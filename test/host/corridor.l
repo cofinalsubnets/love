@@ -45,6 +45,9 @@
    wall (filter (i \ mag (c 6 i) < 0.1) ^(pk 'n))
    two (corridor-read (tx + "(: moss (texture 16 16 1 '((fill (rgb 0.2 0.4 0.1)))))
                          (level \"t\" (skin {'walls rust} (room [0 0 0] [2 2 2])) (skin {'floor moss 'walls rust} (room [0 0 2.2] [2 2 4])))"))
+   ; ..a floor laid a quarter turn and shifted half a metre: u runs with z, v back along x
+   lp (corridor-new 8 8 (lt "(skin {'floor (laid rust 90 [0 0.5])} (room [0 0 0] [2 2 2]))") "" 'sc 'chunks 0 'pk)
+   (lc k i) (peep (lp 'cols k) i 0.0) flr (filter (i \ lc 6 i > 0.9) ^(lp 'n))
  (test (map (t \ t 'name) (hall 'textures) = ['wall 'floor 'ceiling 'door]) (hall 'textures 0 'm = 1.3)
        (#(at 8 8 'sc 'texs) = 5)
        (lt "(skin {'walls rust 'floor rust} (room [0 0 0] [2 2 2]))" 'brushes 0 'skin = [['wall 0] ['floor 0]])
@@ -57,6 +60,10 @@
              "in a texture, (stripes 4 2 (grey 0.5)) -- it reads (stripes every w slant PAINT)")
        (has? (lv "(skin {'walls (texture 32 32 0 '((fill 1)))} (room [0 0 0] [2 2 2]))") "(texture width height metres LAYERS)")
        (has? (lv "(skin {'walls 3} (room [0 0 0] [2 2 2]))") "(skin {")
+       (lt "(skin {'floor (laid rust 90 [0 0.5])} (room [0 0 0] [2 2 2]))" 'brushes 0 'skin = [['floor 0 [90.0 [0.0 0.5]]]])
+       (lt "(textures {'floor (laid rust 45 [1 0])}) (room [0 0 0] [2 2 2])" 'textures 0 'lay = [45.0 [1.0 0.0]])
+       (has? (lv "(skin {'floor (laid rust 'x [0 0])} (room [0 0 0] [2 2 2]))") "(laid TEXTURE degrees [du dv])")
+       (two? flr) (all (i \ abs (lc 3 i - 32.0 * lc 2 i) < 1e-6 && abs (lc 4 i - (16.0 - 32.0 * lc 0 i)) < 1e-6) flr)
        ; the level's textures, then a grid each for floor ceiling door and wall it lacks
        (#(st 'sc 'texs) = 5) (two? wall)
        (all (i \ c 1 i > 1.01 || mag (c 4 i - 32.0) < 1e-6) wall) (any (i \ c 1 i < 1.01) wall)))

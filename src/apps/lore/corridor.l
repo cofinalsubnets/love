@@ -37,7 +37,6 @@
  the-level "src/apps/lore/levels/hall.l"
  ; --- the level, read: (corridor-read s) runs a level file's text into a tablet {'name 'start
  ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
- (skin-name sk c) (foldl (\ a e (e 0 = c ? (e 1) a)) c sk)
  ; ..a brush with no inside: a box flat in some direction, a prism no height
  (empty? r) (: sh (r 'shape)
    (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3)))
@@ -151,14 +150,19 @@
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
  ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
- ; textures, each [name w h metres]; a floor's and ceiling's laid from x 0 z 0, a wall's
- ; along it and its foot on the brush's
+ ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
+ ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else
+ ; the texture's own, lays it, [degrees [du dv]]
  (tix tt nm) (foldl (\ a i (tt i 0 = nm ? i a)) 0 ^#tt)
  (look tt) (\ n b (: c (? (0.7 < n 1) 'floor (n 1 < -0.7) 'ceiling 'wall)
-                     i (tix tt (skin-name (peep b 'skin ()) c)) t (tt i) k (t 1 / t 3)
-                     (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) dx (k * d 0) dz (k * d 2) v0 (t 2 + k * b 'lo 1)
-                                       [i [dx 0.0 dz 0.0] [0.0 (0.0 - k) 0.0 v0]])
-                        [i [k 0.0 0.0 0.0] [0.0 0.0 k 0.0]])))
+                     e (foldl (\ a e (e 0 = c ? e a)) () (peep b 'skin ()))
+                     i (tix tt (two? e ? (e 1) c)) t (tt i) k (t 1 / t 3) ly (two? e ? (e 2) (t 4))
+                     uv (? (c = 'wall) (: d (unit [(0.0 - n 2) 0.0 (n 0)]) [[(k * d 0) 0.0 (k * d 2) 0.0] [0.0 (0.0 - k) 0.0 (t 2 + k * b 'lo 1)]])
+                           [[k 0.0 0.0 0.0] [0.0 0.0 k 0.0]])
+                     (? (!(two? ly)) [i (uv 0) (uv 1)]
+                        (: a (ly 0 * pi / 180.0) co (cos a) si (sin a) U (uv 0) V (uv 1)
+                           (mix p q s) (map (j \ p * U j + q * V j + (j = 3 ? s 0.0)) ^4)
+                           [i (mix co si (k * ly 1 0)) (mix (0.0 - si) co (k * ly 1 1))]))))
  ; ..the door itself, shut: a slab of steel in the middle of the wall, the texture once
  ; across each face
  (door-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h)
@@ -419,7 +423,7 @@
    memo (fresh ? {'v {} 'id {} 'n (peep old 'n 0) 'made 0} old) ov (memo 'v) oi (memo 'id)
    (kept k f) (: c (peep ov k ()) (? (two? c) <c (: v (f ()) (pin ov k [v], v))))
    (idof k) (: i (peep oi k ()) (? (i = ()) (: j (memo 'n) (pins memo 'n (j + 1) 'made (memo 'made + 1), pin oi k j, j)) i))
-   txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm)]) txs)
+   txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm) (peep t 'lay ())]) txs)
    ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ()))
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
    (pm i) (poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0))

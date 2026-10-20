@@ -79,13 +79,17 @@
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
+;   (laid TEXTURE degrees [du dv])     the texture as a skin or textures lays it, turned
+;                                      degrees from u toward v and shifted du dv metres its
+;                                      own way; a floor's u is x and v z, a wall's u along it
+;                                      and v down
 ;   (repeat n [dx dy dz] PARTS)        the parts n times, each that far on from the last
 ;   (move [dx dy dz] PARTS)            the parts that far on
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced start room street sky ambient air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
-         across stammer buzz breathe blink texture skin textures repeat move mirror-x mirror-z rgb)
+         across stammer buzz breathe blink texture laid skin textures repeat move mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
 (:
@@ -221,13 +225,20 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
+   (? (!(texture? t)) (no u t) (!(num? deg)) (no u deg) (!(two? off && #off = 2 && all num? off)) (no u off)
+      {'kind 'laid 'tex t 'deg (f deg) 'off (map f off)}))
+ ; ..what a skin takes: a texture, or one laid; its texture, and how it is laid if it is
+ (surface? t) (texture? t || kind? t ['laid])
+ (bare t) (kind? t ['laid] ? (t 'tex) t)
+ (lay t) (kind? t ['laid] ? [[(t 'deg) (t 'off)]] ())
  (whole b) (brush? b ? (with b 'whole 1) (no "(whole BRUSH)" b))
  (skin s b) (: u "(skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)"
    (? (!(brush? b)) (no u b) (!(tablet? s)) (no u s)
-      (any (k \ !(elem k ['walls 'floor 'ceiling 'all]) || !(texture? (s k))) (keys s)) (no u s)
+      (any (k \ !(elem k ['walls 'floor 'ceiling 'all]) || !(surface? (s k))) (keys s)) (no u s)
       (with b 'skin s)))
  (textures s) (: u "(textures {'wall T 'floor T 'ceiling T 'door T 'train T})"
-   (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door 'train] && texture? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
+   (tablet? s && all (k \ elem k ['wall 'floor 'ceiling 'door 'train] && surface? (s k)) (keys s) ? (part 'textures [['set s]]) (no u s)))
  ; --- repeat and mirror: copies with every point moved, and a start's bearing turned ---
  (flat x) (? (tablet? x) [x] (atom? x) () (cats (map flat x)))
  (re g b p) (: q (foldl (\ q k (with q k (g (p k)))) p (filter (k \ elem k (keys p)) ['at 'lo 'hi 'np 'up]))
@@ -253,14 +264,13 @@
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
-   used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ b 'skin k) (sort (keys (b 'skin)))) bs)
+   used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ bare (b 'skin k)) (sort (keys (b 'skin)))) bs)
                                                      + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad)
                                                      + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin))))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
-   (skin-of b) (: s (b 'skin) (cats (map (k \ (k = 'all ? (map (c \ [c (tname (s k))]) ['wall 'floor 'ceiling])
-                                                 [[(k = 'walls ? 'wall k) (tname (s k))]]))
+   (skin-of b) (: s (b 'skin) (cats (map (k \ (: (e c) ([c (tname (bare (s k)))] + lay (s k)) (k = 'all ? (map e ['wall 'floor 'ceiling]) [(e (k = 'walls ? 'wall k))])))
                                        (filter (k \ elem k (keys s)) ['all 'walls 'floor 'ceiling]))))
-   (tex nm t) {'name nm 'w (t 'w) 'h (t 'h) 'm (t 'm) 'layers (t 'layers)}
+   (tex nm t) (: b (bare t) {'name nm 'w (b 'w) 'h (b 'h) 'm (b 'm) 'layers (b 'layers) 'lay (kind? t ['laid] ? [(t 'deg) (t 'off)] ())})
    (? (!(string? name)) (no "(level NAME PART ..)" name)
       (two? bad) (scare 'level ("not a part: " + show <bad))
       {'kind 'level 'name name
