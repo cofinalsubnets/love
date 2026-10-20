@@ -148,9 +148,9 @@
     usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-P PERM].. MAIN.l [FILE..]
       an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional: an inle
-      (make seat=droid a=a64 kdroid) boots LINE. each PERM is a permission the app asks for
-      at its start, RECORD_AUDIO for the mic (android.permission. unless named in full).
+      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. each PERM is a
+      permission the app asks for at its start, RECORD_AUDIO for the mic (android.permission.
+      unless named in full).
       the key signing it lives in ~/.love/etc/apk.pem
     """)
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
@@ -168,7 +168,7 @@
     (: t (apk-opts as {})
        fs (t 'files)
        _ (two? fs || string? (t 'b) ? 0 (apk-usage 0, quit 2))
-       nm (? (two? fs) (ap-stem <fs) (ap-or (t 'n) "inle"))
+       nm (? (two? fs) (ap-stem <fs) (ap-or (t 'n) "love"))
        out (ap-or (t 'o) (nm + ".apk"))
        pkg (ap-or (t 'p) ("pics.salt." + nm))
        lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
