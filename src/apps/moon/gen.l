@@ -3707,8 +3707,8 @@
           (rotty g env x @ a
              (ptr? a || arr? a ? a
                 (rotty g env y @ b (ptr? b || arr? b ? b)))))
-   (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width
-    (rotty g env e @ 'uint 32 ('ulong || 'ullong) 64)
+   (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width; ilp32's long long is a pair
+    (rotty g env e @ 'uint 32 'ulong (ilp32? g ? 32 64) 'ullong (ilp32? g ? () 64))
    (rotk g e)
     (knum g e @ k (two? k ? <k (cfold !(ilp32? g) e)))
    (rotc? g w big n)                                ; big reads (W - n), n pure and shared
