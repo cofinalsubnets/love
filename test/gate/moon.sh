@@ -458,6 +458,15 @@ else
   gate_partly "  (-ffixed-x18: the allocation check skipped, no llvm-objdump)"
 fi
 moonrun -ffixed-x18 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x18 taken on x64"
+# -mgeneral-regs-only (a64's -mno-sse): a variadic prologue saves no q register, which a kernel traps on
+printf '#include <stdarg.h>\nint vs(int n, ...) { va_list a; int s = 0; va_start(a, n); while (n--) s += va_arg(a, int); va_end(a); return s; }\n' > "$ho/.gro.c"
+moonrun -t a64 -mgeneral-regs-only -c -o "$ho/.gro.o" "$ho/.gro.c" || fail "-mgeneral-regs-only refused on a64"
+if command -v llvm-objdump > /dev/null; then
+  llvm-objdump -d --no-show-raw-insn "$ho/.gro.o" | sed -n 's/^ *[0-9a-f]*://p' | grep -qwE '[bhsdqv][0-9]+' \
+    && fail "-mgeneral-regs-only: a variadic prologue touched a float register"
+else
+  gate_partly "  (-mgeneral-regs-only: the register check skipped, no llvm-objdump)"
+fi
 moonrun -t a64 -ffixed-x20 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x20 was ignored"
 echo "mooncc: -fshort-wchar, -fmacro-prefix-map and -ffixed-x18 do what they say, held to gcc"
 

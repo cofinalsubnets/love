@@ -1232,7 +1232,7 @@
           ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
           (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
           ; the float file refused: code that would touch an xmm or x87 register is a refusal
-          ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float"]) (flags r (pin t 'nofp 1))
+          ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float" "-mgeneral-regs-only"]) (flags r (pin t 'nofp 1))
           ; no lane of ours would use these, so asking for none of them asks nothing
           ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
           ; every call keeps esp 16-aligned, which satisfies any boundary asked for
