@@ -34,23 +34,24 @@
    _ (each ^320 (x \ pin row (4 * x + 2) 255))                   ; 0x00ff0000
    _ (each ^200 (y \ pour p (y * 320 * 4) row 0 (320 * 4)))
    _ (window-show win 0 200)
-   _ (rest 500)
-   (drain acc n) (n < 1 ? acc (window-events win @ l (rest 50, drain (acc + l) (n - 1))))
-   _ (drain () 4)                                                 ; the map's expose and size
+   ; the events until f holds of them, or a deadline that bites only when they never come
+   (drain-to f acc n) (window-events win @ l (acc + l @ a (f a || n < 1 ? a (rest 50, drain-to f a (n - 1)))))
+   (saw e) (a \ elem e a)
    XW (cite 'xwire)
    (w8 s v) (XW 'x-w8 s v) (w16 s v) (XW 'x-w16 s v) (w32 s v) (XW 'x-w32 s v)
    s (XW 'x-connect ("/tmp/.X11-unix/X" + show dn))
    _ (test (hot? s))
    sc (XW 'x-setup s ())
    xw (win 'xw)
-   ; GetImage, ZPixmap: one pixel at (x,y), as (r g b)
+   ; GetImage, ZPixmap: one pixel at (x,y), as (r g b); () while w is not yet viewable
    (px w x y) (: _ (w8 s 73, w8 s 2, w16 s 5, w32 s w)
                _ (w16 s x, w16 s y, w16 s 1, w16 s 1, w32 s 4294967295)
                _ (XW 'x-flush s)
                hdr (XW 'x-reply s)
-               bs (XW 'x-rbytes s (XW 'u32 hdr 4 * 4))
-               [(bs 2) (bs 1) (bs 0)])
-   _ (test ([255 0 0] = px xw 10 10) ([255 0 0] = px xw 319 199))
+               (<hdr = 1 ? (XW 'x-rbytes s (XW 'u32 hdr 4 * 4) @ bs [(bs 2) (bs 1) (bs 0)]) ()))
+   ; the map's Expose ships the paper: its pixels, once the events are taken
+   (shown n) (window-events win, px xw 10 10 @ v (v = [255 0 0] || n < 1 ? v (rest 50, shown (n - 1))))
+   _ (test ([255 0 0] = shown 600) ([255 0 0] = px xw 319 199))
    qx (: _ (w8 s 98, w8 s 0, w16 s 4, w16 s 5, w16 s 0)
          _ (XW 'x-wpad s "XTEST", XW 'x-flush s)
          hdr (XW 'x-reply s) (hdr 9))
@@ -63,29 +64,25 @@
    ; no window manager: the keys go where the pointer is, so it moves in first
    _ (fakeat 6 0 30 40, fake 4 1, fake 5 1)
    _ (fake 2 52, fake 3 52)                                       ; z: evdev 44, set 1's 44 too
-   _ (rest 500)
-   ev (drain () 4)
+   ev (drain-to (saw ['up 44]) () 600)
    _ (test (elem ['down 44] ev) (elem ['up 44] ev) (elem ['text "z"] ev)
            (elem ['move 30 40] ev) (elem ['press 1 30 40] ev) (elem ['release 1 30 40] ev)
            !(any (r \ <r = 'size) ev))                              ; nothing moved: no size
    ; ConfigureWindow, width and height: a size, and a paper of it
    _ (w8 s 12, w8 s 0, w16 s 5, w32 s xw, w16 s 12, w16 s 0, w32 s 200, w32 s 100, XW 'x-flush s)
-   _ (rest 500)
-   ev2 (drain () 4)
+   ev2 (drain-to (saw ['size 200 100]) () 600)
    _ (test (elem ['size 200 100] ev2) ([200 100] = window-size win)
            (200 * 100 * 4 = #(window-paper win)))
    ; the selections: owned, asked for and served back through the server, utf-8 whole
+   (pasted a) (any (r \ <r = 'paste) a)
    _ (window-own win 'clipboard "h\u00e9llo\nw\u00f6rld", window-ask win 'clipboard)
-   _ (rest 300)
-   ev3 (drain () 4)
+   ev3 (drain-to pasted () 600)
    _ (window-own win 'primary "p1", window-ask win 'primary)
-   _ (rest 300)
-   ev4 (drain () 4)
+   ev4 (drain-to pasted () 600)
    ; SetSelectionOwner from the test's wire, owner none: the window loses the clipboard
    cb (XW 'x-intern s "CLIPBOARD")
    _ (w8 s 22, w8 s 0, w16 s 4, w32 s 0, w32 s cb, w32 s 0, XW 'x-flush s)
-   _ (rest 300)
-   ev5 (drain () 4)
+   ev5 (drain-to (saw ['lost 'clipboard]) () 600)
    _ (test (elem ['paste "h\u00e9llo\nw\u00f6rld"] ev3) (elem ['paste "p1"] ev4)
            (elem ['lost 'clipboard] ev5))
    ; INCR: a piece each time the window deletes the property, the empty one closing it
@@ -112,52 +109,62 @@
                             0)
                 (feed ["p1" "\nq2" ""]))
    _ (w8 s 22, w8 s 0, w16 s 4, w32 s ow, w32 s cb, w32 s 0, XW 'x-flush s)
+   _ (XW 'x-intern s "INCR")                                      ; a round trip: the owner is set
    it (twirl (_ \ (serve 0)) 0)
-   _ (rest 100, window-ask win 'clipboard)
-   (waitpaste n acc) (window-events win @ l
-                    (acc + l @ a (any (r \ <r = 'paste) a || n < 1 ? a (rest 100, waitpaste (n - 1) a))))
-   ev6 (waitpaste 30 ())
+   _ (window-ask win 'clipboard)
+   ev6 (drain-to pasted () 600)
    _ (landed? it ? 0 (freeze it))
    _ (test (elem ['paste "p1\nq2"] ev6))
    _ (window-close win)
    ; synth: q's note lit only while held; esc ends with status 0
    ph (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "synth" "-w"])
-   _ (rest 4000)
-   kids <>(XW 'x-querytree s (XW 'scr-root sc))
-   _ (test (two? kids))
-   sw (: (last l) (two? >l ? (last >l) <l) (last kids))
+   (lastof l) (two? >l ? (lastof >l) <l)
+   ; the newest window on the root once it is not ow, () at the deadline; and the root back to
+   ; ow alone, a window's id coming round again once its client is gone
+   (kids _) <>(XW 'x-querytree s (XW 'scr-root sc))
+   (newkid n) (kids 0 @ k (two? k && lastof k != ow ? (lastof k) (n < 1 ? () (rest 100, newkid (n - 1)))))
+   (cleared n) (any (w \ w != ow) (kids 0) && 0 < n ? (rest 100, cleared (n - 1)) 0)
+   sw (newkid 600)
+   _ (test (charm? sw))
    y (synth-trows * 16 + 20) cq (12 * 20 + 10)                    ; middle c, the 13th of 32
    ; a pixel as it becomes c, or as it stands after n tries a tenth of a second apart
    (until w x y c n) (px w x y @ v (v = c || n < 1 ? v (rest 100, until w x y c (n - 1))))
-   before (px sw cq y)
+   before (until sw cq y [208 208 208] 600)                         ; drawn
    _ (fake 2 24)                                                  ; q down
-   held (until sw cq y [255 128 0] 30)
+   held (until sw cq y [255 128 0] 300)
    _ (fake 3 24)
-   after (until sw cq y [208 208 208] 30)
+   after (until sw cq y [208 208 208] 300)
    _ (fake 2 9, fake 3 9)                                         ; esc
    (wfn p n) (gather p @ g2 (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
-   st (wfn <ph 3000)
+   st (wfn <ph 30000)
    _ (test ([208 208 208] = before) ([255 128 0] = held) ([208 208 208] = after)
            (two? st) (0 = <st))
    ; the corridor: l held turns the view; a click holds the mouse and its motion turns the
-   ; view, esc lets it go and leaves the corridor running; q ends with status 0
+   ; view, esc lets it go and leaves the corridor running, l still turning it; q ends with status 0
+   _ (cleared 600)
    pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "lore" "corridor" "--window"])
-   _ (rest 6000)
-   cw (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))
+   cw (newkid 600)
    (look _) (map (i \ px cw (40 + i * 70) (60 + i * 35)) ^8)
-   v0 (look ())
+   ; the scene up: the loading screen is black but for its ring, at the middle point alone
+   (scene n) (look () @ v (any (i \ i != 4 && two? (v i) && v i != [0 0 0]) ^8 || n < 1 ? v (rest 100, scene (n - 1))))
+   v0 (scene 600)
    _ (fake 2 46, rest 1000, fake 3 46)                            ; l, held a second
    (moved n) (look () @ v (v != v0 || n < 1 ? v (rest 100, moved (n - 1))))
-   v1 (moved 30)
-   _ (fakeat 6 0 320 200, fake 4 1, fake 5 1, rest 300)          ; a click at the middle
-   _ (fakeat 6 0 400 200, rest 300, fakeat 6 0 400 200)           ; the mouse right, twice
-   (turned n) (look () @ v (v != v1 || n < 1 ? v (rest 100, turned (n - 1))))
-   v2 (turned 30)
-   _ (fake 2 9, fake 3 9, rest 500)                               ; esc
-   up (gather <pc)
+   v1 (moved 300)
+   _ (fakeat 6 0 320 200, fake 4 1, fake 5 1)                     ; a click at the middle
+   ; the mouse right until the view turns: held, the pointer goes back to the middle; not
+   ; held yet, 400 and 440 by turns are motion still
+   (turned n) (fakeat 6 0 (n % 2 = 0 ? 400 440) 200, rest 100,
+               look () @ v (v != v1 || n < 1 ? v (turned (n - 1))))
+   v2 (turned 300)
+   _ (fake 2 9, fake 3 9)                                         ; esc
+   _ (fake 2 46)                                                  ; l held
+   (alive n) (gather <pc @ g2 (two? g2 ? 'gone (look () @ v (v != v2 || n < 1 ? v (rest 100, alive (n - 1))))))
+   v3 (alive 300)
+   _ (fake 3 46)
    _ (fake 2 24, fake 3 24)                                       ; q
-   sc2 (wfn <pc 3000)
-   _ (test (any (c \ c != [0 0 0]) v0) (v0 != v1) (v1 != v2) (!(two? up)) (two? sc2) (0 = <sc2))
+   sc2 (wfn <pc 30000)
+   _ (test (any (c \ two? c && c != [0 0 0]) v0) (v0 != v1) (v1 != v2) (two? v3) (v3 != v2) (two? sc2) (0 = <sc2))
    _ (close s)
    _ (still <xv 15)
    _ (wfx <xv)
