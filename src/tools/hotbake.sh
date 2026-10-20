@@ -39,9 +39,17 @@ elif [ "${1:-}" = -c ]; then
     echo "row$((i % 37)) $((i * i % 1009)) of the fixture, $((i % 11)) left: abc$((i % 5))"
     i=$((i + 1))
   done > "$d/w/in"
+  # ..and a preprocessed TU, what cpp sees of a header-heavy one: line markers, joined strings
+  i=0
+  while [ $i -lt 1200 ]; do
+    printf '# 1 "include/h%d.h" 1 3\nstatic char const t%d[] __attribute__((unused)) = "s%d\\tof" " the fixture\\n" "%%d \\x41\\\\";\n# %d "t.c" 2\n\n' \
+      $i $i $i $((i * 4 + 3))
+    i=$((i + 1))
+  done > "$d/w/fx.i"
   # the tree's C is read by one relative path, so the counts never carry where the tree is
   run() { (cd "$d/w" && env -i PATH="$d" LOVE_BAKE_COUNT="$d/count" love "$@" > /dev/null 2>&1 < /dev/null); }
   for c in cb compress/zstd; do run mooncc -D tco=1 -It -It/src/love -It/src/inle -c "t/src/love/$c.c" -o o; done
+  run mooncc -c fx.i -o o
   run sed -n 's/^\(row[0-9]*\) \([0-9]*\)/\2 \1/p' in
   run sed -E '/left: abc[13]/{s/[0-9]+/N/g;y/abc/ABC/};3,9d' in
   run awk '{ n[$1] += $2; s += length($0) } END { for (k in n) t += n[k]; print t, s }' in
