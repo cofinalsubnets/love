@@ -977,6 +977,7 @@
        ; hosted as i386 is
        arm? (arm32? tgt && tgt != 'arm)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
+       _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
@@ -998,7 +999,7 @@
        set (so ? lib (lib + rtpull lib tgt os nostd vb dyld?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set dyld? dylibs)
+             mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
              so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib\(l).so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree

@@ -757,13 +757,26 @@
                held {}
                (send s) (0 < #s ? (say kout s, flush kout) 0)
                (soil _) (pin dirty () (max 1 (peep dirty () 0)))
+               ; whether the mitty wants a press: a wheel, or one on a bar, another pane, or a
+               ; pane that asked
+               (hubs r c bb) (: at (hat (hb 'lay) r c) p (hpane hb (hb 'focus))
+                                (? (64 <= bb) 1
+                                   (atom? at && r < hlr hb && two? (hbarat hb r c)) 1
+                                   (peep hb 'bar 0 && r = hb 'rows - 1) 1
+                                   (two? at && wharf-id at != hb 'focus) 1
+                                   (two? p && hpty? p) (gaze (peep (hbox p) () 0) 3 & 7680 ? 1 0)
+                                   0))
                ; the pointer, sent in the form the glass was asked for, a move once a cell;
-               ; the window's own where none was asked, or under shift
+               ; the window's own where the mitty wants no press, or under shift. a press
+               ; decides for its drag and release
                (point how b x y) (: sc (peep gx () 0)
                                     row (max 0 (min (gaze sc 1 - 1) (y // 16))) col (max 0 (min (gaze sc 2 - 1) (x // 8)))
                                     at (row * 65536 + col)
                                     bb (how = 2 ? (peep held 'btn 3) (peep mw-xbtn b 3))
-                                    mine (held 'shift || !(gaze sc 3 & 7680))
+                                    mine (? (how != 0 && charm? (peep held 'btn ())) (peep held 'mine 0)
+                                            (held 'shift || !(gaze sc 3 & 7680) || !(hubs row col bb)) 1
+                                            0)
+                                    _ (how = 0 ? (pin held 'mine mine) 0)
                                     (how = 2 && at = peep held 'at -1 ? 0
                                        (: _ (pin held 'at at)
                                           (? (mine && bb < 3)
@@ -782,7 +795,7 @@
                                (<e = 'up) (peep mw-modkeys k () @ md (md ? (pin held md ()) 0))
                                (<e = 'text) (held 'ctrl || held 'alt ? 0 (send k))
                                (<e = 'press) (: _ (pin held 'btn (peep mw-xbtn k 3)) (point 0 k (e 2) (e 3)))
-                               (<e = 'release) (: _ (pin held 'btn ()) (point 1 k (e 2) (e 3)))
+                               (<e = 'release) (: v (point 1 k (e 2) (e 3)) _ (pin held 'btn ()) v)
                                (<e = 'move) (point 2 0 (e 1) (e 2))
                                (<e = 'size) (: r2 (max 2 ((e 2) // 16)) c2 (max 20 ((e 1) // 8)) sc (peep gx () 0)
                                                (pin gx () (regrid sc (cask (regrid sc () r2 c2)) r2 c2),

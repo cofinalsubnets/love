@@ -683,6 +683,7 @@ static int __love_tbsdn(long n) {
 #define LvNoDoor (-0x7fffffffL)
 extern long __love_door(long n, long a, long b, long c, long d, long e, long f);
 extern long __love_macclock(int ck, struct timespec *ts);   /* LvNoDoor without libSystem */
+extern unsigned long __love_macslide(void);
 struct __mac_osigact;
 extern long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old);
 #endif
