@@ -407,12 +407,14 @@
 (: sb (lv "(room [0 0 0] [6 3 2]) (start [1 0 1] 90 0) (solid (box [3 0.8 0] [3.2 1.0 2]))")
    st (world-new 8 8 sb "") _ (steps st 119 60)
  (test (st 'px < 2.8) (st 'px > 2.5) (world-free? st 2.5 1.0) (!(world-free? st 3.1 1.0))))
-; props: a mattress and a telescope read as solid brushes, a bad colour said back; a car
+; props: a mattress, a telescope, a book and a pencil read as solid brushes, a bad colour
+; said back; a car
 ; carries the brushes wholly inside it, meshed and moving with it, standing in a walk's way
-(: pl (lv "(room [0 0 0] [6 3 4]) (start [1 0 1] 0 0) (mattress [3 0 1] 0) (telescope [5 0 3] 90 20 (rgb 0.2 0.3 0.8))")
+(: pl (lv "(room [0 0 0] [6 3 4]) (start [1 0 1] 0 0) (mattress [3 0 1] 0) (telescope [5 0 3] 90 20 (rgb 0.2 0.3 0.8)) (book [1 0 3] 30) (pencil [1.3 0 3] 120 (rgb 1 0.8 0.1))")
    cl (lv "(room [-4 0 -2] [4 3 2]) (start [-3 0 0] 90 0) (train [-3.5 0 -1.2] [3.5 2.2 1] (door [0 0 1] 1.2 1.9) 20) (mattress [0.5 0 -0.5] 90) (solid (box [-4 0 1.5] [-3.8 1 2]))")
    cs (world-new 8 8 cl "") pr (cs 'sc 'cars 0 'props)
  (test (tablet? pl) (#(pl 'brushes) > 10) (has? (lv "(room [0 0 0] [6 3 4]) (telescope [5 0 3] 90 20 3)") "(telescope [x y z] bearing pitch (rgb r g b))")
+       (has? (lv "(room [0 0 0] [6 3 4]) (pencil [1 0 1] 0 'red)") "(pencil [x y z] bearing (rgb r g b))")
        (#(cl 'cars 0 'props) = 1) (#(cl 'brushes) = 2) (tablet? pr) (0 < #(pr 'pk 'tris))
        (world-free? cs -1.0 0.0) (!(world-free? cs 1.4 -0.5))))
 (test_fin ())

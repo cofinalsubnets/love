@@ -43,6 +43,10 @@
 ;   (telescope [x y z] bearing pitch (rgb r g b))  a refractor on a tripod standing at x
 ;                                      y z, looking toward bearing and pitch degrees up, its
 ;                                      tube that colour; solid
+;   (book [x y z] bearing)             an open book lying with its spine's middle at x y z,
+;                                      the top of its pages toward bearing; solid
+;   (pencil [x y z] bearing (rgb r g b))  a pencil lying from its eraser at x y z, its point
+;                                      toward bearing, painted that colour; solid
 ;   (rod [x y z] [x y z] radius sides TEXTURE)  a straight bar between two points, sides
 ;                                      flats round, its ends square to it; solid
 ;   (grav [x y z] [x y z] DIR)         a grav shaft: a column of air over the plan between the
@@ -98,7 +102,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street sky ambient air solid box prism cut whole door train bin mattress telescope rod decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start shot room street sky ambient air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
          across stammer buzz breathe blink texture laid skin textures repeat move mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -260,6 +264,31 @@
          (rod (tp -0.06 0.085) (tp 0.2 0.085) 0.016 8 bk)
          (rod (tp -0.01 -0.03) (tp -0.01 -0.13) 0.02 8 bk)]
    (legs + head + tube))
+ ; ..an open book: its cover laid flat, a block of pages each side of the spine, ruled and
+ ; written, the lines running across the pages
+ (book at deg) (: u "(book [x y z] bearing)" o (P at u) th (N deg u) f (ahead th) r [(f 2) 0.0 (0.0 - f 0)]
+   (L a h b) (v+ o (v+ (v* a r) (v+ (v* b f) [0.0 h 0.0])))
+   (flat a0 a1 b0 b1 y0 y1) (whole (solid (prism (y1 - y0) [(L a0 y0 b0) (L a1 y0 b0) (L a1 y0 b1) (L a0 y0 b1)])))
+   cover (texture 16 16 0.2 '((fill (rgb 0.36 0.09 0.07)) (noise 3 0.15)))
+   edge (texture 16 8 0.05 '((fill (rgb 0.93 0.91 0.84)) (grid 0 2 1 (shade 0.86))))
+   page (laid (texture 32 32 0.16 '((fill (rgb 0.95 0.93 0.86)) (grid 0 4 1 (rgb 0.72 0.76 0.86))
+                                    (within 3 1 30 31 (patches 1.5 0.22 (rgb 0.16 0.18 0.32)))
+                                    (cols 3 4 (rgb 0.86 0.6 0.6))))
+              (0.0 - th) [0 0])
+   [(skin {'all cover} (flat -0.172 0.172 -0.122 0.122 0.0 0.004))
+    (skin {'floor page 'walls edge 'ceiling cover} (flat -0.165 -0.006 -0.115 0.115 0.004 0.016))
+    (skin {'floor page 'walls edge 'ceiling cover} (flat 0.006 0.165 -0.115 0.115 0.004 0.016))])
+ ; ..a pencil: its painted hexagon, a ferrule and eraser at one end, the wood sharpened to
+ ; its lead at the other
+ (pencil at deg c) (: u "(pencil [x y z] bearing (rgb r g b))" o (P at u) f (ahead (N deg u))
+   _ (? (!(colour? c)) (no u c))
+   (pt k) (v+ o (v+ (v* k f) [0.0 0.0036 0.0]))
+   (tx c) (texture 8 8 0.05 [['fill ['rgb (c 0) (c 1) (c 2)]] '(noise 2 0.1)])
+   [(rod (pt 0.013) (pt 0.163) 0.0035 6 (tx c))
+    (rod (pt 0.004) (pt 0.014) 0.0037 8 (tx [0.75 0.76 0.78]))
+    (rod (pt 0.0) (pt 0.005) 0.0033 8 (tx [0.9 0.55 0.55]))
+    (rod (pt 0.163) (pt 0.174) 0.0024 6 (tx [0.86 0.7 0.5]))
+    (rod (pt 0.174) (pt 0.179) 0.0011 6 (tx [0.12 0.12 0.13]))])
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
  ; ..a sconce: a box from a little inside the wall cut corner to corner, keeping the wall's
