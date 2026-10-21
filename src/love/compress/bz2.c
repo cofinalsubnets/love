@@ -6,10 +6,8 @@
 //   (bz2-step st b eof)  the next block (or a stream's head or end) off b at st's bit ->
 //                    (bytes . k), k whole bytes of b now behind it | -1 more of b wanted |
 //                    0 every stream read | bz2d's codes. eof: b is all there is
-#ifndef BZ_STANDALONE
 #include "love.h"
 #include "bytes.h"
-#endif
 #include <stdint.h>
 #include <string.h>
 

@@ -94,6 +94,11 @@
       ; a glow adds to what is under it, and is hidden by what is nearer
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) ((51 << 16) | 7) = 16)
       (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () ()) 255 = 16)
+      ; glass, -3 - t: what is under it times its texel, its colour added, and hidden by what is nearer
+      (fc-n (facets 4 4 13158600 fc-id (fc-g (big 0.0 0 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [8421504])] ()) 6579300 = 16)
+      (fc-n (facets 4 4 13158600 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [16777215])] ())
+            ((251 << 16) | (200 << 8) | 200) = 16)
+      (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0 0)) (fc-z [[0 1 2 -1] [3 4 5 -3]]) [(star-tray [1 1] [8421504])] ()) 255 = 16)
       (shape near = [4 4]) (peep near [1 2] 0.0 = -0.5) (peep none [3 3] 0.0 = 2.0)
       (fc-n (sunlit none) red = 16) (fc-n (sunlit near) 0 = 16) (fc-n (sunlit ()) red = 16)
       (fc-go 100 () 0 = 0)

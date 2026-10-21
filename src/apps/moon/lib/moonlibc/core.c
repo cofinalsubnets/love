@@ -13,9 +13,12 @@ char const *__love_progname = "";   /* argv[0], for gnulib's progname */
 
 FILE *stdin = &__stdf[0], *stdout = &__stdf[1], *stderr = &__stdf[2];
 
-/* load bias: AT_PHDR - 64 - the p_offset==0 PT_LOAD's p_vaddr; 0 for ET_EXEC, the slide for -pie.
- * a_type reads its low word: netbsd's AuxInfo is {u32 type, pad, u64} with the pad unzeroed */
+/* load bias: AT_PHDR - 64 - the p_offset==0 PT_LOAD's p_vaddr; 0 for ET_EXEC, the slide for -pie;
+ * dyld's on macos. a_type reads its low word: netbsd's AuxInfo is {u32 type, pad, u64} with the pad unzeroed */
 static unsigned long __love_bias(void) {
+#ifdef LvMac
+  if (__love_osv == 4) return __love_macslide();
+#endif
   unsigned long phdr = 0; ElfW(Half) phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
@@ -40,13 +43,13 @@ unsigned long getauxval(unsigned long t) {
     if ((unsigned int) a[0] == t) return (unsigned long) a[1];
   return 0; }
 
-/* one callback, for the main program, carrying the load bias */
+/* one callback, for the main program, carrying the load bias; macos has no phdrs */
 int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), void *data) {
   unsigned long phdr = 0, phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
     if ((unsigned int) a[0] == 5) phnum = (unsigned long) a[1]; }   /* AT_PHNUM */
-  if (!phdr) return 0;
+  if (!phdr && __love_osv != 4) return 0;
   struct dl_phdr_info in;
   memset(&in, 0, sizeof in);
   in.dlpi_addr = __love_bias();

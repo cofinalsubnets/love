@@ -14,10 +14,8 @@
 //   (lzma2-new dict)         a state for LZMA2 a chunk at a time, a dict-sized window
 //   (lzma2-chunk st c)       one whole chunk (control byte, header, data) -> its bytes | ()
 // the decoders' dictionary is the output; the coder is an optimal parse over a binary-tree finder
-#ifndef XZ_STANDALONE
 #include "love.h"
 #include "bytes.h"
-#endif
 #include <stdint.h>
 #include <string.h>
 
