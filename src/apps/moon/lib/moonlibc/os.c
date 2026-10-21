@@ -391,11 +391,15 @@ LvLs(int, proc_info, "__proc_info", int, int, int, unsigned long, void *, int);
 LvLs(int, kevent, "kevent", int, void const *, int, void *, int, void const *);
 LvLs(int, clock_gettime, "clock_gettime", int, void *);
 LvLs(int, usigaction, "sigaction", int, void const *, void *);
+LvLs(long, slide, "_dyld_get_image_vmaddr_slide", unsigned);
 
 /* sigaction by libSystem, its own tramp doing the sigreturn: the user's shape both ways */
 long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old) {
   if (!__ls_usigaction) return LvNoDoor;
   return __ls_usigaction((int) sig, a, old) ? -(*__ls_error() + 4096L) : 0; }
+
+/* the main image's slide from its linked base: dyld's, 0 for -static */
+unsigned long __love_macslide(void) { return __ls_slide ? (unsigned long) __ls_slide(0) : 0; }
 
 /* sigsetjmp's and siglongjmp's mask (mksys) */
 long __love_macmask(long how, long set, long oset) { return __love_fb(48, how, set, oset, 0, 0, 0); }

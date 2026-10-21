@@ -46,9 +46,10 @@ static uintptr_t
  img_hash(word v),
  img_rank_assign(word *rank, uintptr_t nser),
  img_remap(struct img_ctx const *x, uintptr_t bo),
- img_stream(unsigned char *out, word const *blob, uintptr_t nw, word const *key,
+ img_stream(unsigned char *out, word const *blob, uintptr_t nw, uintptr_t i0, word const *key,
             uint16_t const *tk);
-static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
+static unsigned img_width(uintptr_t v);
+static unsigned char const *img_expand(word *out, uintptr_t nw, uintptr_t i0, unsigned char const *p,
                                        unsigned char const *end, word const *dict);
 static unsigned char hc_flag(struct hc *h, word x), *hc_fzmap(struct g *g, word const *base, word const *hp);
 static void
@@ -75,7 +76,8 @@ static lvm_t *const image_extra_aps[] = {
  lvm_fputbn, lvm_yield_sw, lvm_yield_nif, lvm_task_exit,
  _lvm_yieldk,     // a task parked mid-yield carries it
  lvm_deferfwd,    // a deferred native whose compile declined
- lvm_firstcall }; // ..and one not called yet
+ lvm_firstcall,   // ..and one not called yet
+ lvm_countfwd };  // a counting one
 // a data object's words, as the gc sizes it. d carries the kind, s the length words: two
 // homes only in a fused load, the ap decoded into the pool while the payload is still in the blob
 static uintptr_t image_datasize(union u *d, void const *s) {
@@ -476,12 +478,15 @@ static love_inline intptr_t img_decode(intptr_t v, struct img_dec *d) {
  return img_decode_cold(v, d); }
 // the token stream: a word is one byte if among the commonest by count, two if in a wide
 // seat, else an escape naming its width. the dictionary is always full (a short image repeats
-// its head), sparing the wake a bound test. an 8-aligned word may ride shifted, where narrower
-#define ImageNDict 237u   /* 0..236 a one-byte dictionary word */
-#define ImageNWide 4u     /* 237..240 escape to the wide seats: this byte and an index */
+// its head), sparing the wake a bound test. a heap offset may ride as its distance from its own
+// word, an 8-aligned word shifted, where narrower. a run of words lays its token bytes, one a
+// word, then their literal bytes
+#define ImageNDict 232u   /* 0..231 a one-byte dictionary word */
+#define ImageNWide 4u     /* 232..235 escape to the wide seats: this byte and an index */
 #define ImageNDict2 (ImageNWide * 256u)              /* the seats those escapes reach */
 #define ImageNAll (ImageNDict + ImageNDict2)          /* the whole dictionary, as it ships */
-#define ImageNShift (ImageNDict + ImageNWide)         /* 241..247 an 8-aligned 1..7-byte literal */
+#define ImageNRel (ImageNDict + ImageNWide)           /* 236..240 a 1..5-byte zigzag distance, in words */
+#define ImageNShift (ImageNRel + 5u)                  /* 241..247 an 8-aligned 1..7-byte literal */
 #define ImageNPlain (ImageNShift + 7u)                /* 248..255 a plain 1..8-byte one */
 #define ImageDHash 4096u  /* the encoder's value -> token map (open-addressed, 0xffff = free) */
 // allocated, never on the frame: arm32's 12-bit load displacement (src/inle/mps2)
@@ -556,57 +561,62 @@ static int img_tok(word const *key, uint16_t const *tk, word v) {
   if (key[h] == v) return tk[h];
  return -1; }
 
-// one token per blob word; out == NULL sizes the stream
-static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
+static unsigned img_width(uintptr_t v) {
+ unsigned w = 0;
+ do w++, v >>= 8; while (v);                               // unsigned: a negative word shifts forever
+ return w; }
+// the token stream of blob[0..nw), word i0 onward of the image; out == NULL sizes it
+static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw, uintptr_t i0,
                             word const *key, uint16_t const *tk) {
- uintptr_t n = 0;
+ uintptr_t n = nw;                                         // the literals follow the tokens
  for (uintptr_t i = 0; i < nw; i++) {
   int t = img_tok(key, tk, blob[i]);
   if (t >= 0) {
-    if ((uintptr_t) t < ImageNDict) { if (out) out[n] = (unsigned char) t; n++; }
+    if ((uintptr_t) t < ImageNDict) { if (out) out[i] = (unsigned char) t; }
     else { unsigned j = (unsigned) t - ImageNDict;
-      if (out) out[n] = (unsigned char)(ImageNDict + (j >> 8)), out[n + 1] = (unsigned char)(j & 255);
-      n += 2; }
+      if (out) out[i] = (unsigned char)(ImageNDict + (j >> 8)), out[n] = (unsigned char)(j & 255);
+      n++; }
     continue; }
-  uintptr_t uv = (uintptr_t) blob[i], q = uv; unsigned wd = 0;
-  do wd++, q >>= 8; while (q);                             // unsigned: a negative word shifts forever
-  unsigned base = ImageNPlain;
-  if (!(uv & 7)) {
-   uintptr_t sv = uv >> 3; unsigned ws = 0;
-   do ws++, sv >>= 8; while (sv);
-   if (ws < wd) uv >>= 3, wd = ws, base = ImageNShift; }
-  if (out) { out[n] = (unsigned char)(base + wd - 1);
-   for (unsigned k = 0; k < wd; k++) out[n + 1 + k] = (unsigned char)(uv >> (8 * k)); }
-  n += 1 + wd; }
+  uintptr_t uv = (uintptr_t) blob[i];
+  unsigned wd = img_width(uv), base = ImageNPlain;
+  if (!(uv & 7) && img_width(uv >> 3) < wd) uv >>= 3, wd = img_width(uv), base = ImageNShift;
+  uintptr_t dv = (uintptr_t) blob[i] - (i0 + i) * sizeof(word);
+  if (evenp(blob[i]) && (uintptr_t) blob[i] < ImageIdxBase && !(dv % sizeof(word))) {
+   intptr_t dw = (intptr_t) dv / (intptr_t) sizeof(word);
+   uintptr_t z = dw < 0 ? ((uintptr_t) -(dw + 1) << 1) | 1 : (uintptr_t) dw << 1;
+   if (img_width(z) <= wd && img_width(z) <= 5) uv = z, wd = img_width(z), base = ImageNRel; }
+  if (out) { out[i] = (unsigned char)(base + wd - 1);
+   for (unsigned k = 0; k < wd; k++) out[n + k] = (unsigned char)(uv >> (8 * k)); }
+  n += wd; }
  return n; }
-// ..and back: where the stream stopped, NULL if short. a derived image is the first nw words
-// of a longer one, so only the caller judges the tail
-static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
+// ..and back, word i0 onward: where the literals stopped, NULL if short
+static unsigned char const *img_expand(word *out, uintptr_t nw, uintptr_t i0, unsigned char const *p,
                                        unsigned char const *end, word const *dict) {
+ if ((uintptr_t)(end - p) < nw) return NULL;
+ unsigned char const *q = p + nw;
  for (uintptr_t i = 0; i < nw; i++) {
-  if (p >= end) return NULL;
-  unsigned t = *p++;
+  unsigned t = p[i];
   if (t < ImageNDict) { out[i] = dict[t]; continue; }
-  // three-wide is 9 escapes in 10, in both lanes
-  if (t == ImageNPlain + 2) {
-   if ((uintptr_t)(end - p) < 3) return NULL;
-   out[i] = (word)((uintptr_t) p[0] | (uintptr_t) p[1] << 8 | (uintptr_t) p[2] << 16);
-   p += 3; continue; }
-  if (t == ImageNShift + 2) {
-   if ((uintptr_t)(end - p) < 3) return NULL;
-   out[i] = (word)((uintptr_t) p[0] << 3 | (uintptr_t) p[1] << 11 | (uintptr_t) p[2] << 19);
-   p += 3; continue; }
-  if (t < ImageNShift) {                                // a wide seat
-   if (p >= end) return NULL;
-   out[i] = dict[ImageNDict + (((uintptr_t) t - ImageNDict) << 8) + *p++];
+  // a two- or three-byte distance is 3 escapes in 4
+  if (t - (ImageNRel + 1) < 2) {
+   unsigned wd = t - ImageNRel + 1;
+   if ((uintptr_t)(end - q) < wd) return NULL;
+   uintptr_t v = (uintptr_t) q[0] | (uintptr_t) q[1] << 8 | (wd > 2 ? (uintptr_t) q[2] << 16 : 0);
+   q += wd, out[i] = (word)((i0 + i + (v & 1 ? ~(v >> 1) : v >> 1)) * sizeof(word));
    continue; }
-  unsigned k = t - ImageNShift;                         // 0..6 the 8-aligned lane, 7..14 plain
-  unsigned wd = (k < 7 ? k : k - 7) + 1, sh = k < 7 ? 3 : 0;
-  if ((uintptr_t)(end - p) < wd) return NULL;
+  if (t < ImageNRel) {                                  // a wide seat
+   if (q >= end) return NULL;
+   out[i] = dict[ImageNDict + (((uintptr_t) t - ImageNDict) << 8) + *q++];
+   continue; }
+  unsigned k = t - ImageNRel;                           // 0..4 distance, 5..11 8-aligned, 12..19 plain
+  unsigned wd = (k < 5 ? k : k < 12 ? k - 5 : k - 12) + 1;
+  if ((uintptr_t)(end - q) < wd) return NULL;
   uintptr_t v = 0;
-  for (unsigned j = 0; j < wd; j++) v |= (uintptr_t) p[j] << (8 * j);
-  p += wd, out[i] = (word)(v << sh); }
- return p; }
+  for (unsigned j = 0; j < wd; j++) v |= (uintptr_t) q[j] << (8 * j);
+  q += wd;
+  if (k < 5) v = (i0 + i + (v & 1 ? ~(v >> 1) : v >> 1)) * sizeof(word);
+  out[i] = (word)(k < 5 || k >= 12 ? v : v << 3); }
+ return q; }
 
 // the intern map's slot order is its insertion history, which the gc budget moves: re-insert
 // in spelling order, in place, so one key set is one layout
@@ -1004,21 +1014,21 @@ static uintptr_t img_code_dict(char const *c, uintptr_t n, unsigned char *dic) {
 // the stream segment, alloc'd, length in *outn: chunks deflated apart, or raw (nch 0) if not smaller
 static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, struct img_dic const *d,
                                   uintptr_t const *cb, uintptr_t ncb, uintptr_t *outn) {
- uintptr_t rn = img_stream(NULL, blob, nw, d->key, d->tk), ncap = ncb, nch = 0, zn = 0;
+ uintptr_t rn = img_stream(NULL, blob, nw, 0, d->key, d->tk), ncap = ncb, nch = 0, zn = 0;
  unsigned char *raw = alloc(NULL, rn + 1), *z = ImageZStream ? alloc(NULL, rn + 1) : NULL, *seg = NULL;
  uint64_t *tab = z ? alloc(NULL, 4 * ncap * sizeof(uint64_t)) : NULL;
  if (!raw) goto out;
- img_stream(raw, blob, nw, d->key, d->tk);
- if (tab)
+ if (tab)                                                // each chunk laid apart: its tokens, then its literals
   for (uintptr_t i = 0, a = 0, ra = 0; a < nw; i++) {
    uintptr_t b = i + 1 < ncb ? cb[i + 1] : nw,
-             rb = ra + img_stream(NULL, blob + a, b - a, d->key, d->tk);
+             rb = ra + img_stream(raw + ra, blob + a, b - a, a, d->key, d->tk);
    intptr_t got = nch < ncap ? deflate_raw(g, raw + ra, rb - ra, z + zn, rn - zn) : -1;
    if (got <= 0) { nch = 0; break; }
    tab[4 * nch] = a, tab[4 * nch + 1] = ra, tab[4 * nch + 2] = zn, tab[4 * nch + 3] = image_sum(z + zn, (uintptr_t) got, 0);
    nch++, zn += (uintptr_t) got;
    a = b, ra = rb; }
  if (nch && StreamRow * nch + zn >= rn) nch = 0;
+ if (!nch) img_stream(raw, blob, nw, 0, d->key, d->tk);
  uintptr_t body = nch ? StreamRow * nch + zn : rn;
  if ((seg = alloc(NULL, StreamSegHead + body))) {
   ((uint64_t*) seg)[0] = rn, ((uint64_t*) seg)[1] = nch;
@@ -1225,7 +1235,7 @@ static int img_chunk(struct img_lazy *L, uintptr_t k) {
  uintptr_t rl = (uintptr_t) (t[4] - t[1]);
  if (image_sum(L->z + t[2], (uintptr_t) (t[5] - t[2]), 0) != L->sum[k]
      || inflate_raw(L->z + t[2], (uintptr_t) (t[5] - t[2]), L->run, rl) != (intptr_t) rl
-     || img_expand(L->base + t[0], (uintptr_t) (t[3] - t[0]), L->run, L->run + rl, L->dict) != L->run + rl
+     || img_expand(L->base + t[0], (uintptr_t) (t[3] - t[0]), (uintptr_t) t[0], L->run, L->run + rl, L->dict) != L->run + rl
      || !img_walk(L->base, (uintptr_t) t[0], (uintptr_t) t[3], L->code, L->cn, L->clazy)) return 0;
  return L->st[k] = 1, L->left--, 1; }
 
@@ -1403,7 +1413,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
    memcpy(&rn, sp, 8), memcpy(&sch, sp + 8, 8);
    if (!sch) {
     if (rn != ns - StreamSegHead
-        || img_expand(base, nw, sp + StreamSegHead, sp + ns, dict) != sp + ns
+        || img_expand(base, nw, 0, sp + StreamSegHead, sp + ns, dict) != sp + ns
         || !img_walk(base, 0, nw, code, cn, lazy)) goto no; }
    else {
     struct img_lazy *L = img_lazy_new(base, nw, sp, ns, dict, code, cn, lazy);

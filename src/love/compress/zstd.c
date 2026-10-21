@@ -9,10 +9,11 @@
 #ifndef ZS_STANDALONE
 #include "love.h"
 #include "bytes.h"
-#include "compress/prefix.h"
 #else
 #define love_inline inline __attribute__((always_inline))
 #endif
+#include "prefix.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 

@@ -7,7 +7,8 @@
 # whose heap must be the normal one's. $w/cost holds each file's time under stress.
 # usage: gcshard.sh TREE [SHARDS]   SHARDS a half (GCS_SHARDS, default 4); GCS_NOBUILD=1 runs
 # the binaries TREE already has; GCS_HSUF the stress build's out suffix (default /gcs);
-# MAKE the tree's make; GCS_BAKE=1 the stress bake, this script's own
+# MAKE the tree's make; GCS_BAKE=1 the stress bake, this script's own. the normal build
+# is the caller's (the lanes' prerequisites, `host love0 out/mooncc0.image`)
 set -u
 [ $# -ge 1 ] || { echo "usage: gcshard.sh TREE [SHARDS]"; exit 2; }
 cd "$1" || exit 2
@@ -23,9 +24,10 @@ t0=$(date +%s)
 el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
 
 if [ -z "${GCS_NOBUILD:-}" ]; then
-  ${MAKE:-make} --no-print-directory host love0 out/mooncc0.image out/love.raw || fail "the normal build"
-  ${MAKE:-make} --no-print-directory hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
-  ${MAKE:-make} --no-print-directory out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
+  # the stress builds link the normal one's out/src.o: packing the tree again mid-gate takes in a
+  # neighbouring lane's scratch, and the next make of host moves out/love under the gate
+  ${MAKE:-make} --no-print-directory -o out/src.o hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
+  ${MAKE:-make} --no-print-directory -o out/src.o out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
   el built
 fi
 for b in out/love out/love.raw out$gs/love.raw out/gcs0/love0; do [ -x $b ] || fail "no $b"; done
@@ -47,8 +49,8 @@ ps=
 job() { tg=$1; shift; ( "$@" > $w/$tg.out 2>&1 < /dev/null; echo $? > $w/$tg.rc ) & ps="$ps $!"; }
 wt() { for p in $ps; do wait $p; done; ps=; }
 # a bake as the Makefile's, to love.img in its own dir: the bake keeps the path it writes
-hot=$PWD/src/tools/hot.prof
-bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
+hot=$PWD/src/tools/hot.prof calls=$(sh src/tools/hotbake.sh -k)
+bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$hot LOVE_BAKE_CALLS="$calls" "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
                          echo $! > pid; wait $!; echo $? > rc; } ) & }
 [ "$sbake" = 1 ] && { bake bs $PWD/out$gs/love.raw $PWD/out$gs/.dist-cat.l; bsp=$!; }
 # the stress love0 beside the bakes: its boot, then both its passes -- c0, then the egg it

@@ -90,6 +90,10 @@ moonrun -c "$ho/.esy.c" -o "$ho/.esy.o" || fail "mooncc: a file-scope asm with a
 [ "$(readelf -sW "$ho/.esy.o" | awk '$8 == "__export_symbol_x" {print $5}')" = LOCAL ] || fail "a file-scope asm's label is no local symbol"
 [ "$(readelf -sW "$ho/.esy.o" | awk '$8 ~ /^l1\./' | wc -l)" = 0 ] || fail "a file-scope asm's numbered label reached the symtab"
 [ "$(readelf -rW "$ho/.esy.o" | sed -n '/rela.export_symbol/,/^$/p' | awk 'NR == 3 {print $5}')" = x ] || fail "a relocation to a global binds a section symbol, not the global"
+# a64: an absent weak's address is a literal word (abs64), never a page reach a pie link refuses
+printf 'extern __attribute__((weak)) const int t[];\nconst int *g(void) { return t; }\n' > "$ho/.wkla.c"
+moonrun -t a64 -c "$ho/.wkla.c" -o "$ho/.wkla.o" || fail "mooncc -t a64: an absent weak's address"
+[ "$(readelf -rW "$ho/.wkla.o" | awk '$5 == "t" {print $3}' | sort -u)" = R_AARCH64_ABS64 ] || fail "an absent weak's address reaches by page on a64"
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"
@@ -232,6 +236,43 @@ moonrun -c "$ho/.wgt.c" -o "$ho/.wgt.o" || fail "mooncc a long-named inline help
 printf 'typedef unsigned long size_t;\nextern void *slow(size_t); extern void *fast(size_t);\nstatic inline __attribute__((always_inline)) void *km(size_t size) { if (__builtin_constant_p(size) && size) return fast(size); return slow(size); }\nstatic inline void *ka(size_t n, size_t s) { size_t b; if (__builtin_mul_overflow(n, s, &b)) return 0; return km(b); }\nlong *gp;\nvoid *f(void) { return ka(3, sizeof(*gp)); }\n' > "$ho/.kca.c"
 moonrun -c "$ho/.kca.c" -o "$ho/.kca.o" || fail "mooncc kcalloc's constant size"
 grep -q 'fast' "$ho/.kca.o" && ! grep -q 'slow' "$ho/.kca.o" || fail "a constant size through an overflow builtin did not reach __builtin_constant_p"
+# FIELD_PREP's shape: a constant mask four always_inline calls deep folds its check away, no copy laid
+cat > "$ho/.bfm.c" <<'CEOF'
+typedef unsigned long long u64;
+extern void __bad_mask(void);
+static inline __attribute__((always_inline)) u64 fmul(u64 f) { if ((f | (f - 1)) & ((f | (f - 1)) + 1)) __bad_mask(); return f & -f; }
+static inline __attribute__((always_inline)) u64 fmask(u64 f) { return f / fmul(f); }
+static inline __attribute__((always_inline)) u64 enc(u64 v, u64 f) { return (v & fmask(f)) * fmul(f); }
+static inline __attribute__((always_inline)) u64 repl(u64 o, u64 v, u64 f) { return (o & ~f) | enc(v, f); }
+u64 rd(u64 p, u64 n) { return repl(p, n, 0xf800); }
+CEOF
+moonrun -c "$ho/.bfm.c" -o "$ho/.bfm.o" || fail "mooncc FIELD_PREP's shape"
+! grep -q '__bad_mask' "$ho/.bfm.o" || fail "a constant mask four always_inline calls deep kept its __bad_mask"
+# btf_parse_base's shape: a static whose constant test returns early is judged as it splices, the
+# goto tail past the return cut, and the section bounds it never reads go with it
+cat > "$ho/.btf.c" <<'CEOF'
+extern char __start_BTF[], __stop_BTF[];
+extern void *kz(unsigned long);
+extern int hdr(void *);
+static void *base(const char *name, void *data, unsigned size)
+{
+  void *b = 0;
+  int err;
+  if (!0)
+    return (void *)-2L;
+  b = kz(size);
+  if (!b) { err = -12; goto out; }
+  err = hdr(data);
+  if (err) goto out;
+  return b;
+out:
+  return (void *)(long)err;
+}
+void *vml(void) { return base("vmlinux", __start_BTF, __stop_BTF - __start_BTF); }
+void *oth(void *d, unsigned n) { return base(".BTF.base", d, n); }
+CEOF
+moonrun -c "$ho/.btf.c" -o "$ho/.btf.o" || fail "mooncc btf_parse_base's shape"
+! grep -q '_BTF' "$ho/.btf.o" || fail "a call whose callee returns early on a constant kept the section bounds it never reads"
 
 # a jump label: its "i" operand is constant only once spliced, and its asm goto target,
 # named only by __jump_table, stays laid. held to gcc -O2 (-O0 refuses the "i")
@@ -458,6 +499,15 @@ else
   gate_partly "  (-ffixed-x18: the allocation check skipped, no llvm-objdump)"
 fi
 moonrun -ffixed-x18 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x18 taken on x64"
+# -mgeneral-regs-only (a64's -mno-sse): a variadic prologue saves no q register, which a kernel traps on
+printf '#include <stdarg.h>\nint vs(int n, ...) { va_list a; int s = 0; va_start(a, n); while (n--) s += va_arg(a, int); va_end(a); return s; }\n' > "$ho/.gro.c"
+moonrun -t a64 -mgeneral-regs-only -c -o "$ho/.gro.o" "$ho/.gro.c" || fail "-mgeneral-regs-only refused on a64"
+if command -v llvm-objdump > /dev/null; then
+  llvm-objdump -d --no-show-raw-insn "$ho/.gro.o" | sed -n 's/^ *[0-9a-f]*://p' | grep -qwE '[bhsdqv][0-9]+' \
+    && fail "-mgeneral-regs-only: a variadic prologue touched a float register"
+else
+  gate_partly "  (-mgeneral-regs-only: the register check skipped, no llvm-objdump)"
+fi
 moonrun -t a64 -ffixed-x20 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-ffixed-x20 was ignored"
 echo "mooncc: -fshort-wchar, -fmacro-prefix-map and -ffixed-x18 do what they say, held to gcc"
 

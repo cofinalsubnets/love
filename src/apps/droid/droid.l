@@ -33,6 +33,47 @@
              [k a b c])))
    (face-frame s w h fb) (say s ("F" + wrle w 2 + wrle h 2 + wrle 0 2 + wrle h 2), say s fb, flush s)
 
+   ; --- the framework's door (LOVE_DROID; the ops are bridge.c's header) ---
+   ; an answer is a handle's number, () for null, a primitive's text, or [kind text] for
+   ; what was thrown ('x) or refused ('e): a found-test is (two? r). a session holds 256
+   ; handles: let go what is done with
+   (jni-open _) (getenv "LOVE_DROID" @ p (string? p ? (connect ['unix p])))
+   (jni-rd s n) (: (go k acc) (k < 1 ? (two? acc ? (cats (rev acc)) "") (see s @ c (c < 0 ? () (go (k - 1) (string c . acc))))) (go n ()))
+   (jni-op s body)
+    (: _ (say s (wrle #body 4 + body), flush s)
+       n (jni-rd s 4) k (string? n ? (see s) -1) t (0 <= k ? (jni-rd s (rdle n 0 4 - 1)))
+       (? !(string? t) ['e "the bridge hung up"]
+          (k @ 104 (read t) 122 () 118 t 116 t
+               120 ['x t] ['e t])))
+   ; an op on arguments: a text becomes a String for it, let go after; a number is its
+   ; decimal, () null
+   (jni-str s t) (jni-op s ("s" + t))
+   (jni-cmd s pre as)
+    (: hs (map (x \ string? x ? (jni-str s x) x) as)
+       bad (filter two? hs)
+       (? (two? bad) <bad
+          (: r (jni-op s (pre + cats (map (x \ string 0 + (charm? x ? (show x) "")) hs)))
+             (each ^#as (i \ string? (as i) ? (jni-drop s (hs i)) 0), r))))
+   (jni-act s) (jni-op s "a")
+   (jni-class s nm) (jni-op s ("c" + nm))
+   (jni-call s h nm sig as) (jni-cmd s ("m" + show h + string 0 + nm + string 0 + sig) as)
+   (jni-static s c nm sig as) (jni-cmd s ("k" + show c + string 0 + nm + string 0 + sig) as)
+   (jni-new s c sig as) (jni-cmd s ("n" + show c + string 0 + sig) as)
+   (jni-get s h nm ty) (jni-op s ("g" + show h + string 0 + nm + string 0 + ty))
+   (jni-sget s c nm ty) (jni-op s ("f" + show c + string 0 + nm + string 0 + ty))
+   (jni-text s h) (jni-op s ("t" + show h))
+   (jni-drop s h) (charm? h ? (jni-op s ("d" + show h)) 0)
+   ; a uri to what views it, an ACTION_VIEW intent the activity starts: 0, or the failed step's answer
+   (droid-view s u)
+    (: (on r k) (two? r ? r (k r))
+       (on (jni-class s "android/net/Uri") (uc \
+        on ((jni-static s uc "parse" "(Ljava/lang/String;)Landroid/net/Uri;" [u]) @ r (jni-drop s uc, r)) (ur \
+        on (jni-class s "android/content/Intent") (ic \
+        on ((jni-new s ic "(Ljava/lang/String;Landroid/net/Uri;)V" ["android.intent.action.VIEW" ur]) @ r
+            (jni-drop s ic, jni-drop s ur, r)) (i \
+        on (jni-act s) (a \
+        (jni-call s a "startActivity" "(Landroid/content/Intent;)V" [i]) @ r (jni-drop s i, jni-drop s a, two? r ? r 0))))))))
+
    ; --- the binary manifest (android's axml) ---
    ; an element is [tag attrs kids], an attribute [android? name kind value], kind 'int 'hex
    ; 'bool or 'str. attributes are known by resource id, which the map chunk gives the first

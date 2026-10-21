@@ -86,8 +86,8 @@ out/lib/readme.bin: $(love0) $(S)/love/boot/post.l $(R)/VERSION
 	@echo 'LOVE	'$@
 
 ho = out$(hsuf)
-# the link the hot profile is taken of: love.raw less the hot.prof it carries, so the profile is
-# a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
+# the link the profiles are taken of: love.raw less the hot.prof and hot.calls it carries, so
+# each is a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
 # build (HCC) records no profile, and profiles its own link only to say so
 ifneq ($(HCC),)
 prof_raw = $(ho)/love.raw
@@ -117,14 +117,15 @@ love0: $(love0)
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
 # the bake is hot-first: src/tools/hotbake.sh lays what short runs touch ahead, by the tree's
-# profile, so a lazy wake decodes little of the image. `make hotprof` writes the profile again
-# after a change to anything baked (test_bakerep says when).
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hotbake.sh src/tools/hot.prof
+# profile, and glazes a leaf only where the tree's call profile calls it often. `make hotprof`
+# writes both again after a change to anything baked (test_bakerep says when).
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hotbake.sh src/tools/hot.prof src/tools/hot.calls
 	@echo 'BAKE	'$@
 	@sh src/tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
 
 .PHONY: hotprof
 hotprof: $(prof_raw) $(ho)/.dist-cat.l
+	@sh src/tools/hotbake.sh -c $(prof_raw) src/tools/hot.calls $(ho)/.dist-cat.l
 	@sh src/tools/hotbake.sh -p $(prof_raw) src/tools/hot.prof $(ho)/.dist-cat.l
 
 .PHONY: candidate
@@ -308,8 +309,8 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 $(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
-# prof_raw: love.raw less the hot.prof it carries
+	@$(moon0) -os macos -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+# prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
@@ -357,7 +358,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/scenery.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/stones.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
-  src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/doom.l src/apps/droid/droid.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
+  src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/doom.l src/apps/droid/droid.l src/apps/open.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
@@ -443,7 +444,7 @@ out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
 out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof src/tools/hot.calls
 out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)
