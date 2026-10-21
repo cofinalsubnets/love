@@ -449,8 +449,8 @@
       (<lg-r = 1) (cr-in (lg-r 1) "test_quick exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
    0)
 
-; gcshard.sh leaves the normal build to its caller, and its stress builds link that build's
-; out/src.o: a make that packs the tree mid-gate moves out/love under the other lanes
+; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
+; the other lanes. its makes take only what cook takes too (no -o)
 (: gb-d (cr-root + "/gcshard")
    _ (mkdir gb-d 493)
    _ (cr-put gb-d "mk" "echo \"$*\" >> made\n")
@@ -459,7 +459,7 @@
    _ (test
       (<gb-r = 1) (cr-in (gb-r 1) "FAIL gcshard: no out/love")
       (#gb-made = 2)
-      !(two? (filter (\ l !(cr-in l "-o out/src.o ")) gb-made))
+      !(two? (filter (\ l (cr-in l " -o ")) gb-made))
       !(two? (filter (\ l (cr-in (l + " ") " host " || cr-in (l + " ") " out/love.raw ")) gb-made)))
    0)
 

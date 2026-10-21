@@ -15,6 +15,7 @@
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary.
 set -u
 
+# GNU make's: the lanes ask -p -q -k -o, which cook does not take
 MAKE=${MAKE:-make}
 
 # a lane starts only while the box has LANES_MEM_GB (8) available: a shared box runs out of
