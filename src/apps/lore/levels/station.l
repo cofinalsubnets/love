@@ -1,4 +1,4 @@
-; `love lore corridor --level src/apps/lore/levels/station.l`
+; `love play src/apps/lore/levels/station.l`, and `love play edit` the same
 (borrow 'scenery)
 
 ; the textures, their layers listed at the top of src/apps/lore/swatch.l. (tiles n m a b

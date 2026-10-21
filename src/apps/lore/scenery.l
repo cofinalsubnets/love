@@ -15,7 +15,7 @@
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
 ;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
-;                                      corridor's own dim
+;                                      world's own dim
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -61,7 +61,7 @@
 ;                                      one light between them
 ;   (poster [x y z] width height FILE) on the wall nearest, the middle of its foot at x y z;
 ;                                      a png's path from the level's folder, or () for the
-;                                      corridor's own
+;                                      world's own
 ;   (sign [x y z] height TEXT (rgb r g b))  a neon sign on the wall nearest
 ;   (neon [x y z] [nx ny nz] height TEXT (rgb r g b))  a neon sign whose foot's middle is at
 ;                                      x y z, facing n
@@ -256,7 +256,7 @@
  (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (p \ twin 'mz (flip (re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b) p))) l))
  ; ..a twin's 'mx or 'mz -1 where it is turned over on x or z, so a move of it is turned too
  (twin k p) (with p k (0.0 - peep p k 1.0))
- ; --- the level: its parts sorted into what the corridor builds from ---
+ ; --- the level: its parts sorted into what the world builds from ---
  (lo2 a b) (map (k \ min2 (a k) (b k)) ^3)
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})

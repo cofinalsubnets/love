@@ -1,8 +1,8 @@
 ; test/host/lorewin.l -- view's loop on a headless window ('evq its events): keys to actions,
-; held keys at the level's pace, repeat no press, ? help; and the corridor painted on its paper.
+; held keys at the level's pace, repeat no press, ? help; and the world painted on its paper.
 ; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
 (borrow 'view)
-(borrow 'corridor)
+(borrow 'world)
 (borrow 'posix)
 
 (: _ (setenv "HORN" "none")
@@ -37,22 +37,22 @@
        (a 1 = 80) (a 2 = 50)                                          ; 640 by 400: 80 cells by 25 rows
        (c 3 = [1 2]) (c 0 = ()) (d 4 = 4) (d 0 = ()) (a 4 = ())))                                     ; the help while ? is down, and no action
 
-; the corridor on a window's paper: the lit hall, and with p the bottom row's words
-(: hall (corridor-load "src/apps/lore/levels/hall.l")
+; the world on a window's paper: the lit hall, and with p the bottom row's words
+(: hall (world-load "test/lore/hall.l")
    win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}
-   st (corridor-size (pins (corridor-new 80 50 hall "src/apps/lore/levels/") 'win win 'deep 1) 80 25)
-   out (corridor-frame st)
+   st (world-size (pins (world-new 80 50 hall "test/lore/") 'win win 'deep 1) 80 25)
+   out (world-frame st)
    (rgb x y) (4 * (y * 640 + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
    lit (net (map (i \ (rgb (i * 37 % 640) (i * 53 % 384) != [0 0 0])) ^200))
    ; ..each pixel a 2 by 2 square, the default scale
    sq (all (i \ (: x (2 * (i * 37 % 320)) y (2 * (i * 23 % 190)) c (rgb x y)
                   (c = rgb (x + 1) y && c = rgb x (y + 1) && c = rgb (x + 1) (y + 1)))) ^200)
    _ (pin st 'pos 1)
-   _ (corridor-frame st)
+   _ (world-frame st)
    ground (rgb 636 392)
    ink (any (y \ any (x \ rgb x y = [238 238 238]) (map (+ 8) ^8)) (map (+ 384) ^16))
  (test (out = "") (st 'kp = 2) (100 < lit) sq (ground = [20 20 20]) ink
-       (tablet? (corridor-opts ["--window"])) ((corridor-opts ["--window"]) 'md = 'window)))
+       (tablet? (world-opts ["--window"])) ((world-opts ["--window"]) 'md = 'window)))
 
 ; the loading screen: view-spin blacks its box and rings the middle, the brightest dot at
 ; the right to begin, a fifth of the box across, and after shows only the ring's rows; in a
@@ -71,4 +71,4 @@
        (n0 = 0) (n1 = 1) (n2 = 1) (c 'ld 'what = 'cuts) (c 'ld 'part = 0.5) (c 'ld 'n = 0) (c 'ld 'ms >= 150)))
 
 (test_fin (),
- puts "lorewin: ok -- a held key walks at its pace, the keyboard's repeat no press, a pressed one acts once, and the corridor paints its window\n")
+ puts "lorewin: ok -- a held key walks at its pace, the keyboard's repeat no press, a pressed one acts once, and the world paints its window\n")

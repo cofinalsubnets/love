@@ -666,7 +666,7 @@
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
- stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))

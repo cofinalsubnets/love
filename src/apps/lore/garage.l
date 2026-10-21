@@ -275,7 +275,7 @@
    (drain-keys (),
     ttygive rove-modes,
     0))
- garage-usage "usage: love lore garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
+ garage-usage "usage: love play garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (garage-main as) (as @ () (garage-run ())
                         (say err ("garage: " + garage-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'garage (udoor 'garage garage-main garage-usage 1 1)))

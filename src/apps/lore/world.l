@@ -1,14 +1,15 @@
-; corridor -- an indoor level in first person, its rooms read from a level file and read
-; again whenever the file changes, so a level can be edited beside the running game.
-; a level is a love file in scenery.l's words, its last form (level NAME PART ..); a texture
-; is made from its recipe (swatch.l), and a surface no texture names is a grid.
-; nothing outside: every light is a lamp (mesh.l), baked once into a channel and summed each
-; frame by how bright it is just then. corridor-read, -new, -step, -move and -frame are pure;
-; corridor-watch reads the disk, and only corridor-walk and corridor-run touch the tty.
-(module (corridor corridor-run corridor-walk corridor-main corridor-new corridor-size corridor-step corridor-binds corridor-pick corridor-span corridor-scene
-         edit-new edit-events edit-paint edit-lay edit-main edit-outline corridor-ray
-         corridor-move corridor-frame corridor-pens corridor-opts corridor-read corridor-load
-         corridor-watch corridor-free? corridor-ks corridor-sound motes-at fps eye-h body-r grav-n)
+; world -- a level in first person (`love play LEVEL.l`), read from its file and read again
+; whenever the file changes, so a level can be edited beside the running game, and its editor
+; (`love play edit LEVEL.l`). a level is a love file in scenery.l's words, its last form
+; (level NAME PART ..); a texture is made from its recipe (swatch.l), and a surface no texture
+; names is a grid. every lamp (mesh.l) is baked once into a channel and summed each frame by
+; how bright it is just then; a sky, if the level has one, lights what it reaches.
+; world-read, -new, -step, -move and -frame are pure; world-watch reads the disk, and only
+; world-walk and world-run touch the tty.
+(module (world world-run world-walk world-main world-new world-size world-step world-binds world-pick world-span world-scene
+         edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray
+         world-move world-frame world-pens world-opts world-read world-load
+         world-watch world-free? world-ks world-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -34,15 +35,15 @@
  chunk-m 8.0 cell 0.25 cell-top 2.0                   ; how fine the surfaces are cut near a lamp, for the
                                           ; light, and how coarse far from every one
  watch-every 10                           ; frames between looks at the files
- the-level "src/apps/lore/levels/hall.l"
- ; --- the level, read: (corridor-read s) runs a level file's text into a tablet {'name 'start
+ the-level "src/apps/lore/levels/station.l"
+ ; --- the level, read: (world-read s) runs a level file's text into a tablet {'name 'start
  ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
  ; ..a brush with no inside: a box flat in some direction, a prism no height
  (empty? r) (: sh (r 'shape)
    (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3)))
  ; ..a scare raised by a word given what it does not take says what it takes; any other is
  ; love's own
- (corridor-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
+ (world-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
                                        ds (foldl (\ a d (ev 'ev d)) (ev 'ev '(borrow 'scenery)) (src-last ds))))
                              () (\ a b ['scare a b]))
    (? (tablet? r) (r 'kind = 'level ? (check r) "the file's last form should be (level NAME PART ..)")
@@ -76,7 +77,7 @@
                                 (? (k >= #s || elem (s k) [41 93 125]) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc))))
    (go (i + 1) ()))
  (sx-tops s) (: (go j acc) (: k (sx-skip s j) (? (k >= #s) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc)))) (go 0 ()))
- (corridor-span s p) (: tops (sx-tops s) lv (two? tops ? <(rev tops) ())
+ (world-span s p) (: tops (sx-tops s) lv (two? tops ? <(rev tops) ())
    (kid f k) (: ks (sx-kids s (f 0)) j (s (f 0) = 91 ? (k - 1) k) (0 <= j && j < #ks ? (ks j) ()))
    (go f l) (? (atom? l) f (atom? f) () (go (kid f <l) >l))
    (two? lv ? (go lv p) ()))
@@ -110,7 +111,7 @@
    (two? bad ? "a car's door must sit in one of its long walls, under its roof, with wall beside it to slide into" (pin lv 'cars cs)))
  ; ..from a file: the level, or why not
  (slurp-file p) (: q (open p "r") (hot? q ? (slurp q @ s (close q, s)) ()))
- (corridor-load p) (slurp-file p @ () ("cannot read " + p) s (corridor-read s))
+ (world-load p) (slurp-file p @ () ("cannot read " + p) s (world-read s))
  ; --- places: in a door's frame, along its wall, up, and across it ---
  (P ax al y ac) (ax = 'z ? [al y ac] [ac y al])
  (along ax) (ax @ 'z [1.0 0.0 0.0] [0.0 0.0 1.0])
@@ -269,7 +270,7 @@
   'blink (flicker-blink mt 1.5 0.5 0.06)
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
- (corridor-ks sc mt ds) (map (i \ bright (sc 'lights i 'how) mt i ds) ^#(sc 'lights))
+ (world-ks sc mt ds) (map (i \ bright (sc 'lights i 'how) mt i ds) ^#(sc 'lights))
  amb [0.025 0.025 0.03]
  ; the sky's day, an equinox, and its latitude; asked every sky-k of kitty's pixels
  sky-day 20716.0
@@ -405,14 +406,14 @@
                         (ca * c 5 + sa * c 7) (c 6) (ca * c 7 - sa * c 5) (c 8) (c 9) (c 10)]}
                 ad-shine)])
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
- ; corridor's gain; () when it has none
+ ; world's gain; () when it has none
  (sky-of lv) (peep lv 'sky () @ () ()
    s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pin (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4) 'smooth) 'smog (peep s 'smog 0.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
  ;     dir the level's folder, for its pictures; tk () or view-loading's tick, told as it goes ---
- (corridor-scene lv dir was) (scene lv dir was ())
+ (world-scene lv dir was) (scene lv dir was ())
  ; ..a part as a key says it: a tablet hashes as itself, so as its keys and values
  (vals x) (? (tablet? x) (map (k \ [k (vals (x k))]) (sort (keys x))) (two? x) (map vals x) x)
  (scene lv dir was tk) (: ps (lv 'posters) (tick w p) (tk @ () () f (f w p))
@@ -525,13 +526,13 @@
  gain 2.0
  ; ..the thing under a point x y of the screen: where the ray through it first comes out of
  ; the air, with the brush there and its source path, or ()
- (corridor-pick st x y) (: r (corridor-ray st x y)
+ (world-pick st x y) (: r (world-ray st x y)
    (brush-ray (st 'sc 'brushes) (r 0) (r 1) @ () () q (pin q 'src (peep (peep (st 'lvl 'brushes) (q 'b) {}) 'src ()))))
  ; ..the eye, the ray's way through x y, and the view they are in
- (corridor-ray st x y) (: dm (mesh-dims st) w <dm h (dm 1) e [(st 'px) (st 'py) (st 'pz)]
+ (world-ray st x y) (: dm (mesh-dims st) w <dm h (dm 1) e [(st 'px) (st 'py) (st 'pz)]
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0) [e (mesh-dirs v (y * w + x)) v])
- (corridor-pens st) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
-   ds (st 'doors) ks (corridor-ks sc (st 'mt) ds)
+ (world-pens st) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
+   ds (st 'doors) ks (world-ks sc (st 'mt) ds)
    e [(st 'px) (st 'py) (st 'pz)]
    ; ..under a sky, the sky where nothing is drawn; out in a street, seen further, its haze
    ; for fog
@@ -583,7 +584,7 @@
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog 8 gain bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
- (corridor-frame st) (: w (st 'w) h (st 'h) f (corridor-pens st) r (h // 2)
+ (world-frame st) (: w (st 'w) h (st 'h) f (world-pens st) r (h // 2)
    ; ..or, with p pressed, where the player stands and faces, as a level says it
    m (? (st 'err || !(peep st 'pos 0)) (st 'msg) (where st))
    say? (string? m && (st 'err || peep st 'pos 0 || st 'mt < st 'msg-t + 3.0))
@@ -595,15 +596,15 @@
    "(start [\(r (st 'px)) \(r (st 'py - eye-h)) \(r (st 'pz))] \(r deg) \(r (st 'ph * 180.0 / pi)))")
  ; --- the state: the screen as view lays it, the level and its scene, where the player
  ;     stands and looks, the clock, the doors ---
- (corridor-new w h lv dir) (state-new w h lv dir ())
+ (world-new w h lv dir) (state-new w h lv dir ())
  ; ..ld () or (_ \ tick), a fresh tick for each time the scene is made, kept to make it again
  (loader st) (peep st 'load () @ () () f (f ()))
  (state-new w h lv dir ld) (: s (lv 'start)
-   (corridor-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
+   (world-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
                    'lvl lv 'sc (scene lv dir () (ld @ () () f (f ()))) 'load ld 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
- (corridor-size st w r) (mesh-size st w r)
+ (world-size st w r) (mesh-size st w r)
  ; ..a car's state: 'ph waiting, its door opening, shutting, held shut, going and gone; 't the
  ; seconds in it, 'door how open, 'o how far along its track, 'v how fast
  (cars-new lv) (map (_ \ {'ph 'wait 't 0.0 'door 0.0 'o 0.0 'v 0.0}) (peep lv 'cars ()))
@@ -619,7 +620,7 @@
    (car-stands? s && ((c 'a0 < al && al < c 'a1 && c 'c0 < ac && ac < c 'c1)
                       || (s 'door >= 0.85 && mag (al - c 'dc) < 0.5 * c 'dw
                           && min2 (c 'side) w <= ac && ac <= max2 (c 'side) w))))
- (corridor-free? st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (peep lv 'cars ())
+ (world-free? st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (peep lv 'cars ())
    ring (map (k \ (: a (k * pi / 4.0) [(x + r * cos a) (z + r * sin a)])) ^8) pts ([x z] . ring)
    (shut? i) (: d (lv 'doors i) al (d 'ax = 'z ? x z) ac (d 'ax = 'z ? z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
@@ -635,14 +636,14 @@
    (all air pts && !(any pane? pts) && !(any shut? ^#(lv 'doors))))
  jump-v 4.4                               ; up near a metre
  mantle-h 0.6                             ; how far over the feet a ledge is hoisted onto
- (put! st x z) (walk-slide st x z corridor-free?)
+ (put! st x z) (walk-slide st x z world-free?)
  hoist-s 0.35                             ; seconds a pull up takes
  ; ..in the air against a ledge no more than mantle-h over the feet, a pull up onto it where
  ; a body fits: the ledge looked for a body's breadth on the way, and stood on as far in
  (hoist! st x z) (: fl (st 'py - eye-h) dx (x - st 'px) dz (z - st 'pz) d (max2 1e-9 (sqrt (dx * dx + dz * dz)))
    cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (st 'sc 'brushes) cx cz (fl + mantle-h)) y0 (st 'py)
    (? (!(charm? t || gem? t) || t <= fl + 0.001 || t > fl + mantle-h + 0.001) 0
-      (: _ (pin st 'py (t + eye-h)) ok (corridor-free? st cx cz) _ (pin st 'py y0)
+      (: _ (pin st 'py (t + eye-h)) ok (world-free? st cx cz) _ (pin st 'py y0)
          (ok ? (: _ (pins st 'fv 0.0 'hoist {'y0 y0 'y1 (t + eye-h) 'x0 (st 'px) 'z0 (st 'pz) 'x1 cx 'z1 cz 'k 0.0}) 1) 0))))
  ; ..the pull up under way: up first, then in over the edge, eased at both ends
  (hoisting! st dt) (: h (st 'hoist) k (min2 1.0 (h 'k + dt / hoist-s)) (e a b u) (a + (b - a) * u * u * (3.0 - 2.0 * u))
@@ -652,12 +653,12 @@
  (hoisting? st) (tablet? (peep st 'hoist ()))
  ; ..the mouse's motion, as far as a pixel turns
  mouse-k 0.0025
- (corridor-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
- ; ..the corridor's own keys, over view's
- corridor-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump}
+ (world-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
+ ; ..the world's own keys, over view's
+ world-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump}
  ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
  ; way to go, summed for the frame's walk
- (corridor-step st a) (: dt (peep st 'dt (1.0 / fps))
+ (world-step st a) (: dt (peep st 'dt (1.0 / fps))
    (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
    (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
       'jump (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 && !(hoisting? st) ? (pin st 'fv jump-v) st)
@@ -667,10 +668,10 @@
  ; ..the frame's walk: the ways summed, no faster for two at once, and how fast it went
  (walk! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) n (sqrt (f * f + s * s)) th (st 'th) x0 (st 'px) z0 (st 'pz)
    _ (? (n > 0) (: k (walk-v * dt / max2 1.0 n) x (x0 + k * (f * sin th + s * cos th)) z (z0 + k * (f * cos th - s * sin th))
-                  (peep st 'fv 0.0 != 0.0 && !(corridor-free? st x z) && hoist! st x z ? st (put! st x z))))
+                  (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
  ; a frame's motion: the clock, each door toward open while the player is near it, and the cars
- (corridor-move st) (: dt (peep st 'dt (1.0 / fps)) up (hoisting? st) _ (up ? (hoisting! st dt) (walk! st dt)) lv (st 'lvl) x (st 'px) z (st 'pz)
+ (world-move st) (: dt (peep st 'dt (1.0 / fps)) up (hoisting? st) _ (up ? (hoisting! st dt) (walk! st dt)) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
@@ -797,7 +798,7 @@
  (snd-t secs) (iota (int (secs * snd-rate)) / (1.0 * snd-rate))
  ; ..noise from a hash of each sample's time, about -1..1
  (snd-noise t) (: h (sin (t * 12345.678 + 0.5) * 43758.5453) (2.0 * (h - floor h) - 1.0))
- (corridor-sound nm) (nm @
+ (world-sound nm) (nm @
    "chime" (: t (snd-t 1.0) a (t < 0.42) (tone f u) (sin (tau * f * u) * exp (-5.0 * u))
              [(0.35 * (a * tone 659.3 t + (1 - a) * tone 523.3 (t - 0.42))) snd-rate])
    "hiss" (: t (snd-t 0.7) [(0.25 * snd-noise t * exp (-4.0 * t) * min (t * 40.0) 1.0) snd-rate])
@@ -813,10 +814,10 @@
  (files st) (: p (st 'path)
    (string? p ? (p . filter string? (map (q \ file-of (st 'dir) q) (st 'lvl 'posters))) ()))
  (seen! st) (pin st 'stamps (map (p \ [p (stamp p)]) (files st)))
- (corridor-watch st) (: was (peep st 'stamps ())
+ (world-watch st) (: was (peep st 'stamps ())
    (? (atom? was) (seen! st)
       (all (q \ stamp (q 0) = q 1) was) st
-      (: lv (corridor-load (st 'path))
+      (: lv (world-load (st 'path))
          (? (string? lv) (pins (seen! st) 'msg lv 'err 1 'msg-t (st 'mt))
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                cs (#(peep lv 'cars ()) = #(peep st 'cars ()) ? (st 'cars) (cars-new lv))
@@ -825,33 +826,33 @@
                (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc) (loader st)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
                                'err 0 'msg-t (st 'mt))))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
- ; --- the walk, on view's loop; corridor-run raises the stage. o 'loading draws the loading
+ ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---
- (corridor-walk o lv)
+ (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (peep o 'win ())
                                ld (_ \ view-loading win (tablet? win ? (window-size win @ s [0 0 (s 0) (s 1)]) [0 0 w (h // 2)]) (peep o 'loading view-spin))
                                st (pins (state-new w h lv (dir-of p) ld) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
-                               (corridor-watch (corridor-size st w (h // 2)))))
-               'size corridor-size 'frame corridor-frame 'key corridor-step 'look corridor-look
-               'binds (view-bind view-binds corridor-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'where 'finer 'coarser])
+                               (world-watch (world-size st w (h // 2)))))
+               'size world-size 'frame world-frame 'key world-step 'look world-look
+               'binds (view-bind view-binds world-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'where 'finer 'coarser])
                'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                'tick (st \ (walk-dt st,
-                            corridor-move st,
-                            (st 't % watch-every = 0 ? (corridor-watch st))))
+                            world-move st,
+                            (st 't % watch-every = 0 ? (world-watch st))))
                'fps fps 'linger 0 'next ()
-               'song (hn \ (hn ? (mix-new hn corridor-sound (st \ [(st 'px) (st 'pz) (st 'th)]) {'near 2.0 'far 40.0 'fps fps 'gain 12000.0}) ()))
+               'song (hn \ (hn ? (mix-new hn world-sound (st \ [(st 'px) (st 'pz) (st 'th)]) {'near 2.0 'far 40.0 'fps fps 'gain 12000.0}) ()))
                'win (peep o 'win ())})
  ; ..the level named, else the tree's own on disk, else the one the binary carries
- (corridor-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
-                     lv (corridor-load p)
-   (? (string? lv) (say err ("corridor: " + p + ": " + lv + "\n"), flush err, 1)
-      (view-stage (pin o 'level p) (o2 \ corridor-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- corridor-usage "usage: love lore corridor [--level FILE] [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
- ; the words, as a tablet for corridor-run, or () where one is wrong or said twice
- (corridor-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
-                                    (view-arg "--level" 'level (w \ w))])
- (corridor-main as) (view-main "corridor" corridor-usage corridor-opts corridor-run as)
+ (world-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
+                     lv (world-load p)
+   (? (string? lv) (say err ("world: " + p + ": " + lv + "\n"), flush err, 1)
+      (view-stage (pin o 'level p) (o2 \ world-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
+ world-usage "usage: love play LEVEL.l [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ ; the words, as a tablet for world-run, or () where one is wrong or said twice
+ (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
+                                    (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])
+ (world-main as) (view-main "world" world-usage world-opts world-run as)
  ; --- the editor: the level's text in vi on the right and its scene on the left, in one
  ;     window. ctrl-w w goes between them, a click on the scene puts vi on the form that made
  ;     what it hit, the right button held looks by the mouse, and coming back to the scene
@@ -865,7 +866,7 @@
  ; ..the scene read again from vi's text, when it is not what the scene was read from
  (edit-sync ed) (: vi (ed 'vi) vs (ed 'vs) t (edit-text (vs 'lines)) st (ed 'st)
    (? (t = ed 'text) ed
-      (: lv (corridor-read t)
+      (: lv (world-read t)
          (? (string? lv) (vi 'vmsg vs ("scene: " + lv), pins ed 'text t 'dirty 1)
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                _ (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc) (loader st)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
@@ -877,15 +878,15 @@
  ; ..what the scene's pixel x y shows chosen, vi on the form that made it, and a drag begun
  ; from where it was hit: across the floor's level, or with shift held across the face hit,
  ; squared to its nearest axis
- (edit-pick ed x y) (: vi (ed 'vi) vs (ed 'vs) t (ed 'text) st (ed 'st) h (corridor-pick st x y)
-   sp (tablet? h ? (corridor-span t (h 'src)) ())
+ (edit-pick ed x y) (: vi (ed 'vi) vs (ed 'vs) t (ed 'text) st (ed 'st) h (world-pick st x y)
+   sp (tablet? h ? (world-span t (h 'src)) ())
    (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs (tablet? h ? "nothing in the text made that" "nothing there"))
       (: p (h 'p) hn (h 'n) ax (? (mag (hn 0) >= mag (hn 1) && mag (hn 0) >= mag (hn 2)) 0 (mag (hn 1) >= mag (hn 2)) 1 2)
          n (? !(ed 'shift) [0.0 1.0 0.0] (map (i \ i = ax ? 1.0 0.0) ^3))
          (pins ed 'sel (h 'src) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0] 'sg (edit-sg ed (h 'b))},
           vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1))))))
  ; ..the drag to where the ray through x y meets its plane, a twentieth of a metre at a time
- (edit-drag ed x y) (: g (ed 'drag) r (corridor-ray (ed 'st) x y) e (r 0) d (r 1) n (g 'n) k (dot n d)
+ (edit-drag ed x y) (: g (ed 'drag) r (world-ray (ed 'st) x y) e (r 0) d (r 1) n (g 'n) k (dot n d)
    t (mag k < 1e-6 ? -1.0 ((g 'c - dot n e) / k))
    (t > 0.0 ? (: q (c+ e (c* t d)) (pin g 'off (map (i \ floor (20.0 * (q i - g 'p0 i) + 0.5) / 20.0) ^3))) g))
  ; ..a number as the text says it, a twentieth at most
@@ -895,7 +896,7 @@
    (go 0 0 ()))
  ; ..the drag let go: the chosen form in a (move ..) by as far, or its move's by further,
  ; or none where that comes to nothing; vi's text that, undoably, and the scene read again
- (edit-drop ed) (: g (ed 'drag) off (edit-turn (peep g 'sg [1.0 1.0 1.0]) (g 'off)) t (ed 'text) sp (corridor-span t (ed 'sel))
+ (edit-drop ed) (: g (ed 'drag) off (edit-turn (peep g 'sg [1.0 1.0 1.0]) (g 'off)) t (ed 'text) sp (world-span t (ed 'sel))
    _ (pin ed 'drag ())
    (? (all (i \ off i = 0.0) ^3 || atom? sp) ed
       (: a (sp 0) b (sp 1) ks (sx-kids t a) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
@@ -931,7 +932,7 @@
  ; far on as a drag has them
  (edit-outline ed f) (: sel (ed 'sel) st (ed 'st)
    (? (atom? sel) f
-      (: r (corridor-ray st 0 0) e (r 0) v (r 2) w (v 'w) h (v 'h) rt (v 'r) up (v 'u) fw (v 'f) me (c* -1.0 e)
+      (: r (world-ray st 0 0) e (r 0) v (r 2) w (v 'w) h (v 'h) rt (v 'r) up (v 'u) fw (v 'f) me (c* -1.0 e)
          foc (w / 2.0 / tan (fov / 2.0)) off (tablet? (ed 'drag) ? (ed 'drag 'off) [0.0 0.0 0.0])
          (pr p) (: d (c+ p me) z (dot d fw) [(w / 2.0 + foc * dot d rt / z) (h / 2.0 - foc * dot d up / z)])
          (cl a b za zb) (c+ a (c* ((0.1 - za) / (zb - za)) (c+ b (c* -1.0 a))))
@@ -993,7 +994,7 @@
    (ln (ln (ln f2 (by (0.0 - r) 0.0) (by r 0.0) plan-me) (by 0.0 (0.0 - r)) (by 0.0 r) plan-me) e (by (3.0 * r * s) (3.0 * r * o)) plan-me))
  ; ..the plan's chosen form's corners, where it is a room or a box the scene has only moved:
  ; their numbers' spans 'sa 'sb, the numbers 'a 'b, the shift 'd, the brushes' 'lo and 'hi
- (plan-box ed) (: t (ed 'text) st (ed 'st) sel (ed 'sel) sp (atom? sel ? () (corridor-span t sel))
+ (plan-box ed) (: t (ed 'text) st (ed 'st) sel (ed 'sel) sp (atom? sel ? () (world-span t sel))
    (num q) (<(sounds (snip t (q 0) (q 1))) @ n (charm? n || gem? n ? n 'no))
    (form i) (: ks (sx-kids t i) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
      (? (t i != 40 || atom? ks) ()
@@ -1029,7 +1030,7 @@
          (? (tablet? eg) (pin ed 'drag eg)
             (ed 'shift) (: r (map plan-snap q) (pin ed 'drag {'kind 'rect 'a r 'b r 'in (filter (i \ bs i 'air) hs)}))
             (: c (p 'fl + plan-cut) dn (two? hs && bs <hs 'air ? (brush-ray bs [(q 0) c (q 1)] [0.0 -1.0 0.0] @ () () r [(r 'b)]) ())
-               tk (filter (i \ two? (src i)) (dn + hs)) sp (two? tk ? (corridor-span (ed 'text) (src <tk)) ())
+               tk (filter (i \ two? (src i)) (dn + hs)) sp (two? tk ? (world-span (ed 'text) (src <tk)) ())
                (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs "nothing there")
                   (pins ed 'sel (src <tk) 'drag {'kind 'move 'q0 q 'off [0.0 0.0 0.0] 'sg (edit-sg ed <tk)},
                    vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1)))))))))
@@ -1067,7 +1068,7 @@
  ; ..and cut over the next floor up, s 1, or down, s -1
  (plan-step ed s) (: p (ed 'plan) fs (filter (f \ s > 0 ? (f > p 'fl + 0.05) (f < p 'fl - 0.05)) (plan-floors (ed 'st)))
    (? (atom? fs) ed (: f (s > 0 ? <fs <(rev fs)) _ (pin p 'fl f) ((ed 'vi) 'vmsg (ed 'vs) ("the floor at " + edit-num f), ed))))
- ; ..the keys vi wants that the corridor's own keys leave out: backspace, tab, delete, home, end
+ ; ..the keys vi wants that the world's own keys leave out: backspace, tab, delete, home, end
  edit-set1 {14 8 15 9 339 -4 327 -5 335 -6}
  ; ..a key for vi: what it typed, else the arrows as a terminal sends them
  (edit-bytes t k) (? (0 < #t) t (k @ -1 "\e[D" -2 "\e[C" -8 "\e[A" -9 "\e[B" -4 "\e[3~" -5 "\e[H" -6 "\e[F" 27 "\e" 13 "\r" 8 "\x7f" (charm? k && 0 < k ? (string k) "")))
@@ -1090,7 +1091,7 @@
          _ (<e = 'down && charm? k && k != 113 ? (pin ed 'qq 0))
          _ (md != () ? (pin ed 'ctrl md) (e @- ()
             ['close] (pin ed 'quit 1)
-            ['size w h] (: ly2 (edit-lay w h) (pins ed 'lay ly2 'scr (edit-screen ly2) 'dirty 1, corridor-size st (ly2 'pw) (ly2 'ph // 2)))
+            ['size w h] (: ly2 (edit-lay w h) (pins ed 'lay ly2 'scr (edit-screen ly2) 'dirty 1, world-size st (ly2 'pw) (ly2 'ph // 2)))
             ['press b x y] (? (x >= ly 'sw) (edit-focus ed 'vi)
                               (tablet? (ed 'plan)) (edit-focus ed 'scene, plan-press ed b (x // edit-s) (y // edit-s))
                               (b = 3) (pins ed 'look 1 'lx x 'ly y)
@@ -1099,7 +1100,7 @@
                                 (b != 1 || !(tablet? (ed 'drag))) ed
                                 (ed 'drag 'kind @ 'rect (plan-room ed (ed 'drag)) 'edge (plan-resize ed (ed 'drag)) _ (edit-drop ed)))
             ['move x y] (? (tablet? (ed 'plan)) (plan-move ed (x // edit-s) (y // edit-s))
-                           (ed 'look) (corridor-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y)
+                           (ed 'look) (world-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y)
                            (tablet? (ed 'drag) && x < ly 'sw) (edit-drag ed (x // edit-s) (y // edit-s)))
             ['up c] (pin (ed 'held) c ())
             ['down c] (? (ed 'cw) (edit-cw ed k)
@@ -1113,12 +1114,12 @@
                                       (pin ed 'qq (clock 0), (ed 'vi) 'vmsg (ed 'vs) (ed 'vs 'dirty ? "the text is not written: q again within a second leaves without it, :w in vi writes it"
                                                                                                         "q again within a second leaves")))
                          (tablet? (ed 'plan) && elem k [91 93]) (plan-step ed (k = 93 ? 1 -1))
-                         (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (corridor-step st a))))))
+                         (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (world-step st a))))))
          (edit-events ed >l))))
  ; ..the scene painted on the left, vi's frame scribed and its rows laid on the right
  (edit-paint ed) (: ly (ed 'lay) W (ly 'W) H (ly 'H) win (ed 'win) P (window-paper win) st (ed 'st) scr (ed 'scr)
    cols (ly 'cols) rows (ly 'rows) tw (8 * cols) sw (ly 'sw)
-   _ (frame-paint (tablet? (ed 'plan) ? (plan-pens ed) (edit-outline ed (corridor-pens st))) (ly 'pw) edit-s P W)
+   _ (frame-paint (tablet? (ed 'plan) ? (plan-pens ed) (edit-outline ed (world-pens st))) (ly 'pw) edit-s P W)
    fr ((ed 'fc) 0 cols rows)
    _ (? (0 < #fr || ed 'dirty)
         (: tb (cask (tw * rows * 16 * 4)) cur (gaze scr 0)
@@ -1135,25 +1136,26 @@
    _ (row 0) _ (row (h - 1)) (each (drop 1 ^(h - 1)) side))
  (edit-loop ed) (: t0 (clock 0) st (ed 'st)
    _ (edit-events ed (window-events (ed 'win)))
-   _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right]) ? (corridor-step st a))))
-   _ (walk-dt st) _ (corridor-move st) _ (pin st 't (st 't + 1))
+   _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right]) ? (world-step st a))))
+   _ (walk-dt st) _ (world-move st) _ (pin st 't (st 't + 1))
    _ (edit-paint ed)
    (ed 'quit || (ed 'fc) 2 () ? ()
       (clock 0 - t0 @ spent (spent < 1000 // fps ? (rest (1000 // fps - spent)), edit-loop ed))))
  edit-blank "(level \"nothing yet\" (room [0 0 0] [4 3 4]) (start [2 0 2] 0 0))"
  ; ..the editor on a window, over vi's state vs; its scene's pictures from dir
  (edit-new win vs dir) (: vi (cite 'vi) fc (vi 'vi-face vs {}) wh (window-size win)
-   t (edit-text (vs 'lines)) lv0 (corridor-read t) lv (string? lv0 ? (corridor-read edit-blank) lv0)
+   t (edit-text (vs 'lines)) lv0 (world-read t) lv (string? lv0 ? (world-read edit-blank) lv0)
    ly (edit-lay (wh 0) (wh 1)) st (state-new (ly 'pw) (ly 'ph) lv dir (_ \ view-loading win [0 0 (ly 'sw) (ly 'H)] view-spin))
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
    {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
-    'binds (view-bind view-binds corridor-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
+    'binds (view-bind view-binds world-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
  (edit-run p) (window-open 1280 720 "lore edit" @ win
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love lore edit FILE   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, ctrl-z undoes and ctrl-r does again, the right button held looks, the corridor's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
+ edit-usage "usage: love play edit LEVEL.l   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, ctrl-z undoes and ctrl-r does again, the right button held looks, the world's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
  (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
- _ (cite 'lore 'lore-enlist 'corridor (udoor 'corridor corridor-main corridor-usage 1 1))
- _ (cite 'lore 'lore-enlist 'edit (udoor 'edit edit-main edit-usage 1 1)))
-) ; module corridor
+ _ (cite 'lore 'lore-shelve 'world (udoor 'world world-main world-usage 1 1))
+ _ (cite 'lore 'lore-shelve 'world-edit (udoor 'world-edit edit-main edit-usage 1 1))
+ _ (cite 'lore 'lore-alias 'corridor 'world))
+) ; module world
