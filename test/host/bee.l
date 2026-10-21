@@ -429,19 +429,23 @@
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
-; member is, else red naming the red ones
+; member is, else red naming the red ones. a lane run alone (test_hdiff, the lane map's) takes
+; the prerequisites step 1 made as made, as the parallel lanes do
 (: lg-d (cr-root + "/lanes")
    _ (hark ["mkdir" "-p" (lg-d + "/test/gate") (lg-d + "/out")])
    _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (lg-d + "/test/gate/")])
    _ (hark ["ln" "-s" cr-love (lg-d + "/out/love")])
-   _ (cr-put lg-d "Makefile" "test_quick: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n")
-   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_quick")
+   _ (cr-put lg-d "Makefile" ("test_quick: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n"
+                              + "test_hdiff: pre\n\t@true\npre: force\n\t@echo x >> made\nforce:\n"))
+   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_quick test_hdiff")
                  [<r (cr-get (lg-d + "/out/l/summary"))])
    lg-g (lg-run 0)
+   lg-pre (cr-get (lg-d + "/made"))
    _ (cr-put lg-d "red" "")
    lg-r (lg-run 0)
    _ (test
-      (<lg-g = 0) (cr-in (lg-g 1) "test_quick exit=0 ")
+      (<lg-g = 0) (cr-in (lg-g 1) "test_quick exit=0 ") (cr-in (lg-g 1) "test_hdiff exit=0 ")
+      (lg-pre = "x\n")
       (<lg-r = 1) (cr-in (lg-r 1) "test_quick exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
    0)
 

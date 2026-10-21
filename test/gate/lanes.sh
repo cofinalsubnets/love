@@ -156,9 +156,10 @@ moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
 
-# step 4: alone, in turn
+# step 4: alone, in turn, step 1's targets old as in step 3: a lane's own make of host packs the
+# tree again and moves out/love
 for l in $late; do
-  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" -- "$l"
+  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" $oflags -- "$l"
   moved "by $l"
 done
 
