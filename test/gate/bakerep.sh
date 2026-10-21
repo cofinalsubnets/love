@@ -54,9 +54,15 @@ done
 cmp -s "$w/b3" "$w/b4" \
   || fail "the GC budget is in the image -- a bake must not care when collections fire"
 
-# ..and the hot-first bake the build runs (src/tools/hotbake.sh): its layout comes of the tree's
-# profile, so a profile taken now must be the one the tree holds. an eager build (HCC) and a
-# page other than 4 KiB profile differently, and are not asked
+# ..and the hot-first bake the build runs (src/tools/hotbake.sh): its glaze comes of the tree's
+# call profile and its layout of the tree's hot profile, so each taken now must be the one the
+# tree holds. an eager build (HCC) and a page other than 4 KiB profile differently, and are not
+# asked the layout
+calls() { sh src/tools/hotbake.sh -c "$praw" "$w/$1" "$ho/.dist-cat.l" > "$w/calls.log" 2>&1; }
+calls c1 || { cat "$w/calls.log"; fail "the call profile failed"; }
+calls c2 || { cat "$w/calls.log"; fail "the second call profile failed"; }
+cmp -s "$w/c1" "$w/c2" || fail "the call profile is not reproducible -- it carries something of the machine"
+cmp -s "$w/c1" src/tools/hot.calls || fail "src/tools/hot.calls is stale for this tree: make hotprof"
 ps=$(getconf PAGESIZE 2>/dev/null || echo 4096)
 prof() { sh src/tools/hotbake.sh -p "$praw" "$w/$1" "$ho/.dist-cat.l" > "$w/hot.log" 2>&1; }
 if [ "$ps" != 4096 ]; then

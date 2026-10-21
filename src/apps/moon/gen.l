@@ -1084,8 +1084,10 @@
                               ('land _ _) 1 ('lor _ _) 1 ('un 'not _) 1 ()))
    (spec? g env e)
     (two? e ?
+       ; a weak global may be absent, its address 0: its load never speculates
        (e @ ('var nm) (vent g env nm @ en (two? en && elem <en '(regv loc glo) && !(d128? <>>en)
-                                              && !(stru? <>>en || arr? <>>en)))
+                                              && !(stru? <>>en || arr? <>>en)
+                                              && !(<en = 'glo && elem nm (g 'weaks))))
             ('num _) 1
             ('bin op a b) (!(elem op '(/ %)) && spec? g env a && spec? g env b)
             ('un op a) (spec? g env a)
@@ -2920,7 +2922,7 @@
                       ['lea 'r1 'r4 (rsa + 64)]  '(st r0 8 r1)            ; __gr_top (past x0..x7)
                       ['lea 'r1 'r4 (rsa + 192)] '(st r0 16 r1)           ; __vr_top (past q0..q7)
                       ['li 'r1 -(8 * (8 - ngp))]  '(st4 r0 24 r1)    ; __gr_offs = -(unnamed gp)*8
-                      ['li 'r1 -(16 * (8 - nxmm))] '(st4 r0 28 r1)]  ; __vr_offs = -(unnamed vr)*16
+                      ['li 'r1 (nofp? g ? 0 -(16 * (8 - nxmm)))] '(st4 r0 28 r1)]  ; __vr_offs = -(unnamed vr)*16, none saved under nofp
                    [['li 'r1 (8 * ngp)]         '(st4 r0 0 r1)   ; gp_offset = 8*named-gp
                       ['li 'r1 (48 + 16 * nxmm)] '(st4 r0 4 r1)  ; fp_offset = 48 + 16*named-xmm
                       '(lea r1 r4 16)  '(st r0 8 r1)             ; overflow_arg_area = rbp+16
@@ -7328,6 +7330,7 @@
               (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
                                                 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
               (asintt g r ty + cvt ty 'r0 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
+          (d128? ty && w128? g) (as128 g r + wst g 'r4 off)   ; both halves: a union's .full = v
           (flo? ty) (asfty g r ty + fstv g ty 'r4 off 'f0)
           (pair? g ty) (asll g r + pst 'r4 off)
           (asintt g r ty + cvt ty 'r0 + [[(stop ty) 'r4 off 'r0]])))
@@ -7417,8 +7420,11 @@
                        (go i v acc) (n <= i ? (rev acc)
                                        (go (i + 1) (v // 256) (v % 256 . acc)))
                        (go 0 u0 ()))
-   (iminsert x l) (? !(two? l) [x]                    ; insert (off items) keeping offsets ascending
+   ; insert (off items) keeping offsets ascending. pieces come newest first, so one at an offset
+   ; already laid is an earlier initializer the later one overrides (6.7.9p19: [0 ... 5] = a, [3] = b)
+   (iminsert x l) (? !(two? l) [x]
                      (<x < <<l) (x . l)
+                     (<x = <<l) l
                      (<l . iminsert x >l))
    (imsort ps) (: (go l acc) (!(two? l) ? acc (go >l (iminsert <l acc))) (go ps ()))
    (imflat ps total)                                ; sorted (off items).. -> total bytes, gaps zeroed
@@ -10471,7 +10477,8 @@
         (: rsa (nslot g 192)
            _ (pins g 'rsa rsa 'pcopy ())
            savegp (: (go i acc) (7 < i ? acc (go (i + 1) (acc + [['st 'r4 (rsa + 8 * i) (argregs-a64 i)]]))) (go 0 ()))
-           savevr (: (go i acc) (7 < i ? acc (go (i + 1) (acc + fstf g 'double 'r4 (rsa + 64 + 16 * i) (xmmreg i)))) (go 0 ()))
+           ; -mgeneral-regs-only: no q register is touched, the vr half stays empty (a kernel traps on one)
+           savevr (: (go i acc) (7 < i ? acc (go (i + 1) (acc + fstf g 'double 'r4 (rsa + 64 + 16 * i) (xmmreg i)))) (nofp? g ? () (go 0 ())))
            (cls qs gpi vri ov env)
             (!(two? qs) ? (pins g 'vagp gpi 'vaxmm vri 'vaov ov, [(savegp + savevr + g 'pcopy) env])
                (: p <qs pty <>p
@@ -11157,6 +11164,7 @@
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
+          'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
           'aligns (two? xtra && 4 < #xtra ? (xtra 4) {})
