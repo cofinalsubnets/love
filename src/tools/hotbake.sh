@@ -4,7 +4,7 @@
 #   sh src/tools/hotbake.sh RAW OUT CAT      bake RAW to OUT, laid by the tree's src/tools/hot.prof
 #                                            and glazed by its src/tools/hot.calls
 #   sh src/tools/hotbake.sh -p RAW PROF CAT  profile RAW, writing the word ranges to PROF
-#   sh src/tools/hotbake.sh -c RAW CALLS CAT profile RAW's calls, writing "index count" to CALLS
+#   sh src/tools/hotbake.sh -c RAW CALLS CAT profile RAW's calls, writing "index count" to CALLS for those kept
 #   sh src/tools/hotbake.sh -k               the bake indices hot.calls keeps
 # the call profile: a leaf (a body that neither loops nor drives) keeps its native only when
 # the workloads below called it 1024 times or more; a leaf is known by its place in the bake.
@@ -55,7 +55,7 @@ elif [ "${1:-}" = -c ]; then
   run awk '{ n[$1] += $2; s += length($0) } END { for (k in n) t += n[k]; print t, s }' in
   run awk '$2 ~ /^[0-9]+7$/ { printf "%s %d\n", toupper($1), $2 * 2 }' in
   [ -s "$d/count" ] || { echo "hotbake: $raw counted no calls" >&2; exit 1; }
-  (cd "$d" && env -i PATH="$d" love awk '$2 > m[$1] { m[$1] = $2 } END { for (i in m) print i, m[i] }' count \
+  (cd "$d" && env -i PATH="$d" love awk '$2 > m[$1] { m[$1] = $2 } END { for (i in m) if (m[i] >= 1024) print i, m[i] }' count \
      | env -i PATH="$d" love sort -n) > "$calls"
 elif [ "${1:-}" = -p ]; then
   raw=$2 prof=$3 cat=$4
