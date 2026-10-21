@@ -95,7 +95,7 @@
    (x-query s op win) (x-w8 s op, x-w8 s 0, x-w16 s 2, x-w32 s win, x-flush s, x-reply s)
    (x-query-name s op nm)
     (: n #nm
-       (x-w8 s op, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) / 4),
+       (x-w8 s op, x-w8 s 0, x-w16 s (2 + (n + x-pad4 n) // 4),
         x-w16 s n, x-w16 s 0, x-wpad s nm, x-flush s, x-reply s))
 
    ; --- InternAtom; also the redirect sync point ---
@@ -357,6 +357,8 @@
    x-set1-ext {96 284 97 285 98 309 99 311 100 312 102 327 103 328 104 329 105 331 106 333
                107 335 108 336 109 337 110 338 111 339 125 347 126 348 127 349}
    (x-set1 kc) (kc - 8 @ e (? (0 < e < 84 || 86 <= e <= 88) e (peep x-set1-ext e ())))
+   ; ..and a key the keymap makes a ctrl, wherever it sits (caps lock as ctrl), ctrl's own
+   (x-key km kc) (x-sym km kc 0 @ 65507 29 65508 285 _ (x-set1 kc))
 
    ; --- the event decoder: code 0 = X error (window is garbage) ---
    (x-decode pkt) [(127 & <pkt) (pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]
@@ -375,7 +377,7 @@
    (x-events e km dl)
     (: c (ev-code e) kc (ev-detail e) st (ev-state e) raw (ev-raw e)
        (? (c = 2 || c = 3)
-            (: k (x-set1 kc) t (c = 2 ? (x-text (x-sym km kc st) st) "")
+            (: k (x-key km kc) t (c = 2 ? (x-text (x-sym km kc st) st) "")
                ((charm? k ? [[(c = 2 ? 'down 'up) k]] ()) + (0 < #t ? [['text t]] ())))
           (c = 4 || c = 5) [[(c = 4 ? 'press 'release) kc (i16 raw 24) (i16 raw 26)]]
           (c = 6) [['move (i16 raw 24) (i16 raw 26)]]

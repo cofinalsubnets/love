@@ -384,7 +384,7 @@
  fov (pi / 2.0)
  sky-k 2                                  ; the sky asked every sky-k columns of kitty's pixels
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
- (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) w (k * st 'w) h (k * st 'h) b (breath (peep st 'mt 0.0))
+ (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (breath (peep st 'mt 0.0))
    e [(st 'px) (st 'py + b 0) (st 'pz)]
    v (mesh-eye w h e (st 'th) (st 'ph + b 1) (peep st 'ro 0.0) fov 0.05 900.0)
    hz (mesh-haze v lt (st 'wx) (st 'sim))

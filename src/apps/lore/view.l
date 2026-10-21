@@ -7,7 +7,7 @@
          view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-cells view-pen view-band
-         view-rescale)
+         view-rescale view-loading view-spin)
 (borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'posix)    ; close, for the horn
@@ -164,7 +164,8 @@
  ; a level lv on a stage already raised, a frame a tick. lv: 'new (w h) its state, 'size
  ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
- ; optional 'binds 'listed 'win 'repeat ([pause gap] ms) and 'held (st) to stop a repeat.
+ ; optional 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
+; and 'held (st) to stop a repeat.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
@@ -172,6 +173,12 @@
    binds (peep lv 'binds view-binds)
    hl (view-help binds (peep lv 'listed (view-listed ())))
    hs {'on 0 'p ()}
+   ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
+   ; middle summed for the frame and it put back there, esc lets it go
+   look (peep lv 'look ()) ms {'on 0 'dx 0 'dy 0}
+   (mid _) (window-size win @ s [(s 0 // 2) (s 1 // 2)])
+   (grab! on) (: c (mid ()) ok (window-hold win on)
+     (on && ok ? (pins ms 'on 1 'dx 0 'dy 0, window-warp win (c 0) (c 1)) (pin ms 'on 0)))
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
    ; frame, so a resized window is painted whole
    (shape _) (? win (window-size win @ s [(max2 20 (s 0 // 8)) (max2 8 (s 1 // 16))])
@@ -183,13 +190,19 @@
                 (lv 'size st (sh 0) (sh 1), win ? 0 (say out (esc + "[2J")))))
    held {}
    rep (peep lv 'repeat view-repeat)
-   (hold? k) (elem (binds k) view-walking && (peep lv 'held (_ \ 1)) st)
+   (hold? k) (elem (binds k) (peep lv 'walking view-walking) && (peep lv 'held (_ \ 1)) st)
    ; ..a window's keys: a key down is its code by what it typed, else by its place; the
    ; help's key let go puts the help away
    (wgo l) (? (atom? l) ()
               (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
                  k (? (0 < #t) (t 0) (peep view-set1 (e 1) ()))
                  (? (<e = 'close) ('quit . wgo >l)
+                    (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
+                    (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
+                                              (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
+                                               (dx != 0 || dy != 0 ? (window-warp win (c 0) (c 1)) 0),
+                                               wgo >l))
+                    (<e = 'down && ms 'on && k = 27) (grab! 0, wgo >l)
                     (<e = 'down && charm? k && held (e 1) != ()) (wgo >l)
                     (<e = 'down && charm? k) (pin held (e 1) [k (clock 0 + rep 0)],
                                               (binds k = 'help ? (pins hs 'on 1 'p (e 1))),
@@ -221,6 +234,7 @@
              _ (feed ())
              ks (win ? (wkeys ()) (tget ()))
              acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
+             _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
              _ (resize ())
              _ (pin st 'over (win && hs 'on ? (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
@@ -257,6 +271,41 @@
      (window-open 640 400 "lore" @ win
         (? !(tablet? win) (say err ("lore: no window (" + show win + ")\n"), flush err, 1)
            (mind (_ \ walk (pin o 'win win)) () (_ \ window-close win), 0))))
+ ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
+ ;     (tick what part), for the making to call as it goes, what it is at and () or how far
+ ;     through, 0.0 to 1.0. once the making has taken view-load-wait ms, and no oftener than
+ ;     a frame after, draw is called with {'win 'box 'ms 'n 'what 'part}, n its count: in a
+ ;     window it paints the paper inside box [x0 y0 x1 y1], in pixels, and answers [y0 y1]
+ ;     the rows to show, or () for the box's; the paper may not hold what the screen does,
+ ;     a window's frames being sent whole. else box is in cells and it answers what to say
+ ;     to the terminal ---
+ view-load-wait 150 view-load-every 40
+ (view-loading win box draw) (: t0 (clock 0) at {'n 0 'last 0}
+   (\ what part (: now (clock 0)
+     (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
+        (: s (draw {'win win 'box box 'ms (now - t0) 'n (at 'n) 'what what 'part part})
+           (pins at 'n (at 'n + 1) 'last now,
+            (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (box 1) (box 3)))
+               (string? s) (say out s, flush out)),
+            ()))))))
+ ; ..the loading screen a level has unless it says another: the box black, and twelve dots
+ ; in a ring in its middle, the brightest going round; in a terminal a braille wheel
+ view-spin-bg 0
+ view-spin-cells ["\u280b" "\u2819" "\u2839" "\u2838" "\u283c" "\u2834" "\u2826" "\u2827" "\u2807" "\u280f"]
+ (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
+   (? !(tablet? win) (esc + "[" + show ((b 1 + b 3) // 2 + 1) + ";" + show ((b 0 + b 2) // 2 + 1) + "H" + esc + "[0;37;40m"
+            + view-spin-cells (n % 10) + esc + "[0m")
+      ; ..a fifth of the box across, drawn at most 96 pixels and blown up past that
+      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 95) // 96)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
+         x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
+         I (iota (S * S)) X (I % S - 0.5 * S + 0.5) Y (I // S - 0.5 * S + 0.5) R (0.36 * S) r (0.08 * S)
+         (dot k) (: a (2.0 * pi * k / 12.0) dx (X - R * cos a) dy (Y - R * sin a) (dx * dx + dy * dy < r * r))
+         (grey k) (: v (int (40.0 + 215.0 * (1.0 - ((n - k) % 12 + 12) % 12 / 12.0))) ((v << 16) | (v << 8) | v))
+         f (foldl (\ p j (p + dot j * (grey j - bg))) (I * 0 + bg) ^12) T (cask (A * A * 4))
+         Z (cask (4 * bw))
+         _ (n = 0 ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
+         (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))
+                         (n = 0 ? () [y0 (y0 + A)]))))))
  ; ..a level's 'song: (new h sd) a song into the horn, fed (feed s) a frame; none on a
  ; seat with no horn
  (view-song new feed) (hn \ ((hn ? (new hn (wheel (clock 0)))) @ s (s ? (_ \ (feed s)))))

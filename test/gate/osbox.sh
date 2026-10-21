@@ -207,6 +207,23 @@ $lout" ] || fail "uv1: the -static exe -- got: $sout"
     DYLD_INSERT_LIBRARIES=/tmp/ip.dylib /tmp/door; DYLD_INSERT_LIBRARIES=/tmp/ip.dylib /tmp/doors') || fail "door: the box's run -- got: $dout"
   [ "$(echo "$dout" | head -1)" = 4242 ] || fail "door: dyld's exe did not ask libSystem's getpid -- got: $dout"
   [ "$(echo "$dout" | tail -1)" != 4242 ] || fail "door: the -static exe reached libSystem -- got: $dout"
+  # -pie: dyld slides it, rebasing each pointer in data and rodata; two runs, two addresses
+  cat > "$d/pie.c" <<'EOF'
+#include <stdio.h>
+static int seven(void) { return 7; }
+static int (*tab[2])(void) = {seven, 0};
+static int (*const rtab[1])(void) = {seven};
+static char const *msg = "pie";
+int main(void) { printf("%s %d %d %d\n%lx\n", msg, tab[0](), rtab[0](), !tab[1], (unsigned long) &seven); return 0; }
+EOF
+  moon0 -os macos -pie "$d/pie.c" -o "$d/pie.mac" || fail "pie: the mach-o compile"
+  ! moon0 -os macos -static -pie "$d/pie.c" -o "$d/pies.mac" 2>/dev/null || fail "pie: -static -pie linked"
+  pout=$($box 'cat > /tmp/pie && chmod +x /tmp/pie && otool -hv /tmp/pie | grep -c " PIE"; /tmp/pie; /tmp/pie' < "$d/pie.mac") \
+    || fail "pie: the box's run -- got: $pout"
+  [ "$(echo "$pout" | sed -n '1p;2p;4p')" = "1
+pie 7 7 1
+pie 7 7 1" ] || fail "pie: the slid exe -- got: $pout"
+  [ "$(echo "$pout" | sed -n 3p)" != "$(echo "$pout" | sed -n 5p)" ] || fail "pie: two runs at one address -- got: $pout"
 fi
 
 echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"

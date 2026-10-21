@@ -2,11 +2,13 @@
 ; bearing (radians from north toward east) and 'ph how far it looks up.
 ;   (walk-key st a g put)    view's turn, step and look actions, as far as g {'turn 'walk 'tilt
 ;                            'up 'down} says; (put st x z) moves it. () for any other action
+;   (walk-look st dx dy g)   the mouse's dx dy pixels: turned g 'mouse radians a pixel right,
+;                            looked up as far down, within g 'up and 'down
 ;   (walk-slide st x z free?)  to x z where free?, else along x alone, else z alone, else nowhere
 ;   (walk-dt st)             'dt the seconds since the last frame, 0.02..0.25, 'wall its clock
 ;   (walk-rail st a facing move)  on a rail: turns within facing of ahead, 'forward by
 ;                            (move st d), never back; 'stroll toggles 'walk; none once 'done
-(module (walk walk-key walk-slide walk-dt walk-rail walk-binds walk-listed)
+(module (walk walk-key walk-look walk-slide walk-dt walk-rail walk-binds walk-listed)
 (borrow 'view)                          ; wrap, clamp, min2, max2
 (:
  (walk-key st a g put) (: th (st 'th)
@@ -18,6 +20,8 @@
         'look-up (pin st 'ph (min2 (g 'up) (st 'ph + g 'tilt)))
         'look-down (pin st 'ph (max2 (g 'down) (st 'ph - g 'tilt)))
         ()))
+ (walk-look st dx dy g) (: k (g 'mouse)
+   (pins st 'th (wrap (st 'th + k * dx)) 'ph (clamp (st 'ph - k * dy) (g 'down) (g 'up))))
  (walk-slide st x z free?) (? (free? st x z) (pins st 'px x 'pz z)
                               (free? st x (st 'pz)) (pin st 'px x)
                               (free? st (st 'px) z) (pin st 'pz z)
