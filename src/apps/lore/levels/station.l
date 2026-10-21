@@ -331,8 +331,10 @@
 (: whitetile (texture 32 32 0.6 '((fill (rgb 0.86 0.87 0.85)) (grid 8 8 1 (rgb 0.66 0.67 0.66)) (noise 6 0.04))))
 (: burners (texture 64 32 0.9 '((fill (rgb 0.08 0.08 0.09)) (disc 16 16 11 (rgb 0.22 0.22 0.24)) (disc 16 16 8 (rgb 0.08 0.08 0.09))
                                 (disc 48 16 11 (rgb 0.22 0.22 0.24)) (disc 48 16 8 (rgb 0.08 0.08 0.09)) (grid 32 32 2 (rgb 0.2 0.2 0.22)))))
-;; ..and its walk-in: black, gridded as a training booth is, a steel shelf, the cartons
+;; ..and its walk-in: black, gridded as a training booth is, a steel shelf, the cartons; and
+;; the red orb hanging there, mottled so its turning shows
 (: holo (texture 64 64 1 '((fill (rgb 0.01 0.012 0.016)) (grid 16 16 1 (rgb 0.03 0.28 0.24)) (grid 64 64 2 (rgb 0.12 0.95 0.75)))))
+(: redorb (texture 64 64 0.5 '((fill (rgb 0.74 0.06 0.05)) (patches 6 0.35 (shade 0.78)) (noise 5 0.1) (rows 30 33 (shade 0.86)))))
 (: shelfsteel (texture 16 16 0.5 '((fill (rgb 0.5 0.52 0.55)) (noise 4 0.15))))
 (: cardboard (texture 32 32 0.5 '((fill (rgb 0.62 0.46 0.28)) (noise 8 0.1) (rows 13 19 (rgb 0.5 0.3 0.16)) (disc 26 6 3 (rgb 0.3 0.45 0.15)))))
 (: cardtop (texture 32 32 0.5 '((fill (rgb 0.66 0.5 0.31)) (cols 15 17 (rgb 0.82 0.74 0.56)) (noise 8 0.1))))
@@ -347,7 +349,7 @@
      tops [cardtop apples cardtop potatoes cardtop cardtop onions cardtop cabbages cardtop]
      (go z i acc) (: w (ws ((i + k) % 8)) h (min (hs ((3 * i + k) % 8)) (top - y - 0.04))
        (z + w > 10.27 ? acc
-          (go (z + w + 0.03) (i + 1) ((whole (skin {'walls cardboard 'floor (tops ((i + 2 * k) % 10))} (solid (box [-29.57 y z] [-29.07 (y + h) (z + w)])))) . acc))))
+          (go (z + w + 0.03) (i + 1) ((whole (skin {'walls cardboard 'floor (tops ((i + 2 * k) % 10))} (solid (box [-25.57 y z] [-25.07 (y + h) (z + w)])))) . acc))))
      (go (6.78 + 0.04 * k) 0 ())))
 
 (level "the station"
@@ -489,19 +491,23 @@
   (skin {'walls shopwall} (room [-36.2 8 5] [-34.8 10.6 10.5]))
   (bulb [-35.5 10.45 7.7] (rgb 1 0.92 0.8))
   (door [-34.65 8 8.6] 1.4 2.3)
-  ; ..the walk-in: one long shelf of cartons on its back wall, and before it the mattress,
-  ; the telescope, and by it an open diary and its pencils
-  (skin {'all holo} (room [-34.5 8 5.5] [-29 11 11.5]))
-  (strip-light [-33 11 8.5])
-  (strip-light [-30.5 11 8.5])
-  (map (z \ whole (skin {'all shelfsteel} (solid (box [-29.6 8 z] [-29 10.45 (z + 0.04)])))) [6.7 8.5 10.31])
-  (map (y \ whole (skin {'all shelfsteel} (solid (box [-29.6 y 6.7] [-29 (y + 0.03) 10.35])))) [8.12 8.72 9.32 9.92 10.42])
+  ; ..the walk-in, deep and high: one long shelf of cartons on its back wall; along it the
+  ; mattress, and by it the telescope looking west toward the door,
+  ; the end looked through by the bed, an open diary and its pencils beside it; up before it
+  ; the orb, turning fast, its pixels twice the world's
+  (skin {'all holo} (room [-34.5 8 5.5] [-25 12 11.5]))
+  (strip-light [-33 12 8.5])
+  (strip-light [-30 12 8.5])
+  (strip-light [-27 12 8.5])
+  (map (z \ whole (skin {'all shelfsteel} (solid (box [-25.6 8 z] [-25 10.45 (z + 0.04)])))) [6.7 8.5 10.31])
+  (map (y \ whole (skin {'all shelfsteel} (solid (box [-25.6 y 6.7] [-25 (y + 0.03) 10.35])))) [8.12 8.72 9.32 9.92 10.42])
   (map (k \ cartons (8.15 + 0.6 * k) (8.72 + 0.6 * k) k) ^4)
-  (mattress [-30.6 8 7.25] 0)
-  (telescope [-32.4 8 9.9] 45 35 (rgb 0.18 0.22 0.5))
-  (book [-32.05 8 8.95] 250)
-  (pencil [-31.78 8 9.2] 160 (rgb 0.95 0.75 0.1))
-  (pencil [-31.7 8 9.08] 172 (rgb 0.2 0.45 0.8))
+  (mattress [-26.25 8 7.1] 0)
+  (telescope [-27.9 8 8.05] 270 35 (rgb 0.18 0.22 0.5))
+  (book [-28.15 8 7.15] 160)
+  (pencil [-28.4 8 7.42] 70 (rgb 0.95 0.75 0.1))
+  (pencil [-28.28 8 7.5] 82 (rgb 0.2 0.45 0.8))
+  (coarse 2 (orb [-29.8 10.63 8.05] 0.6 redorb 1.5))
   (skin {'all darkmetal} (solid (box [-34.4 12 20.5] [-34.1 19.8 22.2])))
   (shopsign -34.09 1)
   (shopsign -34.41 -1)

@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone)
 (borrow 'view)
 (borrow 'window)
@@ -231,13 +231,18 @@
    [(255.0 * peep (c 0) 0 0.0) (255.0 * peep (c 1) 0 0.0) (255.0 * peep (c 2) 0 0.0)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
- ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes
- (mesh-frame v sc texs fog flags gain bare) (: B (two? bare ? (<bare v) -1)
+ ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes.
+ ; v 'under a coarser frame of mesh-coarse's, laid first where it drew
+ (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (peep v 'under () @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
    f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
-   (? (two? bare) (<>bare v f B)
+   (? (two? bare) (<>bare v f B0)
       (: S (iota (f = -1)) (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))))
+ ; ..sc drawn k times coarser, through v's camera: its colours and its depths, for v 'under
+ (mesh-coarse v sc texs fog flags gain k) (: W (max2 1 (v 'w // k)) H (max2 1 (v 'h // k))
+   (o fl) (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * fl) (1.0 * gain) 0.0])
+   [(facets W H -1 (v 'cam) (sc 0) (sc 1) texs (o (flags | 64))) (facets W H -1 (v 'cam) (sc 0) (sc 1) texs (o (flags | 16)))])
  ; a frame's colours as [r g b] trays, 0 to 1
  (mesh-flat f) [((f >> 16 & 255) / 255.0) ((f >> 8 & 255) / 255.0) ((f & 255) / 255.0)]
  ; ..as half-block cells: 24-bit, or the 256 cube dithered by bay

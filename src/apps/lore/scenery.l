@@ -85,6 +85,10 @@
 ;   (spinner [x y z] width height TEXTURE TEXTURE)  a square of four lit advertisements
 ;                                      turning slowly about its middle at x y z, the two
 ;                                      textures in turn round it
+;   (orb [x y z] radius TEXTURE turns)  a ball hanging in the air about x y z, turning
+;                                      turns a second about the up through it, lit where it is
+;   (coarse k ORB)                     an orb drawn k times coarser than the world round it, k
+;                                      2 4 or 8, its pixels k by k of the world's
 ;   (across LIGHT)                     a strip turned across, along x
 ;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT) (blink LIGHT)  a light failing, buzzing,
 ;                                      breathing, or flashing as a mast's beacon does
@@ -99,11 +103,16 @@
 ;                                      and v down
 ;   (repeat n [dx dy dz] PARTS)        the parts n times, each that far on from the last
 ;   (move [dx dy dz] PARTS)            the parts that far on
+;   (turn degrees [x z] PARTS)         the parts swung degrees clockwise from above about
+;                                      the upright through x z, a bearing turned as far; a
+;                                      box swung off the square a prism, and a room, street,
+;                                      door, window, grav, train or strip light swung only
+;                                      a quarter at a time
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street sky ambient air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
-         across stammer buzz breathe blink texture laid skin textures repeat move mirror-x mirror-z rgb)
+(module (scenery level-of sourced start shot room street sky ambient air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball smog ad spinner orb coarse neon strip-light bulb sconce flames poster sign
+         across stammer buzz breathe blink texture laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
 (:
@@ -116,9 +125,15 @@
  ; a part: a tablet of its kind and fields; with, a copy changed
  (part k l) (foldl (\ t kv (pin t (kv 0) (kv 1))) {'kind k} l)
  (with p k v) (pin (foldl (\ t q (pin t q (p q))) {} (keys p)) k v)
+ ; ..where a part stands from the form that told it, over the floor: [a b c d tx tz], its
+ ; x a x + b z + tx and its z c x + d z + tz
+ xf-id [1.0 0.0 0.0 1.0 0.0 0.0]
  ; ..the parts a form of the level's source made, each told where it stands there, path p
  ; down the source's forms; one told already by a form inside keeps that
- (sourced p x) (map (q \ peep q 'src () = () ? (with q 'src p) q) (flat x))
+ (sourced p x) (map (q \ peep q 'src () = () ? (pin (with q 'src p) 'xf xf-id) q) (flat x))
+ (xf-then o i) [(o 0 * i 0 + o 1 * i 2) (o 0 * i 1 + o 1 * i 3) (o 2 * i 0 + o 3 * i 2) (o 2 * i 1 + o 3 * i 3)
+                (o 0 * i 4 + o 1 * i 5 + o 4) (o 2 * i 4 + o 3 * i 5 + o 5)]
+ (xf-on o p) (with p 'xf (xf-then o (peep p 'xf xf-id)))
  (kind? p ks) (tablet? p && elem (peep p 'kind ()) ks)
  (rgb r g b) [(N r "(rgb r g b)") (N g "(rgb r g b)") (N b "(rgb r g b)")]
  (colour? c) (two? c && #c = 3 && all num? c)
@@ -319,6 +334,11 @@
  (spinner at w h t1 t2) (: u "(spinner [x y z] width height TEXTURE TEXTURE)"
    (? (!(texture? t1)) (no u t1) (!(texture? t2)) (no u t2)
       (part 'spin [['at (P at u)] ['w (N w u)] ['h (N h u)] ['t1 t1] ['t2 t2]])))
+ (orb at r t turns) (: u "(orb [x y z] radius TEXTURE turns)"
+   (? (!(num? r) || r <= 0) (no u r) (!(texture? t)) (no u t)
+      (part 'orb [['at (P at u)] ['r (N r u)] ['tex t] ['turns (N turns u)]])))
+ (coarse k o) (: u "(coarse k ORB)"
+   (? (!(elem k [2 4 8])) (no u k) (kind? o ['orb]) (with o 'coarse k) (no u o)))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
  (how w l) (kind? l ['strip 'bulb 'sconce 'sign 'flame] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb, sconce, sign or flames") l))
  (stammer l) (how 'stammer l)
@@ -355,27 +375,43 @@
    q5 (elem 'rows (keys q4) ? (with q4 'rows (map (map (p \ p = () ? () (g p))) (q4 'rows))) q4)
    (elem 'deg (keys q5) ? (with q5 'deg (b (q5 'deg))) q5))
  (repeat n d ps) (: u "(repeat n [dx dy dz] PARTS)" dd (P d u)
-   (charm? n ? (cats (map (i \ map (re (p \ [(p 0 + i * dd 0) (p 1 + i * dd 1) (p 2 + i * dd 2)]) (b \ b)) (flat ps)) ^n)) (no u n)))
- (move d ps) (: u "(move [dx dy dz] PARTS)" dd (P d u) (map (re (p \ [(p 0 + dd 0) (p 1 + dd 1) (p 2 + dd 2)]) (b \ b)) (flat ps)))
+   (charm? n ? (cats (map (i \ map (p \ xf-on [1.0 0.0 0.0 1.0 (i * dd 0) (i * dd 2)] (re (p \ [(p 0 + i * dd 0) (p 1 + i * dd 1) (p 2 + i * dd 2)]) (b \ b) p)) (flat ps)) ^n)) (no u n)))
+ (move d ps) (: u "(move [dx dy dz] PARTS)" dd (P d u) (map (p \ xf-on [1.0 0.0 0.0 1.0 (dd 0) (dd 2)] (re (p \ [(p 0 + dd 0) (p 1 + dd 1) (p 2 + dd 2)]) (b \ b) p)) (flat ps)))
+ ; ..a turn: off the square a box's four corners a prism's plan, a neon's facing swung too
+ (turn deg c ps) (: u "(turn degrees [x z] PARTS)" d (N deg u)
+   cc (two? c && #c = 2 && all num? c ? (map f c) (no u c)) x0 (cc 0) z0 (cc 1)
+   q (floor (d / 90.0 + 0.5)) sq (d - 90.0 * q @ e (-1e-9 < e && e < 1e-9)) qn ((q % 4 + 4) % 4)
+   co (sq ? (qn @ 0 1.0 1 0.0 2 -1.0 3 0.0) (cos (d * pi / 180.0)))
+   si (sq ? (qn @ 0 0.0 1 1.0 2 0.0 3 -1.0) (sin (d * pi / 180.0)))
+   (sw v) [(v 0 * co + v 2 * si) (v 1) (v 2 * co - v 0 * si)]
+   (g p) (: s (sw [(p 0 - x0) (p 1) (p 2 - z0)]) [(s 0 + x0) (s 1) (s 2 + z0)])
+   xf [co si (0.0 - si) co (x0 - co * x0 - si * z0) (z0 + si * x0 - co * z0)]
+   (prism-of b) (: a (lo2 (b 'lo) (b 'hi)) z (hi2 (b 'lo) (b 'hi))
+     (foldl (\ t k (elem k ['lo 'hi 'kind] ? t (pin t k (b k)))) {'kind 'prism 'h (z 1 - a 1)
+            'pts [[(a 0) (a 1) (a 2)] [(z 0) (a 1) (a 2)] [(z 0) (a 1) (z 2)] [(a 0) (a 1) (z 2)]]} (keys b)))
+   (one p) (: k (peep p 'kind ())
+     (? (!sq && elem k ['room 'door 'pane 'grav 'car 'strip]) (no (u + ", a room, street, door, window, grav, train or strip light a quarter at a time") d)
+        (: p1 (!sq && k = 'box ? (prism-of p) p) p2 (k = 'strip && qn % 2 = 1 ? (with p1 'across (1 - p1 'across)) p1)
+           p3 (k = 'sign && elem 'n (keys p2) ? (with p2 'n (sw (p2 'n))) p2)
+           (xf-on xf (re g (b \ b + d) p3)))))
+   (map one (flat ps)))
  ; ..a mirror turns a drape over, so its rows run back to keep its front
  (flip p) (kind? p ['drape] ? (with p 'rows (map rev (p 'rows))) p)
- (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (p \ twin 'mx (flip (re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b) p))) l))
- (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (p \ twin 'mz (flip (re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b) p))) l))
- ; ..a twin's 'mx or 'mz -1 where it is turned over on x or z, so a move of it is turned too
- (twin k p) (with p k (0.0 - peep p k 1.0))
+ (mirror-x c ps) (: x (N c "(mirror-x c PARTS)") l (flat ps) (l + map (p \ xf-on [-1.0 0.0 0.0 1.0 (2.0 * x) 0.0] (flip (re (p \ [(2.0 * x - p 0) (p 1) (p 2)]) (b \ 0.0 - b) p))) l))
+ (mirror-z c ps) (: z (N c "(mirror-z c PARTS)") l (flat ps) (l + map (p \ xf-on [1.0 0.0 0.0 -1.0 0.0 (2.0 * z)] (flip (re (p \ [(p 0) (p 1) (2.0 * z - p 2)]) (b \ 180.0 - b) p))) l))
  ; --- the level: its parts sorted into what the world builds from ---
  (lo2 a b) (map (k \ min2 (a k) (b k)) ^3)
  (hi2 a b) (map (k \ max2 (a k) (b k)) ^3)
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'orb 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
    used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ bare (b 'skin k)) (sort (keys (b 'skin)))) bs)
                                                      + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad)
-                                                     + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin))))
+                                                     + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin)) + map (o \ o 'tex) (of 'orb)))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
    (skin-of b) (: s (b 'skin) (cats (map (k \ (: (e c) ([c (tname (bare (s k)))] + lay (s k)) (k = 'all ? (map e ['wall 'floor 'ceiling]) [(e (k = 'walls ? 'wall k))])))
                                        (filter (k \ elem k (keys s)) ['all 'walls 'floor 'ceiling]))))
@@ -390,7 +426,7 @@
                           'at (tablet? k ? () (s 'at)) 'sky (tablet? k ? {'hour (k 'hour) 'cover (k 'cover) 'smog 0.0} ())}))
                    (of 'shot))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
-       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ()) 'sg [(peep b 'mx 1.0) 1.0 (peep b 'mz 1.0)]}) bs)
+       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ()) 'xf (peep b 'xf xf-id)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
@@ -408,6 +444,7 @@
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex))}) (of 'drape))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
+       'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1)}) (of 'orb))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'n (peep s 'n ()) 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))
        'textures (map (k \ tex k (dflt k)) (filter (k \ elem k (keys dflt)) ['wall 'floor 'ceiling 'door 'train])
                   + map (i \ tex (tname (used i)) (used i)) ^#used)})))

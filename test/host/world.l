@@ -211,6 +211,38 @@
    _ (edit-events pl [['down 15] ['up 15]])
  (test (pp 'c = [2.0 2.0]) (pp 'fl = 0.0) (pl1 = "  (room [3 0 1] [6 3 3]))") (ps = [4]) (pl2 = "  (room [3 0 1] [6.5 3 3]))")
        (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (pl4 = "  (move [1 0 0] (room [3.5 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
+; a turn swings its parts clockwise from above: a box a quarter round still a box, off the
+; square a prism, a bearing on as far, a room only by quarters; the editor's . and , step the
+; chosen form 15 degrees, < and > 90, in a (turn ..) whose degrees go on and come out at
+; nothing; r swings it after the pointer, a click keeping it and esc letting it go; a mirror's
+; twin stepped turns the way it is seen
+(: (trd t) (world-read ("(level \"t\" (room [-4 0 -4] [4 3 4]) " + t + ")"))
+   tqa (trd "(turn 90 [0 0] (solid (box [1 0 0] [2 1 1])))") tqb (trd "(turn 45 [0 0] (solid (box [1 0 0] [2 1 1])))")
+   tqc (trd "(turn 30 [0 0] (start [0 0 1] 10 0))") tqd (trd "(turn 30 [0 0] (room [0 0 0] [1 1 1]))")
+   tpr (tqb 'brushes 1 'shape 'prism)
+   tv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload tv ["(level \"t\"" "  (room [0 0 0] [8 3 6])" "  (solid (box [3 0 3] [5 1 4]))" "  (start [4 0 0.5] 0 0))"] "t.l")
+   tw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} te (edit-new tw tv "")
+   (tkey c s) [['down c] ['text s] ['up c]]
+   _ (edit-events te [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['press 1 80 100] ['release 1 80 100]])
+   _ (edit-events te (tkey 52 ".")) tl1 (tv 'lines 2) _ (edit-events te (tkey 52 ".")) tl2 (tv 'lines 2) tsh (te 'st 'lvl 'brushes 1 'shape)
+   _ (edit-events te (tkey 52 ">")) tl3 (tv 'lines 2)
+   _ (edit-events te (tkey 51 "," + tkey 51 "," + tkey 51 "<")) tl4 (tv 'lines 2)
+   _ (edit-events te (tkey 19 "r" + [['move 80 100] ['move 120 100]])) tsw (te 'drag 'dl)
+   _ (edit-events te [['down 1] ['up 1]]) _ (edit-events te [['down 27] ['up 27]]) tl5 (tv 'lines 2) tse (te 'sel)
+   _ (edit-events te (tkey 19 "r" + [['move 80 100] ['move 120 100] ['press 1 120 100] ['release 1 120 100]])) tl6 (tv 'lines 2)
+   mv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload mv ["(level \"t\"" "  (room [0 0 0] [8 3 6])" "  (mirror-x 4 [(solid (box [1 0 3] [2 1 4]))])" "  (start [4 0 0.5] 0 0))"] "t.l")
+   mw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} me (edit-new mw mv "")
+   _ (edit-events me [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
+   _ (edit-events me [['press 1 140 100] ['release 1 140 100]]) mx (take 4 (me 'st 'lvl 'brushes (me 'sb) 'xf))
+   _ (edit-events me (tkey 52 ".")) ml (mv 'lines 2)
+ (test (tqa 'brushes 1 'shape 'box = [[0.0 0.0 -2.0] [1.0 1.0 -1.0]]) (tpr 0 = 0.0) (tpr 1 = 1.0) (#(tpr 2) = 4)
+       (mag (tpr 2 1 0 - 1.4142135623730951) < 1e-9) (mag (tqc 'start 'deg - 40.0) < 1e-9) (has? tqd "a quarter at a time")
+       (tl1 = "  (turn 15 [4 3.5] (solid (box [3 0 3] [5 1 4])))") (tl2 = "  (turn 30 [4 3.5] (solid (box [3 0 3] [5 1 4])))")
+       (two? (tsh 'prism)) (tl3 = "  (turn 120 [4 3.5] (solid (box [3 0 3] [5 1 4])))") (tl4 = "  (solid (box [3 0 3] [5 1 4]))")
+       (tsw = 45.0) (tl5 = tl4) (tse = [3]) (tl6 = "  (turn 45 [4 3.5] (solid (box [3 0 3] [5 1 4])))")
+       (mx = [-1.0 0.0 0.0 1.0]) (ml = "  (mirror-x 4 [(turn -15 [1.5 3.5] (solid (box [1 0 3] [2 1 4])))])")))
 ; a mirror's twin dragged moves as dragged, its form's move turned over; ctrl-z undoes it
 ; and ctrl-r does it again; a click on the plan takes the first thing under the cut; the
 ; pane with the keys has a line round it; q on the scene leaves only twice in a second
@@ -228,7 +260,7 @@
    _ (edit-events mt [['down 16] ['up 16]]) mtq (mt 'quit)
    _ (pin mt 'qq (clock 0 - 1500)) _ (edit-events mt [['down 16] ['up 16]]) mtq2 (mt 'quit)
    _ (edit-events mt [['down 16] ['up 16]])
- (test (mtl = "  (mirror-x 4 [(move [-1 0 0] (solid (box [1 0 1] [2 3 2])))])") (mtb 'shape 'box = [[7.0 0.0 1.0] [8.0 3.0 2.0]]) (mtb 'sg = [-1.0 1.0 1.0])
+ (test (mtl = "  (mirror-x 4 [(move [-1 0 0] (solid (box [1 0 1] [2 3 2])))])") (mtb 'shape 'box = [[7.0 0.0 1.0] [8.0 3.0 2.0]]) (take 4 (mtb 'xf) = [-1.0 0.0 0.0 1.0])
        (mtu = "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])") (mtub = [[6.0 0.0 1.0] [7.0 3.0 2.0]]) (mtr = mtl)
        (mts = [4]) (mtp 0 5 = 48) (mtp 200 5 != 48) (mtq = 0) (mtq2 = 0) (mt 'quit = 1)))
 ; a scene made again from the one before keeps what is the same and comes out as one made
@@ -417,5 +449,18 @@
        (has? (lv "(room [0 0 0] [6 3 4]) (pencil [1 0 1] 0 'red)") "(pencil [x y z] bearing (rgb r g b))")
        (#(cl 'cars 0 'props) = 1) (#(cl 'brushes) = 2) (tablet? pr) (0 < #(pr 'pk 'tris))
        (world-free? cs -1.0 0.0) (!(world-free? cs 1.4 -0.5))))
+; an orb: read with its texture, meshed round its middle facing out, and its turning only its texels
+; sliding, turns a second round; a radius not above 0 said back; drawn coarse or not
+(: ol (world-read "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [6 4 6]) (start [3 0 1] 0 0) (bulb [3 3.9 3] (rgb 1 1 1)) (orb [3 2 4] 0.5 t 2))")
+   osc (world-scene ol "" ()) opk (osc 'orbs 0 'pk) cs (opk 'cols)
+   out (amin ((cs 0 - 3.0) * cs 5 + (cs 1 - 2.0) * cs 6 + (cs 2 - 4.0) * cs 7))
+   far (amax (abs (((cs 0 - 3.0) * (cs 0 - 3.0)) + ((cs 1 - 2.0) * (cs 1 - 2.0)) + ((cs 2 - 4.0) * (cs 2 - 4.0)) - 0.25)))
+ (test (#(ol 'orbs) = 1) (ol 'orbs 0 'turns = 2) (#(osc 'orbs) = 1) (far < 1e-6) (out > 0.0) (osc 'orbs 0 'round = 16.0)
+       (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (orb [0 0 0] 0 (texture 8 8 1 '((fill 1))) 1))") "(orb [x y z] radius TEXTURE turns)")
+       ; ..coarse, drawn twice as coarse; a k not 2 4 or 8 said back
+       (ol 'orbs 0 'coarse = 1)
+       ((world-read "(level \"t\" (room [0 0 0] [6 4 6]) (coarse 2 (orb [3 2 4] 0.5 (texture 8 8 1 '((fill 1))) 1)))") 'orbs 0 'coarse = 2)
+       (has? (world-read "(level \"t\" (room [0 0 0] [6 4 6]) (coarse 3 (orb [3 2 4] 0.5 (texture 8 8 1 '((fill 1))) 1)))") "(coarse k ORB)")))
+
 (test_fin ())
 (puts "world: ok\n")
