@@ -286,6 +286,15 @@
          (0 = gaze s 12)
          (120 = chat s 0)))                      ; nothing of the bodies printed
 
+; a screen dropped mid-body holds nothing once it is collected: its cask's finalizer lets go
+(: t (h-mkscr 4 10)
+ h0 (gaze t 12)
+ (held _) (: s (h-mkscr 4 10) _ (scribe s "\e]52;c;abc") (gaze s 12))
+ h1 (held 0)
+ _ (please 1)
+ _ (please 1)
+ _ (test ([0 65536 0] = [h0 h1 (gaze t 12)])))
+
 ; replies: dsr, da, and the drain-once law
 (: s (h-mkscr 4 10)
  _ (scribe s "\e[3;7H\e[6n")

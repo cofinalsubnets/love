@@ -313,6 +313,7 @@ struct g {
    push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
  uintptr_t cbase, croom;          // c0's outermost C frame (0 outside one), and the stack it may take
  uintptr_t ask;                   // the collector's ask while it works: an oom's first datum
+ uintptr_t clips;                 // the bytes quay's osc 52 bodies hold from alloc, every screen's
  struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;

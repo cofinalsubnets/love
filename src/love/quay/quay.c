@@ -61,7 +61,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   cb_hist(c, 0), c->twin = 0;
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0, c->rd = 0, c->ps = 0;
-  c->ucp = 0, c->un = 0, c->ol = 0, c->clip = 0, c->cn = 0, c->cst = 0;
+  c->ucp = 0, c->un = 0, c->ol = 0, c->clip = 0, c->cn = 0, c->cst = 0, c->cfz = 0;
   for (int k = 0; k < 8; k++) c->dmg[k] = 0;
   for (uint32_t k = 0; k < cb_nclu; k++)
     for (uint32_t j = 0; j < cb_clun; j++) c->clu[k][j] = 0;

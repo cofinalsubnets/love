@@ -102,8 +102,8 @@ struct cb {
   int32_t sel0, sel1;  // the selection: cells [sel0, sel1) as glass counts them, none when equal
   uint32_t pgen;       // the last picture's gen
   // osc 52: the body (Pc;Pd) as it came, cn bytes, in cb_clipn taken from alloc while one is
-  // held; cst 1 filling, 2 refused, 3 whole and unread
-  uint8_t *clip; uint32_t cn; uint8_t cst;
+  // held; cst 1 filling, 2 refused, 3 whole and unread. cfz: a finalizer watches the cask
+  uint8_t *clip; uint32_t cn; uint8_t cst, cfz;
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), 256 sixel registers, then xrgb pixels, top

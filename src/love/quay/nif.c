@@ -16,7 +16,7 @@
 //   (gaze scr k)         -> n    0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot, 6 7 a
 //                                cell's pixel w h, 8 the view's lookback, 9 history held,
 //                                10 11 the selection's first cell and one past its last,
-//                                12 the bytes an osc 52 body holds from the heap
+//                                12 the bytes osc 52 bodies hold from the heap, every screen's
 //   (peer scr n)         -> n    view n lines back (0 live), clamped; answers the view
 //   (mouse scr b row col how) -> s  the report the program asked for (cb_mouse): how 0
 //                                press, 1 release, 2 move; "" when not asked
@@ -89,6 +89,15 @@ static uint32_t scr_hl(uint16_t cols) {
  uint32_t const most = (uint32_t) ((4u << 20) / cb_hsize(1, cols));
  return most < 1000u ? most : 1000u; }
 
+// an osc 52 body's buffer let go, and g's count of them
+static void scr_unclip(struct g *g, struct cb *c) {
+ if (c && c->clip) cb_unclip(c), g->clips -= cb_clipn; }
+
+// a dead screen's cask lets its body go; its bytes still read here, as the finalizers run first
+static void scr_fin(struct g *g, void *k) {
+ struct str *s = ((struct cask*) k)->str;
+ if (s->len >= sizeof(struct cb)) scr_unclip(g, (struct cb*) s->bytes); }
+
 static lvm(lvm_screen) {
  word b = Sp[0], out = ZeroPoint;
  uint32_t const sn = scr_sn(Sp[1], Sp[2]);
@@ -100,6 +109,8 @@ static lvm(lvm_screen) {
   else {
    struct str *s = ((struct cask*) b)->str;
    if (s->len >= need) {
+    struct cb *o = scr_ok(b);
+    if (o && o->cfz) scr_unclip(g, o);       // a screen opened again lets its body go
     cb_open((struct cb*) s->bytes, r, k, sn);
     cb_hist((struct cb*) s->bytes, hl), cb_twin((struct cb*) s->bytes, 1);
     out = b; } } }
@@ -120,8 +131,9 @@ static lvm(lvm_regrid) {
   else {
    struct str *s = ((struct cask*) b)->str;
    if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
+    scr_unclip(g, c);                        // a body in flight is refused: no finalizer watches b
     cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl, 1);
-    c->clip = 0, c->cn = 0, c->cst = 0;   // the body's buffer is the new screen's now
+    ((struct cb*) s->bytes)->cfz = 0;
     out = b; } } }
  Sp[3] = out;
  Sp += 3; Ip += 1; love_musttail return Continue(); }
@@ -150,6 +162,7 @@ love_noinline static struct g *scr_pour(struct g *g) {
  struct str *s = !c || (x & 1) ? 0 : strp(x) ? str(x) : ((union u*) x)->ap == lvm_cask ? cask(x)->str : 0;
  uintptr_t const n = (x & 1) ? 1 : s ? s->len : 0;
  if (!c || (!(x & 1) && !s)) return g->sp[1] = ZeroPoint, g;
+ bool const had = c->clip;
  uintptr_t i = 0;
  for (; i < n && !cb_full(c); i++) {
   cb_putc(c, (char) ((x & 1) ? getcharm(x) & 0xff : s->bytes[i]));
@@ -157,6 +170,12 @@ love_noinline static struct g *scr_pour(struct g *g) {
    if (!ok(g = scr_grow(g))) return g;
    c = scr_ok(g->sp[0]), x = g->sp[1];
    if (!(x & 1)) s = strp(x) ? str(x) : cask(x)->str; } }
+ if (had != !!c->clip) g->clips += had ? -(uintptr_t) cb_clipn : cb_clipn;
+ if (c->clip && !c->cfz) {                       // the first body: a finalizer for the cask
+  if (!ok(g = have(g, Width(struct fz)))) return g;
+  c = scr_ok(g->sp[0]), c->cfz = 1;
+  struct fz *z = bump(g, Width(struct fz));
+  z->p = cell(g->sp[0]), z->fn = scr_fin, z->next = g->fz, g->fz = z; }
  g->sp[1] = i == n ? g->sp[0] : putcharm(i);
  return g; }
 
@@ -198,7 +217,7 @@ static lvm(lvm_gaze) {
   case 9: out = putcharm(c->hn);   break;
   case 10: out = putcharm(c->sel0); break;
   case 11: out = putcharm(c->sel1); break;
-  case 12: out = putcharm(c->clip ? cb_clipn : 0); break;
+  case 12: out = putcharm(g->clips); break;
   default: break; }
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
@@ -388,7 +407,7 @@ static lvm(lvm_clipped) {
  Have(str_width(n));
  c = scr_ok(Sp[0]);
  struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
- memcpy(txt(s), c->clip, n), cb_unclip(c);
+ memcpy(txt(s), c->clip, n), scr_unclip(g, c);
  Sp[0] = word(s);
  Ip += 1; love_musttail return Continue(); }
 
