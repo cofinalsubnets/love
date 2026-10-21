@@ -14,6 +14,7 @@ LvNif("scribe", nif_scribe, NULL);
 LvNif("glass", nif_glass, NULL);
 LvNif("gaze", nif_gaze, NULL);
 LvNif("reply", nif_reply, NULL);
+LvNif("clipped", nif_clipped, NULL);
 LvNif("wet", nif_damage, NULL);
 LvNif("fontrow", nif_fontrow, NULL);
 LvNif("tilepx", nif_tilepx, NULL);

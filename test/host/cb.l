@@ -264,6 +264,19 @@
     (120 = chat s 6)
     (5 = cfg s 6)))
 
+; osc 52: the body whole and read once; one byte past 64K refused, and the next kept
+(: s (h-mkscr 4 10)
+ fit ("c;" + string (map (\ i 65) (jot 65534)))
+ _ (scribe s ("\e]52;" + fit + "\x07"))
+ a (clipped s)
+ b (clipped s)
+ _ (scribe s ("\e]52;" + fit + "A\e\\"))
+ c (clipped s)
+ _ (scribe s "\e]52;c;aGk=\e\\x")
+ _ (test (a = fit) !b !c
+         ("c;aGk=" = clipped s)
+         (120 = chat s 0)))                      ; nothing of the bodies printed
+
 ; replies: dsr, da, and the drain-once law
 (: s (h-mkscr 4 10)
  _ (scribe s "\e[3;7H\e[6n")

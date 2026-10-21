@@ -27,6 +27,7 @@
 //   (picture scr slot k) -> n|s  a live picture's width (k 0), height (1), gen (2), pixels
 //                                as base64 rgba (3) or raw (4), tile span w (5) h (6)
 //   (reply scr)          -> (b ..) drain the reply queue (DSR/DA) as byte charms
+//   (clipped scr)        -> s    the last whole osc 52 body (Pc;Pd) as it came, once; () for none
 //   (wet scr k)          -> n    dirty-row bits, read-and-cleared
 //   (tilepx scr i x y)   -> n    pixel (x,y) of cell i's tile: 0xff over its rgb, 0 unset
 //   (dye scr buf w row cur font) -> scr   row painted into cask buf, 32bpp w pixels wide,
@@ -63,7 +64,7 @@ static struct cb *scr_ok(word x) {
  if (c->spos >= n) c->spos = 0;
  if (c->bot >= c->rows) c->bot = (uint16_t) (c->rows - 1u);
  if (c->top > c->bot) c->top = 0;
- if (c->esc > 15) c->esc = 0;
+ if (c->esc > 19) c->esc = 0;
  if (c->kslot >= cb_nimg) c->kslot = 0, c->kopen = 0;
  if (c->kf != 24 && c->kf != 32 && c->kf != 100) c->kf = 32;
  if (c->pn > cb_pmax) c->pn = cb_pmax;
@@ -71,6 +72,7 @@ static struct cb *scr_ok(word x) {
  if (c->on > cb_outn) c->on = 0;
  if (c->un > 3) c->un = 0;
  if (c->ol > 6) c->ol = 6;
+ if (c->cn > cb_clipn || c->cst > 3) c->cn = 0, c->cst = 0;
  return c; }
 
 // the store a rows x cols screen gets, or ~0u for a geometry refused; capped well under
@@ -374,6 +376,18 @@ static lvm(lvm_copied) {
  Sp[2] = word(s);
  Sp += 2; Ip += 1; love_musttail return Continue(); }
 
+// (clipped scr): read once, after Have, whose restart only asks again
+static lvm(lvm_clipped) {
+ struct cb *c = scr_ok(Sp[0]);
+ if (!c || c->cst != 3) { Sp[0] = ZeroPoint; Ip += 1; love_musttail return Continue(); }
+ uintptr_t const n = c->cn;
+ Have(str_width(n));
+ c = scr_ok(Sp[0]);
+ struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
+ memcpy(txt(s), c->clip, n), c->cn = 0, c->cst = 0;
+ Sp[0] = word(s);
+ Ip += 1; love_musttail return Continue(); }
+
 // (pasted scr s): counted first, so Have's restart repeats nothing but the count
 static lvm(lvm_pasted) {
  struct cb *c = scr_ok(Sp[0]);
@@ -470,6 +484,7 @@ static union u const
   nif_glass[]  = {{lvm_cur}, {.x = putcharm(3)}, {lvm_glass},  {lvm_ret0}},
   nif_gaze[]   = {{lvm_cur}, {.x = putcharm(2)}, {lvm_gaze},   {lvm_ret0}},
   nif_reply[]  = {{lvm_reply}, {lvm_ret0}},
+  nif_clipped[] = {{lvm_clipped}, {lvm_ret0}},
   nif_damage[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_damage}, {lvm_ret0}},
   nif_fontrow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_fontrow}, {lvm_ret0}},
   nif_tilepx[]  = {{lvm_cur}, {.x = putcharm(4)}, {lvm_tilepx},  {lvm_ret0}},

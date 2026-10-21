@@ -34,6 +34,13 @@
                     (? (atom? v) ""
                        (<v = 'lin) (foldl (a \ l \ a + l + "\n") "" <>v)
                        <>v))
+ ; a pane's osc 52 sets the clip to its text; a query (?) or an empty one is nothing
+ (hclips hb) (map (id \ (hpane hb id @ p
+                          (hpty? p ? (clipped (peep (hbox p) () 0) @
+                                       (pc + ";" + d) (d = "" || d = "?" ? 0 (pin (hb 'clip) () ['chr (b64d d)]))
+                                       _ 0)
+                             0)))
+                  (sort (keys (hb 'panes))))
  ; a pane's history and screen as rows of text, each with its trailing blanks off; the
  ; glyphs come out as limn paints them
  (hscreen-text p) (: s (peep (hbox p) () 0) r (gaze s 1) c (gaze s 2) hn (gaze s 9)
@@ -160,6 +167,7 @@
       pk = 1 ? (hfree j hb) 0,
       hbars j hb,
       peep hb 'bar 0 ? (say j (limn-go (hb 'rows - 1) 0 + hbarline hb)) 0,
+      hclips hb,
       (hclip-text hb @ ct
          (ct = hb 'c52 ? 0 (pin hb 'c52 ct, 0 < #ct ? (peep hb 'own () @ f (() = f ? (say j ("\e]52;c;" + b64e ct 1 + "\a")) (f ct))) 0))),
       (: p (hpane hb (hb 'focus)) b (hfind (hb 'lay) (hb 'focus))
