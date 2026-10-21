@@ -86,8 +86,8 @@ out/lib/readme.bin: $(love0) $(S)/love/boot/post.l $(R)/VERSION
 	@echo 'LOVE	'$@
 
 ho = out$(hsuf)
-# the link the hot profile is taken of: love.raw less the hot.prof it carries, so the profile is
-# a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
+# the link the profiles are taken of: love.raw less the hot.prof and hot.calls it carries, so
+# each is a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
 # build (HCC) records no profile, and profiles its own link only to say so
 ifneq ($(HCC),)
 prof_raw = $(ho)/love.raw
@@ -117,14 +117,15 @@ love0: $(love0)
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
 # the bake is hot-first: src/tools/hotbake.sh lays what short runs touch ahead, by the tree's
-# profile, so a lazy wake decodes little of the image. `make hotprof` writes the profile again
-# after a change to anything baked (test_bakerep says when).
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hotbake.sh src/tools/hot.prof
+# profile, and glazes a leaf only where the tree's call profile calls it often. `make hotprof`
+# writes both again after a change to anything baked (test_bakerep says when).
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hotbake.sh src/tools/hot.prof src/tools/hot.calls
 	@echo 'BAKE	'$@
 	@sh src/tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
 
 .PHONY: hotprof
 hotprof: $(prof_raw) $(ho)/.dist-cat.l
+	@sh src/tools/hotbake.sh -c $(prof_raw) src/tools/hot.calls $(ho)/.dist-cat.l
 	@sh src/tools/hotbake.sh -p $(prof_raw) src/tools/hot.prof $(ho)/.dist-cat.l
 
 .PHONY: candidate
@@ -308,8 +309,8 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 $(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
-# prof_raw: love.raw less the hot.prof it carries
+	@$(moon0) -os macos -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+# prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
@@ -443,7 +444,7 @@ out/src.o: $(src_tree) src/tools/mksrc.l $(holocat_dep) $(love0)
 	@$(love0) $(holocat) src/tools/mksrc.l $(src_tree) $@ $(hosta)
 out/prof/src.tree: force_src $(love0) $(ho)/.dist.list
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) src/tools/selfpack.l -c $(tree_codecs) $@ love-$(dist_ver) $(dist_stamp) $(ho)/.dist.list $(dist_drop) src/tools/hot.prof src/tools/hot.calls
 out/prof/src.o: out/prof/src.tree src/tools/mksrc.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(love0) $(holocat) src/tools/mksrc.l out/prof/src.tree $@ $(hosta)

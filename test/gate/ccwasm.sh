@@ -13,7 +13,7 @@ m=$2
 name=test_ccwasm
 # return addresses, frame chains and label values live off linear memory, and a module
 # has no symbol table for 294's asm labels
-unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 160-rangeinit 229-labelvalue 256-inline-retaddr 266-vaarg-struct 294-asmlabel 297-frameaddr"
+unsupported="100-complex 280-cxf-fuzz 111-int128 117-vastruct 151-w128fuzz 314-u128union 160-rangeinit 229-labelvalue 256-inline-retaddr 266-vaarg-struct 294-asmlabel 297-frameaddr"
 # x64 alone for these: clang lacks __builtin_*_overflow_p, emcc's malloc aborts where C
 # answers NULL, its aligned_alloc keeps C11's size rule
 noemcc="268-overflow-p 298-malloc-wrap 300-aligned-alloc"

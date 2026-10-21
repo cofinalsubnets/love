@@ -442,6 +442,12 @@
        (lnum? sp) (split "." sp @ p (#p = 2 && starts? <p "l" && digs? (snip <p 1 #(<p)) && digs? <>p))
        (lab f) (two? f && <f = 'label ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
+   ; a64: an undefined weak's address is a literal word, not adrp+add. a pie link (the kernel's)
+   ; refuses a page reach of a symbol that may be absent; an abs64 there answers 0
+   (wkla tgt wu fs)
+    (: wn (map name wu)
+       (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
+       (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
@@ -452,14 +458,17 @@
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
            (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
-              (: xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
-                         + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
-                         + bpsecs bp + cfsecs cf tgt)
-                 ; the file-scope asm's sections, and the names its .globl exports by where they landed
+              (: ; the file-scope asm's sections, and the names its .globl exports by where they landed
                  at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
+                 wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
+                 tforms (wkla tgt wu tforms)
+                 xfns (map ([nm forms al] \ [nm (wkla tgt wu forms) al]) xfns)
+                 xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
+                     + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
+                     + bpsecs bp + cfsecs cf tgt)
                  ; arm32 has no .image lane and no local func symbols (objsecs3 refuses the first)
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
@@ -968,6 +977,7 @@
        ; hosted as i386 is
        arm? (arm32? tgt && tgt != 'arm)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
+       _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
@@ -989,7 +999,7 @@
        set (so ? lib (lib + rtpull lib tgt os nostd vb dyld?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set dyld? dylibs)
+             mac? (macholink tgt set dyld? dylibs pie)
              so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib\(l).so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree
@@ -1223,7 +1233,7 @@
           ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
           (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
           ; the float file refused: code that would touch an xmm or x87 register is a refusal
-          ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float"]) (flags r (pin t 'nofp 1))
+          ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float" "-mgeneral-regs-only"]) (flags r (pin t 'nofp 1))
           ; no lane of ours would use these, so asking for none of them asks nothing
           ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
           ; every call keeps esp 16-aligned, which satisfies any boundary asked for

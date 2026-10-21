@@ -91,9 +91,10 @@ int baked_pick(void const **blob, uintptr_t *blen) {
   return *blob = (void const *) baked_image, *blen = baked_image_len,
          baked_image_len > 0; }
 
-struct bake_at { uintptr_t addr, off; int found; };
+struct bake_at { uintptr_t addr, off, bias; int found; };
 static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
   struct bake_at *b = d;
+  b->bias = in->dlpi_addr;
   for (int i = 0; i < in->dlpi_phnum; i++) {
     const ElfW(Phdr) *p = &in->dlpi_phdr[i];
     uintptr_t lo = in->dlpi_addr + p->p_vaddr;
@@ -187,8 +188,9 @@ static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uin
   return rc; }
 
 // a mach-o's .image is its __IMAGE segment, last mapped, grown to hold the blob. dyld wants
-// __LINKEDIT last, so it and every offset into it move past the image. the link is fixed-base,
-// so segments map an address to its offset. 0 done, >0 not a mach-o laid for growth, <0 failed
+// __LINKEDIT last, so it and every offset into it move past the image. segments map a linked
+// address (the caller takes dyld's slide off) to its offset. 0 done, >0 not a mach-o laid for
+// growth, <0 failed
 struct macho_seg { uint32_t cmd, size; char name[16]; uint64_t addr, vsz, off, fsz;
                    uint32_t maxp, initp, nsect, flags; };
 static void macho_slide(char *c, uint32_t lo, uint32_t hi, uint64_t from, uint64_t d) {
@@ -257,8 +259,8 @@ int image_bake(struct g *g, char const *out, int bare) {
   void *buf = bare ? NULL : image_save_env(g, &len);
   if (!bare && !buf) return -2;
   // baked_image_len patched by the file offset the running phdrs give; a copy shares the head
-  struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0 },
-                 bi = { (uintptr_t) baked_image, 0, 0 };     // ..and the blob goes where that symbol reads
+  struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0, 0 },
+                 bi = { (uintptr_t) baked_image, 0, 0, 0 };     // ..and the blob goes where that symbol reads
   dl_iterate_phdr(bake_phdr, &bl);
   dl_iterate_phdr(bake_phdr, &bi);
   // the kernel's PATH_MAX
@@ -270,7 +272,7 @@ int image_bake(struct g *g, char const *out, int bare) {
   int rc = -6, src = tmp ? open(exe, O_RDONLY) : -1;
   if (src >= 0 && !fstat(src, &st)) {
     void const *blob = bare ? (void const *) stub : buf;
-    rc = bake_macho(src, tmp, blob, len, (uintptr_t) &baked_image_len, (uintptr_t) baked_image, st.st_mode & 07777);
+    rc = bake_macho(src, tmp, blob, len, bl.addr - bl.bias, bi.addr - bi.bias, st.st_mode & 07777);
     if (rc > 0 && !(bl.found && bi.found)) rc = -5;      // an ELF the phdrs cannot place
     else if (rc > 0) rc = bake_tail(g, src, tmp, blob, len, bl.off, bi.off, st.st_mode & 07777);
     if (rc > 0) {
