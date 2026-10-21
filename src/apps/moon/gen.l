@@ -416,13 +416,20 @@
                'cmp (0 <= n <= 255))                  ; cmp imm8 only -- no cmn-imm on v6-M, so materialize negatives
        (t32? g)
         (cls @ 'addsub (-4095 <= n <= 4095)           ; addw/subw imm12
-               'cmp (-255 <= n <= 255))               ; cmp/cmn imm8
+               'cmp (-2147483648 < n < 2147483648 && t2imm? (abs n))   ; cmp/cmn, a modified immediate
+               'log (-2147483648 <= n < 4294967296 && t2imm? n))      ; and/or/xor/tst
        (fits32 n))
+   ; a thumb2 modified immediate: a byte, a byte laid 00XY00XY / XY00XY00 / XYXYXYXY, or eight
+   ; bits anywhere above
+   (t2imm? n)
+    (: u (n & 4294967295) b (u & 255) c (u >> 8 & 255)
+       (u < 256 || u = b * 65537 || u = c * 16777472 || u = b * 16843009 || u // (u & (0 - u)) < 256))
    ; may this op take n as its immediate? (the sweeps ask before rewriting a reg-reg form)
    (imma g op n) (op @ 'imul ((x64t? g || rv64? g) && fits32 n)   ; imul imm: x64's three-operand form, riscv materializes; a64/t32 have none
                        ('add || 'sub) (immok g 'addsub n)
                        'cmp (immok g 'cmp n)
-                       (immok g 'log n))
+                       (immok g 'log n || t32? g && !(v6m? g) && elem op '(and or) && -2147483648 <= n < 4294967296
+                        && t2imm? (-1 - n)))   ; bic, orn
    (uldop sz) (sz @ 1 'ldu1 2 'ldu2 4 'ldu4 'ld)
    (fnty g nm) (g 'sigs nm @ sig        ; return and params riding when sig'd
                 (two? sig ? ['fn <sig <>sig] '(fn)))
@@ -717,7 +724,7 @@
                               (wnt || rdst g rA @ rd   ; a borrowed home shifts a copy (no 3-address shr)
                                  (mkv (rbin g aty nty) rd (vfs av + [['mov rd rA] ['shr rd (lg2 n)]])))))
               (n = 1) (mkv (rbin g aty nty) 'r0 (vdrop g av + '((li r0 0))))
-              !(immok g 'log (n - 1)) 'no                ; t32 has no simple and-imm: materialize (the register path)
+              !(immok g 'log (n - 1)) 'no                ; a mask out of the and-imm reach: materialize (the register path)
               (: rd (wnt || rdst g rA)
                  fs (vfs av + [['and rd rA (n - 1)]])
                  (rpeq? g rd rA ? () (rfree g rA),
@@ -4548,19 +4555,30 @@
                  (ctl? f && d != 0) ()
                  (go >l f F d ((F ? (reb f F d) f) . acc)))))
        (!(a64? g) || abl? g 'a64sp || g 'hasasm ? fs (go fs () () 0 () @ r (two? r ? r fs))))
-   ; a64 three-register twins: (mov d s) (shl d c) = (lsl d s c), likewise shr, sar, the extends
-   ; and not. never an sp source: ubfm and orn read 31 as xzr. last, with a64sp
+   ; three-register twins: (mov d s) (shl d c) = (lsl d s c), likewise shr, sar, the extends
+   ; and not. never an sp source: ubfm and orn read 31 as xzr, thumb's forms are unpredictable
+   ; on it. last, with a64sp
    a64tw {'shl 'lsl 'shr 'lsr 'sar 'asr 'not 'mvn 'zx1 'uxtb 'zx2 'uxth 'zx4 'uxtw 'sx1 'sxtb 'sx2 'sxth 'sx4 'sxtw}
-   (a64mv g fs)
-    (? (!(a64? g) || abl? g 'a64mv) fs
-       (: (go l acc)
+   t2tw {'shl 'lsl 'shr 'lsr 'sar 'asr 'not 'mvn 'zx1 'uxtb 'zx2 'uxth 'sx1 'sxtb 'sx2 'sxth}
+   (twmv g fs)
+    (? (!(a64? g || t32? g && !(v6m? g)) || abl? g 'twmv) fs
+       (: tws (a64? g ? a64tw t2tw)
+          (go l acc)
            (? !(two? l) (rev acc)
               (: f <l h (two? >l ? <>l ())
-                 tw (two? h ? (peep a64tw <h ()) ())
+                 tw (two? h ? (peep tws <h ()) ())
+                 ; thumb2: a move or load into a register that only passes it on lands where it goes
+                 cp (? !(t32? g && two? f && two? h && <h = 'mov && #h = 3 && h 2 = f 1 && h 1 != f 1) ()
+                       !(atom? (h 1) && !(charm? (h 1)) && h 1 != 'sp) ()
+                       !(<f = 'mov && #f = 3 && atom? (f 2) && !(charm? (f 2)) || elem <f ldops9) ()
+                       (dies? g (f 1) >>l) (<f . (h 1) . >>f))
                  (? (two? f && <f = 'mov && #f = 3 && tw && h 1 = f 1 && atom? (f 2) && !(charm? (f 2)) && f 2 != 'sp)
                     (go >>l (([tw (h 1) (f 2)] + >>h) . acc))
+                    (two? cp) (go (cp . >>l) acc)
                     (go >l (f . acc)))))
           (go fs ())))
+   ; a word's zx4/sx4 lays nothing on a 32-bit arm: gone before the folds, so they part no pair
+   (t2nx g fs) (t32? g ? (filter (f \ !(two? f && elem <f '(zx4 sx4))) fs) fs)
    ; the x64 frame prologue heads fs
    (pro4? fs) (epim? >fs pro4)
    ; riscv: a body naming no sp, fp or lr and making no call (wasm: may call) drops its prologue
@@ -11073,7 +11091,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (a64mv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (swp irf))))))))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

@@ -48,7 +48,7 @@ count() {
 # each side's helpers renamed and every other runtime symbol localized, so both link beside libgcc
 rtobj() { # rtobj SRC PREFIX OUT
   ren=""
-  for f in dmul dadd dsub ddiv llsl llsr lasr lmul; do ren="$ren -D__aeabi_$f=$2_$f"; done
+  for f in dmul dadd dsub ddiv llsl llsr lasr lmul dcmpeq dcmplt dcmple dcmpun i2d ui2d d2iz d2uiz l2d d2lz f2d d2f; do ren="$ren -D__aeabi_$f=$2_$f"; done
   mc -t thumb2sp $ren -c $1 $3.o || exit 2
   cp $3.o $3.l.o
   for s in $(arm-none-eabi-nm $3.l.o | awk '$2 == "T" && ($3 ~ /^__/) {print $3}'); do

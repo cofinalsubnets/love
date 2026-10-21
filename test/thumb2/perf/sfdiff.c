@@ -2,6 +2,15 @@
 typedef unsigned long long u64;
 u64 moon_dmul(u64, u64), moon_dadd(u64, u64), moon_dsub(u64, u64), moon_ddiv(u64, u64);
 u64 old_dmul(u64, u64), old_dadd(u64, u64), old_dsub(u64, u64), old_ddiv(u64, u64);
+/* the compares and conversions, each side's: one word out of each, so all share one shape */
+#define CV(p) int p##_dcmpeq(u64, u64), p##_dcmplt(u64, u64), p##_dcmple(u64, u64), p##_dcmpun(u64, u64); \
+  u64 p##_i2d(int), p##_ui2d(unsigned), p##_l2d(long long), p##_f2d(unsigned); \
+  int p##_d2iz(u64); unsigned p##_d2uiz(u64), p##_d2f(u64); long long p##_d2lz(u64);
+CV(moon) CV(old)
+#define CVS(p, a, b) { (u64) p##_dcmpeq(a, b), (u64) p##_dcmplt(a, b), (u64) p##_dcmple(a, b), (u64) p##_dcmpun(a, b), \
+  p##_i2d((int) b), p##_ui2d((unsigned) b), p##_l2d((long long) b), p##_f2d((unsigned) b), \
+  (u64) (unsigned) p##_d2iz(a), (u64) p##_d2uiz(a), (u64) p##_d2f(a), (u64) p##_d2lz(a) }
+static const char *const cvn[12] = { "dcmpeq", "dcmplt", "dcmple", "dcmpun", "i2d", "ui2d", "l2d", "f2d", "d2iz", "d2uiz", "d2f", "d2lz" };
 static u64 rs = 88172645463325252ull;
 static u64 rnd(void) { rs ^= rs << 13; rs ^= rs >> 7; rs ^= rs << 17; return rs; }
 static int isnan_(u64 x) { return (x & 0x7ff0000000000000ull) == 0x7ff0000000000000ull && (x & 0x000fffffffffffffull); }
@@ -31,6 +40,10 @@ int run(void) {
     u64 w[4] = { bits(dbl(a) * dbl(b)), bits(dbl(a) + dbl(b)), bits(dbl(a) - dbl(b)), bits(dbl(a) / dbl(b)) };
     u64 m[4] = { moon_dmul(a, b), moon_dadd(a, b), moon_dsub(a, b), moon_ddiv(a, b) };
     u64 r[4] = { old_dmul(a, b), old_dadd(a, b), old_dsub(a, b), old_ddiv(a, b) };
+    { u64 cm[12] = CVS(moon, a, b), co[12] = CVS(old, a, b);
+      for (int o = 0; o < 12; o++)
+        if (cm[o] != co[o] && !(o == 10 && (co[o] & 0x7f800000) == 0x7f800000 && (co[o] & 0x7fffff) && (cm[o] & 0x7f800000) == 0x7f800000 && (cm[o] & 0x7fffff))) {
+          bad++; puts_("\nmiss "); puts_(cvn[o]); hex(a); hex(b); puts_(" old"); hex(co[o]); puts_(" new"); hex(cm[o]); } }
     for (int o = 0; o < 4; o++) {
       if (!same(r[o], m[o])) { bad++; puts_("\nmiss "); puts_(o == 0 ? "mul" : o == 1 ? "add" : o == 2 ? "sub" : "div"); hex(a); hex(b); puts_(" old"); hex(r[o]); puts_(" new"); hex(m[o]); }
       if (!same(w[o], m[o]) && gcc < 4) { gcc++; puts_("\nlibgcc differs "); puts_(o == 0 ? "mul" : o == 1 ? "add" : o == 2 ? "sub" : "div"); hex(a); hex(b); puts_(" libgcc"); hex(w[o]); puts_(" new"); hex(m[o]); } } }

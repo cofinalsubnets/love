@@ -15,9 +15,9 @@ Instructions per call on qemu's M4 (`sh test/thumb2/perf/perf.sh count gcc|libgc
 
 | | gcc -O2 + libgcc | mooncc + libgcc's helpers | mooncc + rt.c |
 |---|---|---|---|
-| `dmul` | 57 | 85 | 243 |
-| `dadd` | 69 | 90 | 450 |
-| `sin` (lm.c) | 2,926 | 3,927 | 16,306 |
+| `dmul` | 57 | 85 | 220 |
+| `dadd` | 69 | 90 | 186 |
+| `sin` (lm.c) | 2,926 | 3,927 | 9,504 |
 
 mooncc's code for lm.c itself is ~1.3x gcc's. **About 80% of the gap is rt.c's helpers**:
 portable v6-M C (16x16 products, a branch-ladder clz) over `uint64_t`, which mooncc keeps in
@@ -35,13 +35,23 @@ staging.
   store, decl init, `++`/`--`. params are not pair-homed yet
 - rt.c `__aeabi_dmul`: a v7-M fast lane for normal x normal -> normal (768 -> 243 instructions);
   anything else falls to the general code. bit-identical to the old over `perf.sh diff`
+- rt.c `__aeabi_dadd` (and so `dsub`): the same lane in 32-bit words (450 -> 218), its names few and
+  reused in place; `dadd_any`/`dmul_any` hold the general code, so the lanes' names get the seats
+- rt.c compares through a word `dord` (no out-param, no `int64_t`); `i2d`/`ui2d` (v7-M, over `clz`),
+  `d2iz`/`d2uiz` in a word's range and a normal `f2d` in place. `perf.sh diff` covers them too
+- thumb2 modified immediates: and/or/xor/tst/cmp/cmn take one (`t2imm?`), and/or the complement's
+  as bic/orn (`x & 0x7fffffff` is one bic)
+- `twmv` (was a64mv) on thumb2: `(mov d s) (shr d c)` is one `lsr d, s, #c`, likewise the extends and
+  mvn; a move or load into a register that only passes it on lands where it goes. `t2nx` drops a
+  word's zx4/sx4 at the post-choice chain's head, where they parted those pairs
 - earlier in the arc: thumb2 param homes (`nhome` 4, r5..r8 callee-saved), valloc/vpre/vweb/vspare
   on thumb2, float shuttle parks in d-regs, `fleft1`, the float negate fold
 
 ## next, by payoff
 
-1. **rt.c fast lanes** for `dadd`/`dsub`, the compares and int<->double conversions, as `dmul`'s.
-   each checked with `perf.sh diff` against HEAD's rt.c (libgcc is no oracle: it mis-rounds
+1. **the codegen the lanes now show**: params stored to the frame and reloaded, `(x >> s) & 0x7ff`
+   with no `ubfx`, `cmp` with an imm12 out of modified reach (`0x7fe`) through r0, the a64/rv64 sweeps
+   (`swp`) not run on thumb2 at all, a negated literal (`== -0x1fe00`) not folded to an immediate. rt.c checked with `perf.sh diff` against HEAD's (libgcc is no oracle: it mis-rounds
    `0x4340000000000000 + 0xc13e9b8531b800e9`, exact is ...7b)
 2. **pair-homed params** (`homefold`): rt.c's `ua`, `ub` live in the frame today
 3. **seat pressure**: past six cs seats every name spills (`dadd` has 19 candidates, `ma` loses);

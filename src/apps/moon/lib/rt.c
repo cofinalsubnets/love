@@ -145,7 +145,7 @@ static uint64_t stick(uint64_t m, int32_t d) {
  lost = m & (sl64(1, d) - 1);
  return sr64(m, d) | (lost != 0); }
 
-uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub) {
+static uint64_t dadd_any(uint64_t ua, uint64_t ub) {
  uint32_t sa = DSGN(ua), sb = DSGN(ub), ts;
  int32_t ea = DEXP(ua), eb = DEXP(ub), d;
  uint64_t ma = ua & MANT, mb = ub & MANT, m;
@@ -176,7 +176,66 @@ uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub) {
  norm55(&m, &ea);
  return pack(sa, ea, m); }
 
+uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub) {
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
+ /* v7-M: two normals whose sum stays normal, in 32-bit words: significands at bit 62, ten guard bits.
+  * few names, each word reused in place: x then the sum in ah:al, y in bh:bl */
+ uint32_t ah = (uint32_t) (ua >> 32), al = (uint32_t) ua, bh = (uint32_t) (ub >> 32), bl = (uint32_t) ub;
+ uint32_t e = (ah >> 20) & 0x7ff, s = (bh >> 20) & 0x7ff, t, sg;
+ if (e - 1 < 0x7fe && s - 1 < 0x7fe) {
+   if ((ah & 0x7fffffff) < (bh & 0x7fffffff) || ((ah & 0x7fffffff) == (bh & 0x7fffffff) && al < bl)) {
+     t = ah; ah = bh; bh = t; t = al; al = bl; bl = t; t = e; e = s; s = t; }
+   sg = (ah & 0x80000000u) | (ah ^ bh) >> 31;      /* the sign, and bit 0 set for a subtract */
+   ah = ((ah & 0xfffff) | 0x100000) << 10 | al >> 22; al <<= 10;
+   bh = ((bh & 0xfffff) | 0x100000) << 10 | bl >> 22; bl <<= 10;
+   s = e - s;
+   if (s >= 64) { bl = 1; bh = 0; }               /* all of it sticky */
+   else if (s >= 32) { s -= 32; t = bl != 0 || (s && bh << (32 - s)); bl = (s ? bh >> s : bh) | t; bh = 0; }
+   else if (s) { t = (bl << (32 - s)) != 0; bl = (bl >> s | bh << (32 - s)) | t; bh >>= s; }
+   t = al;
+   if (!(sg & 1)) {
+     al += bl; ah += bh + (al < t);
+     if (ah >> 31) { al = al >> 1 | ah << 31 | (al & 1); ah >>= 1; e++; } }
+   else {
+     al -= bl; ah -= bh + (t < bl);
+     if ((ah | al) == 0) return 0;
+     s = (ah ? (uint32_t) __builtin_clz(ah) : 32 + (uint32_t) __builtin_clz(al)) - 1;   /* the top onto bit 62 */
+     if (s >= 32) { ah = al << (s - 32); al = 0; }
+     else if (s) { ah = ah << s | al >> (32 - s); al <<= s; }
+     e -= s; }
+   t = al & 0x3ff;
+   al = al >> 10 | ah << 22; ah >>= 10;
+   if (t > 0x200 || (t == 0x200 && (al & 1))) {
+     al++; ah += al == 0;
+     if (ah >> 21) { ah >>= 1; e++; } }           /* only 2^53 carries out: its low word is already 0 */
+   if (e - 1 < 0x7fe)
+     return ((uint64_t) ((sg & 0x80000000u) | e << 20 | (ah & 0xfffff)) << 32) | al; }
+#endif
+ return dadd_any(ua, ub); }
+
 uint64_t __aeabi_dsub(uint64_t ua, uint64_t ub) { return __aeabi_dadd(ua, ub ^ SGNB); }
+
+static uint64_t dmul_any(uint64_t ua, uint64_t ub) {
+ uint32_t s = DSGN(ua) ^ DSGN(ub);
+ int32_t ea = DEXP(ua), eb = DEXP(ub), sh, e;
+ uint64_t ma = ua & MANT, mb = ub & MANT, hi, lo, m;
+ uint64_t sgn = (uint64_t) s << 63;
+ if (ea == 0x7ff) {
+   if (ma) return ua | DNAN;
+   if (eb == 0x7ff && mb) return ub | DNAN;
+   if (eb == 0 && mb == 0) return DNAN;          /* inf * 0 */
+   return sgn | DINF; }
+ if (eb == 0x7ff) {
+   if (mb) return ub | DNAN;
+   if (ea == 0 && ma == 0) return DNAN;
+   return sgn | DINF; }
+ if ((ea == 0 && ma == 0) || (eb == 0 && mb == 0)) return sgn;
+ if (ea) ma |= HID; else { sh = clz64(ma) - 11; ma = sl64(ma, sh); ea = 1 - sh; }
+ if (eb) mb |= HID; else { sh = clz64(mb) - 11; mb = sl64(mb, sh); eb = 1 - sh; }
+ mul64(ma, mb, &hi, &lo);                        /* 105 or 106 bits */
+ if (hi >> 41) { e = ea + eb - 1022; m = (hi << 14) | (lo >> 50); m |= (lo << 14) != 0; }
+ else          { e = ea + eb - 1023; m = (hi << 15) | (lo >> 49); m |= (lo << 15) != 0; }
+ return pack(s, e, m); }
 
 uint64_t __aeabi_dmul(uint64_t ua, uint64_t ub) {
 #if defined(__arm__) && !defined(__ARM_ARCH_6M__)
@@ -200,26 +259,7 @@ uint64_t __aeabi_dmul(uint64_t ua, uint64_t ub) {
    if ((uint32_t) f - 1 < 0x7fe)
      return ((uint64_t) ((ah ^ bh) & 0x80000000u) << 32) + ((uint64_t) (uint32_t) f << 52) + (hi & MANT); }
 #endif
- uint32_t s = DSGN(ua) ^ DSGN(ub);
- int32_t ea = DEXP(ua), eb = DEXP(ub), sh, e;
- uint64_t ma = ua & MANT, mb = ub & MANT, hi, lo, m;
- uint64_t sgn = (uint64_t) s << 63;
- if (ea == 0x7ff) {
-   if (ma) return ua | DNAN;
-   if (eb == 0x7ff && mb) return ub | DNAN;
-   if (eb == 0 && mb == 0) return DNAN;          /* inf * 0 */
-   return sgn | DINF; }
- if (eb == 0x7ff) {
-   if (mb) return ub | DNAN;
-   if (ea == 0 && ma == 0) return DNAN;
-   return sgn | DINF; }
- if ((ea == 0 && ma == 0) || (eb == 0 && mb == 0)) return sgn;
- if (ea) ma |= HID; else { sh = clz64(ma) - 11; ma = sl64(ma, sh); ea = 1 - sh; }
- if (eb) mb |= HID; else { sh = clz64(mb) - 11; mb = sl64(mb, sh); eb = 1 - sh; }
- mul64(ma, mb, &hi, &lo);                        /* 105 or 106 bits */
- if (hi >> 41) { e = ea + eb - 1022; m = (hi << 14) | (lo >> 50); m |= (lo << 14) != 0; }
- else          { e = ea + eb - 1023; m = (hi << 15) | (lo >> 49); m |= (lo << 15) != 0; }
- return pack(s, e, m); }
+ return dmul_any(ua, ub); }
 
 uint64_t __aeabi_ddiv(uint64_t ua, uint64_t ub) {
  uint32_t s = DSGN(ua) ^ DSGN(ub);
@@ -246,21 +286,23 @@ uint64_t __aeabi_ddiv(uint64_t ua, uint64_t ub) {
  else e = ea - eb + 1022;
  return pack(s, e, q); }
 
-/* sign-magnitude reflected to a signed key; both zeros land on 0 */
-static int32_t dord(uint64_t ua, uint64_t ub, int32_t *un) {
- int64_t ka, kb;
- if ((ua & ~SGNB) > DINF || (ub & ~SGNB) > DINF) { *un = 1; return 0; }
- *un = 0;
- ka = (ua >> 63) ? -(int64_t) (ua & ~SGNB) : (int64_t) ua;
- kb = (ub >> 63) ? -(int64_t) (ub & ~SGNB) : (int64_t) ub;
- return ka < kb ? -1 : ka > kb ? 1 : 0; }
+/* -1, 0, 1 by value, 2 unordered; in 32-bit words, both zeros equal */
+static int32_t dord(uint64_t ua, uint64_t ub) {
+ uint32_t ah = (uint32_t) (ua >> 32), al = (uint32_t) ua, bh = (uint32_t) (ub >> 32), bl = (uint32_t) ub;
+ uint32_t am = ah & 0x7fffffff, bm = bh & 0x7fffffff;
+ int32_t c;
+ if (am > 0x7ff00000 || (am == 0x7ff00000 && al) || bm > 0x7ff00000 || (bm == 0x7ff00000 && bl)) return 2;
+ if ((am | bm | al | bl) == 0) return 0;
+ if ((ah ^ bh) >> 31) return ah >> 31 ? -1 : 1;
+ c = am != bm ? (am < bm ? -1 : 1) : al != bl ? (al < bl ? -1 : 1) : 0;
+ return ah >> 31 ? -c : c; }
 
-int32_t __aeabi_dcmpeq(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); return !u && c == 0; }
-int32_t __aeabi_dcmplt(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); return !u && c < 0; }
-int32_t __aeabi_dcmple(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); return !u && c <= 0; }
-int32_t __aeabi_dcmpge(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); return !u && c >= 0; }
-int32_t __aeabi_dcmpgt(uint64_t a, uint64_t b) { int32_t u, c = dord(a, b, &u); return !u && c > 0; }
-int32_t __aeabi_dcmpun(uint64_t a, uint64_t b) { int32_t u; dord(a, b, &u); return u; }
+int32_t __aeabi_dcmpeq(uint64_t a, uint64_t b) { return dord(a, b) == 0; }
+int32_t __aeabi_dcmplt(uint64_t a, uint64_t b) { return dord(a, b) == -1; }
+int32_t __aeabi_dcmple(uint64_t a, uint64_t b) { return (uint32_t) (dord(a, b) + 1) <= 1; }
+int32_t __aeabi_dcmpge(uint64_t a, uint64_t b) { return (uint32_t) dord(a, b) <= 1; }
+int32_t __aeabi_dcmpgt(uint64_t a, uint64_t b) { return dord(a, b) == 1; }
+int32_t __aeabi_dcmpun(uint64_t a, uint64_t b) { return dord(a, b) == 2; }
 
 static uint64_t u64tod(uint32_t s, uint64_t v) {
  int32_t sh;
@@ -269,8 +311,20 @@ static uint64_t u64tod(uint32_t s, uint64_t v) {
  if (sh >= 0) return pack(s, 1078 - sh, sl64(v, sh));
  return pack(s, 1078 - sh, stick(v, -sh)); }
 
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
+/* v7-M: a word is exact in a double; s the sign bit */
+static uint64_t w2d(uint32_t s, uint32_t v) {
+ uint32_t n;
+ if (v == 0) return (uint64_t) s << 32;
+ n = (uint32_t) __builtin_clz(v);
+ v = n == 31 ? 0 : v << (n + 1);                 /* the hidden bit shifted out */
+ return ((uint64_t) (s | (1054 - n) << 20 | v >> 12) << 32) | v << 20; }
+uint64_t __aeabi_i2d(int32_t x)   { return x < 0 ? w2d(0x80000000u, -(uint32_t) x) : w2d(0, (uint32_t) x); }
+uint64_t __aeabi_ui2d(uint32_t x) { return w2d(0, x); }
+#else
 uint64_t __aeabi_i2d(int32_t x)   { return x < 0 ? u64tod(1, (uint64_t) -(int64_t) x) : u64tod(0, (uint64_t) x); }
 uint64_t __aeabi_ui2d(uint32_t x) { return u64tod(0, x); }
+#endif
 uint64_t __aeabi_l2d(int64_t x)   { return x < 0 ? u64tod(1, -(uint64_t) x) : u64tod(0, (uint64_t) x); }
 uint64_t __aeabi_ul2d(uint64_t x) { return u64tod(0, x); }
 
@@ -287,10 +341,23 @@ static uint64_t dtrunc(uint64_t u) {
 
 int64_t __aeabi_d2lz(uint64_t u)   { uint64_t v = dtrunc(u); return DSGN(u) ? -(int64_t) v : (int64_t) v; }
 uint64_t __aeabi_d2ulz(uint64_t u) { return DSGN(u) ? 0 : dtrunc(u); }
-int32_t __aeabi_d2iz(uint64_t u)   { return (int32_t) __aeabi_d2lz(u); }
-uint32_t __aeabi_d2uiz(uint64_t u) { return (uint32_t) __aeabi_d2ulz(u); }
+/* below one, or in a word's range, from the high word and the top of the low */
+int32_t __aeabi_d2iz(uint64_t u) {
+ uint32_t h = (uint32_t) (u >> 32), k = ((h >> 20) & 0x7ff) - 1023, v;
+ if ((int32_t) k < 0) return 0;
+ if (k < 31) {
+   v = (h << 11 | (uint32_t) u >> 21 | 0x80000000u) >> (31 - k);
+   return h >> 31 ? -(int32_t) v : (int32_t) v; }
+ return (int32_t) __aeabi_d2lz(u); }
+uint32_t __aeabi_d2uiz(uint64_t u) {
+ uint32_t h = (uint32_t) (u >> 32), k = ((h >> 20) & 0x7ff) - 1023;
+ if (h >> 31 || (int32_t) k < 0) return 0;
+ if (k < 32) return (h << 11 | (uint32_t) u >> 21 | 0x80000000u) >> (31 - k);
+ return (uint32_t) __aeabi_d2ulz(u); }
 
 uint64_t __aeabi_f2d(uint32_t u) {
+ if (((u >> 23) & 0xff) - 1 < 0xfe)              /* a normal: the fields widen in place */
+   return ((uint64_t) ((u & 0x80000000u) | (((u >> 23) & 0xff) + 896) << 20 | (u & 0x7fffff) >> 3) << 32) | u << 29;
  uint32_t m = u & 0x7fffff;
  int32_t e = (int32_t) ((u >> 23) & 0xff);
  uint64_t s = (uint64_t) (u >> 31) << 63;

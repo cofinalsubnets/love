@@ -1,8 +1,9 @@
 ; thumb2 -- the armv7e-m (Cortex-M7) backend for holo, also 'thumb2sp and 'arm. mixed 16/32-bit
 ; Thumb-2; a 32-bit word (hw1<<16)|hw2 lays as le16(hw1) ++ le16(hw2), not le32 (t32 does it).
 ; data-processing uses the wide encodings throughout, reaching r0..r12 alike.
-; immediates: add/sub take addw/subw #imm12 (a negative flips the op), cmp #imm8; and/or/xor have
-; only the modified-immediate form, so an immediate there scares (immok keeps it in a register).
+; immediates: add/sub take addw/subw #imm12 (a negative flips the op); cmp/cmn, tst and and/or/xor
+; a modified immediate (and/or also through bic/orn of the complement); else it scares (immok keeps
+; it in a register).
 
 (module 'holo
 (: ;; r12 (IP) is the far-memory and 128-bit scratch
@@ -64,19 +65,37 @@
              (: c (4095 < p ? 4095 p)
                 (chunks (p - c) d (acc + one src c))))
          (pos <= 4095 ? (one a pos) (chunks pos a ())))
+   ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
+   (thumb-mimm n)
+      (: u (n & 4294967295) b (u & 255) c (u >> 8 & 255)
+         (rot r) (? (31 < r) -1
+                    (: v (((u << r) | (u >> (32 - r))) & 4294967295)
+                       (128 <= v <= 255 ? (r << 7 | v & 127) (rot (r + 1)))))
+         (? (u < 256) u
+            (u = b * 65537) (256 | b)              ; 00XY00XY
+            (u = c * 16777472) (512 | c)           ; XY00XY00
+            (u = b * 16843009) (768 | b)           ; XYXYXYXY
+            (rot 8)))
+   (thumb-dpimm base dn an k)                                 ; data-processing (modified immediate)
+      (t32 ((base | ((k >> 11 & 1) << 10 | an)) << 16 | ((k >> 8 & 7) << 12 | (dn << 8 | k & 255))))
+   (thumb-logimm op d a b)
+      (: f (thumb-mimm b) nf (thumb-mimm (-1 - b))
+         (? (0 <= f && elem op '(and or xor)) (thumb-dpimm (op @ 'and 0xF000 'or 0xF040 0xF080) (rn d) (rn a) f)
+            (0 <= nf && elem op '(and or)) (thumb-dpimm (op @ 'and 0xF020 0xF060) (rn d) (rn a) nf)   ; bic, orn
+            (scare 'thumb-logimm [op d a b])))
    (thumb-aluop op d a b)
       (peep thumb-alu op 0 @ base
          (? (reg? b) (thumb-alu-rrr base d a b)
             (elem op '(add sub)) (thumb-addsub-imm op d a b)
-            (scare 'thumb-logimm [op d a b])))
+            (thumb-logimm op d a b)))
 
    (thumb-cmp a b)
       (rn a @ an
          (reg? b ? (rn b @ bn (t32 ((0xEBB0 | an) << 16 | (0x0F00 | bn))))
-            (abs b @ pos
-               (pos <= 255 ? 0 (scare 'cmp-imm-range b),
-               ; a negative compares by cmn
-                t32 (((b < 0 ? 0xF110 0xF1B0) | an) << 16 | (0x0F00 | pos))))))
+            (thumb-mimm (abs b) @ k
+               (k < 0 ? (scare 'cmp-imm-range b)
+                  ; a negative compares by cmn
+                  (thumb-dpimm (b < 0 ? 0xF110 0xF1B0) 15 an k)))))
 
    (thumb-imul d a b)
       (reg? b ? (: dn (rn d) an (rn a) bn (rn b) (t32 ((0xFB00 | an) << 16 | (0xF000 | (dn << 8 | bn)))))
@@ -165,10 +184,13 @@
    (thumb-pop  d) (rn d @ dt (t32 (0xF85D0000 | (dt << 12 | (0xB00 | 4)))))   ; LDR Rt,[sp],#4    P=0 U=1 W=1
 
    ;; w=4 is a no-op on a 32-bit target
-   (thumb-sx w d) (w @ 4 () (rn d @ dn (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (dn << 8 | dn)))))   ; sxtb / sxth Rd, Rd
-   (thumb-zx w d) (w @ 4 () (rn d @ dn (t32 ((w @ 1 0xFA5FF080 0xFA1FF080) | (dn << 8 | dn)))))   ; uxtb / uxth Rd, Rd
+   (thumb-sxr w d s) (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (rn d << 8 | rn s)))   ; sxtb / sxth Rd, Rm
+   (thumb-zxr w d s) (t32 ((w @ 1 0xFA5FF080 0xFA1FF080) | (rn d << 8 | rn s)))   ; uxtb / uxth Rd, Rm
+   (thumb-sx w d) (w @ 4 () (thumb-sxr w d d))
+   (thumb-zx w d) (w @ 4 () (thumb-zxr w d d))
    (thumb-neg d) (rn d @ dn (t32 ((0xF1C0 | dn) << 16 | dn << 8)))          ; rsb Rd, Rd, #0
-   (thumb-not d) (rn d @ dn (t32 (0xEA6F0000 | (dn << 8 | dn))))              ; mvn.W Rd, Rm
+   (thumb-mvn d s) (t32 (0xEA6F0000 | (rn d << 8 | rn s)))                   ; mvn.W Rd, Rm
+   (thumb-not d) (thumb-mvn d d)
    (thumb-inc d) (thumb-addsub-imm 'add d d 1)
    (thumb-dec d) (thumb-addsub-imm 'sub d d 1)
 
@@ -178,11 +200,13 @@
       (? (op = 'rol) (thumb-shift 'ror d ((32 - c) & 31))
          (op = 'ror && (c & 31) = 0) ()
          (thumb-shift1 op d c))
-   (thumb-shift1 op d c)
-      (: dn (rn d)
-         ty (op @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift op))
-         hw2 ((c >> 2 & 7) << 12 | (dn << 8 | ((c & 3) << 6 | (ty << 4 | dn))))
+   (thumb-shift1 op d c) (thumb-shr3 op d d c)
+   (thumb-shr3 op d s c)
+      (: ty (op @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift op))
+         hw2 ((c >> 2 & 7) << 12 | (rn d << 8 | ((c & 3) << 6 | (ty << 4 | rn s))))
          (t32 (0xEA4F0000 | hw2)))
+   ;; the three-register twins (lsl d s c): a count of 0 is the move (lsr/asr #0 would mean 32)
+   (thumb-sh3 op d s c) (c = 0 ? (thumb-mov d s) (thumb-shr3 op d s c))
    ;; any count register, unguarded: the pair shifts keep their high word in r1
    (thumb-shiftv op d c)
       (: dn (rn d) cn (rn c)
@@ -195,10 +219,10 @@
    (thumb-rem d a b t)  (thumb-div t a b + thumb-mls d t b a)          ; t=a/b ; d = a - t*b
    (thumb-urem d a b t) (thumb-udiv t a b + thumb-mls d t b a)
 
-   ;; tst.W: ANDS with Rd=pc; register only
+   ;; tst.W: ANDS with Rd=pc; a register or a modified immediate
    (thumb-test a b)
       (reg? b ? (: an (rn a) bn (rn b) (t32 ((0xEA10 | an) << 16 | (0x0F00 | bn))))
-         (scare 'thumb-test-imm ['test a b]))
+         (thumb-mimm b @ k (k < 0 ? (scare 'thumb-test-imm ['test a b]) (thumb-dpimm 0xF010 15 (rn a) k))))
 
    ;; MOVW d,#0 ; it cond ; MOVW d,#1 -- MOVW keeps the flags and reaches r0..r12
    (thumb-set cond d)
@@ -395,6 +419,8 @@
           ('la . thumb-la) ('lapool . thumb-lapool)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
           ('push . thumb-push) ('pop . thumb-pop)
+          ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
+          ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
           ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
           ('set . thumb-set) ('test . thumb-test)
