@@ -114,8 +114,10 @@
                 (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)])
 
    ;; [Rn,#imm12] (T3), else [Rn,#-imm8] (T4), else r12 = base+off and [r12,#0]
-   (thumb-mem-far bn off)                                    ; r12 = off ; r12 += Rbn
-      (thumb-li 'r12 off + t32 (0xEB0C << 16 | (0x0C00 | bn)))
+   (thumb-mem-far bn off)                                    ; r12 = Rbn +- imm12, else r12 = off ; r12 += Rbn
+      (? (-4095 <= off <= 4095)
+         (: k (abs off) (t32 (((off < 0 ? 0xF2A0 0xF200) | ((k >> 11 & 1) << 10 | bn)) << 16 | ((k >> 8 & 7) << 12 | (0xC00 | k & 255)))))
+         (thumb-li 'r12 off + t32 (0xEB0C << 16 | (0x0C00 | bn))))
    (thumb-mem-r lbase ubase dt bn off)
       (? (0 <= off <= 4095)
          (t32 ((ubase | bn) << 16 | (dt << 12 | off)))
@@ -219,6 +221,9 @@
    (thumb-divss d m) (t2-fp3 0xEE80 0xA00 d m)                ; vdiv.F32
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xB40 | mn)))))
    (thumb-movss d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn)))))   ; VMOV.F32 S[2d], S[2m]
+   ; both halves: VMOV.F32 S[2d], S[2m] ; VMOV.F32 S[2d+1], S[2m+1] -- an sp-only fpu has no VMOV.F64
+   (thumb-movpair d m) (: dn (frn d) mn (frn m)
+                          (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn))) + t32 (0xEEF0 << 16 | (dn << 12 | (0xA60 | mn)))))
    (thumb-ucomisd a b)                                        ; VCMP.F64 Da, Db ; vmrs apsr_nzcv
       (: an (frn a) bn (frn b)                                ;   unordered sets V
          (t32 (0xEEB4 << 16 | (an << 12 | (0xB40 | bn))) + t32 0xEEF1FA10))
@@ -363,7 +368,7 @@
         [('li . thumb-li) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
           ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
-          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
+          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
           ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx)

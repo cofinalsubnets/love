@@ -179,6 +179,27 @@ uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub) {
 uint64_t __aeabi_dsub(uint64_t ua, uint64_t ub) { return __aeabi_dadd(ua, ub ^ SGNB); }
 
 uint64_t __aeabi_dmul(uint64_t ua, uint64_t ub) {
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
+ /* v7-M: two normals whose product stays normal, in 32-bit words over UMULL */
+ uint32_t ah = (uint32_t) (ua >> 32), al = (uint32_t) ua, bh = (uint32_t) (ub >> 32), bl = (uint32_t) ub;
+ uint32_t fa = (ah >> 20) & 0x7ff, fb = (bh >> 20) & 0x7ff;
+ if (fa - 1 < 0x7fe && fb - 1 < 0x7fe) {
+   uint32_t xh = ah << 11 | al >> 21 | 0x80000000u, xl = al << 11;
+   uint32_t yh = bh << 11 | bl >> 21 | 0x80000000u, yl = bl << 11;
+   uint64_t ll = (uint64_t) xl * yl, lh = (uint64_t) xl * yh, hl = (uint64_t) xh * yl;
+   uint64_t mid = (ll >> 32) + (uint32_t) lh + (uint32_t) hl;
+   uint64_t hi = (uint64_t) xh * yh + (lh >> 32) + (hl >> 32) + (mid >> 32);
+   uint32_t lost = (uint32_t) ll | (uint32_t) mid, rb;
+   int32_t f = (int32_t) (fa + fb) - 1023;
+   if (hi >> 63) f++; else hi <<= 1;             /* the top onto bit 63; the bit shifted in is sticky */
+   rb = (uint32_t) hi & 0x7ff;
+   hi >>= 11;
+   if (rb > 0x400 || (rb == 0x400 && (lost || (hi & 1)))) {
+     hi++;
+     if (hi >> 53) { hi >>= 1; f++; } }
+   if ((uint32_t) f - 1 < 0x7fe)
+     return ((uint64_t) ((ah ^ bh) & 0x80000000u) << 32) + ((uint64_t) (uint32_t) f << 52) + (hi & MANT); }
+#endif
  uint32_t s = DSGN(ua) ^ DSGN(ub);
  int32_t ea = DEXP(ua), eb = DEXP(ub), sh, e;
  uint64_t ma = ua & MANT, mb = ub & MANT, hi, lo, m;

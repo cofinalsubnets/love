@@ -103,7 +103,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  struct rz_v const *P[3] = { p0, p1, p2 };
  int64_t X[3], Y[3];
  for (int i = 0; i < 3; i++)
-  X[i] = (int64_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (int64_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);
+  X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);   // in the guard band: a word
  int64_t A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0) return;
  if (A > 0 && (r->flags & rz_cull)) return;   // anticlockwise in gl's y-up faces the eye,
@@ -128,9 +128,9 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   for (intptr_t ty = rz_own(r, (intptr_t) by0) >> 3; ty <= ty1 && !seen; ty++)
    for (intptr_t tx = tx0; tx <= tx1 && !seen; tx++) seen = r->tz[ty * r->TW + tx] > zn;
   if (!seen) return; }
- flo_t const x0f = (flo_t) X[0] / 16, y0f = (flo_t) Y[0] / 16,
-             dx1 = (flo_t) (X[1] - X[0]) / 16, dy1 = (flo_t) (Y[1] - Y[0]) / 16,
-             dx2 = (flo_t) (X[2] - X[0]) / 16, dy2 = (flo_t) (Y[2] - Y[0]) / 16, Af = (flo_t) A / 256;
+ flo_t const x0f = (flo_t) (intptr_t) X[0] / 16, y0f = (flo_t) (intptr_t) Y[0] / 16,
+             dx1 = (flo_t) (intptr_t) (X[1] - X[0]) / 16, dy1 = (flo_t) (intptr_t) (Y[1] - Y[0]) / 16,
+             dx2 = (flo_t) (intptr_t) (X[2] - X[0]) / 16, dy2 = (flo_t) (intptr_t) (Y[2] - Y[0]) / 16, Af = (flo_t) A / 256;
  int const persp = !(r->flags & rz_affine);
  // the attribute planes: value at p0, step a pixel right, step a row down
  flo_t v0[2 + rz_na], vx[2 + rz_na], vy[2 + rz_na], e1[2 + rz_na], e2[2 + rz_na];
@@ -168,16 +168,14 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
    else if (c < 0) xe = xs; }
   if (xs >= xe) continue;
   flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) xs + (flo_t) 0.5;
-  int64_t e[3];
   flo_t a[2 + rz_na];
-  for (int i = 0; i < 3; i++) e[i] = ec[i] + ey[i] * (int64_t) y + ex[i] * (int64_t) xs;
   for (int k = 0; k < 2 + rz_na; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
   int L = 0;   // the texture's level, asked again every eighth pixel, and its texels one of the first's
   flo_t us = 1;
   intptr_t *o = r->out + y * r->W;
   flo_t *dz = r->depth + y * r->W, *td = r->tz + r->TW * r->TH + (y >> 3) * r->TW;
   for (intptr_t x = xs; x < xe; x++) {
-   if ((e[0] | e[1] | e[2]) >= 0 && a[0] >= -1 && a[0] <= 1 && a[0] < dz[x] && !(under && o[x] >= 0)) {
+   if (a[0] >= -1 && a[0] <= 1 && a[0] < dz[x] && !(under && o[x] >= 0)) {   // inside all three edges: the run is exact
     if (r->flags & rz_depth) dz[x] = a[0], td[x >> 3] = 1;
     else {
     flo_t const w = 1 / a[1], s = persp ? w : 1,
@@ -227,7 +225,6 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       if (q >= 0) o[x] = rz_ch(c[0] + (flo_t) (q >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (q >> 8 & 255), 0) << 8
                          | rz_ch(c[2] + (flo_t) (q & 255), 0); }
      else o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d), dz[x] = a[0], td[x >> 3] = 1; } } }
-   for (int i = 0; i < 3; i++) e[i] += ex[i];
    for (int k = 0; k < 7; k++) a[k] += vx[k];
    if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
    if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; } } }

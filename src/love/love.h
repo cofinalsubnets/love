@@ -875,6 +875,9 @@ static love_inline bool same_flo(flo_t a, flo_t b) { return a == b || (a != a &&
 static love_inline flo_t love_trunc(flo_t x) {
  if (x != x) return x;
  flo_t m = x < 0 ? -x : x;
+#if Bits == 32
+ if (m < (flo_t) 2147483648.0) return (flo_t) (int32_t) x;   // a word's: int64's may go through double
+#endif
  if (m > (flo_t) 9.22e18) return x;
  return (flo_t) (int64_t) x; }
 static love_inline flo_t love_fmod(flo_t a, flo_t b) {
