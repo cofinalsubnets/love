@@ -7,6 +7,9 @@
 ;                                      over (level-of NAME [PART ..])
 ;   (start [x y z] bearing pitch)      where the player stands, facing bearing degrees from
 ;                                      north toward east, looking pitch degrees up
+;   (shot seconds [x y z] bearing pitch)  before the start, the level seen from there for
+;                                      seconds, the shots in their order; a key skips them
+;   (shot seconds (sky hour COVER) bearing pitch)  ..or that sky alone, nothing under it
 ;   (room [x y z] [x y z])             a box of air between two corners: floor, walls and
 ;                                      ceiling. two rooms a wall apart share it
 ;   (street [x y z] [x y z])           a room open to the sky: no ceiling, its walls standing
@@ -35,6 +38,13 @@
 ;                                      at its foot, its corners cut, capped, hollow up top and
 ;                                      open on every side there, SIGN () or a texture on each
 ;                                      side below; solid
+;   (mattress [x y z] bearing)         a bare twin mattress lying with the middle of its foot
+;                                      at x y z, its head toward bearing; solid
+;   (telescope [x y z] bearing pitch (rgb r g b))  a refractor on a tripod standing at x
+;                                      y z, looking toward bearing and pitch degrees up, its
+;                                      tube that colour; solid
+;   (rod [x y z] [x y z] radius sides TEXTURE)  a straight bar between two points, sides
+;                                      flats round, its ends square to it; solid
 ;   (grav [x y z] [x y z] DIR)         a grav shaft: a column of air over the plan between the
 ;                                      corners, from the lower's floor to a room's height over
 ;                                      the upper's, motes of light streaming through it; who
@@ -88,7 +98,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start room street sky ambient air solid box prism cut whole door train bin decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start shot room street sky ambient air solid box prism cut whole door train bin mattress telescope rod decal drape window grav ball smog ad spinner neon strip-light bulb sconce flames poster sign
          across stammer buzz breathe blink texture laid skin textures repeat move mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -109,6 +119,9 @@
  (rgb r g b) [(N r "(rgb r g b)") (N g "(rgb r g b)") (N b "(rgb r g b)")]
  (colour? c) (two? c && #c = 3 && all num? c)
  (start at deg pitch) (: u "(start [x y z] bearing pitch)" (part 'start [['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]))
+ (shot s w deg pitch) (: u "(shot seconds [x y z] bearing pitch), or (shot seconds (sky hour COVER) bearing pitch)"
+   (? (!(num? s) || s <= 0) (no u s)
+      (part 'shot ([['secs (f s)] ['deg (N deg u)] ['pitch (N pitch u)]] + (kind? w ['sky] ? [['sky w]] [['at (P w u)]])))))
  (room lo hi) (: u "(room [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}]]))
  (street lo hi) (: u "(street [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}] ['open 1]]))
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
@@ -182,6 +195,71 @@
                ([(skin {'all t} body) (skin {'all t} band)] + map (b \ skin {'all dk} (air b)) hollow
                 + [(skin {'all t} (taper y1 (y1 + 0.05) (W - tp + 0.02) (D - tp + 0.02) (W - tp - 0.01) (D - tp - 0.01)))]))
           signs])))
+ ; --- props: brushes in a group, turned by a bearing, degrees from north toward east ---
+ (v+ a b) (map (k \ a k + b k) ^3)
+ (v* c a) (map (k \ c * a k) ^3)
+ (cross a b) [(a 1 * b 2 - a 2 * b 1) (a 2 * b 0 - a 0 * b 2) (a 0 * b 1 - a 1 * b 0)]
+ (unit a) (: m (sqrt (a 0 * a 0 + a 1 * a 1 + a 2 * a 2)) (v* (1.0 / m) a))
+ (ahead deg) (: t (deg * pi / 180.0) [(sin t) 0.0 (cos t)])
+ ; ..a rod: a box round it cut by a plane along each flat and one square across each end
+ (rod a b r n t) (: u "(rod [x y z] [x y z] radius sides TEXTURE)" p (P a u) q (P b u) R (N r u)
+   (? (!(charm? n && n >= 3)) (no u n) (!(texture? t)) (no u t)
+      (: d (v+ q (v* -1.0 p)) _ (? (sqrt (d 0 * d 0 + d 1 * d 1 + d 2 * d 2) < 1e-6) (no u b))
+         w (unit d) e1 (unit (cross w (abs (w 1) > 0.9 ? [1.0 0.0 0.0] [0.0 1.0 0.0]))) e2 (cross w e1)
+         m (v* 0.5 (v+ p q))
+         flats (map (k \ (: a (2.0 * pi * k / n) dk (v+ (v* (cos a) e1) (v* (sin a) e2)) tk (v+ (v* (0.0 - sin a) e1) (v* (cos a) e2))
+                         o (v+ m (v* R dk)) [o (v+ o w) (v+ o tk)]))
+                    ^n)
+         ends [[p (v+ p e1) (v+ p e2)] [q (v+ q e1) (v+ q e2)]]
+         lo (map (k \ min2 (p k) (q k) - R - 0.01) ^3) hi (map (k \ max2 (p k) (q k) + R + 0.01) ^3)
+         (with (skin {'all t} (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) (solid (box lo hi)) (flats + ends))) 'whole 1))))
+ ; ..a bare twin mattress, 99 by 190.5 by 25 cm: quilted ivory ticking on top, its border
+ ; striped between two pipings, plain under; its corners rounded off in plan and its edges
+ ; top and bottom
+ mattress-w 0.99 mattress-l 1.905 mattress-h 0.25
+ (mattress-top _) (texture 64 64 0.5 '((fill (rgb 0.9 0.88 0.82)) (noise 3 0.06) (patches 8 0.3 (shade 0.94))
+                                   (stripes 16 1 1 (shade 0.8)) (stripes 16 1 -1 (shade 0.8)) (dots 16 16 1.6 (shade 0.7))))
+ (mattress-side _) (texture 64 32 0.5 '((fill (rgb 0.87 0.85 0.79)) (stripes 8 2 0 (shade 0.92)) (noise 3 0.05)
+                                    (rows 0 2 (rgb 0.72 0.7 0.64)) (rows 30 32 (rgb 0.72 0.7 0.64))))
+ (mattress-under _) (texture 32 32 0.5 '((fill (rgb 0.78 0.77 0.73)) (noise 4 0.08)))
+ (mattress at deg) (: u "(mattress [x y z] bearing)" o (P at u) f (ahead (N deg u)) r [(f 2) 0.0 (0.0 - f 0)]
+   w (0.5 * mattress-w) l mattress-l H mattress-h c 0.07 e 0.035
+   (L a h b) (v+ o (v+ (v* a r) (v+ (v* b f) [0.0 h 0.0])))
+   plan [[(w - c) l] [w (l - c)] [w c] [(w - c) 0.0] [(c - w) 0.0] [(0.0 - w) c] [(0.0 - w) (l - c)] [(c - w) l]]
+   mid [0.0 (0.5 * l)]
+   ; ..each edge of the plan bevelled at the top and less at the bottom, toward its outside
+   (edge i) (: A (plan i) B (plan ((i + 1) % 8)) da (B 0 - A 0) db (B 1 - A 1) dl (sqrt (da * da + db * db))
+              n0 (db / dl) n1 (0.0 - da / dl) s (n0 * (0.5 * (A 0 + B 0) - mid 0) + n1 * (0.5 * (A 1 + B 1) - mid 1) < 0.0 ? -1.0 1.0)
+              ox (s * n0) oz (s * n1) k (0.6 * e)
+              [[(L (A 0 - e * ox) H (A 1 - e * oz)) (L (B 0 - e * ox) H (B 1 - e * oz)) (L (A 0) (H - e) (A 1))]
+               [(L (A 0 - k * ox) 0.0 (A 1 - k * oz)) (L (B 0 - k * ox) 0.0 (B 1 - k * oz)) (L (A 0) k (A 1))]])
+   body (solid (prism H (map (q \ L (q 0) 0.0 (q 1)) plan)))
+   (skin {'floor (mattress-top ()) 'walls (mattress-side ()) 'ceiling (mattress-under ())}
+         (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) body (cats (map edge ^8)))))
+ ; ..a small refractor on an aluminium tripod: three legs splayed from a black head, the
+ ; tube its colour with a black dew shield and cell, a finder along its top, the eyepiece
+ ; in a diagonal at its back looking up
+ (telescope-leg _) (texture 16 16 0.2 '((fill (rgb 0.63 0.65 0.68)) (noise 2 0.12)))
+ (telescope-black _) (texture 16 16 0.2 '((fill (rgb 0.07 0.07 0.08)) (noise 3 0.2)))
+ (telescope at deg pitch c) (: u "(telescope [x y z] bearing pitch (rgb r g b))" o (P at u) th (N deg u) ph (N pitch u * pi / 180.0)
+   _ (? (!(colour? c)) (no u c))
+   lg (telescope-leg ()) bk (telescope-black ()) wt (texture 32 16 0.3 [['fill ['rgb (c 0) (c 1) (c 2)]] '(noise 4 0.05)])
+   (up h) (v+ o [0.0 h 0.0]) H 1.15 f (ahead th)
+   legs (map (k \ (: g (ahead (th + 120.0 * k))
+                    (rod (v+ (up -0.02) (v* 0.42 g)) (v+ (up (H - 0.03)) (v* 0.04 g)) 0.016 4 lg)))
+             ^3)
+   head [(rod (up (H - 0.07)) (up H) 0.07 6 bk) (rod (up H) (up (H + 0.1)) 0.03 8 bk)]
+   pv (up (H + 0.15)) v (v+ (v* (cos ph) f) [0.0 (sin ph) 0.0]) n (v+ (v* (0.0 - sin ph) f) [0.0 (cos ph) 0.0])
+   (tp k j) (v+ pv (v+ (v* k v) (v* j n)))
+   tube [(rod (tp -0.38 0.0) (tp 0.44 0.0) 0.05 8 wt)
+         (rod (tp 0.42 0.0) (tp 0.66 0.0) 0.058 8 bk)
+         (rod (tp -0.43 0.0) (tp -0.37 0.0) 0.045 8 bk)
+         (rod (tp -0.47 0.0) (tp -0.43 0.0) 0.025 8 bk)
+         (rod (tp -0.47 -0.01) (tp -0.47 0.12) 0.016 8 bk)
+         (rod (tp 0.05 0.072) (tp 0.06 0.05) 0.008 4 bk)
+         (rod (tp -0.06 0.085) (tp 0.2 0.085) 0.016 8 bk)
+         (rod (tp -0.01 -0.03) (tp -0.01 -0.13) 0.02 8 bk)]
+   (legs + head + tube))
  (strip-light at) (part 'strip [['at (P at "(strip-light [x y z])")] ['across 0] ['how ()]])
  (bulb at c) (: u "(bulb [x y z] (rgb r g b))" (colour? c ? (part 'bulb [['at (P at u)] ['c c] ['how ()]]) (no u c)))
  ; ..a sconce: a box from a little inside the wall cut corner to corner, keeping the wall's
@@ -262,7 +340,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -278,6 +356,10 @@
       {'kind 'level 'name name
        'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0}
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
+       'shots (map (s \ (: k (peep s 'sky ())
+                         {'secs (s 'secs) 'deg (s 'deg) 'pitch (s 'pitch)
+                          'at (tablet? k ? () (s 'at)) 'sky (tablet? k ? {'hour (k 'hour) 'cover (k 'cover) 'smog 0.0} ())}))
+                   (of 'shot))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
        'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ()) 'sg [(peep b 'mx 1.0) 1.0 (peep b 'mz 1.0)]}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))

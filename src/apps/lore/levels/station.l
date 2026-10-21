@@ -301,6 +301,8 @@
   (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
   (start [0 -5 -5.9] 0 0)
+  ; first a second of a clear noon sky, broken cloud, looking up; then the car
+  (shot 1 (sky 13 'partly) 30 55)
   ; a dim light everywhere, the lamps' thrown back off the concrete
   (ambient (rgb 0.15 0.15 0.16))
   ; the hall, 38 metres across, ten high and 16 long
@@ -336,6 +338,10 @@
     (solid (box [-11 -4.0 -4.48] [-1 -3.94 -4.4]))])
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
   (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
+  ; ..a bare mattress along the car's floor at its east end, gone with it
+  (mattress [5.4 -5 -5.94] 90)
+  ; a telescope in the west wing's north corner, looking out across it
+  (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
   ; ends at a blank wall
@@ -385,7 +391,7 @@
   (room [-44.5 8 14.5] [-33.5 12 20])
   (across (strip-light [-39 12 17.2]))
   (window [-42 9.3 19.95] [-35.5 11.6 20.55] glass)
-  (skin {'all concrete} (room [-33 8 18.4] [-28.4 9.2 20.2]))
+  (skin {'all concrete} (street [-33 8 18.4] [-28.4 9.2 20.2]))
   (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 18.4] [-28.4 8.833 20.2])))])
   (door [-33.25 8 19.2] 1.2 2.2)
   (skin {'all darkmetal} (solid (box [-34.4 12 20.5] [-34.1 19.8 22.2])))

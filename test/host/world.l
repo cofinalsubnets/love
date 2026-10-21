@@ -1,5 +1,5 @@
 ; test/host/world.l -- a world level and its file, headless: reading, drawing, light,
-; doors, walls, reload on change, the car, the sign.
+; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
 (borrow 'world)
@@ -389,5 +389,31 @@
        (#(dm 'drapes) = 2) (dm 'drapes 1 'rows 0 0 = [1.0 0.1 1.0]) (dm 'drapes 1 'rows 0 2 = ())
        (verts d1 - verts d0 = 8) (verts dm - verts d0 = 16)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (drape 3 [[[0 0 0]]]))") "(drape TEXTURE [[[x y z] ..] ..])")))
+; shots: in order, each for its seconds, the world still meanwhile; a sky shot is the sky alone,
+; blue at noon; a key skips the rest; a waiting car opens on the cut
+(: sl (lv "(room [0 0 0] [4 3 4]) (start [2 0 2] 0 0) (shot 0.2 (sky 13 'partly) 0 60) (shot 0.2 [1 0 1] 90 0) (train [0.5 0 0.5] [3.5 2 3] (door [2 0 3] 1 1.8) 5)")
+   st (pin (world-new 16 8 sl "") 'cut (sl 'shots))
+   f (world-pens st) (blue? c) ((c & 255) > (c >> 16 & 255) + 40)
+   _ (each ^3 (_ \ world-move st)) mid [(#(st 'cut)) (st 'mt) (st 'cars 0 'ph)]
+   _ (each ^4 (_ \ world-move st)) left #(st 'cut)
+   _ (each ^7 (_ \ world-move st)) cut (st 'cars 0 'ph)
+   sk (pin (world-new 16 8 sl "") 'cut (sl 'shots)) _ (world-step sk (world-kb 119)) _ (world-move sk)
+ (test (#(sl 'shots) = 2) (sl 'shots 0 'sky 'cover = 'partly) (sl 'shots 1 'at = [1.0 0.0 1.0])
+       (any blue? (map (i \ peep f i 0) ^128)) (mid = [2 0.0 'wait]) (left = 1) (cut = 'open) (sk 'cut = ()) (sk 'cars 0 'ph = 'open)
+       (has? (lv "(room [0 0 0] [4 3 4]) (shot 0 [1 0 1] 0 0)") "(shot seconds")
+       (has? (lv "(room [0 0 0] [4 3 4]) (shot 1 3 0 0)") "(shot seconds")))
+; a slab between the knees and the head stops a walk, however thin: the body's whole height
+; is air or it does not go
+(: sb (lv "(room [0 0 0] [6 3 2]) (start [1 0 1] 90 0) (solid (box [3 0.8 0] [3.2 1.0 2]))")
+   st (world-new 8 8 sb "") _ (steps st 119 60)
+ (test (st 'px < 2.8) (st 'px > 2.5) (world-free? st 2.5 1.0) (!(world-free? st 3.1 1.0))))
+; props: a mattress and a telescope read as solid brushes, a bad colour said back; a car
+; carries the brushes wholly inside it, meshed and moving with it, standing in a walk's way
+(: pl (lv "(room [0 0 0] [6 3 4]) (start [1 0 1] 0 0) (mattress [3 0 1] 0) (telescope [5 0 3] 90 20 (rgb 0.2 0.3 0.8))")
+   cl (lv "(room [-4 0 -2] [4 3 2]) (start [-3 0 0] 90 0) (train [-3.5 0 -1.2] [3.5 2.2 1] (door [0 0 1] 1.2 1.9) 20) (mattress [0.5 0 -0.5] 90) (solid (box [-4 0 1.5] [-3.8 1 2]))")
+   cs (world-new 8 8 cl "") pr (cs 'sc 'cars 0 'props)
+ (test (tablet? pl) (#(pl 'brushes) > 10) (has? (lv "(room [0 0 0] [6 3 4]) (telescope [5 0 3] 90 20 3)") "(telescope [x y z] bearing pitch (rgb r g b))")
+       (#(cl 'cars 0 'props) = 1) (#(cl 'brushes) = 2) (tablet? pr) (0 < #(pr 'pk 'tris))
+       (world-free? cs -1.0 0.0) (!(world-free? cs 1.4 -0.5))))
 (test_fin ())
 (puts "world: ok\n")
