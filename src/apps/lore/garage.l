@@ -259,7 +259,7 @@
    sng (hn ? (garage-song-new (garage-tune ()) hn (wheel (clock 0))))
    pace (pacer ())
    ; the wait is the song: fed up to the lead, and a rest when the card wants nothing
-   (feed _) (song-fill hn (song-lead-of (pace! pace)) (_ \ (garage-song-feed sng)))
+   (feed _) (song-keep hn pace song-lead (_ \ (garage-song-feed sng)))
    (idle _) (? !sng (rest 30) (feed ()) 0 (rest 5))
    (press k) (rove-press g k 'fled (g \ pin g 'sign ()) garage-turn)
    _ (say out (esc + "[2J"))

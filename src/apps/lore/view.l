@@ -229,7 +229,7 @@
    hn (horn song-rate 2 @ q (nom? q ? () q))
    fd (lv 'song hn)
    pace (pacer ())
-   (feed _) (? (hn && fd) (song-fill hn (song-lead-of (pace! pace)) (_ \ (fd st))) fd (fd st) 0)
+   (feed _) (? (hn && fd) (song-keep hn pace song-lead (_ \ (fd st))) fd (fd st) 0)
    (go _) (: t0 (clock 0)
              _ (feed ())
              ks (win ? (wkeys ()) (tget ()))

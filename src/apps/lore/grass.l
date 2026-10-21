@@ -409,8 +409,7 @@
    ; the queue must outlast the gap between feeds, a frame's painting on a slow machine:
    ; the pacer holds the recent worst gap and the lead follows it
    pace (pacer ())
-   (feed _) (song-lead-of (pace! pace) @ l
-               (sng ? (song-fill hn l (_ \ grass-song-feed sng (g 'wind)))))
+   (feed _) (sng ? (song-keep hn pace song-lead (_ \ grass-song-feed sng (g 'wind))))
    (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath
    (cue _) (sng && g 'cue ? (grass-song-cue sng, pin g 'cue 0))
    ; tick n is owed at t0 + n ticks. behind by a whole tick, the frame is skipped and the
