@@ -15,7 +15,8 @@
 //                                last. a negative i reads history: -cols the newest line
 //   (gaze scr k)         -> n    0 cursor, 1 rows, 2 cols, 3 flag, 4 top, 5 bot, 6 7 a
 //                                cell's pixel w h, 8 the view's lookback, 9 history held,
-//                                10 11 the selection's first cell and one past its last
+//                                10 11 the selection's first cell and one past its last,
+//                                12 the bytes an osc 52 body holds from the heap
 //   (peer scr n)         -> n    view n lines back (0 live), clamped; answers the view
 //   (mouse scr b row col how) -> s  the report the program asked for (cb_mouse): how 0
 //                                press, 1 release, 2 move; "" when not asked
@@ -72,7 +73,8 @@ static struct cb *scr_ok(word x) {
  if (c->on > cb_outn) c->on = 0;
  if (c->un > 3) c->un = 0;
  if (c->ol > 6) c->ol = 6;
- if (c->cn > cb_clipn || c->cst > 3) c->cn = 0, c->cst = 0;
+ if (c->cn > cb_clipn) c->cn = cb_clipn;
+ if (c->cst > 3 || (!c->clip && c->cst != 2)) c->cn = 0, c->cst = 0;
  return c; }
 
 // the store a rows x cols screen gets, or ~0u for a geometry refused; capped well under
@@ -119,6 +121,7 @@ static lvm(lvm_regrid) {
    struct str *s = ((struct cask*) b)->str;
    if (s->len >= need && (uint8_t*) s->bytes != (uint8_t*) c) {
     cb_regrid((struct cb*) s->bytes, c, r, k, sn, hl, 1);
+    c->clip = 0, c->cn = 0, c->cst = 0;   // the body's buffer is the new screen's now
     out = b; } } }
  Sp[3] = out;
  Sp += 3; Ip += 1; love_musttail return Continue(); }
@@ -195,6 +198,7 @@ static lvm(lvm_gaze) {
   case 9: out = putcharm(c->hn);   break;
   case 10: out = putcharm(c->sel0); break;
   case 11: out = putcharm(c->sel1); break;
+  case 12: out = putcharm(c->clip ? cb_clipn : 0); break;
   default: break; }
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
@@ -384,7 +388,7 @@ static lvm(lvm_clipped) {
  Have(str_width(n));
  c = scr_ok(Sp[0]);
  struct str *s = ini_str(str(Hp), n); Hp += str_width(n);
- memcpy(txt(s), c->clip, n), c->cn = 0, c->cst = 0;
+ memcpy(txt(s), c->clip, n), cb_unclip(c);
  Sp[0] = word(s);
  Ip += 1; love_musttail return Continue(); }
 
