@@ -55,6 +55,12 @@
  (test (out = "") (st 'kp = 2) (100 < lit) sq (ground = [20 20 20]) ink
        (tablet? (world-opts ["--window"])) ((world-opts ["--window"]) 'md = 'window)))
 
+; ..and in a bigger window the picture is the window over the scale: at 8 each of its pixels
+; 8 by 8 of the window's
+(: hall (world-load "test/lore/hall.l") big {'w 1280 'h 800 'paper (cask 4)}
+   s8 (world-size (pins (world-new 160 100 hall "test/lore/") 'win big 'deep 1 'scale 8) 160 50)
+ (test (s8 'pic-w = 160) (s8 'pic-h = 100)))
+
 ; the loading screen: view-spin blacks its box and puts the moon in the middle, a fifth of
 ; the box across, new to begin, its right half lit a quarter through, full at half, and
 ; after shows only the moon's rows; in a terminal its faces. and view-loading draws only once the making has taken a moment, then

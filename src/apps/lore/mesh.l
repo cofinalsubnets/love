@@ -261,12 +261,12 @@
  ; --- a level's screen: 'kitty 1 kitty's pixels, 'win a window, else half blocks ---
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
  ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across.
- ; a window's picture is 'pic-w by 'pic-h, kitty-w over 'scale (1 2 4 or 8, else 2) across,
- ; in the window's shape
+ ; a window's picture is 'pic-w by 'pic-h, the window over 'scale (1 2 4 or 8, else 2): each
+ ; of its pixels 'scale of the window's each way
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (peep st 'win ())
-   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (kitty-w // s) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
+   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max2 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
          'kp (? (tablet? win) (max2 1 (pw // 160)) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
