@@ -233,9 +233,7 @@
                     0))
  ; the horn, () when there is none, and a feed that keeps it a lead ahead
  (synth-horn st) (: hn (horn song-rate 2 @ h (nom? h ? () h)) pace (pacer ())
-                    [hn (_ \ (lead-of (pace! pace) @ l (hn ? (song-fill hn l (_ \ (synth-feed st hn))) 0)))])
- (lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
-                  (n < synth-lead ? synth-lead (song-lead-max < n ? song-lead-max n)))
+                    [hn (_ \ (hn ? (song-keep hn pace synth-lead (_ \ (synth-feed st hn))) 0))])
  (synth-run o) (: _ (synth-warm ())
    st (synth-new o)
    hf (synth-horn st) hn <hf feed <>hf

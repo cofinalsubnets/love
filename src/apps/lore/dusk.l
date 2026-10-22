@@ -217,7 +217,7 @@
                            'song (view-song dusk-song-new dusk-song-feed)
                            'linger done-ms 'next ['garage 'garage-walk]})
  (dusk-run _) (view-run dusk-walk)
- dusk-usage "usage: love lore dusk   (h l turn, k walks on, u n look, space walks on to the garage; ? the keys, q or esc leaves)"
+ dusk-usage "usage: love play dusk   (h l turn, k walks on, u n look, space walks on to the garage; ? the keys, q or esc leaves)"
  (dusk-main as) (view-main "dusk" dusk-usage (as \ view-words as []) dusk-run as)
  _ ((cite 'lore 'lore-enlist) 'dusk (udoor 'dusk dusk-main dusk-usage 1 1)))
 ) ; module dusk

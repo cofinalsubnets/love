@@ -3,7 +3,7 @@
 ; the land is triangles (mesh.l) built once from the shapes whose distance field the player
 ; walks against, relit as the sun moves. stones-new, stones-step and stones-frame are pure;
 ; only stones-walk and stones-run touch the tty.
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-binds stones-move move-at curve acts ghost-on? post-batch stones-light
+(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-binds stones-move acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
@@ -13,15 +13,14 @@
 (borrow 'walk)                          ; the keys, and the frame's time
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (borrow 'mesh)                          ; the triangles, lit and drawn
+(borrow 'gesture)                       ; the eye's kneel, its acts, its rise
 (:
  fps 20
  lat (37.0 * pi / 180.0)               ; the colorado plateau
  eye-h 1.6 body-r 0.25
  walk-v 2.6 turn-v 1.6 tilt-v 1.2         ; metres, and radians, a second
  kneel-h 1.12                             ; the eye kneeling
- slow-v 0.9                               ; ..and the pace of a walk the eye makes on its own
- stride 0.7                               ; a step, in metres
- reach 2.2                                ; how near the altar a kneel can start
+ reach 2.2                                ; how near the altar a kneel goes to it
  dlg-pause 1.0                            ; seconds after an act before the choices come back
  help-t 12.0                              ; seconds the keys are named at the start
  help-text "h/j/k/l move  ·  u/n look up/down  ·  space interacts  ·  ? keys"
@@ -31,43 +30,6 @@
  stones-binds {32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait}
  picks ['breathe 'weep 'bleed 'beg 'wait]                ; acts', as actions
  rise-acts ['kneel 'forward 'back 'turn-left 'turn-right 'look-up 'look-down]
- ; each act a move made from the kneel: keys [t offset] for the eye's height, its pitch,
- ; its tilt and how far it leans forward; how long; and the drops it lets fall, [t kind]
- (act-keys i) (? (i = 0)
-   ; a long breath in, the chin rising and the chest back, held, then out, a little below
-   {'y [[0.0 0.0] [0.5 -0.006] [3.5 0.035] [4.4 0.037] [8.4 -0.012] [9.6 0.0]]
-    'ph [[0.0 0.0] [0.5 -0.012] [3.5 0.12] [4.4 0.13] [8.4 -0.05] [9.6 0.0]]
-    'ro [[0.0 0.0] [4.0 0.012] [8.0 -0.006] [9.6 0.0]]
-    'fw [[0.0 0.0] [3.5 -0.02] [4.4 -0.02] [8.4 0.012] [9.6 0.0]] 'len 9.8 'ev ()}
-   (i = 1)
-   ; the head bowed, hunched over, the sobs in fits of quick catches, the tears falling
-   {'y [[0.0 0.0] [1.0 -0.03] [1.3 -0.02] [1.45 -0.032] [1.6 -0.018] [1.75 -0.033] [1.9 -0.016] [2.5 -0.04]
-        [3.0 -0.022] [3.15 -0.034] [3.3 -0.02] [3.45 -0.036] [4.2 -0.045] [4.6 -0.025] [4.75 -0.035]
-        [4.9 -0.022] [5.05 -0.036] [5.2 -0.024] [6.0 -0.046] [6.6 -0.04] [7.4 -0.042] [8.6 0.0]]
-    'ph [[0.0 0.0] [1.0 -0.4] [1.3 -0.36] [1.45 -0.41] [1.6 -0.35] [1.75 -0.42] [1.9 -0.34] [2.5 -0.45]
-         [3.0 -0.37] [3.15 -0.43] [3.3 -0.36] [3.45 -0.44] [4.2 -0.47] [4.6 -0.38] [4.75 -0.44]
-         [4.9 -0.37] [5.05 -0.45] [5.2 -0.38] [6.0 -0.48] [6.6 -0.42] [7.4 -0.44] [8.6 0.0]]
-    'ro [[0.0 0.0] [1.5 0.03] [3.0 -0.02] [4.5 0.035] [6.0 -0.015] [7.4 0.01] [8.6 0.0]]
-    'fw [[0.0 0.0] [1.0 0.05] [7.4 0.06] [8.6 0.0]] 'len 8.8
-    'ev (map (t \ [t 'tear]) [1.7 2.3 3.2 3.6 4.3 4.95 5.4 6.2 6.9])}
-   (i = 2)
-   ; leant over the altar, a flinch as at a cut, blood dripping from the hand held over it
-   {'y [[0.0 0.0] [1.2 -0.08] [1.9 -0.08] [1.97 -0.095] [2.3 -0.085] [5.6 -0.08] [6.8 0.0]]
-    'ph [[0.0 0.0] [1.2 0.02] [1.9 0.02] [1.96 0.09] [2.4 -0.02] [5.6 0.0] [6.8 0.0]]
-    'ro [[0.0 0.0] [1.9 0.0] [1.97 0.09] [2.4 0.06] [3.4 0.07] [4.6 0.04] [5.8 0.0]]
-    'fw [[0.0 0.0] [1.2 0.42] [5.6 0.44] [6.8 0.0]] 'len 7.0
-    'ev (map (t \ [t 'blood]) [2.4 2.9 3.3 3.8 4.2 4.7 5.1])}
-   (i = 3)
-   ; face to the sand, up at the altar, then up at the sky, calling three times
-   {'y [[0.0 0.0] [1.2 -0.3] [2.4 -0.9] [3.0 -0.95] [5.0 -0.95] [6.2 -0.88] [6.8 -0.88] [8.4 0.0] [10.3 0.0]
-        [10.55 0.02] [11.1 0.0] [11.65 0.022] [12.2 0.0] [12.85 0.022] [13.4 0.0] [15.4 0.0]]
-    'ph [[0.0 0.0] [1.2 -0.5] [2.4 -0.9] [3.0 -0.92] [5.0 -0.9] [6.2 0.75] [6.8 0.7] [8.4 0.25] [8.8 0.25]
-         [10.0 1.4] [10.3 1.4] [10.55 1.5] [11.1 1.4] [11.65 1.52] [12.2 1.4] [12.85 1.52] [13.4 1.38]
-         [14.0 1.4] [15.4 0.0]]
-    'ro [[0.0 0.0] [2.4 0.04] [5.0 0.03] [6.2 0.0] [8.4 -0.02] [10.0 0.0] [15.4 0.0]]
-    'fw [[0.0 0.0] [1.2 0.3] [2.4 0.55] [3.0 0.58] [5.0 0.58] [6.2 0.5] [6.8 0.5] [8.4 0.0] [10.3 0.0]
-         [10.55 0.035] [11.1 0.0] [11.65 0.035] [12.2 0.0] [12.85 0.035] [13.4 0.0] [15.4 0.0]] 'len 15.6 'ev ()}
-   ())
  ; --- the land, in metres: x east, z north, y up. the slot runs north to the bowl, centred at
  ; x 0, z zc: a flat floor out to floor-r, then rows row-h high every row-w out to rim-r ---
  zc 120.0 floor-r 14.0 row-w 2.4 row-h 1.5 rows 7
@@ -384,7 +346,7 @@
  fov (pi / 2.0)
  sky-k 2                                  ; the sky asked every sky-k columns of kitty's pixels
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
- (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (breath (peep st 'mt 0.0))
+ (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (gesture-breath (peep st 'mt 0.0))
    e [(st 'px) (st 'py + b 0) (st 'pz)]
    v (mesh-eye w h e (st 'th) (st 'ph + b 1) (peep st 'ro 0.0) fov 0.05 900.0)
    hz (mesh-haze v lt (st 'wx) (st 'sim))
@@ -476,7 +438,7 @@
       (charm? (st 'dlg)) (dialog-key st a)
       (st 'eye = 'kneel) (elem a rise-acts ? (rise! st) st)
       (st 'eye != 'walk) st
-      (a = 'kneel) (altar-near? st ? (move! st (kneel-move st)) st)
+      (a = 'kneel) (move! st (altar-near? st ? (kneel-move st) (kneel-here st)))
       (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain
@@ -484,66 +446,27 @@
    dt (peep st 'dt (1.0 / fps))
    _ (pins st 'sim (st 'sim + 1.0 / fps) 'mt mt)
    _ (drops! st dt)
-   (? (st 'eye = 'move) (: mv (st 'mv) t (mt - st 'm0) p (move-at mv t) end (mv 'len <= t)
-                           ; ..the drops the move lets fall since the last frame
-                           _ (each (peep mv 'ev ()) (e \ (t - dt < e 0 && e 0 <= t ? (spawn! st (e 1)))))
-                           (pins st 'px (p 0) 'py (p 1) 'pz (p 2) 'th (wrap (p 3)) 'ph (p 4) 'ro (p 5)
-                                    'eye (end ? (mv 'then) 'move)
-                                    'dlg-at (end && peep mv 'dlg 0 ? (mt + dlg-pause) (st 'dlg-at))))
+   (? (st 'eye = 'move) (: mv (st 'mv) _ (gesture-play st dt spawn!)
+                           ; ..and the choices after, a pause on from the move's end
+                           (pin st 'dlg-at (st 'eye != 'move && peep mv 'dlg 0 ? (mt + dlg-pause) (st 'dlg-at))))
       ; ..the choices back, once the pause after a move is up
       (st 'eye = 'kneel && gem? (st 'dlg-at) && st 'dlg-at <= mt) (pins st 'dlg (st 'sel) 'dlg-at ())
       (st 'eye = 'walk)
        (pins st 'py (g + eye-h - y @ dy (mag dy < 0.002 ? (g + eye-h) (y + 0.35 * dy))) 'ro 0.0
                 'done (st 'pz < exit-z ? 1 0))
       st))
- ; --- the eye's moves: per channel (x y z, th ph, ro the tilt right) keys [t v], seconds into
- ; the move, eased through without overshoot, at rest at both ends. 'walk [x0 z0 x1 z1] the
- ; ground covered on foot, 'len its length, 'then 'walk or 'kneel after ---
- (curve ks t)
-  (: n #ks (ti i) (ks i 0) (vi i) (ks i 1)
-     ; ..a key's slope: none at the ends or where the way turns back; else the way through
-     ; it, held to three times the gentler side's, so the curve stays between its keys
-     (slope i) (: a ((vi i - vi (i - 1)) / (ti i - ti (i - 1))) b ((vi (i + 1) - vi i) / (ti (i + 1) - ti i))
-                  m ((vi (i + 1) - vi (i - 1)) / (ti (i + 1) - ti (i - 1))) lim (3.0 * min2 (mag a) (mag b))
-                  (a * b <= 0.0 ? 0.0 (clamp m (0.0 - lim) lim)))
-     (slope0 i) (i = 0 || i = n - 1 ? 0.0 (slope i))
-     (seg i) (i + 2 < n && ti (i + 1) <= t ? (seg (i + 1)) i)
-     (? (n = 1 || t <= ti 0) (vi 0) (ti (n - 1) <= t) (vi (n - 1))
-        (: i (seg 0) h (ti (i + 1) - ti i) s ((t - ti i) / h) s2 (s * s) s3 (s2 * s)
-           (vi i * (2.0 * s3 - 3.0 * s2 + 1.0) + slope0 i * h * (s3 - 2.0 * s2 + s)
-            + vi (i + 1) * (3.0 * s2 - 2.0 * s3) + slope0 (i + 1) * h * (s3 - s2)))))
- ; ..the head at t into the move: on foot, a dip at each step and a sway from foot to foot,
- ; the steps a whole number, so the last ends where the walk does
- (move-at mv t) (: (ch k) (curve (mv k) t) x (ch 'x) z (ch 'z) w (mv 'walk)
-   (far a b) (sqrt (sq (a - w 0) + sq (b - w 1)))
-   sl (two? w ? (far (w 2) (w 3) @ L (L / max2 1.0 (floor (L / stride + 0.5)))) 1.0)
-   q (two? w ? (pi * far x z / sl) 0.0)
-   [x (ch 'y - 0.022 * sq (sin q)) z (ch 'th) (ch 'ph) (ch 'ro + 0.012 * sin q)])
- ; ..and under every move, the breath: the eye rising and nodding a little, slowly
- (breath t) [(0.005 * sin (t * 1.55)) (0.004 * sin (t * 1.55 - 0.8))]
- (move! st mv) (pins st 'eye 'move 'mv mv 'm0 (peep st 'mt 0.0))
+ (move! st mv) (gesture-begin st mv)
  ; the altar: near enough to kneel at, and in sight
  (altar-near? st) (: al <(st 'blocks) dx (st 'px - al 0) dz (st 'pz - al 2)
    gap (sqrt (sq (max 0.0 (mag dx - al 4)) + sq (max 0.0 (mag dz - al 6))))
    (gap < reach && mag (wrap (atan2 (0.0 - dx) (0.0 - dz) - st 'th)) < 1.0))
- ; ..and kneeling there: turn to it, a slow walk to its near long side, one knee then the
- ; other, the gaze settling on its top
- (kneel-move st) (: al <(st 'blocks) ax (al 0) az (al 2) top (al 1 + al 5)
-   x0 (st 'px) z0 (st 'pz) y0 (st 'py) th0 (st 'th) ph0 (st 'ph)
-   sg (z0 < az ? -1.0 1.0) kx (ax + clamp (x0 - ax) -0.4 0.4) kz (az + sg * (al 6 + 0.85))
-   yk (stones-ground kx kz + kneel-h)
-   d (sqrt (sq (kx - x0) + sq (kz - z0))) tw (max2 0.6 (d / slow-v)) T (0.25 + tw)
-   ; ..its bearing from a place, unwound to lie near th0
-   (look x z) (th0 + wrap (atan2 (ax - x) (az - z) - th0))
-   (on f) [(x0 + f * (kx - x0)) (z0 + f * (kz - z0))]
-   (lk f) (on f @ p (look (p 0) (p 1)))
-   {'x [[0.0 x0] [0.25 x0] [T kx]] 'z [[0.0 z0] [0.25 z0] [T kz]]
-    'th [[0.0 th0] [0.55 (lk 0.0)] [(0.25 + 0.5 * tw) (lk 0.5)] [T (lk 1.0)]]
-    'ph [[0.0 ph0] [0.6 -0.12] [T -0.3] [(T + 0.9) -0.55] [(T + 1.9) -0.45]]
-    'y [[0.0 y0] [T y0] [(T + 0.45) (yk + 0.3)] [(T + 0.65) (yk + 0.28)] [(T + 1.05) (yk - 0.03)]
-        [(T + 1.4) (yk + 0.008)] [(T + 1.8) yk]]
-    'ro [[0.0 0.0] [T 0.0] [(T + 0.45) 0.06] [(T + 0.7) 0.05] [(T + 1.1) -0.025] [(T + 1.6) 0.0]]
-    'walk [x0 z0 kx kz] 'len (T + 2.0) 'then 'kneel 'dlg 1})
+ ; ..and kneeling there: a slow walk to its near long side, facing it, the gaze on its top
+ (kneel-move st) (: al <(st 'blocks) ax (al 0) az (al 2)
+   sg (st 'pz < az ? -1.0 1.0) kx (ax + clamp (st 'px - ax) -0.4 0.4) kz (az + sg * (al 6 + 0.85))
+   (pin (gesture-kneel st [kx kz] [ax az] stones-ground kneel-h) 'dlg 1))
+ ; ..or anywhere else: down where it stands, facing on, and no choices
+ (kneel-here st) (: x (st 'px) z (st 'pz) th (st 'th)
+   (gesture-kneel st [x z] [(x + sin th) (z + cos th)] stones-ground kneel-h))
  ; --- the choices: a number, or k j and enter; space stands. wait stays kneeling and is
  ; remembered; any other plays its move, then the choices come back ---
  (dialog-key st a) (: n #acts c (st 'dlg)
@@ -557,12 +480,8 @@
  (choose! st i) (: _ (pins st 'dlg () 'sel i)
    (i = #acts - 1 ? (pins st 'waited 1 'wait-at (st 'mt)) (move! st (act-move st i))))
  (rise! st) (: _ (pins st 'dlg () 'dlg-at () 'wait-at ()) (move! st (stand-move st)))
- ; ..an act's keys laid on the eye where it kneels
- (act-move st i) (: a (act-keys i) x0 (st 'px) z0 (st 'pz) th (st 'th)
-   (off v l) (map (q \ [(q 0) (v + q 1)]) l)
-   {'x (map (q \ [(q 0) (x0 + q 1 * sin th)]) (a 'fw)) 'z (map (q \ [(q 0) (z0 + q 1 * cos th)]) (a 'fw))
-    'y (off (st 'py) (a 'y)) 'th [[0.0 th]] 'ph (off (st 'ph) (a 'ph)) 'ro (off (st 'ro) (a 'ro))
-    'walk () 'len (a 'len) 'then 'kneel 'dlg 1 'ev (a 'ev)})
+ ; ..an act laid on the eye where it kneels
+ (act-move st i) (pin (gesture-act st (gesture-acts (picks i))) 'dlg 1)
  ; --- drops: a tear from under the eye, falling; blood flung from the face, out over the
  ; altar. each falls till it meets the altar's top or the ground, and lies there ---
  (spawn! st kind) (: n (peep st 'nd 0) (j k) (sin ((n * 7 + k) * 12.9898) * 43758.5453 @ q (q - floor q))
@@ -635,14 +554,8 @@
       i (iota n * 11) ts (pk 'tris)
       [(foldl (\ v m (pin v (i + m) (cols m))) (iota (11 * n) * 0.0) ^11)
        (pin ts (iota (#ts // 4) * 4 + 3) -2)]))
- ; ..and up again: a lean forward, the push up, a step back to stand, looking up
- (stand-move st) (: x0 (st 'px) z0 (st 'pz) y0 (st 'py) th (st 'th) ph0 (st 'ph)
-   bx (x0 - 0.3 * sin th) bz (z0 - 0.3 * cos th) ys (stones-ground bx bz + eye-h)
-   {'x [[0.0 x0] [0.5 x0] [1.4 bx]] 'z [[0.0 z0] [0.5 z0] [1.4 bz]] 'th [[0.0 th]]
-    'ph [[0.0 ph0] [0.4 (ph0 - 0.15)] [1.1 -0.05] [1.7 0.05]]
-    'y [[0.0 y0] [0.35 (y0 - 0.02)] [0.8 (y0 + 0.25)] [1.3 (ys + 0.015)] [1.7 ys]]
-    'ro [[0.0 (st 'ro)] [0.5 -0.05] [1.0 0.02] [1.5 0.0]]
-    'walk () 'len 1.8 'then 'walk})
+ ; ..and up again, looking up
+ (stand-move st) (gesture-stand st stones-ground eye-h)
  ; --- the walk, on view's loop. o's 'md 'kitty, 'cells or () for the terminal's own; 'time a
  ; local time of day in seconds, or () for now ---
  (stones-walk o)
@@ -666,7 +579,7 @@
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
- stones-usage "usage: love lore stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, space kneels at the altar, and there 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))

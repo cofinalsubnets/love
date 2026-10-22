@@ -4,6 +4,8 @@
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
 ;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
+;   (window-sized win)        (w h) as the screen has it now: the events waiting read, so the
+;                             paper follows a resize, and kept for window-events
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
 ;   (window-blit win pic w h) a picture w x h, 32-bit pixels as the paper's, out to the
 ;                             whole window, the server enlarging it; 0 where it cannot, the
@@ -25,7 +27,7 @@
 ; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
-(module '(window window-here? window-open window-paper window-size window-show window-blit window-hold window-warp window-events window-close
+(module '(window window-here? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
           window-own window-ask window-typing window-wets)
 (borrow 'xwire)
 (borrow 'posix)
@@ -256,6 +258,7 @@
        ev (foldl (a \ r \ a + resized win r) () (said + l))
        (win 'how = 'droid && any (e \ <e = 'size) ev ? (droid-row-show win) 0, ev))
 
+   (window-sized win) (: ev (window-events win) _ (pin win 'said (peep win 'said () + ev)) (window-size win))
    (window-close win) (win 'how = 'x || win 'how = 'droid ? (close (win 's)) (kpaper 0))
    ; on a phone the keyboard comes with the row, and the paper gives it room
    (window-typing win on)

@@ -126,12 +126,12 @@
                              d 'want @ 'vi (pin d 'want (), vi ? (visit (_ \ vi [p]), reload d) (tell d "no editor"))
                                        'play (pin d 'want (), visit (_ \ story-run (d 'lvl))))
                    (stage (w \ h \ design-frame d w h) step (_ \ (d 'over))))
- design-usage "usage: love lore design [LEVEL.l]"
+ design-usage "usage: love play edit LEVEL.l   (a story level; also love play design [LEVEL.l])"
  ; the one operand is a level file -- a dash word would be opened as one
  (design-main as)
   ((two? as ? <as "src/apps/lore/levels/lighthouse.l") @ f
      (1 < #f && f 0 = 45 ?
         (say err ("design: unknown option " + f + "\n"), flush err, 2)
         (design-run f)))
- _ ((cite 'lore 'lore-enlist) 'design (udoor 'design design-main design-usage 1 1)))
+ _ ((cite 'lore 'lore-shelve) 'design (udoor 'design design-main design-usage 1 1)))
 ) ; module design

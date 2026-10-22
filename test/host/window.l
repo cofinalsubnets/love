@@ -1,6 +1,6 @@
 ; test/host/window.l -- a window on Xvfb, driven by a second wire (GetImage, XTEST, resize):
 ; keys, pointer, size, selections and INCR; a blit refused with no screen; then `love synth -w`
-; and `love lore corridor --window`.
+; and `love play test/lore/hall.l --window`.
 ; skips without Xvfb
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
@@ -139,9 +139,9 @@
    st (wfn <ph 3000)
    _ (test ([208 208 208] = before) ([255 128 0] = held) ([208 208 208] = after)
            (two? st) (0 = <st))
-   ; the corridor: l held turns the view; a click holds the mouse and its motion turns the
-   ; view, esc lets it go and leaves the corridor running; q ends with status 0
-   pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "lore" "corridor" "--window"])
+   ; the world: l held turns the view; a click holds the mouse and its motion turns the
+   ; view, esc lets it go and leaves the world running; q ends with status 0
+   pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "play" "test/lore/hall.l" "--window"])
    _ (rest 6000)
    cw (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))
    (look _) (map (i \ px cw (40 + i * 70) (60 + i * 35)) ^8)

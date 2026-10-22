@@ -1,7 +1,9 @@
 // raster -- triangles onto a frame of pixels as a ps1 drew them: vertex colours, nearest
 // texels, a depth buffer, linear fog, the era's quirks on request
 // (facets w h base mat verts tris texs opts) answers an [h w] tray of 0xrrggbb.
-//  base   the ground: a tray of w*h colours, or one colour
+//  base   the ground: a tray of w*h colours, or one colour; or [ground cs ds], cs and ds a
+//         smaller frame's colours and depths through the same mat, cw by ch, row by row:
+//         each pixel the one over it, where that drew, else the ground
 //  mat    16 numbers, row-major: clip = mat * [x y z 1], gl's clip box (-w <= x,y,z <= w)
 //  verts  8 numbers a vertex: x y z  u v (texels)  r g b (1.0 the texel as it is)
 //  tris   4 a triangle: three vertex indices and a texture's index, -1 none, -2 a glow
@@ -50,6 +52,9 @@ struct rz {
  flo_t *pv;              // the vertices once through m and lm, rz_pv a vertex: x y z w, the sun's x y z, bits, row
  intptr_t nth, ylo, yhi; // the bands the frame is in, and this one's rows
  word base, vs, ts, tx;  // the ground, the batches, the textures
+ intptr_t const *cc;     // a smaller frame laid first, cw by ch, its colours and depths
+ flo_t const *cd;
+ intptr_t cw, ch;
  struct rz_tex lv[rz_lv];
  int nlv; };
 
@@ -364,8 +369,11 @@ static void rz_run(struct rz *r) {
  int const bt = galaxyp(r->base) && tray_nelem(tray(r->base)) >= (uintptr_t) (r->W * r->H);
  intptr_t const bc = charmp(r->base) ? getcharm(r->base) : 0;
  for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
-  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++)
+  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++) {
    r->out[i] = bt ? tray_get_int(tray(r->base), (uintptr_t) i) : bc, r->depth[i] = 2;
+   if (r->cc) {
+    intptr_t const j = y * r->ch / r->H * r->cw + (i - y * r->W) * r->cw / r->W;
+    if (r->cd[j] < 2) r->out[i] = r->cc[j], r->depth[i] = r->cd[j]; } }
  for (intptr_t ty = rz_own(r, 0) >> 3; ty < r->TH && ty * 8 < r->yhi; ty++)
   for (intptr_t tx = 0; tx < r->TW; tx++) r->tz[ty * r->TW + tx] = 2, r->tz[r->TW * r->TH + ty * r->TW + tx] = 0;
  flo_t *const pv = r->pv;
@@ -417,6 +425,14 @@ love_noinline static struct g *host_raster(struct g *g) {
  else fr->shape[0] = n;
  struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp), .pv = tray_data(pt),
                  .tz = tray_data(tt), .TW = TW, .TH = TH, .nth = 1, .yhi = H, .base = a[2], .vs = a[4], .ts = a[5], .tx = a[6] };
+ // a smaller frame under it, and the ground under that
+ word const b = a[2];
+ if (chainp(b) && chainp(B(b)) && chainp(B(B(b)))) {
+  word const cs = A(B(b)), ds = A(B(B(b)));
+  r.base = A(b);
+  if (galaxyp(cs) && galaxyp(ds) && tray(cs)->type == love_Z && tray(ds)->type == love_R && tray(ds)->rank == 2
+      && tray_nelem(tray(cs)) == tray_nelem(tray(ds)) && tray(ds)->shape[1] <= (uintptr_t) W && tray(ds)->shape[0] <= (uintptr_t) H)
+   r.cc = tray_data(tray(cs)), r.cd = tray_data(tray(ds)), r.cw = (intptr_t) tray(ds)->shape[1], r.ch = (intptr_t) tray(ds)->shape[0]; }
  // the opts, read after the allocation, which may move them
  word o = a[7], sv = ZeroPoint, sd = ZeroPoint;
  if (chainp(o)) {
