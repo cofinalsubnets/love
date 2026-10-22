@@ -291,7 +291,7 @@
                            'song (view-song wade-song-new wade-song-feed)
                            'linger (settle-ms + done-ms) 'next ['apartment 'apartment-walk]})
  (wade-run _) (view-run wade-walk)
- wade-usage "usage: love lore wade   (h l turn, k j wade, u n look, space walks on to the lamppost; ? the keys, q or esc leaves)"
+ wade-usage "usage: love play wade   (h l turn, k j wade, u n look, space walks on to the lamppost; ? the keys, q or esc leaves)"
  (wade-main as) (view-main "wade" wade-usage (as \ view-words as []) wade-run as)
  _ ((cite 'lore 'lore-enlist) 'wade (udoor 'wade wade-main wade-usage 1 1)))
 ) ; module wade

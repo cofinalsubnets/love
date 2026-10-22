@@ -338,6 +338,14 @@ static love_noinline struct g *dig_one(struct g *g, const struct digspec *d) {
  blk_hex(h, d->outw, d->be, hex);
  return dig_push(g, hex); }
 
+// the sha-256 of n bytes, 32 out msb first
+void sha256_of(unsigned char const *p, uintptr_t n, unsigned char *out) {
+ uint32_t h[8];
+ uint8_t buf[64];
+ dig_h0(h, &dig_sha);
+ blk_done(h, buf, blk_feed(h, buf, 0, &dig_sha, p, n), (uint64_t) n, &dig_sha);
+ for (int k = 0; k < 32; k++) out[k] = (uint8_t) (h[k / 4] >> (24 - 8 * (k % 4))); }
+
 static struct g *host_sha256(struct g *g) { return dig_one(g, &dig_sha); }
 static struct g *host_md5(struct g *g) { return dig_one(g, &dig_md5); }
 static struct g *host_sha1(struct g *g) { return dig_one(g, &dig_sha1); }

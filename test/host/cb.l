@@ -264,6 +264,37 @@
     (120 = chat s 6)
     (5 = cfg s 6)))
 
+; osc 52: the body whole and read once; one byte past 64K refused, and the next kept. the
+; buffer is held only while a body is (gaze 12): none once it is read or refused
+(: s (h-mkscr 4 10)
+ fit ("c;" + string (map (\ i 65) (jot 65534)))
+ h0 (gaze s 12)
+ _ (scribe s ("\e]52;" + fit + "\x07"))
+ h1 (gaze s 12)
+ a (clipped s)
+ b (clipped s)
+ h2 (gaze s 12)
+ _ (scribe s ("\e]52;" + fit))
+ h3 (gaze s 12)
+ _ (scribe s "A\e\\")
+ h4 (gaze s 12)
+ c (clipped s)
+ _ (scribe s "\e]52;c;aGk=\e\\x")
+ _ (test (a = fit) !b !c
+         ([0 65536 0 65536 0] = [h0 h1 h2 h3 h4])
+         ("c;aGk=" = clipped s)
+         (0 = gaze s 12)
+         (120 = chat s 0)))                      ; nothing of the bodies printed
+
+; a screen dropped mid-body holds nothing once it is collected: its cask's finalizer lets go
+(: t (h-mkscr 4 10)
+ h0 (gaze t 12)
+ (held _) (: s (h-mkscr 4 10) _ (scribe s "\e]52;c;abc") (gaze s 12))
+ h1 (held 0)
+ _ (please 1)
+ _ (please 1)
+ _ (test ([0 65536 0] = [h0 h1 (gaze t 12)])))
+
 ; replies: dsr, da, and the drain-once law
 (: s (h-mkscr 4 10)
  _ (scribe s "\e[3;7H\e[6n")

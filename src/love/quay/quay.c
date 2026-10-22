@@ -1,6 +1,8 @@
 #include "quay.h"
 #include "cp437.h"
 #include "../../apps/moon/lib/moonlibc/ctype/ucd.h"
+#include <stddef.h>
+void *alloc(void *p, size_t n);  // the runtime's heap (alloc.c, or the seat's own)
 
 // *e <- cp in the current pen; a cleared cell is cp 0 in it too, so erased ground keeps
 // the program's background (BCE)
@@ -59,7 +61,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   cb_hist(c, 0), c->twin = 0;
   c->flag = cb_show | cb_wrap;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0, c->rd = 0, c->ps = 0;
-  c->ucp = 0, c->un = 0, c->ol = 0;
+  c->ucp = 0, c->un = 0, c->ol = 0, c->clip = 0, c->cn = 0, c->cst = 0, c->cfz = 0;
   for (int k = 0; k < 8; k++) c->dmg[k] = 0;
   for (uint32_t k = 0; k < cb_nclu; k++)
     for (uint32_t j = 0; j < cb_clun; j++) c->clu[k][j] = 0;
@@ -269,6 +271,20 @@ static void cb_oscq(struct cb *c) {
   if (c->ol == 4 && c->ob[0] == '1' && c->ob[2] == ';' && c->ob[3] == '?') {
     if (c->ob[1] == '0') cb_say(c, "\033]10;rgb:c0c0/c0c0/c0c0\a");
     else if (c->ob[1] == '1') cb_say(c, "\033]11;rgb:0000/0000/0000\a"); } }
+
+void cb_unclip(struct cb *c) {
+  if (c->clip) alloc(c->clip, 0);
+  c->clip = 0, c->cn = 0, c->cst = 0; }
+
+// an osc 52 body begins: the buffer is taken now, and with none to take the body is refused
+static void cb_clipopen(struct cb *c) {
+  if (!c->clip) c->clip = alloc(0, cb_clipn);
+  c->esc = 18, c->cn = 0, c->cst = c->clip ? 1 : 2; }
+
+// osc 52's end: a whole body waits for its reader, a refused one goes
+static void cb_clipend(struct cb *c) {
+  c->esc = 0;
+  if (c->cst == 1) c->cst = 3; else cb_unclip(c); }
 
 // C0 controls, live in ground and mid-CSI. \n implies \r only under LNM (the kernel console's);
 // a raw feed keeps the column, as a pty's ONLCR stream expects
@@ -1155,7 +1171,17 @@ static void cb_put1(struct cb *c, uint8_t i) {
     if (i == 7) { c->esc = 0; return cb_oscq(c); }
     if (i == 27) { c->esc = 8; return; }
     if (c->ol < 5) c->ob[c->ol++] = i; else c->ol = 6;
+    if (c->ol == 3 && c->ob[0] == '5' && c->ob[1] == '2' && c->ob[2] == ';') cb_clipopen(c);
     return;
+   case 18:                                 // osc 52's body, kept to cb_clipn
+    if (i == 7) return cb_clipend(c);
+    if (i == 27) { c->esc = 19; return; }
+    if (c->cst == 1 && c->cn < cb_clipn) c->clip[c->cn++] = i; else c->cst = 2;
+    return;
+   case 19:                                 // its ST tail: anything but \ drops it
+    c->esc = 0;
+    if (i == '\\') return cb_clipend(c);
+    return cb_unclip(c);
    case 8:                                  // OSC's ST tail
     c->esc = 0;
     if (i == '\\') return cb_oscq(c);

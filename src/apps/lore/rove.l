@@ -7,7 +7,7 @@
          fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at mob-spots note
          nth-on oct-at open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-frame sign-over sign-pen
-         sign-rect sign-top sign-tpen snip-l song-fill song-lead song-lead-max song-lead-of song-rate steer
+         sign-rect sign-top sign-tpen snip-l song-fill song-keep song-lead song-lead-max song-lead-of song-rate steer
          tail? tap-dir tap-key tap-steer rove-key rove-modes toward tree-lines tree-next tree-node vlen rove-wander rove-turn rove-press rove-loop)
 (borrow 'posix)
 (borrow 'x11)
@@ -378,7 +378,7 @@
  ; lead is two and a half gaps, clamped to song-lead .. song-lead-max
  song-lead (6 * (song-rate // 30))
  song-lead-max (20 * (song-rate // 30))
- (pacer _) {'t (clock 0) 'gap 0.0}
+ (pacer _) {'t (clock 0) 'gap 0.0 'cap song-lead-max 'step 0}
  (pace! p) (: t (clock 0)
               d (1.0 * (t - p 't))
               v ((d / 2000.0) 0.5 * p 'gap)
@@ -391,6 +391,18 @@
  (song-fill hn lead feed) (:- (go (horn-lag hn) 0) (go l0 k)
                             (l0 < lead ? (: _ (feed ()) l1 (horn-lag hn) (l0 < l1 ? (go l1 (k + 1)) (k + 1)))
                                k))
+ ; ..the horn kept a pacer's lead ahead, lo at least. a feed the ring parks raises the lag
+ ; by under half a feed's: the ring is full there, and the lead stays a feed under it from
+ ; then on. the pacer's clock taken again after, so a fill's own wait is never a gap
+ (song-keep hn p lo feed) (: n (int (2.5 * pace! p * song-rate / 1000.0))
+   lead (min (p 'cap) (n < lo ? lo (song-lead-max < n ? song-lead-max n)))
+   (go l0 k) (? (l0 >= lead) k
+      (: _ (feed ()) l1 (horn-lag hn) r (l1 - l0) st (p 'step)
+         (? (r <= 0) (k + 1)
+            (r * 2 < st) (pin p 'cap (max (2 * st) (l0 - st)), k + 1)
+            (pin p 'step (max st r), go l1 (k + 1)))))
+   k (go (horn-lag hn) 0)
+   (pin p 't (clock 0), k))
  ; ..and a settle: keys drained for a while, under a box that goes up over what they were typed at
  settle-slice 25
  (settle ms) (0 < ms ? (drain-keys (), rest settle-slice, settle (ms - settle-slice)))

@@ -45,8 +45,8 @@
    (string [97 0 98] = parse '(34 97 92 48 98 34))          ; "a\0b"
    (string [97 66 98] = parse '(34 97 92 120 52 50 98 34)))) ; "a\x42b"
 
-; \u{h..}: one to six hex digits naming a code point, laid as its utf-8 bytes. anything
-; else after \u is no escape and reads as the letter, the rest as written
+; \u{h..}: one to six hex digits naming a code point, laid as its utf-8 bytes, or \uhhhh
+; just four. anything else after \u is no escape and reads as the letter, the rest as written
 (test
   ("\u{41}" = "A")                ("\u{0}" = "\0")
   ("\u{e9}" = "\xc3\xa9")         ("\u{E9}" = "\u{e9}")
@@ -56,10 +56,14 @@
   ("\u{ffff}" = "\xef\xbf\xbf")   ("\u{10000}" = "\xf0\x90\x80\x80")
   ("\u{10ffff}" = "\xf4\x8f\xbf\xbf")
   ("\u" = "u")                    ("\uab" = "uab")
+  ("\u0041" = "A")                ("\u00e9" = "\u{e9}")          ; four digits, no braces
+  ("\u280b" = "⠋")                ("\u20AC5" = "\u{20ac}5")      ; a fifth digit is the text's
+  ("\ud800" = "ud800")            ("\u12g4" = "u12g4")            ; a surrogate, a non-digit
   ("\u{}" = "u{}")                ("\u{110000}" = "u{110000}")    ; none, and past unicode
   ("\u{d800}" = "u{d800}")        ("\u{dfff}" = "u{dfff}")        ; a surrogate is no character
   ("\u{0000041}" = "u{0000041}")  ("\u{4g}" = "u{4g}")            ; seven digits, a non-digit
-  ('torn = sound '(34 92 117 123 52 49)))                         ; input ending inside one
+  ('torn = sound '(34 92 117 123 52 49))
+  ('torn = sound '(34 92 117 50 56)))                         ; input ending inside one
 
 ; raw texts: n quotes open and n close, nothing escapes; when the opener ends its line
 ; the closer's indent comes off every line, and the breaks beside the quotes go

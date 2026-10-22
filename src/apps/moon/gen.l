@@ -9378,8 +9378,8 @@
                               (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
        (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
-                ; a body that compiles only spliced has no call to fall back on: it reaches deeper
-                ((peep (g 'ineed) nm () ? 8 3) < #d) ()
+                ; a body that compiles only spliced, or always_inline, reaches deeper
+                ((peep (g 'ineed) nm () || peep (g 'alw) nm () ? 8 3) < #d) ()
                 (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)
@@ -9424,6 +9424,8 @@
                               tx (string? ax && !(sdn ax) ? (peep tys ax 'no) 'no)
                               (? ; a struct param the body never names: only the arg's effects stay
                                  (stru? <>p || arr? <>p) (bind >ps >as (pure? a ? pre (pre + [['expr a]])))
+                                 ; ..and a scalar one the pruned body never names, when its arg loads nothing
+                                 (rdw <p bd 1 = 0 && nold? a) (bind >ps >as pre)
                                  (ty9 = <>p && !(tak <>a) && !(wrs? <p bd))
                                   (pin m <p <>a, bind >ps >as pre)
                                  (tx != 'no)
@@ -9513,6 +9515,14 @@
            (two? cd && !(<>cd @ (('ret e)) 1 ()) ? pc))
        ; no call, store or storage: evaluating it any number of times, or not at all, changes nothing
        (pure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post sexpr clit asm)) () (pure? <x && pure? >x))
+       ; no load at all, a volatile's included: constants, addresses, an array or a function by name
+       (nold? x) (x @ ('num . _) 1
+                      ('var _) (ptype ps9 x @ t (arr? t || fn? t))
+                      ('addr ('var _)) 1
+                      ('cast _ a) (nold? a)
+                      ('un _ a) (nold? a)
+                      ('bin o a b) (elem o '(eq ne lt le gt ge + - * & | ^) && nold? a && nold? b)
+                      ())
        (sub x nm v) (!(two? x) ? x (x @ ('var ^nm) v (sub <x nm v . sub >x nm v)))
        ; may x evaluate ahead of its position, at the statement's head? pure, no trap (no load,
        ; no division), over caller locals nothing else writes: not &-taken, not written in ws
@@ -11291,7 +11301,8 @@
                           (<f = 'fn && !nolin &&
                            nelem <>f weaks &&
                            nelem <>f noinls ?
-                             ((elem <>f ainls ? (sspcut f) f) @ fi
+                             ; judged as it would splice: dead arms pruned, a tail past a return cut
+                             ((elem <>f ainls ? (sspcut f) f) @ f9 (ucut (dprune !(ilp32? g) (e \ ()) f9)) @ fi
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),

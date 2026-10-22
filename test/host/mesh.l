@@ -57,7 +57,7 @@
    vu (mesh-view W H [0.0 0.0 0.0] 0.0 1.5 1.4 0.1 100.0)
    zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 1))
    bare (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0
-                    (\ v S (: d (mesh-dirs v S) (mh-word (sky-tone nl (sky-colour-of nl wx (d 0) (d 1) (d 2) 0.0 0.0 night))))))
+                    (\ v S (: d (mesh-dirs v S) (mh-word (sky-tone nl (sky-colour-at nl wx (mesh-step v 1) (d 0) (d 1) (d 2) 0.0 0.0 night))))))
    seen (net (-1 < mesh-spot vu (ns 'x) (ns 'y) (ns 'z)))
    lit-m (zen != bare) hot (iota lit-m)
    ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box

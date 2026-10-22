@@ -68,6 +68,7 @@ enum { cb_saymax = 40 };  // one reply's longest: kitty's, with a 10-digit id an
 enum { cb_g0 = 1, cb_g1 = 2, cb_so = 4 };
 enum { cb_pmax = 16 };  // CSI parameters kept: two rgb pens in one SGR are ten
 enum { cb_mousen = 36 };  // a mouse report's longest: ESC [ < and three 10-digit fields, 2 ; and M
+enum { cb_clipn = 65536 };  // an osc 52 body's longest; one past it is refused whole
 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
@@ -100,6 +101,9 @@ struct cb {
   uint32_t hl, hh, hn, view, twin;
   int32_t sel0, sel1;  // the selection: cells [sel0, sel1) as glass counts them, none when equal
   uint32_t pgen;       // the last picture's gen
+  // osc 52: the body (Pc;Pd) as it came, cn bytes, in cb_clipn taken from alloc while one is
+  // held; cst 1 filling, 2 refused, 3 whole and unread. cfz: a finalizer watches the cask
+  uint8_t *clip; uint32_t cn; uint8_t cst, cfz;
   struct cb_cell cb[]; };
 
 // the store, after the cells: 128 slots (0 unused), 256 sixel registers, then xrgb pixels, top
@@ -133,6 +137,7 @@ void
   cb_attr(struct cb*, uint32_t fg, uint32_t bg),
   cb_recolor(struct cb*, uint32_t fg, uint32_t bg),
   cb_cur(struct cb*, uint32_t row, uint32_t col);
+void cb_unclip(struct cb*);           // let the osc 52 body go, and its buffer
 int cb_reply(struct cb*, uint8_t*);  // drain the reply queue; buf holds cb_outn
 int cb_full(struct cb const*);       // a drained queue without room for one more reply
 uintptr_t cb_laid(struct cb const*); // the bytes the screen spans, its last cluster slot's end

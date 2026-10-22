@@ -802,6 +802,15 @@
    played ((clock 0 - c0 + 1) * song-rate // 1000)    ; the most the rate plays between the reads
  (test (0 < k1) (k2 = 0) (0 < k3) (2 * song-rate - played <= l - l0 <= 2 * song-rate)))
 
+; a keeper asked past the ring learns where it is full and parks no more: filled again at
+; once it takes no wait, and the pacer's clock is taken after the fill
+(: h (horn song-rate 2) z (string (cask (4 * 480))) (feed _) (say h z)
+   p (pacer ()) _ (pin p 'gap 5000.0)
+   k1 (nom? h ? 1 (song-keep h p song-lead feed)) _ (pin p 'gap 5000.0)
+   c0 (clock 0) k2 (nom? h ? 0 (song-keep h p song-lead feed)) c1 (clock 0)
+ (test (0 < k1) (k2 <= 2) (c1 - c0 < 30) (c0 <= p 't) (p 'cap <= song-lead-max)
+       (nom? h || p 'cap = song-lead-max || p 'cap < horn-lag h + 2 * 480)))
+
 ; the opening sign: the first key takes it down and nothing else; the bar is never covered
 (: g (crawl-new 40 16 (wheel 7))
    f (crawl-frame g) bar (crawl-bar g)

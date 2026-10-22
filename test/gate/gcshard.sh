@@ -7,7 +7,8 @@
 # whose heap must be the normal one's. $w/cost holds each file's time under stress.
 # usage: gcshard.sh TREE [SHARDS]   SHARDS a half (GCS_SHARDS, default 4); GCS_NOBUILD=1 runs
 # the binaries TREE already has; GCS_HSUF the stress build's out suffix (default /gcs);
-# MAKE the tree's make; GCS_BAKE=1 the stress bake, this script's own
+# MAKE the tree's make; GCS_BAKE=1 the stress bake, this script's own. the normal build
+# is the caller's (the lanes' prerequisites, `host love0 out/mooncc0.image`)
 set -u
 [ $# -ge 1 ] || { echo "usage: gcshard.sh TREE [SHARDS]"; exit 2; }
 cd "$1" || exit 2
@@ -23,7 +24,7 @@ t0=$(date +%s)
 el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
 
 if [ -z "${GCS_NOBUILD:-}" ]; then
-  ${MAKE:-make} --no-print-directory host love0 out/mooncc0.image out/love.raw || fail "the normal build"
+  # only the stress builds: a make of host here relinks out/love under the other lanes
   ${MAKE:-make} --no-print-directory hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
   ${MAKE:-make} --no-print-directory out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
   el built

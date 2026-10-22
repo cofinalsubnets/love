@@ -316,7 +316,7 @@
                                            (s ? (st \ (shaft-sfx s st, shaft-song-feed s)) (st \ pin st 'sfx ()))))
                             'linger done-ms 'next ['court 'court-walk]})
  (shaft-run _) (view-run shaft-walk)
- shaft-usage "usage: love lore shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; ? the keys, q or esc leaves)"
+ shaft-usage "usage: love play shaft   (h l turn, k j step, space jumps or takes a ladder, u n look; ? the keys, q or esc leaves)"
  (shaft-main as) (as @ () (shaft-run ())
                        (say err ("shaft: " + shaft-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'shaft (udoor 'shaft shaft-main shaft-usage 1 1)))

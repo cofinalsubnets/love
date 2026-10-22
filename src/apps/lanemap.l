@@ -11,10 +11,12 @@
 ;   (lanes-map _)   lanes.sh's chains and alone set, `chain A,B,..` and `alone A B ..` lines
 ;                   (love bee --lanes-map)
 ;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
-;                   targets of its recipe's $(MAKE) lines, read as written
+;                   targets of its recipe's $(MAKE) lines, read as written; and a test/ path a
+;                   recipe names -> the lanes whose recipe it is
 ;   (lanes-plan paths baked covers)  the lanes a change owes, in run order: [[lane heavy? cost
 ;                   why] ..]. light before heavy, cheap first, a lane another runs dropped, test
-;                   always and test_slow last. why is the paths that owed it
+;                   always and test_slow last. why is the paths that owed it: a rule's, or a
+;                   recipe's that names the path
 ;   (lanes-lines plan)  the plan as `lane light|heavy cost why` lines (love bee --lanes)
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
@@ -27,6 +29,8 @@
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
+     ["" ["test/host/*" "test/gate/lanes.sh"] ["test_hostnif"]
+      "; a test/ path a lane's recipe in `test/test.mk` names owes that lane (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`)"]
      ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_quick"] ""]
      ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
@@ -84,9 +88,12 @@
                 () ls))
    (lanes-covers mk)
     (: (add t ns s) (foldl (\ t n (pin t n (peep t n () + lm-tests s))) t ns)
+       ; a test/ path a recipe line names, to the lanes it is the recipe of
+       (named t ns s) (foldl (\ t w (: o (peep t w ()) (pin t w (o + filter (n \ !(elem n o)) ns))))
+                             t (filter (w \ starts? w "test/") (words s)))
        (step st l)
         (st @ [t cur]
-         (? (starts? l "\t") (? (two? cur && 0 <= lm-from l "$(MAKE)" 0) [(add t cur l) cur] st)
+         (? (starts? l "\t") (? (two? cur) [(named (0 <= lm-from l "$(MAKE)" 0 ? (add t cur l) t) cur l) cur] st)
             (#l = 0 || starts? l "#") st
             (: i (lm-from l ":" 0) ns (words (snip l 0 (i < 0 ? 0 i)))
                (? ((i < 0) || !(two? ns) || any (n \ !(starts? n "test")) ns || (0 <= lm-from l "=" 0)) [t ()]
@@ -107,7 +114,9 @@
                                           (? (any (lm-hit? baked p) globs)
                                              (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t ls) t)))
                                  t lanes-rules))
-                   {} paths)
+                   (foldl (\ t p (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t (peep covers p ())))
+                          {} paths)
+                   paths)
        ls (filter (l \ l != "test" && l != "test_slow") (keys owed))
        under (map (l \ [l (filter (m \ m != l) (lm-under covers l))]) ls)
        kept (filter (l \ !(any (u \ <u != l && elem l (u 1)) under)) ls)

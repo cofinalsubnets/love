@@ -313,6 +313,7 @@ struct g {
    push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
  uintptr_t cbase, croom;          // c0's outermost C frame (0 outside one), and the stack it may take
  uintptr_t ask;                   // the collector's ask while it works: an oom's first datum
+ uintptr_t clips;                 // the bytes quay's osc 52 bodies hold from alloc, every screen's
  struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
@@ -487,6 +488,7 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
+void sha256_of(unsigned char const*, uintptr_t, unsigned char*);
 // the thread pool (pool.c): fn(ctx, i) for chunks 0..n-1, C kernels only
 void par_run(struct g*, intptr_t, void (*)(void*, intptr_t), void*);
 intptr_t par_width(struct g*, intptr_t);

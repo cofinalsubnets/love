@@ -1565,7 +1565,7 @@
                                'dead (fill w-lost [(here g)])
                                (fill w-fled [(g 'p 'penny)])) + "\n"),
               0))
- tower-usage "usage: love lore tower   (no options; q or esc leaves the tower)"
+ tower-usage "usage: love play tower   (no options; q or esc leaves the tower)"
 
  ; tower takes nothing: a word here is a mistake, and the climb would swallow it
  (tower-main as) (atom? as ? (tower-run ())

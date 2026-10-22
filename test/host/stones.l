@@ -96,10 +96,9 @@
    _ (keys! st (map (i \ 107) ^700)) z (st 'pz)
    _ (keys! st [107 107])
  (test (st 'done = 1) (z < exit-z) (st 'pz = z)))
-; the altar: space near it kneels, facing it, with no jump between frames; walking keys
+; the altar: space near it goes to it and kneels, facing it, with no jump between frames; walking keys
 ; go unheard; space again stands it up where it knelt
-(: far (at 15.5 7) _ (stones-step far (stones-kb 32))
-   st (at 15.5 7) z0 (zc - 2.6) g0 (stones-ground 0.8 z0)
+(: st (at 15.5 7) z0 (zc - 2.6) g0 (stones-ground 0.8 z0)
    _ (pins st 'px 0.8 'pz z0 'th 0.25 'ph 0.0 'py (g0 + eye-h) 'dt 0.05)
    _ (stones-step st (stones-kb 32)) began (st 'eye)
    ; ..ticks until the move is done: the most the eye went in one, up and round
@@ -109,10 +108,22 @@
    k (run 0 0.0 0.0) knelt (st 'eye) kx (st 'px) ky (st 'py) kth (st 'th)
    _ (stones-step st (stones-kb 107)) _ (stones-move st) still (st 'px = kx)
    _ (stones-step st (stones-kb 32)) u (run 0 0.0 0.0) stood (st 'eye)
- (test (far 'eye = 'walk) (began = 'move) (knelt = 'kneel) (still)
+ (test (began = 'move) (knelt = 'kneel) (still)
        (ky < stones-ground kx (st 'pz) + 1.3) (mag (wrap (atan2 (0.0 - kx) (zc - st 'pz) - kth)) < 0.5)
        (k 1 < 0.06) (k 2 < 0.12) (u 1 < 0.06) (stood = 'walk)
        (mag (st 'py - stones-ground (st 'px) (st 'pz) - eye-h) < 0.01)))
+
+; ..and away from it space kneels where the eye stands, facing on; the choices never come,
+; and space stands it again
+(: st (at 15.5 7) x0 (st 'px) z0 (st 'pz) th0 (st 'th) _ (pin st 'dt 0.05)
+   (until f n) (stones-move st, f () || 400 < n ? n (until f (n + 1)))
+   _ (stones-step st (stones-kb 32)) began (st 'eye)
+   n (until (_ \ st 'eye != 'move) 0) knelt (st 'eye)
+   _ (until (_ \ charm? (st 'dlg)) 0) asked (st 'dlg)
+   _ (stones-step st (stones-kb 32)) _ (until (_ \ st 'eye != 'move) 0)
+ (test (began = 'move) (n < 400) (knelt = 'kneel) (asked = ())
+       (mag (st 'th - th0) < 1e-9) (mag (st 'py - stones-ground (st 'px) (st 'pz) - eye-h) < 0.01)
+       (st 'eye = 'walk)))
 
 ; the choices: once knelt they come; bleed is a move and they come back after it; wait
 ; puts them away and stays knelt, till a walking key stands the eye up
@@ -160,6 +171,16 @@
 (: hl (view-help stones-kb (view-listed ['kneel]))
  (test (#hl = 9) (hl 6 = "space  kneel") (hl 8 = "esc q  quit")
        !(any (l \ 1 < #(split "bleed" l) || 1 < #(split "choose" l)) hl)))
+
+; w steps as k does and d strafes square to the facing; the mouse turns and tilts the eye
+; while walking, and not while kneeling
+(: sw (at 12.0 7) _ (pin sw 'th 0.0) x0 (sw 'px) z0 (sw 'pz)
+   _ (stones-step sw (stones-kb 119)) z1 (sw 'pz) x1 (sw 'px)
+   _ (stones-step sw (stones-kb 100)) x2 (sw 'px) z2 (sw 'pz)
+   _ (stones-look sw 40 -20) th (sw 'th) ph (sw 'ph)
+   _ (pin sw 'eye 'kneel) _ (stones-look sw 40 -20)
+ (test (z1 > z0) (mag (x1 - x0) < 1e-9) (x2 > x1) (mag (z2 - z1) < 1e-9)
+       (mag (th - 0.1) < 1e-9) (mag (ph - 0.05) < 1e-9) (sw 'th = th) (sw 'ph = ph)))
 
 (test_fin ())
 (puts "stones: ok\n")
