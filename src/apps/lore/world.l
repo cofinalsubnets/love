@@ -529,7 +529,7 @@
     'doors drs 'doors-lit (map (i \ lit-of ['door (vals (lv 'doors i)) tt] (drs i)) ^#drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
     'ball (two? (peep lv 'balls ()) ? (ball-mesh ()) ()) 'lit lit
     'spins (map (s \ spin-mesh s tt) (peep lv 'spins ()))
-    'orbs (map (o \ (: k ['orb (vals o) tt] pk (kept k (_ \ mesh-pack (orb-mesh o tt)))
+    'orbs (map (o \ (: k ['orb (o 'at) (o 'r) (o 'tex) (o 'turns) (o 'coarse) tt] pk (kept k (_ \ mesh-pack (orb-mesh o tt)))
                        {'pk pk 'lit (lit-of k pk) 'round (2.0 * tt (tix tt (o 'tex)) 1)}))
                (peep lv 'orbs ()))
     'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex)
@@ -561,8 +561,33 @@
  gain 2.0
  ; ..the thing under a point x y of the screen: where the ray through it first comes out of
  ; the air, with the brush there and its source path, or ()
- (world-pick st x y) (: r (world-ray st x y)
-   (brush-ray (st 'sc 'brushes) (r 0) (r 1) @ () () q (pin q 'src (peep (peep (st 'lvl 'brushes) (q 'b) {}) 'src ()))))
+ (world-pick st x y) (: r (world-ray st x y) e (r 0) v (r 1) lv (st 'lvl)
+   q (brush-ray (st 'sc 'brushes) e v @ () () q (pin q 'src (peep (peep (lv 'brushes) (q 'b) {}) 'src ())))
+   (foldl (\ a b (prop-hit b e v @ () a h (tablet? a && a 't <= h 't ? a h))) q (world-props lv)))
+ xf-id [1.0 0.0 0.0 1.0 0.0 0.0]          ; a form's place where nothing has moved it
+ ; ..what a click chooses that is no brush: each orb a ball, each strip light its fitting's box,
+ ; with its source path and place
+ (world-props lv) (map (o \ {'ball 1 'at (o 'at) 'r (o 'r) 'src (peep o 'src ()) 'xf (peep o 'xf xf-id)}) (peep lv 'orbs ())
+   + map (s \ (: x (s 'at 0) z (s 'at 1) h (s 'y) a (s 'across ? 0.6 0.08) c (s 'across ? 0.08 0.6)
+                {'ball 0 'lo [(x - a) (h - 0.05) (z - c)] 'hi [(x + a) h (z + c)] 'src (peep s 'src ()) 'xf (peep s 'xf xf-id)}))
+         (peep lv 'strips ()))
+ ; ..a prop's corners, a ball's those of the box round it
+ (prop-box b) (b 'ball ? [(map (i \ b 'at i - b 'r) ^3) (map (i \ b 'at i + b 'r) ^3)] [(b 'lo) (b 'hi)])
+ ; ..where the ray from e along v first meets prop b, as brush-ray answers, or ()
+ (prop-hit b e v) (: t (b 'ball ? (ray-ball e v (b 'at) (b 'r)) (ray-box e v (b 'lo) (b 'hi)))
+   (? (t = ()) ()
+      (: p (c+ e (c* t v)) bx (prop-box b) m (map (i \ 0.5 * (bx 0 i + bx 1 i)) ^3)
+         u (map (i \ (p i - m i) / max2 1e-6 (0.5 * (bx 1 i - bx 0 i))) ^3) (ab x) (x < 0.0 ? (0.0 - x) x)
+         k (? (ab (u 0) >= ab (u 1) && ab (u 0) >= ab (u 2)) 0 (ab (u 1) >= ab (u 2)) 1 2)
+         n (b 'ball ? (c* (1.0 / b 'r) (c+ p (c* -1.0 (b 'at)))) (map (i \ i = k ? (u k < 0.0 ? -1.0 1.0) 0.0) ^3))
+         {'t t 'p p 'b () 'n n 'src (b 'src) 'xf (b 'xf)})))
+ ; ..the nearest t past the eye where e + t v meets a ball or a box, or ()
+ (ray-ball e v a r) (: o (c+ e (c* -1.0 a)) A (dot v v) B (dot o v) D (B * B - A * (dot o o - r * r))
+   (D < 0.0 ? () (: t ((0.0 - B - sqrt D) / A) (t > 0.001 ? t ()))))
+ (ray-box e v lo hi) (: (ax k) (: d (v k) (? (mag d < 1e-9) (e k < lo k || hi k < e k ? [1e9 -1e9] [-1e9 1e9])
+                                              (: t0 ((lo k - e k) / d) t1 ((hi k - e k) / d) (t0 < t1 ? [t0 t1] [t1 t0]))))
+   s (map ax ^3) t0 (max2 (s 0 0) (max2 (s 1 0) (s 2 0))) t1 (min2 (s 0 1) (min2 (s 1 1) (s 2 1)))
+   (t0 <= t1 && 0.001 < t0 ? t0 ()))
  ; ..the eye, the ray's way through x y, and the view they are in
  (world-ray st x y) (: dm (mesh-dims st) w <dm h (dm 1) e [(st 'px) (st 'py) (st 'pz)]
    v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fov 0.05 60.0) [e (mesh-dirs v (y * w + x)) v])
@@ -713,10 +738,12 @@
  world-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump}
  ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
  ; way to go, summed for the frame's walk. any key during the shots skips them
- (world-step st a) (: dt (peep st 'dt (1.0 / fps))
+ (world-step st a) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st)
    (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
+   (up u) (pin st 'mu (peep st 'mu 0 + u))
    (two? (peep st 'cut ()) ? (cue st) (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
-      'jump (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 && !(hoisting? st) ? (pin st 'fv jump-v) st)
+      'jump (? fly (up 1) (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 && !(hoisting? st)) (pin st 'fv jump-v) st)
+      'sink (fly ? (up -1) st)
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
            s s))))
@@ -725,6 +752,15 @@
    _ (? (n > 0) (: k (walk-v * dt / max2 1.0 n) x (x0 + k * (f * sin th + s * cos th)) z (z0 + k * (f * cos th - s * sin th))
                   (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
+ ; ..or flown, the editor's noclip: on the way the eye looks, up and down by 'mu, through
+ ; anything, twice as fast
+ fly-v (2.0 * walk-v)
+ (flying? st) (peep st 'fly 0 = 1)
+ (fly! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) u (peep st 'mu 0) n (sqrt (f * f + s * s + u * u)) th (st 'th) ph (st 'ph)
+   k (fly-v * dt / max2 1.0 n) cp (cos ph)
+   _ (? (n > 0) (pins st 'px (st 'px + k * (f * cp * sin th + s * cos th)) 'py (st 'py + k * (f * sin ph + u))
+                         'pz (st 'pz + k * (f * cp * cos th - s * sin th))))
+   (pins st 'mf 0 'ms 0 'mu 0 'vx 0.0 'vz 0.0 'fv 0.0 'gv 0.0))
  ; a frame's motion: the shots in turn, each for its seconds, and nothing else moving till
  ; they are done; the frame of the cut already the level's
  (world-move st) (: cut (peep st 'cut ()) dt (peep st 'dt (1.0 / fps)) ct (peep st 'ct 0.0 + dt)
@@ -733,13 +769,14 @@
  ; ..the shots done: a waiting car's door opens on the cut, with its chime
  (cue st) (: _ (each (st 'cars) (s \ s 'ph = 'wait ? (pin s 't car-wait))) (pins st 'cut () 'ct 0.0))
  ; ..then the clock, each door toward open while the player is near it, and the cars
- (play-move st) (: dt (peep st 'dt (1.0 / fps)) up (hoisting? st) _ (up ? (hoisting! st dt) (walk! st dt)) lv (st 'lvl) x (st 'px) z (st 'pz)
+ (play-move st) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st) up (hoisting? st)
+   _ (? fly (fly! st dt) up (hoisting! st dt) (walk! st dt)) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
    _ (pins st 'mt (st 'mt + dt) 'doors (map go ^#(lv 'doors)))
-   _ (grav-step st dt)
-   _ (hoisting? st ? st (floor-step st dt))
+   _ (fly ? st (grav-step st dt))
+   _ (fly || hoisting? st ? st (floor-step st dt))
    _ (each (peep st 'balls ()) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(peep lv 'cars ())))
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
@@ -919,7 +956,6 @@
  ;     window. ctrl-w w goes between them, a click on the scene puts vi on the form that made
  ;     what it hit, the right button held looks by the mouse, and coming back to the scene
  ;     reads it again from vi's text when that has changed; vi's :w writes the file ---
- xf-id [1.0 0.0 0.0 1.0 0.0 0.0]          ; a form's place where nothing has moved it
  edit-s 2                                ; a scene pixel, edit-s by edit-s of the window's
  (edit-lay W H) (: sw (W // 2 // edit-s * edit-s)
    {'W W 'H H 'sw sw 'pw (sw // edit-s) 'ph (H // edit-s // 2 * 2) 'cols ((W - sw) // 8) 'rows (H // 16)})
@@ -946,7 +982,7 @@
    (? (atom? sp) (pins ed 'sel () 'drag (), vi 'vmsg vs (tablet? h ? "nothing in the text made that" "nothing there"))
       (: p (h 'p) hn (h 'n) ax (? (mag (hn 0) >= mag (hn 1) && mag (hn 0) >= mag (hn 2)) 0 (mag (hn 1) >= mag (hn 2)) 1 2)
          n (? !(ed 'shift) [0.0 1.0 0.0] (map (i \ i = ax ? 1.0 0.0) ^3))
-         (pins ed 'sel (h 'src) 'sb (h 'b) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0] 'xf (edit-xf ed (h 'b))},
+         (pins ed 'sel (h 'src) 'sb (h 'b) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0] 'xf (peep h 'xf (edit-xf ed (h 'b)))},
           vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1))))))
  ; ..the drag to where the ray through x y meets its plane, a twentieth of a metre at a time
  (edit-drag ed x y) (: g (ed 'drag) r (world-ray (ed 'st) x y) e (r 0) d (r 1) n (g 'n) k (dot n d)
@@ -957,11 +993,103 @@
  (edit-vec v) ("[" + edit-num (v 0) + " " + edit-num (v 1) + " " + edit-num (v 2) + "]")
  (edit-lines t) (: (go i j acc) (? (i >= #t) (rev (j < i ? ((snip t j i) . acc) acc)) (t i = 10) (go (i + 1) (i + 1) ((snip t j i) . acc)) (go (i + 1) j acc))
    (go 0 0 ()))
- ; ..the drag let go: the chosen form in a (move ..) by as far, or its move's by further,
- ; or none where that comes to nothing; vi's text that, undoably, and the scene read again
+ ; --- a move or a turn laid into a form's own numbers, as scenery's (move ..) and (turn ..)
+ ;     would place it, so the text keeps no record of how it got there. an op is a swing
+ ;     about the upright and a shift after it, {'deg 'co 'si 'sq 'qn 'tx 'ty 'tz}, swung as
+ ;     scenery swings. answers the edits [from to text], or 'no where a form's numbers are
+ ;     not all there to change ---
+ ; ..each form's arguments: p a point, v a way (swung, not shifted), b a bearing, s points, r a
+ ; drape's rows of them, P parts, _ left be; only quarter swings for rw-square, none for rw-still
+ rw-kinds {'book "pb" 'mattress "pb" 'pencil "pb_" 'telescope "pb__" 'start "pb_" 'shot "_pb_" 'orb "p___"
+           'ball "p" 'bulb "p_" 'rod "pp___" 'cut "pppP" 'spinner "p____" 'decal "pvv___" 'ad "pvv___"
+           'neon "pv___" 'sconce "pvv__" 'sign "p___" 'poster "p___" 'flames "_s" 'prism "_s" 'drape "_r"
+           'coarse "_P" 'whole "P" 'skin "_P" 'solid "P" 'air "P" 'box "pp" 'room "pp" 'street "pp"
+           'window "pp_" 'grav "pp_" 'door "p__" 'strip-light "p" 'bin "p_____"}
+ rw-square ['box 'room 'street 'window 'grav 'door 'strip-light]
+ rw-still ['bin]
+ ; ..a swing of d degrees, a quarter's exact, shifted by t
+ (rw-op d t) (: q (floor (d / 90.0 + 0.5)) e (d - 90.0 * q) sq (-1e-9 < e && e < 1e-9) qn ((q % 4 + 4) % 4)
+   {'deg d 'sq sq 'qn qn 'co (sq ? (qn @ 0 1.0 1 0.0 2 -1.0 3 0.0) (cos (d * pi / 180.0)))
+    'si (sq ? (qn @ 0 0.0 1 1.0 2 0.0 3 -1.0) (sin (d * pi / 180.0))) 'tx (t 0) 'ty (t 1) 'tz (t 2)})
+ (rw-shift d) (rw-op 0.0 d)
+ (rw-way op v) [(v 0 * op 'co + v 2 * op 'si) (v 1) (v 2 * op 'co - v 0 * op 'si)]
+ (rw-pt op p) (c+ (rw-way op p) [(op 'tx) (op 'ty) (op 'tz)])
+ (rw-turn d c) (: o (rw-op d [0.0 0.0 0.0]) w (rw-way o [(c 0) 0.0 (c 1)]) (rw-op d [(c 0 - w 0) 0.0 (c 1 - w 2)]))
+ (rw-then a b) (rw-op (a 'deg + b 'deg) (rw-pt a [(b 'tx) (b 'ty) (b 'tz)]))
+ (rw-inv a) (: o (rw-op (0.0 - a 'deg) [0.0 0.0 0.0]) (rw-op (0.0 - a 'deg) (c* -1.0 (rw-way o [(a 'tx) (a 'ty) (a 'tz)]))))
+ (rw-still? op) (op 'sq && op 'qn = 0)
+ (rw-none? op) (rw-still? op && mag (op 'tx) < 1e-9 && mag (op 'ty) < 1e-9 && mag (op 'tz) < 1e-9)
+ ; ..a number as the text says it, to a ten-thousandth
+ (rw-num x) (: k (int (floor (x * 10000.0 + 0.5))) a (k < 0 ? (0 - k) k) f (a % 10000)
+   (trim z) (z (#z - 1) = 48 ? (trim (snip z 0 (#z - 1))) z)
+   ((k < 0 ? "-" "") + show (a // 10000) + (f = 0 ? "" ("." + trim (snip (show (10000 + f)) 1 5)))))
+ (rw-vec v) ("[" + rw-num (v 0) + " " + rw-num (v 1) + " " + rw-num (v 2) + "]")
+ (rw-deg v) (rw-num (v - 360.0 * floor ((v + 180.0) / 360.0)))
+ (rw-read t k) (<(sounds (snip t (k 0) (k 1))) @ n (charm? n || gem? n ? (1.0 * n) ()))
+ (rw-nums t k n) (? (t (k 0) != 91) () (: vs (map (q \ rw-read t q) (sx-kids t (k 0))) (#vs = n && !(elem () vs) ? vs ())))
+ (rw-join es) (any (e \ e = 'no) es ? 'no (cats es))
+ ; ..one argument k of kind c
+ (rw-arg t op c k) (? (c = 95) ()
+   (c = 112) (rw-nums t k 3 @ () 'no p [[(k 0) (k 1) (rw-vec (rw-pt op p))]])
+   (c = 118) (rw-nums t k 3 @ () 'no v (rw-still? op ? () [[(k 0) (k 1) (rw-vec (rw-way op v))]]))
+   (c = 98) (rw-read t k @ () 'no b (rw-still? op ? () [[(k 0) (k 1) (rw-deg (b + op 'deg))]]))
+   (c = 115) (t (k 0) != 91 ? 'no (rw-join (map (q \ rw-arg t op 112 q) (sx-kids t (k 0)))))
+   (c = 114) (t (k 0) != 91 ? 'no (rw-join (map (q \ t (q 0) = 91 ? (rw-arg t op 115 q) (snip t (q 0) (q 1) = "()" ? () 'no)) (sx-kids t (k 0)))))
+   (c = 80) (? (t (k 0) = 91) (rw-join (map (q \ rw-form t op q) (sx-kids t (k 0)))) (t (k 0) = 40) (rw-form t op k) 'no)
+   'no)
+ ; ..a (move ..) or (turn ..) w round one form: the two laid into that form and the wrapper
+ ; gone, or 'no; and its parts each given the op as they see it, the wrapper kept
+ (rw-flat t op k w ps) (: es (#ps = 1 && t (ps 0 0) = 40 ? (rw-form t (rw-then op w) (ps 0)) 'no)
+   (es = 'no ? 'no ([[(k 0) (ps 0 0) ""] [(ps 0 1) (k 1) ""]] + es)))
+ (rw-group t op w ps) (rw-join (map (q \ rw-arg t (rw-then (rw-inv w) (rw-then op w)) 80 q) ps))
+ ; ..the form k, by its head
+ (rw-form t op k) (: ks (sx-kids t (k 0)) hd (two? ks && t (k 0) = 40 ? (snip t (ks 0 0) (ks 0 1)) "") as >ks h (sounds hd @ l (two? l ? <l ()))
+   (? (rw-none? op) ()
+      (hd = "move") (rw-nums t (as 0) 3 @ () 'no o
+         (: w (rw-shift o) es (rw-flat t op k w >as)
+            ; ..else a group shifted: its move's on further
+            (? (es != 'no) es (rw-still? op) [[(as 0 0) (as 0 1) (rw-vec [(o 0 + op 'tx) (o 1 + op 'ty) (o 2 + op 'tz)])]]
+               (rw-group t op w >as))))
+      (hd = "turn") (: d (rw-read t (as 0)) c (rw-nums t (as 1) 2)
+         (? (d = () || c = ()) 'no
+            (: w (rw-turn d c) es (rw-flat t op k w (drop 2 as)) a (rw-then op w) f (rw-pt a [(c 0) 0.0 (c 1)])
+               ; ..else swung about its own middle: its turn's degrees on further
+               (? (es != 'no) es (mag (f 0 - c 0) < 1e-6 && mag (f 2 - c 1) < 1e-6 && mag (a 'ty) < 1e-9) [[(as 0 0) (as 0 1) (rw-deg (a 'deg))]]
+                  (rw-group t op w (drop 2 as))))))
+      (hd = "repeat") (rw-nums t (as 1) 3 @ () 'no o
+         (rw-join ((rw-still? op ? () [[(as 1 0) (as 1 1) (rw-vec (rw-way op o))]]) . map (q \ rw-arg t op 80 q) (drop 2 as))))
+      (elem hd ["mirror-x" "mirror-z"]) (? (!(rw-still? op)) 'no
+         (: c (rw-read t (as 0)) (c = () ? 'no (rw-join ([[(as 0 0) (as 0 1) (rw-num (c + op (hd = "mirror-x" ? 'tx 'tz)))]] . map (q \ rw-arg t op 80 q) >as)))))
+      (hd = "across") (? (#as != 1) 'no
+         (: es (rw-form t (pin (rw-then op (rw-shift [0.0 0.0 0.0])) 'nf 1) (as 0)) flip (op 'qn % 2 = 1)
+            (es = 'no || !flip ? es ([[(k 0) (as 0 0) ""] [(as 0 1) (k 1) ""]] + es))))
+      !(elem h (keys rw-kinds)) 'no
+      (!(rw-still? op) && (elem h rw-still || (!(op 'sq) && elem h rw-square))) 'no
+      (: cs (rw-kinds h) (#as < #cs ? 'no
+         (: es (rw-join (map (i \ rw-arg t op (cs i) (as i)) ^#cs))
+            (es != 'no && h = 'strip-light && op 'qn % 2 = 1 && peep op 'nf 0 = 0 ? ([[(k 0) (k 0) "(across "] [(k 1) (k 1) ")"]] + es) es))))))
+ ; ..the op o on the form at path p, lifted through every (move ..) or (turn ..) holding it
+ ; alone, so those go too: [path op] for the outermost
+ (rw-lift t p o) (: q (rev >(rev p)) f (two? q ? (world-span t q) ())
+   (? (atom? q || atom? f || t (f 0) != 40) [p o]
+      (: ks (sx-kids t (f 0)) hd (snip t (ks 0 0) (ks 0 1)) as >ks
+         w (? (hd = "move" && #as = 2) (rw-nums t (as 0) 3 @ () () v (rw-shift v))
+              (hd = "turn" && #as = 3) (: d (rw-read t (as 0)) c (rw-nums t (as 1) 2) (d = () || c = () ? () (rw-turn d c)))
+              ())
+         (tablet? w ? (rw-lift t q (rw-then w (rw-then o (rw-inv w)))) [p o]))))
+ ; ..the op o laid into the form at path p, the edits and the path the form ends at, or 'no
+ (rw-at t p o) (: l (rw-lift t p o) sp (world-span t (l 0)) es (atom? sp ? 'no (rw-form t (l 1) sp))
+   (es = 'no ? 'no [es (l 0)]))
+ ; ..the edits laid into t, the last first
+ (rw-lay t es) (foldl (\ s e (snip s 0 (e 0) + e 2 + snip s (e 1) #s)) t (rev (sort es)))
+ ; ..the drag let go: the chosen form's own numbers moved as far, or where they cannot all
+ ; be, the form in a (move ..) or its move's by further, none where that comes to nothing;
+ ; vi's text that, undoably, and the scene read again
  (edit-drop ed) (: g (ed 'drag) off (xf-from (peep g 'xf xf-id) (g 'off)) t (ed 'text) sp (world-span t (ed 'sel))
    _ (pin ed 'drag ())
+   r (atom? sp ? 'no (rw-at t (ed 'sel) (rw-shift off)))
    (? (all (i \ off i = 0.0) ^3 || atom? sp) ed
+      (r != 'no) (edit-put (pin ed 'sel (r 1)) (rw-lay t (r 0)) ("moved by " + edit-vec off))
       (: a (sp 0) b (sp 1) ks (sx-kids t a) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
          vk (#ks = 3 && t (ks 1 0) = 91 ? (sx-kids t (ks 1 0)) ())
          base (map (k \ <(sounds (snip t (k 0) (k 1))) @ n (charm? n || gem? n ? n 'no)) vk)
@@ -991,14 +1119,20 @@
  ; others as their place has it, or a swing about its middle; and their edges, [a b] pairs,
  ; with a swing's ring round them on the floor and a spoke to where it points
  (edit-sel ed) (: sel (ed 'sel) lb (ed 'st 'lvl 'brushes) (atom? sel ? () (filter (i \ peep (lb i) 'src () = sel) ^#lb)))
+ ; ..and its props, orbs and strip lights, and a box's eight corners and twelve edges
+ (edit-props ed) (: sel (ed 'sel) (atom? sel ? () (filter (b \ b 'src = sel) (world-props (ed 'st 'lvl)))))
+ (box-corners bx) (map (j \ map (i \ (j >> i & 1) = 0 ? (bx 0 i) (bx 1 i)) ^3) ^8)
+ (box-edges bx) (: c (box-corners bx) (cats (map (j \ cats (map (i \ (j >> i & 1) = 0 ? [[(c j) (c (j | (1 << i)))]] ()) ^3)) ^8)))
  (edit-edges ed off) (: st (ed 'st) bs (st 'sc 'brushes) is (edit-sel ed) g (ed 'drag) hs (tablet? g ? (peep g 'xf xf-id) xf-id)
    sw (tablet? g && g 'kind = 'turn) m0 (xf-from hs off)
-   (mv i) (: x (edit-xf ed i) (? sw (p \ xf-at x (edit-swing (g 'dl) (g 'cl) (xf-back x p))) (: o (xf-to x m0) (p \ c+ p o))))
+   (mvx x) (? sw (p \ xf-at x (edit-swing (g 'dl) (g 'cl) (xf-back x p))) (: o (xf-to x m0) (p \ c+ p o)))
+   (mv i) (mvx (edit-xf ed i))
    ring (? !sw () (: c (g 'cw) R (g 'r) y (g 'y) (on a) (: t (a * pi / 180.0) [(c 0 + R * sin t) y (c 2 + R * cos t)])
                      ([[[(c 0) y (c 2)] (on (g 'aw))]] + map (k \ [(on (7.5 * k)) (on (7.5 * k + 7.5))]) ^48)))
    (ring + cats (map (i \ (: m (mv i)
                              (cats (map (ps \ (#ps >= 3 ? (map (j \ [(m (ps j)) (m (ps ((j + 1) % #ps)))]) ^#ps) ())) ((bs i) 'faces)))))
-                     is)))
+                     is)
+    + cats (map (b \ (: m (mvx (b 'xf)) (map (q \ [(m (q 0)) (m (q 1))]) (box-edges (prop-box b))))) (edit-props ed))))
  ; ..a swing of the chosen form begun: about the middle of the brushes placed as the one
  ; clicked, or a (turn ..)'s own middle where the form is one; on the floor under them
  (edit-turned t sp) (: ks (sx-kids t (sp 0)) hd (two? ks ? (snip t (ks 0 0) (ks 0 1)) "")
@@ -1007,8 +1141,9 @@
       (: d (num (ks 1)) c (map num (sx-kids t (ks 2 0)))
          ((charm? d || gem? d) && #c = 2 && !(elem () c) ? [d c (ks 3)] ()))))
  (edit-spin-new ed) (: st (ed 'st) bs (st 'sc 'brushes) is (edit-sel ed) t (ed 'text) sp (atom? (ed 'sel) ? () (world-span t (ed 'sel)))
-   hx (two? is ? (edit-xf ed (elem (ed 'sb) is ? (ed 'sb) <is)) xf-id) mine (filter (i \ edit-xf ed i = hx) is)
-   ps (cats (map (i \ cats (filter (f \ #f >= 3) ((bs i) 'faces))) mine))
+   pr (edit-props ed)
+   hx (? (two? is) (edit-xf ed (elem (ed 'sb) is ? (ed 'sb) <is)) (two? pr) (<pr 'xf) xf-id) mine (filter (i \ edit-xf ed i = hx) is)
+   ps (cats (map (i \ cats (filter (f \ #f >= 3) ((bs i) 'faces))) mine) + cats (map (b \ box-corners (prop-box b)) (filter (b \ b 'xf = hx) pr)))
    (? (atom? ps || atom? sp) ()
       (: w (c* (1.0 / #ps) (foldl c+ [0.0 0.0 0.0] ps)) tn (edit-turned t sp)
          cl (two? tn ? (tn 1) (: q (xf-back hx w) [(floor (20.0 * q 0 + 0.5) / 20.0) (floor (20.0 * q 2 + 0.5) / 20.0)]))
@@ -1024,10 +1159,13 @@
          (? (g 'a0 = ()) (pin g 'a0 a)
             (: v (a - g 'a0) w (v - 360.0 * floor ((v + 180.0) / 360.0)) k (ed 'ctrl ? 1.0 15.0) s (k * floor (w / k + 0.5))
                (pins g 'aw (g 'a0 + s) 'dl (s * xf-hand (g 'xf)), (ed 'vi) 'vmsg (ed 'vs) ("turning " + edit-num s)))))))
- ; ..the chosen form swung dl degrees of its own about cl: in a (turn ..), or its turn's
- ; degrees on further, or out of it where they come round to nothing
+ ; ..the chosen form swung dl degrees of its own about cl: its own numbers turned, or where
+ ; they cannot all be, in a (turn ..), or its turn's degrees on further, or out of it where
+ ; they come round to nothing
  (edit-spin ed dl cl) (: t (ed 'text) sp (world-span t (ed 'sel)) _ (pin ed 'drag ())
+   r (atom? sp ? 'no (rw-at t (ed 'sel) (rw-turn dl cl)))
    (? (atom? sp || mag dl < 1e-9) ed
+      (r != 'no) (edit-put (pin ed 'sel (r 1)) (rw-lay t (r 0)) ("turned by " + edit-num dl))
       (: a (sp 0) b (sp 1) tn (edit-turned t sp) v ((two? tn ? (tn 0) 0.0) + dl) dg (v - 360.0 * floor ((v + 180.0) / 360.0))
          c (two? tn ? (tn 1) cl) inner (two? tn ? (snip t (tn 2 0) (tn 2 1)) (snip t a b))
          f2 (mag dg < 0.025 ? inner ("(turn " + edit-num dg + " [" + edit-num (c 0) + " " + edit-num (c 1) + "] " + inner + ")"))
@@ -1230,7 +1368,7 @@
                                       (pin ed 'qq (clock 0), (ed 'vi) 'vmsg (ed 'vs) (ed 'vs 'dirty ? "the text is not written: q again within a second leaves without it, :w in vi writes it"
                                                                                                         "q again within a second leaves")))
                          (tablet? (ed 'plan) && elem k [91 93]) (plan-step ed (k = 93 ? 1 -1))
-                         (charm? k) (: a ((ed 'binds) k) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (world-step st a))))))
+                         (charm? k) (: a ((ed 'binds) k) (a = 'fly ? (edit-fly ed) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (world-step st a)))))))
          (edit-events ed >l))))
  ; ..the scene painted on the left, vi's frame scribed and its rows laid on the right
  (edit-paint ed) (: ly (ed 'lay) W (ly 'W) H (ly 'H) win (ed 'win) P (window-paper win) st (ed 'st) scr (ed 'scr)
@@ -1252,24 +1390,29 @@
    _ (row 0) _ (row (h - 1)) (each (drop 1 ^(h - 1)) side))
  (edit-loop ed) (: t0 (clock 0) st (ed 'st)
    _ (edit-events ed (window-events (ed 'win)))
-   _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right]) ? (world-step st a))))
+   _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right] + (flying? st ? ['jump 'sink] ())) ? (world-step st a))))
    _ (walk-dt st) _ (world-move st) _ (pin st 't (st 't + 1))
    _ (edit-paint ed)
    (ed 'quit || (ed 'fc) 2 () ? ()
       (clock 0 - t0 @ spent (spent < 1000 // fps ? (rest (1000 // fps - spent)), edit-loop ed))))
  edit-blank "(level \"nothing yet\" (room [0 0 0] [4 3 4]) (start [2 0 2] 0 0))"
+ ; ..the scene's own keys: f flies through walls or walks again, c sinks while flying, space rises
+ edit-binds {102 'fly 99 'sink}
+ (edit-fly ed) (: st (ed 'st) f (1 - peep st 'fly 0)
+   (pins st 'fly f 'mu 0 'fv 0.0 'gv 0.0 'hoist (),
+    (ed 'vi) 'vmsg (ed 'vs) (f = 1 ? "flying: through walls, space up, c down, f to walk" "walking"), ed))
  ; ..the editor on a window, over vi's state vs; its scene's pictures from dir
  (edit-new win vs dir) (: vi (cite 'vi) fc (vi 'vi-face vs {}) wh (window-size win)
    t (edit-text (vs 'lines)) lv0 (world-read t) lv (string? lv0 ? (world-read edit-blank) lv0)
    ly (edit-lay (wh 0) (wh 1)) st (state-new (ly 'pw) (ly 'ph) lv dir (_ \ view-loading win [0 0 (ly 'sw) (ly 'H)] view-spin))
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
    {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
-    'binds (view-bind view-binds world-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'sb () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
+    'binds (view-bind (view-bind view-binds world-binds) edit-binds) 'look 0 'quit 0 'dirty 1 'ctrl 0 'shift 0 'sel () 'sb () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
  (edit-run p) (window-open 1280 720 "lore edit" @ win
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love play edit LEVEL.l   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, r swings it round the upright through its middle after the pointer, 15 degrees at a time or with ctrl 1, a click keeping it and esc letting it go, . and , turn it 15 degrees either way and > and < 90, ctrl-z undoes and ctrl-r does again, the right button held looks, the world's keys walk; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
+ edit-usage "usage: love play edit LEVEL.l   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, r swings it round the upright through its middle after the pointer, 15 degrees at a time or with ctrl 1, a click keeping it and esc letting it go, . and , turn it 15 degrees either way and > and < 90, ctrl-z undoes and ctrl-r does again, the right button held looks, the world's keys walk, f flies through walls (space up, c down) and f again walks; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
  (edit-main as) (? (#as = 1) (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-shelve 'world (udoor 'world world-main world-usage 1 1))
  _ (cite 'lore 'lore-shelve 'world-edit (udoor 'world-edit edit-main edit-usage 1 1))

@@ -165,6 +165,11 @@
    (pkt p) (world-span pks p @ () () q (snip pks (q 0) (q 1)))
  (test (pkh 'src = [2]) (mag (pkh 'p 2 - 4.0) < 1e-9) (pkl 'brushes 1 'src = [3 2 1]) (pkl 'brushes 2 'src = [3 2 1])
        (pkt [3 2 1] = "(solid (box [0 0 1] [1 3 2]))") (pkt [2] = "(room [0 0 0] [4 3 4])") (pkt [9] = ()) (pkt [3 2 7] = ())))
+; ..an orb in the air and a strip light under the ceiling picked before the room behind them
+(: ops "(level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) (orb [2 1.6 3] 0.3 (texture 8 8 1 '((fill 1))) 1) (strip-light [2 2.4 3]))"
+   opw (world-new 160 100 (world-read ops) "") ob (world-pick opw 80 50) sb (world-pick opw 80 16)
+ (test (ob 'src = [4]) (mag (ob 'p 2 - 2.7) < 1e-2) (sb 'src = [5]) (mag (sb 'p 1 - 2.35) < 1e-6)
+       (world-pick opw 80 90 'src = [2])))
 ; the editor, on a window with no screen: vi on a level's text, ctrl-w w gives the scene the
 ; keys, a click on the scene puts vi on the form that made what it hit, and a frame paints
 ; the scene on the left and vi's text on the right
@@ -178,7 +183,7 @@
    (lit? x0 x1 y0 y1) (any (y \ any (x \ peep edp (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
  (test (edf = 'scene) (edv 'row = 1) (edv 'col = 2) (lit? 0 160 0 160) (lit? 160 320 0 16)))
 ; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
-; wrapped in a (move ..) by as far, and the scene read again with it there; dragged back, unwrapped
+; its own numbers moved as far, and the scene read again with it there; dragged back, as it was
 (: dgv ((cite 'vi) 'vi-open "")
    _ ((cite 'vi) 'vload dgv ["(level \"t\"" "  (room [0 0 0] [4 3 6])" "  (solid (box [1 0 3] [3 3 3.5]))" "  (start [2 0 2] 0 0))"] "t.l")
    dgw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} dg (edit-new dgw dgv "") dgl (dg 'lay)
@@ -188,9 +193,46 @@
    dink (net (edit-outline dg (world-pens (dg 'st)) = 16756784))
    _ (edit-events dg [['press 1 (dx + 20) dy] ['move dx dy] ['release 1 dx dy] ['up 42]])
    dl2 (dgv 'lines 2)
- (test (has? dl1 "(move [") (has? dl1 " 0 0] (solid (box [1 0 3] [3 3 3.5])))") (dlo 0 > 1.05) (dink > 20)
+ (test (dl1 = "  (solid (box [1.25 0 3] [3.25 3 3.5]))") (dlo 0 > 1.05) (dink > 20)
        (dl2 = "  (solid (box [1 0 3] [3 3 3.5]))") (dg 'drag = ())
        (world-read "(level \"t\" (room [0 0 0] [4 3 6]) (move [1 0 0.5] (solid (box [0 0 1] [1 3 2]))) (start [2 0 2] 0 0))" 'brushes 1 'shape 'box 0 = [1.0 0.0 1.5])))
+; ..and an orb in the air the same: chosen, outlined, its numbers moved and read again moved
+(: obv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload obv ["(level \"t\"" "  (room [0 0 0] [4 3 6])" "  (orb [2 1.6 3.5] 0.3 (texture 8 8 1 '((fill 1))) 1)" "  (start [2 0 2] 0 0))"] "t.l")
+   obw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} ob (edit-new obw obv "") obl (ob 'lay)
+   ox (obl 'sw // 2) oy (obl 'H // 2)
+   _ (edit-events ob [['down 42] ['press 1 ox oy] ['move (ox + 20) oy] ['release 1 (ox + 20) oy] ['up 42]])
+   oink (net (edit-outline ob (world-pens (ob 'st)) = 16756784))
+ (test (obv 'lines 2 = "  (orb [2.3 1.6 3.5] 0.3 (texture 8 8 1 '((fill 1))) 1)") (oink > 20)
+       (ob 'st 'lvl 'orbs 0 'at 0 > 2.05)))
+; ..a book in moves and a turn stepped comes out of them, its own numbers and bearing turned,
+; and reads as the wrapped one turned would
+(: bkv ((cite 'vi) 'vi-open "")
+   bkf "(move [0.15 0 -0.15] (turn 90 [-27.35 7.4] (move [0.8 0 0.25] (book [-28.15 1 7.15] 160))))"
+   _ ((cite 'vi) 'vload bkv ["(level \"t\"" "  (room [-30 0 4] [-24 3 10])" ("  " + bkf) "  (start [-27 0 5] 0 0))"] "t.l")
+   bkw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} bk (edit-new bkw bkv "")
+   _ (edit-events bk [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
+   _ (pin bk 'sel [3]) _ (edit-events bk [['down 52] ['text "."] ['up 52]])
+   (bkn t) (cats (map (b \ (: p (b 'shape 'prism) [(p 0) (p 1)] + cats (p 2))) >(world-read ("(level \"t\" (room [-30 0 4] [-24 3 10]) " + t + ")") 'brushes)))
+   bka (bkn ("(turn 15 [-27.2 7.25] " + bkf + ")")) bkb (bkn "(book [-27.2 1 7.25] -95)")
+ (test (bkv 'lines 2 = "  (book [-27.2 1 7.25] -95)") (bk 'sel = [3]) (#bka = #bkb) (8 < #bka)
+       (all (i \ mag (bka i - bkb i) < 1e-9) ^#bka)))
+; ..f in the scene flies: forward through a wall a walker stops at, space up and no fall; f
+; again walks, and falls to the floor
+(: flv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload flv ["(level \"t\"" "  (room [0 0 0] [4 3 8])" "  (solid (box [0 0 3] [4 3 3.5]))" "  (start [2 0 2] 0 0))"] "t.l")
+   flw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} fl (edit-new flw flv "") fs (fl 'st)
+   (frames a n) (? (n < 1) fs (: _ (pin fs 'dt 0.05) _ (world-step fs a) _ (world-move fs) (frames a (n - 1))))
+   (key s c) (edit-events fl [['down c] ['text s] ['up c]])
+   _ (edit-events fl [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
+   wz (: _ (frames 'forward 40) (fs 'pz))
+   _ (key "f" 33) on (fs 'fly)
+   fz (: _ (frames 'forward 8) (fs 'pz))
+   fy (: _ (frames 'jump 3) (fs 'py))
+   hy (: _ (frames 'strafe-left 5) (fs 'py))
+   _ (key "f" 33)
+   gy (: _ (frames 'back 40) (fs 'py))
+ (test (wz < 3.0) (on = 1) (fz > 3.6) (fy > 2.5) (mag (hy - fy) < 1e-9) (fs 'fly = 0) (mag (gy - 1.6) < 0.05)))
 ; the plan: tab shows it from above about the player; shift and a drag begun in a room
 ; draws another as high, after the level's parts, and chooses it; a drag on its edge moves
 ; that wall, one inside it moves it; tab puts the plan away
@@ -210,7 +252,7 @@
    (pix x y) (peep plp (4 * (y * 320 + x) + 2) 0)
    _ (edit-events pl [['down 15] ['up 15]])
  (test (pp 'c = [2.0 2.0]) (pp 'fl = 0.0) (pl1 = "  (room [3 0 1] [6 3 3]))") (ps = [4]) (pl2 = "  (room [3 0 1] [6.5 3 3]))")
-       (pl3 = "  (move [1 0 0] (room [3 0 1] [6.5 3 3])))") (pl4 = "  (move [1 0 0] (room [3.5 0 1] [6.5 3 3])))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
+       (pl3 = "  (room [4 0 1] [7.5 3 3]))") (pl4 = "  (room [4.5 0 1] [7.5 3 3]))") (#(pl 'st 'lvl 'brushes) = 2) (pix 4 4 = 22) (pix 80 80 != 22) (pl 'plan = ())))
 ; a turn swings its parts clockwise from above: a box a quarter round still a box, off the
 ; square a prism, a bearing on as far, a room only by quarters; the editor's . and , step the
 ; chosen form 15 degrees, < and > 90, in a (turn ..) whose degrees go on and come out at
@@ -243,7 +285,7 @@
        (two? (tsh 'prism)) (tl3 = "  (turn 120 [4 3.5] (solid (box [3 0 3] [5 1 4])))") (tl4 = "  (solid (box [3 0 3] [5 1 4]))")
        (tsw = 45.0) (tl5 = tl4) (tse = [3]) (tl6 = "  (turn 45 [4 3.5] (solid (box [3 0 3] [5 1 4])))")
        (mx = [-1.0 0.0 0.0 1.0]) (ml = "  (mirror-x 4 [(turn -15 [1.5 3.5] (solid (box [1 0 3] [2 1 4])))])")))
-; a mirror's twin dragged moves as dragged, its form's move turned over; ctrl-z undoes it
+; a mirror's twin dragged moves as dragged, its form's numbers moved the other way; ctrl-z undoes it
 ; and ctrl-r does it again; a click on the plan takes the first thing under the cut; the
 ; pane with the keys has a line round it; q on the scene leaves only twice in a second
 (: mtv ((cite 'vi) 'vi-open "")
@@ -260,7 +302,7 @@
    _ (edit-events mt [['down 16] ['up 16]]) mtq (mt 'quit)
    _ (pin mt 'qq (clock 0 - 1500)) _ (edit-events mt [['down 16] ['up 16]]) mtq2 (mt 'quit)
    _ (edit-events mt [['down 16] ['up 16]])
- (test (mtl = "  (mirror-x 4 [(move [-1 0 0] (solid (box [1 0 1] [2 3 2])))])") (mtb 'shape 'box = [[7.0 0.0 1.0] [8.0 3.0 2.0]]) (take 4 (mtb 'xf) = [-1.0 0.0 0.0 1.0])
+ (test (mtl = "  (mirror-x 4 [(solid (box [0 0 1] [1 3 2]))])") (mtb 'shape 'box = [[7.0 0.0 1.0] [8.0 3.0 2.0]]) (take 4 (mtb 'xf) = [-1.0 0.0 0.0 1.0])
        (mtu = "  (mirror-x 4 [(solid (box [1 0 1] [2 3 2]))])") (mtub = [[6.0 0.0 1.0] [7.0 3.0 2.0]]) (mtr = mtl)
        (mts = [4]) (mtp 0 5 = 48) (mtp 200 5 != 48) (mtq = 0) (mtq2 = 0) (mt 'quit = 1)))
 ; a scene made again from the one before keeps what is the same and comes out as one made
