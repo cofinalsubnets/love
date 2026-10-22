@@ -421,12 +421,14 @@
    g2 (calls "bob" [[6 "queue_gate" {"dir" (w 'repo)}]])
    ok2 (bq-until (\ _ (has? (row "2") "test_kore=1")) 300)
    red (row "2")
-   e (calls "carol" [[7 "queue_row" {"state" "waiting" "branch" "carol" "gated_head" (sha "bob") "keep" "1"}]
+   e (calls "carol" [[7 "queue_row" {"state" "waiting" "branch" "carol" "gated_on" (sha "bob") "gated_head" (sha "bob") "keep" "1"}]
                      [8 "queue_gate" {"dir" (w 'repo)}]])
    _ (hark ["rm" (w 'repo + "/red-test_kore")])
    g3 (calls "bob" [[9 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
    ok3 (bq-until (\ _ (has? (row "2") " green  #")) 300)
    args3 (bq-get (w 'repo + "/out/args"))
+   ; a row gated on no commit plans test and test_slow alone: refused, never green on that
+   n (calls "dan" [[10 "queue_row" {"state" "waiting" "branch" "dan" "keep" "1"}] [11 "queue_gate" {"dir" (w 'repo)}]])
    _ (test
       (has? (g1 2) "row 1 is gating at ")
       ok1 (has? (row "1") "  # gate ") (has? (row "1") "test_slow=0")
@@ -438,7 +440,8 @@
       (has? (e 8) "row 2 ahead is waiting")
       (has? (g3 9) "runs test_kore again")
       ok3 (args3 = "-d out/lanes-gate --slow test_kore test_slow\n")
-      (has? (row "2") "test=0") (has? (row "2") "| stood: test") !(has? (row "2") "| red:"))
+      (has? (row "2") "test=0") (has? (row "2") "| stood: test") !(has? (row "2") "| red:")
+      (has? (n 11) "is gated on -, not a commit") !(has? (row "4") " gating "))
    0)
 
 ; a heavy ticket needs a row carrying the tree's branch and HEAD, or --no-row, or no queue

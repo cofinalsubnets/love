@@ -1051,8 +1051,8 @@
          z #o
          (? (0 = z) () (o (z - 1) = 32) (snip o 0 (z - 1)) o))))
    (upargs pid)                        ; the cmdline as procps shows it: a newline a space,
-    (upcmd pid @ s                     ; another control byte ?, a C1 one ?? as its two bytes
-     (? !(string? s) s
+    (upcmd pid @ s                     ; another control byte ?, a C1 one ?? as its two bytes,
+     (? !(string? s) (upstat pid @ f (two? f ? ("[" + f 1 + "]")))   ; no cmdline, its [comm]
         (: n #s
            (c1 k) (0 <= k && k + 1 < n && s k = 194 && 128 <= s (k + 1) < 160)
            (jug 0 @ j (each ^n (k \ s k @ b
@@ -1103,7 +1103,7 @@
        (start f) (: s (b 'boot + (uatoi (f 21) // HZ)) ymd (civil (s // 86400)) now (civil (b 'now // 86400))
                     (ymd = now ? (zpad 2 (show (s % 86400 // 3600)) + ":" + zpad 2 (show (s % 3600 // 60)))
                      (mon3 (ymd 1 - 1) + zpad 2 (show (ymd 2)))))
-       (args p f) (upargs p @ c (string? c ? c ("[" + f 1 + "]")))
+       (args p f) (upargs p @ c (string? c ? c ""))
        ; statm's resident pages, which the kernel keeps exact where stat's may lag
        (rss p f) (: r (uread ("/proc/" + show p + "/statm")) w (two? r ? (words <>r))
                     (show (4 * (two? >w ? (uatoi <>w) (uatoi (f 23))))))
@@ -1505,11 +1505,10 @@
    ; -- the four by-name tools. a name is matched against the comm, which is what the
    ; kernel keeps and is capped at fifteen charms -- `pgrep -f` asks the cmdline
    ; instead, where the whole of a long program name lives --
-   (upmatch f? x? pat pid)             ; does this process answer to pat
+   (upmatch f? x? pat pid)             ; does this process answer to pat, all of it for -x
     ((f? ? (upargs pid) (upstat pid @ s (s ? (s 1)))) @ c
      (? !(string? c) 0
-        x? (c = pat)
-        (reere pat @ r (two? r ? (rehas <>r c) (udie 2 ("bad pattern: " + pat))))))
+        (reere (x? ? ("^(" + pat + ")$") pat) @ r (two? r ? (rehas <>r c) (udie 2 ("bad pattern: " + pat))))))
    (upfind f? x? pat)                  ; the pids answering, ours never among them
     ((upself 0 @ s (s ? <s -1)) @ me
      (filter (p \ (p = me ? 0 (upmatch f? x? pat p))) (uprocs 0)))
@@ -1550,7 +1549,7 @@
        t <fo rest (fo 1)
        _ (two? rest || t 117 ? () (udie 2 "usage: pgrep [-acflnovx] [-d DELIM] [-u USER,..] [PATTERN]"))
        ps (upsel t (two? rest ? <rest))
-       (row p) (show p + (? (t 97) (" " + (upargs p @ c (string? c ? c (upstat p @ f (f ? (f 1) ""))))) (t 108) (" " + (upstat p @ f (f ? (f 1) ""))) ""))
+       (row p) (show p + (? (t 97) (" " + (upargs p @ c (string? c ? c ""))) (t 108) (" " + (upstat p @ f (f ? (f 1) ""))) ""))
        ((? (t 99) (say out (show #ps + "\n")) (two? ps) (say out (join (t 100 ? (uoptv t 100) "\n") (map row ps) + "\n")) 0),
         flush out,
         two? ps ? 0 1))

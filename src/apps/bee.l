@@ -544,6 +544,9 @@
          prev (foldl (\ a p (? (#a = 0 || q-num a < q-num p) p a)) "" ahead)
          (? (r = ()) "you hold no row in \(q)"
             (q-folded? (rows r)) "row \(r) is \(rows r 5): the union's own row gates"
+            ; a plan is from the gated-on: none, and every lane but test and test_slow drops out
+            (#(g-git dir ("rev-parse --verify -q " + sh-quote (rows r 3 + "^{commit}"))) = 0)
+             ("row \(r) is gated on " + rows r 3 + ", not a commit: write gated_on with queue_row, the sha its union merges onto")
             (0 < #prev && rows prev 5 != "green")
              ("row " + prev + " ahead is \(rows prev 5): the head row gates, or the row behind a green one")
             !(two? (stat "\(dir)/test/gate/lanes.sh")) "no test/gate/lanes.sh in \(dir)"
@@ -588,6 +591,8 @@
                        _ (post-as "gate-\(r)" who "queue_gate: row \(r) is waiting again, ungated: \(why)") 1)
          (? (r = ()) (: _ (gate-say "\(who) holds no row in \(q)") 1)
             (row 4 != h) (back ("row " + r + " gates " + row 4 + ", but HEAD is " + h))
+            (#(git1 ("rev-parse --verify -q " + sh-quote (row 3 + "^{commit}"))) = 0)
+             (back ("row " + r + " is gated on " + row 3 + ", not a commit, and a plan from it owes no lane"))
             (two? ign) (back ("signals " + join " " (map show ign) + " are ignored here, and every lane would "
                               + "inherit them: start it from a shell that ignores none"))
             (: b (row 3) plan (lanes-plan-of b h)

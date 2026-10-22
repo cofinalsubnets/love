@@ -73,6 +73,11 @@ for c in "ps -o args= -p $pq" "pgrep -a -f kq.b" "pgrep -f kq\\?b"; do
   LC_ALL=C.UTF-8 $c > "$g" 2>&1; LC_ALL=C.UTF-8 korerun $c > "$o" 2>&1; same "$c, a control byte"
 done
 kill $pq; wait $pq 2> /dev/null
+# a kernel thread has no cmdline: -f matches, and -a shows, its [comm]; -x is a whole regex match
+for c in "pgrep -f ^.kthreadd.$" "pgrep -x -f .kthreadd." "pgrep -a -f ^.kthreadd.$" "pgrep -a -x kthreadd" "pgrep -x kthread."; do
+  # shellcheck disable=SC2086
+  { $c; echo "rc=$?"; } > "$g" 2>&1; { korerun $c; echo "rc=$?"; } > "$o" 2>&1; same "$c, a kernel thread"
+done
 # pgrep -l -a -c -d -n -o -f -x -u and a miss, over two naps of our own; pkill -e -n the newest alone
 PN=$PWD/$ho/.kore-pgnap; cp "$(command -v sleep)" "$PN"; chmod 755 "$PN"
 "$PN" 30 & pa=$!; sleep 0.3; "$PN" 31 & pb=$!; sleep 0.3

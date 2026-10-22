@@ -12,7 +12,7 @@
 (: w0 {'w 1 'h 1 'paper (cask 4)}
    _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
    _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0)
-           (window-blit w0 (cask 4) 1 1 = 0))
+           (window-blit w0 (cask 4) 1 1 () = 0))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    _ (!(two? xv) ? (gate-skip "window: ok (no Xvfb, skipped)") 0)
