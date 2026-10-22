@@ -8,7 +8,7 @@
 ; world-walk and world-run touch the tty.
 (module (world world-run world-walk world-main world-new world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray
-         world-move world-frame world-pens world-opts world-read world-load
+         world-move world-mouse world-frame world-pens world-opts world-read world-load
          world-watch world-free? world-ks world-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
@@ -811,13 +811,47 @@
  ; time, and rolls along the ground to a stop
  (balls-new lv) (map (p \ {'p [(p 0) (p 1 + ball-r) (p 2)] 'v [0.0 0.0 0.0] 'q [1.0 0.0 0.0 0.0] 'kt -9.0 'rest 1 'pk ()})
                      (peep lv 'balls ()))
- (ball-step st b dt) (: p (b 'p) fl (st 'py - eye-h) dx (p 0 - st 'px) dz (p 2 - st 'pz) d (sqrt (dx * dx + dz * dz))
+ (ball-step st b dt) (? (peep b 'held 0 = 1) (pins b 'p (hand-at st) 'pk ()) (ball-loose st b dt))
+ (ball-loose st b dt) (: p (b 'p) fl (st 'py - eye-h) dx (p 0 - st 'px) dz (p 2 - st 'pz) d (sqrt (dx * dx + dz * dz))
    kick (d < body-r + ball-r && p 1 - ball-r < fl + 0.5 && st 'mt - b 'kt > 0.25)
    _ (? kick (: th (st 'th) n (d > 0.001 ? [(dx / d) (dz / d)] [(sin th) (cos th)])
                 k (ball-kick + 1.3 * max2 0.0 (peep st 'vx 0.0 * n 0 + peep st 'vz 0.0 * n 1))
                 (pins b 'v [(k * n 0) (1.0 + 0.3 * k) (k * n 1)] 'kt (st 'mt) 'rest 0,
                  mix-cry st "bounce" [(p 0) (p 2)])))
    (b 'rest = 1 ? st (ball-fly st b dt)))
+ ; ..a ball in hand: the left button takes the one looked at within reach; held, pressed it
+ ; winds a throw, half a second to the hardest, and let go it flies; the right button lets
+ ; it fall where it is
+ reach 2.2 throw-lo 3.0 throw-hi 11.0 wind-t 0.5
+ (look-way st) (: th (st 'th) ph (st 'ph) [(sin th * cos ph) (sin ph) (cos th * cos ph)])
+ (eye-at st) [(st 'px) (st 'py) (st 'pz)]
+ (wind-k st) (peep st 'wind () @ () 0.0 t0 (min2 1.0 ((st 'mt - t0) / wind-t)))
+ ; ..where the hands hold it: out before the feet, so let fall it is not kicked, high as the
+ ; look, drawn back and down as it winds
+ (hand-at st) (: k (wind-k st) th (st 'th) f (0.45 - 0.15 * k) e (eye-at st)
+   [(e 0 + f * sin th) (e 1 + 0.5 * sin (st 'ph) - 0.28 - 0.1 * k) (e 2 + f * cos th)])
+ (world-mouse st ev bt) (: h (filter (b \ peep b 'held 0 = 1) (peep st 'balls ()))
+   (? (ev = 'press && bt = 1 && atom? h) (ball-take st)
+      (ev = 'press && bt = 1) (pin st 'wind (st 'mt))
+      (ev = 'release && bt = 1 && two? h && peep st 'wind () != ()) (ball-go st <h (throw-lo + (throw-hi - throw-lo) * wind-k st))
+      (ev = 'press && bt = 3 && two? h) (ball-go st <h 0.0)
+      st))
+ ; ..the nearest ball the eye's line passes within a hand of, no further than reach
+ (ball-take st) (: e (eye-at st) d (look-way st)
+   (hit b) (: w (c+ (b 'p) (c* -1.0 e)) s (dot w d) m (c+ w (c* (0.0 - s) d))
+             (0.0 < s && s < reach && dot m m < 0.09 ? s ()))
+   hs (filter (q \ q 0 != ()) (map (b \ [(hit b) b]) (peep st 'balls ())))
+   (? (atom? hs) st
+      (: b (foldl (\ a q (q 0 < a 0 ? q a)) <hs >hs 1)
+         _ (pins b 'held 1 'rest 0 'v [0.0 0.0 0.0] 'w [0.0 0.0 0.0])
+         (pin st 'wind ()))))
+ ; ..let go along the look at v, with the walk's own; from inside the body where the hands
+ ; are in a wall
+ (ball-go st b v) (: hp (hand-at st) bs (st 'sc 'brushes)
+   p (brush-medium bs hp = 1 ? hp (c+ (eye-at st) [0.0 -0.3 0.0]))
+   _ (pins b 'held 0 'rest 0 'kt (st 'mt) 'p p 'pk ()
+           'v (c+ (c* v (look-way st)) [(peep st 'vx 0.0) 0.0 (peep st 'vz 0.0)]))
+   (pin st 'wind ()))
  ; ..its flight in steps short beside its size: each way on its own, back off what it would
  ; meet; among only the brushes and panes near it
  (ball-fly st b dt) (: r ball-r p0 (b 'p) lv (st 'lvl)
@@ -845,7 +879,8 @@
    _ (pins b 'p p 'v (still ? [0.0 0.0 0.0] v) 'q (map (x \ x / ql) q2) 'rest (still ? 1 0) 'pk ())
    (e 2 > 1.2 ? (mix-cry st "bounce" [(p 0) (p 2)]) st))
  ; ..its mesh about its middle: orange, its seams standing just proud, two round it crossing
- ; square and one curved about either pole of the first, every triangle's front outward
+ ; square and about either pole of the first a curved one: 52 degrees out where the second
+ ; crosses it, pinched to 82 toward the first, every triangle's front outward
  (ball-mesh _) (: r ball-r nl 8 nm 16 skin [0.85 0.33 0.08] seam [0.07 0.04 0.03]
    (vx p k col) [(k * p 0) (k * p 1) (k * p 2) 0.0 0.0 (p 0) (p 1) (p 2) (col 0) (col 1) (col 2)]
    body (map (q \ (: a (pi * (q // (nm + 1) / nl - 0.5)) o (tau * (q % (nm + 1)) / nm)
@@ -855,12 +890,12 @@
    bt (cats (map (k \ (: i (k // nm) j (k % nm) a (at i j) b (at i (j + 1)) c (at (i + 1) (j + 1)) d (at (i + 1) j)
                         [[a b c -1] [a c d -1]]))
                  ^(nl * nm)))
-   m 32
+   m 48
    (band u v w g) (cats (map (j \ (: t (tau * j / m) c (c+ (c* (cos t) u) (c* (sin t) v)) (e h) (c+ (c* (sin h) c) (c* (cos h) w))
-                                    [(vx (e (g - 0.07)) (1.015 * r) seam) (vx (e (g + 0.07)) (1.015 * r) seam)]))
+                                    [(vx (e (g t - 0.035)) (1.015 * r) seam) (vx (e (g t + 0.035)) (1.015 * r) seam)]))
                          ^(m + 1)))
    (btris o) (cats (map (j \ (: a (o + 2 * j) [[a (a + 1) (a + 3) -1] [a (a + 3) (a + 2) -1]])) ^m))
-   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] g (0.5 * pi) cg 0.995
+   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] (g _) (0.5 * pi) (cg t) (1.1694 + 0.2618 * cos (2.0 * t))
    o1 #body o2 (o1 + 2 * (m + 1)) o3 (o2 + 2 * (m + 1)) o4 (o3 + 2 * (m + 1))
    vs (body + band x z y g + band y z x g + band x z y cg + band x z (c* -1.0 y) cg)
    (out t) (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2)) e (take 3 a)
@@ -934,7 +969,7 @@
                                st (pins (state-new w h lv (dir-of p) ld) 'cut (peep lv 'shots ()) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (world-watch (world-size st w (h // 2)))))
-               'size world-size 'frame world-frame 'key world-step 'look world-look
+               'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
                'binds (view-bind view-binds world-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'where 'finer 'coarser])
                'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                'tick (st \ (walk-dt st,
@@ -948,7 +983,7 @@
                      lv (world-load p)
    (? (string? lv) (say err ("world: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ world-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- world-usage "usage: love play LEVEL.l [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ world-usage "usage: love play LEVEL.l [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice
  (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])

@@ -38,6 +38,19 @@
        (a 1 = 80) (a 2 = 50)                                          ; 640 by 400: 80 cells by 25 rows
        (c 3 = [1 2]) (c 0 = ()) (d 4 = 4) (d 0 = ()) (a 4 = ())))                                     ; the help while ? is down, and no action
 
+; a window's buttons go to the level's 'mouse, pressed and let go; where it looks by the
+; mouse only once that is held, so the first click takes the mouse and goes no further
+(: lwm {1 [['press 1 9 9]] 2 [['release 1 9 9]] 3 [['press 3 9 9]] 5 [['down 16]]}
+   (lwrun look) (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq ()}
+                  lv {'new (w \ h \ {'w w 'h h 't 0 'log ()})
+                      'size (st \ w \ r \ pins st 'w w 'h (2 * r)) 'frame (st \ "") 'key (st \ a \ st)
+                      'mouse (st \ e \ b \ pin st 'log ([(st 't) e b] . st 'log))
+                      'tick (st \ pin win 'evq (peep lwm (st 't + 1) ()))
+                      'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win}
+                  st (view-walk (look ? (pin lv 'look (st \ dx \ dy \ st)) lv))
+                  (rev (st 'log)))
+ (test (lwrun 0 = [[1 'press 1] [2 'release 1] [3 'press 3]]) (lwrun 1 = ())))
+
 ; the world on a window's paper: the lit hall, and with p the bottom row's words
 (: hall (world-load "test/lore/hall.l")
    win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}

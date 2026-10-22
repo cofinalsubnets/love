@@ -217,6 +217,22 @@
    bka (bkn ("(turn 15 [-27.2 7.25] " + bkf + ")")) bkb (bkn "(book [-27.2 1 7.25] -95)")
  (test (bkv 'lines 2 = "  (book [-27.2 1 7.25] -95)") (bk 'sel = [3]) (#bka = #bkb) (8 < #bka)
        (all (i \ mag (bka i - bkb i) < 1e-9) ^#bka)))
+; a click on a ball looked at takes it into the hands and the click let go keeps it; held
+; pressed half a second and let go, it flies along the look at the hardest; taken again
+; and the right button pressed, it falls where it was held
+(: (bht n) (: lv (world-read "(level \"t\" (room [0 0 0] [10 5 14]) (ball [5 0 3]) (start [5 0 1.5] 0 0))")
+             st (world-new 160 100 lv "")
+             (go k) (? (k < 1) st (: _ (pin st 'dt 0.05) _ (world-move st) (go (k - 1))))
+             _ (go 2) _ (pin st 'ph (-44.6 * pi / 180.0)) _ (world-mouse st 'press 1) _ (world-mouse st 'release 1)
+             (go n))
+   bh (bht 3) bb (bh 'balls 0) bhp (bb 'p) bhk (bb 'held)
+   _ (pin bh 'ph 0.6) _ (world-mouse bh 'press 1) bwp (: _ (each ^10 (_ \ (pin bh 'dt 0.05, world-move bh))) (bb 'p))
+   _ (world-mouse bh 'release 1) bv (bb 'v) bvp (: _ (each ^6 (_ \ (pin bh 'dt 0.05, world-move bh))) (bb 'p))
+   bd (bht 3) db (bd 'balls 0) dp (db 'p) _ (world-mouse bd 'press 3)
+   dq (: _ (each ^40 (_ \ (pin bd 'dt 0.05, world-move bd))) (db 'p))
+ (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
+       (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
+       (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
 ; ..f in the scene flies: forward through a wall a walker stops at, space up and no fall; f
 ; again walks, and falls to the floor
 (: flv ((cite 'vi) 'vi-open "")
