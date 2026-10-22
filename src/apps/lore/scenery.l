@@ -14,6 +14,12 @@
 ;                                      ceiling. two rooms a wall apart share it
 ;   (street [x y z] [x y z])           a room open to the sky: no ceiling, its walls standing
 ;                                      to its top, lit by the sun and the sky
+;   (void [x y z] [x y z])             a street with no walls to see, the sky past its edge:
+;                                      the edge stops a body all the same, and rings when
+;                                      walked into
+;   (gravity [[y g] ..])               how hard the level pulls at each height, metres a
+;                                      second a second, straight between them and held past
+;                                      the ends; none, and 9.8 everywhere
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
@@ -55,6 +61,8 @@
 ;                                      stands in it is carried 'up to the upper floor or 'down
 ;                                      to the lower
 ;   (ball [x y z])                     a basketball standing at x y z, kicked by walking into it
+;   (plush [x y z] bearing FILE)       a stuffed toy lying at x y z, facing bearing: a .glb
+;                                      beside the level, its origin the floor under it
 ;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
 ;                                      across its middle the thin way: what is beyond it
 ;                                      seen through the texture, the light on it; solid
@@ -87,6 +95,7 @@
 ;                                      textures in turn round it
 ;   (orb [x y z] radius TEXTURE turns)  a ball hanging in the air about x y z, turning
 ;                                      turns a second about the up through it, lit where it is
+;   (glow ORB)                         an orb as bright as its own colours, lit or not
 ;   (coarse k ORB)                     an orb drawn k times coarser than the world round it, k
 ;                                      2 4 or 8, its pixels k by k of the world's
 ;   (across LIGHT)                     a strip turned across, along x
@@ -111,7 +120,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street sky ambient air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball smog ad spinner orb coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start shot room street void gravity sky ambient air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
          across stammer buzz breathe blink texture laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -143,6 +152,10 @@
       (part 'shot ([['secs (f s)] ['deg (N deg u)] ['pitch (N pitch u)]] + (kind? w ['sky] ? [['sky w]] [['at (P w u)]])))))
  (room lo hi) (: u "(room [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}]]))
  (street lo hi) (: u "(street [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}] ['open 1]]))
+ (void lo hi) (: u "(void [x y z] [x y z])" (part 'room [['lo (P lo u)] ['hi (P hi u)] ['skin {}] ['open 1] ['sheer 1]]))
+ (gravity ps) (: u "(gravity [[y g] ..])"
+   (two? ps && all (q \ two? q && #q = 2 && all num? q && 0 <= q 1) ps
+    ? (part 'gravity [['by (sort (map (q \ [(1.0 * q 0) (1.0 * q 1)]) ps))]]) (no u ps)))
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
@@ -165,6 +178,8 @@
  (grav lo hi dir) (: u "(grav [x y z] [x y z] DIR)" a (lo2 (P lo u) (P hi u)) b (hi2 (P lo u) (P hi u))
    (elem dir ['up 'down] ? [(room a [(b 0) (b 1 + grav-head) (b 2)]) (part 'grav [['lo a] ['hi b] ['dir dir]])] (no u dir)))
  (ball at) (: u "(ball [x y z])" (part 'ball [['at (P at u)]]))
+ (plush at deg file) (: u "(plush [x y z] bearing FILE)"
+   (string? file ? (part 'plush [['at (P at u)] ['deg (N deg u)] ['file file]]) (no u file)))
  ; ..a window: its opening, and its pane
  (window lo hi t) (: u "(window [x y z] [x y z] TEXTURE)" a (P lo u) b (P hi u)
    (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
@@ -337,6 +352,7 @@
  (orb at r t turns) (: u "(orb [x y z] radius TEXTURE turns)"
    (? (!(num? r) || r <= 0) (no u r) (!(texture? t)) (no u t)
       (part 'orb [['at (P at u)] ['r (N r u)] ['tex t] ['turns (N turns u)]])))
+ (glow o) (kind? o ['orb] ? (with o 'glow 1) (no "(glow ORB)" o))
  (coarse k o) (: u "(coarse k ORB)"
    (? (!(elem k [2 4 8])) (no u k) (kind? o ['orb]) (with o 'coarse k) (no u o)))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
@@ -405,7 +421,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'sky 'smog 'ambient 'ad 'spin 'orb 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'ambient 'ad 'spin 'orb 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -426,7 +442,7 @@
                           'at (tablet? k ? () (s 'at)) 'sky (tablet? k ? {'hour (k 'hour) 'cover (k 'cover) 'smog 0.0} ())}))
                    (of 'shot))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
-       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'src (peep b 'src ()) 'xf (peep b 'xf xf-id)}) bs)
+       'brushes (map (b \ {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'sheer (peep b 'sheer 0) 'src (peep b 'src ()) 'xf (peep b 'xf xf-id)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
@@ -437,6 +453,9 @@
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'balls (map (b \ b 'at) (of 'ball))
+       'plushes (map (p \ {'at (p 'at) 'deg (p 'deg) 'file (p 'file) 'src (peep p 'src ()) 'xf (peep p 'xf xf-id)}) (of 'plush))
+       'voids (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'sheer 0) (of 'room)))
+       'gravity (of 'gravity @ () () g (<g 'by))
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
@@ -444,7 +463,7 @@
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex))}) (of 'drape))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
-       'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'src (peep o 'src ()) 'xf (peep o 'xf xf-id)}) (of 'orb))
+       'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'glow (peep o 'glow 0) 'src (peep o 'src ()) 'xf (peep o 'xf xf-id)}) (of 'orb))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'n (peep s 'n ()) 'text (s 'text) 'c (s 'c) 'how (s 'how)})) (of 'sign))
        'textures (map (k \ tex k (dflt k)) (filter (k \ elem k (keys dflt)) ['wall 'floor 'ceiling 'door 'train])
                   + map (i \ tex (tname (used i)) (used i)) ^#used)})))

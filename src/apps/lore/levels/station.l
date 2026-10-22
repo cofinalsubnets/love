@@ -429,6 +429,8 @@
   (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
   ; ..a bare mattress along the car's floor at its east end, gone with it
   (mattress [5.4 -5 -5.94] 90)
+  ; ..and on the platform outside its door a red plush mouse, looking in
+  (plush [0.7 -5 -3.6] 200 "mouse.glb")
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
@@ -465,8 +467,8 @@
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
   (bin [-7.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
-  ; ..and a basketball someone left out on top of the arch
-  (ball [7 13.2 17.65])
+  ; ..and a stuffed Mitty someone left out on top of the arch, looking out over the street
+  (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
   ; wing, a window a metre and a half over each doorway into its glow

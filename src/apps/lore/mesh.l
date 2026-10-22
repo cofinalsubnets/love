@@ -5,11 +5,13 @@
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone)
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone
+         mesh-glb mesh-glb-of)
 (borrow 'view)
 (borrow 'window)
 (borrow 'vec)
 (borrow 'sky)
+(borrow 'json)
 (:
  ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b], each triangle [a b c tex], tex -1 none
  (mesh vs ts) [vs ts]
@@ -118,9 +120,9 @@
  ; ..the light for a level with nothing to cast a shadow
  (mesh-open c) [1.0 (0.6 + 0.4 * c 6) ()]
  ; --- lamps: {'at points 'c [r g b] 'r reach}, optional 'n a facing, 'soft, 'wrap, and
- ;     'keep a plan box [x0 z0 x1 z1]. c at a metre, shared among the points, falls off by
- ;     the square to none at the reach; 'wrap rounds it onto what it grazes. no shadows:
- ;     it lights only what stands in its box ---
+ ;     'keep a plan box [x0 z0 x1 z1], or [x0 z0 x1 z1 y0 y1] between two heights too. c
+ ;     at a metre, shared among the points, falls off by the square to none at the reach;
+ ;     'wrap rounds it onto what it grazes. no shadows: it lights only what stands in its box ---
  ; a lamp as lamp-light takes it (src/love/lamp.c)
  (mesh-lamp-row lp) [(lp 'at) (lp 'r) (lp 'c) (peep lp 'n ()) (sq (peep lp 'soft 0.1)) (peep lp 'wrap 0.0) (peep lp 'keep ())]
  ; ..its light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
@@ -323,5 +325,100 @@
    cw (4 * max 0 (min bw (W - x0 * 8)))
    (0 < cw ? (each ^(min 16 (H - r * 16)) (j \ pour P (((r * 16 + j) * W + x0 * 8) * 4) t (j * bw * 4) cw))))
  ; ..and both taken down when the level is left
- mesh-gone (mesh-kitty-del 7 + mesh-kitty-del 8))
+ mesh-gone (mesh-kitty-del 7 + mesh-kitty-del 8)
+
+ ; --- glb, glTF 2.0 in one file, for a modeller: a mesh written out and read back. glTF is
+ ;     right-handed, so x runs the other way there and a front turns the same; its colours
+ ;     are linear light, ours as seen ---
+ (glb-u32 s i) (s i | s (i + 1) << 8 | s (i + 2) << 16 | s (i + 3) << 24)
+ (glb-u16 s i) (s i | s (i + 1) << 8)
+ (glb-le v) [(v & 255) (v >> 8 & 255) (v >> 16 & 255) (v >> 24 & 255)]
+ ; ..a binary32's bits as a float, and a float's; the infinities and nans read as nothing
+ (glb-f32 b) (: e (b >> 23 & 255) m (b & 8388607)
+   v (? (e = 0) (m * (2.0 ** -149)) (e = 255) 0.0 ((1.0 + m / 8388608.0) * (2.0 ** (e - 127))))
+   (b >> 31 = 1 ? (0.0 - v) v))
+ (glb-bits x) (? (x = 0.0) 0
+   (: a (x < 0.0 ? (0.0 - x) x) s (x < 0.0 ? 2147483648 0) e0 (floor (log a / log 2.0))
+      e (? (2.0 ** (e0 + 1) <= a) (e0 + 1) (a < 2.0 ** e0) (e0 - 1) e0)
+      (? (e < -126) (s | int (a / (2.0 ** -149) + 0.5))
+         (e > 127) (s | 2139095040)
+         (: m (int ((a / (2.0 ** e) - 1.0) * 8388608.0 + 0.5))
+            (m = 8388608 ? (s | (e + 128) << 23) (s | (e + 127) << 23 | m))))))
+ (glb-lin c) (: k (max2 0.0 (min2 1.0 c)) (k <= 0.04045 ? (k / 12.92) (((k + 0.055) / 1.055) ** 2.4)))
+ (glb-srgb c) (: k (max2 0.0 (min2 1.0 c)) (k <= 0.0031308 ? (12.92 * k) (1.055 * (k ** (1.0 / 2.4)) - 0.055)))
+ ; ..m as a .glb named name: one node, one primitive, its positions, normals, colours and
+ ; triangles, under a plain white matte; a triangle's texture is left behind
+ (mesh-glb-of m name) (: vs (m 0) ts (m 1) n #vs
+   ps (map (v \ map (x \ glb-f32 (glb-bits x)) [(0.0 - v 0) (v 1) (v 2)]) vs) ns (map (v \ [(0.0 - v 5) (v 6) (v 7)]) vs)
+   cs (map (v \ map (k \ glb-lin (v k)) [8 9 10]) vs)
+   (fl l) (cats (map (p \ cats (map (x \ glb-le (glb-bits x)) p)) l))
+   pb (fl ps) nb (fl ns) cb (fl cs) ib (cats (map (t \ cats (map (k \ glb-le (t k)) ^3)) ts))
+   (ext f) (map (k \ foldl (\ a p (f a (p k))) (ps 0 k) ps) ^3)
+   (view o l g) {"buffer" 0 "byteOffset" o "byteLength" l "target" g}
+   (acc v ty c ct) {"bufferView" v "componentType" ct "count" c "type" ty}
+   j (json-show {"asset" {"version" "2.0" "generator" "lore"} "scene" 0 "scenes" [{"nodes" [0]}]
+                 "nodes" [{"mesh" 0 "name" name}]
+                 "meshes" [{"name" name "primitives" [{"attributes" {"POSITION" 0 "NORMAL" 1 "COLOR_0" 2} "indices" 3 "mode" 4 "material" 0}]}]
+                 "materials" [{"name" name "pbrMetallicRoughness" {"baseColorFactor" [1.0 1.0 1.0 1.0] "metallicFactor" 0.0 "roughnessFactor" 1.0}}]
+                 "accessors" [(pins (acc 0 "VEC3" n 5126) "min" (ext min2) "max" (ext max2))
+                              (acc 1 "VEC3" n 5126) (acc 2 "VEC3" n 5126) (acc 3 "SCALAR" (3 * #ts) 5125)]
+                 "bufferViews" [(view 0 #pb 34962) (view #pb #nb 34962) (view (#pb + #nb) #cb 34962) (view (#pb + #nb + #cb) #ib 34963)]
+                 "buffers" [{"byteLength" (#pb + #nb + #cb + #ib)}]})
+   jp (j + string (map (_ \ 32) ^((4 - #j % 4) % 4))) bl (#pb + #nb + #cb + #ib)
+   (string (glb-le 1179937895 + glb-le 2 + glb-le (28 + #jp + bl) + glb-le #jp) + "JSON" + jp
+    + string (glb-le bl + [66 73 78 0]) + string pb + string nb + string cb + string ib))
+ ; ..a .glb's text as a mesh, or () where it is none: every mesh under the scene's nodes,
+ ; each node's place laid on; a primitive's colour its vertices' times its material's, white
+ ; for none; normals made where it has none; triangles only
+ (mesh-glb s) (? (#s < 28 || glb-u32 s 0 != 1179937895 || glb-u32 s 4 != 2 || glb-u32 s 16 != 1313821514) ()
+   (: jl (glb-u32 s 12) r (json-read (snip s 20 (20 + jl))) b0 (28 + jl)
+      (? (atom? r || !(tablet? (r 1))) ()
+         (: g (r 1) avs (peep g "accessors" ()) bvs (peep g "bufferViews" ())
+            (wide ct) (ct @ 5126 4 5125 4 5123 2 5122 2 1)
+            (comp ct o nm) (? (ct = 5126) (glb-f32 (glb-u32 s o)) (ct = 5125) (glb-u32 s o)
+                              (ct = 5123) (glb-u16 s o @ v (nm ? (v / 65535.0) v))
+                              (ct = 5122) (glb-u16 s o @ v (: w (v < 32768 ? v (v - 65536)) (nm ? (max2 -1.0 (w / 32767.0)) w)))
+                              (ct = 5121) (s o @ v (nm ? (v / 255.0) v))
+                              (s o @ v (: w (v < 128 ? v (v - 256)) (nm ? (max2 -1.0 (w / 127.0)) w))))
+            (acc i) (: a (avs i) bv (bvs (a "bufferView")) ct (a "componentType")
+                       nc (peep {"SCALAR" 1 "VEC2" 2 "VEC3" 3 "VEC4" 4} (a "type") 1) cw (wide ct)
+                       st (peep bv "byteStride" (nc * cw)) o (b0 + peep bv "byteOffset" 0 + peep a "byteOffset" 0)
+                       nm (peep a "normalized" json-false = json-true)
+                       (map (i \ map (k \ comp ct (o + i * st + k * cw) nm) ^nc) ^(a "count")))
+            ; ..a node's place: its matrix, else its turn, size and shift; [rows of 3, shift]
+            (place n) (? (elem "matrix" (keys n))
+                         (: q (n "matrix") [(map (r \ map (c \ q (4 * c + r)) ^3) ^3) [(q 12) (q 13) (q 14)]])
+                         (: t (peep n "translation" [0.0 0.0 0.0]) q (peep n "rotation" [0.0 0.0 0.0 1.0]) z (peep n "scale" [1.0 1.0 1.0])
+                            x (q 0) y (q 1) w (q 3) qz (q 2)
+                            R [[(1.0 - 2.0 * (y * y + qz * qz)) (2.0 * (x * y - w * qz)) (2.0 * (x * qz + w * y))]
+                               [(2.0 * (x * y + w * qz)) (1.0 - 2.0 * (x * x + qz * qz)) (2.0 * (y * qz - w * x))]
+                               [(2.0 * (x * qz - w * y)) (2.0 * (y * qz + w * x)) (1.0 - 2.0 * (x * x + y * y))]]
+                            [(map (r \ map (c \ R r c * z c) ^3) ^3) t]))
+            (mul A B) [(map (r \ map (c \ net (map (k \ A 0 r k * B 0 k c) ^3)) ^3) ^3)
+                       (map (r \ A 1 r + net (map (k \ A 0 r k * B 1 k) ^3)) ^3)]
+            (on M p) (map (r \ M 1 r + net (map (k \ M 0 r k * p k) ^3)) ^3)
+            ; ..a normal's way: the cofactors, the inverse's transpose but for its size and sign
+            (cof M) (: m (M 0) (rc r c) (: a (m ((r + 1) % 3)) b (m ((r + 2) % 3)) (a ((c + 1) % 3) * b ((c + 2) % 3) - a ((c + 2) % 3) * b ((c + 1) % 3)))
+                      (map (r \ map (c \ rc r c) ^3) ^3))
+            (det M) (: m (M 0) (net (map (c \ m 0 c * (m 1 ((c + 1) % 3) * m 2 ((c + 2) % 3) - m 1 ((c + 2) % 3) * m 2 ((c + 1) % 3))) ^3)))
+            (prim M p) (: at (p "attributes") P (acc (at "POSITION")) n #P C (cof M) sg (det M < 0.0 ? -1.0 1.0)
+                          N (elem "NORMAL" (keys at) ? (acc (at "NORMAL")) ())
+                          K (elem "COLOR_0" (keys at) ? (acc (at "COLOR_0")) ())
+                          mt (peep p "material" () @ () {} i (peep (peep g "materials" ()) i {}))
+                          f (peep (peep mt "pbrMetallicRoughness" {}) "baseColorFactor" [1.0 1.0 1.0 1.0])
+                          I (elem "indices" (keys p) ? (map cap (acc (p "indices"))) ^n)
+                          vs (map (i \ (: q (on M (P i)) w (two? N ? (unit (map (r \ sg * net (map (c \ C r c * N i c) ^3)) ^3)) [0.0 1.0 0.0])
+                                          k (two? K ? (K i) [1.0 1.0 1.0])
+                                          [(0.0 - q 0) (q 1) (q 2) 0.0 0.0 (0.0 - w 0) (w 1) (w 2)
+                                           (glb-srgb (k 0 * f 0)) (glb-srgb (k 1 * f 1)) (glb-srgb (k 2 * f 2))]))
+                                  ^n)
+                          ts (map (k \ (: a (I (3 * k)) b (I (3 * k + 1)) c (I (3 * k + 2)) (sg < 0.0 ? [a c b -1] [a b c -1]))) ^(#I // 3))
+                          (two? N ? (mesh vs ts) (mesh-normals (mesh vs ts))))
+            (walk i M) (: n (peep g "nodes" () i) M2 (mul M (place n))
+                          here (elem "mesh" (keys n) ? (map (p \ prim M2 p) (filter (p \ peep p "mode" 4 = 4) (peep g "meshes" () (n "mesh") "primitives")))
+                                 ())
+                          (here + cats (map (c \ walk c M2) (peep n "children" ()))))
+            sc (peep (peep g "scenes" ()) (peep g "scene" 0) {})
+            ms (cats (map (i \ walk i [[[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]] [0.0 0.0 0.0]]) (peep sc "nodes" ())))
+            (two? ms ? (mesh-join ms) ()))))))
 ) ; module mesh
