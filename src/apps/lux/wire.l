@@ -37,11 +37,11 @@
    (u32 l off) (rdle l off 4)
 
    ; --- reply/event demux: byte0 0 error, 1 reply, >=2 event. x-reply stashes
-   ;     events in evq while it waits; x-next drains evq first ---
-   evq {0 ()}
+   ;     events in evq, by socket, while it waits; x-next drains its socket's first ---
+   evq {}
    (x-reply s) (x-rbytes s 32 @ pkt
                 (<pkt = 1 || (127 & <pkt) = 0 ? pkt                              ; an error answers the wait too (a dead window
-                 (pin evq 0 (evq 0 + [pkt]), x-reply s)))                        ; must not hang the wm)
+                 (pin evq s (peep evq s () + [pkt]), x-reply s)))                        ; must not hang the wm)
 
    ; --- connect + setup -> the screen record | (). auth is () or the
    ;     mit-magic-cookie-1 (name data) ---
@@ -87,7 +87,7 @@
    (x-unmap s win) (x-w8 s 10, x-w8 s 0, x-w16 s 2, x-w32 s win)
    (x-focus s win) (x-w8 s 42, x-w8 s 1, x-w16 s 3, x-w32 s win, x-w32 s 0)      ; SetInputFocus, PointerRoot revert
    (x-sync s) (x-w8 s 43, x-w8 s 0, x-w16 s 1, x-flush s, x-reply s)             ; a round trip, events so far stashed
-   (x-clear-enters s) (x-sync s, pin evq 0 (filter (p \ (127 & <p) != 7) (evq 0)))   ; drop the EnterNotify our own paint caused
+   (x-clear-enters s) (x-sync s, pin evq s (filter (p \ (127 & <p) != 7) (peep evq s ())))   ; drop the EnterNotify our own paint caused
    (x-border s win px)                                                           ; ConfigureWindow border-width
     (x-w8 s 12, x-w8 s 0, x-w16 s 4, x-w32 s win, x-w16 s 16, x-w16 s 0, x-w32 s px)
 
@@ -363,8 +363,8 @@
    ; --- the event decoder: code 0 = X error (window is garbage) ---
    (x-decode pkt) [(127 & <pkt) (pkt 1) (u32 pkt 8) (u16 pkt 28) pkt]
    (x-next s)                                                                    ; a stashed event first
-    (evq 0 @ q
-       (two? q ? (pin evq 0 >q, x-decode <q)
+    (peep evq s () @ q
+       (two? q ? (pin evq s >q, x-decode <q)
         (see s @ b0
            (b0 = -1 ? ()
             ((b0 . x-rbytes s 31) @ pkt
