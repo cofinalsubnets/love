@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
+         mesh-view mesh-eye mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone)
 (borrow 'view)
 (borrow 'window)
@@ -208,17 +208,24 @@
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
-                  (shine (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
+                  (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
-                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix)))))]))
- ; the sky over f's bare pixels, asked every k pixels, a flat tray
+                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)))))]))
+ ; ..the radians between rays k pixels apart at the middle of v
+ (mesh-step v k) (1.0 * k * tan (v 'fov / 2.0) / (v 'w / 2.0))
+ ; the sky over f's bare pixels, asked every k pixels, a flat tray. the grid rides the sky
+ ; a cell at a time: shifted by the turn and the tilt past a whole cell, its asks keep to
+ ; the same rays as the eye moves, and the sky does not swim between them
  (sky-grid v lt wx e sim k f)
-  (: w (v 'w) h (v 'h) gw (w // k + 2) gh (h // k + 2) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
-     d (rays v (1.0 * k * gi) (1.0 * k * gj))
-     c (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+  (: w (v 'w) h (v 'h) gw (w // k + 3) gh (h // k + 3) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
+     foc (w / 2.0 / tan (v 'fov / 2.0)) (cell a) (: q (a / k) (k * (q - floor q)))
+     ox (cell (foc * v 'th)) oy (cell (foc * v 'ph))
+     X (1.0 * k * gi - ox) Y (1.0 * k * gj + oy - 1.0 * k)
+     d (rays v X Y)
+     c (sky-colour-at lt wx (mesh-step v k) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
      z (G * 0.0)
-     cols [(2.0 * k * gi / w - 1.0) (1.0 - 2.0 * k * gj / h) z z z (c 0) (c 1) (c 2)]
+     cols [(2.0 * X / w - 1.0) (1.0 - 2.0 * Y / h) z z z (c 0) (c 1) (c 2)]
      vs (lace cols)
      C (iota ((gw - 1) * (gh - 1))) q (C // (gw - 1) * gw + C % (gw - 1))
      cs [q (q + 1) (q + gw + 1) (q * 0 - 1) q (q + gw + 1) (q + gw) (q * 0 - 1)]
@@ -292,8 +299,8 @@
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
-   up (window-blit win Q w h)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
+   up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs))
    _ (up ? (each rs (r \ mesh-under f w h P W H r)) (frame-paint f w (max2 1 (min2 (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))

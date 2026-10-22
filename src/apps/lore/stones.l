@@ -3,7 +3,7 @@
 ; the land is triangles (mesh.l) built once from the shapes whose distance field the player
 ; walks against, relit as the sun moves. stones-new, stones-step and stones-frame are pure;
 ; only stones-walk and stones-run touch the tty.
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-binds stones-move acts ghost-on? post-batch stones-light
+(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
@@ -27,9 +27,13 @@
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
  ; ..the stones' own keys, over view's
- stones-binds {32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait}
+ stones-binds {32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait
+               119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
  picks ['breathe 'weep 'bleed 'beg 'wait]                ; acts', as actions
- rise-acts ['kneel 'forward 'back 'turn-left 'turn-right 'look-up 'look-down]
+ rise-acts ['kneel 'forward 'back 'strafe-left 'strafe-right 'turn-left 'turn-right 'look-up 'look-down]
+ ; ..the mouse's motion, as far as a pixel turns: only while walking, the moves' eye their own
+ mouse-k 0.0025
+ (stones-look st dx dy) (st 'eye = 'walk && !(charm? (st 'dlg)) ? (walk-look st dx dy {'mouse mouse-k 'up 1.45 'down -1.2}) st)
  ; --- the land, in metres: x east, z north, y up. the slot runs north to the bowl, centred at
  ; x 0, z zc: a flat floor out to floor-r, then rows row-h high every row-w out to rim-r ---
  zc 120.0 floor-r 14.0 row-w 2.4 row-h 1.5 rows 7
@@ -439,6 +443,8 @@
       (st 'eye = 'kneel) (elem a rise-acts ? (rise! st) st)
       (st 'eye != 'walk) st
       (a = 'kneel) (move! st (altar-near? st ? (kneel-move st) (kneel-here st)))
+      (elem a ['strafe-left 'strafe-right]) (: d ((a = 'strafe-right ? 1.0 -1.0) * walk-v * dt) th (st 'th)
+                                               (put! st (st 'px + d * cos th) (st 'pz - d * sin th)))
       (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain
@@ -567,8 +573,9 @@
                                ; ..the land built and lit before the first frame, which the song's
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
-               'size stones-size 'frame stones-frame 'key stones-step
-               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['kneel 'finer 'coarser])
+               'size stones-size 'frame stones-frame 'key stones-step 'look stones-look
+               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['strafe-left 'strafe-right 'kneel 'finer 'coarser])
+               'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (walk-dt st,
                             stones-move st))
@@ -579,7 +586,7 @@
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
- stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, u n look, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (w a s d or k j step and strafe, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))

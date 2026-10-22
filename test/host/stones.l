@@ -172,5 +172,15 @@
  (test (#hl = 9) (hl 6 = "space  kneel") (hl 8 = "esc q  quit")
        !(any (l \ 1 < #(split "bleed" l) || 1 < #(split "choose" l)) hl)))
 
+; w steps as k does and d strafes square to the facing; the mouse turns and tilts the eye
+; while walking, and not while kneeling
+(: sw (at 12.0 7) _ (pin sw 'th 0.0) x0 (sw 'px) z0 (sw 'pz)
+   _ (stones-step sw (stones-kb 119)) z1 (sw 'pz) x1 (sw 'px)
+   _ (stones-step sw (stones-kb 100)) x2 (sw 'px) z2 (sw 'pz)
+   _ (stones-look sw 40 -20) th (sw 'th) ph (sw 'ph)
+   _ (pin sw 'eye 'kneel) _ (stones-look sw 40 -20)
+ (test (z1 > z0) (mag (x1 - x0) < 1e-9) (x2 > x1) (mag (z2 - z1) < 1e-9)
+       (mag (th - 0.1) < 1e-9) (mag (ph - 0.05) < 1e-9) (sw 'th = th) (sw 'ph = ph)))
+
 (test_fin ())
 (puts "stones: ok\n")
