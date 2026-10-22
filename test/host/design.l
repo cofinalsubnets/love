@@ -1,5 +1,5 @@
 ; test/host/design.l -- the level designer headless: a map painted from keys, saved as the datum
-; story plays and loaded back the same, and the frame. the runner is a live probe: `love lore design`.
+; story plays and loaded back the same, and the frame. the runner is a live probe: `love play design`.
 ; run: cat test/00-init.l test/host/00-host.l test/host/design.l | out/love
 
 (borrow 'story)

@@ -239,6 +239,21 @@
          ('lin = <(got ())) (["a" "b"] = <>(got ())),
     map (t \ (landed? t ? (catch t) (freeze t))) (hb2 'jobs)))
 
+; osc 52 from a pane: a frame takes its text into the clip; a body past 64K leaves it be
+(: (oschb sh) (: panes {} hb {}
+                 (pin panes 1 (hopen ["sh" "-c" sh] 10 20),
+                  pins hb 'plan 1 'focus 1 'next 2 'rows 10 'cols 20 'panes panes
+                     'dirt {1} 'jobs () 'lay () 'clip {},
+                  hrelay hb, hb))
+   (osclip sh) (: hb (oschb sh) p (hpane hb 1)
+                  (moor (hbox p) (hmas p) (),
+                   waitfor (hpid p),
+                   hframe hb,
+                   hclip-text hb))
+   (test ("hi there" = osclip "printf '\\033]52;c;aGkgdGhlcmU=\\a'")
+         ("" = osclip "printf '\\033]52;c;'; head -c 70000 /dev/zero | tr '\\0' A; printf '\\a'")
+         ("" = osclip "printf '\\033]52;c;?\\a'")))
+
 ; a stage over a real pty: frame out through the painter, keys in through edkey, q ends it
 (: md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
              "-e" "(: _ (borrow 'mitty) b {} (mitty (mitty-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])

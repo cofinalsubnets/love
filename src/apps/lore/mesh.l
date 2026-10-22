@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-dirs mesh-spot mesh-sky mesh-haze mesh-frame mesh-flat
+         mesh-view mesh-eye mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone)
 (borrow 'view)
 (borrow 'window)
@@ -208,17 +208,24 @@
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
-                  (shine (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
+                  (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
-                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-of lt wx X Y Z (e 0) (e 2) sim) ix)))))]))
- ; the sky over f's bare pixels, asked every k pixels, a flat tray
+                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)))))]))
+ ; ..the radians between rays k pixels apart at the middle of v
+ (mesh-step v k) (1.0 * k * tan (v 'fov / 2.0) / (v 'w / 2.0))
+ ; the sky over f's bare pixels, asked every k pixels, a flat tray. the grid rides the sky
+ ; a cell at a time: shifted by the turn and the tilt past a whole cell, its asks keep to
+ ; the same rays as the eye moves, and the sky does not swim between them
  (sky-grid v lt wx e sim k f)
-  (: w (v 'w) h (v 'h) gw (w // k + 2) gh (h // k + 2) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
-     d (rays v (1.0 * k * gi) (1.0 * k * gj))
-     c (sky-colour-of lt wx (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+  (: w (v 'w) h (v 'h) gw (w // k + 3) gh (h // k + 3) G (iota (gw * gh)) gi (G % gw) gj (G // gw)
+     foc (w / 2.0 / tan (v 'fov / 2.0)) (cell a) (: q (a / k) (k * (q - floor q)))
+     ox (cell (foc * v 'th)) oy (cell (foc * v 'ph))
+     X (1.0 * k * gi - ox) Y (1.0 * k * gj + oy - 1.0 * k)
+     d (rays v X Y)
+     c (sky-colour-at lt wx (mesh-step v k) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
      z (G * 0.0)
-     cols [(2.0 * k * gi / w - 1.0) (1.0 - 2.0 * k * gj / h) z z z (c 0) (c 1) (c 2)]
+     cols [(2.0 * X / w - 1.0) (1.0 - 2.0 * Y / h) z z z (c 0) (c 1) (c 2)]
      vs (lace cols)
      C (iota ((gw - 1) * (gh - 1))) q (C // (gw - 1) * gw + C % (gw - 1))
      cs [q (q + 1) (q + gw + 1) (q * 0 - 1) q (q + gw + 1) (q + gw) (q * 0 - 1)]
@@ -231,13 +238,18 @@
    [(255.0 * peep (c 0) 0 0.0) (255.0 * peep (c 1) 0 0.0) (255.0 * peep (c 2) 0 0.0)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
- ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes
- (mesh-frame v sc texs fog flags gain bare) (: B (two? bare ? (<bare v) -1)
+ ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes.
+ ; v 'under a coarser frame of mesh-coarse's, laid first where it drew
+ (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (peep v 'under () @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
    f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
-   (? (two? bare) (<>bare v f B)
+   (? (two? bare) (<>bare v f B0)
       (: S (iota (f = -1)) (#S = 0 ? f (pin f S (charm? bare ? bare (bare v S)))))))
+ ; ..sc drawn k times coarser, through v's camera: its colours and its depths, for v 'under
+ (mesh-coarse v sc texs fog flags gain k) (: W (max2 1 (v 'w // k)) H (max2 1 (v 'h // k))
+   (o fl) (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * fl) (1.0 * gain) 0.0])
+   [(facets W H -1 (v 'cam) (sc 0) (sc 1) texs (o (flags | 64))) (facets W H -1 (v 'cam) (sc 0) (sc 1) texs (o (flags | 16)))])
  ; a frame's colours as [r g b] trays, 0 to 1
  (mesh-flat f) [((f >> 16 & 255) / 255.0) ((f >> 8 & 255) / 255.0) ((f & 255) / 255.0)]
  ; ..as half-block cells: 24-bit, or the 256 cube dithered by bay
@@ -261,12 +273,12 @@
  ; --- a level's screen: 'kitty 1 kitty's pixels, 'win a window, else half blocks ---
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
  ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across.
- ; a window's picture is 'pic-w by 'pic-h, kitty-w over 'scale (1 2 4 or 8, else 2) across,
- ; in the window's shape
+ ; a window's picture is 'pic-w by 'pic-h, the window over 'scale (1 2 4 or 8, else 2): each
+ ; of its pixels 'scale of the window's each way
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (peep st 'win ())
-   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (kitty-w // s) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
+   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max2 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
          'kp (? (tablet? win) (max2 1 (pw // 160)) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
@@ -287,8 +299,8 @@
    wh (window-size win) W <wh H (wh 1) P (window-paper win)
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
-   up (window-blit win Q w h)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
+   up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs))
    _ (up ? (each rs (r \ mesh-under f w h P W H r)) (frame-paint f w (max2 1 (min2 (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
