@@ -429,24 +429,28 @@
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
-; member is, else red naming the red ones
+; member is, else red naming the red ones. a lane run alone (test_hdiff, the lane map's) takes
+; the prerequisites step 1 made as made, as the parallel lanes do
 (: lg-d (cr-root + "/lanes")
    _ (hark ["mkdir" "-p" (lg-d + "/test/gate") (lg-d + "/out")])
    _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (lg-d + "/test/gate/")])
    _ (hark ["ln" "-s" cr-love (lg-d + "/out/love")])
-   _ (cr-put lg-d "Makefile" "test_quick: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n")
-   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_quick")
+   _ (cr-put lg-d "Makefile" ("test_quick: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n"
+                              + "test_hdiff: pre\n\t@true\npre: force\n\t@echo x >> made\nforce:\n"))
+   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_quick test_hdiff")
                  [<r (cr-get (lg-d + "/out/l/summary"))])
    lg-g (lg-run 0)
+   lg-pre (cr-get (lg-d + "/made"))
    _ (cr-put lg-d "red" "")
    lg-r (lg-run 0)
    _ (test
-      (<lg-g = 0) (cr-in (lg-g 1) "test_quick exit=0 ")
+      (<lg-g = 0) (cr-in (lg-g 1) "test_quick exit=0 ") (cr-in (lg-g 1) "test_hdiff exit=0 ")
+      (lg-pre = "x\n")
       (<lg-r = 1) (cr-in (lg-r 1) "test_quick exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
    0)
 
-; gcshard.sh leaves the normal build to its caller, and its stress builds link that build's
-; out/src.o: a make that packs the tree mid-gate moves out/love under the other lanes
+; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
+; the other lanes. its makes take only what cook takes too (no -o)
 (: gb-d (cr-root + "/gcshard")
    _ (mkdir gb-d 493)
    _ (cr-put gb-d "mk" "echo \"$*\" >> made\n")
@@ -455,13 +459,13 @@
    _ (test
       (<gb-r = 1) (cr-in (gb-r 1) "FAIL gcshard: no out/love")
       (#gb-made = 2)
-      !(two? (filter (\ l !(cr-in l "-o out/src.o ")) gb-made))
+      !(two? (filter (\ l (cr-in l " -o ")) gb-made))
       !(two? (filter (\ l (cr-in (l + " ") " host " || cr-in (l + " ") " out/love.raw ")) gb-made)))
    0)
 
 ; the projection: a star crosses `/`, a lane another owed lane runs drops out, light before heavy,
 ; test first and test_slow last
-(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\n"
+(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\ntest_g:\n\t@sh test/gate/g.sh .\n"
    lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
    lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
             ["src/apps/moon/gen.l"] lp-cov)
@@ -470,6 +474,8 @@
    ; test_gcstress's shards too, so a change owing both runs the bake alone
    lp-core (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["src/love/num.c"] () lp-cov))
    lp-heavy (map (r \ r 1) (drop 1 lp-plan))
+   ; a script a lane's recipe names owes that lane, and test/host the host laws' lane
+   lp-test (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["test/gate/g.sh" "test/host/x.l"] () lp-cov))
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
       (lp-cov "test_quick" = ["test_clay" "test_x" "test_y"])
@@ -484,6 +490,8 @@
       (elem "test_gcstress_bake" lp-names) !(elem "test_gcstress" lp-names)
       (elem "test_gcstress" lp-core) !(elem "test_gcstress_bake" lp-core)
       (lp-cov "test_gcstress_bake" = ["test_gcstress"])
+      (lp-cov "test/gate/g.sh" = ["test_g"])
+      (elem "test_g" lp-test) (elem "test_hostnif" lp-test)
       !(elem "test_clay" lp-names)
       (lp-heavy = sort lp-heavy)
       (<lp-cli = 0)

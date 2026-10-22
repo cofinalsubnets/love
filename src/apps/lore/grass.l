@@ -409,8 +409,7 @@
    ; the queue must outlast the gap between feeds, a frame's painting on a slow machine:
    ; the pacer holds the recent worst gap and the lead follows it
    pace (pacer ())
-   (feed _) (song-lead-of (pace! pace) @ l
-               (sng ? (song-fill hn l (_ \ grass-song-feed sng (g 'wind)))))
+   (feed _) (sng ? (song-keep hn pace song-lead (_ \ grass-song-feed sng (g 'wind))))
    (beat _) (feed (), rest 5)                           ; a sign's idle: the lead, then a breath
    (cue _) (sng && g 'cue ? (grass-song-cue sng, pin g 'cue 0))
    ; tick n is owed at t0 + n ticks. behind by a whole tick, the frame is skipped and the
@@ -442,7 +441,7 @@
  ; taps: a press's release breaks key-drain's repeat, so two quick taps are two steps
  (grass-run lk ls) (: g (ttytake ['mouse], mind (_ \ grass-week lk ls) () (_ \ (drain-keys (), ttygive ['mouse])))
                   (puts (grass-final g + "\n"), 0))
- grass-usage "usage: love lore grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
+ grass-usage "usage: love play grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run grass-look score)
                        (say err ("grass: " + grass-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'grass88 (udoor 'grass88 grass-main grass-usage 1 1))

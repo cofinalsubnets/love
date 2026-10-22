@@ -1,4 +1,4 @@
-; `love lore corridor --level src/apps/lore/levels/station.l`
+; `love play src/apps/lore/levels/station.l`, and `love play edit` the same
 (borrow 'scenery)
 
 ; the textures, their layers listed at the top of src/apps/lore/swatch.l. (tiles n m a b
@@ -297,10 +297,67 @@
                     (cut [(x + sx * c) (lo 1) z] [x (lo 1) (z + sz * c)] [(x + sx * c) (hi 1) z] b)))
             (solid (box lo hi)) cs)))
 
+;; the natural food center: its floor, walls and stands, the produce on them, the counter's
+;; top, the hot bar's wells and the register's screen
+(: woodfloor (texture 64 64 2 '((fill (rgb 0.42 0.29 0.17)) (rows 0 1 (rgb 0.25 0.16 0.09)) (rows 16 17 (rgb 0.25 0.16 0.09))
+                                (rows 32 33 (rgb 0.25 0.16 0.09)) (rows 48 49 (rgb 0.25 0.16 0.09)) (noise 12 2 0.18) (patches 5 0.2 (shade 0.85)))))
+(: shopwall (texture 32 32 2 '((fill (rgb 0.78 0.72 0.58)) (noise 8 0.06))))
+(: crate (texture 32 32 0.6 '((fill (rgb 0.55 0.4 0.24)) (rows 9 11 (rgb 0.3 0.2 0.11)) (rows 20 22 (rgb 0.3 0.2 0.11)) (noise 10 2 0.2))))
+(: (heap a b c r) (texture 64 64 0.6 [['fill a] ['dots 8 8 r b] ['dots 16 16 (0.8 * r) c] '(noise 2 0.25)]))
+(: apples (heap '(rgb 0.22 0.03 0.03) '(rgb 0.74 0.08 0.06) '(rgb 0.55 0.7 0.12) 3.4))
+(: potatoes (heap '(rgb 0.16 0.11 0.07) '(rgb 0.6 0.45 0.28) '(rgb 0.52 0.38 0.22) 3.8))
+(: onions (heap '(rgb 0.18 0.1 0.05) '(rgb 0.74 0.5 0.22) '(rgb 0.55 0.24 0.42) 3.6))
+(: radishes (heap '(rgb 0.1 0.24 0.08) '(rgb 0.82 0.1 0.26) '(rgb 0.94 0.88 0.9) 2.4))
+(: cabbages (heap '(rgb 0.08 0.2 0.06) '(rgb 0.42 0.62 0.28) '(rgb 0.62 0.78 0.46) 7.2))
+(: carrots (texture 64 64 0.6 '((fill (rgb 0.14 0.09 0.05)) (stripes 6 3 0.4 (rgb 0.9 0.45 0.08))
+                                (within 0 0 64 14 (fill (rgb 0.12 0.32 0.08)) (stripes 3 1 -0.7 (rgb 0.3 0.6 0.15))) (noise 2 0.2))))
+(: countertop (texture 32 32 1 '((fill (rgb 0.2 0.32 0.26)) (noise 6 0.12))))
+; ..the hot bar a tile two full hotel pans deep and four along, their foods
+(: hotbar (texture 64 24 2 '((fill (rgb 0.6 0.62 0.64))
+                             (rect 1 1 15 11 (rgb 0.78 0.55 0.12)) (rect 17 1 31 11 (rgb 0.3 0.5 0.15))
+                             (rect 33 1 47 11 (rgb 0.55 0.18 0.08)) (rect 49 1 63 11 (rgb 0.85 0.78 0.55))
+                             (rect 1 13 15 23 (rgb 0.92 0.88 0.72)) (rect 17 13 31 23 (rgb 0.62 0.2 0.12))
+                             (rect 33 13 47 23 (rgb 0.45 0.32 0.16)) (rect 49 13 63 23 (rgb 0.7 0.6 0.18)) (noise 1 0.25))))
+(: regscreen (texture 32 16 0.36 '((fill (rgb 0.05 0.2 0.12)) (rows 3 4 (rgb 0.3 0.95 0.55)) (rows 7 8 (rgb 0.3 0.95 0.55))
+                                   (rect 20 10 30 14 (rgb 0.6 1 0.7)))))
+;; ..and the cashier's: the sale's lines, its total, the keys under
+(: cashscreen (texture 32 24 0.36 '((fill (rgb 0.06 0.08 0.14)) (rows 2 3 (rgb 0.85 0.88 0.95)) (rows 5 6 (rgb 0.85 0.88 0.95))
+                                    (rows 8 9 (rgb 0.85 0.88 0.95)) (rect 18 11 30 13 (rgb 1 0.85 0.3))
+                                    (rect 2 15 9 19 (rgb 0.3 0.6 0.9)) (rect 11 15 18 19 (rgb 0.3 0.6 0.9)) (rect 20 15 30 22 (rgb 0.3 0.8 0.4))
+                                    (rect 2 20 18 22 (rgb 0.8 0.3 0.25)))))
+;; ..its kitchen: steel, a quarry tile floor, white tile walls, the range's grates
+(: steelk (texture 32 32 1 '((fill (rgb 0.66 0.68 0.7)) (noise 20 1 0.08) (cols 0 1 (shade 0.85)))))
+(: quarry (texture 32 32 0.6 '((fill (rgb 0.52 0.2 0.12)) (grid 16 16 1 (rgb 0.3 0.28 0.25)) (noise 4 0.12))))
+(: whitetile (texture 32 32 0.6 '((fill (rgb 0.86 0.87 0.85)) (grid 8 8 1 (rgb 0.66 0.67 0.66)) (noise 6 0.04))))
+(: burners (texture 64 32 0.9 '((fill (rgb 0.08 0.08 0.09)) (disc 16 16 11 (rgb 0.22 0.22 0.24)) (disc 16 16 8 (rgb 0.08 0.08 0.09))
+                                (disc 48 16 11 (rgb 0.22 0.22 0.24)) (disc 48 16 8 (rgb 0.08 0.08 0.09)) (grid 32 32 2 (rgb 0.2 0.2 0.22)))))
+;; ..and its walk-in: black, gridded as a training booth is, a steel shelf, the cartons; and
+;; the red orb hanging there, mottled so its turning shows
+(: holo (texture 64 64 1 '((fill (rgb 0.01 0.012 0.016)) (grid 16 16 1 (rgb 0.03 0.28 0.24)) (grid 64 64 2 (rgb 0.12 0.95 0.75)))))
+(: redorb (texture 64 64 0.5 '((fill (rgb 0.74 0.06 0.05)) (patches 6 0.35 (shade 0.78)) (noise 5 0.1) (rows 30 33 (shade 0.86)))))
+(: shelfsteel (texture 16 16 0.5 '((fill (rgb 0.5 0.52 0.55)) (noise 4 0.15))))
+(: cardboard (texture 32 32 0.5 '((fill (rgb 0.62 0.46 0.28)) (noise 8 0.1) (rows 13 19 (rgb 0.5 0.3 0.16)) (disc 26 6 3 (rgb 0.3 0.45 0.15)))))
+(: cardtop (texture 32 32 0.5 '((fill (rgb 0.66 0.5 0.31)) (cols 15 17 (rgb 0.82 0.74 0.56)) (noise 8 0.1))))
+; ..a produce stand: a crate from x0 z0 to x1 z1, its top sloping down toward face ('n 's 'e
+; or 'w) under its produce
+(: (stand x0 z0 x1 z1 face t) (: lo 8.72 hi 9.02
+     pl (face @ 's [[x0 lo z0] [x1 lo z0] [x0 hi z1]] 'n [[x0 lo z1] [x1 lo z1] [x0 hi z0]]
+               'e [[x1 lo z0] [x1 lo z1] [x0 hi z0]] 'w [[x0 lo z0] [x0 lo z1] [x1 hi z0]])
+     (skin {'walls crate 'floor t} (cut (pl 0) (pl 1) (pl 2) (solid (box [x0 8 z0] [x1 hi z1]))))))
+; ..a shelf's cartons at y from z 6.78 on, under top: widths and heights by turns, some open
+(: (cartons y top k) (: ws [0.5 0.42 0.55 0.46 0.5 0.44 0.52 0.48] hs [0.32 0.4 0.28 0.45 0.36 0.3 0.42 0.34]
+     tops [cardtop apples cardtop potatoes cardtop cardtop onions cardtop cabbages cardtop]
+     (go z i acc) (: w (ws ((i + k) % 8)) h (min (hs ((3 * i + k) % 8)) (top - y - 0.04))
+       (z + w > 10.27 ? acc
+          (go (z + w + 0.03) (i + 1) ((whole (skin {'walls cardboard 'floor (tops ((i + 2 * k) % 10))} (solid (box [-25.57 y z] [-25.07 (y + h) (z + w)])))) . acc))))
+     (go (6.78 + 0.04 * k) 0 ())))
+
 (level "the station"
   (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
   (start [0 -5 -5.9] 0 0)
+  ; first a second of a clear noon sky, broken cloud, looking up; then the car
+  (shot 1 (sky 13 'partly) 30 55)
   ; a dim light everywhere, the lamps' thrown back off the concrete
   (ambient (rgb 0.15 0.15 0.16))
   ; the hall, 38 metres across, ten high and 16 long
@@ -336,6 +393,10 @@
     (solid (box [-11 -4.0 -4.48] [-1 -3.94 -4.4]))])
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
   (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
+  ; ..a bare mattress along the car's floor at its east end, gone with it
+  (mattress [5.4 -5 -5.94] 90)
+  ; a telescope in the west wing's north corner, looking out across it
+  (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
   ; ends at a blank wall
@@ -378,16 +439,75 @@
   (air (box [-2.5 -5 15.9] [-0.9 -2.4 16.4]))
   (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
   (skin {'all concrete} (air (box [-2.5 9 18.2] [-0.9 11.6 19.1])))
-  ; the corner shop at the street's west end, three storeys, its floor a step below the
-  ; pavement: a window onto the street, steps down from the east to its door by the corner, a sign
+  ; the natural food center at the street's west end, three storeys, its floor a step below
+  ; the pavement: a window onto the street, steps down from the east to its door, a sign
   ; standing out from its front, and a spinner on its roof
   (skin {'all grime} (solid (box [-45 8.85 14] [-33 22.5 20.5])))
-  (room [-44.5 8 14.5] [-33.5 12 20])
+  (skin {'floor woodfloor 'walls shopwall} (room [-44.5 8 12] [-33.5 12 20]))
   (across (strip-light [-39 12 17.2]))
+  (across (strip-light [-39 12 13.8]))
   (window [-42 9.3 19.95] [-35.5 11.6 20.55] glass)
-  (skin {'all concrete} (room [-33 8 18.4] [-28.4 9.2 20.2]))
-  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 18.4] [-28.4 8.833 20.2])))])
-  (door [-33.25 8 19.2] 1.2 2.2)
+  (skin {'all concrete} (street [-33 8 15.8] [-28.4 9.2 17.6]))
+  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 15.8] [-28.4 8.833 17.6])))])
+  (door [-33.25 8 16.6] 1.2 2.2)
+  ; ..in from the door, apples on the right and potatoes and onions on the left; along the
+  ; west wall carrots, radishes and cabbages
+  (stand -37 17.7 -34.6 18.6 's apples)
+  (stand -37 14.4 -35.9 15.3 'n potatoes)
+  (stand -35.7 14.4 -34.6 15.3 'n onions)
+  (stand -44.5 18.1 -43.6 19.6 'e carrots)
+  (stand -44.5 16.4 -43.6 17.9 'e radishes)
+  (stand -44.5 14.4 -43.6 16.2 'e cabbages)
+  ; ..across from the window the counter: the hot bar under its glass, and the register, its
+  ; screens to the shop and the cashier; a gap at its east end into the kitchen
+  (skin {'walls crate 'floor countertop} (solid (box [-44.5 8 12] [-38 8.95 12.8])))
+  (whole (skin {'walls steelk 'floor hotbar} (solid (box [-44 8.95 12] [-41 9.2 12.75]))))
+  (window [-44 9.6 12.02] [-41 9.64 12.75] glass)
+  (rod [-43.95 9.2 12.72] [-43.95 9.62 12.72] 0.012 6 steelk)
+  (rod [-41.05 9.2 12.72] [-41.05 9.62 12.72] 0.012 6 steelk)
+  (whole (skin {'all darkmetal} (solid (box [-39.6 8.95 12.25] [-38.9 9.1 12.7]))))
+  (whole (skin {'all darkmetal} (solid (box [-39.45 9.1 12.5] [-39.05 9.4 12.56]))))
+  (ad [-39.25 9.25 12.565] [0 0 1] [0 1 0] 0.34 0.24 regscreen)
+  (ad [-39.25 9.25 12.495] [0 0 -1] [0 1 0] 0.34 0.24 cashscreen)
+  ; ..behind it the kitchen: the range under its hood and a prep table along the west wall,
+  ; an island, and at the back the dish room's sinks, machine and table; a doorway in the
+  ; south east corner
+  (skin {'floor quarry 'walls whitetile 'ceiling whitetile} (room [-44.5 8 5.5] [-36.5 12 12]))
+  (across (strip-light [-40.5 12 10.3]))
+  (across (strip-light [-40.5 12 7]))
+  (whole (skin {'walls steelk 'floor burners} (solid (box [-44.5 8 9.2] [-43.6 8.9 10.8]))))
+  (whole (skin {'all steelk} (cut [-43.2 10.95 9] [-43.2 10.95 11] [-43.55 10.7 9] (solid (box [-44.5 10.7 9] [-43.2 11.4 11])))))
+  (whole (skin {'all steelk} (solid (box [-44.5 8 6.9] [-43.8 8.9 9]))))
+  (whole (skin {'all steelk} (solid (box [-41.6 8 8.4] [-39.6 8.9 10.2]))))
+  (whole (skin {'all steelk} (solid (box [-44 8 5.5] [-41 8.9 6.2]))))
+  (repeat 3 [1 0 0] [(whole (skin {'all steelk} (air (box [-43.9 8.62 5.6] [-43.1 8.9 6.1]))))
+                     (rod [-43.5 8.9 5.58] [-43.5 9.25 5.58] 0.012 6 steelk)
+                     (rod [-43.5 9.25 5.58] [-43.5 9.25 5.8] 0.01 6 steelk)])
+  (whole (skin {'all steelk} (solid (box [-40.6 8 5.5] [-39.7 10 6.3]))))
+  (whole (skin {'all steelk} (solid (box [-39.7 8 5.5] [-38 8.9 6.2]))))
+  (skin {'all whitetile} (air (box [-36.55 8 5.6] [-36.15 10.2 6.7])))
+  ; ..the corridor east of it, north from the doorway, and on its east wall a heavy door
+  ; into the walk-in
+  (skin {'walls shopwall} (room [-36.2 8 5] [-34.8 10.6 10.5]))
+  (bulb [-35.5 10.45 7.7] (rgb 1 0.92 0.8))
+  (door [-34.65 8 8.6] 1.4 2.3)
+  ; ..the walk-in, deep and high: one long shelf of cartons on its back wall; along it the
+  ; mattress, and by it the telescope looking west toward the door,
+  ; the end looked through by the bed, an open diary and its pencils beside it; up before it
+  ; the orb, turning fast, its pixels twice the world's
+  (skin {'all holo} (room [-34.5 8 5.5] [-25 12 11.5]))
+  (strip-light [-33 12 8.5])
+  (strip-light [-30 12 8.5])
+  (strip-light [-27 12 8.5])
+  (map (z \ whole (skin {'all shelfsteel} (solid (box [-25.6 8 z] [-25 10.45 (z + 0.04)])))) [6.7 8.5 10.31])
+  (map (y \ whole (skin {'all shelfsteel} (solid (box [-25.6 y 6.7] [-25 (y + 0.03) 10.35])))) [8.12 8.72 9.32 9.92 10.42])
+  (map (k \ cartons (8.15 + 0.6 * k) (8.72 + 0.6 * k) k) ^4)
+  (mattress [-26.25 8 7.1] 0)
+  (telescope [-27.9 8 8.05] 270 35 (rgb 0.18 0.22 0.5))
+  (book [-28.15 8 7.15] 160)
+  (pencil [-28.4 8 7.42] 70 (rgb 0.95 0.75 0.1))
+  (pencil [-28.28 8 7.5] 82 (rgb 0.2 0.45 0.8))
+  (coarse 2 (orb [-29.8 10.63 8.05] 0.6 redorb 1.5))
   (skin {'all darkmetal} (solid (box [-34.4 12 20.5] [-34.1 19.8 22.2])))
   (shopsign -34.09 1)
   (shopsign -34.41 -1)

@@ -39,11 +39,12 @@ packed in walk order, mapped executable at wake as a chunk of the code arena bef
 walk names them. A blob holds no address of the binary — the kind sentinels and the callout
 drives it needs are read off `g->reach` — so the bytes are the same under any base. The encoded words are wildly repetitive — half an
 image is 25 distinct words, and the commonest single one is `lvm_chain`'s index at 23%, the `ap`
-every pair wears — so each rides as one byte naming one of the 232 commonest, or as an escape
-naming its own width. A heap offset that misses the dictionary rides as its distance from its own
-word, in words: the heap is mostly a tree, so a pointer is nearly always to an object of its own
-and an absolute one would not repeat. Each chunk lays its token bytes, one a word, ahead of its
-literal bytes, so the two deflate apart. 3.8x off the file; the wake expands into the pool and then decodes there in
+every pair wears — so each rides as one byte naming one of the 226 commonest, or as an escape
+naming its own width. The heap is mostly a tree, and the major collection lays it in
+first-reference order (the hot-first sort is stable), so the first word naming an object rides as
+its step from the last first reference: one chain on is a token of its own, two in three. A heap
+offset named again rides as its distance from its own word, in words. Each chunk lays its step
+base, its token bytes, one a word, then its literal bytes, so the two deflate apart. 3.8x off the file; the wake expands into the pool and then decodes there in
 place. The dictionary is chosen by COUNT and not by lane: a fixed token budget per lane is the
 obvious thing and it is also worse (3.63x), because the split would be tuned to whichever image
 was measured, and the counts follow a kernel's image or an artifact's wherever those go.

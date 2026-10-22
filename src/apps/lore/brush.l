@@ -100,13 +100,17 @@
    (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
    ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
    ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0)]) bs)) ())
+   ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it
+   (meets c pl) (cats (map (k \ (: g (c 'faces k) s (map (side pl) g)
+                                  (#g >= 3 && foldl min2 1e9 s <= 1e-6 && foldl max2 -1e9 s >= -1e-6 ? [(c 'planes k)] ())))
+                           ^#(c 'planes)))
    (piece i b j) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near fb)
      (rel k) (? (k < i) -1 (k > i) 1 0)
      (key _) ['face j (ft i) (map (k \ [(rel k) (ft k)]) ks)]
      ky (tablet? kp ? (key ()) ()) fi (tablet? kp ? ((kp 'id) ky) ())
      qs (keep kp (_ \ ky) (_ \ (: later (filter (k \ i < k) ks)
                             others (filter (k \ k != i) ks)
-                            pls (cats (map (k \ bt k 'planes) others))
+                            pls (cats (map (k \ meets (bt k) (b 'planes j)) others))
                             ps (poly-carve f pls)
                             (cats (map (p \ (: c (mid p) fr (medium ks (c+ c (c* 1e-3 n))) bk (medium ks (c+ c (c* -1e-3 n)))
                                              (fr = bk || any (k \ on-face? (bt k) c n) later ? () [[p (fr = 1 ? n (c* -1.0 n))]])))

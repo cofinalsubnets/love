@@ -135,7 +135,12 @@
                      (. v (p1-cup cl)))
               ((p1-hex? c ? (k < 6)) ?
                  (p1-uhex (p1-cup cl) (v * 16 + p1-dval c) (k + 1))))))
-   (p1-ucl cl) (atom? cl ? 'torn (cap cl = 123 ? (p1-uhex (p1-cup cl) 0 0)))
+   ; ..or \uhhhh: just four, surrogates out
+   (p1-u4 cl v k)
+     (k = 4 ? ((v < 55296 ? 1 (57343 < v)) ? (. v cl))
+      (atom? cl ? 'torn
+       (p1-hex? (cap cl) ? (p1-u4 (p1-cup cl) (v * 16 + p1-dval (cap cl)) (k + 1)))))
+   (p1-ucl cl) (atom? cl ? 'torn (cap cl = 123 ? (p1-uhex (p1-cup cl) 0 0) (p1-u4 cl 0 0)))
    (p1-str cl acc)
      (atom? cl ? 'torn
       (: c <cl r (p1-cup cl)
@@ -143,7 +148,7 @@
             (!= c 92) (p1-str r (. c acc))
             (atom? r) 'torn
             (cap r = 40) (('hole . string (p1-rev acc ())) . p1-cup r)       ; \( opens a hole
-            (cap r = 117)                              ; \u{h..}, else a plain u
+            (cap r = 117)                              ; \u{h..} or \uhhhh, else a plain u
               (p1-ucl (p1-cup r) @ u
                  (? (u = 'torn) 'torn
                     (two? u) (p1-str >u (p1-u8 <u acc))

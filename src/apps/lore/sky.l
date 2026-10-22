@@ -5,7 +5,7 @@
 ; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
 ; weather (sky-weather cover style): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
 ; 'smog 0 (default) to 1, the smooth sky and its light browned toward orange
-(module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-near sky-tone
+(module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-near sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow 'view)
 (borrow 'vec)
@@ -84,13 +84,25 @@
  ; answers where a ray crosses it, in map tiles. under three degrees the deck recedes
  ; ever slower, so each row by the horizon reaches a little further ---
  deck 1800.0 tile 400.0
- (deck-at dx dy dz ex ez sim) (: tc (deck / over dy (dy < 0.05) (0.025 + 0.025 * exp ((min dy 0.05 - 0.05) / 0.025)))
+ (deck-low dy) (over dy (dy < 0.05) (0.025 + 0.025 * exp ((min dy 0.05 - 0.05) / 0.025)))
+ (deck-at dx dy dz ex ez sim) (: tc (deck / deck-low dy)
    [((ex + dx * tc) / tile) ((ez + dz * tc) / tile)])
- (thick wx mp u v sim f) (: m (mp 'cloud)
+ ; ..how many tiles of the deck lie between rays a radians apart, across the ray: what a
+ ; turn of the eye slides them over
+ (deck-fp a dy) (a * deck / (deck-low dy * tile))
+ (thick wx mp u v sim f) (thick-fp wx mp u v sim f 0.0)
+ ; ..each layer toward its middle as a sample spans more of its texels, fp tiles a sample,
+ ; so what a ray cannot tell apart never shimmers as the eye turns
+ (thick-fp wx mp u v sim f fp) (: m (mp 'cloud) (seen q) (1.0 / (1.0 + sq (fp * q)))
    a (bil m cloud-n ((u + sim * lap wx 0.006 16.0) * 16.0) ((v + sim * lap wx 0.0025 16.0) * 16.0))
    b (f = 0.0 ? 0.0 (bil m cloud-n ((u + sim * lap wx 0.011 37.0) * 37.0 + 11.3) ((v + sim * lap wx -0.004 37.0) * 37.0 - 5.1)))
    sw (bil m cloud-n ((u + sim * lap wx 0.002 3.0) * 3.0 + 40.0) ((v + sim * lap wx 0.001 3.0) * 3.0 + 17.0))
-   ((1.0 - f) * a + f * b + 0.18 * (sw - 0.5)))
+   ; ..each layer's features a tile: the map's lattice of 32 across its 128 texels, mostly
+   ; its 8 and 16
+   ((1.0 - f) * (0.5 + seen 2.0 * (a - 0.5)) + f * (0.5 + seen 4.6 * (b - 0.5)) + 0.18 * seen 0.4 * (sw - 0.5)))
+ ; ..and the spread a sample's thickness hides under its mean, the map's about 0.2 a layer
+ (thick-sd f fp) (: (lost q w) (: k (1.0 / (1.0 + sq (fp * q))) (sq w * (1.0 - k * k)))
+   (0.2 * sqrt (lost 2.0 (1.0 - f) + lost 4.6 f + lost 0.4 0.18)))
  ; how much cloud down the rays, 0 to 1, as the smooth sky draws it: by the horizon the
  ; deck too far to tell apart, a haze as thick as the cover
  (haze c dy wx sim) (: k (sat (1.0 - dy / 0.06)) (c + 0.85 * k * (sat (1.2 * sky-cover wx sim) - c)))
@@ -133,7 +145,7 @@
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
  ; --- the smooth sky. far weighs what lies past the moon, the sun's own disc: 0 is the
  ; sky nearer than it, what a body in front of it shows ---
- (smooth-of lt wx dx dy dz ex ez sim far) (: mp (sky-maps ())
+ (smooth-of lt wx dx dy dz ex ez sim far a) (: mp (sky-maps ())
    s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
    mu (dx * sx + dy * sy + dz * sz)
    up (sat dy)
@@ -144,8 +156,9 @@
    disc (sat ((mu - 0.9995) * 4000.0))
    halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
    sky0 (c+ (c+ (cmix dark blue (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
-   d (deck-at dx dy dz ex ez sim) th (thick wx mp (d 0) (d 1) sim 0.3)
-   cl0 (haze (sat (0.5 + (th - edge wx sim 0.3) * 10.0)) dy wx sim)
+   d (deck-at dx dy dz ex ez sim) fp (deck-fp a dy) th (thick-fp wx mp (d 0) (d 1) sim 0.3 fp)
+   ; ..the edge as wide as that spread: the share of the sample past it, not a fringe
+   cl0 (haze (sat (0.5 + (th - edge wx sim 0.3) / sqrt (0.01 + 2.0 * sq (thick-sd 0.3 fp)))) dy wx sim)
    cl (clouded wx cl0)                          ; overcast: no sky through it
    ; ..the clouds: lit from under by the sun, darker the thicker, greyer the more of them
    ; ..and under smog the thick of them darker still and the thin lit through
@@ -207,11 +220,13 @@
    (untone lt (cmix bg cloudc ((0 <= v) * cov))))
  ; the sky's colour down the rays dx dy dz (trays) from the eye at ex ez, under the light
  ; lt and the weather wx, at the time sim, the sun's disc in it; the stars are sky-stars!'s
- (sky-colour-of lt wx dx dy dz ex ez sim)
-  (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 1.0) (smooth-of lt wx dx dy dz ex ez sim 1.0))
+ (sky-colour-of lt wx dx dy dz ex ez sim) (sky-colour-at lt wx 0.0 dx dy dz ex ez sim)
+ ; ..its rays a radians apart, the clouds no finer than they tell apart
+ (sky-colour-at lt wx a dx dy dz ex ez sim)
+  (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 1.0) (smooth-of lt wx dx dy dz ex ez sim 1.0 a))
  ; ..and the sky nearer than the moon: no sun's disc
  (sky-near lt wx dx dy dz ex ez sim)
-  (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 0.0) (smooth-of lt wx dx dy dz ex ez sim 0.0))
+  (wx 'style = 'pixel ? (pixel lt wx dx dy dz ex ez sim 0.0) (smooth-of lt wx dx dy dz ex ez sim 0.0 0.0))
  ; --- the stars: starmap.l's catalogue turned by sidereal time over latitude, trays 'x 'y
  ; 'z [east up north] with brightness 'b, twinkle 'ph, 'tint. laid a pixel each, not read
  ; off a map per ray, which would stretch them overhead and lose them low ---
