@@ -428,6 +428,37 @@
       (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress"))
    0)
 
+; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
+; member is, else red naming the red ones
+(: lg-d (cr-root + "/lanes")
+   _ (hark ["mkdir" "-p" (lg-d + "/test/gate") (lg-d + "/out")])
+   _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (lg-d + "/test/gate/")])
+   _ (hark ["ln" "-s" cr-love (lg-d + "/out/love")])
+   _ (cr-put lg-d "Makefile" "test_quick: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n")
+   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_quick")
+                 [<r (cr-get (lg-d + "/out/l/summary"))])
+   lg-g (lg-run 0)
+   _ (cr-put lg-d "red" "")
+   lg-r (lg-run 0)
+   _ (test
+      (<lg-g = 0) (cr-in (lg-g 1) "test_quick exit=0 ")
+      (<lg-r = 1) (cr-in (lg-r 1) "test_quick exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
+   0)
+
+; gcshard.sh leaves the normal build to its caller, and its stress builds link that build's
+; out/src.o: a make that packs the tree mid-gate moves out/love under the other lanes
+(: gb-d (cr-root + "/gcshard")
+   _ (mkdir gb-d 493)
+   _ (cr-put gb-d "mk" "echo \"$*\" >> made\n")
+   gb-r (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
+   gb-made (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
+   _ (test
+      (<gb-r = 1) (cr-in (gb-r 1) "FAIL gcshard: no out/love")
+      (#gb-made = 2)
+      !(two? (filter (\ l !(cr-in l "-o out/src.o ")) gb-made))
+      !(two? (filter (\ l (cr-in (l + " ") " host " || cr-in (l + " ") " out/love.raw ")) gb-made)))
+   0)
+
 ; the projection: a star crosses `/`, a lane another owed lane runs drops out, light before heavy,
 ; test first and test_slow last
 (: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\n"
