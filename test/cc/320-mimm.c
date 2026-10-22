@@ -24,6 +24,8 @@ int main(void)
     bad += (x & 0xff00ff00) != (x & m[9]);
     bad += (x & 0x000fffff) != (x & m[10]);
     bad += ((x >> 20) & 0x7ff) != ((x >> 20) & m[11]);
+    bad += ((x >> 28) & 0xff) != ((x >> 28) & m[0]);    /* the shift already cleared the mask */
+    bad += ((x >> 1) & 0x7fffffff) != ((x >> 1) & m[6]);
     bad += (x < 0x10000) != (x < m[12]);
     bad += (s < 0x10000) != (s < (int) m[12]);
     bad += (s == -0x1fe00) != (x == 0xfffe0200);

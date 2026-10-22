@@ -429,7 +429,7 @@
                        ('add || 'sub) (immok g 'addsub n)
                        'cmp (immok g 'cmp n)
                        (immok g 'log n || t32? g && !(v6m? g) && elem op '(and or) && -2147483648 <= n < 4294967296
-                        && t2imm? (-1 - n)))   ; bic, orn
+                        && (t2imm? (-1 - n) || op = 'and && 0 < n && 0 = n & (n + 1))))   ; bic, orn, a low run's ubfx
    (uldop sz) (sz @ 1 'ldu1 2 'ldu2 4 'ldu4 'ld)
    (fnty g nm) (g 'sigs nm @ sig        ; return and params riding when sig'd
                 (two? sig ? ['fn <sig <>sig] '(fn)))
@@ -4574,9 +4574,20 @@
                        !(atom? (h 1) && !(charm? (h 1)) && h 1 != 'sp) ()
                        !(<f = 'mov && #f = 3 && atom? (f 2) && !(charm? (f 2)) || elem <f ldops9) ()
                        (dies? g (f 1) >>l) (<f . (h 1) . >>f))
+                 ; thumb2: a right shift masked to a low run is one ubfx; a mask the shift already
+                 ; cleared goes. bf is the shift's (source count)
+                 bf (? !(t32? g && two? f && <f = 'and && #f = 4 && f 1 = f 2 && charm? (f 3) && two? acc) ()
+                       (: a <acc m (f 3)
+                          (? !(0 < m && 0 = m & (m + 1) && two? a && a 1 = f 1) ()
+                             (<a = 'lsr && #a = 4 && charm? (a 3) && 0 < a 3 < 32) [(a 2) (a 3)]
+                             (<a = 'shr && #a = 3 && charm? (a 2) && 0 < a 2 < 32) [(a 1) (a 2)]
+                             ())))
                  (? (two? f && <f = 'mov && #f = 3 && tw && h 1 = f 1 && atom? (f 2) && !(charm? (f 2)) && f 2 != 'sp)
                     (go >>l (([tw (h 1) (f 2)] + >>h) . acc))
                     (two? cp) (go (cp . >>l) acc)
+                    (two? bf) (lg2 (f 3 + 1) @ w
+                                 (32 <= <>bf + w ? (go >l acc)
+                                    (go >l (['ubfx (f 1) <bf <>bf w] . >acc))))
                     (go >l (f . acc)))))
           (go fs ())))
    ; a word's zx4/sx4 lays nothing on a 32-bit arm: gone before the folds, so they part no pair

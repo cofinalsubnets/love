@@ -2,8 +2,8 @@
 ; Thumb-2; a 32-bit word (hw1<<16)|hw2 lays as le16(hw1) ++ le16(hw2), not le32 (t32 does it).
 ; data-processing uses the wide encodings throughout, reaching r0..r12 alike.
 ; immediates: add/sub take addw/subw #imm12 (a negative flips the op); cmp/cmn, tst and and/or/xor
-; a modified immediate (and/or also through bic/orn of the complement); else it scares (immok keeps
-; it in a register).
+; a modified immediate (and/or also through bic/orn of the complement, and a low run of ones as
+; ubfx); else it scares (immok keeps it in a register).
 
 (module 'holo
 (: ;; r12 (IP) is the far-memory and 128-bit scratch
@@ -82,7 +82,12 @@
       (: f (thumb-mimm b) nf (thumb-mimm (-1 - b))
          (? (0 <= f && elem op '(and or xor)) (thumb-dpimm (op @ 'and 0xF000 'or 0xF040 0xF080) (rn d) (rn a) f)
             (0 <= nf && elem op '(and or)) (thumb-dpimm (op @ 'and 0xF020 0xF060) (rn d) (rn a) nf)   ; bic, orn
+            (op = 'and && 0 < b < 4294967296 && 0 = b & (b + 1)) (thumb-ubfx d a 0 (thumb-runw b))   ; a low run
             (scare 'thumb-logimm [op d a b])))
+   (thumb-runw m) (: (go k v) (v = 0 ? k (go (k + 1) (v >> 1))) (go 0 m))
+   ;; ubfx d, s, #lsb, #w: w bits from lsb, zero-extended
+   (thumb-ubfx d s lsb w)
+      (t32 ((0xF3C0 | rn s) << 16 | ((lsb >> 2 & 7) << 12 | (rn d << 8 | ((lsb & 3) << 6 | (w - 1))))))
    (thumb-aluop op d a b)
       (peep thumb-alu op 0 @ base
          (? (reg? b) (thumb-alu-rrr base d a b)
@@ -419,7 +424,7 @@
           ('la . thumb-la) ('lapool . thumb-lapool)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
           ('push . thumb-push) ('pop . thumb-pop)
-          ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
+          ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
           ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
           ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
