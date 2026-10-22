@@ -436,7 +436,7 @@
                   (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
                                           ("you turn back, " + presses (g 'spent) + " in\n")),
                    0))
- slop-usage "usage: love lore slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
+ slop-usage "usage: love play slop [token] [pennies]   (what you bring; forward is k or up, q or esc leaves)"
  ; the two optional words, either order: a number is pennies, anything else the token
  (slop-args as) (:- (go as () ()) (go l tk pn) (atom? l ? [tk pn]
                  (: t <l n (unum t) (charm? n ? (go >l tk n) (go >l t pn)))))

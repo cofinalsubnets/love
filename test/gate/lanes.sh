@@ -15,6 +15,7 @@
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary.
 set -u
 
+# GNU make's: the lanes ask -p -q -k -o, which cook does not take
 MAKE=${MAKE:-make}
 
 # a lane starts only while the box has LANES_MEM_GB (8) available: a shared box runs out of
@@ -65,12 +66,15 @@ db() { $MAKE -pq MAKE=: "$@" 2>/dev/null > "$d/db"; }
 deps() { awk -v t="$1" '(index($0, t ": ") == 1 || $0 == t ":") && !/=/ { sub(/^[^:]*:/, ""); gsub(/\|/, ""); print; exit }' "$d/db"; }
 has() { case " $2 " in *" $1 "*) return 0 ;; esac; return 1; }
 
-# a gate's name is its lanes
+# a gate's name is its lanes; a group's members run as lanes, and the group answers for them
 db $args
-lanes=
+lanes= groups=
 for a in $args; do
   case $a in
-    test_extra|test_quick) for l in $(deps "$a"); do has "$l" "$lanes" || lanes="$lanes $l"; done ;;
+    test_extra|test_quick)
+      has "$a" "$groups" || groups="$groups $a"
+      deps "$a" > "$d/$a.group"
+      for l in $(cat "$d/$a.group"); do has "$l" "$lanes" || lanes="$lanes $l"; done ;;
     test_slow) slow=1 ;;
     *) has "$a" "$lanes" || lanes="$lanes $a" ;;
   esac
@@ -153,10 +157,22 @@ moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
 
-# step 4: alone, in turn
+# step 4: alone, in turn, step 1's targets old as in step 3: a lane's own make of host packs the
+# tree again and moves out/love
 for l in $late; do
-  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" -- "$l"
+  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" $oflags -- "$l"
   moved "by $l"
+done
+
+# a group is green when every member is, else red naming the red ones; its secs its slowest
+for g in $groups; do
+  gr= gs=0
+  for l in $(cat "$d/$g.group"); do
+    if [ -f "$d/$l.rc" ]; then read -r r s < "$d/$l.rc"; else r=missing s=0; fi
+    [ "$r" = 0 ] || gr="$gr${gr:+,}$l"
+    [ "$s" -gt "$gs" ] && gs=$s
+  done
+  echo "${gr:+1:}${gr:-0} $gs" > "$d/$g.rc"
 done
 
 # the summary, in the order the lanes were named
@@ -170,7 +186,7 @@ sum() {
   [ "$r" = 0 ] || red=1
   echo "$1 exit=$r secs=$s"
 }
-{ for l in $lanes; do sum "$l"; done; [ -f "$d/love-moved.rc" ] && sum love-moved; } > "$d/summary"
+{ for l in $lanes $groups; do sum "$l"; done; [ -f "$d/love-moved.rc" ] && sum love-moved; } > "$d/summary"
 grep -v 'exit=0 ' "$d/summary" > /dev/null && red=1
 cat "$d/summary"
 echo "wall=$(( $(date +%s) - t0 ))"

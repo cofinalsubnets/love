@@ -259,7 +259,7 @@
    sng (hn ? (garage-song-new (garage-tune ()) hn (wheel (clock 0))))
    pace (pacer ())
    ; the wait is the song: fed up to the lead, and a rest when the card wants nothing
-   (feed _) (song-fill hn (song-lead-of (pace! pace)) (_ \ (garage-song-feed sng)))
+   (feed _) (song-keep hn pace song-lead (_ \ (garage-song-feed sng)))
    (idle _) (? !sng (rest 30) (feed ()) 0 (rest 5))
    (press k) (rove-press g k 'fled (g \ pin g 'sign ()) garage-turn)
    _ (say out (esc + "[2J"))
@@ -275,7 +275,7 @@
    (drain-keys (),
     ttygive rove-modes,
     0))
- garage-usage "usage: love lore garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
+ garage-usage "usage: love play garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (garage-main as) (as @ () (garage-run ())
                         (say err ("garage: " + garage-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'garage (udoor 'garage garage-main garage-usage 1 1)))

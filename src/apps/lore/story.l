@@ -247,10 +247,10 @@
  (story-run lvl) (story-new lvl @ g
                     (stage (w \ h \ story-frame g w h) (c \ story-key g c) (_ \ g 'over)))
  ; the verb: a level file, or the library under a root; the page has its own door (web.l)
- story-usage "usage: love lore story [LEVEL.l | DIR]"
+ story-usage "usage: love play LEVEL.l | DIR   (a story level, or the library under a root; also love play story [LEVEL.l | DIR])"
  (story-main as)
   (: p (two? as ? <as "src/apps/lore/levels/lighthouse.l")
      lvl (two? (readdir p) ? (library p) (load-level p))
      (lvl ? (story-run lvl) (say err ("story: not a level: " + p + "\n"), 1)))
- _ ((cite 'lore 'lore-enlist) 'story (udoor 'story story-main story-usage 1 1)))
+ _ ((cite 'lore 'lore-shelve) 'story (udoor 'story story-main story-usage 1 1)))
 ) ; module story

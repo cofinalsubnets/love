@@ -1,6 +1,6 @@
 ; test/host/window.l -- a window on Xvfb, driven by a second wire (GetImage, XTEST, resize):
 ; keys, pointer, size, selections and INCR; a blit refused with no screen; then `love synth -w`
-; and `love lore corridor --window`.
+; and `love play test/lore/hall.l --window`.
 ; skips without Xvfb
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
@@ -12,7 +12,7 @@
 (: w0 {'w 1 'h 1 'paper (cask 4)}
    _ (window-own w0 'clipboard "kept", window-ask w0 'clipboard, window-ask w0 'primary)
    _ (test ([['paste "kept"] ['paste ""]] = window-events w0) (() = window-events w0)
-           (window-blit w0 (cask 4) 1 1 = 0))
+           (window-blit w0 (cask 4) 1 1 () = 0))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    _ (!(two? xv) ? (gate-skip "window: ok (no Xvfb, skipped)") 0)
@@ -139,10 +139,10 @@
    st (wfn <ph 30000)
    _ (test ([208 208 208] = before) ([255 128 0] = held) ([208 208 208] = after)
            (two? st) (0 = <st))
-   ; the corridor: l held turns the view; a click holds the mouse and its motion turns the
-   ; view, esc lets it go and leaves the corridor running, l still turning it; q ends with status 0
+   ; the world: l held turns the view; a click holds the mouse and its motion turns the
+   ; view, esc lets it go and leaves the world running, l still turning it; q ends with status 0
    _ (cleared 600)
-   pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "lore" "corridor" "--window"])
+   pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "play" "test/lore/hall.l" "--window"])
    cw (newkid 600)
    (look _) (map (i \ px cw (40 + i * 70) (60 + i * 35)) ^8)
    ; the scene up: the loading screen is black but for its ring, at the middle point alone

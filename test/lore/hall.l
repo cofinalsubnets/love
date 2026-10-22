@@ -1,4 +1,4 @@
-; the test corridor: `love lore corridor --level src/apps/lore/levels/hall.l`, played again
+; test/lore/hall.l -- the laws' hall: `love play test/lore/hall.l`, played again
 ; whenever it is saved. a love file: its words are scenery.l's, listed at its top, and its
 ; last form is the level. metres; every place [x y z], x east, y up, z north.
 (borrow 'scenery)
@@ -32,7 +32,7 @@
               (fill 0.08)
               (stripes 16 8 -1 (rgb 0.85 0.65 0.08))))))
 
-(level "the test corridor"
+(level "the test hall"
   (textures {'wall wall 'floor tiles 'ceiling panels 'door steel})
   (start [0 0 1] 0 0)
   ; the hallway, and the room past the door; the 0.2 between them is the wall
