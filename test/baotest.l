@@ -125,6 +125,8 @@
   (-7 = (edkey (tap ())))
   (-1 = (edkey (tap [27 91 68])))                                 ; left
   (-8 = (edkey (tap [27 91 65])))                                 ; up
+  (-8 = (edkey (tap [27 79 65])))  (-2 = (edkey (tap [27 79 67])))  ; up right, SS3 (application cursor mode)
+  (-5 = (edkey (tap [27 79 72])))  (-6 = (edkey (tap [27 79 70])))  ; home end, SS3
   (-5 = (edkey (tap [27 91 72])))  (-6 = (edkey (tap [27 91 70])))  ; home end
   (-5 = (edkey (tap [27 91 49 126])))  (-4 = (edkey (tap [27 91 51 126])))
   (-10 = (edkey (tap [27 91 49 59 53 72])))                       ; ctrl-home

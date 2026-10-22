@@ -2321,6 +2321,7 @@
                    !(rest 1, cue? p) 27
                    (see p @ c2
                       (? (c2 = 91) (edcsi p)
+                         (c2 = 79) (peep arrow (see p) 0)    ; SS3: application cursor mode's arrows, home, end
                          (97 <= c2 <= 122) (256 + c2)
                          (c2 = -1) 27
                          (unsee p c2, 27)))))
