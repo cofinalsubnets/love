@@ -2,9 +2,9 @@
 # test/gate/maclove.sh -- love itself on macos: love's objects linked as a mach-o here
 # (love-macos.raw), baked ON the box -- an image is its own binary's, so the bake runs where
 # the binary does -- and then asked to wake, name its kernel, run the shell, and compile C
-# natively, which on macos lays a mach-o, and against a framework, which lays dyld's; then two
-# seconds of tone through the horn, love's own AudioQueue, which must take them at the rate it
-# plays. the box is a host bee knows with the cap macos-x64
+# natively, which on macos lays a mach-o, and against a framework, which lays dyld's, the baked
+# love and dyld's exe each signed ad hoc; then two seconds of tone through the horn, love's own
+# AudioQueue, which must take them at the rate it plays. the box is a host bee knows with the cap macos-x64
 # (doc/bee.md, HOSTS), or MAC_SSH; without one the gate skips loudly.
 # usage: maclove.sh OUTDIR
 . test/gate/skip.sh
@@ -31,7 +31,8 @@ out=$($box "cd $rd && ./love -e '(+ 1 2)' && ./love -e '(show love-os)' && ./lov
   && printf '#include <stdio.h>\nint main(void) { puts(\"native\"); return 7; }\n' > h.c \
   && ./love cc h.c -o h && { ./h; echo \"rc=\$?\"; }; od -An -tx1 -N4 h | tr -d \" \" | head -1 \
   && printf 'double CFAbsoluteTimeGetCurrent(void);\nint main(void) { return CFAbsoluteTimeGetCurrent() > 7e8 ? 9 : 1; }\n' > cf.c \
-  && ./love cc -framework CoreFoundation cf.c -o cf && { ./cf; echo \"cf=\$?\"; }") \
+  && ./love cc -framework CoreFoundation cf.c -o cf && { ./cf; echo \"cf=\$?\"; } \
+  && codesign -v love.raw love cf && echo signed") \
   || fail "the baked love on the box -- got: $out"
 cat > "$ho/maclove-tone.l" <<'EOF'
 (: (s16 v) (: u (v < 0 ? (v + 65536) v) (string [(u & 255) (u >> 8)]))
@@ -59,6 +60,7 @@ Darwin
 native
 rc=7
 cffaedfe
-cf=9'
+cf=9
+signed'
 [ "$out" = "$want" ] || fail "the baked love answered -- got: [$out]"
-echo "$t: love woke on macos, named its kernel, ran lush, compiled a mach-o and dyld's; $horn"
+echo "$t: love woke on macos, named its kernel, ran lush, compiled a mach-o and dyld's, each signed; $horn"
