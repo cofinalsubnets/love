@@ -145,7 +145,7 @@
    pc (tether ["env" "HORN=none" ("DISPLAY=:" + show dn) "out/love" "play" "test/lore/hall.l" "--window"])
    cw (newkid 600)
    (look _) (map (i \ px cw (40 + i * 70) (60 + i * 35)) ^8)
-   ; the scene up: the loading screen is black but for its ring, at the middle point alone
+   ; the scene up: the loading screen is black but for the moon in the middle; the hall, once drawn, is lit
    (scene n) (look () @ v (any (i \ i != 4 && two? (v i) && v i != [0 0 0]) ^8 || n < 1 ? v (rest 100, scene (n - 1))))
    v0 (scene 600)
    _ (fake 2 46, rest 1000, fake 3 46)                            ; l, held a second
