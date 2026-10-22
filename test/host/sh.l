@@ -692,6 +692,37 @@
    _ (landed? t ? (catch t) (freeze t))
    (test (has? s "a本b|") !(has? s "a日本b|") !(has? s "\xef\xbf\xbd")))
 
+; an arrow in application cursor mode (ESC O A, as a remote shell leaves the terminal) walks
+; the history as ESC [ A does, and a command that sets the mode finds it reset at the next
+; prompt; a scratch HOME keeps the history
+(: (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
+   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   e (string 27)
+   home0 ("" + getenv "HOME")
+   d "out/.lush-t13"
+   _ (hark ["out/love" "out/lush" "-c" ("mkdir -p " + d + "; rm -f " + d + "/.lush_history")])
+   _ (setenv "HOME" d)
+   r (tether ["out/love" "lush"])
+   _ (setenv "HOME" home0)
+   m >r
+   _ (settty m 24 80)
+   sink (jug 0)
+   t (twirl (_ \ pump m sink) 0)
+   _ (rest 600)
+   _ (type m "echo ss3''-up\r")
+   _ (rest 500)
+   _ (type m (e + "OA\r"))
+   _ (rest 700)
+   _ (type m "printf '\\033[?1h\\033='\r")
+   _ (rest 700)
+   s (slurp sink)
+   _ (still <r 9)
+   _ (landed? t ? (catch t) (freeze t))
+   n (findsub s "ss3-up")
+   k (findsub s (e + "[?1h" + e + "="))
+   (test (0 <= n) (has? (snip s (n + 1) #s) "ss3-up") !(has? s "OA: not found")
+         (0 <= k) (has? (snip s k #s) (e + "[?1l" + e + ">"))))
+
 ; PATH unset searches the default path, never the cwd
 (: r (hark ["out/love" "out/lush" "-c" "d=out/.lush-t9; mkdir -p $d; printf '#!/bin/sh\\necho planted\\n' > $d/zz-qq-plant; chmod 755 $d/zz-qq-plant; cd $d; unset PATH; zz-qq-plant; echo st=$?"])
    (test ("st=127\n" = >r)))

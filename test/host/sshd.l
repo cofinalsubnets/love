@@ -40,9 +40,11 @@
    a (run "id" ["-T" (user + "@127.0.0.1") "echo out-$((6*7)); echo err >&2; exit 3"])
    _ (test (has? <a "out-42") (has? <a "err") (a 1 = 3))
    ; a ^D on the client's terminal is the channel's eof
-   b (: r (ssh "id" ["-T" (user + "@127.0.0.1") "cat; echo done"])
-        _ (rest 300) _ (say >r "piped\n\x04") _ (flush >r)
-        t (slurp >r) [t <(h-waitfor <r)])
+   b (: r (ssh "id" ["-T" (user + "@127.0.0.1") "echo ready; cat; echo done"])
+        (upto t) (has? t "ready" ? t (see >r @ c (c < 0 ? t (upto (t + string c)))))
+        t0 (upto "")                                              ; the channel's command runs
+        _ (say >r "piped\n\x04") _ (flush >r)
+        t (slurp >r) [(t0 + t) <(h-waitfor <r)])
    _ (test (has? <b "piped") (has? <b "done") (b 1 = 0))
    c (: r (ssh "id" ["-t" (user + "@127.0.0.1") "tty; stty size"])
         _ (settty >r 30 100)

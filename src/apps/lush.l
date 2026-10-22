@@ -2601,6 +2601,7 @@
                          (sh-loop S) "" nhist)
                (raw 0,                                          ; cooked for the command
                 (sh-eval-top S) full >pr,
+                puts "\e[?1l\e>",                             ; cursor keys and keypad normal: a child may leave them set
                 raw 1,
                 (sh-loop S) "" nhist))))))                    ; re-raw for the next prompt
 ) ; module 'lush
