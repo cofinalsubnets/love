@@ -844,8 +844,8 @@
    q2 (map (j \ q j + 0.5 * dt * (j = 0 ? (dq 0) (wq (j - 1)))) ^4) ql (sqrt (net (map sq q2)))
    _ (pins b 'p p 'v (still ? [0.0 0.0 0.0] v) 'q (map (x \ x / ql) q2) 'rest (still ? 1 0) 'pk ())
    (e 2 > 1.2 ? (mix-cry st "bounce" [(p 0) (p 2)]) st))
- ; ..its mesh about its middle: orange, three seams round it standing just proud, every
- ; triangle's front outward
+ ; ..its mesh about its middle: orange, its seams standing just proud, two round it crossing
+ ; square and one curved about either pole of the first, every triangle's front outward
  (ball-mesh _) (: r ball-r nl 8 nm 16 skin [0.85 0.33 0.08] seam [0.07 0.04 0.03]
    (vx p k col) [(k * p 0) (k * p 1) (k * p 2) 0.0 0.0 (p 0) (p 1) (p 2) (col 0) (col 1) (col 2)]
    body (map (q \ (: a (pi * (q // (nm + 1) / nl - 0.5)) o (tau * (q % (nm + 1)) / nm)
@@ -856,16 +856,17 @@
                         [[a b c -1] [a c d -1]]))
                  ^(nl * nm)))
    m 32
-   (band u v w) (cats (map (j \ (: t (tau * j / m) c (c+ (c* (cos t) u) (c* (sin t) v))
-                                  [(vx (unit (c+ c (c* 0.07 w))) (1.015 * r) seam) (vx (unit (c+ c (c* -0.07 w))) (1.015 * r) seam)]))
-                       ^(m + 1)))
+   (band u v w g) (cats (map (j \ (: t (tau * j / m) c (c+ (c* (cos t) u) (c* (sin t) v)) (e h) (c+ (c* (sin h) c) (c* (cos h) w))
+                                    [(vx (e (g - 0.07)) (1.015 * r) seam) (vx (e (g + 0.07)) (1.015 * r) seam)]))
+                         ^(m + 1)))
    (btris o) (cats (map (j \ (: a (o + 2 * j) [[a (a + 1) (a + 3) -1] [a (a + 3) (a + 2) -1]])) ^m))
-   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] o1 #body o2 (o1 + 2 * (m + 1)) o3 (o2 + 2 * (m + 1))
-   vs (body + band x z y + band y z x + band x y z)
+   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] g (0.5 * pi) cg 0.995
+   o1 #body o2 (o1 + 2 * (m + 1)) o3 (o2 + 2 * (m + 1)) o4 (o3 + 2 * (m + 1))
+   vs (body + band x z y g + band y z x g + band x z y cg + band x z (c* -1.0 y) cg)
    (out t) (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2)) e (take 3 a)
      (dot (cross (c+ (take 3 c) (c* -1.0 e)) (c+ (take 3 b) (c* -1.0 e))) (c+ e (c+ (take 3 b) (take 3 c))) < 0.0
       ? [(t 0) (t 2) (t 1) (t 3)] t))
-   (mesh-pack (mesh vs (map out (bt + btris o1 + btris o2 + btris o3)))))
+   (mesh-pack (mesh vs (map out (bt + btris o1 + btris o2 + btris o3 + btris o4)))))
  ; ..the ball's mesh turned and moved to where it is, lit there
  (ball-pk sc b) (: pk (sc 'ball) c (pk 'cols) p (b 'p) q (b 'q) w (q 0) x (q 1) y (q 2) z (q 3)
    R [[(1.0 - 2.0 * (y * y + z * z)) (2.0 * (x * y - w * z)) (2.0 * (x * z + w * y))]
