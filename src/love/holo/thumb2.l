@@ -46,9 +46,16 @@
               'adds 0xEB10 'subs 0xEBB0
               'adc 0xEB40 'adcs 0xEB50
               'sbc 0xEB60 'sbcs 0xEB70
-              'ors 0xEA50}
+              'ors 0xEA50 'ands 0xEA10 'eors 0xEA90
+              'bic 0xEA20 'bics 0xEA30 'orn 0xEA60
+              'rsb 0xEBC0 'rsbs 0xEBD0}
    (thumb-alu-rrr base d a b)                                 ; hw1 = base|Rn(a); hw2 = Rd<<8 | Rm(b)
       (: dn (rn d) an (rn a) bn (rn b) (t32 ((base | an) << 16 | (dn << 8 | bn))))
+   ;; ..and b shifted first: op d, a, b, <sh> #k
+   (thumb-alush op d a b sh k)
+      (: ty (sh @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift sh))
+         base (look thumb-alu op 'badop)
+         (t32 ((base | rn a) << 16 | ((k >> 2 & 7) << 12 | (rn d << 8 | ((k & 3) << 6 | (ty << 4 | rn b)))))))
    ;; addw/subw (T4) #imm12; wider chunks by 4095 -- no flags written, and only the first step reads a
    (thumb-addsub-imm op d a imm)
       (: pos (imm < 0 ? -imm imm)
@@ -92,7 +99,10 @@
       (peep thumb-alu op 0 @ base
          (? (reg? b) (thumb-alu-rrr base d a b)
             (elem op '(add sub)) (thumb-addsub-imm op d a b)
-            (thumb-logimm op d a b)))
+            (elem op '(and or xor)) (thumb-logimm op d a b)
+            ; the rest take a modified immediate only: the register form's op and S bits
+            (thumb-mimm b @ k
+               (k < 0 ? (scare 'thumb-alu-imm [op d a b]) (thumb-dpimm (0xF000 | (base & 0x1F0)) (rn d) (rn a) k)))))
 
    (thumb-cmp a b)
       (rn a @ an
@@ -108,6 +118,9 @@
    (thumb-umull dl dh a b)
       (: ln (rn dl) hn (rn dh) an (rn a) bn (rn b)
          (t32 ((0xFBA0 | an) << 16 | (ln << 12 | (hn << 8 | bn)))))
+   (thumb-umlal dl dh a b)                                    ; dh:dl += a*b
+      (: ln (rn dl) hn (rn dh) an (rn a) bn (rn b)
+         (t32 ((0xFBE0 | an) << 16 | (ln << 12 | (hn << 8 | bn)))))
    (thumb-mla d a b acc)                                      ; d = a*b + acc
       (: dn (rn d) an (rn a) bn (rn b) cn (rn acc)
          (t32 ((0xFB00 | an) << 16 | (cn << 12 | (dn << 8 | bn)))))
@@ -187,6 +200,21 @@
 
    (thumb-push s) (rn s @ st (t32 (0xF84D0000 | (st << 12 | (0xD00 | 4)))))   ; STR Rt,[sp,#-4]!  P=1 U=0 W=1
    (thumb-pop  d) (rn d @ dt (t32 (0xF85D0000 | (dt << 12 | (0xB00 | 4)))))   ; LDR Rt,[sp],#4    P=0 U=1 W=1
+   ;; a register list: r0..r7 with lr (push) or pc (pop) is 16-bit, two or more others .W, one
+   ;; other the single-register form
+   (thumb-rmask rs) (foldl (\ m r (m | (1 << rn r))) 0 rs)
+   (thumb-pushm rs)
+      (: m (thumb-rmask rs)
+         (? (0 = (m & 0xBF00)) (t16 (0xB400 | ((m >> 14 & 1) << 8 | (m & 255))))
+            (0 < (m & 0xA000)) (scare 'thumb-push-list rs)
+            (atom? >rs) (thumb-push <rs)
+            (t32 (0xE92D0000 | m))))
+   (thumb-popm rs)
+      (: m (thumb-rmask rs)
+         (? (0 = (m & 0x7F00)) (t16 (0xBC00 | ((m >> 15 & 1) << 8 | (m & 255))))
+            (0 < (m & 0x2000) || (m & 0xC000) = 0xC000) (scare 'thumb-pop-list rs)
+            (atom? >rs) (thumb-pop <rs)
+            (t32 (0xE8BD0000 | m))))
 
    ;; w=4 is a no-op on a 32-bit target
    (thumb-sxr w d s) (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (rn d << 8 | rn s)))   ; sxtb / sxth Rd, Rm
@@ -211,7 +239,11 @@
          hw2 ((c >> 2 & 7) << 12 | (rn d << 8 | ((c & 3) << 6 | (ty << 4 | rn s))))
          (t32 (0xEA4F0000 | hw2)))
    ;; the three-register twins (lsl d s c): a count of 0 is the move (lsr/asr #0 would mean 32)
-   (thumb-sh3 op d s c) (c = 0 ? (thumb-mov d s) (thumb-shr3 op d s c))
+   (thumb-sh3 op d s c) (? (reg? c) (thumb-shv3 op d s c) (c = 0) (thumb-mov d s) (thumb-shr3 op d s c))
+   ;; ..and a register count: lsl.w d, s, c
+   (thumb-shv3 op d s c)
+      (: base (op @ 'shl 0xFA00 'shr 0xFA20 'sar 0xFA40 'ror 0xFA60 (scare 'badshiftv op))
+         (t32 ((base | rn s) << 16 | (0xF000 | (rn d << 8 | rn c)))))
    ;; any count register, unguarded: the pair shifts keep their high word in r1
    (thumb-shiftv op d c)
       (: dn (rn d) cn (rn c)
@@ -423,7 +455,8 @@
           ('lea . thumb-lea) ('lean . thumb-lea)
           ('la . thumb-la) ('lapool . thumb-lapool)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
-          ('push . thumb-push) ('pop . thumb-pop)
+          ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
+          ('umlal . thumb-umlal) ('alush . thumb-alush)
           ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
           ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)

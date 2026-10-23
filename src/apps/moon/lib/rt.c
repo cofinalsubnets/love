@@ -145,7 +145,7 @@ static uint64_t stick(uint64_t m, int32_t d) {
  lost = m & (sl64(1, d) - 1);
  return sr64(m, d) | (lost != 0); }
 
-static uint64_t dadd_any(uint64_t ua, uint64_t ub) {
+uint64_t __dadd_any(uint64_t ua, uint64_t ub) {
  uint32_t sa = DSGN(ua), sb = DSGN(ub), ts;
  int32_t ea = DEXP(ua), eb = DEXP(ub), d;
  uint64_t ma = ua & MANT, mb = ub & MANT, m;
@@ -176,46 +176,7 @@ static uint64_t dadd_any(uint64_t ua, uint64_t ub) {
  norm55(&m, &ea);
  return pack(sa, ea, m); }
 
-uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub) {
-#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
- /* v7-M: two normals whose sum stays normal, in 32-bit words: significands at bit 62, ten guard bits.
-  * few names, each word reused in place: x then the sum in ah:al, y in bh:bl */
- uint32_t ah = (uint32_t) (ua >> 32), al = (uint32_t) ua, bh = (uint32_t) (ub >> 32), bl = (uint32_t) ub;
- uint32_t e = (ah >> 20) & 0x7ff, s = (bh >> 20) & 0x7ff, t, sg;
- if (e - 1 < 0x7fe && s - 1 < 0x7fe) {
-   if ((ah & 0x7fffffff) < (bh & 0x7fffffff) || ((ah & 0x7fffffff) == (bh & 0x7fffffff) && al < bl)) {
-     t = ah; ah = bh; bh = t; t = al; al = bl; bl = t; t = e; e = s; s = t; }
-   sg = (ah & 0x80000000u) | (ah ^ bh) >> 31;      /* the sign, and bit 0 set for a subtract */
-   ah = ((ah & 0xfffff) | 0x100000) << 10 | al >> 22; al <<= 10;
-   bh = ((bh & 0xfffff) | 0x100000) << 10 | bl >> 22; bl <<= 10;
-   s = e - s;
-   if (s >= 64) { bl = 1; bh = 0; }               /* all of it sticky */
-   else if (s >= 32) { s -= 32; t = bl != 0 || (s && bh << (32 - s)); bl = (s ? bh >> s : bh) | t; bh = 0; }
-   else if (s) { t = (bl << (32 - s)) != 0; bl = (bl >> s | bh << (32 - s)) | t; bh >>= s; }
-   t = al;
-   if (!(sg & 1)) {
-     al += bl; ah += bh + (al < t);
-     if (ah >> 31) { al = al >> 1 | ah << 31 | (al & 1); ah >>= 1; e++; } }
-   else {
-     al -= bl; ah -= bh + (t < bl);
-     if ((ah | al) == 0) return 0;
-     s = (ah ? (uint32_t) __builtin_clz(ah) : 32 + (uint32_t) __builtin_clz(al)) - 1;   /* the top onto bit 62 */
-     if (s >= 32) { ah = al << (s - 32); al = 0; }
-     else if (s) { ah = ah << s | al >> (32 - s); al <<= s; }
-     e -= s; }
-   t = al & 0x3ff;
-   al = al >> 10 | ah << 22; ah >>= 10;
-   if (t > 0x200 || (t == 0x200 && (al & 1))) {
-     al++; ah += al == 0;
-     if (ah >> 21) { ah >>= 1; e++; } }           /* only 2^53 carries out: its low word is already 0 */
-   if (e - 1 < 0x7fe)
-     return ((uint64_t) ((sg & 0x80000000u) | e << 20 | (ah & 0xfffff)) << 32) | al; }
-#endif
- return dadd_any(ua, ub); }
-
-uint64_t __aeabi_dsub(uint64_t ua, uint64_t ub) { return __aeabi_dadd(ua, ub ^ SGNB); }
-
-static uint64_t dmul_any(uint64_t ua, uint64_t ub) {
+uint64_t __dmul_any(uint64_t ua, uint64_t ub) {
  uint32_t s = DSGN(ua) ^ DSGN(ub);
  int32_t ea = DEXP(ua), eb = DEXP(ub), sh, e;
  uint64_t ma = ua & MANT, mb = ub & MANT, hi, lo, m;
@@ -237,29 +198,255 @@ static uint64_t dmul_any(uint64_t ua, uint64_t ub) {
  else          { e = ea + eb - 1023; m = (hi << 15) | (lo >> 49); m |= (lo << 15) != 0; }
  return pack(s, e, m); }
 
-uint64_t __aeabi_dmul(uint64_t ua, uint64_t ub) {
+uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub);
+uint64_t __aeabi_dsub(uint64_t ua, uint64_t ub);
+uint64_t __aeabi_dmul(uint64_t ua, uint64_t ub);
+
 #if defined(__arm__) && !defined(__ARM_ARCH_6M__)
- /* v7-M: two normals whose product stays normal, in 32-bit words over UMULL */
- uint32_t ah = (uint32_t) (ua >> 32), al = (uint32_t) ua, bh = (uint32_t) (ub >> 32), bl = (uint32_t) ub;
- uint32_t fa = (ah >> 20) & 0x7ff, fb = (bh >> 20) & 0x7ff;
- if (fa - 1 < 0x7fe && fb - 1 < 0x7fe) {
-   uint32_t xh = ah << 11 | al >> 21 | 0x80000000u, xl = al << 11;
-   uint32_t yh = bh << 11 | bl >> 21 | 0x80000000u, yl = bl << 11;
-   uint64_t ll = (uint64_t) xl * yl, lh = (uint64_t) xl * yh, hl = (uint64_t) xh * yl;
-   uint64_t mid = (ll >> 32) + (uint32_t) lh + (uint32_t) hl;
-   uint64_t hi = (uint64_t) xh * yh + (lh >> 32) + (hl >> 32) + (mid >> 32);
-   uint32_t lost = (uint32_t) ll | (uint32_t) mid, rb;
-   int32_t f = (int32_t) (fa + fb) - 1023;
-   if (hi >> 63) f++; else hi <<= 1;             /* the top onto bit 63; the bit shifted in is sticky */
-   rb = (uint32_t) hi & 0x7ff;
-   hi >>= 11;
-   if (rb > 0x400 || (rb == 0x400 && (lost || (hi & 1)))) {
-     hi++;
-     if (hi >> 53) { hi >>= 1; f++; } }
-   if ((uint32_t) f - 1 < 0x7fe)
-     return ((uint64_t) ((ah ^ bh) & 0x80000000u) << 32) + ((uint64_t) (uint32_t) f << 52) + (hi & MANT); }
+/* v7-M: two normals whose sum stays normal, in 32-bit words: significands at bit 62, ten guard
+ * bits, the larger magnitude in r1:r0 and its exponent in r4; anything else goes to __dadd_any
+ * with the arguments as they came */
+asm(".text\n"
+    ".globl __aeabi_dsub\n.type __aeabi_dsub, %function\n.thumb_func\n"
+    "__aeabi_dsub:\n"
+    "eor r3, r3, #0x80000000\n"                     /* on into dadd */
+    ".globl __aeabi_dadd\n.type __aeabi_dadd, %function\n.thumb_func\n"
+    "__aeabi_dadd:\n"
+    "push {r0-r7, lr}\n"
+    "movw r12, #0x7fe\n"
+    "ubfx r4, r1, #20, #11\n"
+    "ubfx r5, r3, #20, #11\n"
+    "sub r6, r4, #1\n"
+    "cmp r6, r12\n"
+    "bhs 15f\n"
+    "sub r6, r5, #1\n"
+    "cmp r6, r12\n"
+    "bhs 16f\n"
+    "bic r6, r1, #0x80000000\n"
+    "bic r7, r3, #0x80000000\n"
+    "cmp r6, r7\n"
+    "bhi 2f\n"
+    "bne 1f\n"
+    "cmp r0, r2\n"
+    "bhs 2f\n"
+    "1:\n"                                          /* swap */
+    "mov r6, r1\nmov r1, r3\nmov r3, r6\n"
+    "mov r6, r0\nmov r0, r2\nmov r2, r6\n"
+    "mov r6, r4\nmov r4, r5\nmov r5, r6\n"
+    "2:\n"
+    "and r6, r1, #0x80000000\n"
+    "eor r7, r1, r3\n"
+    "orr r7, r6, r7, lsr #31\n"                     /* the sign, and bit 0 set for a subtract */
+    "lsl r1, r1, #11\norr r1, r1, r0, lsr #21\norr r1, r1, #0x80000000\nlsr r1, r1, #1\nlsl r0, r0, #10\n"
+    "lsl r3, r3, #11\norr r3, r3, r2, lsr #21\norr r3, r3, #0x80000000\nlsr r3, r3, #1\nlsl r2, r2, #10\n"
+    "sub r5, r4, r5\n"                              /* the distance; a register shift by 32 is 0 */
+    "cmp r5, #32\n"
+    "bhs 3f\n"
+    "rsb r6, r5, #32\n"
+    "lsl lr, r2, r6\n"
+    "lsr r2, r2, r5\n"
+    "lsl r6, r3, r6\n"
+    "orr r2, r2, r6\n"
+    "lsr r3, r3, r5\n"
+    "b 4f\n"
+    "3:\n"
+    "cmp r5, #64\n"
+    "bhs 5f\n"
+    "sub r5, r5, #32\n"
+    "rsb r6, r5, #32\n"
+    "lsl lr, r3, r6\n"
+    "orr lr, lr, r2\n"
+    "lsr r2, r3, r5\n"
+    "mov r3, #0\n"
+    "4:\n"
+    "cmp lr, #0\n"                                  /* what shifted out is sticky */
+    "beq 6f\n"
+    "orr r2, r2, #1\n"
+    "b 6f\n"
+    "5:\n"                                          /* all of it sticky */
+    "mov r2, #1\n"
+    "mov r3, #0\n"
+    "6:\n"
+    "tst r7, #1\n"
+    "bne 7f\n"
+    "adds r0, r0, r2\n"
+    "adc r1, r1, r3\n"
+    "cmp r1, #0\n"
+    "bge 10f\n"
+    "and r6, r0, #1\n"                              /* a carry onto bit 63: back one */
+    "orr r0, r6, r0, lsr #1\n"
+    "orr r0, r0, r1, lsl #31\n"
+    "lsr r1, r1, #1\n"
+    "add r4, r4, #1\n"
+    "b 10f\n"
+    "7:\n"
+    "subs r0, r0, r2\n"
+    "sbc r1, r1, r3\n"
+    "orrs r6, r0, r1\n"
+    "beq 13f\n"
+    "clz r6, r1\n"                                  /* the top onto bit 62 */
+    "cmp r1, #0\n"
+    "bne 8f\n"
+    "clz r6, r0\n"
+    "add r6, r6, #32\n"
+    "8:\n"
+    "sub r6, r6, #1\n"
+    "sub r4, r4, r6\n"
+    "cmp r6, #32\n"
+    "bhs 11f\n"
+    "rsb r5, r6, #32\n"
+    "lsl r1, r1, r6\n"
+    "lsr r5, r0, r5\n"
+    "orr r1, r1, r5\n"
+    "lsl r0, r0, r6\n"
+    "b 10f\n"
+    "11:\n"
+    "sub r5, r6, #32\n"
+    "lsl r1, r0, r5\n"
+    "mov r0, #0\n"
+    "10:\n"                                         /* round to nearest-even on the ten guard bits */
+    "ubfx r6, r0, #0, #10\n"
+    "lsr r0, r0, #10\n"
+    "orr r0, r0, r1, lsl #22\n"
+    "lsr r1, r1, #10\n"
+    "cmp r6, #0x200\n"
+    "bhi 12f\n"
+    "bne 14f\n"
+    "tst r0, #1\n"
+    "beq 14f\n"
+    "12:\n"
+    "adds r0, r0, #1\n"
+    "bcc 14f\n"
+    "add r1, r1, #1\n"
+    "cmp r1, #0x200000\n"                           /* only 2^53 carries out: its low word is 0 */
+    "bne 14f\n"
+    "lsr r1, r1, #1\n"
+    "add r4, r4, #1\n"
+    "14:\n"
+    "sub r6, r4, #1\n"
+    "cmp r6, r12\n"
+    "bhs 9f\n"
+    "bic r1, r1, #0x100000\n"
+    "orr r1, r1, r4, lsl #20\n"
+    "and r7, r7, #0x80000000\n"
+    "orr r1, r1, r7\n"
+    "add sp, sp, #16\n"
+    "pop {r4-r7, pc}\n"
+    "13:\n"
+    "mov r0, #0\n"
+    "mov r1, #0\n"
+    "add sp, sp, #16\n"
+    "pop {r4-r7, pc}\n"
+    "15:\n"                                         /* a zero and a normal answers the normal */
+    "orrs r6, r0, r1, lsl #1\n"
+    "bne 9f\n"
+    "sub r6, r5, #1\n"
+    "cmp r6, r12\n"
+    "bhs 9f\n"
+    "mov r0, r2\n"
+    "mov r1, r3\n"
+    "add sp, sp, #16\n"
+    "pop {r4-r7, pc}\n"
+    "16:\n"
+    "orrs r6, r2, r3, lsl #1\n"
+    "bne 9f\n"
+    "add sp, sp, #16\n"
+    "pop {r4-r7, pc}\n"
+    "9:\n"
+    "pop {r0-r7, lr}\n"
+    "b __dadd_any\n");
+
+/* v7-M: two normals whose product stays normal, over umull/umlal: x = 1:mant << 11 in r6:r0, y in
+ * r7:r2, the product's top 64 bits in r2:r5 and its low 64, sticky, in r1 */
+asm(".text\n"
+    ".globl __aeabi_dmul\n.type __aeabi_dmul, %function\n.thumb_func\n"
+    "__aeabi_dmul:\n"
+    "push {r0-r7, lr}\n"
+    "movw r12, #0x7fe\n"
+    "ubfx r4, r1, #20, #11\n"
+    "ubfx r5, r3, #20, #11\n"
+    "sub r6, r4, #1\n"
+    "cmp r6, r12\n"
+    "bhs 5f\n"
+    "sub r6, r5, #1\n"
+    "cmp r6, r12\n"
+    "bhs 6f\n"
+    "eor lr, r1, r3\n"                              /* the sign in bit 31 */
+    "add r4, r4, r5\n"
+    "lsl r6, r1, #11\norr r6, r6, r0, lsr #21\norr r6, r6, #0x80000000\nlsl r0, r0, #11\n"
+    "lsl r7, r3, #11\norr r7, r7, r2, lsr #21\norr r7, r7, #0x80000000\nlsl r2, r2, #11\n"
+    "umull r1, r3, r0, r2\n"
+    "mov r5, #0\n"
+    "umlal r3, r5, r0, r7\n"
+    "umull r0, r2, r6, r2\n"
+    "adds r3, r3, r0\n"
+    "adcs r5, r5, r2\n"
+    "mov r2, #0\n"
+    "adc r2, r2, r2\n"
+    "umlal r5, r2, r6, r7\n"
+    "orr r1, r1, r3\n"
+    "subw r4, r4, #1023\n"
+    "cmp r2, #0\n"                                  /* the top onto bit 63 */
+    "blt 1f\n"
+    "adds r5, r5, r5\n"
+    "adc r2, r2, r2\n"
+    "b 2f\n"
+    "1:\n"
+    "add r4, r4, #1\n"
+    "2:\n"
+    "ubfx r3, r5, #0, #11\n"
+    "lsr r5, r5, #11\n"
+    "orr r5, r5, r2, lsl #21\n"
+    "lsr r2, r2, #11\n"
+    "cmp r3, #0x400\n"
+    "bhi 3f\n"
+    "bne 4f\n"
+    "and r3, r5, #1\n"
+    "orrs r3, r3, r1\n"
+    "beq 4f\n"
+    "3:\n"
+    "adds r5, r5, #1\n"
+    "bcc 4f\n"
+    "add r2, r2, #1\n"
+    "cmp r2, #0x200000\n"
+    "bne 4f\n"
+    "lsr r2, r2, #1\n"
+    "add r4, r4, #1\n"
+    "4:\n"
+    "sub r3, r4, #1\n"
+    "cmp r3, r12\n"
+    "bhs 9f\n"
+    "bic r2, r2, #0x100000\n"
+    "orr r1, r2, r4, lsl #20\n"
+    "and lr, lr, #0x80000000\n"
+    "orr r1, r1, lr\n"
+    "mov r0, r5\n"
+    "add sp, sp, #16\n"
+    "pop {r4-r7, pc}\n"
+    "5:\n"                                          /* a zero by a normal is a signed zero */
+    "orrs r6, r0, r1, lsl #1\n"
+    "bne 9f\n"
+    "sub r6, r5, #1\n"
+    "cmp r6, r12\n"
+    "bhs 9f\n"
+    "b 7f\n"
+    "6:\n"
+    "orrs r6, r2, r3, lsl #1\n"
+    "bne 9f\n"
+    "7:\n"
+    "eor r1, r1, r3\n"
+    "and r1, r1, #0x80000000\n"
+    "mov r0, #0\n"
+    "add sp, sp, #16\n"
+    "pop {r4-r7, pc}\n"
+    "9:\n"
+    "pop {r0-r7, lr}\n"
+    "b __dmul_any\n");
+#else
+uint64_t __aeabi_dadd(uint64_t ua, uint64_t ub) { return __dadd_any(ua, ub); }
+uint64_t __aeabi_dsub(uint64_t ua, uint64_t ub) { return __dadd_any(ua, ub ^ SGNB); }
+uint64_t __aeabi_dmul(uint64_t ua, uint64_t ub) { return __dmul_any(ua, ub); }
 #endif
- return dmul_any(ua, ub); }
 
 uint64_t __aeabi_ddiv(uint64_t ua, uint64_t ub) {
  uint32_t s = DSGN(ua) ^ DSGN(ub);
@@ -286,6 +473,7 @@ uint64_t __aeabi_ddiv(uint64_t ua, uint64_t ub) {
  else e = ea - eb + 1022;
  return pack(s, e, q); }
 
+#if !defined(__arm__) || defined(__ARM_ARCH_6M__)
 /* -1, 0, 1 by value, 2 unordered; in 32-bit words, both zeros equal */
 static int32_t dord(uint64_t ua, uint64_t ub) {
  uint32_t ah = (uint32_t) (ua >> 32), al = (uint32_t) ua, bh = (uint32_t) (ub >> 32), bl = (uint32_t) ub;
@@ -296,13 +484,84 @@ static int32_t dord(uint64_t ua, uint64_t ub) {
  if ((ah ^ bh) >> 31) return ah >> 31 ? -1 : 1;
  c = am != bm ? (am < bm ? -1 : 1) : al != bl ? (al < bl ? -1 : 1) : 0;
  return ah >> 31 ? -c : c; }
+#endif
 
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
+int32_t __aeabi_dcmpeq(uint64_t a, uint64_t b);
+int32_t __aeabi_dcmplt(uint64_t a, uint64_t b);
+int32_t __aeabi_dcmple(uint64_t a, uint64_t b);
+int32_t __aeabi_dcmpge(uint64_t a, uint64_t b);
+int32_t __aeabi_dcmpgt(uint64_t a, uint64_t b);
+int32_t __aeabi_dcmpun(uint64_t a, uint64_t b);
+/* v7-M: dord's order as k = ord + 1 in r6; each entry's r12 holds the k it answers 1 for, a bit each */
+asm(".text\n"
+    ".globl __aeabi_dcmpeq\n.type __aeabi_dcmpeq, %function\n.thumb_func\n"
+    "__aeabi_dcmpeq:\nmov r12, #2\nb 1f\n"
+    ".globl __aeabi_dcmplt\n.type __aeabi_dcmplt, %function\n.thumb_func\n"
+    "__aeabi_dcmplt:\nmov r12, #1\nb 1f\n"
+    ".globl __aeabi_dcmple\n.type __aeabi_dcmple, %function\n.thumb_func\n"
+    "__aeabi_dcmple:\nmov r12, #3\nb 1f\n"
+    ".globl __aeabi_dcmpge\n.type __aeabi_dcmpge, %function\n.thumb_func\n"
+    "__aeabi_dcmpge:\nmov r12, #6\nb 1f\n"
+    ".globl __aeabi_dcmpgt\n.type __aeabi_dcmpgt, %function\n.thumb_func\n"
+    "__aeabi_dcmpgt:\nmov r12, #4\nb 1f\n"
+    ".globl __aeabi_dcmpun\n.type __aeabi_dcmpun, %function\n.thumb_func\n"
+    "__aeabi_dcmpun:\nmov r12, #8\n"
+    "1:\n"
+    "push {r4-r6}\n"
+    "bic r4, r1, #0x80000000\n"
+    "bic r5, r3, #0x80000000\n"
+    "cmn r4, #0x100000\n"                           /* an exponent of all ones: inf or nan */
+    "bmi 6f\n"
+    "2:\n"
+    "cmn r5, #0x100000\n"
+    "bmi 7f\n"
+    "3:\n"
+    "orr r6, r4, r5\n"
+    "orr r6, r6, r0\n"
+    "orrs r6, r6, r2\n"
+    "beq 10f\n"                                     /* both zeros are equal */
+    "eor r6, r1, r3\n"
+    "cmp r6, #0\n"
+    "blt 4f\n"
+    "cmp r4, r5\n"
+    "bne 5f\n"
+    "cmp r0, r2\n"
+    "beq 10f\n"
+    "5:\n"
+    "bhi 4f\n"
+    "eor r1, r1, #0x80000000\n"                     /* the smaller magnitude reads the other sign */
+    "4:\n"
+    "asr r6, r1, #31\n"                             /* a's sign: -1 -> 0, 1 -> 2 */
+    "add r6, r6, #1\n"
+    "lsl r6, r6, #1\n"
+    "b 11f\n"
+    "10:\n"
+    "mov r6, #1\n"
+    "b 11f\n"
+    "12:\n"
+    "mov r6, #3\n"
+    "11:\n"
+    "lsr r0, r12, r6\n"
+    "and r0, r0, #1\n"
+    "pop {r4-r6}\n"
+    "bx lr\n"
+    "6:\n"
+    "orrs r6, r0, r1, lsl #12\n"
+    "bne 12b\n"
+    "b 2b\n"
+    "7:\n"
+    "orrs r6, r2, r3, lsl #12\n"
+    "bne 12b\n"
+    "b 3b\n");
+#else
 int32_t __aeabi_dcmpeq(uint64_t a, uint64_t b) { return dord(a, b) == 0; }
 int32_t __aeabi_dcmplt(uint64_t a, uint64_t b) { return dord(a, b) == -1; }
 int32_t __aeabi_dcmple(uint64_t a, uint64_t b) { return (uint32_t) (dord(a, b) + 1) <= 1; }
 int32_t __aeabi_dcmpge(uint64_t a, uint64_t b) { return (uint32_t) dord(a, b) <= 1; }
 int32_t __aeabi_dcmpgt(uint64_t a, uint64_t b) { return dord(a, b) == 1; }
 int32_t __aeabi_dcmpun(uint64_t a, uint64_t b) { return dord(a, b) == 2; }
+#endif
 
 static uint64_t u64tod(uint32_t s, uint64_t v) {
  int32_t sh;
@@ -312,15 +571,35 @@ static uint64_t u64tod(uint32_t s, uint64_t v) {
  return pack(s, 1078 - sh, stick(v, -sh)); }
 
 #if defined(__arm__) && !defined(__ARM_ARCH_6M__)
-/* v7-M: a word is exact in a double; s the sign bit */
-static uint64_t w2d(uint32_t s, uint32_t v) {
- uint32_t n;
- if (v == 0) return (uint64_t) s << 32;
- n = (uint32_t) __builtin_clz(v);
- v = n == 31 ? 0 : v << (n + 1);                 /* the hidden bit shifted out */
- return ((uint64_t) (s | (1054 - n) << 20 | v >> 12) << 32) | v << 20; }
-uint64_t __aeabi_i2d(int32_t x)   { return x < 0 ? w2d(0x80000000u, -(uint32_t) x) : w2d(0, (uint32_t) x); }
-uint64_t __aeabi_ui2d(uint32_t x) { return w2d(0, x); }
+uint64_t __aeabi_i2d(int32_t x);
+uint64_t __aeabi_ui2d(uint32_t x);
+/* v7-M: a word is exact in a double: the sign in r2, the magnitude left-aligned past its top bit */
+asm(".text\n"
+    ".globl __aeabi_ui2d\n.type __aeabi_ui2d, %function\n.thumb_func\n"
+    "__aeabi_ui2d:\n"
+    "mov r2, #0\n"
+    "b 1f\n"
+    ".globl __aeabi_i2d\n.type __aeabi_i2d, %function\n.thumb_func\n"
+    "__aeabi_i2d:\n"
+    "and r2, r0, #0x80000000\n"
+    "cmp r0, #0\n"
+    "bge 1f\n"
+    "rsb r0, r0, #0\n"
+    "1:\n"
+    "cmp r0, #0\n"
+    "beq 2f\n"
+    "clz r3, r0\n"
+    "lsl r0, r0, r3\n"
+    "lsl r0, r0, #1\n"                              /* the hidden bit shifted out */
+    "movw r12, #1054\n"
+    "sub r3, r12, r3\n"
+    "orr r1, r2, r3, lsl #20\n"
+    "orr r1, r1, r0, lsr #12\n"
+    "lsl r0, r0, #20\n"
+    "bx lr\n"
+    "2:\n"
+    "mov r1, #0\n"
+    "bx lr\n");
 #else
 uint64_t __aeabi_i2d(int32_t x)   { return x < 0 ? u64tod(1, (uint64_t) -(int64_t) x) : u64tod(0, (uint64_t) x); }
 uint64_t __aeabi_ui2d(uint32_t x) { return u64tod(0, x); }
@@ -341,7 +620,56 @@ static uint64_t dtrunc(uint64_t u) {
 
 int64_t __aeabi_d2lz(uint64_t u)   { uint64_t v = dtrunc(u); return DSGN(u) ? -(int64_t) v : (int64_t) v; }
 uint64_t __aeabi_d2ulz(uint64_t u) { return DSGN(u) ? 0 : dtrunc(u); }
-/* below one, or in a word's range, from the high word and the top of the low */
+/* below one, or in a word's range, from the high word and the top of the low; past it d2lz's low word */
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
+int32_t __aeabi_d2iz(uint64_t u);
+uint32_t __aeabi_d2uiz(uint64_t u);
+asm(".text\n"
+    ".globl __aeabi_d2iz\n.type __aeabi_d2iz, %function\n.thumb_func\n"
+    "__aeabi_d2iz:\n"
+    "ubfx r2, r1, #20, #11\n"
+    "subw r2, r2, #1023\n"
+    "cmp r2, #0\n"
+    "blt 2f\n"
+    "cmp r2, #31\n"
+    "bge 1f\n"
+    "lsl r3, r1, #11\n"
+    "orr r3, r3, r0, lsr #21\n"
+    "orr r3, r3, #0x80000000\n"
+    "rsb r2, r2, #31\n"
+    "lsr r0, r3, r2\n"
+    "cmp r1, #0\n"
+    "bge 3f\n"
+    "rsb r0, r0, #0\n"
+    "3:\n"
+    "bx lr\n"
+    "2:\n"
+    "mov r0, #0\n"
+    "bx lr\n"
+    "1:\n"
+    "b __aeabi_d2lz\n"
+    ".globl __aeabi_d2uiz\n.type __aeabi_d2uiz, %function\n.thumb_func\n"
+    "__aeabi_d2uiz:\n"
+    "cmp r1, #0\n"
+    "blt 2f\n"
+    "ubfx r2, r1, #20, #11\n"
+    "subw r2, r2, #1023\n"
+    "cmp r2, #0\n"
+    "blt 2f\n"
+    "cmp r2, #32\n"
+    "bge 1f\n"
+    "lsl r3, r1, #11\n"
+    "orr r3, r3, r0, lsr #21\n"
+    "orr r3, r3, #0x80000000\n"
+    "rsb r2, r2, #31\n"
+    "lsr r0, r3, r2\n"
+    "bx lr\n"
+    "2:\n"
+    "mov r0, #0\n"
+    "bx lr\n"
+    "1:\n"
+    "b __aeabi_d2ulz\n");
+#else
 int32_t __aeabi_d2iz(uint64_t u) {
  uint32_t h = (uint32_t) (u >> 32), k = ((h >> 20) & 0x7ff) - 1023, v;
  if ((int32_t) k < 0) return 0;
@@ -354,6 +682,7 @@ uint32_t __aeabi_d2uiz(uint64_t u) {
  if (h >> 31 || (int32_t) k < 0) return 0;
  if (k < 32) return (h << 11 | (uint32_t) u >> 21 | 0x80000000u) >> (31 - k);
  return (uint32_t) __aeabi_d2ulz(u); }
+#endif
 
 uint64_t __aeabi_f2d(uint32_t u) {
  if (((u >> 23) & 0xff) - 1 < 0xfe)              /* a normal: the fields widen in place */

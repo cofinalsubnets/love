@@ -168,6 +168,8 @@
              'movsnxr 2 'movsnrx 2
              'add 3 'sub 3 'and 3 'or 3 'xor 3 'imul 3 'mulh 3 'umulh 3
              'adds 3 'subs 3 'adc 3 'adcs 3 'sbc 3 'sbcs 3 'ors 3
+             'ands 3 'eors 3 'bic 3 'bics 3 'orn 3 'rsb 3 'rsbs 3
+             'alush 6 'pushm 1 'popm 1   ; thumb2's shifted-register operand and register lists
              'div 3 'udiv 3
              'ld 3 'st 3 'lea 3 'lean 3
              'cas 3 'cas4 3
@@ -182,7 +184,7 @@
              'shl128v 0 'shr128v 0 'sar128v 0
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
-             'rem 4 'urem 4 'umull 4 'smull 4 'mla 4
+             'rem 4 'urem 4 'umull 4 'smull 4 'umlal 4 'mla 4
              'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3 'decm 2
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2
