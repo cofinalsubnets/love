@@ -7,7 +7,8 @@
 //  mat    16 numbers, row-major: clip = mat * [x y z 1], gl's clip box (-w <= x,y,z <= w)
 //  verts  8 numbers a vertex: x y z  u v (texels)  r g b (1.0 the texel as it is)
 //  tris   4 a triangle: three vertex indices and a texture's index, -1 none, -2 a glow
-//         (added to what is behind, hiding nothing: drawn after what it lies over), -3 - t
+//         (added to what is behind, hiding nothing: drawn after what it lies over; on a bare
+//         pixel kept as -1 less its colour, and added to what is drawn under it), -3 - t
 //         glass of texture t (what is behind times its texel, its colour added, hiding nothing);
 //         verts and tris may be lists of batches, pairwise
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
@@ -230,11 +231,15 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       int32_t const q = o[x];
       if (q >= 0) o[x] = (int32_t) (rz_ch((flo_t) (q >> 16 & 255) * tint[0] + c[0], 0) << 16 | rz_ch((flo_t) (q >> 8 & 255) * tint[1] + c[1], 0) << 8
                                     | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0)); }
-     else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, left bare
-      int32_t const q = o[x];
-      if (q >= 0) o[x] = (int32_t) (rz_ch(c[0] + (flo_t) (q >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (q >> 8 & 255), 0) << 8
-                                    | rz_ch(c[2] + (flo_t) (q & 255), 0)); }
-     else o[x] = (int32_t) (rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d)), dz[x] = z, td[x >> 3] = 1; } } }
+     else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, kept as -1 less it
+      int32_t const q = o[x], g = q >= 0 ? q : -1 - q,
+                    s = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), 0) << 8
+                                   | rz_ch(c[2] + (flo_t) (g & 255), 0));
+      o[x] = q >= 0 ? s : -1 - s; }
+     else {   // ..and drawn under, onto a glow kept there
+      int32_t const g = under && o[x] < -1 ? -1 - o[x] : 0;
+      o[x] = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), d) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), d) << 8
+                        | rz_ch(c[2] + (flo_t) (g & 255), d)), dz[x] = z, td[x >> 3] = 1; } } } }
    for (int i = 0; i < 3; i++) e[i] += ex[i];
    for (int k = 0; k < 7; k++) a[k] += vx[k];
    if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];

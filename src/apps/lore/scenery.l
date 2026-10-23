@@ -25,6 +25,7 @@
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
 ;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
 ;                                      world's own dim
+;   (skylight (rgb r g b))             light out under the sky at any hour, over the sky's own
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -106,6 +107,8 @@
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
+;   (feel 'soft TEXTURE)               the texture as it sounds landed on: 'soft, 'hard (any
+;                                      not felt), 'wood or 'metal
 ;   (laid TEXTURE degrees [du dv])     the texture as a skin or textures lays it, turned
 ;                                      degrees from u toward v and shifted du dv metres its
 ;                                      own way; a floor's u is x and v z, a wall's u along it
@@ -120,8 +123,8 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street void gravity sky ambient air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
-         across stammer buzz breathe blink texture laid skin textures repeat move turn mirror-x mirror-z rgb)
+(module (scenery level-of sourced start shot room street void gravity sky ambient skylight air solid box prism cut whole door train bin mattress telescope book pencil rod decal drape window grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
+         across stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
 (:
@@ -160,6 +163,7 @@
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
  (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
+ (skylight c) (: u "(skylight (rgb r g b))" (colour? c ? (part 'skylight [['c c]]) (no u c)))
  ; a brush's shape; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
@@ -368,6 +372,8 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ (feel k t) (: u "(feel 'soft TEXTURE)"
+   (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
    (? (!(texture? t)) (no u t) (!(num? deg)) (no u deg) (!(two? off && #off = 2 && all num? off)) (no u off)
       {'kind 'laid 'tex t 'deg (f deg) 'off (map f off)}))
@@ -421,7 +427,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'ambient 'ad 'spin 'orb 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'ambient 'skylight 'ad 'spin 'orb 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -431,7 +437,7 @@
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
    (skin-of b) (: s (b 'skin) (cats (map (k \ (: (e c) ([c (tname (bare (s k)))] + lay (s k)) (k = 'all ? (map e ['wall 'floor 'ceiling]) [(e (k = 'walls ? 'wall k))])))
                                        (filter (k \ elem k (keys s)) ['all 'walls 'floor 'ceiling]))))
-   (tex nm t) (: b (bare t) {'name nm 'w (b 'w) 'h (b 'h) 'm (b 'm) 'layers (b 'layers) 'lay (kind? t ['laid] ? [(t 'deg) (t 'off)] ())})
+   (tex nm t) (: b (bare t) {'name nm 'w (b 'w) 'h (b 'h) 'm (b 'm) 'layers (b 'layers) 'feel (peep b 'feel 'hard) 'lay (kind? t ['laid] ? [(t 'deg) (t 'off)] ())})
    (? (!(string? name)) (no "(level NAME PART ..)" name)
       (two? bad) (scare 'level ("not a part: " + show <bad))
       {'kind 'level 'name name
@@ -457,6 +463,7 @@
        'voids (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'sheer 0) (of 'room)))
        'gravity (of 'gravity @ () () g (<g 'by))
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
+       'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex))}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
