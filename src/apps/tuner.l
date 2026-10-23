@@ -9,6 +9,7 @@
    hues [160 202 214 148 41 45 33 99 171]          ; octaves 0..8, red through violet
    pi 3.141592653589793
    peepv (cite 'guts 'peepv)
+   close (cite 'posix 'close)
    rate 48000
    win 2048                                         ; the window yin compares, frames
    lo 24 hi 1200                                    ; its lags: 2 kHz down to 40 Hz
