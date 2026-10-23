@@ -11450,7 +11450,7 @@
                         0 (keys (g 'glob)))
                ; ..and what a function's asm names from another section
                _ (foldl (_ \ x \ unom x @ s (s ? (pin t s 1) 0)) 0 (keys (cg-refs (g 'fasecs) {})))
-               q (foldl (a \ s \ fnix s && !(laid s) ? (s . a) a)
+               q (foldl (a \ s \ two? (fnix s) && !(laid s) ? (s . a) a)
                         () (keys t))
                (two? q && !(gripe? (g 'genfail)) ? (drive q, datclose 0) 0))
            _ (datclose 0)
