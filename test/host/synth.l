@@ -199,5 +199,52 @@
        (#hv = 1) (#(<hv) = 5) (any (i \ held i != 0) ^#held)
        (any (v \ v 0 < st 'fpos + 10 * song-rate) let)))
 
+; --- the bus: the kernel asks its memory's size, an echo lands on its frame and crosses over,
+; --- the reverb loses 60 dB in its t60, and the same input answers the same frames
+(: K (cite 'dsp 'space) n 735 z (iota n * 0.0) imp ((iota n = 0) * 1.0)
+   (P o) (gem-tray [15] (map (k \ 1.0 * peep o k 0.0) ^15))
+   (e c) (net (<c * <c + >c * >c))
+   PE (P {0 44100 5 1 6 1 7 0.01 8 0.5 9 1})
+   sz (K z z () PE) m (cask sz)
+   _ (K z z m PE) e1 (K imp z m PE) e2 (K z z m PE)
+   PR (P {0 44100 10 1 11 1 12 1.0 13 1 14 0})
+   (verb _) (: m (cask sz) _ (K z z m PR) r0 (K imp z m PR) (r0 . map (_ \ K z z m PR) ^60))
+   v1 (verb ()) v2 (verb ())
+   ratio (e (v1 40) / e (v1 10))
+ (test (charm? sz) (0 < sz) (K z z (cask 8) PE = sz) (K z z m (P {0 10}) = ())
+       (abs (peep <e1 0 0.0 - 1.0) < 1e-9) (abs (peep <e1 441 0.0 - 1.0) < 1e-6) (abs (peep <e1 440 1.0) < 1e-9)
+       (amax (>e1 * >e1) = 0.0) (abs (peep >e2 147 0.0 - 0.5) < 1e-6)               ; fed back to the right at 882
+       (0.0 < e (v1 0)) (1e-4 < ratio) (ratio < 1e-2)                       ; 30 dB down in half a second
+       (all (i \ aall (<(v1 i) = <(v2 i)) && aall (>(v1 i) = >(v2 i))) ^61)))
+
+; synth's bus: a toggle and a wetter step a key, a reverb's tail outlasts the note, a toggle
+; off lets it ring out, the bus at its wettest stays under the clip, and two runs are one
+(: (run st k) (map (_ \ synth-mix st) ^k)
+   (en cs) (net (map (c \ net (<c * <c + >c * >c)) cs))
+   (pk cs) (foldl max 0.0 (map (c \ max (amax (<c * <c)) (amax (>c * >c))) cs))
+   wet (synth-new ()) dry (synth-new ())
+   _ (synth-step wet 114) r1 (wet 'rev) _ (synth-step wet 82) w1 (wet 'rvw)
+   _ (synth-step wet 82) _ (synth-step wet 82) w2 (wet 'rvw)
+   _ (pin wet 'rvw 2)
+   _ (synth-step wet d0) _ (synth-step dry d0)
+   cw (run wet 180) cd (run dry 180)
+   late (en (drop 140 cw)) dlate (en (drop 140 cd))
+   _ (synth-step wet 114) r2 (wet 'rev) t0 (wet 'fxt)
+   _ (run wet 1) t1 (wet 'fxt) ring (en (run wet 30))
+   f (synth-frame wet)
+   (loud _) (: st (synth-new ())
+               (each [114 82 82 111 79 79 79 99 67 67 9 9] (k \ synth-step st k),
+                each [d0 (synth-digits 4) (synth-digits 7)] (k \ synth-step st k),
+                run st 300))
+   l1 (loud ()) l2 (loud ())
+   ws (synth-new ()) _ (synth-wstep ws ['down 59]) _ (synth-wstep ws ['down 63]) _ (synth-wstep ws ['down 61])
+ (test (r1 = 1) (w1 = 3) (w2 = 0) (0.0 < late) (dlate = 0.0)
+       (r2 = 0) (t0 = synth-ftail) (t1 = t0 - synth-chunk) (0.0 < ring)
+       (has? f "reverb off") (has? f "echo off")
+       (pk l1 * synth-gain * synth-gain < 32767.0 * 32767.0)
+       (all (i \ aall (<(l1 i) = <(l2 i)) && aall (>(l1 i) = >(l2 i))) ^#l1)
+       (ws 'rev = 1) (ws 'rvw = 3) (ws 'cho = 1)
+       (has? (synth-wframe ws) "chorus 0.5")))
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, and the FM timbre plays\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, and the bus rings on under the clip\n")
