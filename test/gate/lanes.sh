@@ -153,13 +153,19 @@ for l in $run; do has "$l" "$alone" && late="$late $l" || par="$par $l"; done
 sums() { cksum out/love out/love.raw out/mooncc0.image 2>/dev/null; }
 before=$(sums)
 moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
-  echo "1 0" > "$d/love-moved.rc"; echo "out/love, love.raw or mooncc0.image was rebuilt $1" > "$d/love-moved.log"; }; }
+  echo "1 0" > "$d/love-moved.rc"; echo "out/love, love.raw or mooncc0.image was rebuilt $1" > "$d/love-moved.log"
+  [ -s "$d/newer" ] && { echo "newer than out/love.raw before it:"; cat "$d/newer"; } >> "$d/love-moved.log"; }; }
+# what of love.raw's link is newer than it: the trip's cause, read before each lane
+newer() { find out/o out/moon out/liblove.a out/.hostcc out/src.o out/rootfs.o out/moonlibc.o out/lib/readme.bin \
+  -newer out/love.raw -type f 2>/dev/null | sort | head -40 > "$d/newer"; }
+newer
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
 
 # step 4: alone, in turn, step 1's targets old as in step 3: a lane's own make of host packs the
 # tree again and moves out/love
 for l in $late; do
+  newer
   MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" $oflags -- "$l"
   moved "by $l"
 done
