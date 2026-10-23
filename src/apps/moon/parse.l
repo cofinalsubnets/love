@@ -2453,11 +2453,11 @@
        (hi s) (? !(in? s) [s]
                  (s @ ('blk items) [['blk (catmap hi items)]]
                       ('expr pe) (root pe @ (ds e2) (ds + [['expr e2]]))
-                      ('ret . e . pre) (two? e ? (root e @ (ds e2) (ds + [['ret e2] + pre])) [s])
+                      ('ret . e . pre) (two? e ? (root e @ (ds e2) (ds + [(['ret e2] + pre)])) [s])
                       ('decl ds) (#ds = 1 && two? >><ds ?
-                                   (<ds @ p (root <>>p @ (d2 e2) (d2 + [['decl [[<p <>p e2] + >>>p]]])))
+                                   (<ds @ p (root <>>p @ (d2 e2) (d2 + [['decl [([<p <>p e2] + >>>p)]]])))
                                    [s])
-                      ('if . c . t . er) (root c @ (ds c2) (ds + [['if c2 (hw t)] + map hw er]))
+                      ('if . c . t . er) (root c @ (ds c2) (ds + [(['if c2 (hw t)] + map hw er)]))
                       ('while c b) [['while c (hw b)]]
                       ('do b c) [['do (hw b) c]]
                       ('for i c st b) [['for i c st (hw b)]]
