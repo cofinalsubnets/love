@@ -69,7 +69,7 @@ d=$ho/$sub
 rm -rf "$d"; mkdir -p "$d"
 
 # m4's link set, as its src/Makefile objects + lib/Makefile objects chose --
-# minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: moonlibc's).
+# minus stackovf.o (USE_STACKOVF off) and alloca.o (HAVE_ALLOCA: mooncc lays it on the stack).
 SRC="m4 builtin debug eval format freeze input macro output path symtab"
 LIB="regex getopt getopt1 error obstack xmalloc xstrdup"
 # m4's own directories ahead of the libc's, as its Makefile orders them: lib/regex.h is the
