@@ -121,7 +121,7 @@ for n in (2, 4, 16, 256):
            (hf 2 0 0 = png-decode hand 2))
    _ (put (dir + "/an.py") """
     # apngs PIL wrote, each composed by the apng spec's rule written out here, every frame
-    # decoded alone by PIL; where alpha is all or none, PIL's own composed frames must agree
+    # decoded alone by PIL; where alpha is all or none, the frames as drawn, composed whole, must agree
     import sys, os, io, zlib, struct
     from PIL import Image, ImageDraw
     d = sys.argv[1]
@@ -131,7 +131,8 @@ for n in (2, 4, 16, 256):
         dr.rectangle([2 + 5 * i, 3 + 2 * i, 15 + 5 * i, 14 + 2 * i], fill=(200 - 30 * i, 40 + 40 * i, 90, 128 if semi else 255))
         dr.ellipse([18 - 2 * i, 6, 32 - i, 26 - i], fill=(20, 180 - 20 * i, 60 * i % 256, 200 if semi else 255))
         return im
-    def save(nm, fr, **kw): fr[0].save('%s/%s.png' % (d, nm), save_all=True, append_images=fr[1:], **kw)
+    src = {}
+    def save(nm, fr, **kw): fr[0].save('%s/%s.png' % (d, nm), save_all=True, append_images=fr[1:], **kw); src[nm] = fr, kw
     save('opaque', [frame(i, bg=(250, 250, 240, 255)).convert('RGB') for i in range(5)], duration=[40, 50, 60, 70, 80], disposal=0, blend=0)
     save('clear', [frame(i) for i in range(5)], duration=100, disposal=1, blend=1)
     save('prev', [frame(i) for i in range(5)], duration=[30, 1000, 30, 30, 20], disposal=2, blend=1)
@@ -169,16 +170,24 @@ for n in (2, 4, 16, 256):
                 for r in range(fh): canvas[4 * ((y + r) * w + x):4 * ((y + r) * w + x + fw)] = bytes(4 * fw)
             elif dop == 2: canvas = bytearray(before)
         return w, h, out
+    def whole(nm):
+        # alpha all or none, so a blend is a pick; PIL's own compositor is no oracle
+        fr, kw = src[nm]; ls = lambda v: v if type(v) is list else [v] * len(fr)
+        canvas = bytearray(W * H * 4); out = []
+        for f, dop, bop in zip(fr, ls(kw['disposal']), ls(kw['blend'])):
+            px = f.convert('RGBA').tobytes(); before = bytes(canvas)
+            for o in range(0, len(px), 4):
+                if bop == 0 or px[o + 3]: canvas[o:o + 4] = px[o:o + 4]
+            out.append(bytes(canvas))
+            if dop == 1 or dop == 2 and len(out) == 1: canvas = bytearray(W * H * 4)
+            elif dop == 2: canvas = bytearray(before)
+        return out
     man = []; bad = 0
     for nm in ('opaque', 'clear', 'prev', 'mixed', 'hidden', 'semi', 'semiprev'):
         w, h, out = spec(open('%s/%s.png' % (d, nm), 'rb').read())
         for k, (px, ms) in enumerate(out): open('%s/%s.%d.rgba' % (d, nm, k), 'wb').write(px)
         man.append(' '.join([nm, str(w), str(h), str(len(out))] + [str(ms) for _, ms in out]))
-        # PIL lerps a part-clear pixel's alpha too, and draws a hidden default image's frames over it
-        if nm not in ('hidden', 'semi', 'semiprev'):
-            im = Image.open('%s/%s.png' % (d, nm)); fr = []
-            for i in range(im.n_frames): im.seek(i); fr.append(im.convert('RGBA').tobytes())
-            bad += fr != [px for px, _ in out]
+        if nm not in ('hidden', 'semi', 'semiprev'): bad += whole(nm) != [px for px, _ in out]
     open(d + '/anims', 'w').write('\n'.join(man) + '\n')
     sys.exit(bad)
     """)

@@ -239,7 +239,7 @@
    ; every X event waiting, a reply's leftovers too; Exposes ship the paper once for the lot
    (x-pending win)
     (: s (win 's)
-       (go acc ex) (? !(cue? s || two? (evq 0)) [(rev acc) ex]
+       (go acc ex) (? !(cue? s || two? (peep evq s ())) [(rev acc) ex]
                       (x-next s @ e
                          (? (atom? e) [(rev (['close] . acc)) ex]
                             (ev-code e = 12) (go acc 1)

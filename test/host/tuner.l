@@ -1,5 +1,5 @@
 ; test/host/tuner.l -- the tuner (src/apps/tuner.l); the clock is the test's own, so the hold needs no waiting
-;   cat test/00-init.l test/host/tuner.l | out/love
+;   cat test/00-init.l test/host/00-host.l test/host/tuner.l | out/love
 (borrow 'tuner)
 (: (cents-off f g) (gem? f ? (abs (1200.0 * log (f / g) / log 2.0)) 1e9)
    (heard f) (tuner-yin (tuner-sine f))
@@ -106,5 +106,18 @@
            (has? (tuner-plain (tuner-frame q 60 12 @ r (r 9))) "(listening)"))
    _ (tuner-hear q (tuner-sine 220.0 * 0.5))
    (test (cents-off (q 'hz) 220.0 < 1.0)))
+
+; over a pty on a capture of silence: q ends it 0, and nothing said on the way out
+(: love <cmdline
+   (upto m pat t) (see m @ b (b < 0 ? t (t + string b @ t2 (has? t2 pat ? t2 (upto m pat t2)))))
+   r (tether [love "tuner" "-d" "none"])
+   _ (test (two? r))
+   m >r
+   _ (settty m 30 100)
+   a0 (upto m "q quit" "")
+   _ (say m "q", flush m)
+   a1 (slurp m)
+   st (h-waitfor <r)
+   (test (has? a0 "q quit") (<st = 0) !(has? a1 ";;")))
 
 (test_fin (), puts "tuner: ok", putc 10, 0)

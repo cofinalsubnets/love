@@ -544,6 +544,9 @@
          prev (foldl (\ a p (? (#a = 0 || q-num a < q-num p) p a)) "" ahead)
          (? (r = ()) "you hold no row in \(q)"
             (q-folded? (rows r)) "row \(r) is \(rows r 5): the union's own row gates"
+            ; a plan is from the gated-on: none, and every lane but test and test_slow drops out
+            (#(g-git dir ("rev-parse --verify -q " + sh-quote (rows r 3 + "^{commit}"))) = 0)
+             ("row \(r) is gated on " + rows r 3 + ", not a commit: write gated_on with queue_row, the sha its union merges onto")
             (0 < #prev && rows prev 5 != "green")
              ("row " + prev + " ahead is \(rows prev 5): the head row gates, or the row behind a green one")
             !(two? (stat "\(dir)/test/gate/lanes.sh")) "no test/gate/lanes.sh in \(dir)"
@@ -588,6 +591,8 @@
                        _ (post-as "gate-\(r)" who "queue_gate: row \(r) is waiting again, ungated: \(why)") 1)
          (? (r = ()) (: _ (gate-say "\(who) holds no row in \(q)") 1)
             (row 4 != h) (back ("row " + r + " gates " + row 4 + ", but HEAD is " + h))
+            (#(git1 ("rev-parse --verify -q " + sh-quote (row 3 + "^{commit}"))) = 0)
+             (back ("row " + r + " is gated on " + row 3 + ", not a commit, and a plan from it owes no lane"))
             (two? ign) (back ("signals " + join " " (map show ign) + " are ignored here, and every lane would "
                               + "inherit them: start it from a shell that ignores none"))
             (: b (row 3) plan (lanes-plan-of b h)
@@ -1045,15 +1050,17 @@
                          rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
                          t2 <(q-base (unlines (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-swap q old t2)
-                            (: rows2 (q-rows t2) h (q-head rows2)
-                               to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
+                            (: rows2 (q-rows t2)
+                               ; every row behind stacks on what landed: each session hears, the lander's own rows aside
+                               to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (sort (keys rows2)))))
                                sent (? (0 < #rn)
                                        (map (\ s [s (post s "row \(p) landed on \(br) at \(short): \(rn)")]) to)
                                        ())
                                got (map cap (filter (x \ #(x 1) = 0) sent))
                                lost (filter (x \ 0 < #(x 1)) sent)
                                [1 ("landed: \(q-rows-say gone) left \(q), whose base line is now \(br) \(short). "
-                                   + (? !(two? to) "no row is behind it."
+                                   + (? !(two? (keys rows2)) "no row is behind it."
+                                        !(two? to) "the rows behind are yours."
                                         (0 < #rn)
                                          ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")
                                           + (? (two? lost)

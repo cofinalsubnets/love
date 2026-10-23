@@ -743,38 +743,46 @@ $(rocq_ver): force_coqc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; $(COQC) --version > $$tf 2>&1; \
 	 $(note)
-$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v $(rocq_ver)
+# the stdlib the proofs import, built by this coqc from its own .v: a packaged stdlib's .vo
+# refuse a coqc of another version. coqc carries it
+rocq_std = $(ho)/rocq
+rocq_srcs = $(addprefix test/proof/rocq/,spec.v patch.v gc.v gcsize.v extract.v big.v enc.v encmem.v encli.v) \
+  src/tools/spec2coq.l src/tools/uu2coq.l src/tools/mx2coq.l
+$(rocq_std)/.built: $(rocq_ver) test/gate/rocqstd.sh $(rocq_srcs)
+	@sh test/gate/rocqstd.sh "$(COQC)" $(rocq_std) $(rocq_srcs)
+coqc = $(COQC) -R $(abspath $(rocq_std))/Stdlib Stdlib
+$(rocq_kept): test/proof/rocq/%.vo: test/proof/rocq/%.v $(rocq_ver) $(rocq_std)/.built
 	@echo TEST test/proof/rocq/$*.v "(coqc)"
-	@cd test/proof/rocq && $(COQC) -q -R . "" $*.v
+	@cd test/proof/rocq && $(coqc) -q -R . "" $*.v
 test_proof: $(rocq_kept)
 	@echo "test_proof: spec.v + patch.v check (the .vo IS the evidence, so a re-run is quiet)"
 # gc.v -- the minor is sound under a complete barrier, its pause bounded, the drain a fixpoint
-test_gc:
+test_gc: $(rocq_std)/.built
 	@echo TEST test/proof/rocq/gc.v "(coqc)"
-	@$(COQC) -q test/proof/rocq/gc.v
+	@$(coqc) -q test/proof/rocq/gc.v
 	@echo TEST test/proof/rocq/gcsize.v "(coqc)"
-	@$(COQC) -q test/proof/rocq/gcsize.v
+	@$(coqc) -q test/proof/rocq/gcsize.v
 	@$(call vclean,gc gcsize)
 # src/tools/spec2coq.l turns test/spec.l's numeral facts into gen.v, regenerated every run
 test_gen: host $(rocq_kept)
 	@echo 'LOVE	'test/proof/rocq/gen.v "(src/tools/spec2coq.l on $m)"
 	@$m src/tools/spec2coq.l > test/proof/rocq/gen.v
 	@echo TEST test/proof/rocq/gen.v "(coqc, against spec.v's shared model)"
-	@cd test/proof/rocq && $(COQC) -R . "" gen.v
+	@cd test/proof/rocq && $(coqc) -R . "" gen.v
 	@$(call vclean,gen)
 # src/tools/uu2coq.l: a proof term checked by uu's kernel, re-checked by coqc
-test_uugen: host
+test_uugen: host $(rocq_std)/.built
 	@echo 'LOVE	'test/proof/rocq/uugen.v "(src/tools/uu2coq.l on $m)"
 	@$m src/tools/uu2coq.l > test/proof/rocq/uugen.v
 	@echo TEST test/proof/rocq/uugen.v "(coqc)"
-	@$(COQC) -q test/proof/rocq/uugen.v
+	@$(coqc) -q test/proof/rocq/uugen.v
 	@$(call vclean,uugen)
 # src/love/mx.l modelled in Rocq by src/tools/mx2coq.l, a second derivation beside mx.h
-test_mx: host
+test_mx: host $(rocq_std)/.built
 	@echo 'LOVE	'test/proof/rocq/mx.v "(src/tools/mx2coq.l on $m)"
 	@cat src/love/mx.l src/tools/mx2coq.l | $m > test/proof/rocq/mx.v
 	@echo TEST test/proof/rocq/mx.v "(the dispatch matrices: band factorization + dispatch commutativity, coqc)"
-	@cd test/proof/rocq && $(COQC) -q mx.v >/dev/null
+	@cd test/proof/rocq && $(coqc) -q mx.v >/dev/null
 	@$(call vclean,mx)
 endif
 
@@ -785,7 +793,7 @@ else
 # extract.v's normalizer, extracted to OCaml and fuzzed against ev. run the oracle once into a file
 test_extract: host $(rocq_kept)
 	@echo TEST test/proof/rocq/extract.v "(coqc extraction -> ocaml ref vs ev)"
-	@cd test/proof/rocq && $(COQC) -R . "" extract.v >/dev/null \
+	@cd test/proof/rocq && $(coqc) -R . "" extract.v >/dev/null \
 	  && rm -f normalizer.mli && $(OCAMLOPT) -w -a normalizer.ml oracle_drive.ml -o oracle_drive
 	@test/proof/rocq/oracle_drive 2000 6 1 > out/.extract_oracle.l
 	@$m out/.extract_oracle.l > out/.extract_oracle.out 2>&1; r=$$?; \
@@ -796,9 +804,9 @@ test_extract: host $(rocq_kept)
 	@rm -f test/proof/rocq/normalizer.ml test/proof/rocq/normalizer.mli test/proof/rocq/oracle_drive \
 	  test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.extract_oracle.l out/.extract_oracle.out
 # big.v: the decimal codec roundtrip and quot-rem/gcd, extracted Z against love's bignums
-test_big: host
+test_big: host $(rocq_std)/.built
 	@echo TEST test/proof/rocq/big.v "(coqc codec proof + extracted Z ref vs the limb lane)"
-	@cd test/proof/rocq && $(COQC) -q big.v >/dev/null \
+	@cd test/proof/rocq && $(coqc) -q big.v >/dev/null \
 	  && rm -f bigref.mli && $(OCAMLOPT) -w -a bigref.ml big_drive.ml -o big_drive
 	@test/proof/rocq/big_drive 2000 1 > out/.big_oracle.l
 	@$m out/.big_oracle.l > out/.big_oracle.out 2>&1; r=$$?; \
@@ -810,9 +818,9 @@ test_big: host
 	  test/proof/rocq/*.cmi test/proof/rocq/*.cmx test/proof/rocq/*.o out/.big_oracle.l out/.big_oracle.out
 # reference x86-64 encoders proved to invert decode, extracted and held byte-identical to holo
 encver = enc:1792:reg-direct encmem:6144:memory encli:320:immediate
-test_encver: host
+test_encver: host $(rocq_std)/.built
 	@echo TEST test/proof/rocq/enc.v test/proof/rocq/encmem.v test/proof/rocq/encli.v "(coqc round-trip proofs -> ocaml refs vs holo, byte-exact)"
-	@cd test/proof/rocq && $(COQC) -q enc.v >/dev/null && $(COQC) -q encmem.v >/dev/null && $(COQC) -q encli.v >/dev/null \
+	@cd test/proof/rocq && $(coqc) -q enc.v >/dev/null && $(coqc) -q encmem.v >/dev/null && $(coqc) -q encli.v >/dev/null \
 	  && rm -f enc_ref.mli encmem_ref.mli encli_ref.mli \
 	  && $(OCAMLOPT) -w -a enc_ref.ml enc_drive.ml -o enc_drive >/dev/null \
 	  && $(OCAMLOPT) -w -a encmem_ref.ml encmem_drive.ml -o encmem_drive >/dev/null \

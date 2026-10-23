@@ -34,6 +34,9 @@
    ; a uu name -> a Rocq identifier: uu_, '-' -> '_'
    (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ c (c = 45 ? 95 c)))), slurp j))
    (rocqn nm) ("uu_" + sanit (string nm))
+   ; a bound name as Gallina reads it: one that is a keyword there takes a trailing _
+   gkw (foldl (t \ k \ pin t k 1) {} ["as" "at" "cofix" "else" "end" "exists" "fix" "for" "forall" "fun" "if" "in" "is" "let" "match" "return" "then" "with" "Prop" "Set" "Type" "SProp"])
+   (bvar x) (: s (string x) (? (peep gkw s 0) (s + "_") s))
 
    ; --- collect (kind nm T t) entries (defns live inside asserts) ---
    (deq? c) (two? c && (<c = 'defn || <c = 'defq))
@@ -71,15 +74,15 @@
    _ (pin bases 'nat "nat") _ (pin bases 'UU "Type") _ (pin bases 'bool "bool")
    _ (pin bases 'unit "unit") _ (pin bases 'empty "Empty_set")
    _ (pin bases 'true "true") _ (pin bases 'false "false") _ (pin bases 'tt "tt")
-   (atom-c t) (peep bases t (corpus? t ? (rocqn t) (string t)))   ; base type / global / bound var
+   (atom-c t) (peep bases t (corpus? t ? (rocqn t) (bvar t)))   ; base type / global / bound var
 
    (spine-c l) (two? l ? (u2c <l + (two? >l ? " " "") + spine-c >l) "")
    (u2c t)
    (? (charm? t) (show t)
       (nom? t) (atom-c t)
       (two? t) (<t @ h
-        (h @ 'pi        ("(forall " + (string (t 1)) + " : " + (u2c (t 2)) + ", " + (u2c (t 3)) + ")")
-           'lam       ("(fun " + (string (t 1)) + " => " + (u2c (t 2)) + ")")
+        (h @ 'pi        ("(forall " + (bvar (t 1)) + " : " + (u2c (t 2)) + ", " + (u2c (t 3)) + ")")
+           'lam       ("(fun " + (bvar (t 1)) + " => " + (u2c (t 2)) + ")")
            'let       ("(let " + (string (t 1)) + " := " + (u2c (t 2)) + " in " + (u2c (t 3)) + ")")
            'succ      ("(S " + (u2c (t 1)) + ")")
            'idpath    ("(idpath " + (u2c (t 1)) + ")")
@@ -90,7 +93,7 @@
            'empty_rect ("(Empty_set_rect " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
            ; Sigma -> a primitive-projection total2 record (preamble below), keeping uu's
            ; definitional eta. total2 mirrors pi; tpair's family is inferred from the stated type.
-           'total2    ("(total2 (fun " + (string (t 1)) + " : " + (u2c (t 2)) + " => " + (u2c (t 3)) + "))")
+           'total2    ("(total2 (fun " + (bvar (t 1)) + " : " + (u2c (t 2)) + " => " + (u2c (t 3)) + "))")
            'tpair     ("(tpair " + (u2c (t 1)) + " " + (u2c (t 2)) + ")")
            'pr1       ("(pr1 " + (u2c (t 1)) + ")")
            'pr2       ("(pr2 " + (u2c (t 1)) + ")")

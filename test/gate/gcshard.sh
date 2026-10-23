@@ -24,10 +24,9 @@ t0=$(date +%s)
 el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
 
 if [ -z "${GCS_NOBUILD:-}" ]; then
-  # the stress builds link the normal one's out/src.o: packing the tree again mid-gate takes in a
-  # neighbouring lane's scratch, and the next make of host moves out/love under the gate
-  ${MAKE:-make} --no-print-directory -o out/src.o hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
-  ${MAKE:-make} --no-print-directory -o out/src.o out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
+  # only the stress builds: a make of host here relinks out/love under the other lanes
+  ${MAKE:-make} --no-print-directory hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
+  ${MAKE:-make} --no-print-directory out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
   el built
 fi
 for b in out/love out/love.raw out$gs/love.raw out/gcs0/love0; do [ -x $b ] || fail "no $b"; done
