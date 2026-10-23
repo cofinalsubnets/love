@@ -94,6 +94,20 @@ moonrun -c "$ho/.esy.c" -o "$ho/.esy.o" || fail "mooncc: a file-scope asm with a
 printf 'extern __attribute__((weak)) const int t[];\nconst int *g(void) { return t; }\n' > "$ho/.wkla.c"
 moonrun -t a64 -c "$ho/.wkla.c" -o "$ho/.wkla.o" || fail "mooncc -t a64: an absent weak's address"
 [ "$(readelf -rW "$ho/.wkla.o" | awk '$5 == "t" {print $3}' | sort -u)" = R_AARCH64_ABS64 ] || fail "an absent weak's address reaches by page on a64"
+# alloca lays its block on the stack: no symbol names it on any ISA (the kernel links no alloca).
+# one where an operand is parked on the stack refuses by name
+printf '#include <alloca.h>\nint g(char *);\nint f(int n) { char *p = alloca(n); int r = g(alloca(n)); return r + g(p); }\n' > "$ho/.alc.c"
+for t in x64 a64 rv64 arm i386; do
+  moonrun -t $t -c "$ho/.alc.c" -o "$ho/.alc.o" || fail "mooncc -t $t: alloca"
+  readelf -sW "$ho/.alc.o" | awk '$8 ~ /alloca/' | grep -q . && fail "alloca reached the symtab on $t"
+done
+printf 'int g(void *);\nint f(int c, int n) { return g(c ? __builtin_alloca(n) : 0); }\n' > "$ho/.alr.c"
+moonrun -c "$ho/.alr.c" -o "$ho/.alr.o" 2> "$ho/.alr.log" && fail "an alloca under a parked operand compiled"
+grep -q 'no lane for alloca where an operand is parked' "$ho/.alr.log" || fail "an alloca under a parked operand refused without naming it"
+# -ftrivial-auto-var-init=zero clears an alloca block, as clang does
+printf '#include <string.h>\nstatic void __attribute__((noinline)) dirty(void) { volatile char b[1024]; memset((char *) b, 255, sizeof b); }\nstatic int __attribute__((noinline)) sum(int n) { unsigned char *p = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += p[i]; return s; }\nint main(void) { dirty(); return sum(512) != 0; }\n' > "$ho/.alz.c"
+moonrun -ftrivial-auto-var-init=zero -o "$ho/.alz" "$ho/.alz.c" || fail "mooncc -ftrivial-auto-var-init=zero: alloca"
+"$ho/.alz" || fail "-ftrivial-auto-var-init=zero left an alloca block uncleared"
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"

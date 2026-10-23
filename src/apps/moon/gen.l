@@ -2096,6 +2096,16 @@
         (ilp32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
        (bi = "__builtin_expect") (cgexpr g env <args ())
+       ; sp drops by the size rounded to 16, as a VLA's block, and the frame's unwind gives it back
+       (bi = "__builtin_alloca")
+        (? (g 'abad) (nolane g "no lane for alloca where an operand is parked on the stack")
+           !(elem (gtgt g) '(x64 a64 rv64 i386 i386m16 thumb1 thumb2 thumb2sp arm)) (nolane g "no lane for alloca\(ontgt g)")
+           (: r (cgexpr g env <args ())
+              (bad? r ? 'bad
+                 (pin g 'fesc 1, pin g 'hasasm 1,
+                  mkv '(ptr void) 'r0
+                      (asint g r + '((add r0 r0 15) (shr r0 4) (shl r0 4) (lea r1 sp 0) (sub r1 r1 r0) (lea sp r1 0))
+                       + (avz? g ? (vzero g (nlab g ".alo")) ()) + '((lea r0 sp 0)))))))
        ; the base holds the caller's, the return address a slot above, so both want fpin.
        ; a level above 0 walks the chain: sound where callers keep frames
        (elem bi '("__builtin_return_address" "__builtin_frame_address"))
@@ -7814,15 +7824,15 @@
                       (elem r9 '(r5 r6 r7 r8 r9 r10 r11 r12)))
    ; a declaration list ((name ty init)..) -> (forms env) | 'bad. a homable scalar ticks the decl
    ; seq (stable across ubuild's attempts: splices don't tick) and asks g 'lhome for a home
+   ; -ftrivial-auto-var-init=zero: a new stack block, r0 bytes at sp (a multiple of 16), word by word
+   (vzero g lf) (: lz (name "\(lf).z") ld (name "\(lf).d")
+                   ['(lea r1 sp 0) '(add r2 r1 r0) '(li r0 0) ['label lz] '(cmp r1 r2) ['br 'eq ld]
+                    '(st r1 0 r0) ['add 'r1 'r1 (wsize g)] ['jmp lz] ['label ld]])
    (cgdecl g env pairs)
     (: ; the C99 VLA local: free any prior instance from this site (a loop re-runs the decl), size,
        ; sub sp, stash the block pointer; the fn stays out of sibcalls and homing (fesc + hasasm)
        v16 '((add r0 r0 15) (shr r0 4) (shl r0 4))   ; rounded up to 16: shr/shl, a64's encoder refuses ~15 as an and immediate
        vsub '((lea r1 sp 0) (sub r1 r1 r0) (lea sp r1 0))   ; sp -= r0 through a plain register: on a64 only lea (add-immediate) sees 31 as sp
-       ; -ftrivial-auto-var-init=zero: the new block, r0 bytes at sp (a multiple of 16), word by word
-       (vzero g lf) (: lz (name "\(lf).z") ld (name "\(lf).d")
-                       ['(lea r1 sp 0) '(add r2 r1 r0) '(li r0 0) ['label lz] '(cmp r1 r2) ['br 'eq ld]
-                        '(st r1 0 r0) ['add 'r1 'r1 (wsize g)] ['jmp lz] ['label ld]])
        (vone ps env2 acc p ty)
         (peep (g 'vslots) (varix ty) () @ sl
            (!(two? sl) ? 'bad
@@ -8715,10 +8725,12 @@
        pq9 (0 = pdtl items && !wd9)
        ; an asm anywhere pins its operands' registers, inside a statement expression too
        (asmin e) (? (atom? e) () (<e = 'asm) 1 (any asmin e))
+       ; an alloca moves sp as a VLA does
+       (allocin e) (? (atom? e) () (e @ ('call ('var n) _) (n = "__builtin_alloca" || any allocin e) (any allocin e)))
        (0 = peep n9 'q 0 ?
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
-           (peep n9 'asm 0 || asmin items) (peep n9 'vla 0) (peep n9 'sq 0) tak
+           (peep n9 'asm 0 || asmin items) (peep n9 'vla 0 || allocin items) (peep n9 'sq 0) tak
            (pmxl items 1 1) (pq9 ? 1) (wd9 ? 1) (wd9 ? (wpd items) 0) (peep n9 'loops ())]))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
@@ -9164,7 +9176,7 @@
    ; a fresh 8-byte temp, each return into r0 then a jump to the splice's end label --
    ; an always_inline body splices without its canary: the caller's frame is the one guarded
    (sspcut x) (? !(two? x) x (<x == 'ssp) '(nop) (map sspcut x))
-   (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp)) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell
+   (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp "__builtin_alloca")) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell; alloca the caller's frame
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
                  (noinl? <x || noinl? >x))
@@ -9185,7 +9197,7 @@
                  (y @ ('call ('var fn) as) (peep (g 'ineed) fn () && any pv? as ? 1 (go as))
                       (go <y || go >y)))
        (go x))
-   (noinlj? x) (? (elem x '(sdecl vastart varr)) 1 (atom? x) ()
+   (noinlj? x) (? (elem x '(sdecl vastart varr "__builtin_alloca")) 1 (atom? x) ()
                   (x @ ('call _ as && 6 < tally as) 1 ()) 1
                   (noinlj? <x || noinlj? >x))
    (oneret? (i . u))                                  ; decls* + one trailing `return expr`
@@ -10303,6 +10315,18 @@
        ; -- VLA prep: each site takes a pointer slot + a size slot, the size zeroed after the param
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
+       ; an alloca must run where no operand is parked on the stack: under a statement, a cast,
+       ; a comma, a ?: or a plain variable's assignment, or as another alloca's size
+       _ (: (ab? e) (e @ ('call ('var n) _) (n = "__builtin_alloca") ())
+            (un e) (? !(two? e) () (ab? e) 1 (un <e || un >e))
+            (xs e) (? !(two? e) ()
+                      (two? <e) (any xs e)
+                      (ab? e) (any xs <>>e)
+                      (elem <e '(blk if while do for switch case dflt lbl expr ret sexpr)) (any xs >e)
+                      (<e = 'decl) (any (d \ two? d && two? >d && two? >>d && xs <>>d) <>e)
+                      (e @ ('cast _ x) (xs x) ('comma a b) (xs a || xs b) ('asn ('var _) r) (xs r)
+                           ('cond c a b) (xs c || xs a || xs b) (un e)))
+            (pin g 'abad (xs (f 3))))
        ; the labels whose address the body takes; a computed goto may land on any of them, so
        ; homing stands off as for an asm (every name is live at the jump). a call that returns
        ; twice does the same: the second return restores callee-saved registers, not memory
@@ -11426,7 +11450,7 @@
                         0 (keys (g 'glob)))
                ; ..and what a function's asm names from another section
                _ (foldl (_ \ x \ unom x @ s (s ? (pin t s 1) 0)) 0 (keys (cg-refs (g 'fasecs) {})))
-               q (foldl (a \ s \ fnix s && !(laid s) ? (s . a) a)
+               q (foldl (a \ s \ two? (fnix s) && !(laid s) ? (s . a) a)
                         () (keys t))
                (two? q && !(gripe? (g 'genfail)) ? (drive q, datclose 0) 0))
            _ (datclose 0)
