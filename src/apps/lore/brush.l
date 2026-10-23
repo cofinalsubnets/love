@@ -5,8 +5,8 @@
 ; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
 ; corners, facing, and the brush index; brush-mesh's (look n b) answers [tex U V], a corner
-; p's texels U and V each dotted with [x y z 1]. a brush 'open 1 has no top face, and one
-; 'whole 1 is never cut on the grid.
+; p's texels U and V each dotted with [x y z 1]. a brush 'open 1 has no top face, one
+; 'sheer 1 no walls, and one 'whole 1 is never cut on the grid.
 (module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks chunks-kept brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
@@ -86,8 +86,8 @@
  (keep kp kf f) (? (tablet? kp) ((kp 'kept) (kf ()) f) (f ()))
  ; ..and (kp 'tick), where kp has one, told as the making goes: what it is at and how far
  (ticker kp) (: t (tablet? kp ? (peep kp 'tick ()) ()) (w \ p \ (t @ () () f (f w p))))
- ; ..and a brush marked open has no top: the sky shows there
- (shut? b j) (!(peep b 'open 0) || b 'planes j 0 1 < 0.5)
+ ; ..and a brush marked open has no top: the sky shows there; one sheer no walls
+ (shut? b j) (: n (b 'planes j 0 1) ((!(peep b 'open 0) || n < 0.5) && (!(peep b 'sheer 0) || mag n >= 0.5)))
  ; ..only the faces want holds [i j] of, where it is a tablet
  (faces-kept bs kp want) (: nb #bs bt (tab bs) tick (ticker kp)
    ; ..the brushes near a box, all weighed at once: each axis's ends as a tray
@@ -99,7 +99,7 @@
    ; near it
    (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
    ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
-   ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0)]) bs)) ())
+   ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0)]) bs)) ())
    ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it
    (meets c pl) (cats (map (k \ (: g (c 'faces k) s (map (side pl) g)
                                   (#g >= 3 && foldl min2 1e9 s <= 1e-6 && foldl max2 -1e9 s >= -1e-6 ? [(c 'planes k)] ())))

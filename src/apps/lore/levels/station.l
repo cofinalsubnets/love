@@ -87,6 +87,40 @@
                 (patches 9 0.25 (shade 0.82))
                 (grid 32 32 1 (rgb 0.1 0.1 0.11)))))
 (: kerb (texture 32 32 1 '((fill (rgb 0.36 0.36 0.36)) (noise 4 0.1) (grid 32 0 1 0.4))))
+; ..the short street's half court, painted on the plates five centimetres a texel from its
+; baseline at the top: faded red, the key blue, white lines, and the paint worn through
+(: courtred '(rgb 0.42 0.16 0.12))
+(: courtblue '(rgb 0.14 0.22 0.42))
+(: courtline '(grey 0.82))
+(: court (texture 220 320 11
+          ['(fill hole) ['rect 0 0 220 280 courtred]
+           ['disc 110 31.5 136 courtline] ['disc 110 31.5 135 courtred]
+           ['disc 110 116 37 courtline] ['disc 110 116 36 courtred]
+           ['rect 61 0 159 116 courtblue]
+           ['within 0 32 220 116 ['disc 110 31.5 26 courtline] ['disc 110 31.5 25 courtblue]]
+           ['disc 110 280 37 courtline] ['within 0 0 220 280 ['disc 110 280 36 courtred]] ['within 0 280 220 320 ['disc 110 280 36 'hole]]
+           ['rect 0 0 220 1 courtline] ['rect 0 0 1 280 courtline] ['rect 219 0 220 280 courtline] ['rect 0 279 220 280 courtline]
+           ['rect 61 0 62 116 courtline] ['rect 158 0 159 116 courtline] ['rect 61 115 159 116 courtline]
+           '(noise 6 0.15) '(patches 5 0.1 hole)]))
+; ..its backboard: weathered white, a black edge and the box over the rim
+(: boardface (texture 72 42 1.8
+              '((fill hole) (rect 0 0 72 2 (grey 0.08)) (rect 0 40 72 42 (grey 0.08)) (rect 0 0 2 42 (grey 0.08)) (rect 70 0 72 42 (grey 0.08))
+                (rect 24 18 48 20 (grey 0.08)) (rect 24 18 26 36 (grey 0.08)) (rect 46 18 48 36 (grey 0.08)) (rect 24 34 48 36 (grey 0.08)))))
+(: boardwhite (texture 16 16 1 '((fill (grey 0.86)) (noise 5 0.12) (patches 4 0.2 (shade 0.85)))))
+(: rimorange (texture 8 8 1 '((fill (rgb 0.85 0.32 0.06)) (noise 3 0.2))))
+(: netcord (texture 16 16 0.3 '((fill hole) (grid 8 8 1 (grey 0.9)))))
+; ..a hoop on the wall facing south at z w, the rim's middle x and 3.05 over the floor at y:
+; a board on two arms, the rim on a short bracket, and a net hanging from it
+(: (hoop x y w) (: r 0.225 rz (w - 1.975) ry (y + 3.05) (a k) (3.14159265 * k / 8.0) (rp k) [(x + r * sin (a k)) ry (rz + r * cos (a k))]
+     [(skin {'all boardwhite} (solid (box [(x - 0.9) (y + 2.9) (w - 1.6)] [(x + 0.9) (y + 3.95) (w - 1.57)])))
+      (decal [x (y + 3.425) (w - 1.605)] [0 0 -1] [0 1 0] 1.8 1.05 boardface)
+      (map (d \ rod [(x + d) (y + 3.7) w] [(x + d) (y + 3.7) (w - 1.57)] 0.03 6 darkmetal) [-0.5 0.5])
+      (map (d \ rod [(x + d) (y + 2.4) w] [(x + d) (y + 3.6) (w - 1.57)] 0.03 6 darkmetal) [-0.5 0.5])
+      (rod [x ry (w - 1.6)] [x ry (rz + r)] 0.02 6 rimorange)
+      (map (k \ rod (rp k) (rp (k + 1)) 0.01 6 rimorange) ^16)
+      (drape netcord (map (j \ (: q (r - 0.07 * j / 3.0) h (ry - 0.42 * j / 3.0)
+                                  (map (k \ [(x + q * sin (a k)) h (rz + q * cos (a k))]) ^17)))
+                          ^4))]))
 ; ..the office: poured concrete, its storeys four and a half metres with a band of
 ; narrow windows, and the buttresses bare
 (: unnwall (texture 64 64 4.5
@@ -395,11 +429,13 @@
   (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
   ; ..a bare mattress along the car's floor at its east end, gone with it
   (mattress [5.4 -5 -5.94] 90)
+  ; ..and on the platform outside its door a red plush mouse, looking in
+  (plush [0.7 -5 -3.6] 200 "mouse.glb")
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
-  ; ends at a blank wall
+  ; ends at a blank wall, painted a half court with its hoop on the wall
   (sky 18.35 'mostly)
   (smog 0.9)
   (skin {'floor roadmetal 'walls facade} (street [-45 8.85 14] [45 45 47]))
@@ -414,6 +450,10 @@
   (skin {'all kerb} (solid (box [-20 8.85 28] [45 9 28.2])))
   (skin {'all kerb} (solid (box [-31.2 8.85 28.2] [-31 9 47])))
   (skin {'all kerb} (solid (box [-20 8.85 28.2] [-19.8 9 47])))
+  (decal [-25.5 8.86 38.2] [0 1 0] [0 0 1] 11 16 court)
+  (hoop -25.5 8.85 46.6)
+  (lamp [-25.5 14.6 46.6] [0 0 -1] [0 -1 0])
+  (ball [-23.4 8.85 41.2])
   ; ..across it from the office a great column, the third of its beams reaching over to it,
   ; and either side of the column a wing, upright at the pavement, rising, then level to
   ; meet it, the pavement going on round behind them; the shafts come up in the west wing,
@@ -427,8 +467,8 @@
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
   (bin [-7.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
-  ; ..and a basketball someone left out on top of the arch
-  (ball [7 13.2 17.65])
+  ; ..and a stuffed Mitty someone left out on top of the arch, looking out over the street
+  (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
   ; wing, a window a metre and a half over each doorway into its glow
