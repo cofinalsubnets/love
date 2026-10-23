@@ -528,7 +528,9 @@
                      (peep b 'open 0) w
                      (: i (in b) (b 'air = 0 ? [o (u - i * u + i)] [(o - i * u * o) (u - i * u)]))))
      w (foldl step [(X * 0.0) (X * 0.0)] near)
-     m (min 1.0 (m0 + w 0 * (1 - w 1)))
+     ; ..and past every brush but the ground the open, nothing there to bury it
+     past (foldl (\ a b (peep b 'land () != () ? a (a * (1 - box? [(b 'lo) (b 'hi)])))) (X * 0.0 + 1) bs)
+     m (min 1.0 (m0 + w 0 * (1 - w 1) + past))
      a (m * (0.5 + 0.5 * c 6) * sk 'k) d (m * max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (lt 'sunk * sk 'k))
      (map (j \ a * lt 'amb j + d * lt 'sunc j + m * ls2 j + (1.0 - m) * la j) ^3))
    (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ la (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
@@ -810,7 +812,7 @@
    (two? (peep st 'cut ()) ? (cue st) (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
       'jump (? fly (up 1) (can-jump? st) (jump! st) (pin st 'jq (st 'mt)))
       'sink (fly ? (up -1) st)
-      'tap (tap-at st @ () st i (break! st i))
+      'tap (tap-at st @ () st i (tap! st i))
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
            s s))))
@@ -953,13 +955,16 @@
  ; winds a throw, half a second to the hardest, and let go it flies; the right button lets
  ; it fall where it is
  reach 2.2 throw-lo 3.0 throw-hi 11.0 wind-t 0.5
- ; ..the panes still whole; a brittle one the eye's line meets within reach, its number, and
- ; it broken, ringing as it goes
+ ; ..the panes still whole; a brittle one the eye's line meets within reach, its number; it
+ ; tapped, ringing as steel does the first time and broken the next
  (panes-of st) (: b (peep st 'broke {}) ps (peep (st 'lvl) 'panes ()) (map (i \ ps i) (filter (i \ peep b i 0 = 0) ^#ps)))
  (tap-at st) (: e (eye-at st) d (look-way st) b (peep st 'broke {}) ps (peep (st 'lvl) 'panes ())
    (in? p q) (!(any (k \ q k < p 'lo k - 0.06 || p 'hi k + 0.06 < q k) ^3))
    (hit i) (: p (ps i) (peep p 'brittle 0 = 1 && peep b i 0 = 0 && any (j \ in? p (c+ e (c* (0.05 * j) d))) ^(int (reach / 0.05))))
    (filter hit ^#ps @ () () l <l))
+ (tap! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3) kn (peep st 'knocked {})
+   (peep kn i 0 = 0 ? (mix-cry (pin st 'knocked (pin (foldl (\ t k (pin t k 1)) {} (keys kn)) i 1)) "land metal 1" [(m 0) (m 2)])
+      (break! st i)))
  (break! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3)
    (mix-cry (pins st 'broke (pin (foldl (\ t k (pin t k 1)) {} (keys (peep st 'broke {}))) i 1) 'shards (shards-of st i . peep st 'shards ()))
             "shatter" [(m 0) (m 2)]))
@@ -986,7 +991,7 @@
  (hand-at st b) (: k (wind-k st) th (st 'th) g (b 'r - ball-r) f (0.45 + 2.0 * g - 0.15 * k) e (eye-at st)
    [(e 0 + f * sin th) (e 1 + 0.5 * sin (st 'ph) - 0.28 - g - 0.1 * k) (e 2 + f * cos th)])
  (world-mouse st ev bt) (: h (filter (b \ peep b 'held 0 = 1) (peep st 'balls ()))
-   (? (ev = 'press && bt = 1 && atom? h) (tap-at st @ () (ball-take st) i (break! st i))
+   (? (ev = 'press && bt = 1 && atom? h) (tap-at st @ () (ball-take st) i (tap! st i))
       (ev = 'press && bt = 1) (pin st 'wind (st 'mt))
       (ev = 'release && bt = 1 && two? h && peep st 'wind () != ()) (ball-go st <h (throw-lo + (throw-hi - throw-lo) * wind-k st))
       (ev = 'press && bt = 3 && two? h) (ball-go st <h 0.0)

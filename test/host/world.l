@@ -565,11 +565,14 @@
        (tx sb >= 16777216) (tx sb < 2 * 16777216) (tx (world-new 8 8 dh "" 'sc) >= 2 * 16777216)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (beyond 3))") "(beyond DRAPE)")
        (has? (world-read (sl + "(flow 1 " + sd + "))")) "(flow [du dv] DRAPE)")))
-;; a brittle pane: a tap with it before the eye breaks it, leaving its shards; one not brittle stays
+;; a brittle pane: a tap with it before the eye rings it as steel, a second breaks it, leaving
+;; its shards; one not brittle stays
 (: bw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
    bp (world-read (bw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))")) bq (world-read (bw + "(window [1 0.5 -0.2] [3 2.5 0] t))"))
-   (tap l) (world-step (world-new 8 8 l "") 'tap) (tapped l) (keys (peep (tap l) 'broke {}))
+   (tap l) (world-step (world-step (world-new 8 8 l "") 'tap) 'tap) (tapped l) (keys (peep (tap l) 'broke {}))
+   once (world-step (world-new 8 8 bp "") 'tap)
  (test (bp 'panes 0 'brittle = 1) (bq 'panes 0 'brittle = 0) (tapped bp = [0]) (tapped bq = ()) (#(peep (tap bp) 'shards ()) = 1) (#(peep (tap bq) 'shards ()) = 0)
+       (keys (peep once 'broke {}) = ()) (keys (peep once 'knocked {}) = [0]) (elem "land metal 1" (map (q \ q 0) (peep once 'sfx ())))
        (has? (world-read (bw + "(brittle 3))")) "(brittle (window ..))")))
 ;; ..a lens: on the face toward its point its glass less 2^24, the only glass a beyond drape is
 ;; seen through, the other face plain; its shards plain
@@ -578,7 +581,7 @@
    gl (world-new 8 8 bl "") (ts s) (s 'sc 'panes 0 'pk 'tris) (gt s) (amin (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
    (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
  (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
-       (peep (<(peep (world-step gl 'tap) 'shards ()) 'pk 'tris) 3 0 > -16777216)
+       (peep (<(peep (world-step (world-step gl 'tap) 'tap) 'shards ()) 'pk 'tris) 3 0 > -16777216)
        (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
 ;; ..a land: solid under its sheet and open over it, stood on where its rows put it, drawn
 ;; as a drape

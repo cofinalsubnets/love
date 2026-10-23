@@ -35,7 +35,7 @@
 (: cube-r 18.5)
 (: (spot k) (: a ((22.5 + 45 * k) * 3.14159265 / 180) x (cube-r * cos a) [x (cube-r * sin a + meander x)]))
 (: spots (map spot ^8))
-(: home (spot 1))
+(: home (spot 2))
 
 ; the dunes: two long swells crossing and a short one on them, none near the river or under
 ; a cube
@@ -49,8 +49,16 @@
 (: xs (map (i \ 2.0 * i - 64.0) ^65))
 (: out ([0.75 1.5 2.2 2.9 3.6 4.3] + map (i \ 5.0 + i) ^17 + [23.0 26.0 30.0 34.0 40.0 46.0 52.0 58.0 64.0]))
 (: ts (rev (map (t \ 0.0 - t) out) + [0.0] + out))
-(: (rows ts dy) (map (t \ map (x \ (: z (meander x + t) [x (ground x z + dy) z])) xs) ts))
-(: (level-rows ts y) (map (t \ map (x \ [x y (meander x + t)]) xs) ts))
+(: (rows-on xs ts dy) (map (t \ map (x \ (: z (meander x + t) [x (ground x z + dy) z])) xs) ts))
+(: (rows ts dy) (rows-on xs ts dy))
+(: (level-on xs ts y) (map (t \ map (x \ [x y (meander x + t)]) xs) ts))
+(: bedts [-2.9 -2.2 -1.5 -0.75 0.0 0.75 1.5 2.2 2.9])
+; ..and past the walls out to the haze, for the eye alone: columns six metres apart, rows
+; wider out, four strips round the land
+(: xw (map (i \ -150.0 + 6.0 * i) ^15) xe (rev (map (x \ 0.0 - x) xw)))
+(: xa (xw + xs + xe) tn [64.0 72.0 82.0 95.0 110.0 128.0 150.0] tso (rev (map (t \ 0.0 - t) tn)))
+(: (around f) [(f xa tso) (f (xw + [-64.0]) ts) (f ([64.0] + xe) ts) (f xa tn)])
+(: sides [(xw + [-64.0]) ([64.0] + xe)])
 
 ; a cube with its middle at x z, all glass: four walls and a roof round a grass floor, sealed,
 ; the plain seen through the glass's inner face; in the one woken in the pane toward the river
@@ -68,17 +76,22 @@
 
 (level "the apartment"
   (textures {'wall sand 'floor sand 'ceiling sand})
-  (start [(home 0) 0 (home 1 - 1.2)] 250 -4)
+  (start [(home 0) 0 (home 1 - 1.2)] 110 -4)
   (sky 15.5 'clear) (skylight (rgb 0.12 0.11 0.09))
   (ambient (rgb 0.32 0.32 0.3))
   ; the plain, open to the sky, walled by nothing to see; the land on it, dunes and the river's
   ; dry bed, its mud cracked, a stone left in it
   (void [-60 -2 -60] [60 40 60])
   (land sand (rows ts 0.0))
-  (drape mud (rows [-2.9 -2.2 -1.5 -0.75 0.0 0.75 1.5 2.2 2.9] 0.02))
+  (drape mud (rows bedts 0.02))
   (: z (meander 4.0) (skin {'all stone} (cut [3 -0.2 (z + 0.4)] [5 -0.3 (z - 0.6)] [4 -0.15 (z + 0.8)] (solid (box [3 -0.7 (z - 0.8)] [5.2 -0.2 (z + 0.7)])))))
   ; ..and what the glass shows over it all: grass, and the river running
   (beyond (drape grass (rows ts lift)))
-  (beyond (flow [0.7 0] (drape water (level-rows [-2.7 -1.3 0.0 1.3 2.7] river-y))))
+  (beyond (flow [0.7 0] (drape water (level-on xs [-2.7 -1.3 0.0 1.3 2.7] river-y))))
+  ; the land going on past the walls, its river and what the glass shows of them
+  (map (r \ drape sand r) (around (\ xs ts (rows-on xs ts 0.0))))
+  (map (q \ drape mud (rows-on q bedts 0.02)) sides)
+  (map (r \ beyond (drape grass r)) (around (\ xs ts (rows-on xs ts lift))))
+  (map (q \ beyond (flow [0.7 0] (drape water (level-on q [-2.7 -1.3 0.0 1.3 2.7] river-y)))) sides)
   ; the cubes, and the one woken in
-  (map (k \ cube (spots k 0) (spots k 1) (k = 1)) ^8))
+  (map (k \ cube (spots k 0) (spots k 1) (k = 2)) ^8))
