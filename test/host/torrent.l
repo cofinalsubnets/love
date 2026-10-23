@@ -36,6 +36,15 @@
       ("a%20b%00~" = urlenc (string [97 32 98 0 126]))
       ([["1.2.3.4" 6881] ["10.0.0.1" 51413]] = tr-peers (string [1 2 3 4 26 225 10 0 0 1 200 213]))
       (#(peer-id 0) = 20))
+; a udp tracker on loopback that refuses the connect: its words back, the socket closed. the
+; ask runs in a child, whose scope has no posix of its own for the module to lean on
+(: sp (test-bind 0)
+   s (twirl (_ \ (recv (sp 1) @ d (send (sp 1) <d (wrbe 3 4 + snip (<>d) 12 16 + "go away"), 1))) ())
+   e ("(borrow 'tracker) (puts (announce \"udp://127.0.0.1:" + show <sp + "/\" {'hash (string (cask 20))"
+      + " 'id (string (cask 20)) 'port 1 'up 0 'down 0 'left 0 'event \"\"}))")
+   r (hark [<cmdline "-e" e])
+   _ (catch s, close (sp 1))
+   (test (<r = 0) (has? >r "the tracker refused: go away")))
 
 ; --- a torrent laid here, and a seeder of it on loopback ---
 (: dir (cwd 0 + "/out/.torrent")
