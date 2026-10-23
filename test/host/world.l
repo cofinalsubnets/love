@@ -217,6 +217,95 @@
    bka (bkn ("(turn 15 [-27.2 7.25] " + bkf + ")")) bkb (bkn "(book [-27.2 1 7.25] -95)")
  (test (bkv 'lines 2 = "  (book [-27.2 1 7.25] -95)") (bk 'sel = [3]) (#bka = #bkb) (8 < #bka)
        (all (i \ mag (bka i - bkb i) < 1e-9) ^#bka)))
+; a click on a ball looked at takes it into the hands and the click let go keeps it; held
+; pressed half a second and let go, it flies along the look at the hardest; taken again
+; and the right button pressed, it falls where it was held
+(: (bht n) (: lv (world-read "(level \"t\" (room [0 0 0] [10 5 14]) (ball [5 0 3]) (start [5 0 1.5] 0 0))")
+             st (world-new 160 100 lv "")
+             (go k) (? (k < 1) st (: _ (pin st 'dt 0.05) _ (world-move st) (go (k - 1))))
+             _ (go 2) _ (pin st 'ph (-44.6 * pi / 180.0)) _ (world-mouse st 'press 1) _ (world-mouse st 'release 1)
+             (go n))
+   bh (bht 3) bb (bh 'balls 0) bhp (bb 'p) bhk (bb 'held)
+   _ (pin bh 'ph 0.6) _ (world-mouse bh 'press 1) bwp (: _ (each ^10 (_ \ (pin bh 'dt 0.05, world-move bh))) (bb 'p))
+   _ (world-mouse bh 'release 1) bv (bb 'v) bvp (: _ (each ^6 (_ \ (pin bh 'dt 0.05, world-move bh))) (bb 'p))
+   bd (bht 3) db (bd 'balls 0) dp (db 'p) _ (world-mouse bd 'press 3)
+   dq (: _ (each ^60 (_ \ (pin bd 'dt 0.05, world-move bd))) (db 'p))
+ (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
+       (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
+       (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
+; a plush lies where it is put facing its bearing, a turn swinging that on, its model read
+; from its file and set on the floor, the ball it is taken for half its height; one whose file
+; will not read is a ball. a click takes it like a ball, held it looks back at the player,
+; and thrown it lands upright and stops
+(: (pud t) (world-read ("(level \"t\" (room [0 0 0] [10 5 14]) " + t + " (start [5 0 1.5] 0 0))"))
+   pua (pud "(plush [5 0 3] 180 \"mouse.glb\")") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 \"mouse.glb\"))")
+   pus (world-new 80 50 pua "src/apps/lore/levels/") pm (pus 'sc 'plushes 0) pk (pm 'pk) pt (pk 'tris) pb (pus 'balls 0) py0 (pb 'p 1)
+   pno (world-new 80 50 (pud "(plush [5 0 3] 0 \"none.glb\")") "test/lore/")
+   plo (map (k \ amin (pk 'cols k)) ^3) phi (map (k \ amax (pk 'cols k)) ^3) r (pm 'r)
+   (pgo k) (each ^k (_ \ (pin pus 'dt 0.05, world-move pus)))
+   _ (pgo 2) _ (pin pus 'ph (-38.0 * pi / 180.0)) _ (world-mouse pus 'press 1) _ (world-mouse pus 'release 1)
+   _ (pgo 2) ph1 (pb 'held) phq (pb 'q) _ (pin pus 'ph 0.4) _ (world-mouse pus 'press 1) _ (pgo 4) _ (world-mouse pus 'release 1)
+   _ (pgo 80) pq (pb 'q) pp (pb 'p)
+ (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'file = "mouse.glb")
+       (pb 'kind = 'plush) (0.05 < r) (r < 0.3) (py0 = r) (pb 'r = r) (1000 < pk 'n) (amax pt = pk 'n - 1) (amin pt = -1)
+       (mag (plo 1 + r) < 1e-6) (mag (phi 1 - r) < 1e-6) (foldl max 0.0 (map abs [(plo 0) (phi 0) (plo 2) (phi 2)]) = pm 'w)
+       (pno 'balls 0 'r = 0.12) (pno 'sc 'plushes 0 'r = 0.12)
+       (ph1 = 1) (mag (phq 0 - cos (0.5 * pi)) < 1e-9) (pb 'held = 0) (pb 'rest = 1)
+       (pq 1 = 0.0) (pq 3 = 0.0) (pp 2 > 5.0) (mag (pp 1 - r) < 0.03)))
+; a void is open air with no walls, gravity weakens up it by the table, and walking out
+; against its edge rings, not again for a moment, and turns the walk back; a room's wall never does
+(: vlv (world-read "(level \"t\" (void [0 0 0] [10 40 10]) (solid (box [3 19.8 3] [7 20 7])) (gravity [[2 9.8] [18 2.0]]) (start [5 0 5] 90 0))")
+   vst (world-new 80 50 vlv "test/lore/")
+   (vgo k) (each ^k (_ \ (pin vst 'dt (1.0 / 30.0), world-move vst)))
+   (vtop k) (: y0 (vst 'py) _ (world-step vst 'jump) (go i m) (i = k ? m (: _ (vgo 1) (go (i + 1) (max m (vst 'py - y0))))) (go 0 0.0))
+   vlo (vtop 40) _ (pins vst 'px 5.0 'pz 5.0 'py (20.0 + eye-h) 'fv 0.0) _ (vgo 2) vhi (vtop 150)
+   _ (pins vst 'px 9.0 'pz 5.0 'th (0.5 * pi))
+   (vwalk k) (each ^k (_ \ (world-step vst 'forward, pin vst 'dt (1.0 / 30.0), world-move vst)))
+   _ (vwalk 6) vw0 (peep vst 'ward-at ()) _ (vwalk 6) vw1 (vst 'ward-at) _ (vwalk 12) vbx (vst 'px) _ (vwalk 60) vw2 (vst 'ward-at)
+   rst (world-new 80 50 (world-read "(level \"t\" (room [0 0 0] [10 5 10]) (start [9 0 5] 90 0))") "test/lore/")
+   _ (each ^30 (_ \ (world-step rst 'forward, pin rst 'dt (1.0 / 30.0), world-move rst)))
+ (test (vlv 'voids = [[[0.0 0.0 0.0] [10.0 40.0 10.0]]]) (vlv 'gravity = [[2.0 9.8] [18.0 2.0]])
+       (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (gravity [[1]]))"))
+       ((world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight (rgb 0.3 0.3 0.4)))") 'skylight = [0.3 0.3 0.4])
+       (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight 3))"))
+       (mag (vlo - 4.4 * 4.4 / 19.6) < 0.1) (mag (vhi - 4.4 * 4.4 / 4.0) < 0.3)
+       (vw0 = ()) (vw1 != ()) (vbx < 9.3) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
+; a stair shallower than a body is walked at a walk, floating steps too, at a slow frame's
+; strides too, and one too tall is not
+(: (sgo t) (sgo-at t (1.0 / 30.0) 45)
+   (sgo-at t dt n) (: sl (world-read ("(level \"t\" (room [0 0 0] [4 6 12]) " + t + " (start [2 0 1] 0 0))"))
+     ss (world-new 80 50 sl "test/lore/")
+     _ (each ^n (_ \ (world-step ss 'forward, pin ss 'dt dt, world-move ss))) [(ss 'pz) (ss 'py - eye-h)])
+   (steps h y) (foldl (\ a i (a + " (solid (box [0 " + show y + " " + show (3.0 + 0.25 * i) + "] [4 " + show (y + h * (i + 1)) + " 12]))")) "" ^10)
+   sa (sgo (steps 0.18 0)) sb (sgo ("(air (box [0 -2 3] [4 0 12]))" + steps 0.18 0)) sc (sgo (steps 0.32 0)) sd (sgo-at (steps 0.18 0) 0.2 8)
+ (test (sa 0 > 5.5) (sa 1 > 1.7) (sb 1 > 1.7) (sc 0 < 3.0) (sc 1 = 0.0) (sd 0 > 5.5) (sd 1 > 1.7)))
+; a landing sinks the eye as hard as it hit and thumps as its floor feels, a jump scuffs; a jump
+; is taken a moment after leaving an edge but not later, one pressed a moment before landing is
+; kept for it, and a head stopped on a ceiling jumps no more
+(: lt "(feel 'soft (texture 8 8 1 '((fill 0.5))))"
+   ll (world-read ("(level \"t\" (room [0 0 0] [10 6 10]) (skin {'floor " + lt + "} (solid (box [6 0 0] [10 1 10])))"
+                   + " (solid (box [0 2.6 7] [3 6 10])) (start [2 0 3] 270 0))"))
+   ls (world-new 80 50 ll "test/lore/")
+   (lgo k) (each ^k (_ \ (pin ls 'dt (1.0 / 30.0), world-move ls)))
+   (lput x y z) (pins ls 'px x 'py (y + eye-h) 'pz z 'fv 0.0 'sfx () 'jq -9.0)
+   (lcry _) (map (q \ q 0) (peep ls 'sfx ()))
+   _ (lgo 3) _ (world-step ls 'jump) _ (lgo 40) lc0 (lcry ()) ld0 (ls 'dip 0)
+   _ (lput 8.0 3.0 5.0) _ (lgo 40) lc1 (lcry ())
+   (ledge late) (: _ (lput 6.3 1.0 5.0) _ (lgo 2)
+     (go i) (? (i > 30 || ls 'py - eye-h < 0.999) i (: _ (world-step ls 'forward) _ (lgo 1) (go (i + 1))))
+     _ (go 0) _ (lgo late) _ (world-step ls 'jump) (ls 'fv))
+   lk1 (ledge 1) lk6 (ledge 6)
+   _ (lput 2.0 1.2 3.0) (lfall i) (? (i > 60 || ls 'py - eye-h < 0.15) i (: _ (lgo 1) (lfall (i + 1))))
+   _ (lfall 0) _ (world-step ls 'jump) _ (lgo 3) lq (ls 'fv) lqy (ls 'py - eye-h)
+   _ (lput 1.5 0.0 8.5) _ (lgo 2) _ (world-step ls 'jump) (lhead i) (? (i > 30 || ls 'fv = 0.0) i (: _ (lgo 1) (lhead (i + 1))))
+   lh (lhead 0) lhy (ls 'py - eye-h) _ (world-step ls 'jump) lh2 (ls 'fv)
+ (test (lc0 = ["land hard 0" "hop"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
+       (lk1 = 4.4) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
+; a body caught under something, as a landing may leave it, walks out away from it and not
+; further in, nor along it
+(: cw (world-new 80 50 (world-read "(level \"t\" (room [0 0 0] [6 5 6]) (solid (box [0 1.2 0] [2 5 6])) (start [2.1 0 3] 90 0))") "test/lore/")
+ (test !(world-free? cw 2.05 3.0) (world-free? cw 2.2 3.0) !(world-free? cw 2.1 3.1)
+       (: _ (each ^10 (_ \ (world-step cw 'forward, pin cw 'dt (1.0 / 30.0), world-move cw))) (cw 'px > 2.9))))
 ; ..f in the scene flies: forward through a wall a walker stops at, space up and no fall; f
 ; again walks, and falls to the floor
 (: flv ((cite 'vi) 'vi-open "")
