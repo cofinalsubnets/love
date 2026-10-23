@@ -1050,15 +1050,17 @@
                          rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
                          t2 <(q-base (unlines (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-swap q old t2)
-                            (: rows2 (q-rows t2) h (q-head rows2)
-                               to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
+                            (: rows2 (q-rows t2)
+                               ; every row behind stacks on what landed: each session hears, the lander's own rows aside
+                               to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (sort (keys rows2)))))
                                sent (? (0 < #rn)
                                        (map (\ s [s (post s "row \(p) landed on \(br) at \(short): \(rn)")]) to)
                                        ())
                                got (map cap (filter (x \ #(x 1) = 0) sent))
                                lost (filter (x \ 0 < #(x 1)) sent)
                                [1 ("landed: \(q-rows-say gone) left \(q), whose base line is now \(br) \(short). "
-                                   + (? !(two? to) "no row is behind it."
+                                   + (? !(two? (keys rows2)) "no row is behind it."
+                                        !(two? to) "the rows behind are yours."
                                         (0 < #rn)
                                          ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")
                                           + (? (two? lost)
