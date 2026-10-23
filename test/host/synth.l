@@ -292,5 +292,26 @@
        (pk l1 * synth-gain * synth-gain < 32767.0 * 32767.0)
        (all (i \ aall (<(l1 i) = <(l2 i)) && aall (>(l1 i) = >(l2 i))) ^#l1)))
 
+; the latch: a struck note holds past any strike's length until struck again, then fades;
+; letting the latch go fades them all, and the window's keys latch on their downs
+(: (run st k) (map (_ \ synth-mix st) ^k)
+   (en cs) (net (map (c \ net (<c * <c + >c * >c)) cs))
+   (at l x) (<l = x ? 0 (1 + at >l x))
+   ps (synth-new ()) _ (pin ps 'tim (at (map (p \ p 0) synth-timbres) "pad"))
+   _ (synth-step ps 108) _ (synth-step ps d0) n1 (#(ps 'hv)) f1 (synth-frame ps)
+   c1 (run ps 600) n2 (#(ps 'hv))
+   _ (synth-step ps d0) n3 (#(ps 'hv)) c2 (run ps 300)
+   ss (synth-new ()) _ (synth-step ss 108)
+   _ (each [d0 (synth-digits 4) (synth-digits 7)] (k \ synth-step ss k)) m1 (#(ss 'hv))
+   _ (synth-step ss 108) m2 (#(ss 'hv)) m3 (#(ss 'vs)) c3 (run ss 60)
+   ws (synth-new ()) _ (synth-wstep ws ['down 62])
+   _ (synth-wstep ws ['down 16]) _ (synth-wstep ws ['up 16]) w1 (#(ws 'hv))
+   _ (synth-wstep ws ['down 16]) w2 (#(ws 'hv))
+ (test (n1 = 2) (has? f1 "latched") (n2 = 2) (0.0 < en (drop 540 c1))      ; ringing ten seconds on
+       (n3 = 0) (0.0 < en (take 30 c2)) (en (drop 270 c2) = 0.0)
+       (m1 = 3) (m2 = 0) (ss 'latch = 0) (3 <= m3) (en (drop 30 c3) = 0.0)
+       (ws 'latch = 1) (w1 = 2 || w1 = 1) (w2 = 0)
+       (has? (synth-wframe ws) "f4: latch")))
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, and the bus rings on under the clip\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings on under the clip\n")
