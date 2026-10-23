@@ -254,7 +254,9 @@
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a
- ; bare pixel below -1 keeps a glow, -1 less its colour, put on what fills it
+ ; bare pixel below -1 keeps a glow, -1 less its colour, put on what fills it, and one at or
+ ; below -2^25 a glass's tint and sheen, -2^25 less tint + 2^24 sheen / 4, what fills it seen
+ ; through them
  ; v 'under a coarser frame of mesh-coarse's, laid first where it drew
  (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (peep v 'under () @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
@@ -262,8 +264,10 @@
    f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
    (? (two? bare) (<>bare v f B0)
       (: S (iota (f < 0)) (#S = 0 ? f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - peep f S 0)))))))
- ; ..colours s with the glows g kept on their bare pixels added
- (glowed s g) (: (ch k) (min ((s >> k & 255) + (g >> k & 255)) 255) ((ch 16 << 16) | (ch 8 << 8) | ch 0))
+ ; ..colours s with the glows g kept on their bare pixels added, or through the tints kept
+ (glowed s g) (: t (g >= 33554431) v (g - 33554431)
+   (ch k) (t * min ((s >> k & 255) * (v >> k & 255) // 255 + 4 * (v >> 24)) 255 + (1 - t) * min ((s >> k & 255) + (g >> k & 255)) 255)
+   ((ch 16 << 16) | (ch 8 << 8) | ch 0))
  ; ..sc drawn k times coarser, through v's camera: its colours and its depths, for v 'under
  (mesh-coarse v sc texs fog flags gain k) (: W (max2 1 (v 'w // k)) H (max2 1 (v 'h // k))
    (o fl) (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * fl) (1.0 * gain) 0.0])

@@ -552,6 +552,41 @@
        (#(dm 'drapes) = 2) (dm 'drapes 1 'rows 0 0 = [1.0 0.1 1.0]) (dm 'drapes 1 'rows 0 2 = ())
        (verts d1 - verts d0 = 8) (verts dm - verts d0 = 16)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (drape 3 [[[0 0 0]]]))") "(drape TEXTURE [[[x y z] ..] ..])")))
+;; ..beyond or hither, or flowing: a sheet apart from the chunks, its class over its texture's
+;; index, its flow in texels a second
+(: sl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
+   sd " (drape t [[[1 0.1 1] [2 0.1 1]] [[1 0.1 2] [2 0.1 2]]])"
+   s0 (world-read (sl + ")")) s1 (world-read (sl + sd + ")"))
+   db (world-read (sl + "(beyond (flow [0.5 0] " + sd + ")))")) dh (world-read (sl + "(hither " + sd + "))"))
+   (verts l) (: st (world-new 8 8 l "") (net (map (c \ c 'pk 'n) (st 'sc 'chunks))))
+   sb (world-new 8 8 db "" 'sc) (tx sc) (peep (sc 'sheets 0 'pk 'tris) 3 0)
+ (test (db 'drapes 0 'seen = 1) (db 'drapes 0 'flow = [0.5 0.0]) (dh 'drapes 0 'seen = 2) (s1 'drapes 0 'seen = 0)
+       (verts db = verts s0) (verts s1 > verts s0) (#(sb 'sheets) = 1) (sb 'sheets 0 'flow = [4.0 0.0])
+       (tx sb >= 16777216) (tx sb < 2 * 16777216) (tx (world-new 8 8 dh "" 'sc) >= 2 * 16777216)
+       (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (beyond 3))") "(beyond DRAPE)")
+       (has? (world-read (sl + "(flow 1 " + sd + "))")) "(flow [du dv] DRAPE)")))
+;; a brittle pane: a tap with it before the eye breaks it, leaving its shards; one not brittle stays
+(: bw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
+   bp (world-read (bw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))")) bq (world-read (bw + "(window [1 0.5 -0.2] [3 2.5 0] t))"))
+   (tap l) (world-step (world-new 8 8 l "") 'tap) (tapped l) (keys (peep (tap l) 'broke {}))
+ (test (bp 'panes 0 'brittle = 1) (bq 'panes 0 'brittle = 0) (tapped bp = [0]) (tapped bq = ()) (#(peep (tap bp) 'shards ()) = 1) (#(peep (tap bq) 'shards ()) = 0)
+       (has? (world-read (bw + "(brittle 3))")) "(brittle (window ..))")))
+;; ..a lens: on the face toward its point its glass less 2^24, the only glass a beyond drape is
+;; seen through, the other face plain; its shards plain
+(: lw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
+   bl (world-read (lw + "(brittle (lens [2 1 2] (window [1 0.5 -0.2] [3 2.5 0] t))))")) bn (world-read (lw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))"))
+   gl (world-new 8 8 bl "") (ts s) (s 'sc 'panes 0 'pk 'tris) (gt s) (amin (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
+   (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
+ (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
+       (peep (<(peep (world-step gl 'tap) 'shards ()) 'pk 'tris) 3 0 > -16777216)
+       (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
+;; ..a land: solid under its sheet and open over it, stood on where its rows put it, drawn
+;; as a drape
+(: ld "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) "
+   lv (world-read (ld + "(land t [[[-5 0 -5] [5 0 -5]] [[-5 2 5] [5 2 5]]]))")) st (world-new 8 8 lv "")
+   _ (each ^60 (_ \ world-move st)) (md p) (brush-medium (st 'sc 'brushes) p)
+ (test (md [0 0.5 0] = 0) (md [0 1.5 0] = 1) (md [0 -0.5 4.9] = 0) (abs (st 'py - 2.6) < 0.01) (#(lv 'drapes) = 1)
+       (has? (world-read (ld + "(land t 3))")) "(land TEXTURE [[[x y z] ..] ..])")))
 ; shots: in order, each for its seconds, the world still meanwhile; a sky shot is the sky alone,
 ; blue at noon; a key skips the rest; a waiting car opens on the cut
 (: sl (lv "(room [0 0 0] [4 3 4]) (start [2 0 2] 0 0) (shot 0.2 (sky 13 'partly) 0 60) (shot 0.2 [1 0 1] 90 0) (train [0.5 0 0.5] [3.5 2 3] (door [2 0 3] 1 1.8) 5)")

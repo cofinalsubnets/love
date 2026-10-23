@@ -9,14 +9,19 @@
 //  tris   4 a triangle: three vertex indices and a texture's index, -1 none, -2 a glow
 //         (added to what is behind, hiding nothing: drawn after what it lies over; on a bare
 //         pixel kept as -1 less its colour, and added to what is drawn under it), -3 - t
-//         glass of texture t (what is behind times its texel, its colour added, hiding nothing);
+//         glass of texture t (what is behind times its texel, its colour added, hiding nothing;
+//         on a bare pixel its tint and sheen kept as -2^25 less tint + 2^24 sheen / 4, the sheen
+//         a grey to 252, and what is drawn under it seen through them);
 //         verts and tris may be lists of batches, pairwise
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
 //  opts   fog r g b, fog near, fog far (view depth), flags: 1 affine, 2 snap, 4 dither, 8 cull,
 //         16 depth (the answer the depth buffer, [h w] floats, 2 where nothing was drawn),
 //         32 under (drawn only where the base is bare, below 0: a sky after the scene),
-//         64 flat (the colours answered as one row of w*h, not [h w]);
+//         64 flat (the colours answered as one row of w*h, not [h w]),
+//         128 seen (a texture's index plus 2^24 drawn only behind the nearest lens, plus
+//         2 * 2^24 only before it: through a pane the one, else the other; a lens a glass
+//         less 2^24, the only glass that counts);
 //         and an exposure k, a colour c 0 to 255 shown as 255 (1 - e^(-k c / 255)), 0 none;
 //         and a shadow's bias, in the sun's depth
 //         or a list (opts sun depth): the verts then 11 a vertex, the r g b of the light
@@ -31,7 +36,7 @@ float lm_expf(float);
 #define rz_exp lm_expf
 #endif
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_lv = 8 * sizeof(word), rz_tn = 256,
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11,   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
        rz_par = 32768, rz_band = 32, rz_pv = 9 };   // a frame big enough to share, in bands of rows
                        // rz_lv: a level halves, so a word's bits hold every chain
@@ -48,6 +53,8 @@ struct rz {
  flo_t tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
  int32_t *out;           // the frame drawn four bytes a pixel, then laid into ans a word each
  float *depth;
+ float *gz;              // seen: the nearest lens's depth, a pixel each
+ int cls, gzp;           // the triangle's class, 1 behind glass 2 before it; the glass pass
  void *ans;
  flo_t *tz;             // each 8 by 8 tile's farthest depth, then whether it was drawn on since
  intptr_t TW, TH;
@@ -182,12 +189,15 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   int L = 0;   // the texture's level, asked again every eighth pixel, and its texels one of the first's
   flo_t us = 1;
   int32_t *o = r->out + y * r->W;
-  float *dz = r->depth + y * r->W;
+  float *dz = r->depth + y * r->W, *gz = r->gz ? r->gz + y * r->W : 0;
   flo_t *td = r->tz + r->TW * r->TH + (y >> 3) * r->TW;
   for (intptr_t x = xs; x < xe; x++) {
    float const z = (float) a[0];
-   if ((e[0] | e[1] | e[2]) >= 0 && a[0] >= -1 && a[0] <= 1 && z < dz[x] && !(under && o[x] >= 0)) {
-    if (r->flags & rz_depth) dz[x] = z, td[x >> 3] = 1;
+   if ((e[0] | e[1] | e[2]) >= 0 && a[0] >= -1 && a[0] <= 1
+       && (r->gzp ? z < gz[x] : z < dz[x] && !(under && o[x] >= 0)
+                                && (!r->cls || (r->cls == 1 ? gz && z > gz[x] : !gz || z < gz[x])))) {
+    if (r->gzp) gz[x] = z;
+    else if (r->flags & rz_depth) dz[x] = z, td[x >> 3] = 1;
     else {
     flo_t const w = 1 / a[1], s = persp ? w : 1,
                 sun = shade ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : 1;
@@ -227,17 +237,24 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
       c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
      int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
-     if (r->glass) {   // glass: what is there through its tint, its sheen on it; bare, left bare
-      int32_t const q = o[x];
+     if (r->glass) {   // glass: what is there through its tint, its sheen on it; bare, its tint kept
+      int32_t const q = o[x], v = q <= -rz_vb ? (-rz_vb - q) & 0xffffff : 0xffffff, sh = q <= -rz_vb ? ((-rz_vb - q) >> 24) * 4 : 0;
       if (q >= 0) o[x] = (int32_t) (rz_ch((flo_t) (q >> 16 & 255) * tint[0] + c[0], 0) << 16 | rz_ch((flo_t) (q >> 8 & 255) * tint[1] + c[1], 0) << 8
-                                    | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0)); }
+                                    | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0));
+      else if (q == -1 || q <= -rz_vb)
+       o[x] = -rz_vb - (int32_t) (rz_ch((flo_t) (v >> 16 & 255) * tint[0], 0) << 16 | rz_ch((flo_t) (v >> 8 & 255) * tint[1], 0) << 8
+                                  | rz_ch((flo_t) (v & 255) * tint[2], 0)
+                                  | (rz_ch(((flo_t) sh * (tint[0] + tint[1] + tint[2]) + c[0] + c[1] + c[2]) / 3, 0) / 4) << 24); }
      else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, kept as -1 less it
-      int32_t const q = o[x], g = q >= 0 ? q : -1 - q,
+      int32_t const q = o[x], g = q >= 0 ? q : q <= -rz_vb ? 0 : -1 - q,
                     s = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), 0) << 8
                                    | rz_ch(c[2] + (flo_t) (g & 255), 0));
       o[x] = q >= 0 ? s : -1 - s; }
-     else {   // ..and drawn under, onto a glow kept there
-      int32_t const g = under && o[x] < -1 ? -1 - o[x] : 0;
+     else {   // ..and drawn under, onto a glow kept there, or through a tint
+      int32_t const q = o[x], g = under && q < -1 && q > -rz_vb ? -1 - q : 0;
+      if (under && q <= -rz_vb) {
+       int32_t const v = -rz_vb - q;
+       for (int k = 0; k < 3; k++) c[k] = c[k] * (flo_t) (v >> (16 - 8 * k) & 255) / 255 + (flo_t) ((v >> 24) * 4); }
       o[x] = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), d) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), d) << 8
                         | rz_ch(c[2] + (flo_t) (g & 255), d)), dz[x] = z, td[x >> 3] = 1; } } } }
    for (int i = 0; i < 3; i++) e[i] += ex[i];
@@ -354,12 +371,15 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
  intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
- r->nlv = 0, r->add = 0, r->glass = 0;   // not the last batch's
+ r->nlv = 0, r->add = 0, r->glass = 0, r->cls = 0;   // not the last batch's
  for (uintptr_t i = 0; i < nt; i++) {
   intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
-                 t = tray_get_int(tt, 4 * i + 3);
+                 t0 = tray_get_int(tt, 4 * i + 3), lens = t0 <= -3 - rz_cb, c = t0 >= rz_cb - 1 ? (t0 + 1) / rz_cb : 0,
+                 t = lens ? t0 + rz_cb : c ? (t0 + 1) % rz_cb - 1 : t0;
   if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= nv || ix[1] >= nv || ix[2] >= nv) continue;
-  if (t != ct) ct = t, r->glass = t <= -3, r->nlv = rz_levels(texs, r->glass ? -3 - t : t, r->lv), r->add = t == -2;
+  if (r->gzp && !lens) continue;   // the lens pass: only the lenses
+  if (t0 != ct) ct = t0, r->cls = (int) c, r->glass = t <= -3, r->add = t == -2,
+                r->nlv = r->gzp ? 0 : rz_levels(texs, r->glass ? -3 - t : t, r->lv);
   rz_draw(r, vt, ix, r->lv, r->nlv);
   if ((i & 255) == 255) rz_tiles(r); }
  rz_tiles(r); }
@@ -390,10 +410,15 @@ static void rz_run(struct rz *r) {
   for (intptr_t tx = 0; tx < r->TW; tx++) r->tz[ty * r->TW + tx] = 2, r->tz[r->TW * r->TH + ty * r->TW + tx] = laid;
  if (laid) rz_tiles(r);
  flo_t *const pv = r->pv;
- if (galaxyp(r->vs)) rz_batch(r, tray(r->vs), tray(r->ts), r->tx);
- else for (word v = r->vs, t = r->ts; chainp(v); v = B(v), t = B(t))
-  rz_batch(r, tray(A(v)), tray(A(t)), r->tx), r->pv += rz_pv * (intptr_t) tray_nelem(tray(A(v))) / r->stride;
- r->pv = pv;
+ // ..seen, the glass's depths first, alone, then everything
+ if (r->gz) for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
+  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++) r->gz[i] = 2;
+ for (r->gzp = r->gz != 0; r->gzp >= 0; r->gzp--) {
+  if (galaxyp(r->vs)) rz_batch(r, tray(r->vs), tray(r->ts), r->tx);
+  else for (word v = r->vs, t = r->ts; chainp(v); v = B(v), t = B(t))
+   rz_batch(r, tray(A(v)), tray(A(t)), r->tx), r->pv += rz_pv * (intptr_t) tray_nelem(tray(A(v))) / r->stride;
+  r->pv = pv; }
+ r->gzp = 0;
  int const dp = (r->flags & rz_depth) != 0;
  for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
   for (intptr_t i = y * r->W, e = i + r->W; i < e; i++)
@@ -430,8 +455,9 @@ love_noinline static struct g *host_raster(struct g *g) {
  intptr_t const fl = (intptr_t) rz_opt(o0, 5, 0);
  uintptr_t const fr1 = (fl & rz_flat) && !(fl & rz_depth) ? 1 : 2;   // the answer's rank
  uintptr_t const n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
+                 sb = fl & rz_seen ? 12 : 8,   // a colour and a depth, four bytes each, and seen the glass's
                  fw = b2w(tray_bytes(fl & rz_depth ? love_R : love_Z, fr1, n)),
-                 dw = b2w(tray_bytes(love_Z, 1, mulsat(n, 8) / sizeof(word))),   // a colour and a depth, four bytes each
+                 dw = b2w(tray_bytes(love_Z, 1, mulsat(n, sb) / sizeof(word))),
                  pw = b2w(tray_bytes(love_R, 1, rz_pv * nv + 1));
  intptr_t const TW = (W + 7) / 8, TH = (H + 7) / 8;
  uintptr_t const tw = b2w(tray_bytes(love_R, 1, (uintptr_t) (2 * TW * TH)));
@@ -440,10 +466,11 @@ love_noinline static struct g *host_raster(struct g *g) {
  struct tray *fr = ini_tray(bump(g, fw), fl & rz_depth ? love_R : love_Z, fr1), *sc = ini_tray(bump(g, dw), love_Z, 1),
              *pt = ini_tray(bump(g, pw), love_R, 1), *tt = ini_tray(bump(g, tw), love_R, 1);
  pt->shape[0] = rz_pv * nv + 1, tt->shape[0] = (uintptr_t) (2 * TW * TH);
- sc->shape[0] = mulsat(n, 8) / sizeof(word);
+ sc->shape[0] = mulsat(n, sb) / sizeof(word);
  if (fr1 == 2) fr->shape[0] = (uintptr_t) H, fr->shape[1] = (uintptr_t) W;
  else fr->shape[0] = n;
- struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(sc), .depth = (float*) tray_data(sc) + n, .ans = tray_data(fr), .pv = tray_data(pt),
+ struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(sc), .depth = (float*) tray_data(sc) + n,
+                 .gz = fl & rz_seen ? (float*) tray_data(sc) + 2 * n : 0, .ans = tray_data(fr), .pv = tray_data(pt),
                  .tz = tray_data(tt), .TW = TW, .TH = TH, .nth = 1, .yhi = H, .base = a[2], .vs = a[4], .ts = a[5], .tx = a[6] };
  // a smaller frame under it, and the ground under that
  word const b = a[2];
