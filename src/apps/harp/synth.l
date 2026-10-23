@@ -4,7 +4,8 @@
 ; least an eighth of a second ahead, longer than the runtime's pauses (synth-warm takes the
 ; first early). a backing loop (harp's pattern text) is a vi buffer under the keys; d plays
 ; in just intonation. --fm FILE adds a last timbre from an op2 bank or a wad's GENMIDI. the
-; mix goes through a bus of chorus, echo and reverb (space.c), each on its own key.
+; mix goes through a bus of chorus, echo and reverb (space.c), each on its own key. the pads
+; (pad, glass, wash) swell in through a filter a slow lfo sweeps, and fade slowly once let go.
 ; run: love synth [--fm FILE] [LOOP]   HORN=none plays silent on a seat with no card
 (module (synth synth-run synth-main synth-new synth-step synth-code synth-semis synth-name
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
@@ -12,7 +13,8 @@
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
          synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes
          synth-qwerty synth-hold synth-free synth-wstep synth-wframe synth-paint synth-window synth-trows
-         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail)
+         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail
+         synth-pads synth-pad)
 (borrow 'rove)
 (borrow 'harp)
 (borrow 'play)
@@ -28,7 +30,8 @@
  synth-digits "1234567890-="
  synth-shifted "!@#$%^&*()_+"
  ; the pitched voices of harp's kit, each with how long a strike rings
- synth-timbres [["sin" 1.2] ["tri" 1.2] ["saw" 0.9] ["sqr" 0.9] ["box" 1.6] ["chime" 3.0]]
+ synth-timbres [["sin" 1.2] ["tri" 1.2] ["saw" 0.9] ["sqr" 0.9] ["box" 1.6] ["chime" 3.0]
+                ["pad" 7.0] ["glass" 6.0] ["wash" 8.0]]
  synth-octaves 3
  synth-chunk (song-rate // 60)          ; a feed, in frames
  synth-lead (song-rate // 8)            ; the least queued ahead of the speaker
@@ -46,7 +49,7 @@
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
                 'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()
-                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'fxm () 'fxt 0}
+                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'fxm () 'fxt 0 'rls {}}
  synth-kmodes ["fixed" "follow" "just"]
 
  ; --- just intonation: the row's twelve over the center, and alt's septimal ones
@@ -109,11 +112,41 @@
  (fm? st) (synth-tims st (st 'tim) 0 = "fm")
  (fmv st s at off) (opl-voice (st 'fm (st 'prog)) (60.0 + s) 100 0.5 at off song-rate)
  (prog st d) (st 'fm ? (pins st 'prog ((st 'prog + d + 175) % 175) 'dirty 1) st)
+ ; --- the pads: a detuned unison swelling in, through a filter a slow lfo sweeps. a note is a
+ ; voice a side, each its own spread and its lfo out of step with the other's. 'n operators of
+ ; 'wave 'cents apart either side, 'att seconds to swell, 'rel to fade once let go; the filter's
+ ; 'cut (Hz at middle c, following the key by 'track octaves an octave), 'depth, 'lfo, 'q,
+ ; 'band ---
+ synth-pads {"pad"   {'wave 5 'n 7 'cents 14.0 'att 1.5 'rel 3.0 'lvl 0.11 'cut 1100.0 'track 0.5 'depth 1.2 'lfo 0.09 'q 0.8 'band 0}
+             "glass" {'wave 4 'n 4 'cents 7.0 'att 0.8 'rel 2.5 'lvl 0.13 'cut 3200.0 'track 0.7 'depth 0.8 'lfo 0.06 'q 1.3 'band 0}
+             "wash"  {'wave 7 'n 1 'cents 0.0 'att 2.5 'rel 4.0 'lvl 4.0 'cut 261.6255653005986 'track 1.0 'depth 0.5 'lfo 0.05 'q 5.0 'band 1}}
+ ksweep (cite 'dsp 'sweep)
+ ; a voice's frames through the filter, its memory carried from one chunk to the next
+ (swept [end fn gl gr] o s ph)
+  (: box {'next () 'st ()}
+     (prm f0) (gem-tray [8] [(1.0 * song-rate) (1.0 * f0) (o 'cut * exp (o 'track * s * ln2-12)) (o 'depth) (o 'lfo) ph (o 'q) (1.0 * o 'band)])
+     [end (ix \ (: f0 (peep ix 0 0)
+                   (ksweep (fn ix) (box 'next = f0 ? (box 'st) ()) (prm f0) @ r
+                      (pins box 'next (f0 + #ix) 'st >r, <r))))
+      gl gr])
+ ; the note's two voices from frame at to end; dur () holds at full once swelled
+ (synth-pad nm s at end dur)
+  (: o (synth-pads nm) f (261.6255653005986 * exp (s * ln2-12)) n (o 'n)
+     segs [[0.0 2 (3.0 / o 'att) (dur ? (60.0 / dur) 0.0) 0.0]]
+     (side k) (: sp (k ? 0.83 1.0)
+                 os (map (j \ {'f (f * exp ((n < 2 ? 0.0 (o 'cents * sp * (2.0 * j / (n - 1) - 1.0))) * ln2-12 / 100.0))
+                               'wave (o 'wave) 'l (o 'lvl) 'drop ((j * 0.37 + k * 0.21) % 1.0) 'kappa 3000.0 'segs segs}) ^n)
+                 v (ops-voice os at end 1.0 0.0 song-rate)
+                 g (k ? [0.25 1.0] [1.0 0.25])
+                 (ksweep ? (swept [end (v 1) (g 0) (g 1)] o s (k * 0.41)) [end (v 1) (g 0) (g 1)]))
+     [(side 0) (side 1)])
+ (pad? st) (tablet? (peep synth-pads (synth-tims st (st 'tim) 0) ()))
  ; --- a strike: a voice from the next frame to be written ---
- (synth-strike st s) (: tm (synth-tims st (st 'tim))
-                        v (fm? st ? (fmv st s (st 'fpos) (st 'fpos + int (tm 1 * song-rate)))
-                                    (mkvoice (st 'fpos) {'s (tm 0) 'note s 'gain 0.8 'pan 0.5 'legato (tm 1)} song-rate))
-                        (pins st 'vs (st 'vs + [v]) 'last (synth-name s) 'dirty 1))
+ (synth-strike st s) (: tm (synth-tims st (st 'tim)) at (st 'fpos) end (at + int (tm 1 * song-rate))
+                        vs (? (fm? st) [(fmv st s at end)]
+                              (pad? st) (synth-pad (tm 0) s at end (tm 1))
+                              [(mkvoice at {'s (tm 0) 'note s 'gain 0.8 'pan 0.5 'legato (tm 1)} song-rate)])
+                        (pins st 'vs (st 'vs + vs) 'last (synth-name s) 'dirty 1))
  ; --- the loop ---
  ; a text that fails harp-read answers its complaint and the loop keeps what it had; an
  ; empty text is hush. sending starts the loop if it stood
@@ -289,14 +322,16 @@
   (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1)
      f (261.6255653005986 * exp (s * ln2-12))
      ; an FM note keeps what to sound its own release from
-     h (fm? st ? [k s (fmv st s at ()) (st 'fm (st 'prog)) at]
-                 [k s (ops-voice (held-ops (tm 0) f d) at (at + 3600 * song-rate) 0.4 0.4 song-rate)])
-     (pins st 'hv (h . st 'hv) 'last (synth-name s) 'dirty 1))
+     hs (? (fm? st) [[k s (fmv st s at ()) (st 'fm (st 'prog)) at]]
+           (pad? st) (map (v \ [k s v]) (synth-pad (tm 0) s at (at + 3600 * song-rate) ()))
+           [[k s (ops-voice (held-ops (tm 0) f d) at (at + 3600 * song-rate) 0.4 0.4 song-rate)]])
+     (pins st 'hv (hs + st 'hv) 'rls (pin (st 'rls) k (pad? st ? (synth-pads (tm 0) 'rel) (1.0 / 12)))
+              'last (synth-name s) 'dirty 1))
  (fade [e f gl gr] at rl)
   [(at + rl) (ix \ (: g ((at + rl - ix) * (1.0 / rl)) c (g * (g > 0.0))
                      (f ix * (c + (1.0 - c) * (c > 1.0))))) gl gr]
  (synth-free st k)
-  (: at (st 'fpos) rl (song-rate // 12)
+  (: at (st 'fpos) rl (int (song-rate * peep (st 'rls) k (1.0 / 12)))
      (pins st 'hv (filter (p \ <p != k) (st 'hv))
               'vs (st 'vs + map (p \ #p > 3 ? (opl-voice (p 3) (60.0 + p 1) 100 0.5 (p 4) at song-rate) (fade (p 2) at rl))
                                  (filter (p \ <p = k) (st 'hv)))
@@ -317,7 +352,7 @@
    + "synth -- the qwerty rows play while they are held\r\n\r\n"
    + "  timbre " + synth-tname st + "   octave " + show (st 'oct)
    + "   last " + (string? (st 'last) ? (st 'last) "-") + "\r\n"
-   + "  held " + foldl (a \ p \ " " + synth-name (p 1) + a) "" (st 'hv) + "\r\n"
+   + "  held " + foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv))) + "\r\n"
    + fxline st + "\r\n\r\n"
    + "  z s x d c v g b h n j m , l . ; /       from c below middle c\r\n"
    + "  q 2 w 3 e r 5 t 6 y 7 u i 9 o 0 p [ = ]  from middle c\r\n\r\n"

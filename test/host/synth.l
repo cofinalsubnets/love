@@ -246,5 +246,51 @@
        (ws 'rev = 1) (ws 'rvw = 3) (ws 'cho = 1)
        (has? (synth-wframe ws) "chorus 0.5")))
 
+; --- the swept filter: a lowpass keeps what is under its cutoff and stops what is far over it,
+; --- a bandpass is unity at its peak, and a run cut anywhere answers what it does whole
+(: S (cite 'dsp 'sweep) n 4410
+   (tone f) (sin (iota n * (tau * f / 44100.0)))
+   (P o) (gem-tray [8] (map (k \ 1.0 * peep o k 0.0) ^8))
+   (rms t) (sqrt (net (t * t * (iota n >= 2205)) / 2205.0))            ; past the filter's settling
+   lp (P {0 44100 2 200 6 0.707}) bp (P {0 44100 2 1000 6 4 7 1})
+   lo (<(S (tone 50.0) () lp)) hi (<(S (tone 5000.0) () lp)) pk (<(S (tone 1000.0) () bp))
+   SW (P {0 44100 1 0 2 800 3 1.5 4 3.0 5 0.2 6 1.5})
+   x (tone 330.0 + tone 2900.0)
+   whole (<(S x () SW))
+   h1 (S (gem-tray [735] (map (i \ peep x i 0.0) ^735)) () SW)
+   h2 (S (gem-tray [(n - 735)] (map (i \ peep x (735 + i) 0.0) ^(n - 735))) (>h1) (P {0 44100 1 735 2 800 3 1.5 4 3.0 5 0.2 6 1.5}))
+ (test (0.65 < rms lo) (rms hi < 0.01) (0.65 < rms pk) (rms pk < 0.75)          ; a unit sine is 0.707
+       (S x () (P {0 10 6 1}) = ())
+       (all (i \ peep whole i 0.0 = peep <h1 i 1.0) ^735)
+       (all (i \ peep whole (735 + i) 0.0 = peep <h2 i 1.0) ^(n - 735))))
+
+; the pads: a strike swells in on two sides that differ and rings past its swell; a held one
+; holds a voice a side and, let go, fades over its release; under the clip at the wettest bus
+(: (run st k) (map (_ \ synth-mix st) ^k)
+   (en cs) (net (map (c \ net (<c * <c + >c * >c)) cs))
+   (side cs) (net (map (c \ net ((<c - >c) * (<c - >c))) cs))
+   (pk cs) (foldl max 0.0 (map (c \ max (amax (<c * <c)) (amax (>c * >c))) cs))
+   (at l x) (<l = x ? 0 (1 + at >l x))
+   (pst nm) (: st (synth-new ()) (pin st 'tim (at (map (p \ p 0) synth-timbres) nm)))   ; pin answers st
+   ps (pst "pad") _ (synth-step ps d0) cs (run ps 240)
+   gs (pst "glass") _ (synth-step gs d0) cg (run gs 240)
+   wa (pst "wash") _ (synth-step wa d0) cw (run wa 240)
+   hs (pst "pad") _ (synth-wstep hs ['down 16]) nv (#(hs 'hv)) _ (run hs 120)
+   _ (synth-wstep hs ['up 16]) rl (hs 'rls 16) fading (#(hs 'vs))
+   r1 (run hs 60) r2 (run hs 180) r3 (run hs 30)
+   (loud _) (: st (pst "pad")
+               (each [114 82 82 111 79 79 79 99 67 67] (k \ synth-step st k),
+                each [d0 (synth-digits 4) (synth-digits 7)] (k \ synth-step st k),
+                run st 420))
+   l1 (loud ()) l2 (loud ())
+ (test (all (nm \ elem nm (map (p \ p 0) synth-timbres)) ["pad" "glass" "wash"])
+       (en (take 6 cs) < en (take 6 (drop 60 cs)))           ; a tenth of a second against one past
+       (0.0 < side cs) (0.0 < en (drop 180 cs))               ; two sides; rings past three seconds
+       (0.0 < en cg) (0.0 < en cw) (0.0 < side cw)
+       (nv = 2) (abs (rl - 3.0) < 1e-9) (fading = 2) (#(hs 'hv) = 0)
+       (0.0 < en r1) (en r3 = 0.0)                           ; heard a second on, silent past three
+       (pk l1 * synth-gain * synth-gain < 32767.0 * 32767.0)
+       (all (i \ aall (<(l1 i) = <(l2 i)) && aall (>(l1 i) = >(l2 i))) ^#l1)))
+
 (test_fin (),
  puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, and the bus rings on under the clip\n")

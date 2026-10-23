@@ -11,6 +11,12 @@
 //   14 damp, 0 bright .. 1 dark
 //   a send or wet moves to its new value across the chunk, so a toggle does not click; a send
 //   gone to 0 leaves what its effect holds ringing out
+// (sweep x st prm) -> (y . st'): a mono float tray through a state-variable filter whose cutoff
+//   a slow lfo moves; st' (two floats) handed back as st next time, any other st at rest | ().
+//   prm, a float tray: 0 rate  1 the frame x begins on  2 cutoff, Hz  3 depth, octaves either
+//   side  4 lfo, Hz  5 its phase at frame 0, turns  6 q  7 0 lowpass, 1 bandpass (unity at its peak).
+//   the lfo is read off the frame's own number and the coefficient laid every 32 frames between,
+//   so a run cut into chunks anywhere answers the same
 #include "love.h"
 #if Bits == 64
 double lm_exp(double);
@@ -138,4 +144,45 @@ love_noinline static struct g *host_space(struct g *g) {
  return g; }
 static lvm(lvm_space) { LvmCallp(g, 3, host_space) }
 
+enum { sw_nprm = 8 };
+// the filter's g = tan(pi c / rate) at frame f
+static flo_t sw_g(flo_t const *p, int64_t f) {
+ flo_t const l = p[5] + p[4] * (flo_t) f / p[0], c = sp_clamp(p[2] * sp_exp((flo_t) 0.6931471805599453 * p[3] * sp_sin(l)), 10, (flo_t) 0.45 * p[0]),
+             t = c / (2 * p[0]);
+ return sp_sin(t) / sp_sin(t + (flo_t) 0.25); }
+
+love_noinline static struct g *host_sweep(struct g *g) {
+ word *a = g->sp;
+ // (sweep x st prm)
+ if (!galaxyp(a[0]) || tray(a[0])->rank != 1 || !galaxyp(a[2]) || tray(a[2])->type != love_R || tray_nelem(tray(a[2])) < sw_nprm) { a[0] = ZeroPoint; return g; }
+ flo_t p[sw_nprm];
+ for (int i = 0; i < sw_nprm; i++) p[i] = tray_get_flo(tray(a[2]), (uintptr_t) i);
+ uintptr_t const n = tray_nelem(tray(a[0])), w1 = b2w(tray_bytes(love_R, 1, n)), w2 = b2w(tray_bytes(love_R, 1, 2));
+ if (!(p[0] >= 1000 && p[0] <= 384000) || !(p[6] > (flo_t) 0.05) || n > 1 << 22) { a[0] = ZeroPoint; return g; }
+ if (!ok(g = have(g, w1 + w2 + Width(struct chain)))) return g;
+ a = g->sp;
+ struct tray *ty = ini_tray(bump(g, w1), love_R, 1), *ts = ini_tray(bump(g, w2), love_R, 1);
+ ty->shape[0] = n, ts->shape[0] = 2;
+ flo_t *y = tray_data(ty), *z = tray_data(ts);
+ int const carried = galaxyp(a[1]) && tray_nelem(tray(a[1])) == 2;
+ z[0] = carried ? tray_get_flo(tray(a[1]), 0) : 0, z[1] = carried ? tray_get_flo(tray(a[1]), 1) : 0;
+ flo_t const k = 1 / p[6];
+ int const band = p[7] > (flo_t) 0.5;
+ int64_t const f0 = (int64_t) p[1];
+ int64_t b = -1;
+ flo_t g0 = 0, g1 = 0;
+ for (uintptr_t i = 0; i < n; i++) {
+  int64_t const f = f0 + (int64_t) i, fb = f >= 0 ? f >> 5 : -((-f + 31) >> 5);
+  if (fb != b) b = fb, g0 = sw_g(p, b * 32), g1 = sw_g(p, b * 32 + 32);
+  flo_t const gg = g0 + (g1 - g0) * (flo_t) (f - b * 32) / 32,
+              a1 = 1 / (1 + gg * (gg + k)), a2 = gg * a1, a3 = gg * a2,
+              v3 = tray_get_flo(tray(a[0]), i) - z[1], v1 = a1 * z[0] + a2 * v3, v2 = z[1] + a2 * z[0] + a3 * v3;
+  z[0] = 2 * v1 - z[0] + sp_tiny - sp_tiny, z[1] = 2 * v2 - z[1] + sp_tiny - sp_tiny;
+  y[i] = band ? k * v1 : v2; }
+ struct chain *r = ini_chain(bump(g, Width(struct chain)), (intptr_t) word(ty), (intptr_t) word(ts));
+ a[0] = word(r);
+ return g; }
+static lvm(lvm_sweep) { LvmCallp(g, 2, host_sweep) }
+
 LvDef("space", space, 4, "dsp");
+LvDef("sweep", sweep, 3, "dsp");
