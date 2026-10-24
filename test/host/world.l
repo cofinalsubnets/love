@@ -590,6 +590,16 @@
    _ (each ^60 (_ \ world-move st)) (md p) (brush-medium (st 'sc 'brushes) p)
  (test (md [0 0.5 0] = 0) (md [0 1.5 0] = 1) (md [0 -0.5 4.9] = 0) (abs (st 'py - 2.6) < 0.01) (#(lv 'drapes) = 1)
        (has? (world-read (ld + "(land t 3))")) "(land TEXTURE [[[x y z] ..] ..])")))
+;; ..a room carved under it lit by the room's light alone, the same at noon as at midnight
+(: (ldr h) (: ul ("(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) (sky " + show h + " 'clear) (ambient (rgb 0.5 0.4 0.3)) (land t [[[-5 2 -5] [5 2 -5]] [[-5 2 5] [5 2 5]]]) (room [-3 0 -3] [3 1.5 3]))")
+   (map (c \ c 'lit 'base) (filter (c \ c 'hi 1 < 1.6) (world-new 8 8 (world-read ul) "" 'sc 'chunks))))
+   ldn (ldr 12)
+ (test (0 < #ldn) (ldn = ldr 0)))
+; an unlit strip: its fitting drawn with the room, and no light of its own
+(: ulr (lv "(room [0 0 0] [4 3 4]) (unlit (strip-light [2 3 2]))") ulw (world-new 8 8 ulr "")
+   (ult w) (net (map (c \ #(c 'pk 'tris)) (w 'sc 'chunks)))
+ (test (ulr 'strips 0 'unlit = 1) (#(ulw 'sc 'lights) = 0) (#(world-new 8 8 (lv "(room [0 0 0] [4 3 4]) (strip-light [2 3 2])") "" 'sc 'lights) = 1)
+       (ult (world-new 8 8 (lv "(room [0 0 0] [4 3 4])") "") < ult ulw)))
 ; shots: in order, each for its seconds, the world still meanwhile; a sky shot is the sky alone,
 ; blue at noon; a key skips the rest; a waiting car opens on the cut
 (: sl (lv "(room [0 0 0] [4 3 4]) (start [2 0 2] 0 0) (shot 0.2 (sky 13 'partly) 0 60) (shot 0.2 [1 0 1] 90 0) (train [0.5 0 0.5] [3.5 2 3] (door [2 0 3] 1 1.8) 5)")
@@ -633,7 +643,8 @@
 
 ; a surface: a level laid round a ring's tube, its meshes as far off the tube's core as they
 ; stand off the void's floor, a walk round the tube coming back round past the end, a step along the
-; ring's outside as much shorter as its middle is than its outside; laid flat, only wrapping
+; ring's outside as much shorter as its middle is than its outside, a place in the world
+; charted back where it was laid; laid flat, only wrapping
 (: sfl (lv "(surface 'torus 40 20) (void [-2 -2 -2] [42 4 22]) (solid (box [0 -1 0] [40 0 20])) (start [5 0 10] 0 0)")
    sfs (world-new 8 8 sfl "") sR (40.0 / (2.0 * pi)) sr (20.0 / (2.0 * pi))
    (off c) (: q (sqrt (c 0 * c 0 + c 2 * c 2)) (sqrt ((q - sR) * (q - sR) + c 1 * c 1)))
@@ -641,7 +652,8 @@
    _ (steps sfs 119 200) round [(sfs 'px) (sfs 'pz)]
    ring (pins (world-new 8 8 sfl "") 'th (pi / 2.0)) _ (steps ring 119 10)
    pl (world-new 8 8 (lv "(surface 'plane 10 10) (void [-2 -1 -2] [12 3 12]) (solid (box [0 -1 0] [10 0 10])) (start [9 0 5] 90 0)")) _ (steps pl 119 30)
- (test (sfl 'surface 'shape = 'torus) (sfl 'surface 'lx = 40.0) (sr - 2.0 - 1e-6 < dlo) (dhi < sr + 1e-6)
+   ssf (sfs 'sc 'surf) back (map (q \ (: c (ssf 'chart (ssf 'at (q 0) (q 1) (q 2))) (net (map (i \ abs (c i - q i)) ^3)))) [[7.0 0.5 3.0] [33.0 -1.0 17.0]])
+ (test (sfl 'surface 'shape = 'torus) (all (d \ d < 1e-9) back) (sfl 'surface 'lx = 40.0) (sr - 2.0 - 1e-6 < dlo) (dhi < sr + 1e-6)
        (mag (round 0 - 5.0) < 1e-9) (mag (round 1 - (10.0 + 200.0 * 3.4 / 30.0 - 20.0)) < 0.05)
        (mag (ring 'px - 5.0 - 10.0 * 3.4 / 30.0 * sR / (sR + sr)) < 0.01)
        (mag (pl 'px - 2.4) < 0.05) (has? (lv "(surface 'cone 1 1)") "(surface 'torus lx lz)")))

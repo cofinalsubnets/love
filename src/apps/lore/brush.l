@@ -59,7 +59,7 @@
                 (cats (map (i \ map (j \ (x0 + i + 4096) * 8192 + z0 + j + 4096) ^(z1 - z0 + 1)) ^(x1 - x0 + 1))))
    hs (foldl (\ t i (foldl (\ t k (pin t k (i . peep t k ()))) t (cells (tt i)))) {} ^#ts)
    ps (cats rows) bx (box-of ps)
-   {'air 0 'planes () 'faces () 'land {'tris tt 'cells hs} 'lo [(bx 0 0) -1000.0 (bx 0 2)] 'hi (bx 1)})
+   {'air 0 'planes () 'faces () 'land {'tris tt 'cells hs} 'lo [(bx 0 0) -1000.0 (bx 0 2)] 'hi (bx 1) 'low (bx 0 1)})
  ; ..the land's height at x z, and its facing there, or () off it
  (land-at L x z) (: tt (L 'tris)
    (on i) (: q (tt i) a (q 0) b (q 1) c (q 2) d ((b 2 - c 2) * (a 0 - c 0) + (c 0 - b 0) * (a 2 - c 2))
