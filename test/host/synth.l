@@ -334,5 +334,36 @@
        (ws 'latch = 1) (w1 = 2 || w1 = 1) (w2 = 0)
        (has? (synth-wframe ws) "f4: latch")))
 
+; the limiter: under its knee the pair passes as it came; past it one gain bends both sides
+; toward the ceiling and never through it, the louder still the louder
+(: Lm (cite 'dsp 'limit) n 735
+   (P c) (gem-tray [4] [44100.0 c 0.5 0.4])
+   (sine a) (sin (iota n * (tau * 110.0 / 44100.0)) * a)
+   z (iota n * 0.0)
+   sz (Lm z z () (P 1.0))
+   (lim l r c) (: m (cask sz) (Lm l r m (P c)))
+   q (lim (sine 0.4) (sine -0.2) 1.0)
+   (top a) (: m (cask sz) cs (map (_ \ Lm (sine a) (sine (a / 2.0)) m (P 1.0)) ^4)
+              (foldl max 0.0 (map (c \ amax (<c * <c)) cs)))
+   h (lim (sine 8.0) (sine 2.0) 1.0)
+ (test (charm? sz) (0 < sz) (Lm z z (cask 1) (P 1.0) = sz) (Lm z z (cask sz) (P 0.0) = ())
+       (aall (<q = sine 0.4)) (aall (>q = sine -0.2))                 ; under the knee, untouched
+       (top 2.0 < 1.0) (top 50.0 < 1.0) (top 2.0 < top 8.0)
+       (all (i \ abs (peep <h i 0.0 - 4.0 * peep >h i 0.0) < 1e-9) ^n)))   ; one gain, both sides
+
+; the latch's pile -- a wash, three pads and a glass over a wet bus -- stays under the clip
+(: (at l x) (<l = x ? 0 (1 + at >l x))
+   st (synth-new ())
+   (tim nm) (pin st 'tim (at (map (p \ p 0) synth-timbres) nm))
+   (run k) (map (_ \ synth-mix st) ^k)
+   (pk cs) (foldl max 0.0 (map (c \ max (amax (<c * <c)) (amax (>c * >c))) cs))
+   _ (each [114 82 82 115 83 108] (k \ synth-step st k))
+   _ (tim "wash") _ (synth-drone st -24.0) c1 (run 120)
+   _ (tim "pad") _ (synth-drone st -12.0) _ (synth-drone st -5.0) _ (synth-drone st 4.0) c2 (run 360)
+   _ (tim "glass") _ (synth-strike st 16.0) _ (synth-strike st 19.0) _ (synth-strike st 23.0) c3 (run 600)
+ (test (pk (c1 + c2 + c3) < synth-ceil * synth-ceil)
+       (synth-ceil * synth-gain < 32767.0)
+       (synth-ceil * 0.3 < sqrt (pk c3))))                              ; loud, bent, not crushed
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there\n")

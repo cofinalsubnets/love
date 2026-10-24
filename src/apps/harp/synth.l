@@ -13,7 +13,7 @@
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
          synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes
          synth-qwerty synth-hold synth-free synth-drone synth-latch synth-wstep synth-wframe synth-paint synth-window synth-trows
-         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail
+         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
          synth-pads synth-pad)
 (borrow 'rove)
 (borrow 'harp)
@@ -49,7 +49,7 @@
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
                 'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()
-                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0}
+                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0 'lim ()}
  synth-kmodes ["fixed" "follow" "just"]
 
  ; --- just intonation: the row's twelve over the center, and alt's septimal ones
@@ -207,6 +207,17 @@
         (? (charm? r) (pin st 'fxm (cask r), synth-space st lr)
            !(two? r) lr
            (pin st 'fxt (fxon st ? (st 'shm = 1 ? synth-stail synth-ftail) (st 'fxt - #<lr)), r))))
+ ; last, a limiter: under half the clip nothing moves; past it a pile of held notes bends
+ ; toward the clip, never through it
+ klimit (cite 'dsp 'limit)
+ synth-ceil (0.97 * 32767.0 / synth-gain)
+ synth-lprm (gem-tray [4] [(1.0 * song-rate) synth-ceil 0.5 0.4])
+ (synth-limit st lr)
+  (? !klimit lr
+     (klimit <lr >lr (st 'lim) synth-lprm @ r
+        (? (charm? r) (pin st 'lim (cask r), synth-limit st lr)
+           (two? r) r
+           lr)))
  (fxkey st k) (: (go l) (? (atom? l) ()
                           (k = <l 3) (pins st (<l 0) (1 - st (<l 0)) 'dirty 1)
                           (k = <l 4) (pins st (<l 1) ((st (<l 1) + 1) % #synth-wets) 'dirty 1)
@@ -215,14 +226,14 @@
  (fxline st) ("  " + foldl (+) "" (map (f \ f 2 + " " + (st (f 0) = 1 ? (show (synth-wets (st (f 1)))) "off") + "   ") synth-fx))
 
  ; one chunk as floats, (left . right): the cycles pulled, the due voices taken up, all summed
- ; and through the bus
+ ; and through the bus and the limiter
  (synth-mix st) (: base (st 'fpos) lim (base + synth-chunk)
                    _ (synth-pull st lim)
                    now (map (p \ p 1) (filter (p \ p 0 < lim) (st 'due)))
                    live (filter (v \ v 0 >= base) (st 'vs + now))
                    held (map (p \ p 2) (st 'hv))
                    ((pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim),
-                    synth-space st (mixdown (live + held) base synth-chunk)))
+                    synth-limit st (synth-space st (mixdown (live + held) base synth-chunk))))
  ; ..and out the port (any jug)
  (synth-feed st h) (say h (pack (synth-mix st) synth-chunk synth-gain))
 

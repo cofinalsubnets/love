@@ -18,6 +18,10 @@
 //   side  4 lfo, Hz  5 its phase at frame 0, turns  6 q  7 0 lowpass, 1 bandpass (unity at its peak).
 //   the lfo is read off the frame's own number and the coefficient laid every 32 frames between,
 //   so a run cut into chunks anywhere answers the same
+// (limit L R mem prm) -> (L' . R'): the pair under a ceiling, bent toward it softly past a knee
+//   by one gain for both sides, a peak envelope's that rises at once and falls slowly | the
+//   bytes mem wants | () as space. prm, a float tray: 0 rate  1 ceiling  2 knee, its share of
+//   the ceiling  3 release, seconds
 #include "love.h"
 #if Bits == 64
 double lm_exp(double);
@@ -203,5 +207,41 @@ love_noinline static struct g *host_sweep(struct g *g) {
  return g; }
 static lvm(lvm_sweep) { LvmCallp(g, 2, host_sweep) }
 
+enum { lm_nprm = 4 };
+love_noinline static struct g *host_limit(struct g *g) {
+ word *a = g->sp;
+ // (limit L R mem prm)
+ if (!galaxyp(a[0]) || !galaxyp(a[1]) || !galaxyp(a[3]) || tray(a[3])->type != love_R || tray_nelem(tray(a[3])) < lm_nprm
+     || tray(a[0])->rank != 1 || tray(a[1])->rank != 1 || tray_nelem(tray(a[0])) != tray_nelem(tray(a[1]))) { a[0] = ZeroPoint; return g; }
+ flo_t p[lm_nprm];
+ for (int i = 0; i < lm_nprm; i++) p[i] = tray_get_flo(tray(a[3]), (uintptr_t) i);
+ if (!(p[0] >= 1000 && p[0] <= 384000) || !(p[1] > 0) || !(p[3] > 0)) { a[0] = ZeroPoint; return g; }
+ uintptr_t nb = 0;
+ if (!cask_bytes(a[2], &nb) || nb != sizeof(flo_t)) { a[0] = putcharm((intptr_t) sizeof(flo_t)); return g; }
+ uintptr_t const n = tray_nelem(tray(a[0])), w1 = b2w(tray_bytes(love_R, 1, n));
+ if (n > 1 << 22) { a[0] = ZeroPoint; return g; }
+ if (!ok(g = have(g, 2 * w1 + Width(struct chain)))) return g;
+ a = g->sp;
+ struct tray *tl = ini_tray(bump(g, w1), love_R, 1), *tr = ini_tray(bump(g, w1), love_R, 1);
+ tl->shape[0] = tr->shape[0] = n;
+ flo_t *L = tray_data(tl), *R = tray_data(tr), *e = (flo_t*) cask_bytes(a[2], &nb);
+ flo_t const c = p[1], k = sp_clamp(p[2], 0, (flo_t) 0.95) * c, span = c - k,
+             fall = sp_exp(-1 / (p[0] * p[3]));
+ for (uintptr_t i = 0; i < n; i++) {
+  flo_t const x = tray_get_flo(tray(a[0]), i), y = tray_get_flo(tray(a[1]), i),
+              m = x < 0 ? -x : x, q = y < 0 ? -y : y, pk = m > q ? m : q;
+  flo_t v = *e * fall + sp_tiny - sp_tiny;
+  if (pk > v) v = pk;
+  *e = v;
+  flo_t gn = 1;
+  // past the knee the envelope comes out as k + span u/(1+u): under the ceiling, however loud
+  if (v > k) { flo_t const u = (v - k) / span; gn = (k + span * u / (1 + u)) / v; }
+  L[i] = x * gn, R[i] = y * gn; }
+ struct chain *r = ini_chain(bump(g, Width(struct chain)), (intptr_t) word(tl), (intptr_t) word(tr));
+ a[0] = word(r);
+ return g; }
+static lvm(lvm_limit) { LvmCallp(g, 3, host_limit) }
+
 LvDef("space", space, 4, "dsp");
+LvDef("limit", limit, 4, "dsp");
 LvDef("sweep", sweep, 3, "dsp");
