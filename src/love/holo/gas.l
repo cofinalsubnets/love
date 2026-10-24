@@ -88,7 +88,7 @@
                    (r19 s4) (r20 s5) (r21 s6) (r22 s7) (r23 s8) (r24 s9) (r25 s10) (r26 s11)))
    t32-names (tablet 0 @ t
                 (foldl (\ _ i (pin t (name ("r" + show i)) (name ("r" + show i)))) 0 ^13,
-                 pin t 'sp 'sp, pin t 'lr 'lr,
+                 pin t 'sp 'sp, pin t 'lr 'lr, pin t 'pc 'pc,
                  t))
    (gthumb? tgt) (elem tgt '(thumb2 thumb2sp arm thumb1))
    (gx86? tgt) (elem tgt '(x64 i386 i386m16))   ; AT&T: the x64 lane, i386 through gx-w32
@@ -1215,12 +1215,30 @@
             ('ins m os) (gr-ins m (map gr-opnd os))
             ()))
 
-   ;; thumb: the same operand grammar as a64 over r0..r12, the small system handful
+   ;; thumb: the same operand grammar as a64 over r0..r12, a register list, a shifted operand
    (gt-reg s) (peep t32-names (name s) ())
+   gt-shs (gtab '((lsl shl) (lsr shr) (asr sar) (ror ror)))
+   (gt-list toks)                                   ; {r4-r7, lr} -> (r4 r5 r6 r7 lr)
+    (: (r t) (t @ ('sym s) (gt-reg s @ x (nom? x ? x (scare 'gas-thumb-register s))) (scare 'gas-thumb-operand toks))
+       (n x) (foldl (\ v c (v * 10 + c - 48)) 0 (chars (snip (show x) 1 #(show x))))   ; r5 -> 5
+       (go ts acc)
+        (ts @ () (rev acc)
+              (a . ('ch 45) . b . more) (: lo (n (r a)) hi (n (r b))
+                                       (go (more @ (('ch 44) . m) m more)
+                                           (foldl (\ l i (name ("r" + show (lo + i)) . l)) acc ^(hi - lo + 1))))
+              (a . ('ch 44) . more) (go more (r a . acc))
+              (a) (rev (r a . acc))
+              (scare 'gas-thumb-operand toks))
+       (go toks ()))
    (gt-opnd toks)
     (toks @ (('ch 35) . rest) ['imm (gimm rest)]
             (('num _) . _) ['imm (gimm toks)]
             (('sym s)) (gt-reg s @ r (nom? r ? ['reg r 4] ['sym (name s)]))
+            (('sym s) . rest) (ghas? gt-shs (name s) ? ['sh (gt-shs (name s)) <>(gt-opnd rest)]
+                                 (scare 'gas-thumb-operand toks))
+            (('ch 123) . rest) (#rest @ n
+                                  (rest (n - 1) = '(ch 125) ? ['regs (gt-list (snip rest 0 (n - 1)))]
+                                     (scare 'gas-thumb-operand toks)))
             (('ch 91) ('sym b) ('ch 93)) ['mem (gt-reg b) 0]
             (('ch 91) . ('sym b) . ('ch 44) . rest)
              (#rest @ n
@@ -1229,8 +1247,14 @@
             (scare 'gas-thumb-operand toks))
    (gt-r o) (o @ ('reg x _) x (scare 'gas-thumb-register o))
    (gt-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-thumb-operand o))
+   (gt-sh? o) (o @ ('sh _ _) 1 _ 0)
    gt-nils (gtab '((nop nop) (wfi wfi) (isb isb)))
-   gt-alu (gtab '((add add) (sub sub) (and and) (orr or) (eor xor) (mul imul)))
+   gt-alu (gtab '((add add) (sub sub) (and and) (orr or) (eor xor) (mul imul)
+                  (adds adds) (subs subs) (adc adc) (adcs adcs) (sbc sbc) (sbcs sbcs) (rsb rsb) (rsbs rsbs)
+                  (ands ands) (orrs ors) (eors eors) (bic bic) (bics bics) (orn orn) (addw add) (subw sub)))
+   gt-sh3 (gtab '((lsl lsl) (lsr lsr) (asr asr)))
+   ; bcc: b and a condition, as gas's bne
+   (gt-bcc m) (#(show m) = 3 && (show m) 0 = 98 ? (peep ga-cc (name (snip (show m) 1 3)) ()) ())
    (gt-ins m os)
     (#os @ k
        (? (ghas? gt-nils m) [[(gt-nils m)]]
@@ -1240,11 +1264,26 @@
           (m = 'mrs) [['mrs (gt-r (os 0)) (<>(os 1))]]
           (m = 'b) [['jmp (<>(os 0))]]
           (m = 'bl) [['call (<>(os 0))]]
+          (nom? (gt-bcc m)) [['br (gt-bcc m) (<>(os 0))]]
           (m = 'bx) (gt-r (os 0) = 'lr ? '((ret)) [['jmpr (gt-r (os 0))]])
+          (m = 'push) [['pushm (os 0 @ ('regs rs) rs (scare 'gas-thumb-operand os))]]
+          (m = 'pop) [['popm (os 0 @ ('regs rs) rs (scare 'gas-thumb-operand os))]]
           (m = 'mov) ((os 1) @ ('imm n) [['li (gt-r (os 0)) n]] [['mov (gt-r (os 0)) (gt-r (os 1))]])
+          (m = 'movw) [['li (gt-r (os 0)) (<>(os 1) @ n (0 <= n < 65536 ? n (scare 'gas-thumb-movw n)))]]
+          (m = 'mvn) ((os 1) @ ('imm n) [['li (gt-r (os 0)) (-1 - n)]] [['mvn (gt-r (os 0)) (gt-r (os 1))]])
           (m = 'cmp) [['cmp (gt-r (os 0)) (gt-v (os 1))]]
+          (m = 'tst) [['test (gt-r (os 0)) (gt-v (os 1))]]
+          (m = 'cmn) ((os 1) @ ('imm n) (n != 0 ? [['cmp (gt-r (os 0)) (0 - n)]] (scare 'gas-thumb-cmn os))   ; cmn #0 sets C apart
+                               (scare 'gas-thumb-operand os))
+          (m = 'clz) [['clz (gt-r (os 0)) (gt-r (os 1))]]
+          (m = 'ubfx) [['ubfx (gt-r (os 0)) (gt-r (os 1)) (<>(os 2)) (<>(os 3))]]
+          (elem m '(umull umlal smull)) [[m (gt-r (os 0)) (gt-r (os 1)) (gt-r (os 2)) (gt-r (os 3))]]
+          (ghas? gt-sh3 m)
+           (: c (os (k - 1)) [[(gt-sh3 m) (gt-r (os 0)) (gt-r (os (k - 2))) (gt-v c)]])
           (ghas? gt-alu m)
-           (k = 3 ? [[(gt-alu m) (gt-r (os 0)) (gt-r (os 1)) (gt-v (os 2))]]
+           (? (gt-sh? (os (k - 1)))
+                (: sh (os (k - 1)) [['alush (gt-alu m) (gt-r (os 0)) (gt-r (os (k - 3))) (gt-r (os (k - 2))) (sh 1) (sh 2)]])
+              (k = 3) [[(gt-alu m) (gt-r (os 0)) (gt-r (os 1)) (gt-v (os 2))]]
               [[(gt-alu m) (gt-r (os 0)) (gt-r (os 0)) (gt-v (os 1))]])
           (m = 'ldr) ((os 1) @ ('mem b o) [['ld (gt-r (os 0)) b o]] (scare 'gas-thumb-operand os))
           (m = 'str) ((os 1) @ ('mem b o) [['st b o (gt-r (os 0))]] (scare 'gas-thumb-operand os))
@@ -1583,10 +1622,10 @@
               () (gf-lines tgt src)))
    ; -> [secs fns objs weaks [aliases]]: secs ((name type flags forms)..) first-seen, fns and
    ; objs the .globl names a label here defines, split by whether its section executes
-   (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "")
+   (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "" ".text")
    ; ..read from a section of the caller's own, home, wearing [type flags] htd; a numeric label
    ; is named pfx + GNU's own, so two readings never lay one twice
-   (gas-top-in tgt src home htd pfx)
+   (gas-top-in tgt src home htd pfx hsub)
     (: st {'cur home 'prev home 'stk () 'run () 'order () 'globl () 'md (gx-md tgt)}
        secs {}                                      ; name -> [type flags forms-reversed]
        labs {}                                      ; label -> its section
@@ -1717,7 +1756,7 @@
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
-              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident") || starts? mn ".cfi_") 0
+              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
               ; the ISA a line may use: every one this reader knows, always
               (elem mn '(".arch" ".arch_extension" ".cpu")) 0
               ; the x86 segment the lines after it run in: their operand and address widths
@@ -1743,8 +1782,8 @@
        _ (flush 0)
        _ (foldl (\ _ nm (pool nm)) 0 (rev (st 'order)))      ; each pool still waiting ends its section
        ; each subsection after its section's own forms, in number order; a function's home has no
-       ; tail of its own, so its subsections go to .text
-       _ (foldl (\ _ nm (: b (gf-base nm) t (b = "" ? ".text" b) r (secs nm)
+       ; tail of its own, so its subsections go to hsub, the section the function lands in
+       _ (foldl (\ _ nm (: b (gf-base nm) t (b = "" ? hsub b) r (secs nm)
                           (row t [<r <>r],
                            secs t @ q (pin secs t [<q <>q (<>>r + <>>q)]),
                            foldl (\ _ f (two? f && <f = 'label ? (pin labs (show <>f) t) 0)) 0 <>>r,

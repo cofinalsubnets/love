@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef inf_heap
+#define inf_heap 0
+#endif
 #ifndef wideld
 #define wideld 0
 static uint64_t ld64le(uint8_t const *p) {
@@ -38,7 +41,8 @@ static const uint8_t gz_clord[19] = {
 #define DROOT 9
 #define CROOT 7
 
-// one block's decode tables, 10 KB on inf_run's frame: the kernel's 64 KiB boot stack inflates with it
+// one block's decode tables, 10 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
+// stack inflates with it
 struct inf_tabs {
  uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT], lsym[288], dsym[32], csym[19];
  struct inf_code lit, dst, cl;
@@ -96,14 +100,13 @@ static int inf_fast_run(const uint8_t *in, uintptr_t n, uintptr_t *ipp, uint64_t
 
 // -1 where the twin answers (), -2 past cap. out NULL answers the exact inflated length;
 // dic is a preset dictionary of nd bytes before the output (nd 0 for none)
-static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
-                        const uint8_t *dic, uintptr_t nd) {
+static int64_t inf_rundt(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
+                         const uint8_t *dic, uintptr_t nd, struct inf_tabs *t) {
  uintptr_t ip = 0, op = 0;
  uint64_t bb = 0;
  unsigned bc = 0, last, typ, i;
  uint8_t lens[320];
- struct inf_tabs t;
- t.dic = dic, t.nd = nd;
+ t->dic = dic, t->nd = nd;
 
 // libdeflate's refill: step ip by the bytes that wholly landed; a spilled top is read again
 #define FILL() do { \
@@ -139,9 +142,9 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
 
   if (typ == 1) {                                // the fixed code, RFC 1951 §3.2.6
    for (i = 0; i < 288; i++) lens[i] = i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8;
-   inf_build(&t.lit, lens, 288, t.lsym, t.ltab, LROOT);
+   inf_build(&t->lit, lens, 288, t->lsym, t->ltab, LROOT);
    for (i = 0; i < 30; i++) lens[i] = 5;
-   inf_build(&t.dst, lens, 30, t.dsym, t.dtab, DROOT); }
+   inf_build(&t->dst, lens, 30, t->dsym, t->dtab, DROOT); }
   else {                                         // the block's own, read through a third
    unsigned hlit, hdist, hclen, tot, prev = 0;
    uint8_t cl[19];
@@ -149,13 +152,13 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
    hlit += 257; hdist += 1; hclen += 4;
    memset(cl, 0, sizeof cl);
    for (i = 0; i < hclen; i++) { unsigned v; TAKE(3, v); cl[gz_clord[i]] = (uint8_t) v; }
-   inf_build(&t.cl, cl, 19, t.csym, t.ctab, CROOT);
+   inf_build(&t->cl, cl, 19, t->csym, t->ctab, CROOT);
    memset(lens, 0, sizeof lens);
    tot = hlit + hdist;
    // a run may overshoot tot, as the twin's does: the write is clamped, the cursor not
    for (i = 0; i < tot; ) {
     unsigned sy, r, v, k;
-    SYM(t.cl, t.ctab, CROOT, sy);
+    SYM(t->cl, t->ctab, CROOT, sy);
     if (sy < 16)       { r = 1; v = sy; }
     else if (sy == 16) { TAKE(2, r); r += 3; v = prev; }
     else if (sy == 17) { TAKE(3, r); r += 3; v = 0; }
@@ -163,16 +166,16 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
     else return -1;
     for (k = 0; k < r; k++) if (i + k < sizeof lens) lens[i + k] = (uint8_t) v;
     i += r; prev = v; }
-   inf_build(&t.lit, lens, hlit, t.lsym, t.ltab, LROOT);
-   inf_build(&t.dst, lens + hlit, hdist, t.dsym, t.dtab, DROOT); }
+   inf_build(&t->lit, lens, hlit, t->lsym, t->ltab, LROOT);
+   inf_build(&t->dst, lens + hlit, hdist, t->dsym, t->dtab, DROOT); }
 
   for (;;) {                                     // the symbol loop, fixed or dynamic
    unsigned sy, l, d, x;
    if (out && ip + 8 <= n && op + 266 <= cap) {
-    int f = inf_fast_run(in, n, &ip, &bb, &bc, out, &op, cap, &t);
+    int f = inf_fast_run(in, n, &ip, &bb, &bc, out, &op, cap, t);
     if (f < 0) return -1;
     if (f) break; }
-   SYM(t.lit, t.ltab, LROOT, sy);
+   SYM(t->lit, t->ltab, LROOT, sy);
    if (sy < 256) {
     if (op >= cap) return -2;
     if (out) out[op] = (uint8_t) sy;
@@ -182,7 +185,7 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
    sy -= 257;
    l = gz_lbase[sy];
    if (gz_lext[sy]) { TAKE(gz_lext[sy], x); l += x; }
-   SYM(t.dst, t.dtab, DROOT, sy);
+   SYM(t->dst, t->dtab, DROOT, sy);
    if (sy > 29) return -1;
    d = gz_dbase[sy];
    if (gz_dext[sy]) { TAKE(gz_dext[sy], x); d += x; }
@@ -207,6 +210,20 @@ static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t 
 #undef FILL
 #undef TAKE
 #undef SYM
+}
+// one block's tables: on the frame, or with inf_heap from alloc, for a stack too small for
+// them (a playdate's game task)
+static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
+                        const uint8_t *dic, uintptr_t nd) {
+#if inf_heap
+ struct inf_tabs *t = alloc(NULL, sizeof *t);
+ if (!t) return -1;
+ int64_t r = inf_rundt(in, n, out, cap, dic, nd, t);
+ return alloc(t, 0), r;
+#else
+ struct inf_tabs t;
+ return inf_rundt(in, n, out, cap, dic, nd, &t);
+#endif
 }
 static int64_t inf_run(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap) {
  return inf_rund(in, n, out, cap, 0, 0); }

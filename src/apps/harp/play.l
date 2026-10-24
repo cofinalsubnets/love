@@ -127,10 +127,8 @@
    ; one voice at full scale reaches 0.6 of the range; -g moves the mix under that ceiling
    harp-scale 20000.0
    (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
-   ; the same saturation over a tray: `// 1` truncates toward zero as `int` does
-   (clipv g t) (: v (t * g // 1)
-                  hi (v > 32767)  lo (v < -32768)
-                  (v * (1 - hi) * (1 - lo) + hi * 32767 + lo * -32768))
+   ; the same saturation over a tray, left for pinv to truncate toward zero as `int` does
+   (clipv g t) (min 32767.0 (max -32768.0 (t * g)))
    ; two float trays out as interleaved 16-bit le frames. pinv lays a channel per call (stride the
    ; frame, width the sample); the byte loop is the fallback, and test/law/harp.l checks one against the other.
    (pack lr n g)

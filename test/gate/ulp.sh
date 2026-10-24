@@ -40,8 +40,8 @@ for w in moon sys; do
 done
 
 # `reduce` reaches the Payne-Hanek reduction (|x| up to 2^1020); the sweep stops at 2^8;
-# `arcs` lays the arcs' grid
-for mode in sweep reduce arcs; do
+# `arcs` lays the arcs' grid; `float` sweeps the binary32 twins
+for mode in sweep reduce arcs float; do
   case $mode in sweep) a= ;; *) a=$mode ;; esac
   for w in moon sys; do
     "$d/ulp_$w" $a > "$d/$mode.$w" 2>&1
@@ -62,7 +62,8 @@ $m test/gate/arcs.l "$d/arcs.sys" > "$d/arcs.out" 2>&1 \
 nf=0
 while read -r fn lim; do
   [ -n "$fn" ] || continue
-  got=$(awk -v f="$fn" '$1 == f { print $3; exit }' "$d/sweep.sys")
+  case $fn in *f|*fneg) rep=float ;; *) rep=sweep ;; esac
+  got=$(awk -v f="$fn" '$1 == f { print $3; exit }' "$d/$rep.sys")
   [ -n "$got" ] || fail "no '$fn' line in the report -- src/tools/ulp.c changed shape"
   awk -v g="$got" -v l="$lim" 'BEGIN { exit !(g + 0 <= l + 0) }' \
     || fail "$fn measured $got ulp, over its documented ceiling of $lim"
@@ -80,6 +81,14 @@ asin 1
 acos 1
 pow 7
 powrim 37
+sqrtf 0
+expf 1
+logf 1
+logn1f 1
+sinf 1
+cosf 1
+powf 1
+powfneg 1
 EOF
 
-echo "test_ulp: mooncc and $cc_g build lm.c into byte-identical math (3 modes), all $nf functions hold their ulp ceiling; $(cat "$d/arcs.out")"
+echo "test_ulp: mooncc and $cc_g build lm.c into byte-identical math (4 modes), all $nf functions hold their ulp ceiling; $(cat "$d/arcs.out")"

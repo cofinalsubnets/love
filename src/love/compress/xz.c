@@ -294,13 +294,15 @@ static void rc_len(struct lz_rc *e, struct lz_len *l, unsigned ps, unsigned v) {
  if (v < 16) { rc_bit(e, &l->choice2, 0); rc_tree(e, l->mid[ps], 3, v - 8); return; }
  rc_bit(e, &l->choice2, 1); rc_tree(e, l->high, 8, v - 16); }
 
-// --- the coder's symbols (lc 3, lp 0, pb 2) ---------------------------------------------------
-#define XE_PBM 3u
+// --- the coder's symbols (lc 4, lp 0, pb 0: text and code both pay) ----------------------------
+#define XE_LC 4
+#define XE_PB 0
+#define XE_PBM ((1u << XE_PB) - 1)
 
 static void xe_lit(struct lz_model *m, struct lz_rc *e, const uint8_t *s, uintptr_t p) {
  unsigned st = m->state;
  rc_bit(e, &m->ismatch[st][p & XE_PBM], 0);
- lzp *pr = m->lit + 0x300 * ((p ? s[p - 1] : 0) >> 5);
+ lzp *pr = m->lit + 0x300 * ((p ? s[p - 1] : 0) >> (8 - XE_LC));
  if (st >= 7) {                    // off drops to 0 at the first bit off the match byte
   unsigned mb = s[p - m->reps[0] - 1], off = 0x100, sym = s[p] | 0x100;
   do {
@@ -402,7 +404,7 @@ static uint32_t xp_dist(const struct xe_px *x, uint32_t d, unsigned len) {
  return x->slot[ls][sl] + x->align[(d - ((2 | (sl & 1)) << fb)) & 15]; }
 static uint32_t xp_lit(const struct xe_px *x, const struct lz_model *m, unsigned st, const uint8_t *s,
                        uintptr_t p, uint32_t r0) {
- const lzp *pr = m->lit + 0x300 * ((p ? s[p - 1] : 0) >> 5);
+ const lzp *pr = m->lit + 0x300 * ((p ? s[p - 1] : 0) >> (8 - XE_LC));
  if (st < 7) return xp_tree(x, pr, 8, s[p]);
  unsigned mb = s[p - r0 - 1], off = 0x100, sym = s[p] | 0x100;
  uint32_t c = 0;
@@ -418,11 +420,15 @@ static uint32_t xp_lit(const struct xe_px *x, const struct lz_model *m, unsigned
 #define XE_OPTS 2048
 #define XB_LIT 0xffffffffu
 #define XB_SHORT 0xfffffffeu
-struct xe_node { uint32_t price, back, reps[4]; uint16_t prev, len; uint8_t state; };
+struct xe_node { uint32_t price, back, reps[4]; uint16_t prev, len, ext; uint8_t state; };
 struct xe_op { uint32_t back, len; };
 
 static void xn_take(struct xe_node *nd, uint32_t i, uint32_t price, uint32_t from, uint32_t back) {
- if (price < nd[i].price) nd[i].price = price, nd[i].prev = (uint16_t) from, nd[i].back = back; }
+ if (price < nd[i].price) nd[i].price = price, nd[i].prev = (uint16_t) from, nd[i].back = back, nd[i].ext = 0; }
+// back, then a literal, then rep0 for ext bytes; with XN_LR0, back is the literal itself
+#define XN_LR0 0x8000u
+static void xn_take3(struct xe_node *nd, uint32_t i, uint32_t price, uint32_t from, uint32_t back, unsigned ext) {
+ if (price < nd[i].price) nd[i].price = price, nd[i].prev = (uint16_t) from, nd[i].back = back, nd[i].ext = (uint16_t) ext; }
 static void xn_state(struct xe_node *nd, uint32_t i) {   // node i's state and reps, off its op
  struct xe_node *a = nd + nd[i].prev, *b = nd + i;
  unsigned st = a->state;
@@ -435,7 +441,22 @@ static void xn_state(struct xe_node *nd, uint32_t i) {   // node i's state and r
   b->reps[0] = d, b->state = st < 7 ? 8 : 11; }
  else {
   b->reps[3] = b->reps[2], b->reps[2] = b->reps[1], b->reps[1] = b->reps[0];
-  b->reps[0] = b->back - 4, b->state = st < 7 ? 7 : 10; } }
+  b->reps[0] = b->back - 4, b->state = st < 7 ? 7 : 10; }
+ if (b->ext) b->state = (b->ext & XN_LR0 ? b->state : lz_litst(b->state)) < 7 ? 8 : 11; }
+
+// a literal at q in state st, then rep0 r0 as far as it runs below end: the price, and the run in *L
+static uint32_t xe_lr0(const struct xe_px *x, const struct lz_model *m, const uint8_t *s, uintptr_t q,
+                       unsigned st, uint32_t r0, uintptr_t end, unsigned *L) {
+ uintptr_t q1 = q + 1;
+ *L = 0;
+ if (q1 + 2 > end || q1 <= r0) return XP_INF;
+ const uint8_t *r = s + q1 - r0 - 1;
+ if (r[0] != s[q1] || r[1] != s[q1 + 1]) return XP_INF;
+ *L = lzf_mlen(r, s + q1, end - q1 > XE_NICE ? XE_NICE : (unsigned) (end - q1));
+ unsigned st2 = lz_litst(st), ps = q & XE_PBM, ps2 = q1 & XE_PBM;
+ return xp_bit(x, m->ismatch[st][ps], 0) + xp_lit(x, m, st, s, q, r0)
+      + xp_bit(x, m->ismatch[st2][ps2], 1) + xp_bit(x, m->isrep[st2], 1) + xp_bit(x, m->isg0[st2], 0)
+      + xp_bit(x, m->isrep0l[st2][ps2], 1) + x->rep[ps2][*L - 2]; }
 
 // -> how many ops, in ops, to cover the stretch from p (avail bytes on at most)
 static unsigned xe_plan(struct lz_model *m, struct lzf *f, struct xe_px *x, struct xe_node *nd,
@@ -459,6 +480,10 @@ static unsigned xe_plan(struct lz_model *m, struct lzf *f, struct xe_px *x, stru
           cur, XB_LIT);
   if (q > c->reps[0] && s[q] == s[q - c->reps[0] - 1])
    xn_take(nd, cur + 1, prep + xp_bit(x, m->isg0[st], 0) + xp_bit(x, m->isrep0l[st][ps], 0), cur, XB_SHORT);
+  else {                                          // a literal, then rep0 in the state it leaves
+   unsigned L2; uint32_t pr = xe_lr0(x, m, s, q, st, c->reps[0], end, &L2);
+   if (L2) { while (end_ < cur + 1 + L2) nd[++end_].price = XP_INF;
+             xn_take3(nd, cur + 1 + L2, base + pr, cur, XB_LIT, L2 | XN_LR0); } }
   // the reps
   unsigned rl[4], rmax = 0, ri = 0;
   for (unsigned i = 0; i < 4; i++) {
@@ -472,7 +497,7 @@ static unsigned xe_plan(struct lz_model *m, struct lzf *f, struct xe_px *x, stru
   if (rmax >= XE_NICE || ml >= XE_NICE) {
    uint32_t L = rmax >= ml ? rmax : ml;
    while (end_ < cur + L) nd[++end_].price = XP_INF;
-   nd[cur + L].price = 0, nd[cur + L].prev = (uint16_t) cur;
+   nd[cur + L].price = 0, nd[cur + L].prev = (uint16_t) cur, nd[cur + L].ext = 0;
    nd[cur + L].back = rmax >= ml ? ri : ds[k - 1] + 4;
    end_ = cur + L; cur = end_; break; }
   uint32_t top = cur + (rmax > ml ? rmax : ml);
@@ -482,16 +507,27 @@ static unsigned xe_plan(struct lz_model *m, struct lzf *f, struct xe_px *x, stru
    uint32_t pr = prep + (i == 0 ? xp_bit(x, m->isg0[st], 0) + xp_bit(x, m->isrep0l[st][ps], 1)
                        : xp_bit(x, m->isg0[st], 1) + (i == 1 ? xp_bit(x, m->isg1[st], 0)
                          : xp_bit(x, m->isg1[st], 1) + xp_bit(x, m->isg2[st], i == 3)));
-   for (unsigned L = 2; L <= rl[i]; L++) xn_take(nd, cur + L, pr + x->rep[ps][L - 2], cur, i); }
+   for (unsigned L = 2; L <= rl[i]; L++) xn_take(nd, cur + L, pr + x->rep[ps][L - 2], cur, i);
+   unsigned L = rl[i], L2; uint32_t p3 = xe_lr0(x, m, s, q + L, st < 7 ? 8 : 11, c->reps[i], end, &L2);
+   if (L2) { while (end_ < cur + L + 1 + L2) nd[++end_].price = XP_INF;
+             xn_take3(nd, cur + L + 1 + L2, pr + x->rep[ps][L - 2] + p3, cur, i, L2); } }
   uint32_t pmat = pm1 + xp_bit(x, m->isrep[st], 0);
   for (unsigned j = 0, L = 2; j < k; j++)
    for (; L <= ls[j]; L++)
-    xn_take(nd, cur + L, pmat + x->len[ps][L - 2] + xp_dist(x, ds[j], L), cur, ds[j] + 4); }
+    xn_take(nd, cur + L, pmat + x->len[ps][L - 2] + xp_dist(x, ds[j], L), cur, ds[j] + 4);
+  for (unsigned j = 0; j < k; j++) {               // each match at its longest, a literal, then rep0
+   unsigned L = ls[j], L2; uint32_t p3 = xe_lr0(x, m, s, q + L, st < 7 ? 7 : 10, ds[j], end, &L2);
+   if (L2) { while (end_ < cur + L + 1 + L2) nd[++end_].price = XP_INF;
+             xn_take3(nd, cur + L + 1 + L2, pmat + x->len[ps][L - 2] + xp_dist(x, ds[j], L) + p3, cur, ds[j] + 4, L2); } } }
  // back from the end, the ops in order
  unsigned n = 0;
- for (uint32_t i = cur; i; i = nd[i].prev) nd[i].len = (uint16_t) (i - nd[i].prev), n++;
+ for (uint32_t i = cur; i; i = nd[i].prev) nd[i].len = (uint16_t) (i - nd[i].prev), n += !nd[i].ext ? 1 : nd[i].ext & XN_LR0 ? 2 : 3;
  unsigned k = n;
- for (uint32_t i = cur; i; i = nd[i].prev) k--, ops[k].back = nd[i].back, ops[k].len = nd[i].len;
+ for (uint32_t i = cur; i; i = nd[i].prev) {
+  unsigned e = nd[i].ext & ~XN_LR0, two = nd[i].ext & XN_LR0;
+  if (e) k--, ops[k].back = 0, ops[k].len = e;
+  if (e && !two) k--, ops[k].back = XB_LIT, ops[k].len = 1;
+  k--, ops[k].back = nd[i].back, ops[k].len = nd[i].len - (two ? e : e ? e + 1 : 0); }
  return n; }
 
 // the whole stream into out (cap the worst case) -> its length, or -1. a chunk that does not
@@ -500,9 +536,9 @@ static unsigned xe_plan(struct lz_model *m, struct lzf *f, struct xe_px *x, stru
 #define XE_CC 65536u
 #define XE_CSLACK 256u
 
-struct xe_arena { struct lz_model m; lzp lit[0x300 << 3]; uint8_t cs[XE_CC + XE_CSLACK];
+struct xe_arena { struct lz_model m; lzp lit[0x300 << XE_LC]; uint8_t cs[XE_CC + XE_CSLACK];
                   uint32_t h2[1u << 16], h3[1u << 16], h4[1u << XE_H4BITS];
-                  struct xe_px px; struct xe_node nd[XE_OPTS + LZ_MAXLEN + 2]; struct xe_op ops[XE_OPTS + 1];
+                  struct xe_px px; struct xe_node nd[XE_OPTS + 2 * LZ_MAXLEN + 4]; struct xe_op ops[XE_OPTS + 2 * LZ_MAXLEN + 4];
                   uint32_t ls[XE_MAXM], ds[XE_MAXM]; };
 
 // the bytes below p0 are a base the decoder holds already: indexed, never coded
@@ -514,7 +550,7 @@ static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out,
  int first = !p0, needprops = 1, needstate = 1;
  memset(a->h2, 0, sizeof a->h2), memset(a->h3, 0, sizeof a->h3), memset(a->h4, 0, sizeof a->h4);
  lzf_ins(&f, p0, LZ_MAXLEN);
- m->lit = a->lit; m->lc = 3; m->lp = 0; m->pb = 2;
+ m->lit = a->lit; m->lc = XE_LC; m->lp = 0; m->pb = XE_PB;
  xp_init(&a->px);
  while (p < n) {
   uintptr_t start = p, uend = n - p > XE_CU ? p + XE_CU : n;
@@ -543,7 +579,7 @@ static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out,
    out[o++] = (uint8_t) (0x80 | rst << 5 | (u - 1) >> 16);
    out[o++] = (uint8_t) ((u - 1) >> 8); out[o++] = (uint8_t) (u - 1);
    out[o++] = (uint8_t) ((c - 1) >> 8); out[o++] = (uint8_t) (c - 1);
-   if (rst >= 2) out[o++] = 0x5d;
+   if (rst >= 2) out[o++] = (uint8_t) (XE_PB * 45 + XE_LC);
    memcpy(out + o, a->cs, c); o += c;
    first = needprops = needstate = 0; }
   else {

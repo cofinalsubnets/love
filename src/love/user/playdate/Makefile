@@ -22,7 +22,13 @@
 R := ../../../..
 include $(R)/common.mk
 
-o = $(R)/out/playdate
+# game: cas, the rune workbench, or stones, lore's canyon (game=stones), laid in its own
+# out/playdate-stones; the corpus headers are both in out/playdate
+game ?= cas
+st = $(filter stones,$(game))
+hd = $(R)/out/playdate
+o = $(hd)$(if $(st),-stones)
+or = $(o:$(R)/%=%)
 n = love
 pd_sdk = $(PLAYDATE_SDK_PATH)
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
@@ -37,7 +43,7 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # read off __love_osv is that a board has no OS to have a word about. it also keeps the
 # ALSA and OSS lanes out of the compile, which want open/ioctl/getenv and would be a
 # link error here rather than a device this seat could ever reach.
-mc_flags = -t thumb2sp -D tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D data_section=0 -D love_horn_seat=1 \
+mc_flags = -t thumb2sp -D tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D data_section=0 -D love_horn_seat=1 -D inf_heap=1 -D PD_STONES=$(if $(st),1,0) \
   -Isrc/love/user/playdate -Iout/playdate -I. -Isrc/love -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include -I$(pd_sdk)/C_API
 # our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
 # that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
@@ -53,7 +59,8 @@ mc_ld_alt = -t thumb2sp -Ttext 0x100000 -nostdlib --emit-relocs
 # the lcat lib headers this frontend bakes (produced by the root's rules on
 # love0, delegated below so a standalone make works from a clean tree)
 lib_hs = $(patsubst %,$(R)/out/lib/%.h,egg prel ev post rune)
-pd_h = $(love_h) $(wildcard $(S)/love/quay/*.h) $(o)/cas.h $(lib_hs)
+game_h = $(hd)/$(if $(st),stones,cas).h
+pd_h = $(love_h) $(wildcard $(S)/love/quay/*.h) $(game_h) $(lib_hs)
 
 # the split: mooncc carries src/love/love.c + lm + quay + main.c; gcc carries pdglue.c
 # (the pd_api.h owner) + the SDK's setup.c. the sim build compiles everything
@@ -66,7 +73,9 @@ pd_local_c = $(wildcard *.c)
 # heap, so the doors src/love/fd.c carries on a hosted love have nobody here to answer them.
 # src/love/horn.c where the boards take src/love/nohorn.c: this device has a speaker, so it answers
 # love_horn_writen for real -- see love_horn_seat in the flags below, and k_horn_* in main.c.
-pd_shared_c = $(love_c) $(f_c) $(S)/love/bare.c $(S)/love/horn.c
+# the stones add the rasterizer, the lamps and the pool they run on, and the song's tones and
+# packer, after horn.c, as src/inle/mps2's baker links them
+pd_shared_c = $(love_c) $(f_c) $(S)/love/bare.c $(S)/love/horn.c $(if $(st),$(S)/love/raster.c $(S)/love/lamp.c $(S)/love/pool.c $(S)/love/audio/tones.c $(S)/love/mem.c)
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (src/inle/port.mk's libc_m, out of the same source -- there is no second libc
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
@@ -120,9 +129,9 @@ $(m): FORCE
 
 # cas.l -> C string literal, atomically (a 0-byte header would silently drop
 # the whole demo -- same discipline as the root's lcat_h)
-$(o)/cas.h: cas.l $(S)/tools/lcat.l | $(m)
+$(hd)/cas.h: cas.l $(S)/tools/lcat.l | $(m)
 	@echo LOVE	$@
-	@mkdir -p $(o)
+	@mkdir -p $(hd)
 	@$(m) $(S)/tools/lcat.l cas.l > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
 	  || { rm -f $@.tmp; echo "FAIL: $@ empty"; exit 1; }
 
@@ -138,7 +147,19 @@ $(R)/out/mps2/love-pd.img: FORCE
 	@$(MAKE) --no-print-directory -C $(S)/inle/mps2 imgpd
 FORCE:
 
-$(o)/Source/love-pd.img: $(R)/out/mps2/love-pd.img
+# the stones: the host modules the lore libraries borrow stubbed, then the libraries in the
+# order they borrow each other, then the glue, as one text
+pds_l = stubs.l $(S)/apps/x11.l $(addprefix $(S)/apps/harp/,harp.l ops.l play.l) \
+  $(addprefix $(S)/apps/lore/,rove.l view.l vec.l flicker.l walk.l starmap.l sky.l mesh.l stones.l apartment.l) stones.l
+$(hd)/stones.h: $(pds_l) $(S)/tools/lcat.l | $(m)
+	@echo LOVE	$@
+	@mkdir -p $(hd)
+	@cat $(pds_l) > $@.l && $(m) $(S)/tools/lcat.l $@.l > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \
+	  || { rm -f $@.tmp; echo "FAIL: $@ empty"; exit 1; }
+$(R)/out/mps2/love-pds.img: FORCE
+	@$(MAKE) --no-print-directory -C $(S)/inle/mps2 imgpds
+
+$(o)/Source/love-pd.img: $(R)/out/mps2/love-pd$(if $(st),s).img
 	@echo CP	$@
 	@mkdir -p $(dir $@)
 	@cp $< $@
@@ -152,32 +173,32 @@ $(o)/Source/pdex.%: $(o)/pdex.%
 $(o)/main.o: main.c pdglue.h $(pd_h) | $(m)
 	@echo MOON	$@
 	@mkdir -p $(o)
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c src/love/user/playdate/main.c out/playdate/main.o
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c src/love/user/playdate/main.c $(or)/main.o
 $(o)/%.o: $(S)/%.c $(pd_h) | $(m)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c src/$*.c out/playdate/$*.o
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c src/$*.c $(or)/$*.o
 # the SDK boundary -- ours too, now: pdglue.c is the one file that includes pd_api.h,
 # and mooncc reads it (the header wants -Wno-unknown-pragmas from gcc and nothing at
 # all from us). It is not under the $(R) pattern above: it lives here, not in the tree.
 $(o)/pdglue.o: pdglue.c pdglue.h | $(m)
 	@echo MOON	$@
 	@mkdir -p $(o)
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c src/love/user/playdate/pdglue.c out/playdate/pdglue.o
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_flags) -c src/love/user/playdate/pdglue.c $(or)/pdglue.o
 
 $(o)/pdex.elf: $(pd_o) | $(m)
 	@echo MOON	$@
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld) $(pd_o:$(R)/%=%) -o out/playdate/pdex.elf
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld) $(pd_o:$(R)/%=%) -o $(or)/pdex.elf
 $(o)/pdex-alt.elf: $(pd_o) | $(m)
 	@echo MOON	$@
-	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld_alt) $(pd_o:$(R)/%=%) -o out/playdate/pdex-alt.elf
+	@cd $(R) && LOVE_NO_IMAGE= out/love mooncc $(mc_ld_alt) $(pd_o:$(R)/%=%) -o $(or)/pdex-alt.elf
 
 # the simulator .so: a single-shot hosted build of the same sources
-$(o)/pdex.so: $(pd_src) $(o)/cas.h
+$(o)/pdex.so: $(pd_src) $(game_h)
 	@echo CC	$@
 	@mkdir -p $(o)
-	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dtco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dlove_horn_seat=1 \
-	  -I. -I$(o) -I$(R) -I$(S)/love -I$(R)/out/lib -I$(S)/love/quay -I$(pd_sdk)/C_API \
+	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dtco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dlove_horn_seat=1 -DPD_STONES=$(if $(st),1,0) \
+	  -I. -I$(o) -I$(hd) -I$(R) -I$(S)/love -I$(R)/out/lib -I$(S)/love/quay -I$(pd_sdk)/C_API \
 	  -o $@ $(pd_src) -lm
 
 .PRECIOUS: $(o)/%.elf

@@ -75,13 +75,14 @@ for f in test/cc/*.c; do
 done
 
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
-# carries its size, a block static keeps its section
+# carries its size, a file-scope static is a local one, a block static keeps its section
 printf '#include <stdarg.h>\nint f(int n, ...){ va_list a; va_start(a, n); int r = va_arg(a, int); va_end(a); return r + n; }\n' > "$ho/.vns.c"
 moonrun -mno-sse -c "$ho/.vns.c" -o "$ho/.vns.o" || fail "mooncc -mno-sse refused a variadic function"
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nextern __typeof__(tab) tab_alias __attribute__((alias("tab")));\nint big[7] = {1};\nvoid push(void){ static int q __attribute__((section(".init.data"))) = 3; q++; }\n' > "$ho/.dsz.c"
 moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab_alias" {print $3}')" = 36 ] || fail "a data alias's symbol does not carry its table's 36 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
+[ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab" {print $3, $4, $5}')" = "36 OBJECT LOCAL" ] || fail "a file-scope static is not a local object symbol of its 36 bytes (modpost reads a table's name)"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
@@ -108,6 +109,16 @@ grep -q 'no lane for alloca where an operand is parked' "$ho/.alr.log" || fail "
 printf '#include <string.h>\nstatic void __attribute__((noinline)) dirty(void) { volatile char b[1024]; memset((char *) b, 255, sizeof b); }\nstatic int __attribute__((noinline)) sum(int n) { unsigned char *p = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += p[i]; return s; }\nint main(void) { dirty(); return sum(512) != 0; }\n' > "$ho/.alz.c"
 moonrun -ftrivial-auto-var-init=zero -o "$ho/.alz" "$ho/.alz.c" || fail "mooncc -ftrivial-auto-var-init=zero: alloca"
 "$ho/.alz" || fail "-ftrivial-auto-var-init=zero left an alloca block uncleared"
+# an asm's subsection is its function's section's tail (arm64's ALTERNATIVE in an __init fn), laid
+# where the same code without the subsection lands; its numbered labels stay out of the symtab
+printf '__attribute__((section(".init.text"))) int f(int x)\n{ asm volatile("661: nop\\n662:\\n.subsection 1\\n663: nop\\n664:\\n.previous" ::: "memory"); return x + 1; }\nint g(int x) { return x * 2; }\n' > "$ho/.asb.c"
+sed 's/\\n\.subsection 1//; s/\\n\.previous//' "$ho/.asb.c" > "$ho/.asp.c"
+secsz() { readelf -SW "$1" | sed -E 's/.*\] +//' | awk '$1 == ".text" || $1 == ".init.text" {print $1, $5}' | tr '\n' ' '; }
+for t in x64 a64 rv64; do
+  moonrun -t $t -c "$ho/.asb.c" -o "$ho/.asb.o" && moonrun -t $t -c "$ho/.asp.c" -o "$ho/.asp.o" || fail "mooncc -t $t: an asm subsection"
+  [ "$(secsz "$ho/.asb.o")" = "$(secsz "$ho/.asp.o")" ] || fail "an asm subsection left its function's section on $t: $(secsz "$ho/.asb.o")"
+  nm "$ho/.asb.o" | grep -q 'l66[34]' && fail "an asm's numbered labels reached the symtab on $t"
+done
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"
@@ -118,6 +129,19 @@ sal() { readelf -sW "$1" | awk '$8 == "tab_mod" || $8 == "glob_mod" {print $8, $
 if command -v clang > /dev/null 2>&1 && clang -c -o "$ho/.sal-c.o" "$ho/.sal.c" 2> /dev/null; then
   [ "$(sal "$ho/.sal.o")" = "$(sal "$ho/.sal-c.o")" ] || fail "a static alias's symbol is not clang's: $(sal "$ho/.sal-c.o" | tr '\n' ' ')"
 fi
+# a const that holds an address rides .rodata under -fno-pie, as clang lays it (modpost reads a
+# .data table reaching .init as a mismatch), and .data without; a -pie link refuses the first by
+# name, since its startup cannot write the base into .rodata
+printf 'struct ops { int (*f)(int); const char *n; };\nstatic int one(int x) { return x + 1; }\nstatic const struct ops tab[] = { { one, "one" } };\nint main(void) { const struct ops *volatile p = tab; return p->f(54) == 55 && p->n[0] == 111 ? 55 : 1; }\n' > "$ho/.ror.c"
+datsz() { readelf -SW "$1" | sed -E 's/.*\] +//' | awk '$1 == ".data" {print $5}'; }
+for t in x64 a64 rv64; do
+  moonrun -t $t -fno-PIE -c "$ho/.ror.c" -o "$ho/.ror.o" && [ "$(datsz "$ho/.ror.o")" = 000000 ] || fail "a -fno-PIE const holding an address left .rodata on $t"
+  moonrun -t $t -c "$ho/.ror.c" -o "$ho/.ror.o" && [ "$(datsz "$ho/.ror.o")" = 000010 ] || fail "a const holding an address left .data on $t"
+  moonrun -t $t -fno-PIE -pie -o "$ho/.ror" "$ho/.ror.c" 2> "$ho/.ror.log" && fail "a -pie link laid an address into .rodata on $t"
+  grep -q link-rodata-pie "$ho/.ror.log" || fail "a -pie link over a .rodata address refused without naming it on $t"
+done
+moonrun -fno-PIE -o "$ho/.ror" "$ho/.ror.c" || fail "mooncc -fno-PIE: a const holding an address"
+"$ho/.ror"; [ $? = 55 ] || fail "a -fno-PIE const holding an address reads wrong"
 echo "mooncc: -mno-sse variadics, sized data symbols, a block static's section and static aliases ok"
 # what only dead code calls must not be named at all: an unread stub, a test absorbing
 # its unknown part, __builtin_expect, a flag cleared by `&= 0`, a constant switch, a fixed param
@@ -1348,6 +1372,12 @@ moonrun "$ho/.wklib.o" -o "$ho/.lnk3" > /dev/null 2>&1 && "$ho/.lnk3"; a=$?
 moonrun "$ho/.wklib.o" "$ho/.wkstr2.o" -o "$ho/.lnk4" > /dev/null 2>&1 && "$ho/.lnk4"; a=$?
 [ $a -eq 42 ] || fail "mooncc-link weak override (got $a want 42)"
 
+# always_inline splices a body with a statement expression, a compound literal and struct and
+# array locals (the kernel's per_cpu, an __init caller's own helpers): no out-of-line copy left
+for t in x64 a64 rv64; do
+  moonrun -t $t -c test/cc/317-always-inline-body.c -o "$ho/.awi.o" || fail "mooncc -t $t: 317-always-inline-body"
+  nm "$ho/.awi.o" | grep -q ' t ii$' && fail "an always_inline body stayed out of line on $t"
+done
 # the love_nifs bracket: two TUs packed into one section, __start_/__stop_ synthesized
 cat > "$ho/.nf1.c" <<'EOF'
 typedef struct { char *n; long v; } ent;

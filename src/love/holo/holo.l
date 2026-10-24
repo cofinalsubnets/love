@@ -154,7 +154,7 @@
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
              'la 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
-             'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2   ; a64's three-register twins
+             'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2 'ubfx 4   ; the three-register twins, thumb2's ubfx
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
              'movupd 2 'movsd 2 'movss 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
@@ -168,6 +168,8 @@
              'movsnxr 2 'movsnrx 2
              'add 3 'sub 3 'and 3 'or 3 'xor 3 'imul 3 'mulh 3 'umulh 3
              'adds 3 'subs 3 'adc 3 'adcs 3 'sbc 3 'sbcs 3 'ors 3
+             'ands 3 'eors 3 'bic 3 'bics 3 'orn 3 'rsb 3 'rsbs 3
+             'alush 6 'pushm 1 'popm 1   ; thumb2's shifted-register operand and register lists
              'div 3 'udiv 3
              'ld 3 'st 3 'lea 3 'lean 3
              'cas 3 'cas4 3
@@ -182,7 +184,7 @@
              'shl128v 0 'shr128v 0 'sar128v 0
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
-             'rem 4 'urem 4 'umull 4 'smull 4 'mla 4
+             'rem 4 'urem 4 'umull 4 'smull 4 'umlal 4 'mla 4
              'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3 'decm 2
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2

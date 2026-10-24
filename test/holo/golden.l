@@ -758,6 +758,11 @@
    _ (chk-eq "gas.thumb"
         '((trap) (brk 3) (nop) (wfi) (li r0 5) (add r0 r0 r1) (ld r1 r0 4) (ret))
         (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr"))
+   ;; ..its register lists, conditional branches, shifted operands and flag-setting forms
+   _ (chk-eq "gas.thumb.wide"
+        '((pushm (r4 r5 r6 lr)) (br ne l1.1) (alush or r0 r1 r2 shl 3) (adcs r0 r0 1) (umlal r0 r1 r2 r3)
+          (lsl r0 r1 r2) (lsr r0 r1 3) (ubfx r0 r1 20 11) (bic r0 r0 1048576) (label l1.1) (popm (r4 r5 r6 pc)))
+        (gas-text 'thumb2 "push {r4-r6, lr}\n bne 1f\n orr r0, r1, r2, lsl #3\n adcs r0, r0, #1\n umlal r0, r1, r2, r3\n lsl r0, r1, r2\n lsr r0, r1, #3\n ubfx r0, r1, #20, #11\n bic r0, r0, #0x100000\n1:\n pop {r4-r6, pc}"))
    ;; ..and the spellings substitution hands a template: a register at a width (GNU's modifier
    ;; letter), an immediate, a memory operand, and back from a clobber's name
    _ (chk-eq "gas.spell.x64" '("%rax" "%r8d" "%dx" "%al" "%r11w" "%rsp" "$3" "3" "(%r11)")
@@ -1048,6 +1053,18 @@
       ("t2.addi"    "01f26400"          ((add r0 r1 100)))            ; addw r0, r1, #100
       ("t2.subi"    "a1f26400"          ((sub r0 r1 100)))            ; subw r0, r1, #100
       ("t2.addneg"  "a1f20800"          ((add r0 r1 -8)))             ; negative imm flips add->subw
+      ;; the flag and carry forms take a modified immediate; a register operand may shift first
+      ("t2.addsi"   "10f10100"          ((adds r0 r0 1)))             ; adds.w r0, r0, #1
+      ("t2.bici"    "22f48012"          ((bic r2 r2 1048576)))        ; bic r2, r2, #0x100000
+      ("t2.rsbi"    "c5f12006"          ((rsb r6 r5 32)))             ; rsb.w r6, r5, #32
+      ("t2.alush"   "46ea5056"          ((alush or r6 r6 r0 shr 21))) ; orr.w r6, r6, r0, lsr #21
+      ("t2.umlal"   "e0fb0735"          ((umlal r3 r5 r0 r7)))        ; umlal r3, r5, r0, r7
+      ("t2.lslv"    "02fa06fe"          ((lsl lr r2 r6)))             ; lsl.w lr, r2, r6
+      ;; register lists: r0..r7 with lr or pc narrow, the rest stm/ldm
+      ("t2.pushm"   "ffb5"              ((pushm (r0 r1 r2 r3 r4 r5 r6 r7 lr))))   ; push {r0-r7, lr}
+      ("t2.popm"    "f0bd"              ((popm (r4 r5 r6 r7 pc))))   ; pop {r4-r7, pc}
+      ("t2.popm.w"  "bde8ff40"          ((popm (r0 r1 r2 r3 r4 r5 r6 r7 lr))))   ; ldmia.w sp!, {r0-r7, lr}
+      ("t2.pushm.w" "2de90041"          ((pushm (r8 lr))))            ; stmdb sp!, {r8, lr}
       ("t2.cmp"     "b0eb010f"          ((cmp r0 r1)))                ; cmp.w r0, r1
       ("t2.cmpi"    "b0f12a0f"          ((cmp r0 42)))                ; cmp.w r0, #42
       ("t2.mul"     "01fb02f0"          ((imul r0 r1 r2)))            ; mul r0, r1, r2
