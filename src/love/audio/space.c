@@ -1,6 +1,7 @@
 // src/love/audio/space.c -- an effects bus over a mixed stereo chunk: chorus, a ping-pong
 // feedback delay, then a reverb (four allpass diffusers into eight feedback lines mixed by a
-// householder matrix, each damped by a one-pole lowpass). love keeps the knobs; this runs frames.
+// householder matrix, each damped by a one-pole lowpass) whose tail may come back into it an
+// octave up, a shimmer. love keeps the knobs; this runs frames.
 // (space L R mem prm) -> (L' . R'), two float trays of #L | the bytes mem wants, a number,
 //   when mem is not a cask that long (a fresh one, all zero, is a bus at rest) | () bad args.
 //   mem carries the lines and every filter's memory from one chunk to the next. prm, a float tray:
@@ -8,7 +9,7 @@
 //    1 chorus send  2 wet  3 depth, seconds  4 rate, Hz
 //    5 delay send   6 wet  7 time, seconds (under 2)  8 feedback  9 tone, 1 keeps every high
 //   10 reverb send 11 wet 12 t60, seconds  13 size, the lines' length over the base (1/4 .. 3)
-//   14 damp, 0 bright .. 1 dark
+//   14 damp, 0 bright .. 1 dark  15 shimmer, how much of the tail returns an octave up (0 .. 1)
 //   a send or wet moves to its new value across the chunk, so a toggle does not click; a send
 //   gone to 0 leaves what its effect holds ringing out
 // (sweep x st prm) -> (y . st'): a mono float tray through a state-variable filter whose cutoff
@@ -26,23 +27,26 @@ float lm_expf(float);
 #define sp_exp lm_expf
 #endif
 
-enum { sp_nprm = 15, sp_lines = 8, sp_aps = 4 };
+enum { sp_nprm = 16, sp_lines = 8, sp_aps = 4, sp_ramps = 7 };
 // the lines' and diffusers' lengths in frames at 44100: mutually prime, so no echo lines up
 static int const sp_fdn[sp_lines] = { 1557, 1617, 1491, 1422, 1277, 1356, 1188, 1116 },
                  sp_ap[sp_aps] = { 210, 159, 562, 410 };
 // which side each line reaches, and with what sign
 static flo_t const sp_ls[sp_lines] = { 1, 0, -1, 0, 1, 0, -1, 0 }, sp_rs[sp_lines] = { 0, 1, 0, -1, 0, 1, 0, -1 };
+// the knobs that ramp across a chunk, and how far each may go
+static int const sp_ramp[sp_ramps] = { 1, 2, 5, 6, 10, 11, 15 };
+static flo_t const sp_rhi[sp_ramps] = { 2, 2, 2, 2, 2, 2, 1 };
 #define sp_tiny ((flo_t) 1e-20)   // added and taken away: a decaying state flushed before it is subnormal
 
-struct sp_head { uint64_t w; flo_t lfo, cur[6], dlp[2], flp[sp_lines]; };
+struct sp_head { uint64_t w; flo_t lfo, shp, cur[sp_ramps], dlp[2], flp[sp_lines]; };
 
 static uintptr_t sp_pow2(flo_t x) { uintptr_t n = 16; while ((flo_t) n < x) n <<= 1; return n; }
 // every buffer's length, a power of two, and the whole in bytes
-struct sp_caps { uintptr_t ch, dl, fdn[sp_lines], ap[sp_aps], bytes; };
+struct sp_caps { uintptr_t ch, dl, sh, fdn[sp_lines], ap[sp_aps], bytes; };
 static void sp_caps(flo_t rate, struct sp_caps *c) {
  flo_t const k = rate / 44100;
- c->ch = sp_pow2(rate / 20), c->dl = sp_pow2(2 * rate + 2);
- uintptr_t n = 2 * c->ch + 2 * c->dl;
+ c->ch = sp_pow2(rate / 20), c->dl = sp_pow2(2 * rate + 2), c->sh = sp_pow2(rate / 20 + 4);
+ uintptr_t n = 2 * c->ch + 2 * c->dl + 2 * c->sh;
  for (int i = 0; i < sp_lines; i++) n += c->fdn[i] = sp_pow2(sp_fdn[i] * 3 * k + 2);
  for (int i = 0; i < sp_aps; i++) n += c->ap[i] = sp_pow2(sp_ap[i] * k + 2);
  c->bytes = sizeof(struct sp_head) + n * sizeof(flo_t); }
@@ -86,14 +90,15 @@ love_noinline static struct g *host_space(struct g *g) {
  for (uintptr_t i = 0; i < n; i++) L[i] = tray_get_flo(tray(a[0]), i), R[i] = tray_get_flo(tray(a[1]), i);
  // the memory, read after the allocation, which may move it
  struct sp_head *h = (struct sp_head*) cask_bytes(a[2], &nb);
- flo_t *chl = (flo_t*) (h + 1), *chr = chl + c.ch, *dll = chr + c.ch, *dlr = dll + c.dl, *fdn[sp_lines], *ap[sp_aps];
- fdn[0] = dlr + c.dl;
+ flo_t *chl = (flo_t*) (h + 1), *chr = chl + c.ch, *dll = chr + c.ch, *dlr = dll + c.dl, *shl = dlr + c.dl, *shr = shl + c.sh,
+      *fdn[sp_lines], *ap[sp_aps];
+ fdn[0] = shr + c.sh;
  for (int i = 1; i < sp_lines; i++) fdn[i] = fdn[i - 1] + c.fdn[i - 1];
  ap[0] = fdn[sp_lines - 1] + c.fdn[sp_lines - 1];
  for (int i = 1; i < sp_aps; i++) ap[i] = ap[i - 1] + c.ap[i - 1];
 
  flo_t const k = rate / 44100, cd = sp_clamp(p[3], 0, (flo_t) 0.012) * rate, cb = (flo_t) 0.015 * rate,
-             cstep = sp_clamp(p[4], 0, 20) / rate,
+             cstep = sp_clamp(p[4], 0, 20) / rate, sw = rate / 20, sstep = 1 / sw,
              dd = sp_clamp(p[7], (flo_t) 0.001, 2) * rate, dfb = sp_clamp(p[8], 0, (flo_t) 0.95), dt = sp_clamp(p[9], (flo_t) 0.01, 1),
              t60 = sp_clamp(p[12], (flo_t) 0.1, 60), sz = sp_clamp(p[13], (flo_t) 0.25, 3), damp = sp_clamp(p[14], 0, (flo_t) 0.95);
  uint64_t len[sp_lines], apl[sp_aps];
@@ -101,14 +106,19 @@ love_noinline static struct g *host_space(struct g *g) {
  for (int i = 0; i < sp_lines; i++)   // each line loses 60 dB in t60 seconds, whatever its length
   len[i] = (uint64_t) (sp_fdn[i] * sz * k), gain[i] = sp_exp((flo_t) -6.907755278982137 * (flo_t) len[i] / (rate * t60));
  for (int i = 0; i < sp_aps; i++) apl[i] = (uint64_t) (sp_ap[i] * k);
+ // the shimmer gives back a share of what the lines lose a pass: at 1 a tail rings some four
+ // times its t60, and a longer t60 stays as stable as a short one
+ flo_t sg = 0;
+ for (int i = 0; i < sp_lines; i++) sg += gain[i];
+ sg = (flo_t) 4.5 * (1 - sg / sp_lines);
  uint64_t const dn = (uint64_t) dd;
- flo_t tgt[6], inc[6];
- for (int i = 0; i < 6; i++) tgt[i] = sp_clamp(p[i < 2 ? 1 + i : i < 4 ? 3 + i : 6 + i], 0, 2), inc[i] = (tgt[i] - h->cur[i]) / (flo_t) n;
+ flo_t tgt[sp_ramps], inc[sp_ramps];
+ for (int i = 0; i < sp_ramps; i++) tgt[i] = sp_clamp(p[sp_ramp[i]], 0, sp_rhi[i]), inc[i] = (tgt[i] - h->cur[i]) / (flo_t) n;
  uint64_t w = h->w;
- flo_t lfo = h->lfo;
+ flo_t lfo = h->lfo, shp = h->shp;
  for (uintptr_t i = 0; i < n; i++, w++) {
   flo_t *v = h->cur;
-  for (int j = 0; j < 6; j++) v[j] += inc[j];
+  for (int j = 0; j < sp_ramps; j++) v[j] += inc[j];
   flo_t x = L[i], y = R[i];
   // chorus: each side moved toward itself read a moving 15 ms back, the right a quarter turn behind
   chl[w & (c.ch - 1)] = x, chr[w & (c.ch - 1)] = y;
@@ -122,8 +132,16 @@ love_noinline static struct g *host_space(struct g *g) {
   h->dlp[0] += dt * (el - h->dlp[0]) + sp_tiny - sp_tiny, h->dlp[1] += dt * (er - h->dlp[1]) + sp_tiny - sp_tiny;
   dll[w & (c.dl - 1)] = v[2] * x + dfb * h->dlp[1], dlr[w & (c.dl - 1)] = v[2] * y + dfb * h->dlp[0];
   x += v[3] * h->dlp[0], y += v[3] * h->dlp[1];
-  // the reverb: the sum diffused, into every line
+  // the shimmer: the tail read by two heads closing on the present at twice its speed, each
+  // faded in and out over its sweep and half a sweep apart, so their sum is an octave up, smooth
   flo_t s = (flo_t) 0.5 * v[4] * (x + y);
+  if (v[6] > 0) {
+   flo_t const q = shp + (flo_t) 0.5 - (shp >= (flo_t) 0.5), wa = sp_sin(shp / 2), wb = sp_sin(q / 2);
+   s += sg * v[6] * (wa * wa * sp_tap(shl, c.sh - 1, w, 1 + sw * (1 - shp)) + wb * wb * sp_tap(shl, c.sh - 1, w, 1 + sw * (1 - q))
+                + wa * wa * sp_tap(shr, c.sh - 1, w, 1 + sw * (1 - shp)) + wb * wb * sp_tap(shr, c.sh - 1, w, 1 + sw * (1 - q))); }
+  shp += sstep;
+  if (shp >= 1) shp -= 1;
+  // the reverb: the sum diffused, into every line
   for (int j = 0; j < sp_aps; j++) {
    uintptr_t const m = c.ap[j] - 1;
    flo_t const d = ap[j][(w - apl[j]) & m], o = d - (flo_t) 0.6 * s;
@@ -136,9 +154,10 @@ love_noinline static struct g *host_space(struct g *g) {
    sl += sp_ls[j] * o[j], sr += sp_rs[j] * o[j]; }
   sum *= (flo_t) 2 / sp_lines;
   for (int j = 0; j < sp_lines; j++) fdn[j][w & (c.fdn[j] - 1)] = o[j] - sum + (j & 1 ? -s : s);
+  shl[w & (c.sh - 1)] = (flo_t) 0.5 * sl, shr[w & (c.sh - 1)] = (flo_t) 0.5 * sr;
   L[i] = x + v[5] * (flo_t) 0.5 * sl, R[i] = y + v[5] * (flo_t) 0.5 * sr; }
- for (int j = 0; j < 6; j++) h->cur[j] = tgt[j];
- h->w = w, h->lfo = lfo;
+ for (int j = 0; j < sp_ramps; j++) h->cur[j] = tgt[j];
+ h->w = w, h->lfo = lfo, h->shp = shp;
  struct chain *r = ini_chain(bump(g, Width(struct chain)), (intptr_t) word(tl), (intptr_t) word(tr));
  a[0] = word(r);
  return g; }

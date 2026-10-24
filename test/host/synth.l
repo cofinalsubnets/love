@@ -202,7 +202,7 @@
 ; --- the bus: the kernel asks its memory's size, an echo lands on its frame and crosses over,
 ; --- the reverb loses 60 dB in its t60, and the same input answers the same frames
 (: K (cite 'dsp 'space) n 735 z (iota n * 0.0) imp ((iota n = 0) * 1.0)
-   (P o) (gem-tray [15] (map (k \ 1.0 * peep o k 0.0) ^15))
+   (P o) (gem-tray [16] (map (k \ 1.0 * peep o k 0.0) ^16))
    (e c) (net (<c * <c + >c * >c))
    PE (P {0 44100 5 1 6 1 7 0.01 8 0.5 9 1})
    sz (K z z () PE) m (cask sz)
@@ -216,6 +216,23 @@
        (amax (>e1 * >e1) = 0.0) (abs (peep >e2 147 0.0 - 0.5) < 1e-6)               ; fed back to the right at 882
        (0.0 < e (v1 0)) (1e-4 < ratio) (ratio < 1e-2)                       ; 30 dB down in half a second
        (all (i \ aall (<(v1 i) = <(v2 i)) && aall (>(v1 i) = >(v2 i))) ^61)))
+
+; the shimmer: the tail comes back an octave up, so it rings longer and brighter, and at its
+; deepest over the longest reverb it still dies away
+(: K (cite 'dsp 'space) n 735 z (iota n * 0.0)
+   tone (sin (iota n * (tau * 220.0 / 44100.0)))
+   (P o) (gem-tray [16] (map (k \ 1.0 * peep o k 0.0) ^16))
+   (e c) (net (<c * <c + >c * >c))
+   (zc t) (net (map (i \ peep t i 0.0 * peep t (i + 1) 0.0 < 0.0) ^(n - 1)))   ; sign changes
+   (tail sh t60 sz k) (: pr (P {0 44100 10 1 11 1 12 t60 13 sz 14 0.45 15 sh}) m (cask (K z z () pr))
+                         _ (map (_ \ K tone tone m pr) ^30)
+                         (map (_ \ K z z m pr) ^k))
+   a0 (tail 0.0 7.0 1.6 600) a1 (tail 1.0 7.0 1.6 600) a2 (tail 1.0 7.0 1.6 600)
+   lng (tail 1.0 30.0 3.0 1500)
+ (test (e (a0 599) * 20.0 < e (a1 599))                            ; ten seconds on, far louder
+       (zc <(a0 120) * 1.5 < zc <(a1 120))                         ; and higher
+       (all (i \ aall (<(a1 i) = <(a2 i)) && aall (>(a1 i) = >(a2 i))) [0 120 599])
+       (e (lng 1499) < e (lng 500) * 0.1)))
 
 ; synth's bus: a toggle and a wetter step a key, a reverb's tail outlasts the note, a toggle
 ; off lets it ring out, the bus at its wettest stays under the clip, and two runs are one
@@ -233,18 +250,22 @@
    _ (run wet 1) t1 (wet 'fxt) ring (en (run wet 30))
    f (synth-frame wet)
    (loud _) (: st (synth-new ())
-               (each [114 82 82 111 79 79 79 99 67 67 9 9] (k \ synth-step st k),
+               (each [114 82 82 111 79 79 79 99 67 67 115 83 83 9 9] (k \ synth-step st k),
                 each [d0 (synth-digits 4) (synth-digits 7)] (k \ synth-step st k),
                 run st 300))
    l1 (loud ()) l2 (loud ())
    ws (synth-new ()) _ (synth-wstep ws ['down 59]) _ (synth-wstep ws ['down 63]) _ (synth-wstep ws ['down 61])
+   _ (synth-wstep ws ['down 66]) _ (synth-wstep ws ['down 67])
+   sh (synth-new ()) _ (synth-step sh 114) _ (synth-step sh 115) _ (synth-step sh d0) _ (run sh 1) st0 (sh 'fxt)
  (test (r1 = 1) (w1 = 3) (w2 = 0) (0.0 < late) (dlate = 0.0)
        (r2 = 0) (t0 = synth-ftail) (t1 = t0 - synth-chunk) (0.0 < ring)
        (has? f "reverb off") (has? f "echo off")
        (pk l1 * synth-gain * synth-gain < 32767.0 * 32767.0)
        (all (i \ aall (<(l1 i) = <(l2 i)) && aall (>(l1 i) = >(l2 i))) ^#l1)
        (ws 'rev = 1) (ws 'rvw = 3) (ws 'cho = 1)
-       (has? (synth-wframe ws) "chorus 0.5")))
+       (has? (synth-wframe ws) "chorus 0.5")
+       (ws 'shm = 1) (ws 'shw = 3) (has? (synth-wframe ws) "shimmer 0.7")
+       (sh 'shm = 1) (st0 = synth-stail) (synth-ftail < synth-stail) (has? (synth-frame sh) "shimmer 0.5")))
 
 ; --- the swept filter: a lowpass keeps what is under its cutoff and stops what is far over it,
 ; --- a bandpass is unity at its peak, and a run cut anywhere answers what it does whole
@@ -314,4 +335,4 @@
        (has? (synth-wframe ws) "f4: latch")))
 
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings on under the clip\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip\n")

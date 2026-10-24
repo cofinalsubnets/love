@@ -13,7 +13,7 @@
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
          synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes
          synth-qwerty synth-hold synth-free synth-drone synth-latch synth-wstep synth-wframe synth-paint synth-window synth-trows
-         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail
+         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail
          synth-pads synth-pad)
 (borrow 'rove)
 (borrow 'harp)
@@ -49,7 +49,7 @@
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
                 'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()
-                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'fxm () 'fxt 0 'rls {} 'latch 0}
+                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0}
  synth-kmodes ["fixed" "follow" "just"]
 
  ; --- just intonation: the row's twelve over the center, and alt's septimal ones
@@ -187,23 +187,26 @@
  ; but what it holds rings out; the kernel stops once nothing can still sound ---
  synth-wets [0.2 0.35 0.5 0.7 1.0]
  ; [toggle wet-step name], with the toggling key and the stepping one
- synth-fx [['rev 'rvw "reverb" 114 82] ['echo 'ecw "echo" 111 79] ['cho 'chw "chorus" 99 67]]
+ synth-fx [['rev 'rvw "reverb" 114 82] ['echo 'ecw "echo" 111 79] ['cho 'chw "chorus" 99 67]
+           ['shm 'shw "shimmer" 115 83]]
  synth-t60 7.0
  synth-ftail (int (song-rate * (1.5 * synth-t60 + 4.0)))   ; the reverb's 90 dB, and the echo's ring
+ synth-stail (4 * synth-ftail)                             ; and with the shimmer giving back
  kspace (cite 'dsp 'space)
  (fxon st) (any (f \ st (f 0) = 1) synth-fx)
  (fxprm st) (: (w k) (1.0 * synth-wets (st k))
-   (gem-tray [15] [(1.0 * song-rate)
+   (gem-tray [16] [(1.0 * song-rate)
                    (1.0 * st 'cho) (w 'chw) 0.004 0.23
                    (1.0 * st 'echo) (w 'ecw) 0.42 0.55 0.35
-                   (1.0 * st 'rev) (w 'rvw) synth-t60 1.6 0.45]))
+                   (1.0 * st 'rev) (w 'rvw) synth-t60 1.6 0.45
+                   (1.0 * st 'shm * w 'shw)]))
  ; a fresh bus's memory is the size the kernel first answers
  (synth-space st lr)
   (? (!kspace || (!(fxon st) && st 'fxt <= 0)) lr
      (kspace <lr >lr (st 'fxm) (fxprm st) @ r
         (? (charm? r) (pin st 'fxm (cask r), synth-space st lr)
            !(two? r) lr
-           (pin st 'fxt (fxon st ? synth-ftail (st 'fxt - #<lr)), r))))
+           (pin st 'fxt (fxon st ? (st 'shm = 1 ? synth-stail synth-ftail) (st 'fxt - #<lr)), r))))
  (fxkey st k) (: (go l) (? (atom? l) ()
                           (k = <l 3) (pins st (<l 0) (1 - st (<l 0)) 'dirty 1)
                           (k = <l 4) (pins st (<l 1) ((st (<l 1) + 1) % #synth-wets) 'dirty 1)
@@ -249,7 +252,7 @@
       (fxkey st k @ () st r r)))
 
  ; --- the screen; synth-rows is what the keys' pane is given on the mitty ---
- synth-rows 17
+ synth-rows 18
  (synth-frame st) (: tm [(synth-tname st)]
    (cell i) (synth-name (synth-semis st [i 0 0]) @ n
                (string (synth-digits i) + " " + n + snip "     " 0 (6 - #n)))
@@ -268,12 +271,13 @@
                     + "  lean " + show (st 'dlean) + "   steer " + show (st 'dsteer)
                     + "   home " + show (st 'dhome) + "   keys " + synth-kmodes (st 'km) + "\r\n" + synth-map st))
                 "  drift off\r\n")
-    + fxline st + "r o c: on/off, shifted: wetter\r\n"
-    + (st 'dr && st 'km = 2 ? "  shift: octave up   alt: septimal   tab: timbre   up/down: octave"
-               "  shift: octave up   alt: quarter tone down   tab: timbre   up/down: octave")
+    + fxline st + "\r\n"
+    + (st 'dr && st 'km = 2 ? "  shift: octave up   alt: septimal   tab: timbre"
+               "  shift: octave up   alt: quarter tone down   tab: timbre")
     + (st 'fm ? "   left/right: fm instrument\r\n" "\r\n")
-    + "  d: drift   k: keys   , .: steer   ; ': lean   h: home   v: book   l: latch\r\n"
-    + "  p: play/stop loop   e: send buffer   [ ]: cps   C-a j: buffer   q: leave"))
+    + "  up/down: octave   r o c s: the bus, shifted wetter   l: latch\r\n"
+    + "  d: drift   k: keys   , .: steer   ; ': lean   h: home   v: book\r\n"
+    + "  p: play/stop   e: send buffer   [ ]: cps   C-a j: buffer   q: leave"))
 
  ; --- the tty: alt as the escape before a key, arrows as the cli's numbers ---
  (synth-key p) (see p @ c
@@ -320,6 +324,7 @@
                11 15 25 16 26 17 13 18 27 19}
  synth-wknobs {15 9 333 -10 331 -11 328 -8 336 -9    ; tab and the arrows: the keys' knobs
                59 114 60 111 61 99 63 82 64 79 65 67    ; f1-f3 the bus's toggles, f5-f7 how wet
+               66 115 67 83                             ; f8 the shimmer, f9 how deep
                62 108}                                  ; f4 the latch
  (synth-hold st k s)
   (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1)
@@ -367,7 +372,7 @@
    + "  z s x d c v g b h n j m , l . ; /       from c below middle c\r\n"
    + "  q 2 w 3 e r 5 t 6 y 7 u i 9 o 0 p [ = ]  from middle c\r\n\r\n"
    + "  tab: timbre   up/down: octave   " + (st 'fm ? "left/right: fm instrument   " "") + "esc: leave\r\n"
-   + "  f1 f2 f3: reverb echo chorus   f5 f6 f7: wetter   f4: latch")
+   + "  f1 f2 f3 f8: reverb echo chorus shimmer   f5 f6 f7 f9: wetter   f4: latch")
  ; rw x rh pixels of col (0xrrggbb) at x y
  (fill p w x y rw rh col)
   (? (rw < 1 || rh < 1) 0
@@ -400,7 +405,7 @@
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
             0))))
- synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, r o c reverb echo chorus, l the latch, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
+ synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, r o c s reverb echo chorus shimmer, l the latch, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
  ; --- the mitty: the keys a stage over a vi stage on the loop's text ---
  (synth-mitty br vi f o) (: _ (synth-warm ()) st (synth-new o)
    hf (synth-horn st) hn <hf feed <>hf
