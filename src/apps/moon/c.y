@@ -417,7 +417,8 @@ prim : ID { (cx-id ps $1) }
               (: o (8 + 2 * cx-u32 c2 4) z (c2 o) pos (cx-u32 c2 0)
                  (play c2 (o + 5) (cx-u32 c2 (o + 1)) vl i st @ [vl2 i2 st2]
                     (? (z = 0) (go c2 65535 ks sg vl2 i2 st2)
-                       (z = 1) [<st2 (pos = 0 ? (sg 4) (cx-rest ((sg 1) (pos - 1))))]
+                       ; the vals bound first: the glaze takes no ((f a) b)
+                       (z = 1) [<st2 (pos = 0 ? (sg 4) (: vs (sg 1) (cx-rest (vs (pos - 1)))))]
                        (z = 2) (sel != 'blk && pos * 2 < #ks ? (go c2 65535 (snip ks 0 (2 * pos)) sg vl2 i2 st2))
                        (: st3 <>(feed vl2 i2 pos st2)
                           stop (sg 2) m (sg 3)
