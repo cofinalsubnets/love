@@ -101,7 +101,7 @@
        ['if c9 (arm th) el])
    (cx-lbl ps t c)
     (lname ps (tkv t) @ nm
-       (peep (ps 'labs) nm () ? (cx-no ps () c)
+       (peep (ps 'labs) nm () ? (cx-no ps "duplicate label '\(nm)'" c)
           (pin (ps 'labs) nm 1, pin ps 'cxlab (nm . peep ps 'cxlab ()), ['lbl nm])))
    ; `case A ... B:` lays a label per value when narrow, else ('case A B)
    (cx-case ps e h c)
@@ -111,7 +111,7 @@
        (? !(cint? v) (cx-no ps () c)
           (atom? h) ['case v]
           !(cint? hi) (cx-no ps () c)
-          (hi < v) (cx-no ps () c)
+          (hi < v) (cx-no ps "an empty case range" c)
           (16 < hi - v) ['case v hi]
           ['blk (crange v hi ())]))
    (cx-arm ms s) ['blk (rev (s . ms))]                  ; an arm's labels, then its statement
