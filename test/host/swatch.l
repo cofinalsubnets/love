@@ -19,7 +19,7 @@
    sw-all '((fill (rgb 0.2 0.4 0.6)) (rows 1 5 (grey 0.9)) (cols 2 3 (tint (rgb 1 0.5 0.25)))
             (rect 4 1 9 6 (mix (rgb 0 1 0) 0.3)) (disc 6 5 3.5 (shade 0.7)) (grid 5 7 1 (rgb 0.1 0.1 0.1))
             (checker 3 2 (noise 2 3 0.4)) (stripes 6 2 1 (shade 1.2)) (dots 4 4 1.2 hole)
-            (patches 3 0.4 (rgb 1 1 0)) (within 1 1 11 9 (within 2 0 8 20 (bevel 5 4 1 (grey 0.95) (grey 0.05)) (noise 3 0.2)))
+            (patches 3 0.4 (rgb 1 1 0)) (cracks 4 5 1 1.5 (rgb 0.3 0.2 0.1)) (within 1 1 11 9 (within 2 0 8 20 (bevel 5 4 1 (grey 0.95) (grey 0.05)) (noise 3 0.2)))
             (poly 1 1 10 2 6 9 (rgb 0 0 1)) (rows 0 1 hole))
  ; starts grey; the later layer wins; a number is a grey
  (test (at () 0 0 = g 0.5) (at '((fill 0.2) (rows 0 1 0.7)) 3 0 = g 0.7) (at '((fill 0.2) (rows 0 1 0.7)) 3 1 = g 0.2)

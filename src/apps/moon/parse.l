@@ -13,9 +13,9 @@
    ; token readers: t = (kind val line)
    (tkk t) <t (tkv t) <>t
    ; a nom in a pattern is a fresh binder, so the value is checked by guard
-   (tp? ('p . v . _) s) ?(v = s)
-   (tkw? ('kw . v . _) k) ?(v = k)
-   (idv? ('id . v . _) s) ?(v = s)
+   (tp? ('p . v . _) s) (v = s)
+   (tkw? ('kw . v . _) k) (v = k)
+   (idv? ('id . v . _) s) (v = s)
    (idat? ts) (two? ts && tkk <ts = 'id)         ; an identifier heads ts
    (strat? ts) (two? ts && tkk <ts = 'str)
    cx-door {}                                       ; cgram.l's parse, laid after this file

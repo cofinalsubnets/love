@@ -167,5 +167,14 @@
  (test (#(gm 0) = #(gb 0)) (gb 1 = gm 1) (foldl max 0.0 (map (i \ gd (gm 0 i) (gb 0 i)) ^#(gm 0)) < 1e-6)
        (all (i \ moved (gm 0 i) (gt 0 i)) ^#(gm 0)) (gt 1 = gm 1)
        (mesh-glb "glTF" = ()) (mesh-glb (snip g 0 100) = ())))
+;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
+;; seen both ways shows the same, but for where the pixels fall
+(: wq (sky-weather 1 'smooth) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
+   (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4))
+   va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
+   fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
+   both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
+   gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
+ (test (#both > 8000) (gap < 0.025)))
 (test_fin ())
 (puts "mesh: ok\n")
