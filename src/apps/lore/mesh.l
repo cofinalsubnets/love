@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
+         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
 (borrow 'view)
@@ -182,11 +182,14 @@
   (: st (sin th) ct (cos th) sp (sin ph) cp (cos ph) cr (cos ro) sr (sin ro)
      r0 [ct 0.0 (0.0 - st)] u0 [(0.0 - st * sp) cp (0.0 - ct * sp)] f [(st * cp) sp (ct * cp)]
      r (c+ (c* cr r0) (c* (0.0 - sr) u0)) u (c+ (c* cr u0) (c* sr r0))
-     fx (1.0 / tan (fov / 2.0)) fy (fx * w / h)
+     (pins (mesh-aim w h e r u f fov near far) 'th th 'ph ph))
+ ; ..or with its right, up and ahead given, unit and square
+ (mesh-aim w h e r u f fov near far)
+  (: fx (1.0 / tan (fov / 2.0)) fy (fx * w / h)
      za ((far + near) / (far - near)) zb (-2.0 * far * near / (far - near))
      (row k a) [(k * a 0) (k * a 1) (k * a 2) (0.0 - k * dot a e)]
      z (row za f)
-     {'w w 'h h 'e e 'th th 'ph ph 'fov fov 'r r 'u u 'f f
+     {'w w 'h h 'e e 'fov fov 'near near 'far far 'r r 'u u 'f f
       'cam (gem-tray [16] (row fx r + row fy u + [(z 0) (z 1) (z 2) (z 3 + zb)] + row 1.0 f))})
  ; the directions through pixels ix of the view, unit [x y z] trays
  (mesh-dirs v ix) (: w (v 'w) (rays v (ix % w + 0.5) (ix // w + 0.5)))

@@ -20,6 +20,14 @@
 ;   (gravity [[y g] ..])               how hard the level pulls at each height, metres a
 ;                                      second a second, straight between them and held past
 ;                                      the ends; none, and 9.8 everywhere
+;   (surface 'torus lx lz)            the level laid round a ring's tube instead of flat: x
+;                                      along the ring, z round the tube from its inside, its
+;                                      outside at half lz, each wrapping at
+;                                      lx and lz back to 0, y up off it, a body pulled down
+;                                      toward the tube's core. lx and lz are the lengths
+;                                      round the ring's middle and round the tube; nothing
+;                                      should straddle where x or z wraps
+;   (surface 'plane lx lz)             ..or flat, wrapping the same way
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
@@ -132,7 +140,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street void gravity sky ambient skylight air solid box prism cut whole land door train bin mattress telescope book pencil rod decal drape beyond hither flow window brittle lens grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start shot room street void gravity surface sky ambient skylight air solid box prism cut whole land door train bin mattress telescope book pencil rod decal drape beyond hither flow window brittle lens grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
          across stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -168,6 +176,8 @@
  (gravity ps) (: u "(gravity [[y g] ..])"
    (two? ps && all (q \ two? q && #q = 2 && all num? q && 0 <= q 1) ps
     ? (part 'gravity [['by (sort (map (q \ [(1.0 * q 0) (1.0 * q 1)]) ps))]]) (no u ps)))
+ (surface k lx lz) (: u "(surface 'torus lx lz) or (surface 'plane lx lz)"
+   (elem k ['torus 'plane] && num? lx && num? lz && 0 < lx && 0 < lz ? (part 'surface [['shape k] ['lx (f lx)] ['lz (f lz)]]) (no u k)))
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
@@ -447,7 +457,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'ambient 'skylight 'ad 'spin 'orb 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'surface 'ambient 'skylight 'ad 'spin 'orb 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -483,6 +493,7 @@
        'plushes (map (p \ {'at (p 'at) 'deg (p 'deg) 'file (p 'file) 'src (peep p 'src ()) 'xf (peep p 'xf xf-id)}) (of 'plush))
        'voids (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'sheer 0) (of 'room)))
        'gravity (of 'gravity @ () () g (<g 'by))
+       'surface (of 'surface @ () () s {'shape (<s 'shape) 'lx (<s 'lx) 'lz (<s 'lz)})
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})

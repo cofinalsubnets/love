@@ -239,7 +239,7 @@
  (sky-stars sim dst lat) (: H (sky-lst (sim - dst) - stars0 'ra) ch (cos H) sd (stars0 'sd) cd (stars0 'cd)
    y (sin lat * sd + cos lat * cd * ch)
    {'x (0.0 - cd * sin H) 'y y 'z (cos lat * sd - sin lat * cd * ch)
-    'b (stars0 'b * sat (y / 0.1)) 'ph (stars0 'ph) 'tint (stars0 'tint)})
+    'b (stars0 'b * sat (y / 0.1)) 'b0 (stars0 'b) 'ph (stars0 'ph) 'tint (stars0 'tint)})
  ; ..their light added to the colours c, [r g b] trays before the eye's gain, ix each of
  ; ss's stars' place in them, -1 where it is not on the open sky: dimmed by the cloud before
  ; it, twinkling by the frame's clock t0, or in the pixel sky on and off

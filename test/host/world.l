@@ -631,5 +631,27 @@
        ((world-read "(level \"t\" (room [0 0 0] [6 4 6]) (coarse 2 (orb [3 2 4] 0.5 (texture 8 8 1 '((fill 1))) 1)))") 'orbs 0 'coarse = 2)
        (has? (world-read "(level \"t\" (room [0 0 0] [6 4 6]) (coarse 3 (orb [3 2 4] 0.5 (texture 8 8 1 '((fill 1))) 1)))") "(coarse k ORB)")))
 
+; a surface: a level laid round a ring's tube, its meshes as far off the tube's core as they
+; stand off the void's floor, a walk round the tube coming back round past the end, a step along the
+; ring's outside as much shorter as its middle is than its outside; laid flat, only wrapping
+(: sfl (lv "(surface 'torus 40 20) (void [-2 -2 -2] [42 4 22]) (solid (box [0 -1 0] [40 0 20])) (start [5 0 10] 0 0)")
+   sfs (world-new 8 8 sfl "") sR (40.0 / (2.0 * pi)) sr (20.0 / (2.0 * pi))
+   (off c) (: q (sqrt (c 0 * c 0 + c 2 * c 2)) (sqrt ((q - sR) * (q - sR) + c 1 * c 1)))
+   ds (map (c \ off (c 'pk 'cols)) (sfs 'sc 'chunks)) dlo (foldl (\ a d (min2 a (amin d))) 99.0 ds) dhi (foldl (\ a d (max2 a (amax d))) 0.0 ds)
+   _ (steps sfs 119 200) round [(sfs 'px) (sfs 'pz)]
+   ring (pins (world-new 8 8 sfl "") 'th (pi / 2.0)) _ (steps ring 119 10)
+   pl (world-new 8 8 (lv "(surface 'plane 10 10) (void [-2 -1 -2] [12 3 12]) (solid (box [0 -1 0] [10 0 10])) (start [9 0 5] 90 0)")) _ (steps pl 119 30)
+ (test (sfl 'surface 'shape = 'torus) (sfl 'surface 'lx = 40.0) (sr - 2.0 - 1e-6 < dlo) (dhi < sr + 1e-6)
+       (mag (round 0 - 5.0) < 1e-9) (mag (round 1 - (10.0 + 200.0 * 3.4 / 30.0 - 20.0)) < 0.05)
+       (mag (ring 'px - 5.0 - 10.0 * 3.4 / 30.0 * sR / (sR + sr)) < 0.01)
+       (mag (pl 'px - 2.4) < 0.05) (has? (lv "(surface 'cone 1 1)") "(surface 'torus lx lz)")))
+; ..its sun fixed in the world: noon over the start on the tube's outside, night opposite on
+; its inside, the ground there dimmer however far the eye opens to the dark
+(: snl (lv "(surface 'torus 120 60) (sky 12 'clear) (void [-2 -2 -2] [122 4 62]) (solid (box [0 -1 0] [120 0 60])) (start [5 0 30] 0 -57)")
+   (glow z) (: st (pins (world-new 40 25 snl "") 'pz z) f (world-pens st) (foldl (\ a i (a + lum (peep f i 0))) 0 ^(40 * 24)))
+   noon (glow 30.0) night (glow 0.5)
+ (test (night * 3 < noon)))
+
+
 (test_fin ())
 (puts "world: ok\n")
