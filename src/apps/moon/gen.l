@@ -5344,6 +5344,7 @@
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
    (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk rth ibr cs
+   (npic? g) (drop 17 (g 'mo) @ r (two? r && <r))   ; -fno-pie said: no load base moves the image
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
    (alchunks n a)
@@ -11143,9 +11144,10 @@
        ; an uninitialized global rides .bss unless it names its own section
        (bss? nm) (!(sects nm) && !(two? <>>(peep (g 'glob) nm 0)))
        ; a const global rides .rodata only if its image needs no relocation (a pointer the linker
-       ; writes stays in .data, gcc's .data.rel.ro)
+       ; writes stays in .data, gcc's .data.rel.ro: a -pie startup writes the base there), or
+       ; under -fno-pie, where no base moves it
        (ro? nm bytes) (consts nm &&
-                       !(foldl (a \ x \ a || fixit? x) () bytes))
+                       (npic? g || !(foldl (a \ x \ a || fixit? x) () bytes)))
        ; a const candidate images twice ('d and 'r), so it memoizes; only candidates do
        (image1 nm ty init)
         (!(consts nm) ? (cgimage g ty init)
@@ -11306,7 +11308,7 @@
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel]
+          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
           'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),

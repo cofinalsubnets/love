@@ -118,6 +118,19 @@ sal() { readelf -sW "$1" | awk '$8 == "tab_mod" || $8 == "glob_mod" {print $8, $
 if command -v clang > /dev/null 2>&1 && clang -c -o "$ho/.sal-c.o" "$ho/.sal.c" 2> /dev/null; then
   [ "$(sal "$ho/.sal.o")" = "$(sal "$ho/.sal-c.o")" ] || fail "a static alias's symbol is not clang's: $(sal "$ho/.sal-c.o" | tr '\n' ' ')"
 fi
+# a const that holds an address rides .rodata under -fno-pie, as clang lays it (modpost reads a
+# .data table reaching .init as a mismatch), and .data without; a -pie link refuses the first by
+# name, since its startup cannot write the base into .rodata
+printf 'struct ops { int (*f)(int); const char *n; };\nstatic int one(int x) { return x + 1; }\nstatic const struct ops tab[] = { { one, "one" } };\nint main(void) { const struct ops *volatile p = tab; return p->f(54) == 55 && p->n[0] == 111 ? 55 : 1; }\n' > "$ho/.ror.c"
+datsz() { readelf -SW "$1" | sed -E 's/.*\] +//' | awk '$1 == ".data" {print $5}'; }
+for t in x64 a64 rv64; do
+  moonrun -t $t -fno-PIE -c "$ho/.ror.c" -o "$ho/.ror.o" && [ "$(datsz "$ho/.ror.o")" = 000000 ] || fail "a -fno-PIE const holding an address left .rodata on $t"
+  moonrun -t $t -c "$ho/.ror.c" -o "$ho/.ror.o" && [ "$(datsz "$ho/.ror.o")" = 000010 ] || fail "a const holding an address left .data on $t"
+  moonrun -t $t -fno-PIE -pie -o "$ho/.ror" "$ho/.ror.c" 2> "$ho/.ror.log" && fail "a -pie link laid an address into .rodata on $t"
+  grep -q link-rodata-pie "$ho/.ror.log" || fail "a -pie link over a .rodata address refused without naming it on $t"
+done
+moonrun -fno-PIE -o "$ho/.ror" "$ho/.ror.c" || fail "mooncc -fno-PIE: a const holding an address"
+"$ho/.ror"; [ $? = 55 ] || fail "a -fno-PIE const holding an address reads wrong"
 echo "mooncc: -mno-sse variadics, sized data symbols, a block static's section and static aliases ok"
 # what only dead code calls must not be named at all: an unread stub, a test absorbing
 # its unknown part, __builtin_expect, a flag cleared by `&= 0`, a constant switch, a fixed param
