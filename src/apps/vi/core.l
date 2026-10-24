@@ -601,8 +601,10 @@
                          (<>r @ ms
                             (ms < bound ? (go (ms + 1) ms) best))))
        (go 0 ()))
+   ; a hunt shows its hits again after :noh, as n does in vim
    (vhunt st dir)
-    (: ls (st 'lines) nl #ls r (st 'row) c (st 'col)
+    (: _ (pin st 'noh ())
+       ls (st 'lines) nl #ls r (st 'row) c (st 'col)
        (fwd i steps)
         (nl < steps ? ()
            (: ln (ls i)
@@ -635,7 +637,7 @@
              w (snip ln a (fw a))
              b (rebre (vbesc w))
              (? !(two? b) st
-                (pins st 'pat <>b 'pattx w 'patw 1 'dir dir,
+                (pins st 'pat <>b 'pattx w 'patw 1 'noh () 'dir dir,
                  vgole st a,
                  vhunt st dir)))))
 
@@ -712,7 +714,7 @@
             (vexdelim s (k + 1) (s k) @ [j tx]
               (vexpat st tx @ cp
                  (? !(two? cp) 'bad
-                    (: _ (0 < #tx ? (pins st 'pat <>cp 'pattx tx 'patw ()))
+                    (: _ (0 < #tx ? (pins st 'pat <>cp 'pattx tx 'patw () 'noh ()))
                        r (vexfind st <>cp dot (s k = 47 ? 1 -1))
                        (charm? r ? [j r] 'bad)))))
            ())
@@ -756,7 +758,7 @@
                (vexdelim s j dl @ [k rep]
                  (vexpat st pat @ cp
                     (two? cp ?
-                       (0 < #pat ? (pins st 'pat <>cp 'pattx pat 'patw ()),
+                       (0 < #pat ? (pins st 'pat <>cp 'pattx pat 'patw () 'noh ()),
                         [1 <>cp rep (vexhas? (snip s k n) 103)]))))))))
    (vexsubs st m rep a b g?)                       ; ((row text)..) for the rows that change
     (: (go r acc) (b < r ? (rev acc)
@@ -812,7 +814,7 @@
              (vexdelim s (i + 1) dl @ [j pat]
                (vexpat st pat @ cp
                   (? !(two? cp) (vmsg st $ "bad pattern: " + pat)
-                     (: _ (0 < #pat ? (pins st 'pat <>cp 'pattx pat 'patw ()))
+                     (: _ (0 < #pat ? (pins st 'pat <>cp 'pattx pat 'patw () 'noh ()))
                         sp (vexgbody st (vextrim (snip s j n)))
                         (? !(two? sp) (vmsg st "not a global command")
                            (vexhits st <>cp a b inv? @ rows
@@ -860,7 +862,7 @@
        (0 = tally nm) (vmsg st "no file name")
        (pin st 'doe [nm]))
 
-   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap, nu and ai, each with its no
+   ; :set sw=N / shiftwidth=N (bare :set sw reports), and :set wrap, nu, hls and ai, each with its no
    (vexset st arg)
     (: n #arg
        (eq k) (? (n <= k) () (arg k = 61) k (eq (k + 1)))
@@ -872,6 +874,9 @@
           (elem nm '("nu" "number" "nonu" "nonumber"))
            (pin st 'nu (2 < #nm && snip nm 0 2 = "no" ? () 1),
             vmsg st (st 'nu ? "number" "nonumber"))
+          (elem nm '("hls" "hlsearch" "nohls" "nohlsearch"))
+           (pin st 'hls (2 < #nm && snip nm 0 2 = "no" ? () 1),
+            vmsg st (st 'hls ? "hlsearch" "nohlsearch"))
           (elem nm '("ai" "autoindent" "noai" "noautoindent"))
            (pin st 'ai (2 < #nm && snip nm 0 2 = "no" ? () 1),
             vmsg st (st 'ai ? "autoindent" "noautoindent"))
@@ -904,6 +909,7 @@
               ("q" "q") ("w" "w") ("wq" "wq") ("x" "x")
               ("e" "edit") ("o" "edit") ("edit" "edit")
               ("hl" "hl") ("set" "set") ("lint" "lint")
+              ("noh" "nohlsearch") ("nohlsearch" "nohlsearch")
               ("colo" "colorscheme") ("colorscheme" "colorscheme")
               ("sp" "split") ("split" "split") ("vs" "vsplit") ("vsplit" "vsplit")
               ("find" "find") ("grep" "grep") ("explore" "explore"))
@@ -965,6 +971,7 @@
             (w = "hl") (pin st 'hl (st 'hl ? () 1),
                         vmsg st (st 'hl ? "syntax on" "syntax off"))
             (w = "set") (vexset st arg)
+            (w = "nohlsearch") (pin st 'noh 1)          ; until the next search
             (w = "colorscheme") (vcolo st arg)
             (w = "lint") (vlint st)                    ; libra's scan, on the buffer
             ; unknown here, but left on the state: a face with more ex words takes it
@@ -1327,7 +1334,7 @@
                            (s = "") (two? (st 'pat) ? (vhunt st (st 'dir)) st)
                            (rebre s @ b
                               (two? b ?
-                                 (pins st 'pat <>b 'pattx s 'patw (),
+                                 (pins st 'pat <>b 'pattx s 'patw () 'noh (),
                                   vhunt st (st 'dir))
                                  (vmsg st $ "bad pattern: " + s))))))
                   (_ \ pin st 'mode (m = 's ? (vback st) 'n)))))
@@ -1348,7 +1355,7 @@
      'reg () 'undo () 'redo ()
      'dot () 'rec () 'reccnt 0 'dotting () 'hlfrom () 'hlto () 'hldel 0
      'file file 'dirty () 'msg "" 'sw 2
-     'cmd "" 'pat () 'pattx "" 'patw () 'dir 1
+     'cmd "" 'pat () 'pattx "" 'patw () 'dir 1 'hls 1 'noh ()
      'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore () 'home ()
      'hl (nom? (hues-lang file (two? ls ? <ls ""))) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'mtcar () 'gutcar () 'nu () 'ai 1 'aiw () 'lastr () 'w 80 'h 24}
@@ -1411,6 +1418,18 @@
        vfwd? (vis? && (<va < row || <va = row && <>va <= st 'col))
        vc1 (vfwd? ? <>va (st 'col)) vc2 (vfwd? ? (st 'col) <>va)
        mt (vmatch st)
+       ; :set hls -- every hit of the last search, until :noh
+       hp (st 'hls && !(st 'noh) && two? (st 'pat))
+       ; a row's hits that reach into [a b), clipped to it; an empty hit steps on and shows nothing
+       (vhits raw a b)
+        (: (go i acc) (? (#raw < i) (rev acc)
+                         (vfind1 st raw i @ h
+                            (? !(two? h) (rev acc)
+                               (: x <>h y <>>h
+                                  (? (b <= x) (rev acc)
+                                     (go (x < y ? y (x + 1))
+                                         (x < y && a < y ? ([(x < a ? a x) (b < y ? b y)] . acc) acc)))))))
+           (go 0 ()))
        (sel fr raw) (!vis? || fr < vr1 || vr2 < fr ? ()
                        (#raw @ k
                           (? (st 'mode = 'V) [0 (k < 1 ? 1 k)]
@@ -1429,17 +1448,25 @@
                   pad (k < <>s && q = k ? " " "")       ; the cell past the end, a line's own
                   (snip raw a p + vpen st 'sel "\e[7m" + snip raw p q + pad + vpen st 'off "\e[0m" + snip raw q b))
               (b <= a) ""
-              ; the delimiter's mate, in its pen, the rest of the row painted as ever
-              (two? mt && <mt = fr && a <= <>mt < b)
-               (: m <>mt m2 (vnx raw m @ e (b < e ? b e))
-                  (seg x y) (? (y <= x) "" !paint (snip raw x y) (hue-win (st 'pens) lx raw in x y))
-                  (seg a m + vpen st 'match "\e[46m" + snip raw m m2 + vpen st 'off "\e[0m" + seg m2 b))
-              !paint (snip raw a b)
-              (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
-                 (two? c && <c = ky ? <>c
-                    (hue-win (st 'pens) lx raw in a b @ p
-                       (pin rw i [ky p],
-                        p)))))))
+              ; the delimiter's mate and the search's hits in their pens, the mate cutting
+              ; a hit it sits in, the rest of the row painted as ever
+              (: m (two? mt && <mt = fr && a <= <>mt < b ? <>mt)
+                 m2 (charm? m ? (vnx raw m @ e (b < e ? b e)))
+                 (cut h) (h @ [x y] (? (!(charm? m) || y <= m || m2 <= x) [h]
+                                        (filter (s \ <s < <>s) [[x m] [m2 y]])))
+                 hs (hp ? (catmap cut (vhits raw a b)) ())
+                 sp (sort ((charm? m ? [[m m2 (vpen st 'match "\e[46m")]] ())
+                           + map (h \ h + [(vpen st 'search "\e[30;43m")]) hs))
+                 (seg x y) (? (y <= x) "" !paint (snip raw x y) (hue-win (st 'pens) lx raw in x y))
+                 (go p l) (? !(two? l) (seg p b)
+                             (<l @ [x y pen] (seg p x + pen + snip raw x y + vpen st 'off "\e[0m" + go y >l)))
+                 (? (two? sp) (go a sp)
+                    !paint (snip raw a b)
+                    (: rw (st 'hlrow) ky [raw in a b lg] c (peep rw i ())
+                       (two? c && <c = ky ? <>c
+                          (hue-win (st 'pens) lx raw in a b @ p
+                             (pin rw i [ky p],
+                              p)))))))))
        ; the gutter: a file row's number on its first screen row, blanks under it
        (gut fr k) (? (gw < 1) "" (0 < k) (vblanks gw)
                      (show (fr + 1) @ t (vpen st 'lnr "" @ p
@@ -1470,7 +1497,7 @@
              (sw < k ? sw k))
        ; the body is a pure function of this key, so an unchanged key reuses the last rows
        key [(st 'hlgen) w gw top tops left body (paint ? 1 ()) (wrap? ? 1 ())
-            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2]) (st 'theme) mt]
+            (vis? ? [(st 'mode) vr1 vc1 vr2 vc2]) (st 'theme) mt (hp ? [(st 'pattx) (st 'patw)])]
        lc (st 'laycar)
        rs (two? lc && <lc = key ? <>lc
              (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top @ k
