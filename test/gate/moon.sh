@@ -94,6 +94,20 @@ moonrun -c "$ho/.esy.c" -o "$ho/.esy.o" || fail "mooncc: a file-scope asm with a
 printf 'extern __attribute__((weak)) const int t[];\nconst int *g(void) { return t; }\n' > "$ho/.wkla.c"
 moonrun -t a64 -c "$ho/.wkla.c" -o "$ho/.wkla.o" || fail "mooncc -t a64: an absent weak's address"
 [ "$(readelf -rW "$ho/.wkla.o" | awk '$5 == "t" {print $3}' | sort -u)" = R_AARCH64_ABS64 ] || fail "an absent weak's address reaches by page on a64"
+# alloca lays its block on the stack: no symbol names it on any ISA (the kernel links no alloca).
+# one where an operand is parked on the stack refuses by name
+printf '#include <alloca.h>\nint g(char *);\nint f(int n) { char *p = alloca(n); int r = g(alloca(n)); return r + g(p); }\n' > "$ho/.alc.c"
+for t in x64 a64 rv64 arm i386; do
+  moonrun -t $t -c "$ho/.alc.c" -o "$ho/.alc.o" || fail "mooncc -t $t: alloca"
+  readelf -sW "$ho/.alc.o" | awk '$8 ~ /alloca/' | grep -q . && fail "alloca reached the symtab on $t"
+done
+printf 'int g(void *);\nint f(int c, int n) { return g(c ? __builtin_alloca(n) : 0); }\n' > "$ho/.alr.c"
+moonrun -c "$ho/.alr.c" -o "$ho/.alr.o" 2> "$ho/.alr.log" && fail "an alloca under a parked operand compiled"
+grep -q 'no lane for alloca where an operand is parked' "$ho/.alr.log" || fail "an alloca under a parked operand refused without naming it"
+# -ftrivial-auto-var-init=zero clears an alloca block, as clang does
+printf '#include <string.h>\nstatic void __attribute__((noinline)) dirty(void) { volatile char b[1024]; memset((char *) b, 255, sizeof b); }\nstatic int __attribute__((noinline)) sum(int n) { unsigned char *p = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += p[i]; return s; }\nint main(void) { dirty(); return sum(512) != 0; }\n' > "$ho/.alz.c"
+moonrun -ftrivial-auto-var-init=zero -o "$ho/.alz" "$ho/.alz.c" || fail "mooncc -ftrivial-auto-var-init=zero: alloca"
+"$ho/.alz" || fail "-ftrivial-auto-var-init=zero left an alloca block uncleared"
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"
@@ -236,6 +250,43 @@ moonrun -c "$ho/.wgt.c" -o "$ho/.wgt.o" || fail "mooncc a long-named inline help
 printf 'typedef unsigned long size_t;\nextern void *slow(size_t); extern void *fast(size_t);\nstatic inline __attribute__((always_inline)) void *km(size_t size) { if (__builtin_constant_p(size) && size) return fast(size); return slow(size); }\nstatic inline void *ka(size_t n, size_t s) { size_t b; if (__builtin_mul_overflow(n, s, &b)) return 0; return km(b); }\nlong *gp;\nvoid *f(void) { return ka(3, sizeof(*gp)); }\n' > "$ho/.kca.c"
 moonrun -c "$ho/.kca.c" -o "$ho/.kca.o" || fail "mooncc kcalloc's constant size"
 grep -q 'fast' "$ho/.kca.o" && ! grep -q 'slow' "$ho/.kca.o" || fail "a constant size through an overflow builtin did not reach __builtin_constant_p"
+# FIELD_PREP's shape: a constant mask four always_inline calls deep folds its check away, no copy laid
+cat > "$ho/.bfm.c" <<'CEOF'
+typedef unsigned long long u64;
+extern void __bad_mask(void);
+static inline __attribute__((always_inline)) u64 fmul(u64 f) { if ((f | (f - 1)) & ((f | (f - 1)) + 1)) __bad_mask(); return f & -f; }
+static inline __attribute__((always_inline)) u64 fmask(u64 f) { return f / fmul(f); }
+static inline __attribute__((always_inline)) u64 enc(u64 v, u64 f) { return (v & fmask(f)) * fmul(f); }
+static inline __attribute__((always_inline)) u64 repl(u64 o, u64 v, u64 f) { return (o & ~f) | enc(v, f); }
+u64 rd(u64 p, u64 n) { return repl(p, n, 0xf800); }
+CEOF
+moonrun -c "$ho/.bfm.c" -o "$ho/.bfm.o" || fail "mooncc FIELD_PREP's shape"
+! grep -q '__bad_mask' "$ho/.bfm.o" || fail "a constant mask four always_inline calls deep kept its __bad_mask"
+# btf_parse_base's shape: a static whose constant test returns early is judged as it splices, the
+# goto tail past the return cut, and the section bounds it never reads go with it
+cat > "$ho/.btf.c" <<'CEOF'
+extern char __start_BTF[], __stop_BTF[];
+extern void *kz(unsigned long);
+extern int hdr(void *);
+static void *base(const char *name, void *data, unsigned size)
+{
+  void *b = 0;
+  int err;
+  if (!0)
+    return (void *)-2L;
+  b = kz(size);
+  if (!b) { err = -12; goto out; }
+  err = hdr(data);
+  if (err) goto out;
+  return b;
+out:
+  return (void *)(long)err;
+}
+void *vml(void) { return base("vmlinux", __start_BTF, __stop_BTF - __start_BTF); }
+void *oth(void *d, unsigned n) { return base(".BTF.base", d, n); }
+CEOF
+moonrun -c "$ho/.btf.c" -o "$ho/.btf.o" || fail "mooncc btf_parse_base's shape"
+! grep -q '_BTF' "$ho/.btf.o" || fail "a call whose callee returns early on a constant kept the section bounds it never reads"
 
 # a jump label: its "i" operand is constant only once spliced, and its asm goto target,
 # named only by __jump_table, stays laid. held to gcc -O2 (-O0 refuses the "i")

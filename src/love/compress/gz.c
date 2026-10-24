@@ -3,6 +3,7 @@
 #include "love.h"
 #include "bytes.h"
 #include "inflate.h"
+#include "lzfind.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -330,9 +331,11 @@ static uint32_t df_rev(uint32_t v, unsigned k) {
  for (i = 0; i < k; i++) { a = (a << 1) | (v & 1); v >>= 1; }
  return a; }
 
-// the ladders are short and walked from the top (gz-lcode/gz-dcode)
+// the length ladder is short and walked from the top (gz-lcode)
 static unsigned df_lcode(unsigned v) { for (unsigned i = 28; i >= 1; i--) if (gz_lbase[i] <= v) return i; return 0; }
-static unsigned df_dcode(unsigned v) { for (unsigned i = 29; i >= 1; i--) if (gz_dbase[i] <= v) return i; return 0; }
+static unsigned df_dcode(unsigned v) {             // two codes an octave: its top two bits
+ unsigned d = v - 1, e = 31 - (unsigned) __builtin_clz(d | 1);
+ return d < 4 ? d : 2 * e + (d >> (e - 1) & 1); }
 
 // canonical, shortest first, ties by symbol, stored reversed (gz-hcodes)
 static void df_hcodes(const uint8_t *lens, unsigned nsym, unsigned mx, uint32_t *code) {
@@ -401,8 +404,7 @@ struct df_ar {
           *hc, *pa, *rlb, *fc,
           *codl, *codd, *codc, *fixcl, *fixcd;
  uint64_t *keys, *w;
- uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl;
- unsigned chain, lazy; };                                       // the twin's 32 and greedy; the image lane digs
+ uint8_t *lenl, *lend, *lenc, *fixll, *fixld, *cl; };
 #define DF_ARENA (384u << 10)
 static void df_carve(uint8_t *m, struct df_ar *a) {
  uint8_t *p = m;
@@ -449,30 +451,23 @@ static void df_find(const uint8_t *s, uintptr_t n, uintptr_t i, const uint32_t *
    bl = l; bd = (unsigned) dist; } }
  *rl = bl; *rd = bd; }
 
-// one block: tokenize (gz-tok), then the three spellings costed and the cheapest
-// written (gz-flush). the dynamic code wins its tie with the fixed one.
+static void df_flush(struct df_sink *t, struct df_ar *a, const uint32_t *tok, unsigned k, uint64_t xb,
+                     const uint8_t *s, uintptr_t i0, uintptr_t i, int last);
+// one block: tokenize (gz-tok), then flush
 static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_sink *t, struct df_ar *a) {
  unsigned k = 0;
  uint64_t xb = 0;
  uintptr_t i0 = i;
- int last;
  memset(a->fl, 0, 286 * sizeof *a->fl);
  memset(a->fd, 0, 30 * sizeof *a->fd);
- unsigned cl = 0, cd = 0, held = 0;                              // lazy: the match found one on
  while (i < n && k < DF_TOKMAX) {
-  unsigned l = 0, d = 0, in = 0;
-  if (held) l = cl, d = cd, held = 0;
-  else if (i + 3 <= n) df_find(s, n, i, a->head, a->prev, a->chain, &l, &d);
+  unsigned l = 0, d = 0;
+  if (i + 3 <= n) df_find(s, n, i, a->head, a->prev, DF_CHAIN, &l, &d);
   if (l == 3 && d > DF_TOOFAR) l = 0;                           // a far three is a loss
-  if (a->lazy && l >= 3 && l < 258 && i + 4 <= n) {             // a longer one a byte on wins it
-   if (!in) df_ins(s, n, i, a->head, a->prev), in = 1;
-   df_find(s, n, i + 1, a->head, a->prev, a->chain, &cl, &cd);
-   if (cl == 3 && cd > DF_TOOFAR) cl = 0;
-   if (cl > l) held = 1, l = 0; }
   if (l < 3) {
    unsigned c = s[i];
    a->tok[k++] = c; a->fl[c]++;
-   if (!in) df_ins(s, n, i, a->head, a->prev);
+   df_ins(s, n, i, a->head, a->prev);
    i++; }
   else {
    unsigned lc = df_lcode(l), dc = df_dcode(d), q;
@@ -480,44 +475,237 @@ static uintptr_t df_block(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_
                + ((uint32_t) (l - gz_lbase[lc]) << 13) + (d - gz_dbase[dc]);
    a->fl[257 + lc]++; a->fd[dc]++;
    xb += gz_lext[lc] + gz_dext[dc];
-   for (q = in; q < l; q++) df_ins(s, n, i + q, a->head, a->prev);
+   for (q = 0; q < l; q++) df_ins(s, n, i + q, a->head, a->prev);
    i += l; } }
- last = n <= i;
- a->fl[256]++;                                                  // end-of-block, always sent
- unsigned mxl = df_hlens(a->fl, 286, 15, a->lenl, a),
-          mxd = df_hlens(a->fd, 30, 15, a->lend, a),
-          hlit, hdist, hclen, nr, j2, mxc;
- uint64_t dyn, fix, raw;
+ df_flush(t, a, a->tok, k, xb, s, i0, i, n <= i);
+ return i; }
 
- for (hlit = 286; hlit > 257 && !a->lenl[hlit - 1]; hlit--) ;
- for (hdist = 30; hdist > 1 && !a->lend[hdist - 1]; hdist--) ;
- memcpy(a->cl, a->lenl, hlit); memcpy(a->cl + hlit, a->lend, hdist);
- nr = df_run(a->cl, hlit + hdist, a->rlb);
+// the three spellings of tokens tok[0..k) (counted in fl and fd, xb extra bits) costed, the
+// cheapest written (gz-flush). the dynamic code wins its tie with the fixed one
+// the three spellings of a block of len bytes, counted in fl and fd (xb extra bits), costed
+struct df_plan { unsigned mxl, mxd, mxc, hlit, hdist, hclen, nr; uint64_t dyn, fix, raw; };
+static uint64_t df_price(struct df_ar *a, uint64_t xb, uintptr_t len, struct df_plan *p) {
+ unsigned j2;
+ a->fl[256]++;                                                  // end-of-block, always sent
+ p->mxl = df_hlens(a->fl, 286, 15, a->lenl, a), p->mxd = df_hlens(a->fd, 30, 15, a->lend, a);
+ for (p->hlit = 286; p->hlit > 257 && !a->lenl[p->hlit - 1]; p->hlit--) ;
+ for (p->hdist = 30; p->hdist > 1 && !a->lend[p->hdist - 1]; p->hdist--) ;
+ memcpy(a->cl, a->lenl, p->hlit); memcpy(a->cl + p->hlit, a->lend, p->hdist);
+ p->nr = df_run(a->cl, p->hlit + p->hdist, a->rlb);
  memset(a->fc, 0, 19 * sizeof *a->fc);
- for (j2 = 0; j2 < nr; j2++) a->fc[a->rlb[j2] >> 7]++;
- mxc = df_hlens(a->fc, 19, 7, a->lenc, a);
- for (hclen = 19; hclen > 4 && !a->lenc[gz_clord[hclen - 1]]; hclen--) ;
- dyn = 17 + hclen * 3 + df_ccost(a->rlb, a->lenc, nr)
-     + df_cost(a->fl, a->lenl, 286) + df_cost(a->fd, a->lend, 30) + xb;
- fix = 3 + df_cost(a->fl, a->fixll, 286) + df_cost(a->fd, a->fixld, 30) + xb;
- raw = (i - i0) < 65536 ? 42 + (uint64_t) (i - i0) * 8 : dyn + fix;   // no stored spelling past len
- if (raw < (dyn <= fix ? dyn : fix)) df_wstored(t, s, i0, i, last);
- else if (fix < dyn) {
+ for (j2 = 0; j2 < p->nr; j2++) a->fc[a->rlb[j2] >> 7]++;
+ p->mxc = df_hlens(a->fc, 19, 7, a->lenc, a);
+ for (p->hclen = 19; p->hclen > 4 && !a->lenc[gz_clord[p->hclen - 1]]; p->hclen--) ;
+ p->dyn = 17 + p->hclen * 3 + df_ccost(a->rlb, a->lenc, p->nr)
+        + df_cost(a->fl, a->lenl, 286) + df_cost(a->fd, a->lend, 30) + xb;
+ p->fix = 3 + df_cost(a->fl, a->fixll, 286) + df_cost(a->fd, a->fixld, 30) + xb;
+ p->raw = len < 65536 ? 42 + (uint64_t) len * 8 : p->dyn + p->fix;   // no stored spelling past len
+ uint64_t c = p->dyn <= p->fix ? p->dyn : p->fix;
+ return p->raw < c ? p->raw : c; }
+
+static void df_flush(struct df_sink *t, struct df_ar *a, const uint32_t *tok, unsigned k, uint64_t xb,
+                     const uint8_t *s, uintptr_t i0, uintptr_t i, int last) {
+ struct df_plan p;
+ unsigned j2;
+ df_price(a, xb, i - i0, &p);
+ if (p.raw < (p.dyn <= p.fix ? p.dyn : p.fix)) df_wstored(t, s, i0, i, last);
+ else if (p.fix < p.dyn) {
   df_put(t, last ? 1 : 0, 1); df_put(t, 1, 2);
-  df_wtoks(t, a->tok, k, a->fixcl, a->fixll, a->fixcd, a->fixld); }
+  df_wtoks(t, tok, k, a->fixcl, a->fixll, a->fixcd, a->fixld); }
  else {
-  df_hcodes(a->lenl, 286, mxl, a->codl);
-  df_hcodes(a->lend, 30, mxd, a->codd);
-  df_hcodes(a->lenc, 19, mxc, a->codc);
+  df_hcodes(a->lenl, 286, p.mxl, a->codl);
+  df_hcodes(a->lend, 30, p.mxd, a->codd);
+  df_hcodes(a->lenc, 19, p.mxc, a->codc);
   df_put(t, last ? 1 : 0, 1); df_put(t, 2, 2);
-  df_put(t, hlit - 257, 5); df_put(t, hdist - 1, 5); df_put(t, hclen - 4, 4);
-  for (j2 = 0; j2 < hclen; j2++) df_put(t, a->lenc[gz_clord[j2]], 3);
-  for (j2 = 0; j2 < nr; j2++) {
+  df_put(t, p.hlit - 257, 5); df_put(t, p.hdist - 1, 5); df_put(t, p.hclen - 4, 4);
+  for (j2 = 0; j2 < p.hclen; j2++) df_put(t, a->lenc[gz_clord[j2]], 3);
+  for (j2 = 0; j2 < p.nr; j2++) {
    uint32_t v = a->rlb[j2]; unsigned sy = v >> 7;
    df_put(t, a->codc[sy], a->lenc[sy]);
    if (df_clx(sy)) df_put(t, v & 127, df_clx(sy)); }
-  df_wtoks(t, a->tok, k, a->codl, a->lenl, a->codd, a->lend); }
- return i; }
+  df_wtoks(t, tok, k, a->codl, a->lenl, a->codd, a->lend); } }
+
+// --- the best lane: an optimal parse, priced off the pass before (zopfli's way) -------------
+// a block's matches are found once (lzfind.h): at each position, every length the tree reaches at
+// its nearest distance. each pass is the cheapest path through them, costed in 16ths of a bit
+#ifndef DF_OBLOCK
+#define DF_OBLOCK (1u << 17)                    // input bytes one block parses
+#endif
+#ifndef DF_OITERS
+#define DF_OITERS 2
+#endif
+#define DF_OINF 0xffffffffu
+#ifndef DF_ODEPTH
+#define DF_ODEPTH 48                            // the finder's tree walk
+#endif
+#define DF_OMAXM 64
+#ifndef DF_OGRID
+#define DF_OGRID 128                            // split points a block weighs, at most
+#endif
+#define DF_OSTEP 32                             // tokens between two, at least
+#ifndef DF_ONICE
+#define DF_ONICE 258
+#endif
+struct df_opt { uint32_t *price, *mo, *tok, *best; uint16_t *ml, *md, *len, *dist; uintptr_t capm;
+                struct lzf f; uint32_t cl[286], cd[30], clen[259], ls[DF_OMAXM], ds[DF_OMAXM]; };
+
+static uint32_t df_l2(uint32_t x) {             // 16 log2 x, by squaring: four fraction bits
+ unsigned e = 31 - (unsigned) __builtin_clz(x), f = 0;
+ uint64_t w = e >= 15 ? x >> (e - 15) : (uint64_t) x << (15 - e);
+ for (int j = 0; j < 4; j++) { w = w * w >> 15, f <<= 1; if (w >= 1u << 16) w >>= 1, f |= 1; }
+ return e << 4 | f; }
+
+// the costs off counts: entropy, an unseen symbol as one in the total
+static void df_ocost(uint32_t *c, const uint32_t *f, unsigned nsym) {
+ uint32_t tot = 0;
+ for (unsigned j = 0; j < nsym; j++) tot += f[j];
+ uint32_t lt = df_l2(tot ? tot : 1);
+ for (unsigned j = 0; j < nsym; j++) c[j] = f[j] ? lt - df_l2(f[j]) : lt; }
+
+// the cheapest path through s[i + u .. i + v) under o's costs, as tokens -> how many, counted in
+// fl and fd, extra bits in *xb. o's matches are the block's from i
+static unsigned df_opath(const uint8_t *s, uintptr_t i, uintptr_t u, uintptr_t v, struct df_opt *o,
+                         struct df_ar *a, uint32_t *tok, uint64_t *xb) {
+ uintptr_t B = v - u;
+ const uint8_t *b = s + i + u;
+ const uint32_t *mo = o->mo + u;
+ for (unsigned l = 3; l <= 258; l++) {
+  unsigned lc = df_lcode(l);
+  o->clen[l] = o->cl[257 + lc] + (gz_lext[lc] << 4); }
+ o->price[0] = 0;
+ for (uintptr_t j = 1; j <= B; j++) o->price[j] = DF_OINF;
+ for (uintptr_t j = 0; j < B; j++) {
+  uint32_t c = o->price[j];
+  if (c + o->cl[b[j]] < o->price[j + 1]) o->price[j + 1] = c + o->cl[b[j]], o->len[j + 1] = 1;
+  unsigned lo = 3, top = B - j < 258 ? (unsigned) (B - j) : 258;
+  for (uint32_t m = mo[j]; m < mo[j + 1] && lo <= top; m++) {
+   unsigned hi = o->ml[m] < top ? o->ml[m] : top, dc = df_dcode(o->md[m]);
+   uint32_t cd = c + o->cd[dc] + (gz_dext[dc] << 4);
+   for (unsigned l = lo; l <= hi; l = l < DF_ONICE || l == hi ? l + 1 : hi)   // past nice, only its whole
+    if (cd + o->clen[l] < o->price[j + l]) o->price[j + l] = cd + o->clen[l], o->len[j + l] = (uint16_t) l, o->dist[j + l] = o->md[m];
+   lo = hi + 1; } }
+ unsigned k = 0;
+ for (uintptr_t j = B; j; j -= o->len[j]) k++;
+ unsigned n = k;
+ memset(a->fl, 0, 286 * sizeof *a->fl), memset(a->fd, 0, 30 * sizeof *a->fd), *xb = 0;
+ for (uintptr_t j = B; j; j -= o->len[j]) {
+  unsigned l = o->len[j];
+  if (l == 1) { unsigned c = b[j - 1]; tok[--k] = c, a->fl[c]++; continue; }
+  unsigned d = o->dist[j], lc = df_lcode(l), dc = df_dcode(d);
+  tok[--k] = 256u + ((uint32_t) lc << 23) + ((uint32_t) dc << 18) + ((uint32_t) (l - gz_lbase[lc]) << 13) + (d - gz_dbase[dc]);
+  a->fl[257 + lc]++, a->fd[dc]++, *xb += gz_lext[lc] + gz_dext[dc]; }
+ return n; }
+
+// passes over [u, v) from o's costs, each priced off the one before: the cheapest in o->best,
+// how many in *bk, extra bits in *bxb -> its bits
+static uint64_t df_opass(const uint8_t *s, uintptr_t i, uintptr_t u, uintptr_t v, struct df_opt *o,
+                         struct df_ar *a, unsigned *bk, uint64_t *bxb) {
+ uint64_t bbits = ~(uint64_t) 0, xb;
+ for (unsigned it = 0; it < DF_OITERS; it++) {
+  unsigned k = df_opath(s, i, u, v, o, a, o->tok, &xb);
+  uint32_t fl[286], fd[30];
+  struct df_plan p;
+  memcpy(fl, a->fl, sizeof fl), memcpy(fd, a->fd, sizeof fd);
+  uint64_t bits = df_price(a, xb, v - u, &p);
+  if (bits < bbits) bbits = bits, *bk = k, *bxb = xb, memcpy(o->best, o->tok, k * sizeof *o->tok);
+  df_ocost(o->cl, fl, 286), df_ocost(o->cd, fd, 30); }
+ return bbits; }
+
+// tokens tok[0..k) counted into fl and fd, their extra bits -> how many bytes they cover
+static uintptr_t df_ocount(const uint32_t *tok, unsigned k, uint32_t *fl, uint32_t *fd, uint64_t *xb) {
+ uintptr_t len = 0;
+ for (unsigned j = 0; j < k; j++) {
+  uint32_t v = tok[j];
+  if (v < 256) { fl[v]++, len++; continue; }
+  uint32_t w = v - 256;
+  unsigned lc = w >> 23, dc = (w >> 18) & 31;
+  fl[257 + lc]++, fd[dc]++, *xb += gz_lext[lc] + gz_dext[dc], len += gz_lbase[lc] + ((w >> 13) & 31); }
+ return len; }
+
+// the grid's blocks [ga, gb) priced off its running counts
+static uint64_t df_gcost(struct df_ar *a, const uint32_t *cnt, const uint64_t *xbp, const uintptr_t *pos,
+                         unsigned ga, unsigned gb) {
+ const uint32_t *x = cnt + (uintptr_t) ga * 316, *y = cnt + (uintptr_t) gb * 316;
+ struct df_plan p;
+ for (unsigned j = 0; j < 286; j++) a->fl[j] = y[j] - x[j];
+ for (unsigned j = 0; j < 30; j++) a->fd[j] = y[286 + j] - x[286 + j];
+ return df_price(a, xbp[gb] - xbp[ga], pos[gb] - pos[ga], &p); }
+
+// one block of the best lane from i: its matches, a parse of the whole, split where two codes
+// cost less than one, and each part parsed again on its own -> where it ends
+static uintptr_t df_oblock(const uint8_t *s, uintptr_t n, uintptr_t i, struct df_sink *t, struct df_ar *a,
+                           struct df_opt *o) {
+ uintptr_t e = n - i > DF_OBLOCK ? i + DF_OBLOCK : n, B = e - i, nm = 0;
+ for (uintptr_t j = 0; j < B; j++) {
+  if (o->capm - nm < 258) {                      // alloc keeps nothing: grown by a copy
+   uintptr_t c2 = o->capm * 2 + 4096;
+   uint16_t *l2 = alloc(NULL, c2 * sizeof *l2), *d2 = l2 ? alloc(NULL, c2 * sizeof *d2) : NULL;
+   if (!d2) { if (l2) alloc(l2, 0); t->err = 1; return n; }
+   if (nm) memcpy(l2, o->ml, nm * sizeof *l2), memcpy(d2, o->md, nm * sizeof *d2);
+   if (o->ml) alloc(o->ml, 0), alloc(o->md, 0);
+   o->ml = l2, o->md = d2, o->capm = c2; }
+  o->mo[j] = (uint32_t) nm;
+  uintptr_t left = n - i - j;
+  unsigned k = lzf_all(&o->f, i + j, left < 258 ? (unsigned) left : 258, 258, o->ls, o->ds);
+  for (unsigned q = 0; q < k; q++)
+   if (o->ls[q] >= 3) o->ml[nm] = (uint16_t) o->ls[q], o->md[nm] = (uint16_t) (o->ds[q] + 1), nm++; }
+ o->mo[B] = (uint32_t) nm;
+ // the whole, from the fixed code's lengths
+ for (unsigned j = 0; j < 286; j++) o->cl[j] = (uint32_t) a->fixll[j] << 4;
+ for (unsigned j = 0; j < 30; j++) o->cd[j] = 5u << 4;
+ unsigned bk = 0;
+ uint64_t bxb = 0;
+ df_opass(s, i, 0, B, o, a, &bk, &bxb);
+ // the grid: running counts every g tokens
+ unsigned g = bk / DF_OGRID > DF_OSTEP ? bk / DF_OGRID : DF_OSTEP, G = (bk + g - 1) / g;
+ uint32_t *cnt = alloc(NULL, (uintptr_t) (G + 1) * 316 * sizeof *cnt + (G + 1) * (sizeof(uint64_t) + sizeof(uintptr_t))
+                             + 2 * (G + 1) * sizeof(unsigned));
+ if (!cnt) { t->err = 1; return n; }
+ uint64_t *xbp = (uint64_t*) (cnt + (uintptr_t) (G + 1) * 316);
+ uintptr_t *pos = (uintptr_t*) (xbp + G + 1);
+ unsigned *st = (unsigned*) (pos + G + 1), sn = 0, ga, gb;
+ memset(cnt, 0, 316 * sizeof *cnt), xbp[0] = 0, pos[0] = 0;
+ for (unsigned q = 0; q < G; q++) {
+  uint32_t *c = cnt + (uintptr_t) (q + 1) * 316;
+  unsigned k0 = q * g, k1 = k0 + g < bk ? k0 + g : bk;
+  memcpy(c, c - 316, 316 * sizeof *c), xbp[q + 1] = xbp[q];
+  pos[q + 1] = pos[q] + df_ocount(o->best + k0, k1 - k0, c, c + 286, xbp + q + 1); }
+ // split [ga, gb) at its cheapest point while that pays; the parts in order, left first
+ st[sn++] = 0, st[sn++] = G;
+ while (sn) {
+  gb = st[--sn], ga = st[--sn];
+  uint64_t bc = df_gcost(a, cnt, xbp, pos, ga, gb);
+  unsigned at = 0, lo = ga + 1, hi = gb - 1;
+  while (lo <= hi && gb - ga > 1) {               // nine points across, then between the best's neighbours
+   unsigned w = hi - lo, k = w < 9 ? w + 1 : 9, bi = 0, pt[9];
+   uint64_t bv = ~(uint64_t) 0;
+   for (unsigned q = 0; q < k; q++) {
+    pt[q] = k == w + 1 ? lo + q : lo + (unsigned) ((uint64_t) w * q / (k - 1));
+    uint64_t two = df_gcost(a, cnt, xbp, pos, ga, pt[q]) + df_gcost(a, cnt, xbp, pos, pt[q], gb);
+    if (two < bv) bv = two, bi = q; }
+   if (bv < bc) bc = bv, at = pt[bi];
+   if (k == w + 1) break;
+   lo = bi ? pt[bi - 1] + 1 : lo, hi = bi + 1 < k ? pt[bi + 1] - 1 : hi; }
+  if (at) { st[sn++] = at, st[sn++] = gb, st[sn++] = ga, st[sn++] = at; continue; }
+  if (!ga && gb == G) {                           // the whole, as parsed
+   memset(a->fl, 0, 286 * sizeof *a->fl), memset(a->fd, 0, 30 * sizeof *a->fd), bxb = 0;
+   df_ocount(o->best, bk, a->fl, a->fd, &bxb);
+   df_flush(t, a, o->best, bk, bxb, s, i, e, e >= n);
+   break; }
+  // a part: parsed again from its own counts, then written
+  const uint32_t *x = cnt + (uintptr_t) ga * 316, *y = cnt + (uintptr_t) gb * 316;
+  uint32_t fl[286], fd[30];
+  for (unsigned j = 0; j < 286; j++) fl[j] = y[j] - x[j];
+  for (unsigned j = 0; j < 30; j++) fd[j] = y[286 + j] - x[286 + j];
+  df_ocost(o->cl, fl, 286), df_ocost(o->cd, fd, 30);
+  unsigned pk = 0;
+  uint64_t pxb = 0;
+  df_opass(s, i, pos[ga], pos[gb], o, a, &pk, &pxb);
+  memset(a->fl, 0, 286 * sizeof *a->fl), memset(a->fd, 0, 30 * sizeof *a->fd), pxb = 0;
+  df_ocount(o->best, pk, a->fl, a->fd, &pxb);
+  df_flush(t, a, o->best, pk, pxb, s, i + pos[ga], i + pos[gb], gb == G && e >= n); }
+ alloc(cnt, 0);
+ return e; }
 
 // s[0..i0) is the preset dictionary: in the window, never sent
 static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, uintptr_t cap, uint8_t *m, int best) {
@@ -526,7 +714,6 @@ static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, 
  uintptr_t i = i0;
  unsigned j;
  df_carve(m, &a);
- a.chain = best ? 4096 : DF_CHAIN, a.lazy = !!best;
  memset(a.head, 0, 32768 * sizeof *a.head);
  memset(a.prev, 0, 32768 * sizeof *a.prev);
  for (j = 0; j < 288; j++) a.fixll[j] = j < 144 ? 8 : j < 256 ? 9 : j < 280 ? 7 : 8;
@@ -534,12 +721,29 @@ static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, 
  df_hcodes(a.fixll, 288, 9, a.fixcl);
  df_hcodes(a.fixld, 30, 5, a.fixcd);
  t.out = out; t.op = 0; t.cap = cap; t.acc = 0; t.nb = 0; t.err = 0;
- for (uintptr_t q = 0; q < i0; q++) df_ins(s, n, q, a.head, a.prev);
- do i = df_block(s, n, i, &t, &a); while (i < n && !t.err);
+ if (best) {
+  struct df_opt *o = alloc(NULL, sizeof *o);
+  uintptr_t nb = (DF_OBLOCK + 1) * (3 * sizeof(uint32_t) + 3 * sizeof(uint16_t)) + DF_OBLOCK * sizeof(uint32_t),
+            nf = (3u << 16) + 2 * DF_WSIZE;
+  uint8_t *b = o ? alloc(NULL, nb + nf * sizeof(uint32_t)) : NULL;
+  if (!b) { if (o) alloc(o, 0); return -1; }
+  uint32_t *h = (uint32_t*) (b + nb);
+  memset(h, 0, (3u << 16) * sizeof *h);
+  o->f = (struct lzf) { s, n, h, h + (1u << 16), h + (2u << 16), h + (3u << 16), DF_WMASK, DF_WSIZE, 0,
+                        16, DF_ODEPTH, 8, 258, DF_OMAXM };
+  lzf_ins(&o->f, i0, 258);
+  o->price = (uint32_t*) b, o->mo = o->price + DF_OBLOCK + 1, o->tok = o->mo + DF_OBLOCK + 1,
+  o->best = o->tok + DF_OBLOCK + 1, o->len = (uint16_t*) (o->best + DF_OBLOCK),
+  o->dist = o->len + DF_OBLOCK + 1, o->ml = o->md = NULL, o->capm = 0;
+  do i = df_oblock(s, n, i, &t, &a, o); while (i < n && !t.err);
+  alloc(o->ml, 0), alloc(o->md, 0), alloc(b, 0), alloc(o, 0); }
+ else {
+  for (uintptr_t q = 0; q < i0; q++) df_ins(s, n, q, a.head, a.prev);
+  do i = df_block(s, n, i, &t, &a); while (i < n && !t.err); }
  df_align(&t);
  return t.err ? -2 : (int64_t) t.op; }
 
-// the image lane, no twin: one pass into the caller's buffer, zlib -9's lazy parse
+// the image lane, no twin: into the caller's buffer, the optimal parse
 intptr_t deflate_raw(struct g *g, unsigned char const *in, uintptr_t n,
                         unsigned char *out, uintptr_t cap) {
  uint8_t *m = alloc(NULL, DF_ARENA);

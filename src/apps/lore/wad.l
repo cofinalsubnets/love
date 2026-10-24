@@ -1,7 +1,7 @@
 ; wad -- a doom map walked, read by the unofficial doom specs and drawn by facets, no bsp:
 ; each subsector a floor and ceiling fan cut by the nodes' lines and its segs; each side three
 ; quads; each thing a sprite turned to the eye. a sector is a batch, laid again alone when it moves
-; run: love lore wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]
+; run: love play wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]
 (module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
 (borrow 'posix)
 (borrow 'rove)                          ; pad, for the status row
@@ -746,7 +746,7 @@
  (wad-run o) (wad-open (o 'file) (o 'map) @
    [wd M] (view-stage (pin o 'wad wd) (o2 \ wad-walk o2 M) (_ \ (say out mesh-gone, flush out)))
    why (say err ("wad: " + why + "\n"), flush err, 1))
- wad-usage "usage: love lore wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, a d strafe, r run, u n look, e or space use, f fire, 1-6 guns; ? the keys; q or esc leaves)"
+ wad-usage "usage: love play wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]   (h l turn, k j step, a d strafe, r run, u n look, e or space use, f fire, 1-6 guns; ? the keys; q or esc leaves)"
  ; ..FILE and MAP first, then view's words
  (wad-opts as) (: pos (\ l (two? l && string? <l && #<l > 0 && <l 0 != 45))
    f (pos as ? <as ()) r (pos as ? >as as) m (pos r ? <r "E1M1") rest (pos r ? >r r)

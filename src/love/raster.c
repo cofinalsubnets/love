@@ -1,11 +1,14 @@
 // raster -- triangles onto a frame of pixels as a ps1 drew them: vertex colours, nearest
 // texels, a depth buffer, linear fog, the era's quirks on request
 // (facets w h base mat verts tris texs opts) answers an [h w] tray of 0xrrggbb.
-//  base   the ground: a tray of w*h colours, or one colour
+//  base   the ground: a tray of w*h colours, or one colour; or [ground cs ds], cs and ds a
+//         smaller frame's colours and depths through the same mat, cw by ch, row by row:
+//         each pixel the one over it, where that drew, else the ground
 //  mat    16 numbers, row-major: clip = mat * [x y z 1], gl's clip box (-w <= x,y,z <= w)
 //  verts  8 numbers a vertex: x y z  u v (texels)  r g b (1.0 the texel as it is)
 //  tris   4 a triangle: three vertex indices and a texture's index, -1 none, -2 a glow
-//         (added to what is behind, hiding nothing: drawn after what it lies over), -3 - t
+//         (added to what is behind, hiding nothing: drawn after what it lies over; on a bare
+//         pixel kept as -1 less its colour, and added to what is drawn under it), -3 - t
 //         glass of texture t (what is behind times its texel, its colour added, hiding nothing);
 //         verts and tris may be lists of batches, pairwise
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
@@ -43,13 +46,17 @@ struct rz {
  intptr_t SW, SH;
  flo_t fog[5], tone;
  flo_t tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
- intptr_t *out;
- flo_t *depth;
- flo_t *tz;              // each 8 by 8 tile's farthest depth, then whether it was drawn on since
+ int32_t *out;           // the frame drawn four bytes a pixel, then laid into ans a word each
+ float *depth;
+ void *ans;
+ flo_t *tz;             // each 8 by 8 tile's farthest depth, then whether it was drawn on since
  intptr_t TW, TH;
  flo_t *pv;              // the vertices once through m and lm, rz_pv a vertex: x y z w, the sun's x y z, bits, row
  intptr_t nth, ylo, yhi; // the bands the frame is in, and this one's rows
  word base, vs, ts, tx;  // the ground, the batches, the textures
+ intptr_t const *cc;     // a smaller frame laid first, cw by ch, its colours and depths
+ flo_t const *cd;
+ intptr_t cw, ch;
  struct rz_tex lv[rz_lv];
  int nlv; };
 
@@ -172,11 +179,13 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   for (int k = 0; k < 2 + rz_na; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
   int L = 0;   // the texture's level, asked again every eighth pixel, and its texels one of the first's
   flo_t us = 1;
-  intptr_t *o = r->out + y * r->W;
-  flo_t *dz = r->depth + y * r->W, *td = r->tz + r->TW * r->TH + (y >> 3) * r->TW;
+  int32_t *o = r->out + y * r->W;
+  float *dz = r->depth + y * r->W;
+  flo_t *td = r->tz + r->TW * r->TH + (y >> 3) * r->TW;
   for (intptr_t x = xs; x < xe; x++) {
-   if (a[0] >= -1 && a[0] <= 1 && a[0] < dz[x] && !(under && o[x] >= 0)) {   // inside all three edges: the run is exact
-    if (r->flags & rz_depth) dz[x] = a[0], td[x >> 3] = 1;
+   float const z = (float) a[0];
+   if (a[0] >= -1 && a[0] <= 1 && z < dz[x] && !(under && o[x] >= 0)) {   // inside all three edges: the run is exact
+    if (r->flags & rz_depth) dz[x] = z, td[x >> 3] = 1;
     else {
     flo_t const w = 1 / a[1], s = persp ? w : 1,
                 sun = shade ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : 1;
@@ -217,14 +226,18 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
      int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
      if (r->glass) {   // glass: what is there through its tint, its sheen on it; bare, left bare
-      intptr_t const q = o[x];
-      if (q >= 0) o[x] = rz_ch((flo_t) (q >> 16 & 255) * tint[0] + c[0], 0) << 16 | rz_ch((flo_t) (q >> 8 & 255) * tint[1] + c[1], 0) << 8
-                         | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0); }
-     else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, left bare
-      intptr_t const q = o[x];
-      if (q >= 0) o[x] = rz_ch(c[0] + (flo_t) (q >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (q >> 8 & 255), 0) << 8
-                         | rz_ch(c[2] + (flo_t) (q & 255), 0); }
-     else o[x] = rz_ch(c[0], d) << 16 | rz_ch(c[1], d) << 8 | rz_ch(c[2], d), dz[x] = a[0], td[x >> 3] = 1; } } }
+      int32_t const q = o[x];
+      if (q >= 0) o[x] = (int32_t) (rz_ch((flo_t) (q >> 16 & 255) * tint[0] + c[0], 0) << 16 | rz_ch((flo_t) (q >> 8 & 255) * tint[1] + c[1], 0) << 8
+                                    | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0)); }
+     else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, kept as -1 less it
+      int32_t const q = o[x], g = q >= 0 ? q : -1 - q,
+                    s = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), 0) << 8
+                                   | rz_ch(c[2] + (flo_t) (g & 255), 0));
+      o[x] = q >= 0 ? s : -1 - s; }
+     else {   // ..and drawn under, onto a glow kept there
+      int32_t const g = under && o[x] < -1 ? -1 - o[x] : 0;
+      o[x] = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), d) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), d) << 8
+                        | rz_ch(c[2] + (flo_t) (g & 255), d)), dz[x] = z, td[x >> 3] = 1; } } } }
    for (int k = 0; k < 7; k++) a[k] += vx[k];
    if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
    if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
@@ -356,20 +369,33 @@ static void rz_prep(struct rz const *r) {
   intptr_t const nv = (intptr_t) tray_nelem(tray(A(v))) / r->stride;
   rz_verts(r, tray(A(v)), nv, pv), pv += rz_pv * nv; } }
 
-// a worker's share of the frame: its rows laid with the ground, then every batch drawn on them
+// a worker's share of the frame: its rows laid with the ground, then every batch drawn on them,
+// then laid out a word a pixel. drawn under, a pixel not bare stands nearest of all, so a tile
+// with none bare turns every triangle away before its rows are walked
 static void rz_run(struct rz *r) {
- int const bt = galaxyp(r->base) && tray_nelem(tray(r->base)) >= (uintptr_t) (r->W * r->H);
+ int const bt = galaxyp(r->base) && tray_nelem(tray(r->base)) >= (uintptr_t) (r->W * r->H), under = (r->flags & rz_under) != 0;
  intptr_t const bc = charmp(r->base) ? getcharm(r->base) : 0;
  for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
-  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++)
-   r->out[i] = bt ? tray_get_int(tray(r->base), (uintptr_t) i) : bc, r->depth[i] = 2;
+  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++) {
+   r->out[i] = (int32_t) (bt ? tray_get_int(tray(r->base), (uintptr_t) i) : bc), r->depth[i] = 2;
+   if (r->cc) {
+    intptr_t const j = y * r->ch / r->H * r->cw + (i - y * r->W) * r->cw / r->W;
+    if (r->cd[j] < 2) r->out[i] = (int32_t) r->cc[j], r->depth[i] = (float) r->cd[j]; }
+   if (under && r->out[i] >= 0) r->depth[i] = -2; }
+ int const laid = under || r->cc;   // ..the tiles' farthest asked of what was laid, else all far
  for (intptr_t ty = rz_own(r, 0) >> 3; ty < r->TH && ty * 8 < r->yhi; ty++)
-  for (intptr_t tx = 0; tx < r->TW; tx++) r->tz[ty * r->TW + tx] = 2, r->tz[r->TW * r->TH + ty * r->TW + tx] = 0;
+  for (intptr_t tx = 0; tx < r->TW; tx++) r->tz[ty * r->TW + tx] = 2, r->tz[r->TW * r->TH + ty * r->TW + tx] = laid;
+ if (laid) rz_tiles(r);
  flo_t *const pv = r->pv;
  if (galaxyp(r->vs)) rz_batch(r, tray(r->vs), tray(r->ts), r->tx);
  else for (word v = r->vs, t = r->ts; chainp(v); v = B(v), t = B(t))
   rz_batch(r, tray(A(v)), tray(A(t)), r->tx), r->pv += rz_pv * (intptr_t) tray_nelem(tray(A(v))) / r->stride;
- r->pv = pv; }
+ r->pv = pv;
+ int const dp = (r->flags & rz_depth) != 0;
+ for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
+  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++)
+   if (dp) ((flo_t*) r->ans)[i] = r->depth[i] < -1 ? 2 : (flo_t) r->depth[i];
+   else ((intptr_t*) r->ans)[i] = r->out[i]; }
 
 // a band of rows, drawn on its own copy of the frame's state
 static void rz_bandrun(void *c, intptr_t i) {
@@ -398,22 +424,32 @@ love_noinline static struct g *host_raster(struct g *g) {
  if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st;
  else for (word v = a[4]; chainp(v); v = B(v)) nv += tray_nelem(tray(A(v))) / st;
  word const o0 = chainp(a[7]) ? A(a[7]) : a[7];
- uintptr_t const fr1 = ((intptr_t) rz_opt(o0, 5, 0) & rz_flat) ? 1 : 2;   // the colours' rank
+ intptr_t const fl = (intptr_t) rz_opt(o0, 5, 0);
+ uintptr_t const fr1 = (fl & rz_flat) && !(fl & rz_depth) ? 1 : 2;   // the answer's rank
  uintptr_t const n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
-                 fw = b2w(tray_bytes(love_Z, fr1, n)), dw = b2w(tray_bytes(love_R, 2, n)),
+                 fw = b2w(tray_bytes(fl & rz_depth ? love_R : love_Z, fr1, n)),
+                 dw = b2w(tray_bytes(love_Z, 1, mulsat(n, 8) / sizeof(word))),   // a colour and a depth, four bytes each
                  pw = b2w(tray_bytes(love_R, 1, rz_pv * nv + 1));
  intptr_t const TW = (W + 7) / 8, TH = (H + 7) / 8;
  uintptr_t const tw = b2w(tray_bytes(love_R, 1, (uintptr_t) (2 * TW * TH)));
  if (!ok(g = have(g, fw + dw + pw + tw))) return g;
  a = g->sp;
- struct tray *fr = ini_tray(bump(g, fw), love_Z, fr1), *dp = ini_tray(bump(g, dw), love_R, 2),
+ struct tray *fr = ini_tray(bump(g, fw), fl & rz_depth ? love_R : love_Z, fr1), *sc = ini_tray(bump(g, dw), love_Z, 1),
              *pt = ini_tray(bump(g, pw), love_R, 1), *tt = ini_tray(bump(g, tw), love_R, 1);
  pt->shape[0] = rz_pv * nv + 1, tt->shape[0] = (uintptr_t) (2 * TW * TH);
- dp->shape[0] = (uintptr_t) H, dp->shape[1] = (uintptr_t) W;
+ sc->shape[0] = mulsat(n, 8) / sizeof(word);
  if (fr1 == 2) fr->shape[0] = (uintptr_t) H, fr->shape[1] = (uintptr_t) W;
  else fr->shape[0] = n;
- struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(fr), .depth = tray_data(dp), .pv = tray_data(pt),
+ struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(sc), .depth = (float*) tray_data(sc) + n, .ans = tray_data(fr), .pv = tray_data(pt),
                  .tz = tray_data(tt), .TW = TW, .TH = TH, .nth = 1, .yhi = H, .base = a[2], .vs = a[4], .ts = a[5], .tx = a[6] };
+ // a smaller frame under it, and the ground under that
+ word const b = a[2];
+ if (chainp(b) && chainp(B(b)) && chainp(B(B(b)))) {
+  word const cs = A(B(b)), ds = A(B(B(b)));
+  r.base = A(b);
+  if (galaxyp(cs) && galaxyp(ds) && tray(cs)->type == love_Z && tray(ds)->type == love_R && tray(ds)->rank == 2
+      && tray_nelem(tray(cs)) == tray_nelem(tray(ds)) && tray(ds)->shape[1] <= (uintptr_t) W && tray(ds)->shape[0] <= (uintptr_t) H)
+   r.cc = tray_data(tray(cs)), r.cd = tray_data(tray(ds)), r.cw = (intptr_t) tray(ds)->shape[1], r.ch = (intptr_t) tray(ds)->shape[0]; }
  // the opts, read after the allocation, which may move them
  word o = a[7], sv = ZeroPoint, sd = ZeroPoint;
  if (chainp(o)) {
@@ -430,7 +466,7 @@ love_noinline static struct g *host_raster(struct g *g) {
  if (r.tone > 0) for (int i = 0; i < rz_tn + 2; i++)
   r.tl[i] = 255 * (1 - rz_exp(-(flo_t) (i < rz_tn ? i : rz_tn) / 32));
  rz_share(g, &r);
- a[0] = r.flags & rz_depth ? word(dp) : word(fr);
+ a[0] = word(fr);
  return g; }
 static lvm(lvm_raster) { LvmCallp(g, 7, host_raster) }
 

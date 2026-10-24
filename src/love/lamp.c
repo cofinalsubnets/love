@@ -1,7 +1,8 @@
 // lamp -- lore's lamps on a packed mesh's vertices (mesh.l's mesh-lamp), shared over the pool
 // (lamp-light cols lamps): cols a packed mesh's columns, [x y z u v nx ny nz r g b] trays;
 // lamps each [pts r c n s2 wrap box]: its points, reach, [r g b], () or the way it faces, its
-// softness squared, its wrap, and () or the plan box [x0 z0 x1 z1] it keeps to. answers the
+// softness squared, its wrap, and () or the box it keeps to, [x0 z0 x1 z1] in plan or
+// [x0 z0 x1 z1 y0 y1] between two heights too. answers the
 // light they throw on each vertex as [r g b] trays, summed lamp by lamp in order, a lamp
 // whose reach misses the mesh's box adding nothing, and the numbers [0.0 0.0 0.0] where none
 // reaches it. (lamp-lights cols base lights): base [r g b], each a tray or a number, and to
@@ -16,7 +17,7 @@ float lm_sqrtf(float);
 #endif
 
 enum { lp_chunk = 1024 };   // vertices a share
-struct lamp { flo_t const *ps; uintptr_t np; flo_t r, c[3], n[3], s2, wr, box[4]; bool fn, keep; };
+struct lamp { flo_t const *ps; uintptr_t np; flo_t r, c[3], n[3], s2, wr, box[6]; bool fn, keep, keepy; };
 // light j's lamps l[at[j]] to l[at[j + 1]]; the base a tray a colour, or where none bv
 struct lit { flo_t const *col[6], *base[3]; flo_t *out[3], bv[3]; struct lamp const *l; uintptr_t const *at; uintptr_t nlt, nv; };
 
@@ -48,7 +49,8 @@ static void lp_share(void *c, intptr_t s) {
                  f = lp_sat((flo_t) 1.0 - (d2 / (l->r * l->r)) * (d2 / (l->r * l->r)));
      k = k + lam * em * (f * f) / (d2 + l->s2); }
     k = k / (flo_t) l->np;
-    if (l->keep) k = k * (flo_t) ((l->box[0] < X) * (X < l->box[2]) * (l->box[1] < Z) * (Z < l->box[3]));
+    if (l->keep) k = k * (flo_t) ((l->box[0] < X) * (X < l->box[2]) * (l->box[1] < Z) * (Z < l->box[3])
+                                  * (!l->keepy || (l->box[4] < Y && Y < l->box[5])));
     for (int m = 0; m < 3; m++) a[m] = a[m] + k * l->c[m]; }
    for (int m = 0; m < 3; m++) o[m] = o[m] + a[m]; }
   for (int m = 0; m < 3; m++) t->out[m][i] = o[m]; } }
@@ -60,9 +62,9 @@ static bool lp_read(word w, struct lamp *l, flo_t *pts, uintptr_t *np) {
  l->ps = pts, l->np = 0;
  for (word q = ps; chainp(q); q = B(q), l->np++) if (!lp_nums(A(q), pts + 3 * l->np, 3)) return 0;
  *np = l->np;
- l->fn = chainp(n), l->keep = chainp(bx);
+ l->fn = chainp(n), l->keep = chainp(bx), l->keepy = l->keep && llen(bx) == 6;
  return l->np && lp_num(r, &l->r) && lp_nums(c, l->c, 3) && (!l->fn || lp_nums(n, l->n, 3)) && lp_num(s2, &l->s2) && lp_num(wr, &l->wr)
-        && (!l->keep || lp_nums(bx, l->box, 4)); }
+        && (!l->keep || lp_nums(bx, l->box, l->keepy ? 6 : 4)); }
 static bool lp_row(word w) {
  int k = 0;
  for (; chainp(w) && k < 7; w = B(w)) k++;

@@ -4,10 +4,13 @@
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
 ;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
+;   (window-sized win)        (w h) as the screen has it now: the events waiting read, so the
+;                             paper follows a resize, and kept for window-events
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
-;   (window-blit win pic w h) a picture w x h, 32-bit pixels as the paper's, out to the
-;                             whole window, the server enlarging it; 0 where it cannot, the
-;                             picture to be painted onto the paper
+;   (window-blit win pic w h ys)  a picture w x h, 32-bit pixels as the paper's, out to the
+;                             whole window but the rows ys, [y0 y1] spans the paper shows, the
+;                             server enlarging it; 0 where it cannot, the picture to be
+;                             painted onto the paper
 ;   (window-hold win on)      the pointer held in the window and hidden, on 1, or let go, on
 ;                             0; 1 where it was done
 ;   (window-warp win x y)     the pointer moved to x y in the window
@@ -25,7 +28,7 @@
 ; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
-(module '(window window-here? window-open window-paper window-size window-show window-blit window-hold window-warp window-events window-close
+(module '(window window-here? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
           window-own window-ask window-typing window-wets)
 (borrow 'xwire)
 (borrow 'posix)
@@ -186,17 +189,21 @@
           _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'dst), x-w32 k (win 'xw), x-w32 k (r 'fmt), x-w32 k 0)
           _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (v \ x-w32 k v))
           (pins r 'pw w 'ph h 'sc [(win 'w) (win 'h)] 'made 1)))
-   (window-blit win pic w h)
-    (: r (win 'how = 'x ? (x-render win) 0)
+   (window-blit win pic w h ys)
+    (: r (win 'how = 'x ? (x-render win) 0) H (win 'h)
+       ; ..the rows between the spans left, each [y0 y1]
+       gaps (foldl (\ g s (: a (max 0 (s 0)) b (min H (s 1)) e <g (? (b <= a) g ([b (e 1)] . [(e 0) (min a (e 1))] . >g)))) [[0 H]] (sort ys))
        (? !(tablet? r) 0
           (: k (win 's) op (r 'op)
              _ (x-hold win)
              _ (x-render-at win r w h)
              _ (x-putrows k (r 'pm) (win 'gc) (win 'depth) pic w 0 h)
-             _ (x-w8 k op, x-w8 k 8, x-w16 k 9, x-w8 k 1, x-w8 k 0, x-w16 k 0,               ; Composite, Src
-                x-w32 k (r 'src), x-w32 k 0, x-w32 k (r 'dst),
-                x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k 0,
-                x-w16 k (win 'w), x-w16 k (win 'h), x-flush k)
+             _ (each (filter (g \ g 0 < g 1) gaps)
+                 (g \ (x-w8 k op, x-w8 k 8, x-w16 k 9, x-w8 k 1, x-w8 k 0, x-w16 k 0,          ; Composite, Src
+                    x-w32 k (r 'src), x-w32 k 0, x-w32 k (r 'dst),
+                    x-w16 k 0, x-w16 k (g 0), x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k (g 0),
+                    x-w16 k (win 'w), x-w16 k (g 1 - g 0))))
+             _ (x-flush k)
              _ (x-let win)
              1)))
 
@@ -232,7 +239,7 @@
    ; every X event waiting, a reply's leftovers too; Exposes ship the paper once for the lot
    (x-pending win)
     (: s (win 's)
-       (go acc ex) (? !(cue? s || two? (evq 0)) [(rev acc) ex]
+       (go acc ex) (? !(cue? s || two? (peep evq s ())) [(rev acc) ex]
                       (x-next s @ e
                          (? (atom? e) [(rev (['close] . acc)) ex]
                             (ev-code e = 12) (go acc 1)
@@ -256,6 +263,7 @@
        ev (foldl (a \ r \ a + resized win r) () (said + l))
        (win 'how = 'droid && any (e \ <e = 'size) ev ? (droid-row-show win) 0, ev))
 
+   (window-sized win) (: ev (window-events win) _ (pin win 'said (peep win 'said () + ev)) (window-size win))
    (window-close win) (win 'how = 'x || win 'how = 'droid ? (close (win 's)) (kpaper 0))
    ; on a phone the keyboard comes with the row, and the paper gives it room
    (window-typing win on)

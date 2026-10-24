@@ -35,9 +35,8 @@
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. love inherits the app's own
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
-   is linked under its own name and as am, pm and settings: android's are refused an app's
-   uid, and love's speak the framework's door. when love ends it is started again; the app ends as android
-   ends it. */
+   is linked under its own name and as open, a link handed on through the framework's door.
+   when love ends it is started again; the app ends as android ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -93,6 +92,8 @@ int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const
 void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *, void *, int, long);
 void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void const *, size_t, int);
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
+struct dirent { unsigned long ino; long off; unsigned short reclen; unsigned char type; char name[256]; };
+void *opendir(char const *); struct dirent *readdir(void *); int closedir(void *);
 
 enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
 enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
@@ -775,9 +776,13 @@ static void spawn(br *b) {
   snprintf(face, sizeof face, "LOVE_FACE=%s", b->sock); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
-  static char const *const names[] = { "love", "am", "pm", "settings" };   /* love's own, ahead of android's refused ones */
+  void *d = opendir(bin);                      /* DATA/bin is the bridge's: every link goes, then names[]'s */
+  for (struct dirent *de; d && (de = readdir(d)); )
+    if (de->type == 10) snprintf(path, sizeof path, "%s/%s", bin, de->name), unlink(path);   /* DT_LNK */
+  if (d) closedir(d);
+  static char const *const names[] = { "love", "open" };
   for (unsigned i = 0; i < sizeof names / sizeof *names; i++) {
-    snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); unlink(bin); symlink(exe, bin); }   /* its dir moves per install */
+    snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
   ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;

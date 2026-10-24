@@ -224,6 +224,12 @@ EOF
 pie 7 7 1
 pie 7 7 1" ] || fail "pie: the slid exe -- got: $pout"
   [ "$(echo "$pout" | sed -n 3p)" != "$(echo "$pout" | sed -n 5p)" ] || fail "pie: two runs at one address -- got: $pout"
+  # dyld's exe is signed ad hoc at link: codesign reads it valid, and a byte flipped under it not
+  cs=$($box 'codesign -v /tmp/door && codesign -v /tmp/pie && echo signed; cp /tmp/pie /tmp/piex &&
+    perl -e '"'"'open F, "+<", $ARGV[0]; seek F, 4096, 0; read F, $c, 1; seek F, 4096, 0; print F chr(255 ^ ord $c)'"'"' /tmp/piex &&
+    { codesign -v /tmp/piex 2> /dev/null && echo kept || echo caught; }') || fail "sign: the box's codesign -- got: $cs"
+  [ "$cs" = "signed
+caught" ] || fail "sign: dyld's exe and its signature -- got: $cs"
 fi
 
 echo "$t: UV1 -- ONE default-lane binary answered both kernels the same"

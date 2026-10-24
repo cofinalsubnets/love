@@ -346,7 +346,7 @@
    (drain-keys (),
     ttygive rove-modes,
     0))
- apartment-usage "usage: love lore apartment   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
+ apartment-usage "usage: love play apartment   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (apartment-main as) (as @ () (apartment-run ())
                            (say err ("apartment: " + apartment-usage + "\n"), flush err, 2))
  _ ((cite 'lore 'lore-enlist) 'apartment (udoor 'apartment apartment-main apartment-usage 1 1)))

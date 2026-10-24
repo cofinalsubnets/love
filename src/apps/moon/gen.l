@@ -2124,6 +2124,16 @@
         (ilp32? g ? (mkv 'double 'r0 '((li r0 0) (li r1 2146959360) (movqxr f0 r0)))
            (mkv 'double 'r0 '((li r0 9221120237041090560) (movqxr f0 r0))))
        (bi = "__builtin_expect") (cgexpr g env <args ())
+       ; sp drops by the size rounded to 16, as a VLA's block, and the frame's unwind gives it back
+       (bi = "__builtin_alloca")
+        (? (g 'abad) (nolane g "no lane for alloca where an operand is parked on the stack")
+           !(elem (gtgt g) '(x64 a64 rv64 i386 i386m16 thumb1 thumb2 thumb2sp arm)) (nolane g "no lane for alloca\(ontgt g)")
+           (: r (cgexpr g env <args ())
+              (bad? r ? 'bad
+                 (pin g 'fesc 1, pin g 'hasasm 1,
+                  mkv '(ptr void) 'r0
+                      (asint g r + '((add r0 r0 15) (shr r0 4) (shl r0 4) (lea r1 sp 0) (sub r1 r1 r0) (lea sp r1 0))
+                       + (avz? g ? (vzero g (nlab g ".alo")) ()) + '((lea r0 sp 0)))))))
        ; the base holds the caller's, the return address a slot above, so both want fpin.
        ; a level above 0 walks the chain: sound where callers keep frames
        (elem bi '("__builtin_return_address" "__builtin_frame_address"))
@@ -3746,8 +3756,8 @@
           (rotty g env x @ a
              (ptr? a || arr? a ? a
                 (rotty g env y @ b (ptr? b || arr? b ? b)))))
-   (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width
-    (rotty g env e @ 'uint 32 ('ulong || 'ullong) 64)
+   (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width; ilp32's long long is a pair
+    (rotty g env e @ 'uint 32 'ulong (ilp32? g ? 32 64) 'ullong (ilp32? g ? () 64))
    (rotk g e)
     (knum g e @ k (two? k ? <k (cfold !(ilp32? g) e)))
    (rotc? g w big n)                                ; big reads (W - n), n pure and shared
@@ -5745,53 +5755,52 @@
         keys t))
    (lvun a b) (!(two? b) ? a (lvun (elem <b a ? a (<b . a)) >b))
    (lvsame a b) (#a = #b && !(two? (filter (r9 \ (nelem r9 b)) a)))
-   (lvio g fs)                                      ; -> [lin lot] (index -> live in/out of it) | 'no
+   (lvio g fs)                                      ; -> [lin lot tx] (index -> live in/out of it, its lvtx) | 'no
     (: u (lvuniv g fs)
        um (filter (r9 \ !(vmint? g r9)) u)          ; the machine share: what a blanket case reads
-       (bary? (f . l)) (lvtx g f u @ 'bar 1 (bary? l))
-       (bary? fs ? 'no
-          (: labt {}
-             (ix l i) (!(two? l) ? 0
-                         (<l @ f
-                            (two? f && <f = 'label ? (pin labt <>f i),
-                             ix >l (i + 1))))
-             _ (ix fs 0)
-             (ixd l i) (two? l ? ([i <l] . ixd >l (i + 1)))
-             rl (rev (ixd fs 0))
-             (succ f i) (: op (two? f ? <f 'x)
-                           (? (op = 'jmp) [(peep labt <>f -1)]
-                              (op = 'br) [(peep labt <>>f -1) (i + 1)]
-                              (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
-                              (xit? f) ()
-                              [(i + 1)]))
-             lin {}
-             lot {}
-             (gone? f) (xjmp? f labt)               ; a sibcall: arguments in flight, reads everything
-             ; each form's (reads defs) and successors, once
-             dt (foldl (t \ e \ pin t <e (gone? <>e ? [um ()] (lvtx g <>e u))) {} rl)
-             st (foldl (t \ e \ pin t <e (succ <>e <e)) {} rl)
-             ; a form is read again only when a successor's live-in moved since: the same inputs give
-             ; the same lists. tick numbers every reading, seen when i was read, moved when lin i grew
-             ck {'n 0} seen {} moved {}
-             (pass l ch)                            ; one backward sweep -> did any live-in grow?
-              (!(two? l) ? ch
-                 (: e <l i <e
-                    ss (st i)
-                    (? (peep seen i -1 >= 0 && !(any (s \ peep moved s -1 > seen i) ss)) (pass >l ch)
-                       (: d (dt i)
-                          lo (foldl (a \ s \ lvun a (lin s)) () ss)
-                          li (lvun <d (filter (r9 \ (nelem r9 <>d)) lo))
-                          old (lin i)
-                          ch2 !(lvsame li old)
-                          n (ck 'n + 1)
-                          (pin ck 'n n,
-                           pin seen i n,
-                           ch2 ? (pin lin i li, pin moved i n) 0,
-                           pin lot i lo,
-                           pass >l (ch || ch2))))))
-             (fix u9) (pass rl () ? (fix ()) 0)
-             (fix (),
-              [lin lot]))))
+       (: labt {}
+          (ix l i) (!(two? l) ? 0
+                      (<l @ f
+                         (two? f && <f = 'label ? (pin labt <>f i),
+                          ix >l (i + 1))))
+          _ (ix fs 0)
+          (ixd l i) (two? l ? ([i <l] . ixd >l (i + 1)))
+          rl (rev (ixd fs 0))
+          (succ f i) (: op (two? f ? <f 'x)
+                        (? (op = 'jmp) [(peep labt <>f -1)]
+                           (op = 'br) [(peep labt <>>f -1) (i + 1)]
+                           (op = 'jmpt) (map (L \ (peep labt L -1)) (f 3))
+                           (xit? f) ()
+                           [(i + 1)]))
+          lin {}
+          lot {}
+          (gone? f) (xjmp? f labt)               ; a sibcall: arguments in flight, reads everything
+          ; each form's (reads defs) and successors, once
+          tx (foldl (t \ e \ pin t <e (lvtx g <>e u)) {} rl)
+          bar9 (vany (e \ tx <e = 'bar) rl)
+          dt (bar9 ? {} (foldl (t \ e \ pin t <e (gone? <>e ? [um ()] (tx <e))) {} rl))
+          st (foldl (t \ e \ pin t <e (succ <>e <e)) {} rl)
+          ; a form is read again only when a successor's live-in moved since: the same inputs give
+          ; the same lists. tick numbers every reading, seen when i was read, moved when lin i grew
+          ck {'n 0} seen {} moved {}
+          (pass l ch)                            ; one backward sweep -> did any live-in grow?
+           (!(two? l) ? ch
+              (: e <l i <e
+                 ss (st i)
+                 (? (peep seen i -1 >= 0 && !(any (s \ peep moved s -1 > seen i) ss)) (pass >l ch)
+                    (: d (dt i)
+                       lo (foldl (a \ s \ lvun a (lin s)) () ss)
+                       li (lvun <d (filter (r9 \ (nelem r9 <>d)) lo))
+                       old (lin i)
+                       ch2 !(lvsame li old)
+                       n (ck 'n + 1)
+                       (pin ck 'n n,
+                        pin seen i n,
+                        ch2 ? (pin lin i li, pin moved i n) 0,
+                        pin lot i lo,
+                        pass >l (ch || ch2))))))
+          (fix u9) (pass rl () ? (fix ()) 0)
+          (bar9 ? 'no (fix (), [lin lot tx]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
    ; the staging webs (x64, a64): a def of r0 and the reads it reaches, all explicit operands of plain
@@ -6287,16 +6296,10 @@
                                                  (!(w 3) && 0 < shp9 b ? (b . a) a))
                                       () bases)
                          sc9 (vsucc fs)                           ; the form graph, once per fn
-                         lot9 (two? scand ? (lvout g fs) 'no)   ; index -> live-out, or the refusal
-                         dft9 (lot9 @ 'no {}
-                                      (: t {}
-                                         u9 (lvuniv g fs)
-                                         (go l i) (!(two? l) ? 0
-                                                     (lvtx g <l u9 @ d
-                                                        (d @ 'bar 0 (pin t i <>d),
-                                                         go >l (i + 1))))
-                                         (go fs 0,
-                                          t)))
+                         lio9 (two? scand ? (lvio g fs) 'no)
+                         lot9 (lio9 @ 'no 'no r <>r)              ; index -> live-out, or the refusal
+                         tx9 (lio9 @ 'no {} r (r 2))
+                         (dft9 i) <>(tx9 i)                       ; index -> the regs it defines
                          ; calls by index, and the cs pool a crossing chain may take: regs this fn never
                          ; writes, and never in a jmpr fn (a restore before the indirect exit is the dispatch's hot path)
                          callt (: t {}
@@ -6435,6 +6438,114 @@
                                                           0 (chains9 b))
                                                (nrw = tally (tls b) ? (pin retid b 1) 0)))
                                           0 (filter (b \ !(retid b)) bylo)))
+                         lsc9 {}                     ; a cell -> [its live indices], for the regions and the packing
+                         (lsm9 b) (lsc9 b @ v (two? v ? <v (: r (lset9 b) (pin lsc9 b [r], r))))
+                         ; loop regions: a full-word cell no chain seated rides a caller-saved seat inside one
+                         ; loop, loaded where control enters it live, stored where it leaves live when the loop
+                         ; writes it, and stored and reloaded across a call it is live across
+                         (rpass9 _)                  ; -> [bfr aft], the moves the regions lay | ()
+                          (: (sfree? tk r is9)        ; a caller-saved seat is free wherever no call is; a call's clobber, the pair's to meet
+                             (: (go l) (? !(two? l) 1
+                                          (<l @ i
+                                             (? (elem r (lot9 i)) ()
+                                                (elem r (tk i)) ()
+                                                (peep callt i 0) (go >l)
+                                                (elem r (dft9 i)) ()
+                                                (go >l))))
+                                (go is9))
+                            (sseat tk rs is9) (? !(two? rs) () (sfree? tk <rs is9) <rs (sseat tk >rs is9))
+                            bfr {}                      ; index -> the cell moves laid before it, at the cell's own offset
+                            aft {}                      ; index -> those laid after it
+                            spb {}                      ; a cell a moved value keeps
+                            (lay9 t i f) (pin t i (vapp (peep t i ()) [f]))
+                            vwm9 {}                     ; index -> its loop weight, each laid once
+                            (vw9 i) (: c (peep vwm9 i 0) (0 < c ? c (: w (vwt spans i) (pin vwm9 i w, w))))
+                            fam9 {}                     ; 'f -> [the forms by index], laid on a region's first ask
+                            (fat9 i) (fam9 'f @ v
+                                        (two? v ? (<v i)
+                                           (: t {} (go l k) (!(two? l) ? t (pin t k <l, go >l (k + 1)))
+                                              t9 (go fs 0)
+                                              (pin fam9 'f [t9], t9 i))))
+                            (uncond? f) (two? f && (elem <f '(jmp jmpt jmpr ret) || exit9? f))
+                            (tgt9 f) (two? f ? (<f @ 'jmp <>f 'br <>>f ()))
+                            (ti f) (tgt9 f @ t (nom? t ? (peep labt t -1) -1))
+                            ; one walk of the fn: its jumps [from to], and the forms no region may span
+                            (walk9 l k js bs)
+                             (!(two? l) ? [(rev js) (rev bs)]
+                                (: f <l t (ti f)
+                                   (walk9 >l (k + 1) (0 <= t ? ([k t] . js) js)
+                                           (two? f && elem <f '(jmpt jmpr raw asm sys) ? (k . bs) bs))))
+                            jb9 (walk9 fs 0 () ())
+                            rinm {}                     ; lo -> the region's edges | 'no
+                            (rinf sp)
+                             (rinm <sp @ c
+                                (two? c ? <c
+                                   (: lo <sp hi <>sp
+                                      (inr? i) (lo <= i && i <= hi)
+                                      bad (vany inr? <>jb9)
+                                      (edge j) [<j 'pre <>j]
+                                      e0 [(map edge (filter (j \ !(inr? <j) && inr? <>j) <jb9))
+                                          (map edge (filter (j \ inr? <j && !(inr? <>j)) <jb9))]
+                                      ft (0 < lo && !(uncond? (fat9 (lo - 1))) ? [[(lo - 1) 'post lo]])
+                                      fx (!(uncond? (fat9 hi)) && hi + 1 < n2 ? [[hi 'post (hi + 1)]])
+                                      r9 (bad ? 'no [(ft + <e0) (fx + <>e0) (filter (i \ peep callt i 0) (span9 lo hi))])
+                                      (pin rinm lo [r9], r9))))
+                            (rgn1 b lv ins wr sp xc lop sop)
+                             (rinf sp @ ri9
+                                (ri9 @ 'no ()
+                                   (: lo <sp hi <>sp ents <ri9 exs <>ri9 cls <>>ri9
+                                      en (filter (e \ peep lv (e 2) 0) ents)
+                                      ex (wr ? (filter (e \ peep lv (e 2) 0) exs) ())
+                                      cl (filter (i \ peep lv i 0) cls)
+                                      kk (a6 ? ki 4)
+                                      tw (foldl (a \ t \ a + vw9 <t) 0 ins)
+                                      cw (foldl (a \ e \ a + vw9 <e) 0 (en + ex) +
+                                          foldl (a \ i \ a + (wr ? 2 1) * vw9 i) 0 cl)
+                                      (eok? r) !(vany (e \ !(kk < <e && !(elem r (lot9 <e)) && !(elem r (taken <e)))) en)
+                                      ; ..or a callee-saved one the fn never writes: no pair at a call, but its save and restore
+                                      ; run on every invocation, looping or not, so it must repay them by a loop's worth (64)
+                                      cw2 (foldl (a \ e \ a + vw9 <e) 0 (en + ex) + 64)
+                                      (cok? r) !(vany (e \ !(kk < <e && !(elem r (taken <e)))) en)
+                                      (? (!(two? ins) || (tw <= cw && tw <= cw2)) ()
+                                         ; a load into the seat itself at another extension would wreck it
+                                         (: (dok? r) !(vany (t \ 0 < vldw <>t && t 2 = r && xt9 <>t !== xc) ins)
+                                            ri (span9 lo hi)
+                                            ra (cw < tw ? (sseat taken (filter (r \ eok? r && dok? r) (lvgp g)) ri))
+                                            rc (ra || tw <= cw2 ? () (cstake (filter (r \ cok? r && dok? r) cspool9) ri))
+                                            r (ra || rc)
+                                            (!r ? ()
+                                               (pclaim taken r (ri + map (e \ <e) en),
+                                                (rc ? (pin csut rc 1) 0),
+                                                pin spb b 1,
+                                                foldl (_ \ t \ pin pxm <t [r xc]) 0 ins,
+                                                foldl (_ \ e \ lay9 (<>e = 'pre ? bfr aft) <e [lop r fb b]) 0 en,
+                                                foldl (_ \ e \ lay9 (<>e = 'pre ? bfr aft) <e [sop fb b r]) 0 ex,
+                                                (ra ? (foldl (_ \ i \ ((wr ? (lay9 bfr i [sop fb b r]) 0), lay9 aft i [lop r fb b])) 0 cl) 0),
+                                                1)))))))
+                            (rgn9 b sw)                 ; sw: the loops, widest first
+                             (: lv (foldl (t \ i \ pin t i 1) {} (lsm9 b))
+                                tl (tls b)
+                                ; a narrow cell's seat is canonical to its first load's extension, as a chain's
+                                w (shp9 b)
+                                x0 (filter (t \ 0 < vldw <>t) (rev tl))
+                                xc (? (w = 8) () (two? x0) (xt9 <><x0) (w @ 4 'zx4 2 'zx2 1 'zx1 ()))
+                                lop (xc @ 'zx4 'ldu4 'sx4 'ld4 'zx2 'ldu2 'sx2 'ld2 'zx1 'ldu1 'sx1 'ld1 'ld)
+                                sop (w @ 4 'st4 2 'st2 1 'st1 'st)
+                                (go ss) (!(two? ss) ? ()
+                                           (: lo <<ss hi <><ss
+                                              ins (filter (t \ lo <= <t && <t <= hi) tl)
+                                              wr (vany (t \ 0 < vstw <>t || 0 < vsiw <>t) ins)
+                                              (two? ins && rgn1 b lv ins wr <ss xc lop sop || go >ss)))
+                                (go sw))
+                            inl9 (foldl (t \ sp \ foldl (_ \ i \ pin t i 1) t (span9 <sp <>sp)) {} spans)   ; an index inside a loop
+                            cd (filter (b \ !(retid b) && !(spb b) && 0 < shp9 b && vany (t \ peep inl9 <t 0) (tls b) &&
+                                         !(vany (t \ two? (peep pxm <t ())) (tls b))) bylo)
+                            (!(two? cd) ? ()
+                               (: sw (sortby (x \ y \ (<>y - <y) < (<>x - <x)) spans)
+                                  n (foldl (a \ b \ a + (rgn9 b sw ? 1 0)) 0 cd)
+                                  (0 < n ? [bfr aft]))))
+                         rg9 (lot9 @ 'no ()
+                                (abl? g 'creg || jrf || !(x64? g || a6) || !(two? spans) ? () (rpass9 0)))
                          prom (keys pxm)
                          ; a cell's occupancy: vclive's exact indices when every touch is a ld/st/si at its own base;
                          ; any other use (cmpm, an escape) keeps the window
@@ -6455,7 +6566,7 @@
                                            (go (i - 1) (st9 i || 0 < peep clv i 0 ? (i . acc) acc)))
                              (go <>>w ()))
                          ex9 (filter (b \ !(retid b) && exact9? b) bases)
-                         ls9 (foldl (t \ b \ pin t b (lset9 b)) {} ex9)
+                         ls9 (foldl (t \ b \ pin t b (lsm9 b)) {} ex9)
                          ext9 (foldl (t \ b \ pin t b 1) {} ex9)
                          rows (sortby (a \ b \ <a < <b)
                                       (map (b \ (obs b @ w [<>w b <w <>>w]))
@@ -6534,6 +6645,9 @@
                                 t9 (two? csused ? (tearx? l) 0)
                                 spl (t9 && !inr ? csrests)
                                 p (two? f && ki < i && two? prom ? (prw f i) 'no)
+                                (adj9 c) (radj2 c (0 < vstw <c ? 2 3))
+                                pre9 (two? rg9 ? (map adj9 (peep <rg9 i ())))
+                                pst9 (two? rg9 ? (map adj9 (peep <>rg9 i ())))
                                 (p @ 'no
                                      (: f2 (? !(two? f) f
                                               (i = ki) ['sub 'sp 'sp K3]
@@ -6542,8 +6656,8 @@
                                                     (radj2 f (peep uoff <f -1)) f)))
                                         (i = (a6 ? ki 4) && two? csused ?
                                            (vapp spl (f2 . vapp csaves (rw >l (i + 1) t9)))
-                                           (vapp spl (f2 . rw >l (i + 1) t9))))
-                                     (vapp spl (vapp p (rw >l (i + 1) t9))))))
+                                           (vapp spl (vapp pre9 (f2 . vapp pst9 (rw >l (i + 1) t9))))))
+                                     (vapp spl (vapp pre9 (vapp p (vapp pst9 (rw >l (i + 1) t9))))))))
                          ; the packed map replaces the build's for later slot readers (deadst); promoted or retired
                          ; objects have no cell, the cs save slots are their own
                          slots2 (foldl (a2 \ o \ peep nmap <o 'no9 @ nb
@@ -7814,15 +7928,15 @@
                       (elem r9 '(r5 r6 r7 r8 r9 r10 r11 r12)))
    ; a declaration list ((name ty init)..) -> (forms env) | 'bad. a homable scalar ticks the decl
    ; seq (stable across ubuild's attempts: splices don't tick) and asks g 'lhome for a home
+   ; -ftrivial-auto-var-init=zero: a new stack block, r0 bytes at sp (a multiple of 16), word by word
+   (vzero g lf) (: lz (name "\(lf).z") ld (name "\(lf).d")
+                   ['(lea r1 sp 0) '(add r2 r1 r0) '(li r0 0) ['label lz] '(cmp r1 r2) ['br 'eq ld]
+                    '(st r1 0 r0) ['add 'r1 'r1 (wsize g)] ['jmp lz] ['label ld]])
    (cgdecl g env pairs)
     (: ; the C99 VLA local: free any prior instance from this site (a loop re-runs the decl), size,
        ; sub sp, stash the block pointer; the fn stays out of sibcalls and homing (fesc + hasasm)
        v16 '((add r0 r0 15) (shr r0 4) (shl r0 4))   ; rounded up to 16: shr/shl, a64's encoder refuses ~15 as an and immediate
        vsub '((lea r1 sp 0) (sub r1 r1 r0) (lea sp r1 0))   ; sp -= r0 through a plain register: on a64 only lea (add-immediate) sees 31 as sp
-       ; -ftrivial-auto-var-init=zero: the new block, r0 bytes at sp (a multiple of 16), word by word
-       (vzero g lf) (: lz (name "\(lf).z") ld (name "\(lf).d")
-                       ['(lea r1 sp 0) '(add r2 r1 r0) '(li r0 0) ['label lz] '(cmp r1 r2) ['br 'eq ld]
-                        '(st r1 0 r0) ['add 'r1 'r1 (wsize g)] ['jmp lz] ['label ld]])
        (vone ps env2 acc p ty)
         (peep (g 'vslots) (varix ty) () @ sl
            (!(two? sl) ? 'bad
@@ -8719,10 +8833,12 @@
        pq9 (0 = pdtl items && !wd9)
        ; an asm anywhere pins its operands' registers, inside a statement expression too
        (asmin e) (? (atom? e) () (<e = 'asm) 1 (any asmin e))
+       ; an alloca moves sp as a VLA does
+       (allocin e) (? (atom? e) () (e @ ('call ('var n) _) (n = "__builtin_alloca" || any allocin e) (any allocin e)))
        (0 = peep n9 'q 0 ?
           [liv crs univ (peep n9 'n 0) (peep n9 'ncw 0) spa
            crh rdc rdt sqm (peep n9 'nx 0)
-           (peep n9 'asm 0 || asmin items) (peep n9 'vla 0) (peep n9 'sq 0) tak
+           (peep n9 'asm 0 || asmin items) (peep n9 'vla 0 || allocin items) (peep n9 'sq 0) tak
            (pmxl items 1 1) (pq9 ? 1) (wd9 ? 1) (wd9 ? (wpd items) 0) (peep n9 'loops ())]))
    ; alive's forward twin: cgstmt/cgdecl/cgsdecl entries tick and pin the wrapset off livtab
    ; (a miss pins 'all); a statement expression's statements neither tick nor re-pin
@@ -9169,7 +9285,7 @@
    ; a fresh 8-byte temp, each return into r0 then a jump to the splice's end label --
    ; an always_inline body splices without its canary: the caller's frame is the one guarded
    (sspcut x) (? !(two? x) x (<x == 'ssp) '(nop) (map sspcut x))
-   (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp)) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell
+   (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp "__builtin_alloca")) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell; alloca the caller's frame
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
                  (noinl? <x || noinl? >x))
@@ -9190,7 +9306,7 @@
                  (y @ ('call ('var fn) as) (peep (g 'ineed) fn () && any pv? as ? 1 (go as))
                       (go <y || go >y)))
        (go x))
-   (noinlj? x) (? (elem x '(sdecl vastart varr)) 1 (atom? x) ()
+   (noinlj? x) (? (elem x '(sdecl vastart varr "__builtin_alloca")) 1 (atom? x) ()
                   (x @ ('call _ as && 6 < tally as) 1 ()) 1
                   (noinlj? <x || noinlj? >x))
    (oneret? (i . u))                                  ; decls* + one trailing `return expr`
@@ -9384,8 +9500,8 @@
                               (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
        (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
-                ; a body that compiles only spliced has no call to fall back on: it reaches deeper
-                ((peep (g 'ineed) nm () ? 8 3) < #d) ()
+                ; a body that compiles only spliced, or always_inline, reaches deeper
+                ((peep (g 'ineed) nm () || peep (g 'alw) nm () ? 8 3) < #d) ()
                 (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)
@@ -9430,6 +9546,8 @@
                               tx (string? ax && !(sdn ax) ? (peep tys ax 'no) 'no)
                               (? ; a struct param the body never names: only the arg's effects stay
                                  (stru? <>p || arr? <>p) (bind >ps >as (pure? a ? pre (pre + [['expr a]])))
+                                 ; ..and a scalar one the pruned body never names, when its arg loads nothing
+                                 (rdw <p bd 1 = 0 && nold? a) (bind >ps >as pre)
                                  (ty9 = <>p && !(tak <>a) && !(wrs? <p bd))
                                   (pin m <p <>a, bind >ps >as pre)
                                  (tx != 'no)
@@ -9519,6 +9637,14 @@
            (two? cd && !(<>cd @ (('ret e)) 1 ()) ? pc))
        ; no call, store or storage: evaluating it any number of times, or not at all, changes nothing
        (pure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post sexpr clit asm)) () (pure? <x && pure? >x))
+       ; no load at all, a volatile's included: constants, addresses, an array or a function by name
+       (nold? x) (x @ ('num . _) 1
+                      ('var _) (ptype ps9 x @ t (arr? t || fn? t))
+                      ('addr ('var _)) 1
+                      ('cast _ a) (nold? a)
+                      ('un _ a) (nold? a)
+                      ('bin o a b) (elem o '(eq ne lt le gt ge + - * & | ^) && nold? a && nold? b)
+                      ())
        (sub x nm v) (!(two? x) ? x (x @ ('var ^nm) v (sub <x nm v . sub >x nm v)))
        ; may x evaluate ahead of its position, at the statement's head? pure, no trap (no load,
        ; no division), over caller locals nothing else writes: not &-taken, not written in ws
@@ -10299,6 +10425,18 @@
        ; -- VLA prep: each site takes a pointer slot + a size slot, the size zeroed after the param
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
+       ; an alloca must run where no operand is parked on the stack: under a statement, a cast,
+       ; a comma, a ?: or a plain variable's assignment, or as another alloca's size
+       _ (: (ab? e) (e @ ('call ('var n) _) (n = "__builtin_alloca") ())
+            (un e) (? !(two? e) () (ab? e) 1 (un <e || un >e))
+            (xs e) (? !(two? e) ()
+                      (two? <e) (any xs e)
+                      (ab? e) (any xs <>>e)
+                      (elem <e '(blk if while do for switch case dflt lbl expr ret sexpr)) (any xs >e)
+                      (<e = 'decl) (any (d \ two? d && two? >d && two? >>d && xs <>>d) <>e)
+                      (e @ ('cast _ x) (xs x) ('comma a b) (xs a || xs b) ('asn ('var _) r) (xs r)
+                           ('cond c a b) (xs c || xs a || xs b) (un e)))
+            (pin g 'abad (xs (f 3))))
        ; the labels whose address the body takes; a computed goto may land on any of them, so
        ; homing stands off as for an asm (every name is live at the jump). a call that returns
        ; twice does the same: the second return restores callee-saved registers, not memory
@@ -11305,7 +11443,8 @@
                           (<f = 'fn && !nolin &&
                            nelem <>f weaks &&
                            nelem <>f noinls ?
-                             ((elem <>f ainls ? (sspcut f) f) @ fi
+                             ; judged as it would splice: dead arms pruned, a tail past a return cut
+                             ((elem <>f ainls ? (sspcut f) f) @ f9 (ucut (dprune !(ilp32? g) (e \ ()) f9)) @ fi
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
@@ -11429,7 +11568,7 @@
                         0 (keys (g 'glob)))
                ; ..and what a function's asm names from another section
                _ (foldl (_ \ x \ unom x @ s (s ? (pin t s 1) 0)) 0 (keys (cg-refs (g 'fasecs) {})))
-               q (foldl (a \ s \ fnix s && !(laid s) ? (s . a) a)
+               q (foldl (a \ s \ two? (fnix s) && !(laid s) ? (s . a) a)
                         () (keys t))
                (two? q && !(gripe? (g 'genfail)) ? (drive q, datclose 0) 0))
            _ (datclose 0)

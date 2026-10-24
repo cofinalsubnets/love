@@ -3,6 +3,7 @@
 ; run:  cat test/00-init.l test/host/droid.l | out/love
 
 (borrow "src/apps/droid/droid.l")
+(borrow "src/apps/open.l")
 (borrow 'bytes)
 (borrow 'gz)
 (borrow 'tls)
@@ -139,8 +140,8 @@
 (: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 ; the framework's door: a fake bridge answers each op by its letter and keeps the records;
-; am, pm and settings run as children by their verbs, one at a time: a fork while the fake
-; still holds the last connection would keep that one open
+; open runs as a child, one at a time: a fork while the fake still holds the last connection
+; would keep that one open
 (: dj-path ((getenv "TMPDIR" @ t (string? t ? t "/tmp")) + "/droid-door-" + show (getpid 0))
    _ (unlink dj-path)
    dj-l (listen ['unix dj-path])
@@ -151,8 +152,8 @@
    (dj-reply b n)
     (b 0 @ 116 (dj-ans 116 ("T" + snip b 1 #b))
            100 (dj-ans 118 "")
-           109 (? (has? b "startActivity") (dj-ans 118 "") (has? b "size") (dj-ans 118 "2") (dj-ans 104 (show n)))
-           107 (has? b "putString" ? (dj-ans 120 "java.lang.SecurityException: no") (dj-ans 104 (show n)))
+           109 (has? b "startActivity" ? (dj-ans 118 "") (dj-ans 104 (show n)))
+           115 (has? b "throw" ? (dj-ans 120 "java.lang.SecurityException: no") (dj-ans 104 (show n)))
            (dj-ans 104 (show n)))
    (dj-serve c n) (dj-rd c 4 @ h (? !(string? h) (close c, pin dj-got 'idle 1)
                                     (: b (dj-rd c (rdle h 0 4))
@@ -160,29 +161,30 @@
    dj-srv (twirl (_ \ (: (go _) (await dj-l, accept dj-l @ c (pin dj-got 'idle 0, dj-serve c 0), go 0) (go 0))) ())
    (dj-idle n) (dj-got 'idle || n < 1 ? 0 (rest 10, dj-idle (n - 1)))
    (dj-run as) (: r (hark ("out/love" . as)) _ (dj-idle 500) ops (dj-got 'ops) (pin dj-got 'ops (), [<r >r ops]))
-   dj-am (dj-run ["am" "start" "-a" "V" "-d" "u:x"])
-   dj-pm (dj-run ["pm" "list" "packages"])
-   dj-sg (dj-run ["settings" "get" "secure" "k"])
-   dj-sp (dj-run ["settings" "put" "system" "k" "v"])
+   dj-op (dj-run ["open" "ab:x"])
+   dj-ox (dj-run ["open" "ab:throw"])
+   dj-of (dj-run ["open" "notes.txt"])
    _ (landed? dj-srv ? 0 (freeze dj-srv))
    (dj-z l) (map (w \ cats (map (c \ c = 0 ? "|" (string c)) (chars w))) l))
 (test
- (<dj-am = 0) (dj-am 1 = "Starting: T1\n")
- (dj-z (dj-am 2) = ["candroid/content/Intent" "n0|()V" "candroid/net/Uri" "su:x"
-                    "k2|parse|(Ljava/lang/String;)Landroid/net/Uri;|3" "d3" "sV"
-                    "m1|setAction|(Ljava/lang/String;)Landroid/content/Intent;|6" "d6" "d7"
-                    "m1|setData|(Landroid/net/Uri;)Landroid/content/Intent;|4" "d10" "t1" "a"
-                    "m13|startActivity|(Landroid/content/Intent;)V|1"])
- (<dj-pm = 0) (dj-pm 1 = "package:T5\npackage:T10\n")
- (dj-z (dj-pm 2) = ["a" "m0|getPackageManager|()Landroid/content/pm/PackageManager;"
-                    "m1|getInstalledPackages|(I)Ljava/util/List;|0" "m2|size|()I"
-                    "m2|get|(I)Ljava/lang/Object;|0" "g4|packageName|Ljava/lang/String;" "t5" "d5" "d4"
-                    "m2|get|(I)Ljava/lang/Object;|1" "g9|packageName|Ljava/lang/String;" "t10" "d10" "d9"])
- (<dj-sg = 0) (dj-sg 1 = "T4\n")
- (dj-z (dj-sg 2) = ["a" "m0|getContentResolver|()Landroid/content/ContentResolver;" "candroid/provider/Settings$Secure"
-                    "sk" "k2|getString|(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;|1|3" "d3" "t4"])
- (<dj-sp = 1) (dj-sp 1 = "") (any (w \ has? w "putString") (dj-sp 2))
- (rev (dj-sp 2) @ ("d4" . "d3" . _) 1 _ 0))                  ; let go though it threw
+ (<dj-op = 0) (dj-op 1 = "")
+ (dj-z (dj-op 2) = ["candroid/net/Uri" "sab:x" "k0|parse|(Ljava/lang/String;)Landroid/net/Uri;|1" "d1" "d0"
+                    "candroid/content/Intent" "sandroid.intent.action.VIEW"
+                    "n5|(Ljava/lang/String;Landroid/net/Uri;)V|6|2" "d6" "d5" "d2" "a"
+                    "m11|startActivity|(Landroid/content/Intent;)V|7" "d7" "d11"])
+ (<dj-ox = 1) (dj-z (dj-ox 2) = ["candroid/net/Uri" "sab:throw" "d0"])
+ (<dj-of = 1) (dj-of 2 = ())                                  ; a file never reaches the door
+ (open-link? "https://x") (open-link? "ab:x") !(open-link? "u:x") !(open-link? "c:x") !(open-link? "notes.txt") !(open-link? "a/b:c"))
 (: _ (close dj-l) _ (unlink dj-path) _ (setenv "LOVE_DROID" ()) 0)
+
+; off android: the system's opener, here a fake on PATH that keeps what it was given
+(: do-d ((getenv "TMPDIR" @ t (string? t ? t "/tmp")) + "/droid-open-" + show (getpid 0))
+   _ (hark ["mkdir" "-p" do-d])
+   _ (each ["xdg-open" "open"] (p \ uwrite (do-d + "/" + p) ("#!/bin/sh\necho \"$0 $1\" > " + do-d + "/got\n")))
+   _ (hark ["chmod" "755" (do-d + "/xdg-open") (do-d + "/open")])
+   do-r (hark ["env" ("PATH=" + do-d + ":" + getenv "PATH") "out/love" "open" "https://x"])
+   do-g (uread (do-d + "/got"))
+   _ (hark ["rm" "-rf" do-d])
+   (test (<do-r = 0) (do-g = [1 (do-d + "/" + (love-os = 'macos ? "open" "xdg-open") + " https://x\n")])))
 
 (puts "droid: ok") (putc 10)

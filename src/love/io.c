@@ -866,9 +866,21 @@ static struct g *rd_start(struct g *g) {
  if (!iop(x)) return rd_call(g, x, ZeroPoint, x, RwOne);
  return rd_call(g, hot_hook(g->hook[hook_flow]), x, x, RwOne); }
 
-// escapes: n t r e 0, \xhh (two chars, hex or not), \u{h..} of 1-6 digits outside the
-// surrogates (else a plain u), any other char itself. counts, and lays into d if given:
-// -1 torn, -2 a promise in *end, else *end past the quote, or past a \( with *hole set
+// a code point's utf-8 bytes, laid into d if given; how many
+static intptr_t rd_utf8(char *d, intptr_t v) {
+ char b[4];
+ intptr_t const n = v < 0x80 ? 1 : v < 0x800 ? 2 : v < 0x10000 ? 3 : 4;
+ if (n == 1) b[0] = (char) v;
+ else {
+  for (intptr_t i = n - 1; i > 0; i--) b[i] = (char) (0x80 | (v & 63)), v >>= 6;
+  b[0] = (char) ((0xf00 >> n) | v); }
+ if (d) for (intptr_t i = 0; i < n; i++) d[i] = b[i];
+ return n; }
+
+// escapes: n t r e 0, \xhh (two chars, hex or not), \u{h..} of 1-6 digits or \uhhhh of
+// four, outside the surrogates (else a plain u), any other char itself. counts, and lays
+// into d if given: -1 torn, -2 a promise in *end, else *end past the quote, or past a \(
+// with *hole set
 static intptr_t rd_strw(word src, word p, char *d, word *end, bool *hole) {
  intptr_t k = 0;
  word n, q;
@@ -899,11 +911,20 @@ static intptr_t rd_strw(word src, word p, char *d, word *end, bool *hole) {
     Over(q, q); }
    if (h < 0) return -1;
    if (h == '}' && j && v <= 0x10ffff && (v < 0xd800 || v > 0xdfff)) {
-    if (v < 0x80) Put(v);
-    else if (v < 0x800) Put(0xc0 | v >> 6), Put(0x80 | (v & 63));
-    else if (v < 0x10000) Put(0xe0 | v >> 12), Put(0x80 | (v >> 6 & 63)), Put(0x80 | (v & 63));
-    else Put(0xf0 | v >> 18), Put(0x80 | (v >> 12 & 63)), Put(0x80 | (v >> 6 & 63)), Put(0x80 | (v & 63));
+    k += rd_utf8(d ? d + k : NULL, v);
     Over(p, q);
+    continue; }
+   Put('u'), p = n;
+   continue; }
+  if (c == 'u') {
+   intptr_t v = 0, j = 0, h = 0;
+   for (q = n; j < 4 && (h = rd_at(src, q)) >= 0 && rd_hex(h); j++) {
+    v = v * 16 + rd_dval(h);
+    Over(q, q); }
+   if (h < 0) return -1;
+   if (j == 4 && (v < 0xd800 || v > 0xdfff)) {
+    k += rd_utf8(d ? d + k : NULL, v);
+    p = q;
     continue; }
    Put('u'), p = n;
    continue; }

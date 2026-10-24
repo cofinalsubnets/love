@@ -783,7 +783,6 @@ typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in
 static size_t __munits(__mhdr const *b) { return b->next == __MSlot ? b->size & 0xffff : b->size; }
 __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort naming who */
 int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
-typedef struct __ablk { struct __ablk *next; char *mark; } __ablk;
 struct __sctx { char *p; size_t n, at; };
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask[8 / sizeof(long)]; };   /* the mask in words: 4-aligned on arm */
 /* ent: readdir's repack of the BSD record */

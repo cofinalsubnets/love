@@ -37,6 +37,10 @@
    (sv x y z) [(1.0 * x) (1.0 * y) (1.0 * z) 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0]
    rec (fc-g [(sv -1 -1 0) (sv 3 -1 0) (sv -1 3 0)])
    (sunlit m) (facets 4 4 0 fc-id rec (fc-z [[0 1 2 -1]]) () [(fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]]) fc-id m])
+   ; ..a coarser frame's colours and depths laid under a frame, its tris u, then the frame's t
+   (fc-under u t) (: cs (facets 2 2 -1 fc-id nf (fc-z u) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]]))
+                     ds (facets 2 2 -1 fc-id nf (fc-z u) () dop)
+                     (facets 4 4 [7 cs ds] fc-id nf (fc-z t) () ()))
    ; levels: red where a pixel is a texel, green where it crosses four
    lv [[(star-tray [4 4] (map (k \ red) ^16)) (star-tray [2 2] (map (k \ 65280) ^4))]]
    ; twelve levels, each its own colour: a pixel that crosses 2^10 texels reaches the eleventh
@@ -94,6 +98,11 @@
       ; a glow adds to what is under it, and is hidden by what is nearer
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) ((51 << 16) | 7) = 16)
       (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () ()) 255 = 16)
+      ; ..on a bare pixel kept as -1 less it, and added to what is drawn under it there
+      (fc-n (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) (-1 - (51 << 16)) = 16)
+      (fc-n (facets 4 4 (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]]))
+                    fc-id (fc-g (big 0.0 0 1)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 32.0]]))
+            ((51 << 16) | 255) = 16)
       ; glass, -3 - t: what is under it times its texel, its colour added, and hidden by what is nearer
       (fc-n (facets 4 4 13158600 fc-id (fc-g (big 0.0 0 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [8421504])] ()) 6579300 = 16)
       (fc-n (facets 4 4 13158600 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [16777215])] ())
@@ -106,4 +115,8 @@
       (fc-shared sq (fc-z [[0 1 2 -1] [3 4 5 -1]]))
       (fc-shared (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]))
       ; flag 64 answers the same colours as one row
-      (fc-flatten (facets 8 6 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]])))))
+      (fc-flatten (facets 8 6 7 fc-id sq (fc-z [[0 1 2 -1] [3 4 5 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]])))
+      ; a 2x2 frame laid first under a 4x4, each of its pixels 2 by 2: the near face there stands
+      ; over the far drawn after, the far there gives way to the near, none there the ground
+      (fc-n (fc-under [[0 1 2 -1]] [[3 4 5 -1]]) blue = 16) (fc-n (fc-under [[3 4 5 -1]] [[0 1 2 -1]]) blue = 16)
+      (fc-n (fc-under [] []) 7 = 16) (fc-n (fc-under [[3 4 5 -1]] []) red = 16)))

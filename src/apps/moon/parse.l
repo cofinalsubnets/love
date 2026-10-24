@@ -92,7 +92,7 @@
    autoid "__auto_type"
    ; gcc's library builtins: the prefix names the plain function, which libsig declares.
    ; kept with the rosters: further down the block, love0's lane answers `;; missing libbin`.
-   ; __builtin_alloca is moonlibc's alloca (C_ALLOCA): the block outlives its frame
+   ; __builtin_alloca keeps its name: gen lays it on the stack, and no symbol carries it
    libbin '("__builtin_memcpy" "__builtin_memmove" "__builtin_memset"
             "__builtin_memcmp" "__builtin_strlen" "__builtin_strcpy" "__builtin_alloca")
    ; the shape gate the builtin arms hide their string compares behind: the shortest is 16
@@ -1235,6 +1235,9 @@
                     (peep (ps 'sigs) "strcmp" () ? 0 (pin (ps 'sigs) "strcmp" (libsig ps "strcmp")),
                      [['call ['var "strcmp"] [a b]] rest])))
              ; a library builtin is its plain name, declared if nothing else has
+             (tkk t = 'id && tkv t = "__builtin_alloca")
+              (peep (ps 'sigs) (tkv t) () ? 0 (pin (ps 'sigs) (tkv t) (libsig ps "alloca")),
+               [['var (tkv t)] >ts])
              (tkk t = 'id && bib? (tkv t) && elem (tkv t) libbin)
               (snip (tkv t) 10 #(tkv t) @ nm
                  (peep (ps 'sigs) nm () ? 0 (pin (ps 'sigs) nm (libsig ps nm)),
@@ -2413,7 +2416,8 @@
     (: psh (bindlocs ps prms ())
        _ (pin ps 'fnname name)
        _ (pins ps 'labs {} 'clfn ())
-       b (pblock ps ts)
+       b0 (pblock ps ts)
+       b (two? b0 ? [(ahoist ps <b0) <>b0] b0)
        _ (pin ps 'fnname ())
        _ (unshadow ps psh)
        sig (peep (ps 'sigs) name ())
@@ -2423,6 +2427,44 @@
               b)
        b3 (two? b2 && sspfn? ps prms <b2 ? [(sspw ps <b2 (two? sig ? <sig 'int)) <>b2] b2)
        (two? b3 ? [['fn name prms <b3] <>b3]))
+
+   ; an alloca where gen would find an operand parked on the stack (an argument, a store through
+   ; a pointer) moves ahead of its statement into a temp. under && || ?:, a comma's right, a loop
+   ; condition or a declaration of several it stays, and gen refuses it
+   (ahoist ps body)
+    (: (ab? e) (e @ ('call ('var n) _) (n = "__builtin_alloca") ())
+       (fresh _) (1 + peep ps 'aloc 0 @ n (pin ps 'aloc n, "__alloca." + show n))
+       (in? e) (? !(two? e) () (ab? e) 1 (in? <e || in? >e))
+       (mp f l) (two? l ? (f <l . mp f >l) l)          ; a node's dotted tail rides along
+       (hx sf e)
+        (? !(in? e) e
+           (ab? e) (: e2 ['call <>e (map (hx 1) <>>e)]
+                      (sf ? e2 (: t (fresh 0) (pin ps 'apre ([t '(ptr void) e2] . peep ps 'apre ()), ['var t]))))
+           (elem <e '(land lor szof bcp sexpr)) e
+           (e @ ('cast ty x) ['cast ty (hx sf x)]
+                ('comma a b) ['comma (hx sf a) b]
+                ('cond c a b) ['cond (hx sf c) a b]
+                ('asn ('var v) r) ['asn ['var v] (hx sf r)]
+                (mp (hx ()) e)))
+       ; a root expression -> [decls e']
+       (root e) (: _ (pin ps 'apre ()) e2 (hx 1 e)
+                   [(map (d \ ['decl [d]]) (rev (peep ps 'apre ()))) e2])
+       ; a statement -> the statements it becomes
+       (hi s) (? !(in? s) [s]
+                 (s @ ('blk items) [['blk (catmap hi items)]]
+                      ('expr pe) (root pe @ (ds e2) (ds + [['expr e2]]))
+                      ('ret . e . pre) (two? e ? (root e @ (ds e2) (ds + [(['ret e2] + pre)])) [s])
+                      ('decl ds) (#ds = 1 && two? >><ds ?
+                                   (<ds @ p (root <>>p @ (d2 e2) (d2 + [['decl [([<p <>p e2] + >>>p)]]])))
+                                   [s])
+                      ('if . c . t . er) (root c @ (ds c2) (ds + [(['if c2 (hw t)] + map hw er)]))
+                      ('while c b) [['while c (hw b)]]
+                      ('do b c) [['do (hw b) c]]
+                      ('for i c st b) [['for i c st (hw b)]]
+                      ('switch ce items) (root ce @ (ds c2) (ds + [['switch c2 (catmap hi items)]]))
+                      [s]))
+       (hw s) (hi s @ l (#l = 1 ? <l ['blk l]))
+       (in? body ? (hi body @ l (#l = 1 ? <l ['blk l])) body))
 
    ; -- the stack protector: a canary set at entry, checked on every way out (gen lays both).
    ; 'ssp is 1|2 (strong; -fstack-protector protects that superset), 3 all, 4 the attribute alone
