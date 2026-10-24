@@ -11557,6 +11557,9 @@
                        (go <>ast ()))
              laid ((map (f \ <>f) (filter (f \ <f = 'fn && nelem <>f gone) <>ast)) + (<r 'globs) + (<r 'statics))
              lals (filter (a \ sal? a && elem (als a) laid) (sort (keys als)))
+             ; file-scope static data rides as lnames too, an object symbol where its bytes went, as clang
+             ; lays it: modpost lets a table reach .init only by its name (*_ops, *_probe, *_console)
+             lvars (filter (s \ loc? s && nelem s lals) (rev (<r 'globs)))
              dat <>>r
              ; the sectioned fns folded to (name forms align) per section, in declaration order; the grain is the widest asked
              xfns (: (noms l acc) (!(two? l) ? (rev acc)
@@ -11578,6 +11581,6 @@
                     (two? ls ? [["__patchable_function_entries"
                                  (['align w] . map (L \ ['raw [['fix w (w = 4 ? 'abs32 'abs64) L 0]]]) ls) ()]]))
              [1 <>r <dat fnames gnames
-                <>dat <>>dat (lnames + lals) (<>>>dat + pfs) <>>>>dat <>>>>>dat
+                <>dat <>>dat (lnames + lvars + lals) (<>>>dat + pfs) <>>>>dat <>>>>>dat
                 xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
 ) ; module 'moon
