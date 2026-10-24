@@ -1372,6 +1372,12 @@ moonrun "$ho/.wklib.o" -o "$ho/.lnk3" > /dev/null 2>&1 && "$ho/.lnk3"; a=$?
 moonrun "$ho/.wklib.o" "$ho/.wkstr2.o" -o "$ho/.lnk4" > /dev/null 2>&1 && "$ho/.lnk4"; a=$?
 [ $a -eq 42 ] || fail "mooncc-link weak override (got $a want 42)"
 
+# always_inline splices a body with a statement expression, a compound literal and struct and
+# array locals (the kernel's per_cpu, an __init caller's own helpers): no out-of-line copy left
+for t in x64 a64 rv64; do
+  moonrun -t $t -c test/cc/317-always-inline-body.c -o "$ho/.awi.o" || fail "mooncc -t $t: 317-always-inline-body"
+  nm "$ho/.awi.o" | grep -q ' t ii$' && fail "an always_inline body stayed out of line on $t"
+done
 # the love_nifs bracket: two TUs packed into one section, __start_/__stop_ synthesized
 cat > "$ho/.nf1.c" <<'EOF'
 typedef struct { char *n; long v; } ent;
