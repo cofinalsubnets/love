@@ -9,7 +9,7 @@
 (module (world world-run world-walk world-main world-new world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-pens world-opts world-read world-load
-         world-watch world-free? world-ks world-sound hum-bus deep-hid? motes-at fps eye-h body-r grav-n)
+         world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -526,10 +526,103 @@
    lx (tablet? sf ? (sf 'lx) 0.0) lz (tablet? sf ? (sf 'lz) 0.0)
    (gap a0 a1 b0 b1 l) (: (d s) (max2 0.0 (max2 (b0 + s - a1) (a0 - b1 - s))) (l > 0.0 ? (min2 (d 0.0) (min2 (d l) (d (0.0 - l)))) (d 0.0)))
    (far? lo hi q r) (: dx (gap (lo 0) (hi 0) (q 0 0) (q 1 0) lx) dz (gap (lo 2) (hi 2) (q 0 2) (q 1 2) lz) (dx * dx + dz * dz > r * r))
-   {'g (#ps = 0 || atom? sunk ? 1e9 (amin Y)) 'ports (map (q \ [(q 0) (q 1)]) ports)
+   {'g (#ps = 0 || atom? sunk ? 1e9 (amin Y)) 'ports (map (q \ [(q 0) (q 1)]) ports) 'under under
     'deep? (\ lo hi (#ps > 0 && two? sunk && hi 1 < under lo hi - 0.01 && all (i \ far? lo hi (ports i) (reach i)) ^#ports))})
  ; ..and from where the eye is, whether those are hidden: over the land's lowest, in no opening
  (deep-hid? sc e) (sc 'deep-g < e 1 && !(any (q \ all (k \ q 0 k - 0.3 < e k && e k < q 1 k + 0.3) ^3) (sc 'ports)))
+ ; ..the air as cells, a brush each, so a frame draws only what a line of sight reaches: two
+ ; cells meet where their boxes do, round where the world wraps too, and a way between them is
+ ; kept as points over it laid in the world, a metre apart. a sheer brush is the sky, met where a
+ ; cell reaches up out of the land or past it; each cell's chunks are those its box meets
+ (cells-of bs dp sf ch) (: ca (filter (b \ b 'air = 1 && peep b 'land () = ()) bs)
+   cs (filter (b \ !(peep b 'sheer 0)) ca) sk (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'sheer 0) ca)) n #cs
+   lx (tablet? sf ? (sf 'lx) 0.0) lz (tablet? sf ? (sf 'lz) 0.0) g 4.0
+   ln (filter (b \ peep b 'land () != ()) bs)
+   (meet a b t) (: lo (map (k \ max2 (a 0 k) (b 0 k)) ^3) hi (map (k \ min2 (a 1 k) (b 1 k)) ^3) (all (k \ lo k <= hi k + t) ^3 ? [lo hi] ()))
+   (moved q dx dz) [[(q 0 0 + dx) (q 0 1) (q 0 2 + dz)] [(q 1 0 + dx) (q 1 1) (q 1 2 + dz)]]
+   ; ..each box, and a copy a world round where it starts at the wrap
+   (copies q) (: xs (lx > 0.0 && q 0 0 < 0.5 ? [0.0 lx] [0.0]) zs (lz > 0.0 && q 0 2 < 0.5 ? [0.0 lz] [0.0])
+     (cats (map (dx \ map (dz \ [dx dz (moved q dx dz)]) zs) xs)))
+   (cols q) (: (r a b) (map (i \ a + i) ^(b - a + 1))
+     (cats (map (x \ map (z \ x * 65536 + z) (r (floor (q 0 2 / g)) (floor (q 1 2 / g)))) (r (floor (q 0 0 / g)) (floor (q 1 0 / g))))))
+   (filed bx) (foldl (\ t i (foldl (\ t c (foldl (\ t q (pin t q ([i c] . peep t q ()))) t (cols (c 2)))) t (copies (bx i)))) {} ^#bx)
+   bx (map (b \ [(b 'lo) (b 'hi)]) cs) T (filed bx)
+   W (foldl (\ w c (: l (T c)
+        (foldl (\ w a (foldl (\ w b (: i (a 0) j (b 0) ky [i j (a 1 0) (a 1 1) (b 1 0) (b 1 1)]
+                         (? (i >= j || peep w ky () != ()) w (meet (a 1 2) (b 1 2) 1e-3 @ () w p (pin w ky [i j p])))))
+                       w l)) w l)))
+        {} (keys T))
+   ; ..a cell meets the sky where it stands up out of the land, or past its edge
+   lb (atom? ln ? () [(foldl (\ a b (map (k \ min2 (a k) (b 'lo k)) ^3)) [1e9 1e9 1e9] ln) (foldl (\ a b (map (k \ max2 (a k) (b 'hi k)) ^3)) [-1e9 -1e9 -1e9] ln)])
+   (up q) (? (atom? lb) q
+     (any (k \ q 0 k < lb 0 k || lb 1 k < q 1 k) [0 2]) q
+     (: u ((dp 'under) (q 0) (q 1) - 0.01) (q 1 1 > u ? [[(q 0 0) (max2 (q 0 1) u) (q 0 2)] (q 1)] ())))
+   S (cats (map (i \ cats (map (s \ meet (bx i) s 0.0 @ () () p (up p @ () () q [[i -1 q]])) sk)) ^n))
+   ways (foldl (\ t w (pin (pin t (w 0) ([(w 1) (w 2)] . peep t (w 0) ())) (w 1) ([(w 0) (w 2)] . peep t (w 1) ())))
+              (foldl (\ t w (pin t (w 0) ([-1 (w 2)] . peep t (w 0) ()))) {} S) (map W (sort (keys W))))
+   (pts p d) (: (ax k) (: a (p 0 k) b (p 1 k) m (tablet? sf ? (min2 9 (2 + int ((b - a) / d))) 2) (map (t \ a + (b - a) * t / (m - 1)) ^m))
+     (cats (map (x \ cats (map (y \ map (z \ [x y z]) (ax 2)) (ax 1))) (ax 0))))
+   ; ..and the chunks each cell's box meets, a hair over, and where
+   cb (map (c \ [(c 'lo) (c 'hi)]) ch) C (filed cb)
+   K (foldl (\ t c (: l (T c) m (peep C c ())
+        (foldl (\ t a (foldl (\ t b (meet (a 1 2) (b 1 2) 0.05 @ () t q (pin t (a 0) (pin (peep t (a 0) {}) (b 0) q)))) t m)) t l)))
+        {} (keys T))
+   (laid i) (: ws (peep ways i ()) kt (peep K i {}) ks (sort (keys kt))
+     ps (map (w \ pts (w 1) 1.0) ws + map (k \ pts (kt k) 1.5) ks) m #(cats ps)
+     (col k) (gem-tray [m] (map (p \ p k) (cats ps))) X (col 0) Y (col 1) Z (col 2)
+     os (rev (foldl (\ a p (#p + <a . a)) [0] ps))
+     (ix k) (: o (os k) (int (gem-tray [#(ps k)] (map (j \ 1.0 * (o + j)) ^#(ps k)))))
+     {'P (tablet? sf ? (sf 'at X Y Z) [X Y Z]) 'ways (map (k \ [(ws k 0) (ix k)]) ^#ws) 'ks (map (k \ [(ks k) (ix (#ws + k))]) ^#ks)})
+   (col k f) (gem-tray [n] (map (q \ 1.0 * f q k) bx))
+   {'lo (map (k \ col k (q \ q 0)) ^3) 'hi (map (k \ col k (q \ q 1)) ^3) 'cells (map laid ^n)})
+ ; ..from eye e, those chunks a line of sight could reach through the cells' ways: what is
+ ; seen of a cell a few boxes on the screen, each way's points narrowing one to the box they
+ ; span past it, a little over, and a chunk kept where its points in a cell meet one. () where
+ ; the eye is in no cell, and once the sky is seen all that meet it
+ (cells-seen sc v e) (: cl (peep sc 'cells ())
+   at (? (!(tablet? cl)) () (: L (cl 'lo) H (cl 'hi) (iota ((L 0 <= e 0) * (e 0 <= H 0) * (L 1 <= e 1) * (e 1 <= H 1) * (L 2 <= e 2) * (e 2 <= H 2)))))
+   (? (at = () || #at = 0) ()
+     (: cam (v 'cam) (row i) (map (j \ peep cam (4 * i + j) 0.0) ^4) r0 (row 0) r1 (row 1) r3 (row 3)
+        bent (tablet? (peep sc 'surf ())) mx (8.0 / v 'w) my (8.0 / v 'h) nr (v 'near)
+        (on q P) (q 0 * P 0 + q 1 * P 1 + q 2 * P 2 + q 3)
+        Q {} (seen i) (peep Q i () @ () (: P (cl 'cells i 'P) q [(on r0 P) (on r1 P) (on r3 P)] (pin Q i q, q)) q q)
+        ; ..points across the near plane also as far out as they cross it, each no further out
+        ; there than it is over the plane's depth
+        (span q I r) (: ww (peep (q 2) I 0.0) n (amin ww) xs (peep (q 0) I 0.0) ys (peep (q 1) I 0.0)
+          k (max2 n nr) a (max2 mx (bent ? (0.04 / k) 0.0)) b (max2 my (bent ? (0.04 / k) 0.0))
+          x (xs / max ww nr) y (ys / max ww nr) c (n < nr)
+          x0 (c ? (min2 (amin x) (amin xs / nr)) (amin x)) x1 (c ? (max2 (amax x) (amax xs / nr)) (amax x))
+          y0 (c ? (min2 (amin y) (amin ys / nr)) (amin y)) y1 (c ? (max2 (amax y) (amax ys / nr)) (amax y))
+          p [(max2 (r 0) (x0 - a)) (min2 (r 1) (x1 + a)) (max2 (r 2) (y0 - b)) (min2 (r 3) (y1 + b))]
+          (amax ww >= nr && p 0 <= p 1 && p 2 <= p 3 ? p ()))
+        ; ..a box come to a cell: none if one there holds it, else joined with those it meets,
+        ; and all as one past four
+        R {} (has a b) (a 0 <= b 0 && b 1 <= a 1 && a 2 <= b 2 && b 3 <= a 3) (meets a b) (a 0 <= b 1 && b 0 <= a 1 && a 2 <= b 3 && b 2 <= a 3)
+        (join a b) [(min2 (a 0) (b 0)) (max2 (a 1) (b 1)) (min2 (a 2) (b 2)) (max2 (a 3) (b 3))]
+        (from i r) (: o (peep R i ())
+          (? (any (q \ has q r) o) ()
+             (: u (foldl join r (filter (meets r) o)) l (u . filter (q \ !(meets r q)) o) l (#l > 4 ? [(foldl join <l >l)] l)
+                _ (pin R i l) <l)))
+        (past e) (: i (e 0) r (e 1) q (seen i)
+          (cats (map (w \ span q (w 1) r @ () () p (from (w 0) p @ () () u (w 0 < 0 ? () [[(w 0) u]]))) (cl 'cells i 'ways))))
+        (go q) (? (atom? q) 0 (go (past <q + >q)))
+        _ (go (map (k \ (: i (peep at k 0) [i (from i [-1.0 1.0 -1.0 1.0])])) ^#at))
+        cks (sc 'chunks) S {}
+        ; ..past the sky, a chunk kept where its ball is inside the four planes through the eye
+        ; and a box's edges
+        (sides r) (map (q \ (: s (1.0 / sqrt (sq (q 0) + sq (q 1) + sq (q 2))) (map (x \ s * x) q)))
+                       [(map (j \ r0 j - r 0 * r3 j) ^4) (map (j \ r 1 * r3 j - r0 j) ^4) (map (j \ r1 j - r 2 * r3 j) ^4) (map (j \ r 3 * r3 j - r1 j) ^4)])
+        (ball r) (: ns (sides r)
+          (each ^#cks (k \ (: c (cks k) m (c 'mid) d (0.0 - c 'rad) (all (q \ q 0 * m 0 + q 1 * m 1 + q 2 * m 2 + q 3 >= d) ns ? (pin S k 1) 0)))))
+        (kept i) (: q (seen i) rs (R i)
+          (each (cl 'cells i 'ks) (c \ peep S (c 0) 0 = 1 || !(any (r \ span q (c 1) r != ()) rs) ? 0 (pin S (c 0) 1))))
+        _ (each (keys R) (i \ i < 0 ? (each (R i) ball) (kept i)))
+        S)))
+ ; ..the cells kept as the scenes before made them, while the brushes, the chunks and the
+ ; surface are as they were
+ (celled bs dp sf kp sc) (: ch (sc 'chunks)
+   (pin sc 'cells (kp ['cells (map (b \ [(b 'lo) (b 'hi) (b 'air) (peep b 'sheer 0) (peep b 'sig 0)]) bs) (map (c \ [(c 'lo) (c 'hi)]) ch)]
+                      (_ \ cells-of bs dp sf ch))))
  (scene lv dir was tk) (: ps (lv 'posters) (tick w p) (tk @ () () f (f w p))
    ; ..what the scenes before made, kept where it would be made the same, by a key saying
    ; all it was made of; and a number for each key, never another's. kept on from scene to
@@ -659,7 +752,7 @@
                                                     {'pk q 'lit (kept ['car-props-lit ck (litk-of q)] (_ \ clit lp q ['car-props ck]))}) ())
                       'bar (kept ['car-bar ck] (_ \ mesh-pack (car-bar c)))}))
              (peep lv 'cars ()))
-   (bent-scene sf {'motes (map motes-of (peep lv 'gravs ()))
+   (celled bs dp sf (\ k f (kept [k (vals (peep lv 'surface ()))] f)) (bent-scene sf {'motes (map motes-of (peep lv 'gravs ()))
     'panes (map (p \ (: k ['pane (vals p) tt] pk (kept k (_ \ mesh-pack (pane-mesh p tt))) {'pk pk 'lit (lit-of k pk)})) (peep lv 'panes ()))
     'sheets (map (d \ (: k ['sheet (vals d) tt] pk (kept k (_ \ mesh-pack (drape-mesh d tt))) t (tt (tix tt (d 'tex)))
                        {'pk pk 'lit (lit-of k pk) 'seen (peep d 'seen 0) 'flow (map (j \ t 1 / t 3 * d 'flow j) ^2) 'wh [(t 1) (t 2)]}))
@@ -675,7 +768,7 @@
                        {'pk pk 'lit (lit-of k pk) 'round (2.0 * tt (tix tt (o 'tex)) 1)}))
                (peep lv 'orbs ()))
     'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex)
-    'memo memo 'surf sf 'deep-g (dp 'g) 'ports (dp 'ports)}))
+    'memo memo 'surf sf 'deep-g (dp 'g) 'ports (dp 'ports)})))
  ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
  ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,
  ;     up and ahead there, unit; 'per how far along x and z a metre walked there goes;
@@ -861,7 +954,8 @@
    (seen? c) (: m (c 'mid) r (0.0 - c 'rad) !(any (n \ n 0 * m 0 + n 1 * m 1 + n 2 * m 2 + n 3 < r) pls))
    (far c) (net (map (k \ sq (c 'mid k - v 'e k)) ^3))
    cks (sc 'chunks) hid (deep-hid? sc [(st 'px) (st 'py) (st 'pz)])
-   hall (map (q \ (: c (cks (q 1)) (relit (c 'pk) (c 'lit)))) (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep)) ^#cks))))
+   cs (cells-seen sc v e) (cut? i) (tablet? cs && peep cs i 0 = 0)
+   hall (map (q \ (: c (cks (q 1)) (relit (c 'pk) (c 'lit)))) (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness
    doors (map (i \ (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i)
                       ix (iota (pk 'n) * 8 + (d 'ax = 'z ? 0 2))

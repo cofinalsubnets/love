@@ -707,6 +707,20 @@
    noon (glow 30.0) night (glow 0.5)
  (test (night * 3 < noon)))
 
+; the cells: two rooms a doorway joins meet through it and one walled off meets none, its
+; chunk never drawn from them and a frame drawn the same as one drawn whole; from no cell,
+; nothing cut; round a ring, two rooms meeting where it wraps
+(: cel (lv "(room [0 0 0] [4 3 4]) (room [4.2 0 0] [8 3 4]) (air (box [3.9 0 1.5] [4.3 2 2.5])) (room [0 0 20] [4 3 24]) (start [1 0 2] 0 0)")
+   cst (world-new 40 24 cel "") csc (cst 'sc) cc (csc 'cells 'cells) (to i) (sort (map (w \ w 0) (cc i 'ways)))
+   far (filter (k \ csc 'chunks k 'lo 2 > 10.0) ^#(csc 'chunks)) ce [1.0 1.6 2.0]
+   (cut th) (sort (keys (cells-seen csc (mesh-eye 40 24 ce th 0.0 0.0 1.5 0.05 60.0) ce)))
+   (same th) (: _ (pins cst 'px 1.0 'pz 2.0 'th th 'sky-memo ()) a (world-pens cst) c (csc 'cells)
+               _ (pin csc 'cells ()) b (world-pens cst) _ (pin csc 'cells c) (aall (a = b)))
+   cwr (world-new 8 8 (lv "(surface 'torus 40 20) (room [0 0 2] [3 3 6]) (room [37 0 2] [40 3 6]) (start [1 0 4] 90 0)") "")
+ (test (#cc = 4) (to 0 = [2]) (to 1 = [2]) (to 2 = [0 1]) (to 3 = ()) (two? far)
+       (all (th \ two? (cut th) && !(any (k \ elem k far) (cut th))) [0.0 1.6 3.2 4.7]) (all same [0.0 1.6 3.2 4.7])
+       (cells-seen csc (mesh-eye 40 24 [1.0 1.6 10.0] 0.0 0.0 0.0 1.5 0.05 60.0) [1.0 1.6 10.0] = ())
+       (map (c \ map (w \ w 0) (c 'ways)) (cwr 'sc 'cells 'cells) = [[1] [0]])))
 
 (test_fin ())
 (puts "world: ok\n")
