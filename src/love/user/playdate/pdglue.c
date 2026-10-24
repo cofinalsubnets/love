@@ -25,13 +25,6 @@ void pdg_set_update(int (*cb)(void *)) { PD->system->setUpdateCallback(cb, NULL)
 int pdg_file_size(const char *path) {
   FileStat st;
   return PD->file->stat(path, &st) ? -1 : (int) st.size; }
-// one line onto the end of a file in the game's data folder, as a trail that outlives a crash
-void pdg_trail(const char *s) {
-  PD->system->logToConsole("%s", s);
-  SDFile *f = PD->file->open("trail.txt", kFileAppend);
-  if (!f) return;
-  int n = 0; while (s[n]) n++;
-  PD->file->write(f, s, (unsigned) n), PD->file->write(f, "\n", 1), PD->file->close(f); }
 // a whole bundled file into buf (<= cap bytes), -1 none: how the wake image rides the pdx
 int pdg_file_read(const char *path, void *buf, unsigned cap) {
   SDFile *f = PD->file->open(path, kFileRead);

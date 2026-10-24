@@ -55,8 +55,9 @@ itself ~1,370 -- the gap left to gcc is that code (frame traffic, constants, mov
 
 ## next, by payoff
 
-1. **the device**: `make -C src/love/user/playdate game=stones`, install, read
-   `Data/love/trail.txt` (the `song ... ms` lines are the feed's cost per frame)
+1. **the device**: `make -C src/love/user/playdate game=stones`, install, and listen: the song
+   should keep up with the walk. to time the feed per frame, 815a2170c's `pdg_trail` and its
+   `song ... ms` lines go back in for the run
 2. **gas: a numeric label never defined** (`b 7f`, no `7:`) assembles as an undefined `l7.1`
    and fails only at the link, on every target; GNU refuses it at the line
 3. **the codegen the lanes now show**: params stored to the frame and reloaded, `cmp` with an imm12 out of modified reach (`0x7fe`) through r0, the a64/rv64 sweeps

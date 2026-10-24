@@ -401,23 +401,17 @@
  fov (pi / 2.0)
  sky-k 2
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
- (stones-pens st) (: c0 (clock 0) lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (breath (peep st 'mt 0.0))
+ (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (breath (peep st 'mt 0.0))
    e [(st 'px) (st 'py + b 0) (st 'pz)]
    v (mesh-eye w h e (st 'th) (st 'ph + b 1) (peep st 'ro 0.0) fov 0.05 900.0)
    hs (peep st 'keep-sky 0 ? (kept-by st 'sky-kept (sky-key st lt) (_ \ stones-sky st v e lt k w h)) ())
    hz (two? hs ? <hs (mesh-haze v lt (st 'wx) (st 'sim)))
-   c1 (clock 0)
    sc0 (scene st) db (drop-batch st lt)
    ; ..and after the land the drops, the lamppost once it stands, and last the glow
    xs (filter two? [db (post-batch st lt) (ghost-batch st lt)])
    sc (#xs = 0 ? sc0 [(cat (sc0 0) (map (b \ b 0) xs)) (cat (sc0 1) (map (b \ b 1) xs)) (sc0 2)])
-   c2 (clock 0)
-   sk (? (peep st 'bare0 0) 0
-         (two? hs) (: P (hs 1) (\ v S (peep P S -1)))
-         (sky-of st e lt k))
-   f (mesh-frame v sc (stones-texs st) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo) sk)
-   _ (pin st 'prof [(c1 - c0) (c2 - c1) (clock 0 - c2)])
-   f)
+   sk (? (two? hs) (: P (hs 1) (\ v S (peep P S -1))) (sky-of st e lt k))
+   (mesh-frame v sc (stones-texs st) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo) sk))
  ; the sky over the eye at e: every pixel for half blocks, every sky-k columns of kitty's, or
  ; every 'sky-k
  (sky-of st e lt k) (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (peep st 'sky-k (k @ 1 1 (sky-k * k))))

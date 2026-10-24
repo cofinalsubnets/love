@@ -19,7 +19,6 @@ unsigned char *pdg_frame(void);          // the LCD frame buffer
 void pdg_mark_updated(void);             // mark every row dirty
 void pdg_set_update(int (*cb)(void *));  // install the per-frame callback
 int pdg_file_read(const char *path, void *buf, unsigned cap);  // whole bundled file -> buf; -1 = absent
-void pdg_trail(const char *s);           // log + append to Data/trail.txt
 int pdg_file_size(const char *path);     // a bundled file's bytes; -1 = absent
 
 // the horn's device, pulled by the SDK and pushed by love. its rate or half it: horn.c

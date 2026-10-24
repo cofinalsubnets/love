@@ -19,7 +19,6 @@
 static struct k {
   struct g *g;
   int dead;                    // a scare froze the session; keep blitting it
-  int frames;                  // breadcrumbs for the first few
   union {
     struct cb cb;
     uint8_t cb_bytes[sizeof(struct cb) + sizeof(struct cb_cell) * NROWS * NCOLS]; };
@@ -75,15 +74,6 @@ static lvm(held) {
   Sp[0] = putcharm(pdg_held());
   Ip += 1;
   return Continue(); }
-// (trail s): s onto the trail, for timings off the device
-static lvm(trail_nif) {
-  char b[96]; uintptr_t n = strp(Sp[0]) ? len(Sp[0]) : 0;
-  if (n > sizeof b - 1) n = sizeof b - 1;
-  memcpy(b, n ? txt(Sp[0]) : "", n), b[n] = 0;
-  pdg_trail(b);
-  Sp[0] = zero;
-  Ip += 1;
-  return Continue(); }
 static uint8_t const bayer8[64] = {
    0, 32,  8, 40,  2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26,
   12, 44,  4, 36, 14, 46,  6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
@@ -124,8 +114,7 @@ static union u const
   nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {cur_set}, {lvm_ret0}}
 #if PD_STONES
   , nif_held[]  = {{held}, {lvm_ret0}},
-  nif_lcd[]     = {{lvm_cur}, {.x = putcharm(3)}, {lcd}, {lvm_ret0}},
-  nif_trail[]   = {{trail_nif}, {lvm_ret0}}
+  nif_lcd[]     = {{lvm_cur}, {.x = putcharm(3)}, {lcd}, {lvm_ret0}}
 #endif
   ;
 static struct def defs[] = {
@@ -135,7 +124,6 @@ static struct def defs[] = {
 #if PD_STONES
   {"held",    {.k = nif_held}},
   {"lcd",     {.k = nif_lcd}},
-  {"trail",   {.k = nif_trail}},
 #endif
   };
 
@@ -151,39 +139,8 @@ static void blit(void) {
         frame[PDG_ROWSIZE * (8 * i + b) + j] = PD_STONES ? (uint8_t) ~bmp[b] : bmp[b]; }
   pdg_mark_updated(); }
 
-static void trail(const char *what) {
-  char b[64]; uint32_t n = 0, sp = (uint32_t) (uintptr_t) &b;
-  while (*what && n < 40) b[n++] = *what++;
-  b[n++] = ' ';
-  for (int k = 28; k >= 0; k -= 4) b[n++] = "0123456789abcdef"[sp >> k & 15];
-  b[n] = 0;
-  pdg_trail(b); }
-
-float lm_sinf(float);
-// a C floor under the tray costs, timed once: 735 floats a pass
-static void cbench(void) {
-  float a[735], r[735];
-  for (int i = 0; i < 735; i++) a[i] = (float) i * 0.01f;
-  volatile float k = 1.5f;
-  unsigned t0 = pdg_ms();
-  for (int j = 0; j < 100; j++) { float kk = k; for (int i = 0; i < 735; i++) r[i] = a[i] * kk; a[j] = r[j]; }
-  unsigned t1 = pdg_ms();
-  for (int j = 0; j < 10; j++) { for (int i = 0; i < 735; i++) r[i] = lm_sinf(a[i]); a[j] = r[j] * 0.0f; }
-  unsigned t2 = pdg_ms();
-  char b[64]; int n = 0;
-  char const *m = "cbench mul100 ";
-  while (*m) b[n++] = *m++;
-  unsigned v = t1 - t0; char d[12]; int k2 = 0; do d[k2++] = (char) ('0' + v % 10), v /= 10; while (v);
-  while (k2) b[n++] = d[--k2];
-  m = " sin10 "; while (*m) b[n++] = *m++;
-  v = t2 - t1; k2 = 0; do d[k2++] = (char) ('0' + v % 10), v /= 10; while (v);
-  while (k2) b[n++] = d[--k2];
-  b[n] = 0;
-  pdg_trail(b); }
-
 static int k_update(void *_) {
   pdg_poll_buttons();
-  if (!K.frames++) cbench();
   if (!K.dead) {
     cb_cur(kcb, 0, 0);
     cb_fill(kcb, 0);
@@ -233,7 +190,7 @@ static char const src_mods[] =
 ;
 
 void love_init(void) {
-  trail("love: init");
+  pdg_log("love: init");
   cb_open(kcb, NROWS, NCOLS, 0);
   kcb->flag |= cb_lnm | cb_wrap;   // console discipline + autowrap the long forms
   // wake the pdx's baked image first: the on-device bake outlasts the watchdog. a refusal
@@ -243,13 +200,9 @@ void love_init(void) {
   { int imgcap = pdg_file_size("love-pd.img");
     void *ib = imgcap > 0 ? pdg_realloc(NULL, (size_t) imgcap) : NULL;
     int n = ib ? pdg_file_read("love-pd.img", ib, (unsigned) imgcap) : -1;
-    if (n > 0) { static char const *wy[] = { "why 0", "why 1", "why 2", "why 3", "why 4" };
-      int y = image_why(ib, (uintptr_t) n); trail(y >= 0 && y < 5 ? wy[y] : "why ?");
-      g0 = love_image_load(ib, (uintptr_t) n, 0); }
-    else trail(ib ? "read short" : "no buffer");
+    if (n > 0) g0 = love_image_load(ib, (uintptr_t) n, 0);
     if (ib) pdg_realloc(ib, 0); }
   int woke = g0 != NULL;
-  trail(woke ? "woke" : "no image");
   pdg_log(woke ? "love: image awake" : "love: no image -- baking the egg");
   for (char const *s = woke ? "; src/love/user/playdate -- image awake"
                             : "; src/love/user/playdate -- baking the egg"; *s; s++)
@@ -262,7 +215,7 @@ void love_init(void) {
   if (woke && ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {
     g = defv(g, "born");
     if (ok(g)) g->sp++; }
-  trail(ok(g) ? "love: core up" : "love: core FAILED");
+  pdg_log(ok(g) ? "love: core up" : "love: core FAILED");
   // a quarter of the device's 16 MB: a major holds old and new pools, so the peak is twice this
   if (ok(g)) g->budget = (4u << 20) / sizeof(word);
 #if PD_STONES
@@ -273,9 +226,7 @@ void love_init(void) {
   if (woke && ok(g) && ok(g = gen_major(g, 0, NULL))) g->major_live0 = (uintptr_t) (g->major_hp - g->major_base);
 #endif
   if (woke) {
-    trail(ok(g) ? "majored" : "major FAILED");
     K.g = love_open(g);           // the waker opens its own session (the bake carries none)
-    trail(ok(K.g) ? "opened" : "open FAILED");
     pdg_log("love: woke -- workbench up");
     if (ok(K.g)) pdg_set_update(k_update);
     return; }
