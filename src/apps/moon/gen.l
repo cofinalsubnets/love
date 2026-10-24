@@ -9264,7 +9264,8 @@
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
              ; a frame address costs the caller its sibcalls, a return address read in place is the caller's,
-             ; asm bars it unless the body compiles only spliced. always_inline waives both, as gcc reads it
+             ; asm bars it unless the body compiles only spliced, as do a statement expression, a compound
+             ; literal and a struct or array local. always_inline waives all but the frame address, as gcc reads it
              need (peep (g 'ineed) nm ())
              alw (peep (g 'alw) nm ())
              (bar? x) (two? x ?
@@ -9275,13 +9276,13 @@
                               ('call ('var b9) _ && b9 = "__builtin_frame_address") 1
                               ('call ('var b9) _ && b9 = "__builtin_return_address") !alw
                               ('asm . _) (need || alw ? (bar? >x) 1)
-                              (('clit || 'sexpr) . _) 1
+                              (('clit || 'sexpr) . _) (alw ? (bar? >x) 1)
                               (bar? <x || bar? >x)))
              (fv x a) (!(two? x) ? a
                          (x @ ('var v) (elem v loc || elem v a ? a (v . a))
                               (fv >x (fv <x a))))
              (? (bar? body) ()
-                (foldl (a \ p \ a || stru? <>p || arr? <>p) () dl) ()
+                (!alw && foldl (a \ p \ a || stru? <>p || arr? <>p) () dl) ()
                 [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl need]))))
    ; a callee body's returns -> what rs lays for each, no jump: a return ends the list, or an if arm
    ; that always returns, the rest moving into the other arm | 'no. sw: a trailing switch may end it
