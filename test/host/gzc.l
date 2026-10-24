@@ -164,8 +164,10 @@
     puts "gzc: deflate twin ok -- the C coder answers love's bytes, both inflates read it
 "))
 
-; deflate-best, no twin: both inflates read it back, never longer than deflate's
-(: (gzb-trip s) (: c (deflate-best s)
+; deflate-best, no twin: both inflates read it back, never longer than deflate's. gzb-wide
+; outruns one parse block and changes its letters partway, so its blocks split
+(: gzb-wide (gzc-near + gzc-mk 150000 (i \ (97 + (i * 2654435761 >> 11 & 15))))
+   (gzb-trip s) (: c (deflate-best s)
                    l (gz-puff c #s)   i (inflate c #s)
                    (two? l & string? i & (<(>l) = s) & (i = s) ? 1 0))
    (gzb-small s) (#(deflate-best s) <= #(deflate s))
@@ -173,7 +175,9 @@
       (lit? deflate-best)
       (gzc-all gzb-trip gzc-shapes)
       (gzc-all gzb-small gzc-shapes)
-      (#(deflate-best gzc-mixed) < #(deflate gzc-mixed))     ; the lazy parse pays on text
+      (gzb-trip gzb-wide)
+      (gzb-small gzb-wide)
+      (#(deflate-best gzc-mixed) < #(deflate gzc-mixed))     ; the optimal parse pays on text
       !(string? (deflate-best 7))
       !(string? (deflate-best (cask 8)))))
 
