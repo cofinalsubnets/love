@@ -7,13 +7,15 @@
    cx-ops (foldl (t \ p \ pin t <p <>p) {}
                  '(("*" *) ("/" /) ("%" %) ("+" +) ("-" -) ("<<" shl) (">>" shr) ("<" lt) ("<=" le)
                    (">" gt) (">=" ge) ("==" eq) ("!=" ne) ("&" &) ("^" ^) ("|" |)))
-   ; -- the actions' helpers, parse.l's ladder arms as they stand --
-   (cx-bad ps) (pin ps 'cxbad 1, ())
+   ; -- the actions' helpers --
+   ; a refusal: its sentence and the token it names, () for the lookahead; 0 stops the parse
+   (cx-no ps msg t) (pin ps 'cxwhy [msg t], 0)
+   (cx-bad ps) (cx-no ps () ())
    (cx-bin ps t l r) (mkbin ps (cx-ops (tkv t)) l r)
    (cx-asn ps t lv r)
     (: op <>(assoc (tkv t) asnops)
        greg (two? lv && <lv = 'var && two? (peep (ps 'gregs) <>lv ()))
-       (? greg (cx-bad ps)
+       (? greg (cx-no ps "a write to a global register variable" ())
           !op ['asn lv r]
           (calm? lv) ['asn lv (mkbin ps op lv r)]
           ['rmw op lv r]))
@@ -26,13 +28,11 @@
               ['clit cty ['init [e '(flo 0.0)]]])
           (cplxty? sty && !(stru? cty)) ['cast cty ['dot e "re"]]
           ['cast cty e]))
-   (cx-szn ps n) (charm? n ? ['cast (szty ps) ['num n]] (cx-bad ps))
-   (cx-szty ps ty) (varr? ty ? ['bin '* <>>ty ['num (tsz ps <>ty)]] (cx-szn ps (tsz ps ty)))
-   (cx-szof ps e) (ptype ps e @ ty (!ty || varr? ty ? ['szof e] (cx-szn ps (tsz ps ty))))
-   (cx-alty ps ty) (cx-szn ps (talign ps ty))
-   (cx-alof ps t e)
-    (tkv t != "__alignof__" ? (cx-bad ps)
-       (ptype ps e @ ty (ty ? (cx-szn ps (talign ps ty)) (cx-bad ps))))
+   (cx-szn ps n w) (charm? n ? ['cast (szty ps) ['num n]] (cx-no ps "\(w) an incomplete type" ()))
+   (cx-szty ps ty) (varr? ty ? ['bin '* <>>ty ['num (tsz ps <>ty)]] (cx-szn ps (tsz ps ty) "sizeof"))
+   (cx-szof ps e) (ptype ps e @ ty (!ty || varr? ty ? ['szof e] (cx-szn ps (tsz ps ty) "sizeof")))
+   (cx-alty ps ty) (cx-szn ps (talign ps ty) "alignof")
+   (cx-alof ps e) (ptype ps e @ ty (ty ? (cx-szn ps (talign ps ty) "alignof") (cx-bad ps)))
    (cx-addr ps e) (nulloff ps e @ n (charm? n ? ['num n] ['addr e]))
    (cx-pos ps e) (ptype ps e @ ty (ty && pprom ty != ty ? ['cast (pprom ty) e] e))
    (cx-call ps e as) (bicall e (tuargs ps e as))
@@ -89,7 +89,7 @@
         ['blk (rev acc)]))
    (cx-app l acc) (atom? l ? acc (cx-app >l (<l . acc)))
    (cx-it ps s) (clpop ps @ cm (cm ? [s cm] [s]))       ; a cleanup's marker rides after
-   (cx-ret ps e) (intptr? ps e ? (cx-bad ps) ['ret e])
+   (cx-ret ps e t) (intptr? ps e ? (cx-no ps "an integer where a pointer is owed" t) ['ret e])
    ; if (__builtin_expect(e, k)): the test is e, and a (nop cold|hot) heads the then-arm
    (cx-if ps rc th el)
     (: xa (rc @ ('call ('var "__builtin_expect") (e ('num k)) && elem k '(0 1)) [e k] ())
@@ -100,26 +100,26 @@
                   (['nop (<>xa = 0 ? 'cold 'hot)] @ m
                      (s @ ('blk items) ['blk (m . items)] ['blk [m s]])))
        ['if c9 (arm th) el])
-   (cx-lbl ps t)
+   (cx-lbl ps t c)
     (lname ps (tkv t) @ nm
-       (peep (ps 'labs) nm () ? (cx-bad ps)
+       (peep (ps 'labs) nm () ? (cx-no ps () c)
           (pin (ps 'labs) nm 1, pin ps 'cxlab (nm . peep ps 'cxlab ()), ['lbl nm])))
    ; `case A ... B:` lays a label per value when narrow, else ('case A B)
-   (cx-case ps e h)
+   (cx-case ps e h c)
     (: v (cfold (pw64 ps) e)
        hi (two? h ? (cfold (pw64 ps) h))
        (crange lo hi acc) (hi < lo ? (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
-       (? !(cint? v) (cx-bad ps)
+       (? !(cint? v) (cx-no ps () c)
           (atom? h) ['case v]
-          !(cint? hi) (cx-bad ps)
-          (hi < v) (cx-bad ps)
+          !(cint? hi) (cx-no ps () c)
+          (hi < v) (cx-no ps () c)
           (16 < hi - v) ['case v hi]
           ['blk (crange v hi ())]))
    (cx-arm ms s) ['blk (rev (s . ms))]                  ; an arm's labels, then its statement
 %}
 %token XEXPR XASN XCOND XBLOCK
 %token IF ELSE WHILE DO FOR SWITCH GOTO BREAK CONTINUE CASE DEFAULT RETURN ELLIP DECL STMT MARK
-%token ID NUM STR WSTR PRIM TYPEP STYPEP CLIT SIZEOF ALIGNOF EXT ASNOP
+%token ID NUM STR WSTR PRIM TYPEP STYPEP CLIT SIZEOF ALIGNOF ALIGNTY EXT ASNOP
 %token OROR ANDAND EQEQ NE LE GE SHL SHR ARROW INC DEC
 %param ps
 %nonassoc LOWELSE
@@ -144,7 +144,7 @@ stmt : block | sstmt ;
 sstmt : ';' { ['nop] }
       | expr ';' { ['expr $1] }
       | RETURN ';' { ['ret ()] }
-      | RETURN expr ';' { (cx-ret ps $2) }
+      | RETURN expr ';' { (cx-ret ps $2 $3) }
       | IF '(' expr ')' arm %prec LOWELSE { (cx-if ps $3 $5 ()) }
       | IF '(' expr ')' arm ELSE arm { (cx-if ps $3 $5 $7) }
       | WHILE '(' expr ')' arm { ['while $3 $5] }
@@ -158,9 +158,9 @@ sstmt : ';' { ['nop] }
       | CONTINUE ';' { ['cont] }
       | STMT ;
 fopt : { () } | expr ;
-mark : ID ':' { (cx-lbl ps $1) }
-     | CASE expr ':' { (cx-case ps $2 ()) }
-     | CASE expr ELLIP expr ':' { (cx-case ps $2 $4) }
+mark : ID ':' { (cx-lbl ps $1 $2) }
+     | CASE expr ':' { (cx-case ps $2 () $3) }
+     | CASE expr ELLIP expr ':' { (cx-case ps $2 $4 $5) }
      | DEFAULT ':' { ['dflt] }
      | MARK ;
 marks : mark { [$1] } | marks mark { ($2 . $1) } ;
@@ -195,7 +195,8 @@ un : post
    | SIZEOF un { (cx-szof ps $2) }
    | SIZEOF STYPEP { (cx-szty ps $2) }
    | ALIGNOF STYPEP { (cx-alty ps $2) }
-   | ALIGNOF un { (cx-alof ps $1 $2) }
+   | ALIGNTY STYPEP { (cx-alty ps $2) }
+   | ALIGNOF un { (cx-alof ps $2) }
    | EXT un { $2 }
    | '*' un { ['deref $2] }
    | ANDAND ID { ['laddr (lname ps (tkv $2))] }
@@ -254,7 +255,8 @@ prim : ID { (cx-id ps $1) }
                                          "__builtin_constant_p" "__builtin_object_size" "__builtin_dynamic_object_size"
                                          "__builtin_assume_aligned" "__builtin_extract_return_addr" "__builtin_parity"
                                          "__builtin_parityl" "__builtin_parityll" "__builtin_choose_expr"])) +
-             [["_Alignof" "ALIGNOF" 15] ["__alignof__" "ALIGNOF" 15] ["__extension__" "EXT" 18]
+             ; _Alignof takes a type-name alone; gcc's __alignof__ an expression too
+             [["_Alignof" "ALIGNTY" 15] ["__alignof__" "ALIGNOF" 15] ["__extension__" "EXT" 18]
               ["__attribute__" "STMT" 19] ["_Static_assert" "STMT" 19] ["asm" "STMT" 19]
               ["__asm__" "STMT" 19] ["__asm" "STMT" 19] ["__label__" "DECL" 20]] +
              ; the words a type may begin with, past its qualifiers: the rest are typedef names
@@ -387,17 +389,27 @@ prim : ID { (cx-id ps $1) }
     (: (fr l) (? (#l <= #f0) () (cx-bclose ps <l, pin ps 'scopacc (<l 'epre), fr >l))
        (lb l) (? (#l <= #l0) () (pull (ps 'labs) <l 0, lb >l))
        (fr (peep ps 'cxfr ()), pin ps 'cxfr f0, lb (peep ps 'cxlab ()), pin ps 'cxlab l0))
-   ; -> (value rest) | (): sel 'expr, 'asn, 'cond or 'blk. a token stamped for a refusal's
-   ; re-parse, and a parse this grammar refuses, go to parse.l's own, which marks and blames
+   ; -> (value rest) | (): sel 'expr, 'asn, 'cond or 'blk
    (cx-parse ps ts sel)
-    (? (two? ts && charm? (seqof <ts)) (cx-rd ps ts sel)
-       (: b0 (peep ps 'cxbad 0) _ (pin ps 'cxbad 0)
-          f0 (peep ps 'cxfr ()) l0 (peep ps 'cxlab ())
-          r (cx-go ps ts sel)
-          bad (ps 'cxbad)
-          _ (pin ps 'cxbad b0)
-          (two? r && !bad ? r (cx-undo ps f0 l0, cx-rd ps ts sel))))
-   (cx-rd ps ts sel) (sel @ 'expr (rpexpr ps ts) 'asn (rpasn ps ts) 'cond (rpcond ps ts) (rpblock ps ts))
+    (: f0 (peep ps 'cxfr ()) l0 (peep ps 'cxlab ())
+       r (cx-go ps ts sel)
+       (two? r ? r (cx-undo ps f0 l0, ())))
+   ; a val's first token: a said one carries the tail it was said from
+   (cx-vtok e) (<e = 'cxv ? <>>>e e)
+   ; the token at kind i of a segment's vals, past the last one the token after it, or at the
+   ; input's end the last
+   (cx-at vs i)
+    (? (atom? >vs) (? (i = 0) (cx-vtok <vs) (two? (cx-rest <vs)) (cx-rest <vs) (cx-vtok <vs))
+       (i = 0) (cx-vtok <vs)
+       (cx-at >vs (i - 1)))
+   ; a refusal on a failing form's re-parse marks where it stood, as parse.l's lookaheads do,
+   ; and an action's refusal files its sentence there
+   (cx-fail ps sg pos)
+    (: l (sg 4)
+       ((two? l && stamped? <l ? (mark (atom? (sg 1) ? l (cx-at (sg 1) pos)))), ()))
+   (cx-why ps vl sg)
+    (: w (ps 'cxwhy) t (? (two? <>w) [<>w] (two? vl) (cx-vtok <vl) (two? (sg 1)) (cx-at (sg 1) #(sg 1)) (sg 4))
+       ((<w ? (blame t <w) (mark t)), ()))
    (cx-go ps ts sel)
     (: R (cx-tab 6 + 256 * cx-tab 7)
        (rlen r) (: o (12 + 2 * R + 2 * r) (cx-tab o + 256 * cx-tab (o + 1)))
@@ -409,17 +421,20 @@ prim : ID { (cx-id ps $1) }
               (feed vl i p st @ [vl2 st2]
                  (cx-unit r = 1 ? (play c (o + 6) (k - 1) vl2 p st2)
                     (pop st2 (rlen r) () @ [st3 args]
-                       (play c (o + 6) (k - 1) vl2 p ((peep cx-tab-acts r () @ f (f ? (f ps args) <args)) . st3)))))))
+                       ; an action answering a number refused: the lookahead rides out
+                       (: v (peep cx-tab-acts r () @ f (f ? (f ps args) <args))
+                          (charm? v ? [vl2 -1 st3] (play c (o + 6) (k - 1) vl2 p (v . st3)))))))))
        ; sg: (kinds vals stop m start), kinds and vals in order; ks the kinds' string
        (go c look ks sg vl i st)
         (cx-run cx-tab ks c look @ c2
            (? !(string? c2) ()
               (: o (8 + 2 * cx-u32 c2 4) z (c2 o) pos (cx-u32 c2 0)
                  (play c2 (o + 5) (cx-u32 c2 (o + 1)) vl i st @ [vl2 i2 st2]
-                    (? (z = 0) (go c2 65535 ks sg vl2 i2 st2)
+                    (? (i2 < 0) (cx-why ps vl2 sg)
+                       (z = 0) (go c2 65535 ks sg vl2 i2 st2)
                        ; the vals bound first: the glaze takes no ((f a) b)
                        (z = 1) [<st2 (pos = 0 ? (sg 4) (: vs (sg 1) (cx-rest (vs (pos - 1)))))]
-                       (z = 2) (sel != 'blk && pos * 2 < #ks ? (go c2 65535 (snip ks 0 (2 * pos)) sg vl2 i2 st2))
+                       (z = 2) (cx-fail ps sg pos, (sel != 'blk && pos * 2 < #ks ? (go c2 65535 (snip ks 0 (2 * pos)) sg vl2 i2 st2)))
                        (: st3 <>(feed vl2 i2 pos st2)
                           stop (sg 2) m (sg 3)
                           c3 ((string [0 0 0 0]) + snip c2 4 (8 + 2 * cx-u32 c2 4))
@@ -429,10 +444,10 @@ prim : ID { (cx-id ps $1) }
                                    (atom? e) ()
                                    (: k <e op (k = cx-kprim || k = cx-kclit ? 1 0)
                                       ss (k = cx-kdecl || k = cx-kstmt || k = cx-kmark ? 1 0)
-                                      (next c3 [k] [['cxv <>e <>>e]] 1 <>>e [<m op (m 2) (m 3) 0 ss (m 6) (m 7)] 0 st3)))))))))))
+                                      (next c3 [k] [['cxv <>e <>>e <>>stop]] 1 <>>e [<m op (m 2) (m 3) 0 ss (m 6) (m 7)] 0 st3)))))))))))
        (next c ks vs n l m nx st)
         (cx-map ps l m ks vs n nx @ s
            (: sg [(rev <s) (rev <>s) <>>s <>>>s l]
               (go c 65535 (cx-u16s <s) sg <>sg 0 st)))
-       (next cx-c0 [(cx-sels sel)] [['cxv () ts]] 1 ts [sel 0 0 0 -1 0 0 ()] 0 ()))
+       (next cx-c0 [(cx-sels sel)] [['cxv () ts ts]] 1 ts [sel 0 0 0 -1 0 0 ()] 0 ()))
    _ (pin cx-door 'parse cx-parse)
