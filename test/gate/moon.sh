@@ -108,6 +108,16 @@ grep -q 'no lane for alloca where an operand is parked' "$ho/.alr.log" || fail "
 printf '#include <string.h>\nstatic void __attribute__((noinline)) dirty(void) { volatile char b[1024]; memset((char *) b, 255, sizeof b); }\nstatic int __attribute__((noinline)) sum(int n) { unsigned char *p = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += p[i]; return s; }\nint main(void) { dirty(); return sum(512) != 0; }\n' > "$ho/.alz.c"
 moonrun -ftrivial-auto-var-init=zero -o "$ho/.alz" "$ho/.alz.c" || fail "mooncc -ftrivial-auto-var-init=zero: alloca"
 "$ho/.alz" || fail "-ftrivial-auto-var-init=zero left an alloca block uncleared"
+# an asm's subsection is its function's section's tail (arm64's ALTERNATIVE in an __init fn), laid
+# where the same code without the subsection lands; its numbered labels stay out of the symtab
+printf '__attribute__((section(".init.text"))) int f(int x)\n{ asm volatile("661: nop\\n662:\\n.subsection 1\\n663: nop\\n664:\\n.previous" ::: "memory"); return x + 1; }\nint g(int x) { return x * 2; }\n' > "$ho/.asb.c"
+sed 's/\\n\.subsection 1//; s/\\n\.previous//' "$ho/.asb.c" > "$ho/.asp.c"
+secsz() { readelf -SW "$1" | sed -E 's/.*\] +//' | awk '$1 == ".text" || $1 == ".init.text" {print $1, $5}' | tr '\n' ' '; }
+for t in x64 a64 rv64; do
+  moonrun -t $t -c "$ho/.asb.c" -o "$ho/.asb.o" && moonrun -t $t -c "$ho/.asp.c" -o "$ho/.asp.o" || fail "mooncc -t $t: an asm subsection"
+  [ "$(secsz "$ho/.asb.o")" = "$(secsz "$ho/.asp.o")" ] || fail "an asm subsection left its function's section on $t: $(secsz "$ho/.asb.o")"
+  nm "$ho/.asb.o" | grep -q 'l66[34]' && fail "an asm's numbered labels reached the symtab on $t"
+done
 # a `static` alias is a local symbol (MODULE_DEVICE_TABLE's), an object sized as its target or a
 # func; where clang is, each alias's size, type and binding are clang's
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nstatic __typeof__(tab) tab_mod __attribute__((used, alias("tab")));\nint glob[3] = {1};\nstatic __typeof__(glob) glob_mod __attribute__((used, alias("glob")));\nint f(int x) { return x + tab[x].b; }\nstatic int f_mod(int) __attribute__((used, alias("f")));\n' > "$ho/.sal.c"
