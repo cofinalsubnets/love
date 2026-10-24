@@ -1123,7 +1123,7 @@
       ('pusha = gas-nolong 'x64 "nop\n1: pusha")
       (() = gas-nolong 'x64 "lcall *(%rax)\nrep movsb")
       (() = gas-nolong 'a64 "pusha")
-      ((gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3.") =
+      ((gas-top-in 'x64 "671: dec %rax\n.pushsection .smp_locks,\"a\"\n.long 671b - .\n.popsection" "" [1 6] "f.asm.3." ".text") =
          '((("" 1 6 ((label f.asm.3.l671.1) (raw (72 255 200))))   ; dec %rax, laid exactly
             (".smp_locks" 1 2 ((raw ((fix 4 rel32 f.asm.3.l671.1 4))))))
            () () ()))
