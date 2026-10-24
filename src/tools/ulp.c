@@ -4,7 +4,8 @@
 // where, and the >0.5/>1/>2 ulp counts. `make ulp` builds + runs it (hosted
 // only -- the oracle is glibc); `./out/ulp reduce` prints the sin ulp
 // by magnitude band (the reduction scan); `./out/ulp arcs` prints the arcs' grid, ours and
-// glibc's bits a case, for test/gate/arcs.l's own oracle.
+// glibc's bits a case, for test/gate/arcs.l's own oracle; `./out/ulp float` the binary32
+// twins against glibc's float functions.
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -13,6 +14,7 @@
 double lm_sqrt(double), lm_exp(double), lm_log(double);
 double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_pow(double, double);
 double lm_asin(double), lm_acos(double);
+float lm_sqrtf(float), lm_expf(float), lm_logf(float), lm_sinf(float), lm_cosf(float), lm_powf(float, float);
 
 static uint64_t rng = 0x243F6A8885A308D3ull;   // pi digits, fixed seed
 static uint64_t xr(void) { rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17; return rng; }
@@ -98,10 +100,55 @@ static void arcs(void) {
   arc1("asin", lm_asin, asin, u); arc1("acos", lm_acos, acos, u);
   arc1("asin", lm_asin, asin, (xr() & 1) ? -v : v); arc1("acos", lm_acos, acos, (xr() & 1) ? -v : v); } }
 
+// the binary32 twins against glibc's float functions, in float ulps
+static double ulpf(float got, float want) {
+ if (isnan(got) && isnan(want)) return 0;
+ if (isnan(got) || isnan(want)) return 1e18;
+ if (isinf(got) || isinf(want)) return got == want ? 0 : 1e18;
+ int32_t a, b; memcpy(&a, &got, 4); memcpy(&b, &want, 4);
+ if (a < 0) a = INT32_MIN - a;
+ if (b < 0) b = INT32_MIN - b;
+ double d = (double) a - (double) b;
+ return d < 0 ? -d : d; }
+static void tallyf(struct acc *a, float x, float y, float got, float want) {
+ double u = ulpf(got, want);
+ a->n++;
+ if (u > 0.5) a->n05++;
+ if (u > 1.0) a->n1++;
+ if (u > 2.0) a->n2++;
+ if (u > a->max) { a->max = u; a->at = x; a->at2 = y; } }
+static float opaquef(float f) { volatile float v = f; return v; }
+typedef float (*g1)(float);
+static void sweepf(const char *nm, g1 f, g1 oracle, int elo, int ehi, int sign, long n) {
+ struct acc a = {0};
+ for (long i = 0; i < n; i++) { float x = (float) rmag(elo, ehi, sign); tallyf(&a, x, 0, f(x), oracle(opaquef(x))); }
+ static const float edges[] = { 0.0f, -0.0f, 1.0f, -1.0f, 0.5f, 2.0f, 0x1p-149f, 0x1p-126f, 0x1.fffffep127f,
+   0x1.62e42ep+6f, 0x1.62e430p+6f, -0x1.9fe368p+6f, -0x1.9fe36ap+6f, 3.14159265f, 1.57079633f, 401.9f, 402.0f };
+ for (unsigned i = 0; i < sizeof edges / sizeof *edges; i++)
+  tallyf(&a, edges[i], 0, f(edges[i]), oracle(opaquef(edges[i])));
+ report(nm, &a, 0); }
+static void floats(long n) {
+ sweepf("sqrtf", lm_sqrtf, sqrtf, -149, 128, 0, n);
+ sweepf("expf",  lm_expf,  expf,  -12, 7, 1, n);
+ sweepf("logf",  lm_logf,  logf,  -149, 128, 0, n);
+ sweepf("logn1f",lm_logf,  logf,  -4, 2, 0, n);
+ sweepf("sinf",  lm_sinf,  sinf,  -14, 9, 1, n);
+ sweepf("cosf",  lm_cosf,  cosf,  -14, 9, 1, n);
+ { struct acc a = {0};                                  // powf: x > 0, y modest, inside the range
+   for (long i = 0; i < n; i++) { float xx = (float) rmag(-30, 30, 0), yy = (float) rmag(-6, 6, 1);
+     double w = yy * log(xx); if (w > 88 || w < -103) continue;
+     tallyf(&a, xx, yy, lm_powf(xx, yy), powf(opaquef(xx), opaquef(yy))); }
+   report("powf", &a, 1); }
+ { struct acc a = {0};                                  // powf: negative x, integer y
+   for (long i = 0; i < n / 4; i++) { float xx = -(float) rmag(-3, 3, 0), yy = (float) (int) (rnd01() * 40 - 20);
+     tallyf(&a, xx, yy, lm_powf(xx, yy), powf(opaquef(xx), opaquef(yy))); }
+   report("powfneg", &a, 1); } }
+
 int main(int argc, char **argv) {
  long n = 2000000;
  if (argc > 1 && !strcmp(argv[1], "reduce")) { redscan(); return 0; }
  if (argc > 1 && !strcmp(argv[1], "arcs")) { arcs(); return 0; }
+ if (argc > 1 && !strcmp(argv[1], "float")) { floats(n); return 0; }
  sweep1("sqrt", lm_sqrt, sqrt, -1022, 1024, 0, n);
  sweep1("exp",  lm_exp,  exp,  -12, 10, 1, n);       // useful exp range (past it: over/underflow)
  sweep1("exp2", lm_exp,  exp,  -1022, -12, 1, n / 4); // tiny args (result ~1)

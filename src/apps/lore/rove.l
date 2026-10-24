@@ -371,13 +371,14 @@
  ; the queue eaten: keys typed at what stood before are not for what stands now; stops at end of input
  (drain-keys _) (cue? 0 ? (see in @ -1 () _ (drain-keys ())))
 
- ; --- the horn: every sample is a closure call, so wasm plays at a third of the 48k ---
- song-rate (love-arch @ 'wasm 16000 48000)
+ ; --- the horn: every sample is a closure call, so wasm plays at a third of the 48k and a
+ ;     small core at the 44.1k's half ---
+ song-rate (love-arch @ 'wasm 16000 'other 22050 48000)
  ; the queue must outlast the gap between feeds, which on a slow machine is a frame's paint;
  ; the pacer holds the gap at its recent worst, halving every two seconds of clock, and the
  ; lead is two and a half gaps, clamped to song-lead .. song-lead-max
  song-lead (6 * (song-rate // 30))
- song-lead-max (20 * (song-rate // 30))
+ song-lead-max (120 * (song-rate // 30))
  (pacer _) {'t (clock 0) 'gap 0.0 'cap song-lead-max 'step 0}
  (pace! p) (: t (clock 0)
               d (1.0 * (t - p 't))
