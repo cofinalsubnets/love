@@ -414,7 +414,7 @@
    _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
    _ (bq-put (w 'repo + "/test/gate/lanes.sh")
              (unlines ["d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args; : > $d/summary; rc=0"
-                       "for a in \"$@\"; do case $a in test*)"
+                       "for a in \"$@\"; do case $a in -*|out/*) ;; *)"
                        "  if [ -f red-$a ]; then echo \"$a exit=1 secs=0\" >> $d/summary; rc=1"
                        "  else echo \"$a exit=0 secs=0\" >> $d/summary; fi;; esac; done"
                        "exit $rc"]))
@@ -458,6 +458,12 @@
    g3 (calls "bob" [[9 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
    ok3 (bq-until (\ _ (has? (row "2") " green  #")) 300)
    args3 (bq-get (w 'repo + "/out/args"))
+   ; lanes of any name are read, and a rerun keeps every lane the last gate passed, owed or not
+   (gated _) (bq-until (\ _ !(has? (row "2") " gating ")) 300)
+   g4 (calls "bob" [[12 "queue_gate" {"dir" (w 'repo) "lanes" "test nettest waits"}]])
+   _ (gated 0) r4 (row "2")
+   g5 (calls "bob" [[13 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
+   _ (gated 0) r5 (row "2")
    ; a row gated on no commit plans test and test_slow alone: refused, never green on that
    n (calls "dan" [[10 "queue_row" {"state" "waiting" "branch" "dan" "keep" "1"}] [11 "queue_gate" {"dir" (w 'repo)}]])
    _ (test
@@ -472,6 +478,10 @@
       (has? (g3 9) "runs test_kore again")
       ok3 (args3 = "-d out/lanes-gate --slow test_kore test_slow\n")
       (has? (row "2") "test=0") (has? (row "2") "| stood: test") !(has? (row "2") "| red:")
+      (has? r4 " green  #") (has? r4 "nettest=0") (has? r4 "waits=0") !(has? r4 "unrun")
+      (has? r5 " green  #") (has? r5 "nettest=0 waits=0")
+      (: st (foldl (\ a x (? (x = "stood:") [] (a = 0 ? 0 (a + [x])))) 0 (words r5))
+         (st != 0 && all (\ l (elem l st)) ["test" "nettest" "waits"]))
       (has? (n 11) "is gated on -, not a commit") !(has? (row "4") " gating "))
    0)
 

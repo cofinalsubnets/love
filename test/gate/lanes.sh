@@ -12,7 +12,7 @@
 #   5. --slow: test_slow last and alone, on the same tree, only after every lane is green
 #
 # heavy slots are the caller's: `love bee --lock --heavy --out out -- sh test/gate/lanes.sh ..`.
-# N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary.
+# N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary; the last run's in DIR.prev.
 set -u
 
 # GNU make's: the lanes ask -p -q -k -o, which cook does not take
@@ -57,7 +57,8 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$args" ] || { echo "usage: lanes.sh [-j N] [-d DIR] [--slow] LANE..." >&2; exit 2; }
 [ -n "$j" ] || j=4
-rm -rf "$d" && mkdir -p "$d" || exit 1
+# a rerun keeps the run it reruns for: a trip's logs outlive the gate that clears it
+rm -rf "$d.prev" && { [ ! -d "$d" ] || mv "$d" "$d.prev"; } && mkdir -p "$d" || exit 1
 t0=$(date +%s)
 
 # a target's prerequisites, from make's own database (pattern lanes included once named)
@@ -152,12 +153,16 @@ for l in $run; do has "$l" "$alone" && late="$late $l" || par="$par $l"; done
 # a lane that moves the tree mid-gate relinks love under its neighbours: the summary says so
 sums() { cksum out/love out/love.raw out/mooncc0.image 2>/dev/null; }
 before=$(sums)
+# ..and the log says what moved: a file out/src.tree packs (the tree as it is), summed here and
+# at the trip, or one of love.raw's own inputs newer than it before the lane
+walk() { w=$(out/love src/tools/selfpack.l -l 2>/dev/null) && [ -n "$w" ] && cksum $w 2>/dev/null; }
+walk > "$d/walk"
+newer() { for f in $(deps out/love.raw); do [ ! "$f" -nt out/love.raw ] || echo "$f"; done > "$d/newer"; }
 moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
   echo "1 0" > "$d/love-moved.rc"; echo "out/love, love.raw or mooncc0.image was rebuilt $1" > "$d/love-moved.log"
-  [ -s "$d/newer" ] && { echo "newer than out/love.raw before it:"; cat "$d/newer"; } >> "$d/love-moved.log"; }; }
-# what of love.raw's link is newer than it: the trip's cause, read before each lane
-newer() { find out/o out/moon out/liblove.a out/.hostcc out/src.o out/rootfs.o out/moonlibc.o out/lib/readme.bin \
-  -newer out/love.raw -type f 2>/dev/null | sort | head -40 > "$d/newer"; }
+  walk | diff "$d/walk" - | sed -n 's/^[<>] [0-9]* [0-9]* //p' | sort -u > "$d/walk.moved"
+  [ -s "$d/walk.moved" ] && { echo "what out/src.tree packs, moved since the lanes began:"; cat "$d/walk.moved"; } >> "$d/love-moved.log"
+  [ -s "$d/newer" ] && { echo "love.raw's inputs newer than it before:"; cat "$d/newer"; } >> "$d/love-moved.log"; }; }
 newer
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
