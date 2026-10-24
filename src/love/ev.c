@@ -1372,7 +1372,8 @@ lvm(lvm_argcond) {
 fldc(lvm_argtwocond, chainp(v) && !nomp(v))            // two? answers a charm: no leaf_nilp needed
 
 // the cell doors: peek/poke move values, pick/place instructions, so no code address reaches
-// love (pick answers an op index). a wrong cell is safe and meaningless; only bounds are checked
+// love (pick answers an op index). a wrong cell is safe and meaningless; only bounds are checked:
+// a write lands in a live pool, never in () or a static nif
 // a terminator: 2 mod 4 into a live pool, which no pointer, charm or instruction is (thumb's
 // are odd, wasm's 8 apart)
 static love_inline bool termp(struct g *g, word x) {
@@ -1422,7 +1423,7 @@ lvm(lvm_poke) {
  if (!evenp(Sp[2])) { *(Sp += 2) = ZeroPoint; love_musttail return Next(1); }
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  Pack(g);                    // young reads g->hp, which the live Hp may be ahead of
- if (termp(g, c->x)) { *(Sp += 2) = ZeroPoint; love_musttail return Next(1); }  // never over the wall
+ if (!in_live_pool(g, ptr(c)) || termp(g, c->x)) { *(Sp += 2) = ZeroPoint; love_musttail return Next(1); }  // never over the wall
  gen_wb_cell(g, c, Sp[1]);   // the cell is in a tagged span, never a chain's field
  c->x = Sp[1]; *(Sp += 2) = word(c); love_musttail return Next(1); }
 
@@ -1432,7 +1433,7 @@ lvm(lvm_place) {
  if (!evenp(Sp[2]) || !a) { *(Sp += 2) = ZeroPoint; love_musttail return Next(1); }
  union u *c = cell(Sp[2]) + getcharm(Sp[0]);
  Pack(g);
- if (termp(g, c->x)) { *(Sp += 2) = ZeroPoint; love_musttail return Next(1); }
+ if (!in_live_pool(g, ptr(c)) || termp(g, c->x)) { *(Sp += 2) = ZeroPoint; love_musttail return Next(1); }
  gen_wb_cell(g, c, (word) a);
  c->x = (word) a; *(Sp += 2) = word(c); love_musttail return Next(1); }
 
