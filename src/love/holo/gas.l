@@ -1583,10 +1583,10 @@
               () (gf-lines tgt src)))
    ; -> [secs fns objs weaks [aliases]]: secs ((name type flags forms)..) first-seen, fns and
    ; objs the .globl names a label here defines, split by whether its section executes
-   (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "")
+   (gas-top tgt src) (gas-top-in tgt src ".text" [1 6] "" ".text")
    ; ..read from a section of the caller's own, home, wearing [type flags] htd; a numeric label
    ; is named pfx + GNU's own, so two readings never lay one twice
-   (gas-top-in tgt src home htd pfx)
+   (gas-top-in tgt src home htd pfx hsub)
     (: st {'cur home 'prev home 'stk () 'run () 'order () 'globl () 'md (gx-md tgt)}
        secs {}                                      ; name -> [type flags forms-reversed]
        labs {}                                      ; label -> its section
@@ -1743,8 +1743,8 @@
        _ (flush 0)
        _ (foldl (\ _ nm (pool nm)) 0 (rev (st 'order)))      ; each pool still waiting ends its section
        ; each subsection after its section's own forms, in number order; a function's home has no
-       ; tail of its own, so its subsections go to .text
-       _ (foldl (\ _ nm (: b (gf-base nm) t (b = "" ? ".text" b) r (secs nm)
+       ; tail of its own, so its subsections go to hsub, the section the function lands in
+       _ (foldl (\ _ nm (: b (gf-base nm) t (b = "" ? hsub b) r (secs nm)
                           (row t [<r <>r],
                            secs t @ q (pin secs t [<q <>q (<>>r + <>>q)]),
                            foldl (\ _ f (two? f && <f = 'label ? (pin labs (show <>f) t) 0)) 0 <>>r,

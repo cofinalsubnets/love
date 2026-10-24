@@ -435,11 +435,11 @@
            (udie 2 "cc: -mstack-protector-guard-offset=\(o) -- a64's is a word offset under 32768")
           (!x86 && f 'ssps) (udie 2 "cc: -mstack-protector-guard-symbol -- x86 only")
           [m r (f 'ssps || (m = 'global ? "__stack_chk_guard")) o]))
-   ; a file-scope asm's own labels, local in the symtab as gas lays them: modpost finds an
-   ; export by its __export_symbol_ label. gas's numbered (l911.1) and pool (.L..) labels stay out
+   ; an asm's own labels, local in the symtab as gas lays them: modpost finds an export by its
+   ; __export_symbol_ label. gas's numbered (l911.1, a function's fn.asm.3.l911.1) and pool (.L..) labels stay out
    (asmlocs secs)
     (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
-       (lnum? sp) (split "." sp @ p (#p = 2 && starts? <p "l" && digs? (snip <p 1 #(<p)) && digs? <>p))
+       (lnum? sp) (rev (split "." sp) @ p (1 < #p && starts? <>p "l" && digs? (snip <>p 1 #(<>p)) && digs? <p))
        (lab f) (two? f && <f = 'label ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
    ; a64: an undefined weak's address is a literal word, not adrp+add. a pie link (the kernel's)
