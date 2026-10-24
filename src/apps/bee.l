@@ -601,7 +601,8 @@
                n (? (two? ln) (q-note <ln) "")
                ; a rerun after a split: the lanes named run again, and the ones the last gate passed stand
                ls (? (two? only) (filter (!= "test_slow") only) all)
-               stood (? (two? only) (filter (\ l (!(elem l ls) && elem [l "0"] (gate-was n))) all) ())
+               stood (? (two? only) (filter (\ l (!(elem l ls) && l != "test_slow"))
+                                            (map cap (filter (\ y (y 1 = "0")) (gate-was n)))) ())
                _ (gate-say ("row \(r) at \(h) from \(b): " + join " " (ls + ["test_slow"])
                             + (two? stood ? (", standing: " + join " " stood) "")))
                ; the lanes write to this log as they run
@@ -609,9 +610,9 @@
                             "-d" "out/lanes-gate" "--slow"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
                rc (? (charm? p && 0 < p) (gate-wait p) -1)
                sm (slurp-file (dir + "/out/lanes-gate/summary"))
-               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (starts? l "test")) (? (string? sm) (lines sm) ())))
+               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ())))
                (one l) (: g (filter (\ y (<y = l)) got) [l (? (two? g) (<g 1) (elem l stood) "0" "unrun")])
-               res (map one (q-uniq (all + ls + ["test_slow"])))
+               res (map one (q-uniq (all + stood + ls + ["test_slow"])))
                reds (filter (\ y (y 1 != "0")) res)
                ok (rc = 0 && !(two? reds))
                owe (gate-owe r rows b plan (map (\ y <y) reds))
