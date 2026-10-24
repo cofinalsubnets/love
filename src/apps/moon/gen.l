@@ -6803,21 +6803,23 @@
                     fs))))))
 
    ; the door set a call or a tail jump kills: caller-saved, never an argument (a64 args ride r0-r7,
-   ; x64's al is li'd by setal first); a wasm call writes only r0 r1, so its locals ride it
+   ; x64's al is li'd by setal first); a wasm call writes only r0 r1, so its locals ride it. arm
+   ; has none: r0-r3 carry arguments, r12 a call's target, and the rest are callee-saved
    (doors g tail) (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15)
                      (rv64? g) (wasm? g && !tail ? () '(r8 r9 r10 r11 r12))
                      (ia32? g) '(r0 r1 r2)
+                     (t32? g) ()
                      '(r0 r9 r10))
    ; a jump's target is a function (a sibcall) when its spelling has no dot: gen's own labels lead
    ; with one, and a C label is spelled fn.label (a goto) -- neither is an exit
    (fsym? x) (findsub (show x) "." < 0)
-   ; dies on the straight line: overwritten before any read. a ret rides only r0 out; a call or
-   ; sibcall jmp kills the door set
+   ; dies on the straight line: overwritten before any read. a ret rides r0 out, and on arm a
+   ; pair's r1 beside it; a call or sibcall jmp kills the door set
    (dies? g rd (f . l))
     (two? f ?
        (rdsp g f @ rs
           (? (rs = 'bar)
-              (? (retx? f) (rd != 'r0)
+              (? (retx? f) (rd != 'r0 && !(t32? g && rd = 'r1))
                  (elem <f '(call callr callm)) (elem rd (doors g 0))
                  (<f = 'jmp && fsym? <>f) (elem rd (doors g 1))
                  ())
