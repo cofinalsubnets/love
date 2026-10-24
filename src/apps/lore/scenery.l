@@ -34,6 +34,9 @@
 ;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
 ;                                      world's own dim
 ;   (skylight (rgb r g b))             light out under the sky at any hour, over the sky's own
+;   (hum SOUND [x y z] [x y z])        a sound always going, heard between two corners and
+;                                      fading out a little past them: 'fluorescent, the
+;                                      tubes' buzz, louder under each strip light
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -91,6 +94,8 @@
 ;                                      where no lens is between: what the window shows, and
 ;                                      what is really there
 ;   (flow [du dv] DRAPE)               the drape's texture drifting du dv metres a second
+;   (along s DRAPE)                    the drape's texture laid along its rows as they go,
+;                                      from s metres, not from above: a flow keeps to its bends
 ;   (strip-light [x y z])              a light strip along z, its face at y
 ;   (bulb [x y z] (rgb r g b))         a bare bulb, its light
 ;   (sconce [x y z] [nx ny nz] [dx dy dz] length TEXTURE)  a lamp in a three-sided fitting on
@@ -118,6 +123,8 @@
 ;   (coarse k ORB)                     an orb drawn k times coarser than the world round it, k
 ;                                      2 4 or 8, its pixels k by k of the world's
 ;   (across LIGHT)                     a strip turned across, along x
+;   (troffer LIGHT)                    a strip laid in a drop ceiling: two of its tiles, from
+;                                      x and z on its grid, a diffuser in a frame
 ;   (unlit LIGHT)                      a strip's fitting alone, bright by the room's own light
 ;                                      and lighting nothing: one of many under an ambient
 ;                                      standing for theirs
@@ -144,8 +151,8 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street void gravity surface sky ambient skylight air solid box prism cut whole land door train bin mattress telescope book pencil rod decal drape beyond hither flow window brittle lens grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
-         across unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+(module (scenery level-of sourced start shot room street void gravity surface sky ambient skylight hum air solid box prism cut whole land door train bin mattress telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog ad spinner orb glow coarse neon strip-light bulb sconce flames poster sign
+         across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
 (:
@@ -187,6 +194,8 @@
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
  (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
  (skylight c) (: u "(skylight (rgb r g b))" (colour? c ? (part 'skylight [['c c]]) (no u c)))
+ (hum nm lo hi) (: u "(hum SOUND [x y z] [x y z])"
+   (elem nm ['fluorescent] ? (part 'hum [['sound nm] ['lo (P lo u)] ['hi (P hi u)]]) (no u nm)))
  ; a brush's shape; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
@@ -228,6 +237,7 @@
  (hither d) (kind? d ['drape] ? (with d 'seen 2) (no "(hither DRAPE)" d))
  (flow v d) (: u "(flow [du dv] DRAPE)"
    (two? v && #v = 2 && all num? v && kind? d ['drape] ? (with d 'flow (map f v)) (no u (kind? d ['drape] ? v d))))
+ (along s d) (: u "(along s DRAPE)" (num? s && kind? d ['drape] ? (with d 'along (f s)) (no u (num? s ? d s))))
  ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
  ; opening into it on each side, the band over those and a cap a little wider going in
  ; toward the top; its sign on each side
@@ -394,6 +404,7 @@
  (coarse k o) (: u "(coarse k ORB)"
    (? (!(elem k [2 4 8])) (no u k) (kind? o ['orb]) (with o 'coarse k) (no u o)))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
+ (troffer s) (kind? s ['strip] ? (with s 'troffer 1) (no "(troffer (strip-light ..))" s))
  (unlit s) (kind? s ['strip] ? (with s 'unlit 1) (no "(unlit (strip-light ..))" s))
  (how w l) (kind? l ['strip 'bulb 'sconce 'sign 'flame] ? (with l 'how [w]) (no ("(" + show w + " LIGHT), a strip-light, bulb, sconce, sign or flames") l))
  (stammer l) (how 'stammer l)
@@ -462,7 +473,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'surface 'ambient 'skylight 'ad 'spin 'orb 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'sky 'smog 'gravity 'surface 'ambient 'skylight 'hum 'ad 'spin 'orb 'textures])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -488,8 +499,9 @@
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1)])) (of 'door))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
-       'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'unlit (peep s 'unlit 0) 'how (s 'how) 'src (peep s 'src ()) 'xf (peep s 'xf xf-id)})) (of 'strip))
+       'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'troffer (peep s 'troffer 0) 'unlit (peep s 'unlit 0) 'how (s 'how) 'src (peep s 'src ()) 'xf (peep s 'xf xf-id)})) (of 'strip))
        'bulbs (map (b \ {'at (b 'at) 'c (b 'c) 'how (b 'how)}) (of 'bulb))
+       'hums (map (h \ {'sound (h 'sound) 'lo (lo2 (h 'lo) (h 'hi)) 'hi (hi2 (h 'lo) (h 'hi))}) (of 'hum))
        'sconces (map (q \ {'at (q 'at) 'np (q 'np) 'up (q 'up) 'len (q 'len) 'how (q 'how)}) (of 'sconce))
        'flames (map (q \ {'pts (q 'pts) 'c (q 'c) 'how (q 'how)}) (of 'flame))
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
@@ -504,7 +516,7 @@
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'brittle (peep p 'brittle 0) 'lens (peep p 'lens ())}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
-       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'land (d 'kind = 'land ? 1 0)}) (of 'drape + of 'land))
+       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (peep d 'along ()) 'land (d 'kind = 'land ? 1 0)}) (of 'drape + of 'land))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
        'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'glow (peep o 'glow 0) 'src (peep o 'src ()) 'xf (peep o 'xf xf-id)}) (of 'orb))

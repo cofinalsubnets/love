@@ -182,6 +182,18 @@
    _ (edit-paint ed) edp (edw 'paper)
    (lit? x0 x1 y0 y1) (any (y \ any (x \ peep edp (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
  (test (edf = 'scene) (edv 'row = 1) (edv 'col = 2) (lit? 0 160 0 160) (lit? 160 320 0 16)))
+;; ..a frame vi was typed to paints no scene, so the keys show at once; + on the scene makes
+;; its pixels finer, the scene sized again for them
+(: tyv ((cite 'vi) 'vi-open "")
+   _ ((cite 'vi) 'vload tyv ["(level \"t\"" "  (room [0 0 0] [4 3 4])" "  (start [2 0 2] 0 0))"] "t.l")
+   tyw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} ty (edit-new tyw tyv "")
+   _ (edit-events ty [['down 36] ['text "j"] ['up 36]]) tyt (ty 'typed)
+   _ (edit-paint ty) typ (tyw 'paper) tyt2 (ty 'typed)
+   (lit? x0 x1 y0 y1) (any (y \ any (x \ peep typ (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
+   tye (ty 'lay 'es)
+   _ (edit-events ty [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 13] ['text "+"] ['up 13]])
+ (test (tyt = 1) (tyt2 = 0) !(lit? 0 150 0 150) (tyv 'row = 1) (tye = 2) (ty 'lay 'es = 1)
+       (ty 'lay 'pw = 160) (ty 'st 'w = 160)))
 ; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
 ; its own numbers moved as far, and the scene read again with it there; dragged back, as it was
 (: dgv ((cite 'vi) 'vi-open "")
@@ -565,6 +577,12 @@
        (tx sb >= 16777216) (tx sb < 2 * 16777216) (tx (world-new 8 8 dh "" 'sc) >= 2 * 16777216)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (beyond 3))") "(beyond DRAPE)")
        (has? (world-read (sl + "(flow 1 " + sd + "))")) "(flow [du dv] DRAPE)")))
+;; ..laid along: u how far down its rows from s, v across a row from its middle, in texels
+(: sl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
+   sd " (drape t [[[1 0.1 1] [2 0.1 1]] [[1 0.1 2] [2 0.1 2]]])"
+   sa (world-new 8 8 (world-read (sl + "(flow [0.5 0] (along 2 " + sd + ")))")) "" 'sc) ca (sa 'sheets 0 'pk 'cols)
+ (test (amin (ca 3) = 16.0) (amax (ca 3) = 24.0) (amin (ca 4) = -4.0) (amax (ca 4) = 4.0)
+       (has? (world-read (sl + "(along 'a " + sd + "))")) "(along s DRAPE)")))
 ;; a brittle pane: a tap with it before the eye rings it as steel, a second breaks it, leaving
 ;; its shards; one not brittle stays
 (: bw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
@@ -600,6 +618,31 @@
    (ult w) (net (map (c \ #(c 'pk 'tris)) (w 'sc 'chunks)))
  (test (ulr 'strips 0 'unlit = 1) (#(ulw 'sc 'lights) = 0) (#(world-new 8 8 (lv "(room [0 0 0] [4 3 4]) (strip-light [2 3 2])") "" 'sc 'lights) = 1)
        (ult (world-new 8 8 (lv "(room [0 0 0] [4 3 4])") "") < ult ulw)))
+; ..a troffer: the strip laid in the ceiling, its frame drawn with the room as well, lit or not
+(: tfr (lv "(room [0 0 0] [4 3 4]) (unlit (troffer (strip-light [2.1 3 2.4])))")
+   tfl (lv "(room [0 0 0] [4 3 4]) (troffer (strip-light [2.1 3 2.4]))")
+   (tft l) (net (map (c \ #(c 'pk 'tris)) (world-new 8 8 l "" 'sc 'chunks)))
+ (test (tfr 'strips 0 'troffer = 1) (tft (lv "(room [0 0 0] [4 3 4]) (unlit (strip-light [2.1 3 2.4]))") < tft tfr)
+       (#(world-new 8 8 tfl "" 'sc 'lights) = 1) (tft (lv "(room [0 0 0] [4 3 4])") < tft tfl)
+       (has? (world-read "(level \"t\" (troffer (bulb [0 0 0] (rgb 1 1 1))))") "(troffer (strip-light ..))")))
+; a hum: heard in its box, fading past it, gone a little further, and none without one;
+; a strip near makes the buzz louder
+(: hml (lv "(room [0 0 0] [8 3 8]) (strip-light [2 3 2]) (hum 'fluorescent [0 0 0] [8 3 8])")
+   hst (world-new 8 8 hml "")
+   (hb x y z) (: _ (pins hst 'px x 'py y 'pz z) _ (hum-bus hst 480) b (hum-bus hst 480) (atom? b ? 0.0 (amax <b)))
+   near (hb 2 1.6 2) far (hb 7 1.6 7) edge (hb 7 3.9 7)
+ (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
+       (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
+       (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; deep chunks: a room under the land far from its one opening is left out from above the
+; ground, one near the opening is not, and nothing is from in the opening or under the ground
+(: (dpb l) (atom? l ? (show l) ("[" + join " " (map dpb l) + "]"))
+   dpl (lv ("(void [-2 -2 -2] [62 10 10]) (land (texture 8 8 1 '((fill (rgb 1 1 1)))) "
+            + dpb (map (z \ map (x \ [x 3 z]) (map (i \ 2 * i) ^31)) [0 4 8]) + ")"
+            + " (room [1 0 1] [7 2 7]) (room [50 0 1] [58 2 7]) (street [2 0 2] [5 3.2 5])"))
+   dsc (world-new 8 8 dpl "" 'sc) (dch x) <(filter (c \ c 'lo 0 <= x && x <= c 'hi 0 && c 'lo 1 < 2.5) (dsc 'chunks))
+ (test ((dch 54) 'deep = 1) ((dch 4) 'deep = 0) (#(dsc 'ports) = 1)
+       (deep-hid? dsc [30 4.6 4]) (!(deep-hid? dsc [3.5 2.5 3.5])) (!(deep-hid? dsc [54 1.6 4]))))
 ; shots: in order, each for its seconds, the world still meanwhile; a sky shot is the sky alone,
 ; blue at noon; a key skips the rest; a waiting car opens on the cut
 (: sl (lv "(room [0 0 0] [4 3 4]) (start [2 0 2] 0 0) (shot 0.2 (sky 13 'partly) 0 60) (shot 0.2 [1 0 1] 90 0) (train [0.5 0 0.5] [3.5 2 3] (door [2 0 3] 1 1.8) 5)")

@@ -380,7 +380,7 @@
    (mesh-frame v sc (stones-texs st) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo) sk))
  ; the sky over the eye at e: every pixel for half blocks, every sky-k columns of kitty's, or
  ; every 'sky-k
- (sky-of st e lt k) (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (peep st 'sky-k (k @ 1 1 (sky-k * k))))
+ (sky-of st e lt k) (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (peep st 'sky-k (k @ 1 1 (sky-k * k))) (mesh-sky-memo st))
  ; ..with 'keep-sky, the haze and a whole picture of the sky kept while the hour and the view
  ; hold: a fifth of a pixel of turn or breath, eight metres of walking, never show in them
  (sky-key st lt) (: (q x) (floor (200.0 * x + 0.5))

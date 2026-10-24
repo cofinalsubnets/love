@@ -1,14 +1,14 @@
 ; `love play src/apps/lore/levels/ring.l`: a world laid round a ring's tube, walked all the
 ; way round either way. x runs round the ring and z round the tube, its outside halfway; a
-; row of posts down the outside, a ring of them round the tube, a stream crossing it, and a
-; cairn where the walk begins, met again coming round. under the grass, round a smaller tube
+; row of posts down the outside, a ring of them round the tube, a river winding
+; round it, and a cairn where the walk begins, met again coming round. under the grass, round a smaller tube
 ; inside it, a maze of yellow rooms the whole way round, down a stair by the cairn
 (borrow 'scenery)
 
 (: lx 320.0 lz 88.0)                   ; round the ring and round the maze's floor
 (: mh 3.0 top 4.5)                     ; the maze's height, and how far over its floor the grass is
 
-; the textures: grass, stone, the cairn's red stone and the stream; below, the rooms'
+; the textures: grass, stone, the cairn's red stone and the river's water; below, the rooms'
 ; wallpaper, carpet and ceiling tiles, and the stair's concrete
 (: grass (feel 'soft (texture 64 64 2
           '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
@@ -25,19 +25,38 @@
 (: tiles (texture 64 64 1.2 '((fill (rgb 0.84 0.82 0.72)) (noise 1 0.08) (grid 32 32 1 (grey 0.6)))))
 (: concrete (feel 'hard (texture 32 32 1.5 '((fill (grey 0.5)) (noise 1 0.12) (noise 6 0.1) (patches 5 0.15 (shade 0.85))))))
 
-; the ground: swells that come round whole every way, the stream's bed sunk across it, and
-; flat round the stair
+; the ground: swells that come round whole every way, the river's bed sunk along it, and
+; flat round the stair; each asked of x a number or a tray of them
 (: (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (k * k * (3.0 - 2.0 * k))))
+(: (span v) (max v (0.0 - v)))
 (: (swell x z) (: a (tau * x / lx) b (tau * z / lz)
    (0.9 * (0.5 + 0.5 * sin (5.0 * a + 0.3)) * (0.5 + 0.5 * sin (3.0 * b + 1.1)) + 0.3 * sin (11.0 * a - 4.0 * b))))
-(: stream 200.0)
-(: (bed x z) (swell x z * ease (abs (x - stream)) 2.0 6.0 - 0.7 * (1.0 - ease (abs (x - stream)) 1.0 3.5)))
-(: (ground x z) (top + bed x z * ease (max (abs (x - 20.0) - 4.0) (abs (z - 44.0) - 2.0)) 2.0 8.0))
-(: xs (map (i \ 2.0 * i) ^161) zs (map (i \ 2.0 * i) ^45))
-(: (rows f) (map (z \ map (x \ [x (f x z) z]) xs) zs))
+; ..the river: wn times round the tube for once round the ring, 0 the tube's inside all
+; the way, crossing the start's x there so the walk begins across the tube from it; at x its
+; middle's z, its slope, and how far a place is from it, the shorter way round
+(: wn 6)
+(: rs (wn * lz / lx) (rz x) (rs * (x - 10.0)))
+(: (around d l) (d - l * floor (d / l + 0.5)))
+(: (rd x z) (span (around (z - rz x) lz) / sqrt (1.0 + rs * rs)))
+(: (bed x z) (: d (rd x z) (swell x z * ease d 2.5 7.0 - 0.7 * (1.0 - ease d 1.8 4.2))))
+(: (ground x z) (top + bed x z * ease (max (span (x - 20.0) - 4.0) (span (z - 44.0) - 2.0)) 2.0 8.0))
+(: gm 2.0 xs (map (i \ gm * i) ^(int (lx / gm) + 1)) zs (map (i \ gm * i) ^(int (lz / gm) + 1)) X (gem-tray [#xs] xs))
+(: (rows f) (map (z \ (: Y (f X z) (map (i \ [(xs i) (peep Y i 0.0) z]) ^#xs))) zs))
 
 ; a post standing on the ground at x z, a cairn three stones high
 (: (post x z t) (: y (ground x z) (skin {'all t} (solid (box [(x - 0.2) (y - 0.5) (z - 0.2)] [(x + 0.2) (y + 1.8) (z + 0.2)])))))
+; ..the river's water, a strip down its middle a metre a row, cut where it goes round the
+; tube past lz so none straddles it, each piece a row over the cut to meet the next and laid
+; along from as far down the river as it starts; none in the stair's well
+(: (stair? p) (: z (around (p 2 - 44.0) lz) (14.5 < p 0 && p 0 < 25.5 && span z < 3.5)))
+(: (water-row x) (: z (rz x) n (sqrt (1.0 + rs * rs)) u (3.4 * rs / n) v (-3.4 / n)
+   (map (k \ (: p [(x + k * u) (top - 0.45) (z + k * v)] ((stair? p) ? () p))) [-1.0 0.0 1.0])))
+(: waters (: rows (map (i \ [i (water-row (1.0 * i))]) ^321) (cut r) (floor (rz (1.0 * r 0) / lz))
+   S (map (i \ i * sqrt (1.0 + rs * rs)) ^321)
+   (go l run out) (? (atom? l) (rev (rev run . out))
+      (two? run && cut <l != cut <run) (go >l [<l] (rev (<l . run) . out))
+      (go >l (<l . run) out))
+   (map (piece \ (: o (lz * cut <piece) [(S (<piece 0)) (map (q \ map (p \ p = () ? () [(p 0) (p 1) (p 2 - o)]) (q 1)) piece)])) (go rows () ()))))
 (: (cairn x z) (: y (ground x z)
    (map (k \ (: a (0.9 - 0.25 * k) y0 (y - 0.2 + 0.6 * k) (skin {'all red} (solid (box [(x - a) y0 (z - a)] [(x + a) (y0 + 0.6) (z + a)])))))
         ^3)))
@@ -71,10 +90,11 @@
                [(gap [a 0 (z1 - 0.01)] [b mh lz]) (gap [a 0 0] [b mh (wt + 0.01)])])
    ((through (cid i j) @ 'open (i < nx - 1 ? () (wx z0 z1)) 'door (wx (zm - 0.7) (zm + 0.7)) ())
     + (through (100000 + cid i j) @ 'open (wz x0 x1) 'door (wz (xm - 0.7) (xm + 0.7)) ()))))
-; ..two panels to a room's ceiling, every one lit by the rooms' own light, none where the
-; stair's well opens it
-(: (panels i j) (: x (cx * (i + 0.5)) z (cz * (j + 0.5)) (well? x) (15.5 < x && x < 24.5 && 41.5 < z && z < 46.5)
-   (map (x \ unlit (strip-light [x mh z])) (filter (x \ !(well? x)) [(x - 1.6) (x + 1.6)]))))
+; ..two troffers to a room's ceiling on its tiles' grid, every one lit by the rooms' own
+; light, none where the stair's well opens it
+(: (panels i j) (: x (cx * (i + 0.5)) z (0.6 * floor (cz * (j + 0.5) / 0.6 + 0.5)) (well? x) (15.5 < x && x < 24.5 && 41.5 < z && z < 46.5)
+   (on x) (0.6 * floor (x / 0.6) + 0.3)
+   (map (x \ unlit (troffer (strip-light [x mh z]))) (filter (x \ !(well? x)) [(on (x - 1.6)) (on (x + 1.6))]))))
 ; ..and the stair down by the cairn: a well open to the sky, its steps going down east
 (: rise (top / 18.0) run (8.0 / 18.0))
 (: (step k) (skin {'all concrete} (solid (box [(16.0 + run * k) 0 42] [(16.0 + run * (k + 1)) (top - rise * (k + 1)) 46]))))
@@ -87,15 +107,16 @@
   (ambient (rgb 0.78 0.72 0.5))
   (void [-4 -3 -4] [(lx + 4) (top + 14) (lz + 4)])
   (land grass (rows ground))
-  (flow [0.0 0.6] (drape water (map (z \ map (x \ [x (top - 0.45) z]) [(stream - 2.6) stream (stream + 2.6)]) zs)))
+  (map (w \ along (w 0) (flow [0.6 0] (drape water (w 1)))) waters)
   ; ..the cairn, the posts down the outside every sixteen metres, and round the tube every eight
   (cairn 6 (lz / 2))
-  (map (x \ post x (lz / 2) stone) (filter (x \ abs (x - stream) > 4.0) (map (i \ 40.0 + 16.0 * i) ^17)))
-  (map (i \ post 80.0 (4.0 + 8.0 * i) stone) ^11)
-  ; ..under it the rooms, carved out of the ground, the ways between them and their lights
+  (map (x \ post x (lz / 2) stone) (filter (x \ rd x (lz / 2) > 4.5) (map (i \ 40.0 + 16.0 * i) ^17)))
+  (map (z \ post 80.0 z stone) (filter (z \ rd 80.0 z > 4.5) (map (i \ 4.0 + 8.0 * i) ^11)))
+  ; ..under it the rooms, carved out of the ground, the ways between them, their lights and their buzz
   (map (i \ map (j \ cell i j) ^nz) ^nx)
   (map (i \ cats (map (j \ ways i j) ^nz)) ^nx)
   (map (i \ map (j \ panels i j) ^nz) ^nx)
+  (hum 'fluorescent [0 0 0] [lx mh lz])
   ; ..and the stair down to them
   (skin {'all concrete} (street [16 0 42] [24 (top + 0.05) 46]))
   (map step ^17))

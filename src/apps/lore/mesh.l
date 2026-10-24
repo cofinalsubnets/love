@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
+         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
 (borrow 'view)
@@ -208,22 +208,33 @@
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
- ; stars put on by night
- (mesh-sky ss lt wx e sim t0 k)
+ ; stars put on by night; nothing asked where no pixel is bare
+ (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
-         (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
-                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)))))]))
+         (\ v f B (? (!(aany (f = -1))) f
+                     (: g (sky-grid v lt wx e sim k f sm) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
+                        (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix))))))]))
+ ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
+ (mesh-sky-memo st) (peep st 'sky-memo () @ () (: t {} (pin st 'sky-memo t, t)) t t)
  ; ..the radians between rays k pixels apart at the middle of v
  (mesh-step v k) (1.0 * k * tan (v 'fov / 2.0) / (v 'w / 2.0))
  ; the sky over f's bare pixels, about every k pixels, a flat tray: asked on a cube of
  ; directions n a face, fixed to the sky and drawn through the eye, so no turn or tilt moves
- ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn
- (sky-grid v lt wx e sim k f)
+ ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn.
+ ; with sm a tablet, each ask kept there and asked again a frame in sky-turn, or once
+ ; sky-age of sim old; all of them again for a new grid, weather, or a jump of the eye
+ sky-turn 4 sky-age 1.0
+ (sky-keep sm n mm e wx sim) (: q (peep sm 'e e) dx (e 0 - q 0) dz (e 2 - q 2) ds (sim - peep sm 'sim sim)
+   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && dx * dx + dz * dz < 2500.0 && ds * ds < 3600.0)
+   z (iota (6 * mm) * 0.0)
+   _ (? !ok (pins sm 'n n 'wx wx 'r z 'g z 'b z 'at (z - 1e9) 'k 0))
+   (pins sm 'e e 'sim sim 'k (sm 'k + 1)))
+ (sky-grid v lt wx e sim k f sm)
   (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (m * m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
      ; by fc's parity
@@ -242,9 +253,16 @@
      (corner E c) (: bk (peep vb (E // (c * c)) 0) o (E % (c * c))
                     (bk // (nb * nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
      N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
-     d (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
-     ; ..each ask's clouds no finer than the asks beside it
-     c (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
+     d (dir N)
+     ; ..each ask's clouds no finer than the asks beside it; kept ones as they were
+     (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     c (? (!(tablet? sm)) (ask N d)
+          (: _ (sky-keep sm n mm e wx sim)
+             A (iota (((N + sm 'k) % sky-turn = 0) + (sim - peep (sm 'at) N 0.0 > sky-age) > 0)) NA (peep N A 0)
+             cA (#A = 0 ? () (ask NA (dir NA)))
+             _ (#A = 0 ? () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
+             [(peep (sm 'r) N 0.0) (peep (sm 'g) N 0.0) (peep (sm 'b) N 0.0)]))
      zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
      ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
      (q j) (peep ix (qs + j) 0) zq (qs * 0 - 1)

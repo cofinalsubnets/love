@@ -690,7 +690,7 @@
    bs (cat xs (two? dr ? [dr] ()))
    vs (cat (sc0 'sc 0) (map (b \ b 0) bs)) ts (cat (sc0 'sc 1) (map (b \ b 1) bs))
    (mesh-frame v [vs ts (sc0 'sun)] (court-texs st) [0.0 0.0 0.0 0.0 0.0] 0 (1.5 * lt 'expo)
-               (mesh-sky (stars st) lt (st 'wx) e (st 'sim) t0 (k @ 1 1 (sky-k * k)))))
+               (mesh-sky (stars st) lt (st 'wx) e (st 'sim) t0 (k @ 1 1 (sky-k * k)) (mesh-sky-memo st))))
  ; the frame: the clock in the corner for a while after the time is touched -- in the
  ; cells, or over kitty's picture, and its row blanked once after
  (court-frame st) (: w (st 'w) deep (st 'deep) kit (st 'kitty) f (court-pens st)
