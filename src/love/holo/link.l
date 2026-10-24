@@ -560,6 +560,9 @@
                          (charm? ix && !(elem kind (relbox 'br))) (scare 'link-import-addr <sy))
                     ; an abs32 site cannot be slid by a 64-bit base
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
+                    ; ..nor a site in .rodata, which the startup cannot write: a -fno-pie object's
+                    ; const that holds an address
+                    _ (relbox && abs64? && se 4 = 'rodata ? (scare 'link-rodata-pie <sy))
                     _ ((elem kind $ rv ? '(2 17 19 57)
                                             '(1 2 4 10 11 24 257 258 260 261 273 274 275 277 278 280 282 283 284 285 286 299)) ?
                          0 (scare 'link-reloc kind))
