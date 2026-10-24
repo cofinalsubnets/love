@@ -1,5 +1,6 @@
-; src/apps/moon/parse.l -- the C parser: tokens -> (1 ast stbl) | (). recursive descent plus a
-; precedence ladder; the cursor is a token list threaded as (value rest), () the error riding up.
+; src/apps/moon/parse.l -- the C parser: tokens -> (1 ast stbl) | (). recursive descent, with
+; expressions and blocks through c.y's grammar (cgram.l); the cursor is a token list threaded
+; as (value rest), () the error riding up.
 ; ps holds what C cannot be parsed without: typedef names 'types, enum constants 'enums, and
 ; 'stag (tag -> (fields size align)), which rides out with the AST. unions flatten into 'struct
 ; entries at offset zero; an anonymous member splices into its parent.
@@ -80,7 +81,7 @@
    ; ignorable specifiers, skipped wherever a type or a declarator may carry them;
    ; __attribute__((..)) / _Alignas(..) balance-skip their parens
    qualkw '(const volatile restrict register auto inline extern static)
-   ; _Alignof is an operator (punary): a skip would eat its operand. _Thread_local skips:
+   ; _Alignof is an operator: a skip would eat its operand. _Thread_local skips:
    ; no threads, so a thread-local is the one static object
    qualid '("__attribute__" "__inline" "__inline__" "__restrict" "__restrict__"
             "__volatile__" "__volatile" "__const" "__const__" "_Noreturn" "_Alignas"
@@ -1125,22 +1126,10 @@
            (cxuac tl tr @ w (op = '/ ? (cxdiv ps (cxwrap w l) r w tr) ['bin op (cxwrap w l) r]))
           (cl && cr && op = '/) (cxdiv ps l r tl tr)
           ['bin op l r]))
-   ; one left-associative binary level
-   (plevel ps sub ops ts)
-    (sub ps ts @ r
-       (atom? r ? ()
-          (: (more l ts2)
-              (: t (two? ts2 ? <ts2)
-                 hit (two? t && tkk t = 'p ? (assoc (tkv t) ops))
-                 (atom? hit ? [l ts2]
-                    (sub ps >ts2 @ r2
-                       (two? r2 ?
-                          (more (mkbin ps <>hit l <r2) <>r2)))))
-             (more <r <>r))))
 
    ; primary := num | str | id (an enum constant folds here) | ( expr )
    (pprim ps ts)
-    (atom? (mark ts) ? ()         ; the ladder's bottom: a bad operand reports itself
+    (atom? (mark ts) ? ()         ; a bad operand reports itself
        (<ts @ t
           (? (tkk t = 'num && pchar ps = 'char && chq? t && 127 < tkv t && tkv t < 256)   ; 'c' is (int) (char) c
               [['num (tkv t - 256)] >ts]
@@ -1392,9 +1381,6 @@
                  [e ts2])
        m (more e0 ts0)
        (two? <m ? m))
-   (ppost ps ts)
-    (pprim ps ts @ r
-       (atom? r ? () (ppostfrom ps <r <>r)))
    ; ++x desugars by duplicating x, evaluating the lvalue twice: fine for a calm one, which
    ; keeps gen's lanes (bitfield, pair, wide, all of which `post` refuses); else `post` takes
    ; the address once. `op=` goes the same way, to pasn's ('rmw ..).
@@ -1410,108 +1396,6 @@
     (: op (step < 0 ? '- '+)
        (calm? lv ? ['asn lv ['bin op lv '(num 1)]]
           ['bin op ['post lv step] '(num 1)]))
-   ; unary (casts and sizeof(TYPE) fold here)
-   (punary ps ts)
-    (atom? ts ? ()
-       (<ts @ t
-          (? (ptyat? ps ts)             ; skip quals: (const T*)x is a cast
-              (thenw (pcty ps >ts) ")" @ tr
-                 (atom? tr ? ()
-                    (: cty <tr rest <>tr
-                       (peekp rest "{" ?               ; a compound literal, a postfix head
-                        (pinit ps rest @ iv
-                           (two? iv ? (ppostfrom ps ['clit (fillarr ps cty <iv) <iv] <>iv)))
-                       (punary ps rest @ r
-                          (atom? r ? ()
-                             ; the complex cast lanes (C99 6.3.1.7): componentwise, real ->
-                             ; {x, 0}, complex -> real reads .re. a non-lvalue operand
-                             ; evaluates once per component read.
-                             (ptype ps <r @ sty
-                                (? (cplxty? cty)
-                                    (? (cplxty? sty && <>sty = <>cty) [<r <>r]
-                                       (cplxty? sty)
-                                        [['clit cty ['init [['dot <r "re"] ['dot <r "im"]]]] <>r]
-                                       [['clit cty ['init [<r '(flo 0.0)]]] <>r])
-                                   (cplxty? sty && !(stru? cty))
-                                    [['cast cty ['dot <r "re"]] <>r]
-                                   [['cast cty <r] <>r]))))))))
-             (tkw? t 'sizeof)
-              (>ts @ r1
-                 (ptyat? ps r1 ?
-                     (thenw (pcty ps >r1) ")" @ tr      ; folds to a constant now
-                        (? (atom? tr) ()
-                           ; a VLA type: the runtime dim * sizeof(elt)
-                           (varr? <tr) [['bin '* <>><tr ['num (tsz ps <><tr)]] <>tr]
-                           (tsz ps <tr @ n
-                              (charm? n ? [['cast (szty ps) ['num n]] <>tr]
-                                 (blame <>tr "sizeof an incomplete type")))))
-                    (punary ps r1 @ r                 ; gen sizes from the type
-                       (two? r ? (ptype ps <r @ ty
-                                    (? (!ty || varr? ty) [['szof <r] <>r]      ; a VLA's size is runtime
-                                       (tsz ps ty @ n
-                                          (charm? n ? [['cast (szty ps) ['num n]] <>r]
-                                             (blame <>r "sizeof an incomplete type")))))))))
-             ; _Alignof (C11 6.5.3.4) through talign, playout's own door; an expression
-             ; operand is gcc's __alignof__ alone
-             (tkk t = 'id && elem (tkv t) '("_Alignof" "__alignof__"))
-              (>ts @ r1
-                 (? (ptyat? ps r1)
-                     (thenw (pcty ps >r1) ")" @ tr
-                        (two? tr ? (talign ps <tr @ n
-                                      (charm? n ? [['cast (szty ps) ['num n]] <>tr]
-                                         (blame <>tr "alignof an incomplete type")))))
-                    (tkv t != "__alignof__") ()
-                    (punary ps r1 @ r
-                       (atom? r ? ()
-                          (ptype ps <r @ ty
-                             (ty ? (talign ps ty @ n
-                                      (charm? n ? [['cast (szty ps) ['num n]] <>r]
-                                         (blame <>r "alignof an incomplete type")))))))))
-             ; __extension__ (gcc) prefixes a cast-expression as a no-op
-             (idv? t "__extension__") (punary ps >ts)
-             (tp? t "*") (punary ps >ts @ r
-                            (two? r ? [['deref <r] <>r]))
-             ; gcc's &&L: the address of a label in this function
-             (tp? t "&&" && idat? >ts) [['laddr (lname ps (tkv <>ts))] >>ts]
-             (tp? t "&") (punary ps >ts @ r
-                            (atom? r ? ()
-                               (nulloff ps <r @ n   ; the offsetof idiom folds to a constant
-                                  (charm? n ? [['num n] <>r] [['addr <r] <>r]))))
-             (tp? t "+") (punary ps >ts @ r          ; +x is x promoted
-                            (atom? r ? ()
-                               (ptype ps <r @ ty
-                                  (ty && pprom ty != ty ? [['cast (pprom ty) <r] <>r] r))))
-             (tp? t "-") (punary ps >ts @ r
-                            (two? r ? [['un 'neg <r] <>r]))
-             (tp? t "!") (punary ps >ts @ r
-                            (two? r ? [['un 'not <r] <>r]))
-             (tp? t "~") (punary ps >ts @ r
-                            (two? r ? [['un 'bnot <r] <>r]))
-             (tp? t "++") (punary ps >ts @ r
-                             (two? r ? [(preop <r 1) <>r]))
-             (tp? t "--") (punary ps >ts @ r
-                             (two? r ? [(preop <r -1) <>r]))
-             (ppost ps ts))))
-   ; the ladder
-   (pmul ps ts) (plevel ps punary '(("*" *) ("/" /) ("%" %)) ts)
-   (padd ps ts) (plevel ps pmul '(("+" +) ("-" -)) ts)
-   (pshift ps ts) (plevel ps padd '(("<<" shl) (">>" shr)) ts)
-   (prel ps ts) (plevel ps pshift '(("<" lt) ("<=" le) (">" gt) (">=" ge)) ts)
-   (peq ps ts) (plevel ps prel '(("==" eq) ("!=" ne)) ts)
-   (pband ps ts) (plevel ps peq '(("&" &)) ts)
-   (pbxor ps ts) (plevel ps pband '(("^" ^)) ts)
-   (pbor ps ts) (plevel ps pbxor '(("|" |)) ts)
-   ; one left-associative level over the single token s, laying nodes of kind k
-   (pone ps sub s k ts)
-    (sub ps ts @ r
-       (atom? r ? ()
-          (: (more l ts2) (peekp ts2 s ?
-                             (sub ps >ts2 @ r2
-                                (two? r2 ? (more [k l <r2] <>r2)))
-                             [l ts2])
-             (more <r <>r))))
-   (pland ps ts) (pone ps pbor "&&" 'land ts)
-   (plor ps ts) (pone ps pland "||" 'lor ts)
    ; gcc's `a ?: b` reads a once: a pure a repeats, anything else takes a temp in a sexpr
    (elvpure? e)
     (e @ (('num || 'flo || 'str || 'var || 'szof || 'bcp) . _) 1
@@ -1531,37 +1415,7 @@
           t "__elvis_\(n)"
           (!ty || !ty2 ? ()
              ['sexpr [['decl [[t (pdecay ty) a]]]] ['cond ['var t] ['var t] b] ty2])))
-   (rpcond ps ts)
-    (plor ps ts @ r
-       (? (atom? r) ()
-          (peekp <>r "?" && peekp ><>r ":")
-           (: re (rpcond ps >><>r)
-              e (two? re ? (pelvis ps <r <re))
-              (two? e ? [e <>re]))
-          (peekp <>r "?")
-           (thenw (pexpr ps ><>r) ":" @ rt
-              (atom? rt ? ()
-                 (rpcond ps <>rt @ re
-                    (two? re ? [['cond <r <rt <re] <>re]))))
-          r))
-   (rpasn ps ts)
-    (rpcond ps ts @ r
-       (atom? r ? ()
-          (: t (two? <>r ? <<>r)
-             hit (two? t && tkk t = 'p ? (assoc (tkv t) asnops))
-             (atom? hit ? r
-                (rpasn ps ><>r @ r2
-                   (atom? r2 ? ()
-                      (: lv <r op <>hit
-                         ; a global register variable is read-only: a write loses the frame
-                         greg (two? lv && <lv = 'var && two? (peep (ps 'gregs) <>lv ()))
-                         (greg ? (blame <>r2 "a write to a global register variable")
-                            [(? !op ['asn lv <r2]                      ; plain =: no duplicate to make
-                                 (calm? lv) ['asn lv (mkbin ps op lv <r2)] ; the desugar, exact here
-                                 ['rmw op lv <r2])                     ; evaluate the lvalue once
-                               <>r2]))))))))
-   (rpexpr ps ts) (pone ps rpasn "," 'comma ts)
-   ; the doors: c.y's grammar, laid in cx-door by cgram.l; the ladder above when it refuses
+   ; the doors: c.y's grammar, laid in cx-door by cgram.l
    (pexpr ps ts) ((cx-door 'parse) ps ts 'expr)
    (pasn ps ts) ((cx-door 'parse) ps ts 'asn)
    (pcond ps ts) ((cx-door 'parse) ps ts 'cond)
@@ -2308,34 +2162,6 @@
              (? (peekp af ",") (btdefs ps base >af sh2 bq)
                 (peekp af ";") [>af sh2]
                 ()))))
-   (rpblock ps ts)
-    (: ts0 (want ts "{")
-       epre (ps 'scopacc)
-       ; the depth a tag definition reads to know it is not at file scope; bend restores it
-       d0 (peep ps 'blkd 0)
-       _ (pin ps 'blkd (d0 + 1))
-       (bend sh) (pin ps 'blkd d0, unshadow ps sh)
-       (atom? ts0 ? (bend ())
-          (: (items ts2 acc sh)
-              (? (atom? ts2) (bend sh, ())
-                 ; the last expression's type, read while the block's names stand (a sexpr's value)
-                 (tp? <ts2 "}") (: lv (two? acc ? <acc)
-                                   (pin ps 'blkval (two? lv && <lv = 'expr ? (ptype ps <>lv)),
-                                    bend sh,
-                                    [['blk (rev acc)] >ts2]))
-                 (idv? <ts2 "__extension__") (items >ts2 acc sh)
-                 (idv? <ts2 "__label__") (plabs ps >ts2 sh @ r (items <r acc <>r))
-                 (tkw? <ts2 'typedef)
-                  (: br (pbty ps >ts2)
-                     r (two? br ? (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts2 <br)))
-                     (atom? r ? (bend sh, ())
-                        (items <r acc <>r)))
-                 (: r (tyat? ps ts2 ? (pdecl ps ts2) (pstmt ps ts2))
-                    cm (clpop ps)                   ; a cleanup's marker rides after its decl
-                    (atom? r ? (bend sh, ())
-                       ; the enum body parsed first, so its entries go under the declarators'
-                       (items <>r ((cm ? [cm <r] [<r]) + acc) (bindlocs ps (loctypes <r) (shadowdecl ps (declnames <r) (sdrain ps epre sh)))))))
-             (items ts0 () ()))))
 
    ; a for past its init: ri is (init rest-after-;) -> (('for ..) rest) | ()
    (pfor ps ri)
