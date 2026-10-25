@@ -8,6 +8,7 @@
 ; walk misses lib/, so everything is built from the core. ccbench.sh cats this file and one driver
 ; call; the reps are fixed, and each row prints a sentinel so a lane that answered nothing cannot
 ; be timed as fast.
+(borrow 'tls)
 (:
    ccbytes 65536                             ; 64 KiB per call, 1024 chacha blocks
    msg (string (cask ccbytes))               ; content is irrelevant: both ciphers
