@@ -52,8 +52,9 @@
          (cap s) (: a (s 0) bb (s 1) bx (bb 0 - a 0) by (bb 1 - a 1) bz (bb 2 - a 2) l2 (max2 1e-12 (bx * bx + by * by + bz * bz))
            px (X - a 0) py (Y - a 1) pz (Z - a 2) t (max (min ((px * bx + py * by + pz * bz) / l2) 1.0) 0.0)
            dx (px - t * bx) dy (py - t * by) dz (pz - t * bz) (sqrt (dx * dx + dy * dy + dz * dz) - s 2))
-         k crotch-k
-         F (foldl (\ a d (: e (max (k - max (a - d) (d - a)) 0.0 / k) (min a d - e * e * k * 0.25))) (cap <ws) (map cap >ws))
+         ; ..each limb's pieces joined plainly, so its joints keep its girth, the limbs blended
+         k crotch-k L (map (r \ foldl min (cap <r) (map cap >r)) (runs ws))
+         F (foldl (\ a d (: e (max (k - max (a - d) (d - a)) 0.0 / k) (min a d - e * e * k * 0.25))) <L >L)
          ; ..a point in each cell the surface crosses, at its crossings' mean, facing the slope
          (ix3 i j l) ((i * n + j) * n + l) m (n - 1)
          C (iota (m * m * m)) CI (C // (m * m)) CJ (C // m % m) CK (C % m) c0 (ix3 CI CJ CK)
