@@ -572,12 +572,16 @@ export async function loveMachine(root) {
   const send = (how, b, e) => { const c = cell(e); if (c) over = c.join(), point(how, b | mods(e), c[0], c[1]); };
   // A GRAB LOCKS: a window that grabbed the pointer (a game looking by the mouse) gets the
   // mouse's motions, the pointer hidden and held by the browser. the lock wants a gesture,
-  // so it is asked for when the grab comes back from the click that made it, and again at
-  // the next click once the browser has let it go (esc). a finger has no lock: its moves go
+  // and firefox one still being handled: it is asked for when the grab comes back from the
+  // click that made it (chromium), at that click's release (firefox), and at the next press
+  // once the browser has let it go (esc). a finger has no lock: its moves go
   // as they are, and the kernel steps the grabbed pointer by them
   let grabbed = false;
   const locked = () => document.pointerLockElement === canvas;
-  const lock = () => { try { canvas.requestPointerLock()?.catch?.(() => {}); } catch {} };
+  const lock = () => {
+    if (held !== null) try { canvas.releasePointerCapture(held); } catch {}
+    try { canvas.requestPointerLock()?.catch?.(() => {}); } catch {} };
+  document.addEventListener('pointerlockerror', () => console.info('the pointer lock was refused'));
   const hold = on => {
     grabbed = !!on;
     if (grabbed && !locked()) lock();
@@ -588,7 +592,9 @@ export async function loveMachine(root) {
     (e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true });
     canvas.setPointerCapture?.(e.pointerId), held = e.pointerId;
     send(0, button(e.button), e); });
-  canvas.addEventListener('pointerup', e => { released = performance.now(), held = null; send(1, button(e.button), e); });
+  canvas.addEventListener('pointerup', e => {
+    if (grabbed && !locked() && e.pointerType === 'mouse') lock();
+    released = performance.now(), held = null; send(1, button(e.button), e); });
   // a release the window never saw (it lost the focus mid-drag, or moved between screens)
   // leaves the pointer held by the canvas: the window's blur gives it back
   window.addEventListener('blur', () => {
