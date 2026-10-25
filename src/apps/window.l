@@ -1,6 +1,7 @@
 ; src/apps/window.l -- a window: pixels out, input events in, the same face on X and on inle.
 ;
 ;   (window-here? _)          whether there is a screen to open one on
+;   (window-whole? _)         whether a window there is the whole screen (inle)
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
 ;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
@@ -28,7 +29,7 @@
 ; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
-(module '(window window-here? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
+(module '(window window-here? window-whole? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
           window-own window-ask window-typing window-wets)
 (borrow 'xwire)
 (borrow 'posix)
@@ -142,6 +143,7 @@
        (go more))
 
    (window-here? _) (inle? 0 || 0 < #(getenv "DISPLAY") || string? (getenv "LOVE_FACE"))
+   (window-whole? _) (inle? 0)
    (window-open w h title) (? (inle? 0) (inle-open-win ())
                               (string? (getenv "LOVE_FACE")) (droid-open-win ())
                               (x-open-win w h title))
