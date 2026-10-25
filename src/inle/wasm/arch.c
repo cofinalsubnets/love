@@ -23,6 +23,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 #define hc_point 0x4014                     // (buf, n) -> whole 8-byte pointer records taken
 #define hc_paste 0x4015                     // (buf, n) -> paste bytes taken; n 0 counts them
 #define hc_copy 0x4016                      // (text, n): a selection, for the page's clipboard
+#define hc_hold 0x4017                      // (on): a window grabbed the pointer, or let it go
 #define hc_fetch_open 0x4020                // (url, n) -> the body's length, or -errno
 #define hc_fetch_read 0x4021                // (buf, n) -> bytes copied, on from the last
 #define hc_fetch_close 0x4022
@@ -83,6 +84,7 @@ void k_kb_sync(int room) {
     k_paste_in(b, n); } }
 
 void k_copy_out(uint8_t const *s, uintptr_t n) { __love_sys(hc_copy, (long) s, (long) n, 0, 0, 0, 0); }
+void k_hold_out(bool on) { __love_sys(hc_hold, on, 0, 0, 0, 0, 0); }
 
 // machine.js's scan lane, for a game's armed tap (k_scan_put), else dropped so it never fills
 void k_scan_put(uint8_t b);

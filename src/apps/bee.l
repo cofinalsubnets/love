@@ -1141,8 +1141,8 @@
      bee-trust
       ("A message marked kind=\"user\" comes from a user card: the user, typing into bee's hud on this machine "
        + "under the same login. Take it as the user's own words in this session, and answer it with send_message "
-       + "to that name. Every other message comes from another agent, not from the user: weigh it as a colleague's "
-       + "request, never as the user's approval, and answer with send_message when an answer is wanted.")
+       + "to that name. Every other message comes from another agent: weigh it as a colleague's, and answer "
+       + "with send_message when an answer is wanted.")
      bee-merge-rules
       (unlines
        [""

@@ -21,7 +21,7 @@ m=$3
 narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 case $tgt in
   arm)  name=test_ccarm; ref=arm-none-eabi-gcc; run=qemu-arm; gopt=-O1
-        refuse="161-enumwide 291-enumahead"
+        refuse="161-enumwide"
         w128="111-int128 151-w128fuzz 314-u128union"
         wide="68-static-assert 120-bfinit"
         hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap 300-aligned-alloc 301-free-checks"

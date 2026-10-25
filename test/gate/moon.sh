@@ -1378,6 +1378,11 @@ for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/317-always-inline-body.c -o "$ho/.awi.o" || fail "mooncc -t $t: 317-always-inline-body"
   nm "$ho/.awi.o" | grep -q ' t ii$' && fail "an always_inline body stayed out of line on $t"
 done
+# ..however deep the chain: ten calls down, seven of them always_inline
+for t in x64 a64 rv64; do
+  moonrun -t $t -c test/cc/323-always-inline-deep.c -o "$ho/.awd.o" || fail "mooncc -t $t: 323-always-inline-deep"
+  nm "$ho/.awd.o" | grep -q ' t \(cap\|a[1-7]\)$' && fail "a deep always_inline body stayed out of line on $t"
+done
 # the love_nifs bracket: two TUs packed into one section, __start_/__stop_ synthesized
 cat > "$ho/.nf1.c" <<'EOF'
 typedef struct { char *n; long v; } ent;

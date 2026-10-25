@@ -267,10 +267,12 @@
                   drain-keys (),
                   ttygive rove-modes,
                   0)
- ; ..or the window its words asked for, 640 by 400 and given back after; walk takes o with
- ; 'win the window, and done answers what to say to the terminal once it is down
+ ; ..or the window its words asked for, or unasked where a window is the whole screen, 640
+ ; by 400 and given back after; walk takes o with 'win the window, and done answers what to
+ ; say to the terminal once it is down
  (view-stage o walk done)
-  (? (o 'md != 'window) (view-run (_ \ walk o), done (), 0)
+  (? (o 'md = () && window-whole? ()) (view-stage (pin o 'md 'window) walk done)
+     (o 'md != 'window) (view-run (_ \ walk o), done (), 0)
      (window-open 640 400 "lore" @ win
         (? !(tablet? win) (say err ("lore: no window (" + show win + ")\n"), flush err, 1)
            (mind (_ \ walk (pin o 'win win)) () (_ \ window-close win), 0))))

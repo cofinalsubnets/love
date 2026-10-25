@@ -787,6 +787,11 @@
       ; the report site is the furthest token the parse reached, not the failing form's first
       (cparse <>(clex "int ok(void) { return 1; }\nint bad(void)\n{\n  int x = 1;\n  x = x + ;\n  return x;\n}\n") @ g
        (gripe? g && (gline g = 5)))
+      ; a refusal that knows its cause names it, at the token it stood on
+      (cparse <>(clex "int f(int a)\n{\n  x: a++;\n  x: a--;\n  return a;\n}\n") @ g
+       (gripe? g && (gline g = 4) && (g 4 = "duplicate label 'x'")))
+      (cparse <>(clex "int f(int a)\n{\n  switch (a) {\n  case 5 ... 2: return 1;\n  }\n  return 0;\n}\n") @ g
+       (gripe? g && (gline g = 4) && (g 4 = "an empty case range")))
       ; adjacent string literals join across an include boundary; the file marks stay invisible
       (<>(pgi "char *s = \"a\"\n#include \"h.h\"\n\"c\";\n" "\"b\"\n") =
          '(prog ((gdecl (("s" (ptr char) (str "abc")))))))
