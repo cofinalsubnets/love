@@ -47,13 +47,15 @@ static struct {
 // kb_int decodes into q/qh/qt; g the modifiers; raw arms the scancode tap r/rh/rt. peer and
 // snap ask for history scroll. a paste streams through q (pasting, pbr, pprev); a press anchors
 // a selection (anchor, tp, clicks; at the cell). a window holding the paper (hold) takes the
-// pointer on pq/pqh/pqt and hears the paper's size (sw, sh)
+// pointer on pq/pqh/pqt and hears the paper's size (sw, sh); grabbed, it hears a pointer of
+// its own (vx, vy) that the real one's steps move, from its last place (lx, ly; lon once known)
 static struct { uint8_t g, q[64], qh, qt; uint16_t lost;
                 uint8_t raw, r[64], rh, rt;
                 int16_t peer; uint8_t snap;          // shift+pgup/pgdn asks, a key snaps back
                 uint8_t pasting, pbr, pprev, clicks;
                 intptr_t anchor; uint64_t tp; uint32_t at;
-                uint8_t hold, pqh, pqt; uint16_t pq[16][4], sw, sh; } kkb;
+                uint8_t hold, pqh, pqt; uint16_t pq[16][4], sw, sh;
+                uint8_t grab, lon; uint16_t vx, vy, lx, ly; } kkb;
 // k_uart feeds the same queue; an interrupt cannot wait, so a drop is counted, saturating
 void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 63;
@@ -145,18 +147,40 @@ void k_paste_end(void) {
 
 // to a seat's clipboard; metal has none
 __attribute__((weak)) void k_copy_out(uint8_t const *s, uintptr_t n) { (void) s, (void) n; }
+// a seat that can hide and lock its pointer is told when a window grabs it
+__attribute__((weak)) void k_hold_out(bool on) { (void) on; }
 
-// how 0 press, 1 release, 2 move; b the button (0 1 2, 64 65 the wheel, 3 none) | 4 shift
-// 8 meta 16 ctrl. a window holding the paper takes it whole; else the console cell under it,
+// a grabbed pointer's own place, kept on the paper: a motion (how 3, x y signed) steps it,
+// as does a move by the real pointer's step from its last place, which a motion forgets;
+// a press or a release is where it is
+static uint16_t k_aimed(uint32_t v, int32_t d, uint32_t n) {
+  int32_t const a = (int32_t) v + d;
+  return (uint16_t) (a < 0 ? 0 : a >= (int32_t) n ? (int32_t) n - 1 : a); }
+static void k_aim(uint32_t *how, uint32_t *y, uint32_t *x) {
+  int32_t dx = 0, dy = 0;
+  if (*how == 3) dx = (int16_t) *x, dy = (int16_t) *y, kkb.lon = 0, *how = 2;
+  else if (*how == 2) {
+    if (kkb.lon) dx = (int32_t) *x - kkb.lx, dy = (int32_t) *y - kkb.ly;
+    kkb.lx = (uint16_t) *x, kkb.ly = (uint16_t) *y, kkb.lon = 1; }
+  kkb.vx = k_aimed(kkb.vx, dx, kfb.width), kkb.vy = k_aimed(kkb.vy, dy, kfb.height);
+  *x = kkb.vx, *y = kkb.vy; }
+
+// how 0 press, 1 release, 2 move, 3 a motion; b the button (0 1 2, 64 65 the wheel, 3 none) | 4
+// shift 8 meta 16 ctrl. a window holding the paper takes it whole, a move over the last one
+// unread; else the console cell under it,
 // a move once a cell: the mouse report if asked (cb_mouse), else (or with shift) the left
 // button selects (a second, third quick press the word, the line), the wheel scrolls
 void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
   if (kkb.hold) {
+    if (kkb.grab) k_aim(&how, &y, &x);
+    if (how > 2) return;
+    uint16_t *const l = kkb.pq[(kkb.pqt - 1) & 15];
+    if (how == 2 && kkb.pqh != kkb.pqt && l[0] == 2 && l[1] == b) { l[2] = (uint16_t) x, l[3] = (uint16_t) y; return; }
     uint8_t const n = (kkb.pqt + 1) & 15;
     uint16_t *const p = kkb.pq[kkb.pqt];
     if (n != kkb.pqh) p[0] = (uint16_t) how, p[1] = (uint16_t) b, p[2] = (uint16_t) x, p[3] = (uint16_t) y, kkb.pqt = n;
     return; }
-  if (!kcb || !kfb.scale) return;
+  if (!kcb || !kfb.scale || how > 2) return;
   uint32_t const row = y / (kface.h * kfb.scale), col = x / (kface.w * kfb.scale), at = row << 16 | col;
   if (how == 2 && at == kkb.at) return;
   kkb.at = at;
@@ -1936,6 +1960,7 @@ static struct g *k_charms(struct g *g, intptr_t const *v, int n) {
 // (kpaper 1) holds it and arms the taps -> (w h), () with no paper; (kpaper 0) gives it back
 love_noinline static struct g *k_paper(struct g *g) {
   if (!(charmp(g->sp[0]) && getcharm(g->sp[0]))) {
+    if (kkb.grab) kkb.grab = 0, k_hold_out(false);
     if (kkb.hold) kkb.hold = 0, k_scan_arm(0), fbwash();
     return g->sp[0] = ZeroPoint, g; }
   if (!kfb._ || !kcb) return g->sp[0] = ZeroPoint, g;
@@ -1943,6 +1968,18 @@ love_noinline static struct g *k_paper(struct g *g) {
   kkb.sw = kfb.width, kkb.sh = kfb.height;
   intptr_t const v[2] = { kfb.width, kfb.height };
   return k_charms(g, v, 2); }
+// (kgrab 1) grabs the held paper's pointer, at its middle; (kgrab 0) lets it go; (kgrab (x y))
+// puts it there -> 1, 0 when the paper is not held
+love_noinline static struct g *k_grabev(struct g *g) {
+  word const a = g->sp[0];
+  if (!kkb.hold) return g->sp[0] = putcharm(0), g;
+  if (chainp(a) && charmp(A(a)) && chainp(B(a)) && charmp(A(B(a))))
+    kkb.vx = k_aimed(0, (int32_t) getcharm(A(a)), kfb.width), kkb.vy = k_aimed(0, (int32_t) getcharm(A(B(a))), kfb.height);
+  else {
+    bool const on = charmp(a) && getcharm(a);
+    if (on && !kkb.grab) kkb.vx = kfb.width / 2, kkb.vy = kfb.height / 2, kkb.lon = 0;
+    if (on != kkb.grab) kkb.grab = on, k_hold_out(on); }
+  return g->sp[0] = putcharm(1), g; }
 // (kshow cask y0 y1): rows y0..y1 of a screen-sized paper (32-bit pixels, as paint.c lays them)
 // -> the rows shown; 0 when the paper is not held or no longer fits
 love_noinline static struct g *k_show(struct g *g) {
@@ -1979,6 +2016,8 @@ static lvm(lvm_kpaper) {
   LvmCall(g, k_paper) }
 static lvm(lvm_kshow) {
   LvmCallp(g, 2, k_show) }
+static lvm(lvm_kgrab) {
+  LvmCall(g, k_grabev) }
 static lvm(lvm_kscan) {
   LvmCall(g, k_scanev) }
 
@@ -2043,7 +2082,8 @@ static union u
   nif_kpump[] = {{lvm_kpump}, {lvm_ret0}},
   nif_kpaper[] = {{lvm_kpaper}, {lvm_ret0}},
   nif_kshow[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kshow}, {lvm_ret0}},
-  nif_kscan[] = {{lvm_kscan}, {lvm_ret0}};
+  nif_kscan[] = {{lvm_kscan}, {lvm_ret0}},
+  nif_kgrab[] = {{lvm_kgrab}, {lvm_ret0}};
 
 // in address order and merged, whatever order the map gave
 static bool meminit(void) {
@@ -2124,7 +2164,8 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   // seat.l's kwin-events
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},
-  {"kscan", {.k = nif_kscan}} };
+  {"kscan", {.k = nif_kscan}},
+  {"kgrab", {.k = nif_kgrab}} };
 
 // the kore cat is read off the ramfs at boot: only the order is baked
 static char const src_korelist[] =
