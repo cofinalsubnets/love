@@ -9504,8 +9504,8 @@
                               (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
        (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
-                ; a body that compiles only spliced, or always_inline, reaches deeper
-                ((peep (g 'ineed) nm () || peep (g 'alw) nm () ? 8 3) < #d) ()
+                ; a body that compiles only spliced, or always_inline, splices at any depth
+                (!(peep (g 'ineed) nm () || peep (g 'alw) nm ()) && 3 < #d) ()
                 (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)

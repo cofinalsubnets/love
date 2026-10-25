@@ -374,6 +374,7 @@
                  pin t 'anames {},        ; a file-scope asm label: nm -> its symbol
                  pin t 'currstr (),               ; ..accumulating for the current declaration
                  pin t 'aligns {},        ; global name -> its aligned(N)
+                 pin t 'tdask {},         ; typedef name -> the aligned(N) its declarator asks
                  pin t 'pfes {},          ; fn name -> its patchable_function_entry (N M)
                  pin t 'locals {},        ; local/param name -> its declared type
                  pin t 'globals {},       ; file-scope name -> ty
@@ -1027,7 +1028,7 @@
                  (tkv t = "_Alignas") (go (qskip l) sawty (max a (alignat? ps l @ n (n ? n 0))))
                  (elem (tkv t) qualid) (go (qskip l) sawty a)
                  sawty a
-                 (go >l 1 a))))
+                 (go >l 1 (max a (peep (ps 'tdask) (tkv t) 0))))))   ; a typedef name brings its ask
        (go ts () 0))
    ; a qualifier after the last star qualifies the pointer (`int * const`): a row no
    ; lvalue-converted expression matches
@@ -2157,6 +2158,8 @@
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
              _ (bq ? (pin (ps 'qtdef) nm bq) 0)
+             ; `typedef T n __aligned(N)`: n's declarations ask N, its size unchanged
+             _ (pattpk ps <>dr 2 @ a (0 < a || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm a) 0))
              sh2 (['types nm old] . sh)
              af (patt <>dr)                ; glibc's trailing __attribute__
              (? (peekp af ",") (btdefs ps base >af sh2 bq)
@@ -2479,6 +2482,7 @@
      (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
      (peep ps 'curalign () ? ()
         (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
+     (peep ps 'curtdal () ? () (specask ps ts @ ta (0 < ta ? (pin ps 'curtdal ta)))),   ; a variable's typedef ask
      (two? (peep ps 'curpfe ()) ? ()
         (hwin hw "patchable_function_entry" "__patchable_function_entry__" ? (pfeat? ts @ pf (two? pf ? (pin ps 'curpfe pf))))),
      (hwin hw "no_stack_protector" "__no_stack_protector__" ? (pin ps 'curssp 'no)),
@@ -2681,7 +2685,7 @@
                                      qtake ps nm <><prs,
                                      gogl >prs)))
                    (gogl <>f)))
-           st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign)
+           st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign) va (max (an ? an 0) (peep ps 'curtdal 0))
            fnp (elem <f '(fn proto))
            ; a `used` static is kept though nothing here calls it (gen's dead-static sweep)
            (st && fnp ? (pin (ps 'sfns) <>f (ps 'curused || peep (ps 'sfns) <>f () = 'used ? 'used 1)),
@@ -2689,12 +2693,12 @@
             sc && fnp ? (pin (ps 'sects) <>f sc),
             an && fnp ? (pin (ps 'aligns) <>f an),
             (ps 'curpfe @ pf (two? pf && fnp ? (pin (ps 'pfes) <>f pf))),
-            <f = 'gdecl && (st || sc || an) ?
+            <f = 'gdecl && (st || sc || 0 < va) ?
               (: (go2 prs) (atom? prs ? 1
                               (<<prs @ nm
                                  (st ? (pin (ps 'svars) nm 1),
                                   sc ? (pin (ps 'sects) nm sc),
-                                  an ? (pin (ps 'aligns) nm an),
+                                  0 < va ? (pin (ps 'aligns) nm va),
                                   go2 >prs)))
                  (go2 <>f)),
            ; an alias names no storage: another name for a symbol in this TU; cgen lays the label
@@ -2731,6 +2735,7 @@
             pin ps 'curnoinl (),
             pin ps 'curused (),
             pin ps 'curalign (),
+            pin ps 'curtdal (),
             pin ps 'curpfe (),
             pin ps 'curssp (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
