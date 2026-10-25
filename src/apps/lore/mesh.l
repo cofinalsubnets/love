@@ -131,9 +131,8 @@
  (mesh-lamps pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
- ; ..the same into one buffer the packed mesh keeps, only colours rewritten: each call
- ; overwrites the last answer, so once a frame. amb, chs and gain are the first call's, and
- ; after it only the vertices a lamp reaches change, only when ks does
+ ; ..the same kept on the packed mesh, only colours rewritten: amb, chs and gain are the
+ ; first call's, and after it only the vertices a lamp reaches change, only when ks does
  (mesh-lamps! pk amb chs ks gain)
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
@@ -145,7 +144,8 @@
            _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (ch \ map g ch) chs)})
            [v (pk 'tris)])
       ; ..and nothing written while the lamps stand where they stood
-      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b (: _ (pin lv 'ks ks) (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs)))))
+      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b
+                           (: _ (pin lv 'ks ks) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
                           (pk 'tris)])))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
@@ -227,13 +227,14 @@
  ; directions n a face, fixed to the sky and drawn through the eye, so no turn or tilt moves
  ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn.
  ; with sm a tablet, each ask kept there and asked again a frame in sky-turn, or once
- ; sky-age of sim old; all of them again for a new grid, weather, or a jump of the eye
+ ; sky-age of sim old; all of them again for a new grid, weather or light, or once the eye
+ ; moves, so no two asks side by side are of different moments
  sky-turn 4 sky-age 1.0
- (sky-keep sm n mm e wx sim) (: q (peep sm 'e e) dx (e 0 - q 0) dz (e 2 - q 2) ds (sim - peep sm 'sim sim)
-   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && dx * dx + dz * dz < 2500.0 && ds * ds < 3600.0)
+ (sky-keep sm n mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
+   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && all (k \ e k = q k) ^3 && l 0 = lt 'sun && l 1 = lt 'expo && ds * ds < 3600.0)
    z (iota (6 * mm) * 0.0)
    _ (? !ok (pins sm 'n n 'wx wx 'r z 'g z 'b z 'at (z - 1e9) 'k 0))
-   (pins sm 'e e 'sim sim 'k (sm 'k + 1)))
+   (pins sm 'e e 'lt [(lt 'sun) (lt 'expo)] 'sim sim 'k (sm 'k + 1)))
  (sky-grid v lt wx e sim k f sm)
   (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (m * m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
@@ -258,7 +259,7 @@
      ; ..each ask's clouds no finer than the asks beside it; kept ones as they were
      (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
      c (? (!(tablet? sm)) (ask N d)
-          (: _ (sky-keep sm n mm e wx sim)
+          (: _ (sky-keep sm n mm e lt wx sim)
              A (iota (((N + sm 'k) % sky-turn = 0) + (sim - peep (sm 'at) N 0.0 > sky-age) > 0)) NA (peep N A 0)
              cA (#A = 0 ? () (ask NA (dir NA)))
              _ (#A = 0 ? () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))

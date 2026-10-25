@@ -4,8 +4,10 @@
 ; once a run; stars are points a scene lays a pixel each.
 ; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
 ; weather (sky-weather cover style): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
-; 'smog 0 (default) to 1, the smooth sky and its light browned toward orange
-(module (sky sky-sun sky-body sky-light sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-near sky-tone
+; 'smog 0 (default) to 1, the smooth sky and its light browned toward orange. a light with
+; 'turn, the eye's axes in the world's, has the smooth sky's clouds fixed in the world, far
+; off as the stars, not a deck over the eye: sky-lit's csun then sky-orb-cloud's
+(module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-near sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-styles sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow 'view)
 (borrow 'vec)
@@ -111,6 +113,17 @@
  (clouded wx c) (wx 'cover = 3 ? (max c 0.93) c)
  (sky-cloud wx dx dy dz ex ez sim) (: mp (sky-maps ()) d (deck-at dx dy dz ex ez sim)
    (clouded wx (haze (thick-at wx mp d sim 10.0) dy wx sim)))
+ ; ..clouds fixed in the world down world rays W: the map laid on each axis's plane, as many
+ ; tiles a radian as the deck overhead, the far half of each turned off it, and blended so
+ ; each holds only near its own axis -- no seam anywhere
+ orb-k (deck / tile)
+ (orb-thick wx mp W sim f fp) (: (wt k) (sq (sq (sq (W k)))) ws (wt 0 + wt 1 + wt 2)
+   (face k) (: a (W ((k + 1) % 3)) b (W ((k + 2) % 3)) o (37.0 * (W k < 0.0) + 11.0 * k)
+     (wt k * thick-fp wx mp (a * orb-k + o) (b * orb-k - o) sim f fp))
+   ((face 0 + face 1 + face 2) / ws))
+ ; ..and the cloud over the sun, world way s, a soft edge
+ (sky-orb-cloud wx s sim) (: mp (sky-maps ()) W (map (k \ gem-tray [1] [(1.0 * s k)]) ^3)
+   (peep (clouded wx (sat (0.5 + (orb-thick wx mp W sim 0.3 1.0 - edge wx sim 0.3) * 3.0))) 0 0.0))
  ; the cloud over the sun as the light under it feels it: rays over a patch round it, each
  ; with a soft edge, so a passing cloud thins the light and gives it back over a while --
  ; low down, where one ray sweeps the deck fast, most of all
@@ -128,9 +141,10 @@
  (smoggy wx c) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
    t (cmix [1.35 0.52 0.16] [2.0 1.0 0.24] (sat (1.6 * l)))
    (k = 0.0 ? c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] k)))
- (sky-light s wx sim) (: sy (s 1)
+ (sky-light s wx sim) (sky-lit s wx sim (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim)))
+ ; ..its cloud over the sun given, csun 0 to 1
+ (sky-lit s wx sim csun) (: sy (s 1)
    oc (sky-cover wx sim)
-   csun (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim))
    day (sat ((sy + 0.06) / 0.3))
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
@@ -156,7 +170,9 @@
    disc (sat ((mu - 0.9995) * 4000.0))
    halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
    sky0 (c+ (c+ (cmix dark blue (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
-   d (deck-at dx dy dz ex ez sim) fp (deck-fp a dy) th (thick-fp wx mp (d 0) (d 1) sim 0.3 fp)
+   B (peep lt 'turn ()) fp (two? B ? (a * orb-k) (deck-fp a dy))
+   th (? (two? B) (orb-thick wx mp (map (j \ dx * B 0 j + dy * B 1 j + dz * B 2 j) ^3) sim 0.3 fp)
+         (: d (deck-at dx dy dz ex ez sim) (thick-fp wx mp (d 0) (d 1) sim 0.3 fp)))
    ; ..the edge as wide as that spread: the share of the sample past it, not a fringe
    cl0 (haze (sat (0.5 + (th - edge wx sim 0.3) / sqrt (0.01 + 2.0 * sq (thick-sd 0.3 fp)))) dy wx sim)
    cl (clouded wx cl0)                          ; overcast: no sky through it

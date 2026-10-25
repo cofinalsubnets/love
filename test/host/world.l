@@ -721,6 +721,29 @@
        (all (th \ two? (cut th) && !(any (k \ elem k far) (cut th))) [0.0 1.6 3.2 4.7]) (all same [0.0 1.6 3.2 4.7])
        (cells-seen csc (mesh-eye 40 24 [1.0 1.6 10.0] 0.0 0.0 0.0 1.5 0.05 60.0) [1.0 1.6 10.0] = ())
        (map (c \ map (w \ w 0) (c 'ways)) (cwr 'sc 'cells 'cells) = [[1] [0]])))
+; a door opened by hand: shut however near one stands, open once tapped looking at it, shut
+; again at the next; one into a dark room swung out of it whoever opens it, and shut by a tap
+; on its leaf where it stands; a dark room lit by its lamps alone, none of the ambient
+(: hdl (lv "(room [0 0 0] [2 2 2]) (room [0 0 2.2] [2 2 4]) (by-hand (door [1 0 2.1] 0.9 2)) (start [1 0 1.4] 0 0)")
+   hds (world-new 8 8 hdl "") (idle st n) (each ^n (_ \ world-move st))
+   _ (idle hds 30) d0 (hds 'doors 0) _ (steps hds 101 1) _ (idle hds 30) d1 (hds 'doors 0) _ (pin hds 'th -0.435) _ (steps hds 101 1) _ (idle hds 30) d2 (hds 'doors 0)
+   hdk (lv "(room [0 0 0] [2 2 2]) (dark (room [0 0 2.2] [2 2 4])) (by-hand (door [1 0 2.1] 0.9 2)) (start [1 0 1.4] 0 0)")
+   hks (world-new 8 8 hdk "") _ (steps hks 101 1) _ (idle hks 30) k1 (hks 'doors 0) kw (peep (hks 'swing) 0 ())
+   _ (pins hks 'px 1.4 'pz 1.66 'th (1.5 * pi) 'ph -0.3) _ (steps hks 101 1) _ (idle hks 30) k2 (hks 'doors 0)
+   dkl (lv "(ambient (rgb 1 1 1)) (dark (room [0 0 0] [2 2 2])) (room [10 0 0] [12 2 2]) (start [1 0 1] 0 0)")
+   (glow x) (: st (pins (world-new 16 10 dkl "") 'px x 'pz 1.0) f (world-pens st) (foldl (\ a i (a + lum (peep f i 0))) 0 ^(16 * 10)))
+ (test (hdl 'doors 0 'hand = 1) (d0 = 0.0) (d1 = 1.0) (d2 = 0.0) (hdk 'doors 0 'out = -1.0) (k1 = 1.0) (kw = -1.0) (k2 = 0.0) (dkl 'darks = [[[0.0 0.0 0.0] [2.0 2.0 2.0]]])
+       (glow 1.0 * 4 < glow 11.0) (has? (lv "(dark (street [0 0 0] [2 2 2]))") "(dark (room ..))")))
 
+; a tree climbed out of a well as a ladder: forward facing its trunk climbs it, held there
+; with no key, back comes down, and a walk away from it at the top steps off onto the ground
+(: twl (lv "(room [-9 0 -9] [9 4 9]) (street [-12 4.5 -12] [12 12 12]) (street [-1 3.95 -1] [1 4.55 1]) (solid (box [-0.9 0 -0.9] [0.9 0.6 0.9])) (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4))))) (start [6 0 0] 0 0)")
+   tst (world-new 8 8 twl "") (tgo a n) (each ^n (_ \ (? (a != ()) (world-step tst a), pin tst 'dt (1.0 / 30.0), world-move tst)))
+   (tfl _) (tst 'py - eye-h)
+   _ (pins tst 'px 0.8 'pz 0.0 'py (0.6 + eye-h) 'th (1.5 * pi)) _ (tgo () 5) t0 (tfl 0)
+   _ (tgo 'forward 90) t1 (tfl 0) _ (tgo () 30) t2 (tfl 0) _ (tgo 'back 15) t3 (tfl 0) _ (tgo 'forward 30) t4 (tfl 0)
+   _ (pin tst 'th (0.5 * pi)) _ (tgo 'forward 30) t5 (tfl 0))
+ (test (#(twl 'trees) = 1) (0.59 < t0 < 0.61) (t1 > 4.6) (t2 = t1) (t3 < t2 - 0.5) (t4 > 4.6) (4.45 < t5 < 4.55) (tst 'px > 1.0)
+       (has? (lv "(tree [0 0 0] 'x (texture 8 8 1 '((fill (grey 0.4)))))") "(tree [x y z] seed TEXTURE)"))
 (test_fin ())
 (puts "world: ok\n")
