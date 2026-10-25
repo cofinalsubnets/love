@@ -294,20 +294,17 @@
             ()))))))
  ; ..the loading screen a level has unless it says another: the box black, and in its middle
  ; the moon going through its phases, a month in view-spin-n draws, new to full lit from the
- ; right; in a terminal its eight faces, two cells wide
- view-spin-bg 0 view-spin-lit 0xe8e4d6 view-spin-dark 0x24272c view-spin-n 24
+ ; right, drawn as pom draws it naturally; in a terminal its eight faces, two cells wide
+ view-spin-bg 0 view-spin-n 24
  view-spin-cells ["\u{1f311}" "\u{1f312}" "\u{1f313}" "\u{1f314}" "\u{1f315}" "\u{1f316}" "\u{1f317}" "\u{1f318}"]
  (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
    (? !(tablet? win) (esc + "[" + show ((b 1 + b 3) // 2 + 1) + ";" + show ((b 0 + b 2) // 2) + "H" + esc + "[0;37;40m"
             + view-spin-cells (n * 8 // view-spin-n % 8) + esc + "[0m")
-      ; ..a fifth of the box across, drawn at most 96 pixels and blown up past that
-      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 95) // 96)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
+      ; ..a fifth of the box across, drawn at most 64 pixels and blown up past that
+      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 63) // 64)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
          x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
          I (iota (S * S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
-         ; ..the terminator an ellipse across the disc: waxing, lit right of it; waning, left
-         ph (2.0 * pi * (n % view-spin-n) / view-spin-n) c (cos ph) w (sqrt (max (1.0 - y * y) 0.0))
-         in (x * x + y * y < 1.0) lit (ph < pi ? (x > w * c) (x < (0.0 - w) * c))
-         f (bg + in * (view-spin-dark - bg) + in * lit * (view-spin-lit - view-spin-dark)) T (cask (A * A * 4))
+         in (x * x + y * y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (A * A * 4))
          Z (cask (4 * bw))
          _ (n = 0 ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
          (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))

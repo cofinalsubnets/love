@@ -77,9 +77,9 @@
 ; the light: a failing strip mostly on; the door's lamps red while shut, green once open
 (: st (at 80 48) f (world-pens st) sc (st 'sc)
    up (world-pens (pins (at 80 48) 'ph 1.2 'pz 5.0))
-   ks (map (t \ world-ks sc (t / 10.0) [0.0]) ^600)
+   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0) ^600)
    bad (map (k \ k 2) ks)
-   open (world-ks sc 0.0 [1.0])
+   open (world-ks sc 0.0 [1.0] 0.0)
    east (world-pens (pins (at 80 48) 'th (pi / 2.0) 'pz 7.0 'px -0.6))
    (pink? c) ((c >> 16 & 255) > (c >> 8 & 255) + 40 && (c & 255) > (c >> 8 & 255))
    n #(sc 'lights)
@@ -768,6 +768,25 @@
    dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
+; creaking and lets the body by. a headstone tapped kneels the body before it, its name and
+; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving
+; stands it again
+(: yi "(texture 8 8 1 '((fill 0.1)))"
+   yl (lv ("(void [0 -1 0] [10 4 10]) (solid (box [0 -1 0] [10 0 10])) (fence [[5 0 6] [5 0 9.5]] 1 " + yi + ") (fence [[5 0 0.5] [5 0 4]] 1 " + yi
+           + ") (gate [5 0 6] [5 0 4] 1 90 " + yi + ") (grave [2 0 5] 90 \"Yuki\" " + yi + ") (start [7 0 5] 270 0)"))
+   ys (world-new 80 48 yl "") (ygo a n) (each ^n (_ \ (? (a != ()) (world-step ys a), pin ys 'dt (1.0 / 30.0), world-move ys)))
+   _ (ygo 'forward 60) y0 (ys 'px) _ (pin ys 'pz 8.0) _ (ygo 'forward 30) y1 (ys 'px) _ (pins ys 'px 7.0 'pz 5.0)
+   _ (ygo 'forward 60) _ (pin ys 'ph -1.0) _ (world-step ys 'tap) yc (map (q \ q 0) (peep ys 'sfx ())) _ (pin ys 'ph 0.0)
+   _ (ygo () 60) yg (ys 'gates 0 'g) _ (ygo 'forward 60) y2 (ys 'px)
+   _ (pin ys 'ph -1.2) _ (world-step ys 'tap) k0 (peep ys 'eye ()) _ (ygo () 150)
+   k1 [(ys 'eye) (peep ys 'dlg ()) (ys 'py)] fr (world-frame ys)
+   _ (world-step ys 'weep) _ (ygo () 30) k2 [(ys 'eye) (peep ys 'dlg ())] _ (ygo () 45) kt (#(peep ys 'drops ()) + #(peep ys 'splats ())) _ (ygo () 285) k3 (peep ys 'dlg ())
+   _ (world-step ys 'leave) _ (ygo () 75) k4 [(ys 'eye) (ys 'py) (ys 'px)] _ (ygo 'back 20) k5 (ys 'px)
+ (test (y0 > 5.3) (y1 > 5.3) (elem "creak" yc) (yg = 1.0) (y2 < 4.0)
+       (k0 = 'move) (k1 0 = 'kneel) (k1 1 = 0) (mag (k1 2 - 1.12) < 0.05) (has? fr "Yuki") (has? fr "1  weep") (has? fr "2  leave")
+       (k2 0 = 'move) (k2 1 = ()) (kt > 0) (k3 = 0) (k4 0 = 'walk) (mag (k4 1 - eye-h) < 0.05) (k5 > k4 2 + 0.3)
+       (has? (lv ("(grave [0 0 0] 0 'x " + yi + ")")) "(grave [x y z] bearing NAME TEXTURE)")))
 ; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))

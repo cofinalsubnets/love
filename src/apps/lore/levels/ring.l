@@ -1,9 +1,9 @@
 ; `love play src/apps/lore/levels/ring.l`: a world laid round a ring's tube, walked all the
 ; way round either way. x runs round the ring and z round the tube, its outside halfway; a
 ; row of posts down the outside, a ring of them round the tube, a river winding
-; round it, and a cairn. under the grass, round a smaller tube inside it, a maze of yellow
+; round it, and a little graveyard. under the grass, round a smaller tube inside it, a maze of yellow
 ; rooms the whole way round: the walk begins in a dark closet off one of them, and in a white
-; hall by the cairn a tree grows up through a well to the grass, climbed to get out. over it
+; hall by the graveyard a tree grows up through a well to the grass, climbed to get out. over it
 ; all a pink orb hangs in the ring's middle, a lift up to it from the tube's inside, and in
 ; it a shipping container where the hall's stereo is heard too
 (borrow 'scenery)
@@ -16,13 +16,12 @@
 (: gis [1 2 3] gjs [6 7 8] gh 4.0)     ; the hall's rooms, clear of the river, and its height
 (: sx 90.0 hub ((lx - lz) / tau))      ; the lift's shaft up off the tube's inside, and how high the ring's middle is over it
 
-; the textures: grass, stone, the cairn's red stone and the river's water; below, the rooms'
+; the textures: grass, stone and the river's water; below, the rooms'
 ; wallpaper, carpet and ceiling tiles, and the well's concrete
 (: grass (feel 'soft (texture 64 64 2
           '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
             (patches 5 0.12 (rgb 0.5 0.66 0.26))))))
 (: stone (feel 'hard (texture 32 32 1.2 '((fill (grey 0.55)) (noise 2 0.15) (patches 4 0.2 (shade 0.8))))))
-(: red (feel 'hard (texture 32 32 1.2 '((fill (rgb 0.62 0.24 0.18)) (noise 2 0.15) (patches 4 0.2 (shade 0.8))))))
 (: water (texture 64 64 4
           '((fill (rgb 0.16 0.36 0.5)) (noise 24 4 0.18) (patches 8 0.15 (rgb 0.4 0.6 0.72)) (noise 1 0.06))))
 (: paper (texture 64 64 1.6
@@ -40,6 +39,8 @@
 ; ceiling; each asked of x a number or a tray of them
 (: (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (k * k * (3.0 - 2.0 * k))))
 (: (span v) (max v (0.0 - v)))
+; ..a die for a and b, 0 to 1
+(: (h01 a b) (: s (sin (a * 12.9898 + b * 78.233 + 0.5) * 43758.5453) (s - floor s)))
 (: (swell x z) (: a (tau * x / lx) b (tau * z / lz)
    (0.9 * (0.5 + 0.5 * sin (5.0 * a + 0.3)) * (0.5 + 0.5 * sin (3.0 * b + 1.1)) + 0.3 * sin (11.0 * a - 4.0 * b))))
 ; ..the river: wn times round the tube for once round the ring, 0 the tube's inside all
@@ -57,7 +58,7 @@
 (: gm 2.0 xs (map (i \ gm * i) ^(int (lx / gm) + 1)) zs (map (i \ gm * i) ^(int (lz / gm) + 1)) X (gem-tray [#xs] xs))
 (: (rows f) (map (z \ (: Y (f X z) (map (i \ [(xs i) (peep Y i 0.0) z]) ^#xs))) zs))
 
-; a post standing on the ground at x z, a cairn three stones high
+; a post standing on the ground at x z, and a plinth of grey stone, capped
 (: (post x z t) (: y (ground x z) (skin {'all t} (solid (box [(x - 0.2) (y - 0.5) (z - 0.2)] [(x + 0.2) (y + 1.8) (z + 0.2)])))))
 ; ..the river's water, a strip down its middle a metre a row, cut where it goes round the
 ; tube past lz so none straddles it, each piece a row over the cut to meet the next and laid
@@ -71,17 +72,34 @@
       (two? run && cut <l != cut <run) (go >l [<l] (rev (<l . run) . out))
       (go >l (<l . run) out))
    (map (piece \ (: o (lz * cut <piece) [(S (<piece 0)) (map (q \ map (p \ p = () ? () [(p 0) (p 1) (p 2 - o)]) (q 1)) piece)])) (go rows () ()))))
-(: (cairn x z) (: y (ground x z)
-   (map (k \ (: a (0.9 - 0.25 * k) y0 (y - 0.2 + 0.6 * k) (skin {'all red} (solid (box [(x - a) y0 (z - a)] [(x + a) (y0 + 0.6) (z + a)])))))
-        ^3)))
+(: (plinth x z) (: y (ground x z)
+   [(skin {'all stone} (solid (box [(x - 0.4) (y - 0.2) (z - 0.4)] [(x + 0.4) (y + 0.7) (z + 0.4)])))
+    (skin {'all stone} (solid (box [(x - 0.46) (y + 0.7) (z - 0.46)] [(x + 0.46) (y + 0.78) (z + 0.46)])))]))
+; ..the graveyard: a low iron fence on a square, its gate toward the well swinging in, a path
+; from it to the plinth at the far end, and ten small headstones in rows either side of the
+; path facing the gate, as a cemetery's do, the last row not yet full; each its name
+(: iron (feel 'metal (texture 32 32 0.3 '((fill (grey 0.07)) (noise 1 0.1) (patches 4 0.2 (rgb 0.2 0.1 0.06))))))
+(: granite (feel 'hard (texture 32 32 0.4 '((fill (grey 0.58)) (noise 1 0.12) (noise 4 0.08) (patches 5 0.25 (rgb 0.5 0.56 0.36))))))
+(: yx 6.0 yz (lz / 2) yh 4.0)           ; the yard's middle, and the fence's half side
+(: mourned ["Yuki" "Bella" "Light" "Salt" "Lauren" "Bette" "Ingrid" "Chestnut" "Lentil" "Chickpea"])
+(: (on-ground x z) [x (ground x z) z])
+; ..n points on the ground from a toward b, a the first
+(: (side a b n) (map (k \ (: s (k / (1.0 * n)) (on-ground (a 0 + s * (b 0 - a 0)) (a 1 + s * (b 1 - a 1))))) ^n))
+; ..the headstones' places, rows of four across the path and a last of two
+(: plots (: zs [(yz - 2.6) (yz - 1.4) (yz + 1.4) (yz + 2.6)]
+   (map (z \ [(yx - 1.0) z]) zs + map (z \ [(yx + 0.6) z]) zs + [[(yx + 2.2) (yz - 1.4)] [(yx + 2.2) (yz + 1.4)]])))
+(: yard (: e (yx + yh) w (yx - yh) no (yz + yh) so (yz - yh)
+   [(fence (side [e (yz + 0.5)] [e no] 2 + side [e no] [w no] 4 + side [w no] [w so] 4 + side [w so] [e so] 4
+            + side [e so] [e (yz - 0.5)] 2 + [(on-ground e (yz - 0.5))]) 1.0 iron)
+    (gate (on-ground e (yz + 0.47)) (on-ground e (yz - 0.47)) 1.0 95 iron)
+    (map (i \ (: q (plots i) (grave (on-ground (q 0) (q 1)) (90.0 + 5.0 * (h01 i 3 - 0.5)) (mourned i) granite))) ^10)]))
 
 ; the maze: nx by nz rooms the whole way round, wrapping as the world does, each carved out
 ; of the ground with the ground left standing between them for walls. a passage dug from the
 ; first room to every other, through a doorway, seldom the whole wall; and of the walls not
 ; dug a few with a doorway, so a way round now and then
-(: (h01 a b) (: s (sin (a * 12.9898 + b * 78.233 + 0.5) * 43758.5453) (s - floor s)))
 (: (cid i j) ((i + nx) % nx * nz + (j + nz) % nz))
-; ..the hall: three rooms by three by the cairn, one room, white and higher than the rest, its
+; ..the hall: three rooms by three by the graveyard, one room, white and higher than the rest, its
 ; floor in black and white squares, a doorway in the middle of each side. and the closet:
 ; a dark one off the end of a room across the ring, its door opened by hand, where the
 ; player wakes
@@ -133,12 +151,12 @@
    (? (hall? i j) (under? x ? () [(troffer (strip-light [(on x) gh z]))])
       (map (x \ unlit (troffer (strip-light [x mh z]))) [(on (x - 1.6)) (on (x + 1.6))]))))
 ; ..in the hall the tree in a mound of dirt, and a stereo against the north wall: a cabinet,
-; the amplifier on it, the tape deck on top, a tap on any of it playing the loop, a speaker
-; either side
+; the amplifier on it, its display lit while the loop plays, the tape deck on top, a tap on
+; any of it playing the loop, a speaker either side
 (: dirt (feel 'soft (texture 64 64 1.5 '((fill (rgb 0.34 0.25 0.17)) (noise 1 0.2) (noise 6 0.12) (patches 5 0.2 (shade 0.78))))))
 (: bark (feel 'wood (texture 32 64 0.5 '((fill (rgb 0.46 0.43 0.38)) (noise 1 0.08) (noise 2 14 0.18) (stripes 11 1 0 (shade 1.12))
           (cracks 8 24 1 5 (shade 0.82)) (patches 5 0.2 (shade 0.86))))))
-(: wood (feel 'wood (texture 64 64 0.8 '((fill (rgb 0.42 0.26 0.14)) (stripes 6 1 1 (shade 0.85)) (noise 2 0.12)))))
+(: wood (feel 'wood (texture 64 64 0.8 '((fill (rgb 0.42 0.26 0.14)) (stripes 8 1 1 (shade 0.85)) (noise 2 0.12)))))   ; its grain every 8, so it meets across the tile's edges
 (: ash (texture 32 32 0.6 '((fill (grey 0.1)) (noise 2 0.2))))
 (: alu (feel 'metal (texture 32 32 0.5 '((fill (grey 0.6)) (stripes 2 1 0 (shade 0.92))))))
 (: cone (texture 32 32 0.4 '((fill (grey 0.16)) (noise 1 0.3))))
@@ -184,8 +202,6 @@
     (rod m (at 0.2) 0.13 4 ash)
     (decal (at 0.202) u up 0.25 0.25 grille)
     (speaker (at 0.25))]))
-; ..and in the maze, here and there round the ring, one in a room's corner
-(: pas (map (q \ pa [(cx * q 0 + wt) mh (cz * q 1 + wt)] [1 1]) [[4 2] [11 10] [17 4] [24 11] [32 1] [38 8] [44 3] [48 10]]))
 (: (stereo x z) (: w 0.4
    ([(deck [(x - 0.9) 0 (z - 0.45)] [(x + 0.9) 0.86 z])
      (block [(x - 0.9) 0 (z - 0.45)] [(x + 0.9) 0.5 z] wood)
@@ -195,8 +211,32 @@
      (decal [x 0.79 (z - 0.381)] [0 0 -1] [0 1 0] 0.78 0.13 tapeface)
      (rod [(x + 0.25) 0.63 (z - 0.38)] [(x + 0.25) 0.63 (z - 0.4)] 0.025 8 alu)
      (rod [(x + 0.32) 0.63 (z - 0.38)] [(x + 0.32) 0.63 (z - 0.4)] 0.018 8 alu)
-     (ad [(x - 0.15) 0.565 (z - 0.381)] [0 0 -1] [0 1 0] 0.3 0.06 lcd)]
+     (playing (ad [(x - 0.15) 0.565 (z - 0.381)] [0 0 -1] [0 1 0] 0.3 0.06 lcd))]
     + cabinet [(x - 1.25) 0 z] [0 -1] + cabinet [(x + 1.25) 0 z] [0 -1])))
+; ..and four round the tree, at its corners, each built square and swung to face it
+(: round-tree (map (q \ (: x (tx + 3.0 * q 0) z (tz + 3.0 * q 1) (turn (180.0 / pi * atan2 (0.0 - q 0) (0.0 - q 1)) [x z] (cabinet [x 0 z] [0 1]))))
+                   [[1 1] [1 -1] [-1 1] [-1 -1]]))
+; ..a cable lying along the floor through the points ps [x z]: its corners eased, wandering
+; either side as it goes, still at its ends; a half round r high, a drape
+(: (snake ps sd r) (: st 0.15
+   (len a b) (: dx (b 0 - a 0) dz (b 1 - a 1) (sqrt (dx * dx + dz * dz)))
+   (leg a b) (: n (max 1 (int (len a b / st + 0.5))) (map (k \ [(a 0 + k / (1.0 * n) * (b 0 - a 0)) (a 1 + k / (1.0 * n) * (b 1 - a 1))]) ^n))
+   base (cats (map (i \ leg (ps i) (ps (i + 1))) ^(#ps - 1)) + [(ps (#ps - 1))]) n #base
+   (soft q) (map (i \ (? (i = 0 || i = n - 1) (q i) (: a (q (i - 1)) b (q i) c (q (i + 1)) [((a 0 + 2.0 * b 0 + c 0) / 4.0) ((a 1 + 2.0 * b 1 + c 1) / 4.0)]))) ^n)
+   sm (foldl (\ q _ (soft q)) base ^8)
+   (nrm q i) (: a (q (max 0 (i - 1))) b (q (min (n - 1) (i + 1))) dx (b 0 - a 0) dz (b 1 - a 1) l (max 1e-6 (sqrt (dx * dx + dz * dz))) [(0.0 - dz / l) (dx / l)])
+   L (st * (n - 1))
+   wig (map (i \ (: s (st * i) e (min 1.0 (min (s / 0.6) ((L - s) / 0.6))) w (e * (0.08 * sin (tau * s / 1.9 + sd) + 0.04 * sin (tau * s / 0.8 + 2.3 * sd)))
+                    m (nrm sm i) [(sm i 0 + w * m 0) (sm i 1 + w * m 1)])) ^n)
+   (map (i \ (: m (nrm wig i) c (wig i) (map (k \ (: a (-0.3 + k * (pi + 0.6) / 6.0) [(c 0 + r * cos a * m 0) (r + r * sin a) (c 1 + r * cos a * m 1)])) ^7))) ^n)))
+; ..their cables from under the stereo's front, each its own way to its speaker's back,
+; none crossing another
+(: cables (: zs (cz * (<gjs + 3) - wt - 0.46) e (tx + 3.0) w (tx - 3.0) n (tz + 3.0) s (tz - 3.0)
+   (map (q \ drape ash (snake (q 1) (q 0) 0.03))
+        [[0.4 [[21.8 zs] [21.8 (n + 1.6)] [w (n + 1.6)] [w n]]]
+         [1.7 [[22.15 zs] [22.15 (n + 1.0)] [e (n + 1.0)] [e n]]]
+         [2.9 [[22.65 zs] [22.65 s] [e s]]]
+         [4.2 [[23.0 zs] [23.0 (s - 0.8)] [w (s - 0.8)] [w s]]]])))
 ; ..the way out: from the hall back through every way that goes through, each room's way
 ; on toward it, nearest first; a sign hung inside each way on from the closet, over its room
 (: (goes? e) (elem (through e) ['open 'door]))
@@ -212,10 +252,17 @@
    xm (0.5 * (x0 + x1)) zm (0.5 * (z0 + z1)) y (mh - 0.4) g (rgb 0.25 1.0 0.35)
    (d @ 'xp (unlit (neon [(x1 - 0.03) y zm] [-1 0 0] 0.2 "exit" g)) 'xm (unlit (neon [(x0 + 0.03) y zm] [1 0 0] 0.2 "exit" g))
         'zp (unlit (neon [xm y (z1 - 0.03)] [0 0 -1] 0.2 "exit" g)) (unlit (neon [xm y (z0 + 0.03)] [0 0 1] 0.2 "exit" g)))))
-(: exits (: (go c out) (: d (peep hops c ()) i (c // nz) j (c % nz)
-                         (? (elem c gw || d = ()) out
-                            (go (d @ 'xp (cid (i + 1) j) 'xm (cid (i - 1) j) 'zp (cid i (j + 1)) (cid i (j - 1))) (exit-sign c d . out))))
-   (exit-signs = 1 ? (go (cid ci cj) ()) ())))
+; ..the rooms on the way from the closet's to the hall, in order
+(: way-out (: (go c out) (: d (peep hops c ()) i (c // nz) j (c % nz)
+                           (? (elem c gw || d = ()) (rev out)
+                              (go (d @ 'xp (cid (i + 1) j) 'xm (cid (i - 1) j) 'zp (cid i (j + 1)) (cid i (j - 1))) (c . out))))
+   (go (cid ci cj) ())))
+(: exits (exit-signs = 1 ? (map (c \ exit-sign c (hops c)) way-out) ()))
+; ..and pa speakers in the maze, one in a room's corner every third room on the way out and
+; here and there all round the ring, where both its walls stand
+(: (cornered? c) (: i (c // nz) j (c % nz) (!(hall? i j) && through (cid (i - 1) j) != 'open && through (100000 + cid i (j - 1)) != 'open)))
+(: pas (: on (map (k \ way-out (3 * k + 1)) ^((#way-out + 1) // 3)) round (filter (c \ h01 c 13 < 0.05 && !(elem c on)) ^(nx * nz))
+   (map (c \ pa [(cx * (c // nz) + wt) mh (cz * (c % nz) + wt)] [1 1]) (filter cornered? (on + round)))))
 
 ; ..the ring's middle, flat in the world straight up off the tube's inside: the lift's
 ; platform climbing its tether from the grass up the axis of a pink orb turning there, in at
@@ -254,8 +301,9 @@
   (void [-4 -3 -4] [(lx + 4) (top + 14) (lz + 4)])
   (land grass (rows ground))
   (map (w \ along (w 0) (flow [0.6 0] (drape water (w 1)))) waters)
-  ; ..the cairn, the posts down the outside every sixteen metres, and round the tube every eight
-  (cairn 6 (lz / 2))
+  ; ..the graveyard and its plinth, the posts down the outside every sixteen metres, and round the tube every eight
+  (plinth (yx - 3.0) yz)
+  yard
   (map (x \ post x (lz / 2) stone) (filter (x \ rd x (lz / 2) > 4.5) (map (i \ 40.0 + 16.0 * i) ^17)))
   (map (z \ post 80.0 z stone) (filter (z \ rd 80.0 z > 4.5) (map (i \ 4.0 + 8.0 * i) ^11)))
   ; ..under it the rooms, carved out of the ground, the ways between them, their lights and their buzz
@@ -265,13 +313,16 @@
   (map (i \ map (j \ panels i j) ^nz) ^nx)
   (closet ci cj)
   exits
-  pas
-  (stereo (cx * (gis 2 + 0.5)) (cz * (<gjs + 3) - wt))
+  ; ..the loop down there heard down there alone, as the buzz is
+  (heard [0 0 0] [lx mh lz] pas)
+  (heard [0 0 0] [lx gh lz] [(stereo (cx * (gis 2 + 0.5)) (cz * (<gjs + 3) - wt)) round-tree])
+  cables
   (hum 'fluorescent [0 0 0] [lx mh lz])
   ; ..and the well up out of them, and the tree in its mound, climbed up it
   (skin {'all concrete} (street [(tx - wh) (gh - 0.05) (tz - wh)] [(tx + wh) (top + 0.05) (tz + wh)]))
   (whole (mound tx tz 2.4 0.8 0.6))
   (tree [tx 0 tz] 7 bark)
-  ; ..a speaker out by the cairn, and the ring's middle
-  (cabinet [9.6 (ground 9.6 46.5 - 0.1) 46.5] [-1 0])
+  ; ..a speaker on the plinth facing the gate, one on the grass beside the lift's pad, both heard up here alone, and the ring's middle
+  (heard [-1000 top -1000] [1000 1000 1000]
+    [(cabinet [(yx - 3.21) (ground (yx - 3.0) yz + 0.78) yz] [1 0]) (cabinet [(sx - 2.2) (ground (sx - 2.2) 0.0) 0.0] [-1 0])])
   hang)
