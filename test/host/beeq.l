@@ -277,10 +277,41 @@
    b (calls "queen" [[5 "queue_landed" {"session" "carl" "release" "v2 is in"}]])
    _ (git ["checkout" "-q" "test"])
    _ (test
-      (has? (a 4) "the release note went to carl.") (has? (a 4) "this landing changed bee: every live session restarts")
+      (has? (a 4) "the release note went to carl and dan.") (has? (a 4) "this landing changed bee: every live session restarts")
       (has? (note "carl") "v1 is in this landing changed bee: every live session restarts at the next convenient point -- between tasks, never mid-gate --")
       (has? (b 5) "the release note went to dan.") !(has? (b 5) "changed bee")
-      (has? (note "dan") ": v2 is in") !(has? (note "dan") "changed bee"))
+      (has? (note "dan") ": v2 is in") !(has? (note "dan") "v2 is in this landing"))
+   0)
+
+; the lander's own row next still leaves the rows behind it told; with only its own rows behind, it says so
+(: w (bq-box 'mcp 'w) sq "refs/queue/mine"
+   (git as) (bq-out (bq-git w as))
+   calls (bq-calls w sq "")
+   (commit br from f) (: _ (git ["checkout" "-q" "-b" br from]) _ (bq-put (w 'repo + "/" + f) (br + "\n"))
+                         _ (git ["add" f]) _ (git ["commit" "-q" "-m" br]) (git ["rev-parse" "HEAD"]))
+   (cell nm) (: d (w 'dir + "/.love/run/hive/" + nm)
+                _ (hark ["mkdir" "-p" (d + "/inbox") (d + "/read")])
+                (bq-put (d + "/card") ("pid " + show (getpid 0) + "\ncwd /\nstate idle\nsince 0\n")))
+   (note nm) (: d (w 'dir + "/.love/run/hive/" + nm + "/inbox") fs (readdir d)
+                (foldl (\ a f (a + bq-get (d + "/" + f))) "" (two? fs ? (sort fs) ())))
+   _ (git ["branch" "mine" "test"])
+   m (git ["rev-parse" "--short" "mine"])
+   g1 (commit "m1" "mine" "m1") g2 (commit "m2" "m1" "m2")
+   _ (calls "ant" [[1 "queue_row" {"state" "green" "branch" "m1" "gated_on" m "gated_head" g1 "leader" "queen"}]
+                   [2 "queue_row" {"state" "green" "branch" "m2" "gated_on" g1 "gated_head" g2}]])
+   _ (calls "cyd" [[3 "queue_row" {"state" "waiting" "branch" "m3"}]])
+   _ (cell "cyd")
+   _ (git ["checkout" "-q" "mine"])
+   _ (git ["merge" "-q" "--no-ff" g1 "-m" "row 1"])
+   a (calls "ant" [[4 "queue_landed" {"release" "m1 is in"}]])
+   _ (calls "queen" [[5 "queue_row" {"session" "cyd" "state" "left"}]])
+   _ (git ["merge" "-q" "--no-ff" g2 "-m" "row 2"])
+   _ (calls "ant" [[6 "queue_row" {"state" "waiting" "branch" "m4"}]])
+   b (calls "ant" [[7 "queue_landed" {"release" "m2 is in"}]])
+   _ (git ["checkout" "-q" "test"])
+   _ (test
+      (has? (a 4) "the release note went to cyd.") (has? (note "cyd") ": m1 is in")
+      (has? (b 7) "the rows behind are yours.") !(has? (b 7) "no row is behind it"))
    0)
 
 ; a session is told once when its binary is replaced by one with other bee source; a touch tells nothing
@@ -383,7 +414,7 @@
    _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
    _ (bq-put (w 'repo + "/test/gate/lanes.sh")
              (unlines ["d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args; : > $d/summary; rc=0"
-                       "for a in \"$@\"; do case $a in test*)"
+                       "for a in \"$@\"; do case $a in -*|out/*) ;; *)"
                        "  if [ -f red-$a ]; then echo \"$a exit=1 secs=0\" >> $d/summary; rc=1"
                        "  else echo \"$a exit=0 secs=0\" >> $d/summary; fi;; esac; done"
                        "exit $rc"]))
@@ -427,6 +458,12 @@
    g3 (calls "bob" [[9 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
    ok3 (bq-until (\ _ (has? (row "2") " green  #")) 300)
    args3 (bq-get (w 'repo + "/out/args"))
+   ; lanes of any name are read, and a rerun keeps every lane the last gate passed, owed or not
+   (gated _) (bq-until (\ _ !(has? (row "2") " gating ")) 300)
+   g4 (calls "bob" [[12 "queue_gate" {"dir" (w 'repo) "lanes" "test nettest waits"}]])
+   _ (gated 0) r4 (row "2")
+   g5 (calls "bob" [[13 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
+   _ (gated 0) r5 (row "2")
    ; a row gated on no commit plans test and test_slow alone: refused, never green on that
    n (calls "dan" [[10 "queue_row" {"state" "waiting" "branch" "dan" "keep" "1"}] [11 "queue_gate" {"dir" (w 'repo)}]])
    _ (test
@@ -441,6 +478,10 @@
       (has? (g3 9) "runs test_kore again")
       ok3 (args3 = "-d out/lanes-gate --slow test_kore test_slow\n")
       (has? (row "2") "test=0") (has? (row "2") "| stood: test") !(has? (row "2") "| red:")
+      (has? r4 " green  #") (has? r4 "nettest=0") (has? r4 "waits=0") !(has? r4 "unrun")
+      (has? r5 " green  #") (has? r5 "nettest=0 waits=0")
+      (: st (foldl (\ a x (? (x = "stood:") [] (a = 0 ? 0 (a + [x])))) 0 (words r5))
+         (st != 0 && all (\ l (elem l st)) ["test" "nettest" "waits"]))
       (has? (n 11) "is gated on -, not a commit") !(has? (row "4") " gating "))
    0)
 

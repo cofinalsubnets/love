@@ -4,6 +4,7 @@
 (borrow 'mesh)
 (borrow 'view)     ; pi
 (borrow 'sky)
+(borrow 'json)
 (: W 40 H 24 white [1.0 1.0 1.0]
    (mh-cat l) (foldr (+) () l)
    (mh-q v) (int (min 1.0 (max 0.0 v) * 255.0 + 0.5))
@@ -151,5 +152,29 @@
    near (mesh-shine (mesh-pack (mesh-box [0.0 0.0 5.0] [0.5 0.5 0.1] 0.0 -1 white 1.0)) 1.0)
    f (mesh-frame v [[(far 0) (near 0)] [(far 1) (near 1)]] [grey] [0 0 0 0.0 0.0] 0 0.0 7)
  (test (peep f (12 * W + 20) 0 = 16777215) (peep f (2 * W + 2) 0 != 16777215)))
+; a mesh as a .glb and back: the same triangles, its corners, normals and colours within a
+; float's reach; a node's place laid on, its x the other way; a text that is no glb is nothing
+(: gm (mesh-box [0.5 1.0 2.0] [0.5 0.25 1.0] 0.3 -1 [0.9 0.2 0.1] 1.0)
+   g (mesh-glb-of gm "box") gb (mesh-glb g)
+   (le v) (string [(v & 255) (v >> 8 & 255) (v >> 16 & 255) (v >> 24 & 255)])
+   (u32 s i) (s i | s (i + 1) << 8 | s (i + 2) << 16 | s (i + 3) << 24)
+   jl (u32 g 12) j (json-read (snip g 20 (20 + jl)) 1)
+   _ (pins (j "nodes" 0) "translation" [1.0 2.0 3.0] "scale" [2.0 2.0 2.0])
+   j2 (json-show j) jp (j2 + string (map (_ \ 32) ^((4 - #j2 % 4) % 4))) bin (snip g (20 + jl) #g)
+   gt (mesh-glb ("glTF" + le 2 + le (20 + #jp + #bin) + le #jp + "JSON" + jp + bin))
+   (gd a b) (foldl max 0.0 (map (k \ abs (a k - b k)) [0 1 2 5 6 7 8 9 10]))
+   (moved a b) (abs (b 0 - (2.0 * a 0 - 1.0)) < 1e-5 && abs (b 1 - (2.0 * a 1 + 2.0)) < 1e-5 && abs (b 2 - (2.0 * a 2 + 3.0)) < 1e-5)
+ (test (#(gm 0) = #(gb 0)) (gb 1 = gm 1) (foldl max 0.0 (map (i \ gd (gm 0 i) (gb 0 i)) ^#(gm 0)) < 1e-6)
+       (all (i \ moved (gm 0 i) (gt 0 i)) ^#(gm 0)) (gt 1 = gm 1)
+       (mesh-glb "glTF" = ()) (mesh-glb (snip g 0 100) = ())))
+;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
+;; seen both ways shows the same, but for where the pixels fall
+(: wq (sky-weather 1 'smooth) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
+   (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4))
+   va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
+   fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
+   both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
+   gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
+ (test (#both > 8000) (gap < 0.025)))
 (test_fin ())
 (puts "mesh: ok\n")

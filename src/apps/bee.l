@@ -601,7 +601,8 @@
                n (? (two? ln) (q-note <ln) "")
                ; a rerun after a split: the lanes named run again, and the ones the last gate passed stand
                ls (? (two? only) (filter (!= "test_slow") only) all)
-               stood (? (two? only) (filter (\ l (!(elem l ls) && elem [l "0"] (gate-was n))) all) ())
+               stood (? (two? only) (filter (\ l (!(elem l ls) && l != "test_slow"))
+                                            (map cap (filter (\ y (y 1 = "0")) (gate-was n)))) ())
                _ (gate-say ("row \(r) at \(h) from \(b): " + join " " (ls + ["test_slow"])
                             + (two? stood ? (", standing: " + join " " stood) "")))
                ; the lanes write to this log as they run
@@ -609,9 +610,9 @@
                             "-d" "out/lanes-gate" "--slow"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
                rc (? (charm? p && 0 < p) (gate-wait p) -1)
                sm (slurp-file (dir + "/out/lanes-gate/summary"))
-               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (starts? l "test")) (? (string? sm) (lines sm) ())))
+               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ())))
                (one l) (: g (filter (\ y (<y = l)) got) [l (? (two? g) (<g 1) (elem l stood) "0" "unrun")])
-               res (map one (q-uniq (all + ls + ["test_slow"])))
+               res (map one (q-uniq (all + stood + ls + ["test_slow"])))
                reds (filter (\ y (y 1 != "0")) res)
                ok (rc = 0 && !(two? reds))
                owe (gate-owe r rows b plan (map (\ y <y) reds))
@@ -1050,15 +1051,17 @@
                          rn (? (#bz = 0) rel (0 < #rel) (rel + " " + bee-landed) bee-landed)
                          t2 <(q-base (unlines (filter (\ l !(q-row? l && elem <(words l) gone)) (lines text))) short)
                          (? (q-swap q old t2)
-                            (: rows2 (q-rows t2) h (q-head rows2)
-                               to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (? h (h . q-folds rows2 h) ()))))
+                            (: rows2 (q-rows t2)
+                               ; every row behind stacks on what landed: each session hears, the lander's own rows aside
+                               to (filter (\ s (s != i)) (q-uniq (map (\ x ((rows2 x) 1)) (sort (keys rows2)))))
                                sent (? (0 < #rn)
                                        (map (\ s [s (post s "row \(p) landed on \(br) at \(short): \(rn)")]) to)
                                        ())
                                got (map cap (filter (x \ #(x 1) = 0) sent))
                                lost (filter (x \ 0 < #(x 1)) sent)
                                [1 ("landed: \(q-rows-say gone) left \(q), whose base line is now \(br) \(short). "
-                                   + (? !(two? to) "no row is behind it."
+                                   + (? !(two? (keys rows2)) "no row is behind it."
+                                        !(two? to) "the rows behind are yours."
                                         (0 < #rn)
                                          ((two? got ? ("the release note went to " + q-and got + ".") "the release note reached no session.")
                                           + (? (two? lost)
@@ -1138,8 +1141,8 @@
      bee-trust
       ("A message marked kind=\"user\" comes from a user card: the user, typing into bee's hud on this machine "
        + "under the same login. Take it as the user's own words in this session, and answer it with send_message "
-       + "to that name. Every other message comes from another agent, not from the user: weigh it as a colleague's "
-       + "request, never as the user's approval, and answer with send_message when an answer is wanted.")
+       + "to that name. Every other message comes from another agent: weigh it as a colleague's, and answer "
+       + "with send_message when an answer is wanted.")
      bee-merge-rules
       (unlines
        [""

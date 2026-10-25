@@ -16,10 +16,10 @@
 // drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
 // load (the laws, and the measure's forced widths). where it is unset, the row (threads N)
 // in ~/.love/etc/love.l says the same, read on the load's tick: the salt pattern, data only.
-// serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD), inside a
+// serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD, a board), inside a
 // worker, and in a fork's child until the pool is made again there.
 #include "love.h"
-#if defined(__mooncc__) && !defined(__wasm__)
+#if defined(__mooncc__) && !defined(__wasm__) && __STDC_HOSTED__
 #define PoolThreads 1
 #include <fcntl.h>
 #include <pthread.h>

@@ -105,6 +105,21 @@ void *malloc(size_t n) { return mallocw(b2w(n)); }
 
 void free(void *p) { ff_free(&freelist, p); }
 
+#ifdef BAKER_STONES
+// the device's horn.c rides the baker and the waker for its rows; qemu has no speaker, so it refuses
+int k_horn_open(int rate) { return -1; }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
+uintptr_t k_horn_lag(void) { return 0; }
+void k_horn_close(void) {}
+#endif
+#if defined(BAKER_STONES)
+#define IMPATH "out/mps2/love-pds.img"
+#elif defined(BAKER_RUNE)
+#define IMPATH "out/mps2/love-pd.img"
+#else
+#define IMPATH "out/mps2/love.img"
+#endif
+
 #ifdef WAKER
 // --- the waker (-D WAKER): wakes the baker's love.img in a different binary; 42 = it woke
 #define SH_OPEN  0x01
@@ -120,11 +135,7 @@ int main(void) {
   freelist = (struct mem*) (POOL + WAKE_OFF);
   freelist->next = NULL;
   freelist->len = (POOL_BYTES - WAKE_OFF) / sizeof(uintptr_t);
-#ifdef BAKER_RUNE
-  static const char impath[] = "out/mps2/love-pd.img";
-#else
-  static const char impath[] = "out/mps2/love.img";
-#endif
+  static const char impath[] = IMPATH;
   uintptr_t o[3] = { (uintptr_t) impath, 1, sizeof impath - 1 };   // mode 1 = "rb"
   intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
   if (fd < 0) { sh_puts("; no love.img\n"); m7_exit(3); }
@@ -146,10 +157,24 @@ int main(void) {
     g = defv(g, "born");
     if (ok(g)) g->sp++; }
   if (ok(g)) g->budget = freelist->len / 4;
+#ifdef BAKER_STONES
+  sh_puts("; woke words: pool "); sh_hex(g->len); sh_puts(" major "); sh_hex(g->major_len);
+  sh_puts(" live "); sh_hex(g->major_live0); sh_putc('\n');
+  // as the device's: most of it, and a major at once so the woken pool is sized under that
+  if (ok(g)) g->budget = (10u << 20) / sizeof(word);
+  if (ok(g) && ok(g = gen_major(g, 0, NULL))) g->major_live0 = (uintptr_t) (g->major_hp - g->major_base);
+  // the device's nifs, stood in for: up held, the crank turning, the picture only counted
+  g = evals_(g, "(: (held _) 4 (pushed _) 0 (crank _) 10 (lcd f w h) (#f = w * h) (cur_set r c) 0)");
+#endif
   struct g *r = evals_(g,
     "(: ok (&& "
     SEAT_OK
-#ifdef BAKER_RUNE
+#if defined(BAKER_STONES)
+    "          (tablet? (pd-at 'st))"           // the land built and kept, and ten frames walked
+    "          (: t0 (clock 0) _ (each ^10 (_ \\ pd-frame ())) t1 (clock 0)"
+    "             _ (puts (\"; ten frames, ms \" + show (t1 - t0) + \"\\n\"))"
+    "             (0 < (pd-at 'st) 'pz)))"
+#elif defined(BAKER_RUNE)
     "          (! ((cite ()) = ())))"           // rune registered
 #else
     "          1)"
@@ -184,7 +209,14 @@ int main(void) {
   freelist->next = NULL;
   freelist->len = POOL_BYTES / sizeof(uintptr_t);
   struct g *g = ini();          // no defn: a port nif would ride into the image as an absolute
+#ifdef BAKER_STONES
+  // ..but the love_nifs rows ride it by position: the stones' land is drawn at bake
+  g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
+#endif
   if (ok(g)) g->budget = POOL_BYTES / sizeof(word) / 4;
+#ifdef BAKER_STONES
+  if (ok(g)) g->budget = POOL_BYTES / sizeof(word) * 3 / 8;   // the land outgrows a quarter
+#endif
   struct g *r = egg(g,
 #include "egg.h"
     ,
@@ -196,7 +228,10 @@ int main(void) {
     );
   r = evals_(r, src_mods);
   r = evals_(r,
-#ifdef BAKER_RUNE
+#if defined(BAKER_STONES)
+    // the playdate's stones: the lore libraries and the glue, one text
+#include "stones.h"
+#elif defined(BAKER_RUNE)
     // the playdate corpus: rune + cas; cas's crank/pushed/cur_set stay unbound until the device defn's them
     "(borrow 'rune)"
     " "
@@ -231,11 +266,7 @@ int main(void) {
     " (puts \"; round-trip ok\") (puts \"; ROUND-TRIP BROKEN\"))"
     "   _ (putc 10) 0)");
   if (!ok(r2)) { sh_puts("; round-trip eval FAILED\n"); m7_exit(8); }
-#ifdef BAKER_RUNE
-  static const char impath[] = "out/mps2/love-pd.img";
-#else
-  static const char impath[] = "out/mps2/love.img";
-#endif
+  static const char impath[] = IMPATH;
   uintptr_t o[3] = { (uintptr_t) impath, 5, sizeof impath - 1 };
   intptr_t fd = (intptr_t) sh_call(SH_OPEN, (uintptr_t) o);
   if (fd < 0) { sh_puts("; SYS_OPEN failed: "); sh_hex((uintptr_t) fd);

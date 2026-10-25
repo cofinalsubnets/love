@@ -19,7 +19,7 @@
                 (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)
                 (cfoldir (gst a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
                 (stld (gst a) a) (copyprop (a) a) (rezx (a) a) (addrfold (gst a) a) (laacse (gst a) a) (hz4 (gst a) a) (addk (a) a) (memfw (a) a) (cmpfuse (a) a)
-                (deadst (gst a) a) (repack (gst a) a)
+                (deadst (gst a) a) (repack (gst a) a) (t2nx (gst a) a)
                 ; the post-choice chain: one order types
                 (deadlab (ir-chosen) ir-nolab)
                 (wpair (gst ir-nolab) ir-nolab)

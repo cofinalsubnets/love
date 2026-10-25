@@ -27,7 +27,7 @@ baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o
 pd_lib_h    = $(lib_h) out/lib/rune.h
 
-.PHONY: mps2 mps2t1 img imgpd
+.PHONY: mps2 mps2t1 img imgpd imgpds
 default: mps2
 mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
@@ -80,6 +80,35 @@ $(R)/out/playdate/cas.h:
 pdmainc = main.c $(S)/love/love.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
 $(eval $(call p_obj,main-baker-pd,src/inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))
 $(eval $(call p_obj,main-waker-pd,src/inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
+
+# the playdate's STONES image (love-pds.img): the lore libraries and the glue as one text,
+# and horn.c + raster.c + lamp.c + pool.c + tones.c + mem.c beside the core, rt.c under them, as the device links
+# them, so the land is drawn and lit at bake and the image's nif rows line up with the device's
+imgpds: $(R)/$(o)/love-pds.img
+pds_o = $(R)/$(o)/raster.o $(R)/$(o)/lamp.o $(R)/$(o)/pool.o $(R)/$(o)/tones.o $(R)/$(o)/mem.o
+pds_skel = $(R)/$(o)/start.o $(filter-out %/nohorn.o,$(love_o)) $(R)/$(o)/horn.o $(pds_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/rt.o
+$(foreach u,raster lamp pool mem,$(eval $(call p_obj,$u,src/love/$u.c,$(S)/love/$u.c $(love_dep),$(mps2_cc))))
+$(eval $(call p_obj,tones,src/love/audio/tones.c,$(S)/love/audio/tones.c $(love_dep),$(mps2_cc)))
+$(eval $(call p_obj,horn,src/love/horn.c,$(S)/love/horn.c $(love_dep),$(mps2_cc) -D love_horn_seat=1))
+FORCE:
+$(R)/out/playdate/stones.h: FORCE
+	@$(MAKE) --no-print-directory -C $(S)/love/user/playdate ../../../../out/playdate/stones.h
+pdsmainc = main.c $(S)/love/love.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(addprefix $(R)/,$(lib_h)) $(R)/out/playdate/stones.h $(mc)
+$(eval $(call p_obj,main-baker-pds,src/inle/mps2/main.c,$(pdsmainc),$(mps2_cc) -D BAKER -D BAKER_STONES -Iout/playdate))
+$(eval $(call p_obj,main-waker-pds,src/inle/mps2/main.c,$(pdsmainc),$(mps2_cc) -D WAKER -D BAKER_STONES -Iout/playdate))
+$(R)/$(o)/baker-pds.elf: $(pds_skel) $(R)/$(o)/main-baker-pds.o
+	@echo MOON	$@
+	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/baker-pds.elf
+$(R)/$(o)/waker-pds.elf: $(pds_skel) $(R)/$(o)/main-waker-pds.o
+	@echo MOON	$@
+	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/waker-pds.elf
+$(R)/$(o)/love-pds.img: $(R)/$(o)/baker-pds.elf $(R)/$(o)/waker-pds.elf
+	@echo LOVE	$@ "(qemu M7 + wake-check)"
+	@cd $(R) && timeout 1800 qemu-system-arm -M mps2-an500 -semihosting -nographic \
+	   -kernel $(o)/baker-pds.elf </dev/null && test -s $(o)/love-pds.img \
+	 && { timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
+	        -kernel $(o)/waker-pds.elf </dev/null; [ $$? -eq 42 ] \
+	      || { echo "FAIL pds image wake-check"; rm -f $(o)/love-pds.img; exit 1; }; }
 
 $(R)/$(o)/baker-pd.elf: $(skel) $(R)/$(o)/main-baker-pd.o
 	@echo MOON	$@

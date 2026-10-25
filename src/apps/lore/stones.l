@@ -3,7 +3,7 @@
 ; the land is triangles (mesh.l) built once from the shapes whose distance field the player
 ; walks against, relit as the sun moves. stones-new, stones-step and stones-frame are pure;
 ; only stones-walk and stones-run touch the tty.
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
+(module (stones stones-run stones-walk stones-main stones-new stones-size stones-detail stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow 'rove)
@@ -27,7 +27,7 @@
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
  ; ..the stones' own keys, over view's
- stones-binds {32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait
+ stones-binds {93 'more 91 'less 32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait
                119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
  picks ['breathe 'weep 'bleed 'beg 'wait]                ; acts', as actions
  rise-acts ['kneel 'forward 'back 'strafe-left 'strafe-right 'turn-left 'turn-right 'look-up 'look-down]
@@ -119,7 +119,9 @@
    (cmix stone sand (sat ((ny - 0.8) / 0.12))))
  ; the sun and its light at the scene's hour, under its weather
  (stones-sun st) (sky-sun (st 'sim) (st 'dst) lat)
- (stones-light st) (sky-light (stones-sun st) (st 'wx) (st 'sim))
+ (stones-light st) (kept-by st 'lt-kept [(st 'sim) (st 'dst)] (_ \ sky-light (stones-sun st) (st 'wx) (st 'sim)))
+ ; x under nm while its key k holds, else (f ()) kept there
+ (kept-by st nm k f) (: m (peep st nm ()) (two? m && <m = k ? (m 1) (f () @ x (pin st nm [k x], x))))
  ; --- the land as triangles, built once a run: the slot's two walls, the bowl's rings with the
  ; slot's notch cut out, and the plateau about them. a vertex's colour is the rock's own, lit
  ; by the hour; a texture adds the fine beds and grain ---
@@ -161,18 +163,19 @@
  ; ..each ring the slot cuts, its end on side sg as [z y x], south first
  (row-ends sg) (sort (map (kn \ (: p (ring-at (kn 0) (notch-a kn sg)) [(p 1) (ring-y kn (p 0) (p 1)) (p 0)]))
                          (filter cut? knots)))
- dz 1.0 z0 -42.0                          ; the slot's rings, from where the plain is flat
- nw 8                                     ; rows up a wall
+ ; the land's grids at coarseness c: 1 everywhere but a small screen, which asks 2
+ ring-dz 1.0 z0 -42.0                     ; the slot's rings, from where the plain is flat
+ wall-rows 8                              ; rows up a wall
  lips [2.0 5.0 9.0]                       ; ..and out over the plateau, under its edge
  ; a slot wall, side sg -1 west and 1 east, its profile i up and over at ring j, the east's
  ; crossed so both face the slot; its foot sunk under the floor
  ; ..its rings a metre apart, and where the rows are the rim one at each row's end, so its top
  ; is the rows' own edge
- (wall-zs sg) (: c (map (e \ e 0) (row-ends sg))
+ (wall-zs sg k) (: c (map (e \ e 0) (row-ends sg)) dz (k * ring-dz)
    u (filter (z \ z < <c - 0.05) (map (j \ z0 + (j - 1) * dz) ^(int ((zend - z0) / dz) + 2)))
    (cat u c))
- (wall sg)
-  (: zs (wall-zs sg) nz (#zs - 1) np (nw + #lips)
+ (wall sg k)
+  (: zs (wall-zs sg k) nz (#zs - 1) nw (wall-rows // k) np (nw + #lips)
      ; ..its top where the rock's rim is at the wall's own lean
      (rim-at sx z) (: (gap T) ((rim-y (sx + sg * half T z) z) - T)
                       (go lo hi k) (: m (0.5 * (lo + hi)) (k = 0 ? m (gap m > 0.0 ? (go m hi (k - 1)) (go lo m (k - 1)))))
@@ -200,7 +203,7 @@
  ; ..its floor, sand from wall to wall, ending on a row across the first row's ends so the
  ; bowl's own points meet it; a skirt past each wall's foot covers the wall's curve between rows
  floor-n 2
- (slot-floor _) (: (last l) (l (#l - 1)) pw (last (row-ends -1)) pe (last (row-ends 1)) nz (int ((min (pw 0) (pe 0) - 0.3 - z0) / dz) + 1)
+ (slot-floor k) (: dz (k * ring-dz) (last l) (l (#l - 1)) pw (last (row-ends -1)) pe (last (row-ends 1)) nz (int ((min (pw 0) (pe 0) - 0.3 - z0) / dz) + 1)
    m (mesh-grid (floor-n + 2) (nz + 1) (\ i j (: k (min (max (i - 1) 0) floor-n) sk (? (i = 0) -0.5 (i = floor-n + 2) 0.5 0.0)
                                          p (? (j <= nz) (: z (z0 + (j - 1) * dz) hw (half 0.0 z) [(slot-x z - hw + 2.0 * hw * k / floor-n) z])
                                               (: f (1.0 * k / floor-n) [(pw 2 + f * (pe 2 - pw 2)) (pw 0 + f * (pe 0 - pw 0))]))
@@ -213,8 +216,8 @@
  ; the bowl turned round its middle, ring by wavering ring; a ring the slot crosses runs from
  ; its west wall round by the north to its east wall. before the first cut ring, a bridge: that
  ; ring with its ends drawn to the slot's middle, so the floor and the slot's floor meet it
- (bowl-mesh ks)
-  (: (go l pc) (atom? l ? ()
+ (bowl-mesh ks k)
+  (: bn (bowl-n // k) (go l pc) (atom? l ? ()
                   (: kn <l c (cut? kn) e (c ? [(notch-a kn -1) (notch-a kn 1)] [pi (3.0 * pi)])
                      ((c && pc = 0 ? [[kn e 1]] ()) + [[kn e 0]] + go >l c)))
      rs (go ks 0)
@@ -222,19 +225,19 @@
      (at i j) (: rg (rs j) kn (rg 0) e (rg 1) w (e 0) E (e 1 + (e 1 < e 0 + pi ? tau 0.0))
                  ; ..its ends at their own angles, the very points the walls' tops are
                  (on a) (ring-at (kn 0) a)
-                 (cut k) (? (k = 0) (on w) (k = bowl-n) (on (e 1)) (on (w + (E - w) * k / bowl-n)))
-                 p (? (rg 2 = 0) (cut i) (0 < i < bowl-n) (cut i) (lerp (on w) (on (e 1)) 0.5))
+                 (cut q) (? (q = 0) (on w) (q = bn) (on (e 1)) (on (w + (E - w) * q / bn)))
+                 p (? (rg 2 = 0) (cut i) (0 < i < bn) (cut i) (lerp (on w) (on (e 1)) 0.5))
                  x (p 0) z (p 1) y (ring-y kn x z)
                  ; ..its sand laid by place, the risers' by height as well
                  [x y z (tx * x) (tx * (z + y))])
-     (mesh-grid bowl-n (#rs - 1) at 1 [1.0 1.0 1.0]))
+     (mesh-grid bn (#rs - 1) at 1 [1.0 1.0 1.0]))
  ; the plateau, four metres a cell about the slot and the bowl, and out to the haze the
  ; cells growing: where it is the top, not the bowl's air nor the slot's
  cell 4.0
- (plateau _) (: (out k d s) (k = 0 ? () ([s + d] + out (k - 1) (1.6 * d) (s + d)))
+ (plateau c) (: cl (c * cell) (out k d s) (k = 0 ? () ([s + d] + out (k - 1) (1.6 * d) (s + d)))
    far (out 9 6.4 0.0)
-   xs (map (o \ -80.0 - o) (rev far) + map (i \ -80.0 + i * cell) ^41 + map (o \ 80.0 + o) far)
-   zs (map (o \ -110.0 - o) (rev far) + map (j \ -110.0 + j * cell) ^76)
+   xs (map (o \ -80.0 - o) (rev far) + map (i \ -80.0 + i * cl) ^(40 // c + 1) + map (o \ 80.0 + o) far)
+   zs (map (o \ -110.0 - o) (rev far) + map (j \ -110.0 + j * cl) ^(75 // c + 1))
    ; ..its edge over the bowl's rim sunk under the bowl's last rings, and by the slot under
    ; the walls' lips, past the slot's floor where it starts; lit as the top it was
    (by-slot x z) (: d (mag (x - slot-x z))
@@ -246,6 +249,13 @@
    ; the slot, so its edge stays over where the bowl's wall and the slot's lips run under it
    (ok x z) (top x z <= bowl x z + 0.05 && (zend <= z || z <= z0 || mag (x - slot-x z) > half (top x z) z + 1.0))
    (mesh-keep (mesh-keep-all m (\ x y z (ok x z))) (\ x y z (ok x z))))
+ ; --- the detail, 0 to detail-max, a knob like the pixel scale: the blocks' sections and
+ ; rings, the land's cell, the faces textured from detail-tex up, the blocks' shadows from
+ ; detail-sun's first nonzero up and that many texels across. a small screen asks less ---
+ detail-max 3 detail-tex 2
+ detail-sides [6 8 12 24] detail-rings [4 6 9 14] detail-altar [8 16 24 48]
+ detail-cell [4 3 2 1] detail-sun [0 256 512 1024]
+ (detail-of st xs) (xs (peep st 'detail detail-max))
  ; a block hewn round: rings up it at heights t, (prof j) [t r], each section (sec a) [x z]
  ; scaled by r, n round; worn by amp and leant by lean, varying by place; texels round the
  ; section, or by place for flat
@@ -261,22 +271,25 @@
                     [X y Z (tx * (flat ? (X + Z) (hx * a))) (tx * y)]))
          tex [1.0 1.0 1.0])
      (mesh-move m [(b 0) (b 1) (b 2)] (b 3)))
- ; a standing stone: round, a little wider at its foot, tapering up to a rounded top
- stone-r 14
- (stone-prof j) (: t (1.0 * j / stone-r)
+ ; a standing stone, r rings up it: round, a little wider at its foot, tapering up to a rounded top
+ (stone-prof r j) (: t (1.0 * j / r)
    [t ((1.0 + 0.06 * sat (1.0 - t / 0.08)) * (1.0 - 0.3 * t) * (t < 0.7 ? 1.0 (sqrt (max 0.0 (1.0 - sq ((t - 0.7) / 0.3))))))])
  (round-sec a) [(sin a) (cos a)]
  ; ..the altar: square, its edges and its top's worn round
  altar-prof [[0.0 1.0] [0.25 1.0] [0.5 1.0] [0.7 1.0] [0.84 0.99] [0.93 0.96] [0.98 0.92] [1.0 0.86] [1.0 0.0]]
  (squarish a) (: (sp v) ((v < 0.0 ? -1.0 1.0) * ((1.0 / 3.0) (mag v))) [(sp (sin a)) (sp (cos a))])
- ; the altar, its top stained: a decal over it, its holes the stone
- (block-mesh b) (: yaw (b 3) dx (0.86 * b 4) dz (0.86 * b 6)
+ ; the altar, its top stained: a decal over it, its holes the stone, where the faces wear
+ ; textures; each block as round as the detail d asks
+ (block-mesh d b) (: yaw (b 3) dx (0.86 * b 4) dz (0.86 * b 6) nr (detail-rings d)
    (b 7 = 0
-    ? (mesh-join [(hewn b 48 (#altar-prof - 1) squarish altar-prof 0.1 0.12 1 2)
-                  (mesh-move (mesh-quad [[(0.0 - dx) 0.0 (0.0 - dz)] [dx 0.0 (0.0 - dz)] [dx 0.0 dz] [(0.0 - dx) 0.0 dz]]
-                                        [[0.0 0.0] [64.0 0.0] [64.0 32.0] [0.0 32.0]] 4 [1.0 1.0 1.0])
-                             [(b 0) (b 1 + b 5 + 0.006) (b 2)] yaw)])
-      (hewn b 24 stone-r round-sec stone-prof 0.6 0.3 0 3)))
+    ? (hewn b (detail-altar d) (#altar-prof - 1) squarish altar-prof 0.1 0.12 1 2 @ m
+        (d < detail-tex ? m
+           (mesh-join [m (mesh-move (mesh-quad [[(0.0 - dx) 0.0 (0.0 - dz)] [dx 0.0 (0.0 - dz)] [dx 0.0 dz] [(0.0 - dx) 0.0 dz]]
+                                               [[0.0 0.0] [64.0 0.0] [64.0 32.0] [0.0 32.0]] 4 [1.0 1.0 1.0])
+                                    [(b 0) (b 1 + b 5 + 0.006) (b 2)] yaw)])))
+      (hewn b (detail-sides d) nr round-sec (stone-prof nr) 0.6 0.3 0 3)))
+ ; ..the blocks as one pack, and the scar where there are textures to show it
+ (blocks-pack d bs) (: ms (map (block-mesh d) bs) (mesh-pack (mesh-join (d < detail-tex ? ms (scar () . ms)))))
  ; ..and the sand scuffed where the missing stone stood
  (scar _) (: a (ring-a 3) x (ring-r * cos a) z (zc + ring-r * sin a)
    (mesh-move (mesh-quad [[-1.2 0.0 -1.0] [1.2 0.0 -1.0] [1.2 0.0 1.0] [-1.2 0.0 1.0]]
@@ -316,13 +329,17 @@
                                       lump (vn (x / 64.0 * 14.0) (y / 64.0 * 14.0) 137) dig (vn (x / 64.0 * 6.0 + 3.0) (y / 64.0 * 6.0) 139)
                                       (m < 0.4 + 0.15 * lump ? ()
                                          (c* (0.72 + 0.4 * lump) (cmix [0.84 0.52 0.29] [0.62 0.37 0.19] (sat ((m - 0.5) * 2.0) * (0.4 + 0.6 * dig))))))))])
- ; the land, kept for every run in the process
+ ; the land at coarseness c, kept for every run in the process
  kept {}
- (land _) (kept 'land @ l
+ (land c) (kept c @ l
   (tablet? l ? l
-   (: rk (rock-cols (mesh-pack (mesh-join [(wall -1) (wall 1) (slot-floor ()) (bowl-mesh knots) (plateau ())])))
+   (: rk (rock-cols (mesh-pack (mesh-join [(wall -1 c) (wall 1 c) (slot-floor c) (bowl-mesh knots c) (plateau c)])))
       l2 {'rock rk 'texs (texs-of ())}
-      (pin kept 'land l2, l2))))
+      (pin kept c l2, l2))))
+ ; ..set again: the blocks remade, and the scene and the sky drawn again for them
+ (stones-detail st d) (: d1 (max2 0 (min2 detail-max d))
+   (pins st 'detail d1 'bpk (blocks-pack d1 (st 'blocks)) 'scene () 'sky-kept ()))
+ (stones-texs st) (peep st 'detail detail-max < detail-tex ? () ((land (detail-of st detail-cell)) 'texs))
  ; --- the light baked per vertex: sun past the rock, sky by openness and crowding, and the glow
  ; the sunlit walls throw down the slot; again once the sun has moved on two minutes ---
  (light-of st lt) (: s (lt 'sun)
@@ -335,31 +352,43 @@
            ao (sat (0.45 + 0.55 * field (X + 0.4 * nx) (Y + 0.4 * ny) (Z + 0.4 * nz) / (0.4 * gn)))
            g (lt 'sunk * sat (s 1 * 3.0) * (1.0 - sv) * ao * (0.25 + 0.5 * sat (Y / 14.0)))
            [sun (ao * (0.18 + 0.82 * sv) * (0.75 + 0.25 * ny)) [(0.95 * g) (0.5 * g) (0.24 * g)]])))
- ; ..and the blocks' shadows each frame, by the sun's view of them over the bowl, sun-n
- ; texels across sun-half either side of its middle
- sun-n 1024 sun-half 40.0 sun-deep 60.0 sun-bias 0.12
+ ; ..and the blocks' shadows each frame, by the sun's view of them over the bowl, the
+ ; detail's texels across sun-half either side of its middle
+ sun-half 40.0 sun-deep 60.0 sun-bias 0.12
  (scene st) (: was (peep st 'scene ()) sim (st 'sim)
    (tablet? was && mag (sim - was 'at) < 120.0 ? (was 'sc)
-      (: lt (stones-light st) L (land ()) lit (light-of st lt)
+      (: lt (stones-light st) L (land (detail-of st detail-cell)) lit (light-of st lt) sn (detail-of st detail-sun)
          rk (mesh-bake-sun (L 'rock) lt lit 1.0) bl (mesh-bake-sun (st 'bpk) lt lit 1.0)
          sv (mesh-sun-view lt [0.0 3.0 zc] sun-half sun-deep)
-         sun (0.0 < lt 'sunk * lt 'sun 1 ? [sv (mesh-sun-map sv bl sun-n) (sun-bias / sun-deep)] ())
+         sun (sn > 0 && 0.0 < lt 'sunk * lt 'sun 1 ? [sv (mesh-sun-map sv bl sn) (sun-bias / sun-deep)] ())
          sc [[(rk 0) (bl 0)] [(rk 1) (bl 1)] sun]
          (pin st 'scene {'at sim 'sc sc}, sc))))
  ; --- the frame: land and blocks through the eye's gain, the sky where they leave it bare ---
  fov (pi / 2.0)
- sky-k 2                                  ; the sky asked every sky-k columns of kitty's pixels
+ sky-k 2
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
  (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (gesture-breath (peep st 'mt 0.0))
    e [(st 'px) (st 'py + b 0) (st 'pz)]
    v (mesh-eye w h e (st 'th) (st 'ph + b 1) (peep st 'ro 0.0) fov 0.05 900.0)
-   hz (mesh-haze v lt (st 'wx) (st 'sim))
+   hs (peep st 'keep-sky 0 ? (kept-by st 'sky-kept (sky-key st lt) (_ \ stones-sky st v e lt k w h)) ())
+   hz (two? hs ? <hs (mesh-haze v lt (st 'wx) (st 'sim)))
    sc0 (scene st) db (drop-batch st lt)
    ; ..and after the land the drops, the lamppost once it stands, and last the glow
    xs (filter two? [db (post-batch st lt) (ghost-batch st lt)])
    sc (#xs = 0 ? sc0 [(cat (sc0 0) (map (b \ b 0) xs)) (cat (sc0 1) (map (b \ b 1) xs)) (sc0 2)])
-   (mesh-frame v sc ((land ()) 'texs) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo)
-               (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (k @ 1 1 (sky-k * k)))))
+   sk (? (two? hs) (: P (hs 1) (\ v S (peep P S -1))) (sky-of st e lt k))
+   (mesh-frame v sc (stones-texs st) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo) sk))
+ ; the sky over the eye at e: every pixel for half blocks, every sky-k columns of kitty's, or
+ ; every 'sky-k
+ (sky-of st e lt k) (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (peep st 'sky-k (k @ 1 1 (sky-k * k))))
+ ; ..with 'keep-sky, the haze and a whole picture of the sky kept while the hour and the view
+ ; hold: a fifth of a pixel of turn or breath, eight metres of walking, never show in them
+ (sky-key st lt) (: (q x) (floor (200.0 * x + 0.5))
+   [(st 'sim) (st 'dst) (q (st 'th)) (q (st 'ph)) (q (peep st 'ro 0.0)) (floor (st 'px / 8.0)) (floor (st 'pz / 8.0))
+    (lt 'day * 3.0 < 1.0 ? (st 't) 0)])
+ (stones-sky st v e lt k w h) (: sky (sky-of st e lt k)
+   all (iota (w * h)) B (all * 0 - 1)
+   [(mesh-haze v lt (st 'wx) (st 'sim)) (two? sky ? (<>sky v B -1) (pin B all (sky v all)))])
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
    ; ..the choices centred a third of the way up the screen
    dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max2 0 (r - r // 3 - (bh + 1) // 2)) c0 (max2 0 ((w - bw) // 2))
@@ -413,7 +442,7 @@
    st {'px (slot-x 0.0) 'pz 0.0 'py eye-h 'th 0.32 'ph 0.0 'sim (now 0) 'dst (now 1)
        'wx (sky-weather (cover-of sd) 'smooth) 't 0 'deep 0 'kitty 0 'kp 1 'done 0 'eye 'walk 'mt 0.0 'ro 0.0
        'dlg () 'sel 0 'dlg-at () 'drops () 'splats () 'nd 0
-       'blocks bs 'bpk (mesh-pack (mesh-join (scar () . map block-mesh bs)))}
+       'blocks bs 'bpk (blocks-pack detail-max bs)}
    (stones-size st w (h // 2)))
  ; the screen w cells by r rows, two pixels a row, and its dither; as kitty's, 'kp times
  ; as many pixels each way
@@ -438,7 +467,8 @@
          (? (free? st sx sz) (pins st 'px sx 'pz sz) (free? st x z0) (pin st 'px x) (free? st x0 z) (pin st 'pz z) st))))
  ; ..each action as far as the time since the last frame, 'dt, carries it
  (stones-step st a) (: dt (peep st 'dt (1.0 / fps))
-   (? (st 'done) st
+   (? (elem a ['more 'less]) (stones-detail st (peep st 'detail detail-max + (a = 'more ? 1 -1)))
+      (st 'done) st
       (charm? (st 'dlg)) (dialog-key st a)
       (st 'eye = 'kneel) (elem a rise-acts ? (rise! st) st)
       (st 'eye != 'walk) st
@@ -552,8 +582,8 @@
  (ghost-on? st lt) (st 'eye = 'kneel && !(charm? (st 'dlg)) && gem? (peep st 'wait-at ()) && lt 'day < 0.1
                     && ghost-wait <= peep st 'mt 0.0 - st 'wait-at)
  (ghost-batch st lt) (? (ghost-on? st lt)
-   (: g (peep kept 'ghost ())
-      pk (tablet? g ? g (: q (mesh-pack (block-mesh (ring-stone 3))) (pin kept 'ghost q, q)))
+   (: d (peep st 'detail detail-max) g (peep kept ['ghost d] ())
+      pk (tablet? g ? g (: q (mesh-pack (block-mesh d (ring-stone 3))) (pin kept ['ghost d] q, q)))
       mt (st 'mt) f (sat ((mt - st 'wait-at - ghost-wait) / 12.0) * flicker-pulse mt 0.8 0.2 0.9 0.0)
       c (pk 'cols) n (pk 'n) z (c 0 * 0.0) k (f * (0.55 + 0.45 * c 6))
       cols [(c 0) (c 1) (c 2) (c 3) (c 4) (0.22 * k) (0.11 * k) (0.32 * k) z z z]
@@ -574,7 +604,7 @@
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
                'size stones-size 'frame stones-frame 'key stones-step 'look stones-look
-               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['strafe-left 'strafe-right 'kneel 'finer 'coarser])
+               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['strafe-left 'strafe-right 'kneel 'finer 'coarser 'more 'less])
                'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (walk-dt st,

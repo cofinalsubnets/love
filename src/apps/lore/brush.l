@@ -5,9 +5,10 @@
 ; a plane is [n d], holding the points p with dot n p <= d. brush-prism's plan ps is [x z]
 ; either way round; brush-mirror's axis k is 0 x, 1 y, 2 z. brush-faces answers [ps n i]:
 ; corners, facing, and the brush index; brush-mesh's (look n b) answers [tex U V], a corner
-; p's texels U and V each dotted with [x y z 1]. a brush 'open 1 has no top face, and one
-; 'whole 1 is never cut on the grid.
-(module (brush brush brush-box brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks chunks-kept brush-faces)
+; p's texels U and V each dotted with [x y z 1]. a brush 'open 1 has no top face, one
+; 'sheer 1 no walls, and one 'whole 1 is never cut on the grid. brush-land's is solid under a
+; sheet through rows of points, as a drape lies, and has no faces: its sheet is drawn apart.
+(module (brush brush brush-box brush-land land-y brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks chunks-kept brush-faces)
 (borrow 'view)                          ; min2 max2
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
@@ -46,14 +47,52 @@
  (brush-move b d) (brush (b 'air) (map (pl \ [(pl 0) (pl 1 + dot (pl 0) d)]) (b 'planes)))
  (brush-mirror b k c) (: (fl v) (map (i \ i = k ? (0.0 - v i) (v i)) ^3)
    (brush (b 'air) (map (pl \ (: n (pl 0) [(fl n) (pl 1 - 2.0 * c * n k)])) (b 'planes))))
+ ; ..land: each four neighbours of the rows two triangles, as a drape's, kept by the cells
+ ; land-g wide their plans cross, so a height is found among a few
+ land-g 2.0
+ (cell x z) ((floor (x / land-g) + 4096) * 8192 + floor (z / land-g) + 4096)
+ (brush-land rows) (: R #rows C #<rows (at r c) (rows r c)
+   ts (cats (map (r \ cats (map (c \ [[(at r c) (at r (c + 1)) (at (r + 1) (c + 1))] [(at r c) (at (r + 1) (c + 1)) (at (r + 1) c)]]) ^(C - 1))) ^(R - 1)))
+   tt (foldl (\ t q (pin t #t q)) {} ts)
+   (cells q) (: x0 (floor (min2 (q 0 0) (min2 (q 1 0) (q 2 0)) / land-g)) x1 (floor (max2 (q 0 0) (max2 (q 1 0) (q 2 0)) / land-g))
+                z0 (floor (min2 (q 0 2) (min2 (q 1 2) (q 2 2)) / land-g)) z1 (floor (max2 (q 0 2) (max2 (q 1 2) (q 2 2)) / land-g))
+                (cats (map (i \ map (j \ (x0 + i + 4096) * 8192 + z0 + j + 4096) ^(z1 - z0 + 1)) ^(x1 - x0 + 1))))
+   hs (foldl (\ t i (foldl (\ t k (pin t k (i . peep t k ()))) t (cells (tt i)))) {} ^#ts)
+   ps (cats rows) bx (box-of ps)
+   {'air 0 'planes () 'faces () 'land {'tris tt 'cells hs} 'lo [(bx 0 0) -1000.0 (bx 0 2)] 'hi (bx 1) 'low (bx 0 1)})
+ ; ..the land's height at x z, and its facing there, or () off it
+ (land-at L x z) (: tt (L 'tris)
+   (on i) (: q (tt i) a (q 0) b (q 1) c (q 2) d ((b 2 - c 2) * (a 0 - c 0) + (c 0 - b 0) * (a 2 - c 2))
+     (? (mag d < 1e-12) ()
+        (: u (((b 2 - c 2) * (x - c 0) + (c 0 - b 0) * (z - c 2)) / d) v (((c 2 - a 2) * (x - c 0) + (a 0 - c 0) * (z - c 2)) / d) w (1.0 - u - v)
+           (u >= -1e-9 && v >= -1e-9 && w >= -1e-9 ? [(u * a 1 + v * b 1 + w * c 1) (unit (cross (c- c a) (c- b a)) @ n (n 1 < 0.0 ? (c* -1.0 n) n))] ()))))
+   (go l) (? (atom? l) () (on <l @ () (go >l) h h))
+   (go (peep (L 'cells) (cell x z) ())))
+ (land-y b x z) (land-at (b 'land) x z @ () () h (h 0))
  ; --- the medium at a place: the last brush holding it says, and solid where none does ---
- (inside? b p) (all (pl \ side pl p <= 0.0) (b 'planes))
+ (inside? b p) (peep b 'land () @ () (all (pl \ side pl p <= 0.0) (b 'planes)) L (land-at L (p 0) (p 2) @ () 0 h (p 1 <= h 0)))
  (brush-medium bs p) (: (go l) (? (atom? l) 0 (inside? <l p) (<l 'air) (go >l)) (go (rev bs)))
  ; --- a ray from e along v: where it first comes out of the air, {'t 'p 'b 'n} -- how far,
  ;     the point, the brush that ends the air there and the face's facing toward the air --
  ;     or () where it never does ---
- ; ..the stretch t0 to t1 of the ray inside b, the planes it comes in and goes out by
- (span b e v) (: (go l t0 t1 n0 n1)
+ ; ..the stretch t0 to t1 of the ray inside b, the planes it comes in and goes out by; under
+ ; land, straight up or down as it is, else found in steps and halved down to a hair
+ (span b e v) (peep b 'land () @ () (plane-span b e v) L (land-span L e v))
+ (land-span L e v) (: (hy t) (land-at L (e 0 + t * v 0) (e 2 + t * v 2)) (under t) (hy t @ () 0 h (e 1 + t * v 1 <= h 0))
+   (? (mag (v 0) + mag (v 2) < 1e-9)
+      (hy 0.0 @ () ()
+       h (: y (h 0) n (h 1) in (e 1 <= y)
+           (? (mag (v 1) < 1e-12) (in ? [-1e9 1e9 () ()] ())
+              (v 1 < 0.0) (in ? [-1e9 1e9 () ()] [((e 1 - y) / (0.0 - v 1)) 1e9 n ()])
+              (in ? [-1e9 ((y - e 1) / v 1) () n] ()))))
+      (: dt (0.5 / sqrt (v 0 * v 0 + v 2 * v 2 + v 1 * v 1)) n (int (80.0 / (dt * sqrt (dot v v))))
+         (cross0 a b) (foldl (\ q _ (: m (0.5 * (q 0 + q 1)) (under m = under (q 0) ? [m (q 1)] [(q 0) m]))) [a b] ^20 @ q (q 1))
+         (go i) (? (i >= n) () (under (i * dt) != under ((i + 1) * dt) ? (cross0 (i * dt) ((i + 1) * dt)) (go (i + 1))))
+         i0 (under 0.0)
+         t (go 0)
+         (? (t = ()) (i0 ? [-1e9 1e9 () ()] ())
+            (: h (hy t) nn (h = () ? [0.0 1.0 0.0] (h 1)) (i0 ? [-1e9 t () nn] [t 1e9 nn ()]))))))
+ (plane-span b e v) (: (go l t0 t1 n0 n1)
    (? (t1 < t0) ()
       (atom? l) [t0 t1 n0 n1]
       (: pl <l n (pl 0) a (pl 1 - dot n e) k (dot n v) t (a / (mag k < 1e-12 ? 1.0 k))
@@ -86,8 +125,8 @@
  (keep kp kf f) (? (tablet? kp) ((kp 'kept) (kf ()) f) (f ()))
  ; ..and (kp 'tick), where kp has one, told as the making goes: what it is at and how far
  (ticker kp) (: t (tablet? kp ? (peep kp 'tick ()) ()) (w \ p \ (t @ () () f (f w p))))
- ; ..and a brush marked open has no top: the sky shows there
- (shut? b j) (!(peep b 'open 0) || b 'planes j 0 1 < 0.5)
+ ; ..and a brush marked open has no top: the sky shows there; one sheer no walls
+ (shut? b j) (: n (b 'planes j 0 1) ((!(peep b 'open 0) || n < 0.5) && (!(peep b 'sheer 0) || mag n >= 0.5)))
  ; ..only the faces want holds [i j] of, where it is a tablet
  (faces-kept bs kp want) (: nb #bs bt (tab bs) tick (ticker kp)
    ; ..the brushes near a box, all weighed at once: each axis's ends as a tray
@@ -99,7 +138,7 @@
    ; near it
    (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
    ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
-   ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0)]) bs)) ())
+   ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0)]) bs)) ())
    ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it
    (meets c pl) (cats (map (k \ (: g (c 'faces k) s (map (side pl) g)
                                   (#g >= 3 && foldl min2 1e9 s <= 1e-6 && foldl max2 -1e9 s >= -1e-6 ? [(c 'planes k)] ())))

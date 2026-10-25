@@ -7,8 +7,8 @@
 ; world-read, -new, -step, -move and -frame are pure; world-watch reads the disk, and only
 ; world-walk and world-run touch the tty.
 (module (world world-run world-walk world-main world-new world-size world-step world-binds world-pick world-span world-scene
-         edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray
-         world-move world-frame world-pens world-opts world-read world-load
+         edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
+         world-move world-mouse world-frame world-pens world-opts world-read world-load
          world-watch world-free? world-ks world-sound motes-at fps eye-h body-r grav-n)
 (borrow 'rove)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
@@ -27,7 +27,8 @@
  fps 30
  eye-h 1.6 body-r 0.25
  walk-v 3.4 turn-v 2.0 tilt-v 1.2         ; metres, and radians, a second
- ball-r 0.12 ball-e 0.72 ball-g 9.8 ball-kick 2.6  ; a ball: its radius, its bounce, the fall, the least kick
+ ball-r 0.12 ball-e 0.72 ball-kick 2.6    ; a ball: its radius, its bounce, the least kick
+ plush-e 0.2                                         ; a plush's bounce
  door-v 1.4 door-near 2.4 door-t 0.03     ; the doors: their pace, how near opens one, half their thickness
  grav-v 1.4 grav-n 60                    ; a grav shaft: how fast it carries, its motes
  car-t 0.08 car-wait 0.6 car-hold 1.5 car-acc 1.2  ; a car: its walls' thickness, the seconds before its door
@@ -39,8 +40,8 @@
  ; --- the level, read: (world-read s) runs a level file's text into a tablet {'name 'start
  ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
  ; ..a brush with no inside: a box flat in some direction, a prism no height
- (empty? r) (: sh (r 'shape)
-   (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3)))
+ (empty? r) (peep r 'land () != () ? 0
+   (: sh (r 'shape) (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3))))
  ; ..a scare raised by a word given what it does not take says what it takes; any other is
  ; love's own
  (world-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
@@ -135,6 +136,11 @@
    (foldl (\ b r (gap r < gap b || (gap r = gap b && area r < area b) ? r b)) <rs >rs))
  ; ..a room's box in plan, a little past its walls: what its lamps reach
  (inside r) [(r 0 - 0.11) (r 1 - 0.11) (r 2 + 0.11) (r 3 + 0.11)]
+ ; ..and the room round x y z of those holding height y, where one does, and its box floor to
+ ; ceiling as well
+ (room-in lv x y z) (: rs (filter (r \ r 5 - 0.3 <= y && y <= r 4 + 0.3) (lv 'rooms))
+   (atom? rs ? (room-at lv x z) (room-at (pin {} 'rooms rs) x z)))
+ (inside-y r) (inside r + [(r 5 - 0.11) (r 4 + 0.11)])
  ; ..the wall of x z's room nearest it: [ax at lo hi n], n into the room
  (wall-near lv x z) (: r (room-at lv x z)
    ws [['x (r 0) (r 1) (r 3) [1.0 0.0 0.0]] ['x (r 2) (r 1) (r 3) [-1.0 0.0 0.0]]
@@ -156,9 +162,11 @@
                (sheets lo dx dy [0.0 0.0 -1.0] uv tex col) (sheets [x0 y0 z1] dx dy [0.0 0.0 1.0] uv tex col)]))
  ; --- the world: the level's brushes in its order, and last each doorway carved through
  ;     its wall; the surfaces where air meets solid, textured by the way they face ---
- (brush-of r) (: sh (r 'shape)
-   b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
-   (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0)))
+ (brush-of r) (peep r 'land () @
+   () (: sh (r 'shape)
+         b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
+         (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0) 'sheer (peep r 'sheer 0)))
+   rs (pins (brush-land rs) 'skin (r 'skin) 'sig (foldl (\ a q (a + q 0 + 3.1 * q 1 + 7.3 * q 2)) 0.0 (cats rs))))
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min2 (p 0) (q 0)) (d 'y) (min2 (p 2) (q 2))] [(max2 (p 0) (q 0)) (d 'y + d 'h) (max2 (p 2) (q 2))]))
  (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
@@ -219,7 +227,12 @@
  ;     behaves, and what shines and glows by it, [packed brightness] each ---
  (light ls how sh gl) {'lamps ls 'how how 'shine sh 'glow gl}
  (nub at s col) (slab (c+ at [(0.0 - s) (0.0 - s) (0.0 - s)]) (c+ at [s s s]) (_ \ [0.0 0.0]) -1 col)
- (strip-light lv s) (: x (s 'at 0) z (s 'at 1) r (room-at lv x z) h (s 'y) fl (r 5) ac (s 'across) k (inside r)
+ ; ..an unlit one's fitting alone, lit by the room as anything is, and bright enough by it to
+ ; shine
+ (strip-bar s) (: x (s 'at 0) z (s 'at 1) h (s 'y) c (c* 6.0 white)
+   (s 'across ? (slab [(x - 0.6) (h - 0.05) (z - 0.08)] [(x + 0.6) h (z + 0.08)] (_ \ [0.0 0.0]) -1 c)
+                (slab [(x - 0.08) (h - 0.05) (z - 0.6)] [(x + 0.08) h (z + 0.6)] (_ \ [0.0 0.0]) -1 c)))
+ (strip-light lv s) (: x (s 'at 0) z (s 'at 1) h (s 'y) r (room-in lv x h z) fl (r 5) ac (s 'across) k (inside-y r)
    (spot i) (: o (0.3 * i - 0.6) (ac ? [(x + o) (h - 0.06) z] [x (h - 0.06) (z + o)]))
    bar (ac ? (slab [(x - 0.6) (h - 0.05) (z - 0.08)] [(x + 0.6) h (z + 0.08)] (_ \ [0.0 0.0]) -1 white)
             (slab [(x - 0.08) (h - 0.05) (z - 0.6)] [(x + 0.08) h (z + 0.6)] (_ \ [0.0 0.0]) -1 white))
@@ -229,9 +242,9 @@
            {'at [[x (fl + 0.02) z]] 'n [0.0 1.0 0.0] 'c (c* g2 [1.1 1.1 1.15]) 'r (6.0 * g) 'soft g 'keep k}]
           (s 'how) [[(mesh-pack bar) 3.0]] ()))
  ; ..a bulb: its glass white-hot and tinted, a glow round it, its light soft on what is near
- (bulb-light lv b) (: p (b 'at) c (b 'c) r (room-at lv (p 0) (p 2)) top (max2 0.01 (max2 (c 0) (max2 (c 1) (c 2))))
+ (bulb-light lv b) (: p (b 'at) c (b 'c) r (room-in lv (p 0) (p 1) (p 2)) top (max2 0.01 (max2 (c 0) (max2 (c 1) (c 2))))
    tint (c* (1.0 / top) c)
-   (light [{'at [p] 'c c 'r 6.0 'soft 0.35 'keep (inside r)}] (b 'how)
+   (light [{'at [p] 'c c 'r 6.0 'soft 0.35 'keep (inside-y r)}] (b 'how)
           [[(mesh-pack (nub p 0.04 (cmix tint white 0.55))) 4.0]] [[(mesh-pack (halo-ball p 0.35 tint)) 0.9]]))
  ; ..a sconce: its face white-hot, standing out from the wall, its light thrown the way it looks
  (sconce-light lv q) (: a (q 'at) n (c+ (q 'np) (c* -1.0 a)) d (c+ (q 'up) (c* -1.0 a)) l (cross n d) L (q 'len) s 0.25
@@ -270,7 +283,7 @@
       (light [{'at [p] 'c [0.006 0.07 0.015] 'r 1.6 'soft 0.2 'keep k}] [['open i]]
              [[(mesh-pack (nub p 0.035 [0.1 1.0 0.25])) 2.5]] ())])
    (side (d 'a) -0.01 + side (d 'b) 0.01))
- (lights-of lv) (map (strip-light lv) (lv 'strips) + map (bulb-light lv) (lv 'bulbs)
+ (lights-of lv) (map (strip-light lv) (filter (s \ !(peep s 'unlit 0)) (lv 'strips)) + map (bulb-light lv) (lv 'bulbs)
                  + map (sconce-light lv) (peep lv 'sconces ())
                  + map (sign-light lv) (lv 'signs) + map (flame-light lv) (peep lv 'flames ())
                  + cats (map (i \ door-lights lv i (lv 'doors i)) ^#(lv 'doors))
@@ -363,14 +376,17 @@
        (: dx (out 0 PX) dy (out 1 PY) dz (out 2 PZ) L (min R (6.0 * c - 0.5))
           ix (iota (dx * dx + dy * dy + dz * dz < L * L))
           (any (j \ (: i (peep ix j 0) (lit? (pts i 2) (pts i 0)))) ^#ix))))))))
- ; ..a pane: a sheet each way across the middle of its thin side, glass of its texture, the
- ; light on it its sheen
- (pane-mesh p tt) (: lo (p 'lo) hi (p 'hi) ax ((hi 0 - lo 0) < (hi 2 - lo 2) ? 0 2) al (2 - ax) m (0.5 * (lo ax + hi ax))
-   i (tix tt (p 'tex)) t (tt i) W (hi al - lo al) H (hi 1 - lo 1) g [0.14 0.15 0.15]
-   (pt a y) (ax = 0 ? [m y a] [a y m]) e (map (k \ k = al ? 1.0 0.0) ^3) n (map (k \ k = ax ? 1.0 0.0) ^3)
-   (uv q) [(t 1 / W * (q al - lo al)) (t 2 / H * (hi 1 - q 1))]
-   (mesh-join [(sheets (pt (lo al) (lo 1)) [0.0 H 0.0] (c* W e) n uv (-3 - i) g)
-               (sheets (pt (lo al) (lo 1)) [0.0 H 0.0] (c* W e) (c* -1.0 n) uv (-3 - i) g)]))
+ ; ..a pane: a sheet each way across the middle of its thin side, glass of its texture, the one
+ ; facing its lens's point a lens, the light on it its sheen; upright, or lying flat when it is
+ ; thinnest up
+ (pane-mesh p tt) (: lo (p 'lo) hi (p 'hi) (ex k) (hi k - lo k)
+   ax (ex 1 < min2 (ex 0) (ex 2) ? 1 (ex 0 < ex 2 ? 0 2)) ua (ax = 1 ? 0 (2 - ax)) va (ax = 1 ? 2 1) m (0.5 * (lo ax + hi ax))
+   i (tix tt (p 'tex)) t (tt i) g0 (-3 - i) W (ex ua) H (ex va) g [0.14 0.15 0.15]
+   (one k) (map (j \ j = k ? 1.0 0.0) ^3) o (map (k \ k = ax ? m (lo k)) ^3) n (one ax)
+   (uv q) [(t 1 / W * (q ua - lo ua)) (t 2 / H * (hi va - q va))]
+   L (peep p 'lens ()) (face s) (two? L && s * (L ax - m) > 0.0 ? (g0 - 16777216) g0)
+   (mesh-join [(sheets o (c* H (one va)) (c* W (one ua)) n uv (face 1.0) g)
+               (sheets o (c* H (one va)) (c* W (one ua)) (c* -1.0 n) uv (face -1.0) g)]))
  ; ..a packed mesh as its own light at brightness b, a glow when key says, kept on it while
  ; b holds
  (shine-at pk b key) (? (peep pk 'sb () = b) (pk 'sv)
@@ -380,9 +396,12 @@
  (decal-mesh d tt) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) u (unit (c+ (d 'up) (c* -1.0 a))) r (cross n u)
    w (d 'w) h (d 'h) i (tix tt (d 'tex)) t (tt i) o (c+ a (c+ (c* (-0.5 * w) r) (c* (-0.5 * h) u)))
    (sheets o (c* h u) (c* w r) n (q \ (: e (c+ q (c* -1.0 o)) [(t 1 / w * dot e r) (t 2 / h * (h - dot e u))])) i white))
+ ; ..a drape drawn apart from the chunks: one seen through glass or not, or flowing
+ (sheet? d) (peep d 'seen 0 != 0 || any (x \ x != 0.0) (peep d 'flow [0.0 0.0]))
  ; ..a drape's sheet: each cell whose four corners are there two triangles, its texels laid
- ; from the way it faces most, a floor's or a wall's; a corner's normal across its neighbours
- (drape-mesh d tt) (: rs (d 'rows) i (tix tt (d 'tex)) t (tt i) k (t 1 / t 3) R #rs C #<rs
+ ; from the way it faces most, a floor's or a wall's; a corner's normal across its neighbours;
+ ; one beyond or hither carries its class over its texture's index, as facets' seen takes it
+ (drape-mesh d tt) (: rs (d 'rows) i (tix tt (d 'tex) + 16777216 * peep d 'seen 0) t (tt (tix tt (d 'tex))) k (t 1 / t 3) R #rs C #<rs
    (at r c) ((r < 0) || (r >= R) || (c < 0) || (c >= C) ? () (rs r c))
    (or a b) (a = () ? b a)
    (nrm r c p) (: dr (c+ (or (at (r + 1) c) p) (c* -1.0 (or (at (r - 1) c) p))) dc (c+ (or (at r (c + 1)) p) (c* -1.0 (or (at r (c - 1)) p)))
@@ -413,6 +432,10 @@
    (light [{'at [p] 'c (c* 1.25 (c+ (avg-col txs (s 't1)) (avg-col txs (s 't2)))) 'r (s 'w + 10.0) 'soft 2.0
             'keep (inside (room-at lv (p 0) (p 2)))}]
           () () ()))
+ ; ..a glowing orb lights what is round it, far, in the colour it comes to
+ orb-shine 10.0
+ (orb-light txs o) (: r (o 'r)
+   (light [{'at [(o 'at)] 'c (c* (orb-shine * r * r) (avg-col txs (o 'tex))) 'r (20.0 * r) 'soft r 'wrap 0.3}] () () ()))
  ; ..its four faces about its middle's foot, outward, the two pictures in turn
  (spin-mesh s tt) (: w (s 'w) h (s 'h)
    (face i) (: f (i * pi / 2.0) n [(sin f) 0.0 (cos f)] a [(0.5 * w * sin f) (0.5 * h) (0.5 * w * cos f)]
@@ -455,10 +478,11 @@
    (kept k f) (: c (peep ov k ()) (? (two? c) <c (: v (f ()) (pin ov k [v], v))))
    (idof k) (: i (peep oi k ()) (? (i = ()) (: j (memo 'n) (pins memo 'n (j + 1) 'made (memo 'made + 1), pin oi k j, j)) i))
    txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm) (peep t 'lay ())]) txs)
-   ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ()))
+   ls (lights-of lv + map (ad-light lv txs tt) (peep lv 'ads ()) + map (spin-light lv txs) (peep lv 'spins ())
+       + map (orb-light txs) (filter (o \ peep o 'glow 0 = 1) (peep lv 'orbs ())))
    ptex (map (p \ poster-tex (file-of dir p) (p 'at 3) (p 'at 4)) ps)
    (pm i) (poster-mesh lv (ps i) (#tt + i) (shape (ptex i 0) 1) (shape (ptex i 0) 0))
-   bs (brushes-of lv)
+   bs (brushes-of lv) sf (surf-of lv)
    ; ..the world in chunks chunk-m square, so a frame draws only those in view, nearest first
    ; ..a lamp's mask is its room's or its car's, so a face a masked lamp reaches is kept by those too
    lps (cats (map (l \ l 'lamps) ls)) wk [(lv 'rooms) (vals (peep lv 'cars ()))]
@@ -471,14 +495,25 @@
    hot (map (q \ [(q 1) (q 2)]) (filter (q \ peep opin (q 0) 0 = 0 || (q 3 && wi != owi)) pst + filter (q \ peep pin1 (q 0) 0 = 0 || (q 3 && wi != owi)) ops))
    prev (fresh || peep memo 'ti () != ti ? () (peep memo 'bstate ()))
    kp {'kept kept 'id idof 'reach (reach-of ap pks wi) 'look (b \ [ti (vals (peep b 'skin ())) (b 'lo 1)])
-       'bkey (b \ idof [(b 'planes) (b 'air) (peep b 'open 0) (vals (peep b 'skin ())) (peep b 'whole 0)])
+       'bkey (b \ idof [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0) (vals (peep b 'skin ())) (peep b 'whole 0) (peep b 'sig 0)])
        'prev prev 'hot hot 'stash (st \ pin memo 'bstate st) 'tick tk}
    (on m k) [(mid3 (m 0)) m k]
-   ds (peep lv 'decals ()) dps (peep lv 'drapes ())
+   ds (peep lv 'decals ()) dps (filter (d \ !(sheet? d)) (peep lv 'drapes ()))
+   ; ..a land's sheet only where it is still the ground: none where a later air brush has
+   ; carved it open, asked only of the triangles inside one's box
+   cv (filter (b \ b 'air = 1 && !(peep b 'sheer 0) && peep b 'land () = ()) bs) ck (map (b \ [(b 'lo) (b 'hi)]) cv)
+   (ground-cut m d) (? (!(peep d 'land 0) || atom? cv) m
+     (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
+        (mid k) (gem-tray [n] (map (t \ (peep (P k) (t 0) 0.0 + peep (P k) (t 1) 0.0 + peep (P k) (t 2) 0.0) / 3.0) ts))
+        X (mid 0) Y (mid 1 - 0.05) Z (mid 2)
+        I (iota (foldl (\ a b (a + (b 'lo 0 < X) * (X < b 'hi 0) * (b 'lo 1 < Y) * (Y < b 'hi 1) * (b 'lo 2 < Z) * (Z < b 'hi 2))) (X * 0) cv > 0))
+        gone (foldl (\ t j (: i (peep I j 0) (brush-medium bs [(peep X i 0.0) (peep Y i 0.0) (peep Z i 0.0)] = 1 ? (pin t i 1) t))) {} ^#I)
+        (mesh (m 0) (map ts (filter (i \ peep gone i 0 = 0) ^n)))))
    (made k f) (: ky (idof [k ti]) [(kept ['mesh ky] f) ky])
    more (map (i \ (: m (made ['poster (vals (ps i)) i (shape (ptex i 0))] (_ \ pm i)) (on (m 0) (m 1)))) ^#ps
          + map (d \ (: _ (tick 'decals ()) m (made ['decal (vals d)] (_ \ decal-mesh d tt)) (on (m 0) (m 1)))) ds
-         + map (d \ (: m (made ['drape (vals d)] (_ \ drape-mesh d tt)) (on (m 0) (m 1)))) dps)
+         + map (d \ (: m (made ['drape (vals d) (peep d 'land 0 ? ck ())] (_ \ ground-cut (drape-mesh d tt) d)) (on (m 0) (m 1)))) dps
+         + map (s \ (: m (made ['bar (vals s)] (_ \ strip-bar s)) (on (m 0) (m 1)))) (filter (s \ peep s 'unlit 0) (lv 'strips)))
    cks (map (c \ [(c 0) (kept ['pack (c 0)] (c 1))])
             (chunks-kept bs [cell-top cell (coarse? lps)] (look tt) chunk-m more kp))
    _ (pins memo 'pts pst 'wi wi 'ti ti, fresh ? (pin memo 'size (memo 'made)))
@@ -490,18 +525,51 @@
    LR (foldl (\ t l (pin t #t (map mesh-lamp-row (l 'lamps)))) {} ls)
    (ch pk i) (lamp-light (pk 'cols) (LR i))
    ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
-   ; faces them, scaled to the gain the sky is seen through; the level's ambient off them
-   sk (sky-of lv) la (peep lv 'ambient [0.0 0.0 0.0]) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
+   ; faces them, scaled to the gain the sky is seen through, and the level's skylight; its ambient
+   ; off them. in
+   ; a void the brushes round a point decide in their order: the void's air puts it out, a
+   ; solid buries it, and a room carved where it is buried brings it in
+   sk (sky-on sf lv (sky-of lv)) la (peep lv 'ambient [0.0 0.0 0.0]) ls2 (peep lv 'skylight [0.0 0.0 0.0]) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
+   os (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0 && !(peep b 'sheer 0)) bs))
+   vi (cats (map (i \ peep (bs i) 'sheer 0 ? [i] ()) ^#bs))
    (daylit pk) (: c (pk 'cols) lt (sk 'lt) s (lt 'sun) X (c 0 + 0.05 * c 5) Y (c 1 + 0.05 * c 6) Z (c 2 + 0.05 * c 7)
-     m (min 1.0 (foldl (\ a b (a + (b 0 0 < X) * (X < b 1 0) * (b 0 1 < Y) * (Y < b 1 1 + 0.1) * (b 0 2 < Z) * (Z < b 1 2))) (X * 0.0) ob))
-     a (m * (0.5 + 0.5 * c 6) * sk 'k) d (m * max 0.0 (c 5 * s 0 + c 6 * s 1 + c 7 * s 2) * (lt 'sunk * sk 'k))
-     (map (j \ a * lt 'amb j + d * lt 'sunc j + (1.0 - m) * la j) ^3))
+     (box? b) ((b 0 0 < X) * (X < b 1 0) * (b 0 1 < Y) * (Y < b 1 1 + 0.1) * (b 0 2 < Z) * (Z < b 1 2))
+     m0 (foldl (\ a b (a + box? b)) (X * 0.0) os)
+     lo [(amin X) (amin Y) (amin Z)] hi [(amax X) (amax Y) (amax Z)]
+     (meets b) (all (k \ b 'lo k <= hi k + 0.2 && lo k - 0.2 <= b 'hi k) ^3)
+     near (atom? vi ? () (filter meets (drop <vi bs)))
+     (under b) (: J (iota (Y > b 'low)) (at k) (: i (peep J k 0) (land-y b (peep X i 0.0) (peep Z i 0.0) @ () 0 h (peep Y i 0.0 <= h ? 1 0)))
+                 (pin (Y <= b 'low) J (gem-tray [#J] (map at ^#J))))
+     (in b) (? (peep b 'land () != ()) (under b) (foldl (\ a q (a * (X * q 0 0 + Y * q 0 1 + Z * q 0 2 <= q 1 + 1e-6))) (X * 0.0 + 1) (b 'planes)))
+     ; ..a room carved under the ground brings what it holds in, but one standing up out of
+     ; it is open, as it was before the ground: the ground's height wanted only for such a one
+     lnd (filter (b \ peep b 'land () != ()) near)
+     tall (any (b \ b 'air = 1 && peep b 'land () = () && any (l \ b 'hi 1 > l 'low) lnd) near)
+     G (tall ? (gem-tray [#X] (map (i \ foldl (\ a l (max a (land-y l (peep X i 0.0) (peep Z i 0.0) @ () -1e9 h h))) -1e9 lnd) ^#X)) 0)
+     (step w b) (: o (w 0) u (w 1)
+                  (? (peep b 'sheer 0) (: i (box? [(b 'lo) (b 'hi)]) [(o - i * o + i) (u - i * u)])
+                     (peep b 'open 0) w
+                     (: i (in b) p (tall ? (b 'hi 1 > G) 0)
+                        (b 'air = 0 ? [o (u - i * u + i)] [(o - i * u * o * (1 - p)) (u - i * u)]))))
+     w (foldl step [(X * 0.0) (X * 0.0)] near)
+     ; ..and past every brush but the ground the open, nothing there to bury it; under the
+     ; ground buried, as in a solid
+     past (foldl (\ a b (peep b 'land () != () ? a (a * (1 - box? [(b 'lo) (b 'hi)])))) (X * 0.0 + 1) (filter meets bs))
+     m (min 1.0 (m0 + w 0 * (1 - w 1) + past))
+     ; ..and buried where the open is round it, as a thing's foot is: half the open's light,
+     ; none of a room's
+     bo (w 0 * w 1 * (1 - m)) o (m + 0.5 * bo)
+     ; ..on a surface, the sun as high as it stands over each place, the eye's own light
+     ; setting the frame's gain
+     q (tablet? sf ? (sun-here sf sk (c 0) (c 1) (c 2)) [s (lt 'amb) (lt 'sunc) (lt 'sunk) (sk 'k)]) sl (q 0)
+     a (o * (0.5 + 0.5 * c 6) * q 4) d (o * max 0.0 (c 5 * sl 0 + c 6 * sl 1 + c 7 * sl 2) * (q 3 * q 4))
+     (map (j \ a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * la j) ^3))
    (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ la (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
              'chs (map (ch pk) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
    ; ..a chunk's light kept by what lights it: the lights that reach its box, in their places
    ; ..a light as a key says it, its masks left to wk
-   lfs (map (l \ [(map (lp \ [(lp 'at) (peep lp 'n ()) (lp 'c) (lp 'r) (peep lp 'soft ()) (peep lp 'wrap ())]) (l 'lamps)) (vals (peep l 'how ()))]) ls) gk [la ob (vals (peep lv 'sky ())) dyn still wk]
+   lfs (map (l \ [(map (lp \ [(lp 'at) (peep lp 'n ()) (lp 'c) (lp 'r) (peep lp 'soft ()) (peep lp 'wrap ())]) (l 'lamps)) (vals (peep l 'how ()))]) ls) gk [la ob (vals (peep lv 'sky ())) dyn still wk (tablet? sf ? [(vals (lv 'surface)) (vals (lv 'start))] ())]
    ; ..the lights reaching a box, weighed all at once by their lamps' points
    lq (cats (map (i \ cats (map (lp \ map (p \ [p (lp 'r) i]) (lp 'at)) (ls i 'lamps))) ^#ls)) nq #lq
    (qcol f) (gem-tray [nq] (map (q \ 1.0 * f q) lq)) QP (map (k \ qcol (q \ q 0 k)) ^3) QR (qcol (q \ q 1))
@@ -521,19 +589,90 @@
                                                     {'pk q 'lit (kept ['car-props-lit ck (litk-of q)] (_ \ clit lp q ['car-props ck]))}) ())
                       'bar (kept ['car-bar ck] (_ \ mesh-pack (car-bar c)))}))
              (peep lv 'cars ()))
-   {'motes (map motes-of (peep lv 'gravs ()))
+   (bent-scene sf {'motes (map motes-of (peep lv 'gravs ()))
     'panes (map (p \ (: k ['pane (vals p) tt] pk (kept k (_ \ mesh-pack (pane-mesh p tt))) {'pk pk 'lit (lit-of k pk)})) (peep lv 'panes ()))
+    'sheets (map (d \ (: k ['sheet (vals d) tt] pk (kept k (_ \ mesh-pack (drape-mesh d tt))) t (tt (tix tt (d 'tex)))
+                       {'pk pk 'lit (lit-of k pk) 'seen (peep d 'seen 0) 'flow (map (j \ t 1 / t 3 * d 'flow j) ^2) 'wh [(t 1) (t 2)]}))
+                 (filter sheet? (peep lv 'drapes ())))
     'chunks (map (c \ (: _ (tick 'light ()) pk (c 1) lo (map (k \ amin (pk 'cols k)) ^3) hi (map (k \ amax (pk 'cols k)) ^3)
                           {'pk pk 'lit (kept ['lit (idof (c 0)) (litk lo hi)] (_ \ lit pk)) 'lo lo 'hi hi 'mid (map (k \ 0.5 * (lo k + hi k)) ^3)
                            'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
     'doors drs 'doors-lit (map (i \ lit-of ['door (vals (lv 'doors i)) tt] (drs i)) ^#drs) 'cars cars 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
     'ball (two? (peep lv 'balls ()) ? (ball-mesh ()) ()) 'lit lit
+    'plushes (map (u \ (: f (file-of dir u) (kept ['plush f (stamp f)] (_ \ plush-of f)))) (peep lv 'plushes ()))
     'spins (map (s \ spin-mesh s tt) (peep lv 'spins ()))
     'orbs (map (o \ (: k ['orb (o 'at) (o 'r) (o 'tex) (o 'turns) (o 'coarse) tt] pk (kept k (_ \ mesh-pack (orb-mesh o tt)))
                        {'pk pk 'lit (lit-of k pk) 'round (2.0 * tt (tix tt (o 'tex)) 1)}))
                (peep lv 'orbs ()))
     'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex)
-    'memo memo})
+    'memo memo 'surf sf}))
+ ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
+ ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,
+ ;     up and ahead there, unit; 'per how far along x and z a metre walked there goes;
+ ;     'bend how it curves away down along x and along z, the one over its radius; 'chart
+;     a place in the world back in the level's own ---
+ (surf-of lv) (peep lv 'surface () @ () () s (s 'shape @ 'torus (torus (s 'lx) (s 'lz)) 'plane (plane (s 'lx) (s 'lz))))
+ ; ..round a ring's tube: x round the ring, z round the tube from its inside, the outside
+ ; halfway round, y off it
+ (torus lx lz) (: R (lx / tau) r (lz / tau)
+   {'lx lx 'lz lz
+    'at (\ x y z (: t (x / R) f (z / r - pi) q (r + y) c (R + q * cos f) [(c * cos t) (q * sin f) (c * sin t)]))
+    'axes (\ x y z (: t (x / R) f (z / r - pi) ct (cos t) st (sin t) cf (cos f) sn (sin f)
+                     [[(0.0 - st) 0.0 ct] [(cf * ct) sn (cf * st)] [(0.0 - sn * ct) cf (0.0 - sn * st)]]))
+    'per (\ x y z [(R / (R + (r + y) * cos (z / r - pi))) (r / (r + y))])
+    'bend (\ x y z (: c (cos (z / r - pi)) [(c / (R + (r + y) * c)) (1.0 / (r + y))]))
+    'chart (\ p (: t (atan2 (p 2) (p 0)) q (sqrt (p 0 * p 0 + p 2 * p 2) - R) f (atan2 (p 1) q) x (t * R) z ((f + pi) * r)
+                  [(x < 0.0 ? (x + lx) x) (sqrt (q * q + p 1 * p 1) - r) (z < 0.0 ? (z + lz) z)]))})
+ ; ..or flat, only wrapping
+ (plane lx lz) {'lx lx 'lz lz 'at (\ x y z [x y z]) 'axes (\ x y z [[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]]) 'per (\ x y z [1.0 1.0])
+                'bend (\ x y z [0.0 0.0]) 'chart (\ p p)}
+ ; ..a packed mesh laid on it, and a frame's [verts tris], 8 a vertex
+ (bent sf pk) (: c (pk 'cols) {'n (pk 'n) 'tris (pk 'tris) 'cols (sf 'at (c 0) (c 1) (c 2) + drop 3 c)})
+ (bent-tris sf b) (: v (b 0) i (iota (#v // 8) * 8) (g k) (peep v (i + k) 0.0) p (sf 'at (g 0) (g 1) (g 2))
+   [(foldl (\ u k (pin u (i + k) (p k))) (v + 0.0) ^3) (b 1)])
+ ; ..the scene's still meshes laid on it once, each chunk's ball where it is laid, and the
+ ; lights' fittings
+ (bent-scene sf sc) (? !(tablet? sf) sc
+   (: (b q) (pin q 'pk (bent sf (q 'pk)))
+      (ball q) (: c (q 'pk 'cols) lo (map (k \ amin (c k)) ^3) hi (map (k \ amax (c k)) ^3)
+                 (pins q 'mid (map (k \ 0.5 * (lo k + hi k)) ^3) 'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))))
+      (fit l k) (map (q \ [(bent sf (q 0)) (q 1)]) (peep l k ()))
+      (pins sc 'chunks (map (q \ ball (b q)) (sc 'chunks)) 'panes (map b (sc 'panes)) 'sheets (map b (sc 'sheets))
+               'lights (map (l \ pins l 'shine (fit l 'shine) 'glow (fit l 'glow)) (sc 'lights)))))
+ ; ..the eye's view laid on it: the same view of the level's own, turned and moved there
+ (bent-view sf v) (: e (v 'e) B (sf 'axes (e 0) (e 1) (e 2)) (tw a) (map (j \ a 0 * B 0 j + a 1 * B 1 j + a 2 * B 2 j) ^3)
+   (mesh-aim (v 'w) (v 'h) (sf 'at (e 0) (e 1) (e 2)) (tw (v 'r)) (tw (v 'u)) (tw (v 'f)) (v 'fov) (v 'near) (v 'far)))
+ ; ..a step there, as far along x and z as a metre goes; and a body past an end, round again
+ (surf-step st d) (peep (st 'sc) 'surf () @ () d sf (: k (sf 'per (st 'px) (st 'py - eye-h) (st 'pz)) [(k 0 * d 0) (k 1 * d 1)]))
+ (surf-wrap! st) (peep (st 'sc) 'surf () @ () st
+   sf (: (m v l) (v - l * floor (v / l)) (pins st 'px (m (st 'px) (sf 'lx)) 'pz (m (st 'pz) (sf 'lz)))))
+ ; ..the level's sky on it: its sun and stars fixed in the world, as the start sees them,
+ ; and the sky's light by how high the sun stands, 64 steps from straight under to over
+ (sky-on sf lv sk) (? !(tablet? sf && tablet? sk) sk
+   (: s (lv 'start) B (sf 'axes (s 'at 0) (s 'y) (s 'at 1)) (world v) (map (j \ v 0 * B 0 j + v 1 * B 1 j + v 2 * B 2 j) ^3)
+      ss (sk 'ss) n 64 ls (map (i \ (: y (2.0 * i / n - 1.0) (sky-light [0.0 y (sqrt (max2 0.0 (1.0 - y * y)))] (sk 'wx) (sk 'sim)))) ^(n + 1))
+      (col f) (gem-tray [(n + 1)] (map f ls))
+      (pins sk 'sw (world (sk 'lt 'sun)) 'ws (world [(ss 'x) (ss 'y) (ss 'z)])
+               'by {'n n 'amb (map (j \ col (l \ l 'amb j)) ^3) 'sunc (map (j \ col (l \ l 'sunc j)) ^3) 'sunk (col (l \ l 'sunk))})))
+ ; ..a world direction as the surface's x y z at x y z have it
+ (here sf x y z v) (: B (sf 'axes x y z) (map (k \ v 0 * B k 0 + v 1 * B k 1 + v 2 * B k 2) ^3))
+ ; ..the sun over places x y z (trays): [its way, the ambient, the sun's colour, its share,
+ ; the gain], the gain left to the frame
+ (sun-here sf sk x y z) (: sl (here sf x y z (sk 'sw)) t (sk 'by) n (t 'n) u ((sl 1 + 1.0) * n / 2.0)
+   i (min (max (floor u) 0) (n - 1)) f (u - i) (at T) (peep T i 0.0 * (1.0 - f) + peep T (i + 1) 0.0 * f)
+   [sl (map at (t 'amb)) (map at (t 'sunc)) (at (t 'sunk)) 1.0])
+ ; ..and the sky the eye at e sees: the sun and the stars as they stand over it, each star
+ ; there as high as it is, and the sun's light as high as it stands over the ground's
+ ; edge that way, the ground falling away by its bend; its disc where it is
+ (sky-here sf sk e) (? !(tablet? sf && tablet? sk) sk
+   (: x (e 0) y (e 1) z (e 2) s (here sf x y z (sk 'sw)) ss (sk 'ss) w (here sf x y z (sk 'ws))
+      h (sqrt (s 0 * s 0 + s 2 * s 2)) b (sf 'bend x (y - eye-h) z)
+      k (h < 1e-6 ? 0.0 ((b 0 * s 0 * s 0 + b 1 * s 2 * s 2) / (h * h)))
+      c (1.0 / (1.0 + eye-h * max2 0.0 k)) dip (atan2 (sqrt (1.0 - c * c)) c) a (atan2 (s 1) h + dip)
+      up (h < 1e-6 ? s [(cos a * s 0 / h) (sin a) (cos a * s 2 / h)])
+      lt (pin (sky-light up (sk 'wx) (sk 'sim)) 'sun s)
+      {'lt lt 'wx (sk 'wx) 'sim (sk 'sim) 'k (0.75 * lt 'expo)
+       'ss (pins (foldl (\ t k (pin t k (ss k))) {} (keys ss)) 'x (w 0) 'y (w 1) 'z (w 2) 'b (ss 'b0 * sat (w 1 / 0.1)))}))
  ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
  ;     its own height, speed, and turn about the middle, from its number ---
  (hash01 i) (: h (sin (i * 12.9898 + 78.233) * 43758.5453) (h - floor h))
@@ -559,18 +698,33 @@
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
  fov 1.5
  gain 2.0
+ ; ..f's first answer along the ray through x y of the screen: f takes a straight piece of it
+ ; from p along d and answers what it meets there, {'t ..} or (). on a surface the straight
+ ; ray through the world, brought back in metre pieces, each answer within its piece, none
+ ; taken from one torn across the seam where the world wraps
+ (world-cast st x y f) (: r (world-ray st x y) e (r 0) v (r 1) sf (peep (st 'sc) 'surf ())
+   (? (!(tablet? sf)) (f e v)
+      (: E (sf 'at (e 0) (e 1) (e 2)) ax (sf 'axes (e 0) (e 1) (e 2)) W (map (i \ v 0 * ax 0 i + v 1 * ax 1 i + v 2 * ax 2 i) ^3)
+         (at s) (sf 'chart (c+ E (c* s W)))
+         (go k) (: p (at (1.0 * k)) d (c+ (at (1.0 * k + 1.0)) (c* -1.0 p)) h (dot d d < 9.0 ? (f p d) ())
+                  (? (tablet? h && h 't <= 1.0) h (k < 60) (go (k + 1)) ()))
+         (go 0))))
  ; ..the thing under a point x y of the screen: where the ray through it first comes out of
  ; the air, with the brush there and its source path, or ()
- (world-pick st x y) (: r (world-ray st x y) e (r 0) v (r 1) lv (st 'lvl)
-   q (brush-ray (st 'sc 'brushes) e v @ () () q (pin q 'src (peep (peep (lv 'brushes) (q 'b) {}) 'src ())))
-   (foldl (\ a b (prop-hit b e v @ () a h (tablet? a && a 't <= h 't ? a h))) q (world-props lv)))
+ (world-pick st x y) (: lv (st 'lvl) ps (world-props lv (st 'sc))
+   (hit e v) (: q (brush-ray (st 'sc 'brushes) e v @ () () q (pin q 'src (peep (peep (lv 'brushes) (q 'b) {}) 'src ())))
+     (foldl (\ a b (prop-hit b e v @ () a h (tablet? a && a 't <= h 't ? a h))) q ps))
+   (world-cast st x y hit))
  xf-id [1.0 0.0 0.0 1.0 0.0 0.0]          ; a form's place where nothing has moved it
- ; ..what a click chooses that is no brush: each orb a ball, each strip light its fitting's box,
- ; with its source path and place
- (world-props lv) (map (o \ {'ball 1 'at (o 'at) 'r (o 'r) 'src (peep o 'src ()) 'xf (peep o 'xf xf-id)}) (peep lv 'orbs ())
+ ; ..what a click chooses that is no brush: each orb a ball, each strip light its fitting's box
+ ; and each plush the box it lies in, with its source path and place
+ (world-props lv sc) (map (o \ {'ball 1 'at (o 'at) 'r (o 'r) 'src (peep o 'src ()) 'xf (peep o 'xf xf-id)}) (peep lv 'orbs ())
    + map (s \ (: x (s 'at 0) z (s 'at 1) h (s 'y) a (s 'across ? 0.6 0.08) c (s 'across ? 0.08 0.6)
                 {'ball 0 'lo [(x - a) (h - 0.05) (z - c)] 'hi [(x + a) h (z + c)] 'src (peep s 'src ()) 'xf (peep s 'xf xf-id)}))
-         (peep lv 'strips ()))
+         (peep lv 'strips ())
+   + map (i \ (: p (lv 'plushes i) a (p 'at) m (sc 'plushes i) w (m 'w) h (2.0 * m 'r)
+                {'ball 0 'lo [(a 0 - w) (a 1) (a 2 - w)] 'hi [(a 0 + w) (a 1 + h) (a 2 + w)] 'src (peep p 'src ()) 'xf (peep p 'xf xf-id)}))
+         ^#(peep lv 'plushes ()))
  ; ..a prop's corners, a ball's those of the box round it
  (prop-box b) (b 'ball ? [(map (i \ b 'at i - b 'r) ^3) (map (i \ b 'at i + b 'r) ^3)] [(b 'lo) (b 'hi)])
  ; ..where the ray from e along v first meets prop b, as brush-ray answers, or ()
@@ -601,22 +755,31 @@
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)))))
  (level-pens st sh) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (world-ks sc (st 'mt) ds)
-   e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px) (st 'py) (st 'pz)])
+   e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px) (st 'py + dip st) (st 'pz)])
    th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph))
    ; ..under a sky, the sky where nothing is drawn; out in a street, seen further, its haze
    ; for fog
-   sk (sc 'sky) sim (tablet? sk ? (sk 'sim + st 'mt) 0.0)
-   out (tablet? sk && any (b \ !(any (k \ e k <= b 0 k || b 1 k + 0.1 <= e k) ^3)) (sc 'open))
-   v (mesh-eye w h e th ph 0.0 fov 0.05 (out ? 150.0 60.0))
-   fog (out ? (: hz (mesh-haze v (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) 50.0 150.0]) [0.0 0.0 0.0 30.0 60.0])
-   sky (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
+   sk (sky-here (peep sc 'surf ()) (sc 'sky) e) sim (tablet? sk ? (sk 'sim + st 'mt) 0.0)
+   (in? lo hi) !(any (k \ e k <= lo k || hi k + 0.1 <= e k) ^3)
+   out (tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
+        && !(tablet? (peep sc 'surf ()) && any (b \ b 'air = 1 && !(peep b 'open 0) && peep b 'land () = () && in? (b 'lo) (b 'hi)) (sc 'brushes)))
+   ; ..on a surface, the eye's view laid there, and the sky seen as from the level's own
+   sf (peep sc 'surf ()) fr (tablet? sf ? 300.0 (out ? 150.0 60.0))
+   vl (mesh-eye w h e th ph 0.0 fov 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
+   fog (out ? (: hz (mesh-haze vl (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) (tablet? sf ? 90.0 50.0) fr]) [0.0 0.0 0.0 30.0 60.0])
+   sk0 (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (k @ 1 1 (sky-k * k))) 0)
+   sky (? (!(tablet? sf) || charm? sk0) sk0 (two? sk0) [(_ \ <sk0 vl) (\ _ f B (sk0 1 vl f B))] (\ _ S (sk0 vl S)))
    ; ..indoors the sky only up through an open top, and elsewhere the dark: past what is
-   ; drawn, or a crack between two surfaces
-   (shut S) (: d (mesh-dirs v S) up (d 1 > 1e-6) dy (max (d 1) 1e-6)
-     (on b) (: t ((b 1 1 - e 1) / dy) x (e 0 + t * d 0) z (e 2 + t * d 2) (up * (b 0 0 <= x) * (x <= b 1 0) * (b 0 2 <= z) * (z <= b 1 2)))
-     (iota (foldl (\ m b (max m (on b))) (up * 0) (sc 'open) = 0)))
+   ; drawn, or a crack between two surfaces. on a surface a ray climbs off it as the ground
+   ; bends away under it, half the bend over the way gone squared
+   kb (tablet? sf ? (sf 'bend (e 0) (e 1) (e 2)) [0.0 0.0]) pr (tablet? sf ? (sf 'per (e 0) (e 1) (e 2)) [1.0 1.0])
+   (shut S) (: d (mesh-dirs vl S) a (0.5 * (kb 0 * d 0 * d 0 + kb 1 * d 2 * d 2))
+     (on b) (: c (b 1 1 - e 1) q (d 1 * d 1 + 4.0 * a * c) g (d 1 + sqrt (max q 0.0)) up ((q >= 0.0) * (g > 1e-6))
+              t (2.0 * c / max g 1e-6) x (e 0 + t * pr 0 * d 0) z (e 2 + t * pr 1 * d 2)
+              (up * (b 0 0 <= x) * (x <= b 1 0) * (b 0 2 <= z) * (z <= b 1 2)))
+     (iota (foldl (\ m b (max m (on b))) (d 1 * 0) (sc 'open) = 0)))
    bare (? (out || charm? sky) sky
-           (two? sky) [(sky 0) (\ v f B (: g ((sky 1) v f B) S (iota (f = -1)) (pin g (peep S (shut S) 0) 0)))]
+           (two? sky) [(sky 0) (\ v f B (: g ((sky 1) v f B) S (iota (f < 0)) (pin g (peep S (shut S) 0) 0)))]
            (\ v S (pin (sky v S) (shut S) 0)))
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
@@ -625,7 +788,7 @@
    pls (map (q \ (: a (row (q 0)) b (row 3) s (q 1) n (map (j \ b j + s * a j) ^4) (: s (1.0 / sqrt (sq (n 0) + sq (n 1) + sq (n 2))) (map (x \ s * x) n))))
             [[0 1.0] [0 -1.0] [1 1.0] [1 -1.0] [2 1.0] [2 -1.0]])
    (seen? c) (: m (c 'mid) r (0.0 - c 'rad) !(any (n \ n 0 * m 0 + n 1 * m 1 + n 2 * m 2 + n 3 < r) pls))
-   (far c) (net (map (k \ sq (c 'mid k - e k)) ^3))
+   (far c) (net (map (k \ sq (c 'mid k - v 'e k)) ^3))
    cks (sc 'chunks)
    hall (map (q \ (: c (cks (q 1)) (relit (c 'pk) (c 'lit)))) (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness
@@ -645,18 +808,28 @@
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (cats (map (i \ cats (map (q \ ((q 1 * ks i) @ 0.0 () b [(shine-at (q 0) b key)])) (sc 'lights i key))) ^#ks))
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   glass (map (c \ relit (c 'pk) (c 'lit)) (sc 'panes))
+   gone (peep st 'broke {}) glass (map (i \ relit (sc 'panes i 'pk) (sc 'panes i 'lit)) (filter (i \ peep gone i 0 = 0) ^#(sc 'panes)))
+   ; ..the sheets apart from the chunks, their texels drifting as they flow
+   (drift x w) (x - w * floor (x / w))
+   sheets (map (c \ (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
+                       (foldl (\ b j (c 'flow j = 0.0 ? b [(pin (b 0) (ix + 3 + j) (pk 'cols (3 + j) + drift (c 'flow j * st 'mt) (c 'wh j))) (b 1)]))
+                              b ^2)))
+               (peep sc 'sheets ()))
    ; ..each ball where it is, made again only once it has moved
    balls (map (b \ (: d (tablet? (b 'pk) ? (b 'pk) (: d (ball-pk sc b) (pin b 'pk d, d))) (relit (d 'pk) (d 'lit))))
               (peep st 'balls ()))
    spins (cats (map (i \ spin-at (lv 'spins i) (sc 'spins i) (st 'mt)) ^#(peep lv 'spins ())))
    ; ..the orbs, those drawn coarse apart at the coarsest's k, under the rest
-   (orb i) (orb-at (lv 'orbs i) (sc 'orbs i) (st 'mt) @ q (relit (q 0) (q 1)))
+   (orb i) (orb-at (lv 'orbs i) (sc 'orbs i) (st 'mt) @ q (peep (lv 'orbs i) 'glow 0 = 1 ? (mesh-shine (q 0) 1.0) (relit (q 0) (q 1))))
    (ok i) (lv 'orbs i 'coarse) ois ^#(peep lv 'orbs ())
    orbs (map orb (filter (i \ ok i = 1) ois)) cos (map orb (filter (i \ ok i > 1) ois)) ck (foldl (\ a i (max a (ok i))) 1 ois)
    _ (two? cos ? (pin v 'under (mesh-coarse v [(map (b \ b 0) cos) (map (b \ b 1) cos)] (sc 'texs) fog 8 gain ck)))
-   all (orbs + balls + cars + doors + hall + by 'shine + spins + glass + by 'glow + map (m \ motes-at m (st 'mt)) (sc 'motes))
-   (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog 8 gain bare))
+   shards (map (s \ relit (s 'pk) (s 'lit)) (peep st 'shards ()))
+   ; ..what moves laid on a surface frame by frame, what stands laid with the scene
+   (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
+   all (bd orbs + bd balls + bd cars + bd doors + hall + sheets + bd shards + by 'shine + bd spins + glass + by 'glow
+        + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)))
+   (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
  (world-frame st) (: w (st 'w) h (st 'h) f (world-pens st) r (h // 2)
@@ -674,9 +847,9 @@
  (world-new w h lv dir) (state-new w h lv dir ())
  ; ..ld () or (_ \ tick), a fresh tick for each time the scene is made, kept to make it again
  (loader st) (peep st 'load () @ () () f (f ()))
- (state-new w h lv dir ld) (: s (lv 'start)
-   (world-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0
-                   'lvl lv 'sc (scene lv dir () (ld @ () () f (f ()))) 'load ld 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv) 'cut () 'ct 0.0 'deep 0 'kitty 0 'kp 1
+ (state-new w h lv dir ld) (: s (lv 'start) sc (scene lv dir () (ld @ () () f (f ())))
+   (world-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0 'gt 0.0
+                   'lvl lv 'sc sc 'load ld 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'balls (balls-new lv sc) 'cut () 'ct 0.0 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
                   w (h // 2)))
  (world-size st w r) (mesh-size st w r)
@@ -696,16 +869,25 @@
                        && !(any (q \ q 0 0 <= x && x <= q 1 0 && q 0 2 <= z && z <= q 1 2) (c 'pboxes)))
                       || (s 'door >= 0.85 && mag (al - c 'dc) < 0.5 * c 'dw
                           && min2 (c 'side) w <= ac && ac <= max2 (c 'side) w))))
- (world-free? st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (peep lv 'cars ())
+ ; ..where a body may stand: nothing in its way there; or, one already caught in something, a
+ ; way out less caught than it is, or as caught and away from what holds it, its middle clear
+ (world-free? st x z) (: c (caught st x z) n <c
+   (n = 0 || (n < 50 && (: h (caught st (st 'px) (st 'pz))
+                            (n < <h || n = <h && (x - st 'px) * h 1 + (z - st 'pz) * h 2 < 0.0)))))
+ ; ..how much of a body at x z is in the way: its points, 50 more for its middle, 99 a shut door;
+ ; and the way to those caught, summed
+ (caught st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (peep lv 'cars ())
    ring (map (k \ (: a (k * pi / 4.0) [(x + r * cos a) (z + r * sin a)])) ^8) pts ([x z] . ring)
    (shut? i) (: d (lv 'doors i) al (d 'ax = 'z ? x z) ac (d 'ax = 'z ? z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
-   fl (st 'py - eye-h)
+   ; ..the feet as they will be there, a step up taken at once, so a stair shallower than a body
+   ; is walked and not bumped
+   f0 (st 'py - eye-h) g (floor-at (column bs x z) x z f0) fl ((charm? g || gem? g) && g > f0 && g <= f0 + 0.3 ? g f0)
    ; ..a pane stops a body, a hand either side of it, where it spans feet or head
    (pane? q) (any (p \ (: lo (p 'lo) hi (p 'hi) th 0.1
                        (lo 0 - th < q 0 && q 0 < hi 0 + th && lo 2 - th < q 1 && q 1 < hi 2 + th
                         && any (y \ lo 1 <= y && y <= hi 1) [(fl + 0.3) (fl + 1.7)])))
-               (peep lv 'panes ()))
+               (panes-of st))
    ; ..air from a step over the feet to the head, all the way: nothing thinner than a body
    ; slipped between; among only the brushes the body is within
    near (filter (c \ c 'lo 0 - 0.01 <= x + r && x - r <= c 'hi 0 + 0.01 && c 'lo 2 - 0.01 <= z + r && z - r <= c 'hi 2 + 0.01) bs)
@@ -713,15 +895,23 @@
      (brush-medium near lo = 1 && (brush-ray near lo [0.0 1.0 0.0] @ () 1 h (h 't >= 1.4))))
    (air q) (: on (filter (i \ car-track? (cs i) (q 0) (q 1)) ^#cs)
      (two? on ? (all (i \ car-free? (cs i) (st 'cars i) (q 0) (q 1)) on) (clear? q)))
-   (all air pts && !(any pane? pts) && !(any shut? ^#(lv 'doors))))
+   (bad q) (!(air q) || pane? q)
+   bs2 (filter bad ring)
+   [(any shut? ^#(lv 'doors) ? 99 (#bs2 + (bad <pts ? 50 0)))
+    (foldl (\ a q (a + q 0 - x)) 0.0 bs2) (foldl (\ a q (a + q 1 - z)) 0.0 bs2)])
  jump-v 4.4                               ; up near a metre
+ ; ..a jump from the ground, or a moment after leaving it; one pressed a moment before
+ ; landing is kept for the landing
+ coyote-t 0.12 jq-t 0.15
+ (can-jump? st) (!(hoisting? st) && peep st 'gv 0.0 = 0.0 && st 'mt - peep st 'gt -9.0 <= coyote-t)
+ (jump! st) (mix-cry (pins st 'fv jump-v 'gt -9.0 'jq -9.0) "hop" ())
  mantle-h 0.6                             ; how far over the feet a ledge is hoisted onto
  (put! st x z) (walk-slide st x z world-free?)
  hoist-s 0.35                             ; seconds a pull up takes
  ; ..in the air against a ledge no more than mantle-h over the feet, a pull up onto it where
  ; a body fits: the ledge looked for a body's breadth on the way, and stood on as far in
  (hoist! st x z) (: fl (st 'py - eye-h) dx (x - st 'px) dz (z - st 'pz) d (max2 1e-9 (sqrt (dx * dx + dz * dz)))
-   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (st 'sc 'brushes) cx cz (fl + mantle-h)) y0 (st 'py)
+   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (column (st 'sc 'brushes) cx cz) cx cz (fl + mantle-h)) y0 (st 'py)
    (? (!(charm? t || gem? t) || t <= fl + 0.001 || t > fl + mantle-h + 0.001) 0
       (: _ (pin st 'py (t + eye-h)) ok (world-free? st cx cz) _ (pin st 'py y0)
          (ok ? (: _ (pins st 'fv 0.0 'hoist {'y0 y0 'y1 (t + eye-h) 'x0 (st 'px) 'z0 (st 'pz) 'x1 cx 'z1 cz 'k 0.0}) 1) 0))))
@@ -735,23 +925,41 @@
  mouse-k 0.0025
  (world-look st dx dy) (two? (peep st 'cut ()) ? st (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2}))
  ; ..the world's own keys, over view's
- world-binds {112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump}
+ world-binds {101 'tap 112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump}
  ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
  ; way to go, summed for the frame's walk. any key during the shots skips them
  (world-step st a) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st)
    (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
    (up u) (pin st 'mu (peep st 'mu 0 + u))
    (two? (peep st 'cut ()) ? (cue st) (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
-      'jump (? fly (up 1) (peep st 'fv 0.0 = 0.0 && peep st 'gv 0.0 = 0.0 && !(hoisting? st)) (pin st 'fv jump-v) st)
+      'jump (? fly (up 1) (can-jump? st) (jump! st) (pin st 'jq (st 'mt)))
       'sink (fly ? (up -1) st)
+      'tap (tap-at st @ () st i (tap! st i))
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a = 'where ? (pin st 'pos (1 - peep st 'pos 0)) st)
            s s))))
- ; ..the frame's walk: the ways summed, no faster for two at once, and how fast it went
+ ; ..the frame's walk: the ways summed, no faster for two at once, and how fast it went; while
+ ; a kick off a void's wall lasts, none of the walk into the wall, and the kick's own way
  (walk! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) n (sqrt (f * f + s * s)) th (st 'th) x0 (st 'px) z0 (st 'pz)
-   _ (? (n > 0) (: k (walk-v * dt / max2 1.0 n) x (x0 + k * (f * sin th + s * cos th)) z (z0 + k * (f * cos th - s * sin th))
-                  (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))))
+   k (walk-v * dt / max2 1.0 n) dx (k * (f * sin th + s * cos th)) dz (k * (f * cos th - s * sin th)) b (kick st)
+   d (surf-step st (atom? b ? [dx dz] (: e (min2 0.0 (dx * b 0 + dz * b 1)) w (e - b 2 * dt) [(dx - w * b 0) (dz - w * b 1)])))
+   x (x0 + d 0) z (z0 + d 1)
+   _ (? (n > 0 || two? b) (: _ (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))
+                             (st 'px != x || st 'pz != z ? (ward! st x z dt) st)))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
+ ; ..stopped going past a void's edge it rings there, and not again for a moment; and the
+ ; way into the wall turns back out of it, as fast, dying away
+ ward-near 0.05 ward-t 0.7 kick-t 0.35
+ (kick st) (peep st 'kick () @ () () q (: v (q 2 * exp ((q 3 - st 'mt) / kick-t)) (v < 0.2 ? () [(q 0) (q 1) v])))
+ (ward! st x z dt) (: fl (st 'py - eye-h) r (body-r + ward-near)
+   (side v) (: lo (v 0) hi (v 1)
+              (? (!(lo 1 - 0.1 <= fl && fl <= hi 1)) () (x - r < lo 0) [1.0 0.0] (x + r > hi 0) [-1.0 0.0]
+                 (z - r < lo 2) [0.0 1.0] (z + r > hi 2) [0.0 -1.0] ()))
+   ns (filter two? (map side (peep (st 'lvl) 'voids ())))
+   (? (atom? ns) st
+      (: m <ns vn (((x - st 'px) * m 0 + (z - st 'pz) * m 1) / dt)
+         _ (? (vn < 0.0 && atom? (kick st)) (pin st 'kick [(m 0) (m 1) (0.0 - vn) (st 'mt)]))
+         (st 'mt - peep st 'ward-at -9.0 > ward-t ? (pin (mix-cry st "ward" [(st 'px) (st 'pz)]) 'ward-at (st 'mt)) st))))
  ; ..or flown, the editor's noclip: on the way the eye looks, up and down by 'mu, through
  ; anything, twice as fast
  fly-v (2.0 * walk-v)
@@ -764,13 +972,20 @@
  ; a frame's motion: the shots in turn, each for its seconds, and nothing else moving till
  ; they are done; the frame of the cut already the level's
  (world-move st) (: cut (peep st 'cut ()) dt (peep st 'dt (1.0 / fps)) ct (peep st 'ct 0.0 + dt)
-   (? (atom? cut) (play-move st) (ct < <cut 'secs) (pin st 'ct ct)
-      (atom? >cut) (play-move (cue st)) (pins st 'cut >cut 'ct 0.0)))
+   (? (atom? cut) (play-steps st) (ct < <cut 'secs) (pin st 'ct ct)
+      (atom? >cut) (play-steps (cue st)) (pins st 'cut >cut 'ct 0.0)))
+ ; ..a slow frame moved in steps no longer than a thirtieth, each the frame's ways, so a long
+ ; one strides no further at once than a quick one
+ step-dt (1.0 / 30.0)
+ (play-steps st) (: dt (peep st 'dt (1.0 / fps)) m (max2 1 (int (ceil (dt / step-dt - 1e-6))))
+   f (peep st 'mf 0) s (peep st 'ms 0) u (peep st 'mu 0)
+   (? (m = 1) (play-move st)
+      (: _ (pin st 'dt (dt / m)) _ (each ^m (_ \ (pins st 'mf f 'ms s 'mu u, play-move st))) (pin st 'dt dt))))
  ; ..the shots done: a waiting car's door opens on the cut, with its chime
  (cue st) (: _ (each (st 'cars) (s \ s 'ph = 'wait ? (pin s 't car-wait))) (pins st 'cut () 'ct 0.0))
  ; ..then the clock, each door toward open while the player is near it, and the cars
  (play-move st) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st) up (hoisting? st)
-   _ (? fly (fly! st dt) up (hoisting! st dt) (walk! st dt)) lv (st 'lvl) x (st 'px) z (st 'pz)
+   _ (? fly (fly! st dt) up (hoisting! st dt) (walk! st dt)) _ (surf-wrap! st) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0)
              (want < o ? (max2 want (o - door-v * dt)) (min2 want (o + door-v * dt))))
@@ -791,61 +1006,165 @@
  ; ..what the feet stand on: a step up climbed, a step down or an edge fallen from to what
  ; is under, a jump flown till it comes down on something; not in a grav shaft nor on a
  ; car's track, whose floors are their own
- climb-v 2.5 fall-g 9.8
- ; ..the top of the floor within a few steps of fl, by halves to a hair, or () for none
+ climb-v 2.5 fall-g 9.8 fall-max 40.0 head-h 1.75
+ ; ..how hard the level pulls at height y: straight between its gravity's points, held past
+ ; their ends
+ (grav-at lv y) (: ps (peep lv 'gravity ()) n #ps
+   (? (n = 0) fall-g (y <= ps 0 0) (ps 0 1) (y >= ps (n - 1) 0) (ps (n - 1) 1)
+      (: i (foldl (\ a k (ps k 0 <= y ? k a)) 0 ^n) p (ps i) q (ps (i + 1))
+         (p 1 + (q 1 - p 1) * (y - p 0) / (q 0 - p 0)))))
+ ; ..the top of the first solid on the way down from a to b, a fifth of a metre at a time and
+ ; then by halves, or ()
+ (landing bs x z a b) (: (air? y) (brush-medium bs [x y z] = 1) n (int ((a - b) / 0.2) + 1)
+   (top s u) (foldl (\ q _ (: m (0.5 * (q 0 + q 1)) (air? m ? [(q 0) m] [m (q 1)]))) [s u] ^7 @ q (q 1))
+   (go i) (? (i > n) () (: y (max2 b (a - 0.2 * i)) (air? y ? (go (i + 1)) (top y (min2 a (y + 0.2))))))
+   (go 1))
+ ; ..the top of the floor within a few steps of fl, by halves to a hair, or () for none; up
+ ; from feet in a solid, down from feet in the air
+ ; ..the brushes whose plan holds x z, in their order: all a point there can be in
+ (column bs x z) (filter (b \ b 'lo 0 <= x && x <= b 'hi 0 && b 'lo 2 <= z && z <= b 'hi 2) bs)
  (floor-at bs x z fl) (: (air? y) (brush-medium bs [x y z] = 1)
    (top a b) (foldl (\ q _ (: m (0.5 * (q 0 + q 1)) (air? m ? [(q 0) m] [m (q 1)]))) [a b] ^7 @ q (q 1))
    (dn i) (? (i > 12) () (air? (fl - 0.05 * i) ? (dn (i + 1)) (top (fl - 0.05 * i) (fl - 0.05 * (i - 1)))))
    (up i) (? (i > 7) fl (air? (fl + 0.05 * i) ? (top (fl + 0.05 * (i - 1)) (fl + 0.05 * i)) (up (i + 1))))
-   (air? (fl - 0.01) ? (dn 1) (up 1)))
+   (air? (fl - 0.01) && air? (fl + 0.01) ? (dn 1) (up 1)))
  (floor-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) lv (st 'lvl)
    shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (peep lv 'gravs ()))
-   (? (shaft || any (c \ car-track? c x z) (peep lv 'cars ())) (pin st 'fv 0.0)
-      (: f (floor-at (st 'sc 'brushes) x z fl) v (peep st 'fv 0.0) got (charm? f || gem? f)
-         (? (got && v <= 0.0 && f > fl + 0.001) (pins st 'py (min2 f (fl + climb-v * dt) + eye-h) 'fv 0.0)
-            (got && v <= 0.0 && f >= fl - 0.001) (pin st 'fv 0.0)
-            (: v2 (v - fall-g * dt) n (fl + v2 * dt)
-               (got && n <= f ? (pins st 'py (f + eye-h) 'fv 0.0) (pins st 'py (n + eye-h) 'fv v2)))))))
+   (? (shaft || any (c \ car-track? c x z) (peep lv 'cars ())) (pins st 'fv 0.0 'gt (st 'mt))
+      (: bs (column (st 'sc 'brushes) x z) f (floor-at bs x z fl) v (peep st 'fv 0.0) got (charm? f || gem? f)
+         (? (got && v <= 0.0 && f > fl + 0.001) (pins st 'py (min2 f (fl + climb-v * dt) + eye-h) 'fv 0.0 'gt (st 'mt))
+            (got && v <= 0.0 && f >= fl - 0.001) (pins st 'fv 0.0 'gt (st 'mt))
+            (: v2 (max2 (0.0 - fall-max) (v - grav-at lv fl * dt)) n (fl + v2 * dt)
+               ; ..rising, the head stops at what is over it; falling, the feet at the first
+               ; floor on the way
+               g (v2 < 0.0 && !(got && n <= f) ? (landing bs x z fl n) ())
+               (? (v2 > 0.0 && brush-medium bs [x (n + head-h) z] != 1) (pin st 'fv 0.0)
+                  (got && n <= f) (land! (pin st 'py (f + eye-h)) v2)
+                  (charm? g || gem? g) (land! (pin st 'py (g + eye-h)) v2)
+                  (pins st 'py (n + eye-h) 'fv v2)))))))
+ ; ..come down at v: the eye sunk as hard as it hit and sprung back, a thump as the floor
+ ; sounds, and a jump kept for it taken
+ land-min 2.2 land-k 0.008 land-dip 0.18 dip-t 0.07
+ (land! st v) (: s (0.0 - v) _ (pins st 'fv 0.0 'gt (st 'mt)) a (min2 land-dip (land-k * s))
+   _ (? (s >= land-min) (mix-cry (a > 0.0 - dip st ? (pin st 'dip [a (st 'mt)]) st) (land-cry st s) ()))
+   (st 'mt - peep st 'jq -9.0 <= jq-t ? (jump! st) st))
+ ; ..how far the eye is sunk: down to the dip's depth at dip-t, and eased back
+ (dip st) (peep st 'dip () @ () 0.0 d (: u ((st 'mt - d 1) / dip-t) (u > 8.0 ? 0.0 (0.0 - d 0 * u * exp (1.0 - u)))))
+ ; ..what the floor under the feet is: the brush the way down meets, its floor's texture's feel
+ (feel-under st) (: bs (column (st 'sc 'brushes) (st 'px) (st 'pz)) fl (st 'py - eye-h) h (brush-ray bs [(st 'px) (fl + 0.05) (st 'pz)] [0.0 -1.0 0.0])
+   e (tablet? h ? (foldl (\ a e (e 0 = 'floor ? e a)) () (peep (bs (h 'b)) 'skin ())) ()) nm (two? e ? (e 1) 'floor)
+   (foldl (\ a t (t 'name = nm ? (peep t 'feel 'hard) a)) 'hard (st 'lvl 'textures)))
+ (land-cry st s) ("land " + show (feel-under st) + " " + show (? (s < 5.5) 0 (s < 10.0) 1 2))
  ; ..a ball's next moment: met by the player's feet it is kicked away along the line between,
  ; the harder as they came; then it falls, bounces off what is solid a little less each
- ; time, and rolls along the ground to a stop
- (balls-new lv) (map (p \ {'p [(p 0) (p 1 + ball-r) (p 2)] 'v [0.0 0.0 0.0] 'q [1.0 0.0 0.0 0.0] 'kt -9.0 'rest 1 'pk ()})
-                     (peep lv 'balls ()))
- (ball-step st b dt) (: p (b 'p) fl (st 'py - eye-h) dx (p 0 - st 'px) dz (p 2 - st 'pz) d (sqrt (dx * dx + dz * dz))
-   kick (d < body-r + ball-r && p 1 - ball-r < fl + 0.5 && st 'mt - b 'kt > 0.25)
+ ; time, and rolls along the ground to a stop. a plush is taken for a ball of its size that
+ ; stands as it lies, hardly bounces and stops where it lands, and held it looks at the player
+ (balls-new lv sc) ((map (p \ {'kind 'ball 'r ball-r 'p [(p 0) (p 1 + ball-r) (p 2)] 'v [0.0 0.0 0.0] 'q [1.0 0.0 0.0 0.0] 'kt -9.0 'rest 1 'pk ()})
+                      (peep lv 'balls ()))
+                 + map (i \ (: u (lv 'plushes i) a (u 'at) h (0.5 * u 'deg * pi / 180.0) r (sc 'plushes i 'r)
+                              {'kind 'plush 'i i 'r r 'p [(a 0) (a 1 + r) (a 2)] 'v [0.0 0.0 0.0] 'q [(cos h) 0.0 (sin h) 0.0] 'kt -9.0 'rest 1 'pk ()}))
+                       ^#(peep lv 'plushes ()))
+ (ball-step st b dt) (? (peep b 'held 0 = 1) (: h (0.5 * (st 'th + pi)) (pins b 'p (hand-at st b) 'pk () 'q (b 'kind = 'plush ? [(cos h) 0.0 (sin h) 0.0] (b 'q))))
+                        (ball-loose st b dt))
+ (ball-loose st b dt) (: p (b 'p) r (b 'r) fl (st 'py - eye-h) dx (p 0 - st 'px) dz (p 2 - st 'pz) d (sqrt (dx * dx + dz * dz))
+   kick (d < body-r + r && p 1 - r < fl + 0.5 && st 'mt - b 'kt > 0.25)
    _ (? kick (: th (st 'th) n (d > 0.001 ? [(dx / d) (dz / d)] [(sin th) (cos th)])
                 k (ball-kick + 1.3 * max2 0.0 (peep st 'vx 0.0 * n 0 + peep st 'vz 0.0 * n 1))
                 (pins b 'v [(k * n 0) (1.0 + 0.3 * k) (k * n 1)] 'kt (st 'mt) 'rest 0,
-                 mix-cry st "bounce" [(p 0) (p 2)])))
+                 (b 'kind = 'ball ? (mix-cry st "bounce" [(p 0) (p 2)]) st))))
    (b 'rest = 1 ? st (ball-fly st b dt)))
+ ; ..a ball or a plush in hand: the left button takes the one looked at within reach; held, pressed it
+ ; winds a throw, half a second to the hardest, and let go it flies; the right button lets
+ ; it fall where it is
+ reach 2.2 throw-lo 3.0 throw-hi 11.0 wind-t 0.5
+ ; ..the panes still whole; a brittle one the eye's line meets within reach, its number; it
+ ; tapped, ringing as steel does the first time and broken the next
+ (panes-of st) (: b (peep st 'broke {}) ps (peep (st 'lvl) 'panes ()) (map (i \ ps i) (filter (i \ peep b i 0 = 0) ^#ps)))
+ (tap-at st) (: e (eye-at st) d (look-way st) b (peep st 'broke {}) ps (peep (st 'lvl) 'panes ())
+   (in? p q) (!(any (k \ q k < p 'lo k - 0.06 || p 'hi k + 0.06 < q k) ^3))
+   (hit i) (: p (ps i) (peep p 'brittle 0 = 1 && peep b i 0 = 0 && any (j \ in? p (c+ e (c* (0.05 * j) d))) ^(int (reach / 0.05))))
+   (filter hit ^#ps @ () () l <l))
+ (tap! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3) kn (peep st 'knocked {})
+   (peep kn i 0 = 0 ? (mix-cry (pin st 'knocked (pin (foldl (\ t k (pin t k 1)) {} (keys kn)) i 1)) "land metal 1" [(m 0) (m 2)])
+      (break! st i)))
+ (break! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3)
+   (mix-cry (pins st 'broke (pin (foldl (\ t k (pin t k 1)) {} (keys (peep st 'broke {}))) i 1) 'shards (shards-of st i . peep st 'shards ()))
+            "shatter" [(m 0) (m 2)]))
+ ; ..what is left of pane i on the ground: shards of its glass, three of four thrown away from
+ ; the eye and as far as a stride and a half, the rest dropped back toward it, each lying on
+ ; the floor where it fell
+ shard-n 80
+ (shards-of st i) (: sc (st 'sc) p (st 'lvl 'panes i) lo (p 'lo) hi (p 'hi) ax ((hi 0 - lo 0) < (hi 2 - lo 2) ? 0 2) al (2 - ax)
+   m (0.5 * (lo ax + hi ax)) away (st (ax = 0 ? 'px 'pz) > m ? -1.0 1.0) tx (peep (sc 'panes i 'pk 'tris) 3 -3 @ g (g < -3 - 16777216 + 1 ? (g + 16777216) g)) bs (sc 'brushes)
+   (h k j) (: v (sin (12.9898 * k + 78.233 * j + 37.719 * i) * 43758.5453) (v - floor v))
+   (one k) (: a (lo al + (hi al - lo al) * h k 1) o (away * (h k 2 < 0.75 ? (1.6 * sq (h k 3)) (0.0 - 0.6 * h k 3)))
+     x (ax = 0 ? (m + o) a) z (ax = 0 ? a (m + o)) g (floor-at (column bs x z) x z (lo 1)) y ((charm? g || gem? g) ? (g + 0.004) (lo 1 - 0.25))
+     r (0.03 + 0.09 * sq (h k 4)) t0 (tau * h k 5)
+     (map (c \ (: t (t0 + c * 2.1 + 0.6 * h k (6 + c)) q (r * (0.55 + 0.45 * h k (9 + c)))
+                 [(x + q * cos t) y (z + q * sin t) (64.0 * h k (12 + c)) (64.0 * h k (15 + c)) 0.0 1.0 0.0 0.55 0.6 0.6]))
+          ^3))
+   pk (mesh-pack (mesh (cats (map one ^shard-n)) (cats (map (k \ [[(3 * k) (3 * k + 1) (3 * k + 2) tx] [(3 * k) (3 * k + 2) (3 * k + 1) tx]]) ^shard-n))))
+   {'pk pk 'lit ((sc 'lit) pk)})
+ (look-way st) (: th (st 'th) ph (st 'ph) [(sin th * cos ph) (sin ph) (cos th * cos ph)])
+ (eye-at st) [(st 'px) (st 'py) (st 'pz)]
+ (wind-k st) (peep st 'wind () @ () 0.0 t0 (min2 1.0 ((st 'mt - t0) / wind-t)))
+ ; ..where the hands hold it: out before the feet, so let fall it is not kicked, high as the
+ ; look, drawn back and down as it winds
+ (hand-at st b) (: k (wind-k st) th (st 'th) g (b 'r - ball-r) f (0.45 + 2.0 * g - 0.15 * k) e (eye-at st)
+   [(e 0 + f * sin th) (e 1 + 0.5 * sin (st 'ph) - 0.28 - g - 0.1 * k) (e 2 + f * cos th)])
+ (world-mouse st ev bt) (: h (filter (b \ peep b 'held 0 = 1) (peep st 'balls ()))
+   (? (ev = 'press && bt = 1 && atom? h) (tap-at st @ () (ball-take st) i (tap! st i))
+      (ev = 'press && bt = 1) (pin st 'wind (st 'mt))
+      (ev = 'release && bt = 1 && two? h && peep st 'wind () != ()) (ball-go st <h (throw-lo + (throw-hi - throw-lo) * wind-k st))
+      (ev = 'press && bt = 3 && two? h) (ball-go st <h 0.0)
+      st))
+ ; ..the nearest ball the eye's line passes within a hand of, no further than reach
+ (ball-take st) (: e (eye-at st) d (look-way st)
+   (hit b) (: w (c+ (b 'p) (c* -1.0 e)) s (dot w d) m (c+ w (c* (0.0 - s) d))
+             (0.0 < s && s < reach && dot m m < sq (b 'r + 0.18) ? s ()))
+   hs (filter (q \ q 0 != ()) (map (b \ [(hit b) b]) (peep st 'balls ())))
+   (? (atom? hs) st
+      (: b (foldl (\ a q (q 0 < a 0 ? q a)) <hs >hs 1)
+         _ (pins b 'held 1 'rest 0 'v [0.0 0.0 0.0] 'w [0.0 0.0 0.0])
+         (pin st 'wind ()))))
+ ; ..let go along the look at v, with the walk's own; from inside the body where the hands
+ ; are in a wall
+ (ball-go st b v) (: hp (hand-at st b) bs (st 'sc 'brushes)
+   p (brush-medium bs hp = 1 ? hp (c+ (eye-at st) [0.0 -0.3 0.0]))
+   _ (pins b 'held 0 'rest 0 'kt (st 'mt) 'p p 'pk ()
+           'v (c+ (c* v (look-way st)) [(peep st 'vx 0.0) 0.0 (peep st 'vz 0.0)]))
+   (pin st 'wind ()))
  ; ..its flight in steps short beside its size: each way on its own, back off what it would
  ; meet; among only the brushes and panes near it
- (ball-fly st b dt) (: r ball-r p0 (b 'p) lv (st 'lvl)
+ (ball-fly st b dt) (: r (b 'r) ball (b 'kind = 'ball) p0 (b 'p) lv (st 'lvl)
    bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (st 'sc 'brushes))
    (solid? q) (brush-medium bs q != 1
                || any (w \ w 'lo 0 - 0.05 < q 0 && q 0 < w 'hi 0 + 0.05 && w 'lo 1 < q 1 && q 1 < w 'hi 1
-                            && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (peep lv 'panes ()))
+                            && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (panes-of st))
    n (max2 1 (min2 10 (int (mag3 (b 'v) * dt / (0.5 * r)) + 1))) h (dt / n)
    (set3 p k x) (map (j \ j = k ? x (p j)) ^3)
    (axis s k) (: p (s 0) v (s 1) vk (v k) q (set3 p k (p k + vk * h + (vk < 0.0 ? (0.0 - r) r)))
-     (? (solid? q) (: u (0.0 - ball-e * vk) gr (k = 1 && vk < 0.0)
+     (? (solid? q) (: u (0.0 - (ball ? ball-e plush-e) * vk) gr (k = 1 && vk < 0.0)
                       [p (set3 v k (gr && mag u < 0.5 ? 0.0 u)) (max2 (s 2) (mag vk)) (s 3 || gr)])
         [(set3 p k (p k + vk * h)) v (s 2) (s 3)]))
-   (sub1 s _) (: v (s 1) (foldl axis [(s 0) [(v 0) (v 1 - ball-g * h) (v 2)] (s 2) (s 3)] ^3))
+   bg (grav-at lv (p0 1))
+   (sub1 s _) (: v (s 1) (foldl axis [(s 0) [(v 0) (v 1 - bg * h) (v 2)] (s 2) (s 3)] ^3))
    e (foldl sub1 [p0 (b 'v) 0.0 0] ^n) p (e 0)
-   ; ..on the ground it rolls, slowing, turning as far as it goes, and stops once slow
-   gnd (solid? [(p 0) (p 1 - r - 0.02) (p 2)]) f (gnd ? (max2 0.0 (1.0 - 0.7 * dt)) 1.0)
+   ; ..on the ground it rolls, slowing, turning as far as it goes, and stops once slow; a plush
+   ; drags to a stop
+   gnd (solid? [(p 0) (p 1 - r - 0.02) (p 2)]) f (gnd ? (max2 0.0 (1.0 - (ball ? 0.7 6.0) * dt)) 1.0)
    v (e 1 @ v [(f * v 0) (v 1) (f * v 2)])
    still (gnd && mag3 v < 0.06)
-   _ (? gnd (pin b 'w [(v 2 / r) 0.0 (0.0 - v 0 / r)]))
+   _ (? (gnd && ball) (pin b 'w [(v 2 / r) 0.0 (0.0 - v 0 / r)]))
    q (b 'q) w (peep b 'w [0.0 0.0 0.0])
    dq [(0.0 - dot w (drop 1 q)) 0.0 0.0 0.0]
    wq (c+ (c* (q 0) w) (cross w (drop 1 q)))
    q2 (map (j \ q j + 0.5 * dt * (j = 0 ? (dq 0) (wq (j - 1)))) ^4) ql (sqrt (net (map sq q2)))
    _ (pins b 'p p 'v (still ? [0.0 0.0 0.0] v) 'q (map (x \ x / ql) q2) 'rest (still ? 1 0) 'pk ())
-   (e 2 > 1.2 ? (mix-cry st "bounce" [(p 0) (p 2)]) st))
- ; ..its mesh about its middle: orange, three seams round it standing just proud, every
- ; triangle's front outward
+   (ball && e 2 > 1.2 ? (mix-cry st "bounce" [(p 0) (p 2)]) st))
+ ; ..its mesh about its middle: orange, its seams standing just proud, two round it crossing
+ ; square and about either pole of the first a curved one: 52 degrees out where the second
+ ; crosses it, pinched to 82 toward the first, every triangle's front outward
  (ball-mesh _) (: r ball-r nl 8 nm 16 skin [0.85 0.33 0.08] seam [0.07 0.04 0.03]
    (vx p k col) [(k * p 0) (k * p 1) (k * p 2) 0.0 0.0 (p 0) (p 1) (p 2) (col 0) (col 1) (col 2)]
    body (map (q \ (: a (pi * (q // (nm + 1) / nl - 0.5)) o (tau * (q % (nm + 1)) / nm)
@@ -855,19 +1174,27 @@
    bt (cats (map (k \ (: i (k // nm) j (k % nm) a (at i j) b (at i (j + 1)) c (at (i + 1) (j + 1)) d (at (i + 1) j)
                         [[a b c -1] [a c d -1]]))
                  ^(nl * nm)))
-   m 32
-   (band u v w) (cats (map (j \ (: t (tau * j / m) c (c+ (c* (cos t) u) (c* (sin t) v))
-                                  [(vx (unit (c+ c (c* 0.07 w))) (1.015 * r) seam) (vx (unit (c+ c (c* -0.07 w))) (1.015 * r) seam)]))
-                       ^(m + 1)))
+   m 48
+   (band u v w g) (cats (map (j \ (: t (tau * j / m) c (c+ (c* (cos t) u) (c* (sin t) v)) (e h) (c+ (c* (sin h) c) (c* (cos h) w))
+                                    [(vx (e (g t - 0.035)) (1.015 * r) seam) (vx (e (g t + 0.035)) (1.015 * r) seam)]))
+                         ^(m + 1)))
    (btris o) (cats (map (j \ (: a (o + 2 * j) [[a (a + 1) (a + 3) -1] [a (a + 3) (a + 2) -1]])) ^m))
-   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] o1 #body o2 (o1 + 2 * (m + 1)) o3 (o2 + 2 * (m + 1))
-   vs (body + band x z y + band y z x + band x y z)
+   x [1.0 0.0 0.0] y [0.0 1.0 0.0] z [0.0 0.0 1.0] (g _) (0.5 * pi) (cg t) (1.1694 + 0.2618 * cos (2.0 * t))
+   o1 #body o2 (o1 + 2 * (m + 1)) o3 (o2 + 2 * (m + 1)) o4 (o3 + 2 * (m + 1))
+   vs (body + band x z y g + band y z x g + band x z y cg + band x z (c* -1.0 y) cg)
    (out t) (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2)) e (take 3 a)
      (dot (cross (c+ (take 3 c) (c* -1.0 e)) (c+ (take 3 b) (c* -1.0 e))) (c+ e (c+ (take 3 b) (take 3 c))) < 0.0
       ? [(t 0) (t 2) (t 1) (t 3)] t))
-   (mesh-pack (mesh vs (map out (bt + btris o1 + btris o2 + btris o3)))))
+   (mesh-pack (mesh vs (map out (bt + btris o1 + btris o2 + btris o3 + btris o4)))))
  ; ..the ball's mesh turned and moved to where it is, lit there
- (ball-pk sc b) (: pk (sc 'ball) c (pk 'cols) p (b 'p) q (b 'q) w (q 0) x (q 1) y (q 2) z (q 3)
+ ; ..a plush's model from its file, its origin set on the floor under it: r half its height,
+ ; w as far as it reaches across; a ball where the file will not read
+ (plush-of f) (: s (string? f ? (slurp-file f) ()) m (string? s ? (mesh-glb s) ())
+   (? (atom? m) {'pk (ball-mesh ()) 'r ball-r 'w ball-r}
+      (: vs (m 0) ys (map (v \ v 1) vs) lo (foldl min2 <ys ys) r (max2 0.02 (0.5 * (foldl max2 <ys ys - lo)))
+         {'pk (mesh-pack (mesh-move m [0.0 (0.0 - lo - r) 0.0] 0.0)) 'r r
+          'w (foldl max2 0.0 (map (v \ max2 (abs (v 0)) (abs (v 2))) vs))})))
+ (ball-pk sc b) (: pk (b 'kind = 'plush ? (sc 'plushes (b 'i) 'pk) (sc 'ball)) c (pk 'cols) p (b 'p) q (b 'q) w (q 0) x (q 1) y (q 2) z (q 3)
    R [[(1.0 - 2.0 * (y * y + z * z)) (2.0 * (x * y - w * z)) (2.0 * (x * z + w * y))]
       [(2.0 * (x * y + w * z)) (1.0 - 2.0 * (x * x + z * z)) (2.0 * (y * z - w * x))]
       [(2.0 * (x * z - w * y)) (2.0 * (y * z + w * x)) (1.0 - 2.0 * (x * x + y * y))]]
@@ -891,27 +1218,43 @@
             'go (: v (s 'v + car-acc * dt) o (s 'o + v * dt * (c 'leave < 0.0 ? -1.0 1.0))
                   (mag o >= mag (c 'leave) ? (pins s 'ph 'gone 'o (c 'leave), st) (pins s 'v v 'o o, st)))
             st))
- ; --- the sounds, made: a chime of two falling notes, the door's hiss and its thud home, and
- ;     the motor rising as the car leaves; each [samples rate] for the mixer ---
+ ; --- the sounds, made: a chime of two falling notes, the door's hiss and its thud home, the
+ ;     motor rising as the car leaves, and a void's edge ringing like glass; each [samples
+ ;     rate] for the mixer ---
  snd-rate 11025
  (snd-t secs) (iota (int (secs * snd-rate)) / (1.0 * snd-rate))
  ; ..noise from a hash of each sample's time, about -1..1
  (snd-noise t) (: h (sin (t * 12345.678 + 0.5) * 43758.5453) (2.0 * (h - floor h) - 1.0))
- (world-sound nm) (nm @
+ ; ..a landing's thump, k its weight 0 1 or 2: carpet dull, concrete sharp, wood hollow, steel
+ ; ringing; and the scuff of a jump
+ (snd-low t) (snd-noise (floor (t * 900.0) / 900.0))
+ (land-sound f k) (: g ([0.35 0.6 1.0] k) p ([1.15 1.0 0.85] k) t (snd-t (0.2 + 0.15 * k)) (o hz d) (sin (tau * hz * p * t) * exp (0.0 - d * t))
+   [(g * (f @ 'soft (0.7 * o 60.0 22.0 + 0.18 * snd-low t * exp (-35.0 * t))
+              'wood (0.45 * o 190.0 30.0 + 0.3 * o 430.0 45.0 + 0.3 * o 70.0 25.0 + 0.2 * snd-noise t * exp (-120.0 * t))
+              'metal (0.4 * o 70.0 25.0 + 0.22 * (o 523.0 7.0 + 0.7 * o 1287.0 9.0 + 0.5 * o 2151.0 12.0) + 0.2 * snd-noise t * exp (-90.0 * t))
+              (0.6 * o 85.0 26.0 + 0.35 * snd-noise t * exp (-70.0 * t) + 0.15 * snd-low t * exp (-20.0 * t))))
+    snd-rate])
+ (world-sound nm) (#nm > 5 && snip nm 0 5 = "land " ? (: w (snip nm 5 (#nm - 2)) (land-sound (w @ "soft" 'soft "wood" 'wood "metal" 'metal _ 'hard) (nm (#nm - 1) - 48))) (nm @
+   "hop" (: t (snd-t 0.15) [(0.18 * snd-low (t * 1.7) * exp (-35.0 * t) + 0.15 * sin (tau * 110.0 * t) * exp (-40.0 * t)) snd-rate])
    "chime" (: t (snd-t 1.0) a (t < 0.42) (tone f u) (sin (tau * f * u) * exp (-5.0 * u))
              [(0.35 * (a * tone 659.3 t + (1 - a) * tone 523.3 (t - 0.42))) snd-rate])
+   "ward" (: t (snd-t 1.6) (bell f k) (sin (tau * f * t) * exp (0.0 - k * t))
+            [(0.2 * (bell 1318.5 2.4 + 0.6 * bell 1975.5 3.0 + 0.3 * bell 2793.8 4.5) * min (t * 300.0) 1.0) snd-rate])
+   "shatter" (: t (snd-t 1.4) (tink d f) (: u (t - d) ((u > 0.0) * sin (tau * f * u) * exp (-12.0 * u)))
+               [(0.45 * snd-noise t * exp (-10.0 * t) * min (t * 400.0) 1.0 + 0.3 * sin (tau * 95.0 * t) * exp (-30.0 * t)
+                 + 0.12 * (tink 0.0 3135.9 + tink 0.07 4186.0 + tink 0.15 2637.0 + tink 0.26 3951.1 + tink 0.4 2960.0 + tink 0.62 3520.0)) snd-rate])
    "hiss" (: t (snd-t 0.7) [(0.25 * snd-noise t * exp (-4.0 * t) * min (t * 40.0) 1.0) snd-rate])
    "bounce" (: t (snd-t 0.25) [(0.6 * sin (tau * 150.0 * t) * exp (-22.0 * t) + 0.25 * snd-noise t * exp (-60.0 * t)) snd-rate])
    "thud" (: t (snd-t 0.3) [(0.8 * sin (tau * 70.0 * t) * exp (-18.0 * t) + 0.15 * snd-noise t * exp (-40.0 * t)) snd-rate])
    "motor" (: t (snd-t 6.0) f0 90.0 k 110.0 up (min (t / 1.5) 1.0) down (min ((6.0 - t) / 2.0) 1.0)
              [(up * down * (0.3 * sin (tau * (f0 * t + 0.5 * k * t * t)) + 0.12 * snd-noise t)) snd-rate])
-   ())
+   ()))
  ; --- the files watched: the level and its pictures, each by its stat stamp. a change reads
  ;     the level again, keeping the player where they stand; one that will not read keeps the
  ;     last and says why ---
  (stamp p) (stat p @ s (two? s ? [(s 0) (s 3) (s 8)] ()))
  (files st) (: p (st 'path)
-   (string? p ? (p . filter string? (map (q \ file-of (st 'dir) q) (st 'lvl 'posters))) ()))
+   (string? p ? (p . filter string? (map (q \ file-of (st 'dir) q) (st 'lvl 'posters + peep (st 'lvl) 'plushes ()))) ()))
  (seen! st) (pin st 'stamps (map (p \ [p (stamp p)]) (files st)))
  (world-watch st) (: was (peep st 'stamps ())
    (? (atom? was) (seen! st)
@@ -920,9 +1263,10 @@
          (? (string? lv) (pins (seen! st) 'msg lv 'err 1 'msg-t (st 'mt))
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                cs (#(peep lv 'cars ()) = #(peep st 'cars ()) ? (st 'cars) (cars-new lv))
-               bl (#(peep lv 'balls ()) = #(peep st 'balls ()) ? (st 'balls) (balls-new lv))
-               _ (each bl (b \ pin b 'pk ()))
-               (seen! (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc) (loader st)) 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
+               sc (scene lv (st 'dir) (st 'sc) (loader st))
+               bl (#(peep lv 'balls ()) + #(peep lv 'plushes ()) = #(peep st 'balls ()) ? (st 'balls) (balls-new lv sc))
+               _ (each bl (b \ pins b 'pk () 'r (b 'kind = 'plush ? (sc 'plushes (b 'i) 'r) (b 'r))))
+               (seen! (pins st 'lvl lv 'sc sc 'doors ds 'cars cs 'balls bl 'msg ("read " + st 'path + " again")
                                'err 0 'msg-t (st 'mt))))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i = 47 ? (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
@@ -933,8 +1277,8 @@
                                st (pins (state-new w h lv (dir-of p) ld) 'cut (peep lv 'shots ()) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (world-watch (world-size st w (h // 2)))))
-               'size world-size 'frame world-frame 'key world-step 'look world-look
-               'binds (view-bind view-binds world-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'where 'finer 'coarser])
+               'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
+               'binds (view-bind view-binds world-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
                'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
                'tick (st \ (walk-dt st,
                             world-move st,
@@ -947,7 +1291,7 @@
                      lv (world-load p)
    (? (string? lv) (say err ("world: " + p + ": " + lv + "\n"), flush err, 1)
       (view-stage (pin o 'level p) (o2 \ world-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
- world-usage "usage: love play LEVEL.l [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ world-usage "usage: love play LEVEL.l [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice
  (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
                                     (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])
@@ -968,7 +1312,8 @@
       (: lv (world-read t)
          (? (string? lv) (vi 'vmsg vs ("scene: " + lv), pins ed 'text t 'dirty 1)
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
-               _ (pins st 'lvl lv 'sc (scene lv (st 'dir) (st 'sc) (loader st)) 'doors ds 'cars (cars-new lv) 'balls (balls-new lv))
+               sc (scene lv (st 'dir) (st 'sc) (loader st))
+               _ (pins st 'lvl lv 'sc sc 'doors ds 'cars (cars-new lv) 'balls (balls-new lv sc))
                (vi 'vmsg vs "scene read again", pins ed 'text t 'dirty 1))))))
  ; ..vi's cursor on the text's offset a, its line a third of the way down the pane
  (edit-at ed a) (: t (ed 'text) vs (ed 'vs) (bol i) (i < 0 || t i = 10 ? (i + 1) (bol (i - 1))) l0 (bol (a - 1))
@@ -985,9 +1330,9 @@
          (pins ed 'sel (h 'src) 'sb (h 'b) 'drag {'p0 p 'n n 'c (dot n p) 'off [0.0 0.0 0.0] 'xf (peep h 'xf (edit-xf ed (h 'b)))},
           vi 'vmsg vs ("line " + show (edit-at ed (sp 0) + 1))))))
  ; ..the drag to where the ray through x y meets its plane, a twentieth of a metre at a time
- (edit-drag ed x y) (: g (ed 'drag) r (world-ray (ed 'st) x y) e (r 0) d (r 1) n (g 'n) k (dot n d)
-   t (mag k < 1e-6 ? -1.0 ((g 'c - dot n e) / k))
-   (t > 0.0 ? (: q (c+ e (c* t d)) (pin g 'off (map (i \ floor (20.0 * (q i - g 'p0 i) + 0.5) / 20.0) ^3))) g))
+ (edit-drag ed x y) (: g (ed 'drag) n (g 'n)
+   (meet e d) (: k (dot n d) t (mag k < 1e-6 ? -1.0 ((g 'c - dot n e) / k)) (t > 0.0 ? {'t t 'q (c+ e (c* t d))} ()))
+   (world-cast (ed 'st) x y meet @ () g h (pin g 'off (map (i \ floor (20.0 * (h 'q i - g 'p0 i) + 0.5) / 20.0) ^3))))
  ; ..a number as the text says it, a twentieth at most
  (edit-num x) (: k (floor (20.0 * x + 0.5)) (k % 20 = 0 ? (show (k // 20)) (show (k / 20.0))))
  (edit-vec v) ("[" + edit-num (v 0) + " " + edit-num (v 1) + " " + edit-num (v 2) + "]")
@@ -1000,7 +1345,7 @@
  ;     not all there to change ---
  ; ..each form's arguments: p a point, v a way (swung, not shifted), b a bearing, s points, r a
  ; drape's rows of them, P parts, _ left be; only quarter swings for rw-square, none for rw-still
- rw-kinds {'book "pb" 'mattress "pb" 'pencil "pb_" 'telescope "pb__" 'start "pb_" 'shot "_pb_" 'orb "p___"
+ rw-kinds {'book "pb" 'plush "pb" 'mattress "pb" 'pencil "pb_" 'telescope "pb__" 'start "pb_" 'shot "_pb_" 'orb "p___"
            'ball "p" 'bulb "p_" 'rod "pp___" 'cut "pppP" 'spinner "p____" 'decal "pvv___" 'ad "pvv___"
            'neon "pv___" 'sconce "pvv__" 'sign "p___" 'poster "p___" 'flames "_s" 'prism "_s" 'drape "_r"
            'coarse "_P" 'whole "P" 'skin "_P" 'solid "P" 'air "P" 'box "pp" 'room "pp" 'street "pp"
@@ -1120,7 +1465,7 @@
  ; with a swing's ring round them on the floor and a spoke to where it points
  (edit-sel ed) (: sel (ed 'sel) lb (ed 'st 'lvl 'brushes) (atom? sel ? () (filter (i \ peep (lb i) 'src () = sel) ^#lb)))
  ; ..and its props, orbs and strip lights, and a box's eight corners and twelve edges
- (edit-props ed) (: sel (ed 'sel) (atom? sel ? () (filter (b \ b 'src = sel) (world-props (ed 'st 'lvl)))))
+ (edit-props ed) (: sel (ed 'sel) (atom? sel ? () (filter (b \ b 'src = sel) (world-props (ed 'st 'lvl) (ed 'st 'sc)))))
  (box-corners bx) (map (j \ map (i \ (j >> i & 1) = 0 ? (bx 0 i) (bx 1 i)) ^3) ^8)
  (box-edges bx) (: c (box-corners bx) (cats (map (j \ cats (map (i \ (j >> i & 1) = 0 ? [[(c j) (c (j | (1 << i)))]] ()) ^3)) ^8)))
  (edit-edges ed off) (: st (ed 'st) bs (st 'sc 'brushes) is (edit-sel ed) g (ed 'drag) hs (tablet? g ? (peep g 'xf xf-id) xf-id)
@@ -1152,10 +1497,11 @@
          {'kind 'turn 'xf hx 'cl cl 'cw [(cw 0) y (cw 2)] 'y y 'r (R + 0.25) 'a0 () 'aw 0.0 'dl 0.0})))
  ; ..the swing to where the pointer at x y points across its floor, 15 degrees at a time or
  ; with ctrl held 1
- (edit-spin-to ed x y) (: g (ed 'drag) r (world-ray (ed 'st) x y) e (r 0) d (r 1) c (g 'cw)
-   t (mag (d 1) < 1e-6 ? -1.0 ((g 'y - e 1) / d 1))
-   (? (t <= 0.0) g
-      (: q (c+ e (c* t d)) a (atan2 (q 0 - c 0) (q 2 - c 2) * 180.0 / pi)
+ (edit-spin-to ed x y) (: g (ed 'drag) c (g 'cw)
+   (meet e d) (: t (mag (d 1) < 1e-6 ? -1.0 ((g 'y - e 1) / d 1)) (t > 0.0 ? {'t t 'q (c+ e (c* t d))} ()))
+   h (world-cast (ed 'st) x y meet)
+   (? (!(tablet? h)) g
+      (: q (h 'q) a (atan2 (q 0 - c 0) (q 2 - c 2) * 180.0 / pi)
          (? (g 'a0 = ()) (pin g 'a0 a)
             (: v (a - g 'a0) w (v - 360.0 * floor ((v + 180.0) / 360.0)) k (ed 'ctrl ? 1.0 15.0) s (k * floor (w / k + 0.5))
                (pins g 'aw (g 'a0 + s) 'dl (s * xf-hand (g 'xf)), (ed 'vi) 'vmsg (ed 'vs) ("turning " + edit-num s)))))))
@@ -1208,11 +1554,11 @@
  (plan-floors st) (sort (keys (foldl (\ t b (b 'air && b 'hi 1 - b 'lo 1 >= 2.0 ? (pin t (b 'lo 1) 1) t)) {} (st 'sc 'brushes))))
  ; ..the brushes the cut passes through at x z, the last carved first
  (plan-hits ed x z) (: bs (ed 'st 'sc 'brushes) P [x (ed 'plan 'fl + plan-cut) z]
-   (rev (filter (i \ all (pl \ dot (pl 0) P <= pl 1 + 1e-6) (bs i 'planes)) ^#bs)))
+   (rev (filter (i \ peep (bs i) 'land () = () && all (pl \ dot (pl 0) P <= pl 1 + 1e-6) (bs i 'planes)) ^#bs)))
  ; ..the mask m with brush b laid over it where the cut passes through: 1 air, 0 rock
  (plan-carve m b p w h cut) (: lo (b 'lo) hi (b 'hi) a (plan-px p w h (lo 0) (hi 2)) z (plan-px p w h (hi 0) (lo 2))
    i0 (max2 0 (floor (a 0))) i1 (min2 w (floor (z 0) + 1)) j0 (max2 0 (floor (a 1))) j1 (min2 h (floor (z 1) + 1))
-   (? (cut < lo 1 || hi 1 < cut || i1 <= i0 || j1 <= j0) m
+   (? (cut < lo 1 || hi 1 < cut || i1 <= i0 || j1 <= j0 || peep b 'land () != ()) m
       (: nc (i1 - i0) Q (iota (nc * (j1 - j0))) S ((Q // nc + j0) * w + Q % nc + i0)
          X (p 'c 0 + (S % w + 0.5 - w / 2.0) / p 'k) Z (p 'c 1 + (h / 2.0 - S // w - 0.5) / p 'k)
          in (foldl (\ q pl (: n (pl 0) (q * (n 0 * X + n 2 * Z + n 1 * cut <= pl 1 + 1e-6)))) (S * 0 + 1) (b 'planes))

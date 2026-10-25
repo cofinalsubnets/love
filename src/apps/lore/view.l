@@ -176,6 +176,8 @@
    ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
    ; middle summed for the frame and it put back there, esc lets it go
    look (peep lv 'look ()) ms {'on 0 'dx 0 'dy 0}
+   ; ..and its buttons, once it is held or where nothing looks by it, to the level's 'mouse
+   mouse (peep lv 'mouse ()) (hand? _) (mouse != () && (ms 'on = 1 || look = ()))
    (mid _) (window-size win @ s [(s 0 // 2) (s 1 // 2)])
    (grab! on) (: c (mid ()) ok (window-hold win on)
      (on && ok ? (pins ms 'on 1 'dx 0 'dy 0, window-warp win (c 0) (c 1)) (pin ms 'on 0)))
@@ -198,6 +200,7 @@
                  k (? (0 < #t) (t 0) (peep view-set1 (e 1) ()))
                  (? (<e = 'close) ('quit . wgo >l)
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
+                    (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
                     (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
                                               (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
                                                (dx != 0 || dy != 0 ? (window-warp win (c 0) (c 1)) 0),

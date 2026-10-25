@@ -98,11 +98,29 @@
       ; a glow adds to what is under it, and is hidden by what is nearer
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) ((51 << 16) | 7) = 16)
       (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () ()) 255 = 16)
+      ; ..on a bare pixel kept as -1 less it, and added to what is drawn under it there
+      (fc-n (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) (-1 - (51 << 16)) = 16)
+      (fc-n (facets 4 4 (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]]))
+                    fc-id (fc-g (big 0.0 0 1)) (fc-z [[0 1 2 -1]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 32.0]]))
+            ((51 << 16) | 255) = 16)
+      ; seen, 128: a face of class 1 (its index plus 2^24) only behind the nearest lens (a glass
+      ; less 2^24), of class 2 only before it; with no lens, plain glass or none, the one hidden
+      ; and the other drawn
+      (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 0 + big 0.5 1 0 + big 0.4 0 1)) (fc-z [[0 1 2 -16777219] [3 4 5 16777215] [6 7 8 33554431]])
+                    [(star-tray [1 1] [16777215])] (fc-g [[0.0 0.0 0.0 0.0 0.0 128.0]])) red = 16)
+      (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 0 + big 0.5 1 0 + big 0.4 0 1)) (fc-z [[0 1 2 -3] [3 4 5 16777215] [6 7 8 33554431]])
+                    [(star-tray [1 1] [16777215])] (fc-g [[0.0 0.0 0.0 0.0 0.0 128.0]])) blue = 16)
+      (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 0 + big 0.5 1 0 + big 0.4 0 1)) (fc-z [[3 4 5 16777215] [6 7 8 33554431]])
+                    [(star-tray [1 1] [16777215])] (fc-g [[0.0 0.0 0.0 0.0 0.0 128.0]])) blue = 16)
       ; glass, -3 - t: what is under it times its texel, its colour added, and hidden by what is nearer
       (fc-n (facets 4 4 13158600 fc-id (fc-g (big 0.0 0 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [8421504])] ()) 6579300 = 16)
       (fc-n (facets 4 4 13158600 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [16777215])] ())
             ((251 << 16) | (200 << 8) | 200) = 16)
       (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0 0)) (fc-z [[0 1 2 -1] [3 4 5 -3]]) [(star-tray [1 1] [8421504])] ()) 255 = 16)
+      ; ..on a bare pixel its tint kept, -2^25 less it, its sheen's grey over 4 above
+      (fc-n (facets 4 4 -1 fc-id (fc-g (big 0.0 0 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [8421504])] ()) (-33554432 - 8421504) = 16)
+      (fc-n (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -3]]) [(star-tray [1 1] [8421504])] ())
+            (-33554432 - 8421504 - (17 // 4 << 24)) = 16)
       (shape near = [4 4]) (peep near [1 2] 0.0 = -0.5) (peep none [3 3] 0.0 = 2.0)
       (fc-n (sunlit none) red = 16) (fc-n (sunlit near) 0 = 16) (fc-n (sunlit ()) red = 16)
       (fc-go 100 () 0 = 0)

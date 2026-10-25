@@ -435,11 +435,11 @@
            (udie 2 "cc: -mstack-protector-guard-offset=\(o) -- a64's is a word offset under 32768")
           (!x86 && f 'ssps) (udie 2 "cc: -mstack-protector-guard-symbol -- x86 only")
           [m r (f 'ssps || (m = 'global ? "__stack_chk_guard")) o]))
-   ; a file-scope asm's own labels, local in the symtab as gas lays them: modpost finds an
-   ; export by its __export_symbol_ label. gas's numbered (l911.1) and pool (.L..) labels stay out
+   ; an asm's own labels, local in the symtab as gas lays them: modpost finds an export by its
+   ; __export_symbol_ label. gas's numbered (l911.1, a function's fn.asm.3.l911.1) and pool (.L..) labels stay out
    (asmlocs secs)
     (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
-       (lnum? sp) (split "." sp @ p (#p = 2 && starts? <p "l" && digs? (snip <p 1 #(<p)) && digs? <>p))
+       (lnum? sp) (rev (split "." sp) @ p (1 < #p && starts? <>p "l" && digs? (snip <>p 1 #(<>p)) && digs? <p))
        (lab f) (two? f && <f = 'label ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
    ; a64: an undefined weak's address is a literal word, not adrp+add. a pie link (the kernel's)
@@ -448,12 +448,12 @@
     (: wn (map name wu)
        (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk] pfes] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -1098,7 +1098,7 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f ()}
+                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1160,7 +1160,10 @@
           ((a . r) && elem a '("-fwrapv" "-fno-strict-overflow")) (flags r (pin t 'wrapv 1))
           ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r (pin t 'wrapv ()))
           ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))   ; a64's frame record (refused elsewhere)
-          ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pin t 'pic a))
+          ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pins t 'pic a 'npic ()))
+          ; -fno-pie said outright (the kernel's): no load base moves the image, so a const the
+          ; linker writes rides .rodata, as clang lays it
+          ((a . r) && elem a '("-fno-pie" "-fno-PIE" "-fno-pic" "-fno-PIC")) (flags r (pins t 'pic () 'npic 1))
           ("-ftrivial-auto-var-init=zero" . r) (flags r (pin t 'avz 1))
           ("-ftrivial-auto-var-init=uninitialized" . r) (flags r (pin t 'avz ()))
           ; -fcf-protection: 1 endbr (ibt), 2 the shadow stack's mark alone, 3 both

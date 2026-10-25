@@ -556,7 +556,9 @@
       (st? (ex '("a") "spl") 'dos = '(stack ""))
       (st? (ex '("a") "vsp x") 'dos = '(beside "x"))
       (st? (ex '("a") "se sw=3") 'sw = 3)
-      (st? (ex '("a") "n") 'msg = "1 lines")                        ; nu and number mean one thing
+      (st? (ex '("a") "nu") 'msg = "1 lines")
+      (st? (ex '("a") "col") 'msg = "molokai")                      ; colo and colorscheme mean one thing
+      (has? (st? (ex '("a") "n") 'msg) "ambiguous: n")              ; number and nohlsearch do not
       (st? (ex '("a") "ya") 'reg = '(lin ("a")))
       (: q (vgob '("a") ((bytes ":sen") + [CR]))                    ; the face's word, headed
          _ (pin q 'exmore '("send"))
@@ -676,7 +678,7 @@
       (hue-pen '(Statement 161 "#F92672" (bold)) 1 = "\e[1;38;2;249;38;114m")
       (hue-pens hue-theme () @ ps (all (c \ string? (ps (hue-cls c))) hue-classes))
       (hues-pens hue-theme () @ ps (all (c \ string? (ps (hue-cls c))) hues-classes))
-      (all (r \ any (c \ hue-grp c = <r) hue-classes || any (c \ hue-grp c = <r) hues-classes)
+      (all (r \ <r = 'Search || any (c \ hue-grp c = <r) hue-classes || any (c \ hue-grp c = <r) hues-classes)
            hue-theme))
 
 ; --- paint invariance: colour adds colour and moves nothing ---
@@ -699,7 +701,7 @@
                         !(name? <r && hcol? (r 1) && hhex? (r 2) && all (f \ elem f '(bold italic)) (r 3)) 0
                         (n = 6) (hcol? (r 4) && hhex? (r 5))
                         1))
-   (hgrp? g) (elem g '(Normal Visual) || any (c \ hue-grp c = g) hue-classes
+   (hgrp? g) (elem g '(Normal Visual Search) || any (c \ hue-grp c = g) hue-classes
               || any (c \ hue-grp c = g) hues-classes)
    (hgot rs g) (two? (filter (r \ <r = g) rs))
    (hthm? t) (: rs <>t ps (hues-pens rs ())
@@ -901,6 +903,21 @@
       (see (box '("(ab)") 8 3) "$" @ st (body st = [(vam st + "(" + vaoff st + "ab)") "~"]))
       (see (box '("(ab)") 8 3) "l" @ st (body st = '("(ab)" "~")))          ; off a delimiter: plain
       (see (box '("[a" "b]") 8 3) "" @ st (body st = ["[a" ("b" + vam st + "]" + vaoff st)])))
+
+; --- every hit of the last search is drawn in the 'search pen, until :noh or :set nohls ---
+   (vas st) (vpen st 'search "\e[30;43m")
+   (vah2 st t) (vas st + t + vaoff st)
+   _ (test
+      (see (box '("abcb") 8 3) "/b\r" @ st (body st = [("a" + vah2 st "b" + "c" + vah2 st "b") "~"]))
+      (see (box '("ab" "b") 8 3) "/b\r" @ st (body st = [("a" + vah2 st "b") (vah2 st "b")]))
+      (see (box '("abcb") 8 3) "/b\r:noh\r" @ st (body st = '("abcb" "~")))
+      (see (box '("abcb") 8 3) "/b\r:noh\rn" @ st (body st = [("a" + vah2 st "b" + "c" + vah2 st "b") "~"]))
+      (see (box '("abcb") 8 3) ":set nohls\r/b\r" @ st (body st = '("abcb" "~")))
+      (see (box '("axb") 8 3) "/x*\r" @ st (body st = [("a" + vah2 st "x" + "b") "~"]))     ; empty hits show nothing
+      (see (box '("ab abc ab") 12 3) "*" @ st (body st = [(vah2 st "ab" + " abc " + vah2 st "ab") "~"]))
+      ; a mate on the cursor's delimiter cuts the hit it sits in
+      (see (box '("(a)") 8 3) "/(a)\r" @ st (body st = [(vah2 st "(a" + vam st + ")" + vaoff st) "~"]))
+      (st? (vah ":set nohlsearch") 'msg = "nohlsearch"))
 
 ; --- an edit lexes again only from its row, until the carry meets the old one ---
    (vacount _) (: n (cask 1) lx (hues-lexer 'l)
