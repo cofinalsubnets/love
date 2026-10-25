@@ -807,5 +807,26 @@
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
    (dce k) (: y (decay-at dc0 (dct + k * dcl)) (sqrt (net (y * y) / 4000.0))))
  (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0))
+; the way between levels: a herald within its reach makes for the eye and meeting it leaves
+; for its file, by the level's own folder; a bed tapped is lain on, then left for its entry;
+; and one come to by a bed's entry wakes on it and stands beside it, on its left
+(: wtx "(: face (texture 4 4 1 '((fill (rgb 1 1 0)))))"
+   way (world-read (wtx + "(level \"w\" (room [-6 0 -6] [6 4 6]) (start [0 0 -5] 0 0)
+                          (herald [0 2 3] 1 2.5 face \"next.l\" 'in) (sleep-bed [3 0 -3] 0 \"back.l\" ())
+                          (wake-bed 'up [-3 0 -3] 0) (entry 'door [0 0 5] 180 0))"))
+   (frames st n) (? (n < 1 || st 'done) st (: _ (pin st 'dt 0.05) _ (world-move st) (frames st (n - 1))))
+   far (frames (world-new 16 8 way "lv/") 20)
+   near (frames (pins (world-new 16 8 way "lv/") 'pz 1.0) 40)
+   bed (world-new 16 8 way "lv/") _ (pins bed 'px 2.0 'pz -2.0 'py 1.6 'th (pi / 2.0) 'ph -1.0)
+   lie (frames (world-step bed 'tap) 200) at (world-at 16 8 way "lv/" 'door) up (world-at 16 8 way "lv/" 'up) ue (up 'eye) uy (up 'py) woke (frames up 100)
+ (test (!(far 'done)) (peep far 'goto () = ()) (near 'done) (near 'goto = ["lv/next.l" 'in])
+       (lie 'eye = 'lie) (lie 'goto = ["lv/back.l" ()]) (lie 'py < 0.6)
+       (at 'pz = 5.0) (abs (at 'th - pi) < 1e-9) (ue = 'move) (uy < 0.6)
+       (woke 'eye = 'walk) (abs (woke 'py - 1.6) < 0.01) (woke 'px < -3.9) (!(woke 'done))))
+; ..and come by an entry, a level's cars have already left, so none cries out of earshot of it
+(: gl (lv "(room [-30 0 -3.2] [30 3 6]) (start [0 0 -1.5] 0 0) (strip-light [0 3 3]) (entry 'far [20 0 4] 0 0)
+           (train [-5 0 -2.8] [5 2.3 -0.2] (door [0 0 -0.2] 1.2 2) -40)")
+   gs (world-at 40 24 gl "" 'far) _ (each ^40 (_ \ (pin gs 'dt 0.05, world-move gs)))
+ (test ((world-at 40 24 gl "" ()) 'cars 0 'ph = 'wait) (gs 'cars 0 'ph = 'gone) (gs 'cars 0 'o = -40.0)))
 (test_fin ())
 (puts "world: ok\n")

@@ -4,9 +4,10 @@
 ; (level NAME PART ..); a texture is made from its recipe (swatch.l), and a surface no texture
 ; names is a grid. every lamp (mesh.l) is baked once into a channel and summed each frame by
 ; how bright it is just then; a sky, if the level has one, lights what it reaches.
-; world-read, -new, -step, -move and -frame are pure; world-watch reads the disk, and only
-; world-walk and world-run touch the tty.
-(module (world world-run world-walk world-main world-new world-size world-step world-binds world-pick world-span world-scene
+; world-read, -new, -at, -step, -move and -frame are pure; world-watch reads the disk, and only
+; world-walk and world-run touch the tty. a walk may leave for another level's entry, a herald
+; met or a bed slept in, and world-run walks on there in the same window.
+(module (world world-run world-walk world-main world-new world-at world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-pens world-opts world-read world-load
          world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
@@ -29,6 +30,7 @@
 (:
  fps 30
  eye-h 1.6 body-r 0.25
+ mattress-w 0.99 mattress-l 1.905 mattress-h 0.25    ; scenery's
  walk-v 3.4 turn-v 2.0 tilt-v 1.2         ; metres, and radians, a second
  ball-r 0.12 ball-e 0.72 ball-kick 2.6    ; a ball: its radius, its bounce, the least kick
  plush-e 0.2                                         ; a plush's bounce
@@ -50,12 +52,18 @@
  ; ..a scare raised by a word given what it does not take says what it takes; any other is
  ; love's own
  (world-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
-                                       ds (foldl (\ a d (ev 'ev d)) (ev 'ev '(borrow 'scenery)) (src-last ds))))
+                                       ds (run-forms (src-last ds))))
                              () (\ a b ['scare a b]))
    (? (tablet? r) (r 'kind = 'level ? (check r) "the file's last form should be (level NAME PART ..)")
       (two? r && <r = 'scare) (r 1 = 'level ? (r 2) ";; \(r 1) \(r 2)")
       (two? r && <r = 'torn) "a form is not finished: a ( without its )"
       "the file's last form should be (level NAME PART ..)"))
+ ; ..a file's forms run in turn, scenery's words first put back as scenery has them, so
+ ; none an earlier file named again stands in for them
+ (run-forms ds) (: _ (ev 'ev '(borrow 'scenery)) m (cite 'scenery) colon <'(: _) q <''x
+   ns (foldl (\ t k (pin t k 1)) {} (names ()))
+   _ (each (keys m) (k \ peep ns k 0 && ev 'ev k != m k ? (ev 'ev [colon k ['cite [q 'scenery] [q k]]])))
+   (foldl (\ a d (ev 'ev d)) () ds))
  ; ..the level's last form, each of its parts told its path down the source: the part's
  ; place in (level ..), and in a repeat's or mirror's list of parts the place there too
  (src-form p f) (: n (#f - 1) l (two? f ? (f n) ())
@@ -912,6 +920,7 @@
     'ball (two? (peep lv 'balls ()) ? (ball-mesh ()) ()) 'lit lit
     'plushes (map (u \ (: f (file-of dir u) (kept ['plush f (stamp f)] (_ \ plush-of f)))) (peep lv 'plushes ()))
     'spins (map (s \ spin-mesh s tt) (peep lv 'spins ()))
+    'heralds (map (h \ (: i (tix tt (h 'tex)) [i (tt i 1) (tt i 2)])) (peep lv 'heralds ()))
     'orbs (map (o \ (: k ['orb (o 'at) (o 'r) (o 'tex) (o 'turns) (o 'coarse) (peep o 'in 0) tt] pk (kept k (_ \ mesh-pack (orb-mesh o tt)))
                        {'pk pk 'lit (lit-of k pk) 'round (2.0 * tt (tix tt (o 'tex)) 1)}))
                (peep lv 'orbs ()))
@@ -1177,11 +1186,11 @@
    vines (cats (map (q \ (: n (net (q 'ts <= st 'mt - peep st 'vined 1e9))
                          (? (n = 0) () (: b (relit (q 'pk) (q 'lit)) [(n = #(q 'ts) ? b [(b 0) (peep (b 1) (iota (4 * n)) 0)])]))))
                     (filter seen? (peep sc 'vines ()))))
-   tears (tears-of st @ () () b [b])
+   tears (tears-of st @ () () b [b]) hds (heralds-of st)
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(peep lv 'gates ()))
    ; ..what moves laid on a surface frame by frame, what stands laid with the scene
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
-   all (bd orbs + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + bd shards + by 'shine + bd spins + glass + by 'glow
+   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + bd shards + by 'shine + bd spins + glass + by 'glow
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
@@ -1205,6 +1214,9 @@
  ; --- the state: the screen as view lays it, the level and its scene, where the player
  ;     stands and looks, the clock, the doors ---
  (world-new w h lv dir) (state-new w h lv dir ())
+ ; ..or come to by the entry named, () its start
+ (world-at w h lv dir nm) (state-at w h lv dir () nm)
+ (state-at w h lv dir ld nm) (arrive! (state-new w h (entered lv nm) dir ld) nm)
  ; ..ld () or (_ \ tick), a fresh tick for each time the scene is made, kept to make it again
  (loader st) (peep st 'load () @ () () f (f ()))
  (state-new w h lv dir ld) (: s (lv 'start) sc (scene lv dir () (ld @ () () f (f ())))
@@ -1378,7 +1390,7 @@
  ; a frame's motion: the shots in turn, each for its seconds, and nothing else moving till
  ; they are done; the frame of the cut already the level's
  (world-move st) (: cut (peep st 'cut ()) dt (peep st 'dt (1.0 / fps)) ct (peep st 'ct 0.0 + dt)
-   (? (atom? cut) (play-steps st) (ct < <cut 'secs) (pin st 'ct ct)
+   (? (atom? cut) (heralds! (play-steps st)) (ct < <cut 'secs) (pin st 'ct ct)
       (atom? >cut) (play-steps (cue st)) (pins st 'cut >cut 'ct 0.0)))
  ; ..a slow frame moved in steps no longer than a thirtieth, each the frame's ways, so a long
  ; one strides no further at once than a quick one
@@ -1514,7 +1526,7 @@
  ; ..what a tap does: a door opened by hand swung the other way, else a pane knocked; () where
  ; it meets neither
  (touch st) (? (charm? (peep st 'dlg ())) (pick! st (st 'dlg)) (peep st 'eye 'walk != 'walk) st (touch-at st))
- (touch-at st) (door-at st @ () (tap-at st @ () (deck-at st @ () (switch-at st @ () (gate-at st @ () (grave-at st @ () () i (kneel! st i)) i (swing! st i)) i (send! st i)) _ (play! st)) i (tap! st i))
+ (touch-at st) (door-at st @ () (tap-at st @ () (deck-at st @ () (switch-at st @ () (gate-at st @ () (grave-at st @ () (sleep-at st @ () () i (sleep! st i)) i (kneel! st i)) i (swing! st i)) i (send! st i)) _ (play! st)) i (tap! st i))
    i (: o (peep st 'opened {}) q (st 'lvl 'doors i) m (0.5 * (q 'a + q 'b)) p (P (q 'ax) (q 'c) 0.0 m)
         (copy t) (foldl (\ u k (pin u k (t k))) {} (keys t)) opening (peep o i 0 = 0)
         ; ..opened its way out, or with none away from the eye, the way it swung kept as it shuts
@@ -1571,7 +1583,58 @@
    (? (was = 'move && st 'eye != 'move && peep mv 'dlg 0) (pin st 'dlg-at (st 'mt + dlg-pause))
       (st 'eye = 'kneel && gem? (peep st 'dlg-at ()) && st 'dlg-at <= st 'mt) (pins st 'dlg (peep st 'sel 0) 'dlg-at ())
       (st 'eye = 'walk) (pins st 'gt (st 'mt) 'fv 0.0)
+      (st 'eye = 'lie && charm? (peep st 'sleep ())) (: q (st 'lvl 'sleeps (st 'sleep)) (go! st (q 'file) (q 'entry)))
       st))
+ ; --- a bed: lain on from beside it, and got up from on its left, looking toward its head.
+ ;     q a mattress's 'at, the middle of its foot, and 'deg; s -1.0 its left or 1.0 its right ---
+ (bed-of q s) (: a (q 'at) t (q 'deg * pi / 180.0) f [(sin t) (cos t)] r [(cos t) (0.0 - sin t)] w (0.5 * mattress-w)
+   (on u v) [(a 0 + s * u * r 0 + v * f 0) (a 2 + s * u * r 1 + v * f 1)]
+   {'side (on (w + 0.45) (0.45 * mattress-l)) 'edge (on (w - 0.25) (0.45 * mattress-l)) 'head (on 0.0 (mattress-l - 0.4))
+    'th (t + pi) 'top (a 1 + mattress-h)})
+ ; ..a bed to sleep in the eye's line meets within reach, its number; tapped, the eye lies
+ ; down on it from the side it stands, then goes on where the bed leads
+ (sleep-at st) (: e (eye-at st) d (look-way st) qs (peep (st 'lvl) 'sleeps ())
+   (on? q p) (: a (q 'at) t (q 'deg * pi / 180.0) dx (p 0 - a 0) dz (p 2 - a 2) u (dx * cos t - dz * sin t) v (dx * sin t + dz * cos t)
+     (abs u <= 0.5 * mattress-w && 0.0 <= v && v <= mattress-l && a 1 <= p 1 && p 1 <= a 1 + mattress-h + 0.05))
+   (hit i) (any (j \ on? (qs i) (c+ e (c* (0.05 * j) d))) ^(int (reach / 0.05)))
+   (filter hit ^#qs @ () () l <l))
+ (sleep! st i) (: q (st 'lvl 'sleeps i) a (q 'at) t (q 'deg * pi / 180.0)
+   s ((st 'px - a 0) * cos t - (st 'pz - a 2) * sin t < 0.0 ? -1.0 1.0)
+   _ (pins st 'sleep i 'mf 0 'ms 0 'vx 0.0 'vz 0.0 'fv 0.0)
+   (gesture-begin st (gesture-lie st (bed-of q s))))
+ ; --- the way between levels: go! leaves for file's entry, () its start; world-go walks there
+ ;     next. a level is come to at the entry named, its shots passed by, and in a bed the eye
+ ;     wakes in it and gets up ---
+ (go! st file nm) (pins st 'goto [(st 'dir + file) nm] 'done 1)
+ (entry-of lv nm) (filter (e \ e 'name = nm) (peep lv 'entries ()) @ () () l <l)
+ (entered lv nm) (entry-of lv nm @ () lv
+   e (pin (foldl (\ u k (pin u k (lv k))) {} (keys lv)) 'start {'at (e 'at) 'y (e 'y) 'deg (e 'deg) 'pitch (e 'pitch)}))
+ ; ..come by an entry, the level's cars have already left
+ (arrive! st nm) (entry-of (st 'lvl) nm @ () st
+   e (: _ (pin st 'cars (map (c \ {'ph 'gone 't 0.0 'door 0.0 'o (c 'leave) 'v 0.0}) (peep (st 'lvl) 'cars ())))
+   (? (!(peep e 'bed 0)) st
+        (: b (bed-of {'at (e 'foot) 'deg (e 'deg)} -1.0) h (b 'head)
+           _ (pins st 'px (h 0) 'pz (h 1) 'py (b 'top + 0.18) 'th (b 'th) 'ph 1.45)
+           (gesture-begin st (gesture-wake b (e 'y + eye-h)))))))
+ ; --- a herald: once the eye comes within its reach it makes for the eye, faster and
+ ;     faster, and meeting it goes on where it leads. drawn flat, facing the eye ---
+ herald-a 14.0 herald-meet 0.45
+ (heralds! st) (: hs (peep (st 'lvl) 'heralds ()) dt (peep st 'dt (1.0 / fps)) e (eye-at st)
+   ss (peep st 'hs () @ () (: l (map (h \ {'p (h 'at) 'on 0 'v 0.0}) hs) (pin st 'hs l, l)) l l)
+   (step i) (: h (hs i) q (ss i) d (c- e (q 'p)) n (sqrt (dot d d))
+     (? (st 'done) st
+        (n < herald-meet && q 'on) (go! st (h 'file) (h 'entry))
+        (!(q 'on)) (n < h 'reach ? (pin q 'on 1) q)
+        (: v (q 'v + herald-a * dt) (pins q 'v v 'p (c+ (q 'p) (c* (min2 1.0 (v * dt / n)) d))))))
+   (#hs = #ss ? (each ^#hs step) (pin st 'hs ()), st))
+ (heralds-of st) (: hs (peep st 'hs ()) ts (peep (st 'sc) 'heralds ()) th (st 'th) ph (st 'ph)
+   r [(cos th) 0.0 (0.0 - sin th)] u [(0.0 - sin th * sin ph) (cos ph) (0.0 - cos th * sin ph)]
+   (one i) (: q (hs i) t (ts i) z (0.5 * st 'lvl 'heralds i 'size) p (q 'p) W (t 1) H (t 2)
+     (at a b x y) (c+ p (c+ (c* (a * z) r) (c* (b * z) u)) @ c [(c 0) (c 1) (c 2) x y 0.0 1.0 0.0 1.0 1.0 1.0])
+     (mesh-shine (mesh-pack (mesh [(at -1.0 1.0 0.0 0.0) (at 1.0 1.0 W 0.0) (at 1.0 -1.0 W H) (at -1.0 -1.0 0.0 H)]
+                                  [[0 1 2 (t 0)] [0 2 3 (t 0)] [0 2 1 (t 0)] [0 3 2 (t 0)]]))
+                 1.0))
+   (#hs = #ts ? (map one (filter (i \ hs i 'on) ^#hs)) ()))
  ; ..tears: one from under the eye as it weeps, falling till it meets the ground, and there
  ; a dark patch soaking in, dried from its edge in a few seconds
  tear-c [0.26 0.33 0.46] wet-c [0.02 0.035 0.02] tear-dry 1.5 tear-gone 5.0
@@ -1911,7 +1974,8 @@
  (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (peep o 'win ())
                                ld (_ \ view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin))
-                               st (pins (state-new w h lv (dir-of p) ld) 'cut (peep lv 'shots ()) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
+                               nm (peep o 'entry ()) came (peep o 'came 0)
+                               st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (peep lv 'shots ())) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (peep o 'win ()) 'path p 'scale (peep o 'scale 2))
                                (world-watch (world-size st w (h // 2)))))
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
@@ -1927,7 +1991,12 @@
  (world-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
                      lv (world-load p)
    (? (string? lv) (say err ("world: " + p + ": " + lv + "\n"), flush err, 1)
-      (view-stage (pin o 'level p) (o2 \ world-walk o2 lv) (_ \ (say out mesh-gone, flush out)))))
+      (view-stage (pin o 'level p) (o2 \ world-go o2 lv) (_ \ (say out mesh-gone, flush out)))))
+ ; ..and on to the level a walk left for, in the same window, as long as there is one
+ (world-go o lv) (: st (world-walk o lv) g (peep st 'goto ())
+   (? (atom? g) st
+      (: p (g 0) l2 (world-load p)
+         (string? l2 ? (say err ("world: " + p + ": " + l2 + "\n"), flush err, st) (world-go (pins o 'level p 'entry (g 1) 'came 1) l2)))))
  world-usage "usage: love play LEVEL.l [--kitty|--cells|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice
  (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale

@@ -7,6 +7,8 @@
 ;                                      over (level-of NAME [PART ..])
 ;   (start [x y z] bearing pitch)      where the player stands, facing bearing degrees from
 ;                                      north toward east, looking pitch degrees up
+;   (entry NAME [x y z] bearing pitch)  another way into the level, as the start but named,
+;                                      for another level's way out to arrive by
 ;   (shot seconds [x y z] bearing pitch)  before the start, the level seen from there for
 ;                                      seconds, the shots in their order; a key skips them
 ;   (shot seconds (sky hour COVER) bearing pitch)  ..or that sky alone, nothing under it
@@ -84,6 +86,11 @@
 ;                                      side below; solid
 ;   (mattress [x y z] bearing)         a bare twin mattress lying with the middle of its foot
 ;                                      at x y z, its head toward bearing; solid
+;   (wake-bed NAME [x y z] bearing)    a mattress as above, and a way in named NAME: who
+;                                      arrives by it wakes lying on it and gets up
+;   (sleep-bed [x y z] bearing FILE ENTRY)  a mattress as above that a tap lies down on,
+;                                      and then the level left for FILE beside it at its way
+;                                      in ENTRY, or its start for ()
 ;   (telescope [x y z] bearing pitch (rgb r g b))  a refractor on a tripod standing at x
 ;                                      y z, looking toward bearing and pitch degrees up, its
 ;                                      tube that colour; solid
@@ -161,6 +168,10 @@
 ;                                      turns a second about the up through it, lit where it is
 ;   (glow ORB)                         an orb as bright as its own colours, lit or not
 ;   (inward ORB)                       an orb facing in, seen only from inside it
+;   (herald [x y z] size reach TEXTURE FILE ENTRY)  a picture size across always facing
+;                                      the eye, waiting at x y z: once the eye is within
+;                                      reach of it, it comes for the eye fast, and at the
+;                                      touch the level is left for FILE at ENTRY, as sleep's
 ;   (coarse k ORB)                     an orb drawn k times coarser than the world round it, k
 ;                                      2 4 or 8, its pixels k by k of the world's
 ;   (across LIGHT)                     a strip turned across, along x
@@ -193,7 +204,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand dark tree vined train bin mattress telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog ad spinner orb glow inward tether playing fence gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand dark tree vined train bin mattress wake-bed sleep-bed telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog ad spinner orb glow inward herald tether playing fence gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -221,6 +232,10 @@
  (rgb r g b) [(N r "(rgb r g b)") (N g "(rgb r g b)") (N b "(rgb r g b)")]
  (colour? c) (two? c && #c = 3 && all num? c)
  (start at deg pitch) (: u "(start [x y z] bearing pitch)" (part 'start [['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]))
+ (entry nm at deg pitch) (: u "(entry NAME [x y z] bearing pitch)"
+   (nom? nm ? (part 'entry [['name nm] ['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]) (no u nm)))
+ ; ..where another level is, and the way into it: a file beside this one, a name or ()
+ (way-to u file nm) (? (!(string? file)) (no u file) (!(nom? nm || nm = ())) (no u nm) [['file file] ['entry nm]])
  (shot s w deg pitch) (: u "(shot seconds [x y z] bearing pitch), or (shot seconds (sky hour COVER) bearing pitch)"
    (? (!(num? s) || s <= 0) (no u s)
       (part 'shot ([['secs (f s)] ['deg (N deg u)] ['pitch (N pitch u)]] + (kind? w ['sky] ? [['sky w]] [['at (P w u)]])))))
@@ -379,6 +394,11 @@
    body (solid (prism H (map (q \ L (q 0) 0.0 (q 1)) plan)))
    (skin {'floor (mattress-top ()) 'walls (mattress-side ()) 'ceiling (mattress-under ())}
          (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) body (cats (map edge ^8)))))
+ ; ..a mattress that is a way in, and one that is a way out
+ (wake-bed nm at deg) (: u "(wake-bed NAME [x y z] bearing)"
+   (nom? nm ? [(mattress at deg) (part 'entry [['name nm] ['at (P at u)] ['deg (N deg u)] ['pitch 0.0] ['bed 1]])] (no u nm)))
+ (sleep-bed at deg file nm) (: u "(sleep-bed [x y z] bearing FILE ENTRY)"
+   [(mattress at deg) (part 'sleep ([['at (P at u)] ['deg (N deg u)]] + way-to u file nm))])
  ; ..a small refractor on an aluminium tripod: three legs splayed from a black head, the
  ; tube its colour with a black dew shield and cell, a finder along its top, the eyepiece
  ; in a diagonal at its back looking up
@@ -478,6 +498,9 @@
        (part 'grave [['at p] ['deg d] ['name nm]])]))
  (glow o) (kind? o ['orb] ? (with o 'glow 1) (no "(glow ORB)" o))
  (inward o) (kind? o ['orb] ? (with o 'in 1) (no "(inward ORB)" o))
+ (herald at size reach t file nm) (: u "(herald [x y z] size reach TEXTURE FILE ENTRY)"
+   (? (!(texture? t)) (no u t)
+      (part 'herald ([['at (P at u)] ['size (N size u)] ['reach (N reach u)] ['tex t]] + way-to u file nm))))
  (coarse k o) (: u "(coarse k ORB)"
    (? (!(elem k [2 4 8])) (no u k) (kind? o ['orb]) (with o 'coarse k) (no u o)))
  (across s) (kind? s ['strip] ? (with s 'across 1) (no "(across (strip-light ..))" s))
@@ -550,13 +573,13 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'sleep 'herald])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
    used (foldl (\ a t (elem t a ? a (a + [t]))) () (cats (map (b \ map (k \ bare (b 'skin k)) (sort (keys (b 'skin)))) bs)
                                                      + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad + of 'tree)
-                                                     + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin)) + map (o \ o 'tex) (of 'orb + of 'lift + of 'gate + of 'fence)))
+                                                     + cats (map (s \ [(s 't1) (s 't2)]) (of 'spin)) + map (o \ o 'tex) (of 'orb + of 'lift + of 'gate + of 'fence + of 'herald)))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
    (skin-of b) (: s (b 'skin) (cats (map (k \ (: (e c) ([c (tname (bare (s k)))] + lay (s k)) (k = 'all ? (map e ['wall 'floor 'ceiling]) [(e (k = 'walls ? 'wall k))])))
                                        (filter (k \ elem k (keys s)) ['all 'walls 'floor 'ceiling]))))
@@ -567,6 +590,10 @@
       {'kind 'level 'name name
        'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0}
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
+       'entries (map (e \ (: a (e 'at) {'name (e 'name) 'at [(a 0) (a 2)] 'y (a 1) 'deg (e 'deg) 'pitch (e 'pitch) 'bed (peep e 'bed 0) 'foot a}))
+                     (of 'entry))
+       'sleeps (map (q \ {'at (q 'at) 'deg (q 'deg) 'file (q 'file) 'entry (q 'entry)}) (of 'sleep))
+       'heralds (map (h \ {'at (h 'at) 'size (h 'size) 'reach (h 'reach) 'tex (tname (h 'tex)) 'file (h 'file) 'entry (h 'entry)}) (of 'herald))
        'shots (map (s \ (: k (peep s 'sky ())
                          {'secs (s 'secs) 'deg (s 'deg) 'pitch (s 'pitch)
                           'at (tablet? k ? () (s 'at)) 'sky (tablet? k ? {'hour (k 'hour) 'cover (k 'cover) 'smog 0.0} ())}))

@@ -37,6 +37,11 @@
 ; ..the orb, a mottled pink, banded so its turning shows
 (: pinkorb (texture 128 64 8 '((fill (rgb 0.96 0.46 0.7)) (patches 8 0.35 (shade 0.8)) (patches 4 0.2 (rgb 1 0.78 0.9))
                                (noise 6 0.08) (rows 30 34 (shade 0.86)))))
+; ..inside, darker, and at its middle a smiling face that makes for whoever comes in
+(: pinkin (texture 128 64 8 '((fill (rgb 0.72 0.24 0.5)) (patches 8 0.35 (shade 0.75)) (patches 5 0.25 (rgb 0.9 0.42 0.68))
+                              (noise 6 0.1) (grid 16 16 1 (shade 0.7)))))
+(: smiley (texture 64 64 1 '((fill hole) (disc 32 32 30 (rgb 1 0.86 0.2)) (disc 32 36 20 (rgb 0.2 0.12 0.08)) (disc 32 31 20 (rgb 1 0.86 0.2))
+                             (disc 22 24 5 (rgb 0.2 0.12 0.08)) (disc 42 24 5 (rgb 0.2 0.12 0.08)))))
 
 ; the pieces, each standing with its top at y: a floor slab w by d, and the furniture
 (: (slab x y z w d) (skin {'floor carpet 'walls concrete 'ceiling concrete}
@@ -196,4 +201,6 @@
   ; at the top the orb, turning, and on its own platform the telescope looking up at it
   (slab (scope-at 0) (scope-at 1) (scope-at 2) 4 4)
   (telescope scope-at (aim 'deg) (aim 'pitch) (rgb 0.9 0.9 0.87))
-  (coarse 4 (glow (orb orb-at 6 pinkorb 0.06))))
+  (coarse 4 (glow (orb orb-at 6 pinkorb 0.06)))
+  (coarse 4 (glow (inward (orb orb-at 5.95 pinkin 0.06))))
+  (herald orb-at 1.6 5.9 smiley "ring.l" ()))

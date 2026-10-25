@@ -318,7 +318,7 @@
     (skin {'all paint} (air (box [(sx - 0.81) (hub - 1.31) -0.81] [(sx + 0.81) (cy + 0.01) 0.81])))   ; the hatch, a hair wider than the platform, so the floor never overlaps it
     (map (x \ strip-light [(sx + x) (hub + 1.21) 0]) [-2.3 -1.25 1.25 2.3])
     (block [(sx + 1.9) cy -1.13] [(sx + 2.94) (cy + 0.2) 0.9] wood)
-    (mattress [(sx + 2.42) (cy + 0.2) -1.1] 0)
+    (sleep-bed [(sx + 2.42) (cy + 0.2) -1.1] 0 "station.l" 'walk-in)   ; lain on, back to the station's walk-in
     (map (q \ pa [(sx + q 0 * 2.95) (hub + 1.21) (q 1 * 1.14)] [(0 - q 0) (0 - q 1)]) [[1 1] [1 -1] [-1 1] [-1 -1]])]))
 
 (level "the ring"

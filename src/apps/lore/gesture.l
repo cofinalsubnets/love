@@ -14,6 +14,13 @@
 ;                                         (ground x z); then 'kneel
 ;   (gesture-stand st ground eh)          up from a kneel: a lean, the push up, a step back,
 ;                                         eh the eye standing; then 'walk
+;   (gesture-lie st bed)                  a walk to beside a bed, turning round, sitting on its
+;                                         edge and lying back on it, looking up; then 'lie.
+;                                         bed {'side 'edge 'head [x z] 'th 'top}: where it is
+;                                         stood beside, sat on, lain on, the bearing lain
+;                                         toward the foot, and its top
+;   (gesture-wake bed eh)                 from lying on a bed, sitting up on its edge and
+;                                         standing beside it, eh the eye standing; then 'walk
 ;   (gesture-act st keys)                 an act's keys laid on the eye where it kneels; keys
 ;                                         'y 'ph 'ro offsets, 'fw how far it leans ahead;
 ;                                         then 'kneel
@@ -22,7 +29,7 @@
 ;   (gesture-play st dt fall)             a frame of the move, dt seconds after the last:
 ;                                         (fall st kind) for each event passed; 'eye is mv's
 ;                                         'then once it is over
-(module (gesture gesture-curve gesture-at gesture-breath gesture-kneel gesture-stand gesture-act gesture-acts
+(module (gesture gesture-curve gesture-at gesture-breath gesture-kneel gesture-stand gesture-lie gesture-wake gesture-act gesture-acts
          gesture-begin gesture-play)
 (borrow 'view)                          ; wrap, clamp, min2, max2
 (borrow 'vec)
@@ -73,6 +80,26 @@
     'y [[0.0 y0] [0.35 (y0 - 0.02)] [0.8 (y0 + 0.25)] [1.3 (ys + 0.015)] [1.7 ys]]
     'ro [[0.0 (peep st 'ro 0.0)] [0.5 -0.05] [1.0 0.02] [1.5 0.0]]
     'walk () 'len 1.8 'then 'walk})
+ ; ..a bed's bearings from where it is sat, out and the way lain, each unwound to lie near th
+ (bed-out b th) (: e (b 'edge) s (b 'side) (th + wrap (atan2 (s 0 - e 0) (s 1 - e 1) - th)))
+ (gesture-lie st b) (: x0 (st 'px) z0 (st 'pz) y0 (st 'py) th0 (st 'th) ph0 (st 'ph) s (b 'side) e (b 'edge) h (b 'head) top (b 'top)
+   d (sqrt (2 (s 0 - x0) + 2 (s 1 - z0))) tw (max2 0.6 (d / pace)) T (0.25 + tw)
+   go (th0 + wrap (atan2 (s 0 - x0) (s 1 - z0) - th0)) at (go + wrap (atan2 (e 0 - s 0) (e 1 - s 1) - go)) out (bed-out b at)
+   lain (out + wrap (b 'th - out))
+   {'x [[0.0 x0] [0.25 x0] [T (s 0)] [(T + 0.7) (s 0)] [(T + 1.3) (e 0)] [(T + 2.4) (h 0)]]
+    'z [[0.0 z0] [0.25 z0] [T (s 1)] [(T + 0.7) (s 1)] [(T + 1.3) (e 1)] [(T + 2.4) (h 1)]]
+    'th [[0.0 th0] [0.55 go] [T at] [(T + 0.7) out] [(T + 1.5) out] [(T + 2.4) lain]]
+    'y [[0.0 y0] [(T + 0.7) y0] [(T + 1.3) (top + 0.75)] [(T + 1.8) (top + 0.7)] [(T + 2.6) (top + 0.18)]]
+    'ph [[0.0 ph0] [T -0.2] [(T + 1.3) -0.1] [(T + 2.0) 0.6] [(T + 2.8) 1.42] [(T + 3.2) 1.45]]
+    'ro [[0.0 0.0] [(T + 1.9) 0.05] [(T + 2.8) 0.0]]
+    'walk [x0 z0 (s 0) (s 1)] 'len (T + 4.2) 'then 'lie})
+ (gesture-wake b eh) (: s (b 'side) e (b 'edge) h (b 'head) top (b 'top) th (b 'th) out (bed-out b th)
+   {'x [[0.0 (h 0)] [0.8 (h 0)] [1.8 (e 0)] [2.6 (e 0)] [3.3 (s 0)]] 'z [[0.0 (h 1)] [0.8 (h 1)] [1.8 (e 1)] [2.6 (e 1)] [3.3 (s 1)]]
+    'th [[0.0 th] [0.8 th] [1.8 out]]
+    'y [[0.0 (top + 0.18)] [0.8 (top + 0.2)] [1.8 (top + 0.75)] [2.6 (top + 0.72)] [3.2 (eh + 0.02)] [3.6 eh]]
+    'ph [[0.0 1.45] [0.9 1.3] [1.8 0.1] [2.6 -0.15] [3.6 0.0]]
+    'ro [[0.0 0.0] [1.2 -0.05] [2.0 0.0]]
+    'walk () 'len 3.8 'then 'walk})
  (gesture-act st a) (: x0 (st 'px) z0 (st 'pz) th (st 'th)
    (off v l) (map (q \ [(q 0) (v + q 1)]) l)
    {'x (map (q \ [(q 0) (x0 + q 1 * sin th)]) (a 'fw)) 'z (map (q \ [(q 0) (z0 + q 1 * cos th)]) (a 'fw))
