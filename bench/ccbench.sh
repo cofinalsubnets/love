@@ -39,10 +39,10 @@ CORPUS=${CORPUS:-"$R/test/00-init.l $R/test/spec.l $R/test/uu.l $(ls "$R"/test/*
 [ -n "${LOVE_CFLAGS:-}" ] || { echo "ccbench: no LOVE_CFLAGS -- run \`make ccbench\`" >&2; exit 2; }
 # a caller's -Werror comes back out: a warning set is not throughput
 CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dtco=1 -fpic -I$ho -I$R -I$R/src/love -I$R/src/inle -I$R/out/lib"
-# the hosted roster, common.mk's spelling: the core (love_tu + the codec), then src/love/ less
-# the core and the board seat, plus the nif libraries (src/love/{compress,audio,picture,crypto,archive}) less the codec
-love_tu="love gc ev task io map snap num arr lib/gz"
-host_cs=$(ls "$R"/src/love/*.c "$R"/src/love/compress/*.c "$R"/src/love/audio/*.c "$R"/src/love/picture/*.c "$R"/src/love/crypto/*.c "$R"/src/love/archive/*.c | grep -v '/\(love\|gc\|ev\|task\|io\|map\|snap\|num\|arr\|gz\|bare\|nohorn\|noblob\)\.c$')
+# the hosted roster, common.mk's own (LOVE_C the core, its codec and its math floor; HOST_C
+# src/love/ less the core and the board seat, plus the nif libraries): a copy here drifts
+[ -n "${LOVE_C:-}" ] && [ -n "${HOST_C:-}" ] || { echo "ccbench: no LOVE_C/HOST_C -- run \`make ccbench\`" >&2; exit 2; }
+host_cs=$HOST_C
 # ..and the hosted seat, the Makefile's seat_o: the kernel's doors stood in, no carried source
 host_cs="$host_cs $R/src/love/user/nokern.c $R/src/love/noblob.c"
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's love_typ, and
@@ -59,9 +59,8 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
   cc=$1; bin=$2; xf=$3; od=$WORK/o-$(basename "$bin")   # o- prefix: $bin itself lives in $WORK
   rm -rf "$od"; mkdir -p "$od/host"
   ( cd "$R" || exit 1
-    for b in $love_tu; do
-      $cc $CFLAGS $xf -c "src/love/$b.c" -o "$od/${b##*/}.o" || exit 1; done
-    $cc $CFLAGS $xf -c src/apps/moon/lib/moonlibc/math/lm.c -o "$od/lm.o" || exit 1
+    for f in $LOVE_C; do b=$(basename "$f" .c)
+      $cc $CFLAGS $xf -c "$f" -o "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
       $cc $CFLAGS $xf -c "$f" -o "$od/host/$b.o" || exit 1; done
     $cc $CFLAGS $xf $LDFLAGS -o "$bin" "$od"/*.o "$od"/host/*.o ) || return 1
@@ -78,8 +77,9 @@ mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
   ( cd "$R" || exit 1
-    for b in $love_tu; do
-      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "src/love/$b.c" "$od/${b##*/}.o" || exit 1; done
+    for f in $LOVE_C; do b=$(basename "$f" .c)
+      case $f in */moonlibc/*) continue;; esac       # the link pulls moonlibc by need
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
       mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link pulls members by need, so ccsize and ccdead read
@@ -120,6 +120,7 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
   { cat "$df"; echo "$drv"; } > "$WORK/drv.run.l"
   out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/drv.run.l" 2>&1) || { echo dnf; return; }
   printf '%s' "$out" | grep -q "$4" || { echo dnf; return; }
+  ! printf '%s' "$out" | grep -q '^;; missing' || { echo dnf; return; }   # a missing nif times nothing
   full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/drv.run.l")
   boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
