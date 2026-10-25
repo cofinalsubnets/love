@@ -22,8 +22,14 @@
  ; --- brushes ---
  (box-of ps) [(foldl (\ a p [(min2 (a 0) (p 0)) (min2 (a 1) (p 1)) (min2 (a 2) (p 2))]) [1e9 1e9 1e9] ps)
               (foldl (\ a p [(max2 (a 0) (p 0)) (max2 (a 1) (p 1)) (max2 (a 2) (p 2))]) [-1e9 -1e9 -1e9] ps)]
+ ; ..the point nearest all the planes, a box's middle: the square a face starts as is laid
+ ; round it, so a brush far off is as whole as one near
+ (anchor pls) (: (row k) (foldl (\ a pl (c+ a (c* (pl 0 k) (pl 0)))) [0.0 0.0 0.0] pls)
+   a (row 0) b (row 1) c (row 2) r (foldl (\ s pl (c+ s (c* (pl 1) (pl 0)))) [0.0 0.0 0.0] pls)
+   bc (cross b c) dt (dot a bc)
+   (abs dt < 1e-9 ? [0.0 0.0 0.0] (c* (1.0 / dt) [(dot r bc) (dot a (cross r c)) (dot a (cross b r))])))
  ; ..a face a plane: a wide square on it, cut by every other plane of the brush
- (face pls i) (: pl (pls i) n (pl 0) c (c* (pl 1) n)
+ (face pls i) (: pl (pls i) n (pl 0) m (anchor pls) c (c+ m (c* (pl 1 - dot n m) n))
    a (mag (n 1) < 0.9 ? [0.0 1.0 0.0] [1.0 0.0 0.0]) u (c* 1000.0 (unit (cross n a))) v (cross n u)
    sq [(c+ c (c+ u v)) (c+ c (c+ (c* -1.0 u) v)) (c+ c (c* -1.0 (c+ u v))) (c+ c (c+ u (c* -1.0 v)))]
    (poly-keep sq (map (j \ pls j) (filter (j \ j != i) ^#pls))))

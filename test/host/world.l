@@ -9,6 +9,7 @@
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
+(borrow 'decay)
 (: world-kb (view-bind view-binds world-binds))   ; a key's code -> its action
 
 (: (rows s) (: (go i k) (i + 2 <= #s ? (go (i + 1) (k + ("\r\n" = snip s i (i + 2)))) k) (1 + go 0 0))
@@ -745,5 +746,32 @@
    _ (pin tst 'th (0.5 * pi)) _ (tgo 'forward 30) t5 (tfl 0))
  (test (#(twl 'trees) = 1) (0.59 < t0 < 0.61) (t1 > 4.6) (t2 = t1) (t3 < t2 - 0.5) (t4 > 4.6) (4.45 < t5 < 4.55) (tst 'px > 1.0)
        (has? (lv "(tree [0 0 0] 'x (texture 8 8 1 '((fill (grey 0.4)))))") "(tree [x y z] seed TEXTURE)"))
+; a lift on a surface: stepped onto through its open side at its foot it carries the body
+; into the pocket, and stands there till the switch on its middle post is tapped; then up to
+; its head, its gates holding the body on as it goes, off onto the floor there, and back down and out again
+(: pfl (lv "(surface 'plane 40 40) (void [-4 -3 -4] [44 20 44]) (solid (box [-4 -3 -4] [44 0 44])) (pocket [20 20] [(void [12 -0.5 12] [28 30 28]) (lift [18 0 20] 1.6 10 (texture 8 8 1 '((fill 0.5)))) (solid (box [19 9 18] [24 10 22]))]) (start [21 0 20] 270 0)")
+   pst (world-new 8 8 pfl "") (pgo a n) (each ^n (_ \ (? (a != ()) (world-step pst a), pin pst 'dt (1.0 / 30.0), world-move pst)))
+   (pat _) [(pst 'px) (pst 'py - eye-h) (pst 'lifts 0 'ph)]
+   ; ..the switch looked at from where the body stands, and tapped
+   (ptap _) (: c (pst 'lvl 'lifts 0) dx (pst 'px - c 'at 0 - 0.11) dy (c 'at 1 + pst 'lifts 0 'o + 1.02 - pst 'py)
+     _ (pins pst 'th (1.5 * pi) 'ph (atan (dy / dx))) _ (pgo 'tap 1) (pin pst 'ph 0.0))
+   _ (pgo 'forward 30) _ (pgo () 90) p0 (pat 0) _ (ptap ()) _ (pgo () 75)
+   _ (pin pst 'th (0.5 * pi)) _ (pgo 'forward 30) pg (pat 0) _ (pgo () 300) p1 (pat 0)
+   _ (pin pst 'th (0.5 * pi)) _ (pgo 'forward 30) _ (pgo () 60) p2 (pat 0)
+   _ (pin pst 'th (1.5 * pi)) _ (pgo 'forward 32) _ (ptap ()) _ (pgo () 300) p3 (pat 0)
+   _ (pin pst 'th (0.5 * pi)) _ (pgo 'forward 30) p4 (pat 0))
+ (test (p0 1 < -999.9) (p0 2 = 'foot) (pg 2 = 'up) (pg 0 < 18.8) (pg 1 > -999.9) (mag (p1 1 + 990.0) < 0.01) (p1 2 = 'head) (p2 0 > 19.5) (mag (p2 1 + 990.0) < 0.01) (p2 2 = 'head)
+       (mag (p3 1 + 1000.0) < 0.01) (p3 2 = 'foot) (p4 0 > 19.5) (mag (p4 1) < 0.01)
+       (has? (lv "(lift [0 0 0] 0.5 3 (texture 8 8 1 '((fill 0.5))))") "(lift [x y z] width rise TEXTURE)"))
+; a deck tapped within reach starts the loop and tapped again stops it; looked away from, not
+(: dkl (lv "(room [0 0 0] [10 4 10]) (deck [4 0 6] [6 1 6.5]) (speaker [8 1 8]) (start [5 0 5.3] 0 -30)")
+   dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
+   _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
+ (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
+; fifty times round
+(: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
+   (dce k) (: y (decay-at dc0 (dct + k * dcl)) (sqrt (net (y * y) / 4000.0))))
+ (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0))
 (test_fin ())
 (puts "world: ok\n")
