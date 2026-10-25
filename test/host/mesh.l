@@ -166,7 +166,9 @@
    (moved a b) (abs (b 0 - (2.0 * a 0 - 1.0)) < 1e-5 && abs (b 1 - (2.0 * a 1 + 2.0)) < 1e-5 && abs (b 2 - (2.0 * a 2 + 3.0)) < 1e-5)
  (test (#(gm 0) = #(gb 0)) (gb 1 = gm 1) (foldl max 0.0 (map (i \ gd (gm 0 i) (gb 0 i)) ^#(gm 0)) < 1e-6)
        (all (i \ moved (gm 0 i) (gt 0 i)) ^#(gm 0)) (gt 1 = gm 1)
-       (mesh-glb "glTF" = ()) (mesh-glb (snip g 0 100) = ())))
+       (mesh-glb "glTF" = ()) (mesh-glb (snip g 0 100) = ())
+       ; ..its corners in two bytes each, and one triangle's six padded to a word
+       (j "accessors" 3 "componentType" = 5123) (: m1 [(gm 0) [(gm 1 0)]] g1 (mesh-glb-of m1 "one") (#g1 % 4 = 0 && mesh-glb g1 1 = m1 1))))
 ;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
 ;; seen both ways shows the same, but for where the pixels fall
 (: wq (sky-weather 1 'smooth) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
@@ -176,5 +178,12 @@
    both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
    gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
  (test (#both > 8000) (gap < 0.025)))
+;; ..and seen only through glass, the sky still drawn behind it: a clear pane all round the
+;; eye leaves no pixel bare, each the sky's through it
+(: nr (1.0 * 1790812800 + 12.0 * 3600.0) wr (sky-weather 1 'smooth) lr (sky-light (sky-sun nr 0.0 0.65) wr nr)
+   wh [1.0 1.0 1.0] pn (mesh-bake (mesh-pack (mesh-lathe [[6.0 -6.0] [6.0 6.0]] 16 -3 wh 1.0)) {'sun [0.0 1.0 0.0] 'amb [0.2 0.2 0.2] 'sunk 1.0 'sunc wh 'expo 1.0} mesh-open 1.0)
+   (gl k) (mesh-frame (mesh-view 40 24 [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0) pn [(mesh-tex 4 (\ x y wh))] [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nr 0.0 0.65) lr wr [0.0 0.0 0.0] nr 0.0 k ()))
+   g1 (gl 1) g4 (gl 4)
+ (test (0 <= amin g1) (0 <= amin g4) (+(map (k \ net (abs ((g1 >> k & 255) - (g4 >> k & 255)))) [0 8 16]) / (3.0 * #g1) < 8.0)))
 (test_fin ())
 (puts "mesh: ok\n")

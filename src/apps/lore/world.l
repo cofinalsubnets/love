@@ -1233,13 +1233,15 @@
                           && min2 (c 'side) w <= ac && ac <= max2 (c 'side) w))))
  ; ..where a body may stand: nothing in its way there; or, one already caught in something, a
  ; way out less caught than it is, or as caught and away from what holds it, its middle clear
+ ; ..eight points r round x z
+ (body-ring x z r) (map (k \ (: a (k * pi / 4.0) [(x + r * cos a) (z + r * sin a)])) ^8)
  (world-free? st x z) (: c (caught st x z) n <c
    (n = 0 || (n < 50 && (: h (caught st (st 'px) (st 'pz))
                             (n < <h || n = <h && (x - st 'px) * h 1 + (z - st 'pz) * h 2 < 0.0)))))
  ; ..how much of a body at x z is in the way: its points, 50 more for its middle, 99 a shut door;
  ; and the way to those caught, summed
  (caught st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (peep lv 'cars ())
-   ring (map (k \ (: a (k * pi / 4.0) [(x + r * cos a) (z + r * sin a)])) ^8) pts ([x z] . ring)
+   pts ([x z] . body-ring x z r)
    (shut? i) (: d (lv 'doors i) al (d 'ax = 'z ? x z) ac (d 'ax = 'z ? z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
    ; ..the feet as they will be there, a step up taken at once, so a stair shallower than a body
@@ -1265,7 +1267,7 @@
    ; keeps a hand from, from their foot to their top
    ws (walls-near st x z) (wall? q) (any (s \ s 5 < fl + 1.7 && fl < s 4 && seg-gap s q < 0.13) ws)
    (bad q) (!(air q) || pane? q || trunk? q || lift? q || wall? q)
-   bs2 (filter bad ring)
+   bs2 (filter bad >pts)
    [(any shut? ^#(lv 'doors) ? 99 (#bs2 + (bad <pts ? 50 0)))
     (foldl (\ a q (a + q 0 - x)) 0.0 bs2) (foldl (\ a q (a + q 1 - z)) 0.0 bs2)])
  (walls-of st) (: lv (st 'lvl)
@@ -1417,6 +1419,7 @@
  ; is under, a jump flown till it comes down on something; not in a grav shaft nor on a
  ; car's track, whose floors are their own
  climb-v 2.5 fall-g 9.8 fall-max 40.0 head-h 1.75
+ feet-r 0.12                              ; the feet stand on what is under this much of the body
  ; ..how hard the level pulls at height y: straight between its gravity's points, held past
  ; their ends
  (grav-at lv y) (: ps (peep lv 'gravity ()) n #ps
@@ -1441,16 +1444,21 @@
  (floor-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) lv (st 'lvl)
    shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (peep lv 'gravs ()))
    (? (shaft || any (c \ car-track? c x z) (peep lv 'cars ())) (pins st 'fv 0.0 'gt (st 'mt))
-      (: bs (column (st 'sc 'brushes) x z) f (floor-at bs x z fl) v (peep st 'fv 0.0) got (charm? f || gem? f)
+      (: bss (map (q \ [(column (st 'sc 'brushes) (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z feet-r)) bs (bss 0 0)
+         ; ..the floor under the middle, or under the feet's edge where that is a step higher
+         (num? y) (charm? y || gem? y)
+         (top l) (: m <l r (foldl (\ a y (num? y && !(num? a && a >= y) ? y a)) () >l)
+                   (num? r && !(num? m && r <= m + 0.05) ? r m))
+         f (top (map (c \ floor-at (c 0) (c 1) (c 2) fl) bss)) v (peep st 'fv 0.0) got (num? f)
          (? (got && v <= 0.0 && f > fl + 0.001) (pins st 'py (min2 f (fl + climb-v * dt) + eye-h) 'fv 0.0 'gt (st 'mt))
             (got && v <= 0.0 && f >= fl - 0.001) (pins st 'fv 0.0 'gt (st 'mt))
             (: v2 (max2 (0.0 - fall-max) (v - grav-at lv fl * dt)) n (fl + v2 * dt)
                ; ..rising, the head stops at what is over it; falling, the feet at the first
                ; floor on the way
-               g (v2 < 0.0 && !(got && n <= f) ? (landing bs x z fl n) ())
+               g (v2 < 0.0 && !(got && n <= f) ? (top (map (c \ landing (c 0) (c 1) (c 2) fl n) bss)) ())
                (? (v2 > 0.0 && brush-medium bs [x (n + head-h) z] != 1) (pin st 'fv 0.0)
                   (got && n <= f) (land! (pin st 'py (f + eye-h)) v2)
-                  (charm? g || gem? g) (land! (pin st 'py (g + eye-h)) v2)
+                  (num? g) (land! (pin st 'py (g + eye-h)) v2)
                   (pins st 'py (n + eye-h) 'fv v2)))))))
  ; ..come down at v: the eye sunk as hard as it hit and sprung back, a thump as the floor
  ; sounds, and a jump kept for it taken

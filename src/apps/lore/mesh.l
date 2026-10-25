@@ -216,7 +216,7 @@
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
-         (\ v f B (? (!(aany (f = -1))) f
+         (\ v f B (? (!(aany (f < 0))) f
                      (: g (sky-grid v lt wx e sim k f sm) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
                         (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix))))))]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
@@ -394,7 +394,9 @@
    ps (map (v \ map (x \ glb-f32 (glb-bits x)) [(0.0 - v 0) (v 1) (v 2)]) vs) ns (map (v \ [(0.0 - v 5) (v 6) (v 7)]) vs)
    cs (map (v \ map (k \ glb-lin (v k)) [8 9 10]) vs)
    (fl l) (cats (map (p \ cats (map (x \ glb-le (glb-bits x)) p)) l))
-   pb (fl ps) nb (fl ns) cb (fl cs) ib (cats (map (t \ cats (map (k \ glb-le (t k)) ^3)) ts))
+   ; ..the triangles' corners in two bytes each where that holds them, padded to a word
+   sh (n <= 65536) (le k) (sh ? [(k & 255) (k >> 8 & 255)] (glb-le k))
+   pb (fl ps) nb (fl ns) cb (fl cs) il (#ts * 3 * (sh ? 2 4)) ib (cats (map (t \ cats (map (k \ le (t k)) ^3)) ts) + map (_ \ 0) ^((4 - il % 4) % 4))
    (ext f) (map (k \ foldl (\ a p (f a (p k))) (ps 0 k) ps) ^3)
    (view o l g) {"buffer" 0 "byteOffset" o "byteLength" l "target" g}
    (acc v ty c ct) {"bufferView" v "componentType" ct "count" c "type" ty}
@@ -403,8 +405,8 @@
                  "meshes" [{"name" name "primitives" [{"attributes" {"POSITION" 0 "NORMAL" 1 "COLOR_0" 2} "indices" 3 "mode" 4 "material" 0}]}]
                  "materials" [{"name" name "pbrMetallicRoughness" {"baseColorFactor" [1.0 1.0 1.0 1.0] "metallicFactor" 0.0 "roughnessFactor" 1.0}}]
                  "accessors" [(pins (acc 0 "VEC3" n 5126) "min" (ext min2) "max" (ext max2))
-                              (acc 1 "VEC3" n 5126) (acc 2 "VEC3" n 5126) (acc 3 "SCALAR" (3 * #ts) 5125)]
-                 "bufferViews" [(view 0 #pb 34962) (view #pb #nb 34962) (view (#pb + #nb) #cb 34962) (view (#pb + #nb + #cb) #ib 34963)]
+                              (acc 1 "VEC3" n 5126) (acc 2 "VEC3" n 5126) (acc 3 "SCALAR" (3 * #ts) (sh ? 5123 5125))]
+                 "bufferViews" [(view 0 #pb 34962) (view #pb #nb 34962) (view (#pb + #nb) #cb 34962) (view (#pb + #nb + #cb) il 34963)]
                  "buffers" [{"byteLength" (#pb + #nb + #cb + #ib)}]})
    jp (j + string (map (_ \ 32) ^((4 - #j % 4) % 4))) bl (#pb + #nb + #cb + #ib)
    (string (glb-le 1179937895 + glb-le 2 + glb-le (28 + #jp + bl) + glb-le #jp) + "JSON" + jp

@@ -609,6 +609,11 @@
    _ (each ^60 (_ \ world-move st)) (md p) (brush-medium (st 'sc 'brushes) p)
  (test (md [0 0.5 0] = 0) (md [0 1.5 0] = 1) (md [0 -0.5 4.9] = 0) (abs (st 'py - 2.6) < 0.01) (#(lv 'drapes) = 1)
        (has? (world-read (ld + "(land t 3))")) "(land TEXTURE [[[x y z] ..] ..])")))
+;; ..a seat smaller than a body come down on by its edge, the middle just past it: stood on,
+;; and one clear of it fallen past to the floor
+(: sd "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) (solid (box [-5 -1 -5] [5 0 5])) (solid (box [-0.2 1 -0.2] [0.2 1.1 0.2])))"
+   (seat x) (: st (world-new 8 8 (world-read sd) "") _ (pins st 'px x 'pz 0.0 'py (2.0 + eye-h) 'fv 0.0) _ (each ^60 (_ \ world-move st)) (st 'py - eye-h))
+ (test (abs (seat 0.0 - 1.1) < 0.01) (abs (seat 0.28 - 1.1) < 0.01) (abs (seat 0.4) < 0.01)))
 ;; ..a room carved under it lit by the room's light alone, the same at noon as at midnight
 (: (ldr h) (: ul ("(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) (sky " + show h + " 'clear) (ambient (rgb 0.5 0.4 0.3)) (land t [[[-5 2 -5] [5 2 -5]] [[-5 2 5] [5 2 5]]]) (room [-3 0 -3] [3 1.5 3]))")
    (map (c \ c 'lit 'base) (filter (c \ c 'hi 1 < 1.6) (world-new 8 8 (world-read ul) "" 'sc 'chunks))))

@@ -97,39 +97,58 @@
 
 ; the maze: nx by nz rooms the whole way round, wrapping as the world does, each carved out
 ; of the ground with the ground left standing between them for walls. a passage dug from the
-; first room to every other, through a doorway, seldom the whole wall; and of the walls not
-; dug a few with a doorway, so a way round now and then
+; first room to every other, through a doorway, seldom the whole wall, and no way round: one
+; hand kept on a wall leads everywhere
 (: (cid i j) ((i + nx) % nx * nz + (j + nz) % nz))
+; ..the room through room c's wall d, and that wall
+(: (nb c d) (: i (c // nz) j (c % nz) (d @ 0 (cid (i + 1) j) 1 (cid (i - 1) j) 2 (cid i (j + 1)) (cid i (j - 1)))))
+(: (edge c d) (: i (c // nz) j (c % nz) (d @ 0 (cid i j) 1 (cid (i - 1) j) 2 (100000 + cid i j) (100000 + cid i (j - 1)))))
 ; ..the hall: three rooms by three by the graveyard, one room, white and higher than the rest, its
 ; floor in black and white squares, a doorway in the middle of each side. and the closet:
 ; a dark one off the end of a room across the ring, its door opened by hand, where the
-; player wakes
-(: ci 27 cj 6)
+; player wakes, and another off a dead end further round, zooble's, where it sits waiting
+(: ci 27 cj 6 zi 39 zj 10)
+(: closets [[ci cj] [zi zj]] shut (map (q \ 100000 + cid (q 0) (q 1)) closets)
+   sides (cats (map (q \ [(cid (q 0) (q 1)) (cid (q 0 - 1) (q 1))]) closets)))
 (: (hall? i j) (elem i gis && elem j gjs))
 (: gw (cats (map (i \ map (j \ cid i j) gjs) gis)))
 (: dug (: seen {} open {}
-   (nb c d) (: i (c // nz) j (c % nz) (d @ 0 (cid (i + 1) j) 1 (cid (i - 1) j) 2 (cid i (j + 1)) (cid i (j - 1))))
-   (edge c d) (: i (c // nz) j (c % nz) (d @ 0 (cid i j) 1 (cid (i - 1) j) 2 (100000 + cid i j) (100000 + cid i (j - 1))))
    (go c) (: _ (pin seen c 1)
              (each (map (q \ q 1) (sort (map (d \ [(h01 c d) d]) ^4)))
-                   (d \ (: n (nb c d) e (edge c d) (peep seen n 0 = 0 && e != 100000 + cid ci cj ? (: _ (pin open e 1) (go n)) 0)))))
+                   (d \ (: n (nb c d) e (edge c d) (peep seen n 0 = 0 && !(elem e shut) ? (: _ (pin open e 1) (go n)) 0)))))
    _ (each gw (c \ pin seen c 1))
    _ (go 0)
    open))
 ; ..room i j, and the way through its wall toward x and toward z: the whole wall, a doorway
 ; or none; a room open toward x reaching over into the next, and a way across where the
-; world wraps cut either side of it. the hall's walls shut but its doorways; the closet's
-; room no wider than a doorway to its sides
+; world wraps cut either side of it. the hall's walls shut but its doorways; the closets'
+; rooms no wider than a doorway to their sides
 (: hall-doors [(cid (<gis - 1) (gjs 1)) (cid (gis 2) (gjs 1)) (100000 + cid (gis 1) (<gjs - 1)) (100000 + cid (gis 1) (gjs 2))])
+; ..the room outside each, and the passages filled in so each doorway but the first is the
+; only way to its room's side of the maze: the first passage from that room toward the
+; doorways before it
+(: hall-out [(cid (<gis - 1) (gjs 1)) (cid (gis 2 + 1) (gjs 1)) (cid (gis 1) (<gjs - 1)) (cid (gis 1) (gjs 2 + 1))])
+(: filled (: shut {}
+   (way c d) (peep dug (edge c d) 0 = 1 && peep shut (edge c d) 0 = 0)
+   ; ..each room's next room toward the rooms in src, over the passages
+   (toward src) (: par {} _ (each src (c \ pin par c c))
+     (go fr) (? (atom? fr) par
+                (go (cats (map (c \ cats (map (d \ (: n (nb c d) (? (peep par n -1 >= 0 || hall? (n // nz) (n % nz) || !(way c d)) ()
+                                                                     (: _ (pin par n c) [n]))))
+                                               ^4))
+                               fr))))
+     (go src))
+   _ (each [1 2 3] (k \ (: c (hall-out k) p (toward (take k hall-out) c) d <(filter (d \ nb c d = p) ^4) (pin shut (edge c d) 1))))
+   shut))
 (: (round-hall e) (: c (e % 100000) i (c // nz) j (c % nz)
    (? (e < 100000) (hall? i j || hall? (i + 1) j) (hall? i j || hall? i (j + 1)))))
 (: (through e) (? (elem e hall-doors) 'door (round-hall e) 'none
-                  (e = 100000 + cid ci cj) 'none
-                  (: w (? (peep dug e 0 = 1) (h01 e 7 <= 0.15 ? 'open 'door) (h01 e 11 < 0.1 ? 'door 'none))
-                     (elem e [(cid ci cj) (cid (ci - 1) cj)] && w = 'open ? 'door w))))
+                  (elem e shut) 'none
+                  (: w (? (peep dug e 0 = 1 && peep filled e 0 = 0) (h01 e 7 <= 0.15 ? 'open 'door) 'none)
+                     (elem e sides && w = 'open ? 'door w))))
 (: white (texture 64 64 2 '((fill (grey 0.92)) (noise 3 0.03))))
 (: checks (feel 'hard (texture 64 64 1.2 '((fill (grey 0.93)) (checker 32 32 (grey 0.08)) (noise 2 0.04)))))
-(: (cell i j) (: wide (i < nx - 1 && through (cid i j) = 'open) z1 (cz * (j + 1) - wt) top-z (i = ci && j = cj ? (z1 - 1.6) z1)
+(: (cell i j) (: wide (i < nx - 1 && through (cid i j) = 'open) z1 (cz * (j + 1) - wt) top-z (elem [i j] closets ? (z1 - 1.6) z1)
    ((hall? i j) ? () (room [(cx * i + wt) 0 (cz * j + wt)] [(cx * (i + 1) + (wide ? (wt + 0.01) (0.0 - wt))) mh top-z]))))
 (: hall (dark (skin {'walls white 'floor checks 'ceiling white}
                     (room [(cx * <gis + wt) 0 (cz * <gjs + wt)] [(cx * (<gis + 3) - wt) gh (cz * (<gjs + 3) - wt)]))))
@@ -322,6 +341,8 @@
   (map (i \ cats (map (j \ ways i j) ^nz)) ^nx)
   (map (i \ map (j \ panels i j) ^nz) ^nx)
   (closet ci cj)
+  (closet zi zj)
+  (plush [(cx * (zi + 0.5)) 0 (cz * (zj + 1) - wt - 0.4)] 180 "zooble.glb")
   exits
   ; ..the loop down there heard down there alone, as the buzz is
   (heard [0 0 0] [lx mh lz] pas)
