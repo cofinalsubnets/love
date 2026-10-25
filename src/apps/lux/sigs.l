@@ -73,6 +73,7 @@
      (wsfloatw (sheaf)                wrow)
      (wstiled  (sheaf)                wrow)
      (wswins   (sheaf)                wrow)
+     (wsstack  (wrow window a)        wrow)
      (wsknownw? (sheaf window)        top)
      (wstagof  (sheaf window)         tag)
      (admit    (sheaf window)         sheaf)
