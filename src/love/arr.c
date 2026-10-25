@@ -123,8 +123,8 @@ static lvm(lvm_mul_cart) {
    ini_chain(spine + idx, word(p0), idx + 1 < pairs ? word(spine + idx + 1) : ZeroPoint); } }
  love_musttail return Push(word(spine)); }
 
-// the apply lane: sequences index and juxtapose, numbers are church numerals, and anything
-// with nothing to answer with answers ()
+// the apply lane: sequences and trays index, sequences juxtapose, numbers are church numerals,
+// and anything with nothing to answer with answers ()
 
 // string x charm -> byte by index or (); x string or name -> concat
 lvm(data_string_apply) {

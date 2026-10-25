@@ -73,7 +73,7 @@
  ; the vertices' first m parts as trays, and their places [x y z], indexable; a triangle t's corners
  (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
  (places vs) (columns vs 3)
- (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
+ (at3 P i) [(P 0 i) (P 1 i) (P 2 i)]
  (corners P t) [(at3 P (t 0)) (at3 P (t 1)) (at3 P (t 2))]
  ; ..each with its index, in order
  (indexed l) (rev (<>(foldl (\ st v [(<st + 1) ([v <st] . <>st)]) [0 ()] l)))
@@ -251,7 +251,7 @@
      out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
      vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
      ; ..the blocks' corners, each asked once
-     (corner E c) (: bk (peep vb (E // (c * c)) 0) o (E % (c * c))
+     (corner E c) (: bk (vb (E // (c * c))) o (E % (c * c))
                     (bk // (nb * nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
      N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
      (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
@@ -260,19 +260,19 @@
      (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
      c (? (!(tablet? sm)) (ask N d)
           (: _ (sky-keep sm n mm e lt wx sim)
-             A (iota (((N + sm 'k) % sky-turn = 0) + (sim - peep (sm 'at) N 0.0 > sky-age) > 0)) NA (peep N A 0)
+             A (iota (((N + sm 'k) % sky-turn = 0) + (sim - sm 'at N > sky-age) > 0)) NA (N A)
              cA (#A = 0 ? () (ask NA (dir NA)))
              _ (#A = 0 ? () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
-             [(peep (sm 'r) N 0.0) (peep (sm 'g) N 0.0) (peep (sm 'b) N 0.0)]))
+             [(sm 'r N) (sm 'g N) (sm 'b N)]))
      zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
      ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
-     (q j) (peep ix (qs + j) 0) zq (qs * 0 - 1)
+     (q j) (ix (qs + j)) zq (qs * 0 - 1)
      ts (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])
      (#N = 0 ? f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
-   [(255.0 * peep (c 0) 0 0.0) (255.0 * peep (c 1) 0 0.0) (255.0 * peep (c 2) 0 0.0)])
+   [(255.0 * c 0 0) (255.0 * c 1 0) (255.0 * c 2 0)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a
@@ -285,7 +285,7 @@
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
    f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
    (? (two? bare) (<>bare v f B0)
-      (: S (iota (f < 0)) (#S = 0 ? f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - peep f S 0)))))))
+      (: S (iota (f < 0)) (#S = 0 ? f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - f S)))))))
  ; ..colours s with the glows g kept on their bare pixels added, or through the tints kept
  (glowed s g) (: t (g >= 33554431) v (g - 33554431)
    (ch k) (t * min ((s >> k & 255) * (v >> k & 255) // 255 + 4 * (v >> 24)) 255 + (1 - t) * min ((s >> k & 255) + (g >> k & 255)) 255)
@@ -299,7 +299,7 @@
  ; ..as half-block cells: 24-bit, or the 256 cube dithered by bay
  (mesh-cells f w h deep bay bands) (: c (mesh-flat f)
    (deep ? (view-deep-frame w h (view-deep-pens c) bands)
-      (view-cube-pens c bay @ px (view-frame w h (y \ peep px (iota w + w * y) 0) bands))))
+      (view-cube-pens c bay @ px (view-frame w h (y \ px (iota w + w * y)) bands))))
  ; ..or as kitty image id over cols by rows cells from the cursor, which stays
  (mesh-kitty f w h cols rows id) (: b (frame-bytes f 2 1) n #b o (jug 0)
    (go i) (: j (min n (i + 4096))
@@ -352,7 +352,7 @@
    "")
  ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
  (mesh-under f w h P W H r) (: y0 (16 * r) n (min2 16 (H - y0))
-   (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (peep f (Y * h // H * w + X * w // W) 0) T (cask (W * n * 4))
+   (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (f (Y * h // H * w + X * w // W)) T (cask (W * n * 4))
               _ (frame-paint g W 1 T W) (pour P (y0 * W * 4) T 0 (W * n * 4)))
       0))
  ; ..a band [x0 cells fg bg] on cell row r: pens six bits a channel, or the 256

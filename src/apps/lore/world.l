@@ -337,10 +337,10 @@
  (props-mesh c tt) (: m 0.03 p (P (c 'ax) (c 'a0 - m) (c 'y0 - m) (c 'c0 - m)) q (P (c 'ax) (c 'a1 + m) (c 'y1 + m) (c 'c1 + m))
    lo (map (k \ min2 (p k) (q k)) ^3) hi (map (k \ max2 (p k) (q k)) ^3)
    pk (brush-mesh (pins (brush-box 1 lo hi) 'skin () . map brush-of (c 'props)) cell (look tt))
-   T (pk 'tris) X (pk 'cols) (mid t k) ((peep (X k) (peep T (4 * t) 0) 0.0 + peep (X k) (peep T (4 * t + 1) 0) 0.0 + peep (X k) (peep T (4 * t + 2) 0) 0.0) / 3.0)
+   T (pk 'tris) X (pk 'cols) (mid t k) ((X k (T (4 * t)) + X k (T (4 * t + 1)) + X k (T (4 * t + 2))) / 3.0)
    (wall? t) (any (k \ (: v (mid t k) (mag (v - lo k) < 1e-4 || mag (v - hi k) < 1e-4))) ^3)
    ks (filter (t \ !(wall? t)) ^(#T // 4))
-   (pin pk 'tris (star-tray [(4 * #ks)] (cats (map (t \ map (j \ peep T (4 * t + j) 0) ^4) ks)))))
+   (pin pk 'tris (star-tray [(4 * #ks)] (cats (map (t \ map (j \ T (4 * t + j)) ^4) ks)))))
  ; ..its strip down the roof, and the lamp it is, lighting only the car
  (car-mask c) (: p (P (c 'ax) (c 'a0) 0.0 (c 'c0)) q (P (c 'ax) (c 'a1) 0.0 (c 'c1))
    (inside [(min2 (p 0) (q 0)) (min2 (p 2) (q 2)) (max2 (p 0) (q 0)) (max2 (p 2) (q 2))]))
@@ -509,7 +509,7 @@
    (? (lp 'n = 0) ()
       (: (out k) (: P (lp 'P k) (max 0.0 (max (flo k - P) (P - fhi k)))) dx (out 0) dy (out 1) dz (out 2) R (lp 'R)
          I (iota (dx * dx + dy * dy + dz * dz < R * R))
-         (map (j \ peep I j 0) ^#I))))
+         (map I ^#I))))
  ; ..what of the lamps a face's cut hangs on, as a key: wk too where one is masked, and the
  ; troffers it meets, tf their boxes and (tm lo hi) the numbers of those meeting a box
  (reach-of all-pts ks wi tf tm)
@@ -518,7 +518,7 @@
  (box-hi ps) (map (k \ foldl (\ a p (max2 a (p k))) -1e9 ps) ^3)
  ; ..a box's numbers among boxes, all weighed at once: L and H their corners' trays
  (boxes-meeting n L H) (\ lo hi (? (n = 0) ()
-   (: (on k) ((H k >= lo k - 1e-3) * (L k - 1e-3 <= hi k)) I (iota (on 0 * on 1 * on 2)) (map (j \ peep I j 0) ^#I))))
+   (: (on k) ((H k >= lo k - 1e-3) * (L k - 1e-3 <= hi k)) I (iota (on 0 * on 1 * on 2)) (map I ^#I))))
  (coarse? lps tf tm) (: all-pts (lamp-pts lps)
   ; ..asked of a face first, so its pieces weigh only the lamps that reach it
   (\ f (: pts (map (all-pts 'at) (reach-ix all-pts f)) tx (map tf (tm (box-lo f) (box-hi f)))
@@ -537,7 +537,7 @@
        (#pts = 0 || 6.0 * c - 0.5 <= 0.0) 0
        (: dx (out 0 PX) dy (out 1 PY) dz (out 2 PZ) L (min R (6.0 * c - 0.5))
           ix (iota (dx * dx + dy * dy + dz * dz < L * L))
-          (any (j \ (: i (peep ix j 0) (lit? (pts i 2) (pts i 0)))) ^#ix))))))))
+          (any (j \ (: i (ix j) (lit? (pts i 2) (pts i 0)))) ^#ix))))))))
  ; ..a pane: a sheet each way across the middle of its thin side, glass of its texture, the one
  ; facing its lens's point a lens, the light on it its sheen; upright, or lying flat when it is
  ; thinnest up
@@ -717,7 +717,7 @@
  (cells-seen sc v e) (: cl (peep sc 'cells ())
    at (? (!(tablet? cl)) () (: L (cl 'lo) H (cl 'hi) (iota ((L 0 <= e 0) * (e 0 <= H 0) * (L 1 <= e 1) * (e 1 <= H 1) * (L 2 <= e 2) * (e 2 <= H 2)))))
    (? (at = () || #at = 0) ()
-     (: cam (v 'cam) (row i) (map (j \ peep cam (4 * i + j) 0.0) ^4) r0 (row 0) r1 (row 1) r3 (row 3)
+     (: cam (v 'cam) (row i) (map (j \ cam (4 * i + j)) ^4) r0 (row 0) r1 (row 1) r3 (row 3)
         bent (tablet? (peep sc 'surf ())) mx (8.0 / v 'w) my (8.0 / v 'h) nr (v 'near)
         (on q P) (q 0 * P 0 + q 1 * P 1 + q 2 * P 2 + q 3)
         Q {} (seen i) (peep Q i () @ () (: P (cl 'cells i 'P) q [(on r0 P) (on r1 P) (on r3 P)] (pin Q i q, q)) q q)
@@ -741,7 +741,7 @@
         (past e) (: i (e 0) r (e 1) q (seen i)
           (cats (map (w \ span q (w 1) r @ () () p (from (w 0) p @ () () u (w 0 < 0 ? () [[(w 0) u]]))) (cl 'cells i 'ways))))
         (go q) (? (atom? q) 0 (go (past <q + >q)))
-        _ (go (map (k \ (: i (peep at k 0) [i (from i [-1.0 1.0 -1.0 1.0])])) ^#at))
+        _ (go (map (k \ (: i (at k) [i (from i [-1.0 1.0 -1.0 1.0])])) ^#at))
         cks (sc 'chunks) S {}
         ; ..past the sky, a chunk kept where its ball is inside the four planes through the eye
         ; and a box's edges
@@ -786,7 +786,7 @@
    otf (fresh || peep memo 'ti () != ti ? () (peep memo 'tfb ()))
    (tf-hot a b) (: in (foldl (\ t q (pin t q 1)) {} b)
      (map (q \ [(map (k \ 0.5 * (q 0 k + q 1 k)) ^3) 0.8]) (filter (q \ peep in q 0 = 0) a)))
-   pst (map (j \ [(pks j) (ap 'at j 0) (peep (ap 'R) j 0.0) (ap 'mk j)]) ^(ap 'n))
+   pst (map (j \ [(pks j) (ap 'at j 0) (ap 'R j) (ap 'mk j)]) ^(ap 'n))
    ops (fresh || peep memo 'ti () != ti ? () (peep memo 'pts ())) owi (peep memo 'wi ())
    pin1 (foldl (\ t q (pin t (q 0) 1)) {} pst) opin (foldl (\ t q (pin t (q 0) 1)) {} ops)
    hot (map (q \ [(q 1) (q 2)]) (filter (q \ peep opin (q 0) 0 = 0 || (q 3 && wi != owi)) pst + filter (q \ peep pin1 (q 0) 0 = 0 || (q 3 && wi != owi)) ops)
@@ -802,10 +802,10 @@
    cv (filter (b \ b 'air = 1 && !(peep b 'sheer 0) && peep b 'land () = ()) bs) ck (map (b \ [(b 'lo) (b 'hi)]) cv)
    (ground-cut m d) (? (!(peep d 'land 0) || atom? cv) m
      (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
-        (mid k) (gem-tray [n] (map (t \ (peep (P k) (t 0) 0.0 + peep (P k) (t 1) 0.0 + peep (P k) (t 2) 0.0) / 3.0) ts))
+        (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) ts))
         X (mid 0) Y (mid 1 - 0.05) Z (mid 2)
         I (iota (foldl (\ a b (a + (b 'lo 0 < X) * (X < b 'hi 0) * (b 'lo 1 < Y) * (Y < b 'hi 1) * (b 'lo 2 < Z) * (Z < b 'hi 2))) (X * 0) cv > 0))
-        gone (foldl (\ t j (: i (peep I j 0) (brush-medium bs [(peep X i 0.0) (peep Y i 0.0) (peep Z i 0.0)] = 1 ? (pin t i 1) t))) {} ^#I)
+        gone (foldl (\ t j (: i (I j) (brush-medium bs [(X i) (Y i) (Z i)] = 1 ? (pin t i 1) t))) {} ^#I)
         (mesh (m 0) (map ts (filter (i \ peep gone i 0 = 0) ^n)))))
    (made k f) (: ky (idof [k ti]) [(kept ['mesh ky] f) ky])
    more (map (i \ (: m (made ['poster (vals (ps i)) i (shape (ptex i 0))] (_ \ pm i)) (on (m 0) (m 1)))) ^#ps
@@ -838,14 +838,14 @@
      lo [(amin X) (amin Y) (amin Z)] hi [(amax X) (amax Y) (amax Z)]
      (meets b) (all (k \ b 'lo k <= hi k + 0.2 && lo k - 0.2 <= b 'hi k) ^3)
      near (atom? vi ? () (filter meets (drop <vi bs)))
-     (under b) (: J (iota (Y > b 'low)) (at k) (: i (peep J k 0) (land-y b (peep X i 0.0) (peep Z i 0.0) @ () 0 h (peep Y i 0.0 <= h ? 1 0)))
+     (under b) (: J (iota (Y > b 'low)) (at k) (: i (J k) (land-y b (X i) (Z i) @ () 0 h (Y i <= h ? 1 0)))
                  (pin (Y <= b 'low) J (gem-tray [#J] (map at ^#J))))
      (in b) (? (peep b 'land () != ()) (under b) (foldl (\ a q (a * (X * q 0 0 + Y * q 0 1 + Z * q 0 2 <= q 1 + 1e-6))) (X * 0.0 + 1) (b 'planes)))
      ; ..a room carved under the ground brings what it holds in, but one standing up out of
      ; it is open, as it was before the ground: the ground's height wanted only for such a one
      lnd (filter (b \ peep b 'land () != ()) near)
      tall (any (b \ b 'air = 1 && peep b 'land () = () && any (l \ b 'hi 1 > l 'low) lnd) near)
-     G (tall ? (gem-tray [#X] (map (i \ foldl (\ a l (max a (land-y l (peep X i 0.0) (peep Z i 0.0) @ () -1e9 h h))) -1e9 lnd) ^#X)) 0)
+     G (tall ? (gem-tray [#X] (map (i \ foldl (\ a l (max a (land-y l (X i) (Z i) @ () -1e9 h h))) -1e9 lnd) ^#X)) 0)
      (step w b) (: o (w 0) u (w 1)
                   (? (peep b 'sheer 0) (: i (box? [(b 'lo) (b 'hi)]) [(o - i * o + i) (u - i * u)])
                      (peep b 'open 0) w
@@ -880,7 +880,7 @@
    QL (foldl (\ t q (pin t #t (q 2))) {} lq) LF (foldl (\ t f (pin t #t (idof f))) {} lfs) gi (idof gk)
    (litk lo hi) (? (nq = 0) [gi]
      (: (out k) (: P (QP k) (max 0.0 (max (lo k - P) (P - hi k)))) dx (out 0) dy (out 1) dz (out 2)
-        I (iota (dx * dx + dy * dy + dz * dz < QR * QR)) hit (foldl (\ t j (pin t (QL (peep I j 0)) 1)) {} ^#I)
+        I (iota (dx * dx + dy * dy + dz * dz < QR * QR)) hit (foldl (\ t j (pin t (QL (I j)) 1)) {} ^#I)
         [gi (map LF (sort (keys hit)))]))
    (litk-of pk) (litk (map (j \ amin (pk 'cols j)) ^3) (map (j \ amax (pk 'cols j)) ^3))
    ; ..a packed mesh's light, kept by what made it, k, and what lights its box
@@ -966,7 +966,7 @@
                 'bend (\ x y z [0.0 0.0]) 'chart (\ p p)}
  ; ..a packed mesh laid on it, and a frame's [verts tris], 8 a vertex
  (bent sf pk) (: c (pk 'cols) {'n (pk 'n) 'tris (pk 'tris) 'cols (sf 'at (c 0) (c 1) (c 2) + drop 3 c)})
- (bent-tris sf b) (: v (b 0) i (iota (#v // 8) * 8) (g k) (peep v (i + k) 0.0) p (sf 'at (g 0) (g 1) (g 2))
+ (bent-tris sf b) (: v (b 0) i (iota (#v // 8) * 8) (g k) (v (i + k)) p (sf 'at (g 0) (g 1) (g 2))
    [(foldl (\ u k (pin u (i + k) (p k))) (v + 0.0) ^3) (b 1)])
  ; ..the scene's still meshes laid on it once, each chunk's ball where it is laid, and the
  ; lights' fittings
@@ -1023,7 +1023,7 @@
        [(0.0 - s) o (0.0 - s)] [s o (0.0 - s)] [s o s] [(0.0 - s) o s]] I (iota n) lo (g 'lo) hi (g 'hi) R (0.4 * min2 (hi 0 - lo 0) (hi 2 - lo 2))
    (r k) (gem-tray [n] (map (i \ hash01 (i + 101 * k)) ^n))
    C (iota (12 * n)) ci (C // n)
-   (cor k) (peep (gem-tray [12] (map (c \ c k) cs)) ci 0.0)
+   (cor k) (gem-tray [12] (map (c \ c k) cs) ci)
    ts (cats (map (q \ (: (v c) ((4 * q + c) * n) (cats (map (i \ [[(v 0 + i) (v 1 + i) (v 2 + i) -2] [(v 0 + i) (v 2 + i) (v 1 + i) -2]
                                                                      [(v 0 + i) (v 2 + i) (v 3 + i) -2] [(v 0 + i) (v 3 + i) (v 2 + i) -2]]) ^n)))) ^3))
    {'x (0.5 * (lo 0 + hi 0)) 'z (0.5 * (lo 2 + hi 2)) 'y0 (lo 1) 'H (hi 1 + 2.8 - lo 1) 'up (g 'dir = 'up ? 1.0 -1.0)
@@ -1032,7 +1032,7 @@
  ; ..where they have got to at mt: [verts tris], brightest midway along the shaft
  (motes-at m mt) (: u (m 'h + m 'up * m 'sp * grav-v * mt / m 'H) f (u - floor u)
    an (m 'a + m 'w * mt) X (m 'x + m 'rad * cos an) Z (m 'z + m 'rad * sin an) Y (m 'y0 + m 'H * f)
-   b (0.9 * sin (pi * f)) ix (m 'ix) (g t) (peep t ix 0.0) B (g b)
+   b (0.9 * sin (pi * f)) ix (m 'ix) (g t) (t ix) B (g b)
    [(lace [(g X + m 'ox) (g Y + m 'oy) (g Z + m 'oz) 0.0 0.0 (0.45 * B) (0.75 * B) B]) (m 'tris)])
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
@@ -1125,7 +1125,7 @@
    dk (map (i \ ks i) (sc 'dyn))
    (relit pk l) (mesh-lamps! pk (l 'base) (l 'chs) dk 1.0)
    ; ..the chunks whose ball is on the inside of each plane of the view, nearest first
-   cam (v 'cam) (row i) (map (j \ peep cam (4 * i + j) 0.0) ^4)
+   cam (v 'cam) (row i) (map (j \ cam (4 * i + j)) ^4)
    pls (map (q \ (: a (row (q 0)) b (row 3) s (q 1) n (map (j \ b j + s * a j) ^4) (: s (1.0 / sqrt (sq (n 0) + sq (n 1) + sq (n 2))) (map (x \ s * x) n))))
             [[0 1.0] [0 -1.0] [1 1.0] [1 -1.0] [2 1.0] [2 -1.0]])
    (seen? c) (: m (c 'mid) r (0.0 - c 'rad) !(any (n \ n 0 * m 0 + n 1 * m 1 + n 2 * m 2 + n 3 < r) pls))
@@ -1139,7 +1139,7 @@
    ; ..one opened by hand its light the shut door's and the open's, mixed as it swings
    (hinged b pk d i) (: w (peep sw i 1.0) t (ds i) o (sc 'doors-swung i (w > 0.0 ? 0 1)) ob (relit (o 0) (o 1))
      c (iota (pk 'n) * 8 + 5)
-     v (foldl (\ v k (pin v (c + k) ((1.0 - t) * peep (b 0) (c + k) 0.0 + t * peep (ob 0) (c + k) 0.0))) (b 0) ^3)
+     v (foldl (\ v k (pin v (c + k) ((1.0 - t) * b 0 (c + k) + t * ob 0 (c + k)))) (b 0) ^3)
      (swung [v (b 1)] pk d (w * t * swing-wide)))
    doors (map (i \ (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i) A (d 'ax = 'z ? 0 2) ix (iota (pk 'n) * 8)
                       (d 'hand = 1 ? (hinged b pk d i) [(pin (b 0) (ix + A) (pk 'cols A + ds i * (d 'w - 0.05))) (b 1)])))
@@ -1184,7 +1184,7 @@
    fences (map (c \ relit (c 'pk) (c 'lit)) (filter seen? (peep sc 'fences ())))
    ; ..a vined tree's vines grown as far as they have since the loop first played
    vines (cats (map (q \ (: n (net (q 'ts <= st 'mt - peep st 'vined 1e9))
-                         (? (n = 0) () (: b (relit (q 'pk) (q 'lit)) [(n = #(q 'ts) ? b [(b 0) (peep (b 1) (iota (4 * n)) 0)])]))))
+                         (? (n = 0) () (: b (relit (q 'pk) (q 'lit)) [(n = #(q 'ts) ? b [(b 0) (b 1 (iota (4 * n)))])]))))
                     (filter seen? (peep sc 'vines ()))))
    tears (tears-of st @ () () b [b]) hds (heralds-of st)
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(peep lv 'gates ()))
@@ -1676,7 +1676,7 @@
    (? (charm? (peep st 'dlg ())) (foldl (\ o j (o + at j + esc + "[49m" + esc + (grave-hi? st j ? hi lo) + pad (grave-line st j) bw " ")) "" ^bh + esc + "[0m")
       (peep st 'shut 2 = 1) (foldl (\ o j (o + at j + esc + "[0m" + pad "" bw " ")) "" ^bh)
       ""))
- (dim-box f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (peep f ix 0)
+ (dim-box f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (f ix)
    (pin f ix ((((v >> 16 & 255) * 2 // 5) << 16) | (((v >> 8 & 255) * 2 // 5) << 8) | ((v & 255) * 2 // 5))))
  (tap! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3) kn (peep st 'knocked {})
    (peep kn i 0 = 0 ? (mix-cry (pin st 'knocked (pin (foldl (\ t k (pin t k 1)) {} (keys kn)) i 1)) "land metal 1" [(m 0) (m 2)])
@@ -2239,7 +2239,7 @@
    n (min2 3000 (floor (max2 (ab (pb 0 - pa 0)) (ab (pb 1 - pa 1)))) + 1)
    K (iota (n + 1)) X (pa 0 + (pb 0 - pa 0) * K / n) Y (pa 1 + (pb 1 - pa 1) * K / n)
    S (iota ((X >= 0.0) * (X < 1.0 * w) * (Y >= 0.0) * (Y < 1.0 * h)))
-   (#S = 0 ? f (pin f (peep (floor Y * w + floor X) S 0) ink)))
+   (#S = 0 ? f (pin f ((floor Y * w + floor X) S) ink)))
  ; ..the chosen form's brushes, outlined on the frame f through whatever is before them, as
  ; far on as a drag has them
  (edit-outline ed f) (: sel (ed 'sel) st (ed 'st)
@@ -2277,7 +2277,7 @@
       (: nc (i1 - i0) Q (iota (nc * (j1 - j0))) S ((Q // nc + j0) * w + Q % nc + i0)
          X (p 'c 0 + (S % w + 0.5 - w / 2.0) / p 'k) Z (p 'c 1 + (h / 2.0 - S // w - 0.5) / p 'k)
          in (foldl (\ q pl (: n (pl 0) (q * (n 0 * X + n 2 * Z + n 1 * cut <= pl 1 + 1e-6)))) (S * 0 + 1) (b 'planes))
-         (pin m (peep S (iota in) 0) (b 'air ? 1 0)))))
+         (pin m (S (iota in)) (b 'air ? 1 0)))))
  ; ..what stays while the plan does: below the cut, the rooms flat lit straight down; at it,
  ; the rock and the walls; and the rules every metre, or further apart further out
  (plan-base ed p w h) (: st (ed 'st) sc (st 'sc) k (p 'k) c (p 'c) cut (p 'fl + plan-cut) hw (w / 2.0 / k) hh (h / 2.0 / k)
@@ -2291,8 +2291,8 @@
    g (? (k >= 8.0) 1.0 (k >= 2.0) 5.0 10.0)
    cx (c 0 + (iota w + 0.5 - w / 2.0) / k) cz (c 1 + (h / 2.0 - iota h - 0.5) / k)
    cr (floor (cx / g) != floor ((cx + 1.0 / k) / g)) rr (floor (cz / g) != floor ((cz - 1.0 / k) / g))
-   rule ((peep cr (I % w) 0) + (peep rr (I // w) 0) > 0)
-   A (iota (rule * m)) f1 (pin f A ((peep f A 0 >> 1 & 8355711) + 4737096))
+   rule (cr (I % w) + rr (I // w) > 0)
+   A (iota (rule * m)) f1 (pin f A ((f A >> 1 & 8355711) + 4737096))
    (pin (pin (pin f1 (iota (m = 0)) plan-rock) (iota (rule * (m = 0))) plan-rule) (iota wall) plan-wall))
  ; ..a plan's frame: its base, the chosen form outlined, what a drag draws, the player
  (plan-pens ed) (: st (ed 'st) p (ed 'plan) dm (mesh-dims st) w <dm h (dm 1) key (show [(p 'c) (p 'k) (p 'fl) w h]) pc (ed 'pc)

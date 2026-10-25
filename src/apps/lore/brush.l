@@ -139,7 +139,7 @@
    (ends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) L (map (ends 'lo) ^3) H (map (ends 'hi) ^3)
    (near fb) (: lo (fb 'lo) hi (fb 'hi)
      (on k) ((H k >= lo k - 0.01) * (L k - 0.01 <= hi k)) I (iota (on 0 * on 1 * on 2))
-     (map (j \ peep I j 0) ^#I))
+     (map I ^#I))
    ; ..and the medium there, of only those: a brush holding a place a hair off the face is
    ; near it
    (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
@@ -190,7 +190,7 @@
      ; ..those whose box comes within s of box x, as a mask
      (near-box x s) (: (on a) ((RH a >= x 0 a - s) * (RL a - s <= x 1 a)) (on 0 * on 1 * on 2))
      (any-of m bxs s) (foldl (\ m x (max m (near-box x s))) m bxs) none (RL 0 * 0.0)
-     (marked m) (: I (iota (m > 0.5)) (map (j \ peep I j 0) ^#I))
+     (marked m) (: I (iota (m > 0.5)) (map I ^#I))
      ; ..what an edit touched, where the scene before is known: the brushes not as they were,
      ; and the lamps not, (kp 'hot) each [p r]; the faces their pieces and cuts hang on, those
      ; beside them, and the chunks any of those are in, or more's are not as they were
@@ -230,11 +230,11 @@
      nb #bs (bends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) BL (tablet? kp ? (map (bends 'lo) ^3) ()) BH (tablet? kp ? (map (bends 'hi) ^3) ())
      BF (foldl (\ t i (: b (FT i 2) (pin t b (i . peep t b ())))) {} (rev ^nf))
      (among b) (: _ (tick 'sides (b / nb)) lo (bt b 'lo) hi (bt b 'hi) (on k) ((BH k >= lo k - 0.02) * (BL k - 0.02 <= hi k)) I (iota (on 0 * on 1 * on 2))
-       cs (cats (map (j \ peep BF (peep I j 0) ()) ^#I)) T (floor (gem-tray [#cs] (map (c \ 1.0 * c) cs)))
+       cs (cats (map (j \ peep BF (I j) ()) ^#I)) T (floor (gem-tray [#cs] (map (c \ 1.0 * c) cs)))
        [(tab cs) (map (k \ peep (FL k) T 0.0) ^3) (map (k \ peep (FH k) T 0.0) ^3)])
      AM (tablet? kp ? (tab (map among ^nb)) ())
      (beside i) (: a (AM (FT i 2)) bx (box-of (FT i 0)) (on k) ((a 2 k >= bx 0 k - 1e-3) * (a 1 k - 1e-3 <= bx 1 k))
-       I (iota (on 0 * on 1 * on 2)) (map (j \ CI (a 0 (peep I j 0))) ^#I))
+       I (iota (on 0 * on 1 * on 2)) (map (j \ CI (a 0 (I j))) ^#I))
      fks (tablet? kp ? (tab (map (i \ (: f (FT i) _ (tick 'sides (i / nf)) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
      fid (tablet? kp ? (tab (map (i \ (kp 'id) (fks i)) ^nf)) ())
      items (cats (map (i \ (? (tick 'fans (i / nf), !(mine? (FT i))) ()

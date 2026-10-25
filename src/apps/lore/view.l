@@ -60,7 +60,7 @@
  ; each pixel's place in a 4 by 4 bayer square, a w by h screen's worth, as the dither's
  ; offset between two steps
  bayer (star-tray [16] [0 8 2 10 12 4 14 6 3 11 1 9 15 7 13 5])
- (view-bayer w h) (: i (iota (w * h)) (peep bayer (i // w % 4 * 4 + i % w % 4) 0 / 16.0 + 1.0 / 32.0))
+ (view-bayer w h) (: i (iota (w * h)) (bayer (i // w % 4 * 4 + i % w % 4) / 16.0 + 1.0 / 32.0))
  ; 24-bit, six bits a channel packed
  (view-deep-pens c) (: (q v) (int (sat1 v * 63.0 + 0.5)) (q (c 0) * 4096 + q (c 1) * 64 + q (c 2)))
  ; ..or the 256 palette's cube or grey ramp, dithered between the two steps round each part

@@ -63,9 +63,9 @@
  ; share is the share of sky its clouds take: thick's own mix of the map, shuffled, with
  ; the fine layer's weight f
  (quantiles m f) (: n (cloud-n * cloud-n) i (iota n)
-   (sh k) (peep m ((i * k + 7919 * k) % n) 0.0)
+   (sh k) (m ((i * k + 7919 * k) % n))
    t ((1.0 - f) * m + f * sh 7 + 0.18 * (sh 13 - 0.5))
-   l (sort (map (k \ peep t k 0.0) ^n))
+   l (sort (map t ^n))
    (map (q \ l (q * (n - 1) // 100)) ^101))
  (sky-maps _) (maps 'cloud ? maps
    (: m (cloud-map ()) (pins maps 'cloud m 0.3 (quantiles m 0.3) 0.0 (quantiles m 0.0))))
@@ -123,7 +123,7 @@
    ((face 0 + face 1 + face 2) / ws))
  ; ..and the cloud over the sun, world way s, a soft edge
  (sky-orb-cloud wx s sim) (: mp (sky-maps ()) W (map (k \ gem-tray [1] [(1.0 * s k)]) ^3)
-   (peep (clouded wx (sat (0.5 + (orb-thick wx mp W sim 0.3 1.0 - edge wx sim 0.3) * 3.0))) 0 0.0))
+   (clouded wx (sat (0.5 + (orb-thick wx mp W sim 0.3 1.0 - edge wx sim 0.3) * 3.0)) 0))
  ; the cloud over the sun as the light under it feels it: rays over a patch round it, each
  ; with a soft edge, so a passing cloud thins the light and gives it back over a while --
  ; low down, where one ray sweeps the deck fast, most of all

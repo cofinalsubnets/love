@@ -59,16 +59,16 @@
          (ix3 i j l) ((i * n + j) * n + l) m (n - 1)
          C (iota (m * m * m)) CI (C // (m * m)) CJ (C // m % m) CK (C % m) c0 (ix3 CI CJ CK)
          cpos [[0 0 0] [1 0 0] [0 1 0] [1 1 0] [0 0 1] [1 0 1] [0 1 1] [1 1 1]] offs (map (q \ ix3 (q 0) (q 1) (q 2)) cpos)
-         ins (foldl (\ a f (a + (peep F (c0 + f) 1.0 < 0.0))) (C * 0) offs)
-         act (iota ((ins > 0) * (ins < 8))) na #act ac (peep c0 act 0)
+         ins (foldl (\ a f (a + (F (c0 + f) < 0.0))) (C * 0) offs)
+         act (iota ((ins > 0) * (ins < 8))) na #act ac (c0 act)
          edges [[0 1] [2 3] [4 5] [6 7] [0 2] [1 3] [4 6] [5 7] [0 4] [1 5] [2 6] [3 7]]
-         sums (foldl (\ q e (: a (e 0) d (e 1) fa (peep F (ac + offs a) 0.0) fb (peep F (ac + offs d) 0.0)
+         sums (foldl (\ q e (: a (e 0) d (e 1) fa (F (ac + offs a)) fb (F (ac + offs d))
                               w ((fa < 0.0) != (fb < 0.0)) t (fa / (fa - fb + 1e-12) * w)
                               [(q 0 + w * (cpos a 0 + t * (cpos d 0 - cpos a 0))) (q 1 + w * (cpos a 1 + t * (cpos d 1 - cpos a 1)))
                                (q 2 + w * (cpos a 2 + t * (cpos d 2 - cpos a 2))) (q 3 + w)]))
                      [(ac * 0.0) (ac * 0.0) (ac * 0.0) (ac * 0.0)] edges)
-         VX (o 0 + h * (peep CI act 0 + sums 0 / sums 3)) VY (o 1 + h * (peep CJ act 0 + sums 1 / sums 3)) VZ (o 2 + h * (peep CK act 0 + sums 2 / sums 3))
-         (gr f) (peep F (ac + f) 0.0)
+         VX (o 0 + h * (CI act + sums 0 / sums 3)) VY (o 1 + h * (CJ act + sums 1 / sums 3)) VZ (o 2 + h * (CK act + sums 2 / sums 3))
+         (gr f) (F (ac + f))
          (slope j) (foldl (\ q p (q + (p j = 1 ? 1.0 -1.0) * gr (ix3 (p 0) (p 1) (p 2)))) (ac * 0.0) cpos)
          NX (slope 0) NY (slope 1) NZ (slope 2) NL (sqrt (NX * NX + NY * NY + NZ * NZ) + 1e-12)
          VI (pin ((C * 0) - 1) act (iota na)) (cell i j l) (peep VI ((i * m + j) * m + l) -1)
@@ -76,14 +76,14 @@
          (quads ax) (: d (ax @ 0 [1 0 0] 1 [0 1 0] [0 0 1]) e1 (ax @ 0 [0 1 0] 1 [0 0 1] [1 0 0]) e2 (ax @ 0 [0 0 1] 1 [1 0 0] [0 1 0])
            w ((GX >= 1 - d 0) * (GX < n - 1 - d 0) * (GY >= 1 - d 1) * (GY < n - 1 - d 1) * (GZ >= 1 - d 2) * (GZ < n - 1 - d 2))
            g0 (F < 0.0) g1 (peep F (G + ix3 (d 0) (d 1) (d 2)) 1.0 < 0.0) E (iota (w * (g0 != g1)))
-           i (peep GX E 0) j (peep GY E 0) l (peep GZ E 0) inn (peep g0 E 0)
+           i (GX E) j (GY E) l (GZ E) inn (g0 E)
            (cc u v) (cell (i - (1 - u) * e1 0 - (1 - v) * e2 0) (j - (1 - u) * e1 1 - (1 - v) * e2 1) (l - (1 - u) * e1 2 - (1 - v) * e2 2))
            qa (cc 0 0) qb (cc 1 0) qc (cc 1 1) qd (cc 0 1)
-           (cats (map (q \ (: A (peep qa q -1) B (peep qb q -1) Cc (peep qc q -1) D (peep qd q -1)
-                            (A < 0 || B < 0 || Cc < 0 || D < 0 ? () (peep inn q 0 ? [[A B Cc tex] [A Cc D tex]] [[A Cc B tex] [A D Cc tex]]))))
+           (cats (map (q \ (: A (qa q) B (qb q) Cc (qc q) D (qd q)
+                            (A < 0 || B < 0 || Cc < 0 || D < 0 ? () (inn q ? [[A B Cc tex] [A Cc D tex]] [[A Cc B tex] [A D Cc tex]]))))
                       ^#E)))
-         vs (map (q \ (: x (peep VX q 0.0) y (peep VY q 0.0) z (peep VZ q 0.0) l (peep NL q 1.0)
-                       [x y z ((x - c 0 + z - c 2) / ts) (y / ts) (peep NX q 0.0 / l) (peep NY q 0.0 / l) (peep NZ q 0.0 / l) 1.0 1.0 1.0]))
+         vs (map (q \ (: x (VX q) y (VY q) z (VZ q) l (NL q)
+                       [x y z ((x - c 0 + z - c 2) / ts) (y / ts) (NX q / l) (NY q / l) (NZ q / l) 1.0 1.0 1.0]))
                  ^na)
          [(mesh vs (quads 0 + quads 1 + quads 2)) [lo hi] ws])))
  ; ..a piece of wood less what is inside box q, a grid step short of its walls: the pieces
@@ -121,13 +121,13 @@
    (flip m) (mesh (m 0) (map (t \ [(t 0) (t 2) (t 1) (t 3)]) (m 1)))
    ss (atom? cr ? (tr 'segs) (cats (map (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) (tr 'segs))))
    wood (flip (mesh-join ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ss))))
-   ix (iota ((tr 'kind = 2.0) * (iota #(tr 'kind) % 5 = 0))) n #ix (g q) (peep (tr q) ix 0.0) f 1.7
+   ix (iota ((tr 'kind = 2.0) * (iota #(tr 'kind) % 5 = 0))) n #ix (g q) (tr q ix) f 1.7
    P [(g 'x) (g 'y) (g 'z)] A [(f * g 'ax) (f * g 'ay) (f * g 'az)] W [(f * g 'sx) (f * g 'sy) (f * g 'sz)]
    (corner u s) (map (j \ P j + u * A j + s * W j) ^3) C [(corner -0.5 -1.0) (corner -0.5 1.0) (corner 0.5 0.0)]
    (e q j) (C q j - C 0 j) N0 [(e 2 1 * e 1 2 - e 2 2 * e 1 1) (e 2 2 * e 1 0 - e 2 0 * e 1 2) (e 2 0 * e 1 1 - e 2 1 * e 1 0)]
    up ((N0 1 >= 0.0) * 2.0 - 1.0) L (up / (sqrt (N0 0 * N0 0 + N0 1 * N0 1 + N0 2 * N0 2) + 1e-12)) N (map (j \ N0 j * L) ^3)
    sh (g 'shade) col [(0.24 * sh) (0.4 * sh) (0.13 * sh)]
-   (vert i q) (: c (C q) (r T) (peep T i 0.0) [(r (c 0)) (r (c 1)) (r (c 2)) 0.0 0.0 (r (N 0)) (r (N 1)) (r (N 2)) (r (col 0)) (r (col 1)) (r (col 2))])
+   (vert i q) (: c (C q) (r T) (T i) [(r (c 0)) (r (c 1)) (r (c 2)) 0.0 0.0 (r (N 0)) (r (N 1)) (r (N 2)) (r (col 0)) (r (col 1)) (r (col 2))])
    leaves (mesh (map (t \ vert (t // 3) (t % 3)) ^(3 * n))
                 (map (t \ (: o (3 * (t // 2)) (t % 2 = 0 ? [o (o + 1) (o + 2) -1] [o (o + 2) (o + 1) -1]))) ^(2 * n)))
    (mesh-join [wood leaves]))))

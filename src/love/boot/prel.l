@@ -239,7 +239,7 @@
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
                   (go (cap l) (cup l)))))
 
-(: (** a b) (b a)
+(: (** a b) (? (tray? b) (fpow a b) (b a))      ; a tray applied indexes, so its power is fpow's
    $ 1 ! nil?  (!= a b) (- 1 (= a b))                 ; a bit, or a tray's mask, flipped
    ; `nil?`, not glued `!`: a glued sigil factors through mono, bound further down
    (nelem x l) (nil? (elem x l)))

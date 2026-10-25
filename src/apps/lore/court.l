@@ -191,7 +191,7 @@
  ; 'night lit all night, 'tv
  (wall-at i) (:
    wid ((nu-long * nv <= i) + (2 * nu-long * nv <= i) + ((2 * nu-long + nu-short) * nv <= i))
-   nu (peep wall-nus wid 0) j (i - peep wall-offs wid 0)
+   nu (wall-nus wid) j (i - wall-offs wid)
    isx (wid < 2) isz (1 - isx)
    half (over yard-a isx yard-b)
    al ((j % nu + 0.5) * ts - half) py ((j // nu + 0.5) * ts)
@@ -284,7 +284,7 @@
    jd (min (min ux uz) (mag (b * ux - a * uz) / dg))        ; to the nearest joint
    joint ((jd < 0.02) * (sump-r * sump-r < r2))
    oct ((0.0 < px) * 4 + (0.0 < pz) * 2 + (a * uz < b * ux))
-   tone (peep (gem-tray [8] [0.97 1.03 0.94 1.0 1.02 0.95 1.04 0.98]) oct 1.0)
+   tone (gem-tray [8] [0.97 1.03 0.94 1.0 1.02 0.95 1.04 0.98] oct)
    de (min (a - ux) (b - uz))
    mf (0.55 * vn (px * 1.3) (pz * 1.3) 31 + 0.3 * vn (px * 4.1) (pz * 4.1) 32
        + 0.45 * sat (1.0 - de / 1.3) + 0.3 * sat (1.0 - r2 / 1.0) + 0.5 * sat (1.0 - jd / 0.12) - 0.02)
@@ -372,7 +372,7 @@
    (rr lo hi) (lo + (hi - lo) * rnd g)
    bs (tr 'base) X (tr 'x) Y (tr 'y) Z (tr 'z) K (tr 'kind) n #X top (amax Y)
    ; a leaf of the crown, thrown for until one comes up, or the first point
-   (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) (k < 1 || peep K i 0.0 = 2.0 && ok? i ? i (pick (k - 1) ok?)))
+   (pick k ok?) (: i (int (rr 0.0 (n - 0.5))) (k < 1 || K i = 2.0 && ok? i ? i (pick (k - 1) ok?)))
    ; ..the heap: branches in a ring hard against the trunk so no floor shows, most along the
    ; ring, the rest pointing out; most forked
    (keep q) [(clamp (q 0) (0.12 - yard-a) (yard-a - 0.12)) (q 1) (clamp (q 2) (0.12 - yard-b) (yard-b - 0.12))]
@@ -411,12 +411,12 @@
                                                          ^3))
                                       [(0.0 - th) 0.0 th]))) ^k))
    ; ..each leaf under one of the crown's, blown a little way off, kept off the walls
-   (leaf _) (: i (pick 40 0) x (clamp (peep X i 0.0 + rr -0.4 0.4) (0.08 - yard-a) (yard-a - 0.08))
-               z (clamp (peep Z i 0.0 + rr -0.4 0.4) (0.08 - yard-b) (yard-b - 0.08))
+   (leaf _) (: i (pick 40 0) x (clamp (X i + rr -0.4 0.4) (0.08 - yard-a) (yard-a - 0.08))
+               z (clamp (Z i + rr -0.4 0.4) (0.08 - yard-b) (yard-b - 0.08))
                ang (rr 0.0 tau) c (c* (rr 0.8 1.1) (hues (int (rr 0.0 3.99))))
                (lying x z ang c))
-   hi (filter (i \ peep K i 0.0 = 2.0 && top - 1.5 < peep Y i 0.0) ^n)
-   tops (two? hi ? (map (q \ hi (int (rr 0.0 (#hi - 0.5))) @ i [(peep X i 0.0) (peep Y i 0.0) (peep Z i 0.0)]) ^120) ())
+   hi (filter (i \ K i = 2.0 && top - 1.5 < Y i) ^n)
+   tops (two? hi ? (map (q \ hi (int (rr 0.0 (#hi - 0.5))) @ i [(X i) (Y i) (Z i)]) ^120) ())
    ; ..the big branch propping the crate, and the heap kept out of the crate and off the plate
    cr (crate-of bs) cc (cr 0) ch (cr 3) pl (plate-of bs)
    lain (: r 0.09 z (cc 2 + ch 2 + r + 0.005)
@@ -465,11 +465,11 @@
    (? (on? 0 yard-a) 0 (on? 0 (0.0 - yard-a)) 1 (on? 2 yard-b) 2 3))
  (along-of wid p) (wid < 2 ? (p 2) (p 0))
  ; ..the map's texel on wall wid at u along it and v up it
- (wall-texel wid u v) (peep wall-offs wid 0 + floor (v / ts) * peep wall-nus wid 0
+ (wall-texel wid u v) (wall-offs wid + floor (v / ts) * wall-nus wid
                        + floor ((u + (wid < 2 ? yard-b yard-a)) / ts))
  ; ..a step laid into the wall's map: the texels of its box, each the share of it the run
  ; covers, its strands striped and its upper side lit, the wall under it a little shadowed
- (lay-step m wid u0 u1 v0 v1 wd c) (: nu (peep wall-nus wid 0) half (wid < 2 ? yard-b yard-a)
+ (lay-step m wid u0 u1 v0 v1 wd c) (: nu (wall-nus wid) half (wid < 2 ? yard-b yard-a)
    flat (mag (v1 - v0) < 0.001) pad (wd + 0.08)
    tu0 (max2 0 (int ((min2 u0 u1 - pad + half) / ts))) tu1 (min2 (nu - 1) (int ((max2 u0 u1 + pad + half) / ts)))
    tv0 (max2 0 (int ((min2 v0 v1 - pad) / ts))) tv1 (min2 (nv - 1) (int ((max2 v0 v1 + pad) / ts)))
@@ -501,7 +501,7 @@
  ; the walls' textures, east, west, north, south: the glass black, a pane laid over it
  ; each frame
  (wall-texs mp) (: m (mp 'wall)
-   (map (wid \ (: ix (peep wall-offs wid 0 + grid nv (peep wall-nus wid 0))
+   (map (wid \ (: ix (wall-offs wid + grid nv (wall-nus wid))
                   (word [(peep (m 'r) ix 0.0) (peep (m 'g) ix 0.0) (peep (m 'b) ix 0.0)] * (1 - peep (m 'glass) ix 0))))
         ^4))
  ; ..and the floor's, darker wet and white under snow
