@@ -358,6 +358,7 @@
                  pin t 'lrn 0,
                  pin t 'etag {},          ; enum tag -> its lowered type
                  pin t 'efwd {},          ; an enum tag named before its definition
+                 pin t 'ehint {},         ; enum tag -> the type its definition lays, from a pass before
                  pin t 'stag {},          ; tag -> (fields size align)
                  pin t 'tags {},          ; a block tag's spelling -> its stag key
                  pin t 'utag {},          ; the union tags
@@ -919,9 +920,12 @@
                                   (clblame "an enumerator does not fit the enum's __attribute__((mode))")
                                  mt)))
                      (? (ty = ()) ()
-                        ; a name typed ahead as uint cannot become another width
-                        (tag && peep (ps 'efwd) tag 0 && ty != 'uint)
-                         (clblame "an enum named before its definition lays other than unsigned int here")
+                        ; a name typed ahead took the hint, or uint: another type files a hint, and
+                        ; cparse-o parses again; a second disagreement refuses
+                        (tag && peep (ps 'efwd) tag 0 && ty != peep (ps 'ehint) tag 'uint)
+                         (peep (ps 'ehint) tag () ?
+                            (clblame "an enum named before its definition lays other than its first reading")
+                            (pin (ps 'ehint) tag ty, spin ps 'etag tag ty, ty))
                         (tag ? (spin ps 'etag tag ty) 0,
                          ty)))
                  (peekp ts3 "{" ?
@@ -948,9 +952,9 @@
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
                                           (two? rest ? (ety pos2 lo2 hi2 (max <pa lpk) (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
                        (consts >ts3 0 1 0 0))
-                    ; a tag not yet defined reads uint, gcc's non-negative enum; its definition must agree
+                    ; a tag not yet defined reads its hint, else uint, gcc's non-negative enum
                     (tag && !(peep (ps 'etag) tag ()) ? (spin ps 'efwd tag 1) 0,
-                     [(peep (ps 'etag) tag 'uint) ts3])))
+                     [(peep (ps 'etag) tag (peep (ps 'ehint) tag 'uint)) ts3])))
              (tkk t = 'id && (peep (ps 'types) (tkv t) 0 ? 1))
               [(peep (ps 'types) (tkv t) 0) >ts]
              ; __auto_type NAME = init: the initializer's type, the cursor left at the name.
@@ -2661,9 +2665,15 @@
    (cparse ts) (cparse-t ts 'x64)          ; law tests and bare callers: 64-bit widths
    (cparse-t ts tgt) (cparse-d ts tgt 'moon)  ; ..and the default dialect
    (cparse-d ts tgt dia) (cparse-o ts tgt dia {})
-   ; opts: the driver's language flags beyond the dialect ('swch, -fshort-wchar)
+   ; opts: the driver's language flags beyond the dialect ('swch, -fshort-wchar).
+   ; a pass that filed an enum hint is parsed again, the forward names read as defined
    (cparse-o ts tgt dia opts)
-    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp))
+    (: eh {}
+       (go n) (cparse-h ts tgt dia opts eh @ r
+                 (tally (keys eh) @ m (n < m ? (go m) r)))
+       (go 0))
+   (cparse-h ts tgt dia opts eh)
+    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp) 'ehint eh)
        toks (fsbody ts) spans (fspans ts)
        ; a unit with no `mode(M)` or `__mode__(M)` has no mode attribute, so modeat's walk
        ; of every declaration is skipped; pfail's re-parse walks it again

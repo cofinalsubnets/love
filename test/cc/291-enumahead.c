@@ -1,5 +1,5 @@
-/* an enum named ahead of its definition (the x86 kernel's apic.h): gcc lays it unsigned int,
- * so the redeclaration agrees. a short-enum target cannot know the width yet, and refuses. held to gcc. */
+/* an enum named ahead of its definition (the x86 kernel's apic.h) is the type the definition
+ * lays: unsigned int, or a short-enum target's byte. held to gcc. */
 
 extern enum mode later;
 enum mode { M0, M1, M2 };
