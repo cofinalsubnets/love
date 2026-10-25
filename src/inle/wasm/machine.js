@@ -148,8 +148,9 @@ export function scanning(ring, ctl, el, k) {
 
 // --- the pointer and the clipboard: lanes of their own ---------------------------------
 // a pointer event is a record the kernel takes whole (src/inle/wasm/arch.c): how (0 a press, 1
-// a release, 2 a move), the button (0 1 2, 64 65 the wheel, 3 none held) with modifiers 4
-// shift 8 meta 16 ctrl, and the paper's pixel, y then x. what it MEANS is the kernel's to say:
+// a release, 2 a move, 3 a locked pointer's motion), the button (0 1 2, 64 65 the wheel, 3 none
+// held) with modifiers 4 shift 8 meta 16 ctrl, and the paper's pixel, y then x, or for a
+// motion its step, signed. what it MEANS is the kernel's to say:
 // a window holding the paper takes it as it is, a program that asked for the mouse gets a
 // report for the cell under it, and otherwise a drag selects, the release comes back as
 // { copy } and the wheel scrolls the history. a paste is its text, which the
@@ -316,6 +317,7 @@ export async function loveMachine(root) {
   const halt = t => {
     status.textContent = t; status.hidden = false;
     if (held !== null) try { canvas.releasePointerCapture(held); } catch {}
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
     if (root.contains(document.activeElement)) document.activeElement.blur();
     canvas.hidden = true; };
   // a question for the reader, answered by a click: the text, two buttons. -> true for
@@ -517,6 +519,7 @@ export async function loveMachine(root) {
     else if (m.proc) proc(m.proc);
     else if (m.stop !== undefined) stop(m.stop);
     else if (m.copy !== undefined) { copied = m.copy; if (fresh()) copy(); }
+    else if (m.hold !== undefined) hold(m.hold);
     else if (m.lift !== undefined) lifted(m);
     else if (m.fault) halt('the machine faulted: ' + m.fault); };
   cpu.onerror = e => halt('the machine stopped: ' + e.message);
@@ -567,21 +570,45 @@ export async function loveMachine(root) {
   const button = n => n === 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : 3;
   let over = '', spun = 0;
   const send = (how, b, e) => { const c = cell(e); if (c) over = c.join(), point(how, b | mods(e), c[0], c[1]); };
+  // A GRAB LOCKS: a window that grabbed the pointer (a game looking by the mouse) gets the
+  // mouse's motions, the pointer hidden and held by the browser. the lock wants a gesture,
+  // and firefox one still being handled: it is asked for when the grab comes back from the
+  // click that made it (chromium), at that click's release (firefox), and at the next press
+  // once the browser has let it go (esc). a finger has no lock: its moves go
+  // as they are, and the kernel steps the grabbed pointer by them
+  let grabbed = false;
+  const locked = () => document.pointerLockElement === canvas;
+  const lock = () => {
+    if (held !== null) try { canvas.releasePointerCapture(held); } catch {}
+    try { canvas.requestPointerLock()?.catch?.(() => {}); } catch {} };
+  document.addEventListener('pointerlockerror', () => console.info('the pointer lock was refused'));
+  const hold = on => {
+    grabbed = !!on;
+    if (grabbed && !locked()) lock();
+    else if (!grabbed && locked()) document.exitPointerLock(); };
   // a finger focuses the canvas (no keyboard over the floor), a mouse the field
   canvas.addEventListener('pointerdown', e => {
+    if (grabbed && !locked() && e.pointerType === 'mouse') lock();
     (e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true });
     canvas.setPointerCapture?.(e.pointerId), held = e.pointerId;
     send(0, button(e.button), e); });
-  canvas.addEventListener('pointerup', e => { released = performance.now(), held = null; send(1, button(e.button), e); });
+  canvas.addEventListener('pointerup', e => {
+    if (grabbed && !locked() && e.pointerType === 'mouse') lock();
+    released = performance.now(), held = null; send(1, button(e.button), e); });
   // a release the window never saw (it lost the focus mid-drag, or moved between screens)
   // leaves the pointer held by the canvas: the window's blur gives it back
   window.addEventListener('blur', () => {
     if (held !== null) try { canvas.releasePointerCapture(held); } catch {}
     held = null; });
+  const stride = v => Math.max(-32767, Math.min(32767, Math.round(v))) & 0xffff;
+  const down = e => e.buttons & 1 ? 0 : e.buttons & 4 ? 1 : e.buttons & 2 ? 2 : 3;
   canvas.addEventListener('pointermove', e => {
+    if (locked()) {
+      if (e.movementX || e.movementY) point(3, down(e) | mods(e), stride(e.movementY), stride(e.movementX));
+      return; }
     const c = cell(e);
     if (!c || c.join() === over) return;
-    send(2, e.buttons & 1 ? 0 : e.buttons & 4 ? 1 : e.buttons & 2 ? 2 : 3, e); });
+    send(2, down(e), e); });
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     spun += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
