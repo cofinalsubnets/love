@@ -1135,22 +1135,46 @@ compiles and differs, by cause: units it touches, and units it alone explains.
 with the static alias laid local, the 1007 units it touched compiled again: 883 are clang's, and
 the other 124 differ by the causes below it.
 
-### x86_64 defconfig, a sample, measured 2026-10-16
+### x86_64 defconfig, measured 2026-10-25
 
-every 20th unit of 6.19.14's x86_64 defconfig (151 of 3080), against the host's clang 23.1.1
-(the pinned 22.1.8 lays only arm64), on our cpp with kbuild's flags: 6 same as clang, 129
-compile and differ, 13 refused, 2 time out, 1 a flag (`-o` past a second input). the clang `-E`
-leg agrees.
+6.19.14's x86_64 defconfig, every compile unit (3004 of its 3080 `.o.cmd`), against the host's
+clang 23.1.1 (the pinned 22.1.8 lays only arm64), on our cpp with kbuild's flags, on gwen
+caf692cc6 (r21/x64). every `-m` flag the kernel asks is taken now, so the census leaves none out.
 
-- **`-fpatchable-function-entry=16,16` is taken in silence**: no nops before the entry and no
-  `__patchable_function_entries` section, so ftrace has no site to patch. 128 of the 129 units
-  that differ lack the section, 94 for that alone (gen).
-- every unit carries eleven `-m` flags mooncc refuses and the census leaves out, the kernel's
-  code model among them: `-mcmodel=kernel`, `-mno-red-zone`, `-mstack-alignment=8`,
-  `-mskip-rax-setup`, `-mno-fp-ret-in-387`, the `gs` stack guard and the retpoline and return
-  thunks (flags).
-- refused: an enum used before its definition 9, `endbr64` 1, `xstore` 1, a register spelled
-  `igest` 1, an asm immediate that is not a constant 1.
+| | units | same as clang | compiles, differs | refused | flag | crash | timeout |
+|---|---|---|---|---|---|---|---|
+| 2026-10-16, every 20th (gwen f3f9357e1) | 151 | 6 | 129 | 13 | 1 | 0 | 2 |
+| 2026-10-25 (gwen caf692cc6) | 3004 | 900 | 1749 | 347 | 5 | 2 | 1 |
+
+the sample's 129 that differed: 128 lacked `__patchable_function_entries`, and no unit of the
+3004 lacks it now. 51 of the 129 are clang's, 29 more differ only by the thunk register below
+(44 by that or the canary), and its two timeouts refuse by name.
+
+compiles and differs, by cause: units it touches, and units it alone explains.
+
+| units | alone | cause | area |
+|---|---|---|---|
+| 1450 | 775 | an indirect call through `__x86_indirect_thunk_rbx` (or `_rax`, `_rdx`, ..) where clang's always go through `_r11`: the kernel lays a thunk per register, as gcc's calls use them, so this links and runs | gen |
+| 286 | 102 | a canary (`__stack_chk_fail`, `__ref_stack_chk_guard`) in a unit clang's `-fstack-protector-strong` leaves unguarded: protects more, slower | gen |
+| 187 | 18 | no `.bss`: an explicitly zeroed static lays in `.data` | gen |
+| 177 / 97 | 33 / 23 | `memcmp` / `memset` called where clang expands or folds it; `strlen`, `strcmp`, `strncmp`, `strcpy`, `memcpy` 15-37 each | gen |
+| 72 / 72 | 10 / 11 | `__seq_puts` (`seq_puts`'s `__builtin_constant_p` arm) and `init_user_ns`, calls clang folds away; `sprintf`, `__udelay`, `__kmalloc_noprof` 17-19 each | frontend |
+
+with the thunk register set aside 1675 units are clang's, and 1900 with the canary too.
+
+refused, first stops:
+
+| units | first stop | area |
+|---|---|---|
+| 224 | an enum used before its definition, whose type is not unsigned int: `drm_modes.h` and `intel_display_limits.h` carry it to every drm and i915 unit | frontend |
+| 47 | `__attribute__((ms_abi))`, which `linux/efi.h` lays on every EFI call | gen |
+| 16 | an asm immediate input that is not a constant, all in `nf_hook` | asm |
+| 55 | assembler lines and asm it has no lane for: `endbr64` 8, the `%rsp == %rsp` immediate 3, `lretq`, `.octa`, `movntdqa`, `igest` 2 each, `ljmpw`, `sysenter`, `rdpid`, `vmcall`, `crc32q`, `xstore`, `.uleb128`, `ymm`, `pinsrd`, `%st` and label-arithmetic data 1 each | asm |
+| 3 / 1 / 1 | an initializer it cannot lay (acpica's dump tables, a `dfield` table); a parse error (`net/ax25.h`); a duplicate case in `blk_trace_ioctl`, which clang takes (unexamined) | frontend |
+
+the flags: `-o` past a second input 3, vdso32's `-fpic` on i386 2. the crashes: `piggy.o` (the
+compressed image as data) out of memory, `net/mac80211/airtime.o` an internal `0 0` after 206 s
+at the census's 1500 MB budget; the timeout is i915's `intel_snps_phy.o` at 300 s.
 
 ### the -f and -m flags the driver took in silence
 
