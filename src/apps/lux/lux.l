@@ -205,7 +205,9 @@
                  g 2 = cw && g 3 = ch && g 4 = bw ? 0 (x-configure s w bw bw cw ch),
                  pin r 'g [x y cw ch bw],
                  synconf w (x + bw) (y + bw) cw ch)))))
-   (unled! w) (pull mapd w 0, pull owed w 0)                              ; the window left management: clear its ledger
+   owns (tablet 8)                                                              ; WM_TRANSIENT_FOR, read once: owner | 0
+   (owner w) (peep owns w -1 @ p (p != -1 ? p (x-transient s w @ q (pin owns w (q ? q 0), q))))
+   (unled! w) (pull mapd w 0, pull owed w 0, pull owns w 0)               ; the window left management: clear its ledger
    (render sh lays)                                                               ; every screen: its tag's placements configured, the dropped unmapped, floats on top
     (: f (wsfoc sh)                                                              ; the focus is the sheaf's, float or tile alike
        (tiles p)                                                                 ; one screen (tag rect): tile the tag into its rect, answer the placed
@@ -223,7 +225,8 @@
                                  bw (fr = r ? 0 lux-border)                      ; a fullscreen float (its screen is its rect) wears no border
                                  (bord! w bw (w = f ? fpix npix),
                                   move! w (fr 0) (fr 1) (fr 2) (fr 3),
-                                  map! w, x-raise s (fwin w)))) (wsvisflof sh <p)))) (wsvis sh),
+                                  map! w, x-raise s (fwin w))))
+                        (map (w \ [w (wsrect sh w)]) (wsstack (wsflof sh <p) f owner))))) (wsvis sh),
         x-clear-enters s))                                                       ; the crossings this paint caused are not the user's
    (refocus sh) (wsfoc sh @ f                                                   ; an empty view takes the root: PointerRoot would
                    (x-focus s (f ? f root), x-flush s))                         ; hand the keys to whatever the pointer sits over

@@ -73,6 +73,18 @@
       (wsmaster g = g) (wsswapup g = g)                                          ; the order ops are tiles-only
       (wsring h = '(10 20 30)) (wsrow h = '(10 30)) (wsflhere h = '(20))))       ; the float keeps its own slot
 
+; --- float stacking, bottom to top: the ring reversed, the focus and its owners last, a transient over its owner ---
+(: fl '(1 2 3 4) (none w) () (by4 w) (w = 2 ? 4) (cyc w) (w @ 1 2 2 1 ())
+   (test
+      (wsstack fl () none = '(4 3 2 1)) (wsstack fl 3 none = '(4 2 1 3))
+      (wsstack fl () by4 = '(4 2 3 1))                                           ; 2 serves 4: just above it
+      (wsstack fl 4 by4 = '(3 1 4 2)) (wsstack fl 2 by4 = '(3 1 4 2))            ; focus on either lifts the pair, the dialog on top
+      (wsstack '(30 20 40 10) 10 (w \ w = 40 ? 10) = '(20 30 10 40))           ; a dialog opened from a focused owner low in the ring
+      (wsstack fl () (w \ w = 1 ? 99) = '(4 3 2 1))                             ; an owner off the list is no owner
+      (wsstack fl () (w \ w) = '(4 3 2 1))                                      ; nor is the window itself
+      (wsstack '(1 2) () cyc = '(2 1))                                           ; an owner cycle keeps every window
+      (wsstack () 5 none = ())))
+
 ; --- the screens (xmonad's current/visible/hidden): vis is ((tag rect)..) in screen order ---
 (: r1 '(0 0 800 600) r2 '(800 0 800 600) r3 '(1600 0 800 600) r4 '(2400 0 800 600)
    s0 (sheaf '(1 2 3)) s2 (wsrescreen s0 [r1 r2])                               ; tags 1 and 2 on view, 3 hidden
