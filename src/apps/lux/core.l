@@ -136,7 +136,15 @@
    (wsallw sh) (foldl (a \ p \ a + zrow <>p) () (wsboard sh))
    (wstiled sh) (filter (w \ !(wsfloating? sh w)) (wsallw sh))
    (wsfloatw sh) (filter (w \ wsfloating? sh w) (wsallw sh))
-   (wswins sh) (wstiled sh + wsfloatw sh)                          ; the stacking order a pager reads, bottom to top
+   (wswins sh) (wstiled sh + wsstack (wsfloatw sh) (wsfoc sh) (w \ ()))   ; the stacking order a pager reads, bottom to top
+   (wsstack fl foc par)                                            ; floats bottom to top: the ring's top-first order
+    (: (up w) (par w @ p (p != w && any (= p) fl ? p))             ; reversed, the focus and its owners last, a transient
+       (chain w n) (w && 0 < n ? (w . chain (up w) (n - 1)))         ; just above its owner. par: window -> owner | ()
+       ch (chain (any (= foc) fl ? foc) #fl)
+       o (filter (w \ !(any (= w) ch)) (rev fl) + filter (w \ any (= w) ch) (rev fl))
+       (tree w n) (0 < n ? (w . foldl (a \ c \ a + tree c (n - 1)) () (filter (c \ up c = w) o)))
+       t (foldl (a \ r \ a + tree r #fl) () (filter (w \ !(up w)) o))
+       (t + filter (w \ !(any (= w) t)) o))                         ; an owner cycle has no root: its windows go last
    (wsknownw? sh w) (any (x \ x = w) (wsallw sh))
    (wsdelw sh w) (map (p \ [<p (zdel w <>p)]) (wsboard sh))
    (wstagof sh w) (: r (filter (p \ zhas? w <>p) (wsboard sh))
