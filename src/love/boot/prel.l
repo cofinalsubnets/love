@@ -744,12 +744,11 @@
    (mkcs bx) (map (v \ v . mint 0 . v) bx)
    (cellbinds cs) (map (c \ <>c . list tablet 0) cs)
    ; the cell read boxfix emits. a pre-fill read scares `missing` with the binder's name, and
-   ; the help's result is the value. `sent` is closure-private, so no cell value poses as absence.
+   ; the help's result is the value, terminal with nothing heard. `sent` is closure-private, so
+   ; no cell value poses as absence.
    cellread (: sent (mint 0)
                (\ c nm (: v (peep c nm sent)
-                          (? !(v == sent) v
-                             !(heard ()) ()
-                             (scare 'missing nm))))))
+                          (v == sent ? (scare 'missing nm) v)))))
 
 ; boxfix-core: the rewrite, refs via sub/subl since c0 has no analysis-time redirect. answers
 ; (cells pairs.. . body), or () when nothing boxes.

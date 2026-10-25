@@ -925,16 +925,13 @@ lvm(lvm_scare) {
  return Pack(g), love_raise(g, a, b, help_more_k); }
 // a name bound to zero is distinct from no entry
 static union u const no_entry[1];
-struct g *ioputs(struct g*, char const*),
-                 *ioputc(struct g*, int);
-struct g *zflush(struct g*);
 // may collect: Pack first and hold no heap local across it -> the tag, or 0
 static love_noinline word missing_tag(struct g *g) {
  struct g *h = intern(strof(g, "missing"));
  return ok(h) ? pop1(h) : 0; }
 
-// the live book by name, never self-patching. a miss raises (help 'missing nom); with nothing
-// heard it reads ZeroPoint, a point not a quantity, so (i love you) = 1
+// the live book by name, never self-patching. a miss raises (help 'missing nom), terminal
+// with nothing heard: a repl's help answers it, a file's stops
 lvm(lvm_index) {
  Have1();                          // may GC: no live local yet
  word v = stacklook(g, word(no_entry), Ip[1].x);
@@ -942,18 +939,6 @@ lvm(lvm_index) {
   *--Sp = v,
   Ip += 2,
   Continue();
- word h = *task_help(g);
- if (h == ZeroPoint) {
-#if __STDC_HOSTED__
-  // nothing heard: ";; missing <nom>" on err. nom_str and ioput* do not collect
-  struct str *nm = nom_str(g, Ip[1].x);
-  if (nm) { struct io *sv = g->io; g->io = &love_stderr.io;
-            g = ioputs(g, ";; missing ");
-            for (uintptr_t i = 0; ok(g) && i < nm->len; i++) g = ioputc(g, nm->bytes[i]);
-            g = core_of(zflush(ioputc(g, '\n')));  // best effort: a failed write stays off g
-            g->io = sv; }
-#endif
-  *--Sp = ZeroPoint; love_musttail return Next(2); }
  Pack(g);
  word a = missing_tag(g);          // may collect
  if (!a) love_musttail return Ap(_lvm_ghelp, g);   // no tag to be had: the bare scare, still packed
