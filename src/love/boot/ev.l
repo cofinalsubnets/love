@@ -30,8 +30,8 @@
             sin cos tan atan atan2 exp sqrt log fpow))
    (foldl (\ t s (: v (gv s ()) (v ? (pin t v 1) t))) {} names)))
 ; the container doors, pure or not by what they are handed, so not in pureset: on a tablet peep
-; reads mutable state and pin writes it; on text or a chain pin answers a fresh container
-(: readset (: names '(peep pin)
+; and tally read mutable state and pin writes it; on text or a chain pin answers a fresh container
+(: readset (: names '(peep pin tally)
    (foldl (\ t s (: v (gv s ()) (v ? (pin t v 1) t))) {} names)))
 (: feels (:
    lvm_cur  (pick 0 (+))

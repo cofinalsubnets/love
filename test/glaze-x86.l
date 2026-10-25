@@ -266,6 +266,7 @@
 (base-ev '(:
  (tr s) (= (base-ev s) (ev s))  (tv s n) (&& (= n (ev s)) (tr s))
  (agt s) (&& !(= (autogroup s) s) (tr s))  (ag s n) (&& !(= (autogroup s) s) (tv s n))  (agd s) (&& (= (autogroup s) s) (tr s))
+ (dfhas? x s) (? (atom? x) (= x s) (any (\ e (dfhas? e s)) x))  (dfused? s) (: d ((cite 'glaze 'defoliate) (opfix s)) (&& !(dfhas? d 'map) !(dfhas? d 'filter)))
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
     (23 = ((ev '(\ x (+ (* x 2) 3))) 10))
@@ -449,6 +450,38 @@
     (tr '(: (h n) (foldl (+) 0 (map (\ x (* x x)) (iota n))) (h 100))) ; iota: degenerate to 0, transparent
     ; a foldl over a list param can't lower (no jot) -> interpreted, value still correct (defoliate no-op)
     (tr '(: (g l) (foldl (+) 0 l) (g (jot 5)))) ; 0+1+2+3+4 = 10
+    ; each fuses as the folds do, its step's effects in their order, a filter's skip doing nothing
+    (dfused? '(: (f n t) (each (map (\ x (* x x)) (jot n)) (\ v (pin t v 1)))))
+    (tv '(: (f n) (: t (tablet 0) _ (each (filter (\ x (= 0 (% x 3))) (map (+ 1) (jot n))) (\ v (pin t (tally (keys t)) v)))
+                     (map (\ i (peep t i ())) (jot (tally (keys t)))))
+             (f 10)) '(3 6 9))
+    (tv '(: (f l) (: t (tablet 0) _ (each (map (\ x (* 2 x)) l) (\ v (pin t v 1))) (sort (keys t))) (f '(1 2 3))) '(2 4 6))
+    ; a pipeline fuses only when its stages are pure: one that writes, one that reads what may be
+    ; written, and one called by a name the form binds stay as written
+    !(dfused? '(: (f n t) (foldl (+) 0 (map (\ x (: _ (pin t x 1) x)) (jot n)))))
+    ; ..so a grouped helper commits the lowered form and the consumer still reads every stage's pin
+    (tv '(: (g x) (* x x) (f n t) (foldl (\ a v (+ a (tally (keys t)))) 0 (map (\ x (: _ (pin t x 1) (g x))) (jot n)))
+         (f 5 (tablet 0))) 25)
+    !(dfused? '(: (f n t) (each (map (\ x (peep t x 0)) (jot n)) (\ v (pin t v 1)))))
+    !(dfused? '(: (f n sqrt) (all (\ x (< x 9)) (map sqrt (jot n)))))
+    (dfused? '(: (f n) (all (\ x (< x 9)) (map sqrt (jot n)))))
+    ; ..a glued op is its fn, max a pure word, a walk pure when its fn is; tally reads a tablet
+    (dfused? '(: (f n) (foldl (+) 0 (map (\ p (* <p >p)) (map (\ i (. i i)) (jot n))))))
+    (dfused? '(: (f n) (foldl (+) 0 (map (\ x (max x 3)) (jot n)))))
+    (dfused? '(: (f n t) (each (map (\ x [x x]) (jot n)) (\ p (pin t <p >p)))))
+    ; ..a helper of the form's own is as pure as its body, its recursion taken as pure
+    (dfused? '(: (f n) (: (sq x) (* x x) (foldl (+) 0 (map sq (jot n))))))
+    (dfused? '(: (f n) (foldl (+) 0 (map (\ x (x @ 0 1 k (* k 2))) (jot n)))))
+    !(dfused? '(: (f n t) (foldl (+) 0 (map (\ x ([x x] @ (p . _) (p 0))) (jot n)))))
+    (dfused? '(: (f n) (: (fib k) (? (< k 2) k (+ (fib (- k 1)) (fib (- k 2)))) (foldl (+) 0 (map fib (jot n))))))
+    !(dfused? '(: (f n t) (: (hit x) (: _ (pin t x 1) x) (foldl (+) 0 (map hit (jot n))))))
+    ; ..a read fuses under a consumer that writes nothing, and on text whatever the consumer does
+    (dfused? '(: (f n t) (foldl (+) 0 (map (\ x (peep t x 0)) (jot n)))))
+    (dfused? '(: (f n t) (each (map (\ i (peep "abcdef" i 0)) (jot n)) (\ c (pin t c 1)))))
+    (dfused? '(: (f n t) (: hx "0123456789abcdef" (each (map (\ i (hx i)) (jot n)) (\ c (pin t c 1))))))
+    (dfused? '(: (f n) (all (\ x (< x 9)) (filter (\ x (any (\ y (= x y)) '(1 2 3))) (jot n)))))
+    !(dfused? '(: (f n t) (all (\ x (< x 9)) (filter (\ x (any (\ y (pin t y 1)) '(1 2))) (jot n)))))
+    !(dfused? '(: (f n t) (each (map (\ x #t) (jot n)) (\ v (pin t v 1)))))
     ; foldr: the fused down-loop lifts to a group fn and natives
     (ag '(: (f n) (foldr (+) 0 (map (\ x (* x x)) (jot n))) (f 100)) 328350) ; foldr +.map sq, sum i^2 for i<100
     (ag '(: (f n) (foldr (+) 0 (filter (\ x (= 1 (% x 2))) (jot n))) (f 20)) 100) ; foldr +.filter odd, 1+3+..+19 = 100
