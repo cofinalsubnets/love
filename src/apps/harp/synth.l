@@ -3,15 +3,18 @@
 ; is a strike that rings and dies: a tty never says a key was let go. the horn is fed at
 ; least an eighth of a second ahead, longer than the runtime's pauses (synth-warm takes the
 ; first early). a backing loop (harp's pattern text) is a vi buffer under the keys; d plays
-; in just intonation. --fm FILE adds a last timbre from an op2 bank or a wad's GENMIDI.
+; in just intonation. --fm FILE adds a last timbre from an op2 bank or a wad's GENMIDI. the
+; mix goes through a bus of chorus, echo and reverb (space.c), each on its own key. the pads
+; (pad, glass, wash) swell in through a filter a slow lfo sweeps, and fade slowly once let go.
 ; run: love synth [--fm FILE] [LOOP]   HORN=none plays silent on a seat with no card
 (module (synth synth-run synth-main synth-new synth-step synth-code synth-semis synth-name
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
          synth-chunk synth-lead synth-octaves synth-send synth-play synth-stop synth-pull
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
          synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes
-         synth-qwerty synth-hold synth-free synth-wstep synth-wframe synth-paint synth-window synth-trows
-         synth-tims synth-tname)
+         synth-qwerty synth-hold synth-free synth-drone synth-latch synth-wstep synth-wframe synth-paint synth-window synth-trows
+         synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
+         synth-pads synth-pad)
 (borrow 'rove)
 (borrow 'harp)
 (borrow 'play)
@@ -27,7 +30,8 @@
  synth-digits "1234567890-="
  synth-shifted "!@#$%^&*()_+"
  ; the pitched voices of harp's kit, each with how long a strike rings
- synth-timbres [["sin" 1.2] ["tri" 1.2] ["saw" 0.9] ["sqr" 0.9] ["box" 1.6] ["chime" 3.0]]
+ synth-timbres [["sin" 1.2] ["tri" 1.2] ["saw" 0.9] ["sqr" 0.9] ["box" 1.6] ["chime" 3.0]
+                ["pad" 7.0] ["glass" 6.0] ["wash" 8.0]]
  synth-octaves 3
  synth-chunk (song-rate // 60)          ; a feed, in frames
  synth-lead (song-rate // 8)            ; the least queued ahead of the speaker
@@ -44,7 +48,8 @@
  (synth-new o) {'fm (tablet? o ? (peep o 'fm ()) ()) 'prog 0 'oct 0 'tim 0 'vs () 'due () 'fpos 0 'last () 'lk 0 'lt 0 'dirty 1
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
-                'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()}
+                'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()
+                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0 'lim ()}
  synth-kmodes ["fixed" "follow" "just"]
 
  ; --- just intonation: the row's twelve over the center, and alt's septimal ones
@@ -107,11 +112,41 @@
  (fm? st) (synth-tims st (st 'tim) 0 = "fm")
  (fmv st s at off) (opl-voice (st 'fm (st 'prog)) (60.0 + s) 100 0.5 at off song-rate)
  (prog st d) (st 'fm ? (pins st 'prog ((st 'prog + d + 175) % 175) 'dirty 1) st)
+ ; --- the pads: a detuned unison swelling in, through a filter a slow lfo sweeps. a note is a
+ ; voice a side, each its own spread and its lfo out of step with the other's. 'n operators of
+ ; 'wave 'cents apart either side, 'att seconds to swell, 'rel to fade once let go; the filter's
+ ; 'cut (Hz at middle c, following the key by 'track octaves an octave), 'depth, 'lfo, 'q,
+ ; 'band ---
+ synth-pads {"pad"   {'wave 5 'n 7 'cents 14.0 'att 1.5 'rel 3.0 'lvl 0.11 'cut 1100.0 'track 0.5 'depth 1.2 'lfo 0.09 'q 0.8 'band 0}
+             "glass" {'wave 4 'n 4 'cents 7.0 'att 0.8 'rel 2.5 'lvl 0.13 'cut 3200.0 'track 0.7 'depth 0.8 'lfo 0.06 'q 1.3 'band 0}
+             "wash"  {'wave 7 'n 1 'cents 0.0 'att 2.5 'rel 4.0 'lvl 4.0 'cut 261.6255653005986 'track 1.0 'depth 0.5 'lfo 0.05 'q 5.0 'band 1}}
+ ksweep (cite 'dsp 'sweep)
+ ; a voice's frames through the filter, its memory carried from one chunk to the next
+ (swept [end fn gl gr] o s ph)
+  (: box {'next () 'st ()}
+     (prm f0) (gem-tray [8] [(1.0 * song-rate) (1.0 * f0) (o 'cut * exp (o 'track * s * ln2-12)) (o 'depth) (o 'lfo) ph (o 'q) (1.0 * o 'band)])
+     [end (ix \ (: f0 (peep ix 0 0)
+                   (ksweep (fn ix) (box 'next = f0 ? (box 'st) ()) (prm f0) @ r
+                      (pins box 'next (f0 + #ix) 'st >r, <r))))
+      gl gr])
+ ; the note's two voices from frame at to end; dur () holds at full once swelled
+ (synth-pad nm s at end dur)
+  (: o (synth-pads nm) f (261.6255653005986 * exp (s * ln2-12)) n (o 'n)
+     segs [[0.0 2 (3.0 / o 'att) (dur ? (60.0 / dur) 0.0) 0.0]]
+     (side k) (: sp (k ? 0.83 1.0)
+                 os (map (j \ {'f (f * exp ((n < 2 ? 0.0 (o 'cents * sp * (2.0 * j / (n - 1) - 1.0))) * ln2-12 / 100.0))
+                               'wave (o 'wave) 'l (o 'lvl) 'drop ((j * 0.37 + k * 0.21) % 1.0) 'kappa 3000.0 'segs segs}) ^n)
+                 v (ops-voice os at end 1.0 0.0 song-rate)
+                 g (k ? [0.25 1.0] [1.0 0.25])
+                 (ksweep ? (swept [end (v 1) (g 0) (g 1)] o s (k * 0.41)) [end (v 1) (g 0) (g 1)]))
+     [(side 0) (side 1)])
+ (pad? st) (tablet? (peep synth-pads (synth-tims st (st 'tim) 0) ()))
  ; --- a strike: a voice from the next frame to be written ---
- (synth-strike st s) (: tm (synth-tims st (st 'tim))
-                        v (fm? st ? (fmv st s (st 'fpos) (st 'fpos + int (tm 1 * song-rate)))
-                                    (mkvoice (st 'fpos) {'s (tm 0) 'note s 'gain 0.8 'pan 0.5 'legato (tm 1)} song-rate))
-                        (pins st 'vs (st 'vs + [v]) 'last (synth-name s) 'dirty 1))
+ (synth-strike st s) (: tm (synth-tims st (st 'tim)) at (st 'fpos) end (at + int (tm 1 * song-rate))
+                        vs (? (fm? st) [(fmv st s at end)]
+                              (pad? st) (synth-pad (tm 0) s at end (tm 1))
+                              [(mkvoice at {'s (tm 0) 'note s 'gain 0.8 'pan 0.5 'legato (tm 1)} song-rate)])
+                        (pins st 'vs (st 'vs + vs) 'last (synth-name s) 'dirty 1))
  ; --- the loop ---
  ; a text that fails harp-read answers its complaint and the loop keeps what it had; an
  ; empty text is hush. sending starts the loop if it stood
@@ -148,20 +183,65 @@
                       pin s 'msg (v ? ("cps " + show (st 'cps)) "cps N"),
                       1))
       ()))
+ ; --- the bus: each effect a toggle and a step of how wet. off, an effect hears nothing more
+ ; but what it holds rings out; the kernel stops once nothing can still sound ---
+ synth-wets [0.2 0.35 0.5 0.7 1.0]
+ ; [toggle wet-step name], with the toggling key and the stepping one
+ synth-fx [['rev 'rvw "reverb" 114 82] ['echo 'ecw "echo" 111 79] ['cho 'chw "chorus" 99 67]
+           ['shm 'shw "shimmer" 115 83]]
+ synth-t60 7.0
+ synth-ftail (int (song-rate * (1.5 * synth-t60 + 4.0)))   ; the reverb's 90 dB, and the echo's ring
+ synth-stail (4 * synth-ftail)                             ; and with the shimmer giving back
+ kspace (cite 'dsp 'space)
+ (fxon st) (any (f \ st (f 0) = 1) synth-fx)
+ (fxprm st) (: (w k) (1.0 * synth-wets (st k))
+   (gem-tray [16] [(1.0 * song-rate)
+                   (1.0 * st 'cho) (w 'chw) 0.004 0.23
+                   (1.0 * st 'echo) (w 'ecw) 0.42 0.55 0.35
+                   (1.0 * st 'rev) (w 'rvw) synth-t60 1.6 0.45
+                   (1.0 * st 'shm * w 'shw)]))
+ ; a fresh bus's memory is the size the kernel first answers
+ (synth-space st lr)
+  (? (!kspace || (!(fxon st) && st 'fxt <= 0)) lr
+     (kspace <lr >lr (st 'fxm) (fxprm st) @ r
+        (? (charm? r) (pin st 'fxm (cask r), synth-space st lr)
+           !(two? r) lr
+           (pin st 'fxt (fxon st ? (st 'shm = 1 ? synth-stail synth-ftail) (st 'fxt - #<lr)), r))))
+ ; last, a limiter: under half the clip nothing moves; past it a pile of held notes bends
+ ; toward the clip, never through it
+ klimit (cite 'dsp 'limit)
+ synth-ceil (0.97 * 32767.0 / synth-gain)
+ synth-lprm (gem-tray [4] [(1.0 * song-rate) synth-ceil 0.5 0.4])
+ (synth-limit st lr)
+  (? !klimit lr
+     (klimit <lr >lr (st 'lim) synth-lprm @ r
+        (? (charm? r) (pin st 'lim (cask r), synth-limit st lr)
+           (two? r) r
+           lr)))
+ (fxkey st k) (: (go l) (? (atom? l) ()
+                          (k = <l 3) (pins st (<l 0) (1 - st (<l 0)) 'dirty 1)
+                          (k = <l 4) (pins st (<l 1) ((st (<l 1) + 1) % #synth-wets) 'dirty 1)
+                          (go >l))
+                 (go synth-fx))
+ (fxline st) ("  " + foldl (+) "" (map (f \ f 2 + " " + (st (f 0) = 1 ? (show (synth-wets (st (f 1)))) "off") + "   ") synth-fx))
 
- ; one chunk out the port (any jug): the cycles pulled, the due voices taken up, all summed
- (synth-feed st h) (: base (st 'fpos) lim (base + synth-chunk)
-                      _ (synth-pull st lim)
-                      now (map (p \ p 1) (filter (p \ p 0 < lim) (st 'due)))
-                      live (filter (v \ v 0 >= base) (st 'vs + now))
-                      held (map (p \ p 2) (st 'hv))
-                      ((pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim),
-                       say h (pack (mixdown (live + held) base synth-chunk) synth-chunk synth-gain)))
+ ; one chunk as floats, (left . right): the cycles pulled, the due voices taken up, all summed
+ ; and through the bus and the limiter
+ (synth-mix st) (: base (st 'fpos) lim (base + synth-chunk)
+                   _ (synth-pull st lim)
+                   now (map (p \ p 1) (filter (p \ p 0 < lim) (st 'due)))
+                   live (filter (v \ v 0 >= base) (st 'vs + now))
+                   held (map (p \ p 2) (st 'hv))
+                   ((pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim),
+                    synth-limit st (synth-space st (mixdown (live + held) base synth-chunk))))
+ ; ..and out the port (any jug)
+ (synth-feed st h) (say h (pack (synth-mix st) synth-chunk synth-gain))
 
  ; --- a key; q or ^c is the end ---
  (synth-step st k) (synth-code k @ c
-   (? (two? c) (synth-strike st (synth-semis st c) @ s2
-                  (st 'dr && st 'km = 2 ? (pins s2 'last (rshow (synth-jdeg c) + " " + synth-name (synth-semis st c))) s2))
+   (? (two? c) (? (st 'latch) (synth-drone st (synth-semis st c))
+                  (synth-strike st (synth-semis st c) @ s2
+                     (st 'dr && st 'km = 2 ? (pins s2 'last (rshow (synth-jdeg c) + " " + synth-name (synth-semis st c))) s2)))
       (k = 9) (pins st 'tim ((st 'tim + 1) % #(synth-tims st)) 'dirty 1)
       (k = -10) (prog st 1)
       (k = -11) (prog st -1)
@@ -178,11 +258,12 @@
       (k = 104) (pins st 'dhome (st 'dhome @ 0.0 0.1 0.1 0.3 0.0) 'dirty 1)
       (k = 107) (pins st 'km ((st 'km + 1) % #synth-kmodes) 'dirty 1)
       (k = 118) (pins st 'dbook ((st 'dbook + 1) % #phrase-books) 'dirty 1)
+      (k = 108) (synth-latch st)
       (k = 113 || k = 3) (pins st 'over 1)
-      st))
+      (fxkey st k @ () st r r)))
 
  ; --- the screen; synth-rows is what the keys' pane is given on the mitty ---
- synth-rows 16
+ synth-rows 18
  (synth-frame st) (: tm [(synth-tname st)]
    (cell i) (synth-name (synth-semis st [i 0 0]) @ n
                (string (synth-digits i) + " " + n + snip "     " 0 (6 - #n)))
@@ -190,7 +271,7 @@
    (esc + "[H" + esc + "[2J"
     + "synth -- the row plays, from middle c a semitone a key\r\n\r\n"
     + "  timbre " + tm 0 + "   octave " + show (st 'oct)
-    + "   last " + (string? (st 'last) ? (st 'last) "-") + "\r\n"
+    + "   last " + (string? (st 'last) ? (st 'last) "-") + synth-lline st + "\r\n"
     + row 0 + row 6 + "\r\n"
     + "  loop " + (st 'on ? "playing" "stopped") + "   cps " + show (st 'cps)
     + "   cycle " + show (st 'cyc) + "   " + st 'lmsg + "\r\n"
@@ -201,11 +282,13 @@
                     + "  lean " + show (st 'dlean) + "   steer " + show (st 'dsteer)
                     + "   home " + show (st 'dhome) + "   keys " + synth-kmodes (st 'km) + "\r\n" + synth-map st))
                 "  drift off\r\n")
-    + (st 'dr && st 'km = 2 ? "  shift: octave up   alt: septimal   tab: timbre   up/down: octave"
-               "  shift: octave up   alt: quarter tone down   tab: timbre   up/down: octave")
+    + fxline st + "\r\n"
+    + (st 'dr && st 'km = 2 ? "  shift: octave up   alt: septimal   tab: timbre"
+               "  shift: octave up   alt: quarter tone down   tab: timbre")
     + (st 'fm ? "   left/right: fm instrument\r\n" "\r\n")
+    + "  up/down: octave   r o c s: the bus, shifted wetter   l: latch\r\n"
     + "  d: drift   k: keys   , .: steer   ; ': lean   h: home   v: book\r\n"
-    + "  p: play/stop loop   e: send buffer   [ ]: cps   C-a j: buffer   q: leave"))
+    + "  p: play/stop   e: send buffer   [ ]: cps   C-a j: buffer   q: leave"))
 
  ; --- the tty: alt as the escape before a key, arrows as the cli's numbers ---
  (synth-key p) (see p @ c
@@ -250,30 +333,42 @@
                51 0 38 1 52 2 39 3 53 4
                16 0 3 1 17 2 4 3 18 4 19 5 6 6 20 7 7 8 21 9 8 10 22 11 23 12 10 13 24 14
                11 15 25 16 26 17 13 18 27 19}
- synth-wknobs {15 9 333 -10 331 -11 328 -8 336 -9}   ; tab and the arrows: the keys' knobs
+ synth-wknobs {15 9 333 -10 331 -11 328 -8 336 -9    ; tab and the arrows: the keys' knobs
+               59 114 60 111 61 99 63 82 64 79 65 67    ; f1-f3 the bus's toggles, f5-f7 how wet
+               66 115 67 83                             ; f8 the shimmer, f9 how deep
+               62 108}                                  ; f4 the latch
  (synth-hold st k s)
   (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1)
      f (261.6255653005986 * exp (s * ln2-12))
      ; an FM note keeps what to sound its own release from
-     h (fm? st ? [k s (fmv st s at ()) (st 'fm (st 'prog)) at]
-                 [k s (ops-voice (held-ops (tm 0) f d) at (at + 3600 * song-rate) 0.4 0.4 song-rate)])
-     (pins st 'hv (h . st 'hv) 'last (synth-name s) 'dirty 1))
+     hs (? (fm? st) [[k s (fmv st s at ()) (st 'fm (st 'prog)) at]]
+           (pad? st) (map (v \ [k s v]) (synth-pad (tm 0) s at (at + 3600 * song-rate) ()))
+           [[k s (ops-voice (held-ops (tm 0) f d) at (at + 3600 * song-rate) 0.4 0.4 song-rate)]])
+     (pins st 'hv (hs + st 'hv) 'rls (pin (st 'rls) k (pad? st ? (synth-pads (tm 0) 'rel) (1.0 / 12)))
+              'last (synth-name s) 'dirty 1))
  (fade [e f gl gr] at rl)
   [(at + rl) (ix \ (: g ((at + rl - ix) * (1.0 / rl)) c (g * (g > 0.0))
                      (f ix * (c + (1.0 - c) * (c > 1.0))))) gl gr]
  (synth-free st k)
-  (: at (st 'fpos) rl (song-rate // 12)
+  (: at (st 'fpos) rl (int (song-rate * peep (st 'rls) k (1.0 / 12)))
      (pins st 'hv (filter (p \ <p != k) (st 'hv))
               'vs (st 'vs + map (p \ #p > 3 ? (opl-voice (p 3) (60.0 + p 1) 100 0.5 (p 4) at song-rate) (fade (p 2) at rl))
                                  (filter (p \ <p = k) (st 'hv)))
               'dirty 1))
+ ; the latch: a note struck rings until struck again, its key the semitone past the
+ ; window's codes; let go, every note held fades
+ (synth-drone st s) (: k (1000.0 + s) (any (p \ <p = k) (st 'hv) ? (synth-free st k) (synth-hold st k s)))
+ (synth-latch st) (? (st 'latch) (foldl synth-free (pins st 'latch 0 'dirty 1) (uniq (map (p \ <p) (st 'hv))))
+                     (pins st 'latch 1 'dirty 1))
+ (synth-lline st) (st 'latch ? ("   latched" + foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv)))) "")
  ; a window record: a key down sounds or turns a knob, a key up lets its note go
  (synth-wstep st r)
   (: e <r k (r 1)
      (? (e = 'close) (pins st 'over 1)
-        (e = 'up) (synth-free st k)
+        (e = 'up) (st 'latch ? st (synth-free st k))
         (e = 'size) (pins st 'dirty 1)
-        (e != 'down || any (p \ <p = k) (st 'hv)) st
+        (e != 'down) st
+        (any (p \ <p = k) (st 'hv)) (st 'latch ? (synth-free st k) st)
         (k = 1) (pins st 'over 1)
         (peep synth-wknobs k () @ c
            (charm? c ? (synth-step st c)
@@ -283,10 +378,12 @@
    + "synth -- the qwerty rows play while they are held\r\n\r\n"
    + "  timbre " + synth-tname st + "   octave " + show (st 'oct)
    + "   last " + (string? (st 'last) ? (st 'last) "-") + "\r\n"
-   + "  held " + foldl (a \ p \ " " + synth-name (p 1) + a) "" (st 'hv) + "\r\n\r\n"
+   + (st 'latch ? "  latched" "  held") + foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv))) + "\r\n"
+   + fxline st + "\r\n\r\n"
    + "  z s x d c v g b h n j m , l . ; /       from c below middle c\r\n"
    + "  q 2 w 3 e r 5 t 6 y 7 u i 9 o 0 p [ = ]  from middle c\r\n\r\n"
-   + "  tab: timbre   up/down: octave   " + (st 'fm ? "left/right: fm instrument   " "") + "esc: leave")
+   + "  tab: timbre   up/down: octave   " + (st 'fm ? "left/right: fm instrument   " "") + "esc: leave\r\n"
+   + "  f1 f2 f3 f8: reverb echo chorus shimmer   f5 f6 f7 f9: wetter   f4: latch")
  ; rw x rh pixels of col (0xrrggbb) at x y
  (fill p w x y rw rh col)
   (? (rw < 1 || rh < 1) 0
@@ -319,7 +416,7 @@
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
             0))))
- synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
+ synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, r o c s reverb echo chorus shimmer, l the latch, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
  ; --- the mitty: the keys a stage over a vi stage on the loop's text ---
  (synth-mitty br vi f o) (: _ (synth-warm ()) st (synth-new o)
    hf (synth-horn st) hn <hf feed <>hf
