@@ -18,6 +18,7 @@
 //        { fault }                        the module trapped: the message, and the worker stops
 //        { lift, bytes | error }          a ramfs file the terminal asked for (see lift below)
 //        { copy }                         a selection the console made, as text: the page's clipboard
+//        { hold }                         1 when a window grabbed the pointer, 0 when it let go
 //   in, beside the boot: { host: { port, ring } }  the seat's own files (hostfs.mjs): a
 //                                         port to ask it on and the ring its answers land in
 
@@ -28,7 +29,7 @@ import { box_at, box_win, box_n } from './procbox.mjs';
 const NR = { read: 0, write: 1, nanosleep: 35, reboot: 169, clock_gettime: 228,
              horn_open: 0x4000, horn_write: 0x4001, horn_lag: 0x4002, horn_close: 0x4003,
              lift: 0x4010, scan: 0x4011, drew: 0x4012, kexec: 0x4013,
-             point: 0x4014, paste: 0x4015, copy: 0x4016,
+             point: 0x4014, paste: 0x4015, copy: 0x4016, hold: 0x4017,
              fetch_open: 0x4020, fetch_read: 0x4021, fetch_close: 0x4022, host: 0x4030,
              proc: 0x4040, proc_stop: 0x4041 };
 const ENOENT = 2, EBADF = 9, EACCES = 13, ENOSYS = 38, ENAMETOOLONG = 36;
@@ -370,6 +371,7 @@ const sys1 = (n, a, b, c, d, e, f) => {
       Atomics.store(ctl, c_xh, head);
       return BigInt(k); }
     case NR.copy: post({ copy: dec.decode(u8().slice(Number(a), Number(a) + Number(b))) }); return 0n;
+    case NR.hold: post({ hold: Number(a) }); return 0n;
     case NR.drew: drew = true; blit(false); return 0n;  // the paper changed under a program's own hand
     case NR.fetch_open: return BigInt(fetchOpen(dec.decode(u8().subarray(Number(a), Number(a) + Number(b)))));
     case NR.fetch_read: {

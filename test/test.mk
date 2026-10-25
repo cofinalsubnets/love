@@ -1059,6 +1059,9 @@ test_kernel_wasm: host
 	@echo TEST test/gate/point.mjs "(the page's pointer and clipboard: select, copy, paste, the wheel)"
 	@$(NODE) $(R)/test/gate/point.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/point.log \
 	   || { echo "FAIL test_kernel_wasm"; exit 1; }
+	@echo TEST test/gate/grab.mjs "(a window's grab: the page's lock, motions, a warp)"
+	@$(NODE) $(R)/test/gate/grab.mjs $(R)/out/love.wasm out/wasm/love.image out/wasm/grab.log \
+	   || { echo "FAIL test_kernel_wasm"; exit 1; }
 	@echo TEST test/kernel/winrun.l "(a window on the paper: its pixels shown, keys by place, the pointer, the text)"
 	@rm -f out/wasm/winrun.ppm
 	@printf 'hi\033[A!' | INLE_RAM=256 $(NODE) $(S)/inle/wasm/inle.mjs --fb 640x400 --dump out/wasm/winrun.ppm \
