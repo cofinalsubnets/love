@@ -71,9 +71,9 @@
    fmout ['fmark 'out ()]
    (idt? ('id . _)) 1
    ; the value is a guard, never a second pattern variable: `(pv? ('p v) v)` would rebind v
-   (idv? ('id . v . _) s) ?(v = s)
-   (pv? ('p . v . _) s) ?(v = s)
-   (kwv? ('kw . v . _) s) ?(v = s)
+   (idv? ('id . v . _) s) (v = s)
+   (pv? ('p . v . _) s) (v = s)
+   (kwv? ('kw . v . _) s) (v = s)
 
    ; -- the spelling of a token, for ## paste and # stringize --
    numks '(num unum lnum ulnum llnum ullnum flo flof iflo)
