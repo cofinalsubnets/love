@@ -99,6 +99,15 @@
    tk (view-loading rw () view-spin) _ (rest 200) _ (tk 'cuts 0.5)
    (at x y) (4 * (y * 800 + x) @ i (string (rw 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
  (test (window-size rw = [800 600]) (0 < at 400 300 0) (at 400 300 0 < 60) (at 300 300 = [0 0 0]) (window-events rw = [['down 16]])))
+; ..and resized while it draws: the draw after told the box is fresh, so the moon blacks it
+; whole again and shows it all, the moon's old place too
+(: fw {'w 320 'h 200 'paper (cask (320 * 200 * 4)) 'evq ()} fs {'l ()}
+   tk (view-loading fw () (ld \ (pin fs 'l (fs 'l + [(ld 'fresh)]), ())))
+   _ (rest 200) _ (tk 'cuts 0.1) _ (rest 60) _ (tk 'cuts 0.2) _ (pin fw 'evq [['size 400 300]]) _ (rest 60) _ (tk 'cuts 0.3) _ (rest 60) _ (tk 'cuts 0.4)
+   pw {'w 320 'h 200 'paper (cask (320 * 200 * 4))} _ (frame-paint (iota (320 * 200) * 0 + 0xffffff) 320 1 (pw 'paper) 320)
+   f0 (view-spin {'win pw 'box [0 0 320 200] 'n 5 'fresh 0}) w0 (string (pw 'paper) 0)
+   f1 (view-spin {'win pw 'box [0 0 320 200] 'n 6 'fresh 1}) w1 (string (pw 'paper) 0)
+ (test (fs 'l = [1 0 1 0]) (two? f0) (w0 = 255) (f1 = ()) (w1 = 0)))
 
 (test_fin (),
  puts "lorewin: ok -- a held key walks at its pace, the keyboard's repeat no press, a pressed one acts once, and the world paints its window\n")

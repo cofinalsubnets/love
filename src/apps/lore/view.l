@@ -277,8 +277,9 @@
  ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
  ;     (tick what part), for the making to call as it goes, what it is at and () or how far
  ;     through, 0.0 to 1.0. once the making has taken view-load-wait ms, and no oftener than
- ;     a frame after, draw is called with {'win 'box 'ms 'n 'what 'part}, n its count: in a
- ;     window it paints the paper inside box [x0 y0 x1 y1], in pixels, or () the whole window
+ ;     a frame after, draw is called with {'win 'box 'ms 'n 'fresh 'what 'part}, n its count,
+ ;     fresh 1 on the first and when the box has changed since the last: in a window it
+ ;     paints the paper inside box [x0 y0 x1 y1], in pixels, or () the whole window
  ;     as big as it is by then, and answers [y0 y1] the rows to show, or () for the box's;
  ;     the paper may not hold what the screen does, a window's frames being sent whole.
  ;     else box is in cells and it answers what to say to the terminal ---
@@ -287,8 +288,8 @@
    (\ what part (: now (clock 0)
      (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
         (: b (tablet? win && atom? box ? (window-sized win @ s [0 0 (s 0) (s 1)]) box)
-           s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'what what 'part part})
-           (pins at 'n (at 'n + 1) 'last now,
+           s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'fresh (at 'n = 0 || b != peep at 'box ()) 'what what 'part part})
+           (pins at 'n (at 'n + 1) 'last now 'box b,
             (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (b 1) (b 3)))
                (string? s) (say out s, flush out)),
             ()))))))
@@ -306,9 +307,9 @@
          I (iota (S * S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
          in (x * x + y * y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (A * A * 4))
          Z (cask (4 * bw))
-         _ (n = 0 ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
+         fr (peep ld 'fresh (n = 0)) _ (fr ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
          (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))
-                         (n = 0 ? () [y0 (y0 + A)]))))))
+                         (fr ? () [y0 (y0 + A)]))))))
  ; ..a level's 'song: (new h sd) a song into the horn, fed (feed s) a frame; none on a
  ; seat with no horn
  (view-song new feed) (hn \ ((hn ? (new hn (wheel (clock 0)))) @ s (s ? (_ \ (feed s)))))

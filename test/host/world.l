@@ -746,6 +746,16 @@
    _ (pin tst 'th (0.5 * pi)) _ (tgo 'forward 30) t5 (tfl 0))
  (test (#(twl 'trees) = 1) (0.59 < t0 < 0.61) (t1 > 4.6) (t2 = t1) (t3 < t2 - 0.5) (t4 > 4.6) (4.45 < t5 < 4.55) (tst 'px > 1.0)
        (has? (lv "(tree [0 0 0] 'x (texture 8 8 1 '((fill (grey 0.4)))))") "(tree [x y z] seed TEXTURE)"))
+; a vined tree: not climbed till the loop first plays, a tap on the deck, and then not till
+; its vines have grown to the fork, drawn as they go
+(: vwl (lv "(room [-9 0 -9] [9 4 9]) (street [-12 4.5 -12] [12 12 12]) (street [-1 3.95 -1] [1 4.55 1]) (solid (box [-0.9 0 -0.9] [0.9 0.6 0.9])) (vined (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4)))))) (deck [5 0 -1] [6 1 1]) (start [6 0 0] 0 0)")
+   vst (world-new 8 8 vwl "") (vgo a n) (each ^n (_ \ (? (a != ()) (world-step vst a), pin vst 'dt (1.0 / 30.0), world-move vst)))
+   (vfl _) (vst 'py - eye-h) (vup _) (: _ (pins vst 'px 0.8 'pz 0.0 'py (0.6 + eye-h) 'th (1.5 * pi) 'ph 0.0) _ (vgo () 5) _ (vgo 'forward 60) (vfl 0))
+   v0 (vup 0) n0 (peep vst 'vined ())
+   _ (pins vst 'px 3.8 'pz 0.0 'py eye-h 'th (0.5 * pi) 'ph -0.5) _ (vgo () 5) _ (world-step vst 'tap) n1 (peep vst 'vined ())
+   v1 (vup 0) p1 (world-pens vst) _ (pin vst 'vined (vst 'mt - 60.0)) v2 (vup 0) p2 (world-pens vst))
+ (test (#(vwl 'trees) = 1) (vwl 'trees 0 'vine = 1) (n0 = ()) (tablet? (vst 'music)) (charm? n1 || gem? n1) (v0 < 0.61) (v1 < 0.61) (v2 > 3.0)
+       (#(vst 'sc 'vines) = 1) (has? (lv "(vined (room [0 0 0] [1 1 1]))") "(vined (tree ..))"))
 ; a lift on a surface: stepped onto through its open side at its foot it carries the body
 ; into the pocket, and stands there till the switch on its middle post is tapped; then up to
 ; its head, its gates holding the body on as it goes, off onto the floor there, and back down and out again
@@ -769,7 +779,7 @@
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
-; creaking and lets the body by. a headstone tapped kneels the body before it, its name and
+; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving
 ; stands it again
 (: yi "(texture 8 8 1 '((fill 0.1)))"
@@ -777,13 +787,13 @@
            + ") (gate [5 0 6] [5 0 4] 1 90 " + yi + ") (grave [2 0 5] 90 \"Yuki\" " + yi + ") (start [7 0 5] 270 0)"))
    ys (world-new 80 48 yl "") (ygo a n) (each ^n (_ \ (? (a != ()) (world-step ys a), pin ys 'dt (1.0 / 30.0), world-move ys)))
    _ (ygo 'forward 60) y0 (ys 'px) _ (pin ys 'pz 8.0) _ (ygo 'forward 30) y1 (ys 'px) _ (pins ys 'px 7.0 'pz 5.0)
-   _ (ygo 'forward 60) _ (pin ys 'ph -1.0) _ (world-step ys 'tap) yc (map (q \ q 0) (peep ys 'sfx ())) _ (pin ys 'ph 0.0)
+   _ (ygo 'forward 60) _ (pin ys 'ph -1.0) _ (world-step ys 'tap) _ (pin ys 'ph 0.0)
    _ (ygo () 60) yg (ys 'gates 0 'g) _ (ygo 'forward 60) y2 (ys 'px)
    _ (pin ys 'ph -1.2) _ (world-step ys 'tap) k0 (peep ys 'eye ()) _ (ygo () 150)
    k1 [(ys 'eye) (peep ys 'dlg ()) (ys 'py)] fr (world-frame ys)
    _ (world-step ys 'weep) _ (ygo () 30) k2 [(ys 'eye) (peep ys 'dlg ())] _ (ygo () 45) kt (#(peep ys 'drops ()) + #(peep ys 'splats ())) _ (ygo () 285) k3 (peep ys 'dlg ())
    _ (world-step ys 'leave) _ (ygo () 75) k4 [(ys 'eye) (ys 'py) (ys 'px)] _ (ygo 'back 20) k5 (ys 'px)
- (test (y0 > 5.3) (y1 > 5.3) (elem "creak" yc) (yg = 1.0) (y2 < 4.0)
+ (test (y0 > 5.3) (y1 > 5.3) (yg = 1.0) (y2 < 4.0)
        (k0 = 'move) (k1 0 = 'kneel) (k1 1 = 0) (mag (k1 2 - 1.12) < 0.05) (has? fr "Yuki") (has? fr "1  weep") (has? fr "2  leave")
        (k2 0 = 'move) (k2 1 = ()) (kt > 0) (k3 = 0) (k4 0 = 'walk) (mag (k4 1 - eye-h) < 0.05) (k5 > k4 2 + 0.3)
        (has? (lv ("(grave [0 0 0] 0 'x " + yi + ")")) "(grave [x y z] bearing NAME TEXTURE)")))

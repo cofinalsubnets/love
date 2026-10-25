@@ -102,6 +102,9 @@
 ;   (tree [x y z] seed TEXTURE)        a tree of heaven grown from seed, its foot at x y z: its
 ;                                      wood in the bark TEXTURE, its trunk in the way and
 ;                                      climbed as a ladder, facing it; fitting a 2 m well
+;   (vined TREE)                       the tree climbed only once vines have grown up its
+;                                      trunk to the fork, out of the ground, from when the
+;                                      loop first plays
 ;   (plush [x y z] bearing FILE)       a stuffed toy lying at x y z, facing bearing: a .glb
 ;                                      beside the level, its origin the floor under it
 ;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
@@ -146,7 +149,7 @@
 ;                                      spiked; in a body's way below its top
 ;   (gate [x y z] [x y z] height degrees TEXTURE)  a wrought iron gate's leaf from the foot of
 ;                                      its hinge to its latch's: a tap swings it open degrees
-;                                      clockwise from above, creaking, and shut again; in a
+;                                      clockwise from above, and shut again; in a
 ;                                      body's way where it hangs
 ;   (grave [x y z] bearing NAME TEXTURE)  a small headstone, the middle of its foot at x y z,
 ;                                      facing bearing: tapped, the player kneels before it,
@@ -190,7 +193,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand dark tree train bin mattress telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog ad spinner orb glow inward tether playing fence gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand dark tree vined train bin mattress telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog ad spinner orb glow inward tether playing fence gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -271,6 +274,7 @@
  (tree at seed t) (: u "(tree [x y z] seed TEXTURE)" p (P at u)
    (? (!(charm? seed)) (no u seed) (!(texture? t)) (no u t)
       (: (o q) (v+ p q) (part 'tree [['at p] ['seed seed] ['tex t] ['trunk (map (s \ [(o (s 0)) (o (s 1)) (s 2)]) (bough-solid seed))]]))))
+ (vined t) (kind? t ['tree] ? (with t 'vine 1) (no "(vined (tree ..))" t))
  (plush at deg file) (: u "(plush [x y z] bearing FILE)"
    (string? file ? (part 'plush [['at (P at u)] ['deg (N deg u)] ['file file]]) (no u file)))
  ; ..a window: its opening, and its pane
@@ -572,7 +576,7 @@
                          {'air (b 'kind = 'room ? 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'sheer (peep b 'sheer 0) 'src (peep b 'src ()) 'xf (peep b 'xf xf-id)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1) (peep d 'hand 0)])) (of 'door))
        'darks (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'dark 0) (of 'room)))
-       'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'trunk (m 'trunk) 'xf (peep m 'xf xf-id)}) (of 'tree))
+       'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'trunk (m 'trunk) 'vine (peep m 'vine 0) 'xf (peep m 'xf xf-id)}) (of 'tree))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'troffer (peep s 'troffer 0) 'unlit (peep s 'unlit 0) 'how (s 'how) 'src (peep s 'src ()) 'xf (peep s 'xf xf-id)})) (of 'strip))

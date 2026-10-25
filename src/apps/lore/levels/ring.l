@@ -3,9 +3,10 @@
 ; row of posts down the outside, a ring of them round the tube, a river winding
 ; round it, and a little graveyard. under the grass, round a smaller tube inside it, a maze of yellow
 ; rooms the whole way round: the walk begins in a dark closet off one of them, and in a white
-; hall by the graveyard a tree grows up through a well to the grass, climbed to get out. over it
-; all a pink orb hangs in the ring's middle, a lift up to it from the tube's inside, and in
-; it a shipping container where the hall's stereo is heard too
+; hall by the graveyard a tree grows up through a well to the grass, climbed to get out up
+; the vines the loop grows on it. over it all a pink orb hangs in the ring's middle, a lift
+; up to it from the tube's inside, and in it a shipping container where the hall's stereo
+; is heard too
 (borrow 'scenery)
 
 (: lx 320.0 lz 88.0)                   ; round the ring and round the maze's floor
@@ -159,7 +160,6 @@
 (: wood (feel 'wood (texture 64 64 0.8 '((fill (rgb 0.42 0.26 0.14)) (stripes 8 1 1 (shade 0.85)) (noise 2 0.12)))))   ; its grain every 8, so it meets across the tile's edges
 (: ash (texture 32 32 0.6 '((fill (grey 0.1)) (noise 2 0.2))))
 (: alu (feel 'metal (texture 32 32 0.5 '((fill (grey 0.6)) (stripes 2 1 0 (shade 0.92))))))
-(: cone (texture 32 32 0.4 '((fill (grey 0.16)) (noise 1 0.3))))
 ; ..the tape deck's face: two doors, a cassette behind each one's glass, the tape wound on
 ; its two hubs in its window, the counter and the keys beside them
 (: tapeface (texture 256 64 0.8
@@ -182,15 +182,23 @@
    (foldl (\ br k (: a (pi * k / 4.0 + pi / 8.0) c (cos a) s (sin a) p [(x + r * c) 0.0 (z + r * s)]
                       (cut p [(p 0 - s) 0.0 (p 2 + c)] [(x + rt * c) h (z + rt * s)] br)))
           (skin {'all dirt} (solid (box [(x - b) 0 (z - b)] [(x + b) h (z + b)]))) ^8)))
-; ..a speaker's cabinet, the middle of its back's foot at x y z, facing f across the floor:
-; a woofer, a midrange and a tweeter down its front, the loop heard from it
+; ..the ring's own x and z to a metre at x y z: the tube bends them, and the further off it
+; the more, so a box is laid true where it stands
+(: (per x y z) (: R (lx / tau) r (lz / tau) [(R / (R + (r + y) * cos (z / r - pi))) (r / (r + y))]))
+; ..a speaker's cabinet, the middle of its back's foot at x y z, facing f across the floor,
+; k the ring's x and z to a metre there: a woofer, a midrange and a tweeter down its front,
+; the loop heard from it
 (: (block lo hi t) (skin {'all t} (solid (box lo hi))))
-(: (cabinet o f) (: (p l h d) [(o 0 + l * (0.0 - f 1) + d * f 0) (o 1 + h) (o 2 + l * f 0 + d * f 1)]
-   [(block (p -0.25 0.0 0.0) (p 0.25 1.05 0.42) ash)
-    (rod (p 0.0 0.35 0.42) (p 0.0 0.35 0.44) 0.17 12 cone)
-    (rod (p 0.0 0.68 0.42) (p 0.0 0.68 0.44) 0.08 10 cone)
-    (rod (p 0.0 0.9 0.42) (p 0.0 0.9 0.435) 0.035 8 alu)
-    (speaker (p 0.0 0.7 0.5))]))
+(: drivers (texture 30 64 0.5 '((fill (grey 0.1)) (noise 2 0.2)
+                                (disc 15 43 11 (grey 0.42)) (disc 15 43 9.8 (grey 0.05)) (disc 15 43 8 (grey 0.2)) (disc 15 43 3.5 (grey 0.45))
+                                (disc 15 22 5.4 (grey 0.42)) (disc 15 22 4.5 (grey 0.05)) (disc 15 22 3.6 (grey 0.2)) (disc 15 22 1.6 (grey 0.45))
+                                (disc 15 8 2.6 (grey 0.62)) (disc 15 8 1.3 (grey 0.36)))))
+; ..as [body front]: the box, and the drivers on it with where the loop is heard from
+(: (cabinet-in k o f) (: (p l h d) [(o 0 + k 0 * (l * (0.0 - f 1) + d * f 0)) (o 1 + h) (o 2 + k 1 * (l * f 0 + d * f 1))]
+   w (sqrt (2 (k 0 * f 1) + 2 (k 1 * f 0)))
+   [[(block (p -0.25 0.0 0.0) (p 0.25 1.05 0.42) ash)]
+    [(decal (p 0.0 0.525 0.43) [(f 0) 0 (f 1)] [0 1 0] (0.47 * w) 1.0 drivers) (speaker (p 0.0 0.7 0.5))]]))
+(: (cabinet o f) (: c (cabinet-in (per (o 0) (o 1) (o 2)) o f) (c 0 + c 1)))
 ; ..a pa speaker hung in a ceiling's corner c, d [dx dz] the way into the room: a square
 ; cabinet on a bracket tilted down into it, its grille on the front, a woofer and a tweeter
 ; behind it, the loop heard from it
@@ -213,8 +221,10 @@
      (rod [(x + 0.32) 0.63 (z - 0.38)] [(x + 0.32) 0.63 (z - 0.4)] 0.018 8 alu)
      (playing (ad [(x - 0.15) 0.565 (z - 0.381)] [0 0 -1] [0 1 0] 0.3 0.06 lcd))]
     + cabinet [(x - 1.25) 0 z] [0 -1] + cabinet [(x + 1.25) 0 z] [0 -1])))
-; ..and four round the tree, at its corners, each built square and swung to face it
-(: round-tree (map (q \ (: x (tx + 3.0 * q 0) z (tz + 3.0 * q 1) (turn (180.0 / pi * atan2 (0.0 - q 0) (0.0 - q 1)) [x z] (cabinet [x 0 z] [0 1]))))
+; ..and four round the tree, at its corners, each facing it: its box built square and
+; swung, its front laid facing the tree as it is
+(: round-tree (map (q \ (: x (tx + 3.0 * q 0) z (tz + 3.0 * q 1) f [(-0.7071 * q 0) (-0.7071 * q 1)]
+                          ((turn (180.0 / pi * atan2 (f 0) (f 1)) [x z] (cabinet-in [1.0 1.0] [x 0 z] [0 1] 0)) + cabinet-in [1.0 1.0] [x 0 z] f 1)))
                    [[1 1] [1 -1] [-1 1] [-1 -1]]))
 ; ..a cable lying along the floor through the points ps [x z]: its corners eased, wandering
 ; either side as it goes, still at its ends; a half round r high, a drape
@@ -286,7 +296,7 @@
     (void [(sx - 3.08) (hub - 1.35) -1.27] [(sx + 3.08) (hub + 1.34) 1.27])   ; a hair of air round the container, so its steel shows
     (skin {'all steel} (solid (box [(sx - 3.03) (hub - 1.3) -1.22] [(sx + 3.03) (hub + 1.29) 1.22])))
     (dark (skin {'walls paint 'floor ply 'ceiling paint} (room [(sx - 2.95) cy -1.14] [(sx + 2.95) (hub + 1.21) 1.14])))
-    (skin {'all paint} (air (box [(sx - 0.78) (hub - 1.31) -0.78] [(sx + 0.78) (cy + 0.01) 0.78])))   ; the hatch, no wider than the platform's footing
+    (skin {'all paint} (air (box [(sx - 0.81) (hub - 1.31) -0.81] [(sx + 0.81) (cy + 0.01) 0.81])))   ; the hatch, a hair wider than the platform, so the floor never overlaps it
     (map (x \ strip-light [(sx + x) (hub + 1.21) 0]) [-2.3 -1.25 1.25 2.3])
     (block [(sx + 1.9) cy -1.13] [(sx + 2.94) (cy + 0.2) 0.9] wood)
     (mattress [(sx + 2.42) (cy + 0.2) -1.1] 0)
@@ -318,11 +328,11 @@
   (heard [0 0 0] [lx gh lz] [(stereo (cx * (gis 2 + 0.5)) (cz * (<gjs + 3) - wt)) round-tree])
   cables
   (hum 'fluorescent [0 0 0] [lx mh lz])
-  ; ..and the well up out of them, and the tree in its mound, climbed up it
+  ; ..and the well up out of them, and the tree in its mound, climbed up the vines the loop grows on it
   (skin {'all concrete} (street [(tx - wh) (gh - 0.05) (tz - wh)] [(tx + wh) (top + 0.05) (tz + wh)]))
   (whole (mound tx tz 2.4 0.8 0.6))
-  (tree [tx 0 tz] 7 bark)
-  ; ..a speaker on the plinth facing the gate, one on the grass beside the lift's pad, both heard up here alone, and the ring's middle
+  (vined (tree [tx 0 tz] 7 bark))
+  ; ..a speaker on the plinth facing the gate, one on the grass at the side of the lift's pad facing it, both heard up here alone, and the ring's middle
   (heard [-1000 top -1000] [1000 1000 1000]
-    [(cabinet [(yx - 3.21) (ground (yx - 3.0) yz + 0.78) yz] [1 0]) (cabinet [(sx - 2.2) (ground (sx - 2.2) 0.0) 0.0] [-1 0])])
+    [(cabinet [(yx - 3.21) (ground (yx - 3.0) yz + 0.78) yz] [1 0]) (cabinet [sx (ground sx (lz - 2.2)) (lz - 2.2)] [0 1])])
   hang)
