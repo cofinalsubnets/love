@@ -609,6 +609,10 @@
    ;; .reloc on the zero word just laid at its offset lays that word as the expression; else it stays
    _ (chk-eq "gas.reloc" '(".data" ".pushsection .r, \"a\"" "\t.long s + 0x13f8 - ." "\t.quad t" ".word 0" ".reloc 8, R_AARCH64_PREL32, s" ".popsection")
         (gf-expand 'a64 (gf-lines 'a64 ".data\n.pushsection .r, \"a\"\n.word 0\n.reloc 0, R_AARCH64_PREL32, s + 0x13f8\n.quad 0\n.reloc 4, R_AARCH64_ABS64, t\n.word 0\n.reloc 8, R_AARCH64_PREL32, s\n.popsection")))
+   _ (chk-eq "gas.lbl.named" '(".Ls1:" "\tnop" "\tnop" ".Le1:" "\tmov x0, #2")
+        (gf-expand 'a64 (gf-lines 'a64 ".Ls1:\n\tnop\n\tnop\n.Le1:\n.if (.Le1 - .Ls1) > 4\n\tmov x0, #2\n.else\n\tmov x0, #1\n.endif")))
+   _ (chk-eq "gas.lbl.nil" '("661:" "\t.globl f" "\t.cfi_startproc" "\tnop" "662:" "\tnop")
+        (gf-expand 'a64 (gf-lines 'a64 "661:\n\t.globl f\n\t.cfi_startproc\n\tnop\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
    _ (chk-eq "gas.lbl.insn" '("661:" "\tprfm plil1strm, [x30, #(1b - 0b)]" "662:" "\tnop")
         (gf-expand 'a64 (gf-lines 'a64 "661:\n\tprfm plil1strm, [x30, #(1b - 0b)]\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
    _ (chk-eq "gas.lbl.datasize" '("661:" "\tmov x0, #1" "\t.inst 0xd503201f, 0xd503201f" "\t.inst(0xd503201f)" "\t.pushsection .f, \"a\""
