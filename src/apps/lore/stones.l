@@ -440,7 +440,7 @@
  (cover-of sd) (throw sd 3 89 20 @ k (k < 15 ? 0 1))
  (stones-new w h now sd) (: bs (stones-blocks sd)
    st {'px (slot-x 0.0) 'pz 0.0 'py eye-h 'th 0.32 'ph 0.0 'sim (now 0) 'dst (now 1)
-       'wx (sky-weather (cover-of sd) 'smooth) 't 0 'deep 0 'kitty 0 'kp 1 'done 0 'eye 'walk 'mt 0.0 'ro 0.0
+       'wx (sky-weather (cover-of sd)) 't 0 'deep 0 'kitty 0 'kp 1 'done 0 'eye 'walk 'mt 0.0 'ro 0.0
        'dlg () 'sel 0 'dlg-at () 'drops () 'splats () 'nd 0
        'blocks bs 'bpk (blocks-pack detail-max bs)}
    (stones-size st w (h // 2)))

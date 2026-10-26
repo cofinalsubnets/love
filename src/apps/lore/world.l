@@ -633,7 +633,7 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (peep lv 'sky () @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pin (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4) 'smooth) 'smog (peep s 'smog 0.0))
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pin (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
@@ -999,9 +999,9 @@
  (sun-here sf sk x y z) (: sl (here sf x y z (sk 'sw)) t (sk 'by) n (t 'n) u ((sl 1 + 1.0) * n / 2.0)
    i (min (max (floor u) 0) (n - 1)) f (u - i) (at T) (peep T i 0.0 * (1.0 - f) + peep T (i + 1) 0.0 * f)
    [sl (map at (t 'amb)) (map at (t 'sunc)) (at (t 'sunk)) 1.0])
- ; ..and the sky the eye at e sees: the sun and the stars as they stand over it, each star
- ; there as high as it is, and the sun's light as high as it stands over the ground's
- ; edge that way, the ground falling away by its bend; its disc where it is
+ ; ..and the sky the eye at e sees: the sun and the stars as they stand over it, every star
+ ; lit all round, the ground hiding those it covers, and the sun's light as high as it stands
+ ; over the ground's edge that way, the ground falling away by its bend; its disc where it is
  (sky-here sf sk e) (? !(tablet? sf && tablet? sk) sk
    (: x (e 0) y (e 1) z (e 2) s (here sf x y z (sk 'sw)) ss (sk 'ss) w (here sf x y z (sk 'ws))
       h (sqrt (s 0 * s 0 + s 2 * s 2)) b (sf 'bend x (y - eye-h) z)
@@ -1012,7 +1012,7 @@
       cs (up 1 <= 0.0 ? 0.0 (sky-orb-cloud (sk 'wx) (sk 'sw) (sk 'sim)))
       lt (pins (sky-lit up (sk 'wx) (sk 'sim) cs) 'sun s 'turn (sf 'axes x y z))
       {'lt lt 'wx (sk 'wx) 'sim (sk 'sim) 'k (0.75 * lt 'expo)
-       'ss (pins (foldl (\ t k (pin t k (ss k))) {} (keys ss)) 'x (w 0) 'y (w 1) 'z (w 2) 'b (ss 'b0 * sat (w 1 / 0.1)))}))
+       'ss (pins (foldl (\ t k (pin t k (ss k))) {} (keys ss)) 'x (w 0) 'y (w 1) 'z (w 2) 'b (ss 'b0))}))
  ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
  ;     its own height, speed, and turn about the middle, from its number ---
  (hash01 i) (: h (sin (i * 12.9898 + 78.233) * 43758.5453) (h - floor h))

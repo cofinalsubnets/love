@@ -137,8 +137,8 @@
    (mirror (sky-body (day0 + (g 'h % 24.0) * 3600.0) lat (-24.0 * p) (365.2422 * p))))
  ; the clouds ride a clock of their own, a slow one: the game's day is a minute
  (cloud-sim g) (g 'fr * 2.0)
- (meadow-weather g style) (: d (int (g 'h / 24.0) @ v (6 < v ? 6 v)) c (g 'covers d)
-   (sky-weather (? (c < 0.2) 0 (c < 0.5) 1 (c < 0.8) 2 3) style))
+ (meadow-weather g) (: d (int (g 'h / 24.0) @ v (6 < v ? 6 v)) c (g 'covers d)
+   (sky-weather (? (c < 0.2) 0 (c < 0.5) 1 (c < 0.8) 2 3)))
  (meadow-light g wx) (sky-light (meadow-sun g) wx (cloud-sim g))
  ; --- a blade as points: base x0 z0, length L, lean A at the tip, bow bw, at u along it. the
  ; lean grows along the blade, so it curves as a stem does ---
@@ -266,7 +266,7 @@
  (meadow-frame st g wx deep) (: w (st 'w) h (st 'h) c (meadow-pens st g wx)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay * 0.5 + 0.25)))
    (deep ? (view-deep-frame w h px {}) (view-frame w h (y \ px (iota w + w * y)) {})))
- (meadow-sky g) (meadow-weather g 'smooth)
+ (meadow-sky g) (meadow-weather g)
  ; where the sun and the moon stand on the screen, [x y] or (), and the moon's phase
  (meadow-bodies st g) [(meadow-sun g @ s (s 1 < -0.03 ? () (on-screen st s)))
                        (meadow-moon st g @ m (m 1 < -0.03 ? () (on-screen st m)))

@@ -29,7 +29,7 @@
 (borrow 'sky)
 (borrow 'view)
 (: court-kb (view-bind view-binds court-binds))
-(: (up hr) (: st (pins (at hr) 'px 0.0 'pz 0.0 'ph 1.5 'wx (sky-weather 0 'smooth)) c (mesh-flat (court-pens st))
+(: (up hr) (: st (pins (at hr) 'px 0.0 'pz 0.0 'ph 1.5 'wx (sky-weather 0)) c (mesh-flat (court-pens st))
               l (c 0 + c 1 + c 2) w (st 'w) n #l b (net l / n * 4.0 + 0.05 < l) i (iota n)
               (at k) (peep b k 0)
               [(net b) (net (b * (at (i + 1) + at (i - 1) + at (i + w) + at (i - w) = 0)))])
@@ -83,7 +83,7 @@
        (court-now () @ n (two? n && 0.0 < n 0))))
 
 ; midsummer noon: the floor by the north wall in sun, by the south wall in shadow
-(: (down z) (: st (pins (on 6 21) 'px -1.5 'pz z 'th 0.0 'ph -1.45 'wx (sky-weather 0 'smooth) 'wet 0.0 'snow 0.0)
+(: (down z) (: st (pins (on 6 21) 'px -1.5 'pz z 'th 0.0 'ph -1.45 'wx (sky-weather 0) 'wet 0.0 'snow 0.0)
                 c (mesh-flat (court-pens st)) (net (c 0 + c 1 + c 2) / #(c 0)))
  (test (1.3 * down (0.6 - yard-b) < down (yard-b - 0.6))))
 
@@ -187,7 +187,7 @@
    (hop k) (pin st 'sim (st 'sim + 3600.0), court-move st, pin seen k (st 'wx 'cover))
    _ (each ^300 hop)
    cs (map (k \ seen k) ^300) steps (map (k \ cs (k + 1) - cs k) ^299)
-   fx (on 1 15) _ (pins fx 'drift 0 'wx (sky-weather 2 'smooth))
+   fx (on 1 15) _ (pins fx 'drift 0 'wx (sky-weather 2))
    _ (each ^300 (k \ (pin fx 'sim (fx 'sim + 3600.0), court-move fx)))
  (test (#jan = 20) (n 3 jul < n 3 jan) (n 0 jan < n 0 jul)
        (all (d \ -1 <= d && d <= 1) steps) (any (d \ d != 0) steps)
@@ -197,7 +197,7 @@
 ; snowed ones pale
 (: (fp m c j) (map (k \ court-fall-pick m c k j) ^20) (n v l) #(filter (x \ x = v) l)
    jan (fp 1 3 0) jul (fp 7 3 0) clear (fp 7 0 0) mar (fp 3 3 1)
-   (wxf c f) (pins (sky-weather c 'smooth) 'fall f)
+   (wxf c f) (pins (sky-weather c) 'fall f)
    st (on 1 15) _ (pins st 'drift 0 'wx (wxf 3 2) 'snow 0.0 'wet 0.0 'pace 1)
    _ (each ^400 (k \ court-move st)) s1 (st 'snow)
    _ (pin st 'wx (wxf 3 0)) _ (each ^200 (k \ court-move st)) s2 (st 'snow)
@@ -217,44 +217,40 @@
 
 ; the words: date, time, pace and weather in any order, each at most once; a date alone keeps
 ; now's hour; unreadable words refuse
-(: o (court-opts ["--date" "2026-10-25" "--time" "16:30" "--pace" "120" "--weather" "overcast" "--sky" "pixel"])
+(: o (court-opts ["--date" "2026-10-25" "--time" "16:30" "--pace" "120" "--weather" "overcast"])
    w (court-opts ["partly"]) n (court-opts [])
    d (court-opts ["--date" "2026-07-04"]) dn (court-now ())
    bad (map court-opts [["--date" "2026-13-01"] ["--time" "25:00"] ["--pace" "x"] ["--pace"]
-                        ["clear" "--weather" "mostly"] ["--sky" "smooth" "pixel"] ["nope"]])
+                        ["clear" "--weather" "mostly"] ["--sky" "pixel"] ["nope"]])
    (day v) (int (v 0) // 86400)
- (test (o 'pace = 120.0) (o 'wx 'cover = 3) (o 'wx 'style = 'pixel)
+ (test (o 'pace = 120.0) (o 'wx 'cover = 3)
        (day (o 'now) = (cite 'cal 'epoch-days) 2026 10 25) (int (o 'now 0) % 86400 = 59400)
        (o 'now 1 = 3600) (court-clock {'sim (o 'now 0)} = "16:30")
-       (w 'wx 'cover = 1) (w 'wx 'style = 'smooth) (w 'pace = ()) (n 'wx = ()) (two? (n 'now))
+       (w 'wx 'cover = 1) (w 'pace = ()) (n 'wx = ()) (two? (n 'now))
        (day (d 'now) = (cite 'cal 'epoch-days) 2026 7 4) ((int (d 'now 0) - int (dn 0)) % 86400 @ x (abs x <= 2 || 86398 <= abs x))   ; two reads of the clock
        (all (v \ v = ()) bad)
-       ; ..a cover said holds the weather; a style alone leaves it to the season
-       (o 'fix = 1) (w 'fix = 1) (court-opts ["--sky" "pixel"] @ k (k 'fix = 0 && k 'wx 'style = 'pixel))))
+       ; ..a cover said holds the weather
+       (o 'fix = 1) (w 'fix = 1)))
 
 (borrow 'sky)
 
-; c steps the cover, v the style: more cover more cloud; overcast all but hides the sun
+; c steps the cover: more cover more cloud; overcast all but hides the sun
 (: st (at 13.0)
-   _ (pin st 'wx (sky-weather 0 'smooth))
+   _ (pin st 'wx (sky-weather 0))
    _ (keys! st [99]) w1 (st 'wx)
-   _ (keys! st [118]) w2 (st 'wx)
    _ (keys! st [99 99 99]) w3 (st 'wx)
-   clear (sky-light (court-sun st) (sky-weather 0 'smooth) (st 'sim))
-   oc (sky-light (court-sun st) (sky-weather 3 'smooth) (st 'sim))
+   clear (sky-light (court-sun st) (sky-weather 0) (st 'sim))
+   oc (sky-light (court-sun st) (sky-weather 3) (st 'sim))
    ; the cloudy share of the sky above 25 degrees, sampled on a golden spiral
    n 3000 i (iota n) y (0.42 + 0.58 * (i + 0.5) / n) r (sqrt (1.0 - y * y))
    dx (r * cos (i * 2.39996)) dz (r * sin (i * 2.39996)) sim (st 'sim) s (court-sun st)
-   (cloud c sty) (: wx (sky-weather c sty) lt (sky-light s wx sim)
-                    k (sky-colour-of lt wx dx y dz 0.0 0.0 sim)
-                    k0 (sky-colour-of lt (sky-weather 0 sty) dx y dz 0.0 0.0 sim)
-                    (net (0.15 < mag (k 0 - k0 0) + mag (k 1 - k0 1) + mag (k 2 - k0 2)) / (1.0 * n)))
-   (rises sty) (: f (map (c \ cloud c sty) [1 2 3]) (f 0 < f 1 && f 1 < f 2 && 0.1 < f 0 && 0.9 < f 2))
-   sm (court-frame (pins (at 15.0) 'ph 1.4 'wx (sky-weather 2 'smooth)))
-   px (court-frame (pins (at 15.0) 'ph 1.4 'wx (sky-weather 2 'pixel)))
- (test (w1 'cover = 1) (w1 'style = 'smooth) (w2 'cover = 1) (w2 'style = 'pixel)
-       (w3 'cover = 0) (w3 'style = 'pixel)
+   (cloud c) (: wx (sky-weather c) lt (sky-light s wx sim)
+                k (sky-colour-of lt wx dx y dz 0.0 0.0 sim)
+                k0 (sky-colour-of lt (sky-weather 0) dx y dz 0.0 0.0 sim)
+                (net (0.15 < mag (k 0 - k0 0) + mag (k 1 - k0 1) + mag (k 2 - k0 2)) / (1.0 * n)))
+   rises (: f (map cloud [1 2 3]) (f 0 < f 1 && f 1 < f 2 && 0.1 < f 0 && 0.9 < f 2))
+ (test (w1 'cover = 1) (w3 'cover = 0)
        (oc 'sunk < 0.25 * clear 'sunk) (clear 'cover < oc 'cover)
-       (rises 'smooth) (rises 'pixel) (sm != px)))
+       rises))
 (test_fin ())
 (puts "court: ok")
