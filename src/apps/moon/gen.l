@@ -9919,15 +9919,17 @@
                ('un . 'not . a . _) (zfold w64 a @ va (cint? va ? (va = 0 ? 1 0) ()))
                ('cast . t . a . _) (zfold w64 a @ va (cint? va ? (cfold w64 ['cast t ['num va]]) ()))
                ())))
-   (dprune w64 ty x)
+   (dprune w64 ty x) (dprunel w64 ty lbl? x)
+   ; lk: does a piece hold a label that something outside it may reach
+   (dprunel w64 ty lk x)
     (atom? x ? x
        (x @ ('cond c a b)
-             (: v (bcpopen? w64 c ? () (zfold w64 c)) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
-                (!t ? (map (dprune w64 ty) x) ['cast t (dprune w64 ty (v != 0 ? a b))]))
+             (: v (bcpopen? w64 c ? () (zfold w64 c)) t (? (!(cint? v) || lk a || lk b) () (ty a = ty b) (ty a) ())
+                (!t ? (map (dprunel w64 ty lk) x) ['cast t (dprunel w64 ty lk (v != 0 ? a b))]))
             ('if c th el)
              ((bcpopen? w64 c ? () (zfold w64 c)) @ v
-                (!(cint? v) || lbl? th || lbl? el ? (map (dprune w64 ty) x)
-                   (: s (v != 0 ? th el) (two? s ? (dprune w64 ty s) '(nop)))))
+                (!(cint? v) || lk th || lk el ? (map (dprunel w64 ty lk) x)
+                   (: s (v != 0 ? th el) (two? s ? (dprunel w64 ty lk s) '(nop)))))
             ; a switch on a constant starts at its case: no case reaches what lies ahead, unless a goto's
             ; label is there or a case stands deeper than the body's own list (Duff's device)
             ('switch c items)
@@ -9940,9 +9942,9 @@
                    ok (sm? v && all (it \ (it @ ('case . lo . r) (sm? lo && (!(two? r) || sm? <r)) 1)) items)
                    k (ok ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
                    (glb? l) (any (it \ glbl? it) l)
-                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprune w64 ty) x)
-                      ['switch c (map (dprune w64 ty) (drop k items))])))
-            (map (dprune w64 ty) x)))
+                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
+                      ['switch c (map (dprunel w64 ty lk) (drop k items))])))
+            (map (dprunel w64 ty lk) x)))
    (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
    (exits? x) (x @ ('ret . _) 1 ('goto . _) 1 ('blk items) (two? items && exits? (last items)) ())
    ; -- a block ends at an item that always leaves: what follows is unreachable unless a kept jump
@@ -10407,7 +10409,19 @@
     (: w64 !(ilp32? g)
        (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
-       (ucut (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) (dprune w64 (e \ ()) f))))
+       ; a spliced body's labels are reached from the splice alone: an arm holds one only when a jump
+       ; outside it names it (or a case stands in it)
+       (refs x t) (? !(two? x) t
+                     (x @ (('goto || 'laddr) . n . _) (pin t n (1 + peep t n 0))
+                          ('asm . _) (: _ (5 < #x ? (map (n \ pin t n (1 + peep t n 0)) (x 5)) 0) (refs >x (refs <x t)))
+                          (refs >x (refs <x t))))
+       all (refs f {})
+       (lk x) (: inn (refs x {})
+                 (go y) (? (atom? y) () (elem <y '(case dflt)) 1
+                           (<y = 'lbl) (string? <>y && !(starts? <>y "`") && peep inn <>y 0 < peep all <>y 0)
+                           (go <y || go >y))
+                 (go x))
+       (ucut (has? f ? (kprop g (dprunel w64 (e \ ()) lk (res f))) (dprune w64 (e \ ()) f))))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
     (: f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
