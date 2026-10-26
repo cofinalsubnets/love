@@ -195,8 +195,15 @@
    (col lt dy) (sky-colour-of lt wt dx dy dz 0.0 0.0 nt)
    (d2 p q) ((p - q) * (p - q)) (same a b) (net (d2 (a 0) (b 0) + d2 (a 1) (b 1) + d2 (a 2) (b 2) < 1e-12) / (1.0 * n))
    ss {'x @(0.6) 'y @(-0.6) 'z @(0.53) 'b @(1.0) 'ph @(0.0) 'tint [1.0 1.0 1.0]}
-   (lit lt) (sky-stars! ss [@(0.0) @(0.0) @(0.0)] lt wt 0.0 0.0 nt 0.0 @(0) @ c (c 0 0))
+   (lit lt) (: c (sky-stars! ss [@(0.0) @(0.0) @(0.0)] lt wt 0.0 0.0 nt 0.0 @(0)) (c 0 0))
  (test (0.9 < same (col ltt y) (col ltt (0.0 - y))) (same (col ltf y) (col ltf (0.0 - y)) < 0.1)
        (0.5 < lit ltt)))
+;; the air's flicker: a low star's deeper than one overhead, and none under an airless sky
+(: tw-nw (1.0 * 1790812800 + 1.0 * 3600.0) (tw-ww q) (pin (sky-weather 0) 'twinkle q) tw-lw (sky-light (sky-sun tw-nw 0.0 0.65) (tw-ww 1.0) tw-nw)
+   (tw-one v) (gem-tray [1] [v]) (tw-star y) {'x (tw-one 0.0) 'y (tw-one y) 'z (tw-one (sqrt (1.0 - y * y))) 'b (tw-one 1.0) 'ph (tw-one 0.4) 'tint [1.0 1.0 1.0]}
+   (tw-at y q t) (: c (sky-stars! (tw-star y) [@(0.0) @(0.0) @(0.0)] tw-lw (tw-ww q) 0.0 0.0 tw-nw t @(0)) (c 0 0))
+   (tw-spread y q) (: vs (map (k \ tw-at y q (0.07 * k)) ^60) (foldl max 0.0 vs - foldl min 9.0 vs))
+ (test (0.0 < tw-spread 0.9 1.0) (2.0 * tw-spread 0.9 1.0 < tw-spread 0.12 1.0)
+       (tw-spread 0.12 0.0 < 1e-9) (tw-spread 0.9 0.0 < 1e-9) (0.0 < tw-at 0.12 1.0 0.3)))
 (test_fin ())
 (puts "mesh: ok\n")

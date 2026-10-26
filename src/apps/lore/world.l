@@ -633,7 +633,7 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (peep lv 'sky () @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pin (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0))
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'twinkle (peep s 'twinkle 1.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; --- the scene, built from a level: the meshes packed and each light's channel baked;
