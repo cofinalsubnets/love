@@ -4,7 +4,8 @@
 ; lays a pixel each.
 ; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
 ; weather (sky-weather cover): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
-; 'smog 0 (default) to 1, the sky and its light browned toward orange. a light with
+; 'smog 0 (default) to 1, the sky and its light browned toward orange; 'twinkle the air's
+; stir under the stars, 1 earth's (default), 0 none, more a shimmering night. a light with
 ; 'turn, the eye's axes in the world's, has the sky's clouds fixed in the world, far
 ; off as the stars, not a deck over the eye, and the sky all round, below the eye's
 ; horizon too: sky-lit's csun then sky-orb-cloud's
@@ -223,14 +224,20 @@
     'b (stars0 'b * sat (y / 0.1)) 'b0 (stars0 'b) 'ph (stars0 'ph) 'tint (stars0 'tint)})
  ; ..their light added to the colours c, [r g b] trays before the eye's gain, ix each of
  ; ss's stars' place in them, -1 where it is not on the open sky: dimmed by the cloud before
- ; it, twinkling by the frame's clock t0
+ ; it, twinkling by the frame's clock t0 -- a slow swell, and the air's fast flicker as deep as
+ ; the air the light crosses goes, about its height's sine to the -1.5, its colours parting low
  (sky-stars! ss c lt wx ex ez sim t0 ix) (: nt (sat (1.0 - lt 'day * 3.0))
    (nt <= 0.0 ? c
     (: X (ss 'x) Y (ss 'y) Z (ss 'z)
        cl (sky-cloud-lt lt wx X Y Z ex ez sim)
-       tw (sin (t0 * turns wx 'tper 0.9 + ss 'ph))
-       v (ss 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl))
-       (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (ss 'tint) k * v))) ^3))))
+       q (peep wx 'twinkle 1.0) (w r) (t0 * turns wx 'tper r)
+       tw (sin (w 0.9 + ss 'ph))
+       am (1.0 / max (max Y (0.0 - Y)) 0.06)        ; the air crossed, overhead's 1
+       s (min (q * 0.08 * am * sqrt am) 0.6) ch (0.7 * sat ((am - 2.0) / 6.0))
+       (fl k) ((sin (w 7.1 + 2.3 * ss 'ph + k * ch) + sin (w 11.3 + 3.7 * ss 'ph + 2.0 * k * ch)
+                + sin (w 17.9 + 5.1 * ss 'ph + 3.0 * k * ch)) / 3.0)
+       v (ss 'b * (1.0 - 0.25 * (min q 1.0) * (1.0 - tw)) * nt * (1.0 - cl))
+       (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (ss 'tint) k * v * max (1.0 + s * fl k) 0.0))) ^3))))
  ; --- what falls round the eye e at sec: () or {'x 'y 'z foot, 'len 'wd 'a 'c}. no state:
  ; a drop's place is its number and the clock, on a ground lattice wrapped round the eye ---
  fall-r 6.0 fall-h 9.0 rain-n 1600 snow-n 1400
