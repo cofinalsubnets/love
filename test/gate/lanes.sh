@@ -154,8 +154,10 @@ for l in $run; do has "$l" "$alone" && late="$late $l" || par="$par $l"; done
 sums() { cksum out/love out/love.raw out/mooncc0.image 2>/dev/null; }
 before=$(sums)
 # ..and the log says what moved: a file out/src.tree packs (the tree as it is), summed here and
-# at the trip, or one of love.raw's own inputs newer than it before the lane
-walk() { w=$(out/love src/tools/selfpack.l -l 2>/dev/null) && [ -n "$w" ] && cksum $w 2>/dev/null; }
+# at the trip, a directory (the tar packs an empty one too), or one of love.raw's own inputs
+# newer than it before the lane
+walk() { w=$(out/love src/tools/selfpack.l -l 2>/dev/null) && [ -n "$w" ] && cksum $w 2>/dev/null
+  find . \( -path ./out -o -path ./.git -o -path ./.claude \) -prune -o -type d -print | sed 's,.*,0 0 &/,' | sort; }
 walk > "$d/walk"
 newer() { for f in $(deps out/love.raw); do [ ! "$f" -nt out/love.raw ] || echo "$f"; done > "$d/newer"; }
 moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
