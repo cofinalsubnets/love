@@ -27,12 +27,22 @@
       i ((: (g j q) (? (j + 1 >= n) -1 (q && s j = 92) (g (j + 2) q) (s j = 34) (g (j + 1) !q)
                         (!q && s j = c && s (j + 1) = c) j (g (j + 1) q))) 0 0)
       (i < 0 ? s (snip s 0 i)))
+   ; a /* */ comment drops, outside a string, its newlines kept
+   (gdecom s) (: n #s
+      (cend j) (? (j + 1 >= n) n (s j = 42 && s (j + 1) = 47) (j + 2) (cend (j + 1)))
+      (go i st q acc) (? (i >= n) (cats (rev (snip s st n . acc)))
+                         (q && s i = 92) (go (i + 2) st q acc)
+                         (s i = 34) (go (i + 1) st !q acc)
+                         (!q && s i = 47 && i + 1 < n && s (i + 1) = 42)
+                          (cend (i + 2) @ e (go e e q (" " + string (filter (c \ c = 10) (chars (snip s i e))) . snip s st i . acc)))
+                         (go (i + 1) st q acc))
+      (go 0 0 0 ()))
    (gsplit s c) (#s @ n
                    ((: (g i st acc) (? (i >= n) (rev (snip s st n . acc))
                                        (s i = c) (g (i + 1) (i + 1) (snip s st i . acc))
                                        (g (i + 1) st acc))) 0 0 ()))
    (glines src hash?) (foldr (\ ln acc (gsplit ln 59 + acc)) ()
-                             (map (ln \ (gcut2 ln 47 @ a (hash? ? (gcut a 35) a))) (gsplit src 10)))
+                             (map (ln \ (gcut2 ln 47 @ a (hash? ? (gcut a 35) a))) (gsplit (gdecom src) 10)))
    (glabel n k) (name ("l" + show n + "." + show k))
    (glocal toks lc)                                 ; (lref n d) -> (sym), the count tablet updated by defs
     (toks @ (('num n) ('ch 58)) (1 + peep lc n 0 @ k (pin lc n k, [['sym (show (glabel n k))] '(ch 58)]))
@@ -1419,7 +1429,7 @@
    (gf-base nm) ((: (g j) (? (j >= #nm) nm (nm j = 1) (snip nm 0 j) (g (j + 1)))) 0)   ; a subsection's section
    (gf-lines tgt src)
     (elem tgt '(x64 i386 i386m16 rv64) @ hash?
-       (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit src 10)))
+       (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit (gdecom src) 10)))
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
    ;; .else, .set/.equ (the symbol reads as its value on the lines after), `name .req reg` and
