@@ -17,7 +17,7 @@ static int h(unsigned char pf)
 {
 	if (__builtin_constant_p(pf)) {
 		if (!skf(&needed[pf][0]))
-			return 10;
+			return 3;
 	}
 	return 3;
 }
