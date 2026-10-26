@@ -88,19 +88,21 @@
    (gbinv s) (foldl (a \ i \ a * 2 + s i - 48) 0 ^#s)
    (gtoks s) (: n #s
       (span i p) ((: (g j) (j < n && p (s j) ? (g (j + 1)) j)) i)
+      ; C's integer suffixes past a numeral (`1U << 0`, a header shared with C), as llvm-mc and gas skip them
+      (sfx j) (span j (c \ elem c [117 85 108 76]) @ k (k > j && (k >= n || !(gidc? (s k))) ? k j))
       (go i acc)
        (i >= n ? (rev acc)
           (s i @ c
              (? (blank? c) (go (i + 1) acc)
                 (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
-                 (span (i + 2) ghex? @ j (go j (['num (ghexv (snip s (i + 2) j))] . acc)))
+                 (span (i + 2) ghex? @ j (go (sfx j) (['num (ghexv (snip s (i + 2) j))] . acc)))
                 (c = 48 && i + 2 < n && (s (i + 1) = 98 || s (i + 1) = 66) && gbin? (s (i + 2)))  ; 0b101, never the label 0b
                  (span (i + 2) gbin? @ j (go j (['num (gbinv (snip s (i + 2) j))] . acc)))
                 (digit? c)
                  (: j (span i digit?) v (gdecv (snip s i j))
                     (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))) ?
                        (go (j + 1) (['lref v (s j)] . acc))
-                       (go j (['num v] . acc))))
+                       (go (sfx j) (['num v] . acc))))
                 (galpha? c) (span i gidc? @ j (go j (['sym (snip s i j)] . acc)))
                 (c = 37 && i + 1 < n && galpha? (s (i + 1)))
                  (span (i + 1) gidc? @ j (go j (['pct (snip s (i + 1) j)] . acc)))

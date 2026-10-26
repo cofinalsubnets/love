@@ -575,6 +575,10 @@
               "tbl v1.16b, {v30.16b, v31.16b, v0.16b}, v9.16b" "tbx v1.16b, {v7.16b}, v8.16b"
               "stg x4, [x0, #-16]!" "stg x4, [x0], #16" "ldg x4, [x1, #16]" "ldgm x5, [x0]"
               "pmull v0.4s, v1.4h, v2.4h" "crc32x w0, w1, w2" "stg x4, [x0, #8]"]))
+   ;; C's integer suffixes ride a numeral (the kernel's GNU_PROPERTY_AARCH64_FEATURE_1_BTI, 1U << 0)
+   _ (chk-eq "gas.numsfx" [3 16 7 3 '((num 1) (sym "ux"))]
+        [(gimm (gtoks "(((1U << 0) | (1UL << 1)))")) (gimm (gtoks "0x10u")) (gimm (gtoks "7l")) (gimm (gtoks "3ULL"))
+         (gtoks "1ux")])
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
