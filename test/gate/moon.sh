@@ -1027,6 +1027,11 @@ moonrun -c -t a64 -I "$ho/.incd" -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 |
 readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a4344 45612f2f" \
   || fail "an .incbin's bytes were not laid as llvm-mc lays them"
 moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
+# ..and in a C file's file-scope asm (kernel/configs.c)
+printf 'asm(".pushsection .rodata, \\"a\\"\\n.globl blob\\nblob:\\n.incbin \\".inc.bin\\", 2, 4\\n.globl blob_end\\nblob_end:\\n.popsection\\n");\nextern const char blob[], blob_end[];\nint main(void){ return (int)(blob_end - blob) * 10 + blob[3] - 70; }\n' > "$ho/.incc.c"
+moonrun -I "$ho/.incd" -o "$ho/.incc" "$ho/.incc.c" > /dev/null 2>&1 || fail "a C file's asm .incbin did not compile"
+"$ho/.incc"; a=$?
+[ $a -eq 40 ] || fail "a C file's asm .incbin laid other bytes (got $a want 40)"
 
 # an asm .weak through an alias chain: a strong definition wins the link, alone the weak one is taken
 printf '__asm__(".text\\n.weak pick\\n.weak __pick\\n.set pick, __pick\\n.globl __pick\\n.set __pick, opick\\nopick: mov $1, %%eax\\n ret\\n");\nint pick(void);\nint main(void){ return pick(); }\n' > "$ho/.wka.c"
