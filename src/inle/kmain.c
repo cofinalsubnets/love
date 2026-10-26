@@ -1285,14 +1285,14 @@ static void k_dir_close(int fd) {
  *s = (struct k_source) {0}; }
 
 // a host directory's whole listing, taken once: a kind byte (d f), the name, a NUL each
-struct k_hd { char *b; long n, at, k; };
+struct k_hd { char *b; long n, at, k; uintptr_t pn; char p[256]; };   // p: its path, for fchdir
 static void k_hdir_close(int fd) {
  struct k_source *s = k_source(fd);
  if (!s) return;
  struct k_hd *h = s->state;
  if (h) k_drop(h->b), k_drop(h);
  *s = (struct k_source) {0}; }
-static long k_host_opendir(char const *p, uintptr_t n) {
+static long k_host_opendir(char const *p, uintptr_t n, char const *cp, uintptr_t cn) {
  for (long cap = 4096; ; ) {
   char *b = k_grab((uintptr_t) cap);
   if (!b) return -ENOMEM;
@@ -1303,7 +1303,8 @@ static long k_host_opendir(char const *p, uintptr_t n) {
   struct k_hd *h = k_grab(sizeof *h);
   struct k_source *s = h ? k_source_open(fd) : NULL;
   if (!s) { k_drop(h), k_drop(b); return -ENOMEM; }
-  *h = (struct k_hd) { b, k, 0, 0 };
+  *h = (struct k_hd) { b, k, 0, 0, cn, {0} };
+  memcpy(h->p, cp, cn);
   *s = (struct k_source) { .close = k_hdir_close, .state = h };
   return fd; } }
 
@@ -1313,7 +1314,7 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  if (!k_fs_init()) return -ENOMEM;
  if ((cn = vfs_walk(&k_fs, p, pn, cp, true)) < 0) return cn;
  intptr_t ho = k_hosted(cp, (uintptr_t) cn);
- if (ho >= 0) return k_host_opendir(cp + ho, (uintptr_t) (cn - ho));
+ if (ho >= 0) return k_host_opendir(cp + ho, (uintptr_t) (cn - ho), cp, (uintptr_t) cn);
  if (!vfs_dirp(&k_fs, cp, (uintptr_t) cn))
   return vfs_find(&k_fs, cp, (uintptr_t) cn) >= 0 ? -ENOTDIR : -ENOENT;
  int fd = k_fd_free();
@@ -1324,6 +1325,17 @@ long k_fs_opendir(char const *p, uintptr_t pn) {
  memcpy(h->p, cp, (uintptr_t) cn);
  *s = (struct k_source) { .close = k_dir_close, .state = h };
  return fd; }
+
+// fchdir(2): the cwd becomes the directory the fd opened, even one since removed
+long k_fd_chdir(int fd) {
+ if (!k_row_live(fd)) return -EBADF;
+ struct k_source *s = k_source(fd);
+ char const *p; uintptr_t n;
+ if (s->close == k_dir_close) p = ((struct k_dh*) s->state)->p, n = ((struct k_dh*) s->state)->pn;
+ else if (s->close == k_hdir_close) p = ((struct k_hd*) s->state)->p, n = ((struct k_hd*) s->state)->pn;
+ else return -ENOTDIR;
+ memcpy(k_fs.cwd, p, n), k_fs.cwd_n = n;
+ return 0; }
 
 // linux_dirent64: 19 header bytes, the name with its NUL, rounded to 8
 struct k_dent { unsigned long ino; long off; unsigned short reclen;

@@ -176,6 +176,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
                        || b == F_GETFL || b == F_SETFL; break;
    case NR_exit: case NR_exit_group: case NR_getpid: case 110: case NR_kill: case NR_close:
    case NR_lseek: case NR_ftruncate: case NR_dup3: case 32: case 33:    // getppid, dup, dup2
+   case NR_fchdir:
     ok = true; break;
    default: return -ENOSYS; }
   return ok ? 0 : -EFAULT; }

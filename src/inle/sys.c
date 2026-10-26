@@ -43,6 +43,7 @@ extern long
  k_fd_stat(int fd, struct k_st *st),
  k_fd_dents(int fd, void *buf, long cap),
  k_fs_opendir(char const *p, uintptr_t pn),
+ k_fd_chdir(int fd),
  k_fd_write(int fd, void const *b, long n),
  k_fd_read(int fd, void *b, long n),
  k_fd_close(int fd),
@@ -151,6 +152,7 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   case NR_chdir:
    if (!a) return -EFAULT;
    return k_fs_chdir((char const*) a, strlen((char const*) a));
+  case NR_fchdir: return k_fd_chdir((int) a);
   case NR_getcwd:
    if (!a) return -EFAULT;
    if ((r = k_fs_getcwd((char*) a, (uintptr_t) b))) return r;
@@ -497,6 +499,12 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
     return k_fd_close((int) kf);
    case NR_lseek: case NR_ftruncate: case NR_fstat: case NR_getdents64:
     return kf < 0 ? -EBADF : __love_inle(n, kf, b, c, d, e, f);
+   case NR_fchdir:                                   // under the process's own cwd, as a path's call
+    if (kf < 0) return -EBADF;
+    k_fs_cwd_swap(p->cwd, &p->cwd_n);
+    r = __love_inle(n, kf, b, c, d, e, f);
+    k_fs_cwd_swap(p->cwd, &p->cwd_n);
+    return r;
    case NR_fcntl:
     if (kf < 0) return -EBADF;
     if (b == F_DUPFD || b == F_DUPFD_CLOEXEC) return k_pfd_put(p, k_fd_dup((int) kf, 3), c, b != F_DUPFD);
