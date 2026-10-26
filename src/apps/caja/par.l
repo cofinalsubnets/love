@@ -41,7 +41,7 @@
              ['linepenalty 0] ['hyphenpenalty 0] ['exhyphenpenalty 0] ['adjdemerits 0]
              ['doublehyphendemerits 0] ['finalhyphendemerits 0] ['interlinepenalty 0]
              ['clubpenalty 0] ['widowpenalty 0] ['brokenpenalty 0] ['lefthyphenmin 0]
-             ['righthyphenmin 0] ['uchyph 0] ['language 0] ['lineskiplimit 0]
+             ['righthyphenmin 0] ['uchyph 0] ['language 0] ['tracingparagraphs 0] ['lineskiplimit 0]
              ['leftskip ()] ['rightskip ()] ['parfillskip ()] ['baselineskip ()]
              ['lineskip ()] ['parskip ()] ['spaceskip ()] ['xspaceskip ()]],
         pin J 'lc lc, pin J 'sf sf,
@@ -457,9 +457,11 @@
           'mind awful 'minimal {0 awful 1 awful 2 awful 3 awful} 'bp {} 'bpl {}
           'aw z7 'bg z7 'bw z7 'caw z7}
        _ (pin M 'mode 'v)
-       ; check_shrinkage: infinite shrink is made finite
+       ; check_shrinkage: infinite shrink is made finite, J's 'par-shrink-warn says so once
        (finite g) (g != () && g 'sho != 0 && g 'shrink != 0 ?
-                     (pin L 'nse 0, cp-spec (g 'width) (g 'stretch) (g 'sto) (g 'shrink) 0) g)
+                     (: _ (L 'nse = 1 ? (pin L 'nse 0, peep J 'par-shrink-warn () @ f (f != () ? (f J))))
+                        (cp-spec (g 'width) (g 'stretch) (g 'sto) (g 'shrink) 0))
+                     g)
        _ (pin (J 'params) 'leftskip (finite (P J 'leftskip)))
        _ (pin (J 'params) 'rightskip (finite (P J 'rightskip)))
        ls (spec-of (P J 'leftskip)) rs (spec-of (P J 'rightskip))
@@ -479,11 +481,19 @@
        A {'head 1 'type 1 'line maxhw 'link ()}
        _ (pin A 'link A)
        (lastp r) (r 'head = 1)
+       ; \tracingparagraphs, printed by whoever set J 'ptrace
+       (tr k a) (P J 'tracingparagraphs > 0 && peep J 'ptrace () != () ? (J 'ptrace J k a))
        (aw-add v) (pin L 'aw (bump (L 'aw) 1 v))
        (bw-add v) (pin L 'bw (bump (L 'bw) 1 v))
 
        ; try_break (829-860)
+       ; past a discretionary just printed, its replaced nodes count as printed (tex.web 858)
        (try-break pi0 bt)
+        (: _ (try-break1 pi0 bt) cp (L 'cp)
+           (adv p n) (n > 0 ? (adv (p 'link) (n - 1)) p)
+           (cp != () && L 'printed == cp && !(char? cp) && cp 'type = 7 ?
+              (pin L 'printed (adv cp (cp 'sub)))))
+       (try-break1 pi0 bt)
         (abs pi0 >= 10000 && pi0 > 0 ? ()
            (: pi (abs pi0 >= 10000 ? -10000 pi0)
               T {'nby 1 'pr A 'ppr () 'oldl 0 'lw 0}
@@ -518,10 +528,13 @@
                   adj (P J 'adjdemerits)
                   (pin L 'mind (abs adj >= awful - L 'mind ? (awful - 1) (L 'mind + abs adj)),
                    map (fit \ (L 'minimal fit <= L 'mind ?
-                                 (: q {'cb cp 'prev (L 'bp fit) 'link (L 'passive)}
+                                 (: _ (pin L 'pn (L 'pn + 1))
+                                    q {'cb cp 'prev (L 'bp fit) 'link (L 'passive) 'serial (L 'pn)}
                                     _ (pin L 'passive q)
                                     a {'type bt 'fit fit 'brk q 'line (L 'bpl fit + 1)
                                        'td (L 'minimal fit) 'link r}
+                                    _ (tr 'node [(q 'serial) (a 'line - 1) fit bt (a 'td)
+                                                 (q 'prev = () ? 0 (q 'prev 'serial))])
                                     (pin (T 'pr) 'link a, pin T 'pr a)),
                                pin (L 'minimal) fit awful))
                        [0 1 2 3],
@@ -538,6 +551,7 @@
                                 (cp != () ? (d2 + P J 'doublehyphendemerits) (d2 + P J 'finalhyphendemerits))
                                 d2)
                           (abs (fit - r 'fit) > 1 ? (d3 + P J 'adjdemerits) d3)))
+                  _ (tr 'feasible [L (r 'brk) b pi d art])
                   d2 (d + r 'td)
                   (d2 <= L 'minimal fit ?
                      (pin (L 'minimal) fit d2, pin (L 'bp) fit (r 'brk), pin (L 'bpl) fit l,
@@ -627,7 +641,8 @@
                                     (y = 11) (cp 'sub = 1 ? (kern-break cp) (aw-add (cp 'width)))
                                     (y = 6) (aw-add (wd J cp))
                                     (y = 9) (pin L 'auto (cp 'sub = 1), kern-break cp)
-                                    (y = 12) (try-break (cp 'penalty) 0))
+                                    (y = 12) (try-break (cp 'penalty) 0)
+                                    (y = 8) (set-lang cp))
                                nx (cp 'link)
                                (pin L 'cp nx,
                                 walk cp nx)))))
@@ -658,6 +673,8 @@
                  pin L 'lang (L 'lang0), pin L 'lhyf (L 'lhyf0), pin L 'rhyf (L 'rhyf0)))
            a {'type 0 'fit 2 'link A 'brk () 'line (L 'pg + 1) 'td 0}
            _ (pin A 'link a)
+           _ (pins L 'pn 0 'printed (L 'head))
+           _ (tr 'pass ())
            _ (pin L 'aw (L 'bg))
            _ (pin L 'passive ())
            first (L 'head 'link)
@@ -673,11 +690,12 @@
                    0)
            (done ? ()
               ((? (!(L 'second))
-                  (pin L 'thr (P J 'tolerance), pin L 'second 1,
+                  (tr 'second (), pin L 'thr (P J 'tolerance), pin L 'second 1,
                    pin L 'final (P J 'emergencystretch <= 0))
-                  (pin L 'bg (bump (L 'bg) 2 (P J 'emergencystretch)), pin L 'final 1)),
+                  (tr 'emergency (), pin L 'bg (bump (L 'bg) 2 (P J 'emergencystretch)), pin L 'final 1)),
                pass 0)))
        _ (pin L 'thr (P J 'pretolerance))
+       _ (tr 'begin (L 'thr >= 0))
        _ (L 'thr >= 0 ? (pin L 'second 0, pin L 'final 0)
             (pin L 'thr (P J 'tolerance), pin L 'second 1,
              pin L 'final (P J 'emergencystretch <= 0)))
@@ -688,6 +706,8 @@
        (hu k) (H 'hu k) (hc k) (H 'hc k) (hyf k) (peep (H 'hyf) k 0)
        (odd? n) (n % 2 = 1)
        hold {'type 'head 'link ()}
+       ; a \setlanguage whatsit sets the language and its hyphenmins (1362-1363)
+       (set-lang w) (w 'sub = 4 ? (pins L 'lang (w 'lang) 'lhyf (w 'lhm) 'rhyf (w 'rhm)))
        (try-hyphenate cp)
         (cp 'link @ s0
            (s0 = () ? ()
@@ -697,7 +717,7 @@
                      cf (? (y = 'c) [(s 'char) (s 'font)]
                            (y = 6) (s 'lig = () ? 'cont [(s 'lig 'char) (s 'lig 'font)])
                            (y = 11 && s 'sub = 0) 'cont
-                           (y = 8) 'cont
+                           (y = 8) (set-lang s, 'cont)
                            'fail)
                      (? (cf = 'fail) ()
                         (cf = 'cont) (ha-scan s (s 'link))
@@ -886,7 +906,7 @@
                _ (pin S 'mt r) _ (pin S 'rc 0) _ (adv-major 0)
                i0 (H 'hp) _ (pin (H 'hyf) i0 0)
                ; the pre-break: hu[l..i] and a hyphen
-               hy (exists J hf hyc)
+               hy (exists J hf hyc ? 1 (warn J hf hyc, 0))
                i (hy ? (i0 + 1) i0)
                c (hu i)
                _ (hy ? (pin (H 'hu) i hyc))
@@ -1004,5 +1024,6 @@
            (line cp0 (L 'pg + 1),
             pin M 'vpg (L 'bline - 1)))
        (pass 0,
+        tr 'end (),
         post-line-break fwp)))
 ) ; module caja-par
