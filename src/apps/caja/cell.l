@@ -58,7 +58,7 @@
    ; left to right: a character ['ch a c] its font and slot, a font token where it changes
    (resolve J ts)
     (: (go l acc)
-        (? (!(two? l)) (rev acc)
+        (? !(two? l) (rev acc)
            (<l @ t
               (? (two? t && t 0 = 'ch)
                   (: ps (slot J (t 2)) f (1 + NS * ps 0 + sty J (t 1))
@@ -76,20 +76,20 @@
    ; spaces as a line wants them: none at either end, a run one
    (squeeze ts)
     (: (go l acc)
-        (? (!(two? l)) (rev (two? acc && <acc = 'sp ? >acc acc))
+        (? !(two? l) (rev (two? acc && <acc = 'sp ? >acc acc))
            (<l = 'sp) (go >l (? (!(two? acc) || <acc = 'sp) acc ('sp . acc)))
            (go >l (<l . acc)))
        (go ts ()))
    (inl a l)
-    (cats (map (x \ (<x @ 'text (text-toks a <>x)
+    (catmap (x \ (<x @ 'text (text-toks a <>x)
                          'code (text-toks a <>x)
                          'strong (inl (ttadd a "1") <>x)
                          'em (inl (ttadd a "4") <>x)
                          'link (inl a <>x + (#<>>x ? ('sp . text-toks a "<\(<>>x)>") []))
                          'img (#<>x ? (text-toks a "[\(<>x)]") [])
                          []))
-               l))
-   (cells ts) (net (map (t \ (t = 'sp ? 1 (max 0 (wcwidth (t 2))))) ts))
+               l)
+   (cells ts) (net (map (t \ (t @ 'sp 1 (max 0 (wcwidth (t 2))))) ts))
 
    ; --- blocks ---
    ; a paragraph at ind, its lines after the first hung by hang, the first led by a label box
@@ -97,12 +97,12 @@
     (squeeze body @ b
        (? (label = () && !(two? b)) []
           ([['set 'leftskip [(ind * U) 0 0 0 0]] ['set 'hangindent (hang * U)] 'noindent]
-           + (label = () ? [] [['hbox (hang * U) (label + [hss])]])
+           + (label @ () [] [['hbox (hang * U) (label + [hss])]])
            + b + ['par])))
    (verb ind s)
-    ['hbox () ([['kern (ind * U)]] + map (c \ (c = 32 ? ['kern U] ['ch "" c])) (cps s))]
+    ['hbox () ([['kern (ind * U)]] + map (c \ (c @ 32 ['kern U] ['ch "" c])) (cps s))]
    (item ind mk l) (par ind (swidth mk) (text-toks "" mk) (inl "" l))
-   (join-gap ls) (? (!(two? ls)) [] (!(two? >ls)) <ls (<ls + [gap] + join-gap >ls))
+   (join-gap ls) (? !(two? ls) [] (!(two? >ls)) <ls (<ls + [gap] + join-gap >ls))
    ; a term short enough keeps its definition beside it
    (defs l ind)
     (join-gap (map (it \ (: tm (squeeze (inl "" <it)) df (inl "" <>it) n (cells tm)
@@ -116,17 +116,17 @@
           'para    (par ind 0 () (inl "" <>x))
           'fence   (map (verb ind) (lns <>>x))
           'quote   (doc <>x w (ind + 4))
-          'bullets (cats (map (l \ item ind "• " l) <>x))
-          'numbers (<>x @ l (cats (map (k \ item ind "\(k + 1). " (l k)) ^#l)))
+          'bullets (catmap (l \ item ind "• " l) <>x)
+          'numbers (<>x @ l (catmap (k \ item ind "\(k + 1). " (l k)) ^#l))
           'deflist (defs <>x ind)
           'table   (map (l \ verb ind (unpad l)) (lns (ttyshow [x] (w - ind + 5))))
           'rule    [(verb ind (w - ind @ n (: (go k s) (k < 1 ? s (go (k - 1) "\(s)-")) (go (max 1 n) ""))))]
           [])
    ; one blank line between blocks, none after a heading
    (doc d w ind)
-    (? (!(two? d)) []
+    (? !(two? d) []
        (: h (blk <d w ind) r (doc >d w ind)
-          (? (!(two? h)) r (!(two? r)) h
+          (? !(two? h) r (!(two? r)) h
              (<(<d) = 'head) (h + r)
              (h + [gap] + r))))
 
@@ -152,7 +152,7 @@
        (plain _) (? #(S 'sty) (put ttoff, pin S 'sty ""))
        (walk b x0)
         (: (go p x)
-            (p = () ? x
+            (p @ () x
                (p 'type @ t
                   (? (t = 'char)
                       (: g (glyph-of J (p 'font) (p 'char)) a (g 2)
@@ -173,7 +173,7 @@
    ; the vlist's lines, each [baseline text]
    (rows J p0)
     (: (go p y acc)
-        (p = () ? (rev acc)
+        (p @ () (rev acc)
            (p 'type @ t
               (? (t = 0) (y + p 'height @ yb (go (p 'link) (yb + p 'depth) ([yb (hline J p)] . acc)))
                  (t = 1 || t = 2) (go (p 'link) (y + p 'height + p 'depth) acc)
@@ -183,10 +183,10 @@
        (go p0 0 ()))
    ; a line to each row, a blank row where no line fell
    (text rs)
-    (? (!(two? rs)) ""
+    (? !(two? rs) ""
        (: y0 (<rs 0)
           (go l r acc)
-           (? (!(two? l)) (join "" (rev acc))
+           (? !(two? l) (join "" (rev acc))
               (: e <l k ((e 0 - y0 + L // 2) // L)
                  (go >l (k + 1) ("\(e 1)\n" . (map (_ \ "\n") ^(k - r) + acc)))))
           (go rs 0 ())))
@@ -194,8 +194,8 @@
    (cc-show d w0)
     (: w (w0 < 20 ? 20 w0)
        J (cp-setup (cb-job 0))
-       _ (pin J 'planes ()) _ (pin J 'cur 0) _ (pin J 'where {}) _ (pin J 'curf ())
-       _ (pin J 'sty {"" 0}) _ (pin J 'stys {0 ""}) _ (pin J 'gc {})
+       _ (pins J 'planes () 'cur 0 'where {} 'curf ()
+       'sty {"" 0} 'stys {0 ""} 'gc {})
        _ (plane J)
        params [['set 'hsize (w * U)] ['set 'pretolerance 10000] ['set 'tolerance 10000]
                ['set 'linepenalty 10] ['set 'hangafter 1] ['set 'parindent 0]

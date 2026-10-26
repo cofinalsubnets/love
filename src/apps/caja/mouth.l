@@ -549,7 +549,7 @@
    (read-term J)
     (: q (J 'term-in) b (jug 0)
        (go n)
-        (see q @ c (? (c < 0) (n = 0 ? () (strip-tail (slurp b)))
+        (see q @ c (? (c < 0) (n @ 0 () (strip-tail (slurp b)))
                       (c = 10) (strip-tail (slurp b))
                       (put b c, go (n + 1))))
        (go 0))
@@ -558,7 +558,7 @@
    (term-input J)
     (: _ (flush (J 'term-out))
        l (read-term J)
-       (? (l = ()) (fatal-error J "End of file on the terminal!")
+       (l @ () (fatal-error J "End of file on the terminal!")
           (: _ (pin J 'term-offset 0) _ (pin J 'selector (J 'selector - 1))
              _ (: n #l (go k) (k < n ? (print J (l k), go (k + 1))) (go 0))
              _ (print-ln J) _ (pin J 'selector (J 'selector + 1))
@@ -574,7 +574,7 @@
        _ (print-char J 46) _ (show-context J)
        (? (J 'interaction = error-stop-mode) (advice J)
           (: _ (pin J 'error-count (J 'error-count + 1))
-             _ (J 'error-count = 100 ?
+             _ (J 'error-count @ 100
                   (print-nl J "(That makes 100 errors; please try again.)",
                    pin J 'history fatal-error-stop, jump-out J))
              (put-help J))))
@@ -591,7 +591,7 @@
     (? (J 'interaction != error-stop-mode) ()
        (: _ (clear-for-error-prompt J)
           l (prompt-input J "? ")
-          (? (#l = 0) ()
+          (#l @ 0 ()
              (: c (l 0 @ c (c >= 97 ? (c - 32) c))
                 (? (48 <= c <= 57 && J 'deletions-allowed) (delete-tokens J l c, advice J)
                    (c = 69 && edit-file? J)
@@ -615,9 +615,9 @@
    (change-interaction J c)
     (pins J 'error-count 0 'interaction (batch-mode + c - 81),
      print J "OK, entering ",
-     (? (c = 81) (print-esc J "batchmode", pin J 'selector (J 'selector - 1))
-        (c = 82) (print-esc J "nonstopmode")
-        (print-esc J "scrollmode")),
+     (c @ 81 (print-esc J "batchmode", pin J 'selector (J 'selector - 1))
+          82 (print-esc J "nonstopmode")
+          (print-esc J "scrollmode")),
      print J "...", print-ln J, flush (J 'term-out))
    (insert-from-terminal J l)
     (: _ (begin-file-reading J)
@@ -636,7 +636,7 @@
        (show-context J))
    (help-now J)
     (: _ (? (J 'use-err-help) (give-err-help J, pin J 'use-err-help 0)
-            (: _ (J 'help = () ? (set-help J ["Sorry, I don't know how to help in this situation."
+            (: _ (J 'help @ () (set-help J ["Sorry, I don't know how to help in this situation."
                                           "Maybe you should try asking a human?"]))
                (map (\ s (print J s, print-ln J)) (J 'help))))
        (set-help J ["Sorry, I already gave what help I could..."
@@ -681,7 +681,7 @@
    (nx-plus-y J n x y) (mult-and-add J n x y 1073741823)
    (mult-integers J n x) (mult-and-add J n x 0 2147483647)
    (x-over-n J x0 n0)
-    (? (n0 = 0) (pins J 'arith-error 1 'remainder x0, 0)
+    (n0 @ 0 (pins J 'arith-error 1 'remainder x0, 0)
        (: neg (n0 < 0) x (neg ? (0 - x0) x0) n (neg ? (0 - n0) n0)
           q (x >= 0 ? (x // n) (0 - (0 - x) // n))
           r (x >= 0 ? (x % n) (0 - (0 - x) % n))
@@ -695,7 +695,7 @@
    (badness t s)
     (? (t = 0) 0 (s <= 0) inf-bad
        ((? (t <= 7230584) (t * 297 // s) (s >= 1663497) (t // (s // 297)) t) @ r
-          (r > 1290 ? inf-bad ((r * r * r + 131072) // 262144))))
+          (r > 1290 ? inf-bad ((3 r + 131072) // 262144))))
 
    ; --- the table of equivalents (tex.web 220-255) ----------------------------------------
    (equiv J p) (peep (J 'eq) p ())
@@ -764,7 +764,7 @@
         (order > normal) (print J "fil", map (_ \ print-char J 108) ^(order - 1))
         (s != "") (print J s)))
    (print-spec J p s)
-    (? (p = ()) (print-char J 42)
+    (p @ () (print-char J 42)
        (print-scaled J (p 'width), s != "" ? (print J s),
         p 'stretch != 0 ? (print J " plus ", print-glue J (p 'stretch) (p 'sto) s),
         p 'shrink != 0 ? (print J " minus ", print-glue J (p 'shrink) (p 'sho) s)))
@@ -858,7 +858,7 @@
            (print-esc J "csname", print-esc J "endcsname"))
        (print-esc J (J 'text p)))
    (primitive J s c o)
-    (: p (#s = 1 ? (single-base + s 0)
+    (: p (#s @ 1 (single-base + s 0)
             (: _ (pin J 'no-new-control-sequence 0) q (id-lookup J s)
                (pin J 'no-new-control-sequence 1, q)))
        (set-eqtb J p c level-one o, p))
@@ -868,8 +868,8 @@
         (two? l ?
            (<l @ [s c o]
               (: p (primitive J s c o)
-                 _ (? (s = "par") (pins J 'par-loc p 'par-token (cs-token-flag + p))
-                      (s = "write") (pin J 'write-loc p))
+                 _ (s @ "par" (pins J 'par-loc p 'par-token (cs-token-flag + p))
+                        "write" (pin J 'write-loc p))
                  frz (peep frozen-of s ())
                  _ (frz != () ? (pin (J 'text) frz s, set-eqtb J frz c level-one o))
                  (go >l))))
@@ -1078,7 +1078,7 @@
    (print-location J I b)
     (: nm (I 'name)
        (? (string? nm) (print-nl J "l.", print-int J (J 'line))
-          (nm = 0) (print-nl J (b = 0 ? "<*>" "<insert> "))
+          (nm = 0) (print-nl J (b @ 0 "<*>" "<insert> "))
           (print-nl J "<read ", nm = 17 ? (print-char J 42) (print-int J (nm - 1)),
            print-char J 62)),
        print-char J 32)
@@ -1094,7 +1094,7 @@
     (: t (I 'index)
        (? (t = parameter) (print-nl J "<argument> ")
           (t = u-template || t = v-template) (print-nl J "<template> ")
-          (t = backed-up) (print-nl J (I 'loc = () ? "<recently read> " "<to be read again> "))
+          (t = backed-up) (print-nl J (I 'loc @ () "<recently read> " "<to be read again> "))
           (t = inserted) (print-nl J "<inserted text> ")
           (t = macro) (print-ln J, print-cs J (I 'name))
           (t = output-text) (print-nl J "<output> ")
@@ -1111,7 +1111,7 @@
    (pseudo-list J I)
     (begin-pseudoprint J @ l (show-token-list J (I 'start) (I 'loc) 100000, l))
    (two-lines J l)
-    (: _ (J 'trick-count = 1000000 ? (set-trick-count J))
+    (: _ (J 'trick-count @ 1000000 (set-trick-count J))
        fc (J 'first-count) tc (J 'trick-count) t (J 'tally)
        el (J 'error-line) hel (J 'half-error-line) buf (J 'trick-buf)
        m (t < tc ? (t - fc) (tc - fc))
@@ -1149,7 +1149,7 @@
    (name-num I) (string? (I 'name) ? 18 (I 'name))
    (runaway-recover J)
     (: _ (runaway J)
-       _ (? (J 'cur-cs = 0) (print-err J "File ended")
+       _ (J 'cur-cs @ 0 (print-err J "File ended")
             (pin J 'cur-cs 0, print-err J "Forbidden control sequence found"))
        _ (print J " while scanning ")
        ss (J 'scanner-status)
@@ -1184,7 +1184,7 @@
           (insert-v-template J, get-next J)))
    (next-from-list J)
     (: I (J 'cur) loc (I 'loc)
-       (? (loc = ()) (end-token-list J, get-next-restart J)
+       (loc @ () (end-token-list J, get-next-restart J)
           (: t <loc _ (pin I 'loc >loc)
              (? (t >= cs-token-flag)
                 (: cs (t - cs-token-flag)
@@ -1288,7 +1288,7 @@
        (: _ (pin J 'line (J 'line + 1))
           f (J 'input-file (I 'index))
           l (J 'force-eof ? () (input-ln f))
-          (? (l = ())
+          (l @ ()
              (: _ (print-char J 41) _ (pin J 'open-parens (J 'open-parens - 1))
                 _ (flush (J 'term-out)) _ (pin J 'force-eof 0)
                 _ (end-file-reading J) _ (check-outer-validity J)
@@ -1326,7 +1326,7 @@
              (pin f 'pos (e + 1), strip-tail (snip s p e)))))
    (get-token J)
     (pin J 'no-new-control-sequence 0, get-next J, pin J 'no-new-control-sequence 1,
-     pin J 'cur-tok (J 'cur-cs = 0 ? (J 'cur-cmd * 256 + J 'cur-chr) (cs-token-flag + J 'cur-cs)))
+     pin J 'cur-tok (J 'cur-cs @ 0 (J 'cur-cmd * 256 + J 'cur-chr) (cs-token-flag + J 'cur-cs)))
 
    ; --- expansion (tex.web 366-401) --------------------------------------------------------
    (print-mode J m)
@@ -1379,7 +1379,7 @@
    (manufacture-cs J)
     (: (collect acc)
         (: _ (get-x-token J)
-           (J 'cur-cs = 0 ? (collect (J 'cur-tok . acc)) (rev acc)))
+           (J 'cur-cs @ 0 (collect (J 'cur-tok . acc)) (rev acc)))
        r (collect ())
        _ (J 'cur-cmd != end-cs-name ?
             (print-err J "Missing ", print-esc J "endcsname", print J " inserted",
@@ -1408,11 +1408,11 @@
                   (pins J 'cur-cs frozen-endv 'cur-cmd endv))
               (expand J, go ())))
        (go (),
-        pin J 'cur-tok (J 'cur-cs = 0 ? (J 'cur-cmd * 256 + J 'cur-chr) (cs-token-flag + J 'cur-cs))))
+        pin J 'cur-tok (J 'cur-cs @ 0 (J 'cur-cmd * 256 + J 'cur-chr) (cs-token-flag + J 'cur-cs))))
    (x-token J)
     (: (go _) (J 'cur-cmd > max-command ? (expand J, get-next J, go ()))
        (go (),
-        pin J 'cur-tok (J 'cur-cs = 0 ? (J 'cur-cmd * 256 + J 'cur-chr) (cs-token-flag + J 'cur-cs))))
+        pin J 'cur-tok (J 'cur-cs @ 0 (J 'cur-cmd * 256 + J 'cur-chr) (cs-token-flag + J 'cur-cs))))
 
    ; --- macro_call (tex.web 389-401) ------------------------------------------------------
    ; S carries the scan: 'r the place in the macro's parameter text, 's where the current
@@ -1453,7 +1453,7 @@
            r (S 'r)
            _ (? (<r > match-token + 255 || <r < match-token) (pin S 's ())
                 (pins S 'mc (<r - match-token) 's >r 'r >r 'm 0))
-           (? (!(scan-one J S)) 0
+           (? !(scan-one J S) 0
               (<(S 'r) = end-match-token) 1
               (one ())))
        (one ()))
@@ -1469,11 +1469,11 @@
                     (t < left-brace-limit ? (pin J 'align-state (J 'align-state - 1)), found ())
                     (cont ())))
               (recent J S @ x
-                 (? (x = 'cont) (cont ())
-                    (x = 'abort) 0
-                    (rest-of J S @ y (? (y = 'cont) (cont ()) (y = 'abort) 0
-                                        (: _ (pin S 'm (S 'm + 1))
-                                           (!(delimiter-or-undelimited? <(S 'r)) ? (cont ()) (found ())))))))))
+                 (x @ 'cont (cont ())
+                      'abort 0
+                      (rest-of J S @ y (y @ 'cont (cont ()) 'abort 0
+                                            (: _ (pin S 'm (S 'm + 1))
+                                               (!(delimiter-or-undelimited? <(S 'r)) ? (cont ()) (found ())))))))))
        (found _) (S 's != () ? (tuck-away J S), 1)
        (cont ()))
    ; the tokens matched so far of a delimiter that failed join the parameter (tex.web 397)
@@ -1486,7 +1486,7 @@
                (? (u == S 'r) (? (J 'cur-tok != <v) 'done (pin S 'r >v, 'cont))
                   (<u != <v) 'done
                   (inner >u >v))
-              (inner >t (S 's) = 'cont ? 'cont
+              (inner >t (S 's) @ 'cont 'cont
                  (: t2 >t (t2 == S 'r ? (pin S 'r (S 's), 'next) (outer t2)))))
           (outer (S 's))))
    (improper-use J)
@@ -1523,7 +1523,7 @@
               (t < left-brace-limit) (pin S 'unbalance (S 'unbalance + 1), go ())
               (t < right-brace-limit)
                (: _ (pin S 'unbalance (S 'unbalance - 1))
-                  (S 'unbalance = 0 ? (store-tok J t, 'stored) (go ())))
+                  (S 'unbalance @ 0 (store-tok J t, 'stored) (go ())))
               (go ())))
        (go ()))
    (runaway-arg J S)
@@ -1608,19 +1608,19 @@
                 (m = vmode) (scanned J (J 'cur-list 'prev-depth) dimen-val)
                 (scanned J (J 'cur-list 'sf) int-val))
             (cmd = set-prev-graf)
-             (? (mode J = 0) (scanned J 0 int-val)
+             (mode J @ 0 (scanned J 0 int-val)
                 (: (find l) (abs (<l 'mode) = vmode ? <l (find >l))
                    (scanned J (find (J 'cur-list . J 'nest) 'pg) int-val)))
             (cmd = set-page-int)
-             (scanned J (m = 0 ? (J 'dead-cycles) (J 'insert-penalties)) int-val)
+             (scanned J (m @ 0 (J 'dead-cycles) (J 'insert-penalties)) int-val)
             (cmd = set-page-dimen)
-             (scanned J (J 'page-contents = 0 && !(J 'output-active) ? (m = 0 ? max-dimen 0)
+             (scanned J (J 'page-contents = 0 && !(J 'output-active) ? (m @ 0 max-dimen 0)
                            (J 'page-so-far m))
                       dimen-val)
             (cmd = set-shape) (scanned J (#(equiv J par-shape-loc)) int-val)
             (cmd = set-box-dimen)
              (: _ (scan-eight-bit-int J) b (equiv J (box-base + J 'cur-val))
-                (scanned J (b = () ? 0 (b (? (m = width-offset) 'width (m = height-offset) 'height
+                (scanned J (b @ () 0 (b (? (m = width-offset) 'width (m = height-offset) 'height
                                              'depth)))
                          dimen-val))
             (cmd = char-given || cmd = math-given) (scanned J m int-val)
@@ -1628,7 +1628,7 @@
              (: _ (find-font-dimen J 0) (scanned J (font-dimen-value J) dimen-val))
             (cmd = assign-font-int)
              (: _ (scan-font-ident J) f (J 'fonts (J 'cur-val))
-                (scanned J (m = 0 ? (peep f 'hyphenchar -1) (peep f 'skewchar -1)) int-val))
+                (scanned J (m @ 0 (peep f 'hyphenchar -1) (peep f 'skewchar -1)) int-val))
             (cmd = register)
              (: _ (scan-eight-bit-int J) n (J 'cur-val)
                 (scanned J (? (m = int-val) (J 'eq (count-base + n)) (m = dimen-val) (J 'eq (scaled-base + n))
@@ -1762,7 +1762,7 @@
                        _ (J 'cur-tok = continental-point-token ? (pin J 'cur-tok point-token))
                        _ (J 'radix = 10 && J 'cur-tok = point-token ? (scan-decimal J D))
                        'units))))
-       _ (how = 'units ?
+       _ (how @ 'units
             (J 'cur-val < 0 ? (pins D 'neg (!(D 'neg)), pin J 'cur-val (0 - J 'cur-val)),
              scan-units J D mu inf))
        _ (J 'arith-error || abs (J 'cur-val) >= 1073741824 ?
@@ -1801,7 +1801,7 @@
        (internal-units _)
         (: _ (pin D 'save (J 'cur-val))
            _ (non-blank J)
-           (? (!(internal? J)) (back-input J, 0)
+           (? !(internal? J) (back-input J, 0)
               (: _ (? mu (scan-something-internal J mu-val 0, coerce-glue J,
                           J 'cur-val-level != mu-val ? (mu-error J))
                       (scan-something-internal J dimen-val 0))
@@ -1838,7 +1838,7 @@
           (internal-units ()) ()
           (em-ex ()) ()
           mu
-           (: _ (? (!(scan-keyword J "mu"))
+           (: _ (? !(scan-keyword J "mu")
                    (print-err J "Illegal unit of measure (", print J "mu inserted)",
                     set-help J ["The unit of measurement in math glue must be mu."
                                 "To recover gracefully from this error, it's best to"
@@ -1913,10 +1913,10 @@
            set-help J ["To increase the number of font parameters, you must"
                        "use \\fontdimen immediately after the \\font is loaded."],
            tex-error J)))
-   (font-dimen-value J) (J 'fd @ fd (fd = () ? 0 (font-param J (fd 0) (fd 1))))
+   (font-dimen-value J) (J 'fd @ fd (fd @ () 0 (font-param J (fd 0) (fd 1))))
 
    ; --- building token lists (tex.web 464-486) ---------------------------------------------
-   (str-toks s) (map (\ c (c = 32 ? space-token (other-token + c))) (chars s))
+   (str-toks s) (map (\ c (c @ 32 space-token (other-token + c))) (chars s))
    (in-new-string J f)
     (: old (J 'selector) _ (pins J 'selector new-string 'str-buf ()) _ (f ())
        _ (pin J 'selector old)
@@ -1938,7 +1938,7 @@
              (: sss (J 'scanner-status) _ (pin J 'scanner-status normal) _ (get-token J)
                 (pin J 'scanner-status sss))
             (c = font-name-code) (scan-font-ident J)
-            (J 'job-name = () ? (open-log-file J)))
+            (J 'job-name @ () (open-log-file J)))
        (ins-list J (str-toks (in-new-string J (\ _
           (? (c = number-code) (print-int J (J 'cur-val))
              (c = roman-numeral-code) (print-roman-int J (J 'cur-val))
@@ -1984,7 +1984,7 @@
                               back-error J))
                         (store-def J s, go ()))))
               (store-def J (J 'cur-tok), go ())))
-       (? (go () = 'done) 0
+       (go () @ 'done 0
           (: _ (store-def J end-match-token)
              (? (J 'cur-cmd = right-brace)
                  (print-err J "Missing { inserted", pin J 'align-state (J 'align-state + 1),
@@ -2047,7 +2047,7 @@
                            (runaway J, print-err J "File ended within ", print-esc J "read",
                             set-help J ["This \\read has unbalanced braces."],
                             pin J 'align-state 1000000, pins I 'buf "" 'limit -1, tex-error J))))
-                _ (set-line J I (l = () ? "" l))
+                _ (set-line J I (l @ () "" l))
                 n))
        _ (pin I 'state new-line)
        (go _)
@@ -2088,12 +2088,12 @@
    (conditional J)
     (: _ (push-cond J) save (J 'cond-ptr) this (J 'cur-chr)
        b (if-value J this save)
-       (? (b = 'ret) ()
-          (b = 'common) (common-ending J)
-          (: _ (int-par J tracing-commands-code > 1 ?
-                  (begin-diagnostic J, print J (b ? "{true}" "{false}"), end-diagnostic J 0))
-             (? b (change-if-limit J else-code save)
-                (skip-to-else J save, common-ending J)))))
+       (b @ 'ret ()
+            'common (common-ending J)
+            (: _ (int-par J tracing-commands-code > 1 ?
+                    (begin-diagnostic J, print J (b ? "{true}" "{false}"), end-diagnostic J 0))
+               (? b (change-if-limit J else-code save)
+                  (skip-to-else J save, common-ending J)))))
    (common-ending J) (J 'cur-chr = fi-code ? (pop-cond J) (pin J 'if-limit fi-code))
    (extra-or J)
     (print-err J "Extra ", print-esc J "or",
@@ -2143,7 +2143,7 @@
                (back-error J, 61)))
        _ (scan ())
        v (J 'cur-val)
-       (? (r = 60) (n < v) (r = 61) (n = v) (n > v)))
+       (r @ 60 (n < v) 61 (n = v) (n > v)))
    (test-ifx J)
     (: sss (J 'scanner-status) _ (pin J 'scanner-status normal)
        _ (get-next J) n (J 'cur-cs) p (J 'cur-cmd) q (J 'cur-chr)
@@ -2157,7 +2157,7 @@
        _ (int-par J tracing-commands-code > 1 ?
             (begin-diagnostic J, print J "{case ", print-int J n, print-char J 125, end-diagnostic J 0))
        (go n)
-        (? (n = 0) (change-if-limit J or-code save, 'ret)
+        (n @ 0 (change-if-limit J or-code save, 'ret)
            (: _ (pass-text J)
               (? (J 'cond-ptr == save) (J 'cur-chr = or-code ? (go (n - 1)) 'common)
                  (J 'cur-chr = fi-code ? (pop-cond J), go n))))
@@ -2187,7 +2187,7 @@
        (go acc q)
         (? (J 'cur-cmd > other-char || J 'cur-chr > 255) (back-input J, acc)
            (J 'cur-chr = 32 && !q) acc
-           (: c (J 'cur-chr) acc2 (c . acc) q2 (c = 34 ? !q q)
+           (: c (J 'cur-chr) acc2 (c . acc) q2 (c @ 34 !q q)
               (get-x-token J, go acc2 q2)))
        s (string (rev (go () 0)))
        (end-name J s, pin J 'name-in-progress 0))
@@ -2207,7 +2207,7 @@
    (read-whole p) (: q (open p "r") s (slurp q) (close q, {'s s 'pos 0}))
    (pack-cur-name J) (J 'cur-area + J 'cur-name + J 'cur-ext)
    (prompt-file-name J s e)
-    (: _ (? (s = "input file name") (print-err J "I can't find file `")
+    (: _ (s @ "input file name" (print-err J "I can't find file `")
             (print-err J "I can't write on file `"))
        _ (print-file-name J (J 'cur-name) (J 'cur-area) (J 'cur-ext))
        _ (print J "'.")
@@ -2223,7 +2223,7 @@
        (end-name J (snip l (go 0) #l), J 'cur-ext = "" ? (pin J 'cur-ext e)))
    (open-log-file J)
     (: old (J 'selector)
-       _ (J 'job-name = () ? (pin J 'job-name "texput"))
+       _ (J 'job-name @ () (pin J 'job-name "texput"))
        name (J 'job-name + ".log")
        _ (pins J 'log-file (open name "w") 'log-name name 'selector log-only 'log-opened 1)
        _ (say (J 'log-file) (J 'banner))
@@ -2252,7 +2252,7 @@
        I (J 'cur)
        _ (pin (J 'input-file) (I 'index) (read-whole path))
        _ (pin I 'name path)
-       _ (J 'job-name = () ? (pin J 'job-name (J 'cur-name), open-log-file J))
+       _ (J 'job-name @ () (pin J 'job-name (J 'cur-name), open-log-file J))
        _ (? (J 'term-offset + #path > J 'max-print-line - 2) (print-ln J)
             (J 'term-offset > 0 || J 'file-offset > 0) (print-char J 32))
        _ (print-char J 40) _ (pin J 'open-parens (J 'open-parens + 1))
@@ -2260,7 +2260,7 @@
        _ (pins I 'state new-line 'start 0)
        _ (pin J 'line 1)
        l (input-ln (J 'input-file (I 'index)))
-       (firm-up-the-line J I (l = () ? "" l)))
+       (firm-up-the-line J I (l @ () "" l)))
    (give-err-help J) (token-show J (equiv J err-help-loc))
 
 ))
