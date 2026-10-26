@@ -8420,9 +8420,11 @@
                                                (matv g (clval g env <>>e2) @ lv
                                                   (bad? lv ? 'bad
                                                      (vty lv @ ty
-                                                        (flo? ty && !(freg? <al) || stru? ty || arr? ty || bitf? ty ? (asmno g "a float, struct, array or bit-field asm output")
-                                                           (ostores >l >al
-                                                            (vfs lv + (freg? <al ? (fst <>>><l ty <al) (spop 'r1 + [[(stop ty) 'r0 0 'r1]])) + acc)))))))))
+                                                        ; a struct or union a register holds whole ("=r"(lockval)) stores as the integer its size is
+                                                        (: wt (stru? ty && <e2 = 'o && !(freg? <al) ? (tsz g ty @ n (elem n [1 2 4 (wsize g)] ? (n @ 1 'uchar 2 'ushort 4 'uint 'ulong) ty)) ty)
+                                                           (flo? wt && !(freg? <al) || stru? wt || arr? wt || bitf? wt ? (asmno g "a float, struct, array or bit-field asm output")
+                                                              (ostores >l >al
+                                                               (vfs lv + (freg? <al ? (fst <>>><l wt <al) (spop 'r1 + [[(stop wt) 'r0 0 'r1]])) + acc))))))))))
                                      osf (ostores ops9 asgn ())
                                      ; one register output into a plain memory lvalue (a local's slot, a home's
                                      ; face) stores straight from its register: no cell
