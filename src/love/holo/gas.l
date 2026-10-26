@@ -927,7 +927,9 @@
                     || (m = 'movi && #os = 2 && charm? (ga-fr (os 0) 100))))
    ;; three registers of one arrangement: [word sized?], an unsized one bytes only
    ga-v3 {'add [0x0E208400 1] 'sub [0x2E208400 1] 'and [0x0E201C00 0] 'bic [0x0E601C00 0] 'orr [0x0EA01C00 0]
-          'orn [0x0EE01C00 0] 'eor [0x2E201C00 0] 'bsl [0x2E601C00 0] 'bit [0x2EA01C00 0] 'bif [0x2EE01C00 0]}
+          'orn [0x0EE01C00 0] 'eor [0x2E201C00 0] 'bsl [0x2E601C00 0] 'bit [0x2EA01C00 0] 'bif [0x2EE01C00 0]
+          'cmeq [0x2E208C00 1] 'cmtst [0x0E208C00 1] 'cmge [0x0E203C00 1] 'cmgt [0x0E203400 1]
+          'cmhs [0x2E203C00 1] 'cmhi [0x2E203400 1]}
    ;; a shift by an immediate: [word right?], left esize + s (0 <= s < esize), right 2 esize - s (1 <= s <= esize)
    ga-vsh {'shl [0x0F005400 0] 'sli [0x2F005400 0] 'sshr [0x0F000400 1] 'ushr [0x2F000400 1] 'ssra [0x0F001400 1]
            'usra [0x2F001400 1] 'sri [0x2F004400 1] 'srshr [0x0F002400 1] 'urshr [0x2F002400 1]}
