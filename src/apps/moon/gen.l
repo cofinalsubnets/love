@@ -10430,7 +10430,8 @@
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
        ; an alloca must run where no operand is parked on the stack: under a statement, a cast,
-       ; a comma, a ?: or a plain variable's assignment, or as another alloca's size
+       ; a comma, a ?: or a plain variable's assignment, as another alloca's size, or left of an
+       ; operator, which compiles first (| aside: gather may reorder its terms)
        _ (: (ab? e) (e @ ('call ('var n) _) (n = "__builtin_alloca") ())
             (un e) (? !(two? e) () (ab? e) 1 (un <e || un >e))
             (xs e) (? !(two? e) ()
@@ -10439,7 +10440,7 @@
                       (elem <e '(blk if while do for switch case dflt lbl expr ret sexpr)) (any xs >e)
                       (<e = 'decl) (any (d \ two? d && two? >d && two? >>d && xs <>>d) <>e)
                       (e @ ('cast _ x) (xs x) ('comma a b) (xs a || xs b) ('asn ('var _) r) (xs r)
-                           ('cond c a b) (xs c || xs a || xs b) (un e)))
+                           ('cond c a b) (xs c || xs a || xs b) ('bin o a b && o != '|) (xs a || un b) (un e)))
             (pin g 'abad (xs (f 3))))
        ; the labels whose address the body takes; a computed goto may land on any of them, so
        ; homing stands off as for an asm (every name is live at the jump). a call that returns
