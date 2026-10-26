@@ -560,6 +560,9 @@
    ;; a /* */ comment is a space, across lines too (the kernel's crash_setup_regs)
    _ (chk-eq "gas.a64.ccomment" (holo-hex 'a64 (gas-text 'a64 "mov x0, #1\nmov x1, #2\nmov x2, #3"))
         (holo-hex 'a64 (gas-text 'a64 "/* faked */\nmov x0, #1 /* a */\nmov/* b */x1, #2 /* c\n d */\nmov x2, #3")))
+   ;; .ifdef/.ifndef by what is defined so far: an untaken arm's .if never reads (the kernel's frame_push)
+   _ (chk-eq "gas.ifdef" '("mov x1, #1" "mov x2, #2" "f: mov x3, #3")
+        (gf-expand 'a64 (gf-lines 'a64 ".ifdef .Lx\n.if .Lx != -1\nmov x0, #9\n.endif\n.endif\n.set .Lx, 3\n.ifdef .Lx\nmov x1, #1\n.endif\n.ifndef .Ly\nmov x2, #2\n.endif\nf: mov x3, #3\n.ifndef f\nmov x4, #4\n.endif")))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"

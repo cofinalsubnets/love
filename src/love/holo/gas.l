@@ -1434,7 +1434,7 @@
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
    ;; .else, .set/.equ (the symbol reads as its value on the lines after), `name .req reg` and
    ;; .unreq (the name reads as its register), .error, .purgem
-   gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb")
+   gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb" ".ifdef" ".ifndef")
    (gf-expand tgt ls)
     (: mac {} sv {} sv0 {} rq {} cnt {}
        xdirs ([".macro" ".purgem" ".irp" ".rept" ".set" ".equ" ".error"] + gf-ifs)
@@ -1585,6 +1585,10 @@
                              (w = ".ifb") (xa-trim r = "")
                              (w = ".ifnb") (xa-trim r != "")
                              (w = ".ifeq") (vat r acc = 0)
+                             ; defined so far: a .set, or a label laid above
+                             (elem w '(".ifdef" ".ifndef"))
+                              (: nm (xa-trim r) d (charm? (peep sv nm ()) || any (x \ starts? (xa-trim x) (nm + ":")) acc)
+                                 (w = ".ifdef" ? d !d))
                              (vat r acc != 0))
                      (go <>b (go (yes ? <ab <>ab) acc)))
                  (w = ".error") (scare 'gas-error r)
