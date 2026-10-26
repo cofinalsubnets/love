@@ -157,7 +157,7 @@
        ; the document's settings are its \vbox group's: restored when the box is made
        pr (J 'params) saved ({} @ t (map (k \ pin t k (pr k)) (keys pr), t))
        M (cp-run J (cp-mode J) (cd-tokens J doc))
-       v0 (cp-node J (cb-vpackage J (cp-vlist J M) 0 'additional 0))
+       v0 (cb-vpackage J (cp-vlist J M) 0 'additional 0)
        _ (map (k \ pin pr k (saved k)) (keys saved))
        (go v n)
         (v != () ?

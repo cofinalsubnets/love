@@ -14,7 +14,7 @@
    awful 1073741823
    max-dimen 1073741823
    (P J k) (J 'params k)
-   (same? a b) (a != () && b != () && a 'id = b 'id)
+   (same? a b) (a != () && a == b)
    (spec-of g) (g = () ? (cp-spec 0 0 0 0 0) g)
 
    (cg-prune-top J p0)
@@ -25,8 +25,8 @@
               (? (y <= 2)
                   (: s (spec-of (P J 'splittopskip))
                      w (s 'width > p 'height ? (s 'width - p 'height) 0)
-                     q (cp-node J {'type 10 'sub 11 'glue (cp-spec w (s 'stretch) (s 'sto) (s 'shrink) (s 'sho))
-                                   'leader () 'link p})
+                     q {'type 10 'sub 11 'glue (cp-spec w (s 'stretch) (s 'sto) (s 'shrink) (s 'sho))
+                        'leader () 'link p}
                      (pin prev 'link q))
                  (elem y [3 4 8]) (go p (p 'link))
                  (p 'link @ nx (pin p 'link (), pin prev 'link nx, go prev nx)))))
@@ -83,6 +83,6 @@
           (cut n) (? (same? (n 'link) q) (pin n 'link ()) (n 'link = ()) () (cut (n 'link)))
           first (same? p q ? () (p != () ? (cut p), p))
           q2 (cg-prune-top J q)
-          rest (q2 = () ? () (cp-node J (cb-vpackage J q2 0 'additional max-dimen)))
-          [(cp-node J (cb-vpackage J first h 'exactly d)) rest])))
+          rest (q2 = () ? () (cb-vpackage J q2 0 'additional max-dimen))
+          [(cb-vpackage J first h 'exactly d) rest])))
 ) ; module caja-page

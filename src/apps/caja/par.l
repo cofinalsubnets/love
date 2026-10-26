@@ -9,14 +9,16 @@
 ;   (cp-vlist J M)            ends a paragraph still open; the vlist's first node
 ;   (cp-hbox J f w toks)      \hbox{..} in font f, to w or natural (w ()); the box
 ;   (cp-tex toks)             the tokens as -ini TeX says them, font k as \f and a letter
-;   (cp-node J n)             n with an 'id, for a node made outside
+;   (cp-lig J M c0 next)      the main loop from character c0, (next _) its lookahead
+;   (cp-line-break J M fwp)   M's paragraph broken into lines on its vlist; fwp the widow penalty
+;   (cp-append-to-vlist J M b)  b on M's vlist, the interline glue ahead of it
 ; a token: ['c code], 'sp, 'xsp (control space), ['f k], ['pen n], ['kern w], ['skip glue],
 ; ['vskip glue], 'dash (\-), ['rule w h d], ['hrule w h d] (a running width ()), ['hbox w toks],
-; ['box b] (from cp-node), 'nb (\noboundary), 'indent, 'noindent, 'par, ['set k v]. a glue is
-; w st sto sh sho, flat after the head or a list in 'set. nodes are box.l's, each with an 'id
+; ['box b], 'nb (\noboundary), 'indent, 'noindent, 'par, ['set k v]. a glue is
+; w st sto sh sho, flat after the head or a list in 'set. nodes are box.l's, compared by ==
 ; where tex.web compares pointers.
 (module (caja-par cp-setup cp-patterns cp-hyphenation cp-hyphen-file cp-mode cp-run cp-vlist
-         cp-hbox cp-tex cp-node cp-spec)
+         cp-hbox cp-tex cp-spec cp-lig cp-line-break cp-append-to-vlist)
 (borrow 'tfm)
 (borrow 'caja-box)
 (:
@@ -44,7 +46,7 @@
              ['lineskip ()] ['parskip ()] ['spaceskip ()] ['xspaceskip ()]],
         pin J 'lc lc, pin J 'sf sf,
         pin J 'pats {}, pin J 'pref {}, pin J 'langs {}, pin J 'exc {},
-        pin J 'nid 0, pin J 'lp 0, pin J 'lft 0, pin J 'rt 0, pin J 'cbd 0,
+        pin J 'lp 0, pin J 'lft 0, pin J 'rt 0, pin J 'cbd 0,
         pin J 'insd 0,
         J))
    (P J k) (J 'params k)
@@ -52,16 +54,14 @@
    (spec-of g) (g = () ? (cp-spec 0 0 0 0 0) g)
 
    ; --- nodes ---
-   (nd J n) (pin J 'nid (J 'nid + 1), pin n 'id (J 'nid), n)
-   (cp-node J n) (nd J n)
-   (same? a b) (a != () && b != () && a 'id = b 'id)
+   (same? a b) (a != () && a == b)
    (char? n) (n != () && n 'type = 'char)
-   (charnode J f c) (nd J {'type 'char 'font f 'char c 'link ()})
-   (lignode J f c l) (nd J {'type 6 'sub 0 'font f 'char c 'lig l 'link ()})
-   (kernnode J w s) (nd J {'type 11 'sub s 'width w 'link ()})
-   (pennode J n) (nd J {'type 12 'sub 0 'penalty n 'link ()})
-   (discnode J) (nd J {'type 7 'sub 0 'pre () 'post () 'link ()})
-   (gluenode J g s) (nd J {'type 10 'sub s 'glue (spec-of g) 'leader () 'link ()})
+   (charnode J f c) {'type 'char 'font f 'char c 'link ()}
+   (lignode J f c l) {'type 6 'sub 0 'font f 'char c 'lig l 'link ()}
+   (kernnode J w s) {'type 11 'sub s 'width w 'link ()}
+   (pennode J n) {'type 12 'sub 0 'penalty n 'link ()}
+   (discnode J) {'type 7 'sub 0 'pre () 'post () 'link ()}
+   (gluenode J g s) {'type 10 'sub s 'glue (spec-of g) 'leader () 'link ()}
    (to-end n) (n 'link = () ? n (to-end (n 'link)))
    ; the character field as tex.web reads it off any node: a non-character's subtype
    (charfield n) (char? n ? (n 'char) (n 'sub))
@@ -76,13 +76,14 @@
    (kn J f j) (tf J f 'kern (256 * (j 2 - 128) + j 3))
    (hychar J f) (peep (J 'fonts f) 'hyphenchar -1)
    (fparam J f k) (peep (tf J f 'param) k 0)
-   (warn J f c) (pin J 'missing ([f c] . J 'missing))
+   ; a character the font lacks: J's 'char-warn says so when it has one, else J notes it
+   (warn J f c) (peep J 'char-warn () @ w (w = () ? (pin J 'missing ([f c] . J 'missing)) (w J f c)))
    ; a width as line_break takes one: characters, ligatures, boxes, rules, kerns
    (wd J n) (char? n || n 'type = 6 ? (cw J (n 'font) (n 'char)) (n 'width))
 
    ; --- the lists of a mode: 'head a sentinel node, 'tail the last ---
    (cp-mode J)
-    (nd J {'type 'head 'link ()} @ v
+    ({'type 'head 'link ()} @ v
        {'mode 'v 'vhead v 'vtail v 'pd ignore-depth 'vpg 0 'font 0 'hhead () 'tail () 'sf 1000
         'hpg 0 'restricted 0})
    (tail-append M n) (pin (M 'tail) 'link n, pin M 'tail n)
@@ -114,8 +115,16 @@
                  (warn J f c, >ts))))
        (go toks))
    (lig-run J M toks)
+    (: in {'ts >toks}
+       (next _) (in 'ts @ ts (? (two? ts && ctok? <ts) (pin in 'ts >ts, <ts 1)
+                                (two? ts && <ts = 'nb) 'nb ()))
+       (cp-lig J M (<toks 1) next, in 'ts))
+   ; the run from character c0 in M's font; (next _) looks ahead: a character's code, 'nb for
+   ; \noboundary, () for anything else. answers 'out when the lookahead ended the run, 'lost
+   ; when a character the font lacks did
+   (cp-lig J M c0 next)
     (: f (M 'font) t (tf J f)
-       S {'in >toks 'c0 (<toks 1) 'bchar (t 'bchar) 'fb (t 'fbchar) 'cl non 'cr non 'cq ()
+       S {'c0 c0 'bchar (t 'bchar) 'fb (t 'fbchar) 'cl non 'cr non 'cq ()
           'ls () 'k 0 'j ()}
        (item c) {'type 'item 'char c 'lig () 'link ()}
        (pack x)
@@ -144,12 +153,12 @@
          'move1 (char? (S 'ls) ? 'move2 'movelig)
          'move2
           (S 'ls 'char @ c
-             (? (!(exists J f c)) (warn J f c, pin S 'ls (), 'out)
+             (? (!(exists J f c)) (warn J f c, pin S 'ls (), 'lost)
                 (tail-append M (S 'ls), 'look)))
          'look
-          (: in (S 'in)
-             (two? in && ctok? <in ? (pin S 'c1 (<in 1), pin S 'in >in, 'look1)
-                (two? in && <in = 'nb ? (pin S 'bchar non),
+          (next () @ c
+             (charm? c ? (pin S 'c1 c, 'look1)
+                (c = 'nb ? (pin S 'bchar non),
                  pin S 'cr (S 'bchar), pin S 'ls (),
                  'lig)))
          'look1
@@ -198,17 +207,17 @@
               pin J 'lp 1,
               S 'ls = () ? (p != () ? 'look (pin S 'cr (S 'bchar), 'lig))
                 (pin S 'cr (S 'ls 'char), 'lig))))
-       (run l) (l = 'out ? (S 'in) (run (step l)))
+       (run l) (l = 'out || l = 'lost ? l (run (step l)))
        (run 'append))
 
    ; --- spaces (tex.web 1041-1044) ---
    (font-glue J f) (cp-spec (fparam J f 2) (fparam J f 3) 0 (fparam J f 4) 0)
    (normal-space J M)
     (P J 'spaceskip @ ss
-       (tail-append M (zero? ss ? (gluenode J (font-glue J (M 'font)) 0) (gluenode J ss 12))))
+       (tail-append M (zero? ss ? (gluenode J (font-glue J (M 'font)) 0) (gluenode J ss 13))))
    (app-space J M)
     (: sf (M 'sf) xs (P J 'xspaceskip) ss (P J 'spaceskip)
-       (? (sf >= 2000 && !(zero? xs)) (tail-append M (gluenode J xs 13))
+       (? (sf >= 2000 && !(zero? xs)) (tail-append M (gluenode J xs 14))
           (: b (zero? ss ? (font-glue J (M 'font)) ss)
              w (sf >= 2000 ? (b 'width + fparam J (M 'font) 7) (b 'width))
              g (cp-spec w (xn-over-d (b 'stretch) sf 1000) (b 'sto) (xn-over-d (b 'shrink) 1000 sf) (b 'sho))
@@ -220,11 +229,11 @@
    (new-graf J M indented)
     (: _ (pin M 'vpg 0)
        _ (? (!(same? (M 'vhead) (M 'vtail))) (vappend M (gluenode J (P J 'parskip) 3)))
-       h (nd J {'type 'head 'link ()})
+       h {'type 'head 'link ()}
        (pin M 'mode 'h, pin M 'hhead h, pin M 'tail h, pin M 'sf 1000,
         pin M 'hpg ((norm-min (P J 'lefthyphenmin) * 64 + norm-min (P J 'righthyphenmin)) * 65536
                     + cur-lang J),
-        indented ? (nd J (cb-null-box 0) @ b (pin b 'width (P J 'parindent), tail-append M b))))
+        indented ? (cb-null-box 0 @ b (pin b 'width (P J 'parindent), tail-append M b))))
    (normal-paragraph J)
     (J 'params @ pr
        (pin pr 'looseness 0, pin pr 'hangindent 0, pin pr 'hangafter 1,
@@ -234,6 +243,7 @@
        (M 'hhead 'link != () ? (line-break J M (P J 'widowpenalty)),
         pin M 'mode 'v,
         normal-paragraph J))
+   (cp-append-to-vlist J M b) (append-to-vlist J M b)
    (append-to-vlist J M b)
     (M 'pd > ignore-depth ?
        (: bs (spec-of (P J 'baselineskip))
@@ -254,10 +264,10 @@
    (vtok? t k) (two? t && t 0 = k)
    ; the contents of \hbox{..} or \hbox to w{..}, in restricted horizontal mode (tex.web 1083-1086)
    (cp-hbox J font w toks)
-    (: h (nd J {'type 'head 'link ()})
+    (: h {'type 'head 'link ()}
        M {'mode 'h 'restricted 1 'font font 'hhead h 'tail h 'sf 1000 'hpg 0}
        (cp-run J M toks,
-        nd J (cb-hpack J (h 'link) (w = () ? 0 w) (w = () ? 'additional 'exactly))))
+        (cb-hpack J (h 'link) (w = () ? 0 w) (w = () ? 'additional 'exactly))))
    (cp-run J M toks)
     (: (go ts)
         (? (!(two? ts)) M
@@ -271,7 +281,7 @@
                     (vtok? t 'vskip) (vappend M (gluenode J (glue-of >t) 0), go >ts)
                     (vtok? t 'pen) (vappend M (pennode J (t 1)), go >ts)
                     (vtok? t 'hrule)
-                     (vappend M (nd J (cb-rule (t 1 = () ? -1073741824 (t 1)) (t 2) (t 3))),
+                     (vappend M (cb-rule (t 1 = () ? -1073741824 (t 1)) (t 2) (t 3)),
                       pin M 'pd ignore-depth, go >ts)
                     (vtok? t 'hbox) (append-to-vlist J M (cp-hbox J (M 'font) (t 1) (t 2)), go >ts)
                     (vtok? t 'box) (append-to-vlist J M (t 1), go >ts)
@@ -285,7 +295,7 @@
                     (t = 'par) (end-graf J M, go >ts)
                     (t = 'noindent) (go >ts)
                     (t = 'indent)
-                     (nd J (cb-null-box 0) @ b (pin b 'width (P J 'parindent),
+                     (cb-null-box 0 @ b (pin b 'width (P J 'parindent),
                                                 pin M 'sf 1000, tail-append M b, go >ts))
                     (t = 'dash)
                      (: d (discnode J) _ (tail-append M d) c (hychar J (M 'font))
@@ -299,7 +309,7 @@
                      'pen (tail-append M (pennode J (t 1)), go >ts)
                      'kern (tail-append M (kernnode J (t 1) 1), go >ts)
                      'skip (tail-append M (gluenode J (glue-of >t) 0), go >ts)
-                     'rule (tail-append M (nd J (cb-rule (t 1) (t 2) (t 3))), pin M 'sf 1000, go >ts)
+                     'rule (tail-append M (cb-rule (t 1) (t 2) (t 3)), pin M 'sf 1000, go >ts)
                      'hbox (tail-append M (cp-hbox J (M 'font) (t 1) (t 2)), pin M 'sf 1000, go >ts)
                      'box (tail-append M (t 1), pin M 'sf 1000, go >ts)
                      (go >ts))))))
@@ -435,6 +445,7 @@
    (bump t k v) (pin t k (peep t k 0 + v))
    (spec-add t g) (bump (bump (bump t 1 (g 'width)) (2 + g 'sto) (g 'stretch)) 6 (g 'shrink))
    (spec-sub t g) (bump (bump (bump t 1 (0 - g 'width)) (2 + g 'sto) (0 - g 'stretch)) 6 (0 - g 'shrink))
+   (cp-line-break J M fwp) (line-break J M fwp)
    (line-break J M fwp)
     (: tl (M 'tail)
        _ (char? tl || tl 'type != 10 ? (tail-append M (pennode J 10000))
@@ -675,7 +686,7 @@
        (lc c) (J 'lc c)
        (hu k) (H 'hu k) (hc k) (H 'hc k) (hyf k) (peep (H 'hyf) k 0)
        (odd? n) (n % 2 = 1)
-       hold (nd J {'type 'head 'link ()})
+       hold {'type 'head 'link ()}
        (try-hyphenate cp)
         (cp 'link @ s0
            (s0 = () ? ()
@@ -963,9 +974,14 @@
                q5 (zero? (P J 'leftskip) ? q4 (gluenode J (P J 'leftskip) 8 @ g (pin g 'link q4, g)))
                wi (? (cl > L 'lsl) [(L 'sw) (L 'si)] (ps = ()) [(L 'fw) (L 'fi)]
                      [(ps (cl - 1) 1) (ps (cl - 1) 0)])
-               b (nd J (cb-hpack J q5 <wi 'exactly))
+               ; a line's inserts, marks and \vadjust material follow it (tex.web 889)
+               ah {'type 'head 'link ()}
+               _ (pins J 'adjust-head ah 'adjust ah)
+               b (cb-hpack J q5 <wi 'exactly)
                _ (pin b 'shift (wi 1))
                _ (append-to-vlist J M b)
+               _ (ah 'link != () ? (pin (M 'vtail) 'link (ah 'link), pin M 'vtail (J 'adjust)))
+               _ (pin J 'adjust ())
                bl (L 'bline)
                _ (cl + 1 != bl ?
                     (: pen (P J 'interlinepenalty

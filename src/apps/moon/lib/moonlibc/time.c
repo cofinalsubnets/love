@@ -7,8 +7,8 @@ char *tzname[2] = { __tzutc, __tzutc };
 long timezone = 0;
 int daylight = 0;
 void tzset(void) { }
-struct tm *gmtime(time_t const *tp) {
-  static struct tm tm;
+struct tm *gmtime_r(time_t const *tp, struct tm *o) {
+  struct tm tm;
   time_t t = *tp;
   long days = (long) (t / 86400), secs = (long) (t % 86400);
   if (secs < 0) { secs += 86400; days -= 1; }
@@ -29,12 +29,16 @@ struct tm *gmtime(time_t const *tp) {
   tm.tm_year = (int) (y - 1900);
   tm.tm_mon = (int) (m - 1);
   tm.tm_mday = (int) d;
-  tm.tm_yday = 0;
+  int leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+  tm.tm_yday = (int) (m <= 2 ? doy - 306 : doy + 59 + leap);   /* doy counts from march 1 */
   tm.tm_isdst = 0;
   tm.tm_gmtoff = 0;
   tm.tm_zone = "UTC";
-  return &tm; }
+  *o = tm;
+  return o; }
+struct tm *gmtime(time_t const *tp) { static struct tm tm; return gmtime_r(tp, &tm); }
 struct tm *localtime(time_t const *tp) { return gmtime(tp); }
+struct tm *localtime_r(time_t const *tp, struct tm *o) { return gmtime_r(tp, o); }
 static void __d2(char *p, int v) { p[0] = (char) (48 + v / 10 % 10); p[1] = (char) (48 + v % 10); }
 double difftime(time_t a, time_t b) { return (double) (a - b); }
 time_t mktime(struct tm *tm) {   /* the inverse of gmtime */
@@ -46,8 +50,7 @@ time_t mktime(struct tm *tm) {   /* the inverse of gmtime */
   long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
   long days = era * 146097 + doe - 719468;
   return (time_t) days * 86400 + tm->tm_hour * 3600L + tm->tm_min * 60L + tm->tm_sec; }
-char *asctime(struct tm const *tm) {
-  static char b[26];
+char *asctime_r(struct tm const *tm, char *b) {
   static char const *wd = "SunMonTueWedThuFriSat";
   static char const *mo = "JanFebMarAprMayJunJulAugSepOctNovDec";
   int i;
@@ -66,7 +69,9 @@ char *asctime(struct tm const *tm) {
   __d2(b + 20, y / 100); __d2(b + 22, y % 100);
   b[24] = 10; b[25] = 0;
   return b; }
+char *asctime(struct tm const *tm) { static char b[26]; return asctime_r(tm, b); }
 char *ctime(time_t const *tp) { return asctime(gmtime(tp)); }
+char *ctime_r(time_t const *tp, char *b) { struct tm t; return asctime_r(gmtime_r(tp, &t), b); }
 /* the everyday conversions; an unknown one echoes, 0 when the buffer runs out */
 size_t strftime(char *s, size_t max, char const *fmt, struct tm const *tm) {
   static char const *wdl = "Sunday\0   Monday\0   Tuesday\0  Wednesday\0Thursday\0 Friday\0   Saturday";
