@@ -46,7 +46,7 @@
    scr (screen (cask (screen () 4 10)) 4 10)
    _ (scribe scr (mesh-kitty big 80 64 10 4 3))
    back (map (i \ (: x (i % 80) y (i // 80) (tilepx scr (y // 16 * 10 + x // 8) (x % 8) (y % 16)))) ^(80 * 64))
-   wx (sky-weather 0 'smooth) noon (1.0 * 1790812800 + 12.0 * 3600.0)
+   wx (sky-weather 0) noon (1.0 * 1790812800 + 12.0 * 3600.0)
    sl (sky-light (sky-sun noon 0.0 0.65) wx noon)
    ; the sky where the box leaves the screen bare, and the same sky asked alone
    v0 (vw [0.0 0.0 0.0] 0.0 0.0)
@@ -60,6 +60,8 @@
    bare (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0
                     (\ v S (: d (mesh-dirs v S) (mh-word (sky-tone nl (sky-colour-at nl wx (mesh-step v 1) (d 0) (d 1) (d 2) 0.0 0.0 night))))))
    seen (net (-1 < mesh-spot vu (ns 'x) (ns 'y) (ns 'z)))
+   ; ..of them on the open sky, the rest under a cloud's breath of the clear sky
+   open (net ((-1 < mesh-spot vu (ns 'x) (ns 'y) (ns 'z)) * (sky-cloud wx (ns 'x) (ns 'y) (ns 'z) 0.0 0.0 night < 0.5)))
    lit-m (zen != bare) hot (iota lit-m)
    ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box
    ; the same; by night still a pixel per star in view
@@ -77,7 +79,7 @@
    gk0 (mesh-sky (pins ns 'y (ns 'y * 0.0 - 1.0)) nl wx [0.0 0.0 0.0] night 0.0 4 ())
    hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk0))
    ; ..and by day none: the sky shaded between as it is, under a partly cloudy sky
-   wp (sky-weather 1 'smooth) lp (sky-light (sky-sun noon 0.0 0.65) wp noon)
+   wp (sky-weather 1) lp (sky-light (sky-sun noon 0.0 0.65) wp noon)
    (dk s) (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky s lp wp [0.0 0.0 0.0] noon 0.0 4 ()))
    ds (sky-stars noon 0.0 0.65) ds0 (: u (sky-stars noon 0.0 0.65) (pins u 'y (u 'y * 0.0 - 1.0)))
  (test (all (k \ round k != 7) ^4)
@@ -99,8 +101,8 @@
        (back = map (i \ 4278190080 | peep big i 0) ^(80 * 64))
        (shape sk = [(W * H)]) (0 < amin sk)
        (at fs mid cen = at f0 mid cen) (at fs 0 0 = peep sk 0 0) (at fs (W - 1) 0 = peep sk (W - 1) 0)
-       (0 < seen) (0.9 * seen <= #hot) (#hot <= seen)
-       (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * seen <= #hot4) (#hot4 <= seen)
+       (0 < open) (0.9 * open <= #hot) (#hot <= seen)
+       (at fg mid cen = at f0 mid cen) (two? gk) (gap fg fs < 0.01) (0.9 * open <= #hot4) (#hot4 <= seen)
        (0 < net (-1 < mesh-spot vu (ds 'x) (ds 'y) (ds 'z))) (net (dk ds != dk ds0) = 0)
        (shape mp = [64 64]) (at fsh mid cen < at fno mid cen) (at fsh (mid + 6) cen = at fno (mid + 6) cen)))
 ; --- a picture's texture: levels halved down to a side of one; from rgba bytes, each texel the
@@ -171,7 +173,7 @@
        (j "accessors" 3 "componentType" = 5123) (: m1 [(gm 0) [(gm 1 0)]] g1 (mesh-glb-of m1 "one") (#g1 % 4 = 0 && mesh-glb g1 1 = m1 1))))
 ;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
 ;; seen both ways shows the same, but for where the pixels fall
-(: wq (sky-weather 1 'smooth) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
+(: wq (sky-weather 1) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
    (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4 ()))
    va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
    fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
@@ -180,7 +182,7 @@
  (test (#both > 8000) (gap < 0.025)))
 ;; ..and seen only through glass, the sky still drawn behind it: a clear pane all round the
 ;; eye leaves no pixel bare, each the sky's through it
-(: nr (1.0 * 1790812800 + 12.0 * 3600.0) wr (sky-weather 1 'smooth) lr (sky-light (sky-sun nr 0.0 0.65) wr nr)
+(: nr (1.0 * 1790812800 + 12.0 * 3600.0) wr (sky-weather 1) lr (sky-light (sky-sun nr 0.0 0.65) wr nr)
    wh [1.0 1.0 1.0] pn (mesh-bake (mesh-pack (mesh-lathe [[6.0 -6.0] [6.0 6.0]] 16 -3 wh 1.0)) {'sun [0.0 1.0 0.0] 'amb [0.2 0.2 0.2] 'sunk 1.0 'sunc wh 'expo 1.0} mesh-open 1.0)
    (gl k) (mesh-frame (mesh-view 40 24 [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0) pn [(mesh-tex 4 (\ x y wh))] [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nr 0.0 0.65) lr wr [0.0 0.0 0.0] nr 0.0 k ()))
    g1 (gl 1) g4 (gl 4)

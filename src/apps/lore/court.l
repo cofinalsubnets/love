@@ -99,7 +99,7 @@
                         st {'px (yard-a - 0.5) 'pz (bs 2 - 1.0) 'th (0.0 - pi / 2.0) 'ph 1.4
                             'sim (now 0) 'dst (now 1) 'pace 0 'paces paces 'shown 40 't 0
                             'deep 0 'done 0 'tree tr 'litter lr 'fall () 'fallen ()
-                            'wx (court-season-wx (now 0) sd 'smooth)
+                            'wx (court-season-wx (now 0) sd)
                             'drift 1 'hour (int (now 0 // 3600))}
                         _ (pins st 'wet (sky-fall (st 'wx) = 1 ? 0.8 0.0) 'snow (sky-fall (st 'wx) = 2 ? 0.6 0.0))
                        (court-size st w (h // 2)))
@@ -115,15 +115,14 @@
                   (d < m ? (pins st 'px (bs 0 + qx * m / max2 d 0.001) 'pz (bs 2 + qz * m / max2 d 0.001))
                      (pins st 'px x2 'pz z2)))
  ; ..the court's own keys, over view's
- court-binds {91 'hour-back 93 'hour-on 116 'pace 99 'clouds 118 'sky-style 112 'fall}
+ court-binds {91 'hour-back 93 'hour-on 116 'pace 99 'clouds 112 'fall}
  (court-step st a) (: (tell st2) (pin st2 'shown (st 't + 2 * fps))
    (walk-key st a {'turn turn-step 'walk (walk-v / fps) 'tilt tilt-step 'up 1.45 'down -1.2} put!
     @ () (a @ 'hour-back (tell (pin st 'sim (st 'sim - 3600.0)))
               'hour-on (tell (pin st 'sim (st 'sim + 3600.0)))
               'pace (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
-              'clouds (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (st 'wx 'style) (sky-fall (st 'wx))) 'drift 0))
-              'sky-style (tell (pin st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style = 'pixel ? 'smooth 'pixel) (sky-fall (st 'wx)))))
-              'fall (tell (pins st 'wx (wx-of (st 'wx 'cover) (st 'wx 'style) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
+              'clouds (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (sky-fall (st 'wx))) 'drift 0))
+              'fall (tell (pins st 'wx (wx-of (st 'wx 'cover) ((sky-fall (st 'wx) + 1) % 3)) 'drift 0))
               st)
       s s))
  ; a frame's motion: the clock, and the leaves -- now and then one lets go of the top of
@@ -157,10 +156,10 @@
       (m = 12 || m <= 2) 2
       (m = 3 || m = 11) (j @ 0 2 1)
       1))
- (wx-of c sty f) (pins (sky-weather c sty) 'fall f)
+ (wx-of c f) (pins (sky-weather c) 'fall f)
  ; the season's weather at local seconds l, its dice from sd
- (court-season-wx l sd sty) (: m (court-month l) c (court-wx-pick m (throw sd 7 71 20))
-   (wx-of c sty (court-fall-pick m c (throw sd 9 73 20) (throw sd 11 79 2))))
+ (court-season-wx l sd) (: m (court-month l) c (court-wx-pick m (throw sd 7 71 20))
+   (wx-of c (court-fall-pick m c (throw sd 9 73 20) (throw sd 11 79 2))))
  ; ..an hour on: the cover stepped one in four, and the fall kept two in three while the
  ; cover can hold it, else drawn again
  (court-drift st) (: h (int (st 'sim // 3600))
@@ -171,7 +170,7 @@
          c (throw h 11 67 4 != 0 ? c0 (c0 + (to < c0 ? -1 (c0 < to ? 1 0))))
          f (? (c < 2) 0 (0 < f0 && throw h 21 43 3 != 0) f0
               (court-fall-pick m c (throw h 17 53 20) (throw h 19 47 2)))
-         (pins st 'hour h 'wx (wx-of c (st 'wx 'style) f)))))
+         (pins st 'hour h 'wx (wx-of c f)))))
  ; --- the maps: the walls and the floor laid once a run in texels, gathered from each frame ---
  ts 0.04                                ; a texel's side
  (cells l) (int (l / ts + 0.999))
@@ -696,8 +695,7 @@
  (court-frame st) (: w (st 'w) deep (st 'deep) kit (st 'kitty) f (court-pens st)
    pace (st 'paces (st 'pace)) wx (st 'wx)
    txt (" " + court-clock st + (pace @ 0.0 "  still" 1.0 "" ("  x" + (show $ int pace = pace ? (int pace) pace)))
-        + "  " + sky-says (wx 'cover) + (sky-fall wx @ 1 ", rain" 2 ", snow" "")
-        + (wx 'style @ 'pixel ", in pixels " " "))
+        + "  " + sky-says (wx 'cover) + (sky-fall wx @ 1 ", rain" 2 ", snow" "") + " ")
    up (st 't < st 'shown)
    bands (up ? {0 [1 txt (deep ? 249660 255) (deep ? 33288 235)]} {})
    text (? !kit "" up (esc + "[1;1H" + esc + "[0m" + txt) (st 't = st 'shown) (esc + "[1;1H" + esc + "[0m" + pad "" w " ") "")
@@ -714,15 +712,15 @@
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
                'size court-size 'frame court-frame 'key court-step 'tick court-move
                'binds (view-bind view-binds court-binds)
-               'listed (view-listed ['hour-back 'hour-on 'pace 'clouds 'sky-style 'fall 'finer 'coarser])
+               'listed (view-listed ['hour-back 'hour-on 'pace 'clouds 'fall 'finer 'coarser])
                'fps fps 'song (hn \ ()) 'linger 0 'next () 'win (opt 'win)}))
  ; ..and kitty's picture taken down after, where it was put up
  (court-run o) (view-stage o court-walk (_ \ (say out mesh-gone, flush out)))
- court-usage "usage: love play court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--sky smooth|pixel] [--fall none|rain|snow] [--kitty|--cells|--window] [--scale 1|2|4|8]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow, v the sky's style; ? the keys; q or esc leaves)"
+ court-usage "usage: love play court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--fall none|rain|snow] [--kitty|--cells|--window] [--scale 1|2|4|8]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow; ? the keys; q or esc leaves)"
  ; --- the words -> the walk's start, or () for words it cannot read; a date or a time
  ; alone keeps the other from now ---
  (court-opts as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
-   (cov w) (ix sky-covers w) (sty w) (ix sky-styles w) (fal w) (ix sky-falls w)
+   (cov w) (ix sky-covers w) (fal w) (ix sky-falls w)
    (dnum w) (: n #w (go i v) (i < n ? (48 <= w i <= 57 ? (go (i + 1) (v * 10 + w i - 48)) ()) v)
                (0 < n ? (go 0 0) ()))
    (date w) (w @ (y + "-" + m + "-" + d)
@@ -733,25 +731,24 @@
                _ ())
    (pnum w) (: cs (chars w) (0 < #w && all (c \ (48 <= c <= 57) || c = 46) cs && #(filter (= 46) cs) < 2
                              && 48 <= w 0 <= 57 ? (1.0 * <(sound w))))
-   ; ..rain and snow, a cover and a style, each also a word alone
+   ; ..rain and snow and a cover, each also a word alone
    (bare k read ok) (l \ ok <l ? [k (read <l) >l])
    r (view-words as [(view-arg "--date" 'date date) (view-arg "--time" 'time hm) (view-arg "--pace" 'pace pnum)
-                     (view-arg "--weather" 'cov cov) (view-arg "--sky" 'sty sty) (view-arg "--fall" 'fall fal)
+                     (view-arg "--weather" 'cov cov) (view-arg "--fall" 'fall fal)
                      (bare 'fall fal (w \ w = "rain" || w = "snow")) (bare 'cov cov (w \ charm? (cov w)))
-                     (bare 'sty sty (w \ charm? (sty w))) (view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
+                     (view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
                      (view-flag "--window" 'md 'window) view-scale])
    (tablet? r ?
       (: now0 (court-now ()) l0 (int (now0 0)) d (r 'date) t (r 'time)
          now (d = () && t = () ? now0
               (court-local (86400 * (d = () ? (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
                             + (t = () ? (l0 % 86400) t))))
-         c (r 'cov) y (r 'sty) fl (r 'fall) l (now 0) sd (int l) m (court-month l)
+         c (r 'cov) fl (r 'fall) l (now 0) sd (int l) m (court-month l)
          ; ..what is not said is the season's: a fall said without a cover comes from overcast
-         sty (y = () ? 'smooth (sky-styles y))
          c2 (? (c != ()) c (0 < fl) 3 (court-wx-pick m (throw sd 7 71 20)))
          {'now now 'pace (r 'pace) 'fix (c = () && fl = () ? 0 1) 'md (r 'md) 'scale (r 'scale)
-          'wx (c = () && y = () && fl = () ? ()
-                 (wx-of c2 sty (fl = () ? (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
+          'wx (c = () && fl = () ? ()
+                 (wx-of c2 (fl = () ? (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
  (court-main as) (view-main "court" court-usage court-opts court-run as)
  _ ((cite 'lore 'lore-enlist) 'court (udoor 'court court-main court-usage 1 1)))
 ) ; module court
