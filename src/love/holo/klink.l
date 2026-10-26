@@ -1,11 +1,14 @@
 ; src/love/holo/klink.l -- holo's link under a linker script, at a kernel's scale: every section
 ; kept by name and flags, placed by the script (lds.l), relocated, laid as ld.lld lays a
-; -shared -Bsymbolic image. load with -l after lds.l. elf64, little-endian, aarch64 first.
+; -shared -Bsymbolic image. load with -l after lds.l; borrows holo's field encoders. elf64,
+; little-endian, aarch64 first.
 ;
 ;   (kl-ar path)          -> the members of an archive, thin or whole: [(name bytes) ..] in
 ;                            header order, and 'index the symbol index, nom -> member position
 ;   (kl-read id bytes)    -> one relocatable object as a tablet, see below
 
+(borrow 'holo)
+(borrow 'posix)
 (:
    (kl-u16 s i) (rdle s i 2)
    (kl-u32 s i) (rdle s i 4)
@@ -388,7 +391,7 @@
            (? (atom? g) ()
               (: r (ot <g 'syms (g 1)) sh (r 3)
                  (? (sh = 65521) (r 4) (at <g sh (r 4))))))
-       _ (pin env 'gv gv)
+       _ (pin env 'gv gv, pin env 'at at)
        (ev e) (kl-ev env e)
        (dot u) (env 'dot)
        (setdot v) (pin env 'dot v)
@@ -409,7 +412,7 @@
        (step final x)
         (: k <x
            (? (k = 'isec) (: a (kl-al (dot 0) (x 4)) _ (pin isa (x 1 * 65536 + x 2) a) (setdot (a + x 3)))
-              (k = 'synth) (: a (kl-al (dot 0) (x 3)) _ (pin isa (x 1) a) (setdot (a + x 2)))
+              (k = 'synth) (: a (kl-al (dot 0) (x 3)) _ (pin isa (x 1) a) (setdot (a + sy (x 1) 1)))
               (k = 'msec) (: m (ms (x 1)) a (kl-al (dot 0) (m 'align)) _ (pin msa (x 1) a)
                              (setdot (a + m 'size)))
               (cmd final x)))
@@ -435,4 +438,187 @@
               (n > 12) (scare 'klink-unsettled n)
               (go (n + 1) s)))
        (go 0 ()))
+
+   ;; --- relocation. a -shared -Bsymbolic image binds every definition home, so an ABS64 in
+   ;     an allocated section is a load-time slide: a RELR entry where the site is even in a
+   ;     section aligned to 2 or more, else a RELATIVE in .rela.dyn whose field stays 0. a weak
+   ;     undefined is an ABS64 against symbol 0. lk: {'cx 'ot 'env 'mx 'outs}
+   (kl-isecs outs) (foldl (\ acc t (? (peep t 'dead 0 || t 'name = "/DISCARD/") acc
+                                     (foldl (\ a x (? (<x = 'isec) (x . a) a)) acc (t 'steps))))
+                          () outs)
+   ; S + A for entry e of object oi, () for a weak undefined
+   (kl-sa lk oi e)
+    (: ob (lk 'ot oi) sy (ob 'syms (e 2)) sh (sy 3) a (e 3) env (lk 'env) at (env 'at)
+       (none u) (scare 'klink-dropped [(ob 'id) <sy])
+       (? (sy 2 = 3) (: v (at oi sh (sy 4 + a)) (? (whole? v) v (none 0)))
+          (sy 1 = 0 && sh != 0)
+           (? (sh = 65521) (sy 4 + a) (: v (at oi sh (sy 4)) (? (whole? v) (v + a) (none 0))))
+          (: v (peep (env 'sv) <sy ()) g (? (whole? v) v ((env 'gv) <sy))
+             (? (whole? g) (g + a)
+                (sy 1 = 2) ()
+                (scare 'klink-undef [(ob 'id) <sy])))))
+   ; the dynamic sites: {'relr [[key ro] ..] 'rela [[key entry weak?] ..]}, in input order
+   (kl-dyn lk)
+    (: relr {'l ()} rela {'l ()}
+       (wu? ob e) (: sy (ob 'syms (e 2))
+                     (sy 1 = 2 && sy 3 = 0 && atom? (peep (lk 'cx 'glob) <sy ())))
+       (one x)
+        (: oi (x 1) si (x 2) ob (lk 'ot oi) r (ob 'sec si) key (oi * 65536 + si)
+           (each (peep (ob 'rela) si ())
+              (e \ (? (e 1 != 257) 0
+                      (wu? ob e) (pin rela 'l ([key e 1] . rela 'l))
+                      (r 5 >= 2 && <e % 2 = 0) (pin relr 'l ([key <e] . relr 'l))
+                      (pin rela 'l ([key e 0] . rela 'l))))))
+       _ (each (rev (kl-isecs (lk 'outs))) one)
+       {'relr (rev (relr 'l)) 'rela (rev (rela 'l))})
+   ; sorted addresses -> RELR words: an address, then bitmaps of the 63 words after it
+   (kl-relr as)
+    (: (bits l base bm)
+        (? (atom? l) [bm l]
+           (: d (<l - base)
+              (? (d < 0 || d >= 504 || d % 8 != 0) [bm l]
+                 (bits >l base (bm + 2 ** (d // 8))))))
+       (maps l base acc)
+        (: r (bits l base 0)
+           (? (<r = 0) (start l acc)
+              (maps <>r (base + 504) ((<r * 2 + 1) . acc))))
+       (start l acc) (? (atom? l) (rev acc) (maps >l (<l + 8) (<l . acc)))
+       (start as ()))
+
+   ;; --- emission. pieces are texts and byte lists, laid in file order
+   kl-z64 (cask (ld-zeros 65536))
+   (kl-zp n acc) (? (n <= 0) acc (n <= 65536) (snip kl-z64 0 n . acc) (kl-zp (n - 65536) (kl-z64 . acc)))
+   (kl-le n w) (: u (kl-w n) (map (i \ (u // 256 ** i) % 256) ^w))
+   ; .rela.dyn: RELATIVE first, then the weak ABS64s, each by address
+   (kl-rela lk dy)
+    (: isa (lk 'env 'isa)
+       es (map (r \ (: k <r e (r 1) p (isa k + <e)
+                     (? (r 2) [1 p 257 (e 3)] [0 p 1027 (kl-sa lk (k // 65536) e)])))
+               (dy 'rela))
+       (map (x \ kl-le (x 1) 8 + kl-le (x 2) 8 + kl-le (x 3) 8) (sort es)))
+   ; one input section's bytes with its relocations applied -> pieces, reversed onto acc
+   (kl-patch lk x acc)
+    (: oi (x 1) si (x 2) ob (lk 'ot oi) r (ob 'sec si) s (ob 'src) o0 (r 3) sz (r 4)
+       base (lk 'env 'isa (oi * 65536 + si)) be (backends 'a64)
+       ; a weak undefined: a branch falls to the next instruction, a pc-relative field reads
+       ; the place, an absolute one the addend
+       (weak k p a) (? (elem k '(279 280 282 283)) (p + 4 + a) (elem k '(260 261 273 274 275)) (p + a) a)
+       (field e) (: ro <e k (e 1) p (base + ro) s0 (kl-sa lk oi e)
+                    sa (? (whole? s0) s0 (weak k p (e 3)))
+                    (? (k = 257)
+                       (? (!(whole? s0) || !(r 5 >= 2 && ro % 2 = 0)) (kl-le 0 8) (kl-le sa 8))
+                       (k = 258) (? (sa < 4294967296) (kl-le sa 4) (scare 'klink-range [(ob 'id) ro]))
+                       (k = 260) (kl-le (sa - p) 8)
+                       (k = 261) (: v (sa - p)
+                                    (? (-2147483648 <= v && v < 2147483648) (kl-le v 4)
+                                       (scare 'klink-range [(ob 'id) ro])))
+                       (: c (lda64-kinds k)
+                          _ (? (two? c) 0 (scare 'klink-reloc [(ob 'id) k]))
+                          f (refix-with be <c (map (i \ s (o0 + ro + i)) ^4) sa p 4)
+                          (? (two? f) f (scare 'klink-range [(ob 'id) ro k])))))
+       ; lld's relaxation: adrp xn, sym; add xn, xn, :lo12:sym, neither addended, sym within
+       ; 1 MiB of the add -> nop; adr xn, sym. answers the 8 bytes, or ()
+       (relax e f)
+        (: ro <e i1 (kl-u32 s (o0 + ro)) i2 (kl-u32 s (o0 + ro + 4)) rd (i1 % 32)
+           (? (e 1 = 275 && two? f && f 1 = 277 && <f = ro + 4 && e 2 = f 2 && e 3 = 0 && f 3 = 0
+               && (i1 & 2667577344) = 2415919104 && (i2 & 4290772992) = 2432696320
+               && i2 % 32 = rd && (i2 >> 5) % 32 = rd)
+              (: v (kl-sa lk oi e) p (base + ro + 4)
+                 (? (whole? v && -1048576 <= v - p && v - p < 1048576)
+                    (kl-le 3573751839 4 + refix-with be 'adr21 (kl-le (268435456 + rd) 4) v p 4)
+                    ()))
+              ()))
+       (go pos es acc)
+        (? (atom? es) (snip s pos (o0 + sz) . acc)
+           (: e <es x (relax e (? (two? >es) <(>es) ()))
+              (? (two? x) (go (o0 + <e + 8) >(>es) (x . snip s pos (o0 + <e) . acc))
+                 (: b (field e)
+                    (go (o0 + <e + #b) >es (b . snip s pos (o0 + <e) . acc))))))
+       (? (r 1 = 8) (kl-zp sz acc) (go o0 (peep (ob 'rela) si ()) acc)))
+   ; a merge section's bytes: its pieces by offset, the gaps zero
+   (kl-mbytes m acc)
+    (: t (m 'tab) ps (sort (map (k \ [(t k) k]) (keys t)))
+       (go l cur acc) (? (atom? l) (kl-zp (m 'size - cur) acc)
+                         (: o <(<l) k <>(<l) (go >l (o + #k) (k . kl-zp (o - cur) acc))))
+       (go ps 0 acc))
+   ; an output section's pieces; lk 'sdata synthetic name -> [size pieces]
+   (kl-emit lk t)
+    (: env (lk 'env) isa (env 'isa) ms (lk 'mx 'ms) end (t 'va + t 'sz)
+       (go l cur acc)
+        (? (atom? l) (rev (kl-zp (end - cur) acc))
+           (: x <l k <x
+              (? (k = 'isec) (: a (isa (x 1 * 65536 + x 2))
+                                (go >l (a + x 3) (kl-patch lk x (kl-zp (a - cur) acc))))
+                 (k = 'synth) (: a (isa (x 1)) d (lk 'sdata (x 1))
+                                 (go >l (a + <d) (rev <>d + kl-zp (a - cur) acc)))
+                 (k = 'msec) (: m (ms (x 1)) a (env 'msa (x 1))
+                                (go >l (a + m 'size) (kl-mbytes m (kl-zp (a - cur) acc))))
+                 (k = 'data) (: _ (pin env 'dot cur) (go >l (cur + x 1) (kl-le (kl-ev env (x 2)) (x 1) . acc)))
+                 (k = 'set && x 1 = ".")
+                  (: _ (pin env 'dot cur) v (kl-ev env (x 3))
+                     (go >l v (kl-zp (v - cur) acc)))
+                 (go >l cur acc))))
+       (? (t 'stype = 8) () (go (t 'steps) (t 'va) ())))
+
+   ;; --- the image, as lld lays it: a PT_LOAD per run of sections with one set of
+   ;     permissions, a new one at each AT(); an empty section opens none. a load's first
+   ;     section sits at a file offset congruent to its address mod 64K, the rest follow by
+   ;     address. answers [file-size pieces]
+   (kl-elf lk entry)
+    (: outs (filter (t \ !(peep t 'dead 0) && t 'name != "/DISCARD/") (lk 'outs))
+       (alloc? t) (0 < (t 'flags & 2))
+       (perm t) (4 + (? (0 < (t 'flags & 1)) 2 0) + (? (0 < (t 'flags & 4)) 1 0))
+       (at? t) (? (atom? (t 'lma)) (whole? (t 'lma)) 1)
+       ; loads [[first last] ..]
+       loads (rev (foldl (\ acc t
+                            (? (!(alloc? t) || t 'sz = 0) acc
+                               (atom? acc || at? t || perm t != perm (<(<acc))) ([t t] . acc)
+                               ([(<(<acc)) t] . >acc)))
+                         () outs))
+       _ (each loads (l \ each outs (t \ (? (t 'va >= <l 'va && alloc? t && t 'sz > 0
+                                                && t 'va <= (l 1) 'va && !(peep t 'load 0))
+                                             (pin t 'load l) 0))))
+       nph (#loads + 1)
+       names (foldl (\ a t (a + t 'name + "\0")) "\0" outs)
+       shn (names + ".shstrtab\0")
+       _ (foldl (\ o t
+                  (: f (peep t 'load ())
+                     off (? (two? f && <f 'name = t 'name) (o + (t 'va - o) % 65536)
+                            (two? f) (<f 'off + t 'va - <f 'va)
+                            (kl-al o (t 'al)))
+                     _ (pin t 'off off)
+                     (off + (? (t 'stype = 8) 0 (t 'sz)))))
+                (64 + 56 * nph) outs)
+       last (: l <(rev outs) (l 'off + (? (l 'stype = 8) 0 (l 'sz))))
+       shso last
+       shoff (kl-al (shso + #shn) 8)
+       shnum (#outs + 2)
+       (w2 n) (kl-le n 2) (w4 n) (kl-le n 4) (w8 n) (kl-le n 8)
+       eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 3) (w2 183) (w4 1) (w8 entry) (w8 64) (w8 shoff)
+                 (w4 0) (w2 64) (w2 56) (w2 nph) (w2 64) (w2 shnum) (w2 (shnum - 1))])
+       (ph l) (: a <l b (l 1) fe (b 'off + (? (b 'stype = 8) 0 (b 'sz)))
+                 (cats [(w4 1) (w4 (perm a)) (w8 (a 'off)) (w8 (a 'va)) (w8 (a 'la))
+                        (w8 (fe - a 'off)) (w8 (b 'va + b 'sz - a 'va)) (w8 65536)]))
+       phs (map ph loads + [(cats [(w4 1685382481) (w4 6) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0)])])
+       nmoff (: t {} _ (foldl (\ o x (pin t (x 'name) o, o + #(x 'name) + 1)) 1 outs) t)
+       (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (w8 (t 'flags)) (w8 (? (alloc? t) (t 'va) 0)) (w8 (t 'off))
+                     (w8 (t 'sz)) (w4 0) (w4 0) (w8 (t 'al)) (w8 0)])
+       shs ([(kl-le 0 64)] + map sh outs
+            + [(cats [(w4 #names) (w4 3) (w8 0) (w8 0) (w8 shso) (w8 #shn) (w4 0) (w4 0) (w8 1) (w8 0)])])
+       (body o l acc)
+        (? (atom? l) [o acc]
+           (: t <l
+              (? (t 'stype = 8 || t 'sz = 0) (body o >l acc)
+                 (: ps (kl-emit lk t)
+                    n (foldl (\ a p (a + #p)) 0 ps)
+                    _ (? (n = t 'sz) 0 (scare 'klink-emit [(t 'name) n (t 'sz)]))
+                    (body (t 'off + t 'sz) >l (rev ps + kl-zp (t 'off - o) acc))))))
+       b (body (64 + 56 * nph) outs (rev phs + [eh]))
+       acc (rev shs + kl-zp (shoff - shso - #shn) (shn . kl-zp (shso - <b) <>b))
+       [(shoff + 64 * shnum) (rev acc)])
+   (kl-write path ps)
+    (: _ (unlink path)
+       q (open path "w")
+       _ (each ps (p \ (? (two? p) (say q (cask p)) (atom? p && #p > 0) (say q p) 0)))
+       (close q))
 )
