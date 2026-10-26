@@ -197,10 +197,10 @@
      'callr (w-indirect (f 1) 'call_indirect + w-rets 0)
      'jmpr  (w-indirect (f 1) 'return_call_indirect)
      'ret  (w-ret 0)
-     ;; raw bytes are refused but for gen.l's rv64 sync idioms, on one thread: the fence is
-     ;; nothing, amoswap.w/d.aq a0,a0,(a1) an exchange through A
+     ;; raw bytes are refused but for an empty asm and gen.l's rv64 sync idioms, on one thread:
+     ;; the fence is nothing, amoswap.w/d.aq a0,a0,(a1) an exchange through A
      'raw (f 1 @ bs
-             (? (bs = '(15 0 16 3)) ()
+             (? (atom? bs || bs = '(15 0 16 3)) ()
                 (bs = '(47 165 165 12)) (w-xchg 4)
                 (bs = '(47 181 165 12)) (w-xchg 8)
                 (scare 'wasm-noasm bs)))
