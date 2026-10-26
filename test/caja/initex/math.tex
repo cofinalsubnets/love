@@ -1,0 +1,32 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7 \catcode`\_=8 \catcode`\$=3
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \font\i=cmmi10 \font\s=cmsy10 \font\x=cmex10
+\font\sa=cmr7 \font\si=cmmi7 \font\ss=cmsy7 \font\ssa=cmr5 \font\ssi=cmmi5 \font\sss=cmsy5
+\textfont0=\a \scriptfont0=\sa \scriptscriptfont0=\ssa
+\textfont1=\i \scriptfont1=\si \scriptscriptfont1=\ssi
+\textfont2=\s \scriptfont2=\ss \scriptscriptfont2=\sss
+\textfont3=\x \scriptfont3=\x \scriptscriptfont3=\x
+\mathcode`a="7161 \mathcode`b="7162 \mathcode`x="7178 \mathcode`y="7179
+\mathcode`1="0131 \mathcode`2="0132 \mathcode`+="202B \mathcode`=="303D
+\mathcode`(="4028 \mathcode`)="5029 \mathcode`,="613B
+\delcode`(="028300 \delcode`)="029301 \delcode`.=0
+\thinmuskip=3mu \medmuskip=4mu plus 2mu minus 4mu \thickmuskip=5mu plus 5mu
+\scriptspace=0.5pt \delimiterfactor=901 \delimitershortfall=5pt \nulldelimiterspace=1.2pt
+\hsize=200pt \parindent=0pt \baselineskip=12pt \tolerance=10000 \parfillskip=0pt plus 1fil
+\a
+\setbox1\hbox{$a+b=x$} \showbox1
+\setbox1\hbox{$x^2_1 + y^{a+b} , a_{x_1}$} \showbox1
+\setbox1\hbox{$\left(a\over b\right) + {x\atop y} + {1\above 1pt 2}$} \showbox1
+\setbox1\hbox{$\mathchar"1350 _a^b + \mathop{x}\limits^1_2 \displaystyle\mathchar"1350 _a^b$} \showbox1
+\setbox1\hbox{$\radical"270370 {a+b} \mathaccent"17F x \overline{a} \underline{y}$} \showbox1
+\setbox1\hbox{$\mathchoice{a}{b}{x}{y} \scriptstyle \mathchoice{a}{b}{x}{y} \mskip 6mu plus 1fil \mkern-3mu \nonscript\mskip 2mu x$} \showbox1
+\setbox1\hbox{$\mathpunct{,} \mathinner{x} \mathbin{+} \mathrel{=} \mathopen{(} \mathclose{)} \mathord{a}$} \showbox1
+\setbox1\hbox{$\vcenter{\hrule height 10pt} \fam1 \mathchar"7031 \delimiter"4162362 \hbox{t}$} \showbox1
+\setbox1\hbox{$a\showlists$}
+\setbox1\hbox{$x^a^b_1_2 \limits$}
+Text $a+b$ and $$a=b\eqno(1)$$ more text $$x+y\leqno 2$$ and done
+$$\halign{#\cr a\cr}$$ after.\par
+\showlists
+\shipout\vbox{\box1}
+\end

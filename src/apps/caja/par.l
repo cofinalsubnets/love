@@ -978,6 +978,7 @@
                ah {'type 'head 'link ()}
                _ (pins J 'adjust-head ah 'adjust ah)
                b (cb-hpack J q5 <wi 'exactly)
+               _ (pin J 'just-box b)
                _ (pin b 'shift (wi 1))
                _ (append-to-vlist J M b)
                _ (ah 'link != () ? (pin (M 'vtail) 'link (ah 'link), pin M 'vtail (J 'adjust)))
