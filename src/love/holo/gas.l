@@ -1630,10 +1630,10 @@
                            (k = 'label ? (go >l (s . acc))
                               (pin sv <xs k, charm? (peep sv0 <xs ()) ? 0 (pin sv0 <xs k), go >l acc)))))
                  (w = ".irp")
-                  (: b (grab >l '(".irp" ".rept") ".endr") xs (xa-oplist r)
+                  (: b (grab >l '(".irp" ".rept" ".rep") ".endr") xs (xa-oplist r)
                      (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
-                 (w = ".rept")
-                  (grab >l '(".irp" ".rept") ".endr" @ b
+                 (elem w [".rept" ".rep"])                      ; .rep is .rept
+                  (grab >l '(".irp" ".rept" ".rep") ".endr" @ b
                      (go <>b (foldl (\ a i (go <b a)) acc ^(vat r acc))))
                  (elem w gf-ifs)
                   (: b (grab >l gf-ifs ".endif") ab (split <b)
