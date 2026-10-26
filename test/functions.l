@@ -29,8 +29,8 @@
  (1 = (0 'anything))                                                        ; 0 is const-1: (0 x) = 1 for every x
  !(cask 4 'anything)                                                        ; opaque handles (cask/port) hold nothing to answer
  (aall ((2 (star-tray '(3) '(2 3 4))) = star-tray '(3) '(4 9 16)))          ; array operand: elementwise ** broadcast
- (aall ((star-tray '(3) '(2 3 4) 5) = gem-tray '(3) '(25.0 125.0 625.0)))   ; array operator: 5 ** [2 3 4] elementwise (vmap2 power)
- (15 = (star-tray '(2) '(2 3) (+ 1) 10))                                    ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
+ (aall ((5 ** star-tray '(3) '(2 3 4)) = gem-tray '(3) '(25.0 125.0 625.0)))  ; a tray exponent: 5 ** [2 3 4] elementwise
+ (4 = (star-tray '(3) '(2 3 4) 2))                                          ; a tray applied indexes
  (13 = (((3 ~ 4) (+ 1)) 10))                                                ; complex operator on a fn: compose ($ (3 ~ 4)) = 3, the real part
  (10 = (((-3 ~ 4) (+ 1)) 10))                                               ; ... but a complex sorting negative saturates to 0
  (twin? ((0 ~ 1) 5))                                                        ; complex operator on a number -> complex power (5^i)

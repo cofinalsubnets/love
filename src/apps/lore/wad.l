@@ -76,7 +76,7 @@
               ^pw)))
  (compose pal w h ps) (: es (cats (map (p \ texels (p 2) (p 0) (p 1) w h) ps)) n #es
    T (star-tray [h w] (map (_ \ -1) ^(w * h)))
-   (n = 0 ? T (pin T (star-tray [n] (map (e \ e 0) es)) (peep pal (star-tray [n] (map (e \ e 1) es)) 0))))
+   (n = 0 ? T (pin T (star-tray [n] (map (e \ e 0) es)) (pal (star-tray [n] (map (e \ e 1) es))))))
  ; ..the texture table: name -> [w h patches], each patch [ox oy name]
  (texdefs w) (: pn (lump w "PNAMES") pns (string? pn ? (map (k \ nm pn (4 + 8 * k)) ^(rdle pn 0 4)) ())
    (one b) (string? b ? (map (k \ (: o (rdle b (4 + 4 * k) 4) np (u16 b (o + 20))
@@ -86,7 +86,7 @@
                 ())
    (foldl (\ t d (pin t (d 0) d)) {} (one (lump w "TEXTURE1") + one (lump w "TEXTURE2"))))
  (texture w pal d) (compose pal (d 1) (d 2) (filter (p \ string? (p 2)) (map (p \ [(p 0) (p 1) (lump w (p 2))]) (d 3))))
- (flat pal b) (peep pal (star-tray [64 64] (map (i \ b i) ^4096)) 0)
+ (flat pal b) (pal (star-tray [64 64] (map (i \ b i) ^4096)))
  ; ..a sprite: its picture, and its offsets [w h left top]
  (sprite pal b) [(compose pal (u16 b 0) (u16 b 2) [[0 0 b]]) [(u16 b 0) (u16 b 2) (s16 b 4) (s16 b 6)]]
  ; --- things: a type's sprite and frame (the doom wiki's thing table); hung from the ceiling ---
@@ -240,7 +240,7 @@
  (swap n) (snip n 0 3 @ "SW1" ("SW2" + snip n 3 #n) "SW2" ("SW1" + snip n 3 #n) _ n)
  (sector-batch M sc s) (pack (join (sector-mesh M (sc 'ps) s (sc 'ti) (sc 'ski) (sc 'skc) + walls M s (sc 'ti) (sc 'th))))
  ; ..a picture turned left for right, for the rotations a sprite's lump serves mirrored
- (flipx T) (: h (shape T 0) w (shape T 1) (peep T (star-tray [h w] (map (i \ (i // w) * w + w - 1 - i % w) ^(h * w))) 0))
+ (flipx T) (: h (shape T 0) w (shape T 1) (T (star-tray [h w] (map (i \ (i // w) * w + w - 1 - i % w) ^(h * w)))))
  ; ..the textures a map names, laid and indexed: walls by name, flats as "F:" name, and each
  ;   sprite frame its things and the guns show, by name and rotation ("POSSA1", "POSSH0")
  (wad-scene w M) (: pal (palette w) defs (texdefs w) fs (span w "F_START" "F_END" @ t (#(keys t) > 0 ? t (span w "FF_START" "FF_END")))
@@ -304,7 +304,7 @@
          x0 (int ((dx - d 2) * s + (w - 320.0 * s) / 2.0)) y0 (int ((32 + dy - d 3 - (vh < h ? 16 0)) * s))
          J (iota (gw * gh)) sx (J % gw) sy (J // gw) c (peep T (int (sy / s) * d 0 + int (sx / s)) -1)
          X (x0 + sx) Y (y0 + sy) ok (iota ((c >= 0) * (X >= 0) * (X < w) * (Y >= 0) * (Y < vh)))
-         [(peep (Y * w + X) ok 0) (peep c ok 0)])))
+         [((Y * w + X) ok) (c ok)])))
  ; ..swung as the body moves, a gun's way, and lowered by 'gy
  (gun-over st f w h vh) (: g (guns (st 'gun)) v2 (sq (st 'vx) + sq (st 'vz)) bob (min2 16.0 (v2 / 4.0)) a (0.098 * st 't)
    dx (int (bob * cos a) // 2 * 2) dy ((int (bob * mag (sin a)) + st 'gy) // 2 * 2)
@@ -355,9 +355,9 @@
    ps (bar-parts st) id (show (map (p \ [(p 0) (p 1) (#(p 2))]) ps) + mug st)
    _ (#(keys (peep sc 'barc {})) > 64 ? (pin sc 'barc {}) 0)
    cache (peep sc 'barc () @ () (pin sc 'barc {} 'barc) c c)
-   (peep cache id () @ () (: O (compose pal 320 32 ps) I (iota (O != -1)) B (pin base I (peep O I 0)) _ (pin cache id B) B) B B))
+   (peep cache id () @ () (: O (compose pal 320 32 ps) I (iota (O != -1)) B (pin base I (O I)) _ (pin cache id B) B) B B))
  ; ..and drawn w by bh, each pixel the bar's nearest
- (bar-px st w bh) (: J (iota (w * bh)) (peep (bar-pic st) (J // w * 32 // bh * 320 + J % w * 320 // w) 0))
+ (bar-px st w bh) (: J (iota (w * bh)) (bar-pic st (J // w * 32 // bh * 320 + J % w * 320 // w)))
  ; --- the face: hurt five ways by health; dead; a grin for a new gun, a wince at a big hit, a
  ;     look toward what hurt it, a grimace hurt head on or firing on; else looking about ---
  (mug st) (: t (st 't) p (show (min2 4 ((100 - min2 100 (max2 0 (st 'hp))) * 5 // 101)))
@@ -378,7 +378,7 @@
          O (compose (palette wd) 320 8 (go 0 1 ()))
          J (iota (w * (int (8 * s) + 1))) sx (J % w) sy (J // w) X (int ((sx - (w - 320.0 * s) / 2.0) / s)) Y (int (sy / s))
          c (peep O (Y * 320 + X) -1) ok (iota ((c >= 0) * (X >= 0) * (X < 320) * (Y < 8) * (sy < vh)))
-         (pin f (peep J ok 0) (peep c ok 0)))))
+         (pin f (J ok) (c ok)))))
  ; ..which palette the frame takes: a hurt's red by how much is left of it, else a pickup's gold,
  ;   else the suit's green, flickering in its last 128 tics
  (flash st) (: dc (peep st 'dc 0) bc (peep st 'bc 0) u (st 'suit - st 't)
@@ -454,8 +454,8 @@
  (crossed st ax az bx bz) (: L (st 'lines) dx (L 'bx - L 'ax) dy (L 'by - L 'ay) qx (bx - ax) qz (bz - az)
    d1 (dx * (az - L 'ay) - dy * (ax - L 'ax)) d2 (dx * (bz - L 'ay) - dy * (bx - L 'ax))
    d3 (qx * (L 'ay - az) - qz * (L 'ax - ax)) d4 (qx * (L 'by - az) - qz * (L 'bx - ax))
-   I (iota ((d1 * d2 < 0.0) * (d3 * d4 < 0.0))) s (peep (d1 / (d1 - d2 + 1e-9)) I 0.0)
-   (sort (map (k \ [(peep s k 0.0) (peep I k 0)]) ^#I)))
+   I (iota ((d1 * d2 < 0.0) * (d3 * d4 < 0.0))) s ((d1 / (d1 - d2 + 1e-9)) I)
+   (sort (map (k \ [(s k) (I k)]) ^#I)))
  (shut st i) (: L (st 'lines) (g k) (peep (L k) i 0.0)
    (g 'blk > 0.0 || min2 (g 'fc) (g 'bc) - max2 (g 'ff) (g 'bf) <= 0.0))
  (sees st ax az bx bz) !(any (c \ shut st (c 1)) (crossed st ax az bx bz))
@@ -540,7 +540,7 @@
            17 (q % 4 = 0 ? (rand 4 = 0 ? (max2 lo (hi - 16)) hi) (L 'now))
            _ hi))
  (tint sc i b k) (: tt (peep sc 'tint () @ () (pin sc 'tint {} 'tint) t t)
-   e (peep tt i () @ () (: v (b 0) I (iota ((iota #v % 8 >= 5) * (v <= 1.0))) x [I (peep v I 0.0)] _ (pin tt i x) x) x x)
+   e (peep tt i () @ () (: v (b 0) I (iota ((iota #v % 8 >= 5) * (v <= 1.0))) x [I (v I)] _ (pin tt i x) x) x x)
    [(pin (b 0) (e 0) (e 1 * k)) (b 1)])
  (shine st) (: sc (st 'sc) t (st 't) ch {}
    _ (each (st 'lights) (L \ (: v (glow L t) (v = L 'now ? 0 (: _ (pin L 'now v) (pin ch (L 's) (1.0 * v / max2 1 (L 'hi))))))))

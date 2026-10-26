@@ -77,8 +77,8 @@
     ; --- power elementwise over arrays, broadcast ---
     (gem-tray = tier (2.0 (star-tray '(2) '(2 3))))                ; array^2.0 -> float array
     (aall (2 (gem-tray '(3) '(1 2 3)) = gem-tray '(3) '(1 4 9))) ; array ^ scalar
-    (aall (gem-tray '(3) '(1 2 3) 2 = gem-tray '(3) '(2 4 8))) ; scalar ^ array (array numeral)
-    (aall (gem-tray '(3) '(2 2 2) (gem-tray '(3) '(1 2 3))   ; array ^ array
+    (aall (2 ** gem-tray '(3) '(1 2 3) = gem-tray '(3) '(2 4 8))) ; scalar ^ array
+    (aall (gem-tray '(3) '(1 2 3) ** gem-tray '(3) '(2 2 2)   ; array ^ array
            =  gem-tray '(3) '(1 4 9)))
     (near 1.570796326794897 (peep (arg ((gem-tray '(2) '(1 0)) ~ (gem-tray '(2) '(1 1)))) 1 0))
 

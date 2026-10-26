@@ -122,7 +122,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - tablets: {} makes, (pin t k v) mutates AND answers t (so foldl builds one),
 ;   (peep t k d) reads with default, t k = peep t k () ; (keys t) is UNSORTED -- sort before
 ;   walking or answers drift
-; - strings and lists index by application: "abc" 0 = 97, [1 2 3] 1 = 2
+; - strings, lists and trays index by application: "abc" 0 = 97, [1 2 3] 1 = 2, @(5 6 7) 1 = 6,
+;   a tray of indices gathering; a tray's power is **
 ; - charm? is number predicate; (show 'sym) spells a symbol
 ; - cap/cup are total: <() = >() = (); (= a b) across types answers 0, never dies
 ; - trays (@(..), iota): every numeric word is elementwise with broadcast, = and != too;

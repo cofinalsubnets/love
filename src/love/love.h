@@ -752,7 +752,7 @@ love_noinline noicf lvm_t
  lvm_quotn, lvm_rank, lvm_tabp, lvm_twinp, lvm_worn,
  lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap1z, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
  // the data sentinels: byte-identical bodies kept apart by address (noicf)
- data_num_apply, data_sym_apply, data_string_apply, data_pair_apply,
+ data_num_apply, data_sym_apply, data_string_apply, data_pair_apply, data_tray_apply,
  lvm_sym, lvm_nom, lvm_gembox, lvm_twinbox,
  lvm_big, lvm_tray, lvm_str, lvm_chain,
  lvm_addn, lvm_fquotn, lvm_muln,

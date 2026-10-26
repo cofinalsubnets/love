@@ -38,7 +38,8 @@ float lm_expf(float);
 
 enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11,   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
-       rz_par = 32768, rz_band = 32, rz_pv = 9 };   // a frame big enough to share, in bands of rows
+       rz_par = 32768, rz_band = 32, rz_pv = 9, rz_bk = 32768 };   // a frame big enough to share, in bands of rows;
+                       // rz_bk: past any frame's count of bands, rz_side_max / rz_band
                        // rz_lv: a level halves, so a word's bits hold every chain
 // a vertex in clip space and its riders; once projected x y are pixels and z ndc
 struct rz_v { flo_t x, y, z, w, a[rz_na]; };
@@ -59,6 +60,7 @@ struct rz {
  flo_t *tz;             // each 8 by 8 tile's farthest depth, then whether it was drawn on since
  intptr_t TW, TH;
  flo_t *pv;              // the vertices once through m and lm, rz_pv a vertex: x y z w, the sun's x y z, bits, row
+ intptr_t *bk;           // shared, each triangle's bands, first * rz_bk + last, or -1 none's
  intptr_t nth, ylo, yhi; // the bands the frame is in, and this one's rows
  word base, vs, ts, tx;  // the ground, the batches, the textures
  intptr_t const *cc;     // a smaller frame laid first, cw by ch, its colours and depths
@@ -109,6 +111,29 @@ static flo_t rz_vis(struct rz const *r, flo_t lx, flo_t ly, flo_t lz) {
 // the first row from y on that is this worker's
 static love_inline intptr_t rz_own(struct rz const *r, intptr_t y) {
  return y < r->ylo ? r->ylo : y < r->yhi ? y : r->H; }
+
+// whether a screen triangle may draw, asked of its places alone as rz_tri asks them: not
+// edge on, facing the eye when culling, some pixel centre of this worker's in its box, and
+// nearer than all drawn on some tile it covers
+static int rz_may(struct rz const *r, struct rz_v const *const P[3]) {
+ int64_t X[3], Y[3];
+ for (int i = 0; i < 3; i++)
+  X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);
+ int64_t const A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
+ if (A == 0 || (A > 0 && (r->flags & rz_cull))) return 0;
+ int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
+ for (int i = 1; i < 3; i++) {
+  xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb;
+  ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb; }
+ int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
+ bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
+ bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
+ if (bx0 >= bx1 || by0 >= by1 || rz_own(r, (intptr_t) by0) >= (intptr_t) by1) return 0;
+ flo_t const zn = P[0]->z < P[1]->z ? (P[0]->z < P[2]->z ? P[0]->z : P[2]->z) : (P[1]->z < P[2]->z ? P[1]->z : P[2]->z);
+ intptr_t const ty1 = ((intptr_t) by1 < r->yhi ? (intptr_t) by1 - 1 : r->yhi - 1) >> 3, tx0 = (intptr_t) bx0 >> 3, tx1 = (intptr_t) (bx1 - 1) >> 3;
+ for (intptr_t ty = rz_own(r, (intptr_t) by0) >> 3; ty <= ty1; ty++)
+  for (intptr_t tx = tx0; tx <= tx1; tx++) if (r->tz[ty * r->TW + tx] > zn) return 1;
+ return 0; }
 
 // one screen triangle, edges exact in sixteenths so a shared edge's pixels fall to one side;
 // riders over w unless affine
@@ -316,15 +341,21 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
   intptr_t const y0 = lo > 1 ? (intptr_t) lo - 1 : 0;
   if ((flo_t) rz_own(r, y0) > hi + 1) return; }
  struct rz_v p[8], q[8];
+ for (int i = 0; i < 3; i++) p[i].x = P[i][0], p[i].y = P[i][1], p[i].z = P[i][2], p[i].w = P[i][3];
+ // a triangle inside every plane passes the cuts unchanged, so it skips them, and is turned
+ // away on its places before its riders are read
+ int n = 3, in = (o0 & o1 & o2 & 64) != 0;
+ if (in) {
+  struct rz_v s[3];
+  for (int i = 0; i < 3; i++) s[i].x = p[i].x, s[i].y = p[i].y, s[i].z = p[i].z, s[i].w = p[i].w, rz_project(r, s + i);
+  struct rz_v const *const S[3] = { s, s + 1, s + 2 };
+  if (!rz_may(r, S)) return; }
+ flo_t const *vd = vt->type == love_R ? tray_data(vt) : 0;
+ int const na = r->stride - 3 < 8 ? (int) r->stride - 3 : 8;
  for (int i = 0; i < 3; i++) {
-  uintptr_t const b = (uintptr_t) (ix[i] * r->stride);
-  p[i].x = P[i][0], p[i].y = P[i][1], p[i].z = P[i][2], p[i].w = P[i][3];
-  for (int k = 0; k < 8; k++) p[i].a[k] = k < r->stride - 3 ? rz_num(vt, b + 3 + (uintptr_t) k) : 0;
+  uintptr_t const b = (uintptr_t) (ix[i] * r->stride) + 3;
+  for (int k = 0; k < 8; k++) p[i].a[k] = k >= na ? 0 : vd ? vd[b + (uintptr_t) k] : rz_num(vt, b + (uintptr_t) k);
   p[i].a[8] = P[i][4], p[i].a[9] = P[i][5], p[i].a[10] = P[i][6]; }
- // a triangle inside every plane passes the cuts unchanged, so it skips them
- int n = 3, in = 1;
- for (int k = 0; k < 5 && in; k++)
-  for (int i = 0; i < 3; i++) in &= rz_side(p + i, k) >= 0;
  for (int k = 0; k < 5 && n >= 3 && !in; k++) {
   int m = 0;
   for (int i = 0; i < n; i++) {
@@ -368,10 +399,13 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
  intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
+ intptr_t const *ti = tt->type == love_R ? 0 : tray_data(tt);   // ..the triangles as words, but a float tray's
  r->nlv = 0, r->add = 0, r->glass = 0, r->cls = 0;   // not the last batch's
+ intptr_t const me = r->ylo / rz_band;
  for (uintptr_t i = 0; i < nt; i++) {
-  intptr_t const ix[3] = { tray_get_int(tt, 4 * i), tray_get_int(tt, 4 * i + 1), tray_get_int(tt, 4 * i + 2) },
-                 t0 = tray_get_int(tt, 4 * i + 3), lens = t0 <= -3 - rz_cb, c = t0 >= rz_cb - 1 ? (t0 + 1) / rz_cb : 0,
+  if (r->bk && (r->bk[i] < 0 || r->bk[i] / rz_bk > me || r->bk[i] % rz_bk < me)) continue;   // none of this band's
+  intptr_t const ix[3] = { ti ? ti[4 * i] : tray_get_int(tt, 4 * i), ti ? ti[4 * i + 1] : tray_get_int(tt, 4 * i + 1), ti ? ti[4 * i + 2] : tray_get_int(tt, 4 * i + 2) },
+                 t0 = ti ? ti[4 * i + 3] : tray_get_int(tt, 4 * i + 3), lens = t0 <= -3 - rz_cb, c = t0 >= rz_cb - 1 ? (t0 + 1) / rz_cb : 0,
                  t = lens ? t0 + rz_cb : c ? (t0 + 1) % rz_cb - 1 : t0;
   if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= nv || ix[1] >= nv || ix[2] >= nv) continue;
   if (r->gzp && !lens) continue;   // the lens pass: only the lenses
@@ -407,20 +441,47 @@ static void rz_run(struct rz *r) {
   for (intptr_t tx = 0; tx < r->TW; tx++) r->tz[ty * r->TW + tx] = 2, r->tz[r->TW * r->TH + ty * r->TW + tx] = laid;
  if (laid) rz_tiles(r);
  flo_t *const pv = r->pv;
+ intptr_t *const bk = r->bk;
  // ..seen, the glass's depths first, alone, then everything
  if (r->gz) for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
   for (intptr_t i = y * r->W, e = i + r->W; i < e; i++) r->gz[i] = 2;
  for (r->gzp = r->gz != 0; r->gzp >= 0; r->gzp--) {
   if (galaxyp(r->vs)) rz_batch(r, tray(r->vs), tray(r->ts), r->tx);
   else for (word v = r->vs, t = r->ts; chainp(v); v = B(v), t = B(t))
-   rz_batch(r, tray(A(v)), tray(A(t)), r->tx), r->pv += rz_pv * (intptr_t) tray_nelem(tray(A(v))) / r->stride;
-  r->pv = pv; }
+   rz_batch(r, tray(A(v)), tray(A(t)), r->tx), r->pv += rz_pv * (intptr_t) tray_nelem(tray(A(v))) / r->stride,
+  r->bk = r->bk ? r->bk + tray_nelem(tray(A(t))) / 4 : 0;
+  r->pv = pv, r->bk = bk; }
  r->gzp = 0;
  int const dp = (r->flags & rz_depth) != 0;
  for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
   for (intptr_t i = y * r->W, e = i + r->W; i < e; i++)
    if (dp) ((flo_t*) r->ans)[i] = r->depth[i] < -1 ? 2 : (flo_t) r->depth[i];
    else ((intptr_t*) r->ans)[i] = r->out[i]; }
+
+// each triangle's bands, as rz_draw would keep it: none outside one plane, else the rows its
+// vertices fall on a row's slack either side, or every band where it is cut
+static void rz_bin(struct rz const *r, struct tray *vt, struct tray *tt, flo_t const *pv, intptr_t *bk, intptr_t nb) {
+ uintptr_t const nt = tray_nelem(tt) / 4;
+ intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
+ for (uintptr_t i = 0; i < nt; i++) {
+  intptr_t const a = tray_get_int(tt, 4 * i), b = tray_get_int(tt, 4 * i + 1), c = tray_get_int(tt, 4 * i + 2);
+  bk[i] = nb - 1;   // every band: a bad index is rz_batch's to turn away, a cut one rz_draw's
+  if (a < 0 || b < 0 || c < 0 || a >= nv || b >= nv || c >= nv) continue;
+  flo_t const *P[3] = { pv + rz_pv * a, pv + rz_pv * b, pv + rz_pv * c };
+  int const o0 = (int) P[0][7], o1 = (int) P[1][7], o2 = (int) P[2][7];
+  if (o0 & o1 & o2 & 63) { bk[i] = -1; continue; }
+  if (!(o0 & o1 & o2 & 64)) continue;
+  flo_t lo = P[0][8], hi = P[0][8];
+  for (int k = 1; k < 3; k++) lo = P[k][8] < lo ? P[k][8] : lo, hi = P[k][8] > hi ? P[k][8] : hi;
+  intptr_t const y0 = lo > 1 ? (intptr_t) lo - 1 : 0, y1 = hi + 1 < (flo_t) r->H ? (intptr_t) (hi + 1) : r->H - 1,
+                 b0 = y0 / rz_band < nb ? y0 / rz_band : nb - 1, b1 = y1 / rz_band;
+  bk[i] = b0 * rz_bk + (b1 < b0 ? b0 : b1); } }
+static void rz_bins(struct rz *r, intptr_t nb) {
+ flo_t const *pv = r->pv;
+ intptr_t *bk = r->bk;
+ if (galaxyp(r->vs)) { rz_bin(r, tray(r->vs), tray(r->ts), pv, bk, nb); return; }
+ for (word v = r->vs, t = r->ts; chainp(v); v = B(v), t = B(t))
+  rz_bin(r, tray(A(v)), tray(A(t)), pv, bk, nb), pv += rz_pv * (intptr_t) tray_nelem(tray(A(v))) / r->stride, bk += tray_nelem(tray(A(t))) / 4; }
 
 // a band of rows, drawn on its own copy of the frame's state
 static void rz_bandrun(void *c, intptr_t i) {
@@ -433,8 +494,9 @@ static void rz_bandrun(void *c, intptr_t i) {
 static void rz_share(struct g *g, struct rz *r) {
  rz_prep(r);
  intptr_t const nb = (r->H + rz_band - 1) / rz_band;
- if (r->W * r->H < rz_par || par_width(g, nb) < 2) { r->nth = 1, r->ylo = 0, r->yhi = r->H, rz_run(r); return; }
+ if (r->W * r->H < rz_par || par_width(g, nb) < 2) { r->nth = 1, r->ylo = 0, r->yhi = r->H, r->bk = 0, rz_run(r); return; }
  r->nth = nb;
+ if (r->bk) rz_bins(r, nb);
  par_run(g, nb, rz_bandrun, r); }
 
 love_noinline static struct g *host_raster(struct g *g) {
@@ -445,9 +507,9 @@ love_noinline static struct g *host_raster(struct g *g) {
   a[0] = ZeroPoint; return g; }
  intptr_t const W = getcharm(a[0]), H = getcharm(a[1]);
  if (W < 1 || H < 1 || W > rz_side_max || H > rz_side_max) { a[0] = ZeroPoint; return g; }
- uintptr_t nv = 0;   // the vertices of all the batches
- if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st;
- else for (word v = a[4]; chainp(v); v = B(v)) nv += tray_nelem(tray(A(v))) / st;
+ uintptr_t nv = 0, nt = 0;   // the vertices and the triangles of all the batches
+ if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st, nt = tray_nelem(tray(a[5])) / 4;
+ else for (word v = a[4], t = a[5]; chainp(v); v = B(v), t = B(t)) nv += tray_nelem(tray(A(v))) / st, nt += tray_nelem(tray(A(t))) / 4;
  word const o0 = chainp(a[7]) ? A(a[7]) : a[7];
  intptr_t const fl = (intptr_t) rz_opt(o0, 5, 0);
  uintptr_t const fr1 = (fl & rz_flat) && !(fl & rz_depth) ? 1 : 2;   // the answer's rank
@@ -457,18 +519,19 @@ love_noinline static struct g *host_raster(struct g *g) {
                  dw = b2w(tray_bytes(love_Z, 1, mulsat(n, sb) / sizeof(word))),
                  pw = b2w(tray_bytes(love_R, 1, rz_pv * nv + 1));
  intptr_t const TW = (W + 7) / 8, TH = (H + 7) / 8;
- uintptr_t const tw = b2w(tray_bytes(love_R, 1, (uintptr_t) (2 * TW * TH)));
- if (!ok(g = have(g, fw + dw + pw + tw))) return g;
+ uintptr_t const tw = b2w(tray_bytes(love_R, 1, (uintptr_t) (2 * TW * TH))),
+                 bw = b2w(tray_bytes(love_Z, 1, nt + 1));
+ if (!ok(g = have(g, fw + dw + pw + tw + bw))) return g;
  a = g->sp;
  struct tray *fr = ini_tray(bump(g, fw), fl & rz_depth ? love_R : love_Z, fr1), *sc = ini_tray(bump(g, dw), love_Z, 1),
-             *pt = ini_tray(bump(g, pw), love_R, 1), *tt = ini_tray(bump(g, tw), love_R, 1);
- pt->shape[0] = rz_pv * nv + 1, tt->shape[0] = (uintptr_t) (2 * TW * TH);
+             *pt = ini_tray(bump(g, pw), love_R, 1), *tt = ini_tray(bump(g, tw), love_R, 1), *bt = ini_tray(bump(g, bw), love_Z, 1);
+ pt->shape[0] = rz_pv * nv + 1, tt->shape[0] = (uintptr_t) (2 * TW * TH), bt->shape[0] = nt + 1;
  sc->shape[0] = mulsat(n, sb) / sizeof(word);
  if (fr1 == 2) fr->shape[0] = (uintptr_t) H, fr->shape[1] = (uintptr_t) W;
  else fr->shape[0] = n;
  struct rz r = { .W = W, .H = H, .stride = (intptr_t) st, .out = tray_data(sc), .depth = (float*) tray_data(sc) + n,
                  .gz = fl & rz_seen ? (float*) tray_data(sc) + 2 * n : 0, .ans = tray_data(fr), .pv = tray_data(pt),
-                 .tz = tray_data(tt), .TW = TW, .TH = TH, .nth = 1, .yhi = H, .base = a[2], .vs = a[4], .ts = a[5], .tx = a[6] };
+                 .tz = tray_data(tt), .bk = tray_data(bt), .TW = TW, .TH = TH, .nth = 1, .yhi = H, .base = a[2], .vs = a[4], .ts = a[5], .tx = a[6] };
  // a smaller frame under it, and the ground under that
  word const b = a[2];
  if (chainp(b) && chainp(B(b)) && chainp(B(B(b)))) {

@@ -34,7 +34,7 @@ command -v objdump > /dev/null 2>&1 || command -v llvm-objdump > /dev/null 2>&1 
 # tail-threaded vm without it, so a cc that lacks it would look like "could not
 # build love" -- a failure report for a tree that is fine and a toolchain that is old.
 mtc=out/.hdiff-musttail.c
-mkdir -p b
+mkdir -p out
 printf '%s\n' \
   '#if !defined(__clang__) && !(defined(__GNUC__) && __GNUC__ >= 15)' \
   '#error no musttail' \

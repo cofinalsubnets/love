@@ -139,7 +139,7 @@
   !e (0 = $e)
   (0 = #(e + e)) (0 = #(e * 2)) (0 = #(1 + e))
   (0 = #(e < 1)) (0 = #(e = e))
-  (0 = #(e 2))                                 ; an empty exponent array applies empty
+  (0 = #(2 ** e))                              ; an empty exponent array powers empty
   (0 = #(sine e)) (0 = #(2 e))
   (0 = #((star-tray '(1) '(5)) + e))           ; a 1-axis broadcasts to 0, not 1
   (-1 = (peep e 0 -1))
@@ -189,3 +189,14 @@
  (0 = #(iota @(0 0))) (star-tray = tier (iota (@(1.0 2.0) < 1.5)))
  (aall (@(1 3) = iota (star-tray '(2 2) '(0 1 0 1))))
  (: m (@(5 1 7 2) > 3) w (iota m) (aall (@(5 7) = peep @(5 1 7 2) w 0))))
+
+; --- a tray applied indexes, as (peep t k ()): an index or [i j ..] by axis its element, an
+; int tray of indices gathers in its shape, () where any misses; its power is ** ---
+(test
+ (6 = @(5 6 7) 1) (2.5 = @(1.5 2.5) 1) (() = @(5 6 7) 3) (() = @(5 6 7) -1) (() = @() 0)
+ (() = @(5 6 7) 'a) (() = @(5 6 7) 1.0) (3 = star-tray '(2 2) '(1 2 3 4) [1 0])
+ (aall (@(7 5) = @(5 6 7) @(2 0))) (aall (@(2.5 2.5) = @(1.5 2.5) @(1 1))) (() = @(5 6 7) @(0 3))
+ ('(2 2) = shape (@(5 6 7) (star-tray '(2 2) '(0 1 2 0))))
+ ([5 7] = map @(5 6 7) [0 2]) (peep @(5 6 7) 3 0 = 0)
+ (aall (@(2.0 4.0 8.0) = 2 ** @(1 2 3))) (aall (@(1 4 9) = @(1 2 3) ** 2))
+ (aall (@(1.0 8.0) = @(1 2) ** @(2 3))) (aall (@(2.0) = 4.0 ** @(0.5))))
