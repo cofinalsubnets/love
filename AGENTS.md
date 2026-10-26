@@ -158,6 +158,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a test/ path a lane's recipe in `test/test.mk` names owes that lane (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`)
 - `src/love/snap.c`, `src/love/image.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - `src/love/snap.c` -> `test_boards`, whose links bake their own images through it
+- `src/apps/caja/*` `test/caja/*` `test/gate/caja.sh` -> `test_caja`
+- `src/apps/tfm.l` `test/gate/tfm.sh` `test/gate/tfm.l` -> `test_tfm` `test_caja`, which caja borrows for its fonts
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_quick`
 - the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk` -> `test_gcstress`, in the queue's union; a `.l`, doc, app or test diff never owes it
 - what the bake runs, `src/love/{gc,snap,image,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
