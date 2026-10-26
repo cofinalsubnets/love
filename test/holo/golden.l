@@ -563,6 +563,18 @@
    ;; .ifdef/.ifndef by what is defined so far: an untaken arm's .if never reads (the kernel's frame_push)
    _ (chk-eq "gas.ifdef" '("mov x1, #1" "mov x2, #2" "f: mov x3, #3")
         (gf-expand 'a64 (gf-lines 'a64 ".ifdef .Lx\n.if .Lx != -1\nmov x0, #9\n.endif\n.endif\n.set .Lx, 3\n.ifdef .Lx\nmov x1, #1\n.endif\n.ifndef .Ly\nmov x2, #2\n.endif\nf: mov x3, #3\n.ifndef f\nmov x4, #4\n.endif")))
+   ;; crypto, crc32, tbl/tbx and the tag moves, as llvm-mc -mattr=+crypto,+sha3,+crc,+mte lays them
+   _ (chk-eq "gas.a64.crypto"
+        ["4048284e" "2000025e" "2008285e" "208462ce" "2080c0ce" "200c02ce" "201482ce" "20e0220e" "20e0e24e"
+         "204cc29a" "2058c21a" "c143094e" "e110084e" "04fc3fd9" "041420d9" "241060d9" "0500e0d9"
+         'gas-a64-operand 'gas-a64-operand 'gas-a64-operand]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["aese v0.16b, v2.16b" "sha1c q0, s1, v2.4s" "sha1h s0, s1" "sha512h2 q0, q1, v2.2d" "sha512su0 v0.2d, v1.2d"
+              "eor3 v0.16b, v1.16b, v2.16b, v3.16b" "xar v0.2d, v1.2d, v2.2d, #5" "pmull v0.8h, v1.8b, v2.8b"
+              "pmull2 v0.1q, v1.2d, v2.2d" "crc32x w0, w1, x2" "crc32cw w0, w1, w2"
+              "tbl v1.16b, {v30.16b, v31.16b, v0.16b}, v9.16b" "tbx v1.16b, {v7.16b}, v8.16b"
+              "stg x4, [x0, #-16]!" "stg x4, [x0], #16" "ldg x4, [x1, #16]" "ldgm x5, [x0]"
+              "pmull v0.4s, v1.4h, v2.4h" "crc32x w0, w1, w2" "stg x4, [x0, #8]"]))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"

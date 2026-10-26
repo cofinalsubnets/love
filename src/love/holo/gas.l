@@ -871,15 +871,51 @@
           (scare 'gas-a64-operand os)))
    ;; the vector file: vN.<arrangement>, or a whole qN -> N, () for any other spelling. a row
    ;; is its word, then each operand's arrangement; rd at 0, rn at 5, rm at 16 (mov's rm is rn)
-   (ga-vr o a) (o @ ('sym s) (: t (show s) p (a = "q" ? ["q" ""] ["v" ("." + a)])
+   (ga-vr o a) (o @ ('sym s) (: t (show s) p (elem a ["q" "s" "d"] ? [a ""] ["v" ("." + a)])
                                 (filter (n \ t = <p + show n + <>p) ^32 @ (n . _) n _ ()))
                     _ ())
-   ga-simd {'sha256h [0x5E004000 "q" "q" "4s"] 'sha256h2 [0x5E005000 "q" "q" "4s"]
-            'sha256su0 [0x5E282800 "4s" "4s"] 'sha256su1 [0x5E006000 "4s" "4s" "4s"]}
+   ;; the crypto words, rows per mnemonic: a whole q/s/d register or vN.<T>, rd rn rm ra at 0 5 16
+   ;; 10, and 'i6 an immediate there (xar's rotate)
+   ga-simd {'sha256h [[0x5E004000 "q" "q" "4s"]] 'sha256h2 [[0x5E005000 "q" "q" "4s"]]
+            'sha256su0 [[0x5E282800 "4s" "4s"]] 'sha256su1 [[0x5E006000 "4s" "4s" "4s"]]
+            'sha1c [[0x5E000000 "q" "s" "4s"]] 'sha1p [[0x5E001000 "q" "s" "4s"]] 'sha1m [[0x5E002000 "q" "s" "4s"]]
+            'sha1su0 [[0x5E003000 "4s" "4s" "4s"]] 'sha1h [[0x5E280800 "s" "s"]] 'sha1su1 [[0x5E281800 "4s" "4s"]]
+            'sha512h [[0xCE608000 "q" "q" "2d"]] 'sha512h2 [[0xCE608400 "q" "q" "2d"]]
+            'sha512su0 [[0xCEC08000 "2d" "2d"]] 'sha512su1 [[0xCE608800 "2d" "2d" "2d"]]
+            'rax1 [[0xCE608C00 "2d" "2d" "2d"]] 'xar [[0xCE800000 "2d" "2d" "2d" 'i6]]
+            'eor3 [[0xCE000000 "16b" "16b" "16b" "16b"]] 'bcax [[0xCE200000 "16b" "16b" "16b" "16b"]]
+            'aese [[0x4E284800 "16b" "16b"]] 'aesd [[0x4E285800 "16b" "16b"]]
+            'aesmc [[0x4E286800 "16b" "16b"]] 'aesimc [[0x4E287800 "16b" "16b"]]
+            'pmull [[0x0E20E000 "8h" "8b" "8b"] [0x0EE0E000 "1q" "1d" "1d"]]
+            'pmull2 [[0x4E20E000 "8h" "16b" "16b"] [0x4EE0E000 "1q" "2d" "2d"]]}
    (ga-simd-ins m os)
-    (: row (ga-simd m) rs (map (i \ ga-vr (os i) (row (i + 1))) ^#os)
-       (? (#os != #row - 1 || !(all charm? rs)) (scare 'gas-a64-operand [m os])
-          (ga-raw (<row | (#rs > 2 ? (rs 2) 0) << 16 | <>rs << 5 | <rs))))
+    (: (fit row) (: rs (map (i \ row (i + 1) @ 'i6 ((os i) @ ('imm v) (0 <= v < 64 ? v ()) _ ()) a (ga-vr (os i) a)) ^#os)
+                    (#os = #row - 1 && all charm? rs ? rs ()))
+       (go l) (? (atom? l) (scare 'gas-a64-operand [m os])
+                 (fit <l @ rs (two? rs ? (ga-raw (<<l | (#rs > 2 ? (rs 2) 0) << 16 | (#rs > 3 ? (rs 3) 0) << 10 | <>rs << 5 | <rs))
+                                 (go >l))))
+       (go (ga-simd m)))
+   ;; crc32 by width: wd, wn, and a w or (the x forms) an x
+   ga-crc {'crc32b 0x1AC04000 'crc32h 0x1AC04400 'crc32w 0x1AC04800 'crc32x 0x9AC04C00
+           'crc32cb 0x1AC05000 'crc32ch 0x1AC05400 'crc32cw 0x1AC05800 'crc32cx 0x9AC05C00}
+   (ga-crc-ins m os)
+    (: b (ga-crc m) mw (b >> 31 = 1 ? 8 4)
+       (? (#os = 3 && all (i \ (os i) @ ('reg r w) (r != 'sp && w = (i = 2 ? mw 4)) _ 0) ^3)
+           (ga-raw (b | ga-hw ((os 2) 1) << 16 | ga-hw ((os 1) 1) << 5 | ga-hw ((os 0) 1)))
+          (scare 'gas-a64-operand [m os])))
+   ;; the memory tag moves: stg/ldg take a 16-scaled imm9 (stg post- and pre-indexed too), stgm/ldgm none
+   (ga-mte-ins m os)
+    (: t ((os 0) @ ('reg r 8) (r != 'sp ? (ga-hw r)) _ ())
+       (i9 v) (v % 16 = 0 && -4096 <= v < 4096 ? ((v // 16) & 511) ())
+       (w b x v o) (i9 v @ n (charm? n ? (ga-raw (b | n << 12 | o << 10 | ga-hw x << 5 | t)) (scare 'gas-a64-operand [m os])))
+       (? !(charm? t) (scare 'gas-a64-operand [m os])
+          (elem m '(stgm ldgm))
+           (#os = 2 ? ((os 1) @ ('mem x 0) (ga-raw ((m = 'stgm ? 0xD9A00000 0xD9E00000) | ga-hw x << 5 | t)) _ (scare 'gas-a64-operand [m os]))
+              (scare 'gas-a64-operand [m os]))
+          (m = 'ldg) (#os = 2 ? ((os 1) @ ('mem x v) (w 0xD9600000 x v 0) _ (scare 'gas-a64-operand [m os])) (scare 'gas-a64-operand [m os]))
+          (#os = 3) ([(os 1) (os 2)] @ (('mem x 0) ('imm v)) (w 0xD9200000 x v 1) _ (scare 'gas-a64-operand [m os]))
+          (#os = 2) ((os 1) @ ('mem x v) (w 0xD9200000 x v 2) ('memw x v) (w 0xD9200000 x v 3) _ (scare 'gas-a64-operand [m os]))
+          (scare 'gas-a64-operand [m os])))
    ;; the advanced simd lane: vN.<T> registers, vN.<T>[i] lanes, { vA.T - vB.T } lists and dN
    ;; scalars, each word as llvm-mc lays it; an arrangement a form does not take refuses
    ga-varr [["8b" 0 0] ["16b" 1 0] ["4h" 0 1] ["8h" 1 1] ["2s" 0 2] ["4s" 1 2] ["1d" 0 3] ["2d" 1 3]]
@@ -908,6 +944,12 @@
                             (all (j \ rs j 0 = (rs 0 0 + j) % 32 && rs j 3 = rs 0 3) ^#rs) [(rs 0 0) #rs (rs 0 1) (rs 0 2)]
                             ()))))
                 _ ())
+   ;; tbl/tbx: vd.8b|16b, a list of one to four consecutive 16b registers, vm of vd's arrangement
+   (ga-tbl-ins m os)
+    (: d (ga-vt (os 0)) l (#os = 3 ? (ga-vls (os 1))) v (#os = 3 ? (ga-vt (os 2)))
+       (? (two? d && two? l && two? v && elem (d 3) ["8b" "16b"] && v 3 = d 3 && l 2 = 1 && l 3 = 0)
+           (ga-raw (0x0E000000 | d 1 << 30 | <v << 16 | (l 1 - 1) << 13 | (m = 'tbx ? 0x1000 0) | <l << 5 | <d))
+          (scare 'gas-a64-operand [m os])))
    ;; scalar floating point on h s d registers, as llvm-mc lays it: the type at bit 22 (s 0,
    ;; d 1, h 3), m << 16 | n << 5 | d; fcvt names its two types, fmov to or from a gp register
    ;; takes sf at bit 31 from an x
@@ -1063,6 +1105,7 @@
     (#os @ k
        (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
           (ga-fp? m os) (ga-fp m os)
+          (elem m '(tbl tbx)) (ga-tbl-ins m os)
           (ga-vec? m os) (ga-neon m os)
           ; a literal load: the word at a label, pc-relative (gas-top's pools land here too)
           (elem m '(ldr ldrsw) && k = 2 && ((os 1) @ ('sym _) 1 ('symk _ _) 1 _ 0) && ((os 0) @ ('reg r _) (r != 'sp) _ 0))
@@ -1100,7 +1143,9 @@
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]
           (m = 'svc) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((sys)) [['svcn n]]))
           (k > 0 && elem m '(ldr str) && charm? (ga-vr (os 0) "q")) (ga-lsq m os)
-          (k > 0 && two? (peep ga-simd m ()) && charm? (ga-vr (os 0) (ga-simd m 1))) (ga-simd-ins m os)
+          (two? (peep ga-simd m ())) (ga-simd-ins m os)
+          (charm? (peep ga-crc m ())) (ga-crc-ins m os)
+          (elem m '(stg ldg stgm ldgm)) (ga-mte-ins m os)
           (two? (peep ga-ldst m ())) (ga-ls m os)
           (two? (peep ga-mla m ())) (ga-mul m os)
           ; an immediate op beside no sp that the IR's rows cannot hold, zr or a word of its own: that
