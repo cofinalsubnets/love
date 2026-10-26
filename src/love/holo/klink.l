@@ -45,16 +45,16 @@
        mem <w
        ; the index: nom -> the member's position, by its header offset; the first definer wins
        pos (: t {} (foldl (\ i m (pin t (m 2) i, i + 1)) 0 mem, t))
-       ix (: t {} ix0 <>w
-             (? (string? ix0)
-                (: n (kl-be32 ix0 0)
-                   (go i o) (? (n <= i) t
-                               (: nom (kl-cstr ix0 o) at (peep pos (kl-be32 ix0 (4 + 4 * i)) -1)
-                                  _ (? (peep t nom -1 != -1) 0 (pin t nom at))
-                                  (go (i + 1) (o + 1 + #nom))))
-                   (go 0 (4 + 4 * n)))
-                t))
-       {'members (map (m \ [<m <>m]) mem) 'index ix 'thin thin})
+       ix {} ord {'l ()}
+       _ (? (string? <>w)
+            (: ix0 <>w n (kl-be32 ix0 0)
+               (go i o) (? (n <= i) 0
+                           (: nom (kl-cstr ix0 o) at (peep pos (kl-be32 ix0 (4 + 4 * i)) -1)
+                              _ (? (peep ix nom -1 != -1) 0 (pin ix nom at, pin ord 'l ([nom at] . ord 'l)))
+                              (go (i + 1) (o + 1 + #nom))))
+               (go 0 (4 + 4 * n)))
+            0)
+       {'members (map (m \ [<m <>m]) mem) 'index ix 'order (rev (ord 'l)) 'thin thin})
 
    ;; --- one relocatable object -> a tablet
    ;   'id 'src 'shnum
@@ -117,9 +117,9 @@
            (p i = s j && m (i + 1) (j + 1)))
        (m 0 0))
 
-   ;; --- inputs in lld's order. items: ('whole path) ('obj path) ('group (path ..)).
-   ;     a group's members are fetched as a strong undefined names them, depth first, and
-   ;     stay fetchable for every later input. answers the link's tablet:
+   ;     a group archive's index is walked in order, a member fetched the moment an entry meets
+   ;     a strong undefined, depth first; the rest stay fetchable for every later input.
+   ;     answers the link's tablet:
    ;     'objs [ob ..] in order, 'glob nom -> [oi si] the definition, 'und nom -> 1|2 (bind)
    (kl-load items)
     (: cx {'objs () 'n 0 'glob {} 'und {} 'lazy {}}
@@ -154,13 +154,14 @@
                    (? (k = 'obj) (add (kl-read <>it <>(uread <>it)))
                       (k = 'whole) (each ((kl-ar <>it) 'members) (m \ add (kl-read <m <>m)))
                       (k = 'group)
-                       (: ars (map (p \ (: a (kl-ar p) (pin a 'taken {}, a))) <>it)
-                          _ (each ars (a \ each (keys (a 'index))
-                                         (nom \ (? (two? (peep lazy nom ())) 0
-                                                   (pin lazy nom [a ((a 'index) nom)])))))
-                          (each ars (a \ (: ix (a 'index)
-                                            (each (sort (map (nom \ [(ix nom) nom]) (keys ix)))
-                                               (p \ (? (peep und <>p 0 = 1) (fetch <>p) 0)))))))
+                       (each <>it
+                          (p \ (: a (kl-ar p)
+                                  _ (pin a 'taken {})
+                                  (each (a 'order)
+                                     (e \ (: nom <e
+                                             (? (two? (peep glob nom ()) || two? (peep lazy nom ())) 0
+                                                (: _ (pin lazy nom [a <>e])
+                                                   (? (peep und nom 0 = 1) (fetch nom) 0)))))))))
                       (scare 'klink-input k)))))
        _ (pin cx 'objs (rev (cx 'objs)))
        cx)
