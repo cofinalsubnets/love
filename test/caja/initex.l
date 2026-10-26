@@ -6,6 +6,7 @@
    _ (borrow (r + "/src/apps/tfm.l"))
    _ (borrow (r + "/src/apps/caja/box.l"))
    _ (borrow (r + "/src/apps/caja/par.l"))
+   _ (borrow (r + "/src/apps/caja/page.l"))
    _ (borrow (r + "/src/apps/caja/mouth.l"))
    _ (borrow (r + "/src/apps/caja/build.l"))
    _ (borrow (r + "/src/apps/caja/exec.l"))

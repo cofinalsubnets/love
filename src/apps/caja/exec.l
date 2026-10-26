@@ -96,7 +96,7 @@
      ins-error J)
    (its-all-over? J)
     (? (!(privileged? J)) 0
-       (J 'page-contents-list = () && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
+       (J 'page-head == J 'page-tail && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
        ; \hbox to \hsize{}\vfill\penalty-'10000000000, and \end comes again
        (: _ (back-input J)
           _ (tail-append J (new-null-box () @ b (pin b 'width (dimen-par J hsize-code), b)))
@@ -137,6 +137,7 @@
           (g = vbox-group) (end-graf J, package J 0)
           (g = vtop-group) (end-graf J, package J vtop-code)
           (g = disc-group) (build-discretionary J)
+          (g = output-group) (resume-page-builder J)
           (not-yet J "this group's end")))
    (extra-right-brace J)
     (: g (J 'cur-group)
@@ -658,8 +659,11 @@
                'cur-mark {} 'read-open {} 'read-file {} 'write-file {} 'after-token 0
                'cur-list {'mode vmode 'head H 'tail H 'prev-depth ignore-depth 'sf 0
                           'pg 0 'ml 0 'clang 0}
-               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty 'page-contents-list () 'contrib-list ()
-               'page-so-far {} 'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
+               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty
+               'page-head {'type glue-node 'sub normal 'link ()} 'page-ins () 'best-page-break ()
+               'least-page-cost 0 'best-size 0 'page-max-depth 0 'best-height-plus-depth 0
+               'page-so-far {0 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0}
+               'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
                'insert-penalties 0 'output-active 0 'mag-set 0
                'cur-cs 0 'cur-cmd 0 'cur-chr 0 'cur-tok 0 'cur-val 0 'cur-val-level int-val
                'radix 0 'cur-order 0 'cur-name "" 'cur-area "" 'cur-ext "" 'fd ()
@@ -667,9 +671,10 @@
                'output-file-name ()
                'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
                'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)
-               'report pack-report 'char-warn char-warning)
+               'report pack-report 'char-warn char-warning 'shrink-warn split-shrink-warn)
        ; par.l's state for its ligature loop and line_break, its codes eqtb's
        _ (cp-setup J)
+       _ (start-new-page J)
        _ (pins J 'sf (\ c (J 'eq (sf-code-base + c))) 'lc (\ c (J 'eq (lc-code-base + c))))
        _ (init-eqtb J)
        _ (primitives J)

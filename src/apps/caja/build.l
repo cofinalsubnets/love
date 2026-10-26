@@ -1,15 +1,18 @@
 ; src/apps/caja/build.l -- caja's lists: box display (tex.web part 12), the semantic nest (16),
-; the packager's reports (33) and the building of boxes and lists (parts 46-47). the second
-; part of the module caja-tex, between mouth.l and exec.l. line_break and the ligature loop
-; are par.l's, packing and shipping box.l's; eqtb reaches them through J 'params.
+; the packager's reports (33), the page builder (45) and the building of boxes and lists
+; (46-47). the second part of the module caja-tex, between mouth.l and exec.l. line_break and
+; the ligature loop are par.l's, vert_break page.l's, packing and shipping box.l's; eqtb
+; reaches them through J 'params.
 (module 'caja-tex
 (borrow 'posix)
 (borrow 'tfm)
 (borrow 'caja-box)
 (borrow 'caja-par)
+(borrow 'caja-page)
 (:
    acc-kern 2 non-char 256 nest-size 500
    box-flag 1073741824 ship-out-flag 1073742336 leader-flag 1073742337
+   awful-bad 1073741823 deplorable 100000 inserting 0 split-up 1
 
    ; --- nodes (tex.web 133-159), as box.l lays them ------------------------------------------
    (tl J) (J 'cur-list 'tail)
@@ -172,7 +175,8 @@
                     print-int J (N 'pg // 4194304), print-char J 44,
                     print-int J (N 'pg // 65536 % 64), print-char J 41))
               _ (N 'ml < 0 ? (print J " (\\output routine)"))
-              _ (>l = () && N 'head 'link != () ? (print-nl J "### recent contributions:"))
+              _ (>l = () ?
+                   (show-page-status J, N 'head 'link != () ? (print-nl J "### recent contributions:")))
               _ (show-box J (N 'head 'link))
               _ (? (abs m // 101 = 0)
                     (print-nl J "prevdepth ",
@@ -324,7 +328,15 @@
            (scan-eight-bit-int J, pin J 'cur-box (copy-node-list (equiv J (box-base + J 'cur-val))),
             box-end J bc)
           (c = last-box-code) (last-box J, box-end J bc)
-          (c = vsplit-code) (not-yet J "\\vsplit")
+          (c = vsplit-code)
+           (: _ (scan-eight-bit-int J) n (J 'cur-val)
+              _ (scan-keyword J "to" ? ()
+                   (print-err J "Missing `to' inserted",
+                    set-help J ["I'm working on `\\vsplit<box number> to <dimen>';"
+                                "will look for the <dimen> next."],
+                    tex-error J))
+              _ (scan-normal-dimen J)
+              (pin J 'cur-box (vsplit J n (J 'cur-val)), box-end J bc))
           (: k (c - vtop-code)
              _ (set-saved J 0 bc)
              _ (? (k = hmode)
@@ -600,23 +612,345 @@
                  "an alignment. Proceed, and I'll ignore this case."],
      tex-error J)
 
-   ; --- the page builder, as far as an empty page goes (tex.web 994-1000) ---------------------
-   ; glue, kerns and penalties ahead of the first box are discarded; the rest is not yet caja's
+   ; --- the page builder (tex.web 980-1028) ----------------------------------------------------
+   ; the current page hangs off J 'page-head; J 'page-ins holds tex.web's page-insertion records,
+   ; sorted by box number, each {'sub 'type 'height 'broken-ptr 'broken-ins 'last-ins 'best-ins}
+   (at? p b) (? (p = ()) (b = ()) (b = ()) 0 (p == b))
+   (last-node p) (p 'link = () ? p (last-node (p 'link)))
+   (box-reg J n) (equiv J (box-base + n))
+   (set-box-reg J n b) (pin (J 'eq) (box-base + n) b)
+   (count-reg J n) (J 'eq (count-base + n))
+   (scaled-count J x n) (count-reg J n = 1000 ? x ((x // 1000) * count-reg J n))
+   (vpack J p h m) (vpackage J p h m max-dimen)
+   (psf J k) (J 'page-so-far k)
+   (psf! J k v) (pin (J 'page-so-far) k v)
+   (set-contrib-tail J t) (pin (J 'nest = () ? (J 'cur-list) ((rev (J 'nest)) 0)) 'tail t)
+   (print-totals J)
+    (: (plus k s) (psf J k != 0 ? (print J " plus ", print-scaled J (psf J k), print J s))
+       (print-scaled J (psf J 1), plus 2 "", plus 3 "fil", plus 4 "fill", plus 5 "filll",
+        psf J 6 != 0 ? (print J " minus ", print-scaled J (psf J 6))))
+   (show-page-status J)
+    (: ph (J 'page-head)
+       (count-ins q b n)
+        (: q2 (q 'link) k (q2 'type = ins-node && q2 'sub = n ? 1 0)
+           (q2 == b ? k (k + count-ins q2 b n)))
+       (ph == J 'page-tail ? ()
+          (print-nl J "### current page:",
+           J 'output-active ? (print J " (held over for next output)"),
+           show-box J (ph 'link),
+           J 'page-contents > empty ?
+             (print-nl J "total height ", print-totals J,
+              print-nl J " goal height ", print-scaled J (psf J 0),
+              map (r \ (: n (r 'sub)
+                          _ (print-ln J) _ (print-esc J "insert") _ (print-int J n)
+                          _ (print J " adds ") _ (print-scaled J (scaled-count J (r 'height) n))
+                          (r 'type = split-up ?
+                             (print J ", #", print-int J (count-ins ph (r 'broken-ins) n),
+                              print J " might split"))))
+                  (J 'page-ins)))))
+   (freeze-page-specs J s)
+    (pins J 'page-contents s 'page-max-depth (dimen-par J max-depth-code) 'least-page-cost awful-bad,
+     psf! J 0 (dimen-par J vsize-code), map (k \ psf! J k 0) [1 2 3 4 5 6 7],
+     int-par J tracing-pages-code > 0 ?
+       (begin-diagnostic J, print-nl J "%% goal height=", print-scaled J (psf J 0),
+        print J ", max depth=", print-scaled J (J 'page-max-depth), end-diagnostic J 0))
+   (start-new-page J)
+    (pins J 'page-contents empty 'page-tail (J 'page-head) 'last-glue () 'last-penalty 0
+            'last-kern 0 'page-max-depth 0,
+     pin (J 'page-head) 'link (), psf! J 7 0)
+   (box-error J n)
+    (tex-error J, begin-diagnostic J, print-nl J "The following box has been deleted:",
+     show-box J (box-reg J n), end-diagnostic J 1, set-box-reg J n ())
+   (ensure-vbox J n)
+    (box-reg J n @ p
+       (p != () && p 'type = hlist-node ?
+          (print-err J "Insertions can only be added to a vbox",
+           set-help J ["Tut tut: You're trying to \\insert into a"
+                       "\\box register that now contains an \\hbox."
+                       "Proceed, and I'll discard its present contents."],
+           box-error J n)))
+   ; the record for insertions into box n, made on the first (tex.web 1009)
+   (page-ins-for J n)
+    (: m (filter (r \ r 'sub = n) (J 'page-ins))
+       (into r l) (l = () || <l 'sub > n ? (r . l) (<l . into r >l))
+       (m != () ? <m
+          (: r {'sub n 'type inserting 'height 0 'best-ins () 'last-ins () 'broken-ptr () 'broken-ins ()}
+             _ (pin J 'page-ins (into r (J 'page-ins)))
+             _ (ensure-vbox J n)
+             _ (box-reg J n @ b (pin r 'height (b = () ? 0 (b 'height + b 'depth))))
+             q (equiv J (skip-base + n))
+             _ (psf! J 0 (psf J 0 - scaled-count J (r 'height) n - q 'width))
+             _ (psf! J (2 + q 'sto) (psf J (2 + q 'sto) + q 'stretch))
+             _ (psf! J 6 (psf J 6 + q 'shrink))
+             _ (q 'sho != normal && q 'shrink != 0 ?
+                  (print-err J "Infinite glue shrinkage inserted from ", print-esc J "skip", print-int J n,
+                   set-help J ["The correction glue for page breaking with insertions"
+                               "must have finite shrinkability. But you may proceed,"
+                               "since the offensive shrinkability has been made finite."],
+                   tex-error J))
+             r)))
+   ; an insertion goes onto the page, whole or to be split (tex.web 1008, 1010)
+   (append-insertion J p)
+    (: _ (J 'page-contents = empty ? (freeze-page-specs J inserts-only))
+       n (p 'sub) r (page-ins-for J n)
+       (? (r 'type = split-up) (pin J 'insert-penalties (J 'insert-penalties + p 'cost))
+          (: _ (pin r 'last-ins p)
+             delta (psf J 0 - psf J 1 - psf J 7 + psf J 6)
+             h (scaled-count J (p 'height) n)
+             ((h <= 0 || h <= delta) && p 'height + r 'height <= J 'eq (scaled-base + n) ?
+                (psf! J 0 (psf J 0 - h), pin r 'height (r 'height + p 'height))
+                (: w0 (? (count-reg J n <= 0) max-dimen
+                         (psf J 0 - psf J 1 - psf J 7 @ w
+                            (count-reg J n != 1000 ? ((w // count-reg J n) * 1000) w)))
+                   room (J 'eq (scaled-base + n) - r 'height)
+                   w (w0 > room ? room w0)
+                   q (cg-vert-break J (p 'ins) w (p 'depth))
+                   _ (pin r 'height (r 'height + J 'best-height-plus-depth))
+                   _ (int-par J tracing-pages-code > 0 ?
+                        (begin-diagnostic J, print-nl J "% split", print-int J n, print J " to ",
+                         print-scaled J w, print-char J 44, print-scaled J (J 'best-height-plus-depth),
+                         print J " p=",
+                         (? (q = ()) (print-int J eject-penalty)
+                            (q 'type = penalty-node) (print-int J (q 'penalty))
+                            (print-char J 48)),
+                         end-diagnostic J 0))
+                   _ (pin J 'best-height-plus-depth (scaled-count J (J 'best-height-plus-depth) n))
+                   _ (psf! J 0 (psf J 0 - J 'best-height-plus-depth))
+                   _ (pins r 'type split-up 'broken-ptr q 'broken-ins p)
+                   (? (q = ()) (pin J 'insert-penalties (J 'insert-penalties + eject-penalty))
+                      (q 'type = penalty-node)
+                       (pin J 'insert-penalties (J 'insert-penalties + q 'penalty))))))))
    (build-page J)
     (: c (contrib-head J)
-       (go _)
-        (c 'link @ p
-           (p != () ?
-              (: _ (pins J 'last-glue () 'last-penalty 0 'last-kern 0)
-                 t (p 'type)
-                 _ (? (t = glue-node) (pin J 'last-glue (p 'glue))
-                      (t = penalty-node) (pin J 'last-penalty (p 'penalty))
-                      (t = kern-node) (pin J 'last-kern (p 'width)))
-                 (J 'page-contents < box-there && (t = glue-node || t = kern-node || t = penalty-node) ?
-                    (pin c 'link (p 'link), pin p 'link (), go ())
-                    (not-yet J "the page builder")))))
-       (!(J 'output-active) ?
-          (go (), pin (J 'nest = () ? (J 'cur-list) ((rev (J 'nest)) 0)) 'tail c)))
+       (contribute p)
+        (: _ (psf J 7 > J 'page-max-depth ?
+                (psf! J 1 (psf J 1 + psf J 7 - J 'page-max-depth), psf! J 7 (J 'page-max-depth)))
+           (pin (J 'page-tail) 'link p, pin J 'page-tail p, pin c 'link (p 'link), pin p 'link ()))
+       (update-heights p)
+        (: q (? (p 'type = kern-node) p
+                (: g (p 'glue)
+                   _ (psf! J (2 + g 'sto) (psf J (2 + g 'sto) + g 'stretch))
+                   _ (psf! J 6 (psf J 6 + g 'shrink))
+                   (g 'sho != normal && g 'shrink != 0 ?
+                      (print-err J "Infinite glue shrinkage found on current page",
+                       set-help J ["The page about to be output contains some infinitely"
+                                   "shrinkable glue, e.g., `\\vss' or `\\vskip 0pt minus 1fil'."
+                                   "Such glue doesn't belong there; but you can safely proceed,"
+                                   "since the offensive shrinkability has been made finite."],
+                       tex-error J,
+                       (new-spec g @ r (pin r 'sho normal, pin p 'glue r, r)))
+                      g)))
+           (psf! J 1 (psf J 1 + psf J 7 + q 'width), psf! J 7 0, contribute p))
+       ; a legal breakpoint of penalty pi: champion it, and fire if it is time; 'exit, 'done or 'go
+       (champion p pi)
+        (pi >= inf-penalty ? 'go
+           (: pt (psf J 1) pg (psf J 0)
+              b (? (pt < pg)
+                    (psf J 3 != 0 || psf J 4 != 0 || psf J 5 != 0 ? 0 (cb-badness (pg - pt) (psf J 2)))
+                   (pt - pg > psf J 6) awful-bad
+                   (cb-badness (pt - pg) (psf J 6)))
+              c0 (? (b >= awful-bad) b (pi <= eject-penalty) pi
+                    (b < inf-bad) (b + pi + J 'insert-penalties) deplorable)
+              k (J 'insert-penalties >= 10000 ? awful-bad c0)
+              _ (int-par J tracing-pages-code > 0 ?
+                   (begin-diagnostic J, print-nl J "%", print J " t=", print-totals J,
+                    print J " g=", print-scaled J pg, print J " b=",
+                    (b = awful-bad ? (print-char J 42) (print-int J b)),
+                    print J " p=", print-int J pi, print J " c=",
+                    (k = awful-bad ? (print-char J 42) (print-int J k)),
+                    (k <= J 'least-page-cost ? (print-char J 35)),
+                    end-diagnostic J 0))
+              _ (k <= J 'least-page-cost ?
+                   (pins J 'best-page-break p 'best-size pg 'least-page-cost k,
+                    map (r \ pin r 'best-ins (r 'last-ins)) (J 'page-ins)))
+              (k = awful-bad || pi <= eject-penalty ? (fire-up J p, J 'output-active ? 'exit 'done) 'go)))
+       ; one node off the contributions; 'exit leaves build_page at once
+       (step p)
+        (: t (p 'type)
+           _ (pins J 'last-glue (t = glue-node ? (p 'glue) ()) 'last-penalty 0 'last-kern 0)
+           _ (? (t = penalty-node) (pin J 'last-penalty (p 'penalty))
+                (t = kern-node) (pin J 'last-kern (p 'width)))
+           pc (J 'page-contents)
+           ; pi, or what to do instead
+           pi (? (t <= rule-node)
+                  (? (pc < box-there)
+                      (: _ (pc = empty ? (freeze-page-specs J box-there) (pin J 'page-contents box-there))
+                         q (new-skip-param J top-skip-code)
+                         s (q 'glue)
+                         _ (pin s 'width (s 'width > p 'height ? (s 'width - p 'height) 0))
+                         (pin q 'link p, pin c 'link q, 'next))
+                     (psf! J 1 (psf J 1 + psf J 7 + p 'height), psf! J 7 (p 'depth), 'contribute))
+                 (t = whatsit-node || t = mark-node) 'contribute
+                 (t = glue-node)
+                  (? (pc < box-there) 'recycle (J 'page-tail 'type < math-node) 0 'update)
+                 (t = kern-node)
+                  (? (pc < box-there) 'recycle (p 'link = ()) 'exit
+                     (p 'link 'type = glue-node) 0 'update)
+                 (t = penalty-node) (pc < box-there ? 'recycle (p 'penalty))
+                 (t = ins-node) (append-insertion J p, 'contribute)
+                 (confusion J "page"))
+           (? (pi = 'next || pi = 'exit) pi
+              (pi = 'recycle) (pin c 'link (p 'link), pin p 'link (), 'next)
+              (pi = 'contribute) (contribute p, 'next)
+              (pi = 'update) (update-heights p, 'next)
+              (champion p pi @ k
+                 (? (k = 'go) (t < glue-node || t > kern-node ? (contribute p) (update-heights p), 'next)
+                    (k = 'done) 'next
+                    'exit))))
+       (go _) (c 'link = () ? 'next (step (c 'link) = 'exit ? 'exit (go ())))
+       (c 'link = () || J 'output-active ? ()
+          ((go ()) = 'exit ? () (set-contrib-tail J c))))
+   ; the best page into box 255, and the output routine or a shipout (tex.web 1012-1023)
+   (fire-up J c)
+    (: bpb (J 'best-page-break)
+       _ (? (bpb 'type = penalty-node)
+             (geq-word-define J (int-base + output-penalty-code) (bpb 'penalty),
+              pin bpb 'penalty inf-penalty)
+             (geq-word-define J (int-base + output-penalty-code) inf-penalty))
+       M (J 'cur-mark)
+       _ (peep M bot-mark-code () != () ?
+            (pin M top-mark-code (M bot-mark-code), pin M first-mark-code ()))
+       _ (c == bpb ? (pin J 'best-page-break ()))
+       _ (box-reg J 255 != () ?
+            (print-err J "", print-esc J "box", print J "255 is not void",
+             set-help J ["You shouldn't use \\box255 except in \\output routines."
+                         "Proceed, and I'll discard its present contents."],
+             box-error J 255))
+       _ (pin J 'insert-penalties 0)
+       hold (int-par J holding-inserts-code > 0)
+       ; each box an insertion goes to acts as a queue
+       _ (hold ? ()
+            (map (r \ (r 'best-ins != () ?
+                         (: n (r 'sub) _ (ensure-vbox J n)
+                            _ (box-reg J n = () ? (set-box-reg J n (new-null-box ())))
+                            h {'type 'head 'link (box-reg J n 'list)}
+                            (pins r 'qhead h 'last-ins (last-node h)))))
+                 (J 'page-ins)))
+       Q {'q {'type 'head 'link ()}}
+       qh (Q 'q)
+       ; box n's queue closed, and p split if it must be; answers 1 when p keeps a remainder
+       (wrap-up r p s)
+        (: w (? (r 'type = split-up && r 'broken-ins == p && r 'broken-ptr != ())
+                (: s2 (: (go s) (s 'link == r 'broken-ptr ? s (go (s 'link))) (go s))
+                   _ (pin s2 'link ())
+                   _ (pin (J 'params) 'splittopskip (p 'split-top))
+                   rest (cg-prune-top J (r 'broken-ptr))
+                   _ (pin p 'ins rest)
+                   (rest = () ? 0 (vpack J rest 0 'additional @ t (pin p 'height (t 'height + t 'depth), 1))))
+                0)
+           _ (pin r 'best-ins ())
+           _ (set-box-reg J (r 'sub) (vpack J (r 'qhead 'link) 0 'additional))
+           w)
+       (walk prev p)
+        (? (at? p (J 'best-page-break)) prev
+           (p 'type = ins-node && !hold)
+            (: r <(filter (r \ r 'sub = p 'sub) (J 'page-ins))
+               wait (? (r 'best-ins = ()) 1
+                       (: s (r 'last-ins)
+                          _ (pin s 'link (p 'ins))
+                          (r 'best-ins == p ? (wrap-up r p s) (pin r 'last-ins (last-node s), 0))))
+               _ (pin prev 'link (p 'link))
+               _ (pin p 'link ())
+               _ (wait != 0 ?
+                    (pin (Q 'q) 'link p, pin Q 'q p, pin J 'insert-penalties (J 'insert-penalties + 1)))
+               (walk prev (prev 'link)))
+           (p 'type = mark-node)
+            (: _ (peep M first-mark-code () = () ? (pin M first-mark-code (p 'mark)))
+               _ (pin M bot-mark-code (p 'mark))
+               (walk p (p 'link)))
+           (walk p (p 'link)))
+       prev (walk (J 'page-head) (J 'page-head 'link))
+       p (J 'best-page-break)
+       ch (contrib-head J)
+       _ (p != () ?
+            (: _ (ch 'link = () ? (set-contrib-tail J (J 'page-tail)))
+               (pin (J 'page-tail) 'link (ch 'link), pin ch 'link p, pin prev 'link ())))
+       ; box 255 packed with vbadness and vfuzz out of the way
+       sb (int-par J vbadness-code) sf (dimen-par J vfuzz-code)
+       _ (pin (J 'eq) (int-base + vbadness-code) inf-bad)
+       _ (pin (J 'eq) (dimen-base + vfuzz-code) max-dimen)
+       _ (set-box-reg J 255 (vpackage J (J 'page-head 'link) (J 'best-size) 'exactly (J 'page-max-depth)))
+       _ (pin (J 'eq) (int-base + vbadness-code) sb)
+       _ (pin (J 'eq) (dimen-base + vfuzz-code) sf)
+       _ (start-new-page J)
+       _ (Q 'q == qh ? () (pin (J 'page-head) 'link (qh 'link), pin J 'page-tail (Q 'q)))
+       _ (pin J 'page-ins ())
+       _ (peep M top-mark-code () != () && peep M first-mark-code () = () ?
+            (pin M first-mark-code (M top-mark-code)))
+       (? (equiv J output-routine-loc = ()) (default-output J)
+          (J 'dead-cycles >= int-par J max-dead-cycles-code)
+           (print-err J "Output loop---", print-int J (J 'dead-cycles),
+            print J " consecutive dead cycles",
+            set-help J ["I've concluded that your \\output is awry; it never does a"
+                        "\\shipout, so I'm shipping \\box255 out myself. Next time"
+                        "increase \\maxdeadcycles if you want me to be more patient!"],
+            tex-error J, default-output J)
+          (pins J 'output-active 1 'dead-cycles (J 'dead-cycles + 1),
+           push-nest J,
+           pins (J 'cur-list) 'mode (0 - vmode) 'prev-depth ignore-depth 'ml (0 - J 'line),
+           begin-token-list J (equiv J output-routine-loc) output-text,
+           new-save-level J output-group, normal-paragraph J, scan-left-brace J)))
+   (default-output J)
+    (: ph (J 'page-head) ch (contrib-head J)
+       _ (ph 'link != () ?
+            (: _ (ch 'link = () ? (set-contrib-tail J (J 'page-tail)) (pin (J 'page-tail) 'link (ch 'link)))
+               (pin ch 'link (ph 'link), pin ph 'link (), pin J 'page-tail ph)))
+       (ship-out J (box-reg J 255), set-box-reg J 255 ()))
+   ; the output routine's right brace (tex.web 1026-1028)
+   (resume-page-builder J)
+    (: I (J 'cur)
+       _ (I 'loc != () || (I 'index != output-text && I 'index != backed-up) ?
+            (print-err J "Unbalanced output routine",
+             set-help J ["Your sneaky output routine has problematic {'s and/or }'s."
+                         "I can't handle that very well; good luck."],
+             tex-error J,
+             (: (go _) (get-token J, J 'cur 'loc != () ? (go ())) (go ()))))
+       _ (end-token-list J) _ (end-graf J) _ (unsave J)
+       _ (pins J 'output-active 0 'insert-penalties 0)
+       _ (box-reg J 255 != () ?
+            (print-err J "Output routine didn't use all of ", print-esc J "box", print-int J 255,
+             set-help J ["Your \\output commands should empty \\box255,"
+                         "e.g., by saying `\\shipout\\box255'."
+                         "Proceed; I'll discard its present contents."],
+             box-error J 255))
+       L (J 'cur-list)
+       _ (L 'tail == L 'head ? () (pin (J 'page-tail) 'link (L 'head 'link), pin J 'page-tail (L 'tail)))
+       ph (J 'page-head) ch (contrib-head J)
+       _ (ph 'link != () ?
+            (: _ (ch 'link = () ? (set-contrib-tail J (J 'page-tail)))
+               (pin (J 'page-tail) 'link (ch 'link), pin ch 'link (ph 'link),
+                pin ph 'link (), pin J 'page-tail ph)))
+       (pop-nest J, build-page J))
+   ; \vsplit n to h (tex.web 977-979)
+   (vsplit J n h)
+    (: v (box-reg J n) M (J 'cur-mark)
+       _ (pin M split-first-mark-code (), pin M split-bot-mark-code ())
+       (? (v = ()) ()
+          (v 'type != vlist-node)
+           (print-err J "", print-esc J "vsplit", print J " needs a ", print-esc J "vbox",
+            set-help J ["The box you are trying to split is an \\hbox."
+                        "I can't split such a box, so I'll leave it alone."],
+            tex-error J, ())
+          (: _ (sync-params J)
+             q (cg-vert-break J (v 'list) h (dimen-par J split-max-depth-code))
+             (marks p)
+              (: _ (p 'type = mark-node ?
+                      (peep M split-first-mark-code () = () ?
+                         (pin M split-first-mark-code (p 'mark), pin M split-bot-mark-code (p 'mark))
+                         (pin M split-bot-mark-code (p 'mark))))
+                 (at? (p 'link) q ? (pin p 'link ()) (marks (p 'link))))
+             _ (at? (v 'list) q ? (pin v 'list ()) (marks (v 'list)))
+             q2 (cg-prune-top J q)
+             _ (set-box-reg J n (q2 = () ? () (vpack J q2 0 'additional)))
+             (vpackage J (v 'list) h 'exactly (dimen-par J split-max-depth-code)))))
+   ; page.l's vert_break, on glue it made finite (tex.web 976)
+   (split-shrink-warn J)
+    (print-err J "Infinite glue shrinkage found in box being split",
+     set-help J ["The box you are \\vsplitting contains some infinitely"
+                 "shrinkable glue, e.g., `\\vss' or `\\vskip 0pt minus 1fil'."
+                 "Such glue doesn't belong there; but you can safely proceed,"
+                 "since the offensive shrinkability has been made finite."],
+     tex-error J)
 
    ; --- shipping out (tex.web 638-641) ---------------------------------------------------------
    (ship-out J p)

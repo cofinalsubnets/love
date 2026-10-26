@@ -3,7 +3,8 @@
 ;
 ;   (cg-vsplit J v h)         v a vbox (or ()), h the height; answers [page rest], the page
 ;                             packed to h at \splitmaxdepth, the rest a vbox or () when v is spent
-;   (cg-vert-break J p h d)   the best break in the vlist p for height h, depth d; () for the end
+;   (cg-vert-break J p h d)   the best break in the vlist p for height h, depth d; () for the end,
+;                             its height plus depth left in J 'best-height-plus-depth
 ;   (cg-prune-top J p)        p less its leading glue, kerns and penalties, \splittopskip ahead
 ;
 ; marks and inserts are not ported; a vlist with neither splits as TeX splits it.
@@ -48,7 +49,7 @@
         (pi < 10000 ?
            (: b0 (bad 0)
               b (b0 < awful ? (? (pi <= -10000) pi (b0 < 10000) (b0 + pi) 100000) b0)
-              (b <= S 'least ? (pin S 'best p, pin S 'least b),
+              (b <= S 'least ? (pin S 'best p, pin S 'least b, pin J 'best-height-plus-depth (cur 0 + S 'pd)),
                b = awful || pi <= -10000))
            0)
        (heights p)
@@ -56,7 +57,8 @@
                 (p 'glue @ g
                    (add (2 + g 'sto) (g 'stretch), add 6 (g 'shrink),
                     g 'sho != 0 && g 'shrink != 0 ?
-                      (cp-spec (g 'width) (g 'stretch) (g 'sto) (g 'shrink) 0 @ g2 (pin p 'glue g2, g2))
+                      ((peep J 'shrink-warn () @ f (f != () ? (f J))),
+                       cp-spec (g 'width) (g 'stretch) (g 'sto) (g 'shrink) 0 @ g2 (pin p 'glue g2, g2))
                       g)))
            (add 1 (S 'pd + q 'width),
             pin S 'pd 0))
