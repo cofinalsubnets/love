@@ -1556,12 +1556,14 @@
            (go 0 ""))
        ; a call's arguments: split at commas, and at a space with no operator beside it
        ; (`m x0 8 1f`, but `m (a) | (b)` is one), outside brackets and quotes
-       (margs s)
+       (margs s) (margsl s -1)
+       ; ..the first lim, then the rest raw (a :vararg's text, commas kept)
+       (margsl s lim)
         (: n #s
            (op? c) (elem c '(43 45 42 47 37 38 124 94 60 62 61 33 126))
            (sk j) (j < n && ws? (s j) ? (sk (j + 1)) j)
            (go i st d q acc)
-            (? (i >= n) (rev (xa-trim (snip s st n) . acc))
+            (? (i >= n || i = st && #acc = lim) (rev (xa-trim (snip s st n) . acc))
                (q = 1) (go (i + 1) st d (s i = 34 ? 0 1) acc)
                (s i = 34) (go (i + 1) st d 1 acc)
                (s i = 40 || s i = 91) (go (i + 1) st (d + 1) q acc)
@@ -1583,13 +1585,17 @@
        ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
        (call m rest)
         (: ps <m
-           as (map unq (0 = #(xa-trim rest) ? () (margs rest)))
+           ; `%expr` (.altmacro) passes the expression's value
+           (pct a) (: t (xa-trim a) (0 < #t && t 0 = 37 ? (show (val (snip t 1 #t))) a))
+           va (two? ps && last ps 2 = 'va)
+           as (map (a \ pct (unq a)) (0 = #(xa-trim rest) ? () (margsl rest (va ? (#ps - 1) -1))))
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
            (kv nm) (filter (a \ xa-trim (snip a 0 (xa-idx a 61)) = nm) kw)
            (bind ps po acc)
             (atom? ps ? acc
                (: p <ps k (kv <p)
-                  (two? k ? (bind >ps po ([<p (unq (xa-trim (snip <k (1 + xa-idx <k 61) #<k)))] . acc))
+                  (? (two? k) (bind >ps po ([<p (unq (xa-trim (snip <k (1 + xa-idx <k 61) #<k)))] . acc))
+                     (p 2 = 'va) ([<p (two? po ? <po "")] . acc)               ; :vararg takes the rest, raw
                      (bind >ps >po ([<p (two? po && <po != "" ? <po <>p)] . acc)))))
            k (peep cnt 'n 0)
            _ (pin cnt 'n (k + 1))
@@ -1601,10 +1607,10 @@
               (? (w = ".macro")
                   (: b (grab >l '(".macro") ".endm")
                      ws (foldl (\ a f (a + eqj (filter (x \ 0 < #x) (xa-split f 32)))) () (xa-split r 44))
-                     specs (map (x \ x @ (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
+                     specs (map (x \ x @ (a + ":vararg") [a "" 'va] (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
                      (pin mac <ws [specs <b],
                       go <>b acc))
-                 (w = ".purgem") (go >l acc)
+                 (elem w [".purgem" ".altmacro" ".noaltmacro"]) (go >l acc)
                  (two? (req t)) (req t @ (nm rg) (pin rq nm (ssub rg), go >l acc))
                  (w = ".unreq") (pin rq (xa-trim r) (), go >l acc)
                  ; gas's `name = expr` is `.set name, expr`
