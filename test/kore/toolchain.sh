@@ -21,6 +21,30 @@ if [ "$(uname -m)" = x86_64 ]; then
     korerun ar rcs "$ho/.kore-our.a" "$ho/.kore-arf.o" "$ho/.kore-arm.o" || fail "kore ar rcs"
     cmp -s "$ho/.kore-gnu.a" "$ho/.kore-our.a" || fail "kore ar vs GNU (archive bytes)"
     ar t "$ho/.kore-gnu.a" > "$g"; korerun ar t "$ho/.kore-our.a" > "$o"; same "ar t"
+    # a name past 15 bytes goes to "//", padded inside its size
+    cp "$ho/.kore-arf.o" "$ho/.kore-long-name-f.o"
+    rm -f "$ho/.kore-gnul.a" "$ho/.kore-ourl.a"
+    ar rcsD "$ho/.kore-gnul.a" "$ho/.kore-long-name-f.o"
+    korerun ar rcs "$ho/.kore-ourl.a" "$ho/.kore-long-name-f.o" || fail "kore ar rcs (long name)"
+    cmp -s "$ho/.kore-gnul.a" "$ho/.kore-ourl.a" || fail "kore ar vs GNU (long name)"
+  fi
+  # thin archives as kbuild asks llvm-ar for them, to the byte: built-in.a nested and
+  # flattened, a lib.a indexed, vmlinux.a's head object moved first, an empty one
+  if command -v llvm-ar >/dev/null 2>&1; then
+    ma=$(cd "$(dirname "$m")" && pwd)/$(basename "$m")
+    for w in llvm kore; do
+      d="$ho/.kore-thin-$w"; rm -rf "$d"; mkdir -p "$d/sub/deep"
+      cp "$ho/.kore-arf.o" "$d/sub/deep/f.o"; cp "$ho/.kore-arm.o" "$d/sub/m.o"; cp "$ho/.kore-arm.o" "$d/z.o"
+      if [ $w = llvm ]; then A="llvm-ar"; else A="env LOVE_NO_IMAGE= $ma ar"; fi
+      ( cd "$d" && $A cDPrST sub/deep/built-in.a sub/deep/f.o && $A cDPrST sub/built-in.a sub/deep/built-in.a sub/m.o \
+        && $A cDPrST built-in.a sub/built-in.a && $A cDPrST empty.a && $A cDPrsT lib.a z.o sub/deep/f.o \
+        && $A cDPrST vmlinux.a built-in.a lib.a && $A mPiT sub/deep/f.o vmlinux.a sub/m.o ) || fail "kore ar thin ($w)"
+    done
+    for a in sub/deep/built-in.a sub/built-in.a built-in.a empty.a lib.a vmlinux.a; do
+      cmp -s "$ho/.kore-thin-llvm/$a" "$ho/.kore-thin-kore/$a" || fail "kore ar thin vs llvm-ar ($a)"
+    done
+    ( cd "$ho/.kore-thin-kore" && LOVE_NO_IMAGE= "$ma" ar t vmlinux.a ) > "$o"
+    ( cd "$ho/.kore-thin-llvm" && llvm-ar t vmlinux.a ) > "$g"; same "ar t (thin)"
   fi
   "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (borrow (name "holo")) _ (borrow (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (quote ("__love_start")) () (quote ("__love_start")) () () () () ())))' >/dev/null 2>&1
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
