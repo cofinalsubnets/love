@@ -275,7 +275,7 @@
                   set-help J ["Sorry, \\setbox is not allowed after \\halign in a display,"
                               "or between \\accent and an accented character."],
                   tex-error J)))
-          (cmd = hyph-data) (not-yet J "hyphenation")
+          (cmd = hyph-data) (chr = 1 ? (new-patterns J) (new-hyph-exceptions J))
           (confusion J "prefix")))
    (assign-let J a n)
     (: _ (get-r-token J) p (J 'cur-cs)

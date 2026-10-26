@@ -1,8 +1,9 @@
 ; src/apps/caja/build.l -- caja's lists: box display (tex.web part 12), the semantic nest (16),
-; the packager's reports (33), math (34-36), alignment (37), the page builder (45), the building
-; of boxes and lists (46-47), math mode (48) and the extensions (53). the second part of the
-; module caja-tex, between mouth.l and exec.l. line_break and the ligature loop are par.l's,
-; vert_break page.l's, packing and shipping box.l's; eqtb reaches them through J 'params.
+; the packager's reports (33), math (34-36), alignment (37), \patterns and \hyphenation (42-43),
+; the page builder (45), the building of boxes and lists (46-47), math mode (48) and the
+; extensions (53). the second part of the module caja-tex, between mouth.l and exec.l.
+; line_break and the ligature loop are par.l's, vert_break page.l's, packing and shipping
+; box.l's; eqtb reaches them through J 'params.
 (module 'caja-tex
 (borrow 'posix)
 (borrow 'tfm)
@@ -1827,6 +1828,71 @@
        _ (get-x-token J)
        _ (J 'cur-cmd != spacer ? (back-input J))
        (#(J 'nest) = 1 ? (build-page J)))
+
+   ; --- \patterns and \hyphenation, token by token (tex.web 934-941, 960-965) -----------------
+   ; into par.l's tables: J 'pats under the language's byte and the letters, every prefix in
+   ; J 'pref, exceptions in J 'exc. J 'trie-ready once a paragraph has hyphenated
+   (hyph-lang J) (int-par J language-code @ l (l <= 0 || l > 255 ? 0 l))
+   (new-hyph-exceptions J)
+    (: _ (scan-left-brace J)
+       lang (hyph-lang J)
+       St {'n 0 'p () 'key ""}
+       (sw _)
+        (: cmd (J 'cur-cmd) ch (J 'cur-chr)
+           (? (cmd = letter || cmd = other-char || cmd = char-given)
+               (: _ (? (ch = 45) (St 'n < 63 ? (pin St 'p (St 'n . St 'p)))
+                       (J 'lc ch = 0)
+                        (print-err J "Not a letter",
+                         set-help J ["Letters in \\hyphenation words must have \\lccode>0."
+                                     "Proceed; I'll ignore the character I just read."],
+                         tex-error J)
+                       (St 'n < 63) (pins St 'n (St 'n + 1) 'key (St 'key + string (J 'lc ch))))
+                  (go ()))
+              (cmd = char-num) (scan-char-num J, pins J 'cur-chr (J 'cur-val) 'cur-cmd char-given, sw ())
+              (cmd = spacer || cmd = right-brace)
+               (: _ (St 'n > 1 ? (pin (J 'exc) (St 'key + string lang) (St 'p)))
+                  (cmd = right-brace ? () (pins St 'n 0 'p () 'key "", go ())))
+              (print-err J "Improper ", print-esc J "hyphenation", print J " will be flushed",
+               set-help J ["Hyphenation exceptions must contain only letters"
+                           "and hyphens. But continue; I'll forgive and forget."],
+               tex-error J, go ())))
+       (go _) (get-x-token J, sw ())
+       (go ()))
+   (new-patterns J)
+    (? (J 'trie-ready = 1)
+        (print-err J "Too late for ", print-esc J "patterns",
+         set-help J ["All patterns must be given before typesetting begins."],
+         tex-error J, scan-toks J 0 0, ())
+       (: lang (hyph-lang J)
+          _ (scan-left-brace J)
+          St {'k 0 'ds 0 'hc {} 'hy {0 0}}
+          (bad msg) (print-err J msg, set-help J ["(See Appendix H.)"], tex-error J)
+          (insert _)
+           (: k (St 'k) hc (St 'hc) hy (St 'hy)
+              _ (hc 1 = 0 ? (pin hy 0 0))
+              _ (hc k = 0 ? (pin hy k 0))
+              (grow i key) (i <= k ? (key + string (hc i) @ k2 (pin (J 'pref) k2 1, grow (i + 1) k2)) key)
+              key (grow 1 (string lang))
+              old (peep (J 'pats) key ())
+              _ (old != () && any (x \ x != 0) old ? (bad "Duplicate pattern"))
+              (pin (J 'langs) lang 1, pin (J 'pats) key (map (i \ peep hy i 0) ^(k + 1))))
+          (go _)
+           (: _ (get-x-token J)
+              cmd (J 'cur-cmd) ch (J 'cur-chr) k (St 'k)
+              (? (cmd = letter || cmd = other-char)
+                  (: _ (? (St 'ds = 1 || ch < 48 || ch > 57)
+                           (: c (ch = 46 ? 0 (J 'lc ch))
+                              _ (c = 0 && ch != 46 ? (bad "Nonletter"))
+                              (k < 63 ? (pin (St 'hc) (k + 1) c, pin (St 'hy) (k + 1) 0,
+                                         pins St 'k (k + 1) 'ds 0)))
+                           (k < 63) (pin (St 'hy) k (ch - 48), pin St 'ds 1))
+                     (go ()))
+                 (cmd = spacer || cmd = right-brace)
+                  (: _ (k > 0 ? (insert ()))
+                     (cmd = right-brace ? () (pins St 'k 0 'ds 0 'hc {} 'hy {0 0}, go ())))
+                 (print-err J "Bad ", print-esc J "patterns", set-help J ["(See Appendix H.)"],
+                  tex-error J, go ())))
+          (go ())))
 
    ; --- alignment (tex.web 768-812) ---------------------------------------------------------
    ; the preamble hangs off J 'align-head. an alignrecord is a null box: 'u and 'v its

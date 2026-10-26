@@ -654,7 +654,8 @@
        (pass _)
         (: _ (L 'thr > 10000 ? (pin L 'thr 10000))
            _ (L 'second ?
-                (pin L 'lang (L 'lang0), pin L 'lhyf (L 'lhyf0), pin L 'rhyf (L 'rhyf0)))
+                (pin J 'trie-ready 1,
+                 pin L 'lang (L 'lang0), pin L 'lhyf (L 'lhyf0), pin L 'rhyf (L 'rhyf0)))
            a {'type 0 'fit 2 'link A 'brk () 'line (L 'pg + 1) 'td 0}
            _ (pin A 'link a)
            _ (pin L 'aw (L 'bg))
