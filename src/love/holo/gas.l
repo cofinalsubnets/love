@@ -1522,6 +1522,11 @@
                   (: a <l b <>l
                      (? ((b 0 = 61 && !(xa-has? a 61)) || a (#a - 1) = 61) (eqj ((a + b) . >>l))
                         (a . eqj >l))))
+       ; a .macro line's comma piece: names at spaces, but a default runs to the comma whole
+       ; (`feat=(((1U << 0) | (1U << 1)))` once cpp has expanded it)
+       (mpiece f) (: i (xa-idx f 61) ws (filter (x \ 0 < #x) (xa-split (i < 0 ? f (snip f 0 i)) 32))
+                     (i < 0 || !(two? ws) ? (eqj (filter (x \ 0 < #x) (xa-split f 32)))
+                        (rev >(rev ws) + [(last ws + "=" + xa-trim (snip f (i + 1) #f))])))
        ; an argument that is one quoted string passes its inside (`"dmb sy"` -> dmb sy)
        (unq a) (: n #a (n >= 2 && a 0 = 34 && a (n - 1) = 34 && !(xa-has? (snip a 1 (n - 1)) 34) ? (snip a 1 (n - 1)) a))
        ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
@@ -1544,7 +1549,7 @@
            (: s <l t (xa-trim s) w (dname s) r (xa-rest t)
               (? (w = ".macro")
                   (: b (grab >l '(".macro") ".endm")
-                     ws (foldl (\ a f (a + eqj (filter (x \ 0 < #x) (xa-split f 32)))) () (xa-split r 44))
+                     ws (foldl (\ a f (a + mpiece f)) () (xa-split r 44))
                      specs (map (x \ x @ (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
                      (pin mac <ws [specs <b],
                       go <>b acc))

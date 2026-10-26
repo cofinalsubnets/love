@@ -551,6 +551,9 @@
         (map (l \ holo-hex 'a64 (gas-text 'a64 l))
              ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
               "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
+   ;; a .macro default with spaces in it stays whole (the vdso's emit_aarch64_feature_1_and)
+   _ (chk-eq "gas.macro.dflt" '("\t.word (((1 << 0) | (1 << 1)))" "\t.word 5")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro e, feat=(((1 << 0) | (1 << 1)))\n\t.word \\feat\n.endm\ne\ne 5")))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
