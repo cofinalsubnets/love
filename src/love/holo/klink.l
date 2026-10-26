@@ -7,6 +7,7 @@
 ;                            header order; the symbol index is not read
 ;   (kl-read id bytes)    -> one relocatable object as a tablet, see below
 ;   (kl-banner id text)   -> an object of one .comment line, for the linker to sign with
+;   (kl-kas id text)      -> the object scripts/kallsyms' .S assembles to, read directly
 
 (module 'holo
 (borrow 'posix)
@@ -93,6 +94,61 @@
        {'id id 'src s 'shnum 2 'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".comment" 1 48 0 #s 1 1 0 0]}
         'syms {0 ["" 0 0 0 0 0 0]} 'nsym 1 'rela {}})
 
+   ; the .S scripts/kallsyms writes, read straight to an object: .byte .short .long .asciz,
+   ; ALGN and PTR at 64 bits, labels and .globl; laid as clang lays it, the debug sections
+   ; empty but there, so a strip-debug link writes the same symbols
+   (kl-kas id s)
+    (: n #s
+       (eol i) (: (go k) (? (k >= n || s k = 10) k (go (k + 1))) (go i))
+       (sp? c) (c = 32 || c = 9 || c = 44)
+       (skip i e) (? (i < e && sp? (s i)) (skip (i + 1) e) i)
+       (word i e) (: (go k) (? (k >= e || sp? (s k) || s k = 58) k (go (k + 1))) (go i))
+       (dig c) (? (c < 58) (c - 48) (c < 71) (c - 55) (c - 87))
+       (num i e) (? (i + 1 < e && s i = 48 && s (i + 1) = 120)
+                    (: (go k a) (? (k >= e) a (go (k + 1) (a * 16 + dig (s k)))) (go (i + 2) 0))
+                    (: (go k a) (? (k >= e) a (go (k + 1) (a * 10 + s k - 48))) (go i 0)))
+       ; numbers to a comment or the line's end
+       (nums i e acc) (: j (skip i e)
+                         (? (j >= e || s j = 47) (rev acc)
+                            (: k (word j e) (nums k e (num j k . acc)))))
+       st {'off 0 'out () 'lab {} 'ord () 'seen {} 'rel ()}
+       (emit b) (pin st 'out (b . st 'out), pin st 'off (st 'off + #b))
+       (name nm) (? (peep (st 'seen) nm ()) () (pin (st 'seen) nm 1, pin st 'ord (nm . st 'ord)))
+       (line i e)
+        (: j (skip i e) k (word j e) w (snip s j k)
+           (? (j >= e || s j = 35) ()
+              (k < e && s k = 58) (: _ (name w) (pin (st 'lab) w (st 'off)))
+              (w = ".byte") (emit (string (nums k e ())))
+              (w = ".short") (emit (string (kl-le (num (skip k e) (word (skip k e) e)) 2)))
+              (w = ".long") (emit (string (kl-le (num (skip k e) (word (skip k e) e)) 4)))
+              (w = ".asciz") (: q (skip k e) (go z) (? (s z = 34) z (go (z + 1)))
+                                (emit (snip s (q + 1) (go (q + 1))), emit (string [0])))
+              (w = ".globl") (name (snip s (skip k e) (word (skip k e) e)))
+              (w = "ALGN") (: r (st 'off % 8) (? (r = 0) () (emit (string (map (x \ 0) ^(8 - r))))))
+              (w = "PTR") (: a (skip k e) b (word a e) nm (snip s a b) p (skip b e)
+                             add (? (p < e && s p = 43) (: q (skip (p + 1) e) (num q (word q e))) 0)
+                             _ (name nm)
+                             _ (pin st 'rel ([(st 'off) nm add] . st 'rel))
+                             (emit (string (kl-le 0 8))))
+              (w = ".section") ()
+              (scare 'klink-kas w)))
+       (walk i) (? (i >= n) () (: e (eol i) _ (line i e) (walk (e + 1))))
+       _ (walk 0)
+       src (cats (rev (st 'out)))
+       ord (rev (st 'ord))
+       ix (: t {} _ (foldl (\ k nm (pin t nm k, k + 1)) 5 ord) t)
+       {'id id 'src src 'shnum 9 'nsym (5 + #ord)
+        'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".strtab" 3 0 0 0 1 0 0 0] 2 [".text" 1 6 0 0 4 0 0 0]
+              3 [".rodata" 1 2 0 #src 8 0 0 0] 4 [".rela.rodata" 4 64 0 (24 * #(st 'rel)) 8 24 8 3]
+              5 [".debug_line" 1 0 0 0 1 0 0 0] 6 [".rela.debug_line" 4 64 0 0 8 24 8 5]
+              7 [".debug_line_str" 1 48 0 0 1 1 0 0] 8 [".symtab" 2 0 0 0 8 24 1 5]}
+        'syms (foldl (\ t nm (: o (peep (st 'lab) nm -1)
+                               (pin t (ix nm) [nm 1 0 (o < 0 ? 0 3) (o < 0 ? 0 o) 0 0])))
+                     {0 ["" 0 0 0 0 0 0] 1 ["$d" 0 0 3 0 0 0] 2 ["$d" 0 0 5 0 0 0]
+                      3 ["" 0 3 7 0 0 0] 4 ["$d" 0 0 7 0 0 0]}
+                     ord)
+        'rela {3 (rev (map (r \ [<r 257 (ix (r 1)) (r 2)]) (st 'rel)))}})
+
    ;; --- glob: * ? [set] [!set] [^set], over a whole name
    (kl-glob p s)
     (: np #p ns #s
@@ -159,6 +215,7 @@
        _ (each items
           (it \ (: k <it
                    (? (k = 'obj) (add (kl-read <>it <>(uread <>it)))
+                      (k = 'tablet) (add <>it)
                       (k = 'whole) (each ((kl-ar <>it) 'members) (m \ add (kl-read <m <>m)))
                       (k = 'group)
                        (each <>it (p \ each ((kl-ar p) 'members)
