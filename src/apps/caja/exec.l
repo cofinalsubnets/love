@@ -138,6 +138,11 @@
           (g = vtop-group) (end-graf J, package J vtop-code)
           (g = disc-group) (build-discretionary J)
           (g = output-group) (resume-page-builder J)
+          (g = no-align-group) (end-graf J, unsave J, align-peek J)
+          (g = align-group)
+           (back-input J, pin J 'cur-tok (cs-token-flag + frozen-cr),
+            print-err J "Missing ", print-esc J "cr", print J " inserted",
+            set-help J ["I'm guessing that you meant to end an alignment here."], ins-error J)
           (not-yet J "this group's end")))
    (extra-right-brace J)
     (: g (J 'cur-group)
@@ -589,7 +594,9 @@
               ((is car-ret) || is tab-mark) (align-error J, big ())
               (is no-align) (no-align-error J, big ())
               (is omit) (omit-error J, big ())
-              ((v? halign) || h? valign || mm? halign || is endv) (not-yet J "alignment")
+              ((v? halign) || h? valign) (init-align J, big ())
+              (mm? halign) (not-yet J "math")
+              ((v? endv) || h? endv) (do-endv J, big ())
               (is end-cs-name)
                (print-err J "Extra ", print-esc J "endcsname",
                 set-help J ["I'm ignoring this, since I wasn't doing a \\csname."],
@@ -668,7 +675,8 @@
                'insert-penalties 0 'output-active 0 'mag-set 0
                'cur-cs 0 'cur-cmd 0 'cur-chr 0 'cur-tok 0 'cur-val 0 'cur-val-level int-val
                'radix 0 'cur-order 0 'cur-name "" 'cur-area "" 'cur-ext "" 'fd ()
-               'up {} 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
+               'align-head {'type 'head 'link ()} 'end-span {'n 256 'info () 'width 0} 'align-stack ()
+               'cur-align () 'cur-span () 'cur-loop () 'cur-head () 'cur-tail () 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
                'output-file-name ()
                'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
                'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)

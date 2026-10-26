@@ -118,6 +118,7 @@
                       walk p (p 'link)))
                  (walk p (p 'link)))))
        _ (walk () p0)
+       _ (pins J 'total-stretch st 'total-shrink sh)
        _ (pins r 'height (dims 'h) 'depth (dims 'd))
        w2 (m @ 'additional (dims 'x + w) w)
        _ (pin r 'width w2)
@@ -168,6 +169,7 @@
                   (t = 11) (pins dims 'x (dims 'x + dims 'd + p 'width) 'd 0)),
                walk (p 'link))))
        _ (walk p0)
+       _ (pins J 'total-stretch st 'total-shrink sh)
        _ (pin r 'width (dims 'w))
        _ (dims 'd > l ? (pin dims 'x (dims 'x + dims 'd - l), pin r 'depth l) (pin r 'depth (dims 'd)))
        h2 (m = 'additional ? (dims 'x + h) h)
