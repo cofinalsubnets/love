@@ -115,6 +115,10 @@
      (: (go a b) (two? a && two? b && <a = <b ? (go >a >b) (ujoinc 47 (map (_ \ "..") a + b)))
         (go (ar-parts d) (ar-parts p))))
    (ar-thin? b) (8 <= #b && snip b 0 8 = "!<thin>\n")
+   ; l less its first k; and the first [k bytes] of l as [it rest], [() l] for none
+   (ar-less k l) (: (go l acc) (atom? l ? (rev acc) (<l = k ? (rev acc + >l) (go >l (<l . acc)))) (go l ()))
+   (ar-pick k l) (: (go l acc) (atom? l ? [() (rev acc)] (<<l = k ? [<l (rev acc + >l)] (go >l (<l . acc))))
+                    (go l ()))
    ; an archive at p, bytes b, as [thin ((name bytes)..)]: the index read past, a thin member's
    ; bytes off its file from p's directory; () for bytes that are no archive
    (ar-read p b)
@@ -163,22 +167,27 @@
            (key f) (thin ? (ar-rel dd f) (ubase f ""))
            (op = 'm ?
               (: _ (two? <>old ? () (udie 2 ("ar: cannot open " + dst)))
-                 ks (map key fs) ms <>old
-                 mv (filter (m \ elem <m ks) ms) st (filter (m \ !(elem <m ks)) ms)
-                 pk (pos? ? key pos ())
-                 (at l) (: (go l acc) (atom? l ? (rev acc + mv)
-                                         (<<l = pk ? (has 97 ? (rev acc + [<l] + mv + >l) (rev acc + mv + l))
-                                            (go >l (<l . acc))))
-                           (go l ()))
-                 (ar-write dst thin ix (at st), 0))
+                 pk (pos? ? (key pos) ())
+                 ; each named key moves its first member; the last member named POS marks
+                 ; where they land, before it (i, b) or after it (a)
+                 (go l ks st mv at)
+                  (atom? l ? [(rev st) (rev mv) at]
+                   (: m <l at2 (<m = pk ? (has 97 ? (#st + 1) #st) at)
+                      (elem <m ks ? (go >l (ar-less <m ks) st (m . mv) at2) (go >l ks (m . st) mv at2))))
+                 (go <>old (map key fs) () () () @ [st mv at]
+                    (: _ (pos? && !(charm? at) ? (udie 2 ("ar: no member " + pos)) ())
+                       k (charm? at ? at #st)
+                       (ar-write dst thin ix (take k st + mv + drop k st), 0))))
               (: ; each file, or a thin archive's members when the archive is thin
                  adds (foldl (\ acc f (uread f @ r
                                        (two? r ? (thin && ar-thin? <>r ? (acc + map (m \ [(key (ar-dir f + <m)) <>m]) <>(ar-read f <>r))
                                                     (acc + [[(key f) <>r]]))
                                           (udie 2 ("ar: cannot open " + f)))))
                              () fs)
-                 ms (foldl (\ acc m (any (o \ <o = <m) acc ? (map (o \ <o = <m ? m o) acc) (acc + [m]))) <>old adds)
-                 (ar-write dst thin ix ms, 0))))))
+                 ; an old member a new one names is replaced in place, by the first such; the rest append
+                 (go l ns acc) (atom? l ? (rev acc + ns)
+                                  (ar-pick <<l ns @ [m rest] (go >l rest ((two? m ? m <l) . acc))))
+                 (ar-write dst thin ix (go <>old adds ()), 0))))))
 
    ; ld: holo's static linker (src/love/holo/link.l) as an applet; -pie the self-relocating
    ; et_dyn, -Ttext the bare-metal org
