@@ -4,7 +4,7 @@
 ; little-endian, aarch64 first.
 ;
 ;   (kl-ar path)          -> the members of an archive, thin or whole: [(name bytes) ..] in
-;                            header order, and 'index the symbol index, nom -> member position
+;                            header order; the symbol index is not read
 ;   (kl-read id bytes)    -> one relocatable object as a tablet, see below
 
 (borrow 'holo)
@@ -15,7 +15,6 @@
    (kl-u64 s i) (rdle s i 8)
    (kl-s64 v) (? (v >= 9223372036854775808) (v - 18446744073709551616) v)
    (kl-cstr s i) (: (go j) (? (s j = 0) (snip s i j) (go (j + 1))) (go i))
-   (kl-be32 s i) ((s i << 24) | (s (i + 1) << 16) | (s (i + 2) << 8) | s (i + 3))
 
    ;; --- archives. a header is 60 bytes: name 16, then size at 48 as decimal text. a thin
    ;     archive's members are paths beside it, its headers followed by no data.
@@ -33,36 +32,23 @@
        (next off sz) (? thin (off + 60) (off + 60 + sz + sz % 2))
        ; the long-name table, a member named "/<offset>" reads to the "/\n" there
        (lname lt o) (: (go k) (? (k + 1 < #lt && !(lt k = 47 && lt (k + 1) = 10)) (go (k + 1)) k) (snip lt o (go o)))
-       (walk off lt idx acc)
-        (? (#s <= off + 59) [(rev acc) idx]
+       (walk off lt acc)
+        (? (#s <= off + 59) (rev acc)
            (: nm (kl-arfld s off 16) sz (kl-arnum (kl-arfld s (off + 48) 10)) d0 (off + 60)
-              (? (nm = "/") (walk (off + 60 + sz + sz % 2) lt (snip s d0 (d0 + sz)) acc)
-                 (nm = "//") (walk (off + 60 + sz + sz % 2) (snip s d0 (d0 + sz)) idx acc)
+              (? (nm = "/") (walk (off + 60 + sz + sz % 2) lt acc)
+                 (nm = "//") (walk (off + 60 + sz + sz % 2) (snip s d0 (d0 + sz)) acc)
                  (: real (? (nm 0 = 47) (lname lt (kl-arnum (snip nm 1 #nm)))
                             (#nm > 0 && nm (#nm - 1) = 47) (snip nm 0 (#nm - 1)) nm)
                     by (? thin (: r (uread (dir + real))
                                   (? (two? r) <>r (scare 'klink-member (dir + real))))
                           (snip s d0 (d0 + sz)))
-                    (walk (next off sz) lt idx ([real by off] . acc))))))
-       w (walk 8 "" () ())
-       mem <w
-       ; the index: nom -> the member's position, by its header offset; the first definer wins
-       pos (: t {} (foldl (\ i m (pin t (m 2) i, i + 1)) 0 mem, t))
-       ix {} ord {'l ()}
-       _ (? (string? <>w)
-            (: ix0 <>w n (kl-be32 ix0 0)
-               (go i o) (? (n <= i) 0
-                           (: nom (kl-cstr ix0 o) at (peep pos (kl-be32 ix0 (4 + 4 * i)) -1)
-                              _ (? (peep ix nom -1 != -1) 0 (pin ix nom at, pin ord 'l ([nom at] . ord 'l)))
-                              (go (i + 1) (o + 1 + #nom))))
-               (go 0 (4 + 4 * n)))
-            0)
-       {'members (map (m \ [<m <>m]) mem) 'index ix 'order (rev (ord 'l)) 'thin thin})
+                    (walk (next off sz) lt ([real by] . acc))))))
+       {'members (walk 8 "" ()) 'thin thin})
 
    ;; --- one relocatable object -> a tablet
    ;   'id 'src 'shnum
    ;   'sec          index -> [name type flags off size align entsize link info]
-   ;   'syms 'nsym   index -> [name bind type shndx value size]
+   ;   'syms 'nsym   index -> [name bind type shndx value size other]
    ;   'rela         target section index -> [(off kind sym addend) ..], ascending by off
    (kl-read id s)
     (: _ (? (#s > 64 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70) 0 (scare 'klink-not-elf id))
@@ -84,7 +70,7 @@
        _ (each ^nsym
             (i \ (: e (sy 3 + 24 * i) info (s (e + 4))
                     (pin syms i [(kl-cstr s (stro + kl-u32 s e)) (info >> 4) (info & 15)
-                                 (kl-u16 s (e + 6)) (kl-u64 s (e + 8)) (kl-u64 s (e + 16))]))))
+                                 (kl-u16 s (e + 6)) (kl-u64 s (e + 8)) (kl-u64 s (e + 16)) (s (e + 5))]))))
        rela {}
        _ (each ^shnum
             (i \ (: r (sec i)
@@ -120,53 +106,57 @@
            (p i = s j && m (i + 1) (j + 1)))
        (m 0 0))
 
-   ;     a group archive's index is walked in order, a member fetched the moment an entry meets
-   ;     a strong undefined, depth first; the rest stay fetchable for every later input.
-   ;     answers the link's tablet:
-   ;     'objs [ob ..] in order, 'glob nom -> [oi si] the definition, 'und nom -> 1|2 (bind)
+   ;; --- inputs, resolved as lld resolves them. items: ('whole path) ('obj path) ('group
+   ;     (path ..)). every global name is inserted in first-seen order; a file's definitions
+   ;     resolve before its undefineds, and a strong undefined extracts a lazy member at once,
+   ;     depth first. a group archive's members are lazy: each in member order offers its
+   ;     definitions until one meets a strong undefined, which extracts it. answers 'objs
+   ;     [ob ..] in parse order, 'ot index -> ob, 'glob nom -> [oi si] the definition, 'und
+   ;     nom -> 0 defined, 1|2 strong or weak undefined, 'order every name inserted
    (kl-load items)
-    (: cx {'objs () 'n 0 'glob {} 'und {} 'lazy {}}
-       glob (cx 'glob) und (cx 'und) lazy (cx 'lazy)
+    (: cx {'objs () 'n 0 'ot {} 'glob {} 'und {} 'lazy {} 'order () 'seen {}}
+       glob (cx 'glob) und (cx 'und) lazy (cx 'lazy) ot (cx 'ot) seen (cx 'seen)
+       (ins nom) (? (peep seen nom 0) 0 (: _ (pin seen nom 1) (pin cx 'order (nom . cx 'order))))
+       (gl ob f) (each >^(ob 'nsym) (si \ (: r (ob 'syms si) (? (r 1 = 0 || #(<r) = 0) 0 (f si r)))))
        (add ob)
         (: oi (cx 'n)
-           _ (pin cx 'n (oi + 1), pin cx 'objs (ob . cx 'objs))
-           sy (ob 'syms)
-           _ (each ^(ob 'nsym)
-              (si \ (: r (sy si) nom <r bind (r 1) sh (r 3)
-                       (? (bind = 0 || #nom = 0) 0
-                          (sh != 0)
-                           (: cur (peep glob nom ())
-                              (? (atom? cur) (pin glob nom [oi si], pin und nom 0)
-                                 (bind = 1 && ((cx 'objs) ((cx 'n) - 1 - <cur)) 'syms (cur 1) 1 = 2)
-                                  (pin glob nom [oi si])
-                                 0))
-                          (two? (peep glob nom ())) 0
-                          (: u (peep und nom 0)
-                             _ (pin und nom (? (u = 1 || bind = 1) 1 2))
-                             (? (bind = 1) (fetch nom) 0))))))
+           _ (pin cx 'n (oi + 1), pin ot oi ob, pin cx 'objs (ob . cx 'objs))
+           _ (gl ob (\ si r (ins <r)))
+           _ (gl ob (\ si r (? (r 3 = 0) 0 (def oi si r))))
+           _ (gl ob (\ si r (? (r 3 = 0) (ref <r (r 1)) 0)))
            oi)
-       (fetch nom)
-        (: m (peep lazy nom ())
-           (? (two? m) (: ar <m mi <>m
-                          (? (peep (ar 'taken) mi 0) 0
-                             (: mem ((ar 'members) mi)
-                                (pin (ar 'taken) mi 1, add (kl-read <mem <>mem)))))
+       (def oi si r)
+        (: nom <r cur (peep glob nom ())
+           (? (atom? cur) (: _ (pin glob nom [oi si], pin und nom 0) (pin lazy nom ()))
+              (r 1 = 1 && ot <cur 'syms (cur 1) 1 = 2) (pin glob nom [oi si])
               0))
+       (ref nom bind)
+        (? (two? (peep glob nom ())) 0
+           (: u (peep und nom 0) m (peep lazy nom ())
+              _ (pin und nom (? (u = 1 || bind = 1) 1 2))
+              (? (bind = 1 && two? m) (extract <m) 0)))
+       (extract mem) (? (mem 'taken) 0 (: _ (pin mem 'taken 1) (add (mem 'ob))))
+       ; a lazy member offers its definitions in order until one meets a strong undefined
+       (offer mem)
+        (: ob (mem 'ob) sy (ob 'syms)
+           (go si) (? (si >= ob 'nsym) 0
+                      (: r (sy si)
+                         (? (r 1 = 0 || r 3 = 0 || #(<r) = 0) (go (si + 1))
+                            (: nom <r _ (ins nom)
+                               (? (two? (peep glob nom ())) (go (si + 1))
+                                  (peep und nom 0 = 1) (extract mem)
+                                  (: _ (? (two? (peep lazy nom ())) 0 (pin lazy nom [mem]))
+                                     (go (si + 1))))))))
+           (go 1))
        _ (each items
           (it \ (: k <it
                    (? (k = 'obj) (add (kl-read <>it <>(uread <>it)))
                       (k = 'whole) (each ((kl-ar <>it) 'members) (m \ add (kl-read <m <>m)))
                       (k = 'group)
-                       (each <>it
-                          (p \ (: a (kl-ar p)
-                                  _ (pin a 'taken {})
-                                  (each (a 'order)
-                                     (e \ (: nom <e
-                                             (? (two? (peep glob nom ()) || two? (peep lazy nom ())) 0
-                                                (: _ (pin lazy nom [a <>e])
-                                                   (? (peep und nom 0 = 1) (fetch nom) 0)))))))))
+                       (each <>it (p \ each ((kl-ar p) 'members)
+                                         (m \ offer {'ob (kl-read <m <>m) 'taken 0})))
                       (scare 'klink-input k)))))
-       _ (pin cx 'objs (rev (cx 'objs)))
+       _ (pin cx 'objs (rev (cx 'objs)), pin cx 'order (rev (cx 'order)))
        cx)
 
    ;; --- placement: each input section to the first SECTIONS input description whose pattern
