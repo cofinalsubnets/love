@@ -48,6 +48,8 @@
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
+;   (twinkle k)                        the air's stir under the stars: 1 earth's (none said),
+;                                      0 an airless sky's still stars, more a shimmering night
 ;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
 ;                                      world's own dim
 ;   (skylight (rgb r g b))             light out under the sky at any hour, over the sky's own
@@ -204,7 +206,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand dark tree vined train bin mattress wake-bed sleep-bed telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog ad spinner orb glow inward herald tether playing fence gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand dark tree vined train bin mattress wake-bed sleep-bed telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
@@ -262,6 +264,7 @@
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
+ (twinkle k) (: u "(twinkle k)" ((charm? k || gem? k) && 0 <= k ? (part 'twinkle [['k (1.0 * k)]]) (no u k)))
  (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
  (skylight c) (: u "(skylight (rgb r g b))" (colour? c ? (part 'skylight [['c c]]) (no u c)))
  (hum nm lo hi) (: u "(hum SOUND [x y z] [x y z])"
@@ -573,7 +576,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'sleep 'herald])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (peep p 'kind ()) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'sleep 'herald])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -596,7 +599,7 @@
        'heralds (map (h \ {'at (h 'at) 'size (h 'size) 'reach (h 'reach) 'tex (tname (h 'tex)) 'file (h 'file) 'entry (h 'entry)}) (of 'herald))
        'shots (map (s \ (: k (peep s 'sky ())
                          {'secs (s 'secs) 'deg (s 'deg) 'pitch (s 'pitch)
-                          'at (tablet? k ? () (s 'at)) 'sky (tablet? k ? {'hour (k 'hour) 'cover (k 'cover) 'smog 0.0} ())}))
+                          'at (tablet? k ? () (s 'at)) 'sky (tablet? k ? {'hour (k 'hour) 'cover (k 'cover) 'smog 0.0 'twinkle 1.0} ())}))
                    (of 'shot))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
        'brushes (map (b \ b 'kind = 'land ? {'air 0 'land (b 'rows) 'skin (skin-of b) 'src (peep b 'src ())}
@@ -627,7 +630,7 @@
        'speakers (map (q \ {'at (q 'at) 'lo (peep q 'lo ()) 'hi (peep q 'hi ())}) (of 'speaker))
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
-       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k))})
+       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'brittle (peep p 'brittle 0) 'lens (peep p 'lens ())}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (peep d 'along ()) 'land (d 'kind = 'land ? 1 0)}) (of 'drape + of 'land))
