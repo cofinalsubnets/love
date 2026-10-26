@@ -44,11 +44,10 @@
              ['righthyphenmin 0] ['uchyph 0] ['language 0] ['tracingparagraphs 0] ['lineskiplimit 0]
              ['leftskip ()] ['rightskip ()] ['parfillskip ()] ['baselineskip ()]
              ['lineskip ()] ['parskip ()] ['spaceskip ()] ['xspaceskip ()]],
-        pin J 'lc lc, pin J 'sf sf,
-        pin J 'pats {}, pin J 'pref {}, pin J 'langs {}, pin J 'exc {},
-        pin J 'lp 0, pin J 'lft 0, pin J 'rt 0, pin J 'cbd 0,
-        pin J 'insd 0,
-        J))
+        pins J 'lc lc 'sf sf
+        'pats {} 'pref {} 'langs {} 'exc {}
+        'lp 0 'lft 0 'rt 0 'cbd 0
+        'insd 0))
    (P J k) (J 'params k)
    (zero? g) (g = () || g 'width = 0 && g 'stretch = 0 && g 'shrink = 0)
    (spec-of g) (g = () ? (cp-spec 0 0 0 0 0) g)
@@ -62,14 +61,14 @@
    (pennode J n) {'type 12 'sub 0 'penalty n 'link ()}
    (discnode J) {'type 7 'sub 0 'pre () 'post () 'link ()}
    (gluenode J g s) {'type 10 'sub s 'glue (spec-of g) 'leader () 'link ()}
-   (to-end n) (n 'link = () ? n (to-end (n 'link)))
+   (to-end n) (n 'link @ () n (to-end (n 'link)))
    ; the character field as tex.web reads it off any node: a non-character's subtype
    (charfield n) (char? n ? (n 'char) (n 'sub))
 
    ; --- fonts ---
    (tf J f) (J 'fonts f 'tfm)
    (ci J f c) (tf J f 'ci c)
-   (exists J f c) (tf J f @ t (t 'bc <= c && c <= t 'ec && 0 < <(t 'ci c)))
+   (exists J f c) (tf J f @ t (t 'bc <= c <= t 'ec && 0 < <(t 'ci c)))
    (cw J f c) (tf J f @ t (t 'wd <(t 'ci c)))
    (tag q) (q 2 % 4)
    (lk J f k) (tf J f 'lig k)
@@ -99,7 +98,7 @@
    (ctok? t) (two? t && t 0 = 'c)
    ; the run starts at the character token first in toks; answers the tokens left
    (main-loop J M toks)
-    (tf J (M 'font) 'nl = 0 ? (plain-run J M toks) (lig-run J M toks))
+    (tf J (M 'font) 'nl @ 0 (plain-run J M toks) (lig-run J M toks))
    ; no lig/kern program: each character its node, a hyphen character a discretionary after it
    (plain-run J M toks)
     (: f (M 'font) t (tf J f) ci (t 'ci) hc (hychar J f)
@@ -137,41 +136,40 @@
         (S 'cl < non ?
            (S 'cq 'link != () && charfield (M 'tail) = hychar J f ? (pin J 'insd 1),
             J 'lp ? (pack x),
-            J 'insd ? (pin J 'insd 0, (? (!(M 'restricted)) (tail-append M (discnode J))))))
+            J 'insd ? (pin J 'insd 0, !(M 'restricted) ? (tail-append M (discnode J)))))
        (step l)
         (l @
          'append
           (: c (S 'c0)
              _ (adjust-sf J M c)
-             _ (pin S 'ls (charnode J f c)) _ (pin S 'cl c) _ (pin S 'cq (M 'tail))
+             _ (pins S 'ls (charnode J f c) 'cl c 'cq (M 'tail))
              k (J 'cbd ? (pin J 'cbd 0, ()) (t 'blabel))
-             (k = () ? 'move2
-                (pin S 'k k, pin S 'cr c, pin S 'cl non, 'lig1)))
+             (k @ () 'move2 (pins S 'k k 'cr c 'cl non, 'lig1)))
          'wrapup (wrapup (J 'rt), 'move)
-         'move (S 'ls = () ? 'out
-                  (pin S 'cq (M 'tail), pin S 'cl (S 'ls 'char), 'move1))
+         'move (S 'ls @ () 'out
+                  (pins S 'cq (M 'tail) 'cl (S 'ls 'char), 'move1))
          'move1 (char? (S 'ls) ? 'move2 'movelig)
          'move2
           (S 'ls 'char @ c
-             (? (!(exists J f c)) (warn J f c, pin S 'ls (), 'lost)
+             (? !(exists J f c) (warn J f c, pin S 'ls (), 'lost)
                 (tail-append M (S 'ls), 'look)))
          'look
           (next () @ c
              (charm? c ? (pin S 'c1 c, 'look1)
                 (c = 'nb ? (pin S 'bchar non),
-                 pin S 'cr (S 'bchar), pin S 'ls (),
+                 pins S 'cr (S 'bchar) 'ls (),
                  'lig)))
          'look1
           (S 'c1 @ c
              (adjust-sf J M c,
-              pin S 'ls (charnode J f c), pin S 'cr c,
+              pins S 'ls (charnode J f c) 'cr c,
               c = S 'fb ? (pin S 'cr non),
               'lig))
          'lig
           (ci J f (S 'cl) @ q
              (tag q != 1 || S 'cr = non ? 'wrapup
                 (: k (q 3) j (lk J f k)
-                   (j 0 <= 128 ? (pin S 'k k, pin S 'j j, 'lig2)
+                   (j 0 <= 128 ? (pins S 'k k 'j j, 'lig2)
                       (pin S 'k (256 * j 2 + j 3), 'lig1)))))
          'lig1 (pin S 'j (lk J f (S 'k)), 'lig2)
          'lig2
@@ -188,14 +186,14 @@
                    nx (? (op = 1 || op = 5) (pin S 'cl r, pin J 'lp 1, ())
                          (op = 2 || op = 6)
                           (: _ (pin S 'cr r) ls (S 'ls)
-                             (? (ls = ()) (pin S 'ls (item r), pin S 'bchar non, ())
+                             (? (ls = ()) (pins S 'ls (item r) 'bchar non, ())
                                 (char? ls) (item r @ it (pin it 'lig ls, pin S 'ls it, ()))
                                 (pin ls 'char r, ())))
                          (op = 3)
                           (: _ (pin S 'cr r) it (item r) (pin it 'link (S 'ls), pin S 'ls it, ()))
                          (op = 7 || op = 11)
-                          (wrapup 0, pin S 'cq (M 'tail), pin S 'cl r, pin J 'lp 1, ())
-                         (pin S 'cl r, pin J 'lp 1, S 'ls = () ? 'wrapup 'move1))
+                          (wrapup 0, pins S 'cq (M 'tail) 'cl r, pin J 'lp 1, ())
+                         (pin S 'cl r, pin J 'lp 1, S 'ls @ () 'wrapup 'move1))
                    (? (nx != ()) nx
                       (op > 4 && op != 7) 'wrapup
                       (S 'cl < non) 'lig
@@ -205,9 +203,9 @@
              (p != () ? (tail-append M p),
               pin S 'ls (ls 'link),
               pin J 'lp 1,
-              S 'ls = () ? (p != () ? 'look (pin S 'cr (S 'bchar), 'lig))
+              S 'ls @ () (p @ () (pin S 'cr (S 'bchar), 'lig) 'look)
                 (pin S 'cr (S 'ls 'char), 'lig))))
-       (run l) (l = 'out || l = 'lost ? l (run (step l)))
+       (run l) (l @ ('out || 'lost) l (run (step l)))
        (run 'append))
 
    ; --- spaces (tex.web 1041-1044) ---
@@ -230,14 +228,11 @@
     (: _ (pin M 'vpg 0)
        _ (? (!(same? (M 'vhead) (M 'vtail))) (vappend M (gluenode J (P J 'parskip) 3)))
        h {'type 'head 'link ()}
-       (pin M 'mode 'h, pin M 'hhead h, pin M 'tail h, pin M 'sf 1000,
-        pin M 'hpg ((norm-min (P J 'lefthyphenmin) * 64 + norm-min (P J 'righthyphenmin)) * 65536
+       (pins M 'mode 'h 'hhead h 'tail h 'sf 1000
+        'hpg ((norm-min (P J 'lefthyphenmin) * 64 + norm-min (P J 'righthyphenmin)) * 65536
                     + cur-lang J),
         indented ? (cb-null-box 0 @ b (pin b 'width (P J 'parindent), tail-append M b))))
-   (normal-paragraph J)
-    (J 'params @ pr
-       (pin pr 'looseness 0, pin pr 'hangindent 0, pin pr 'hangafter 1,
-        pin pr 'parshape ()))
+   (normal-paragraph J) (pins (J 'params) 'looseness 0 'hangindent 0 'hangafter 1 'parshape ())
    (end-graf J M)
     (? (M 'mode = 'h && !(M 'restricted))
        (M 'hhead 'link != () ? (line-break J M (P J 'widowpenalty)),
@@ -267,12 +262,12 @@
     (: h {'type 'head 'link ()}
        M {'mode 'h 'restricted 1 'font font 'hhead h 'tail h 'sf 1000 'hpg 0}
        (cp-run J M toks,
-        (cb-hpack J (h 'link) (w = () ? 0 w) (w = () ? 'additional 'exactly))))
+        (cb-hpack J (h 'link) (w @ () 0 w) (w @ () 'additional 'exactly))))
    (cp-run J M toks)
     (: (go ts)
         (? (!(two? ts)) M
            (<ts @ t
-              (M 'mode = 'v ?
+              (M 'mode @ 'v
                  (? (ctok? t) (new-graf J M 1, go ts)
                     (t = 'indent) (new-graf J M 1, go >ts)
                     (t = 'noindent) (new-graf J M 0, go >ts)
@@ -321,11 +316,11 @@
    ; said in halves, so a token's must be one
    (fname k) "\\f\(string (96 + k))"
    (units o) (["sp" "fil" "fill" "filll"] o)
-   (amt v o) (o = 0 ? "\(v)sp"
+   (amt v o) (o @ 0 "\(v)sp"
                 (: whole (v // 65536) frac (v % 65536)
                    (frac = 0 ? "\(whole)\(units o)" "\(whole).5\(units o)")))
    (glue-tex g) "\(g 0)sp plus \(amt (g 1) (g 2)) minus \(amt (g 3) (g 4))"
-   (dim-tex nm v) (v = () ? "" " \(nm) \(v)sp")
+   (dim-tex nm v) (v @ () "" " \(nm) \(v)sp")
    (plain? b) (32 < b && b < 127 && nelem b [92 123 125 37])
    ; each token said, and whether it ended in a plain character (a space may follow it bare)
    (tok-tex t)
@@ -385,15 +380,15 @@
         (: hc {} hy {0 0} St {'k 0 'ds 0}
            _ (map (i \ (: ch (w i) k (St 'k)
                           (St 'ds || ch < 48 || ch > 57 ?
-                             (k < 63 ? ((ch = 46 ? 0 (J 'lc ch)) @ c
+                             (k < 63 ? ((ch @ 46 0 (J 'lc ch)) @ c
                                           (pin hc (k + 1) c, pin hy (k + 1) 0,
-                                           pin St 'k (k + 1), pin St 'ds 0)))
+                                           pins St 'k (k + 1) 'ds 0)))
                              (k < 63 ? (pin hy k (ch - 48), pin St 'ds 1)))))
                   ^#w)
            k (St 'k)
            (k > 0 ?
-              (: _ (hc 1 = 0 ? (pin hy 0 0))
-                 _ (hc k = 0 ? (pin hy k 0))
+              (: _ (hc 1 @ 0 (pin hy 0 0))
+                 _ (hc k @ 0 (pin hy k 0))
                  (grow i key) (i <= k ?
                                  (key + string (hc i) @ k2 (pin (J 'pref) k2 1, grow (i + 1) k2))
                                  key)
@@ -431,7 +426,7 @@
             (: j (name (i + 1)) nm (snip s (i + 1) j) k (blank j)
                (k < n && s k = 123 ?
                   (body (k + 1) () @ b
-                     ((? (nm = "patterns") (cp-patterns J <b) (nm = "hyphenation") (cp-hyphenation J <b)),
+                     (nm @ "patterns" (cp-patterns J <b) "hyphenation" (cp-hyphenation J <b),
                       go (b 1)))
                   (go j)))
            (go (i + 1)))
@@ -449,7 +444,7 @@
    (line-break J M fwp)
     (: tl (M 'tail)
        _ (char? tl || tl 'type != 10 ? (tail-append M (pennode J 10000))
-            (pin tl 'type 12, pin tl 'penalty 10000, pin tl 'glue ()))
+            (pins tl 'type 12 'penalty 10000 'glue ()))
        _ (tail-append M (gluenode J (P J 'parfillskip) 15))
        hpg (M 'hpg)
        L {'lang0 (hpg % 65536) 'lhyf0 (hpg // 4194304) 'rhyf0 (hpg // 65536 % 64)
@@ -471,13 +466,10 @@
             (hi = 0 ? (pin L 'lsl 0, pin L 'sw hs, pin L 'si 0)
                (pin L 'lsl (abs ha),
                 ha < 0 ?
-                  (pin L 'fw (hs - abs hi), pin L 'fi (hi >= 0 ? hi 0),
-                   pin L 'sw hs, pin L 'si 0)
-                  (pin L 'fw hs, pin L 'fi 0,
-                   pin L 'sw (hs - abs hi), pin L 'si (hi >= 0 ? hi 0))))
-            (#ps @ n (pin L 'lsl (n - 1),
-                      pin L 'sw (ps (n - 1) 1), pin L 'si (ps (n - 1) 0))))
-       _ (pin L 'easy (P J 'looseness = 0 ? (L 'lsl) maxhw))
+                  (pins L 'fw (hs - abs hi) 'fi (hi >= 0 ? hi 0) 'sw hs 'si 0)
+                  (pins L 'fw hs 'fi 0 'sw (hs - abs hi) 'si (hi >= 0 ? hi 0))))
+            (#ps @ n (pins L 'lsl (n - 1) 'sw (ps (n - 1) 1) 'si (ps (n - 1) 0))))
+       _ (pin L 'easy (P J 'looseness @ 0 (L 'lsl) maxhw))
        A {'head 1 'type 1 'line maxhw 'link ()}
        _ (pin A 'link A)
        (lastp r) (r 'head = 1)
@@ -511,12 +503,11 @@
                         cp)
                   (strip s)
                    (s = () || char? s ? ()
-                      (s 'type @ y
-                         (? (y = 10) (pin L 'bw (spec-sub (L 'bw) (s 'glue)), strip (s 'link))
-                            (y = 12) (strip (s 'link))
-                            (y = 9) (bw-add (0 - s 'width), strip (s 'link))
-                            (y = 11 && s 'sub = 1) (bw-add (0 - s 'width), strip (s 'link))
-                            ())))
+                    (s 'type @
+                     10 (pin L 'bw (spec-sub (L 'bw) (s 'glue)), strip (s 'link))
+                     12 (strip (s 'link))
+                     9 (bw-add (0 - s 'width), strip (s 'link))
+                     (11 && s 'sub = 1) (bw-add (0 - s 'width), strip (s 'link))))
                   (strip s0))
               (create r)
                (: _ (T 'nby ? (pin T 'nby 0, break-width 0))
@@ -524,7 +515,7 @@
                   _ (? (pr 'type = 2) (pin pr 'd (pr 'd - caw + bw))
                        (lastp pr) (pin L 'aw bw)
                        ({'type 2 'd (bw - caw) 'link r} @ q
-                          (pin pr 'link q, pin T 'ppr pr, pin T 'pr q)))
+                          (pin pr 'link q, pins T 'ppr pr 'pr q)))
                   adj (P J 'adjdemerits)
                   (pin L 'mind (abs adj >= awful - L 'mind ? (awful - 1) (L 'mind + abs adj)),
                    map (fit \ (L 'minimal fit <= L 'mind ?
@@ -541,12 +532,12 @@
                    pin L 'mind awful,
                    (? (!(lastp r))
                       ({'type 2 'd (caw - bw) 'link r} @ q
-                         (pin (T 'pr) 'link q, pin T 'ppr (T 'pr), pin T 'pr q)))))
+                         (pin (T 'pr) 'link q, pins T 'ppr (T 'pr) 'pr q)))))
               (record r b fit art l)
                (: d (art ? 0
                        (: d0 (P J 'linepenalty + b)
-                          d1 (abs d0 >= 10000 ? 100000000 (d0 * d0))
-                          d2 (? (pi > 0) (d1 + pi * pi) (pi < 0 && pi > -10000) (d1 - pi * pi) d1)
+                          d1 (abs d0 >= 10000 ? 100000000 (2 d0))
+                          d2 (? (pi > 0) (d1 + 2 pi) (pi < 0 && pi > -10000) (d1 - 2 pi) d1)
                           d3 (bt = 1 && r 'type = 1 ?
                                 (cp != () ? (d2 + P J 'doublehyphendemerits) (d2 + P J 'finalhyphendemerits))
                                 d2)
@@ -562,8 +553,7 @@
                    (? (lastp pr)
                       (A 'link @ r2
                          (r2 'type = 2 ?
-                            (pin L 'aw (L 'aw + r2 'd),
-                             pin L 'caw (L 'aw),
+                            (pin L 'aw (L 'aw + r2 'd), pin L 'caw (L 'aw),
                              pin A 'link (r2 'link))))
                       (pr 'type = 2)
                       (pr 'link @ r2
@@ -572,8 +562,7 @@
                              pin (T 'ppr) 'link A, pin T 'pr (T 'ppr))
                             (r2 'type = 2)
                             (pin L 'caw (L 'caw + r2 'd),
-                             pin pr 'd (pr 'd + r2 'd),
-                             pin pr 'link (r2 'link)))))))
+                             pins pr 'd (pr 'd + r2 'd) 'link (r2 'link)))))))
               (consider r l)
                (: caw (L 'caw)
                   sf (T 'lw - at caw 1)
@@ -600,9 +589,8 @@
                         (l > T 'oldl ?
                            (L 'mind < awful && (T 'oldl != L 'easy || lastp r) ? (create r),
                             lastp r ? ()
-                              (l > L 'easy ? (pin T 'lw (L 'sw), pin T 'oldl (maxhw - 1))
-                                 (pin T 'oldl l,
-                                  pin T 'lw (? (l > L 'lsl) (L 'sw) (ps = ()) (L 'fw) (ps (l - 1) 1))),
+                              (l > L 'easy ? (pins T 'lw (L 'sw) 'oldl (maxhw - 1))
+                                 (pins T 'oldl l 'lw (? (l > L 'lsl) (L 'sw) (ps = ()) (L 'fw) (ps (l - 1) 1))),
                                consider r l))
                            (consider r l)))))
               (loop 0)))
@@ -638,7 +626,7 @@
                                         g (finite (cp 'glue)) (pin cp 'glue g,
                                                                pin L 'aw (spec-add (L 'aw) g),
                                                                L 'second && L 'auto ? (try-hyphenate cp)))
-                                    (y = 11) (cp 'sub = 1 ? (kern-break cp) (aw-add (cp 'width)))
+                                    (y = 11) (cp 'sub @ 1 (kern-break cp) (aw-add (cp 'width)))
                                     (y = 6) (aw-add (wd J cp))
                                     (y = 9) (pin L 'auto (cp 'sub = 1), kern-break cp)
                                     (y = 12) (try-break (cp 'penalty) 0)
@@ -650,7 +638,7 @@
         (: (go r best fd) (lastp r ? best
                              (r 'type != 2 && r 'td < fd ? (go (r 'link) r (r 'td)) (go (r 'link) best fd)))
            b (go (A 'link) () awful)
-           (pin L 'best b, pin L 'bline (b 'line)))
+           (pins L 'best b 'bline (b 'line)))
        (loose _)
         (: lo (P J 'looseness) bl (L 'bline)
            S {'al 0 'fd awful}
@@ -658,7 +646,7 @@
                      (r 'type != 2 ?
                         (r 'line - bl @ d
                            (? (d < S 'al && lo <= d || d > S 'al && lo >= d)
-                              (pin L 'best r, pin S 'al d, pin S 'fd (r 'td))
+                              (pin L 'best r, pins S 'al d 'fd (r 'td))
                               (d = S 'al && r 'td < S 'fd)
                               (pin L 'best r, pin S 'fd (r 'td)))),
                       go (r 'link)))
@@ -675,8 +663,7 @@
            _ (pin A 'link a)
            _ (pins L 'pn 0 'printed (L 'head))
            _ (tr 'pass ())
-           _ (pin L 'aw (L 'bg))
-           _ (pin L 'passive ())
+           _ (pins L 'aw (L 'bg) 'passive ())
            first (L 'head 'link)
            _ (pin L 'auto 1)
            cp (walk first first)
@@ -685,20 +672,19 @@
                     try-break -10000 1,
                     lastp (A 'link) ? 0
                       (fewest 0,
-                       P J 'looseness = 0 ? 1
+                       P J 'looseness @ 0 1
                          (loose 0 @ al (al = P J 'looseness || L 'final))))
                    0)
            (done ? ()
-              ((? (!(L 'second))
-                  (tr 'second (), pin L 'thr (P J 'tolerance), pin L 'second 1,
-                   pin L 'final (P J 'emergencystretch <= 0))
-                  (tr 'emergency (), pin L 'bg (bump (L 'bg) 2 (P J 'emergencystretch)), pin L 'final 1)),
+              (L 'second ?
+                  (tr 'emergency (), pins L 'bg (bump (L 'bg) 2 (P J 'emergencystretch)) 'final 1)
+                  (tr 'second (),
+                   pins L 'thr (P J 'tolerance) 'second 1 'final (P J 'emergencystretch <= 0)),
                pass 0)))
        _ (pin L 'thr (P J 'pretolerance))
        _ (tr 'begin (L 'thr >= 0))
        _ (L 'thr >= 0 ? (pin L 'second 0, pin L 'final 0)
-            (pin L 'thr (P J 'tolerance), pin L 'second 1,
-             pin L 'final (P J 'emergencystretch <= 0)))
+            (pins L 'thr (P J 'tolerance) 'second 1 'final (P J 'emergencystretch <= 0)))
 
        ; --- hyphenation (891-918, 923, 930-934) ---
        H {'hu {} 'hc {} 'hyf {} 'hn 0}
@@ -714,13 +700,13 @@
               (: ; skip to ha
                  (ha-scan prev s)
                   (: y (char? s ? 'c (s 'type))
-                     cf (? (y = 'c) [(s 'char) (s 'font)]
-                           (y = 6) (s 'lig = () ? 'cont [(s 'lig 'char) (s 'lig 'font)])
-                           (y = 11 && s 'sub = 0) 'cont
-                           (y = 8) (set-lang s, 'cont)
-                           'fail)
-                     (? (cf = 'fail) ()
-                        (cf = 'cont) (ha-scan s (s 'link))
+                     cf (y @ 'c [(s 'char) (s 'font)]
+                             6 (s 'lig = () ? 'cont [(s 'lig 'char) (s 'lig 'font)])
+                             (11 && s 'sub = 0) 'cont
+                             8 (set-lang s, 'cont)
+                             'fail)
+                     (cf @ 'fail ()
+                           'cont (ha-scan s (s 'link))
                         (<cf @ c
                            (lc c != 0 ?
                               (lc c = c || P J 'uchyph > 0 ? [prev s (cf 1)])
@@ -729,7 +715,7 @@
                  (hs = () ? ()
                     (: ha (hs 0) s1 (hs 1) hf (hs 2) hyc (hychar J hf)
                        (hyc < 0 || hyc > 255 || L 'lhyf + L 'rhyf > 63 ? ()
-                          (: _ (pin H 'hn 0) _ (pin H 'hf hf) _ (pin H 'ha ha) _ (pin H 'hyc hyc)
+                          (: _ (pins H 'hn 0 'hf hf 'ha ha 'hyc hyc)
                              bch (tf J hf)
                              ; skip to hb, letters into hu and hc
                              (hb-scan s)
@@ -738,7 +724,7 @@
                                     (s 'font != hf ? s
                                        (pin H 'hbc c,
                                         lc c = 0 || H 'hn = 63 ? s
-                                          (H 'hn + 1 @ n (pin H 'hn n, pin H 'hb s,
+                                          (H 'hn + 1 @ n (pins H 'hn n 'hb s,
                                                           pin (H 'hu) n c, pin (H 'hc) n (lc c),
                                                           pin H 'hbc non,
                                                           hb-scan (s 'link))))))
@@ -752,31 +738,29 @@
                                                           (pin (H 'hu) (j + 1) c, pin (H 'hc) (j + 1) (lc c),
                                                            lg (q 'link) (j + 1)))))
                                         j (lg q0 (H 'hn))
-                                        (j = 'stop ? s
-                                           (pin H 'hb s, pin H 'hn j,
-                                            pin H 'hbc (odd? (s 'sub) ? (bch 'bchar) non),
-                                            hb-scan (s 'link)))))
+                                        (j @ 'stop s
+                                         (pins H 'hb s 'hn j 'hbc (odd? (s 'sub) ? (bch 'bchar) non),
+                                          hb-scan (s 'link)))))
                                  (s 'type = 11 && s 'sub = 0)
-                                  (pin H 'hb s, pin H 'hbc (bch 'bchar), hb-scan (s 'link))
+                                  (pins H 'hb s 'hbc (bch 'bchar), hb-scan (s 'link))
                                  s)
                              s2 (hb-scan s1)
                              (H 'hn < L 'lhyf + L 'rhyf ? ()
                                 (: (tail-ok s)
                                     (char? s ? (tail-ok (s 'link))
-                                       (s 'type @ y
-                                          (? (y = 6) (tail-ok (s 'link))
-                                             (y = 11) (s 'sub != 0 ? 1 (tail-ok (s 'link)))
-                                             (elem y [8 10 12 3 5 4]) 1
-                                             0)))
+                                       (s 'type @ 6 (tail-ok (s 'link))
+                                                  11 (s 'sub != 0 ? 1 (tail-ok (s 'link)))
+                                                  (8 || 10 || 12 || 3 || 5 || 4) 1
+                                                  0))
                                    (tail-ok s2 ? (hyphenate cp)))))))))))
        (hyphenate cp)
         (: hn (H 'hn) hf (H 'hf) lang (L 'lang)
            _ (map (j \ pin (H 'hyf) j 0) ^(hn + 1))
-           ek (cats (map (j \ string (hc (j + 1))) ^hn) + string lang)
+           ek (catmap (j \ string (hc (j + 1))) ^hn + string lang)
            ex (peep (J 'exc) ek 'none)
            found (? (ex != 'none) (map (k \ pin (H 'hyf) k 1) ex, 1)
                     (!(J 'langs lang)) 0
-                    (: _ (pin (H 'hc) 0 0) _ (pin (H 'hc) (hn + 1) 0)
+                    (: _ (pins (H 'hc) 0 0 (hn + 1) 0)
                        (from j) (j <= hn - L 'rhyf + 1 ?
                                    (: (grow key l)
                                        (l > hn + 1 ? ()
@@ -792,10 +776,10 @@
                                        from (j + 1))))
                        (from 0,
                         1)))
-           (found = 0 ? ()
+           (found @ 0 ()
               (map (j \ pin (H 'hyf) j 0) ^(L 'lhyf),
                map (j \ pin (H 'hyf) (hn - j) 0) ^(L 'rhyf),
-               (? (!(any (j \ odd? (hyf j)) (map (+ (L 'lhyf)) ^(max 0 (hn - L 'rhyf - L 'lhyf + 1)))))
+               (? (!(any (odd? * hyf) (map (+ (L 'lhyf)) ^(max 0 (hn - L 'rhyf - L 'lhyf + 1)))))
                   ()
                   (replace cp)))))
 
@@ -807,9 +791,7 @@
            _ (pin H 'hp 0) _ (pin hold 'link ())
            (app c) (charnode J hf c @ n (pin (R 't) 'link n, pin R 't n))
            (set-cur-r _)
-            (: j (R 'j)
-               (pin R 'cr (j < n ? (hu (j + 1)) (R 'bchar)),
-                pin R 'crh (odd? (hyf j) ? (R 'hchar) non)))
+            (R 'j @ j (pins R 'cr (j < n ? (hu (j + 1)) (R 'bchar)) 'crh (odd? (hyf j) ? (R 'hchar) non)))
            (wrap x)
             (J 'lp ?
                (lignode J hf (R 'cl) (R 'cq 'link) @ p
@@ -819,9 +801,9 @@
                    pin J 'lp 0)))
            (pop-ls _)
             (: ls (R 'ls)
-               (ls 'lig != () ? (pin (R 't) 'link (ls 'lig), pin R 't (ls 'lig), pin R 'j (R 'j + 1)),
+               (ls 'lig != () ? (pin (R 't) 'link (ls 'lig), pins R 't (ls 'lig) 'j (R 'j + 1)),
                 pin R 'ls (ls 'link),
-                R 'ls = () ? (set-cur-r 0) (pin R 'cr (R 'ls 'char))))
+                R 'ls @ () (set-cur-r 0) (pin R 'cr (R 'ls 'char))))
            ; set up with the cursor after j
            _ (? (j0 = 0)
                 (: _ (pin J 'lp (H 'ilig))
@@ -833,18 +815,18 @@
            (step l)
             (l @
              'cont
-              (: q (R 'cl = non ? (t 'blabel = () ? () (pin R 'k (t 'blabel), lk J hf (t 'blabel)))
+              (: q (R 'cl = non ? (t 'blabel @ () () (pin R 'k (t 'blabel), lk J hf (t 'blabel)))
                       (ci J hf (R 'cl) @ ci0
-                         (tag ci0 != 1 ? ()
-                            (: k (ci0 3) q (lk J hf k)
-                               (q 0 > 128 ? (256 * q 2 + q 3 @ k2 (pin R 'k k2, lk J hf k2))
-                                  (pin R 'k k, q))))))
-                 (q = () ? 'done (pin R 'q q, 'scan)))
+                         (tag ci0 @ 1
+                          (: k (ci0 3) q (lk J hf k)
+                             (q 0 > 128 ? (256 * q 2 + q 3 @ k2 (pin R 'k k2, lk J hf k2))
+                                (pin R 'k k, q))))))
+                 (q @ () 'done (pin R 'q q, 'scan)))
              'scan
               (: q (R 'q) tc (R 'crh < non ? (R 'crh) (R 'cr))
                  (? (q 1 = tc && q 0 <= 128)
                     (R 'crh < non ?
-                       (pin H 'hp (R 'j), pin R 'hchar non, pin R 'crh non, 'cont)
+                       (pin H 'hp (R 'j), pins R 'hchar non 'crh non, 'cont)
                        (R 'hchar < non && odd? (hyf (R 'j)) ? (pin H 'hp (R 'j), pin R 'hchar non),
                         q 2 < 128 ? 'lig (pin R 'w (kn J hf q), 'done)))
                     (q 0 >= 128) (R 'crh = non ? 'done (pin R 'crh non, 'cont))
@@ -863,7 +845,7 @@
                        (op = 3)
                         (: _ (pin R 'cr r) it {'type 'item 'char r 'lig () 'link (R 'ls)} (pin R 'ls it, ()))
                        (op = 7 || op = 11)
-                        (wrap 0, pin R 'cq (R 't), pin R 'cl r, pin J 'lp 1, ())
+                        (wrap 0, pins R 'cq (R 't) 'cl r, pin J 'lp 1, ())
                        (pin R 'cl r, pin J 'lp 1,
                         (? (R 'ls != ()) (pop-ls 0, ())
                            (j = n) 'done
@@ -871,11 +853,11 @@
                  (? (nx != ()) nx (op > 4 && op != 7) 'done 'cont))
              'done
               (wrap (J 'rt),
-               R 'w != 0 ? (kernnode J (R 'w) 0 @ kk (pin (R 't) 'link kk, pin R 't kk, pin R 'w 0)),
+               R 'w != 0 ? (kernnode J (R 'w) 0 @ kk (pin (R 't) 'link kk, pins R 't kk 'w 0)),
                R 'ls != () ?
-                 (pin R 'cq (R 't), pin R 'cl (R 'ls 'char), pin J 'lp 1, pop-ls 0, 'cont)
+                 (pins R 'cq (R 't) 'cl (R 'ls 'char), pin J 'lp 1, pop-ls 0, 'cont)
                  'out))
-           (run l) (l = 'out ? (R 'j) (run (step l)))
+           (run l) (l @ 'out (R 'j) (run (step l)))
            (run 'cont))
 
        ; replace ha..hb by the word with its discretionaries (903, 913-918)
@@ -885,25 +867,25 @@
            r0 (ha 'link) _ (pin ha 'link ())
            bchar (H 'hbc)
            (before n) (same? (n 'link) ha ? n (before (n 'link)))
-           (found2 _) (pin (H 'hu) 0 non, pin H 'ilig 0, pin H 'ilist (), [ha 0])
+           (found2 _) (pin (H 'hu) 0 non, pins H 'ilig 0 'ilist (), [ha 0])
            sj (? (char? ha)
                  (ha 'font != hf ? (found2 0)
-                    (pin H 'ilist ha, pin H 'ilig 0, pin (H 'hu) 0 (ha 'char), [(before cp) 0]))
+                    (pins H 'ilist ha 'ilig 0, pin (H 'hu) 0 (ha 'char), [(before cp) 0]))
                  (ha 'type = 6)
                  (ha 'font != hf ? (found2 0)
-                    (pin H 'ilist (ha 'lig), pin H 'ilig 1, pin H 'ilft (ha 'sub > 1),
+                    (pins H 'ilist (ha 'lig) 'ilig 1 'ilft (ha 'sub > 1),
                      pin (H 'hu) 0 (ha 'char),
                      ha 'lig = () && ha 'sub > 1 ? (pin (H 'hu) 0 non, pin H 'ilig 0),
                      [(before cp) 0]))
                  (? (!(char? r0) && r0 'type = 6 && r0 'sub > 1) (found2 0)
                        (pin H 'ilist (), [ha 1])))
            S {'s <sj 'j <>sj 'l 0 'mt () 'rc 0}
-           (adv-major _) (S 'mt 'link != () ? (pin S 'mt (S 'mt 'link), pin S 'rc (S 'rc + 1), adv-major 0))
+           (adv-major _) (S 'mt 'link != () ? (pins S 'mt (S 'mt 'link) 'rc (S 'rc + 1), adv-major 0))
            ; one discretionary, then the branches until they agree (914-918)
            (disc _)
             (: r (discnode J)
                _ (pin r 'link (hold 'link))
-               _ (pin S 'mt r) _ (pin S 'rc 0) _ (adv-major 0)
+               _ (pins S 'mt r 'rc 0) _ (adv-major 0)
                i0 (H 'hp) _ (pin (H 'hyf) i0 0)
                ; the pre-break: hu[l..i] and a hyphen
                hy (exists J hf hyc ? 1 (warn J hf hyc, 0))
@@ -945,8 +927,7 @@
                 pin H 'hp (S 'j - 1), pin hold 'link (),
                 odd? (hyf (S 'j - 1)) ? (disc 0)))
            (outer _)
-            (pin S 'l (S 'j),
-             pin S 'j (recon (S 'j) hn bchar hyc + 1),
+            (pins S 'l (S 'j) 'j (recon (S 'j) hn bchar hyc + 1),
              H 'hp = 0 ?
                (pin (S 's) 'link (hold 'link),
                 pin S 's (to-end (S 's)),
@@ -960,7 +941,7 @@
        ; --- post_line_break (877-890) ---
        (post-line-break fwp)
         (: head (L 'head)
-           (rev q cp) (q = () ? cp (q 'prev @ nx (pin q 'prev cp, rev nx q)))
+           (rev q cp) (q @ () cp (q 'prev @ nx (pin q 'prev cp, rev nx q)))
            cp0 (rev (L 'best 'brk) ())
            ps (P J 'parshape)
            (line cp cl)
@@ -968,11 +949,11 @@
                D {'db 0 'pdb 0}
                (rskip-after q) (gluenode J (P J 'rightskip) 9 @ r (pin r 'link (q 'link), pin q 'link r, r))
                qe (? (q != () && q 'type = 10)
-                     (pin q 'glue (spec-of (P J 'rightskip)), pin q 'sub 9, q)
+                     (pins q 'glue (spec-of (P J 'rightskip)) 'sub 9)
                      (q != ())
                      (: q2 (q 'type = 7 ?
                               (: t (q 'sub)
-                                 r0 (t = 0 ? (q 'link)
+                                 r0 (t @ 0 (q 'link)
                                        (: (fwd r k) (k > 1 ? (fwd (r 'link) (k - 1)) r)
                                           r1 (fwd q t) s (r1 'link) r2 (s 'link) (pin s 'link (),
                                                                                   pin q 'sub 0,
@@ -992,7 +973,7 @@
                ; leftskip, and detach the line
                r (qe 'link) _ (pin qe 'link ())
                q4 (head 'link) _ (pin head 'link r)
-               q5 (zero? (P J 'leftskip) ? q4 (gluenode J (P J 'leftskip) 8 @ g (pin g 'link q4, g)))
+               q5 (zero? (P J 'leftskip) ? q4 (gluenode J (P J 'leftskip) 8 @ g (pin g 'link q4)))
                wi (? (cl > L 'lsl) [(L 'sw) (L 'si)] (ps = ()) [(L 'fw) (L 'fi)]
                      [(ps (cl - 1) 1) (ps (cl - 1) 0)])
                ; a line's inserts, marks and \vadjust material follow it (tex.web 889)
@@ -1019,7 +1000,7 @@
                           (q = () || same? q nb || char? q || q 'type < 9 || q 'type = 11 && q 'sub != 1 ? [r q]
                              (prune q)))
                       rq (prune head)
-                      (? (!(same? <rq head)) (pin <rq 'link (), pin head 'link (rq 1))))),
+                      (? !(same? <rq head) (pin <rq 'link (), pin head 'link (rq 1))))),
                 nx != () ? (line nx (cl + 1))))
            (line cp0 (L 'pg + 1),
             pin M 'vpg (L 'bline - 1)))
