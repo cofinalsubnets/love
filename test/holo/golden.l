@@ -590,6 +590,20 @@
    _ (chk-eq "gas.rep" '("\t.word 0" "\t.word 0" "\t.word 0") (gf-expand 'a64 (gf-lines 'a64 "\t.rep 3\n\t.word 0\n\t.endr")))
    ;; .extern says nothing gas does not assume
    _ (chk-eq "gas.extern" (show (gas-top 'a64 "\tret\n")) (show (gas-top 'a64 "\t.extern f\n\tret\n")))
+   ;; b/h/s/d loads and stores, the other tag stores, orr/bic's lane immediates, a scalar from a lane
+   _ (chk-eq "gas.a64.forms"
+        ["a20840bd" "230000fd" "0104407d" "0024e0d9" "4128a0d9" "23fc7fd9" "3b54000f" "e177074f" "62b4002f" "a094004f"
+         "7304185e" "2004185e"]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ldr s2, [x5, #8]" "str d3, [x1]" "ldr h1, [x0, #2]" "stz2g x0, [x0], #32" "st2g x1, [x2, #32]"
+              "stzg x3, [x1, #-16]!" "orr v27.2s, #1, lsl #16" "orr v1.4s, #0xff, lsl #24" "bic v2.4h, #3, lsl #8"
+              "orr v0.8h, #5" "mov d19, v3.d[1]" "dup d0, v1.d[1]"]))
+   ;; a .req alias keeps the arrangement after it (sha256-ce's t0_a.4s)
+   _ (chk-eq "gas.req.arr" '("add v28.4s, v1.4s, v2.4s" "mov v28.d[0], v1.d[1]")
+        (gf-expand 'a64 (gf-lines 'a64 "t0_a .req v28\nadd t0_a.4s, v1.4s, v2.4s\nmov t0_a.d[0], v1.d[1]")))
+   ;; .fill repeat, size, value as llvm-mc lays it
+   _ (chk-eq "gas.fill" "(((\".text\" 1 6 ((raw (255 255 255)) (raw (52 18 52 18)) (raw (0)) (raw (7 0 0 0 0 0 0 0))))) () () ())"
+        (show (gas-top 'a64 "\t.fill 3, 1, 0xff\n\t.fill 2, 2, 0x1234\n\t.fill 1\n\t.fill 1, 8, 7\n")))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
