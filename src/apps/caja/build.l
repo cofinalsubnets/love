@@ -1858,6 +1858,11 @@
                tex-error J, go ())))
        (go _) (get-x-token J, sw ())
        (go ()))
+   (new-trie-op J lang d n v)
+    (: key (show [lang d n v]) T (J 'trie-ops) u (peep T key 0)
+       (? (u > 0) u
+          (: u2 (peep (J 'trie-used) lang 0 + 1)
+             (pin (J 'trie-used) lang u2, pin T key u2, pin J 'trie-op-count (J 'trie-op-count + 1), u2))))
    (new-patterns J)
     (? (J 'trie-ready = 1)
         (print-err J "Too late for ", print-esc J "patterns",
@@ -1874,7 +1879,10 @@
               (grow i key) (i <= k ? (key + string (hc i) @ k2 (pin (J 'pref) k2 1, grow (i + 1) k2)) key)
               key (grow 1 (string lang))
               old (peep (J 'pats) key ())
+              v (: (go l v) (? (l < 0) v (go (l - 1) (peep hy l 0 = 0 ? v (new-trie-op J lang (k - l) (hy l) v))))
+                   (go k 0))
               _ (old != () && any (x \ x != 0) old ? (bad "Duplicate pattern"))
+              _ (pin (J 'pat-ops) key v)
               (pin (J 'langs) lang 1, pin (J 'pats) key (map (i \ peep hy i 0) ^(k + 1))))
           (go _)
            (: _ (get-x-token J)

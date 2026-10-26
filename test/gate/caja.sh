@@ -30,6 +30,7 @@ done
 hy=$(kpsewhich hyphen.tex) || true
 [ -n "$hy" ] || gate_skip "caja: no hyphen.tex, skipped"
 pltotf test/caja/cajalig.pl "$w/cajalig.tfm" >/dev/null 2>&1 || fail "pltotf refused test/caja/cajalig.pl"
+pltotf test/caja/cajaext.pl "$w/cajaext.tfm" >/dev/null 2>&1 || fail "pltotf refused test/caja/cajaext.pl"
 
 # run SCRIPT SEED N ARGS..: the script's pages through TeX and through caja
 run() {
@@ -53,7 +54,10 @@ echo "  caja: paragraphs -- the fixed pages and 400 random ones, DVI identical t
 
 # the macro language: test/caja/initex's jobs through tex -ini and caja at tripman's line
 # lengths, each log held to TeX's from its second line (the first is the banner and the date),
-# and the DVI and the files \openout writes held to TeX's byte for byte (missfont.log is kpathsea's)
+# and the DVI and the files \openout writes held to TeX's byte for byte (missfont.log is kpathsea's).
+# a job with files/NAME-2.tex runs again as `&NAME NAME-2' on the format it dumped, each engine
+# its own; a dump's string and memory counts are the engine's own (tripman 5f-g). every job's
+# directory holds cajaext.tfm, an extension font whose extensible repeats character 0
 tdirs=""
 for f in cmr10 cmbx12 cmtt10 cmsl10; do
   p=$(kpsewhich $f.tfm) || true
@@ -64,25 +68,32 @@ i=$w/initex
 jobs=""
 for f in test/caja/initex/*.tex; do
   n=$(basename "$f" .tex)
-  for s in tex caja; do mkdir -p "$i/$s/$n" && cp "$f" test/caja/initex/files/*.tex "$i/$s/$n/"; done
+  for s in tex caja; do mkdir -p "$i/$s/$n" && cp "$f" test/caja/initex/files/*.tex "$w/cajaext.tfm" "$i/$s/$n/"; done
   ( cd "$i/tex/$n" && max_print_line=72 error_line=64 half_error_line=32 \
       tex -ini -interaction=batchmode $n.tex >/dev/null 2>&1 ) || true
+  [ -f "$i/tex/$n/$n-2.tex" ] && { ( cd "$i/tex/$n" && max_print_line=72 error_line=64 half_error_line=32 \
+      tex -ini -interaction=batchmode "&$n" $n-2 >/dev/null 2>&1 ) || true; }
   [ -s "$i/tex/$n/$n.log" ] || fail "TeX wrote no log for initex/$n"
   jobs="$jobs $i/caja/$n"
 done
 "$L" test/caja/initex.l "$r" "${tdirs#:}" $jobs || fail "initex.l died"
+stats='s/^[0-9]* strings of total length [0-9]*$/# strings/; s/^[0-9]* memory locations dumped; current usage is [0-9]*&[0-9]*$/# memory/'
 ni=0 nd=0
 for d in $jobs; do
   n=$(basename "$d")
-  tail -n +2 "$i/tex/$n/$n.log" > "$i/t.log"; tail -n +2 "$d/$n.log" > "$i/c.log"
-  cmp -s "$i/t.log" "$i/c.log" || { diff "$i/t.log" "$i/c.log" | head -20; fail "caja's log differs from TeX's (initex/$n)"; }
-  if [ -f "$i/tex/$n/$n.dvi" ]; then
-    cmp "$i/tex/$n/$n.dvi" "$d/$n.dvi" || fail "caja's DVI differs from TeX's (initex/$n)"
-    nd=$((nd + 1))
-  fi
+  for p in $n $n-2; do
+    [ -f "$i/tex/$n/$p.log" ] || continue
+    [ -f "$d/$p.log" ] || fail "caja wrote no log (initex/$n, $p)"
+    tail -n +2 "$i/tex/$n/$p.log" | sed "$stats" > "$i/t.log"; tail -n +2 "$d/$p.log" | sed "$stats" > "$i/c.log"
+    cmp -s "$i/t.log" "$i/c.log" || { diff "$i/t.log" "$i/c.log" | head -20; fail "caja's log differs from TeX's (initex/$n, $p)"; }
+    if [ -f "$i/tex/$n/$p.dvi" ]; then
+      cmp "$i/tex/$n/$p.dvi" "$d/$p.dvi" || fail "caja's DVI differs from TeX's (initex/$n, $p)"
+      nd=$((nd + 1))
+    fi
+  done
   for o in "$i/tex/$n"/*; do
     b=${o##*/}
-    [ "$b" = "$n.log" ] || [ "$b" = "$n.dvi" ] || [ "$b" = missfont.log ] && continue
+    case $b in "$n.log"|"$n.dvi"|"$n-2.log"|"$n-2.dvi"|*.fmt|missfont.log) continue;; esac
     cmp -s "$o" "$d/$b" || fail "caja's $b differs from TeX's (initex/$n)"
   done
   ni=$((ni + 1))
