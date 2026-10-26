@@ -450,6 +450,21 @@
    _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
         '((mov r1 r0) (zx4 r1) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))
+   _ (chk-eq "gas.a64.cmp"
+        ["c68c286e" "203ca24e" "2034624e" "8334a52e" "203ce26e" "208c7f0e" 'gas-a64-operand]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["cmeq v6.16b, v6.16b, v8.16b" "cmge v0.4s, v1.4s, v2.4s" "cmgt v0.8h, v1.8h, v2.8h"
+              "cmhi v3.2s, v4.2s, v5.2s" "cmhs v0.2d, v1.2d, v2.2d" "cmtst v0.4h, v1.4h, v31.4h"
+              "cmeq v0.1d, v1.1d, v2.1d"]))
+   _ (chk-eq "gas.a64.across"
+        ["c0a8314e" "41a8704e" "83a8b16e" "c5a8302e" "20b8314e" "3fcddf4d" "20c8404d" "41c0c34d"
+         "002c010e" "412c0e4e" "832c0c4e" "c52c1f0e"
+         'gas-a64-operand 'gas-a64-operand 'gas-a64-operand 'gas-a64-operand]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["sminv b0, v6.16b" "smaxv h1, v2.8h" "uminv s3, v4.4s" "umaxv b5, v6.8b" "addv b0, v1.16b"
+              "ld1r {v31.2d}, [x9], #8" "ld1r {v0.4s}, [x1]" "ld1r {v1.16b}, [x2], x3"
+              "smov w0, v0.b[0]" "smov x1, v2.h[3]" "smov x3, v4.s[1]" "smov w5, v6.b[15]"
+              "addv s0, v1.2s" "sminv h0, v1.16b" "ld1r {v0.4s}, [x1], #16" "smov w0, v1.s[0]"]))
    _ (chk-eq "gas.a64.sys"
         '((msri daifset 15) (tlbi vmalle1is zr) (dsb ish) (lea r9 sp 0) (msri spsel 1) (lea sp r9 0)
           (mrs r9 cpacr_el1) (or r9 r9 3145728) (msr cpacr_el1 r9) (isb) (brk 0) (udf 0) (dbrk 61440) (hvc 0)
@@ -551,6 +566,14 @@
         (map (l \ holo-hex 'a64 (gas-text 'a64 l))
              ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
               "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
+   ;; the local, el2 outer and el3 forms
+   _ (chk-eq "gas.a64.tlbi.more"
+        ["608708d5" "e08708d5" "1f810cd5" "20810cd5" "a0810cd5" "20860cd5" "a0860cd5" "20850cd5" "a0850cd5" "1f870ed5"
+         "1f830ed5" "1f810ed5" "20870ed5" "20830ed5" "20810ed5" "a0870ed5" "a0830ed5" "a0810ed5"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["tlbi vaae1, x0" "tlbi vaale1, x0" "tlbi alle2os" "tlbi vae2os, x0" "tlbi vale2os, x0" "tlbi rvae2, x0"
+              "tlbi rvale2, x0" "tlbi rvae2os, x0" "tlbi rvale2os, x0" "tlbi alle3" "tlbi alle3is" "tlbi alle3os"
+              "tlbi vae3, x0" "tlbi vae3is, x0" "tlbi vae3os, x0" "tlbi vale3, x0" "tlbi vale3is, x0" "tlbi vale3os, x0"]))
    ;; the numbered debug and pmu families, an aarch32 spsr, a pstate field in any case
    _ (chk-eq "gas.a64.sysfam"
         ["00c138d5" "a00f30d5" "c0eb3bd5" "20ed3bd5" "40433cd5" "c00310d5" "bf4100d5" "20840cd5" 'badsysreg]
@@ -560,6 +583,62 @@
    ;; a /* */ comment is a space, across lines too (the kernel's crash_setup_regs)
    _ (chk-eq "gas.a64.ccomment" (holo-hex 'a64 (gas-text 'a64 "mov x0, #1\nmov x1, #2\nmov x2, #3"))
         (holo-hex 'a64 (gas-text 'a64 "/* faked */\nmov x0, #1 /* a */\nmov/* b */x1, #2 /* c\n d */\nmov x2, #3")))
+   ;; .ifdef/.ifndef by what is defined so far: an untaken arm's .if never reads (the kernel's frame_push)
+   _ (chk-eq "gas.ifdef" '("mov x1, #1" "mov x2, #2" "f: mov x3, #3")
+        (gf-expand 'a64 (gf-lines 'a64 ".ifdef .Lx\n.if .Lx != -1\nmov x0, #9\n.endif\n.endif\n.set .Lx, 3\n.ifdef .Lx\nmov x1, #1\n.endif\n.ifndef .Ly\nmov x2, #2\n.endif\nf: mov x3, #3\n.ifndef f\nmov x4, #4\n.endif")))
+   ;; crypto, crc32, tbl/tbx and the tag moves, as llvm-mc -mattr=+crypto,+sha3,+crc,+mte lays them
+   _ (chk-eq "gas.a64.crypto"
+        ["4048284e" "2000025e" "2008285e" "208462ce" "2080c0ce" "200c02ce" "201482ce" "20e0220e" "20e0e24e"
+         "204cc29a" "2058c21a" "c143094e" "e110084e" "04fc3fd9" "041420d9" "241060d9" "0500e0d9"
+         'gas-a64-operand 'gas-a64-operand 'gas-a64-operand]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["aese v0.16b, v2.16b" "sha1c q0, s1, v2.4s" "sha1h s0, s1" "sha512h2 q0, q1, v2.2d" "sha512su0 v0.2d, v1.2d"
+              "eor3 v0.16b, v1.16b, v2.16b, v3.16b" "xar v0.2d, v1.2d, v2.2d, #5" "pmull v0.8h, v1.8b, v2.8b"
+              "pmull2 v0.1q, v1.2d, v2.2d" "crc32x w0, w1, x2" "crc32cw w0, w1, w2"
+              "tbl v1.16b, {v30.16b, v31.16b, v0.16b}, v9.16b" "tbx v1.16b, {v7.16b}, v8.16b"
+              "stg x4, [x0, #-16]!" "stg x4, [x0], #16" "ldg x4, [x1, #16]" "ldgm x5, [x0]"
+              "pmull v0.4s, v1.4h, v2.4h" "crc32x w0, w1, w2" "stg x4, [x0, #8]"]))
+   ;; C's integer suffixes ride a numeral (the kernel's GNU_PROPERTY_AARCH64_FEATURE_1_BTI, 1U << 0)
+   _ (chk-eq "gas.numsfx" [3 16 7 3 '((num 1) (sym "ux"))]
+        [(gimm (gtoks "(((1U << 0) | (1UL << 1)))")) (gimm (gtoks "0x10u")) (gimm (gtoks "7l")) (gimm (gtoks "3ULL"))
+         (gtoks "1ux")])
+   ;; .altmacro's %expr argument and a :vararg's raw rest: the kernel's recursive _for (fpsimdmacros.h)
+   _ (chk-eq "gas.altmacro.for" '("mov x0, #0" "mov x1, #1" "mov x2, #2" "mov x3, #3")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro __for from:req, to:req\n.if (\\from) == (\\to)\n_for__body %\\from\n.else\n__for %\\from, %((\\from) + ((\\to) - (\\from)) / 2)\n__for %((\\from) + ((\\to) - (\\from)) / 2 + 1), %\\to\n.endif\n.endm\n.macro _for var:req, from:req, to:req, insn:vararg\n.macro _for__body \\var:req\n.noaltmacro\n\\insn\n.altmacro\n.endm\n.altmacro\n__for \\from, \\to\n.noaltmacro\n.purgem _for__body\n.endm\n_for n, 0, 3, mov x\\n, #\\n")))
+   ;; a label distance over data directives, a .pushsection run laying elsewhere (alternative_else_nop_endif)
+   ;; .reloc on the zero word just laid at its offset lays that word as the expression; else it stays
+   _ (chk-eq "gas.reloc" '(".data" ".pushsection .r, \"a\"" "\t.long s + 0x13f8 - ." "\t.quad t" ".word 0" ".reloc 8, R_AARCH64_PREL32, s" ".popsection")
+        (gf-expand 'a64 (gf-lines 'a64 ".data\n.pushsection .r, \"a\"\n.word 0\n.reloc 0, R_AARCH64_PREL32, s + 0x13f8\n.quad 0\n.reloc 4, R_AARCH64_ABS64, t\n.word 0\n.reloc 8, R_AARCH64_PREL32, s\n.popsection")))
+   _ (chk-eq "gas.lbl.named" '(".Ls1:" "\tnop" "\tnop" ".Le1:" "\tmov x0, #2")
+        (gf-expand 'a64 (gf-lines 'a64 ".Ls1:\n\tnop\n\tnop\n.Le1:\n.if (.Le1 - .Ls1) > 4\n\tmov x0, #2\n.else\n\tmov x0, #1\n.endif")))
+   _ (chk-eq "gas.lbl.nil" '("661:" "\t.globl f" "\t.cfi_startproc" "\tnop" "662:" "\tnop")
+        (gf-expand 'a64 (gf-lines 'a64 "661:\n\t.globl f\n\t.cfi_startproc\n\tnop\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
+   _ (chk-eq "gas.lbl.insn" '("661:" "\tprfm plil1strm, [x30, #(1b - 0b)]" "662:" "\tnop")
+        (gf-expand 'a64 (gf-lines 'a64 "661:\n\tprfm plil1strm, [x30, #(1b - 0b)]\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
+   _ (chk-eq "gas.lbl.datasize" '("661:" "\tmov x0, #1" "\t.inst 0xd503201f, 0xd503201f" "\t.inst(0xd503201f)" "\t.pushsection .f, \"a\""
+                                  "\t.long 1, 2, 3" "\t.popsection" "662:" "\tnop" "\tnop" "\tnop" "\tnop")
+        (gf-expand 'a64 (gf-lines 'a64 "661:\n\tmov x0, #1\n\t.inst 0xd503201f, 0xd503201f\n\t.inst(0xd503201f)\n\t.pushsection .f, \"a\"\n\t.long 1, 2, 3\n\t.popsection\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
+   ;; .rep is .rept (kuser32's padding)
+   _ (chk-eq "gas.rep" '("\t.word 0" "\t.word 0" "\t.word 0") (gf-expand 'a64 (gf-lines 'a64 "\t.rep 3\n\t.word 0\n\t.endr")))
+   ;; .extern says nothing gas does not assume
+   _ (chk-eq "gas.extern" (show (gas-top 'a64 "\tret\n")) (show (gas-top 'a64 "\t.extern f\n\tret\n")))
+   ;; b/h/s/d loads and stores, the other tag stores, orr/bic's lane immediates, a scalar from a lane
+   _ (chk-eq "gas.a64.forms"
+        ["a20840bd" "230000fd" "0104407d" "0024e0d9" "4128a0d9" "23fc7fd9" "3b54000f" "e177074f" "62b4002f" "a094004f"
+         "7304185e" "2004185e"]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["ldr s2, [x5, #8]" "str d3, [x1]" "ldr h1, [x0, #2]" "stz2g x0, [x0], #32" "st2g x1, [x2, #32]"
+              "stzg x3, [x1, #-16]!" "orr v27.2s, #1, lsl #16" "orr v1.4s, #0xff, lsl #24" "bic v2.4h, #3, lsl #8"
+              "orr v0.8h, #5" "mov d19, v3.d[1]" "dup d0, v1.d[1]"]))
+   ;; a .req alias keeps the arrangement after it (sha256-ce's t0_a.4s)
+   _ (chk-eq "gas.req.arr" '("add v28.4s, v1.4s, v2.4s" "mov v28.d[0], v1.d[1]")
+        (gf-expand 'a64 (gf-lines 'a64 "t0_a .req v28\nadd t0_a.4s, v1.4s, v2.4s\nmov t0_a.d[0], v1.d[1]")))
+   ;; .fill repeat, size, value as llvm-mc lays it
+   _ (chk-eq "gas.fill" "(((\".text\" 1 6 ((raw (255 255 255)) (raw (52 18 52 18)) (raw (0)) (raw (7 0 0 0 0 0 0 0))))) () () ())"
+        (show (gas-top 'a64 "\t.fill 3, 1, 0xff\n\t.fill 2, 2, 0x1234\n\t.fill 1\n\t.fill 1, 8, 7\n")))
+   ;; a .macro default with spaces in it stays whole (the vdso's emit_aarch64_feature_1_and)
+   _ (chk-eq "gas.macro.dflt" '("\t.word (((1 << 0) | (1 << 1)))" "\t.word 5")
+        (gf-expand 'a64 (gf-lines 'a64 ".macro e, feat=(((1 << 0) | (1 << 1)))\n\t.word \\feat\n.endm\ne\ne 5")))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"

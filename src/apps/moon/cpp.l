@@ -509,12 +509,16 @@
    (mput e) (pin memo 'l (e . mfew (memo 'l) 3))
    (mfew l n) (n < 1 || atom? l ? () (<l . mfew >l (n - 1)))
 
+   ; a function-like macro, or an object-like one whose text ends in one (`#define cpu_to_le64 __cpu_to_le64`)
+   (fnish? d macs k) (? (mfun? d) 1
+                        (k < 1 || !(mobj? d) || !(two? <>d)) ()
+                        (last <>d @ t (macat? t macs && fnish? (mdef macs (macnm t)) macs (k - 1))))
    ; buf (reversed) ends inside a call of a function-like macro: an unmatched ( right after its name
    (callopen? buf macs)
     (: (go l d) (? (atom? l) 0
                    (pv? <l ")") (go >l (d + 1))
                    (pv? <l "(") (? (0 < d) (go >l (d - 1))
-                                    (two? >l && macat? <>l macs && mfun? (mdef macs (macnm <>l))) 1
+                                    (two? >l && macat? <>l macs && fnish? (mdef macs (macnm <>l)) macs 8) 1
                                     (go >l 0))
                    (go >l d))
        (go buf 0))

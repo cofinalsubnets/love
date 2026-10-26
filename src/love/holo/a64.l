@@ -559,7 +559,13 @@
                  'rvae2is (sreg 1 4 8 2 1) 'rvale2is (sreg 1 4 8 2 5)
                  'ipas2e1 (sreg 1 4 8 4 1) 'ipas2le1 (sreg 1 4 8 4 5) 'ripas2e1 (sreg 1 4 8 4 2) 'ripas2le1 (sreg 1 4 8 4 6)
                  'ipas2e1os (sreg 1 4 8 4 0) 'ipas2le1os (sreg 1 4 8 4 4) 'ripas2e1os (sreg 1 4 8 4 3) 'ripas2le1os (sreg 1 4 8 4 7)
-                 'vmalls12e1os (sreg 1 4 8 1 6) 'alle1os (sreg 1 4 8 1 4) 'vale2 (sreg 1 4 8 7 5)}
+                 'vmalls12e1os (sreg 1 4 8 1 6) 'alle1os (sreg 1 4 8 1 4) 'vale2 (sreg 1 4 8 7 5)
+                 'vaae1 (sreg 1 0 8 7 3) 'vaale1 (sreg 1 0 8 7 7)
+                 'alle2os (sreg 1 4 8 1 0) 'vae2os (sreg 1 4 8 1 1) 'vale2os (sreg 1 4 8 1 5)
+                 'rvae2 (sreg 1 4 8 6 1) 'rvale2 (sreg 1 4 8 6 5) 'rvae2os (sreg 1 4 8 5 1) 'rvale2os (sreg 1 4 8 5 5)
+                 'alle3 (sreg 1 6 8 7 0) 'alle3is (sreg 1 6 8 3 0) 'alle3os (sreg 1 6 8 1 0)
+                 'vae3 (sreg 1 6 8 7 1) 'vae3is (sreg 1 6 8 3 1) 'vae3os (sreg 1 6 8 1 1)
+                 'vale3 (sreg 1 6 8 7 5) 'vale3is (sreg 1 6 8 3 5) 'vale3os (sreg 1 6 8 1 5)}
    a64-ic-ops {'iallu (sreg 1 0 7 5 0) 'ialluis (sreg 1 0 7 1 0) 'ivau (sreg 1 3 7 5 1)}
    a64-dc-ops {'ivac (sreg 1 0 7 6 1) 'zva (sreg 1 3 7 4 1) 'cvac (sreg 1 3 7 10 1)
                'cvau (sreg 1 3 7 11 1) 'civac (sreg 1 3 7 14 1)
