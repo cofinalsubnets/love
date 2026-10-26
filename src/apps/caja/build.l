@@ -218,6 +218,34 @@
               (each >l)))
        (each (J 'cur-list . J 'nest)))
 
+   ; --- par.l's \tracingparagraphs lines (tex.web 846, 856-857, 863), as J 'ptrace -----------
+   (par-trace J k a)
+    (? (k = 'begin) (begin-diagnostic J, a ? (print-nl J "@firstpass"))
+       (k = 'second) (print-nl J "@secondpass")
+       (k = 'emergency) (print-nl J "@emergencypass")
+       (k = 'end) (end-diagnostic J 1, normalize-selector J)
+       (k = 'pass) (pin J 'fisd null-font)
+       (k = 'node)
+        (print-nl J "@@", print-int J (a 0), print J ": line ", print-int J (a 1), print-char J 46,
+         print-int J (a 2), a 3 = 1 ? (print-char J 45), print J " t=", print-int J (a 4),
+         print J " -> @@", print-int J (a 5))
+       (: L (a 0) cp (L 'cp) pn (L 'printed) brk (a 1) b (a 2) d (a 4)
+          _ (? (pn == cp) ()
+               (: _ (print-nl J "")
+                  _ (? (cp = ()) (short-display J (pn 'link))
+                       (: s (cp 'link) _ (pin cp 'link ()) _ (print-nl J "") _ (short-display J (pn 'link))
+                          (pin cp 'link s)))
+                  (pin L 'printed cp)))
+          _ (print-nl J "@")
+          _ (? (cp = ()) (print-esc J "par")
+               (cp 'type != glue-node)
+                (print-esc J (? (cp 'type = penalty-node) "penalty" (cp 'type = disc-node) "discretionary"
+                                (cp 'type = kern-node) "kern" "math")))
+          _ (print J " via @@") _ (print-int J (brk = () ? 0 (brk 'serial)))
+          _ (print J " b=") _ (b > 10000 ? (print-char J 42) (print-int J b))
+          _ (print J " p=") _ (print-int J (a 3)) _ (print J " d=")
+          (a 5 ? (print-char J 42) (print-int J d))))
+
    ; --- packaging, with tex.web's reports (644-679) ------------------------------------------
    ; par.l and box.l read their parameters by name off J 'params: eqtb's, as they stand
    param-ints
@@ -227,7 +255,8 @@
      ['adjdemerits adj-demerits-code] ['doublehyphendemerits double-hyphen-demerits-code]
      ['finalhyphendemerits final-hyphen-demerits-code] ['interlinepenalty inter-line-penalty-code]
      ['clubpenalty club-penalty-code] ['widowpenalty widow-penalty-code]
-     ['brokenpenalty broken-penalty-code] ['lefthyphenmin left-hyphen-min-code]
+     ['brokenpenalty broken-penalty-code] ['tracingparagraphs tracing-paragraphs-code]
+     ['lefthyphenmin left-hyphen-min-code]
      ['righthyphenmin right-hyphen-min-code] ['uchyph uc-hyph-code] ['language language-code]
      ['hbadness hbadness-code] ['vbadness vbadness-code] ['mag mag-code] ['year year-code]
      ['month month-code] ['day day-code] ['time time-code]]
@@ -979,6 +1008,18 @@
                  "Such glue doesn't belong there; but you can safely proceed,"
                  "since the offensive shrinkability has been made finite."],
      tex-error J)
+   ; par.l's line_break, likewise (tex.web 826)
+   (par-shrink-warn J)
+    (: tp (int-par J tracing-paragraphs-code > 0)
+       _ (tp ? (end-diagnostic J 1))
+       _ (print-err J "Infinite glue shrinkage found in a paragraph",
+          set-help J ["The paragraph just ended includes some glue that has"
+                      "infinite shrinkability, e.g., `\\hskip 0pt minus 1fil'."
+                      "Such glue doesn't belong there---it allows a paragraph"
+                      "of any length to fit on one line. But it's safe to proceed,"
+                      "since the offensive shrinkability has been made finite."],
+          tex-error J)
+       (tp ? (begin-diagnostic J)))
 
    ; --- math: noads and their display (tex.web 680-698) --------------------------------------
    ; a noad: 'type ord-noad..right-noad, 'sub, fields 'nucleus 'supscr 'subscr {'mt 'fam 'char 'info}
@@ -2335,7 +2376,10 @@
                (cb-ship J p)))
        _ (!tr ? (print-char J 93))
        _ (pin J 'dead-cycles 0)
-       (flush (J 'term-out)))
+       _ (flush (J 'term-out))
+       ; there is no mem array, so its counts are zeros
+       (int-par J tracing-stats-code > 1 ?
+          (print-nl J "Memory usage before: 0&0; after: 0&0; still untouched: 0", print-ln J)))
    ; the postamble, and what the log says of it (tex.web 642)
    (finish-dvi J)
     (? (J 'pages = 0) (print-nl J "No pages of output.")

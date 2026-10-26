@@ -100,6 +100,33 @@ for d in $jobs; do
 done
 echo "  caja: macros -- $ni jobs through -ini TeX, logs identical to TeX's, $nd DVIs byte for byte"
 
+# the trip test: tripman's two runs through tex -ini and caja, the logs and the terminal held to
+# TeX's but for what tripman 5f-g lets differ (the memory counts, the job's statistics, the date),
+# and the DVI byte for byte past the date in its preamble
+t=$w/trip
+mkdir -p "$t/tex" "$t/caja"
+pltotf test/caja/trip/trip.pl "$t/trip.tfm" >/dev/null 2>&1 || fail "pltotf refused test/caja/trip/trip.pl"
+for s in tex caja; do cp test/caja/trip/trip.tex "$t/trip.tfm" "$t/$s/"; done
+( cd "$t/tex" && export max_print_line=72 error_line=64 half_error_line=32 &&
+  { tex -ini '\input trip' </dev/null >tripin.fot 2>&1 || true; } && mv trip.log tripin.log &&
+  { tex -ini '&trip  trip ' </dev/null >trip.fot 2>&1 || true; } ) || fail "TeX could not run trip"
+( cd "$t/caja" && "$L" "$r/test/caja/trip.l" "$r" "$t/caja" 1 </dev/null >tripin.fot 2>&1 && mv trip.log tripin.log &&
+  "$L" "$r/test/caja/trip.l" "$r" "$t/caja" 2 </dev/null >trip.fot 2>&1 ) || fail "trip.l died"
+tripmask() {
+  awk 'k { k = 0; next } /^Memory usage before: / { print "# memory"; k = length($0) >= 72; next } { print }' |
+    sed 's/^ (preloaded format=trip [0-9.]*)$/# format/; s/^ [0-9]* strings out of [0-9]*$/# strings/
+         s/^ [0-9]* string characters out of [0-9]*$/# characters/; s/^ [0-9]* words of memory out of [0-9]*$/# words/
+         s/,[0-9]*b,/,#b,/'
+}
+for f in tripin.log trip.log tripin.fot trip.fot; do
+  case $f in *.log) k=2;; *) k=1;; esac
+  tail -n +2 "$t/tex/$f" | sed "$stats" | tripmask > "$t/t"; tail -n +$k "$t/caja/$f" | sed "$stats" | tripmask > "$t/c"
+  cmp -s "$t/t" "$t/c" || { diff "$t/t" "$t/c" | head -20; fail "caja's $f differs from TeX's (trip)"; }
+done
+tail -c +43 "$t/tex/trip.dvi" > "$t/t"; tail -c +43 "$t/caja/trip.dvi" > "$t/c"
+cmp -s "$t/t" "$t/c" || fail "caja's trip.dvi differs from TeX's"
+echo "  caja: trip -- both runs, logs and terminal as TeX's but for the counts tripman frees, trip.dvi byte for byte"
+
 dfonts=""
 for f in cmr10 cmbx10 cmti10 cmtt10 cmbx12 cmbx12 cmsy10; do
   p=$(kpsewhich $f.tfm) || true

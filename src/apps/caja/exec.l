@@ -663,7 +663,6 @@
    ; --- dumping and undumping (tex.web 1299-1329) ----------------------------------------------
    ; a format is the fields below as text: i int, f float, s string, y symbol, n (), L list, T a
    ; tablet with its id, R a tablet already written, so a shared glue spec stays shared
-   trie-op-size 35111
    fmt-fields ['eq 'et 'el 'hash 'text 'hash-used 'cs-count 'fonts 'nfonts 'pats 'pref 'langs 'exc
                'trie-ops 'trie-used 'trie-op-count 'pat-ops 'interaction 'format-ident 'zero-glue
                'fil-glue 'fill-glue 'ss-glue 'fil-neg-glue]
@@ -712,6 +711,24 @@
     (: t (J 'fonts f 'tfm)
        (#(keys (t 'ci)) + #(keys (t 'wd)) + #(keys (t 'ht)) + #(keys (t 'dp)) + #(keys (t 'ic))
         + t 'nl + #(keys (t 'kern)) + #(keys (t 'ext)) + t 'np))
+   ; fmem_ptr-7: every font's words, the null font's first seven aside
+   (fmem-words J) (foldl (\ a f (a + font-words J f)) (J 'fonts 0 'tfm 'np - 7) (map (+ 1) ^(J 'nfonts)))
+   ; the statistics tracingstats asks of the job's end (tex.web 1334), out of TeX Live's capacities;
+   ; there is no string pool or mem array, so those counts are zeros
+   (job-stats J)
+    (: q (J 'log-file) nf (J 'nfonts) nh #(keys (J 'exc))
+       (pl n) (n != 1 ? "s" "")
+       (say q (cats [" \nHere is how much of TeX's memory you used:\n"
+                     " 0 strings out of 498626\n"
+                     " 0 string characters out of 6225294\n"
+                     " 0 words of memory out of 5000000\n"
+                     " " (show (J 'cs-count)) " multiletter control sequences out of 15000+600000\n"
+                     " " (show (fmem-words J + 7)) " words of font info for " (show nf) " font" (pl nf)
+                     ", out of 8000000 for 9000\n"
+                     " " (show nh) " hyphenation exception" (pl nh) " out of 8191\n"
+                     " " (show (J 'max-in-stack)) "i," (show (J 'max-nest-stack)) "n,"
+                     (show (J 'max-param-stack)) "p,0b," (show (J 'max-save-stack + 6))
+                     "s stack positions out of 10000i,1000n,20000p,200000b,200000s\n"])))
    ; the packed trie's length, as init_trie's compress_trie, first_fit and trie_pack find it
    (trie-length J)
     (: root {}
@@ -777,7 +794,7 @@
        nt (#(keys (J 'text)))
        lt (foldl (\ a k (a + #(J 'text k))) 0 (keys (J 'text)))
        nf (J 'nfonts)
-       fw (foldl (\ a f (a + font-words J f)) 0 (map (+ 1) ^nf))
+       fw (fmem-words J)
        nh #(keys (J 'exc))
        _ (pin J 'trie-ready 1)
        F (fmt-text J)
@@ -801,7 +818,7 @@
        no (J 'trie-op-count)
        _ (print-nl J "Hyphenation trie of length ") _ (print-int J tl0) _ (print J " has ")
        _ (print-int J no) _ (print J " op") _ (no != 1 ? (print-char J 115))
-       _ (print J " out of ") _ (print-int J trie-op-size)
+       _ (print J " out of ") _ (print-int J (J 'trie-op-size))
        _ (each (rev ^256)
             (k \ (peep (J 'trie-used) k 0 @ u
                     (u > 0 ? (print-nl J "  ", print-int J u, print J " for language ", print-int J k)))))
@@ -879,8 +896,11 @@
                'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
                'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)
                'report pack-report 'char-warn char-warning 'shrink-warn split-shrink-warn
-               'out-what out-what 'trie-ops {} 'trie-used {} 'trie-op-count 0 'pat-ops {} 'trie-ready 0
-               'interaction-option (peep O 'interaction ()))
+               'par-shrink-warn par-shrink-warn
+               'out-what out-what 'ptrace par-trace
+               'trie-ops {} 'trie-used {} 'trie-op-count 0 'pat-ops {} 'trie-ready 0
+               'interaction-option (peep O 'interaction ())
+               'trie-op-size (peep O 'trie-op-size 35111))
        ; par.l's state for its ligature loop and line_break, its codes eqtb's
        _ (cp-setup J)
        _ (start-new-page J)
@@ -896,7 +916,7 @@
    (tex-run O)
     (: J (tex-job O)
        I (J 'cur)
-       _ (pin I 'buf (peep O 'line ""))
+       _ (pin I 'buf (strip-tail (peep O 'line "")))
        _ (trap (\ _ (start-job J)) () (\ a b (? (a = 'caja-end) () (scare a b))))
        _ (peep J 'fmt-failed 0 = 1 ? () (close-files-and-terminate J))
        J)
@@ -937,6 +957,7 @@
        (c = 1 ? (pin J 'cur-mark {}, store-fmt-file J)))
    (close-files-and-terminate J)
     (: _ (close-write-files J)
+       _ (J 'log-opened && int-par J tracing-stats-code > 0 ? (job-stats J))
        _ (finish-dvi J)
        (J 'log-opened ?
           (: _ (put (J 'log-file) 10) _ (close (J 'log-file))
