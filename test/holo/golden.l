@@ -566,6 +566,14 @@
         (map (l \ holo-hex 'a64 (gas-text 'a64 l))
              ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
               "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
+   ;; the local, el2 outer and el3 forms
+   _ (chk-eq "gas.a64.tlbi.more"
+        ["608708d5" "e08708d5" "1f810cd5" "20810cd5" "a0810cd5" "20860cd5" "a0860cd5" "20850cd5" "a0850cd5" "1f870ed5"
+         "1f830ed5" "1f810ed5" "20870ed5" "20830ed5" "20810ed5" "a0870ed5" "a0830ed5" "a0810ed5"]
+        (map (l \ holo-hex 'a64 (gas-text 'a64 l))
+             ["tlbi vaae1, x0" "tlbi vaale1, x0" "tlbi alle2os" "tlbi vae2os, x0" "tlbi vale2os, x0" "tlbi rvae2, x0"
+              "tlbi rvale2, x0" "tlbi rvae2os, x0" "tlbi rvale2os, x0" "tlbi alle3" "tlbi alle3is" "tlbi alle3os"
+              "tlbi vae3, x0" "tlbi vae3is, x0" "tlbi vae3os, x0" "tlbi vale3, x0" "tlbi vale3is, x0" "tlbi vale3os, x0"]))
    ;; the numbered debug and pmu families, an aarch32 spsr, a pstate field in any case
    _ (chk-eq "gas.a64.sysfam"
         ["00c138d5" "a00f30d5" "c0eb3bd5" "20ed3bd5" "40433cd5" "c00310d5" "bf4100d5" "20840cd5" 'badsysreg]
