@@ -1460,28 +1460,32 @@
        ; the others sit back from it, so only their differences mean anything (`(662b-661b) / 4`).
        ; anything unmeasurable between leaves the expression refused
        (vat e acc) (trap val e (\ a b (gtoks (ssub e) @ ts (lbloffs ts acc @ m (two? m ? (gimm (lsub ts m)) (scare a b))))))
-       (lsub ts m) (map (t \ t @ ('lref v 98) ['num (assoc v m @ x <>x)] t) ts)
+       (lsub ts m) (map (t \ lkey t @ k (two? (assoc k m) ? ['num (assoc k m @ x <>x)] t)) ts)
+       ; a backward local label or a named one, by the name its line lays
+       (lkey t) (t @ ('lref v 98) (show v) ('sym s) (s != "." ? s ()) _ ())
        ; a line's leading labels and the rest -> [names rest]
        (lsplit s) (: (go t ns) (: j (word t 0)
                                   (0 < j && j < #t && t j = 58 ? (go (xa-trim (snip t (j + 1) #t)) ((snip t 0 j) . ns)) [ns t]))
                      (go (xa-trim s) ()))
        ; a data directive's bytes, its items counted at top-level commas
+       gf-dnil [".globl" ".global" ".weak" ".hidden" ".protected" ".local" ".type" ".size" ".set" ".equ"]
        gf-dsz {".inst" 4 ".word" 4 ".long" 4 ".4byte" 4 ".quad" 8 ".8byte" 8 ".xword" 8 ".hword" 2 ".short" 2 ".2byte" 2 ".byte" 1}
        (lsize r) (? (r = "") 0 (tgt != 'a64) ()
-                    (r 0 = 46) (peep gf-dsz (dname r) () @ z (charm? z ? (z * #(xa-oplist (xa-rest r))) ()))
+                    (r 0 = 46) (dname r @ d (peep gf-dsz d () @ z
+                                  (? (charm? z) (z * #(xa-oplist (xa-rest r))) (elem d gf-dnil || starts? d ".cfi_") 0 ())))
                     ; an instruction it cannot lay yet (an offset over labels) is still one word
                     (trap (x \ foldl (\ n f (? !(charm? n) () (f @ ('label _) n ('raw bs) (n + #bs) ('align . _) () (n + 4))))
                                     0 (gas-text tgt x))
                           r (\ a b 4)))
        (lbloffs ts acc)
-        (: refs (foldl (\ a t (t @ ('lref v 98) (elem v a ? a (v . a)) a)) () ts)
+        (: refs (foldl (\ a t (lkey t @ k (k = () || elem k a ? a (k . a)))) () ts)
            ; a .pushsection..popsection run lays elsewhere: walking back, a pop opens it, its push closes it
            (go l org off m)
             (? (!(two? refs) || all (v \ two? (assoc v m)) refs) m
                (atom? l) ()
                (dname <l = ".popsection") (skip >l 1 @ l2 (l2 = 'none ? () (go l2 org off m)))
                (lsplit <l @ (ns r)
-                  (: hit (filter (v \ elem (show v) ns) refs)
+                  (: hit (filter (v \ elem v ns) refs)
                      (? !org (two? hit ? (go >l 1 0 (map (v \ [v 0]) hit + m)) (go >l () 0 m))
                         (lsize r @ k
                            (!(charm? k) ? ()

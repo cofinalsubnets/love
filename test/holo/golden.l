@@ -552,6 +552,10 @@
              ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
               "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
    ;; a label distance over data directives, a .pushsection run laying elsewhere (alternative_else_nop_endif)
+   _ (chk-eq "gas.lbl.named" '(".Ls1:" "\tnop" "\tnop" ".Le1:" "\tmov x0, #2")
+        (gf-expand 'a64 (gf-lines 'a64 ".Ls1:\n\tnop\n\tnop\n.Le1:\n.if (.Le1 - .Ls1) > 4\n\tmov x0, #2\n.else\n\tmov x0, #1\n.endif")))
+   _ (chk-eq "gas.lbl.nil" '("661:" "\t.globl f" "\t.cfi_startproc" "\tnop" "662:" "\tnop")
+        (gf-expand 'a64 (gf-lines 'a64 "661:\n\t.globl f\n\t.cfi_startproc\n\tnop\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
    _ (chk-eq "gas.lbl.insn" '("661:" "\tprfm plil1strm, [x30, #(1b - 0b)]" "662:" "\tnop")
         (gf-expand 'a64 (gf-lines 'a64 "661:\n\tprfm plil1strm, [x30, #(1b - 0b)]\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
    _ (chk-eq "gas.lbl.datasize" '("661:" "\tmov x0, #1" "\t.inst 0xd503201f, 0xd503201f" "\t.inst(0xd503201f)" "\t.pushsection .f, \"a\""
