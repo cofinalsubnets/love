@@ -1581,6 +1581,20 @@
            (skip l d) (? (atom? l) 'none (d = 0) l
                          (dname <l @ w (skip >l (? (w = ".popsection") (d + 1) (w = ".pushsection") (d - 1) d))))
            (go acc () 0 ()))
+       ; `.reloc off, type, expr` on the zero word just laid at off -> acc with that word as its
+       ; expression; the offset measured back to the section's one opening, else ()
+       gf-rtys {"R_AARCH64_PREL32" [4 " - ."] "R_AARCH64_ABS32" [4 ""] "R_AARCH64_ABS64" [8 ""]}
+       (greloc r acc)
+        (: xs (xa-oplist r) ty (two? >xs && peep gf-rtys (xa-trim <>xs) ()) opens [".pushsection" ".section"]
+           (back l n) (? (atom? l) ()
+                         (elem (dname <l) opens)
+                          (: nm (<(xa-oplist (xa-rest (xa-trim <l))))
+                             (any (x \ elem (dname x) opens && <(xa-oplist (xa-rest (xa-trim x))) = nm) >l ? () n))
+                         (lsplit <l @ (_ u) (lsize u @ k (charm? k ? (back >l (n + k)) ()))))
+           (? (!(two? ty) || !(two? >>xs) || atom? acc) ()
+              (: w <ty p (xa-trim <acc)
+                 (? (lsize p != w || xa-trim (xa-rest p) != "0" || back acc 0 != val <xs + w) ()
+                    (("\t" + (w = 4 ? ".long " ".quad ") + xa-trim (xs 2) + ty 1) . >acc)))))
        ; `name .req reg` -> [name reg] | ()
        (req t) (: i (word t 0) r (xa-trim (snip t i #t))
                   (0 < i && #r > 4 && (snip r 0 4) = ".req" && blank? (r 4) ? [(snip t 0 i) (xa-trim (snip r 4 #r))]))
@@ -1691,6 +1705,7 @@
                                  (w = ".ifdef" ? d !d))
                              (vat r acc != 0))
                      (go <>b (go (yes ? <ab <>ab) acc)))
+                 (w = ".reloc") (greloc r acc @ a (two? a ? (go >l a) (go >l (ssub s . acc))))
                  (w = ".error") (scare 'gas-error r)
                  (two? (mac (xa-mnem t))) (go >l (go (call (mac (xa-mnem t)) r) acc))
                  ; labels then a macro call, or a directive read here: the labels where its lines lay

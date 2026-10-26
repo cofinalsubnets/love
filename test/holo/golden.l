@@ -598,6 +598,9 @@
    _ (chk-eq "gas.altmacro.for" '("mov x0, #0" "mov x1, #1" "mov x2, #2" "mov x3, #3")
         (gf-expand 'a64 (gf-lines 'a64 ".macro __for from:req, to:req\n.if (\\from) == (\\to)\n_for__body %\\from\n.else\n__for %\\from, %((\\from) + ((\\to) - (\\from)) / 2)\n__for %((\\from) + ((\\to) - (\\from)) / 2 + 1), %\\to\n.endif\n.endm\n.macro _for var:req, from:req, to:req, insn:vararg\n.macro _for__body \\var:req\n.noaltmacro\n\\insn\n.altmacro\n.endm\n.altmacro\n__for \\from, \\to\n.noaltmacro\n.purgem _for__body\n.endm\n_for n, 0, 3, mov x\\n, #\\n")))
    ;; a label distance over data directives, a .pushsection run laying elsewhere (alternative_else_nop_endif)
+   ;; .reloc on the zero word just laid at its offset lays that word as the expression; else it stays
+   _ (chk-eq "gas.reloc" '(".data" ".pushsection .r, \"a\"" "\t.long s + 0x13f8 - ." "\t.quad t" ".word 0" ".reloc 8, R_AARCH64_PREL32, s" ".popsection")
+        (gf-expand 'a64 (gf-lines 'a64 ".data\n.pushsection .r, \"a\"\n.word 0\n.reloc 0, R_AARCH64_PREL32, s + 0x13f8\n.quad 0\n.reloc 4, R_AARCH64_ABS64, t\n.word 0\n.reloc 8, R_AARCH64_PREL32, s\n.popsection")))
    _ (chk-eq "gas.lbl.datasize" '("661:" "\tmov x0, #1" "\t.inst 0xd503201f, 0xd503201f" "\t.inst(0xd503201f)" "\t.pushsection .f, \"a\""
                                   "\t.long 1, 2, 3" "\t.popsection" "662:" "\tnop" "\tnop" "\tnop" "\tnop")
         (gf-expand 'a64 (gf-lines 'a64 "661:\n\tmov x0, #1\n\t.inst 0xd503201f, 0xd503201f\n\t.inst(0xd503201f)\n\t.pushsection .f, \"a\"\n\t.long 1, 2, 3\n\t.popsection\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
