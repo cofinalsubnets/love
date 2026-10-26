@@ -1469,9 +1469,10 @@
        gf-dsz {".inst" 4 ".word" 4 ".long" 4 ".4byte" 4 ".quad" 8 ".8byte" 8 ".xword" 8 ".hword" 2 ".short" 2 ".2byte" 2 ".byte" 1}
        (lsize r) (? (r = "") 0 (tgt != 'a64) ()
                     (r 0 = 46) (peep gf-dsz (dname r) () @ z (charm? z ? (z * #(xa-oplist (xa-rest r))) ()))
+                    ; an instruction it cannot lay yet (an offset over labels) is still one word
                     (trap (x \ foldl (\ n f (? !(charm? n) () (f @ ('label _) n ('raw bs) (n + #bs) ('align . _) () (n + 4))))
                                     0 (gas-text tgt x))
-                          r (\ a b ())))
+                          r (\ a b 4)))
        (lbloffs ts acc)
         (: refs (foldl (\ a t (t @ ('lref v 98) (elem v a ? a (v . a)) a)) () ts)
            ; a .pushsection..popsection run lays elsewhere: walking back, a pop opens it, its push closes it
