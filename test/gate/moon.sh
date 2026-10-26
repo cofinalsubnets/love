@@ -1027,6 +1027,10 @@ moonrun -c -t a64 -I "$ho/.incd" -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 |
 readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a4344 45612f2f" \
   || fail "an .incbin's bytes were not laid as llvm-mc lays them"
 moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
+# a .S spells v0.16b back as one word: a macro argument keeps its arrangement (ghash-ce-core)
+printf '\t.macro vadd, rq, ad\n\tadd \\rq\\().16b, \\ad, v1.16b\n\t.endm\n\tvadd v10, v0.16b\n' > "$ho/.asp.S"
+moonrun -c -t a64 -o "$ho/.asp.o" "$ho/.asp.S" > /dev/null 2>&1 || fail "a .S macro argument v0.16b did not assemble"
+readelf -x .text "$ho/.asp.o" 2>/dev/null | grep -q "0a84214e" || fail "a .S macro argument v0.16b was not laid as llvm-mc lays it"
 
 # an asm .weak through an alias chain: a strong definition wins the link, alone the weak one is taken
 printf '__asm__(".text\\n.weak pick\\n.weak __pick\\n.set pick, __pick\\n.globl __pick\\n.set __pick, opick\\nopick: mov $1, %%eax\\n ret\\n");\nint pick(void);\nint main(void){ return pick(); }\n' > "$ho/.wka.c"
