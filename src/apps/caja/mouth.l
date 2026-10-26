@@ -830,8 +830,6 @@
             (print-esc J "dimen", print-int J (n - scaled-base))),
          print-char J 61, print-scaled J (J 'eq n), print J "pt")
        (print-char J 63))
-   ; a call upward, to the part of caja-tex that hangs it on J 'up
-   (up J k x) (J 'up k J x)
 
    ; --- the hash (tex.web 256-267) -------------------------------------------------------
    (id-lookup J s)
@@ -1183,7 +1181,7 @@
     (: _ (pin J 'cur-cs 0)
        _ (? (J 'cur 'state != token-list) (next-from-file J) (next-from-list J))
        (J 'cur-cmd <= car-ret && J 'cur-cmd >= tab-mark && J 'align-state = 0 ?
-          (up J 'insert-v-template 0, get-next J)))
+          (insert-v-template J, get-next J)))
    (next-from-list J)
     (: I (J 'cur) loc (I 'loc)
        (? (loc = ()) (end-token-list J, get-next-restart J)

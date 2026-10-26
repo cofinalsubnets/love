@@ -96,7 +96,7 @@
      ins-error J)
    (its-all-over? J)
     (? (!(privileged? J)) 0
-       (J 'page-contents-list = () && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
+       (J 'page-head == J 'page-tail && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
        ; \hbox to \hsize{}\vfill\penalty-'10000000000, and \end comes again
        (: _ (back-input J)
           _ (tail-append J (new-null-box () @ b (pin b 'width (dimen-par J hsize-code), b)))
@@ -137,6 +137,15 @@
           (g = vbox-group) (end-graf J, package J 0)
           (g = vtop-group) (end-graf J, package J vtop-code)
           (g = disc-group) (build-discretionary J)
+          (g = output-group) (resume-page-builder J)
+          (g = math-choice-group) (build-choices J)
+          (g = math-group) (end-math-group J)
+          (g = vcenter-group) (end-vcenter J)
+          (g = no-align-group) (end-graf J, unsave J, align-peek J)
+          (g = align-group)
+           (back-input J, pin J 'cur-tok (cs-token-flag + frozen-cr),
+            print-err J "Missing ", print-esc J "cr", print J " inserted",
+            set-help J ["I'm guessing that you meant to end an alignment here."], ins-error J)
           (not-yet J "this group's end")))
    (extra-right-brace J)
     (: g (J 'cur-group)
@@ -266,7 +275,7 @@
                   set-help J ["Sorry, \\setbox is not allowed after \\halign in a display,"
                               "or between \\accent and an accented character."],
                   tex-error J)))
-          (cmd = hyph-data) (not-yet J "hyphenation")
+          (cmd = hyph-data) (chr = 1 ? (new-patterns J) (new-hyph-exceptions J))
           (confusion J "prefix")))
    (assign-let J a n)
     (: _ (get-r-token J) p (J 'cur-cs)
@@ -588,7 +597,10 @@
               ((is car-ret) || is tab-mark) (align-error J, big ())
               (is no-align) (no-align-error J, big ())
               (is omit) (omit-error J, big ())
-              ((v? halign) || h? valign || mm? halign || is endv) (not-yet J "alignment")
+              ((v? halign) || h? valign) (init-align J, big ())
+              (mm? halign)
+               (J 'cur-group = math-shift-group ? (init-align J) (off-save J), big ())
+              ((v? endv) || h? endv) (do-endv J, big ())
               (is end-cs-name)
                (print-err J "Extra ", print-esc J "endcsname",
                 set-help J ["I'm ignoring this, since I wasn't doing a \\csname."],
@@ -600,7 +612,33 @@
               (is message) (issue-message J, big ())
               (is case-shift) (shift-case J, big ())
               (is xray) (show-whatever J, big ())
-              (h? math-shift) (not-yet J "math")
+              (is extension) (do-extension J, big ())
+              (h? math-shift) (init-math J, big ())
+              (mm? eq-no) (J 'cur-group = math-shift-group ? (start-eq-no J) (off-save J), big ())
+              (mm? left-brace)
+               (tail-append J (new-noad ()), back-input J, scan-math J (tl J 'nucleus), big ())
+              ((mm? letter) || mm? other-char || mm? char-given)
+               (set-math-char J (equiv J (math-code-base + J 'cur-chr)), big ())
+              (mm? char-num)
+               (scan-char-num J, pin J 'cur-chr (J 'cur-val),
+                set-math-char J (equiv J (math-code-base + J 'cur-chr)), big ())
+              (mm? math-char-num) (scan-fifteen-bit-int J, set-math-char J (J 'cur-val), big ())
+              (mm? math-given) (set-math-char J (J 'cur-chr), big ())
+              (mm? delim-num) (scan-twenty-seven-bit-int J, set-math-char J (J 'cur-val // 4096), big ())
+              (mm? math-comp)
+               (tail-append J (new-noad ()), pin (tl J) 'type (J 'cur-chr), scan-math J (tl J 'nucleus), big ())
+              (mm? limit-switch) (math-limit-switch J, big ())
+              (mm? radical) (math-radical J, big ())
+              ((mm? accent) || mm? math-accent) (math-ac J, big ())
+              (mm? vcenter) (begin-vcenter J, big ())
+              (mm? math-style) (tail-append J (new-style (J 'cur-chr)), big ())
+              (mm? non-script)
+               (tail-append J (new-glue (J 'zero-glue)), pin (tl J) 'sub cond-math-glue, big ())
+              (mm? math-choice) (append-choices J, big ())
+              ((mm? sub-mark) || mm? sup-mark) (sub-sup J, big ())
+              (mm? above) (math-fraction J, big ())
+              (mm? left-right) (math-left-right J, big ())
+              (mm? math-shift) (J 'cur-group = math-shift-group ? (after-math J) (off-save J), big ())
               (not-yet J "typesetting")))
        (big ()))
    (normal-paragraph J)
@@ -658,18 +696,24 @@
                'cur-mark {} 'read-open {} 'read-file {} 'write-file {} 'after-token 0
                'cur-list {'mode vmode 'head H 'tail H 'prev-depth ignore-depth 'sf 0
                           'pg 0 'ml 0 'clang 0}
-               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty 'page-contents-list () 'contrib-list ()
-               'page-so-far {} 'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
+               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty
+               'page-head {'type glue-node 'sub normal 'link ()} 'page-ins () 'best-page-break ()
+               'least-page-cost 0 'best-size 0 'page-max-depth 0 'best-height-plus-depth 0
+               'page-so-far {0 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0}
+               'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
                'insert-penalties 0 'output-active 0 'mag-set 0
                'cur-cs 0 'cur-cmd 0 'cur-chr 0 'cur-tok 0 'cur-val 0 'cur-val-level int-val
                'radix 0 'cur-order 0 'cur-name "" 'cur-area "" 'cur-ext "" 'fd ()
-               'up {} 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
+               'align-head {'type 'head 'link ()} 'end-span {'n 256 'info () 'width 0} 'align-stack ()
+               'cur-align () 'cur-span () 'cur-loop () 'cur-head () 'cur-tail () 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
                'output-file-name ()
                'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
                'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)
-               'report pack-report 'char-warn char-warning)
+               'report pack-report 'char-warn char-warning 'shrink-warn split-shrink-warn
+               'out-what out-what)
        ; par.l's state for its ligature loop and line_break, its codes eqtb's
        _ (cp-setup J)
+       _ (start-new-page J)
        _ (pins J 'sf (\ c (J 'eq (sf-code-base + c))) 'lc (\ c (J 'eq (lc-code-base + c))))
        _ (init-eqtb J)
        _ (primitives J)
@@ -721,7 +765,8 @@
              pin J 'selector term-and-log))
        (c = 1 ? (not-yet J "\\dump")))
    (close-files-and-terminate J)
-    (: _ (finish-dvi J)
+    (: _ (close-write-files J)
+       _ (finish-dvi J)
        (J 'log-opened ?
           (: _ (put (J 'log-file) 10) _ (close (J 'log-file))
              _ (pin J 'selector (J 'selector - 2))

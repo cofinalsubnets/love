@@ -6,7 +6,7 @@
 ; scaled points; glue_set a double, as TeX Live's glue_ratio
 (module (caja-box cb-char cb-rule cb-glue cb-kern cb-penalty cb-math cb-leaders cb-list
          cb-null-box cb-hpack cb-vpack cb-vpackage cb-font cb-job cb-ship cb-dvi cb-badness
-         cb-param cb-set-param)
+         cb-param cb-set-param cb-special)
 (borrow 'tfm)
 (:
    null-flag -1073741824                     ; a running dimension
@@ -118,6 +118,7 @@
                       walk p (p 'link)))
                  (walk p (p 'link)))))
        _ (walk () p0)
+       _ (pins J 'total-stretch st 'total-shrink sh)
        _ (pins r 'height (dims 'h) 'depth (dims 'd))
        w2 (m @ 'additional (dims 'x + w) w)
        _ (pin r 'width w2)
@@ -168,6 +169,7 @@
                   (t = 11) (pins dims 'x (dims 'x + dims 'd + p 'width) 'd 0)),
                walk (p 'link))))
        _ (walk p0)
+       _ (pins J 'total-stretch st 'total-shrink sh)
        _ (pin r 'width (dims 'w))
        _ (dims 'd > l ? (pin dims 'x (dims 'x + dims 'd - l), pin r 'depth l) (pin r 'depth (dims 'd)))
        h2 (m = 'additional ? (dims 'x + h) h)
@@ -298,6 +300,13 @@
    (leave J save-loc)
     (prune J save-loc, J 'curs > 0 ? (dvi-pop J save-loc), pin J 'curs (J 'curs - 1))
    (sub-out J b) (b 'type = 1 ? (vlist-out J b) (hlist-out J b))
+   ; a whatsit is its owner's to output, through J 'out-what
+   (out-what J p) (peep J 'out-what () @ f (f != () ? (f J p)))
+   ; a \special's bytes, xxx1 or xxx4 (tex.web 1368)
+   (cb-special J s)
+    (synch-h J, synch-v J,
+     #s < 256 ? (dvi-out J 239, dvi-out J #s) (dvi-out J 242, dvi-four J #s),
+     map (b \ dvi-out J b) (map s ^#s))
    ; leaders of boxes l long over w2 from J's ax, the box's edge at org: ax moved to the first
    ; box, answering the gap between boxes -- aligned (100), centered (101) or expanded
    (lead-start J ax org sub l w2)
@@ -365,7 +374,8 @@
                                         (rep 0,
                                          pin J 'curh (edge - 10)))
                                      (pin J 'curh (J 'curh + wd))))))))
-                  (t = 11 || t = 9) (pin J 'curh (J 'curh + p 'width))),
+                  (t = 11 || t = 9) (pin J 'curh (J 'curh + p 'width))
+                  (t = 8) (out-what J p)),
                go (p 'link))))
        (go (box 'list),
         leave J save-loc))
@@ -409,7 +419,8 @@
                                         (rep 0,
                                          pin J 'curv (edge - 10)))
                                      (pin J 'curv (J 'curv + ht))))))))
-                  (t = 11) (pin J 'curv (J 'curv + p 'width))),
+                  (t = 11) (pin J 'curv (J 'curv + p 'width))
+                  (t = 8) (out-what J p)),
                go (p 'link))))
        (go (box 'list),
         leave J save-loc))
