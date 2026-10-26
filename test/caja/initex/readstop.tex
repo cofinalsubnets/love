@@ -1,0 +1,21 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\$=3 \catcode`\&=4
+\catcode`\^=7 \catcode`\_=8 \catcode`\~=13 \catcode`\^^I=10
+\message{\jobname}\input sub \message{after \the\inputlineno}
+\input sub2.tex
+\openin3=data \ifeof3 \message{closed}\else\message{open}\fi
+\read3 to\x \show\x \read3 to\x \show\x \read3 to\x \show\x
+\read3 to\x \show\x \read3 to\x \show\x \ifeof3\message{eof}\fi
+\read3 to\x \show\x \ifeof3\message{eof}\fi
+\openin4=nonexistent \ifeof4\message{noexist}\fi
+\openin5=bad \read5 to\y \show\y \read5 to\y \show\y \read5 to\y \show\y
+\closein5 \ifeof5\message{closed5}\fi
+\endlinechar=-1 \openin3=data \read3 to\x \show\x \closein3
+\endlinechar=13
+\def\a{\input sub2 }\a
+\message{\string\par\string\^^A}
+\escapechar=-1 \message{\string\par}\show\par \escapechar=`\\
+\newlinechar=`\| \message{a|b} \newlinechar=-1
+\message{ababababababababababababababababababababababababababababababababababababab}
+\message{c}\message{dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd}
+\input nonexist
+\end
