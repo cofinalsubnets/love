@@ -588,6 +588,8 @@
         (gf-expand 'a64 (gf-lines 'a64 "661:\n\tmov x0, #1\n\t.inst 0xd503201f, 0xd503201f\n\t.pushsection .f, \"a\"\n\t.long 1, 2, 3\n\t.popsection\n662:\n\t.rept (662b - 661b) / 4\n\tnop\n\t.endr")))
    ;; .rep is .rept (kuser32's padding)
    _ (chk-eq "gas.rep" '("\t.word 0" "\t.word 0" "\t.word 0") (gf-expand 'a64 (gf-lines 'a64 "\t.rep 3\n\t.word 0\n\t.endr")))
+   ;; .extern says nothing gas does not assume
+   _ (chk-eq "gas.extern" (show (gas-top 'a64 "\tret\n")) (show (gas-top 'a64 "\t.extern f\n\tret\n")))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
