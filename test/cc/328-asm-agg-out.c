@@ -8,7 +8,7 @@ static int f(unsigned int x)
 	sl lv;
 	struct p2 q;
 #if defined(__x86_64__)
-	asm volatile("lea 0x10000(%1), %0" : "=&r" (lv) : "r" (x));
+	asm volatile("movl %1, %0\n\taddl $0x10000, %0" : "=&r" (lv) : "r" (x));
 	asm volatile("movl $0x0705, %k0" : "=r" (q));
 #elif defined(__aarch64__)
 	asm volatile("add %w0, %w1, #0x10000" : "=&r" (lv) : "r" (x));
