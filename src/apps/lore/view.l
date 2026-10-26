@@ -60,7 +60,7 @@
  ; each pixel's place in a 4 by 4 bayer square, a w by h screen's worth, as the dither's
  ; offset between two steps
  bayer (star-tray [16] [0 8 2 10 12 4 14 6 3 11 1 9 15 7 13 5])
- (view-bayer w h) (: i (iota (w * h)) (peep bayer (i // w % 4 * 4 + i % w % 4) 0 / 16.0 + 1.0 / 32.0))
+ (view-bayer w h) (: i (iota (w * h)) (bayer (i // w % 4 * 4 + i % w % 4) / 16.0 + 1.0 / 32.0))
  ; 24-bit, six bits a channel packed
  (view-deep-pens c) (: (q v) (int (sat1 v * 63.0 + 0.5)) (q (c 0) * 4096 + q (c 1) * 64 + q (c 2)))
  ; ..or the 256 palette's cube or grey ramp, dithered between the two steps round each part
@@ -279,8 +279,9 @@
  ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
  ;     (tick what part), for the making to call as it goes, what it is at and () or how far
  ;     through, 0.0 to 1.0. once the making has taken view-load-wait ms, and no oftener than
- ;     a frame after, draw is called with {'win 'box 'ms 'n 'what 'part}, n its count: in a
- ;     window it paints the paper inside box [x0 y0 x1 y1], in pixels, or () the whole window
+ ;     a frame after, draw is called with {'win 'box 'ms 'n 'fresh 'what 'part}, n its count,
+ ;     fresh 1 on the first and when the box has changed since the last: in a window it
+ ;     paints the paper inside box [x0 y0 x1 y1], in pixels, or () the whole window
  ;     as big as it is by then, and answers [y0 y1] the rows to show, or () for the box's;
  ;     the paper may not hold what the screen does, a window's frames being sent whole.
  ;     else box is in cells and it answers what to say to the terminal ---
@@ -289,31 +290,28 @@
    (\ what part (: now (clock 0)
      (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
         (: b (tablet? win && atom? box ? (window-sized win @ s [0 0 (s 0) (s 1)]) box)
-           s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'what what 'part part})
-           (pins at 'n (at 'n + 1) 'last now,
+           s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'fresh (at 'n = 0 || b != peep at 'box ()) 'what what 'part part})
+           (pins at 'n (at 'n + 1) 'last now 'box b,
             (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (b 1) (b 3)))
                (string? s) (say out s, flush out)),
             ()))))))
  ; ..the loading screen a level has unless it says another: the box black, and in its middle
  ; the moon going through its phases, a month in view-spin-n draws, new to full lit from the
- ; right; in a terminal its eight faces, two cells wide
- view-spin-bg 0 view-spin-lit 0xe8e4d6 view-spin-dark 0x24272c view-spin-n 24
+ ; right, drawn as pom draws it naturally; in a terminal its eight faces, two cells wide
+ view-spin-bg 0 view-spin-n 24
  view-spin-cells ["\u{1f311}" "\u{1f312}" "\u{1f313}" "\u{1f314}" "\u{1f315}" "\u{1f316}" "\u{1f317}" "\u{1f318}"]
  (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
    (? !(tablet? win) (esc + "[" + show ((b 1 + b 3) // 2 + 1) + ";" + show ((b 0 + b 2) // 2) + "H" + esc + "[0;37;40m"
             + view-spin-cells (n * 8 // view-spin-n % 8) + esc + "[0m")
-      ; ..a fifth of the box across, drawn at most 96 pixels and blown up past that
-      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 95) // 96)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
+      ; ..a fifth of the box across, drawn at most 64 pixels and blown up past that
+      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 63) // 64)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
          x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
          I (iota (S * S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
-         ; ..the terminator an ellipse across the disc: waxing, lit right of it; waning, left
-         ph (2.0 * pi * (n % view-spin-n) / view-spin-n) c (cos ph) w (sqrt (max (1.0 - y * y) 0.0))
-         in (x * x + y * y < 1.0) lit (ph < pi ? (x > w * c) (x < (0.0 - w) * c))
-         f (bg + in * (view-spin-dark - bg) + in * lit * (view-spin-lit - view-spin-dark)) T (cask (A * A * 4))
+         in (x * x + y * y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (A * A * 4))
          Z (cask (4 * bw))
-         _ (n = 0 ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
+         fr (peep ld 'fresh (n = 0)) _ (fr ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
          (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))
-                         (n = 0 ? () [y0 (y0 + A)]))))))
+                         (fr ? () [y0 (y0 + A)]))))))
  ; ..a level's 'song: (new h sd) a song into the horn, fed (feed s) a frame; none on a
  ; seat with no horn
  (view-song new feed) (hn \ ((hn ? (new hn (wheel (clock 0)))) @ s (s ? (_ \ (feed s)))))

@@ -75,20 +75,22 @@
  (test (s8 'pic-w = 160) (s8 'pic-h = 100)))
 
 ; the loading screen: view-spin blacks its box and puts the moon in the middle, a fifth of
-; the box across, new to begin, its right half lit a quarter through, full at half, and
-; after shows only the moon's rows; in a terminal its faces. and view-loading draws only once the making has taken a moment, then
-; not again within a frame
+; the box across as pom draws it: new to begin, dark but for earthshine, its right half lit a
+; quarter through, full at half, and after shows only the moon's rows; in a terminal its
+; faces. and view-loading draws only once the making has taken a moment, then not again
+; within a frame
 (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}
    (rgb x y) (4 * (y * 640 + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
    _ (frame-paint (iota (640 * 400) * 0 + 0xffffff) 640 1 (win 'paper) 640)
    s0 (view-spin {'win win 'box [0 0 320 400] 'n 0}) new (rgb 160 200) s1 (view-spin {'win win 'box [0 0 320 400] 'n 6})
    qr (rgb 175 200) ql (rgb 145 200) _ (view-spin {'win win 'box [0 0 320 400] 'n 12}) full [(rgb 145 200) (rgb 175 200)]
+   (lum c) (c 0 + c 1 + c 2)
    big (view-spin {'win {'w 1200 'h 1000 'paper (cask (1200 * 1000 * 4))} 'box [0 0 1200 1000] 'n 1})
    tw (view-spin {'win () 'box [0 0 80 24] 'n 3})
    c {'n 0} tk (view-loading () [0 0 80 24] (ld \ (pin c 'n (c 'n + 1), pin c 'ld ld, "")))
    _ (tk 'early ()) n0 (c 'n) _ (rest 200) _ (tk 'cuts 0.5) n1 (c 'n) _ (tk 'cuts 0.6) n2 (c 'n)
- (test (s0 = ()) (s1 = [168 232]) (big = [401 599]) (rgb 10 10 = [0 0 0]) (rgb 600 10 = [255 255 255])
-       (new = [36 39 44]) (qr = [232 228 214]) (ql = [36 39 44]) (full = [[232 228 214] [232 228 214]])
+ (test (s0 = ()) (s1 = [168 232]) (big = [400 600]) (rgb 10 10 = [0 0 0]) (rgb 600 10 = [255 255 255])
+       (0 < lum new) (lum new < 120) (lum qr > 400) (lum ql < 60) (all (c \ lum c > 300) full)
        (has? tw "\u{1f312}")
        (n0 = 0) (n1 = 1) (n2 = 1) (c 'ld 'what = 'cuts) (c 'ld 'part = 0.5) (c 'ld 'n = 0) (c 'ld 'ms >= 150)))
 ; ..a window resized before the loading screen draws: the moon in the middle of its new size,
@@ -96,7 +98,16 @@
 (: rw {'w 320 'h 200 'paper (cask (320 * 200 * 4)) 'evq [['size 800 600] ['down 16]]}
    tk (view-loading rw () view-spin) _ (rest 200) _ (tk 'cuts 0.5)
    (at x y) (4 * (y * 800 + x) @ i (string (rw 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
- (test (window-size rw = [800 600]) (at 400 300 = [36 39 44]) (at 300 300 = [0 0 0]) (window-events rw = [['down 16]])))
+ (test (window-size rw = [800 600]) (0 < at 400 300 0) (at 400 300 0 < 60) (at 300 300 = [0 0 0]) (window-events rw = [['down 16]])))
+; ..and resized while it draws: the draw after told the box is fresh, so the moon blacks it
+; whole again and shows it all, the moon's old place too
+(: fw {'w 320 'h 200 'paper (cask (320 * 200 * 4)) 'evq ()} fs {'l ()}
+   tk (view-loading fw () (ld \ (pin fs 'l (fs 'l + [(ld 'fresh)]), ())))
+   _ (rest 200) _ (tk 'cuts 0.1) _ (rest 60) _ (tk 'cuts 0.2) _ (pin fw 'evq [['size 400 300]]) _ (rest 60) _ (tk 'cuts 0.3) _ (rest 60) _ (tk 'cuts 0.4)
+   pw {'w 320 'h 200 'paper (cask (320 * 200 * 4))} _ (frame-paint (iota (320 * 200) * 0 + 0xffffff) 320 1 (pw 'paper) 320)
+   f0 (view-spin {'win pw 'box [0 0 320 200] 'n 5 'fresh 0}) w0 (string (pw 'paper) 0)
+   f1 (view-spin {'win pw 'box [0 0 320 200] 'n 6 'fresh 1}) w1 (string (pw 'paper) 0)
+ (test (fs 'l = [1 0 1 0]) (two? f0) (w0 = 255) (f1 = ()) (w1 = 0)))
 
 (test_fin (),
  puts "lorewin: ok -- a held key walks at its pace, the keyboard's repeat no press, a pressed one acts once, and the world paints its window\n")

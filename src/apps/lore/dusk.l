@@ -84,7 +84,7 @@
    ; ..and where the columns' edges meet it, so the columns tile the face exactly
    th (st 'th) ue ((iota (w + 1) - st 'cx) / foc)
    he (px + (gz - pz) / max (cos th - ue * sin th) 0.000001 * (sin th + ue * cos th))
-   hxa (peep he (iota w) 0.0) hxb (peep he (iota w + 1) 0.0)
+   hxa (he (iota w)) hxb (he (iota w + 1))
    ; the hole's crown, an arch jagged along the face -- only once a column is narrower than the
    ; jags, which would otherwise shimmer
    jag ((hxb - hxa < 0.4) * (throw (floor (hx * 2.5 + 1000.0)) 0 17 5 * 0.12 - 0.24))

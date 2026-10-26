@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-haze mesh-frame mesh-coarse mesh-flat
+         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
 (borrow 'view)
@@ -73,7 +73,7 @@
  ; the vertices' first m parts as trays, and their places [x y z], indexable; a triangle t's corners
  (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
  (places vs) (columns vs 3)
- (at3 P i) [(peep (P 0) i 0.0) (peep (P 1) i 0.0) (peep (P 2) i 0.0)]
+ (at3 P i) [(P 0 i) (P 1 i) (P 2 i)]
  (corners P t) [(at3 P (t 0)) (at3 P (t 1)) (at3 P (t 2))]
  ; ..each with its index, in order
  (indexed l) (rev (<>(foldl (\ st v [(<st + 1) ([v <st] . <>st)]) [0 ()] l)))
@@ -131,9 +131,8 @@
  (mesh-lamps pk amb chs ks gain) (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
- ; ..the same into one buffer the packed mesh keeps, only colours rewritten: each call
- ; overwrites the last answer, so once a frame. amb, chs and gain are the first call's, and
- ; after it only the vertices a lamp reaches change, only when ks does
+ ; ..the same kept on the packed mesh, only colours rewritten: amb, chs and gain are the
+ ; first call's, and after it only the vertices a lamp reaches change, only when ks does
  (mesh-lamps! pk amb chs ks gain)
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
@@ -145,7 +144,8 @@
            _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (ch \ map g ch) chs)})
            [v (pk 'tris)])
       ; ..and nothing written while the lamps stand where they stood
-      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b (: _ (pin lv 'ks ks) (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs)))))
+      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b
+                           (: _ (pin lv 'ks ks) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
                           (pk 'tris)])))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
@@ -208,22 +208,34 @@
    (over -1 ((0.05 < zc) * (0 <= cx) * (cx < w) * (0 <= cy) * (cy < h)) (cy * w + cx)))
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
- ; stars put on by night
- (mesh-sky ss lt wx e sim t0 k)
+ ; stars put on by night; nothing asked where no pixel is bare
+ (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
-         (\ v f B (: g (sky-grid v lt wx e sim k f) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
-                     (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)))))]))
+         (\ v f B (? (!(aany (f < 0))) f
+                     (: g (sky-grid v lt wx e sim k f sm) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
+                        (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix))))))]))
+ ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
+ (mesh-sky-memo st) (peep st 'sky-memo () @ () (: t {} (pin st 'sky-memo t, t)) t t)
  ; ..the radians between rays k pixels apart at the middle of v
  (mesh-step v k) (1.0 * k * tan (v 'fov / 2.0) / (v 'w / 2.0))
  ; the sky over f's bare pixels, about every k pixels, a flat tray: asked on a cube of
  ; directions n a face, fixed to the sky and drawn through the eye, so no turn or tilt moves
- ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn
- (sky-grid v lt wx e sim k f)
+ ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn.
+ ; with sm a tablet, each ask kept there and asked again a frame in sky-turn, or once
+ ; sky-age of sim old; all of them again for a new grid, weather or light, or once the eye
+ ; moves, so no two asks side by side are of different moments
+ sky-turn 4 sky-age 1.0
+ (sky-keep sm n mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
+   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && all (k \ e k = q k) ^3 && l 0 = lt 'sun && l 1 = lt 'expo && ds * ds < 3600.0)
+   z (iota (6 * mm) * 0.0)
+   _ (? !ok (pins sm 'n n 'wx wx 'r z 'g z 'b z 'at (z - 1e9) 'k 0))
+   (pins sm 'e e 'lt [(lt 'sun) (lt 'expo)] 'sim sim 'k (sm 'k + 1)))
+ (sky-grid v lt wx e sim k f sm)
   (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (m * m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
      ; by fc's parity
@@ -239,21 +251,28 @@
      out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
      vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
      ; ..the blocks' corners, each asked once
-     (corner E c) (: bk (peep vb (E // (c * c)) 0) o (E % (c * c))
+     (corner E c) (: bk (vb (E // (c * c))) o (E % (c * c))
                     (bk // (nb * nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
      N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
-     d (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
-     ; ..each ask's clouds no finer than the asks beside it
-     c (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
+     d (dir N)
+     ; ..each ask's clouds no finer than the asks beside it; kept ones as they were
+     (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     c (? (!(tablet? sm)) (ask N d)
+          (: _ (sky-keep sm n mm e lt wx sim)
+             A (iota (((N + sm 'k) % sky-turn = 0) + (sim - sm 'at N > sky-age) > 0)) NA (N A)
+             cA (#A = 0 ? () (ask NA (dir NA)))
+             _ (#A = 0 ? () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
+             [(sm 'r N) (sm 'g N) (sm 'b N)]))
      zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
      ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
-     (q j) (peep ix (qs + j) 0) zq (qs * 0 - 1)
+     (q j) (ix (qs + j)) zq (qs * 0 - 1)
      ts (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])
      (#N = 0 ? f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
-   [(255.0 * peep (c 0) 0 0.0) (255.0 * peep (c 1) 0 0.0) (255.0 * peep (c 2) 0 0.0)])
+   [(255.0 * c 0 0) (255.0 * c 1 0) (255.0 * c 2 0)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a
@@ -266,7 +285,7 @@
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
    f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
    (? (two? bare) (<>bare v f B0)
-      (: S (iota (f < 0)) (#S = 0 ? f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - peep f S 0)))))))
+      (: S (iota (f < 0)) (#S = 0 ? f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - f S)))))))
  ; ..colours s with the glows g kept on their bare pixels added, or through the tints kept
  (glowed s g) (: t (g >= 33554431) v (g - 33554431)
    (ch k) (t * min ((s >> k & 255) * (v >> k & 255) // 255 + 4 * (v >> 24)) 255 + (1 - t) * min ((s >> k & 255) + (g >> k & 255)) 255)
@@ -280,7 +299,7 @@
  ; ..as half-block cells: 24-bit, or the 256 cube dithered by bay
  (mesh-cells f w h deep bay bands) (: c (mesh-flat f)
    (deep ? (view-deep-frame w h (view-deep-pens c) bands)
-      (view-cube-pens c bay @ px (view-frame w h (y \ peep px (iota w + w * y) 0) bands))))
+      (view-cube-pens c bay @ px (view-frame w h (y \ px (iota w + w * y)) bands))))
  ; ..or as kitty image id over cols by rows cells from the cursor, which stays
  (mesh-kitty f w h cols rows id) (: b (frame-bytes f 2 1) n #b o (jug 0)
    (go i) (: j (min n (i + 4096))
@@ -333,7 +352,7 @@
    "")
  ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
  (mesh-under f w h P W H r) (: y0 (16 * r) n (min2 16 (H - y0))
-   (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (peep f (Y * h // H * w + X * w // W) 0) T (cask (W * n * 4))
+   (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (f (Y * h // H * w + X * w // W)) T (cask (W * n * 4))
               _ (frame-paint g W 1 T W) (pour P (y0 * W * 4) T 0 (W * n * 4)))
       0))
  ; ..a band [x0 cells fg bg] on cell row r: pens six bits a channel, or the 256
@@ -375,7 +394,9 @@
    ps (map (v \ map (x \ glb-f32 (glb-bits x)) [(0.0 - v 0) (v 1) (v 2)]) vs) ns (map (v \ [(0.0 - v 5) (v 6) (v 7)]) vs)
    cs (map (v \ map (k \ glb-lin (v k)) [8 9 10]) vs)
    (fl l) (cats (map (p \ cats (map (x \ glb-le (glb-bits x)) p)) l))
-   pb (fl ps) nb (fl ns) cb (fl cs) ib (cats (map (t \ cats (map (k \ glb-le (t k)) ^3)) ts))
+   ; ..the triangles' corners in two bytes each where that holds them, padded to a word
+   sh (n <= 65536) (le k) (sh ? [(k & 255) (k >> 8 & 255)] (glb-le k))
+   pb (fl ps) nb (fl ns) cb (fl cs) il (#ts * 3 * (sh ? 2 4)) ib (cats (map (t \ cats (map (k \ le (t k)) ^3)) ts) + map (_ \ 0) ^((4 - il % 4) % 4))
    (ext f) (map (k \ foldl (\ a p (f a (p k))) (ps 0 k) ps) ^3)
    (view o l g) {"buffer" 0 "byteOffset" o "byteLength" l "target" g}
    (acc v ty c ct) {"bufferView" v "componentType" ct "count" c "type" ty}
@@ -384,8 +405,8 @@
                  "meshes" [{"name" name "primitives" [{"attributes" {"POSITION" 0 "NORMAL" 1 "COLOR_0" 2} "indices" 3 "mode" 4 "material" 0}]}]
                  "materials" [{"name" name "pbrMetallicRoughness" {"baseColorFactor" [1.0 1.0 1.0 1.0] "metallicFactor" 0.0 "roughnessFactor" 1.0}}]
                  "accessors" [(pins (acc 0 "VEC3" n 5126) "min" (ext min2) "max" (ext max2))
-                              (acc 1 "VEC3" n 5126) (acc 2 "VEC3" n 5126) (acc 3 "SCALAR" (3 * #ts) 5125)]
-                 "bufferViews" [(view 0 #pb 34962) (view #pb #nb 34962) (view (#pb + #nb) #cb 34962) (view (#pb + #nb + #cb) #ib 34963)]
+                              (acc 1 "VEC3" n 5126) (acc 2 "VEC3" n 5126) (acc 3 "SCALAR" (3 * #ts) (sh ? 5123 5125))]
+                 "bufferViews" [(view 0 #pb 34962) (view #pb #nb 34962) (view (#pb + #nb) #cb 34962) (view (#pb + #nb + #cb) il 34963)]
                  "buffers" [{"byteLength" (#pb + #nb + #cb + #ib)}]})
    jp (j + string (map (_ \ 32) ^((4 - #j % 4) % 4))) bl (#pb + #nb + #cb + #ib)
    (string (glb-le 1179937895 + glb-le 2 + glb-le (28 + #jp + bl) + glb-le #jp) + "JSON" + jp

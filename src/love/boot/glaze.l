@@ -32,6 +32,14 @@
    glazeasm {}
    letc (cite 'guts 'letc)                 ; (letc rows . binds): the hook's twin carries it where a surface is missing
    threadir (cite 'guts 'threadir)
+   dpureset (cite 'guts 'pureset)  dgv (cite 'guts 'gv)   ; defoliate's purity oracle: a stage fuses only when pure
+   ; ..past pureset, the words pure on any value, and the walks pure when the fn they are handed is.
+   ; tally and show are not: on a tablet they read what a consumer may pin
+   dpurex (: (put t s) (: v (dgv s ()) (v != () ? (pin t v 1) t)) (foldl put {} '(max min != !== bit)))
+   dwalks (: (put t s) (: v (dgv s ()) (v != () ? (pin t v 1) t)) (foldl put {} '(map filter foldl foldr all any each)))
+   ; ..the reads: pure where nothing writes between them, and on a container that cannot change
+   dreads (: (put t s) (: v (dgv s ()) (v != () ? (pin t v 1) t)) (foldl put {} '(peep tally keys)))
+   dimms (: (put t s) (: v (dgv s ()) (v != () ? (pin t v 1) t)) (foldl put {} '(peep pin tally)))
    leafops '(+ - * // % & | ^ < <= > >= =)   ; the ops the integer lanes emit
    (le8 n) (: u (n < 0 ? (n + 18446744073709551616) n)                        ; & is broken on a bignum >= 2^63,
               (map (i \ u // i 256 % 256) ^8))   ; so //% splits n into 8 LE bytes
@@ -2078,8 +2086,9 @@
           statenv (map (pr \ [<pr (sstat <>>pr)]) statps)
           (!(two? defs && two? statenv) ? form
              (swalk form statenv defs (map cap defs) (map cap statenv)))))
-   ; --- deforestation: fuse a map/filter pipeline under foldl/foldr/all/any into one pass, then lower it over (jot N) to the
-   ;     named-let loop lift glazes. all/any glaze because their false is the fixnum 0, not (); `each` is an effect, out of the fragment
+   ; --- deforestation: fuse a map/filter pipeline under foldl/foldr/all/any/each into one pass, then lower it over (jot N) to
+   ;     the named-let loop lift glazes. all/any glaze because their false is the fixnum 0, not (). fused, a stage's calls
+   ;     interleave with the consumer's, so a pipeline fuses only when every stage is pure; the consumer may do anything
    (dquote? x) (two? x && <x = '\ && 2 = #x)
    (drm ks env) (filter (p \ !(elem <p ks)) env)
    (dcolnms bs) (two? >bs ? (: n <bs (nom? n ? (n . dcolnms >>bs) (dcolnms >>bs))))
@@ -2108,24 +2117,82 @@
    (dfilt? P)  (two? P && <P = 'filter && 3 = #P)
    (dprod? P)  (dmap? P || dfilt? P)
    (dsfn P)    <>P  (dssrc P) <>>P                              ; (map f P') -> f / P'
-   (dpeel B e felse P)                                                        ; thread step body B over (elem e, filter-skip felse) through the chain
-    (? (dmap? P)  (dpeel (dsub e [(dforest (dsfn P)) e] B) e felse (dssrc P))    ; e := (f e)
-       (dfilt? P) (dpeel ['? [(dforest (dsfn P)) e] B felse] e felse (dssrc P))   ; (? (p e) B skip)
-       [B (dforest P)])
+   (dpeel cx B e felse P)                                                     ; thread step body B over (elem e, filter-skip felse) through the chain
+    (? (dmap? P)  (dpeel cx (dsub e [(dforest cx (dsfn P)) e] B) e felse (dssrc P))    ; e := (f e)
+       (dfilt? P) (dpeel cx ['? [(dforest cx (dsfn P)) e] B felse] e felse (dssrc P))   ; (? (p e) B skip)
+       [B (dforest cx P)])
    (dfold? x) (elem <x '(foldl foldr) && 4 = #x && (: P <>>>x (dprod? P || djot? P)))
    (dpred? x) (elem <x '(all any) && 3 = #x && (: P <>>x (dprod? P || djot? P)))
-   (dforest x)
+   (deach? x) (<x = 'each && 3 = #x && (: P <>x (dprod? P || djot? P)))
+   ; the names a form binds anywhere, lambda params, let binders and @'s patterns: a call by one of
+   ; them is to nothing known
+   (dpats l) (? (atom? l || atom? >l) () (<l . dpats >>l))
+   ; ..a pattern's binders: its names, but never a form's head ((. a b), [a b], a guard's fn)
+   (dpsyms p) (? (nom? p) [p] (atom? p) () (dquote? p) () (foldl (a \ x \ a + dpsyms x) () >p))
+   (dbinds x) (? (atom? x) () (dquote? x) ()
+                 (: r (foldl (a \ e \ a + dbinds e) () x)
+                    (? (<x = '\) (dsyms (init >x) + r) (<x = ':) (dcolnms >x + dsugcol >x + r)
+                       (<x = '@) (foldl (a \ q \ a + dpsyms q) () (dpats >>x) + r) r)))
+   ; ..and what it binds once: (name args) body or name (\ args body) as [name 'fn body], a name
+   ; bound to text, a number or a quote as [name 'lit v]
+   (dbound1 l) (? (atom? l || atom? >l) ()
+                  (: k <l v <>l
+                     ((? (two? k && nom? <k) [[<k 'fn v]]
+                         (nom? k && two? v && <v = '\) [[k 'fn (last v)]]
+                         (nom? k && (string? v || charm? v || gem? v || dquote? v)) [[k 'lit v]]
+                         ()) + dbound1 >>l)))
+   (dbound x) (? (atom? x) () (dquote? x) ()
+                 (: r (foldl (a \ e \ a + dbound e) () x) (<x = ': ? (dbound1 >x + r) r)))
+   ; the purity context: [names bindings reads-ok visiting], the bindings only of names bound once
+   (dcx form) (: bs (dbinds form) (once n) (1 = #(filter (m \ m = n) bs))
+     [bs (filter (b \ once <b) (dbound form)) 0 ()])
+   (dbind cx h) (: e (filter (b \ <b = h) (cx 1)) (two? e ? <e ()))
+   ; pure: every call to a pure fn by a name the form never binds, to a helper of its own whose
+   ; body is (its own recursion taken as pure), or to a read where reads are licensed; a lambda
+   ; literal only makes a closure
+   (dpv? cx v) (dpureset v || dpurex v || cx 2 && dreads v)
+   ; ..a name bound once may mean a global outside its scope, so that one must be pure too
+   (dlocal? cx h) (: b (dbind cx h) g (dgv h ())
+     (? (atom? b || g != () && !(dpv? cx g)) 0 (b 1 = 'lit) 1 (elem h (cx 3)) 1 (dpb? [(cx 0) (cx 1) (cx 2) (h . cx 3)] (b 2))))
+   ; a head: a name bound to a pure fn, or (opfix's glued #x <x >x) the fn itself
+   (dpn? cx h) (? (nom? h) (? (elem h (cx 0)) (dlocal? cx h) (: v (dgv h ()) (v != () && dpv? cx v)))
+                  (two? h) 0 (dpv? cx h))
+   (dwn? cx h) (? (nom? h) (!(elem h (cx 0)) && (: v (dgv h ()) (v != () && dwalks v))) (two? h) 0 (dwalks h))
+   ; a container that cannot change: text, a number, a quote, or a name bound once to one. a jug,
+   ; a cask and a tablet never are
+   (dimm? cx a) (? (string? a || charm? a || gem? a || dquote? a) 1
+                   (nom? a) (: b (dbind cx a) (two? b && b 1 = 'lit)) 0)
+   (dimh? h) (? (nom? h) (: v (dgv h ()) (v != () && dimms v)) (two? h) 0 (dimms h))
+   (dpb? cx x) (? (atom? x) 1  (dquote? x) 1
+                  (elem <x '(? && || list @)) (all (dpb? cx) >x)       ; @'s patterns: binders, data, guards
+                  (<x = '\) (dpb? cx (last x))
+                  (<x = ':) (all (e \ atom? e || dpb? cx e) >x)
+                  (dpn? cx <x) (all (dpb? cx) >x)
+                  (dwn? cx <x) (two? >x && dpf? cx <>x && all (dpb? cx) >>x)
+                  (dimh? <x && two? >x && dimm? cx <>x) (all (dpb? cx) >x)
+                  0)
+   (dpf? cx f) (? (nom? f) (dpn? cx f) (atom? f) 1 (dquote? f) 0 (<f = '\) (dpb? cx (last f)) (dpb? cx f))
+   (dpure? cx P) (? (dprod? P) (dpf? cx (dsfn P) && dpure? cx (dssrc P)) 1)
+   ; a consumer that writes nothing lets the stages read: no write falls between their reads
+   (drd cx f) (: r [(cx 0) (cx 1) 1 (cx 3)] (dpf? r f ? r cx))
+   (dforest cx x)
     (? (atom? x)   x
        (dquote? x) x
-       (dfold? x)  (: tag <x c <>x z <>>x P <>>>x e (mint 0) a (mint 0)
+       (dfold? x && dpure? (drd cx <>x) <>>>x)
+                   (: tag <x c <>x z <>>x P <>>>x e (mint 0) a (mint 0)
                       B0 (tag = 'foldl ? [c a e] [c e a])
-                      r (dpeel B0 e a P)                                      ; filter-skip = the acc, unchanged
+                      r (dpeel cx B0 e a P)                                   ; filter-skip = the acc, unchanged
                       hd (tag = 'foldl ? ['\ a e <r] ['\ e a <r])
-                      [tag hd (dforest z) <>r])
-       (dpred? x)  (: tag <x q <>x P <>>x e (mint 0) unit (tag = 'all ? 1 0)   ; filter-skip = the short-circuit unit
-                      r (dpeel [q e] e unit P)
+                      [tag hd (dforest cx z) <>r])
+       (dpred? x && dpure? (drd cx <>x) <>>x)
+                   (: tag <x q <>x P <>>x e (mint 0) unit (tag = 'all ? 1 0)   ; filter-skip = the short-circuit unit
+                      r (dpeel cx [q e] e unit P)
                       [tag ['\ e <r] <>r])
-       (<x . map dforest >x))
+       (deach? x && dpure? (drd cx <>>x) <>x)
+                   (: f <>>x P <>x e (mint 0)                                 ; filter-skip = nothing done
+                      r (dpeel cx [f e] e () P)
+                      ['each <>r ['\ e <r]])
+       (<x . map (dforest cx) >x))
    (dspecial? ('? || '\ || ':)) 1
    (dsimp x) (dsimpm (macro-names 0) x)                                     ; to first order: beta unary lambdas, flatten curried heads
    ; a macro takes its args whole, so its call never flattens: ((list a b) i) indexes, (list a b i) is longer
@@ -2142,9 +2209,10 @@
    (dstep? f)  (two? f && <f = '\ && 4 = #f)                 ; (\ A E BODY), a 2-param fold step
    (dstep1? f) (two? f && <f = '\ && 3 = #f)                 ; (\ E BODY), a 1-param predicate
    ; the counted loop is (jot N)'s only for a whole N: anything else runs the fold as written, N read once
-   (dguard N mk x) (: n0 (? (atom? N) N (mint 0))
-                      g ['? ['whole? n0] (mk n0) (init x + [['jot n0]])]
-                      (atom? N ? g [': n0 N g]))
+   (dguard N mk x) (dguardx N mk (n0 \ init x + [['jot n0]]))
+   (dguardx N mk fb) (: n0 (? (atom? N) N (mint 0))
+                        g ['? ['whole? n0] (mk n0) (fb n0)]
+                        (atom? N ? g [': n0 N g]))
    (dlowerfold x)                                                            ; (foldl/foldr STEP Z (jot N)) -> a counted loop, up / down
     (: tag <x STEP <>x Z <>>x SRC <>>>x
        (!(dstep? STEP && djot? SRC) ? x
@@ -2163,20 +2231,28 @@
                    [[': [go E] ['? ['< E N] ['? BODY [go ['+ E 1]] 0] 1]] 0]
                    [[': [go E] ['? ['< E N] ['? BODY 1 [go ['+ E 1]]] 0]] 0])
                 x))))
+   (dlowereach x)                                                            ; (each (jot N) STEP) -> a counted loop, () at its end
+    (: SRC <>x STEP <>>x
+       (!(dstep1? STEP && djot? SRC) ? x
+          (: E <>STEP BODY <>>STEP go (mint 0)
+             (dguardx <>SRC
+                (N \ [[': [go E] ['? ['< E N] [': '_ BODY [go ['+ E 1]]] ()]] 0])
+                (n0 \ ['each ['jot n0] STEP])))))
    (dlower x)
     (? (atom? x) x (dquote? x) x
+       (<x = 'each && 3 = #x)            (dlowereach (<x . map dlower >x))
        (elem <x '(foldl foldr) && 4 = #x) (dlowerfold (<x . map dlower >x))
        (elem <x '(all any) && 3 = #x)     (dlowerpred (<x . map dlower >x))
        (<x . map dlower >x))
    (has-pipe? x) (? (atom? x) 0  (dquote? x) 0  (dprod? x) 1  (dfold? x) 1  (dpred? x) 1  (any has-pipe? >x))
-   (defol-body b) (has-pipe? b ? (dlower (dsimp (dforest b))) b)
-   (defol-bs bl) (? (atom? bl) ()                                  ; a body-less `:` ends here; the next arm would read () as a trailing body and turn a defglob into a local let
-                    (atom? >bl) [(defol-body <bl)]
-                    (<bl . (defol-body <>bl . defol-bs >>bl)))
+   (defol-body cx b) (has-pipe? b ? (dlower (dsimp (dforest cx b))) b)
+   (defol-bs cx bl) (? (atom? bl) ()                               ; a body-less `:` ends here; the next arm would read () as a trailing body and turn a defglob into a local let
+                       (atom? >bl) [(defol-body cx <bl)]
+                       (<bl . (defol-body cx <>bl . defol-bs cx >>bl)))
    (defoliate form)
     (? !(has-pipe? form) form                                             ; no pipeline anywhere -> byte-identical
-       !(two? form && <form = ': && !(atom? >form)) (dlower (dsimp (dforest form)))
-       (': . defol-bs >form))
+       !(two? form && <form = ': && !(atom? >form)) (dlower (dsimp (dforest (dcx form) form)))
+       (': . defol-bs (dcx form) >form))
    ; --- loopclose: a polynomial accumulation (foldl/foldr (+) z SRC) closes to its form in the bound by finite differences,
    ;     Σ_{i<N} g(i) = Σ_k c_k C(N,k+1) with c_k = Δ^k g(0), as falling factorials over k!. before defoliate: it wants the raw fold. the body is sampled through base-ev
    (lcfd ys)    (atom? >ys ? () (<>ys - <ys . lcfd >ys))

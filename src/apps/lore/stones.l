@@ -69,7 +69,7 @@
  ; south of the rows the bowl is far, and past the slot's end the slot is
  south-z (zc - rim-r - 12.0) north-z (zend + 3.0)
  (field x y z) (: a (iota (z < south-z)) b (iota (north-z < z)) c (iota ((south-z <= z) * (z <= north-z)))
-   (g ix v) (peep v ix 0.0)
+   (g ix v) (v ix)
    o1 (#a @ 0 (z * 0.0) (: X (g a x) Y (g a y) Z (g a z) (pin (z * 0.0) a (max (slot-d X Y Z) (top-d X Y Z)))))
    o2 (#b @ 0 o1 (: X (g b x) Y (g b y) Z (g b z) (pin o1 b (max (bowl-d X Y Z) (top-d X Y Z)))))
    (#c @ 0 o2 (: X (g c x) Y (g c y) Z (g c z) (pin o2 c (stones-field X Y Z)))))
@@ -380,7 +380,7 @@
    (mesh-frame v sc (stones-texs st) [(hz 0) (hz 1) (hz 2) 150.0 900.0] 8 (1.5 * lt 'expo) sk))
  ; the sky over the eye at e: every pixel for half blocks, every sky-k columns of kitty's, or
  ; every 'sky-k
- (sky-of st e lt k) (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (peep st 'sky-k (k @ 1 1 (sky-k * k))))
+ (sky-of st e lt k) (mesh-sky (sky-stars (st 'sim) (st 'dst) lat) lt (st 'wx) e (st 'sim) (st 't) (peep st 'sky-k (k @ 1 1 (sky-k * k))) (mesh-sky-memo st))
  ; ..with 'keep-sky, the haze and a whole picture of the sky kept while the hour and the view
  ; hold: a fifth of a pixel of turn or breath, eight metres of walking, never show in them
  (sky-key st lt) (: (q x) (floor (200.0 * x + 0.5))
@@ -401,7 +401,7 @@
         (hp && kit) (dim f0 (k * w) 0 (2 * k * (r - 1)) (k * w) (2 * k)) f0)
    (mesh-show st f (kit ? (menu st r0 c0 bw bh + keys-line st r w) "") (kit ? {} (menu-bands st r0 c0 bw bh r w))))
  ; a part of a frame W wide darkened: x0 y0 its corner, bw by bh its size, in pixels
- (dim f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (peep f ix 0)
+ (dim f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (f ix)
    (pin f ix ((((v >> 16 & 255) * 2 // 5) << 16) | (((v >> 8 & 255) * 2 // 5) << 8) | ((v & 255) * 2 // 5))))
  ; the choices as text at row r0, column c0, bw by bh cells: the marked one bright, over a
  ; dark ground in cells; under kitty, over the picture, and blanked when they are put away

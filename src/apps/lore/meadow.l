@@ -44,7 +44,7 @@
    ; sunrise to sunset, so the sun rises off the hilltops and crosses the picture. kc the
    ; column's sky rows
    sky (1 - gnd)
-   kc (gem-tray [w] (map (c \ 1.0 * net (peep sky (iota h * w + c) 0)) ^w))
+   kc (gem-tray [w] (map (c \ 1.0 * net (sky (iota h * w + c))) ^w))
    kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
    el (sky-lo + f * (0.5 * pi - sky-lo) * 0.97) az (az-lift * atan U) cl (cos el)
    _ (pins st 'kc kc 'sdx (cl * sin az) 'sdy (sin el) 'sdz (cl * cos az))
@@ -53,7 +53,7 @@
             'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp (0.0 - sp)]))
  ; the stars: sky's ss, each a pixel where the lens shows it and the land does not; -1 unseen
  (lay-stars st ss) (: w (st 'w) h (st 'h) X (ss 'x) Y (ss 'y) Z (ss 'z)
-   (one k) (on-screen st [(peep X k 0.0) (peep Y k 0.0) (peep Z k 0.0)] @ p
+   (one k) (on-screen st [(X k) (Y k) (Z k)] @ p
               (two? p ? (: x (int (p 0)) y (int (p 1)) i (y * w + x)
                            (0 <= x && x < w && 0 <= y && y < h && peep (st 'gnd) i 1 = 0 ? i -1))
                  -1))
@@ -197,7 +197,7 @@
    rwt (gem-tray [#bs] (map (b \ b 'hy < 12.0 ? 1.0 (b 'hy < 25.0 ? ((25.0 - b 'hy) / 26.0) 0.0)) bs))
    n #bs j (iota (n * kr))
    bix (j // kr) u ((j % kr + 1.0) / kr)
-   (rf v) (peep v bix 0.0)
+   (rf v) (v bix)
    rp (bent (rf rx) (rf rz) (rf rL) (rf rA) (rf rB) u)
    ; the meadow's: swaying on the wind as the row does, each its own phase
    fu (fd 'u) sway (0.05 * wxv * (1.0 + 0.35 * sin (t0 * turns wx 'tper (2.2 / 30.0) + fd 'ph)))
@@ -265,7 +265,7 @@
  ; the picture: 24-bit where the terminal takes it, else the palette dithered
  (meadow-frame st g wx deep) (: w (st 'w) h (st 'h) c (meadow-pens st g wx)
    px (deep ? (view-deep-pens c) (view-cube-pens c (st 'bay * 0.5 + 0.25)))
-   (deep ? (view-deep-frame w h px {}) (view-frame w h (y \ peep px (iota w + w * y) 0) {})))
+   (deep ? (view-deep-frame w h px {}) (view-frame w h (y \ px (iota w + w * y)) {})))
  (meadow-sky g) (meadow-weather g 'smooth)
  ; where the sun and the moon stand on the screen, [x y] or (), and the moon's phase
  (meadow-bodies st g) [(meadow-sun g @ s (s 1 < -0.03 ? () (on-screen st s)))

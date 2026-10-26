@@ -50,20 +50,20 @@
    sl (sky-light (sky-sun noon 0.0 0.65) wx noon)
    ; the sky where the box leaves the screen bare, and the same sky asked alone
    v0 (vw [0.0 0.0 0.0] 0.0 0.0)
-   skf (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 1)
+   skf (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 1 ())
    sk (skf v0 (iota (W * H)))
    fs (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 skf)
    ; by night, looking up: the stars change at most one pixel each
    night (1.0 * 1790812800 + 1.0 * 3600.0) nl (sky-light (sky-sun night 0.0 0.65) wx night) ns (sky-stars night 0.0 0.65)
    vu (mesh-view W H [0.0 0.0 0.0] 0.0 1.5 1.4 0.1 100.0)
-   zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 1))
+   zen (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 1 ()))
    bare (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0
                     (\ v S (: d (mesh-dirs v S) (mh-word (sky-tone nl (sky-colour-at nl wx (mesh-step v 1) (d 0) (d 1) (d 2) 0.0 0.0 night))))))
    seen (net (-1 < mesh-spot vu (ns 'x) (ns 'y) (ns 'z)))
    lit-m (zen != bare) hot (iota lit-m)
    ; the sky asked every 4 pixels and shaded between: near the sky asked at each, the box
    ; the same; by night still a pixel per star in view
-   fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 4))
+   fg (mesh-frame v0 (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars noon 0.0 0.65) sl wx [0.0 0.0 0.0] noon 0.0 4 ()))
    (gap a b) (: p (mesh-flat a) q (mesh-flat b) (+(map (k \ net (max (p k - q k) (q k - p k))) ^3) / (3.0 * #a)))
    ; a box over a sheet, the sun overhead: the sheet shadowed under the box by the sun's
    ; view, lit away from it; without the view, lit throughout
@@ -73,12 +73,12 @@
    vd (mesh-view W H [0.0 5.0 0.0] 0.0 -1.5 1.4 0.1 100.0)
    fsh (mesh-frame vd [(shs 0) (shs 1) [sv mp 0.02]] () [0 0 0 0.0 0.0] 0 0.0 7)
    fno (mesh-frame vd [(shs 0) (shs 1) ()] () [0 0 0 0.0 0.0] 0 0.0 7)
-   gk (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 4)
-   gk0 (mesh-sky (pins ns 'y (ns 'y * 0.0 - 1.0)) nl wx [0.0 0.0 0.0] night 0.0 4)
+   gk (mesh-sky ns nl wx [0.0 0.0 0.0] night 0.0 4 ())
+   gk0 (mesh-sky (pins ns 'y (ns 'y * 0.0 - 1.0)) nl wx [0.0 0.0 0.0] night 0.0 4 ())
    hot4 (iota (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk != mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 gk0))
    ; ..and by day none: the sky shaded between as it is, under a partly cloudy sky
    wp (sky-weather 1 'smooth) lp (sky-light (sky-sun noon 0.0 0.65) wp noon)
-   (dk s) (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky s lp wp [0.0 0.0 0.0] noon 0.0 4))
+   (dk s) (mesh-frame vu (lit bx) () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky s lp wp [0.0 0.0 0.0] noon 0.0 4 ()))
    ds (sky-stars noon 0.0 0.65) ds0 (: u (sky-stars noon 0.0 0.65) (pins u 'y (u 'y * 0.0 - 1.0)))
  (test (all (k \ round k != 7) ^4)
        (mid < <(cols right))
@@ -166,15 +166,24 @@
    (moved a b) (abs (b 0 - (2.0 * a 0 - 1.0)) < 1e-5 && abs (b 1 - (2.0 * a 1 + 2.0)) < 1e-5 && abs (b 2 - (2.0 * a 2 + 3.0)) < 1e-5)
  (test (#(gm 0) = #(gb 0)) (gb 1 = gm 1) (foldl max 0.0 (map (i \ gd (gm 0 i) (gb 0 i)) ^#(gm 0)) < 1e-6)
        (all (i \ moved (gm 0 i) (gt 0 i)) ^#(gm 0)) (gt 1 = gm 1)
-       (mesh-glb "glTF" = ()) (mesh-glb (snip g 0 100) = ())))
+       (mesh-glb "glTF" = ()) (mesh-glb (snip g 0 100) = ())
+       ; ..its corners in two bytes each, and one triangle's six padded to a word
+       (j "accessors" 3 "componentType" = 5123) (: m1 [(gm 0) [(gm 1 0)]] g1 (mesh-glb-of m1 "one") (#g1 % 4 = 0 && mesh-glb g1 1 = m1 1))))
 ;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
 ;; seen both ways shows the same, but for where the pixels fall
 (: wq (sky-weather 1 'smooth) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
-   (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4))
+   (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4 ()))
    va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
    fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
    both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
    gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
  (test (#both > 8000) (gap < 0.025)))
+;; ..and seen only through glass, the sky still drawn behind it: a clear pane all round the
+;; eye leaves no pixel bare, each the sky's through it
+(: nr (1.0 * 1790812800 + 12.0 * 3600.0) wr (sky-weather 1 'smooth) lr (sky-light (sky-sun nr 0.0 0.65) wr nr)
+   wh [1.0 1.0 1.0] pn (mesh-bake (mesh-pack (mesh-lathe [[6.0 -6.0] [6.0 6.0]] 16 -3 wh 1.0)) {'sun [0.0 1.0 0.0] 'amb [0.2 0.2 0.2] 'sunk 1.0 'sunc wh 'expo 1.0} mesh-open 1.0)
+   (gl k) (mesh-frame (mesh-view 40 24 [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0) pn [(mesh-tex 4 (\ x y wh))] [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nr 0.0 0.65) lr wr [0.0 0.0 0.0] nr 0.0 k ()))
+   g1 (gl 1) g4 (gl 4)
+ (test (0 <= amin g1) (0 <= amin g4) (+(map (k \ net (abs ((g1 >> k & 255) - (g4 >> k & 255)))) [0 8 16]) / (3.0 * #g1) < 8.0)))
 (test_fin ())
 (puts "mesh: ok\n")

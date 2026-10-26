@@ -210,6 +210,41 @@ static lvm(lvm_gather) {
  for (uintptr_t i = 0; i < rank; i++) r->shape[i] = ki->shape[i];
  gather_fill(r, v, ki, zf, zi);
  love_musttail return Answerp(2, word(r)); }
+// (t k): a tray applied indexes, as (peep t k ()): an index, or [i j ..] by axis, its element;
+// an int tray of indices gathers, () if any misses; else ()
+lvm(data_tray_apply) {
+ word k = Sp[0], z = ZeroPoint;
+ struct tray *v = tray(word(Ip));
+ if (trayp(k)) {
+  struct tray *ki = tray(k);
+  uintptr_t n = tray_nelem(ki), m = tray_nelem(v);
+  bool in = v->type <= love_R && ki->type < love_R;
+  intptr_t *ix = in ? tray_data(ki) : 0;
+  for (uintptr_t i = 0; in && i < n; i++) in = ix[i] >= 0 && (uintptr_t) ix[i] < m;
+  if (in) {
+   int type = v->type == love_R ? love_R : love_Z;
+   uintptr_t rank = ki->rank, bytes = tray_bytes(type, rank, n);
+   Have(b2w(bytes));
+   v = tray(word(Ip)), ki = tray(Sp[0]);
+   struct tray *r = (struct tray*) Hp;
+   Hp += b2w(bytes);
+   ini_tray(r, type, rank);
+   for (uintptr_t i = 0; i < rank; i++) r->shape[i] = ki->shape[i];
+   gather_fill(r, v, ki, 0.0, 0);
+   z = word(r); } }
+ else {
+  intptr_t o = tray_off(v, k); uintptr_t off = (uintptr_t) o;
+  if (o >= 0 && v->type == love_O) z = tray_get_obj(v, off);
+  else if (o >= 0 && v->type == love_C) {
+   Have(twin_req); v = tray(word(Ip));
+   flo_t *fp = tray_data(v);
+   z = mk_twin(&Hp, fp[2*off], fp[2*off+1]); }
+  else if (o >= 0) { word _res; Have(box_req); v = tray(word(Ip));
+   if (v->type >= love_R) emit_gem(_res, tray_get_flo(v, off));
+   else emit_int(_res, tray_get_int(v, off));
+   z = _res; } }
+ Ip = cell(*++Sp), *Sp = z;
+ love_musttail return Continue(); }
 // (pin tray idx vals): the scatter into a fresh copy, a later index winning, out of range
 // skipped. vals a number or a numeric tray idx's length, else the tray unchanged
 static lvm(lvm_scatter) {

@@ -1152,11 +1152,11 @@ DSENT(1,  lvm_nom,     data_sym_apply)
 DSENT(2,  lvm_gembox,  data_num_apply)
 DSENT(3,  lvm_twinbox, data_num_apply)
 DSENT(4,  lvm_big,     data_num_apply)
-DSENT(5,  lvm_tray,    data_num_apply)
+DSENT(5,  lvm_tray,    data_tray_apply)
 DSENT(6,  lvm_str,     data_string_apply)
 DSENT(7,  lvm_chain,   data_pair_apply)
 #else
-lvm(lvm_tray)   { love_musttail return Ap(data_num_apply, g); }
+lvm(lvm_tray)   { love_musttail return Ap(data_tray_apply, g); }
 lvm(lvm_big)   { love_musttail return Ap(data_num_apply, g); }
 lvm(lvm_str)   { love_musttail return Ap(data_string_apply, g); }
 lvm(lvm_sym)   { love_musttail return Ap(data_sym_apply, g); }

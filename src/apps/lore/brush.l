@@ -22,8 +22,14 @@
  ; --- brushes ---
  (box-of ps) [(foldl (\ a p [(min2 (a 0) (p 0)) (min2 (a 1) (p 1)) (min2 (a 2) (p 2))]) [1e9 1e9 1e9] ps)
               (foldl (\ a p [(max2 (a 0) (p 0)) (max2 (a 1) (p 1)) (max2 (a 2) (p 2))]) [-1e9 -1e9 -1e9] ps)]
+ ; ..the point nearest all the planes, a box's middle: the square a face starts as is laid
+ ; round it, so a brush far off is as whole as one near
+ (anchor pls) (: (row k) (foldl (\ a pl (c+ a (c* (pl 0 k) (pl 0)))) [0.0 0.0 0.0] pls)
+   a (row 0) b (row 1) c (row 2) r (foldl (\ s pl (c+ s (c* (pl 1) (pl 0)))) [0.0 0.0 0.0] pls)
+   bc (cross b c) dt (dot a bc)
+   (abs dt < 1e-9 ? [0.0 0.0 0.0] (c* (1.0 / dt) [(dot r bc) (dot a (cross r c)) (dot a (cross b r))])))
  ; ..a face a plane: a wide square on it, cut by every other plane of the brush
- (face pls i) (: pl (pls i) n (pl 0) c (c* (pl 1) n)
+ (face pls i) (: pl (pls i) n (pl 0) m (anchor pls) c (c+ m (c* (pl 1 - dot n m) n))
    a (mag (n 1) < 0.9 ? [0.0 1.0 0.0] [1.0 0.0 0.0]) u (c* 1000.0 (unit (cross n a))) v (cross n u)
    sq [(c+ c (c+ u v)) (c+ c (c+ (c* -1.0 u) v)) (c+ c (c* -1.0 (c+ u v))) (c+ c (c+ u (c* -1.0 v)))]
    (poly-keep sq (map (j \ pls j) (filter (j \ j != i) ^#pls))))
@@ -133,7 +139,7 @@
    (ends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) L (map (ends 'lo) ^3) H (map (ends 'hi) ^3)
    (near fb) (: lo (fb 'lo) hi (fb 'hi)
      (on k) ((H k >= lo k - 0.01) * (L k - 0.01 <= hi k)) I (iota (on 0 * on 1 * on 2))
-     (map (j \ peep I j 0) ^#I))
+     (map I ^#I))
    ; ..and the medium there, of only those: a brush holding a place a hair off the face is
    ; near it
    (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
@@ -184,7 +190,7 @@
      ; ..those whose box comes within s of box x, as a mask
      (near-box x s) (: (on a) ((RH a >= x 0 a - s) * (RL a - s <= x 1 a)) (on 0 * on 1 * on 2))
      (any-of m bxs s) (foldl (\ m x (max m (near-box x s))) m bxs) none (RL 0 * 0.0)
-     (marked m) (: I (iota (m > 0.5)) (map (j \ peep I j 0) ^#I))
+     (marked m) (: I (iota (m > 0.5)) (map I ^#I))
      ; ..what an edit touched, where the scene before is known: the brushes not as they were,
      ; and the lamps not, (kp 'hot) each [p r]; the faces their pieces and cuts hang on, those
      ; beside them, and the chunks any of those are in, or more's are not as they were
@@ -224,11 +230,11 @@
      nb #bs (bends f k) (gem-tray [nb] (map (b \ 1.0 * b f k) bs)) BL (tablet? kp ? (map (bends 'lo) ^3) ()) BH (tablet? kp ? (map (bends 'hi) ^3) ())
      BF (foldl (\ t i (: b (FT i 2) (pin t b (i . peep t b ())))) {} (rev ^nf))
      (among b) (: _ (tick 'sides (b / nb)) lo (bt b 'lo) hi (bt b 'hi) (on k) ((BH k >= lo k - 0.02) * (BL k - 0.02 <= hi k)) I (iota (on 0 * on 1 * on 2))
-       cs (cats (map (j \ peep BF (peep I j 0) ()) ^#I)) T (floor (gem-tray [#cs] (map (c \ 1.0 * c) cs)))
+       cs (cats (map (j \ peep BF (I j) ()) ^#I)) T (floor (gem-tray [#cs] (map (c \ 1.0 * c) cs)))
        [(tab cs) (map (k \ peep (FL k) T 0.0) ^3) (map (k \ peep (FH k) T 0.0) ^3)])
      AM (tablet? kp ? (tab (map among ^nb)) ())
      (beside i) (: a (AM (FT i 2)) bx (box-of (FT i 0)) (on k) ((a 2 k >= bx 0 k - 1e-3) * (a 1 k - 1e-3 <= bx 1 k))
-       I (iota (on 0 * on 1 * on 2)) (map (j \ CI (a 0 (peep I j 0))) ^#I))
+       I (iota (on 0 * on 1 * on 2)) (map (j \ CI (a 0 (I j))) ^#I))
      fks (tablet? kp ? (tab (map (i \ (: f (FT i) _ (tick 'sides (i / nf)) ['fan (CI i) (beside i) (LI (f 2))])) ^nf)) ())
      fid (tablet? kp ? (tab (map (i \ (kp 'id) (fks i)) ^nf)) ())
      items (cats (map (i \ (? (tick 'fans (i / nf), !(mine? (FT i))) ()

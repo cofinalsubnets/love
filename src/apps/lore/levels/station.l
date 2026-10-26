@@ -366,9 +366,10 @@
 (: burners (texture 64 32 0.9 '((fill (rgb 0.08 0.08 0.09)) (disc 16 16 11 (rgb 0.22 0.22 0.24)) (disc 16 16 8 (rgb 0.08 0.08 0.09))
                                 (disc 48 16 11 (rgb 0.22 0.22 0.24)) (disc 48 16 8 (rgb 0.08 0.08 0.09)) (grid 32 32 2 (rgb 0.2 0.2 0.22)))))
 ;; ..and its walk-in: black, gridded as a training booth is, a steel shelf, the cartons; and
-;; the red orb hanging there, mottled so its turning shows
+;; the pink orb hanging there, mottled and banded so its turning shows, as the others are
 (: holo (texture 64 64 1 '((fill (rgb 0.01 0.012 0.016)) (grid 16 16 1 (rgb 0.03 0.28 0.24)) (grid 64 64 2 (rgb 0.12 0.95 0.75)))))
-(: redorb (texture 64 64 0.5 '((fill (rgb 0.74 0.06 0.05)) (patches 6 0.35 (shade 0.78)) (noise 5 0.1) (rows 30 33 (shade 0.86)))))
+(: pinkorb (texture 128 64 8 '((fill (rgb 0.96 0.46 0.7)) (patches 8 0.35 (shade 0.8)) (patches 4 0.2 (rgb 1 0.78 0.9))
+                               (noise 6 0.08) (rows 30 34 (shade 0.86)))))
 (: shelfsteel (texture 16 16 0.5 '((fill (rgb 0.5 0.52 0.55)) (noise 4 0.15))))
 (: cardboard (texture 32 32 0.5 '((fill (rgb 0.62 0.46 0.28)) (noise 8 0.1) (rows 13 19 (rgb 0.5 0.3 0.16)) (disc 26 6 3 (rgb 0.3 0.45 0.15)))))
 (: cardtop (texture 32 32 0.5 '((fill (rgb 0.66 0.5 0.31)) (cols 15 17 (rgb 0.82 0.74 0.56)) (noise 8 0.1))))
@@ -542,12 +543,12 @@
   (map (z \ whole (skin {'all shelfsteel} (solid (box [-25.6 8 z] [-25 10.45 (z + 0.04)])))) [6.7 8.5 10.31])
   (map (y \ whole (skin {'all shelfsteel} (solid (box [-25.6 y 6.7] [-25 (y + 0.03) 10.35])))) [8.12 8.72 9.32 9.92 10.42])
   (map (k \ cartons (8.15 + 0.6 * k) (8.72 + 0.6 * k) k) ^4)
-  (mattress [-26.25 8 7.1] 0)
+  (wake-bed 'walk-in [-26.25 8 7.1] 0)       ; woken in, come back from the ring
   (telescope [-27.9 8 8.05] 270 35 (rgb 0.18 0.22 0.5))
   (book [-27.2 8 7.25] -110)
   (pencil [-27.35 8 7.42] 70 (rgb 0.95 0.75 0.1))
   (pencil [-27.33 8 7.5] 82 (rgb 0.2 0.45 0.8))
-  (coarse 8 (orb [-29.8 10.63 8.05] 0.6 redorb 1.5))
+  (coarse 8 (glow (orb [-29.8 10.63 8.05] 0.6 pinkorb 1.5)))
   (skin {'all darkmetal} (solid (box [-34.4 12 20.5] [-34.1 19.8 22.2])))
   (shopsign -34.09 1)
   (shopsign -34.41 -1)

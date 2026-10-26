@@ -1,5 +1,5 @@
 ; reading a nom not in the book calls (help 'missing nom), whose answer is the value at the site;
-; with nothing heard it reads the zero point. welp answers it quietly; test-strict ends the run
+; with nothing heard it stops the run. welp answers it with the zero point, quietly
 (hear welp)
 (test
  ((:) = an-never-defined)                      ; the floor handler
@@ -35,7 +35,6 @@
  (2 = (: a an-local an-local 2 an-local))
  ((:) = (: f (_ \ an-cell) v (f 0) an-cell 5 v))  ; the closure's read is the cell: the point pre-pin
  (5 = (: f (_ \ an-cell) v (f 0) an-cell 5 (f 0)))) ; ... and the value, once pinned
-(hear 0)
 ; nested and shadowed: the outer answers only eager pre-pin reads, never a closure's
 (: an-outer2 42)
 (test
@@ -44,6 +43,7 @@
  ((:) = (99 @ an-o3 (: f (_ \ an-o3) r (f 0) an-o3 42 r))) ; ..the closure's read is the cell, outer in scope
  (2 = (: b 1 b (b + 1) b))                                   ; a rebind within one chain still
  (43 = (: c 42 d (c + 1) d)))                                ;   reads the previous value, and folds
+(hear 0)
 
 ; the help hears the cell miss too; the payload is the binding-site nom
 (hear (a \ b \ a = 'missing && nom? b && "an-fwd" = (string b) ? 'cell-nom 0))

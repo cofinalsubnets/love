@@ -539,6 +539,7 @@
 ; nonlinear: (- a a) matches only when both sides agree.
 (: sew (cite 'kanren 'subst)
    mnil (cite 'kanren 'empty_dict)
+   var (cite 'kanren 'var) unify (cite 'kanren 'unify) ufail? (cite 'kanren 'ufail?)
    ; () on a miss. a var-less hit is the empty binding, whose truth is blue, so test a miss
    ; against (), never with ! alone
    (match p x) (unify mnil p x @ r (ufail? r ? () r))
