@@ -1521,21 +1521,28 @@
        (lsplit s) (: (go t ns) (: j (word t 0)
                                   (0 < j && j < #t && t j = 58 ? (go (xa-trim (snip t (j + 1) #t)) ((snip t 0 j) . ns)) [ns t]))
                      (go (xa-trim s) ()))
-       (lsize r) (? (r = "") 0 (tgt != 'a64 || r 0 = 46) ()
+       ; a data directive's bytes, its items counted at top-level commas
+       gf-dsz {".inst" 4 ".word" 4 ".long" 4 ".4byte" 4 ".quad" 8 ".8byte" 8 ".xword" 8 ".hword" 2 ".short" 2 ".2byte" 2 ".byte" 1}
+       (lsize r) (? (r = "") 0 (tgt != 'a64) ()
+                    (r 0 = 46) (peep gf-dsz (dname r) () @ z (charm? z ? (z * #(xa-oplist (xa-rest r))) ()))
                     (trap (x \ foldl (\ n f (? !(charm? n) () (f @ ('label _) n ('raw bs) (n + #bs) ('align . _) () (n + 4))))
                                     0 (gas-text tgt x))
                           r (\ a b ())))
        (lbloffs ts acc)
         (: refs (foldl (\ a t (t @ ('lref v 98) (elem v a ? a (v . a)) a)) () ts)
+           ; a .pushsection..popsection run lays elsewhere: walking back, a pop opens it, its push closes it
            (go l org off m)
             (? (!(two? refs) || all (v \ two? (assoc v m)) refs) m
                (atom? l) ()
+               (dname <l = ".popsection") (skip >l 1 @ l2 (l2 = 'none ? () (go l2 org off m)))
                (lsplit <l @ (ns r)
                   (: hit (filter (v \ elem (show v) ns) refs)
                      (? !org (two? hit ? (go >l 1 0 (map (v \ [v 0]) hit + m)) (go >l () 0 m))
                         (lsize r @ k
                            (!(charm? k) ? ()
                               (go >l 1 (off + k) (map (v \ [v (0 - (off + k))]) (filter (v \ !(two? (assoc v m))) hit) + m))))))))
+           (skip l d) (? (atom? l) 'none (d = 0) l
+                         (dname <l @ w (skip >l (? (w = ".popsection") (d + 1) (w = ".pushsection") (d - 1) d))))
            (go acc () 0 ()))
        ; `name .req reg` -> [name reg] | ()
        (req t) (: i (word t 0) r (xa-trim (snip t i #t))
