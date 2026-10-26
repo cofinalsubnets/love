@@ -7914,7 +7914,7 @@
    asmfp '(f16 f17 f18 f19 f20 f21 f22 f23)
    (freg? r9) (elem r9 asmfp)
    asmnames (foldl (t \ i \ "r\(i)" @ s9 (pin t (name s9) s9)) {} ^11)
-   (asmreg? g r9) (elem r9 (asmfile g) || a64? g && r9 = 'r4)
+   (asmreg? g r9) (elem r9 (asmfile g) || a64? g && elem r9 '(r4 lr))   ; lr: the a64 frame saves it, and its epilogue restores
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
    (asmpk g) (ia32? g ? '(r2 r1 r0 r6 r5) asmpick)   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1)
    ; an x64 xmm0..15 or an a64 v0..31, by name
@@ -10446,7 +10446,8 @@
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
        ; an alloca must run where no operand is parked on the stack: under a statement, a cast,
-       ; a comma, a ?: or a plain variable's assignment, or as another alloca's size
+       ; a comma, a ?: or a plain variable's assignment, as another alloca's size, or left of an
+       ; operator, which compiles first (| aside: gather may reorder its terms)
        _ (: (ab? e) (e @ ('call ('var n) _) (n = "__builtin_alloca") ())
             (un e) (? !(two? e) () (ab? e) 1 (un <e || un >e))
             (xs e) (? !(two? e) ()
@@ -10455,7 +10456,7 @@
                       (elem <e '(blk if while do for switch case dflt lbl expr ret sexpr)) (any xs >e)
                       (<e = 'decl) (any (d \ two? d && two? >d && two? >>d && xs <>>d) <>e)
                       (e @ ('cast _ x) (xs x) ('comma a b) (xs a || xs b) ('asn ('var _) r) (xs r)
-                           ('cond c a b) (xs c || xs a || xs b) (un e)))
+                           ('cond c a b) (xs c || xs a || xs b) ('bin o a b && o != '|) (xs a || un b) (un e)))
             (pin g 'abad (xs (f 3))))
        ; the labels whose address the body takes; a computed goto may land on any of them, so
        ; homing stands off as for an asm (every name is live at the jump). a call that returns
