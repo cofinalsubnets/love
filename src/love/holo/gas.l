@@ -1427,6 +1427,7 @@
    gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb")
    (gf-expand tgt ls)
     (: mac {} sv {} sv0 {} rq {} cnt {}
+       xdirs ([".macro" ".purgem" ".irp" ".rept" ".set" ".equ" ".error"] + gf-ifs)
        (dname s) (xa-trim s @ t (0 < #t && t 0 = 46 ? (xa-mnem t) ""))
        (word s i) ((: (g j) (j < #s && gidc? (s j) ? (g (j + 1)) j)) i)
        ; a block's body up to its closer, nested openers counted -> (body rest)
@@ -1578,8 +1579,8 @@
                      (go <>b (go (yes ? <ab <>ab) acc)))
                  (w = ".error") (scare 'gas-error r)
                  (two? (mac (xa-mnem t))) (go >l (go (call (mac (xa-mnem t)) r) acc))
-                 ; labels then a macro call: the labels where the call lays its lines
-                 (lsplit t @ (ns u) (two? ns && two? (mac (xa-mnem u))))
+                 ; labels then a macro call, or a directive read here: the labels where its lines lay
+                 (lsplit t @ (ns u) (two? ns && (two? (mac (xa-mnem u)) || elem (dname u) xdirs)))
                   (lsplit t @ (ns u) (go (u . >l) ((map (n \ n + ":") ns) + acc)))
                  (go >l (ssub s . acc)))))
        out (rev (go ls ()))

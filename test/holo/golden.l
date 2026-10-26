@@ -551,6 +551,12 @@
         (map (l \ holo-hex 'a64 (gas-text 'a64 l))
              ["tlbi rvae1, x0" "tlbi rvaale1is, x0" "tlbi rvale1os, x0" "tlbi vaae1os, x0" "tlbi ripas2e1is, x0"
               "tlbi rvale2is, x0" "tlbi vae2is, x0"]))
+   ;; the numbered debug and pmu families, an aarch32 spsr, a pstate field in any case
+   _ (chk-eq "gas.a64.sysfam"
+        ["00c138d5" "a00f30d5" "c0eb3bd5" "20ed3bd5" "40433cd5" "c00310d5" "bf4100d5" "20840cd5" 'badsysreg]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["mrs x0, isr_el1" "mrs x0, dbgbcr15_el1" "mrs x0, pmevcntr30_el0" "mrs x0, pmevtyper9_el0"
+              "mrs x0, spsr_und" "msr dbgwvr3_el1, x0" "msr SPsel, #1" "tlbi ipas2e1, x0" "mrs x0, dbgbcr16_el1"]))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
@@ -573,6 +579,9 @@
    ;; labels then a macro call on one line: the labels, then the call's lines
    _ (chk-eq "gas.macro.lbl" '("g:" "\tmov x0, #4" "1:" "h:" "\tmov x1, #4" "k: ret")
         (gf-expand 'a64 (gf-lines 'a64 "\t.macro m, r\n\tmov \\r, #4\n\t.endm\ng:\tm x0\n1: h: m x1\nk: ret")))
+   ;; ..and labels then an .irp (the kernel's `1: msr_s`)
+   _ (chk-eq "gas.irp.lbl" '("1:" "mov x0, #0" "mov x1, #0")
+        (gf-expand 'a64 (gf-lines 'a64 "1:\t.irp n,0,1\nmov x\\n, #0\n.endr")))
    _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
