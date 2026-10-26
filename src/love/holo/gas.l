@@ -981,6 +981,8 @@
    ;; two registers: [word largest-size], size laid only past 0
    ga-v2 {'rev64 [0x0E200800 2] 'rev32 [0x2E200800 1] 'rev16 [0x0E201800 0] 'not [0x2E205800 0] 'mvn [0x2E205800 0]
           'cnt [0x0E205800 0] 'neg [0x2E20B800 3] 'abs [0x0E20B800 3]}
+   ;; across the lanes into one scalar of the lane's size
+   ga-vacr {'addv 0x0E31B800 'smaxv 0x0E30A800 'sminv 0x0E31A800 'umaxv 0x2E30A800 'uminv 0x2E31A800}
    ga-vperm {'uzp1 0x0E001800 'uzp2 0x0E005800 'zip1 0x0E003800 'zip2 0x0E007800 'trn1 0x0E002800 'trn2 0x0E006800}
    (ga-neon m os)
     (: k #os bad (_ \ scare 'gas-a64-operand [m os])
@@ -998,6 +1000,8 @@
           ; a scalar from a lane: dup's scalar form, mov its alias
           (elem m '(mov dup) && k = 2 && two? (e 1) && charm? (ga-fpz (os 0)) && ga-fpz (os 0) = e 1 1)
            (ga-raw (0x5E000400 | el5 (e 1) << 16 | e 1 0 << 5 | ga-vr (os 0) (ga-fpcs (e 1 1))))
+          (charm? (peep ga-vacr m ()) && k = 2 && two? (v 1) && ga-fpz (os 0) = v 1 2 && v 1 2 < 3 && v 1 3 != "2s")
+           (ga-raw (ga-vacr m | v 1 1 << 30 | v 1 2 << 22 | v 1 0 << 5 | ga-vr (os 0) (ga-fpcs (v 1 2))))
           (elem m '(add sub) && k = 3 && all (o \ charm? (ga-fr o 100)) os)
            (ga-raw ((m = 'add ? 0x5EE08400 0x7EE08400) | ga-fr (os 2) 100 << 16 | ga-fr (os 1) 100 << 5 | ga-fr (os 0) 100))
           (two? (peep ga-v3 m ()) && k = 3 && same)
@@ -1060,6 +1064,15 @@
                  (k = 2) (ga-raw (base | wd))
                  ((os 2) @ ('imm i) (i = n * (l 2 = 1 ? 16 8)) _ 0) (ga-raw (base | 0x00800000 | 31 << 16 | wd))
                  ((os 2) @ ('reg r 8) (r != 'sp) _ 0) (ga-raw (base | 0x00800000 | ga-hw ((os 2) 1) << 16 | wd))
+                 (bad 0)))
+          ; one element loaded to every lane, written back by its size or a register
+          (m = 'ld1r && (k = 2 || k = 3) && two? (ga-vls (os 0)) && ga-vls (os 0) 1 = 1)
+           (: l (ga-vls (os 0)) b ((os 1) @ ('mem x 0) (ga-hw x) _ ())
+              wd (charm? b ? (l 2 << 30 | l 3 << 10 | b << 5 | l 0) ())
+              (? (!(charm? b)) (bad 0)
+                 (k = 2) (ga-raw (0x0D40C000 | wd))
+                 ((os 2) @ ('imm i) (i = 1 << l 3) _ 0) (ga-raw (0x0DC0C000 | 31 << 16 | wd))
+                 ((os 2) @ ('reg r 8) (r != 'sp) _ 0) (ga-raw (0x0DC0C000 | ga-hw ((os 2) 1) << 16 | wd))
                  (bad 0)))
           (bad 0)))
    ;; a b h s d or q register's load and store: imm12 scaled by its size, else imm9, or written back

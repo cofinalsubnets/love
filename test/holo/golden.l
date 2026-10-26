@@ -450,6 +450,13 @@
    _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
         '((mov r1 r0) (zx4 r1) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))
+   _ (chk-eq "gas.a64.across"
+        ["c0a8314e" "41a8704e" "83a8b16e" "c5a8302e" "20b8314e" "3fcddf4d" "20c8404d" "41c0c34d"
+         'gas-a64-operand 'gas-a64-operand 'gas-a64-operand]
+        (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
+             ["sminv b0, v6.16b" "smaxv h1, v2.8h" "uminv s3, v4.4s" "umaxv b5, v6.8b" "addv b0, v1.16b"
+              "ld1r {v31.2d}, [x9], #8" "ld1r {v0.4s}, [x1]" "ld1r {v1.16b}, [x2], x3"
+              "addv s0, v1.2s" "sminv h0, v1.16b" "ld1r {v0.4s}, [x1], #16"]))
    _ (chk-eq "gas.a64.sys"
         '((msri daifset 15) (tlbi vmalle1is zr) (dsb ish) (lea r9 sp 0) (msri spsel 1) (lea sp r9 0)
           (mrs r9 cpacr_el1) (or r9 r9 3145728) (msr cpacr_el1 r9) (isb) (brk 0) (udf 0) (dbrk 61440) (hvc 0)
