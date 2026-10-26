@@ -226,60 +226,71 @@
         0))
 
    ; nm: VALUE type NAME over link.l's ld-syms. the letter is ELF's facts: U undefined,
-   ; a absolute, C common, else section flags pick T/B/D/R, lowercased for a local bind.
-   ; sorted by byte, `LC_ALL=C nm`'s order. an archive is not walked (that is `ar t`'s)
+   ; a absolute, C common, W/w weak (V/v a weak object), else section flags pick
+   ; b/t/d/r, a non-alloc section N for debug or n, lowercase for a local bind. sorted by
+   ; byte, `LC_ALL=C nm`'s order; -n by value, undefined first; -S adds the size. a64's
+   ; $x/$d mapping symbols are not shown. an archive is not walked (that is `ar t`'s)
    (nm-sp w) (w < 1 ? "" (nm-sp (w - 1) + " "))
    (nm-hex v w) (: dg "0123456789abcdef"
                    (go k a) (k < 0 ? a (go (k - 1) (a + string (dg (v // k 16 % 16)))))
                    (go (w - 1) ""))
-   (nm-low t) (t 0 @ c (65 <= c && c <= 90 ? (string (c + 32)) t))
    (nm-let sy)
-    (: x (sy 3) sec (sy 6)
-       u (? (x = 0) "U" (x = 65521) "A" (x = 65522) "C"
-            (atom? sec) "?"
-            (: ty (sec 1) fl (sec 2)
-               (? (ty = 8) "B" (0 < fl & 4) "T" (0 < fl & 1) "D" "R")))
-       (? (sy 1 = 2) (x = 0 ? "w" "W")
-          (sy 1 = 0) (nm-low u)
-          u))
-   (nm-file p wide g u srt)
+    (: x (sy 3) sec (sy 6) bd (sy 1)
+       (up c) (? (97 <= c && c <= 122) (c - 32) c)
+       c (? (bd = 2) (: k (sy 2 = 1 ? 118 119) (x = 0 ? k (up k)))
+            (x = 0) 85 (x = 65522) 67
+            (: l (? (x = 65521) 97 (atom? sec) 63
+                    (: fl (sec 2)
+                       (? (0 < fl & 2147483648) 101 (sec 1 = 8) 98 (0 < fl & 4) 116
+                          (0 < fl & 2) (0 < fl & 1 ? 100 114)
+                          (: n <sec (#n >= 6 && snip n 0 6 = ".debug" ? 78 (0 < fl & 1 ? 63 110))))))
+               (? (bd = 0) l (bd = 10) 117 (up l))))
+       (string [c]))
+   (nm-file p wide g u srt num sz)
     (: r (uread p) _ (two? r ? () (udie 2 ("nm: cannot open " + p)))
        b <>r
        w (b 4 = 2 ? 16 8)
+       a64 (b 18 = 183 && b 19 = 0)
        ; a section or file symbol names no value of the program's -- nm shows
        ; neither, and an empty name is the null-ish filler a section symbol leaves
-       all (filter (sy \ (? !#<sy () (elem (sy 2) '(3 4)) () 1))
+       all (filter (sy \ (? !#<sy () (elem (sy 2) '(3 4)) ()
+                            (a64 && <sy 0 = 36 && #<sy > 1 && (<sy 1 = 100 || <sy 1 = 120)) () 1))
                    (ld-syms p b))
        ; "no symbols" is the file's fact, asked before the flags narrow: a -u that
        ; comes back empty says the lanes are all ours, which is an answer, not a lack
        _ (two? all ? () (say err ("nm: " + p + ": no symbols"), put err 10, 1))
        keep (filter (sy \ (? (g && sy 1 = 0) () (u && !(sy 3 = 0)) () 1)) all)
-       ord (srt ? keep (sortby (\ a b (<a <= <b)) keep))
+       (def? sy) (? (sy 3 = 0) 0 1)
+       ord (? num (map (k \ k 4) (sort (map (sy \ [(def? sy) (sy 4) <sy (sy 5) sy]) keep)))
+              srt keep
+              (sortby (\ a b (<a <= <b)) keep))
        (wide ? (puts ("\n" + p + ":\n"), 0) 0,
         ; foldl is the printing walk: it answers the accumulator, so nothing is built
         foldl (\ _ sy (puts ((sy 3 = 0 ? (nm-sp w) (nm-hex (sy 4) w))
+                             + (sz ? (" " + (sy 3 = 0 ? (nm-sp w) (nm-hex (sy 5) w))) "")
                              + " " + nm-let sy + " " + <sy + "\n")))
               0 ord,
         two? all))
    (nm-main as)
     ; flags cluster: -gu is -g -u, which is what a hand types and what nm takes
-    (: (nm-flags t k g u srt)
-        (#t <= k ? [g u srt]
+    (: (nm-flags t k f)
+        (#t <= k ? f
          (t k @ c
-            (? (c = 103) (nm-flags t (k + 1) 1 u srt)
-               (c = 117) (nm-flags t (k + 1) g 1 srt)
-               (c = 112) (nm-flags t (k + 1) g u 1)
+            (? (c = 103) (nm-flags t (k + 1) (pin f 'g 1))
+               (c = 117) (nm-flags t (k + 1) (pin f 'u 1))
+               (c = 112) (nm-flags t (k + 1) (pin f 'p 1))
+               (c = 110) (nm-flags t (k + 1) (pin f 'n 1))
+               (c = 83) (nm-flags t (k + 1) (pin f 'S 1))
                (udie 2 ("nm: unknown flag -" + string c)))))
-       (go a g u srt fs)
-        (? (atom? a) [g u srt (rev fs)]
-           (1 < tally <a && <a 0 = 45)
-            (nm-flags <a 1 g u srt @ f (go >a <f <>f <>>f fs))
-           (go >a g u srt (<a . fs)))
-       r (go as () () () ())
-       fs (r 3)
-       _ (two? fs ? () (udie 2 "usage: nm [-g] [-u] [-p] FILE.."))
+       (go a f fs)
+        (? (atom? a) [f (rev fs)]
+           (1 < tally <a && <a 0 = 45) (go >a (nm-flags <a 1 f) fs)
+           (go >a f (<a . fs)))
+       r (go as {} ())
+       f <r fs <>r
+       _ (two? fs ? () (udie 2 "usage: nm [-g] [-u] [-p] [-n] [-S] FILE.."))
        wide (two? >fs)
-       any (foldl (\ a p (nm-file p wide <r <>r <>>r ? 1 a)) () fs)
+       any (foldl (\ a p (nm-file p wide (f 'g) (f 'u) (f 'p) (f 'n) (f 'S) ? 1 a)) () fs)
        (flush out,
         any ? 0 1))
 
@@ -823,7 +834,7 @@
    ; here still answers the flag, with its own spelling for a synopsis.
    korehelp
    {'diff "usage: diff [-Nqru] OLD NEW   (0 same / 1 differ / 2 trouble)"
-    'nm "usage: nm [-g] [-u] [-p] FILE.."
+    'nm "usage: nm [-g] [-u] [-p] [-n] [-S] FILE.."
     'nc "usage: nc [-CdkNnUuvz] [-i SECS] [-o FILE] [-q SECS] [-w SECS] {HOST PORT.. | -l [[-s] ADDR] [-p] PORT | -U [-l] PATH}"
     'ssh "usage: ssh [-p port] [-i identity] [-l user] [-t|-T] [-o option=value] [user@]host [command]"
     'sshd "usage: sshd [-Deq] [-p port] [-h host_key_file] [-o AuthorizedKeysFile=path]"
@@ -834,7 +845,7 @@
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
-    'objcopy "usage: objcopy -O binary|ihex IN OUT"
+    'objcopy "usage: objcopy -O binary|ihex [-R SEC] [-j SEC] IN OUT"
     'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
