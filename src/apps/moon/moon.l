@@ -396,7 +396,8 @@
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
        ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
-        ps))
+        ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
+        (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
    ; other section(NAME) the TU used, in declaration order (its address is the program's to fix).
    ; the wide tuples are named once, here; `[]` is strict, so a changed arity refuses
