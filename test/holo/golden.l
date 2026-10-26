@@ -557,6 +557,9 @@
         (map (l \ trap (x \ holo-hex 'a64 (gas-text 'a64 x)) l (\ a b a))
              ["mrs x0, isr_el1" "mrs x0, dbgbcr15_el1" "mrs x0, pmevcntr30_el0" "mrs x0, pmevtyper9_el0"
               "mrs x0, spsr_und" "msr dbgwvr3_el1, x0" "msr SPsel, #1" "tlbi ipas2e1, x0" "mrs x0, dbgbcr16_el1"]))
+   ;; a /* */ comment is a space, across lines too (the kernel's crash_setup_regs)
+   _ (chk-eq "gas.a64.ccomment" (holo-hex 'a64 (gas-text 'a64 "mov x0, #1\nmov x1, #2\nmov x2, #3"))
+        (holo-hex 'a64 (gas-text 'a64 "/* faked */\nmov x0, #1 /* a */\nmov/* b */x1, #2 /* c\n d */\nmov x2, #3")))
    ;; a branch to `.`, `.+k`, `.-k` is its own pc-relative word, never a symbol named `.`
    _ (chk-eq "gas.a64.dot"
         ["00000014" "01000054" "000000b5" "41000034" "02000014" "ffffff97" "0bfeff54" "030080b5"
