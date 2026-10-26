@@ -8,7 +8,7 @@
 ;   'align 'subalign 'constraint 'body 'phdrs 'fill. a body item is a set, provide or assert, or
 ;     ('in keep? filepat pats), each pat (sort "glob"), sort one of none sort sort_by_name ..
 ;     ('data width e)  ('fill e)
-;   an expression is a number, a text (a symbol, "." the location counter), or a list:
+;   an expression is a whole number, a text (a symbol, "." the location counter), or a list:
 ;     (op a b)  ('neg a)  ('not a)  ('cpl a)  ('? c a b)  ('call "NAME" args)
 ;
 ; words split on blanks, ( ) { } ; , and strings; a glob keeps every other character, so
@@ -80,7 +80,7 @@
           (lds-op? t "+") (lds-unary >ts)
           (lds-op? t "(") (: r (lds-expr >ts)
                              (? (lds-op? <>r ")") (<r . >>r) (scare 'lds-paren ts)))
-          (charm? t) (t . >ts)
+          (whole? t) (t . >ts)
           (string? t) (? (lds-op? <>ts "(")                  ; a builtin: ALIGN(..), ADDR(..)
                          (: r (lds-args >>ts ()) (['call t <r] . >r))
                          (t . >ts))

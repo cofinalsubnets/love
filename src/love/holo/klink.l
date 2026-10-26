@@ -163,4 +163,134 @@
                                                (p \ (? (peep und <>p 0 = 1) (fetch <>p) 0)))))))
                       (scare 'klink-input k)))))
        _ (pin cx 'objs (rev (cx 'objs)))
-       cx))
+       cx)
+
+   ;; --- placement: each input section to the first SECTIONS input description whose pattern
+   ;     names it (the file patterns here are all *), ordered as lld orders one description:
+   ;     unsorted matches by input position, a SORT pattern's by its key. the synthetic
+   ;     sections come after every object's, as lld appends them.
+   kl-skip '(0 2 3 4 9 17 1879002115)             ; null symtab strtab rela rel group addrsig
+   (kl-debug? nm) (starts? nm ".debug" || starts? nm ".zdebug")
+   (kl-zip l) (: (go l i acc) (? (atom? l) (rev acc) (go >l (i + 1) ([i <l] . acc))) (go l 0 ()))
+   ; SECTIONS' output sections -> [tablet ..], each with 'pos
+   (kl-outs cmds)
+    (: secs (foldl (\ a c (? (<c = 'sections) <>c a)) () cmds)
+       os (map (i \ <>i) (filter (i \ <i = 'osec) secs))
+       _ (foldl (\ i t (pin t 'pos i, i + 1)) 0 os)
+       os)
+   ; -> [[d osec desc] ..] in script order, d numbering every description
+   (kl-descs os)
+    (: (go l d acc)
+        (? (atom? l) (rev acc)
+           (: t <l
+              ins (filter (b \ <b = 'in) (t 'body))
+              (go >l (d + #ins) (rev (map (p \ [(d + <p) t <>p]) (kl-zip ins)) + acc))))
+       (go os 0 ()))
+   ; -> a fn: name -> [d pi], the first description and its first pattern naming it, else ()
+   (kl-matcher descs)
+    (: memo {}
+       (hit pats nm i) (? (atom? pats) -1 (kl-glob (<pats 1) nm) i (hit >pats nm (i + 1)))
+       (find l nm) (? (atom? l) ()
+                      (: dd <l h (hit (dd 2 3) nm 0)
+                         (? (h >= 0) [<dd h] (find >l nm))))
+       (nm \ (: m (peep memo nm 0)
+                (? (m = 0) (: r (find descs nm) _ (pin memo nm r) r) m))))
+   ; one description's entries [(pos e pi) ..] -> its e's in lld's order
+   (kl-order es pats)
+    (: (bypos l) (map (x \ x 1) (sort l))
+       (keyed k x) (? (k = 'SORT_BY_ALIGNMENT) [(0 - (x 1 4)) <x x]
+                      (elem k '(SORT SORT_BY_NAME)) [(x 1 5) <x x]
+                      (scare 'klink-sort k))
+       (go ps i pend acc)
+        (? (atom? ps) (acc + bypos pend)
+           (: ms (filter (x \ x 2 = i) es) k <(<ps)
+              (? (k = 'none || k = 'SORT_NONE) (go >ps (i + 1) (pend + ms) acc)
+                 (go >ps (i + 1) () (acc + bypos pend + map (y \ y 2 1) (sort (map (keyed k) ms)))))))
+       (go pats 0 () ()))
+   ; objects, script, synthetic sections [(name size align) ..] -> [outs orphans]: each
+   ; output section tablet gains 'steps, its body with every description expanded to its
+   ; ('isec oi si size align name) and ('synth name size align) in order
+   (kl-place objs cmds synth strip)
+    (: os (kl-outs cmds)
+       descs (kl-descs os)
+       mt (kl-matcher descs)
+       bk {}
+       orph {'l ()}
+       (put d e) (pin bk d (e . peep bk d ()))
+       (scan oi ob)
+        (each >^(ob 'shnum)
+           (si \ (: r (ob 'sec si) ty (r 1) fl (r 2) nm <r
+                    (? (elem ty kl-skip || 0 < (fl & 2147483648)) 0
+                       (strip && 0 = (fl & 2) && kl-debug? nm) 0
+                       (: m (mt nm)
+                          (? (two? m) (put <m [(oi * 65536 + si) ['isec oi si (r 4) (r 5) nm] <>m])
+                             (pin orph 'l ([oi nm] . orph 'l))))))))
+       _ (foldl (\ oi ob (scan oi ob, oi + 1)) 0 objs)
+       _ (foldl (\ k s (: m (mt <s)
+                          _ (? (two? m) (put <m [k ['synth <s (s 1) (s 2) <s] <>m])
+                               (pin orph 'l (['synth <s] . orph 'l)))
+                          (k + 1)))
+                4294967296 synth)
+       dmap (: t {} _ (each descs (dd \ pin t (dd 2) dd)) t)
+       (expand b) (: dd (dmap b) (kl-order (rev (peep bk <dd ())) (b 3)))
+       _ (each os
+            (t \ pin t 'steps
+                   (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body))))
+       [os (rev (orph 'l))])
+
+   ;; --- 64-bit words. & is wrong on a bignum >= 2^63, so the bit ops go by 32-bit halves
+   kl-m64 18446744073709551616
+   kl-m32 4294967296
+   (kl-w v) (: r (v % kl-m64) (? (r < 0) (r + kl-m64) r))
+   (kl-bits f a b) (: x (kl-w a) y (kl-w b)
+                     (f (x // kl-m32) (y // kl-m32) * kl-m32 + f (x % kl-m32) (y % kl-m32)))
+   (kl-and a b) (kl-bits (&) a b)
+   (kl-or a b) (kl-bits (|) a b)
+   (kl-xor a b) (kl-bits (^) a b)
+   (kl-not a) (kl-m64 - 1 - kl-w a)
+   (kl-al v a) (? (a < 2) v (: r (v % a) (? (r = 0) v (v + a - r))))   ; align up
+
+   ;; --- the script's expressions, over a layout env:
+   ;     'dot, 'sv script symbols, 'osv output sections by name -> [addr size lma align],
+   ;     'gv a fn nom -> an object symbol's value or ()
+   (kl-sym env nom)
+    (: v (peep (env 'sv) nom ())
+       (? (whole? v) v
+          (: g ((env 'gv) nom) (? (whole? g) g (: _ (pin env 'undef 1) 0)))))
+   (kl-osv env nm k) (: r (peep (env 'osv) nm ()) (? (two? r) (r k) (: _ (pin env 'undef 1) 0)))
+   (kl-ev env e)
+    (? (whole? e) (kl-w e)
+       (string? e) (? (e = ".") (env 'dot) (kl-sym env e))
+       (: o <e (a u) (kl-ev env (e 1)) (b u) (kl-ev env (e 2))
+          (? (o = '+) (kl-w (a 0 + b 0)) (o = '-) (kl-w (a 0 - b 0)) (o = '*) (kl-w (a 0 * b 0))
+             (o = '/) (? (b 0 = 0) (scare 'klink-div e) (a 0 // b 0))
+             (o = '%) (? (b 0 = 0) (scare 'klink-div e) (a 0 % b 0))
+             (o = '<<) (kl-w (a 0 * 2 ** b 0)) (o = '>>) (a 0 // 2 ** b 0)
+             (o = '&) (kl-and (a 0) (b 0)) (o = '|) (kl-or (a 0) (b 0)) (o = '^) (kl-xor (a 0) (b 0))
+             (o = '==) (? (a 0 = b 0) 1 0) (o = '!=) (? (a 0 = b 0) 0 1)
+             (o = '<) (? (a 0 < b 0) 1 0) (o = '<=) (? (a 0 <= b 0) 1 0)
+             (o = '>) (? (a 0 > b 0) 1 0) (o = '>=) (? (a 0 >= b 0) 1 0)
+             (o = '&&) (? (a 0 != 0 && b 0 != 0) 1 0) (o = '||) (? (a 0 != 0 || b 0 != 0) 1 0)
+             (o = 'neg) (kl-w (0 - a 0)) (o = 'not) (? (a 0 = 0) 1 0) (o = 'cpl) (kl-not (a 0))
+             (o = '?) (? (a 0 != 0) (b 0) (kl-ev env (e 3)))
+             (o = 'call) (kl-call env (e 1) (e 2))
+             (scare 'klink-op o))))
+   (kl-call env f as)
+    (: (x i) (kl-ev env (as i)) nm as
+       (? (f = "ALIGN") (? (#as = 1) (kl-al (env 'dot) (x 0)) (kl-al (x 0) (x 1)))
+          (f = "ABSOLUTE") (x 0)
+          (f = "ADDR") (kl-osv env (nm 0) 0)
+          (f = "SIZEOF") (kl-osv env (nm 0) 1)
+          (f = "LOADADDR") (kl-osv env (nm 0) 2)
+          (f = "ALIGNOF") (kl-osv env (nm 0) 3)
+          (f = "DEFINED") (? (whole? (peep (env 'sv) (nm 0) ()) || whole? ((env 'gv) (nm 0))) 1 0)
+          (f = "MAX") (? (x 0 > x 1) (x 0) (x 1))
+          (f = "MIN") (? (x 0 < x 1) (x 0) (x 1))
+          (f = "SEGMENT_START") (x 1)
+          (f = "CONSTANT") (? (nm 0 = "MAXPAGESIZE") 65536 (nm 0 = "COMMONPAGESIZE") 4096 (scare 'klink-constant (nm 0)))
+          (scare 'klink-call f)))
+   ; the section names an expression reads by ADDR SIZEOF LOADADDR ALIGNOF
+   (kl-named e acc)
+    (? (atom? e) acc
+       (<e = 'call && elem (e 1) '("ADDR" "SIZEOF" "LOADADDR" "ALIGNOF")) ((e 2 0) . acc)
+       (foldl (\ a x (kl-named x a)) acc >e)))
