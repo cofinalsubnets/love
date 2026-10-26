@@ -7697,6 +7697,7 @@
                 (two? en ? [<en 0 <>en] 'no)))
            'deref
             (imaddr g <>e @ p (p @ 'no 'no [<p <>p <><>>p]))
+           'str (imaddr g e @ a [<a 0 ['arr (gchar g) (tally <>e + 1)]])   ; &"s": the literal's array
            'dot
             (imlval g <>e @ 'no 'no b
              (fmem g <>>b <>>e @ fm (bad? fm ? 'no [<b (<>b + <fm) <>fm])))
@@ -7805,11 +7806,24 @@
     (? (nan? v) (: neg (v = '-nan) (ty = 'float ? (les 4 (neg ? 4290772992 2143289344)) (les 8 (neg ? -2251799813685248 9221120237041090560))))
        (ty = 'float) (les 4 (fbits32 v))
        (les 8 (fbits v)))
+   ; sizeof a file-scope object in an initializer, its own too: parse types the name only once
+   ; its declaration ends
+   (imszof g e)
+    (? (!(two? e) || !(elem <e '(bin un cast cond szof))) e
+       (<e = 'szof) (<>e @ ('var nm) (peep (g 'glob) nm 0 @ ge
+                                        (two? ge && !(gvarr? <>ge) ? ['num (tsz g <>ge)] e))
+                       e)
+       (<e = 'cast) ['cast <>e (imszof g <>>e)]
+       (<e = 'un) ['un <>e (imszof g <>>e)]
+       (<e = 'bin) ['bin <>e (imszof g <>>e) (imszof g <>>>e)]
+       ['cond (imszof g <>e) (imszof g <>>e) (imszof g <>>>e)])
    (imgbytes g ty ini)                              ; a byte/fix list of length tsz(ty) | 'bad
     (?- 'bad
      (atom? ini) (zeros (tsz g ty))
      (<ini = 'cond) (imsel g ini @ a (a = 'no ? 'bad (imgbytes g ty a)))
-     (<ini = 'flo) (flo? ty ? (fim ty <>ini) 'bad)
+     (<ini = 'flo) (? (flo? ty) (fim ty <>ini)
+                      (aggish? ty || ptr? ty) 'bad
+                      (icfold ['cast ty ini] @ c (c @ 'no 'bad (imnum g ty c))))
      (<ini = 'num) (? (aggish? ty) 'bad
                            (flo? ty) (fim ty (0.0 + <>ini))
                            (ty = 'bool) (imnum g ty (<>ini = 0 ? 0 1))   ; a bool image normalizes (C11 6.3.1.2)
@@ -7834,9 +7848,11 @@
       (imaddr g ini @ r
          (r != 'no ? [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]
             (icfold ini @ v (v @ 'no (imgbytes g ty <>>ini) (imnum g ty v)))))
-     ; a constant expression parse's cfold left: a float through a cast ((int)(0.867 * (1 << 16)))
+     ; a constant expression parse's cfold left: a float through a cast ((int)(0.867 * (1 << 16))), or
+     ; a floating one (2 * 4.5 - 1), which converts as by assignment
      (!(aggish? ty) && !(flo? ty) && elem <ini '(bin un cast))
-      (icfold ini @ v (v @ 'no 'bad (imnum g ty v)))
+      (imszof g ini @ e
+         (icfold e @ v (v @ 'no (icfold ['cast ty e] @ c (c @ 'no 'bad (imnum g ty c))) (imnum g ty v))))
      (<ini = 'init)
       (unelide g 'none ty ini @ nini
        (?- 'bad
