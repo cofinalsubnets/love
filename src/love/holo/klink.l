@@ -350,6 +350,8 @@
                      (<x = 'msec) (ms (x 1) 'flags) -1)
        (mtype x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 1) (<x = 'synth) (sy (x 1) 3) (ms (x 1) 'type))
        (malign x) (? (<x = 'isec) (x 4) (<x = 'synth) (x 3) (ms (x 1) 'align))
+       (ments x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 6) (<x = 'synth) (: y (sy (x 1) 3) (? (y = 4) 24 (y = 19) 8 0))
+                    (ms (x 1) 'entsize))
        (held? b) ((<b = 'set && b 1 != ".") || <b = 'data)
        osof {} mof {}                                 ; isec key, merge id -> output section
        _ (foldl (\ pf c
@@ -362,13 +364,15 @@
                               ty (: ts (map mtype mem) nb (filter (y \ y != 8) ts)
                                     (? (atom? ts) 1 (atom? nb) 8 <nb))
                               _ (pin t 'flags fl, pin t 'stype ty,
-                                 pin t 'malign (foldl (\ a x (max a (malign x))) 1 mem))
+                                 pin t 'malign (foldl (\ a x (max a (malign x))) 1 mem),
+                                 pin t 'entsize (? (atom? mem) 0
+                                                   (: e (ments <mem) (? (all (x \ ments x = e) mem) e 0))))
                               _ (each mem (x \ (? (<x = 'isec) (pin osof (x 1 * 65536 + x 2) (t 'name))
                                                   (<x = 'msec) (pin mof (x 1) (t 'name)) 0)))
                               fl)))))
                 0 flat)
-       env {'dot 0 'sv {} 'osv {} 'isa {} 'msa {} 'undef 0 'osof osof 'mof mof 'ssec {} 'cur ()}
-       isa (env 'isa) msa (env 'msa) sv (env 'sv) ssec (env 'ssec)
+       env {'dot 0 'sv {} 'osv {} 'isa {} 'msa {} 'undef 0 'osof osof 'mof mof 'ssec {} 'stype {} 'cur ()}
+       isa (env 'isa) msa (env 'msa) sv (env 'sv) ssec (env 'ssec) stype (env 'stype)
        ; the address of byte off of input section si of object oi, or () if not laid
        (at oi si off)
         (: k (oi * 65536 + si) a (peep isa k ())
@@ -405,7 +409,11 @@
                                 (e 1 = "ADDR") (e 2 0)
                                 ())
                  ())))
-       (setsym nm v e) (: _ (pin sv nm v) (pin ssec nm (secof e)))
+       ; a symbol assigned a symbol takes its type
+       (typeof e) (? (!(string? e) || e = ".") 0
+                     (whole? (peep sv e ())) (peep stype e 0)
+                     (: g (peep glob e ()) (? (two? g) (ot <g 'syms (g 1) 2) 0)))
+       (setsym nm v e) (: _ (pin sv nm v, pin ssec nm (secof e)) (pin stype nm (typeof e)))
        (ev e) (kl-ev env e)
        (dot u) (env 'dot)
        (setdot v) (pin env 'dot v)
@@ -575,12 +583,81 @@
                  (go >l cur acc))))
        (? (t 'stype = 8) () (go (t 'steps) (t 'va) ())))
 
+   ;; --- the symbol table as lld writes it. the script's names enter after the objects':
+   ;     the names its expressions read (not a PROVIDE's, nor a section name), then the
+   ;     right sides of the PROVIDEs it takes, then the names it assigns
+   (kl-sorder lk)
+    (: cmds (lk 'cmds) und (lk 'cx 'und) sv (lk 'env 'sv)
+       flat (foldr (\ c acc (? (<c = 'sections) (<>c + acc) (c . acc))) () cmds)
+       (ex e acc)
+        (? (string? e) (? (e = ".") acc (e . acc))
+           (atom? e) acc
+           (<e = 'call) (? (elem (e 1) '("ADDR" "SIZEOF" "LOADADDR" "ALIGNOF" "DEFINED" "CONSTANT" "SEGMENT_START")) acc
+                           (foldl (\ a x (ex x a)) acc (e 2)))
+           (foldl (\ a x (ex x a)) acc >e))
+       (taken? c) (peep und (c 1) 0 > 0)
+       (walk f l acc) (foldl (\ a c (? (<c = 'osec) (: t <>c (walk f (t 'body) (f ['hdr t] a))) (f c a))) acc l)
+       (reads c a) (? (<c = 'set) (ex (c 3) a) (<c = 'assert) (ex (c 1) a) (<c = 'data) (ex (c 2) a)
+                      (<c = 'hdr) (: t (c 1) (ex (t 'align) (ex (t 'lma) (ex (t 'addr) a))))
+                      a)
+       (provs c a) (? (<c = 'provide && taken? c) (ex (c 2) a) a)
+       (sets c a) (? (<c = 'set && c 1 != ".") ((c 1) . a) (<c = 'provide && taken? c) ((c 1) . a) a)
+       (rev (walk sets flat (walk provs flat (walk reads flat ())))))
+   ; -> [nlocal entries strsize strpieces]; shx output section name -> its index
+   (kl-symtab lk shx)
+    (: cx (lk 'cx) ot (cx 'ot) env (lk 'env) sv (env 'sv) ssec (env 'ssec)
+       osof (env 'osof) mof (env 'mof) im (lk 'mx 'im) at (env 'at) glob (cx 'glob) und (cx 'und)
+       str {'n 1 'l ()}
+       (addstr nm) (: o (str 'n) _ (pin str 'n (o + #nm + 1), pin str 'l ("\0" . nm . str 'l)) o)
+       (oname oi sh) (: k (oi * 65536 + sh) n (peep osof k ())
+                        (? (string? n) n (: m (peep im k ()) (? (two? m) (peep mof <m ()) ()))))
+       (ent nm v z info oth shn) [(addstr nm) v z info oth shn]
+       groups {} gord {'l ()} glo {'l ()}
+       (put oi e) (: g (peep groups oi ())
+                     _ (? (two? g) 0 (pin gord 'l (oi . gord 'l)))
+                     (pin groups oi (e . g)))
+       _ (each ^(cx 'n)
+           (oi \ (: ob (ot oi) sy (ob 'syms)
+                    (each >^(ob 'nsym)
+                       (si \ (: r (sy si)
+                                (? (r 1 != 0 || r 2 = 3 || r 3 = 0 || starts? <r ".L") 0
+                                   (r 3 = 65521) (put oi (ent <r (r 4) (r 5) (r 2) 0 65521))
+                                   (: n (oname oi (r 3)) q (ob 'sec (r 3))
+                                      (? (string? n) (put oi (ent <r (at oi (r 3) (r 4)) (r 5) (r 2) 0 (shx n)))
+                                         ; a debug section --strip-debug dropped leaves its locals absolute
+                                         (lk 'strip && 0 = (q 2 & 2) && kl-debug? <q) (put oi (ent <r (r 4) (r 5) (r 2) 0 65521))
+                                         0)))))))))
+       seen {}
+       names (rev (foldl (\ a n (? (peep seen n 0) a (: _ (pin seen n 1) (n . a)))) () (cx 'order + kl-sorder lk)))
+       (gl nm)
+        (: v (peep sv nm ())
+           (? (whole? v) (: q (peep ssec nm ())
+                            (pin glo 'l (ent nm v 0 (16 + peep (env 'stype) nm 0) 0 (? (string? q) (shx q) 65521) . glo 'l)))
+              (: g (peep glob nm ())
+                 (? (two? g)
+                    (: oi <g r (ot oi 'syms (g 1)) vis (r 6 % 4) n (oname oi (r 3))
+                       vs (? (r 3 = 65521) [(r 4) 65521] (string? n) [(at oi (r 3) (r 4)) (shx n)] [0 0])
+                       (? (vis = 1 || vis = 2) (put oi (ent nm <vs (r 5) (r 2) vis (vs 1)))
+                          (pin glo 'l (ent nm <vs (r 5) (r 1 * 16 + r 2) vis (vs 1) . glo 'l))))
+                    (peep und nm 0 > 0) (pin glo 'l (ent nm 0 0 (und nm * 16) 0 0 . glo 'l))
+                    0))))
+       _ (each names gl)
+       locs (foldl (\ a oi (a + rev (groups oi))) () (rev (gord 'l)))
+       es (locs + rev (glo 'l))
+       (row e) (cask (kl-le <e 4 + [(e 3) (e 4)] + kl-le (e 5) 2 + kl-le (e 1) 8 + kl-le (e 2) 8))
+       [(#locs + 1) ([(kl-le 0 24)] + map row es) (str 'n) ("\0" . rev (str 'l))])
+
    ;; --- the image, as lld lays it: a PT_LOAD per run of sections with one set of
    ;     permissions, a new one at each AT(); an empty section opens none. a load's first
    ;     section sits at a file offset congruent to its address mod 64K, the rest follow by
-   ;     address. answers [file-size pieces]
-   (kl-elf lk entry)
-    (: outs (filter (t \ !(peep t 'dead 0) && t 'name != "/DISCARD/") (lk 'outs))
+   ;     address. each section is written as it is emitted; answers the file's size
+   (kl-elf lk entry path)
+    (: outs0 (filter (t \ !(peep t 'dead 0) && t 'name != "/DISCARD/") (lk 'outs))
+       shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 (outs0 + [{'name ".symtab"} {'name ".strtab"}])) t)
+       st (kl-symtab lk (n \ shx n))
+       outs (outs0 + [{'name ".symtab" 'stype 2 'flags 0 'al 8 'sz (24 * #(st 1)) 'entsize 24
+                       'link (#outs0 + 2) 'info <st 'pieces (st 1)}
+                      {'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 2) 'pieces (st 3)}])
        (alloc? t) (0 < (t 'flags & 2))
        (perm t) (4 + (? (0 < (t 'flags & 1)) 2 0) + (? (0 < (t 'flags & 4)) 1 0))
        (at? t) (? (atom? (t 'lma)) (whole? (t 'lma)) 1)
@@ -617,23 +694,24 @@
        phs (map ph loads + [(cats [(w4 1685382481) (w4 6) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0)])])
        nmoff (: t {} _ (foldl (\ o x (pin t (x 'name) o, o + #(x 'name) + 1)) 1 outs) t)
        (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (w8 (t 'flags)) (w8 (? (alloc? t) (t 'va) 0)) (w8 (t 'off))
-                     (w8 (t 'sz)) (w4 0) (w4 0) (w8 (t 'al)) (w8 0)])
+                     (w8 (t 'sz)) (w4 (peep t 'link 0)) (w4 (peep t 'info 0)) (w8 (t 'al)) (w8 (peep t 'entsize 0))])
        shs ([(kl-le 0 64)] + map sh outs
             + [(cats [(w4 #names) (w4 3) (w8 0) (w8 0) (w8 shso) (w8 #shn) (w4 0) (w4 0) (w8 1) (w8 0)])])
-       (body o l acc)
-        (? (atom? l) [o acc]
+       _ (unlink path)
+       q (open path "w")
+       (put ps) (each ps (p \ (? (two? p) (say q (cask p)) (atom? p && #p > 0) (say q p) 0)))
+       (body o l)
+        (? (atom? l) o
            (: t <l
-              (? (t 'stype = 8 || t 'sz = 0) (body o >l acc)
-                 (: ps (kl-emit lk t)
+              (? (t 'stype = 8 || t 'sz = 0) (body o >l)
+                 (: ps (? (two? (peep t 'pieces ())) (t 'pieces) (kl-emit lk t))
                     n (foldl (\ a p (a + #p)) 0 ps)
                     _ (? (n = t 'sz) 0 (scare 'klink-emit [(t 'name) n (t 'sz)]))
-                    (body (t 'off + t 'sz) >l (rev ps + kl-zp (t 'off - o) acc))))))
-       b (body (64 + 56 * nph) outs (rev phs + [eh]))
-       acc (rev shs + kl-zp (shoff - shso - #shn) (shn . kl-zp (shso - <b) <>b))
-       [(shoff + 64 * shnum) (rev acc)])
-   (kl-write path ps)
-    (: _ (unlink path)
-       q (open path "w")
-       _ (each ps (p \ (? (two? p) (say q (cask p)) (atom? p && #p > 0) (say q p) 0)))
-       (close q))
+                    _ (put (rev (kl-zp (t 'off - o) ())), put ps)
+                    (body (t 'off + t 'sz) >l)))))
+       _ (put (eh . phs))
+       e (body (64 + 56 * nph) outs)
+       _ (put (rev (kl-zp (shso - e) ())), put [shn], put (rev (kl-zp (shoff - shso - #shn) ())), put shs)
+       _ (close q)
+       (shoff + 64 * shnum))
 )
