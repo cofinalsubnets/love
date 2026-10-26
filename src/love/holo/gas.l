@@ -1427,7 +1427,7 @@
    gf-ifs '(".if" ".ifc" ".ifnc" ".ifeq" ".ifne" ".ifb" ".ifnb")
    (gf-expand tgt ls)
     (: mac {} sv {} sv0 {} rq {} cnt {}
-       (dname s) (xa-trim s @ t (0 < #t && t 0 = 46 ? (xa-mnem t) ""))
+       (dname s) (xa-trim s @ t (0 < #t && t 0 = 46 ? (xa-mnem t @ m (snip m 0 (word m 1))) ""))   ; .inst(..) too
        (word s i) ((: (g j) (j < #s && gidc? (s j) ? (g (j + 1)) j)) i)
        ; a block's body up to its closer, nested openers counted -> (body rest)
        (grab l opens close)
