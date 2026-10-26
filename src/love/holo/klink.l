@@ -351,6 +351,7 @@
        (mtype x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 1) (<x = 'synth) (sy (x 1) 3) (ms (x 1) 'type))
        (malign x) (? (<x = 'isec) (x 4) (<x = 'synth) (x 3) (ms (x 1) 'align))
        (held? b) ((<b = 'set && b 1 != ".") || <b = 'data)
+       osof {} mof {}                                 ; isec key, merge id -> output section
        _ (foldl (\ pf c
                   (? (<c != 'osec) pf
                      (: t <>c mem (filter (x \ mflags x >= 0) (t 'steps))
@@ -362,10 +363,12 @@
                                     (? (atom? ts) 1 (atom? nb) 8 <nb))
                               _ (pin t 'flags fl, pin t 'stype ty,
                                  pin t 'malign (foldl (\ a x (max a (malign x))) 1 mem))
+                              _ (each mem (x \ (? (<x = 'isec) (pin osof (x 1 * 65536 + x 2) (t 'name))
+                                                  (<x = 'msec) (pin mof (x 1) (t 'name)) 0)))
                               fl)))))
                 0 flat)
-       env {'dot 0 'sv {} 'osv {} 'isa {} 'msa {} 'undef 0}
-       isa (env 'isa) msa (env 'msa) sv (env 'sv)
+       env {'dot 0 'sv {} 'osv {} 'isa {} 'msa {} 'undef 0 'osof osof 'mof mof 'ssec {} 'cur ()}
+       isa (env 'isa) msa (env 'msa) sv (env 'sv) ssec (env 'ssec)
        ; the address of byte off of input section si of object oi, or () if not laid
        (at oi si off)
         (: k (oi * 65536 + si) a (peep isa k ())
@@ -382,6 +385,27 @@
               (: r (ot <g 'syms (g 1)) sh (r 3)
                  (? (sh = 65521) (r 4) (at <g sh (r 4))))))
        _ (pin env 'gv gv, pin env 'at at)
+       ; the output section a value is relative to, () when absolute, as lld carries it:
+       ; + and & | keep the relative side, a difference of two relatives is absolute,
+       ; ALIGN(x, a) keeps x's, ADDR names its section, and . is the last section's
+       (osec-of oi sh) (? (sh = 65521 || sh = 0) () (: k (oi * 65536 + sh) n (peep osof k ())
+                                                     (? (string? n) n
+                                                        (: m (peep im k ()) (? (two? m) (peep mof <m ()) ())))))
+       (symsec nom)
+        (? (whole? (peep sv nom ())) (: q (peep ssec nom ()) (? (string? q) q ()))
+           (: g (peep glob nom ()) (? (two? g) (osec-of <g (ot <g 'syms (g 1) 3)) ())))
+       (secof e)
+        (? (whole? e) ()
+           (string? e) (? (e = ".") (env 'cur) (symsec e))
+           (: o <e (a u) (secof (e 1)) (b u) (secof (e 2))
+              (? (o = '+ || o = '& || o = '|) (: x (a 0) (? (string? x) x (b 0)))
+                 (o = '-) (: x (a 0) (? (string? x && !(string? (b 0))) x ()))
+                 (o = '?) (? (kl-ev env (e 1) != 0) (b 0) (secof (e 3)))
+                 (o = 'call) (? (e 1 = "ALIGN" && #(e 2) = 2) (secof (e 2 0))
+                                (e 1 = "ADDR") (e 2 0)
+                                ())
+                 ())))
+       (setsym nm v e) (: _ (pin sv nm v) (pin ssec nm (secof e)))
        (ev e) (kl-ev env e)
        (dot u) (env 'dot)
        (setdot v) (pin env 'dot v)
@@ -393,8 +417,8 @@
         (: k <c
            (? (k = 'set) (: nm (c 1) v (ev (c 3))
                             (? (nm = ".") (setdot (op2 (c 2) (dot 0) v))
-                               (pin sv nm (op2 (c 2) (peep sv nm 0) v))))
-              (k = 'provide) (? (peep und (c 1) 0 > 0) (pin sv (c 1) (ev (c 2))) 0)
+                               (setsym nm (op2 (c 2) (peep sv nm 0) v) (c 3))))
+              (k = 'provide) (? (peep und (c 1) 0 > 0) (setsym (c 1) (ev (c 2)) (c 2)) 0)
               (k = 'assert) (? (final && ev (c 1) = 0) (scare 'klink-assert (c 2)) 0)
               (k = 'data) (setdot (dot 0 + c 1))
               (k = 'osec) (? (peep <>c 'dead 0) 0 (lay final <>c))
@@ -408,6 +432,7 @@
               (cmd final x)))
        (lay final t)
         (: alloc (0 < (t 'flags & 2)) saved (dot 0)
+           _ (pin env 'cur (t 'name))
            _ (setdot (? (two? (t 'addr) || whole? (t 'addr) || string? (t 'addr)) (ev (t 'addr))
                         alloc (dot 0) 0))
            al (max (t 'malign) (? (atom? (t 'align)) (? (whole? (t 'align)) (t 'align) 1) (ev (t 'align))))
@@ -421,7 +446,7 @@
            _ (pin (env 'osv) (t 'name) [a z lma al])
            (? alloc 0 (setdot saved)))
        (snap u) (map (c \ (? (<c = 'osec && !(peep <>c 'dead 0)) [(<>c 'va) (<>c 'sz)] 0)) flat)
-       (pass final) (: _ (setdot 0, pin env 'undef 0) _ (each flat (cmd final)) (snap 0))
+       (pass final) (: _ (setdot 0, pin env 'undef 0, pin env 'cur ()) _ (each flat (cmd final)) (snap 0))
        (go n prev)
         (: s (pass 0)
            (? (s = prev) (: _ (pass 1) env)
