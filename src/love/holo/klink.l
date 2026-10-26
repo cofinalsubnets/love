@@ -94,4 +94,73 @@
                           (pin rela (r 8) (es (n - 1) ())))
                        (r 1 = 9) (scare 'klink-rel id)
                        0))))
-       {'id id 'src s 'shnum shnum 'sec sec 'syms syms 'nsym nsym 'rela rela}))
+       {'id id 'src s 'shnum shnum 'sec sec 'syms syms 'nsym nsym 'rela rela})
+
+   ;; --- glob: * ? [set] [!set] [^set], over a whole name
+   (kl-glob p s)
+    (: np #p ns #s
+       (cls j c)                                  ; [..] at j -> (matched? . index past "]")
+        (: neg (j < np && (p j = 33 || p j = 94))
+           (go k hit) (? (k >= np) (scare 'klink-glob p)
+                         (p k = 93 && k > (? neg (j + 1) j)) [hit (k + 1)]
+                         (k + 2 < np && p (k + 1) = 45 && p (k + 2) != 93)
+                          (go (k + 3) (hit || (p k <= c && c <= p (k + 2))))
+                         (go (k + 1) (hit || p k = c)))
+           r (go (? neg (j + 1) j) 0)
+           [(? neg !(<r) <r) <>r])
+       (m i j)
+        (? (i >= np) (j >= ns)
+           (p i = 42) (m (i + 1) j || (j < ns && m i (j + 1)))
+           (j >= ns) 0
+           (p i = 63) (m (i + 1) (j + 1))
+           (p i = 91) (: r (cls (i + 1) (s j)) (<r && m <>r (j + 1)))
+           (p i = s j && m (i + 1) (j + 1)))
+       (m 0 0))
+
+   ;; --- inputs in lld's order. items: ('whole path) ('obj path) ('group (path ..)).
+   ;     a group's members are fetched as a strong undefined names them, depth first, and
+   ;     stay fetchable for every later input. answers the link's tablet:
+   ;     'objs [ob ..] in order, 'glob nom -> [oi si] the definition, 'und nom -> 1|2 (bind)
+   (kl-load items)
+    (: cx {'objs () 'n 0 'glob {} 'und {} 'lazy {}}
+       glob (cx 'glob) und (cx 'und) lazy (cx 'lazy)
+       (add ob)
+        (: oi (cx 'n)
+           _ (pin cx 'n (oi + 1), pin cx 'objs (ob . cx 'objs))
+           sy (ob 'syms)
+           _ (each ^(ob 'nsym)
+              (si \ (: r (sy si) nom <r bind (r 1) sh (r 3)
+                       (? (bind = 0 || #nom = 0) 0
+                          (sh != 0)
+                           (: cur (peep glob nom ())
+                              (? (atom? cur) (pin glob nom [oi si], pin und nom 0)
+                                 (bind = 1 && ((cx 'objs) ((cx 'n) - 1 - <cur)) 'syms (cur 1) 1 = 2)
+                                  (pin glob nom [oi si])
+                                 0))
+                          (two? (peep glob nom ())) 0
+                          (: u (peep und nom 0)
+                             _ (pin und nom (? (u = 1 || bind = 1) 1 2))
+                             (? (bind = 1) (fetch nom) 0))))))
+           oi)
+       (fetch nom)
+        (: m (peep lazy nom ())
+           (? (two? m) (: ar <m mi <>m
+                          (? (peep (ar 'taken) mi 0) 0
+                             (: mem ((ar 'members) mi)
+                                (pin (ar 'taken) mi 1, add (kl-read <mem <>mem)))))
+              0))
+       _ (each items
+          (it \ (: k <it
+                   (? (k = 'obj) (add (kl-read <>it <>(uread <>it)))
+                      (k = 'whole) (each ((kl-ar <>it) 'members) (m \ add (kl-read <m <>m)))
+                      (k = 'group)
+                       (: ars (map (p \ (: a (kl-ar p) (pin a 'taken {}, a))) <>it)
+                          _ (each ars (a \ each (keys (a 'index))
+                                         (nom \ (? (two? (peep lazy nom ())) 0
+                                                   (pin lazy nom [a ((a 'index) nom)])))))
+                          (each ars (a \ (: ix (a 'index)
+                                            (each (sort (map (nom \ [(ix nom) nom]) (keys ix)))
+                                               (p \ (? (peep und <>p 0 = 1) (fetch <>p) 0)))))))
+                      (scare 'klink-input k)))))
+       _ (pin cx 'objs (rev (cx 'objs)))
+       cx))
