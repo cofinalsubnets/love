@@ -52,7 +52,8 @@ run pars 20260928 400 "$hy" $fonts "$w/cajalig.tfm"
 echo "  caja: paragraphs -- the fixed pages and 400 random ones, DVI identical to TeX's"
 
 # the macro language: test/caja/initex's jobs through tex -ini and caja at tripman's line
-# lengths, each log held to TeX's from its second line (the first is the banner and the date)
+# lengths, each log held to TeX's from its second line (the first is the banner and the date),
+# and a DVI TeX writes held to it byte for byte
 tdirs=""
 for f in cmr10 cmbx12 cmtt10 cmsl10; do
   p=$(kpsewhich $f.tfm) || true
@@ -70,14 +71,18 @@ for f in test/caja/initex/*.tex; do
   jobs="$jobs $i/caja/$n"
 done
 "$L" test/caja/initex.l "$r" "${tdirs#:}" $jobs || fail "initex.l died"
-ni=0
+ni=0 nd=0
 for d in $jobs; do
   n=$(basename "$d")
   tail -n +2 "$i/tex/$n/$n.log" > "$i/t.log"; tail -n +2 "$d/$n.log" > "$i/c.log"
   cmp -s "$i/t.log" "$i/c.log" || { diff "$i/t.log" "$i/c.log" | head -20; fail "caja's log differs from TeX's (initex/$n)"; }
+  if [ -f "$i/tex/$n/$n.dvi" ]; then
+    cmp "$i/tex/$n/$n.dvi" "$d/$n.dvi" || fail "caja's DVI differs from TeX's (initex/$n)"
+    nd=$((nd + 1))
+  fi
   ni=$((ni + 1))
 done
-echo "  caja: macros -- $ni jobs through -ini TeX's mouth and stomach, logs identical to TeX's"
+echo "  caja: macros -- $ni jobs through -ini TeX, logs identical to TeX's, $nd DVIs byte for byte"
 
 dfonts=""
 for f in cmr10 cmbx10 cmti10 cmtt10 cmbx12 cmbx12 cmsy10; do

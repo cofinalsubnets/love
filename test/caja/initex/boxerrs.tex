@@ -1,0 +1,30 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=1 \showboxbreadth=3 \tracingonline=1 \tracinglostchars=1
+\font\a=cmr10 \a \hsize=100pt \parfillskip=0pt plus 1fil \tolerance=10000
+\setbox1\hbox{a\hbox{b\hbox{c}}de\vrule f}\showbox1
+\showboxdepth=10 \showboxbreadth=10
+\setbox2\hbox{x}\setbox3\vbox{\unhbox2}\setbox4\vbox{\setbox4\hbox{\unvbox3}}
+\setbox4\vbox{\setbox4\hbox{\leaders\hbox{.}\vskip 3pt}}
+\setbox4\hbox{\leaders\hbox{.}\hskip 3pt}\showbox4
+\setbox4=\showbox4
+\setbox4\hbox{\discretionary{a\hskip1pt b}{\kern1pt}{}}\showbox4
+\setbox4\vbox{\lastbox}\setbox4\hbox{\hrule}
+\setbox4\hbox{\vadjust{}} \setbox4\hbox{\moveleft3pt\hbox{}}
+\setbox4\hbox{^^80\char200 b}\showbox4
+\setbox4\hbox{ab\hbox{c}\setbox5\lastbox\showbox5 \unskip\unkern}\showbox4
+\everyhbox{E}\everyvbox{\kern1pt}\everypar{P}
+\setbox4\vbox{\hbox{x}}\showbox4
+\everyhbox{}\everyvbox{}
+\setbox4\vbox{Here we go\par\showthe\prevgraf\prevgraf=7 \showthe\prevgraf
+  \hbox{a\vbox{b\showlists}}}
+\setbox4\vbox{\hsize 20pt \hbadness=0 \vbadness=0 Wide wide wide words\par}
+\setbox4\vbox to 1pt{\hbox{}\hbox{}}
+\setbox4\vbox to 100pt{\hbox{}}
+\setbox4\hbox to 1pt{a\hskip 0pt minus 0.5pt}
+\global\setbox4\hbox{g}{\setbox4\hbox{l}}\showbox4
+\setbox4\hbox{a}\wd4=7pt \ht4=1pt \showbox4 \showthe\dp4
+\setbox4\hbox{}\showthe\wd4 \showthe\wd 99
+\setbox4\hbox{\hfil}}
+\setbox4\hbox{\endgroup}
+\end

@@ -1,6 +1,7 @@
 ; src/apps/caja/mouth.l -- caja's mouth, tex.web parts 5-7 and 17-29 section for section:
 ; printing, errors, eqtb and the save stack, the hash, the input stack, get_next, expansion,
-; scanning, conditionals and \input. the first part of the module caja-tex; exec.l follows.
+; scanning, conditionals and \input. the first part of the module caja-tex; build.l and exec.l
+; follow.
 ; tex.web's globals are J's fields; eqtb is the tablets 'eq 'et 'el 'xl; a token is tex.web's
 ; integer; a token list is a love list, a pointer into it the list from there, compared by ==.
 (module 'caja-tex
@@ -802,7 +803,8 @@
              equiv J n != () ? (show-token-list J (equiv J n) () 32))
            (n < cur-font-loc)
             (print-esc J "box", print-int J (n - box-base), print-char J 61,
-             equiv J n = () ? (print J "void") (up J 'show-box1 (equiv J n)))
+             equiv J n = () ? (print J "void")
+               (pins J 'depth-threshold 0 'breadth-max 1, show-node-list J (equiv J n)))
            (n < cat-code-base)
             ((? (n = cur-font-loc) (print J "current font")
                 (n < math-font-base + 16) (print-esc J "textfont", print-int J (n - math-font-base))
@@ -1606,7 +1608,7 @@
                               "I'm forgetting what you said and using zero instead."],
                   tex-error J, zero-result J level)
                 (m = vmode) (scanned J (J 'cur-list 'prev-depth) dimen-val)
-                (scanned J (J 'cur-list 'space-factor) int-val))
+                (scanned J (J 'cur-list 'sf) int-val))
             (cmd = set-prev-graf)
              (? (mode J = 0) (scanned J 0 int-val)
                 (: (find l) (abs (<l 'mode) = vmode ? <l (find >l))
@@ -1656,7 +1658,7 @@
         (scanned J (m = input-line-no-code ? (J 'line) (J 'badness)) int-val)
        (: _ (scanned J (m = glue-val ? (J 'zero-glue) 0) m)
           tl (J 'cur-list 'tail)
-          (? (tl 'type != 'char && mode J != 0)
+          (? (tl 'type != 'char && tl 'type != 'head && mode J != 0)
               (? (m = int-val && tl 'type = penalty-node) (pin J 'cur-val (tl 'penalty))
                  (m = dimen-val && tl 'type = kern-node) (pin J 'cur-val (tl 'width))
                  (m = glue-val && tl 'type = glue-node)

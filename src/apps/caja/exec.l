@@ -1,10 +1,11 @@
 ; src/apps/caja/exec.l -- caja's stomach: tex.web's chief executive and its mode-independent
-; commands (parts 46 and 49), print_cmd_chr, and the main program (part 51). the second part
-; of the module caja-tex, after mouth.l.
+; commands (parts 46 and 49), print_cmd_chr, and the main program (part 51). the last part
+; of the module caja-tex, after mouth.l and build.l.
 (module 'caja-tex
 (borrow 'posix)
 (borrow 'tfm)
 (borrow 'caja-box)
+(borrow 'caja-par)
 (:
    ; --- print_cmd_chr (tex.web 227-1346) ---------------------------------------------------
    ; what a command prints when its chr is none of its primitives'
@@ -96,7 +97,12 @@
    (its-all-over? J)
     (? (!(privileged? J)) 0
        (J 'page-contents-list = () && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
-       (not-yet J "the page builder"))
+       ; \hbox to \hsize{}\vfill\penalty-'10000000000, and \end comes again
+       (: _ (back-input J)
+          _ (tail-append J (new-null-box () @ b (pin b 'width (dimen-par J hsize-code), b)))
+          _ (tail-append J (new-glue (J 'fill-glue)))
+          _ (tail-append J (new-penalty -1073741824))
+          (build-page J, 0)))
    (off-save J)
     (? (J 'cur-group = bottom-level)
         (print-err J "Extra ", print-cmd-chr J (J 'cur-cmd) (J 'cur-chr),
@@ -124,6 +130,13 @@
                         "Such booboos are generally harmless, so keep going."],
             tex-error J)
           (g = semi-simple-group || g = math-shift-group || g = math-left-group) (extra-right-brace J)
+          (g = hbox-group) (package J 0)
+          (g = adjusted-hbox-group)
+           ({'type 'head 'link ()} @ ah (pins J 'adjust-head ah 'adjust ah, package J 0))
+          (g = insert-group) (end-insert-group J)
+          (g = vbox-group) (end-graf J, package J 0)
+          (g = vtop-group) (end-graf J, package J vtop-code)
+          (g = disc-group) (build-discretionary J)
           (not-yet J "this group's end")))
    (extra-right-brace J)
     (: g (J 'cur-group)
@@ -138,10 +151,6 @@
                       "deleted material, e.g., by typing `I$}'."])
        _ (tex-error J)
        (pin J 'align-state (J 'align-state + 1)))
-   ; what caja cannot do yet: said plainly, and the run ends
-   (not-yet J what)
-    (print-err J "caja cannot yet do ", print J what, print J " (", print-cmd-chr J (J 'cur-cmd) (J 'cur-chr),
-     print-char J 41, set-help J [], pin J 'history fatal-error-stop, jump-out J)
 
    ; --- mode-independent processing (tex.web 1208-1298) -----------------------------------
    (non-blank-non-relax J)
@@ -249,7 +258,14 @@
               (pin (J 'fonts f) (chr = 0 ? 'hyphenchar 'skewchar) (J 'cur-val)))
           (cmd = def-font) (new-font J a)
           (cmd = set-interaction) (new-interaction J chr)
-          (cmd = set-box) (not-yet J "boxes")
+          (cmd = set-box)
+           (: _ (scan-eight-bit-int J) n (a >= 4 ? (256 + J 'cur-val) (J 'cur-val))
+              _ (scan-optional-equals J)
+              (J 'set-box-allowed ? (scan-box J (box-flag + n))
+                 (print-err J "Improper ", print-esc J "setbox",
+                  set-help J ["Sorry, \\setbox is not allowed after \\halign in a display,"
+                              "or between \\accent and an accented character."],
+                  tex-error J)))
           (cmd = hyph-data) (not-yet J "hyphenation")
           (confusion J "prefix")))
    (assign-let J a n)
@@ -363,7 +379,7 @@
                    (? (v <= 0 || v > 32767)
                        (print-err J "Bad space factor",
                         set-help J ["I allow only values in the range 1..32767 here."], int-error J v)
-                      (pin (J 'cur-list) 'space-factor v)))))))
+                      (pin (J 'cur-list) 'sf v)))))))
    (alter-prev-graf J)
     (: (find l) (abs (<l 'mode) = vmode ? <l (find >l))
        n (find (J 'cur-list . J 'nest))
@@ -474,13 +490,24 @@
        (back-list J (map change l)))
    (show-whatever J)
     (: c (J 'cur-chr)
-       _ (? (c = show-code)
-             (: _ (get-token J) _ (print-nl J "> ")
-                _ (J 'cur-cs != 0 ? (sprint-cs J (J 'cur-cs), print-char J 61))
-                (print-meaning J))
-            (c = show-the-code)
-             (: l (the-toks J) _ (print-nl J "> ") (token-show J l))
-            (not-yet J "\\showbox and \\showlists"))
+       long (? (c = show-code)
+                (: _ (get-token J) _ (print-nl J "> ")
+                   _ (J 'cur-cs != 0 ? (sprint-cs J (J 'cur-cs), print-char J 61))
+                   (print-meaning J, 0))
+               (c = show-the-code)
+                (: l (the-toks J) _ (print-nl J "> ") (token-show J l, 0))
+               (c = show-box-code)
+                (: _ (scan-eight-bit-int J) _ (begin-diagnostic J)
+                   _ (print-nl J "> \\box") _ (print-int J (J 'cur-val)) _ (print-char J 61)
+                   b (equiv J (box-base + J 'cur-val))
+                   (b = () ? (print J "void") (show-box J b), 1))
+               (begin-diagnostic J, show-activities J, 1))
+       ; a potentially long \show ends here (tex.web 1298)
+       _ (long ?
+            (end-diagnostic J 1, print-err J "OK",
+             J 'selector = term-and-log && int-par J tracing-online-code <= 0 ?
+               (pin J 'selector term-only, print J " (see the transcript file)",
+                pin J 'selector term-and-log)))
        _ (? (J 'interaction < error-stop-mode) (set-help J [], pin J 'error-count (J 'error-count - 1))
             (int-par J tracing-online-code > 0)
              (set-help J ["This isn't an error message; I'm just \\showing something."
@@ -493,7 +520,7 @@
                          "lists on your terminal as well as in the transcript file."]))
        (tex-error J))
 
-   ; --- main_control (tex.web 1029-1031, 1045) ------------------------------------------------
+   ; --- main_control (tex.web 1029-1031, 1045-1135) -------------------------------------------
    (main-control J)
     (: _ (equiv J every-job-loc != () ? (begin-token-list J (equiv J every-job-loc) every-job-text))
        (big _) (get-x-token J, sw ())
@@ -501,24 +528,71 @@
         (: _ (int-par J tracing-commands-code > 0 ? (show-cur-cmd-chr J))
            m (abs (mode J)) cmd (J 'cur-cmd)
            (is c) (cmd = c)
-           (? (is relax || (cmd = spacer && m != hmode) || (cmd = no-boundary && m = mmode)) (big ())
+           (v? c) (m = vmode && cmd = c) (h? c) (m = hmode && cmd = c) (mm? c) (m = mmode && cmd = c)
+           (chars _) (main-loop J = 'out ? (sw ()) (big ()))
+           (? ((h? letter) || h? other-char || h? char-given) (chars ())
+              (h? char-num) (scan-char-num J, pin J 'cur-chr (J 'cur-val), chars ())
+              (h? no-boundary)
+               (: _ (get-x-token J) c (J 'cur-cmd)
+                  (c = letter || c = other-char || c = char-given || c = char-num ? (pin J 'cbd 1),
+                   sw ()))
+              (h? spacer) (J 'cur-list 'sf = 1000 ? (append-normal-space J) (app-space J), big ())
+              ((h? ex-space) || mm? ex-space) (append-normal-space J, big ())
+              ((is relax) || v? spacer || mm? spacer || mm? no-boundary) (big ())
               (is ignore-spaces)
                (: (go _) (get-x-token J, J 'cur-cmd = spacer ? (go ())) (go (), sw ()))
-              (is stop && m = vmode) (its-all-over? J ? () (big ()))
-              ((m = vmode && cmd = vmove) || (m != vmode && cmd = hmove) || is last-item
-               || (m = vmode && (cmd = vadjust || cmd = ital-corr))
+              (v? stop) (its-all-over? J ? () (big ()))
+              ((v? vmove) || h? hmove || mm? hmove || is last-item || v? vadjust || v? ital-corr
                || (m != mmode && cmd = eq-no) || is mac-param)
                (report-illegal-case J, big ())
-              (m != mmode && math-only? cmd) (insert-dollar-sign J, big ())
-              (m = mmode && (cmd = endv || cmd = par-end || cmd = stop || cmd = vskip || cmd = un-vbox
-                             || cmd = valign || cmd = hrule))
+              ((m != mmode && math-only? cmd)
+               || (m = mmode && (cmd = endv || cmd = par-end || cmd = stop || cmd = vskip
+                                 || cmd = un-vbox || cmd = valign || cmd = hrule)))
                (insert-dollar-sign J, big ())
-              (m = vmode && cmd = par-end) (normal-paragraph J, mode J > 0 ? (build-page J), big ())
+              ((v? hrule) || h? vrule || mm? vrule)
+               (tail-append J (scan-rule-spec J),
+                (? (m = vmode) (pin (J 'cur-list) 'prev-depth ignore-depth)
+                   (m = hmode) (pin (J 'cur-list) 'sf 1000)),
+                big ())
+              ((v? vskip) || h? hskip || mm? hskip || mm? mskip) (append-glue J, big ())
+              ((is kern) || mm? mkern) (append-kern J, big ())
               (m != mmode && cmd = left-brace) (new-save-level J simple-group, big ())
               (is begin-group) (new-save-level J semi-simple-group, big ())
-              (is end-group)
-               (J 'cur-group = semi-simple-group ? (unsave J) (off-save J), big ())
+              (is end-group) (J 'cur-group = semi-simple-group ? (unsave J) (off-save J), big ())
               (is right-brace) (handle-right-brace J, big ())
+              ((v? hmove) || h? vmove || mm? vmove)
+               (: t (J 'cur-chr) _ (scan-normal-dimen J)
+                  (scan-box J (t = 0 ? (J 'cur-val) (0 - J 'cur-val)), big ()))
+              (is leader-ship) (scan-box J (leader-flag - a-leaders + J 'cur-chr), big ())
+              (is make-box) (begin-box J 0, big ())
+              (v? start-par) (new-graf J (J 'cur-chr > 0), big ())
+              (m = vmode && (cmd = letter || cmd = other-char || cmd = char-num || cmd = char-given
+                             || cmd = math-shift || cmd = un-hbox || cmd = vrule || cmd = accent
+                             || cmd = discretionary || cmd = hskip || cmd = valign
+                             || cmd = ex-space || cmd = no-boundary))
+               (back-input J, new-graf J 1, big ())
+              ((h? start-par) || mm? start-par) (indent-in-hmode J, big ())
+              (v? par-end) (normal-paragraph J, mode J > 0 ? (build-page J), big ())
+              (h? par-end)
+               (J 'align-state < 0 ? (off-save J), end-graf J, mode J = vmode ? (build-page J), big ())
+              ((h? stop) || h? vskip || h? hrule || h? un-vbox || h? halign) (head-for-vmode J, big ())
+              ((is insert) || h? vadjust || mm? vadjust) (begin-insert-or-adjust J, big ())
+              (is mark) (make-mark J, big ())
+              (is break-penalty) (append-penalty J, big ())
+              (is remove-item) (delete-last J, big ())
+              ((v? un-vbox) || h? un-hbox || mm? un-hbox) (unpackage J, big ())
+              (h? ital-corr) (append-italic-correction J, big ())
+              (mm? ital-corr) (tail-append J (new-kern 0), big ())
+              ((h? discretionary) || mm? discretionary) (append-discretionary J, big ())
+              (h? accent) (make-accent J, big ())
+              ((is car-ret) || is tab-mark) (align-error J, big ())
+              (is no-align) (no-align-error J, big ())
+              (is omit) (omit-error J, big ())
+              ((v? halign) || h? valign || mm? halign || is endv) (not-yet J "alignment")
+              (is end-cs-name)
+               (print-err J "Extra ", print-esc J "endcsname",
+                set-help J ["I'm ignoring this, since I wasn't doing a \\csname."],
+                tex-error J, big ())
               (prefixed? cmd) (prefixed-command J, big ())
               (is after-assignment) (get-token J, pin J 'after-token (J 'cur-tok), big ())
               (is after-group) (get-token J, save-for-after J (J 'cur-tok), big ())
@@ -526,10 +600,7 @@
               (is message) (issue-message J, big ())
               (is case-shift) (shift-case J, big ())
               (is xray) (show-whatever J, big ())
-              (is end-cs-name)
-               (print-err J "Extra ", print-esc J "endcsname",
-                set-help J ["I'm ignoring this, since I wasn't doing a \\csname."],
-                tex-error J, big ())
+              (h? math-shift) (not-yet J "math")
               (not-yet J "typesetting")))
        (big ()))
    (normal-paragraph J)
@@ -537,7 +608,6 @@
      dimen-par J hang-indent-code != 0 ? (eq-word-define J (dimen-base + hang-indent-code) 0),
      int-par J hang-after-code != 1 ? (eq-word-define J (int-base + hang-after-code) 1),
      equiv J par-shape-loc != () ? (eq-define J par-shape-loc shape-ref ()))
-   (build-page J) (J 'contrib-list != () && !(J 'output-active) ? (not-yet J "the page builder"))
    (math-only? c)
     (c = sup-mark || c = sub-mark || c = math-char-num || c = math-given || c = math-comp
      || c = delim-num || c = left-right || c = above || c = radical || c = math-style
@@ -586,14 +656,21 @@
                'cur-group bottom-level 'cur-boundary 0
                'cond-ptr () 'if-limit normal 'cur-if 0 'if-line 0 'skip-line 0
                'cur-mark {} 'read-open {} 'read-file {} 'write-file {} 'after-token 0
-               'cur-list {'mode vmode 'head H 'tail H 'prev-depth ignore-depth 'space-factor 0
+               'cur-list {'mode vmode 'head H 'tail H 'prev-depth ignore-depth 'sf 0
                           'pg 0 'ml 0 'clang 0}
-               'nest () 'shown-mode 0 'page-contents empty 'page-contents-list () 'contrib-list ()
+               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty 'page-contents-list () 'contrib-list ()
                'page-so-far {} 'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
                'insert-penalties 0 'output-active 0 'mag-set 0
                'cur-cs 0 'cur-cmd 0 'cur-chr 0 'cur-tok 0 'cur-val 0 'cur-val-level int-val
                'radix 0 'cur-order 0 'cur-name "" 'cur-area "" 'cur-ext "" 'fd ()
-               'up {})
+               'up {} 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
+               'output-file-name ()
+               'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
+               'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)
+               'report pack-report 'char-warn char-warning)
+       ; par.l's state for its ligature loop and line_break, its codes eqtb's
+       _ (cp-setup J)
+       _ (pins J 'sf (\ c (J 'eq (sf-code-base + c))) 'lc (\ c (J 'eq (lc-code-base + c))))
        _ (init-eqtb J)
        _ (primitives J)
        _ (init-cmd-names J)
@@ -644,7 +721,7 @@
              pin J 'selector term-and-log))
        (c = 1 ? (not-yet J "\\dump")))
    (close-files-and-terminate J)
-    (: _ (print-nl J "No pages of output.")
+    (: _ (finish-dvi J)
        (J 'log-opened ?
           (: _ (put (J 'log-file) 10) _ (close (J 'log-file))
              _ (pin J 'selector (J 'selector - 2))
