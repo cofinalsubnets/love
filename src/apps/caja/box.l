@@ -70,24 +70,36 @@
    ; --- packaging (tex.web 644-679) -----------------------------------------------------
    (order tot) (? (tot 3 != 0) 3 (tot 2 != 0) 2 (tot 1 != 0) 1 0)
    (add! tot o v) (pin tot o (tot o + v))
+   ; a box tex.web 660-678 reports: J's 'report says so, (f J r what v), what "Underfull"
+   ; "Loose" "Tight" or "Overfull", v the badness or the excess
+   (report J r what v) (peep J 'report () @ f (f != () ? (f J r what v)))
+   (loose J r b bad) (b > bad ? (report J r (b > 100 ? "Underfull" "Loose") b))
    (cb-hpack J p0 w m)
     (: r (cb-null-box 0) _ (pin r 'list p0)
        st {0 0 1 0 2 0 3 0} sh {0 0 1 0 2 0 3 0}
        dims {'h 0 'd 0 'x 0}
        (grow k v) (v > dims k ? (pin dims k v))
-       ; the adjustment list, when J asks for one, takes ins, mark and adjust nodes out
+       ; the adjustment list, when J's 'adjust is its tail, takes ins, mark and adjust nodes out
+       ; (tex.web 655); q trails p, () while p is the first
        (walk q p)
-        (? (p = ()) ()
+        (? (p = ()) (J 'adjust != () ? (pin (J 'adjust) 'link ()))
            ; a run of characters, the font's metrics kept while the font is
            (char? p)
-            (: (run p f t x h d)
+            (: (run q p f t x h d)
                 (char? p ?
-                   (: f2 (p 'font) t2 (f2 = f ? t (fnt J f2)) q (t2 'ci (p 'char)) i <>q
-                      (run (p 'link) f2 t2 (x + t2 'wd <q) (max h (t2 'ht (i // 16))) (max d (t2 'dp (i % 16)))))
-                   (pins dims 'x x 'h h 'd d, walk () p))
-               (run p 0 () (dims 'x) (dims 'h) (dims 'd)))
+                   (: f2 (p 'font) t2 (f2 = f ? t (fnt J f2)) c (t2 'ci (p 'char)) i <>c
+                      (run p (p 'link) f2 t2 (x + t2 'wd <c) (max h (t2 'ht (i // 16))) (max d (t2 'dp (i % 16)))))
+                   (pins dims 'x x 'h h 'd d, walk q p))
+               (run q p 0 () (dims 'x) (dims 'h) (dims 'd)))
            (p 'type @ t
-              (? (elem t [0 1 2 13])
+              (? (t >= 3 && t <= 5 && J 'adjust != ())
+                  (: nx (p 'link)
+                     _ (q = () ? (pin r 'list nx) (pin q 'link nx))
+                     (last x) (x 'link = () ? x (last (x 'link)))
+                     _ (? (t = 5) (pin (J 'adjust) 'link (p 'adj), pin J 'adjust (last (J 'adjust)))
+                          (pin p 'link (), pin (J 'adjust) 'link p, pin J 'adjust p))
+                     (walk q nx))
+                 (elem t [0 1 2 13])
                   ((t >= 2 ? 0 (p 'shift)) @ s
                      (pin dims 'x (dims 'x + p 'width),
                       grow 'h (p 'height - s), grow 'd (p 'depth + s),
@@ -115,20 +127,25 @@
            (order st @ o
               ((pins r 'gorder o 'gsign 1),
                st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
-               o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
+               o = 0 && r 'list != () ?
+                 (pin J 'badness (cb-badness x (st 0)), loose J r (J 'badness) (J 'params 'hbadness))))
            (x < 0)
            (order sh @ o
               ((pins r 'gorder o 'gsign 2),
                sh o != 0 ? (pin r 'gset (-x / sh o)) (pins r 'gsign 0 'gset 0.0),
-               (? (sh o < 0 - x && o = 0 && p0 != ())
+               (? (sh o < 0 - x && o = 0 && r 'list != ())
                   (: _ (pin J 'badness 1000000) _ (pin r 'gset 1.0)
                      over (0 - x - sh 0)
                      ; the overfull rule, where TeX would lay one
-                     (J 'params 'overfullrule > 0 && over > J 'params 'hfuzz ?
-                        (: (last q) (q 'link = () ? q (last (q 'link)))
-                           nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
-                           (pin (last p0) 'link nr))))
-                  (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
+                     (over > J 'params 'hfuzz || J 'params 'hbadness < 100 ?
+                        (J 'params 'overfullrule > 0 && over > J 'params 'hfuzz ?
+                           (: (last q) (q 'link = () ? q (last (q 'link)))
+                              nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
+                              (pin (last (r 'list)) 'link nr)),
+                         report J r "Overfull" over)))
+                  (o = 0 && r 'list != ())
+                   (pin J 'badness (cb-badness (0 - x) (sh 0)),
+                    J 'badness > J 'params 'hbadness ? (report J r "Tight" (J 'badness))))))),
         r))
    (cb-vpack J p h m) (cb-vpackage J p h m max-dimen)
    (cb-vpackage J p0 h m l)
@@ -161,14 +178,19 @@
            (order st @ o
               (pin r 'gorder o, pin r 'gsign 1,
                st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
-               o = 0 && p0 != () ? (pin J 'badness (cb-badness x (st 0)))))
+               o = 0 && p0 != () ?
+                 (pin J 'badness (cb-badness x (st 0)), loose J r (J 'badness) (J 'params 'vbadness))))
            (x < 0)
            (order sh @ o
               (pin r 'gorder o, pin r 'gsign 2,
                sh o != 0 ? (pin r 'gset ((0 - x) / sh o)) (pins r 'gsign 0 'gset 0.0),
                (? (sh o < 0 - x && o = 0 && p0 != ())
-                  (pin J 'badness 1000000, pin r 'gset 1.0)
-                  (o = 0 && p0 != ()) (pin J 'badness (cb-badness (0 - x) (sh 0))))))),
+                  (: _ (pin J 'badness 1000000) _ (pin r 'gset 1.0) over (0 - x - sh 0)
+                     (over > J 'params 'vfuzz || J 'params 'vbadness < 100 ?
+                        (report J r "Overfull" over)))
+                  (o = 0 && p0 != ())
+                   (pin J 'badness (cb-badness (0 - x) (sh 0)),
+                    J 'badness > J 'params 'vbadness ? (report J r "Tight" (J 'badness))))))),
         r))
 
    ; --- the DVI buffer (tex.web 595-601) --------------------------------------------------
