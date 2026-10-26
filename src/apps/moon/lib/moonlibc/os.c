@@ -204,6 +204,7 @@ static short const os_nr[][4] = {
   {NR_copy_file_range, NR_fb_copy_file_range, -1,   -1},   /* netbsd has none */
   {NR_nanosleep,     NR_fb_nanosleep,   430,   -1},
   {NR_getpid,        NR_fb_getpid,       20,   20},
+  {NR_getppid,       NR_fb_getppid,      39,   39},
   {NR_socket,        NR_fb_socket,      394,   97},
   {NR_socketpair,    NR_fb_socketpair,  135,  135},
   {NR_connect,       NR_fb_connect,      98,   98},
@@ -223,7 +224,7 @@ static short const os_nr[][4] = {
   {NR_execveat,      NR_fb_fexecve,     465,   -1},   /* the member builds fexecve(fd av ev) */
   {NR_exit,          NR_fb_exit,          1,    1},   /* exit and exit_group are one act here */
   {NR_wait4,         NR_fb_wait4,       449,    7},
-  /* getrusage: netbsd's __getrusage50 narrows suseconds_t. statfs: no row, the shapes disagree */
+  /* getrusage: netbsd goes to its __getrusage50 in sys/getrusage.c. statfs: no row, the shapes disagree */
   {NR_getrusage,     NR_fb_getrusage,    -1,  117},
   {NR_getrlimit,     NR_fb_getrlimit,   194,  194},
   {NR_setrlimit,     NR_fb_setrlimit,   195,  195},
@@ -243,6 +244,7 @@ static short const os_nr[][4] = {
   {NR_setuid,        NR_fb_setuid,       23,   23},
   {NR_setgid,        NR_fb_setgid,      181,  181},
   {NR_geteuid,       NR_fb_geteuid,      25,   25},
+  {NR_getegid,       NR_fb_getegid,      43,   43},
   {NR_setpgid,       NR_fb_setpgid,      82,   82},
   {NR_setsid,        NR_fb_setsid,      147,  147},
   {NR_setgroups,     NR_fb_setgroups,    80,   80},
@@ -315,9 +317,11 @@ LvLs(int, close, "close", int);
 LvLs(int, wait4, "wait4", int, int *, int, void *);
 LvLs(int, chdir, "chdir", char const *);
 LvLs(int, getpid, "getpid", void);
+LvLs(int, getppid, "getppid", void);
 LvLs(int, setuid, "setuid", unsigned);
 LvLs(unsigned, getuid, "getuid", void);
 LvLs(unsigned, geteuid, "geteuid", void);
+LvLs(unsigned, getegid, "getegid", void);
 LvLs(long, recvmsg, "recvmsg", int, void *, int);
 LvLs(long, sendmsg, "sendmsg", int, void const *, int);
 LvLs(long, recvfrom, "recvfrom", int, void *, unsigned long, int, void *, void *);
@@ -432,6 +436,7 @@ long __love_door(long n, long a, long b, long c, long d, long e, long f) {
   case 23: r = __ls_setuid((unsigned) a); break;
   case 24: r = __ls_getuid(); break;
   case 25: r = __ls_geteuid(); break;
+  case 43: r = __ls_getegid(); break;
   case 27: r = __ls_recvmsg(ia, pb, ic); break;
   case 28: r = __ls_sendmsg(ia, pb, ic); break;
   case 29: r = __ls_recvfrom(ia, pb, (unsigned long) c, id, pe, (void *) f); break;
@@ -439,6 +444,7 @@ long __love_door(long n, long a, long b, long c, long d, long e, long f) {
   case 31: r = __ls_getpeername(ia, pb, pc); break;
   case 32: r = __ls_getsockname(ia, pb, pc); break;
   case 37: r = __ls_kill(ia, ib); break;
+  case 39: r = __ls_getppid(); break;
   case 42: r = __ls_pipe(pa); break;
   case 46: r = __ls_sigaction(ia, pb, pc); break;
   case 47: r = __ls_getgid(); break;
@@ -597,8 +603,18 @@ struct __nb_siginfo { int signo, code, err;
 static int os_faultlane(int s, long code) {
   return (s == SIGILL || s == SIGTRAP || s == SIGFPE || s == SIGBUS || s == SIGSEGV)
          && code > 0 && code < 0x80; }
-/* si_code's sender band; the fault codes agree on all three kernels */
-static long os_sicode(long c) {
+/* a fault's si_code as linux numbers it: freebsd swaps FPE_INTDIV and FPE_INTOVF, macos orders
+ * its FPE and ILL codes its own way; SEGV, BUS and TRAP agree on all four */
+static long os_faultcode(int s, long c) {
+  static signed char const fbfpe[] = {0, 2, 1}, mfpe[] = {0, 3, 4, 5, 6, 7, 8, 1, 2},
+                           mill[] = {0, 1, 4, 5, 2, 3, 6, 7, 8};
+  if (__love_osv == 2 && s == SIGFPE && c <= 2) return fbfpe[c];
+  if (__love_osv == 4 && s == SIGFPE && c <= 8) return mfpe[c];
+  if (__love_osv == 4 && s == SIGILL && c <= 8) return mill[c];
+  return c; }
+/* si_code's sender band, and a fault's code */
+static long os_sicode(int s, long c) {
+  if (os_faultlane(s, c)) return os_faultcode(s, c);
   if (__love_osv == 2 || __love_osv == 4) switch (c) {
     case 0x10001: return 0;      /* SI_USER */
     case 0x10002: return -1;     /* SI_QUEUE */
@@ -619,14 +635,14 @@ void __love_sicanon(void const *n, siginfo_t *o) {
   if (__love_osv == 2 || __love_osv == 4) {   /* macos keeps freebsd's head and its sender band */
     struct __fb_siginfo const *f = n;
     o->si_signo = (int) __love_sigcan(f->signo), o->si_errno = f->err;
-    o->si_code = (int) os_sicode(f->code);
+    o->si_code = (int) os_sicode(o->si_signo, f->code);
     if (os_faultlane(o->si_signo, o->si_code)) o->si_addr = f->addr;
     else { o->si_pid = f->pid, o->si_uid = f->uid;
            if (o->si_signo == SIGCHLD) o->si_status = f->status; } }
   else if (__love_osv == 3) {
     struct __nb_siginfo const *b = n;
     o->si_signo = (int) __love_sigcan(b->signo), o->si_errno = b->err;
-    o->si_code = (int) os_sicode(b->code);
+    o->si_code = (int) os_sicode(o->si_signo, b->code);
     if (os_faultlane(o->si_signo, o->si_code)) o->si_addr = b->u.addr;
     else { o->si_pid = b->u.chld.pid, o->si_uid = b->u.chld.uid;
            if (o->si_signo == SIGCHLD) o->si_status = b->u.chld.status; } }

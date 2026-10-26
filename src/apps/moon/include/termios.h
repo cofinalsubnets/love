@@ -27,6 +27,8 @@ struct termios {
 #define IEXTEN 32768
 #define VTIME   5
 #define VMIN    6
+#define VSTART  8
+#define VSTOP   9
 #define TCIFLUSH  0
 #define TCOFLUSH  1
 #define TCIOFLUSH 2
