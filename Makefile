@@ -337,6 +337,8 @@ holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/lov
   src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/macho.l
+# the kernel's link under its script: kore's alone, mooncc never reads it
+holo_klink = src/love/holo/lds.l src/love/holo/klink.l
 # the compiler over them
 moon_mid = src/apps/moon/floor.l src/apps/moon/ctab.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/cgram.l \
   src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
@@ -360,7 +362,7 @@ crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/s
   src/apps/x11.l src/apps/manifest/manifest.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/doom.l src/apps/droid/droid.l src/apps/open.l src/apps/lupa.l src/apps/mc.l src/apps/help.l \
   src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/tuner.l src/apps/mitty/saver.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l
-korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(kore_arc) $(kore_net)
+korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_klink) $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
 # `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
@@ -396,7 +398,7 @@ $(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(lov
 	@$(love0) -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
-            $(holo_obj) src/love/holo/copy.l $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
+            $(holo_obj) src/love/holo/copy.l $(holo_klink) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \

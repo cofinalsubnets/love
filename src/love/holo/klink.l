@@ -1,14 +1,16 @@
 ; src/love/holo/klink.l -- holo's link under a linker script, at a kernel's scale: every section
 ; kept by name and flags, placed by the script (lds.l), relocated, laid as ld.lld lays a
-; -shared -Bsymbolic image. load with -l after lds.l; borrows holo's field encoders. elf64,
+; -shared -Bsymbolic image. after lds.l in module holo, on its field encoders. elf64,
 ; little-endian, aarch64 first.
 ;
 ;   (kl-ar path)          -> the members of an archive, thin or whole: [(name bytes) ..] in
 ;                            header order; the symbol index is not read
 ;   (kl-read id bytes)    -> one relocatable object as a tablet, see below
+;   (kl-banner id text)   -> an object of one .comment line, for the linker to sign with
 
-(borrow 'holo)
+(module 'holo
 (borrow 'posix)
+(borrow 'bytes)
 (:
    (kl-u16 s i) (rdle s i 2)
    (kl-u32 s i) (rdle s i 4)
@@ -84,6 +86,12 @@
                        (r 1 = 9) (scare 'klink-rel id)
                        0))))
        {'id id 'src s 'shnum shnum 'sec sec 'syms syms 'nsym nsym 'rela rela})
+
+   ; the linker's own .comment line, an object after every other, as ld.lld adds its banner
+   (kl-banner id t)
+    (: s (string (map (i \ t i) ^#t + [0]))
+       {'id id 'src s 'shnum 2 'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".comment" 1 48 0 #s 1 1 0 0]}
+        'syms {0 ["" 0 0 0 0 0 0]} 'nsym 1 'rela {}})
 
    ;; --- glob: * ? [set] [!set] [^set], over a whole name
    (kl-glob p s)
@@ -244,6 +252,66 @@
    (kl-not a) (kl-m64 - 1 - kl-w a)
    (kl-al v a) (? (a < 2) v (: r (v % a) (? (r = 0) v (v + a - r))))   ; align up
 
+   ;; --- xxh3_64 with seed 0, lld's piece hash: its low word's top five bits pick a merge shard
+   kl-xsec (string [184 254 108 57 35 164 75 190 124 1 129 44 247 33 173 28 222 212 109 233 131 144 151 219
+                  114 64 164 164 183 179 103 31 203 121 230 78 204 192 229 120 130 90 208 125 204 255 114 33
+                  184 8 70 116 247 67 36 142 224 53 144 230 129 58 38 76 60 40 82 187 145 195 0 203
+                  136 208 101 139 27 83 46 163 113 100 72 151 162 13 249 78 56 25 239 70 169 222 172 216
+                  168 250 118 63 227 156 52 63 249 220 187 199 199 11 79 29 138 81 224 75 205 180 89 49
+                  200 159 126 201 217 120 115 100 234 197 172 131 52 211 235 195 197 129 160 255 250 19 99 235
+                  23 13 221 81 183 240 218 73 211 22 85 38 41 212 104 158 43 22 190 88 125 71 161 252
+                  143 248 184 209 122 208 49 206 69 203 58 143 149 22 4 40 175 215 251 202 187 75 64 126])
+   kl-xp1 11400714785074694791 kl-xp2 14029467366897019727 kl-xp3 1609587929392839161
+   kl-xp4 9650029242287828579 kl-xp5 2870177450012600261
+   kl-xmx1 1609587791953885689 kl-xmx2 11507291218515648293
+   (kl-xm a b) (kl-w (a * b))
+   (kl-xf a b) (: p (a * b) (kl-xor (p % kl-m64) (p // kl-m64)))         ; 128-bit product, folded
+   (kl-xr h n) (kl-xor h (h // (2 ** n)))
+   (kl-xrot h r) (kl-w (h * (2 ** r)) + h // (2 ** (64 - r)))
+   (kl-xsw x) (foldl (\ a i (a * 256 + x // (256 ** i) % 256)) 0 ^8)
+   (kl-xav h) (kl-xr (kl-xm (kl-xr h 37) kl-xmx1) 32)
+   (kl-x64av h) (kl-xr (kl-xm (kl-xr (kl-xm (kl-xr h 33) kl-xp2) 29) kl-xp3) 32)
+   (kl-xrrmx h n) (: a (kl-xm (kl-xor h (kl-xor (kl-xrot h 49) (kl-xrot h 24))) kl-xmx2)
+                     b (kl-xm (kl-xor a (kl-w (a // (2 ** 35) + n))) kl-xmx2)
+                     (kl-xr b 28))
+   (kl-xxh s)
+    (: n #s k kl-xsec (r64 t i) (rdle t i 8)
+       (mix i j) (kl-xf (kl-xor (r64 s i) (r64 k j)) (kl-xor (r64 s (i + 8)) (r64 k (j + 8))))
+       (mixes l) (foldl (\ a p (a + mix <p <>p)) 0 l)
+       (? (n = 0) (kl-x64av (kl-xor (r64 k 56) (r64 k 64)))
+          (n < 4) (kl-x64av (kl-xor (s 0 * 65536 + s (n // 2) * 16777216 + s (n - 1) + n * 256)
+                                    (kl-xor (rdle k 0 4) (rdle k 4 4))))
+          (n <= 8) (kl-xrrmx (kl-xor (rdle s (n - 4) 4 + rdle s 0 4 * kl-m32) (kl-xor (r64 k 8) (r64 k 16))) n)
+          (n <= 16) (: lo (kl-xor (r64 s 0) (kl-xor (r64 k 24) (r64 k 32)))
+                       hi (kl-xor (r64 s (n - 8)) (kl-xor (r64 k 40) (r64 k 48)))
+                       (kl-xav (kl-w (n + kl-xsw lo + hi + kl-xf lo hi))))
+          (n <= 128) (kl-xav (kl-w (n * kl-xp1 + mixes (cats [[[0 0] [(n - 16) 16]]
+                                                             (? (n > 32) [[16 32] [(n - 32) 48]] ())
+                                                             (? (n > 64) [[32 64] [(n - 48) 80]] ())
+                                                             (? (n > 96) [[48 96] [(n - 64) 112]] ())]))))
+          (n <= 240) (: a (kl-xav (kl-w (n * kl-xp1 + mixes (map (i \ [(16 * i) (16 * i)]) ^8))))
+                        (kl-xav (kl-w (a + mixes (map (i \ [(16 * i) (16 * (i - 8) + 3)]) (drop 8 ^(n // 16)))
+                                       + mix (n - 16) 119))))
+          (kl-xlong s n)))
+   ; over 240 bytes: eight lanes over 64-byte stripes, scrambled every 1024
+   (kl-xlong s n)
+    (: k kl-xsec (r64 t i) (rdle t i 8)
+       (stripe acc p j)
+        (: dv (map (i \ r64 s (p + 8 * i)) ^8)
+           (map (i \ (: d (kl-xor (dv i) (r64 k (j + 8 * i)))
+                        (kl-w (acc i + dv (i ^ 1) + (d % kl-m32) * (d // kl-m32)))))
+                ^8))
+       (stripes acc p m) (foldl (\ a q (stripe a (p + 64 * q) (8 * q))) acc ^m)
+       (scram acc) (map (i \ (: a (acc i) (kl-xm (kl-xor (kl-xr a 47) (r64 k (128 + 8 * i))) 2654435761))) ^8)
+       nb ((n - 1) // 1024)
+       a0 (foldl (\ a b (scram (stripes a (1024 * b) 16)))
+                 [3266489917 kl-xp1 kl-xp2 kl-xp3 kl-xp4 2246822519 kl-xp5 2654435761] ^nb)
+       a1 (stripes a0 (1024 * nb) ((n - 1 - 1024 * nb) // 64))
+       a2 (stripe a1 (n - 64) 121)
+       (kl-xav (kl-w (foldl (\ r i (r + kl-xf (kl-xor (a2 (2 * i)) (r64 k (11 + 16 * i)))
+                                              (kl-xor (a2 (2 * i + 1)) (r64 k (19 + 16 * i)))))
+                            (n * kl-xp1) ^4))))
+
    ;; --- the script's expressions, over a layout env:
    ;     'dot, 'sv script symbols, 'osv output sections by name -> [addr size lma align],
    ;     'gv a fn nom -> an object symbol's value or ()
@@ -290,8 +358,9 @@
        (foldl (\ a x (kl-named x a)) acc >e))
 
    ;; --- merging: an output section's SHF_MERGE inputs of one flags, entsize and, for strings,
-   ;     align are one synthetic section at the first's place, each distinct piece once, in
-   ;     first-seen order. answers 'ms id -> {'size 'align 'flags 'entsize 'type 'tab piece -> off}
+   ;     align are one synthetic section at the first's place, each distinct piece once: 32
+   ;     shards by the piece's hash, first-seen within each, laid at the group's final align.
+   ;     answers 'ms id -> {'size 'align 'flags 'entsize 'type 'tab piece -> off}
    ;     and 'im isec key -> [id [[start off] ..]]
    (kl-pieces s off size e str)
     (: end (off + size)
@@ -309,8 +378,8 @@
            (find k) (: (go l) (? (atom? l) -1 (<(<l) = k) (<>(<l)) (go >l)) (go (cur 'l)))
            (fresh k r) (: id (nid 'n)
                           _ (pin nid 'n (id + 1), pin cur 'l ([k id] . cur 'l))
-                          _ (pin ms id {'size 0 'align (r 5) 'palign (r 5) 'flags (r 2) 'entsize (r 6)
-                                        'type (r 1) 'tab {}})
+                          _ (pin ms id {'size 0 'align (r 5) 'flags (r 2) 'entsize (r 6)
+                                        'type (r 1) 'tab {} 'sh {}})
                           id)
            (step acc x)
             (? (<x != 'isec) (x . acc)
@@ -322,15 +391,24 @@
                         id (? (f >= 0) f (fresh k r))
                         m (ms id) tab (m 'tab) src (ob 'src)
                         _ (pin m 'align (max (m 'align) (r 5)))
-                        (place p) (: key (snip src <p <>p) o (peep tab key -1)
-                                     (? (o >= 0) [(<p - r 3) o]
-                                        (: o (kl-al (m 'size) (m 'palign))
-                                           _ (pin tab key o, pin m 'size (o + <>p - <p))
-                                           [(<p - r 3) o])))
+                        e (r 6)
+                        ; the hash leaves a string's terminator out
+                        (place p) (: key (snip src <p <>p)
+                                     _ (? (peep tab key ()) ()
+                                          (: h (kl-xxh (? str (snip src <p (<>p - e)) key)) k (h % kl-m32 // 134217728)
+                                             (pin tab key 1, pin (m 'sh) k (key . peep (m 'sh) k ()))))
+                                     [(<p - r 3) key])
                         _ (pin im (oi * 65536 + si) [id (map place (kl-pieces src (r 3) (r 4) (r 6) str))])
                         (? (f >= 0) acc (['msec id] . acc))))))
            (pin t 'steps (rev (foldl step () (t 'steps)))))
        _ (each outs one)
+       (lay m) (: a (m 'align) tab (m 'tab)
+                  (put1 o key) (: q (kl-al o a) _ (pin tab key q) (q + #key))
+                  (shard o k) (: l (peep (m 'sh) k ()) (? (two? l) (foldl put1 (kl-al o a) (rev l)) o))
+                  (pin m 'size (foldl shard 0 ^32)))
+       _ (each (keys ms) (id \ lay (ms id)))
+       _ (each (keys im) (k \ (: v (im k) tab (ms <v 'tab)
+                                 (pin im k [<v (map (q \ [<q (tab (q 1))]) (v 1))]))))
        {'ms ms 'im im})
 
    ;; --- layout: the script's commands in order, SECTIONS inline, in passes until every
@@ -511,7 +589,10 @@
    ;; --- emission. pieces are texts and byte lists, laid in file order
    kl-z64 (cask (ld-zeros 65536))
    (kl-zp n acc) (? (n <= 0) acc (n <= 65536) (snip kl-z64 0 n . acc) (kl-zp (n - 65536) (kl-z64 . acc)))
-   (kl-le n w) (: u (kl-w n) (map (i \ (u // 256 ** i) % 256) ^w))
+   ; n's low w bytes, little-endian; one split into 32-bit halves, then shifts
+   (kl-le n w)
+    (: u (kl-w n) lo (u % 4294967296) hi (u // 4294967296)
+       (map (i \ (? (i < 4) ((lo >> (8 * i)) & 255) (i < 8) ((hi >> (8 * (i - 4))) & 255) 0)) ^w))
    ; .rela.dyn: RELATIVE first, then the weak ABS64s, each by address
    (kl-rela lk dy)
     (: isa (lk 'env 'isa)
@@ -642,7 +723,7 @@
                     (peep und nm 0 > 0) (pin glo 'l (ent nm 0 0 (und nm * 16) 0 0 . glo 'l))
                     0))))
        _ (each names gl)
-       locs (foldl (\ a oi (a + rev (groups oi))) () (rev (gord 'l)))
+       locs (cats (map (oi \ rev (groups oi)) (rev (gord 'l))))
        es (locs + rev (glo 'l))
        (row e) (cask (kl-le <e 4 + [(e 3) (e 4)] + kl-le (e 5) 2 + kl-le (e 1) 8 + kl-le (e 2) 8))
        [(#locs + 1) ([(kl-le 0 24)] + map row es) (str 'n) ("\0" . rev (str 'l))])
@@ -715,3 +796,4 @@
        _ (close q)
        (shoff + 64 * shnum))
 )
+) ; module 'holo

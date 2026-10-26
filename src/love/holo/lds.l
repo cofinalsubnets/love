@@ -1,5 +1,5 @@
-; src/love/holo/lds.l -- a GNU ld script read into love data, for holo's link to lay. load with
-; -l after the prel; it only parses, the layout reads what it answers.
+; src/love/holo/lds.l -- a GNU ld script read into love data, for holo's link to lay. part of module holo,
+; baked after link.l; it only parses, the layout reads what it answers.
 ;
 ;   (lds-read text) -> the commands, in order:
 ;     ('entry "sym")  ('set "sym" op e)  ('provide "sym" e hidden?)  ('assert e "msg")
@@ -15,6 +15,7 @@
 ; `___ksymtab+*` stays one word. an expression re-lexes its words into numbers, names and
 ; operators.
 
+(module 'holo
 (:
    (lds-sp? c) (c = 32 || c = 9 || c = 10 || c = 13 || c = 12)
    (lds-punc? c) (elem c '(40 41 123 125 59 44))      ; ( ) { } ; ,
@@ -248,3 +249,4 @@
              (w = "OUTPUT_FORMAT") (: c (lds-call ws) (lds-top (lds-semi <>c) (['format (lds-unq <<c)] . acc)))
              (: r (lds-sitem ws) (lds-top >r (? (<<r = 'nop) acc (<r . acc)))))))
    (lds-read s) (lds-top (lds-words s) ()))
+) ; module 'holo

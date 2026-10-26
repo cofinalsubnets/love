@@ -1,5 +1,6 @@
 ; test/law/lds.l -- the ld script reader: words, expressions, statements, output sections
 
+(borrow 'holo)
 (: (ldx s) (lds-x (lds-words s))                      ; one expression
    (ldsec s) (: r (lds-read ("SECTIONS { " + s + " }"))  (<>(<r)))   ; SECTIONS' items
    (ldo s) <>(<(ldsec s))                               ; the first output section's tablet
