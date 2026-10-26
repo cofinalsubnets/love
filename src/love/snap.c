@@ -95,15 +95,13 @@ static uintptr_t image_objsize(struct g *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);
  return (uintptr_t)(term - (word*) p) + 1; }
-// the host nif slice: a fixed reservation for the link-order love_nifs bracket, indexed by
-// position -- so its order is image contract, checked by name in image_fp
-#define ImageNHost 256u
-// the kernel's bracket (kmain.c's knifs) rides behind the host's; a link without one answers none
+// the host nif slice: the link-order love_nifs bracket, indexed by position -- so its order
+// and count are image contract, checked by name in image_fp. the kernel's bracket (kmain.c's
+// knifs) rides behind the host's; a link without one answers none
 uintptr_t knifs_slice(struct def const **s);
 static love_inline uintptr_t image_nhost(void) {
  struct def const *ks;
- uintptr_t n = (uintptr_t)(__stop_love_nifs - __start_love_nifs) + knifs_slice(&ks);
- return n < ImageNHost ? n : ImageNHost; }
+ return (uintptr_t)(__stop_love_nifs - __start_love_nifs) + knifs_slice(&ks); }
 static love_inline struct def const *image_host_def(uintptr_t k) {
  uintptr_t nh = (uintptr_t)(__stop_love_nifs - __start_love_nifs);
  struct def const *ks;
@@ -244,6 +242,7 @@ uint64_t image_sum(void const *p, uintptr_t n, uint64_t h) {
 struct img_ctx {
  struct g *g;
  word *base, *hp;
+ uintptr_t nlvm, cb;              // the lvm lane's width and the code lane's floor
  uintptr_t cur_off, cur_ap;       // the object being encoded: offset + its hot
  int fail;                        // sticky
  uintptr_t bad[3 * 2]; int nbad;  // (offset, value, ap) of the first refusals
@@ -320,41 +319,41 @@ static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *v
 //   native code   -> CodeBase + 2*offset       a blob's place in the segment
 // no lane for a raw address: it refuses. the lanes start at a constant floor, not the blob's
 // length, so one live set is one byte string under any budget. fixnums are odd, lanes even
-#define ImageNLvm ((uintptr_t)(countof(image_extra_aps) + def1_n + ImageNHost))
+// widths follow this link's nif count, so a codec walk reads them once, from its img_ctx or img_dec
 #define ImageNImm ((uintptr_t) countof(image_immortals))
 #define ImageCellW 16u   /* max nif-cell span (words) an interior link can sit in */
+static love_inline uintptr_t image_nlvm(void) { return countof(image_extra_aps) + def1_n + image_nhost(); }
 // the bare-fn lane: one slot per nif cell, love_def1's then the host slice's
-#define ImageNFn ((uintptr_t)(def1_n + ImageNHost))
+static love_inline uintptr_t image_nfn(void) { return def1_n + image_nhost(); }
 // an out-of-pool word's index, -1 for none: a hash keys a binary address by it, so a table
 // orders alike in every build of one source
 intptr_t image_seat(word v) {
  intptr_t i = image_ap_index((intptr_t) v);
  if (i >= 0) return i;
- if ((i = image_imm_index(v)) >= 0) return (intptr_t) ImageNLvm + i;
- return (i = image_fn_index((intptr_t) v)) >= 0 ? (intptr_t) (ImageNLvm + ImageNImm) + i : -1; }
-// the lane floor, above any heap this codec encodes (a bigger dump refuses); in the preprocessor,
-// as mooncc does not fold a sizeof ternary on this hot path
+ if ((i = image_imm_index(v)) >= 0) return (intptr_t) image_nlvm() + i;
+ return (i = image_fn_index((intptr_t) v)) >= 0 ? (intptr_t) (image_nlvm() + ImageNImm) + i : -1; }
+// the lane floor, above any heap this codec encodes (a bigger dump refuses)
 #if UINTPTR_MAX > 0xffffffffu
 #define ImageIdxBase ((uintptr_t) 1 << 40)
 #else
 #define ImageIdxBase ((uintptr_t) 1 << 27)
 #endif
 // a word naming a native's code encodes as its segment offset, doubled so parity holds
-#define ImageCodeBase (ImageIdxBase + 2 * (ImageNLvm + ImageNImm) \
-                                    + 2 * ImageNLvm * ImageCellW + 2 * ImageNFn)
+static love_inline uintptr_t image_code_base(uintptr_t nlvm, uintptr_t nfn) {
+ return ImageIdxBase + 2 * (nlvm + ImageNImm) + 2 * nlvm * ImageCellW + 2 * nfn; }
 #define ImageCodeMax ((uintptr_t) 1 << 28)   /* bytes of code an image can carry */
 // a root back: one naming past the pool or a table, or an empty slot, sets *bad
 static word image_root_dec(uint64_t tag, uint64_t val, word *base, uintptr_t nw, int *bad) {
  if (tag == 0) return (word) val;
  if (tag == 1 && val < nw) return word(base + val);
  if (tag == 3 && val < ImageNImm) return image_immortals[val];
- word r = tag == 2 && val < ImageNLvm ? (word) image_ap_resolve((intptr_t) val) : 0;
+ word r = tag == 2 && val < image_nlvm() ? (word) image_ap_resolve((intptr_t) val) : 0;
  if (!r) *bad = 1;
  return r; }
 
 // the instruction table for love's pick/place, so no code address lands in a love value.
 // shares the image's numbering, but only for what an op cell can hold: a def1 row carrying a
-// nif's run is that nif's value; its body fn rides the bare-fn lane behind ImageNLvm
+// nif's run is that nif's value; its body fn rides the bare-fn lane behind the lvm lane
 intptr_t op_index(intptr_t ap) {
 #if !defined(__arm__)
  // a shortcut, not the answer: on thumb every fn address is odd, so charms are asked too
@@ -365,7 +364,7 @@ intptr_t op_index(intptr_t ap) {
                           | (nif_cell((union u const*) ap) ? 0 : OpMask(OpDef)));
  if (r < 0) return -1;
  uintptr_t k = op_kind(r), i = op_idx(r);
- return (intptr_t) (k == OpExtra ? i : k == OpDef ? countof(image_extra_aps) + i : ImageNLvm + i); }
+ return (intptr_t) (k == OpExtra ? i : k == OpDef ? countof(image_extra_aps) + i : image_nlvm() + i); }
 // the nif cell whose run a body fn is, 0 for none: a thread names a nif by that fn
 intptr_t fn_nif(intptr_t f) {
  intptr_t r = op_seek(f, OpMask(OpFn));
@@ -378,9 +377,10 @@ intptr_t def_index(intptr_t x) {
  return r < 0 ? -1 : (intptr_t) op_idx(r); }
 intptr_t op_resolve(intptr_t i) {
  if (i < 0) return 0;
- if ((uintptr_t) i < ImageNLvm) return image_ap_resolve(i);
- i -= (intptr_t) ImageNLvm;
- return (uintptr_t) i < ImageNFn ? image_fn_resolve(i) : 0; }
+ uintptr_t nlvm = image_nlvm();
+ if ((uintptr_t) i < nlvm) return image_ap_resolve(i);
+ i -= (intptr_t) nlvm;
+ return (uintptr_t) i < image_nfn() ? image_fn_resolve(i) : 0; }
 // a heap byte offset -> its place in the blob; the identity where the layout is the heap's own
 static uintptr_t img_remap(struct img_ctx const *x, uintptr_t bo) {
  if (!x->ob) return bo;
@@ -422,21 +422,21 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
  if (idx >= 0) return (intptr_t)(hb + 2 * (uintptr_t) idx);
  if (oddp(v)) {
   intptr_t fj = image_fn_index(v);                                               // a bare nif fn, on thumb
-  if (fj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
-                                    + 2 * ImageNLvm * ImageCellW
+  if (fj >= 0) return (intptr_t)(hb + 2 * (x->nlvm + ImageNImm)
+                                    + 2 * x->nlvm * ImageCellW
                                     + 2 * (uintptr_t) fj);
   return v; }
  if (v >= (intptr_t) x->base && v < (intptr_t) x->hp) return (intptr_t) img_remap(x, (uintptr_t) (v - (intptr_t) x->base));
  if (x->g && code_in(x->g, (uintptr_t) v)) {
   intptr_t off = img_code_off(x, (uintptr_t) v);
   if (off < 0 || (uintptr_t) off >= ImageCodeMax) return img_refuse(x, v);
-  return (intptr_t)(ImageCodeBase + 2 * (uintptr_t) off); }
+  return (intptr_t)(x->cb + 2 * (uintptr_t) off); }
  intptr_t ii = image_imm_index((word) v);
- if (ii >= 0) return (intptr_t)(hb + 2 * ImageNLvm + 2 * (uintptr_t) ii);
+ if (ii >= 0) return (intptr_t)(hb + 2 * x->nlvm + 2 * (uintptr_t) ii);
  // the bare-fn lane again, for even-pointer arches
  intptr_t fj = image_fn_index(v);
- if (fj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
-                                   + 2 * ImageNLvm * ImageCellW
+ if (fj >= 0) return (intptr_t)(hb + 2 * (x->nlvm + ImageNImm)
+                                   + 2 * x->nlvm * ImageCellW
                                    + 2 * (uintptr_t) fj);
  // an interior pointer into a love_def1 nif cell (a baked partial's curry link): the owner
  // is the greatest base <= v
@@ -446,28 +446,28 @@ static intptr_t img_encode(struct img_ctx *x, intptr_t v) {
   uintptr_t x = (uintptr_t) love_def1[j].v.x, d = (uintptr_t) v - x;
   if ((uintptr_t) v > x && d < ImageCellW * sizeof(word) && !(d % sizeof(word))
       && (bj < 0 || x > (uintptr_t) love_def1[bj].v.x)) bj = (intptr_t) j, boff = d / sizeof(word); }
- if (bj >= 0) return (intptr_t)(hb + 2 * (ImageNLvm + ImageNImm)
+ if (bj >= 0) return (intptr_t)(hb + 2 * (x->nlvm + ImageNImm)
                                    + 2 * (((uintptr_t)(countof(image_extra_aps) + (uintptr_t) bj)) * ImageCellW + boff));
  return img_refuse(x, v); }                     // a raw binary address
 // the decode ladder: odd, heap offset, lvm index and immortal are nearly all decodes, so the
-// cold tail stays out of line. b1 caches the lvm lane's top, as def1_n is link-time and
-// unfolded. one argument, not four, for the inline sites. lazy: a native wakes as lvm_lazy,
-// seated at first call. bad: a cold lane named nothing this binary has
-struct img_dec { word *base; char *code; uintptr_t b1, cn; int lazy, bad; };
+// cold tail stays out of line. b1 caches the lvm lane's top, nlvm and cb the rest, as the
+// widths are link-time and unfolded. one argument, not four, for the inline sites. lazy: a
+// native wakes as lvm_lazy, seated at first call. bad: a cold lane named nothing this binary has
+struct img_dec { word *base; char *code; uintptr_t b1, cn, nlvm, cb; int lazy, bad; };
 static love_noinline intptr_t img_decode_cold(intptr_t v, struct img_dec *d) {
  uintptr_t const hb = ImageIdxBase;
  uintptr_t uv = (uintptr_t) v, r;
- if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW) {   // nif-cell interior
-  uintptr_t k = (uv - hb - 2 * (ImageNLvm + ImageNImm)) / 2;
+ uintptr_t const nl = d->nlvm;
+ if (uv < hb + 2 * (nl + ImageNImm) + 2 * nl * ImageCellW) {                     // nif-cell interior
+  uintptr_t k = (uv - hb - 2 * (nl + ImageNImm)) / 2;
   if (!(r = (uintptr_t) image_ap_resolve((intptr_t)(k / ImageCellW)))) d->bad = 1;
   return (intptr_t) (r + (k % ImageCellW) * sizeof(word)); }
- if (uv < hb + 2 * (ImageNLvm + ImageNImm) + 2 * ImageNLvm * ImageCellW
-         + 2 * ImageNFn) {                                                      // bare-fn lane: the cell's code slot
-  if (!(r = (uintptr_t) image_fn_resolve((intptr_t)((uv - hb - 2 * (ImageNLvm + ImageNImm)
-                                                     - 2 * ImageNLvm * ImageCellW) / 2)))) d->bad = 1;
+ if (uv < d->cb) {                                                               // bare-fn lane: the cell's code slot
+  if (!(r = (uintptr_t) image_fn_resolve((intptr_t)((uv - hb - 2 * (nl + ImageNImm)
+                                                     - 2 * nl * ImageCellW) / 2)))) d->bad = 1;
   return (intptr_t) r; }
- if ((uv - ImageCodeBase) / 2 >= d->cn) return d->bad = 1, 0;                  // native code
- return (intptr_t)(d->code + (uv - ImageCodeBase) / 2); }
+ if ((uv - d->cb) / 2 >= d->cn) return d->bad = 1, 0;                            // native code
+ return (intptr_t)(d->code + (uv - d->cb) / 2); }
 
 static love_inline intptr_t img_decode(intptr_t v, struct img_dec *d) {
  if (oddp(v)) return v;
@@ -907,7 +907,9 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (!cb) { alloc(slots, 0); alloc(blob, 0); return NULL; }
  bool slotover = false;
  // every field spelled, not left to the compiler to zero
- struct img_ctx X = { g, base, hp, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, 0 }, *x = &X;
+ uintptr_t const nlvm = image_nlvm(), nfn = image_nfn();
+ struct img_ctx X = { g, base, hp, nlvm, image_code_base(nlvm, nfn), 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0,
+                      NULL, NULL, NULL, 0 }, *x = &X;
  unsigned char *fzm = hc_fzmap(g, base, hp);
  if (opt && opt->nhot) img_perm(x, fzm, nw, opt->hot, opt->nhot);
  uintptr_t j = 0;                                  // the object's index, for a hot-first seat
@@ -1186,7 +1188,8 @@ void *image_save2(struct g *g, uintptr_t *outlen, struct image_bad *bad, struct 
 // already seated when its head names it; the last object must end at hi. 0 refuses. its own
 // function: in img_wake's frame every value here spills
 static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_t cn, int lazy) {
- struct img_dec D = { base, code, ImageIdxBase + 2 * ImageNLvm, cn, lazy, 0 }, *d = &D;
+ uintptr_t const nlvm = image_nlvm(), nfn = image_nfn();
+ struct img_dec D = { base, code, ImageIdxBase + 2 * nlvm, cn, nlvm, image_code_base(nlvm, nfn), lazy, 0 }, *d = &D;
  // the chain lane: two words in three are a chain's, so its encoded head is tested first
  intptr_t ci = image_ap_index((intptr_t) lvm_chain);
  if (ci < 0) return 0;
@@ -1214,7 +1217,7 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_
   } else {                                                                        // the encoded terminator: its head's byte offset | tag
    word term = (word)(off * sizeof(word) + thread_tag); uintptr_t k = 1;
    uintptr_t kmax = hi - off;                                                     // a mis-decoded word0 must refuse, not march off the pool
-   if (d->lazy && evenp(w0) && (uintptr_t) w0 >= ImageCodeBase)                   // a native: its header's twin is its entry
+   if (d->lazy && evenp(w0) && (uintptr_t) w0 >= d->cb)                   // a native: its header's twin is its entry
     for (;; k++) {
      if (k >= kmax) return 0;
      if (o[k] == term) break;
