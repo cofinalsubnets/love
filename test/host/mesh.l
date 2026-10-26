@@ -187,5 +187,16 @@
    (gl k) (mesh-frame (mesh-view 40 24 [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0) pn [(mesh-tex 4 (\ x y wh))] [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nr 0.0 0.65) lr wr [0.0 0.0 0.0] nr 0.0 k ()))
    g1 (gl 1) g4 (gl 4)
  (test (0 <= amin g1) (0 <= amin g4) (+(map (k \ net (abs ((g1 >> k & 255) - (g4 >> k & 255)))) [0 8 16]) / (3.0 * #g1) < 8.0)))
+;; under a light with 'turn the sky is all round: by deep night each way below the eye's
+;; horizon shows as its mirror above, but where a cloud is; a star under it is lit
+(: nt (1.0 * 1790812800 + 1.0 * 3600.0) wt (sky-weather 0) ltf (sky-light (sky-sun nt 0.0 0.65) wt nt)
+   ltt (pin (sky-light (sky-sun nt 0.0 0.65) wt nt) 'turn [[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]])
+   n 2000 i (iota n) y (0.1 + 0.8 * (i + 0.5) / n) r (sqrt (1.0 - y * y)) dx (r * cos (i * 2.39996)) dz (r * sin (i * 2.39996))
+   (col lt dy) (sky-colour-of lt wt dx dy dz 0.0 0.0 nt)
+   (d2 p q) ((p - q) * (p - q)) (same a b) (net (d2 (a 0) (b 0) + d2 (a 1) (b 1) + d2 (a 2) (b 2) < 1e-12) / (1.0 * n))
+   ss {'x @(0.6) 'y @(-0.6) 'z @(0.53) 'b @(1.0) 'ph @(0.0) 'tint [1.0 1.0 1.0]}
+   (lit lt) (sky-stars! ss [@(0.0) @(0.0) @(0.0)] lt wt 0.0 0.0 nt 0.0 @(0) @ c (c 0 0))
+ (test (0.9 < same (col ltt y) (col ltt (0.0 - y))) (same (col ltf y) (col ltf (0.0 - y)) < 0.1)
+       (0.5 < lit ltt)))
 (test_fin ())
 (puts "mesh: ok\n")

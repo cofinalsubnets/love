@@ -6,7 +6,8 @@
 ; weather (sky-weather cover): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
 ; 'smog 0 (default) to 1, the sky and its light browned toward orange. a light with
 ; 'turn, the eye's axes in the world's, has the sky's clouds fixed in the world, far
-; off as the stars, not a deck over the eye: sky-lit's csun then sky-orb-cloud's
+; off as the stars, not a deck over the eye, and the sky all round, below the eye's
+; horizon too: sky-lit's csun then sky-orb-cloud's
 (module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-near sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow 'view)
@@ -120,6 +121,11 @@
    (face k) (: a (W ((k + 1) % 3)) b (W ((k + 2) % 3)) o (37.0 * (W k < 0.0) + 11.0 * k)
      (wt k * thick-fp wx mp (a * orb-k + o) (b * orb-k - o) sim fp))
    ((face 0 + face 1 + face 2) / ws))
+ ; ..the cloud down rays X Y Z as lt's sky draws it: the deck's, or under 'turn the world's
+ (sky-cloud-lt lt wx X Y Z ex ez sim) (peep lt 'turn () @ B
+   (? !(two? B) (sky-cloud wx X Y Z ex ez sim)
+      (: W (map (j \ X * B 0 j + Y * B 1 j + Z * B 2 j) ^3) mp (sky-maps ())
+         (clouded wx (haze (sat (0.5 + (orb-thick wx mp W sim 0.0 - edge wx sim) * 10.0)) (max Y (0.0 - Y)) wx sim)))))
  ; ..and the cloud over the sun, world way s, a soft edge
  (sky-orb-cloud wx s sim) (: mp (sky-maps ()) W (map (k \ gem-tray [1] [(1.0 * s k)]) ^3)
    (clouded wx (sat (0.5 + (orb-thick wx mp W sim 1.0 - edge wx sim) * 3.0)) 0))
@@ -161,7 +167,9 @@
  (paint lt wx dx dy dz ex ez sim far a) (: mp (sky-maps ())
    s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
    mu (dx * sx + dy * sy + dz * sz)
-   up (sat dy)
+   ; ..under a light with 'turn the sky is all round, as high below the eye's horizon as above
+   B (peep lt 'turn ()) dh (two? B ? (max dy (0.0 - dy)) dy)
+   up (sat dh)
    blue (cmix [0.55 0.7 0.9] [0.2 0.42 0.84] (sat (up * 1.3)))
    dark (c+ [0.012 0.016 0.04] (c* (0.06 * (1.0 - up)) [0.6 0.45 0.3]))
    warm (sat ((mu + 0.3) / 1.3))
@@ -169,7 +177,7 @@
    disc (sat ((mu - 0.9995) * 4000.0))
    halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
    sky0 (c+ (c+ (cmix dark blue (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
-   B (peep lt 'turn ()) fp (two? B ? (a * orb-k) (deck-fp a dy))
+   fp (two? B ? (a * orb-k) (deck-fp a dy))
    (th-of dx dy dz) (? (two? B) (orb-thick wx mp (map (j \ dx * B 0 j + dy * B 1 j + dz * B 2 j) ^3) sim fp)
                        (: d (deck-at dx dy dz ex ez sim) (thick-fp wx mp (d 0) (d 1) sim fp)))
    th (th-of dx dy dz)
@@ -177,7 +185,7 @@
    ts (: n 0.025 X (dx + n * sx) Y (dy + n * sy) Z (dz + n * sz) l (sqrt (X * X + Y * Y + Z * Z))
         (th-of (X / l) (Y / l) (Z / l)))
    ; ..the edge as wide as that spread: the share of the sample past it, not a fringe
-   cl0 (haze (sat (0.5 + (th - edge wx sim) / sqrt (0.0016 + 2.0 * sq (thick-sd fp)))) dy wx sim)
+   cl0 (haze (sat (0.5 + (th - edge wx sim) / sqrt (0.0016 + 2.0 * sq (thick-sd fp)))) dh wx sim)
    cl (clouded wx cl0)                          ; overcast: no sky through it
    ; ..the clouds: lit on the side toward the sun, darker the thicker, greyer the more of them
    ; ..and under smog the thick of them darker still and the thin lit through
@@ -219,7 +227,7 @@
  (sky-stars! ss c lt wx ex ez sim t0 ix) (: nt (sat (1.0 - lt 'day * 3.0))
    (nt <= 0.0 ? c
     (: X (ss 'x) Y (ss 'y) Z (ss 'z)
-       cl (sky-cloud wx X Y Z ex ez sim)
+       cl (sky-cloud-lt lt wx X Y Z ex ez sim)
        tw (sin (t0 * turns wx 'tper 0.9 + ss 'ph))
        v (ss 'b * (0.75 + 0.25 * tw) * nt * (1.0 - cl))
        (map (k \ peep (c k) ix 0.0 @ o (pin (c k) ix (o + (ss 'tint) k * v))) ^3))))
