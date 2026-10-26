@@ -1757,6 +1757,8 @@
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; what a static link never reads: symbol types and sizes, visibility, unwind rows
               (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
+              ; gas takes every undefined name as external already
+              (mn = ".extern") 0
               ; the ISA a line may use: every one this reader knows, always
               (elem mn '(".arch" ".arch_extension" ".cpu")) 0
               ; the x86 segment the lines after it run in: their operand and address widths
