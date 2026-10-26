@@ -11529,7 +11529,7 @@
                      ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law
                      an (peep (g 'aligns) nm 2 @ a (max (max a 2) (falgn g)))
                      pf (pfeof g nm)
-                     fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r))
+                     fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r) + [['label (fn-end nm)]])
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain
                      sc (peep (g 'sects) nm ())
                      _ (nm = "main" ? (pin g 'saw 1))

@@ -84,6 +84,17 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab" {print $3, $4, $5}')" = "36 OBJECT LOCAL" ] || fail "a file-scope static is not a local object symbol of its 36 bytes (modpost reads a table's name)"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+# a function's symbol carries its code's bytes, its next one's pad excluded (objtool walks a
+# function by them); gas's .size f, .-f the same, and the end label stays out of the symtab
+printf 'static int s(int a){ return a * 3 + 1; }\nint f(int a){ return s(a) + s(a + 1); }\n__attribute__((aligned(64))) int g(void){ return 2; }\n' > "$ho/.fsz.c"
+moonrun -fno-inline -c "$ho/.fsz.c" -o "$ho/.fsz.o" || fail "mooncc: sized functions"
+[ "$(readelf -sW "$ho/.fsz.o" | awk '$4 == "FUNC" && $3 > 0' | wc -l)" = 3 ] || fail "a function's symbol does not carry its code's size"
+set -- $(readelf -sW "$ho/.fsz.o" | awk '$8 == "f" || $8 == "g" {print $2, $3}' | sort)
+[ $((0x$1 + $2)) -lt $((0x$3)) ] || fail "a function's size runs into the next one's pad"
+printf '.text\n.globl h\n.type h, @function\nh:\n nop\n ret\n.size h, .-h\n.p2align 4\nk:\n ret\n.size k, . - k\n.globl m\nm:\n pause\n ret\n.type m STT_FUNC ; .set .L__sym_size_m, .-m ; .size m, .L__sym_size_m\n' > "$ho/.fsz.S"
+moonrun -c "$ho/.fsz.S" -o "$ho/.fszs.o" || fail "mooncc: an asm .size"
+[ "$(readelf -sW "$ho/.fszs.o" | awk '$8 == "h" || $8 == "k" || $8 == "m" {print $8, $3}' | sort | tr '\n' ' ')" = "h 2 k 1 m 3 " ] || fail "gas's .size f, .-f (or the kernel's SYM_END) does not size f"
+readelf -sW "$ho/.fszs.o" | grep -q ' end$' && fail "a function's end label reached the symtab"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"

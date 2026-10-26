@@ -101,6 +101,8 @@
                     (<ls 6 @ lb
                        (o-has? lb lbl ? [i (peep lb lbl 0)] (go >ls (i + 1)))))
        (go lanes 1))
+   ; a func symbol's size: its end label's offset less its own, in the same lane, else 0
+   (o-fsize lanes w nm) (o-where lanes (fn-end nm) @ e (two? e && <e = <w ? (<>e - <>w) 0))
    ; labels a relocation names that no lane defines, each an undef symbol; first-seen order
    (o-exts lanes rels)
     (: seen {}
@@ -257,13 +259,13 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (sec-exec? si ?
-                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) 0)   ; stb_local stt_func, +thumb bit
+                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) (o-fsize lanes [si off] (cap e)))   ; stb_local stt_func, +thumb bit
                                               (elf-sym32 (stroffs i) 0 1 si off 0))))      ; stb_local stt_object
                                  locs))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym32 (stroffs (nloc + i))
                                                      (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
-                                                     2 <w (<>w | tb) 0)))                   ; stt_func, +thumb bit
+                                                     2 <w (<>w | tb) (o-fsize lanes w fs))))   ; stt_func, +thumb bit
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
@@ -479,12 +481,12 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (secs (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? 2 1) <w <>w (x ? 0 (o-size ls)))))
+                                            (elf-sym (stroffs i) 0 (x ? 2 1) <w <>w (x ? (o-fsize lanes w ls) (o-size ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
-                                             2 <w <>w 0)))
+                                             2 <w <>w (o-fsize lanes w fs))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))

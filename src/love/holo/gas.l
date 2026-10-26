@@ -1722,9 +1722,13 @@
                   (goto (n = 0 ? b (b + string 1 + show n))
                         (two? r ? [<r <>r] (b = home ? htd (gf-dflt b)))))
               (mn = ".base64") (raw (catmap gf-b64 (gf-strs rest)))
-              ; what the pre-pass left: an alias, or a value over labels only .size reads
+              ; what the pre-pass left: an alias, or a value over labels only .size reads. the
+              ; kernel's SYM_END sizes f by `.set .L__sym_size_f, .-f`: f's end label lays here
               (elem mn '(".set" ".equ"))
-               (gf-ident? (xa-trim <>xs) ? (pin st 'alias ([(xa-unquote <xs) (xa-unquote <>xs)] . peep st 'alias ())) 0)
+               (: v (cats (split " " (xa-trim <>xs)))
+                  (? (gf-ident? v) (pin st 'alias ([(xa-unquote <xs) (xa-unquote <>xs)] . peep st 'alias ()))
+                     (starts? (xa-unquote <xs) ".L__sym_size_" && starts? v ".-") (emit [['label (fn-end (snip v 2 #v))]])
+                     0))
               ; exported, and bound weak: a strong definition elsewhere wins
               (mn = ".weak") (map xa-unquote xs @ ws (pin st 'globl (rev ws + st 'globl), pin st 'weak (ws + peep st 'weak ())))
               (mn = ".local") (pin st 'local (map xa-unquote xs + peep st 'local ()))
@@ -1755,8 +1759,12 @@
               (mn = ".previous") (st 'cur @ c (pin st 'cur (st 'prev), pin st 'prev c))
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
-              ; what a static link never reads: symbol types and sizes, visibility, unwind rows
-              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
+              ; .size f, .-f: an end label here, f's st_size; any other size goes unread
+              (mn = ".size")
+               (two? >xs && cats (split " " (xa-trim <>xs)) = ".-" + xa-unquote <xs ?
+                  (emit [['label (fn-end (xa-unquote <xs))]]) 0)
+              ; what a static link never reads: symbol types, visibility, unwind rows
+              (elem mn '(".type" ".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
               ; the ISA a line may use: every one this reader knows, always
               (elem mn '(".arch" ".arch_extension" ".cpu")) 0
               ; the x86 segment the lines after it run in: their operand and address widths

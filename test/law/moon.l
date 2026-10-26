@@ -211,10 +211,10 @@
 ; --- the gen-law kit: compile, cut one fn, count its traffic (a body-less `:` leaks to every block below) ---
 (: (cgn src) (cparse <>(clex src) @ r
               (okv? r ? (cgen <>r <>>r <>>>r <>>>>r () 'x64)))
-   ; one fn's own forms, label to the next align seam (the inliner copies bodies into main)
+   ; one fn's own forms, label to its end label or the next align seam (the inliner copies bodies into main)
    (fnf nm fs) (: (seek l) (atom? l ? () (<l = ['label nm] ? >l (seek >l)))
                   (take l) (? (atom? l) ()
-                              (<l = '(align 2)) ()
+                              (<l = '(align 2) || <l = ['label (fn-end nm)]) ()
                               (<l . take >l))
                   (take (seek fs)))
    (movs fs) #(filter (f \ two? f && <f = 'mov) fs)
@@ -264,7 +264,7 @@
       ; no r3 touch, so its save/restore sweeps; the default `return 0` tail is dead; main is a
       ; slotless leaf, so the frame link elides -- no push/mov/sub at entry, a bare ret at exit
       (ir = '((call main) (mov r6 r0) (li r0 60) (sys)
-              (align 2) (label main) (li r0 42) (ret)))
+              (align 2) (label main) (li r0 42) (ret)) + [['label (fn-end "main")]])
       (two? (cgn "int main() { int x=1; while (x<5) x++; return x; }"))
       ; a ret-position call tail-jumps: the epilogue is (jmp F), no (call F)
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; return rec(n-1); } int main(){ return rec(3); }"))

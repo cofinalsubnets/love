@@ -346,6 +346,9 @@
    (holo-bytes-at target prog org) (peep (assemble-org target prog org) 'bytes 0)
    (holo-str target prog) (string (holo-bytes target prog))
    (label-at res name)   (peep (peep res 'labels 0) name ())
+   ;; a function's end label, laid where its code stops, before the next one's pad: obj.l's st_size
+   (fn-end nm)  (intern ((string? nm ? nm (show nm)) + " end"))
+   (fn-end? s)  (ends? (show s) " end")
 
    ;; -- hex, for goldens and disassembly. --
    (hex1 d)  (snip "0123456789abcdef" d (d + 1))
