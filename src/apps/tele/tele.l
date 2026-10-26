@@ -88,8 +88,8 @@
      (s \ tl-accum nx (tl-val nx * 0 + peep s 'grad 0))))  ; broadcast g to x's shape
 
    ;; -- activations + loss --
-   ;; e^z is application: a tray applied to e exponentiates each cell
-   (tl-exp z) (z e)
+   ;; e^z, cell by cell
+   (tl-exp z) (e ** z)
 
    (sub a b) (: na (node a) nb (node b)
       (tl-op (tl-ew (-) (tl-val na) (tl-val nb))
