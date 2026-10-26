@@ -78,6 +78,9 @@ done
 # carries its size, a file-scope static is a local one, a block static keeps its section
 printf '#include <stdarg.h>\nint f(int n, ...){ va_list a; va_start(a, n); int r = va_arg(a, int); va_end(a); return r + n; }\n' > "$ho/.vns.c"
 moonrun -mno-sse -c "$ho/.vns.c" -o "$ho/.vns.o" || fail "mooncc -mno-sse refused a variadic function"
+# a name spelled like a float register is no float code
+printf 'int f815x(int a){ return a + 1; }\nint g(int a){ return f815x(a); }\n' > "$ho/.fnm.c"
+moonrun -mno-sse -c "$ho/.fnm.c" -o "$ho/.fnm.o" || fail "mooncc -mno-sse took a function named f815x for float code"
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nextern __typeof__(tab) tab_alias __attribute__((alias("tab")));\nint big[7] = {1};\nvoid push(void){ static int q __attribute__((section(".init.data"))) = 3; q++; }\n' > "$ho/.dsz.c"
 moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab_alias" {print $3}')" = 36 ] || fail "a data alias's symbol does not carry its table's 36 bytes"

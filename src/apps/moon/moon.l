@@ -1053,7 +1053,7 @@
    (xdie w) "cc: -x \(w) -- mooncc reads: c none assembler-with-cpp"
    ; a float register named anywhere in a function's forms (the xmm file, f0..f15)
    (fpuse? l) (? (two? l) (any fpuse? l)
-                 (name? l) (show l @ s (#s > 1 && s 0 = 102 && 48 <= s 1 && s 1 <= 57))
+                 (name? l) (show l @ s (#s > 1 && s 0 = 102 && all (i \ 48 <= s i <= 57) >^#s))
                  0)
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
