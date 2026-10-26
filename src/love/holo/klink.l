@@ -789,6 +789,19 @@
    ;     permissions, a new one at each AT(); an empty section opens none. a load's first
    ;     section sits at a file offset congruent to its address mod 64K, the rest follow by
    ;     address. each section is written as it is emitted; answers the file's size
+   ; the build-id, once kl-elf has written path: sha256's first 20 bytes over the file with
+   ; the field still zero, written into the .note.gnu.build-id kl-elf left zero
+   (kl-buildid lk path)
+    (: a (lk 'env 'isa ".note.gnu.build-id")
+       t <(filter (t \ !(peep t 'dead 0) && 0 < (t 'flags & 2) && t 'va <= a && a < t 'va + t 'sz) (lk 'outs))
+       off (t 'off + a - t 'va + 16)
+       h (sha256 <>(uread path))
+       (d c) (? (c < 58) (c - 48) (c - 87))
+       id (map (i \ d (h (2 * i)) * 16 + d (h (2 * i + 1))) ^20)
+       (openfd path 4 @ fd
+          (? (charm? fd && fd >= 0) (lseek fd off 0, fdopen fd @ q (say q (string id), close q), id)
+             (scare 'klink-buildid path))))
+
    (kl-elf lk entry path)
     (: outs0 (filter (t \ !(peep t 'dead 0) && t 'name != "/DISCARD/") (lk 'outs))
        shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 (outs0 + [{'name ".symtab"} {'name ".strtab"}])) t)
