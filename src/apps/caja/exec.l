@@ -601,6 +601,7 @@
               (is message) (issue-message J, big ())
               (is case-shift) (shift-case J, big ())
               (is xray) (show-whatever J, big ())
+              (is extension) (do-extension J, big ())
               (h? math-shift) (not-yet J "math")
               (not-yet J "typesetting")))
        (big ()))
@@ -671,7 +672,8 @@
                'output-file-name ()
                'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
                'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)
-               'report pack-report 'char-warn char-warning 'shrink-warn split-shrink-warn)
+               'report pack-report 'char-warn char-warning 'shrink-warn split-shrink-warn
+               'out-what out-what)
        ; par.l's state for its ligature loop and line_break, its codes eqtb's
        _ (cp-setup J)
        _ (start-new-page J)
@@ -726,7 +728,8 @@
              pin J 'selector term-and-log))
        (c = 1 ? (not-yet J "\\dump")))
    (close-files-and-terminate J)
-    (: _ (finish-dvi J)
+    (: _ (close-write-files J)
+       _ (finish-dvi J)
        (J 'log-opened ?
           (: _ (put (J 'log-file) 10) _ (close (J 'log-file))
              _ (pin J 'selector (J 'selector - 2))

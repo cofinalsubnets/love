@@ -53,7 +53,7 @@ echo "  caja: paragraphs -- the fixed pages and 400 random ones, DVI identical t
 
 # the macro language: test/caja/initex's jobs through tex -ini and caja at tripman's line
 # lengths, each log held to TeX's from its second line (the first is the banner and the date),
-# and a DVI TeX writes held to it byte for byte
+# and the DVI and the files \openout writes held to TeX's byte for byte (missfont.log is kpathsea's)
 tdirs=""
 for f in cmr10 cmbx12 cmtt10 cmsl10; do
   p=$(kpsewhich $f.tfm) || true
@@ -80,6 +80,11 @@ for d in $jobs; do
     cmp "$i/tex/$n/$n.dvi" "$d/$n.dvi" || fail "caja's DVI differs from TeX's (initex/$n)"
     nd=$((nd + 1))
   fi
+  for o in "$i/tex/$n"/*; do
+    b=${o##*/}
+    [ "$b" = "$n.log" ] || [ "$b" = "$n.dvi" ] || [ "$b" = missfont.log ] && continue
+    cmp -s "$o" "$d/$b" || fail "caja's $b differs from TeX's (initex/$n)"
+  done
   ni=$((ni + 1))
 done
 echo "  caja: macros -- $ni jobs through -ini TeX, logs identical to TeX's, $nd DVIs byte for byte"

@@ -12,7 +12,7 @@
 (:
    acc-kern 2 non-char 256 nest-size 500
    box-flag 1073741824 ship-out-flag 1073742336 leader-flag 1073742337
-   awful-bad 1073741823 deplorable 100000 inserting 0 split-up 1
+   awful-bad 1073741823 deplorable 100000 inserting 0 split-up 1 language-node 4
 
    ; --- nodes (tex.web 133-159), as box.l lays them ------------------------------------------
    (tl J) (J 'cur-list 'tail)
@@ -119,6 +119,19 @@
             node-list-display J (p 'pre), append-char J 124, show-node-list J (p 'post), flush-char J)
           (t = mark-node) (print-esc J "mark", print-mark J (p 'mark))
           (t = adjust-node) (print-esc J "vadjust", node-list-display J (p 'adj))
+          (t = whatsit-node)
+           (: s (p 'sub)
+              (stream w) (print-esc J w, p 'stream @ j (? (j < 16) (print-int J j) (j = 16) (print-char J 42)
+                                                           (print-char J 45)))
+              (? (s = open-node)
+                  (stream "openout", print-char J 61, print-file-name J (p 'name) (p 'area) (p 'ext))
+                 (s = write-node) (stream "write", print-mark J (p 'toks))
+                 (s = close-node) (stream "closeout")
+                 (s = special-node) (print-esc J "special", print-mark J (p 'toks))
+                 (s = language-node)
+                  (print-esc J "setlanguage", print-int J (p 'lang), print J " (hyphenmin ",
+                   print-int J (p 'lhm), print-char J 44, print-int J (p 'rhm), print-char J 41)
+                 (print J "whatsit?")))
           (print J "Unknown node type!")))
    (display-box J p)
     (: t (p 'type)
@@ -250,7 +263,7 @@
    ; --- the main loop (tex.web 1034-1044): par.l's, with get_next for its lookahead -----------
    (main-loop J)
     (: L (J 'cur-list)
-       _ (L 'mode > 0 && int-par J language-code != L 'clang ? (not-yet J "\\language changes"))
+       _ (L 'mode > 0 && int-par J language-code != L 'clang ? (fix-language J))
        _ (pins L 'font (equiv J cur-font-loc) 'restricted (L 'mode < 0))
        (cp-lig J L (J 'cur-chr) (\ _ (lookahead J))))
    (lookahead J)
@@ -951,6 +964,82 @@
                  "Such glue doesn't belong there; but you can safely proceed,"
                  "since the offensive shrinkability has been made finite."],
      tex-error J)
+
+   ; --- extensions (tex.web 1340-1378) --------------------------------------------------------
+   ; a whatsit: 'sub its kind, 'stream, 'toks, 'name 'area 'ext for \openout, 'lang 'lhm 'rhm
+   (new-whatsit J s) (tail-append J {'type whatsit-node 'sub s 'link ()})
+   (new-write-whatsit J op)
+    (: _ (new-whatsit J (J 'cur-chr))
+       _ (? op (scan-four-bit-int J)
+            (: _ (scan-int J) v (J 'cur-val) (pin J 'cur-val (? (v < 0) 17 (v > 15) 16 v))))
+       (pin (tl J) 'stream (J 'cur-val)))
+   (language-whatsit J l)
+    (new-whatsit J language-node,
+     pins (tl J) 'lang l 'lhm (norm-min (int-par J left-hyphen-min-code))
+                 'rhm (norm-min (int-par J right-hyphen-min-code)))
+   (fix-language J)
+    (: v (int-par J language-code) l (v <= 0 || v > 255 ? 0 v)
+       (l != J 'cur-list 'clang ? (language-whatsit J l, pin (J 'cur-list) 'clang l)))
+   (do-extension J)
+    (: c (J 'cur-chr)
+       (? (c = open-node)
+           (: _ (new-write-whatsit J 1) _ (scan-optional-equals J) _ (scan-file-name J)
+              (pins (tl J) 'name (J 'cur-name) 'area (J 'cur-area) 'ext (J 'cur-ext)))
+          (c = write-node)
+           (: k (J 'cur-cs) _ (new-write-whatsit J 0) _ (pin J 'cur-cs k)
+              (pin (tl J) 'toks (scan-toks J 0 0)))
+          (c = close-node) (new-write-whatsit J 0, pin (tl J) 'toks ())
+          (c = special-node)
+           (new-whatsit J special-node, pin (tl J) 'stream (), pin (tl J) 'toks (scan-toks J 0 1))
+          (c = immediate-code)
+           (: _ (get-x-token J)
+              (J 'cur-cmd = extension && J 'cur-chr <= close-node ?
+                 (: p (tl J) _ (do-extension J) _ (out-what J (tl J))
+                    (pin (J 'cur-list) 'tail p, pin p 'link ()))
+                 (back-input J)))
+          (c = set-language-code)
+           (? (abs (mode J) != hmode) (report-illegal-case J)
+              (: _ (scan-int J) v (J 'cur-val) l (v <= 0 || v > 255 ? 0 v)
+                 (pin (J 'cur-list) 'clang l, language-whatsit J l)))
+          (confusion J "ext1")))
+   ; a whatsit as the shipper meets it (tex.web 1373-1374); none while leaders repeat
+   (out-what J p)
+    (: s (p 'sub)
+       (? (s = special-node)
+           (cb-special J (in-new-string J (\ _ (show-token-list J (p 'toks) () 10000000))))
+          (s = language-node || J 'leaders = 1) ()
+          (s = write-node) (write-out J p)
+          (: j (p 'stream)
+             _ (peep (J 'write-file) j () @ q (q != () ? (close q, pin (J 'write-file) j ())))
+             (s = open-node && j < 16 ?
+                (pin (J 'write-file) j
+                   (open (p 'area + p 'name + (p 'ext = "" ? ".tex" (p 'ext))) "w"))))))
+   ; \write's tokens expanded as {..}\endwrite, then shown to its stream (tex.web 1370-1372)
+   (write-out J p)
+    (: ew (cs-token-flag + end-write)
+       _ (ins-list J [(right-brace-token + 125) ew])
+       _ (begin-token-list J (p 'toks) write-text)
+       _ (ins-list J [(left-brace-token + 123)])
+       L (J 'cur-list) om (L 'mode)
+       _ (pin L 'mode 0)
+       _ (pin J 'cur-cs (J 'write-loc))
+       q (scan-toks J 0 1)
+       _ (get-token J)
+       _ (J 'cur-tok != ew ?
+            (print-err J "Unbalanced write command",
+             set-help J ["On this page there's a \\write with fewer real {'s than }'s."
+                         "I can't handle that very well; good luck."],
+             tex-error J,
+             (: (go _) (get-token J, J 'cur-tok != ew ? (go ())) (go ()))))
+       _ (pin L 'mode om)
+       _ (end-token-list J)
+       old (J 'selector) j (p 'stream)
+       _ (? (peep (J 'write-file) j () != ()) (pin J 'selector j)
+            (: _ (j = 17 && old = term-and-log ? (pin J 'selector log-only)) (print-nl J "")))
+       _ (token-show J q) _ (print-ln J)
+       (pin J 'selector old))
+   (close-write-files J)
+    (map (j \ peep (J 'write-file) j () @ q (q != () ? (close q))) ^16)
 
    ; --- shipping out (tex.web 638-641) ---------------------------------------------------------
    (ship-out J p)
