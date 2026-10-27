@@ -15,7 +15,7 @@
    ; tex.web 582: a character the font lacks makes no node, and TeX says so in the log
    (cb-char J f c)
     (fnt J f @ t
-       (t 'bc <= c && c <= t 'ec && 0 < <(t 'ci c) ? {'type 'char 'font f 'char c 'link ()}
+       (t 'bc <= c <= t 'ec && 0 < <(t 'ci c) ? {'type 'char 'font f 'char c 'link ()}
           (pin J 'missing ([f c] . J 'missing), ())))
    (cb-null-box _)
     {'type 0 'sub 0 'width 0 'depth 0 'height 0 'shift 0 'list () 'gsign 0 'gorder 0 'gset 0.0
@@ -50,7 +50,7 @@
    (cb-set-param J k v) (pin (J 'params) k v)
    (cb-font J name area bytes size)
     (tfm-read bytes size @ t
-       (t = 'badtfm ? 'badtfm
+       (t @ 'badtfm 'badtfm
           (J 'nfonts + 1 @ f
              (pin J 'nfonts f,
               pin (J 'fonts) f {'tfm t 'name name 'area area 'used 0},
@@ -65,7 +65,7 @@
    (cb-badness t s)
     (? (t = 0) 0 (s <= 0) 10000
        ((? (t <= 7230584) (t * 297 // s) (s >= 1663497) (t // (s // 297)) t) @ r
-          (r > 1290 ? 10000 ((r * r * r + 131072) // 262144))))
+          (r > 1290 ? 10000 ((3 r + 131072) // 262144))))
 
    ; --- packaging (tex.web 644-679) -----------------------------------------------------
    (order tot) (? (tot 3 != 0) 3 (tot 2 != 0) 2 (tot 1 != 0) 1 0)
@@ -94,9 +94,9 @@
            (p 'type @ t
               (? (t >= 3 && t <= 5 && J 'adjust != ())
                   (: nx (p 'link)
-                     _ (q = () ? (pin r 'list nx) (pin q 'link nx))
-                     (last x) (x 'link = () ? x (last (x 'link)))
-                     _ (? (t = 5) (pin (J 'adjust) 'link (p 'adj), pin J 'adjust (last (J 'adjust)))
+                     _ (q @ () (pin r 'list nx) (pin q 'link nx))
+                     (last x) (x 'link @ () x (last (x 'link)))
+                     _ (t @ 5 (pin (J 'adjust) 'link (p 'adj), pin J 'adjust (last (J 'adjust)))
                           (pin p 'link (), pin (J 'adjust) 'link p, pin J 'adjust p))
                      (walk q nx))
                  (elem t [0 1 2 13])
@@ -140,7 +140,7 @@
                      ; the overfull rule, where TeX would lay one
                      (over > J 'params 'hfuzz || J 'params 'hbadness < 100 ?
                         (J 'params 'overfullrule > 0 && over > J 'params 'hfuzz ?
-                           (: (last q) (q 'link = () ? q (last (q 'link)))
+                           (: (last q) (q 'link @ () q (last (q 'link)))
                               nr (cb-rule (J 'params 'overfullrule) null-flag null-flag)
                               (pin (last (r 'list)) 'link nr)),
                          report J r "Overfull" over)))
@@ -154,7 +154,7 @@
        st {0 0 1 0 2 0 3 0} sh {0 0 1 0 2 0 3 0}
        dims {'w 0 'd 0 'x 0}
        (walk p)
-        (p = () ? ()
+        (p @ () ()
            (p 'type @ t
               ((? (elem t [0 1 2 13])
                   (: _ (pins dims 'x (dims 'x + dims 'd + p 'height) 'd (p 'depth))
@@ -172,19 +172,19 @@
        _ (pins J 'total-stretch st 'total-shrink sh)
        _ (pin r 'width (dims 'w))
        _ (dims 'd > l ? (pin dims 'x (dims 'x + dims 'd - l), pin r 'depth l) (pin r 'depth (dims 'd)))
-       h2 (m = 'additional ? (dims 'x + h) h)
+       h2 (m @ 'additional (dims 'x + h) h)
        _ (pin r 'height h2)
        x (h2 - dims 'x)
        (pin J 'badness 0,
         (? (x > 0)
            (order st @ o
-              (pin r 'gorder o, pin r 'gsign 1,
+              (pins r 'gorder o 'gsign 1,
                st o != 0 ? (pin r 'gset (x / st o)) (pins r 'gsign 0 'gset 0.0),
                o = 0 && p0 != () ?
                  (pin J 'badness (cb-badness x (st 0)), loose J r (J 'badness) (J 'params 'vbadness))))
            (x < 0)
            (order sh @ o
-              (pin r 'gorder o, pin r 'gsign 2,
+              (pins r 'gorder o 'gsign 2,
                sh o != 0 ? (pin r 'gset ((0 - x) / sh o)) (pins r 'gsign 0 'gset 0.0),
                (? (sh o < 0 - x && o = 0 && p0 != ())
                   (: _ (pin J 'badness 1000000) _ (pin r 'gset 1.0) over (0 - x - sh 0)
@@ -226,7 +226,7 @@
    ; --- movement, with the w/x/y/z reuse (tex.web 607-615) ---------------------------------
    ; a stack entry: 'w the motion, 'loc its byte number, 'info y_here 1 .. d_fixed 6
    (movement J w o)
-    (: sk (o = 157 ? 'down 'right)
+    (: sk (o @ 157 'down 'right)
        q {'w w 'loc (J 'offset + J 'ptr) 'info 3}
        below (J sk)
        _ (pin J sk (q . below))
@@ -248,7 +248,7 @@
             found p))
        ; mstate: 0 none seen, 6 y seen, 12 z seen
        (look l ms)
-        (? (!(two? l)) 'none
+        (? !(two? l) 'none
            (: p <l i (p 'info) s (ms + i)
               (p 'w = w ?
                  (? (elem s [3 4 15 16]) (p 'loc < J 'gone ? 'none (change p 5 1))
@@ -256,7 +256,7 @@
                     (elem s [1 2 8 13]) (found p)
                     (look >l ms))
                  (? (s = 1) (look >l 6) (s = 2) (look >l 12) (s = 8 || s = 13) 'none (look >l ms)))))
-       (look below 0 = 'none ?
+       (look below 0 @ 'none
           (abs w @ a
              (? (a >= 8388608) (dvi-out J (o + 3), dvi-four J w)
                 (a >= 32768)
@@ -299,7 +299,7 @@
      J 'offset + J 'ptr)
    (leave J save-loc)
     (prune J save-loc, J 'curs > 0 ? (dvi-pop J save-loc), pin J 'curs (J 'curs - 1))
-   (sub-out J b) (b 'type = 1 ? (vlist-out J b) (hlist-out J b))
+   (sub-out J b) (b 'type @ 1 (vlist-out J b) (hlist-out J b))
    ; a whatsit is its owner's to output, through J 'out-what
    (out-what J p) (peep J 'out-what () @ f (f != () ? (f J p)))
    ; a \special's bytes, xxx1 or xxx4 (tex.web 1368)
@@ -310,11 +310,11 @@
    ; leaders of boxes l long over w2 from J's ax, the box's edge at org: ax moved to the first
    ; box, answering the gap between boxes -- aligned (100), centered (101) or expanded
    (lead-start J ax org sub l w2)
-    (? (sub = 100)
+    (sub @ 100
         (: s0 (J ax) v1 (org + l * ((J ax - org) // l))
            (pin J ax (v1 < s0 ? (v1 + l) v1), 0))
        (: lq (w2 // l) lr (w2 % l)
-          (sub = 101 ? (pin J ax (J ax + lr // 2), 0)
+          (sub @ 101 (pin J ax (J ax + lr // 2), 0)
              (lr // (lq + 1) @ lx
                 (pin J ax (J ax + (lr - (lq - 1) * lx) // 2),
                  lx)))))
@@ -348,7 +348,7 @@
                 go nx))
            (p 'type @ t
               ((? (t = 0 || t = 1)
-                  (p 'list = () ? (pin J 'curh (J 'curh + p 'width))
+                  (p 'list @ () (pin J 'curh (J 'curh + p 'width))
                      (: sh (J 'dvih) sv (J 'dviv)
                         _ (pin J 'curv (base + p 'shift))
                         edge (J 'curh)
@@ -359,7 +359,7 @@
                    (: g (p 'glue) g0 (gs 'g) wd (g 'width - g0 + glue-amount box gs g)
                       (p 'sub < 100 ? (pin J 'curh (J 'curh + wd))
                          (p 'leader @ lb
-                            (lb 'type = 2 ? (rule-out (lb 'height) (lb 'depth) wd)
+                            (lb 'type @ 2 (rule-out (lb 'height) (lb 'depth) wd)
                                (lb 'width @ lw
                                   (lw > 0 && wd > 0 ?
                                      (: wd2 (wd + 10) edge (J 'curh + wd2)
@@ -390,10 +390,10 @@
             t > 0 && wd2 > 0 ?
               (synch-h J, synch-v J, dvi-out J 137, dvi-four J t, dvi-four J wd2)))
        (go p)
-        (p = () ? ()
+        (p @ () ()
            (p 'type @ t
               ((? (t = 0 || t = 1)
-                  (p 'list = () ? (pin J 'curv (J 'curv + p 'height + p 'depth))
+                  (p 'list @ () (pin J 'curv (J 'curv + p 'height + p 'depth))
                      (: _ (pin J 'curv (J 'curv + p 'height)) _ (synch-v J)
                         sh (J 'dvih) sv (J 'dviv)
                         (pin J 'curh (left + p 'shift),
@@ -404,7 +404,7 @@
                    (: g (p 'glue) g0 (gs 'g) ht (g 'width - g0 + glue-amount box gs g)
                       (p 'sub < 100 ? (pin J 'curv (J 'curv + ht))
                          (p 'leader @ lb
-                            (lb 'type = 2 ? (rule-out ht 0 (lb 'width))
+                            (lb 'type @ 2 (rule-out ht 0 (lb 'width))
                                (lb 'height + lb 'depth @ lh
                                   (lh > 0 && ht > 0 ?
                                      (: ht2 (ht + 10) edge (J 'curv + ht2)
@@ -435,7 +435,7 @@
           (: _ (p 'height + p 'depth + vo > J 'maxv && pin J 'maxv (p 'height + p 'depth + vo))
              _ (p 'width + ho > J 'maxh && pin J 'maxh (p 'width + ho))
              _ (pins J 'dvih 0 'dviv 0 'curh ho 'dvif 0)
-             _ (J 'pages = 0 ?
+             _ (J 'pages @ 0
                   (: _ (dvi-out J 247) _ (dvi-out J 2)
                      _ (dvi-four J 25400000) _ (dvi-four J 473628672) _ (dvi-four J (pr 'mag))
                      s " TeX output \(pr 'year).\(two-digits (pr 'month)).\(two-digits (pr 'day)):\(two-digits (pr 'time // 60))\(two-digits (pr 'time % 60))"
@@ -444,13 +444,13 @@
              loc (J 'offset + J 'ptr)
              (dvi-out J 139,
               map (k \ dvi-four J (peep (J 'count) k 0)) ^10,
-              dvi-four J (J 'lastbop), pin J 'lastbop loc,
-              pin J 'curv (p 'height + vo),
+              dvi-four J (J 'lastbop), pins J 'lastbop loc
+              'curv (p 'height + vo),
               sub-out J p,
-              dvi-out J 140, pin J 'pages (J 'pages + 1), pin J 'curs -1,
+              dvi-out J 140, pins J 'pages (J 'pages + 1) 'curs -1,
               'ok))))
    (cb-dvi J)
-    (J 'pages = 0 ? ""
+    (J 'pages @ 0 ""
        (: _ (dvi-out J 248)
           _ (dvi-four J (J 'lastbop)) _ (pin J 'lastbop (J 'offset + J 'ptr - 5))
           _ (dvi-four J 25400000) _ (dvi-four J 473628672) _ (dvi-four J (J 'params 'mag))

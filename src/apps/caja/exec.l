@@ -26,7 +26,7 @@
     (: names {} dflt {}
        _ (map (\ p (: c (p 1) n (p 0)
                       (pin names (cmd-key c (p 2)) n,
-                       pin dflt c (peep dflt c () = () ? n 'many))))
+                       pin dflt c (peep dflt c () @ () n 'many))))
               primitive-table)
        _ (map (\ p (pin dflt (p 0) (p 1))) cmd-defaults)
        (pins J 'cmd-names names 'cmd-default dflt))
@@ -95,7 +95,7 @@
                  "you left one out. Proceed, with fingers crossed."],
      ins-error J)
    (its-all-over? J)
-    (? (!(privileged? J)) 0
+    (? !(privileged? J) 0
        (J 'page-head == J 'page-tail && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
        ; \hbox to \hsize{}\vfill\penalty-'10000000000, and \end comes again
        (: _ (back-input J)
@@ -244,7 +244,7 @@
            (scan-optional-equals J, scan-normal-dimen J, pin (J 'page-so-far) chr (J 'cur-val))
           (cmd = set-page-int)
            (scan-optional-equals J, scan-int J,
-            pin J (chr = 0 ? 'dead-cycles 'insert-penalties) (J 'cur-val))
+            pin J (chr @ 0 'dead-cycles 'insert-penalties) (J 'cur-val))
           (cmd = set-box-dimen)
            (: _ (scan-eight-bit-int J) b (equiv J (box-base + J 'cur-val))
               _ (scan-optional-equals J) _ (scan-normal-dimen J)
@@ -264,7 +264,7 @@
           (cmd = assign-font-int)
            (: _ (scan-font-ident J) f (J 'cur-val)
               _ (scan-optional-equals J) _ (scan-int J)
-              (pin (J 'fonts f) (chr = 0 ? 'hyphenchar 'skewchar) (J 'cur-val)))
+              (pin (J 'fonts f) (chr @ 0 'hyphenchar 'skewchar) (J 'cur-val)))
           (cmd = def-font) (new-font J a)
           (cmd = set-interaction) (new-interaction J chr)
           (cmd = set-box)
@@ -275,7 +275,7 @@
                   set-help J ["Sorry, \\setbox is not allowed after \\halign in a display,"
                               "or between \\accent and an accented character."],
                   tex-error J)))
-          (cmd = hyph-data) (chr = 1 ? (new-patterns J) (new-hyph-exceptions J))
+          (cmd = hyph-data) (chr @ 1 (new-patterns J) (new-hyph-exceptions J))
           (confusion J "prefix")))
    (assign-let J a n)
     (: _ (get-r-token J) p (J 'cur-cs)
@@ -307,10 +307,10 @@
        _ (J 'cur-cmd = toks-register ?
             (scan-eight-bit-int J, pins J 'cur-cmd assign-toks 'cur-chr (toks-base + J 'cur-val)))
        (? (J 'cur-cmd = assign-toks)
-           (equiv J (J 'cur-chr) @ l (l = () ? (define J a p undefined-cs ()) (define J a p call l)))
+           (equiv J (J 'cur-chr) @ l (l @ () (define J a p undefined-cs ()) (define J a p call l)))
           (: _ (back-input J) _ (pin J 'cur-cs q)
              l (scan-toks J 0 0)
-             (? (l = ()) (define J a p undefined-cs ())
+             (l @ () (define J a p undefined-cs ())
                 (define J a p call
                    (p = output-routine-loc ? ((left-brace-token + 123) . (l + [(right-brace-token + 125)])) l))))))
    (assign-def-code J a chr)
@@ -372,10 +372,10 @@
    (glue-sum q0 r)
     (: q (new-spec q0)
        _ (pin q 'width (q 'width + r 'width))
-       _ (q 'stretch = 0 ? (pin q 'sto normal))
+       _ (q 'stretch @ 0 (pin q 'sto normal))
        _ (? (q 'sto = r 'sto) (pin q 'stretch (q 'stretch + r 'stretch))
             (q 'sto < r 'sto && r 'stretch != 0) (pins q 'stretch (r 'stretch) 'sto (r 'sto)))
-       _ (q 'shrink = 0 ? (pin q 'sho normal))
+       _ (q 'shrink @ 0 (pin q 'sho normal))
        _ (? (q 'sho = r 'sho) (pin q 'shrink (q 'shrink + r 'shrink))
             (q 'sho < r 'sho && r 'shrink != 0) (pins q 'shrink (r 'shrink) 'sho (r 'sho)))
        q)
@@ -404,7 +404,7 @@
 
    ; --- fonts (tex.web 560-576, 1257-1260) ---------------------------------------------------
    (new-font J a)
-    (: _ (J 'job-name = () ? (open-log-file J))
+    (: _ (J 'job-name @ () (open-log-file J))
        _ (get-r-token J) u (J 'cur-cs)
        t (? (u >= hash-base) (J 'text u)
             (u = null-cs) "FONT"
@@ -442,12 +442,12 @@
        (pin (J 'text) (font-id-base + f) t))
    (find-tfm J name area)
     (: file (name + ".tfm")
-       (try ds) (? (ds = ()) () (readable? (<ds + file) ? (<ds + file) (try >ds)))
+       (try ds) (ds @ () () (readable? (<ds + file) ? (<ds + file) (try >ds)))
        (area != "" ? (readable? (area + file) ? (area + file) ()) (try (J 'tfm-dirs))))
    (read-font-info J u nm ar s)
     (: p (find-tfm J nm ar)
-       bytes (p = () ? () (: q (open p "r") b (slurp q) (close q, b)))
-       f (bytes = () ? 'badtfm (cb-font J nm ar bytes s))
+       bytes (p @ () () (: q (open p "r") b (slurp q) (close q, b)))
+       f (bytes @ () 'badtfm (cb-font J nm ar bytes s))
        (? (f != 'badtfm)
            (: F (J 'fonts f)
               (pins F 'hyphenchar (int-par J default-hyphen-char-code)
@@ -456,7 +456,7 @@
              _ (print-file-name J nm ar "")
              _ (? (s >= 0) (print J " at ", print-scaled J s, print J "pt")
                   (s != -1000) (print J " scaled ", print-int J (0 - s)))
-             _ (print J (bytes = () ? " not loadable: Metric (TFM) file not found"
+             _ (print J (bytes @ () " not loadable: Metric (TFM) file not found"
                                        " not loadable: Bad metric (TFM) file"))
              _ (set-help J ["I wasn't able to read the size data for this font,"
                             "so I will ignore the font specification."
@@ -477,7 +477,7 @@
     (: c (J 'cur-chr)
        l (scan-toks J 0 1)
        s (in-new-string J (\ _ (token-show J l)))
-       (? (c = 0)
+       (c @ 0
            (: _ (? (J 'term-offset + #s > J 'max-print-line - 2) (print-ln J)
                    (J 'term-offset > 0 || J 'file-offset > 0) (print-char J 32))
               (slow-print J s, flush (J 'term-out)))
@@ -538,7 +538,7 @@
            m (abs (mode J)) cmd (J 'cur-cmd)
            (is c) (cmd = c)
            (v? c) (m = vmode && cmd = c) (h? c) (m = hmode && cmd = c) (mm? c) (m = mmode && cmd = c)
-           (chars _) (main-loop J = 'out ? (sw ()) (big ()))
+           (chars _) (main-loop J @ 'out (sw ()) (big ()))
            (? ((h? letter) || h? other-char || h? char-given) (chars ())
               (h? char-num) (scan-char-num J, pin J 'cur-chr (J 'cur-val), chars ())
               (h? no-boundary)
@@ -571,7 +571,7 @@
               (is right-brace) (handle-right-brace J, big ())
               ((v? hmove) || h? vmove || mm? vmove)
                (: t (J 'cur-chr) _ (scan-normal-dimen J)
-                  (scan-box J (t = 0 ? (J 'cur-val) (0 - J 'cur-val)), big ()))
+                  (scan-box J (t @ 0 (J 'cur-val) (0 - J 'cur-val)), big ()))
               (is leader-ship) (scan-box J (leader-flag - a-leaders + J 'cur-chr), big ())
               (is make-box) (begin-box J 0, big ())
               (v? start-par) (new-graf J (J 'cur-chr > 0), big ())
@@ -672,20 +672,20 @@
        (str tag x) (emit (tag + show #x + ":" + x))
        (val x)
         (: k (kind x)
-           (? (k = 'charm) (emit ("i" + show x + " "))
-              (k = 'gem) (emit ("f" + show x + " "))
-              (k = 'string) (str "s" x)
-              (k = 'nom) (str "y" (show x))
-              (k = 'mint) (emit "n")
-              (k = 'chain) (: _ (pin C 'cells (C 'cells + #x)) _ (emit ("L" + show #x + " ")) (each x val))
-              (k = 'tablet)
-               (? (peep x 'fmt-id 0 > 0) (emit ("R" + show (x 'fmt-id) + " "))
-                  (: n (C 'n + 1)
-                     ks (filter (k2 \ k2 != 'fmt-id) (keys x))
-                     _ (pins C 'n n) _ (pin x 'fmt-id n)
-                     _ (emit ("T" + show n + " " + show #ks + " "))
-                     (each ks (k2 \ (val k2, val (x k2))))))
-              (confusion J "dump")))
+           (k @ 'charm (emit ("i" + show x + " "))
+                'gem (emit ("f" + show x + " "))
+                'string (str "s" x)
+                'nom (str "y" (show x))
+                'mint (emit "n")
+                'chain (: _ (pin C 'cells (C 'cells + #x)) _ (emit ("L" + show #x + " ")) (each x val))
+                'tablet
+                 (? (peep x 'fmt-id 0 > 0) (emit ("R" + show (x 'fmt-id) + " "))
+                    (: n (C 'n + 1)
+                       ks (filter (k2 \ k2 != 'fmt-id) (keys x))
+                       _ (pins C 'n n) _ (pin x 'fmt-id n)
+                       _ (emit ("T" + show n + " " + show #ks + " "))
+                       (each ks (k2 \ (val k2, val (x k2))))))
+                (confusion J "dump")))
        _ (each fmt-fields (f \ val (J f)))
        [(cats (rev (C 'acc))) (C 'n) (C 'cells)])
    (fmt-parse J s)
@@ -698,7 +698,7 @@
               (c = 115) (str ())
               (c = 121) (nom (str ()))
               (c = 110) ()
-              (c = 76) (: n (read (upto 32)) (go k acc) (k = 0 ? (rev acc) (go (k - 1) (val () . acc))) (go n ()))
+              (c = 76) (: n (read (upto 32)) (go k acc) (k @ 0 (rev acc) (go (k - 1) (val () . acc))) (go n ()))
               (c = 84)
                (: id (read (upto 32)) n (read (upto 32)) t {} _ (pin ids id t)
                   (go k) (k > 0 ? (: k2 (val ()) (pin t k2 (val ()), go (k - 1))))
@@ -735,9 +735,9 @@
        (add node key i)
         (? (i >= #key) (pin node 'o (peep (J 'pat-ops) key 0))
            (: K (peep node 'kids ())
-              K2 (K = () ? ({} @ k (pin node 'kids k, k)) K)
+              K2 (K @ () ({} @ k (pin node 'kids k, k)) K)
               ch (key i)
-              (add (peep K2 ch () @ n (n = () ? ({'o 0} @ m (pin K2 ch m, m)) n)) key (i + 1))))
+              (add (peep K2 ch () @ n (n @ () ({'o 0} @ m (pin K2 ch m, m)) n)) key (i + 1))))
        _ (each (keys (J 'pats)) (k \ add root k 0))
        C {'n 0 'tab {} 'c {} 'o {} 'l {} 'r {}}
        (canon c o l r)
@@ -747,7 +747,7 @@
                  (pin C 'n n, pin (C 'tab) key n, pin (C 'c) n c, pin (C 'o) n o, pin (C 'l) n l,
                   pin (C 'r) n r, n))))
        (chain K)
-        (K = () ? 0
+        (K @ () 0
            (foldl (\ r ch (K ch @ nd (canon ch (nd 'o) (chain (peep nd 'kids ())) r))) 0
                   (rev (sort (keys K)))))
        top (chain (peep root 'kids ()))
@@ -764,7 +764,7 @@
            (go q)
             (q != 0 ?
                (: z (h + C 'c q) l (peep back z 0) r (lk z)
-                  _ (pin back r l) _ (pin link l r) _ (pin link z 0)
+                  _ (pin back r l) _ (pins link l r z 0)
                   _ (l < 256 ? (: ll (z < 256 ? z 256) (fill m) (m < ll ? (pin tmin m r, fill (m + 1))) (fill l)))
                   (go (C 'r q))))
            (go p))
@@ -778,7 +778,7 @@
            (: q (C 'l p)
               _ (q > 0 && peep ref q 0 = 0 ? (first-fit q, trie-pack q))
               (trie-pack (C 'r p))))
-       (top = 0 ? 256 (first-fit top, trie-pack top, T 'max)))
+       (top @ 0 256 (first-fit top, trie-pack top, T 'max)))
    (store-fmt-file J)
     (: _ (J 'save-ptr != 0 ?
             (print-err J "You can't dump inside a group", set-help J ["`{...\\dump}' is a no-no."],
@@ -830,14 +830,14 @@
        e (: (go j) (j < I 'limit && b j != 32 ? (go (j + 1)) j) (go a))
        nm (snip b a e)
        name (#nm > 4 && snip nm (#nm - 4) #nm = ".fmt" ? nm (nm + ".fmt"))
-       (? (!(readable? name))
+       (? !(readable? name)
            (: o (J 'term-out)
               (say o "Sorry, I can't find that format; will try PLAIN.\n",
                say o "I can't find the PLAIN format file!\n", 0))
           (: q (open name "r") s (slurp q) _ (close q)
              _ (each (fmt-parse J s) (fv \ pin J (fv 0) (fv 1)))
-             _ (pin J 'xl {})
-             _ (pin J 'trie-ready 1)
+             _ (pins J 'xl {}
+             'trie-ready 1)
              _ (each (map (+ 1) ^(J 'nfonts)) (f \ pin (J 'fonts f) 'used 0))
              _ (peep J 'interaction-option () != () ? (pin J 'interaction (J 'interaction-option)))
              _ (: t (J 'sys-time)
@@ -917,8 +917,8 @@
     (: J (tex-job O)
        I (J 'cur)
        _ (pin I 'buf (strip-tail (peep O 'line "")))
-       _ (trap (\ _ (start-job J)) () (\ a b (? (a = 'caja-end) () (scare a b))))
-       _ (peep J 'fmt-failed 0 = 1 ? () (close-files-and-terminate J))
+       _ (trap (\ _ (start-job J)) () (\ a b (a @ 'caja-end () (scare a b))))
+       _ (peep J 'fmt-failed 0 @ 1 () (close-files-and-terminate J))
        J)
    (start-job J)
     (: I (J 'cur) l (I 'buf)
@@ -932,7 +932,7 @@
        (final-cleanup J))
    (final-cleanup J)
     (: c (J 'cur-chr)
-       _ (J 'job-name = () ? (open-log-file J))
+       _ (J 'job-name @ () (open-log-file J))
        (unwind _)
         (J 'input-ptr > 0 ?
            ((J 'cur 'state = token-list ? (end-token-list J) (end-file-reading J)), unwind ()))
@@ -954,7 +954,7 @@
             (pin J 'selector term-only,
              print-nl J "(see the transcript file for additional information)",
              pin J 'selector term-and-log))
-       (c = 1 ? (pin J 'cur-mark {}, store-fmt-file J)))
+       (c @ 1 (pin J 'cur-mark {}, store-fmt-file J)))
    (close-files-and-terminate J)
     (: _ (close-write-files J)
        _ (J 'log-opened && int-par J tracing-stats-code > 0 ? (job-stats J))

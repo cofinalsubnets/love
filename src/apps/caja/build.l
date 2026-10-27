@@ -29,7 +29,7 @@
    (new-disc _) {'type disc-node 'sub 0 'pre () 'post () 'link ()}
    (char-node? p) (p 'type = 'char)
    (tfm-of J f) (J 'fonts f 'tfm)
-   (char-exists? J f c) (tfm-of J f @ t (t 'bc <= c && c <= t 'ec && 0 < <(t 'ci c)))
+   (char-exists? J f c) (tfm-of J f @ t (t 'bc <= c <= t 'ec && 0 < <(t 'ci c)))
    (char-width J f c) (tfm-of J f @ t (t 'wd <(t 'ci c)))
    (char-height J f c) (tfm-of J f @ t (t 'ht ((t 'ci c) 1 // 16)))
    (char-italic J f c) (tfm-of J f @ t (t 'ic ((t 'ci c) 2 // 4)))
@@ -41,7 +41,7 @@
     (char-exists? J f c ? {'type 'char 'font f 'char c 'link ()} (char-warning J f c, ()))
    (copy-node-list p)
     (: h {'link ()}
-       (go q p) (p = () ? (pin q 'link ()) (copy-node p @ r (pin q 'link r, go r (p 'link))))
+       (go q p) (p @ () (pin q 'link ()) (copy-node p @ r (pin q 'link r, go r (p 'link))))
        (go h p, h 'link))
    (copy-node p)
     (: r ({} @ t (map (k \ pin t k (p k)) (keys p), t))
@@ -110,7 +110,7 @@
                 p 'sub = acc-kern ? (print J " (for accent)"))
               (print-esc J "mkern", print-scaled J (p 'width), print J "mu"))
           (t = math-node)
-           (print-esc J "math", print J (p 'sub = 0 ? "on" "off"),
+           (print-esc J "math", print J (p 'sub @ 0 "on" "off"),
             p 'width != 0 ? (print J ", surrounded ", print-scaled J (p 'width)))
           (t = ligature-node)
            (print-font-and-char J p, print J " (ligature ", p 'sub > 1 ? (print-char J 124),
@@ -188,7 +188,7 @@
                          'clang (L 'clang) 'pg 0 'ml (J 'line)}))
    (pop-nest J) (pin J 'cur-list <(J 'nest), pin J 'nest >(J 'nest))
    (set-mode J m) (pin (J 'cur-list) 'mode m)
-   (contrib-head J) (J 'nest = () ? (J 'cur-list 'head) ((rev (J 'nest)) 0 'head))
+   (contrib-head J) (J 'nest @ () (J 'cur-list 'head) ((rev (J 'nest)) 0 'head))
    (show-activities J)
     (: _ (print-nl J "") _ (print-ln J)
        (each l)
@@ -201,7 +201,7 @@
                     print-int J (N 'pg // 4194304), print-char J 44,
                     print-int J (N 'pg // 65536 % 64), print-char J 41))
               _ (N 'ml < 0 ? (print J " (\\output routine)"))
-              _ (>l = () ?
+              _ (>l @ ()
                    (show-page-status J, N 'head 'link != () ? (print-nl J "### recent contributions:")))
               _ (show-box J (N 'head 'link))
               _ (? (abs m // 101 = 0)
@@ -220,31 +220,31 @@
 
    ; --- par.l's \tracingparagraphs lines (tex.web 846, 856-857, 863), as J 'ptrace -----------
    (par-trace J k a)
-    (? (k = 'begin) (begin-diagnostic J, a ? (print-nl J "@firstpass"))
-       (k = 'second) (print-nl J "@secondpass")
-       (k = 'emergency) (print-nl J "@emergencypass")
-       (k = 'end) (end-diagnostic J 1, normalize-selector J)
-       (k = 'pass) (pin J 'fisd null-font)
-       (k = 'node)
-        (print-nl J "@@", print-int J (a 0), print J ": line ", print-int J (a 1), print-char J 46,
-         print-int J (a 2), a 3 = 1 ? (print-char J 45), print J " t=", print-int J (a 4),
-         print J " -> @@", print-int J (a 5))
-       (: L (a 0) cp (L 'cp) pn (L 'printed) brk (a 1) b (a 2) d (a 4)
-          _ (? (pn == cp) ()
-               (: _ (print-nl J "")
-                  _ (? (cp = ()) (short-display J (pn 'link))
-                       (: s (cp 'link) _ (pin cp 'link ()) _ (print-nl J "") _ (short-display J (pn 'link))
-                          (pin cp 'link s)))
-                  (pin L 'printed cp)))
-          _ (print-nl J "@")
-          _ (? (cp = ()) (print-esc J "par")
-               (cp 'type != glue-node)
-                (print-esc J (? (cp 'type = penalty-node) "penalty" (cp 'type = disc-node) "discretionary"
-                                (cp 'type = kern-node) "kern" "math")))
-          _ (print J " via @@") _ (print-int J (brk = () ? 0 (brk 'serial)))
-          _ (print J " b=") _ (b > 10000 ? (print-char J 42) (print-int J b))
-          _ (print J " p=") _ (print-int J (a 3)) _ (print J " d=")
-          (a 5 ? (print-char J 42) (print-int J d))))
+    (k @ 'begin (begin-diagnostic J, a ? (print-nl J "@firstpass"))
+         'second (print-nl J "@secondpass")
+         'emergency (print-nl J "@emergencypass")
+         'end (end-diagnostic J 1, normalize-selector J)
+         'pass (pin J 'fisd null-font)
+         'node
+          (print-nl J "@@", print-int J (a 0), print J ": line ", print-int J (a 1), print-char J 46,
+           print-int J (a 2), a 3 = 1 ? (print-char J 45), print J " t=", print-int J (a 4),
+           print J " -> @@", print-int J (a 5))
+         (: L (a 0) cp (L 'cp) pn (L 'printed) brk (a 1) b (a 2) d (a 4)
+            _ (? (pn == cp) ()
+                 (: _ (print-nl J "")
+                    _ (cp @ () (short-display J (pn 'link))
+                         (: s (cp 'link) _ (pin cp 'link ()) _ (print-nl J "") _ (short-display J (pn 'link))
+                            (pin cp 'link s)))
+                    (pin L 'printed cp)))
+            _ (print-nl J "@")
+            _ (? (cp = ()) (print-esc J "par")
+                 (cp 'type != glue-node)
+                  (print-esc J (? (cp 'type = penalty-node) "penalty" (cp 'type = disc-node) "discretionary"
+                                  (cp 'type = kern-node) "kern" "math")))
+            _ (print J " via @@") _ (print-int J (brk @ () 0 (brk 'serial)))
+            _ (print J " b=") _ (b > 10000 ? (print-char J 42) (print-int J b))
+            _ (print J " p=") _ (print-int J (a 3)) _ (print J " d=")
+            (a 5 ? (print-char J 42) (print-int J d))))
 
    ; --- packaging, with tex.web's reports (644-679) ------------------------------------------
    ; par.l and box.l read their parameters by name off J 'params: eqtb's, as they stand
@@ -282,7 +282,7 @@
    (pack-report J r what v)
     (: h (r 'type = hlist-node) pbl (J 'pack-begin-line)
        _ (print-ln J) _ (print-nl J what)
-       _ (? (what = "Overfull")
+       _ (what @ "Overfull"
              (print J (h ? " \\hbox (" " \\vbox ("), print-scaled J v,
               print J (h ? "pt too wide" "pt too high"))
             (print J (h ? " \\hbox (badness " " \\vbox (badness "), print-int J v))
@@ -430,9 +430,9 @@
    (scan-spec J c three)
     (: s (three ? (saved J 0) 0)
        sc (? (scan-keyword J "to") 'exactly (scan-keyword J "spread") 'additional ())
-       _ (sc = () ? (pin J 'cur-val 0) (scan-normal-dimen J))
+       _ (sc @ () (pin J 'cur-val 0) (scan-normal-dimen J))
        _ (three ? (set-saved J 0 s, pin J 'save-ptr (J 'save-ptr + 1)))
-       _ (set-saved J 0 (sc = () ? 'additional sc))
+       _ (set-saved J 0 (sc @ () 'additional sc))
        _ (set-saved J 1 (J 'cur-val))
        _ (pin J 'save-ptr (J 'save-ptr + 2))
        (new-save-level J c, scan-left-brace J))
@@ -473,7 +473,7 @@
        _ (indented ?
             (new-null-box () @ b (pin b 'width (dimen-par J par-indent-code), tail-append J b)))
        _ (equiv J every-par-loc != () ? (begin-token-list J (equiv J every-par-loc) every-par-text))
-       (#(J 'nest) = 1 ? (build-page J)))
+       (#(J 'nest) @ 1 (build-page J)))
    (indent-in-hmode J)
     (J 'cur-chr > 0 ?
        (new-null-box () @ p
@@ -508,7 +508,7 @@
    (begin-insert-or-adjust J)
     (: _ (? (J 'cur-cmd = vadjust) (pin J 'cur-val 255)
             (: _ (scan-eight-bit-int J)
-               (J 'cur-val = 255 ?
+               (J 'cur-val @ 255
                   (print-err J "You can't ", print-esc J "insert", print-int J 255,
                    set-help J ["I'm changing to \\insert0; box 255 is special."],
                    tex-error J, pin J 'cur-val 0))))
@@ -528,7 +528,7 @@
                {'type ins-node 'sub (saved J 0) 'height (p 'height + p 'depth) 'ins (p 'list)
                 'split-top q 'depth d 'cost f 'link ()}
                {'type adjust-node 'sub 0 'adj (p 'list) 'link ()}))
-       (J 'nest = () ? (build-page J)))
+       (J 'nest @ () (build-page J)))
    (make-mark J) (: l (scan-toks J 0 1) (tail-append J {'type mark-node 'sub 0 'mark l 'link ()}))
    (append-penalty J)
     (scan-int J, tail-append J (new-penalty (J 'cur-val)), mode J = vmode ? (build-page J))
@@ -557,7 +557,7 @@
           (: L (J 'cur-list)
              _ (pin (L 'tail) 'link (c = copy-code ? (copy-node-list (p 'list)) (p 'list)))
              _ (c != copy-code ? (pin (J 'eq) n ()))
-             (go t) (t 'link = () ? t (go (t 'link)))
+             (go t) (t 'link @ () t (go (t 'link)))
              (pin L 'tail (go (L 'tail))))))
    (append-italic-correction J)
     (: L (J 'cur-list) t (L 'tail)
@@ -565,7 +565,7 @@
           (tail-append J (new-kern (char-italic J (t 'font) (t 'char))), pin (tl J) 'sub explicit)))
    (append-discretionary J)
     (: _ (tail-append J (new-disc ()))
-       (J 'cur-chr = 1 ?
+       (J 'cur-chr @ 1
           (: f (equiv J cur-font-loc) c (J 'fonts f 'hyphenchar)
              (c >= 0 && c < 256 ? (pin (tl J) 'pre (new-character J f c))))
           (pin J 'save-ptr (J 'save-ptr + 1), set-saved J -1 0, disc-group-again J)))
@@ -591,21 +591,21 @@
        p (L 'head 'link)
        _ (pop-nest J)
        d (tl J) s (saved J -1)
-       (? (s = 0) (pin d 'pre p, set-saved J -1 1, disc-group-again J)
-          (s = 1) (pin d 'post p, set-saved J -1 2, disc-group-again J)
-          (: n2 (? (n > 0 && abs (mode J) = mmode)
-                    (print-err J "Illegal math ", print-esc J "discretionary",
-                     set-help J ["Sorry: The third part of a discretionary break must be"
-                                 "empty, in math formulas. I had to delete your third part."],
-                     tex-error J, 0)
-                    (pin d 'link p, n))
-             _ (n2 <= 255 ? (pin d 'sub n2)
-                  (print-err J "Discretionary list is too long",
-                   set-help J ["Wow---I never thought anybody would tweak me here."
-                               "You can't seriously need such a huge discretionary list?"],
-                   tex-error J))
-             _ (n2 > 0 ? (pin (J 'cur-list) 'tail q))
-             (pin J 'save-ptr (J 'save-ptr - 1)))))
+       (s @ 0 (pin d 'pre p, set-saved J -1 1, disc-group-again J)
+            1 (pin d 'post p, set-saved J -1 2, disc-group-again J)
+            (: n2 (? (n > 0 && abs (mode J) = mmode)
+                      (print-err J "Illegal math ", print-esc J "discretionary",
+                       set-help J ["Sorry: The third part of a discretionary break must be"
+                                   "empty, in math formulas. I had to delete your third part."],
+                       tex-error J, 0)
+                      (pin d 'link p, n))
+               _ (n2 <= 255 ? (pin d 'sub n2)
+                    (print-err J "Discretionary list is too long",
+                     set-help J ["Wow---I never thought anybody would tweak me here."
+                                 "You can't seriously need such a huge discretionary list?"],
+                     tex-error J))
+               _ (n2 > 0 ? (pin (J 'cur-list) 'tail q))
+               (pin J 'save-ptr (J 'save-ptr - 1)))))
    (do-assignments J)
     (: (go _)
         (non-blank-non-relax J,
@@ -622,7 +622,7 @@
              q (? (cmd = letter || cmd = other-char || cmd = char-given) (new-character J f2 (J 'cur-chr))
                   (cmd = char-num) (scan-char-num J, new-character J f2 (J 'cur-val))
                   (back-input J, ()))
-             r (? (q = ()) p
+             r (q @ () p
                   (: t (font-param J f2 slant-code / 65536.0)
                      w (char-width J f2 (q 'char)) h (char-height J f2 (q 'char))
                      p1 (h != x ? (hpack J p 0 'additional @ b (pin b 'shift (x - h), b)) p)
@@ -650,10 +650,10 @@
          tex-error J)
        (: _ (back-input J)
           _ (? (J 'align-state < 0)
-                (print-err J "Missing { inserted", pin J 'align-state (J 'align-state + 1),
-                 pin J 'cur-tok (left-brace-token + 123))
-                (print-err J "Missing } inserted", pin J 'align-state (J 'align-state - 1),
-                 pin J 'cur-tok (right-brace-token + 125)))
+                (print-err J "Missing { inserted", pins J 'align-state (J 'align-state + 1)
+                 'cur-tok (left-brace-token + 123))
+                (print-err J "Missing } inserted", pins J 'align-state (J 'align-state - 1)
+                 'cur-tok (right-brace-token + 125)))
           _ (set-help J ["I've put in what seems to be necessary to fix"
                          "the current column of the current alignment."
                          "Try to go on, since this might almost work."])
@@ -673,15 +673,15 @@
    ; the current page hangs off J 'page-head; J 'page-ins holds tex.web's page-insertion records,
    ; sorted by box number, each {'sub 'type 'height 'broken-ptr 'broken-ins 'last-ins 'best-ins}
    (at? p b) (? (p = ()) (b = ()) (b = ()) 0 (p == b))
-   (last-node p) (p 'link = () ? p (last-node (p 'link)))
+   (last-node p) (p 'link @ () p (last-node (p 'link)))
    (box-reg J n) (equiv J (box-base + n))
    (set-box-reg J n b) (pin (J 'eq) (box-base + n) b)
    (count-reg J n) (J 'eq (count-base + n))
-   (scaled-count J x n) (count-reg J n = 1000 ? x ((x // 1000) * count-reg J n))
+   (scaled-count J x n) (count-reg J n @ 1000 x ((x // 1000) * count-reg J n))
    (vpack J p h m) (vpackage J p h m max-dimen)
    (psf J k) (J 'page-so-far k)
    (psf! J k v) (pin (J 'page-so-far) k v)
-   (set-contrib-tail J t) (pin (J 'nest = () ? (J 'cur-list) ((rev (J 'nest)) 0)) 'tail t)
+   (set-contrib-tail J t) (pin (J 'nest @ () (J 'cur-list) ((rev (J 'nest)) 0)) 'tail t)
    (print-totals J)
     (: (plus k s) (psf J k != 0 ? (print J " plus ", print-scaled J (psf J k), print J s))
        (print-scaled J (psf J 1), plus 2 "", plus 3 "fil", plus 4 "fill", plus 5 "filll",
@@ -734,7 +734,7 @@
           (: r {'sub n 'type inserting 'height 0 'best-ins () 'last-ins () 'broken-ptr () 'broken-ins ()}
              _ (pin J 'page-ins (into r (J 'page-ins)))
              _ (ensure-vbox J n)
-             _ (box-reg J n @ b (pin r 'height (b = () ? 0 (b 'height + b 'depth))))
+             _ (box-reg J n @ b (pin r 'height (b @ () 0 (b 'height + b 'depth))))
              q (equiv J (skip-base + n))
              _ (psf! J 0 (psf J 0 - scaled-count J (r 'height) n - q 'width))
              _ (psf! J (2 + q 'sto) (psf J (2 + q 'sto) + q 'stretch))
@@ -851,12 +851,12 @@
               (pi = 'contribute) (contribute p, 'next)
               (pi = 'update) (update-heights p, 'next)
               (champion p pi @ k
-                 (? (k = 'go) (t < glue-node || t > kern-node ? (contribute p) (update-heights p), 'next)
-                    (k = 'done) 'next
-                    'exit))))
-       (go _) (c 'link = () ? 'next (step (c 'link) = 'exit ? 'exit (go ())))
+                 (k @ 'go (t < glue-node || t > kern-node ? (contribute p) (update-heights p), 'next)
+                      'done 'next
+                      'exit))))
+       (go _) (c 'link @ () 'next (step (c 'link) @ 'exit 'exit (go ())))
        (c 'link = () || J 'output-active ? ()
-          ((go ()) = 'exit ? () (set-contrib-tail J c))))
+          ((go ()) @ 'exit () (set-contrib-tail J c))))
    ; the best page into box 255, and the output routine or a shipout (tex.web 1012-1023)
    (fire-up J c)
     (: bpb (J 'best-page-break)
@@ -866,7 +866,7 @@
              (geq-word-define J (int-base + output-penalty-code) inf-penalty))
        M (J 'cur-mark)
        _ (peep M bot-mark-code () != () ?
-            (pin M top-mark-code (M bot-mark-code), pin M first-mark-code ()))
+            (pins M top-mark-code (M bot-mark-code) first-mark-code ()))
        _ (c == bpb ? (pin J 'best-page-break ()))
        _ (box-reg J 255 != () ?
             (print-err J "", print-esc J "box", print J "255 is not void",
@@ -879,7 +879,7 @@
        _ (hold ? ()
             (map (r \ (r 'best-ins != () ?
                          (: n (r 'sub) _ (ensure-vbox J n)
-                            _ (box-reg J n = () ? (set-box-reg J n (new-null-box ())))
+                            _ (box-reg J n @ () (set-box-reg J n (new-null-box ())))
                             h {'type 'head 'link (box-reg J n 'list)}
                             (pins r 'qhead h 'last-ins (last-node h)))))
                  (J 'page-ins)))
@@ -893,7 +893,7 @@
                    _ (pin (J 'params) 'splittopskip (p 'split-top))
                    rest (cg-prune-top J (r 'broken-ptr))
                    _ (pin p 'ins rest)
-                   (rest = () ? 0 (vpack J rest 0 'additional @ t (pin p 'height (t 'height + t 'depth), 1))))
+                   (rest @ () 0 (vpack J rest 0 'additional @ t (pin p 'height (t 'height + t 'depth), 1))))
                 0)
            _ (pin r 'best-ins ())
            _ (set-box-reg J (r 'sub) (vpack J (r 'qhead 'link) 0 'additional))
@@ -902,7 +902,7 @@
         (? (at? p (J 'best-page-break)) prev
            (p 'type = ins-node && !hold)
             (: r <(filter (r \ r 'sub = p 'sub) (J 'page-ins))
-               wait (? (r 'best-ins = ()) 1
+               wait (r 'best-ins @ () 1
                        (: s (r 'last-ins)
                           _ (pin s 'link (p 'ins))
                           (r 'best-ins == p ? (wrap-up r p s) (pin r 'last-ins (last-node s), 0))))
@@ -912,7 +912,7 @@
                     (pin (Q 'q) 'link p, pin Q 'q p, pin J 'insert-penalties (J 'insert-penalties + 1)))
                (walk prev (prev 'link)))
            (p 'type = mark-node)
-            (: _ (peep M first-mark-code () = () ? (pin M first-mark-code (p 'mark)))
+            (: _ (peep M first-mark-code () @ () (pin M first-mark-code (p 'mark)))
                _ (pin M bot-mark-code (p 'mark))
                (walk p (p 'link)))
            (walk p (p 'link)))
@@ -920,7 +920,7 @@
        p (J 'best-page-break)
        ch (contrib-head J)
        _ (p != () ?
-            (: _ (ch 'link = () ? (set-contrib-tail J (J 'page-tail)))
+            (: _ (ch 'link @ () (set-contrib-tail J (J 'page-tail)))
                (pin (J 'page-tail) 'link (ch 'link), pin ch 'link p, pin prev 'link ())))
        ; box 255 packed with vbadness and vfuzz out of the way
        sb (int-par J vbadness-code) sf (dimen-par J vfuzz-code)
@@ -950,7 +950,7 @@
    (default-output J)
     (: ph (J 'page-head) ch (contrib-head J)
        _ (ph 'link != () ?
-            (: _ (ch 'link = () ? (set-contrib-tail J (J 'page-tail)) (pin (J 'page-tail) 'link (ch 'link)))
+            (: _ (ch 'link @ () (set-contrib-tail J (J 'page-tail)) (pin (J 'page-tail) 'link (ch 'link)))
                (pin ch 'link (ph 'link), pin ph 'link (), pin J 'page-tail ph)))
        (ship-out J (box-reg J 255), set-box-reg J 255 ()))
    ; the output routine's right brace (tex.web 1026-1028)
@@ -974,14 +974,14 @@
        _ (L 'tail == L 'head ? () (pin (J 'page-tail) 'link (L 'head 'link), pin J 'page-tail (L 'tail)))
        ph (J 'page-head) ch (contrib-head J)
        _ (ph 'link != () ?
-            (: _ (ch 'link = () ? (set-contrib-tail J (J 'page-tail)))
+            (: _ (ch 'link @ () (set-contrib-tail J (J 'page-tail)))
                (pin (J 'page-tail) 'link (ch 'link), pin ch 'link (ph 'link),
                 pin ph 'link (), pin J 'page-tail ph)))
        (pop-nest J, build-page J))
    ; \vsplit n to h (tex.web 977-979)
    (vsplit J n h)
     (: v (box-reg J n) M (J 'cur-mark)
-       _ (pin M split-first-mark-code (), pin M split-bot-mark-code ())
+       _ (pins M split-first-mark-code () split-bot-mark-code ())
        (? (v = ()) ()
           (v 'type != vlist-node)
            (print-err J "", print-esc J "vsplit", print J " needs a ", print-esc J "vbox",
@@ -992,13 +992,13 @@
              q (cg-vert-break J (v 'list) h (dimen-par J split-max-depth-code))
              (marks p)
               (: _ (p 'type = mark-node ?
-                      (peep M split-first-mark-code () = () ?
+                      (peep M split-first-mark-code () @ ()
                          (pin M split-first-mark-code (p 'mark), pin M split-bot-mark-code (p 'mark))
                          (pin M split-bot-mark-code (p 'mark))))
                  (at? (p 'link) q ? (pin p 'link ()) (marks (p 'link))))
              _ (at? (v 'list) q ? (pin v 'list ()) (marks (v 'list)))
              q2 (cg-prune-top J q)
-             _ (set-box-reg J n (q2 = () ? () (vpack J q2 0 'additional)))
+             _ (set-box-reg J n (q2 @ () () (vpack J q2 0 'additional)))
              (vpackage J (v 'list) h 'exactly (dimen-par J split-max-depth-code)))))
    ; page.l's vert_break, on glue it made finite (tex.web 976)
    (split-shrink-warn J)
@@ -1045,7 +1045,7 @@
           _ (? (m = math-char) (print-ln J, print-current-string J, print-fam-and-char J p)
                (m = sub-box) (show-node-list J (p 'info))
                (m = sub-mlist)
-                (p 'info = () ? (print-ln J, print-current-string J, print J "{}")
+                (p 'info @ () (print-ln J, print-current-string J, print J "{}")
                    (show-node-list J (p 'info))))
           (flush-char J)))
    (display-noad J p)
@@ -1095,7 +1095,7 @@
    (set-cur-size J)
     (: z (size-of (J 'cur-style)) (pins J 'cur-size z 'cur-mu (x-over-n J (mathsy J 6 z) 18)))
    ; char_info as tfm.l keeps it: [width height_depth italic_tag remainder], () for none
-   (ci-of J f c) (tfm-of J f @ t (t 'bc <= c && c <= t 'ec ? (t 'ci c) ()))
+   (ci-of J f c) (tfm-of J f @ t (t 'bc <= c <= t 'ec ? (t 'ci c) ()))
    (exists? i) (i != () && 0 < <i)
    (ch-width J f i) (tfm-of J f @ t (t 'wd <i))
    (ch-height J f i) (tfm-of J f @ t (t 'ht (i 1 // 16)))
@@ -1125,9 +1125,9 @@
        ; the characters from y on in font g; 1 once one is large enough
        (chars g y)
         (tfm-of J g @ t
-           (t 'bc <= y && y <= t 'ec ?
+           (t 'bc <= y <= t 'ec ?
               (: q (t 'ci y)
-                 (? (!(exists? q)) 0
+                 (? !(exists? q) 0
                     (ch-tag q = 3) (pins S 'f g 'c y 'q q 'ext 1, 1)
                     (: u (ch-height J g q + ch-depth J g q)
                        (? (u > S 'w && (pins S 'f g 'c y 'w u, u >= v)) 1
@@ -1138,7 +1138,7 @@
         (? (z = 0 && x = 0) 0
            (: (fams z) (fam-fnt J z @ g (g != null-font && chars g x = 1 ? 1 (z < 16 ? 0 (fams (z - 16)))))
               (fams (z + s))))
-       _ (look (d 'sf) (d 'sc) = 1 ? () (look (d 'lf) (d 'lc)))
+       _ (look (d 'sf) (d 'sc) @ 1 () (look (d 'lf) (d 'lc)))
        b (? (S 'f = null-font)
              (new-null-box () @ b (pin b 'width (dimen-par J null-delimiter-space-code), b))
              (S 'ext = 1) (ext-box J (S 'f) (S 'q) v)
@@ -1221,9 +1221,9 @@
     (: _ (pin J 'cur-style style) _ (set-cur-size J)
        S {'r () 'rt op-noad 'mh 0 'md 0}
        (first q)
-        (q = () ? ()
+        (q @ () ()
            (: k (first-pass J q S)
-              _ (k = 'dims ?
+              _ (k @ 'dims
                    (hpack J (q 'new-hlist) 0 'additional @ z
                       (z 'height > S 'mh ? (pin S 'mh (z 'height)), z 'depth > S 'md ? (pin S 'md (z 'depth)))))
               _ (k != 'node ? (pins S 'r q 'rt (q 'type)))
@@ -1235,7 +1235,7 @@
        _ (pin J 'cur-style style) _ (set-cur-size J)
        (put q) (pin (P 'p) 'link q, pin P 'p q)
        (second q)
-        (q = () ? ()
+        (q @ () ()
            (: t0 (q 'type) nx (q 'link)
               (? (t0 = style-node) (pin J 'cur-style (q 'sub), set-cur-size J, second nx)
                  (elem t0 [whatsit-node penalty-node rule-node disc-node adjust-node ins-node mark-node
@@ -1363,7 +1363,7 @@
              0)))
    (make-math-accent J q)
     (: _ (fetch J (q 'acc))
-       (? (!(exists? (J 'cur-i))) ()
+       (? !(exists? (J 'cur-i)) ()
           (: i0 (J 'cur-i) c0 (J 'cur-c) f (J 'cur-f)
              s (skew J q)
              x0 (clean-box J (q 'nucleus) (cramped-style (J 'cur-style)))
@@ -1371,7 +1371,7 @@
              ; a larger accent, while one is no wider than the accentee
              c (: (go i c) (? (ch-tag i != 2) c
                               (: y (i 3) i2 (ci-of J f y)
-                                 (? (!(exists? i2)) c (ch-width J f i2 > w) c (go i2 y))))
+                                 (? !(exists? i2) c (ch-width J f i2 > w) c (go i2 y))))
                   (go i0 c0))
              xh (font-param J f 5)
              S {'x x0 'd (h0 < xh ? h0 xh) 'h h0}
@@ -1386,13 +1386,13 @@
                      (pins S 'd (S 'd + x2 'height - S 'h) 'h (x2 'height) 'x x2)))
              x (S 'x) h (S 'h)
              y (char-box J f c)
-             _ (pin y 'shift (s + half (w - y 'width)))
-             _ (pin y 'width 0)
+             _ (pins y 'shift (s + half (w - y 'width))
+             'width 0)
              p (new-kern (0 - S 'd)) _ (pin p 'link x) _ (pin y 'link p)
              y2 (vpack J y 0 'additional)
              _ (pin y2 'width (x 'width))
              _ (y2 'height < h ?
-                  (new-kern (h - y2 'height) @ k (pin k 'link (y2 'list), pin y2 'list k, pin y2 'height h)))
+                  (new-kern (h - y2 'height) @ k (pin k 'link (y2 'list), pins y2 'list k 'height h)))
              (pins (q 'nucleus) 'info y2 'mt sub-box))))
    (make-fraction J q)
     (: _ (q 'width = default-code ? (pin q 'width (rule-thickness J)))
@@ -1404,7 +1404,7 @@
        sz (J 'cur-size) ax (axis-height J sz)
        up0 (? (st < text-style) (mathsy J 8 sz) (th != 0) (mathsy J 9 sz) (mathsy J 10 sz))
        dn0 (st < text-style ? (mathsy J 11 sz) (mathsy J 12 sz))
-       ud (? (th = 0)
+       ud (th @ 0
               (: clr ((st < text-style ? 7 3) * rule-thickness J)
                  delta (half (clr - ((up0 - x 'depth) - (z 'height - dn0))))
                  (delta > 0 ? [(up0 + delta) (dn0 + delta)] [up0 dn0]))
@@ -1416,7 +1416,7 @@
        up (ud 0) dn (ud 1)
        v (new-null-box ())
        _ (pins v 'type vlist-node 'height (up + x 'height) 'depth (z 'depth + dn) 'width (x 'width))
-       _ (? (th = 0)
+       _ (th @ 0
              (new-kern ((up - x 'depth) - (z 'height - dn)) @ p (pin p 'link z, pin x 'link p))
              (: delta (half th)
                 y (fraction-rule th)
@@ -1439,7 +1439,7 @@
                     _ (J 'cur-style < text-style && J 'cur-i != () && ch-tag (J 'cur-i) = 2 ?
                          (: c (J 'cur-i 3) i (ci-of J (J 'cur-f) c)
                             (exists? i ? (pins J 'cur-c c 'cur-i i, pin n 'char c))))
-                    d (J 'cur-i = () ? 0 (ch-italic J (J 'cur-f) (J 'cur-i)))
+                    d (J 'cur-i @ () 0 (ch-italic J (J 'cur-f) (J 'cur-i)))
                     x (clean-box J n (J 'cur-style))
                     _ (q 'subscr 'mt != m-empty && q 'sub != limits ? (pin x 'width (x 'width - d)))
                     _ (pin x 'shift (half (x 'height - x 'depth) - axis-height J (J 'cur-size)))
@@ -1518,7 +1518,7 @@
                 c1 (? (st % 2 = 1) (mathsy J 15 sz) (st < text-style) (mathsy J 13 sz) (mathsy J 14 sz))
                 su2 (max (max su c1) (x 'depth + abs (math-x-height J sz) // 4))
                 (q 'subscr 'mt = m-empty ? (pin x 'shift (0 - su2), x) (sub-and-sup J q x su2 sd delta))))
-       (? (q 'new-hlist = ()) (pin q 'new-hlist x) (pin (last-node (q 'new-hlist)) 'link x)))
+       (q 'new-hlist @ () (pin q 'new-hlist x) (pin (last-node (q 'new-hlist)) 'link x)))
    (sub-and-sup J q x su sd delta)
     (: y (clean-box J (q 'subscr) (sub-style (J 'cur-style)))
        _ (pin y 'width (y 'width + dimen-par J script-space-code))
@@ -1549,9 +1549,9 @@
    (math-space J P t)
     (: ch (math-spacing ((P 'rt - ord-noad) * 8 + t - ord-noad))
        sc (J 'cur-style < script-style)
-       x (? (ch = 48) 0 (ch = 49) (sc ? thin-mu-skip-code 0) (ch = 50) thin-mu-skip-code
-            (ch = 51) (sc ? med-mu-skip-code 0) (ch = 52) (sc ? thick-mu-skip-code 0)
-            (confusion J "mlist4"))
+       x (ch @ 48 0 49 (sc ? thin-mu-skip-code 0) 50 thin-mu-skip-code
+               51 (sc ? med-mu-skip-code 0) 52 (sc ? thick-mu-skip-code 0)
+               (confusion J "mlist4"))
        (x != 0 ?
           (new-glue (math-glue J (glue-par J x) (J 'cur-mu)) @ z
              (pin z 'sub (x + 1), pin (P 'p) 'link z, pin P 'p z))))
@@ -1576,9 +1576,9 @@
              (t = kern-node || t = math-node) [(p 'width) 0 0]
              (t = glue-node)
               (: q (p 'glue)
-                 inf (? (b 'gsign = 1) (b 'gorder = q 'sto && q 'stretch != 0)
-                        (b 'gsign = 2) (b 'gorder = q 'sho && q 'shrink != 0)
-                        0)
+                 inf (b 'gsign @ 1 (b 'gorder = q 'sto && q 'stretch != 0)
+                                 2 (b 'gorder = q 'sho && q 'shrink != 0)
+                                 0)
                  [(q 'width) (p 'sub >= a-leaders) inf])
              [0 0 0])))
    (go-into-display J)
@@ -1586,7 +1586,7 @@
             (: _ (line-break J (int-par J display-widow-penalty-code))
                b (J 'just-box)
                (go p v w)
-                (? (p = ()) w
+                (p @ () w
                    (: k (nat-width J p b) d (k 0) v2 (k 2 != 0 ? max-dimen v)
                       (? (k 1 != 0) (v2 < max-dimen ? (go (p 'link) (v2 + d) (v2 + d)) max-dimen)
                          (go (p 'link) (v2 < max-dimen ? (v2 + d) v2) w))))
@@ -1605,7 +1605,7 @@
        _ (eq-word-define J (dimen-base + display-indent-code) (ls 1))
        _ (equiv J every-display-loc != () ?
             (begin-token-list J (equiv J every-display-loc) every-display-text))
-       (#(J 'nest) = 1 ? (build-page J)))
+       (#(J 'nest) @ 1 (build-page J)))
    (set-math-field J p c)
     (: f (int-par J cur-fam-code)
        (pins p 'mt math-char 'char (c % 256) 'fam (c >= var-code && f >= 0 && f < 16 ? f ((c // 256) % 16))))
@@ -1619,7 +1619,7 @@
         (: cmd (J 'cur-cmd)
            (? (cmd = letter || cmd = other-char || cmd = char-given)
                (: c (equiv J (math-code-base + J 'cur-chr))
-                  (c = 32768 ? (active-char J, scan-math J p) (set-math-field J p c)))
+                  (c @ 32768 (active-char J, scan-math J p) (set-math-field J p c)))
               (cmd = char-num) (scan-char-num J, pins J 'cur-chr (J 'cur-val) 'cur-cmd char-given, rs ())
               (cmd = math-char-num) (scan-fifteen-bit-int J, set-math-field J p (J 'cur-val))
               (cmd = math-given) (set-math-field J p (J 'cur-chr))
@@ -1690,7 +1690,7 @@
      push-math J math-choice-group, scan-left-brace J)
    (build-choices J)
     (: _ (unsave J) p (fin-mlist J ()) k (saved J -1) t (tl J)
-       (? (k = 3) (pin t 'ss p, pin J 'save-ptr (J 'save-ptr - 1))
+       (k @ 3 (pin t 'ss p, pin J 'save-ptr (J 'save-ptr - 1))
           (pin t (['d 't 's] k) p, set-saved J -1 (k + 1), push-math J math-choice-group, scan-left-brace J)))
    (sub-sup J)
     (: t0 (tl J)
@@ -1733,7 +1733,7 @@
     (: L (J 'cur-list) n (L 'incompleat)
        q (? (n != ())
              (: _ (pins (n 'subscr) 'mt sub-mlist 'info (L 'head 'link))
-                (? (p = ()) n
+                (p @ () n
                    (: q (n 'supscr 'info)
                       _ (q 'type != left-noad ? (confusion J "right"))
                       _ (pin (n 'supscr) 'info (q 'link))
@@ -1812,7 +1812,7 @@
               _ (tail-append J (new-math (dimen-par J math-surround-code) 1))
               _ (pin (J 'cur-list) 'sf 1000)
               (unsave J))
-          (: _ (r 0 = () ? (check-dollar J))
+          (: _ (r 0 @ () (check-dollar J))
              (finish-display J (r 4) (r 0) (r 1) (r 2)))))
    (new-math w s) (cb-math w s)
    (finish-display J p0 a l danger)
@@ -1841,7 +1841,7 @@
        g2 (short ? below-display-short-skip-code below-display-skip-code)
        _ (? (l && e = 0) (pin a 'shift s, append-to-vlist J a, tail-append J (new-penalty inf-penalty))
             (tail-append J (new-param-glue J g1)))
-       bd (? (e = 0) [b d]
+       bd (e @ 0 [b d]
               (: r (new-kern (z - w - e - d))
                  (? l (: _ (pin a 'link r) _ (pin r 'link b) [(hpack J a 0 'additional) 0])
                     (: _ (pin b 'link r) _ (pin r 'link a) [(hpack J b 0 'additional) d]))))
@@ -1868,7 +1868,7 @@
                       + norm-min (int-par J right-hyphen-min-code)) * 65536 + lang))
        _ (get-x-token J)
        _ (J 'cur-cmd != spacer ? (back-input J))
-       (#(J 'nest) = 1 ? (build-page J)))
+       (#(J 'nest) @ 1 (build-page J)))
 
    ; --- \patterns and \hyphenation, token by token (tex.web 934-941, 960-965) -----------------
    ; into par.l's tables: J 'pats under the language's byte and the letters, every prefix in
@@ -1905,7 +1905,7 @@
           (: u2 (peep (J 'trie-used) lang 0 + 1)
              (pin (J 'trie-used) lang u2, pin T key u2, pin J 'trie-op-count (J 'trie-op-count + 1), u2))))
    (new-patterns J)
-    (? (J 'trie-ready = 1)
+    (J 'trie-ready @ 1
         (print-err J "Too late for ", print-esc J "patterns",
          set-help J ["All patterns must be given before typesetting begins."],
          tex-error J, scan-toks J 0 0, ())
@@ -1915,12 +1915,12 @@
           (bad msg) (print-err J msg, set-help J ["(See Appendix H.)"], tex-error J)
           (insert _)
            (: k (St 'k) hc (St 'hc) hy (St 'hy)
-              _ (hc 1 = 0 ? (pin hy 0 0))
-              _ (hc k = 0 ? (pin hy k 0))
+              _ (hc 1 @ 0 (pin hy 0 0))
+              _ (hc k @ 0 (pin hy k 0))
               (grow i key) (i <= k ? (key + string (hc i) @ k2 (pin (J 'pref) k2 1, grow (i + 1) k2)) key)
               key (grow 1 (string lang))
               old (peep (J 'pats) key ())
-              v (: (go l v) (? (l < 0) v (go (l - 1) (peep hy l 0 = 0 ? v (new-trie-op J lang (k - l) (hy l) v))))
+              v (: (go l v) (? (l < 0) v (go (l - 1) (peep hy l 0 @ 0 v (new-trie-op J lang (k - l) (hy l) v))))
                    (go k 0))
               _ (old != () && any (x \ x != 0) old ? (bad "Duplicate pattern"))
               _ (pin (J 'pat-ops) key v)
@@ -1930,7 +1930,7 @@
               cmd (J 'cur-cmd) ch (J 'cur-chr) k (St 'k)
               (? (cmd = letter || cmd = other-char)
                   (: _ (? (St 'ds = 1 || ch < 48 || ch > 57)
-                           (: c (ch = 46 ? 0 (J 'lc ch))
+                           (: c (ch @ 46 0 (J 'lc ch))
                               _ (c = 0 && ch != 46 ? (bad "Nonletter"))
                               (k < 63 ? (pin (St 'hc) (k + 1) c, pin (St 'hy) (k + 1) 0,
                                          pins St 'k (k + 1) 'ds 0)))
@@ -1950,10 +1950,10 @@
    (tabskip-glue g) (new-glue g @ x (pin x 'sub (tab-skip-code + 1), x))
    (tot-order t) (? (t 3 != 0) 3 (t 2 != 0) 2 (t 1 != 0) 1 0)
    (push-alignment J)
-    (pin J 'align-stack
-       ({'align (J 'cur-align) 'pre (J 'align-head 'link) 'span (J 'cur-span) 'loop (J 'cur-loop)
-         'state (J 'align-state) 'head (J 'cur-head) 'tail (J 'cur-tail)} . J 'align-stack),
-     pin J 'cur-head {'type 'head 'link ()})
+    (pins J 'align-stack ({'align (J 'cur-align) 'pre (J 'align-head 'link) 'span (J 'cur-span)
+                           'loop (J 'cur-loop) 'state (J 'align-state) 'head (J 'cur-head)
+                           'tail (J 'cur-tail)} . J 'align-stack)
+     'cur-head {'type 'head 'link ()})
    (pop-alignment J)
     (: a <(J 'align-stack)
        (pins J 'cur-tail (a 'tail) 'cur-head (a 'head) 'align-state (a 'state) 'cur-loop (a 'loop)
@@ -2019,8 +2019,8 @@
        _ (u ())
        r (new-null-box ())
        _ (pins r 'info (J 'end-span) 'width null-flag 'u (rev (J 'hold-list)))
-       _ (pin (J 'cur-align) 'link r) _ (pin J 'cur-align r)
-       _ (pin J 'hold-list ())
+       _ (pin (J 'cur-align) 'link r) _ (pins J 'cur-align r
+       'hold-list ())
        (v _)
         (: _ (get-preamble-token J)
            (? (at-tab? J) ()
@@ -2071,9 +2071,9 @@
    ; a column's end; 1 when the row ends too (tex.web 791-798)
    (fin-col J)
     (: a (J 'cur-align)
-       _ (a = () ? (confusion J "endv"))
+       _ (a @ () (confusion J "endv"))
        q (a 'link)
-       _ (q = () ? (confusion J "endv"))
+       _ (q @ () (confusion J "endv"))
        _ (J 'align-state < 500000 ? (fatal-error J "(interwoven alignment preambles are not allowed)"))
        p (? (q 'link != () || a 'extra >= cr-code) (q 'link)
             (J 'cur-loop != ()) (lengthen-preamble J q)
@@ -2142,7 +2142,7 @@
                                       (open? I && I 'index = v-template))))
        _ (ok (J 'cur . J 'istack) ? ()
             (fatal-error J "(interwoven alignment preambles are not allowed)"))
-       (J 'cur-group = align-group ? (end-graf J, (fin-col J = 1 ? (fin-row J))) (off-save J)))
+       (J 'cur-group = align-group ? (end-graf J, (fin-col J @ 1 (fin-row J))) (off-save J)))
    ; the columns' widths, the preamble packed, and every row set to it (tex.web 800-812)
    (fin-align J)
     (: _ (J 'cur-group != align-group ? (confusion J "align1"))
@@ -2152,7 +2152,7 @@
        o (<(J 'nest) 'mode = mmode ? (dimen-par J display-indent-code) 0)
        es (J 'end-span)
        (columns q)
-        (q = () ? ()
+        (q @ () ()
            (: p (q 'link 'link)
               _ (q 'width = null-flag ? (pin q 'width 0, pin (q 'link) 'glue (J 'zero-glue)))
               _ (q 'info == es ? () (merge-spans J q p))
@@ -2162,7 +2162,7 @@
        _ (columns (J 'align-head 'link 'link))
        _ (pin J 'save-ptr (J 'save-ptr - 2))
        _ (pin J 'pack-begin-line (0 - J 'cur-list 'ml))
-       (each f) (: (go q) (q = () ? () (f q, go (q 'link 'link))) (go (J 'align-head 'link 'link)))
+       (each f) (: (go q) (q @ () () (f q, go (q 'link 'link))) (go (J 'align-head 'link 'link)))
        p (? (mode J = 0 - vmode)
              (: rs (dimen-par J overfull-rule-code)
                 _ (pin (J 'eq) (dimen-base + overfull-rule-code) 0)
@@ -2175,7 +2175,7 @@
                 p))
        _ (pin J 'pack-begin-line 0)
        (set-glue s q)
-        (q = () ? ()
+        (q @ () ()
            (: q2 (? (char-node? q) q
                     (q 'type = unset-node) (set-unset J q p o)
                     (q 'type = rule-node) (extend-rule J q p o s)
@@ -2227,7 +2227,7 @@
     (: _ (q 'width = null-flag ? (pin q 'width (p 'width)))
        _ (q 'height = null-flag ? (pin q 'height (p 'height)))
        _ (q 'depth = null-flag ? (pin q 'depth (p 'depth)))
-       (o = 0 ? q
+       (o @ 0 q
           (: r (q 'link) _ (pin q 'link ())
              b (hpack J q 0 'additional)
              (pins b 'shift o 'link r, pin s 'link b, b))))
@@ -2237,7 +2237,7 @@
        _ (? v (pins q 'type hlist-node 'width (p 'width)) (pins q 'type vlist-node 'height (p 'height)))
        _ (pins q 'gorder (p 'gorder) 'gsign (p 'gsign) 'gset (p 'gset) 'shift o)
        (go r s)
-        (r = () ? ()
+        (r @ () ()
            (set-entry J q p r s v @ rs (go (rs 0 'link 'link) (rs 1 'link 'link))))
        (go (q 'list 'link) (p 'list 'link),
         q))
@@ -2250,9 +2250,9 @@
            u (tabskip-glue g)
            _ (pin (S 'u) 'link u)
            t0 (S 't + g 'width)
-           t1 (? (p 'gsign = 1) (g 'sto = p 'gorder ? (t0 + round-real (p 'gset * g 'stretch)) t0)
-                 (p 'gsign = 2) (g 'sho = p 'gorder ? (t0 - round-real (p 'gset * g 'shrink)) t0)
-                 t0)
+           t1 (p 'gsign @ 1 (g 'sto = p 'gorder ? (t0 + round-real (p 'gset * g 'stretch)) t0)
+                          2 (g 'sho = p 'gorder ? (t0 - round-real (p 'gset * g 'shrink)) t0)
+                          t0)
            s2 (s 'link)
            b (new-null-box ())
            _ (pin u 'link b)
@@ -2263,7 +2263,7 @@
        _ (? v (pins r 'height (q 'height) 'depth (q 'depth)) (pin r 'width (q 'width)))
        x (r dim)
        _ (? (t = x) (pins r 'gsign normal 'gorder normal 'gset 0.0)
-            (t > x) (pins r 'gsign 1 'gset (r 'gstretch = 0 ? 0.0 ((t - x) / r 'gstretch)))
+            (t > x) (pins r 'gsign 1 'gset (r 'gstretch @ 0 0.0 ((t - x) / r 'gstretch)))
             (pins r 'gorder (r 'gsign) 'gsign 2
                     'gset (? (r 'gshrink = 0) 0.0
                              (r 'gsign = normal && x - t > r 'gshrink) 1.0
@@ -2320,7 +2320,7 @@
              _ (peep (J 'write-file) j () @ q (q != () ? (close q, pin (J 'write-file) j ())))
              (s = open-node && j < 16 ?
                 (pin (J 'write-file) j
-                   (open (p 'area + p 'name + (p 'ext = "" ? ".tex" (p 'ext))) "w"))))))
+                   (open (p 'area + p 'name + (p 'ext @ "" ".tex" (p 'ext))) "w"))))))
    ; \write's tokens expanded as {..}\endwrite, then shown to its stream (tex.web 1370-1372)
    (write-out J p)
     (: ew (cs-token-flag + end-write)
@@ -2368,10 +2368,10 @@
               tex-error J,
               !tr ? (begin-diagnostic J, print-nl J "The following box has been deleted:",
                      show-box J p, end-diagnostic J 1))
-            (: _ (J 'output-file-name = () ?
+            (: _ (J 'output-file-name @ ()
                     (J 'job-name = () ? (open-log-file J),
                      pin J 'output-file-name (J 'job-name + ".dvi")))
-               _ (J 'pages = 0 ? (prepare-mag J))
+               _ (J 'pages @ 0 (prepare-mag J))
                _ (sync-params J)
                (cb-ship J p)))
        _ (!tr ? (print-char J 93))
@@ -2382,7 +2382,7 @@
           (print-nl J "Memory usage before: 0&0; after: 0&0; still untouched: 0", print-ln J)))
    ; the postamble, and what the log says of it (tex.web 642)
    (finish-dvi J)
-    (? (J 'pages = 0) (print-nl J "No pages of output.")
+    (J 'pages @ 0 (print-nl J "No pages of output.")
        (: _ (prepare-mag J) _ (sync-params J)
           b (cb-dvi J)
           _ (open (J 'output-file-name) "w" @ q (say q b, close q))
