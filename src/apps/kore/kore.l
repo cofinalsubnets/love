@@ -845,7 +845,7 @@
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
-    'objcopy "usage: objcopy -O binary|ihex [-R SEC] [-j SEC] IN OUT"
+    'objcopy "usage: objcopy [-O binary|ihex] [-S] [-R SEC] [-j SEC] IN OUT"
     'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
