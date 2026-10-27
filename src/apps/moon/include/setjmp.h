@@ -11,7 +11,10 @@ typedef long sigjmp_buf[25];
 int __sigsetjmp(sigjmp_buf, int);
 void siglongjmp(sigjmp_buf, int);
 #define sigsetjmp(env, save) __sigsetjmp(env, save)
-/* the plain pair rides the sig pair: restoring the mask setjmp saved is the identity */
+/* the plain pair rides the sig pair: restoring the mask setjmp saved is the identity.
+ * longjmp is a function, as C asks, so its address can be taken */
 #define setjmp(env) __sigsetjmp(env, 0)
-#define longjmp(env, v) siglongjmp(env, v)
+#define _setjmp(env) __sigsetjmp(env, 0)
+void longjmp(jmp_buf, int);
+void _longjmp(jmp_buf, int);
 #endif

@@ -1,0 +1,16 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\$=3 \catcode`\&=4
+\catcode`\^=7 \catcode`\_=8 \catcode`\~=13 \catcode`\^^I=10
+\tracingrestores=1 \tracingonline=1
+\count1=5 {\count1=6 \showthe\count1}\showthe\count1
+{\global\count1=7 \count1=8 }\showthe\count1
+\begingroup \def\a{1}\gdef\b{2}\endgroup \show\a \show\b
+{\aftergroup\x \aftergroup\y \def\x{\message{X}}\gdef\y{\message{Y}}}
+\def\z{\message{Z}}\afterassignment\z \count2=3
+\begingroup \skip3=1pt plus 1fil {\skip3=2pt \dimen3=4pt \toks3={q}}\endgroup
+{\catcode`\A=12 \lccode`A=`B \global\uccode`a=`Z}
+\showthe\catcode`A \showthe\lccode`A \showthe\uccode`a
+{\let\a=\relax \chardef\b=1 }
+\begingroup { \endgroup }
+\endgroup
+}
+{ \end

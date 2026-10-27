@@ -674,7 +674,7 @@ gate_love += test_gpic
 gate_love += test_grap
 # test_chem -- chem.l against groff's, likewise; test/chem/open counted. skips without groff's chem
 gate_love += test_chem
-# test_caja -- caja against TeX, DVI byte for byte; skips without TeX Live
+# test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
 gate_love += test_caja
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host

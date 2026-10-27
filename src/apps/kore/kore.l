@@ -92,45 +92,102 @@
          say err ("as: wrote " + dst), put err 10,
          0)))
 
-   ; ar: the classic "!<arch>" archive, GNU's to the byte, through holo's `arbytes` so
-   ; mooncc's runtime archive shares the writer. names stored as basenames
-   (ar-write dst ms)                                          ; ms: ((basename bytes)..)
+   ; ar: GNU's "!<arch>" and llvm-ar's "!<thin>", to the byte, through holo's `arlay` so
+   ; mooncc's runtime archive shares the writer. kbuild's verbs: r (q alike; c D P u ignored,
+   ; always deterministic), m before or after a member (i b / a), t; s indexes, as by default,
+   ; and S leaves the index out. a thin archive names its members by path from its directory,
+   ; and a thin archive added to one gives its members, never itself
+   ar-usage "usage: ar [-]{r|q|m|t}[cDPsSTuiba] [--thin] [POS] ARCHIVE [MEMBER..]"
+   (ar-write dst thin ix ms)
     (open dst "w" @ q
        (hot? q ? () (udie 2 ("ar: cannot write " + dst)),
-        say q (arbytes ms),
+        say q (arlay thin ix ms),
         close q))
-   ; an archive's members as ((name bytes)..), the index and the long-name table read
-   ; past; () for bytes that are no archive
-   (ar-mems b)
-    (: n #b
+   ; a path's directory with its "/", "" for none; and p as seen from directory d
+   (ar-dir p) (: (go k) (k < 0 ? "" (p k = 47 ? (snip p 0 (k + 1)) (go (k - 1)))) (go (#p - 1)))
+   ; a path's components, each ".." taking back the one before it
+   (ar-parts p) (rev (foldl (\ acc c (? (c = "" || c = ".") acc
+                                       (c = ".." && two? acc && <acc != "..") >acc
+                                       (c . acc)))
+                            () (usplit 47 p)))
+   (ar-rel d p)
+    (p 0 = 47 ? p
+     (: (go a b) (two? a && two? b && <a = <b ? (go >a >b) (ujoinc 47 (map (_ \ "..") a + b)))
+        (go (ar-parts d) (ar-parts p))))
+   (ar-thin? b) (8 <= #b && snip b 0 8 = "!<thin>\n")
+   ; l less its first k; and the first [k bytes] of l as [it rest], [() l] for none
+   (ar-less k l) (: (go l acc) (atom? l ? (rev acc) (<l = k ? (rev acc + >l) (go >l (<l . acc)))) (go l ()))
+   (ar-pick k l) (: (go l acc) (atom? l ? [() (rev acc)] (<<l = k ? [<l (rev acc + >l)] (go >l (<l . acc))))
+                    (go l ()))
+   ; an archive at p, bytes b, as [thin ((name bytes)..)]: the index read past, a thin member's
+   ; bytes off its file from p's directory; () for bytes that are no archive
+   (ar-read p b)
+    (: n #b thin (ar-thin? b) d (ar-dir p)
+       (lname lt o) (: (go k) (k + 1 < #lt && !(lt k = 47 && lt (k + 1) = 10) ? (go (k + 1)) k)
+                       (snip lt o (go o)))
+       (name h lt) (1 < #h && h 0 = 47 && 48 <= h 1 && h 1 <= 57 ? (lname lt (ld-arnum (snip h 1 #h)))
+                      (#h @ z (0 < z && h (z - 1) = 47 ? (snip h 0 (z - 1)) h)))
+       (file nm) (nm 0 = 47 ? nm (d + nm) @ f
+                    (uread f @ r (two? r ? <>r (udie 2 ("ar: cannot open " + f)))))
        (go off lt acc)
-        (n - off < 60 ? (rev acc)
-         (: nm (ld-arfld b off 16) nx (ld-arnext b off)
-            (? (nm = "/" || nm = "/SYM64/") (go nx lt acc)
-               (nm = "//") (go nx (snip b (off + 60) (off + 60 + ld-arsz b off)) acc)
-               (go nx lt (ld-armem b off lt . acc)))))
-       (ld-ar? b ? (go 8 "" ())))
-   (ar-t p)                                                   ; list member names
-    (: r (uread p) _ (two? r ? () (udie 2 ("ar: cannot open " + p)))
-       b <>r
-       (ld-ar? b ? () (udie 2 ("ar: not an archive: " + p)),
-        map (m \ puts (<m + "\n")) (ar-mems b),
-        0))
+        (n - off < 60 ? [thin (rev acc)]
+         (: h (ld-arfld b off 16) sz (ld-arsz b off) d0 (off + 60)
+            meta (h = "/" || h = "//" || h = "/SYM64/")
+            nx (thin && !meta ? d0 (off + 60 + sz + sz % 2))
+            (? (h = "/" || h = "/SYM64/") (go nx lt acc)
+               (h = "//") (go nx (snip b d0 (d0 + sz)) acc)
+               (name h lt @ nm (go nx lt ([nm (thin ? (file nm) (snip b d0 (d0 + sz)))] . acc))))))
+       (thin || ld-ar? b ? (go 8 "" ())))
+   (ar-mems b) (ar-read "" b @ () () r <>r)
+   (ar-load p) (uread p @ r
+                  (two? r ? (ar-read p <>r @ () (udie 2 ("ar: not an archive: " + p)) a a)
+                     (udie 2 ("ar: cannot open " + p))))
+   (ar-t p) (map (m \ puts (<m + "\n")) <>(ar-load p), 0)
    (ar-main as)
-    (atom? as ? (udie 2 "usage: ar rcs OUT MEMBER..   |   ar t OUT")
-     (<as @ fl
-        (fl = "t" ? (two? >as ? (ar-t <>as) (udie 2 "ar: t wants an archive"))
-         (: hasr ((: (go i) (i < #fl ? (fl i = 114 ? 1 (go (i + 1))) 0)) 0)
-            _ (hasr ? () (udie 2 ("ar: unsupported command " + fl + " (rcs / t)")))
-            _ (two? >as ? () (udie 2 "ar: no archive named"))
-            dst <>as
-            fs >>as
-            _ (two? fs ? () (udie 2 "ar: no members"))
-            ms (map (f \ (uread f @ r
-                             (two? r ? [(ubase f "") <>r] (udie 2 ("ar: cannot open " + f)))))
-                    fs)
-            (ar-write dst ms,
-             0)))))
+    (: lead (: (go l acc) (two? l && 1 < #<l && <l 0 = 45 && <l 1 = 45 ? (go >l (<l . acc)) [(rev acc) l])
+               (go as ()))
+       rest0 <>lead
+       _ (two? rest0 ? () (udie 2 ar-usage))
+       fl (<rest0 @ f (0 < #f && f 0 = 45 ? (snip f 1 #f) f))
+       (has c) (any (k \ fl k = c) ^#fl)
+       _ (all (k \ elem (fl k) (chars "rqmtcDPsSTuiba")) ^#fl ? () (udie 2 ("ar: unsupported command " + fl + "; " + ar-usage)))
+       _ (all (o \ o = "--thin") <lead ? () (udie 2 ("ar: unsupported option " + (filter (o \ o != "--thin") <lead @ l <l))))
+       op (? (has 116) 't (has 109) 'm (has 114 || has 113) 'r (udie 2 ("ar: no operation in " + fl)))
+       pos? (op = 'm && (has 105 || has 98 || has 97))
+       args >rest0
+       _ (two? args && (!pos? || two? >args) ? () (udie 2 "ar: no archive named"))
+       pos (pos? ? <args ())
+       dst (pos? ? <>args <args)
+       fs (pos? ? >>args >args)
+       ix !(has 83)
+       (op = 't ? (ar-t dst)
+        (: old (uread dst @ r (two? r ? (ar-read dst <>r @ () (udie 2 ("ar: not an archive: " + dst)) a a) [0 ()]))
+           thin (has 84 || elem "--thin" <lead || <old)
+           dd (ar-dir dst)
+           (key f) (thin ? (ar-rel dd f) (ubase f ""))
+           (op = 'm ?
+              (: _ (two? <>old ? () (udie 2 ("ar: cannot open " + dst)))
+                 pk (pos? ? (key pos) ())
+                 ; each named key moves its first member; the last member named POS marks
+                 ; where they land, before it (i, b) or after it (a)
+                 (go l ks st mv at)
+                  (atom? l ? [(rev st) (rev mv) at]
+                   (: m <l at2 (<m = pk ? (has 97 ? (#st + 1) #st) at)
+                      (elem <m ks ? (go >l (ar-less <m ks) st (m . mv) at2) (go >l ks (m . st) mv at2))))
+                 (go <>old (map key fs) () () () @ [st mv at]
+                    (: _ (pos? && !(charm? at) ? (udie 2 ("ar: no member " + pos)) ())
+                       k (charm? at ? at #st)
+                       (ar-write dst thin ix (take k st + mv + drop k st), 0))))
+              (: ; each file, or a thin archive's members when the archive is thin
+                 adds (foldl (\ acc f (uread f @ r
+                                       (two? r ? (thin && ar-thin? <>r ? (acc + map (m \ [(key (ar-dir f + <m)) <>m]) <>(ar-read f <>r))
+                                                    (acc + [[(key f) <>r]]))
+                                          (udie 2 ("ar: cannot open " + f)))))
+                             () fs)
+                 ; an old member a new one names is replaced in place, by the first such; the rest append
+                 (go l ns acc) (atom? l ? (rev acc + ns)
+                                  (ar-pick <<l ns @ [m rest] (go >l rest ((two? m ? m <l) . acc))))
+                 (ar-write dst thin ix (go <>old adds ()), 0))))))
 
    ; ld: holo's static linker (src/love/holo/link.l) as an applet; -pie the self-relocating
    ; et_dyn, -Ttext the bare-metal org
@@ -642,12 +699,11 @@
        (one f)
         (uread f @ r
            (atom? r ? (say err ("ranlib: '" + f + "': No such file\n"), 1)
-            (ar-mems <>r @ ms
-               (atom? ms && !(snip <>r 0 8 = "!<arch>\n") ?
-                  (say err ("ranlib: " + f + ": file format not recognized\n"), 1)
-                  (open f "w" @ q
-                     (hot? q ? (say q (arbytes ms), close q, 0)
-                      (say err ("ranlib: unable to write " + f + "\n"), 1)))))))
+            (ar-read f <>r @
+               () (say err ("ranlib: " + f + ": file format not recognized\n"), 1)
+               a (open f "w" @ q
+                    (hot? q ? (say q (arlay <a 1 <>a), close q, 0)
+                     (say err ("ranlib: unable to write " + f + "\n"), 1))))))
        (foldl (\ a f (max a (one f))) 0 fs ? 1 0))
 
    ; the registry: name -> main (aliases share)

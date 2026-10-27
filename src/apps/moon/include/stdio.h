@@ -62,6 +62,7 @@ int    ferror(FILE*);
 int    feof(FILE*);
 void   clearerr(FILE*);
 FILE  *fdopen(int, char const*);
+FILE  *open_memstream(char **, size_t *);
 FILE  *tmpfile(void);
 void   setbuf(FILE*, char*);
 int    setvbuf(FILE*, char*, int, size_t);

@@ -7,8 +7,21 @@ static long __wall(int fd, unsigned char const *p, long n) {
     if (k < 0) { if (__errno_v == EINTR) continue; return -1; }
     i += k; }
   return i; }
+/* a memory stream's write: buf keeps room for the nul past len */
+static int __mput(FILE *f, void const *p, size_t n) {
+  if ((size_t) (f->cap - f->len) <= n) {
+    size_t c = (size_t) f->cap * 2;
+    if (c <= f->len + n) c = f->len + n + 1;
+    unsigned char *b = realloc(f->buf, c);
+    if (!b) { f->err = 1; return EOF; }
+    f->buf = b; f->cap = (int) c; }
+  memcpy(f->buf + f->len, p, n);
+  f->len += (int) n;
+  f->buf[f->len] = 0;
+  *f->mp = (char *) f->buf; *f->ms = (size_t) f->len;
+  return 0; }
 static int __fdrain(FILE *f) {
-  if (f->len == 0) return 0;
+  if (f->len == 0 || f->mp) return 0;
   long n = f->len;
   f->len = 0;
   if (__wall(f->fd, f->buf, n) < 0) { f->err = 1; return EOF; }
@@ -26,11 +39,13 @@ int fflush(FILE *f) {
     return r ? EOF : 0; }
   return f->wr ? __fdrain(f) : __rsync(f); }
 void setbuf(FILE *f, char *buf) {          /* NULL = unbuffered, else a BUFSIZ block */
+  if (f->mp) return;
   __fdrain(f);
   if (!f->wr) { __rsync(f); f->rp = f->rl = 0; if (buf) f->rb = (unsigned char *) buf; f->rcap = buf ? 8192 : 0; return; }
   if (buf) { f->buf = (unsigned char *) buf; f->cap = 8192; f->line = 0; }
   else f->cap = 0; }
 int setvbuf(FILE *f, char *buf, int mode, size_t size) {
+  if (f->mp) return 0;
   __fdrain(f);
   if (!f->wr) {                              /* a read stream: no buffer, or the caller's (else its own stays) */
     __rsync(f); f->rp = f->rl = 0;
@@ -45,6 +60,7 @@ int setvbuf(FILE *f, char *buf, int mode, size_t size) {
  * and the == catches the fill */
 int fputc(int c, FILE *f) {
   unsigned char b = (unsigned char) c;
+  if (f->mp) return __mput(f, &b, 1) ? EOF : b;
   if (!f->cap) { if (__wall(f->fd, &b, 1) < 0) { f->err = 1; return EOF; } return b; }
   f->buf[f->len++] = b;
   if (f->len == f->cap || (f->line && b == 10))
@@ -53,6 +69,7 @@ int fputc(int c, FILE *f) {
 size_t fwrite(void const *p, size_t sz, size_t n, FILE *f) {
   size_t total = sz * n;
   if (total == 0) return 0;
+  if (f->mp) return __mput(f, p, total) ? 0 : n;
   if (!f->cap || total >= (size_t) f->cap) {
     if (__fdrain(f)) return 0;
     if (__wall(f->fd, p, (long) total) < 0) { f->err = 1; return 0; }
@@ -64,7 +81,7 @@ size_t fwrite(void const *p, size_t sz, size_t n, FILE *f) {
   return n; }
 int fclose(FILE *f) {
   int r = f->wr ? __fdrain(f) : __rsync(f);
-  if (close(f->fd) < 0) r = EOF;
+  if (!f->mp && close(f->fd) < 0) r = EOF;
   __love_fclosed(f);
   if (f->heap) free(f);
   return r; }
@@ -91,5 +108,6 @@ int fseeko(FILE *f, off_t off, int wh) {
   return lseek(f->fd, off, wh) < 0 ? -1 : 0; }
 off_t ftello(FILE *f) {
   if (__fdrain(f)) return -1;
+  if (f->mp) return f->len;
   off_t o = lseek(f->fd, 0, SEEK_CUR);
   return o < 0 ? -1 : o - __rahead(f); }
