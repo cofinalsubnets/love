@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_SIGNALFD_H
-#define _LOVE_SYS_SIGNALFD_H
+#pragma once
 #include <signal.h>
 #define SFD_CLOEXEC  524288
 #define SFD_NONBLOCK   2048
@@ -25,4 +24,3 @@ struct signalfd_siginfo {
   char __pad[46];
 };
 int signalfd(int, sigset_t const*, int);
-#endif

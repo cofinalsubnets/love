@@ -1,5 +1,4 @@
-#ifndef _LOVE_ENDIAN_H
-#define _LOVE_ENDIAN_H
+#pragma once
 /* every moon target is little-endian: le conversions are casts, be ones swap */
 #include <stdint.h>
 #include <byteswap.h>
@@ -23,4 +22,3 @@
 #define le16toh(x) ((uint16_t) (x))
 #define le32toh(x) ((uint32_t) (x))
 #define le64toh(x) ((uint64_t) (x))
-#endif

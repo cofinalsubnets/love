@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_STAT_H
-#define _LOVE_SYS_STAT_H
+#pragma once
 #include <time.h>
 #include <sys/types.h>  /* posix: stat.h provides mode_t and kin */
 #if defined(__aarch64__) || defined(__riscv)
@@ -109,4 +108,3 @@ int utimensat(int, char const*, struct timespec const*, int);
 int futimens(int, struct timespec const*);
 int mkfifo(char const*, unsigned int);
 int mknod(char const*, unsigned int, unsigned long);
-#endif

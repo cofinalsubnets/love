@@ -1,5 +1,4 @@
-#ifndef _LOVE_UNISTD_H
-#define _LOVE_UNISTD_H
+#pragma once
 typedef long ssize_t;
 #include <sys/types.h>
 long read(int, void*, long);
@@ -90,4 +89,3 @@ int  getpgrp(void);
 int  setpgid(pid_t, pid_t);
 pid_t tcgetpgrp(int);
 int  tcsetpgrp(int, pid_t);
-#endif

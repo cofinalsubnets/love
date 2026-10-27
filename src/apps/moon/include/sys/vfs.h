@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_VFS_H
-#define _LOVE_SYS_VFS_H
+#pragma once
 /* linux's statfs, a machine word a field on 64-bit; the bsds answer ENOSYS */
 #ifdef __ILP32__  /* i386 and arm: statfs64's record */
 struct statfs {
@@ -14,4 +13,3 @@ struct statfs {
   long f_namelen, f_frsize, f_flags, f_spare[4]; };
 int statfs(char const*, struct statfs*);
 int fstatfs(int, struct statfs*);
-#endif

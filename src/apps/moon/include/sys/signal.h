@@ -1,4 +1,2 @@
-#ifndef _LOVE_SYS_SIGNAL_H
-#define _LOVE_SYS_SIGNAL_H
+#pragma once
 #include <signal.h>
-#endif
