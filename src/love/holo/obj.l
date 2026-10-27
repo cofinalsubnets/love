@@ -72,7 +72,7 @@
                         (o-walkr be >items labels wkset internal? rset (off + w)
                                  (rev bs + bacc) racc))
                     (: fill (? (elem k a64-afixk) (le32 (afix-w (fix-a x)))
-                               (elem k '(b26 b19 b14 j21)) (le32 (fix-a x))
+                               (elem k '(b14 j21)) (le32 (fix-a x))
                                ; riscv 'pcrel: aux packs both base words, auipc low, the I-insn high
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
                                ; arm is REL: a thumb branch holds its encoding with the -4 addend
@@ -534,8 +534,8 @@
                  'adrp21 (o-rela off si ra-pghi21 (sa + afix-ad aux))
                  'addlo12 (o-rela off si ra-lo12 (sa + afix-ad aux))
                  ('lo12s1 || 'lo12s2 || 'lo12s4 || 'lo12s8 || 'lo12s16) (o-rela off si (ra-ldst k) (sa + afix-ad aux))
-                 'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
-                 'b19 (o-rela off si ra-condbr19 sa)
+                 'b26 (o-rela off si (afix-w aux = 2483027968 ? ra-call26 ra-jump26) (sa + afix-ad aux))   ; 0x94000000 = bl
+                 'b19 (o-rela off si ra-condbr19 (sa + afix-ad aux))
                  'b14 (o-rela off si ra-tstbr14 sa)
                  'ld19 (o-rela off si ra-ldlo19 (sa + afix-ad aux))
                  'adr21 (o-rela off si ra-adrlo21 (sa + afix-ad aux))
