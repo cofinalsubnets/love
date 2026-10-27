@@ -1426,6 +1426,11 @@
    (pcond ps ts) ((cx-door 'parse) ps ts 'cond)
    (pblock ps ts) ((cx-door 'parse) ps ts 'blk)
 
+   ; a file-scope name types in its own initializer (typeof, sizeof), C11 6.2.1p7
+   (gpinit ps nm ty ts) (: old (peep (ps 'globals) nm 'none)
+                           _ (pin (ps 'globals) nm ty)
+                           r (pinit ps ts)
+                           (old = 'none ? (pull (ps 'globals) nm 0) (pin (ps 'globals) nm old), r))
    ; an initializer: an assignment-expr or ('init (item..)), an item plain | ('dfield name
    ; init) | ('didx n init). dbuild nests a designator chain (.a.b = v, C99 6.7.9), coalescing
    ; a run that shares its head into one sub-init, else the member would image twice.
@@ -2252,7 +2257,7 @@
    ; a function definition from its `{`: params, __func__ and the label table per function,
    ; undone on the way out. -> (('fn name params body) rest) | ()
    (pfbody ps name prms ts)
-    (: psh (bindlocs ps prms ())
+    (: psh (bindlocs ps prms (shadowdecl ps (filter string? (map cap prms)) ()))   ; a param hides a typedef of its name
        _ (pin ps 'fnname name)
        _ (pins ps 'labs {} 'clfn ())
        b0 (pblock ps ts)
@@ -2559,12 +2564,12 @@
                                             ; nested arr, optional init; an outer [] counts the init's top level
                                             (mkarr t2 dims @ aty0
                                                (peekp rest0 "=" ?     ; T a[n].. = init
-                                                   (pinit ps >rest0 @ ir
+                                                   (gpinit ps nm aty0 >rest0 @ ir
                                                       (atom? ir ? ()
                                                          [[nm (fillarr ps aty0 <ir) <ir] <>ir]))
                                                   [[nm aty0 ()] rest0]))))))
                                 (peekp ts3 "=")
-                                 (pinit ps >ts3 @ r
+                                 (gpinit ps nm t2 >ts3 @ r
                                     (atom? r ? ()
                                        ; a later declarator arrives with its dims parsed (t2 the
                                        ; whole array type), so a lone [] bound fills in here too

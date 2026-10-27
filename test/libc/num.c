@@ -111,6 +111,23 @@ int main(void) {
   say_u("strtod", bits.u);
   say_n("strtod", (long) (e - cases[i])); }
  say_n("atof", (long) (atof("2.5") * 4.0));
+ /* strtof rounds the digits once: a double that lands on a binary32 midpoint would round
+    again, so the ties, a hair past them, and the binary32 floor and ceiling */
+ { char const *fc[] = { "0.1", "1.000000059604644775390625", "1.0000000596046447753906250000000001",
+                        "1.0000000596046447753906249999999999", "16777217", "16777219", "3.4028235e38",
+                        "3.40282357e38", "3.4028236e38", "1.4e-45", "7e-46", "7.1e-46", "1.1754942e-38",
+                        "0x1.000001p0", "0x1.000003p0", "0x1.0000011p0", "0x1p-149", "0x1.8p-150",
+                        "0x1.fffffep127", "0x1.ffffffp127", "-2.5e-3x", "nope", "inf", 0 };
+   for (int i = 0; fc[i]; i++) {
+     union { float f; unsigned u; } fb;
+     fb.f = strtof(fc[i], &e);
+     say_u("strtof", fb.u);
+     say_n("strtof", (long) (e - fc[i])); } }
+ /* long double is double here, and strtold's answer is checked as one: an 80-bit reading
+    narrowed after would round twice */
+ { union { double d; unsigned long u; } a, b;
+   a.d = strtod("2.210680847e+02", 0); b.d = (double) strtold("2.210680847e+02", 0);
+   say_n("strtold", a.u == b.u || sizeof (long double) > sizeof (double)); }
 
  /* strtod's special spellings: inf, infinity and nan (a (chars) tail), any case, signed */
  { char const *sp[] = { "inf", "-INF", "infinity", "Infinityx", "nan", "NaN(abc)", "-nan", "infin", "nan(", "+inf" };

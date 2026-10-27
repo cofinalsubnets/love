@@ -138,7 +138,7 @@ int getaddrinfo(char const *host, char const *serv, struct addrinfo const *hints
   if (host) {
     if (strcmp(host, "localhost") != 0 && __quad(host, &a4) < 0
         && __lines("/etc/hosts", host, &a4, __hline) < 0
-        && __dnslook(host, &a4) < 0) return -2;                               /* EAI_NONAME */
+        && __dnslook(host, &a4) < 0) return EAI_NONAME;
   } else if (hints && (hints->ai_flags & AI_PASSIVE)) a4 = 0;                 /* INADDR_ANY */
   unsigned int port = 0;
   if (serv) {
@@ -147,7 +147,7 @@ int getaddrinfo(char const *host, char const *serv, struct addrinfo const *hints
     while (*s >= 48 && *s <= 57) port = port * 10 + (unsigned) (*s++ - 48);
     if (*s || port > 65535) return -2; }
   struct __gai *g = malloc(sizeof(struct __gai));
-  if (!g) return -10;                        /* EAI_MEMORY */
+  if (!g) return EAI_MEMORY;
   memset(g, 0, sizeof *g);
   g->sa.fam = AF_INET;
   g->sa.port = htons((unsigned short) port);
@@ -161,3 +161,16 @@ int getaddrinfo(char const *host, char const *serv, struct addrinfo const *hints
   return 0; }
 void freeaddrinfo(struct addrinfo *r) { free(r); }
 
+char const *gai_strerror(int e) {
+  switch (e) {
+  case 0: return "Success";
+  case EAI_BADFLAGS: return "Bad value for ai_flags";
+  case EAI_NONAME: return "Name or service not known";
+  case EAI_AGAIN: return "Temporary failure in name resolution";
+  case EAI_FAIL: return "Non-recoverable failure in name resolution";
+  case EAI_FAMILY: return "ai_family not supported";
+  case EAI_SOCKTYPE: return "ai_socktype not supported";
+  case EAI_SERVICE: return "Servname not supported for ai_socktype";
+  case EAI_MEMORY: return "Memory allocation failure";
+  case EAI_SYSTEM: return "System error"; }
+  return "Unknown error"; }

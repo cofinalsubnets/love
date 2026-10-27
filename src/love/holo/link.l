@@ -307,30 +307,34 @@
     (ld-arp 16 nm + ld-arp 12 date + ld-arp 6 uid + ld-arp 6 gid + ld-arp 8 mode + ld-arp 10 (show sz) + "`\n")
    (ld-arpad s) (#s & 1 ? (s + "\n") s)
    (ld-arelf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70)
-   ; a member's defined globals, read as a pull reads them; a non-ELF member defines nothing
-   (ld-ardefs f b) (ld-arelf? b ? <(dusyms f b (b 18 + 256 * b 19)))
-   (arbytes ms)
+   ; a member's defined globals in symbol-table order; a non-ELF member defines nothing
+   (ld-ardefs f b) (ld-arelf? b ? (rev <(dusyms f b (b 18 + 256 * b 19))))
+   (arbytes ms) (arlay 0 1 ms)
+   ; ..any shape: thin keeps only each member's header, its name (a path from the archive's
+   ; directory) in "//" however short, as llvm-ar lays one; ix 0 leaves the index out
+   (arlay thin ix ms)
     (: names (map cap ms)
        datas (map caup ms)
        ; the long-name table: parallel to names, each entry (offset) | ()
        lofs (: (go l off acc) (atom? l ? (rev acc)
                                  (#<l @ ln
-                                    (ln < 16 ? (go >l off (() . acc))
+                                    (ln < 16 && !thin ? (go >l off (() . acc))
                                        (go >l (off + ln + 2) ([off] . acc)))))
                (go names 0 ()))
-       ltab (: (go ns ls) (atom? ns ? ""
-                             (two? <ls ? (<ns + "/\n" + go >ns >ls) (go >ns >ls)))
-               (go names lofs))
-       syml (map (m \ ld-ardefs <m <>m) ms)
+       ; padded to even inside its own size, as GNU and llvm-ar count it
+       ltab (ld-arpad (: (go ns ls) (atom? ns ? ""
+                                       (two? <ls ? (<ns + "/\n" + go >ns >ls) (go >ns >ls)))
+                         (go names lofs)))
+       syml (map (m \ ix ? (ld-ardefs <m <>m) ()) ms)
        nsym (foldl (+) 0 (map tally syml))
        strt (foldl (+) "" (map (ss \ foldl (a \ s \ a + s + string 0) "" ss) syml))
        ; the index pads to even with a NUL counted in its size, as GNU does
        isz (4 + 4 * nsym + #strt @ z (z + (z & 1)))
-       ; member header offsets: magic, index hdr + data, "//" (when any), then each
-       m0 (8 + 60 + isz)
-       m1 (#ltab ? (m0 + 60 + #ltab + (#ltab & 1)) m0)
+       ; member header offsets: magic, index hdr + data (when any), "//" (when any), then each
+       m0 (ix ? (8 + 60 + isz) 8)
+       m1 (#ltab ? (m0 + 60 + #ltab) m0)
        offs (: (go ds off acc) (atom? ds ? (rev acc)
-                                (go >ds (off + 60 + (#<ds @ z (z + (z & 1)))) (off . acc)))
+                                (go >ds (off + 60 + (thin ? 0 (#<ds @ z (z + (z & 1))))) (off . acc)))
                (go datas m1 ()))
        idx (: raw ((ld-arb4 nsym
                     + (: (go os ss) (atom? os ? ""
@@ -340,10 +344,10 @@
               (#raw & 1 ? (raw + string 0) raw))
        body (: (go ns ls ds) (atom? ns ? ""
                                 (: nf (two? <ls ? ("/" + show <<ls) (<ns + "/"))
-                                 (ld-arhdr nf "0" "0" "0" "644" #<ds + ld-arpad <ds + go >ns >ls >ds)))
+                                 (ld-arhdr nf "0" "0" "0" "644" #<ds + (thin ? "" (ld-arpad <ds)) + go >ns >ls >ds)))
                (go names lofs datas))
-       ((("!<arch>\n" + ld-arhdr "/" "0" "0" "0" "0" isz + idx)
-         + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ld-arpad ltab) ""))
+       (((thin ? "!<thin>\n" "!<arch>\n") + (ix ? (ld-arhdr "/" "0" "0" "0" "0" isz + idx) "")
+         + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ltab) ""))
         + body))
    ; a set of objects -> (dt owed): dt every nom defined or synthesized, a tablet the caller
    ; pins into; owed the strong undefineds left. __start_X/__stop_X are ldres's to answer.

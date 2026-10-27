@@ -89,6 +89,8 @@ double scalbln(double x, long n) { return ldexp(x, n > INT_MAX ? INT_MAX : n < I
 float scalbnf(float x, int n) { return (float) ldexp(x, n); }
 float ldexpf(float x, int n) { return (float) ldexp(x, n); }
 float frexpf(float x, int *e) { return (float) frexp(x, e); }
+long double ldexpl(long double x, int n) { return ldexp(x, n); }
+long double frexpl(long double x, int *e) { return frexp(x, e); }
 int ilogb(double x) {
   if (x != x || x == 0) return INT_MIN;
   if (x - x != 0) return INT_MAX;

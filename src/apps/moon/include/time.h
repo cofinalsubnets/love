@@ -27,7 +27,9 @@ struct tm* localtime_r(time_t const*, struct tm*);
 struct tm* gmtime_r(time_t const*, struct tm*);
 time_t     mktime(struct tm*);
 char*      ctime(time_t const*);
+char*      ctime_r(time_t const*, char*);
 char*      asctime(struct tm const*);
+char*      asctime_r(struct tm const*, char*);
 double     difftime(time_t, time_t);
 unsigned long strftime(char*, unsigned long, char const*, struct tm const*);
 #define CLOCK_REALTIME  0

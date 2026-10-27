@@ -3,7 +3,8 @@
 ;
 ;   (cg-vsplit J v h)         v a vbox (or ()), h the height; answers [page rest], the page
 ;                             packed to h at \splitmaxdepth, the rest a vbox or () when v is spent
-;   (cg-vert-break J p h d)   the best break in the vlist p for height h, depth d; () for the end
+;   (cg-vert-break J p h d)   the best break in the vlist p for height h, depth d; () for the end,
+;                             its height plus depth left in J 'best-height-plus-depth
 ;   (cg-prune-top J p)        p less its leading glue, kerns and penalties, \splittopskip ahead
 ;
 ; marks and inserts are not ported; a vlist with neither splits as TeX splits it.
@@ -14,19 +15,19 @@
    awful 1073741823
    max-dimen 1073741823
    (P J k) (J 'params k)
-   (same? a b) (a != () && b != () && a 'id = b 'id)
-   (spec-of g) (g = () ? (cp-spec 0 0 0 0 0) g)
+   (same? a b) (a != () && a == b)
+   (spec-of g) (g @ () (cp-spec 0 0 0 0 0) g)
 
    (cg-prune-top J p0)
     (: head {'type 'head 'link p0}
        (go prev p)
-        (p = () ? ()
+        (p @ () ()
            (p 'type @ y
               (? (y <= 2)
                   (: s (spec-of (P J 'splittopskip))
                      w (s 'width > p 'height ? (s 'width - p 'height) 0)
-                     q (cp-node J {'type 10 'sub 11 'glue (cp-spec w (s 'stretch) (s 'sto) (s 'shrink) (s 'sho))
-                                   'leader () 'link p})
+                     q {'type 10 'sub 11 'glue (cp-spec w (s 'stretch) (s 'sto) (s 'shrink) (s 'sho))
+                        'leader () 'link p}
                      (pin prev 'link q))
                  (elem y [3 4 8]) (go p (p 'link))
                  (p 'link @ nx (pin p 'link (), pin prev 'link nx, go prev nx)))))
@@ -48,26 +49,27 @@
         (pi < 10000 ?
            (: b0 (bad 0)
               b (b0 < awful ? (? (pi <= -10000) pi (b0 < 10000) (b0 + pi) 100000) b0)
-              (b <= S 'least ? (pin S 'best p, pin S 'least b),
+              (b <= S 'least ? (pins S 'best p 'least b, pin J 'best-height-plus-depth (cur 0 + S 'pd)),
                b = awful || pi <= -10000))
            0)
        (heights p)
-        (: q (p 'type = 11 ? p
+        (: q (p 'type @ 11 p
                 (p 'glue @ g
                    (add (2 + g 'sto) (g 'stretch), add 6 (g 'shrink),
                     g 'sho != 0 && g 'shrink != 0 ?
-                      (cp-spec (g 'width) (g 'stretch) (g 'sto) (g 'shrink) 0 @ g2 (pin p 'glue g2, g2))
+                      ((peep J 'shrink-warn () @ f (f != () ? (f J))),
+                       cp-spec (g 'width) (g 'stretch) (g 'sto) (g 'shrink) 0 @ g2 (pin p 'glue g2, g2))
                       g)))
            (add 1 (S 'pd + q 'width),
             pin S 'pd 0))
        (settle _) (S 'pd > d ? (add 1 (S 'pd - d), pin S 'pd d))
        (go prev p)
-        (p = () ? (champ () -10000, S 'best)
+        (p @ () (champ () -10000, S 'best)
            (: y (p 'type)
               ; pi, or 'nf (not a break), or 'uh (glue or kern that is no break)
               pi (? (y <= 2) (add 1 (S 'pd + p 'height), pin S 'pd (p 'depth), 'nf)
                     (y = 10) (prev 'type < 9 ? 0 'uh)
-                    (y = 11) ((p 'link = () ? 12 (p 'link 'type)) @ t (t = 10 ? 0 'uh))
+                    (y = 11) ((p 'link @ () 12 (p 'link 'type)) @ t (t @ 10 0 'uh))
                     (y = 12) (p 'penalty)
                     'nf)
               (? (pi = 'nf) (settle 0, go p (p 'link))
@@ -77,12 +79,12 @@
        (go p0 p0))
 
    (cg-vsplit J v h)
-    (v = () ? [() ()]
+    (v @ () [() ()]
        (: p (v 'list) d (P J 'splitmaxdepth)
           q (cg-vert-break J p h d)
           (cut n) (? (same? (n 'link) q) (pin n 'link ()) (n 'link = ()) () (cut (n 'link)))
           first (same? p q ? () (p != () ? (cut p), p))
           q2 (cg-prune-top J q)
-          rest (q2 = () ? () (cp-node J (cb-vpackage J q2 0 'additional max-dimen)))
-          [(cp-node J (cb-vpackage J first h 'exactly d)) rest])))
+          rest (q2 @ () () (cb-vpackage J q2 0 'additional max-dimen))
+          [(cb-vpackage J first h 'exactly d) rest])))
 ) ; module caja-page

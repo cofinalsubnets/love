@@ -1,8 +1,10 @@
 /* the pthread waits: a mutex keeps a shared count whole under eight threads, the three kinds
  * answer as POSIX has them, a condition carries a queue between threads, once runs once, keys
  * hold a value per thread and destroy it at exit, an rwlock admits readers together and a
- * writer alone. sums and error numbers only, so both libcs print the same */
+ * writer alone, a semaphore hands each post to exactly one waiter. sums and error numbers only, so both libcs print the same */
 #include <pthread.h>
+#include <semaphore.h>
+#include <errno.h>
 #include <time.h>
 #include "say.h"
 
@@ -28,6 +30,13 @@ static void *produce(void *arg) {
     pthread_cond_broadcast(&qc);
     pthread_mutex_unlock(&qm); }
   pthread_mutex_lock(&qm); qdone = 1; pthread_cond_broadcast(&qc); pthread_mutex_unlock(&qm);
+  return 0; }
+
+static sem_t sm, smdone;
+static long staken;
+static void *sem_taker(void *arg) {
+  for (int i = 0; i < 3000; i++) { sem_wait(&sm); __atomic_fetch_add(&staken, 1, __ATOMIC_SEQ_CST); }
+  sem_post(&smdone);
   return 0; }
 
 static pthread_once_t once = PTHREAD_ONCE_INIT;
@@ -131,4 +140,23 @@ int main(void) {
   pthread_create(&f, 0, tryw, 0); pthread_join(f, &r); say_n("rw.trywr.writer", (long) r);
   say_n("rw.unlock", pthread_rwlock_unlock(&rw));
   say_n("rw.destroy", pthread_rwlock_destroy(&rw));
+
+  /* four takers sleep on an empty semaphore and the main thread posts their 12000 */
+  say_n("sem.init", sem_init(&sm, 0, 0) + sem_init(&smdone, 0, 0));
+  pthread_t st[4];
+  for (int i = 0; i < 4; i++) pthread_create(&st[i], 0, sem_taker, 0);
+  for (int i = 0; i < 12000; i++) sem_post(&sm);
+  for (int i = 0; i < 4; i++) sem_wait(&smdone);
+  for (int i = 0; i < 4; i++) pthread_join(st[i], 0);
+  int sv = -1;
+  sem_getvalue(&sm, &sv);
+  say_n("sem.taken", staken);
+  say_n("sem.left", sv);
+  errno = 0; { int tw = sem_trywait(&sm); say_n("sem.trywait.empty", tw); say_n("sem.trywait.eagain", errno == EAGAIN); }
+  sem_post(&sm); say_n("sem.trywait.one", sem_trywait(&sm));
+  { struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 20000000; if (ts.tv_nsec >= 1000000000) ts.tv_sec++, ts.tv_nsec -= 1000000000;
+    errno = 0; int tr = sem_timedwait(&sm, &ts);
+    say_n("sem.timedwait", tr); say_n("sem.timedout", errno == ETIMEDOUT); }
+  say_n("sem.destroy", sem_destroy(&sm) + sem_destroy(&smdone));
   return 0; }
