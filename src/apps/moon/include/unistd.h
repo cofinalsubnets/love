@@ -58,13 +58,25 @@ int  execle(char const*, char const*, ...);
 void _exit(int);
 unsigned int getuid(void);
 unsigned int geteuid(void);
+unsigned int getegid(void);
 unsigned int getgid(void);
 int  getpid(void);
+int  getppid(void);
 int  setsid(void);
 int  isatty(int);
 int  ftruncate(int, off_t);
 int  truncate(char const*, off_t);
 long pathconf(char const*, int);
+/* glibc's numbers */
+#define _PC_LINK_MAX         0
+#define _PC_MAX_CANON        1
+#define _PC_MAX_INPUT        2
+#define _PC_NAME_MAX         3
+#define _PC_PATH_MAX         4
+#define _PC_PIPE_BUF         5
+#define _PC_CHOWN_RESTRICTED 6
+#define _PC_NO_TRUNC         7
+#define _PC_VDISABLE         8
 long fpathconf(int, int);
 int  fsync(int);
 int  fdatasync(int);

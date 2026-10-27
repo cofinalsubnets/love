@@ -1,0 +1,17 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \a \font\b=cmbx12
+\hsize=200pt \parindent=15pt \baselineskip=12pt plus 1pt \lineskip=1pt \lineskiplimit=0pt
+\tolerance=10000 \parfillskip=0pt plus 1fil \rightskip=0pt \hbadness=10000
+\setbox1\vbox{Now is the time for all good men to come to the aid of the party.
+The quick brown fox jumps over the lazy dog, and \b then\a\ the dog sleeps.\par
+\noindent A second paragraph, shorter.}
+\showbox1
+\shipout\box1
+\count1=5 \tracingoutput=1
+\shipout\vbox{\hrule height 1pt\vskip 3pt \hbox to 50pt{\leaders\hrule\hfil}
+  \hbox{\b Bold \a roman}\vfil}
+\tracingoutput=0
+\shipout\hbox{\hskip 10pt \vrule width 2pt\hskip 0pt\xleaders\hbox to 7pt{\hss.\hss}\hskip 60pt}
+\end

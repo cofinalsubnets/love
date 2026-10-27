@@ -463,7 +463,7 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
   switch (n) {
    case NR_exit: case NR_exit_group: k_proc_end(p, (int) (a & 255) << 8); return 0;
    case NR_getpid: return p->pid;
-   case 110: return p->ppid ? p->ppid : 1;           // getppid: an orphan's is the kernel
+   case NR_getppid: return p->ppid ? p->ppid : 1;    // an orphan's parent is the kernel
    case NR_inle_spawn:
     return k_proc_spawn(pid, (char const*) a, b, (char const*) c, d, (int const*) e, f);
    case NR_wait4: {                                  // a child, or any; WNOHANG asks without waiting

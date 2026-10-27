@@ -76,4 +76,6 @@ int ilogbf(float);
 float copysignf(float, float), nextafterf(float, float), nexttowardf(float, long double), nanf(char const *);
 float fmaxf(float, float), fminf(float, float), fdimf(float, float), fmaf(float, float, float);
 float erff(float), erfcf(float), tgammaf(float), lgammaf(float);
+/* long double twins, where a port asks for one */
+long double ldexpl(long double, int), frexpl(long double, int *);
 #endif

@@ -81,6 +81,7 @@ struct _IO_FILE {
   int rp, rl, rcap;                          /* a read-only stream's buffer: rb[rp..rl) is read ahead */
   unsigned char *rb;
   struct _IO_FILE *next;                     /* the open streams past the standard three (stdio/fflush.c) */
+  char **mp; size_t *ms;                     /* open_memstream's: buf grows, and every write lays it here */
 };
 
 /* freebsd's syscall numbers, machine-independent; os.c pairs them with the canonical.
@@ -104,6 +105,7 @@ struct _IO_FILE {
 #define NR_fb_pread64       475
 #define NR_fb_pwrite64      476
 #define NR_fb_getpid         20
+#define NR_fb_getppid        39
 #define NR_fb_setuid         23
 #define NR_fb_setgid        181
 #define NR_fb_setgroups      80
@@ -111,6 +113,7 @@ struct _IO_FILE {
 #define NR_fb_sigaltstack    53   /* stack_t orders size before flags */
 #define NR_fb_setresgid     312
 #define NR_fb_geteuid        25
+#define NR_fb_getegid        43
 #define NR_fb_sendfile      393   /* another signature */
 #define NR_fb_pselect6      522   /* pselect; the 6th arg is a plain sigset* */
 #define NR_fb_socket         97
@@ -247,6 +250,8 @@ struct _IO_FILE {
 #define NR_setsid         157
 #define NR_umask          166
 #define NR_getpid         172
+#define NR_getppid        173
+#define NR_getegid        177
 #define NR_uname          160
 #define NR_sysinfo        179
 #define NR_getuid         174
@@ -309,6 +314,8 @@ struct _IO_FILE {
 #define NR_pread64        180
 #define NR_pwrite64       181
 #define NR_getpid          20
+#define NR_getppid         64
+#define NR_getegid        202   /* getegid32 */
 #define NR_uname          122
 #define NR_sysinfo        116
 #define NR_setuid         213   /* setuid32 */
@@ -426,6 +433,8 @@ struct _IO_FILE {
 #define NR_pread64        180
 #define NR_pwrite64       181
 #define NR_getpid          20
+#define NR_getppid         64
+#define NR_getegid        202   /* getegid32 */
 #define NR_uname          122
 #define NR_sysinfo        116
 #define NR_setuid         213   /* setuid32 */
@@ -538,6 +547,8 @@ struct _IO_FILE {
 #define NR_pread64         17
 #define NR_pwrite64        18
 #define NR_getpid          39
+#define NR_getppid        110
+#define NR_getegid        108
 #define NR_uname           63
 #define NR_sysinfo         99
 #define NR_setuid         105

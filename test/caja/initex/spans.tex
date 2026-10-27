@@ -1,0 +1,29 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7 \catcode`\&=4
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \a \hsize=200pt \vsize=300pt \baselineskip=12pt \lineskip=1pt \lineskiplimit=0pt
+\parfillskip=0pt plus 1fil \tolerance=10000 \hbadness=0 \vbadness=0 \hfuzz=0pt \overfullrule=5pt
+\def\s{\span\omit}
+\setbox1\vbox{\tabskip=3pt plus 2pt minus 1pt \halign to 120pt{#\hfil&\hfil#\tabskip=1pt plus 1fil&#\tabskip=2pt minus 4pt&#\cr
+aaa&bbbbbb&c&d\cr
+\omit spanning three columns here\s\s\cr
+x&\omit y\s z\cr
+\noalign{\vskip 2pt plus 1fil}
+1&2&3&4\cr}}
+\showbox1
+\setbox2\vbox{\tabskip=5pt minus 3pt\halign to 30pt{#&#&#\cr aaaa&bbbb&cccc\cr a\s\s\cr}}
+\showbox2
+\setbox3\vbox{\tabskip=0pt\halign to 20pt{#\hss\cr wide wide wide\cr}}
+\showbox3
+\setbox4\vbox{\halign{#\tabskip 1pt&&[#]\tabskip 2pt&(#)\cr 1&2&3&4&5&6\cr a\cr\noalign{\hrule}&&\cr}}
+\showbox4
+\setbox5\hbox{\tabskip=1pt\valign to 40pt{\hrule height 2pt#\vfil&\vfil#\cr
+\hbox{a}&\hbox{b}\cr \noalign{\kern 4pt}\hbox{c}\span\hbox{d}\cr \omit\vrule height 30pt width 1pt\cr}}
+\showbox5
+\setbox6\vbox{\halign{#\cr\noalign{\global\count1=3}\omit\cr}}
+\showbox6 \showthe\count1
+\setbox7\vbox{\halign spread -5pt{#\hskip 0pt minus 1fil&#\cr abc&def\cr}}
+\showbox7
+\setbox8\vbox{\offinterlineskip\halign{\vrule#&#\cr\noalign{\hrule}height 10pt&a\cr\omit\vrule height 3pt depth 2pt width 1pt&b\cr}}
+\showbox8
+\end

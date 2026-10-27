@@ -78,6 +78,9 @@ done
 # carries its size, a file-scope static is a local one, a block static keeps its section
 printf '#include <stdarg.h>\nint f(int n, ...){ va_list a; va_start(a, n); int r = va_arg(a, int); va_end(a); return r + n; }\n' > "$ho/.vns.c"
 moonrun -mno-sse -c "$ho/.vns.c" -o "$ho/.vns.o" || fail "mooncc -mno-sse refused a variadic function"
+# a name spelled like a float register is no float code
+printf 'int f815x(int a){ return a + 1; }\nint g(int a){ return f815x(a); }\n' > "$ho/.fnm.c"
+moonrun -mno-sse -c "$ho/.fnm.c" -o "$ho/.fnm.o" || fail "mooncc -mno-sse took a function named f815x for float code"
 printf 'struct t { int a, b, c; };\nstatic const struct t tab[] = {{1,2,3},{4,5,6},{7,8,9}};\nextern __typeof__(tab) tab_alias __attribute__((alias("tab")));\nint big[7] = {1};\nvoid push(void){ static int q __attribute__((section(".init.data"))) = 3; q++; }\n' > "$ho/.dsz.c"
 moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab_alias" {print $3}')" = 36 ] || fail "a data alias's symbol does not carry its table's 36 bytes"
@@ -1027,6 +1030,15 @@ moonrun -c -t a64 -I "$ho/.incd" -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 |
 readelf -x .rodata "$ho/.inc.o" 2>/dev/null | grep -q "41424344 45464748 494a4344 45612f2f" \
   || fail "an .incbin's bytes were not laid as llvm-mc lays them"
 moonrun -c -t a64 -o "$ho/.inc.o" "$ho/.inc.S" > /dev/null 2>&1 && fail "an .incbin of a file nowhere on the path was laid"
+# ..and in a C file's file-scope asm (kernel/configs.c)
+printf 'asm(".pushsection .rodata, \\"a\\"\\n.globl blob\\nblob:\\n.incbin \\".inc.bin\\", 2, 4\\n.globl blob_end\\nblob_end:\\n.popsection\\n");\nextern const char blob[], blob_end[];\nint main(void){ return (int)(blob_end - blob) * 10 + blob[3] - 70; }\n' > "$ho/.incc.c"
+moonrun -I "$ho/.incd" -o "$ho/.incc" "$ho/.incc.c" > /dev/null 2>&1 || fail "a C file's asm .incbin did not compile"
+"$ho/.incc"; a=$?
+[ $a -eq 40 ] || fail "a C file's asm .incbin laid other bytes (got $a want 40)"
+# a .S spells v0.16b back as one word: a macro argument keeps its arrangement (ghash-ce-core)
+printf '\t.macro vadd, rq, ad\n\tadd \\rq\\().16b, \\ad, v1.16b\n\t.endm\n\tvadd v10, v0.16b\n' > "$ho/.asp.S"
+moonrun -c -t a64 -o "$ho/.asp.o" "$ho/.asp.S" > /dev/null 2>&1 || fail "a .S macro argument v0.16b did not assemble"
+readelf -x .text "$ho/.asp.o" 2>/dev/null | grep -q "0a84214e" || fail "a .S macro argument v0.16b was not laid as llvm-mc lays it"
 
 # an asm .weak through an alias chain: a strong definition wins the link, alone the weak one is taken
 printf '__asm__(".text\\n.weak pick\\n.weak __pick\\n.set pick, __pick\\n.globl __pick\\n.set __pick, opick\\nopick: mov $1, %%eax\\n ret\\n");\nint pick(void);\nint main(void){ return pick(); }\n' > "$ho/.wka.c"
