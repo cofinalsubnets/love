@@ -457,7 +457,7 @@
              blabel (<last = 255 ? (256 * <>>last + <>>>last) 32767)
              kern (table kb nk)
              ext (foldl (\ t i (pin t i (q (eb + 4 * i)))) {} ^ne)
-             eok (all (i \ (: e (ext i) (all (x \ x = 0 || exists x) (take 3 e)) && exists (e 3))) ^ne)
+             eok (all (i \ (: e (ext i) ((all (x \ x = 0 || exists x) (take 3 e)) && exists (e 3)))) ^ne)
              slant (: v (at pb) sv (127 < v ? (v - 256) v)
                       (((sv * 256 + at (pb + 1)) * 256 + at (pb + 2)) * 16 + at (pb + 3) // 16))
              par (: t {1 (0 < np ? slant 0)}

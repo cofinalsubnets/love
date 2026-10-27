@@ -1771,6 +1771,9 @@
                     (? !(charm? n) (cmderr S ("ulimit: " + lim + ": invalid limit"))
                        (: e (setrlimit (r 3) (? (hard? && !soft?) () n) (? (soft? && !hard?) () n))
                           (? e (cmderr S ("ulimit: cannot set " + (r 1))) 0))))))))
+   ; the working directory, or $PWD once it is removed under us (cwd answers an error)
+   (sh-pwd S) (: w (cwd 0) (? (string? w) w (sh-vget S "PWD" @ (_ . v) v "")))
+   (sh-pwdinit S _) (: w (cwd 0) (? (string? w) (sh-setvar S "PWD" w) 0))   ; never a parent's stale $PWD
    ; cd: -L and -P alike, since chdir resolves one way
    (sh-cdopts a) (? (two? a && (<a = "-L" || <a = "-P")) (sh-cdopts >a) (two? a && <a = "--") >a a)
    (sh-cdb S args)
@@ -1778,7 +1781,7 @@
         dash (two? a && <a = "-")
         vt (? dash (sh-vget S "OLDPWD") (two? a) (1 . <a) (sh-vget S "HOME"))
         t (? (two? vt) >vt "")
-        old (cwd 0)
+        old (sh-pwd S)
         (? !#t (say err ("lush: cd: " + (dash ? "OLDPWD" "HOME") + " not set\n"), 1)
            (chdir t) (say err ("lush: cd: " + t + "\n"), 1)
            (sh-setvar S "OLDPWD" old, (sh-setvar S) "PWD" (cwd 0),
@@ -1800,7 +1803,7 @@
                               (? (atom? v) 1 (puts ((sh-vname w v) + "\n"), 0)))))
                      (atom? a) 1
                      (sh-simple2 S a ())))         ; `command W ..` -- run W, no function lookup
-      "pwd"    (puts ((cwd 0) + "\n"), 0)
+      "pwd"    (puts (sh-pwd S + "\n"), 0)
       "jobs"   (each (sort (keys (S 'sh-jobs))) (n \ puts (sh-jobline n ((S 'sh-jobs) n))), 0)
       "fg"     (sh-fg S (sh-jobn S argv), (S 'sh-status))
       "bg"     (sh-bg S (sh-jobn S argv))
@@ -2498,7 +2501,7 @@
         br (sh-gitbr S 0)
         pst (st @ 0 "" (sh-pen-st + show st + " " + sh-pen-off))
         pbr (#br ? (sh-pen-br + " (" + br + ")" + sh-pen-off) "")
-        (pst + sh-pen-cwd + sh-vis (sh-homely ("" + cwd 0)) + sh-pen-off + pbr
+        (pst + sh-pen-cwd + sh-vis (sh-homely ("" + sh-pwd S)) + sh-pen-off + pbr
              + (getuid 0 @ 0 " # " " $ ")))
 
    ; --- history: ~/.lush_history, oldest first on disk, newest first in hand
@@ -2574,7 +2577,7 @@
    ; --- the loops ---------------------------------------------------------------
    (sh-cooked S buf)
      (: _ (? #buf 0 (sh-reapbg S 0))
-        _ (say out (? #buf "> " ((cwd 0) + "$ ")))  _ (flush out)
+        _ (say out (? #buf "> " (sh-pwd S + "$ ")))  _ (flush out)
         _ (pin S 'sh-inread 1)
         line (sh-getline in)
         (? (line = 'eof)
@@ -2658,6 +2661,7 @@ with no mode flag, LUSHFLAGS' last a, g or p sets the mode; `set --autonomous` (
 no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise"
    (sh-main1 S args)
      (sh-snapign S 0,                           ; first: what our caller had turned off
+      sh-pwdinit S 0,
       pin S 'sh-mflag (sh-envflag S 0),    ; the mode: LUSHFLAGS' now, a flag word's below
       sh-args S args)
    (sh-args S args)                              ; the argv walk
@@ -2678,7 +2682,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
                 (fw 1) (fw 2 @ r (r ? (sh-c S <r >r) (say err "lush: -c needs a command\n", quit 2))))))))
    ; the outside entries, each a fresh shell
    (sh-main args) (sh-main1 (sh-new 0) args)
-   (sh _) (sh1 (sh-new 0) 0)
+   (sh _) (: S (sh-new 0) (sh-pwdinit S 0, sh1 S 0))
    ; the interactive entry: ignore the tty's job signals; (raw 1) answers () on a tty,
    ; else cooked. the floor is heard first, so a broken rc scares back to the prompt
    (sh1 S _) (: ok (each [sig-int sig-quit sig-tstp sig-ttou sig-ttin] (flip signal 1), raw 1)

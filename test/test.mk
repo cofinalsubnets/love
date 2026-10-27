@@ -674,7 +674,7 @@ gate_love += test_gpic
 gate_love += test_grap
 # test_chem -- chem.l against groff's, likewise; test/chem/open counted. skips without groff's chem
 gate_love += test_chem
-# test_caja -- caja against TeX, DVI byte for byte; skips without TeX Live
+# test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
 gate_love += test_caja
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host
@@ -682,6 +682,8 @@ test_holo: host
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
 	    src/love/holo/rv64.l src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/love/holo/elf.l \
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
+	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
+	@cat test/00-init.l test/law/klink.l | $(gsh) test/gate/run.sh klink "$m" "test/law/klink:"
 # as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect and decode alongside
 test_as: host
 	@echo TEST test/holo/as.l

@@ -250,7 +250,7 @@
                       (sp = () ? (cb-ship J b)
                          (: _ (cp-run J M [['set 'splittopskip (sp 1)] ['set 'splitmaxdepth (sp 2)]])
                             (go v) (? (v != ()) (cg-vsplit J v (sp 0) @ r (cb-ship J <r, go (r 1))))
-                            (go (cp-node J b))))))
+                            (go b)))))
              pages),
         spit (out + ".dvi") (cb-dvi J)))
    (main >argv))

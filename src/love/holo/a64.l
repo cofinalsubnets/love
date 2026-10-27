@@ -479,7 +479,28 @@
                 'icc_iar1_el1 (sreg 3 0 12 12 0) 'icc_eoir1_el1 (sreg 3 0 12 12 1)
                 'icc_hppir1_el1 (sreg 3 0 12 12 2) 'icc_bpr1_el1 (sreg 3 0 12 12 3)
                 'icc_ctlr_el1 (sreg 3 0 12 12 4) 'icc_sre_el1 (sreg 3 0 12 12 5)
-                'icc_igrpen1_el1 (sreg 3 0 12 12 7) 'icc_sre_el2 (sreg 3 4 12 9 5)}
+                'icc_igrpen1_el1 (sreg 3 0 12 12 7) 'icc_sre_el2 (sreg 3 4 12 9 5)
+                'actlr_el1 (sreg 3 0 1 0 1) 'aidr_el1 (sreg 3 1 0 0 7) 'isr_el1 (sreg 3 0 12 1 0)
+                'hpfar_el2 (sreg 3 4 6 0 4) 'dacr32_el2 (sreg 3 4 3 0 0) 'ifsr32_el2 (sreg 3 4 5 0 1)
+                'fpexc32_el2 (sreg 3 4 5 3 0) 'dbgvcr32_el2 (sreg 2 4 0 7 0)
+                'spsr_irq (sreg 3 4 4 3 0) 'spsr_abt (sreg 3 4 4 3 1) 'spsr_und (sreg 3 4 4 3 2) 'spsr_fiq (sreg 3 4 4 3 3)
+                'mdccint_el1 (sreg 2 0 0 2 0) 'oslsr_el1 (sreg 2 0 1 1 4) 'dbgdtrrx_el0 (sreg 2 3 0 5 0)
+                'dbgauthstatus_el1 (sreg 2 0 7 14 6)
+                'pmcntenset_el0 (sreg 3 3 9 12 1) 'pmcntenclr_el0 (sreg 3 3 9 12 2) 'pmovsclr_el0 (sreg 3 3 9 12 3)
+                'pmswinc_el0 (sreg 3 3 9 12 4) 'pmselr_el0 (sreg 3 3 9 12 5) 'pmceid0_el0 (sreg 3 3 9 12 6)
+                'pmceid1_el0 (sreg 3 3 9 12 7) 'pmccntr_el0 (sreg 3 3 9 13 0) 'pmxevtyper_el0 (sreg 3 3 9 13 1)
+                'pmxevcntr_el0 (sreg 3 3 9 13 2) 'pmovsset_el0 (sreg 3 3 9 14 3) 'pmccfiltr_el0 (sreg 3 3 14 15 7)
+                'pmintenset_el1 (sreg 3 0 9 14 1) 'pmintenclr_el1 (sreg 3 0 9 14 2)}
+   ;; the numbered families: dbgb/w v/c r<n>_el1 (n < 16), pmevcntr/pmevtyper<n>_el0 (n < 31)
+   (a64-sfam s)
+    (: tl (snip s (#s - 4) #s)
+       (num p) (snip s #p (#s - 4) @ d
+                  (starts? s p && 0 < #d < 3 && foldl (a \ c \ a && 48 <= c <= 57) 1 (chars d) ?
+                     (foldl (a \ c \ a * 10 + c - 48) 0 (chars d))))
+       (dbg p o2) (tl = "_el1" ? (num p @ n (charm? n && n < 16 ? (sreg 2 0 0 n o2))))
+       (pmev p cm) (tl = "_el0" ? (num p @ n (charm? n && n < 31 ? (sreg 3 3 14 (cm + (n >> 3)) (n & 7)))))
+       (#s < 8 ? () (dbg "dbgbvr" 4 || dbg "dbgbcr" 5 || dbg "dbgwvr" 6 || dbg "dbgwcr" 7 ||
+                     pmev "pmevcntr" 8 || pmev "pmevtyper" 12)))
    ;; gas's generic s<op0>_<op1>_c<n>_c<m>_<op2> names the rest (s0_3_c1_c0_1 is wfit). any case reads
    (a64-sgen s)
     (: (parts i j acc) (? (#s <= j) (rev ((snip s i j) . acc))
@@ -496,9 +517,9 @@
    (a64-sysreg nm)
     (: s (lower (show nm))
        (peep a64-sysregs (name s) () @ v
-          (charm? v ? v (a64-sgen s @ k (charm? k ? k (scare 'badsysreg nm))))))
+          (charm? v ? v (a64-sgen s @ k (charm? k ? k (a64-sfam s @ f (charm? f ? f (scare 'badsysreg nm))))))))
    ;; mrs of a write-only register by name scares
-   a64-wo {'oslar_el1 1 'icc_dir_el1 1 'icc_sgi1r_el1 1 'icc_eoir1_el1 1}
+   a64-wo {'oslar_el1 1 'icc_dir_el1 1 'icc_sgi1r_el1 1 'icc_eoir1_el1 1 'pmswinc_el0 1}
    (a64-mrs d nm) (? (peep a64-wo (name (lower (show nm))) ()) (scare 'badsysreg-wo nm)
                      (le32 (0xD5200000 | (a64-sysreg nm | a64-sysrt d))))  ; MRS Xd, <reg>
    (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | a64-sysrt s)))  ; MSR <reg>, Xs
@@ -506,7 +527,7 @@
    ;; MSR (immediate) to a pstate field: op1/op2 name it, the imm4 rides crm
    a64-pstate {'spsel '(0 5) 'daifset '(3 6) 'daifclr '(3 7)}
    (a64-msri fld imm)
-      (peep a64-pstate fld () @ r
+      (peep a64-pstate (name (lower (show fld))) () @ r
          (two? r ? 0 (scare 'badpstate fld),
           imm >= 0 && imm <= 15 ? 0 (scare 'a64-pstate-imm imm),
           le32 (0xD500401F | (<r << 16 | (imm << 8 | <>r << 5)))))
@@ -535,7 +556,16 @@
                  'rvae1 (sreg 1 0 8 6 1) 'rvaae1 (sreg 1 0 8 6 3) 'rvale1 (sreg 1 0 8 6 5) 'rvaale1 (sreg 1 0 8 6 7)
                  'rvae1is (sreg 1 0 8 2 1) 'rvaae1is (sreg 1 0 8 2 3) 'rvale1is (sreg 1 0 8 2 5) 'rvaale1is (sreg 1 0 8 2 7)
                  'rvae1os (sreg 1 0 8 5 1) 'rvaae1os (sreg 1 0 8 5 3) 'rvale1os (sreg 1 0 8 5 5) 'rvaale1os (sreg 1 0 8 5 7)
-                 'rvae2is (sreg 1 4 8 2 1) 'rvale2is (sreg 1 4 8 2 5)}
+                 'rvae2is (sreg 1 4 8 2 1) 'rvale2is (sreg 1 4 8 2 5)
+                 'ipas2e1 (sreg 1 4 8 4 1) 'ipas2le1 (sreg 1 4 8 4 5) 'ripas2e1 (sreg 1 4 8 4 2) 'ripas2le1 (sreg 1 4 8 4 6)
+                 'ipas2e1os (sreg 1 4 8 4 0) 'ipas2le1os (sreg 1 4 8 4 4) 'ripas2e1os (sreg 1 4 8 4 3) 'ripas2le1os (sreg 1 4 8 4 7)
+                 'vmalls12e1os (sreg 1 4 8 1 6) 'alle1os (sreg 1 4 8 1 4) 'vale2 (sreg 1 4 8 7 5)
+                 'vaae1 (sreg 1 0 8 7 3) 'vaale1 (sreg 1 0 8 7 7)
+                 'alle2os (sreg 1 4 8 1 0) 'vae2os (sreg 1 4 8 1 1) 'vale2os (sreg 1 4 8 1 5)
+                 'rvae2 (sreg 1 4 8 6 1) 'rvale2 (sreg 1 4 8 6 5) 'rvae2os (sreg 1 4 8 5 1) 'rvale2os (sreg 1 4 8 5 5)
+                 'alle3 (sreg 1 6 8 7 0) 'alle3is (sreg 1 6 8 3 0) 'alle3os (sreg 1 6 8 1 0)
+                 'vae3 (sreg 1 6 8 7 1) 'vae3is (sreg 1 6 8 3 1) 'vae3os (sreg 1 6 8 1 1)
+                 'vale3 (sreg 1 6 8 7 5) 'vale3is (sreg 1 6 8 3 5) 'vale3os (sreg 1 6 8 1 5)}
    a64-ic-ops {'iallu (sreg 1 0 7 5 0) 'ialluis (sreg 1 0 7 1 0) 'ivau (sreg 1 3 7 5 1)}
    a64-dc-ops {'ivac (sreg 1 0 7 6 1) 'zva (sreg 1 3 7 4 1) 'cvac (sreg 1 3 7 10 1)
                'cvau (sreg 1 3 7 11 1) 'civac (sreg 1 3 7 14 1)

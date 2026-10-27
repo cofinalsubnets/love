@@ -705,7 +705,48 @@ static double lm_hexflo(uint64_t m, int e2, int sticky, int sign) {
  if (E > 1023) return sign > 0 ? DInf : -DInf;
  double d = mkd(((uint64_t) (E + 1023) << 52) | (sig & (((uint64_t) 1 << 52) - 1)));
  return sign > 0 ? d : -d; }
-double lm_strtod(char const *s, char **end) {
+// ..and to binary32: the same once-only rounding at 24 bits
+static float lm_hexflof(uint64_t m, int e2, int sticky, int sign) {
+ if (!m) return sign > 0 ? 0.0f : -0.0f;
+ while (!(m >> 63)) m <<= 1, e2--;
+ int E = e2 + 63;
+ if (E > 127)  return sign > 0 ? mkf(0x7f800000u) : mkf(0xff800000u);
+ if (E < -160) return sign > 0 ? 0.0f : -0.0f;
+ int sub = E < -126, sh = sub ? 40 + (-126 - E) : 40;
+ uint64_t sig;
+ if (sh > 64) sig = 0;
+ else if (sh == 64) sig = (m > ((uint64_t) 1 << 63) || sticky) ? 1 : 0;
+ else {
+  uint64_t lost = m & (((uint64_t) 1 << sh) - 1), half = (uint64_t) 1 << (sh - 1);
+  sig = m >> sh;
+  if (lost > half || (lost == half && (sticky || (sig & 1)))) sig++; }
+ if (sub) { float f = mkf((uint32_t) sig); return sign > 0 ? f : -f; }
+ if (sig >> 24) sig >>= 1, E++;
+ if (E > 127) return sign > 0 ? mkf(0x7f800000u) : mkf(0xff800000u);
+ float f = mkf(((uint32_t) (E + 127) << 23) | ((uint32_t) sig & ((1u << 23) - 1)));
+ return sign > 0 ? f : -f; }
+// the binary32 answer from the correctly rounded binary64 d (a magnitude): rounding d again
+// errs only when d sits exactly on a binary32 midpoint, so there the input digits decide
+static float lm_dtof(double d, unsigned char const *din, int nin, int kk, int sticky) {
+ fb t; t.f = (float) d;
+ if ((double) t.f == d) return t.f;
+ fb o = t;
+ if (t.u == 0x7f800000u) o.u = 0x7f7fffffu;            // past the top: FLT_MAX and 2^128
+ else o.u = (double) t.f > d ? t.u - 1 : t.u + 1;
+ double dt = t.u == 0x7f800000u ? 0x1p128 : (double) t.f, mid = (dt + (double) o.f) / 2;
+ if (d != mid) return t.f;
+ db b; b.d = mid;
+ int be = (int) (b.u >> 52);
+ uint64_t m = (b.u & ((1ull << 52) - 1)) | (be ? 1ull << 52 : 0);
+ int e2 = (be ? be : 1) - 1023 - 52, scb = e2 - 2 < 0 ? e2 - 2 : 0;
+ unsigned char dg[lm_dgmax]; int ndg;
+ lm_dgexp(dg, &ndg, 4 * m, e2 - 2);
+ int c = lm_dgcmp(din, nin, kk - scb, sticky, dg, ndg);
+ if (!c) return t.f;                                   // a true tie: (float) chose the even one
+ return (c > 0) == (dt > (double) o.f) ? t.f : o.f; }
+// decimal or hex text to binary64; fo, when given, takes the binary32 answer where
+// rounding twice could differ, and is left alone where the double's own cast is exact
+static double lm_strto(char const *s, char **end, float *fo) {
  char const *p = s;
  int sign = 1;
  if (*p == '-') sign = -1, p++;
@@ -737,6 +778,7 @@ double lm_strtod(char const *s, char **end) {
      while ('0' <= *r && *r <= '9') { if (pv < 100000) pv = pv * 10 + (*r - '0'); r++; }
      he += es * pv;
      if (end) *end = (char*) r; } }
+   if (fo) *fo = lm_hexflof(hm, he, hst, sign);
    return lm_hexflo(hm, he, hst, sign); } }
  // up to 780 significant digits kept exactly (rounding can need ~768), the rest
  // a sticky bit; fr counts post-point digits
@@ -805,4 +847,10 @@ double lm_strtod(char const *s, char **end) {
   else {                                         // under the lower midpoint: down one ulp
    if (!b.u) break;                              // beneath half the least denormal: zero
    b.u--; } }
+ if (fo) { float f = lm_dtof(b.d, din, nin, kk, sticky); *fo = sign > 0 ? f : -f; }
  return sign * b.d; }
+double lm_strtod(char const *s, char **end) { return lm_strto(s, end, 0); }
+float lm_strtof(char const *s, char **end) {
+ float f = mkf(0x7fc00000u);                      // a nan: no reading answers one
+ double d = lm_strto(s, end, &f);
+ return f != f ? (float) d : f; }

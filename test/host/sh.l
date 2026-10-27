@@ -341,6 +341,35 @@
   ["export E=out; echo [$(export E=in; echo $E)][$E]" "[in][out]\n"]
   ["g() { echo G; }; f() { g() { echo I; }; }; echo [$(f; g)][$(g)]" "[I][G]\n"]
   ["set -- keep it; f() { echo $1; }; echo [$(f one)][$1 $2]" "[one][keep it]\n"]])
+; a cwd removed under us: pwd and the cd that leaves keep its path, as $PWD has it;
+; a parent's stale $PWD is never what that falls back to
+(: d (cwd 0 + "/out/t-lushcwd")
+   lv (cwd 0 + "/out/love") ls (cwd 0 + "/out/lush")
+   _ (test (t-lush ("rm -rf " + d + "; mkdir -p " + d + "/e; cd " + d + "/e; rmdir ../e; pwd; cd ..; pwd; echo $OLDPWD")
+            = (d + "/e\n" + d + "\n" + d + "/e\n")))
+   _ (test (t-lush ("mkdir -p " + d + "/f; cd " + d + "/f; PWD=/stale " + lv + " " + ls + " -c 'rmdir ../f; pwd'")
+            = (d + "/f\n")))
+   (t-lush ("rm -rf " + d)))
+; ..and on a pty the prompt keeps it
+(: (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
+   (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
+   _ (t-lush "rm -rf out/t-lushcwd; mkdir -p out/t-lushcwd/p")
+   r (tether ["out/love" "lush"])
+   m >r
+   _ (settty m 24 80)
+   sink (jug 0)
+   t (twirl (_ \ pump m sink) 0)
+   _ (rest 600)
+   _ (type m "cd out/t-lushcwd/p\n")
+   _ (rest 600)
+   s1 (slurp sink)
+   _ (type m "rmdir ../p\n")
+   _ (rest 700)
+   s2 (slurp sink)
+   _ (still <r 9)
+   _ (landed? t ? (catch t) (freeze t))
+   _ (t-lush "rm -rf out/t-lushcwd")
+   (test (has? s1 "t-lushcwd/p") (has? (snip s2 #s1 #s2) "t-lushcwd/p")))
 ; ..on a raised exit too. the cwd is put back before the assert, so a red cannot strand
 ; later tests
 (: start (cwd 0)
