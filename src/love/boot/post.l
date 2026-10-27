@@ -424,7 +424,7 @@
                   (y @ ('k v) (rk C v)
                        ('g n) n
                        ('o n as) (onm n . map (ra C) as)
-                       ('c . J . cl) ('? . rcl C J cl)
+                       ('c . J . cl) (cone ('? . rcl C J cl))
                        ('a . _) (rapp C y)
                        (fail C))))
    ; the same captures: a name bound to a slot is that slot, whether or not the name holds
@@ -432,6 +432,25 @@
    (alleq C xs ys) (two? ys ? (== (sees C <xs) (sees C <ys) && alleq C >xs >ys) 1)
    ; an operator away from the head is parenthesised, or it reads as infix
    (ra C x) (rv C x @ r (infix? r ? [r] r))
+   ; a let whose last init is a cond tail-applies its body from each arm, so the arms read as
+   ; the same let, each its own binders, but that init: one let again, the cond its init. the
+   ; let may close a chain of more clauses, so its run of arms is the chain's tail
+   (cone f) (cmerge >f @ r (atom? >r ? <r ('? . r)))
+   (cmerge c) (atom? >c ? c (clet c @ m (two? m ? [m] (<c . <>c . cmerge >>c))))
+   (clet c) (: as (arms c) a <as n #a
+              (sk b) (tk (n - 2) b + [(last b)])
+              (? (atom? a || <a != ': || n < 4) 0
+                 (: ms (map (b \ two? b && #b = n && <b == ': ? (: M {} N {} (aeq (sk a) (sk b) M N ? N 0)) 0) >as)
+                    (any (m \ m == 0) ms ? 0 (tk (n - 2) a + [('? . cinit c (0 . ms)) (last a)])))))
+   (arms c) (atom? >c ? c (<>c . arms >>c))                     ; the results, the else last
+   (cinit c rs) (: (li b) (rn <rs (b (#b - 2)))
+                  (atom? >c ? [(li <c)] (<c . li <>c . cinit >>c >rs)))
+   ; x and y alike but for their mints, which pair one to one: M x's to y's, N back
+   (aeq x y M N) (? (mint? x) (mint? y && (peep M x () @ p (peep N y () @ q
+                                 (p !== () || q !== () ? (p == y && q == x) (pin M x y, pin N y x, 1)))))
+                    (two? x) (two? y && aeq <x <y M N && aeq >x >y M N)
+                    (x = y))
+   (rn N x) (? (N == 0) x (mint? x) (peep N x () @ y (y !== () ? y x)) (two? x) (rn N <x . rn N >x) x)
    ; a cond whose else is a cond of the same join is one cond of more clauses
    (rcl C J cl) (: t <cl a <>cl e <>>cl y (res C e)
     (rv C t . rv C a . (two? y && <y = 'c && y 1 == J ? (rcl C J >>y) [(rv C e)])))
