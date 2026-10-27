@@ -648,6 +648,12 @@
                       (psufs ps r <e (t \ <>e (ptrk k t)) <>>e (<>>>e && k = 0))))))))
    ; a leading `*..` run (quals interleaved) over ty -> (ty rest)
    (pstars ts ty) (pquals ts @ s (peekp s "*" ? (pstars >s ['ptr ty]) [ty s]))
+   ; C11 6.7.6.3p1: no function returns a function or an array, no array holds functions
+   (illty? t) (two? t && (? (<t = 'fn) (two? <>t && elem <<>t '(fn arr varr) || illty? <>t)
+                            (elem <t '(arr varr)) (two? <>t && <<>t = 'fn || illty? <>t)
+                            (<t = 'ptr) (illty? <>t)
+                            ()))
+   (illblame _) (clblame "a function returning a function or an array, or an array of functions")
    (pdtor ps ts base)                               ; -> ((name ty) rest) | ()
     ; k: the run follows a star, where alone restrict qualifies the pointer (pparams files it)
     (: (stars ts2 ty k)
@@ -661,7 +667,7 @@
            (pdirect ps ts2 @ dr
               (atom? dr ? ()
                  (: e <dr ty2 (<>e ty) dat <>>e
-                    [(two? dat ? [<e ty2 dat] [<e ty2]) <>dr])))
+                    (illty? ty2 ? (illblame 0) [(two? dat ? [<e ty2 dat] [<e ty2]) <>dr]))))
           !(idat? ts2)           ; an abstract declarator
            (? (peekp ts2 "[")                          ; `struct timespec const[2]`
                (adims ps ts2 () @ dr                 ; pparams decays it to a pointer
@@ -673,7 +679,7 @@
              ts3 >ts2
              (? (peekp ts3 "(")                       ; name(params): ('fn ty), the params balance-skipped
                  (skipbal >ts3 1 @ t2
-                    (two? t2 ? [[name ['fn ty]] t2]))
+                    (? !(two? t2) () (illty? ['fn ty]) (illblame 0) [[name ['fn ty]] t2]))
                 !(peekp ts3 "[") [[name ty] ts3]
                 (adims ps ts3 () @ dr
                    (atom? dr ? ()

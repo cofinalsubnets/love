@@ -479,6 +479,14 @@ moonrun -std=c11 -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct
 moonrun -std=nosuchlang -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "an unknown -std= was tolerated"
 moonrun -std=holyc -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-std=holyc was accepted -- it names a dialect we do not read"
 moonrun -std=c -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=c refused a plain C file"
+# no function returns a function or an array (C11 6.7.6.3p1); a function pointer, a pointer to a
+# typedef'd function type and an array of function pointers still declare
+printf 'int inc(int x){ return x + 1; }\nint (pick(int w))(int) { return inc; }\n' > "$ho/.frf.c"
+printf 'int (f2(void))[3];\n' > "$ho/.fra.c"
+printf 'typedef int F(int);\nF *g(void);\nint (*h(void))(int);\nint (*a[3])(void);\n' > "$ho/.frp.c"
+moonrun -c -o /dev/null "$ho/.frf.c" > /dev/null 2>&1 && fail "a function returning a function was accepted"
+moonrun -c -o /dev/null "$ho/.fra.c" > /dev/null 2>&1 && fail "a function returning an array was accepted"
+moonrun -c -o /dev/null "$ho/.frp.c" > /dev/null 2>&1 || fail "function pointers in a declarator were refused"
 moonrun -std=gnu11 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=gnu11 refused a plain C file"
 echo "mooncc: -std= is a rail (moon is the default and lays gcc's own layout; c fences the extensions out; an unknown one refuses)"
 
