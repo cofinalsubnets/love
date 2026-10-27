@@ -1866,7 +1866,7 @@
                                                !(any (t \ t = ['sym "."]) ts) || any (t \ <t = 'sym && sxn <>t) ts ? (wx ts w)
                                                  ; ..and one over `.` no fix carries, `(sym - .) / 8`
                                                  (trap (e \ ['raw (gf-word tgt w e rl)]) e
-                                                       (\ a b (any (t \ t = ['sym "."]) ts && any (t \ <t = 'lref || (<t = 'sym && <>t != ".")) ts ?
+                                                       (\ a b (a = 'gas-data && any (t \ t = ['sym "."]) ts && any (t \ <t = 'lref || (<t = 'sym && <>t != ".")) ts ?
                                                                   (wx ts w) (scare a b)))))))
                                       xs))))
               (mn = ".ascii") (raw (catall (gf-strs rest)))
