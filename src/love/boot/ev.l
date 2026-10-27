@@ -24,6 +24,7 @@
             == gcd modpow abs
             . cap cup caap caup cuap cuup
             dig lidx assoc elem last rev cat
+            max min != !== bit
             charm? numeric? nom? two? tablet? lit? string? nil? gem? twin? atom?
             snip string
             re im conj arg gem twin
@@ -68,18 +69,9 @@
        t))))
    (foldl add {} (catmap keys (stack ())))))
 
-; opfixed: the tag a caller that already factored its form puts at the head, so ev skips
-; opfix. a global: a top-level let holding ev would keep the egg's first-generation closure
-; alive in the image.
-(: opfixed (mint 0))
-
-; ev = opfix (factor sigils), feel (desugar), ana
-(:- (x \ (:
- c (sco 0 [()] ())
- y (feel c (two? x && <x == opfixed ? >x (opfix x)))
- k (ana c y (k0 c) 0 0)
- _ (each (rev (peep c 'defer ())) (t \ t 0))   ; the glaze's compiles that waited on a sibling
- k))
+; ev = opfix (factor sigils), feel (lower, then mark), ana. its book doors: ev-lower answers
+; the lowering alone, ev-run marks and compiles a form lowered already
+(:- (x \ evk (opfix x) 0)
   lvm_cur (pick 0 (+))
   lvm_ret0 (pick 1 cap)
   ; the nil? nif for cflip's head test: opfix's glued lane splices the value, so `!e` reaches
@@ -91,6 +83,10 @@
   lev (gv '<= ())
   peepv (gv 'peep ())
   apv (gv 'apcap ())
+  (evk x lo) (: c (sco 0 [()] ())
+                k (ana c (feel c x lo) (k0 c) 0 0)
+                _ (each (rev (peep c 'defer ())) (t \ t 0))   ; the glaze's compiles that waited on a sibling
+                k)
   (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {}}
   (rootc c) (: p (c 'par) (!p ? c (rootc p)))   ; top scope: where feel stashes 'src
   ; --- the emission interface (the codegen seam) ---
@@ -173,7 +169,7 @@
                           (pro (seek -2 (peek 4 f)))))))
   ; feel: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks applies
   ; with their n-ary-vs-l2r strategy. tail position is untracked; kap detects it at analysis.
-  (feel c x) (:
+  (feel c x lo) (:
    (wx x bnd)
     (: h <x (h @
      ^x x
@@ -332,10 +328,11 @@
    ; body inline, the twin kept for a list N. the loop's own names are fresh and its ops spliced
    ; as values, so the body captures nothing. a fold's Z and N trade places only when one of them
    ; is plain
-   (jotin x bnd) (? (atom? x) x
-                    (<x == '\) (atom? >>x ? x (: r (lp x) (relam x r (jotin >r (jsyms <r + bnd)))))
-                    (<x == ':) (atom? >x ? x (keep x (jotinb >x (ln >x + bnd)) ':))
-                    (npow (jotx (mapi (e \ jotin e bnd) x) bnd)))
+   ; dv: the local names as fusion's oracle reads them, jdefs' rows, a param [n 0]
+   (jotin x bnd dv) (? (atom? x) x
+                    (<x == '\) (atom? >>x ? x (: r (lp x) ps (jsyms <r) (relam x r (jotin >r (ps + bnd) (jvars ps + dv)))))
+                    (<x == ':) (atom? >x ? x (: ns (ln >x) (keep x (jotinb >x (ns + bnd) (jdefs >x ns + dv)) ':)))
+                    (npow (jotx (mapi (e \ jotin e bnd dv) (jfuse x bnd dv)) bnd)))
    ; (N x), N a literal 2..4: a number under apcap takes ipow's own products inline, the same tree
    ; and so the same answer; the rest, a function's church power, data's, a scare, keeps num-ap's lane
    (npow y) (two? y && charm? <y && 2 <= <y && <y <= 4 && 2 = #y ? (npow1 <y <>y) y)
@@ -344,9 +341,66 @@
                                             3 [mulv [mulv h h] t]
                                             [': q [mulv h h] [mulv q q]])]
                   [': t a ['? [numv t] ['? [lev n [peepv apv 0 0]] pw [n t]] [n t]]])
-   (jotinb bs bnd) (? (atom? bs) bs
-                      (atom? >bs) (keep1 bs (jotin <bs bnd))
-                      (keep3 bs <bs (jotin <>bs (two? <bs ? (jsyms <bs + bnd) bnd)) (jotinb >>bs bnd)))
+   (jotinb bs bnd dv) (? (atom? bs) bs
+                         (atom? >bs) (keep1 bs (jotin <bs bnd dv))
+                         (keep3 bs <bs (two? <bs ? (: ps (jsyms <bs) (jotin <>bs (ps + bnd) (jvars ps + dv))) (jotin <>bs bnd dv))
+                                (jotinb >>bs bnd dv)))
+   (jvars ps) (map (p \ [p 0]) ps)
+   ; a :'s rows: a helper bound once [n 'fn lambda], a constant [n 'lit], else [n 0]
+   (jdefs bs ns) (atom? bs || atom? >bs ? () (jdef <bs <>bs ns + jdefs >>bs ns))
+   (jdef k v ns) (? (two? k) (nom? <k && 1 = #(filter (== <k) ns) ? [[<k 'fn ('\ . >k + [v])]] (jvars (jsyms k)))
+                    (1 < #(filter (== k) ns)) [[k 0]]
+                    (string? v || charm? v || gem? v) [[k 'lit]]
+                    (two? v && <v == '\) [[k (atom? >>v ? 'lit 'fn) v]]
+                    [[k 0]])
+   (jdv h dv) (? (atom? dv) () (<<dv == h) <dv (jdv h >dv))
+   ; fusion interleaves a stage's calls with the consumer's, so a stage fuses only when pure: each
+   ; call a pure fn's, a pure local helper's (its own recursion taken as pure), a constant's, or a
+   ; read where rd licenses one, the consumer writing nothing. vs: the helpers being visited
+   jreads (map (n \ gv n ()) '(peep tally keys))
+   (jp? x dv rd vs) (? (atom? x) 1
+                       (<x == '\) (atom? >>x || (: r (lp x) (jp? >r (jvars (jsyms <r) + dv) rd vs)))
+                       (<x == '? || <x == ':) (all (e \ atom? e || jp? e dv rd vs) >x)
+                       (jph? <x >x dv rd vs && all (e \ jp? e dv rd vs) >x))
+   (jph? h as dv rd vs) (? (nom? h) (: e (jdv h dv)
+                                       (? (two? e) (e 1 @ 'fn (elem h vs || jp? (e 2) dv rd (h . vs)) 'lit 1 0)
+                                          (jpv? (gv h ()) as dv rd vs)))
+                           (two? h) 0
+                           (jpv? h as dv rd vs))
+   ; a walker is as pure as the fn it is handed
+   (jpv? v as dv rd vs) (string? v || constellation? v || pure-hv? v as || rd && elem v jreads
+                         || (jwalk? v && two? as && jpf? <as dv rd vs))
+   (jpf? f dv rd vs) (nom? f ? (jph? f () dv rd vs) (jp? f dv rd vs))
+   (jwalk? v) (v != () && (two? (jotfuse v) || v == jotfuse 'filter))
+   ; fusion: a walker over a map/filter chain takes the stages into its step, one pass and no list
+   ; between. a stage's fn and the consumer apply to fresh names, so nothing captures. [list step] places by kind
+   (jfuse x bnd dv) (: h <x jf (nom? h && !(elem h bnd) ? (jotfuse (gv h ())) ())
+      (? !(two? jf) x
+         (: kind (jkind jf) (? (kind = 3) x
+            ((? (kind < 2) [2 0] (kind = 2) [0 1] [1 0]) @ [li si]
+             (: as >x F (as si) pl (jpeel (as li) bnd ())
+               (? (atom? <pl || #as != jf 1 || !(atom? F || <F == '\ || jp? F dv 0 ())) x
+                  (: rd (jpf? F dv 1 ()) ss <pl
+                     (? !(all (s \ jpf? (s 1) dv rd ()) ss) x
+                        (: a (nom 0) i (nom 0)
+                           (step b) (? (kind = 0) ['\ a i b] (kind = 1) ['\ i a b] ['\ i b])
+                           sk (? (kind < 2) a (kind = 2) () (kind = 4) 1 0)
+                           (done v) (japp F (? (kind = 0) [a v] (kind = 1) [v a] [v]))
+                           (<x . jput as li <>pl si (step (jbody ss i sk done)))))))))))))
+   (jkind jf) (? (jf == jotfuse 'foldl) 0 (jf == jotfuse 'foldr) 1 (jf == jotfuse 'each) 2 (jf == jotfuse 'map) 3 (jf == jotfuse 'all) 4 5)
+   (jput as li l si f) (atom? as ? as ((? (li = 0) l (si = 0) f <as) . jput >as (li - 1) l (si - 1) f))
+   ; the stages, innermost first, and the list under them
+   (jstage L bnd) (two? L && 3 = #L && nom? <L && !(elem <L bnd) ? (: v (gv <L ()) (? (jotfuse v == jotfuse 'map) 1 (v == jotfuse 'filter) 2 0)) 0)
+   (jpeel L bnd ss) (: t (jstage L bnd) (t ? (jpeel <>>L bnd ([t <>L] . ss)) [ss L]))
+   ; the step's body: v the element, sk a filtered one's answer, done the consumer on the last
+   (jbody ss v sk done) (? (atom? ss) (done v)
+                           (<ss @ [t f] (t = 1 ? (: w (nom 0) [': w (japp f [v]) (jbody >ss w sk done)])
+                                                 ['? (japp f [v]) (jbody >ss v sk done) sk])))
+   ; f applied to fresh names: a plain lambda as a let, a partial flattened, else the call
+   (japp f as) (? (two? f && <f == '\ && two? (jstep f #as)) (': . (jrows (init >f) as + [(last f)]))
+                  (two? f && nom? <f && !(elem <f ['? '\ ':])) (f + as)
+                  (f . as))
+   (jrows ps as) (atom? ps ? () (<ps . <as . jrows >ps >as))
    (jsyms p) (? (nom? p) [p] (atom? p) () (jsyms <p + jsyms >p))
    (jplain? e) (atom? e || <e == '\ && atom? >>e)
    ; the step's params when it is (\ p.. B) with np distinct plain names, else ()
@@ -359,23 +413,25 @@
    (jsrc L bnd) (two? L && 2 = #L && (: j (jotfuse 'jot) h <L (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>L] ())
    (jotk y jf n ops bnd) (: as >y k <jf
                         (? !(two? n) y
-                           (: kind (? (jf == jotfuse 'foldl) 0 (jf == jotfuse 'foldr) 1 (jf == jotfuse 'each) 2 3)
+                           (: kind (jkind jf)
                               F (as (k = 0 ? 1 0))
                               ps (jstep F (kind < 2 ? 2 1))
                               (? !(two? ps) y
                                  (kind < 2 && !(jplain? <n || jplain? (as 1))) y
                                  (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops (jnum? <n bnd ops))))))
    ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
-   (jnum? N bnd ops) (charm? N || two? N && 2 = #N && (: T (ops 6) h <N (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)))
-   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] f l]])))
+   (jnum? N bnd ops) (charm? N || two? N && 2 = #N && (: T (ops 5) h <N (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)))
+   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] l f]])))   ; a whole N loops, the rest is the twin's
    ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
    (jotloop1 kind F ps B N Z tw ops)
-    (: t2 <ops sat <>ops lt <>>ops pl (ops 3) cons (ops 4) rv (ops 5)
-       n (nom 0) z (nom 0) go (nom 0) m (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
-       (? (kind = 0) [[': n N z Z] n [tw F z n] [': m [sat n] [go I A] ['? [lt I m] [go [pl I 1] B] A] [go 0 z]]]
-          (kind = 1) [[': n N z Z] n [tw F z n] [': m [sat n] [go I] ['? [lt I m] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
-          (kind = 2) [[': n N] n [tw n F] [': m [sat n] [go I] ['? [lt I m] [': e B [go [pl I 1]]]] [go 0]]]
-          [[': n N] n [tw F n] [': m [sat n] [go I a] ['? [lt I m] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
+    (: lt <>ops pl <>>ops cons (ops 3) rv (ops 4)
+       n (nom 0) z (nom 0) go (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
+       (? (kind = 0) [[': n N z Z] n [tw F z n] [': [go I A] ['? [lt I n] [go [pl I 1] B] A] [go 0 z]]]
+          (kind = 1) [[': n N z Z] n [tw F z n] [': [go I] ['? [lt I n] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
+          (kind = 2) [[': n N] n [tw n F] [': [go I] ['? [lt I n] [': e B [go [pl I 1]]]] [go 0]]]
+          (kind > 3) (: t [go [pl I 1]] u (kind = 4)
+                        [[': n N] n [tw F n] [': [go I] ['? [lt I n] (u ? ['? B t 0] ['? B 1 t]) u] [go 0]]])
+          [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
    ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
    ; var and folds a pure-fn call on constant args; pureset is the fold license and a
    ; bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc does) and unfolds no
@@ -454,17 +510,18 @@
     (all (e \ pbody? e bnd) x))
    (inlinable? nm lam) (lambp lam && smpl? lam && closedl? lam && pbody? lam () && !(w nm lam 0 0 0))
    (rmkeys ps env) (filter (p \ !(elem <p ps)) env)                         ; drop shadowed substitutions
-   (colnms bs) (atom? >bs ? ()                                                  ; a :'s binder noms
-                (: n <bs (nom? n ? (n . colnms >>bs) (colnms >>bs))))
+   (colnms bs) (atom? >bs ? ()                                                  ; a :'s binder noms, a define's head too
+                (: n <(dsug <bs 0) (nom? n ? (n . colnms >>bs) (colnms >>bs))))
    (bsub env x) (?                                                                     ; capture-avoiding substitution
     (nom? x) (assq x env @ (_ . x) x x)
     (atom? x) x
     (<x == '\) (atom? >>x ? x
        (: r (lp x) ps <r ren (map (p \ p . nom 0) ps)                      ; rename binders fresh -> no capture
           ('\ . (map cup ren + [(bsub (ren + rmkeys ps env) (last x))]))))
-    (<x == ':) (: nms (colnms >x) ren (map (p \ p . nom 0) nms)       ; whole-form, so an entangled : never reaches here (entg?)
-       (map (e \ bsub (ren + rmkeys nms env) e) x))
+    (<x == ':) (: y (': . dsrows >x) nms (colnms >y) ren (map (p \ p . nom 0) nms)   ; whole-form, so an entangled : never reaches here (entg?)
+       (map (e \ bsub (ren + rmkeys nms env) e) y))
     (map (e \ bsub env e) x))
+   (dsrows bs) (atom? >bs ? bs (dsug <bs <>bs @ (n . d) (n . d . dsrows >>bs)))   ; (f a) B as f (\ a B), so the renaming sees f
    (beta lam as) (: r (lp lam) ps <r np #ps                               ; apply a lambda to args (curried)
     (#as < np ?                                                             ; under-saturated -> substitute the given,
        (bsub (zip ps as) ('\ . drop #as ps + [(last lam)]))             ;   answer a \ of the rest
@@ -536,7 +593,11 @@
     (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's body inherits the let's op
     (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
        _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] segone))         ; a const or a known pure lambda enters se
-       (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb))))
+       b (two? <bs ? (usug <bs v1) segone)                                    ; a define keeps its sugar
+       (b == segone ? (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb)) (keep3 bs <bs b (cpbinds >>bs se fl op bnd pb)))))
+   ; usug: the body under a define's head (f a..), dsug undone, or segone where cprop changed its lambdas
+   (usug k v) (? (atom? k) v
+                 (: w (usug <k v) (w != segone && two? w && <w == '\ && init >w = >k ? (last w) segone)))
    ; bnd: the lexical binder set (\ params + : names): a local is never a macro head, and se can't
    ; stand in, since absence from se doesn't tell local from global.
    ; the atom test stays out of the @ chain: as the pin ^x it would compile to a deep `=`
@@ -547,7 +608,8 @@
     ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
     '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
     h (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
-       (m && !(elem h bnd) ? (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
+       (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (atom? >x ? () (map (e \ cprop e se fl 0 bnd pb) (init >x) + [(cprop (last >x) se fl op bnd pb)])) bnd)
+          (m && !(elem h bnd)) (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
           (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
              hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
              h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
@@ -572,6 +634,21 @@
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
                   (cpap >hk as)                                                       ;   keeps the value as its head
                 (keep2 x h2 as)))))))
+   ; && and || keep the macro's answer without its let where the left operand may be read twice:
+   ; (? a b a) and (? a a b), the shape the glaze's recognizers read
+   ; its operands come propagated: a sibling cprop's show would carry twice
+   (cpand h as bnd) (? (atom? as) (h == '&& ? 1 0)
+      (atom? >as) <as
+      (: a <as r (cpand h >as bnd)
+         (? (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
+            (: y (nom 0) [': y a (h == '&& ? ['? y r y] ['? y y r])]))))
+   ; dupok?: a leaf, or a pure fn over dupok? operands in nine nodes or fewer: cheap to read twice, the same answer both times
+   (dupok? a bnd) (? (atom? a) 1
+                     (9 < nsz a) 0
+                     (: h <a ((? (nom? h) (!(elem h bnd) && pure-head? h >a)
+                                 (atom? h) (pure-hv? h >a)
+                                 0)
+                              && all (e \ dupok? e bnd) >a)))
    ; dechurch: a numeral N under 64 applied to a literal function -- a lambda, or a dyadic op's
    ; partial on pure operands, which a copy evaluates no more often -- and an operand is f nested
    ; N deep, love's church power, written out so the beta lane above can take each f
@@ -592,7 +669,10 @@
    (fuel? fl lam) (: n (nsz (last lam)) _ (pin >fl 'z n) (0 < <fl && n <= left fl))   ; z: the size asked, for burn
    (burn fl) (: b >fl _ (pin b 0 (left fl - peep b 'z 0)) ((<fl - 1) . b))
    (nsz y) (? (two? y) (nsz <y + nsz >y) 1)
-   (wx (jotin (cprop x () (64 . {0 [x]}) 0 () ()) ()) ()))   ; bnd seeds (), not 0: `list + 0` would carry 0 into every binder set
+   ; lower: cprop then jotin. bnd seeds (), not 0: `list + 0` would carry 0 into every binder set
+   (lower y) (jotin (cprop y () (64 . {0 [y]}) 0 () ()) () ())
+   (mark y) (tablet? c ? (wx y ()) y)                   ; c 0 answers the lowering unmarked
+   (mark (lo ? x (lower x))))
   ; a bare symbol is a variable reference, except (), a literal: as a variable it would become a
   ; spurious import. the test is `!= ()`, not nil?: boxfix's cell names are nameless mints, also
   ; nil?, and must still reach ava.
@@ -820,4 +900,6 @@
        ana c ('\ . revcat (map cap prs) [body]))
     h (kap #prs)
     (pin c 'sn s,
-     f * g * h)))))
+     f * g * h))))
+  ; the glaze's doors, which egg moves to guts: it lowers once and runs canon's passes between them
+  _ (pins book 'ev-lower (x \ feel 0 (opfix x) 0) 'ev-run (x \ evk x 1)))

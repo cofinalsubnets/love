@@ -10,7 +10,7 @@
  ; nomop keeps them all. a start that loads more first finds `mop` under latemop
  (ev '(:
    m '(cellread seal-hook stack setstack lib enter leave gv trim peek poke pick place seek stem span
-       dis disp discell opname opnames nifop spin thrun lamthr lamform threadir nifnom yield ci-vt to-vt macros boxfix boxfix-es bodyless? bpr breads boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop letc opfixed gone jotfuse numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx lidx ldel _)
+       dis disp discell opname opnames nifop spin thrun lamthr lamform threadir nifnom yield ci-vt to-vt macros boxfix boxfix-es bodyless? bpr breads boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop letc ev-lower ev-run gone jotfuse numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx lidx ldel _)
    n (filter (\ k (? (nom? k) (= "lvm_" (snip (string k) 0 4)))) (keys book))
    M (lib ())
    ; the module may already hold rows bound from C at boot: join them, don't replace

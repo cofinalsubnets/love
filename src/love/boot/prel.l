@@ -216,10 +216,15 @@
         (eachn x f) (? (two? x) (each (jot x) f) (: n (saturate x) (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0)))
         (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
         (fuse w nm k ar t) (: e (. k (. ar (. t ()))) _ (pin jotfuse nm e) (pin jotfuse w e))
+        (alln f x) (? (two? x) (all f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0)))
+        (anyn f x) (? (two? x) (any f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0)))
         _ (pin jotfuse 'jot jot)
+        _ (pin jotfuse 'filter filter)                   ; no twin: fusion's stage, by value
         _ (fuse foldl 'foldl 2 3 foldn)
         _ (fuse foldr 'foldr 2 3 foldrn)
         _ (fuse each 'each 0 2 eachn)
+        _ (fuse all 'all 1 2 alln)
+        _ (fuse any 'any 1 2 anyn)
         (fuse map 'map 1 2 mapn)))
 
 (: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
@@ -618,7 +623,7 @@
 (seal-hook 3 opfix)
 (seal-hook 9 (\ p (opfix-past (cap p) (filter two? (cup p)))))
 ; the ops ev's jotin splices into a loop, as values: none a loop's body can shadow
-(pin jotfuse 'ops [two? saturate (<) (+) (.) rev tally])
+(pin jotfuse 'ops [whole? (<) (+) (.) rev tally])
 
 ; --- text + sequence batteries ------------------------------------------------
 ; one copy of each, `sep` first so a partial application reads, and -1 for absent.
