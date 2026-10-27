@@ -669,10 +669,15 @@
    (x64-lower ins) (lower-via @ f (lit? f ? (f x64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    x64-patch x86-patch
+   ;; a pad of k bytes as the long nops (0F 1F /0 and its 66 forms), 9 bytes at most each
+   x64-nops [() '(144) '(102 144) '(15 31 0) '(15 31 64 0) '(15 31 68 0 0) '(102 15 31 68 0 0)
+             '(15 31 128 0 0 0 0) '(15 31 132 0 0 0 0 0) '(102 15 31 132 0 0 0 0 0)]
+   (x64-pad k) (k < 10 ? (x64-nops k) (x64-nops 9 + x64-pad (k - 9)))
 
    x64 {'lower x64-lower
         'patch x64-patch
         'nop '(144)
+        'pad x64-pad
         ;; holo may rewrite (li d 0) to (xor d d d) where the flags are free. flagw lands a whole
         ;; fresh set: inc/dec keep CF, a shift by 0 keeps all, imul/idiv leave some undefined
         'zeroxor 1

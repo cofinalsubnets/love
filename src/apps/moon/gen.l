@@ -7351,50 +7351,82 @@
 
    ; rezx: a zxN over a register already clean to N drops, and an sxN over one clean below N
    ; (clean: zx, ldu, the 32-bit rotates, li, mov). a set is clean to 1, so `cmp r 0; set ne r`
-   ; over it drops unless the next form reads flags
+   ; over it drops unless the next form reads flags. a register's signed width rides beside
+   ; (its value fits a signed N bits, keyed by its spelling), so an sxN over one within N drops
    (rezx g fs)
-    (: (go l t acc)
+    (: (sk r) (show r)
+       (swk k) (: (go w) (64 < w ? 0 (-(1 << (w - 1)) <= k && k < 1 << (w - 1) ? w (go (w + 1)))) (go 1))
+       (swr t x) (? (charm? x) (swk x)
+                    !(nom? x) 0
+                    (: s (peep t (sk x) 0) c (peep t x 0)
+                       (? (0 < s) s (0 < c) (c + 1) 0)))
+       (cap w) (0 < w && w <= 64 ? w 0)
+       (both a b h) (0 < a && 0 < b ? (cap (h a b)) 0)
+       ; the width an op lays in its destination, from its operands' (0: unknown)
+       (swof t f)
+        (<f @ op
+           (? (elem op '(add sub lea)) (both (swr t (f 2)) (swr t (f 3)) (a \ b \ max a b + 1))
+              (op = 'imul) (both (swr t (f 2)) (swr t (f 3)) (a \ b \ a + b))
+              (elem op '(and or xor)) (both (swr t (f 2)) (swr t (f 3)) max)
+              (op = 'sar) (swr t (f 1) @ a (0 < a && charm? (f 2) ? (max 1 (a - f 2)) 0))
+              (op = 'shl) (swr t (f 1) @ a (0 < a && charm? (f 2) ? (cap (a + f 2)) 0))
+              (op = 'neg) (swr t (f 1) @ a (0 < a ? (cap (a + 1)) 0))
+              (op = 'not) (swr t (f 1))
+              (elem op '(ld1 ld2 ld4)) (op @ 'ld1 8 'ld2 16 32)
+              (elem op '(ldu1 ldu2 ldu4)) (op @ 'ldu1 9 'ldu2 17 33)
+              (elem op '(zx1 zx2 zx4)) (op @ 'zx1 9 'zx2 17 33)
+              (elem op '(sx1 sx2 sx4)) (: w (op @ 'sx1 8 'sx2 16 32) o (swr t (f 1)) (0 < o && o < w ? o w))
+              (op = 'li) (swr t (f 2))
+              (op = 'mov) (swr t (f 2))
+              (op = 'set) 2
+              0))
+       (lays? op) (elem op '(add sub lea imul and or xor sar shl neg not ld1 ld2 ld4))
+       (go l t acc)
         (!(two? l) ? (rev acc)
            (: f <l r >l
               (!(two? f) ? (go r t (f . acc))
-                 (<f @ op
-                    (? (op = 'cmp && peep t <>f 0 = 1 && <>>f = 0 &&
-                        two? r && <r = ['set 'ne <>f] &&
-                        !(two? >r && two? <>r && elem <<>r '(br br8 set)))
-                        (go >r t acc)
-                       (op = 'set)
-                        (pin t <>>f 1, go r t (f . acc))
-                       (elem op '(zx1 zx2 zx4))
-                        (: w (? (op = 'zx1) 8 (op = 'zx2) 16 32)
-                           c (peep t <>f 0)
-                           (0 < c && c <= w ? (go r t acc)
-                              (pin t <>f w, go r t (f . acc))))
-                       (elem op '(sx1 sx2 sx4))                 ; clean below the sign bit: a no-op
-                        (: w (? (op = 'sx1) 8 (op = 'sx2) 16 32)
-                           c (peep t <>f 0)
-                           (0 < c && c < w ? (go r t acc)
-                              (pin t <>f 0, go r t (f . acc))))
-                       (elem op '(ldu1 ldu2 ldu4))
-                        (pin t <>f (? (op = 'ldu1) 8 (op = 'ldu2) 16 32),
-                         go r t (f . acc))
-                       (op = 'ror4)
-                        (pin t <>f 32, go r t (f . acc))
-                       (op = 'rorv4)
-                        (pin t 'r1 0, pin t <>f 32, go r t (f . acc))
-                       (op = 'li)
-                        (<>>f @ k
-                           (pin t <>f (? !(charm? k) 0 (k < 0) 0
-                                         (k < 2) 1 (k < 256) 8 (k < 65536) 16
-                                         (k < 4294967296) 32 0),
-                            go r t (f . acc)))
-                       (op = 'mov)
-                        (pin t <>f (peep t <>>f 0), go r t (f . acc))
-                       (rdsp g f @ rd
-                          (rd @ 'bar (go r {} (f . acc))
-                                (: (dirty ds) (!(two? ds) ? 0
-                                                 (pin t <ds 0, dirty >ds))
-                                   (dirty <>rd,
-                                    go r t (f . acc))))))))))
+                 (: nw (swof t f)
+                    (<f @ op
+                       (? (op = 'cmp && peep t <>f 0 = 1 && <>>f = 0 &&
+                           two? r && <r = ['set 'ne <>f] &&
+                           !(two? >r && two? <>r && elem <<>r '(br br8 set)))
+                           (go >r t acc)
+                          (op = 'set)
+                           (pin t <>>f 1, pin t (sk <>>f) 2, go r t (f . acc))
+                          (elem op '(zx1 zx2 zx4))
+                           (: w (? (op = 'zx1) 8 (op = 'zx2) 16 32)
+                              c (peep t <>f 0)
+                              (0 < c && c <= w ? (go r t acc)
+                                 (pin t <>f w, pin t (sk <>f) nw, go r t (f . acc))))
+                          (elem op '(sx1 sx2 sx4))                 ; clean below the sign bit, or within it: a no-op
+                           (: w (? (op = 'sx1) 8 (op = 'sx2) 16 32)
+                              c (peep t <>f 0)
+                              o (swr t <>f)
+                              (0 < c && c < w || 0 < o && o <= w ? (go r t acc)
+                                 (pin t <>f 0, pin t (sk <>f) nw, go r t (f . acc))))
+                          (elem op '(ldu1 ldu2 ldu4))
+                           (pin t <>f (? (op = 'ldu1) 8 (op = 'ldu2) 16 32), pin t (sk <>f) nw,
+                            go r t (f . acc))
+                          (op = 'ror4)
+                           (pin t <>f 32, pin t (sk <>f) 0, go r t (f . acc))
+                          (op = 'rorv4)
+                           (pin t 'r1 0, pin t (sk 'r1) 0, pin t <>f 32, pin t (sk <>f) 0, go r t (f . acc))
+                          (op = 'li)
+                           (<>>f @ k
+                              (pin t <>f (? !(charm? k) 0 (k < 0) 0
+                                            (k < 2) 1 (k < 256) 8 (k < 65536) 16
+                                            (k < 4294967296) 32 0),
+                               pin t (sk <>f) nw,
+                               go r t (f . acc)))
+                          (op = 'mov)
+                           (pin t <>f (peep t <>>f 0), pin t (sk <>f) nw, go r t (f . acc))
+                          (rdsp g f @ rd
+                             (rd @ 'bar (go r {} (f . acc))
+                                   (: (dirty ds) (!(two? ds) ? 0
+                                                    (pin t <ds 0, pin t (sk <ds) 0, dirty >ds))
+                                      (dirty <>rd,
+                                       (lays? op && nom? <>f ? (pin t (sk <>f) nw) 0),
+                                       go r t (f . acc)))))))))))
        (go fs {} ()))
 
    ; copy propagation: after (mov a b) later reads of a say b; once nothing reads a the copy
