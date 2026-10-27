@@ -216,15 +216,16 @@
 
    ;; -- pass one: lower each form, assign addresses, record labels -> (items . labels).
    ;; items accumulate reversed so a whole-program lay stays linear.
-   ;; ('align n) pads with the backend's nop unit cycled to the exact count; the pad is never
-   ;; executed, so a torn unit is harmless. --
+   ;; ('align n) pads with the backend's 'pad, the fewest nops to the exact count, else its nop
+   ;; unit cycled; a cycled pad is never executed, so a torn unit is harmless. --
    (pad-to be addr n)
       (: k ((n - addr % n) % n)
+         pad (be 'pad)
          unit (peep be 'nop '(144))
          (fill j u) (? (j < 1) ()
                        !(two? u) (fill j unit)
                        (<u . fill (j - 1) >u))
-         (fill k unit))
+         (lit? pad ? (pad k) (fill k unit)))
    ;; (li d 0) -> (xor d d d) where the backend pins 'zeroxor and nothing reads the flags it clobbers
    (zeroidiom be ins rest)
       (<ins = 'li && ins 2 = 0 && be 'zeroxor && flagfree be rest 64 ?

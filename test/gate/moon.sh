@@ -126,6 +126,14 @@ moonrun -c "$ho/.ded.c" -o "$ho/.ded.o" || fail "mooncc: dead calls and statics"
 printf 'struct ops { void (*a)(void); void (*b)(void); } pv;\nvoid f(void){ asm volatile("call *%%[op]" :: [op] "m" (pv.b)); }\n' > "$ho/.pv.c"
 moonrun -c "$ho/.pv.c" -o "$ho/.pv.o" || fail "mooncc: an m operand at a global"
 [ "$(objdump -d "$ho/.pv.o" | grep -c 'ff 15 00 00 00 00')" = 1 ] || fail "an m operand at a global is not rip-relative"
+# an int already within 32 signed bits takes no movsxd (a short plus a byte, then halved); a
+# long narrowed to int still does
+printf 'int f(short a, unsigned char b){ int x = a + b; int y = x >> 1; return y * 3; }\n' > "$ho/.sxw.c"
+moonrun -c "$ho/.sxw.c" -o "$ho/.sxw.o" || fail "mooncc: a narrow int's arithmetic"
+[ "$(objdump -d "$ho/.sxw.o" | grep -c movslq)" = 0 ] || fail "an int within 32 bits was sign-extended again"
+printf 'int g(long a){ return (int)a; }\n' > "$ho/.sxn.c"
+moonrun -c "$ho/.sxn.c" -o "$ho/.sxn.o" || fail "mooncc: a long narrowed to int"
+[ "$(objdump -d "$ho/.sxn.o" | grep -c movslq)" = 1 ] || fail "a long narrowed to int lost its sign extension"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"

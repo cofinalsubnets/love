@@ -40,8 +40,9 @@
       ("alu.swap"    "4801d8"                ((add r0 r3 r0)))    ; commutes -> add rax,rbx, no mov
       ("add.movop"   "488d1418"              ((add r2 r0 r3)))    ; a fresh dest is one lea rdx,[rax+rbx] (the emit-alu note)
       ("add.movop.i" "488d4805"              ((add r1 r0 5)))     ; lea rcx,[rax+5]
-      ;; ('align n) pads to the boundary with the backend's nop unit (lay-level, no lowering)
-      ("align.pad"   "c3909090c3"            ((ret) (align 4) (label x) (ret)))
+      ;; ('align n) pads to the boundary with the backend's long nops (lay-level, no lowering)
+      ("align.pad"   "c30f1f00c3"            ((ret) (align 4) (label x) (ret)))
+      ("align.pad15" "c3660f1f840000000000660f1f440000c3" ((ret) (align 16) (label x) (ret)))
       ("align.zero"  "c3"                    ((align 16) (ret)))   ; already on the boundary: no pad
       ;; imul (true 3-operand imm form; rr folds two-address)
       ("imul.rr"     "480fafc3"              ((imul r0 r0 r3)))
