@@ -648,6 +648,12 @@
                       (psufs ps r <e (t \ <>e (ptrk k t)) <>>e (<>>>e && k = 0))))))))
    ; a leading `*..` run (quals interleaved) over ty -> (ty rest)
    (pstars ts ty) (pquals ts @ s (peekp s "*" ? (pstars >s ['ptr ty]) [ty s]))
+   ; C11 6.7.6.3p1: no function returns a function or an array, no array holds functions
+   (illty? t) (two? t && (? (<t = 'fn) (two? <>t && elem <<>t '(fn arr varr) || illty? <>t)
+                            (elem <t '(arr varr)) (two? <>t && <<>t = 'fn || illty? <>t)
+                            (<t = 'ptr) (illty? <>t)
+                            ()))
+   (illblame _) (clblame "a function returning a function or an array, or an array of functions")
    (pdtor ps ts base)                               ; -> ((name ty) rest) | ()
     ; k: the run follows a star, where alone restrict qualifies the pointer (pparams files it)
     (: (stars ts2 ty k)
@@ -661,7 +667,7 @@
            (pdirect ps ts2 @ dr
               (atom? dr ? ()
                  (: e <dr ty2 (<>e ty) dat <>>e
-                    [(two? dat ? [<e ty2 dat] [<e ty2]) <>dr])))
+                    (illty? ty2 ? (illblame 0) [(two? dat ? [<e ty2 dat] [<e ty2]) <>dr]))))
           !(idat? ts2)           ; an abstract declarator
            (? (peekp ts2 "[")                          ; `struct timespec const[2]`
                (adims ps ts2 () @ dr                 ; pparams decays it to a pointer
@@ -673,7 +679,7 @@
              ts3 >ts2
              (? (peekp ts3 "(")                       ; name(params): ('fn ty), the params balance-skipped
                  (skipbal >ts3 1 @ t2
-                    (two? t2 ? [[name ['fn ty]] t2]))
+                    (? !(two? t2) () (illty? ['fn ty]) (illblame 0) [[name ['fn ty]] t2]))
                 !(peekp ts3 "[") [[name ty] ts3]
                 (adims ps ts3 () @ dr
                    (atom? dr ? ()
@@ -900,8 +906,8 @@
                  ; AAPCS32 or a packed enum takes the smallest type holding every enumerator,
                  ; others int; past 32 bits both widen
                  (ety pos lo hi pk m)
-                  (: wide (? (pos && 4294967295 < hi) 'ulong
-                             (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
+                  (: wide (? (pos && 4294967295 < hi) (pst32? ps ? 'ullong 'ulong)
+                             (!pos && (hi > 2147483647 || lo < -2147483648)) (pst32? ps ? 'llong 'long) ())
                      narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
                                (-128 <= lo && hi <= 127) 'char
                                (-32768 <= lo && hi <= 32767) 'short
@@ -1319,7 +1325,7 @@
              (tkk t = 'id)
               (: nm (tkv t)
                  ev (peep (ps 'declaring) nm () ? () (peep (ps 'enums) nm ()))
-                 (cint? ev ? [['num ev] >ts]
+                 (cint? ev ? [(enumnum ps ev) >ts]
                     [['var nm] >ts]))
              ; ({ .. }): gcc's statement expression -- the leading statements, and the last as
              ; its value when it is an expression, else void
@@ -1578,6 +1584,12 @@
    ; value in its type, operands meeting by puac (-1 < 1u is 0), results wrapping to their
    ; width, an unsigned answer never negative. w64: long is 8 bytes.
    (cint? x) (charm? x || sun? x)
+   ; an enum constant as an operand: int when it fits, past int the enum's type: uint up to 2**32,
+   ; then 8 bytes, which ilp32 spells long long
+   (enumnum ps v) (? (!(charm? v) || -2147483648 <= v && v <= 2147483647) ['num v]
+                     (0 < v && v <= 4294967295) ['cast 'uint ['num v]]
+                     (pst32? ps) ['cast 'llong ['num v]]
+                     ['num v])
    (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
    (tbits w64 ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
                         ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
@@ -2711,7 +2723,7 @@
             <f = 'gdecl && (st || sc || 0 < va) ?
               (: (go2 prs) (atom? prs ? 1
                               (<<prs @ nm
-                                 (st ? (pin (ps 'svars) nm 1),
+                                 (st ? (pin (ps 'svars) nm (ps 'curused ? 'used 1)),
                                   sc ? (pin (ps 'sects) nm sc),
                                   0 < va ? (pin (ps 'aligns) nm va),
                                   go2 >prs)))

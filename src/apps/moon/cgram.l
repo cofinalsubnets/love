@@ -39,7 +39,7 @@
     (: nm (tkv t)
        (? (elem nm '("__func__" "__FUNCTION__" "__PRETTY_FUNCTION__") && string? (ps 'fnname)) ['str (ps 'fnname)]
           (: ev (peep (ps 'declaring) nm () ? () (peep (ps 'enums) nm ()))
-             (cint? ev ? ['num ev] ['var nm]))))
+             (cint? ev ? (enumnum ps ev) ['var nm]))))
    (cx-num ps t)
     (: k (tkk t) v (tkv t)
        (? (k = 'num && pchar ps = 'char && chq? t && 127 < v && v < 256) ['num (v - 256)]

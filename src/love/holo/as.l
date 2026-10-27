@@ -57,8 +57,8 @@
             ([(as-mrm 2 rf rm)] + le16 d)))
    (as-mem-rm md rf o)
       (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-         sy (5 < #o ? (o 5) ())                            ; a symbol displacement: abs32, always four bytes
-         d4 (sy ? [(fix 4 'abs32 sy d)] (le32 d))
+         sy (5 < #o ? (o 5) ())                            ; a symbol displacement: four bytes, sign-extended in 64
+         d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32) sy d)] (le32 d))
          _ (md = 64 && (b >= 32 || ix >= 32) && scare 'as-mem16-mode o)
          (? (as-a16? o) (as-mem16 rf o)
             (md = 16 && b < 0 && ix < 0)                    ; an absolute address in a 16-bit segment: disp16
