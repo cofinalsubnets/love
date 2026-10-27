@@ -1763,8 +1763,13 @@
               (mn = ".size")
                (two? >xs && cats (split " " (xa-trim <>xs)) = ".-" + xa-unquote <xs ?
                   (emit [['label (fn-end (xa-unquote <xs))]]) 0)
-              ; what a static link never reads: symbol types, visibility, unwind rows
-              (elem mn '(".type" ".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
+              ; .type f, @function: f's type label; stt_notype for a label no .type names
+              (mn = ".type")
+               (filter (w \ 0 < #w) (map xa-trim (catmap (f \ xa-split f 32) (xa-split rest 44))) @ ws
+                  (two? >ws && elem (ws 1) '("@function" "%function" "STT_FUNC" "\"function\"" "@gnu_indirect_function") ?
+                     (emit [['label (fn-type (xa-unquote <ws))]]) 0))
+              ; what a static link never reads: visibility, unwind rows
+              (elem mn '(".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
               ; the ISA a line may use: every one this reader knows, always
               (elem mn '(".arch" ".arch_extension" ".cpu")) 0
               ; the x86 segment the lines after it run in: their operand and address widths

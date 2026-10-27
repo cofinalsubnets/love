@@ -103,6 +103,7 @@
        (go lanes 1))
    ; a func symbol's size: its end label's offset less its own, in the same lane, else 0
    (o-fsize lanes w nm) (o-where lanes (fn-end nm) @ e (two? e && <e = <w ? (<>e - <>w) 0))
+   (o-ftype lanes nm) (two? (o-where lanes (fn-type nm)) ? 2 0)        ; stt_func | stt_notype
    ; labels a relocation names that no lane defines, each an undef symbol; first-seen order
    (o-exts lanes rels)
     (: seen {}
@@ -481,12 +482,12 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (secs (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? 2 1) <w <>w (x ? (o-fsize lanes w ls) (o-size ls)))))
+                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) 1) <w <>w (x ? (o-fsize lanes w ls) (o-size ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
-                                             2 <w <>w (o-fsize lanes w fs))))
+                                             (o-ftype lanes fs) <w <>w (o-fsize lanes w fs))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
@@ -547,10 +548,12 @@
            rs))
        relas (map (o-rels * ln-rl) lanes)
        rcnt (tally * ln-rl * ln)
+       ; a .rela only where a section has relocations: objtool walks an empty one's first entry
+       rl (filter (i \ rcnt i > 0) ^nsec)  nrel #rl
 
        shnames (map cap lanes
                 + '(".symtab" ".strtab")
-                + map (l \ ".rela" + <l) lanes
+                + map (i \ ".rela" + <(ln i)) rl
                 + '(".shstrtab"))
        shstr (o-strtab shnames)
        shstrblob <shstr shoffs <>shstr
@@ -558,9 +561,9 @@
 
        ; -- file layout: header, section contents packed tight (sh_addralign places them),
        ; then the sht. the indices: 0 NULL, the content sections, .symtab, .strtab, a .rela
-       ; per content section, .shstrtab last. --
-       i-sym (1 + nsec) i-str (2 + nsec) i-rel0 (3 + nsec)
-       i-shs (2 * nsec + 3) nsh (2 * nsec + 4)
+       ; per relocated section, .shstrtab last. --
+       i-sym (1 + nsec) i-str (2 + nsec)
+       i-shs (nsec + nrel + 3) nsh (nsec + nrel + 4)
        h-sz 64
        ; the content offsets, in section order; a NOBITS sh_offset is a placeholder.
        (o-offs i off acc) (nsec <= i ? [(rev acc) off]
@@ -580,10 +583,10 @@
                        lanes
               + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
                  (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab
-              + o-mapi (\ i l (elf-shdr (shname (nsec + 2 + i)) 4 0                          ; one .rela per section, link=.symtab
+              + o-mapi (\ j i (elf-shdr (shname (nsec + 2 + j)) 4 0                          ; a .rela per relocated section, link=.symtab
                                   0 (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
-                       lanes
-              + [(elf-shdr (shname (2 * nsec + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
+                       rl
+              + [(elf-shdr (shname (nsec + nrel + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
 
        hdr (catall [
              '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 64-bit LSB

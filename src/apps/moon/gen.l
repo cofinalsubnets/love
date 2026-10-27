@@ -5565,7 +5565,7 @@
              (!(inP 0) || !(foldl (a \ i \ a || exit? (fv i)) () (filter inP (jot n))) ? fs
                 (: tl (foldl (t \ j \ fv j @ f (pin t j (two? f && <f = 'label ? (f 1) (nlab g ".w")))) {} js)
                    sl (foldl (t \ j \ pin t j (nlab g ".w")) {} jb)
-                   pro (<>fs . map (p \ ['st 'sp (p 0) (p 1)]) saves)
+                   pro (['lea 'sp 'sp (0 - N)] . map (p \ ['st 'sp (p 0) (p 1)]) saves)   ; lea: a compare's flags may outlive it
                    (emit i acc)
                     (!(i < n) ? (rev acc)
                        (fv i @ f
@@ -8251,9 +8251,14 @@
        ; asm goto's labels, mangled as cgstmt's lbl; %lN spells one, and the blob leaves them as fixes
        labs (map (nm \ (name "\(g 'fn).\(nm)")) <>>>>>s)
        ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
-       ; register input, ('b reg (addr expr) 0) a memory input or output, ('m imm 0 0) an
+       ; register input, ('b reg (addr expr) 0) a memory input or output, ('g text 0 0) one at a
+       ; rip-relative address constant, ('m imm 0 0) an
        ; immediate, ('f reg expr 1 cond) a flag output, ('k sp expr 8) the stack pointer as it stands
        (pinof k e) (k @ 'pick (asmvpin g env e @ p (nom? p ? p k)) k)
+       ; x64's memory operand at an address constant is `sym+k(%rip)`, as gcc spells it, and takes no
+       ; register: paravirt's `call *%[op]` must stay the six-byte `ff 15` the kernel patches. a
+       ; segment's operand keeps the register: holo lays no %gs: store at a rip address
+       (riptext e) (? (neutral? || gtgt g != 'x64 || 0 <= findsub tmpl "s:") () (asmk g env ['addr e] @ v (string? v ? v ())))
        (oconv l acc)
         (!(two? l) ? (rev acc)
            (: c <<l n #c
@@ -8271,7 +8276,7 @@
                      (asmno g "an asm flag output \"\(c)\"\(ontgt g)"))
                  (bad? k || elem k '(imm either) || two? k && <k != 'one) (asmno g "an asm output constrained \"\(c)\"")
                  ; a memory output is the asm's own store: its address rides a register, as "m" in
-                 (k = 'mem) (oconv >l (['b 'pick ['addr <><l] 0] . acc))
+                 (k = 'mem) (oconv >l ((riptext <><l @ v (v ? ['g v 0 0] ['b 'pick ['addr <><l] 0])) . acc))
                  (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (!(two? l) ? (rev acc)
@@ -8280,7 +8285,7 @@
               (k @ 'bad (asmno g "an asm input constrained \"\(<<l)\"")
                    'imm (v != 'no ? (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
                    'either ((a64? g ? (cint? v && a64fit? <<l v) (charm? v)) ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
-                   'mem (iconv >l (['b 'pick ['addr e] 0] . acc))
+                   'mem (iconv >l ((riptext e @ v (v ? ['g v 0 0] ['b 'pick ['addr e] 0])) . acc))
                    (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
@@ -8294,7 +8299,7 @@
              (pinset l acc)
               (!(two? l) ? acc
                  (: e2 <l k <>e2
-                    (? (elem <e2 '(m k) || elem k '(pick fpick) || two? k) (pinset >l acc)
+                    (? (elem <e2 '(m k g) || elem k '(pick fpick) || two? k) (pinset >l acc)
                        !(asmreg? g k) 'bad
                        (elem k acc) 'bad
                        (pinset >l (k . acc)))))
@@ -8303,7 +8308,7 @@
                 (: (assign l fr acc)
                     (!(two? l) ? (rev acc)
                        (: e2 <l k <>e2
-                          (? (elem <e2 '(m k)) (assign >l fr (k . acc))
+                          (? (elem <e2 '(m k g)) (assign >l fr (k . acc))
                              (two? k && <k = 'one)          ; the first free register of the set
                               (filter (r9 \ elem r9 >k) fr @ c9
                                  (two? c9 ? (assign >l (filter (r9 \ r9 != <c9) fr) (<c9 . acc)) 'bad))
@@ -8366,6 +8371,7 @@
                              (: e2 <l a9 <al
                                 (optext >l >al ((<e2 @ 'm (itext a9)
                                                        'b (mtext a9)
+                                                       'g (md \ (md ? 'bad "\(a9)(%rip)"))
                                                        'f (md \ 'bad)       ; a flag output has no spelling
                                                        (freg? a9 ? (ftext a9) (rtext a9 <>>>e2))) . acc))))
                          txt (asmsub tmpl (optext ops9 asgn () + map ltext tls))
@@ -9368,9 +9374,10 @@
        (two? f ?
           (: rf (respell f)
              ps <>>rf
-             ; dead arms pruned before any splice: a call types by its signature, a cast by its type
+             ; dead arms pruned before any splice, a constant-returning call answered first, at any depth:
+             ; a call types by its signature, a cast by its type
              (sty e) (e @ ('call ('var n) _) <(peep (g 'sigs) n [()]) ('cast t _) t ())
-             body (nofx (dprune !(ilp32? g) sty <>(rf 3)))
+             body (nofx (dprune !(ilp32? g) sty (kcall1 g <>(rf 3) 0)))
              (dps x a) (? !(two? x) a
                           (<x = 'decl) (foldl (a2 \ p \ p . a2) a <>x)
                           (dps >x (dps <x a)))
@@ -11308,7 +11315,9 @@
                            (go (keys (g 'alias)) ()))   ; a data alias (musl's __stdin_used) names the same bytes
                     (globs >gs want zm (acc + (1 < an ? [['align an]])
                                            + als + [['label lbl]]
-                                           + (elem want '("love_nifs" ".love.image") ? [['raw bytes]] (exact (tsz g ty) bytes))))))))
+                                           + (? (elem want '("love_nifs" ".love.image")) [['raw bytes]]
+                                                (elem want '(".data" ".bss" ".rodata")) (exact (tsz g ty) bytes)
+                                                [<(exact (tsz g ty) bytes)])))))))   ; a named stream: no word's pad past the object
        ; an image as its object's own bytes, and the word's padding past them apart: the object
        ; writer reads a symbol's size up to the align (modpost holds a device table to it)
        (exact n bs)
@@ -11529,7 +11538,8 @@
                      ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law
                      an (peep (g 'aligns) nm 2 @ a (max (max a 2) (falgn g)))
                      pf (pfeof g nm)
-                     fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r) + [['label (fn-end nm)]])
+                     fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r)
+                          + (wasm? g ? () (catmap (a \ [['label (fn-end a)] ['label (fn-type a)]]) (nm . map (f \ <>f) al2))))   ; elf's size and type
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain
                      sc (peep (g 'sects) nm ())
                      _ (nm = "main" ? (pin g 'saw 1))
@@ -11564,19 +11574,33 @@
            ; ..and a static the file-scope asm names, which no C reference may reach
            aq (foldl (a \ x \ unom x @ t (t && !(laid t) ? (t . a) a)) () (keys (cg-refs (g 'asecs) {})))
            _ (drive (roots + sq + aq))
-           ; the data lane's fn references, read off the initializers in g 'glob (block-scope statics
-           ; included); a laid body can add its own, so this closes rather than passes
+           ; the live globals: one another unit may name (not static), a `used` or sectioned static, an alias's
+           ; target, and what a laid body, an asm or a live initializer names. a block-scope static is no svar,
+           ; so it stays. only a live initializer's fns are laid, and only live globals
+           svs (two? xtra ? <>xtra {})
+           gnom {}                              ; a global's label nom -> its name
+           live {}
+           gfr {}                               ; every name a live initializer mentions
+           (gadd ks) (foldl (a \ k \ (two? (peep (g 'glob) k 0) && !(live k) ? (pin live k 1, k . a) a)) () ks)
+           (gclose ws) (!(two? ws) ? 0
+                          (: r (cg-srefs <>>(g 'glob <ws) {})
+                             _ (foldl (_ \ k \ (pin gfr k 1, 0)) 0 (keys r))
+                             (gclose (gadd (keys r) + >ws))))
+           (groot? k) ((peep svs k 'no @ s (s = 'no || s = 'used)) || peep (g 'sects || {}) k () || elem k atg)
+           ; a laid body can name more, and lays its block statics, so this closes rather than passes
            (datclose _)
-            (: t {}
-               _ (foldl (_ \ k \ g 'glob k @ e
-                                   (two? e ? (cg-srefs <>>e t, 0) 0))
-                        0 (keys (g 'glob)))
+            (: _ (foldl (_ \ k \ (pin gnom <(g 'glob k) k, 0)) 0 (keys (g 'glob)))
+               _ (gclose (gadd (filter groot? (keys (g 'glob)))))
+               t (foldl (t2 \ k \ cg-refs (lfm k) t2)
+                        (cg-refs (g 'xfns) (cg-refs (g 'fasecs) (cg-refs (g 'asecs) {}))) (keys lfm))
+               _ (gclose (gadd (foldl (a \ x \ peep gnom x () @ s (s ? (s . a) a)) () (keys t))))
                ; ..and what a function's asm names from another section
-               _ (foldl (_ \ x \ unom x @ s (s ? (pin t s 1) 0)) 0 (keys (cg-refs (g 'fasecs) {})))
+               _ (foldl (_ \ x \ unom x @ s (s ? (pin gfr s 1) 0)) 0 (keys (cg-refs (g 'fasecs) {})))
                q (foldl (a \ s \ two? (fnix s) && !(laid s) ? (s . a) a)
-                        () (keys t))
+                        () (keys gfr))
                (two? q && !(gripe? (g 'genfail)) ? (drive q, datclose 0) 0))
            _ (datclose 0)
+           _ (pin g 'globs (filter (k \ live k) (g 'globs)))
            gf (g 'genfail)
            (gripe? gf ? gf
               (cgdata g @ dat
