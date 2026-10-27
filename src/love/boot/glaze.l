@@ -1528,7 +1528,7 @@
    ; jitgroupir: defs are ((nameform . body) ..), the entry is the group's value. the deopt fallback is (ev <group>), so the
    ; mpeep/mpin -> peep/pin aliases must assemble on every target; by the sequence law they read the previous global binding, not themselves
    (jitgroupir defs entry tgt)
-    (jitgroupirx defs entry tgt (ev (': . ('(mpeep mc mk md) . ('(peep mc mk md) . ('(mpin mc mk mv) . ('(pin mc mk mv) . jgir-lrf entry defs)))))))
+    (jitgroupirx defs entry tgt (ev-run (': . ('(mpeep mc mk md) . ('(peep mc mk md) . ('(mpin mc mk mv) . ('(pin mc mk mv) . jgir-lrf entry defs)))))))
    ; jitgroupirx takes the deopt target directly: the natjit hook passes the bytecode twin `e`, so a group-bearing
    ; closure native-backs without re-entering the evaluator mid-ala
    (jitgroupirx defs0 entry tgt deopt)
@@ -2470,7 +2470,8 @@
                          (co e ()))
                    e))
    ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
-   (auto-ev e) (? (qualfr e) (memo e (l \ jitfr l arch))
+   (auto-ev e) (? (atom? e) (ev-run e)                                                 ; an atom has nothing to lower
+                  (qualfr e) (memo e (l \ jitfr l arch))
                   ; cask-build a string loop (x86 only), lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
                   (: f (canon (ev-lower e))
                      (ev-run (autogroup (autonat (twolow (x86? ? (castbuild f) f)))))))
