@@ -340,7 +340,7 @@
        (okv? pp || ccdie pp src "cc: preprocessor error in \(src)",
         asmwrap (incbins (asmspell <>pp) is src)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one; a
-   ; space where the source had one and between two words
+   ; space where the source had one and between two words that would paste (v0.16b stays one)
    (asmspell ts)
     (: (word? t) (<t != 'p && <t != 'str)
        (qesc s) "\"\(string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
@@ -353,7 +353,7 @@
            (<l @ t
               (? (<t = 'fspans) (go >l prev acc)                  ; cpp's file-span record, not text
                  (<t = 'p && <>t = "\n") (go >l () ([10] . acc))
-                 (: sep (? (atom? prev) () (spaced? prev || (word? prev && word? t)) [32] ())
+                 (: sep (? (atom? prev) () (spaced? prev || word? prev && word? t && pastes? (spell prev) (spell t)) [32] ())
                     (go >l t (chars (spell t) . sep . acc))))))
        (go ts () ()))
    ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
@@ -396,7 +396,8 @@
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
        ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
-        ps))
+        ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
+        (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
    ; other section(NAME) the TU used, in declaration order (its address is the program's to fix).
    ; the wide tuples are named once, here; `[]` is strict, so a changed arity refuses
