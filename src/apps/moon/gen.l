@@ -7930,7 +7930,7 @@
    asmfp '(f16 f17 f18 f19 f20 f21 f22 f23)
    (freg? r9) (elem r9 asmfp)
    asmnames (foldl (t \ i \ "r\(i)" @ s9 (pin t (name s9) s9)) {} ^11)
-   (asmreg? g r9) (elem r9 (asmfile g) || a64? g && r9 = 'r4)
+   (asmreg? g r9) (elem r9 (asmfile g) || a64? g && elem r9 '(r4 lr))   ; lr: the a64 frame saves it, and its epilogue restores
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
    (asmpk g) (ia32? g ? '(r2 r1 r0 r6 r5) asmpick)   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1)
    ; an x64 xmm0..15 or an a64 v0..31, by name
@@ -8436,9 +8436,11 @@
                                                (matv g (clval g env <>>e2) @ lv
                                                   (bad? lv ? 'bad
                                                      (vty lv @ ty
-                                                        (flo? ty && !(freg? <al) || stru? ty || arr? ty || bitf? ty ? (asmno g "a float, struct, array or bit-field asm output")
-                                                           (ostores >l >al
-                                                            (vfs lv + (freg? <al ? (fst <>>><l ty <al) (spop 'r1 + [[(stop ty) 'r0 0 'r1]])) + acc)))))))))
+                                                        ; a struct or union a register holds whole ("=r"(lockval)) stores as the integer its size is
+                                                        (: wt (stru? ty && <e2 = 'o && !(freg? <al) ? (tsz g ty @ n (elem n [1 2 4 (wsize g)] ? (n @ 1 'uchar 2 'ushort 4 'uint 'ulong) ty)) ty)
+                                                           (flo? wt && !(freg? <al) || stru? wt || arr? wt || bitf? wt ? (asmno g "a float, struct, array or bit-field asm output")
+                                                              (ostores >l >al
+                                                               (vfs lv + (freg? <al ? (fst <>>><l wt <al) (spop 'r1 + [[(stop wt) 'r0 0 'r1]])) + acc))))))))))
                                      osf (ostores ops9 asgn ())
                                      ; one register output into a plain memory lvalue (a local's slot, a home's
                                      ; face) stores straight from its register: no cell
@@ -9935,15 +9937,17 @@
                ('un . 'not . a . _) (zfold w64 a @ va (cint? va ? (va = 0 ? 1 0) ()))
                ('cast . t . a . _) (zfold w64 a @ va (cint? va ? (cfold w64 ['cast t ['num va]]) ()))
                ())))
-   (dprune w64 ty x)
+   (dprune w64 ty x) (dprunel w64 ty lbl? x)
+   ; lk: does a piece hold a label that something outside it may reach
+   (dprunel w64 ty lk x)
     (atom? x ? x
        (x @ ('cond c a b)
-             (: v (bcpopen? w64 c ? () (zfold w64 c)) t (? (!(cint? v) || lbl? a || lbl? b) () (ty a = ty b) (ty a) ())
-                (!t ? (map (dprune w64 ty) x) ['cast t (dprune w64 ty (v != 0 ? a b))]))
+             (: v (bcpopen? w64 c ? () (zfold w64 c)) t (? (!(cint? v) || lk a || lk b) () (ty a = ty b) (ty a) ())
+                (!t ? (map (dprunel w64 ty lk) x) ['cast t (dprunel w64 ty lk (v != 0 ? a b))]))
             ('if c th el)
              ((bcpopen? w64 c ? () (zfold w64 c)) @ v
-                (!(cint? v) || lbl? th || lbl? el ? (map (dprune w64 ty) x)
-                   (: s (v != 0 ? th el) (two? s ? (dprune w64 ty s) '(nop)))))
+                (!(cint? v) || lk th || lk el ? (map (dprunel w64 ty lk) x)
+                   (: s (v != 0 ? th el) (two? s ? (dprunel w64 ty lk s) '(nop)))))
             ; a switch on a constant starts at its case: no case reaches what lies ahead, unless a goto's
             ; label is there or a case stands deeper than the body's own list (Duff's device)
             ('switch c items)
@@ -9956,9 +9960,9 @@
                    ok (sm? v && all (it \ (it @ ('case . lo . r) (sm? lo && (!(two? r) || sm? <r)) 1)) items)
                    k (ok ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
                    (glb? l) (any (it \ glbl? it) l)
-                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprune w64 ty) x)
-                      ['switch c (map (dprune w64 ty) (drop k items))])))
-            (map (dprune w64 ty) x)))
+                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
+                      ['switch c (map (dprunel w64 ty lk) (drop k items))])))
+            (map (dprunel w64 ty lk) x)))
    (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
    (exits? x) (x @ ('ret . _) 1 ('goto . _) 1 ('blk items) (two? items && exits? (last items)) ())
    ; -- a block ends at an item that always leaves: what follows is unreachable unless a kept jump
@@ -10423,7 +10427,19 @@
     (: w64 !(ilp32? g)
        (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
        (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
-       (ucut (has? f ? (kprop g (dprune w64 (e \ ()) (res f))) (dprune w64 (e \ ()) f))))
+       ; a spliced body's labels are reached from the splice alone: an arm holds one only when a jump
+       ; outside it names it (or a case stands in it)
+       (refs x t) (? !(two? x) t
+                     (x @ (('goto || 'laddr) . n . _) (pin t n (1 + peep t n 0))
+                          ('asm . _) (: _ (5 < #x ? (map (n \ pin t n (1 + peep t n 0)) (x 5)) 0) (refs >x (refs <x t)))
+                          (refs >x (refs <x t))))
+       all (refs f {})
+       (lk x) (: inn (refs x {})
+                 (go y) (? (atom? y) () (elem <y '(case dflt)) 1
+                           (<y = 'lbl) (string? <>y && !(starts? <>y "`") && peep inn <>y 0 < peep all <>y 0)
+                           (go <y || go >y))
+                 (go x))
+       (ucut (has? f ? (kprop g (dprunel w64 (e \ ()) lk (res f))) (dprune w64 (e \ ()) f))))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
     (: f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
@@ -10446,7 +10462,8 @@
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
        ; an alloca must run where no operand is parked on the stack: under a statement, a cast,
-       ; a comma, a ?: or a plain variable's assignment, or as another alloca's size
+       ; a comma, a ?: or a plain variable's assignment, as another alloca's size, or left of an
+       ; operator, which compiles first (| aside: gather may reorder its terms)
        _ (: (ab? e) (e @ ('call ('var n) _) (n = "__builtin_alloca") ())
             (un e) (? !(two? e) () (ab? e) 1 (un <e || un >e))
             (xs e) (? !(two? e) ()
@@ -10455,7 +10472,7 @@
                       (elem <e '(blk if while do for switch case dflt lbl expr ret sexpr)) (any xs >e)
                       (<e = 'decl) (any (d \ two? d && two? >d && two? >>d && xs <>>d) <>e)
                       (e @ ('cast _ x) (xs x) ('comma a b) (xs a || xs b) ('asn ('var _) r) (xs r)
-                           ('cond c a b) (xs c || xs a || xs b) (un e)))
+                           ('cond c a b) (xs c || xs a || xs b) ('bin o a b && o != '|) (xs a || un b) (un e)))
             (pin g 'abad (xs (f 3))))
        ; the labels whose address the body takes; a computed goto may land on any of them, so
        ; homing stands off as for an asm (every name is live at the jump). a call that returns

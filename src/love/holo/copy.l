@@ -31,7 +31,7 @@
 
    ;; -> ((lma fileoff size).. in lma order, entry): every SHF_ALLOC section with file
    ;; bytes. the test is not-NOBITS, not is-PROGBITS: .note, .dynsym and .rela.dyn load too.
-   (oc-read id s)
+   (oc-read id s drop only)
     (: _ (s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0
             (scare 'copy-not-elf id))
        fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'copy-elf-class id))
@@ -45,12 +45,16 @@
        segs (oc-segs fs s)
        _ (two? segs ? 0 (scare 'copy-no-load id))
        shoff (ld-f fs s 0 'e-shoff)
+       shstro (ld-f fs s (shoff + ld-f fs s 0 'e-shstrx * ld-n fs 'sh-ent) 'sh-off)
+       ; -R drops a section by name, -j keeps only those named
+       (want? h) (: nm (ld-cstr s (shstro + ld-f fs s h 'sh-name))
+                    (? (elem nm drop) () (two? only) (elem nm only) 1))
        (go i acc)
         (shnum <= i ? acc
            (: h (shoff + i * ld-n fs 'sh-ent)
               ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
               off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size)
-              keep (!(ty = 8) && 0 < fl & 2 && 0 < sz)
+              keep (!(ty = 8) && 0 < fl & 2 && 0 < sz && want? h)
               (go (i + 1) (keep ? ([(oc-lma id segs off) off sz] . acc) acc))))
        secs (go 1 ())
        (two? secs ? 0 (scare 'copy-nothing id),
@@ -134,16 +138,30 @@
 
    ;; -- the applet; it complains as gnu objcopy does, named and exit 1
    (oc-die m) (say err ("objcopy: " + m), put err 10, quit 1)
+   ; -O binary|ihex, -R/--remove-section and -j/--only-section by name; -S/--strip-all
+   ; and --strip-debug are taken, a flat image carrying no symbols or debug anyway
    (objcopy as)
-    (#as != 4 ? (oc-die "usage: objcopy -O binary|ihex IN OUT")
-       (: fmt (<as = "-O" ? <>as (oc-die ("unrecognized option " + <as)))
-          src (as 2) dst (as 3)
-          _ (elem fmt '("binary" "ihex") ? 0 (oc-die ("unknown output format " + fmt)))
-          r (uread src)
-          _ (two? r ? 0 (oc-die ("cannot open " + src)))
-          s <>r
-          w (oc-read src s)
-          nw (ld-write dst (fmt = "ihex" ? (oc-ihex s <w <>w) (oc-bin s <w)))
-          (nom? nw ? (oc-die ("cannot write " + dst + " -- " + show nw)) 0,
-           quit 0))))
+    (: (go a f ps)
+        (? (atom? a) [f (rev ps)]
+           (a @ ("-O" . w . r) (go r (pin f 'fmt w) ps)
+                ("-R" . w . r) (go r (pin f 'drop (w . f 'drop)) ps)
+                ("-j" . w . r) (go r (pin f 'only (w . f 'only)) ps)
+                (("--remove-section=" + n) . r) (go r (pin f 'drop (n . f 'drop)) ps)
+                (("--only-section=" + n) . r) (go r (pin f 'only (n . f 'only)) ps)
+                ((x . r) && elem x '("-S" "--strip-all" "-g" "--strip-debug")) (go r f ps)
+                ((x . r) && 1 < #x && x 0 = 45) (oc-die ("unrecognized option " + x))
+                (x . r) (go r f (x . ps))))
+       r0 (go as {'fmt () 'drop () 'only ()} ())
+       f <r0 ps <>r0
+       fmt (f 'fmt)
+       _ (? (#ps = 2 && string? fmt) 0 (oc-die "usage: objcopy -O binary|ihex [-R SEC] [-j SEC] IN OUT"))
+       src <ps dst <>ps
+       _ (elem fmt '("binary" "ihex") ? 0 (oc-die ("unknown output format " + fmt)))
+       r (uread src)
+       _ (two? r ? 0 (oc-die ("cannot open " + src)))
+       s <>r
+       w (oc-read src s (f 'drop) (f 'only))
+       nw (ld-write dst (fmt = "ihex" ? (oc-ihex s <w <>w) (oc-bin s <w)))
+       (nom? nw ? (oc-die ("cannot write " + dst + " -- " + show nw)) 0,
+        quit 0)))
 ) ; module 'holo

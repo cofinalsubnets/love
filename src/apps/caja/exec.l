@@ -26,7 +26,7 @@
     (: names {} dflt {}
        _ (map (\ p (: c (p 1) n (p 0)
                       (pin names (cmd-key c (p 2)) n,
-                       pin dflt c (peep dflt c () = () ? n 'many))))
+                       pin dflt c (peep dflt c () @ () n 'many))))
               primitive-table)
        _ (map (\ p (pin dflt (p 0) (p 1))) cmd-defaults)
        (pins J 'cmd-names names 'cmd-default dflt))
@@ -95,8 +95,8 @@
                  "you left one out. Proceed, with fingers crossed."],
      ins-error J)
    (its-all-over? J)
-    (? (!(privileged? J)) 0
-       (J 'page-contents-list = () && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
+    (? !(privileged? J) 0
+       (J 'page-head == J 'page-tail && J 'cur-list 'head == J 'cur-list 'tail && J 'dead-cycles = 0) 1
        ; \hbox to \hsize{}\vfill\penalty-'10000000000, and \end comes again
        (: _ (back-input J)
           _ (tail-append J (new-null-box () @ b (pin b 'width (dimen-par J hsize-code), b)))
@@ -137,6 +137,15 @@
           (g = vbox-group) (end-graf J, package J 0)
           (g = vtop-group) (end-graf J, package J vtop-code)
           (g = disc-group) (build-discretionary J)
+          (g = output-group) (resume-page-builder J)
+          (g = math-choice-group) (build-choices J)
+          (g = math-group) (end-math-group J)
+          (g = vcenter-group) (end-vcenter J)
+          (g = no-align-group) (end-graf J, unsave J, align-peek J)
+          (g = align-group)
+           (back-input J, pin J 'cur-tok (cs-token-flag + frozen-cr),
+            print-err J "Missing ", print-esc J "cr", print J " inserted",
+            set-help J ["I'm guessing that you meant to end an alignment here."], ins-error J)
           (not-yet J "this group's end")))
    (extra-right-brace J)
     (: g (J 'cur-group)
@@ -235,7 +244,7 @@
            (scan-optional-equals J, scan-normal-dimen J, pin (J 'page-so-far) chr (J 'cur-val))
           (cmd = set-page-int)
            (scan-optional-equals J, scan-int J,
-            pin J (chr = 0 ? 'dead-cycles 'insert-penalties) (J 'cur-val))
+            pin J (chr @ 0 'dead-cycles 'insert-penalties) (J 'cur-val))
           (cmd = set-box-dimen)
            (: _ (scan-eight-bit-int J) b (equiv J (box-base + J 'cur-val))
               _ (scan-optional-equals J) _ (scan-normal-dimen J)
@@ -255,7 +264,7 @@
           (cmd = assign-font-int)
            (: _ (scan-font-ident J) f (J 'cur-val)
               _ (scan-optional-equals J) _ (scan-int J)
-              (pin (J 'fonts f) (chr = 0 ? 'hyphenchar 'skewchar) (J 'cur-val)))
+              (pin (J 'fonts f) (chr @ 0 'hyphenchar 'skewchar) (J 'cur-val)))
           (cmd = def-font) (new-font J a)
           (cmd = set-interaction) (new-interaction J chr)
           (cmd = set-box)
@@ -266,7 +275,7 @@
                   set-help J ["Sorry, \\setbox is not allowed after \\halign in a display,"
                               "or between \\accent and an accented character."],
                   tex-error J)))
-          (cmd = hyph-data) (not-yet J "hyphenation")
+          (cmd = hyph-data) (chr @ 1 (new-patterns J) (new-hyph-exceptions J))
           (confusion J "prefix")))
    (assign-let J a n)
     (: _ (get-r-token J) p (J 'cur-cs)
@@ -298,10 +307,10 @@
        _ (J 'cur-cmd = toks-register ?
             (scan-eight-bit-int J, pins J 'cur-cmd assign-toks 'cur-chr (toks-base + J 'cur-val)))
        (? (J 'cur-cmd = assign-toks)
-           (equiv J (J 'cur-chr) @ l (l = () ? (define J a p undefined-cs ()) (define J a p call l)))
+           (equiv J (J 'cur-chr) @ l (l @ () (define J a p undefined-cs ()) (define J a p call l)))
           (: _ (back-input J) _ (pin J 'cur-cs q)
              l (scan-toks J 0 0)
-             (? (l = ()) (define J a p undefined-cs ())
+             (l @ () (define J a p undefined-cs ())
                 (define J a p call
                    (p = output-routine-loc ? ((left-brace-token + 123) . (l + [(right-brace-token + 125)])) l))))))
    (assign-def-code J a chr)
@@ -363,10 +372,10 @@
    (glue-sum q0 r)
     (: q (new-spec q0)
        _ (pin q 'width (q 'width + r 'width))
-       _ (q 'stretch = 0 ? (pin q 'sto normal))
+       _ (q 'stretch @ 0 (pin q 'sto normal))
        _ (? (q 'sto = r 'sto) (pin q 'stretch (q 'stretch + r 'stretch))
             (q 'sto < r 'sto && r 'stretch != 0) (pins q 'stretch (r 'stretch) 'sto (r 'sto)))
-       _ (q 'shrink = 0 ? (pin q 'sho normal))
+       _ (q 'shrink @ 0 (pin q 'sho normal))
        _ (? (q 'sho = r 'sho) (pin q 'shrink (q 'shrink + r 'shrink))
             (q 'sho < r 'sho && r 'shrink != 0) (pins q 'shrink (r 'shrink) 'sho (r 'sho)))
        q)
@@ -395,7 +404,7 @@
 
    ; --- fonts (tex.web 560-576, 1257-1260) ---------------------------------------------------
    (new-font J a)
-    (: _ (J 'job-name = () ? (open-log-file J))
+    (: _ (J 'job-name @ () (open-log-file J))
        _ (get-r-token J) u (J 'cur-cs)
        t (? (u >= hash-base) (J 'text u)
             (u = null-cs) "FONT"
@@ -433,12 +442,12 @@
        (pin (J 'text) (font-id-base + f) t))
    (find-tfm J name area)
     (: file (name + ".tfm")
-       (try ds) (? (ds = ()) () (readable? (<ds + file) ? (<ds + file) (try >ds)))
+       (try ds) (ds @ () () (readable? (<ds + file) ? (<ds + file) (try >ds)))
        (area != "" ? (readable? (area + file) ? (area + file) ()) (try (J 'tfm-dirs))))
    (read-font-info J u nm ar s)
     (: p (find-tfm J nm ar)
-       bytes (p = () ? () (: q (open p "r") b (slurp q) (close q, b)))
-       f (bytes = () ? 'badtfm (cb-font J nm ar bytes s))
+       bytes (p @ () () (: q (open p "r") b (slurp q) (close q, b)))
+       f (bytes @ () 'badtfm (cb-font J nm ar bytes s))
        (? (f != 'badtfm)
            (: F (J 'fonts f)
               (pins F 'hyphenchar (int-par J default-hyphen-char-code)
@@ -447,7 +456,7 @@
              _ (print-file-name J nm ar "")
              _ (? (s >= 0) (print J " at ", print-scaled J s, print J "pt")
                   (s != -1000) (print J " scaled ", print-int J (0 - s)))
-             _ (print J (bytes = () ? " not loadable: Metric (TFM) file not found"
+             _ (print J (bytes @ () " not loadable: Metric (TFM) file not found"
                                        " not loadable: Bad metric (TFM) file"))
              _ (set-help J ["I wasn't able to read the size data for this font,"
                             "so I will ignore the font specification."
@@ -468,7 +477,7 @@
     (: c (J 'cur-chr)
        l (scan-toks J 0 1)
        s (in-new-string J (\ _ (token-show J l)))
-       (? (c = 0)
+       (c @ 0
            (: _ (? (J 'term-offset + #s > J 'max-print-line - 2) (print-ln J)
                    (J 'term-offset > 0 || J 'file-offset > 0) (print-char J 32))
               (slow-print J s, flush (J 'term-out)))
@@ -529,7 +538,7 @@
            m (abs (mode J)) cmd (J 'cur-cmd)
            (is c) (cmd = c)
            (v? c) (m = vmode && cmd = c) (h? c) (m = hmode && cmd = c) (mm? c) (m = mmode && cmd = c)
-           (chars _) (main-loop J = 'out ? (sw ()) (big ()))
+           (chars _) (main-loop J @ 'out (sw ()) (big ()))
            (? ((h? letter) || h? other-char || h? char-given) (chars ())
               (h? char-num) (scan-char-num J, pin J 'cur-chr (J 'cur-val), chars ())
               (h? no-boundary)
@@ -562,7 +571,7 @@
               (is right-brace) (handle-right-brace J, big ())
               ((v? hmove) || h? vmove || mm? vmove)
                (: t (J 'cur-chr) _ (scan-normal-dimen J)
-                  (scan-box J (t = 0 ? (J 'cur-val) (0 - J 'cur-val)), big ()))
+                  (scan-box J (t @ 0 (J 'cur-val) (0 - J 'cur-val)), big ()))
               (is leader-ship) (scan-box J (leader-flag - a-leaders + J 'cur-chr), big ())
               (is make-box) (begin-box J 0, big ())
               (v? start-par) (new-graf J (J 'cur-chr > 0), big ())
@@ -588,7 +597,10 @@
               ((is car-ret) || is tab-mark) (align-error J, big ())
               (is no-align) (no-align-error J, big ())
               (is omit) (omit-error J, big ())
-              ((v? halign) || h? valign || mm? halign || is endv) (not-yet J "alignment")
+              ((v? halign) || h? valign) (init-align J, big ())
+              (mm? halign)
+               (J 'cur-group = math-shift-group ? (init-align J) (off-save J), big ())
+              ((v? endv) || h? endv) (do-endv J, big ())
               (is end-cs-name)
                (print-err J "Extra ", print-esc J "endcsname",
                 set-help J ["I'm ignoring this, since I wasn't doing a \\csname."],
@@ -600,7 +612,33 @@
               (is message) (issue-message J, big ())
               (is case-shift) (shift-case J, big ())
               (is xray) (show-whatever J, big ())
-              (h? math-shift) (not-yet J "math")
+              (is extension) (do-extension J, big ())
+              (h? math-shift) (init-math J, big ())
+              (mm? eq-no) (J 'cur-group = math-shift-group ? (start-eq-no J) (off-save J), big ())
+              (mm? left-brace)
+               (tail-append J (new-noad ()), back-input J, scan-math J (tl J 'nucleus), big ())
+              ((mm? letter) || mm? other-char || mm? char-given)
+               (set-math-char J (equiv J (math-code-base + J 'cur-chr)), big ())
+              (mm? char-num)
+               (scan-char-num J, pin J 'cur-chr (J 'cur-val),
+                set-math-char J (equiv J (math-code-base + J 'cur-chr)), big ())
+              (mm? math-char-num) (scan-fifteen-bit-int J, set-math-char J (J 'cur-val), big ())
+              (mm? math-given) (set-math-char J (J 'cur-chr), big ())
+              (mm? delim-num) (scan-twenty-seven-bit-int J, set-math-char J (J 'cur-val // 4096), big ())
+              (mm? math-comp)
+               (tail-append J (new-noad ()), pin (tl J) 'type (J 'cur-chr), scan-math J (tl J 'nucleus), big ())
+              (mm? limit-switch) (math-limit-switch J, big ())
+              (mm? radical) (math-radical J, big ())
+              ((mm? accent) || mm? math-accent) (math-ac J, big ())
+              (mm? vcenter) (begin-vcenter J, big ())
+              (mm? math-style) (tail-append J (new-style (J 'cur-chr)), big ())
+              (mm? non-script)
+               (tail-append J (new-glue (J 'zero-glue)), pin (tl J) 'sub cond-math-glue, big ())
+              (mm? math-choice) (append-choices J, big ())
+              ((mm? sub-mark) || mm? sup-mark) (sub-sup J, big ())
+              (mm? above) (math-fraction J, big ())
+              (mm? left-right) (math-left-right J, big ())
+              (mm? math-shift) (J 'cur-group = math-shift-group ? (after-math J) (off-save J), big ())
               (not-yet J "typesetting")))
        (big ()))
    (normal-paragraph J)
@@ -621,6 +659,192 @@
      || c = register || c = advance || c = multiply || c = divide || c = prefix || c = let-cmd
      || c = shorthand-def || c = read-to-cs || c = def || c = set-box || c = hyph-data
      || c = set-interaction)
+
+   ; --- dumping and undumping (tex.web 1299-1329) ----------------------------------------------
+   ; a format is the fields below as text: i int, f float, s string, y symbol, n (), L list, T a
+   ; tablet with its id, R a tablet already written, so a shared glue spec stays shared
+   fmt-fields ['eq 'et 'el 'hash 'text 'hash-used 'cs-count 'fonts 'nfonts 'pats 'pref 'langs 'exc
+               'trie-ops 'trie-used 'trie-op-count 'pat-ops 'interaction 'format-ident 'zero-glue
+               'fil-glue 'fill-glue 'ss-glue 'fil-neg-glue]
+   (fmt-text J)
+    (: C {'n 0 'cells 0 'acc ()}
+       (emit s) (pin C 'acc (s . C 'acc))
+       (str tag x) (emit (tag + show #x + ":" + x))
+       (val x)
+        (: k (kind x)
+           (k @ 'charm (emit ("i" + show x + " "))
+                'gem (emit ("f" + show x + " "))
+                'string (str "s" x)
+                'nom (str "y" (show x))
+                'mint (emit "n")
+                'chain (: _ (pin C 'cells (C 'cells + #x)) _ (emit ("L" + show #x + " ")) (each x val))
+                'tablet
+                 (? (peep x 'fmt-id 0 > 0) (emit ("R" + show (x 'fmt-id) + " "))
+                    (: n (C 'n + 1)
+                       ks (filter (k2 \ k2 != 'fmt-id) (keys x))
+                       _ (pins C 'n n) _ (pin x 'fmt-id n)
+                       _ (emit ("T" + show n + " " + show #ks + " "))
+                       (each ks (k2 \ (val k2, val (x k2))))))
+                (confusion J "dump")))
+       _ (each fmt-fields (f \ val (J f)))
+       [(cats (rev (C 'acc))) (C 'n) (C 'cells)])
+   (fmt-parse J s)
+    (: P {'i 0} ids {}
+       (upto c) (: a (P 'i) (go k) (s k = c ? k (go (k + 1))) e (go a) (pin P 'i (e + 1), snip s a e))
+       (str _) (: n (read (upto 58)) a (P 'i) (pin P 'i (a + n), snip s a (a + n)))
+       (val _)
+        (: c (s (P 'i)) _ (pin P 'i (P 'i + 1))
+           (? (c = 105 || c = 102) (read (upto 32))
+              (c = 115) (str ())
+              (c = 121) (nom (str ()))
+              (c = 110) ()
+              (c = 76) (: n (read (upto 32)) (go k acc) (k @ 0 (rev acc) (go (k - 1) (val () . acc))) (go n ()))
+              (c = 84)
+               (: id (read (upto 32)) n (read (upto 32)) t {} _ (pin ids id t)
+                  (go k) (k > 0 ? (: k2 (val ()) (pin t k2 (val ()), go (k - 1))))
+                  (go n, t))
+              (c = 82) (ids (read (upto 32)))
+              (confusion J "undump")))
+       (map (f \ [f (val ())]) fmt-fields))
+   ; font_info's words for font f, as read_font_info and \fontdimen lay them
+   (font-words J f)
+    (: t (J 'fonts f 'tfm)
+       (#(keys (t 'ci)) + #(keys (t 'wd)) + #(keys (t 'ht)) + #(keys (t 'dp)) + #(keys (t 'ic))
+        + t 'nl + #(keys (t 'kern)) + #(keys (t 'ext)) + t 'np))
+   ; fmem_ptr-7: every font's words, the null font's first seven aside
+   (fmem-words J) (foldl (\ a f (a + font-words J f)) (J 'fonts 0 'tfm 'np - 7) (map (+ 1) ^(J 'nfonts)))
+   ; the statistics tracingstats asks of the job's end (tex.web 1334), out of TeX Live's capacities;
+   ; there is no string pool or mem array, so those counts are zeros
+   (job-stats J)
+    (: q (J 'log-file) nf (J 'nfonts) nh #(keys (J 'exc))
+       (pl n) (n != 1 ? "s" "")
+       (say q (cats [" \nHere is how much of TeX's memory you used:\n"
+                     " 0 strings out of 498626\n"
+                     " 0 string characters out of 6225294\n"
+                     " 0 words of memory out of 5000000\n"
+                     " " (show (J 'cs-count)) " multiletter control sequences out of 15000+600000\n"
+                     " " (show (fmem-words J + 7)) " words of font info for " (show nf) " font" (pl nf)
+                     ", out of 8000000 for 9000\n"
+                     " " (show nh) " hyphenation exception" (pl nh) " out of 8191\n"
+                     " " (show (J 'max-in-stack)) "i," (show (J 'max-nest-stack)) "n,"
+                     (show (J 'max-param-stack)) "p,0b," (show (J 'max-save-stack + 6))
+                     "s stack positions out of 10000i,1000n,20000p,200000b,200000s\n"])))
+   ; the packed trie's length, as init_trie's compress_trie, first_fit and trie_pack find it
+   (trie-length J)
+    (: root {}
+       (add node key i)
+        (? (i >= #key) (pin node 'o (peep (J 'pat-ops) key 0))
+           (: K (peep node 'kids ())
+              K2 (K @ () ({} @ k (pin node 'kids k, k)) K)
+              ch (key i)
+              (add (peep K2 ch () @ n (n @ () ({'o 0} @ m (pin K2 ch m, m)) n)) key (i + 1))))
+       _ (each (keys (J 'pats)) (k \ add root k 0))
+       C {'n 0 'tab {} 'c {} 'o {} 'l {} 'r {}}
+       (canon c o l r)
+        (: key (show [c o l r]) old (peep (C 'tab) key 0)
+           (? (old > 0) old
+              (: n (C 'n + 1)
+                 (pin C 'n n, pin (C 'tab) key n, pin (C 'c) n c, pin (C 'o) n o, pin (C 'l) n l,
+                  pin (C 'r) n r, n))))
+       (chain K)
+        (K @ () 0
+           (foldl (\ r ch (K ch @ nd (canon ch (nd 'o) (chain (peep nd 'kids ())) r))) 0
+                  (rev (sort (keys K)))))
+       top (chain (peep root 'kids ()))
+       link {0 1} back {} taken {} tmin {} ref {} T {'max 0}
+       _ (each ^256 (p \ pin tmin p (p + 1)))
+       (lk z) (peep link z 0)
+       (ensure h)
+        (T 'max < h + 256 ?
+           (: m (T 'max + 1)
+              (pin T 'max m, pin taken m 0, pin link m (m + 1), pin back m (m - 1), ensure h)))
+       (fits? q h) (q = 0 || (lk (h + C 'c q) != 0 && fits? (C 'r q) h))
+       (pack p h)
+        (: _ (pin taken h 1) _ (pin ref p h)
+           (go q)
+            (q != 0 ?
+               (: z (h + C 'c q) l (peep back z 0) r (lk z)
+                  _ (pin back r l) _ (pins link l r z 0)
+                  _ (l < 256 ? (: ll (z < 256 ? z 256) (fill m) (m < ll ? (pin tmin m r, fill (m + 1))) (fill l)))
+                  (go (C 'r q))))
+           (go p))
+       (first-fit p)
+        (: c (C 'c p)
+           (try z) (: h (z - c) _ (ensure h)
+                      (? (peep taken h 0 = 1) (try (lk z)) (fits? (C 'r p) h) (pack p h) (try (lk z))))
+           (try (tmin c)))
+       (trie-pack p)
+        (p != 0 ?
+           (: q (C 'l p)
+              _ (q > 0 && peep ref q 0 = 0 ? (first-fit q, trie-pack q))
+              (trie-pack (C 'r p))))
+       (top @ 0 256 (first-fit top, trie-pack top, T 'max)))
+   (store-fmt-file J)
+    (: _ (J 'save-ptr != 0 ?
+            (print-err J "You can't dump inside a group", set-help J ["`{...\\dump}' is a no-no."],
+             succumb J))
+       ymd (int-par J year-code @ y [y (int-par J month-code) (int-par J day-code)])
+       _ (pin J 'format-ident (" (preloaded format=" + J 'job-name + " " + show (ymd 0) + "."
+                                + show (ymd 1) + "." + show (ymd 2) + ")"))
+       _ (pin J 'selector (J 'interaction = batch-mode ? log-only term-and-log))
+       name (J 'job-name + ".fmt")
+       _ (print-nl J "Beginning to dump on file ") _ (slow-print J name)
+       _ (print-nl J "") _ (slow-print J (J 'format-ident))
+       tl0 (trie-length J)
+       nt (#(keys (J 'text)))
+       lt (foldl (\ a k (a + #(J 'text k))) 0 (keys (J 'text)))
+       nf (J 'nfonts)
+       fw (fmem-words J)
+       nh #(keys (J 'exc))
+       _ (pin J 'trie-ready 1)
+       F (fmt-text J)
+       _ (open name "w" @ q (say q (F 0), close q))
+       _ (print-ln J) _ (print-int J nt) _ (print J " strings of total length ")
+       _ (print-int J lt)
+       _ (print-ln J) _ (print-int J (F 1 + F 2))
+       _ (print J " memory locations dumped; current usage is ")
+       _ (print-int J (F 1)) _ (print-char J 38) _ (print-int J (F 2))
+       _ (print-ln J) _ (print-int J (J 'cs-count)) _ (print J " multiletter control sequences")
+       _ (each (0 . map (+ 1) ^nf)
+            (f \ (: e (J 'fonts f) t (e 'tfm)
+                    (print-nl J "\\font", print-esc J (font-id-text J f), print-char J 61,
+                     print-file-name J (e 'name) (e 'area) "",
+                     t 'size != t 'dsize ? (print J " at ", print-scaled J (t 'size), print J "pt")))))
+       _ (print-ln J) _ (print-int J fw)
+       _ (print J " words of font info for ") _ (print-int J nf) _ (print J " preloaded font")
+       _ (nf != 1 ? (print-char J 115))
+       _ (print-ln J) _ (print-int J nh) _ (print J " hyphenation exception")
+       _ (nh != 1 ? (print-char J 115))
+       no (J 'trie-op-count)
+       _ (print-nl J "Hyphenation trie of length ") _ (print-int J tl0) _ (print J " has ")
+       _ (print-int J no) _ (print J " op") _ (no != 1 ? (print-char J 115))
+       _ (print J " out of ") _ (print-int J (J 'trie-op-size))
+       _ (each (rev ^256)
+            (k \ (peep (J 'trie-used) k 0 @ u
+                    (u > 0 ? (print-nl J "  ", print-int J u, print J " for language ", print-int J k)))))
+       (pin (J 'eq) (int-base + tracing-stats-code) 0))
+   ; \&NAME on the first line: the format's fields replace the fresh job's (tex.web 524, 1303)
+   (load-fmt-file J)
+    (: I (J 'cur) b (I 'buf)
+       a (I 'loc + 1)
+       e (: (go j) (j < I 'limit && b j != 32 ? (go (j + 1)) j) (go a))
+       nm (snip b a e)
+       name (#nm > 4 && snip nm (#nm - 4) #nm = ".fmt" ? nm (nm + ".fmt"))
+       (? !(readable? name)
+           (: o (J 'term-out)
+              (say o "Sorry, I can't find that format; will try PLAIN.\n",
+               say o "I can't find the PLAIN format file!\n", 0))
+          (: q (open name "r") s (slurp q) _ (close q)
+             _ (each (fmt-parse J s) (fv \ pin J (fv 0) (fv 1)))
+             _ (pins J 'xl {}
+             'trie-ready 1)
+             _ (each (map (+ 1) ^(J 'nfonts)) (f \ pin (J 'fonts f) 'used 0))
+             _ (peep J 'interaction-option () != () ? (pin J 'interaction (J 'interaction-option)))
+             _ (: t (J 'sys-time)
+                  (each [[time-code 'time] [day-code 'day] [month-code 'month] [year-code 'year]]
+                        (kv \ pin (J 'eq) (int-base + kv 0) (t (kv 1)))))
+             _ (pin I 'loc (: (skip k) (k < I 'limit && b k = 32 ? (skip (k + 1)) k) (skip e)))
+             1)))
 
    ; --- the main program (tex.web 1330-1337) ------------------------------------------------
    (null-font-info _)
@@ -658,18 +882,28 @@
                'cur-mark {} 'read-open {} 'read-file {} 'write-file {} 'after-token 0
                'cur-list {'mode vmode 'head H 'tail H 'prev-depth ignore-depth 'sf 0
                           'pg 0 'ml 0 'clang 0}
-               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty 'page-contents-list () 'contrib-list ()
-               'page-so-far {} 'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
+               'nest () 'max-nest-stack 0 'shown-mode 0 'page-contents empty
+               'page-head {'type glue-node 'sub normal 'link ()} 'page-ins () 'best-page-break ()
+               'least-page-cost 0 'best-size 0 'page-max-depth 0 'best-height-plus-depth 0
+               'page-so-far {0 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0}
+               'last-glue () 'last-penalty 0 'last-kern 0 'dead-cycles 0
                'insert-penalties 0 'output-active 0 'mag-set 0
                'cur-cs 0 'cur-cmd 0 'cur-chr 0 'cur-tok 0 'cur-val 0 'cur-val-level int-val
                'radix 0 'cur-order 0 'cur-name "" 'cur-area "" 'cur-ext "" 'fd ()
-               'up {} 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
+               'align-head {'type 'head 'link ()} 'end-span {'n 256 'info () 'width 0} 'align-stack ()
+               'cur-align () 'cur-span () 'cur-loop () 'cur-head () 'cur-tail () 'fisd 0 'depth-threshold 0 'breadth-max 0 'cur-box () 'pack-begin-line 0
                'output-file-name ()
                'fil-glue (spec 0 65536 fil 0 normal) 'fill-glue (spec 0 65536 fill 0 normal)
                'ss-glue (spec 0 65536 fil 65536 fil) 'fil-neg-glue (spec 0 -65536 fil 0 normal)
-               'report pack-report 'char-warn char-warning)
+               'report pack-report 'char-warn char-warning 'shrink-warn split-shrink-warn
+               'par-shrink-warn par-shrink-warn
+               'out-what out-what 'ptrace par-trace
+               'trie-ops {} 'trie-used {} 'trie-op-count 0 'pat-ops {} 'trie-ready 0
+               'interaction-option (peep O 'interaction ())
+               'trie-op-size (peep O 'trie-op-size 35111))
        ; par.l's state for its ligature loop and line_break, its codes eqtb's
        _ (cp-setup J)
+       _ (start-new-page J)
        _ (pins J 'sf (\ c (J 'eq (sf-code-base + c))) 'lc (\ c (J 'eq (lc-code-base + c))))
        _ (init-eqtb J)
        _ (primitives J)
@@ -682,14 +916,15 @@
    (tex-run O)
     (: J (tex-job O)
        I (J 'cur)
-       _ (pin I 'buf (peep O 'line ""))
-       _ (trap (\ _ (start-job J)) () (\ a b (? (a = 'caja-end) () (scare a b))))
-       _ (close-files-and-terminate J)
+       _ (pin I 'buf (strip-tail (peep O 'line "")))
+       _ (trap (\ _ (start-job J)) () (\ a b (a @ 'caja-end () (scare a b))))
+       _ (peep J 'fmt-failed 0 @ 1 () (close-files-and-terminate J))
        J)
    (start-job J)
     (: I (J 'cur) l (I 'buf)
        _ (set-line J I l)
        _ (pin I 'loc (: (skip k) (k < #l && l k = 32 ? (skip (k + 1)) k) (skip 0)))
+       _ (I 'loc < I 'limit && l (I 'loc) = 38 && load-fmt-file J = 0 ? (pin J 'fmt-failed 1, jump-out J))
        _ (pin J 'selector (J 'interaction = batch-mode ? no-print term-only))
        _ (I 'loc < I 'limit && cat-code J (I 'buf (I 'loc)) != escape ? (start-input J))
        _ (pin J 'history spotless)
@@ -697,7 +932,7 @@
        (final-cleanup J))
    (final-cleanup J)
     (: c (J 'cur-chr)
-       _ (J 'job-name = () ? (open-log-file J))
+       _ (J 'job-name @ () (open-log-file J))
        (unwind _)
         (J 'input-ptr > 0 ?
            ((J 'cur 'state = token-list ? (end-token-list J) (end-file-reading J)), unwind ()))
@@ -719,9 +954,11 @@
             (pin J 'selector term-only,
              print-nl J "(see the transcript file for additional information)",
              pin J 'selector term-and-log))
-       (c = 1 ? (not-yet J "\\dump")))
+       (c @ 1 (pin J 'cur-mark {}, store-fmt-file J)))
    (close-files-and-terminate J)
-    (: _ (finish-dvi J)
+    (: _ (close-write-files J)
+       _ (J 'log-opened && int-par J tracing-stats-code > 0 ? (job-stats J))
+       _ (finish-dvi J)
        (J 'log-opened ?
           (: _ (put (J 'log-file) 10) _ (close (J 'log-file))
              _ (pin J 'selector (J 'selector - 2))
