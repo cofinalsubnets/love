@@ -1890,16 +1890,19 @@
                   (goto (n = 0 ? b (b + string 1 + show n))
                         (two? r ? [<r <>r] (b = home ? htd (gf-dflt b)))))
               (mn = ".base64") (raw (catmap gf-b64 (gf-strs rest)))
-              ; what the pre-pass left: an alias, or a value over labels only .size reads
+              ; what the pre-pass left: an alias, or a value over labels only .size reads. the
+              ; kernel's SYM_END sizes f by `.set .L__sym_size_f, .-f`: f's end label lays here
               (elem mn '(".set" ".equ"))
-               (? (gf-ident? (xa-trim <>xs)) (pin st 'alias ([(xa-unquote <xs) (xa-unquote <>xs)] . peep st 'alias ()))
-                  ; over labels: its tokens, `.` a label here, for the words laid once layout holds
-                  (any (t \ <t = 'lref || <t = 'sym) (gtoks <>xs))
-                   (: k (peep st 'sxs 0) here (pfx + ".Lset" + show k)
-                      (pin st 'sxs (k + 1),
-                       emit [['label (name here)]],
-                       pin sx (xa-trim <xs) (map (t \ (t @ ('lref n d) ['sym (rl n d)] ('sym ".") ['sym here] _ t)) (gtoks <>xs))))
-                  0)
+               (: v (cats (split " " (xa-trim <>xs)))
+                  (? (gf-ident? v) (pin st 'alias ([(xa-unquote <xs) (xa-unquote <>xs)] . peep st 'alias ()))
+                     (starts? (xa-unquote <xs) ".L__sym_size_" && starts? v ".-") (emit [['label (fn-end (snip v 2 #v))]])
+                     ; over labels: its tokens, `.` a label here, for the words laid once layout holds
+                     (any (t \ <t = 'lref || <t = 'sym) (gtoks <>xs))
+                      (: k (peep st 'sxs 0) here (pfx + ".Lset" + show k)
+                         (pin st 'sxs (k + 1),
+                          emit [['label (name here)]],
+                          pin sx (xa-trim <xs) (map (t \ (t @ ('lref n d) ['sym (rl n d)] ('sym ".") ['sym here] _ t)) (gtoks <>xs))))
+                     0))
               ; exported, and bound weak: a strong definition elsewhere wins
               (mn = ".weak") (map xa-unquote xs @ ws (pin st 'globl (rev ws + st 'globl), pin st 'weak (ws + peep st 'weak ())))
               (mn = ".local") (pin st 'local (map xa-unquote xs + peep st 'local ()))
@@ -1930,8 +1933,17 @@
               (mn = ".previous") (st 'cur @ c (pin st 'cur (st 'prev), pin st 'prev c))
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
-              ; what a static link never reads: symbol types and sizes, visibility, unwind rows
-              (elem mn '(".type" ".size" ".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
+              ; .size f, .-f: an end label here, f's st_size; any other size goes unread
+              (mn = ".size")
+               (two? >xs && cats (split " " (xa-trim <>xs)) = ".-" + xa-unquote <xs ?
+                  (emit [['label (fn-end (xa-unquote <xs))]]) 0)
+              ; .type f, @function: f's type label; stt_notype for a label no .type names
+              (mn = ".type")
+               (filter (w \ 0 < #w) (map xa-trim (catmap (f \ xa-split f 32) (xa-split rest 44))) @ ws
+                  (two? >ws && elem (ws 1) '("@function" "%function" "STT_FUNC" "\"function\"" "@gnu_indirect_function") ?
+                     (emit [['label (fn-type (xa-unquote <ws))]]) 0))
+              ; what a static link never reads: visibility, unwind rows
+              (elem mn '(".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
               ; gas takes every undefined name as external already
               (mn = ".extern") 0
               ; the ISA a line may use: every one this reader knows, always
@@ -1963,6 +1975,7 @@
                             (0 < #u && u 0 = 46 ?
                                (gf-dsplit u @ (mn r) (xa-oplist r @ xs
                                   (elem mn '(".set" ".equ")) && two? >xs && !(gf-ident? (xa-trim <>xs))
+                                   && !(starts? (xa-unquote <xs) ".L__sym_size_")
                                    && any (k \ <k = 'lref || <k = 'sym) (gtoks <>xs) ? (pin t (xa-trim <xs) 1) t))
                                t)))
                   {} ls)

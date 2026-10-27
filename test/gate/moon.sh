@@ -87,6 +87,45 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab" {print $3, $4, $5}')" = "36 OBJECT LOCAL" ] || fail "a file-scope static is not a local object symbol of its 36 bytes (modpost reads a table's name)"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+# a function's symbol carries its code's bytes, its next one's pad excluded (objtool walks a
+# function by them); gas's .size f, .-f the same, and the end label stays out of the symtab
+printf 'static int s(int a){ return a * 3 + 1; }\nint f(int a){ return s(a) + s(a + 1); }\n__attribute__((aligned(64))) int g(void){ return 2; }\n' > "$ho/.fsz.c"
+moonrun -fno-inline -c "$ho/.fsz.c" -o "$ho/.fsz.o" || fail "mooncc: sized functions"
+[ "$(readelf -sW "$ho/.fsz.o" | awk '$4 == "FUNC" && $3 > 0' | wc -l)" = 3 ] || fail "a function's symbol does not carry its code's size"
+set -- $(readelf -sW "$ho/.fsz.o" | awk '$8 == "f" || $8 == "g" {print $2, $3}' | sort)
+[ $((0x$1 + $2)) -lt $((0x$3)) ] || fail "a function's size runs into the next one's pad"
+printf '.text\n.globl h\n.type h, @function\nh:\n nop\n ret\n.size h, .-h\n.p2align 4\nk:\n ret\n.size k, . - k\n.globl m\nm:\n pause\n ret\n.type m STT_FUNC ; .set .L__sym_size_m, .-m ; .size m, .L__sym_size_m\n' > "$ho/.fsz.S"
+moonrun -c "$ho/.fsz.S" -o "$ho/.fszs.o" || fail "mooncc: an asm .size"
+[ "$(readelf -sW "$ho/.fszs.o" | awk '$8 == "h" || $8 == "k" || $8 == "m" {print $8, $3, $4}' | sort | tr '\n' ' ')" = "h 2 FUNC k 1 NOTYPE m 3 FUNC " ] || fail "gas's .size f, .-f (or the kernel's SYM_END) does not size f, or .type is not its type"
+# an alias is its function's type and size
+printf 'int f(int a){ return a + 1; }\nextern int fa(int) __attribute__((alias("f")));\n' > "$ho/.fal.c"
+moonrun -c "$ho/.fal.c" -o "$ho/.fal.o" || fail "mooncc: a function alias"
+[ "$(readelf -sW "$ho/.fal.o" | awk '$8 == "f" || $8 == "fa" {print $3, $4}' | sort -u | wc -l)" = 1 ] || fail "an alias does not carry its function's type and size"
+readelf -sW "$ho/.fszs.o" | grep -q ' end$' && fail "a function's end label reached the symtab"
+# a global in a named section is its object's bytes, no word's pad: the kernel's percpu hot
+# data must fit one cache line
+printf '_Bool b __attribute__((section(".data..h1")));\nint n __attribute__((section(".data..h2"))) = 3;\nchar c[3] __attribute__((section(".data..h3")));\n' > "$ho/.nps.c"
+moonrun -c "$ho/.nps.c" -o "$ho/.nps.o" || fail "mooncc: globals in named sections"
+[ "$(readelf -SW "$ho/.nps.o" | sed -E 's/.*\] +//' | awk '$1 ~ /^\.data\.\.h/ {print $1, $5}' | sort | tr '\n' ' ')" = ".data..h1 000001 .data..h2 000004 .data..h3 000003 " ] || fail "a named section's global carries a word's pad"
+# a .rela only where a section has relocations: objtool's loop walks an empty one's first entry
+[ "$(readelf -SW "$ho/.fsz.o" | sed -E 's/.*\] +//' | awk '$1 ~ /^\.rela/ && $5 == "000000"' | wc -l)" = 0 ] || fail "an object carries an empty .rela section"
+# a displacement is a constant expression (opt.c's 18*8(%rsp)), %gs: may stand apart from its
+# operand, and a symbol displacement sign-extends: the kernel lives at the top of the space
+printf '.text\nf:\n cmpq %%gs: 8(%%rsi), %%rdx\n movq 18*8(%%rsp), %%rdx\n movq (2+3)*8(%%rsp), %%rdx\n movq sym+8(%%rax), %%rdx\n ret\n' > "$ho/.dsp.S"
+moonrun -c "$ho/.dsp.S" -o "$ho/.dsp.o" || fail "mooncc: expression displacements"
+[ "$(readelf -rW "$ho/.dsp.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_32S sym " ] || fail "a constant displacement became a symbol, or a symbol one is not R_X86_64_32S"
+[ "$(objdump -d "$ho/.dsp.o" | grep -c '%gs:0x8(%rsi)\|0x90(%rsp)\|0x28(%rsp)')" = 3 ] || fail "a displacement expression encodes the wrong value"
+# what clang leaves out, a call to a function that only returns 0 below the inliner's depth and a
+# static table nothing names (and the static functions only it names), is not laid; a `used`,
+# sectioned or reached static is
+printf 'void ext(int);\nstatic inline _Bool no(int b){ return 0; }\nstatic inline void c1(int b){ if (no(b)) ext(b); }\nvoid c2(int b){ c1(b); }\nstatic inline void c3(int b){ if (b) return; c2(b); }\nstatic inline void c4(int b){ c3(b + 1); }\nvoid c5(int b){ c4(b); }\nstruct ops { long (*f)(void *); };\nvoid *priv(void *);\nstatic long direct(void *d){ return (long)priv(d); }\nstatic const struct ops my_ops = { .f = direct };\nstatic inline void *alloc(void *p, const struct ops *o){ return 0; }\nvoid *mk(void *p){ return alloc(p, &my_ops); }\nstatic int ku __attribute__((used)) = 3;\nstatic int ks __attribute__((section(".mysec"))) = 4;\nstatic int dropme = 5;\nstatic int vp = 6;\nstatic int *const tab[] = { &vp };\nint use(int i){ return *tab[i]; }\nstatic int bo = 7;\nint *blk(int i){ static int *const bs[] = { &bo }; return bs[i]; }\n' > "$ho/.ded.c"
+moonrun -c "$ho/.ded.c" -o "$ho/.ded.o" || fail "mooncc: dead calls and statics"
+[ "$(readelf -sW "$ho/.ded.o" | awk '$8 ~ /^(ext|priv|direct|my_ops|dropme|ku|ks|vp|tab|bo)$/ {print $8}' | sort | tr '\n' ' ')" = "bo ks ku tab vp " ] || fail "a dead call or an unreferenced static was laid, or a used one was not"
+# an "m" operand at a global's address is sym+k(%rip), no register: the kernel's alternatives
+# patch paravirt's `call *%[op]` only as the six-byte ff 15
+printf 'struct ops { void (*a)(void); void (*b)(void); } pv;\nvoid f(void){ asm volatile("call *%%[op]" :: [op] "m" (pv.b)); }\n' > "$ho/.pv.c"
+moonrun -c "$ho/.pv.c" -o "$ho/.pv.o" || fail "mooncc: an m operand at a global"
+[ "$(objdump -d "$ho/.pv.o" | grep -c 'ff 15 00 00 00 00')" = 1 ] || fail "an m operand at a global is not rip-relative"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"

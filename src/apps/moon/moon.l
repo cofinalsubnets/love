@@ -441,7 +441,7 @@
    (asmlocs secs)
     (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
        (lnum? sp) (rev (split "." sp) @ p (1 < #p && starts? <>p "l" && digs? (snip <>p 1 #(<>p)) && digs? <p))
-       (lab f) (two? f && <f = 'label ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
+       (lab f) (two? f && <f = 'label && !(fn-mark? <>f) ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
    ; a64: an undefined weak's address is a literal word, not adrp+add. a pie link (the kernel's)
    ; refuses a page reach of a symbol that may be absent; an abs64 there answers 0

@@ -900,8 +900,8 @@
                  ; AAPCS32 or a packed enum takes the smallest type holding every enumerator,
                  ; others int; past 32 bits both widen
                  (ety pos lo hi pk m)
-                  (: wide (? (pos && 4294967295 < hi) 'ulong
-                             (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
+                  (: wide (? (pos && 4294967295 < hi) (pst32? ps ? 'ullong 'ulong)
+                             (!pos && (hi > 2147483647 || lo < -2147483648)) (pst32? ps ? 'llong 'long) ())
                      narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
                                (-128 <= lo && hi <= 127) 'char
                                (-32768 <= lo && hi <= 32767) 'short
@@ -1319,7 +1319,7 @@
              (tkk t = 'id)
               (: nm (tkv t)
                  ev (peep (ps 'declaring) nm () ? () (peep (ps 'enums) nm ()))
-                 (cint? ev ? [['num ev] >ts]
+                 (cint? ev ? [(enumnum ps ev) >ts]
                     [['var nm] >ts]))
              ; ({ .. }): gcc's statement expression -- the leading statements, and the last as
              ; its value when it is an expression, else void
@@ -1578,6 +1578,12 @@
    ; value in its type, operands meeting by puac (-1 < 1u is 0), results wrapping to their
    ; width, an unsigned answer never negative. w64: long is 8 bytes.
    (cint? x) (charm? x || sun? x)
+   ; an enum constant as an operand: int when it fits, past int the enum's type: uint up to 2**32,
+   ; then 8 bytes, which ilp32 spells long long
+   (enumnum ps v) (? (!(charm? v) || -2147483648 <= v && v <= 2147483647) ['num v]
+                     (0 < v && v <= 4294967295) ['cast 'uint ['num v]]
+                     (pst32? ps) ['cast 'llong ['num v]]
+                     ['num v])
    (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
    (tbits w64 ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
                         ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
@@ -2711,7 +2717,7 @@
             <f = 'gdecl && (st || sc || 0 < va) ?
               (: (go2 prs) (atom? prs ? 1
                               (<<prs @ nm
-                                 (st ? (pin (ps 'svars) nm 1),
+                                 (st ? (pin (ps 'svars) nm (ps 'curused ? 'used 1)),
                                   sc ? (pin (ps 'sects) nm sc),
                                   0 < va ? (pin (ps 'aligns) nm va),
                                   go2 >prs)))

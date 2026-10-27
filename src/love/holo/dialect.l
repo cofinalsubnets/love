@@ -149,6 +149,9 @@
                       (gbad? r2 ? 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
    (gexpr ts) (gprim ts @ r (gbad? r ? 'bad (gclimb <r >r 1)))
    (gimm ts) (gexpr ts @ r (gbad? r || two? >r ? (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
+   ; a displacement that is a constant expression, `18*8`: [value], or () for anything naming a symbol
+   (gconst s) (gtoks s @ ts
+      (any (t \ elem <t '(sym lref pct)) ts ? () (gexpr ts @ r (gbad? r || two? >r ? () [<r]))))
 
    (xa-has? s c) ((: (g i) (? (i >= #s) 0 (s i = c) 1 (g (i + 1)))) 0)
    (xa-idx s c)  ((: (g i) (? (i >= #s) -1 (s i = c) i (g (i + 1)))) 0)
@@ -267,7 +270,7 @@
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (t @ ("%" + s + ":" + r)
-                                       (at-operand r @ o ['seg (name s) (<o = 'abs ? ['mem -1 -1 1 <>o] o)]))
+                                       (at-operand (xa-trim r) @ o ['seg (name s) (<o = 'abs ? ['mem -1 -1 1 <>o] o)]))
          (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
                        (? (two? cr) cr (two? dr) dr (two? sr) sr (at-reglook nm)))
          (t 0 = 36) (snip t 1 #t @ v
@@ -283,12 +286,12 @@
             d0 (snip t 0 op) n0 #d0
             disp (1 < n0 && d0 0 = 40 && d0 (n0 - 1) = 41 ? (snip d0 1 (n0 - 1)) d0)
             inner (snip t (op + 1) (#t - 1))
-            (inner = "%rip" ? (? (0 = #disp) ['rip () 0]
-                                  (xa-num? disp) ['rip () (xa-num disp)]
+            cv (0 = #disp ? [0] (gconst disp))
+            (inner = "%rip" ? (? (two? cv) ['rip () <cv]
                                   (xa-symoff disp @ so ['rip <so >so]))
                (: fs (xa-split inner 44) k #fs
-                  so (0 = #disp || xa-num? disp ? () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
-                  d (? (0 = #disp) 0 (xa-num? disp) (xa-num disp) >so)
+                  so (two? cv ? () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
+                  d (two? cv ? <cv >so)
                   (k > 3 ? (scare 'as-memform t)
                      (['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
                             (k < 3 ? 1 (xa-imm (fs 2))) d] + (two? so ? [<so]))))))
