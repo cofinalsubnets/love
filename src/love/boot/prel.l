@@ -62,7 +62,7 @@
      _ (place (+ 3 (* 3 n)) lvm_ret th) _ (poke (+ 4 (* 3 n)) 1 th)
    (seek 1 th))
    ;; FIXME rename | -> bit-or to free | for pipe operator
-   (constellation? x) (| (charm? x) (packp x))   ; the whole numeric tower, trays too
+   (constellation? x) (numeric? x)   ; the whole numeric tower, trays too
    (whole? n) (| (charm? n) (sun? n))       ; integer-valued
    ; the machine word: a charm spends one bit, so the word reaches twice as far.
    ; what fits here fits an int tray cell.

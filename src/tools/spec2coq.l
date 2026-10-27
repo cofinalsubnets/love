@@ -341,7 +341,7 @@
    (kpred h) (h @ 'charm? "fixp"   'gem? "flop"   'twin? "comp"
                   'string? "strp"  'nom? "nomp"   'name? "namep"  'two? "chainp"
                   'tablet? "tabp"  'set? "setp"   'constellation? "nump"
-                  'whole? "whole"  'atom? "atomp" 'packp "packp"
+                  'whole? "whole"  'atom? "atomp" 'numeric? "nump"
                   'lit? "lamp" 0)
    ; cross-band order: symbol<string<number<chain<map; same band stays value/lex
    (ordop? h) (elem h '(< <= > >=))
@@ -524,7 +524,6 @@
      "Definition setp  v := match v with Varr => true | _ => false end.\n"
      "Definition whole   v := match v with Vz   => true | _ => false end.\n"
      "Definition nump  v := match v with Vz|Vflo|Vcx|Varr => true | _ => false end.\n"
-     "Definition packp v := match v with Vflo|Vcx|Varr => true | _ => false end.\n"
      "Definition atomp v := match v with Vpair => false | _ => true end.\n"
      "Definition lamp  v := match v with Vmap => true | _ => false end.\n"   ; among modeled kinds only Vmap is lit?
      "Definition vband v : Z := match v with Vsym => 0 | Vstr => 1 | Vz|Vflo|Vcx|Varr => 2 | Vpair => 3 | Vmap => 4 | Vunit|Vbot => 9 end.\n\n"]))

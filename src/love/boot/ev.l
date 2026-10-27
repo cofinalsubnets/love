@@ -24,7 +24,7 @@
             == gcd modpow abs
             . cap cup caap caup cuap cuup
             dig lidx assoc elem last rev cat
-            charm? nom? two? tablet? lit? string? nil? gem? twin? atom?
+            charm? numeric? nom? two? tablet? lit? string? nil? gem? twin? atom?
             snip string
             re im conj arg gem twin
             sin cos tan atan atan2 exp sqrt log fpow))
@@ -85,6 +85,12 @@
   ; the nil? nif for cflip's head test: opfix's glued lane splices the value, so `!e` reaches
   ; the peephole unnamed
   nilv (gv 'nil? ())
+  ; npow's test and products, spliced as values so no local of either name can catch them
+  numv (gv 'numeric? ())
+  mulv (gv '* ())
+  lev (gv '<= ())
+  peepv (gv 'peep ())
+  apv (gv 'apcap ())
   (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {}}
   (rootc c) (: p (c 'par) (!p ? c (rootc p)))   ; top scope: where feel stashes 'src
   ; --- the emission interface (the codegen seam) ---
@@ -329,7 +335,15 @@
    (jotin x bnd) (? (atom? x) x
                     (<x == '\) (atom? >>x ? x (: r (lp x) (relam x r (jotin >r (jsyms <r + bnd)))))
                     (<x == ':) (atom? >x ? x (keep x (jotinb >x (ln >x + bnd)) ':))
-                    (jotx (mapi (e \ jotin e bnd) x) bnd))
+                    (npow (jotx (mapi (e \ jotin e bnd) x) bnd)))
+   ; (N x), N a literal 2..4: a number under apcap takes ipow's own products inline, the same tree
+   ; and so the same answer; the rest, a function's church power, data's, a scare, keeps num-ap's lane
+   (npow y) (two? y && charm? <y && 2 <= <y && <y <= 4 && 2 = #y ? (npow1 <y <>y) y)
+   (npow1 n a) (: t (nom 0) h (nom 0) q (nom 0)
+                  pw [': h [mulv 1 t] (n @ 2 [mulv h h]
+                                            3 [mulv [mulv h h] t]
+                                            [': q [mulv h h] [mulv q q]])]
+                  [': t a ['? [numv t] ['? [lev n [peepv apv 0 0]] pw [n t]] [n t]]])
    (jotinb bs bnd) (? (atom? bs) bs
                       (atom? >bs) (keep1 bs (jotin <bs bnd))
                       (keep3 bs <bs (jotin <>bs (two? <bs ? (jsyms <bs + bnd) bnd)) (jotinb >>bs bnd)))
@@ -538,7 +552,10 @@
              hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
              h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
              hk (kconst hr)
-             (? (lambp hr && two? as && fuel? fl hr)
+             (? (dch? hr as bnd se fl) (cprop (dch-ap <as hr >as) se fl op bnd pb)                 ; (N f x ..)
+                (two? hr && 2 = #hr && dch? <hr (>hr + as) bnd se fl)
+                  (cprop (dch-ap <>hr <hr as) se fl op bnd pb)                                     ; ((N f) x ..)
+                (lambp hr && two? as && fuel? fl hr)
                  (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound
                      (keep2 x h2 as)
                     (allp as se)
@@ -555,6 +572,16 @@
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
                   (cpap >hk as)                                                       ;   keeps the value as its head
                 (keep2 x h2 as)))))))
+   ; dechurch: a numeral N under 64 applied to a literal function -- a lambda, or a dyadic op's
+   ; partial on pure operands, which a copy evaluates no more often -- and an operand is f nested
+   ; N deep, love's church power, written out so the beta lane above can take each f
+   dch-ops '(+ - * // % & | ^)
+   (dch-op? o bnd) (nom? o ? (elem o dch-ops && !(elem o bnd)) (any (s \ o == gv s ()) dch-ops))
+   (dch-fn? f bnd se) (lambp f || two? f && 2 = #f && dch-op? <f bnd && allp >f se)
+   (dch? n as bnd se fl) (charm? n && 0 <= n && n < 64 && two? as && two? >as && dch-fn? <as bnd se
+                          && n * nsz <as <= left fl)
+   (dch-nest f n x) (: y (n = 0 ? x (dch-nest f (n - 1) x)) (? (n = 0) x (lambp f) [f y] (f + [y])))   ; a partial takes its operand curried: (+ i y)
+   (dch-ap f n as) (: y (dch-nest f n <as) (atom? >as ? y (y . >as)))
    (sub1 x p m) (? (x == p) m  (atom? x) x  (<x == '\ && atom? >>x) x
                    (mapi2 x (sub1 <x p m) (sub1 >x p m)))
    ; the fuel: (depth . box), the betas left on this path and the nodes the whole form may
