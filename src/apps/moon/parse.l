@@ -366,6 +366,7 @@
                  pin t 'sigs {},          ; fn/proto name -> (rettype (paramty..))
                  pin t 'anon 0,                   ; the anonymous-tag counter
                  pin t 'sfns {},          ; top-level `static` fn names
+                 pin t 'fdefs {},         ; fn name -> 'hard | 'soft, its definition so far
                  pin t 'c99inl {},        ; fn name -> 'inl while every declaration says plain `inline`
                  pin t 'svars {},         ; top-level `static` globals
                  pin t 'sects {},         ; global name -> its section
@@ -2671,8 +2672,14 @@
    ; scalar, pointer, struct, and two different arithmetic types
    (tyshape t) (? (atom? t) t (ptr? t) 'ptr (arr? t) 'arr (stru? t) t (fn? t) 'fn 'other)
    (tyclash? a b) (? (fn? a || fn? b) () (atom? a && atom? b) (a != b) (tyshape a != tyshape b))
+   ; C11 6.9p3: one definition per function; a gnu `extern inline` body may be followed by the
+   ; real one, so only a static or externally laid definition counts
    (redecl ps f)
-    (? !(elem <f '(gdecl xdecl)) ()
+    (? (<f = 'fn)
+        (: hard (peep ps 'curstat () || peep ps 'curlink () = 'ext)
+           (peep (ps 'fdefs) <>f () = 'hard ? "redefinition of '\(<>f)'"
+              (pin (ps 'fdefs) <>f (hard ? 'hard 'soft), ())))
+       !(elem <f '(gdecl xdecl)) ()
        (: (go prs) (atom? prs ? ()
                      (<prs @ pr
                         (peep (ps 'globals) <pr () @ old

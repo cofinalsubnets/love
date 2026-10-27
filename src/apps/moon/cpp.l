@@ -616,8 +616,8 @@
           (pin macs 'ninc (nth + 1),
            atom? txt ? (gripeat body "cannot resolve #include \(spelt)")      ; unresolved -> fatal
              (: ipath (3 < #txt ? <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
-                ; #pragma once: a header that says it is read once per TU, by its resolved path
-                okey "#once:\(ipath)"
+                ; #pragma once: a header that says it is read once per TU, by its folded path
+                okey "#once:\(pnorm ipath)"
                 seen (0 < #ipath && two? (macs okey))
                 _ (!seen && 0 < #ipath && oncep <>txt && pin macs okey [1])
                 pre (nth = 0 ? (msnap macs))
@@ -647,6 +647,20 @@
                                   (mput [ipath <>txt pre raw (msnap macs)
                                          (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
                                 rejoin raw)))))))))))
+   ; a path with . and .. folded away: "a/sys/../b.h" and "a/b.h" are one key; a leading /
+   ; and a .. with nothing left to fold stay
+   (pnorm p)
+    (: n #p
+       (go i st ps) (? (n < i) ps
+                       (i = n || p i = 47)
+                        (snip p st i @ c
+                         (go (i + 1) (i + 1)
+                          (c @ ("" || ".") ps
+                               ".." (two? ps && <ps != ".." ? >ps (c . ps))
+                               (c . ps))))
+                       (go (i + 1) st ps))
+       (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? "/\(a)" a))))
+       ((0 < n && p 0 = 47 ? "/" "") + jn (go 0 0 ()) ""))
    ; does a header's text say `#pragma once` on a line of its own?
    (oncep s)
     (: (ws? c) (c = 32 || c = 9)

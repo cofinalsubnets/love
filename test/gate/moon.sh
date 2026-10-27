@@ -552,6 +552,9 @@ mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
 printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m.c"
 [ "$(moonrun -E "$ho/.once/m.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read the header twice"
+mkdir -p "$ho/.once/b"
+printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
+[ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
@@ -1120,6 +1123,10 @@ cok x64 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return 
 # C11 6.8.1p3: a label is unique to its function; __label__ makes two
 cno x64 'int m(void){ { L: ; } { L: ; } return 0; }\n' "a duplicate label was accepted"
 cok x64 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' "two blocks' __label__ L refused"
+# C11 6.9p3: one definition per function; gnu89's extern inline may precede the real one
+cno x64 'static int f(void){ return 1; }\nstatic int f(void){ return 2; }\nint m(void){ return f(); }\n' "a static function defined twice was accepted"
+cno x64 'int f(void){ return 1; }\nint f(void){ return 2; }\n' "a function defined twice was accepted"
+cok x64 'extern inline __attribute__((gnu_inline)) int f(void){ return 1; }\nint f(void){ return 2; }\n' "a gnu extern inline followed by its definition refused"
 
 # a UCN takes exactly 4 or 8 hex digits, and names no basic-set character, surrogate or
 # code point past the last (C11 6.4.3p2). \134 is the backslash in octal
