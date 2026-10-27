@@ -386,7 +386,7 @@
    ; bodies, a named function answers its name, else it is read again naming shared lambdas
    (lamform v) (: nm (nifnom v)
                   (go S) (: r (call-cc (k \ (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {} 'sites (S ? S {}) 'n 0}
-                                            (rename (cites (tie C (partp v ? (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v)))))))))
+                                            (rename (cites (tie C (partp v ? (rfn C (fbase v) . map (rka C) (pargs v)) (rlam C (unw v)))))))))
                           (? (r !== 'big) r (tablet? S || !== (glob v) ()) 0 (go (sites v))))
                   r (string? nm ? (nifn v (name nm)) (go 0))
                  (r == 0 ? (glob v @ g (g !== () ? g 0)) r))
@@ -552,6 +552,8 @@
                ; a carrier is `=` only to itself: a tablet too big to walk shows as its size
                (tablet? v || hot? v) (glob v @ g (? (g !== ()) g (tablet? v && (16 < #v || wee 64 v < 0)) (name ("{.." + dec #v + "}")) v))
                v)
+   ; a partial's argument: an operator by value is parenthesised, or it reads as infix
+   (rka C v) (rk C v @ r (infix? r ? [r] r))
    ; what is left of n once v is walked, negative past it: a cycle ends there too
    (wee n v) (? (n < 0) n
                 (tablet? v) (n < #v ? -1 (foldl (\ m k (wee (wee (m - 1) k) (v k))) n (keys v)))
@@ -571,7 +573,7 @@
                          (glob v @ g (g !== () ? g (glob u @ g (g !== () ? g 0))))))))
    (rfn C v) (fname C v @ nm
                 (? (nm !== 0) nm
-                   (partp v) (rfn C (fbase v) . map (rk C) (pargs v))
+                   (partp v) (rfn C (fbase v) . map (rka C) (pargs v))
                    (rlam C (unw v))))
    ; a lambda constant is read once and stands as a name for its form
    (rlam C u) (peep (C 'memo) u 0 @ n
@@ -863,16 +865,21 @@
   (farg v i n) (pargs v i)
 
   (pfn o v sn) (nifnom v @ nm
-                  (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (px o s sn)))   ; off the book: what binds it
+                  (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (px o (tpins s) sn)))   ; off the book: what binds it
                      ; a glued sigil's backing value prints as its one word, not its body
                      (opnom v @ gn
                         (gn ? (say o (string gn))
                            (lamform v @ s
-                              (? (s !== 0) (px o s sn)
+                              (? (s !== 0) (px o (tpins s) sn)
                                  (partp v) (nargs v @ n (put o 40, pfn o (fbase v) sn,
                                                          each ^n (i \ (put o 32, px o (farg v i n) sn)), put o 41))
                                  (put o 92, pnum o (abs (dig v)))))))))   ; opaque: the digest, a distinguisher and nothing more
 
+  ; a tablet a read-back form holds, as the pins that build it: a form reads its keys
+  (tpins x) (? (tablet? x) (foldl (\ f k ['pin f (tq k) (tq (x k))]) ['tablet 0] (sort (keys x)))
+               (atom? x || <x == '\ && two? >x && atom? >>x) x
+               (tpins <x . tpins >x))
+  (tq v) (? (tablet? v) (tpins v) (nom? v || two? v) ['\ v] v)
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)
                 (tablet? x) (pmap o x sn)
