@@ -156,6 +156,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    case NR_readlinkat: ok = k_ustr(c, b) && k_uokw(c, d, e, true); break;
    case NR_renameat: ok = k_ustr(c, b) && k_ustr(c, e); break;
    case NR_chdir: ok = k_ustr(c, a); break;
+   case NR_fchdir: ok = true; break;
    case NR_ioctl:                                          // sys.c's: TCGETS, TCSETS*, TIOC[GS]PGRP
     ok = b == 21505 ? k_uokw(c, d, sizeof(struct termios), true)
        : 21506 <= b && b <= 21508 ? k_uok(c, d, sizeof(struct termios))
@@ -176,7 +177,6 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
                        || b == F_GETFL || b == F_SETFL; break;
    case NR_exit: case NR_exit_group: case NR_getpid: case 110: case NR_kill: case NR_close:
    case NR_lseek: case NR_ftruncate: case NR_dup3: case 32: case 33:    // getppid, dup, dup2
-   case NR_fchdir:
     ok = true; break;
    default: return -ENOSYS; }
   return ok ? 0 : -EFAULT; }
