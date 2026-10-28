@@ -4,14 +4,13 @@
 ; grown k times as tall and wide, its wood g times as thick
 ;   (bough-grow seed)                  the tree grown, which each word below takes for its seed,
 ;                                      so a level grows a tree once
-;   (bough-sized tr k g)               a grown tree as [seed k g] would grow it, tr kept as it is
 ;   (bough-solid seed)                 its trunk, [a b r] each piece: what a body climbs
 ;   (bough-mesh seed tex ts)           it drawn: its wood under texture tex, ts metres a
 ;                                      texel, and its leaves
 ;   (bough-sheared seed pl)            burnt, and pl () or a plane [n d] about the foot:
 ;                                      {'trunk 'segs 'cuts}, the wood kept, a cut [p r dir]
 ;   (bough-burnt seed tex ts pl)       that drawn, each cut closed by a face on the plane
-(module (bough bough-grow bough-sized bough-solid bough-mesh bough-sheared bough-burnt)
+(module (bough bough-grow bough-solid bough-mesh bough-sheared bough-burnt)
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the mesh it makes
 (borrow 'grove)                         ; the tree of heaven
@@ -52,7 +51,6 @@
          'sx (k * tr 'sx) 'sy (k * tr 'sy) 'sz (k * tr 'sz)))
  (tree-of sd) (tablet? sd ? sd (grown sd))
  (bough-grow sd) (grown sd)
- (bough-sized tr k g) (sized (foldl (\ t q (pin t q (tr q))) {} (keys tr)) (1.0 * k) (1.0 * g))
  (bough-solid seed) (take 5 (tree-of seed 'segs))
  ; ..the crotch: in a box round the fork the thick wood as one surface, blended where it meets,
  ; sampled on a grid and meshed by surface nets; [the mesh, the box] or () for no wood there

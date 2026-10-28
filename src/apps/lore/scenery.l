@@ -224,7 +224,6 @@
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow 'view)
 (borrow 'swatch)
-(borrow 'bough)
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)
@@ -306,16 +305,14 @@
  (dark r) (kind? r ['room] && !(peep r 'open 0) ? (with r 'dark 1) (no "(dark (room ..))" r))
  (tree at seed t) (: u "(tree [x y z] seed TEXTURE)" p (P at u)
    (? (!(charm? seed)) (no u seed) (!(texture? t)) (no u t)
-      (: (o q) (v+ p q) g (bough-grow seed)
-         (part 'tree [['at p] ['seed seed] ['tex t] ['grown g] ['trunk (map (s \ [(o (s 0)) (o (s 1)) (s 2)]) (bough-solid g))]]))))
+      (part 'tree [['at p] ['seed seed] ['tex t]])))
  (vined t) (kind? t ['tree] ? (with t 'vine 1) (no "(vined (tree ..))" t))
  (burnt t) (kind? t ['tree] ? (with t 'burnt 1) (no "(burnt (tree ..))" t))
  (sheared p q r t) (: u "(sheared [x y z] [x y z] [x y z] (tree ..))"
    (kind? t ['tree] ? (with (with t 'burnt 1) 'cuts [[(P p u) (P q u) (P r u)]]) (no u t)))
  (sized k g t) (: u "(sized k girth (tree ..))"
    (? (!(kind? t ['tree])) (no u t) (!(num? k && k > 0)) (no u k) (!(num? g && g > 0)) (no u g)
-      (: p (t 'at) gr (bough-sized (t 'grown) k g)
-         (with (with (with t 'size [(f k) (f g)]) 'grown gr) 'trunk (map (s \ [(v+ p (s 0)) (v+ p (s 1)) (s 2)]) (bough-solid gr))))))
+      (with t 'size [(f k) (f g)])))
  (shadow-hole t) (kind? t ['tree] ? (with t 'hole 1) (no "(shadow-hole (tree ..))" t))
  (plush at deg file) (: u "(plush [x y z] bearing FILE)"
    (string? file ? (part 'plush [['at (P at u)] ['deg (N deg u)] ['file file]]) (no u file)))
@@ -636,7 +633,7 @@
                          {'air (b 'kind @ 'room 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'sheer (peep b 'sheer 0) 'src (b 'src) 'xf (peep b 'xf xf-id)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1) (peep d 'hand 0) (d 'glass @ () () g (tname g))])) (of 'door))
        'darks (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'dark 0) (of 'room)))
-       'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'trunk (m 'trunk) 'grown (m 'grown) 'vine (peep m 'vine 0) 'xf (peep m 'xf xf-id) 'size (m 'size)
+       'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'vine (peep m 'vine 0) 'xf (peep m 'xf xf-id) 'size (m 'size)
                           'burnt (peep m 'burnt 0) 'cuts (m 'cuts) 'hole (peep m 'hole 0)}) (of 'tree))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))

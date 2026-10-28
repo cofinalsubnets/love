@@ -49,7 +49,8 @@
 (: lift 0.04)                            ; how far the grass lies over the sand
 (: sep-w 7.0)                            ; how far a channel runs off the line beside the cube
 (: (sep x) (sep-w * (1.0 - ease (abs x) 4.0 16.0)))
-(: (chan x z) (: d (z - meander x) s (sep x) (min (abs (d - s)) (abs (d + s)))))   ; to the nearer channel
+(: (chan x z) (: d (z - meander x) s (sep x) (smin (abs (d - s)) (abs (d + s)))))   ; to the nearer channel
+(: (smin a b) (max 0.0 (2.0 - abs (a - b)) / 2.0 @ h (min a b - h * h * 0.5)))   ; rounded by 2 m between them
 
 ; the cube, on the river's line in the middle of the island
 (: home [0.0 (meander 0.0)])
@@ -67,23 +68,41 @@
 (: (flat x z) (foldl (\ a p (a * ease (sqrt (2 (x - p 0) + 2 (z - p 1))) 5.6 10.0)) (ease (off-site x z) 3.0 14.0) spots))
 (: (ground x z) (: d (z - meander x) (bed-y (chan x z) + dune x z * ease (abs d - sep x) 4.5 14.0 * flat x z - sink x z)))
 
-; the land laid along the river: a column every two metres, its rows close at the water and
-; over the island, wider out to the edge
-(: xs (map (i \ 2.0 * i - 150.0) ^108))
+; the land laid along the river: a column every two metres, closer at the island's round ends,
+; its rows close at the water and over the island, wider out to the edge
+(: ends [9.0 9.5 9.75 10.25 10.5 10.65 10.8 11.0])
+(: xs (sort (map (i \ 2.0 * i - 150.0) ^108 + ends + map (x \ 0.0 - x) ends)))
 (: out (map (i \ 0.75 * (i + 1)) ^16 + map (i \ 13.0 + i) ^9 + [23.0 26.0 30.0 34.0 40.0 46.0 52.0 58.0 64.0]))
-(: ts (rev (map (t \ 0.0 - t) out) + [0.0] + out))
-; rows along the line k channels over: -1 and 1 the two by the island, 0 the line itself
-(: (rows-at k xs ts dy) (map (t \ map (x \ (: z (meander x + k * sep x + t) [x (ground x z + dy) z])) xs) ts))
-(: (rows-on xs ts dy) (rows-at 0 xs ts dy))
-(: (rows ts dy) (rows-on xs ts dy))
+; rows, each an offset off the line at x: the land's over the island, each channel's bed, the
+; mud on the same points, then out to the edge, the channel's shift easing off by it
+(: (rows-by xs fs dy) (map (f \ map (x \ (: z (meander x + f x) [x (ground x z + dy) z])) xs) fs))
+(: (rows-on xs ts dy) (rows-by xs (flats ts) dy))
+; the island's half-width, rounded at its ends by a nose nose-r across; where it closes, by
+; bisection; and near either end its middle run straight on along x off the bending line,
+; so the nose comes round square to the river
+(: nose-r 2.5)
+(: (isle-e x) (sep x - 2.9 @ h (h > 0.0 ? (sqrt (h * (h + 2.0 * nose-r))) 0.0)))
+(: (halve f a b n) ((a + b) / 2.0 @ c (n = 0 ? c (f c > 0.0 ? (halve f c b (n - 1)) (halve f a c (n - 1))))))
+(: tip (halve (x \ sep x - 2.9) 4.0 16.0 30))
+(: (slope x) ((meander (x + 0.05) - meander (x - 0.05)) / 0.1))
+(: (isle-d x) (abs x >= tip ? 0.0 ((x < 0.0 ? (0.0 - tip) tip) @ t (0.0 - slope t * (x - t) * (1.0 - ease (abs (x - t)) 1.0 4.0)))))
+; ..the island's rows v of its half-width off its middle, and a bed's on side g, u of the way
+; from the island's edge out to the bank
+(: (isle-at v x) (isle-d x + v * isle-e x))
+(: (bed-at g u x) (isle-d x + g * isle-e x @ e (e + u * (g * (sep x + 2.9) - e))))
+(: (far-at o x) (o + sep x * (1.0 - ease o 8.0 40.0)))
+(: (mirror fs) (rev (map (f \ x \ 0.0 - f x) fs)))
 ; the water's face, widened over both channels and the island between
 (: (level-on xs ts y) (map (t \ map (x \ [x y (meander x + t * (1.0 + sep x / 2.7))]) xs) ts))
-(: bedts [-2.9 -2.2 -1.5 -0.75 0.0 0.75 1.5 2.2 2.9])
+(: hi-bed (map (i \ bed-at 1.0 (i / 8.0)) ^9) lo-bed (rev (map (i \ bed-at -1.0 (i / 8.0)) ^9))
+   far (map far-at (filter (o \ o > 3.0) out)) isle (map isle-at [-0.75 -0.5 -0.25 0.0 0.25 0.5 0.75])
+   lts (mirror far + lo-bed + isle + hi-bed + far))
 ; ..and past the walls out to the haze, for the eye alone: columns six metres apart, rows
 ; wider out, four strips round the land
 (: xw (map (i \ -240.0 + 6.0 * i) ^15) xe (map (i \ 66.0 + 6.0 * i) ^15))
 (: xa (xw + xs + xe) tn [64.0 72.0 82.0 95.0 110.0 128.0 150.0] tso (rev (map (t \ 0.0 - t) tn)))
-(: (around f) [(f xa tso) (f (xw + [-150.0]) ts) (f ([64.0] + xe) ts) (f xa tn)])
+(: (flats ts) (map (t \ x \ t) ts))
+(: (around f) [(f xa (flats tso)) (f (xw + [-150.0]) lts) (f ([64.0] + xe) lts) (f xa (flats tn))])
 (: sides [(xw + [-150.0]) ([64.0] + xe)])
 
 ; a cube with its middle at x z, all glass: four walls and a roof round a grass floor, sealed,
@@ -141,18 +160,18 @@
   ; the plain, open to the sky, walled by nothing to see; the land on it, dunes and the river's
   ; dry bed in its two channels about the island, its mud cracked
   (void [-146 -2 -60] [60 40 60])
-  (land sand (rows ts 0.0))
-  (map (k \ drape mud (rows-at k xs bedts 0.02)) [-1 1])
+  (land sand (rows-by xs lts 0.0))
+  (map (fs \ drape mud (rows-by xs fs 0.02)) [lo-bed hi-bed])
   ; ..heard out on it, the wind and now and then a bell; by the burnt tree, a throb
   (hum 'wind [-146 -2 -60] [60 40 60]) (hum 'bells [-146 -2 -60] [60 40 60])
   (hum 'throb [-129.5 -1 18.5] [-123.5 5 24.5])
   ; ..and what the glass shows over it all: grass, and the river running
-  (beyond (drape grass (rows ts lift)))
+  (beyond (drape grass (rows-by xs lts lift)))
   (beyond (flow [0.7 0] (drape water (level-on xs [-2.7 -1.3 0.0 1.3 2.7] river-y))))
   ; the land going on past the walls, its river and what the glass shows of them
-  (map (drape sand) (around (\ xs ts (rows-on xs ts 0.0))))
-  (map (q \ drape mud (rows-on q bedts 0.02)) sides)
-  (map (beyond * drape grass) (around (\ xs ts (rows-on xs ts lift))))
+  (map (drape sand) (around (\ xs fs (rows-by xs fs 0.0))))
+  (map (q \ drape mud (rows-by q (lo-bed + hi-bed) 0.02)) sides)
+  (map (beyond * drape grass) (around (\ xs fs (rows-by xs fs lift))))
   (map (q \ beyond (flow [0.7 0] (drape water (level-on q [-2.7 -1.3 0.0 1.3 2.7] river-y)))) sides)
   ; the cube woken in
   (cube (home 0) (home 1) 1)

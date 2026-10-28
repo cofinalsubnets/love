@@ -25,7 +25,7 @@
 (borrow 'walk)                          ; the keys, and a step slid along a wall
 (borrow 'mixer)                         ; the sounds, mixed into the horn
 (borrow 'sky)                           ; the sun, its light, the sky's colour
-(borrow 'bough)                         ; a tree's drawn wood and leaves
+(borrow 'bough)                         ; a tree grown, its wood and leaves drawn
 (borrow 'decay)                         ; the loop a deck plays
 (borrow 'gesture)                       ; the eye kneeling at a grave, weeping, rising
 (:
@@ -55,7 +55,7 @@
  (world-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
                                        ds (run-forms (src-last ds))))
                              () (\ a b ['scare a b]))
-   (? (tablet? r) (r 'kind @ 'level (check (burn r)) "the file's last form should be (level NAME PART ..)")
+   (? (tablet? r) (r 'kind @ 'level (check r) "the file's last form should be (level NAME PART ..)")
       (two? r && <r = 'scare) (r 1 @ 'level (r 2) ";; \(r 1) \(r 2)")
       (two? r && <r = 'torn) "a form is not finished: a ( without its )"
       "the file's last form should be (level NAME PART ..)"))
@@ -705,19 +705,23 @@
    {'bs (map (q \ brush {'prism [y0 (g + 0.05) q]}) ps + [(brush {'box [lo hi]})])
     'dark [[(lo 0 - 2.5) (lo 1) (lo 2 - 2.5)] [(hi 0 + 2.5) (g - 0.075) (hi 2 + 2.5)]]
     'shade (map (slot 0) (filter (s \ s 2 < hole-r) ss))})
- (burn lv) (: (sun _) (sky-of lv @ () [0.0 1.0 0.0] k (k 'lt 'sun))
+ ; ..the trees grown, once a level and as the scenes before grew them: each one's trunk,
+ ; and a burnt one's cut, its embers and its shadow's hole
+ (burn lv kept tick) (: (sun _) (sky-of lv @ () [0.0 1.0 0.0] k (k 'lt 'sun))
    (one o) (: at (o 'at) cs (o 'cuts) pl (two? cs ? (plane-at <cs at) ())
-     c (o 'burnt || o 'hole ? (bough-sheared (tree-seed o) pl) ())
+     g (kept ['grown (o 'seed) (peep o 'size ())] (_ \ bough-grow (tree-seed o))) _ (pin o 'grown g)
+     c (o 'burnt || o 'hole ? (bough-sheared g pl) ())
      (mv s) [(c+ (s 0) at) (c+ (s 1) at) (s 2)]
-     _ (? (tablet? c) (pins o 'pl pl 'trunk (map mv (c 'trunk))))
+     _ (pins o 'pl pl 'trunk (map mv (tablet? c ? (c 'trunk) (bough-solid g))))
      es (two? pl ? (map (q \ {'rim (map (x \ c+ x at) (rim q pl)) 'n (pl 0)}) (filter (q \ q 1 >= ember-r) (c 'cuts))) ())
      h (o 'hole && tablet? c ? (: s (sun ()) (s 1 > 0.05 ? [(hole-of (map mv (c 'segs)) (at 1) s)] ())) ())
      _ (atom? h || pin o 'shade (map (q \ map (p \ [(p 0 - at 0) (p 1 - at 2)]) q) (<h 'shade)))
      [es h])
-   rs (map one (lv 'trees)) hs (catmap (q \ q 1) rs)
-   (pins lv 'brushes (lv 'brushes + catmap (h \ h 'bs) hs) 'pits (map (h \ h 'dark) hs)
-            'embers (catmap (q \ q 0) rs)))
- ; ..a tree as bough takes it: grown as the level read it, else its seed with its size
+   (? (peep lv 'grown 0) lv
+      (: _ (two? (lv 'trees) ? (tick 'trees ())) rs (map one (lv 'trees)) hs (catmap (q \ q 1) rs)
+         (pins lv 'grown 1 'brushes (lv 'brushes + catmap (h \ h 'bs) hs) 'pits (map (h \ h 'dark) hs)
+                  'embers (catmap (q \ q 0) rs)))))
+ ; ..a tree as bough takes it: grown, else its seed with its size
  (tree-seed o) (peep o 'grown () @ () (o 'size @ () (o 'seed) z [(o 'seed) (z 0) (z 1)]) g g)
  (tree-mesh o i ts) (: m (? (peep o 'burnt 0) (bough-burnt (tree-seed o) i ts (o 'pl)) (bough-mesh (tree-seed o) i ts))
    (atom? (o 'shade) ? m (mesh-join [m (shade-mesh (o 'shade))])))
@@ -854,6 +858,7 @@
    memo (fresh ? {'v {} 'id {} 'n (peep old 'n 0) 'made 0} old) ov (memo 'v) oi (memo 'id)
    (kept k f) (: c (ov k) (? (two? c) <c (: v (f ()) (pin ov k [v], v))))
    (idof k) (: i (oi k) (i @ () (: j (memo 'n) (pins memo 'n (j + 1) 'made (memo 'made + 1), pin oi k j, j)) i))
+   _ (burn lv kept tick)
    txs (textures lv) tt (map (t \ [(t 'name) (t 'w) (t 'h) (t 'm) (t 'lay)]) txs)
    ls (lights-of lv + map (ad-light lv txs tt) (lv 'ads) + map (spin-light lv txs) (lv 'spins)
        + map (orb-light txs) (filter (o \ peep o 'glow 0 = 1 && o 'at 1 > pocket-cut lv) (lv 'orbs)))
