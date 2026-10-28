@@ -74,6 +74,17 @@
              (48 <= c <= 55) (: (oc k v m) (m < 3 && k < #s && 48 <= s k <= 55 ? (oc (k + 1) (8 * v + s k - 48) (m + 1)) [v k])
                                 (oc i 0 0))
              [c (i + 1)])))
+   ; [:name:]'s bytes, by the C locale
+   (lex-posix nm)
+    (: r (jot 256)
+       (in a b) (filter (c \ a <= c <= b) r)
+       al (in 97 122 + in 65 90) dg (in 48 57)
+       pu (filter (c \ 33 <= c <= 126 && !(elem c al || elem c dg)) r)
+       (? (nm = "alpha") al (nm = "digit") dg (nm = "alnum") (al + dg) (nm = "upper") (in 65 90)
+          (nm = "lower") (in 97 122) (nm = "space") [9 10 11 12 13 32] (nm = "blank") [9 32]
+          (nm = "punct") pu (nm = "xdigit") (dg + in 97 102 + in 65 70) (nm = "cntrl") (in 0 31 + [127])
+          (nm = "print") (in 32 126) (nm = "graph") (in 33 126)
+          (lex-die ("no class [:" + nm + ":]"))))
    ; a bracket at the char past '[' -> (bytes negated? next)
    (lex-br s i0)
     (: neg (i0 < #s && s i0 = 94)
@@ -81,6 +92,9 @@
        (go i acc first)
         (? (#s <= i) (lex-die "an open bracket")
            (s i = 93 && !first) [acc neg (i + 1)]
+           (s i = 91 && i + 1 < #s && s (i + 1) = 58)
+            (: k (findsub (snip s i #s) ":]")
+               (k < 0 ? (lex-die "an open [:") (go (i + k + 2) (acc + lex-posix (snip s (i + 2) (i + k))) ())))
            (one i @ [lo j]
               (? (j + 1 < #s && s j = 45 && s (j + 1) != 93)
                   (one (j + 1) @ [hi k]
@@ -114,6 +128,7 @@
                      (two? d ? (go (j + 1) (")" . <>d . "(" . acc)) (lex-die ("no definition {" + snip p (i + 1) j + "}"))))
                  (c = 47 || i = 0 && (c = 94 || c = 60) || c = 36 && i = n - 1)
                   (lex-die ("not yet: " + string [c] + " in " + p))
+                 (c = 36 || c = 94) (go (i + 1) (string [92 c] . acc))      ; within, a $ or ^ is itself
                  (go (i + 1) (string [c] . acc)))))
        (go 0 ()))
    ; each definition translates seeing the ones before it
@@ -137,12 +152,18 @@
             (jot np)))
    ; -- the DFA: (classes S K trans accept rules); states 0 (dead) to S - 1, 1 the start; trans by
    ; state * K + class; accept the rule's number from 1, 0 for none --
-   ; the ops: 0 char, 1 any, 2 set, 6 split, 7 jmp, 8 save, 10 mark, 11 check, 12 match
    (lex-dfa spec)
     (: ds (lex-defs <spec)
        rs <>spec
        _ (two? rs ? () (lex-die "no rules"))
-       progs (map (r \ lex-prog (lex-ere ds <r)) rs)
+       a (lex-auto (map (r \ lex-ere ds <r) rs) [(jot #rs)])
+       _ ((a 4) <(a 5) ? (lex-die "a rule matches the empty text") ())
+       [<a (a 1) (a 2) (a 3) (a 4) (map (r \ <>r) rs)])
+   ; EREs and start sets (lists of rule indices) -> (classes S K trans accept starts), a start
+   ; per set, the first the lowest state
+   ; the ops: 0 char, 1 any, 2 set, 6 split, 7 jmp, 8 save, 10 mark, 11 check, 12 match
+   (lex-auto eres starts)
+    (: progs (map lex-prog eres)
        bases (: (go l b acc) (two? l ? (go >l (b + #<l) (b . acc)) (rev acc)) (go progs 0 ()))
        nd {} rule {}
        _ (map (k \ map (pc \ (pin nd ((bases k) + pc) ((progs k) pc), pin rule ((bases k) + pc) (k + 1))) (jot #(progs k)))
@@ -177,7 +198,7 @@
        sid {} sts {}
        (intern l) (? !(two? l) 0
                      (peep sid l 0 @ k (k ? k (: k2 (#(keys sid) + 1) (pin sid l k2, pin sts k2 l, k2)))))
-       start (intern (clo bases))
+       st0 (map (l \ intern (clo (map bases l))) starts)
        tr {}
        (step l c) (clo (foldl (a \ i \ (elem c (bytes i) ? ((i + 1) . a) a)) () (filter (i \ <(nd i) != 12) l)))
        (walk q) (? !(two? q) 0
@@ -187,10 +208,9 @@
                                               (t && !(peep tr [t 'v] ()) ? (pin tr [t 'v] 1, (t . a)) a))))
                                  () (jot K))
                       (walk (>q + rev new))))
-       _ (pin tr [start 'v] 1)
-       _ (walk [start])
+       sq (filter (s \ s && !(peep tr [s 'v] ()) && (pin tr [s 'v] 1, 1)) st0)
+       _ (walk sq)
        S #(keys sid)
-       _ (acpt (sts 1) ? (lex-die "a rule matches the empty text") ())
        ss (map (+ 1) (jot S))
        ; Moore's refinement: blocks by accept, split by the blocks each class leads to, to a fixpoint
        (number l) (: ids {} (map (k9 \ peep ids k9 0 @ v (v ? v (: v2 (#(keys ids) + 1) (pin ids k9 v2, v2)))) l))
@@ -209,7 +229,7 @@
        ms (map (+ 1) (jot M))
        trans (foldl (a \ m \ a + map (k \ (peep tr [(rep m) k] 0 @ t (t ? (ren (bf t)) 0))) (jot K)) () ms)
        accept (0 . map (m \ acpt (sts (rep m))) ms)
-       [cls (M + 1) K (map (k \ 0) (jot K) + trans) accept (map (r \ <>r) rs)])
+       [cls (M + 1) K (map (k \ 0) (jot K) + trans) accept (map (s \ s ? (ren (bf s)) 0) st0)])
    ; -- the tables as dfa.c reads them: w (1, or 2 once states or rules pass 255), K and S in two
    ; bytes each, the class map, the rule by state, the next state by (state, class) --
    (lex-tab d)
@@ -220,6 +240,388 @@
    (lex-scan txt) (trap (_ \ (lex-dfa (lex-spec txt) @ d [(lex-tab d) (d 5)]))
                         () (\ a b (a @ 'lex-err b (scare a b))))
    (lex-next t src i) ((cite 'dfa 'run) t src i @ m (m ? [(m & 65535) (m >> 16)]))
+   ; -- a flex spec whole, for the C scanner: {'defs 'code 'opts 'scs 'rules 'pre 'post}. code the
+   ; definitions' C (%{ %}, indented lines, comments), scs ((name exclusive?) ..) past INITIAL, pre
+   ; the C opening the rules, post the C after the second %%. a rule [scs bol pattern tail action]:
+   ; scs () for none or "*", pattern "<<EOF>>" for an end rule, tail the trailing context or (),
+   ; action C text or "|" --
+   (lex-pendi s i0)
+    (: n #s
+       (go i q b) (? (n <= i) i
+                     (s i @ c
+                        (? (c = 92) (go (i + 2) q (b && 1))
+                           q (go (i + 1) (c != 34) b)
+                           (b && c = 91 && i + 1 < n && s (i + 1) = 58)
+                            (: k (findsub (snip s i n) ":]") (go (k < 0 ? (i + 1) (i + k + 2)) q 1))
+                           (b = 2) (go (i + 1) q (c = 94 ? 2 1))
+                           (b && c = 93) (go (i + 1) q ())
+                           b (go (i + 1) q b)
+                           (c = 34) (go (i + 1) 1 b)
+                           (c = 91) (go (i + 1) q 2)
+                           (lex-sp? c) i
+                           (go (i + 1) q b))))
+       (go i0 () ()))
+   (lex-lead s) (: (go i) (i < #s && lex-sp? (s i) ? (go (i + 1)) i) (go 0))
+   (lex-pre? s t) (#t <= #s && snip s 0 #t = t)
+   ; C from i: the braces opened less those closed, and whether a /* */ is left open
+   (lex-qskip t i q) (: n #t (go j) (? (n <= j) n (t j = 92) (go (j + 2)) (t j = q) (j + 1) (go (j + 1))) (go i))
+   (lex-cdepth t d cm)
+    (: n #t
+       (go i d cm)
+        (? (n <= i) [d cm]
+           cm (i + 1 < n && t i = 42 && t (i + 1) = 47 ? (go (i + 2) d ()) (go (i + 1) d 1))
+           (i + 1 < n && t i = 47 && t (i + 1) = 42) (go (i + 2) d 1)
+           (i + 1 < n && t i = 47 && t (i + 1) = 47) [d ()]
+           (t i = 34 || t i = 39) (go (lex-qskip t (i + 1) (t i)) d ())
+           (t i = 123) (go (i + 1) (d + 1) ())
+           (t i = 125) (go (i + 1) (d - 1) ())
+           (go (i + 1) d ()))
+       (go 0 d cm))
+   ; an action begun with a on its rule's line, l the lines after -> [C l']: %{ to %}, or on to
+   ; its braces' close
+   (lex-act a l)
+    (? (lex-pre? a "%{")
+        (: (go l acc) (? !(two? l) (lex-die "an open %{")
+                         (lex-trim <l = "%}") [(join "\n" (rev acc)) >l]
+                         (go >l (<l . acc)))
+           (go l [(snip a 2 #a)]))
+       (: (go l acc d cm) (? (d <= 0 && !cm) [(join "\n" (rev acc)) l]
+                             !(two? l) (lex-die "an action's braces never close")
+                             (lex-cdepth <l d cm @ [d2 cm2] (go >l (<l . acc) d2 cm2)))
+          (lex-cdepth a 0 () @ [d cm] (go l [a] d cm))))
+   ; a pattern's top-level / (trailing context) and a final $ (a newline after): [head tail]
+   (lex-ptail p)
+    (: n #p
+       (go i q b) (? (n <= i) [p ()]
+                     (p i @ c
+                        (? (c = 92) (go (i + 2) q b)
+                           q (go (i + 1) (c != 34) b)
+                           b (go (i + 1) q (c != 93))
+                           (c = 34) (go (i + 1) 1 b)
+                           (c = 91) (go (i + 2) q 1)
+                           (c = 47) [(snip p 0 i) (snip p (i + 1) n)]
+                           (c = 36 && i = n - 1) [(snip p 0 i) "\\n"]
+                           (go (i + 1) q b))))
+       (go 0 () ()))
+   (lex-fspec txt)
+    (: t {'defs () 'code () 'opts () 'scs () 'rules () 'pre () 'post ()}
+       (add k v) (pin t k (peep t k () + [v]))
+       (block l) (: (go l acc) (? !(two? l) (lex-die "an open %{")
+                                  (lex-trim <l = "%}") [(join "\n" (rev acc)) >l]
+                                  (go >l (<l . acc)))
+                    (go >l ()))
+       (comment l) (: (go l acc) (? !(two? l) [(join "\n" (rev acc)) l]
+                                    (0 <= findsub <l "*/") [(join "\n" (rev (<l . acc))) >l]
+                                    (go >l (<l . acc)))
+                      (go l ()))
+       (defs l)
+        (? !(two? l) (lex-die "no %% before the rules")
+           (<l @ x
+              (? (x = "%%") >l
+                 (lex-pre? x "%{") (block l @ [c r] (add 'code c, defs r))
+                 (lex-pre? x "/*") (comment l @ [c r] (add 'code c, defs r))
+                 (#(lex-trim x) = 0) (defs >l)
+                 (lex-sp? (x 0)) (add 'code x, defs >l)
+                 (lex-pre? x "%option") (map (w \ add 'opts w) (words (snip x 7 #x)), defs >l)
+                 (lex-pre? x "%x") (map (w \ add 'scs [w 1]) (words (snip x 2 #x)), defs >l)
+                 (lex-pre? x "%s") (map (w \ add 'scs [w ()]) (words (snip x 2 #x)), defs >l)
+                 (x 0 = 37) (defs >l)
+                 (: (nm i) (i < #x && lex-name? (x i) ? (nm (i + 1)) i)
+                    k (nm 0)
+                    (add 'defs [(snip x 0 k) (lex-trim (snip x k #x))], defs >l)))))
+       (rules l scope seen)
+        (? !(two? l) ()
+           (<l @ x
+              (: ld (lex-lead x) tx (lex-trim x)
+                 (? (x = "%%") (pin t 'post (join "\n" >l))
+                    (#tx = 0) (rules >l scope seen)
+                    (two? scope && tx = "}") (rules >l () seen)
+                    (!seen && !(two? scope) && lex-pre? x "%{") (block l @ [c r] (add 'pre c, rules r scope seen))
+                    (!seen && !(two? scope) && 0 < ld) (add 'pre x, rules >l scope seen)
+                    (: i0 (two? scope ? ld 0)
+                       sc? (x i0 = 60 && !(lex-pre? (snip x i0 #x) "<<EOF>>"))
+                       k (sc? ? (findsub (snip x i0 #x) ">" + i0) i0)
+                       scs (sc? ? (snip x (i0 + 1) k @ v (v = "*" ? "*" (split "," v))) ())
+                       i (sc? ? (k + 1) i0)
+                       (? (sc? && i < #x && x i = 123 && #(lex-trim (snip x (i + 1) #x)) = 0) (rules >l scs seen)
+                          (: eof (lex-pre? (snip x i #x) "<<EOF>>")
+                             e (eof ? (i + 7) (lex-pendi x i))
+                             p (snip x i e)
+                             bol (!eof && 0 < #p && p 0 = 94)
+                             pt (eof ? [p ()] (lex-ptail (bol ? (snip p 1 #p) p)))
+                             (lex-act (lex-trim (snip x e #x)) >l @ [a r]
+                                (add 'rules [(two? scs || string? scs ? scs scope) bol <pt <>pt a],
+                                 rules r scope 1)))))))))
+       (rules (defs (split "\n" txt)) () (), t))
+   ; a pattern's length when every match has one, else (): literals, escapes, classes and {NAME}s
+   (lex-flen defs p)
+    (: n #p
+       (go i m)
+        (? (n <= i) m
+           (p i @ c
+              (? (c = 34) (: (q j m) (? (n <= j) () (p j = 34) (go (j + 1) m)
+                                        (p j = 92) (lex-esc p (j + 1) @ [_ k] (q k (m + 1)))
+                                        (q (j + 1) (m + 1)))
+                             (q (i + 1) m))
+                 (c = 92) (lex-esc p (i + 1) @ [_ k] (go k (m + 1)))
+                 (c = 46) (go (i + 1) (m + 1))
+                 (c = 91) (lex-br p (i + 1) @ [_ _ j] (go j (m + 1)))
+                 (c = 123 && i + 1 < n && !(48 <= p (i + 1) <= 57))
+                  (: j (i + findsub (snip p i n) "}") d (assoc (snip p (i + 1) j) defs)
+                     (two? d ? (lex-flen defs <>d @ dm (charm? dm ? (go (j + 1) (m + dm)) ())) ()))
+                 (elem c "*+?|(){}") ()
+                 (go (i + 1) (m + 1)))))
+       (go 0 0))
+
+   ; -- the C scanner: flex's api over the tables, the spec's C in its places --
+   lex-cpre """
+      #include <stdio.h>
+      #include <stdlib.h>
+      #include <string.h>
+      #define FLEX_SCANNER
+      #define YY_FLEX_MAJOR_VERSION 2
+      #define YY_FLEX_MINOR_VERSION 6
+      #define YY_FLEX_SUBMINOR_VERSION 4
+      #define YY_NULL 0
+      #define YY_BUF_SIZE 16384
+      #define INITIAL 0
+      #define BEGIN yy_start =
+      #define YY_START yy_start
+      #define YYSTATE YY_START
+      #define ECHO do { if (fwrite(yytext, (size_t) yyleng, 1, yyout)) {} } while (0)
+      #define yyterminate() return YY_NULL
+      #define YY_FATAL_ERROR(msg) yy_fatal_error(msg)
+      #define YY_CURRENT_BUFFER (yy_ntop ? yy_stack[yy_ntop - 1] : (YY_BUFFER_STATE) 0)
+      #define yyless(n) yy_less(n)
+      #define unput(c) yyunput(c, yytext)
+      typedef struct yy_buffer_state *YY_BUFFER_STATE;
+      extern FILE *yyin, *yyout;
+      extern char *yytext;
+      extern int yyleng;
+      extern int yylineno;
+      int yylex(void);
+      YY_BUFFER_STATE yy_create_buffer(FILE *f, int size);
+      void yy_switch_to_buffer(YY_BUFFER_STATE b);
+      void yy_delete_buffer(YY_BUFFER_STATE b);
+      void yypush_buffer_state(YY_BUFFER_STATE b);
+      void yypop_buffer_state(void);
+      void yyrestart(FILE *f);
+      static int yy_start;
+      static YY_BUFFER_STATE *yy_stack;
+      static long yy_ntop;
+      static void yy_fatal_error(const char *msg);
+      static void yy_less(int n) __attribute__((unused));
+
+      """
+   lex-cmid """
+      #ifndef YY_DECL
+      #define YY_DECL int yylex(void)
+      #endif
+      #ifndef YY_USER_ACTION
+      #define YY_USER_ACTION
+      #endif
+      #ifndef YY_BREAK
+      #define YY_BREAK break;
+      #endif
+      #define YY_RULE_SETUP YY_USER_ACTION
+      /* a buffer reads its file whole at first use; pos is the next byte, bol whether a line begins there */
+      struct yy_buffer_state { FILE *f; char *buf; long len, cap, pos; int filled, bol; };
+      FILE *yyin, *yyout;
+      char *yytext;
+      int yyleng;
+      int yylineno = 1;
+      static long yy_ncap;
+      /* the byte held off behind yytext's nul, and whose */
+      static YY_BUFFER_STATE yy_hbuf;
+      static long yy_hpos;
+      static char yy_hold;
+
+      """
+   lex-crun """
+      static void yy_fatal_error(const char *msg) { fprintf(stderr, "%s\n", msg); exit(2); }
+      static void yy_unhold(void) { if (yy_hbuf) { yy_hbuf->buf[yy_hpos] = yy_hold; yy_hbuf = 0; } }
+      static void yy_holdat(YY_BUFFER_STATE b, long p) { yy_hbuf = b; yy_hpos = p; yy_hold = b->buf[p]; b->buf[p] = 0; }
+      static void yy_lines(const char *s, long n, int d) { long i; for (i = 0; i < n; i++) if (s[i] == '\n') yylineno += d; }
+      static void yy_grow(void) {
+        if (yy_ntop < yy_ncap) return;
+        yy_ncap = yy_ncap ? 2 * yy_ncap : 8;
+        yy_stack = realloc(yy_stack, (size_t) yy_ncap * sizeof *yy_stack);
+        if (!yy_stack) YY_FATAL_ERROR("out of memory"); }
+      static void yy_fill(YY_BUFFER_STATE b) {
+        size_t n;
+        if (b->filled) return;
+        b->filled = 1; b->cap = 16384; b->len = 0; b->pos = 0;
+        b->buf = malloc((size_t) b->cap + 2);
+        if (!b->buf) YY_FATAL_ERROR("out of memory");
+        while (b->f && (n = fread(b->buf + b->len, 1, (size_t) (b->cap - b->len), b->f)) > 0) {
+          b->len += (long) n;
+          if (b->len == b->cap) {
+            b->cap *= 2;
+            b->buf = realloc(b->buf, (size_t) b->cap + 2);
+            if (!b->buf) YY_FATAL_ERROR("out of memory"); } }
+        b->buf[b->len] = 0; b->buf[b->len + 1] = 0; }
+      YY_BUFFER_STATE yy_create_buffer(FILE *f, int size) {
+        YY_BUFFER_STATE b = calloc(1, sizeof *b);
+        (void) size;
+        if (!b) YY_FATAL_ERROR("out of memory");
+        b->f = f; b->bol = 1;
+        return b; }
+      void yy_switch_to_buffer(YY_BUFFER_STATE b) {
+        yy_unhold();
+        if (!yy_ntop) { yy_grow(); yy_ntop = 1; }
+        yy_stack[yy_ntop - 1] = b;
+        if (b) yyin = b->f; }
+      void yy_delete_buffer(YY_BUFFER_STATE b) {
+        if (!b) return;
+        if (yy_hbuf == b) yy_hbuf = 0;
+        if (b == YY_CURRENT_BUFFER) yy_stack[yy_ntop - 1] = 0;
+        free(b->buf); free(b); }
+      void yypush_buffer_state(YY_BUFFER_STATE b) {
+        yy_unhold();
+        if (!b) return;
+        if (!yy_ntop || YY_CURRENT_BUFFER) { yy_grow(); yy_ntop++; }
+        yy_stack[yy_ntop - 1] = b;
+        yyin = b->f; }
+      void yypop_buffer_state(void) {
+        yy_unhold();
+        if (!YY_CURRENT_BUFFER) return;
+        yy_delete_buffer(YY_CURRENT_BUFFER);
+        if (yy_ntop > 1) yy_ntop--;
+        if (YY_CURRENT_BUFFER) yyin = YY_CURRENT_BUFFER->f; }
+      void yyrestart(FILE *f) {
+        YY_BUFFER_STATE b = YY_CURRENT_BUFFER;
+        yy_unhold();
+        if (!b) { yy_switch_to_buffer(yy_create_buffer(f, YY_BUF_SIZE)); return; }
+        if (yy_hbuf == b) yy_hbuf = 0;
+        free(b->buf); b->buf = 0; b->filled = 0; b->len = b->pos = 0; b->bol = 1; b->f = f; yyin = f; }
+      static YY_BUFFER_STATE yy_cur(void) {
+        if (!yyin) yyin = stdin;
+        if (!yyout) yyout = stdout;
+        if (!YY_CURRENT_BUFFER) yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
+        yy_fill(YY_CURRENT_BUFFER);
+        return YY_CURRENT_BUFFER; }
+      /* the longest match at pos, the earliest rule on a tie: its number, 0 at the end, -1 for none */
+      static int yy_scan(void) {
+        YY_BUFFER_STATE b;
+        long p, last = 0;
+        int st, r = 0;
+        yy_unhold();
+        b = yy_cur();
+        yytext = b->buf + b->pos; yyleng = 0;
+        if (b->pos >= b->len) return 0;
+        st = yy_starts[2 * yy_start + b->bol];
+        for (p = b->pos; st && p < b->len; ) {
+          st = yy_trans[st * YY_NCLS + yy_cls[(unsigned char) b->buf[p]]];
+          p++;
+          if (st && yy_acc[st]) { r = yy_acc[st]; last = p; } }
+        if (!r) yyleng = 1;
+        else {
+          yyleng = (int) (last - b->pos);
+          if (yy_tck[r] == 1) yyleng -= yy_tcn[r];
+          else if (yy_tck[r] == 2) yyleng = yy_tcn[r]; }
+        b->pos += yyleng;
+        yy_lines(yytext, yyleng, 1);
+        b->bol = yytext[yyleng - 1] == '\n';
+        yy_holdat(b, b->pos);
+        return r ? r : -1; }
+      static void yy_less(int n) {
+        YY_BUFFER_STATE b = YY_CURRENT_BUFFER;
+        yy_unhold();
+        yy_lines(yytext + n, yyleng - n, -1);
+        b->pos = (long) (yytext - b->buf) + n;
+        yyleng = n;
+        yy_holdat(b, b->pos); }
+
+      """
+   lex-cinput """
+      static int input(void) {
+        YY_BUFFER_STATE b;
+        int c;
+        yy_unhold();
+        b = yy_cur();
+        if (b->pos >= b->len) return 0;
+        c = (unsigned char) b->buf[b->pos++];
+        if (c == '\n') yylineno++;
+        b->bol = c == '\n';
+        yy_holdat(b, b->pos);
+        return c; }
+
+      """
+   lex-cunput """
+      static void yyunput(int c, char *bp) {
+        YY_BUFFER_STATE b;
+        (void) bp;
+        yy_unhold();
+        b = yy_cur();
+        if (!b->pos) {
+          char *nb = malloc((size_t) b->len + 66);
+          if (!nb) YY_FATAL_ERROR("out of memory");
+          memcpy(nb + 64, b->buf, (size_t) b->len + 2);
+          free(b->buf);
+          b->buf = nb; b->pos = 64; b->len += 64; b->cap = b->len; }
+        b->buf[--b->pos] = (char) c;
+        if (c == '\n') yylineno--; }
+
+      """
+   (lex-carr ty nm vs)
+    (: (rows l acc) (? !(two? l) (rev acc) (rows (drop 16 l) (join ", " (map show (take 16 l)) . acc)))
+       ("static const " + ty + " " + nm + "[" + show (max 1 #vs) + "] = {\n  "
+        + join ",\n  " (rows (two? vs ? vs [0]) ()) + " };\n"))
+   (lex-cout f txt)
+    (: t (lex-fspec txt)
+       opt (t 'opts) (has o) (elem o opt)
+       defs (lex-defs (t 'defs))
+       scs (["INITIAL" ()] . t 'scs)
+       nsc #scs
+       rl (t 'rules)
+       rs (filter (r \ r 2 != "<<EOF>>") rl)
+       es (filter (r \ r 2 = "<<EOF>>") rl)
+       _ (two? rs ? () (lex-die "no rules"))
+       _ (map (r \ (!(two? <r) || all (n \ any (s \ <s = n) scs) <r) ? () (lex-die ("no start condition in " + show <r))) rl)
+       (in? r j) (: s <r (? (string? s) 1 (two? s) (elem (<(scs j)) s) !(<>(scs j))))
+       starts (foldl (a \ j \ a + map (b \ filter (k \ in? (rs k) j && (b || !((rs k) 1))) (jot #rs)) [0 1]) () (jot nsc))
+       eres (map (r \ (r 3 @ tl (two? tl || string? tl ? ("(" + lex-ere defs (r 2) + ")(" + lex-ere defs tl + ")") (lex-ere defs (r 2))))) rs)
+       tcs (map (r \ (string? (r 3) ? (lex-flen defs (r 3) @ m
+                                         (charm? m ? [1 m] (lex-flen defs (r 2) @ h (charm? h ? [2 h] (lex-die ("variable trailing context in " + r 2))))))
+                       [0 0]))
+                rs)
+       a (lex-auto eres starts)
+       S (a 1) K (a 2)
+       (eof j) (: own (filter (r \ two? <r && elem (<(scs j)) <r || string? <r) es) un (filter (r \ !(two? <r || string? <r)) es)
+                  (two? own ? (<own 4) (two? un ? (<un 4) ())))
+       acts (map (k \ (rs k) @ r
+                    (r 4 = "|" ? ("case " + show (k + 1) + ":\n")
+                       ("case " + show (k + 1) + ":\nYY_RULE_SETUP\n" + r 4 + "\nYY_BREAK\n")))
+                 (jot #rs))
+       ("/* generated by `love lex " + f + "`; edit the spec, not this */\n"
+        + lex-cpre
+        + (has "noyywrap" ? "#define yywrap() 1\n" "int yywrap(void);\n")
+        + (has "noinput" ? "" "static int input(void);\n")
+        + (has "nounput" ? "" "static void yyunput(int c, char *bp) __attribute__((unused));\n")
+        + join "" (map (j \ "#define " + <(scs j) + " " + show j + "\n") (drop 1 (jot nsc)))
+        + join "\n" (t 'code) + "\n"
+        + lex-cmid
+        + "#define YY_NCLS " + show K + "\n"
+        + lex-carr "unsigned short" "yy_cls" <a
+        + lex-carr "unsigned short" "yy_acc" (a 4)
+        + lex-carr "unsigned short" "yy_trans" (a 3)
+        + lex-carr "unsigned short" "yy_starts" (a 5)
+        + lex-carr "unsigned char" "yy_tck" (0 . map (c \ <c) tcs)
+        + lex-carr "int" "yy_tcn" (0 . map (c \ c 1) tcs)
+        + "\n" + lex-crun
+        + (has "noinput" ? "" lex-cinput)
+        + (has "nounput" ? "" lex-cunput)
+        + "YY_DECL\n{\n" + join "\n" (t 'pre) + "\n  for (;;) {\n    int yy_r = yy_scan();\n"
+        + "    if (!yy_r) {\n      YY_BUFFER_STATE yy_eb = YY_CURRENT_BUFFER;\n"
+        + "      if (!yywrap()) { yyrestart(yyin); continue; }\n      switch (YY_START) {\n"
+        + join "" (map (j \ eof j @ e (string? e ? ("      case " + show j + ":\n" + e + "\n      break;\n") "")) (jot nsc))
+        + "      default: yyterminate();\n      }\n      if (YY_CURRENT_BUFFER == yy_eb) yyterminate();\n      continue;\n    }\n"
+        + "    switch (yy_r) {\n    case -1:\n"
+        + (has "nodefault" ? "      YY_FATAL_ERROR(\"flex scanner jammed\");\n" "      ECHO;\n") + "      break;\n"
+        + join "" acts
+        + "    }\n  }\n}\n"
+        + (string? (t 'post) ? (t 'post) "")))
+
    ; -- love lex: the tables as love text --
    (lex-hex v) ("0123456789abcdef" @ h (string [92 120 (h (v >> 4)) (h (v & 15))]))
    (lex-text mod nm spec r)
@@ -227,7 +629,25 @@
      ("; generated by `love lex " + spec + "`; edit the spec, not this\n(module '" + mod + "\n(:\n" +
      "   " + nm + " \"" + join "" (map lex-hex (map <r (jot #<r))) + "\"\n" +
      "   " + nm + "-rules '(" + join " " <>r + ")\n))\n"))
+   ; love lex -o FILE [-L] [-t] SPEC: the C scanner, as flex lays one (-t to stdout)
+   (lex-cmain as)
+    (: (go a o) (? !(two? a) (udie 2 "usage: lex -o FILE [-L] SPEC")
+                   (<a = "-L") (go >a o)
+                   (<a = "-t") (go >a "-")
+                   (<a = "-o" && two? >a) (go >>a <>a)
+                   (lex-pre? <a "-o") (go >a (snip <a 2 #<a))
+                   (two? >a) (udie 2 ("lex: unknown option " + <a))
+                   [<a o])
+       fo (go as "lex.yy.c")
+       f <fo
+       txt (uread f @ x (two? x ? <>x (udie 1 ("lex: can't read " + f))))
+       r (trap (_ \ lex-cout f txt) () (\ a b (a @ 'lex-err b (scare a b))))
+       (string? r && lex-pre? r "/* generated" ?
+           (<>fo = "-" ? (say out r, 0)
+              (open <>fo "w" @ q (hot? q ? (say q r, close q, 0) (udie 1 ("lex: can't write " + <>fo)))))
+          (udie 1 ("lex: " + f + ": " + show r))))
    (lex-main as)
+    (? (any (a \ a = "-L" || a = "-t" || lex-pre? a "-o") as) (lex-cmain as)
     (: (opts a m n) (? (two? a && two? >a && <a = "-m") (opts >>a <>a n)
                        (two? a && two? >a && <a = "-n") (opts >>a m <>a)
                        [a m n])
@@ -236,5 +656,5 @@
        _ (two? <o && !(two? ><o) ? () (udie 2 "usage: lex [-m MODULE] [-n NAME] SPEC"))
        r (lex-scan (uread f @ x (two? x ? <>x (udie 1 ("lex: can't read " + f)))))
        (string? r ? (udie 1 ("lex: " + f + ": " + r))
-          (: _ (say out (lex-text <>o <>>o f r)) 0)))
+          (: _ (say out (lex-text <>o <>>o f r)) 0))))
 ))

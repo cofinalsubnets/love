@@ -189,41 +189,29 @@
                                   (ar-pick <<l ns @ [m rest] (go >l rest ((two? m ? m <l) . acc))))
                  (ar-write dst thin ix (go <>old adds ()), 0))))))
 
-   ; ld: holo's static linker (src/love/holo/link.l) as an applet; -pie the self-relocating
-   ; et_dyn, -Ttext the bare-metal org
+   ld-usage "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] [-T SCRIPT [LLD OPTIONS]] A.o.. -o OUT"
+   ; ld: one linker, lld's command line (klink.l's kl-args). -r, or under a script, klink lays
+   ; it as ld.lld would; else holo's static link (link.l): -pie the self-relocating et_dyn, -Ttext
+   ; the bare-metal org, --readme plain text into `.love.README`
    (ld-main as)
-    (: (num s) (: n #s
-                  hex (2 < n && s 0 = 48 && s 1 = 120)
-                  (go i a) (i < n ?
-                              (go (i + 1) (a * (hex ? 16 10)
-                                           + (s i @ b
-                                                (? (48 <= b && b < 58) (b - 48)
-                                                   (97 <= b && b < 103) (b - 87)
-                                                   (65 <= b && b < 71) (b - 55)
-                                                   (udie 2 ("ld: bad number " + s))))))
-                              a)
-                  (go (hex ? 2 0) 0))
-       (go a fs o pie org tgt rd)
-        (? (atom? a) [(rev fs) o pie org tgt rd]
-           (<a = "-o")     (two? >a ? (go >>a fs <>a pie org tgt rd) (udie 2 "ld: -o wants a path"))
-           (<a = "-pie")   (go >a fs o 1 org tgt rd)
-           (<a = "-t")     (two? >a ? (go >>a fs o pie org (intern <>a) rd) (udie 2 "ld: -t wants a target"))
-           (<a = "-Ttext") (two? >a ? (go >>a fs o pie (num <>a) tgt rd) (udie 2 "ld: -Ttext wants an address"))
-           ; --readme file: plain text into `.love.README`, for whoever opens the output
-           (<a = "--readme") (two? >a ?
-                                (uread <>a @ t (two? t ? (go >>a fs o pie org tgt <>t)
-                                                (udie 2 ("ld: cannot open " + <>a))))
-                                (udie 2 "ld: --readme wants a path"))
-           (go >a (<a . fs) o pie org tgt rd))
-       r (go as () () 0 () 'x64 ())
-       fs <r o <>r pie <>>r org (r 3) tgt (r 4) rdme (r 5)
-       _ (two? fs ? () (udie 2 "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"))
-       _ (#o ? () (udie 2 "ld: no -o OUT"))
-       srcs (map (f \ (uread f @ r2 (two? r2 ? [f <>r2] (udie 2 ("ld: cannot open " + f))))) fs)
-       ps (ldlink tgt pie org srcs ("love " + <(usplit 43 love-version)) rdme)
-       (ld-write o ps,
-        chmod o 493,
-        0))
+    (: o (kl-args as)
+       _ (? (string? o) (udie 2 o) 0)
+       _ (? (o 'ver) (puts ("holo ld (love " + love-version + ") " + kl-lld + "-compatible\n")) 0)
+       ins (map (i \ i 1) (o 'ins))
+       (? (o 'help) (puts (ld-usage + "\n"), 0)
+          (o 'ver && atom? ins) 0
+          (atom? ins) (udie 2 ld-usage)
+          (string? (peep o 'script ()) || o 'reloc || o 'shared)
+          (: _ (pin o 'banner ("Linker: love " + <(usplit 43 love-version)))
+             _ (kl-ld o)
+             (? (o 'reloc) 0 (chmod (o 'out) 493)), 0)
+          (: _ (#(peep o 'out "") ? () (udie 2 "ld: no -o OUT"))
+             t (peep o 'tgt ()) tgt (? (t != ()) t (o 'emu = ()) 'x64 (o 'emu))
+             rd (peep o 'readme ())
+             rdme (? (string? rd) (uread rd @ t (two? t ? <>t (udie 2 ("ld: cannot open " + rd)))) ())
+             srcs (map (f \ (uread f @ r2 (two? r2 ? [f <>r2] (udie 2 ("ld: cannot open " + f))))) ins)
+             ps (ldlink tgt (o 'pie) (peep o 'org ()) srcs ("love " + <(usplit 43 love-version)) rdme)
+             (ld-write (o 'out) ps, chmod (o 'out) 493, 0))))
 
    ; nm: VALUE type NAME over link.l's ld-syms. the letter is ELF's facts: U undefined,
    ; a absolute, C common, W/w weak (V/v a weak object), else section flags pick
@@ -844,7 +832,7 @@
     'ssh-keyscan "usage: ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host .."
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
-    'ld "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] A.o.. -o OUT"
+    'ld ld-usage
     'objcopy "usage: objcopy [-O binary|ihex] [-S] [-R SEC] [-j SEC] IN OUT"
     'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
@@ -1043,9 +1031,9 @@
     'bzip2 (cite 'bz2cmd 'bzc-help) 'bunzip2 (cite 'bz2cmd 'bzc-help) 'bzcat (cite 'bz2cmd 'bzc-help)
     'zstd (cite 'zstdcmd 'zsc-help) 'unzstd (cite 'zstdcmd 'zsc-help) 'zstdcat (cite 'zstdcmd 'zsc-help)}
 
-   ; echo, test and [ read no options (posix: `echo --help` means the words); cook and
-   ; lush answer their flags themselves
-   korenoflag ['echo 'test (name "[") 'make 'cook 'sh 'lush]
+   ; echo, test and [ read no options (posix: `echo --help` means the words); cook, lush
+   ; and ld answer their flags themselves, ld's --version the line kbuild's ld-version.sh reads
+   korenoflag ['echo 'test (name "[") 'make 'cook 'sh 'lush 'ld]
    ; -v is never the door's (gnu gives --version no short spelling; cpio -v, grep -v ..).
    ; -h is the door's unless the tool spells it itself
    korenoh '(grep du df ls sort touch chown chgrp ln free readelf pinky httpd)

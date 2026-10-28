@@ -269,6 +269,24 @@
         ; read at another address, the targets relabel the same
         chk-eq (name + ".decode.base") want (as-hexv (x64-relabel (x64-disasm (unhex want) 4198400) 4198400))))
    _ (foldl (_ \ t \ law3 (t 0) (t 1) (t 2)) 0 tests)
+   ; the forms the decoder has no row for, as gas lays them
+   _ (foldl (_ \ t \ chk (t 0) (t 1) (t 2)) 0 '(
+      ("crc32b" "f20f38f0c1" "crc32b %cl, %eax")
+      ("crc32b.m.rex" "f2440f38f00f" "crc32b (%rdi), %r9d")
+      ("crc32w" "66f20f38f1c1" "crc32w %cx, %eax")
+      ("crc32l.rex" "f2440f38f1d1" "crc32l %ecx, %r10d")
+      ("crc32q" "f2480f38f1c1" "crc32q %rcx, %rax")
+      ("crc32q.m" "f24c0f38f106" "crc32q (%rsi), %r8")
+      ("crc32b.q" "f2480f38f0c6" "crc32b %sil, %rax")
+      ("rdpid" "f30fc7f8" "rdpid %rax")
+      ("rdpid.rex" "f3410fc7f9" "rdpid %r9")
+      ("movntdqa" "660f382a0f" "movntdqa (%rdi), %xmm1")
+      ("movntdqa.rex" "66440f382a4e10" "movntdqa 16(%rsi), %xmm9")
+      ("endbr64" "f30f1efa" "endbr64")
+      ("lretq" "48cb" "lretq")
+      ("sysenter" "0f34" "sysenter")
+      ("vmcall" "0f01c1" "vmcall")
+      ("vmmcall" "0f01d9" "vmmcall")))
    ; the operand-size prefix by mode: in a 16-bit segment the 32-bit width takes 66
    _ (chk-eq "osz.m16.movl" [102 137 195] (as-instrm 16 <(att-read "movl %eax, %ebx")))
    _ (chk-eq "osz.m16.movw" [137 195] (as-instrm 16 <(att-read "movw %ax, %bx")))

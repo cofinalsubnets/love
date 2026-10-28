@@ -78,8 +78,8 @@ holo assembles every `.S` the census compiles; only the refused ones stay clang'
 
 - a64: 0 of 69. entry.o, head.o and hyp-entry.o match clang's code sections but for branches to
   global symbols, which holo resolves inside the object
-- x64: 38 of 70. `endbr64` 7, `lretq` 2, `ljmpw` 1, `.octa` 2, `.uleb128` 1, `%`-immediates 3, bad
-  numbers 3, register names 4, others
+- x64: of the 64 units with asm, 38 lay (16 as clang does) and 26 refuse: AVX 7, the 16- and
+  32-bit lanes' far transfers 5, three SSE4 rows, `.irpc`, `.uleb128` over labels, x87, others
 - the 3 kallsyms `.S` files from link-vmlinux.sh are clang's in both (the link, below)
 
 ## 3. clang outside the units
