@@ -38,7 +38,7 @@
     (: md (x86-md bn disp)
      ([(x86-modrm md regf 4) (x86-sib (x86-scale sc) ixn bn)] + x86-dispb md disp))
    ;; xmm binops: op -> (prefix opcode), prefix 0 for none; modrm.reg d, rm s
-   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movss '(243 16) 'movapd '(102 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd copies the whole register
+   x86-sse {'movupd '(102 16) 'movsd '(242 16) 'movss '(243 16) 'movapd '(0 40) 'movhlps '(0 18) 'unpcklpd '(102 20)   ; movapd lays movaps: the same whole-register copy, a byte shorter
             'mulpd '(102 89) 'addpd '(102 88) 'subpd '(102 92) 'divpd '(102 94)
             'mulsd '(242 89) 'addsd '(242 88) 'subsd '(242 92) 'divsd '(242 94)
             'minsd '(242 93) 'maxsd '(242 95)                                              ; d <- d < s ? d : s (a NaN takes s)
@@ -142,10 +142,11 @@
              (emit-zxm (b @ 255 1 65535 2 4) d a)
             (emit-mov d a + alu-step rr ext d b)))
 
-   ;; 69 /r id is three-address; register-register folds onto two-address 0F AF /r
+   ;; 69 /r id (6B /r ib for a byte) is three-address; register-register folds onto two-address 0F AF /r
    (imul-rr d s) (: dn (rn d) sn (rn s) [(rex 1 (hi dn) 0 (hi sn)) 15 175 (modrm 3 dn sn)])
    (imul-ri d a imm) (: dn (rn d) an (rn a)
-                        ([(rex 1 (hi dn) 0 (hi an)) 105 (modrm 3 dn an)] + le32 imm))
+                        (fits8 imm ? [(rex 1 (hi dn) 0 (hi an)) 107 (modrm 3 dn an) (byte imm)]
+                        ([(rex 1 (hi dn) 0 (hi an)) 105 (modrm 3 dn an)] + le32 imm)))
    (emit-imul d a b)
       (reg? b ?
          (? (reg-eq d a) (imul-rr d b)

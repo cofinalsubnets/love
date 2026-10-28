@@ -45,7 +45,8 @@
       ("align.zero"  "c3"                    ((align 16) (ret)))   ; already on the boundary: no pad
       ;; imul (true 3-operand imm form; rr folds two-address)
       ("imul.rr"     "480fafc3"              ((imul r0 r0 r3)))
-      ("imul.imm"    "4869d007000000"        ((imul r2 r0 7)))
+      ("imul.imm"    "486bd007"              ((imul r2 r0 7)))
+      ("imul.imm32"  "4869d0e8030000"        ((imul r2 r0 1000)))
       ;; memory: the rsp(SIB) and rbp(forced-disp) base quirks, disp8 + disp32
       ("ld.base"     "488b07"                ((ld r0 r6 0)))
       ("ld.disp8"    "488b4708"              ((ld r0 r6 8)))

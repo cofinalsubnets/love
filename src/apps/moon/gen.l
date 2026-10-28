@@ -6988,7 +6988,24 @@
              (two? lk) (lk . addrf1 g all >r)
              (two? xj) (fuse xj)
              (two? aj) (fuse aj)
-             (f . addrf1 g all r))))
+             (xscale g f nx @ xs
+                (? !(two? xs) (f . addrf1 g all r)
+                   (dead9 <>f >r || (<>f = <>nx && nelem <nx (stxops + fstxops))) (xs . addrf1 g all >r)
+                   (<>f = <>>f) (f . addrf1 g all r)        ; the multiply rewrote its own source
+                   (f . xs . addrf1 g all >r))))))
+   ; a scaling multiply feeding the next indexed form's index at scale 1 rides the scale (x64)
+   (xscale g f nx)
+    (? !(x64? g && two? f && <f = 'imul && elem (f 3) '(2 4 8) && two? nx) ()
+       (: t <>f a <>>f s (f 3)
+          st? (elem <nx (stxops + fstxops))
+          o (st? ? 1 2)                                   ; the base's operand; index, scale, disp follow
+          b (nx o) i (nx (o + 1))
+          (? !(st? || elem <nx '(ldx ldxb ldxw ldxsw leax ldsdx ldssx)) ()
+             (nx (o + 2) != 1) ()
+             (st? && nx 5 = t) ()
+             (: bi (? (i = t && b != t) [b a] (b = t && i != t) [i a] ())
+                (two? bi
+                   ? (st? ? [<nx <bi <>bi s (nx 4) (nx 5)] [<nx <>nx <bi <>bi s (nx 5)]))))))
    (addrfold g fs) (addrf1 g fs (addrf1 g fs fs) @ r (#r = #fs ? r (addrfold g r)))
 
    ; the branching death proof (cmpfuse's license): dead when no reachable path reads before a
@@ -7123,6 +7140,23 @@
           (local? L) !(fsym? L)
           ; an and by a 32-bit mask straight after clears the top itself
           (masked r n) (two? n && <n = 'and && <>n = r && <>>n = r && u32? (n 3))
+          ; or whose bits reach only a narrowing or a narrow store of r (or of a copy r dies into),
+          ; through ops whose low half reads only low halves; fl: one of those ops set the flags, so
+          ; they must be written again before any reader
+          (lo32 r l fl) (two? l && two? <l &&
+             (<l @ f
+                (? (elem <f '(zx4 sx4 zx2 sx2 zx1 sx1) && <>f = r) (!fl || fdead >l 16)
+                   (elem <f '(st4 st2 st1) && f 3 = r) (<>f != r && dies? g r >l && (!fl || fdead >l 16))
+                   (elem <f (aluops + '(neg not)) && <>f = r) (lo32 r >l 1)
+                   (<f = 'mov && <>>f = r) (<>f != r && dies? g r >l && lo32 <>f >l fl)
+                   (elem <f '(label align jmp jmp8 jmpt jmpr jmpm br br8 set cmov adc sbb ret)) ()
+                   (rdsp g f @ rs (rs != 'bar && nelem r <rs && nelem r <>rs && lo32 r >l fl)))))
+          ; the flags are written again (or a call clobbers them) before anything reads them
+          (fdead l k) (k > 0 && two? l && two? <l &&
+             (<<l @ op (? (elem op (aluops + '(cmp test cmpm cmprm neg))) 1
+                          (elem op barops) 1
+                          (elem op '(label align jmp jmp8 jmpt jmpr jmpm br br8 set cmov adc sbb ret)) ()
+                          (fdead >l (k - 1)))))
           (round l K ch)
            (!(two? l) ? ch
               (<l @ f
@@ -7162,6 +7196,7 @@
                     (retx? f) (f . out >l 'top)
                     (<f = 'zx4 && K != 'top && elem <>f K) (out >l K)
                     (<f = 'zx4 && two? >l && masked <>f <>l) (out >l K)
+                    (<f = 'zx4 && lo32 <>f >l ()) (out >l K)
                     (fuse f >l K @ m
                        (two? m ? (<m + out (m 1) (step <>l (step f K)))
                           (f . out >l (step f K)))))))
