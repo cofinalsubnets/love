@@ -18,7 +18,7 @@ Counts are from 2026-10-26 unless a row says otherwise. Sources:
 Two pipelines exist today, and the criterion is their join:
 
 - `make test_hearts` (src/apps/hearts/build.l): the love-native driver. No GNU make; host programs by
-  mooncc, our flex/bison, perl's scripts ported, commands through `lush -a`. But clang compiles the
+  mooncc, love's lex/yacc, perl's scripts ported, commands through `lush -a`. But clang compiles the
   kernel side, llvm links it, and ARCH is fixed to arm64 (build.l `cl0`)
 - the mixed boot (mix.sh, boot.sh): mooncc and holo objects for the kernel, laid over a GNU make +
   clang + ld.lld + `HOSTCC=cc` build, then booted under qemu
@@ -160,7 +160,7 @@ uniq, cut, sort, cmp, cat, gzip, cpio; `#!/bin/sh` scripts run as lush's sh.
 | tool | a64 | x64 | love |
 |---|---|---|---|
 | perl | 3: sha2-armv8.pl ×2, build_OID_registry | 1: build_OID_registry | perlasm.l, oidreg.l |
-| flex / bison | 2 / 2 | 1 / 1 | GNU flex/bison built by mooncc (moon-flex.sh, moon-bison.sh): not love's own parsers |
+| flex / bison | 2 / 2 | 1 / 1 | love lex / love yacc, their C back ends (flex's `-o$@ -L`, bison's `-o -d -t -l`) |
 | awk | 2 (gen-cpucaps, gen-sysreg) | 3 (orc_hash, cpufeaturemasks.h, gen-insn-attr-x86.awk) | kore awk; x64 scripts untried |
 | bc | 1 (timeconst) | 1 | kore bc |
 | gzip | 1 (config_data) | 1 (vmlinux.bin.gz) | love gzip (KGZIP) |
