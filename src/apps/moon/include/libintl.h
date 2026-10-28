@@ -1,5 +1,4 @@
-#ifndef _LOVE_LIBINTL_H
-#define _LOVE_LIBINTL_H
+#pragma once
 /* no message catalogs: gettext is the identity, the domain calls no-ops */
 #define gettext(Msgid)                     (Msgid)
 #define dgettext(Domain, Msgid)            (Msgid)
@@ -9,4 +8,3 @@
 #define textdomain(Domain)                 ((char *)0)
 #define bindtextdomain(Domain, Dir)        ((char *)0)
 #define bind_textdomain_codeset(Dom, Cs)   ((char *)0)
-#endif

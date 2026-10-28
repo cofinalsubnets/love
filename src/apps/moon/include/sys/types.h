@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_TYPES_H
-#define _LOVE_SYS_TYPES_H
+#pragma once
 typedef unsigned long size_t;
 typedef long   ssize_t;
 typedef int    pid_t;
@@ -34,4 +33,3 @@ typedef unsigned int   uint;
 typedef unsigned long  ulong;
 typedef char          *caddr_t;
 #include <sys/select.h>   /* as glibc does */
-#endif

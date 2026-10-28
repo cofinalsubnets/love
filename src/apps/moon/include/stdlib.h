@@ -1,5 +1,4 @@
-#ifndef _LOVE_STDLIB_H
-#define _LOVE_STDLIB_H
+#pragma once
 #ifndef NULL
 #define NULL ((void*)0)
 #endif
@@ -60,4 +59,3 @@ int mbtowc(wchar_t *, char const *, size_t);
 int wctomb(char *, wchar_t);
 size_t mbstowcs(wchar_t *, char const *, size_t);
 size_t wcstombs(char *, wchar_t const *, size_t);
-#endif

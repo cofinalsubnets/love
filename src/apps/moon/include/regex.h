@@ -1,5 +1,4 @@
-#ifndef _REGEX_H
-#define _REGEX_H
+#pragma once
 #include <stddef.h>
 
 typedef int regoff_t;
@@ -25,4 +24,3 @@ int regcomp(regex_t *, char const *, int);
 int regexec(regex_t const *, char const *, size_t, regmatch_t *, int);
 size_t regerror(int, regex_t const *, char *, size_t);
 void regfree(regex_t *);
-#endif

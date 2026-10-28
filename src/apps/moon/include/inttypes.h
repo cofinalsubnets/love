@@ -1,5 +1,4 @@
-#ifndef _LOVE_INTTYPES_H
-#define _LOVE_INTTYPES_H
+#pragma once
 #include <stdint.h>
 
 /* the 64-bit ones are long here but long long on the 32-bit targets */
@@ -139,4 +138,3 @@ intmax_t  strtoimax(const char *, char **, int);
 uintmax_t strtoumax(const char *, char **, int);
 intmax_t  imaxabs(intmax_t);
 imaxdiv_t imaxdiv(intmax_t, intmax_t);
-#endif

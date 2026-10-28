@@ -887,7 +887,7 @@ k_qemu_a64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting \
   -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu_rv64 = -M virt -serial stdio -display none
 k_qemu = qemu-system-$(uname_$a) -m 256M $(k_qemu_$a) $(k_kvm)
-k_fw = -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$(uname_$a).fd,readonly=on
+k_fw = -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$(uname_$a).fd,readonly=on
 
 # the emulator is asked for FIRST: a missing qemu refuses before the kernel is built, not
 # after. a prerequisite, so every run door shares the one question.
@@ -897,7 +897,7 @@ qemu-present:
 	  { echo "run: needs qemu-system-$(uname_$a) on PATH"; exit 1; }
 ifeq ($a,x64)
 run: run-$a
-run-$a: qemu-present $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf dl/edk2-ovmf/ovmf-code-$(uname_$a).fd
+run-$a: qemu-present $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf $(dl)/edk2-ovmf/ovmf-code-$(uname_$a).fd
 	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp-$a
 else
 run: run-$a
@@ -953,13 +953,11 @@ uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "      qemu-system-$(uname_$a) -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
 
 # --- downloads -------------------------------------------------------
-dl/edk2-ovmf/ovmf-code-%.fd:
-	@echo 'CURL	'$@
-	@mkdir -p dl
-	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/lat/download/edk2-ovmf.tar.gz | gunzip | tar -C dl -xf -
-	@case "$a" in \
-		a64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
-	esac
+$(dl)/edk2-ovmf/ovmf-code-%.fd:
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf && test -f $@
+$(dl)/doom1.wad:
+	@DL=$(dl) sh test/gate/dl.sh doom1.wad && test -f $@
+
 include $(R)/test/test.mk
 #
 # THE NEST: the default install is ~/.love, a self-implying home, and what lands in it

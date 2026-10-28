@@ -1,5 +1,4 @@
-#ifndef _LOVE_SPAWN_H
-#define _LOVE_SPAWN_H
+#pragma once
 #include <sys/types.h>
 #include <signal.h>
 #define POSIX_SPAWN_RESETIDS   1
@@ -29,4 +28,3 @@ int posix_spawn(pid_t*, char const*, posix_spawn_file_actions_t const*, posix_sp
                 char *const[], char *const[]);
 int posix_spawnp(pid_t*, char const*, posix_spawn_file_actions_t const*, posix_spawnattr_t const*,
                  char *const[], char *const[]);
-#endif

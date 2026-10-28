@@ -18,7 +18,7 @@ static intptr_t seq_byte(word x);
 static lvm_t
  lvm_apof, lvm_stack, lvm_cap, lvm_casknew, lvm_chainp, lvm_clock, lvm_cup,
  lvm_gauge, lvm_intf, lvm_key, lvm_kreg, lvm_link, lvm_mint, lvm_mintp, lvm_lib, lvm_namep,
- lvm_nclock, lvm_nomctor, lvm_nomp, lvm_packp, lvm_please, lvm_setstack, lvm_setp,
+ lvm_nclock, lvm_nomctor, lvm_nomp, lvm_numericp, lvm_please, lvm_setstack, lvm_setp,
  lvm_snip, lvm_sitsp, lvm_subidx, lvm_cats, lvm_strp, lvm_sub, lvm_subn, lvm_sunp, lvm_tune, _lvm_help_scare, _lvm_yield_c;
 static struct g
  *ini_0(struct g*g, uintptr_t len0);
@@ -915,7 +915,7 @@ op11(lvm_nomp, (nomp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
 op11(lvm_namep, namep(Sp[0]) ? putcharm(1) : zero)
 // mint? and name? partition nom?; the only way to ask, since a mint's spelling is ""
 op11(lvm_mintp, (mintp(Sp[0]) && Sp[0] != ZeroPoint) ? putcharm(1) : zero)
-op11(lvm_packp, (packp(Sp[0]) || gemp(Sp[0]) || bigp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // arrays + every boxed number
+op11(lvm_numericp, (charmp(Sp[0]) || packp(Sp[0]) || gemp(Sp[0]) || bigp(Sp[0]) || twinp(Sp[0])) ? putcharm(1) : zero)  // every number and every tray
 op11(lvm_sunp, bigp(Sp[0]) ? putcharm(1) : zero)
 op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // (int x): a gem truncates toward zero, saturating at the charm bounds; a coin whose kind

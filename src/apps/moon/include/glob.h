@@ -1,5 +1,4 @@
-#ifndef _LOVE_GLOB_H
-#define _LOVE_GLOB_H
+#pragma once
 #include <stddef.h>
 /* glibc's flag and error numbers */
 #define GLOB_ERR      1      /* stop at an unreadable directory */
@@ -22,4 +21,3 @@ typedef struct {
 } glob_t;
 int glob(char const *, int, int (*)(char const *, int), glob_t *);
 void globfree(glob_t *);
-#endif

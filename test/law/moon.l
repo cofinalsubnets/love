@@ -715,6 +715,8 @@
                  (: (go l) (atom? l ? "" ((spell1 <l) + ((two? >l ? " " "") + (go >l))))
                     (go (fsbody <>r)))))          ; peel cpp's leading spans marker (parse.l fsbody)
    ; the refusal side of the same door: the message a cpp gripe carries, and its line
+   ; a token's own spelling, which -E and a .S's text print
+   (ppsp src) (cpp <>(clexw src 1) () "<law>" @ r (!(okv? r) ? 'FAIL (fsbody <>r @ l (<l 4))))
    (cppno src) (cpp <>(clexw src 1) () "<law>" @ r (gripe? r ? <>>>>r 'FAIL))
    (cppline src) (cpp <>(clexw src 1) () "<law>" @ r (gripe? r ? <>>r 'FAIL))
    (test
@@ -734,6 +736,8 @@
       ((pps "#define S(x) #x\nS(1u)") = "\"1u\"")                      ; ..suffix kept
       ((pps "#define S(x) #x\nS(1.20)") = "\"1.20\"")                  ; ..a float is text, not a value
       ((pps "#define S(x) #x\nS(\"hi\")") = "\"\"hi\"\"")              ; ..a string keeps its quotes
+      ; ..and its spelling escapes only inside a literal, as gcc spells it: `%\reg` stays one backslash
+      ((ppsp "#define S(x) #x\nS(%\\reg \"q\\n\" '\\\\')") = "\"%\\reg \\\"q\\\\n\\\" '\\\\\\\\'\"")
       ((pps "#define C(a,b) a##b\nC(foo,bar)") = "foobar")             ; ## paste
       ((pps "#define P(...) f(__VA_ARGS__)\nP(1,2,3)") = "f ( 1 , 2 , 3 )")   ; variadic
       ((pps "#define F F\nF") = "F")                                   ; blue paint: self-ref stops

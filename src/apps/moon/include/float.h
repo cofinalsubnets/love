@@ -1,5 +1,4 @@
-#ifndef _LOVE_FLOAT_H
-#define _LOVE_FLOAT_H
+#pragma once
 /* ieee-754 binary32 and binary64; mooncc's long double is double, so LDBL_ restates DBL_ */
 #define FLT_RADIX        2
 #define FLT_ROUNDS       1     /* round to nearest */
@@ -41,4 +40,3 @@
 #define FLT_EPSILON      1.19209289550781250000e-7F
 #define DBL_EPSILON      2.22044604925031308085e-16
 #define LDBL_EPSILON     2.22044604925031308085e-16L
-#endif

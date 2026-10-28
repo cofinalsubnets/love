@@ -1,5 +1,4 @@
-#ifndef _LOVE_GRP_H
-#define _LOVE_GRP_H
+#pragma once
 #include <sys/types.h>
 
 struct group {
@@ -15,4 +14,3 @@ struct group *getgrent(void);
 void          setgrent(void);
 void          endgrent(void);
 int setgroups(size_t, gid_t const*);
-#endif
