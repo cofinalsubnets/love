@@ -61,7 +61,7 @@ warns 6 (all `__calc_tpm2_event_size`).
 | class | units | note |
 |---|---|---|
 | enum named before its definition | 224 | fixed (row 543); recheck took all 224 |
-| `__attribute__((ms_abi))` | 47 | efi libstub 15, firmware/efi 10, platform/efi 5, arch/x86/kernel 8, others 9 |
+| `__attribute__((ms_abi))` | 47 | carried out; a recheck takes 43, the 4 left stop on asm (endbr64, vmcall, a width clash) and an initializer |
 | asm immediate input not constant (`nf_hook`) | 16 | |
 | inline asm holo lacks | 10 | vmcall, rdpid, a register name, others |
 | parse errors | 4 | selinux hooks, nf_nat ×2, net/ax25.h |
@@ -78,8 +78,8 @@ holo assembles every `.S` the census compiles; only the refused ones stay clang'
 
 - a64: 0 of 69. entry.o, head.o and hyp-entry.o match clang's code sections but for branches to
   global symbols, which holo resolves inside the object
-- x64: 38 of 70. `endbr64` 7, `lretq` 2, `ljmpw` 1, `.octa` 2, `.uleb128` 1, `%`-immediates 3, bad
-  numbers 3, register names 4, others
+- x64: of the 64 units with asm, 38 lay (16 as clang does) and 26 refuse: AVX 7, the 16- and
+  32-bit lanes' far transfers 5, three SSE4 rows, `.irpc`, `.uleb128` over labels, x87, others
 - the 3 kallsyms `.S` files from link-vmlinux.sh are clang's in both (the link, below)
 
 ## 3. clang outside the units

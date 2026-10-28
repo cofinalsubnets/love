@@ -40,12 +40,14 @@
       ("alu.swap"    "4801d8"                ((add r0 r3 r0)))    ; commutes -> add rax,rbx, no mov
       ("add.movop"   "488d1418"              ((add r2 r0 r3)))    ; a fresh dest is one lea rdx,[rax+rbx] (the emit-alu note)
       ("add.movop.i" "488d4805"              ((add r1 r0 5)))     ; lea rcx,[rax+5]
-      ;; ('align n) pads to the boundary with the backend's nop unit (lay-level, no lowering)
-      ("align.pad"   "c3909090c3"            ((ret) (align 4) (label x) (ret)))
+      ;; ('align n) pads to the boundary with the backend's long nops (lay-level, no lowering)
+      ("align.pad"   "c30f1f00c3"            ((ret) (align 4) (label x) (ret)))
+      ("align.pad15" "c3660f1f840000000000660f1f440000c3" ((ret) (align 16) (label x) (ret)))
       ("align.zero"  "c3"                    ((align 16) (ret)))   ; already on the boundary: no pad
       ;; imul (true 3-operand imm form; rr folds two-address)
       ("imul.rr"     "480fafc3"              ((imul r0 r0 r3)))
-      ("imul.imm"    "4869d007000000"        ((imul r2 r0 7)))
+      ("imul.imm"    "486bd007"              ((imul r2 r0 7)))
+      ("imul.imm32"  "4869d0e8030000"        ((imul r2 r0 1000)))
       ;; memory: the rsp(SIB) and rbp(forced-disp) base quirks, disp8 + disp32
       ("ld.base"     "488b07"                ((ld r0 r6 0)))
       ("ld.disp8"    "488b4708"              ((ld r0 r6 8)))
@@ -425,6 +427,16 @@
    _ (chk-eq "gas.expand"
         '(".long 11 + (1 << 8)")
         (gf-expand 'x64 (gf-lines 'x64 ".macro m t:req r:req\n.set .Ln, 0\n.irp s,rax,rcx\n.ifc \\r, %\\s\n.long \\t + (.Ln << 8)\n.endif\n.set .Ln, .Ln+1\n.endr\n.endm\nm r=%rcx, t=11\n.purgem m")))
+   ; spaced .macro defaults part at each `name=`, and `.if \base == %rsp` compares registers by name
+   _ (chk-eq "gas.macro.spaced" '(".long 0" ".long 5 + 2")
+        (gf-expand 'x64 (gf-lines 'x64 ".macro m base=%rsp off=0 extra=1\n.if \\base == %rsp\n.long \\off\n.else\n.long \\off + \\extra\n.endif\n.endm\nm\nm base=%rbp off=5 extra=2")))
+   ; an x86 operand over two labels lays its 32-bit field once the section's layout holds
+   _ (chk-eq "gas.x64.ldiff"
+        "(((\".text\" 1 6 ((label a) (raw (144)) (raw (185)) (raw (19 0 0 0)) (raw (141 145)) (raw (7 0 0 0)) (label l1.1) (raw (198 135)) (raw (19 0 0 0)) (raw (7)) (label b) (raw (195))))) () () ())"
+        (show (gas-top 'x64 "a: nop\n movl $(b - a), %ecx\n leal (b - 1f)(%rcx), %edx\n1: movb $7, (b - a)(%rdi)\nb: ret\n")))
+   ; .octa: a hex literal past 64 bits, low bytes first; a plain number sign-filled
+   _ (chk-eq "gas.octa" "(((\".data\" 1 3 ((raw (103 230 9 106 133 174 103 187 114 243 110 60 58 245 79 165)) (raw (251 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255))))) () () ())"
+        (show (gas-top 'x64 ".data\n.octa 0xA54FF53A3C6EF372BB67AE856A09E667\n.octa -5\n")))
    ; an .elseif chain takes its first true arm, and >> is gas's logical shift
    _ (chk-eq "gas.elseif"
         '(".long 2" ".long 6")

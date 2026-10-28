@@ -63,12 +63,13 @@
    (frames m) (? (charm? (m 'total)) (m 'total)
                  (charm? (m 'len) && 0 <= m 'len) (m 'len // m 'align)
                  0)
-   ; a stream is asked only its name: what it carries may be a codec still to come
+   ; a stream is asked only its name: what it carries may be a codec still to come, and its
+   ; title is the reader's, which may run ahead of the ask
    (probe c uri)
     (? (starts? uri "http://" || starts? uri "https://")
        ((cite 'av 'av-uri) uri @
          [q info] (: _ (shut q info) t (peep info 'title "") nm (peep info 'name "")
-                     it {'id (c 'nid) 'uri uri 'title (#t > 0 ? t (#nm > 0 ? nm uri)) 'artist ""
+                     it {'id (c 'nid) 'uri uri 'title (#nm > 0 ? nm (#t > 0 ? t uri)) 'artist ""
                          'album nm 'dur 0.0 'rate 0 'ch 0 'bits 0 'size 0 'br (peep info 'br 0)}
                      (pin c 'nid (c 'nid + 1), it))
          why why)

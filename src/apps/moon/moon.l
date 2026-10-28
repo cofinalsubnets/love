@@ -30,17 +30,6 @@
                            (two? (uread "\(<rs)lib/moonlibc/core.c")) <rs
                            (go >rs))
                 (go (mroots ())))
-   ; a path with . and .. folded away: "a/sys/../b.h" and "a/b.h" are one key
-   (pnorm p)
-    (: n #p
-       (go i st ps) (? (n < i) ps
-                       (i = n || p i = 47)
-                        (snip p st i @ c
-                         (go (i + 1) (i + 1)
-                          (c @ ("" || ".") ps ".." (two? ps ? >ps) (c . ps))))
-                       (go (i + 1) st ps))
-       (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? "/\(a)" a))))
-       (jn (go 0 0 ()) ""))
    ; a read-only ustar walk: nom (prefix + name), size, body
    (ttxt s o k) (: (go i) (k <= i || s (o + i) = 0 ? i (go (i + 1)))
                    m (go 0)

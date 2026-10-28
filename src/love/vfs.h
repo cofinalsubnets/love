@@ -1,8 +1,7 @@
 // vfs.h -- the tree under inle's namespace (kmain.c) and the host's /love (lovefs.c): entries
 // over baked rows, copied to the heap at the first write. paths are canonical, "" the root; a
 // directory is an entry that says so, or a prefix something lives under
-#ifndef VFS_H
-#define VFS_H
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
 #include "archive/srctree.h"
@@ -76,4 +75,3 @@ char *vfs_strdup(struct vfs *v, char const *p, uintptr_t n);
 void vfs_gc(struct vfs *v, int i);
 int vfs_create(struct vfs *v, char const *p, uintptr_t n, bool dir, uintptr_t mode);
 bool vfs_fit(struct vfs *v, int i, uintptr_t need);
-#endif

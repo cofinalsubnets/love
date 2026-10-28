@@ -74,6 +74,7 @@
    ;; a symbol, or a symbol with an offset either side: sym, sym+4, sym-8, 4+sym -> (sym . off)
    (xa-symoff s) (: i ((: (g i) (? (i >= #s) -1 (s i = 43 || s i = 45) i (g (i + 1)))) 1)
                     (? (i < 0) ((name (xa-unquote s)) . 0)
+                       (two? (xa-symlin s)) (xa-symlin s)
                        (xa-num? (snip s 0 i) && s i = 43)
                        ((name (xa-unquote (snip s (i + 1) #s))) . (xa-num (snip s 0 i)))
                        ((name (xa-unquote (snip s 0 i))) . (xa-imm (snip s (s i = 43 ? (i + 1) i) #s)))))
@@ -94,7 +95,7 @@
        (i >= n ? (rev acc)
           (s i @ c
              (? (blank? c) (go (i + 1) acc)
-                (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
+                (c = 48 && i + 2 < n && (s (i + 1) = 120 || s (i + 1) = 88) && ghex? (s (i + 2)))   ; 0x needs a digit
                  (span (i + 2) ghex? @ j (go (sfx j) (['num (ghexv (snip s (i + 2) j))] . acc)))
                 (c = 48 && i + 2 < n && (s (i + 1) = 98 || s (i + 1) = 66) && gbin? (s (i + 2)))  ; 0b101, never the label 0b
                  (span (i + 2) gbin? @ j (go j (['num (gbinv (snip s (i + 2) j))] . acc)))
@@ -147,6 +148,12 @@
                 (gbad? r ? 'bad
                    (gclimb <r >r (<b + 1) @ r2
                       (gbad? r2 ? 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
+   ; ..or constant arithmetic about one symbol, `K256+32*4`, read by its slope: (sym . off) | ()
+   (xa-symlin s) (gtoks s @ ts
+      (: ss (filter (t \ <t = 'sym) ts)
+         (at v) (gexpr (map (t \ (<t = 'sym ? ['num v] t)) ts) @ r (gbad? r || two? >r ? () <r))
+         a (#ss = 1 ? (at 0) ()) b (#ss = 1 ? (at 1) ()) c (#ss = 1 ? (at 2) ())
+         (? (charm? a && charm? b && charm? c && b - a = 1 && c - b = 1) ((name <>(ss 0)) . a))))
    (gexpr ts) (gprim ts @ r (gbad? r ? 'bad (gclimb <r >r 1)))
    (gimm ts) (gexpr ts @ r (gbad? r || two? >r ? (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
    ; a displacement that is a constant expression, `18*8`: [value], or () for anything naming a symbol
@@ -276,6 +283,8 @@
          (t 0 = 36) (snip t 1 #t @ v
                        (? (xa-num? v) ['im (xa-num v)]
                           (xa-expr? v) ['im (gimm (gtoks v))]
+                          ; a constant expression: $4096/8, $-4*16
+                          (two? (gconst v)) ['im <(gconst v)]
                           ; $1f / $1b: a numeric label's address, which gas-text names
                           (1 < #v && (v (#v - 1) = 102 || v (#v - 1) = 98) && xa-allof? (snip v 0 (#v - 1)) digit? 0)
                            ['ims (name v)]

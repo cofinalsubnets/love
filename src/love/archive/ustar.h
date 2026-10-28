@@ -1,7 +1,6 @@
 // ustar.h -- reading ustar headers and walking paths: the kernel's rootfs (src/inle/kmain.c)
 // and the carried source's links (src/love/archive/srctree.c). the walks stay their callers'.
-#ifndef USTAR_H
-#define USTAR_H
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -25,4 +24,3 @@ intptr_t path_canon(char *out, uintptr_t n, char const *p, uintptr_t pn, uintptr
 // a symlink's target joined against the link's directory -> the length; 0 when too long,
 // so the link resolves to nothing rather than a truncated name
 uintptr_t lnk_canon(char const *at, char const *ln, char *out, uintptr_t cap);
-#endif

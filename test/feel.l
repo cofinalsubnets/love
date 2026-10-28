@@ -185,3 +185,24 @@
     (-2 = ap-t2 ap-k1 1 2 1) ([-2] = ap-n2 ap-k1 1 2 1)                     ; no cur
     (5 = ap-t2 {1 (x \ x + 4)} 1 1 1) ([5] = ap-n2 {1 (x \ x + 4)} 1 1 1)  ; a tablet
     (7 = ap-t2 1 (+ 3) 4 1) ([7] = ap-n2 1 (+ 3) 4 1)))                    ; a number: the tower
+
+; a literal 2..4 applied to one operand: a number takes ipow's products, the rest num-ap's lane
+(: (fl-sq x) (2 x) (fl-cu x) (3 x) (fl-qu x) (4 x)
+   (fl-ip x) (: h (1 * x) [(h * h) (h * h * x) (: q (h * h) (q * q))])
+   (test
+    ([49 343 2401] = [(fl-sq 7) (fl-cu 7) (fl-qu 7)])
+    (all (x \ show [(fl-sq x) (fl-cu x) (fl-qu x)] = show (fl-ip x)) [1.1 -0.0 0.1 -3.7 1e200 (70 2) (0 ~ 1) (1.5 ~ -0.0)])
+    (aall (fl-sq @(1 2 3) = @(1 4 9))) (aall (fl-cu @(1.5 -2.0) = @(3.375 -8.0)))
+    ([2 3 4] = [((fl-sq (+ 1)) 0) ((fl-cu (+ 1)) 0) ((fl-qu (+ 1)) 0)])   ; a function: its church power
+    (2 = (fl-sq [1 2]) 0)                                                 ; data too: [1 2] ([1 2] 0)
+    (5 = (: (f g x) (2 g x) (f (+ 2) 1)))))                               ; a second operand: church, not lowered
+
+; dechurch: a numeral over a literal function is that function nested, church's answer
+(: (dc-a i) (2 (+ i) i) (dc-b i) ((2 (+ i)) i) (dc-c i) (2 (\ a (a * a)) i)
+   dc-n {}
+   (dc-bump _) (pin dc-n 'k (dc-n 'k + 1), dc-n 'k)
+   (test
+    ([15 15 625] = [(dc-a 5) (dc-b 5) (dc-c 5)])
+    ([7 5 9] = [(0 (\ a a) 7) (1 (+ 2) 3) (3 (+ 3) 0)])
+    (: _ (pin dc-n 'k 0) (3 = 2 (\ a (a + 1)) (dc-bump 0) && 1 = dc-n 'k))   ; the operand evaluates once
+    (: _ (pin dc-n 'k 0) (2 = 2 (+ (dc-bump 0)) 0 && 1 = dc-n 'k))))       ; an impure partial: once too

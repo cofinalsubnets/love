@@ -54,6 +54,20 @@ if [ "$(uname -m)" = x86_64 ]; then
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"
+  # -r: two objects as one, as ld.lld -r lays them; linked on, it runs the same
+  korerun ld -r "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-r.o" || fail "kore ld -r"
+  if command -v ld.lld > /dev/null 2>&1; then
+    ld.lld -r "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-lr.o"
+    cmp -s "$ho/.kore-lr.o" "$ho/.kore-r.o" || fail "kore ld -r vs ld.lld -r (bytes)"
+  fi
+  korerun ld "$ho/.kore-crt0.o" "$ho/.kore-r.o" -o "$ho/.kore-ldr.elf" || fail "kore ld of an ld -r object"
+  "$ho/.kore-ldr.elf"; r=$?
+  [ $r -eq 42 ] || fail "kore ld -r run (exit $r)"
+  # lld's dialect as kbuild probes it: --version names LLD for ld-version.sh, and a flag
+  # the linker does not carry out fails its ld-option probe
+  korerun ld --version > "$o" 2>&1; grep -q " LLD [0-9.]*-compatible$" "$o" || fail "kore ld --version: $(cat "$o")"
+  korerun ld -EL -maarch64elf -z norelro --pack-dyn-relocs=relr -v > /dev/null 2>&1 || fail "kore ld: a carried flag refused"
+  korerun ld -EL -maarch64elf --no-warn-rwx-segments -v > /dev/null 2>&1 && fail "kore ld: an unsupported flag passed"
   # the archive as a link input binds the same exe byte for byte: members come in by need
   # through the ranlib index, past one nothing calls
   printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
@@ -138,4 +152,56 @@ if [ "$(uname -m)" = x86_64 ]; then
   ( cd "$N" && "$K" cc h.c -o h ) > "$o" 2>&1 || { cat "$o"; fail "love cc off the carried source"; }
   [ "$("$N/h")" = carried ] || fail "love cc off the carried source: the program"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf ok"
+# lex's C back end, as kbuild asks for it: start conditions, ^, trailing context, <<EOF>>,
+# yyless and input(), compiled by mooncc and run; the same as flex's scanner when there is one
+L=$ho/.kore-lex; rm -rf "$L"; mkdir -p "$L"
+cat > "$L/t.l" <<'SPEC'
+%option noyywrap nounput yylineno
+%x STR
+%s V1
+DIG	[0-9]
+%{
+#include <stdio.h>
+
+%}
+%%
+<*>"#"[^\n]*		printf("<c>");
+^"%v1"			{ BEGIN(V1); printf("<v1>"); }
+<V1>{DIG}+		printf("<n1:%s>", yytext);
+"ab"|"cd"		|
+"ef"			printf("<pair:%s>", yytext);
+"xyz"			{ yyless(1); printf("<x>"); }
+"/*"			{ int c, p = 0; while ((c = input()) && !(p == '*' && c == '/')) p = c; printf("<cm>"); }
+{DIG}+/"px"		printf("<px:%s>", yytext);
+{DIG}+			printf("<n:%s>", yytext);
+[[:alpha:]_][[:alnum:]_]*	printf("<id:%s>", yytext);
+\"			{ BEGIN(STR); printf("<s"); }
+<STR>{
+  \\.			printf("%c", yytext[1]);
+  \"			{ BEGIN(INITIAL); printf(">"); }
+  [^\\"\n]+		printf("%s", yytext);
+  \n			printf("\\n");
+  <<EOF>>		{ printf("<eof-in-str>"); return 0; }
+}
+\n			printf("\n%d:", yylineno);
+[ \t]+			;
+.			printf("<%c>", yytext[0]);
+<<EOF>>			{ printf("<eof>"); return 0; }
+%%
+int main(void) { yylex(); printf("\n"); return 0; }
+SPEC
+printf 'abc 12px 34 _a1 "q\\"x" ab cd ef xyz\n/* a\n*/ b #note\n%%v1 56 # c\n%%v1x 7\n  "open\nmore' > "$L/in"
+korerun lex -o "$L/l.c" "$L/t.l" || fail "kore lex -o"
+moonc "$L/l.c" "$L/l" > /dev/null 2>&1 || fail "kore lex: mooncc the scanner"
+"$L/l" < "$L/in" > "$o"
+printf '%s' '<id:abc><px:12><id:px><n:34><id:_a1><sq"x><pair:ab><pair:cd><pair:ef><x><id:yz>
+2:<cm><id:b><c>
+4:<v1><n1:56><c>
+5:<v1><id:x><n1:7>
+6:<sopen\nmore<eof-in-str>
+' > "$g"; same "lex C scanner (the answer)"
+if command -v flex >/dev/null 2>&1; then
+  flex -o "$L/f.c" "$L/t.l" 2>/dev/null && moonc "$L/f.c" "$L/f" > /dev/null 2>&1 || fail "flex's scanner"
+  "$L/f" < "$L/in" > "$g"; same "lex C scanner vs flex"
+fi
+echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + lex ok"

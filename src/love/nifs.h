@@ -109,7 +109,7 @@
  P(296, "floor", lvm_floor, 0) \
  C(298, 2, "inner", lvm_inner, 0) \
  C(302, 2, "outer", lvm_outer, 0) \
- P(306, "packp", lvm_packp, 0) \
+ P(306, "numeric?", lvm_numericp, 0) \
  P(308, "sun?", lvm_sunp, 0) \
  P(310, "tray?", lvm_setp, 0) \
  P(312, "int", lvm_intf, 0) \

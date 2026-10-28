@@ -16,7 +16,7 @@
    ; gcc 8.1's attributes: 'do carries it out, 'hint skips exactly, 'no refuses by name (parse's
    ; attrcheck). __has_attribute answers 1 for do/hint; an unknown name is skipped and answers 0
    gnuattrs {"aligned" 'do "packed" 'do "section" 'do "weak" 'do "alias" 'do "always_inline" 'do
-             "noinline" 'do "cleanup" 'do "used" 'do "gnu_inline" 'do "musttail" 'do "holo" 'do
+             "noinline" 'do "cleanup" 'do "used" 'do "gnu_inline" 'do "musttail" 'do "ms_abi" 'do "holo" 'do
              "unused" 'hint "maybe_unused" 'hint "noreturn" 'hint "cold" 'hint "hot" 'hint "pure" 'hint
              "const" 'hint "format" 'hint "format_arg" 'hint "malloc" 'hint "warn_unused_result" 'hint
              "deprecated" 'hint "nonnull" 'hint "returns_nonnull" 'hint "visibility" 'hint
@@ -33,7 +33,7 @@
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
              ; i386's conventions: gcc ignores them on every target here
-             "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "ms_abi" 'no "pcs" 'no
+             "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no
              "symver" 'no "no_caller_saved_registers" 'no}
    ; an attribute's name, either spelling: __aligned__ is aligned
@@ -88,6 +88,15 @@
    ; C11 6.10.3.2's stringize: the spelling as is (never re-lexed, so no extra escapes); one
    ; space where the source had any. a stray `\\` outside a literal (gas's macro argument) is one backslash
    (bs? t) (spell t = "\\")
+   ; ..and its literal: `\` and `"` escape inside a string or char literal only, as gcc spells it
+   (strsp v) (: n #v
+                (go i q acc)
+                 (? (i >= n) acc
+                    (v i @ c
+                       (? (q = 0) (go (i + 1) (c = 34 || c = 39 ? c 0) (acc + (c = 34 ? "\\\"" (string c))))
+                          (c = 92 && i + 1 < n) (go (i + 2) q (acc + "\\\\" + (v (i + 1) @ 34 "\\\"" 92 "\\\\" d (string d))))
+                          (go (i + 1) (c = q ? 0 q) (acc + (c = 34 ? "\\\"" (string c)))))))
+                "\"\(go 0 0 "")\"")
    (spellcat ts) (: (go l acc gap) (? (atom? l) acc
                                       (bs? <l && !(spaced? <l) && two? >l && bs? <>l)
                                        (go >>l "\(acc)\(gap && acc != "" ? " " "")\\" (spaced? <>l))
@@ -166,7 +175,8 @@
                      pi (paramidx params (pnm p))
                      va (var? && idv? p "__VA_ARGS__")
                      (-1 < pi || va ?
-                        (go >>ml p t (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
+                        (spellcat (va ? (vaargs args params seps) (args pi)) @ v
+                           (go >>ml p t (['str v line () (strsp v)] . acc)))
                         (go >ml t q1 (t . acc))))
                  ; __VA_OPT__(x): x when the variadic tail has a token, else a placemarker
                  (var? && idv? t "__VA_OPT__" && two? >ml && pv? <>ml "(")
@@ -616,8 +626,8 @@
           (pin macs 'ninc (nth + 1),
            atom? txt ? (gripeat body "cannot resolve #include \(spelt)")      ; unresolved -> fatal
              (: ipath (3 < #txt ? <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
-                ; #pragma once: a header that says it is read once per TU, by its resolved path
-                okey "#once:\(ipath)"
+                ; #pragma once: a header that says it is read once per TU, by its folded path
+                okey "#once:\(pnorm ipath)"
                 seen (0 < #ipath && two? (macs okey))
                 _ (!seen && 0 < #ipath && oncep <>txt && pin macs okey [1])
                 pre (nth = 0 ? (msnap macs))
@@ -647,6 +657,20 @@
                                   (mput [ipath <>txt pre raw (msnap macs)
                                          (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
                                 rejoin raw)))))))))))
+   ; a path with . and .. folded away: "a/sys/../b.h" and "a/b.h" are one key; a leading /
+   ; and a .. with nothing left to fold stay
+   (pnorm p)
+    (: n #p
+       (go i st ps) (? (n < i) ps
+                       (i = n || p i = 47)
+                        (snip p st i @ c
+                         (go (i + 1) (i + 1)
+                          (c @ ("" || ".") ps
+                               ".." (two? ps && <ps != ".." ? >ps (c . ps))
+                               (c . ps))))
+                       (go (i + 1) st ps))
+       (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? "/\(a)" a))))
+       ((0 < n && p 0 = 47 ? "/" "") + jn (go 0 0 ()) ""))
    ; does a header's text say `#pragma once` on a line of its own?
    (oncep s)
     (: (ws? c) (c = 32 || c = 9)
