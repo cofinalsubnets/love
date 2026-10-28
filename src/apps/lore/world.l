@@ -1424,9 +1424,9 @@
    _ (? (n > 0 || two? b) (: _ (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))
                              (st 'px != x || st 'pz != z ? (ward! st x z dt) st)))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
- ; ..stopped going past a void's edge it rings there, and not again for a moment; and the
- ; way into the wall turns back out of it, as fast, dying away
- ward-near 0.05 ward-t 0.7 kick-t 0.35
+ ; ..stopped going past a void's edge it rings there, and not again for a moment; in the air
+ ; the way into the wall turns back out of it, kick-e as fast and a hop up, dying away
+ ward-near 0.05 ward-t 0.7 kick-t 0.8 kick-e 0.8 kick-up 2.0
  (kick st) (st 'kick @ () () q (: v (q 2 * exp ((q 3 - st 'mt) / kick-t)) (v < 0.2 ? () [(q 0) (q 1) v])))
  (ward! st x z dt) (: fl (st 'py - eye-h) r (body-r + ward-near)
    (side v) (: lo (v 0) hi (v 1)
@@ -1435,7 +1435,8 @@
    ns (filter two? (map side (st 'lvl 'voids)))
    (? (atom? ns) st
       (: m <ns vn (((x - st 'px) * m 0 + (z - st 'pz) * m 1) / dt)
-         _ (? (vn < 0.0 && atom? (kick st)) (pin st 'kick [(m 0) (m 1) -vn (st 'mt)]))
+         _ (? (vn < 0.0 && peep st 'fv 0.0 != 0.0 && atom? (kick st))
+              (pins st 'kick [(m 0) (m 1) (kick-e * -vn) (st 'mt)] 'fv (max (st 'fv) kick-up)))
          (st 'mt - peep st 'ward-at -9.0 > ward-t ? (pin (mix-cry st "ward" [(st 'px) (st 'pz)]) 'ward-at (st 'mt)) st))))
  ; ..a tree's trunk climbed as a ladder: within reach of it, facing it, forward climbs and back
  ; comes down to the floor, neither a step along; held there with neither, let go by a jump

@@ -266,15 +266,17 @@
        (ph1 = 1) (mag (phq 0 - cos (0.5 * pi)) < 1e-9) (pb 'held = 0) (pb 'rest = 1)
        (pq 1 = 0.0) (pq 3 = 0.0) (pp 2 > 5.0) (mag (pp 1 - r) < 0.03)))
 ; a void is open air with no walls, gravity weakens up it by the table, and walking out
-; against its edge rings, not again for a moment, and turns the walk back; a room's wall never does
+; against its edge rings, not again for a moment, and stops there; in the air the edge throws
+; the body back and up off it; a room's wall never rings
 (: vlv (world-read "(level \"t\" (void [0 0 0] [10 40 10]) (solid (box [3 19.8 3] [7 20 7])) (gravity [[2 9.8] [18 2.0]]) (start [5 0 5] 90 0))")
    vst (world-new 80 50 vlv "test/lore/")
    (vgo k) (each ^k (_ \ (pin vst 'dt (1.0 / 30.0), world-move vst)))
    (vtop k) (: y0 (vst 'py) _ (world-step vst 'jump) (go i m) (i = k ? m (: _ (vgo 1) (go (i + 1) (max m (vst 'py - y0))))) (go 0 0.0))
    vlo (vtop 40) _ (pins vst 'px 5.0 'pz 5.0 'py (20.0 + eye-h) 'fv 0.0) _ (vgo 2) vhi (vtop 150)
-   _ (pins vst 'px 9.0 'pz 5.0 'th (0.5 * pi))
+   _ (pins vst 'px 9.0 'pz 5.0 'py eye-h 'fv 0.0 'th (0.5 * pi))
    (vwalk k) (each ^k (_ \ (world-step vst 'forward, pin vst 'dt (1.0 / 30.0), world-move vst)))
    _ (vwalk 6) vw0 (peep vst 'ward-at ()) _ (vwalk 6) vw1 (vst 'ward-at) _ (vwalk 12) vbx (vst 'px) _ (vwalk 60) vw2 (vst 'ward-at)
+   _ (pins vst 'px 9.0 'py (30.0 + eye-h) 'fv -0.1) _ (vwalk 6) vay (vst 'py) _ (vwalk 24) vax (vst 'px) vay1 (vst 'py)
    rst (world-new 80 50 (world-read "(level \"t\" (room [0 0 0] [10 5 10]) (start [9 0 5] 90 0))") "test/lore/")
    _ (each ^30 (_ \ (world-step rst 'forward, pin rst 'dt (1.0 / 30.0), world-move rst)))
  (test (vlv 'voids = [[[0.0 0.0 0.0] [10.0 40.0 10.0]]]) (vlv 'gravity = [[2.0 9.8] [18.0 2.0]])
@@ -282,7 +284,7 @@
        ((world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight (rgb 0.3 0.3 0.4)))") 'skylight = [0.3 0.3 0.4])
        (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight 3))"))
        (mag (vlo - 4.4 * 4.4 / 19.6) < 0.1) (mag (vhi - 4.4 * 4.4 / 4.0) < 0.3)
-       (vw0 = ()) (vw1 != ()) (vbx < 9.3) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
+       (vw0 = ()) (vw1 != ()) (vbx > 9.6) (vax < 8.5) (vay1 > vay) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
 ; a stair shallower than a body is walked at a walk, floating steps too, at a slow frame's
 ; strides too, and one too tall is not
 (: (sgo t) (sgo-at t (1.0 / 30.0) 45)
