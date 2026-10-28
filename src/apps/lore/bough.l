@@ -2,13 +2,16 @@
 ; trunk bare and near upright to a fork near 7 m, climbed as a ladder is; its wood kept
 ; inside a 2 m well from 3.8 to 4.7 m. its foot at 0 0 0. a seed may be [seed k g]: the tree
 ; grown k times as tall and wide, its wood g times as thick
+;   (bough-grow seed)                  the tree grown, which each word below takes for its seed,
+;                                      so a level grows a tree once
+;   (bough-sized tr k g)               a grown tree as [seed k g] would grow it, tr kept as it is
 ;   (bough-solid seed)                 its trunk, [a b r] each piece: what a body climbs
 ;   (bough-mesh seed tex ts)           it drawn: its wood under texture tex, ts metres a
 ;                                      texel, and its leaves
 ;   (bough-sheared seed pl)            burnt, and pl () or a plane [n d] about the foot:
 ;                                      {'trunk 'segs 'cuts}, the wood kept, a cut [p r dir]
 ;   (bough-burnt seed tex ts pl)       that drawn, each cut closed by a face on the plane
-(module (bough bough-solid bough-mesh bough-sheared bough-burnt)
+(module (bough bough-grow bough-sized bough-solid bough-mesh bough-sheared bough-burnt)
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the mesh it makes
 (borrow 'grove)                         ; the tree of heaven
@@ -47,7 +50,10 @@
    (pins tr 'segs (map (s \ [(p (s 0)) (p (s 1)) (g * s 2)]) (tr 'segs)) 'fork (p (tr 'fork))
          'x (k * tr 'x) 'y (k * tr 'y) 'z (k * tr 'z) 'ax (k * tr 'ax) 'ay (k * tr 'ay) 'az (k * tr 'az)
          'sx (k * tr 'sx) 'sy (k * tr 'sy) 'sz (k * tr 'sz)))
- (bough-solid seed) (take 5 (grown seed 'segs))
+ (tree-of sd) (tablet? sd ? sd (grown sd))
+ (bough-grow sd) (grown sd)
+ (bough-sized tr k g) (sized (foldl (\ t q (pin t q (tr q))) {} (keys tr)) (1.0 * k) (1.0 * g))
+ (bough-solid seed) (take 5 (tree-of seed 'segs))
  ; ..the crotch: in a box round the fork the thick wood as one surface, blended where it meets,
  ; sampled on a grid and meshed by surface nets; [the mesh, the box] or () for no wood there
  crotch-b 0.55 crotch-h 0.04 crotch-k 0.12
@@ -140,7 +146,7 @@
                  (: s (r i) p (crossing pl s)
                     (go >rs (take (i + 1) r . W) (take i r + [[(s 0) p (s 2)]] . K) ([p (s 2) (unit (c- (s 1) (s 0)))] . C))))))))
    (go rs () () ()))
- (bough-sheared seed pl) (: c (sheared (grown seed) pl) {'trunk (c 1 @ () () l (take 5 <l)) 'segs (cats (c 1)) 'cuts (c 2)})
+ (bough-sheared seed pl) (: c (sheared (tree-of seed) pl) {'trunk (c 1 @ () () l (take 5 <l)) 'segs (cats (c 1)) 'cuts (c 2)})
  ; ..a mesh less what lies past the plane: a triangle across it cut along it, and each ring
  ; of cut edges closed by a face on the plane, charred to a glow at its edge
  char [0.05 0.035 0.03] ember [0.9 0.32 0.08]
@@ -176,13 +182,13 @@
       r (foldl tri [#vs () () ()] (m 1))
       body (mesh (vs + rev (r 1)) (rev (r 2)))
       (mesh-join [body (caps (r 3) n (front body))])))
- (bough-burnt seed tex ts pl) (: tr (grown seed) ss (cats (sheared tr pl 0)) cr (crotch {'fork (tr 'fork) 'segs ss} tex ts)
+ (bough-burnt seed tex ts pl) (: tr (tree-of seed) ss (cats (sheared tr pl 0)) cr (crotch {'fork (tr 'fork) 'segs ss} tex ts)
    ws (atom? cr ? ss (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) ss))
    (mesh-join (map (m \ clip (turned m) pl) ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ws)))))
  ; ..the wood as runs of tube, the crotch's own cut back to its box, all turned to face out;
  ; and one leaflet in five, a little larger, both sides, each facing up so either side
  ; takes the light from above
- (bough-mesh seed tex ts) (: tr (grown seed) cr (crotch tr tex ts)
+ (bough-mesh seed tex ts) (: tr (tree-of seed) cr (crotch tr tex ts)
    (flip m) (mesh (m 0) (map (t \ [(t 0) (t 2) (t 1) (t 3)]) (m 1)))
    ss (atom? cr ? (tr 'segs) (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) (tr 'segs)))
    wood (flip (mesh-join ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ss))))

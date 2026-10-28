@@ -717,8 +717,8 @@
    rs (map one (lv 'trees)) hs (catmap (q \ q 1) rs)
    (pins lv 'brushes (lv 'brushes + catmap (h \ h 'bs) hs) 'pits (map (h \ h 'dark) hs)
             'embers (catmap (q \ q 0) rs)))
- ; ..a tree's seed as bough takes it, with its size
- (tree-seed o) (o 'size @ () (o 'seed) z [(o 'seed) (z 0) (z 1)])
+ ; ..a tree as bough takes it: grown as the level read it, else its seed with its size
+ (tree-seed o) (peep o 'grown () @ () (o 'size @ () (o 'seed) z [(o 'seed) (z 0) (z 1)]) g g)
  (tree-mesh o i ts) (: m (? (peep o 'burnt 0) (bough-burnt (tree-seed o) i ts (o 'pl)) (bough-mesh (tree-seed o) i ts))
    (atom? (o 'shade) ? m (mesh-join [m (shade-mesh (o 'shade))])))
  ; ..thin wood's shadow: each slot a black quad a hair over the ground, seen from either side
@@ -901,7 +901,7 @@
          + map (d \ (: m (made ['drape (vals d) (peep d 'land 0 ? ck ())] (_ \ ground-cut (drape-mesh d tt) d)) (on (m 0) (m 1)))) dps
          + map (s \ (: m (made ['bar (vals s)] (_ \ strip-bar s)) (on (m 0) (m 1)))) (filter (s \ peep s 'unlit 0) (lv 'strips))
          + map (s \ (: m (made ['frame (vals s)] (_ \ troffer-frame s)) (on (m 0) (m 1)))) (filter (s \ peep s 'troffer 0) (lv 'strips))
-         + map (o \ (: m (made ['tree (vals o)] (_ \ (: i (tix tt (o 'tex)) (mesh-move (tree-mesh o i (tt i 3 / tt i 1)) (o 'at) 0.0)))) (on (m 0) (m 1)))) (lv 'trees))
+         + map (o \ (: m (made ['tree (map o (sort (filter (k \ k != 'grown) (keys o))))] (_ \ (: i (tix tt (o 'tex)) (mesh-move (tree-mesh o i (tt i 3 / tt i 1)) (o 'at) 0.0)))) (on (m 0) (m 1)))) (lv 'trees))
    ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
    ; faces them, scaled to the gain the sky is seen through, and the level's skylight; its ambient
    ; off them. in
@@ -1185,7 +1185,8 @@
    ; for fog
    sk (sky-here (sc 'surf) (sc 'sky) e) sim (tablet? sk ? (sk 'sim + st 'mt) 0.0)
    (in? lo hi) !(any (k \ e k <= lo k || hi k + 0.1 <= e k) ^3)
-   out (open-at sc e)
+   out (tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
+        && !(tablet? (sc 'surf) && any (b \ b 'air = 1 && !(peep b 'open 0) && b 'land = () && in? (b 'lo) (b 'hi)) (sc 'brushes)))
    ; ..on a surface, the eye's view laid there, and the sky seen as from the level's own
    sf (sc 'surf) fr (tablet? sf ? 300.0 (out ? 150.0 60.0))
    vl (mesh-eye w h e th ph (tablet? sh ? 0.0 (peep st 'ro 0.0)) fov 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
@@ -2009,11 +2010,15 @@
    (sh tp * (1.0 - exp (tp * -420.0)) * exp (tp / d * -2.6) * (t >= 0.0) * (t < d)))
  (frame-at t) (int (t * song-rate + 0.5))
  ; ..the desert's wind: harp's, a long swell over and over, each starting halfway into the
- ; one before, so the swells sum to a wind that never drops
- wind-len 24.0
+ ; one before, so the swells sum to a wind that never drops; low under a far howl, two tones
+ ; gliding slowly about their pitch, swelling and dying away in gusts
+ wind-len 24.0 wind-k 0.1 howl-k 0.05
+ (howl-at t) (: g (0.5 + 0.5 * sin (t * 0.11 + 1.3)) h (0.5 + 0.5 * sin (t * 0.047 + 0.2))
+   p (tau * 380.0 * t + 1000.0 * sin (tau * 0.05 * t)) q (tau * 610.0 * t + 600.0 * sin (tau * 0.07 * t + 2.0))
+   (howl-k * g * g * h * (sin p + 0.3 * sin (1.5 * p) + 0.5 * h * sin q)))
  (wind-at t) (: mk (cite 'play 'mkvoice) ix (frame-at t) k (int (t 0 / (wind-len / 2.0)))
    (one j) (j < 0 ? 0.0 ((mk (int (j * wind-len / 2.0 * song-rate)) {'s "wind" 'note -12 'legato wind-len} song-rate) 1 ix))
-   (0.3 * (one (k - 1) + one k + one (k + 1))))
+   (wind-k * (one (k - 1) + one k + one (k + 1)) + howl-at t))
  ; ..dusk's bells: a chime on pelog's five steps two octaves down, one in three an octave up;
  ; each bell-slot seconds strikes one in bell-odds, at a time in the slot its own die picks
  pelog [0.0 1.2 2.7 6.7 7.85] bell-slot 0.5 bell-odds 7 bell-ring 5.0
@@ -2031,11 +2036,13 @@
  (throb-at t) (: ix (frame-at t) k0 (int (t 0 / throb-step))
    (one k nt) (k < 0 ? 0.0 (struck ix (frame-at (k * throb-step)) throb-ring (saw-sh (note-hz nt))))
    (0.14 * foldl (\ a j (a + one (k0 + 1 - j) -31.0 + one (k0 + 1 - j) -30.9)) (t * 0.0) ^4))
- ; ..where the eye is out under the sky and behind no glass: the desert's sounds whole
- ; there, dulled under a roof or sealed in glass (a lens's panes, the box they span)
+ ; ..where the ear is out under the sky: in an open box and under no roof, a closed room a
+ ; body could stand in, not a window's slot. the desert's sounds whole there and behind no
+ ; glass, dulled under a roof or sealed in glass (a lens's panes, the box they span)
  (open-at sc e) (: sk (sky-here (sc 'surf) (sc 'sky) e) (in? lo hi) !(any (k \ e k <= lo k || hi k + 0.1 <= e k) ^3)
+   (roomy b) (b 'hi 0 - b 'lo 0 > 2.0 * body-r && b 'hi 2 - b 'lo 2 > 2.0 * body-r && b 'hi 1 - b 'lo 1 > eye-h)
    (tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
-    && !(any (b \ b 'air = 1 && !(peep b 'open 0) && b 'land = () && in? (b 'lo) (b 'hi)) (sc 'brushes))))
+    && !(any (b \ b 'air = 1 && !(peep b 'open 0) && b 'land = () && in? (b 'lo) (b 'hi) && roomy b) (sc 'brushes))))
  (glassed lv e) (: ps (filter (p \ two? (peep p 'lens ())) (peep lv 'panes ()))
    (in L) (: qs (filter (p \ p 'lens = L) ps)
             (all (k \ foldl (\ a p (min a (p 'lo k))) 1e9 qs < e k && e k < foldl (\ a p (max a (p 'hi k))) -1e9 qs) ^3))
