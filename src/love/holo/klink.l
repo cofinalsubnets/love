@@ -54,39 +54,11 @@
    ;   'syms 'nsym   index -> [name bind type shndx value size other]
    ;   'rela         target section index -> [(off kind sym addend) ..], ascending by off
    (kl-read id s)
-    (: _ (? (#s > 64 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70) 0 (scare 'klink-not-elf id))
-       _ (? (s 4 = 2 && s 5 = 1 && kl-u16 s 16 = 1) 0 (scare 'klink-not-rel64 id))
-       shoff (kl-u64 s 40) shnum (kl-u16 s 60) shstrx (kl-u16 s 62)
-       (sh i) (shoff + 64 * i)
-       shstro (kl-u64 s (sh shstrx + 24))
-       sec {}
-       _ (each ^shnum
-            (i \ (: h (sh i)
-                    (pin sec i [(kl-cstr s (shstro + kl-u32 s h)) (kl-u32 s (h + 4)) (kl-u64 s (h + 8))
-                                (kl-u64 s (h + 24)) (kl-u64 s (h + 32)) (kl-u64 s (h + 48))
-                                (kl-u64 s (h + 56)) (kl-u32 s (h + 40)) (kl-u32 s (h + 44))]))))
-       symi ((: (g i) (? (shnum <= i) -1 (sec i 1 = 2) i (g (i + 1)))) 1)
-       _ (? (symi < 0) (scare 'klink-no-symtab id))
-       sy (sec symi) stro (sec (sy 7) 3)
-       nsym (sy 4 // 24)
-       syms {}
-       _ (each ^nsym
-            (i \ (: e (sy 3 + 24 * i) info (s (e + 4))
-                    (pin syms i [(kl-cstr s (stro + kl-u32 s e)) (info >> 4) (info & 15)
-                                 (kl-u16 s (e + 6)) (kl-u64 s (e + 8)) (kl-u64 s (e + 16)) (s (e + 5))]))))
-       rela {}
-       _ (each ^shnum
-            (i \ (: r (sec i)
-                    (? (r 1 = 4)
-                       (: n (r 4 // 24) o (r 3)
-                          (es k acc) (? (k < 0) acc
-                                        (: e (o + 24 * k) inf (kl-u64 s (e + 8))
-                                           (es (k - 1) ([(kl-u64 s e) (inf & 4294967295) (inf >> 32)
-                                                         (kl-s64 (kl-u64 s (e + 16)))] . acc))))
-                          (pin rela (r 8) (es (n - 1) ())))
-                       (r 1 = 9) (scare 'klink-rel id)
-                       0))))
-       {'id id 'src s 'shnum shnum 'sec sec 'syms syms 'nsym nsym 'rela rela})
+    (: r (ld-obj id s 1)
+       _ (r 'class = 64 && r 'type = 1 ? 0 (scare 'klink-not-rel64 id))
+       _ (r 'nsym > 0 ? 0 (scare 'klink-no-symtab id))
+       _ (each ^(r 'shnum) (i \ (r 'sec i 1 = 9 ? (scare 'klink-rel id))))
+       r)
 
    ; the linker's own .comment line, an object after every other, as ld.lld adds its banner
    (kl-banner id t)
@@ -800,14 +772,9 @@
                        (? (!(whole? s0)) (kl-le 0 8)
                           (peep lk 'relr 1 && r 5 >= 2 && ro % 2 = 0) (kl-le sa 8)       ; relr: the field is the addend
                           (kl-le (? (peep lk 'apply 0) sa 0) 8))
-                       (k = 258) (? (kl-w sa < 4294967296) (kl-le sa 4) (scare 'klink-range [(ob 'id) ro]))
-                       (k = 260) (kl-le (sa - p) 8)
-                       (k = 261) (: v (sa - p)
-                                    (? (-2147483648 <= v && v < 2147483648) (kl-le v 4)
-                                       (scare 'klink-range [(ob 'id) ro])))
-                       (: c (lda64-kinds k)
+                       (: c (peep (ld-rtab 183) k ())
                           _ (? (two? c) 0 (scare 'klink-reloc [(ob 'id) k]))
-                          f (refix-with be <c (map (i \ s (o0 + ro + i)) ^4) sa p 4)
+                          f (ld-fix be c (map (i \ s (o0 + ro + i)) ^4) sa p)
                           (? (two? f) f (scare 'klink-range [(ob 'id) ro k])))))
        ; lld's relaxation: adrp xn, sym; add xn, xn, :lo12:sym, neither addended, sym within
        ; 1 MiB of the add -> nop; adr xn, sym. answers the 8 bytes, or ()

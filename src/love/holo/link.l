@@ -62,34 +62,94 @@
                  (r < 0 ? (r + 18446744073709551616) r))
    (ld-u32 v) (v % 4294967296 @ r (r < 0 ? (r + 4294967296) r))
 
-   ; --- the ARM field lane. EM_ARM is REL: each kind pulls its addend out of the field. the
-   ; thumb bit rides in S (st_value's bit 0), and every branch field drops bit 0, so
-   ; ((S+A)|T) falls out of S+A. the encodings are the widest arm32 backend's, through
-   ; refix-with, since one image may mix cores (a v6-M link takes a v7-M start.o).
-   ; abs32 is ((S+A)|T), rel32 that minus P (`.word handler - .`), written here.
-   ; the numbers collide with x86-64's and riscv's, so the machine picks the lane first.
-   ldarm-kinds (ld-cls '((2 abs32) (3 rel32) (10 bl) (30 b) (47 movw16) (48 movt16) (51 bcc)))
-   ; the a64 and riscv instruction fields by relocation number, in the backend's names.
-   ; RELA: S+A arrives whole, and the backend ors its field into the word already there
-   lda64-kinds (ld-cls '((273 ld19) (274 adr21) (275 adrp21) (277 addlo12) (278 addlo12) (279 b14) (280 b19) (282 b26) (283 b26)
-                         (284 lo12s2) (285 lo12s4) (286 lo12s8) (299 lo12s16)))
-   ldrv-kinds (ld-cls '((17 j21) (19 pcrel)))
-   ; EM_386 is REL too, every field whole: _32, _PC32, _PLT32 four bytes, _16 and _PC16 two,
-   ; _8 and _PC8 one.
-   ld386-kinds (ld-cls '((1 abs32) (2 rel32) (4 rel32) (20 abs16) (21 rel16) (22 abs8) (23 pc8)))
+   ; --- one ELF reader, either class and any e_type: link.l's lanes, nm and klink read
+   ;     through it. rels? reads the relocations too. -> a tablet
+   ;   'id 'src 'class 32|64 'type 'mach 'shnum
+   ;   'sec        index -> [name type flags off size align entsize link info]
+   ;   'syms 'nsym index -> [name bind type shndx value size other], 'nsym 0 with no .symtab
+   ;   'rela       target index -> [(off kind sym addend) ..] in file order, the addend ()
+   ;               on a REL; 'rels the same as [(target . entries) ..] in header order
+   (ld-obj id s rels?)
+    (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
+       fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
+       (f b r) (rdle s (b + <r) <>r)
+       (fx nm) (ld-row fs nm)
+       shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
+       _ (shnum = 0 || ld-f fs s 0 'e-shent = ld-n fs 'sh-ent ? 0 (scare 'link-shentsize id))
+       she (ld-n fs 'sh-ent)
+       hn (fx 'sh-name) ht (fx 'sh-type) hf (fx 'sh-flags) ho (fx 'sh-off) hz (fx 'sh-size)
+       ha (fx 'sh-align) he (fx 'sh-esz) hl (fx 'sh-link) hi (fx 'sh-info)
+       shstro (? (shnum = 0) 0 (f (shoff + she * ld-f fs s 0 'e-shstrx) ho))
+       sec {}
+       _ (each ^shnum (i \ (: h (shoff + she * i)
+                              (pin sec i [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
+                                          (f h ha) (f h he) (f h hl) (f h hi)]))))
+       ob {'id id 'src s 'class (? (s 4 = 2) 64 32) 'type (rle16 s 16) 'mach (rle16 s 18) 'shnum shnum
+           'sec sec 'syms {} 'nsym 0 'rela {} 'rels ()}
+       ; held to sh_entsize: a wrong stride reads well-formed garbage
+       (esz r want) (? (r 6 = ld-n fs want) 0 (scare 'link-entsize <r))
+       symi ((: (g i) (? (shnum <= i) -1 (sec i 1 = 2) i (g (i + 1)))) 1)
+       _ (? (symi < 0) 0
+            (: y (sec symi) _ (esz y 'sy-ent) ye (ld-n fs 'sy-ent) stro (sec (y 7) 3)
+               yn (fx 'sy-name) yi (fx 'sy-info) yo (<yi + 1) yx (fx 'sy-shndx)
+               yv (fx 'sy-val) yz (fx 'sy-size) syms (ob 'syms) n (y 4 // ye)
+               _ (pin ob 'nsym n)
+               (each ^n (i \ (: e (y 3 + ye * i) info (f e yi)
+                                (pin syms i [(ld-cstr s (stro + f e yn)) (info >> 4) (info & 15)
+                                             (f e yx) (f e yv) (f e yz) (s (e + yo))]))))))
+       rty (? (s 4 = 2) 4 9) re (ld-n fs 'rl-ent)
+       ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
+       (ents r) (: (go k acc) (? (k < 0) acc
+                                 (: e (r 3 + re * k)
+                                    (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
+                   (go (r 4 // re - 1) ()))
+       _ (? rels? (each ^shnum (i \ (: r (sec i)
+                                       (? (r 1 = rty) (: _ (esz r 'rl-ent) es (ents r)
+                                                         (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))
+                                          0))))
+            0)
+       _ (pin ob 'rels (rev (ob 'rels)))
+       ob)
+
+   ; --- the relocation table, every machine's: e_machine -> kind -> (width how), how the
+   ; field takes S+A at P. RELA: abs whole, pc S+A-P whole, abs32 four bytes in either range,
+   ; u32 unsigned, s32 signed, pc32 S+A-P signed; else a backend's instruction field, ored
+   ; into the word already there. arm and i386 are REL, each kind pulling its addend out of
+   ; the field: w32 w16 w8 S+A, r32 r16 r8 S+A-P. the numbers collide across machines, so
+   ; the machine picks the row first
+   ld-rtab {62 (ld-cls '((1 8 abs) (10 4 u32) (11 4 s32) (2 4 pc32) (4 4 pc32) (24 8 pc)))
+            183 (ld-cls '((257 8 abs) (258 4 abs32) (260 8 pc) (261 4 pc32) (273 4 ld19) (274 4 adr21)
+                          (275 4 adrp21) (277 4 addlo12) (278 4 addlo12) (279 4 b14) (280 4 b19) (282 4 b26)
+                          (283 4 b26) (284 4 lo12s2) (285 4 lo12s4) (286 4 lo12s8) (299 4 lo12s16)))
+            ; call_plt spans the auipc pair
+            243 (ld-cls '((2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
+            ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
+            ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
+            40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (51 4 bcc)))
+            3 (ld-cls '((1 4 w32) (2 4 r32) (4 4 r32) (20 2 w16) (21 2 r16) (22 1 w8) (23 1 r8)))}
+   ; machine, kind -> its row, or a scare
+   (ld-rk mach kind) (: t (peep ld-rtab mach ()) r (? (t = ()) () (peep t kind ()))
+                        (two? r ? r (scare 'link-reloc kind)))
+   ; a RELA field: row r, the field's old bytes bs, S+A, P -> its bytes, () out of reach
+   (ld-fix be r bs sa p)
+    (: k (r 1)
+       (? (k == 'abs) (le64 (ld-u64 sa))
+          (k == 'pc) (le64 (ld-u64 (sa - p)))
+          (k == 'pc32) (: v (s64 (ld-u64 (sa - p))) (fits32 v ? (le32 v)))
+          (k == 'abs32) (: v (s64 (ld-u64 sa)) (0 <= v && v <= 4294967295 || fits32 v ? (le32 v)))
+          (k == 'u32) (: v (ld-u64 sa) (v <= 4294967295 ? (le32 v)))
+          (k == 's32) (: v (s64 (ld-u64 sa)) (fits32 v ? (le32 v)))
+          (refix-with be k bs sa p <r)))
+   ; a REL field: S+A whole, or less P, or the backend's
    (ld386 s off sv kind site)
-    (: r (ld386-kinds kind)
-       _ (atom? r ? (scare 'link-reloc kind))
-       k <r w (k @ 'abs16 2 'rel16 2 'abs8 1 'pc8 1 4)
+    (: r (ld-rk 3 kind) w <r k (r 1)
        sa (sv + rdle s off w)
-       v (elem k '(abs32 abs16 abs8) ? sa (sa - site))
+       v (elem k '(w32 w16 w8) ? sa (sa - site))
        (w @ 4 (le32 (ld-u32 v)) 2 (le16 (ld-u32 v)) [(ld-u32 v & 255)]))
    (ldarm be s off sv kind site)
-    (: r (ldarm-kinds kind)
-       _ (atom? r ? (scare 'link-reloc kind))
-       k <r  sa (sv + rle32 s off)
-       (? (k == 'abs32) (le32 (ld-u32 sa))
-          (k == 'rel32) (le32 (ld-u32 (sa - site)))
+    (: r (ld-rk 40 kind) k (r 1) sa (sv + rle32 s off)
+       (? (k == 'w32) (le32 (ld-u32 sa))
+          (k == 'r32) (le32 (ld-u32 (sa - site)))
           (refix-with be k (map (i \ s (off + i)) ^4) sv site 4)))
 
    ; --- archives: "!<arch>\n", GNU shape. only the "/" ranlib index is walked, so an
@@ -163,18 +223,10 @@
    ;                       on a rel, where it rides in the field instead
    ; layout pins 'base later, section index -> load address
    (ld-read id s mach)
-    (: _ (s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
-       ; e_type and e_machine sit at 16 and 18 in both classes
-       fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
-       _ (rle16 s 16 = 1 && rle16 s 18 = mach ? 0 (scare 'link-machine id))
-       _ (ld-f fs s 0 'e-shent = ld-n fs 'sh-ent ? 0 (scare 'link-shentsize id))
-       shoff (ld-f fs s 0 'e-shoff)
-       shnum (ld-f fs s 0 'e-shnum) shstrx (ld-f fs s 0 'e-shstrx)
-       (sh i) (shoff + i * ld-n fs 'sh-ent)
-       shstro (ld-f fs s (sh shstrx) 'sh-off)
-       (sname i) (ld-cstr s (shstro + ld-f fs s (sh i) 'sh-name))
+    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64) 4 9)
+       _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
        secs {} lanes {} drops {}
-       ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {}}
+       ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach}
        ; droppable: empty, no shf_alloc, a note, or the unwinder's tables. the index is
        ; recorded so a relocation against it is skipped, not scared at.
        (drop? i ty fl nm sz)
@@ -182,33 +234,26 @@
            (pin drops i 1, 1) ())
        ; classify: progbits and nobits onto their lane, symtab/rela by type, the droppable
        ; set dropped; anything else with bytes refuses, shf_tls among them (no pt_tls here).
-       (class i symt rls)
-        (shnum <= i ? (symt . rls)
-           (: h (sh i) ty (ld-f fs s h 'sh-type) fl (ld-f fs s h 'sh-flags)
-              off (ld-f fs s h 'sh-off) sz (ld-f fs s h 'sh-size) nm (sname i)
+       (class i)
+        (shnum <= i ? ()
+           (: h (sec i) nm <h ty (h 1) fl (h 2) off (h 3) sz (h 4)
               (0 < fl & 1024 && 0 < sz ? (scare 'link-tls nm),
               ; a note with a lane (.note.pvh) is placed like progbits
                (? (elem ty '(1 8) || ty = 7 && ld-lane nm ty fl)
                    ; a nobits section's sh_offset is a placeholder
                    (ld-lane nm ty fl @ lane
-                      (? lane (pin secs i [lane (ty = 8 ? 0 off) sz
-                                           (ld-f fs s h 'sh-align) (ld-home lane fl ty)],
+                      (? lane (pin secs i [lane (ty = 8 ? 0 off) sz (h 5) (ld-home lane fl ty)],
                                pin lanes lane (i . lanes lane),
-                               class (i + 1) symt rls)
+                               class (i + 1))
                          ; .comment is dropped but kept: the output's is the union of the inputs'
                          (drop? i ty fl nm sz)
                           (nm = ".comment" ? (pin ob 'comment (snip s off (off + sz))) 0,
-                           class (i + 1) symt rls)
+                           class (i + 1))
                          (scare 'link-section nm)))
-                  (ty = 2) (ld-esz fs s h 'sy-ent nm,
-                            class (i + 1) [off sz (ld-f fs s h 'sh-link)] rls)
-                  (ty = ld-n fs 'rl-ty)
-                   (ld-esz fs s h 'rl-ent nm,
-                    class (i + 1) symt ([(ld-f fs s h 'sh-info) off sz] . rls))
-                  (elem ty '(0 3)) (class (i + 1) symt rls)
-                  (drop? i ty fl nm sz) (class (i + 1) symt rls)
+                  (ty = 2 || ty = rty || elem ty '(0 3)) (class (i + 1))
+                  (drop? i ty fl nm sz) (class (i + 1))
                   (scare 'link-section nm)))))
-       cl (class 1 () ())
+       _ (class 1)
        ; the named lanes this object carries, first-seen in header order
        nmd (: (go i acc)
                (shnum <= i ? (rev acc)
@@ -220,35 +265,14 @@
               (go 1 ()))
        _ (pin ob 'named nmd)
        _ (foldl (\ _ l (pin lanes l (rev (lanes l)))) 0 (ld-lanes + nmd))
-       symt <cl
-       _ (atom? symt ? (scare 'link-no-symtab id))
-       stro (ld-f fs s (sh (symt 2)) 'sh-off)    ; .strtab offset, via symtab's link
-       syms {} _ (pin ob 'syms syms)
-       nsym (symt 1 // ld-n fs 'sy-ent)
-       _ (pin ob 'nsym nsym)
-       _ (each ^nsym (i \ (: e (symt 0 + i * ld-n fs 'sy-ent)
-                              info (ld-f fs s e 'sy-info)
-                              (pin syms i [(ld-cstr s (stro + ld-f fs s e 'sy-name))
-                                            (info >> 4) (info & 15)
-                                            (ld-f fs s e 'sy-shndx) (ld-f fs s e 'sy-val)
-                                            (ld-f fs s e 'sy-size)]))))
+       _ (r 'nsym = 0 ? (scare 'link-no-symtab id))
+       _ (pin ob 'syms (r 'syms), pin ob 'nsym (r 'nsym))
        ; a .rela whose target was dropped goes with it; one neither placed nor dropped scares.
        ; a REL addend arrives () and the patcher pulls it from the field.
-       ad (ld-row fs 'rl-add)
-       rent (ld-n fs 'rl-ent)
-       relas (map (r \ (: n (r 2 // rent)
-                          (es i acc) (i < 0 ? acc
-                                        (r 1 + i * rent @ e
-                                           (es (i - 1)
-                                               ([(ld-f fs s e 'rl-off) (ld-f fs s e 'rl-kind)
-                                                 (ld-f fs s e 'rl-sym)
-                                                 (two? ad ? (s64 (ld-f fs s e 'rl-add)))] . acc))))
-                          (<r . es (n - 1) ())))
-                  (filter (r \ (? (two? (secs <r)) 1
-                                  (drops <r) ()
-                                  (scare 'link-rela-target id)))
-                          >cl))
-       (pin ob 'relas relas,
+       (pin ob 'relas (filter (x \ (? (two? (secs <x)) 1
+                                     (drops <x) ()
+                                     (scare 'link-rela-target id)))
+                              (rev (r 'rels))),
         ob))
 
    ; every symbol in .symtab of a file of any e_type (`love nm`) -> rows
@@ -256,34 +280,10 @@
    ; sec the defining section's (name type flags), or () for an undefined or reserved index.
    ; a file without .symtab answers ().
    (ld-syms id s)
-    (: _ (s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
-       fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
-       shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
-       (sh i) (shoff + i * ld-n fs 'sh-ent)
-       shstro (ld-f fs s (sh (ld-f fs s 0 'e-shstrx)) 'sh-off)
-       (sname i) (ld-cstr s (shstro + ld-f fs s (sh i) 'sh-name))
-       (find i) (? (shnum <= i) () (ld-f fs s (sh i) 'sh-type = 2) [i] (find (i + 1)))
-       t (find 1)
-       (atom? t ? ()
-          (: h (sh <t)
-             _ (ld-esz fs s h 'sy-ent ".symtab")
-             ent (ld-n fs 'sy-ent)
-             off (ld-f fs s h 'sh-off) n (ld-f fs s h 'sh-size // ent)
-             stro (ld-f fs s (sh (ld-f fs s h 'sh-link)) 'sh-off)
-             ; index 0 is the null symbol
-             (go i acc)
-              (i < 1 ? acc
-                 (: e (off + i * ent)
-                    info (ld-f fs s e 'sy-info) x (ld-f fs s e 'sy-shndx)
-                    (go (i - 1)
-                        ([(ld-cstr s (stro + ld-f fs s e 'sy-name))
-                          (info >> 4) (info & 15) x
-                          (ld-f fs s e 'sy-val) (ld-f fs s e 'sy-size)
-                          (0 < x && x < shnum ?
-                             [(sname x) (ld-f fs s (sh x) 'sh-type)
-                              (ld-f fs s (sh x) 'sh-flags)])]
-                         . acc))))
-             (go (n - 1) ()))))
+    (: r (ld-obj id s 0) sec (r 'sec) shnum (r 'shnum) sy (r 'syms)
+       (map (i \ (: e (sy i) x (e 3)
+                    [<e (e 1) (e 2) x (e 4) (e 5) (0 < x && x < shnum ? [<(sec x) (sec x 1) (sec x 2)])]))
+            >^(r 'nsym)))
 
    ; -- archives. the noms the linker synthesizes, never looked for in a .a
    ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
@@ -531,7 +531,7 @@
               ; the REL machines: the addend is in the field and `ad` arrives (). an ARM field
               ; is always 4 bytes, an i386 one by kind.
               (? (arm? == 'i386)
-                 (: w (kind @ 20 2 21 2 22 1 23 1 4)
+                 (: w <(ld-rk 3 kind)
                     (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)),
                      relbox ? (scare 'link-i386-pie <sy),
                      go (off0 + ro + w) >es
@@ -548,12 +548,9 @@
                      (ldarm be s (off0 + ro) sv kind (base + ro)
                       . (snip s pos (off0 + ro) . acc)))
                  (: sa (ld-u64 (sv + ad))
-                    prel (s64 (ld-u64 (sa - (base + ro))))            ; S + A - P, signed
-                    abs64? (rv ? (kind = 2) (elem kind '(1 257)))   ; R_RISCV_64 / R_X86_64_64 / R_AARCH64_ABS64
-                    ; R_X86_64_32 / _32S and R_AARCH64_ABS32: S + A into 4 bytes; ABS32 takes either range
-                    abs32? (!rv && elem kind '(10 11 258))
-                    pc64? (!rv && elem kind '(24 260))              ; R_X86_64_PC64 / R_AARCH64_PREL64: S + A - P in eight bytes
-                    w (? (abs64? || pc64?) 8 (rv && kind = 19) 8 4)             ; call_plt spans the auipc pair
+                    row (ld-rk (peep ob 'mach 0) kind) w <row
+                    abs64? (row 1 == 'abs)
+                    abs32? (elem (row 1) '(abs32 u32 s32))
                     ; -pie: record each abs64 site for the startup relocator to add the base.
                     ; -shared: record (site import value) for the loader, an import's addend or
                     ; the link-time value; a weak undefined stays zero.
@@ -567,24 +564,9 @@
                     ; ..nor a site in .rodata, which the startup cannot write: a -fno-pie object's
                     ; const that holds an address
                     _ (relbox && abs64? && se 4 = 'rodata ? (scare 'link-rodata-pie <sy))
-                    _ ((elem kind $ rv ? '(2 17 19 57)
-                                            '(1 2 4 10 11 24 257 258 260 261 273 274 275 277 278 280 282 283 284 285 286 299)) ?
-                         0 (scare 'link-reloc kind))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
-                    bs (? abs64? (le64 sa)
-                          pc64? (le64 (ld-u64 (sa - (base + ro))))
-                          abs32?                                       ; _32 unsigned, _32S signed
-                           (: v (kind = 10 ? sa (s64 sa))
-                              ((kind = 10 || kind = 258) && 0 <= v && v <= 4294967295 || fits32 v ? 0 (scare 'link-range <sy),
-                               le32 v))
-                          (elem kind '(2 4 261) || rv && kind = 57)
-                           (: v prel                          ; pc32/plt32/32_pcrel: S + A - P
-                              (fits32 v ? 0 (scare 'link-range <sy),
-                               le32 v))
-                          ; an instruction field, by the backend; () is out of reach
-                          (: k <((rv ? ldrv-kinds lda64-kinds) kind)
-                             r (refix-with be k (map (i \ s (off0 + ro + i)) ^w) sa (base + ro) w)
-                             (two? r ? r (scare 'link-range <sy))))
+                    bs (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sa (base + ro))
+                          (two? r ? r (scare 'link-range <sy)))
                     (go (off0 + ro + w) >es
                         (bs . snip s pos (off0 + ro) . acc))))))
        (go off0 (ent (ob 'relas)) ()))
@@ -637,10 +619,10 @@
         <str (1 + tally locs)])
 
    ; the abs64 relocations across the set: the -pie table's entry count
-   (ld-nabs objs rv)
-    (foldl (\ a ob (foldl (\ a2 tr
-              (foldl (\ a3 e ((rv ? (e 1 = 2) (elem (e 1) '(1 257))) ? (a3 + 1) a3)) a2 >tr))
-              a (peep ob 'relas ())))
+   (ld-nabs objs)
+    (foldl (\ a ob (: t (peep ld-rtab (peep ob 'mach 0) {})
+                      (foldl (\ a2 tr (foldl (\ a3 e (peep t (e 1) () @ r (two? r && r 1 == 'abs ? (a3 + 1) a3))) a2 >tr))
+                             a (peep ob 'relas ()))))
        0 objs)
 
    ; -- .comment, the producer record: NUL-separated strings, the inputs' deduped ahead of
@@ -696,7 +678,7 @@
        ; the address the cuts skipped, which the file does not carry: from d0 on an offset is
        ; `addr - base - sk`, o0's is `t1 - base`
        sk ((o0 - t1) + (d0 - o1))
-       nrel (pie ? (ld-nabs objs rv) 0)
+       nrel (pie ? (ld-nabs objs) 0)
        r0 (pie ? (ld-align 16 end) end)
        r1 (r0 + 8 * nrel)
        ; the file bytes end on 16, for .bss and .image; the slack is outside .love.rela, where
@@ -863,7 +845,7 @@
        dstr (o-strtab ((soname . needed) + imps + map cap exps))
        (soff k) (<>dstr k)
        nn #needed
-       nrel (ld-nabs objs ())
+       nrel (ld-nabs objs)
        ndy (nn + 11)
        dy0 (ld-align 16 end)       got0 (dy0 + 16 * ndy)
        ra0 (got0 + 8 * ni)         ds0 (ra0 + 24 * (nrel + ni))
