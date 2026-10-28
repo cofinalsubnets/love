@@ -42,25 +42,17 @@ Two pipelines exist today, and the criterion is their join:
 
 ### a64 (r23: 4439 units, 4370 `.c` + 69 `.S`)
 
-3026 `.c` same as clang, 1228 differ (mooncc's in the boot), 116 not mooncc's:
+3026 `.c` same as clang, 1228 differ (mooncc's in the boot), 116 not mooncc's. A recheck of those 116
+plus the 32 refused `.S` on gwen 87db0fb6a with e9w's holo leaves 3 units with clang:
 
 | class | units | note |
 |---|---|---|
-| enum named before its definition | 36 | fixed (row 543, gwen 01d4d4892); r23 + these boots on 4321 |
-| qcom clk `ftbl_*` initializers | 38 | drivers/clk/qcom: "cannot lay the initializer" — **g-e9, next** |
-| asm sysreg / tlbi names holo lacks | 13 | dbgb*, pm*, spsr_abt/und, aidr_el1, ipas2e1 (kvm, hw_breakpoint, arm_pmuv3) |
-| parse errors | 7 | asm/insn.h, net/ax25.h ×2, ghes, of/resolver, pcie/aer, flexfilelayout |
-| asm struct output (`hyp_spin_lock`) | 5 | kvm nvhe |
-| asm immediate input not constant (`nf_hook`) | 5 | net/ipv4, ipv6 |
-| other initializers | 3 | acpica exdump, rsaddr; 8250_pci |
-| inline asm directives | 3 | `.irp` (kvm/at), `.incbin` (configs), crash_core |
-| register variable in x30 | 2 | stacktrace, process |
 | vdso32, `--target=arm-linux-gnueabi` | 2 | the compat vdso: mooncc's arm32 is not wired in |
-| timeout (300 s) | 1 | pinctrl-rzg2l |
-| undeclared `__cpu_to_le64` | 1 | arm-smmu-v3 |
+| timeout (600 s) | 1 | pinctrl-rzg2l |
 
-So 80 `.c` units remain after efwd. r23's boot pool is 4285 mooncc objects, 0 culprits; the share of
-vmlinux.a members from mooncc is 4242/4386 = 96.7%; modpost warns 6 (all `__calc_tpm2_event_size`).
+The other 113 `.c` compile (rc 0; same or differ is for the next census). r23's boot pool is 4285
+mooncc objects, 0 culprits; the share of vmlinux.a members from mooncc is 4242/4386 = 96.7%; modpost
+warns 6 (all `__calc_tpm2_event_size`).
 
 ### x64 (r21: 3004 units, 2934 `.c` + 70 `.S`; before efwd)
 
@@ -84,10 +76,8 @@ A KEEP=1 census on gwen 1065c73ee (g-21) gives the post-efwd numbers.
 
 holo assembles every `.S` the census compiles; only the refused ones stay clang's.
 
-- a64: 32 of 69. gas-immediate 13 (`.Lframe_regcount`, `(%`-style expressions), gas-directive 4
-  (`.rep`, `.reloc`, `.extern` ×2), gas-data 4 (`(((1U` in the vdso notes), a64 operands 4 (`v0.16b`
-  in aese/tbl/sha512su0, `add` with a symbol), ops 2 (`stgm`, `crc32x`), sysreg/pstate 3 (isr_el1, SPsel),
-  data width 1, register 1
+- a64: 0 of 69. entry.o, head.o and hyp-entry.o match clang's code sections but for branches to
+  global symbols, which holo resolves inside the object
 - x64: 38 of 70. `endbr64` 7, `lretq` 2, `ljmpw` 1, `.octa` 2, `.uleb128` 1, `%`-immediates 3, bad
   numbers 3, register names 4, others
 - the 3 kallsyms `.S` files from link-vmlinux.sh are clang's in both (the link, below)

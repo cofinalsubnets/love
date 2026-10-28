@@ -148,6 +148,7 @@ struct _IO_FILE {
 #define NR_fb_ftruncate     480
 #define NR_fb_getcwd        326   /* __getcwd */
 #define NR_fb_chdir          12
+#define NR_fb_fchdir         13
 #define NR_fb_chroot         61
 #define NR_fb_fchmod        124
 #define NR_fb_umask          60
@@ -211,6 +212,7 @@ struct _IO_FILE {
 #define NR_ftruncate       46
 #define NR_sync            81
 #define NR_chdir           49
+#define NR_fchdir          50
 #define NR_chroot          51
 #define NR_fchmod          52
 #define NR_fchmodat        53
@@ -359,6 +361,7 @@ struct _IO_FILE {
 #define NR_ftruncate      194   /* ftruncate64 */
 #define NR_getcwd         183
 #define NR_chdir           12
+#define NR_fchdir         133
 #define NR_chroot          61
 #define NR_fchmod          94
 #define NR_umask           60
@@ -476,6 +479,7 @@ struct _IO_FILE {
 #define NR_ftruncate      194   /* ftruncate64 */
 #define NR_getcwd         183
 #define NR_chdir           12
+#define NR_fchdir         133
 #define NR_chroot          61
 #define NR_fchmod          94
 #define NR_umask           60
@@ -591,6 +595,7 @@ struct _IO_FILE {
 #define NR_ftruncate       77
 #define NR_getcwd          79
 #define NR_chdir           80
+#define NR_fchdir          81
 #define NR_chroot         161
 #define NR_fchmod          91
 #define NR_umask           95
