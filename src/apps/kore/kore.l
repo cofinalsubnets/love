@@ -31,7 +31,7 @@
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main
         sha3sum-main crc32-main basenc-main uuencode-main uudecode-main ascii-main pinky-main
-        usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main hexedit-main
+        usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main
         which-main xxd-main tz-zone)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'bytes)
@@ -779,7 +779,6 @@
             'awk awk-main 'find find-main
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'ed ed-main 'ex ex-main   ; the line editors (src/apps/kore/ed.l)
-            'hexedit hexedit-main
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'man man-main    ; the pages the build writes, read back (src/apps/kore/man.l)
             'html2text html2text-main   ; a page's prose (src/apps/kore/lens.l), the same lens
@@ -911,7 +910,6 @@
     'dircolors "usage: dircolors [-b|-c|-p|--print-ls-colors] [FILE]"
     'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
     'readelf "usage: readelf -h|-l|-S|-s|-e [-W] FILE.."
-    'hexedit "usage: hexedit [-r] FILE"
     'ls "usage: ls [-aACcdFghiLlnoprRsStux1] [--color[=WHEN]] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"

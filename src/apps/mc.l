@@ -1,4 +1,4 @@
-; mc -- a two-pane file browser on the stage lupa and design share. a name wears the
+; mc -- a two-pane file browser on the stage hexedit and design share. a name wears the
 ; colour ls gives its class.
 ;
 ;   j k / arrows  the cursor      ^b ^f  a page        g G  the ends

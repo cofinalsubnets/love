@@ -42,7 +42,7 @@ The file discipline, two shapes:
 kore.l wraps every applet on both dispatch lanes (the verb registry and the symlink), so
 one synopsis table — `korehelp` — is where a tool's shape is written down, and the two
 lanes cannot drift. The door itself is cli's, `udoor` in post.l, and the crew's own verbs
-(mc, lupa, pom, tuner, tower, story, design, slop, libra, sb, tar, fat, doom) stand at the same one; what
+(mc, hexedit, pom, tuner, tower, story, design, slop, libra, sb, tar, fat, doom) stand at the same one; what
 kore keeps is the policy below. The walk reads only the leading flag words and stops at
 the first operand and at `--`. It is NOT getopt: a value word that looks like a flag is walked
 over, so `grep -e --help f` answers the help rather than searching for `--help` — glue
@@ -52,7 +52,7 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (195 tools, 209 names)
+## the inventory (194 tools, 208 names)
 
 The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
 less/more, im/pngcat/jpegcat/gifcat and imless/pngless/jpegless/gifless (`im cat` and
@@ -97,7 +97,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | src/apps/vi/ | vi |
 | ed.l | ed (the line editor), ex (the same buffer by word; its `vi` hands the buffer to vi) |
-| less.l, the pager and the byte editor | less / more, hexedit (toybox's, writing each change as it is made) |
+| less.l, the pager | less / more |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
 | openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
@@ -858,7 +858,7 @@ shred draws its pattern order from its own random numbers, as GNU's does, so the
 which passes are random and never on the order of the rest; watch has no `-d`, `-c` or `-p`;
 hostid and dnsdomainname ask /etc/hosts and the host's own addresses, never DNS.
 readelf reads no relocations, dynamic section, notes or dumps; dircolors spells LS_COLORS
-that kore's own ls does not yet read; hexedit has no search.
+that kore's own ls does not yet read.
 Of xz, not yet: `-l`, writing `.lzma`, and the BCJ and delta filters (a stream using one is
 refused by name). The encoder's parse is one fast greedy one, near `xz -1`'s ratio at any
 level; a level picks only the dictionary. strip leaves a relocatable object's symbol table
@@ -884,7 +884,7 @@ Not counted in any column: one implementation's spelling of a general tool (kore
 plan9port's `9`).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
-  (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `mc`, `pom`.
+  (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `hexedit`, `mc`, `pom`.
 * **busybox** — `busybox --list`, 1.36.1 as Arch builds it.
 * **toybox** — `toybox` bare, 0.8.14-57 (38ebde21) built from ~/src/toybox at defconfig: the
   pending tools (`sh`, `vi`, `awk`, `bc`, `make` ..) are off, as a release build has them.

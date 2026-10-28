@@ -1,4 +1,4 @@
-; lupa -- the magnifier: a hex editor and disassembler over one file. two views of the bytes:
+; hexedit -- a hex editor and disassembler over one file. two views of the bytes:
 ; hex (offset, sixteen bytes, text) and asm (address, bytes, instruction); an ELF opens on its
 ; .text with symbols named, anything else is bytes from 0.
 ;   hjkl / arrows  the cursor      ^f ^b ^d ^u  a page     g G  start, end
@@ -6,9 +6,9 @@
 ;   0-9 a-f  (hex view) overwrite the nibble at the cursor
 ;   :w   :q   :q!   :wq   :g ADDR|SYM  go   :/ HEX|"text"  find
 ; every key is a pure step on the state and every frame a pure lay into a port, so the tool
-; gates headless (test/host/lupa.l). an edit is a note in a tablet over the file's string.
-; usage: love lupa FILE
-(module (lupa lupa-main lupa-run lupa-new lupa-key lupa-frame lupa-byte)
+; gates headless (test/host/hexedit.l). an edit is a note in a tablet over the file's string.
+; usage: hexedit [-r] FILE
+(module (hexedit hexedit-main hexedit-run hexedit-new hexedit-key hexedit-frame hexedit-byte)
 (borrow 'holo)
 (borrow 'tui)
 (borrow 'posix)
@@ -32,21 +32,21 @@
      (shoff > 0 && shoff + shnum * 64 <= #s && shstr < shnum ? (go (rle64 s (sh shstr + 24)) 0) ()))
  (elf-syms s)                                              ; -> (addr->name name->addr)
   (: syms {} names {}
-     (each (ld-syms "lupa" s)
+     (each (ld-syms "hexedit" s)
            (r \ (: v (r 4) t (r 2) nm (r 0)
                    (v > 0 && (t = 2 || t = 1) && 0 < #nm ? (pin syms v nm, pin names nm v) 0))),
       [syms names]))
- (lupa-new s p)
+ (hexedit-new s p)
   (: t (elf? s ? (elf-text s) ())
      e (two? t ? (elf-syms s @ sy {'toff <t 'taddr <>t 'tsize <>>t 'syms <sy 'names <>sy}))
      start (two? t ? <t 0)
      {'bytes s 'n #s 'path p 'edits {} 'cur start 'top start
-      'mode (two? t ? 'asm 'hex) 'syn 'att 'in 'map 'cmd (ednew ()) 'msg "" 'dirty 0 'over 0
+      'mode (two? t ? 'asm 'hex) 'syn 'att 'in 'map 'cmd (ednew ()) 'msg "" 'dirty 0 'over 0 'ro 0
       'nib -1 'elf e 'find "" 'h 24})
  (elfed? d) (tablet? (d 'elf))
- (lupa-byte d i) (peep (d 'edits) i -1 @ v (v < 0 ? (d 'bytes i) v))
+ (hexedit-byte d i) (peep (d 'edits) i -1 @ v (v < 0 ? (d 'bytes i) v))
  (range a b) (map (i \ a + i) (jot (b - a)))
- (slice d a b) (string (map (i \ lupa-byte d i) (range a b)))
+ (slice d a b) (string (map (i \ hexedit-byte d i) (range a b)))
  (patched d) (slice d 0 (d 'n))
  ;; inside .text an offset and its address part company, elsewhere they agree
  (addr d off) (d 'elf @ e (elfed? d && e 'toff <= off < e 'toff + e 'tsize ? (off - e 'toff + e 'taddr) off))
@@ -101,8 +101,9 @@
  ;; --- editing: a hex digit at the cursor, the high nibble first ---
  (poke d i v) (pins d 'dirty 1 'edits (pin (d 'edits) i v))
  (nibble d v)
-  (: i (d 'cur) old (lupa-byte d i)
-     (d 'nib < 0 ? (poke d i (v << 4 | old & 15), pin d 'nib v)
+  (: i (d 'cur) old (hexedit-byte d i)
+     (? (d 'ro) (tell d "read only")
+        (d 'nib < 0) (poke d i (v << 4 | old & 15), pin d 'nib v)
         (poke d i (d 'nib << 4 | v), pin d 'nib -1, move d 1)))
  (save d) (open (d 'path) "w" @ q
              (hot? q ? (say q (patched d), close q, pins d 'dirty 0 'msg ("wrote " + d 'path))
@@ -117,7 +118,7 @@
   (: nd (needle s) n #nd
      (0 = n ? (tell d "find: a hex string, or \"text\"")
         (: start (d 'cur + 1)
-           (at? i) ((: (g k) (? (k >= n) 1 (lupa-byte d (i + k) = nd k) (g (k + 1)) 0)) 0)
+           (at? i) ((: (g k) (? (k >= n) 1 (hexedit-byte d (i + k) = nd k) (g (k + 1)) 0)) 0)
            (go i left) (? (left = 0) -1 (i + n > d 'n) (go 0 left) (at? i) i (go (i + 1) (left - 1)))
            hit (go (start >= d 'n ? 0 start) (d 'n))
            (hit < 0 ? (tell d "not found") (pins d 'find s 'cur hit 'msg ("found at " + hexn (addr d hit)))))))
@@ -140,7 +141,7 @@
           (0 = #v ? d (tell d ("no such command: " + v)))))
 
  ;; --- the step: a key on the state ---
- (lupa-key d c) (: h (d 'h) hexmode (d 'mode = 'hex)
+ (hexedit-key d c) (: h (d 'h) hexmode (d 'mode = 'hex)
    (d 'in = 'cmd ?
       (edcmd d 'cmd c (l \ (pin d 'in 'map, command d l)) (_ \ (pin d 'in 'map, tell d "")))
       ((c = 58 || c = 27 ? 0 (pin d 'msg "")),
@@ -165,8 +166,8 @@
  ;; a hex row: 77 columns, the text dropped on a narrower screen, all cut to the screen
  (hexrow d off w)
   (: n (d 'n) cur (d 'cur)
-     hx (foldl (a \ i \ a + (off + i < n ? (hex (lupa-byte d (off + i)) 2) "  ") + (i = 7 ? "  " " ")) "" ^16)
-     tx (foldl (a \ i \ a + (off + i < n ? (printable (lupa-byte d (off + i))) " ")) "" ^16)
+     hx (foldl (a \ i \ a + (off + i < n ? (hex (hexedit-byte d (off + i)) 2) "  ") + (i = 7 ? "  " " ")) "" ^16)
+     tx (foldl (a \ i \ a + (off + i < n ? (printable (hexedit-byte d (off + i))) " ")) "" ^16)
      row (hex (addr d off) 8 + "  " + hx + (w < 78 ? "" ("|" + tx + "|")))
      k (cur - off)                                          ; the cursor's cell, if on this row
      col (10 + k * 3 + (k > 7 ? 1 0))
@@ -190,13 +191,13 @@
      (join "; " (map strip (filter (l \ 0 < #(strip l)) ls2))))
  (asmrow d off w)
   (: r (insn d off) ln <r its >r cur (off = d 'cur)
-     bs (foldl (a \ i \ a + (i < ln ? (hex (lupa-byte d (off + i)) 2) "  ") + " ") "" ^7)
+     bs (foldl (a \ i \ a + (i < ln ? (hex (hexedit-byte d (off + i)) 2) "  ") + " ") "" ^7)
      s (symat d (addr d off)) sym (0 < #s && !(has? s "+") ? (s + ":") "")
      row (hex (addr d off) 8 + "  " + bs + (ln > 7 ? "+" " ") + " " + edfit sym 14 " " + " " + insn-text d off ln its)
      [ln ((cur ? "\e[7m" "") + edfit row w " " + (cur ? "\e[0m" ""))])
- (lupa-frame d w h) (: j (jug 0) rows (rows-of h) _ (pin d 'h h) _ (settle d h)
+ (hexedit-frame d w h) (: j (jug 0) rows (rows-of h) _ (pin d 'h h) _ (settle d h)
    e (d 'elf) hexmode (d 'mode = 'hex)
-   title (" lupa: " + d 'path + (d 'dirty ? " [+]" "") + "  " + (hexmode ? "hex" "asm") + " " + show (d 'syn)
+   title (" hexedit: " + d 'path + (d 'dirty ? " [+]" "") + "  " + (hexmode ? "hex" "asm") + " " + show (d 'syn)
           + "  " + hexn (addr d (d 'cur)) + "/" + hexn (d 'n)
           + (elfed? d ? ("  .text " + hexn (e 'taddr) + " " + show (e 'tsize) + " bytes") ""))
    _ (say j ("\e[H\e[0m\e[7m" + edfit title w " " + "\e[0m\e[K\r\n"))
@@ -208,7 +209,7 @@
                          (say j (<>row + "\e[0m\e[K\r\n"),
                           go (k + 1) (off + <row)))))
          0 (d 'top)))
-   cur (d 'cur) b (lupa-byte d cur) sym (symat d (addr d cur))
+   cur (d 'cur) b (hexedit-byte d cur) sym (symat d (addr d cur))
    about (" " + hexn (addr d cur) + "  byte " + hex b 2 + " " + show b + " " + printable b
           + (0 < #sym ? ("  " + sym) "") + (d 'nib >= 0 ? "  (high nibble set)" "")
           + (elfed? d ? "" "  (raw bytes)"))
@@ -219,13 +220,15 @@
     slurp j))
 
  ;; --- the runner: the tool on cli's stage ---
- (lupa-run p)
+ (hexedit-run p ro)
   (uread p @
-   [1 ""] (puts ("lupa: " + p + " is empty\n"), 1)
-   [1 a]  (lupa-new a p @ d (stage (lupa-frame d) (lupa-key d) (_ \ d 'over)))
-   (puts $ "lupa: cannot read " + p + "\n", 1))
- lupa-usage "usage: love lupa FILE"
- (lupa-main as)
-  (two? as ? (lupa-run <as) (puts (lupa-usage + "\n"), 1))
- _ (pins (cite 'verbs 'tab) 'lupa (udoor 'lupa lupa-main lupa-usage 1 1)))
-) ; module lupa
+   [1 ""] (puts ("hexedit: " + p + " is empty\n"), 1)
+   [1 a]  (hexedit-new a p @ d (pin d 'ro ro, stage (hexedit-frame d) (hexedit-key d) (_ \ d 'over)))
+   (puts $ "hexedit: cannot read " + p + "\n", 1))
+ hexedit-usage "usage: hexedit [-r] FILE"
+ (hexedit-main as)
+  (as @ ["-r" f] (hexedit-run f 1)
+        [f] (hexedit-run f 0)
+        (puts (hexedit-usage + "\n"), 1))
+ _ (pins (cite 'verbs 'tab) 'hexedit (udoor 'hexedit hexedit-main hexedit-usage 1 1)))
+) ; module hexedit
