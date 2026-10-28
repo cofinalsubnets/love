@@ -231,16 +231,20 @@
       (<ins = 'li && ins 2 = 0 && be 'zeroxor && flagfree be rest 64 ?
          ['xor (ins 1) (ins 1) (ins 1)] ins)
    ;; the flags are free if a writer, call or ret comes before any reader within k forms. a
-   ;; jump may reach an unseen reader, so it answers no; a label is transparent, as only the
-   ;; fall-through carries these flags.
+   ;; jump goes on at its label when that lies ahead, an unseen target answers no; a label is
+   ;; transparent, as only the fall-through carries these flags.
    (flagfree be l k)
       (k < 1 || atom? l ? 0
          (<(<l) @ o
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
-               (elem o '(jmp jmpr jmpm)) 0
+               (o = 'jmp) (flagjump be >l (<l 1) k)
+               (elem o '(jmpr jmpm jmpt)) 0
                (flagfree be >l (k - 1)))))
+   (flagjump be l nm k)
+      (k < 1 || atom? l ? 0
+         (<l @ ins (<ins = 'label && ins 1 = nm ? (flagfree be >l (k - 1)) (flagjump be >l nm (k - 1)))))
    (lay prog be addr items labels)
       (!(two? prog) ? (rev items . labels)
          (<prog @ ins
