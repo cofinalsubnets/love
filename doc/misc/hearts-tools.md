@@ -88,8 +88,8 @@ holo assembles every `.S` the census compiles; only the refused ones stay clang'
   (`.rep`, `.reloc`, `.extern` ×2), gas-data 4 (`(((1U` in the vdso notes), a64 operands 4 (`v0.16b`
   in aese/tbl/sha512su0, `add` with a symbol), ops 2 (`stgm`, `crc32x`), sysreg/pstate 3 (isr_el1, SPsel),
   data width 1, register 1
-- x64: 38 of 70. `endbr64` 7, `lretq` 2, `ljmpw` 1, `.octa` 2, `.uleb128` 1, `%`-immediates 3, bad
-  numbers 3, register names 4, others
+- x64: of the 64 units with asm, 38 lay (16 as clang does) and 26 refuse: AVX 7, the 16- and
+  32-bit lanes' far transfers 5, three SSE4 rows, `.irpc`, `.uleb128` over labels, x87, others
 - the 3 kallsyms `.S` files from link-vmlinux.sh are clang's in both (the link, below)
 
 ## 3. clang outside the units

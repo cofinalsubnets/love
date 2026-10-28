@@ -171,8 +171,8 @@
                (w @ 0 (scare 'as-nowidth [mn a]) (as-emit md w frc [(as-opw opc w)] ext a)))
             (k = 'ind)                                       ; call/jmp through a register or memory
             (a 1 @ o
-               (? (elem mn '(call calll callw)) (as-emit md (mn @ 'callw 2 'calll 4 0) 0 '(255) 2 o)
-                  (elem mn '(jmp jmpl jmpw)) (as-emit md (mn @ 'jmpw 2 'jmpl 4 0) 0 '(255) 4 o)
+               (? (elem mn '(call calll callw callq)) (as-emit md (mn @ 'callw 2 'calll 4 0) 0 '(255) 2 o)
+                  (elem mn '(jmp jmpl jmpw jmpq)) (as-emit md (mn @ 'jmpw 2 'jmpl 4 0) 0 '(255) 4 o)
                   (scare 'as-op1 mn)))
             (elem mn '(call jmp calll jmpl callw jmpw))
             (a 1 @ sym ((mn @ 'callw (as-osz md 2) 'calll (as-osz md 4) 'jmpw (as-osz md 2) 'jmpl (as-osz md 4) ())
@@ -192,7 +192,10 @@
             'cld '(252) 'std '(253)
             'lahf '(159) 'sahf '(158)
             'xlat '(215)
-            'sysret '(15 7) 'sysretl '(15 7) 'sysretq '(72 15 7)}
+            'sysret '(15 7) 'sysretl '(15 7) 'sysretq '(72 15 7)
+            'lretq '(72 203) 'sysenter '(15 52) 'sysexit '(15 53)
+            'endbr64 '(243 15 30 250) 'endbr32 '(243 15 30 251)          ; IBT's landing pads
+            'vmcall '(15 1 193) 'vmmcall '(15 1 217)}
    ;; ..and in a 16- or 32-bit segment: a size suffix (w l, the string ops' b w d) sets the operand,
    ;; none takes the segment's own; the prefixes stand alone, as gas reads `rep; movsb`
    as-sized {'ret 195 'lret 203 'iret 207 'pushf 156 'popf 157 'pusha 96 'popa 97}
@@ -208,7 +211,7 @@
           (1 < sw && charm? (peep as-sized stem ())) (as-osz md sw + [(as-sized stem)])
           (0 < sw && charm? (peep as-strs stem ())) (sw = 1 ? [(as-strs stem - 1)] (as-osz md sw + [(as-strs stem)]))
           (elem mn '(cbw cwde cwd cdq)) (as-osz md (elem mn '(cbw cwd) ? 2 4) + [(elem mn '(cbw cwde) ? 152 153)])
-          (elem mn '(cdqe cqo syscall sysret sysretq pushfq popfq)) (scare 'as-op0-mode [mn md])
+          (elem mn '(cdqe cqo syscall sysret sysretq pushfq popfq lretq)) (scare 'as-op0-mode [mn md])
           (as-nils mn @ () (scare 'as-op0 mn) b b)))
 
    ;; past the GPR core, ops destination first. SSE by a table of (prefix opcode), register <-
@@ -242,7 +245,7 @@
    ; (prefix opcode digit) for a shift of the whole register by the immediate
    as-ssi {'shufps [() 198] 'shufpd [[102] 198] 'pshufd [[102] 112] 'pshuflw [[242] 112] 'pshufhw [[243] 112]}
    ; the three-byte rows: 0F 38 xx, and 0F 3A xx with an imm8 last (sha256rnds2's xmm0 is implied)
-   as-s38 {'pshufb [[102] 0] 'sha256rnds2 [() 203] 'sha256msg1 [() 204] 'sha256msg2 [() 205]}
+   as-s38 {'pshufb [[102] 0] 'movntdqa [[102] 42] 'sha256rnds2 [() 203] 'sha256msg1 [() 204] 'sha256msg2 [() 205]}
    as-s3a {'palignr [[102] 15] 'pblendw [[102] 14]}
    as-ssh {'psrlw [113 2] 'psraw [113 4] 'psllw [113 6] 'psrld [114 2] 'psrad [114 4] 'pslld [114 6]
            'psrlq [115 2] 'psllq [115 6] 'psrldq [115 3] 'pslldq [115 7]}
@@ -313,6 +316,11 @@
                  (n = 2 && <s = 'im) (as-imt (as-emit md w frc [(192 + o8)] k d + [(byte <>s)]) 1 d)
                  (n = 2 && <s = 'rg && as-regn s = 1) (as-emit md w frc [(210 + o8)] k d)
                  ()))
+          ; crc32 by its source's suffix: F2 0F 38 F0 a byte, F1 the rest; the destination's REX.W
+          (n = 2 && elem mn '(crc32b crc32w crc32l crc32q) && <d = 'rg)
+           (: sw (xa-sfxw (nm 5)) ew (? (sw = 1) (as-regw d = 8 ? 8 4) (sw = 2) 4 sw)   ; gas lays 66 ahead of F2
+              ((sw = 2 ? [102 242] [242]) + as-emit md ew (as-frcs ops) [15 56 (sw = 1 ? 240 241)] (as-regn d) s))
+          (n = 1 && mn = 'rdpid && <d = 'rg) ([243] + as-emit md 4 0 '(15 199) 7 d)          ; F3 0F C7 /7
           (n = 1 && mn = 'bswap && <d = 'rg)
            (as-regn d @ r (catall [(as-rexm md 0 (as-rexw w) 0 0 (as-hi r)) [15 (200 + as-lo r)]]))
           (n = 3 && elem mn '(shld shrd))
@@ -359,7 +367,7 @@
      ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? ['mem -1 -1 1 0 <>o] o)) ops0))
      (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
-        (md < 64 && two? (as-sys md mn w ops)) (as-sys md mn w ops)
+        ((md < 64 || elem mn '(bt bts btr btc)) && two? (as-sys md mn w ops)) (as-sys md mn w ops)
         (as-more md mn w ops @ x
            (two? x ? x
               (#ops @ 0 (as-0 md mn)
