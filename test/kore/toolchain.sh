@@ -54,6 +54,15 @@ if [ "$(uname -m)" = x86_64 ]; then
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"
+  # -r: two objects as one, as ld.lld -r lays them; linked on, it runs the same
+  korerun ld -r "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-r.o" || fail "kore ld -r"
+  if command -v ld.lld > /dev/null 2>&1; then
+    ld.lld -r "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-lr.o"
+    cmp -s "$ho/.kore-lr.o" "$ho/.kore-r.o" || fail "kore ld -r vs ld.lld -r (bytes)"
+  fi
+  korerun ld "$ho/.kore-crt0.o" "$ho/.kore-r.o" -o "$ho/.kore-ldr.elf" || fail "kore ld of an ld -r object"
+  "$ho/.kore-ldr.elf"; r=$?
+  [ $r -eq 42 ] || fail "kore ld -r run (exit $r)"
   # lld's dialect as kbuild probes it: --version names LLD for ld-version.sh, and a flag
   # the linker does not carry out fails its ld-option probe
   korerun ld --version > "$o" 2>&1; grep -q " LLD [0-9.]*-compatible$" "$o" || fail "kore ld --version: $(cat "$o")"

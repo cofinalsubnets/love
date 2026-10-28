@@ -190,8 +190,8 @@
                  (ar-write dst thin ix (go <>old adds ()), 0))))))
 
    ld-usage "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] [-T SCRIPT [LLD OPTIONS]] A.o.. -o OUT"
-   ; ld: one linker, lld's command line (klink.l's kl-args). under a script klink lays it as
-   ; ld.lld would; else holo's static link (link.l): -pie the self-relocating et_dyn, -Ttext
+   ; ld: one linker, lld's command line (klink.l's kl-args). -r, or under a script, klink lays
+   ; it as ld.lld would; else holo's static link (link.l): -pie the self-relocating et_dyn, -Ttext
    ; the bare-metal org, --readme plain text into `.love.README`
    (ld-main as)
     (: o (kl-args as)
@@ -204,7 +204,7 @@
           (string? (peep o 'script ()) || o 'reloc || o 'shared)
           (: _ (pin o 'banner ("Linker: love " + <(usplit 43 love-version)))
              _ (kl-ld o)
-             (chmod (o 'out) 493, 0))
+             (? (o 'reloc) 0 (chmod (o 'out) 493)), 0)
           (: _ (#(peep o 'out "") ? () (udie 2 "ld: no -o OUT"))
              t (peep o 'tgt ()) tgt (? (t != ()) t (o 'emu = ()) 'x64 (o 'emu))
              rd (peep o 'readme ())
