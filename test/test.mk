@@ -6,7 +6,7 @@
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
-  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
+  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
@@ -34,7 +34,7 @@ test_quick: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
+	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_grap test_chem \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
+	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
@@ -664,8 +664,6 @@ gate_hol += test_root
 gate_hol += test_fat32
 # test_cpio -- src/apps/cpio.l against GNU cpio, both ways over newc
 gate_love += test_cpio
-# test_tfm -- src/apps/tfm.l against tftopl and TeX, damaged copies too; skips without TeX Live
-gate_love += test_tfm
 # test_gpic -- gpic.l against groff's pic, byte for byte; test/gpic/open counted, not gated. skips
 # without groff
 gate_love += test_gpic
@@ -674,8 +672,6 @@ gate_love += test_gpic
 gate_love += test_grap
 # test_chem -- chem.l against groff's, likewise; test/chem/open counted. skips without groff's chem
 gate_love += test_chem
-# test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
-gate_love += test_caja
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host
 	@echo TEST test/holo/golden.l

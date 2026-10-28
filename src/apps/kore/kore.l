@@ -1006,7 +1006,7 @@
     'mac2unix "usage: mac2unix [-fkqn] [FILE..]"
     'man "usage: man [-w] [SECTION] NAME.."
     'html2text "usage: html2text [-w COLS] [FILE..]"
-    'markdown "usage: markdown [-t html|roff|text|dvi] [-w COLS] [FILE..]"
+    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
     'pic "usage: pic [cat|less|convert|pixelize] [-g MODE] [-w COLS] [-h ROWS] FILE.. | pic [-nCSU] [-t [-cz]] [FILE..]"
     'picless "usage: picless FILE.."

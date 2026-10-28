@@ -355,7 +355,7 @@ kore_net = src/apps/tls/bytes.l src/apps/tls/verify.l src/apps/tls/client.l src/
 # the crew the artifact carries past kore and mooncc
 crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
   src/apps/fat.l \
-  src/apps/source.l src/apps/lapiz.l src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l \
+  src/apps/source.l src/apps/lapiz.l \
   src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l \
