@@ -37,4 +37,34 @@
       (<st = "\0.text\0.altinstructions\0.dynstr\0.gnu.version\0.dynsym\0.gnu.hash\0.note\0.gnu.version_d\0.dynamic\0.shstrtab\0.rodata\0")
       (<>st ".hash" = 57) (<>st ".gnu.hash" = 53) (<>st ".rodata" = 103)))
 
+; --- kbuild's $(LD) lines: the vdso's, vmlinux's inputs in order, and what a probe is refused
+(: v (kl-args ["-EL" "-maarch64elf" "-z" "norelro" "-z" "noexecstack" "-shared" "-soname=linux-vdso.so.1" "-Bsymbolic"
+               "--build-id=sha1" "-n" "-z" "force-bti" "--orphan-handling=warn" "-T" "vdso.lds" "a.o" "b.o" "-o" "vdso.so.dbg"])
+   k (kl-args ["-X" "--pack-dyn-relocs=relr" "--script=./vmlinux.lds" "--strip-debug" "-o" "v1" "--whole-archive" "vmlinux.a"
+               "x.o" "--no-whole-archive" "--start-group" "lib.a" "--end-group" "ks.o"])
+   r (kl-args ["-EL" "-maarch64elf" "-z" "norelro" "-r" "-o" "vmlinux.o"])
+   (test
+      (v 'script = "vdso.lds") (v 'out = "vdso.so.dbg") (v 'soname = "linux-vdso.so.1") (v 'emu = 'a64)
+      (v 'shared = 1) (v 'symbolic = 1) (v 'nmagic = 1) (v 'bti = 1) (v 'bid = 1) (v 'relro = 0) (v 'orphan = "warn")
+      (v 'ins = [['in "a.o" 0] ['in "b.o" 0]])
+      (k 'script = "./vmlinux.lds") (k 'discard = 'locals) (k 'relr = 1) (k 'strip = 1)
+      (k 'ins = [['in "vmlinux.a" 1] ['in "x.o" 1] ['in "lib.a" 0] ['in "ks.o" 0]])
+      (r 'reloc = 1) (r 'ins = ())
+      (kl-args ["--no-warn-rwx-segments" "-v"] = "ld: unsupported option --no-warn-rwx-segments")
+      (kl-args ["-z" "max-page-size=4096"] = "ld: unsupported: -z max-page-size=4096")
+      (kl-args ["-o"] = "ld: -o wants a value")
+      (kl-args ["-maarch64elfb"] = "ld: unsupported option -maarch64elfb")
+      ((kl-args ["-v"]) 'ver = 1)
+      (kl-num "0x10000" = 65536) (kl-num "4096" = 4096) (kl-num "4k" = ())))
+
+; --- the a53 erratum: adrp at a page's 0xff8, a load not writing x0, a load through x0 is refused;
+; off that word it scans clean, and a section its object names no section symbol for is answered
+(: code (string (cats (map (w \ kl-le w 4) [2415919104 4181721153 4181721091])))
+   (ob ss) {'id "e.o" 'src code 'nsym (? ss 3 2) 'syms {0 ["" 0 0 0 0 0 0] 1 ["$x" 0 0 1 0 0 0] 2 ["" 0 3 1 0 0 0]}
+            'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".text" 1 6 0 12 4 0 0 0]}}
+   (lk a ss) {'ot {0 (ob ss)} 'env {'isa {1 a}} 'outs [{'name ".text" 'flags 6 'steps [['isec 0 1 12 4 ".text"]]}]}
+   (test
+      (trap (_ \ kl-a53 (lk 4088 0)) () (a \ b \ a) = 'klink-843419)
+      (kl-a53 (lk 4096 0) = [[0 1]]) (kl-a53 (lk 4096 1) = ())))
+
 (test_fin (), say err "test/law/klink: ok", put err 10, 0)
