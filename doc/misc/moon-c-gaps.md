@@ -1566,7 +1566,7 @@ in the table above.
 
 **c-testsuite is wired** — `test_cts`, `test_cts_a64`, `test_cts_rv64` over
 `test/gate/cts.sh` (doc/misc/moon.md). 220 single-file programs held to the output they ship, on all
-three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole without it. Its
+three targets, ~60 s each, the corpus fetched into dl/ by the lane (a failed fetch skips it). Its
 first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came
 from. The roster of failures lives in the gate with a cause apiece.
 

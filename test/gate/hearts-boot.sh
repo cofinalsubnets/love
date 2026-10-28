@@ -11,6 +11,7 @@
 # tcg) and the cross-host check is a skip.
 # usage: hearts-boot.sh LOVE XLOVE CAT   (XLOVE the a64 love, CAT the carried tree it bakes from)
 . test/gate/skip.sh
+. test/gate/dl.sh
 set -u
 
 love=$1 xlove=$2 cat=$3
@@ -19,9 +20,9 @@ KSHA=06008d280d8e6311965b35efcc7f544d76e88b236a443c675ca24b41a61c47cd
 K=$C/Image-6.19.14-$(echo $KSHA | cut -c1-16)
 stamp=${HEARTS_STAMP:-0}
 fail() { echo "FAIL hearts-boot: $*" >&2; exit 1; }
-dl=${DL:-$(sh src/tools/dlfind.sh .)}
-fw=$dl/edk2-ovmf/ovmf-code-aarch64.fd
-[ -f "$fw" ] || gate_skip "hearts-boot: no dl/edk2-ovmf/ovmf-code-aarch64.fd, skipped"
+name=hearts-boot
+dl_need edk2-ovmf
+fw=$DL/edk2-ovmf/ovmf-code-aarch64.fd
 [ -f "$K" ] || fail "no $K -- a green test_hearts keeps it"
 [ "$(sha256sum < "$K" | cut -d" " -f1)" = "$KSHA" ] || fail "$K is not the certified Image $KSHA"
 w=$(mktemp -d -p /var/tmp) || exit 1
