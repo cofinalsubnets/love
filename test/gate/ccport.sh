@@ -34,7 +34,6 @@ roster='
 '
 # and the ones only mooncc's tcc misses: mooncc's gaps, each to close
 roster_moon='
-146_tls_extern links tcc objects by the configured CC: mooncc refuses -no-pie and -Wl,-z,noexecstack, and holo links no foreign .tdata (link-tls)
 '
 
 t2='$1 -o $*.exe 2>$*.cerr; sh -c '\''cat $$0.cerr; rm -f $$0.cerr; [ ! -x ./$$0.exe ] || exec ./$$0.exe "$$@"'\'' $*'
