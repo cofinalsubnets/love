@@ -1,5 +1,4 @@
-#ifndef _LOVE_TERMIOS_H
-#define _LOVE_TERMIOS_H
+#pragma once
 #include <sys/types.h>
 typedef unsigned int  tcflag_t;
 typedef unsigned char cc_t;
@@ -44,4 +43,3 @@ int tcflush(int, int);
 int tcflow(int, int);
 pid_t tcgetpgrp(int);
 int tcsetpgrp(int, pid_t);
-#endif

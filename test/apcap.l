@@ -21,8 +21,12 @@
  (1024 = 10 2) (13 = 3 (+ 1) 10) (0.5 = -1 2))
 
 ; cap 4: compose 5 scares; a power only past 4 words (256 bits)
+(: (ac-sq x) (2 x))
+(pin apcap 0 1)
+(test ('capped = <(ac-sq (100 2))))   ; a literal square past the count keeps num-ap's scare
 (pin apcap 0 4)
 (test
+ ((200 2) = ac-sq (100 2))            ; ..and under it squares outright
  (14 = 4 (+ 1) 10)
  ('capped = <(5 (+ 1)))   ; the scare fires at compose time, mid-curry
  (16 = 4 2)

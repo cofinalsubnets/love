@@ -1,5 +1,4 @@
-#ifndef _LOVE_WCTYPE_H
-#define _LOVE_WCTYPE_H
+#pragma once
 #include <wchar.h>
 /* the c locale: past ascii a wide character has no class, as in glibc */
 typedef int wctype_t;
@@ -20,4 +19,3 @@ wint_t towlower(wint_t);
 wint_t towupper(wint_t);
 wctype_t wctype(char const *);
 int iswctype(wint_t, wctype_t);
-#endif

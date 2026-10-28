@@ -1,5 +1,4 @@
-#ifndef _LOVE_FNMATCH_H
-#define _LOVE_FNMATCH_H
+#pragma once
 /* shell patterns against a name: * ? [..] with ranges, ! or ^ negation and [:class:]es, \ escapes */
 #define FNM_PATHNAME    1    /* a / matches only a / */
 #define FNM_NOESCAPE    2    /* \ is an ordinary character */
@@ -9,4 +8,3 @@
 #define FNM_FILE_NAME   FNM_PATHNAME
 #define FNM_NOMATCH     1
 int fnmatch(char const *, char const *, int);
-#endif

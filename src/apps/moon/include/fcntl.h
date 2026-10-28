@@ -1,5 +1,4 @@
-#ifndef _LOVE_FCNTL_H
-#define _LOVE_FCNTL_H
+#pragma once
 #include <sys/types.h>
 /* linux x86-64's values, in decimal, on every kernel; the bsds take them translated */
 #define O_RDONLY         0
@@ -60,4 +59,3 @@ int open(char const*, int, ...);
 int openat(int, char const*, int, ...);
 int creat(char const*, unsigned int);
 int fcntl(int, int, ...);
-#endif

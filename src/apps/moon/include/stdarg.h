@@ -1,7 +1,6 @@
 /* stdarg.h for mooncc: the target's real va_list, laid as gcc's so variadics link across
  * compilers. an array of one, so it decays to a pointer; aapcs64's offsets are negative. */
-#ifndef _CC_STDARG_H
-#define _CC_STDARG_H
+#pragma once
 
 /* gcc/clang's builtins insist on their own va_list; mooncc claims __GNUC__ but lays its own */
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__mooncc__)
@@ -48,6 +47,4 @@ typedef __gnuc_va_list va_list;
 #define va_copy(dst, src)  __builtin_va_copy(dst, src)
 #else
 #define va_copy(dst, src)  ((dst)[0] = (src)[0])
-#endif
-
 #endif

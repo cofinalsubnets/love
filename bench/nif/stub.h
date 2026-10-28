@@ -13,8 +13,7 @@
  *
  * include this AFTER the nif source. the types are love.h's and the
  * declarations are love.h's; this only lays the bodies. */
-#ifndef NIF_STUB_H
-#define NIF_STUB_H
+#pragma once
 #include "love.h"
 
 const struct mint mint_zero = {0, 0};
@@ -31,5 +30,3 @@ lvm(lvm_cask) { return g; }
 lvm(lvm_str) { return g; }              // love.h's inline strp() names it, so every nif does
 lvm(lvm_chain) { return g; }
 lvm(_lvm_ghelp) { return g; }
-
-#endif

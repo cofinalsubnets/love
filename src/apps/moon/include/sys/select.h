@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_SELECT_H
-#define _LOVE_SYS_SELECT_H
+#pragma once
 #include <sys/types.h>
 #include <sys/time.h>
 /* glibc's layout: 1024 bits as 16 longs, as the kernel reads it */
@@ -14,4 +13,3 @@ typedef struct { unsigned long fds_bits[FD_SETSIZE / (8 * sizeof(unsigned long))
 #define FD_CLR(d, s)   ((s)->fds_bits[__FDELT(d)] &= ~__FDMASK(d))
 #define FD_ISSET(d, s) (((s)->fds_bits[__FDELT(d)] & __FDMASK(d)) != 0)
 int select(int, fd_set*, fd_set*, fd_set*, struct timeval*);
-#endif

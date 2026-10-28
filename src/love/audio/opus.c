@@ -5,8 +5,9 @@
 //                          gain (the head's output gain: dB in Q7.8) | why
 // (opus-packet b p f)   -> one packet's samples, interleaved, s16le (f 0) or f32le (f 1); p ""
 //                          conceals a lost packet | why: an opus error code, negated
-// the rfc's reference decoder (float build, opus/ with its notices) as one unit, allocating
-// nothing: its pseudostack is the cask's tail, pointed at for one call (the one mutable global)
+// the rfc's reference decoder, float build, decode path only (opus/, its notice opus/COPYING)
+// as one unit, allocating nothing: its pseudostack is the cask's tail, pointed at for one call
+// (the one mutable global)
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>
@@ -14,103 +15,18 @@
 #include <math.h>
 #include <stdlib.h>
 
-double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_sqrt(double),
-       lm_exp(double), lm_log(double), lm_pow(double, double);
-static double op_floor(double x) {
- if (x != x || x >= 4503599627370496.0 || x <= -4503599627370496.0) return x;
- double t = (double) (long long) x;
- return t > x ? t - 1 : t; }
-static long op_lrint(double x) {             // to nearest, ties to even
- double f = op_floor(x), d = x - f;
- long r = (long) f;
- return d > 0.5 || (d == 0.5 && (r & 1)) ? r + 1 : r; }
-#define sin(x) lm_sin(x)
+double lm_cos(double), lm_sqrt(double), lm_exp(double);
 #define cos(x) lm_cos(x)
 #define sqrt(x) lm_sqrt(x)
 #define exp(x) lm_exp(x)
-#define log(x) lm_log(x)
-#define log2(x) (lm_log(x) * 1.4426950408889634074)
-#define atan2(y, x) lm_atan2(y, x)
-#define atan(x) lm_atan2(x, 1.0)
-#define floor(x) op_floor(x)
-#define lrint(x) op_lrint(x)
-#define lrintf(x) op_lrint(x)
 
-#define OPUS_BUILD 1
-#define HAVE_LRINTF 1                  // float2int rounds to nearest, as the reference does
-#define CELT_C
-#define NONTHREADSAFE_PSEUDOSTACK 1
 #define restrict
 // no heap: nothing on the decoder's path asks, and the scratch is laid per call below
-#define OVERRIDE_OPUS_ALLOC
-#define OVERRIDE_OPUS_FREE
-#define OVERRIDE_OPUS_ALLOC_SCRATCH
-static inline void *opus_alloc(size_t n) { (void) n; return NULL; }
-static inline void opus_free(void *p) { (void) p; }
 static inline void *opus_alloc_scratch(size_t n) { (void) n; return NULL; }
 
-#include "opus/celt/bands.c"
-#include "opus/celt/celt.c"
-#include "opus/celt/celt_lpc.c"
-#include "opus/celt/cwrs.c"
-#include "opus/celt/entcode.c"
-#include "opus/celt/entdec.c"
-#include "opus/celt/entenc.c"
-#include "opus/celt/kiss_fft.c"
-#include "opus/celt/laplace.c"
-#include "opus/celt/mathops.c"
-#include "opus/celt/mdct.c"
-#include "opus/celt/modes.c"
-#include "opus/celt/pitch.c"
-#include "opus/celt/quant_bands.c"
-#include "opus/celt/rate.c"
-#include "opus/celt/vq.c"
-#undef MAX_PULSES                      // celt's, before silk's own
-#include "opus/silk/CNG.c"
-#include "opus/silk/LPC_analysis_filter.c"
-#include "opus/silk/LPC_inv_pred_gain.c"
-#undef QA                              // LPC_inv_pred_gain.c's, before NLSF2A.c's own
-#include "opus/silk/NLSF2A.c"
-#include "opus/silk/NLSF_VQ_weights_laroia.c"
-#include "opus/silk/NLSF_decode.c"
-#include "opus/silk/NLSF_stabilize.c"
-#include "opus/silk/NLSF_unpack.c"
-#include "opus/silk/PLC.c"
-#include "opus/silk/bwexpander.c"
-#include "opus/silk/bwexpander_32.c"
-#include "opus/silk/code_signs.c"
-#include "opus/silk/dec_API.c"
-#include "opus/silk/decode_core.c"
-#include "opus/silk/decode_frame.c"
-#include "opus/silk/decode_indices.c"
-#include "opus/silk/decode_parameters.c"
-#include "opus/silk/decode_pitch.c"
-#include "opus/silk/decode_pulses.c"
-#include "opus/silk/decoder_set_fs.c"
-#include "opus/silk/gain_quant.c"
-#include "opus/silk/init_decoder.c"
-#include "opus/silk/log2lin.c"
-#include "opus/silk/pitch_est_tables.c"
-#include "opus/silk/resampler.c"
-#include "opus/silk/resampler_private_AR2.c"
-#include "opus/silk/resampler_private_IIR_FIR.c"
-#include "opus/silk/resampler_private_down_FIR.c"
-#include "opus/silk/resampler_private_up2_HQ.c"
-#include "opus/silk/resampler_rom.c"
-#include "opus/silk/shell_coder.c"
-#include "opus/silk/sort.c"
-#include "opus/silk/stereo_MS_to_LR.c"
-#include "opus/silk/stereo_decode_pred.c"
-#include "opus/silk/sum_sqr_shift.c"
-#include "opus/silk/table_LSF_cos.c"
-#include "opus/silk/tables_LTP.c"
-#include "opus/silk/tables_NLSF_CB_NB_MB.c"
-#include "opus/silk/tables_NLSF_CB_WB.c"
-#include "opus/silk/tables_gain.c"
-#include "opus/silk/tables_other.c"
-#include "opus/silk/tables_pitch_lag.c"
-#include "opus/silk/tables_pulses_per_block.c"
-#include "opus/src/opus_decoder.c"
+#include "opus/celt.c"
+#include "opus/silk.c"
+#include "opus/decoder.c"
 
 // the cask: the decoder, its gain (a double), its scratch, then room for a packet's samples
 #define OP_SCRATCH (16 + GLOBAL_STACK_SIZE + 64 + 5760 * 2 * sizeof(float))

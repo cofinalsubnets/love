@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_IOCTL_H
-#define _LOVE_SYS_IOCTL_H
+#pragma once
 #include <sys/types.h>
 struct winsize { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel; };
 #define TIOCSCTTY  21518
@@ -22,4 +21,3 @@ struct winsize { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel; };
 #define _IOWR(type, nr, sz)   _IOC(_IOC_READ | _IOC_WRITE, (type), (nr), sizeof(sz))
 
 int ioctl(int, unsigned long, ...);
-#endif

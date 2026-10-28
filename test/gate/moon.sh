@@ -126,6 +126,14 @@ moonrun -c "$ho/.ded.c" -o "$ho/.ded.o" || fail "mooncc: dead calls and statics"
 printf 'struct ops { void (*a)(void); void (*b)(void); } pv;\nvoid f(void){ asm volatile("call *%%[op]" :: [op] "m" (pv.b)); }\n' > "$ho/.pv.c"
 moonrun -c "$ho/.pv.c" -o "$ho/.pv.o" || fail "mooncc: an m operand at a global"
 [ "$(objdump -d "$ho/.pv.o" | grep -c 'ff 15 00 00 00 00')" = 1 ] || fail "an m operand at a global is not rip-relative"
+# an int already within 32 signed bits takes no movsxd (a short plus a byte, then halved); a
+# long narrowed to int still does
+printf 'int f(short a, unsigned char b){ int x = a + b; int y = x >> 1; return y * 3; }\n' > "$ho/.sxw.c"
+moonrun -c "$ho/.sxw.c" -o "$ho/.sxw.o" || fail "mooncc: a narrow int's arithmetic"
+[ "$(objdump -d "$ho/.sxw.o" | grep -c movslq)" = 0 ] || fail "an int within 32 bits was sign-extended again"
+printf 'int g(long a){ return (int)a; }\n' > "$ho/.sxn.c"
+moonrun -c "$ho/.sxn.c" -o "$ho/.sxn.o" || fail "mooncc: a long narrowed to int"
+[ "$(objdump -d "$ho/.sxn.o" | grep -c movslq)" = 1 ] || fail "a long narrowed to int lost its sign extension"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"
@@ -282,6 +290,14 @@ $cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peer128.o" te
 moonrun -o "$ho/.abi128" test/cc/abi128/host.c "$ho/.peer128.o" > "$ho/.abi128.log" 2>&1 \
   || { cat "$ho/.abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
 "$ho/.abi128" > "$ho/.abi128.out" || { cat "$ho/.abi128.out" >&2; fail "abi128: mooncc and gcc disagree on SysV's __int128"; }
+
+# ms_abi across compilers: gcc's definitions and calls against mooncc's trampolines and shuffles
+$cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peerms.o" test/cc/msabi/peer.c \
+  || fail "msabi: gcc could not build peer.c"
+moonrun -o "$ho/.msabi" test/cc/msabi/host.c "$ho/.peerms.o" > "$ho/.msabi.log" 2>&1 \
+  || { cat "$ho/.msabi.log" >&2; fail "msabi: mooncc could not build or link host.c"; }
+"$ho/.msabi"; b=$?
+[ $b -eq 0 ] || fail "msabi: mooncc and gcc disagree on ms_abi (bits $b)"
 
 # the float fuzz at -Os too: its exit folds every result's bits
 $cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
@@ -552,6 +568,9 @@ mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
 printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m.c"
 [ "$(moonrun -E "$ho/.once/m.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read the header twice"
+mkdir -p "$ho/.once/b"
+printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
+[ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
@@ -1120,6 +1139,10 @@ cok x64 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return 
 # C11 6.8.1p3: a label is unique to its function; __label__ makes two
 cno x64 'int m(void){ { L: ; } { L: ; } return 0; }\n' "a duplicate label was accepted"
 cok x64 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' "two blocks' __label__ L refused"
+# C11 6.9p3: one definition per function; gnu89's extern inline may precede the real one
+cno x64 'static int f(void){ return 1; }\nstatic int f(void){ return 2; }\nint m(void){ return f(); }\n' "a static function defined twice was accepted"
+cno x64 'int f(void){ return 1; }\nint f(void){ return 2; }\n' "a function defined twice was accepted"
+cok x64 'extern inline __attribute__((gnu_inline)) int f(void){ return 1; }\nint f(void){ return 2; }\n' "a gnu extern inline followed by its definition refused"
 
 # a UCN takes exactly 4 or 8 hex digits, and names no basic-set character, surrogate or
 # code point past the last (C11 6.4.3p2). \134 is the backslash in octal

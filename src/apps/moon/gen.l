@@ -1073,6 +1073,10 @@
          ('deref x) (hdty9 g env x @ it
                        (two? it && elem <it '(ptr arr) ? <>it ()))
          ('cast ty _) ty
+         ; a call's answer: its function's result type, off the sigs row or the head's own type
+         ('call h _)
+          (: sg (h @ ('var nm) (bad? (vent g env nm) ? (peep (g 'sigs) nm ())) ())
+             (two? sg ? <sg (hdty9 g env h @ ft (? (ptr? ft && fn? <>ft) <>(<>ft) (fn? ft) <>ft ()))))
          ; a[i] is *(a + i), so a table's element type reaches the deref through the sum's pointer operand
          ('bin o x y && o = '+)
           (hdty9 g env x @ a
@@ -3073,7 +3077,12 @@
                  off (direct && 0 < nps && (variadic ? (nas < nps) (nas != nps)))
                  _ (off ? (pin g 'arity
                                "call to '\(<>head)' wants \(nps)\(variadic ? " or more" "")\(nps = 1 ? " argument" " arguments"), given \(nas)") 0)
-                 cr (off ? 'bad (call-fixed g env head args direct ptys rt variadic))
+                 ms (? (two? sig) (3 < #sig && sig 3 = 'ms) direct () (fnms (hdty9 g env head)))
+                 cr (? off 'bad
+                       !ms (call-fixed g env head args direct ptys rt variadic ())
+                       !(x64? g) (nolane g "no lane for an ms_abi call\(ontgt g)")
+                       (any (t \ flo? t || stru? t) (rt . ptys)) (nolane g "no lane for an ms_abi call with a float or struct in its signature")
+                       (call-fixed g env head args direct ptys rt variadic 1))
                  (? (bad? cr) 'bad
                     !(stru? (vty cr)) cr
                     (sretm? g (vty cr)) cr   ; a memory return: the sret temp's address is the value
@@ -3188,7 +3197,13 @@
                       (a8? g && rT = 'r4 ? 'no (fin ty [['la rT <>en] [(ldop ty) rT rT 0]]))))))))
    ; overflow args emit first, then the register group, both right-to-left; the caller cleans the
    ; overflow block. params are named uniquely so no lambda param shadows a :-local
-   (call-fixed g env hd ags dir pts ret va?)
+   ; an ms_abi callee (x64): the sysv words move over -- rdi rsi rdx rcx to rcx rdx r8 r9, r8 r9 above
+   ; a 32-byte shadow, sysv's stack words already where ms wants its fifth on. raw: the passes' sp
+   ; model never sees the 48, which nothing between reads
+   (msw ms fs) (ms ? ([['raw [72 131 236 48 76 137 68 36 32 76 137 76 36 40 73 137 201 73 137 208 72 137 242 72 137 249]]]
+                      + fs + [['raw [72 131 196 48]]]) fs)
+   (fnms ty) (? (ptr? ty) (fnms <>ty) (fn? ty) (3 < #ty && ty 3 = 'ms) ())
+   (call-fixed g env hd ags dir pts ret va? ms)
     (: (kls as i gpc xmmc ovc acc)                       ; classify + evaluate, L->R -> (((class idx) pushforms)..) | 'bad
         (!(two? as) ? (rev acc)
            ; a targetable leaf skips the cell ('ez/'ezm): emitted into its register after the spills
@@ -3570,7 +3585,7 @@
                     ; the sret pointer rides the first arg register (a64: x8); the temp's address answers
                     srin (sr6 ? (srpass g sroff srg))
                     srout (sr6 ? (srback g sroff srg))
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + msw ms [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
                    fres (? (ia32? g) (st0in g (fnret (vty hr)))
@@ -3592,7 +3607,7 @@
                                  [['callm 'rip (gword (vfs hr))]] + fres +
                                  rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['callr pk]] + fres +
+                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + msw ms [['callr pk]] + fres +
                                 rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))))))))
    ; the hidden result pointer, out and back: a register (a64 x8, else the first argument's), or on
    ; i386 the block's first word -- which the callee pops (ret $4), so the caller's block is 4 short
@@ -6988,7 +7003,24 @@
              (two? lk) (lk . addrf1 g all >r)
              (two? xj) (fuse xj)
              (two? aj) (fuse aj)
-             (f . addrf1 g all r))))
+             (xscale g f nx @ xs
+                (? !(two? xs) (f . addrf1 g all r)
+                   (dead9 <>f >r || (<>f = <>nx && nelem <nx (stxops + fstxops))) (xs . addrf1 g all >r)
+                   (<>f = <>>f) (f . addrf1 g all r)        ; the multiply rewrote its own source
+                   (f . xs . addrf1 g all >r))))))
+   ; a scaling multiply feeding the next indexed form's index at scale 1 rides the scale (x64)
+   (xscale g f nx)
+    (? !(x64? g && two? f && <f = 'imul && elem (f 3) '(2 4 8) && two? nx) ()
+       (: t <>f a <>>f s (f 3)
+          st? (elem <nx (stxops + fstxops))
+          o (st? ? 1 2)                                   ; the base's operand; index, scale, disp follow
+          b (nx o) i (nx (o + 1))
+          (? !(st? || elem <nx '(ldx ldxb ldxw ldxsw leax ldsdx ldssx)) ()
+             (nx (o + 2) != 1) ()
+             (st? && nx 5 = t) ()
+             (: bi (? (i = t && b != t) [b a] (b = t && i != t) [i a] ())
+                (two? bi
+                   ? (st? ? [<nx <bi <>bi s (nx 4) (nx 5)] [<nx <>nx <bi <>bi s (nx 5)]))))))
    (addrfold g fs) (addrf1 g fs (addrf1 g fs fs) @ r (#r = #fs ? r (addrfold g r)))
 
    ; the branching death proof (cmpfuse's license): dead when no reachable path reads before a
@@ -7123,6 +7155,23 @@
           (local? L) !(fsym? L)
           ; an and by a 32-bit mask straight after clears the top itself
           (masked r n) (two? n && <n = 'and && <>n = r && <>>n = r && u32? (n 3))
+          ; or whose bits reach only a narrowing or a narrow store of r (or of a copy r dies into),
+          ; through ops whose low half reads only low halves; fl: one of those ops set the flags, so
+          ; they must be written again before any reader
+          (lo32 r l fl) (two? l && two? <l &&
+             (<l @ f
+                (? (elem <f '(zx4 sx4 zx2 sx2 zx1 sx1) && <>f = r) (!fl || fdead >l 16)
+                   (elem <f '(st4 st2 st1) && f 3 = r) (<>f != r && dies? g r >l && (!fl || fdead >l 16))
+                   (elem <f (aluops + '(neg not)) && <>f = r) (lo32 r >l 1)
+                   (<f = 'mov && <>>f = r) (<>f != r && dies? g r >l && lo32 <>f >l fl)
+                   (elem <f '(label align jmp jmp8 jmpt jmpr jmpm br br8 set cmov adc sbb ret)) ()
+                   (rdsp g f @ rs (rs != 'bar && nelem r <rs && nelem r <>rs && lo32 r >l fl)))))
+          ; the flags are written again (or a call clobbers them) before anything reads them
+          (fdead l k) (k > 0 && two? l && two? <l &&
+             (<<l @ op (? (elem op (aluops + '(cmp test cmpm cmprm neg))) 1
+                          (elem op barops) 1
+                          (elem op '(label align jmp jmp8 jmpt jmpr jmpm br br8 set cmov adc sbb ret)) ()
+                          (fdead >l (k - 1)))))
           (round l K ch)
            (!(two? l) ? ch
               (<l @ f
@@ -7162,6 +7211,7 @@
                     (retx? f) (f . out >l 'top)
                     (<f = 'zx4 && K != 'top && elem <>f K) (out >l K)
                     (<f = 'zx4 && two? >l && masked <>f <>l) (out >l K)
+                    (<f = 'zx4 && lo32 <>f >l ()) (out >l K)
                     (fuse f >l K @ m
                        (two? m ? (<m + out (m 1) (step <>l (step f K)))
                           (f . out >l (step f K)))))))
@@ -7351,50 +7401,82 @@
 
    ; rezx: a zxN over a register already clean to N drops, and an sxN over one clean below N
    ; (clean: zx, ldu, the 32-bit rotates, li, mov). a set is clean to 1, so `cmp r 0; set ne r`
-   ; over it drops unless the next form reads flags
+   ; over it drops unless the next form reads flags. a register's signed width rides beside
+   ; (its value fits a signed N bits, keyed by its spelling), so an sxN over one within N drops
    (rezx g fs)
-    (: (go l t acc)
+    (: (sk r) (show r)
+       (swk k) (: (go w) (64 < w ? 0 (-(1 << (w - 1)) <= k && k < 1 << (w - 1) ? w (go (w + 1)))) (go 1))
+       (swr t x) (? (charm? x) (swk x)
+                    !(nom? x) 0
+                    (: s (peep t (sk x) 0) c (peep t x 0)
+                       (? (0 < s) s (0 < c) (c + 1) 0)))
+       (cap w) (0 < w && w <= 64 ? w 0)
+       (both a b h) (0 < a && 0 < b ? (cap (h a b)) 0)
+       ; the width an op lays in its destination, from its operands' (0: unknown)
+       (swof t f)
+        (<f @ op
+           (? (elem op '(add sub lea)) (both (swr t (f 2)) (swr t (f 3)) (a \ b \ max a b + 1))
+              (op = 'imul) (both (swr t (f 2)) (swr t (f 3)) (a \ b \ a + b))
+              (elem op '(and or xor)) (both (swr t (f 2)) (swr t (f 3)) max)
+              (op = 'sar) (swr t (f 1) @ a (0 < a && charm? (f 2) ? (max 1 (a - f 2)) 0))
+              (op = 'shl) (swr t (f 1) @ a (0 < a && charm? (f 2) ? (cap (a + f 2)) 0))
+              (op = 'neg) (swr t (f 1) @ a (0 < a ? (cap (a + 1)) 0))
+              (op = 'not) (swr t (f 1))
+              (elem op '(ld1 ld2 ld4)) (op @ 'ld1 8 'ld2 16 32)
+              (elem op '(ldu1 ldu2 ldu4)) (op @ 'ldu1 9 'ldu2 17 33)
+              (elem op '(zx1 zx2 zx4)) (op @ 'zx1 9 'zx2 17 33)
+              (elem op '(sx1 sx2 sx4)) (: w (op @ 'sx1 8 'sx2 16 32) o (swr t (f 1)) (0 < o && o < w ? o w))
+              (op = 'li) (swr t (f 2))
+              (op = 'mov) (swr t (f 2))
+              (op = 'set) 2
+              0))
+       (lays? op) (elem op '(add sub lea imul and or xor sar shl neg not ld1 ld2 ld4))
+       (go l t acc)
         (!(two? l) ? (rev acc)
            (: f <l r >l
               (!(two? f) ? (go r t (f . acc))
-                 (<f @ op
-                    (? (op = 'cmp && peep t <>f 0 = 1 && <>>f = 0 &&
-                        two? r && <r = ['set 'ne <>f] &&
-                        !(two? >r && two? <>r && elem <<>r '(br br8 set)))
-                        (go >r t acc)
-                       (op = 'set)
-                        (pin t <>>f 1, go r t (f . acc))
-                       (elem op '(zx1 zx2 zx4))
-                        (: w (? (op = 'zx1) 8 (op = 'zx2) 16 32)
-                           c (peep t <>f 0)
-                           (0 < c && c <= w ? (go r t acc)
-                              (pin t <>f w, go r t (f . acc))))
-                       (elem op '(sx1 sx2 sx4))                 ; clean below the sign bit: a no-op
-                        (: w (? (op = 'sx1) 8 (op = 'sx2) 16 32)
-                           c (peep t <>f 0)
-                           (0 < c && c < w ? (go r t acc)
-                              (pin t <>f 0, go r t (f . acc))))
-                       (elem op '(ldu1 ldu2 ldu4))
-                        (pin t <>f (? (op = 'ldu1) 8 (op = 'ldu2) 16 32),
-                         go r t (f . acc))
-                       (op = 'ror4)
-                        (pin t <>f 32, go r t (f . acc))
-                       (op = 'rorv4)
-                        (pin t 'r1 0, pin t <>f 32, go r t (f . acc))
-                       (op = 'li)
-                        (<>>f @ k
-                           (pin t <>f (? !(charm? k) 0 (k < 0) 0
-                                         (k < 2) 1 (k < 256) 8 (k < 65536) 16
-                                         (k < 4294967296) 32 0),
-                            go r t (f . acc)))
-                       (op = 'mov)
-                        (pin t <>f (peep t <>>f 0), go r t (f . acc))
-                       (rdsp g f @ rd
-                          (rd @ 'bar (go r {} (f . acc))
-                                (: (dirty ds) (!(two? ds) ? 0
-                                                 (pin t <ds 0, dirty >ds))
-                                   (dirty <>rd,
-                                    go r t (f . acc))))))))))
+                 (: nw (swof t f)
+                    (<f @ op
+                       (? (op = 'cmp && peep t <>f 0 = 1 && <>>f = 0 &&
+                           two? r && <r = ['set 'ne <>f] &&
+                           !(two? >r && two? <>r && elem <<>r '(br br8 set)))
+                           (go >r t acc)
+                          (op = 'set)
+                           (pin t <>>f 1, pin t (sk <>>f) 2, go r t (f . acc))
+                          (elem op '(zx1 zx2 zx4))
+                           (: w (? (op = 'zx1) 8 (op = 'zx2) 16 32)
+                              c (peep t <>f 0)
+                              (0 < c && c <= w ? (go r t acc)
+                                 (pin t <>f w, pin t (sk <>f) nw, go r t (f . acc))))
+                          (elem op '(sx1 sx2 sx4))                 ; clean below the sign bit, or within it: a no-op
+                           (: w (? (op = 'sx1) 8 (op = 'sx2) 16 32)
+                              c (peep t <>f 0)
+                              o (swr t <>f)
+                              (0 < c && c < w || 0 < o && o <= w ? (go r t acc)
+                                 (pin t <>f 0, pin t (sk <>f) nw, go r t (f . acc))))
+                          (elem op '(ldu1 ldu2 ldu4))
+                           (pin t <>f (? (op = 'ldu1) 8 (op = 'ldu2) 16 32), pin t (sk <>f) nw,
+                            go r t (f . acc))
+                          (op = 'ror4)
+                           (pin t <>f 32, pin t (sk <>f) 0, go r t (f . acc))
+                          (op = 'rorv4)
+                           (pin t 'r1 0, pin t (sk 'r1) 0, pin t <>f 32, pin t (sk <>f) 0, go r t (f . acc))
+                          (op = 'li)
+                           (<>>f @ k
+                              (pin t <>f (? !(charm? k) 0 (k < 0) 0
+                                            (k < 2) 1 (k < 256) 8 (k < 65536) 16
+                                            (k < 4294967296) 32 0),
+                               pin t (sk <>f) nw,
+                               go r t (f . acc)))
+                          (op = 'mov)
+                           (pin t <>f (peep t <>>f 0), pin t (sk <>f) nw, go r t (f . acc))
+                          (rdsp g f @ rd
+                             (rd @ 'bar (go r {} (f . acc))
+                                   (: (dirty ds) (!(two? ds) ? 0
+                                                    (pin t <ds 0, pin t (sk <ds) 0, dirty >ds))
+                                      (dirty <>rd,
+                                       (lays? op && nom? <>f ? (pin t (sk <>f) nw) 0),
+                                       go r t (f . acc)))))))))))
        (go fs {} ()))
 
    ; copy propagation: after (mov a b) later reads of a say b; once nothing reads a the copy

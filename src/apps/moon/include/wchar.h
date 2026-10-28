@@ -1,5 +1,4 @@
-#ifndef _LOVE_WCHAR_H
-#define _LOVE_WCHAR_H
+#pragma once
 #include <stddef.h>
 /* the c locale's restartable conversions only: ascii, a byte past 0x7f is EILSEQ */
 typedef unsigned int wint_t;
@@ -21,4 +20,3 @@ size_t wcrtomb(char *, wchar_t, mbstate_t *);
 size_t mbsrtowcs(wchar_t *, char const **, size_t, mbstate_t *);
 size_t wcsrtombs(char *, wchar_t const **, size_t, mbstate_t *);
 size_t wcslen(wchar_t const *);
-#endif
