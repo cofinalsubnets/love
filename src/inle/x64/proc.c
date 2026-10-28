@@ -156,6 +156,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    case NR_readlinkat: ok = k_ustr(c, b) && k_uokw(c, d, e, true); break;
    case NR_renameat: ok = k_ustr(c, b) && k_ustr(c, e); break;
    case NR_chdir: ok = k_ustr(c, a); break;
+   case NR_fchdir: ok = true; break;
    case NR_ioctl:                                          // sys.c's: TCGETS, TCSETS*, TIOC[GS]PGRP
     ok = b == 21505 ? k_uokw(c, d, sizeof(struct termios), true)
        : 21506 <= b && b <= 21508 ? k_uok(c, d, sizeof(struct termios))

@@ -31,6 +31,7 @@ int  setresgid(unsigned int, unsigned int, unsigned int);
 int  seteuid(unsigned int);
 int  setegid(unsigned int);
 int  chdir(char const*);
+int  fchdir(int);
 int  chroot(char const*);
 char *getcwd(char*, unsigned long);
 int  access(char const*, int);

@@ -611,6 +611,26 @@
    ;; .reloc on the zero word just laid at its offset lays that word as the expression; else it stays
    _ (chk-eq "gas.reloc" '(".data" ".pushsection .r, \"a\"" "\t.long s + 0x13f8 - ." "\t.quad t" ".word 0" ".reloc 8, R_AARCH64_PREL32, s" ".popsection")
         (gf-expand 'a64 (gf-lines 'a64 ".data\n.pushsection .r, \"a\"\n.word 0\n.reloc 0, R_AARCH64_PREL32, s + 0x13f8\n.quad 0\n.reloc 4, R_AARCH64_ABS64, t\n.word 0\n.reloc 8, R_AARCH64_PREL32, s\n.popsection")))
+   ;; an instruction over a label difference lays once layout holds (hyp-entry's `b sym + (1b - 0b + 8)`)
+   _ (chk-eq "gas.insx" "(((\".text\" 1 6 ((label v) (nop) (label l0.1) (align 16) (label l1.1) (nop) (nop) (afix b26 335544320 v 20) (afix b26 335544320 foo 12) (align 16) (label l1.2) (nop) (afix b26 335544320 l2.1 28) (label l2.1)))) () () ())"
+        (show (gas-top 'a64 "v:\tnop\n0:\n\t.align 4\n1:\tnop\n\tnop\n\tb v + (1b - 0b + 8)\n\tb foo + (1b - 0b)\n\t.align 4\n1:\tnop\n\tb 2f + (1b - 0b)\n2:\n")))
+   ;; b, bl and b.cond carry a symbol's addend
+   _ (chk-eq "gas.a64.bsymk" ["1f2003d501000014fdffff97c1ffff54" "((afix b26 335544320 v 24) (afix b26 2483027968 v -4) (afix b19 1409286145 v 8))"]
+        [(holo-hex 'a64 (gas-text 'a64 "x:\nnop\nb x + 8\nbl x - 4\nb.ne x + 4")) (show (gas-text 'a64 "b v + 24\nbl v - 4\nb.ne v + 8"))])
+   ;; a .set over labels, read before or after it (efi-header's .Lsection_count, .Lpe_header_offset)
+   _ (chk-eq "gas.setx" ["(((\".text\" 1 6 ((label h) (raw (2 0)) (raw (12 0)) (raw (1 0 0 0)) (nop) (label .Lt) (raw (1 0 0 0 0 0 0 0)) (raw (2 0 0 0 0 0 0 0)) (label .Lset0) (raw (0 0 0 0))))) () () ())"
+                          "(((\".text\" 1 6 ((label .L_head) (nop) (raw (24 0 0 0)) (raw ((fix 4 abs32 .Lfwd 0))) (raw ((fix 4 abs32 ext 0))) (raw (9 0 0 0 0 0 0 0)) (label .Lset0) (label .Lfwd) (nop)))) () () ())"]
+        [(show (gas-top 'a64 "h:\n\t.short .Lc\n\t.short .Lt - h\n\t.long (.Lt - .) / 8\n\tnop\n.Lt:\n\t.quad 1\n\t.quad 2\n\t.set .Lc, (. - .Lt) / 8\n\t.long 0\n"))
+         (show (gas-top 'a64 ".L_head:\n\tnop\n\t.long .Lpo\n\t.long .Lfwd\n\t.long ext\n\t.quad 9\n\t.set .Lpo, . - .L_head\n.Lfwd:\n\tnop\n"))])
+   ;; ..and in a wide move, a section's name its start (entry's tramp_alias)
+   _ (chk-eq "gas.setx.movw" "(\".text\" 1 6 ((nop) (label .Lset0) (raw (29 0 192 146)) (raw (253 231 191 242)) (raw (157 255 139 242))))"
+        (show (<(<(gas-top 'a64 "\t.text\n\tnop\n\t.set .La, (0xffffffffff3f3000) + te - .tt\n\tmovz x29, :abs_g2_s:.La\n\tmovk x29, :abs_g1_nc:.La\n\tmovk x29, :abs_g0_nc:.La\n\t.pushsection .tt, \"ax\"\n\tnop\n\t.align 12\n\tnop\n\t.space 0x1ff8\nte:\tnop\n\t.popsection\n")))))
+   ;; a data operand's product with a constant
+   _ (chk-eq "gas.val.term" '((() "s" 6144) (() "s" 5) (1 "s" 4))
+        (map (e \ gf-val e (\ n d 'x)) ["s + ((4 - 1) * 0x800)" "s + 2 * 3 - 1" "(s + 1) * 1 - . + 6 / 2"]))
+   ;; an .org reads back while the pads before it still grow (hyp-entry's vectors)
+   _ (chk-eq "gas.org.settle" "(((\".text\" 1 6 ((label l0.1) (align 16) (nop) (align 16) (nop) (label .Lorg0) (raw (0 0 0 0 0 0 0 0 0 0 0 0)) (label l0.2) (align 16) (nop) (nop) (nop) (align 16) (nop) (nop) (nop) (label .Lorg1) (raw (0 0 0 0))))) () () ())"
+        (show (gas-top 'a64 "0:\n\t.align 4\n\tnop\n\t.align 4\n\tnop\n\t.org 0b + 32\n0:\n\t.align 4\n\tnop\n\tnop\n\tnop\n\t.align 4\n\tnop\n\tnop\n\tnop\n\t.org 0b + 32\n")))
    _ (chk-eq "gas.lbl.named" '(".Ls1:" "\tnop" "\tnop" ".Le1:" "\tmov x0, #2")
         (gf-expand 'a64 (gf-lines 'a64 ".Ls1:\n\tnop\n\tnop\n.Le1:\n.if (.Le1 - .Ls1) > 4\n\tmov x0, #2\n.else\n\tmov x0, #1\n.endif")))
    _ (chk-eq "gas.lbl.nil" '("661:" "\t.globl f" "\t.cfi_startproc" "\tnop" "662:" "\tnop")

@@ -124,7 +124,7 @@ function run({ module, pid, argv, env, box: boxb, ring }) {
       case 102: case 104: case 107: case 108: return 0n;  // uid gid euid egid: one user
       case 95: return 18n;                              // umask: 022, kept nowhere
       default: {
-        if (!(n in ptrs) && ![3, 8, 72, 77, 292, 39, 110, 109, 112, 111, 62].includes(n)) return -38n;
+        if (!(n in ptrs) && ![3, 8, 72, 77, 81, 292, 39, 110, 109, 112, 111, 62].includes(n)) return -38n;
         if (piece[n] && Number(c) > box_win) c = BigInt(box_win);
         return kcall(n, [a, b, c, d, e, f]); } } };
   const sys = (...a) => { const r = sys1(...a); return uni ? [r, 0n, 0, 0] : r; };
