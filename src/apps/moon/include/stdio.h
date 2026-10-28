@@ -1,5 +1,4 @@
-#ifndef _LOVE_STDIO_H
-#define _LOVE_STDIO_H
+#pragma once
 /* NULL here too, as glibc does */
 #ifndef NULL
 #define NULL ((void*)0)
@@ -90,4 +89,3 @@ int    vsscanf(char const*, char const*, va_list);
 /* gnu: allocate the answer */
 int    asprintf(char**, char const*, ...);
 int    vasprintf(char**, char const*, va_list);
-#endif

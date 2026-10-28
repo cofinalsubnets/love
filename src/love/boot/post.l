@@ -386,7 +386,7 @@
    ; bodies, a named function answers its name, else it is read again naming shared lambdas
    (lamform v) (: nm (nifnom v)
                   (go S) (: r (call-cc (k \ (: C {'k k 'D {} 'B {} 'R {} 'busy () 'memo {} 'F {} 'want {} 'pre {} 'obj {} 'objs () 'letE {} 'sites (S ? S {}) 'n 0}
-                                            (rename (cites (tie C (partp v ? (rfn C (fbase v) . map (rk C) (pargs v)) (rlam C (unw v)))))))))
+                                            (rename (cites (tie C (partp v ? (rfn C (fbase v) . map (rka C) (pargs v)) (rlam C (unw v)))))))))
                           (? (r !== 'big) r (tablet? S || !== (glob v) ()) 0 (go (sites v))))
                   r (string? nm ? (nifn v (name nm)) (go 0))
                  (r == 0 ? (glob v @ g (g !== () ? g 0)) r))
@@ -424,7 +424,7 @@
                   (y @ ('k v) (rk C v)
                        ('g n) n
                        ('o n as) (onm n . map (ra C) as)
-                       ('c . J . cl) ('? . rcl C J cl)
+                       ('c . J . cl) (cone ('? . rcl C J cl))
                        ('a . _) (rapp C y)
                        (fail C))))
    ; the same captures: a name bound to a slot is that slot, whether or not the name holds
@@ -432,6 +432,25 @@
    (alleq C xs ys) (two? ys ? (== (sees C <xs) (sees C <ys) && alleq C >xs >ys) 1)
    ; an operator away from the head is parenthesised, or it reads as infix
    (ra C x) (rv C x @ r (infix? r ? [r] r))
+   ; a let whose last init is a cond tail-applies its body from each arm, so the arms read as
+   ; the same let, each its own binders, but that init: one let again, the cond its init. the
+   ; let may close a chain of more clauses, so its run of arms is the chain's tail
+   (cone f) (cmerge >f @ r (atom? >r ? <r ('? . r)))
+   (cmerge c) (atom? >c ? c (clet c @ m (two? m ? [m] (<c . <>c . cmerge >>c))))
+   (clet c) (: as (arms c) a <as n #a
+              (sk b) (tk (n - 2) b + [(last b)])
+              (? (atom? a || <a != ': || n < 4) 0
+                 (: ms (map (b \ two? b && #b = n && <b == ': ? (: M {} N {} (aeq (sk a) (sk b) M N ? N 0)) 0) >as)
+                    (any (m \ m == 0) ms ? 0 (tk (n - 2) a + [('? . cinit c (0 . ms)) (last a)])))))
+   (arms c) (atom? >c ? c (<>c . arms >>c))                     ; the results, the else last
+   (cinit c rs) (: (li b) (rn <rs (b (#b - 2)))
+                  (atom? >c ? [(li <c)] (<c . li <>c . cinit >>c >rs)))
+   ; x and y alike but for their mints, which pair one to one: M x's to y's, N back
+   (aeq x y M N) (? (mint? x) (mint? y && (peep M x () @ p (peep N y () @ q
+                                 (p !== () || q !== () ? (p == y && q == x) (pin M x y, pin N y x, 1)))))
+                    (two? x) (two? y && aeq <x <y M N && aeq >x >y M N)
+                    (x = y))
+   (rn N x) (? (N == 0) x (mint? x) (peep N x () @ y (y !== () ? y x)) (two? x) (rn N <x . rn N >x) x)
    ; a cond whose else is a cond of the same join is one cond of more clauses
    (rcl C J cl) (: t <cl a <>cl e <>>cl y (res C e)
     (rv C t . rv C a . (two? y && <y = 'c && y 1 == J ? (rcl C J >>y) [(rv C e)])))
@@ -533,6 +552,8 @@
                ; a carrier is `=` only to itself: a tablet too big to walk shows as its size
                (tablet? v || hot? v) (glob v @ g (? (g !== ()) g (tablet? v && (16 < #v || wee 64 v < 0)) (name ("{.." + dec #v + "}")) v))
                v)
+   ; a partial's argument: an operator by value is parenthesised, or it reads as infix
+   (rka C v) (rk C v @ r (infix? r ? [r] r))
    ; what is left of n once v is walked, negative past it: a cycle ends there too
    (wee n v) (? (n < 0) n
                 (tablet? v) (n < #v ? -1 (foldl (\ m k (wee (wee (m - 1) k) (v k))) n (keys v)))
@@ -552,7 +573,7 @@
                          (glob v @ g (g !== () ? g (glob u @ g (g !== () ? g 0))))))))
    (rfn C v) (fname C v @ nm
                 (? (nm !== 0) nm
-                   (partp v) (rfn C (fbase v) . map (rk C) (pargs v))
+                   (partp v) (rfn C (fbase v) . map (rka C) (pargs v))
                    (rlam C (unw v))))
    ; a lambda constant is read once and stands as a name for its form
    (rlam C u) (peep (C 'memo) u 0 @ n
@@ -844,16 +865,30 @@
   (farg v i n) (pargs v i)
 
   (pfn o v sn) (nifnom v @ nm
-                  (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (px o s sn)))   ; off the book: what binds it
+                  (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (pread o s sn)))   ; off the book: what binds it
                      ; a glued sigil's backing value prints as its one word, not its body
                      (opnom v @ gn
                         (gn ? (say o (string gn))
                            (lamform v @ s
-                              (? (s !== 0) (px o s sn)
+                              (? (s !== 0) (pread o s sn)
                                  (partp v) (nargs v @ n (put o 40, pfn o (fbase v) sn,
                                                          each ^n (i \ (put o 32, px o (farg v i n) sn)), put o 41))
                                  (put o 92, pnum o (abs (dig v)))))))))   ; opaque: the digest, a distinguisher and nothing more
 
+  ; a tablet a read-back form holds, as the pins that build it: a form reads its keys. one
+  ; already on the print path stays a tablet, so pmap names the cycle
+  (tseen? m sn) (m == sn 2 || onpath? m (sn 0) 64)
+  (tin m sn) [(m . sn 0) (peep sn 1 0) (sn 2)]
+  (tpins x sn) (? (tablet? x) (tseen? x sn ? x (tin x sn @ s (foldl (\ f k ['pin f (tq k s) (tq (x k) s)]) ['tablet 0] (sort (keys x)))))
+                  (atom? x || <x == '\ && two? >x && atom? >>x) x
+                  (tpins <x sn . tpins >x sn))
+  (tq v sn) (? (tablet? v) (tpins v sn) (nom? v || two? v) ['\ v] v)
+  ; the path the pins print under: every tablet tpins expanded is on it
+  (tpath x sn p) (? (tablet? x) (tseen? x sn ? p (tin x sn @ s (foldl (\ q k (tqp (x k) s (tqp k s q))) (x . p) (keys x))))
+                    (atom? x || <x == '\ && two? >x && atom? >>x) p
+                    (tpath >x sn (tpath <x sn p)))
+  (tqp v sn p) (tablet? v ? (tpath v sn p) p)
+  (pread o s sn) (px o (tpins s sn) [(tpath s sn (sn 0)) (peep sn 1 0) (sn 2)])
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)
                 (tablet? x) (pmap o x sn)

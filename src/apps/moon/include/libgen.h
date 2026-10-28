@@ -1,5 +1,3 @@
-#ifndef _LIBGEN_H
-#define _LIBGEN_H
+#pragma once
 char *basename(char *);
 char *dirname(char *);
-#endif

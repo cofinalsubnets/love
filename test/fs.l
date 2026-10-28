@@ -86,6 +86,21 @@
     (mount "" "/" "no-such-fs" @ e
      (test (nom? e) !(e = 'enosys))),
 
+    ; fchdir: back to a directory held open, even one removed meanwhile; a file is no directory
+    (: here (cwd 0) e (here + "/" + d + "/e")       ; whole: the rmdir runs from /
+       _ (mkdir e 493) _ (chdir e)
+       fd (openfd "." 0)
+       _ (chdir "/") _ (rmdir e)
+       r (fchdir fd) _ (close fd)
+       gone (cwd 0)
+       _ (chdir here)
+       f (here + "/" + d + "/f")
+       _ (open f "w" @ p (close p))
+       bf (openfd f 0)
+       nd (fchdir bf) _ (close bf) _ (unlink f)
+       (test (charm? fd) !r (nom? gone) (here = cwd 0)
+             ('enotdir = nd) ('badarg = (fchdir "x")) ('badarg = (fchdir -1)))),
+
     ; a NUL in a path is misuse: the kernel would stop at it
     ((d + string 0 + "x") @ z
      (test ('badarg = (open z "r")) ('badarg = (stat z)) ('badarg = (lstat z))

@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYSEXITS_H
-#define _LOVE_SYSEXITS_H
+#pragma once
 /* BSD's exit statuses, 64 and up */
 #define EX_OK          0
 #define EX__BASE      64
@@ -19,4 +18,3 @@
 #define EX_NOPERM     77
 #define EX_CONFIG     78
 #define EX__MAX       78
-#endif

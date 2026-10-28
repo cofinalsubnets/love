@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_WAIT_H
-#define _LOVE_SYS_WAIT_H
+#pragma once
 #include <sys/types.h>
 #define WNOHANG 1
 #define WUNTRACED 2
@@ -12,4 +11,3 @@
 #define WIFSIGNALED(s) ((((signed char)(((s) & 127) + 1)) >> 1) > 0)
 int waitpid(int, int*, int);
 int wait(int*);
-#endif

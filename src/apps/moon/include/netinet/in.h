@@ -1,5 +1,4 @@
-#ifndef _LOVE_NETINET_IN_H
-#define _LOVE_NETINET_IN_H
+#pragma once
 #include <sys/socket.h>
 typedef unsigned short in_port_t;
 typedef unsigned int   in_addr_t;
@@ -69,4 +68,3 @@ unsigned short htons(unsigned short);
 unsigned short ntohs(unsigned short);
 unsigned int   htonl(unsigned int);
 unsigned int   ntohl(unsigned int);
-#endif

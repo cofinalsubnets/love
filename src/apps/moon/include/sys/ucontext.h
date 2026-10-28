@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_UCONTEXT_H
-#define _LOVE_SYS_UCONTEXT_H
+#pragma once
 #include <signal.h>
 /* a SA_SIGINFO handler's context: linux's frame up to the register set; a bsd hands its own */
 #if defined(__x86_64__)
@@ -71,5 +70,4 @@ typedef struct ucontext_t {
   mcontext_t uc_mcontext;
   sigset_t uc_sigmask;
 } ucontext_t;
-#endif
 #endif

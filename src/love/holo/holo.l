@@ -92,8 +92,8 @@
    (fix-k x)  (x 2)
    (fix-l x)  (x 3)
    (fix-a x)  (x 4)
-   ;; an a64 address fix's aux: the word below bit 32, a signed 32-bit addend above it
-   a64-afixk '(adrp21 adr21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16 ld19)
+   ;; an a64 address or branch fix's aux: the word below bit 32, a signed 32-bit addend above it
+   a64-afixk '(adrp21 adr21 addlo12 lo12s1 lo12s2 lo12s4 lo12s8 lo12s16 ld19 b26 b19)
    (afix-w aux) (aux & 4294967295)
    (afix-ad aux) ((aux >> 32) @ h (h >= 2147483648 ? (h - 4294967296) h))
    ;; a byte is 1, a fixup its width, a string a blob: its bytes verbatim as one item,
@@ -216,30 +216,35 @@
 
    ;; -- pass one: lower each form, assign addresses, record labels -> (items . labels).
    ;; items accumulate reversed so a whole-program lay stays linear.
-   ;; ('align n) pads with the backend's nop unit cycled to the exact count; the pad is never
-   ;; executed, so a torn unit is harmless. --
+   ;; ('align n) pads with the backend's 'pad, the fewest nops to the exact count, else its nop
+   ;; unit cycled; a cycled pad is never executed, so a torn unit is harmless. --
    (pad-to be addr n)
       (: k ((n - addr % n) % n)
+         pad (be 'pad)
          unit (peep be 'nop '(144))
          (fill j u) (? (j < 1) ()
                        !(two? u) (fill j unit)
                        (<u . fill (j - 1) >u))
-         (fill k unit))
+         (lit? pad ? (pad k) (fill k unit)))
    ;; (li d 0) -> (xor d d d) where the backend pins 'zeroxor and nothing reads the flags it clobbers
    (zeroidiom be ins rest)
       (<ins = 'li && ins 2 = 0 && be 'zeroxor && flagfree be rest 64 ?
          ['xor (ins 1) (ins 1) (ins 1)] ins)
    ;; the flags are free if a writer, call or ret comes before any reader within k forms. a
-   ;; jump may reach an unseen reader, so it answers no; a label is transparent, as only the
-   ;; fall-through carries these flags.
+   ;; jump goes on at its label when that lies ahead, an unseen target answers no; a label is
+   ;; transparent, as only the fall-through carries these flags.
    (flagfree be l k)
       (k < 1 || atom? l ? 0
          (<(<l) @ o
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
-               (elem o '(jmp jmpr jmpm)) 0
+               (o = 'jmp) (flagjump be >l (<l 1) k)
+               (elem o '(jmpr jmpm jmpt)) 0
                (flagfree be >l (k - 1)))))
+   (flagjump be l nm k)
+      (k < 1 || atom? l ? 0
+         (<l @ ins (<ins = 'label && ins 1 = nm ? (flagfree be >l (k - 1)) (flagjump be >l nm (k - 1)))))
    (lay prog be addr items labels)
       (!(two? prog) ? (rev items . labels)
          (<prog @ ins

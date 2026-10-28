@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_PARAM_H
-#define _LOVE_SYS_PARAM_H
+#pragma once
 #include <limits.h>
 #ifndef MAXPATHLEN
 #define MAXPATHLEN PATH_MAX
@@ -16,5 +15,4 @@
 #endif
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
 #endif

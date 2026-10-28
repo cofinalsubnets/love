@@ -891,8 +891,12 @@ skip is exact** — the diagnostics, the optimisation promises (pure const mallo
 visibility under a static link, cold/hot, fallthrough, i386's calling conventions (stdcall
 fastcall thiscall regparm, which gcc ignores on every target mooncc lays) and the rest of the
 list; **refused by name** — constructor destructor ifunc weakref vector_size naked
-interrupt patchable_function_entry, the calling conventions that change code here (ms_abi,
-pcs), scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first
+interrupt patchable_function_entry, pcs, scalar_storage_order, target_clones, symver.
+`ms_abi` is carried out on x64 (elsewhere gcc lets it go by, and so does mooncc): it marks the
+first function a declarator's type reaches, a call through it moves sysv's words to rcx rdx r8 r9
+over a 32-byte shadow, and a definition lays as a static `__msabi_NAME` behind a trampoline that
+keeps rdi rsi and xmm6-15. integer and pointer words only, a definition at most six: a float or a
+struct refuses. `__has_attribute` answers 1 for the first
 two classes and 0 for the third and for a name it does not know, which is what a header asks
 before it uses one -- save the four i386 conventions, which answer 1 where gcc off i386 knows
 them not and answers 0.
@@ -1167,7 +1171,7 @@ refused, first stops:
 | units | first stop | area |
 |---|---|---|
 | 224 | an enum used before its definition, whose type is not unsigned int: `drm_modes.h` and `intel_display_limits.h` carry it to every drm and i915 unit | frontend |
-| 47 | `__attribute__((ms_abi))`, which `linux/efi.h` lays on every EFI call | gen |
+| 47 | `__attribute__((ms_abi))`, which `linux/efi.h` lays on every EFI call: carried out; a recheck takes 43, the 4 left stop on asm and an initializer | gen |
 | 16 | an asm immediate input that is not a constant, all in `nf_hook` | asm |
 | 55 | assembler lines and asm it has no lane for. of the 64 x64 units with asm, 26 still refuse, mostly a stop further in: AVX (`vmovdqu`, `ymm`) 7, `ljmpl`/`ljmpw`/`lcallw`/`lidt` in the 16- and 32-bit lanes 5, an operand gas spaces or nests (` rip`, `r8 %r9`, `(11*32+13)`) 3, `pclmulqdq`/`pinsrd`/`pmovzxdq` 3, a push of an immediate segment 2, `.irpc`, `.uleb128` over labels, a symbol minus a 64-bit constant, char constants in an expression, a `.long` divided over labels, `%st` 1 each | asm |
 | 3 / 1 / 1 | an initializer it cannot lay (acpica's dump tables, a `dfield` table); a parse error (`net/ax25.h`); a duplicate case in `blk_trace_ioctl`, which clang takes (unexamined) | frontend |

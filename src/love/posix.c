@@ -471,6 +471,11 @@ static love_inline word path2(struct g *g, word ow, word nw, int (*f)(char const
  return !o || !n ? badarg(g) : f(o, n) ? love_err(g, errno) : ZeroPoint; }
 static love_inline word host_chdir(struct g *g, word p) { return path1(g, p, chdir); }
 LvmWord1(chdir)
+// (fchdir fd): back to a directory held open, which may since have lost its path
+static love_inline word host_fchdir(struct g *g, word fw) {
+ if (!charmp(fw) || getcharm(fw) < 0) return badarg(g);
+ return fchdir((int) getcharm(fw)) ? love_err(g, errno) : ZeroPoint; }
+LvmWord1(fchdir)
 
 love_noinline static struct g *host_cwd(struct g *g) {
  char buf[4096];
@@ -1010,6 +1015,7 @@ LvDef("childign", childign, 1, "posix");
 LvDef("sigign?", sigignp, 1, "posix");
 LvDef("wait", waitpid, 1, NULL);
 LvDef("chdir", chdir, 1, "posix");
+LvDef("fchdir", fchdir, 1, "posix");
 LvDef("fnmatch", fnmatch, 2, "posix");
 LvDef("regcomp", regcomp, 2, "posix");
 LvDef("regexec", regexec, 4, "posix");

@@ -236,6 +236,7 @@ static short const os_nr[][4] = {
   {NR_ftruncate,     NR_fb_ftruncate,   201,  201},   /* nb: (fd PAD len) */
   {NR_getcwd,        NR_fb_getcwd,      296,   -1},   /* __getcwd answers 0 */
   {NR_chdir,         NR_fb_chdir,        12,   12},
+  {NR_fchdir,        NR_fb_fchdir,       13,   13},
   {NR_fchmod,        NR_fb_fchmod,      124,  124},
   {NR_fchown,        NR_fb_fchown,      123,  123},
   {NR_umask,         NR_fb_umask,        60,   60},
@@ -316,6 +317,7 @@ LvLs(long, write, "write", int, void const *, unsigned long);
 LvLs(int, close, "close", int);
 LvLs(int, wait4, "wait4", int, int *, int, void *);
 LvLs(int, chdir, "chdir", char const *);
+LvLs(int, fchdir, "fchdir", int);
 LvLs(int, getpid, "getpid", void);
 LvLs(int, getppid, "getppid", void);
 LvLs(int, setuid, "setuid", unsigned);
@@ -432,6 +434,7 @@ long __love_door(long n, long a, long b, long c, long d, long e, long f) {
   case 6: r = __ls_close(ia); break;
   case 7: r = __ls_wait4(ia, pb, ic, pd); break;
   case 12: r = __ls_chdir(sa); break;
+  case 13: r = __ls_fchdir(ia); break;
   case 20: r = __ls_getpid(); break;
   case 23: r = __ls_setuid((unsigned) a); break;
   case 24: r = __ls_getuid(); break;

@@ -1,5 +1,4 @@
-#ifndef _LOVE_LIMITS_H
-#define _LOVE_LIMITS_H
+#pragma once
 /* PATH_MAX and NAME_MAX live here too, as on linux */
 #define CHAR_BIT   8
 #define MB_LEN_MAX 16
@@ -52,4 +51,3 @@
 #define OPEN_MAX           1024
 #define LINK_MAX           127
 #define PIPE_BUF           4096
-#endif

@@ -1,5 +1,4 @@
-#ifndef _LOVE_SIGNAL_H
-#define _LOVE_SIGNAL_H
+#pragma once
 typedef int sig_atomic_t;
 #include <sys/types.h>
 typedef struct { unsigned long long __v[16]; } sigset_t;   /* 128 bytes, glibc-sized; the kernel's 64 signals in __v[0] */
@@ -133,4 +132,3 @@ typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
 #define MINSIGSTKSZ 2048
 #define SIGSTKSZ    8192
 int sigaltstack(stack_t const*, stack_t*);
-#endif

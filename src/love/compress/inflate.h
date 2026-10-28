@@ -1,7 +1,6 @@
 // inflate.h -- RFC 1951 DEFLATE decoded, for gz.c and for uefi/slot.c, which has no love.
 // an includer with bytes.h gets its one-load ld64, else a byte gather
-#ifndef INFLATE_H
-#define INFLATE_H
+#pragma once
 #include "prefix.h"
 #include <stdint.h>
 #include <string.h>
@@ -234,5 +233,3 @@ intptr_t inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, u
 intptr_t inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,
                          const unsigned char *dic, uintptr_t nd) {
  return (intptr_t) inf_rund(in, n, out, cap, dic, nd); }
-
-#endif

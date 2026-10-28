@@ -1,5 +1,4 @@
-#ifndef _g_cb_h
-#define _g_cb_h
+#pragma once
 #include <stdint.h>
 #include <stdarg.h>
 
@@ -192,4 +191,3 @@ struct cb_paper { volatile uint32_t *px; uintptr_t pitch, w, h, scale; };
 // qf: a font cb_font_ok passed, or 0 -- the chain is the built-in font, then qf, then the ■
 void cb_paint(struct cb_paper const*, struct cb const*, struct font const*,
               uint8_t const *qf, uint16_t row, uintptr_t x0, uintptr_t y0, uint32_t cur);
-#endif

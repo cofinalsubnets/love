@@ -1,5 +1,4 @@
-#ifndef _LOVE_STRING_H
-#define _LOVE_STRING_H
+#pragma once
 #ifndef NULL
 #define NULL ((void*)0)
 #endif
@@ -36,4 +35,3 @@ char *strsep(char**, char const*);
 char *strchrnul(char const*, int);
 char *strncat(char*, char const*, size_t);
 int strcoll(char const*, char const*);
-#endif

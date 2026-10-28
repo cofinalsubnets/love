@@ -66,6 +66,12 @@
        !(0 <= fsub (show shm-y) "<cycle>" 0)
        (test-linear (n \ show (shm-nest n 1)) 1500)))
 
+; a function over a map that holds the function, or holds itself, reads back to a <cycle>
+(: shf-t {'a 1} (shf-f x) (shf-t x) _ (pin shf-t 'f shf-f)
+   shf-s {} _ (pin shf-s 's shf-s) (shf-g x) (shf-s x)
+ (test (0 <= fsub (show shf-f) "<cycle>" 0) (0 <= fsub (show shf-f) "(pin (pin (tablet 0) 'a 1) 'f" 0)
+       (0 <= fsub (show shf-g) "{..1}" 0)))
+
 ; a partial laid in one cell -- an unknown head called short, apo's miss -- shows as the
 ; chain of unc cells it stands for
 (: (sha-k3 a b c) (a < 1 ? [a b c] (sha-k3 (a - 1) b c))
