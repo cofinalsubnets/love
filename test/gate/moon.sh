@@ -291,6 +291,14 @@ moonrun -o "$ho/.abi128" test/cc/abi128/host.c "$ho/.peer128.o" > "$ho/.abi128.l
   || { cat "$ho/.abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
 "$ho/.abi128" > "$ho/.abi128.out" || { cat "$ho/.abi128.out" >&2; fail "abi128: mooncc and gcc disagree on SysV's __int128"; }
 
+# ms_abi across compilers: gcc's definitions and calls against mooncc's trampolines and shuffles
+$cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peerms.o" test/cc/msabi/peer.c \
+  || fail "msabi: gcc could not build peer.c"
+moonrun -o "$ho/.msabi" test/cc/msabi/host.c "$ho/.peerms.o" > "$ho/.msabi.log" 2>&1 \
+  || { cat "$ho/.msabi.log" >&2; fail "msabi: mooncc could not build or link host.c"; }
+"$ho/.msabi"; b=$?
+[ $b -eq 0 ] || fail "msabi: mooncc and gcc disagree on ms_abi (bits $b)"
+
 # the float fuzz at -Os too: its exit folds every result's bits
 $cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
 moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"

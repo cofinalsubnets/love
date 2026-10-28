@@ -69,7 +69,7 @@ vmlinux.a members from mooncc is 4242/4386 = 96.7%; modpost warns 6 (all `__calc
 | class | units | note |
 |---|---|---|
 | enum named before its definition | 224 | fixed (row 543); recheck took all 224 |
-| `__attribute__((ms_abi))` | 47 | efi libstub 15, firmware/efi 10, platform/efi 5, arch/x86/kernel 8, others 9 |
+| `__attribute__((ms_abi))` | 47 | carried out; a recheck takes 43, the 4 left stop on asm (endbr64, vmcall, a width clash) and an initializer |
 | asm immediate input not constant (`nf_hook`) | 16 | |
 | inline asm holo lacks | 10 | vmcall, rdpid, a register name, others |
 | parse errors | 4 | selinux hooks, nf_nat ×2, net/ax25.h |
