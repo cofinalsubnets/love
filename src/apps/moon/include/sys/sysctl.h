@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_SYSCTL_H
-#define _LOVE_SYS_SYSCTL_H
+#pragma once
 /* bsd only (linux answers ENOSYS); these numbers agree on freebsd and netbsd */
 #include <stddef.h>
 #define CTL_KERN            1
@@ -15,4 +14,3 @@
 #define HW_PHYSMEM          5     /* freebsd: an unsigned long */
 #define HW_PHYSMEM64       13     /* netbsd: an int64; its HW_PHYSMEM is 32-bit */
 int sysctl(int const*, unsigned int, void*, size_t*, void const*, size_t);
-#endif

@@ -1,5 +1,3 @@
-#ifndef _LOVE_STDNORETURN_H
-#define _LOVE_STDNORETURN_H
+#pragma once
 /* a hint only */
 #define noreturn
-#endif

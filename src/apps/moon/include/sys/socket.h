@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_SOCKET_H
-#define _LOVE_SYS_SOCKET_H
+#pragma once
 typedef unsigned int socklen_t;
 typedef unsigned short sa_family_t;
 struct sockaddr { sa_family_t sa_family; char sa_data[14]; };
@@ -88,5 +87,3 @@ struct cmsghdr { unsigned long cmsg_len; int cmsg_level; int cmsg_type; };
 #define CMSG_NXTHDR(m, c)   ((unsigned char*)(c) + CMSG_ALIGN((c)->cmsg_len) + sizeof(struct cmsghdr)      > (unsigned char*)(m)->msg_control + (m)->msg_controllen    ? (struct cmsghdr*) 0    : (struct cmsghdr*)((unsigned char*)(c) + CMSG_ALIGN((c)->cmsg_len)))
 long recvmsg(int, struct msghdr*, int);
 long sendmsg(int, struct msghdr const*, int);
-
-#endif

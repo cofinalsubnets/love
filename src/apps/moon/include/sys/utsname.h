@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_UTSNAME_H
-#define _LOVE_SYS_UTSNAME_H
+#pragma once
 /* linux's new_utsname, filled in place; the bsds build it from kern.* and hw.machine */
 struct utsname {
   char sysname[65];
@@ -10,4 +9,3 @@ struct utsname {
   char domainname[65];
 };
 int uname(struct utsname *);
-#endif

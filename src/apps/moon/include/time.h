@@ -1,5 +1,4 @@
-#ifndef _LOVE_TIME_H
-#define _LOVE_TIME_H
+#pragma once
 #ifdef __ILP32__
 typedef long long time_t;
 #else
@@ -38,4 +37,3 @@ int clock_gettime(int, struct timespec*);
 int nanosleep(struct timespec const*, struct timespec*);
 time_t time(time_t*);
 clock_t clock(void);
-#endif

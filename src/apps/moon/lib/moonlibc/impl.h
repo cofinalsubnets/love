@@ -1,7 +1,6 @@
 /* impl.h -- the shared head of every moonlibc member. members link by need, so one
  * reaches another's state by its public name (errno, not __errno_v) or through here */
-#ifndef LvMoonlibcImplH
-#define LvMoonlibcImplH
+#pragma once
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -1070,4 +1069,3 @@ void __love_fopened(FILE *f);
 long __rfill(FILE *f);
 long __rahead(FILE *f);
 int __rsync(FILE *f);
-#endif

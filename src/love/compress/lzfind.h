@@ -2,8 +2,7 @@
 // the window its dict. a 4-byte hash roots a tree of earlier positions ordered by what follows:
 // one walk finds the longest matches and re-roots. 2- and 3-byte heads find short ones.
 // entries are position + 1; an includer has bytes.h
-#ifndef LZFIND_H
-#define LZFIND_H
+#pragma once
 #include <stdint.h>
 
 struct lzf { const uint8_t *s; uintptr_t n; uint32_t *h2, *h3, *h4, *son, wmask, dict; uintptr_t ins;
@@ -72,4 +71,3 @@ static unsigned lzf_all(struct lzf *f, uintptr_t p, unsigned avail, unsigned max
  if (f->ins != p) return 0;
  f->ins = p + 1;
  return lzf_bt(f, p, avail, ls, ds); }
-#endif

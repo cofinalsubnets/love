@@ -1,5 +1,4 @@
-#ifndef _GETOPT_H
-#define _GETOPT_H
+#pragma once
 #include <unistd.h>
 
 struct option { char const *name; int has_arg; int *flag; int val; };
@@ -16,4 +15,3 @@ struct getopt_data { int optind, opterr, optopt; char *optarg; char *next; int f
 int getopt_r(int, char *const *, char const *, struct getopt_data *);
 int getopt_long_r(int, char *const *, char const *, struct option const *, int *, struct getopt_data *);
 int getopt_long_only_r(int, char *const *, char const *, struct option const *, int *, struct getopt_data *);
-#endif

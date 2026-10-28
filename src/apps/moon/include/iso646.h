@@ -1,5 +1,4 @@
-#ifndef _LOVE_ISO646_H
-#define _LOVE_ISO646_H
+#pragma once
 #define and    &&
 #define and_eq &=
 #define bitand &
@@ -11,4 +10,3 @@
 #define or_eq  |=
 #define xor    ^
 #define xor_eq ^=
-#endif

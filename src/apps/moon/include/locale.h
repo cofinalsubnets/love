@@ -1,5 +1,4 @@
-#ifndef _LOVE_LOCALE_H
-#define _LOVE_LOCALE_H
+#pragma once
 /* every category is C, but LC_CTYPE may be utf-8 */
 #define LC_CTYPE    0
 #define LC_NUMERIC  1
@@ -32,4 +31,3 @@ struct lconv {
 
 char *setlocale(int, const char *);
 struct lconv *localeconv(void);
-#endif
