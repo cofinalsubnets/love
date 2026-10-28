@@ -189,7 +189,7 @@
    ; % and the bracket objects count only delimiters that are code: a known language's
    ; lexer masks strings and comments, else every column counts. the language decides,
    ; not 'hl, so :hl changes colour only.
-   (vlang st) (hues-lang (st 'file) <(st 'lines))
+   (vlang st) (hues-lang (st 'file) (st 'lines))
    (vlex st g)
     (st 'lex @ c
        (two? c && <c = g ? <>c
@@ -1357,7 +1357,7 @@
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1 'hls 1 'noh ()
      'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore () 'home ()
-     'hl (nom? (hues-lang file (two? ls ? <ls ""))) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
+     'hl (nom? (hues-lang file ls)) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'mtcar () 'gutcar () 'nu () 'ai 1 'aiw () 'lastr () 'w 80 'h 24}
 
    ; -- the frame ---------------------------------------------------------------
