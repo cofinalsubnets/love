@@ -865,21 +865,30 @@
   (farg v i n) (pargs v i)
 
   (pfn o v sn) (nifnom v @ nm
-                  (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (px o (tpins s) sn)))   ; off the book: what binds it
+                  (string? nm ? (lamform v @ s (s == name nm ? (say o nm) (pread o s sn)))   ; off the book: what binds it
                      ; a glued sigil's backing value prints as its one word, not its body
                      (opnom v @ gn
                         (gn ? (say o (string gn))
                            (lamform v @ s
-                              (? (s !== 0) (px o (tpins s) sn)
+                              (? (s !== 0) (pread o s sn)
                                  (partp v) (nargs v @ n (put o 40, pfn o (fbase v) sn,
                                                          each ^n (i \ (put o 32, px o (farg v i n) sn)), put o 41))
                                  (put o 92, pnum o (abs (dig v)))))))))   ; opaque: the digest, a distinguisher and nothing more
 
-  ; a tablet a read-back form holds, as the pins that build it: a form reads its keys
-  (tpins x) (? (tablet? x) (foldl (\ f k ['pin f (tq k) (tq (x k))]) ['tablet 0] (sort (keys x)))
-               (atom? x || <x == '\ && two? >x && atom? >>x) x
-               (tpins <x . tpins >x))
-  (tq v) (? (tablet? v) (tpins v) (nom? v || two? v) ['\ v] v)
+  ; a tablet a read-back form holds, as the pins that build it: a form reads its keys. one
+  ; already on the print path stays a tablet, so pmap names the cycle
+  (tseen? m sn) (m == sn 2 || onpath? m (sn 0) 64)
+  (tin m sn) [(m . sn 0) (peep sn 1 0) (sn 2)]
+  (tpins x sn) (? (tablet? x) (tseen? x sn ? x (tin x sn @ s (foldl (\ f k ['pin f (tq k s) (tq (x k) s)]) ['tablet 0] (sort (keys x)))))
+                  (atom? x || <x == '\ && two? >x && atom? >>x) x
+                  (tpins <x sn . tpins >x sn))
+  (tq v sn) (? (tablet? v) (tpins v sn) (nom? v || two? v) ['\ v] v)
+  ; the path the pins print under: every tablet tpins expanded is on it
+  (tpath x sn p) (? (tablet? x) (tseen? x sn ? p (tin x sn @ s (foldl (\ q k (tqp (x k) s (tqp k s q))) (x . p) (keys x))))
+                    (atom? x || <x == '\ && two? >x && atom? >>x) p
+                    (tpath >x sn (tpath <x sn p)))
+  (tqp v sn p) (tablet? v ? (tpath v sn p) p)
+  (pread o s sn) (px o (tpins s sn) [(tpath s sn (sn 0)) (peep sn 1 0) (sn 2)])
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)
                 (tablet? x) (pmap o x sn)
