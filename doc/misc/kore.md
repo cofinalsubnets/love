@@ -52,11 +52,11 @@ chown ln free); `-v` never does — GNU gives --version no short spelling, and t
 the tool's wherever it wants one. echo, test and `[` read no options at all and are not at
 the door; cook and lush answer both flags themselves, each with more to say than a synopsis.
 
-## the inventory (197 tools, 211 names)
+## the inventory (195 tools, 209 names)
 
 The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
-less/more, pic/pngcat/jpegcat/gifcat and picless/pngless/jpegless/gifless (`pic cat` and
-`pic less`). love's own verbs
+less/more, im/pngcat/jpegcat/gifcat and imless/pngless/jpegless/gifless (`im cat` and
+`im less`). love's own verbs
 carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md),
 `mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
 
@@ -106,7 +106,7 @@ carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |
 | lens.l, the doors onto lapiz | html2text (the lens entered from the other surface), markdown (the lens run the way papel runs it) |
 | www.l, over wget.l, lapiz and less.l | www (a web page with its links numbered, followed by number; gopher and gemini too) |
-| pic.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l and qoi.l | pic (pictures printed in cells, two pixels a cell), picless (a viewer: zoom, pan, an animation played) |
+| im.l, over png.l, jpeg.l, gif.l, webp.l, bmp.l, pnm.l and qoi.l | im (pictures printed in cells, two pixels a cell), imless (a viewer: zoom, pan, an animation played) |
 | net.l | telnet (a remote terminal: nc with the protocol's options answered), telnetd (its server: a program on a pty per client), httpd (kiosko under busybox's flags), nslookup (a name's records, asked of a nameserver), ping and ping6 (icmp echoes, v4 and v6), traceroute and traceroute6 (the routers on the way) |
 | src/apps/lush.l | sh / lush |
 
@@ -525,7 +525,7 @@ inline spans. `<b>` is `<strong>` and `<tt>` is `<code>` to a reader with one fo
 * Named and numeric entities both decode; an unknown name rides through as written, which is
   better than eating the word it was part of.
 * **An `<img>` shows as its `[alt]`**, and on a terminal a local picture is drawn under that
-  line, two pixels a cell as `pic` draws it, its path taken from the page's own directory.
+  line, two pixels a cell as `im` draws it, its path taken from the page's own directory.
   One on the web stays its `[alt]`: this reads files, it does not fetch.
 
 None of this is law 1 — that says `htread` reads what `htshow` writes, and reading a page
@@ -604,7 +604,7 @@ keys over less's:
   utf-8. A `<base href>` is what the page's links resolve against, and an image shows as its
   alt text.
 * **A PNG, JPEG or GIF is drawn under its alt text** on a terminal, two pixels to a cell, as
-  `pic` draws it (a GIF stands at its first frame). A picture is fetched when it comes
+  `im` draws it (a GIF stands at its first frame). A picture is fetched when it comes
   within a screen of the view, shrunk to the page's width and the screen's height (never
   enlarged), and kept by URL for the session. The rows are text, so they scroll, page and
   re-lay with the rest.
@@ -631,14 +631,12 @@ verified as wget's is: its certificate to a root in the host's bundle, or its ke
 `~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
-## pic (src/apps/kore/pic.l)
+## im (src/apps/kore/im.l)
 
-`pic` is one command with four verbs. With none, it is `pic cat` when its first input is a
-picture it reads (or a flag is one of cat's, `-g`, `-w`, `-h`) and classic pic otherwise
-(below). It reads PNG, JPEG (turned upright by its EXIF orientation), GIF, WebP, BMP, ICO and
+`im` is one command with four verbs. With none, it is `im cat`. It reads PNG, JPEG (turned upright by its EXIF orientation), GIF, WebP, BMP, ICO and
 CUR, and netpbm's PBM, PGM, PPM and PAM.
 
-`pic [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture (an animation's first
+`im [cat] [-g MODE] [-w COLS] [-h ROWS] [FILE..]` prints each picture (an animation's first
 frame), as wide as the terminal (or `COLS`, or 80 when there is none) and no
 taller than `ROWS` cells, shrunk and never enlarged. With no FILE it reads stdin, and with
 several it names each above it. `MODE` picks how:
@@ -650,77 +648,38 @@ several it names each above it. `MODE` picks how:
 - `sixel`: DEC's sixel graphics, up to 255 colours (exact up to that, a median cut past it),
   a see-through pixel left to the ground.
 - `kitty`: kitty's graphics protocol, the pixels sent raw in 4096-byte chunks.
-- `auto`: on a terminal, pic asks it (kitty's query, the cell size `CSI 16 t`,
+- `auto`: on a terminal, im asks it (kitty's query, the cell size `CSI 16 t`,
   and DA1, whose answer ends the wait, a second at most) and takes kitty's, then sixel, then
   blocks. Off a terminal it draws blocks without asking.
 
 For sixel and kitty's a picture is fitted to `COLS` times the cell's width in pixels (8 by 16
-when the terminal does not say). `pngcat`, `jpegcat` and `gifcat` are `pic cat`.
+when the terminal does not say). `pngcat`, `jpegcat` and `gifcat` are `im cat`.
 
-`pic less [-g MODE] FILE..` shows one picture at a time, fitted to the screen, in blocks or
-as `-g` says (the modes are `pic cat`'s). In sixel and kitty's a view is sampled by nearest
+`im less [-g MODE] FILE..` shows one picture at a time, fitted to the screen, in blocks or
+as `-g` says (the modes are `im cat`'s). In sixel and kitty's a view is sampled by nearest
 pixel, so a redraw stays quick, and 100% is a source pixel to a screen pixel. `+` and `-`
 zoom (past the fit into single pixels, and back out below it), `0` fits it again, `h` `j` `k`
 `l` or the arrows pan a quarter of the view, `n` and `p` move between files. A GIF, an
 animated WebP or an APNG plays at its own delays; `space` pauses it and `.` and `,` step a frame. The status line holds the
-name, the size, the zoom and the frame. `picless`, `pngless`, `jpegless` and `gifless` are
+name, the size, the zoom and the frame. `imless`, `pngless`, `jpegless` and `gifless` are
 the same tool.
 
-`pic convert [-q QUALITY] [-t TYPE] IN OUT` writes IN as OUT's type, from its extension
+`im convert [-q QUALITY] [-t TYPE] IN OUT` writes IN as OUT's type, from its extension
 (`.png`, `.gif`, `.jpg`/`.jpeg`, `.webp`, `.qoi`, `.ppm`/`.pnm`, `.pam`, `.six`/`.sixel`, `.ans`) or `-t`. A PPM
 drops alpha; a PAM keeps it. A WebP is written lossless. `ans` is the blocks
-`pic cat` prints, as text 80 cells wide, for `cat` to show again. `-` is stdin for IN and stdout for
+`im cat` prints, as text 80 cells wide, for `cat` to show again. `-` is stdin for IN and stdout for
 OUT. A GIF gives its first frame, except that a file already of the type goes across as it
 is (a GIF keeps its frames), unless `-q` asks for a JPEG to be written again. A JPEG has
 no alpha; its quality is 90 unless `-q` says otherwise.
 
-`pic pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q QUALITY] [-t TYPE] IN OUT` writes
-the picture as `pic cat` draws it in blocks at `COLS` (80) by `ROWS`, as a picture: each
+`im pixelize [-w COLS] [-h ROWS] [-s PX] [-c 256] [-q QUALITY] [-t TYPE] IN OUT` writes
+the picture as `im cat` draws it in blocks at `COLS` (80) by `ROWS`, as a picture: each
 half-cell becomes a square of `PX` pixels (by default the source's own scale, so the output
 is near the input's size), a pixel the terminal would leave blank is transparent, an odd last
 row's lower half is transparent as the cell's is, and `-c 256` takes each channel to the
 level the 256-colour cube shows (0, 95, 135, 175, 215, 255). OUT is a PNG unless its
 extension or `-t` says otherwise; to `.ans` it is the blocks' text itself, `-c 256` in the
 cube's codes.
-
-`pic [-nCSU] [FILE..]` and `pic -t [-cCSUz] [FILE..]` are classic pic (src/apps/kore/gpic.l),
-Kernighan's picture language as GNU pic speaks it: a troff preprocessor that copies a
-document through and turns each picture between `.PS` and `.PE` (or `.PF`, `.PY`) into
-troff's `\D` drawing commands, or with `-t` into tpic `\special`s in a TeX box `\graph`. A
-flag of GNU pic's (`-n -t -c -C -S -U -z`, `-D`, `-T dev`) always means classic pic. Its
-output is held byte for byte to groff's own `pic` (`make test_gpic`, the corpus in
-test/gpic): boxes, circles, ellipses, arcs, lines, arrows, splines, moves and text with
-their attributes, places and corners, expressions and variables, blocks, `define`, `for`,
-`if`, `copy` and `copy thru`, `sprintf`, `print` and `command`, colours, polygons, slanted
-boxes and `aligned` text; `-c` and `-z` for TeX. `sh` runs only under `-U`. Not yet: dashed
-or dotted ellipses and rounded boxes, `.PS <file`, groff's `rand`, and its error messages
-(the exit status and what is drawn before an error agree, the words on stderr do not).
-As groff's, a picture's variables and labels carry into the next one, `.lf` lines between
-pictures renumber the document, and `.PS`'s width and height are read as scanf reads them.
-
-`grap [FILE..]` is Kernighan and Bentley's language for graphs (src/apps/kore/grap.l), a
-preprocessor ahead of pic: each graph between `.G1` and `.G2` becomes a picture of its
-coordinate systems' macros, its frame, its ticks and what it plots. Its output is held byte
-for byte to plan 9's grap (`make test_grap`, the corpus in test/grap), and what it writes is
-drawn by kore's pic as groff's pic draws plan 9's: frames and their sides, `coord` with log
-axes, automatic ticks as plan 9 chooses them (its steps, slack and margins, log decades and
-their widened ends), `ticks` and `grid` at lists or iterators with their labels and formats,
-`label`, `plot`, `line`, `arrow`, `circle`, `draw`, `new`, `next` and plain numbers,
-`define`, `copy` and `copy thru`, `for`, `if`, `sh`, `sprintf`, `graph` for several in one
-picture, and plan 9's marks (its grap.defines, or a copy of them where plan9port is not).
-`log` and `exp` are base ten and, like `^`, the doubles nearest the true values, as glibc's
-are. Not yet: plan 9's mark left dangling from one graph to the next, and its error
-recovery beyond a line given up.
-
-`chem [FILE..]` is the language for chemical structures (src/apps/kore/chem.l), a
-preprocessor ahead of pic over groff's chem.pic macros: each diagram between `.cstart` and
-`.cend` (or `begin chem` and `end` inside a picture) becomes pic. Its output is held byte for
-byte to groff's chem (`make test_chem`, the corpus in test/chem): moieties with their
-subscripts and where a bond meets them, bonds of each kind by angle or compass word, length,
-`from` and `to`, rings of three to eight sides, `benzene`, `flatring` and `aromatic`, with
-`pointing`, `put` and `double`, labels, `BP`, strings, `size`, `textht`, `cwid` and `db`, and
-pic and troff lines through. It writes the copy of groff's own chem.pic it finds beside
-groff, and `chem.pic` where there is none.
 
 The decoders: src/apps/png.l (every colour type and depth, Adam7, APNG's frames composed by the
 spec's blend and dispose), src/love/picture/jpeg.c (baseline and progressive, any sampling, grey,
@@ -911,8 +870,7 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27; kore's `grap` and
-`chem` counted 2026-09-30. A row is a tool
+Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27. A row is a tool
 NAME and a mark says the implementation answers to it — the same reach as the inventory,
 nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's manner). Every
 tool kore has is a row, and so is every tool at least two of the others share; a name only
@@ -984,7 +942,6 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `cat` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `cc` | ✓ |  |  | ✓ |  |  |  |
 | `chattr` |  | ✓ | ✓ |  |  |  |  |
-| `chem` | ✓ |  |  |  |  |  |  |
 | `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
@@ -1046,7 +1003,6 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `ftpget` |  | ✓ | ✓ |  |  |  |  |
 | `ftpput` |  | ✓ | ✓ |  |  |  |  |
 | `getopt` | ✓ | ✓ | ✓ |  |  |  | ✓ |
-| `grap` | ✓ |  |  |  |  | ✓ |  |
 | `grep` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
 | `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `gunzip` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
@@ -1302,7 +1258,7 @@ The names only one carries:
   `calendar` `cb` `cleanname` `clock` `cmapcube` `colors` `compress` `core` `crop` `db`
   `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery` `dnstcp`
   `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum` `fontsrv`
-  `fortune` `freq` `fsize` `g` `getflags` `gif` `graph` `gview` `hget` `hist` `hoc`
+  `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist` `hoc`
   `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex` `listen1`
   `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime` `namespace`
   `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget` `netfileput`

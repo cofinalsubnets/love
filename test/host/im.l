@@ -1,13 +1,13 @@
-; test/host/pic.l -- kore's pictures (src/apps/kore/pic.l) and the gif decoder: kinds (netpbm, webp and qoi
-; written too), sixel and kitty off a quay screen, pic's verbs, picless's keys, and gifs against magick where present
-;   cat test/00-init.l test/host/00-host.l test/host/pic.l | out/love
+; test/host/im.l -- kore's pictures (src/apps/kore/im.l) and the gif decoder: kinds (netpbm, webp and qoi
+; written too), sixel and kitty off a quay screen, im's verbs, imless's keys, and gifs against magick where present
+;   cat test/00-init.l test/host/00-host.l test/host/im.l | out/love
 (borrow 'posix)
 (borrow 'jpeg)
 (: K (cite 'kore)
-   kind (K 'pic-kind) size (K 'pic-size) dec (K 'pic-decode) frames (K 'pic-frames)
-   art (K 'pic-art) view (K 'pic-view)
+   kind (K 'im-kind) size (K 'im-size) dec (K 'im-decode) frames (K 'im-frames)
+   art (K 'im-art) view (K 'im-view)
    pnew (K 'pv-new) pstep (K 'pv-step) pframe (K 'pv-frame) ptick (K 'pv-tick) pkeys (K 'pv-keys)
-   dir (cwd 0 + "/out/.pic")
+   dir (cwd 0 + "/out/.im")
    love (cwd 0 + "/out/love")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (put p s) (open p "w" @ q (say q s, close q))
@@ -66,7 +66,7 @@
    (argb im) (map (i \ (: o (4 * i) p (im 2)
                           (p (o + 3) < 128 ? 0 (255 << 24 | p o << 16 | p (o + 1) << 8 | p (o + 2)))))
                   (jot (im 0 * im 1)))
-   six (K 'pic-sixel) kit (K 'pic-kitty)
+   six (K 'im-sixel) kit (K 'im-kitty)
    ; sixel's colours are whole percents, so a channel may move by 2; clear stays clear
    (near a b)
     (: (ch v k) (v >> k & 255)
@@ -87,92 +87,88 @@
            (kit [64 64 (string (cask (4 * 64 * 64)))] @ k
               (has? k "m=1;" && has? k "\e_Gm=0;" && !(has? k "\e_Gm=1;\e"))))
    ; the probe: quay says it takes both, and its cell
-   heard (K 'pic-heard (string (reply (scribe (h-mkscr 4 10) (K 'pic-ask)))))
+   heard (K 'im-heard (string (reply (scribe (h-mkscr 4 10) (K 'im-ask)))))
    _ (heard @ h (test (h 'kitty) (h 'sixel) (h 'cw = 8) (h 'ch = 16)))
-   _ (K 'pic-heard "" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 0)))
-   _ (K 'pic-heard "\e[6;20;10t\e[?62;22c" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 10) (h 'ch = 20)))
+   _ (K 'im-heard "" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 0)))
+   _ (K 'im-heard "\e[6;20;10t\e[?62;22c" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 10) (h 'ch = 20)))
 
-   ; pic as a command
+   ; im as a command
    _ (put (dir + "/a.gif") gf, put (dir + "/b.jpg") jp, put (dir + "/n.txt") "hello")
    _ (put (dir + "/anim.gif") anim)
-   r1 (hark [love "pic" "-w" "8" (dir + "/a.gif")])
+   r1 (hark [love "im" "-w" "8" (dir + "/a.gif")])
    r2 (hark [love "jpegcat" "-w" "8" (dir + "/a.gif") (dir + "/b.jpg")])
-   r3 (hark [love "pic" "cat" (dir + "/n.txt") (dir + "/none.png")])
+   r3 (hark [love "im" "cat" (dir + "/n.txt") (dir + "/none.png")])
    _ (test (<r1 = 0) (has? >r1 "▀") !(has? >r1 "a.gif")
            (<r2 = 0) (has? >r2 "a.gif:\n") (has? >r2 "b.jpg:\n")
            (<r3 = 1))
-   (pic as) (hark ([love "pic"] + as))
-   ; a bare pic sniffs: a picture is drawn, anything else goes to classic pic (src/apps/kore/gpic.l)
-   _ (put (dir + "/d.ms") ".PS\nbox\n.PE\ntext\n")
-   _ (test (pic [(dir + "/a.gif")] @ r (<r = 0 && has? >r "▀"))
-           (pic [(dir + "/n.txt")] @ r (<r = 0 && has? >r ".do if !dPS" && has? >r "\nhello\n"))
-           (pic [(dir + "/d.ms")] @ r (<r = 0 && has? >r "\\D'p 0.000i -0.500i -0.750i" && has? >r ".PE\n.lf 4\ntext\n"))
-           (pic ["-t" (dir + "/d.ms")] @ r (<r = 0 && has? >r "\\special{pa 750 500}%"))
-           (pic ["-n" (dir + "/d.ms")] @ r (<r = 0 && has? >r "\\D'l 0.750i 0.000i'"))
-           (pic ["-w" "8" (dir + "/n.txt")] @ r (<r = 1))
-           (pic [(dir + "/n.txt") (dir + "/none.png")] @ r (<r = 3)))
+   (imr as) (hark ([love "im"] + as))
+   ; a bare im is cat: a picture is drawn, anything else refused
+   _ (test (imr [(dir + "/a.gif")] @ r (<r = 0 && has? >r "▀"))
+           (imr [(dir + "/n.txt")] @ r (<r = 1))
+           (imr ["-w" "8" (dir + "/n.txt")] @ r (<r = 1))
+           (imr [(dir + "/n.txt") (dir + "/none.png")] @ r (<r = 1)))
    (file p) (uread p @ r (two? r ? <>r ""))
    ; cat is the default, and off a terminal a mode is said, not probed
-   _ (test (pic ["cat" "-w" "8" (dir + "/a.gif")] = r1)
-           (pic ["-g" "sixel" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 2 = "\eP"))
-           (pic ["cat" "-g" "kitty" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 3 = "\e_G"))
-           (<(pic ["-g" "neon" (dir + "/a.gif")]) = 2)
-           (pic ["help"] @ r (<r = 0 && has? >r "pic convert")))
+   _ (test (imr ["cat" "-w" "8" (dir + "/a.gif")] = r1)
+           (imr ["-g" "sixel" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 2 = "\eP"))
+           (imr ["cat" "-g" "kitty" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 3 = "\e_G"))
+           (<(imr ["-g" "neon" (dir + "/a.gif")]) = 2)
+           (imr ["help"] @ r (<r = 0 && has? >r "im convert")))
    ; convert: by extension or -t, a file already its type copied as it is
-   _ (test (<(pic ["convert" (dir + "/a.gif") (dir + "/c.png")]) = 0)
+   _ (test (<(imr ["convert" (dir + "/a.gif") (dir + "/c.png")]) = 0)
            (dec (file (dir + "/c.png")) = im)
-           (<(pic ["convert" (dir + "/c.png") (dir + "/c.gif")]) = 0)
+           (<(imr ["convert" (dir + "/c.png") (dir + "/c.gif")]) = 0)
            (dec (file (dir + "/c.gif")) = im)
-           (<(pic ["convert" (dir + "/anim.gif") (dir + "/d.gif")]) = 0)
+           (<(imr ["convert" (dir + "/anim.gif") (dir + "/d.gif")]) = 0)
            (file (dir + "/d.gif") = anim)
-           (<(pic ["convert" "-t" "jpg" (dir + "/c.png") (dir + "/c.out")]) = 0)
+           (<(imr ["convert" "-t" "jpg" (dir + "/c.png") (dir + "/c.out")]) = 0)
            (kind (file (dir + "/c.out")) = 'jpeg)
-           (pic ["convert" "-t" "sixel" (dir + "/c.png") "-"] @ r (<r = 0 && near (shot im >r) (argb im)))
-           (<(pic ["convert" (dir + "/c.png") (dir + "/c.bmp")]) = 2)
-           (<(pic ["convert" (dir + "/n.txt") (dir + "/n.png")]) = 1)
-           (<(pic ["convert" (dir + "/c.png")]) = 2))
+           (imr ["convert" "-t" "sixel" (dir + "/c.png") "-"] @ r (<r = 0 && near (shot im >r) (argb im)))
+           (<(imr ["convert" (dir + "/c.png") (dir + "/c.bmp")]) = 2)
+           (<(imr ["convert" (dir + "/n.txt") (dir + "/n.png")]) = 1)
+           (<(imr ["convert" (dir + "/c.png")]) = 2))
    ; netpbm's written and read back, a pam with its alpha; bmp, ico and netpbm sniffed and drawn
-   _ (test (<(pic ["convert" (dir + "/c.png") (dir + "/c.pam")]) = 0)
+   _ (test (<(imr ["convert" (dir + "/c.png") (dir + "/c.pam")]) = 0)
            (kind (file (dir + "/c.pam")) = 'pnm) (dec (file (dir + "/c.pam")) = im)
-           (<(pic ["convert" "-t" "ppm" (dir + "/c.png") (dir + "/c.out")]) = 0)
+           (<(imr ["convert" "-t" "ppm" (dir + "/c.png") (dir + "/c.out")]) = 0)
            (snip (file (dir + "/c.out")) 0 2 = "P6") (size (file (dir + "/c.out")) = [(im 0) (im 1)])
-           (<(pic ["cat" "-w" "8" (dir + "/c.out")]) = 0)
+           (<(imr ["cat" "-w" "8" (dir + "/c.out")]) = 0)
            (kind ("BM" + bytes [0 0 0 0 0 0]) = 'bmp) (kind (bytes [0 0 1 0 1 0 8 8]) = 'ico)
            (kind "P6\n1 1\n255\n" = 'pnm) (kind "P9\n1 1\n255\n" = ())
            (dec ("P6 2 1 255\n" + bytes [255 0 0 0 0 255]) = [2 1 (bytes (red + blue))]))
    ; webp, lossless, and qoi written and read back exactly
-   _ (test (<(pic ["convert" (dir + "/c.png") (dir + "/c.webp")]) = 0)
+   _ (test (<(imr ["convert" (dir + "/c.png") (dir + "/c.webp")]) = 0)
            (kind (file (dir + "/c.webp")) = 'webp) (dec (file (dir + "/c.webp")) = im)
-           (<(pic ["convert" "-t" "qoi" (dir + "/c.png") (dir + "/c.q")]) = 0)
+           (<(imr ["convert" "-t" "qoi" (dir + "/c.png") (dir + "/c.q")]) = 0)
            (kind (file (dir + "/c.q")) = 'qoi) (size (file (dir + "/c.q")) = [(im 0) (im 1)])
            (dec (file (dir + "/c.q")) = im) (kind "qoifxxxx" = 'qoi))
    ; pixelize: 16x12 at 8 cells is 8x6 pixels, each s pixels square; the cube's levels
    ; with -c 256, and an odd last row's lower half clear
    pz (dir + "/z.png")
-   _ (test (<(pic ["pixelize" "-w" "8" "-s" "3" (dir + "/a.gif") pz]) = 0)
+   _ (test (<(imr ["pixelize" "-w" "8" "-s" "3" (dir + "/a.gif") pz]) = 0)
            (dec (file pz) @ z (z 0 = 24 && z 1 = 18 && snip (z 2) 0 4 = "\0\0\xc8\xff"
                                  && snip (z 2) (4 * 23) (4 * 24) = "\xc8d\0\xff"))
-           (<(pic ["pixelize" "-w" "8" "-c" "256" (dir + "/a.gif") pz]) = 0)
+           (<(imr ["pixelize" "-w" "8" "-c" "256" (dir + "/a.gif") pz]) = 0)
            ; the default scale is the source's: 2 source pixels to each
            (dec (file pz) @ z (z 0 = 16 && z 1 = 12 && snip (z 2) 0 4 = "\0\0\xd7\xff"))
-           (<(pic ["pixelize" "-w" "5" "-s" "1" (dir + "/a.gif") pz]) = 0)
+           (<(imr ["pixelize" "-w" "5" "-s" "1" (dir + "/a.gif") pz]) = 0)
            ; 16x12 at 5 cells: 5 wide and 3 high, 4 once the last cell's lower half is kept
            (dec (file pz) @ z (z 0 = 5 && z 1 = 4 && z 2 (4 * 15 + 3) = 0 && z 2 (4 * 10 + 3) = 255))
-           (<(pic ["pixelize" "-c" "7" (dir + "/a.gif") pz]) = 2)
+           (<(imr ["pixelize" "-c" "7" (dir + "/a.gif") pz]) = 2)
            ; the cube's colours are few, so a palette: colour type 3
-           (<(pic ["pixelize" "-w" "8" "-c" "256" (dir + "/b.jpg") pz]) = 0)
+           (<(imr ["pixelize" "-w" "8" "-c" "256" (dir + "/b.jpg") pz]) = 0)
            (file pz 25 = 3))
-   ; the blocks as text: .ans is pic cat's own lines, truecolor unless -c 256
-   ans (K 'pic-ans im 8 () 1)
+   ; the blocks as text: .ans is im cat's own lines, truecolor unless -c 256
+   ans (K 'im-ans im 8 () 1)
    _ (test (ans = cats (map (r \ r + "\n") (art im 8 () 1)))
-           (<(pic ["pixelize" "-w" "8" (dir + "/a.gif") (dir + "/a.ans")]) = 0)
+           (<(imr ["pixelize" "-w" "8" (dir + "/a.gif") (dir + "/a.ans")]) = 0)
            (file (dir + "/a.ans") = ans)
-           (<(pic ["pixelize" "-w" "8" "-c" "256" "-t" "ans" (dir + "/a.gif") "-"]) = 0)
-           (pic ["pixelize" "-w" "8" "-c" "256" "-t" "ans" (dir + "/a.gif") "-"] @ r (has? >r "38;5;"))
-           (<(pic ["convert" (dir + "/a.gif") (dir + "/c.ans")]) = 0)
-           (file (dir + "/c.ans") = (K 'pic-ans) im 80 () 1))
+           (<(imr ["pixelize" "-w" "8" "-c" "256" "-t" "ans" (dir + "/a.gif") "-"]) = 0)
+           (imr ["pixelize" "-w" "8" "-c" "256" "-t" "ans" (dir + "/a.gif") "-"] @ r (has? >r "38;5;"))
+           (<(imr ["convert" (dir + "/a.gif") (dir + "/c.ans")]) = 0)
+           (file (dir + "/c.ans") = (K 'im-ans) im 80 () 1))
 
-   ; picless, its keys
+   ; imless, its keys
    st (pnew [(dir + "/anim.gif") (dir + "/a.gif") (dir + "/n.txt")] 12 200)
    s0 (pframe st)
    _ (test (has? s0 "anim.gif  [1/3]  2x1") (has? s0 "frame 1/2") !(has? s0 "paused")
@@ -213,7 +209,7 @@
    _ (pstep st 113)
    _ (test (st 'quit))
 
-   ; picless in sixel and kitty's, read back off quay
+   ; imless in sixel and kitty's, read back off quay
    ; a 16x12 picture on 6 rows of 30 cells of 8x16 fits at its size, centred: 14 cells over
    ; (30 less its 2, halved) and 2 rows down (5 rows less its 1, halved)
    (pv-in mode)
@@ -235,8 +231,8 @@
            ; a sixel is whole bands: 5 rows of 16 is 80 pixels, 78 of them drawn
            (K 'pv-view gq @ v (v 4 = 78)))
    ; the default is blocks, and off a terminal the viewer says so
-   _ (test (<(hark [love "pic" "less" (dir + "/a.gif")]) = 2)
-           (<(hark [love "pic" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
+   _ (test (<(hark [love "im" "less" (dir + "/a.gif")]) = 2)
+           (<(hark [love "im" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
 
    ; markdown and html2text on a terminal: a local picture under its image's line
    _ (put (dir + "/sub.gif") gf)
@@ -275,8 +271,8 @@
         && off (foldl (a \ x \ (a + <x)) "" (fs 2)) m = 0))
    ((magick? ?
        (test (anim-of "None") (anim-of "Background") (anim-of "Previous"))
-       (gate-partly "pic: no magick, disposals against it skipped")),
+       (gate-partly "im: no magick, disposals against it skipped")),
     hark ["rm" "-rf" dir],
     0))
 
-(test_fin (), puts "pic: ok", putc 10, 0)
+(test_fin (), puts "im: ok", putc 10, 0)
