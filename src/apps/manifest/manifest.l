@@ -109,10 +109,8 @@
  ; the tty every key
  (upto n f) (:- (go 0) (go i) (i < n ? (f i, go (i + 1))))
  (cnom cx cy) (name $ string (97 + cx) + show (cy + 1))
- (min2 a b) (a < b ? a b)
- (max2 a b) (a < b ? b a)
- (mrows h) (max2 1 (h - 3))                    ; the sheet's rows: bar, header and stern take 3
- (mcols w) (max2 1 (min2 26 ((w - 5) // 10)))  ; 26 columns at 10 wide, past the 5-wide gutter
+ (mrows h) (max 1 (h - 3))                    ; the sheet's rows: bar, header and stern take 3
+ (mcols w) (max 1 (min 26 ((w - 5) // 10)))  ; 26 columns at 10 wide, past the 5-wide gutter
 
  (manifest-new sh path)
   (pins {} 'sh sh 'path path 'cx 0 'cy 0 'top 0 'edit () 'over () 'w 80 'h 24)
@@ -178,10 +176,10 @@
             27 (pin d 'edit ())
             (127 || 8) (pin d 'edit (#edit ? (snip edit 0 (#edit - 1)) edit))
             (pin d 'edit $ edit + (32 <= k < 127 ? (string k))))
-       (k @ (-8 || 107) (pin d 'cy (max2 0 (cy - 1)))                 ; up
-            (-9 || 106) (pin d 'cy (min2 98 (cy + 1)))                ; down
-            (-2 || 108) (pin d 'cx (min2 (nc - 1) (cx + 1)))          ; right
-            (-1 || 104) (pin d 'cx (max2 0 (cx - 1)))                 ; left
+       (k @ (-8 || 107) (pin d 'cy (max 0 (cy - 1)))                 ; up
+            (-9 || 106) (pin d 'cy (min 98 (cy + 1)))                ; down
+            (-2 || 108) (pin d 'cx (min (nc - 1) (cx + 1)))          ; right
+            (-1 || 104) (pin d 'cx (max 0 (cx - 1)))                 ; left
             13 (pin d 'edit (cell sh cur @ () "" s s))
             61 (pin d 'edit "")                                       ; = : a fresh formula
             120 (cell! sh cur "")                                     ; x : clear

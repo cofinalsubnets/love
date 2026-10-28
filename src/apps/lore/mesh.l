@@ -12,6 +12,7 @@
 (borrow 'vec)
 (borrow 'sky)
 (borrow 'json)
+(borrow 'lore)                          ; lamp-light, in C
 (:
  ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b], each triangle [a b c tex], tex -1 none
  (mesh vs ts) [vs ts]
@@ -42,11 +43,11 @@
      (mesh-move m c yaw))
  ; a sheet of nu by nv cells, (f i j) placing each corner [x y z u v]; its normals smooth
  (mesh-grid nu nv f tex col)
-  (: vs (cats (map (i \ map (j \ f i j + [0.0 0.0 0.0] + col) ^(nv + 1)) ^(nu + 1)))
+  (: vs (catmap (i \ map (j \ f i j + [0.0 0.0 0.0] + col) ^(nv + 1)) ^(nu + 1))
      (at i j) (i * (nv + 1) + j)
-     ts (cats (map (k \ (: i (k // nv) j (k % nv) a (at i j) b (at (i + 1) j) c (at (i + 1) (j + 1)) d (at i (j + 1))
+     ts (catmap (k \ (: i (k // nv) j (k % nv) a (at i j) b (at (i + 1) j) c (at (i + 1) (j + 1)) d (at i (j + 1))
                         [[a b c tex] [a c d tex]]))
-                  ^(nu * nv)))
+                  ^(nu * nv))
      (mesh-normals (mesh vs ts)))
  ; a profile of [r y] turned n times round the y axis, its texels k a unit
  (mesh-lathe prof n tex col k)
@@ -64,12 +65,12 @@
    (ring c k) (map (j \ (: an (tau * j / n) o (c+ (c* (cos an) p1) (c* (sin an) p2))
                           (c+ c (c* r o) + [(r * an / ts) (k * L / ts)] + o + col))) ^(n + 1))
    (mesh (cat (ring a 0.0) (ring b 1.0))
-         (cats (map (j \ (: m (n + 1 + j) [[j (j + 1) (m + 1) tex] [j (m + 1) m tex]])) ^n))))
+         (catmap (j \ (: m (n + 1 + j) [[j (j + 1) (m + 1) tex] [j (m + 1) m tex]])) ^n)))
  ; n triangles by the tray for facets: ps three corners [x y z] of n-trays, sky and sun their
  ; [r g b] light, tex -1 none, -2 a glow. [verts tris], 11 a vertex
  (mesh-dots ps sky sun tex) (: n #(ps 0 0) i (iota n)
    (vtx q) [(ps q 0) (ps q 1) (ps q 2) 0.0 0.0 (sky 0) (sky 1) (sky 2) (sun 0) (sun 1) (sun 2)]
-   [(lace (cats (map vtx ^3))) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
+   [(lace (catmap vtx ^3)) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
  ; the vertices' first m parts as trays, and their places [x y z], indexable; a triangle t's corners
  (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
  (places vs) (columns vs 3)
@@ -112,7 +113,7 @@
  ; the sun's view matrix round c: half metres either side, deep along the light
  (mesh-sun-view lt c half deep) (: s (lt 'sun)
    r (unit (mag (s 1) < 0.99 ? (cross [0.0 1.0 0.0] s) [1.0 0.0 0.0])) u (cross s r)
-   (row a k) [(a 0 / k) (a 1 / k) (a 2 / k) (0.0 - dot a c / k)]
+   (row a k) [(a 0 / k) (a 1 / k) (a 2 / k) -(dot a c / k)]
    (gem-tray [16] (row r half + row u half + row (c- [0.0 0.0 0.0] s) deep + [0.0 0.0 0.0 1.0])))
  ; ..and its n by n depth tray of a sun-apart scene, for mesh-frame's sun
  (mesh-sun-map sv sc n)
@@ -124,7 +125,7 @@
  ;     at a metre, shared among the points, falls off by the square to none at the reach;
  ;     'wrap rounds it onto what it grazes. no shadows: it lights only what stands in its box ---
  ; a lamp as lamp-light takes it (src/love/lamp.c)
- (mesh-lamp-row lp) [(lp 'at) (lp 'r) (lp 'c) (peep lp 'n ()) (sq (peep lp 'soft 0.1)) (peep lp 'wrap 0.0) (peep lp 'keep ())]
+ (mesh-lamp-row lp) [(lp 'at) (lp 'r) (lp 'c) (lp 'n) (sq (peep lp 'soft 0.1)) (peep lp 'wrap 0.0) (lp 'keep)]
  ; ..its light on each vertex of a packed mesh: [r g b] trays, before the surface's colour
  (mesh-lamp pk lp) (lamp-light (pk 'cols) [(mesh-lamp-row lp)])
  ; ..and the mesh lit by amb [r g b] plus each lamp's chs times its ks: [verts tris] 8 a vertex
@@ -136,15 +137,15 @@
  (mesh-lamps! pk amb chs ks gain)
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
-     (peep pk 'buf () @
+     (pk 'buf @
       () (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0) i (iota n * 8)
            base (map (j \ z + amb j) ^3) c8 (map (j \ c (8 + j)) ^3)
            v (pins3 (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) i (lit c8 base chs))
            on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
-           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (ch \ map g ch) chs)})
+           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (map g) chs)})
            [v (pk 'tris)])
       ; ..and nothing written while the lamps stand where they stood
-      b (: lv (pk 'live) [(#(lv 'ix) = 0 || peep lv 'ks () = ks ? b
+      b (: lv (pk 'live) [(#(lv 'ix) = 0 || lv 'ks = ks ? b
                            (: _ (pin lv 'ks ks) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
                           (pk 'tris)])))
  ; ..a mesh that is its own light, its colour times k and nothing on it
@@ -169,9 +170,9 @@
  (mesh-tex n f) (mesh-pic n n f)
  ; ..from rgba bytes sw by sh (png-decode's), a hole where mostly clear
  (mesh-rgba sw sh b w h)
-  (mesh-pic w h (\ x y (: x0 (x * sw // w) x1 (max2 (x0 + 1) ((x + 1) * sw // w))
-                          y0 (y * sh // h) y1 (max2 (y0 + 1) ((y + 1) * sh // h))
-                          os (cats (map (j \ map (i \ 4 * (j * sw + i)) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))
+  (mesh-pic w h (\ x y (: x0 (x * sw // w) x1 (max (x0 + 1) ((x + 1) * sw // w))
+                          y0 (y * sh // h) y1 (max (y0 + 1) ((y + 1) * sh // h))
+                          os (catmap (j \ map (i \ 4 * (j * sw + i)) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0)))
                           (px k) (foldl (\ a o (a + b (o + k))) 0 os / (255.0 * #os))
                           (px 3 < 0.5 ? () [(px 0 / px 3) (px 1 / px 3) (px 2 / px 3)]))))
  ; --- the view: w by h, the eye at e facing th tilted up by ph, fov across; 'cam the
@@ -180,14 +181,14 @@
  ; ..and rolled ro toward the right
  (mesh-eye w h e th ph ro fov near far)
   (: st (sin th) ct (cos th) sp (sin ph) cp (cos ph) cr (cos ro) sr (sin ro)
-     r0 [ct 0.0 (0.0 - st)] u0 [(0.0 - st * sp) cp (0.0 - ct * sp)] f [(st * cp) sp (ct * cp)]
-     r (c+ (c* cr r0) (c* (0.0 - sr) u0)) u (c+ (c* cr u0) (c* sr r0))
+     r0 [ct 0.0 -st] u0 [-(st * sp) cp -(ct * sp)] f [(st * cp) sp (ct * cp)]
+     r (c+ (c* cr r0) (c* -sr u0)) u (c+ (c* cr u0) (c* sr r0))
      (pins (mesh-aim w h e r u f fov near far) 'th th 'ph ph))
  ; ..or with its right, up and ahead given, unit and square
  (mesh-aim w h e r u f fov near far)
   (: fx (1.0 / tan (fov / 2.0)) fy (fx * w / h)
      za ((far + near) / (far - near)) zb (-2.0 * far * near / (far - near))
-     (row k a) [(k * a 0) (k * a 1) (k * a 2) (0.0 - k * dot a e)]
+     (row k a) [(k * a 0) (k * a 1) (k * a 2) -(k * dot a e)]
      z (row za f)
      {'w w 'h h 'e e 'fov fov 'near near 'far far 'r r 'u u 'f f
       'cam (gem-tray [16] (row fx r + row fy u + [(z 0) (z 1) (z 2) (z 3 + zb)] + row 1.0 f))})
@@ -197,7 +198,7 @@
  (rays v px py) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
    U ((px - w / 2.0) / foc) V ((h / 2.0 - py) / foc) r (v 'r) u (v 'u) f (v 'f)
    x (f 0 + U * r 0 + V * u 0) y (f 1 + U * r 1 + V * u 1) z (f 2 + U * r 2 + V * u 2)
-   l (sqrt (x * x + y * y + z * z))
+   l (sqrt (2 x + 2 y + 2 z))
    [(x / l) (y / l) (z / l)])
  ; ..and the pixels directions X Y Z (trays) fall on, -1 behind the eye or off the screen
  (mesh-spot v X Y Z) (: w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0))
@@ -212,15 +213,25 @@
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
+     ; ..by day the bare pixels about the sun asked one each, clouds as coarse as the grid's: its corners too few to round the disc
+     (disc v f g) (: s (lt 'sun) w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0)) zc (dot s (v 'f))
+       ca (cos (sun-r + 2.0 * mesh-step v k)) R (int (foc * tan (sun-r + 2.0 * mesh-step v k) / max zc 0.1) + 2) D (2 * R + 1)
+       cx (floor (w / 2.0 + foc * dot s (v 'r) / max zc 0.1)) cy (floor (h / 2.0 - foc * dot s (v 'u) / max zc 0.1))
+       J (iota (2 D)) px (cx - R + J % D) py (cy - R + J // D)
+       S0 ((py * w + px) (iota ((0 <= px) * (px < w) * (0 <= py) * (py < h))))
+       S1 (#S0 @ 0 S0 (S0 (iota (f S0 = -1)))) d (#S1 @ 0 () (mesh-dirs v S1))
+       I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
+       (zc < 0.1 || #I = 0 ? g (pin g (S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ()))))
+     sun-r 0.0316                       ; the disc's radius, acos 0.9995 as sky.l draws it
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (? (!(aany (f < 0))) f
                      (: g (sky-grid v lt wx e sim k f sm) sp (mesh-spot v X Y Z) ix (over -1 (peep f sp 0 = -1) (iota #X))
-                        (1.0 <= lt 'day * 3.0 ? g (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix))))))]))
+                        (1.0 <= lt 'day * 3.0 ? (disc v f g) (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix))))))]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
- (mesh-sky-memo st) (peep st 'sky-memo () @ () (: t {} (pin st 'sky-memo t, t)) t t)
+ (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)
  ; ..the radians between rays k pixels apart at the middle of v
  (mesh-step v k) (1.0 * k * tan (v 'fov / 2.0) / (v 'w / 2.0))
  ; the sky over f's bare pixels, about every k pixels, a flat tray: asked on a cube of
@@ -231,28 +242,28 @@
  ; moves, so no two asks side by side are of different moments
  sky-turn 4 sky-age 1.0
  (sky-keep sm n mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
-   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && all (k \ e k = q k) ^3 && l 0 = lt 'sun && l 1 = lt 'expo && ds * ds < 3600.0)
+   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && all (k \ e k = q k) ^3 && l 0 = lt 'sun && l 1 = lt 'expo && 2 ds < 3600.0)
    z (iota (6 * mm) * 0.0)
    _ (? !ok (pins sm 'n n 'wx wx 'r z 'g z 'b z 'at (z - 1e9) 'k 0))
    (pins sm 'e e 'lt [(lt 'sun) (lt 'expo)] 'sim sim 'k (sm 'k + 1)))
  (sky-grid v lt wx e sim k f sm)
-  (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (m * m)
+  (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (2 m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
      ; by fc's parity
      (dirs fc a b) (: A0 (fc // 2 = 0) A1 (fc // 2 = 1) A2 (fc // 2 = 2) sg (2.0 * (fc % 2) - 1.0)
                      s (tan (qa / 2.0 * a)) t (tan (qa / 2.0 * b))
                      x (A0 * sg + (1 - A0) * s) y (A1 * sg + A0 * s + A2 * t) z (A2 * sg + (1 - A2) * t)
-                     L (sqrt (x * x + y * y + z * z)) [(x / L) (y / L) (z / L)])
+                     L (sqrt (2 x + 2 y + 2 z)) [(x / L) (y / L) (z / L)])
      ; ..a block in view: inside each side of the view but for half a block's diagonal
      tx (tan (v 'fov / 2.0)) ty (tx * h / w) r (v 'r) u (v 'u) fw (v 'f)
-     (side a k) (: l (sqrt (1.0 + k * k)) (map (j \ (a j - k * fw j) / l) ^3))
+     (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
      sides [(side r tx) (side (map (j \ 0.0 - r j) ^3) tx) (side u ty) (side (map (j \ 0.0 - u j) ^3) ty)]
-     K (iota (6 * nb * nb)) bd (dirs (K // (nb * nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
+     K (iota (6 * nb * nb)) bd (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
      out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
      vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
      ; ..the blocks' corners, each asked once
-     (corner E c) (: bk (vb (E // (c * c))) o (E % (c * c))
-                    (bk // (nb * nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
+     (corner E c) (: bk (vb (E // (2 c))) o (E % (2 c))
+                    (bk // (2 nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
      N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
      (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
      d (dir N)
@@ -261,14 +272,14 @@
      c (? (!(tablet? sm)) (ask N d)
           (: _ (sky-keep sm n mm e lt wx sim)
              A (iota (((N + sm 'k) % sky-turn = 0) + (sim - sm 'at N > sky-age) > 0)) NA (N A)
-             cA (#A = 0 ? () (ask NA (dir NA)))
-             _ (#A = 0 ? () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
+             cA (#A @ 0 () (ask NA (dir NA)))
+             _ (#A @ 0 () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
              [(sm 'r N) (sm 'g N) (sm 'b N)]))
      zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
      ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
      (q j) (ix (qs + j)) zq (qs * 0 - 1)
      ts (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])
-     (#N = 0 ? f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
+     (#N @ 0 f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
    c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
@@ -280,18 +291,18 @@
  ; below -2^25 a glass's tint and sheen, -2^25 less tint + 2^24 sheen / 4, what fills it seen
  ; through them
  ; v 'under a coarser frame of mesh-coarse's, laid first where it drew
- (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (peep v 'under () @ () B0 u [B0 (u 0) (u 1)])
+ (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (v 'under @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
    f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
    (? (two? bare) (<>bare v f B0)
-      (: S (iota (f < 0)) (#S = 0 ? f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - f S)))))))
+      (: S (iota (f < 0)) (#S @ 0 f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - f S)))))))
  ; ..colours s with the glows g kept on their bare pixels added, or through the tints kept
  (glowed s g) (: t (g >= 33554431) v (g - 33554431)
    (ch k) (t * min ((s >> k & 255) * (v >> k & 255) // 255 + 4 * (v >> 24)) 255 + (1 - t) * min ((s >> k & 255) + (g >> k & 255)) 255)
    ((ch 16 << 16) | (ch 8 << 8) | ch 0))
  ; ..sc drawn k times coarser, through v's camera: its colours and its depths, for v 'under
- (mesh-coarse v sc texs fog flags gain k) (: W (max2 1 (v 'w // k)) H (max2 1 (v 'h // k))
+ (mesh-coarse v sc texs fog flags gain k) (: W (max 1 (v 'w // k)) H (max 1 (v 'h // k))
    (o fl) (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * fl) (1.0 * gain) 0.0])
    [(facets W H -1 (v 'cam) (sc 0) (sc 1) texs (o (flags | 64))) (facets W H -1 (v 'cam) (sc 0) (sc 1) texs (o (flags | 16)))])
  ; a frame's colours as [r g b] trays, 0 to 1
@@ -321,16 +332,16 @@
  ; of its pixels 'scale of the window's each way
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
- (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (peep st 'win ())
-   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max2 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max2 1 (pw * wh 1 // max2 1 (wh 0)))
+ (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (st 'win)
+   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
-         'kp (? (tablet? win) (max2 1 (pw // 160)) (st 'kitty) (max2 1 (kitty-w // w // s)) 1)))
+         'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // w // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
- (mesh-dims st) (: k (peep st 'kp 1) (tablet? (peep st 'win ()) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
+ (mesh-dims st) (: k (peep st 'kp 1) (tablet? (st 'win) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
  ; ..a frame f: kitty alternates ids 7 and 8 in one synchronised update, the old taken down
  ; once the new is over it (one id reused blanks first); or the cells, bands over them
  (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
-   (? (peep st 'win ()) (mesh-win st f bands)
+   (? (st 'win) (mesh-win st f bands)
       (st 'kitty)
       (: n (peep st 'kn 0) _ (pin st 'kn (1 - n))
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
@@ -345,13 +356,13 @@
    _ (frame-paint f w 1 Q w)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
    up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs))
-   _ (up ? (each rs (r \ mesh-under f w h P W H r)) (frame-paint f w (max2 1 (min2 (W // w) (H // h))) P W))
+   _ (up ? (each rs (mesh-under f w h P W H)) (frame-paint f w (max 1 (min (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
    "")
  ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
- (mesh-under f w h P W H r) (: y0 (16 * r) n (min2 16 (H - y0))
+ (mesh-under f w h P W H r) (: y0 (16 * r) n (min 16 (H - y0))
    (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (f (Y * h // H * w + X * w // W)) T (cask (W * n * 4))
               _ (frame-paint g W 1 T W) (pour P (y0 * W * 4) T 0 (W * n * 4)))
       0))
@@ -377,26 +388,26 @@
  (glb-le v) [(v & 255) (v >> 8 & 255) (v >> 16 & 255) (v >> 24 & 255)]
  ; ..a binary32's bits as a float, and a float's; the infinities and nans read as nothing
  (glb-f32 b) (: e (b >> 23 & 255) m (b & 8388607)
-   v (? (e = 0) (m * (2.0 ** -149)) (e = 255) 0.0 ((1.0 + m / 8388608.0) * (2.0 ** (e - 127))))
-   (b >> 31 = 1 ? (0.0 - v) v))
+   v (e @ 0 (m * (2.0 ** -149)) 255 0.0 ((1.0 + m / 8388608.0) * (2.0 ** (e - 127))))
+   (b >> 31 @ 1 -v v))
  (glb-bits x) (? (x = 0.0) 0
-   (: a (x < 0.0 ? (0.0 - x) x) s (x < 0.0 ? 2147483648 0) e0 (floor (log a / log 2.0))
+   (: a (x < 0.0 ? -x x) s (x < 0.0 ? 2147483648 0) e0 (floor (log a / log 2.0))
       e (? (2.0 ** (e0 + 1) <= a) (e0 + 1) (a < 2.0 ** e0) (e0 - 1) e0)
       (? (e < -126) (s | int (a / (2.0 ** -149) + 0.5))
          (e > 127) (s | 2139095040)
          (: m (int ((a / (2.0 ** e) - 1.0) * 8388608.0 + 0.5))
-            (m = 8388608 ? (s | (e + 128) << 23) (s | (e + 127) << 23 | m))))))
- (glb-lin c) (: k (max2 0.0 (min2 1.0 c)) (k <= 0.04045 ? (k / 12.92) (((k + 0.055) / 1.055) ** 2.4)))
- (glb-srgb c) (: k (max2 0.0 (min2 1.0 c)) (k <= 0.0031308 ? (12.92 * k) (1.055 * (k ** (1.0 / 2.4)) - 0.055)))
+            (m @ 8388608 (s | (e + 128) << 23) (s | (e + 127) << 23 | m))))))
+ (glb-lin c) (: k (max 0.0 (min 1.0 c)) (k <= 0.04045 ? (k / 12.92) (((k + 0.055) / 1.055) ** 2.4)))
+ (glb-srgb c) (: k (max 0.0 (min 1.0 c)) (k <= 0.0031308 ? (12.92 * k) (1.055 * (k ** (1.0 / 2.4)) - 0.055)))
  ; ..m as a .glb named name: one node, one primitive, its positions, normals, colours and
  ; triangles, under a plain white matte; a triangle's texture is left behind
  (mesh-glb-of m name) (: vs (m 0) ts (m 1) n #vs
-   ps (map (v \ map (x \ glb-f32 (glb-bits x)) [(0.0 - v 0) (v 1) (v 2)]) vs) ns (map (v \ [(0.0 - v 5) (v 6) (v 7)]) vs)
-   cs (map (v \ map (k \ glb-lin (v k)) [8 9 10]) vs)
-   (fl l) (cats (map (p \ cats (map (x \ glb-le (glb-bits x)) p)) l))
+   ps (map (v \ map (glb-f32 * glb-bits) [-(v 0) (v 1) (v 2)]) vs) ns (map (v \ [-(v 5) (v 6) (v 7)]) vs)
+   cs (map (v \ map (glb-lin * v) [8 9 10]) vs)
+   (fl l) (catmap (p \ catmap (glb-le * glb-bits) p) l)
    ; ..the triangles' corners in two bytes each where that holds them, padded to a word
    sh (n <= 65536) (le k) (sh ? [(k & 255) (k >> 8 & 255)] (glb-le k))
-   pb (fl ps) nb (fl ns) cb (fl cs) il (#ts * 3 * (sh ? 2 4)) ib (cats (map (t \ cats (map (k \ le (t k)) ^3)) ts) + map (_ \ 0) ^((4 - il % 4) % 4))
+   pb (fl ps) nb (fl ns) cb (fl cs) il (#ts * 3 * (sh ? 2 4)) ib (catmap (t \ catmap (le * t) ^3) ts + map (_ \ 0) ^((4 - il % 4) % 4))
    (ext f) (map (k \ foldl (\ a p (f a (p k))) (ps 0 k) ps) ^3)
    (view o l g) {"buffer" 0 "byteOffset" o "byteLength" l "target" g}
    (acc v ty c ct) {"bufferView" v "componentType" ct "count" c "type" ty}
@@ -404,7 +415,7 @@
                  "nodes" [{"mesh" 0 "name" name}]
                  "meshes" [{"name" name "primitives" [{"attributes" {"POSITION" 0 "NORMAL" 1 "COLOR_0" 2} "indices" 3 "mode" 4 "material" 0}]}]
                  "materials" [{"name" name "pbrMetallicRoughness" {"baseColorFactor" [1.0 1.0 1.0 1.0] "metallicFactor" 0.0 "roughnessFactor" 1.0}}]
-                 "accessors" [(pins (acc 0 "VEC3" n 5126) "min" (ext min2) "max" (ext max2))
+                 "accessors" [(pins (acc 0 "VEC3" n 5126) "min" (ext min) "max" (ext max))
                               (acc 1 "VEC3" n 5126) (acc 2 "VEC3" n 5126) (acc 3 "SCALAR" (3 * #ts) (sh ? 5123 5125))]
                  "bufferViews" [(view 0 #pb 34962) (view #pb #nb 34962) (view (#pb + #nb) #cb 34962) (view (#pb + #nb + #cb) il 34963)]
                  "buffers" [{"byteLength" (#pb + #nb + #cb + #ib)}]})
@@ -417,13 +428,13 @@
  (mesh-glb s) (? (#s < 28 || glb-u32 s 0 != 1179937895 || glb-u32 s 4 != 2 || glb-u32 s 16 != 1313821514) ()
    (: jl (glb-u32 s 12) r (json-read (snip s 20 (20 + jl))) b0 (28 + jl)
       (? (atom? r || !(tablet? (r 1))) ()
-         (: g (r 1) avs (peep g "accessors" ()) bvs (peep g "bufferViews" ())
+         (: g (r 1) avs (g "accessors") bvs (g "bufferViews")
             (wide ct) (ct @ 5126 4 5125 4 5123 2 5122 2 1)
             (comp ct o nm) (? (ct = 5126) (glb-f32 (glb-u32 s o)) (ct = 5125) (glb-u32 s o)
                               (ct = 5123) (glb-u16 s o @ v (nm ? (v / 65535.0) v))
-                              (ct = 5122) (glb-u16 s o @ v (: w (v < 32768 ? v (v - 65536)) (nm ? (max2 -1.0 (w / 32767.0)) w)))
+                              (ct = 5122) (glb-u16 s o @ v (: w (v < 32768 ? v (v - 65536)) (nm ? (max -1.0 (w / 32767.0)) w)))
                               (ct = 5121) (s o @ v (nm ? (v / 255.0) v))
-                              (s o @ v (: w (v < 128 ? v (v - 256)) (nm ? (max2 -1.0 (w / 127.0)) w))))
+                              (s o @ v (: w (v < 128 ? v (v - 256)) (nm ? (max -1.0 (w / 127.0)) w))))
             (acc i) (: a (avs i) bv (bvs (a "bufferView")) ct (a "componentType")
                        nc (peep {"SCALAR" 1 "VEC2" 2 "VEC3" 3 "VEC4" 4} (a "type") 1) cw (wide ct)
                        st (peep bv "byteStride" (nc * cw)) o (b0 + peep bv "byteOffset" 0 + peep a "byteOffset" 0)
@@ -434,35 +445,35 @@
                          (: q (n "matrix") [(map (r \ map (c \ q (4 * c + r)) ^3) ^3) [(q 12) (q 13) (q 14)]])
                          (: t (peep n "translation" [0.0 0.0 0.0]) q (peep n "rotation" [0.0 0.0 0.0 1.0]) z (peep n "scale" [1.0 1.0 1.0])
                             x (q 0) y (q 1) w (q 3) qz (q 2)
-                            R [[(1.0 - 2.0 * (y * y + qz * qz)) (2.0 * (x * y - w * qz)) (2.0 * (x * qz + w * y))]
-                               [(2.0 * (x * y + w * qz)) (1.0 - 2.0 * (x * x + qz * qz)) (2.0 * (y * qz - w * x))]
-                               [(2.0 * (x * qz - w * y)) (2.0 * (y * qz + w * x)) (1.0 - 2.0 * (x * x + y * y))]]
+                            R [[(1.0 - 2.0 * (2 y + 2 qz)) (2.0 * (x * y - w * qz)) (2.0 * (x * qz + w * y))]
+                               [(2.0 * (x * y + w * qz)) (1.0 - 2.0 * (2 x + 2 qz)) (2.0 * (y * qz - w * x))]
+                               [(2.0 * (x * qz - w * y)) (2.0 * (y * qz + w * x)) (1.0 - 2.0 * (2 x + 2 y))]]
                             [(map (r \ map (c \ R r c * z c) ^3) ^3) t]))
             (mul A B) [(map (r \ map (c \ net (map (k \ A 0 r k * B 0 k c) ^3)) ^3) ^3)
                        (map (r \ A 1 r + net (map (k \ A 0 r k * B 1 k) ^3)) ^3)]
             (on M p) (map (r \ M 1 r + net (map (k \ M 0 r k * p k) ^3)) ^3)
             ; ..a normal's way: the cofactors, the inverse's transpose but for its size and sign
             (cof M) (: m (M 0) (rc r c) (: a (m ((r + 1) % 3)) b (m ((r + 2) % 3)) (a ((c + 1) % 3) * b ((c + 2) % 3) - a ((c + 2) % 3) * b ((c + 1) % 3)))
-                      (map (r \ map (c \ rc r c) ^3) ^3))
+                      (map (r \ map (rc r) ^3) ^3))
             (det M) (: m (M 0) (net (map (c \ m 0 c * (m 1 ((c + 1) % 3) * m 2 ((c + 2) % 3) - m 1 ((c + 2) % 3) * m 2 ((c + 1) % 3))) ^3)))
             (prim M p) (: at (p "attributes") P (acc (at "POSITION")) n #P C (cof M) sg (det M < 0.0 ? -1.0 1.0)
                           N (elem "NORMAL" (keys at) ? (acc (at "NORMAL")) ())
                           K (elem "COLOR_0" (keys at) ? (acc (at "COLOR_0")) ())
-                          mt (peep p "material" () @ () {} i (peep (peep g "materials" ()) i {}))
+                          mt (p "material" @ () {} i (peep (g "materials") i {}))
                           f (peep (peep mt "pbrMetallicRoughness" {}) "baseColorFactor" [1.0 1.0 1.0 1.0])
                           I (elem "indices" (keys p) ? (map cap (acc (p "indices"))) ^n)
                           vs (map (i \ (: q (on M (P i)) w (two? N ? (unit (map (r \ sg * net (map (c \ C r c * N i c) ^3)) ^3)) [0.0 1.0 0.0])
                                           k (two? K ? (K i) [1.0 1.0 1.0])
-                                          [(0.0 - q 0) (q 1) (q 2) 0.0 0.0 (0.0 - w 0) (w 1) (w 2)
+                                          [-(q 0) (q 1) (q 2) 0.0 0.0 -(w 0) (w 1) (w 2)
                                            (glb-srgb (k 0 * f 0)) (glb-srgb (k 1 * f 1)) (glb-srgb (k 2 * f 2))]))
                                   ^n)
                           ts (map (k \ (: a (I (3 * k)) b (I (3 * k + 1)) c (I (3 * k + 2)) (sg < 0.0 ? [a c b -1] [a b c -1]))) ^(#I // 3))
                           (two? N ? (mesh vs ts) (mesh-normals (mesh vs ts))))
             (walk i M) (: n (peep g "nodes" () i) M2 (mul M (place n))
-                          here (elem "mesh" (keys n) ? (map (p \ prim M2 p) (filter (p \ peep p "mode" 4 = 4) (peep g "meshes" () (n "mesh") "primitives")))
+                          here (elem "mesh" (keys n) ? (map (prim M2) (filter (p \ peep p "mode" 4 = 4) (peep g "meshes" () (n "mesh") "primitives")))
                                  ())
-                          (here + cats (map (c \ walk c M2) (peep n "children" ()))))
-            sc (peep (peep g "scenes" ()) (peep g "scene" 0) {})
-            ms (cats (map (i \ walk i [[[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]] [0.0 0.0 0.0]]) (peep sc "nodes" ())))
+                          (here + catmap (c \ walk c M2) (n "children")))
+            sc (peep (g "scenes") (peep g "scene" 0) {})
+            ms (catmap (i \ walk i [[[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]] [0.0 0.0 0.0]]) (sc "nodes"))
             (two? ms ? (mesh-join ms) ()))))))
 ) ; module mesh

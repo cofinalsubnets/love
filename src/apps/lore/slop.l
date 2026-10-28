@@ -28,7 +28,7 @@
    cx (x2 - c / 2.0)
    (field t dy) (: yy (y2 + dy * 1.0)
                    cy ((yy - r / 2.0) * 2.0)
-                   rr (1 / 2 $ cx * cx + cy * cy)
+                   rr (1 / 2 $ cx * cx + 2 cy)
                  (sin (x2 * 0.09 + t) +
                   sin (yy * 0.16 - t * 0.7) +
                   sin ((x2 + yy) * 0.06 + t * 0.4) +
@@ -162,7 +162,7 @@
                      (pin g 'push 0, slop-step g)))
 
  ; forward is any rove steer that climbs; a tap anywhere (cli's -12) is forward too
- (slop-key g k) (steer (k = -12 ? 107 k) @ mv
+ (slop-key g k) (steer (k @ -12 107 k) @ mv
                    (? (g 'over) g
                       (k @ (113 || 27) 1 0) (pin g 'over 'fled)
                       (atom? mv) g
@@ -187,7 +187,7 @@
      (go 0 -1,
       slurp j))
  (turf-row g w px)
-  ((px < 0 ? (peep (g 'rows) w ())) @ hit
+  ((px < 0 ? (g 'rows w)) @ hit
    (? (string? hit) hit
       (px < 0) (turf-line g w -1 @ s (pin (g 'rows) w s, s))
       (turf-line g w px)))
@@ -278,7 +278,7 @@
 
  ; the cost goes with the rate. cards want 48k (an hda hdmi port refuses 16k); the wasm
  ; page resamples any rate and is the slow one, so it plays at a third
- song-rate (love-arch = 'wasm ? 16000 48000)
+ song-rate (love-arch @ 'wasm 16000 48000)
  song-cps 0.55                          ; cycles a second at full speed
  song-chunk (song-rate // 30)           ; a frame's worth of frames, thirty a second
  song-gain 6500.0
@@ -296,7 +296,7 @@
   (: gap (slop-gap g) lo (g 'gedge)
      m (? (lo <= gap) 0.0
           (1 < gap) ((lo - gap) * 1.0 / ((lo - 1) * 1.0) @ u
-                     (u * u * (3.0 - 2.0 * u)))
+                     (2 u * (3.0 - 2.0 * u)))
           1.0)
    (? (m < 0.0) 0.0 (1.0 < m) 1.0 m))
 
@@ -309,7 +309,7 @@
      h (g 'r // 2)
      v (? (sp <= gap) 1.0
           (lo < gap) (: q ((gap - lo) * 1.0 / ((sp - lo) * 1.0))
-                        s (q * q * (3.0 - 2.0 * q))
+                        s (2 q * (3.0 - 2.0 * q))
                       (song-floor + (1.0 - song-floor) * s))
           (h <= d) song-floor
           (0 < d) ((h - d) * 1.0 / (h * 1.0) @ u
@@ -377,7 +377,7 @@
      _ (fill ())
      (song-out s song-chunk song-gain))
 
- (presses n) (show n + (n = 1 ? " press" " presses"))
+ (presses n) (show n + (n @ 1 " press" " presses"))
  ; the bar stops a column short of the screen: a console that wraps at its edge would
  ; scroll the map for a bar that reached it
  (slop-bar-fit g) (snip (slop-bar g) 0 (g 'c - 1))
@@ -412,7 +412,7 @@
              (beat-out sp m vol) (sng ? (slop-song-feed sng sp m vol) (rest 33))
              ; since is beats since the last frame
              (swim since) (g 'over ? ()
-                         (: keys (key-drain g repeat-gap (k \ slop-key g k))   ; a held key at the tower's pace
+                         (: keys (key-drain g repeat-gap (slop-key g))   ; a held key at the tower's pace
                             _ (g 'over ? () (slop-tick g))
                             due (!hn || frame-due? song-yield (horn-lag hn) (0 < keys) since)
                             (due ? (say out (slop-frame g), flush out),

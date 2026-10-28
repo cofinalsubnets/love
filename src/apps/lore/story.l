@@ -245,7 +245,7 @@
 
  ; --- the runner: the story on cli's stage, a key a turn -----------------------------
  (story-run lvl) (story-new lvl @ g
-                    (stage (w \ h \ story-frame g w h) (c \ story-key g c) (_ \ g 'over)))
+                    (stage (w \ h \ story-frame g w h) (story-key g) (_ \ g 'over)))
  ; the verb: a level file, or the library under a root; the page has its own door (web.l)
  story-usage "usage: love play LEVEL.l | DIR   (a story level, or the library under a root; also love play story [LEVEL.l | DIR])"
  (story-main as)

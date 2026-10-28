@@ -204,7 +204,7 @@
       (t = 6) (npc && i = g 'pane ? (chat g 'start) (note g w-glass))
       (t = 4) (note g w-water)
       (nx < 0 && 5 = dat d 0 ny) (pin g 'over 'west)
-      !(open? d nx ny) (note g (dat d ox oy = 5 ? w-east w-edge))
+      !(open? d nx ny) (note g (dat d ox oy @ 5 w-east w-edge))
       ((pins p 'x nx 'y ny),
        stride-msgs t @ () () l
        (: sb (g 'sb) (roll sb 8 @ 0 (note g (l $ roll sb #l)))),

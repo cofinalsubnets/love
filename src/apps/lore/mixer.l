@@ -8,19 +8,18 @@
 ;                           (st n), if given, answers n frames more to lay under them, (left . right)
 (module (mixer mix-cry mix-new)
 (borrow 'rove)                          ; song-rate
-(borrow 'view)                          ; max2
 (:
- (mix-cry st nm at) (: q (peep st 'sfx ()) (#q < 8 && #nm > 0 ? (pin st 'sfx ([nm at] . q)) st))
+ (mix-cry st nm at) (: q (st 'sfx) (#q < 8 && #nm > 0 ? (pin st 'sfx ([nm at] . q)) st))
  ; ..a voice started: [samples step at left right], the step the sound's rate over the horn's
- (voice S at E near far) (: dx (atom? at ? 0.0 (at 0 - E 0)) dz (atom? at ? 0.0 (at 1 - E 1)) d (sqrt (dx * dx + dz * dz))
-   v (d < near ? 1.0 (max2 0.0 ((far - d) / (far - near))))
+ (voice S at E near far) (: dx (atom? at ? 0.0 (at 0 - E 0)) dz (atom? at ? 0.0 (at 1 - E 1)) d (sqrt (2 dx + 2 dz))
+   v (d < near ? 1.0 (max 0.0 ((far - d) / (far - near))))
    p (d < 1.0 ? 0.5 (0.5 + 0.375 * (dx * cos (E 2) - dz * sin (E 2)) / d))
    (v <= 0.0 ? () [(S 0) (1.0 * S 1 / song-rate) 0 (v * (1.0 - p)) (v * p)]))
  (firsts l k) (k = 0 || atom? l ? () (<l . firsts >l (k - 1)))
  (mix-new hn sound ear o) (: box {'vs ()} n (song-rate // peep o 'fps 35) pk (cite 'play 'pack) z (iota n * 0.0)
-   bus (peep o 'bus ())
+   bus (o 'bus)
    near (1.0 * peep o 'near 1.0) far (1.0 * peep o 'far 10.0) g (1.0 * peep o 'gain 20000.0)
-   (st \ (: fx (peep st 'sfx ()) _ (pin st 'sfx ()) E (ear st)
+   (st \ (: fx (st 'sfx) _ (pin st 'sfx ()) E (ear st)
             (start f) (sound (f 0) @ () () S (voice S (f 1) E near far))
             vs (firsts (filter two? (map start (rev fx)) + box 'vs) 8)
             (go l L R keep) (? (atom? l) [L R (rev keep)]
