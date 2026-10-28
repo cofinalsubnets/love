@@ -1,5 +1,4 @@
-#ifndef _LOVE_NETDB_H
-#define _LOVE_NETDB_H
+#pragma once
 #include <sys/socket.h>
 /* glibc's field order: ai_addr before ai_canonname */
 struct addrinfo {
@@ -28,4 +27,3 @@ struct addrinfo {
 int  getaddrinfo(char const*, char const*, struct addrinfo const*, struct addrinfo**);
 void freeaddrinfo(struct addrinfo*);
 char const *gai_strerror(int);
-#endif

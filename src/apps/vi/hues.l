@@ -421,6 +421,114 @@
                  (w (i + 1) acc 0))))
        (in = 1 ? (cm 0 0 () 1) (w 0 () 1)))
 
+   ; --- lex and yacc: definitions, %%, rules, %%, C; C wherever the grammar holds code ---
+   ; runs rs, less those any of vs covers, merged with vs in order
+   (hues-overlay rs vs)
+    (: ks (filter (x \ !(any (v \ x 1 < v 2 && v 1 < x 2) vs)) rs)
+       (go a b acc) (? (atom? a) (rev acc + b) (atom? b) (rev acc + a)
+                       (<a 1 <= <b 1) (go >a b (<a . acc)) (go a >b (<b . acc)))
+       (go ks vs ()))
+   ; yacc's $$ $1 $-1 $<t>1 @1 @$ in t, where code? holds, as var runs from a
+   (hues-yvars t code? a)
+    (: n #t
+       (go i acc)
+        (n <= i ? (rev acc)
+           (t i @ c
+              (? ((c = 36 || c = 64) && code? i)
+                  (: j (i + 1 < n && t (i + 1) = 60 ? (hues-find t (i + 1) ">" @ m (m < n ? (m + 1) n)) (i + 1))
+                     e (? (j < n && t j = 36) (j + 1)
+                          (j < n && t j = 45) (hues-run t (j + 1) hues-dig?)
+                          (hues-run t j hues-dig?))
+                     (i + 1 < e ? (go e (['var (i + a) (e + a)] . acc)) (go (i + 1) acc)))
+                 (go (i + 1) acc))))
+       (go 0 ()))
+   ; s from a as C, carrying cc: [runs carry braces], the braces opened less those closed
+   (hues-cseg s a cc ya)
+    (: t (snip s a #s)
+       r (hues-cl hues-c t cc 1)
+       (code? k) (all (x \ !(<x = 'string || <x = 'comment) || k < x 1 || x 2 <= k) <r)
+       d (foldl (\ d k (t k @ c (? (c = 123 && code? k) (d + 1) (c = 125 && code? k) (d - 1) d))) 0 ^#t)
+       rs (map (x \ [<x (x 1 + a) (x 2 + a)]) <r)
+       [(ya ? (hues-overlay rs (hues-yvars t code? a)) rs) <>r d])
+   ; s i opens a pattern: past it, at the first blank outside "..", [..] and an escape
+   (hues-patend s i)
+    (: n #s
+       (go j q b) (? (n <= j) n
+                     (s j = 92) (go (j + 2) q b)
+                     q (go (j + 1) (s j != 34) b)
+                     b (go (j + 1) q (s j != 93))
+                     (s j = 34) (go (j + 1) 1 b)
+                     (s j = 91) (go (j + 2) q 1)
+                     (hues-bl? (s j)) j
+                     (go (j + 1) q b))
+       (go i () ()))
+   ; <..> tags, quoted names and TOKENS in a directive's rest, from i
+   (hues-ydecl s i acc emit)
+    (: n #s
+       (go j acc) (? (n <= j) acc
+                     (s j = 60) (hues-find s j ">" @ k (go (k + 1) (emit acc 'type j (min n (k + 1)))))
+                     (elem (s j) "\"'") (: k (hues-qend s (j + 1) (s j) 92) e (k ? k n) (go e (emit acc 'string j e)))
+                     (hues-alf? (s j))
+                      (: e (hues-idend s j) w (snip s j e) (go e (w = upper w ? (emit acc 'const j e) acc)))
+                     (go (j + 1) acc))
+       (go i acc))
+   ; a yacc rule line from i: name:, | ; %prec, 'c' and TOKENS, then an action's C
+   (hues-yrule s i acc emit)
+    (: n #s
+       (go j acc) (? (n <= j) [acc n]
+                     (hues-bl? (s j)) (go (j + 1) acc)
+                     (elem (s j) "{/") [acc j]
+                     (elem (s j) "|;:") (go (j + 1) (emit acc 'pre j (j + 1)))
+                     (s j = 37) (hues-mkw s (j + 1) @ e (go e (emit acc 'keyword j e)))
+                     (s j = 39) (: k (hues-qend s (j + 1) 39 92) e (k ? k n) (go e (emit acc 'string j e)))
+                     (hues-alf? (s j))
+                      (: e (hues-idend s j) k (hues-skip s e) w (snip s j e)
+                         (? (k < n && s k = 58) (go e (emit acc 'func j e))
+                            (w = "error") (go e (emit acc 'keyword j e))
+                            (w = upper w) (go e (emit acc 'const j e))
+                            (go e acc)))
+                     (go (j + 1) acc))
+       (go i acc))
+   ; carry: [section in-%{ open-braces c-carry in-<scope>{]; section 0 the definitions, 1 the
+   ; rules, 2 C. in the rules an indented line is C, but in a scope it is a rule
+   (hues-lexy s in keep ya)
+    (: c (two? in ? in [0 0 0 0 0]) sec (c 0) inc (c 1) dep (c 2) cc (c 3) sc (c 4)
+       n #s lead (hues-skip s 0)
+       emit (hue-emit keep)
+       (ret rs c2) [(keep ? rs ()) c2]
+       ; C from a after the runs acc; its braces count while an action or %union is open
+       (code a acc cnt)
+        (hues-cseg s a cc ya @ [rs cc2 d]
+           (ret (rev acc + rs) [sec inc (cnt ? (max 0 (dep + d)) dep) cc2 sc]))
+       (? (inc = 1) (s = "%}" ? (ret [['pre 0 2]] [sec 0 dep 0 sc]) (code 0 () ()))
+          (cc != 0 || 0 < dep) (code 0 () (0 < dep))
+          (s = "%%") (ret [['pre 0 2]] [(min 2 (sec + 1)) 0 0 0 0])
+          (sec = 2) (code 0 () ())
+          (hue-at? s 0 "%{") (ret [['pre 0 2]] [sec 1 dep 0 sc])
+          (sec = 0)
+           (? (n = 0) (ret () c)
+              (s 0 = 37)
+               (: e (hues-run s 1 (x \ hues-idc? x || x = 46 || x = 45)) acc (emit () 'keyword 0 e)
+                  k (hues-find s e "{")
+                  (k < n ? (code k (hues-ydecl (snip s 0 k) e acc emit) 1) (ret (rev (hues-ydecl s e acc emit)) c)))
+              (s 0 = 123) (code 0 () 1)
+              (0 < lead || hue-at? s 0 "/*") (code 0 () ())
+              (: e (hues-run s 0 (x \ !(hues-bl? x))) a (hues-skip s e)
+                 (ret (rev (emit (emit () 'func 0 e) 'string a n)) c)))
+          ya (hues-yrule s 0 () emit @ [acc j] (j < n ? (code j acc 1) (ret (rev acc) c)))
+          (n = 0) (ret () c)
+          (0 < lead && !sc) (code 0 () 1)
+          (sc && lead + 1 = n && s lead = 125) (ret [['pre lead n]] [sec inc dep cc 0])
+          (: i (s lead = 60 && !(hue-at? s lead "<<EOF>>") ? (hues-find s lead ">" @ k (min n (k + 1))) lead)
+             acc (emit () 'type lead i)
+             (? (i < n && s i = 123 && hues-skip s (i + 1) = n) (ret (rev (emit acc 'pre i (i + 1))) [sec inc dep cc 1])
+                (: eof (hue-at? s i "<<EOF>>") p (eof ? (i + 7) (hues-patend s i)) a (hues-skip s p)
+                   acc2 (emit acc (eof ? 'pre 'string) i p)
+                   (? (n <= a) (ret (rev acc2) c)
+                      (s a = 124) (ret (rev (emit acc2 'pre a (a + 1))) c)
+                      (code a acc2 1)))))))
+   (hues-lexy? ls) (: (go l k) (? (atom? l || 400 < k) () (<l = "%%") 1 (go >l (k + 1))) (go ls 0))
+
    ; --- which lexer ---
    (hues-pairs t rows) (foldl (b \ r \ pin b <r <>r) t rows)
    hues-exts
@@ -428,13 +536,14 @@
      '(("l" l) ("c" c) ("h" c) ("html" html) ("htm" html) ("css" css) ("js" js) ("mjs" js) ("cjs" js)
        ("sh" sh) ("bash" sh) ("mk" make) ("mak" make) ("md" md) ("markdown" md) ("json" json)
        ("s" asm) ("S" asm) ("asm" asm) ("diff" diff) ("patch" diff) ("awk" awk)
+       ("lex" lex) ("y" yacc) ("yy" yacc)
        ("man" roff) ("roff" roff) ("1" roff) ("2" roff) ("3" roff) ("4" roff) ("5" roff)
        ("6" roff) ("7" roff) ("8" roff) ("9" roff)))
    ; a fence's info word: an extension, or a name for one
    hues-fences
     (hues-pairs (hues-pairs (tablet ()) (map (k \ [k (hues-exts k)]) (keys hues-exts)))
      '(("love" l) ("shell" sh) ("lush" sh) ("console" sh) ("javascript" js) ("make" make)
-       ("makefile" make) ("assembly" asm) ("gas" asm)))
+       ("makefile" make) ("assembly" asm) ("gas" asm) ("flex" lex) ("bison" yacc)))
    hues-mknames '("Makefile" "makefile" "GNUmakefile" "Cookfile")
 
    ; --- markdown ---
@@ -514,12 +623,14 @@
                            (2 < m && snip b (m - 3) m = "awk") 'awk
                            (go >ws))))
           (go (words (snip l 2 #l)))))
-   ; the language of a file, by its name, else its first line; () for none
-   (hues-lang f l0)
-    (: b (hues-base f) g (hues-exts (hues-ext b))
-       (? (nom? g) g
+   ; the language of a file, by its name, else its first line; () for none. a .l with a
+   ; line that is only %% is lex, not love
+   (hues-lang f ls)
+    (: b (hues-base f) e (hues-ext b) g (hues-exts e)
+       (? (e = "l" && hues-lexy? ls) 'lex
+          (nom? g) g
           (elem b hues-mknames) 'make
-          (hues-bang l0)))
+          (hues-bang (two? ls ? <ls ()))))
    ; the lexer for a language; the .l one folds the book, so a caller keeps it
    (hues-lexer g) (g @
     'l (hue-book () @ bk (s \ in \ keep \ hue-lex bk s in keep))
@@ -534,6 +645,8 @@
     'diff hues-diff
     'roff hues-roff
     'asm hues-asm
+    'lex (s \ in \ keep \ hues-lexy s in keep ())
+    'yacc (s \ in \ keep \ hues-lexy s in keep 1)
     'md (hues-mdlx ()))
 
    ; --- the pens: hue.l's, and one per class above ---

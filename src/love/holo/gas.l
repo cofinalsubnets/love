@@ -1490,6 +1490,13 @@
                       (atom? dt) [() <<sy <<r]
                       (><dt = -1) [1 <<sy <<r]
                       (scare 'gas-data e)))))))
+   ; an .octa's 16 bytes: hex digits read in pairs from the low end, a plain number sign-filled
+   (gf-octa e)
+    (: t (xa-trim e) n #t
+       (? (2 < n && t 0 = 48 && (t 1 = 120 || t 1 = 88))
+           (map (i \ (: j (n - 2 * i - 1) (lo k) (k > 1 && ghex? (t k) ? (hexv (t k)) 0)
+                        (lo j + 16 * lo (j - 1)))) ^16)
+           (gimm (gtoks t) @ v (gf-le v 8 + gf-le (v < 0 ? -1 0) 8))))
    (gf-le v w) (: u (v < 0 ? (v + (1 << 8 * w)) v) (map (i \ byte (u >> 8 * i)) ^w))
    ; a word's bytes, or its fixup: rel32 is S + aux - P - 4 wherever it resolves, so `- .` rides aux + 4
    (gf-word tgt w e rl)
@@ -1563,6 +1570,10 @@
                                           (go (i + 1) (acc + string c)))))
                       (go 0 ""))
        (val e) (gimm (gtoks (ssub e)))
+       ; `.if \base == %rsp`: two registers compare by name -> [bit] | ()
+       (rcmp r) (gtoks (ssub r) @ ts
+                   (? (#ts = 3 && <(ts 0) = 'pct && <(ts 2) = 'pct && elem (ts 1) '((op "==") (op "!=")))
+                      (: eq (<>(ts 0) = <>(ts 2)) [(ts 1 = '(op "==") ? eq !eq)])))
        ; ..at a point, acc the lines laid so far (latest first): backward local labels (`Nb`)
        ; whose distances the a64 lines between them measure. the latest named is the origin and
        ; the others sit back from it, so only their differences mean anything (`(662b-661b) / 4`).
@@ -1662,14 +1673,26 @@
        ; (`feat=(((1U << 0) | (1U << 1)))` once cpp has expanded it)
        (mpiece f) (: i (xa-idx f 61) ws (filter (x \ 0 < #x) (xa-split (i < 0 ? f (snip f 0 i)) 32))
                      (i < 0 || !(two? ws) ? (eqj (filter (x \ 0 < #x) (xa-split f 32)))
-                        (rev >(rev ws) + [(last ws + "=" + xa-trim (snip f (i + 1) #f))])))
+                        (rev >(rev ws) + mdef (last ws) (xa-trim (snip f (i + 1) #f)))))
+       ; ..up to the next `name=` outside parens, when the pieces are spaced (`m a=0 b=0`)
+       (mdef nm d)
+        (: n #d
+           (sk j) (j < n && ws? (d j) ? (sk (j + 1)) j)
+           (kw? i) (: k (sk i) e (word d k) m (sk e)
+                      (e > k && m < n && d m = 61 && (m + 1 >= n || d (m + 1) != 61)))
+           (go i p) (? (i >= n) [(nm + "=" + d)]
+                       (d i = 40) (go (i + 1) (p + 1))
+                       (d i = 41) (go (i + 1) (p - 1))
+                       (p = 0 && ws? (d i) && kw? i) ((nm + "=" + xa-trim (snip d 0 i)) . mpiece (xa-trim (snip d i n)))
+                       (go (i + 1) p))
+           (go 0 0))
        ; an argument that is one quoted string passes its inside (`"dmb sy"` -> dmb sy)
        (unq a) (: n #a (n >= 2 && a 0 = 34 && a (n - 1) = 34 && !(xa-has? (snip a 1 (n - 1)) 34) ? (snip a 1 (n - 1)) a))
        ; a call's lines: keyword arguments by name, the rest in order, a default for one empty or left off
        (call m rest)
         (: ps <m
-           ; `%expr` (.altmacro) passes the expression's value
-           (pct a) (: t (xa-trim a) (0 < #t && t 0 = 37 ? (show (val (snip t 1 #t))) a))
+           ; `%expr` passes the expression's value under .altmacro; outside it `%rax` is a register
+           (pct a) (: t (xa-trim a) (peep cnt 'alt () && 0 < #t && t 0 = 37 ? (show (val (snip t 1 #t))) a))
            va (two? ps && last ps 2 = 'va)
            as (map (a \ pct (unq a)) (0 = #(xa-trim rest) ? () (margsl rest (va ? (#ps - 1) -1))))
            kw (filter (a \ xa-has? a 61) as) po (filter (a \ !(xa-has? a 61)) as)
@@ -1693,18 +1716,23 @@
                      specs (map (x \ x @ (a + ":vararg") [a "" 'va] (a + ":" + _) [a ""] (a + "=" + b) [a b] [x ""]) >ws)
                      (pin mac <ws [specs <b],
                       go <>b acc))
-                 (elem w [".purgem" ".altmacro" ".noaltmacro"]) (go >l acc)
+                 (w = ".altmacro") (pin cnt 'alt 1, go >l acc)
+                 (w = ".noaltmacro") (pin cnt 'alt (), go >l acc)
+                 (w = ".purgem") (go >l acc)
                  (two? (req t)) (req t @ (nm rg) (pin rq nm (ssub rg), go >l acc))
                  (w = ".unreq") (pin rq (xa-trim r) (), go >l acc)
                  ; gas's `name = expr` is `.set name, expr`
                  (gf-eqset? t) (go ((".set " + xa-trim (snip t 0 (xa-idx t 61)) + ", " + snip t (1 + xa-idx t 61) #t) . >l) acc)
                  (elem w '(".set" ".equ"))
-                  (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs ""))
-                     (gf-ident? v && !(charm? (peep sv v ())) ? (go >l (s . acc))   ; an alias: gas-top lays it
+                  (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs "")) rv (ssub v)
+                     ; a register's name (`digest = %rdi`, then `h = g` as the rounds rotate) stands for it after
+                     (? (0 < #rv && rv 0 = 37) (pin rq <xs rv, pin sv <xs (), go >l acc)
+                        (gf-ident? v && !(charm? (peep sv v ())))
+                         ((peep rq <xs () ? (pin rq <xs ())), go >l (s . acc))   ; an alias: gas-top lays it
                         ; a value over labels (`.set .L__sym_size_f, .-f`) is layout's, not a constant here
                         (trap val <>xs (\ _ _ 'label) @ k
                            (k = 'label ? (go >l (s . acc))
-                              (pin sv <xs k, charm? (peep sv0 <xs ()) ? 0 (pin sv0 <xs k), go >l acc)))))
+                              (pin rq <xs (), pin sv <xs k, charm? (peep sv0 <xs ()) ? 0 (pin sv0 <xs k), go >l acc)))))
                  (w = ".irp")
                   (: b (grab >l '(".irp" ".rept" ".rep") ".endr") xs (xa-oplist r)
                      (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
@@ -1723,6 +1751,7 @@
                              (elem w '(".ifdef" ".ifndef"))
                               (: nm (xa-trim r) d (charm? (peep sv nm ()) || any (x \ starts? (xa-trim x) (nm + ":")) acc)
                                  (w = ".ifdef" ? d !d))
+                             (two? (rcmp r)) <(rcmp r)
                              (vat r acc != 0))
                      (go <>b (go (yes ? <ab <>ab) acc)))
                  (w = ".reloc") (greloc r acc @ a (two? a ? (go >l a) (go >l (ssub s . acc))))
@@ -1869,6 +1898,7 @@
                                                        (\ a b (a = 'gas-data && any (t \ t = ['sym "."]) ts && any (t \ <t = 'lref || (<t = 'sym && <>t != ".")) ts ?
                                                                   (wx ts w) (scare a b)))))))
                                       xs))))
+              (mn = ".octa") (raw (catmap gf-octa xs))
               (mn = ".ascii") (raw (catall (gf-strs rest)))
               (elem mn '(".asciz" ".string")) (raw (catmap (b \ b + [0]) (gf-strs rest)))
               (elem mn '(".zero" ".skip" ".space"))
@@ -1968,7 +1998,26 @@
                     (s 0 = 46) (flush 0, gf-dsplit s @ d (dir <d <>d))
                     (lit (gf-lsub s rl) @ t
                        (gf-ldiff? tgt t || (tgt = 'a64 && any (k \ <k = 'sym && sxn <>k) (gtoks t)) ?
-                          (flush 0, emit [['insx t]]) (pin st 'run (t . (st 'run)))))))))
+                          (flush 0, emit [['insx t]])
+                          (dline t @ fs (two? fs ? (flush 0, emit fs) (pin st 'run (t . (st 'run)))))))))))
+       ; an x86 operand over two labels, `$(a - b)` or `(a - b)(%reg)`, which no instruction
+       ; lays alone: laid over a sentinel, its four bytes then wait like a word (a 'wordx). () when not one
+       (dcut o) (? (0 < #o && o 0 = 36) ["$" (snip o 1 #o) ""]
+                   ((: (g i) (? (i < 1) () (o i = 40 && o (i + 1) = 37) ["" (snip o 0 i) (snip o i #o)] (g (i - 1))))
+                    (#o - 2)))
+       (diff? e) (gtoks e @ ts (any (t \ t = ['ch 45]) ts && 1 < #(filter (t \ <t = 'sym && <>t != ".") ts)))
+       (dline t)
+        (: os (xa-ops (xa-rest t)) c (foldl (\ a o (two? a ? a (dcut o @ d (two? d && diff? (d 1) ? d ())))) () os)
+           (sent bs) ((: (g j) (? (j + 4 > #bs) () (snip bs j (j + 4) = [120 86 52 18]) j (g (j + 1)))) 0)
+           (? (!(gx86? tgt) || atom? c) ()
+              (trap (\ _ (gx-exactm (st 'md) tgt t)) 0 (\ _ _ ()) @ ok
+                 (two? ok ? ()
+                    (: u (xa-mnem t + " " + xa-join ", " (map (o \ (dcut o = c ? (c 0 + "0x12345678" + c 2) o)) os))
+                       fs (gx-exactm (st 'md) tgt u) bs (two? fs && atom? >fs && <<fs = 'raw ? <>(fs 0) ())
+                       j (sent bs) k (peep st 'wxs 0) here (pfx + ".Lwx" + show k)
+                       (? !(charm? j) ()
+                          (pin st 'wxs (k + 1),
+                           [['raw (snip bs 0 j)] ['wordx (gtoks (c 1)) 4 here] ['raw (snip bs (j + 4) #bs)]])))))))
        ls (gf-expand tgt (gf-lines tgt src))
        ; the names a .set over labels makes, known before a word reads one
        sxn (foldl (\ t l (xa-trim l @ u

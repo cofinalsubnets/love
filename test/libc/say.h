@@ -3,8 +3,7 @@
  * every program's frame (fmt.c tests the formatter in its payload). comparisons report a
  * sign, never a value (only the sign is fixed), and a pointer an offset from its base
  * (-1 for null): addresses differ between builds, offsets do not. */
-#ifndef LIBC_SAY_H
-#define LIBC_SAY_H
+#pragma once
 #include <stdio.h>
 #include <stddef.h>
 
@@ -53,5 +52,3 @@ static void say_c(char const *k, int r) { say_n(k, r < 0 ? -1 : r > 0 ? 1 : 0); 
 /* a pointer into a known base, as an offset; null is -1 */
 static void say_p(char const *k, void const *base, void const *p) {
   say_n(k, p ? (long) ((char const *) p - (char const *) base) : -1L); }
-
-#endif

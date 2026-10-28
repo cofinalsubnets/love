@@ -2,11 +2,12 @@
 # test/gate/cts.sh -- mooncc against c-testsuite, an outside corpus whose oracle is each
 # program's own .expected. the failures are rostered with a cause, both ways: a program off
 # the roster must pass, one on it must still fail, and its kind (refuses or wrong) holds.
-# skips without the corpus (`make dl/c-testsuite`, or CTSSRC) or the target's runner.
+# the corpus is fetched into dl/ (or CTSSRC); skips without it or the target's runner.
 # usage: cts.sh ARCH OUTDIR LOVE     (ARCH: x64 | a64 | rv64 | wasm)
 . test/gate/skip.sh
 . test/gate/a64run.sh
 . test/gate/cclib.sh
+. test/gate/dl.sh
 set -u
 
 arch=$1
@@ -65,16 +66,13 @@ if [ "$arch" = wasm ]; then
   a64_qemu="$NODE $PWD/src/inle/wasm/loader.js"
 fi
 
-# the corpus: CTSSRC, then $DL (or dl), then $MOONSRC
-cts=${CTSSRC:-}
-if [ -z "$cts" ]; then
-  for c in "${DL:-dl}"/c-testsuite "${MOONSRC:-$HOME/src}"/c-testsuite; do
-    [ -f "$c/tests/single-exec/00001.c" ] && { cts=$c; break; }
-  done
-fi
-if [ -z "$cts" ] || [ ! -f "$cts/tests/single-exec/00001.c" ]; then
-  echo "          \`make dl/c-testsuite\` fetches it, or set CTSSRC=<a clone>."
-  gate_skip "$name: no c-testsuite here (looked in dl and ${MOONSRC:-$HOME/src}) -- skipped."
+# the corpus: CTSSRC, else the pinned one, fetched into dl/ once
+if [ -n "${CTSSRC:-}" ]; then
+  cts=$CTSSRC
+  [ -f "$cts/tests/single-exec/00001.c" ] || fail "CTSSRC=$cts holds no c-testsuite"
+else
+  dl_need c-testsuite
+  cts=$DL/c-testsuite
 fi
 
 d=$ho/cts-$arch

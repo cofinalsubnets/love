@@ -1,5 +1,4 @@
-#ifndef _LOVE_DIRENT_H
-#define _LOVE_DIRENT_H
+#pragma once
 typedef struct __dirstream DIR;   /* opaque */
 struct dirent {                   /* getdents64's record on every kernel */
   unsigned long long d_ino;
@@ -22,4 +21,3 @@ struct dirent *readdir(DIR*);
 int closedir(DIR*);
 int dirfd(DIR*);
 void rewinddir(DIR*);
-#endif

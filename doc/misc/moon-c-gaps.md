@@ -891,8 +891,12 @@ skip is exact** — the diagnostics, the optimisation promises (pure const mallo
 visibility under a static link, cold/hot, fallthrough, i386's calling conventions (stdcall
 fastcall thiscall regparm, which gcc ignores on every target mooncc lays) and the rest of the
 list; **refused by name** — constructor destructor ifunc weakref vector_size naked
-interrupt patchable_function_entry, the calling conventions that change code here (ms_abi,
-pcs), scalar_storage_order, target_clones, symver. `__has_attribute` answers 1 for the first
+interrupt patchable_function_entry, pcs, scalar_storage_order, target_clones, symver.
+`ms_abi` is carried out on x64 (elsewhere gcc lets it go by, and so does mooncc): it marks the
+first function a declarator's type reaches, a call through it moves sysv's words to rcx rdx r8 r9
+over a 32-byte shadow, and a definition lays as a static `__msabi_NAME` behind a trampoline that
+keeps rdi rsi and xmm6-15. integer and pointer words only, a definition at most six: a float or a
+struct refuses. `__has_attribute` answers 1 for the first
 two classes and 0 for the third and for a name it does not know, which is what a header asks
 before it uses one -- save the four i386 conventions, which answer 1 where gcc off i386 knows
 them not and answers 0.
@@ -1167,9 +1171,9 @@ refused, first stops:
 | units | first stop | area |
 |---|---|---|
 | 224 | an enum used before its definition, whose type is not unsigned int: `drm_modes.h` and `intel_display_limits.h` carry it to every drm and i915 unit | frontend |
-| 47 | `__attribute__((ms_abi))`, which `linux/efi.h` lays on every EFI call | gen |
+| 47 | `__attribute__((ms_abi))`, which `linux/efi.h` lays on every EFI call: carried out; a recheck takes 43, the 4 left stop on asm and an initializer | gen |
 | 16 | an asm immediate input that is not a constant, all in `nf_hook` | asm |
-| 55 | assembler lines and asm it has no lane for: `endbr64` 8, the `%rsp == %rsp` immediate 3, `lretq`, `.octa`, `movntdqa`, `igest` 2 each, `ljmpw`, `sysenter`, `rdpid`, `vmcall`, `crc32q`, `xstore`, `.uleb128`, `ymm`, `pinsrd`, `%st` and label-arithmetic data 1 each | asm |
+| 55 | assembler lines and asm it has no lane for. of the 64 x64 units with asm, 26 still refuse, mostly a stop further in: AVX (`vmovdqu`, `ymm`) 7, `ljmpl`/`ljmpw`/`lcallw`/`lidt` in the 16- and 32-bit lanes 5, an operand gas spaces or nests (` rip`, `r8 %r9`, `(11*32+13)`) 3, `pclmulqdq`/`pinsrd`/`pmovzxdq` 3, a push of an immediate segment 2, `.irpc`, `.uleb128` over labels, a symbol minus a 64-bit constant, char constants in an expression, a `.long` divided over labels, `%st` 1 each | asm |
 | 3 / 1 / 1 | an initializer it cannot lay (acpica's dump tables, a `dfield` table); a parse error (`net/ax25.h`); a duplicate case in `blk_trace_ioctl`, which clang takes (unexamined) | frontend |
 
 the flags: `-o` past a second input 3, vdso32's `-fpic` on i386 2. the crashes: `piggy.o` (the
@@ -1552,10 +1556,8 @@ shifts, extends. What as.l has no row for lowers as a function's template does. 
 pads its alignment with zeros.
 
 **Measured**: gcc `-S -O2` of every test/cc file, assembled by GNU as and by mooncc, both linked
-by mooncc -- **208 of 208** run alike. The linux sample's seven `.S` units each get further and
-stop at gas's tail: `.uleb128`, `.octa`, `.code32`/`.code64`, `lretq`, `\@` in a macro's label,
-a register named through `.set`. Three of them are not 64-bit code (the 32-bit vDSO, realmode,
-la57toggle's mode switch).
+by mooncc -- **208 of 208** run alike. The linux x64 units with asm are counted
+in the table above.
 
 ---
 
@@ -1564,7 +1566,7 @@ la57toggle's mode switch).
 
 **c-testsuite is wired** — `test_cts`, `test_cts_a64`, `test_cts_rv64` over
 `test/gate/cts.sh` (doc/misc/moon.md). 220 single-file programs held to the output they ship, on all
-three targets, ~60 s each, opt-in on `make dl/c-testsuite` and skipping whole without it. Its
+three targets, ~60 s each, the corpus fetched into dl/ by the lane (a failed fetch skips it). Its
 first run is where twelve rows of the syntax ledger above and six of the wrong-answer rows came
 from. The roster of failures lives in the gate with a cause apiece.
 

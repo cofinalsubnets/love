@@ -1,5 +1,4 @@
-#ifndef _LOVE_SEMAPHORE_H
-#define _LOVE_SEMAPHORE_H
+#pragma once
 #include <time.h>
 /* an unnamed, process-private counting semaphore; glibc's 32 bytes */
 typedef struct { int __v, __w; char __pad[24]; } sem_t;
@@ -11,4 +10,3 @@ int sem_wait(sem_t *);
 int sem_trywait(sem_t *);
 int sem_timedwait(sem_t *, struct timespec const *);
 int sem_getvalue(sem_t *, int *);
-#endif

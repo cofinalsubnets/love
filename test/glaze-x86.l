@@ -17,7 +17,8 @@
    thloop (G 'thloop)  thcount (G 'thcount)  threadir (G 'threadir)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)  canon (G 'canon)
    nif (G 'nif)                                  ; the C install seam, a glaze member: every boot pulls it off the book
-   (tloop f) (thloop (threadir (base-ev f) 0)))    ; a written loop, as the hook's thread lane reads what ev made of it
+   (tloop f) (thloop (threadir (base-ev f) 0))     ; a written loop, as the hook's thread lane reads what ev made of it
+   (anlow s) (canon ((G 'ev-lower) s)))             ; auto-ev's front: what autonat and twolow read
 (assert (lit? base-ev) (lit? autogroup) (lit? jitgroupir) (lit? assemble))
 (: tw twin)                                            ; a synonym, for canon's law below
 
@@ -265,8 +266,9 @@
 
 (base-ev '(:
  (tr s) (= (base-ev s) (ev s))  (tv s n) (&& (= n (ev s)) (tr s))
- (agt s) (&& !(= (autogroup s) s) (tr s))  (ag s n) (&& !(= (autogroup s) s) (tv s n))  (agd s) (&& (= (autogroup s) s) (tr s))
- (dfhas? x s) (? (atom? x) (= x s) (any (\ e (dfhas? e s)) x))  (dfused? s) (: d ((cite 'glaze 'defoliate) (opfix s)) (&& !(dfhas? d 'map) !(dfhas? d 'filter)))
+ (agt s) (&& !(= (autogroup (anlow s)) (anlow s)) (tr s))  (ag s n) (&& !(= (autogroup (anlow s)) (anlow s)) (tv s n))  (agd s) (&& (= (autogroup (anlow s)) (anlow s)) (tr s))
+ (dfhas? x s) (? (atom? x) (= x s) (any (\ e (dfhas? e s)) x))  (dfl x) (? (= x '(jot n)) 'l (two? x) (map dfl x) x)   ; a list jot's loop would not hide an unfused map
+ (dfused? s) (: d ((cite 'glaze 'ev-lower) (dfl s)) (&& !(dfhas? d 'map) !(dfhas? d 'filter)))
  _ (assert
     ((\ x (+ (* x 2) 3)) = (ev '(\ x (+ (* x 2) 3))))          ; leaf: native, =-identical
     (23 = ((ev '(\ x (+ (* x 2) 3))) 10))
@@ -326,19 +328,19 @@
               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
               (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
             (grid 0 0))
-       (&& !(= (autonat g2) g2) (= 87130 (ev g2)) (tr g2)))      ; autonat rewrote it -> native == interp
+       (&& !(= (autonat (anlow g2)) (anlow g2)) (= 87130 (ev g2)) (tr g2)))      ; autonat rewrote it -> native == interp
     ; D=1 -- a single row of escape counts (cy a constant 0.0) -> native == interp
     (: g1 '(: (mand cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
               (row px acc) (? (< px 64) (row (+ px 1) (+ acc (mand (- (* px 0.046875) 2.0) 0.0 0.0 0.0 0))) acc)
             (row 0 0))
-       (&& !(= (autonat g1) g1) (tr g1)))
+       (&& !(= (autonat (anlow g1)) (anlow g1)) (tr g1)))
     ; D=3 -- an 8x8x8 nest, M=3 invariants, cz=pz*0.01 shifting zy (exercises r12 push/pop)
     (: g3 '(: (mand cx cy cz zx zy it) (? (&& (< it 50) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy cz (+ (- (* zx zx) (* zy zy)) cx) (+ (+ (* (* 2.0 zx) zy) cy) cz) (+ it 1)) it)
               (lz px py pz acc) (? (< pz 8) (lz px py (+ pz 1) (+ acc (mand (- (* px 0.046875) 2.0) (- (* py 0.046875) 1.5) (* pz 0.01) 0.0 0.0 0))) acc)
               (ly px py acc) (? (< py 8) (ly px (+ py 1) (+ acc (lz px py 0 0))) acc)
               (lx px acc) (? (< px 8) (lx (+ px 1) (+ acc (ly px 0 0))) acc)
             (lx 0 0))
-       (&& !(= (autonat g3) g3) (tr g3)))
+       (&& !(= (autonat (anlow g3)) (anlow g3)) (tr g3)))
     ; twin grid: twolow lowers c/z to real pairs, autonat glazes it, bit-exact
     (: g2t '(: (mand c z it)
                  (? (&& (< it 100) (<= (+ (* (re z) (re z)) (* (im z) (im z))) 4.0)) (mand c (+ (* z z) c) (+ it 1)) it)
@@ -346,7 +348,7 @@
                (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
              (grid 0 0))
        (&& !(= (twolow g2t) g2t)                                                    ; twolow rewrote the twin grid
-           !(= (autonat (twolow g2t)) (twolow g2t))                                 ; ... and autonat then glazes the real-pair form
+           !(= (autonat (twolow (anlow g2t))) (twolow (anlow g2t)))                               ; ... and autonat then glazes the real-pair form
            (= 87130 (ev g2t)) (tr g2t)))                            ; native == interp, same checksum as the plain-float g2
     ; ... spelled (re ~ im): auto-ev opfixes ahead of the lowering, so twolow reads (twin ..)
     (: g2i '(: (mand c z it)
@@ -405,7 +407,7 @@
     (ag '(: data (string [72 105 90 33 65])
                (bsum s i) (? (< i 0) 0 (+ (peep s i 0) (bsum s (- i 1))))
                (bsum data 4)) 365)
-    ; full string lane: fold-consts, norm-let, lift and inference glaze the rolling hash
+    ; full string lane: ev's constant propagation, norm-let, lift and inference glaze the rolling hash
     (ag '(: hmod 1000000007
                (strhash s) (: n (tally s) (go i h) (? (< i n) (go (+ i 1) (% (+ (* h 31) (peep s i 0)) hmod)) h) (go 0 0))
                data (string [72 105 90 33 65])
@@ -439,7 +441,7 @@
                   (bump i)     (? (< i n) (: k (+ 1 (* 97 i)) _ (pin h k (+ 1 (peep h k 0))) (bump (+ i 1))) h)
                   _ (ins 0) a (scan 0 0) __ (bump 0) (+ a (scan 0 0)))
                 (hash-run 50)) 2500) ; hash-run(50) = 2500
-    ; deforestation: defoliate fuses a map/filter/fold over (jot N) into one native counted loop
+    ; deforestation: ev's lowering fuses a map/filter/fold over (jot N) into one native counted loop
     (ag '(: (sumsq n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (sumsq 100)) 328350) ; sum i^2 for i<100
     ; map after filter: the filter guards the fused step; map-after-map composes the element subs
     (ag '(: (f n) (foldl (+) 0 (map (+ 1) (filter (\ x (> x 2)) (jot n)))) (f 10)) 49) ; keep>2, +1, sum = 49
@@ -448,7 +450,7 @@
     (ag '(: (s n) (foldl (+) 0 (jot n)) (s 100)) 4950) ; sum 0..99 = 4950
     ; soundness: foldl/map don't iterate an (iota N) tray, and fusion keeps that degenerate answer
     (tr '(: (h n) (foldl (+) 0 (map (\ x (* x x)) (iota n))) (h 100))) ; iota: degenerate to 0, transparent
-    ; a foldl over a list param can't lower (no jot) -> interpreted, value still correct (defoliate no-op)
+    ; a foldl over a list param can't lower (no jot) -> interpreted, value still correct
     (tr '(: (g l) (foldl (+) 0 l) (g (jot 5)))) ; 0+1+2+3+4 = 10
     ; each fuses as the folds do, its step's effects in their order, a filter's skip doing nothing
     (dfused? '(: (f n t) (each (map (\ x (* x x)) (jot n)) (\ v (pin t v 1)))))
@@ -492,10 +494,10 @@
     (ag '(: (f n) (foldl (+) 0 (map (\ x (* x x)) (filter (\ x (= 1 (% x 2))) (jot n)))) (f 20000)) 1333333330000) ; Σ odd k^2 -> a literal, scev keeps the loop
     ; symbolic bound: the closed form is a polynomial in n, exact at multiple n (not one folded point)
     (tr '(: (f n) (foldl (+) 0 (map (\ x (* x x)) (jot n))) (+ (f 7) (* 1000 (f 13))))) ; f(7)+1000*f(13), the closed form reused at two n
-    ; decline 1: a non-period-2 filter (>2) is left to defoliate; value preserved
-    (tr '(: (f n) (foldl (+) 0 (map (\ x (+ x 1)) (filter (\ x (> x 2)) (jot n)))) (f 10))) ; keep>2,+1 -> defoliate
+    ; decline 1: a non-period-2 filter (>2) is left to fusion; value preserved
+    (tr '(: (f n) (foldl (+) 0 (map (\ x (+ x 1)) (filter (\ x (> x 2)) (jot n)))) (f 10))) ; keep>2,+1 -> fused
     ; decline 2: a piecewise body is not polynomial -> the difference table never dies
-    (tr '(: (f n) (foldl (+) 0 (map (\ x (? (< x 5) (* x x) 0)) (jot n))) (f 12))) ; 0+1+4+9+16 = 30, defoliated/interpreted
+    (tr '(: (f n) (foldl (+) 0 (map (\ x (? (< x 5) (* x x) 0)) (jot n))) (f 12))) ; 0+1+4+9+16 = 30, fused/interpreted
     ; a named-let accumulator with a polynomial step closes too; "fired" is checked through show
     (: lcacc '(: (hof i acc) (? (< i 100) (hof (+ i 1) (+ acc (+ i (+ i i)))) acc) (hof 0 0))
        (&& !(= (show (autogroup lcacc)) (show lcacc)) (14850 = (ev lcacc)) (tr lcacc)))   ; Σ 3k for k<100 = 3·4950
@@ -551,14 +553,14 @@
     ; an unfoldable test (%): descent still bounds the speculative arm
     (: sr '(: (g s k) (? (= 1 (% k 2)) s (g (cup s) (+ k 1))) ww '(a b c) (g ww 0))
        (tv sr '(b c)))
-    ; dechurch: a literal (N f x) with a function operand lowers to f^N(x) nested, so the group glazes
+    ; dechurch, in ev's lowering: a literal (N f x) with a function operand is f^N(x) nested, so the group glazes
     (ag '(: (f i) (2 (+ i) i)                                                          ; (2 (+ i) i) = (+ i (+ i i)) = 3i
                ((: (go k a) (? (< k 100) (go (+ k 1) (+ a (f k))) a)) 0 0)) 14850) ; Σ 3k for k<100 = 3·4950
     (ag '(: (f i) ((2 (+ i)) i)                                                       ; curried form, must compile the same
                 ((: (go k a) (? (< k 100) (go (+ k 1) (+ a (f k))) a)) 0 0)) 14850)
     (ag '(: (f i) (2 (\ a (* a a)) i)                                                 ; (2 sqr i) = (sqr (sqr i)) = i^4
                 ((: (go k a) (? (< k 10) (go (+ k 1) (+ a (f k))) a)) 0 0)) 15333) ; Σ k^4 for k<10
-    ; a number operand is a power, not church: dechurch leaves it. (2 3 i) = (9 i) = i^9
+    ; a number operand is a power, not church: dechurch leaves it to npow. (2 3 i) = (9 i) = i^9
     (tv '(: (g i) (2 i)   ((: (go k a) (? (< k 6) (go (+ k 1) (+ a (g k))) a)) 0 0)) 55) ; Σ k^2 for k<6 = 55, untouched
     (tv '(: (h i) (2 3 i) ((: (go k a) (? (< k 4) (go (+ k 1) (+ a (h k))) a)) 0 0)) 20196) ; Σ k^9 for k<4 = 20196, untouched
     ; delet: a pure value-let in a fn body inlines, so the fn joins the group
@@ -575,7 +577,7 @@
     (ag '(: (f N) (: (lp i acc) (? (< i N) (lp (+ i 1) (: x (% i 13) (+ acc (* x x)))) acc) (lp 0 0)) (f 20)) 741) ; sum (i%13)^2 for i<20, native == interp
     ; an effectful `_`-bound let is kept, not inlined away; the fn stays interpreted
     (tr '(: (f N) (: (lp i b) (? (< i N) (: _ (pin b 0 (+ 1 (peep b 0 0))) (lp (+ i 1) b)) (peep b 0 0)) (lp 0 (cask 1))) (f 7))) ; pin 7x -> 7, write preserved
-    ; debool: &&/||/min/max/abs lower to ?, so the fn glazes
+    ; && and || lower to ? in ev, abs in deabs, so the fn glazes
     (ag '(: (f x n) (? (&& (< x n) (> x 0)) 1 0) (f 5 9)) 1) ; 5<9 && 5>0 -> 1
     (ag '(: (f x) (? (|| (< x 0) (> x 9)) 1 0) (f 5)) 0) ; neither -> 0
     (ag '(: (f x) (+ (abs x) 1) (f -5)) 6) ; |-5|+1 -> 6
@@ -587,7 +589,7 @@
     (tr '(: (g n) (? (< n 1) 0 (+ n (g (- n 1)))) (f n) (? (|| (g n) (< n 0)) 1 0) (f 5))) ; (|| g(5)=15 ..) truthy -> 1, interpreted (g still glazes)
     ; || and abs nested in a loop accumulator
     (agt '(: (f n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0))) a)) 0 0) (f 1000))) ; native == interp on the nested ||/abs loop
-    ; a debool'd helper called by a loop sibling: clamp glazes as a group fn, run_go calls it native
+    ; a lowered helper called by a loop sibling: clamp glazes as a group fn, run_go calls it native
     (agt '(: (clamp i) (? (|| (< i 100) (> i 900)) (abs (- i 500)) 0)
                   (run n) ((: (go i a) (? (< i n) (go (+ i 1) (+ a (clamp i))) a)) 0 0) (run 1000))
        ))                ; native == interp; clamp a glazed sibling
@@ -695,15 +697,15 @@
       (67305985 = v))                   ; 0x04030201: the two dsr2 calls read in source order
    (say err "glaze auto: delet keeps _-bound effects + call-binding order ok\n"))
 
-; --- swheads opfixes first: a raw infix operand is no call head ---
-(: swh (G 'swheads)
-   h1 (swh '(? (two? l) (pm9 x (want9 = 3 ? (cup l) l)) 0) '(x l) ())
-   h2 (swh '(: a (want9 1 2) (+ a x)) '(x) ())
+; --- swwalk reads lowered source: an infix operand is no call head ---
+(: swh (G 'swwalk)
+   h1 (swh (opfix '(? (two? l) (pm9 x (want9 = 3 ? (cup l) l)) 0)) '(x l) ())
+   h2 (swh (opfix '(: a (want9 1 2) (+ a x))) '(x) ())
    _ (assert
       (! (elem 'want9 h1)) (1 = (elem 'pm9 h1))                             ; a free operand is no head; the real call is
       (1 = (elem 'want9 h2))                                                   ; a called global still arrives
       (! (elem 'x h2)))                                                        ; ... and the binder set still filters
-   (say err "glaze auto: swheads reads opfixed source -- no operand fake heads\n"))
+   (say err "glaze auto: swwalk reads lowered source -- no operand fake heads\n"))
 
 ; --- the point-= grammar: (= P (cap ..)) admits, so elem is a group native; charm and string keys deopt ---
 (: mm (nom 0)

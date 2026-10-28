@@ -1,5 +1,4 @@
-#ifndef _LOVE_STDDEF_H
-#define _LOVE_STDDEF_H
+#pragma once
 typedef unsigned long size_t;
 typedef long ssize_t;
 typedef long ptrdiff_t;
@@ -10,4 +9,3 @@ typedef int  wchar_t;
 #endif
 #define NULL ((void*)0)
 #define offsetof(t, m) ((size_t) &(((t*)0)->m))
-#endif
