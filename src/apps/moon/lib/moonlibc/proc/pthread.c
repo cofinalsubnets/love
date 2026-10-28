@@ -1,10 +1,11 @@
 #include "../impl.h"
 #include <pthread.h>
 
-/* a thread's record, at the top of its own stack. linux clears tid and wakes its futex when
- * the thread is gone, which is all a join waits for; freebsd's thr_exit sets gone instead,
- * and netbsd's _lwp_wait waits on tid */
-struct __pthread { void *(*fn)(void *); void *arg; void *ret; void *map; unsigned long len; volatile int tid;
+/* a thread's record, at the top of its own stack and its thread pointer: self first, as %fs:0
+ * reads it, a program's tls template copied just under it. linux clears tid and wakes its
+ * futex when the thread is gone, which is all a join waits for; freebsd's thr_exit sets gone
+ * instead, and netbsd's _lwp_wait waits on tid */
+struct __pthread { void *self; void *(*fn)(void *); void *arg; void *ret; void *map; unsigned long len; volatile int tid;
                    volatile long gone; void *tsd[128]; };
 #define PtStack (8UL << 20)
 #define PtFlags 0x3d0f00L   /* VM FS FILES SIGHAND THREAD SYSVSEM SETTLS PARENT_SETTID CHILD_CLEARTID */
@@ -37,7 +38,7 @@ pthread_t pthread_self(void) {
 #else
   void *tp = __love_tp();
 #endif
-  return tp ? (pthread_t) tp : PtMain; }
+  return tp && tp != __love_mt.mtp ? (pthread_t) tp : PtMain; }
 
 int pthread_equal(pthread_t a, pthread_t b) { return a == b; }
 int pthread_attr_init(pthread_attr_t *a) { a->__unused = 0; return 0; }
@@ -107,10 +108,14 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
   void *m = mmap(0, (long) PtStack, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (m == (void *) -1) return EAGAIN;
   mprotect(m, 4096, PROT_NONE);               /* a guard page under the stack */
-  struct __pthread *d = (struct __pthread *) (((unsigned long) m + PtStack - sizeof *d) & ~15UL);
+  unsigned long al = __love_mt.tlsalign > 16 ? __love_mt.tlsalign : 16;
+  struct __pthread *d = (struct __pthread *) (((unsigned long) m + PtStack - sizeof *d) & ~(al - 1));
+  char *low = (char *) d;
+  d->self = d;
+  if (__love_mt.tlsimg) __love_tlscopy(d), low -= __love_mt.tlsblk;
   d->fn = fn; d->arg = arg; d->ret = 0; d->map = m; d->len = PtStack; d->tid = 0; d->gone = 0;
   memset(d->tsd, 0, sizeof d->tsd);
-  void **sp = (void **) (((unsigned long) d - 16) & ~15UL);
+  void **sp = (void **) (((unsigned long) low - 16) & ~15UL);
   sp[0] = (void *) __pt_start; sp[1] = d;     /* the leaf calls sp[0](sp[1]) */
 #ifdef __i386__
   /* i386's thread pointer is a gdt segment based at sp[1], so gs:0 reads d; the leaf
@@ -127,7 +132,7 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
 #endif
   __love_mt.threads = 1;                        /* before the child can reach malloc */
 #ifdef LvBsdThreads
-  long r = __love_osv >= 2 ? __pt_bsd(d, (void **) (((unsigned long) d - 16) & ~15UL))
+  long r = __love_osv >= 2 ? __pt_bsd(d, (void **) (((unsigned long) low - 16) & ~15UL))
                            : __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, tls);
 #else
   long r = __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, tls);

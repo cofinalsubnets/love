@@ -283,6 +283,17 @@ moonrun -o "$ho/.abi128" test/cc/abi128/host.c "$ho/.peer128.o" > "$ho/.abi128.l
   || { cat "$ho/.abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
 "$ho/.abi128" > "$ho/.abi128.out" || { cat "$ho/.abi128.out" >&2; fail "abi128: mooncc and gcc disagree on SysV's __int128"; }
 
+# gcc's thread-locals linked by mooncc: a pt_tls template (file bytes, zeros, 32-aligned), its
+# local-exec reads and an initial-exec one relaxed, each thread a fresh copy; at -O0 and -O2
+$cc_g -fno-pie -c -o "$ho/.tlsd.o" test/cc/tls/defs.c || fail "tls: gcc could not build defs.c"
+for o in 0 2; do
+  $cc_g -O$o -fno-pie -c -o "$ho/.tlsp$o.o" test/cc/tls/peer.c || fail "tls: gcc -O$o could not build peer.c"
+  moonrun -no-pie -Wl,-z,noexecstack -o "$ho/.tls$o" test/cc/tls/host.c "$ho/.tlsp$o.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
+    || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link gcc -O$o's thread-locals"; }
+  "$ho/.tls$o" || fail "tls: gcc -O$o's thread-locals read wrong under mooncc's link and moonlibc (exit $?)"
+done
+readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
+
 # the float fuzz at -Os too: its exit folds every result's bits
 $cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
 moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"

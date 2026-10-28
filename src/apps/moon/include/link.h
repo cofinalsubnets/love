@@ -45,6 +45,7 @@ typedef struct {
 #define ElfW(t) Elf64_##t
 #endif
 #define PT_LOAD 1
+#define PT_TLS 7
 #define EI_NIDENT 16
 #define EI_CLASS 4
 #define ELFCLASS64 2
