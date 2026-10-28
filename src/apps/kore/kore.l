@@ -979,7 +979,7 @@
     'ranlib "usage: ranlib ARCHIVE.."
     'groups "usage: groups"
     'ps "usage: ps [-Aef] [-o KEY[=HDR],..] [-p PID,..] [-u USER,..] | ps [a][u][x]"
-    'top "usage: top [-b] [-n FRAMES] [-d SECS] [-p PID]..
+    'top "usage: top [-b] [-P] [-C] [-n FRAMES] [-d SECS] [-p PID]..
   -b  batch: no terminal wanted, every process, a frame per iteration
   -n  stop after N frames (-b alone is one frame)
   -d  seconds between frames (3 by default)
