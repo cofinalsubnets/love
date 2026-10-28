@@ -59,7 +59,8 @@ test/gate/moon.sh), and the deliberate readings in them:
 - **`_Thread_local`** (and gcc's `__thread`) is an ignorable specifier: no TLS, no threads
   (`__STDC_NO_THREADS__`), so a thread-local *is* the one static object — observationally
   right, and C11 gives the storage class no opt-out macro to refuse it under. it is the row
-  that would read wrong, in silence, the day threads arrive.
+  that would read wrong, in silence, the day threads arrive. holo does link a foreign
+  object's `.tdata`/`.tbss` (gcc's, x64 static links), and moonlibc gives each thread its copy.
 - **universal character names in an identifier**, the remaining half of a C99-mandatory row.
   A UCN names a code point, so `Å` and a raw utf-8 `Å` intern as one name and export the
   same symbol bytes gcc does. a byte past 127 is now an identifier char everywhere, so a
@@ -1219,6 +1220,7 @@ fn that calls; clang's a64 leaves keep none either), `-fshort-enums` on the AAPC
 
 **taken as they stand:** `-fno-strict-aliasing` (memfw forgets on any root that may overlap),
 `-fno-delete-null-pointer-checks`, `-fno-common` (a tentative lays as a definition), `-fno-pie`,
+`-no-pie`, `-Wl,-z,noexecstack` (no PT_GNU_STACK: the stack maps rw),
 `-fomit-frame-pointer`, the absent-feature `-fno-*` (unwind tables, stack check and clash
 protection, addrsig, ident), `-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers
 its unknown), `-fms-extensions`, the placement, alignment, inlining and diagnostic hints,
