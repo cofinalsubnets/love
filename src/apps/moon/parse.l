@@ -654,7 +654,16 @@
                             (<t = 'ptr) (illty? <>t)
                             ()))
    (illblame _) (clblame "a function returning a function or an array, or an array of functions")
-   (pdtor ps ts base)                               ; -> ((name ty) rest) | ()
+   ; ms_abi anywhere in a declarator marks the first function its type reaches: ('fn ret params 'ms).
+   ; x64's alone: gcc lets it go by elsewhere
+   (pms? ps) (peep ps 'tgt 'x64 = 'x64)
+   (pdtor ps ts base) (pdtor0 ps ts base @ dr (two? dr && pms? ps && msin? ts <>dr ? [(msent <dr) <>dr] dr))
+   (msin? a b) (? (atom? a || a = b) () (tkk <a = 'id && elem (tkv <a) '("ms_abi" "__ms_abi__")) 1 (msin? >a b))
+   (msty t) (? (fn? t) [<t <>t (2 < #t ? t 2) 'ms]
+               (two? t && elem <t '(ptr arr varr)) (<t . (msty <>t . >>t))
+               t)
+   (msent e) (<e . (msty <>e . >>e))
+   (pdtor0 ps ts base)                              ; -> ((name ty) rest) | ()
     ; k: the run follows a star, where alone restrict qualifies the pointer (pparams files it)
     (: (stars ts2 ty k)
         (pquals ts2 @ s
@@ -2629,8 +2638,8 @@
                             (? (atom? fpty && peekp ts2 "(")        ; a function
                                (: rp (krhead? ps >ts2 ? (pkr ps >ts2) (pparams ps >ts2 ()))
                                   (atom? rp ? ()
-                                     (: _ (pin (ps 'sigs) name (mksig rty rp))
-                                        aft (patt (plabel ps <>rp name))    ; a trailing attribute
+                                     (: aft (patt (plabel ps <>rp name))    ; a trailing attribute
+                                        _ (pin (ps 'sigs) name (mksig rty rp + (pms? ps && (msin? ts0 ts1 || msin? <>rp aft) ? '(ms) ())))
                                         (? (peekp aft ";") [['proto name] >aft]
                                            ; more `* nm (params)` prototypes sharing base, to `;`. a
                                            ; mixed list (`int f(int), a;`) takes the object lane
@@ -2772,14 +2781,43 @@
         ; entry back (C's tentative rule)
         (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
-                      [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
+                      [1 ['prog (ps 'hoist + rev acc + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)])
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
                     (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
-                       (note <r, tops <>r (<r . acc)))))))
+                       (note <r, tops <>r (msren ps <r . acc)))))))
+   ; an ms_abi definition: the body lays as a static __msabi_NAME on the sysv side, and NAME is a
+   ; trampoline (msasm) carrying the ms caller's words over and keeping what ms keeps
+   (msname nm) "__msabi_\(nm)"
+   (msren ps f)
+    (f @ ('fn nm prms body)
+          (peep (ps 'sigs) nm () @ sg
+             (? !(3 < #sg && sg 3 = 'ms) f
+                (: _ (pin ps 'msdefs (nm . peep ps 'msdefs ()))
+                   _ (pin (ps 'sigs) (msname nm) (take 3 sg))
+                   _ (pin (ps 'sfns) (msname nm) 1)
+                   _ (peep (ps 'sects) nm () @ sc (sc ? (pin (ps 'sects) (msname nm) sc)))
+                   ['fn (msname nm) prms body])))
+        f)
+   (msasm ps)
+    (map (nm \ (: sg (ps 'sigs nm)
+                  sc (peep (ps 'sects) nm ".text")
+                  vis (? (peep (ps 'sfns) nm ()) "" (elem nm (ps 'weaks)) "\t.weak \(nm)\n" "\t.globl \(nm)\n")
+                  xs (map (i \ "\(16 * i)(%rsp)") ^10)
+                  (? (6 < #<>sg) (clblame "an ms_abi function past six parameters")
+                     (any (t \ elem t '(float double ldouble i128 u128) || stru? t) (<sg . <>sg)) (clblame "an ms_abi function with a float or struct in its signature")
+                     ['tasm (cats ["\t.pushsection \(sc),\"ax\"\n" vis "\t.type \(nm),@function\n\(nm):\n"
+                                   "\tpush %rdi\n\tpush %rsi\n\tsub $168,%rsp\n"
+                                   (cats (map (i \ "\tmovaps %xmm\(i + 6),\(xs i)\n") ^10))
+                                   "\tmov %rcx,%rdi\n\tmov %rdx,%rsi\n\tmov %r8,%rdx\n\tmov %r9,%rcx\n"
+                                   "\tmov 224(%rsp),%r8\n\tmov 232(%rsp),%r9\n\tcall \(msname nm)\n"
+                                   (cats (map (i \ "\tmovaps \(xs i),%xmm\(i + 6)\n") ^10))
+                                   "\tadd $168,%rsp\n\tpop %rsi\n\tpop %rdi\n\tret\n"
+                                   "\t.size \(nm),.-\(nm)\n\t.popsection\n"])])))
+         (rev (peep ps 'msdefs ())))
        (attrbad toks spans @ ab (gripe? ab ? ab (tops toks ()))))
    ; an __attribute__ whose skip would change the code (cpp.l's gnuattrs 'no) refuses where
    ; written, each item read by its first word. -> a gripe | ()

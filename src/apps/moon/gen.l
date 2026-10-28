@@ -1073,6 +1073,10 @@
          ('deref x) (hdty9 g env x @ it
                        (two? it && elem <it '(ptr arr) ? <>it ()))
          ('cast ty _) ty
+         ; a call's answer: its function's result type, off the sigs row or the head's own type
+         ('call h _)
+          (: sg (h @ ('var nm) (bad? (vent g env nm) ? (peep (g 'sigs) nm ())) ())
+             (two? sg ? <sg (hdty9 g env h @ ft (? (ptr? ft && fn? <>ft) <>(<>ft) (fn? ft) <>ft ()))))
          ; a[i] is *(a + i), so a table's element type reaches the deref through the sum's pointer operand
          ('bin o x y && o = '+)
           (hdty9 g env x @ a
@@ -3073,7 +3077,12 @@
                  off (direct && 0 < nps && (variadic ? (nas < nps) (nas != nps)))
                  _ (off ? (pin g 'arity
                                "call to '\(<>head)' wants \(nps)\(variadic ? " or more" "")\(nps = 1 ? " argument" " arguments"), given \(nas)") 0)
-                 cr (off ? 'bad (call-fixed g env head args direct ptys rt variadic))
+                 ms (? (two? sig) (3 < #sig && sig 3 = 'ms) direct () (fnms (hdty9 g env head)))
+                 cr (? off 'bad
+                       !ms (call-fixed g env head args direct ptys rt variadic ())
+                       !(x64? g) (nolane g "no lane for an ms_abi call\(ontgt g)")
+                       (any (t \ flo? t || stru? t) (rt . ptys)) (nolane g "no lane for an ms_abi call with a float or struct in its signature")
+                       (call-fixed g env head args direct ptys rt variadic 1))
                  (? (bad? cr) 'bad
                     !(stru? (vty cr)) cr
                     (sretm? g (vty cr)) cr   ; a memory return: the sret temp's address is the value
@@ -3188,7 +3197,13 @@
                       (a8? g && rT = 'r4 ? 'no (fin ty [['la rT <>en] [(ldop ty) rT rT 0]]))))))))
    ; overflow args emit first, then the register group, both right-to-left; the caller cleans the
    ; overflow block. params are named uniquely so no lambda param shadows a :-local
-   (call-fixed g env hd ags dir pts ret va?)
+   ; an ms_abi callee (x64): the sysv words move over -- rdi rsi rdx rcx to rcx rdx r8 r9, r8 r9 above
+   ; a 32-byte shadow, sysv's stack words already where ms wants its fifth on. raw: the passes' sp
+   ; model never sees the 48, which nothing between reads
+   (msw ms fs) (ms ? ([['raw [72 131 236 48 76 137 68 36 32 76 137 76 36 40 73 137 201 73 137 208 72 137 242 72 137 249]]]
+                      + fs + [['raw [72 131 196 48]]]) fs)
+   (fnms ty) (? (ptr? ty) (fnms <>ty) (fn? ty) (3 < #ty && ty 3 = 'ms) ())
+   (call-fixed g env hd ags dir pts ret va? ms)
     (: (kls as i gpc xmmc ovc acc)                       ; classify + evaluate, L->R -> (((class idx) pushforms)..) | 'bad
         (!(two? as) ? (rev acc)
            ; a targetable leaf skips the cell ('ez/'ezm): emitted into its register after the spills
@@ -3570,7 +3585,7 @@
                     ; the sret pointer rides the first arg register (a64: x8); the temp's address answers
                     srin (sr6 ? (srpass g sroff srg))
                     srout (sr6 ? (srback g sroff srg))
-                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
+                    (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + msw ms [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
                    fres (? (ia32? g) (st0in g (fnret (vty hr)))
@@ -3592,7 +3607,7 @@
                                  [['callm 'rip (gword (vfs hr))]] + fres +
                                  rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))
                       (mkv (fnret (vty hr)) 'r0 (pf + tor0 g hr + [['mov pk 'r0]] +
-                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['callr pk]] + fres +
+                                spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + msw ms [['callr pk]] + fres +
                                 rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))))))))
    ; the hidden result pointer, out and back: a register (a64 x8, else the first argument's), or on
    ; i386 the block's first word -- which the callee pops (ret $4), so the caller's block is 4 short

@@ -16,7 +16,7 @@
    ; gcc 8.1's attributes: 'do carries it out, 'hint skips exactly, 'no refuses by name (parse's
    ; attrcheck). __has_attribute answers 1 for do/hint; an unknown name is skipped and answers 0
    gnuattrs {"aligned" 'do "packed" 'do "section" 'do "weak" 'do "alias" 'do "always_inline" 'do
-             "noinline" 'do "cleanup" 'do "used" 'do "gnu_inline" 'do "musttail" 'do "holo" 'do
+             "noinline" 'do "cleanup" 'do "used" 'do "gnu_inline" 'do "musttail" 'do "ms_abi" 'do "holo" 'do
              "unused" 'hint "maybe_unused" 'hint "noreturn" 'hint "cold" 'hint "hot" 'hint "pure" 'hint
              "const" 'hint "format" 'hint "format_arg" 'hint "malloc" 'hint "warn_unused_result" 'hint
              "deprecated" 'hint "nonnull" 'hint "returns_nonnull" 'hint "visibility" 'hint
@@ -33,7 +33,7 @@
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
              ; i386's conventions: gcc ignores them on every target here
-             "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "ms_abi" 'no "pcs" 'no
+             "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no
              "symver" 'no "no_caller_saved_registers" 'no}
    ; an attribute's name, either spelling: __aligned__ is aligned
