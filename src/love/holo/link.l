@@ -117,7 +117,8 @@
    ; into the word already there. arm and i386 are REL, each kind pulling its addend out of
    ; the field: w32 w16 w8 S+A, r32 r16 r8 S+A-P. the numbers collide across machines, so
    ; the machine picks the row first
-   ld-rtab {62 (ld-cls '((1 8 abs) (10 4 u32) (11 4 s32) (2 4 pc32) (4 4 pc32) (24 8 pc)))
+   ld-rtab {62 (ld-cls '((1 8 abs) (10 4 u32) (11 4 s32) (2 4 pc32) (4 4 pc32) (24 8 pc)
+                         (18 8 tpoff) (23 4 tpoff32) (22 4 gottpoff)))
             183 (ld-cls '((257 8 abs) (258 4 abs32) (260 8 pc) (261 4 pc32) (273 4 ld19) (274 4 adr21)
                           (275 4 adrp21) (277 4 addlo12) (278 4 addlo12) (279 4 b14) (280 4 b19) (282 4 b26)
                           (283 4 b26) (284 4 lo12s2) (285 4 lo12s4) (286 4 lo12s8) (299 4 lo12s16)))
@@ -192,7 +193,7 @@
    (ld-unwind? nm)
     (starts? nm ".eh_frame" || starts? nm ".ARM.exidx" || starts? nm ".ARM.extab")
    ; the lanes the linker knows by name; anything else allocated is a named lane
-   ld-lanes '(text rodata data nifs bss image note boot)
+   ld-lanes '(text rodata data nifs bss image note boot tdata tbss)
    ; an allocated progbits or nobits section of another name is its own lane, laid contiguous
    (ld-any nm ty fl) (elem ty '(1 8) && 0 < fl & 2 ? (name nm))
    ; and travels with the known lane its flags name: exec text, write data, nobits bss,
@@ -202,7 +203,8 @@
      (ty = 8) 'bss (0 < fl & 4) 'text (0 < fl & 1) 'data 'rodata)
    ; a section name -> its lane, by prefix (gcc splits a lane: .text.unlikely, .rodata.str1.1)
    (ld-lane nm ty fl)
-    (? (ty = 8) (nm = ".bss" || starts? nm ".bss." ? 'bss (ld-any nm ty fl))
+    (? (0 < fl & 1024) (ty = 8 ? 'tbss 'tdata)        ; shf_tls: the thread template
+       (ty = 8) (nm = ".bss" || starts? nm ".bss." ? 'bss (ld-any nm ty fl))
        (nm = ".text" || starts? nm ".text.") 'text
        (nm = ".rodata" || starts? nm ".rodata.") 'rodata
        (nm = ".data" || starts? nm ".data.") 'data
@@ -233,13 +235,12 @@
         (sz = 0 || 0 = fl & 2 || ty = 7 || ld-unwind? nm ?
            (pin drops i 1, 1) ())
        ; classify: progbits and nobits onto their lane, symtab/rela by type, the droppable
-       ; set dropped; anything else with bytes refuses, shf_tls among them (no pt_tls here).
+       ; set dropped; anything else with bytes refuses.
        (class i)
         (shnum <= i ? ()
            (: h (sec i) nm <h ty (h 1) fl (h 2) off (h 3) sz (h 4)
-              (0 < fl & 1024 && 0 < sz ? (scare 'link-tls nm),
               ; a note with a lane (.note.pvh) is placed like progbits
-               (? (elem ty '(1 8) || ty = 7 && ld-lane nm ty fl)
+              (? (elem ty '(1 8) || ty = 7 && ld-lane nm ty fl)
                    ; a nobits section's sh_offset is a placeholder
                    (ld-lane nm ty fl @ lane
                       (? lane (pin secs i [lane (ty = 8 ? 0 off) sz (h 5) (ld-home lane fl ty)],
@@ -252,7 +253,7 @@
                          (scare 'link-section nm)))
                   (ty = 2 || ty = rty || elem ty '(0 3)) (class (i + 1))
                   (drop? i ty fl nm sz) (class (i + 1))
-                  (scare 'link-section nm)))))
+                  (scare 'link-section nm))))
        _ (class 1)
        ; the named lanes this object carries, first-seen in header order
        nmd (: (go i acc)
@@ -285,10 +286,12 @@
                     [<e (e 1) (e 2) x (e 4) (e 5) (0 < x && x < shnum ? [<(sec x) (sec x 1) (sec x 2)])]))
             >^(r 'nsym)))
 
-   ; -- archives. the noms the linker synthesizes, never looked for in a .a
+   ; -- archives. the noms the linker synthesizes, never looked for in a .a. gcc names
+   ; _GLOBAL_OFFSET_TABLE_ beside a gottpoff the link relaxes; no got is laid, and a
+   ; relocation that would read one refuses by its kind
    ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
              "__data_start__" "__data_end__" "__data_load__"
-             "__bss_start__" "__bss_end__" "__load_size__")
+             "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
@@ -429,6 +432,12 @@
    (ld-lanesz ob lane)
     (foldl (\ a i (a + (peep (peep ob 'secs 0) i ()) 2))
            0 (peep (peep ob 'lanes 0) lane ()))
+   ; the set's thread template: any tdata or tbss section, and the widest alignment among them
+   (ld-tls? objs) (any (ob \ two? (peep (peep ob 'lanes 0) 'tdata ()) || two? (peep (peep ob 'lanes 0) 'tbss ())) objs)
+   (ld-tlsalign objs)
+    (foldl (\ a ob (foldl (\ b i ((peep (peep ob 'secs 0) i ()) 3 @ x (x > b ? x b)))
+                          a (peep (peep ob 'lanes 0) 'tdata () + peep (peep ob 'lanes 0) 'tbss ())))
+           1 objs)
 
    ; pin every section's load address: hdrsz of headers, text, rodata, data, then the nif
    ; region, 16-aligned and packed so the __start_/__stop_ bracket reads one array. bss is
@@ -498,10 +507,12 @@
 
    ; patch one object's one section: its bytes as text snips + byte lists, each relocation's
    ; field spliced in. entries must ascend by offset. cx: (glo n0 n1 r0 r1 relbox rv arm? be
-   ; xt), the symbol book, the brackets, the -pie/-shared site box, the riscv flag, the arm
-   ; flag ('i386 for EM_386), the backend fields re-encode through, the named-lane extents.
+   ; xt tp), the symbol book, the brackets, the -pie/-shared site box, the riscv flag, the arm
+   ; flag ('i386 for EM_386), the backend fields re-encode through, the named-lane extents,
+   ; the thread pointer's address in the template (x64's variant II: the block ends at it), ()
+   ; where the link lays no tls.
    ; kind numbers collide across machines (R_RISCV_64 is R_X86_64_PC32), so dispatch is by machine.
-   (ldpatch ob ix base [glo n0 n1 r0 r1 relbox rv arm? be xt])
+   (ldpatch ob ix base [glo n0 n1 r0 r1 relbox rv arm? be xt tp])
     (: s (peep ob 'src 0) se (peep (peep ob 'secs 0) ix ())
        off0 (se 1) sz (se 2)
        (ent es) (? (atom? es) ()
@@ -548,9 +559,18 @@
                      (ldarm be s (off0 + ro) sv kind (base + ro)
                       . (snip s pos (off0 + ro) . acc)))
                  (: sa (ld-u64 (sv + ad))
-                    row (ld-rk (peep ob 'mach 0) kind) w <row
-                    abs64? (row 1 == 'abs)
-                    abs32? (elem (row 1) '(abs32 u32 s32))
+                    row (ld-rk (peep ob 'mach 0) kind) w <row k (row 1)
+                    abs64? (k == 'abs)
+                    abs32? (elem k '(abs32 u32 s32))
+                    ; x64's thread-pointer kinds: S + A from tp
+                    _ (elem k '(tpoff tpoff32 gottpoff) && !(charm? tp) ? (scare 'link-tls <sy))
+                    ; GOTTPOFF's mov or add from the got, relaxed as ld does to the same op on an
+                    ; immediate: the three bytes ahead of the field rewritten
+                    gx (? (k == 'gottpoff)
+                          (: o (off0 + ro) rx (s (o - 3)) op (s (o - 2)) md (s (o - 1))
+                             (pos <= o - 3 && elem rx '(72 76) && (md & 199) = 5 && elem op '(139 3) ?
+                              [(rx = 76 ? 73 72) (op = 139 ? 199 129) (192 | ((md >> 3) & 7))]
+                              (scare 'link-tls-gottpoff <sy))))
                     ; -pie: record each abs64 site for the startup relocator to add the base.
                     ; -shared: record (site import value) for the loader, an import's addend or
                     ; the link-time value; a weak undefined stays zero.
@@ -565,10 +585,17 @@
                     ; const that holds an address
                     _ (relbox && abs64? && se 4 = 'rodata ? (scare 'link-rodata-pie <sy))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
-                    bs (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sa (base + ro))
-                          (two? r ? r (scare 'link-range <sy)))
+                    bs (? (k == 'tpoff) (le64 (ld-u64 (sa - tp)))
+                          ; GOTTPOFF's addend is the -4 of its rip-relative field, gone with the got
+                          (elem k '(tpoff32 gottpoff))
+                           (: v (s64 (ld-u64 ((k == 'gottpoff ? sv sa) - tp)))
+                              (fits32 v ? 0 (scare 'link-range <sy),
+                               le32 (ld-u32 v)))
+                          (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sa (base + ro))
+                             (two? r ? r (scare 'link-range <sy))))
                     (go (off0 + ro + w) >es
-                        (bs . snip s pos (off0 + ro) . acc))))))
+                        (? (two? gx) (bs . gx . snip s pos (off0 + ro - 3) . acc)
+                           (bs . snip s pos (off0 + ro) . acc)))))))
        (go off0 (ent (ob 'relas)) ()))
 
    ; emit one lane in layout order, zero-padding up to each base -> (end . pieces)
@@ -651,6 +678,9 @@
        _ (0 < mach ? 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        rv (mach = 243)
+       ; a thread template (x64 alone): .tdata then .tbss as file zeros, past the nifs, a pt_tls
+       tls? (ld-tls? objs)
+       _ (tls? && mach != 62 ? (scare 'link-tls target))
        ; em_386 and em_arm: ELF32 headers, symbols and REL fields
        w32 (elem mach '(3 40))
        _ (w32 && pie ? (scare 'link-i386-pie target))
@@ -668,7 +698,7 @@
        ; an alloc section so strip keeps it, on the ISAs that can meet a BSD
        bsd? (elem mach '(62 183 243 3) || target = 'arm)
        nb? (wx? && bsd?)
-       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0)) + (nb? ? 24 0))
+       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0) + (tls? ? 1 0)) + (nb? ? 24 0))
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
@@ -679,7 +709,14 @@
        ; `addr - base - sk`, o0's is `t1 - base`
        sk ((o0 - t1) + (d0 - o1))
        nrel (pie ? (ld-nabs objs) 0)
-       r0 (pie ? (ld-align 16 end) end)
+       ; the template, each section where it asks; the thread pointer is the block's end on its
+       ; alignment, so a symbol's offset is its address less tp
+       tal (ld-tlsalign objs)
+       tl0 (ld-align tal end)
+       td1 (ldlay1 'tdata tl0 objs)
+       tl1 (ldlay1 'tbss td1 objs)
+       tp (tls? ? (tl0 + ld-align tal (tl1 - tl0)))
+       r0 (pie ? (ld-align 16 tl1) tl1)
        r1 (r0 + 8 * nrel)
        ; the file bytes end on 16, for .bss and .image; the slack is outside .love.rela, where
        ; the relocator would read a zero as a site
@@ -705,12 +742,14 @@
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
-       cx [glo n0 end r0 r1 relbox rv (ld-rel32 mach) (backends target) (ld-extents objs)]
+       cx [glo n0 end r0 r1 relbox rv (ld-rel32 mach) (backends target) (ld-extents objs) tp]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
        en (ldemit cx 'nifs <ed objs >ed)
-       tail (<en < r0 ? [(ld-zeros (r0 - <en))])
+       etd (ldemit cx 'tdata <en objs >en)
+       tbz (<etd < tl1 ? [(ld-zeros (tl1 - <etd))])
+       tail (tl1 < r0 ? [(ld-zeros (r0 - tl1))])
        rtab ((pie ? (catall (map le64 (rev (peep relbox 0 ()))))) + ld-zeros (dend - r1))
        ei (img? ? (ldemit cx 'image iaddr objs ()) [iaddr])
        ; -- the section headers and symbol table, past p_filesz. every loaded byte has a
@@ -720,8 +759,9 @@
        ; e_shstrndx and .symtab's sh_link are fixed at 10 and 9, so new sections go last.
        ; an object says love_nifs, a C identifier, so GNU ld synthesizes its brackets; the
        ; binary may say .love.nifs, ldres defining the pair itself.
-       shstr (o-strtab '(".text" ".rodata" ".data" ".love.nifs" ".love.rela" ".bss" ".love.image"
-                         ".symtab" ".strtab" ".shstrtab" ".comment" ".love.README" ".note.netbsd.ident"))
+       shstr (o-strtab ('(".text" ".rodata" ".data" ".love.nifs" ".love.rela" ".bss" ".love.image"
+                          ".symtab" ".strtab" ".shstrtab" ".comment" ".love.README" ".note.netbsd.ident")
+                        + (tls? ? '(".tdata"))))
        (snm k) (<>shstr k)
        symo (ld-align 8 endf) symz #<st
        stro (symo + symz) strz #<>st
@@ -729,7 +769,7 @@
        cmt (ld-comment objs prod) cmto (ssto + sstz) cmtz #cmt
        rdm (string? readme ? (o-strbytes readme))
        rdmo (cmto + cmtz) rdmz #rdm
-       nsh ((0 < rdmz ? 13 12) + ?nb?)
+       nsh ((0 < rdmz ? 13 12) + ?nb? + ?tls?)
        shto (ld-align 8 (rdmo + rdmz))
        sht (catall [(shf 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
                      ; a lane's offset follows the last byte before it, so no gap is unowned
@@ -745,7 +785,8 @@
                     (shf (snm 9) 3 0 0 ssto sstz 0 0 1 0)
                     (shf (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
                     (0 < rdmz ? (shf (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.README: strings, no alloc
-                    (nb? ? (shf (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0))])   ; sht_note, alloc: strip keeps it
+                    (nb? ? (shf (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0))     ; sht_note, alloc: strip keeps it
+                    (tls? ? (shf (snm 13) 1 1027 tl0 (tl0 - base - sk) (tl1 - tl0) 0 0 tal 0))])   ; alloc|write|tls
        ; w^x: headers + code r-x; literals r; .data through love_rela, bss in memsz, rw; the
        ; image rw. no page is in two segments, and the file pays no padding: offsets run on
        ; while addresses skip. sound only while no relocation lands in text or rodata.
@@ -755,11 +796,12 @@
                     (phf 1 6 (d0 - base - sk) d0 d0 (dend - d0) (bend - d0) pg)]
                  [(phf 1 7 0 base base (dend - base) (bend - base) pg)])
             + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
-            + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)]))
+            + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)])
+            + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)]))
        hdr (w32 ? (elf32-hdrn 2 ent mach (arm-eflags target) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
-       (hdr9 . ((nb? ? [nbnote]) + >en + tail + [rtab] + >ei
+       (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                     (ld-zeros (shto - (rdmo + rdmz))) sht])))
 
@@ -826,6 +868,7 @@
        dm (peep ld-dyn mach ())
        _ (two? dm ? 0 (scare 'link-shared-target target))
        objs0 (map (p \ ld-read <p <>p mach) srcs)
+       _ (ld-tls? objs0 ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        _ (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs0 ? (scare 'link-shared-image soname))
        imps (ld-imports objs0) ni #imps
        plt {'id "<plt>" 'src "" 'secs {1 ['text 0 (16 * ni) 16 'text]} 'lanes {'text [1]}
@@ -857,7 +900,7 @@
        _ (pin plt 'src (string (catall (map (k \ (dm 4) (p0 + 16 * k) (got0 + 8 * k)) ^ni))))
        imp ({} @ t (each ^ni (k \ pin t (imps k) (1 + k)), t))
        relbox {0 () 'dyn 1 'imp imp 'br <dm}
-       cx [glo n0 end dy0 dy0 relbox () () (backends target) (ld-extents objs)]
+       cx [glo n0 end dy0 dy0 relbox () () (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text hdrsz objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
@@ -926,6 +969,7 @@
     (: mach (peep elf-machines target 0)
        _ (0 >= mach ? (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
+       _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        (lsz lane) (foldl (\ a ob (a + ld-lanesz ob lane)) 0 objs)
        ne (ldlay1 'note vbase objs)
        b0 (ld-align 4096 ne)  b1 (ldlay1 'boot b0 objs)
@@ -953,7 +997,7 @@
        e (glo ent)
        _ (atom? e ? (scare 'link-entry ent))
        ; no -pie table and no arm32 kernel; the riscv flag picks ldpatch's reloc numbers
-       cx [glo n0 n1 n1 n1 () (mach = 243) () (backends target) (ld-extents objs)]
+       cx [glo n0 n1 n1 n1 () (mach = 243) () (backends target) (ld-extents objs) ()]
        en (ldemit cx 'note vbase objs ())
        eb (ldemit cx 'boot b0 objs (gap vbase b0))  ; from vbase, at offset 4096
        et (ldemitn cx 'text objs (ldemit cx 'text t0 objs (>eb + gap <eb t0)))
@@ -1050,6 +1094,7 @@
        ; the re-encoder is the arm32 family's (see ldarm)
        be (backends (arm32? target ? 'thumb2 target))
        objs (map (p \ ld-read <p <>p mach) srcs)
+       _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        ; expand each run's lanes in place: every lane followed by the named lanes homed with
        ; it, unless the map names them itself (a table the silicon reads at a fixed address)
        (lrf a r) (a + ld-runlanes r)
@@ -1122,7 +1167,7 @@
        nif (lpos 'nifs @ r (two? r ? r [org org 0]))
        n0 (ld-align (ld-lane0 objs 'nifs @ s (two? s ? (s 3) 1)) <nif)
        relbox (rel? ? {0 ()})    ; the emit-relocs sites
-       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be (ld-extents objs)]
+       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be (ld-extents objs) ()]
        body (: (go rs fp acc)
                 (atom? rs ? [fp acc]
                    (: r <rs
