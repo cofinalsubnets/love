@@ -26,6 +26,8 @@
                        m ((op-sg (peepv c 0 2 4 n) + op-sg (peepv c 2 2 4 n)) / 2)
                        d (av-t-s16 a - m)
                        (net (m * m) > 1000000 * net (d * d))))
+   ; fetched into dl/ once: loud when it cannot be, a FAIL when the hash differs
+   _ (hark ["sh" "test/gate/dl.sh" "opus-vectors"] @ r (puts >r, test (<r = 0)))
    vd (getenv "DL" @ d (string? d ? (d + "/opus-vectors") ""))
    vs (map (i \ (i < 9 ? "0" "") + show (i + 1)) ^12)
    (op-vecs v) (: b (av-t-rd (vd + "/testvector" + v + ".bit")) r (av-t-rd (vd + "/testvector" + v + ".dec"))
@@ -37,7 +39,7 @@
    _ (? (0 < #(av-t-rd (vd + "/testvector01.bit")))
          (test (all op-vecs vs)
                (: b (av-t-rd (vd + "/testvector01.bit")) (op-half (op-vec b 2 0) (op-vec b 2 -1536))))
-        (gate-partly "opus: no dl/opus-vectors (make dl/opus-vectors), the rfc's test vectors skipped"))
+        (gate-partly "opus: no dl/opus-vectors (could not fetch them), the rfc's test vectors skipped"))
 
    ; libopus's streams through the door
    ref? (<(hark ["sh" "-c" "command -v ffmpeg >/dev/null"]) = 0)

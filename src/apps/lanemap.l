@@ -25,7 +25,7 @@
                  lanes-covers lanes-plan lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccarm" "test_ccrv64" "test_ccwasm"
-               "test_ccthumb1" "test_ccthumb2" "test_fixpoint" "test_moonfuzz" "test_inle"]
+               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
