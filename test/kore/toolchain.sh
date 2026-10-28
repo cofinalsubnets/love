@@ -190,4 +190,95 @@ if command -v flex >/dev/null 2>&1; then
   flex -o "$L/f.c" "$L/t.l" 2>/dev/null && moonc "$L/f.c" "$L/f" > /dev/null 2>&1 || fail "flex's scanner"
   "$L/f" < "$L/in" > "$g"; same "lex C scanner vs flex"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + lex ok"
+# yacc's C back end, as kbuild asks for it: %union and <tag>s, %locations and @n, precedence
+# and %prec, error with yyerrok, YYERROR, %destructor on what recovery and an abort let go
+Y=$ho/.kore-yacc; rm -rf "$Y"; mkdir -p "$Y"
+cat > "$Y/t.y" <<'SPEC'
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int yylex(void);
+void yyerror(const char *s);
+%}
+%locations
+%union { long n; char *s; }
+%token <n> NUM
+%token <s> NAME
+%type <n> e line
+%left '+' '-'
+%left '*' '/'
+%right '^'
+%nonassoc UMINUS
+%destructor { printf("[drop %s]", $$); free($$); } <s>
+%%
+input :
+      | input line { printf("= %ld @%d.%d-%d.%d\n", $2, @2.first_line, @2.first_column, @2.last_line, @2.last_column); }
+      ;
+line : e '\n' { $$ = $1; }
+     | NAME '=' e '\n' { printf("%s:", $1); free($1); $$ = $3; }
+     | error '\n' { yyerrok; $$ = -1; }
+     ;
+e : NUM
+  | e '+' e { $$ = $1 + $3; }
+  | e '-' e { $$ = $1 - $3; }
+  | e '*' e { $$ = $1 * $3; }
+  | e '/' e { if (!$3) { yyerror("div0"); YYERROR; } $$ = $1 / $3; }
+  | e '^' e { long r = 1; for (long i = 0; i < $3; i++) r *= $1; $$ = r; }
+  | '-' e %prec UMINUS { $$ = -$2; }
+  | '(' e ')' { $$ = $2; }
+  ;
+%%
+static int ln = 1, col = 1;
+int yylex(void)
+{
+  int c;
+  while ((c = getchar()) == ' ') col++;
+  yylloc.first_line = yylloc.last_line = ln;
+  yylloc.first_column = yylloc.last_column = col;
+  if (c == EOF) return 0;
+  if (c >= '0' && c <= '9') {
+    long v = 0;
+    for (; c >= '0' && c <= '9'; c = getchar()) v = 10 * v + c - '0', col++;
+    ungetc(c, stdin);
+    yylval.n = v, yylloc.last_column = col - 1;
+    return NUM;
+  }
+  if (c >= 'a' && c <= 'z') {
+    char b[64]; int n = 0;
+    for (; c >= 'a' && c <= 'z' && n < 63; c = getchar()) b[n++] = c, col++;
+    ungetc(c, stdin);
+    b[n] = 0, yylval.s = strdup(b), yylloc.last_column = col - 1;
+    return NAME;
+  }
+  if (c == '\n') ln++, col = 1; else col++;
+  return c;
+}
+void yyerror(const char *s) { printf("err %s at %d.%d\n", s, yylloc.first_line, yylloc.first_column); }
+int main(void) { int r = yyparse(); printf("rc %d nerrs %d\n", r, yynerrs); return 0; }
+SPEC
+printf '1+2*3\nx = 2^3^2\n-(4-1)*2\n1+*2\nfoo bar baz\n8/0\n(1\n7 - -2\n' > "$Y/in"
+korerun yacc -o "$Y/l.c" --defines="$Y/l.h" -t -l "$Y/t.y" || fail "kore yacc -o"
+moonc "$Y/l.c" "$Y/l" > /dev/null 2>&1 || fail "kore yacc: mooncc the parser"
+{ "$Y/l" < "$Y/in"; printf foo | "$Y/l"; } > "$o"
+printf '%s' '= 7 @1.1-1.6
+x:= 512 @2.1-2.10
+= -6 @3.1-3.9
+err syntax error at 4.3
+= -1 @4.1-4.5
+err syntax error at 5.5
+[drop foo][drop bar][drop baz]= -1 @5.1-5.12
+err div0 at 6.4
+= -1 @6.1-6.4
+err syntax error at 7.3
+= -1 @7.1-7.3
+= 9 @8.1-8.7
+rc 0 nerrs 4
+err syntax error at 1.4
+[drop foo]rc 1 nerrs 1
+' > "$g"; same "yacc C parser (the answer)"
+if command -v bison >/dev/null 2>&1; then
+  bison -o "$Y/b.c" --defines="$Y/b.h" -t -l "$Y/t.y" 2>/dev/null && moonc "$Y/b.c" "$Y/b" > /dev/null 2>&1 || fail "bison's parser"
+  { "$Y/b" < "$Y/in"; printf foo | "$Y/b"; } > "$g"; same "yacc C parser vs bison"
+fi
+echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + lex + yacc ok"
