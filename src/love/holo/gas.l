@@ -347,9 +347,12 @@
                              (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))
    ; an inline template's line: the template lane, and as.l's bytes where it has no row (the
-   ; vector rows -- pshufb, sha256rnds2). an operand the template refuses stays refused
+   ; vector rows -- pshufb, sha256rnds2) or no operand (an index, `-16(%rsi,%rcx)`). bytes hold no
+   ; fix, so an operand naming a symbol the template refuses stays refused
+   (gx-plain? o) (? (atom? o) 1 (elem <o '(lbl rip ims seg)) 0 (<o = 'mem) (#o < 6) (<o = 'ind) (gx-plain? <>o) 1)
    (gx-text src)
-    (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (a = 'gas-x64-op ? (trap (i \ [['raw (as-instr i)]]) it (\ _ _ (scare a b)))
+    (catmap (it \ (<it = 'op ? (trap gx-item it (\ a b (a = 'gas-x64-op || a = 'gas-x64-operand && all gx-plain? (it 3)
+                                                       ? (trap (i \ [['raw (as-instr i)]]) it (\ _ _ (scare a b)))
                                                        (scare a b))))
                      (gx-item it)))
             (gx-locals (att-read src)))
@@ -959,10 +962,14 @@
    ;; d 1, h 3), m << 16 | n << 5 | d; fcvt names its two types, fmov to or from a gp register
    ;; takes sf at bit 31 from an x
    ga-fty {115 0 100 1 104 3}
-   ga-f1 {'fmov 0x1E204000 'fabs 0x1E20C000 'fneg 0x1E214000 'fsqrt 0x1E21C000}
+   ga-f1 {'fmov 0x1E204000 'fabs 0x1E20C000 'fneg 0x1E214000 'fsqrt 0x1E21C000
+          'frintn 0x1E244000 'frintp 0x1E24C000 'frintm 0x1E254000 'frintz 0x1E25C000
+          'frinta 0x1E264000 'frintx 0x1E274000 'frinti 0x1E27C000}
    ga-f2 {'fadd 0x1E202800 'fsub 0x1E203800 'fmul 0x1E200800 'fdiv 0x1E201800 'fmax 0x1E204800 'fmin 0x1E205800}
+   ; ..and the fused four, d n m a: the addend at bit 10
+   ga-f3 {'fmadd 0x1F000000 'fmsub 0x1F008000 'fnmadd 0x1F200000 'fnmsub 0x1F208000}
    (ga-fs o) (o @ ('sym s) (: t (show s) ty (peep ga-fty (t 0) ()) n (ga-fr o (t 0)) (charm? ty && charm? n ? [ty n] ())) _ ())
-   (ga-fp? m os) ((m = 'fcvt || charm? (peep ga-f1 m ()) || charm? (peep ga-f2 m ())) && any (o \ two? (ga-fs o)) os)
+   (ga-fp? m os) ((m = 'fcvt || charm? (peep ga-f1 m ()) || charm? (peep ga-f2 m ()) || charm? (peep ga-f3 m ())) && any (o \ two? (ga-fs o)) os)
    (ga-fp m os)
     (: fs (map ga-fs os) k #os
        (gw o) (o @ ('reg r w) (r != 'sp ? [(ga-hw r) w]) _ ())
@@ -977,6 +984,8 @@
            (ga-raw (ga-f1 m | <<fs << 22 | <>(fs 1) << 5 | <>(fs 0)))
           (charm? (peep ga-f2 m ()) && k = 3 && same? fs)
            (ga-raw (ga-f2 m | <<fs << 22 | <>(fs 2) << 16 | <>(fs 1) << 5 | <>(fs 0)))
+          (charm? (peep ga-f3 m ()) && k = 4 && same? fs)
+           (ga-raw (ga-f3 m | <<fs << 22 | <>(fs 2) << 16 | <>(fs 3) << 10 | <>(fs 1) << 5 | <>(fs 0)))
           (scare 'gas-a64-operand [m os])))
    (ga-vec? m os) (!(two? (peep ga-simd m ())) &&
                    (any (o \ two? (ga-vt o) || (o @ ('vel _ _) 1 ('vlist _) 1 _ 0)) os
