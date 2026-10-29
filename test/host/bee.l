@@ -465,7 +465,7 @@
 
 ; the projection: a star crosses `/`, a lane another owed lane runs drops out, light before heavy,
 ; test first and test_slow last
-(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\ntest_g:\n\t@sh test/gate/g.sh .\n"
+(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\ntest_g:\n\t@sh test/gate/g.sh .\ntest_v: host\n\t@cat src/apps/vi/core.l \"src/a/q.l\"; echo\nhelp: host\n\t@love src/tools/h.l\ntest_q2: help\ntest_extra: help\ngen: host\n\t@echo src/love/gen.h\ntest_p:\n\t@$(MAKE) $(patsubst %,pp-%,a b)\npp-%:\n\t@sh src/tools/pp.sh $*\n\t@cat $(ho)/src/x.l\n"
    lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
    lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
             ["src/apps/moon/gen.l"] lp-cov)
@@ -491,6 +491,12 @@
       (elem "test_gcstress" lp-core) !(elem "test_gcstress_bake" lp-core)
       (lp-cov "test_gcstress_bake" = ["test_gcstress"])
       (lp-cov "test/gate/g.sh" = ["test_g"])
+      ; a source a recipe names owes its lane too; a helper's, the lanes that name it, never
+      ; test_extra, a pattern by its stem; a generator no lane names, and a $(var) path, nothing
+      (lp-cov "src/apps/vi/core.l" = ["test_v"]) (lp-cov "src/a/q.l" = ["test_v"])
+      (lp-cov "src/tools/h.l" = ["test_q2"])
+      (lp-cov "src/tools/pp.sh" = ["test_p"])
+      !(two? (peep lp-cov "src/love/gen.h" ())) !(two? (peep lp-cov "$(ho)/src/x.l" ())) !(two? (peep lp-cov "src/x.l" ()))
       (elem "test_g" lp-test) (elem "test_hostnif" lp-test)
       !(elem "test_clay" lp-names)
       (lp-heavy = sort lp-heavy)
