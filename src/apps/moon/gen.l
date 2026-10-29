@@ -616,15 +616,18 @@
    ; a64's v8..v15 keep their low half across a call: a crossing double or float homes there for one
    ; save in the prologue (g 'cssv), never a wrap
    (fcspool g) (a64? g && !(abl? g 'fcs) && !(g 'hasasm) ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
-   ; x64's homes past the eight: the parks' registers too, which the float colouring moves apart; a build
-   ; whose colouring fails builds again on the eight (g 'fnar)
+   ; x64's homes past the eight: the parks' registers too, then seats past the sixteen that only the
+   ; float colouring lays onto registers. a build whose colouring fails builds again a level narrower
+   ; (g 'fnar: () over, 1 wide, 2 the eight)
    fwide9 '(f8 f9 f10 f11 f12 f13 f14 f15 f7 f6 f5 f4 f3)
+   fover9 '(f16 f17 f18 f19 f20 f21 f22 f23)
    (ffile g) (? (abl? g 'fsel) ()
-                 (x64? g) (fwide? g ? fwide9 '(f8 f9 f10 f11 f12 f13 f14 f15))
+                 (x64? g) (? (fover? g) (fwide9 + fover9) (fwide? g) fwide9 '(f8 f9 f10 f11 f12 f13 f14 f15))
                  (a64? g) '(f24 f25 f26 f27 f28 f29 f30 f31)   ; the pure temps past the parks (v8..v15 owe a save)
                  (rv64? g) '(f8 f9 f10 f11 f12 f13 f14 f15)    ; ft0..ft7, and wasm's locals
                  ())
-   (fwide? g) (x64? g && !(g 'fnar) && !(abl? g 'fwide) && !(abl? g 'fcol) && !(abl? g 'valloc))
+   (fwide? g) (x64? g && peep g 'fnar 0 < 2 && !(abl? g 'fwide) && !(abl? g 'fcol) && !(abl? g 'valloc))
+   (fover? g) (fwide? g && !(g 'fnar) && !(abl? g 'fover))
    (fsel? g) ((x64? g || a64? g || rv64? g) && !(abl? g 'fsel))   ; the targets whose double lane rides the float file
    (fidx? g) ((x64? g || a64? g) && fsel? g)             ; ..and whose indexed float loads/stores are one form
    ; the homable-param fold for pgo, upar and ubuild: a float/sse param spends no gp seat, the
@@ -5799,8 +5802,8 @@
              (elem op fbin9) [[<>f <>>f] [<>f]]
              (elem op fcpy9 || fcvt9 op) [[<>>f] [<>f]]
              (fdef9 op) [() [<>f]]
-             (elem op '(stsd stss)) [[f 3] ()]
-             (elem op '(stsdx stssx)) [[f 5] ()]
+             (elem op '(stsd stss)) [[(f 3)] ()]
+             (elem op '(stsdx stssx)) [[(f 5)] ()]
              (elem op '(ucomisd ucomiss)) [[<>f <>>f] ()]
              (fuse9 op) [[<>>f] ()]
              (op = 'cmppd) [[<>f <>>f] [<>f]]
@@ -5988,7 +5991,11 @@
                            (t x && peep ix x 0 = 0) (bit x, (x . acc))
                            acc)
              m9 (foldl mw () fs)
-             (rev (filter (m \ !(peep g 'vweb {} m)) m9) + filter (m \ peep g 'vweb {} m) m9))
+             ms9 (rev (filter (m \ !(peep g 'vweb {} m)) m9) + filter (m \ peep g 'vweb {} m) m9)
+             ; the float lane colours by priority: parks first, then homes by mentions, so a miss falls on the cheap
+             wc (foldl (a \ f \ (two? f ? (foldl (b \ x \ (t x ? (pin b x (1 + peep b x 0)) b)) a f) a)) {} fs)
+             (wt m) ((g 'fmn) m ? peep wc m 0 1000000)
+             (gp ? ms9 (sortby (a \ b \ wt b < wt a) ms9)))
        mm (bits ms)
        labt {}
        n (foldl (i \ f \ ((two? f && <f = 'label ? (pin labt <>f i)), i + 1)) 0 fs)
@@ -6038,7 +6045,8 @@
                    (db = 0 ? () (map (y \ nbor y db) (lows ((lx | bd i) & mm)))),
                    w2 (i + 1))))
        sm (foldl (a \ m \ pin a (t m) (peep a (t m) (peep ix (t m) 0) | ix m)) {} ms)
-       (fixed? m) (: P (t m) (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0))
+       ; the float lane trusts no first assignment: its parks and wide homes share f3..f7 until coloured
+       (fixed? m) (: P (t m) (gp && (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0)))
        col {}
        (cof n9) (t n9 ? (col n9) n9)
        (pick m)
@@ -6054,7 +6062,8 @@
            (? (two? pp) <pp (elem (t m) cs) (t m) (two? cs) <cs))
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
-                 (pick <l @ r (r ? (pin col <l r, go >l))))
+                 (pick <l @ r (? r (pin col <l r, go >l)
+                                 !gp (pin g 'fbad (<l . g 'fbad), go >l, ()))))
        (ok1 &&
           (: _ (fix9 ())
              _ (w2 0)
@@ -6066,7 +6075,8 @@
        (: b2 ((x64? g || a64? g || t2? g) && !(abl? g 'vweb) ? (vweb g hd body tl) body)
         ((peep g 'vrn 0 && valloc g (dp 'vweb (hd + b2 + tl)) ? (pin g 'vdone 1)),
          (peep g 'frn 0 && (x64? g || a64? g) && !(abl? g 'fcol) && !(fvalloc g (hd + b2 + tl)) && g 'fwh ?
-            (pin g 'fclob 1)),
+            (: ns (map (g 'fmn) (g 'fbad))
+             (pin g 'fclob 1, (fover? g && two? ns && !(any (n \ n = ()) ns) ? (pin g 'fdn ns))))),
          b2)))
    ; the float file: what a float mint may take, every register a call writes (a64's v8..v15 owe a save)
    (fvfile g) (x64? g ? fregs16 (fcalld g))
@@ -7356,7 +7366,29 @@
        (esc? (f . l))
         (two? f && elem <f '(lea lean) && <>>f = fb && <>f != 'sp ? 1 (esc? l))
        fs2 (stldp fb fs ())
-       (xret g (xmov g (esc? fs2 ? (stlda fb fs2) (stldw g fb (stldkp g) fs2 ())))))
+       (fsweep g (xret g (xmov g (esc? fs2 ? (stlda fb fs2) (stldw g fb (stldkp g) fs2 ()))))))
+   ; within a straight run: a copy into a register the next op reads as its source, and that the run
+   ; writes again before any read, lends the op its own source; a float copy or frame load whose
+   ; register the run writes again unread goes
+   (fsweep g fs)
+    (? (!(x64? g) || abl? g 'fsweep) fs
+       (: fb (fbase g)
+          (fstep f) (? (!(two? f) || elem <f '(label jmp br jmpt) || xit? f) () (frd g f @ 'bar () d d))
+          ; a write that keeps the upper lane (movsd between registers, a convert) leaves r live
+          (dead? r l) (? !(two? l) ()
+                         (fstep <l @ d (? !(two? d) ()
+                                          (elem r <d) ()
+                                          (elem r <>d) (elem <<l '(movapd ldsd ldss ldsdl ldsdx ldssx movqxr movdxr))
+                                          (dead? r >l))))
+          (cp? f) (two? f && <f = 'movapd && elem <>f fregs16 && elem <>>f fregs16)
+          (ldf? f) (two? f && elem <f '(ldsd ldss) && elem <>f fregs16 && (<>>f = 'sp || <>>f = fb))
+          (lend? f s) (two? f && #f = 3 && (elem <f fbin9 || elem <f '(movapd ucomisd ucomiss)) && <>>f = s && <>f != s)
+          (go l) (? !(two? l) l
+                    (: f <l
+                     (? (cp? f && lend? <>l <>f && dead? <>f >>l) (go ([<<>l <><>l <>>f] . >>l))
+                        ((cp? f || ldf? f) && dead? <>f >l) (go >l)
+                        (f . go >l))))
+          (go fs)))
    ; an xmm move straight back over the move that set it is idle: (movapd A B) (movapd B A)
    (xmov g fs)
     (? (abl? g 'xmov) fs
@@ -8148,7 +8180,7 @@
                              (vmint g h9 @ m (pin g 'hmints (m . g 'hmints), m))
                             ; a float home is a mint the float file's colouring may move
                             (fhomable? ty && nom? h9 && elem h9 fall9)
-                             ((elem h9 '(f3 f4 f5 f6 f7) ? (pin g 'fwh 1)), fpm g h9)
+                             ((elem h9 '(f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23) ? (pin g 'fwh 1)), fpm g h9 @ m (pin (g 'fmn) m <p, m))
                             h9)))
               ; a register variable's pin rides the env entry's fourth slot for cgasm
               apin (two? >>>p && <>>>p ? (gas-regname (gtgt g) <>>>p))
@@ -9051,6 +9083,8 @@
     'vweb {}                   ; ..and the staging webs among them
     'vrt {}            ; ...and its per-build map, mint -> physical
     'frn 0 'frt {}     ; the float file's mints and their map
+    'fmn {} 'fbad ()   ; ..a home's mint -> its name, and the mints the colouring found no register for
+    'fdn ()            ; ..whose names, all homes past the file, the next build spills
     'fwh ()            ; ..and a home bound past the eight, which a failed colouring may not keep
     'hmints ())        ; thumb2's pool homes, minted so pclash? sees the kits' r2, r3 past them
    ; every per-fn pin and its neutral, one roster: a new per-fn pin registers here (the computed
@@ -9073,8 +9107,9 @@
      'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
      'pcopy ()                 ; the by-reference struct params' copies, laid after the spills (spillp)
-     'fnar ()                  ; the float homes on the eight alone (cgfn's build after a failed colouring)
-     'fclob ())                ; ..which that failure pins
+     'fnar ()                  ; the float homes' width, narrowed by cgfn's build after a failed colouring
+     'fclob ()                 ; ..which that failure pins
+     'fdrop ())                ; the float names a failed colouring of the seats past the file took homes from
 
    ; a split loop's transfers: an evicted name parks in its slot at entry and takes it back past the
    ; exit label (every break lands there); a seated cell loads at entry and stores back -- each only
@@ -11137,7 +11172,7 @@
                                       fok (: c9 (peep crs9 nm 0)
                                              fc (two? (fcspool g) && 2 < tc && 1 + nx9 < tc ? (fcspool g))
                                              fw (c9 = 0 || ty = 'double && fwrap? g && 2 * c9 < peep rdt9 nm 0 ? (ffile g))
-                                             (fl && u9 && 2 <= tc ? (c9 = 0 ? (fw + fc) (fc + fw))))
+                                             (fl && u9 && 2 <= tc && nelem nm (g 'fdrop) ? (c9 = 0 ? (fw + fc) (fc + fw))))
                                       (!(pok || cok || fok) ? (go (i + 1) acc)
                                          (go (i + 1) ([tc (1 < ns9 ? (peep rdt9 nm 0 // ns9)
                                                              (peep rdt9 nm 0)) i
@@ -11390,7 +11425,7 @@
                                       (pin t nm <free, go >ps >free)
                                       (go >ps free))))
                             ; an argument register is no grant: a later param may still arrive there
-                            (go params (filter (f9 \ (nelem f9 used && nelem f9 '(f0 f1 f2 f3 f4 f5 f6 f7))) (ffile g)),
+                            (go params (filter (f9 \ (nelem f9 used && nelem f9 '(f0 f1 f2 f3 f4 f5 f6 f7) && nelem f9 fover9)) (ffile g)),
                              t))))
                e0 (peep g 'epi epi)
                ; no reset before the first attempt: the VLA prep's slots live in this frame state and a
@@ -11422,8 +11457,8 @@
                   (bad? irU ||
                    two? av9 && peep g 'lsq 0 != av9 3 ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
-                  (: fn9 (g 'fnar)
-                     _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 (tpl 0) 'pool (tpl 0) 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'fnar fn9)
+                  (: fn9 (g 'fnar) fd9 (g 'fdrop)
+                     _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 (tpl 0) 'pool (tpl 0) 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'fnar fn9 'fdrop fd9)
                      sb (spillp () params 0 ())
                      sb (two? vzf ? [(<sb + vzf) <>sb] sb)
                      (build sb))
@@ -11459,12 +11494,12 @@
        ; a pool clash builds again with no pool, a failed float colouring on the eight; once more if the
        ; first rebuild's colouring fails too
        (rb irk n9) (? (bad? irk || !(g 'kclob || g 'fclob) || n9 = 0) irk
-                      (: kc (g 'kclob || g 'nopool) fn (g 'fclob || g 'fnar)
+                      (: kc (g 'kclob || g 'nopool) fn (? (g 'fdn) (g 'fnar) (g 'fclob) (peep g 'fnar 0 + 1) (g 'fnar)) fd (g 'fdn + g 'fdrop)
                          _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0
                                  'pool0 (kc ? () (tpl 0)) 'pool (kc ? () (tpl 0))
-                                 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'nopool (kc ? 1 ()) 'kclob () 'fnar fn)
+                                 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'nopool (kc ? 1 ()) 'kclob () 'fnar fn 'fdrop fd)
                          (rb (uni9 ? (ubuild (alive g f)) (build sp1)) (n9 - 1))))
-       irf0 (rb irk 2)
+       irf0 (rb irk 6)
        ; i386: a build that seats esi and edi and leaves ebx alone (no park, no pair scratch -- r3
        ; only in the frame's own save) builds again with ebx a seat too
        (r3in? x) (? (atom? x) (x = 'r3)
