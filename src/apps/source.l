@@ -192,16 +192,21 @@
            (: out "\(root)/out/love"
               (seed-roster out, seed-fix exe out)))))
 
-   ; the units this image left out (`love roster`): the rebuild bakes the same roster
-   (seed-left _)
+   ; the roster this image took against the default, which bakes what it does not carry:
+   ; the units it baked in (b 1) or left out (b 0) past that. the rebuild bakes the same roster
+   (seed-units b)
     (: V (cite 'verbs)
-       (foldl (a \ f \ (V 'unit <f @ u (>f = 0 && !(elem u a) ? (a + [u]) a))) () (rev (V 'ros 'files))))
+       (off f) (>f = b && b = (V 'carried <f ? 1 0))
+       (foldl (a \ f \ (V 'unit <f @ u (off f && !(elem u a) ? (a + [u]) a))) () (rev (V 'ros 'files))))
    (seed-roster out)
-    (seed-left 0 @ () 0
-       l (: _ (puts ";; baking the roster: --without \(join "," l)\n")
-            r (spawn [out "roster" "bake" "--without" (join "," l) "-o" out] @ p
-                 (charm? p && 0 <= p ? (wait p) 127))
-            (0 != r ? (src-die "the roster bake failed (exit \(r))"))))
+    (: w (seed-units 1)
+       wo (seed-units 0)
+       as ((two? w ? ["--with" (join "," w)] ()) + (two? wo ? ["--without" (join "," wo)] ()))
+       (two? as ?
+          (: _ (puts ";; baking the roster: \(join " " as)\n")
+             r (spawn ([out "roster" "bake"] + as + ["-o" out]) @ p
+                  (charm? p && 0 <= p ? (wait p) 127))
+             (0 != r ? (src-die "the roster bake failed (exit \(r))")))))
 
    ; the imageless projection of a binary, written beside p. a binary carrying no image
    ; is its own projection, which is how seed-fix reads either side's state.

@@ -2005,12 +2005,13 @@
 ;             script of the same name
 ;   (seat p)  argv[0], by its basename
 ; a verb takes the args after its name and answers a status charm.
-(module '(verbs any? bn call dash enlist fills fire get holds lazy mark mods need prov ros seat seatof tab trait unit word)
+(module '(verbs any? bn call carried carry dash enlist fills fire get holds lazy mark mods need prov ros seat seatof tab trait unit word)
 (: tab {}   ; nil? when empty: ask it with peep, not by testing it
    ; the roster's, below: 'files (path . baked) newest first, 'rising while a unit loads;
-   ; verb -> path, module -> path, unit -> the units it needs, unit -> 1 once raised
+   ; verb -> path, module -> path, unit -> the units it needs, unit -> 1 once raised,
+   ; unit -> 1 when it has a left-out file, path -> 1 when left out, path -> 1 when carried
    ros {'cur "src/love/boot"}
-   prov {} mods {} need {} up {}
+   prov {} mods {} need {} up {} lefts {} lazies {} carried {}
    ; what a verb says of itself -- name -> {trait v}, v 1 or a function of the call's args:
    ;   'builtin  run in the caller in every mode, ahead of PATH (echo, test ..)
    ;   'self     safe to run in the caller: bounded, reads no stdin, leaves the caller as it
@@ -2023,10 +2024,12 @@
    ; cleared before the call so it cannot re-enter
    fill {}
    (fills f) (pin fill 'f f)
+   ; a miss on a left-out unit's name raises the unit, and asks again
    (get k)   (tab k @ v
                 (lit? v ? v
                  (fill 'f @ f
-                    (lit? f ? (pin fill 'f (), f (), tab k)))))
+                    (lit? f ? (pin fill 'f (), f (), tab k)
+                       (string k @ u (lefts u && !(up u) ? (rise u, tab k)))))))
    ; register a verb: ts a list of trait words, or (word . f) with f a function of the args
    (enlist k f ts) (pin tab k f,
                     pin traits k (foldl (\ t x (two? x ? (pin t <x >x) (pin t x 1))) {} ts))
@@ -2093,21 +2096,26 @@
    (mark p) (settle (), pin ros 'cur p, string? p ? (pin ros 'files ((p . 1) . ros 'files)) 0)
    (lazy p vs ms ns) (settle (), pin ros 'cur p,
                       pin ros 'files ((p . 0) . ros 'files),
+                      pin lefts (unit p) 1,
+                      pin lazies p 1,
                       each ms (m \ pin mods m p),
                       pin need (unit p) (ns + need (unit p)),
                       each vs (v \ (pin prov v p, pin tab v (stub v))))
+   ; a file the default bake carries but leaves out (the Makefile's carryfiles), lazy unless
+   ; a mark already laid it
+   (carry p) (pin carried p 1, any (f \ <f = p) (ros 'files) ? 0 (lazy p () () ()))
    ; a stub raises its unit, then runs what the unit pinned in its place
    (stub v) (as \ (rise (unit (prov v)),
                    tab v @ f (lit? f ? (f as)
                                 (say err "love: \(v): its unit \(unit (prov v)) did not register it\n", 1))))
    ; raise u and the left-out units it needs: their files in cat order, read off /love into
    ; the session. their fire lines stay quiet, since a load is not a run
-   (rise u) (: (cl s w) (elem w s || up w ? s (foldl cl (w . s) (need w)))
+   (rise u) (: (cl s w) (elem w s || up w || !(lefts w) ? s (foldl cl (w . s) (need w)))
                us (cl () u)
                fs (filter (f \ >f = 0 && elem (unit <f) us) (rev (ros 'files)))
                (two? us ?
                   (each us (w \ pin up w 1),
-                   each (keys prov) (k \ (elem (unit (prov k)) us ? (pin tab k ()) 0)),
+                   each (keys prov) (k \ (lazies (prov k) && elem (unit (prov k)) us ? (pin tab k ()) 0)),
                    pin ros 'rising 1,
                    trap (_ \ each fs (f \ rise1 <f)) () (\ a b (pin ros 'rising (), scare a b)),
                    pin ros 'rising ())))
