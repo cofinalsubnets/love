@@ -1,7 +1,7 @@
-// the math floor: binary64 transcendentals in portable mooncc-subset c (no fma, int128, builtins).
-// taylor/exact-rational coefficients; sqrt exact, exp/log <= 1 ulp, sin/cos ~0.74 ulp at every
-// magnitude, atan2 asin acos correctly rounded, pow <= 2 ulp typical (~40 at 1e+-300), exact for
-// y in {2, 1, -1, 1/2}
+// the math floor: binary64 transcendentals in portable mooncc-subset c (no fma, int128, builtins),
+// but for x64's and a64's own sqrt. taylor/exact-rational coefficients; sqrt exact, exp/log <= 1
+// ulp, sin/cos ~0.74 ulp at every magnitude, atan2 asin acos correctly rounded, pow <= 2 ulp
+// typical (~40 at 1e+-300), exact for y in {2, 1, -1, 1/2}
 #include <stdint.h>
 
 typedef union { double d; uint64_t u; } db;
@@ -30,16 +30,23 @@ static void tsum(double a, double b, double *s, double *e) {
  *e = (a - (*s - bb)) + (b - bb); }
 
 // newton from a bit-level seed, then a correct-rounding fixup: of y and its ulp
-// neighbour, whichever exact square sits nearer x
+// neighbour, whichever exact square sits nearer x. where the cpu has one, its sqrt, which ieee
+// rounds correctly too; a nan or a negative stays ours, so its bits do
 double lm_sqrt(double x) {
  uint64_t ux = mku(x);
  if (x != x) return DNan;
  if (ux == 0 || ux == 0x8000000000000000ull) return x;      // +-0
  if (ux >> 63) return DNan;                                 // negative
  if ((ux >> 52) == 0x7ff) return x;                          // +inf
+#if defined(__x86_64__)
+ { uint64_t r; __asm__("movq %1, %%xmm0\n\tsqrtsd %%xmm0, %%xmm0\n\tmovq %%xmm0, %0" : "=r"(r) : "r"(ux) : "xmm0"); return mkd(r); }
+#elif defined(__aarch64__)
+ { double y; __asm__("fsqrt %d0, %d1" : "=w"(y) : "w"(x)); return y; }
+#endif
  int scale = 0;
- // pre-scale tiny x: the fixup's dekker products must stay normal
+ // pre-scale tiny and huge x: the fixup's dekker products must stay normal and finite
  if (x < 0x1p-512) { x *= 0x1p540; ux = mku(x); scale = -270; }
+ else if (x > 0x1p1000) { x *= 0x1p-540; ux = mku(x); scale = 270; }
  // seed: halve the exponent field (a ~5-bit guess), sharpen by Newton
  uint64_t uy = ((ux >> 1) + (0x3ffull << 51)) & 0x7fffffffffffffffull;
  double y = mkd(uy);
@@ -60,7 +67,7 @@ double lm_sqrt(double x) {
   if (ar2 < ar || (ar2 == ar && !(mku(yn) & 1))) y = yn;     // nearer, or the even side of a tie
   else break;
  }
- return scale ? y * 0x1p-270 : y; }
+ return scale < 0 ? y * 0x1p-270 : scale ? y * 0x1p270 : y; }
 
 // x = k ln2 + r, |r| <= ln2/2; e^r by taylor to r^13 (tail < 2^-57), then 2^k
 static const double LN2_HI = 0x1.62e42f8000000p-1, LN2_LO = 0x1.be8e7bcd5e4f2p-27,
@@ -516,11 +523,17 @@ float lm_atan2f(float y, float x) { return (float) lm_atan2(y, x); }
 float lm_asinf(float x) { return (float) lm_asin(x); }
 float lm_acosf(float x) { return (float) lm_acos(x); }
 
-// the integer root of the mantissa, rounded by its remainder (a tie cannot happen)
+// the integer root of the mantissa, rounded by its remainder (a tie cannot happen); the cpu's
+// where it has one, as lm_sqrt
 float lm_sqrtf(float x) {
  uint32_t u = muf(x);
  if (x != x || !(u << 1) || u == 0x7f800000u) return x;   // nan, +-0, +inf
  if (u >> 31) return mkf(0x7fc00000u);
+#if defined(__x86_64__)
+ { uint32_t r; __asm__("movd %1, %%xmm0\n\tsqrtss %%xmm0, %%xmm0\n\tmovd %%xmm0, %0" : "=r"(r) : "r"(u) : "xmm0"); return mkf(r); }
+#elif defined(__aarch64__)
+ { float y; __asm__("fsqrt %s0, %s1" : "=w"(y) : "w"(x)); return y; }
+#endif
  int e = (int) (u >> 23);
  uint32_t m = u & 0x7fffffu;
  if (e) m |= 0x800000u;

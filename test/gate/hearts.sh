@@ -71,10 +71,11 @@ qs=$(sha256sum < "$q/q.o" | cut -d' ' -f1); rm -rf "$q"
 for t in make cc c++ clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
   command -v $t >/dev/null 2>&1 || gate_skip "hearts: no $t, skipped"
 done
+# $B is one dir for every session, so a second run waits its turn: the script runs again under
+# bee's exclusive lock named by $B, which a dead holder's pid gives up (src/apps/locks.l)
+[ -n "${HEARTS_HELD:-}" ] || { export HEARTS_HELD=1; exec "$love" bee --lock --out "$B" -- "$love" lush -g "$0" "$1"; }
 mkdir -p "$B" "$C/src" || fail "cannot make $B"
-mkdir "$B/.lock" 2>/dev/null || fail "$B is in use ($B/.lock)"
 # a red run keeps both builds to read (the next run clears them); a green one leaves nothing
-trap 'rm -rf "$B/.lock"' EXIT
 
 tgz=$C/src/linux-$V.tar.xz
 [ -f "$tgz" ] || curl -sSfL -o "$tgz" "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$V.tar.xz" \

@@ -27,8 +27,11 @@
    (sp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (sp-write p s) (: q (open p "w")
                      (!(hot? q) ? (sp-die ("cannot write " + p)), say q s, close q))
+   ; what is never the checkout's own source: the hidden dirs (.git, the sessions' .claude
+   ; worktrees) and a release laid at the root, love-VERSION/ of any version
+   sp-laid '(".*" "love-*")
    ; the structural skips no ignore file may take away; doc/ stays for the man pages
-   sp-own '("bin" "dl" "doc/misc" ".*")
+   sp-own (["bin" "dl" "doc/misc"] + sp-laid)
    sp-ign? (cite 'sb 'ign?)
    ; sb's directory-only built-ins ride as plain rules: the walk has no stat to ask
    (sp-rules drops) ((cite 'sb 'igs 0) + (cite 'sb 'igsdir) + sp-own + drops)
@@ -129,9 +132,10 @@
        (? (two? old && two? have && <>old = h) 0
           (puts ("LOVE\t" + out), putc 10, sp-write out (sp-tree (sp-codecs spec) secs frags), sp-write side h, 0)))
 
-   ; the listing: the tree's files under sb's law alone
+   ; the listing: the tree's files under sb's law, less what is not the checkout's own
    (sp-ls _)
-    (: t (tar-thin? (sp-keep? ((cite 'sb 'igs 0) + (cite 'sb 'igsdir))) "." "")
+    (: rules ((cite 'sb 'igs 0) + (cite 'sb 'igsdir) + sp-laid)
+       t (tar-thin? (sp-keep? rules) "." "")
        _ (!t ? (sp-die "cannot read the tree"))
        (each >(<>t) (e \ tar-get e 'kind 'file = 'file ? (puts (tar-get e 'nom "" + "\n")) 0), 0))
 

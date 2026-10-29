@@ -54,7 +54,7 @@
  ; the skyline: a mesa's height as an angle, by bearing cell, a value noise flattened
  ; at its tops and its feet
  mesa-n 512 mesa-h 0.035
- (mesa-v i) (: k (i // 16) f (i % 16 / 16.0) s (f * f * (3.0 - 2.0 * f))
+ (mesa-v i) (: k (i // 16) f (i % 16 / 16.0) s (2 f * (3.0 - 2.0 * f))
                a (dice k 3 11 100 / 100.0) b (dice ((k + 1) % (mesa-n // 16)) 3 11 100 / 100.0)
                (mesa-h * clamp ((a + s * (b - a) - 0.5) * 3.5) 0.0 1.0))
  mesas (gem-tray [mesa-n] (map mesa-v ^mesa-n))
@@ -62,7 +62,7 @@
  ; tall and wide; the loop has so many places, and each is hashed once and kept
  bushes {}
  (bush-of k s) (: kk ((k % loop + loop) % loop) key (kk * 2 + (0 < s))
-   b (peep bushes key ())
+   b (bushes key)
    b2 (two? b ? b
          (: seed (s + 2)
             b3 [(dice kk seed 3 100 / 100.0 * sp)
@@ -89,10 +89,10 @@
    ; jags, which would otherwise shimmer
    jag ((hxb - hxa < 0.4) * (throw (floor (hx * 2.5 + 1000.0)) 0 17 5 * 0.12 - 0.24))
    q (hx / hole-w)
-   crown ((q * q < 1.0) * (hole-h * sqrt (max 0.0 (1.0 - q * q)) + jag))
+   crown ((2 q < 1.0) * (hole-h * sqrt (max 0.0 (1.0 - 2 q)) + jag))
    tb {'xc xc 'ab ab 'vx vx 'vz vz 'qa (cell // 2)
        'mt (hz - foc * peep mesas cell 0.0)
-       'tw tw 'hx hx 'hxa hxa 'hxb hxb 'win ((0.0 < vz) * (hx * hx < gw * gw))
+       'tw tw 'hx hx 'hxa hxa 'hxb hxb 'win ((0.0 < vz) * (2 hx < 2 gw))
        'wt (hz - foc * (gh - eh) / tw) 'wf (hz + foc * eh / tw) 'crown crown
        'dusk (dusk-of pz) 'sun (sun-at st)}
    (lay-bushes st tb))
@@ -111,9 +111,9 @@
                  tops (tabs (d < near ? 'ntops 'tops)) foots (tabs (d < near ? 'nfoots 'foots))
                  xa (clamp (flo (cx - hw)) 0 (w - 1)) xb (clamp (flo (cx + hw)) 0 (w - 1))
                  (col x) (x <= xb ? (: q (abs (x + 0.5 - cx) / hw)
-                                       hx (q < 1.0 ? (hg * sqrt (1.0 - q * q)) 0.0)
-                                       (0.0 < hx ? (pin tops x (min2 (peep tops x 999.0) (by - hx)),
-                                                    pin foots x (max2 (peep foots x -999.0) by)),
+                                       hx (q < 1.0 ? (hg * sqrt (1.0 - 2 q)) 0.0)
+                                       (0.0 < hx ? (pin tops x (min (peep tops x 999.0) (by - hx)),
+                                                    pin foots x (max (peep foots x -999.0) by)),
                                         col (x + 1))))
                  (col xa))))))
    (go k k1) (k <= k1 ? (one k -1, one k 1, go (k + 1) k1))
@@ -125,7 +125,7 @@
  ; the dusk; a few stars high up once dark enough, and the disc
  (sky-row y st tb) (: foc (st 'foc) e (atan ((st 'hz - y - 0.5) / foc)) dusk (tb 'dusk) sn (tb 'sun)
    i0 (2.0 + 14.0 * e + dusk * (1.5 + 6.0 * e))
-   da (tb 'ab - sn 4) de (e - sn 3) dd (sqrt (da * da + de * de))
+   da (tb 'ab - sn 4) de (e - sn 3) dd (sqrt (2 da + 2 de))
    warm (max 0.0 (min 3.0 ((0.7 - dd) * 5.0)) * (1.0 - 0.6 * dusk))
    c (peep sky-ramp (floor (max 0.0 (min 11.0 (i0 - warm)))) 16)
    qe (flo (e * foc))
@@ -133,26 +133,26 @@
    c2 (over c star star-pen)
    dx (tb 'xc - sn 0) dy (y + 0.5 - sn 1) r (sn 2)
    disc (sun-pens (? (0.1 < sn 3) 0 (0.04 < sn 3) 1 2))
-   (over c2 (dx * dx + dy * dy < r * r) disc))
+   (over c2 (2 dx + 2 dy < 2 r) disc))
  ; the sand and the bed at a row, by distance near, middling or far: near, sand rippled and
  ; pebbled, the bed's mud cracked, a bank's edge darker. a crack is at least a pixel wide, and
  ; gone where cracks would stand closer than pixels
  (ground-row y st tb) (: foc (st 'foc) t (foc * eh / (y + 0.5 - st 'hz))
    wx (st 'px + t * tb 'vx) wz (st 'pz + t * tb 'vz)
-   be (bed-w + 0.35 * sin (0.23 * wz)) ax2 (wx * wx)
-   inbed (ax2 < be * be)
+   be (bed-w + 0.35 * sin (0.23 * wz)) ax2 (2 wx)
+   inbed (ax2 < 2 be)
    k (? (t < 10.0) 0 (t < 30.0) 1 2)
    c (over (sand-pens k) inbed (bed-pens k))
    (1 < k ? c
       (: pebble ((1 - inbed) * (0 = throw (floor (wx * 3.0 + 1000.0)) (floor (wz * 3.0 + 1000.0)) 5 29))
          c2 (over c pebble pebble-pen)
-         bank ((be * be <= ax2) * (ax2 < (be + 0.3) * (be + 0.3)))
+         bank ((2 be <= ax2) * (ax2 < 2 (be + 0.3)))
          c3 (over c2 bank bank-pen)
          (0 < k ? c3
             (: rip ((1 - inbed) * (0.75 < sin (2.1 * wz + 0.8 * wx + 0.6 * sin (0.5 * wx))))
                fx (frac (wx * 0.9 + 0.25 * sin (1.3 * wz))) fz (frac (wz * 1.1 + 0.25 * sin (1.7 * wx)))
-               ex (t / foc * 0.9) ez (t * t / (foc * eh) * 1.1)      ; a pixel's reach across each
-               crack (inbed * (0 < (ex < 0.4) * (fx < max2 0.08 ex) + (ez < 0.4) * (fz < max2 0.08 ez)))
+               ex (t / foc * 0.9) ez (2 t / (foc * eh) * 1.1)      ; a pixel's reach across each
+               crack (inbed * (0 < (ex < 0.4) * (fx < max 0.08 ex) + (ez < 0.4) * (fz < max 0.08 ez)))
                (over (over c3 rip ripple-pen) crack crack-pen))))))
  ; the garage's face over a row: concrete by distance, a seam every formwork lift and every
  ; bay, the parapet lit until sunset, and the hole. a seam is thinner than a pixel, so it is
@@ -192,7 +192,7 @@
  ; a step on down the bed, whichever way the player faces, no further than the hole's
  ; mouth, where the level is done and the walking with it
  (dusk-move st mv) (st 'done ? st
-                      (min2 (st 'pz + mv) end-z @ pz2
+                      (min (st 'pz + mv) end-z @ pz2
                          (pin st 'pz pz2,
                           end-z <= pz2 ? (pins st 'done 1 'walk 0) st)))
  ; ..and in the hole, the view eased back to dead ahead and level, a frame at a time

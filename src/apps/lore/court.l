@@ -48,12 +48,12 @@
  ; corner one, 2 a short wall's, 3 the stair's between the floors ---
  windows (: fls ^floors
    (key wid fl k) (wid * 100 + fl % 8 * 10 + k)
-   (long wid) (cats (map (fl \ (: y (fl * floor-h) nb (wid = 0 ? 0.9 1.4)
+   (long wid) (catmap (fl \ (: y (fl * floor-h) nb (wid @ 0 0.9 1.4)
                                  cs (? (wid = 0) [-4.05 -3.45 3.45 4.05] (0 < fl) [-3.8 3.8] [])
                                  (cat (map (wi \ [wid ((wi - 1.5) * bay) sash-w (y + 0.9) 1.4 (key wid fl (2 <= wi)) 0]) ^4)
                                       (map (c \ [wid c nook-w (y + nb) (2.3 - nb) (key wid fl (4 + 2 * (0.0 < c))) 1]) cs))))
-                         fls))
-   (short wid) (cat (cats (map (fl \ map (c \ [wid c 0.25 (fl * floor-h + 0.9) 1.5 (key wid fl (4 + (0.0 < c))) 2]) [-1.6 1.6]) fls))
+                         fls)
+   (short wid) (cat (catmap (fl \ map (c \ [wid c 0.25 (fl * floor-h + 0.9) 1.5 (key wid fl (4 + (0.0 < c))) 2]) [-1.6 1.6]) fls)
                     (map (fs \ [wid 0.0 0.3 (2.45 + fs * floor-h) 1.2 (key wid fs 0) 3]) ^(floors - 1)))
    (cats [(long 0) (long 1) (short 2) (short 3)]))
  ; ..one air conditioner, on the sill of the west wall's south sash on the top floor
@@ -62,15 +62,15 @@
  ; each, and loose strands (strands). a run is [width colour waypoints], each step along one
  ; axis on one wall's face; a box is [low corner, high corner, wall] ---
  cab [0.25 0.25 0.26]
- boxes [[[0.95 3.9 (yard-b - 0.23)] [1.25 4.2 yard-b] 2] [[0.95 3.9 (0.0 - yard-b)] [1.25 4.2 (0.23 - yard-b)] 3]]
- (to-box z) [[1.09 3.9 z] [1.09 2.62 z] [0.45 2.62 z] [0.45 2.3 z] [-0.43 2.3 z] [-0.43 2.62 z] [(0.0 - yard-a) 2.62 z]]
- runs [[0.04 cab (to-box (0.0 - yard-b) + rev (to-box yard-b))]]
+ boxes [[[0.95 3.9 (yard-b - 0.23)] [1.25 4.2 yard-b] 2] [[0.95 3.9 -yard-b] [1.25 4.2 (0.23 - yard-b)] 3]]
+ (to-box z) [[1.09 3.9 z] [1.09 2.62 z] [0.45 2.62 z] [0.45 2.3 z] [-0.43 2.3 z] [-0.43 2.62 z] [-yard-a 2.62 z]]
+ runs [[0.04 cab (to-box -yard-b + rev (to-box yard-b))]]
  ; --- the time: 'sim is local seconds, 'dst what summer adds: the offset now less the least
  ; of it a season, two and three on ---
  ; the zone's offset at utc u, the zone read once a call
  (zone-off _) (: zone (cite 'kore 'tz-zone 0) (u \ zone ? (zone u 0) 0))
  (court-when s) (: off (zone-off 0)
-                   o (off s) std (foldl (a \ k \ min2 a (off (s + k * 7889400))) o [1 2 3])
+                   o (off s) std (foldl (a \ k \ min a (off (s + k * 7889400))) o [1 2 3])
                    [(1.0 * (s + o)) (o - std)])
  (court-now _) (court-when (clock 0 // 1000))
  ; ..and a wall-clock time L in local seconds, as [L dst] in this zone
@@ -81,10 +81,10 @@
  ; april. a leaf lets go about one frame in 'every ---
  (court-doy st) (: d (st 'sim / 86400.0 - 10957.0) (d - 365.2422 * floor (d / 365.2422)))
  (court-season st) (: d (court-doy st) spring (sat ((d - 108.0) / 22.0)) drop (sat ((d - 285.0) / 30.0))
-   share (min2 spring (1.0 - drop))
+   share (min spring (1.0 - drop))
    {'share share 'turn (sat ((d - 262.0) / 28.0))
     'seeds (150.0 <= d ? sat ((d - 160.0) / 25.0) (1.0 - sat ((d - 90.0) / 35.0))) 'ripe (150.0 <= d ? sat ((d - 165.0) / 135.0) 1.0)
-    'ground (285.0 <= d ? (0.12 + 0.88 * drop) (max2 0.12 (1.0 - 0.88 * sat (d / 150.0))))
+    'ground (285.0 <= d ? (0.12 + 0.88 * drop) (max 0.12 (1.0 - 0.88 * sat (d / 150.0))))
     'brown (285.0 <= d ? 0.1 0.65)
     'every (? (share < 0.05) 0 (285.0 <= d && d < 320.0) 6 300)})
  (court-clock st) (: d (day-secs (st 'sim)) hh (int (d / 3600.0)) mm (int (d / 60.0) % 60)
@@ -96,12 +96,12 @@
  ; and its pace. a run starts by the east wall looking up into the crown ---
  (court-new w h now) (: sd (int (now 0)) tr (tree-grow sd) lr (litter tr sd)
                         bs (tr 'base)
-                        st {'px (yard-a - 0.5) 'pz (bs 2 - 1.0) 'th (0.0 - pi / 2.0) 'ph 1.4
+                        st {'px (yard-a - 0.5) 'pz (bs 2 - 1.0) 'th -(pi / 2.0) 'ph 1.4
                             'sim (now 0) 'dst (now 1) 'pace 0 'paces paces 'shown 40 't 0
                             'deep 0 'done 0 'tree tr 'litter lr 'fall () 'fallen ()
                             'wx (court-season-wx (now 0) sd)
                             'drift 1 'hour (int (now 0 // 3600))}
-                        _ (pins st 'wet (sky-fall (st 'wx) = 1 ? 0.8 0.0) 'snow (sky-fall (st 'wx) = 2 ? 0.6 0.0))
+                        _ (pins st 'wet (sky-fall (st 'wx) @ 1 0.8 0.0) 'snow (sky-fall (st 'wx) @ 2 0.6 0.0))
                        (court-size st w (h // 2)))
  ; the screen w cells by r rows, two pixels a row, and its dither; under kitty 'kp pixels
  ; a column (mesh-size)
@@ -110,9 +110,9 @@
  ; ..kept inside the walls and out of the trunk where it passes the eye
  (put! st x z) (: ma (yard-a - body-r) mb (yard-b - body-r) b0 (st 'tree 'base) fk (st 'tree 'fork)
                   bs (c+ b0 (c* (eye-h / fk 1) (c+ fk (c* -1.0 b0))))
-                  x2 (clamp x (0.0 - ma) ma) z2 (clamp z (0.0 - mb) mb)
-                  qx (x2 - bs 0) qz (z2 - bs 2) d (sqrt (qx * qx + qz * qz)) m (0.3 + body-r)
-                  (d < m ? (pins st 'px (bs 0 + qx * m / max2 d 0.001) 'pz (bs 2 + qz * m / max2 d 0.001))
+                  x2 (clamp x -ma ma) z2 (clamp z -mb mb)
+                  qx (x2 - bs 0) qz (z2 - bs 2) d (sqrt (2 qx + 2 qz)) m (0.3 + body-r)
+                  (d < m ? (pins st 'px (bs 0 + qx * m / max d 0.001) 'pz (bs 2 + qz * m / max d 0.001))
                      (pins st 'px x2 'pz z2)))
  ; ..the court's own keys, over view's
  court-binds {91 'hour-back 93 'hour-on 116 'pace 99 'clouds 112 'fall}
@@ -129,7 +129,7 @@
  ; the crown, drifts down and lies where it lands
  (court-move st) (: t (st 't) tops (st 'litter 'tops) sea (court-season st) ev (sea 'every)
    ; ..gold in the fall, else mostly green
-   hue (0.5 < sea 'turn ? (throw t 9 79 3) (throw t 9 79 4 = 0 ? 0 3))
+   hue (0.5 < sea 'turn ? (throw t 9 79 3) (throw t 9 79 4 @ 0 0 3))
    born (0 < ev && throw t 3 97 ev = 0 && two? tops ?
          (tops (throw t 5 89 #tops) @ p [[(p 0) (p 1) (p 2) (throw t 7 83 628 / 100.0) hue]]))
    moved (map (q \ fall-step q t) (cat born (st 'fall)))
@@ -140,7 +140,7 @@
    _ (pins st 'sim (st 'sim + dt)
              'fall (filter (q \ leaf-y < q 1) moved)
              'fallen (newest fallen-n (cat down (st 'fallen)))
-             'wet (sat (st 'wet + (f @ 1 (dt / 1800.0) (0.0 - dt / 10800.0))))
+             'wet (sat (st 'wet + (f @ 1 (dt / 1800.0) -(dt / 10800.0))))
              'snow (sat (st 'snow + (f @ 2 (dt / 10800.0) (-dt / (f @ 1 3600.0 21600.0))))))
    (court-drift st))
  ; --- the weather: a month's odds pick a cover from k in 0..19; while 'drift is set it steps
@@ -167,7 +167,7 @@
       !(st 'drift) (pin st 'hour h)
       (: m (court-month (st 'sim)) c0 (st 'wx 'cover) f0 (sky-fall (st 'wx))
          to (court-wx-pick m (throw h 13 59 20))
-         c (throw h 11 67 4 != 0 ? c0 (c0 + (to < c0 ? -1 (c0 < to ? 1 0))))
+         c (throw h 11 67 4 @ 0 (c0 + (to < c0 ? -1 (c0 < to ? 1 0))) c0)
          f (? (c < 2) 0 (0 < f0 && throw h 21 43 3 != 0) f0
               (court-fall-pick m c (throw h 17 53 20) (throw h 19 47 2)))
          (pins st 'hour h 'wx (wx-of c f)))))
@@ -199,11 +199,11 @@
    ; the windows, as windows lays them
    wi (max 0 (min 3 (floor (al / bay + 2.0)))) ca (al - (wi - 1.5) * bay)
    lr (sat (1.0 - sq (ca / sash-w)))
-   lw (isx * (sq ca < sash-w * sash-w) * (0.9 < yy) * (yy < 2.3 + rise * lr) * infl)
+   lw (isx * (sq ca < 2 sash-w) * (0.9 < yy) * (yy < 2.3 + rise * lr) * infl)
    ea (mag al) ei ((wid = 0) * (3.75 < ea)) na (ea - over 3.8 (wid = 0) (over 3.45 ei 4.05))
    nk (isx * ((wid = 0) + (wid = 1) * (0.0 < fl)) * infl)
    nb (over 1.4 (wid = 0) 0.9) bath (wid = 1)
-   nw (nk * (sq na < nook-w * nook-w) * (nb < yy) * (yy < 2.3))
+   nw (nk * (sq na < 2 nook-w) * (nb < yy) * (yy < 2.3))
    sa (mag al - 1.6)
    sr (sat (1.0 - sq (sa / 0.25)))
    sw (isz * (sq sa < 0.0625) * (0.9 < yy) * (yy < 2.4 + rise * sr) * infl)
@@ -221,8 +221,8 @@
    ; ..the arch over a sash or a short wall's window: a course of bricks on end, wider
    ; than the opening and rising with it, its joints fanned
    la (sash-w + 0.08) sb 0.33
-   arch (isx * (sq ca < la * la) * (2.3 + rise * lr <= yy) * (yy < 2.42 + rise * sat (1.0 - sq (ca / la))) * infl
-         + isz * (sq sa < sb * sb) * (2.4 + rise * sr <= yy) * (yy < 2.52 + rise * sat (1.0 - sq (sa / sb))) * infl)
+   arch (isx * (sq ca < 2 la) * (2.3 + rise * lr <= yy) * (yy < 2.42 + rise * sat (1.0 - sq (ca / la))) * infl
+         + isz * (sq sa < 2 sb) * (2.4 + rise * sr <= yy) * (yy < 2.52 + rise * sat (1.0 - sq (sa / sb))) * infl)
    ajt (frac ((isx * ca + isz * sa) / 0.075) < 0.2)
    ; ..each room its own by wkey: lamps warm and various, some curtained, some a television,
    ; a bathroom's white; the lobby, the stair and the ground floor halls lit all night
@@ -278,10 +278,10 @@
  sump-r 0.2
  (floor-at i) (: a yard-a b yard-b
    px ((i % fl-nx + 0.5) * fts - a) pz ((i // fl-nx + 0.5) * fts - b)
-   r2 (sq px + sq pz) dg (sqrt (a * a + b * b))
+   r2 (sq px + sq pz) dg (sqrt (2 a + 2 b))
    ux (mag px) uz (mag pz)
    jd (min (min ux uz) (mag (b * ux - a * uz) / dg))        ; to the nearest joint
-   joint ((jd < 0.02) * (sump-r * sump-r < r2))
+   joint ((jd < 0.02) * (2 sump-r < r2))
    oct ((0.0 < px) * 4 + (0.0 < pz) * 2 + (a * uz < b * ux))
    tone (gem-tray [8] [0.97 1.03 0.94 1.0 1.02 0.95 1.04 0.98] oct)
    de (min (a - ux) (b - uz))
@@ -292,24 +292,24 @@
    conc (c* (tone * (0.9 + 0.2 * vn (px * 7.0) (pz * 7.0) 33) * (1.0 - 0.15 * speck)) [0.5 0.5 0.47])
    mossc (c* (0.75 + 0.45 * vn (px * 9.0) (pz * 9.0) 35) [0.2 0.31 0.12])
    wet (1.0 - 0.2 * (r2 < 0.2) - 0.35 * joint)
-   sump (r2 < sump-r * sump-r)
-   rim (sump * ((sump-r - 0.035) * (sump-r - 0.035) < r2))
+   sump (r2 < 2 sump-r)
+   rim (sump * (2 (sump-r - 0.035) < r2))
    bar (frac ((px + sump-r) / 0.06) < 0.5)
    grate (cmix (cmix [0.01 0.01 0.01] [0.18 0.16 0.14] bar) [0.24 0.21 0.18] rim)
    alb (cmix (c* wet (cmix conc mossc moss)) grate sump)
    {'r (alb 0) 'g (alb 1) 'b (alb 2)})
  ; ..laid a slice of k texels at a time, so the intermediates are held for a slice, not the map
  (lay-map n f) (: k 16384
-   (go lo out) (lo < n ? (: ix (lo + iota (min2 k (n - lo))) c (f ix)
+   (go lo out) (lo < n ? (: ix (lo + iota (min k (n - lo))) c (f ix)
                             (go (lo + k) (foldl (o \ key \ pin o key (pin (peep o key (iota n * 0 + peep (c key) 0 0 * 0)) ix (c key)))
                                                 out (keys c))))
                          out)
    (go 0 {}))
- (court-maps _) (maps 'wall ? maps (: m (lay-map wall-n wall-at) _ (each runs (rn \ lay-run m rn))
+ (court-maps _) (maps 'wall ? maps (: m (lay-map wall-n wall-at) _ (each runs (lay-run m))
                                      (pins maps 'wall m 'floor (lay-map (fl-nx * fl-nz) floor-at))))
  ; --- the tree: below the wall tops a point is kept inside the walls, or not grown in one ---
  crown-y 5.5
- (inside p) (p 1 < wall-h ? [(clamp (p 0) (0.15 - yard-a) (yard-a - 0.15)) (max2 0.05 (p 1))
+ (inside p) (p 1 < wall-h ? [(clamp (p 0) (0.15 - yard-a) (yard-a - 0.15)) (max 0.05 (p 1))
                             (clamp (p 2) (0.15 - yard-b) (yard-b - 0.15))] p)
  (in-wall? p) (p 1 < wall-h && (yard-a - 0.1 < mag (p 0) || yard-b - 0.1 < mag (p 2)))
  ; its habit: the trunk from the east wall leaning a little west to a fork in the third floor,
@@ -327,7 +327,7 @@
     fk (tq 5)
     ; ..the fork: a long limb steep off to the lean's left, a short one up and back; ways weighed
     ; from up, cdir (the lean) and lh (its left); (branch! from way length pieces r0 r1 bend droop)
-    lh [(0.0 - cdir 2) 0.0 (cdir 0)]
+    lh [-(cdir 2) 0.0 (cdir 0)]
     up (branch! fk (unit (c+ (c+ [0.0 2.0 0.0] (c* 1.6 cdir)) (c* 1.1 lh))) (rr 3.2 3.8) 6 0.12 0.07 0.3 0.0)   ; the long limb
     _ (head! up 4 (int (rr 10.0 13.99)))   ; its head: from joint 4, the stubs
     ot (branch! fk (unit (c+ (c+ [0.0 1.6 0.0] (c* 0.4 cdir)) (c* (rr -0.3 -0.1) lh))) (rr 2.4 3.0) 5 0.12 0.08 0.3 0.0)   ; the short limb
@@ -383,7 +383,7 @@
    (fork a b r c fz k) (: p (lerp a b (rr 0.4 0.75)) ax (c+ b (c* -1.0 a))
      ang ((rr 0.0 1.0 < 0.5 ? -1.0 1.0) * rr 0.4 0.9) ln (rr 0.3 0.55 * sqrt (dot ax ax))
      (tip g) (keep (c+ p (c* ln (unit (turn (unit ax) [0.0 1.0 0.0] (g * ang))))))
-     q (tip 1.0 @ q (from q < 0.3 + r ? (tip -1.0) q) @ q [(q 0) (max2 (0.55 * r) (q 1 + rr -0.1 0.05)) (q 2)])
+     q (tip 1.0 @ q (from q < 0.3 + r ? (tip -1.0) q) @ q [(q 0) (max (0.55 * r) (q 1 + rr -0.1 0.05)) (q 2)])
      rd [p q (0.55 * r) c fz]
      (0 < k && rr 0.0 1.0 < 0.5 ? (rd . fork p q (0.55 * r) c fz (k - 1)) [rd]))
    (branch _) (: a (rr 0.0 tau) r (rr 0.022 0.06) c (bark 0) fz (rr 0.15 0.35)
@@ -408,7 +408,7 @@
                               (catmap (v \ (map (m \ [(cx + u * cy - v * sy) (0.01 + m * th) (cz + u * sy + v * cy)
                                                                ((0.8 + 0.12 * m) * c 0) ((0.8 + 0.12 * m) * c 1) ((0.8 + 0.12 * m) * c 2) 1.0])
                                                          ^3))
-                                      [(0.0 - th) 0.0 th]))) ^k))
+                                      [-th 0.0 th]))) ^k))
    ; ..each leaf under one of the crown's, blown a little way off, kept off the walls
    (leaf _) (: i (pick 40 0) x (clamp (X i + rr -0.4 0.4) (0.08 - yard-a) (yard-a - 0.08))
                z (clamp (Z i + rr -0.4 0.4) (0.08 - yard-b) (yard-b - 0.08))
@@ -436,7 +436,7 @@
  ; a falling leaf, [x y z ph hue]: down at its own pace, swung side to side as it goes, and
  ; kept inside the walls; it lands at the floor
  (fall-step q t) (: x (q 0) y (q 1) z (q 2) ph (q 3) w (1.0 * t * 0.11 + ph)
-   [(clamp (x + 0.3 * sin w / fps) (0.08 - yard-a) (yard-a - 0.08)) (max2 leaf-y (y - fall-v / fps))
+   [(clamp (x + 0.3 * sin w / fps) (0.08 - yard-a) (yard-a - 0.08)) (max leaf-y (y - fall-v / fps))
     (clamp (z + 0.3 * cos (w * 0.7) / fps) (0.08 - yard-b) (yard-b - 0.08)) ph (q 4)])
  ; the leaves loose on the scene as points: those falling, turning as they go, and those landed
  (loose st) (: t (st 't)
@@ -450,7 +450,7 @@
  ; frame's clock t goes: [a b r colour bark wall]
  (strands t) (: (sway k p) (: f (sq (sat ((wall-h - p 1) / 5.0)))
                              [(p 0 + f * 0.03 * sin (t * 0.05 + k)) (p 1) (p 2 + f * 0.03 * cos (t * 0.04 + k * 1.3))])
-   (hang wid ps r k) (: n #ps q (map (i \ sway k (ps i)) ^n)
+   (hang wid ps r k) (: n #ps q (map (sway k * ps) ^n)
                         (map (i \ [(q i) (q (i + 1)) r [0.05 0.05 0.055] 0.0 wid]) ^(n - 1)))
    ea (yard-a - 0.04) wa (0.04 - yard-a) nb (yard-b - 0.04) sb (0.04 - yard-b)
    (cats [(hang 2 [[-2.2 wall-h nb] [-2.2 9.4 (nb + 0.01)] [-2.14 7.6 (nb - 0.12)]] 0.009 1.0)
@@ -461,7 +461,7 @@
           (hang 1 [[wa wall-h -4.1] [(wa - 0.02) 10.9 -4.12] [(wa + 0.16) 10.1 -4.0]] 0.008 6.0)]))
  ; which wall's face a step of a run is on, and where along it
  (wall-of p q) (: (on? k v) (mag (p k - v) < 0.01 && mag (q k - v) < 0.01)
-   (? (on? 0 yard-a) 0 (on? 0 (0.0 - yard-a)) 1 (on? 2 yard-b) 2 3))
+   (? (on? 0 yard-a) 0 (on? 0 -yard-a) 1 (on? 2 yard-b) 2 3))
  (along-of wid p) (wid < 2 ? (p 2) (p 0))
  ; ..the map's texel on wall wid at u along it and v up it
  (wall-texel wid u v) (wall-offs wid + floor (v / ts) * wall-nus wid
@@ -470,18 +470,18 @@
  ; covers, its strands striped and its upper side lit, the wall under it a little shadowed
  (lay-step m wid u0 u1 v0 v1 wd c) (: nu (wall-nus wid) half (wid < 2 ? yard-b yard-a)
    flat (mag (v1 - v0) < 0.001) pad (wd + 0.08)
-   tu0 (max2 0 (int ((min2 u0 u1 - pad + half) / ts))) tu1 (min2 (nu - 1) (int ((max2 u0 u1 + pad + half) / ts)))
-   tv0 (max2 0 (int ((min2 v0 v1 - pad) / ts))) tv1 (min2 (nv - 1) (int ((max2 v0 v1 + pad) / ts)))
+   tu0 (max 0 (int ((min u0 u1 - pad + half) / ts))) tu1 (min (nu - 1) (int ((max u0 u1 + pad + half) / ts)))
+   tv0 (max 0 (int ((min v0 v1 - pad) / ts))) tv1 (min (nv - 1) (int ((max v0 v1 + pad) / ts)))
    bw (tu1 - tu0 + 1) bh (tv1 - tv0 + 1)
    ii (iota (bw * bh)) tu (tu0 + ii % bw) tv (tv0 + ii // bw)
    uc ((tu + 0.5) * ts - half) vc ((tv + 0.5) * ts) ix (wall-texel wid uc vc)
    ac (flat ? (vc - v0) (uc - u0)) w2 (0.5 * wd)
-   at (flat ? uc vc) lo (flat ? (min2 u0 u1) (min2 v0 v1)) hi (flat ? (max2 u0 u1) (max2 v0 v1))
+   at (flat ? uc vc) lo (flat ? (min u0 u1) (min v0 v1)) hi (flat ? (max u0 u1) (max v0 v1))
    (ov x l h) (sat ((min (x + 0.5 * ts) h - max (x - 0.5 * ts) l) / ts))
    long (ov at (lo - w2) (hi + w2))
-   cov (ov ac (0.0 - w2) w2 * long)
-   shd ((ov ac (0.0 - w2 - 0.04) (flat ? w2 (w2 + 0.04)) * long - cov) * 0.15)
-   x (ac / max2 w2 0.001) k (max2 1 (int (wd / 0.012)))
+   cov (ov ac -w2 w2 * long)
+   shd ((ov ac (-w2 - 0.04) (flat ? w2 (w2 + 0.04)) * long - cov) * 0.15)
+   x (ac / max w2 0.001) k (max 1 (int (wd / 0.012)))
    strand (0.9 + 0.2 * throw (floor ((x + 1.0) * 0.5 * k)) (int (mag lo * 100.0)) 91 9 / 9.0)
    tie ((frac (at / 0.3) < 0.13) * (0.05 < wd))
    tone ((flat ? (1.0 + 0.25 * x) (1.1 - 0.2 * mag x)) * strand * (1.0 + 0.3 * tie))
@@ -511,14 +511,14 @@
    (word (cmix (c* (1.0 - 0.35 * wet) fc) snowc sw)))
  ; ..the four walls', the floor's (laid again when wet or snow moves a twentieth) and the bark's
  (court-texs st) (: mp (court-maps ())
-   wt (peep maps 'wtex () @ () (: t (wall-texs mp) (pin maps 'wtex t, t)) t t)
+   wt (maps 'wtex @ () (: t (wall-texs mp) (pin maps 'wtex t, t)) t t)
    k [(int (st 'wet * 20.0)) (int (st 'snow * 20.0))]
-   ft (peep maps 'ftex () @ [k0 t] (k0 = k ? t ()) _ ())
-   bk (peep maps 'bark () @ () (: t (grove-bark ()) (pin maps 'bark t, t)) t t)
+   ft (maps 'ftex @ [k0 t] (k0 = k ? t ()) _ ())
+   bk (maps 'bark @ () (: t (grove-bark ()) (pin maps 'bark t, t)) t t)
    (cat wt [(tray? ft ? ft (: t (floor-tex mp (st 'wet) (st 'snow)) (pin maps 'ftex [k t], t))) bk]))
  ; --- the walls and the floor: a place on wall wid's face, al along it and y up it, and
  ; the way it faces, into the yard ---
- (at wid al y) (? (wid = 0) [yard-a y al] (wid = 1) [(0.0 - yard-a) y al] (wid = 2) [al y yard-b] [al y (0.0 - yard-b)])
+ (at wid al y) (wid @ 0 [yard-a y al] 1 [-yard-a y al] 2 [al y yard-b] [al y -yard-b])
  ins [[-1.0 0.0 0.0] [1.0 0.0 0.0] [0.0 0.0 -1.0] [0.0 0.0 1.0]]
  (half-of wid) (wid < 2 ? yard-b yard-a)
  white [1.0 1.0 1.0]
@@ -540,11 +540,11 @@
    (bat bt) (: w (bt 0) c (bt 1) h (bt 2)
               [(panel w (c - h) (c + h) wall-h top-h)
                (end-face w (c + h) 1.0 wall-t wall-h top-h [1.0 0.0 0.0]) (end-face w (c - h) -1.0 wall-t wall-h top-h [-1.0 0.0 0.0])])
-   (mesh-pack (mesh-join (cat (cats (map bat bats))
-     [(panel 0 (0.0 - b) b 0.0 wall-h) (panel 1 (0.0 - b) b 0.0 wall-h)
-      (panel 2 (0.0 - a) a 0.0 wall-h) (panel 3 (0.0 - a) a 0.0 wall-h)
+   (mesh-pack (mesh-join (cat (catmap bat bats)
+     [(panel 0 -b b 0.0 wall-h) (panel 1 -b b 0.0 wall-h)
+      (panel 2 -a a 0.0 wall-h) (panel 3 -a a 0.0 wall-h)
       (panel 0 (b - cw) b wall-h top-h) (end-face 0 (b - cw) -1.0 cw wall-h top-h [0.0 0.0 -1.0])
-      (face [[(0.0 - a) 0.0 (0.0 - b)] [a 0.0 (0.0 - b)] [a 0.0 b] [(0.0 - a) 0.0 b]]
+      (face [[-a 0.0 -b] [a 0.0 -b] [a 0.0 b] [-a 0.0 b]]
             [[0.0 0.0] [fx 0.0] [fx fz] [0.0 fz]] 4 [0.0 1.0 0.0])]))))
  ; ..lit: the sun, the sky by how much of it a place sees -- the more the higher up a wall,
  ; and the side toward the sun more by day -- and a little back off the walls the sun is on
@@ -554,26 +554,26 @@
            [0.9 sv (c* (lt 'sunk * 0.05) (lt 'sunc))])))
  ; --- what stands in the yard, laid once a run and kept with its tree: branches, cables and
  ; boxes, air conditioners, copings, the crate, the plate and the tree's wood ---
- (props st) (: tr (st 'tree) (peep tr 'props () @ () (:
+ (props st) (: tr (st 'tree) (tr 'props @ () (:
    (step wd c p q) (: o (c* (0.5 * wd) (ins (wall-of p q))) (mesh-rod (c+ p o) (c+ q o) (0.5 * wd) c 5 -1 1.0))
    (run rn) (: ps (rn 2) (map (i \ step (rn 0) (rn 1) (ps i) (ps (i + 1))) ^(#ps - 1)))
-   (cap bt) (: z (bt 0 = 2 ? 1.0 -1.0)
+   (cap bt) (: z (bt 0 @ 2 1.0 -1.0)
               (mesh-box [(bt 1) (top-h + 0.05) (z * (yard-b + 0.5 * wall-t))] [(bt 2 + lip) 0.05 (0.5 * wall-t + lip)] 0.0 -1 [0.7 0.68 0.63] 1.0))
    (box bx) (mesh-box (c* 0.5 (c+ (bx 0) (bx 1))) (c* 0.5 (c+ (bx 1) (c* -1.0 (bx 0)))) 0.0 -1 [0.47 0.48 0.44] 1.0)
    ; ..the crate: rims round its open face and its back, posts at the corners, and slats
    ; across its five closed sides
    (crate bs) (: cr (crate-of bs) h (cr 1) hx (h 0) hy (h 1) hz (h 2) t 0.012 X (hx - t) Y (hy - t) Z (hz - t)
      (bar p q) (mesh-box (c* 0.5 (c+ p q)) (map (k \ 0.5 * mag (q k - p k) + t) ^3) 0.0 -1 [0.05 0.05 0.055] 1.0)
-     (rim z) [(bar [(0.0 - X) Y z] [X Y z]) (bar [(0.0 - X) (0.0 - Y) z] [X (0.0 - Y) z])
-              (bar [(0.0 - X) (0.0 - Y) z] [(0.0 - X) Y z]) (bar [X (0.0 - Y) z] [X Y z])]
-     posts (catmap (x \ map (y \ bar [x y (0.0 - Z)] [x y Z]) [(0.0 - Y) Y]) [(0.0 - X) X])
-     back (map (x \ bar [x (0.0 - Y) (0.0 - Z)] [x Y (0.0 - Z)]) [(-0.5 * X) 0.0 (0.5 * X)]
-           + [(bar [(0.0 - X) 0.0 (0.0 - Z)] [X 0.0 (0.0 - Z)])])
-     lids (catmap (y \ map (x \ bar [x y (0.0 - Z)] [x y Z]) [(-0.5 * X) 0.0 (0.5 * X)] + [(bar [(0.0 - X) y 0.0] [X y 0.0])]) [(0.0 - Y) Y])
-     ends (catmap (x \ [(bar [x 0.0 (0.0 - Z)] [x 0.0 Z]) (bar [x (0.0 - Y) 0.0] [x Y 0.0])]) [(0.0 - X) X])
+     (rim z) [(bar [-X Y z] [X Y z]) (bar [-X -Y z] [X -Y z])
+              (bar [-X -Y z] [-X Y z]) (bar [X -Y z] [X Y z])]
+     posts (catmap (x \ map (y \ bar [x y -Z] [x y Z]) [-Y Y]) [-X X])
+     back (map (x \ bar [x -Y -Z] [x Y -Z]) [(-0.5 * X) 0.0 (0.5 * X)]
+           + [(bar [-X 0.0 -Z] [X 0.0 -Z])])
+     lids (catmap (y \ map (x \ bar [x y -Z] [x y Z]) [(-0.5 * X) 0.0 (0.5 * X)] + [(bar [-X y 0.0] [X y 0.0])]) [-Y Y])
+     ends (catmap (x \ [(bar [x 0.0 -Z] [x 0.0 Z]) (bar [x -Y 0.0] [x Y 0.0])]) [-X X])
      ; ..tipped back about its long side, the open side turning up
      c (cos (cr 2)) s (sin (cr 2)) (rot y z) [(y * c + z * s) (z * c - y * s)]
-     m (mesh-join (cats [(rim Z) (rim (0.0 - Z)) posts back lids ends]))
+     m (mesh-join (cats [(rim Z) (rim -Z) posts back lids ends]))
      (mesh-move (mesh (map (v \ (: p (rot (v 1) (v 2)) n (rot (v 6) (v 7))
                                  [(v 0) (p 0) (p 1) (v 3) (v 4) (v 5) (n 0) (n 1) (v 8) (v 9) (v 10)])) (m 0)) (m 1))
                 (cr 0) 0.0))
@@ -584,7 +584,7 @@
    (ac w) (: wid (w 0) hw (w 2) d (wid < 2 ? [0.2 0.19 (hw - 0.04)] [(hw - 0.04) 0.19 0.2])
             (mesh-box (c+ (at wid (w 1) (w 3 + 0.21)) (c* 0.12 (ins wid))) d 0.0 -1 [0.62 0.62 0.6] 1.0))
    p {'rods (mesh-pack (mesh-join (cats [(map (rd \ mesh-rod (rd 0) (rd 1) (rd 2) (c* 1.15 (rd 3)) 6 5 0.01) (st 'litter 'lain + st 'litter 'rods))
-                                         (cats (map run runs)) [(grove-wood tr 5)]])))
+                                         (catmap run runs) [(grove-wood tr 5)]])))
       'boxes (mesh-pack (mesh-join (cats [(map box boxes) (map ac (filter cooled? windows)) (map cap bats) [(crate (tr 'base)) (plate (tr 'base))]])))}
    (pin tr 'props p, p)) p p))
  ; ..a packed mesh under snow: its colours toward the snow's by w, a tray of its vertices
@@ -594,13 +594,13 @@
  ; else standing; white under snow sn where they lie ---
  (dots P lt sn sz) (: s (lt 'sun) X (P 'x) Y (P 'y) Z (P 'z) up (P 'up)
    base (cmix [(P 'r) (P 'g) (P 'b)] snowc (up * sn))
-   face (up * max2 (s 1) 0.0 + (1.0 - up) * 0.5)
+   face (up * max (s 1) 0.0 + (1.0 - up) * 0.5)
    (corner k) [(X + sz * cos (2.1 * k)) (Y + (1.0 - up) * sz * sin (2.1 * k)) (Z + up * sz * sin (2.1 * k))]
    (mesh-dots [(corner 0) (corner 1) (corner 2)] (cm base (c* 0.42 (lt 'amb))) (cm base (c* (0.9 * face * lt 'sunk) (lt 'sunc))) -1))
  ; --- the scene lit, kept with the tree until two sky minutes pass or the snow or season
  ; moves: [verts tris] lists, and the sun's view [view depths bias], () while it is down ---
  sun-n 1024 sun-half 10.0 sun-deep 30.0 sun-bias 0.06
- (scene st lt) (: was (peep (st 'tree) 'scene ()) sim (st 'sim) sea (court-season st) sn (st 'snow)
+ (scene st lt) (: was (st 'tree 'scene) sim (st 'sim) sea (court-season st) sn (st 'snow)
    key [(int (sn * 20.0)) (int (sea 'ground * 50.0)) (int (sea 'share * 50.0)) (int (sea 'turn * 50.0)) (int (sea 'seeds * 50.0))]
    (tablet? was && mag (sim - was 'at) < 120.0 && was 'key = key ? was
       (: P (props st) sh (court-shell ())
@@ -619,27 +619,27 @@
              'sc [(cat [(wl 0) (rd 0) (bx 0)] (map (b \ b 0) gd2)) (cat [(wl 1) (rd 1) (bx 1)] (map (b \ b 1) gd2))]}
          (pin (st 'tree) 'scene s2, s2))))
  ; the walls and the floor, packed once a process
- (court-shell _) (peep maps 'shell () @ () (: m (shell ()) (pin maps 'shell m, m)) m m)
+ (court-shell _) (maps 'shell @ () (: m (shell ()) (pin maps 'shell m, m)) m m)
  ; the tree in its season
  (tree-of st sea) (pins (st 'tree) 'share (sea 'share) 'turn (sea 'turn) 'seeds (sea 'seeds) 'ripe (sea 'ripe))
  ; ..each window's glass in six panes a hair off the wall, as trays: each corner's place, its
  ; window, whether behind a curtain, and how much sky it gives back
- (court-panes _) (peep maps 'panes () @ ()
+ (court-panes _) (maps 'panes @ ()
    (: (pieces wn) (: w (windows wn) wid (w 0) c (w 1) hw (w 2) y0 (w 3) vh (w 4) o (c* 0.02 (ins wid))
-        xs [(0.0 - hw + 0.05) (-0.45 * hw) (0.45 * hw) (hw - 0.05)] ys [0.07 (0.5 * vh - 0.03) (0.5 * vh + 0.03) (vh - 0.06)]
+        xs [(-hw + 0.05) (-0.45 * hw) (0.45 * hw) (hw - 0.05)] ys [0.07 (0.5 * vh - 0.03) (0.5 * vh + 0.03) (vh - 0.06)]
         ar (? (w 6 = 0 || w 6 = 2) rise 0.0)
         (pc i j) (: a0 (c + xs i) a1 (c + xs (i + 1)) b0 (y0 + ys (2 * j)) b1 (y0 + ys (2 * j + 1))
                     (top x) (b1 + j * ar * sat (1.0 - sq ((x - c) / hw)))
                     [(map (p \ c+ p o) [(at wid a0 b0) (at wid a1 b0) (at wid a1 (top a1)) (at wid a0 (top a0))]) wn (i != 1)
                      (0.25 + 0.2 * j + 0.04 * throw (w 5) (3 * j + i) 37 5 + 0.15 * (j = 0 && throw (w 5) 5 41 4 = 0))])
-        (cats (map (j \ map (i \ pc i j) ^3) ^2)))
-      ps (cats (map pieces ^#windows)) n #ps
-      (col f) (gem-tray [(4 * n)] (cats (map (p \ map (k \ 1.0 * f p k) ^4) ps)))
+        (catmap (j \ map (i \ pc i j) ^3) ^2))
+      ps (catmap pieces ^#windows) n #ps
+      (col f) (gem-tray [(4 * n)] (catmap (p \ map (k \ 1.0 * f p k) ^4) ps))
       t {'x (col (\ p k (p 0 k 0))) 'y (col (\ p k (p 0 k 1))) 'z (col (\ p k (p 0 k 2)))
-         'wn (star-tray [(4 * n)] (cats (map (p \ [(p 1) (p 1) (p 1) (p 1)]) ps)))
-         'sd (gem-tray [(4 * n)] (cats (map (p \ (: s (1.0 * p 2) [s s s s])) ps)))
-         'rf (gem-tray [(4 * n)] (cats (map (p \ [(p 3) (p 3) (p 3) (p 3)]) ps)))
-         'tris (star-tray [(8 * n)] (cats (map (i \ (: v (4 * i) [v (v + 1) (v + 2) -2 v (v + 2) (v + 3) -2])) ^n)))}
+         'wn (star-tray [(4 * n)] (catmap (p \ [(p 1) (p 1) (p 1) (p 1)]) ps))
+         'sd (gem-tray [(4 * n)] (catmap (p \ (: s (1.0 * p 2) [s s s s])) ps))
+         'rf (gem-tray [(4 * n)] (catmap (p \ [(p 3) (p 3) (p 3) (p 3)]) ps))
+         'tris (star-tray [(8 * n)] (catmap (i \ (: v (4 * i) [v (v + 1) (v + 2) -2 v (v + 2) (v + 3) -2])) ^n))}
       (pin maps 'panes t, t)) t t)
  ; ..and each frame's light in them: the sky in the glass, the room behind when lit by the
  ; hour; the lobby, stair and ground floor halls whenever it is dark out
@@ -667,7 +667,7 @@
  (loose-batch st lt) (loose st @ P (tablet? P ? (dots P lt (st 'snow) 0.012) ()))
  (drops-batch st lt e) (: d (sky-drops (st 'wx) lt e (1.0 * st 't / fps))
    (tablet? d ?
-    (: X (d 'x) Y (d 'y) Z (d 'z) hw (0.5 * d 'wd) th (st 'th) rx (cos th * hw) rz ((0.0 - sin th) * hw) L (d 'len)
+    (: X (d 'x) Y (d 'y) Z (d 'z) hw (0.5 * d 'wd) th (st 'th) rx (cos th * hw) rz (-(sin th) * hw) L (d 'len)
        (mesh-dots [[(X - rx) Y (Z - rz)] [(X + rx) Y (Z + rz)] [X (Y + L) Z]] (c* (d 'a) (d 'c)) [0.0 0.0 0.0] -2))
     ()))
  ; --- the stars: sky's at the hour, each one pixel where the eye sees it through the top ---
@@ -735,20 +735,20 @@
    (bare k read ok) (l \ ok <l ? [k (read <l) >l])
    r (view-words as [(view-arg "--date" 'date date) (view-arg "--time" 'time hm) (view-arg "--pace" 'pace pnum)
                      (view-arg "--weather" 'cov cov) (view-arg "--fall" 'fall fal)
-                     (bare 'fall fal (w \ w = "rain" || w = "snow")) (bare 'cov cov (w \ charm? (cov w)))
+                     (bare 'fall fal (w \ w = "rain" || w = "snow")) (bare 'cov cov (charm? * cov))
                      (view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
                      (view-flag "--window" 'md 'window) view-scale])
    (tablet? r ?
       (: now0 (court-now ()) l0 (int (now0 0)) d (r 'date) t (r 'time)
          now (d = () && t = () ? now0
-              (court-local (86400 * (d = () ? (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
-                            + (t = () ? (l0 % 86400) t))))
+              (court-local (86400 * (d @ () (l0 // 86400) ((cite 'cal 'epoch-days) (d 0) (d 1) (d 2)))
+                            + (t @ () (l0 % 86400) t))))
          c (r 'cov) fl (r 'fall) l (now 0) sd (int l) m (court-month l)
          ; ..what is not said is the season's: a fall said without a cover comes from overcast
          c2 (? (c != ()) c (0 < fl) 3 (court-wx-pick m (throw sd 7 71 20)))
          {'now now 'pace (r 'pace) 'fix (c = () && fl = () ? 0 1) 'md (r 'md) 'scale (r 'scale)
           'wx (c = () && fl = () ? ()
-                 (wx-of c2 (fl = () ? (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
+                 (wx-of c2 (fl @ () (court-fall-pick m c2 (throw sd 9 73 20) (throw sd 11 79 2)) fl)))})))
  (court-main as) (view-main "court" court-usage court-opts court-run as)
  _ ((cite 'lore 'lore-enlist) 'court (udoor 'court court-main court-usage 1 1)))
 ) ; module court
