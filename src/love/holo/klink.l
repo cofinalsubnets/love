@@ -324,7 +324,7 @@
        (one x)
         (: oi (x 1) si (x 2) ob (lk 'ot oi) r (ob 'sec si) key (oi * 65536 + si)
            (each (? (0 < (r 2 & 2)) (peep (ob 'rela) si ()) ())
-              (e \ (? (e 1 != 257) 0
+              (e \ (? (e 1 != peep lk 'abs 257) 0
                       (wu? ob e) (pin rela 'l ([key e 1] . rela 'l))
                       (peep lk 'relr 1 && r 5 >= 2 && <e % 2 = 0) (pin relr 'l ([key <e] . relr 'l))
                       (pin rela 'l ([key e 0] . rela 'l))))))
@@ -356,28 +356,36 @@
                                     (lds-sp? (t i)) (go (i + 1) (i + 1) (? (st < i) (snip t st i . acc) acc))
                                     (go (i + 1) st acc))
                    (go 0 0 ()))
+   ; with no version script (opts 'flat) every definition of default or protected
+   ; visibility is exported, unversioned, and the table carries no soname
    (kl-dso cx opts vt)
     (: ws (kl-words vt)
+       fl (peep opts 'flat 0)
        vn <ws
        (gs l on acc) (? (atom? l) (rev acc) (<l = "global:") (gs >l 1 acc) (<l = "local:") (gs >l 0 acc)
                         (on && <l != ";") (gs >l on (<l . acc)) (gs >l on acc))
        ex (: t {} _ (each (gs >ws 0 ()) (n \ pin t n 1)) t)
-       ds (filter (n \ peep ex n 0 && two? (peep (cx 'glob) n ())) (cx 'order))
+       (vis? n) (: g (peep (cx 'glob) n ())
+                   (? (two? g) (: v ((cx 'objs) <g 'syms (g 1) 6 & 3) (v = 0 || v = 3)) 0))
+       ds (filter (n \ (? fl (vis? n) (peep ex n 0 && two? (peep (cx 'glob) n ())))) (cx 'order))
        nb (max (#ds // 4) 1)
        syms (map (p \ p 2) (sort (map (i \ [(kl-ghash (ds i) % nb) i (ds i)]) ^#ds)))
        so (opts 'soname)
        st {'n 1}
-       _ (each (syms + [so vn]) (s \ (? (whole? (peep st s ())) 0 (: _ (pin st s (st 'n)) (pin st 'n (st 'n + #s + 1))))))
+       _ (each (syms + (? fl () [so vn])) (s \ (? (whole? (peep st s ())) 0 (: _ (pin st s (st 'n)) (pin st 'n (st 'n + #s + 1))))))
        mw ((: (go p) (? (p > #syms * 12 // 64) p (go (p * 2)))) 1)
        n (#syms + 1)
-       dt (cats [[[14 'soname]] (? (opts 'symbolic) [[30 'symbolic]] ()) (? (opts 'bti) [[1879048193 'zero]] ())
-                 [[6 ".dynsym"] [11 'syment] [5 ".dynstr"] [10 'strsz] [1879047925 ".gnu.hash"] [4 ".hash"]
-                  [1879048176 ".gnu.version"] [1879048188 ".gnu.version_d"] [1879048189 'nverdef] [0 'zero]]])
-       {'exports ex 'syms syms 'vn vn 'soname so 'str st 'nb nb 'mw mw 'dt dt
-        'synth [[".hash" (4 * (2 + 2 * n)) 4 5 2 4] [".gnu.hash" (16 + 8 * mw + 4 * nb + 4 * #syms) 8 1879048182 2 0]
-                [".dynsym" (24 * n) 8 11 2 24] [".dynstr" (st 'n) 1 3 2 0] [".gnu.version" (2 * n) 2 1879048191 2 2]
-                [".gnu.version_d" 56 4 1879048189 2 0] [".dynamic" (16 * #dt) 8 6 3 16]
-                [".got" 0 8 1 3 0 1] [".got.plt" 0 8 1 3 0 1] [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]]
+       dt (cats [(? fl () [[14 'soname]]) (? (opts 'symbolic) [[30 'symbolic]] ()) (? (opts 'bti) [[1879048193 'zero]] ())
+                 (? (fl && opts 'relr) [[36 ".relr.dyn"] [35 'relrsz] [37 'relrent]] ())
+                 [[6 ".dynsym"] [11 'syment] [5 ".dynstr"] [10 'strsz] [1879047925 ".gnu.hash"] [4 ".hash"]]
+                 (? fl () [[1879048176 ".gnu.version"] [1879048188 ".gnu.version_d"] [1879048189 'nverdef]])
+                 [[0 'zero]]])
+       {'exports ex 'syms syms 'vn vn 'soname so 'str st 'nb nb 'mw mw 'dt dt 'flat fl
+        'synth ([[".hash" (4 * (2 + 2 * n)) 4 5 2 4] [".gnu.hash" (16 + 8 * mw + 4 * nb + 4 * #syms) 8 1879048182 2 0]
+                [".dynsym" (24 * n) 8 11 2 24] [".dynstr" (st 'n) 1 3 2 0]]
+                + (? fl () [[".gnu.version" (2 * n) 2 1879048191 2 2] [".gnu.version_d" 56 4 1879048189 2 0]])
+                + [[".dynamic" (16 * #dt) 8 6 3 16]
+                [".got" 0 8 1 3 0 1] [".got.plt" 0 8 1 3 0 1] [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]])
         'slink {".hash" [".dynsym" 0] ".gnu.hash" [".dynsym" 0] ".dynsym" [".dynstr" 1] ".gnu.version" [".dynsym" 0]
                 ".gnu.version_d" [".dynstr" 2] ".dynamic" [".dynstr" 0]}})
    (kl-dsdata lk)
@@ -403,10 +411,10 @@
                  (cats (map (i \ w4 (hs i // 2 * 2 + (? (i + 1 = #hs || bk (i + 1) != bk i) 1 0))) ^#hs))])
        strs (sort (map (k \ [(st k) k]) (filter string? (keys st))))
        dstr (cats ([0] . map (p \ map (i \ p 1 i) ^#(p 1) + [0]) strs))
-       vd (cats [(w2 1) (w2 1) (w2 1) (w2 1) (w4 (kl-ehash (d 'soname))) (w4 20) (w4 28) (w4 (st (d 'soname))) (w4 0)
-                 (w2 1) (w2 0) (w2 2) (w2 1) (w4 (kl-ehash (d 'vn))) (w4 20) (w4 0) (w4 (st (d 'vn))) (w4 0)])
+       vd (? (d 'flat) () (cats [(w2 1) (w2 1) (w2 1) (w2 1) (w4 (kl-ehash (d 'soname))) (w4 20) (w4 28) (w4 (st (d 'soname))) (w4 0)
+                 (w2 1) (w2 0) (w2 2) (w2 1) (w4 (kl-ehash (d 'vn))) (w4 20) (w4 0) (w4 (st (d 'vn))) (w4 0)]))
        (dv k) (? (string? k) (isa k) (k = 'soname) (st (d 'soname)) (k = 'symbolic) 2 (k = 'syment) 24
-                 (k = 'strsz) (st 'n) (k = 'nverdef) 2 0)
+                 (k = 'strsz) (st 'n) (k = 'nverdef) 2 (k = 'relrsz) (peep d 'relrsz 0) (k = 'relrent) 8 0)
        dyn (cats (map (e \ w8 <e + w8 (dv (e 1))) (d 'dt)))
        one (\ b [#b [b]])
        {".hash" (one sysv) ".gnu.hash" (one gh) ".dynsym" (one (cats ((kl-le 0 24) . map dsym syms)))
@@ -434,7 +442,8 @@
    ; one input section's bytes with its relocations applied -> pieces, reversed onto acc
    (kl-patch lk x acc)
     (: oi (x 1) si (x 2) ob (lk 'ot oi) r (ob 'sec si) s (ob 'src) o0 (r 3) sz (r 4)
-       base (lk 'env 'isa (oi * 65536 + si)) be (backends 'a64)
+       base (lk 'env 'isa (oi * 65536 + si)) mach (peep lk 'mach 183) abs (peep lk 'abs 257)
+       be (backends (? (mach = 62) 'x64 'a64))
        ; a weak undefined: a branch falls to the next instruction, a pc-relative field reads
        ; the place, an absolute one the addend
        (weak k p a) (? (elem k '(279 280 282 283)) (p + 4 + a) (elem k '(260 261 273 274 275)) (p + a) a)
@@ -447,12 +456,12 @@
                     sa <q p <>q
                     (? (s0 = 'dead) (? (elem k '(257 258)) (kl-le (kl-tomb <r (e 3)) (? (k = 257) 8 4))
                                        (scare 'klink-dropped [(ob 'id) ro k]))
-                       (k = 257 && nal) (kl-le sa 8)               ; not loaded: no slide
-                       (k = 257)
+                       (k = abs && nal) (kl-le sa 8)               ; not loaded: no slide
+                       (k = abs)
                        (? (!(whole? s0)) (kl-le 0 8)
                           (peep lk 'relr 1 && r 5 >= 2 && ro % 2 = 0) (kl-le sa 8)       ; relr: the field is the addend
                           (kl-le (? (peep lk 'apply 0) sa 0) 8))
-                       (: c (peep (ld-rtab 183) k ())
+                       (: c (peep (ld-rtab mach) k ())
                           _ (? (two? c) 0 (scare 'klink-reloc [(ob 'id) k]))
                           f (ld-fix be c (map (i \ s (o0 + ro + i)) ^4) sa p)
                           (? (two? f) f (scare 'klink-range [(ob 'id) ro k])))))
@@ -556,12 +565,13 @@
        seen {}
        names (rev (foldl (\ a n (? (peep seen n 0) a (: _ (pin seen n 1) (n . a)))) () (cx 'order + kl-sorder lk)))
        ; a -shared link's version script keeps its list global and makes the rest local, a
-       ; script's own names a group after every object's
+       ; script's own names a group after every object's; the default script's words are klink's
        dso (peep lk 'dso 0)
-       (loc? nm) (? (dso = 0) 0 !(peep (dso 'exports) nm 0))
+       (loc? nm) (? (dso = 0 || dso 'flat) 0 !(peep (dso 'exports) nm 0))
        (gl nm)
         (: v (peep sv nm ())
-           (? (whole? v) (: q (peep ssec nm ()) ty (peep (env 'stype) nm 0)
+           (? (whole? v && starts? nm "__ld_") 0
+              (whole? v) (: q (peep ssec nm ()) ty (peep (env 'stype) nm 0)
                             shn (? (q = 'aether) 1 (string? q) (shx q) 65521)
                             (? (loc? nm) (put -1 (ent nm v 0 ty 0 shn))
                                (pin glo 'l (ent nm v 0 (16 + ty) 0 shn . glo 'l))))
@@ -609,18 +619,27 @@
    ;     a load's first section sits at a file offset congruent to its address mod 64K, or
    ;     at the next aligned one under lk 'nmagic; the rest follow by address. each section
    ;     is written as it is emitted; answers the file's size
+   ; the sections lld's relro covers
+   kl-relro '(".data.rel.ro" ".dynamic" ".got" ".relro_padding")
    (kl-pt ty) (? (whole? ty) ty
                  (: l '(("PT_NULL" 0) ("PT_LOAD" 1) ("PT_DYNAMIC" 2) ("PT_INTERP" 3) ("PT_NOTE" 4) ("PT_PHDR" 6)
                         ("PT_TLS" 7) ("PT_GNU_EH_FRAME" 1685382480) ("PT_GNU_STACK" 1685382481) ("PT_GNU_RELRO" 1685382482))
                     r (filter (p \ <p = ty) l)
                     (? (two? r) <>(<r) (scare 'klink-phdr ty))))
+   ;     with no script (lk 'flat) as lld lays its own: a PT_PHDR, the first load from the
+   ;     file's start, a load at each change of permissions or relro, the empty ones dropped
+   ;     but their headers' room kept, then PT_DYNAMIC, PT_GNU_RELRO and PT_GNU_STACK, and
+   ;     .shstrtab before .strtab
    (kl-elf lk entry path)
     (: outs0 (kl-live (lk 'outs))
+       flat (peep lk 'flat 0) pg (peep lk 'pg 65536)
        shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 (outs0 + [{'name ".symtab"} {'name ".strtab"}])) t)
        st (kl-symtab lk (n \ shx n))
+       sht {'name ".shstrtab" 'stype 3 'flags 0 'al 1}
        outs (outs0 + [{'name ".symtab" 'stype 2 'flags 0 'al 8 'sz (24 * #(st 1)) 'entsize 24
-                       'link (#outs0 + 2) 'info <st 'pieces (st 1)}
-                      {'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 2) 'pieces (st 3)}])
+                       'link (#outs0 + (? flat 3 2)) 'info <st 'pieces (st 1)}]
+             + (? flat [sht] ())
+             + [{'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 2) 'pieces (st 3)}])
        slink (peep lk 'slink {})
        nmagic (peep lk 'nmagic 0)
        (alloc? t) (0 < (t 'flags & 2))
@@ -630,8 +649,10 @@
        _ (foldl (\ pv t (? (alloc? t) (: ns (? (two? (peep t 'phdrs ())) (t 'phdrs) pv) _ (pin t 'phn ns) ns) pv)) () outs)
        (in p) (filter (t \ alloc? t && t 'sz > 0 && elem (p 'name) (t 'phn)) outs)
        ; loads [[first last row] ..], row the PHDRS one or ()
+       grps (? flat (kl-fgroups outs0) ())
        loads (? (two? phr)
                 (cats (map (p \ (: ms (in p) (? (kl-pt (p 'type) = 1 && two? ms) [[<ms <(rev ms) p]] ()))) phr))
+                flat (map (g \ [<g (g 1) ()]) (filter (g \ g 2) grps))
                 (rev (foldl (\ acc t
                                (? (!(alloc? t) || t 'sz = 0) acc
                                   (atom? acc || at? t || perm t != perm (<(<acc))) ([t t ()] . acc)
@@ -640,14 +661,16 @@
        _ (each loads (l \ each outs (t \ (? (t 'va >= <l 'va && alloc? t && t 'sz > 0
                                                 && t 'va <= (l 1) 'va && !(peep t 'load 0))
                                              (pin t 'load l) 0))))
-       nph (? (two? phr) #phr (#loads + 1))
-       hdrs (64 + 56 * nph)
+       nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1))
+       nres (? flat (#grps + 4) nph)
+       hdrs (64 + 56 * nres)
        names (foldl (\ a t (a + t 'name + "\0")) "\0" outs)
        fouts (filter alloc? outs + filter (t \ !(alloc? t)) outs)        ; the file: allocated first
-       shn (names + ".shstrtab\0")
+       shn (? flat names (names + ".shstrtab\0"))
+       _ (pin sht 'sz #shn, pin sht 'pieces [shn])
        _ (foldl (\ o t
                   (: f (peep t 'load ())
-                     off (? (two? f && <f 'name = t 'name) (? nmagic (kl-al o (t 'al)) (o + (t 'va - o) % 65536))
+                     off (? (two? f && <f 'name = t 'name) (? nmagic (kl-al o (t 'al)) (o + (t 'va - o) % pg))
                             (two? f) (<f 'off + t 'va - <f 'va)
                             (kl-al o (t 'al)))
                      _ (pin t 'off off)
@@ -655,14 +678,28 @@
                 hdrs fouts)
        last (: l <(rev fouts) (l 'off + (? (l 'stype = 8) 0 (l 'sz))))
        shso last
-       shoff (kl-al (shso + #shn) 8)
-       shnum (#outs + 2)
+       shoff (kl-al (? flat last (shso + #shn)) 8)
+       shnum (#outs + (? flat 1 2))
+       shstx (? flat (#outs0 + 2) (shnum - 1))
        (w2 n) (kl-le n 2) (w4 n) (kl-le n 4) (w8 n) (kl-le n 8)
-       eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 3) (w2 183) (w4 1) (w8 entry) (w8 64) (w8 shoff)
-                 (w4 0) (w2 64) (w2 56) (w2 nph) (w2 64) (w2 shnum) (w2 (shnum - 1))])
+       eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 3) (w2 (peep lk 'mach 183)) (w4 1) (w8 entry) (w8 64) (w8 shoff)
+                 (w4 0) (w2 64) (w2 56) (w2 nph) (w2 64) (w2 shnum) (w2 shstx)])
+       ; a load from its first section, or under flat the first from the file's start
        (ph l) (: a <l b (l 1) fe (b 'off + (? (b 'stype = 8) 0 (b 'sz)))
-                 (cats [(w4 1) (w4 (perm a)) (w8 (a 'off)) (w8 (a 'va)) (w8 (a 'la))
-                        (w8 (fe - a 'off)) (w8 (b 'va + b 'sz - a 'va)) (w8 65536)]))
+                 o0 (? (flat && a 'name = <(<loads) 'name) 0 (a 'off))
+                 v0 (a 'va - a 'off + o0) l0 (a 'la - a 'off + o0)
+                 (cats [(w4 1) (w4 (perm a)) (w8 o0) (w8 v0) (w8 l0)
+                        (w8 (fe - o0)) (w8 (b 'va + b 'sz - v0)) (w8 pg)]))
+       (row ty fl o v fz mz al) (cats [(w4 ty) (w4 fl) (w8 o) (w8 v) (w8 v) (w8 fz) (w8 mz) (w8 al)])
+       rro (filter (t \ alloc? t && elem (t 'name) kl-relro) outs0)
+       dyn (filter (t \ t 'name = ".dynamic") outs0)
+       (fend t) (t 'off + (? (t 'stype = 8) 0 (t 'sz)))
+       fphs (? flat
+               ([(row 6 4 64 64 (56 * nres) (56 * nres) 8)] + map ph loads
+                + (? (two? dyn) [(: t <dyn (row 2 6 (t 'off) (t 'va) (t 'sz) (t 'sz) 8))] ())
+                + (? (two? rro) [(: a <rro b <(rev rro)
+                                    (row 1685382482 4 (a 'off) (a 'va) (fend b - a 'off) (b 'va + b 'sz - a 'va) 1))] ())
+                + [(row 1685382481 6 0 0 0 0 0)] + [(kl-le 0 (56 * (nres - nph)))]))
        ; a script's header: FILEHDR opens it at offset 0, the headers before its first section
        (prow p)
         (: ms (in p) ty (kl-pt (p 'type)) fl (peep p 'flags ())
@@ -673,14 +710,14 @@
                  al (? (ty = 1 && !nmagic) 65536 (foldl (\ m t (max m (t 'al))) 1 ms))
                  (cats [(w4 ty) (w4 (? (whole? fl) fl (perm a))) (w8 o0) (w8 v0) (w8 l0)
                         (w8 (fe - o0)) (w8 (b 'va + b 'sz - v0)) (w8 al)]))))
-       phs (? (two? phr) (map prow phr)
+       phs (? (two? phr) (map prow phr) flat fphs
               (map ph loads + [(cats [(w4 1685382481) (w4 6) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0)])]))
        (lnk t k) (: s (peep slink (t 'name) ()) (? (two? s) (? (k = 0) (shx <s) <>s) (peep t (? (k = 0) 'link 'info) 0)))
        nmoff (: t {} _ (foldl (\ o x (pin t (x 'name) o, o + #(x 'name) + 1)) 1 outs) t)
        (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (w8 (t 'flags)) (w8 (? (alloc? t) (t 'va) 0)) (w8 (t 'off))
                      (w8 (t 'sz)) (w4 (lnk t 0)) (w4 (lnk t 1)) (w8 (t 'al)) (w8 (peep t 'entsize 0))])
        shs ([(kl-le 0 64)] + map sh outs
-            + [(cats [(w4 #names) (w4 3) (w8 0) (w8 0) (w8 shso) (w8 #shn) (w4 0) (w4 0) (w8 1) (w8 0)])])
+            + (? flat () [(cats [(w4 #names) (w4 3) (w8 0) (w8 0) (w8 shso) (w8 #shn) (w4 0) (w4 0) (w8 1) (w8 0)])]))
        _ (unlink path)
        q (open path "w")
        (put ps) (each ps (p \ (? (two? p) (say q (cask p)) (atom? p && #p > 0) (say q p) 0)))
@@ -694,8 +731,10 @@
                     _ (put (rev (kl-zp (t 'off - o) ())), put ps)
                     (body (t 'off + t 'sz) >l)))))
        _ (put (eh . phs))
-       e (body (64 + 56 * nph) fouts)
-       _ (put (rev (kl-zp (shso - e) ())), put [shn], put (rev (kl-zp (shoff - shso - #shn) ())), put shs)
+       e (body hdrs fouts)
+       _ (? flat (put (rev (kl-zp (shoff - e) ())))
+            (: _ (put (rev (kl-zp (shso - e) ()))) (put [shn], put (rev (kl-zp (shoff - shso - #shn) ())))))
+       _ (put shs)
        _ (close q)
        (shoff + 64 * shnum))
 
@@ -1064,6 +1103,52 @@
        r (go as)
        (? (string? r) r (: _ (pin o 'ins (rev (o 'ins))) o)))
 
+   ; -shared with no script: lld's own layout said as one, by rank -- the read-only tables,
+   ; text, the relro run padded to a page, then data -- each load lifted a page past the
+   ; last as its file offset runs on. a link sets __ld_pg and __ld_hdrs
+   kl-shtmpl (lds-read """
+     SECTIONS {
+     . = __ld_hdrs;
+     .dynsym : { *(.dynsym) }
+     .gnu.hash : { *(.gnu.hash) }
+     .hash : { *(.hash) }
+     .dynstr : { *(.dynstr) }
+     .rela.dyn : { *(.rela.dyn) }
+     .relr.dyn : { *(.relr.dyn) }
+     .rodata : { *(.rodata .rodata.*) }
+     . = ALIGN(__ld_pg) + (. & (__ld_pg - 1));
+     .text : { *(.text .text.*) }
+     .plt : { *(.plt) }
+     .iplt : { *(.iplt) }
+     . = ALIGN(__ld_pg) + (. & (__ld_pg - 1));
+     .data.rel.ro : { *(.data.rel.ro .data.rel.ro.*) }
+     .dynamic : { *(.dynamic) }
+     .got : { *(.got) }
+     __ld_rr = .;
+     .relro_padding : { *(.relro_padding) }
+     . = ALIGN(__ld_pg) + (__ld_rr & (__ld_pg - 1));
+     .data : { *(.data .data.*) }
+     .got.plt : { *(.got.plt) }
+     .bss : { *(.bss .bss.*) }
+     .comment 0 : { *(.comment) }
+     /DISCARD/ : { *(.note.GNU-stack) }
+     }
+     """)
+   ; a template's commands with each output section afresh, for kl-place to fill
+   (kl-fresh cmds)
+    (: (osec t) (: n {} _ (each (keys t) (k \ pin n k (t k))) n)
+       (map (c \ (? (<c = 'sections) ['sections (map (i \ (? (<i = 'osec) ['osec (osec <>i)] i)) <>c)] c)) cmds))
+   ; lld's loads with no script, over the allocated sections in order: a new one at a change
+   ; of permissions or into or out of relro -> [[first last bytes?] ..], the empty ones kept
+   (kl-fgroups outs)
+    (: (perm t) (4 + (? (0 < (t 'flags & 1)) 2 0) + (? (0 < (t 'flags & 4)) 1 0))
+       (rel? t) (elem (t 'name) kl-relro)
+       (rev (foldl (\ acc t
+                      (? (!(0 < (t 'flags & 2))) acc
+                         (atom? acc || perm t != perm (<acc 1) || rel? t != rel? (<acc 1)) ([t t (t 'sz > 0)] . acc)
+                         ([(<(<acc)) t (<acc 2 || t 'sz > 0)] . >acc)))
+                   () (kl-live outs))))
+
    ; the link under a script. o from kl-args, o 'banner the .comment line to sign with
    (kl-ld o) (? (o 'reloc) (kl-rel o) (kl-exe o))
    (kl-exe o)
@@ -1071,19 +1156,30 @@
        (no w) (scare 'klink-refuses w)
        _ (? (string? out) 0 (no "no -o"))
        sc (peep o 'script ())
-       _ (? (string? sc) 0 (no "no linker script"))
-       _ (? (elem (o 'emu) '(() a64)) 0 (no (show (o 'emu))))
+       ; -shared with no script lays lld's own layout, kl-shtmpl
+       flat (o 'shared && !(string? sc))
+       _ (? (string? sc || flat) 0 (no "no linker script"))
        _ (? (o 'shared && !(o 'symbolic)) (no "-shared without -Bsymbolic") 0)
-       _ (? (o 'relro) (no "PT_GNU_RELRO: pass -z norelro") 0)
+       _ (? (flat && !(o 'relr)) (no "-shared with no script and no --pack-dyn-relocs=relr") 0)
+       _ (? (flat && !(o 'relro)) (no "-z norelro with no script") 0)
+       _ (? (o 'relro && !flat) (no "PT_GNU_RELRO: pass -z norelro") 0)
        cx (kl-load (o 'ins))
+       ; the machine: aarch64, or x86-64 with no script
+       em (? (atom? (cx 'objs)) 183 (kl-u16 (<(cx 'objs) 'src) 18))
+       _ (? (elem [(o 'emu) em] (? flat '((() 183) (a64 183) (() 62) (x64 62)) '((() 183) (a64 183)))) 0
+            (no (show (? (o 'emu = ()) em (o 'emu)))))
        _ (pin cx 'objs (cx 'objs + [(kl-banner "<linker>" (peep o 'banner ("Linker: " + kl-lld)))]))
-       cmds (lds-read <>(uread sc))
+       pg (? (em = 62) 4096 65536)
+       body (? flat (kl-fresh kl-shtmpl) (lds-read <>(uread sc)))
+       (words h) (? flat [['set "__ld_pg" '= pg] ['set "__ld_hdrs" '= h]] ())
+       cmds (words 0 + body)
        vt (foldl (\ a c (? (<c = 'version) <>c a)) "" cmds)
-       d (? (o 'shared && 0 < #vt) (kl-dso cx {'soname (peep o 'soname "") 'symbolic 1 'bti (o 'bti)} vt) 0)
+       d (? (o 'shared && (flat || 0 < #vt))
+            (kl-dso cx {'soname (peep o 'soname "") 'symbolic 1 'bti (o 'bti) 'flat flat 'relr (o 'relr)} vt) 0)
        dsyn (? (d = 0) () (d 'synth))
        bid (? (o 'bid) [[".note.gnu.build-id" 36 4 7 2]] ())
-       dyns (? (o 'shared) (? (o 'relr) [".rela.dyn" ".relr.dyn"] [".rela.dyn"]) ())
-       pl (kl-place (cx 'objs) cmds (map (s \ [<s (s 1) (s 2)]) dsyn + map (n \ [n 0 8]) dyns + bid) (o 'strip))
+       dyns ((? (o 'shared) (? (o 'relr) [".rela.dyn" ".relr.dyn"] [".rela.dyn"]) ()) + (? flat [".relro_padding"] ()))
+       pl (kl-place (cx 'objs) cmds (map (s \ [<s (s 1) (s 2)]) dsyn + map (n \ [n 0 (? (n = ".relro_padding") 1 8)]) dyns + bid) (o 'strip))
        os <pl
        _ (? (two? <>pl)
             (: w (map (x \ (? (<x = 'synth) (x 1) (cx 'objs <x 'id + ":(" + x 1 + ")"))) (lds-first <>pl 8))
@@ -1091,22 +1187,35 @@
        ot (: t {} _ (foldl (\ i ob (pin t i ob, i + 1)) 0 (cx 'objs)) t)
        mx (kl-merge ot os)
        lk {'cx cx 'ot ot 'mx mx 'outs os 'cmds cmds 'strip (o 'strip) 'discard (o 'discard)
-           'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic)}
+           'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg
+           'mach em 'abs (? (em = 62) 1 257)}
        _ (? (d = 0) 0 (: _ (pin lk 'dso d) (pin lk 'slink (d 'slink))))
        dy (? (o 'shared) (kl-dyn lk) {'rela () 'relr ()})
        nrela #(dy 'rela)
-       ; an empty .rela.dyn or .relr.dyn lends its flags as lld's removed synthetic sections do
-       (dsec n z ty es) [n z 8 ty 2 es (? (z = 0 && atom? (? (ty = 4) (dy 'rela) (dy 'relr))) 1 0)]
-       (lay rz) (kl-lay cx cmds mx (dsyn + bid + (? (o 'shared) [(dsec ".rela.dyn" (24 * nrela) 4 24)] ())
-                                      + (? (o 'shared && o 'relr) [(dsec ".relr.dyn" rz 19 8)] ())))
-       ; .relr.dyn's size moves the layout it encodes: lay until it holds
-       (go n rz)
-        (: env (lay rz) isa (env 'isa)
+       ; an empty .rela.dyn or .relr.dyn lends its flags as lld's removed synthetic sections do;
+       ; with no script lld keeps aarch64's empty .rela.dyn
+       (dsec n z ty es) [n z 8 ty 2 es (? (z = 0 && !(flat && ty = 4 && em = 183) && atom? (? (ty = 4) (dy 'rela) (dy 'relr))) 1 0)]
+       _ (? (flat && two? (dy 'rela)) (no "-shared with no script and a .rela.dyn") 0)
+       (lay rz pz h) (kl-lay cx (words h + body) mx
+                        (dsyn + bid + (? (o 'shared) [(dsec ".rela.dyn" (24 * nrela) 4 24)] ())
+                         + (? (o 'shared && o 'relr) [(dsec ".relr.dyn" rz 19 8)] ())
+                         + (? flat [[".relro_padding" pz 1 8 3 0 0]] ())))
+       ; .relr.dyn's size moves the layout it encodes, and with no script so do the relro
+       ; padding and the headers, one for each load before the empty ones go: lay until they hold
+       (go n rz pz h)
+        (: env (lay rz pz h) isa (env 'isa)
            w (kl-relr (sort (map (p \ isa <p + <>p) (dy 'relr))))
-           (? (8 * #w = rz) [env w] (n > 8) (scare 'klink-relr n) (go (n + 1) (8 * #w))))
-       r (go 0 0)
+           rr (peep (env 'sv) "__ld_rr" 0)
+           pz2 (? flat (kl-al rr 4096 - rr) 0)
+           h2 (? flat (64 + 56 * (4 + #(kl-fgroups os))) 0)
+           (? (8 * #w = rz && pz2 = pz && h2 = h) [env w] (n > 8) (scare 'klink-relr n)
+              (go (n + 1) (8 * #w) pz2 h2)))
+       r (go 0 0 0 0)
        env <r
        _ (pin lk 'env env)
+       ; x86's code gaps are int3, as lld fills them
+       _ (? (em = 62) (each os (t \ (? (0 < (peep t 'flags 0 & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
+       _ (? (d = 0) 0 (pin d 'relrsz (8 * #(<>r))))
        _ (? (o 'a53) (pin lk 'a53 (kl-a53 lk)) 0)
        sd (? (d = 0) {} (kl-dsdata lk))
        _ (? (o 'shared) (: _ (pin sd ".rela.dyn" [(24 * nrela) (kl-rela lk dy)])
