@@ -101,7 +101,7 @@
 ; leg 6: src/tools/wm2uu.l translates core.l's ops to uu terms, certified in gens' order,
 ; which must answer the fuzz exactly as core.l does
 (reads (open "src/tools/wm2uu.l" "r"))
-(:    cforms (map (f \ unglue (opfix f)) (forms (open "src/apps/lux/core.l" "r")))   ; the surface factored to the core, as above
+(:    cforms (map (f \ unglue (opfix f)) (lux-peel (forms (open "src/apps/lux/core.l" "r"))))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (test (10 = #gens))
  _ (map (g \ (uu 'defn) <g (g 1) (g 2)) gens)   ; the function: these args are computed
