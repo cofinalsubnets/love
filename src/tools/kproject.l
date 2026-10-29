@@ -89,7 +89,7 @@
                    (go (e + 24))))) symo)
       eaddr (: r (glo entnm) (two? r ? <r (scare 'kproject-entry entnm)))
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
-      cx [glo b0 b0 b0 b0 () (mach = 243) () (backends tgt) (ld-extents objs)]
+      cx [glo b0 b0 b0 b0 () (mach = 243) () (backends tgt) (ld-extents objs) ()]
 
       ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base and k_pie_data
       ; take the image's far edge (physical), the pie's base and the data copy. ascending, for

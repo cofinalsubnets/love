@@ -50,6 +50,7 @@
        emach (peep elf-machines target 0)
        _ (0 < mach ? 0 (scare 'pe-target target))
        objs (map (p \ ld-read <p <>p emach) srcs)
+       _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        base (pe-ibase + 4096)
        lay (ldlay objs base 0 4096 0)     ; the lanes land page-apart: rodata at o0, data at d0
        end (lay 0) n0 (lay 1) o0 (lay 2) d0 (lay 3)
@@ -58,8 +59,8 @@
        glo (ldsyms objs)
        o1 <objs
        ent (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)
-       ;; ldpatch destructures ten wide; no -pie table (r0 = r1 = end), no riscv, no arm32.
-       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs)]
+       ;; ldpatch destructures eleven wide (no tls); no -pie table (r0 = r1 = end), no riscv, no arm32.
+       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs) ()]
        ;; the read-only half; the alignment gap before rodata is written as zeros.
        et (ldemitn cx 'text objs (ldemit cx 'text base objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (o0 - <et))])))

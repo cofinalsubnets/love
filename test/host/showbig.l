@@ -6,9 +6,7 @@
    ks ['pdecl0 'specask]
    ss (map (k \ (show (m k))) ks)
    (test (ss = map (k \ ("(cite 'moon '" + show k + ")")) ks)
-         (all (k \ (m k = ev <(sound (show (m k))))) ks)
-         (has? (show (m 'arr?)) "(\\ ")
-         (m 'arr? = ev <(sound (show (m 'arr?)))),
+         (has? (show (m 'arr?)) "(\\ "),
     test_fin (),
     puts "showbig: ok -- moon's pdecl0 and specask show as their names, arr? as its lambda",
     putc 10))

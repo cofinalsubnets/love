@@ -67,4 +67,9 @@
       (trap (_ \ kl-a53 (lk 4088 0)) () (a \ b \ a) = 'klink-843419)
       (kl-a53 (lk 4096 0) = [[0 1]]) (kl-a53 (lk 4096 1) = ())))
 
+; --- ldemit's context is 11 slots, and one short of it is refused, not laid as no bytes
+(test
+   (trap (_ \ ldemit ^10 'text 0 () ()) () (a \ b \ a) = 'link-cx)
+   (ldemit ^11 'text 7 () () = [7]))
+
 (test_fin (), say err "test/law/klink: ok", put err 10, 0)
