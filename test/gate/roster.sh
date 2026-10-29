@@ -16,6 +16,10 @@ grep -q '^helm  *carry $' "$w/units" || fail "helm is not listed carried"
 # a carried unit answers its name off /love
 (cd "$w" && "$love" helm --help) > "$w/h0" 2>&1
 grep -q '^usage: helm' "$w/h0" || fail "helm did not raise: $(head -5 "$w/h0")"
+# lux bakes its wire and carries the rest
+grep -q '^lux  *part ' "$w/units" || fail "lux is not listed part: $(grep '^lux ' "$w/units")"
+(cd "$w" && "$love" lux --help) > "$w/x0" 2>&1
+grep -q '^usage: love lux' "$w/x0" || fail "lux did not raise: $(head -5 "$w/x0")"
 
 # a kept unit's needs stay
 "$love" bake --without lore -o "$w/no" > "$w/refuse" 2>&1 && fail "a bake left out lore under harp"
@@ -23,10 +27,12 @@ grep -q 'harp needs lore' "$w/refuse" || fail "the refusal: $(cat "$w/refuse")"
 "$love" bake --without nosuch -o "$w/no" > "$w/refuse" 2>&1 && fail "a bake took an unknown unit"
 [ -e "$w/no" ] && fail "a refused bake wrote its binary"
 
-"$love" bake --with helm --without torrent,hexedit,bee -o "$w/l1" > "$w/b1" 2>&1 || fail "the bake: $(tail -5 "$w/b1")"
+"$love" bake --with helm,lux --without torrent,hexedit,bee -o "$w/l1" > "$w/b1" 2>&1 || fail "the bake: $(tail -5 "$w/b1")"
 "$w/l1" roster > "$w/u1" 2>&1 || fail "love roster on the configured binary"
 grep -q '^helm  *baked helm$' "$w/u1" || fail "helm is not baked in: $(cat "$w/u1")"
 [ "$("$w/l1" -e "#(cite 'helm)")" != 0 ] || fail "helm's module is not baked"
+grep -q '^lux  *baked lux$' "$w/u1" || fail "lux is not baked in: $(grep '^lux ' "$w/u1")"
+[ "$("$w/l1" -e "#(cite 'lux)")" != 0 ] || fail "lux's module is not baked"
 grep -q '^torrent  *left  torrent torrent-show$' "$w/u1" || fail "torrent is not left out: $(cat "$w/u1")"
 grep -q '^hexedit  *left ' "$w/u1" || fail "hexedit is not left out"
 "$w/l1" verbs | grep -qw torrent-show || fail "the left-out verbs are not listed"
@@ -41,7 +47,7 @@ grep -q '^usage: hexedit' "$w/r2" || fail "hexedit did not raise: $(head -5 "$w/
 
 # the roster rides the image, so a configured binary reseeds to its own bytes
 "$w/l1" seed -g "$w/s" > "$w/seed" 2>&1 || fail "the seed: $(tail -20 "$w/seed")"
-grep -q 'baking the roster: --with helm --without hexedit,torrent,bee' "$w/seed" || fail "the seed baked no roster: $(tail -5 "$w/seed")"
+grep -q 'baking the roster: --with helm,lux --without hexedit,torrent,bee' "$w/seed" || fail "the seed baked no roster: $(tail -5 "$w/seed")"
 grep -q '^;; fixpoint ok' "$w/seed" || fail "no fixpoint: $(tail -5 "$w/seed")"
 rm -rf "$w/s"
 

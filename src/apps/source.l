@@ -428,17 +428,6 @@ install this binary as ~/.love/bin/love, with lush beside it
                           "love nest: installed ~/.love/bin/love (\(love-build 0))\n"),
         0))
 
-   ; -- lux: the window manager, a verb over the source this binary carries. its modules
-   ;    read in the Makefile's order (luxfiles), so the wm and its love never skew; it
-   ;    restarts by exec'ing its own argv, which comes back here --
-   lux-modules ["core" "layout" "wire" "ewmh" "manage" "keys" "config" "lux"]
-   (lux-main as)
-    (: cat (foldl (a \ m \ a + kern-pick "src/apps/lux/\(m).l") "" lux-modules)
-       (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0))))
-   lux-usage "usage: love lux
-  the window manager, over the display DISPLAY names; settings ride ~/.love/etc/lux.l
-"
-
    ; a binding, not a body: the letrec stays body-less, so every name above is the
    ; module's -- (cite 'source 'src-arm) for serve and doom -- and the pins still run at load
    _ (pins (cite 'verbs 'tab)
@@ -446,7 +435,6 @@ install this binary as ~/.love/bin/love, with lush beside it
       'src    source-main
       'seed   seed-main
       'kernel kernel-main
-      'nest   nest-main
-      'lux    (udoor 'lux lux-main lux-usage 1 1)))
+      'nest   nest-main))
 
 ) ; module 'source

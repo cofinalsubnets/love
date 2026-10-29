@@ -401,7 +401,7 @@ distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l sr
             $(holo_obj) src/love/holo/copy.l $(holo_klink) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
 # carried, not baked: each a carry row in the cat, raised off /love at its unit's first call;
 # `love bake --with UNIT` bakes it (src/apps/roster.l). distlist.h lists them after a +
-carryfiles = $(helmfiles)
+carryfiles = $(helmfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
