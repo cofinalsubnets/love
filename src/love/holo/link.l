@@ -1034,24 +1034,59 @@
      __ie = .;
      }
      """)
-   ; -> the commands for one link: its words, then the template's output sections afresh,
+   ; -> the commands for one link: its words, then a template's output sections afresh,
    ; each lane's named lanes inside it after it, first-seen
    ld-dhome {".text" 'text ".rodata" 'rodata ".data" 'data ".bss" 'bss}
-   (ld-dscript objs base hdrsz pg wx? pie nrel tal)
-    (: (w nm v) ['set nm '= v]
-       (osec t) (: n {} _ (each (keys t) (k \ pin n k (t k)))
+   (ld-tscript objs words tmpl)
+    (: (osec t) (: n {} _ (each (keys t) (k \ pin n k (t k)))
                    h (peep ld-dhome (t 'name) 0)
                    _ (? (h != 0) (pin n 'body (t 'body + map (l \ ['in 0 "*" [['none (show l)]]]) (ld-nlanes objs h))) 0)
                    n)
        (item c) (<c = 'osec ? ['osec (osec <>c)] c)
-       ([(w "__ld_start" (base + hdrsz)) (w "__ld_cut" (wx? ? pg 1)) (w "__ld_tal" tal)
-         (w "__ld_ra" (pie ? 16 1)) (w "__ld_rsz" (8 * nrel)) (w "__ld_pg" pg) (w "__ld_base" base)]
-        + map (c \ (<c = 'sections ? ['sections (map item <>c)] c)) ld-dtmpl))
+       (map (p \ ['set <p '= <>p]) words
+        + map (c \ (<c = 'sections ? ['sections (map item <>c)] c)) tmpl))
+   (ld-dscript objs base hdrsz pg wx? pie nrel tal)
+    (ld-tscript objs [["__ld_start" (base + hdrsz)] ["__ld_cut" (wx? ? pg 1)] ["__ld_tal" tal]
+                      ["__ld_ra" (pie ? 16 1)] ["__ld_rsz" (8 * nrel)] ["__ld_pg" pg] ["__ld_base" base]]
+       ld-dtmpl)
    ; lay the set by a script: each placed section's address pinned in its object's 'base,
    ; each in the output section `want` names for it, or a scare -> the script's symbols
    ld-lanesec {'text ".text" 'rodata ".rodata" 'data ".data" 'nifs ".love.nifs" 'tdata ".tdata"
                'tbss ".tbss" 'bss ".bss" 'image ".love.image"}
    (ld-homesec se) (peep ld-lanesec (se 4) ())
+   (ld-kernsec se) (peep ld-lanesec (se 4) () || peep {'note ".note.pvh" 'boot ".boot"} (se 4) ())
+
+   ; the bare-metal kernel's default script: the PVH note in the header page, then boot, text,
+   ; rodata and data each on its own page, nifs, image and bss running on from data
+   ld-ktmpl (lds-read """
+     SECTIONS {
+     . = __ld_vbase;
+     .note.pvh . : { *(.note.pvh) }
+     . = ALIGN(4096);
+     __b0 = .;
+     .boot . : { *(.boot .boot.text) }
+     __b1 = .;
+     . = ALIGN(4096);
+     __t0 = .;
+     .text . : { *(.text .text.*) }
+     __t1 = .;
+     . = ALIGN(4096);
+     __o0 = .;
+     .rodata . : { *(.rodata .rodata.*) }
+     __o1 = .;
+     . = ALIGN(4096);
+     __d0 = .;
+     .data . : { *(.data .data.*) }
+     . = ALIGN(16);
+     __n0 = .;
+     .love.nifs . : { *(love_nifs) }
+     __n1 = .;
+     .love.image . : { *(.love.image) }
+     __i1 = .;
+     .bss . : { *(.bss .bss.*) }
+     __kend = .;
+     }
+     """)
    (ld-script objs cmds want)
     (: _ (kl-place objs cmds () 0)
        env (kl-lay {'objs objs 'glob {} 'und {}} cmds {'ms {} 'im {}} ())
@@ -1362,14 +1397,9 @@
        objs (map (p \ ld-read <p <>p mach) srcs)
        _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        (lsz lane) (foldl (\ a ob (a + ld-lanesz ob lane)) 0 objs)
-       ne (ldlay1 'note vbase objs)
-       b0 (ld-align 4096 ne)  b1 (ldlay1 'boot b0 objs)
-       t0 (ld-align 4096 b1)  t1 (ldlayn 'text (ldlay1 'text t0 objs) objs)
-       o0 (ld-align 4096 t1)  o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
-       d0 (ld-align 4096 o1)  d1 (ldlayn 'data (ldlay1 'data d0 objs) objs)
-       n0 (ld-align 16 d1)    n1 (ldlay1 'nifs n0 objs)
-       i1 (ldlay1 'image n1 objs)
-       kend (ldlayn 'bss (ldlay1 'bss i1 objs) objs)
+       sv (ld-script objs (ld-tscript objs [["__ld_vbase" vbase]] ld-ktmpl) ld-kernsec)
+       b0 (sv "__b0") b1 (sv "__b1") t0 (sv "__t0") t1 (sv "__t1") o0 (sv "__o0") o1 (sv "__o1")
+       d0 (sv "__d0") n0 (sv "__n0") n1 (sv "__n1") i1 (sv "__i1") kend (sv "__kend")
        ; p_offset is the address one page in (the first page holds headers and the note),
        ; congruent to p_vaddr mod page
        (fo a) (a - vbase + 4096)
