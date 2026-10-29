@@ -34,6 +34,8 @@
     (near 1.414213562373095 ((1 / 2) 2))
     ; (sqrt (* x x)) ~ x for x > 0
     (near 7.5 ((1 / 2) (7.5 * 7.5)))
+    ; ..exact at the top of the range too: the largest double's, a hair under 2^512
+    (1.3407807929942596e154 = sqrt 1.7976931348623157e308)
 
     ; --- exp / log inverse ---
     (near 1.0 (0 e))
