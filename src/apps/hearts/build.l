@@ -19,6 +19,9 @@
 ; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, love's
 ;                lex and yacc, whose C back ends write what flex and bison would
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
+; $HEARTS_CC, $HEARTS_LD, $HEARTS_AR  the kernel's compiler, linker and archiver (`make CC= LD= AR=`);
+;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
+;                named in .hearts/kcc.log), love's ld and love's ar
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 (: argv cmdline
    memo {}
@@ -107,6 +110,10 @@
                 + "case \" $* \" in\n  *\" -o certs/extract-cert \"*) exec cp -f " + q (hd + "/bin/xcert") + " certs/extract-cert;;\n"
                 + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
         uwrite (hd + "/bin/xcert") (bang + "exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/xcert.l") + " \"$@\"\n"),
+        uwrite (hd + "/bin/hk-cc")
+               (bang + "# the kernel's compiler: mooncc, and clang where it refuses (kcc.l)\n"
+                + "export HEARTS_KCC_LOG=" + q (hd + "/kcc.log") + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
+        hark ["chmod" "+x" (hd + "/bin/hk-cc")],
         hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
         ; perl: the scripts the build runs are ported (perlasm.l, oidreg.l, each pinned by hash); any
@@ -137,9 +144,11 @@
          ; the host programs' popen and system (conf's $(shell)) run moonlibc's $LOVE_SH, the shell the commands run
          cl1 (pins cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc")))
                        "LOVE_SH" (getenv "HEARTS_SH" @ h (string? h ? h (selfpath 0 + " lush -a")))
-                       "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc"))
+                       "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc")
+                       "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar"))
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
-                   [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]])
+                   [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]
+                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"]])
          goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
