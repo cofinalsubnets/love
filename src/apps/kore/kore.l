@@ -7,7 +7,7 @@
 (module (kore kore-main wget-main openssl-main wg-digits wg-lower wg-url wg-resolve wg-header wg-unchunk wg-once wg-fetch wg-name
         www-main ww-split ww-resolve ww-arg ww-get ww-lay ww-dump ww-new ww-show ww-step ww-body ww-fit
         ww-art ww-splice ww-marks ww-pictures ww-hop? wg-plain
-        pic-main gpic-main gp-run grap-main gr-run chem-main ch-run pic-cat pic-convert pic-pixelize pic-blocky pic-sample pic-sixel pic-kitty pic-kits pic-near pic-ans pic-type pic-ask pic-heard picless-main pic-kind pic-size pic-decode pic-frames pic-art pic-view pic-deep pic-cells pic-fit pic-probe pic-pick lens-pics
+        im-main im-cat im-convert im-pixelize im-blocky im-sample im-sixel im-kitty im-kits im-near im-ans im-type im-ask im-heard imless-main im-kind im-size im-decode im-frames im-art im-view im-deep im-cells im-fit im-probe im-pick lens-pics
         pv-new pv-step pv-frame pv-tick pv-keys pv-view pv-unkit
         telnet-main telnetd-main td-new td-chunk td-esc httpd-main tn-new tn-byte tn-send tn-echo? nslookup-main ping-main ping6-main ping-ms ping-t traceroute-main traceroute6-main tr-mark
         diff-main as-main ar-main ld-main nm-main ed-main ex-main
@@ -31,7 +31,7 @@
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main
         sha3sum-main crc32-main basenc-main uuencode-main uudecode-main ascii-main pinky-main
-        usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main hexedit-main
+        usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main
         which-main xxd-main tz-zone)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
 (borrow 'bytes)
@@ -767,16 +767,13 @@
             'awk awk-main 'find find-main
             'vi (cite 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
             'ed ed-main 'ex ex-main   ; the line editors (src/apps/kore/ed.l)
-            'hexedit hexedit-main
             'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'man man-main    ; the pages the build writes, read back (src/apps/kore/man.l)
             'html2text html2text-main   ; a page's prose (src/apps/kore/lens.l), the same lens
             'markdown markdown-main     ; ..and the lens run the way papel runs it
             'www www-main               ; a page to read, its links followed (src/apps/kore/www.l)
-            'pic pic-main 'pngcat pic-cat 'jpegcat pic-cat 'gifcat pic-cat   ; pictures (src/apps/kore/pic.l)
-            'picless picless-main 'pngless picless-main 'jpegless picless-main 'gifless picless-main
-            'grap grap-main   ; graphs as classic pic (src/apps/kore/grap.l)
-            'chem chem-main   ; chemical structures as classic pic (src/apps/kore/chem.l)
+            'im im-main 'pngcat im-cat 'jpegcat im-cat 'gifcat im-cat   ; pictures (src/apps/kore/im.l)
+            'imless imless-main 'pngless imless-main 'jpegless imless-main 'gifless imless-main
             'telnet telnet-main 'httpd httpd-main   ; a remote terminal, and kiosko (src/apps/kore/net.l)
             'telnetd telnetd-main                     ; ... and the terminal's server
             'nslookup nslookup-main 'ping ping-main ; a name's records, and icmp echoes (the same)
@@ -901,7 +898,6 @@
     'dircolors "usage: dircolors [-b|-c|-p|--print-ls-colors] [FILE]"
     'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
     'readelf "usage: readelf -h|-l|-S|-s|-e [-W] FILE.."
-    'hexedit "usage: hexedit [-r] FILE"
     'ls "usage: ls [-aACcdFghiLlnoprRsStux1] [--color[=WHEN]] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"
@@ -971,7 +967,7 @@
     'ranlib "usage: ranlib ARCHIVE.."
     'groups "usage: groups"
     'ps "usage: ps [-Aef] [-o KEY[=HDR],..] [-p PID,..] [-u USER,..] | ps [a][u][x]"
-    'top "usage: top [-b] [-n FRAMES] [-d SECS] [-p PID]..
+    'top "usage: top [-b] [-P] [-C] [-n FRAMES] [-d SECS] [-p PID]..
   -b  batch: no terminal wanted, every process, a frame per iteration
   -n  stop after N frames (-b alone is one frame)
   -d  seconds between frames (3 by default)
@@ -994,12 +990,10 @@
     'mac2unix "usage: mac2unix [-fkqn] [FILE..]"
     'man "usage: man [-w] [SECTION] NAME.."
     'html2text "usage: html2text [-w COLS] [FILE..]"
-    'markdown "usage: markdown [-t html|roff|text|dvi] [-w COLS] [FILE..]"
+    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
-    'pic "usage: pic [cat|less|convert|pixelize] [-g MODE] [-w COLS] [-h ROWS] FILE.. | pic [-nCSU] [-t [-cz]] [FILE..]"
-    'picless "usage: picless FILE.."
-    'grap "usage: grap [FILE..]"
-    'chem "usage: chem [FILE..]"
+    'im "usage: im [cat|less|convert|pixelize] [-g MODE] [-w COLS] [-h ROWS] FILE.."
+    'imless "usage: imless FILE.."
     'telnet "usage: telnet HOST [PORT]"
     'telnetd "usage: telnetd [-FK] [-p PORT] [-b ADDR[:PORT]] [-l LOGIN] [-f ISSUE]"
     'httpd "usage: httpd [-fv] [-p PORT] [-h DIR]"

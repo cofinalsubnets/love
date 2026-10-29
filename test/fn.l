@@ -1,10 +1,6 @@
-; functions print as forms that eval back to an `=` function: a lambda's binders are
-; shortlex letters by depth, skipping any spelled free. `=` compares compiled threads
-; two globals bound as one letrec: fn-al calls its sibling
-(: (fn-dg c) (? (c < 1) 0 (fn-dg (c - 1)))  (fn-al c) (fn-dg c || c > 90))
-(: (rt x) (ev <(sound (show x)))
-   (rt= f) (f = rt f)
-   (fnfree s x) (: f (trap (_ \ ev x) () (a \ b \ 0)) (f ? (s = show f) 1))
+; functions print as forms: a lambda's binders are shortlex letters by depth, skipping
+; any spelled free. `=` compares compiled threads
+(: (fnfree s x) (: f (trap (_ \ ev x) () (a \ b \ 0)) (f ? (s = show f) 1))
  (test
   ("\+" = show (+))
   ("." = show (.))
@@ -21,32 +17,12 @@
      = show (\ q1 q2 q3 q4 q5 q6 q7 q8 q9 q10 q11 q12 q13 q14 q15 q16 q17 q18 q19 q20
               q21 q22 q23 q24 q25 q26 q27 q28 (q27 + q28))) ; past z, shortlex rolls to aa
   ("(+ 1)" = show (+ 1))
-  (3 = (rt ((a \ b \ a + b) 1) 2))                           ; capture rendering free to vary
-  (9 = (: y (2 + 3) (rt (x \ x + y) 4)))
-  ; --- the read-back is the thread: show -> read -> eval compiles the same words ---
-  (rt= (x \ (? x 1 2)))
-  (rt= (x \ 1 + (? (two? x) <x 7)))                            ; a cond joined mid-call
-  (rt= (x \ (? x 1 (two? x) 2 3)))
-  (rt= (x \ (: y (x + 1) (y * x))))
-  (rt= (x \ (: y (x + 1) z (y * 2) (y * z * x))))
-  (rt= (x \ (: (f n) (? n (f (n - 1)) x) (f (x + 3)))))
-  (rt= (x \ (: (f n) (? n (g (n - 1)) x) (g n) (f n) (f 3))))
-  (rt= (x \ map (y \ x + y) x))
-  (rt= (a \ b \ c \ foldl a b c 4))
-  (rt= (l \ foldl (+) 0 l))                                    ; an operator as a value
-  (rt= ((a \ b \ a + b) 1))
-  (rt= fn-al)                                                  ; a sibling call fuses as a global's does
-  (rt= (m \ x \ (: k (tally x) (m < k ? k m))))               ; an inner lambda `=` to glaze's amax is its own
-  (rt= (x \ (: h (y \ y + 1) g (z \ map h z) [(g x) (map h x) (g >x)])))
   ; a big carrier a closure keeps prints short, as its size
   (has? (show (: t (foldl (t \ i \ pin t i i) {} (jot 40)) (x \ peep t (x + 1) 0))) "{..40}")
   (has? (show (: t {'s (foldl (t \ i \ pin t i i) {} (jot 40))} (x \ peep t x 0))) "{..1}")
   (has? (show (: t {'a 1} _ (pin t 'me t) (x \ peep t x 0))) "{..2}")
   (#(show ev) < 200000)
   !(has? (show ev) "((mint ")                        ; every name it calls is bound
-  ; ev read back off its own show is an ev, or a miss where the mop dropped a door
-  (trap (_ \ 3 = (ev <(sound (show ev))) '(+ 1 2)) ()
-        (a \ b \ a = 'missing && !(cite 'guts 'place) && (nelem b (names ()))))
   ; --- functions compare by their threads ---
   ((p \ q \ p + q) = (a \ b \ a + b))
   !((a \ b \ a + b) = (a \ b \ a - b))

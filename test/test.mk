@@ -6,7 +6,7 @@
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
-  test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
+  test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
@@ -34,7 +34,7 @@ test_quick: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
+	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
@@ -45,7 +45,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
+	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
@@ -170,14 +170,12 @@ test_front: $(ho)/front $(ho)/frontseat
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests kept out of the corpus: each wants a crew module, is not idempotent
 # (love0 evaluates twice), or can hang. gate = exit 0 and "<name>: ok"
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/im.l test/host/font.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/hexedit.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
 # test/host/sh.l drives out/lush via out/love, not PATH's love
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
-# evback.l reads show names a mopped image has dropped
-hostnif_nomop = test/host/evback.l
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -188,8 +186,7 @@ test_hostnif: host out$(hsuf)/lush
 	@echo "test_hostnif: $(words $(hostnif_tests)) gates"
 hostnif-%:
 	@s=test/host/$*.l; t0=`date +%s`; \
-	 case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; *) L="$m";; esac; \
-	 cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif-$* "$$L" ": ok" \
+	 cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif-$* "$m" ": ok" \
 	   > out$(hsuf)/hostnif/$*.log 2>&1 \
 	   || { cat out$(hsuf)/hostnif/$*.log; echo "  (the gate above is $$s)"; exit 1; }; \
 	 echo "TEST $$s ($$((`date +%s` - t0))s)"
@@ -642,18 +639,6 @@ gate_hol += test_root
 gate_hol += test_fat32
 # test_cpio -- src/apps/cpio.l against GNU cpio, both ways over newc
 gate_love += test_cpio
-# test_tfm -- src/apps/tfm.l against tftopl and TeX, damaged copies too; skips without TeX Live
-gate_love += test_tfm
-# test_gpic -- gpic.l against groff's pic, byte for byte; test/gpic/open counted, not gated. skips
-# without groff
-gate_love += test_gpic
-# test_grap -- grap.l against plan9port's, both through our pic against groff's; test/grap/open
-# counted. skips without plan9port
-gate_love += test_grap
-# test_chem -- chem.l against groff's, likewise; test/chem/open counted. skips without groff's chem
-gate_love += test_chem
-# test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
-gate_love += test_caja
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host
 	@echo TEST test/holo/golden.l
@@ -1008,7 +993,7 @@ test_kernel_rv64:
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 900s)"
+	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 endif
 

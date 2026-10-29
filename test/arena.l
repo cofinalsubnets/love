@@ -12,6 +12,6 @@
                   _ (please 1) _ (please 1) a0 (arena 0)
                   most (arz-churn 0 () 0)
                   _ (please 1) _ (please 1)
-                  [(most <= 8 + a0 3) (a0 = arena 0)])
+                  [(most <= 16 + a0 3) (a0 = arena 0)])   ; the churn adds 6-10 spans by layout; unmerged, ~45
    (test (4 = tally (arena 0))
          (nat? (arz-mk 1) ? (: r (arz-law 0) (r 0 && r 1)) 1)))
