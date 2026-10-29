@@ -1,5 +1,5 @@
 ; src/love/holo/lds.l -- a GNU ld script read into love data, for holo's link to lay. part of module holo,
-; baked after link.l; it only parses, the layout reads what it answers.
+; baked ahead of link.l; it only parses, the layout reads what it answers.
 ;
 ;   (lds-read text) -> the commands, in order:
 ;     ('entry "sym")  ('set "sym" op e)  ('provide "sym" e hidden?)  ('assert e "msg")

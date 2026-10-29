@@ -1058,8 +1058,11 @@ extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
 /* threads: the clone leaf starts the child calling sp[0](sp[1]); __love_tp reads the
  * thread pointer clone set */
-struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128]; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
+struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128];
+                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; void *mtp; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
 extern struct __love_mt __love_mt;
+/* x64's pt_tls template (tlsimg 0 without one): a thread's copy ends at its thread pointer */
+void __love_tlscopy(void *tp);
 long __love_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
 void *__love_tp(void);
 extern unsigned char __ibuf[4096];

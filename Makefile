@@ -336,9 +336,9 @@ kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
 holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/love/holo/rv64.l \
   src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
-holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/macho.l
-# the kernel's link under its script: kore's alone, mooncc never reads it
-holo_klink = src/love/holo/lds.l src/love/holo/klink.l
+holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/lds.l src/love/holo/link.l src/love/holo/macho.l
+# the kernel's link: kore's alone, mooncc never reads it
+holo_klink = src/love/holo/klink.l
 # the compiler over them
 moon_mid = src/apps/moon/floor.l src/apps/moon/ctab.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/cgram.l \
   src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
