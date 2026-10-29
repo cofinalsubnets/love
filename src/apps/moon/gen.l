@@ -9486,8 +9486,9 @@
    (noinlj? x) (? (elem x '(sdecl vastart varr "__builtin_alloca")) 1 (atom? x) ()
                   (x @ ('call _ as && 6 < tally as) 1 ()) 1
                   (noinlj? <x || noinlj? >x))
-   (oneret? (i . u))                                  ; decls* + one trailing `return expr`
-    (i @ ('decl . _) (oneret? u)
+   ; decls and expression statements, then one trailing `return expr`: no arm to copy
+   (straight? (i . u))
+    (i @ (('decl || 'expr) . _) (straight? u)
          (('ret . rv . _) && two? rv) !(two? u))
    ; a body's weight by its structure: a name, a number or an operator one unit each, and a
    ; __builtin_expect (with the !! it wraps) its operand -- a hint lays no code
@@ -9513,8 +9514,8 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the body's weight: 99 single-return, 43 branchy
-          (!aln && (oneret? items ? 99 43) < aweigh <>>>f) ()
+          ; the size gate on the body's weight: 99 straight, 43 branchy
+          (!aln && (straight? items ? 99 43) < aweigh <>>>f) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, evaluated by its statement before anything it
@@ -10488,10 +10489,20 @@
 
    ; -- a small counted loop unrolled: for (T k = A; k < B; k++) of at most 16 trips, its copies small
    ; in all, a body that neither writes k, takes its address, nor leaves early. each copy reads k as
-   ; its literal and spells its own locals apart --
+   ; its literal and spells its own locals apart. a body indexing a small local array by k may run
+   ; larger: its copies are what lets sra seat the array --
    (unrl g f)
     (: w64 !(ilp32? g)
        (size x) (atom? x ? 1 (foldl (a \ y \ a + size y) 0 x))
+       sm {}                                        ; the small local arrays sra may take
+       (cen x) (? (atom? x) 0
+                  (<x = 'decl) (map (p \ <>p @ ('arr _ n) (charm? n && n <= 16 ? (pin sm <p 1) 0) 0) <>x)
+                  (map cen x))
+       _ (cen f)
+       (ment? x k) (? (atom? x) () (x @ ('var n) (n = k) (ment? <x k || ment? >x k)))
+       (akx? x k) (? (atom? x) ()
+                     (x @ ('deref ('bin '+ ('var nm) e)) (sm nm && ment? e k) ()) 1
+                     (akx? <x k || akx? >x k))
        (kv e) (cfold w64 e @ v (cint? v ? v ()))
        (nogo? x k)                                  ; something a copy may not repeat, or k may not suffer
         (? (atom? x) ()
@@ -10536,11 +10547,45 @@
                  (: t (trip ini cnd stp)
                     n (two? t ? (t 3 - t 2) -1)
                     b2 (walk body)
-                    (? (n < 0 || 16 < n || 512 < n * size b2 || nogo? b2 <t) ['for ini cnd stp b2]
+                    (? (n < 0 || 16 < n || (akx? b2 <t ? 2048 512) < n * size b2 || nogo? b2 <t) ['for ini cnd stp b2]
                        (: ds (dnames b2)
                           ['blk (map (i \ copy b2 <t <>t (t 2 + i) ds) ^n)])))
                 (map walk x)))
        (abl? g 'unroll ? f (walk f)))
+   ; -- a small local array named only by constant-indexed elements becomes those elements as
+   ; scalars, which the allocator may seat. no initializer, no decay, no &, no sizeof: any other
+   ; mention leaves the array whole --
+   (sra g f)
+    (: w64 !(ilp32? g)
+       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+       (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
+       cand {}                                      ; name -> (elty n)
+       dcl {}
+       (fit? x p) (<x = 'decl && #p = 3 && !(two? (p 2)) &&
+                   (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16) ()))
+       (one x p) (pin dcl <p (1 + peep dcl <p 0), fit? x p ? (pin cand <p >(<>p)) 0)
+       (cen x) (? (atom? x) 0
+                  (elem <x '(decl sdecl)) (map (one x) <>x)
+                  (map cen x))
+       _ (cen f)
+       bad {}
+       (elt x) (x @ ('deref ('bin '+ ('var nm) ix)) (cand nm @ c (two? c ? (kv ix @ k (charm? k && 0 <= k < c 1 ? [nm k]))))
+                    ())
+       (scan x) (? (atom? x) 0
+                   (two? (elt x)) 0
+                   (<x = 'var) (two? (cand <>x) ? (pin bad <>x 1) 0)
+                   (map scan x))
+       _ (two? (keys cand) ? (scan f))
+       ok (filter (nm \ !(bad nm) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
+       (sn nm k) "\(nm)`s\(k)"
+       (rd ps) (? !(two? ps) ()
+                  (elem <<ps ok) (cand <<ps @ [et n] (map (k \ [(sn <<ps k) et ()]) ^n) + rd >ps)
+                  (rw <ps . rd >ps))
+       (rw x) (? (atom? x) x
+                 (elt x @ e (? (two? e && elem <e ok) ['var (sn <e <>e)]
+                               (<x = 'decl) ['decl (rd <>x)]
+                               (map rw x))))
+       (abl? g 'sra || !(two? ok) ? f (rw f)))
    ; an overflow builtin over two constant operands into a local only it &-takes and nothing else
    ; writes, answered here: the local's decl takes the exact value at its width, the call whether it
    ; fit, so kprop carries the local on -> f | ()
@@ -10601,7 +10646,7 @@
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
     (: f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
                       u0 (unrl g k0)
-                      k1 (u0 = k0 ? k0 (kprop g u0))
+                      k1 (sra g (u0 = k0 ? k0 (kprop g u0)))
                       (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1)))
                 @ f1 (kprop g (ucut (dprune !(ilp32? g) (e \ ()) (lprop g f1)))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
