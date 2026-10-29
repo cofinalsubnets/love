@@ -399,18 +399,26 @@ $(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(lov
 
 distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
             $(holo_obj) src/love/holo/copy.l $(holo_klink) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
+# carried, not baked: each a carry row in the cat, raised off /love at its unit's first call;
+# `love bake --with UNIT` bakes it (src/apps/roster.l). distlist.h lists them after a +
+carryfiles = $(helmfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
 	 $(note)
-$(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
+$(ho)/.carry.list: force_dist_list
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; echo '$(carryfiles)' > $$tf; \
+	 $(note)
+$(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p $(dir $@)
 	@for f in $(distfiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
+	@for f in $(carryfiles); do printf '\n(cite (quote verbs) (quote carry) "%s")\n' $$f; done >> $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
 out/lib/distlist.h: Makefile
 	@mkdir -p out/lib
-	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles) + $(carryfiles)' > $$tf; \
 	 $(note)
 .PHONY: dist dist-seed
 
