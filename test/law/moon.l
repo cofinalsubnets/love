@@ -2514,7 +2514,7 @@
       (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
       (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
 
-; --- a small counted loop unrolls, a constant-indexed double element is its frame slot, and
+; --- a small counted loop unrolls, its constant-indexed double elements become scalars, and
 ; an integer literal meeting a double is a double constant: no address, no loop test, no convert
 (: hC (fnf 'h <>(cgn "double h(double *v, int n) { double a[3]; for (int k = 0; k < 3; k++) a[k] = v[k]; double s = 0; for (int i = 0; i < n; i++) { s += a[0] * a[1] - a[2]; for (int k = 0; k < 3; k++) a[k] += 1; } return s >= -1 ? s : 0; } int main() { return 0; }"))
    (hn op) (#(filter (f \ two? f && <f = op) hC))
@@ -2522,7 +2522,7 @@
       (0 = (hn 'lea))                            ; every a[k] a static slot
       (0 = (hn 'cvtsi2sd))                       ; += 1 and >= -1 convert at compile time
       (2 = (hn 'br))                             ; the i loop's test and the ?: -- no k loop left
-      (elem '(stsd sp 16 f0) hC)))
+      (0 = (hn 'stsd))))                         ; ..and no element a frame slot
 
 ; --- a double home across a call: x64's xmm file is caller-saved, so the home is wrapped at
 ; that call alone (stsd before, ldsd after); a64 seats it in v8..v15, saved once at entry.
