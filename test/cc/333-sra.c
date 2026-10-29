@@ -1,5 +1,6 @@
 /* small local arrays named only by constant elements become scalars once their loops unroll;
- * one decayed, indexed at a run-time k, or past its end stays whole. a straight helper inlines */
+ * one decayed, indexed at a run-time k, past its end, or an element's address taken stays
+ * whole. a straight helper inlines */
 static int mix(int h, int v) {
 	int k = h * 31 + v;
 	k = k < 0 ? -k : k;
@@ -32,6 +33,12 @@ static int narrow(int x) {
 	for (int k = 0; k < 5; k++) h = mix(h, w[k]);
 	return h; }
 
+static int apart(int n) {
+	long a[8];
+	for (int k = 0; k < 8; k++) a[k] = k * n;
+	long *p = &a[6], *q = &a[2];             /* two elements' addresses: one array still */
+	return (int) ((p - q) * 10 + (q < p) + *p - *q); }
+
 int main(void) {
 	double v0[13], vx[13];
 	for (int k = 0; k < 13; k++) v0[k] = k * 0.25 - 1, vx[k] = 0.125 * (k & 3);
@@ -39,4 +46,5 @@ int main(void) {
 	h = mix(h, whole(5));
 	h = mix(h, whole(-3));
 	h = mix(h, narrow(0x5a3c9e17));
+	h = mix(h, apart(3));
 	return h & 255; }
