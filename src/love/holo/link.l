@@ -601,7 +601,8 @@
 
    ; emit one lane in layout order, zero-padding up to each base -> (end . pieces)
    (ldemit cx lane cur os acc)
-    (atom? os ? (cur . acc)
+    (? (#cx != 11) (scare 'link-cx #cx)          ; a short cx misses ldpatch's pattern: () in silence
+       (atom? os) (cur . acc)
        (: ob <os
           (go c ac is)
            (atom? is ? (c . ac)

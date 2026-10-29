@@ -127,4 +127,9 @@
         """
         = "13a750f7dcef72e18558d84a2dc81f284649f6165d79287fc9e60a229ef3e5a8")))
 
+; --- ldemit's context is 11 slots, and one short of it is refused, not laid as no bytes
+(test
+   (trap (_ \ ldemit ^10 'text 0 () ()) () (a \ b \ a) = 'link-cx)
+   (ldemit ^11 'text 7 () () = [7]))
+
 (test_fin (), say err "test/law/klink: ok", put err 10, 0)
