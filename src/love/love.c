@@ -44,6 +44,8 @@ enum status fin(struct g *g) {
    code_fin(g);                                 // ..then the native arena they hand blobs back to
    if (g->rem) alloc(g->rem, 0);
    if (g->major_base) image_drop(g->major_base), alloc(g->major_base, 0);
+   if (g->sv_base) alloc(g->sv_base, 0);
+   if (g->sv2_base) alloc(g->sv2_base, 0);
    alloc(g, 0); }                       // ..the pool is g, so it goes last
  return s; }
 
@@ -140,7 +142,8 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  for (int i = 0; i < hook_n; i++) g->hook[i] = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  g->major_len = love_major0;
- g->rem = alloc(NULL, LvRemCap * sizeof(word));
+ g->rem = alloc(NULL, LvRemCap * sizeof(word) + LvRemIx * sizeof(uint16_t));
+ if (g->rem) memset(g->rem + LvRemCap, 0xff, LvRemIx * sizeof(uint16_t));
  g->major_base = g->rem ? alloc(NULL, g->major_len * sizeof(word)) : NULL;
  if (!g->major_base) { if (g->rem) alloc(g->rem, 0); return encode(g, status_scare); }
  g->major_hp = g->major_base, g->budget = love_budget;
