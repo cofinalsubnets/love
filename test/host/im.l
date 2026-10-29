@@ -1,0 +1,278 @@
+; test/host/im.l -- kore's pictures (src/apps/kore/im.l) and the gif decoder: kinds (netpbm, webp and qoi
+; written too), sixel and kitty off a quay screen, im's verbs, imless's keys, and gifs against magick where present
+;   cat test/00-init.l test/host/00-host.l test/host/im.l | out/love
+(borrow 'posix)
+(borrow 'jpeg)
+(: K (cite 'kore)
+   kind (K 'im-kind) size (K 'im-size) dec (K 'im-decode) frames (K 'im-frames)
+   art (K 'im-art) view (K 'im-view)
+   pnew (K 'pv-new) pstep (K 'pv-step) pframe (K 'pv-frame) ptick (K 'pv-tick) pkeys (K 'pv-keys)
+   dir (cwd 0 + "/out/.im")
+   love (cwd 0 + "/out/love")
+   _ (hark ["rm" "-rf" dir], mkdir dir 448)
+   (put p s) (open p "w" @ q (say q s, close q))
+   (bytes l) (foldl (a \ b \ (a + string b)) "" l)
+   red [255 0 0 255] blue [0 0 255 255]
+
+   ; two frames by hand: 2x1, red blue then blue red, 100 and 200 ms
+   ; clear 4, the two indices, end 5, three bits a code, lsb first
+   anim ("GIF89a" + bytes ([2 0 1 0 128 0 0 255 0 0 0 0 255]
+                + [33 249 4 0 10 0 0 0] + [44 0 0 0 0 2 0 1 0 0 2 2 68 10 0]
+                + [33 249 4 0 20 0 0 0] + [44 0 0 0 0 2 0 1 0 0 2 2 12 10 0] + [59]))
+   fr (frames anim)
+   _ (test (kind anim = 'gif) (size anim = [2 1]) (two? fr) (#(fr 2) = 2)
+           (fr 2 0 1 = 100) (fr 2 1 1 = 200)
+           (fr 2 0 0 = bytes (red + blue)) (fr 2 1 0 = bytes (blue + red))
+           (dec anim = [2 1 (bytes (red + blue))]))
+   ; a stream cut inside the second image draws what came, over the first
+   cut (frames (snip anim 0 (#anim - 3)))
+   _ (test (#(cut 2) = 2) (cut 2 1 0 = bytes (blue + blue))
+           (#(frames (snip anim 0 40) 2) = 1)
+           (frames "GIF8" = "not a picture") (dec "hello" = "not a picture"))
+
+   ; each kind, and its drawing
+   (image w h f)
+    (cask (4 * w * h) @ c
+     (map (i \ (: p (f (i % w) (i // w)) o (4 * i)
+                  (pins c o (p 0) (o + 1) (p 1) (o + 2) (p 2) (o + 3) (p 3))))
+          (jot (w * h)),
+      string c))
+   px (image 16 12 (x \ y \ (x < 8 ? [0 0 200 255] [200 100 0 255])))
+   jp (jpeg-encode 16 12 px 95)
+   gf (cite 'gif 'gif-encode 16 12 px)
+   _ (test (kind jp = 'jpeg) (size jp = [16 12]) (kind gf = 'gif) (size gf = [16 12])
+           (kind "\x89PNG\r\n\x1a\nxxxxxxxxxxxxxxxx" = 'png) (kind "hi" = ()))
+   im (dec gf)
+   _ (test (two? im) (im 2 = px))
+   ; 8 cells wide halves it: 8 columns of cells, 3 rows (6 pixels); 40 wide never enlarges
+   a8 (art im 8 () 1) a40 (art im 40 () 1)
+   _ (test (#a8 = 3) (#a40 = 6)
+           (has? (a8 0) "\e[38;2;0;0;200m\e[48;2;0;0;200m▀") (has? (a8 0) "38;2;200;100;0")
+           ; a row ends back at the plain colours
+           (has? (a8 2) "▀\e[0m"))
+   ; the 256-colour cube when not deep
+   _ (test (has? (art im 8 () 0 0) "\e[38;5;"))
+   ; a see-through picture draws blank cells
+   clear (art [2 2 (bytes [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0])] 4 () 1)
+   _ (test (clear = ["\e[0m \e[0m \e[0m"]))
+   ; rows caps the height: 16x12 in 2 rows is 16 by 4 pixels at most, scale 3
+   _ (test (#(art im 80 2 1) = 2))
+
+   ; sixel and kitty's, through quay
+   ; a picture's pixels as a quay screen of 8x16 cells holds them, clear 0
+   (shot im t) (: s (h-mkscr 4 10) _ (scribe s t) w (im 0)
+                  (map (i \ (: x (i % w) y (i // w) (tilepx s (y // 16 * 10 + x // 8) (x % 8) (y % 16))))
+                       (jot (w * im 1))))
+   (argb im) (map (i \ (: o (4 * i) p (im 2)
+                          (p (o + 3) < 128 ? 0 (255 << 24 | p o << 16 | p (o + 1) << 8 | p (o + 2)))))
+                  (jot (im 0 * im 1)))
+   six (K 'im-sixel) kit (K 'im-kitty)
+   ; sixel's colours are whole percents, so a channel may move by 2; clear stays clear
+   (near a b)
+    (: (ch v k) (v >> k & 255)
+       (px1 u v) (u = 0 || v = 0 ? (u = v)
+                  (foldl (ok \ k \ (ok && abs (ch u k - ch v k) <= 2)) 1 [0 8 16 24]))
+       (#a = #b && foldl (ok \ i \ (ok && px1 (a i) (b i))) 1 (jot #a)))
+   ; clear columns and a clear row, 104 colours: within sixel's palette whole
+   cut (cask (4 * 30 * 20) @ c
+        (map (i \ (: x (i % 30) y (i // 30) o (4 * i)
+                     (x < 4 || y = 7 ? 0 (pins c o (x * 8) (o + 1) (y % 4 * 60) (o + 2) 90 (o + 3) 255))))
+             (jot 600),
+         [30 20 (string c)]))
+   _ (test (shot im (kit im) = argb im) (shot cut (kit cut) = argb cut)
+           (near (shot im (six im)) (argb im)) (near (shot cut (six cut)) (argb cut))
+           !(shot im (six im) = argb im)
+           (snip (six im) 0 3 = "\ePq" || snip (six im) 0 8 = "\eP0;1;0q")
+           ; a big picture goes in chunks of 4096, the last m=0
+           (kit [64 64 (string (cask (4 * 64 * 64)))] @ k
+              (has? k "m=1;" && has? k "\e_Gm=0;" && !(has? k "\e_Gm=1;\e"))))
+   ; the probe: quay says it takes both, and its cell
+   heard (K 'im-heard (string (reply (scribe (h-mkscr 4 10) (K 'im-ask)))))
+   _ (heard @ h (test (h 'kitty) (h 'sixel) (h 'cw = 8) (h 'ch = 16)))
+   _ (K 'im-heard "" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 0)))
+   _ (K 'im-heard "\e[6;20;10t\e[?62;22c" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 10) (h 'ch = 20)))
+
+   ; im as a command
+   _ (put (dir + "/a.gif") gf, put (dir + "/b.jpg") jp, put (dir + "/n.txt") "hello")
+   _ (put (dir + "/anim.gif") anim)
+   r1 (hark [love "im" "-w" "8" (dir + "/a.gif")])
+   r2 (hark [love "jpegcat" "-w" "8" (dir + "/a.gif") (dir + "/b.jpg")])
+   r3 (hark [love "im" "cat" (dir + "/n.txt") (dir + "/none.png")])
+   _ (test (<r1 = 0) (has? >r1 "▀") !(has? >r1 "a.gif")
+           (<r2 = 0) (has? >r2 "a.gif:\n") (has? >r2 "b.jpg:\n")
+           (<r3 = 1))
+   (imr as) (hark ([love "im"] + as))
+   ; a bare im is cat: a picture is drawn, anything else refused
+   _ (test (imr [(dir + "/a.gif")] @ r (<r = 0 && has? >r "▀"))
+           (imr [(dir + "/n.txt")] @ r (<r = 1))
+           (imr ["-w" "8" (dir + "/n.txt")] @ r (<r = 1))
+           (imr [(dir + "/n.txt") (dir + "/none.png")] @ r (<r = 1)))
+   (file p) (uread p @ r (two? r ? <>r ""))
+   ; cat is the default, and off a terminal a mode is said, not probed
+   _ (test (imr ["cat" "-w" "8" (dir + "/a.gif")] = r1)
+           (imr ["-g" "sixel" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 2 = "\eP"))
+           (imr ["cat" "-g" "kitty" (dir + "/a.gif")] @ r (<r = 0 && snip >r 0 3 = "\e_G"))
+           (<(imr ["-g" "neon" (dir + "/a.gif")]) = 2)
+           (imr ["help"] @ r (<r = 0 && has? >r "im convert")))
+   ; convert: by extension or -t, a file already its type copied as it is
+   _ (test (<(imr ["convert" (dir + "/a.gif") (dir + "/c.png")]) = 0)
+           (dec (file (dir + "/c.png")) = im)
+           (<(imr ["convert" (dir + "/c.png") (dir + "/c.gif")]) = 0)
+           (dec (file (dir + "/c.gif")) = im)
+           (<(imr ["convert" (dir + "/anim.gif") (dir + "/d.gif")]) = 0)
+           (file (dir + "/d.gif") = anim)
+           (<(imr ["convert" "-t" "jpg" (dir + "/c.png") (dir + "/c.out")]) = 0)
+           (kind (file (dir + "/c.out")) = 'jpeg)
+           (imr ["convert" "-t" "sixel" (dir + "/c.png") "-"] @ r (<r = 0 && near (shot im >r) (argb im)))
+           (<(imr ["convert" (dir + "/c.png") (dir + "/c.bmp")]) = 2)
+           (<(imr ["convert" (dir + "/n.txt") (dir + "/n.png")]) = 1)
+           (<(imr ["convert" (dir + "/c.png")]) = 2))
+   ; netpbm's written and read back, a pam with its alpha; bmp, ico and netpbm sniffed and drawn
+   _ (test (<(imr ["convert" (dir + "/c.png") (dir + "/c.pam")]) = 0)
+           (kind (file (dir + "/c.pam")) = 'pnm) (dec (file (dir + "/c.pam")) = im)
+           (<(imr ["convert" "-t" "ppm" (dir + "/c.png") (dir + "/c.out")]) = 0)
+           (snip (file (dir + "/c.out")) 0 2 = "P6") (size (file (dir + "/c.out")) = [(im 0) (im 1)])
+           (<(imr ["cat" "-w" "8" (dir + "/c.out")]) = 0)
+           (kind ("BM" + bytes [0 0 0 0 0 0]) = 'bmp) (kind (bytes [0 0 1 0 1 0 8 8]) = 'ico)
+           (kind "P6\n1 1\n255\n" = 'pnm) (kind "P9\n1 1\n255\n" = ())
+           (dec ("P6 2 1 255\n" + bytes [255 0 0 0 0 255]) = [2 1 (bytes (red + blue))]))
+   ; webp, lossless, and qoi written and read back exactly
+   _ (test (<(imr ["convert" (dir + "/c.png") (dir + "/c.webp")]) = 0)
+           (kind (file (dir + "/c.webp")) = 'webp) (dec (file (dir + "/c.webp")) = im)
+           (<(imr ["convert" "-t" "qoi" (dir + "/c.png") (dir + "/c.q")]) = 0)
+           (kind (file (dir + "/c.q")) = 'qoi) (size (file (dir + "/c.q")) = [(im 0) (im 1)])
+           (dec (file (dir + "/c.q")) = im) (kind "qoifxxxx" = 'qoi))
+   ; pixelize: 16x12 at 8 cells is 8x6 pixels, each s pixels square; the cube's levels
+   ; with -c 256, and an odd last row's lower half clear
+   pz (dir + "/z.png")
+   _ (test (<(imr ["pixelize" "-w" "8" "-s" "3" (dir + "/a.gif") pz]) = 0)
+           (dec (file pz) @ z (z 0 = 24 && z 1 = 18 && snip (z 2) 0 4 = "\0\0\xc8\xff"
+                                 && snip (z 2) (4 * 23) (4 * 24) = "\xc8d\0\xff"))
+           (<(imr ["pixelize" "-w" "8" "-c" "256" (dir + "/a.gif") pz]) = 0)
+           ; the default scale is the source's: 2 source pixels to each
+           (dec (file pz) @ z (z 0 = 16 && z 1 = 12 && snip (z 2) 0 4 = "\0\0\xd7\xff"))
+           (<(imr ["pixelize" "-w" "5" "-s" "1" (dir + "/a.gif") pz]) = 0)
+           ; 16x12 at 5 cells: 5 wide and 3 high, 4 once the last cell's lower half is kept
+           (dec (file pz) @ z (z 0 = 5 && z 1 = 4 && z 2 (4 * 15 + 3) = 0 && z 2 (4 * 10 + 3) = 255))
+           (<(imr ["pixelize" "-c" "7" (dir + "/a.gif") pz]) = 2)
+           ; the cube's colours are few, so a palette: colour type 3
+           (<(imr ["pixelize" "-w" "8" "-c" "256" (dir + "/b.jpg") pz]) = 0)
+           (file pz 25 = 3))
+   ; the blocks as text: .ans is im cat's own lines, truecolor unless -c 256
+   ans (K 'im-ans im 8 () 1)
+   _ (test (ans = cats (map (r \ r + "\n") (art im 8 () 1)))
+           (<(imr ["pixelize" "-w" "8" (dir + "/a.gif") (dir + "/a.ans")]) = 0)
+           (file (dir + "/a.ans") = ans)
+           (<(imr ["pixelize" "-w" "8" "-c" "256" "-t" "ans" (dir + "/a.gif") "-"]) = 0)
+           (imr ["pixelize" "-w" "8" "-c" "256" "-t" "ans" (dir + "/a.gif") "-"] @ r (has? >r "38;5;"))
+           (<(imr ["convert" (dir + "/a.gif") (dir + "/c.ans")]) = 0)
+           (file (dir + "/c.ans") = (K 'im-ans) im 80 () 1))
+
+   ; imless, its keys
+   st (pnew [(dir + "/anim.gif") (dir + "/a.gif") (dir + "/n.txt")] 12 200)
+   s0 (pframe st)
+   _ (test (has? s0 "anim.gif  [1/3]  2x1") (has? s0 "frame 1/2") !(has? s0 "paused")
+           ; a 2x1 picture fits at its size, never enlarged: 100%, in the middle of the screen
+           (has? s0 "100%"))
+   ; the clock: the first tick sets the due time, a tick past it moves the frame on
+   _ (test (ptick st 1000 = 0) (ptick st 1050 = 0) (ptick st 1100 = 1) (st 'f = 1)
+           (has? (pframe st) "frame 2/2"))
+   _ (pstep st 32)
+   _ (test !(st 'play) (has? (pframe st) "(paused)") (ptick st 99999 = 0))
+   _ (pstep st 46)
+   _ (test (st 'f = 0))
+   _ (pstep st 44)
+   _ (test (st 'f = 1))
+   ; zoom in doubles past the fit and back; 0 fits again
+   _ (pstep st 43)
+   _ (test (has? (pframe st) "150%"))
+   _ (pstep st 48)
+   _ (test (has? (pframe st) "100%"))
+   ; n to the next file, p back; a file that is no picture says so
+   _ (pstep st 110)
+   _ (test (st 'i = 1) (has? (pframe st) "a.gif  [2/3]  16x12"))
+   _ (pstep st 110)
+   _ (test (has? (pframe st) "n.txt: not a picture"))
+   _ (pstep st 112)
+   _ (test (st 'i = 1))
+   ; panning a picture zoomed past the screen moves the view and stops at the edge
+   _ (map (c \ pstep st c) [43 43 43 43 43 43])
+   c0 (st 'cx)
+   _ (pstep st 108)
+   _ (test (c0 < st 'cx))
+   _ (map (c \ pstep st c) [104 104 104 104 104 104 104 104 104 104])
+   _ (K 'pv-view st @ v (test (v 1 = 0)))
+   ; the arrows arrive as their escapes
+   _ (test (pkeys "\e[A\e[Bq\e[C\e[D" = [107 106 113 108 104]))
+   _ (pstep st 63)
+   _ (test (has? (pframe st) "q quit"))
+   _ (pstep st 113)
+   _ (test (st 'quit))
+
+   ; imless in sixel and kitty's, read back off quay
+   ; a 16x12 picture on 6 rows of 30 cells of 8x16 fits at its size, centred: 14 cells over
+   ; (30 less its 2, halved) and 2 rows down (5 rows less its 1, halved)
+   (pv-in mode)
+    (pnew [(dir + "/a.gif")] 6 30 @ q (pins q 'mode mode 'ux 8 'uy 16, q))
+   (seen q) (h-mkscr 6 30 @ s
+             (scribe s (pframe q),
+              map (i \ (: x (i % 16) y (i // 16)
+                           (tilepx s ((y // 16 + 2) * 30 + (x // 8 + 14)) (x % 8) (y % 16))))
+                  (jot 192)))
+   gq (pv-in "sixel") kq (pv-in "kitty")
+   _ (test (has? (pframe gq) "16x12  100%") (has? (pframe gq) "\e[3;15H\eP")
+           (near (seen gq) (argb im)) (seen kq = argb im)
+           (has? (pframe kq) "\e_Ga=d,d=a,q=2\e\\") (has? (pframe kq) "C=1,"))
+   ; zoomed past the screen, a pixel is s screen pixels wide and panning moves by them
+   _ (map (c \ pstep gq c) [43 43 43 43 43 43 43])
+   gx (gq 'cx)
+   _ (pstep gq 108)
+   _ (test (has? (pframe gq) "1709%") (gx < gq 'cx)
+           ; a sixel is whole bands: 5 rows of 16 is 80 pixels, 78 of them drawn
+           (K 'pv-view gq @ v (v 4 = 78)))
+   ; the default is blocks, and off a terminal the viewer says so
+   _ (test (<(hark [love "im" "less" (dir + "/a.gif")]) = 2)
+           (<(hark [love "im" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
+
+   ; markdown and html2text on a terminal: a local picture under its image's line
+   _ (put (dir + "/sub.gif") gf)
+   md (cite 'lapiz 'mdread "# t\n\nsee ![it](sub.gif) here\n\n![gone](nope.png) and ![w](http://x/y.png)\n")
+   lp (K 'lens-pics md 40 (dir + "/doc.md"))
+   ll (: (go i st acc) (? (#lp <= i) (rev acc) (lp i = 10) (go (i + 1) (i + 1) (snip lp st i . acc)) (go (i + 1) st acc))
+         (go 0 0 ()))
+   at (: (go i) (? (#ll <= i) -1 (has? (ll i) "see [it] here") i (go (i + 1))) (go 0))
+   _ (test (0 <= at) (has? (ll (at + 1)) "▀") (has? (ll (at + 6)) "▀") !(has? (ll (at + 7)) "▀")
+           ; 16 wide at 40 columns: the picture's own size, set in at the text's margin
+           (snip (ll (at + 1)) 0 5 = "     ")
+           (#(filter (l \ has? l "▀") ll) = 6)
+           (has? lp "[gone] and [w]"))
+
+   ; against magick: every disposal, frame by frame
+   magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
+   (coalesced f) (hark ["magick" f "-coalesce" "-depth" "8" "rgba:-"] @ r (two? r && <r = 0 ? >r))
+   ; pixels that differ in whether they are seen, or in colour where both are
+   (off a b) (: n (#a // 4)
+                (go i bad) (i = n ? bad
+                            (: o (4 * i) sa (127 < a (o + 3)) sb (127 < b (o + 3))
+                               (go (i + 1) (? (sa != sb) (bad + 1)
+                                              (sa && snip a o (o + 3) != snip b o (o + 3)) (bad + 1)
+                                              bad))))
+                (go 0 0))
+   (anim-of d)
+    (: f (dir + "/d" + d + ".gif")
+       r (hark ["magick" "-size" "30x20" "xc:#303060"
+                "(" "-size" "30x20" "xc:none" "-fill" "red" "-draw" "rectangle 2,2 10,10" ")"
+                "(" "-size" "30x20" "xc:none" "-fill" "yellow" "-draw" "rectangle 12,5 20,14" ")"
+                "(" "-size" "30x20" "xc:none" "-fill" "white" "-draw" "circle 22,10 22,16" ")"
+                "-set" "delay" "7" "-dispose" d "-loop" "0" "-layers" "optimize" f])
+       q (open f "r") s (slurp q) _ (close q)
+       fs (frames s) m (coalesced f)
+       (two? fs && string? m && #(fs 2) = 4
+        && off (foldl (a \ x \ (a + <x)) "" (fs 2)) m = 0))
+   ((magick? ?
+       (test (anim-of "None") (anim-of "Background") (anim-of "Previous"))
+       (gate-partly "im: no magick, disposals against it skipped")),
+    hark ["rm" "-rf" dir],
+    0))
+
+(test_fin (), puts "im: ok", putc 10, 0)

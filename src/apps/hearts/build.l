@@ -14,8 +14,10 @@
 ;                line's, so no clock or host name reaches the image
 ; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
 ;                as `make HOSTCC=` names it; unset, mooncc through .hearts/bin/hk-hostcc, which
-;                lays certs/extract-cert as ours (xcert.l) rather than link openssl's
-; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, kbuild's
+;                lays certs/extract-cert as ours (xcert.l) rather than link openssl's; their popen
+;                and system run the commands' shell, through moonlibc's $LOVE_SH
+; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, love's
+;                lex and yacc, whose C back ends write what flex and bison would
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 (: argv cmdline
@@ -132,7 +134,10 @@
          cl0 (foldl (a \ n \ pin a n (getenv n))
                     (pins {} "ARCH" "arm64" "LLVM" "1" "RUSTC" "false" "HOSTRUSTC" "false" "BINDGEN" "false" "PAHOLE" "false"
                              "USERCFLAGS" ("--sysroot=" + hd + "/no-sysroot")) id)
-         cl1 (pin cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc"))))
+         ; the host programs' popen and system (conf's $(shell)) run moonlibc's $LOVE_SH, the shell the commands run
+         cl1 (pins cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc")))
+                       "LOVE_SH" (getenv "HEARTS_SH" @ h (string? h ? h (selfpath 0 + " lush -a")))
+                       "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc"))
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
                    [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]])
          goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))

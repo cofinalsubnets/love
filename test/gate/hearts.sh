@@ -8,10 +8,10 @@
 # (llvm, flex, bison, perl) and a clang+lld we build (src/tools/hearts-llvm.sh: a distro's clang
 # of the same version gives other code, so other images per host). hearts' half borrows only clang/lld/llvm for the kernel's
 # own units: the host programs build with mooncc, certs/extract-cert is ours (xcert.l, no
-# openssl), flex and bison are ours (src/tools/moon-flex.sh, moon-bison.sh), perl's scripts are ported,
+# openssl), flex and bison are love's lex and yacc, perl's scripts are ported,
 # and the commands run through lush with kore's verbs. where a tool's bytes reach the Image
 # (config_data.gz), kbuild's half borrows OUR tool too: KGZIP is love's gzip on both sides.
-# heavy (two kernel builds, and our flex/bison once when absent); opt-in by name.
+# heavy (two kernel builds); opt-in by name.
 # usage: hearts.sh LOVE
 . test/gate/skip.sh
 set -u
@@ -109,15 +109,6 @@ for f in "$R/src/apps/tls/roots.pem" "$x/one.pem" "$x/trail.pem" "$x/lead.pem" "
   if [ -f "$x/r" ] || [ -f "$x/o" ]; then cmp -s "$x/r" "$x/o" || fail "extract-cert '$f' differs from openssl's"; fi
 done
 
-# our flex and bison, each on our m4, built by their lanes when absent
-fx=$R/out/moonflex/flex-2.6.4/src/flex
-by=$R/out/moonbison/bison-3.8.2/src/bison
-[ -x "$fx" ] || sh src/tools/moon-flex.sh > "$B/moon-flex.log" 2>&1 || { tail -5 "$B/moon-flex.log"; fail "our flex did not build"; }
-[ -x "$by" ] || sh src/tools/moon-bison.sh > "$B/moon-bison.log" 2>&1 || { tail -5 "$B/moon-bison.log"; fail "our bison did not build"; }
-mkdir -p "$B/tools"
-printf '#!/bin/sh\nM4=%s BISON_PKGDATADIR=%s exec %s "$@"\n' \
-  "$R/out/moonbison/m4-1.4.21/src/m4" "$R/out/moonbison/bison-3.8.2/data" "$by" > "$B/tools/bison"
-chmod +x "$B/tools/bison"
 gz="$love gzip"
 # and neither half sees the host's rust or pahole, nor its libc: their versions, and whether the
 # compiler can link a user program (CC_CAN_LINK), reach .config, so the image. an empty sysroot
@@ -136,7 +127,7 @@ mv "$O" "$B/ref" || fail "cannot set kbuild's build aside"
 
 mkdir -p "$O"
 (cd "$O" && HEARTS_SRC="$K" HEARTS_JOBS="$J" LOVE_BUDGET_MB=${LOVE_BUDGET_MB:-1500} \
-  HEARTS_LEX="$fx" HEARTS_YACC="$B/tools/bison" HEARTS_KGZIP="$gz" \
+  HEARTS_KGZIP="$gz" \
   "$love" "$R/src/apps/hearts/build.l") > "$B/hearts.log" 2>&1 \
   || { tail -20 "$B/hearts.log"; fail "hearts' build failed"; }
 

@@ -63,7 +63,7 @@ kore_l = $(S)/apps/kore/text.l $(S)/apps/kore/u.l
 lay_l  = $(kore_l) $(S)/apps/kore/asbook.l \
   $(S)/love/holo/elf.l $(S)/love/holo/obj.l
 link_l = $(kore_l) $(S)/apps/kore/asbook.l \
-  $(p_lnbe_l) $(S)/love/holo/elf.l $(S)/love/holo/obj.l $(S)/love/holo/link.l
+  $(p_lnbe_l) $(S)/love/holo/elf.l $(S)/love/holo/obj.l $(S)/love/holo/lds.l $(S)/love/holo/link.l
 copy_l = $(link_l) $(S)/love/holo/copy.l
 # the same lists spelled from $(R), which is where the cats run
 lay_lc  = $(subst $(R)/,,$(lay_l))

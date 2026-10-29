@@ -336,21 +336,21 @@
                        (: to (ww-resolve url loc) (? (ww-hop? url to) (ww-fetch url to (hops - 1)) ()))
                       (200 <= code < 300) (r 2)
                       ()))))))
-   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a picture pic reads (its first
+   ; bytes -> [w h rgba], or 'none for what cannot be drawn: a picture im reads (its first
    ; frame) of up to 4 megapixels
    (ww-picture b)
-    (: d (pic-size b)
+    (: d (im-size b)
        (? (atom? d || 4194304 < (d 0 * d 1)) 'none
-          (: r (pic-decode b) (? (two? r) r 'none))))
+          (: r (im-decode b) (? (two? r) r 'none))))
    ; a picture as rows of cells at most cols wide and rows tall, set in at the text's own
    ; margin where there is room for it
    (ww-art im cols0 rows deep)
     (: pad (? (20 < cols0) "     " "")
-       (map (r \ pad + r) (pic-art im (cols0 - #pad) rows deep)))
+       (map (r \ pad + r) (im-art im (cols0 - #pad) rows deep)))
    ; each drawn picture as [line rows], off the marks of the raw layout
    (ww-arts st p)
     (: base (st 'base) c (st 'imgs)
-       deep (pic-deep 0)
+       deep (im-deep 0)
        rows (max 2 (pgbody st - 1))
        (foldl (\ acc m (: im (peep c (ww-resolve base (m 1)) 'none)
                           (? (im = 'none) acc (acc + [[<m (ww-art im (pgwidth st) rows deep)]]))))

@@ -1,4 +1,4 @@
-; mc -- a two-pane file browser on the stage lupa and design share. a name wears the
+; mc -- a two-pane file browser on the stage hexedit and design share. a name wears the
 ; colour ls gives its class.
 ;
 ;   j k / arrows  the cursor      ^b ^f  a page        g G  the ends
@@ -9,7 +9,7 @@
 ;   /  find under the pane's directory, narrowed as typed (seek.l); enter goes, esc back
 ;   r  re-read the pane           q  leave
 ;
-; pictures by `love pic`: blocks, or sixel/kitty where the terminal answers and -g allows.
+; pictures by `love im`: blocks, or sixel/kitty where the terminal answers and -g allows.
 ; thumbnails cache by path, mtime and cell size; a dear decode waits for the keys to rest.
 ;
 ; every key is a pure step on the state and every frame a pure lay, so the tool gates
@@ -149,12 +149,12 @@
 ; and "", or blank rows under a sixel or kitty graphic
  (mc-thumb im cols rows gm cw ch deep)
   (: kp (cite 'kore)
-     (near s) (kp 'pic-near im 0 0 s (max 1 (int (im 0 / s))) (max 1 (int (im 1 / s))))
+     (near s) (kp 'im-near im 0 0 s (max 1 (int (im 0 / s))) (max 1 (int (im 1 / s))))
      (gm = "block" ?
-         (near (kp 'pic-fit im cols rows) @ sm [(sm 0) (kp 'pic-cells sm deep) ""])
+         (near (kp 'im-fit im cols rows) @ sm [(sm 0) (kp 'im-cells sm deep) ""])
         (: ph (rows * ch) ph2 (max 1 (gm @ "sixel" (6 * (ph // 6)) ph))
            sm (near (max 1.0 (max (im 0 / (cols * cw)) (im 1 / ph2))))
-           g (gm @ "sixel" (kp 'pic-sixel sm) (kp 'pic-kits sm mc-kitkeys))
+           g (gm @ "sixel" (kp 'im-sixel sm) (kp 'im-kits sm mc-kitkeys))
            [((sm 0 + cw - 1) // cw) (map (_ \ "") ^((sm 1 + ch - 1) // ch)) g])))
 ; a thumbnail, or a string saying why none: cached, else decoded when cheap or in budget,
 ; else "..." and owed
@@ -167,7 +167,7 @@
         (sz < s 'cheap || 0 < s 'budget)
          (: _ (pin s 'budget (s 'budget - 1))
             r (uread q)
-            im (two? r ? (cite 'kore 'pic-decode <>r) "cannot read")
+            im (two? r ? (cite 'kore 'im-decode <>r) "cannot read")
             th (two? im ? (mc-thumb im cols rows gm (s 'cw) (s 'ch) (s 'deep)) im)
             ((64 < #(keys (s 'cache)) ? (pin s 'cache {}) 0),
              pin (s 'cache) key th,
@@ -175,7 +175,7 @@
         (pin s 'owe 1, "...")))
 ; quick view of a picture: centred, its name and kind under it
  (mc-pic s q nm st k b w n)
-  (: d (cite 'kore 'pic-size b)
+  (: d (cite 'kore 'im-size b)
      tag (two? d ? "\(d 0)x\(d 1)  \(k)" (show k))
      th (mc-thumbat s q st (max 1 (w - 2)) (max 1 (n - 3)) (s 'gm))
      art (string? th ? [th] (th 1))
@@ -191,13 +191,13 @@
      (? !(two? st) [[(" " + (two? e ? <e "") + ": a link to nothing")] ()]
         (16384 = st 2 & 61440) [(mc-pad (mc-count q n)) ()]
         !(32768 = st 2 & 61440) [[" not a regular file"] ()]
-        (: b (mc-peek q 4096) k (cite 'kore 'pic-kind b)
+        (: b (mc-peek q 4096) k (cite 'kore 'im-kind b)
            (k != () ? (mc-pic s q <e st k b w n) [(mc-pad (mc-text b n (w - 1))) ()]))))
 ; thumbnails: the page of the active pane's pictures holding the cursor's, its name reversed
  mc-tw 14
  mc-th 6
  (mc-grid s p w n)
-  (: es (filter (e \ !(mc-dir? e) && elem (cite 'kore 'pic-type <e) '(png gif jpeg)) (p 'es))
+  (: es (filter (e \ !(mc-dir? e) && elem (cite 'kore 'im-type <e) '(png gif jpeg)) (p 'es))
      cur (mc-at p)
      nc (max 1 (w // mc-tw)) nr (max 1 (n // mc-th)) per (nc * nr)
      ci (: (go l i) (? (atom? l) 0 (<l = cur) i (go >l (i + 1))) (go es 0))
@@ -278,7 +278,7 @@
 ; a frame that could not afford one sets 'owe; past 'cap a picture is only named
  (mc-new ld rd)
   (pins {} 'l (mc-pane ld) 'r (mc-pane rd) 'act 0 'rows 20 'over 0 'qv 0
-        'gm "block" 'cw 8 'ch 16 'deep (cite 'kore 'pic-deep 0) 'cache {}
+        'gm "block" 'cw 8 'ch 16 'deep (cite 'kore 'im-deep 0) 'cache {}
         'cheap 65536 'cap 33554432 'budget 1000 'owe 0 'shown "")
  ; a key within k ms: 1, else ()
  (mc-rest k) (? (k < 1) () (cue? 0) 1 (rest 10, mc-rest (k - 10)))
@@ -293,8 +293,8 @@
  (mc-run ld rd gm)
   (: s (mc-new ld rd)
      kp (cite 'kore)
-     pr (gm @ "block" (kp 'pic-heard "") (kp 'pic-probe 0))
-     (pins s 'gm (kp 'pic-pick gm pr) 'budget 0
+     pr (gm @ "block" (kp 'im-heard "") (kp 'im-probe 0))
+     (pins s 'gm (kp 'im-pick gm pr) 'budget 0
              'cw (0 < pr 'cw ? (pr 'cw) 8) 'ch (0 < pr 'ch ? (pr 'ch) 16),
       ttytake (), mind mc-loop s (_ \ (s 'gm = "kitty" ? (say out (kp 'pv-unkit)), ttygive ())), 0))
  mc-usage "usage: love mc [-g block|sixel|kitty|auto] [DIR [DIR]]"

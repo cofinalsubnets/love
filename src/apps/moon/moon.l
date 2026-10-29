@@ -1105,6 +1105,9 @@
           (("--help" || "-h") . _)
            (puts usage, putc 10, flush out, uleave 0)
           ("-pie" . r) (flags r (pin t 'pie 1))
+          ("-no-pie" . r) (flags r (pin t 'pie ()))
+          ; the stack is never executable already (no PT_GNU_STACK: the kernel maps it rw)
+          ((a . r) && elem a '("-Wl,-z,noexecstack" "-Wl,-znoexecstack")) (flags r t)
           ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
           ; library each comes from (a DT_NEEDED libNAME.so). without -shared, -l rides through
           ("-shared" . r) (flags r (pin t 'so 1))
