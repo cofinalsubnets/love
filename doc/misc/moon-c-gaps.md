@@ -1174,7 +1174,7 @@ refused, first stops:
 | 224 | an enum used before its definition, whose type is not unsigned int: `drm_modes.h` and `intel_display_limits.h` carry it to every drm and i915 unit | frontend |
 | 47 | `__attribute__((ms_abi))`, which `linux/efi.h` lays on every EFI call: carried out; a recheck takes 43, the 4 left stop on asm and an initializer | gen |
 | 16 | an asm immediate input that is not a constant, all in `nf_hook` | asm |
-| 55 | assembler lines and asm it has no lane for. of the 64 x64 units with asm, 15 still refuse: `ljmpl`/`ljmpw`/`lcallw`/`lidt` in the 16- and 32-bit lanes 4, an operand gas spaces or nests (` rip`, `r8 %r9`, `(11*32+13)`, a paren opening an operand) 4, a push of an immediate segment 2, `.irpc`, `.uleb128` over labels, a symbol minus a 64-bit constant, char constants in an expression, `%st` 1 each. AVX-512 lays without masks, broadcast or registers past 15 | asm |
+| 55 | assembler lines and asm it has no lane for. none of the 64 x64 units with asm refuse; holo keeps a jmp long where clang shortens one ahead of a `.fill` padding to `.`, and `%al` immediates in the long form. AVX-512 lays without masks, broadcast or registers past 15 | asm |
 | 3 / 1 / 1 | an initializer it cannot lay (acpica's dump tables, a `dfield` table); a parse error (`net/ax25.h`); a duplicate case in `blk_trace_ioctl`, which clang takes (unexamined) | frontend |
 
 the flags: `-o` past a second input 3, vdso32's `-fpic` on i386 2. the crashes: `piggy.o` (the

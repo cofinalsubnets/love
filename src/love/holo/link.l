@@ -114,11 +114,11 @@
 
    ; --- the relocation table, every machine's: e_machine -> kind -> (width how), how the
    ; field takes S+A at P. RELA: abs whole, pc S+A-P whole, abs32 four bytes in either range,
-   ; u32 unsigned, s32 signed, pc32 S+A-P signed; else a backend's instruction field, ored
+   ; u32 u16 u8 unsigned, s32 signed, pc32 S+A-P signed; else a backend's instruction field, ored
    ; into the word already there. arm and i386 are REL, each kind pulling its addend out of
    ; the field: w32 w16 w8 S+A, r32 r16 r8 S+A-P. the numbers collide across machines, so
    ; the machine picks the row first
-   ld-rtab {62 (ld-cls '((1 8 abs) (10 4 u32) (11 4 s32) (2 4 pc32) (4 4 pc32) (24 8 pc)
+   ld-rtab {62 (ld-cls '((1 8 abs) (10 4 u32) (11 4 s32) (12 2 u16) (14 1 u8) (2 4 pc32) (4 4 pc32) (24 8 pc)
                          (18 8 tpoff) (23 4 tpoff32) (22 4 gottpoff)))
             183 (ld-cls '((257 8 abs) (258 4 abs32) (260 8 pc) (261 4 pc32) (273 4 ld19) (274 4 adr21)
                           (275 4 adrp21) (277 4 addlo12) (278 4 addlo12) (279 4 b14) (280 4 b19) (282 4 b26)
@@ -141,6 +141,8 @@
           (k == 'abs32) (: v (s64 (ld-u64 sa)) (0 <= v && v <= 4294967295 || fits32 v ? (le32 v)))
           (k == 'u32) (: v (ld-u64 sa) (v <= 4294967295 ? (le32 v)))
           (k == 's32) (: v (s64 (ld-u64 sa)) (fits32 v ? (le32 v)))
+          (k == 'u16) (: v (ld-u64 sa) (v <= 65535 ? (le16 v)))
+          (k == 'u8) (: v (ld-u64 sa) (v <= 255 ? [v]))
           (refix-with be k bs sa p <r)))
    ; a REL field: S+A whole, or less P, or the backend's
    (ld386 s off sv kind site)
@@ -562,7 +564,7 @@
                  (: sa (ld-u64 (sv + ad))
                     row (ld-rk (peep ob 'mach 0) kind) w <row k (row 1)
                     abs64? (k == 'abs)
-                    abs32? (elem k '(abs32 u32 s32))
+                    abs32? (elem k '(abs32 u32 s32 u16 u8))
                     ; x64's thread-pointer kinds: S + A from tp
                     _ (elem k '(tpoff tpoff32 gottpoff) && !(charm? tp) ? (scare 'link-tls <sy))
                     ; GOTTPOFF's mov or add from the got, relaxed as ld does to the same op on an
