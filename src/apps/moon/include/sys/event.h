@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_EVENT_H
-#define _LOVE_SYS_EVENT_H
+#pragma once
 /* kqueue, bsd only: freebsd's shape, netbsd's translated. EVFILT_SIGNAL idents are
  * canonical signal numbers (SIGCHLD 17, never the kernel's 20) */
 struct kevent {
@@ -39,4 +38,3 @@ struct timespec;
 int kqueue(void);
 int kevent(int kq, struct kevent const *ch, int nch,
            struct kevent *ev, int nev, struct timespec const *ts);
-#endif

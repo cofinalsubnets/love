@@ -1,5 +1,4 @@
-#ifndef _LOVE_LINK_H
-#define _LOVE_LINK_H
+#pragma once
 /* just enough elf for dl_iterate_phdr and the file headers the bake rewrites */
 typedef unsigned long  Elf64_Addr;
 typedef unsigned long  Elf64_Off;
@@ -45,6 +44,7 @@ typedef struct {
 #define ElfW(t) Elf64_##t
 #endif
 #define PT_LOAD 1
+#define PT_TLS 7
 #define EI_NIDENT 16
 #define EI_CLASS 4
 #define ELFCLASS64 2
@@ -77,4 +77,3 @@ struct dl_phdr_info {
   ElfW(Half)        dlpi_phnum;
 };
 int dl_iterate_phdr(int (*)(struct dl_phdr_info*, unsigned long, void*), void*);
-#endif

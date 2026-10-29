@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_MMAN_H
-#define _LOVE_SYS_MMAN_H
+#pragma once
 #include <sys/types.h>
 #define PROT_NONE  0
 #define PROT_READ  1
@@ -30,4 +29,3 @@ int mprotect(void*, long, int);
 void *mremap(void*, unsigned long, unsigned long, int, ...);
 #define MFD_CLOEXEC 1
 int memfd_create(char const*, unsigned int);
-#endif

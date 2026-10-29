@@ -1,5 +1,4 @@
-#ifndef _LOVE_PWD_H
-#define _LOVE_PWD_H
+#pragma once
 #include <sys/types.h>
 
 struct passwd {
@@ -17,4 +16,3 @@ struct passwd *getpwuid(uid_t);
 struct passwd *getpwent(void);
 void           setpwent(void);
 void           endpwent(void);
-#endif

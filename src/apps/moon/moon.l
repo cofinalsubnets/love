@@ -30,17 +30,6 @@
                            (two? (uread "\(<rs)lib/moonlibc/core.c")) <rs
                            (go >rs))
                 (go (mroots ())))
-   ; a path with . and .. folded away: "a/sys/../b.h" and "a/b.h" are one key
-   (pnorm p)
-    (: n #p
-       (go i st ps) (? (n < i) ps
-                       (i = n || p i = 47)
-                        (snip p st i @ c
-                         (go (i + 1) (i + 1)
-                          (c @ ("" || ".") ps ".." (two? ps ? >ps) (c . ps))))
-                       (go (i + 1) st ps))
-       (jn l a) (!(two? l) ? a (jn >l (<l + (#a ? "/\(a)" a))))
-       (jn (go 0 0 ()) ""))
    ; a read-only ustar walk: nom (prefix + name), size, body
    (ttxt s o k) (: (go i) (k <= i || s (o + i) = 0 ? i (go (i + 1)))
                    m (go 0)
@@ -441,7 +430,7 @@
    (asmlocs secs)
     (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
        (lnum? sp) (rev (split "." sp) @ p (1 < #p && starts? <>p "l" && digs? (snip <>p 1 #(<>p)) && digs? <p))
-       (lab f) (two? f && <f = 'label ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
+       (lab f) (two? f && <f = 'label && !(fn-mark? <>f) ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
    ; a64: an undefined weak's address is a literal word, not adrp+add. a pie link (the kernel's)
    ; refuses a page reach of a symbol that may be absent; an abs64 there answers 0
@@ -1116,6 +1105,9 @@
           (("--help" || "-h") . _)
            (puts usage, putc 10, flush out, uleave 0)
           ("-pie" . r) (flags r (pin t 'pie 1))
+          ("-no-pie" . r) (flags r (pin t 'pie ()))
+          ; the stack is never executable already (no PT_GNU_STACK: the kernel maps it rw)
+          ((a . r) && elem a '("-Wl,-z,noexecstack" "-Wl,-znoexecstack")) (flags r t)
           ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
           ; library each comes from (a DT_NEEDED libNAME.so). without -shared, -l rides through
           ("-shared" . r) (flags r (pin t 'so 1))

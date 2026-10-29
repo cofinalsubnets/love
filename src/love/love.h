@@ -1,5 +1,4 @@
-#ifndef _love_h
-#define _love_h
+#pragma once
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -1170,5 +1169,3 @@ bool
  in_heap(struct g *c, word x),
  iop(word x),
  lam_isp(struct g *g, word x);
-#endif
-

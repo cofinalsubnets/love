@@ -1,5 +1,4 @@
-#ifndef _LOVE_ELF_H
-#define _LOVE_ELF_H
+#pragma once
 /* the elf format, both widths: the gabi's structures and the psabis' relocation numbers */
 #include <stdint.h>
 
@@ -330,4 +329,3 @@ typedef struct { Elf64_Word n_namesz, n_descsz, n_type; } Elf64_Nhdr;
 #define NT_PRSTATUS 1
 #define NT_GNU_ABI_TAG 1
 #define NT_GNU_BUILD_ID 3
-#endif

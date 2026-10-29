@@ -1,5 +1,4 @@
-#ifndef _LOVE_ERRNO_H
-#define _LOVE_ERRNO_H
+#pragma once
 /* glibc's spelling; here one errno for the process */
 int *__errno_location(void);
 #define errno (*__errno_location())
@@ -137,4 +136,3 @@ int *__errno_location(void);
 #define ENOTRECOVERABLE 131
 #define ERFKILL         132
 #define EHWPOISON       133
-#endif

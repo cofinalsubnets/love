@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_RESOURCE_H
-#define _LOVE_SYS_RESOURCE_H
+#pragma once
 #include <sys/time.h>
 #include <sys/types.h>
 #define RUSAGE_SELF      0
@@ -31,4 +30,3 @@ int setrlimit(int, const struct rlimit*);
 #define PRIO_USER    2
 int getpriority(int, id_t);
 int setpriority(int, id_t, int);
-#endif

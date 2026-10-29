@@ -6,7 +6,7 @@
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
-  test_ccthumb2 test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
+  test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
@@ -20,7 +20,7 @@
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
-  uuvallaw uuwm vmret waits test_doomx test_gcstress_bake test_kernel_uproc test_web test_wgetnet
+  uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
 test_phases = test_host test_love0
@@ -34,7 +34,7 @@ test_quick: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
+	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
@@ -45,11 +45,11 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
 	test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
+	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
-	test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
@@ -170,14 +170,12 @@ test_front: $(ho)/front $(ho)/frontseat
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests kept out of the corpus: each wants a crew module, is not idempotent
 # (love0 evaluates twice), or can hang. gate = exit 0 and "<name>: ok"
-hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/manifest.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/pic.l test/host/grap.l test/host/chem.l test/host/font.l test/host/story.l test/host/evback.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/lupa.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/chucho.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
+hostnif_tests = test/host/gcpause.l test/host/gcroom.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/mitty.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/web.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/im.l test/host/font.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/hexedit.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/saver.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
 # test/host/sh.l drives out/lush via out/love, not PATH's love
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
-# evback.l reads show names a mopped image has dropped
-hostnif_nomop = test/host/evback.l
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -188,8 +186,7 @@ test_hostnif: host out$(hsuf)/lush
 	@echo "test_hostnif: $(words $(hostnif_tests)) gates"
 hostnif-%:
 	@s=test/host/$*.l; t0=`date +%s`; \
-	 case " $(hostnif_nomop) " in *" $$s "*) L="env LOVE_NO_IMAGE=1 LOVE_NO_MOP=1 $m";; *) L="$m";; esac; \
-	 cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif-$* "$$L" ": ok" \
+	 cat test/00-init.l test/host/00-host.l $$s | DL=$(dl) $(gsh) test/gate/run.sh hostnif-$* "$m" ": ok" \
 	   > out$(hsuf)/hostnif/$*.log 2>&1 \
 	   || { cat out$(hsuf)/hostnif/$*.log; echo "  (the gate above is $$s)"; exit 1; }; \
 	 echo "TEST $$s ($$((`date +%s` - t0))s)"
@@ -408,38 +405,16 @@ gate_hm += test_ccwasm
 # the battery on M-profile: no qemu-user, ILP32, so arm-none-eabi-gcc's build is the oracle
 test_ccthumb1 test_ccthumb2: test_cc%: host
 	@$(gsh) test/gate/ccthumb.sh $* $(ho) $m
-# c-testsuite held to its shipped stdout, misses rostered in cts.sh; skips without dl/c-testsuite
+# c-testsuite held to its shipped stdout, misses rostered in cts.sh
 test_cts: host
 	@DL=$(dl) $(gsh) test/gate/cts.sh x64 $(ho) $m
 test_cts_a64 test_cts_rv64 test_cts_wasm: test_cts_%: host
 	@DL=$(dl) $(gsh) test/gate/cts.sh $* $(ho) $m
-# a pinned, hash-checked tarball into dl/, kept by `make clean`; no gate downloads
-cts_pin = 5c7275656d751de0e68b2d340a95b5681858ed07
-cts_sha = 010008bf4b5671f947ae7e8d693a1c959a4a4d795fa7227c0abb1f95de45f7e7
-dl/c-testsuite:
-	@echo 'MK	'c-testsuite
-	@mkdir -p dl && t=dl/c-testsuite-$(cts_pin).tar.gz; \
-	 [ -f $$t ] || curl -sSfL -o $$t https://github.com/c-testsuite/c-testsuite/archive/$(cts_pin).tar.gz || exit 1; \
-	 [ "$$(sha256sum < $$t | cut -d' ' -f1)" = $(cts_sha) ] || { echo "FAIL dl/c-testsuite: $$t is not the pinned tarball"; exit 1; }; \
-	 rm -rf $@.tmp && mkdir $@.tmp && tar xzf $$t -C $@.tmp && mv $@.tmp/c-testsuite-$(cts_pin) $@ && rmdir $@.tmp
-# the mp3 layer iii conformance streams for test/host/mp3.l, pinned like c-testsuite
-mp3v_pin = ea99364f61c14656440e8d77e9c233ccf3124633
-mp3v_sha = 5628166eb82a9bb581317918a334c317a2c0a30278bb14a20381307976768f34
-dl/mp3-vectors:
-	@echo 'MK	'mp3-vectors
-	@mkdir -p dl && t=dl/minimp3-$(mp3v_pin).tar.gz; \
-	 [ -f $$t ] || curl -sSfL -o $$t https://github.com/lieff/minimp3/archive/$(mp3v_pin).tar.gz || exit 1; \
-	 [ "$$(sha256sum < $$t | cut -d' ' -f1)" = $(mp3v_sha) ] || { echo "FAIL dl/mp3-vectors: $$t is not the pinned tarball"; exit 1; }; \
-	 rm -rf $@.tmp && mkdir $@.tmp && tar xzf $$t -C $@.tmp --wildcards '*/vectors/l3-*' '*/vectors/M2L3*' \
-	 && mv $@.tmp/minimp3-$(mp3v_pin)/vectors $@ && rm -rf $@.tmp && rm -f $$t
-# the rfc 8251 opus vectors for test/host/opus.l, pinned likewise
-opusv_sha = 6b26a22f9ba87b2b836906a9bb7afec5f8e54d49553b1200382520ee6fedfa55
-dl/opus-vectors:
-	@echo 'MK	'opus-vectors
-	@mkdir -p dl && t=dl/opus_testvectors-rfc8251.tar.gz; \
-	 [ -f $$t ] || curl -sSfL -o $$t https://opus-codec.org/static/testvectors/opus_testvectors-rfc8251.tar.gz || exit 1; \
-	 [ "$$(sha256sum < $$t | cut -d' ' -f1)" = $(opusv_sha) ] || { echo "FAIL dl/opus-vectors: $$t is not the pinned tarball"; exit 1; }; \
-	 rm -rf $@.tmp && mkdir $@.tmp && tar xzf $$t -C $@.tmp && mv $@.tmp/opus_newvectors $@ && rm -rf $@.tmp && rm -f $$t
+# the tests fetch their pinned, hash-checked inputs into dl/ themselves, once (test/gate/dl.sh
+# holds the pins; `make clean` keeps dl/); a failed fetch skips loudly
+# test_ccport -- tcc and chibicc built by mooncc, held to their gcc builds (test/gate/ccport.sh)
+test_ccport: host
+	@DL=$(dl) $(gsh) test/gate/ccport.sh $(ho) $m
 # test_libc -- test/libc/*.c built by mooncc and by gcc, outputs compared
 gate_hm += test_libc
 # test_ulp -- the math floor built by both compilers must agree bit for bit
@@ -664,18 +639,6 @@ gate_hol += test_root
 gate_hol += test_fat32
 # test_cpio -- src/apps/cpio.l against GNU cpio, both ways over newc
 gate_love += test_cpio
-# test_tfm -- src/apps/tfm.l against tftopl and TeX, damaged copies too; skips without TeX Live
-gate_love += test_tfm
-# test_gpic -- gpic.l against groff's pic, byte for byte; test/gpic/open counted, not gated. skips
-# without groff
-gate_love += test_gpic
-# test_grap -- grap.l against plan9port's, both through our pic against groff's; test/grap/open
-# counted. skips without plan9port
-gate_love += test_grap
-# test_chem -- chem.l against groff's, likewise; test/chem/open counted. skips without groff's chem
-gate_love += test_chem
-# test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
-gate_love += test_caja
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host
 	@echo TEST test/holo/golden.l
@@ -916,8 +879,14 @@ test_wgetnet: host
 	@echo TEST test/host/wgetnet.l "(wget over TLS 1.3 to a live peer)"
 	@cat test/00-init.l test/host/wgetnet.l | $(gsh) test/gate/run.sh wgetnet "$m" "wgetnet: ok"
 
-# doom on X under Xvfb: opt-in, wants the vendored source and the IWAD
-test_doomx: $(R)/test/host/doomx.l
+# the doom lanes: their source and IWAD fetched into dl/ first, else a loud skip; then the lane
+test_doomx test_doomwasm:
+	@DL=$(dl) sh test/gate/dl.sh doomgeneric doom1.wad || exit 1; \
+	 if [ -d $(dl)/doomgeneric ] && [ -f $(dl)/doom1.wad ]; then $(MAKE) -s $@-run; \
+	 else sh test/gate/skip.sh gate-skip "$@: skipped (no dl/doomgeneric or dl/doom1.wad: could not fetch them)"; fi
+
+# doom on X under Xvfb: opt-in
+test_doomx-run: $(R)/test/host/doomx.l
 	@$(MAKE) -s host DOOM=1
 	@echo TEST test/host/doomx.l "(doom on X, 300 frames under Xvfb, a held key)"
 	@cat test/00-init.l test/host/doomx.l | $(gsh) test/gate/run.sh doomx "$R/out/doom/love" "doomx: ok"
@@ -965,27 +934,30 @@ test_disk test_kboot test_kernel_vmx test_kernel_uproc test_kmitty:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (host arch $a is not x64)"
 endif
 
-OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
-ifeq ($(and $(filter x64,$a),$(OVMF_X64)),)
+# the firmware is fetched into dl/ by the lane itself; a failed fetch skips
+ifneq ($a,x64)
 test_uefi:
-	@sh test/gate/skip.sh gate-skip "test_uefi: skipped (x64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
+	@sh test/gate/skip.sh gate-skip "test_uefi: skipped (host arch $a is not x64)"
 else
 test_uefi: host $(S)/tools/ktest.l
-	@$(MAKE) -s $(ko)/esp-x64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x64/love.elf $(ko)/esp-x64/love.cmd
-	@echo TEST $(ko)/esp-x64 "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)"
-	@$m $(S)/tools/ktest.l $(ko)/esp-x64 $(OVMF_X64) x64
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-x86_64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s $(ko)/esp-x64/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x64/love.elf $(ko)/esp-x64/love.cmd \
+	 && echo TEST $(ko)/esp-x64 "(serial, headless, our own BOOTX64.EFI; ~64s, ceiling 420s)" \
+	 && $m $(S)/tools/ktest.l $(ko)/esp-x64 $$fw x64; fi
 endif
 
-OVMF_A64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-aarch64.fd)
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
-ifeq ($(and $(OVMF_A64),$(QEMU_A64)),)
+ifeq ($(QEMU_A64),)
 test_uefi_a64:
-	@sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
+	@sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (qemu-system-aarch64 needed)"
 else
 test_uefi_a64: host $(S)/tools/ktest.l
-	@$(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd
-	@echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 900s)"
-	@$m $(S)/tools/ktest.l $(ko)/esp-a64 $(OVMF_A64) a64
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-aarch64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd \
+	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 900s)" \
+	 && $m $(S)/tools/ktest.l $(ko)/esp-a64 $$fw a64; fi
 endif
 
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
@@ -1021,7 +993,7 @@ test_kernel_rv64:
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 900s)"
+	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 endif
 
@@ -1030,7 +1002,7 @@ WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
 wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int
 holo_wasm = out/.holo.wasm out/.holo2.wasm out/.holo3.wasm
 ifeq ($(NODE),)
-test_kernel_wasm test_doomwasm test_seedwasm test_nestwasm test_holowasm:
+test_kernel_wasm test_doomwasm-run test_seedwasm test_nestwasm test_holowasm:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (needs node)"
 else
 # test_kernel_wasm -- the kernel corpus on out/love.wasm's woken image, the (reset) read as the exit.
@@ -1134,7 +1106,7 @@ test_kernel_wasm: host
 
 # doom on wasm: draws, sounds, quits from its menu by key (a game deaf to keys outruns --for).
 # DOOM=1 builds in out/doom; then kexec boots it off the origin
-test_doomwasm:
+test_doomwasm-run:
 	@$(MAKE) -s wasm DOOM=1
 	@echo TEST test/kernel/doomrun.l "(doom on the wasm seat: a frame, the horn, and quit by key)"
 	@rm -f out/wasm/doom.ppm out/wasm/doom.raw

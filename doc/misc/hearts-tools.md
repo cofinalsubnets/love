@@ -11,14 +11,14 @@ Counts are from 2026-10-26 unless a row says otherwise. Sources:
   (5482 lines), x64 `/var/tmp/census-g21/ref-x64-defconfig` (3887). filechk and `$(call cmd,..)`
   steps leave no `.cmd`; those are counted from hearts' command log (`/var/tmp/hearts/h2/.hearts/commands`,
   a64) or the Makefiles, and link-vmlinux.sh's steps from the script
-- mooncc's censuses (census.py, g-21): a64 r23 (gwen aabadf8b2) `/var/tmp/census-g21/r23/mix/units.tsv`,
+- mooncc's censuses (census.py, g-21): a64 r24 (gwen 31372f7af) `/var/tmp/census-g21/r24/mix/units.tsv`,
   x64 r21 (gwen caf692cc6) `/var/tmp/census-g21/r21/x64/units.tsv`
 - the boots: a64 `/var/tmp/census-g21-mix` (mix.sh), x64 `/var/tmp/census-g21/x64mix` (boot.sh)
 
 Two pipelines exist today, and the criterion is their join:
 
 - `make test_hearts` (src/apps/hearts/build.l): the love-native driver. No GNU make; host programs by
-  mooncc, our flex/bison, perl's scripts ported, commands through `lush -a`. But clang compiles the
+  mooncc, love's lex/yacc, perl's scripts ported, commands through `lush -a`. But clang compiles the
   kernel side, llvm links it, and ARCH is fixed to arm64 (build.l `cl0`)
 - the mixed boot (mix.sh, boot.sh): mooncc and holo objects for the kernel, laid over a GNU make +
   clang + ld.lld + `HOSTCC=cc` build, then booted under qemu
@@ -40,27 +40,17 @@ Two pipelines exist today, and the criterion is their join:
 
 ## 1. kernel C units still compiled by clang
 
-### a64 (r23: 4439 units, 4370 `.c` + 69 `.S`)
+### a64 (r24: 4439 units, 4370 `.c` + 69 `.S`)
 
-3026 `.c` same as clang, 1228 differ (mooncc's in the boot), 116 not mooncc's:
+3106 `.c` same as clang, 1258 differ, 6 not finished. Every `.S` is holo's.
 
 | class | units | note |
 |---|---|---|
-| enum named before its definition | 36 | fixed (row 543, gwen 01d4d4892); r23 + these boots on 4321 |
-| qcom clk `ftbl_*` initializers | 38 | drivers/clk/qcom: "cannot lay the initializer" — **g-e9, next** |
-| asm sysreg / tlbi names holo lacks | 13 | dbgb*, pm*, spsr_abt/und, aidr_el1, ipas2e1 (kvm, hw_breakpoint, arm_pmuv3) |
-| parse errors | 7 | asm/insn.h, net/ax25.h ×2, ghes, of/resolver, pcie/aer, flexfilelayout |
-| asm struct output (`hyp_spin_lock`) | 5 | kvm nvhe |
-| asm immediate input not constant (`nf_hook`) | 5 | net/ipv4, ipv6 |
-| other initializers | 3 | acpica exdump, rsaddr; 8250_pci |
-| inline asm directives | 3 | `.irp` (kvm/at), `.incbin` (configs), crash_core |
-| register variable in x30 | 2 | stacktrace, process |
 | vdso32, `--target=arm-linux-gnueabi` | 2 | the compat vdso: mooncc's arm32 is not wired in |
-| timeout (300 s) | 1 | pinctrl-rzg2l |
-| undeclared `__cpu_to_le64` | 1 | arm-smmu-v3 |
+| timeout (300 s) | 4 | pinctrl-rzg2l; .vmlinux.export, kvm inject_fault, hid-input finish in 320-450 s on a loaded box |
 
-So 80 `.c` units remain after efwd. r23's boot pool is 4285 mooncc objects, 0 culprits; the share of
-vmlinux.a members from mooncc is 4242/4386 = 96.7%; modpost warns 6 (all `__calc_tpm2_event_size`).
+The boots below ran on r23's pool: 4285 mooncc objects, 0 culprits; the share of vmlinux.a members
+from mooncc was 4242/4386 = 96.7%; modpost warns 6 (all `__calc_tpm2_event_size`).
 
 ### x64 (r21: 3004 units, 2934 `.c` + 70 `.S`; before efwd)
 
@@ -69,7 +59,7 @@ vmlinux.a members from mooncc is 4242/4386 = 96.7%; modpost warns 6 (all `__calc
 | class | units | note |
 |---|---|---|
 | enum named before its definition | 224 | fixed (row 543); recheck took all 224 |
-| `__attribute__((ms_abi))` | 47 | efi libstub 15, firmware/efi 10, platform/efi 5, arch/x86/kernel 8, others 9 |
+| `__attribute__((ms_abi))` | 47 | carried out; a recheck takes 43, the 4 left stop on asm (endbr64, vmcall, a width clash) and an initializer |
 | asm immediate input not constant (`nf_hook`) | 16 | |
 | inline asm holo lacks | 10 | vmcall, rdpid, a register name, others |
 | parse errors | 4 | selinux hooks, nf_nat ×2, net/ax25.h |
@@ -84,12 +74,11 @@ A KEEP=1 census on gwen 1065c73ee (g-21) gives the post-efwd numbers.
 
 holo assembles every `.S` the census compiles; only the refused ones stay clang's.
 
-- a64: 32 of 69. gas-immediate 13 (`.Lframe_regcount`, `(%`-style expressions), gas-directive 4
-  (`.rep`, `.reloc`, `.extern` ×2), gas-data 4 (`(((1U` in the vdso notes), a64 operands 4 (`v0.16b`
-  in aese/tbl/sha512su0, `add` with a symbol), ops 2 (`stgm`, `crc32x`), sysreg/pstate 3 (isr_el1, SPsel),
-  data width 1, register 1
-- x64: 38 of 70. `endbr64` 7, `lretq` 2, `ljmpw` 1, `.octa` 2, `.uleb128` 1, `%`-immediates 3, bad
-  numbers 3, register names 4, others
+- a64: 0 of 69. entry.o, head.o and hyp-entry.o match clang's code sections but for branches to
+  global symbols, which holo resolves inside the object
+- x64: of the 64 units with asm, 49 lay (27 as clang does) and 15 refuse: the 16- and 32-bit
+  lanes' far transfers and `lidt` 4, operands gas spaces or nests 4, a pushed immediate segment 2,
+  `.irpc`, `.uleb128` over labels, x87, others
 - the 3 kallsyms `.S` files from link-vmlinux.sh are clang's in both (the link, below)
 
 ## 3. clang outside the units
@@ -170,7 +159,7 @@ uniq, cut, sort, cmp, cat, gzip, cpio; `#!/bin/sh` scripts run as lush's sh.
 | tool | a64 | x64 | love |
 |---|---|---|---|
 | perl | 3: sha2-armv8.pl ×2, build_OID_registry | 1: build_OID_registry | perlasm.l, oidreg.l |
-| flex / bison | 2 / 2 | 1 / 1 | GNU flex/bison built by mooncc (moon-flex.sh, moon-bison.sh): not love's own parsers |
+| flex / bison | 2 / 2 | 1 / 1 | love lex / love yacc, their C back ends (flex's `-o$@ -L`, bison's `-o -d -t -l`) |
 | awk | 2 (gen-cpucaps, gen-sysreg) | 3 (orc_hash, cpufeaturemasks.h, gen-insn-attr-x86.awk) | kore awk; x64 scripts untried |
 | bc | 1 (timeconst) | 1 | kore bc |
 | gzip | 1 (config_data) | 1 (vmlinux.bin.gz) | love gzip (KGZIP) |

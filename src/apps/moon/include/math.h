@@ -1,5 +1,4 @@
-#ifndef _LOVE_MATH_H
-#define _LOVE_MATH_H
+#pragma once
 /* long double is double here */
 typedef float float_t;
 typedef double double_t;
@@ -78,4 +77,3 @@ float fmaxf(float, float), fminf(float, float), fdimf(float, float), fmaf(float,
 float erff(float), erfcf(float), tgammaf(float), lgammaf(float);
 /* long double twins, where a port asks for one */
 long double ldexpl(long double, int), frexpl(long double, int *);
-#endif

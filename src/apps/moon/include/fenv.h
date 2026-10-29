@@ -1,5 +1,4 @@
-#ifndef _LOVE_FENV_H
-#define _LOVE_FENV_H
+#pragma once
 /* one rounding mode, nearest, and no exception flags kept: fesetround refuses the others */
 typedef struct { int __round; } fenv_t;
 typedef unsigned fexcept_t;
@@ -19,4 +18,3 @@ int fegetround(void), fesetround(int);
 int feclearexcept(int), feraiseexcept(int), fetestexcept(int);
 int fegetexceptflag(fexcept_t *, int), fesetexceptflag(fexcept_t const *, int);
 int fegetenv(fenv_t *), fesetenv(fenv_t const *), feholdexcept(fenv_t *), feupdateenv(fenv_t const *);
-#endif

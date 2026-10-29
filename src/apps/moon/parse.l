@@ -366,6 +366,7 @@
                  pin t 'sigs {},          ; fn/proto name -> (rettype (paramty..))
                  pin t 'anon 0,                   ; the anonymous-tag counter
                  pin t 'sfns {},          ; top-level `static` fn names
+                 pin t 'fdefs {},         ; fn name -> 'hard | 'soft, its definition so far
                  pin t 'c99inl {},        ; fn name -> 'inl while every declaration says plain `inline`
                  pin t 'svars {},         ; top-level `static` globals
                  pin t 'sects {},         ; global name -> its section
@@ -648,7 +649,22 @@
                       (psufs ps r <e (t \ <>e (ptrk k t)) <>>e (<>>>e && k = 0))))))))
    ; a leading `*..` run (quals interleaved) over ty -> (ty rest)
    (pstars ts ty) (pquals ts @ s (peekp s "*" ? (pstars >s ['ptr ty]) [ty s]))
-   (pdtor ps ts base)                               ; -> ((name ty) rest) | ()
+   ; C11 6.7.6.3p1: no function returns a function or an array, no array holds functions
+   (illty? t) (two? t && (? (<t = 'fn) (two? <>t && elem <<>t '(fn arr varr) || illty? <>t)
+                            (elem <t '(arr varr)) (two? <>t && <<>t = 'fn || illty? <>t)
+                            (<t = 'ptr) (illty? <>t)
+                            ()))
+   (illblame _) (clblame "a function returning a function or an array, or an array of functions")
+   ; ms_abi anywhere in a declarator marks the first function its type reaches: ('fn ret params 'ms).
+   ; x64's alone: gcc lets it go by elsewhere
+   (pms? ps) (peep ps 'tgt 'x64 = 'x64)
+   (pdtor ps ts base) (pdtor0 ps ts base @ dr (two? dr && pms? ps && msin? ts <>dr ? [(msent <dr) <>dr] dr))
+   (msin? a b) (? (atom? a || a = b) () (tkk <a = 'id && elem (tkv <a) '("ms_abi" "__ms_abi__")) 1 (msin? >a b))
+   (msty t) (? (fn? t) [<t <>t (2 < #t ? t 2) 'ms]
+               (two? t && elem <t '(ptr arr varr)) (<t . (msty <>t . >>t))
+               t)
+   (msent e) (<e . (msty <>e . >>e))
+   (pdtor0 ps ts base)                              ; -> ((name ty) rest) | ()
     ; k: the run follows a star, where alone restrict qualifies the pointer (pparams files it)
     (: (stars ts2 ty k)
         (pquals ts2 @ s
@@ -661,7 +677,7 @@
            (pdirect ps ts2 @ dr
               (atom? dr ? ()
                  (: e <dr ty2 (<>e ty) dat <>>e
-                    [(two? dat ? [<e ty2 dat] [<e ty2]) <>dr])))
+                    (illty? ty2 ? (illblame 0) [(two? dat ? [<e ty2 dat] [<e ty2]) <>dr]))))
           !(idat? ts2)           ; an abstract declarator
            (? (peekp ts2 "[")                          ; `struct timespec const[2]`
                (adims ps ts2 () @ dr                 ; pparams decays it to a pointer
@@ -673,7 +689,7 @@
              ts3 >ts2
              (? (peekp ts3 "(")                       ; name(params): ('fn ty), the params balance-skipped
                  (skipbal >ts3 1 @ t2
-                    (two? t2 ? [[name ['fn ty]] t2]))
+                    (? !(two? t2) () (illty? ['fn ty]) (illblame 0) [[name ['fn ty]] t2]))
                 !(peekp ts3 "[") [[name ty] ts3]
                 (adims ps ts3 () @ dr
                    (atom? dr ? ()
@@ -900,8 +916,8 @@
                  ; AAPCS32 or a packed enum takes the smallest type holding every enumerator,
                  ; others int; past 32 bits both widen
                  (ety pos lo hi pk m)
-                  (: wide (? (pos && 4294967295 < hi) 'ulong
-                             (!pos && (hi > 2147483647 || lo < -2147483648)) 'long ())
+                  (: wide (? (pos && 4294967295 < hi) (pst32? ps ? 'ullong 'ulong)
+                             (!pos && (hi > 2147483647 || lo < -2147483648)) (pst32? ps ? 'llong 'long) ())
                      narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
                                (-128 <= lo && hi <= 127) 'char
                                (-32768 <= lo && hi <= 32767) 'short
@@ -1319,7 +1335,7 @@
              (tkk t = 'id)
               (: nm (tkv t)
                  ev (peep (ps 'declaring) nm () ? () (peep (ps 'enums) nm ()))
-                 (cint? ev ? [['num ev] >ts]
+                 (cint? ev ? [(enumnum ps ev) >ts]
                     [['var nm] >ts]))
              ; ({ .. }): gcc's statement expression -- the leading statements, and the last as
              ; its value when it is an expression, else void
@@ -1578,6 +1594,12 @@
    ; value in its type, operands meeting by puac (-1 < 1u is 0), results wrapping to their
    ; width, an unsigned answer never negative. w64: long is 8 bytes.
    (cint? x) (charm? x || sun? x)
+   ; an enum constant as an operand: int when it fits, past int the enum's type: uint up to 2**32,
+   ; then 8 bytes, which ilp32 spells long long
+   (enumnum ps v) (? (!(charm? v) || -2147483648 <= v && v <= 2147483647) ['num v]
+                     (0 < v && v <= 4294967295) ['cast 'uint ['num v]]
+                     (pst32? ps) ['cast 'llong ['num v]]
+                     ['num v])
    (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
    (tbits w64 ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
                         ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
@@ -2617,8 +2639,8 @@
                             (? (atom? fpty && peekp ts2 "(")        ; a function
                                (: rp (krhead? ps >ts2 ? (pkr ps >ts2) (pparams ps >ts2 ()))
                                   (atom? rp ? ()
-                                     (: _ (pin (ps 'sigs) name (mksig rty rp))
-                                        aft (patt (plabel ps <>rp name))    ; a trailing attribute
+                                     (: aft (patt (plabel ps <>rp name))    ; a trailing attribute
+                                        _ (pin (ps 'sigs) name (mksig rty rp + (pms? ps && (msin? ts0 ts1 || msin? <>rp aft) ? '(ms) ())))
                                         (? (peekp aft ";") [['proto name] >aft]
                                            ; more `* nm (params)` prototypes sharing base, to `;`. a
                                            ; mixed list (`int f(int), a;`) takes the object lane
@@ -2659,8 +2681,14 @@
    ; scalar, pointer, struct, and two different arithmetic types
    (tyshape t) (? (atom? t) t (ptr? t) 'ptr (arr? t) 'arr (stru? t) t (fn? t) 'fn 'other)
    (tyclash? a b) (? (fn? a || fn? b) () (atom? a && atom? b) (a != b) (tyshape a != tyshape b))
+   ; C11 6.9p3: one definition per function; a gnu `extern inline` body may be followed by the
+   ; real one, so only a static or externally laid definition counts
    (redecl ps f)
-    (? !(elem <f '(gdecl xdecl)) ()
+    (? (<f = 'fn)
+        (: hard (peep ps 'curstat () || peep ps 'curlink () = 'ext)
+           (peep (ps 'fdefs) <>f () = 'hard ? "redefinition of '\(<>f)'"
+              (pin (ps 'fdefs) <>f (hard ? 'hard 'soft), ())))
+       !(elem <f '(gdecl xdecl)) ()
        (: (go prs) (atom? prs ? ()
                      (<prs @ pr
                         (peep (ps 'globals) <pr () @ old
@@ -2711,7 +2739,7 @@
             <f = 'gdecl && (st || sc || 0 < va) ?
               (: (go2 prs) (atom? prs ? 1
                               (<<prs @ nm
-                                 (st ? (pin (ps 'svars) nm 1),
+                                 (st ? (pin (ps 'svars) nm (ps 'curused ? 'used 1)),
                                   sc ? (pin (ps 'sects) nm sc),
                                   0 < va ? (pin (ps 'aligns) nm va),
                                   go2 >prs)))
@@ -2760,14 +2788,43 @@
         ; entry back (C's tentative rule)
         (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
-                      [1 ['prog (ps 'hoist + rev acc)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
+                      [1 ['prog (ps 'hoist + rev acc + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)])
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
                     (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
-                       (note <r, tops <>r (<r . acc)))))))
+                       (note <r, tops <>r (msren ps <r . acc)))))))
+   ; an ms_abi definition: the body lays as a static __msabi_NAME on the sysv side, and NAME is a
+   ; trampoline (msasm) carrying the ms caller's words over and keeping what ms keeps
+   (msname nm) "__msabi_\(nm)"
+   (msren ps f)
+    (f @ ('fn nm prms body)
+          (peep (ps 'sigs) nm () @ sg
+             (? !(3 < #sg && sg 3 = 'ms) f
+                (: _ (pin ps 'msdefs (nm . peep ps 'msdefs ()))
+                   _ (pin (ps 'sigs) (msname nm) (take 3 sg))
+                   _ (pin (ps 'sfns) (msname nm) 1)
+                   _ (peep (ps 'sects) nm () @ sc (sc ? (pin (ps 'sects) (msname nm) sc)))
+                   ['fn (msname nm) prms body])))
+        f)
+   (msasm ps)
+    (map (nm \ (: sg (ps 'sigs nm)
+                  sc (peep (ps 'sects) nm ".text")
+                  vis (? (peep (ps 'sfns) nm ()) "" (elem nm (ps 'weaks)) "\t.weak \(nm)\n" "\t.globl \(nm)\n")
+                  xs (map (i \ "\(16 * i)(%rsp)") ^10)
+                  (? (6 < #<>sg) (clblame "an ms_abi function past six parameters")
+                     (any (t \ elem t '(float double ldouble i128 u128) || stru? t) (<sg . <>sg)) (clblame "an ms_abi function with a float or struct in its signature")
+                     ['tasm (cats ["\t.pushsection \(sc),\"ax\"\n" vis "\t.type \(nm),@function\n\(nm):\n"
+                                   "\tpush %rdi\n\tpush %rsi\n\tsub $168,%rsp\n"
+                                   (cats (map (i \ "\tmovaps %xmm\(i + 6),\(xs i)\n") ^10))
+                                   "\tmov %rcx,%rdi\n\tmov %rdx,%rsi\n\tmov %r8,%rdx\n\tmov %r9,%rcx\n"
+                                   "\tmov 224(%rsp),%r8\n\tmov 232(%rsp),%r9\n\tcall \(msname nm)\n"
+                                   (cats (map (i \ "\tmovaps \(xs i),%xmm\(i + 6)\n") ^10))
+                                   "\tadd $168,%rsp\n\tpop %rsi\n\tpop %rdi\n\tret\n"
+                                   "\t.size \(nm),.-\(nm)\n\t.popsection\n"])])))
+         (rev (peep ps 'msdefs ())))
        (attrbad toks spans @ ab (gripe? ab ? ab (tops toks ()))))
    ; an __attribute__ whose skip would change the code (cpp.l's gnuattrs 'no) refuses where
    ; written, each item read by its first word. -> a gripe | ()

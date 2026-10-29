@@ -1,7 +1,6 @@
 // prefix.h -- one canonical prefix code read lsb first, rfc 1951's and vp8l's alike (gz.c, webp.c
 // build and read it, and choose its lengths, the same way)
-#ifndef INF_H
-#define INF_H
+#pragma once
 #include <stdint.h>
 #include <string.h>
 
@@ -72,5 +71,3 @@ static inline unsigned pfx_lens(uint32_t *hc, unsigned nsym, unsigned lim, uint8
    if (d > mx) mx = d; }
   if (mx <= lim || pass >= 32) return mx;
   for (i = 0; i < nsym; i++) if (hc[i]) hc[i] = hc[i] >> 1 ? hc[i] >> 1 : 1; } }
-
-#endif

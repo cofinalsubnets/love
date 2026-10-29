@@ -1,5 +1,4 @@
-#ifndef _LOVE_PTHREAD_H
-#define _LOVE_PTHREAD_H
+#pragma once
 /* minimal threads, linux only (elsewhere create answers EAGAIN), 8M stacks, attributes but a
    mutex's kind ignored. errno is process-wide and stdio takes no lock */
 #include <sys/types.h>
@@ -63,4 +62,3 @@ pthread_t pthread_self(void);
 int pthread_equal(pthread_t, pthread_t);
 int pthread_attr_init(pthread_attr_t *);
 int pthread_attr_destroy(pthread_attr_t *);
-#endif

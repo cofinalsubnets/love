@@ -1,4 +1,2 @@
-#ifndef _LOVE_UCONTEXT_H
-#define _LOVE_UCONTEXT_H
+#pragma once
 #include <sys/ucontext.h>
-#endif

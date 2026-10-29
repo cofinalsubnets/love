@@ -14,6 +14,7 @@
 ; name reads the live book. spawn, wait, fork, pipe, dup .. stay global: inle shadows them.
 (: chdir (cite 'posix 'chdir)      chmod (cite 'posix 'chmod)
    close (cite 'posix 'close)      cwd (cite 'posix 'cwd)
+   fchdir (cite 'posix 'fchdir)
    mkdir (cite 'posix 'mkdir)      open (cite 'posix 'open)
    openfd (cite 'posix 'openfd)    readdir (cite 'posix 'readdir)
    readlink (cite 'posix 'readlink) rmdir (cite 'posix 'rmdir)
@@ -2285,12 +2286,16 @@
                                 (setenv (? !p e (snip e 0 p)) ())))),
             each old (\ e (e @ ((n && 0 < #n) + "=" + v) (setenv n v) 0)),
             0)))
+   ; the cwd held open, so a body's cd comes back even to one removed under us; its path
+   ; when "." will not open
+   (sh-dirhold _) (: fd (openfd "." 0) (? (charm? fd) fd (cwd 0)))
+   (sh-dirback d) (? (charm? d) (: r (fchdir d) (close d, r)) (chdir d))
    (sh-subsave S _)
-     (: s [(cwd 0) (sh-tabsnap (S 'sh-vars)) (sh-tabsnap (S 'sh-funcs)) (S 'sh-pos) (S 'sh-arg0)
+     (: s [(sh-dirhold 0) (sh-tabsnap (S 'sh-vars)) (sh-tabsnap (S 'sh-funcs)) (S 'sh-pos) (S 'sh-arg0)
              [(S 'sh-eflag) (S 'sh-uflag) (S 'sh-xflag)] (environ 0) (S 'sh-subrds)]
         (pin S 'sh-subrds (), s))
    (sh-subback S s)
-     (: _ (chdir (s 0), sh-tabback (S 'sh-vars) (s 1), sh-tabback (S 'sh-funcs) (s 2),
+     (: _ (sh-dirback (s 0), sh-tabback (S 'sh-vars) (s 1), sh-tabback (S 'sh-funcs) (s 2),
               pin S 'sh-pos (s 3), pin S 'sh-arg0 (s 4))
         _ (flush out, flush err,
            each (S 'sh-subrds) (e \ nom? >e ? (close <e) (dup2 >e <e, close >e)),

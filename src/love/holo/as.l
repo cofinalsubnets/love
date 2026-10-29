@@ -55,25 +55,27 @@
             (d = 0 && rm != 6) [(as-mrm 0 rf rm)]
             (fits8 d) [(as-mrm 1 rf rm) (byte d)]
             ([(as-mrm 2 rf rm)] + le16 d)))
-   (as-mem-rm md rf o)
+   (as-mem-rm md rf o n)
       (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-         sy (5 < #o ? (o 5) ())                            ; a symbol displacement: abs32, always four bytes
-         d4 (sy ? [(fix 4 'abs32 sy d)] (le32 d))
+         sy (5 < #o ? (o 5) ())                            ; a symbol displacement: four bytes, sign-extended in 64
+         d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32) sy d)] (le32 d))
          _ (md = 64 && (b >= 32 || ix >= 32) && scare 'as-mem16-mode o)
          (? (as-a16? o) (as-mem16 rf o)
             (md = 16 && b < 0 && ix < 0)                    ; an absolute address in a 16-bit segment: disp16
              ([(as-mrm 0 rf 6)] + (sy ? [(fix 2 'abs16 sy d)] (le16 d)))
             (md = 32 && b < 0 && ix < 0) ([(as-mrm 0 rf 5)] + d4)   ; ..and in a 32-bit one, no SIB
-            (as-mem32 rf o b ix sc d sy d4)))
-   (as-mem32 rf o b ix sc d sy d4)
+            (as-mem32 rf o b ix sc d sy d4 n)))
+   ; n scales a disp8: EVEX's disp8*N, 1 elsewhere
+   (as-mem32 rf o b ix sc d sy d4 n)
          (b < 0 ? ([(as-mrm 0 rf 4) (as-sib (as-scb sc) (ix < 0 ? 4 ix) 5)] + d4)
-            (: md (? sy 2 (d = 0 && !(as-lo b = 5)) 0 (fits8 d) 1 2)
-               dsp (md @ 0 () 1 [(byte d)] d4)
+            (: md (? sy 2 (d = 0 && !(as-lo b = 5)) 0 (d % n = 0 && fits8 (d // n)) 1 2)
+               dsp (md @ 0 () 1 [(byte (d // n))] d4)
                hd (? (ix >= 0)      [(as-mrm md rf 4) (as-sib (as-scb sc) ix b)]
                      (as-lo b = 4)  [(as-mrm md rf 4) (as-sib 0 4 b)]
                      [(as-mrm md rf (as-lo b))])
                (hd + dsp)))
-   (as-rm md rf o) (<o @ 'mem (as-mem-rm md rf o)
+   (as-rm md rf o) (as-rmn md rf o 1)
+   (as-rmn md rf o n) (<o @ 'mem (as-mem-rm md rf o n)
                       'rip (? (md != 64) (scare 'as-rip-mode o)
                               (nom? <>o) [(as-mrm 0 rf 5) (fix 4 'rel32 <>o <>>o)]
                               ([(as-mrm 0 rf 5)] + le32 <>>o))   ; `0(%rip)`: a bare displacement
@@ -171,8 +173,8 @@
                (w @ 0 (scare 'as-nowidth [mn a]) (as-emit md w frc [(as-opw opc w)] ext a)))
             (k = 'ind)                                       ; call/jmp through a register or memory
             (a 1 @ o
-               (? (elem mn '(call calll callw)) (as-emit md (mn @ 'callw 2 'calll 4 0) 0 '(255) 2 o)
-                  (elem mn '(jmp jmpl jmpw)) (as-emit md (mn @ 'jmpw 2 'jmpl 4 0) 0 '(255) 4 o)
+               (? (elem mn '(call calll callw callq)) (as-emit md (mn @ 'callw 2 'calll 4 0) 0 '(255) 2 o)
+                  (elem mn '(jmp jmpl jmpw jmpq)) (as-emit md (mn @ 'jmpw 2 'jmpl 4 0) 0 '(255) 4 o)
                   (scare 'as-op1 mn)))
             (elem mn '(call jmp calll jmpl callw jmpw))
             (a 1 @ sym ((mn @ 'callw (as-osz md 2) 'calll (as-osz md 4) 'jmpw (as-osz md 2) 'jmpl (as-osz md 4) ())
@@ -192,7 +194,10 @@
             'cld '(252) 'std '(253)
             'lahf '(159) 'sahf '(158)
             'xlat '(215)
-            'sysret '(15 7) 'sysretl '(15 7) 'sysretq '(72 15 7)}
+            'sysret '(15 7) 'sysretl '(15 7) 'sysretq '(72 15 7)
+            'lretq '(72 203) 'sysenter '(15 52) 'sysexit '(15 53)
+            'endbr64 '(243 15 30 250) 'endbr32 '(243 15 30 251)          ; IBT's landing pads
+            'vmcall '(15 1 193) 'vmmcall '(15 1 217)}
    ;; ..and in a 16- or 32-bit segment: a size suffix (w l, the string ops' b w d) sets the operand,
    ;; none takes the segment's own; the prefixes stand alone, as gas reads `rep; movsb`
    as-sized {'ret 195 'lret 203 'iret 207 'pushf 156 'popf 157 'pusha 96 'popa 97}
@@ -208,7 +213,7 @@
           (1 < sw && charm? (peep as-sized stem ())) (as-osz md sw + [(as-sized stem)])
           (0 < sw && charm? (peep as-strs stem ())) (sw = 1 ? [(as-strs stem - 1)] (as-osz md sw + [(as-strs stem)]))
           (elem mn '(cbw cwde cwd cdq)) (as-osz md (elem mn '(cbw cwd) ? 2 4) + [(elem mn '(cbw cwde) ? 152 153)])
-          (elem mn '(cdqe cqo syscall sysret sysretq pushfq popfq)) (scare 'as-op0-mode [mn md])
+          (elem mn '(cdqe cqo syscall sysret sysretq pushfq popfq lretq)) (scare 'as-op0-mode [mn md])
           (as-nils mn @ () (scare 'as-op0 mn) b b)))
 
    ;; past the GPR core, ops destination first. SSE by a table of (prefix opcode), register <-
@@ -242,8 +247,16 @@
    ; (prefix opcode digit) for a shift of the whole register by the immediate
    as-ssi {'shufps [() 198] 'shufpd [[102] 198] 'pshufd [[102] 112] 'pshuflw [[242] 112] 'pshufhw [[243] 112]}
    ; the three-byte rows: 0F 38 xx, and 0F 3A xx with an imm8 last (sha256rnds2's xmm0 is implied)
-   as-s38 {'pshufb [[102] 0] 'sha256rnds2 [() 203] 'sha256msg1 [() 204] 'sha256msg2 [() 205]}
-   as-s3a {'palignr [[102] 15] 'pblendw [[102] 14]}
+   as-s38 {'pshufb [[102] 0] 'movntdqa [[102] 42] 'sha256rnds2 [() 203] 'sha256msg1 [() 204] 'sha256msg2 [() 205]
+           'sha1nexte [() 200] 'sha1msg1 [() 201] 'sha1msg2 [() 202]
+           'pblendvb [[102] 16] 'blendvps [[102] 20] 'blendvpd [[102] 21]
+           'pmovsxbw [[102] 32] 'pmovsxbd [[102] 33] 'pmovsxbq [[102] 34] 'pmovsxwd [[102] 35]
+           'pmovsxwq [[102] 36] 'pmovsxdq [[102] 37] 'pmovzxbw [[102] 48] 'pmovzxbd [[102] 49]
+           'pmovzxbq [[102] 50] 'pmovzxwd [[102] 51] 'pmovzxwq [[102] 52] 'pmovzxdq [[102] 53]}
+   as-s3a {'palignr [[102] 15] 'pblendw [[102] 14] 'pclmulqdq [[102] 68] 'sha1rnds4 [() 204]
+           'pinsrb [[102] 32] 'pinsrd [[102] 34]}
+   ; pclmulqdq's spellings of its immediate, which halves it multiplies
+   as-clmul {'pclmullqlqdq 0 'pclmulhqlqdq 1 'pclmullqhqdq 16 'pclmulhqhqdq 17}
    as-ssh {'psrlw [113 2] 'psraw [113 4] 'psllw [113 6] 'psrld [114 2] 'psrad [114 4] 'pslld [114 6]
            'psrlq [115 2] 'psllq [115 6] 'psrldq [115 3] 'pslldq [115 7]}
    as-shf {'rol 0 'ror 1 'rcl 2 'rcr 3 'shl 4 'sal 4 'shr 5 'sar 7}
@@ -268,6 +281,138 @@
     (catall [(as-asz md rm) pf (as-rexm md 0 wb (as-hi rn) (as-rm-x rm) (as-rm-b rm)) [15 op] (as-rm md rn rm)])
    (as-sse-op3 md pf esc op rn rm)
     (catall [(as-asz md rm) pf (as-rexm md 0 0 (as-hi rn) (as-rm-x rm) (as-rm-b rm)) [15 esc op] (as-rm md rn rm)])
+
+   ;; VEX, the AVX forms: C5 (R̄ vvvv̄ L pp) when the map is 0F and W, X and B are clear, else
+   ;; C4 (R̄ X̄ B̄ map) (W vvvv̄ L pp). vv is the second source, 0 when none (vvvv̄ all ones);
+   ;; the map 1 0F, 2 0F 38, 3 0F 3A; the legacy prefix becomes pp
+   (as-vpp pf) (charm? <pf ? (<pf @ 102 1 243 2 242 3 0) 0)
+   (as-vex md pf mm wb l rn vv op rm)
+    (: r (1 - as-hi rn) x (1 - as-rm-x rm) b (1 - as-rm-b rm) lp ((l << 2) | as-vpp pf) v ((15 - vv) & 15)
+       (catall [(as-asz md rm)
+                (mm = 1 && wb = 0 && x = 1 && b = 1 ? [197 ((r << 7) | ((v << 3) | lp))]
+                   [196 ((r << 7) | ((x << 6) | ((b << 5) | mm))) ((wb << 7) | ((v << 3) | lp))])
+                [op] (as-rm md rn rm)]))
+   ; an SSE row's v-twin takes its second source in vvvv, but these keep two operands
+   as-v2 '(movntdqa pshufd pshuflw pshufhw ptest pabsb pabsw pabsd sqrtps sqrtpd rcpps rsqrtps
+           movmskps movmskpd pmovmskb ucomiss ucomisd comiss comisd
+           pmovsxbw pmovsxbd pmovsxbq pmovsxwd pmovsxwq pmovsxdq pmovzxbw pmovzxbd pmovzxbq pmovzxwd pmovzxwq pmovzxdq)
+   ; ..and these have no v-twin among the rows
+   as-vno '(sha256rnds2 sha256msg1 sha256msg2 sha1nexte sha1msg1 sha1msg2 sha1rnds4 movsd movss
+            movhps movlps movhpd movlpd movlhps movhlps)
+   ; a v-twin whose sources trade places: when only r/m wants VEX's B, clang swaps them for C5
+   as-vcomm '(paddb paddw paddd paddq pand por pxor pmullw pmuludq pmulhw pmulhuw pmaddwd pcmpeqb pcmpeqw
+              pcmpeqd pminub pmaxub pminsw pmaxsw pavgb pavgw paddusb paddusw paddsb paddsw psadbw
+              addps addpd mulps mulpd andps andpd orps orpd xorps xorpd)
+   ; the shifts by an xmm's count (the imm8 forms are as-ssh's)
+   as-vsh {'psrlw 209 'psrld 210 'psrlq 211 'psraw 225 'psrad 226 'psllw 241 'pslld 242 'psllq 243}
+   ; the AVX-only rows, all 66: (map opcode shape), the shape 'nds a second source, 'nds8 with an
+   ; imm8, 'two none, 'ext8 the xmm in reg and the destination in r/m, 'is4 a fourth register in imm8's top
+   as-vrows {'vperm2f128 [3 6 'nds8] 'vperm2i128 [3 70 'nds8] 'vinsertf128 [3 24 'nds8] 'vinserti128 [3 56 'nds8]
+             'vpblendd [3 2 'nds8] 'vpinsrb [3 32 'nds8] 'vpinsrd [3 34 'nds8] 'vpclmulqdq [3 68 'nds8]
+             'vextractf128 [3 25 'ext8] 'vextracti128 [3 57 'ext8] 'vpextrb [3 20 'ext8] 'vpextrd [3 22 'ext8]
+             'vbroadcasti128 [2 90 'two] 'vpbroadcastd [2 88 'two] 'vpbroadcastq [2 89 'two]
+             'vpbroadcastb [2 120 'two] 'vpbroadcastw [2 121 'two] 'vpermd [2 54 'nds] 'vpblendvb [3 76 'is4]}
+
+   ;; EVEX, AVX-512's forms: 62 (R̄ X̄ B̄ R̄' 0 0 map) (W vvvv̄ 1 pp) (z L'L b V̄' aaa), here without
+   ;; masks, broadcast or the registers past 15. a disp8 counts in units of n bytes, the whole
+   ;; vector unless the row says (the 128- and 256-bit lanes of the inserts and extracts)
+   (as-evex md pf mm wb ll rn vv op rm n)
+    (: r (1 - as-hi rn) x (1 - as-rm-x rm) b (1 - as-rm-b rm) v ((15 - vv) & 15)
+       (catall [(as-asz md rm)
+                [98 ((r << 7) | ((x << 6) | ((b << 5) | (16 | mm)))) ((wb << 7) | ((v << 3) | (4 | as-vpp pf))) ((ll << 5) | 8)]
+                [op] (as-rmn md rn rm (n = 0 ? (16 << ll) n))]))
+   ; (prefix map opcode W shape n), the shapes as-vrows' and 'mov (a load, its store at op+16) and
+   ; 'shi (a shift by imm8: vvvv the destination, reg the digit, the row's seventh)
+   as-xrows {'vpternlogd [[102] 3 37 0 'nds8 0] 'vpternlogq [[102] 3 37 1 'nds8 0]
+             'vprord [[102] 1 114 0 'shi 0 0] 'vprorq [[102] 1 114 1 'shi 0 0]
+             'vprold [[102] 1 114 0 'shi 0 1] 'vprolq [[102] 1 114 1 'shi 0 1]
+             'vpermi2d [[102] 2 118 0 'nds 0] 'vpermi2q [[102] 2 118 1 'nds 0]
+             'vpermt2d [[102] 2 126 0 'nds 0] 'vpermt2q [[102] 2 126 1 'nds 0]
+             'vpxord [[102] 1 239 0 'nds 0] 'vpxorq [[102] 1 239 1 'nds 0] 'vpandd [[102] 1 219 0 'nds 0]
+             'vpandq [[102] 1 219 1 'nds 0] 'vpord [[102] 1 235 0 'nds 0] 'vporq [[102] 1 235 1 'nds 0]
+             'vpandnd [[102] 1 223 0 'nds 0] 'vpandnq [[102] 1 223 1 'nds 0]
+             'vmovdqu8 [[242] 1 111 0 'mov 0] 'vmovdqu16 [[242] 1 111 1 'mov 0] 'vmovdqu32 [[243] 1 111 0 'mov 0]
+             'vmovdqu64 [[243] 1 111 1 'mov 0] 'vmovdqa32 [[102] 1 111 0 'mov 0] 'vmovdqa64 [[102] 1 111 1 'mov 0]
+             'vbroadcasti32x4 [[102] 2 90 0 'two 16] 'vbroadcasti64x2 [[102] 2 90 1 'two 16]
+             'vbroadcasti32x8 [[102] 2 91 0 'two 32] 'vbroadcasti64x4 [[102] 2 91 1 'two 32]
+             'vextracti32x4 [[102] 3 57 0 'ext8 16] 'vextracti64x2 [[102] 3 57 1 'ext8 16]
+             'vextracti32x8 [[102] 3 59 0 'ext8 32] 'vextracti64x4 [[102] 3 59 1 'ext8 32]
+             'vinserti32x4 [[102] 3 56 0 'nds8 16] 'vinserti64x2 [[102] 3 56 1 'nds8 16]
+             'vinserti32x8 [[102] 3 58 0 'nds8 32] 'vinserti64x4 [[102] 3 58 1 'nds8 32]}
+   ; a VEX row a zmm operand takes to EVEX, with its W there
+   as-xzmm {'vpclmulqdq [[102] 3 68 0 'nds8 0] 'vpaddd [[102] 1 254 0 'nds 0] 'vpaddq [[102] 1 212 1 'nds 0]
+            'vpshufb [[102] 2 0 0 'nds 0]}
+   (as-evx md mn ops)
+    (: nm (show mn) n #ops d (n > 0 ? (ops 0) ()) a (n > 1 ? (ops 1) ()) c (n > 2 ? (ops 2) ())
+       ll (? (any (o \ <o = 'rg && <>>o = 64) ops) 2 (any (o \ <o = 'rg && <>>o = 32) ops) 1 0)
+       cl (peep as-clmul (name (snip nm 1 #nm)) ())
+       r (peep as-xrows mn (? (ll < 2) () (charm? cl) (as-xzmm 'vpclmulqdq) (peep as-xzmm mn ())))
+       (? !(two? r) ()
+          (: pf (r 0) mm (r 1) op (r 2) wb (r 3) k (r 4) nn (r 5)
+             (im? o) (two? o && <o = 'im)
+             (ex rn vv rm) (as-evex md pf mm wb ll rn vv op rm nn)
+             (ex8 rn vv rm i) (as-imt (ex rn vv rm + [(byte <>i)]) 1 rm)
+             (? (charm? cl && n = 3) (ex8 (as-regn d) (as-regn a) c ['im cl])
+                (k = 'nds && n = 3) (ex (as-regn d) (as-regn a) c)
+                (k = 'nds8 && n = 4 && im? (ops 3)) (ex8 (as-regn d) (as-regn a) c (ops 3))
+                (k = 'two && n = 2) (ex (as-regn d) 0 a)
+                (k = 'ext8 && n = 3 && im? c) (ex8 (as-regn a) 0 d c)
+                (k = 'shi && n = 3 && im? c) (ex8 (r 6) (as-regn d) a c)
+                (k = 'mov && n = 2 && as-mem? d) (as-evex md pf mm wb ll (as-regn a) 0 (op + 16) d nn)
+                (k = 'mov && n = 2) (ex (as-regn d) 0 a)
+                ()))))
+   (as-vx md mn ops)
+    (: nm (show mn) n #ops
+       (? (#nm < 3 || nm 0 != 118) ()
+          (: b (name (snip nm 1 #nm)) d (n > 0 ? (ops 0) ()) a (n > 1 ? (ops 1) ()) c (n > 2 ? (ops 2) ())
+             l (any (o \ <o = 'rg && <>>o = 32) ops ? 1 0)
+             (im? o) (two? o && <o = 'im)
+             (ib o) [(byte <>o)]
+             (hi? o) (<o = 'rg && as-hi (as-regn o) = 1)
+             (vx pf mm op wb rn vv rm) (as-vex md pf mm wb l rn vv op rm)
+             (vx8 pf mm op wb rn vv rm k) (as-imt (vx pf mm op wb rn vv rm + ib k) 1 rm)
+             ld (peep as-sse b (peep as-sse2 b ())) st (peep as-sst b ()) vr (peep as-vrows mn ())
+             cl (peep as-clmul b ()) s38 (peep as-s38 b ()) s3a (peep as-s3a b ()) si (peep as-ssi b ())
+             ev (as-evx md mn ops)
+             (? (two? ev) ev
+                (any (o \ <o = 'rg && <>>o = 64) ops) ()               ; a zmm only EVEX lays
+                (elem mn '(vzeroupper vzeroall)) (n = 0 ? [197 (mn = 'vzeroall ? 252 248) 119] ())
+                (elem b as-vno) ()
+                ; vmovd/vmovq across to a general register or memory, mirroring the legacy rows
+                (elem mn '(vmovd vmovq) && n = 2)
+                 (: g? (as-gp? d || as-gp? a) wq (mn = 'vmovq && g? ? 1 0)
+                    (? (<d = 'rg && as-regw d = 16 && !(mn = 'vmovq && !g?)) (vx [102] 1 110 wq (as-regn d) 0 a)
+                       (<a = 'rg && as-regw a = 16 && (g? || mn = 'vmovd)) (vx [102] 1 126 wq (as-regn a) 0 d)
+                       (as-mem? d) (vx [102] 1 214 0 (as-regn a) 0 d)
+                       (vx [243] 1 126 0 (as-regn d) 0 a)))
+                ; the moves: a store row to memory, and for a register pair where only the source wants
+                ; B, as clang lays it so C5 holds
+                (two? st && two? ld && n = 2)
+                 (? (as-mem? d || (<a = 'rg && hi? a && !(hi? d))) (vx <st 1 <>st 0 (as-regn a) 0 d)
+                    (vx <ld 1 <>ld 0 (as-regn d) 0 a))
+                (two? vr)
+                 (vr @ (mm op k)
+                    (? (k = 'nds && n = 3) (vx [102] mm op 0 (as-regn d) (as-regn a) c)
+                       (k = 'nds8 && n = 4 && im? (ops 3)) (vx8 [102] mm op 0 (as-regn d) (as-regn a) c (ops 3))
+                       (k = 'two && n = 2) (vx [102] mm op 0 (as-regn d) 0 a)
+                       (k = 'ext8 && n = 3 && im? c) (vx8 [102] mm op 0 (as-regn a) 0 d c)
+                       (k = 'is4 && n = 4 && <(ops 3) = 'rg) (vx [102] mm op 0 (as-regn d) (as-regn a) c + [(as-regn (ops 3) << 4)])
+                       ()))
+                (charm? cl && n = 3) (vx8 [102] 3 68 0 (as-regn d) (as-regn a) c ['im cl])
+                ; the shifts: by an immediate the destination rides vvvv and reg holds the digit
+                (n = 3 && im? c && two? (peep as-ssh b ()))
+                 (as-ssh b @ r (vx8 [102] 1 <r 0 <>r (as-regn d) a c))
+                (n = 3 && charm? (peep as-vsh b ())) (vx [102] 1 (as-vsh b) 0 (as-regn d) (as-regn a) c)
+                (two? si && n = 3 && im? c && !(elem b '(shufps shufpd))) (vx8 <si 1 <>si 0 (as-regn d) 0 a c)
+                (two? si && n = 4 && im? (ops 3)) (vx8 <si 1 <>si 0 (as-regn d) (as-regn a) c (ops 3))
+                (two? s3a && n = 4 && im? (ops 3)) (vx8 <s3a 3 <>s3a 0 (as-regn d) (as-regn a) c (ops 3))
+                (two? s38 && n = 2 && elem b as-v2) (vx <s38 2 <>s38 0 (as-regn d) 0 a)
+                (two? s38 && n = 3) (vx <s38 2 <>s38 0 (as-regn d) (as-regn a) c)
+                (two? ld && n = 2 && elem b as-v2) (vx <ld 1 <>ld 0 (as-regn d) 0 a)
+                (two? ld && n = 3 && !(starts? (show b) "cvt"))
+                 (? (elem b as-vcomm && <c = 'rg && hi? c && !(hi? a)) (vx <ld 1 <>ld 0 (as-regn d) (as-regn c) a)
+                    (vx <ld 1 <>ld 0 (as-regn d) (as-regn a) c))
+                ()))))
    (as-more md mn w ops)
     (: nm (show mn) n #ops d (n > 0 ? (ops 0) ()) s (n > 1 ? (ops 1) ())
        sr (peep as-sse mn (peep as-sse2 mn ())) ss (peep as-sst mn ())
@@ -281,10 +426,16 @@
                  (as-sse-op md [102] 110 0 (as-regn d) s)))
           (two? ss && n = 2 && as-mem? d) (as-sse-op md <ss <>ss 0 (as-regn s) d)
           (two? sr && n = 2) (as-sse-op md <sr <>sr (as-xw d s w) (as-regn d) s)
-          (two? (peep as-s38 mn ()) && (n = 2 || (n = 3 && mn = 'sha256rnds2 && <(ops 2) = 'rg && as-regn (ops 2) = 0)))
+          (two? (peep as-s38 mn ()) && (n = 2 || (n = 3 && elem mn '(sha256rnds2 pblendvb blendvps blendvpd)
+                                                   && <(ops 2) = 'rg && as-regw (ops 2) = 16 && as-regn (ops 2) = 0)))
            (as-s38 mn @ r (as-sse-op3 md <r 56 <>r (as-regn d) s))
           (n = 3 && two? (peep as-s3a mn ()) && <(ops 2) = 'im)
            (as-s3a mn @ r (as-imt (as-sse-op3 md <r 58 <>r (as-regn d) s + [(byte <>(ops 2))]) 1 s))
+          (n = 2 && charm? (peep as-clmul mn ()))
+           (as-imt (as-sse-op3 md [102] 58 68 (as-regn d) s + [(as-clmul mn)]) 1 s)
+          ; pextrd: the xmm in reg, the destination in r/m
+          (n = 3 && elem mn '(pextrb pextrd) && <(ops 2) = 'im && <s = 'rg)
+           (as-imt (as-sse-op3 md [102] 58 (mn = 'pextrb ? 20 22) (as-regn s) d + [(byte <>(ops 2))]) 1 d)
           ; a symbol's address as the immediate
           (n = 2 && <s = 'ims)
            (: fx (md = 64 && w = 8 ? (as-syms s) (as-symw s (w = 2 ? 2 4))) frc (as-frc d)
@@ -313,6 +464,17 @@
                  (n = 2 && <s = 'im) (as-imt (as-emit md w frc [(192 + o8)] k d + [(byte <>s)]) 1 d)
                  (n = 2 && <s = 'rg && as-regn s = 1) (as-emit md w frc [(210 + o8)] k d)
                  ()))
+          ; crc32 by its source's suffix: F2 0F 38 F0 a byte, F1 the rest; the destination's REX.W
+          (n = 2 && elem mn '(crc32 crc32b crc32w crc32l crc32q) && <d = 'rg && (mn != 'crc32 || as-gp? s))
+           (: sw (mn = 'crc32 ? (as-regw s) (xa-sfxw (nm 5))) ew (? (sw = 1) (as-regw d = 8 ? 8 4) (sw = 2) 4 sw)   ; gas lays 66 ahead of F2
+              ((sw = 2 ? [102 242] [242]) + as-emit md ew (as-frcs ops) [15 56 (sw = 1 ? 240 241)] (as-regn d) s))
+          ; BMI's VEX-encoded general-register ops, W the destination's width
+          (n = 3 && mn = 'rorx && <(ops 2) = 'im && as-gp? d)
+           (as-imt (as-vex md [242] 3 (as-regw d = 8 ? 1 0) 0 (as-regn d) 0 240 s + [(byte <>(ops 2))]) 1 s)
+          (n = 3 && mn = 'andn && as-gp? d) (as-vex md () 2 (as-regw d = 8 ? 1 0) 0 (as-regn d) (as-regn s) 242 (ops 2))
+          (n = 3 && elem mn '(shlx sarx shrx) && as-gp? d && as-gp? (ops 2))
+           (as-vex md (mn @ 'shlx [102] 'sarx [243] [242]) 2 (as-regw d = 8 ? 1 0) 0 (as-regn d) (as-regn (ops 2)) 247 s)
+          (n = 1 && mn = 'rdpid && <d = 'rg) ([243] + as-emit md 4 0 '(15 199) 7 d)          ; F3 0F C7 /7
           (n = 1 && mn = 'bswap && <d = 'rg)
            (as-regn d @ r (catall [(as-rexm md 0 (as-rexw w) 0 0 (as-hi r)) [15 (200 + as-lo r)]]))
           (n = 3 && elem mn '(shld shrd))
@@ -359,13 +521,15 @@
      ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? ['mem -1 -1 1 0 <>o] o)) ops0))
      (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
-        (md < 64 && two? (as-sys md mn w ops)) (as-sys md mn w ops)
-        (as-more md mn w ops @ x
-           (two? x ? x
-              (#ops @ 0 (as-0 md mn)
-                   1 (as-1 md mn w <ops)
-                   2 (as-2 md mn w <>ops <ops)
-                   n (scare 'as-arity [mn n]))))))
+        ((md < 64 || elem mn '(bt bts btr btc)) && two? (as-sys md mn w ops)) (as-sys md mn w ops)
+        (as-vx md mn ops @ v
+           (two? v ? v
+              (as-more md mn w ops @ x
+                 (two? x ? x
+                    (#ops @ 0 (as-0 md mn)
+                         1 (as-1 md mn w <ops)
+                         2 (as-2 md mn w <>ops <ops)
+                         n (scare 'as-arity [mn n]))))))))
    ;; the system lane of a 16- or 32-bit segment: the segment and control registers, the far
    ;; transfers, the descriptor tables, the ports, int. ops destination first; () when not one
    (as-sys md mn w ops)

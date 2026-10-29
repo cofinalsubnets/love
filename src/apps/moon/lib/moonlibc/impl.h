@@ -1,7 +1,6 @@
 /* impl.h -- the shared head of every moonlibc member. members link by need, so one
  * reaches another's state by its public name (errno, not __errno_v) or through here */
-#ifndef LvMoonlibcImplH
-#define LvMoonlibcImplH
+#pragma once
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -148,6 +147,7 @@ struct _IO_FILE {
 #define NR_fb_ftruncate     480
 #define NR_fb_getcwd        326   /* __getcwd */
 #define NR_fb_chdir          12
+#define NR_fb_fchdir         13
 #define NR_fb_chroot         61
 #define NR_fb_fchmod        124
 #define NR_fb_umask          60
@@ -211,6 +211,7 @@ struct _IO_FILE {
 #define NR_ftruncate       46
 #define NR_sync            81
 #define NR_chdir           49
+#define NR_fchdir          50
 #define NR_chroot          51
 #define NR_fchmod          52
 #define NR_fchmodat        53
@@ -359,6 +360,7 @@ struct _IO_FILE {
 #define NR_ftruncate      194   /* ftruncate64 */
 #define NR_getcwd         183
 #define NR_chdir           12
+#define NR_fchdir         133
 #define NR_chroot          61
 #define NR_fchmod          94
 #define NR_umask           60
@@ -476,6 +478,7 @@ struct _IO_FILE {
 #define NR_ftruncate      194   /* ftruncate64 */
 #define NR_getcwd         183
 #define NR_chdir           12
+#define NR_fchdir         133
 #define NR_chroot          61
 #define NR_fchmod          94
 #define NR_umask           60
@@ -591,6 +594,7 @@ struct _IO_FILE {
 #define NR_ftruncate       77
 #define NR_getcwd          79
 #define NR_chdir           80
+#define NR_fchdir          81
 #define NR_chroot         161
 #define NR_fchmod          91
 #define NR_umask           95
@@ -1054,8 +1058,11 @@ extern FILE __stdf[3];
 extern unsigned char __obuf[8192];
 /* threads: the clone leaf starts the child calling sp[0](sp[1]); __love_tp reads the
  * thread pointer clone set */
-struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128]; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
+struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128];
+                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; void *mtp; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
 extern struct __love_mt __love_mt;
+/* x64's pt_tls template (tlsimg 0 without one): a thread's copy ends at its thread pointer */
+void __love_tlscopy(void *tp);
 long __love_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
 void *__love_tp(void);
 extern unsigned char __ibuf[4096];
@@ -1065,4 +1072,3 @@ void __love_fopened(FILE *f);
 long __rfill(FILE *f);
 long __rahead(FILE *f);
 int __rsync(FILE *f);
-#endif

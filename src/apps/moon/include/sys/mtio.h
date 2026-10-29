@@ -1,5 +1,4 @@
-#ifndef _LOVE_SYS_MTIO_H
-#define _LOVE_SYS_MTIO_H
+#pragma once
 /* magnetic-tape ioctls, as tar's rmt client speaks them; linux's values */
 #include <sys/ioctl.h>
 
@@ -47,4 +46,3 @@ struct mtpos {
 #define MTIOCTOP _IOW('m', 1, struct mtop)
 #define MTIOCGET _IOR('m', 2, struct mtget)
 #define MTIOCPOS _IOR('m', 3, struct mtpos)
-#endif

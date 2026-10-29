@@ -87,6 +87,53 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab" {print $3, $4, $5}')" = "36 OBJECT LOCAL" ] || fail "a file-scope static is not a local object symbol of its 36 bytes (modpost reads a table's name)"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+# a function's symbol carries its code's bytes, its next one's pad excluded (objtool walks a
+# function by them); gas's .size f, .-f the same, and the end label stays out of the symtab
+printf 'static int s(int a){ return a * 3 + 1; }\nint f(int a){ return s(a) + s(a + 1); }\n__attribute__((aligned(64))) int g(void){ return 2; }\n' > "$ho/.fsz.c"
+moonrun -fno-inline -c "$ho/.fsz.c" -o "$ho/.fsz.o" || fail "mooncc: sized functions"
+[ "$(readelf -sW "$ho/.fsz.o" | awk '$4 == "FUNC" && $3 > 0' | wc -l)" = 3 ] || fail "a function's symbol does not carry its code's size"
+set -- $(readelf -sW "$ho/.fsz.o" | awk '$8 == "f" || $8 == "g" {print $2, $3}' | sort)
+[ $((0x$1 + $2)) -lt $((0x$3)) ] || fail "a function's size runs into the next one's pad"
+printf '.text\n.globl h\n.type h, @function\nh:\n nop\n ret\n.size h, .-h\n.p2align 4\nk:\n ret\n.size k, . - k\n.globl m\nm:\n pause\n ret\n.type m STT_FUNC ; .set .L__sym_size_m, .-m ; .size m, .L__sym_size_m\n' > "$ho/.fsz.S"
+moonrun -c "$ho/.fsz.S" -o "$ho/.fszs.o" || fail "mooncc: an asm .size"
+[ "$(readelf -sW "$ho/.fszs.o" | awk '$8 == "h" || $8 == "k" || $8 == "m" {print $8, $3, $4}' | sort | tr '\n' ' ')" = "h 2 FUNC k 1 NOTYPE m 3 FUNC " ] || fail "gas's .size f, .-f (or the kernel's SYM_END) does not size f, or .type is not its type"
+# an alias is its function's type and size
+printf 'int f(int a){ return a + 1; }\nextern int fa(int) __attribute__((alias("f")));\n' > "$ho/.fal.c"
+moonrun -c "$ho/.fal.c" -o "$ho/.fal.o" || fail "mooncc: a function alias"
+[ "$(readelf -sW "$ho/.fal.o" | awk '$8 == "f" || $8 == "fa" {print $3, $4}' | sort -u | wc -l)" = 1 ] || fail "an alias does not carry its function's type and size"
+readelf -sW "$ho/.fszs.o" | grep -q ' end$' && fail "a function's end label reached the symtab"
+# a global in a named section is its object's bytes, no word's pad: the kernel's percpu hot
+# data must fit one cache line
+printf '_Bool b __attribute__((section(".data..h1")));\nint n __attribute__((section(".data..h2"))) = 3;\nchar c[3] __attribute__((section(".data..h3")));\n' > "$ho/.nps.c"
+moonrun -c "$ho/.nps.c" -o "$ho/.nps.o" || fail "mooncc: globals in named sections"
+[ "$(readelf -SW "$ho/.nps.o" | sed -E 's/.*\] +//' | awk '$1 ~ /^\.data\.\.h/ {print $1, $5}' | sort | tr '\n' ' ')" = ".data..h1 000001 .data..h2 000004 .data..h3 000003 " ] || fail "a named section's global carries a word's pad"
+# a .rela only where a section has relocations: objtool's loop walks an empty one's first entry
+[ "$(readelf -SW "$ho/.fsz.o" | sed -E 's/.*\] +//' | awk '$1 ~ /^\.rela/ && $5 == "000000"' | wc -l)" = 0 ] || fail "an object carries an empty .rela section"
+# a displacement is a constant expression (opt.c's 18*8(%rsp)), %gs: may stand apart from its
+# operand, and a symbol displacement sign-extends: the kernel lives at the top of the space
+printf '.text\nf:\n cmpq %%gs: 8(%%rsi), %%rdx\n movq 18*8(%%rsp), %%rdx\n movq (2+3)*8(%%rsp), %%rdx\n movq sym+8(%%rax), %%rdx\n ret\n' > "$ho/.dsp.S"
+moonrun -c "$ho/.dsp.S" -o "$ho/.dsp.o" || fail "mooncc: expression displacements"
+[ "$(readelf -rW "$ho/.dsp.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_32S sym " ] || fail "a constant displacement became a symbol, or a symbol one is not R_X86_64_32S"
+[ "$(objdump -d "$ho/.dsp.o" | grep -c '%gs:0x8(%rsi)\|0x90(%rsp)\|0x28(%rsp)')" = 3 ] || fail "a displacement expression encodes the wrong value"
+# what clang leaves out, a call to a function that only returns 0 below the inliner's depth and a
+# static table nothing names (and the static functions only it names), is not laid; a `used`,
+# sectioned or reached static is
+printf 'void ext(int);\nstatic inline _Bool no(int b){ return 0; }\nstatic inline void c1(int b){ if (no(b)) ext(b); }\nvoid c2(int b){ c1(b); }\nstatic inline void c3(int b){ if (b) return; c2(b); }\nstatic inline void c4(int b){ c3(b + 1); }\nvoid c5(int b){ c4(b); }\nstruct ops { long (*f)(void *); };\nvoid *priv(void *);\nstatic long direct(void *d){ return (long)priv(d); }\nstatic const struct ops my_ops = { .f = direct };\nstatic inline void *alloc(void *p, const struct ops *o){ return 0; }\nvoid *mk(void *p){ return alloc(p, &my_ops); }\nstatic int ku __attribute__((used)) = 3;\nstatic int ks __attribute__((section(".mysec"))) = 4;\nstatic int dropme = 5;\nstatic int vp = 6;\nstatic int *const tab[] = { &vp };\nint use(int i){ return *tab[i]; }\nstatic int bo = 7;\nint *blk(int i){ static int *const bs[] = { &bo }; return bs[i]; }\n' > "$ho/.ded.c"
+moonrun -c "$ho/.ded.c" -o "$ho/.ded.o" || fail "mooncc: dead calls and statics"
+[ "$(readelf -sW "$ho/.ded.o" | awk '$8 ~ /^(ext|priv|direct|my_ops|dropme|ku|ks|vp|tab|bo)$/ {print $8}' | sort | tr '\n' ' ')" = "bo ks ku tab vp " ] || fail "a dead call or an unreferenced static was laid, or a used one was not"
+# an "m" operand at a global's address is sym+k(%rip), no register: the kernel's alternatives
+# patch paravirt's `call *%[op]` only as the six-byte ff 15
+printf 'struct ops { void (*a)(void); void (*b)(void); } pv;\nvoid f(void){ asm volatile("call *%%[op]" :: [op] "m" (pv.b)); }\n' > "$ho/.pv.c"
+moonrun -c "$ho/.pv.c" -o "$ho/.pv.o" || fail "mooncc: an m operand at a global"
+[ "$(objdump -d "$ho/.pv.o" | grep -c 'ff 15 00 00 00 00')" = 1 ] || fail "an m operand at a global is not rip-relative"
+# an int already within 32 signed bits takes no movsxd (a short plus a byte, then halved); a
+# long narrowed to int still does
+printf 'int f(short a, unsigned char b){ int x = a + b; int y = x >> 1; return y * 3; }\n' > "$ho/.sxw.c"
+moonrun -c "$ho/.sxw.c" -o "$ho/.sxw.o" || fail "mooncc: a narrow int's arithmetic"
+[ "$(objdump -d "$ho/.sxw.o" | grep -c movslq)" = 0 ] || fail "an int within 32 bits was sign-extended again"
+printf 'int g(long a){ return (int)a; }\n' > "$ho/.sxn.c"
+moonrun -c "$ho/.sxn.c" -o "$ho/.sxn.o" || fail "mooncc: a long narrowed to int"
+[ "$(objdump -d "$ho/.sxn.o" | grep -c movslq)" = 1 ] || fail "a long narrowed to int lost its sign extension"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"
@@ -243,6 +290,25 @@ $cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peer128.o" te
 moonrun -o "$ho/.abi128" test/cc/abi128/host.c "$ho/.peer128.o" > "$ho/.abi128.log" 2>&1 \
   || { cat "$ho/.abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
 "$ho/.abi128" > "$ho/.abi128.out" || { cat "$ho/.abi128.out" >&2; fail "abi128: mooncc and gcc disagree on SysV's __int128"; }
+
+# gcc's thread-locals linked by mooncc: a pt_tls template (file bytes, zeros, 32-aligned), its
+# local-exec reads and an initial-exec one relaxed, each thread a fresh copy; at -O0 and -O2
+$cc_g -fno-pie -c -o "$ho/.tlsd.o" test/cc/tls/defs.c || fail "tls: gcc could not build defs.c"
+for o in 0 2; do
+  $cc_g -O$o -fno-pie -c -o "$ho/.tlsp$o.o" test/cc/tls/peer.c || fail "tls: gcc -O$o could not build peer.c"
+  moonrun -no-pie -Wl,-z,noexecstack -o "$ho/.tls$o" test/cc/tls/host.c "$ho/.tlsp$o.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
+    || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link gcc -O$o's thread-locals"; }
+  "$ho/.tls$o" || fail "tls: gcc -O$o's thread-locals read wrong under mooncc's link and moonlibc (exit $?)"
+done
+readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
+
+# ms_abi across compilers: gcc's definitions and calls against mooncc's trampolines and shuffles
+$cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peerms.o" test/cc/msabi/peer.c \
+  || fail "msabi: gcc could not build peer.c"
+moonrun -o "$ho/.msabi" test/cc/msabi/host.c "$ho/.peerms.o" > "$ho/.msabi.log" 2>&1 \
+  || { cat "$ho/.msabi.log" >&2; fail "msabi: mooncc could not build or link host.c"; }
+"$ho/.msabi"; b=$?
+[ $b -eq 0 ] || fail "msabi: mooncc and gcc disagree on ms_abi (bits $b)"
 
 # the float fuzz at -Os too: its exit folds every result's bits
 $cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
@@ -440,6 +506,14 @@ moonrun -std=c11 -c -o /dev/null "$ho/.lbl.c" > /dev/null 2>&1 && fail "a struct
 moonrun -std=nosuchlang -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "an unknown -std= was tolerated"
 moonrun -std=holyc -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 && fail "-std=holyc was accepted -- it names a dialect we do not read"
 moonrun -std=c -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=c refused a plain C file"
+# no function returns a function or an array (C11 6.7.6.3p1); a function pointer, a pointer to a
+# typedef'd function type and an array of function pointers still declare
+printf 'int inc(int x){ return x + 1; }\nint (pick(int w))(int) { return inc; }\n' > "$ho/.frf.c"
+printf 'int (f2(void))[3];\n' > "$ho/.fra.c"
+printf 'typedef int F(int);\nF *g(void);\nint (*h(void))(int);\nint (*a[3])(void);\n' > "$ho/.frp.c"
+moonrun -c -o /dev/null "$ho/.frf.c" > /dev/null 2>&1 && fail "a function returning a function was accepted"
+moonrun -c -o /dev/null "$ho/.fra.c" > /dev/null 2>&1 && fail "a function returning an array was accepted"
+moonrun -c -o /dev/null "$ho/.frp.c" > /dev/null 2>&1 || fail "function pointers in a declarator were refused"
 moonrun -std=gnu11 -c -o /dev/null "$ho/.cc1.c" > /dev/null 2>&1 || fail "-std=gnu11 refused a plain C file"
 echo "mooncc: -std= is a rail (moon is the default and lays gcc's own layout; c fences the extensions out; an unknown one refuses)"
 
@@ -505,6 +579,9 @@ mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
 printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m.c"
 [ "$(moonrun -E "$ho/.once/m.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read the header twice"
+mkdir -p "$ho/.once/b"
+printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
+[ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
@@ -1073,6 +1150,10 @@ cok x64 'int m(void){ register long v asm("rcx") = 5; asm("" : "+r"(v)); return 
 # C11 6.8.1p3: a label is unique to its function; __label__ makes two
 cno x64 'int m(void){ { L: ; } { L: ; } return 0; }\n' "a duplicate label was accepted"
 cok x64 'int m(void){ { __label__ L; L: ; } { __label__ L; L: ; } return 0; }\n' "two blocks' __label__ L refused"
+# C11 6.9p3: one definition per function; gnu89's extern inline may precede the real one
+cno x64 'static int f(void){ return 1; }\nstatic int f(void){ return 2; }\nint m(void){ return f(); }\n' "a static function defined twice was accepted"
+cno x64 'int f(void){ return 1; }\nint f(void){ return 2; }\n' "a function defined twice was accepted"
+cok x64 'extern inline __attribute__((gnu_inline)) int f(void){ return 1; }\nint f(void){ return 2; }\n' "a gnu extern inline followed by its definition refused"
 
 # a UCN takes exactly 4 or 8 hex digits, and names no basic-set character, surrogate or
 # code point past the last (C11 6.4.3p2). \134 is the backslash in octal

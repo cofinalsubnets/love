@@ -8,7 +8,7 @@
 ;                         the operands DESTINATION FIRST -- Intel's order, the manual's, and holo's
 ;   ('label sym)  ('globl sym)  ('dir name rest)     -- rest is the directive's tail, verbatim
 ; an operand:
-;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register; ah..bh sit at 20..23)   ('cr n) ('dr n)
+;   ('rg enc w)   a register, w in 1/2/4/8 (16 an xmm register, 32 a ymm, 64 a zmm; ah..bh sit at 20..23)   ('cr n) ('dr n)
 ;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('sr n)
 ;   ('mem base index scale disp [sym])   an absent register is -1
 ; a statement ends at a newline or a `;`, a comment starts at `#` or `//`, and an immediate may
@@ -44,7 +44,7 @@
                   (xa-reg! n i 8, xa-reg! (n + "d") i 4,
                    xa-reg! (n + "w") i 2, xa-reg! (n + "b") i 1, 0)))
         0 '(8 9 10 11 12 13 14 15))
-   _ (foldl (\ _ i (xa-reg! ("xmm" + show i) i 16, 0)) 0 ^16)
+   _ (foldl (\ _ i (xa-reg! ("xmm" + show i) i 16, xa-reg! ("ymm" + show i) i 32, xa-reg! ("zmm" + show i) i 64, 0)) 0 ^16)
    ;; ah/ch/dh/bh share 4..7 with spl/bpl/sil/dil (REX tells them apart), so they sit 16 above
    _ (foldl (\ _ r (xa-reg! <r <>r 1, 0)) 0 '(("ah" 20) ("ch" 21) ("dh" 22) ("bh" 23)))
    (xa-reg nm) (xa-regs (name nm) @ r (two? r ? ['rg <r <>r]))    ; or ()
@@ -74,6 +74,7 @@
    ;; a symbol, or a symbol with an offset either side: sym, sym+4, sym-8, 4+sym -> (sym . off)
    (xa-symoff s) (: i ((: (g i) (? (i >= #s) -1 (s i = 43 || s i = 45) i (g (i + 1)))) 1)
                     (? (i < 0) ((name (xa-unquote s)) . 0)
+                       (two? (xa-symlin s)) (xa-symlin s)
                        (xa-num? (snip s 0 i) && s i = 43)
                        ((name (xa-unquote (snip s (i + 1) #s))) . (xa-num (snip s 0 i)))
                        ((name (xa-unquote (snip s 0 i))) . (xa-imm (snip s (s i = 43 ? (i + 1) i) #s)))))
@@ -94,7 +95,7 @@
        (i >= n ? (rev acc)
           (s i @ c
              (? (blank? c) (go (i + 1) acc)
-                (c = 48 && i + 1 < n && (s (i + 1) = 120 || s (i + 1) = 88))
+                (c = 48 && i + 2 < n && (s (i + 1) = 120 || s (i + 1) = 88) && ghex? (s (i + 2)))   ; 0x needs a digit
                  (span (i + 2) ghex? @ j (go (sfx j) (['num (ghexv (snip s (i + 2) j))] . acc)))
                 (c = 48 && i + 2 < n && (s (i + 1) = 98 || s (i + 1) = 66) && gbin? (s (i + 2)))  ; 0b101, never the label 0b
                  (span (i + 2) gbin? @ j (go j (['num (gbinv (snip s (i + 2) j))] . acc)))
@@ -147,8 +148,17 @@
                 (gbad? r ? 'bad
                    (gclimb <r >r (<b + 1) @ r2
                       (gbad? r2 ? 'bad (gclimb (gapply <>b lhs <r2) >r2 minp))))))))
+   ; ..or constant arithmetic about one symbol, `K256+32*4`, read by its slope: (sym . off) | ()
+   (xa-symlin s) (gtoks s @ ts
+      (: ss (filter (t \ <t = 'sym) ts)
+         (at v) (gexpr (map (t \ (<t = 'sym ? ['num v] t)) ts) @ r (gbad? r || two? >r ? () <r))
+         a (#ss = 1 ? (at 0) ()) b (#ss = 1 ? (at 1) ()) c (#ss = 1 ? (at 2) ())
+         (? (charm? a && charm? b && charm? c && b - a = 1 && c - b = 1) ((name <>(ss 0)) . a))))
    (gexpr ts) (gprim ts @ r (gbad? r ? 'bad (gclimb <r >r 1)))
    (gimm ts) (gexpr ts @ r (gbad? r || two? >r ? (scare 'gas-immediate ts) <r))   ; the whole run, or nothing
+   ; a displacement that is a constant expression, `18*8`: [value], or () for anything naming a symbol
+   (gconst s) (gtoks s @ ts
+      (any (t \ elem <t '(sym lref pct)) ts ? () (gexpr ts @ r (gbad? r || two? >r ? () [<r]))))
 
    (xa-has? s c) ((: (g i) (? (i >= #s) 0 (s i = c) 1 (g (i + 1)))) 0)
    (xa-idx s c)  ((: (g i) (? (i >= #s) -1 (s i = c) i (g (i + 1)))) 0)
@@ -267,12 +277,14 @@
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (t @ ("%" + s + ":" + r)
-                                       (at-operand r @ o ['seg (name s) (<o = 'abs ? ['mem -1 -1 1 <>o] o)]))
+                                       (at-operand (xa-trim r) @ o ['seg (name s) (<o = 'abs ? ['mem -1 -1 1 <>o] o)]))
          (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
                        (? (two? cr) cr (two? dr) dr (two? sr) sr (at-reglook nm)))
          (t 0 = 36) (snip t 1 #t @ v
                        (? (xa-num? v) ['im (xa-num v)]
                           (xa-expr? v) ['im (gimm (gtoks v))]
+                          ; a constant expression: $4096/8, $-4*16
+                          (two? (gconst v)) ['im <(gconst v)]
                           ; $1f / $1b: a numeric label's address, which gas-text names
                           (1 < #v && (v (#v - 1) = 102 || v (#v - 1) = 98) && xa-allof? (snip v 0 (#v - 1)) digit? 0)
                            ['ims (name v)]
@@ -283,12 +295,12 @@
             d0 (snip t 0 op) n0 #d0
             disp (1 < n0 && d0 0 = 40 && d0 (n0 - 1) = 41 ? (snip d0 1 (n0 - 1)) d0)
             inner (snip t (op + 1) (#t - 1))
-            (inner = "%rip" ? (? (0 = #disp) ['rip () 0]
-                                  (xa-num? disp) ['rip () (xa-num disp)]
+            cv (0 = #disp ? [0] (gconst disp))
+            (inner = "%rip" ? (? (two? cv) ['rip () <cv]
                                   (xa-symoff disp @ so ['rip <so >so]))
                (: fs (xa-split inner 44) k #fs
-                  so (0 = #disp || xa-num? disp ? () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
-                  d (? (0 = #disp) 0 (xa-num? disp) (xa-num disp) >so)
+                  so (two? cv ? () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
+                  d (two? cv ? <cv >so)
                   (k > 3 ? (scare 'as-memform t)
                      (['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
                             (k < 3 ? 1 (xa-imm (fs 2))) d] + (two? so ? [<so]))))))

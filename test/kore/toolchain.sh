@@ -54,6 +54,20 @@ if [ "$(uname -m)" = x86_64 ]; then
   cmp -s "$ho/.kore-mc.elf" "$ho/.kore-ld.elf" || fail "kore ld vs mooncc link (bytes)"
   "$ho/.kore-ld.elf"; r=$?
   [ $r -eq 42 ] || fail "kore ld run (exit $r)"
+  # -r: two objects as one, as ld.lld -r lays them; linked on, it runs the same
+  korerun ld -r "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-r.o" || fail "kore ld -r"
+  if command -v ld.lld > /dev/null 2>&1; then
+    ld.lld -r "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-lr.o"
+    cmp -s "$ho/.kore-lr.o" "$ho/.kore-r.o" || fail "kore ld -r vs ld.lld -r (bytes)"
+  fi
+  korerun ld "$ho/.kore-crt0.o" "$ho/.kore-r.o" -o "$ho/.kore-ldr.elf" || fail "kore ld of an ld -r object"
+  "$ho/.kore-ldr.elf"; r=$?
+  [ $r -eq 42 ] || fail "kore ld -r run (exit $r)"
+  # lld's dialect as kbuild probes it: --version names LLD for ld-version.sh, and a flag
+  # the linker does not carry out fails its ld-option probe
+  korerun ld --version > "$o" 2>&1; grep -q " LLD [0-9.]*-compatible$" "$o" || fail "kore ld --version: $(cat "$o")"
+  korerun ld -EL -maarch64elf -z norelro --pack-dyn-relocs=relr -v > /dev/null 2>&1 || fail "kore ld: a carried flag refused"
+  korerun ld -EL -maarch64elf --no-warn-rwx-segments -v > /dev/null 2>&1 && fail "kore ld: an unsupported flag passed"
   # the archive as a link input binds the same exe byte for byte: members come in by need
   # through the ranlib index, past one nothing calls
   printf 'int unused(void){return 99;}\n' > "$ho/.kore-arz.c"
@@ -138,4 +152,147 @@ if [ "$(uname -m)" = x86_64 ]; then
   ( cd "$N" && "$K" cc h.c -o h ) > "$o" 2>&1 || { cat "$o"; fail "love cc off the carried source"; }
   [ "$("$N/h")" = carried ] || fail "love cc off the carried source: the program"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf ok"
+# lex's C back end, as kbuild asks for it: start conditions, ^, trailing context, <<EOF>>,
+# yyless and input(), compiled by mooncc and run; the same as flex's scanner when there is one
+L=$ho/.kore-lex; rm -rf "$L"; mkdir -p "$L"
+cat > "$L/t.l" <<'SPEC'
+%option noyywrap nounput yylineno
+%x STR
+%s V1
+DIG	[0-9]
+%{
+#include <stdio.h>
+
+%}
+%%
+<*>"#"[^\n]*		printf("<c>");
+^"%v1"			{ BEGIN(V1); printf("<v1>"); }
+<V1>{DIG}+		printf("<n1:%s>", yytext);
+"ab"|"cd"		|
+"ef"			printf("<pair:%s>", yytext);
+"xyz"			{ yyless(1); printf("<x>"); }
+"/*"			{ int c, p = 0; while ((c = input()) && !(p == '*' && c == '/')) p = c; printf("<cm>"); }
+{DIG}+/"px"		printf("<px:%s>", yytext);
+{DIG}+			printf("<n:%s>", yytext);
+[[:alpha:]_][[:alnum:]_]*	printf("<id:%s>", yytext);
+\"			{ BEGIN(STR); printf("<s"); }
+<STR>{
+  \\.			printf("%c", yytext[1]);
+  \"			{ BEGIN(INITIAL); printf(">"); }
+  [^\\"\n]+		printf("%s", yytext);
+  \n			printf("\\n");
+  <<EOF>>		{ printf("<eof-in-str>"); return 0; }
+}
+\n			printf("\n%d:", yylineno);
+[ \t]+			;
+.			printf("<%c>", yytext[0]);
+<<EOF>>			{ printf("<eof>"); return 0; }
+%%
+int main(void) { yylex(); printf("\n"); return 0; }
+SPEC
+printf 'abc 12px 34 _a1 "q\\"x" ab cd ef xyz\n/* a\n*/ b #note\n%%v1 56 # c\n%%v1x 7\n  "open\nmore' > "$L/in"
+korerun lex -o "$L/l.c" "$L/t.l" || fail "kore lex -o"
+moonc "$L/l.c" "$L/l" > /dev/null 2>&1 || fail "kore lex: mooncc the scanner"
+"$L/l" < "$L/in" > "$o"
+printf '%s' '<id:abc><px:12><id:px><n:34><id:_a1><sq"x><pair:ab><pair:cd><pair:ef><x><id:yz>
+2:<cm><id:b><c>
+4:<v1><n1:56><c>
+5:<v1><id:x><n1:7>
+6:<sopen\nmore<eof-in-str>
+' > "$g"; same "lex C scanner (the answer)"
+if command -v flex >/dev/null 2>&1; then
+  flex -o "$L/f.c" "$L/t.l" 2>/dev/null && moonc "$L/f.c" "$L/f" > /dev/null 2>&1 || fail "flex's scanner"
+  "$L/f" < "$L/in" > "$g"; same "lex C scanner vs flex"
+fi
+# yacc's C back end, as kbuild asks for it: %union and <tag>s, %locations and @n, precedence
+# and %prec, error with yyerrok, YYERROR, %destructor on what recovery and an abort let go
+Y=$ho/.kore-yacc; rm -rf "$Y"; mkdir -p "$Y"
+cat > "$Y/t.y" <<'SPEC'
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int yylex(void);
+void yyerror(const char *s);
+%}
+%locations
+%union { long n; char *s; }
+%token <n> NUM
+%token <s> NAME
+%type <n> e line
+%left '+' '-'
+%left '*' '/'
+%right '^'
+%nonassoc UMINUS
+%destructor { printf("[drop %s]", $$); free($$); } <s>
+%%
+input :
+      | input line { printf("= %ld @%d.%d-%d.%d\n", $2, @2.first_line, @2.first_column, @2.last_line, @2.last_column); }
+      ;
+line : e '\n' { $$ = $1; }
+     | NAME '=' e '\n' { printf("%s:", $1); free($1); $$ = $3; }
+     | error '\n' { yyerrok; $$ = -1; }
+     ;
+e : NUM
+  | e '+' e { $$ = $1 + $3; }
+  | e '-' e { $$ = $1 - $3; }
+  | e '*' e { $$ = $1 * $3; }
+  | e '/' e { if (!$3) { yyerror("div0"); YYERROR; } $$ = $1 / $3; }
+  | e '^' e { long r = 1; for (long i = 0; i < $3; i++) r *= $1; $$ = r; }
+  | '-' e %prec UMINUS { $$ = -$2; }
+  | '(' e ')' { $$ = $2; }
+  ;
+%%
+static int ln = 1, col = 1;
+int yylex(void)
+{
+  int c;
+  while ((c = getchar()) == ' ') col++;
+  yylloc.first_line = yylloc.last_line = ln;
+  yylloc.first_column = yylloc.last_column = col;
+  if (c == EOF) return 0;
+  if (c >= '0' && c <= '9') {
+    long v = 0;
+    for (; c >= '0' && c <= '9'; c = getchar()) v = 10 * v + c - '0', col++;
+    ungetc(c, stdin);
+    yylval.n = v, yylloc.last_column = col - 1;
+    return NUM;
+  }
+  if (c >= 'a' && c <= 'z') {
+    char b[64]; int n = 0;
+    for (; c >= 'a' && c <= 'z' && n < 63; c = getchar()) b[n++] = c, col++;
+    ungetc(c, stdin);
+    b[n] = 0, yylval.s = strdup(b), yylloc.last_column = col - 1;
+    return NAME;
+  }
+  if (c == '\n') ln++, col = 1; else col++;
+  return c;
+}
+void yyerror(const char *s) { printf("err %s at %d.%d\n", s, yylloc.first_line, yylloc.first_column); }
+int main(void) { int r = yyparse(); printf("rc %d nerrs %d\n", r, yynerrs); return 0; }
+SPEC
+printf '1+2*3\nx = 2^3^2\n-(4-1)*2\n1+*2\nfoo bar baz\n8/0\n(1\n7 - -2\n' > "$Y/in"
+korerun yacc -o "$Y/l.c" --defines="$Y/l.h" -t -l "$Y/t.y" || fail "kore yacc -o"
+moonc "$Y/l.c" "$Y/l" > /dev/null 2>&1 || fail "kore yacc: mooncc the parser"
+{ "$Y/l" < "$Y/in"; printf foo | "$Y/l"; } > "$o"
+printf '%s' '= 7 @1.1-1.6
+x:= 512 @2.1-2.10
+= -6 @3.1-3.9
+err syntax error at 4.3
+= -1 @4.1-4.5
+err syntax error at 5.5
+[drop foo][drop bar][drop baz]= -1 @5.1-5.12
+err div0 at 6.4
+= -1 @6.1-6.4
+err syntax error at 7.3
+= -1 @7.1-7.3
+= 9 @8.1-8.7
+rc 0 nerrs 4
+err syntax error at 1.4
+[drop foo]rc 1 nerrs 1
+' > "$g"; same "yacc C parser (the answer)"
+if command -v bison >/dev/null 2>&1; then
+  bison -o "$Y/b.c" --defines="$Y/b.h" -t -l "$Y/t.y" 2>/dev/null && moonc "$Y/b.c" "$Y/b" > /dev/null 2>&1 || fail "bison's parser"
+  { "$Y/b" < "$Y/in"; printf foo | "$Y/b"; } > "$g"; same "yacc C parser vs bison"
+fi
+echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + lex + yacc ok"

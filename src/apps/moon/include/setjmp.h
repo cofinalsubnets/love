@@ -1,5 +1,4 @@
-#ifndef _LOVE_SETJMP_H
-#define _LOVE_SETJMP_H
+#pragma once
 /* glibc's jmp_buf size, 25 longs; sigsetjmp is a macro over __sigsetjmp, as in glibc */
 #ifdef __ARM_EABI__
 typedef long long jmp_buf[16];               /* arm's: r4-r11 sp lr, d8-d15, a BSD's 16-byte mask at 104 */
@@ -17,4 +16,3 @@ void siglongjmp(sigjmp_buf, int);
 #define _setjmp(env) __sigsetjmp(env, 0)
 void longjmp(jmp_buf, int);
 void _longjmp(jmp_buf, int);
-#endif

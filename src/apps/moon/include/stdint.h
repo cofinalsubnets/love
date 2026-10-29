@@ -1,5 +1,4 @@
-#ifndef _LOVE_STDINT_H
-#define _LOVE_STDINT_H
+#pragma once
 typedef signed char        int8_t;
 typedef short              int16_t;
 typedef int                int32_t;
@@ -113,4 +112,3 @@ typedef int64_t  int_fast64_t;   typedef uint64_t  uint_fast64_t;
 #endif
 #define INTMAX_C(c)  INT64_C(c)
 #define UINTMAX_C(c) UINT64_C(c)
-#endif

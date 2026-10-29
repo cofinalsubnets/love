@@ -7,8 +7,7 @@
 //   then the packed sections back to back, the index first. an index record is
 //   u8 sec, u8 kind ('0' file, '2' link), u16 mode, u32 off, len, mtime  path NUL  target NUL
 //   off is where the member's bytes start in its section, path is tree-relative.
-#ifndef SRCTREE_H
-#define SRCTREE_H
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -39,4 +38,3 @@ intptr_t tree_find(struct tree const *t, char const *p, uintptr_t n);
 // codec's packed bytes into exactly cap of out -> cap, or -1
 intptr_t tree_decode(uint32_t codec, unsigned char const *z, uintptr_t zn,
                         unsigned char *out, uintptr_t cap);
-#endif

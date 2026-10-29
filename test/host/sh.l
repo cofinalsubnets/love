@@ -249,7 +249,7 @@
 (: r (sh-complete shS (sh-expl "cat src/apps/ko"))
    (test ("re/" = slurp (tap <r))))
 (: r (sh-complete shS (sh-expl "cat src/apps/lu"))
-   (test ('("src/apps/lupa.l" "src/apps/lush.l" "src/apps/lux") = >r)))
+   (test ('("src/apps/lush.l" "src/apps/lux") = >r)))
 (test ("ab" = sh-common '("abc" "abd" "ab"))
         ("~" = sh-homely ("" + getenv "HOME")))
 
@@ -379,6 +379,11 @@
    (test (r = 'boom)
            (start = here)
            !(start = "/")))                    ; not vacuous
+; a forkless body's cd comes back even to a cwd removed under us: cd .. leaves from there, not /
+(: d (cwd 0 + "/out/t-lushfchdir")
+   _ (test (t-lush ("rm -rf " + d + "; mkdir -p " + d + "/e; cd " + d + "/e; rmdir ../e; x=$(cd /; echo hi); cd ..; pwd")
+            = (d + "\n")))
+   (t-lush ("rm -rf " + d)))
 ; `exit` in a forkless body folds to ('xit . st); a fork under one exits for real
 (t-lushes
  [["echo [$(echo x; exit 7; echo y)]; z=$(exit 7); echo $?" "[x]\n7\n"]

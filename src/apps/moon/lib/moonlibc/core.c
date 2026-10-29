@@ -38,6 +38,42 @@ static void __love_reloc(void) {
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
 
+/* x64's thread template, variant II: a thread's copy ends at its thread pointer, whose first
+ * word points at itself; the template's tail past its file bytes is the .tbss, zeroed */
+void __love_tlscopy(void *tp) {
+  char *b = (char *) tp - __love_mt.tlsblk;
+  memcpy(b, __love_mt.tlsimg, __love_mt.tlsfile);
+  memset(b + __love_mt.tlsfile, 0, __love_mt.tlsblk - __love_mt.tlsfile);
+  *(void **) tp = tp; }
+
+/* a program with a pt_tls gets the main thread's copy, the thread pointer set at its end;
+ * one without keeps the main thread's at 0 */
+static void __love_tlsinit(void) {
+#if defined(__x86_64__)
+  unsigned long phdr = 0, phnum = 0;
+  for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
+    if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
+    if ((unsigned int) a[0] == 5) phnum = (unsigned long) a[1]; }   /* AT_PHNUM */
+  ElfW(Phdr) const *ph = (ElfW(Phdr) const *) phdr, *t = 0;
+  for (unsigned long i = 0; ph && i < phnum; i++)
+    if (ph[i].p_type == PT_TLS && ph[i].p_memsz) t = &ph[i];
+  if (!t) return;
+  unsigned long al = t->p_align > 1 ? (unsigned long) t->p_align : 1;
+  __love_mt.tlsimg = (char const *) (__love_bias() + (unsigned long) t->p_vaddr);
+  __love_mt.tlsfile = (unsigned long) t->p_filesz;
+  __love_mt.tlsblk = ((unsigned long) t->p_memsz + al - 1) / al * al;
+  __love_mt.tlsalign = al;
+  char *m = mmap(0, (long) (__love_mt.tlsblk + 64), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (m == (char *) -1) { sc1(NR_exit_group, 127); }
+  void *tp = m + __love_mt.tlsblk;
+  __love_tlscopy(tp);
+  __love_mt.mtp = tp;
+  if (__love_osv == 2) fb2(165, 129, (long) &tp);             /* sysarch(AMD64_SET_FSBASE) */
+  else if (__love_osv == 3) fb1(317, (long) tp);              /* _lwp_setprivate */
+  else sc2(NR_arch_prctl, 0x1002, (long) tp);                 /* ARCH_SET_FS */
+#endif
+}
+
 unsigned long getauxval(unsigned long t) {
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2)
     if ((unsigned int) a[0] == t) return (unsigned long) a[1];
@@ -70,6 +106,7 @@ void __love_start(long *sp, long osv) {
   while (*e) e++;
   __auxv = osv == 4 ? 0 : (long *) (e + 1);   /* macos lays its apple strings there */
   __love_reloc();   /* before any data pointer is read */
+  __love_tlsinit();
   stdout->fd = 1;
   stdout->wr = 1;
   stdout->buf = __obuf;

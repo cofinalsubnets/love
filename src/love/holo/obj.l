@@ -72,7 +72,7 @@
                         (o-walkr be >items labels wkset internal? rset (off + w)
                                  (rev bs + bacc) racc))
                     (: fill (? (elem k a64-afixk) (le32 (afix-w (fix-a x)))
-                               (elem k '(b26 b19 b14 j21)) (le32 (fix-a x))
+                               (elem k '(b14 j21)) (le32 (fix-a x))
                                ; riscv 'pcrel: aux packs both base words, auipc low, the I-insn high
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
                                ; arm is REL: a thumb branch holds its encoding with the -4 addend
@@ -101,6 +101,9 @@
                     (<ls 6 @ lb
                        (o-has? lb lbl ? [i (peep lb lbl 0)] (go >ls (i + 1)))))
        (go lanes 1))
+   ; a func symbol's size: its end label's offset less its own, in the same lane, else 0
+   (o-fsize lanes w nm) (o-where lanes (fn-end nm) @ e (two? e && <e = <w ? (<>e - <>w) 0))
+   (o-ftype lanes nm) (two? (o-where lanes (fn-type nm)) ? 2 0)        ; stt_func | stt_notype
    ; labels a relocation names that no lane defines, each an undef symbol; first-seen order
    (o-exts lanes rels)
     (: seen {}
@@ -257,13 +260,13 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (sec-exec? si ?
-                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) 0)   ; stb_local stt_func, +thumb bit
+                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) (o-fsize lanes [si off] (cap e)))   ; stb_local stt_func, +thumb bit
                                               (elf-sym32 (stroffs i) 0 1 si off 0))))      ; stb_local stt_object
                                  locs))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym32 (stroffs (nloc + i))
                                                      (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
-                                                     2 <w (<>w | tb) 0)))                   ; stt_func, +thumb bit
+                                                     2 <w (<>w | tb) (o-fsize lanes w fs))))   ; stt_func, +thumb bit
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
@@ -479,12 +482,12 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (secs (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? 2 1) <w <>w (x ? 0 (o-size ls)))))
+                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) 1) <w <>w (x ? (o-fsize lanes w ls) (o-size ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
-                                             2 <w <>w 0)))
+                                             (o-ftype lanes fs) <w <>w (o-fsize lanes w fs))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
@@ -534,8 +537,8 @@
                  'adrp21 (o-rela off si ra-pghi21 (sa + afix-ad aux))
                  'addlo12 (o-rela off si ra-lo12 (sa + afix-ad aux))
                  ('lo12s1 || 'lo12s2 || 'lo12s4 || 'lo12s8 || 'lo12s16) (o-rela off si (ra-ldst k) (sa + afix-ad aux))
-                 'b26 (o-rela off si (aux = 2483027968 ? ra-call26 ra-jump26) sa)   ; 0x94000000 = bl
-                 'b19 (o-rela off si ra-condbr19 sa)
+                 'b26 (o-rela off si (afix-w aux = 2483027968 ? ra-call26 ra-jump26) (sa + afix-ad aux))   ; 0x94000000 = bl
+                 'b19 (o-rela off si ra-condbr19 (sa + afix-ad aux))
                  'b14 (o-rela off si ra-tstbr14 sa)
                  'ld19 (o-rela off si ra-ldlo19 (sa + afix-ad aux))
                  'adr21 (o-rela off si ra-adrlo21 (sa + afix-ad aux))
@@ -545,10 +548,12 @@
            rs))
        relas (map (o-rels * ln-rl) lanes)
        rcnt (tally * ln-rl * ln)
+       ; a .rela only where a section has relocations: objtool walks an empty one's first entry
+       rl (filter (i \ rcnt i > 0) ^nsec)  nrel #rl
 
        shnames (map cap lanes
                 + '(".symtab" ".strtab")
-                + map (l \ ".rela" + <l) lanes
+                + map (i \ ".rela" + <(ln i)) rl
                 + '(".shstrtab"))
        shstr (o-strtab shnames)
        shstrblob <shstr shoffs <>shstr
@@ -556,9 +561,9 @@
 
        ; -- file layout: header, section contents packed tight (sh_addralign places them),
        ; then the sht. the indices: 0 NULL, the content sections, .symtab, .strtab, a .rela
-       ; per content section, .shstrtab last. --
-       i-sym (1 + nsec) i-str (2 + nsec) i-rel0 (3 + nsec)
-       i-shs (2 * nsec + 3) nsh (2 * nsec + 4)
+       ; per relocated section, .shstrtab last. --
+       i-sym (1 + nsec) i-str (2 + nsec)
+       i-shs (nsec + nrel + 3) nsh (nsec + nrel + 4)
        h-sz 64
        ; the content offsets, in section order; a NOBITS sh_offset is a placeholder.
        (o-offs i off acc) (nsec <= i ? [(rev acc) off]
@@ -578,10 +583,10 @@
                        lanes
               + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
                  (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab
-              + o-mapi (\ i l (elf-shdr (shname (nsec + 2 + i)) 4 0                          ; one .rela per section, link=.symtab
+              + o-mapi (\ j i (elf-shdr (shname (nsec + 2 + j)) 4 0                          ; a .rela per relocated section, link=.symtab
                                   0 (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
-                       lanes
-              + [(elf-shdr (shname (2 * nsec + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
+                       rl
+              + [(elf-shdr (shname (nsec + nrel + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
 
        hdr (catall [
              '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 64-bit LSB

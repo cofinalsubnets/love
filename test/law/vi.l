@@ -771,17 +771,17 @@
    (hk g s in) (map (r \ <r) <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
    _ (test
-      (hues-lang "a/b.c" "" = 'c)
-      (hues-lang "x.h" "" = 'c)
-      (hues-lang "Makefile" "" = 'make)
-      (hues-lang "t.mk" "" = 'make)
-      (hues-lang "x.html" "" = 'html)
-      (hues-lang "x.css" "" = 'css)
-      (hues-lang "x.sh" "" = 'sh)
-      (hues-lang "run" "#!/bin/sh -e" = 'sh)
-      (hues-lang "x.l" "#!/bin/sh" = 'l)                  ; the name first
-      !(hues-lang "x.txt" "")
-      !(hues-lang "run" "#!/usr/bin/env python3"))
+      (hues-lang "a/b.c" () = 'c)
+      (hues-lang "x.h" () = 'c)
+      (hues-lang "Makefile" () = 'make)
+      (hues-lang "t.mk" () = 'make)
+      (hues-lang "x.html" () = 'html)
+      (hues-lang "x.css" () = 'css)
+      (hues-lang "x.sh" () = 'sh)
+      (hues-lang "run" ["#!/bin/sh -e"] = 'sh)
+      (hues-lang "x.l" ["#!/bin/sh"] = 'l)                  ; the name first
+      !(hues-lang "x.txt" ())
+      !(hues-lang "run" ["#!/usr/bin/env python3"]))
    _ (test
       (hk 'c "#include <stdio.h>" 0 = '(pre string))
       (hk 'c "static int x = 0x1f; // n" 0 = '(type type number comment))
@@ -817,10 +817,28 @@
       (<(hues-lexer 'make "\ttest -s $$t" 0 1) = '((func 1 5) (var 9 12)))
       (hk 'make "x.o: CFLAGS=1" 0 = '(func)))
    _ (test
-      (map (f \ hues-lang f "") ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"
+      (map (f \ hues-lang f ()) ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"
                                    "love.1" "x.man" "x.mjs" "Cookfile"]
        = '(md json asm asm asm diff diff awk roff roff js make))
-      (hues-lang "run" "#!/usr/bin/awk -f" = 'awk))
+      (hues-lang "run" ["#!/usr/bin/awk -f"] = 'awk))
+; --- lex and yacc: a .l with a %% line is lex; the grammar around C ---
+   _ (test
+      (hues-lang "x.l" ["/* c */" "%{" "%}" "%%" "a {}"] = 'lex)
+      (hues-lang "x.l" ["; love" "(: a 1)"] = 'l)
+      (hues-lang "g.y" () = 'yacc)
+      (hues-lang "c.lex" () = 'lex)
+      (hc 'lex ["%{" "int x;" "%}" "%%" "<S>{" "\t\"a\"\t{ x++;" "\t}" "}" "%%" "int y;"]
+          = '(0 (0 1 0 0 0) (0 1 0 0 0) (0 0 0 0 0) (1 0 0 0 0) (1 0 0 0 1) (1 0 1 0 1) (1 0 0 0 1)
+              (1 0 0 0 0) (2 0 0 0 0)))
+      (hk 'lex "<S>[a-z ]+\t{ x++; /* c */" [1 0 0 0 0] = '(type string comment))
+      (hk 'lex "<<EOF>>\treturn 0;" [1 0 0 0 0] = '(pre keyword number))
+      (hk 'lex "DIG\t[0-9]" [0 0 0 0 0] = '(func string))
+      (hk 'yacc "%token <num> T_NUM" [0 0 0 0 0] = '(keyword type const))
+      (hk 'yacc "expr: expr '+' T_NUM { $$ = $1 + @3; }" [1 0 0 0 0] = '(func pre string const var var var))
+      (hk 'yacc "\t| x { $<f>-1 = 0; }" [1 0 0 0 0] = '(pre var number))
+      (hc 'yacc ["%union" "{" "int n;" "}" "%%" "a: B {" "  f($1); }" "  ;" "%%" "int z;"]
+          = '(0 (0 0 0 0 0) (0 0 1 0 0) (0 0 1 0 0) (0 0 0 0 0) (1 0 0 0 0) (1 0 1 0 0) (1 0 0 0 0)
+              (1 0 0 0 0) (2 0 0 0 0))))
    _ (test
       (hk 'json "{\"a\": [1, -2.5e3, true], \"b\": \"x\\\"y\"} // c" 0
           = '(type number number const type string comment))

@@ -250,10 +250,10 @@ mean that one cell is not the bare naive form the others use.
 `mapfilter`, but written as a genuine *list* pipeline read straight from source —
 `(foldl + 0 (map sq (filter odd (jot N))))` — which under a plain evaluator
 materializes three throwaway lists (the range, the odds, the squares). love's
-native glaze **fuses** the whole pipeline into one counted loop with no
-intermediate allocation (the rewrite-level pass `defoliate` collapses the
-map/filter into the fold and lowers `foldl`-over-`jot` to the same loop codegen
-`fib`/`primes` use). Read the cross-language row **honestly**: it measures the
+evaluator **fuses** the whole pipeline into one counted loop with no
+intermediate allocation (ev's lowering folds the map/filter into the fold's
+step and lowers `foldl`-over-`jot` to a counted loop, which the glaze compiles
+with the same codegen `fib`/`primes` use). Read the cross-language row **honestly**: it measures the
 *abstraction cost of the functional-pipeline idiom*, not a fixed algorithm — each
 column reflects how the implementation handles the intermediates (love fuses them;
 `luajit` has no `map`/`filter`, so its bench fuses by hand; `pypy` is

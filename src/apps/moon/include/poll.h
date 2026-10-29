@@ -1,5 +1,4 @@
-#ifndef _LOVE_POLL_H
-#define _LOVE_POLL_H
+#pragma once
 struct pollfd { int fd; short events; short revents; };
 typedef unsigned long nfds_t;
 #define POLLIN   1
@@ -9,4 +8,3 @@ typedef unsigned long nfds_t;
 #define POLLHUP 16
 #define POLLNVAL 32
 int poll(struct pollfd*, nfds_t, int);
-#endif

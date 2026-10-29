@@ -78,6 +78,7 @@
     (: cpu (peep macho-cpus target ())
        _ (two? cpu || scare 'macho-target target)
        objs0 (map (p \ ld-read <p <>p (peep elf-machines target 0)) srcs)
+       _ (ld-tls? objs0 ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        wimps (dyn? ? (macho-weak-undefs objs0) ())
        imps (dyn? ? (ld-imports objs0 + wimps) ()) ni #imps
        plt {'id "<stubs>" 'src "" 'secs {1 ['text 0 (16 * ni) 16 'text]} 'lanes {'text [1]}
@@ -115,7 +116,7 @@
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
        relbox {0 ()}                      ; abs64 sites
-       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs)]
+       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (o0 - <et))])))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs (>eo + [(ld-zeros (d0 - <eo))])))

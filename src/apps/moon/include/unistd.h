@@ -1,5 +1,4 @@
-#ifndef _LOVE_UNISTD_H
-#define _LOVE_UNISTD_H
+#pragma once
 typedef long ssize_t;
 #include <sys/types.h>
 long read(int, void*, long);
@@ -32,6 +31,7 @@ int  setresgid(unsigned int, unsigned int, unsigned int);
 int  seteuid(unsigned int);
 int  setegid(unsigned int);
 int  chdir(char const*);
+int  fchdir(int);
 int  chroot(char const*);
 char *getcwd(char*, unsigned long);
 int  access(char const*, int);
@@ -90,4 +90,3 @@ int  getpgrp(void);
 int  setpgid(pid_t, pid_t);
 pid_t tcgetpgrp(int);
 int  tcsetpgrp(int, pid_t);
-#endif
