@@ -73,8 +73,10 @@
                                         (go ()))))
                         (pend + cl))))
        (go ()))
+   ; the repl evaluates in lux's own vocabulary, the module this file shares
    (lux-moor path)
-    (: gone (lux-sweep path)
+    (: _ (ev '(borrow 'lux))
+       gone (lux-sweep path)
        _ (two? gone ? (say out ("lux: swept " + (show #gone + " stale socket(s)\n")),
                        flush out))
        lp (listen ['unix path])
