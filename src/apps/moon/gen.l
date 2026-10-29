@@ -10572,7 +10572,9 @@
        bad {}
        (elt x) (x @ ('deref ('bin '+ ('var nm) ix)) (cand nm @ c (two? c ? (kv ix @ k (charm? k && 0 <= k < c 1 ? [nm k]))))
                     ())
+       ; an element's address is the array's: pointer arithmetic may walk from it
        (scan x) (? (atom? x) 0
+                   (x @ ('addr e) (two? (elt e)) ()) (elt <>x @ [nm _] (pin bad nm 1))
                    (two? (elt x)) 0
                    (<x = 'var) (two? (cand <>x) ? (pin bad <>x 1) 0)
                    (map scan x))
