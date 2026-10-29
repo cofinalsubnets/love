@@ -493,9 +493,10 @@ bool fn_carrier(union u *k) {
  return k[0].ap == lvm_map_lookup || k[0].ap == lvm_map_data || k[0].ap == lvm_cask
      || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
 
-// the two pools are independent blocks, either above the other
+// the pools are independent blocks, in any order
 bool in_heap(struct g *c, word x) {
- return (ptr(x) >= ptr(c) && ptr(x) < ptr(c) + c->len) || (ptr(x) >= c->major_base && ptr(x) < c->major_hp); }
+ return (ptr(x) >= ptr(c) && ptr(x) < ptr(c) + c->len) || (ptr(x) >= c->major_base && ptr(x) < c->major_hp)
+     || (ptr(x) >= c->sv_base && ptr(x) < c->sv_hp); }
 
 // (nifnom f): a nif's roster spelling, or (); the book can't say, two names may share one nif
 lvm(lvm_nifnom) {

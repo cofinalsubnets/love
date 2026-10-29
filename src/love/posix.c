@@ -189,6 +189,8 @@ void host_spawn_guard(struct g *g, int on) {
  int adv = on ? MADV_DONTFORK : MADV_DOFORK;
  guard1(g, g->hp, adv);                       // not the block top: the argv sits above hp
  guard1(g->major_base, g->major_base + g->major_len, adv);
+ if (g->sv_base) guard1(g->sv_base, g->sv_base + g->sv_len, adv);
+ if (g->sv2_base) guard1(g->sv2_base, g->sv2_base + g->sv2_len, adv);
 #else
 #endif
 }
