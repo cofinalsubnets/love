@@ -8,7 +8,7 @@
 ;                         the operands DESTINATION FIRST -- Intel's order, the manual's, and holo's
 ;   ('label sym)  ('globl sym)  ('dir name rest)     -- rest is the directive's tail, verbatim
 ; an operand:
-;   ('rg enc w)   a register, w in 1/2/4/8 (16 = an xmm register; ah..bh sit at 20..23)   ('cr n) ('dr n)
+;   ('rg enc w)   a register, w in 1/2/4/8 (16 an xmm register, 32 a ymm, 64 a zmm; ah..bh sit at 20..23)   ('cr n) ('dr n)
 ;   ('im n)  ('ims sym)  ('lbl sym)  ('rip sym off)  ('ind o)  ('sr n)
 ;   ('mem base index scale disp [sym])   an absent register is -1
 ; a statement ends at a newline or a `;`, a comment starts at `#` or `//`, and an immediate may
@@ -44,7 +44,7 @@
                   (xa-reg! n i 8, xa-reg! (n + "d") i 4,
                    xa-reg! (n + "w") i 2, xa-reg! (n + "b") i 1, 0)))
         0 '(8 9 10 11 12 13 14 15))
-   _ (foldl (\ _ i (xa-reg! ("xmm" + show i) i 16, 0)) 0 ^16)
+   _ (foldl (\ _ i (xa-reg! ("xmm" + show i) i 16, xa-reg! ("ymm" + show i) i 32, xa-reg! ("zmm" + show i) i 64, 0)) 0 ^16)
    ;; ah/ch/dh/bh share 4..7 with spl/bpl/sil/dil (REX tells them apart), so they sit 16 above
    _ (foldl (\ _ r (xa-reg! <r <>r 1, 0)) 0 '(("ah" 20) ("ch" 21) ("dh" 22) ("bh" 23)))
    (xa-reg nm) (xa-regs (name nm) @ r (two? r ? ['rg <r <>r]))    ; or ()

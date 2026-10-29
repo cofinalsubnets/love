@@ -249,7 +249,7 @@
 (: r (sh-complete shS (sh-expl "cat src/apps/ko"))
    (test ("re/" = slurp (tap <r))))
 (: r (sh-complete shS (sh-expl "cat src/apps/lu"))
-   (test ('("src/apps/lupa.l" "src/apps/lush.l" "src/apps/lux") = >r)))
+   (test ('("src/apps/lush.l" "src/apps/lux") = >r)))
 (test ("ab" = sh-common '("abc" "abd" "ab"))
         ("~" = sh-homely ("" + getenv "HOME")))
 
