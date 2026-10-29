@@ -107,7 +107,7 @@
  ; the visible set: a tablet of cell indices, radius-bounded and stride-clear, each pinned in
  ; the seen cask too; a closing pass glows the rock beside every lit floor cell
  (fov d px py r) (:
-   vis {} w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + r * r)
+   vis {} w (d 'w) h (d 'h) sn (d 'seen) r2 (1 + 2 r)
    (glow x y) (x + w * y @ i (pin vis i 1, pin sn i 1, ()))
    (cell x y) (2 (x - px) + 2 (y - py) <= r2 && clear? d px py x y ? (glow x y))
    (row y x) (x <= px + r ? (cell x y, row y (x + 1)))
@@ -238,7 +238,7 @@
                         (2 < #l && l 0 = 1 ? (l 2) 0))  ; a choice's line opens on 1, its digit next
                      (tap-steer g c)))
  ; the key a floor's turn is given: a tap (cli's -12) through tap-key, the rest through steer
- (rove-key g k) (k = -12 ? (tap-key g (edtap ())) (steer k))
+ (rove-key g k) (k @ -12 (tap-key g (edtap ())) (steer k))
  ; ..and the tty a floor is played on, for ttytake and ttygive: a tap's press, no cursor
  rove-modes '(hide tap)
 

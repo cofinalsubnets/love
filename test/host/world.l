@@ -83,7 +83,7 @@
    east (world-pens (pins (at 80 48) 'th (pi / 2.0) 'pz 7.0 'px -0.6))
    (pink? c) ((c >> 16 & 255) > (c >> 8 & 255) + 40 && (c & 255) > (c >> 8 & 255))
    n #(sc 'lights)
- (test (n = 10) (40 < lum (px f st 40 44)) (700 < foldl max2 0 (map (i \ lum (peep up i 0)) ^(80 * 48)))
+ (test (n = 10) (40 < lum (px f st 40 44)) (700 < foldl max 0 (map (i \ lum (peep up i 0)) ^(80 * 48)))
        (any (k \ k < 0.5) bad) (all (k \ 0.0 <= k <= 1.0) bad) (300 < #(filter (k \ k = 1.0) bad))
        (all (k \ k 0 = 1.0 && k (n - 4) = 1.0 && k (n - 3) = 0.0) ks)
        (open (n - 4) = 0.0) (open (n - 3) = 1.0)
@@ -266,15 +266,17 @@
        (ph1 = 1) (mag (phq 0 - cos (0.5 * pi)) < 1e-9) (pb 'held = 0) (pb 'rest = 1)
        (pq 1 = 0.0) (pq 3 = 0.0) (pp 2 > 5.0) (mag (pp 1 - r) < 0.03)))
 ; a void is open air with no walls, gravity weakens up it by the table, and walking out
-; against its edge rings, not again for a moment, and turns the walk back; a room's wall never does
+; against its edge rings, not again for a moment, and stops there; in the air the edge throws
+; the body back and up off it; a room's wall never rings
 (: vlv (world-read "(level \"t\" (void [0 0 0] [10 40 10]) (solid (box [3 19.8 3] [7 20 7])) (gravity [[2 9.8] [18 2.0]]) (start [5 0 5] 90 0))")
    vst (world-new 80 50 vlv "test/lore/")
    (vgo k) (each ^k (_ \ (pin vst 'dt (1.0 / 30.0), world-move vst)))
    (vtop k) (: y0 (vst 'py) _ (world-step vst 'jump) (go i m) (i = k ? m (: _ (vgo 1) (go (i + 1) (max m (vst 'py - y0))))) (go 0 0.0))
    vlo (vtop 40) _ (pins vst 'px 5.0 'pz 5.0 'py (20.0 + eye-h) 'fv 0.0) _ (vgo 2) vhi (vtop 150)
-   _ (pins vst 'px 9.0 'pz 5.0 'th (0.5 * pi))
+   _ (pins vst 'px 9.0 'pz 5.0 'py eye-h 'fv 0.0 'th (0.5 * pi))
    (vwalk k) (each ^k (_ \ (world-step vst 'forward, pin vst 'dt (1.0 / 30.0), world-move vst)))
    _ (vwalk 6) vw0 (peep vst 'ward-at ()) _ (vwalk 6) vw1 (vst 'ward-at) _ (vwalk 12) vbx (vst 'px) _ (vwalk 60) vw2 (vst 'ward-at)
+   _ (pins vst 'px 9.0 'py (30.0 + eye-h) 'fv -0.1) _ (vwalk 6) vay (vst 'py) _ (vwalk 24) vax (vst 'px) vay1 (vst 'py)
    rst (world-new 80 50 (world-read "(level \"t\" (room [0 0 0] [10 5 10]) (start [9 0 5] 90 0))") "test/lore/")
    _ (each ^30 (_ \ (world-step rst 'forward, pin rst 'dt (1.0 / 30.0), world-move rst)))
  (test (vlv 'voids = [[[0.0 0.0 0.0] [10.0 40.0 10.0]]]) (vlv 'gravity = [[2.0 9.8] [18.0 2.0]])
@@ -282,7 +284,7 @@
        ((world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight (rgb 0.3 0.3 0.4)))") 'skylight = [0.3 0.3 0.4])
        (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight 3))"))
        (mag (vlo - 4.4 * 4.4 / 19.6) < 0.1) (mag (vhi - 4.4 * 4.4 / 4.0) < 0.3)
-       (vw0 = ()) (vw1 != ()) (vbx < 9.3) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
+       (vw0 = ()) (vw1 != ()) (vbx > 9.6) (vax < 8.5) (vay1 > vay) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
 ; a stair shallower than a body is walked at a walk, floating steps too, at a slow frame's
 ; strides too, and one too tall is not
 (: (sgo t) (sgo-at t (1.0 / 30.0) 45)
@@ -524,7 +526,7 @@
    on (steps (world-step (st ()) 'jump) 107 30) off (steps (st ()) 107 30)
    ; ..the eye carried up over a few frames, never a leap
    ys (: q (world-step (st ()) 'jump) (map (_ \ (: _ (world-step q (world-kb 107)) _ (world-move q) (q 'py))) ^30))
-   rise (foldl max2 0.0 (map (i \ ys (i + 1) - ys i) ^29))
+   rise (foldl max 0.0 (map (i \ ys (i + 1) - ys i) ^29))
  (test (mag (feet on - 1.4) < 0.01) (on 'pz > 1.5) (mag (feet off) < 0.01) (off 'pz < 1.0) (rise < 0.16)))
 ; the ball: still until walked into, then away, off the far wall, and still again on the floor
 (: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0) (ball [0 0 2])")
@@ -700,7 +702,7 @@
 (: sfl (lv "(surface 'torus 40 20) (void [-2 -2 -2] [42 4 22]) (solid (box [0 -1 0] [40 0 20])) (start [5 0 10] 0 0)")
    sfs (world-new 8 8 sfl "") sR (40.0 / (2.0 * pi)) sr (20.0 / (2.0 * pi))
    (off c) (: q (sqrt (c 0 * c 0 + c 2 * c 2)) (sqrt ((q - sR) * (q - sR) + c 1 * c 1)))
-   ds (map (c \ off (c 'pk 'cols)) (sfs 'sc 'chunks)) dlo (foldl (\ a d (min2 a (amin d))) 99.0 ds) dhi (foldl (\ a d (max2 a (amax d))) 0.0 ds)
+   ds (map (c \ off (c 'pk 'cols)) (sfs 'sc 'chunks)) dlo (foldl (\ a d (min a (amin d))) 99.0 ds) dhi (foldl (\ a d (max a (amax d))) 0.0 ds)
    _ (steps sfs 119 200) round [(sfs 'px) (sfs 'pz)]
    ring (pins (world-new 8 8 sfl "") 'th (pi / 2.0)) _ (steps ring 119 10)
    pl (world-new 8 8 (lv "(surface 'plane 10 10) (void [-2 -1 -2] [12 3 12]) (solid (box [0 -1 0] [10 0 10])) (start [9 0 5] 90 0)")) _ (steps pl 119 30)
