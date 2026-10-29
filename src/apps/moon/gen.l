@@ -6070,7 +6070,7 @@
          b2)))
    ; the float file: what a float mint may take, every register a call writes (a64's v8..v15 owe a save)
    (fvfile g) (x64? g ? fregs16 (fcalld g))
-   (fvalloc g fs) (vcol g fs (g 'frt) (fvfile g) (frd g) fcpy9 (f \ l \ l) () @ ok (getenv "MOON_FDBG" ? (puts ";; fv \(g 'fn) \(peep g 'frn 0) \(show ok)\n"), ok))
+   (fvalloc g fs) (vcol g fs (g 'frt) (fvfile g) (frd g) fcpy9 (f \ l \ l) ())
    ; substitute every mint over prologue+body+epilogue: sibcall and soften read registers, so neither
    ; may meet a vreg. the assignment runs first
    (vrfix g fs)
@@ -10553,16 +10553,17 @@
                 (map walk x)))
        (abl? g 'unroll ? f (walk f)))
    ; -- a small local array named only by constant-indexed elements becomes those elements as
-   ; scalars, which the allocator may seat. no initializer, no decay, no &, no sizeof: any other
-   ; mention leaves the array whole --
+   ; scalars, which the allocator may seat; a brace of plain items initializes them in order, the
+   ; rest zero. no decay, no &, no sizeof, no designator: any other mention leaves the array whole --
    (sra g f)
     (: w64 !(ilp32? g)
        (kv e) (cfold w64 e @ v (cint? v ? v ()))
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
        cand {}                                      ; name -> (elty n)
        dcl {}
-       (fit? x p) (<x = 'decl && #p = 3 && !(two? (p 2)) &&
-                   (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16) ()))
+       (plain? p2 n) (p2 @ ('init is) (#is <= n && !(any (e \ two? e && elem <e '(dfield didx init)) is)) !(two? p2))
+       (fit? x p) (<x = 'decl && #p = 3 &&
+                   (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16 && plain? (p 2) n) ()))
        (one x p) (pin dcl <p (1 + peep dcl <p 0), fit? x p ? (pin cand <p >(<>p)) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
@@ -10579,7 +10580,8 @@
        ok (filter (nm \ !(bad nm) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
        (sn nm k) "\(nm)`s\(k)"
        (rd ps) (? !(two? ps) ()
-                  (elem <<ps ok) (cand <<ps @ [et n] (map (k \ [(sn <<ps k) et ()]) ^n) + rd >ps)
+                  (elem <<ps ok) (: is (<ps 2 @ ('init l) l ())
+                                    (cand <<ps @ [et n] (map (k \ [(sn <<ps k) et (two? is ? (k < #is ? (rw (is k)) '(num 0)))]) ^n) + rd >ps))
                   (rw <ps . rd >ps))
        (rw x) (? (atom? x) x
                  (elt x @ e (? (two? e && elem <e ok) ['var (sn <e <>e)]
