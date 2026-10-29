@@ -214,14 +214,17 @@
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      ; ..by day the bare pixels about the sun asked one each, clouds as coarse as the grid's: its corners too few to round the disc
-     (disc v f g) (: s (lt 'sun) w (v 'w) h (v 'h) foc (w / 2.0 / tan (v 'fov / 2.0)) zc (dot s (v 'f))
-       ca (cos (sun-r + 2.0 * mesh-step v k)) R (int (foc * tan (sun-r + 2.0 * mesh-step v k) / max zc 0.1) + 2) D (2 * R + 1)
-       cx (floor (w / 2.0 + foc * dot s (v 'r) / max zc 0.1)) cy (floor (h / 2.0 - foc * dot s (v 'u) / max zc 0.1))
-       J (iota (2 D)) px (cx - R + J % D) py (cy - R + J // D)
-       S0 ((py * w + px) (iota ((0 <= px) * (px < w) * (0 <= py) * (py < h))))
-       S1 (#S0 @ 0 S0 (S0 (iota (f S0 = -1)))) d (#S1 @ 0 () (mesh-dirs v S1))
-       I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
-       (zc < 0.1 || #I = 0 ? g (pin g (S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ()))))
+     (disc v f g) (: s (lt 'sun) w (v 'w) h (v 'h) zc (dot s (v 'f))
+       (zc < 0.1 ? g
+          (: foc (w / 2.0 / tan (v 'fov / 2.0)) ca (cos (sun-r + 2.0 * mesh-step v k)) R (int (foc * tan (sun-r + 2.0 * mesh-step v k) / zc) + 2)
+             cx (int (floor (w / 2.0 + foc * dot s (v 'r) / zc))) cy (int (floor (h / 2.0 - foc * dot s (v 'u) / zc)))
+             ; ..the box about it cut to the frame first, so a disc off it asks nothing
+             x0 (max 0 (cx - R)) x1 (min (w - 1) (cx + R)) y0 (max 0 (cy - R)) y1 (min (h - 1) (cy + R))
+             (x1 < x0 || y1 < y0 ? g
+                (: bw (x1 - x0 + 1) J (iota (bw * (y1 - y0 + 1))) S0 ((y0 + J // bw) * w + x0 + J % bw)
+                   S1 (S0 (iota (f S0 = -1))) d (#S1 @ 0 () (mesh-dirs v S1))
+                   I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
+                   (#I = 0 ? g (pin g (S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ()))))))))
      sun-r 0.0316                       ; the disc's radius, acos 0.9995 as sky.l draws it
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
