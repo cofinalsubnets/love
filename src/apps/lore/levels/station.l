@@ -149,14 +149,14 @@
 ; ..and its banner: on black, two red hands raised side by side, palms facing, fingers up,
 ; and over them the three stars they have let go, a triangle pointing down; UNN across
 ; the wrists
-(: (star cx cy r c) ('poly . cats (map (k \ (: a (3.14159265 * (k / 5.0 + 0.5)) q (k % 2 = 0 ? r (0.4 * r))
+(: (star cx cy r c) ('poly . catmap (k \ (: a (3.14159265 * (k / 5.0 + 0.5)) q (k % 2 @ 0 r (0.4 * r))
                                              [(cx + q * cos a) (cy + q * sin a)]))
-                                      ^10)
+                                      ^10
                          + [c]))
 ; ..a hand seen from its thumb's side, its wrist at x y, its palm toward s: the forearm
 ; upright, the hand's edge from the back of it round the fingers' tips to the palm, the
 ; thumb in front with its nail
-(: (hand x y s c nail) (: (part k ps) ('poly . cats (map (p \ [(x + s * p 0) (y + p 1)]) ps) + [k])
+(: (hand x y s c nail) (: (part k ps) ('poly . catmap (p \ [(x + s * p 0) (y + p 1)]) ps + [k])
                           [(part c [[-4 0] [4 0] [4.5 40] [-4.5 40]])
                            (part c [[5 0] [6.5 -12] [6.5 -24] [5 -33] [2 -38] [-1.5 -37] [-3.5 -32] [-3 -26] [-1.5 -21] [-2 -16] [-4.5 -8] [-4.5 0]])
                            (part c [[-4.5 -2] [-6 -8] [-6.8 -16] [-6.3 -24] [-4 -24.5] [-3.2 -17] [-2.5 -10]])
@@ -243,11 +243,11 @@
    (: nx (int (floor ((b - a) / e + 0.5))) nz (int (floor ((d - c) / e + 0.5)))
       (pt x z) (: h (hf x z) (h < -0.2 ? () [x (fl x z h + h - 0.06) z]))
       (drape t (map (j \ (: z (c + (d - c) * j / nz) (map (i \ pt (a + (b - a) * i / nx) z) ^(nx + 1)))) ^(nz + 1)))))
-(: (sm v) (: u (max 0.0 (min 1.0 v)) (u * u * (3.0 - 2.0 * u))))
+(: (sm v) (: u (max 0.0 (min 1.0 v)) (2 u * (3.0 - 2.0 * u))))
 ; ..a heap h high against a wall, out d from it reaching r, and sinking under past r
 (: (heap h r d) (: s (max 0.0 d / r) (h * (1.0 - s ** 1.6) - 0.25 * s)))
 ; ..the higher of two heaps, rounded where they meet as a drift fills a corner
-(: (smax a b) (0.5 * (a + b + sqrt ((a - b) * (a - b) + 0.5))))
+(: (smax a b) (0.5 * (a + b + sqrt (2 (a - b) + 0.5))))
 ; ..lumps on a heap, more the deeper it is
 (: (lumpy h x z) (h + sm (h / 0.5) * (0.2 * sin (3.1 * x + 1.7 * z) * sin (2.3 * z - 1.3 * x + 0.7)
                                       + 0.1 * sin (7.3 * x + 0.4) * sin (6.1 * z + 1.9))))
@@ -260,8 +260,8 @@
    (? (t < 0.12) [(decal [x (y + 0.4) z] [0 0.45 -0.89] [0 0.89 0.45] 0.95 0.95 wreath)]
       [(decal [x (y + 0.24) z] [(rnd (sd + 0.53) - 0.5 + s) 0 -1] [0 1 0] 0.42 0.48 b)])))
 (: (plant n sd a b c d hf fl)
-   (cats (map (i \ (: x (a + (b - a) * rnd (sd + i)) z (c + (d - c) * rnd (sd + i + 0.37)) h (hf x z)
-                      (h < 0.15 ? () (strew x (fl x z h + h - 0.22) z (0.0 - 0.15 * x) (sd + i))))) ^n)))
+   (catmap (i \ (: x (a + (b - a) * rnd (sd + i)) z (c + (d - c) * rnd (sd + i + 0.37)) h (hf x z)
+                      (h < 0.15 ? () (strew x (fl x z h + h - 0.22) z -(0.15 * x) (sd + i))))) ^n))
 ; ..the office's ground: the pavement, the steps up from it, the landing, and over the
 ; steps under a deep drift their nosings' slope; the bays' floor, its sunken foot
 (: (stepy x z) (? (z < 28.6) 9.0 (min 9.6 (9.15 + 0.15 * floor ((z - 28.6) / 0.5)))))
@@ -272,7 +272,7 @@
 ; outer bay the same, gone toward its open end at x o
 (: (stairh x z) (: ax (abs x) k (sm ((ax - 1.3) / 0.6))
    wall (heap (1.4 + 1.2 * k) (2.2 + 1.2 * k) (36.9 - z)) side (heap (2.0 * sm ((z - 29.0) / 2.2)) 1.9 (3.2 - ax))
-   cl (sm ((sqrt (x * x + (z - 33.3) * (z - 33.3)) - 0.95) / 0.75))
+   cl (sm ((sqrt (2 x + 2 (z - 33.3)) - 0.95) / 0.75))
    (lumpy ((smax wall side + 0.25) * cl - 0.25) x z)))
 (: (bayh a b) (\ x z (lumpy (smax (heap 2.4 3.4 (35.0 - z)) (heap (1.8 * sm ((z - 29.4) / 2.4)) 1.8 (min (x - a) (b - x)))) x z)))
 (: (outh w o) (\ x z (: h (smax (heap 2.2 3.0 (35.0 - z)) (heap (1.6 * sm ((z - 29.4) / 2.4)) 1.6 (abs (x - w))))
@@ -386,6 +386,188 @@
        (z + w > 10.27 ? acc
           (go (z + w + 0.03) (i + 1) ((whole (skin {'walls cardboard 'floor (tops ((i + 2 * k) % 10))} (solid (box [-25.57 y z] [-25.07 (y + h) (z + w)])))) . acc))))
      (go (6.78 + 0.04 * k) 0 ())))
+
+;; the office tower on the street's north side, east of the office: it comes apart as it
+;; rises, its top floors drifting off into slabs and furniture hung in the air, a way up
+;; across them to a pink orb over it all; the higher, the lighter the pull
+; ..the roofs round it, seen from the climb: gravel
+(: gravel (texture 32 32 2 '((fill (grey 0.4)) (noise 1 0.35) (noise 6 0.1) (patches 4 0.2 (shade 0.85)))))
+; ..the tower: pale panels outside, poured concrete where it is broken
+(: cladding (texture 64 64 4 '((fill (rgb 0.66 0.67 0.69)) (noise 6 0.06) (rows 0 2 (shade 0.8)) (cols 0 2 (shade 0.85)) (cols 32 33 (shade 0.9)))))
+(: cast (texture 128 128 6
+             '((fill (rgb 0.42 0.41 0.4)) (noise 6 0.05) (patches 6 0.18 (shade 0.88))
+               (rows 0 1 (shade 0.88)) (rows 64 65 (shade 0.88)) (dots 42.667 16 0.8 (shade 0.6)))))
+; ..the offices: blue-grey carpet, off-white walls, ceiling tiles in a grid
+(: carpet (feel 'soft (texture 64 64 2 '((fill (rgb 0.3 0.33 0.39)) (noise 1 0.25) (noise 8 0.1) (patches 5 0.2 (shade 0.9))))))
+(: paint (texture 32 32 3 '((fill (rgb 0.8 0.78 0.73)) (noise 6 0.05) (rows 30 32 (shade 0.75)))))
+(: ceiltile (texture 32 32 1.2 '((fill (grey 0.84)) (noise 2 0.08) (dots 4 4 0.5 (shade 0.82)) (grid 32 32 1 (grey 0.6)))))
+; ..and what is in them: wood desks and doors, grey steel, black screens, dark cloth
+(: wood (feel 'wood (texture 32 32 1.6 '((fill (rgb 0.56 0.39 0.23)) (noise 2 12 0.2) (rows 0 1 (shade 0.85))))))
+(: greysteel (feel 'metal (texture 16 16 1 '((fill (rgb 0.46 0.48 0.51)) (noise 3 0.12)))))
+(: drawers (feel 'metal (texture 32 64 1.3 '((fill (rgb 0.46 0.48 0.51)) (noise 3 0.12) (rows 0 1 (shade 0.6)) (rows 16 17 (shade 0.6))
+                                (rows 32 33 (shade 0.6)) (rows 48 49 (shade 0.6)) (rect 12 7 20 9 (grey 0.2)) (rect 12 23 20 25 (grey 0.2))
+                                (rect 12 39 20 41 (grey 0.2)) (rect 12 55 20 57 (grey 0.2))))))
+(: screen (texture 16 16 0.5 '((fill (rgb 0.04 0.04 0.05)) (noise 4 0.2))))
+(: cloth (feel 'soft (texture 16 16 0.5 '((fill (rgb 0.16 0.17 0.22)) (noise 1 0.3)))))
+; ..inside the tower's orb, darker, and at its middle a smiling face that makes for whoever comes in
+(: pinkin (texture 128 64 8 '((fill (rgb 0.72 0.24 0.5)) (patches 8 0.35 (shade 0.75)) (patches 5 0.25 (rgb 0.9 0.42 0.68))
+                              (noise 6 0.1) (grid 16 16 1 (shade 0.7)))))
+(: smiley (texture 64 64 1 '((fill hole) (disc 32 32 30 (rgb 1 0.86 0.2)) (disc 32 36 20 (rgb 0.2 0.12 0.08)) (disc 32 31 20 (rgb 1 0.86 0.2))
+                             (disc 22 24 5 (rgb 0.2 0.12 0.08)) (disc 42 24 5 (rgb 0.2 0.12 0.08)))))
+
+; the pieces, each standing with its top at y: a floor slab w by d, and the furniture
+(: (slab x y z w d) (skin {'floor carpet 'walls cast 'ceiling cast}
+                      (solid (box [(x - 0.5 * w) (y - 0.3) (z - 0.5 * d)] [(x + 0.5 * w) y (z + 0.5 * d)]))))
+; ..a fitting, uncut: its faces lit at their corners
+(: (fit t b) (whole (skin t (solid b))))
+(: (desk x y z) [(fit {'all wood} (box [(x - 0.8) (y - 0.04) (z - 0.4)] [(x + 0.8) y (z + 0.4)]))
+                 (fit {'all wood} (box [(x - 0.78) (y - 0.75) (z - 0.38)] [(x - 0.74) (y - 0.04) (z + 0.38)]))
+                 (fit {'all wood} (box [(x + 0.74) (y - 0.75) (z - 0.38)] [(x + 0.78) (y - 0.04) (z + 0.38)]))
+                 (fit {'all wood} (box [(x - 0.74) (y - 0.6) (z + 0.3)] [(x + 0.74) (y - 0.1) (z + 0.33)]))])
+(: (cabinet x y z) (fit {'walls drawers 'floor greysteel 'ceiling greysteel} (box [(x - 0.25) (y - 1.3) (z - 0.3)] [(x + 0.25) y (z + 0.3)])))
+(: (officedoor x y z) (fit {'all wood} (box [(x - 0.45) (y - 0.05) (z - 1.0)] [(x + 0.45) y (z + 1.0)])))
+(: (copier x y z) [(fit {'all greysteel} (box [(x - 0.5) (y - 1.0) (z - 0.35)] [(x + 0.5) (y - 0.06) (z + 0.35)]))
+                   (fit {'all screen} (box [(x - 0.45) (y - 0.06) (z - 0.3)] [(x + 0.45) y (z + 0.3)]))])
+(: (chair x y z) (: f (y - 0.45)
+   [(fit {'all cloth} (box [(x - 0.25) (y - 0.08) (z - 0.25)] [(x + 0.25) y (z + 0.25)]))
+    (fit {'all cloth} (box [(x - 0.25) y (z + 0.2)] [(x + 0.25) (y + 0.5) (z + 0.26)]))
+    (fit {'all greysteel} (box [(x - 0.03) (f + 0.09) (z - 0.03)] [(x + 0.03) (y - 0.08) (z + 0.03)]))
+    ; ..on a cross of spokes, a caster under each end
+    (fit {'all greysteel} (box [(x - 0.28) (f + 0.06) (z - 0.02)] [(x + 0.28) (f + 0.09) (z + 0.02)]))
+    (fit {'all greysteel} (box [(x - 0.02) (f + 0.06) (z - 0.28)] [(x + 0.02) (f + 0.09) (z + 0.28)]))
+    (map (c \ fit {'all screen} (box [(x + c 0 - 0.025) f (z + c 1 - 0.025)] [(x + c 0 + 0.025) (f + 0.06) (z + c 1 + 0.025)]))
+         [[0.26 0] [-0.26 0] [0 0.26] [0 -0.26]])]))
+(: (tile x y z) (fit {'all ceiltile} (box [(x - 0.3) (y - 0.02) (z - 0.3)] [(x + 0.3) y (z + 0.3)])))
+(: (monitor x y z) [(fit {'all screen} (box [(x - 0.26) y (z - 0.03)] [(x + 0.26) (y + 0.34) (z + 0.03)]))
+                    (fit {'all greysteel} (box [(x - 0.1) (y - 0.02) (z - 0.1)] [(x + 0.1) y (z + 0.1)]))])
+; ..a piece by its name, turned deg about its middle
+(: (piece p) (: k (p 0) x (p 1) y (p 2) z (p 3)
+   (turn (p 4) [x z] [(k @ 'slab (slab x y z 3.2 3.2) 'desk (desk x y z) 'cabinet (cabinet x y z) 'door (officedoor x y z)
+                          'copier (copier x y z) 'chair (chair x y z) 'tile (tile x y z) (monitor x y z))])))
+
+; the tower's floors, four metres each, the offices between [-9.7 -9.7] and [9.7 9.7], the
+; ground floor's south window parted for the door; the furniture a hair over the carpet, so
+; it does not cut the floor
+(: (storey k) (: y (4 * k)
+   [(skin {'floor carpet 'walls paint 'ceiling ceiltile} (room [-9.7 y -9.7] [9.7 (y + 3.7) 9.7]))
+    (k = 0 ? [(window [-8 0.9 -10] [-2 2.9 -9.7] glass) (window [2 0.9 -10] [8 2.9 -9.7] glass)]
+             (window [-8 (y + 0.9) -10] [8 (y + 2.9) -9.7] glass))
+    (window [-8 (y + 0.9) 9.7] [8 (y + 2.9) 10] glass)
+    (window [-10 (y + 0.9) -8] [-9.7 (y + 2.9) 8] glass) (window [9.7 (y + 0.9) -8] [10 (y + 2.9) 8] glass)
+    (strip-light [-4 (y + 3.7) 0]) (strip-light [3 (y + 3.7) -5])
+    (desk -6 (y + 0.753) 7.5) (chair -6 (y + 0.453) 6.6) (monitor -6 (y + 0.756) 7.7)
+    (desk -2 (y + 0.753) 7.5) (chair -2 (y + 0.453) 6.6)
+    (desk -6 (y + 0.753) -7.5) (cabinet -9.2 (y + 1.303) -4) (cabinet -9.2 (y + 1.303) -3.4)]))
+; ..the stairs up from floor k: twenty-two treads of 4/22 m up and a quarter along, by turns
+; north up the east side and south up the middle, through a hole in the floor over them; skip
+; the steps left out
+(: (stair k skip) (: y (4 * k) up (k % 2 = 0) x0 (up ? 6.5 3.5) x1 (up ? 9.3 6.3) rise (4.0 / 22.0)
+   (z i) (up ? (-3 + 0.25 * i) (2.5 - 0.25 * i - 0.25))
+   [(skin {'floor carpet 'walls paint 'ceiling ceiltile} (air (box [x0 (y + 3.6) -3] [x1 (y + 4.05) 2.5])))
+    (map (i \ (skin {'floor carpet 'walls cast} (solid (box [x0 (y + rise * i) (z i)] [x1 (y + rise * (i + 1)) (z i + 0.25)]))))
+         (filter (i \ !(elem i skip)) ^22))]))
+
+(: route [['slab 1.84 36.75 8.81 13.58]
+          ['slab -3.27 37.52 9.35 6.52]
+          ['copier -6.26 38.31 6.47 52.45]
+          ['copier -8.48 39.13 3.02 7.74]
+          ['cabinet -8.95 39.98 -0.92 8.16]
+          ['cabinet -7.66 40.86 -4.72 50.89]
+          ['slab -4.13 41.77 -8.87 52.47]
+          ['slab 1.24 42.73 -10.17 35.7]
+          ['slab 5.84 43.73 -6.84 77.26]
+          ['slab 8.77 44.77 -2.01 48.66]
+          ['slab 8.6 45.83 3.71 61.38]
+          ['slab 5.18 46.91 8.38 57.5]
+          ['desk 0.09 48.02 9 64.09]
+          ['slab -5.71 49.15 7.86 44.68]
+          ['copier -8.46 50.31 3.81 28.27]
+          ['door -8.86 51.51 -1.59 22.36]
+          ['slab -6.92 52.73 -7.48 21.97]
+          ['slab -1.41 53.99 -10.25 78.76]
+          ['door 4.01 55.29 -8.14 88.22]
+          ['slab 8.42 56.64 -3.57 14.85]
+          ['desk 8.75 58.03 2.13 44.01]
+          ['slab 7.46 59.47 9.11 6.99]
+          ['copier 2.47 60.98 11.96 78.79]
+          ['slab -4.31 62.55 10.39 31.52]
+          ['door -9.67 64.2 6.64 41.06]
+          ['slab -14.39 65.93 0.45 42.67]
+          ['slab -9.99 67.78 -6.2 63.13]
+          ['door -3.62 69.74 -9.82 34.72]
+          ['slab 4.22 71.8 -7.95 41.55]
+          ['slab 9.5 73.93 -1.8 44.43]
+          ['slab 9.13 76.14 6.61 11.64]
+          ['slab 1.55 78.45 10.55 82.51]
+          ['door -5.88 80.85 6.81 40.43]
+          ['copier -8.99 83.38 -0.49 12.32]
+          ['desk -6.66 86.04 -8.98 25.06]
+          ['desk 1.32 88.87 -14.04 61.45]
+          ['desk 11.17 91.89 -12.61 13.58]
+          ['slab 14.62 95.09 -1.97 59.27]])
+(: adrift [['chair 2.55 43.49 -4.56 1.47]
+          ['tile -8.83 71.91 9.49 248.58]
+          ['chair -10.94 80.04 -9.96 164.39]
+          ['cabinet 20.57 80.36 -6.42 143.31]
+          ['monitor -12.4 59.63 1.45 24.25]
+          ['chair 4.69 55.16 7.64 36.86]
+          ['chair -15.35 100.22 -3.6 25.31]
+          ['desk -6.38 76.95 6.28 216.82]
+          ['door 10.49 66.12 9.29 172.94]
+          ['chair 6.74 85.48 8.6 172.3]
+          ['desk -18.05 45.19 -1.86 52.78]
+          ['tile 15.1 69.08 2.59 250.63]
+          ['monitor -6.67 42.36 7.4 191.73]
+          ['monitor -9.5 46.51 17.37 290.19]
+          ['door -1.31 46.78 -20.51 128]
+          ['chair 5.47 50.68 0.97 69.71]
+          ['desk -9.21 89.83 13.69 343.8]
+          ['desk 11.9 65.48 -18.63 287.87]
+          ['monitor -3.52 97.32 -5.59 172.09]
+          ['cabinet 19.9 59.29 -3.58 267.61]
+          ['chair 3.58 103.49 5.56 54.41]
+          ['door 7.71 40.82 -20.81 236.62]])
+
+; where the orb hangs, and the platform with the telescope trained on it
+(: orb-at [0 112 0])
+(: scope-at [19 97.6 6])
+(: (aim a) (: dx (orb-at 0 - scope-at 0) dz (orb-at 2 - scope-at 2) dy (orb-at 1 - scope-at 1 - 1.3)
+   (a @ 'deg (atan2 dx dz * 180 / 3.14159265) (atan2 dy (sqrt (2 dx + 2 dz)) * 180 / 3.14159265))))
+
+;; the city round about, for the eye alone: roofs at the street's walls' height out into
+;; the haze, and blocks standing up off them, taller further out; none over the streets or
+;; the climb. drapes, not brushes: nothing to walk on, nothing lit apart
+(: city-y 45.0 city-lot 20.0 city-n 8)
+(: city-at [32.5 43.0])                  ; the lots' middle, under the climb
+(: city-keep [[-48.0 11.0] [63.0 73.0]]) ; the streets and the climb, left open
+(: (city-u i j k) (sin (i * 12.9898 + j * 78.233 + k * 37.719) * 43758.5453 @ v (v - floor v)))
+; ..a lot's block, or () for bare roof: its plan inset off the lot's edges, a storey's four
+; metres a step up, more of them the further out
+(: (city-block i j) (: x (city-at 0 + city-lot * i) z (city-at 1 + city-lot * j) r (0.5 * city-lot)
+   d (sqrt (1.0 * (i * i + j * j))) u (city-u i j 0)
+   (u < 0.2 ? ()
+      (: a (2.0 + 4.0 * city-u i j 1) b (2.0 + 4.0 * city-u i j 2) c (2.0 + 4.0 * city-u i j 3) e (2.0 + 4.0 * city-u i j 4)
+         h (4.0 * (1 + int (u * u * u * (2.0 + 2.2 * d))))
+         [(x - r + a) (z - r + b) (x + r - c) (z + r - e) (city-y + h)]))))
+(: (city-clear? q) (: k city-keep
+   (q 2 < k 0 0 || k 1 0 < q 0 || q 3 < k 0 1 || k 1 1 < q 1)))
+(: city-blocks (filter (q \ two? q && city-clear? q)
+                 (catmap (i \ map (j \ city-block (i - city-n) (j - city-n)) ^(2 * city-n + 1)) ^(2 * city-n + 1))))
+; ..each block four walls of storeys and a gravel roof, its foot a hair under the roofs
+(: (city-walls q) (: y0 (city-y - 0.1) y1 (q 4) (ring y) [[(q 0) y (q 1)] [(q 2) y (q 1)] [(q 2) y (q 3)] [(q 0) y (q 3)] [(q 0) y (q 1)]]
+   [(drape facade [(ring y0) (ring y1)])
+    (drape gravel [[[(q 0) y1 (q 1)] [(q 2) y1 (q 1)]] [[(q 0) y1 (q 3)] [(q 2) y1 (q 3)]]])]))
+; ..and the roofs between, four strips round what is left open, a point each lot's width
+(: city-edge (city-lot * (city-n + 0.5)))
+(: (city-span a b) (: n (int ((b - a) / city-lot) + 1) (map (i \ a + (b - a) * i / n) ^(n + 1))))
+(: (city-roof x0 z0 x1 z1) (drape gravel (map (z \ map (x \ [x city-y z]) (city-span x0 x1)) (city-span z0 z1))))
+(: city-roofs (: X0 (city-at 0 - city-edge) X1 (city-at 0 + city-edge) Z0 (city-at 1 - city-edge) Z1 (city-at 1 + city-edge)
+                 k city-keep
+   [(city-roof X0 Z0 X1 (k 0 1)) (city-roof X0 (k 1 1) X1 Z1)
+    (city-roof X0 (k 0 1) (k 0 0) (k 1 1)) (city-roof (k 1 0) (k 0 1) X1 (k 1 1))]))
+(: city [city-roofs (map city-walls city-blocks)])
+
+
 
 (level "the station"
   (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
@@ -637,15 +819,57 @@
   ; of broad dark panes sunk deep in each face, a heavy lip round its roof
   (skin {'all concrete} (solid (box [-45 8.85 33] [-33 26 47])))
   (skin {'all concrete} (solid (box [-45 24.4 32.3] [-32.3 26.6 47])))
-  (map (q \ slot (q 0) (q 1) 'z) (cats (map (y \ map (x \ [x y]) [-42.4 -38]) [16.9 20.5])))
-  (map (q \ slot (q 0) (q 1) 'x) (cats (map (y \ map (z \ [z y]) [38.5 43.5]) [16.9 20.5])))
+  (map (q \ slot (q 0) (q 1) 'z) (catmap (y \ map (x \ [x y]) [-42.4 -38]) [16.9 20.5]))
+  (map (q \ slot (q 0) (q 1) 'x) (catmap (y \ map (z \ [z y]) [38.5 43.5]) [16.9 20.5]))
   ; ..and a steel girder from its corner near the shop's roof, out to the office's first
   ; beam, along through the points of all four and through the one on the column, and back
   ; the same way to the building east; a red beacon flashing under it at each free point
   (mirror-x 0 [(whole (skin {'all darkmetal} (solid (prism 0.8 [[-33.855 21.2 34.418] [-14.361 21.2 21.314] [-15.142 21.2 20.152] [-34.636 21.2 33.256]]))))])
   (whole (skin {'all darkmetal} (solid (box [-15.2 21.2 20.2] [15.2 22 21.6]))))
   (map (x \ blink (bulb [x 21.08 20.9] (rgb 1 0.06 0.03))) [-13.5 -4.5 13.5])
-  (skin {'all facade} (solid (box [20 8.85 33] [45 28 47])))
+  ; the office tower east of the office, its door on the pavement, alleys either side of it
+  ; and behind; over the roofs the sky open to the top of the climb, its floor the roofs
+  ; round about at the street's walls' height
+  (skin {'floor paving 'walls facade} (street [18 8.85 47] [45 45 56]))
+  (skin {'all paving} (solid (box [18 8.85 33] [45 9 56])))
+  (skin {'floor gravel} (void [5 45 20] [60 140 70]))
+  ; ..and the city round about it
+  city
+  ; ..the pull, a whole one through the offices, easing above them to a seventh at the top
+  (gravity [[33 9.8] [53 5.0] [79 2.6] [109 1.4]])
+  (move [32.5 9 43]
+   [; ..six whole floors and the stairs through them
+    (skin {'walls cladding 'floor carpet 'ceiling cast} (solid (box [-10 0 -10] [10 24 10])))
+    (map storey ^6)
+    (air (box [-1.5 0 -10.05] [1.5 3 -9.65]))
+    (map (k \ stair k ()) ^6)
+    ; ..its roof the first floor come apart: the stairs on up, columns, stubs of wall
+    (stair 6 ())
+    (map (c \ (skin {'all cast} (solid (box [(c 0 - 0.25) 24 (c 1 - 0.25)] [(c 0 + 0.25) (c 2) (c 1 + 0.25)]))))
+         [[7.5 7.5 27.7] [-7.5 7.5 27.7] [-7.5 -7.5 27.7] [2.5 -7.5 25.5] [-2.5 2.5 26.2]])
+    (map (w \ (skin {'all cladding} (solid (box (w 0) (w 1)))))
+         [[[-10 24 -10] [-4 26.2 -9.7]] [[-10 24 9.7] [-2 25.4 10]] [[9.7 24 -10] [10 27.7 -6]] [[-10 24 1] [-9.7 25 6]]])
+    (desk -5 24.75 -6) (chair -4.4 24.45 -5.2) (cabinet 1 25.3 8.5)
+    ; ..the next floor in three plates, its stairs with steps gone
+    (slab 6.5 28 6.25 7 7.5) (slab -5.5 28 6 9 8) (slab -5.75 28 -5.25 7.5 8.5)
+    (stair 7 [7 8 15])
+    (desk 6 28.95 7) (chair -6 28.6 5) (tile 4 28.4 4)
+    ; ..the next drifted apart, and rubble up from it
+    (slab 5.8 32 -6.3 7.2 6.6) (slab -5.4 32.2 -7.35 8.8 5.7) (slab -4.75 31.8 6.6 6.5 7.2)
+    (map (b \ (skin {'all cast} (solid (box [(b 0 - 0.6) (b 2 - 0.8) (b 1 - 0.6)] [(b 0 + 0.6) (b 2) (b 1 + 0.6)]))))
+         [[8 -1.8 32.85] [7.2 0.2 33.7] [8.2 2.1 34.55] [5.6 1.9 35.4]])
+    ; ..and the last, a few slabs adrift
+    (slab 6.5 36 6.5 6 6) (slab -6.25 36.4 1 6.5 6) (turn 12 [0 -8] [(slab 0 35.6 -8 8 4)])
+    (cabinet 8 37.6 8) (monitor 5 36.2 4.5)
+    ; ..the way up, and the furniture adrift off it
+    (map piece route)
+    (map piece adrift)
+    ; ..at the top the orb, turning, and on its own platform the telescope looking up at it
+    (slab (scope-at 0) (scope-at 1) (scope-at 2) 4 4)
+    (telescope scope-at (aim 'deg) (aim 'pitch) (rgb 0.9 0.9 0.87))
+    (coarse 4 (glow (orb orb-at 6 pinkorb 0.06)))
+    (coarse 4 (glow (inward (orb orb-at 5.95 pinkin 0.06))))
+    (herald orb-at 1.6 5.9 smiley "ring.l" ())])
   (poster [-4.7 -3.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
   ; chamber beside it, a lamp, and a door in its east wall

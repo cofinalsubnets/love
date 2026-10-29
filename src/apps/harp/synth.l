@@ -6,6 +6,7 @@
 ; in just intonation. --fm FILE adds a last timbre from an op2 bank or a wad's GENMIDI. the
 ; mix goes through a bus of chorus, echo and reverb (space.c), each on its own key. the pads
 ; (pad, glass, wash) swell in through a filter a slow lfo sweeps, and fade slowly once let go.
+; { and } (f11 f12 in the window) turn the volume, the horn's own, past any mixer.
 ; run: love synth [--fm FILE] [LOOP]   HORN=none plays silent on a seat with no card
 (module (synth synth-run synth-main synth-new synth-step synth-code synth-semis synth-name
          synth-strike synth-feed synth-frame synth-key synth-timbres synth-shifted synth-digits
@@ -14,6 +15,7 @@
          synth-just synth-sept synth-jdeg synth-dopts synth-drift synth-lname synth-map synth-kmodes
          synth-qwerty synth-hold synth-free synth-drone synth-latch synth-wstep synth-wframe synth-paint synth-window synth-trows
          synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
+         synth-vols synth-vol0
          synth-pads synth-pad)
 (borrow 'rove)
 (borrow 'harp)
@@ -36,6 +38,8 @@
  synth-chunk (song-rate // 60)          ; a feed, in frames
  synth-lead (song-rate // 8)            ; the least queued ahead of the speaker
  synth-gain 11000.0
+ synth-vols [0.0 0.06 0.09 0.12 0.18 0.25 0.35 0.5 0.7 1.0 1.4 2.0]   ; ~3 dB a step, 1.0 the mix as laid
+ synth-vol0 9
  names ["C" "C#" "D" "D#" "E" "F" "F#" "G" "G#" "A" "A#" "B"]
  synth-cps 0.5                          ; cycles a second the loop starts at
  synth-cps-step 0.05                    ; and what [ and ] move it by
@@ -49,7 +53,7 @@
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0
                 'dr 0 'dw () 'dnow () 'dprev [() ()] 'dph "" 'trail () 'dbook 3
                 'dlean 1.5 'dsteer 1.0 'dhome 0.1 'km 0 'hv ()
-                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0 'lim ()}
+                'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0 'lim () 'vol synth-vol0}
  synth-kmodes ["fixed" "follow" "just"]
 
  ; --- just intonation: the row's twelve over the center, and alt's septimal ones
@@ -211,10 +215,11 @@
  ; toward the clip, never through it
  klimit (cite 'dsp 'limit)
  synth-ceil (0.97 * 32767.0 / synth-gain)
- synth-lprm (gem-tray [4] [(1.0 * song-rate) synth-ceil 0.5 0.4])
+ ; past 1.0 the ceiling comes down with the volume, so a louder horn bends sooner, never clips
+ synth-lprms (map (v \ gem-tray [4] [(1.0 * song-rate) (synth-ceil / max v 1.0) 0.5 0.4]) synth-vols)
  (synth-limit st lr)
   (? !klimit lr
-     (klimit <lr >lr (st 'lim) synth-lprm @ r
+     (klimit <lr >lr (st 'lim) (synth-lprms (st 'vol)) @ r
         (? (charm? r) (pin st 'lim (cask r), synth-limit st lr)
            (two? r) r
            lr)))
@@ -223,6 +228,7 @@
                           (k = <l 4) (pins st (<l 1) ((st (<l 1) + 1) % #synth-wets) 'dirty 1)
                           (go >l))
                  (go synth-fx))
+ (vline st) ("   volume " + show (synth-vols (st 'vol)))
  (fxline st) ("  " + foldl (+) "" (map (f \ f 2 + " " + (st (f 0) = 1 ? (show (synth-wets (st (f 1)))) "off") + "   ") synth-fx))
 
  ; one chunk as floats, (left . right): the cycles pulled, the due voices taken up, all summed
@@ -235,7 +241,7 @@
                    ((pins st 'vs live 'due (filter (p \ p 0 >= lim) (st 'due)) 'fpos lim),
                     synth-limit st (synth-space st (mixdown (live + held) base synth-chunk))))
  ; ..and out the port (any jug)
- (synth-feed st h) (say h (pack (synth-mix st) synth-chunk synth-gain))
+ (synth-feed st h) (say h (pack (synth-mix st) synth-chunk (synth-gain * synth-vols (st 'vol))))
 
  ; --- a key; q or ^c is the end ---
  (synth-step st k) (synth-code k @ c
@@ -259,6 +265,8 @@
       (k = 107) (pins st 'km ((st 'km + 1) % #synth-kmodes) 'dirty 1)
       (k = 118) (pins st 'dbook ((st 'dbook + 1) % #phrase-books) 'dirty 1)
       (k = 108) (synth-latch st)
+      (k = 123) (pins st 'vol (max 0 (st 'vol - 1)) 'dirty 1)
+      (k = 125) (pins st 'vol (min (#synth-vols - 1) (st 'vol + 1)) 'dirty 1)
       (k = 113 || k = 3) (pins st 'over 1)
       (fxkey st k @ () st r r)))
 
@@ -271,7 +279,7 @@
    (esc + "[H" + esc + "[2J"
     + "synth -- the row plays, from middle c a semitone a key\r\n\r\n"
     + "  timbre " + tm 0 + "   octave " + show (st 'oct)
-    + "   last " + (string? (st 'last) ? (st 'last) "-") + synth-lline st + "\r\n"
+    + "   last " + (string? (st 'last) ? (st 'last) "-") + vline st + synth-lline st + "\r\n"
     + row 0 + row 6 + "\r\n"
     + "  loop " + (st 'on ? "playing" "stopped") + "   cps " + show (st 'cps)
     + "   cycle " + show (st 'cyc) + "   " + st 'lmsg + "\r\n"
@@ -286,7 +294,7 @@
     + (st 'dr && st 'km = 2 ? "  shift: octave up   alt: septimal   tab: timbre"
                "  shift: octave up   alt: quarter tone down   tab: timbre")
     + (st 'fm ? "   left/right: fm instrument\r\n" "\r\n")
-    + "  up/down: octave   r o c s: the bus, shifted wetter   l: latch\r\n"
+    + "  up/down: octave   r o c s: the bus, shifted wetter   l: latch   { }: volume\r\n"
     + "  d: drift   k: keys   , .: steer   ; ': lean   h: home   v: book\r\n"
     + "  p: play/stop   e: send buffer   [ ]: cps   C-a j: buffer   q: leave"))
 
@@ -336,7 +344,8 @@
  synth-wknobs {15 9 333 -10 331 -11 328 -8 336 -9    ; tab and the arrows: the keys' knobs
                59 114 60 111 61 99 63 82 64 79 65 67    ; f1-f3 the bus's toggles, f5-f7 how wet
                66 115 67 83                             ; f8 the shimmer, f9 how deep
-               62 108}                                  ; f4 the latch
+               62 108                                   ; f4 the latch
+               87 123 88 125}                           ; f11 f12 the volume
  (synth-hold st k s)
   (: tm (synth-tims st (st 'tim)) at (st 'fpos) d (tm 1)
      f (261.6255653005986 * exp (s * ln2-12))
@@ -377,13 +386,13 @@
   (esc + "[H" + esc + "[2J"
    + "synth -- the qwerty rows play while they are held\r\n\r\n"
    + "  timbre " + synth-tname st + "   octave " + show (st 'oct)
-   + "   last " + (string? (st 'last) ? (st 'last) "-") + "\r\n"
+   + "   last " + (string? (st 'last) ? (st 'last) "-") + vline st + "\r\n"
    + (st 'latch ? "  latched" "  held") + foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv))) + "\r\n"
    + fxline st + "\r\n\r\n"
    + "  z s x d c v g b h n j m , l . ; /       from c below middle c\r\n"
    + "  q 2 w 3 e r 5 t 6 y 7 u i 9 o 0 p [ = ]  from middle c\r\n\r\n"
    + "  tab: timbre   up/down: octave   " + (st 'fm ? "left/right: fm instrument   " "") + "esc: leave\r\n"
-   + "  f1 f2 f3 f8: reverb echo chorus shimmer   f5 f6 f7 f9: wetter   f4: latch")
+   + "  f1 f2 f3 f8: reverb echo chorus shimmer   f5 f6 f7 f9: wetter   f4: latch   f11 f12: volume")
  ; rw x rh pixels of col (0xrrggbb) at x y
  (fill p w x y rw rh col)
   (? (rw < 1 || rh < 1) 0
@@ -416,7 +425,7 @@
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
             0))))
- synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, r o c s reverb echo chorus shimmer, l the latch, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
+ synth-usage "usage: love synth [--fm FILE] [LOOP]   (1 .. = play, shift and alt bend, tab the timbre, up and down the octave, p e [ ] the loop, r o c s reverb echo chorus shimmer, l the latch, { } the volume, q leaves)\n       love synth [--fm FILE] -w      (a window: the qwerty rows sound while held)\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
  ; --- the mitty: the keys a stage over a vi stage on the loop's text ---
  (synth-mitty br vi f o) (: _ (synth-warm ()) st (synth-new o)
    hf (synth-horn st) hn <hf feed <>hf

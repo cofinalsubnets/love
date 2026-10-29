@@ -152,6 +152,15 @@
      [(side 0) (side 1)])
    e (wad-t-mix [5.0 0.0])
    _ (test (e 1 > 2 * e 0) (e 0 > 0) (wad-t-mix [30.0 0.0] = [0 0]) (: c (wad-t-mix ()) (c 0 = c 1 && c 0 > 0)))
+   ; ..its frames a call the seconds since the last, as asked of its bus, the fraction carried
+   ;   on; a tic's with none said
+   (wad-t-paced dts) (: q ("out/.wad-pace-" + show (getpid 0) + ".raw") tot {'n 0}
+     _ (open q "w" @ p (: fd (mix-new p (_ \ ()) (_ \ [0.0 0.0 0.0]) {'fps 30 'bus (st \ n \ (pin tot 'n (tot 'n + n), ()))})
+                          (each dts (d \ fd (d = () ? {'sfx ()} {'sfx () 'dt d})), close p)))
+     _ (unlink q)
+     (tot 'n))
+   _ (test (wad-t-paced (map (_ \ 0.1) ^10) = 48000) (wad-t-paced (map (_ \ 0.07) ^7) = 23520)
+           (wad-t-paced (map (_ \ ()) ^30) = 48000))
    ; ..and the pistol puts it down, a bullet a shot
    (shoot s k) (k = 0 || zom s 'st = 'die ? s (shoot (wad-tics (wad-step s 'fire) 15) (k - 1)))
    d (shoot d 12)

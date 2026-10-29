@@ -29,6 +29,11 @@
        b ((a ^ a >> 16) * 2246822507 & 4294967295)
        c ((b ^ b >> 13) * 3266489909 & 4294967295)
        ((c >> 16 & 65535) * 0.000030517578125 - 1.0))
+   ; ..smoothed: the noise at every kth frame eased between, so the lower k the brighter; sd
+   ; keeps one band's draws apart from another's
+   (vsmooth ix k sd) (: a (ix // k) u ((ix - a * k) * (1.0 / k)) e (u * u * (3.0 - 2.0 * u))
+                        n0 (vnoise (a + sd))
+                        (n0 + (vnoise (a + sd + 1) - n0) * e))
 
    ; --- the kit. each takes trays (t ix ph): seconds since onset (clamped at 0), absolute
    ;     frames, and the phase in cycles, so a shape never sees a frequency. ---
@@ -58,13 +63,23 @@
    ; a wind chime's tube, two octaves up: inharmonic partials over a long ring
    (i-chime t ix ph) (ph * tau * 4.0 @ w
                        (sin w + 0.5 * sin (w * 2.76) * exp (t * -2.0) + 0.25 * sin (w * 5.4) * exp (t * -4.0)))
-   ; name -> [default-duration pitched? shape]
+   ; wind: smoothed noise in three bands, low to high, each swelling on slow sines of its own
+   ; (seconds tens to a few), and a thin whistle an octave over the note wandering on the gusts
+   (i-wind t ix ph) (: g1 (0.5 + 0.5 * sin (t * 0.37 + 0.4)) g2 (0.5 + 0.5 * sin (t * 0.23 + 2.1))
+                       g3 (0.5 + 0.5 * sin (t * 1.7 + 4.0) * sin (t * 0.61))
+                       (vsmooth ix 32 0 * (0.5 + 0.3 * g1) + vsmooth ix 10 7919 * 0.45 * g2
+                        + vsmooth ix 4 104729 * 0.25 * g2 * g3
+                        + 0.05 * g1 * g2 * sin (ph * tau * 2.0 + 2.5 * sin (t * 0.9))))
+   ; a swell over the whole note, from nothing and back: for what has no attack
+   (vswell t d) (sin (t / d * tau * 0.5) @ u (u * u))
+   ; name -> [default-duration pitched? shape]; pitched 2 swells over the note instead
    (instr nm) (nm @
     "bd"  [0.55 0 i-bd]   "sn"  [0.35 0 i-sn]   "hh"  [0.09 0 i-hh]
     "oh"  [0.35 0 i-oh]   "cp"  [0.35 0 i-cp]   "rim" [0.06 0 i-rim]
     "tom" [0.45 0 i-tom]  "sin" [0.30 1 i-sin]  "saw" [0.30 1 i-saw] 
     "sqr" [0.30 1 i-sqr]
-    "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime])
+    "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime]
+    "wind" [12.0 2 i-wind])
 
    ; --- an event's value -> a voice ------------------------------------------
    ; the value is a tablet of control words, a string from `hit`, or a bare note number
@@ -101,7 +116,7 @@
              end (st + int (dur * rate / spd) + 2)
              fn  (ix \ (: t  ((ix - st) * (spd / rate))
                           tp (t * (t > 0.0))
-                          e  (ins 1 ? (venv tp dur) 1.0)
+                          e  (ins 1 @ 0 1.0 2 (vswell tp dur) (venv tp dur))
                           (sh tp ix (vphase tp f k) * e * (t >= 0.0) * (t < dur))))
              ; as operators where the kit has them: speed scales every rate
              nm (vname v) pr (peep partials nm ()) dk (peep kit nm ())

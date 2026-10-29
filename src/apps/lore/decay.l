@@ -4,7 +4,6 @@
 ;   (decay-new sd)          the loop from seed sd: its phrase and where it wears
 ;   (decay-at d t)          its samples at the seconds t since it began, a tray, about -1..1
 (module (decay decay-new decay-at)
-(borrow 'view)                          ; min2, max2
 (:
  rate 22050                             ; the phrase's samples a second
  chord-s 2.4                            ; a chord's seconds, four to the phrase
@@ -14,7 +13,7 @@
  (die sd k) (: h (sin (sd * 12.9898 + k * 78.233 + 0.31) * 43758.5453) (h - floor h))
  (hz m) (440.0 * 2.0 ** ((m - 69) / 12.0))
  ; ..a note's envelope over t seconds from its start: up over a, held to d, gone over r
- (env t a d r) (: up (min 1.0 (t / a)) dn (max 0.0 (min 1.0 (1.0 - (t - d) / r))) (up * up * (3.0 - 2.0 * up) * dn * dn))
+ (env t a d r) (: up (min 1.0 (t / a)) dn (max 0.0 (min 1.0 (1.0 - (t - d) / r))) (2 up * (3.0 - 2.0 * up) * dn * dn))
  ; ..the voices, each a tray of samples for a note of f hertz held d seconds, its tail
  ; after: sung by partials, its pitch wavering once it has spoken
  (tones f d r a ws vr vd ph) (: n (int ((d + r) * rate)) t (iota n / (1.0 * rate))
@@ -37,15 +36,15 @@
    (deg i) (sc (i % 7) + 12 * (i // 7))
    (mid m) (55 + ((m - 55) % 12 + 12) % 12)
    N (int (4.0 * chord-s * rate))
-   chords (cats (map (c \ (: d (pr c) s (int (c * chord-s * rate))
+   chords (catmap (c \ (: d (pr c) s (int (c * chord-s * rate))
                             ([[s (bass (hz (key + deg d - 12)) chord-s)]] + map (j \ [s (strings (hz (mid (key + deg (d + j)))) chord-s)]) [0 2 4])))
-                     ^4))
+                     ^4)
    ; ..the horn: each chord's time cut by a rhythm, each note a step or two from the last
    rh [[1.2 1.2] [1.8 0.6] [0.6 0.6 1.2] [2.4] [1.2 0.6 0.6] [0.9 0.3 1.2]]
    line (foldl (\ q c (: d (pr c) r (rh (int (#rh * die sd (10 + c)))) t0 (c * chord-s)
                       (foldl (\ q j (: k (100 + 10 * c + j) on (j = 0 || die sd (k + 5) < 0.5)
                                        ch (map (o \ d + o) [0 2 4 7]) near (foldl (\ a x (abs (x - q 0) < abs (a - q 0) ? x a)) <ch ch)
-                                       step (q 0 + int (5.0 * die sd k) - 2) m (max2 (d + 2) (min2 (d + 11) (on ? near step)))
+                                       step (q 0 + int (5.0 * die sd k) - 2) m (max (d + 2) (min (d + 11) (on ? near step)))
                                        t (t0 + foldl (\ a i (a + r i)) 0.0 ^j)
                                        [m (q 1 + [[(int (t * rate)) (horn (hz (key + 12 + deg m)) (r j - 0.06))]])]))
                              q ^#r)))
@@ -53,8 +52,8 @@
    buf (foldl (\ b e (lay b (e 0) (e 1))) (iota N * 0.0) (chords + line 1))
    echo [[0.031 0.32] [0.047 0.28] [0.071 0.25] [0.097 0.22] [0.131 0.18] [0.173 0.15] [0.229 0.12] [0.283 0.1] [0.37 0.08] [0.47 0.06]]
    I (iota N) wet (foldl (\ y e (y + e 1 * peep buf ((I - int (e 0 * rate) + N) % N) 0.0)) (buf * 1.0) echo)
-   pk (max2 (amax wet) (0.0 - amin wet))
-   (wet * (0.9 / max2 1e-6 pk)))
+   pk (max (amax wet) -(amin wet))
+   (wet * (0.9 / max 1e-6 pk)))
  ; ..where it wears: each slot the time round it first falls silent, a gap more each
  ; time round from the second, short most often, some a good part of a second
  (wear sd L) (: n (int (L * wear-k)) w (iota n * 0.0 + 1e9)

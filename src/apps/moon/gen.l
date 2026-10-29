@@ -8148,9 +8148,12 @@
    ; the inline-asm register file (cgasm; cgdecl reads it for a register variable's pin)
    asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
    asmpick '(r10 r9 r8 r7 r6 r5 r2 r1 r0)
-   ; a64's "w": a v register, from the caller-saved top (a function with an asm homes no float)
-   asmfp '(f16 f17 f18 f19 f20 f21 f22 f23)
-   (freg? r9) (elem r9 asmfp)
+   ; a64's "w" and x64's "x": a v register, from the caller-saved top (a function with an asm
+   ; homes no float); x64's leave the low xmm to the loads' scratch
+   asmfp-a64 '(f16 f17 f18 f19 f20 f21 f22 f23)
+   asmfp-x64 '(f8 f9 f10 f11 f12 f13 f14 f15)
+   (asmfp g) (a64? g ? asmfp-a64 asmfp-x64)
+   (freg? r9) (elem r9 asmfp-a64 || elem r9 asmfp-x64)
    asmnames (foldl (t \ i \ "r\(i)" @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 (asmfile g) || a64? g && elem r9 '(r4 lr))   ; lr: the a64 frame saves it, and its epilogue restores
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
@@ -8337,6 +8340,7 @@
                       112 'pick                                ; "p": an address in a register, %a spells it as memory
                       81 (a64? g ? 'mem 'bad)                  ; a64's Q: a base register alone, [xN]
                       119 (a64? g ? 'fpick 'bad)               ; a64's w: a v register
+                      120 (x64? g ? 'fpick 'bad)               ; x64's x: an xmm register
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
                       (elem c0 asmimm ? 'imm 'bad))
@@ -8557,7 +8561,7 @@
                              (k = 'pick)
                               (two? fr ? (assign >l >fr (<fr . acc)) 'bad)
                              (k = 'fpick)
-                              (#(filter freg? acc) @ j (j < #asmfp ? (assign >l fr ((asmfp j) . acc)) 'bad))
+                              (#(filter freg? acc) @ j (j < #(asmfp g) ? (assign >l fr (asmfp g j . acc)) 'bad))
                              (assign >l fr (k . acc)))))
                    ; no operand takes a register the asm clobbers; past the scratch file, x64 seats
                    ; callee-saved ones, saved around the whole asm
@@ -8602,11 +8606,12 @@
                          (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
-                         ; a v register: plain is v, s h d b q its scalar views
+                         ; a v register: plain is v, s h d b q its scalar views; x64's is xmm, x too
                          (ftext a9) (md \ (? neutral? 'bad
                                              (: n9 (snip (show a9) 1 #(show a9))
-                                                (md @ 0 "v\(n9)" 115 "s\(n9)" 104 "h\(n9)" 100 "d\(n9)"
-                                                      98 "b\(n9)" 113 "q\(n9)" 'bad))))
+                                                (? (x64? g) (md = 0 || md = 120 ? "%xmm\(n9)" 'bad)
+                                                   (md @ 0 "v\(n9)" 115 "s\(n9)" 104 "h\(n9)" 100 "d\(n9)"
+                                                         98 "b\(n9)" 113 "q\(n9)" 'bad)))))
                          (optext l al acc)
                           (!(two? l) ? (rev acc)
                              (: e2 <l a9 <al

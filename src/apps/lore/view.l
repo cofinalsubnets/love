@@ -2,7 +2,7 @@
 ; state, the rays its columns cast, the pens said a change at a time, the tty loop that
 ; runs a level, and the small arithmetic the scenes share. a scene that colours every
 ; pixel says its colours as pens here too: 24-bit, or the 256 palette dithered.
-(module (view esc pi clamp flo wrap min2 max2 over throw sgr view! view-hz view-size view-rays
+(module (view esc pi clamp flo wrap over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
          view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
@@ -17,8 +17,6 @@
  (clamp v lo hi) (v < lo ? lo (hi < v ? hi v))
  (flo v) (int (v + 1000.0) - 1000)
  (wrap a) (a < -pi ? (wrap (a + tau)) (pi < a ? (wrap (a - tau)) a))
- (min2 a b) (a < b ? a b)
- (max2 a b) (a < b ? b a)
  (over c m v) (c + m * (v - c))                          ; v where the mask holds, c elsewhere
  ; the hash: two rounds of multiply, shift and mask kept under 32 bits, so a tray's
  ; machine words and a number throw alike
@@ -52,7 +50,7 @@
         (f2 != f || b2 != b ? (say j (sgr f2 b2)),
          say j (tx ? (string (bd 1 (x - bd 0))) "▀"),
          row (x + 1) f2 b2 ts bs bd)))
-   (rows y) (y < h // 2 ? (row 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (peep bands y ()),
+   (rows y) (y < h // 2 ? (row 0 -1 -1 (src (2 * y)) (src (2 * y + 1)) (bands y),
                            say j (esc + "[0m"), y + 1 < h // 2 ? (say j "\r\n"), rows (y + 1)))
    (rows 0, slurp j))
  ; --- colours to pens: c a triple of trays, each part 0 to 1 ---
@@ -68,7 +66,7 @@
  ; near enough to the eye's), not its code: the cube's first step is 0 to 95, and a code
  ; half way there dithered half and half reads far too bright
  (cube-lvl k) (over (0.0 * k) (0 < k) ((55.0 + 40.0 * k) / 255.0))
- (dith a b v bay) (: a2 (a * a) (over 0 (bay < (v * v - a2) / (b * b - a2)) 1))
+ (dith a b v bay) (: a2 (2 a) (over 0 (bay < (2 v - a2) / (2 b - a2)) 1))
  (view-cube-pens c bay) (: (ix v) (: u (sat1 v)
      lo (max 0 (min 4 (floor (over (u * 255.0 / 95.0) (95.0 / 255.0 <= u) (1.0 + (u * 255.0 - 95.0) / 40.0)))))
      (lo + dith (cube-lvl lo) (cube-lvl (lo + 1)) u bay))
@@ -100,7 +98,7 @@
         (f2 != f || b2 != b ? (say j (deep-sgr f b f2 b2)),
          say j (tx ? (string (bd 1 (x - bd 0))) "▀"),
          row (x + 1) f2 b2 i bd)))
-   (rows y) (y < h // 2 ? (row 0 -1 -1 (2 * y * w) (peep bands y ()),
+   (rows y) (y < h // 2 ? (row 0 -1 -1 (2 * y * w) (bands y),
                            say j (esc + "[0m"), y + 1 < h // 2 ? (say j "\r\n"), rows (y + 1)))
    (rows 0, slurp j))
  ; --- keys: a binding is a tablet, a key's code -> the action it names, a symbol. a code is
@@ -114,7 +112,7 @@
  ; ..a picture's pixel scale halved or doubled, 1 to 8, and the screen sized again for it:
  ; fewer pixels drawn for more frames, or the other way
  (view-rescale lv st a) (: s (peep st 'scale 2)
-   _ (pin st 'scale (a = 'finer ? (max2 1 (s // 2)) (min2 8 (s * 2))))
+   _ (pin st 'scale (a @ 'finer (max 1 (s // 2)) (min 8 (s * 2))))
    (lv 'size st (st 'w) (st 'h // 2)))
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
@@ -136,12 +134,12 @@
  (view-help b listed) (: cs (sort (filter (k \ b k != ()) (keys b)))
    acts (filter (a \ elem a (map b cs)) listed)
    (names a) (join " " (uniq (map view-key-name (filter (k \ b k = a) cs))))
-   wd (foldl max2 0 (map (a \ vlen (names a)) acts))
+   wd (foldl max 0 (map (vlen * names) acts))
    (map (a \ pad (names a) wd " " + "  " + show a) acts))
  ; ..laid in a box over the middle of a w by r cell screen: [x0 y0 rows], each row as wide
  ; as the box
- (view-help-box ls w r) (: bw (2 + foldl max2 0 (map vlen ls)) rows (map (l \ " " + pad l (bw - 2) " " + " ") ([""] + ls + [""]))
-   [(max2 0 ((w - bw) // 2)) (max2 0 ((r - #rows) // 2)) rows])
+ (view-help-box ls w r) (: bw (2 + foldl max 0 (map vlen ls)) rows (map (l \ " " + pad l (bw - 2) " " + " ") ([""] + ls + [""]))
+   [(max 0 ((w - bw) // 2)) (max 0 ((r - #rows) // 2)) rows])
  ; ..to a terminal, over the frame and in the same synchronised update, so the two are
  ; shown as one: inside the frame's own, or one of its own round them
  (view-synced f o) (: e (esc + "[?2026l") n #e
@@ -169,21 +167,21 @@
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
-   win (peep lv 'win ())
+   win (lv 'win)
    binds (peep lv 'binds view-binds)
    hl (view-help binds (peep lv 'listed (view-listed ())))
    hs {'on 0 'p ()}
    ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
    ; middle summed for the frame and it put back there, esc lets it go
-   look (peep lv 'look ()) ms {'on 0 'dx 0 'dy 0}
+   look (lv 'look) ms {'on 0 'dx 0 'dy 0}
    ; ..and its buttons, once it is held or where nothing looks by it, to the level's 'mouse
-   mouse (peep lv 'mouse ()) (hand? _) (mouse != () && (ms 'on = 1 || look = ()))
+   mouse (lv 'mouse) (hand? _) (mouse != () && (ms 'on = 1 || look = ()))
    (mid _) (window-size win @ s [(s 0 // 2) (s 1 // 2)])
    (grab! on) (: c (mid ()) ok (window-hold win on)
      (on && ok ? (pins ms 'on 1 'dx 0 'dy 0, window-warp win (c 0) (c 1)) (pin ms 'on 0)))
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
    ; frame, so a resized window is painted whole
-   (shape _) (? win (window-size win @ s [(max2 20 (s 0 // 8)) (max2 8 (s 1 // 16))])
+   (shape _) (? win (window-size win @ s [(max 20 (s 0 // 8)) (max 8 (s 1 // 16))])
                 (tty 1 @ ws [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)]))
    sh0 (shape ())
    st (lv 'new (sh0 0) (2 * sh0 1))
@@ -197,7 +195,7 @@
    ; help's key let go puts the help away
    (wgo l) (? (atom? l) ()
               (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
-                 k (? (0 < #t) (t 0) (peep view-set1 (e 1) ()))
+                 k (? (0 < #t) (t 0) (view-set1 (e 1)))
                  (? (<e = 'close) ('quit . wgo >l)
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
@@ -208,7 +206,7 @@
                     (<e = 'down && ms 'on && k = 27) (grab! 0, wgo >l)
                     (<e = 'down && charm? k && held (e 1) != ()) (wgo >l)
                     (<e = 'down && charm? k) (pin held (e 1) [k (clock 0 + rep 0)],
-                                              (binds k = 'help ? (pins hs 'on 1 'p (e 1))),
+                                              (binds k @ 'help (pins hs 'on 1 'p (e 1))),
                                               k . wgo >l)
                     (<e = 'up) (pin held (e 1) (),
                                 (e 1 = hs 'p ? (pins hs 'on 0 'p ())),
@@ -290,7 +288,7 @@
    (\ what part (: now (clock 0)
      (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
         (: b (tablet? win && atom? box ? (window-sized win @ s [0 0 (s 0) (s 1)]) box)
-           s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'fresh (at 'n = 0 || b != peep at 'box ()) 'what what 'part part})
+           s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'fresh (at 'n = 0 || b != at 'box) 'what what 'part part})
            (pins at 'n (at 'n + 1) 'last now 'box b,
             (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (b 1) (b 3)))
                (string? s) (say out s, flush out)),
@@ -304,10 +302,10 @@
    (? !(tablet? win) (esc + "[" + show ((b 1 + b 3) // 2 + 1) + ";" + show ((b 0 + b 2) // 2) + "H" + esc + "[0;37;40m"
             + view-spin-cells (n * 8 // view-spin-n % 8) + esc + "[0m")
       ; ..a fifth of the box across, drawn at most 64 pixels and blown up past that
-      (: Q (min2 bw bh // 5) k (max2 1 ((Q + 63) // 64)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
+      (: Q (min bw bh // 5) k (max 1 ((Q + 63) // 64)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
          x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
-         I (iota (S * S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
-         in (x * x + y * y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (A * A * 4))
+         I (iota (2 S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
+         in (2 x + 2 y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (2 A * 4))
          Z (cask (4 * bw))
          fr (peep ld 'fresh (n = 0)) _ (fr ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
          (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))

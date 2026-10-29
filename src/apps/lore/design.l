@@ -86,7 +86,7 @@
                  118 (pin d 'want 'vi)  112 (pin d 'want 'play)   ; the runner's: they leave the stage
                  d)))
       ; a prompt is cli's editor: enter commits, escape backs out
-      (edcmd d 'buf c (l \ commit d l) (_ \ (pin d 'mode 'map, tell d "")))))
+      (edcmd d 'buf c (commit d) (_ \ (pin d 'mode 'map, tell d "")))))
 
  ; --- the frame: the map with the cursor on it, the tile and thing under it, the help --
  (design-frame d w h) (: j (jug 0) lvl (d 'lvl)
