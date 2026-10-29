@@ -39,13 +39,13 @@
    (lens-pics d w p)
     (: r (cite 'lapiz 'ttpics d w) ls (lines <r)
        ws (tty 1) rows (two? ws && 3 < <ws ? (<ws - 2))
-       deep (cite 'kore 'pic-deep 0) dir (lens-dir p)
+       deep (cite 'kore 'im-deep 0) dir (lens-dir p)
        (draw t a)
         (<a @ nm
            (nm @ (" img " + (s && 0 < #s))
               (: f (lens-path dir s)
                  rd (string? f ? (uread f))
-                 im (two? rd ? (cite 'kore 'pic-decode <>rd))
+                 im (two? rd ? (cite 'kore 'im-decode <>rd))
                  (two? im ? (pin t (a 1) (peep t (a 1) () + cite 'kore 'ww-art im w rows deep)) t))
               t))
        pics (foldl draw {} (r 1))
@@ -64,39 +64,11 @@
        tty? (two? ws)
        (lensrun (\ s p (h2t-lay s w tty? p)) "html2text" <>>o))
 
-   md-usage "usage: markdown [-t html|roff|text|cells|dvi] [-w COLS] [FILE..]"
-   md-tos ["html" "roff" "text" "cells" "dvi"]
-   ; -t dvi: caja sets pages with cm metrics and hyphen patterns from a TeX tree ($CAJA_TEXMF,
-   ; else TeX Live's). one file or stdin; a man page (first line a request) is read as roff
-   texmf-roots ["/usr/share/texmf-dist" "/usr/share/texlive/texmf-dist" "/usr/local/share/texmf-dist"]
-   (lens-texmf rel)
-    (: e (getenv "CAJA_TEXMF")
-       rs (string? e && 0 < #e ? (e . texmf-roots) texmf-roots)
-       (go l) (two? l ? (uread "\(<l)/\(rel)" @ r (two? r ? "\(<>r)" (go >l))))
-       (go rs))
-   (lens-roff? s) (0 < #s && (s 0 = 46 || 1 < #s && s 0 = 39 && s 1 = 92))
-   (md-dvi s)
-    (: tfms (map (n \ lens-texmf "fonts/tfm/public/cm/\(n).tfm") (cite 'caja-doc 'cd-fonts))
-       hy (lens-texmf "tex/generic/hyphen/hyphen.tex")
-       _ (elem () (hy . tfms) ?
-            (udie 1 "markdown: -t dvi wants Computer Modern's TFMs and hyphen.tex from a TeX tree; set CAJA_TEXMF"))
-       ms (clock 0) sec (ms // 1000) ymd (civil (sec // 86400))
-       J (cite 'caja-doc 'cd-job tfms hy [(ymd 0) (ymd 1) (ymd 2) (sec % 86400 // 60)])
-       doc (lens-roff? s ? (cite 'lapiz 'rfread s) (cite 'lapiz 'mdread s))
-       (cite 'caja-doc 'cd-dvi J doc))
-   (md-dvi-main fs)
-    (: _ (two? (tty 1) ? (udie 2 "markdown: a DVI is not for a terminal; send it to a file"))
-       _ (1 < #fs ? (udie 2 "markdown: -t dvi sets one document"))
-       s (two? fs ? (uread <fs @ r (two? r ? (<>r + "") (udie 1 ("markdown: cannot open " + <fs)))) (slurp in))
-       (say out (md-dvi s),
-        flush out,
-        0))
+   md-usage "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
+   md-tos ["html" "roff" "text"]
    (md-lay s to w tty? p)
     (to @ "roff" (cite 'lapiz 'md->rf s)
           "text" (tty? ? (lens-pics (cite 'lapiz 'mdread s) w p) (usgr (cite 'lapiz 'md->tty s w)))
-          "cells" (: d (lens-roff? s ? (cite 'lapiz 'rfread s) (cite 'lapiz 'mdread s))
-                     o (cite 'caja-cell 'cc-show d w)
-                   (tty? ? o (usgr o)))
        (cite 'lapiz 'md->ht s))
    (markdown-main as)
     (: t {}
@@ -109,7 +81,6 @@
        _ (elem to md-tos ? () (udie 2 md-usage))
        ws (tty 1)
        w (lens-w t ws)
-       tty? (two? ws && (to = "text" || to = "cells"))
-       (to @ "dvi" (md-dvi-main <>>o)
-        (lensrun (s \ md-lay s to w tty?) "markdown" <>>o))))
+       tty? (two? ws && to = "text")
+       (lensrun (s \ md-lay s to w tty?) "markdown" <>>o)))
 ) ; module 'kore

@@ -1,5 +1,5 @@
 ; test/host/mp3.l -- src/love/audio/mp3.c's nifs and src/apps/mp3.l: a small stream and its
-; flips, the 11172-4/13818-4 conformance streams (make dl/mp3-vectors), lame against ffmpeg/mpg123
+; flips, the 11172-4/13818-4 conformance streams (fetched into dl/mp3-vectors), lame against ffmpeg/mpg123
 ;   cat test/00-init.l test/host/mp3.l | out/love
 (borrow 'posix)
 (borrow 'mp3)
@@ -60,6 +60,8 @@
 
    ; 11172-4 full accuracy on s16: rms under 1/sqrt 12 of a step, none more than two
    ; a reference may drop a last frame; sin1k0db's drops the first two, so it is decoded from its first
+   ; fetched into dl/ once: loud when it cannot be, a FAIL when the hash differs
+   _ (hark ["sh" "test/gate/dl.sh" "mp3-vectors"] @ r (puts >r, test (<r = 0)))
    vd (getenv "DL" @ d (string? d ? (d + "/mp3-vectors") ""))
    iso ["l3-compl" "l3-he_32khz" "l3-he_44khz" "l3-he_48khz" "l3-he_free" "l3-he_mode" "l3-hecommon"
         "l3-si" "l3-si_block" "l3-si_huff" "l3-test45" "l3-test46" "M2L3_bitrate_16_all"
@@ -70,7 +72,7 @@
          (test (all mp-iso iso)
                (: b (av-t-rd (vd + "/l3-sin1k0db.bit")) r (av-t-rd (vd + "/l3-sin1k0db.pcm"))
                   (mp-all (snip b (mp3-meta b 'at) #b) 0 @ pcm (? (string? pcm) (av-t-full (snip pcm 9216 (9216 + #r)) r)) _ 0)))
-        (gate-partly "mp3: no dl/mp3-vectors (make dl/mp3-vectors), the conformance streams skipped"))
+        (gate-partly "mp3: no dl/mp3-vectors (could not fetch them), the conformance streams skipped"))
 
    ; lame's streams against ffmpeg's float decoder and mpg123, gapless
    ref? (all (t \ <(hark ["sh" "-c" ("command -v " + t + " >/dev/null")]) = 0) ["ffmpeg" "mpg123"])

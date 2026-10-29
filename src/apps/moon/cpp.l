@@ -88,6 +88,15 @@
    ; C11 6.10.3.2's stringize: the spelling as is (never re-lexed, so no extra escapes); one
    ; space where the source had any. a stray `\\` outside a literal (gas's macro argument) is one backslash
    (bs? t) (spell t = "\\")
+   ; ..and its literal: `\` and `"` escape inside a string or char literal only, as gcc spells it
+   (strsp v) (: n #v
+                (go i q acc)
+                 (? (i >= n) acc
+                    (v i @ c
+                       (? (q = 0) (go (i + 1) (c = 34 || c = 39 ? c 0) (acc + (c = 34 ? "\\\"" (string c))))
+                          (c = 92 && i + 1 < n) (go (i + 2) q (acc + "\\\\" + (v (i + 1) @ 34 "\\\"" 92 "\\\\" d (string d))))
+                          (go (i + 1) (c = q ? 0 q) (acc + (c = 34 ? "\\\"" (string c)))))))
+                "\"\(go 0 0 "")\"")
    (spellcat ts) (: (go l acc gap) (? (atom? l) acc
                                       (bs? <l && !(spaced? <l) && two? >l && bs? <>l)
                                        (go >>l "\(acc)\(gap && acc != "" ? " " "")\\" (spaced? <>l))
@@ -166,7 +175,8 @@
                      pi (paramidx params (pnm p))
                      va (var? && idv? p "__VA_ARGS__")
                      (-1 < pi || va ?
-                        (go >>ml p t (tok 'str (spellcat (va ? (vaargs args params seps) (args pi))) line . acc))
+                        (spellcat (va ? (vaargs args params seps) (args pi)) @ v
+                           (go >>ml p t (['str v line () (strsp v)] . acc)))
                         (go >ml t q1 (t . acc))))
                  ; __VA_OPT__(x): x when the variadic tail has a token, else a placemarker
                  (var? && idv? t "__VA_OPT__" && two? >ml && pv? <>ml "(")
