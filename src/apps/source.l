@@ -189,7 +189,19 @@
         (0 != st ? (src-die "the build failed (exit \(st))")),
         (string? xa ? (seed-cross root xa dst)
            ; the rebuild must be this binary, byte for byte
-           (seed-fix exe "\(root)/out/love"))))
+           (: out "\(root)/out/love"
+              (seed-roster out, seed-fix exe out)))))
+
+   ; the units this image left out (`love roster`): the rebuild bakes the same roster
+   (seed-left _)
+    (: V (cite 'verbs)
+       (foldl (a \ f \ (V 'unit <f @ u (>f = 0 && !(elem u a) ? (a + [u]) a))) () (rev (V 'ros 'files))))
+   (seed-roster out)
+    (seed-left 0 @ () 0
+       l (: _ (puts ";; baking the roster: --without \(join "," l)\n")
+            r (spawn [out "roster" "bake" "--without" (join "," l) "-o" out] @ p
+                 (charm? p && 0 <= p ? (wait p) 127))
+            (0 != r ? (src-die "the roster bake failed (exit \(r))"))))
 
    ; the imageless projection of a binary, written beside p. a binary carrying no image
    ; is its own projection, which is how seed-fix reads either side's state.
