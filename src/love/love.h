@@ -299,8 +299,12 @@ struct g {
 #endif
  // the main pool is all nursery, young [end, hp); old lives in the major block
  word *major_base, *major_hp;
+ // the survivors: young that outlived one minor, [sv_base, sv_hp) in a block sv_len long,
+ // tenured at their second; sv2 the spare block the next minor copies into
+ word *sv_base, *sv_hp, *sv2_base;
  uintptr_t
    major_len,
+   sv_len, sv2_len, sv_want, sv_idle, // the blocks' lengths, the room the last minors wanted, minors since it was
    n_minor,                       // majors = n_gc - n_minor
    minor_hi, major_hi,            // peak words one minor / major copied (gauge[14]/[15])
    major_live0,                   // live after the last major: the budget's live set
@@ -1032,8 +1036,10 @@ static love_inline bool eql(struct g *g, word a, word b) {
  return a == b ? true : (a & b & 1) || (nomp(a) && nomp(b)) ? false : eqv(g, a, b); }
 
 // --- the collector ---
-// the rem set's capacity in words
-#define LvRemCap (1u << 12)
+// the rem set's capacity in words, and its index: a uint16 slot per hash after the words
+#define LvRemCap (1u << 14)
+#define LvRemIxBits 16
+#define LvRemIx (1u << LvRemIxBits)
 // a thread ends with a tag word, its head pointer | 2; an external pointer may carry the bits,
 // never into the pool
 #define thread_tag 2
@@ -1043,6 +1049,7 @@ static love_inline bool tagp(word x, word const *lo, word const *hi) {
 // the pools a heap pointer may live in between collections
 static love_inline bool in_live_pool(struct g *g, word const *p) {
  if (p >= ptr(g) && p < ptr(g) + g->len) return true;
+ if (p >= g->sv_base && p < g->sv_base + g->sv_len) return true;
  return p >= g->major_base && p < g->major_base + g->major_len; }
 static love_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | thread_tag, h; }
@@ -1056,6 +1063,7 @@ static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g
  // k forward to its terminator, in whichever pool holds it
  word *lo, *hi;
  if (ptr(k) >= g->major_base && ptr(k) < g->major_hp) lo = g->major_base, hi = g->major_hp;
+ else if (ptr(k) >= g->sv_base && ptr(k) < g->sv_hp) lo = g->sv_base, hi = g->sv_hp;
  else lo = ptr(g), hi = topof(g);
  while (!tagp(k->x, lo, hi)) k++;
  return (struct tag*) k; }
