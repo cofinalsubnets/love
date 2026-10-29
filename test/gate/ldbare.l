@@ -3,7 +3,7 @@
 ;         them: call f (rel32 6), mov $d,%eax (d at 0x10000c), ret, ret, then d's bytes
 ;   bcc   a thumb2 Bcc.W into another section leaves R_ARM_THM_JUMP19, linked here to the
 ;         word GNU ld lays for it: beq.w 0x800e at 0x8004 (f000 8003)
-;   cat src/apps/kore/{text,u,asbook}.l src/love/holo/{holo,i386,thumb2,elf,obj,link}.l
+;   cat src/apps/kore/{text,u,asbook}.l src/love/holo/{holo,i386,thumb2,elf,obj,lds,link}.l
 ;       test/gate/ldbare.l | love   (prints "ldbare: ok")
 (borrow 'holo)
 (: (bytes l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
