@@ -24,7 +24,7 @@
    doy (sky-doy s + dd)
    dec (-0.4091 * cos (tau * (doy + 10.0) / 365.2422))
    ha ((hr - 12.0) * pi / 12.0)
-   [(0.0 - cos dec * sin ha)
+   [-(cos dec * sin ha)
     (sin lat * sin dec + cos lat * cos dec * cos ha)
     (cos lat * sin dec - sin lat * cos dec * cos ha)])
  (sky-doy s) (s / 86400.0 - 10957.0 - 365.2422 * floor ((s / 86400.0 - 10957.0) / 365.2422))
@@ -48,13 +48,13 @@
  ; a loop: 'per on the weather is its length in sim seconds and 'tper in frames, and each of
  ; the sky's clocks then comes round a whole number of times in it -- the nearest number, so
  ; a slow one stands still. turns snaps a rate in radians, lap a drift over a wrapping map
- (turns wx k w) (peep wx k 0 @ p (p = 0 ? w (tau * floor (w * p / tau + 0.5) / p)))
- (lap wx r k) (peep wx 'per 0 @ p (p = 0 ? r (floor (r * k * p / cloud-n + 0.5) * cloud-n / (k * p))))
+ (turns wx k w) (peep wx k 0 @ p (p @ 0 w (tau * floor (w * p / tau + 0.5) / p)))
+ (lap wx r k) (peep wx 'per 0 @ p (p @ 0 r (floor (r * k * p / cloud-n + 0.5) * cloud-n / (k * p))))
  ; the clouds' thickness, a square that tiles: value noise on lattices that wrap, read through
  ; a slow warp so no lattice shows, its finer two puffed toward billows
- (cloud-map _) (: n cloud-n i (iota (n * n)) u (i % n / (1.0 * n)) v (i // n / (1.0 * n))
+ (cloud-map _) (: n cloud-n i (iota (2 n)) u (i % n / (1.0 * n)) v (i // n / (1.0 * n))
    (vp x z s p) (: ix (floor x) iz (floor z) ux (x - ix) uz (z - iz)
-                   ex (ux * ux * (3.0 - 2.0 * ux)) ez (uz * uz * (3.0 - 2.0 * uz))
+                   ex (2 ux * (3.0 - 2.0 * ux)) ez (2 uz * (3.0 - 2.0 * uz))
                    (h a c) (throw (wrap-n a p) (wrap-n c p) s 1024 / 1023.0)
                    q0 (h ix iz) q1 (h (ix + 1) iz) q2 (h ix (iz + 1)) q3 (h (ix + 1) (iz + 1))
                    lo (q0 + ex * (q1 - q0)) hi (q2 + ex * (q3 - q2))
@@ -66,7 +66,7 @@
  ; ..and where the clouds' thickness stands at each hundredth of the sky, so a cover's
  ; share is the share of sky its clouds take: thick's own mix of the map, shuffled
  fine 0.3                               ; the fine layer's weight
- (quantiles m f) (: n (cloud-n * cloud-n) i (iota n)
+ (quantiles m f) (: n (2 cloud-n) i (iota n)
    (sh k) (m ((i * k + 7919 * k) % n))
    t ((1.0 - f) * m + f * sh 7 + 0.18 * (sh 13 - 0.5))
    l (sort (map t ^n))
@@ -104,14 +104,14 @@
    ; its 8 and 16
    ((1.0 - f) * (0.5 + seen 2.0 * (a - 0.5)) + f * (0.5 + seen 4.6 * (b - 0.5)) + 0.18 * seen 0.4 * (sw - 0.5)))
  ; ..and the spread a sample's thickness hides under its mean, the map's about 0.2 a layer
- (thick-sd fp) (: f fine (lost q w) (: k (1.0 / (1.0 + sq (fp * q))) (sq w * (1.0 - k * k)))
+ (thick-sd fp) (: f fine (lost q w) (: k (1.0 / (1.0 + sq (fp * q))) (sq w * (1.0 - 2 k)))
    (0.2 * sqrt (lost 2.0 (1.0 - f) + lost 4.6 f + lost 0.4 0.18)))
  ; how much cloud down the rays, 0 to 1, as the sky draws it: by the horizon the
  ; deck too far to tell apart, a haze as thick as the cover
  (haze c dy wx sim) (: k (sat (1.0 - dy / 0.06)) (c + 0.85 * k * (sat (1.2 * sky-cover wx sim) - c)))
  ; ..past where the cover starts, k as sharp; at a full cover, never under 0.93
  (thick-at wx mp d sim k) (sat (0.5 + (thick wx mp (d 0) (d 1) sim - edge wx sim) * k))
- (clouded wx c) (wx 'cover = 3 ? (max c 0.93) c)
+ (clouded wx c) (wx 'cover @ 3 (max c 0.93) c)
  (sky-cloud wx dx dy dz ex ez sim) (: mp (sky-maps ()) d (deck-at dx dy dz ex ez sim)
    (clouded wx (haze (thick-at wx mp d sim 10.0) dy wx sim)))
  ; ..clouds fixed in the world down world rays W: the map laid on each axis's plane, as many
@@ -123,10 +123,10 @@
      (wt k * thick-fp wx mp (a * orb-k + o) (b * orb-k - o) sim fp))
    ((face 0 + face 1 + face 2) / ws))
  ; ..the cloud down rays X Y Z as lt's sky draws it: the deck's, or under 'turn the world's
- (sky-cloud-lt lt wx X Y Z ex ez sim) (peep lt 'turn () @ B
+ (sky-cloud-lt lt wx X Y Z ex ez sim) (lt 'turn @ B
    (? !(two? B) (sky-cloud wx X Y Z ex ez sim)
       (: W (map (j \ X * B 0 j + Y * B 1 j + Z * B 2 j) ^3) mp (sky-maps ())
-         (clouded wx (haze (sat (0.5 + (orb-thick wx mp W sim 0.0 - edge wx sim) * 10.0)) (max Y (0.0 - Y)) wx sim)))))
+         (clouded wx (haze (sat (0.5 + (orb-thick wx mp W sim 0.0 - edge wx sim) * 10.0)) (max Y -Y) wx sim)))))
  ; ..and the cloud over the sun, world way s, a soft edge
  (sky-orb-cloud wx s sim) (: mp (sky-maps ()) W (map (k \ gem-tray [1] [(1.0 * s k)]) ^3)
    (clouded wx (sat (0.5 + (orb-thick wx mp W sim 1.0 - edge wx sim) * 3.0)) 0))
@@ -135,7 +135,7 @@
  ; low down, where one ray sweeps the deck fast, most of all
  sun-ring (cat [[0.0 0.0]] (map (k \ (: a (k * pi / 6.0) [(cos a) (sin a)])) ^12))
  (sun-cloud wx s sim) (: mp (sky-maps ()) r 0.05
-   (one o) (deck-at (s 0 + r * o 0) (max2 (s 1) 0.05) (s 2 + r * o 1) 0.0 0.0 sim @ d
+   (one o) (deck-at (s 0 + r * o 0) (max (s 1) 0.05) (s 2 + r * o 1) 0.0 0.0 sim @ d
               (clouded wx (thick-at wx mp d sim 3.0)))                    ; a soft edge
    (net (map one sun-ring) / #sun-ring))
  ; the light of the sun s under the weather: its colour and strength, the share of it
@@ -146,7 +146,7 @@
  ; ..smog, wx 'smog 0 to 1 of the way, browns what is seen and what it lights toward orange
  (smoggy wx c) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
    t (cmix [1.35 0.52 0.16] [2.0 1.0 0.24] (sat (1.6 * l)))
-   (k = 0.0 ? c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] k)))
+   (k @ 0.0 c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] k)))
  (sky-light s wx sim) (sky-lit s wx sim (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim)))
  ; ..its cloud over the sun given, csun 0 to 1
  (sky-lit s wx sim csun) (: sy (s 1)
@@ -155,12 +155,12 @@
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
    f (sky-fall wx)
-   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f = 0 ? 1.0 0.3))
-   sunc (cmix [1.0 0.4 0.1] [1.0 0.93 0.82] (sat ((sy - 0.04) / 0.4) @ k (k * k * (3.0 - 2.0 * k))))
+   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f @ 0 1.0 0.3))
+   sunc (cmix [1.0 0.4 0.1] [1.0 0.93 0.82] (sat ((sy - 0.04) / 0.4) @ k (2 k * (3.0 - 2.0 * k))))
    night [0.05 0.055 0.075]
    amb0 (c+ (cmix night [0.42 0.47 0.56] day) (c* (tw * (1.0 - 0.5 * day)) [0.1 0.05 0.07]))
    grey (cmix night [0.5 0.51 0.53] day)
-   amb (c* (f = 1 ? 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
+   amb (c* (f @ 1 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
    {'sun s 'day day 'tw tw 'sunk sunk 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
  ; --- the sky. far weighs what lies past the moon, the sun's own disc: 0 is the
@@ -169,7 +169,7 @@
    s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
    mu (dx * sx + dy * sy + dz * sz)
    ; ..under a light with 'turn the sky is all round, as high below the eye's horizon as above
-   B (peep lt 'turn ()) dh (two? B ? (max dy (0.0 - dy)) dy)
+   B (lt 'turn) dh (two? B ? (max dy -dy) dy)
    up (sat dh)
    blue (cmix [0.55 0.7 0.9] [0.2 0.42 0.84] (sat (up * 1.3)))
    dark (c+ [0.012 0.016 0.04] (c* (0.06 * (1.0 - up)) [0.6 0.45 0.3]))
@@ -183,7 +183,7 @@
                        (: d (deck-at dx dy dz ex ez sim) (thick-fp wx mp (d 0) (d 1) sim fp)))
    th (th-of dx dy dz)
    ; ..and a step toward the sun: thinner there, this side faces it
-   ts (: n 0.025 X (dx + n * sx) Y (dy + n * sy) Z (dz + n * sz) l (sqrt (X * X + Y * Y + Z * Z))
+   ts (: n 0.025 X (dx + n * sx) Y (dy + n * sy) Z (dz + n * sz) l (sqrt (2 X + 2 Y + 2 Z))
         (th-of (X / l) (Y / l) (Z / l)))
    ; ..the edge as wide as that spread: the share of the sample past it, not a fringe
    cl0 (haze (sat (0.5 + (th - edge wx sim) / sqrt (0.0016 + 2.0 * sq (thick-sd fp)))) dh wx sim)
@@ -193,7 +193,7 @@
    sm (peep wx 'smog 0.0)
    core (sat ((th - edge wx sim) * 5.0))
    lit (sat (0.45 + 6.0 * lt 'day * (th - ts)))
-   body ((0.62 + 0.5 * lit - 0.3 * core - 0.2 * oc * core) * (sky-fall wx = 1 ? 0.8 1.0)
+   body ((0.62 + 0.5 * lit - 0.3 * core - 0.2 * oc * core) * (sky-fall wx @ 1 0.8 1.0)
          * (1.0 - 0.45 * sm) * (1.0 - 0.6 * sm * sat ((th - 0.3) * 2.2) + 0.5 * sm * sat ((0.4 - th) * 3.0)))
    cloudc (c* body
               (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
@@ -220,7 +220,7 @@
             'tint [(0.78 + 0.22 * u) (0.86 + 0.11 * u - 0.19 * w) (1.0 - 0.1 * u - 0.35 * w)]})
  (sky-stars sim dst lat) (: H (sky-lst (sim - dst) - stars0 'ra) ch (cos H) sd (stars0 'sd) cd (stars0 'cd)
    y (sin lat * sd + cos lat * cd * ch)
-   {'x (0.0 - cd * sin H) 'y y 'z (cos lat * sd - sin lat * cd * ch)
+   {'x -(cd * sin H) 'y y 'z (cos lat * sd - sin lat * cd * ch)
     'b (stars0 'b * sat (y / 0.1)) 'b0 (stars0 'b) 'ph (stars0 'ph) 'tint (stars0 'tint)})
  ; ..their light added to the colours c, [r g b] trays before the eye's gain, ix each of
  ; ss's stars' place in them, -1 where it is not on the open sky: dimmed by the cloud before
@@ -232,7 +232,7 @@
        cl (sky-cloud-lt lt wx X Y Z ex ez sim)
        q (peep wx 'twinkle 1.0) (w r) (t0 * turns wx 'tper r)
        tw (sin (w 0.9 + ss 'ph))
-       am (1.0 / max (max Y (0.0 - Y)) 0.06)        ; the air crossed, overhead's 1
+       am (1.0 / max (max Y -Y) 0.06)        ; the air crossed, overhead's 1
        s (min (q * 0.08 * am * sqrt am) 0.6) ch (0.7 * sat ((am - 2.0) / 6.0))
        (fl k) ((sin (w 7.1 + 2.3 * ss 'ph + k * ch) + sin (w 11.3 + 3.7 * ss 'ph + 2.0 * k * ch)
                 + sin (w 17.9 + 5.1 * ss 'ph + 3.0 * k * ch)) / 3.0)
@@ -243,18 +243,18 @@
  fall-r 6.0 fall-h 9.0 rain-n 1600 snow-n 1400
  (sky-drops wx lt e sec) (: f (sky-fall wx)
    (f = 0 ? ()
-      (: n (f = 1 ? rain-n snow-n) i (iota n) R fall-r H fall-h
+      (: n (f @ 1 rain-n snow-n) i (iota n) R fall-r H fall-h
          (rnd k) (frac (sin (i * 12.9898 + k * 78.233) * 43758.5453))
-         v (f = 1 ? 7.5 1.1) sway (f = 1 ? 0.0 0.25)
+         v (f @ 1 7.5 1.1) sway (f @ 1 0.0 0.25)
          (wrap w0 c) (c + 2.0 * R * (frac ((w0 - c) / (2.0 * R)) - 0.5))
          X (wrap (2.0 * R * rnd 1 + sway * sin (sec * 0.7 + 6.3 * rnd 4)) (e 0))
          Z (wrap (2.0 * R * rnd 2 + sway * cos (sec * 0.5 + 6.3 * rnd 5)) (e 2))
          Y (H * (1.0 - frac (rnd 3 + sec * v / H)))
          dist (sqrt (sq (X - e 0) + sq (Y - e 1) + sq (Z - e 2)))
-         {'x X 'y Y 'z Z 'len (f = 1 ? 0.14 0.012) 'wd (f = 1 ? 0.004 0.012)
-          'a ((f = 1 ? 0.38 0.85) * sat (1.4 - dist / R))
-          'c (f = 1 ? (c* 0.95 (c+ (lt 'amb) [0.08 0.09 0.11])) (sky-irr lt 1.5 (0.4 * lt 'sunk)))})))
+         {'x X 'y Y 'z Z 'len (f @ 1 0.14 0.012) 'wd (f @ 1 0.004 0.012)
+          'a ((f @ 1 0.38 0.85) * sat (1.4 - dist / R))
+          'c (f @ 1 (c* 0.95 (c+ (lt 'amb) [0.08 0.09 0.11])) (sky-irr lt 1.5 (0.4 * lt 'sunk)))})))
  ; ..and the eye: its gain against the dark under lt, and a soft shoulder that keeps a hue
  (sky-tone lt col) (: k (1.5 * lt 'expo)
-   [(1.0 - exp (0.0 - k * col 0)) (1.0 - exp (0.0 - k * col 1)) (1.0 - exp (0.0 - k * col 2))]))
+   [(1.0 - exp -(k * col 0)) (1.0 - exp -(k * col 1)) (1.0 - exp -(k * col 2))]))
 ) ; module sky

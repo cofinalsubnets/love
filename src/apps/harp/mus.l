@@ -10,11 +10,9 @@
 (borrow 'bytes)                         ; rdle
 (borrow 'opl)
 (:
- (max2 a b) (a < b ? b a)
- (min2 a b) (a < b ? a b)
  ; --- the score: every event read once, its tick from the delays before it ---
  (mus-read b) (? (!(string? b) || #b < 16 || snip b 0 4 != "MUS\x1a") ()
-   (: len (rdle b 4 2) st (rdle b 6 2) end (min2 #b (st + len))
+   (: len (rdle b 4 2) st (rdle b 6 2) end (min #b (st + len))
       (delay p d) (p >= end ? [p d] (b p @ x (x < 128 ? [(p + 1) (d * 128 + x)] (delay (p + 1) (d * 128 + x - 128)))))
       ; ..one event at p: [event next-p], () at the score's end
       (one p t) (? (p >= end) ()
@@ -36,7 +34,7 @@
  (mus-new sc bank rate) {'sc sc 'bank bank 'rate rate 'evs (sc 'evs) 'base 0 'fpos 0
                          'ch (map chan ^16) 'on () 'tails () 'fpt (rate / 140.0)}
  ; ..a note's instrument: percussion by its note, else the channel's program
- (ins p c n) (c = 15 ? (opl-drum (p 'bank) n) (p 'bank (min2 127 (p 'ch c 'prog))))
+ (ins p c n) (c = 15 ? (opl-drum (p 'bank) n) (p 'bank (min 127 (p 'ch c 'prog))))
  (velo C v) (v * C 'vol // 127)
  (start p e at) (: c (e 1) n (e 3) C (p 'ch c) _ (e 4 >= 0 ? (pin C 'vel (e 4)) 0) I (ins p c n)
    _ (release p c n at)
@@ -60,7 +58,7 @@
  ; ..at most 16 voices: the oldest let-go ones are the first to stop
  (firsts l k) (k = 0 || atom? l ? () (<l . firsts >l (k - 1)))
  (mus-feed p n) (: base (p 'fpos) _ (run p (base + n))
-   tails (firsts (filter (v \ v 0 >= base) (p 'tails)) (max2 0 (16 - #(p 'on))))
+   tails (firsts (filter (v \ v 0 >= base) (p 'tails)) (max 0 (16 - #(p 'on))))
    _ (pins p 'tails tails 'fpos (base + n))
    (cite 'play 'mixdown (map (s \ s 2) (p 'on) + tails) base n))
  (mus-voices p) (#(p 'on) + #(p 'tails))

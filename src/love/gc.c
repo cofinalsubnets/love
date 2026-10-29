@@ -1,19 +1,26 @@
-// gc.c -- the generational collector: a minor evacuates the nursery into the major block, a
-// major copies both into a fresh block; the rem set lets a minor skip the tenured bulk
+// gc.c -- the generational collector: a minor evacuates the nursery into the survivors' block
+// and the survivors before into the major block, a major copies all of it into a fresh block;
+// the rem set lets a minor skip the tenured bulk
 #include "love.h"
 // one pass's state, on the driver's C stack: meaningless between collections
 struct gcx {
  word const *p0, *t0;        // the from-space under trace
- word const *f2lo, *f2hi;    // a second from-space (0 = unused); a major traces {major ∪ minor} in one pass
- word *to_lo, *to_hi;        // where survivors land: the tagp range [to_lo, to_hi)
+ word const *f2lo, *f2hi;    // a second from-space (0 = unused): a minor's survivors, a major's nursery
+ word const *f3lo, *f3hi;    // a third: a major's survivors
+ word *to_lo, *to_hi;        // where the tenured land: the tagp range [to_lo, to_hi)
  word *fwd;                  // the forwarding floor: word0 in [fwd, to_hi) = a copy made this pass
- word *cp; };                // the cheney scan cursor
+ word *cp;                   // the cheney scan cursor
+ // a minor's survivors' block [s_lo, s_hi), filled to s_hp and scanned at s_cp; old says the
+ // scan is in a tenured object and hit that it kept a survivor; ten that its young tenure with it
+ word *s_lo, *s_hi, *s_hp, *s_cp;
+ bool old, ten, hit, over; };
 // a terminator is known by the live pool its head lands in, never the scan's range;
 // mid-pass the to-space counts as a third pool
 static love_inline bool tagl(struct g *g, struct gcx *X, word x) {
  if ((x & 3) != thread_tag) return false;
  word const *p = (word const*) (x & ~(word) 3);
- return (X->to_lo && p >= X->to_lo && p < X->to_hi) || in_live_pool(g, p); }
+ return (X->to_lo && p >= X->to_lo && p < X->to_hi) || (X->s_lo && p >= X->s_lo && p < X->s_hi)
+     || in_live_pool(g, p); }
 
 lvm(lvm_gc) {
  uintptr_t n = (uintptr_t) g->b;                // Have's ask, left in the scratch slot
@@ -24,6 +31,13 @@ static love_noinline word gcp(struct g*, struct gcx*, word);
 // the collector's bump: a pass promotes into the major pool, never the nursery it is emptying
 static love_inline void *gbump(struct g *g, uintptr_t n) {
  void *x = g->major_hp; g->major_hp += n; return x; }
+// ..or a copy's room: a nursery object found from the young goes to the survivors while they
+// have it, all else tenures
+static love_inline void *cbump(struct g *g, struct gcx *X, bool sv, uintptr_t n) {
+ if (sv) {
+  if (X->s_hp + n <= X->s_hi) { void *x = X->s_hp; X->s_hp += n; return x; }
+  X->over = true; }
+ return gbump(g, n); }
 
 static void evac_thread(struct g *g, struct gcx *X) {
  for (X->cp += 1; !tagl(g, X, X->cp[-1]); X->cp[-1] = gcp(g, X, X->cp[-1]), X->cp++); }
@@ -58,16 +72,22 @@ static void evac_data(struct g *g, struct gcx *X) {
 // the write barrier: every old->young edge goes through gen_wb into the rem set, so a minor
 // under a complete set is sound (gc.v barrier_sound); an overflow (rem_miss) forces a major
 static bool young(struct g *g, word p) {
- return evenp(p) && ptr(p) >= (word*) g->end && ptr(p) < g->hp; }
+ return evenp(p) && ((ptr(p) >= (word*) g->end && ptr(p) < g->hp) || (ptr(p) >= g->sv_base && ptr(p) < g->sv_hp)); }
 
-static bool gen_remembered(struct g *g, word obj) {
- for (uintptr_t i = 0; i < g->rem_n; i++) if (g->rem[i] == obj) return true;
- return false; }
+// the index: entry numbers probed from an object's hash, one at or past rem_n free. cleared with
+// the set; a probe that runs long costs a duplicate, never a miss
+static uint16_t *rem_ix(struct g *g) { return (uint16_t*)(g->rem + LvRemCap); }
+static void rem_clear(struct g *g) {
+ g->rem_n = 0;
+ memset(rem_ix(g), 0xff, LvRemIx * sizeof(uint16_t)); }
 
 static void gen_remember(struct g *g, word obj) {
- if (g->rem_n && g->rem[g->rem_n - 1] == obj) return;          // same map as the last pin
- if (gen_remembered(g, obj)) return;
- if (g->rem_n < LvRemCap) g->rem[g->rem_n++] = obj;
+ uint16_t *ix = rem_ix(g), *e = NULL;
+ uintptr_t h = (uintptr_t)(((uint64_t) obj >> 3) * 0x9e3779b97f4a7c15ull >> (64 - LvRemIxBits));
+ for (int k = 0; k < 16; k++, h = (h + 1) & (LvRemIx - 1)) {
+  if (ix[h] >= g->rem_n) { e = ix + h; break; }
+  if (g->rem[ix[h]] == obj) return; }
+ if (g->rem_n < LvRemCap) { if (e) *e = (uint16_t) g->rem_n; g->rem[g->rem_n++] = obj; }
  else g->rem_miss++;                                           // full: the next collection is a major
  if (g->rem_n > g->rem_hi) g->rem_hi = g->rem_n; }
 
@@ -102,15 +122,20 @@ static void gen_scan_inplace(struct g *g, struct gcx *X, word obj) {
   case DNom: nom(p)->name = gcp(g, X, nom(p)->name); break;
   default: break; } }                              // the rest are pointer-free
 
+// a word0 that is this pass's forward: into the tenured it made, or the survivors
+static love_inline bool moved(struct gcx *X, word w) {
+ return evenp(w) && ((X->fwd <= ptr(w) && ptr(w) < X->to_hi) || (X->s_lo && X->s_lo <= ptr(w) && ptr(w) < X->s_hi)); }
+
 // after the drain: an unforwarded young target is dead and finalizes while the from-space
 // still reads; a tenured one waits for a major
 static void minor_run_finalizers(struct g *g, struct gcx *X) {
  struct fz **link = &g->fz;
  for (struct fz *fz = *link; fz; ) {
   struct fz *next = fz->next;
-  if ((word*) fz->p >= X->p0 && (word*) fz->p < X->t0) {
+  word const *q = (word const*) fz->p;
+  if ((q >= X->p0 && q < X->t0) || (X->f2lo && q >= X->f2lo && q < X->f2hi)) {
    word fwd = fz->p->x;
-   if (!(evenp(fwd) && X->fwd <= ptr(fwd) && ptr(fwd) < X->to_hi)) {
+   if (!moved(X, fwd)) {
     fz->fn(g, fz->p), *link = fz = next;
     continue; }
    fz->p = cell(fwd); }
@@ -164,48 +189,77 @@ static void major_run_finalizers(struct g *g, struct gcx *X) {
 #define gc_poison ((word) 0xd0d0d0d0d0d0d0d0ULL)
 #define gc_stress_major 32
 
-// the minor: [end, hp) into the major block. the scan starts at the append point, and
-// X.fwd tells this pass's forwards from older major objects
-static void gen_minor(struct g *g) {
- struct gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
-                     .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
-                     .fwd = g->major_hp, .cp = g->major_hp };
- g->ip = cell(gcp(g, &X, word(g->ip)));
- g->tasks = cell(gcp(g, &X, word(g->tasks)));
- if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));   // the parked ring is its own root
- for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, &X, (&g->v0)[i]);   // core vars
- for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);                       // stack
- for (struct love_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);              // C roots
+// the minor's roots: the machine's own, and an intern map still young
+static void minor_roots(struct g *g, struct gcx *X) {
+ g->ip = cell(gcp(g, X, word(g->ip)));
+ g->tasks = cell(gcp(g, X, word(g->tasks)));
+ if (g->parked) g->parked = cell(gcp(g, X, word(g->parked)));   // the parked ring is its own root
+ for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, X, (&g->v0)[i]);   // core vars
+ for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, X, *s);                       // stack
+ for (struct love_r *r = g->root; r; r = r->n) *r->x = gcp(g, X, *r->x);              // C roots
  // the intern map is weak, not a root: a young header promotes here, a tenured one is remembered
- if (g->symbols) { // FIXME when !g->symbols ?  early init?
-  if (young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols); }
- for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);        // major->young edges
- while (X.cp < g->major_hp)
-  if (datp(X.cp)) evac_data(g, &X);
-  else evac_thread(g, &X);
+ if (g->symbols && young(g, g->symbols)) g->symbols = gcp(g, X, g->symbols); }
+
+// the cheney drain over both to-spaces: the survivors' first, then the tenured, each of
+// which a survivor's pointer leaves remembered, but past an overflow, which rescans them
+static void drain(struct g *g, struct gcx *X) {
+ for (;;) {
+  if (X->s_cp < X->s_hp) {
+   word *c = X->cp;
+   X->cp = X->s_cp;
+   (datp(X->cp) ? evac_data : evac_thread)(g, X);
+   X->s_cp = X->cp, X->cp = c; }
+  else if (X->cp < g->major_hp) {
+   word *o = X->cp;
+   X->old = X->ten = X->s_lo != NULL, X->hit = false;
+   (datp(X->cp) ? evac_data : evac_thread)(g, X);
+   X->old = X->ten = false;
+   if (X->hit && !X->over) gen_remember(g, (word) o); }
+  else return; } }
+
+// the minor: [end, hp) into the survivors' block sto, slen long, and the survivors before into
+// the major block; X.fwd tells this pass's forwards from older major objects, and the tenured
+// from scan up are walked again. answers whether the block ran out
+static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan) {
+ struct gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
+                  .f2lo = g->sv_base, .f2hi = g->sv_hp,      // the survivors before, tenuring
+                  .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
+                  .fwd = g->major_hp, .cp = scan,
+                  .s_lo = sto, .s_hi = sto + slen, .s_hp = sto, .s_cp = sto };
+ minor_roots(g, &X);
+ // major->young edges: each remembered again only while it holds a survivor
+ uintptr_t n0 = g->rem_n;
+ rem_clear(g);
+ for (uintptr_t i = 0; i < n0; i++) {
+  word o = g->rem[i];
+  X.old = true, X.hit = false;
+  gen_scan_inplace(g, &X, o);
+  if (X.hit) gen_remember(g, o); }
+ X.old = false;
+ drain(g, &X);
 #ifdef LvGcCheck
  // a second drive copies nothing (gc.v drain_second_pass_copies_nothing), or the first lost an object
- { word *hp1 = g->major_hp;
-  X.cp = X.fwd;
-  g->ip = cell(gcp(g, &X, word(g->ip)));
-  g->tasks = cell(gcp(g, &X, word(g->tasks)));
-  if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));
-  for (word i = 0; i < g->end - &g->v0; i++) (&g->v0)[i] = gcp(g, &X, (&g->v0)[i]);
-  for (word *s = g->sp; s < topof(g); s++) *s = gcp(g, &X, *s);
-  for (struct love_r *r = g->root; r; r = r->n) *r->x = gcp(g, &X, *r->x);
-  if (g->symbols) {
-   if (young(g, g->symbols)) g->symbols = gcp(g, &X, g->symbols); }
-  for (uintptr_t i = 0; i < g->rem_n; i++) gen_scan_inplace(g, &X, g->rem[i]);
-  while (X.cp < g->major_hp) (datp(X.cp) ? evac_data : evac_thread)(g, &X);
-  if (g->major_hp != hp1) __builtin_trap(); }
+ { word *hp1 = g->major_hp, *sh1 = X.s_hp;
+  uintptr_t rn = g->rem_n;
+  X.cp = scan, X.s_cp = X.s_lo;
+  minor_roots(g, &X);
+  for (uintptr_t i = 0; i < rn; i++) gen_scan_inplace(g, &X, g->rem[i]);
+  drain(g, &X);
+  if (g->major_hp != hp1 || X.s_hp != sh1 || g->rem_n != rn) __builtin_trap(); }
 #endif
  if (g->fz) minor_run_finalizers(g, &X);
  g->hp = g->end;
 #ifdef LvGcStress
- // after the finalizers, the from-space's last reader
+ // after the finalizers, the from-spaces' last reader
  for (word *p = (word*) X.p0; p < (word*) X.t0; p++) *p = gc_poison;
+ for (word *p = (word*) X.f2lo; p < (word*) X.f2hi; p++) *p = gc_poison;
 #endif
- }
+ // the block copied into holds the survivors now; the one emptied is the spare
+ word *ob = g->sv_base;
+ uintptr_t ol = g->sv_len;
+ g->sv_base = sto, g->sv_len = slen, g->sv_hp = X.s_hp;
+ g->sv2_base = ob, g->sv2_len = ol;
+ return X.over; }
 
 // the pool a major leaves for v survivors: f of them again plus a nursery's promotion n, in
 // whole steps -- gcsize.v's target, whose bounds hold only while this is it
@@ -225,12 +279,13 @@ static uintptr_t major_share(struct g *g) {
 static bool at_share(struct g *g) {
  return g->budget && 2 * ((uintptr_t) g->major_len + g->major0) + g->minor0 > g->budget; }
 
-// the major: one pass from the roots over both from-spaces into a fresh block. req0 is the
-// allocation that could not be served; *tight says the pool got less than it asked for
+// the major: one pass from the roots over the three from-spaces into a fresh block. req0 is
+// the allocation that could not be served; *tight says the pool got less than it asked for
 struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  struct gcx X = { .p0 = g->major_base, .t0 = g->major_hp };
  uintptr_t used = (uintptr_t)(g->major_hp - g->major_base), young = (uintptr_t)(g->hp - (word*) g->end),
-           need = used + young,
+           svu = (uintptr_t)(g->sv_hp - g->sv_base),
+           need = used + young + svu,
  // the to-space (gcsize.v's lone block): the worst case and a promotion past it, or the
  // last survivors' target where that is more
            step = g->major0, nr = (uintptr_t) g->len + req0,
@@ -255,6 +310,7 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
  g->major_hp = to, X.cp = to;
  X.to_lo = to, X.to_hi = to + to_len, X.fwd = to;
  X.f2lo = (word const*) g->end, X.f2hi = g->hp;             // the nursery promotes in the same pass
+ X.f3lo = g->sv_base, X.f3hi = g->sv_hp;                    // ..and the survivors
  g->ip = cell(gcp(g, &X, word(g->ip)));
  g->tasks = cell(gcp(g, &X, word(g->tasks)));
  if (g->parked) g->parked = cell(gcp(g, &X, word(g->parked)));   // the parked ring is its own root
@@ -278,9 +334,11 @@ struct g *gen_major(struct g *g, uintptr_t req0, bool *tight) {
 #ifdef LvGcStress
  // the old block needs none: each copy left a forward in word0, which faults on dispatch
  for (word *p = (word*) g->end; p < (word*) g->end + young; p++) *p = gc_poison;
+ for (word *p = g->sv_base; p < g->sv_hp; p++) *p = gc_poison;
 #endif
+ g->sv_hp = g->sv_base;
  // the rem set dies with its block; cleared here too, as the image dump calls a major directly
- g->rem_n = 0, g->rem_miss = 0;
+ rem_clear(g), g->rem_miss = 0;
  // a live set past the whole budget scares, the heap intact
  if (g->budget && (uintptr_t) (g->major_hp - to) > g->budget) return encode(g, status_scare);
  return g; }
@@ -302,6 +360,13 @@ struct g *gen_grow(struct g *g, uintptr_t len1) {
  love_system = h;                              // the one place a state changes address
  return h; }
 
+// the survivors' room: none at the budget's edge, where the pools keep gcsize.v's bounds;
+// else what the last minors wanted, up to the nursery: no minor keeps more
+static uintptr_t sv_size(struct g *g) {
+ if (at_share(g)) return 0;
+ uintptr_t w = g->sv_want ? g->sv_want : g->minor0, top = (uintptr_t) g->len;
+ return w < top ? w : top; }
+
 // the collector, asked for req0 words: a minor unless the rem set missed or the major lacks
 // headroom. the ask rides g while it works, so an oom can say it
 static struct g *please_(struct g *g, uintptr_t req0);
@@ -317,8 +382,9 @@ static struct g *please_(struct g *g, uintptr_t req0) {
  // a major on a rem-set miss, or when the major lacks room for a worst-case promotion --
  // at the budget a nursery early, or the pool ratchets past it
  bool early = at_share(g);
+ uintptr_t svu = (uintptr_t)(g->sv_hp - g->sv_base);         // a minor tenures every survivor
  bool major = g->rem_miss
-   || major_free < (early ? 2 : 1) * (uintptr_t) g->len + req0 + 16;
+   || major_free < (early ? 2 : 1) * (uintptr_t) g->len + svu + req0 + 16;
 #ifdef LvGcStress
  // a minor never moves the tenured, so every Nth collection is a major
  major = major || g->n_gc % gc_stress_major == 0;
@@ -337,13 +403,30 @@ static struct g *please_(struct g *g, uintptr_t req0) {
   if (g->major_len > gc_target((uintptr_t) g->len + req0, g->major_live0, g->major0))
    __builtin_trap();
 #endif
- } else gen_minor(g), g->n_gc += 1, g->n_minor += 1;
- uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base) : (uintptr_t)(g->major_hp - before);
+ } else {
+  // the survivors' block for this minor: the spare, made again when its size is not wanted
+  uintptr_t want = sv_size(g), sl = g->sv2_len;
+  word *sto = g->sv2_base;
+  if (sl != want) {
+   if (sto) alloc(sto, 0);
+   sto = want ? alloc(NULL, want * sizeof(word)) : NULL, sl = sto ? want : 0;
+   g->sv2_base = NULL, g->sv2_len = 0; }
+  bool over = gen_minor(g, sto, sl, before);
+  // a block that ran out tenures whole, its overflow rescanned for the edges back into it
+  if (over) gen_minor(g, NULL, 0, before), g->rem_miss = 0;
+  uintptr_t su = (uintptr_t)(g->sv_hp - g->sv_base);
+  // grown when it ran out, halved after eight minors mostly empty, never under the floor
+  if (over) g->sv_want = 2 * (sl ? sl : g->minor0), g->sv_idle = 0;
+  else if (sl > g->minor0 && 8 * su < sl) {
+   if (++g->sv_idle >= 8) g->sv_want = sl / 2, g->sv_idle = 0; }
+  else g->sv_idle = 0;
+  g->n_gc += 1, g->n_minor += 1; }
+ uintptr_t copied = major ? (uintptr_t)(g->major_hp - g->major_base)
+                          : (uintptr_t)(g->major_hp - before) + (uintptr_t)(g->sv_hp - g->sv_base);
  g->n_seen += seen_young;
  g->n_evac += copied;
  if (major) { if (copied > g->major_hi) g->major_hi = copied; }
  else if (copied > g->minor_hi) g->minor_hi = copied;
- g->rem_n = 0, g->rem_miss = 0;
  uintptr_t e = (uintptr_t)(g->major_hp - g->major_base);
  if (e > g->max_heap) g->max_heap = e;
  // the nursery grows on copy overhead (copied / allocated, no clock) over a window; only
@@ -409,40 +492,40 @@ struct g *force(struct g *g, bool major) {
  g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
  return g; }
 
-static love_inline word copy_data(struct g *g, union u *src) {
+static love_inline word copy_data(struct g *g, struct gcx *X, union u *src, bool sv) {
  switch (typ(src)) {
   case DChain: {
-   struct chain *s = two(src), *d = gbump(g, chain_req);
+   struct chain *s = two(src), *d = cbump(g, X, sv, chain_req);
    ini_chain(d, s->a, s->b);
    return word(s->ap = (void*) d); }
   case DTray: {
    struct tray *s = tray(src), *d;
    uintptr_t bytes = love_tray_bytes(s);
-   d = gbump(g, b2w(bytes));
+   d = cbump(g, X, sv, b2w(bytes));
    return word(s->ap = memcpy(d, s, bytes)); }
   case DMint: {
-   struct mint *s = sym(src), *d = gbump(g, mint_req);
+   struct mint *s = sym(src), *d = cbump(g, X, sv, mint_req);
    ini_missing(d, s->serial);
    return word(s->ap = (void*) d); }
   case DNom: {
-   struct nom *s = nom(src), *d = gbump(g, nom_req);
+   struct nom *s = nom(src), *d = cbump(g, X, sv, nom_req);
    ini_nom(d, s->name, s->dig);
    return word(s->ap = (void*) d); }
   case DString: {
    struct str *s = str(src), *d;
    uintptr_t w = str_width(s->len);
-   d = gbump(g, w);
+   d = cbump(g, X, sv, w);
    return word(s->ap = memcpy(d, s, w * sizeof(word))); }   // the zeroed tail rides
   case DBig: {
    struct big *s = big(src), *d;
    uintptr_t bytes = big_bytes(s);
-   d = gbump(g, b2w(bytes));
+   d = cbump(g, X, sv, b2w(bytes));
    return word(s->ap = memcpy(d, s, bytes)); }
   case DGem: {
-   struct gem *s = gem(src), *d = gbump(g, gem_req);
+   struct gem *s = gem(src), *d = cbump(g, X, sv, gem_req);
    return word(s->ap = memcpy(d, s, sizeof(struct gem))); }
   case DTwin: {
-   struct twin *s = twin(src), *d = gbump(g, twin_req);
+   struct twin *s = twin(src), *d = cbump(g, X, sv, twin_req);
    return word(s->ap = memcpy(d, s, sizeof(struct twin))); } }
  __builtin_trap(); }
 
@@ -450,20 +533,26 @@ static love_inline struct tag *ttag2(struct g *g, struct gcx *X, union u *k) {
  while (!tagl(g, X, k->x)) k++;
  return (struct tag*) k; }
 
-static love_inline word copy_thread(struct g *g, struct gcx *X, union u *src) {
+static love_inline word copy_thread(struct g *g, struct gcx *X, union u *src, bool sv) {
  struct tag *t = ttag2(g, X, src);
- union u *ini = tag_head(t), *d = gbump(g, t->end - ini), *dst = d;
+ union u *ini = tag_head(t), *d = cbump(g, X, sv, t->end - ini), *dst = d;
  // each word copied leaves a forward; the terminator becomes the new head
  for (union u *s = ini; !tagl(g, X, s->x); s->x = (word) d, d++, s++) d->x = s->x;
  return (word) (tagthread(dst, d - dst) + (src - ini)); }
 
+// what a tenured object's field comes to: a survivor's address leaves it to be remembered
+static love_inline word seen(struct gcx *X, word r) {
+ if (X->old && evenp(r) && ptr(r) >= X->s_lo && ptr(r) < X->s_hp) X->hit = true;
+ return r; }
+
 static love_noinline intptr_t gcp(struct g *g, struct gcx *X, word x) {
  if (charmp(x)) return x;
- if (!(ptr(x) >= X->p0 && ptr(x) < X->t0)
-  && !(X->f2lo && ptr(x) >= X->f2lo && ptr(x) < X->f2hi)) return x;
+ bool nur = ptr(x) >= X->p0 && ptr(x) < X->t0;
+ if (!nur && !(X->f2lo && ptr(x) >= X->f2lo && ptr(x) < X->f2hi)
+          && !(X->f3lo && ptr(x) >= X->f3lo && ptr(x) < X->f3hi)) return seen(X, x);
  union u *src = cell(x);
- x = src->x;
- word const *flo = X->fwd, *fhi = X->to_hi;   // a word0 in here is this pass's forward
- return evenp(x) && flo <= ptr(x) && ptr(x) < fhi ? x :
-        in_data((void*) x) ? copy_data(g, src) :
-                             copy_thread(g, X, src); }
+ word w = src->x;
+ if (moved(X, w)) return seen(X, w);
+ // a minor's nursery object survives once, but one a tenure reaches; the rest tenure
+ bool sv = X->s_lo && nur && !X->ten;
+ return seen(X, in_data((void*) w) ? copy_data(g, X, src, sv) : copy_thread(g, X, src, sv)); }

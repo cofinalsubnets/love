@@ -165,6 +165,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
 - `src/apps/sb/*` -> `test_sb`
+- `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*` -> `test_hearts` `test_hearts_boot`
 <!-- /lanes -->
 

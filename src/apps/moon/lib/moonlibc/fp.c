@@ -28,7 +28,15 @@ float copysignf(float x, float y) { return flt((fbits(x) & 0x7fffffffu) | (fbits
 double nan(char const *s) { (void) s; return dbl(0x7ff8000000000000ULL); }
 float nanf(char const *s) { (void) s; return flt(0x7fc00000u); }
 
-/* ---- rounding: trunc clears the fraction bits; the rest build on it ---- */
+/* ---- rounding: trunc clears the fraction bits; the rest build on it. a64 rounds each in one
+ * instruction, to the same bits ---- */
+#if defined(__aarch64__)
+double trunc(double x) { __asm__("frintz %d0, %d1" : "=w"(x) : "w"(x)); return x; }
+double floor(double x) { __asm__("frintm %d0, %d1" : "=w"(x) : "w"(x)); return x; }
+double ceil(double x) { __asm__("frintp %d0, %d1" : "=w"(x) : "w"(x)); return x; }
+double round(double x) { __asm__("frinta %d0, %d1" : "=w"(x) : "w"(x)); return x; }
+double rint(double x) { __asm__("frintx %d0, %d1" : "=w"(x) : "w"(x)); return x; }
+#else
 double trunc(double x) {
   u64 u = bits(x); int e = (int) (u >> 52 & 2047) - 1023;
   if (e >= 52) return x;                           /* integral, or inf, or nan */
@@ -45,6 +53,7 @@ double rint(double x) {
   volatile double t = x + s;
   double y = t - s;
   return y == 0 ? copysign(0.0, x) : y; }
+#endif
 double nearbyint(double x) { return rint(x); }
 long lrint(double x) { return (long) rint(x); }
 long long llrint(double x) { return (long long) rint(x); }
@@ -164,7 +173,12 @@ float remquof(float x, float y, int *q) { return (float) remquo(x, y, q); }
 float remainderf(float x, float y) { int q; return (float) remquo(x, y, &q); }
 
 /* ---- fma, rounded once: the 106-bit product and the addend aligned in 128 bits, a sticky
- * bit for what falls off the bottom, one round to nearest even (a subnormal shifted first) ---- */
+ * bit for what falls off the bottom, one round to nearest even (a subnormal shifted first).
+ * a64 fuses in one instruction, to the same bits ---- */
+#if defined(__aarch64__)
+double fma(double a, double b, double c) { double r; __asm__("fmadd %d0, %d1, %d2, %d3" : "=w"(r) : "w"(a), "w"(b), "w"(c)); return r; }
+float fmaf(float a, float b, float c) { float r; __asm__("fmadd %s0, %s1, %s2, %s3" : "=w"(r) : "w"(a), "w"(b), "w"(c)); return r; }
+#else
 typedef struct { u64 hi, lo; } u128;
 static u128 __mul64(u64 a, u64 b) {
   u64 a0 = a & 0xffffffff, a1 = a >> 32, b0 = b & 0xffffffff, b1 = b >> 32;
@@ -228,11 +242,13 @@ double fma(double a, double b, double c) {
   if (E > 1023) return dbl(s | 0x7ff0000000000000ULL);
   if (m >> 52) return dbl(s | (u64) (E + 1023) << 52 | (m & (~0ULL >> 12)));
   return dbl(s | m); }
-/* fmaf: the product is exact in double; the sum rounds to odd there, so the float round is the one */
+/* fmaf: the product is exact in double; the sum rounds to odd there, so the float round is the one.
+ * an infinite or nan sum stands: its error term is a nan */
 float fmaf(float a, float b, float c) {
   double p = (double) a * b, s = p + c, bb = s - p, e = (p - (s - bb)) + (c - bb);
-  if (e != 0 && !(bits(s) & 1)) s = dbl(bits(s) + ((e > 0) == (s > 0) ? 1 : -1));
+  if (s - s == 0 && e != 0 && !(bits(s) & 1)) s = dbl(bits(s) + ((e > 0) == (s > 0) ? 1 : -1));
   return (float) s; }
+#endif
 
 /* ---- the transcendentals past lm's floor ---- */
 double hypot(double x, double y) {

@@ -102,7 +102,7 @@
  (grove-wood tr tex) (mesh-join (map (s \ mesh-rod (s 0) (s 1) (s 2) [0.3 0.3 0.31] 8 tex 0.01) (filter (s \ thick <= s 2) (tr 'segs))))
  ; the leaflets and seeds as a scene draws them, where they are and their colours, kept on
  ; the tree for its season
- (laid tr) (: k [(peep tr 'share 1.0) (peep tr 'turn 0.0) (peep tr 'seeds 0.0) (peep tr 'ripe 0.0)] was (peep tr 'laid ())
+ (laid tr) (: k [(peep tr 'share 1.0) (peep tr 'turn 0.0) (peep tr 'seeds 0.0) (peep tr 'ripe 0.0)] was (tr 'laid)
    (two? was && was 0 = k ? (was 1)
       (: ix (iota (in-leaf tr)) (fk q) (peep (tr q) ix 0.0)
          lf (fk 'kind = 2.0) ph (fk 'ph) sh (fk 'shade) yel (fk 'yel)
@@ -119,7 +119,7 @@
  ; ..lit by sky's light lt seen from e, kept until the light or season moves or the eye goes
  ; a quarter metre; deep leaves darken, backlit ones glow. where a pixel spans pa and a leaflet
  ; is smaller, one in th is drawn, grown to stand for the rest
- (lit tr lt e pa) (: L0 (laid tr) (r v) (int (v * 100.0)) th (max2 1 (min2 3 (int (pa / 0.006))))
+ (lit tr lt e pa) (: L0 (laid tr) (r v) (int (v * 100.0)) th (max 1 (min 3 (int (pa / 0.006))))
    k [(tr 'laid 0) (map r (lt 'sun)) (r (lt 'sunk)) (map r (lt 'amb)) (map r (lt 'sunc)) (map (v \ int (v * 4.0)) e) th]
    was (tr 'lit)
    (two? was && was 0 = k ? (was 1)
@@ -145,7 +145,7 @@
          t {'a [(col 0 0) (col 0 1) (col 0 2)] 'b [(col 1 0) (col 1 1) (col 1 2)] 'r (gem-tray [n] (map (s \ s 2) sg))}
          (pin tr 'thin t, t)) t t)
    a (T 'a) b (T 'b) u [(b 0 - a 0) (b 1 - a 1) (b 2 - a 2)] v [(a 0 - e 0) (a 1 - e 1) (a 2 - e 2)]
-   d (sqrt (v 0 * v 0 + v 1 * v 1 + v 2 * v 2)) hw (max (T 'r) (0.6 * pa * d))
+   d (sqrt (2 (v 0) + 2 (v 1) + 2 (v 2))) hw (max (T 'r) (0.6 * pa * d))
    x [(u 1 * v 2 - u 2 * v 1) (u 2 * v 0 - u 0 * v 2) (u 0 * v 1 - u 1 * v 0)]
    k (hw / sqrt (2 (x 0) + 2 (x 1) + 2 (x 2) + 1e-12))
    col [0.22 0.22 0.23]

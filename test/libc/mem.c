@@ -79,6 +79,41 @@ int main(void) {
      for (int i = 0; i < (int) sizeof mb; i++) bad += mb[i] != ref[i]; }
   say_n("memmove.shift.bad", bad); }
 
+ /* --- the vector lanes past 64: blocks of 64, then 16s, then a last 16 over what they left;
+    every length mod 64 and 16, every offset of a vector, both overlaps, near and far --- */
+ { static unsigned short const lens[] = {64, 65, 79, 80, 95, 111, 127, 128, 129, 143, 191, 200, 255, 256, 257, 300};
+  static char va[420], vb[420], vr[420];
+  long bad = 0;
+  for (unsigned li = 0; li < sizeof lens / sizeof *lens; li++)
+   for (int so = 0; so < 16; so++)
+    for (int dof = 0; dof < 16; dof++) {
+     int n = lens[li];
+     fill(vb, sizeof vb, so + dof + (int) li);
+     memset(va, '.', sizeof va);
+     memcpy(va + dof + 1, vb + so, (size_t) n);
+     for (int i = 0; i < n; i++) bad += va[dof + 1 + i] != vb[so + i];
+     bad += va[dof] != '.';
+     bad += va[dof + 1 + n] != '.';
+     memset(va + dof + 1, (int) (0x80 + li), (size_t) n);
+     for (int i = 0; i < n; i++) bad += va[dof + 1 + i] != (char) (0x80 + li);
+     bad += va[dof] != '.';
+     bad += va[dof + 1 + n] != '.'; }
+  say_n("vec.copy.set.bad", bad);
+  bad = 0;
+  static short const shs[] = {1, 7, 15, 16, 17, 31, 63, 64, 65, 100};
+  for (unsigned li = 0; li < sizeof lens / sizeof *lens; li++)
+   for (int so = 0; so < 16; so += 3)
+    for (unsigned si = 0; si < sizeof shs / sizeof *shs; si++)
+     for (int up = 0; up < 2; up++) {
+      int n = lens[li], sh = shs[si], s0 = up ? so : so + sh, d0 = up ? so + sh : so;
+      fill(va, sizeof va, so + sh);
+      for (int i = 0; i < (int) sizeof va; i++) vr[i] = va[i];
+      if (up) for (int i = n - 1; i >= 0; i--) vr[d0 + i] = vr[s0 + i];
+      else for (int i = 0; i < n; i++) vr[d0 + i] = vr[s0 + i];
+      memmove(va + d0, va + s0, (size_t) n);
+      for (int i = 0; i < (int) sizeof va; i++) bad += va[i] != vr[i]; }
+  say_n("vec.move.bad", bad); }
+
  fill(buf, 40, 0);
  memmove(buf, buf, 20);                        /* exactly equal: a no-op */
  say_b("memmove.eq", buf, 24);

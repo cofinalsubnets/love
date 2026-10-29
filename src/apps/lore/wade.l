@@ -59,7 +59,7 @@
    moon (abs rel < 1.3 ? [(cx0 + foc * tn rel) (hz - foc * tn el / c) (foc * tn mang / c) (hz - foc * tn el / c) 0.0 0.0]
            off-screen)
    dz (lamp-z - pz) dist (sqrt (2 px + 2 dz))
-   rl (wrap (atan2 (0.0 - px) dz - th)) dep (dist * cos rl)
+   rl (wrap (atan2 -px dz - th)) dep (dist * cos rl)
    lamp (abs rl < 1.3 && 0.5 < dep ?
            [(cx0 + foc * tn rl) (hz - (foc * (lamp-h - eh)) / dep) (foc * lamp-r / dep)
             (hz + foc * eh / dep) (foc * post-w / dep) 1.0]
@@ -105,8 +105,8 @@
                  xa (clamp (flo (cx - hw)) 0 (w - 1)) xb (clamp (flo (cx + hw)) 0 (w - 1))
                  (col x) (x <= xb ? (: q (abs (x - cx) / hw)
                                        hx (q < 1.0 ? (hg * (tr 'round ? (sqrt (1.0 - 2 q)) (1.0 - q))) 0.0)
-                                       (pin tops x (min2 (peep tops x 999.0) (by - hx)),
-                                        pin bots x (max2 (peep bots x (hz - 1.0)) (by + hx)),
+                                       (pin tops x (min (peep tops x 999.0) (by - hx)),
+                                        pin bots x (max (peep bots x (hz - 1.0)) (by + hx)),
                                         col (x + 1))))
                  (col xa))))))
    (go k k1 r) (k <= k1 ? (one k -1 r, one k 1 r, go (k + 1) k1 r))
@@ -126,41 +126,41 @@
    starry (over (over ramp bright 255) star (245 + 5 * twinkle))
    dy (y - mn 1) r (mn 2) v (mn 5) lit (1.0 <= v)
    g1 (r + 1.5 * sc) g4 (r + 4.0 * sc)                                          ; the glow, the lamp's as much as the moon's
-   pw (mn 4) hw (max2 0.5 pw)                                                       ; the post, a pixel at least
+   pw (mn 4) hw (max 0.5 pw)                                                       ; the post, a pixel at least
    ; the lantern in pixels: glass, rim, eaves and roof each at least a pixel so the shape reads
    ; far off -- but only once the glass is wider than a pixel; a lone point of light is unhoused
    sz (r / lamp-r)                                                                  ; a world unit in pixels
-   gw (max2 0.5 (lan-w * sz)) gh (max2 0.5 (lan-h / 2.0 * sz))
+   gw (max 0.5 (lan-w * sz)) gh (max 0.5 (lan-h / 2.0 * sz))
    housed (1.25 <= lan-w * sz)                                                     ; the glass three wide at the top
-   rw (max2 (gw + 1.0) ((lan-w + lan-rim) * sz)) rh (max2 (gh + 1.0) ((lan-h / 2.0 + lan-rim) * sz))
-   ev (max2 (rw + 1.0) (lan-eave * sz)) rf (max2 1.0 (lan-roof * sz))
+   rw (max (gw + 1.0) ((lan-w + lan-rim) * sz)) rh (max (gh + 1.0) ((lan-h / 2.0 + lan-rim) * sz))
+   ev (max (rw + 1.0) (lan-eave * sz)) rf (max 1.0 (lan-roof * sz))
    reach (rh + rf)                                                                  ; the roof's peak above the lamp's centre
    ; the moon's layers on the rows it reaches: glow, the black post, the disc -- or as the lamp,
    ; the lantern: roof, rim, tapering glass, a swaying flame and its white heart
    (lantern c dx) (: x2 (2 dx) ady (abs dy)
      tp (1.0 - lan-taper * clamp ((dy + gh) / (2.0 * gh + 0.001)) 0.0 1.0)  ; down the glass: 1 at the top
-     gwt (gw * tp) rwt (max2 (gwt + 1.0) ((lan-w + lan-rim) * sz * tp))
+     gwt (gw * tp) rwt (max (gwt + 1.0) ((lan-w + lan-rim) * sz * tp))
      q ((-dy - rh) / rf)                       ; up the roof: 0 at the eaves, 1 at the peak
-     ew (max2 0.5 (ev * (1.0 - q)))
-     roofed (housed ? (over c ((0.0 <= q) * (q <= 1.0) * (x2 <= ew * ew)) tree-pen) c)
-     rimmed (housed ? (over roofed ((x2 <= rwt * rwt) * (ady <= rh)) haze-pen) roofed)
-     glass ((x2 <= gwt * gwt) * (ady <= gh))
+     ew (max 0.5 (ev * (1.0 - q)))
+     roofed (housed ? (over c ((0.0 <= q) * (q <= 1.0) * (x2 <= 2 ew)) tree-pen) c)
+     rimmed (housed ? (over roofed ((x2 <= 2 rwt) * (ady <= rh)) haze-pen) roofed)
+     glass ((x2 <= 2 gwt) * (ady <= gh))
      glassed (over rimmed glass glass-pen)
      fh (1.5 * gh * flicker-pulse t 0.85 0.15 1.3 0.0)  ; the flame's height, off the floor to its tip
      p ((0.6 * gh - dy) / fh)                         ; up the flame: 0 at its foot, 1 at its tip
      sx (p * gw * (0.3 * sin (0.5 * t) + 0.15 * sin (1.9 * t)))   ; the sway, all of it at the tip
-     fw (max2 0.5 (1.43 * gw * (1.0 - p) * sqrt (max2 0.0 p)))     ; the teardrop, widest a third of the way up
-     f2 ((dx - sx) * (dx - sx))
-     flamed (over glassed (glass * (0.0 <= p) * (p <= 1.0) * (f2 <= fw * fw)) moon-pen)
-     hw2 (max2 0.5 (0.45 * fw))
+     fw (max 0.5 (1.43 * gw * (1.0 - p) * sqrt (max 0.0 p)))     ; the teardrop, widest a third of the way up
+     f2 (2 (dx - sx))
+     flamed (over glassed (glass * (0.0 <= p) * (p <= 1.0) * (f2 <= 2 fw)) moon-pen)
+     hw2 (max 0.5 (0.45 * fw))
      (over flamed (housed * (1.0 <= fw) * glass * (0.05 <= p) * (p <= 0.65) * (f2 <= 2 hw2)) heart-pen))   ; ..where the flame is three wide around it
    (mooned _) (: dx (xs - mn 0) r2 (2 dx + 2 dy)
                  sea (0 = throw (floor (dx + 100.0)) (floor (dy + 100.0)) 21 7)
-                 glowed (over (over starry (r2 < g4 * g4) 237)     ; #3a3a3a the glow, wide
-                              (r2 < g1 * g1) 238)                  ; #444444 ..and close
+                 glowed (over (over starry (r2 < 2 g4) 237)     ; #3a3a3a the glow, wide
+                              (r2 < 2 g1) 238)                  ; #444444 ..and close
                  posted (over glowed ((0.0 < pw) * (0.0 < dy) * (2 dx <= 2 hw)) tree-pen)
                  (lit ? (lantern posted dx)
-                    (over posted (r2 < r * r) (over moon-pen sea sea-pen))))
+                    (over posted (r2 < 2 r) (over moon-pen sea sea-pen))))
    (abs dy < g4 || lit && abs dy <= reach || 0.0 < pw && 0.0 < dy ? (mooned ()) starry))
  (sky-at y st tb mn t) (tb 'sky y @ r
    (tray? r ? r (sky-row y st tb mn t @ r2 (pin (tb 'sky) y r2, r2))))
@@ -222,7 +222,7 @@
    c2 (over c (y2 < peep (tb 'bots) x2 0.0) haze-pen)
    c3 (over c2 (0.06 < rl) (peep crests c2 haze-pen))
    c4 (over c3 (0 < bank) bank-pen)
-   pw (mn 4) hw (max2 0.5 pw) dx (tb 'xs - mn 0)
+   pw (mn 4) hw (max 0.5 pw) dx (tb 'xs - mn 0)
    (over c4 ((0.0 < pw) * (y < mn 3) * (2 dx <= 2 hw)) tree-pen))
  ; a frame, as view lays it: a pixel row is a tray of pens, the sky's and the trees' above
  ; the horizon and the water's below it
@@ -233,7 +233,7 @@
    ; the words, each a band [x0 text pen ground] on its cell row, the ground the average of
    ; the two pixel rows under it
    ws (texts-at (st 'pz))
-   (band i) (: s (snip (ws i) 0 (min2 #(ws i) w)) ty (h // 4 - text-row - i) x0 ((w - #s) // 2)
+   (band i) (: s (snip (ws i) 0 (min #(ws i) w)) ty (h // 4 - text-row - i) x0 ((w - #s) // 2)
                ts (src (2 * ty)) bs (src (2 * ty + 1))
                (add a x) (: p (pen-rgb (peep ts x 236)) q (pen-rgb (peep bs x 236))
                             [(a 0 + p 0 + q 0) (a 1 + p 1 + q 1) (a 2 + p 2 + q 2)])
@@ -249,7 +249,7 @@
  ; a step on down the river, no further than the lamppost's foot, where the level is done;
  ; it sends a ring, but not on the heels of the last
  (wade-move st mv) (: t (st 't) rs (st 'rings) px (st 'px)
-   pz2 (min2 (st 'pz + mv) (lamp-z - lamp-near))
+   pz2 (min (st 'pz + mv) (lamp-z - lamp-near))
    due (rs @ () 1 (6.0 <= t - peep <rs 't 0.0))
    r {'x px 'z pz2 't (t + 0.0)}
    (st 'done ? st

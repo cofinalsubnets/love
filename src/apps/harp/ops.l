@@ -30,10 +30,10 @@
  (seg-of ss t) (: (go l s) (? (atom? l) s (<l 0 <= t) (go >l <l) s) (go ss ()))
  (env ss t) (seg-of ss t @ () 0.0
    [t0 k a b c] (: u (t - t0) e (exp (0.0 - a * u)) d (exp (0.0 - b * u / ops-db))
-                   v (k @ 0 (exp (0.0 - (a + b * u) / ops-db)) 1 (max2 0.0 (a + b * u)) 2 ((1.0 - e) * d) _ ((1.0 - e) * (c + (1.0 - c) * d)))
+                   v (k @ 0 (exp (0.0 - (a + b * u) / ops-db)) 1 (max 0.0 (a + b * u)) 2 ((1.0 - e) * d) _ ((1.0 - e) * (c + (1.0 - c) * d)))
                    (v < 1.5848931924611134e-05 ? 0.0 v)))
  (wave w x ix) (: u (x - floor x) s (sin (x * tau))
-   (w @ 0 s 1 (max2 s 0.0) 2 (abs s) 3 (abs s * ((u >= 0.5 ? (u - 0.5) u) < 0.25 ? 1.0 0.0))
+   (w @ 0 s 1 (max s 0.0) 2 (abs s) 3 (abs s * ((u >= 0.5 ? (u - 0.5) u) < 0.25 ? 1.0 0.0))
         4 (u < 0.5 ? (4.0 * u - 1.0) (3.0 - 4.0 * u)) 5 (2.0 * u - 1.0) 6 (u < 0.5 ? 1.0 -1.0)
         _ (: a ((ix * 1103515245 + 12345) & 4294967295) b (((a ^ (a >> 16)) * 2246822507) & 4294967295)
              c (((b ^ (b >> 13)) * 3266489909) & 4294967295) ((c >> 16 & 65535) * 0.000030517578125 - 1.0))))
@@ -64,10 +64,8 @@
    (reach f0) (? (f0 = box 'next) 0
                  (f0 <= at) (pins box 'next f0 'ys ())
                  (: _ (pins box 'next at 'ys ())
-                    (go p) (p >= f0 ? 0 (: _ (run p (min2 4096 (f0 - p))) (go (box 'next))))
+                    (go p) (p >= f0 ? 0 (: _ (run p (min 4096 (f0 - p))) (go (box 'next))))
                     (go at)))
    fn (ix \ (: n #ix f0 (peep ix 0 0) _ (reach f0) r (run f0 n) (peep r (iota n) 0.0)))
    [end fn gl gr])
- (max2 a b) (a < b ? b a)
- (min2 a b) (a < b ? a b)
 )) ; module ops

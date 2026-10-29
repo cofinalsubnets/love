@@ -101,7 +101,7 @@
    width (n * (nb * bay-w + 1) + (n - 1) * section-lane)
    x0 (left + (span - width) // 2)
    bays {()}
-   (mark x y0 t) (each ^bay-d (j \ (1 = dat d x (y0 + j) ? (dput d x (y0 + j) t))))
+   (mark x y0 t) (each ^bay-d (j \ (dat d x (y0 + j) @ 1 (dput d x (y0 + j) t))))
    (band y0) (each ^n (si \ (x0 + si * (nb * bay-w + 1 + section-lane) @ sx
                               (each ^nb (k \ (sx + k * bay-w @ x
                                                 (mark x y0 (k = nb // 2 ? 2 4),
@@ -174,7 +174,7 @@
    (ground-pen rp x y) (cite 'slop 'slop-under sk (ramp-pen rp) x y)
    (floor-face rp x y) (cite 'slop 'slop-face sk (ramp-pen rp) x y ())
    ; what a mob stands on, and a line and a wreck lie on: the floor, or the bed
-   (under t x y) (t = 5 ? (ground-pen bed-ramp x y) (ground-pen floor-ramp x y))
+   (under t x y) (t @ 5 (ground-pen bed-ramp x y) (ground-pen floor-ramp x y))
    (i \ (: e (spot i) x (i % w) y (i // w) t (peep (d 't) i 0)
            (e ? (under t x y @ bg [(e 'gl) [(legible (e 'hue) bg) bg]])
               (t @ 0 [ground-glyph wall-pen]
