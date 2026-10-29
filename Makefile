@@ -722,7 +722,7 @@ $(k_mod): $(k_o) $(mdep)
 	@$(mooncc) -t $a $(k_o) -o $@
 endif
 kproject_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
-  $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/link.l $S/tools/kproject.l
+  $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/lds.l $S/love/holo/link.l $S/tools/kproject.l
 $(k_odir)/kproject.list: force_dist_list
 	@mkdir -p "$(dir $@)"
 	@tf=$@.$$$$.tmp; echo '$(kproject_l)' > $$tf; \
@@ -916,7 +916,7 @@ init-container: host
 	unshare --pid --fork --mount-proc --user --map-root-user -- $m -l src/apps/init/init.l -e "(pid1 0)"
 
 uefi_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
-  $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/link.l $S/love/holo/pe.l \
+  $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/lds.l $S/love/holo/link.l $S/love/holo/pe.l \
   $S/inle/uefi/mkefi.l
 # the removable-media path firmware looks for, per arch -- it is the FILENAME that
 # picks the loader, so the two ESPs differ in nothing else.

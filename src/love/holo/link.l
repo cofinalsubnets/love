@@ -1048,19 +1048,20 @@
          (w "__ld_ra" (pie ? 16 1)) (w "__ld_rsz" (8 * nrel)) (w "__ld_pg" pg) (w "__ld_base" base)]
         + map (c \ (<c = 'sections ? ['sections (map item <>c)] c)) ld-dtmpl))
    ; lay the set by a script: each placed section's address pinned in its object's 'base,
-   ; each where its lane says, or a scare -> the script's symbols
+   ; each in the output section `want` names for it, or a scare -> the script's symbols
    ld-lanesec {'text ".text" 'rodata ".rodata" 'data ".data" 'nifs ".love.nifs" 'tdata ".tdata"
                'tbss ".tbss" 'bss ".bss" 'image ".love.image"}
-   (ld-script objs cmds)
+   (ld-homesec se) (peep ld-lanesec (se 4) ())
+   (ld-script objs cmds want)
     (: _ (kl-place objs cmds () 0)
        env (kl-lay {'objs objs 'glob {} 'und {}} cmds {'ms {} 'im {}} ())
        isa (env 'isa) osof (env 'osof)
        _ (foldl (\ oi ob
                   (: secs (ob 'secs) bs (ob 'base)
                      _ (each (keys secs)
-                          (i \ (: se (secs i) k (oi * 65536 + i) want (peep ld-lanesec (se 4) ())
-                                  (? (!(string? want)) 0
-                                     (peep osof k () = want) (pin bs i (isa k))
+                          (i \ (: se (secs i) k (oi * 65536 + i) w (want se)
+                                  (? (!(string? w)) 0
+                                     (peep osof k () = w) (pin bs i (isa k))
                                      (scare 'link-script-lane [(ob 'id) (ob 'sec i 0)])))))
                      (oi + 1)))
                 0 objs)
@@ -1097,7 +1098,7 @@
                   
        nrel (pie ? (ld-nabs objs) 0)
        tal (ld-tlsalign objs)
-       sv (ld-script objs (ld-dscript objs base hdrsz pg wx? pie nrel tal))
+       sv (ld-script objs (ld-dscript objs base hdrsz pg wx? pie nrel tal) ld-homesec)
        end (sv "__end") n0 (sv "__n0") o0 (sv "__o0") d0 (sv "__d0") t1 (sv "__t1") o1 (sv "__o1")
        ; the address the cuts skipped, which the file does not carry: from d0 on an offset is
        ; `addr - base - sk`, o0's is `t1 - base`
@@ -1464,6 +1465,19 @@
    ; the fused `at` segment's one flags word; two that disagree scare
    (ld-onef vs)
     (foldl (\ a v (? !v a !a v (a = v) a (scare 'link-run-flags v))) () vs)
+   ; the map said as a script: each run from its address, each lane an output section of
+   ; its inputs between __lb and __le words, a known lane's by its patterns, a named one's by name
+   ld-lanepats {'text [".text" ".text.*"] 'rodata [".rodata" ".rodata.*"] 'data [".data" ".data.*"]
+                'nifs ["love_nifs"] 'bss [".bss" ".bss.*"] 'image [".love.image"]}
+   (ld-bscript lruns)
+    (: (w nm v) ['set nm '= v]
+       (lane a l) (: nm (ld-lanenm l)
+                     (a + [(w ("__lb" + nm) ".")
+                           ['osec {'phdrs () 'name nm 'addr "."
+                                   'body [['in 0 "*" (map (p \ ['none p]) (peep ld-lanepats l [nm]))]]}]
+                           (w ("__le" + nm) ".")]))
+       [['sections (foldl (\ a r (foldl lane (a + [(w "." (r 1))]) (ld-runlanes r))) () lruns)]])
+   (ld-lanesecof se) (ld-lanenm <se)
    ; every lane the set actually puts bytes or address space in, first-seen order
    (ld-uselanes objs)
     (: seen {}
@@ -1502,8 +1516,9 @@
                 0 (ld-uselanes objs))
        org (<lruns 1)
        foff (4096 + org % 4096)               ; the header's page, congruent to org
-       ; -- the layout pass in the map's order; lpos records each lane's (vaddr fileoff size).
-       ; -> per run: (kind vaddr fileoff filesz memsz lanes flags)
+       ; -- the map laid as a script, then read in its order; lpos records each lane's
+       ; (vaddr fileoff size). -> per run: (kind vaddr fileoff filesz memsz lanes flags)
+       sv (ld-script objs (ld-bscript lruns) ld-lanesecof)
        lpos {}
        plan (: (go rs cur fpos copied acc)
                 (atom? rs ? (rev acc)
@@ -1515,8 +1530,8 @@
                          (scare 'link-run-bss start))
                       _ (!copy? && cur > start ? (scare 'link-run-back start))
                       fo (copy? ? fpos (fpos + start - cur))
-                      w (foldl (\ a l (: c <a f <>a
-                                         n (ldlay1 l c objs)
+                      w (foldl (\ a l (: f <>a nm (ld-lanenm l)
+                                         c (sv ("__lb" + nm)) n (sv ("__le" + nm))
                                          (pin lpos l [c f (n - c)],
                                           [n (l = 'bss ? f (f + n - c))])))
                                [start fo] ls)
