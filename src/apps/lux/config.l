@@ -49,7 +49,7 @@
 
    ; the settings, read at the first ask and never at load, where a bake would keep the
    ; baker's own (lux-cfg 'border): conf border normal-color focused-color tags layout
-   ; manage mod keymap startup display auth
+   ; manage mod keymap startup dispnum display auth
    cfg {}
    (lux-cfg k) (cfg 'read ? (cfg k) (lux-read (), cfg k))
    (lux-read _)
@@ -76,6 +76,7 @@
              'startup (getenv "LUX_NOSTARTUP" ? ()
                          (conf-roster c 'startup
                                       '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
+             'dispnum d
              'display ("/tmp/.X11-unix/X" + d)
              'auth (xauth-cookie (salt-one c 'xauthority (lux-xauth ())) d))))
 ) ; module lux

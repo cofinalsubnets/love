@@ -33,7 +33,7 @@
 
    ; a task per client, never caught: lux runs forever
    (lux-rundir u) (getenv "XDG_RUNTIME_DIR" @ rd (1 < #rd ? rd "/tmp"))
-   (lux-sock u) (lux-rundir () + "/lux-" + lux-dispnum () + ".sock")
+   (lux-sock u) (lux-rundir () + "/lux-" + lux-cfg 'dispnum + ".sock")
    ; sockets are never unlinked on exit: a sibling that refuses connect is dead, unlink it
    (lux-sweep own)
     (: dir (lux-rundir ())
