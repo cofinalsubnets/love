@@ -79,7 +79,7 @@
                    (t0 + 12.0 * sin (pi * (grass-hour g - 9.0) / 12.0)))
  (compass deg) (points (int ((deg + 11.25) / 22.5) % 16))
  ; the wind's push along the screen: it blows FROM its heading, and east is right
- (grass-wind-x g) (0.0 - sin (g 'head * pi / 180.0) * g 'wind)
+ (grass-wind-x g) -(sin (g 'head * pi / 180.0) * g 'wind)
 
  ; --- a fresh field on an r by c screen ------------------------------------------
  ; a blade every other column, you in the middle; the week's temperatures and cloud
@@ -139,7 +139,7 @@
    t (fr * dt)
    day (grass-day g)
    ; the wind walks toward the day's own mean, the heading wanders, gusts ride three sines
-   wt (fr % (fps * 60) = 1 ? (3.0 + roll sb 15) (g 'wt))
+   wt (fr % (fps * 60) @ 1 (3.0 + roll sb 15) (g 'wt))
    wind (clamp (g 'wind + (roll sb 3 - 1) * 0.25 + (wt - g 'wind) * 0.003) 0.0 30.0)
    head ((g 'head + (roll sb 3 - 1) * 1.5 + 360.0) % 360.0)
    gust (1.0 + 0.3 * sin (t * 1.7) + 0.2 * sin (t * 4.3 + 1.0) + 0.15 * sin (t * 0.37))
@@ -159,7 +159,7 @@
    ; whoever feeds the horn
    _ (g 'songs day <= hr && g 'sang != day ? (pins g 'sang day 'cue 1))
    ; growth wants water, warmth and light
-   tf (: q ((temp - 72.0) / 32.0) v (1.0 - q * q) (v < 0.0 ? 0.0 v))
+   tf (: q ((temp - 72.0) / 32.0) v (1.0 - 2 q) (v < 0.0 ? 0.0 v))
    (grow hy) (0.075 * clamp ((hy - 10.0) / 80.0) 0.0 1.0 * tf * (0.2 + 0.8 * sun) * dh)
    wx (grass-wind-x g * gust)
    ; each blade takes its own water, and is a spring in the wind: the push waves down
@@ -234,7 +234,7 @@
    (lay cl) (: cx ((int (cl 'x0 + drift) + 2 * c) % c) w (cl 'w) hh (cl 'h) cy (cl 'y)
                k0 (int (cl 'x0 - w) - 2)                 ; the cloud's own first column
                (row y x) (x <= cx + w ?
-                          (: dx ((x - cx) / w) dy ((y - cy) / hh * (cy < y ? 1.7 1.0)) e (dx * dx + dy * dy)
+                          (: dx ((x - cx) / w) dy ((y - cy) / hh * (cy < y ? 1.7 1.0)) e (2 dx + 2 dy)
                              xx ((x + 2 * c) % c)
                              kx (x - int (cx - w) + k0)
                              v (3 - int (e * 3.0) - (cy < y) - (0 = dice kx y 5 4))
@@ -297,7 +297,7 @@
    (cell x y cells) (: i (x + c * y) o (ov i)
      (? (base < y) (dirt-cell x y i)
         (two? o) [(o 0) (o 1) (o 2 < 0 ? (peep cells x () 2) (o 2))]
-        (peep cells x ())))
+        (cells x)))
    ; a row is painted to the screen's edge, so it wants no erase after it: under a
    ; pending wrap an erase takes the very glyph that raised it, and the last column
    ; would go blank

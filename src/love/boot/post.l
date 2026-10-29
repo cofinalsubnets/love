@@ -2005,8 +2005,12 @@
 ;             script of the same name
 ;   (seat p)  argv[0], by its basename
 ; a verb takes the args after its name and answers a status charm.
-(module '(verbs any? bn call dash enlist fills fire get holds seat seatof tab trait word)
+(module '(verbs any? bn call dash enlist fills fire get holds lazy mark mods need prov ros seat seatof tab trait unit word)
 (: tab {}   ; nil? when empty: ask it with peep, not by testing it
+   ; the roster's, below: 'files (path . baked) newest first, 'rising while a unit loads;
+   ; verb -> path, module -> path, unit -> the units it needs, unit -> 1 once raised
+   ros {'cur "src/love/boot"}
+   prov {} mods {} need {} up {}
    ; what a verb says of itself -- name -> {trait v}, v 1 or a function of the call's args:
    ;   'builtin  run in the caller in every mode, ahead of PATH (echo, test ..)
    ;   'self     safe to run in the caller: bounded, reads no stdin, leaves the caller as it
@@ -2071,7 +2075,44 @@
                     (<a = "-l") (two? >a ?                     ; a preload named for me: the shebang's lane
                                  (mine? ws <>a ? (<>a . >>a) (seatof ws >>a)))
                     (mine? ws <a) (<a . >a))
-   (fire ws)   (seatof ws (elem 'cmdline (names ()) ? >cmdline)))
+   (fire ws)   (ros 'rising ? () (seatof ws (elem 'cmdline (names ()) ? >cmdline)))
+
+   ; --- the roster. a bake's cat marks each file ahead of its forms, and a mark lays the verbs
+   ; and modules added since the last at the file they came from; (mark ()) closes the cat.
+   ; (lazy p vs ms ns) stands for a file the bake left out: its verbs, pinned as stubs that
+   ; raise its unit off /love at the first call, its modules, and the units it needs.
+   ; a unit is an app, src/apps/NAME.l or src/apps/NAME/; any other path is its own
+   (unit p) (#p @ n
+               (9 < n && snip p 0 9 = "src/apps/" ?
+                  (: (go i) (? (n <= i) (snip p 9 (n - 2)) (p i = 47) (snip p 9 i) (go (i + 1)))
+                     (go 9))
+                  p))
+   (settle _) (ros 'cur @ c
+                (each (keys tab) (k \ (string? (prov k) ? 0 (pin prov k c))),
+                 each (keys (lib ())) (k \ (nom? k && !(string? (mods k)) ? (pin mods k c) 0))))
+   (mark p) (settle (), pin ros 'cur p, string? p ? (pin ros 'files ((p . 1) . ros 'files)) 0)
+   (lazy p vs ms ns) (settle (), pin ros 'cur p,
+                      pin ros 'files ((p . 0) . ros 'files),
+                      each ms (m \ pin mods m p),
+                      pin need (unit p) (ns + need (unit p)),
+                      each vs (v \ (pin prov v p, pin tab v (stub v))))
+   ; a stub raises its unit, then runs what the unit pinned in its place
+   (stub v) (as \ (rise (unit (prov v)),
+                   tab v @ f (lit? f ? (f as)
+                                (say err "love: \(v): its unit \(unit (prov v)) did not register it\n", 1))))
+   ; raise u and the left-out units it needs: their files in cat order, read off /love into
+   ; the session. their fire lines stay quiet, since a load is not a run
+   (rise u) (: (cl s w) (elem w s || up w ? s (foldl cl (w . s) (need w)))
+               us (cl () u)
+               fs (filter (f \ >f = 0 && elem (unit <f) us) (rev (ros 'files)))
+               (two? us ?
+                  (each us (w \ pin up w 1),
+                   each (keys prov) (k \ (elem (unit (prov k)) us ? (pin tab k ()) 0)),
+                   pin ros 'rising 1,
+                   trap (_ \ each fs (f \ rise1 <f)) () (\ a b (pin ros 'rising (), scare a b)),
+                   pin ros 'rising ())))
+   (rise1 p) ((cite 'posix 'open) ("/love/" + p) "r" @ q
+               (hot? q ? (cite 'cli 'reads q, cite 'posix 'close q) (scare 'no-source p))))
 
 ) ; module verbs
 

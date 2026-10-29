@@ -365,5 +365,30 @@
        (synth-ceil * synth-gain < 32767.0)
        (synth-ceil * 0.3 < sqrt (pk c3))))                              ; loud, bent, not crushed
 
+; the volume: } up and { down, stopping at the ends; at nought the horn hears silence, at
+; the top the loudest pile still bends under the clip, the bytes louder than at 1.0
+(: st (synth-new ())
+   v0 (st 'vol)
+   _ (each ^20 (i \ synth-step st 125)) top (st 'vol)
+   _ (each ^40 (i \ synth-step st 123)) bot (st 'vol)
+   (pk cs) (foldl max 0.0 (map (c \ max (amax (<c * <c)) (amax (>c * >c))) cs))
+   (s16 b i) (: u (b (2 * i) + 256 * b (2 * i + 1)) (u > 32767 ? (u - 65536) u))
+   cv (synth-ceil / synth-vols (#synth-vols - 1))
+   (loud v) (: s (synth-new ()) j (jug 0)
+               _ (pin s 'vol v)
+               _ (each [114 82 82 115 83 108] (k \ synth-step s k))
+               _ (each [-24.0 -12.0 -5.0 4.0 7.0] (n \ synth-drone s n))
+               ms (map (_ \ synth-mix s) ^240)
+               _ (each ^60 (i \ synth-feed s j)) b (slurp j)
+               [(pk ms) (foldl max 0 (map (i \ abs (s16 b i)) ^(#b // 2)))])
+   hi (loud (#synth-vols - 1)) one (loud synth-vol0)
+   _ (each ^9 (i \ synth-step st 125))
+   z (jug 0) _ (each ^10 (i \ synth-feed (pins (synth-new ()) 'vol 0) z)) zb (slurp z)
+ (test (synth-vols v0 = 1.0) (top = #synth-vols - 1) (bot = 0) (st 'vol = 9)
+       (has? (synth-frame st) "volume 1.0")
+       (0 < #zb) (all (i \ zb i = 0) ^#zb)
+       (<hi < cv * cv)
+       (one 1 < hi 1) (hi 1 < 32767)))
+
 (test_fin (),
- puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there\n")
+ puts "synth: ok -- the keys bend as they should, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there, and the volume turns\n")

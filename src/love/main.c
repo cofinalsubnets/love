@@ -313,8 +313,9 @@ static char const src_distlist[] =
 #include "distlist.h"
  ;
 
-// lay the roster cat from the carried source beside `at`: the crew baked when no -l names one.
-// 1 laid, 0 refused; per-process, as image.c's bake scratch
+// lay the roster cat from the carried source beside `at`: the crew baked when no -l names one,
+// each file behind its mark (the Makefile's .dist-cat.l, word for word). 1 laid, 0 refused;
+// per-process, as image.c's bake scratch
 static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
   char exe[4096];                                    // the kernel's PATH_MAX
   if (!srctree_len) return 0;                     // noblob.c: no source aboard
@@ -335,11 +336,16 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
     intptr_t i = tree_find(t, w, wl);
     unsigned char const *m = i < 0 ? NULL : tree_bytes(t, t->rows + i);
     uintptr_t ml = i < 0 ? 0 : t->rows[i].len;
-    if (!m || (ml && write(fd, m, ml) != (ssize_t) ml)) {
+    char mk[300];
+    int mn = snprintf(mk, sizeof mk, "\n(cite (quote verbs) (quote mark) \"%s\")\n", w);
+    if (!m || write(fd, mk, mn) != mn || (ml && write(fd, m, ml) != (ssize_t) ml)) {
       fprintf(stderr, "love: bake: %s %s\n", w,
               i < 0 ? "is not in the carried source" : m ? "would not write" : "will not decode");
       close(fd), unlink(cat);
       return 0; } }
+  static char const end[] = "\n(cite (quote verbs) (quote mark) ())\n";
+  if (write(fd, end, sizeof end - 1) != (ssize_t) sizeof end - 1)
+    return close(fd), unlink(cat), fprintf(stderr, "love: bake: the cat would not write\n"), 0;
   return close(fd), 1; }
 
 // a cross seed's egg stub says 2 (source.l seed-mark): its first run bakes in place, then
@@ -359,9 +365,20 @@ static void self_bake(char const **argv) {
     return (void) fprintf(stderr, "love: the bake did not go: running unbaked\n");
   execv(exe, (char *const *) argv);
   fprintf(stderr, "love: baked, but can't run again: running unbaked\n"); }
+
+// bake --with/--without: the roster verb's bake, which lays its cat from the carried source
+static int bake_roster(int argc, char const **argv) {
+  char exe[4096];
+  char const *v[256];
+  if (argc > 250 || !host_selfpath(exe, sizeof exe)) return fprintf(stderr, "love: bake: cannot run the roster\n"), 2;
+  v[0] = exe, v[1] = "roster", v[2] = "bake";
+  for (int i = 2; i <= argc; i++) v[i + 1] = argv[i];
+  execv(exe, (char *const *) v);
+  return fprintf(stderr, "love: bake: cannot run the roster\n"), 2; }
 #else
 #define bsrc_lay_cat(cat, n, at) 0
 #define self_bake(argv) ((void) 0)
+#define bake_roster(argc, argv) (fprintf(stderr, "love: bake: no carried source for a roster\n"), 2)
 #endif
 
 // read-eval a bake's cat: a raise ends the bake. the path is a value, never spliced. q is closed
@@ -580,8 +597,9 @@ int main(int argc, char const **argv) {
     else if (!strcmp(argv[i], "-o") && i + 1 < argc) bake_out = argv[++i];
     else if (!strcmp(argv[i], "-n")) bare = 1;      // no image: the stub back, and no snapshot
     else if (!strcmp(argv[i], "-i")) in_place = 1;  // -i says the default -- this binary -- out loud
+    else if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without")) return bake_roster(argc, argv);
     else
-     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]\n"), 2;
+     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [--with U,..] [--without U,..] [IMAGE]\n"), 2;
    bake = i < argc ? argv[i] : "";
    if (*bake && (bake_out || bare))                 // a named IMAGE is a plain image file, never a binary
     return fprintf(stderr, "love: bake: IMAGE writes an image; -o and -n write a binary\n"), 2;

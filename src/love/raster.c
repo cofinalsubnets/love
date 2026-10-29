@@ -50,18 +50,18 @@ struct rz {
  flo_t lm[16], bias;     // the sun's view, when there is one, and its depth answer
  flo_t const *sm;
  intptr_t SW, SH;
- flo_t fog[5], tone;
- flo_t tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
+ flo_t fog[5], tone,
+       tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
  int32_t *out;           // the frame drawn four bytes a pixel, then laid into ans a word each
- float *depth;
- float *gz;              // seen: the nearest lens's depth, a pixel each
+ float *depth,
+       *gz;              // seen: the nearest lens's depth, a pixel each
  int cls, gzp;           // the triangle's class, 1 behind glass 2 before it; the glass pass
  void *ans;
  flo_t *tz;             // each 8 by 8 tile's farthest depth, then whether it was drawn on since
  intptr_t TW, TH;
  flo_t *pv;              // the vertices once through m and lm, rz_pv a vertex: x y z w, the sun's x y z, bits, row
- intptr_t *bk;           // shared, each triangle's bands, first * rz_bk + last, or -1 none's
- intptr_t nth, ylo, yhi; // the bands the frame is in, and this one's rows
+ intptr_t *bk,           // shared, each triangle's bands, first * rz_bk + last, or -1 none's
+          nth, ylo, yhi; // the bands the frame is in, and this one's rows
  word base, vs, ts, tx;  // the ground, the batches, the textures
  intptr_t const *cc;     // a smaller frame laid first, cw by ch, its colours and depths
  flo_t const *cd;
@@ -122,9 +122,9 @@ static int rz_may(struct rz const *r, struct rz_v const *const P[3]) {
  int64_t const A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0 || (A > 0 && (r->flags & rz_cull))) return 0;
  int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
- for (int i = 1; i < 3; i++) {
-  xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb;
-  ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb; }
+ for (int i = 1; i < 3; i++)
+  xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
+  ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
  int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
@@ -153,9 +153,9 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  p0 = P[0], p1 = P[1], p2 = P[2];
  // the pixels whose centres the box holds: none, and done before any plane
  int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
- for (int i = 1; i < 3; i++) {
-  xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb;
-  ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb; }
+ for (int i = 1; i < 3; i++)
+  xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
+  ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
  int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
@@ -175,10 +175,10 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  flo_t v0[2 + rz_na], vx[2 + rz_na], vy[2 + rz_na], e1[2 + rz_na], e2[2 + rz_na];
  v0[0] = p0->z, e1[0] = p1->z, e2[0] = p2->z;
  v0[1] = 1 / p0->w, e1[1] = 1 / p1->w, e2[1] = 1 / p2->w;
- for (int k = 0; k < rz_na; k++) {
-  v0[2 + k] = p0->a[k] * (persp ? v0[1] : 1);
-  e1[2 + k] = p1->a[k] * (persp ? e1[1] : 1);
-  e2[2 + k] = p2->a[k] * (persp ? e2[1] : 1); }
+ for (int k = 0; k < rz_na; k++)
+  v0[2 + k] = p0->a[k] * (persp ? v0[1] : 1),
+  e1[2 + k] = p1->a[k] * (persp ? e1[1] : 1),
+  e2[2 + k] = p2->a[k] * (persp ? e2[1] : 1);
  for (int k = 0; k < 2 + rz_na; k++) {
   flo_t const d1 = e1[k] - v0[k], d2 = e2[k] - v0[k];
   vx[k] = (d1 * dy2 - d2 * dy1) / Af, vy[k] = (d2 * dx1 - d1 * dx2) / Af; }
@@ -377,6 +377,7 @@ static flo_t rz_opt(word o, uintptr_t i, flo_t d) {
 // a batch: verts and tris both trays, or lists of them pairwise
 static int rz_ok(word v, word t, uintptr_t st) {
  return galaxyp(v) && galaxyp(t) && !(tray_nelem(tray(v)) % st) && !(tray_nelem(tray(t)) % 4); }
+
 static int rz_batches(word v, word t, uintptr_t st) {
  if (rz_ok(v, t, st)) return 1;
  for (; chainp(v) && chainp(t); v = B(v), t = B(t)) if (!rz_ok(A(v), A(t), st)) return 0;
@@ -476,6 +477,7 @@ static void rz_bin(struct rz const *r, struct tray *vt, struct tray *tt, flo_t c
   intptr_t const y0 = lo > 1 ? (intptr_t) lo - 1 : 0, y1 = hi + 1 < (flo_t) r->H ? (intptr_t) (hi + 1) : r->H - 1,
                  b0 = y0 / rz_band < nb ? y0 / rz_band : nb - 1, b1 = y1 / rz_band;
   bk[i] = b0 * rz_bk + (b1 < b0 ? b0 : b1); } }
+
 static void rz_bins(struct rz *r, intptr_t nb) {
  flo_t const *pv = r->pv;
  intptr_t *bk = r->bk;
@@ -511,15 +513,15 @@ love_noinline static struct g *host_raster(struct g *g) {
  if (galaxyp(a[4])) nv = tray_nelem(tray(a[4])) / st, nt = tray_nelem(tray(a[5])) / 4;
  else for (word v = a[4], t = a[5]; chainp(v); v = B(v), t = B(t)) nv += tray_nelem(tray(A(v))) / st, nt += tray_nelem(tray(A(t))) / 4;
  word const o0 = chainp(a[7]) ? A(a[7]) : a[7];
- intptr_t const fl = (intptr_t) rz_opt(o0, 5, 0);
- uintptr_t const fr1 = (fl & rz_flat) && !(fl & rz_depth) ? 1 : 2;   // the answer's rank
- uintptr_t const n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
+ intptr_t const fl = (intptr_t) rz_opt(o0, 5, 0),
+                TW = (W + 7) / 8, TH = (H + 7) / 8;
+ uintptr_t const fr1 = (fl & rz_flat) && !(fl & rz_depth) ? 1 : 2,   // the answer's rank
+                 n = mulsat((uintptr_t) W, (uintptr_t) H),   // past every heap: have refuses it
                  sb = fl & rz_seen ? 12 : 8,   // a colour and a depth, four bytes each, and seen the glass's
                  fw = b2w(tray_bytes(fl & rz_depth ? love_R : love_Z, fr1, n)),
                  dw = b2w(tray_bytes(love_Z, 1, mulsat(n, sb) / sizeof(word))),
-                 pw = b2w(tray_bytes(love_R, 1, rz_pv * nv + 1));
- intptr_t const TW = (W + 7) / 8, TH = (H + 7) / 8;
- uintptr_t const tw = b2w(tray_bytes(love_R, 1, (uintptr_t) (2 * TW * TH))),
+                 pw = b2w(tray_bytes(love_R, 1, rz_pv * nv + 1)),
+                 tw = b2w(tray_bytes(love_R, 1, (uintptr_t) (2 * TW * TH))),
                  bw = b2w(tray_bytes(love_Z, 1, nt + 1));
  if (!ok(g = have(g, fw + dw + pw + tw + bw))) return g;
  a = g->sp;
@@ -564,8 +566,8 @@ static lvm(lvm_raster) { LvmCallp(g, 7, host_raster) }
 // kind 0 r g b, 1 b g r x (an xrgb word, little-endian), 2 the r g b in base64
 static uintptr_t rz_out(struct tray *f, intptr_t kind, intptr_t s, uint8_t *o) {
  static char const abc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
- uintptr_t const H = f->rank == 2 ? f->shape[0] : 1, W = f->rank == 2 ? f->shape[1] : f->shape[0];
- uintptr_t const per = kind == 1 ? 4 : 3, raw = W * H * per * (uintptr_t) (s * s);
+ uintptr_t const H = f->rank == 2 ? f->shape[0] : 1, W = f->rank == 2 ? f->shape[1] : f->shape[0],
+                 per = kind == 1 ? 4 : 3, raw = W * H * per * (uintptr_t) (s * s);
  if (!o) return kind == 2 ? (raw + 2) / 3 * 4 : raw;
  uint32_t acc = 0, got = 0;
  uintptr_t at = 0;
@@ -648,6 +650,7 @@ love_noinline static struct g *host_lace(struct g *g) {
  return g; }
 static lvm(lvm_lace) { LvmCall(g, host_lace) }
 
+// FIXME namespace these
 LvDef("facets", raster, 8, NULL);
 LvDef("frame-bytes", frame_bytes, 3, NULL);
 LvDef("frame-paint", frame_paint, 5, NULL);

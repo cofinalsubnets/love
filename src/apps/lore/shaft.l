@@ -34,7 +34,7 @@
  ; the ladders, [s from to] each, one a floor: on the wall at z = -r for even floors, beside
  ; the door for odd; and the hole in the ledge each comes up through, by ring
  door-s (5.0 * shaft-r) door-w 0.6 door-h 2.2 door-edge 0.08   ; the doors, in the middle of the wall at z = r
- ladders (map (f \ [(f % 2 = 0 ? shaft-r (door-s - 1.6)) (f * floor-h) ((f + 1) * floor-h)]) ^(floors - 1))
+ ladders (map (f \ [(f % 2 @ 0 shaft-r (door-s - 1.6)) (f * floor-h) ((f + 1) * floor-h)]) ^(floors - 1))
  ladder-w 0.35                        ; ..how near a ladder is at it
  hatch-w 0.5                          ; the hole in a ledge over its ladder, either side of it -- drawn, not fallen through
  hatches (foldl (t \ l \ pin t (int (l 2 / floor-h + 0.5)) [[(l 0 - hatch-w) (l 0 + hatch-w)]]) {} ladders)
@@ -67,7 +67,7 @@
  (band-of d) ((band-1 < d) + (band-2 < d))
  ; --- round the walls ---
  (wrap-s s) (s - perim * flo (s / perim))
- (s-apart a b) (wrap-s (a - b) @ d (min2 d (perim - d)))
+ (s-apart a b) (wrap-s (a - b) @ d (min d (perim - d)))
  (wall-of s) (flo (wrap-s s / (2.0 * shaft-r)) % 4)
  ; the point s round the walls and q in from them; a point's run along a wall and its
  ; distance in from it; the way a wall runs, as a bearing, direction (sin cos)
@@ -75,7 +75,7 @@
                   (i @ 0 [(l - r) (q - r)] 1 [(r - q) (l - r)] 2 [(r - l) (r - q)] [(q - r) (r - l)]))
  (wall-s i x z) (shaft-r @ r (i @ 0 (x + r) 1 (z + r) 2 (r - x) (r - z)))
  (wall-q i x z) (shaft-r @ r (i @ 0 (z + r) 1 (r - x) 2 (r - z) (x + r)))
- tangents [(pi / 2.0) 0.0 (0.0 - pi / 2.0) pi]
+ tangents [(pi / 2.0) 0.0 -(pi / 2.0) pi]
  (tangent-of s) (tangents (wall-of s))
  ; --- the lay: the gaps in the ledges, [s0 s1] each by ring, off the die; each within one
  ; wall, clear of its corners, a ladder and its hole, the door and another gap ---
@@ -92,7 +92,7 @@
    {'gaps gaps})
  ; a ledge under s on ring f: the floor is one everywhere, a ring above it wherever no gap is
  (ledge? lay f s) (? (f <= 0) 1 (floors <= f) 0
-                     (wrap-s s @ ss (!(any (g \ g 0 <= ss < g 1) (peep (lay 'gaps) f ())))))
+                     (wrap-s s @ ss (!(any (g \ g 0 <= ss < g 1) (lay 'gaps f)))))
  ; the wall a point stands nearest, [i s q]: which, how far round the shaft, and how far in
  (near-wall x z) (foldl (a \ i \ (wall-q i x z @ q (q < a 2 ? [i (2.0 * shaft-r * i + wall-s i x z) q] a)))
                         [0 0.0 99.0] ^4)
@@ -100,9 +100,9 @@
  (ledge-under? lay f x z) (f <= 0 ? 1
                              (any (i \ wall-q i x z <= ledge-d && ledge? lay f (2.0 * shaft-r * i + wall-s i x z)) ^4))
  ; the ground under feet at y: the highest ledge under the point no more than a step above them
- (ground-at lay x z y) (foldl max2 0.0 (map (f \ (ledge-under? lay f x z && f * floor-h <= y + climb-h ? (f * floor-h) 0.0)) ^floors))
+ (ground-at lay x z y) (foldl max 0.0 (map (f \ (ledge-under? lay f x z && f * floor-h <= y + climb-h ? (f * floor-h) 0.0)) ^floors))
  ; a fall from y1 to y2: the highest ledge under the point crossed on the way, or -1 for none
- (land-at lay x z y1 y2) (foldl max2 -1.0 (map (f \ (f * floor-h @ t (ledge-under? lay f x z && y2 <= t < y1 ? t -1.0))) ^floors))
+ (land-at lay x z y1 y2) (foldl max -1.0 (map (f \ (f * floor-h @ t (ledge-under? lay f x z && y2 <= t < y1 ? t -1.0))) ^floors))
  ; the ladder within reach of the point at y, or (): against its wall, beside it, and
  ; between its ends or near enough
  (ladder-at lay x z y) (: (near? l) (wall-of (l 0) @ i
@@ -128,8 +128,8 @@
  (shaft-land st g v) (: a (clamp ((v - flash-v0) / flash-span) 0.0 1.0)
    tau (flash-hold + flash-slow * a)
    (pins st 'y g 'vy 0.0 'ground 1
-            'flash (max2 a (st 'flash))
-            'flash-k (a <= 0.0 ? (st 'flash-k) (exp (0.0 - 1.0 / (fps * tau))))
+            'flash (max a (st 'flash))
+            'flash-k (a <= 0.0 ? (st 'flash-k) (exp -(1.0 / (fps * tau))))
             'sfx (v < 1.0 ? (st 'sfx) (st 'sfx + [['thud (0.3 + 0.7 * clamp (v / 12.0) 0.0 1.0)]]))))
  ; the push the keys last gave, if within coyote frames, else none: what a jump or fall carries
  (carried st) (st 't - st 'kt <= coyote ? [(st 'kx * fps) (st 'kz * fps)] [0.0 0.0])
@@ -139,7 +139,7 @@
                     (carried st @ c (pins st 'vy jump-v 'vx (c 0) 'vz (c 1) 'ground 0 'off-t -999))
                     st)
  ; a step to x z, kept inside the walls
- (put! st x z) (shaft-r - body-r @ m (pins st 'px (clamp x (0.0 - m) m) 'pz (clamp z (0.0 - m) m)))
+ (put! st x z) (shaft-r - body-r @ m (pins st 'px (clamp x -m m) 'pz (clamp z -m m)))
  ; the frame's motion: on a ladder only the keys move you; on the ground the keys' step, off an
  ; edge into the air; in the air ballistic until a ledge is crossed going down. standing at
  ; the top door opens it, which is the level done
@@ -153,7 +153,7 @@
         (: vy (st 'vy - grav * dt) y2 (y + vy * dt)
            _ (put! st (st 'px + st 'vx * dt) (st 'pz + st 'vz * dt))
            g (vy < 0.0 ? (land-at lay (st 'px) (st 'pz) y y2) -1.0)
-           (0.0 <= g ? (shaft-land st g (0.0 - vy)) (pins st 'y y2 'vy vy))))
+           (0.0 <= g ? (shaft-land st g -vy) (pins st 'y y2 'vy vy))))
    fl (st 'flash * st 'flash-k)
    _ (pin st 'flash (fl < 0.02 ? 0.0 fl))
    nw (near-wall (st 'px) (st 'pz))
@@ -164,8 +164,8 @@
  ; a tty tells of keys pressed and never let go, and repeats a held one, so a held key is a
  ; walk; space at a ladder takes hold, then forward and back climb, off at either end
  shaft-binds {32 'jump}                  ; the shaft's own key, over view's
- (shaft-step st a) (: turn (a @ 'turn-left (0.0 - turn-step) 'turn-right turn-step 0.0)
-   h (st 'h) tilt (a @ 'look-up (h // 16) 'look-down (0 - h // 16) 0)
+ (shaft-step st a) (: turn (a @ 'turn-left -turn-step 'turn-right turn-step 0.0)
+   h (st 'h) tilt (a @ 'look-up (h // 16) 'look-down -(h // 16) 0)
    fwd (a @ 'forward 1.0 'back -1.0 0.0)
    l (st 'rung)
    (step d) (d * walk-v / fps @ v (pins st 'kx (v * sin (st 'th)) 'kz (v * cos (st 'th)) 'kt (st 't)))
@@ -205,7 +205,7 @@
    ; the lights on the walls at x = r and -r: a lamp, and when lit a halo, redder nearer
    side ((iw = 1) + (iw = 3))
    ds (sw - r)
-   (light c f) (: dy (yh - (f * floor-h + light-h)) r2 (ds * ds + dy * dy)
+   (light c f) (: dy (yh - (f * floor-h + light-h)) r2 (2 ds + 2 dy)
                   bl (tb 'blinks f) hr (halo-r2 * bl)
                   lv (floor (3.0 * (1.0 - r2 / (hr + 0.000001))) + 1)   ; 3 by the lamp, 1 at the halo's edge
                   (halo c k) (over c (side * (r2 < hr) * (lv = k)) (peep (flashes (k - 1)) c 0))
@@ -213,13 +213,13 @@
                   (over c2 (side * (r2 < core-r2)) (0.5 < bl ? core-pen lamp-pen)))
    c2 (foldl light c1 ^floors)
    ; the doors, on the wall at z = r: a frame, a shut panel, and the top one open with light beyond
-   ads (max ds (0.0 - ds))
+   ads (max ds -ds)
    (door c f) (: dy (yh - f * floor-h) in ((iw = 2) * (ads < door-w) * (0.0 <= dy) * (dy < door-h))
                  edge ((door-w - door-edge < ads) + (door-h - door-edge < dy))
                  (over (over c in (f = floors - 1 && st 'done ? open-pen panel-pen)) (in * (0 < edge)) frame-pen))
    c3 (foldl door c2 ^floors)
    ; the ladders: two rails and the rungs between, each on its wall
-   (ladder c l) (: wl (wall-of (l 0)) dd (sw - (l 0 - 2.0 * r * wl)) add (max dd (0.0 - dd))
+   (ladder c l) (: wl (wall-of (l 0)) dd (sw - (l 0 - 2.0 * r * wl)) add (max dd -dd)
                    on ((iw = wl) * (l 1 <= yh) * (yh <= l 2 + ladder-over))
                    rail (on * (rail-in < add) * (add < rail-out))
                    yr (yh / rung-gap) rung (on * (add < rail-out) * (yr - floor yr < rung-w))
@@ -239,34 +239,34 @@
  (ledges! st tb ov) (: w (st 'w) h (st 'h) hz (st 'hz) foc (st 'foc) lay (st 'lay)
    ey (tb 'ey) ex (tb 'ex) ez (tb 'ez) r shaft-r w2 (2.0 * shaft-r)
    (rowof d yy) (flo (hz - foc * (yy - ey) / (d < 0.02 ? 0.02 d)))
-   (fill! x ra rb p) (: a (max2 0 (min2 ra rb)) b (min2 (h - 1) (max2 ra rb))
+   (fill! x ra rb p) (: a (max 0 (min ra rb)) b (min (h - 1) (max ra rb))
                         (go i) (i <= x + w * b ? (peep ov i 0 @ 0 (pin ov i p), go (i + w)))
                         (go (x + w * a)))
-   (span a k lo hi) (k * k < 1e-18 ? (lo <= a <= hi ? [0.0 1e9] [1.0 0.0])
+   (span a k lo hi) (2 k < 1e-18 ? (lo <= a <= hi ? [0.0 1e9] [1.0 0.0])
                        (: t0 ((lo - a) / k) t1 ((hi - a) / k) (t0 < t1 ? [t0 t1] [t1 t0])))
    (col x) (: vx (peep (tb 'vx) x 0.0) vz (peep (tb 'vz) x 0.0) dw (peep (tb 'dw) x 0.0)
-     (band i) (: qa (wall-q i ex ez) kq (i @ 0 vz 1 (0.0 - vx) 2 (0.0 - vz) vx)
-                 sa (wall-s i ex ez) ks (i @ 0 vx 1 vz 2 (0.0 - vx) (0.0 - vz))
+     (band i) (: qa (wall-q i ex ez) kq (i @ 0 vz 1 -vx 2 -vz vx)
+                 sa (wall-s i ex ez) ks (i @ 0 vx 1 vz 2 -vx -vz)
                  q (span qa kq 0.0 ledge-d) rn (span sa ks 0.0 (w2 - ledge-d))
-                 da (max2 0.0 (max2 (q 0) (rn 0))) db (min2 dw (min2 (q 1) (rn 1)))
+                 da (max 0.0 (max (q 0) (rn 0))) db (min dw (min (q 1) (rn 1)))
                  [da db i sa ks (kq < 0.0 && ledge-d < qa && rn 0 <= q 0)])
      (ring b f) (: da (b 0) db (b 1) sag (b 3 + w2 * b 2) ks (b 4) front (b 5) yf (f * floor-h)
                    ; the stretch in s, and the ledge's runs on it between the gaps, as stretches in d
-                   sA (sag + ks * da) sB (sag + ks * db) lo (min2 sA sB) hi (max2 sA sB)
-                   gs (peep (lay 'gaps) f () + hatches f)     ; the gaps, and the hole over the ladder
+                   sA (sag + ks * da) sB (sag + ks * db) lo (min sA sB) hi (max sA sB)
+                   gs (lay 'gaps f + hatches f)     ; the gaps, and the hole over the ladder
                    pts (sort ([lo hi] + filter (p \ lo < p < hi) (cat (map (g \ g 0) gs) (map (g \ g 1) gs))))
                    (drawn? p) (wrap-s p @ ss (ledge? lay f ss && !(any (g \ g 0 <= ss < g 1) (hatches f))))
                    (run p0 p1) ((p0 + p1) / 2.0 @ mid
-                                  (drawn? mid ? (: d0 ((p0 - sag) / ks) d1 ((p1 - sag) / ks) [(min2 d0 d1) (max2 d0 d1)])))
-                   runs (ks * ks < 1e-18 ? (drawn? sag ? [[da db]] ())
+                                  (drawn? mid ? (: d0 ((p0 - sag) / ks) d1 ((p1 - sag) / ks) [(min d0 d1) (max d0 d1)])))
+                   runs (2 ks < 1e-18 ? (drawn? sag ? [[da db]] ())
                            (sort (filter two? (map (i \ run (pts i) (pts (i + 1))) ^(#pts - 1)))))
-                   (one rr) (: d0 (max2 da (rr 0)) d1 (min2 db (rr 1)) k (band-of d0)
+                   (one rr) (: d0 (max da (rr 0)) d1 (min db (rr 1)) k (band-of d0)
                                (front || da + 1e-6 < d0 ? (fill! x (rowof d0 yf) (rowof d0 (yf - ledge-t)) (face-pens k)),
                                 yf < ey ? (fill! x (rowof d1 yf) (rowof d0 yf) (rust-pens k)),
                                 ey < yf - ledge-t && fill! x (rowof d0 (yf - ledge-t)) (rowof d1 (yf - ledge-t)) (under-pens k)))
                    (each runs one))
      bands (sort (filter (b \ b 0 < b 1) (map band ^4)))
-     rings (map (p \ p 1) (sort (map (f \ (f * floor-h - ey @ dy [(dy * dy) f])) (map (+ 1) ^(floors - 1)))))
+     rings (map (p \ p 1) (sort (map (f \ (f * floor-h - ey @ dy [(2 dy) f])) (map (+ 1) ^(floors - 1)))))
      (each bands (each rings * ring)))
    (each ^w col))
  ; a frame: the background rows are trays and the ledges a cask over them; the flash tints both
@@ -275,8 +275,8 @@
    rs (view-rays st) vx0 (rs 0) vz0 (rs 1)
    vx (over vx0 (vx0 = 0.0) 1e-9) vz (over vz0 (vz0 = 0.0) 1e-9)
    ; each column's ray ends on the nearest of the four planes ahead of it
-   tx (over ((0.0 - r - ex) / vx) (0.0 < vx) ((r - ex) / vx))
-   tz (over ((0.0 - r - ez) / vz) (0.0 < vz) ((r - ez) / vz))
+   tx (over ((-r - ex) / vx) (0.0 < vx) ((r - ex) / vx))
+   tz (over ((-r - ez) / vz) (0.0 < vz) ((r - ez) / vz))
    nz (tz <= tx)
    dw (over tx nz tz)
    iw (nz * over 0 (0.0 < vz) 2 + (1 - nz) * over 3 (0.0 < vx) 1)

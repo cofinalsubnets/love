@@ -7,6 +7,12 @@
 // whose reach misses the mesh's box adding nothing, and the numbers [0.0 0.0 0.0] where none
 // reaches it. (lamp-lights cols base lights): base [r g b], each a tray or a number, and to
 // it each light's lamp-light in turn. () where an argument is not as it says
+// (lamp-open X Y Z db): the daylight walk of world.l's daylit on the points X Y Z, db its
+// brushes end to end, each [kind n lo hi ..n numbers], kind 1 air, 2 open, 4 land, 8 walked,
+// the numbers its planes [nx ny nz d] or its land (dy_land). answers [o u past] trays.
+// (lamp-near db lo hi): the brushes of db lamp-open asks about points in the box lo hi.
+// (lamp-varies ps lift step gap db): 1 where the light the open lets in on face ps, its
+// corners end to end, changes by more than step, else 0. () where an argument is not as it says
 #include "love.h"
 #if Bits == 64
 double lm_sqrt(double);
@@ -41,8 +47,8 @@ static void lp_share(void *c, intptr_t s) {
     struct lamp const *l = t->l + j;
     flo_t k = X * (flo_t) 0.0;
     for (uintptr_t q = 0; q < l->np; q++) {
-     flo_t const *p = l->ps + 3 * q;
-     flo_t const lx = p[0] - X, ly = p[1] - Y, lz = p[2] - Z, d2 = lx * lx + ly * ly + lz * lz,
+     flo_t const *p = l->ps + 3 * q,
+                 lx = p[0] - X, ly = p[1] - Y, lz = p[2] - Z, d2 = lx * lx + ly * ly + lz * lz,
                  d = lp_sqrt(d2 + (flo_t) 1e-9),
                  lam = lp_sat(((nx * lx + ny * ly + nz * lz) / d + l->wr) / ((flo_t) 1.0 + l->wr)),
                  em = l->fn ? lp_sat((flo_t) 0.25 - (l->n[0] * lx + l->n[1] * ly + l->n[2] * lz) / d) : (flo_t) 1.0,
@@ -151,7 +157,210 @@ static struct g *lp_light(struct g *g, word cl, uintptr_t ib, uintptr_t il, bool
  return g; }
 love_noinline static struct g *host_lamp_light(struct g *g) { return lp_light(g, g->sp[0], 0, 1, 1); }
 love_noinline static struct g *host_lamp_lights(struct g *g) { return lp_light(g, g->sp[0], 1, 2, 0); }
+// a brush of the db: its kind, box, and its n numbers, planes or a land; v0 the first walked
+struct dbr { flo_t const *lo, *hi, *pl; uintptr_t n, np, nt; int kind; bool any; };
+struct day { flo_t const *x[3]; flo_t *out[3]; struct dbr const *b; uintptr_t nb, v0, nv; bool tall; };
+static flo_t dy_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
+// a land's numbers: low, cell width g, its first cell x0 z0, nx by nz cells, each cell's start
+// among the triangles' numbers, those, then the triangles, nine numbers each
+static bool dy_land(struct dbr *b) {
+ flo_t const *v = b->pl;
+ if (b->n < 7 || v[4] < 0 || v[5] < 0 || !(v[1] > 0)) return 0;
+ uintptr_t const nc = (uintptr_t) v[4] * (uintptr_t) v[5];
+ if (6 + nc + 1 > b->n || v[6 + nc] < 0 || 6 + nc + 1 + (uintptr_t) v[6 + nc] > b->n) return 0;
+ uintptr_t const at = 6 + nc + 1 + (uintptr_t) v[6 + nc];
+ return (b->n - at) % 9 == 0 && ((b->nt = (b->n - at) / 9), 1); }
+// the land's height at x z, as brush.l's land-at: the first of its cell's triangles holding it
+static bool dy_land_y(struct dbr const *b, flo_t x, flo_t z, flo_t *h) {
+ flo_t const *v = b->pl, g = v[1];
+ intptr_t const nx = (intptr_t) v[4], nz = (intptr_t) v[5], i = (intptr_t) dy_floor(x / g) - (intptr_t) v[2], j = (intptr_t) dy_floor(z / g) - (intptr_t) v[3];
+ if (i < 0 || j < 0 || i >= nx || j >= nz) return 0;
+ flo_t const *of = v + 6, *ix = of + nx * nz + 1, *ts = ix + (uintptr_t) of[nx * nz];
+ uintptr_t const c = (uintptr_t) (i * nz + j), q0 = (uintptr_t) of[c], q1 = (uintptr_t) of[c + 1];
+ for (uintptr_t q = q0; q < q1 && q1 <= (uintptr_t) of[nx * nz]; q++) {
+  uintptr_t const k = (uintptr_t) ix[q];
+  if (k >= b->nt) continue;
+  flo_t const *a = ts + 9 * k, *bb = a + 3, *cc = a + 6,
+              d = (bb[2] - cc[2]) * (a[0] - cc[0]) + (cc[0] - bb[0]) * (a[2] - cc[2]);
+  if ((d < 0 ? -d : d) < (flo_t) 1e-12) continue;
+  flo_t const u = ((bb[2] - cc[2]) * (x - cc[0]) + (cc[0] - bb[0]) * (z - cc[2])) / d,
+              w = ((cc[2] - a[2]) * (x - cc[0]) + (a[0] - cc[0]) * (z - cc[2])) / d, r = (flo_t) 1.0 - u - w;
+  if (u >= (flo_t) -1e-9 && w >= (flo_t) -1e-9 && r >= (flo_t) -1e-9) return *h = u * a[1] + w * bb[1] + r * cc[1], 1; }
+ return 0; }
+static bool dy_box(struct dbr const *b, flo_t const p[3], flo_t e, flo_t top) {
+ for (int k = 0; k < 3; k++) if (!(b->lo[k] - e < p[k] && p[k] < b->hi[k] + e + (k == 1 ? top : (flo_t) 0.0))) return 0;
+ return 1; }
+static bool dy_bbox(struct dbr const *b, flo_t const p[3]) {
+ flo_t const e = (flo_t) 1e-6;
+ for (int k = 0; k < 3; k++) if (!(b->lo[k] - e <= p[k] && p[k] <= b->hi[k] + e)) return 0;
+ return 1; }
+static bool dy_planes(struct dbr const *b, flo_t const p[3]) {
+ for (uintptr_t q = 0; q < b->np; q++) {
+  flo_t const *n = b->pl + 4 * q;
+  if (!(p[0] * n[0] + p[1] * n[1] + p[2] * n[2] <= n[3] + (flo_t) 1e-6)) return 0; }
+ return 1; }
+// open air puts a point out, a solid buries it, a room carved where it is buried brings it in,
+// but one standing up out of the land is open, as it was before the land
+static void dy_point(struct day const *t, flo_t const p[3], flo_t w[3]) {
+ flo_t o = 0, u = 0, past = 1, G = (flo_t) -1e9, h;
+ for (uintptr_t j = t->v0; t->tall && j < t->nb; j++)
+  if (t->b[j].kind & 4 && dy_land_y(t->b + j, p[0], p[2], &h)) G = G < h ? h : G;
+ for (uintptr_t j = 0; j < t->nb; j++) {
+  struct dbr const *b = t->b + j;
+  if (!(b->kind & 4) && dy_box(b, p, 0, (flo_t) 0.1)) past = 0;
+  if (j < t->v0) continue;
+  if (b->kind & 2) { if (dy_box(b, p, (flo_t) 0.001, (flo_t) 0.1)) o = 1, u = 0; }
+  else if (b->kind & 4 ? p[1] <= b->pl[0] || (dy_land_y(b, p[0], p[2], &h) && p[1] <= h) : b->any && dy_planes(b, p)) {
+   if (b->kind & 1) o = u && !(t->tall && b->hi[1] > G) ? 0 : o, u = 0;
+   else u = 1; } }
+ w[0] = o, w[1] = u, w[2] = past; }
+static void dy_share(void *c, intptr_t s) {
+ struct day const *t = c;
+ uintptr_t const i0 = (uintptr_t) s * lp_chunk, i1 = i0 + lp_chunk < t->nv ? i0 + lp_chunk : t->nv;
+ for (uintptr_t i = i0; i < i1; i++) {
+  flo_t const p[3] = {t->x[0][i], t->x[1][i], t->x[2][i]};
+  flo_t w[3];
+  dy_point(t, p, w);
+  for (int m = 0; m < 3; m++) t->out[m][i] = w[m]; } }
+// the next brush of db v from at, 0 where it is not as it says
+static bool dy_next(flo_t const *v, uintptr_t n, uintptr_t *at, struct dbr *b) {
+ if (*at + 8 > n || v[*at + 1] < 0) return 0;
+ *b = (struct dbr) {.kind = (int) v[*at], .n = (uintptr_t) v[*at + 1], .lo = v + *at + 2, .hi = v + *at + 5, .pl = v + *at + 8};
+ if (*at + 8 + b->n > n || (b->kind & 4 ? !dy_land(b) : b->n % 4)) return 0;
+ b->np = b->kind & 4 ? 0 : b->n / 4, *at += 8 + b->n;
+ return 1; }
+static bool dy_meets(struct dbr const *b, flo_t const lo[3], flo_t const hi[3]) {
+ bool meet = 1;
+ for (int k = 0; k < 3; k++) meet = meet && b->hi[k] >= lo[k] - (flo_t) 0.2 - (flo_t) 1e-3 && b->lo[k] - (flo_t) 1e-3 <= hi[k] + (flo_t) 0.2;
+ return meet; }
+// the brushes meeting the points' box, in order, each with whether any point is in its own
+// box; walked from the first open one, or the first marked walked (8)
+static bool dy_read(word db, struct day *t, struct dbr *bs, uintptr_t nmax) {
+ struct tray *d = tray(db);
+ flo_t const *v = tray_data(d);
+ uintptr_t const n = tray_nelem(d);
+ flo_t lo[3], hi[3];
+ for (int k = 0; k < 3; k++) lo[k] = hi[k] = t->nv ? t->x[k][0] : 0;
+ for (uintptr_t i = 0; i < t->nv; i++)
+  for (int k = 0; k < 3; k++) {
+   flo_t const x = t->x[k][i];
+   lo[k] = x < lo[k] ? x : lo[k], hi[k] = hi[k] < x ? x : hi[k]; }
+ t->b = bs, t->nb = 0, t->v0 = (uintptr_t) -1, t->tall = 0;
+ for (uintptr_t at = 0, j = 0; at < n; j++) {
+  struct dbr b;
+  if (j >= nmax || !dy_next(v, n, &at, &b)) return 0;
+  if (b.kind & 10 && t->v0 == (uintptr_t) -1) t->v0 = t->nb;
+  if (!dy_meets(&b, lo, hi)) continue;
+  for (uintptr_t i = 0; i < t->nv && !b.any && !(b.kind & 4); i++) {
+   flo_t const p[3] = {t->x[0][i], t->x[1][i], t->x[2][i]};
+   b.any = dy_bbox(&b, p); }
+  bs[t->nb++] = b; }
+ if (t->v0 == (uintptr_t) -1) t->v0 = t->nb;
+ // ..a room standing up out of a land walked with it
+ for (uintptr_t j = t->v0; j < t->nb; j++)
+  for (uintptr_t l = t->v0; l < t->nb && !t->tall; l++)
+   t->tall = (bs[j].kind & 5) == 1 && bs[l].kind & 4 && bs[j].hi[1] > bs[l].pl[0];
+ return 1; }
+static bool dy_db(word x) { return galaxyp(x) && tray(x)->type == love_R; }
+love_noinline static struct g *host_lamp_open(struct g *g) {
+ uintptr_t nv = 0;
+ for (int k = 0; k < 4; k++) {
+  word const x = g->sp[k];
+  if (!dy_db(x)) return g->sp[0] = ZeroPoint, g;
+  if (k < 3 && k && tray_nelem(tray(x)) != nv) return g->sp[0] = ZeroPoint, g;
+  if (!k) nv = tray_nelem(tray(x)); }
+ uintptr_t const nmax = tray_nelem(tray(g->sp[3])) / 8 + 1, w = b2w(tray_bytes(love_R, 1, nv));
+ struct dbr *bs = alloc(NULL, nmax * sizeof *bs);
+ struct day t = {.nv = nv};
+ for (int k = 0; k < 3; k++) t.x[k] = tray_data(tray(g->sp[k]));
+ bool const good = bs && dy_read(g->sp[3], &t, bs, nmax);
+ if (good && ok(g = have(g, 3 * w + 3 * chain_req))) {
+  for (int k = 0; k < 3; k++) t.x[k] = tray_data(tray(g->sp[k]));
+  dy_read(g->sp[3], &t, bs, nmax);   // re-read: the ask may have moved them
+  word r[3];
+  for (int m = 0; m < 3; m++) {
+   struct tray *o = ini_tray(bump(g, w), love_R, 1);
+   o->shape[0] = nv, t.out[m] = tray_data(o), r[m] = word(o); }
+  par_run(g, (intptr_t) ((nv + lp_chunk - 1) / lp_chunk), dy_share, &t);
+  word l = ZeroPoint;
+  for (int m = 3; m--; ) l = word(ini_chain(bump(g, chain_req), (intptr_t) r[m], (intptr_t) l));
+  g->sp[0] = l; }
+ else if (ok(g)) g->sp[0] = ZeroPoint;
+ if (bs) alloc(bs, 0);
+ return g; }
+// the brushes of db v meeting the box lo hi, laid into o where there is one, those from the
+// first walked marked so; their length, or -1 where db is not as it says
+static uintptr_t dy_near(flo_t const *v, uintptr_t n, flo_t const lo[3], flo_t const hi[3], flo_t *o) {
+ uintptr_t m = 0;
+ bool walk = 0;
+ for (uintptr_t at = 0; at < n; ) {
+  uintptr_t const a0 = at;
+  struct dbr b;
+  if (!dy_next(v, n, &at, &b)) return (uintptr_t) -1;
+  walk = walk || b.kind & 10;
+  if (!dy_meets(&b, lo, hi)) continue;
+  if (o) {
+   for (uintptr_t k = a0; k < at; k++) o[m + k - a0] = v[k];
+   o[m] = (flo_t) (b.kind | (walk ? 8 : 0)); }
+  m += at - a0; }
+ return m; }
+love_noinline static struct g *host_lamp_near(struct g *g) {
+ flo_t lo[3], hi[3];
+ if (!dy_db(g->sp[0]) || !lp_nums(g->sp[1], lo, 3) || !lp_nums(g->sp[2], hi, 3)) return g->sp[0] = ZeroPoint, g;
+ uintptr_t const m = dy_near(tray_data(tray(g->sp[0])), tray_nelem(tray(g->sp[0])), lo, hi, NULL);
+ if (m == (uintptr_t) -1) return g->sp[0] = ZeroPoint, g;
+ uintptr_t const w = b2w(tray_bytes(love_R, 1, m));
+ if (ok(g = have(g, w))) {
+  struct tray *o = ini_tray(bump(g, w), love_R, 1);
+  o->shape[0] = m;
+  dy_near(tray_data(tray(g->sp[0])), tray_nelem(tray(g->sp[0])), lo, hi, tray_data(o));
+  g->sp[0] = word(o); }
+ return g; }
+// whether the light the open lets in on face ps changes by more than step, asked a lift out
+// from it along its edges gap apart and at its middle: the open's share and half of how
+// buried it is where the open is round it, as world.l's daylit weighs them
+love_noinline static struct g *host_lamp_varies(struct g *g) {
+ flo_t lift[3], step, gap;
+ if (!dy_db(g->sp[0]) || !dy_db(g->sp[4]) || !lp_nums(g->sp[1], lift, 3) || !lp_num(g->sp[2], &step) || !lp_num(g->sp[3], &gap) || !(gap > 0)
+     || tray_nelem(tray(g->sp[0])) % 3 || !tray_nelem(tray(g->sp[0]))) return g->sp[0] = ZeroPoint, g;
+ flo_t const *ps = tray_data(tray(g->sp[0]));
+ uintptr_t const nc = tray_nelem(tray(g->sp[0])) / 3, nmax = tray_nelem(tray(g->sp[4])) / 8 + 1;
+ uintptr_t nv = 1;
+ for (uintptr_t i = 0; i < nc; i++) {
+  flo_t const *p = ps + 3 * i, *q = ps + 3 * ((i + 1) % nc), d[3] = {q[0] - p[0], q[1] - p[1], q[2] - p[2]};
+  nv += (uintptr_t) (lp_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / gap) + 1; }
+ flo_t *x = alloc(NULL, 3 * nv * sizeof *x);
+ struct dbr *bs = alloc(NULL, nmax * sizeof *bs);
+ struct day t = {.nv = nv};
+ bool good = x && bs;
+ if (good) {
+  flo_t m[3] = {0, 0, 0};
+  for (uintptr_t i = 0; i < nc; i++) for (int k = 0; k < 3; k++) m[k] = m[k] + ps[3 * i + k];
+  for (int k = 0; k < 3; k++) x[k * nv] = m[k] / (flo_t) nc + lift[k];
+  for (uintptr_t i = 0, s = 1; i < nc; i++) {
+   flo_t const *p = ps + 3 * i, *q = ps + 3 * ((i + 1) % nc), d[3] = {q[0] - p[0], q[1] - p[1], q[2] - p[2]};
+   uintptr_t const n = (uintptr_t) (lp_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / gap) + 1;
+   for (uintptr_t j = 0; j < n; j++, s++) for (int k = 0; k < 3; k++) x[k * nv + s] = p[k] + d[k] * ((flo_t) j / (flo_t) n) + lift[k]; }
+  for (int k = 0; k < 3; k++) t.x[k] = x + k * nv;
+  good = dy_read(g->sp[4], &t, bs, nmax); }
+ flo_t lo = 0, hi = 0;
+ for (uintptr_t i = 0; good && i < nv; i++) {
+  flo_t const p[3] = {t.x[0][i], t.x[1][i], t.x[2][i]};
+  flo_t w[3];
+  dy_point(&t, p, w);
+  flo_t const s = w[0] * (1 - w[1]) + w[2], m = s < 1 ? s : 1, o = m + (flo_t) 0.5 * (w[0] * w[1] * (1 - m));
+  lo = i && lo < o ? lo : o, hi = i && o < hi ? hi : o; }
+ bool const on = good && hi - lo > step;
+ if (x) alloc(x, 0);
+ if (bs) alloc(bs, 0);
+ return g->sp[0] = good ? putcharm(on) : ZeroPoint, g; }
 static lvm(lvm_lamp_light) { LvmCallp(g, 1, host_lamp_light) }
 static lvm(lvm_lamp_lights) { LvmCallp(g, 2, host_lamp_lights) }
-LvDef("lamp-light", lamp_light, 2, NULL);
-LvDef("lamp-lights", lamp_lights, 3, NULL);
+LvDef("lamp-light", lamp_light, 2, "lore");
+LvDef("lamp-lights", lamp_lights, 3, "lore");
+static lvm(lvm_lamp_open) { LvmCallp(g, 3, host_lamp_open) }
+LvDef("lamp-open", lamp_open, 4, "lore");
+static lvm(lvm_lamp_near) { LvmCallp(g, 2, host_lamp_near) }
+LvDef("lamp-near", lamp_near, 3, "lore");
+static lvm(lvm_lamp_varies) { LvmCallp(g, 4, host_lamp_varies) }
+LvDef("lamp-varies", lamp_varies, 5, "lore");

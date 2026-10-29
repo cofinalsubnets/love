@@ -73,7 +73,7 @@
  (neon-strokes s) (: cs (points s) k (1.0 / 6.0)
    (wd c) (c > 255 ? 6.0 4.0)
    (go l x) (atom? l ? () (: c <l u (97 <= c <= 122 ? (c - 32) c)
-                             (map (ln \ map (p \ [(k * (x + p 0)) (k * p 1)]) (pairs ln)) (peep neon-font u ()) + go >l (x + wd c + 1.5))))
+                             (map (ln \ map (p \ [(k * (x + p 0)) (k * p 1)]) (pairs ln)) (neon-font u) + go >l (x + wd c + 1.5))))
    [(go cs 0.0) (k * (foldl (\ a c (a + wd c + 1.5)) 0.0 cs - 1.5))])
  ; --- the sign: the tubes as three sides of a square a stroke, the halo a band either side
  ;     of each stroke on the wall, bright down its middle and gone at its edges ---
@@ -86,7 +86,7 @@
   (: sk (neon-strokes s) u (c* h al) v (c* h up)
      (at p d) (c+ o (c+ (c+ (c* (p 0) u) (c* (p 1) v)) (c* d out)))
      glass (cmix col [1.0 1.0 1.0] 0.15)          ; the tube's own colour, paler than its light
-     segs (cats (map (ln \ (: (go l) (atom? >l ? () ([<l <>l] . go >l)) (go ln))) (sk 0)))
+     segs (catmap (ln \ (: (go l) (atom? >l ? () ([<l <>l] . go >l)) (go ln))) (sk 0))
      rt (0.035 * h) hw (0.35 * h) lift (0.04 + rt)
      (tube g) (: A (at (g 0) lift) B (at (g 1) lift) t (unit (c+ B (c* -1.0 A))) n2 (unit (cross t out))
        (face o2 o3) (: (cn q k) (c+ q (c+ (c* rt o2) (c* (k * rt) o3)))
@@ -97,12 +97,12 @@
        z [0.0 0.0 0.0] (e p) (vx p z) (m p) (vx p col) (neg v) (c* -1.0 v)
        (row q k) [(e (c+ q n2)) (k q) (e (c+ q (neg n2)))]
        (piece (row (c+ A (neg t)) e + row A m + row B m + row (c+ B t) e)
-              (cats (map (r \ (: a (3 * r) [[a (a + 1) (a + 4)] [a (a + 4) (a + 3)] [(a + 1) (a + 2) (a + 5)] [(a + 1) (a + 5) (a + 4)]])) ^3))
+              (catmap (r \ (: a (3 * r) [[a (a + 1) (a + 4)] [a (a + 4) (a + 3)] [(a + 1) (a + 2) (a + 5)] [(a + 1) (a + 5) (a + 4)]])) ^3)
               out))
      ; ..its light from the strokes' ends, one to each half-height square, so a busy glyph
      ; costs a lamp no more than a plain one
      q (0.5 * h) (cell v) (show (map (k \ floor (v k / q + 0.5)) ^3))
-     ends (foldl (\ t v (pin t (cell v) v)) {} (cats (map (g \ [(at (g 0) lift) (at (g 1) lift)]) segs)))
+     ends (foldl (\ t v (pin t (cell v) v)) {} (catmap (g \ [(at (g 0) lift) (at (g 1) lift)]) segs))
      pts (map ends (sort (keys ends)))
      {'tube (mesh-pack (mesh-join (map tube segs))) 'halo (mesh-pack (mesh-join (map halo segs)))
       'lamp {'at pts 'c col 'r (6.0 * h + 2.0) 'soft (0.5 * h) 'wrap 0.6} 'w (h * sk 1)}))
