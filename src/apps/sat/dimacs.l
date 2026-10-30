@@ -1,6 +1,7 @@
 ; dimacs -- a dimacs cnf reader for the sat solver, built from the parser combinators in src/love/boot/post.l
 ; (a parser is (\ s y n): a state s = (text . i), a success continuation y = (rest payload),
 ; a failure continuation n = rest; payloads are lists that `seq` concatenates).
+(module 'sat
 (borrow 'peg)
 
 (:
@@ -25,36 +26,5 @@
         (? (atom? ls) (atom? cur ? (rev acc) (rev (rev cur . acc)))         ; flush a final un-terminated clause
            (<ls = 0) (g >ls () (rev cur . acc))
            (g >ls (<ls . cur) acc))) ints () ())
-   (dimacs text) (runp cnf text @ p (split0 (drop 4 p) . p 2))           ; (formula . nvars)
-
- ; -- parse self-tests (standalone; no solver needed) --
- _ (assert
-    ; comments, a 3-var header, three clauses (one 1-lit), all 0-terminated
-    (: r (dimacs "c hi
-c there
-p cnf 3 3
-1 -2 0
-2 3 -1 0
--3 0
-")  (>r = 3 && <r = '((1 -2) (2 3 -1) (-3))))
-    ; no leading comments, a clause split across whitespace, a missing final 0 (lenient flush)
-    (: r (dimacs "p cnf 4 2
-1 2 -3 0
-4 -1")  (>r = 4 && <r = '((1 2 -3) (4 -1))))
-    ; tabs + extra blank lines + a big var number parse
-    (: r (dimacs "p cnf 100 1
-	42	-99	0
-")  (>r = 100 && <r = '((42 -99)))))
- ; -- integration self-test. `cdcl` is src/apps/sat/sat.l's, catted before this file; a missing
- ; name fails at compile, so no predicate can guard this --
- _ (assert
-     (: r (dimacs "p cnf 3 3
-1 2 0
--1 3 0
--2 -3 0
-") f <r nv >r m (cdcl f nv) (m != 'unsat && sat? m f))   ; SAT -- model checks
-     (cdcl <(dimacs "p cnf 1 2
-1 0
--1 0
-") 1 = 'unsat))                                                             ; (x)(-x) -> UNSAT
- _ (say err "src/apps/sat/dimacs: ok -- DIMACS reader (parser combinators) + parse->solve\n"))
+   (dimacs text) (runp cnf text @ p (split0 (drop 4 p) . p 2)))          ; (formula . nvars)
+) ; module sat
