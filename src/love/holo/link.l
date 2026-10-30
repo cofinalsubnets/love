@@ -466,8 +466,8 @@
        n0 (ld-align 16 d1)
        [(ldlay1 'nifs n0 objs) n0 o0 d0 t1 o1])
 
-   ; the symbol book: name -> (addr weak?), every defined global/weak across the set.
-   ; strong beats weak, two strongs scare, the first weak stands.
+   ; the symbol book: name -> (addr weak?), and 'tls after a thread-local's, every defined
+   ; global/weak across the set. strong beats weak, two strongs scare, the first weak stands.
    (ldsyms objs)
     (: glo {}
        (one ob i)
@@ -479,11 +479,11 @@
                     _ (two? (peep (peep ob 'secs 0) shx ()) ? 0
                          (scare 'link-sym-section nm))
                     a (peep (peep ob 'base 0) shx 0 + sy 4)
-                    w (bind = 2)
+                    w (bind = 2) e (sy 2 = 6 ? [a w 'tls] [a w])
                     old (peep glo nm ())
-                    ((? (atom? old) (pin glo nm [a w])
+                    ((? (atom? old) (pin glo nm e)
                         w 0
-                        (old 1) (pin glo nm [a w])
+                        (old 1) (pin glo nm e)
                         (scare 'link-dup nm)),
                      one ob (i + 1))))))
        ((: (each os) (atom? os ? 0 (one <os 1, each >os))
@@ -590,6 +590,9 @@
                     abs32? (elem k '(abs32 u32 s32 u16 u8))
                     ; the thread-pointer kinds: S + A from tp
                     _ (elem k ld-tpkinds && !(charm? tp) ? (scare 'link-tls <sy))
+                    ; ..and a thread-local takes no other: a plain read of one is its template's
+                    _ (!(elem k ld-tpkinds) && (sy 2 = 6 || sy 3 = 0 && elem 'tls (glo <sy)) ?
+                       (scare 'link-tls-plain <sy))
                     ; GOTTPOFF's mov or add from the got, relaxed as ld does to the same op on an
                     ; immediate: the three bytes ahead of the field rewritten
                     gx (? (k == 'gottpoff)
