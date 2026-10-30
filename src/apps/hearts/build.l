@@ -9,7 +9,8 @@
 ;                make would remake and restart for)
 ; $HEARTS_JOBS   commands in flight at once (default 1); a filechk and a sub-make's script run
 ;                here, in order
-; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior")
+; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior");
+;                each target made writes its own, so a build is the next one's prior
 ; $KBUILD_BUILD_USER/HOST/VERSION/TIMESTAMP  the build's identity, handed in as the command
 ;                line's, so no clock or host name reaches the image
 ; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
@@ -49,12 +50,15 @@
    (q s) ("'" + join "'\\''" (split "'" s) + "'")
    (ident? n) (0 < #n && all (c \ c = 95 || 65 <= c <= 90 || 97 <= c <= 122 || 48 <= c <= 57) (map n ^#n)
                && !(48 <= n 0 <= 57))
+   ; a target's .cmd: dir/.name.cmd
+   (cmdf tg) (: p (hk-path tg) k (lastsl p) ((k >= 0 ? (snip p 0 (k + 1)) "") + "." + snip p (k + 1) #p + ".cmd"))
    ; the prior build's saved command for a target: its .cmd, read as make reads it
-   (prior tg) (: p (hk-path tg) k (lastsl p)
-                 f ((k >= 0 ? (snip p 0 (k + 1)) "") + "." + snip p (k + 1) #p + ".cmd")
-                 l (uread f @ [1 s] <(lines s) "")
+   (prior tg) (: l (uread (cmdf tg) @ [1 s] <(lines s) "")
                  i (findsub l " := ")
                  (0 <= i ? ((cite 'cook 'cook-expand) (snip l (i + 4) #l) (pins {} "pound" "#")) ()))
+   ; a made target's saved command, laid as kbuild's .cmd so a later HEARTS_PRIOR build reads it
+   (savecmd tg text) (uwrite (cmdf tg) ("savedcmd_" + hk-path tg + " := "
+                                        + join "$(pound)" (split "#" (join "$$" (split "$" text))) + "\n"))
    (appendf p t) (cite 'posix 'open p "a" @ f (hot? f ? (say f t, cite 'posix 'close f, 1)))
    (bump k) (pin cnt k (peep cnt k 0 + 1), peep cnt k 0)
 
@@ -67,7 +71,7 @@
              _ (peep jobs (j 0) 0 = pid ? (pull jobs (j 0) 0) 0)
              out (uread (j 1) @ [1 s] s "")
              _ (unlink (j 1))
-             (status = 0 ? 0
+             (status = 0 ? (string? (j 2) ? (savecmd (j 0) (j 2)) 0, 0)
                 (puts ("FAILED " + j 0 + " (" + show status + ")\n" + out),
                  peep made " failed" 0 ? 0 (pin made " failed" (j 0)))))))
    (reap1 _) (glean 0 @ r (? (two? r) (land <r >r) (atom? r) (rest 2) 0))
@@ -84,19 +88,20 @@
             + "mkdir -p " + q (dir tg) + " && ")
        _ (waitfor tg)
        _ (appendf (hd + "/commands") (tg + "\t" + show kind + "\t" + text + "\n"))
+       (keep _) (saved ? (savecmd tg text) 0)
        (kind = 'out || njobs < 2
         ? (: line (pre + (kind = 'out
                            ? ("{ " + text + "\n} > " + q (tg + ".tmp") + " && if cmp -s " + q (tg + ".tmp") + " " + q tg
                               + "; then rm -f " + q (tg + ".tmp") + "; exit 3; else mv -f " + q (tg + ".tmp") + " " + q tg + "; fi")
                            text))
              r (hark (shc (line + " 2>&1")))
-             (? (two? r && 0 = <r) 0
-                (kind = 'out && two? r && 3 = <r) 'same
+             (? (two? r && 0 = <r) (keep 0, 0)
+                (kind = 'out && two? r && 3 = <r) (keep 0, 'same)
                 (puts ("FAILED " + tg + " (" + show (two? r ? <r r) + ")\n" + text + "\n" + (two? r ? >r "") + "\n"), 1)))
           (: _ (slot 0)
              f (hd + "/job." + show (bump 'n))
              pid (spawn (shc ("{ " + pre + text + "\n} > " + q f + " 2>&1")))
-             (pin pids pid [tg f], pin jobs tg pid, bump 'live, 0))))
+             (pin pids pid [tg f (saved ? text ())], pin jobs tg pid, bump 'live, 0))))
    ; mooncc finds its headers and runtime at <its binary>/../lib/love/moon: a seat under .hearts,
    ; a copy of this love beside the tree's own src/apps/moon (build.l sits in src/apps/hearts)
    (seat _)
