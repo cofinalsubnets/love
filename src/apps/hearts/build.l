@@ -116,8 +116,9 @@
                 + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
         uwrite (hd + "/bin/xcert") (bang + "exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/xcert.l") + " \"$@\"\n"),
         uwrite (hd + "/bin/hk-cc")
-               (bang + "# the kernel's compiler: mooncc, and clang where it refuses (kcc.l)\n"
-                + "export HEARTS_KCC_LOG=" + q (hd + "/kcc.log") + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
+               (bang + "# the kernel's compiler: mooncc, and clang where it refuses (kcc.l); a unit takes love's\n"
+                + "# own budget, not the driver's: one header-heavy unit's live set passes 800 MB\n"
+                + "unset LOVE_BUDGET_MB\nexport HEARTS_KCC_LOG=" + q (hd + "/kcc.log") + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
         hark ["chmod" "+x" (hd + "/bin/hk-cc")],
         hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
