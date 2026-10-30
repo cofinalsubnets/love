@@ -8001,9 +8001,9 @@
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (imgbytes g ty val @ b (bad? b ? 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
-    (: span (aup (tsz g ty) (wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
-       raw (imgbytes g ty ini)
-       (bad? raw ? 'bad (raw + zeros (span - imbytelen raw))))
+    (: raw (imgbytes g ty ini)
+       ; round to the word (8 on x64/a64, 4 on t32), past a flexible array's initializer too
+       (bad? raw ? 'bad (: n (imbytelen raw) (raw + zeros (aup (max (tsz g ty) n) (wsize g) - n)))))
 
    ; the inline-asm register file (cgasm; cgdecl reads it for a register variable's pin)
    asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
@@ -11436,8 +11436,10 @@
                     (globs >gs want zm (acc + (1 < an ? [['align an]])
                                            + als + [['label lbl]]
                                            + (? (elem want '("love_nifs" ".love.image")) [['raw bytes]]
-                                                (elem want '(".data" ".bss" ".rodata")) (exact (tsz g ty) bytes)
-                                                [<(exact (tsz g ty) bytes)])))))))   ; a named stream: no word's pad past the object
+                                                (elem want '(".data" ".bss" ".rodata")) (exact (own ty init) bytes)
+                                                [<(exact (own ty init) bytes)])))))))   ; a named stream: no word's pad past the object
+       ; an object's own bytes: its type's, or more where a flexible array's initializer runs past it
+       (own ty init) (max (tsz g ty) (imbytelen (imgbytes g ty init)))
        ; an image as its object's own bytes, and the word's padding past them apart: the object
        ; writer reads a symbol's size up to the align (modpost holds a device table to it)
        (exact n bs)
