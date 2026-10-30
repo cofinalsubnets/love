@@ -620,7 +620,7 @@ test_bakerep: host $(prof_raw)
 test_distboot: dist
 	@echo TEST test/gate/distboot.sh
 	@sh test/gate/distboot.sh $(ho)/love
-# test_hearts -- the arm64 defconfig Image, byte-identical to kbuild+clang's; heavy, opt-in
+# test_hearts -- the arm64 defconfig Image by mooncc, booted to init under qemu; heavy, opt-in
 gate_love += test_hearts
 # test_hearts_boot -- hearts under qemu virt: chooser, helm as pid 1, three updates. heavy
 hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)

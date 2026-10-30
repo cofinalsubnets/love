@@ -2287,6 +2287,70 @@
               b)
        b3 (two? b2 && sspfn? ps prms <b2 ? [(sspw ps <b2 (two? sig ? <sig 'int)) <>b2] b2)
        (two? b3 ? [['fn name prms <b3] <>b3]))
+   ; a static definition's body waits as ('lazy ts n rstr ssp qs), its n tokens from `{` and what
+   ; pfbody reads of the form (the params' staged qualifier marks taken along), and is parsed at
+   ; the unit's end only if the unit can reach it (lzres). a body that declares a tag or a
+   ; typedef is parsed where it stands
+   (pfdef ps name prms ts)
+    (: sg (peep (ps 'sigs) name ())
+       sf (peep (ps 'sfns) name ())
+       n (peep ps 'lazy () && (peep ps 'curstat () || sf) && sf != 'used && !(peep ps 'curused ())
+          && !(3 < #sg && sg 3 = 'ms) && peekp ts "{" ? (lzlen ts))
+       (charm? n ?
+          (: qs (foldl (a \ p \ (: nm <p q (peep (ps 'qstage) nm 'none)
+                                   (string? nm && q != 'none ? (pull (ps 'qstage) nm 0, [nm q] . a) a)))
+                       () prms)
+             [['fn name prms ['lazy ts n (peep ps 'currstr ()) (peep ps 'curssp ()) qs]] (drop n ts)])
+          (pfbody ps name prms ts)))
+   (lzlen ts)
+    (: (tag? l) (two? >l && (patt >l @ r (idat? r ? (two? >r && tp? <>r "{") (two? r && tp? <r "{"))))
+       (go l d k) (? (atom? l) ()
+                     (: t <l
+                        (? (tp? t "{") (go >l (d + 1) (k + 1))
+                           (tp? t "}") (d = 1 ? (k + 1) (go >l (d - 1) (k + 1)))
+                           (tkw? t 'typedef) ()
+                           (tkk t = 'kw && elem (tkv t) '(struct union enum) && tag? l) ()
+                           (go >l d (k + 1)))))
+       (go ts 0 0))
+   ; the names a string may hold: an asm text's identifiers
+   (lzidws s acc)
+    (: (idc? c) (c = 95 || 48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
+       (go i j acc) (? (#s <= i) (j < i ? (snip s j i . acc) acc)
+                       (idc? (s i)) (go (i + 1) j acc)
+                       (go (i + 1) (i + 1) (j < i ? (snip s j i . acc) acc)))
+       (go 0 0 acc))
+   ; the unit's items, newest first, their reachable lazy bodies parsed and the rest dropped.
+   ; reach starts at every other item, the hoisted externs and the alias targets, and runs
+   ; through a body's tokens. -> items | 'lazyfail
+   (lzres ps acc)
+    (: (lz? f) (<f = 'fn && two? <>>>f && <<>>>f = 'lazy)
+       lzt (foldl (t \ f \ (lz? f ? (pin t <>f f) t)) {} acc)
+       (refs x asm acc) (? (string? x) (asm ? (lzidws x (x . acc)) (x . acc))
+                           !(two? x) acc
+                           (: a (asm || <x = 'asm || <x = 'tasm) (refs >x a (refs <x a acc))))
+       (trefs l n acc) (? (n < 1 || atom? l) acc
+                          (: t <l
+                             (trefs >l (n - 1)
+                                    (? (tkk t = 'id) (tkv t . acc) (tkk t = 'str && string? (tkv t)) (lzidws (tkv t) acc) acc))))
+       reach {}
+       (visit nm) (? (reach nm) 0
+                     (two? (lzt nm)) (: _ (pin reach nm 1) lb (<>>>(lzt nm))
+                                        (foldl (_ \ n \ visit n) 0 (trefs <>lb <>>lb ())))
+                     0)
+       roots (foldl (a \ f \ (lz? f ? a (refs f () a))) (refs (ps 'hoist) () ()) acc)
+       _ (foldl (_ \ n \ visit n) 0 (roots + map (k \ ps 'alias k) (keys (ps 'alias))))
+       (one f) (: lb <>>>f
+                  _ (pins ps 'currstr (lb 3) 'curssp (lb 4))
+                  _ (map (q \ pin (ps 'qstage) <q <>q) (lb 5))
+                  r (pfbody ps <>f <>>f <>lb)
+                  _ (ps 'currstr @ rs (two? rs ? (pin (ps 'rstrs) <>f (rev rs))))
+                  _ (pins ps 'currstr () 'curssp ())
+                  (two? r ? <r 'lazyfail))
+       (go l out) (? (atom? l) out
+                     !(lz? <l) (go >l (<l . out))
+                     !(reach <><l) (go >l out)
+                     (one <l @ f (f = 'lazyfail ? f (go >l (f . out)))))
+       (go (rev acc) ()))
 
    ; an alloca where gen would find an operand parked on the stack (an argument, a store through
    ; a pointer) moves ahead of its statement into a temp. under && || ?:, a comma's right, a loop
@@ -2649,12 +2713,12 @@
                                                (two? rest ? [['proto name] <rest]
                                                   ((peep ps 'curstat () ? (pin (ps 'sfns) name 1)),
                                                    more aft ())))
-                                           (pfbody ps name <rp aft)))))
+                                           (pfdef ps name <rp aft)))))
                                (fn? fpty)                                ; returns a fn-ptr: <>fpty, params in fprm
                                 (: _ (pin (ps 'sigs) name (mksig <>fpty fprm))
                                    aft (patt (plabel ps ts2 name))
                                    (peekp aft ";" ? [['proto name] >aft]
-                                      (pfbody ps name <fprm aft)))
+                                      (pfdef ps name <fprm aft)))
                                ; a global declaration; the first declarator's stars came off `sr`
                                (one (patt (plabel ps (pgreg ps ts2 name (leadregister? ps ts)) name)) name (two? fpty ? fpty rty) @ first
                                   (two? first ? (more <>first [<first]))))))))))))
@@ -2702,11 +2766,14 @@
    ; a pass that filed an enum hint is parsed again, the forward names read as defined
    (cparse-o ts tgt dia opts)
     (: eh {}
-       (go n) (cparse-h ts tgt dia opts eh @ r
-                 (tally (keys eh) @ m (n < m ? (go m) r)))
-       (go 0))
-   (cparse-h ts tgt dia opts eh)
-    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp) 'ehint eh)
+       ; opts 'lazy: static bodies wait for reach (pfdef), the driver's choice; one that will not
+   ; parse sends the unit through again where it stands, for the error's site
+       (go n lz) (cparse-h ts tgt dia opts eh lz @ r
+                    (? (r = 'lazyfail) (go n ())
+                       (tally (keys eh) @ m (n < m ? (go m lz) r))))
+       (go 0 (opts 'lazy)))
+   (cparse-h ts tgt dia opts eh lz)
+    (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp) 'ehint eh 'lazy lz)
        toks (fsbody ts) spans (fspans ts)
        ; a unit with no `mode(M)` or `__mode__(M)` has no mode attribute, so modeat's walk
        ; of every declaration is skipped; pfail's re-parse walks it again
@@ -2788,9 +2855,11 @@
         ; entry back (C's tentative rule)
         (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
-                      [1 ['prog (ps 'hoist + rev acc + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
+                      (peep ps 'lazy () ? (lzres ps acc) acc) @ acc2
+                      (acc2 = 'lazyfail ? acc2
+                         [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)])
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)]))
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
