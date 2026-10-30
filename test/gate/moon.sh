@@ -1001,7 +1001,7 @@ taref() {
   printf "$1" > "$ho/.feat.c"
   moonrun -c -t "$2" -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "$3" || fail "file-scope asm: $4"
 }
-taref 'asm(".uleb128 5");\n' x64 "gas-directive" "an unread directive was not refused"
+taref 'asm(".stabs 1");\n' x64 "gas-directive" "an unread directive was not refused"
 taref 'asm(".data\\na: .long a - b\\n.text\\nb:");\n' x64 "gas-data" "a label difference across sections was not refused"
 taref 'int f(void){return 0;}\nasm(".data\\n.long f - .");\n' thumb2 "gas-data-pcrel" "a pc-relative word on arm32 was not refused"
 taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file-scope asm"
