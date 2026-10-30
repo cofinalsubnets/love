@@ -979,7 +979,7 @@ cok x64 '_Static_assert(1, "ok");' "a TU of one _Static_assert"
 cno x64 '_Static_assert(0, "boom");' "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an int reaches a pointer only as a null pointer constant
-cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' "an int returned where a pointer is owed was accepted"
+cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return f(0) != 0;}\n' "an int returned where a pointer is owed was accepted"
 cok x64 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return 0; }\nint m(void){return 0;}\n' "a CAST to the pointer type must still pass"
 
 # a file-scope bound that does not fold refuses by name, never laid as a pointer's worth
