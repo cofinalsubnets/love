@@ -1,16 +1,17 @@
 ; src/apps/lux/manage.l -- the manageHook dsl, after xmonad: the driver tiles a new window
 ; first, then a hook (ctx sh -> sh) may float, center or evict it. the combinators and
 ; actions are pure (test/law/lux.l); the predicates query X, so they and the default are
-; host-only. a body-less `:`, it all leaks to the driver.
+; host-only. a body-less `:` in the module lux, which the driver shares.
 ; ctx = (socket window screen-rect win-geom)
 
 ; the combinators are operators: `pred -?> act`, `p <||> q`. grip stands in its own form:
 ; opfix factors a whole form at once, so a row pinned inside the `:` would land too late.
 ; <||> sits in the logical band with ||, -?> just under it; 2 is the lane (binary infix),
 ; the band positive for right-handed
-(borrow 'xwire)   ; src/apps/lux/wire.l
 (grip 2 '<||> 30)
 (grip 2 '-?> 25)
+(module 'lux
+(borrow 'xwire)   ; src/apps/lux/wire.l
 (:
    (mg-ctx s win screen geom) [s win screen geom]
    (mg-sock c) (c 0)  (mg-win c) (c 1)  (mg-screen c) (c 2)  (mg-geom c) (c 3)
@@ -77,3 +78,4 @@
             <||> class-of? (mg-classes floats))
            -?> do-float)])])
    manage-default (manage-for mg-center-def mg-float-def ()))
+) ; module lux
