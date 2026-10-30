@@ -5,6 +5,7 @@
 set -u
 love=${1:-out/love}
 [ -x "$love" ] || { echo "roster: no $love"; exit 1; }
+case $love in /*) ;; *) love=$PWD/$love ;; esac
 w=$(mktemp -d) || exit 1
 trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL roster: $*"; exit 1; }
