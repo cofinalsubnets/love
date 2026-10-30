@@ -10,6 +10,7 @@
    inames {}                                       ; a macro name -> its interned string
    guards {}                                       ; a header's path -> (text guard), the guard () when it has none
    specials {"__LINE__" 1 "__COUNTER__" 1 "_Pragma" 1}   ; the names expand answers itself, though no macro spells them
+   relexed {}                                      ; a ## paste's spelling -> its token's (kind val): one lex a spelling
    m64 18446744073709551616                        ; 2^64: #if arithmetic is 64-bit (C11 6.10.1)
    h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
    b32 4294967296                                  ; 2^32: the limb cbit splits on
@@ -117,7 +118,9 @@
 
    ; -- lex a spelling back into one token (## paste result), keeping the spelling --
    (relex s line)
-    (clex s @ [_ (t . _)] [<t <>t line () s])   ; clex answers (1 toks) -- reach inside
+    (peep relexed s () @ kv
+       (two? kv ? [<kv <>kv line () s]
+          (clex s @ [_ (t . _)] (: _ (pin relexed s [<t <>t]) [<t <>t line () s]))))   ; clex answers (1 toks) -- reach inside
 
    ; -- split off the first logical line (tokens sharing the head's line no.) --
    (linesplit toks) (: ln (lof <toks)
