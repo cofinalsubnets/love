@@ -1994,7 +1994,8 @@
    (specall def apv seen defs)
     (: nm <def ps <>def bd <>>def sz (sw apv)
        w (sanc nm seen) n (peep sfuel 'n 0)
-       (? (0 <= w && w <= sz) (sdyn (nm . map sreify apv))               ; no strict descent -> residual call
+       (? (#apv != #ps) (sdyn (nm . map sreify apv))                      ; a partial or over-full call is no body to unfold
+          (0 <= w && w <= sz) (sdyn (nm . map sreify apv))               ; no strict descent -> residual call
           !n (sdyn (nm . map sreify apv))                                 ; fuel out -> residual call
           (pin sfuel 'n (n - 1), spe bd (szipenv ps apv) ((nm . sz) . seen) defs)))
    (spe x env seen defs)                                                          ; the partial evaluator
