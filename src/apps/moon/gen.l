@@ -8144,9 +8144,9 @@
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (imgbytes g ty val @ b (bad? b ? 'bad (b + zeros (w - imbytelen b))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
-    (: span (aup (tsz g ty) (wsize g))         ; round to the word (8 on x64/a64, 4 on t32)
-       raw (imgbytes g ty ini)
-       (bad? raw ? 'bad (raw + zeros (span - imbytelen raw))))
+    (: raw (imgbytes g ty ini)
+       ; round to the word (8 on x64/a64, 4 on t32), past a flexible array's initializer too
+       (bad? raw ? 'bad (: n (imbytelen raw) (raw + zeros (aup (max (tsz g ty) n) (wsize g) - n)))))
 
    ; the inline-asm register file (cgasm; cgdecl reads it for a register variable's pin)
    asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
@@ -10322,7 +10322,10 @@
                    (x @ ('var nm) (peep sfns nm () && 1)
                         (('asm || 'tasm) . _) 1
                         (rel? <x || rel? >x)))
-       _ (map (f \ (<f = 'fn ? (respell f @ r (rel? r ? (scan (lprop g (dprune !(ilp32? g) (e \ ()) (lprop g r)))) (scan r)))
+       ; only a fn glay may lay counts (cgreach): a header's unused static inline is neither scanned
+       ; nor substituted
+       reach (g 'reach)
+       _ (map (f \ (<f = 'fn ? (reach <>f ? (respell f @ r (rel? r ? (scan (lprop g (dprune !(ilp32? g) (e \ ()) (lprop g r)))) (scan r))) 0)
                      (scan f))) fs)
        (spelt? nm) (any (t \ string? t && 1 < #(split nm t)) (asms 't))
        w64 !(ilp32? g)
@@ -10339,7 +10342,29 @@
                                                      ? ([<p ['cast <>p ['num k]]] . acc) acc))))
                  ks (go ps 0 ())
                  (two? ks ? ([<f <>f <>>f (psub ks body)] + >>>>f) f))))
-       (map (f \ (<f = 'fn ? (one f) f)) fs))
+       (map (f \ (<f = 'fn && reach <>f ? (one f) f)) fs))
+   ; the fns glay may lay, fn name -> 1: each one no cut leaves (an export, a used or aliased
+   ; static), then every name a reached body or an initializer holds and every word an asm spells,
+   ; to closure. a superset of the laid: propagation and the splice only drop names
+   (cgreach fs sfns als)
+    (: fnx (foldl (t \ f \ (<f = 'fn ? (pin t <>f f) t)) {} fs)
+       atg (map (k \ als k) (keys als))
+       (idc? c) (c = 95 || 48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
+       (idws s acc) ((: (go i j acc) (? (#s <= i) (j < i ? (snip s j i . acc) acc)
+                                        (idc? (s i)) (go (i + 1) j acc)
+                                        (go (i + 1) (i + 1) (j < i ? (snip s j i . acc) acc))))
+                     0 0 acc)
+       (refs x asm acc) (? (string? x) (asm ? (idws x (x . acc)) (x . acc))
+                           !(two? x) acc
+                           (: a (asm || <x = 'asm || <x = 'tasm) (refs >x a (refs <x a acc))))
+       reach {}
+       (visit nm) (? (reach nm) 0
+                     (two? (fnx nm)) (: _ (pin reach nm 1) (foldl (_ \ n \ visit n) 0 (refs (fnx nm) () ())))
+                     0)
+       (root? f) (? (<f != 'fn) (foldl (_ \ n \ visit n) 0 (refs f () ()))
+                    ((peep sfns <>f 'no @ s (s = 'no || s = 'used)) || elem <>f atg) (visit <>f)
+                    0)
+       (foldl (_ \ f \ root? f) 0 fs, reach))
    (pwrites x acc) (? !(two? x) acc
                       (x @ (('asn || 'post) . ('var v) . _) (pwrites >>x (v . acc))
                            ('rmw . _ . ('var v) . _) (pwrites >>>x (v . acc))
@@ -11646,8 +11671,10 @@
                     (globs >gs want zm (acc + (1 < an ? [['align an]])
                                            + als + [['label lbl]]
                                            + (? (elem want '("love_nifs" ".love.image")) [['raw bytes]]
-                                                (elem want '(".data" ".bss" ".rodata")) (exact (tsz g ty) bytes)
-                                                [<(exact (tsz g ty) bytes)])))))))   ; a named stream: no word's pad past the object
+                                                (elem want '(".data" ".bss" ".rodata")) (exact (own ty init) bytes)
+                                                [<(exact (own ty init) bytes)])))))))   ; a named stream: no word's pad past the object
+       ; an object's own bytes: its type's, or more where a flexible array's initializer runs past it
+       (own ty init) (max (tsz g ty) (imbytelen (imgbytes g ty init)))
        ; an image as its object's own bytes, and the word's padding past them apart: the object
        ; writer reads a symbol's size up to the align (modpost holds a device table to it)
        (exact n bs)
@@ -11777,6 +11804,8 @@
        noinls (two? xtra && 6 < #xtra ? (xtra 6))
        ; -fno-inline outranks always_inline: the flag is an instrument
        nolin (two? xtra && 9 < #xtra ? (xtra 9))
+       ; what glay may lay: an unreached fn is judged for no splice
+       _ (pin g 'reach (cgreach <>ast (two? xtra ? <xtra {}) (g 'alias)))
        (recfns fs) (!(two? fs) ? 1
                       (<fs @ f
                          (elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
@@ -11784,7 +11813,7 @@
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
                           ; ..and one that is a single `return E`, for kcall to answer where E is one constant
                           (<f = 'fn && nelem <>f weaks ? ((f 3) @ ('blk . is . _) (two? is && !(two? >is) && <<is = 'ret && two? >(<is) ? (pin (g 'fnret) <>f <>(<is)) 0) 0) 0),
-                          (<f = 'fn && !nolin &&
+                          (<f = 'fn && !nolin && g 'reach <>f &&
                            nelem <>f weaks &&
                            nelem <>f noinls ?
                              ; judged as it would splice: dead arms pruned, a tail past a return cut
