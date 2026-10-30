@@ -6066,8 +6066,11 @@
                    (db = 0 ? () (map (y \ nbor y db) (lows ((lx | bd i) & mm)))),
                    w2 (i + 1))))
        sm (foldl (a \ m \ pin a (t m) (peep a (t m) (peep ix (t m) 0) | ix m)) {} ms)
-       ; the float lane trusts no first assignment: its parks and wide homes share f3..f7 until coloured
-       (fixed? m) (: P (t m) (gp && (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0) || !gp && peep g 'fwfix {} m))
+       ; the float lane trusts no first assignment in its file: its parks and wide homes share f3..f7 until
+       ; coloured. a seat outside it keeps its register (a64's callee-saved homes), x64's seats past it none
+       (fixed? m) (: P (t m)
+                     (? gp (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0)
+                        (nelem P file && nelem P fover9 || peep g 'fwfix {} m)))
        col {}
        (cof n9) (t n9 ? (col n9) n9)
        (pick m)
@@ -8237,7 +8240,7 @@
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (nom? apin ? [apin]) . env2)
               ; a cs home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow
-              _ (hreg && !(two? hreg) && nelem hreg (cspool g) && nelem hreg (fcspool g) && (!(fhomable? ty) || ty = 'double && fwrap? g) && !(spr g <p) ?
+              _ (hreg && !(two? hreg) && nelem hreg (cspool g) && nelem (frp g hreg) (fcspool g) && (!(fhomable? ty) || ty = 'double && fwrap? g) && !(spr g <p) ?
                    (pin g 'homes ([(fmint? g hreg ? hreg (rp g hreg)) off <p] . g 'homes)))
               ; a constant init of a plain slotted scalar is one store-immediate; bool keeps its cvt (0/1)
               si9 (x64t? g && !hreg && <init = 'num && charm? <>init &&
