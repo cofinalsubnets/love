@@ -9,6 +9,7 @@
    ; bound mid-list reads `;; missing m64` in the #if evaluator (only the mooncc0 bake fails)
    inames {}                                       ; a macro name -> its interned string
    guards {}                                       ; a header's path -> (text guard), the guard () when it has none
+   specials {"__LINE__" 1 "__COUNTER__" 1 "_Pragma" 1}   ; the names expand answers itself, though no macro spells them
    m64 18446744073709551616                        ; 2^64: #if arithmetic is 64-bit (C11 6.10.1)
    h64 9223372036854775808                         ; 2^63: intmax's top, so the sign boundary
    b32 4294967296                                  ; 2^32: the limb cbit splits on
@@ -205,7 +206,9 @@
                         prevhh (go >ml t q1 (revcat (two? va ? va [(tok 'pmark "" line)]) acc))
                         (go >ml t q1 (revcat (ex 'va va) acc))))
                  (go >ml t q1 (t . acc)))))
-       (paste (go mb () () ()) line))
+       ; a ## operator, and so a placemarker, comes only from the body: one without either
+       ; answers as substituted
+       (go mb () () () @ r ((any (t \ pv? t "##" || idv? t "__VA_OPT__") mb) ? (paste r line) r)))
    (vaargs args params seps)                        ; the arg token-lists past the named params, comma-joined
     (: np #params
        (skip l k) (k < 1 || atom? l ? l (skip >l (k - 1)))
@@ -221,6 +224,8 @@
     (atom? toks ? ()
        (: t <toks rest >toks
           (? !(macat? t macs) (t . expand rest macs)
+             ; most names are no macro: one lookup says so
+             (atom? (mdef macs (macnm t)) && !(peep specials (vof t) 0)) (t . expand rest macs)
              (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
              ; __COUNTER__: per TU, in expansion order, in macs under a key no identifier spells
              (idv? t "__COUNTER__" && !(mdef macs "__COUNTER__"))
@@ -255,13 +260,15 @@
                                 (expand (mapadd body hs (lof t) (spaced? (ca 3)) + after) macs))))
                       (t . expand rest macs)))))))
    ; give body tokens the hideset + the invocation line; the last takes the invocation's own
-   ; spacing (w), not its definition line's end
+   ; spacing (w), not its definition line's end. a run of tokens shares one hideset, so the
+   ; last union (ph to pu) is kept for the next
    (mapadd toks hs line w)
-    (atom? toks ? ()
-       (<toks @ t
-          (atom? >toks ? [(w ? [(kof t) (vof t) line (hunion (hof t) hs) (sof t) 1]
-                             [(kof t) (vof t) line (hunion (hof t) hs) (sof t)])]
-             (retok t line (hunion (hof t) hs) . mapadd >toks hs line w))))
+    (: (go l ph pu)
+        (? (atom? l) ()
+           (: t <l h (hof t) u (h == ph ? pu (hunion h hs))
+              (atom? >l ? [(w ? [(kof t) (vof t) line u (sof t) 1] [(kof t) (vof t) line u (sof t)])]
+                 (retok t line u . go >l h u))))
+       (go toks [0] ()))                     ; a fresh cell, never a hideset
    ; a hideset holds interned names, found by identity. the union is h's names hs lacks, then
    ; hs; often h is a tail of hs already
    (iname nm) (inames nm @ c (string? c ? c (: _ (pin inames nm nm) nm)))
