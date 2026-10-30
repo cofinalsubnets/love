@@ -305,6 +305,11 @@ readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
 moonrun -o "$ho/.tlsb" test/cc/tls/bare.c "$ho/.tlsp2.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
   || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link bare.c"; }
 "$ho/.tlsb" || fail "tls: a program calling no libc read its thread-locals wrong (exit $?)"
+# ..but mooncc's __thread is a plain global, and the link refuses its read of gcc's
+printf 'extern __thread int tl_ext;\nint main(void) { return tl_ext; }\n' > "$ho/.tlsplain.c"
+moonrun -o "$ho/.tlsplain" "$ho/.tlsplain.c" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
+  && fail "tls: a plain read of gcc's thread-local linked"
+grep -q link-tls-plain "$ho/.tls.log" || { cat "$ho/.tls.log" >&2; fail "tls: a plain read of a thread-local was not refused by name"; }
 
 # ms_abi across compilers: gcc's definitions and calls against mooncc's trampolines and shuffles
 $cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peerms.o" test/cc/msabi/peer.c \
@@ -974,7 +979,7 @@ cok x64 '_Static_assert(1, "ok");' "a TU of one _Static_assert"
 cno x64 '_Static_assert(0, "boom");' "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an int reaches a pointer only as a null pointer constant
-cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' "an int returned where a pointer is owed was accepted"
+cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return f(0) != 0;}\n' "an int returned where a pointer is owed was accepted"
 cok x64 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return 0; }\nint m(void){return 0;}\n' "a CAST to the pointer type must still pass"
 
 # a file-scope bound that does not fold refuses by name, never laid as a pointer's worth

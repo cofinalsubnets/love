@@ -5762,15 +5762,17 @@
                    (w128? g && (d128? rt || x64? g && ipair? g rt) ? '(r0 r1 r2 f0 f1) '(r0 r1 f0 f1))))
    ; the blanket cases filter mints out: a mint live across a call must read as crossing, not
    ; be read+def'd into a false kill. inert post-vrfix
+   (ral? g f) (!(x64? g) || <f != 'call || (peep (g 'sigs) (show <>f) () @ sg (!(two? sg) || sg 2)))
    (lvtx g f u)                                     ; one form's (reads defs) | 'bar
     (!(two? f) ? [() ()]
        (<f @ op
           (? (elem op lvquiet) [() ()]
              (elem op '(call callr callm sys))
               (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c
-                 ; narrow (the allocator's): a call reads its argument file and r0 (x64's al), a callr its target too
+                 ; narrow (the allocator's): a call reads its argument file and r0 (x64's al, unless a
+                 ; direct callee's signature is known fixed), a callr its target too
                  (peep g 'lvnarrow () && op != 'sys ?
-                    [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 || nelem r9 (lvgp g)) c +
+                    [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 && ral? g f || nelem r9 (lvgp g)) c +
                       (op = 'callr && nom? <>f ? [<>f])) c]
                     [c c]))
              (retx? f) [(lvret g + csregs g) ()]
@@ -5871,12 +5873,25 @@
           (bar9 ? 'no (fix (), [lin lot tx]))))
    (lvout g fs) ; index -> the registers live out of it | 'no
     (lvio g fs @ 'no 'no r <>r)
-   ; the staging webs (x64, a64): a def of r0 and the reads it reaches, all explicit operands of plain
-   ; forms inside the body, never live into a join, an exit or an unnamed read, become one mint
-   ; bound to r0 that valloc may move. a web nothing reads stays (al before a variadic call)
-   (wpos f)                                         ; -> [defs reads both] operand positions | ()
+   ; the staging webs (x64, a64): the defs of r0 that reach a common read, with all the reads they reach,
+   ; become one mint bound to r0 that valloc may move, when each is an explicit operand of a plain form
+   ; inside the body. a web reaching an exit, an unnamed read or the entry stays, and so does one
+   ; nothing reads (al before a variadic call)
+   (wpos g f)                                       ; -> [defs reads both] operand positions | ()
     (<f @ op
        (? (elem op '(li la laa)) [[1] () ()]
+          (elem op fldops) [() [2] ()]
+          (elem op fstops) [() [1] ()]
+          (elem op fxops) [() [2 3] ()]
+          (elem op fstxops) [() [1 2] ()]
+          (elem op '(cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss)) [() [2] ()]
+          (elem op '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui)) [[1] () ()]
+          (op = 'movdxr) [() [2] ()]
+          (op = 'movdrx) [[1] () ()]
+          ; a 32-bit target's movq names the low half of a pair
+          (elem op '(movqxr movqrx) && ilp32? g) ()
+          (op = 'movqxr) [() [2] ()]
+          (op = 'movqrx) [[1] () ()]
           (op = 'mov || elem op ldops9 || elem op leaops) [[1] [2] ()]
           (elem op xops || elem op aluops || elem op '(adds subs)) [[1] [2 3] ()]
           (op = 'set) [[2] () ()]
@@ -5885,7 +5900,7 @@
           (elem op siops) [() [1] ()]
           (elem op '(cmp test cmprm)) [() [1 2] ()]
           (op = 'cmpm) [() [1 3] ()]
-          (elem op unops || elem op '(shl shr sar)) [() () [1]]
+          (elem op unops || elem op '(shl shr sar) || elem op vshops) [() () [1]]
           (op = 'cmov) [() [3] [2]]
           (elem op x4ops) [() [2 3] [1]]
           (elem op m4ops) [() [2] [1]]
@@ -5902,7 +5917,7 @@
        (mk _) (: k9 (peep g 'vrn 0)
                  m (name "%v\(k9)")
                (pin g 'vrn (k9 + 1), pin (g 'vrt) m 'r0, pin vw m 1, m))
-       (vwebc g hd body tl 'r0 eff wpos mk))
+       (vwebc g hd body tl 'r0 eff (wpos g) mk))
    ; the float lane's twin over f0 or f1: its copies colour the protocol pair away. a write that
    ; keeps the upper lane continues the web it lands in
    (fwpos f) (<f @ op
@@ -5920,7 +5935,7 @@
                        (xjmp? f labt) [1 ()]
                        (frd g f @ 'bar [1 ()] d [(elem R <d) (elem R <>d)]))
        (vwebc g hd body tl R eff fwpos (_ \ fmint g R)))
-   ; the core: webs of R through the body, each a fresh mint (mk) where every touch of R in its run
+   ; the core: webs of R through the body, each a fresh mint (mk) where every touch of R in the web
    ; is a site the position table names; eff answers a form's [reads? defs?] of R
    (vwebc g hd body tl R eff wpos mk)
     (: fs (hd + body + tl)
@@ -5937,42 +5952,87 @@
                         [(i + 1)]))
        ef {} sc {}
        _ (foldl (i \ f \ (pin ef i (eff labt f), pin sc i (succ f i), i + 1)) 0 fs)
-       lin {}
-       (pass i ch) (? (i < 0) ch
-                      (: e (ef i)
-                         lv (<e || (!(<>e) && foldl (a \ s \ a || peep lin s ()) () (sc i)))
-                       (lv && !(lin i) ? (pin lin i 1, pass (i - 1) 1) (pass (i - 1) ch))))
-       (fix9 _) (pass (n - 1) () ? (fix9 ()) 0)
-       _ (fix9 ())
+       ft {}
+       _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
        (at f l) (filter (p \ f p = R) l)
        (rpos f) (: (go l k) (? !(two? l) () (<l = R) (k . go >l (k + 1)) (go >l (k + 1))) (go >f 1))
-       sites {}                                      ; web -> ([i pos] ..)
-       bad {}
-       used {}
-       (add w i ps) (map (p \ pin sites w ([i p] . peep sites w ())) ps)
-       (walk i cur nw)
-        (? (i >= n) nw
-           (: f (fs i)
-              e (ef i)
-              ps (k0 <= i && i < k1 && two? f ? (wpos f) ())
-              rp (two? f ? (rpos f) ())
-              dp (two? ps ? (at f <ps))
-              up (two? ps ? (at f (<>ps + <>>ps)))
-              ok (two? ps && #rp = #dp + #up && (two? up || !(<e)) && (two? dp || two? <>>ps || !(<>e)))
-              (? ok
-                  (: _ (cur >= 0 && two? up ? (add cur i up, pin used cur 1))
-                     (two? dp ? (add nw i dp, walk (i + 1) nw (nw + 1))
-                        (walk (i + 1) cur nw)))
-                 (: _ (cur >= 0 && (two? rp || <e || (elem <f '(jmp br jmpt label) && lin i)) ? (pin bad cur 1))
-                    (walk (i + 1) (<>e || elem <f '(jmp jmpt label) || xit? f ? -1 cur) nw)))))
-       nw (walk 0 -1 0)
+       ; a form's sites: [ok dp up both mentions]. ok when every mention of R is a listed operand
+       st {}
+       _ (map (i \ (: f (ft i)
+                      e (ef i)
+                      ps (k0 <= i && i < k1 && two? f ? (wpos f) ())
+                      rp (two? f ? (rpos f) ())
+                      dp (two? ps ? (at f <ps))
+                      up (two? ps ? (at f (<>ps + <>>ps)))
+                      ok (two? ps && #rp = #dp + #up && (two? up || !(<e)) && (two? dp || two? <>>ps || !(<>e)))
+                    (pin st i [ok dp up (two? ps && two? (at f <>>ps)) (two? rp)])))
+              (jot n))
+       (dfs? i) (: s9 (st i) (<>(ef i) || <s9 && (two? <>s9 || s9 3)))
+       ; an unlisted read: one the table misses, a jump to no label here, or a mention that may read
+       (badr? i) (: s9 (st i) e (ef i) (!(<s9) && (<e || s9 4 && !(<>e)) || any (j \ j < 0) (sc i)))
+       (rds? i) (: s9 (st i) (<(ef i) || <s9 && two? <>>s9 || badr? i))
+       ; the defs of R, numbered from 1; 0 stands for whatever reaches the entry
+       dn {}
+       _ (foldl (k \ i \ (dfs? i ? (pin dn i k, k + 1) k)) 1 (jot n))
+       ; reaching defs by block: a label, or the form after a jump or an exit, starts one
+       (ends? f) (two? f && (elem <f '(jmp br jmpt) || xit? f))
+       bof {}
+       nb9 (1 + foldl (b \ i \ (: f (ft i)
+                                    b2 (i = 0 || two? f && <f = 'label || ends? (ft (i - 1)) ? (b + 1) b)
+                                  (pin bof i b2, b2)))
+                       -1 (jot n))
+       bl {}                                         ; block -> its forms
+       _ (map (i \ pin bl (bof i) (i . peep bl (bof i) ())) (rev (jot n)))
+       bp {}                                         ; block -> its preds
+       _ (map (b \ (: lf (peep (bl b) (#(bl b) - 1) ())
+                     (map (j \ (j >= 0 ? (pin bp (bof j) (b . peep bp (bof j) ())))) (sc lf))))
+              (jot nb9))
+       bg {}                                         ; block -> its last def
+       _ (map (b \ map (i \ (peep dn i 0 @ k (k > 0 ? (pin bg b k)))) (bl b)) (jot nb9))
+       bin {} bout {}
+       (fw b ch) (? (b >= nb9) ch
+                    (: ps9 (peep bp b ())
+                       s9 (foldl (a \ q \ lvun a (peep bout q ())) (b = 0 || !(two? ps9) ? [0] ()) ps9)
+                       o (peep bg b 0 @ k (k > 0 ? [k] s9))
+                     (pin bin b s9,
+                      (lvsame o (peep bout b [-1]) ? (fw (b + 1) ch) (pin bout b o, fw (b + 1) 1)))))
+       (fix9 _) (fw 0 () ? (fix9 ()) 0)
+       _ (fix9 ())
+       ; the webs: every def a read reaches is one web, and a def that also reads its operand (both)
+       ; joins what reaches it. k 0 is the entry: a web it reaches stays R
+       par {}
+       (root k) (: p (peep par k k) (p = k ? k (root p)))
+       (join a b) (: ra (root a) rb (root b) (ra != rb ? (pin par ra rb)))
+       bad {} used {}
+       rdk {}                                        ; a read's reaching defs
+       _ (map (b \ foldl (cur \ i \
+                            ((rds? i ?
+                                (pin rdk i cur,
+                                 (two? cur ? (map (k \ join <cur k) >cur)),
+                                 (peep dn i 0 @ k (k > 0 && (st i 3) && two? cur ? (join k <cur))))),
+                             peep dn i 0 @ k (k > 0 ? [k] cur)))
+                         (peep bin b ()) (bl b))
+              (jot nb9))
+       _ (pin bad (root 0) 1)
+       _ (map (i \ (: s9 (st i) ks (peep rdk i ())
+                    ((two? ks && badr? i ? (pin bad (root <ks) 1)),
+                     (two? ks && <s9 && two? <>>s9 ? (pin used (root <ks) 1)),
+                     (peep dn i 0 @ k (k > 0 && (!(<s9) || s9 3 && !(two? ks)) ? (pin bad (root k) 1))))))
+              (jot n))
+       mt {}                                         ; root -> its mint
+       (mof k) (: r (root k)
+                  (? (bad r || !(used r)) ()
+                     (peep mt r () || (mk r @ m (pin mt r m, m)))))
        sub {}                                        ; index -> ([pos mint] ..)
-       _ (: (mw w) (? (w >= nw) ()
-                      (bad w || !(used w)) (mw (w + 1))
-                      (mk w @ m
-                         (map (s \ pin sub <s ([<>s m] . peep sub <s ())) (sites w),
-                          mw (w + 1))))
-            (mw 0))
+       _ (map (i \ (: s9 (st i)
+                    (<s9 ?
+                       (: ks (peep rdk i ())
+                          mr (two? ks && two? <>>s9 ? (mof <ks))
+                          md (peep dn i 0 @ k (k > 0 ? (mof k)))
+                          ps9 ((mr ? (map (q \ [q mr]) <>>s9)) + (md && !(s9 3) ? (map (q \ [q md]) <>s9)))
+                        ((md ? (pin g 'vwdef (R . peep g 'vwdef ()))),
+                         (two? ps9 ? (pin sub i ps9)))))))
+              (jot n))
        (re f l) (two? l ? (re (reop f <<l <>(<l)) >l) f)
        (: (go l i) (two? l ? (re <l (peep sub i ()) . go >l (i + 1)))
           (go body k0)))
@@ -5987,10 +6047,19 @@
    ; the ops whose dest may share the second source: x64's holo lays d = b as d op= a when
    ; the op commutes; a64's alu is three-address throughout
    (vacomm g) (a64? g ? '(add sub and or xor adds subs imul) '(add or and xor adds imul))
+   ; a web the colouring misses keeps r0, the rest colouring around it, a few rounds
+   ; x64's wide multiply lays its high half through rdx, which it saves round itself: its dest is never r2
    (valloc g fs)
     (: file (vafile g) cm9 (vacomm g)
-       (vcol g fs (g 'vrt) file (f \ lvtx g f file) '(mov)
-             (f \ l \ filter (y \ vpos f y != 2 && !(vpos f y = 3 && elem <f cm9)) l) 1))
+       fx (: t9 (peep g 'vwfix {}) (pin g 'vwfix t9, t9))
+       (bdf f l) (filter (y \ vpos f y != 2 && !(vpos f y = 3 && elem <f cm9)) l +
+                  (x64? g && elem <f '(mulh umulh) ? '(r2) ()))
+       (go k) (: _ (pin g 'vbad ())
+                 ok (vcol g fs (g 'vrt) file (f \ lvtx g f file) '(mov) bdf 1)
+                 wb (filter (m \ peep g 'vweb {} m) (g 'vbad))
+               (? (ok || k = 0 || !(two? wb)) ok
+                  (map (m \ pin fx m 1) wb, go (k - 1))))
+       (go 4))
    ; ..the core over one file: t the mints' map, tx a form's (reads defs) | 'bar, cop the copies,
    ; (bdf f reads) the reads a def may not share, gp the gp lanes' own rules (the narrow call, r0's store)
    (vpos f y) (: (go l k) (? !(two? l) -1 (<l == y) k (go >l (k + 1))) (go >f 1))
@@ -6069,7 +6138,7 @@
        ; the float lane trusts no first assignment in its file: its parks and wide homes share f3..f7 until
        ; coloured. a seat outside it keeps its register (a64's callee-saved homes), x64's seats past it none
        (fixed? m) (: P (t m)
-                     (? gp (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0)
+                     (? gp (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0 || peep g 'vwfix {} m)
                         (nelem P file && nelem P fover9 || peep g 'fwfix {} m)))
        col {}
        (cof n9) (t n9 ? (col n9) n9)
@@ -6087,7 +6156,7 @@
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
                  (pick <l @ r (? r (pin col <l r, go >l)
-                                 !gp (pin g 'fbad (<l . g 'fbad), go >l, ()))))
+                                 (: k9 (gp ? 'vbad 'fbad) (pin g k9 (<l . peep g k9 ()), go >l, ())))))
        (ok1 &&
           (: _ (fix9 ())
              _ (w2 0)
@@ -9136,6 +9205,8 @@
     'vrn 0                     ; the vreg mint counter (the shadow: ralloc mints, vrfix resolves)
     'vdone ()                  ; vpre assigned this build's mints
     'vweb {}                   ; ..and the staging webs among them
+    'vwfix {} 'vbad ()         ; ..those kept on r0 after a colouring missed, and the misses
+    'vwdef ()                  ; ..and the registers whose defs a web took
     'vrt {}            ; ...and its per-build map, mint -> physical
     'frn 0 'frt {}     ; the float file's mints and their map
     'fmn {} 'fbad ()   ; ..a home's mint -> its name, and the mints the colouring found no register for
@@ -11452,9 +11523,10 @@
                      [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                     a4)))))
        ; the quad-ride check: a ridden r0-r3 arrival's only legitimate def is its entry cvt; any other
-       ; def falsifies the ride, and a form rdsp cannot read ('bar) counts as a hit
+       ; def falsifies the ride, a web's too, and a form rdsp cannot read ('bar) counts as a hit
        (qclob? fs qrr)
-        (two? qrr ?
+        (? !(two? qrr) ()
+           (any (r \ elem r (g 'vwdef)) qrr) 1
            (: (go l) (two? l ?
                         (<l @ f9
                            (!(two? f9) ||
