@@ -2287,15 +2287,20 @@
               b)
        b3 (two? b2 && sspfn? ps prms <b2 ? [(sspw ps <b2 (two? sig ? <sig 'int)) <>b2] b2)
        (two? b3 ? [['fn name prms <b3] <>b3]))
-   ; a static definition's body waits as ('lazy ts n rstr ssp), its n tokens from `{` and what
-   ; pfbody reads of the form, and is parsed at the unit's end only if the unit can reach it
-   ; (lzres). a body that declares a tag or a typedef is parsed where it stands
+   ; a static definition's body waits as ('lazy ts n rstr ssp qs), its n tokens from `{` and what
+   ; pfbody reads of the form (the params' staged qualifier marks taken along), and is parsed at
+   ; the unit's end only if the unit can reach it (lzres). a body that declares a tag or a
+   ; typedef is parsed where it stands
    (pfdef ps name prms ts)
     (: sg (peep (ps 'sigs) name ())
        sf (peep (ps 'sfns) name ())
        n (peep ps 'lazy () && (peep ps 'curstat () || sf) && sf != 'used && !(peep ps 'curused ())
           && !(3 < #sg && sg 3 = 'ms) && peekp ts "{" ? (lzlen ts))
-       (charm? n ? [['fn name prms ['lazy ts n (peep ps 'currstr ()) (peep ps 'curssp ())]] (drop n ts)]
+       (charm? n ?
+          (: qs (foldl (a \ p \ (: nm <p q (peep (ps 'qstage) nm 'none)
+                                   (string? nm && q != 'none ? (pull (ps 'qstage) nm 0, [nm q] . a) a)))
+                       () prms)
+             [['fn name prms ['lazy ts n (peep ps 'currstr ()) (peep ps 'curssp ()) qs]] (drop n ts)])
           (pfbody ps name prms ts)))
    (lzlen ts)
     (: (tag? l) (two? >l && (patt >l @ r (idat? r ? (two? >r && tp? <>r "{") (two? r && tp? <r "{"))))
@@ -2336,6 +2341,7 @@
        _ (foldl (_ \ n \ visit n) 0 (roots + map (k \ ps 'alias k) (keys (ps 'alias))))
        (one f) (: lb <>>>f
                   _ (pins ps 'currstr (lb 3) 'curssp (lb 4))
+                  _ (map (q \ pin (ps 'qstage) <q <>q) (lb 5))
                   r (pfbody ps <>f <>>f <>lb)
                   _ (ps 'currstr @ rs (two? rs ? (pin (ps 'rstrs) <>f (rev rs))))
                   _ (pins ps 'currstr () 'curssp ())
@@ -2760,11 +2766,12 @@
    ; a pass that filed an enum hint is parsed again, the forward names read as defined
    (cparse-o ts tgt dia opts)
     (: eh {}
-       ; a lazy body that will not parse is parsed again where it stands, for the error's site
+       ; opts 'lazy: static bodies wait for reach (pfdef), the driver's choice; one that will not
+   ; parse sends the unit through again where it stands, for the error's site
        (go n lz) (cparse-h ts tgt dia opts eh lz @ r
                     (? (r = 'lazyfail) (go n ())
                        (tally (keys eh) @ m (n < m ? (go m lz) r))))
-       (go 0 1))
+       (go 0 (opts 'lazy)))
    (cparse-h ts tgt dia opts eh lz)
     (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp) 'ehint eh 'lazy lz)
        toks (fsbody ts) spans (fspans ts)
