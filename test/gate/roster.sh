@@ -1,6 +1,7 @@
 #!/bin/sh
 # test/gate/roster.sh -- a bake by roster: units left out of the image stay verbs, raised off
-# /love at their first call, and a configured binary bakes them back in. takes the love binary.
+# /love at their first call; a configured binary reseeds to its own bytes and bakes them back
+# in. takes the love binary.
 set -u
 love=${1:-out/love}
 [ -x "$love" ] || { echo "roster: no $love"; exit 1; }
@@ -28,6 +29,12 @@ grep -q '^hexedit  *left ' "$w/u1" || fail "hexedit is not left out"
 grep -q '^usage: love torrent-show' "$w/r1" || fail "torrent-show did not raise: $(cat "$w/r1")"
 "$w/l1" hexedit < /dev/null > "$w/r2" 2>&1
 grep -q '^usage: hexedit' "$w/r2" || fail "hexedit did not raise: $(head -5 "$w/r2")"
+
+# the roster rides the image, so a configured binary reseeds to its own bytes
+"$w/l1" seed -g "$w/s" > "$w/seed" 2>&1 || fail "the seed: $(tail -20 "$w/seed")"
+grep -q 'baking the roster: --without hexedit,torrent' "$w/seed" || fail "the seed baked no roster: $(tail -5 "$w/seed")"
+grep -q '^;; fixpoint ok' "$w/seed" || fail "no fixpoint: $(tail -5 "$w/seed")"
+rm -rf "$w/s"
 
 # back in, from the configured binary's own roster
 "$w/l1" bake --with torrent -o "$w/l2" > "$w/b2" 2>&1 || fail "the bake back: $(tail -5 "$w/b2")"

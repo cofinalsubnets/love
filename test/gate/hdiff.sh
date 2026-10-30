@@ -47,19 +47,23 @@ for cc in "$@"; do
   "$cc" -c "$mtc" -o "$mtc".o > /dev/null 2>&1 || {
     gate_partly "test_hdiff: $cc has no musttail -- tco=1 is this lane's point, so SKIPPED, not passed"
     continue; }
+  # each cc builds out/cc from clean, so neither another cc's objects nor an old tree's
+  # stand in for its own; each step's output is kept in the log, and a failure shows its tail
+  log=out/.hdiff-$cc.log
+  rm -rf out/cc
   echo "  $cc: building love (HCC=1, tco=1)"
-  make --no-print-directory HCC=1 CC="$cc" host > /dev/null 2>&1 \
-    || fail "$cc could not build love"
+  make --no-print-directory HCC=1 CC="$cc" host > "$log" 2>&1 \
+    || { tail -20 "$log" >&2; fail "$cc could not build love (all of it in $log)"; }
   b=out/cc/love
   [ -x "$b" ] || fail "$cc laid no $b"
   # it answers: the corpus is the interpreter's business, this is the binary's.
   [ "$("$b" -e '(2 = 1 + 1)' 2>&1)" = 1 ] || fail "the $cc-built love does not answer"
   echo "  $cc: the quick host suite"
-  make --no-print-directory HCC=1 CC="$cc" test_host > /dev/null 2>&1 \
-    || fail "$cc: test_host"
+  make --no-print-directory HCC=1 CC="$cc" test_host >> "$log" 2>&1 \
+    || { tail -20 "$log" >&2; fail "$cc: test_host (all of it in $log)"; }
   echo "  $cc: vmret"
-  make --no-print-directory HCC=1 CC="$cc" vmret > /dev/null 2>&1 \
-    || fail "$cc: vmret -- an lvm_ kept a ret"
+  make --no-print-directory HCC=1 CC="$cc" vmret >> "$log" 2>&1 \
+    || { tail -20 "$log" >&2; fail "$cc: vmret -- an lvm_ kept a ret (all of it in $log)"; }
   ran="$ran $cc"
 done
 

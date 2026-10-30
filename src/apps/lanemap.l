@@ -11,8 +11,8 @@
 ;   (lanes-map _)   lanes.sh's chains and alone set, `chain A,B,..` and `alone A B ..` lines
 ;                   (love bee --lanes-map)
 ;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
-;                   targets of its recipe's $(MAKE) lines, read as written; and a test/ path a
-;                   recipe names -> the lanes whose recipe it is
+;                   targets of its recipe's $(MAKE) lines, read as written; and a path in the tree
+;                   a recipe names (src/, test/, bench/, doc/, web/) -> the lanes whose recipe it is
 ;   (lanes-plan paths baked covers)  the lanes a change owes, in run order: [[lane heavy? cost
 ;                   why] ..]. light before heavy, cheap first, a lane another runs dropped, test
 ;                   always and test_slow last. why is the paths that owed it: a rule's, or a
@@ -30,7 +30,7 @@
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
      ["" ["test/host/*" "test/gate/lanes.sh"] ["test_hostnif"]
-      "; a test/ path a lane's recipe in `test/test.mk` names owes that lane (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`)"]
+      "; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)"]
      ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["" ["src/love/snap.c"] ["test_boards"] ", whose links bake their own images through it"]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_quick"] ""]
@@ -85,25 +85,55 @@
    (lm-hit? baked p g) (g = "baked" ? (elem p baked) (lm-glob? g p))
 
    (lm-tests s) (filter (w \ starts? w "test_") (words s))
+   ; a recipe's word as a path in the tree: quotes and a shell's punctuation off its ends, and
+   ; none a make variable, a brace list or a glob is read as one
+   (lm-trim w) (: (cut? c) (elem c [34 39 40 41 59 96])
+                  (lo i) (? (i < #w && cut? (w i)) (lo (i + 1)) i)
+                  (hi i) (? (0 < i && cut? (w (i - 1))) (hi (i - 1)) i)
+                  a (lo 0)
+                  (snip w a (max a (hi #w))))
+   (lm-path w) (: v (lm-trim w)
+                  (? (any (c \ elem c [36 37 42 123]) (map v ^#v)) ()
+                     (any (d \ starts? v (d + "/")) ["src" "test" "bench" "doc" "web"]) v
+                     ()))
    (lm-joined ls)
     (rev (foldl (\ acc l (? (two? acc && ends? <acc "\\") ((snip <acc 0 (#<acc - 1) + " " + l) . >acc) (l . acc)))
                 () ls))
    (lanes-covers mk)
     (: (add t ns s) (foldl (\ t n (pin t n (peep t n () + lm-tests s))) t ns)
-       ; a test/ path a recipe line names, to the lanes it is the recipe of
+       ; a path in the tree a recipe line names, to the lanes it is the recipe of
        (named t ns s) (foldl (\ t w (: o (peep t w ()) (pin t w (o + filter (n \ !(elem n o)) ns))))
-                             t (filter (w \ starts? w "test/") (words s)))
+                             t (filter string? (map lm-path (words s))))
+       ; a target's name as written: letters, digits, _ - and a pattern's %
+       (tname? n) (all (c \ 47 < c < 58 || 96 < c < 123 || elem c [37 45 95]) (map n ^#n))
+       ; d keeps the words each target names a helper by, its prerequisites and its recipe's
+       ; $(MAKE) lines, as written
+       (dadd d ns ws) (foldl (\ d n (pin d n (peep d n () + ws))) d ns)
        (step st l)
-        (st @ [t cur]
-         (? (starts? l "\t") (? (two? cur) [(named (0 <= lm-from l "$(MAKE)" 0 ? (add t cur l) t) cur l) cur] st)
+        (st @ [t cur d]
+         (? (starts? l "\t")
+            (? !(two? cur) st
+               (0 <= lm-from l "$(MAKE)" 0) [(named (add t cur l) cur l) cur (dadd d cur (words l))]
+               [(named t cur l) cur d])
             (#l = 0 || starts? l "#") st
-            (: i (lm-from l ":" 0) ns (words (snip l 0 (i < 0 ? 0 i)))
-               (? ((i < 0) || !(two? ns) || any (n \ !(starts? n "test")) ns || (0 <= lm-from l "=" 0)) [t ()]
-                  [(add t ns (snip l (i + 1) #l)) ns]))))
+            (: i (lm-from l ":" 0) ns (words (snip l 0 (i < 0 ? 0 i)))   ps (words (snip l (i + 1) #l))
+               (? ((i < 0) || !(two? ns) || !(all tname? ns) || (0 <= lm-from l "=" 0)) [t () d]
+                  [(add t ns (snip l (i + 1) #l)) ns (dadd d ns ps)]))))
+       st (foldl step [{} () {}] (lm-joined (lines mk)))   cv0 <st   deps (st 2)
+       ; a helper target's recipe (waits, vmret, hostnif-%) is owed through the lanes that name
+       ; it, a pattern by its stem; one no lane names (mx, a generator) owes nothing. test_extra
+       ; is the opt-in gate before a merge, never a lane a change owes
+       lanes (filter (k \ starts? k "test" && k != "test_extra") (keys deps))
+       (users h) (: k (lm-from h "%" 0)   g (snip h 0 (max 0 k))
+                    (filter (L \ any (w \ w = h || (0 < k && 0 <= lm-from w g 0)) (peep deps L ())) lanes))
+       (via ns) (foldl (\ a n (: us (starts? n "test" ? [n] (users n))
+                                  (a + filter (u \ !(elem u a)) us)))
+                       () ns)
+       cv1 (foldl (\ t k (0 <= lm-from k "/" 0 ? (pin t k (via (t k))) t)) cv0 (keys cv0))
        ; ..and what a recipe runs through a script, where no $(MAKE) says so: gcshard.sh under
        ; GCS_BAKE runs test_gcstress's shards, so owing both runs the bake alone
-       cv (<(foldl step [{} ()] (lm-joined (lines mk))))   b (peep cv "test_gcstress_bake" ())
-       (pin cv "test_gcstress_bake" (elem "test_gcstress" b ? b (b + ["test_gcstress"]))))
+       b (peep cv1 "test_gcstress_bake" ())
+       (pin cv1 "test_gcstress_bake" (elem "test_gcstress" b ? b (b + ["test_gcstress"]))))
    ; every lane l runs, through its members' members too
    (lm-under covers l)
     (:- (go [l] ()) (go todo seen)

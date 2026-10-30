@@ -134,7 +134,10 @@ the verbs and modules each file added at that path. `love roster` reads it back 
 `src/apps/NAME.l` or `src/apps/NAME/`, past kore's table), with the units each one's files cite or
 borrow. `love bake --without U,.. [--with U,..] [-o OUT]` is the roster's bake: a left-out unit
 is a `lazy` form in the cat, its verbs pinned as stubs that read its files off `/love` at their
-first call, and a kept unit's needs stay kept. `test_roster` holds it.
+first call, and a kept unit's needs stay kept. A bake starts from the egg, so its image is a
+function of the code and the roster alone, and the roster rides the image: `love seed` on a
+configured binary rebuilds the default, bakes it again without the units its own image left
+out, and then holds it to the fixpoint. `test_roster` holds both.
 
 `love bake PATH` writes a plain image file instead of touching a binary. `love wake PATH
 prog.l args..` boots from a named image.
