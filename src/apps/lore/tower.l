@@ -37,13 +37,13 @@
    ; along it, and at a crossing the way along each. driving keeps to the right, so
    ; the west lane runs south and the south lane runs east
    (lane x y dx dy) (: i (x + w * y) l (peep (d 'lane) i '(0 0))
-                       (pin (d 'lane) i [(dx = 0 ? <l dx) (dy = 0 ? <>l dy)]))
+                       (pin (d 'lane) i [(dx @ 0 <l dx) (dy @ 0 <>l dy)]))
    _ (each xs (x \ each ^h (y \ (dput d x y 1, lane x y 0 1,
                                   dput d (x + 1) y 1, lane (x + 1) y 0 -1))))
    _ (each ys (y \ each ^w (x \ (dput d x y 1, lane x y -1 0,
                                   dput d x (y + 1) 1, lane x (y + 1) 1 0))))
    ; every road runs off the map: its border cell is glass, driven through and not walked
-   (glass x y) (1 = dat d x y ? (dput d x y 6))
+   (glass x y) (dat d x y @ 1 (dput d x y 6))
    _ (each xs (x \ (glass x 0, glass (x + 1) 0, glass x (h - 1), glass (x + 1) (h - 1))))
    _ (each ys (y \ (glass 0 y, glass (w - 1) y, glass 0 (y + 1), glass (w - 1) (y + 1))))
    ; a block between four streets: the wall ring is left as rock, the inside is floor
@@ -100,9 +100,9 @@
    (plat cx cy a b k) (pal (k % #pal) @ c
                          (rhomb cx cy a b (x \ y \ (dput d x y 8, pin (d 'tint) (x + w * y) c))))
    ; the stairway: bresenham from middle to middle, a step laid on the void either side
-   (step x y) (6 = dat d x y ? (dput d x y 7))
+   (step x y) (dat d x y @ 6 (dput d x y 7))
    (walk [ax ay] [bx by]) (:
-     dx |(bx - ax) dy (0 - |(by - ay))
+     dx |(bx - ax) dy -(|(by - ay))
      sx (ax < bx ? 1 -1) sy (ay < by ? 1 -1)
      (go x y e) (step (x - 1) y, step x y, step (x + 1) y,
                  x = bx && y = by ? ()
@@ -165,7 +165,7 @@
  plat-grey '("█" 252 245)
  plat-blue '("█" 33 24)
  step-face '("▒" 245 239)
- (plat-face x y lit c) (wear ((x + y) % 2 = 0 ? plat-grey c) lit)
+ (plat-face x y lit c) (wear ((x + y) % 2 @ 0 plat-grey c) lit)
 
 
 
@@ -303,7 +303,7 @@
  (feat-of k) (peep feat-book k '("?" 250 244 ""))
  (feat-face k) (feat-of k @ r [(r 0) (r 1) (r 2)])        ; not take: that is the penny verb here
  (feat-line k) (feat-of k 3)
- (feat-lines k) (peep (feat-of k) 4 ())
+ (feat-lines k) (feat-of k 4)
 
 
 
@@ -368,7 +368,7 @@
        3 (wear water-face lit)
        4 (wear floor-face lit)
        5 (wear door-face lit)
-       6 (strew (peep th 4 ()) x y (s + 3) 0 @ r (wear (two? r ? r (th 1)) lit))
+       6 (strew (th 4) x y (s + 3) 0 @ r (wear (two? r ? r (th 1)) lit))
        7 (wear step-face lit)
        8 (plat-face x y lit plat-blue)
        9 (dice x y (s + 9) 3 @ k [46 (road-pens k)])
@@ -393,7 +393,7 @@
    ; ..and on the vale the grass past the pink front takes slop's ramp instead. the
    ; front is () until there is pink anywhere, so the walk never pays for this
    fr (d 'front) fc (peep d 'fire '(0 0)) fcx <fc fcy <>fc
-   (pinkish? x y) (fr && (: dx (x - fcx) dy (y - fcy) (fr < dx * dx + 4 * dy * dy)))
+   (pinkish? x y) (fr && (: dx (x - fcx) dy (y - fcy) (fr < 2 dx + 4 * dy * dy)))
    ; slop's skin in its glyph mode: the tile's glyph in the pen of its cell's lower half
    (skinned rp x y gl) (cite 'slop 'slop-face (skin 'ground) (ramp-pen rp) x y gl)
    (shade gh x y) ((tablet? skin ? (skin-kinds <>gh)) @- gh
@@ -536,7 +536,7 @@
   (dice i c 11 100 < 11 ||
       gust? c (i - 1) ||
       gust? c (i - 2) ?
-     (vox (dice i c 14 3 = 0 ? "tri" "sin")
+     (vox (dice i c 14 3 @ 0 "tri" "sin")
           (chime-tones (dice i c 13 #chime-tones))
           (0.55 + dice i c 15 45 / 100.0)
           (1.30 + dice i c 16 120 / 100.0)))
@@ -749,7 +749,7 @@
  (car-new x y dx dy hue) {'x x 'y y 'dx dx 'dy dy 'gl (car-glyph dx dy) 'hue hue
                           'car 1 'nm "car" 'hp 99 'dm car-dm 'pc 1}
  (car-head m dx dy) (pins m 'dx dx 'dy dy 'gl (car-glyph dx dy))
- (car-back m) (car-head m (0 - m 'dx) (0 - m 'dy))
+ (car-back m) (car-head m -(m 'dx) -(m 'dy))
  (street? d x y) (1 = dat d x y)
  (road? d x y) (dat d x y @ (1 || 6) 1 0)
 
@@ -757,7 +757,7 @@
  ; a corner is a cell whose lane runs the way of the turn: only a crossing has a lane
  ; across, and a turn into the oncoming lane is no corner either
  (lane-at d x y) (peep (peep d 'lane {}) (x + d 'w * y) '(0 0))
- (corner? d x y dx dy) (lane-at d x y @ l (dx != 0 ? (<l = dx) (<>l = dy)))
+ (corner? d x y dx dy) (lane-at d x y @ l (dx @ 0 (<>l = dy) (<l = dx)))
 
  ; the horn, twice, and the hurt: what a car does when it reaches you either way
  (run-down g m) (: p (g 'p)
@@ -888,7 +888,7 @@
                                   1 [(x0 + 1 + roll sb (x1 - x0 - 1)) y1]
                                   2 [x0 (y0 + 1 + roll sb (y1 - y0 - 1))]
                                     [x1 (y0 + 1 + roll sb (y1 - y0 - 1))])
-                   (0 = dat d <c <>c ? (pin loot (<c + d 'w * <>c) '(lamp))))
+                   (dat d <c <>c @ 0 (pin loot (<c + d 'w * <>c) '(lamp))))
    _ (lvl @ 2 (each rms (rm \ (lamp-on rm, roll sb 2 @ 0 (furnish-in rm 'brazier)))))
    ; heaven's fountains and mirrors stand only where all eight neighbours are open and
    ; bare, so a piece never blocks the one way past
@@ -954,7 +954,7 @@
  (stream d sb) (: w (d 'w) h (d 'h)
                   (go x y) (y < h ?
                               (: _ (2 != dat d x y && dput d x y 3)
-                                 nx (roll sb 2 = 0 ? (x + roll sb 3 - 1) x)
+                                 nx (roll sb 2 @ 0 (x + roll sb 3 - 1) x)
                                  (go (nx < 1 ? 1 (nx > (w - 2) ? (w - 2) nx)) (y + 1))))
                   (go (2 + roll sb (w - 4)) 0))
 
@@ -1081,7 +1081,7 @@
                  (blocked? g nx ny ? () (pins m 'x nx 'y ny)))
  (stir g m) (: p (g 'p) dx (p 'x - m 'x) dy (p 'y - m 'y)
                (? (|dx <= 1 && |dy <= 1) (bite g m)
-                  (dx * dx + dy * dy <= 65 &&
+                  (2 dx + 2 dy <= 65 &&
                    clear? (g 'd) (m 'x) (m 'y) (p 'x) (p 'y))
                    (: sx (sgn dx) sy (sgn dy)
                       ox (m 'x) oy (m 'y)
@@ -1161,13 +1161,13 @@
              ""
              "-- any key --")
  house-goods '(pot bronze iron bells cloth table chair bed)
- (sq n) (n * n)
+ (sq n) (2 n)
  (circle? g) (last-floor < g 'lvl)
- (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) (dx * dx + 4 * dy * dy))
+ (circle-q g x y) (: dx (x - g 'cx) dy (y - g 'cy) (2 dx + 4 * dy * dy))
 
  ; the board's reach from the fire, in the ring's own quarter-unit measure
  (circle-far {'d {'w w 'h h} 'cx cx 'cy cy})
-  (: dx (cx < w - cx ? (w - cx) cx) dy (cy < h - cy ? (h - cy) cy) (dx * dx + 4 * dy * dy))
+  (: dx (cx < w - cx ? (w - cx) cx) dy (cy < h - cy ? (h - cy) cy) (2 dx + 4 * dy * dy))
 
  ; the ring's radius in rows, and -1 while there is no ring
  (circle-r g) (g 'phase @ 'ring (g 'r) -1)
@@ -1181,7 +1181,7 @@
  (ramp-pen rp v) (cite 'slop 'slop-ramp-pen rp pink-span v)
  (skin-pen g x y) (pink-front g @ f
                      (cite 'slop 'slop-under (g 'sk)
-                           (ramp-pen (circle-q g x y > f * f * circle-far g ? pink-ramp grass-ramp))
+                           (ramp-pen (circle-q g x y > 2 f * circle-far g ? pink-ramp grass-ramp))
                            x y))
 
 
@@ -1248,7 +1248,7 @@
                      (pins (g 'p) 'x x 'y y),
                      pin g 'vis (lit-all d),
                      k @ 'vale (doom g)))
- (exit-at g x y) (peep (peep (g 'd) 'exits {}) (x + g 'd 'w * y) ())
+ (exit-at g x y) (peep (g 'd) 'exits {} (x + g 'd 'w * y))
 
 
  ; out of the house with the token: the shudder, the sign, and the closing begun; and
@@ -1298,7 +1298,7 @@
    (fill-box x0 y0 bw bh t) (each ^bh (j \ each ^bw (i \ dput d (x0 + i) (y0 + j) t)))
    ; the clearing: an ellipse of grass
    _ (each ^h (y \ each ^w (x \ (: dx (x - cx) dy (y - cy)
-                                    (dx * dx * ry * ry + dy * dy * rx * rx <= rx * rx * ry * ry ?
+                                    (2 dx * ry * ry + 2 dy * rx * rx <= 2 rx * ry * ry ?
                                        (dput d x y 1))))))
    ; the road up from the foot to the clearing, grass two cells either side of it
    _ (each ^(h - 1) (j \ (: y (h - 1 - j) mx (road-x cx y)
@@ -1402,7 +1402,7 @@
     (each (g 'ms) (m \ !(g 'over) && due? g m && (m 'car ? (drive g m) (stir g m)))),
    ; the vale's closing takes a turn for every turn taken, and none for a sign's key
     circle? g && !sg && !(g 'over) && vale-tick g,
-    circle? g && pin (g 'd) 'front (pink-front g @ f (f < 1.0 && f * f * circle-far g)),
+    circle? g && pin (g 'd) 'front (pink-front g @ f (f < 1.0 && 2 f * circle-far g)),
     circle? g ? g (pin g 'vis (fov (g 'd) (g 'p 'x) (g 'p 'y) 8))))
 
 
@@ -1421,7 +1421,7 @@
               ((? (rows < h)
                   (g 'p 'y - rows // 2 + peep d 'jolt 0 @ v
                      (pin d 'vy (? (v < 0) 0 (h - rows < v) (h - rows) v)))
-                  (h < rows) (pin d 'vy (0 - (rows - h) // 2))),
+                  (h < rows) (pin d 'vy -((rows - h) // 2))),
                w < cols ? (pin d 'vx ((cols - w) // 2))))
  (crawl-frame g) (: d (g 'd) rows (peep d 'rows (d 'h))
                     _ (view! g)
@@ -1530,7 +1530,7 @@
              ; the wait is the song: feed a chunk whenever less than the lead is queued,
              ; else a plain poll; and each quarter-second count repaint the live cells
              (flick! _) (: d (g 'd) t (clock 0 // 250)
-                           (t != peep d 'ft () ? (pin d 'ft t, say out (live-frame g), flush out)))
+                           (t != d 'ft ? (pin d 'ft t, say out (live-frame g), flush out)))
              ; the lead paced by the frame gap: rove's pacer, asked each feed
              pace (pacer ())
              (feed! _) (horn-lag hn < song-lead-of (pace! pace) ? (song-feed sng (song-vol g)) (rest 5))
@@ -1544,7 +1544,7 @@
              ; ..and the song goes on under it
              (rumble! _) (: d (g 'd) sg (g 'sign)
                             (pin g 'sign (),
-                             each ^6 (k \ (pin d 'jolt (k % 2 = 0 ? 1 -1),
+                             each ^6 (k \ (pin d 'jolt (k % 2 @ 0 1 -1),
                                            say out (crawl-frame g), flush out, hold 66)),
                              (pin d 'jolt 0, pin g 'sign sg, pin g 'rumble ())))
              (press k) (turn k,

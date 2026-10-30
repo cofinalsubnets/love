@@ -14,6 +14,8 @@
 ; a body-less `:` -- lux-dom/lux-sigs leak; neither shadows a nif.
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
 (:
+   ; a lux file's top-level forms as read, its module peeled: what wm2uu and the sweep take
+   (lux-peel fs) (catmap (f \ (f @ ('module . _ . b) b [f])) fs)
    (lux-join a b) (a = b ? a 'top)
    (lux-tr op a b) 'top
    (lux-lit e) 'top

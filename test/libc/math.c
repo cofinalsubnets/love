@@ -89,6 +89,10 @@ int main(void) {
     h = h * 1000003 + ub(fma(a, c, d));
     hf = hf * 1000003 + uf(fmaf((float) a, (float) c, (float) d)); }
   say_u("fma 400", h); say_u("fmaf 400", hf);
+  /* an infinite operand's sum stays infinite, whichever factor or addend brings it */
+  float finf = (float) (1.0 / 0.0);
+  say_u("fmaf factor inf", uf(fmaf(finf, -0.0016f, -0.0f))); say_u("fmaf addend inf", uf(fmaf(0.0f, -640.0f, -finf)));
+  say_u("fmaf big", uf(fmaf(3e38f, 3e38f, 1.0f))); X("fma inf", fma(1.0, 2.0, -1.0 / 0.0));
   /* the transcendentals, to twelve digits */
   double tx[] = { 0.001, 0.5, 1.0, 2.0, 3.7, 10.0, -0.3, 1e-8 };
   for (int i = 0; i < 8; i++) {

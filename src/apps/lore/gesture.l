@@ -31,7 +31,7 @@
 ;                                         'then once it is over
 (module (gesture gesture-curve gesture-at gesture-breath gesture-kneel gesture-stand gesture-lie gesture-wake gesture-act gesture-acts
          gesture-begin gesture-play)
-(borrow 'view)                          ; wrap, clamp, min2, max2
+(borrow 'view)                          ; wrap, clamp
 (borrow 'vec)
 (:
  stride 0.7                             ; a step, in metres
@@ -41,26 +41,26 @@
      ; ..a key's slope: none at the ends or where the way turns back; else the way through
      ; it, held to three times the gentler side's, so the curve stays between its keys
      (slope i) (: a ((vi i - vi (i - 1)) / (ti i - ti (i - 1))) b ((vi (i + 1) - vi i) / (ti (i + 1) - ti i))
-                  m ((vi (i + 1) - vi (i - 1)) / (ti (i + 1) - ti (i - 1))) lim (3.0 * min2 (mag a) (mag b))
-                  (a * b <= 0.0 ? 0.0 (clamp m (0.0 - lim) lim)))
+                  m ((vi (i + 1) - vi (i - 1)) / (ti (i + 1) - ti (i - 1))) lim (3.0 * min (mag a) (mag b))
+                  (a * b <= 0.0 ? 0.0 (clamp m -lim lim)))
      (slope0 i) (i = 0 || i = n - 1 ? 0.0 (slope i))
      (seg i) (i + 2 < n && ti (i + 1) <= t ? (seg (i + 1)) i)
      (? (n = 1 || t <= ti 0) (vi 0) (ti (n - 1) <= t) (vi (n - 1))
-        (: i (seg 0) h (ti (i + 1) - ti i) s ((t - ti i) / h) s2 (s * s) s3 (s2 * s)
+        (: i (seg 0) h (ti (i + 1) - ti i) s ((t - ti i) / h) s2 (2 s) s3 (s2 * s)
            (vi i * (2.0 * s3 - 3.0 * s2 + 1.0) + slope0 i * h * (s3 - 2.0 * s2 + s)
             + vi (i + 1) * (3.0 * s2 - 2.0 * s3) + slope0 (i + 1) * h * (s3 - s2)))))
  ; ..the steps a whole number, so the last ends where the walk does
  (gesture-at mv t) (: (ch k) (gesture-curve (mv k) t) x (ch 'x) z (ch 'z) w (mv 'walk)
    (far a b) (sqrt (sq (a - w 0) + sq (b - w 1)))
    ; ..none where it goes nowhere
-   sl (two? w ? (far (w 2) (w 3) @ L (L / max2 1.0 (floor (L / stride + 0.5)))) 0.0)
+   sl (two? w ? (far (w 2) (w 3) @ L (L / max 1.0 (floor (L / stride + 0.5)))) 0.0)
    q (sl > 1e-6 ? (pi * far x z / sl) 0.0)
    [x (ch 'y - 0.022 * sq (sin q)) z (ch 'th) (ch 'ph) (ch 'ro + 0.012 * sin q)])
  (gesture-breath t) [(0.005 * sin (t * 1.55)) (0.004 * sin (t * 1.55 - 0.8))]
  ; ..turn to it, the walk, the knees, the gaze settling below
  (gesture-kneel st spot at ground kh) (: x0 (st 'px) z0 (st 'pz) y0 (st 'py) th0 (st 'th) ph0 (st 'ph)
    kx (spot 0) kz (spot 1) ax (at 0) az (at 1) yk (ground kx kz + kh)
-   d (sqrt (sq (kx - x0) + sq (kz - z0))) tw (max2 0.6 (d / pace)) T (0.25 + tw)
+   d (sqrt (sq (kx - x0) + sq (kz - z0))) tw (max 0.6 (d / pace)) T (0.25 + tw)
    ; ..its bearing from a place, unwound to lie near th0
    (look x z) (th0 + wrap (atan2 (ax - x) (az - z) - th0))
    (on f) [(x0 + f * (kx - x0)) (z0 + f * (kz - z0))]
@@ -83,7 +83,7 @@
  ; ..a bed's bearings from where it is sat, out and the way lain, each unwound to lie near th
  (bed-out b th) (: e (b 'edge) s (b 'side) (th + wrap (atan2 (s 0 - e 0) (s 1 - e 1) - th)))
  (gesture-lie st b) (: x0 (st 'px) z0 (st 'pz) y0 (st 'py) th0 (st 'th) ph0 (st 'ph) s (b 'side) e (b 'edge) h (b 'head) top (b 'top)
-   d (sqrt (2 (s 0 - x0) + 2 (s 1 - z0))) tw (max2 0.6 (d / pace)) T (0.25 + tw)
+   d (sqrt (2 (s 0 - x0) + 2 (s 1 - z0))) tw (max 0.6 (d / pace)) T (0.25 + tw)
    go (th0 + wrap (atan2 (s 0 - x0) (s 1 - z0) - th0)) at (go + wrap (atan2 (e 0 - s 0) (e 1 - s 1) - go)) out (bed-out b at)
    lain (out + wrap (b 'th - out))
    {'x [[0.0 x0] [0.25 x0] [T (s 0)] [(T + 0.7) (s 0)] [(T + 1.3) (e 0)] [(T + 2.4) (h 0)]]
@@ -104,7 +104,7 @@
    (off v l) (map (q \ [(q 0) (v + q 1)]) l)
    {'x (map (q \ [(q 0) (x0 + q 1 * sin th)]) (a 'fw)) 'z (map (q \ [(q 0) (z0 + q 1 * cos th)]) (a 'fw))
     'y (off (st 'py) (a 'y)) 'th [[0.0 th]] 'ph (off (st 'ph) (a 'ph)) 'ro (off (peep st 'ro 0.0) (a 'ro))
-    'walk () 'len (a 'len) 'then 'kneel 'ev (peep a 'ev ())})
+    'walk () 'len (a 'len) 'then 'kneel 'ev (a 'ev)})
  gesture-acts
   {; a long breath in, the chin rising and the chest back, held, then out, a little below
    'breathe
@@ -142,7 +142,7 @@
          [10.55 0.035] [11.1 0.0] [11.65 0.035] [12.2 0.0] [12.85 0.035] [13.4 0.0] [15.4 0.0]] 'len 15.6 'ev ()}}
  (gesture-begin st mv) (pins st 'eye 'move 'mv mv 'm0 (peep st 'mt 0.0))
  (gesture-play st dt fall) (: mv (st 'mv) t (peep st 'mt 0.0 - st 'm0) p (gesture-at mv t)
-   _ (each (peep mv 'ev ()) (e \ (t - dt < e 0 && e 0 <= t ? (fall st (e 1)))))
+   _ (each (mv 'ev) (e \ (t - dt < e 0 && e 0 <= t ? (fall st (e 1)))))
    (pins st 'px (p 0) 'py (p 1) 'pz (p 2) 'th (wrap (p 3)) 'ph (p 4) 'ro (p 5)
             'eye (mv 'len <= t ? (mv 'then) 'move))))
 ) ; module gesture

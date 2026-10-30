@@ -35,7 +35,7 @@
        (has? k "i=7,s=") (has? k "a=d,d=I,i=8,") (has? k2 "i=8,s=") (has? k2 "a=d,d=I,i=7,") (has? k "f=24") (has? k "C=1") (has? k "s=80,v=48,c=80,r=24,") (has? k "m=0;")
        (has? k8 "s=320,v=192,c=80,r=24,") (has? k1 "s=640,v=384,c=80,r=24,") ((stones-size (at 12.0 7) 80 24) 'kp = 1)))
 ; ..the choices' cells blanked over the picture once, the frame they are put away
-(: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max2 0 (r - r // 3 - 4)) c0 (max2 0 ((kb 'w - 22) // 2))
+(: kb (pin (at 12.0 7) 'kitty 1) r ((kb 'h) // 2) r0 (max 0 (r - r // 3 - 4)) c0 (max 0 ((kb 'w - 22) // 2))
    gap ("\e[" + show (r0 + 1) + ";" + show (c0 + 1) + "H\e[0m" + cats (map (_ \ " ") (jot 22)))
    f0 (stones-frame kb) _ (pin kb 'dlg 0) _ (stones-frame kb) _ (pin kb 'dlg ())
    f2 (stones-frame kb) f3 (stones-frame kb)
@@ -103,7 +103,7 @@
    _ (stones-step st (stones-kb 32)) began (st 'eye)
    ; ..ticks until the move is done: the most the eye went in one, up and round
    (run n jy jt) (: y (st 'py) t (st 'th) _ (stones-move st)
-                    jy2 (max2 jy (mag (st 'py - y))) jt2 (max2 jt (mag (wrap (st 'th - t))))
+                    jy2 (max jy (mag (st 'py - y))) jt2 (max jt (mag (wrap (st 'th - t))))
                     (st 'eye = 'move && n < 400 ? (run (n + 1) jy2 jt2) [n jy2 jt2]))
    k (run 0 0.0 0.0) knelt (st 'eye) kx (st 'px) ky (st 'py) kth (st 'th)
    _ (stones-step st (stones-kb 107)) _ (stones-move st) still (st 'px = kx)

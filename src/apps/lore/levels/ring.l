@@ -38,8 +38,8 @@
 ; the ground: swells that come round whole every way, the river's bed sunk along it, flat
 ; round the well and the lift's foot, and over the hall never lower than a slab over its
 ; ceiling; each asked of x a number or a tray of them
-(: (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (k * k * (3.0 - 2.0 * k))))
-(: (span v) (max v (0.0 - v)))
+(: (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (2 k * (3.0 - 2.0 * k))))
+(: (span v) (max v -v))
 ; ..a die for a and b, 0 to 1
 (: (h01 a b) (: s (sin (a * 12.9898 + b * 78.233 + 0.5) * 43758.5453) (s - floor s)))
 (: (swell x z) (: a (tau * x / lx) b (tau * z / lz)
@@ -50,7 +50,7 @@
 (: wn 6)
 (: rs (wn * lz / lx) (rz x) (rs * (x - 10.0)))
 (: (around d l) (d - l * floor (d / l + 0.5)))
-(: (rd x z) (span (around (z - rz x) lz) / sqrt (1.0 + rs * rs)))
+(: (rd x z) (span (around (z - rz x) lz) / sqrt (1.0 + 2 rs)))
 (: (bed x z) (: d (rd x z) (swell x z * ease d 2.5 7.0 - 0.7 * (1.0 - ease d 1.8 4.2))))
 (: (ground x z) (: f (max (span (x - sx) - 1.0) (span (around z lz) - 1.0))
    g (top + bed x z * ease (max (span (x - tx) - wh - 1.0) (span (z - tz) - wh - 1.0)) 2.0 8.0 * ease f 1.0 5.0)
@@ -65,10 +65,10 @@
 ; tube past lz so none straddles it, each piece a row over the cut to meet the next and laid
 ; along from as far down the river as it starts; none by the well
 (: (well? p) (: z (around (p 2 - tz) lz) (span (p 0 - tx) < wh + 1.5 && span z < wh + 1.5)))
-(: (water-row x) (: z (rz x) n (sqrt (1.0 + rs * rs)) u (3.4 * rs / n) v (-3.4 / n)
+(: (water-row x) (: z (rz x) n (sqrt (1.0 + 2 rs)) u (3.4 * rs / n) v (-3.4 / n)
    (map (k \ (: p [(x + k * u) (top - 0.45) (z + k * v)] ((well? p) ? () p))) [-1.0 0.0 1.0])))
 (: waters (: rows (map (i \ [i (water-row (1.0 * i))]) ^321) (cut r) (floor (rz (1.0 * r 0) / lz))
-   S (map (i \ i * sqrt (1.0 + rs * rs)) ^321)
+   S (map (i \ i * sqrt (1.0 + 2 rs)) ^321)
    (go l run out) (? (atom? l) (rev (rev run . out))
       (two? run && cut <l != cut <run) (go >l [<l] (rev (<l . run) . out))
       (go >l (<l . run) out))
@@ -109,9 +109,9 @@
 ; player wakes, and another off a dead end further round, zooble's, where it sits waiting
 (: ci 27 cj 6 zi 39 zj 10)
 (: closets [[ci cj] [zi zj]] shut (map (q \ 100000 + cid (q 0) (q 1)) closets)
-   sides (cats (map (q \ [(cid (q 0) (q 1)) (cid (q 0 - 1) (q 1))]) closets)))
+   sides (catmap (q \ [(cid (q 0) (q 1)) (cid (q 0 - 1) (q 1))]) closets))
 (: (hall? i j) (elem i gis && elem j gjs))
-(: gw (cats (map (i \ map (j \ cid i j) gjs) gis)))
+(: gw (catmap (i \ map (cid i) gjs) gis))
 (: dug (: seen {} open {}
    (go c) (: _ (pin seen c 1)
              (each (map (q \ q 1) (sort (map (d \ [(h01 c d) d]) ^4)))
@@ -133,10 +133,10 @@
    ; ..each room's next room toward the rooms in src, over the passages
    (toward src) (: par {} _ (each src (c \ pin par c c))
      (go fr) (? (atom? fr) par
-                (go (cats (map (c \ cats (map (d \ (: n (nb c d) (? (peep par n -1 >= 0 || hall? (n // nz) (n % nz) || !(way c d)) ()
+                (go (catmap (c \ catmap (d \ (: n (nb c d) (? (peep par n -1 >= 0 || hall? (n // nz) (n % nz) || !(way c d)) ()
                                                                      (: _ (pin par n c) [n]))))
-                                               ^4))
-                               fr))))
+                                               ^4)
+                               fr)))
      (go src))
    _ (each [1 2 3] (k \ (: c (hall-out k) p (toward (take k hall-out) c) d <(filter (d \ nb c d = p) ^4) (pin shut (edge c d) 1))))
    shut))
@@ -149,7 +149,7 @@
 (: white (texture 64 64 2 '((fill (grey 0.92)) (noise 3 0.03))))
 (: checks (feel 'hard (texture 64 64 1.2 '((fill (grey 0.93)) (checker 32 32 (grey 0.08)) (noise 2 0.04)))))
 (: (cell i j) (: wide (i < nx - 1 && through (cid i j) = 'open) z1 (cz * (j + 1) - wt) top-z (elem [i j] closets ? (z1 - 1.6) z1)
-   ((hall? i j) ? () (room [(cx * i + wt) 0 (cz * j + wt)] [(cx * (i + 1) + (wide ? (wt + 0.01) (0.0 - wt))) mh top-z]))))
+   ((hall? i j) ? () (room [(cx * i + wt) 0 (cz * j + wt)] [(cx * (i + 1) + (wide ? (wt + 0.01) -wt)) mh top-z]))))
 (: hall (dark (skin {'walls white 'floor checks 'ceiling white}
                     (room [(cx * <gis + wt) 0 (cz * <gjs + wt)] [(cx * (<gis + 3) - wt) gh (cz * (<gjs + 3) - wt)]))))
 (: (gap lo hi) (air (box lo hi)))
@@ -213,7 +213,7 @@
                                 (disc 15 22 5.4 (grey 0.42)) (disc 15 22 4.5 (grey 0.05)) (disc 15 22 3.6 (grey 0.2)) (disc 15 22 1.6 (grey 0.45))
                                 (disc 15 8 2.6 (grey 0.62)) (disc 15 8 1.3 (grey 0.36)))))
 ; ..as [body front]: the box, and the drivers on it with where the loop is heard from
-(: (cabinet-in k o f) (: (p l h d) [(o 0 + k 0 * (l * (0.0 - f 1) + d * f 0)) (o 1 + h) (o 2 + k 1 * (l * f 0 + d * f 1))]
+(: (cabinet-in k o f) (: (p l h d) [(o 0 + k 0 * (l * -(f 1) + d * f 0)) (o 1 + h) (o 2 + k 1 * (l * f 0 + d * f 1))]
    w (sqrt (2 (k 0 * f 1) + 2 (k 1 * f 0)))
    [[(block (p -0.25 0.0 0.0) (p 0.25 1.05 0.42) ash)]
     [(decal (p 0.0 0.525 0.43) [(f 0) 0 (f 1)] [0 1 0] (0.47 * w) 1.0 drivers) (speaker (p 0.0 0.7 0.5))]]))
@@ -248,12 +248,12 @@
 ; ..a cable lying along the floor through the points ps [x z]: its corners eased, wandering
 ; either side as it goes, still at its ends; a half round r high, a drape
 (: (snake ps sd r) (: st 0.15
-   (len a b) (: dx (b 0 - a 0) dz (b 1 - a 1) (sqrt (dx * dx + dz * dz)))
+   (len a b) (: dx (b 0 - a 0) dz (b 1 - a 1) (sqrt (2 dx + 2 dz)))
    (leg a b) (: n (max 1 (int (len a b / st + 0.5))) (map (k \ [(a 0 + k / (1.0 * n) * (b 0 - a 0)) (a 1 + k / (1.0 * n) * (b 1 - a 1))]) ^n))
-   base (cats (map (i \ leg (ps i) (ps (i + 1))) ^(#ps - 1)) + [(ps (#ps - 1))]) n #base
+   base (catmap (i \ leg (ps i) (ps (i + 1))) ^(#ps - 1) + [(ps (#ps - 1))]) n #base
    (soft q) (map (i \ (? (i = 0 || i = n - 1) (q i) (: a (q (i - 1)) b (q i) c (q (i + 1)) [((a 0 + 2.0 * b 0 + c 0) / 4.0) ((a 1 + 2.0 * b 1 + c 1) / 4.0)]))) ^n)
    sm (foldl (\ q _ (soft q)) base ^8)
-   (nrm q i) (: a (q (max 0 (i - 1))) b (q (min (n - 1) (i + 1))) dx (b 0 - a 0) dz (b 1 - a 1) l (max 1e-6 (sqrt (dx * dx + dz * dz))) [(0.0 - dz / l) (dx / l)])
+   (nrm q i) (: a (q (max 0 (i - 1))) b (q (min (n - 1) (i + 1))) dx (b 0 - a 0) dz (b 1 - a 1) l (max 1e-6 (sqrt (2 dx + 2 dz))) [-(dz / l) (dx / l)])
    L (st * (n - 1))
    wig (map (i \ (: s (st * i) e (min 1.0 (min (s / 0.6) ((L - s) / 0.6))) w (e * (0.08 * sin (tau * s / 1.9 + sd) + 0.04 * sin (tau * s / 0.8 + 2.3 * sd)))
                     m (nrm sm i) [(sm i 0 + w * m 0) (sm i 1 + w * m 1)])) ^n)
@@ -274,7 +274,7 @@
      [[(cid (i + 1) j) (cid i j) 'xm] [(cid (i - 1) j) (cid (i - 1) j) 'xp]
       [(cid i (j + 1)) (100000 + cid i j) 'zm] [(cid i (j - 1)) (100000 + cid i (j - 1)) 'zp]])
    (reach c q) (: n (q 0) (? (peep seen n 0 = 0 && goes? (q 1)) (: _ (pin seen n 1) _ (pin hop n (q 2)) [n]) ()))
-   (go fr) (? (atom? fr) hop (go (cats (map (c \ cats (map (reach c) (near c))) fr))))
+   (go fr) (? (atom? fr) hop (go (catmap (c \ catmap (reach c) (near c)) fr)))
    _ (each gw (c \ pin seen c 1))
    (go gw)))
 (: (exit-sign c d) (: i (c // nz) j (c % nz) x0 (cx * i + wt) x1 (cx * (i + 1) - wt) z0 (cz * j + wt) z1 (cz * (j + 1) - wt)
@@ -282,11 +282,11 @@
    (d @ 'xp (unlit (neon [(x1 - 0.03) y zm] [-1 0 0] 0.2 "exit" g)) 'xm (unlit (neon [(x0 + 0.03) y zm] [1 0 0] 0.2 "exit" g))
         'zp (unlit (neon [xm y (z1 - 0.03)] [0 0 -1] 0.2 "exit" g)) (unlit (neon [xm y (z0 + 0.03)] [0 0 1] 0.2 "exit" g)))))
 ; ..the rooms on the way from the closet's to the hall, in order
-(: way-out (: (go c out) (: d (peep hops c ()) i (c // nz) j (c % nz)
+(: way-out (: (go c out) (: d (hops c) i (c // nz) j (c % nz)
                            (? (elem c gw || d = ()) (rev out)
                               (go (d @ 'xp (cid (i + 1) j) 'xm (cid (i - 1) j) 'zp (cid i (j + 1)) (cid i (j - 1))) (c . out))))
    (go (cid ci cj) ())))
-(: exits (exit-signs = 1 ? (map (c \ exit-sign c (hops c)) way-out) ()))
+(: exits (exit-signs @ 1 (map (c \ exit-sign c (hops c)) way-out) ()))
 ; ..and pa speakers in the maze, one in a room's corner every third room on the way out and
 ; here and there all round the ring, where both its walls stand
 (: (cornered? c) (: i (c // nz) j (c % nz) (!(hall? i j) && through (cid (i - 1) j) != 'open && through (100000 + cid i (j - 1)) != 'open)))
@@ -319,7 +319,7 @@
     (map (x \ strip-light [(sx + x) (hub + 1.21) 0]) [-2.3 -1.25 1.25 2.3])
     (block [(sx + 1.9) cy -1.13] [(sx + 2.94) (cy + 0.2) 0.9] wood)
     (sleep-bed [(sx + 2.42) (cy + 0.2) -1.1] 0 "station.l" 'walk-in)   ; lain on, back to the station's walk-in
-    (map (q \ pa [(sx + q 0 * 2.95) (hub + 1.21) (q 1 * 1.14)] [(0 - q 0) (0 - q 1)]) [[1 1] [1 -1] [-1 1] [-1 -1]])]))
+    (map (q \ pa [(sx + q 0 * 2.95) (hub + 1.21) (q 1 * 1.14)] [-(q 0) -(q 1)]) [[1 1] [1 -1] [-1 1] [-1 -1]])]))
 
 (level "the ring"
   (surface 'torus lx lz)
@@ -336,10 +336,10 @@
   (map (x \ post x (lz / 2) stone) (filter (x \ rd x (lz / 2) > 4.5) (map (i \ 40.0 + 16.0 * i) ^17)))
   (map (z \ post 80.0 z stone) (filter (z \ rd 80.0 z > 4.5) (map (i \ 4.0 + 8.0 * i) ^11)))
   ; ..under it the rooms, carved out of the ground, the ways between them, their lights and their buzz
-  (map (i \ map (j \ cell i j) ^nz) ^nx)
+  (map (i \ map (cell i) ^nz) ^nx)
   hall
-  (map (i \ cats (map (j \ ways i j) ^nz)) ^nx)
-  (map (i \ map (j \ panels i j) ^nz) ^nx)
+  (map (i \ catmap (ways i) ^nz) ^nx)
+  (map (i \ map (panels i) ^nz) ^nx)
   (closet ci cj)
   (closet zi zj)
   (plush [(cx * (zi + 0.5)) 0 (cz * (zj + 1) - wt - 0.4)] 180 "zooble.glb")

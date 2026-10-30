@@ -2514,7 +2514,7 @@
       (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
       (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
 
-; --- a small counted loop unrolls, a constant-indexed double element is its frame slot, and
+; --- a small counted loop unrolls, its constant-indexed double elements become scalars, and
 ; an integer literal meeting a double is a double constant: no address, no loop test, no convert
 (: hC (fnf 'h <>(cgn "double h(double *v, int n) { double a[3]; for (int k = 0; k < 3; k++) a[k] = v[k]; double s = 0; for (int i = 0; i < n; i++) { s += a[0] * a[1] - a[2]; for (int k = 0; k < 3; k++) a[k] += 1; } return s >= -1 ? s : 0; } int main() { return 0; }"))
    (hn op) (#(filter (f \ two? f && <f = op) hC))
@@ -2522,23 +2522,24 @@
       (0 = (hn 'lea))                            ; every a[k] a static slot
       (0 = (hn 'cvtsi2sd))                       ; += 1 and >= -1 convert at compile time
       (2 = (hn 'br))                             ; the i loop's test and the ?: -- no k loop left
-      (elem '(stsd sp 16 f0) hC)))
+      (0 = (hn 'stsd))))                         ; ..and no element a frame slot
 
 ; --- a double home across a call: x64's xmm file is caller-saved, so the home is wrapped at
 ; that call alone (stsd before, ldsd after); a64 seats it in v8..v15, saved once at entry.
-; h op= y runs on the home itself
+; h op= y runs on the home itself, its source a register or the frame
 (: src "void g9(void); double h(double *v, int n, double k) { double s = 0, t = 1; for (int i = 0; i < n; i++) { s += v[i] * k; t *= k; t += s; if (v[i] < 0) g9(); } return s + t; } int main() { return 0; }"
    hX (fnf 'h <>(cgn src))
    hA (fnf 'h <>(cparse-t <>(clex src) 'a64 @ r (okv? r ? (cgen-obj <>r <>>r <>>>r <>>>>r () 'a64))))
    (around fs) (: (go l) (? (#l < 5) () (l 2 = '(call g9)) [(l 0) (l 1) (l 3) (l 4)] (go >l)) (go fs))
    (reg? o r f) (two? f && <f = o && elem r f)
+   (onto? o r f) (two? f && (<f = o && <>f = r || <f = 'fopm && <>f = o && <>>f = r))
    wX (around hX)
    wA (around hA)
    (test
       (reg? 'stsd 'f8 (wX 0)) (reg? 'stsd 'f9 (wX 1))
       (reg? 'ldsd 'f8 (wX 2)) (reg? 'ldsd 'f9 (wX 3))
       (1 = #(filter (reg? 'stsd 'f8) hX))           ; no save at entry: the wrap is the call's
-      (elem '(addsd f9 f0) hX) (elem '(mulsd f8 f1) hX) (elem '(addsd f8 f9) hX)
+      (elem '(addsd f9 f0) hX) (any (onto? 'mulsd 'f8) hX) (elem '(addsd f8 f9) hX)
       !(any (f \ reg? 'stsd 'f8 f || reg? 'ldsd 'f8 f) [(wA 1) (wA 2)])
       (1 = #(filter (reg? 'stsd 'f8) hA))           ; a64: one save, one restore
       (1 = #(filter (reg? 'ldsd 'f8) hA))

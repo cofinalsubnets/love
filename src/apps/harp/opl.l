@@ -10,8 +10,6 @@
 (borrow 'bytes)
 (borrow 'ops)
 (:
- (max2 a b) (a < b ? b a)
- (min2 a b) (a < b ? a b)
  ; --- the bank: a header of 8, 175 instruments of 36 bytes, then their names, 32 each ---
  (op b o) (: r (b o) {'am (r >> 7 & 1) 'vib (r >> 6 & 1) 'egt (r >> 5 & 1) 'ksr (r >> 4 & 1) 'mul (r & 15)
                       'ar (b (o + 1) >> 4) 'dr (b (o + 1) & 15) 'sl (b (o + 2) >> 4) 'rr (b (o + 2) & 15)
@@ -40,8 +38,8 @@
  ; never moves; an attack at 15 is at once
  ln2 0.6931471805599453
  (dbl r) (exp ((r - 1.0) * ln2))
- (times o n) (: oct (max2 0 (min2 7 (int n // 12 - 1))) kso (min2 15 (2 * oct + (int n % 12 >= 6 ? 1 0)))
-   ks (o 'ksr ? (kso / 4.0) (kso / 16.0)) (eff r) (min2 15.0 (r + ks))
+ (times o n) (: oct (max 0 (min 7 (int n // 12 - 1))) kso (min 15 (2 * oct + (int n % 12 >= 6 ? 1 0)))
+   ks (o 'ksr ? (kso / 4.0) (kso / 16.0)) (eff r) (min 15.0 (r + ks))
    {'ta (o 'ar = 0 ? 1e6 (eff (o 'ar) >= 15.0 ? 0.0 (2.82624 / dbl (eff (o 'ar)))))
     'dd (o 'dr = 0 ? 1e-6 (96.0 / (39.28064 / dbl (eff (o 'dr)))))
     'rd (o 'rr = 0 ? 1e-6 (96.0 / (39.28064 / dbl (eff (o 'rr)))))
@@ -49,7 +47,7 @@
  ; the attack up as an amplitude, decay to sustain, held or on down at the release rate; t a
  ; number or a tray
  (held E t) (: a (E 'ta) s (E 'sl) dd (E 'dd)
-   up (log (max (t / max2 a 1e-9) 1e-5) * -8.685889638065035)
+   up (log (max (t / max a 1e-9) 1e-5) * -8.685889638065035)
    d ((t - a) * dd) on (s + (t - a - s / dd) * E 'rd)
    ((t < a) * up + (t >= a) * ((d < s) * d + (d >= s) * (E 'egt = 1 ? s on))))
  ; ..key scaling of level: 3, 1.5 or 6 dB an octave over c3
@@ -71,14 +69,14 @@
    vdb (vel <= 0 ? 200.0 (log (vel / 127.0) * -17.37177927613007))
    to (off = () ? 1e9 ((off - at) * 1.0 / rate))
    (pair j) (: V (I 'vs j) nk (nb + V 'off + (j = 1 ? ((I 'tune - 128) / 64.0) 0.0)) f (opl-freq nk) add (V 'conn = 1)
-     (one o v) (: E (times o nk) k (ksl-db (o 'ksl) * max2 0.0 ((nk - 48.0) / 12.0))
+     (one o v) (: E (times o nk) k (ksl-db (o 'ksl) * max 0.0 ((nk - 48.0) / 12.0))
                  {'f (f * mults (o 'mul)) 'wave (o 'wave) 'lvl (o 'tl * 0.75 + k + v @ d (d >= 96.0 ? 0.0 (exp (d * -0.11512925464970229))))
                   'segs (segs E to) 'vib (o 'vib ? 0.00405 0.0) 'vrate 6.1 'trem (o 'am ? 1.0 0.0) 'trate 3.7 'E E})
      [(pins (one (V 'm) (add ? vdb 0.0)) 'fb (fbs (V 'fb)) 'l (add ? 1.0 0.0))
       (pins (one (V 'c) vdb) 'mod (add ? -1 (2 * j)) 'depth fm-depth 'l 1.0)])
    os (cats (map pair ^#(I 'vs)))
    (tail o) (: E (o 'E) ((96.0 - held E to) / E 'rd))
-   end (off = () ? (at + 3600 * rate) (off + int (rate * min2 10.0 (foldl max2 0.0 (map tail os))) + 2))
+   end (off = () ? (at + 3600 * rate) (off + int (rate * min 10.0 (foldl max 0.0 (map tail os))) + 2))
    [os end])
  (opl-voice I n vel pan at off rate) (opl-ops I n vel pan at off rate @ [os end] (ops-voice os at end (1.0 - pan) pan rate))
 )) ; module opl

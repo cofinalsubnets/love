@@ -76,9 +76,9 @@ holo assembles every `.S` the census compiles; only the refused ones stay clang'
 
 - a64: 0 of 69. entry.o, head.o and hyp-entry.o match clang's code sections but for branches to
   global symbols, which holo resolves inside the object
-- x64: of the 64 units with asm, 49 lay (27 as clang does) and 15 refuse: the 16- and 32-bit
-  lanes' far transfers and `lidt` 4, operands gas spaces or nests 4, a pushed immediate segment 2,
-  `.irpc`, `.uleb128` over labels, x87, others
+- x64: of the 64 units with asm, none refuse and 41 lay as clang does. the 23 that differ are C
+  units with inline asm whose difference is mooncc's code, and `addb $imm, %al`, which holo
+  encodes in the long form
 - the 3 kallsyms `.S` files from link-vmlinux.sh are clang's in both (the link, below)
 
 ## 3. clang outside the units

@@ -27,7 +27,7 @@
       (<q = 'tint && #q = 2 && rgb? (q 1)) (: k (colour (q 1)) (on (\ c x y [(c 0 * k 0) (c 1 * k 1) (c 2 * k 2)])))
       (<q = 'mix && #q = 3 && colour (q 1) != () && num? (q 2)) (: k (colour (q 1)) t (f (q 2)) (on (\ c x y (cmix c k t))))
       (<q = 'noise && (#q = 3 || #q = 4) && all num? >q)
-       (: sx (f (q 1)) sy (f (#q = 4 ? (q 2) (q 1))) a (f (q (#q - 1)))
+       (: sx (f (q 1)) sy (f (#q @ 4 (q 2) (q 1))) a (f (q (#q - 1)))
           (on (\ c x y (c* (1.0 - a + a * vn (x / sx) (y / sy) s) c))))))
  ; ..what each layer takes, said back when one is not understood
  usage {'fill "(fill PAINT)" 'rows "(rows from to PAINT)" 'cols "(cols from to PAINT)"
@@ -35,7 +35,7 @@
         'checker "(checker dx dy PAINT)" 'stripes "(stripes every w slant PAINT)" 'dots "(dots dx dy r PAINT)"
         'bevel "(bevel dx dy w LIGHT DARK)" 'patches "(patches size cover PAINT)" 'poly "(poly x y x y x y .. PAINT)"
         'cracks "(cracks dx dy w wander PAINT)" 'within "(within x0 y0 x1 y1 LAYER ..)"}
- (hint q) (two? q && peep usage <q () != () ? (usage <q)
+ (hint q) (two? q && usage <q != () ? (usage <q)
            "a layer is one of fill rows cols rect disc grid checker stripes dots bevel patches cracks poly within")
  ; ..the shapes: (in? x y), x y a texel's corner; s a seed
  (shape k a s) (: (n i) (f (a i))
@@ -70,7 +70,7 @@
      (? (n < 6 || n % 2 = 1 || !(all num? (take n a)) || atom? p) ()
         (: in? (poly-in (map f (take n a))) [(\ c x y (in? x y ? (<p c x y) c))])))
    (: k <q t (peep takes k -1) a >q
-      (? (t < 0 || #a != t + (k = 'bevel ? 2 1) || !(all num? (take t a))) ()
+      (? (t < 0 || #a != t + (k @ 'bevel 2 1) || !(all num? (take t a))) ()
          (: in? (shape k (take t a) s) p (paint (a t) s)
             (? (atom? p) ()
                (k = 'bevel) (: d (paint (a (t + 1)) (s + 1)) w (f (a 2)) dx (f (a 0)) dy (f (a 1))
@@ -84,7 +84,7 @@
  ; ..the first layer not understood, a within's inner ones searched, and what it takes
  (swatch-fault l) (? (atom? l) ()
    (two? (layer <l 0)) (swatch-fault >l)
-   (: q <l (inner q != () ? (swatch-fault (inner q) @ () [q (hint q)] e e) [q (hint q)])))
+   (: q <l (inner q @ () [q (hint q)] (swatch-fault (inner q) @ () [q (hint q)] e e))))
  (swatch-texel l) (: ls (layers l 211) g [0.5 0.5 0.5] (\ x y (run ls g (f x) (f y))))
  ; ..the same recipe as data for swatch-pic (src/love/swatch.c): each layer [boxes kind nums
  ; seed paint paint], a within's box laid on each of its layers; a paint [tag a b c d]
@@ -95,12 +95,12 @@
       (<q = 'shade) [2 (f (q 1)) z z z]
       (<q = 'tint) (: k (colour (q 1)) [3 (k 0) (k 1) (k 2) z])
       (<q = 'mix) (: k (colour (q 1)) [4 (k 0) (k 1) (k 2) (f (q 2))])
-      (: sx (f (q 1)) sy (f (#q = 4 ? (q 2) (q 1))) [5 sx sy (f (q (#q - 1))) (f s)])))
+      (: sx (f (q 1)) sy (f (#q @ 4 (q 2) (q 1))) [5 sx sy (f (q (#q - 1))) (f s)])))
  (plan q s bx) (? (two? (paint q s)) [[bx 0 [0.0 0.0 0.0 0.0] s (paint-plan q s) ()]]
-   (inner q != ()) (: is (inner q) b (bx + map f (take 4 >q)) (cats (map (i \ plan (is i) (s + 7 * i) b) ^#is)))
+   (inner q != ()) (: is (inner q) b (bx + map f (take 4 >q)) (catmap (i \ plan (is i) (s + 7 * i) b) ^#is))
    (<q = 'poly) (: a >q n (#a - 1) [[bx 11 (map f (take n a)) s (paint-plan (a n) s) ()]])
    (<q = 'bevel) (: a >q [[bx 10 (map f (take 3 a)) s (paint-plan (a 3) s) (paint-plan (a 4) (s + 1))]])
    (: k <q a >q t (takes k) [[bx (shapes k) (map f (take t a) + map (_ \ 0.0) ^(4 - t)) s (paint-plan (a t) s) ()]]))
- (swatch-plan l) (? (two? (layers l 211)) (cats (map (i \ plan (l i) (211 + 7 * i) ()) ^#l)))
+ (swatch-plan l) (? (two? (layers l 211)) (catmap (i \ plan (l i) (211 + 7 * i) ()) ^#l))
  (swatch w h l) (swatch-pic w h (swatch-plan l)))
 ) ; module swatch

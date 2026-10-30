@@ -4,6 +4,7 @@
 //  (poly-keep ps pls)  ps kept inside each plane in turn, till it is under three corners
 //  (poly-carve ps pls) ps in pieces, each plane through it cutting every piece it crosses
 //  (poly-grid ps cell) ps cut at every multiple of cell, x then y then z
+//  (poly-beside ..)    each face's neighbours, for brush.l's sides
 // a carve's or a grid's pieces are those three or more corners round and over 1e-8 in area,
 // in the order brush.l laid them; () where an argument is not as it says
 #include "love.h"
@@ -421,15 +422,87 @@ love_noinline static struct g *host_poly_weave(struct g *g) {
  g->sp[0] = pl_list(g, r, 3);
  return g; }
 
+// --- the faces beside each face: those of the brushes near its brush, whose boxes meet its own ---
+// a column of n numbers: a tray of them
+static bool pl_col(word w, uintptr_t n) { return galaxyp(w) && tray_nelem(tray(w)) == n; }
+static bool pl_cols3(word l, uintptr_t n) {
+ for (int k = 0; k < 3; k++, l = B(l)) if (!chainp(l) || !pl_col(A(l), n)) return 0;
+ return 1; }
+static void pl_get3(word l, uintptr_t n, flo_t *o) {   // three columns into rows of three
+ for (int k = 0; k < 3; k++, l = B(l))
+  for (uintptr_t i = 0; i < n; i++) o[3 * i + (uintptr_t) k] = tray_get_flo(tray(A(l)), i); }
+
+// (poly-beside fl fh fb ci bl bh): faces' boxes fl fh, each three trays, their brushes fb and
+// numbers ci; the brushes' boxes bl bh. answers each face's list of the numbers of the faces
+// of brushes within 0.02 of its brush's box, brush by brush and face by face in order, whose
+// boxes come within 1e-3 of its own
+struct side { flo_t *f, *b; intptr_t *br, *id, *by, *at, *sp, *r; uintptr_t nf, nb, nr, cr; int bad; };
+static void sd_fin(struct side *s) {
+ flo_t *fs[2] = {s->f, s->b};
+ intptr_t *is[6] = {s->br, s->id, s->by, s->at, s->sp, s->r};
+ for (int k = 0; k < 2; k++) if (fs[k]) alloc(fs[k], 0);
+ for (int k = 0; k < 6; k++) if (is[k]) alloc(is[k], 0); }
+static void *sd_new(uintptr_t n, uintptr_t w, int *bad) { uintptr_t c = 0; return pl_grow(NULL, n + 1, &c, w, bad); }
+// the faces brush by brush, each brush's in order: by[at[c]] to by[at[c + 1]]
+static void sd_group(struct side *s) {
+ for (uintptr_t c = 0; c <= s->nb; c++) s->at[c] = 0;
+ for (uintptr_t i = 0; i < s->nf; i++) s->at[s->br[i] + 1]++;
+ for (uintptr_t c = 0; c < s->nb; c++) s->at[c + 1] += s->at[c];
+ for (uintptr_t i = 0; i < s->nf; i++) s->by[s->at[s->br[i]]++] = (intptr_t) i;
+ for (uintptr_t c = s->nb; c; c--) s->at[c] = s->at[c - 1];
+ s->at[0] = 0; }
+static bool sd_meet(flo_t const *lo, flo_t const *hi, uintptr_t i, uintptr_t j, flo_t e) {
+ for (int k = 0; k < 3; k++) if (!(hi[3 * j + k] >= lo[3 * i + k] - e && lo[3 * j + k] - e <= hi[3 * i + k])) return 0;
+ return 1; }
+static void sd_run(struct side *s) {
+ flo_t const *fl = s->f, *fh = s->f + 3 * s->nf, *bl = s->b, *bh = s->b + 3 * s->nb;
+ for (uintptr_t i = 0; i < s->nf && !s->bad; i++) {
+  uintptr_t const c0 = (uintptr_t) s->br[i];
+  s->sp[2 * i] = (intptr_t) s->nr;
+  for (uintptr_t c = 0; c < s->nb && !s->bad; c++) {
+   if (!sd_meet(bl, bh, c0, c, (flo_t) 0.02)) continue;
+   for (intptr_t q = s->at[c]; q < s->at[c + 1] && !s->bad; q++) {
+    uintptr_t const j = (uintptr_t) s->by[q];
+    if (!sd_meet(fl, fh, i, j, (flo_t) 1e-3)) continue;
+    s->r = pl_grow(s->r, s->nr + 1, &s->cr, sizeof *s->r, &s->bad);
+    if (!s->bad) s->r[s->nr++] = s->id[j]; } }
+  s->sp[2 * i + 1] = (intptr_t) s->nr - s->sp[2 * i]; } }
+love_noinline static struct g *host_poly_beside(struct g *g) {
+ word const fb = g->sp[2], ci = g->sp[3], bl = g->sp[4];
+ struct side s = {0};
+ s.nf = galaxyp(fb) ? tray_nelem(tray(fb)) : 0, s.nb = chainp(bl) && galaxyp(A(bl)) ? tray_nelem(tray(A(bl))) : 0;
+ if (!pl_cols3(g->sp[0], s.nf) || !pl_cols3(g->sp[1], s.nf) || !pl_col(ci, s.nf) || !pl_cols3(bl, s.nb) || !pl_cols3(g->sp[5], s.nb))
+  return g->sp[0] = ZeroPoint, g;
+ s.f = sd_new(6 * s.nf, sizeof *s.f, &s.bad), s.b = sd_new(6 * s.nb, sizeof *s.b, &s.bad);
+ s.br = sd_new(s.nf, sizeof *s.br, &s.bad), s.id = sd_new(s.nf, sizeof *s.id, &s.bad), s.by = sd_new(s.nf, sizeof *s.by, &s.bad);
+ s.at = sd_new(s.nb + 1, sizeof *s.at, &s.bad), s.sp = sd_new(2 * s.nf, sizeof *s.sp, &s.bad);
+ if (!s.bad) {
+  pl_get3(g->sp[0], s.nf, s.f), pl_get3(g->sp[1], s.nf, s.f + 3 * s.nf), pl_get3(bl, s.nb, s.b), pl_get3(g->sp[5], s.nb, s.b + 3 * s.nb);
+  for (uintptr_t i = 0; i < s.nf; i++) {
+   s.br[i] = tray_get_int(tray(fb), i), s.id[i] = tray_get_int(tray(ci), i);
+   s.bad |= s.br[i] < 0 || (uintptr_t) s.br[i] >= s.nb; } }
+ if (!s.bad) sd_group(&s), sd_run(&s);
+ if (!s.bad && ok(g = have(g, (s.nf + s.nr) * chain_req))) {
+  word l = ZeroPoint;
+  for (uintptr_t i = s.nf; i--; ) {
+   word m = ZeroPoint;
+   for (intptr_t q = s.sp[2 * i] + s.sp[2 * i + 1]; q-- > s.sp[2 * i]; ) m = word(ini_chain(bump(g, chain_req), (intptr_t) putcharm(s.r[q]), (intptr_t) m));
+   l = word(ini_chain(bump(g, chain_req), (intptr_t) m, (intptr_t) l)); }
+  g->sp[0] = l; }
+ else if (ok(g)) g->sp[0] = ZeroPoint;
+ return sd_fin(&s), g; }
+
 static lvm(lvm_poly_keep) { LvmCallp(g, 1, host_poly_keep) }
 static lvm(lvm_poly_carve) { LvmCallp(g, 1, host_poly_carve) }
 static lvm(lvm_poly_grid) { LvmCallp(g, 1, host_poly_grid) }
 static lvm(lvm_poly_seen) { LvmCall(g, host_poly_seen) }
 static lvm(lvm_poly_fans) { LvmCallp(g, 3, host_poly_fans) }
 static lvm(lvm_poly_weave) { LvmCall(g, host_poly_weave) }
-LvDef("poly-keep", poly_keep, 2, NULL);
-LvDef("poly-carve", poly_carve, 2, NULL);
-LvDef("poly-grid", poly_grid, 2, NULL);
-LvDef("poly-seen", poly_seen, 1, NULL);
-LvDef("poly-fans", poly_fans, 4, NULL);
-LvDef("poly-weave", poly_weave, 1, NULL);
+static lvm(lvm_poly_beside) { LvmCallp(g, 5, host_poly_beside) }
+LvDef("poly-keep", poly_keep, 2, "lore");
+LvDef("poly-carve", poly_carve, 2, "lore");
+LvDef("poly-grid", poly_grid, 2, "lore");
+LvDef("poly-seen", poly_seen, 1, "lore");
+LvDef("poly-fans", poly_fans, 4, "lore");
+LvDef("poly-weave", poly_weave, 1, "lore");
+LvDef("poly-beside", poly_beside, 6, "lore");
