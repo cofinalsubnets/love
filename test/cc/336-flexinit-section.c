@@ -13,6 +13,6 @@ int main(void)
 	if (pa->f[1].s != 3 || pa->f[1].n[1] != 'y' || pa->f[2].n[0]) r |= 1;
 	if (pb->f[0].s != 5 || pb->ov != 2) r |= 2;
 	if (pc->f[0].w != 8 || pe->ov != 4) r |= 4;
-	if (((unsigned long) pb | (unsigned long) pe) & 7) r |= 8;
+	if (((unsigned long) pb | (unsigned long) pe) & (_Alignof(struct d) - 1)) r |= 8;
 	return r + 40;
 }
