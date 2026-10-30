@@ -33,10 +33,7 @@
  luxhome ("out/.luxui-home-" + show (getpid 0))
  _ (mkdir luxhome 493)
  ph (tether ["env" ("DISPLAY=:" + show dn) ("HOME=" + luxhome)
-           "out/love" "-l" "src/apps/lux/core.l" "-l" "src/apps/lux/layout.l"
-           "-l" "src/apps/lux/wire.l" "-l" "src/apps/lux/ewmh.l"
-           "-l" "src/apps/lux/manage.l" "-l" "src/apps/lux/keys.l"
-           "-l" "src/apps/lux/config.l" "-l" "src/apps/lux/lux.l"])
+           "out/love" "lux"])                                       ; the carried unit, raised by name
  _ (must 'lux-up (two? ph))
  _ (enlist 'ph <ph)
 

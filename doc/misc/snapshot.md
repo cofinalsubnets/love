@@ -134,10 +134,15 @@ the verbs and modules each file added at that path. `love roster` reads it back 
 `src/apps/NAME.l` or `src/apps/NAME/`, past kore's table), with the units each one's files cite or
 borrow. `love bake --without U,.. [--with U,..] [-o OUT]` is the roster's bake: a left-out unit
 is a `lazy` form in the cat, its verbs pinned as stubs that read its files off `/love` at their
-first call, and a kept unit's needs stay kept. A bake starts from the egg, so its image is a
-function of the code and the roster alone, and the roster rides the image: `love seed` on a
-configured binary rebuilds the default, bakes it again without the units its own image left
-out, and then holds it to the fixpoint. `test_roster` holds both.
+first call, and a kept unit's needs stay kept. The Makefile's `carryfiles` are carried but not
+baked: each is a `(cite 'verbs 'carry PATH)` row after the crew, and a verb miss on a left-out
+unit's name raises it, so `love helm` runs from the source and `--with helm` bakes it in.
+`love roster pick` chooses the same flags on a checklist, each unit with its source and an
+estimate of its baked bytes; turning one on takes what it needs along, and off, what needs it. A
+bake starts from the egg, so its image is a function of the code and the roster alone, and the
+roster rides the image: `love seed` on a configured binary rebuilds the default, bakes it again
+with and without the units its image took against the default, and then holds it to the
+fixpoint. `test_roster` holds all three.
 
 `love bake PATH` writes a plain image file instead of touching a binary. `love wake PATH
 prog.l args..` boots from a named image.

@@ -254,11 +254,12 @@ test_hook:
 test_glazebench test_glazefuzz:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (the glaze emits for x64 / a64; host arch is $a)"
 endif
-# the SAT solver, portable; cold on purpose (3.6 s egg vs 14.4 s woken)
+# the SAT solver's laws over the sources, then `love sat` raised off /love
 test_sat: host
-	@echo TEST src/apps/sat/sat.l + src/apps/sat/dimacs.l + src/apps/sat/flat.l
-	@cat src/apps/sat/sat.l src/apps/sat/dimacs.l src/apps/sat/flat.l \
-	  | $(gsh) test/gate/run.sh sat "env LOVE_NO_IMAGE=1 $m" "sat: Stages 1-3 ok|src/apps/sat/dimacs: ok|src/apps/sat/flat: ok"
+	@echo TEST test/law/sat.l + love sat
+	@cat $(filter-out src/apps/sat/cli.l,$(satfiles)) test/law/sat.l \
+	  | $(gsh) test/gate/run.sh sat "$m" "sat: Stages 1-3 ok|src/apps/sat/dimacs: ok|src/apps/sat/flat: ok"
+	@$(gsh) test/gate/satverb.sh $m
 # flat.l's refutations checked by drat-trim (fetched into out/drat; skips offline)
 test_drat: host
 	@cd src/apps/sat && ./dratcheck.sh || { echo "FAIL drat"; exit 1; }
