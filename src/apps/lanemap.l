@@ -57,6 +57,7 @@
      ["test_inle" "test_kernel_vmx" "test_disk" "test_uefi" "test_kboot" "test_kmitty" "test_kverb" "test_kernel_uproc"
       "test_kernel_a64" "test_uefi_a64" "test_kernel_rv64" "test_kernel_wasm" "test_seedwasm" "test_nestwasm"]
      ["test_doomx" "test_doomwasm"]
+     ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
       "test_nucleo446" "test_nucleo446_smoke" "test_teensy41" "test_playdate" "test_rp2040" "test_boards"
       "test_objcopy" "test_links"]

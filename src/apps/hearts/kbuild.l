@@ -6,9 +6,10 @@
 ; those tablets; hearts owns the walk, the archives and the link, and its answers are held to
 ; a reference build's vmlinux.a and .cmd files.
 ;
-; a hearts build is clean and one-shot: no fixdep, no .cmd, no if_changed. hk-make runs kbuild's
-; own goals as make would, sub-makes and all; an earlier build's .cmd files are read only as the
-; prior state a differential starts from.
+; a hearts build has no fixdep and no if_changed. hk-make runs kbuild's own goals as make would,
+; sub-makes and all; an earlier build's .cmd files (kbuild's, or the ones hearts writes) are read
+; only as the prior state a rebuild starts from: a target is remade when its command changed, a
+; prerequisite was remade, or it is gone -- a header edit is not seen.
 (module (hearts-kbuild hk-top hk-topgoal hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-make hk-submake hk-envmake hk-path)
 (borrow 'posix)
 (borrow 'cook)

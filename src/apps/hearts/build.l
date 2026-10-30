@@ -9,7 +9,8 @@
 ;                make would remake and restart for)
 ; $HEARTS_JOBS   commands in flight at once (default 1); a filechk and a sub-make's script run
 ;                here, in order
-; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior")
+; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior");
+;                each target made writes its own, so a build is the next one's prior
 ; $KBUILD_BUILD_USER/HOST/VERSION/TIMESTAMP  the build's identity, handed in as the command
 ;                line's, so no clock or host name reaches the image
 ; $HEARTS_HOSTCC the compiler the host programs build with (kconfig's conf, fixdep, dtc, ..),
@@ -19,6 +20,9 @@
 ; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, love's
 ;                lex and yacc, whose C back ends write what flex and bison would
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
+; $HEARTS_CC, $HEARTS_LD, $HEARTS_AR  the kernel's compiler, linker and archiver (`make CC= LD= AR=`);
+;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
+;                named in .hearts/kcc.log), love's ld (but the arm32 compat vdso's, lld's) and love's ar
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 (: argv cmdline
    memo {}
@@ -46,12 +50,15 @@
    (q s) ("'" + join "'\\''" (split "'" s) + "'")
    (ident? n) (0 < #n && all (c \ c = 95 || 65 <= c <= 90 || 97 <= c <= 122 || 48 <= c <= 57) (map n ^#n)
                && !(48 <= n 0 <= 57))
+   ; a target's .cmd: dir/.name.cmd
+   (cmdf tg) (: p (hk-path tg) k (lastsl p) ((k >= 0 ? (snip p 0 (k + 1)) "") + "." + snip p (k + 1) #p + ".cmd"))
    ; the prior build's saved command for a target: its .cmd, read as make reads it
-   (prior tg) (: p (hk-path tg) k (lastsl p)
-                 f ((k >= 0 ? (snip p 0 (k + 1)) "") + "." + snip p (k + 1) #p + ".cmd")
-                 l (uread f @ [1 s] <(lines s) "")
+   (prior tg) (: l (uread (cmdf tg) @ [1 s] <(lines s) "")
                  i (findsub l " := ")
                  (0 <= i ? ((cite 'cook 'cook-expand) (snip l (i + 4) #l) (pins {} "pound" "#")) ()))
+   ; a made target's saved command, laid as kbuild's .cmd so a later HEARTS_PRIOR build reads it
+   (savecmd tg text) (uwrite (cmdf tg) ("savedcmd_" + hk-path tg + " := "
+                                        + join "$(pound)" (split "#" (join "$$" (split "$" text))) + "\n"))
    (appendf p t) (cite 'posix 'open p "a" @ f (hot? f ? (say f t, cite 'posix 'close f, 1)))
    (bump k) (pin cnt k (peep cnt k 0 + 1), peep cnt k 0)
 
@@ -64,7 +71,7 @@
              _ (peep jobs (j 0) 0 = pid ? (pull jobs (j 0) 0) 0)
              out (uread (j 1) @ [1 s] s "")
              _ (unlink (j 1))
-             (status = 0 ? 0
+             (status = 0 ? (string? (j 2) ? (savecmd (j 0) (j 2)) 0, 0)
                 (puts ("FAILED " + j 0 + " (" + show status + ")\n" + out),
                  peep made " failed" 0 ? 0 (pin made " failed" (j 0)))))))
    (reap1 _) (glean 0 @ r (? (two? r) (land <r >r) (atom? r) (rest 2) 0))
@@ -81,19 +88,20 @@
             + "mkdir -p " + q (dir tg) + " && ")
        _ (waitfor tg)
        _ (appendf (hd + "/commands") (tg + "\t" + show kind + "\t" + text + "\n"))
+       (keep _) (saved ? (savecmd tg text) 0)
        (kind = 'out || njobs < 2
         ? (: line (pre + (kind = 'out
                            ? ("{ " + text + "\n} > " + q (tg + ".tmp") + " && if cmp -s " + q (tg + ".tmp") + " " + q tg
                               + "; then rm -f " + q (tg + ".tmp") + "; exit 3; else mv -f " + q (tg + ".tmp") + " " + q tg + "; fi")
                            text))
              r (hark (shc (line + " 2>&1")))
-             (? (two? r && 0 = <r) 0
-                (kind = 'out && two? r && 3 = <r) 'same
+             (? (two? r && 0 = <r) (keep 0, 0)
+                (kind = 'out && two? r && 3 = <r) (keep 0, 'same)
                 (puts ("FAILED " + tg + " (" + show (two? r ? <r r) + ")\n" + text + "\n" + (two? r ? >r "") + "\n"), 1)))
           (: _ (slot 0)
              f (hd + "/job." + show (bump 'n))
              pid (spawn (shc ("{ " + pre + text + "\n} > " + q f + " 2>&1")))
-             (pin pids pid [tg f], pin jobs tg pid, bump 'live, 0))))
+             (pin pids pid [tg f (saved ? text ())], pin jobs tg pid, bump 'live, 0))))
    ; mooncc finds its headers and runtime at <its binary>/../lib/love/moon: a seat under .hearts,
    ; a copy of this love beside the tree's own src/apps/moon (build.l sits in src/apps/hearts)
    (seat _)
@@ -107,6 +115,11 @@
                 + "case \" $* \" in\n  *\" -o certs/extract-cert \"*) exec cp -f " + q (hd + "/bin/xcert") + " certs/extract-cert;;\n"
                 + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
         uwrite (hd + "/bin/xcert") (bang + "exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/xcert.l") + " \"$@\"\n"),
+        uwrite (hd + "/bin/hk-cc")
+               (bang + "# the kernel's compiler: mooncc, and clang where it refuses (kcc.l); a unit takes love's\n"
+                + "# own budget, not the driver's: one header-heavy unit's live set passes 800 MB\n"
+                + "unset LOVE_BUDGET_MB\nexport HEARTS_KCC_LOG=" + q (hd + "/kcc.log") + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
+        hark ["chmod" "+x" (hd + "/bin/hk-cc")],
         hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
         ; perl: the scripts the build runs are ported (perlasm.l, oidreg.l, each pinned by hash); any
@@ -137,9 +150,13 @@
          ; the host programs' popen and system (conf's $(shell)) run moonlibc's $LOVE_SH, the shell the commands run
          cl1 (pins cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc")))
                        "LOVE_SH" (getenv "HEARTS_SH" @ h (string? h ? h (selfpath 0 + " lush -a")))
-                       "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc"))
+                       "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc")
+                       "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar")
+                       ; the compat vdso is elf32 arm, which love's ld does not link: lld's
+                       "LD_COMPAT" "ld.lld")
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
-                   [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]])
+                   [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]
+                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"]])
          goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
