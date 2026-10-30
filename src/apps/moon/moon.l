@@ -864,7 +864,8 @@
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
    (rtpull srcs tgt os nostd vb imp?)
     (: mach (peep elf-machines tgt 0)
-       lg (ldledger srcs mach) dt <lg owed <>lg
+       ; a thread template owes the startup that lays the first thread's copy
+       lg (ldledger srcs mach) dt <lg owed (lg 2 ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
        home (two? owed && !nostd && mhome ())

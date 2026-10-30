@@ -301,6 +301,10 @@ for o in 0 2; do
   "$ho/.tls$o" || fail "tls: gcc -O$o's thread-locals read wrong under mooncc's link and moonlibc (exit $?)"
 done
 readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
+# ..and with no libc call to pull the startup in, the template does
+moonrun -o "$ho/.tlsb" test/cc/tls/bare.c "$ho/.tlsp2.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
+  || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link bare.c"; }
+"$ho/.tlsb" || fail "tls: a program calling no libc read its thread-locals wrong (exit $?)"
 
 # ms_abi across compilers: gcc's definitions and calls against mooncc's trampolines and shuffles
 $cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peerms.o" test/cc/msabi/peer.c \

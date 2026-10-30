@@ -60,7 +60,8 @@ test/gate/moon.sh), and the deliberate readings in them:
   (`__STDC_NO_THREADS__`), so a thread-local *is* the one static object — observationally
   right, and C11 gives the storage class no opt-out macro to refuse it under. it is the row
   that would read wrong, in silence, the day threads arrive. holo does link a foreign
-  object's `.tdata`/`.tbss` (gcc's, x64 static links), and moonlibc gives each thread its copy.
+  object's `.tdata`/`.tbss` (gcc's or clang's, x64 and a64 static links), and moonlibc gives
+  each thread its copy.
 - **universal character names in an identifier**, the remaining half of a C99-mandatory row.
   A UCN names a code point, so `Å` and a raw utf-8 `Å` intern as one name and export the
   same symbol bytes gcc does. a byte past 127 is now an identifier char everywhere, so a
