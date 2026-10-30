@@ -2535,11 +2535,14 @@
    (onto? o r f) (two? f && (<f = o && <>f = r || <f = 'fopm && <>f = o && <>>f = r))
    wX (around hX)
    wA (around hA)
+   ; x64 colours the two homes freely: the wrap names them, t's the one s is added onto
+   a ((wX 0) 3) b ((wX 1) 3)
+   T (elem ['addsd a b] hX ? a b) S (T = a ? b a)
    (test
-      (reg? 'stsd 'f8 (wX 0)) (reg? 'stsd 'f9 (wX 1))
-      (reg? 'ldsd 'f8 (wX 2)) (reg? 'ldsd 'f9 (wX 3))
-      (1 = #(filter (reg? 'stsd 'f8) hX))           ; no save at entry: the wrap is the call's
-      (elem '(addsd f9 f0) hX) (any (onto? 'mulsd 'f8) hX) (elem '(addsd f8 f9) hX)
+      (reg? 'stsd a (wX 0)) (reg? 'stsd b (wX 1)) (a != b)
+      (reg? 'ldsd a (wX 2)) (reg? 'ldsd b (wX 3))
+      (1 = #(filter (reg? 'stsd T) hX))           ; no save at entry: the wrap is the call's
+      (any (f \ two? f && <f = 'addsd && <>f = S && <>>f != T) hX) (any (onto? 'mulsd T) hX) (elem ['addsd T S] hX)
       !(any (f \ reg? 'stsd 'f8 f || reg? 'ldsd 'f8 f) [(wA 1) (wA 2)])
       (1 = #(filter (reg? 'stsd 'f8) hA))           ; a64: one save, one restore
       (1 = #(filter (reg? 'ldsd 'f8) hA))
