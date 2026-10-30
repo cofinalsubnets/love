@@ -38,18 +38,22 @@ static void __love_reloc(void) {
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
 
-/* x64's thread template, variant II: a thread's copy ends at its thread pointer, whose first
- * word points at itself; the template's tail past its file bytes is the .tbss, zeroed */
+/* a thread's copy of the pt_tls template, its .tbss tail zeroed: x64's (variant II) ends at
+ * the thread pointer, whose first word points at itself; a64's (variant I) starts tlsoff past
+ * it, over a 16-byte control block whose first word the caller lays */
 void __love_tlscopy(void *tp) {
-  char *b = (char *) tp - __love_mt.tlsblk;
+  char *b = (char *) tp + __love_mt.tlsoff;
   memcpy(b, __love_mt.tlsimg, __love_mt.tlsfile);
   memset(b + __love_mt.tlsfile, 0, __love_mt.tlsblk - __love_mt.tlsfile);
-  *(void **) tp = tp; }
-
-/* a program with a pt_tls gets the main thread's copy, the thread pointer set at its end;
- * one without keeps the main thread's at 0 */
-static void __love_tlsinit(void) {
 #if defined(__x86_64__)
+  *(void **) tp = tp;
+#endif
+}
+
+/* a program with a pt_tls gets the main thread's copy and its thread pointer; one without
+ * keeps the main thread's at 0 */
+static void __love_tlsinit(void) {
+#if defined(__x86_64__) || defined(__aarch64__)
   unsigned long phdr = 0, phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
     if ((unsigned int) a[0] == 3) phdr = (unsigned long) a[1];   /* AT_PHDR */
@@ -63,14 +67,25 @@ static void __love_tlsinit(void) {
   __love_mt.tlsfile = (unsigned long) t->p_filesz;
   __love_mt.tlsblk = ((unsigned long) t->p_memsz + al - 1) / al * al;
   __love_mt.tlsalign = al;
-  char *m = mmap(0, (long) (__love_mt.tlsblk + 64), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#if defined(__x86_64__)
+  __love_mt.tlsoff = -(long) __love_mt.tlsblk;
+#else
+  __love_mt.tlsoff = (long) ((16 + al - 1) / al * al);
+#endif
+  unsigned long tcb = __love_mt.tlsoff > 0 ? (unsigned long) __love_mt.tlsoff : 0;
+  char *m = mmap(0, (long) (tcb + __love_mt.tlsblk + 64), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (m == (char *) -1) { sc1(NR_exit_group, 127); }
-  void *tp = m + __love_mt.tlsblk;
+  void *tp = m + (__love_mt.tlsoff > 0 ? 0 : __love_mt.tlsblk);
   __love_tlscopy(tp);
   __love_mt.mtp = tp;
+#if defined(__x86_64__)
   if (__love_osv == 2) fb2(165, 129, (long) &tp);             /* sysarch(AMD64_SET_FSBASE) */
   else if (__love_osv == 3) fb1(317, (long) tp);              /* _lwp_setprivate */
   else sc2(NR_arch_prctl, 0x1002, (long) tp);                 /* ARCH_SET_FS */
+#else
+  if (__love_osv == 3) fb1(317, (long) tp);                   /* _lwp_setprivate */
+  else __asm__ volatile("msr tpidr_el0, %0" : : "r"(tp));
+#endif
 #endif
 }
 

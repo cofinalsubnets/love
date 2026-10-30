@@ -122,13 +122,20 @@
                          (18 8 tpoff) (23 4 tpoff32) (22 4 gottpoff)))
             183 (ld-cls '((257 8 abs) (258 4 abs32) (260 8 pc) (261 4 pc32) (273 4 ld19) (274 4 adr21)
                           (275 4 adrp21) (277 4 addlo12) (278 4 addlo12) (279 4 b14) (280 4 b19) (282 4 b26)
-                          (283 4 b26) (284 4 lo12s2) (285 4 lo12s4) (286 4 lo12s8) (299 4 lo12s16)))
+                          (283 4 b26) (284 4 lo12s2) (285 4 lo12s4) (286 4 lo12s8) (299 4 lo12s16)
+                          (549 4 tphi12) (550 4 tplo12) (551 4 tplo12nc) (553 4 tpst0) (555 4 tpst1)
+                          (557 4 tpst2) (559 4 tpst3) (571 4 tpst4) (541 4 gottprel21) (542 4 gottprel12)))
             ; call_plt spans the auipc pair
             243 (ld-cls '((2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
             40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (51 4 bcc)))
             3 (ld-cls '((1 4 w32) (2 4 r32) (4 4 r32) (20 2 w16) (21 2 r16) (22 1 w8) (23 1 r8)))}
+   ; a64's thread-pointer kinds -> (how shift): an add's imm12 (hi or lo, the lo checked or
+   ; not), a load's scaled imm12, or initial-exec's adrp and ldr from the got
+   ld-a64tp {'tphi12 '(hi 12) 'tplo12 '(lo 0) 'tplo12nc '(nc 0) 'tpst0 '(nc 0) 'tpst1 '(nc 1)
+             'tpst2 '(nc 2) 'tpst3 '(nc 3) 'tpst4 '(nc 4) 'gottprel21 '(movz 16) 'gottprel12 '(movk 0)}
+   ld-tpkinds ('(tpoff tpoff32 gottpoff) + keys ld-a64tp)
    ; machine, kind -> its row, or a scare
    (ld-rk mach kind) (: t (peep ld-rtab mach ()) r (? (t = ()) () (peep t kind ()))
                         (two? r ? r (scare 'link-reloc kind)))
@@ -295,10 +302,10 @@
    ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
              "__data_start__" "__data_end__" "__data_load__"
              "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_")
-   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs), global noms
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
-        (peep ob 'nsym 0 <= i ? [ds us]
+        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob])]
            (: sy (sy9 i) bind (sy 1)
               (? !(elem bind '(1 2)) (go (i + 1) ds us)
                  (0 < sy 3) (go (i + 1) (<sy . ds) us)
@@ -355,8 +362,9 @@
        (((thin ? "!<thin>\n" "!<arch>\n") + (ix ? (ld-arhdr "/" "0" "0" "0" "0" isz + idx) "")
          + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ltab) ""))
         + body))
-   ; a set of objects -> (dt owed): dt every nom defined or synthesized, a tablet the caller
-   ; pins into; owed the strong undefineds left. __start_X/__stop_X are ldres's to answer.
+   ; a set of objects -> (dt owed tls?): dt every nom defined or synthesized, a tablet the
+   ; caller pins into; owed the strong undefineds left; tls? whether one carries a thread
+   ; template. __start_X/__stop_X are ldres's to answer.
    (ld-bracket? nm)
     (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
@@ -367,7 +375,8 @@
         [dt (foldl (\ a du (foldl (\ a2 nm (dt nm || elem nm a2
                                             || ld-bracket? nm ? a2 (nm . a2)))
                                   a <>du))
-                   () duos)]))
+                   () duos)
+         (any (du \ du 2) duos)]))
    ; pull the members the index names for owed noms, each pull's undefineds joining the owed,
    ; until none hits -> (picked-srcs owed); `dt` grows in place.
    (arpull path s dt owed mach)
@@ -508,12 +517,26 @@
                      ())
              (two? x ? <x (scare 'link-undef nm)))))
 
+   ; one a64 field: (how sh), the section's bytes s, the word's offset o, v = S + A - tp -> its
+   ; four bytes. the got's adrp and ldr relax, as ld does, to movz and movk of v, the ldr's
+   ; base its own target
+   (ld-a64tls [how sh] s o v nm)
+    (: wd (+(map (i \ (s (o + i)) << (8 * i)) ^4))
+       rd (wd & 31)
+       _ (0 <= v < (? (how == 'hi) 16777216 (how == 'lo) 4096 4294967296) ? 0 (scare 'link-range nm))
+       _ (how == 'nc && (v % (1 << sh)) != 0 ? (scare 'link-tls-align nm))
+       _ (how == 'movz && (wd & 2667577344) != 2415919104 ? (scare 'link-tls-gottprel nm))
+       _ (how == 'movk && ((wd & 4290772992) != 4181721088 || ((wd >> 5) & 31) != rd) ? (scare 'link-tls-gottprel nm))
+       (le32 (? (how == 'movz) (3533701120 | (((v >> 16) & 65535) << 5) | rd)
+                (how == 'movk) (4068474880 | ((v & 65535) << 5) | rd)
+                ((wd & 4290774015) | (((v >> sh) & 4095) << 10)))))
+
    ; patch one object's one section: its bytes as text snips + byte lists, each relocation's
    ; field spliced in. entries must ascend by offset. cx: (glo n0 n1 r0 r1 relbox rv arm? be
    ; xt tp), the symbol book, the brackets, the -pie/-shared site box, the riscv flag, the arm
    ; flag ('i386 for EM_386), the backend fields re-encode through, the named-lane extents,
-   ; the thread pointer's address in the template (x64's variant II: the block ends at it), ()
-   ; where the link lays no tls.
+   ; the thread pointer's address beside the template (x64's variant II ends the block at it,
+   ; a64's variant I starts it a control block past), () where the link lays no tls.
    ; kind numbers collide across machines (R_RISCV_64 is R_X86_64_PC32), so dispatch is by machine.
    (ldpatch ob ix base [glo n0 n1 r0 r1 relbox rv arm? be xt tp])
     (: s (peep ob 'src 0) se (peep (peep ob 'secs 0) ix ())
@@ -565,8 +588,8 @@
                     row (ld-rk (peep ob 'mach 0) kind) w <row k (row 1)
                     abs64? (k == 'abs)
                     abs32? (elem k '(abs32 u32 s32 u16 u8))
-                    ; x64's thread-pointer kinds: S + A from tp
-                    _ (elem k '(tpoff tpoff32 gottpoff) && !(charm? tp) ? (scare 'link-tls <sy))
+                    ; the thread-pointer kinds: S + A from tp
+                    _ (elem k ld-tpkinds && !(charm? tp) ? (scare 'link-tls <sy))
                     ; GOTTPOFF's mov or add from the got, relaxed as ld does to the same op on an
                     ; immediate: the three bytes ahead of the field rewritten
                     gx (? (k == 'gottpoff)
@@ -574,6 +597,7 @@
                              (pos <= o - 3 && elem rx '(72 76) && (md & 199) = 5 && elem op '(139 3) ?
                               [(rx = 76 ? 73 72) (op = 139 ? 199 129) (192 | ((md >> 3) & 7))]
                               (scare 'link-tls-gottpoff <sy))))
+                    ax (peep ld-a64tp k () @ f (two? f ? (ld-a64tls f s (off0 + ro) (s64 (ld-u64 (sa - tp))) <sy)))
                     ; -pie: record each abs64 site for the startup relocator to add the base.
                     ; -shared: record (site import value) for the loader, an import's addend or
                     ; the link-time value; a weak undefined stays zero.
@@ -588,7 +612,8 @@
                     ; const that holds an address
                     _ (relbox && abs64? && se 4 = 'rodata ? (scare 'link-rodata-pie <sy))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
-                    bs (? (k == 'tpoff) (le64 (ld-u64 (sa - tp)))
+                    bs (? (two? ax) ax
+                          (k == 'tpoff) (le64 (ld-u64 (sa - tp)))
                           ; GOTTPOFF's addend is the -4 of its rip-relative field, gone with the got
                           (elem k '(tpoff32 gottpoff))
                            (: v (s64 (ld-u64 ((k == 'gottpoff ? sv sa) - tp)))
@@ -1109,9 +1134,9 @@
        _ (0 < mach ? 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        rv (mach = 243)
-       ; a thread template (x64 alone): .tdata then .tbss as file zeros, past the nifs, a pt_tls
+       ; a thread template (x64 and a64): .tdata then .tbss as file zeros, past the nifs, a pt_tls
        tls? (ld-tls? objs)
-       _ (tls? && mach != 62 ? (scare 'link-tls target))
+       _ (tls? && !(elem mach '(62 183)) ? (scare 'link-tls target))
        ; em_386 and em_arm: ELF32 headers, symbols and REL fields
        w32 (elem mach '(3 40))
        _ (w32 && pie ? (scare 'link-i386-pie target))
@@ -1141,10 +1166,10 @@
        ; the address the cuts skipped, which the file does not carry: from d0 on an offset is
        ; `addr - base - sk`, o0's is `t1 - base`
        sk ((o0 - t1) + (d0 - o1))
-       ; the template: the thread pointer is the block's end on its alignment, so a symbol's
-       ; offset is its address less tp
+       ; the template, a symbol's offset its address less tp: x64's thread pointer is the
+       ; block's end on its alignment, a64's lies a 16-byte control block (aligned) before it
        tl0 (sv "__tl0") tl1 (sv "__tl1")
-       tp (tls? ? (tl0 + ld-align tal (tl1 - tl0)))
+       tp (tls? ? (mach = 183 ? (tl0 - ld-align tal 16) (tl0 + ld-align tal (tl1 - tl0))))
        r0 (sv "__r0")
        r1 (r0 + 8 * nrel)
        ; the file bytes end on 16, for .bss and .image; the slack is outside .love.rela, where
