@@ -32,7 +32,7 @@
    (spell ws a inc)
     (? (atom? ws) [(rev a) (rev inc)]
        (: x <ws  r >ws
-          (? (x = "-c" || starts? x "-Wp,-MMD" || starts? x "-Wp,-MD" || drop? x || x = <srcs) (spell r a inc)
+          (? (x = "-c" || drop? x || x = <srcs) (spell r a inc)
              (x = "-o") (spell >r a inc)
              (x = "-include" && two? r) (spell >r a (<r . inc))
              (x = "-isystem" && two? r) (spell >r (<r . "-I" . a) inc)

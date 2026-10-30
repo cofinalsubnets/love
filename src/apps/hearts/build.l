@@ -21,7 +21,7 @@
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
 ; $HEARTS_CC, $HEARTS_LD, $HEARTS_AR  the kernel's compiler, linker and archiver (`make CC= LD= AR=`);
 ;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
-;                named in .hearts/kcc.log), love's ld and love's ar
+;                named in .hearts/kcc.log), love's ld (but the arm32 compat vdso's, lld's) and love's ar
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 (: argv cmdline
    memo {}
@@ -145,7 +145,9 @@
          cl1 (pins cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc")))
                        "LOVE_SH" (getenv "HEARTS_SH" @ h (string? h ? h (selfpath 0 + " lush -a")))
                        "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc")
-                       "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar"))
+                       "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar")
+                       ; the compat vdso is elf32 arm, which love's ld does not link: lld's
+                       "LD_COMPAT" "ld.lld")
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
                    [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]
                     ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"]])
