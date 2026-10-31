@@ -59,7 +59,8 @@ struct rz {
  int cls, gzp;           // the triangle's class, 1 behind glass 2 before it; the glass pass
  void *ans;
  flo_t *tz;             // each 8 by 8 tile's farthest depth, then whether it was drawn on since
- intptr_t TW, TH;
+ intptr_t TW, TH,
+          bx0, bx1, by0, by1;   // the box of tiles drawn on since last, rows by0 to by1
  flo_t *pv;              // the vertices once through m and lm, rz_pv a vertex: x y z w, the sun's x y z, bits, row
  intptr_t *bk,           // shared, each triangle's bands, first * rz_bk + last, or -1 none's
           nth, ylo, yhi; // the bands the frame is in, and this one's rows
@@ -164,10 +165,13 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  { // ..or behind all that is drawn on every tile it covers, as near as its nearest corner
   flo_t const zn = p0->z < p1->z ? (p0->z < p2->z ? p0->z : p2->z) : (p1->z < p2->z ? p1->z : p2->z);
   intptr_t const ty1 = ((intptr_t) by1 < r->yhi ? (intptr_t) by1 - 1 : r->yhi - 1) >> 3, tx0 = (intptr_t) bx0 >> 3, tx1 = (intptr_t) (bx1 - 1) >> 3;
+  intptr_t const ty0 = rz_own(r, (intptr_t) by0) >> 3;
   int seen = 0;
-  for (intptr_t ty = rz_own(r, (intptr_t) by0) >> 3; ty <= ty1 && !seen; ty++)
+  for (intptr_t ty = ty0; ty <= ty1 && !seen; ty++)
    for (intptr_t tx = tx0; tx <= tx1 && !seen; tx++) seen = r->tz[ty * r->TW + tx] > zn;
-  if (!seen) return; }
+  if (!seen) return;
+  r->bx0 = tx0 < r->bx0 ? tx0 : r->bx0, r->bx1 = tx1 > r->bx1 ? tx1 : r->bx1,
+  r->by0 = ty0 < r->by0 ? ty0 : r->by0, r->by1 = ty1 > r->by1 ? ty1 : r->by1; }
  flo_t const x0f = (flo_t) (intptr_t) X[0] / 16, y0f = (flo_t) (intptr_t) Y[0] / 16,
              dx1 = (flo_t) (intptr_t) (X[1] - X[0]) / 16, dy1 = (flo_t) (intptr_t) (Y[1] - Y[0]) / 16,
              dx2 = (flo_t) (intptr_t) (X[2] - X[0]) / 16, dy2 = (flo_t) (intptr_t) (Y[2] - Y[0]) / 16, Af = (flo_t) A / 256;
@@ -391,18 +395,24 @@ static int rz_batches(word v, word t, uintptr_t st) {
  for (; chainp(v) && chainp(t); v = B(v), t = B(t)) if (!rz_ok(A(v), A(t), st)) return 0;
  return v == ZeroPoint && t == ZeroPoint; }
 
-// the tiles of this worker's rows drawn on since last, each its farthest depth again
+// the tiles of this worker's rows drawn on since last, each its farthest depth again; only
+// the box they fall in is walked
 static void rz_tiles(struct rz *r) {
- flo_t *td = r->tz + r->TW * r->TH;
- for (intptr_t ty = rz_own(r, 0) >> 3; ty < r->TH && ty * 8 < r->yhi; ty++)
-  for (intptr_t tx = 0; tx < r->TW; tx++) {
-   if (!td[ty * r->TW + tx]) continue;
-   td[ty * r->TW + tx] = 0;
+ intptr_t const TW = r->TW, TH = r->TH, W = r->W, H = r->H, yhi = r->yhi, tx1 = r->bx1, ty1 = r->by1;
+ flo_t *const tz = r->tz, *const td = tz + TW * TH;
+ float const *const dp = r->depth;
+ intptr_t const own = rz_own(r, 0) >> 3;
+ for (intptr_t ty = r->by0 > own ? r->by0 : own; ty <= ty1 && ty < TH && ty * 8 < yhi; ty++)
+  for (intptr_t tx = r->bx0; tx <= tx1; tx++) {
+   if (!td[ty * TW + tx]) continue;
+   td[ty * TW + tx] = 0;
    flo_t m = -2;
-   intptr_t const x1 = tx * 8 + 8 < r->W ? tx * 8 + 8 : r->W, y1 = ty * 8 + 8 < r->H ? ty * 8 + 8 : r->H;
-   for (intptr_t y = ty * 8; y < y1; y++)
-    for (intptr_t x = tx * 8; x < x1; x++) m = r->depth[y * r->W + x] > m ? r->depth[y * r->W + x] : m;
-   r->tz[ty * r->TW + tx] = m; } }
+   intptr_t const x1 = tx * 8 + 8 < W ? tx * 8 + 8 : W, y1 = ty * 8 + 8 < H ? ty * 8 + 8 : H;
+   for (intptr_t y = ty * 8; y < y1; y++) {
+    float const *const row = dp + y * W;
+    for (intptr_t x = tx * 8; x < x1; x++) { flo_t const d = row[x]; m = d > m ? d : m; } }
+   tz[ty * TW + tx] = m; }
+ r->bx0 = TW, r->bx1 = -1, r->by0 = TH, r->by1 = -1; }
 
 static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) {
  intptr_t const nv = (intptr_t) tray_nelem(vt) / r->stride;
@@ -438,22 +448,33 @@ static void rz_prep(struct rz const *r) {
 static void rz_run(struct rz *r) {
  int const bt = galaxyp(r->base) && tray_nelem(tray(r->base)) >= (uintptr_t) (r->W * r->H), under = (r->flags & rz_under) != 0;
  intptr_t const bc = charmp(r->base) ? getcharm(r->base) : 0;
- for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
-  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++) {
-   r->out[i] = (int32_t) (bt ? tray_get_int(tray(r->base), (uintptr_t) i) : bc), r->depth[i] = 2;
-   if (r->cc) {
-    intptr_t const j = y * r->ch / r->H * r->cw + (i - y * r->W) * r->cw / r->W;
-    if (r->cd[j] < 2) r->out[i] = (int32_t) r->cc[j], r->depth[i] = (float) r->cd[j]; }
-   if (under && r->out[i] >= 0) r->depth[i] = -2; }
+ intptr_t const W = r->W, H = r->H, cw = r->cw, ch = r->ch;
+ int32_t *const out = r->out;
+ float *const depth = r->depth;
+ intptr_t const *const cc = r->cc;
+ flo_t const *const cd = r->cd;
+ struct tray *const bv = bt ? tray(r->base) : 0;
+ for (intptr_t y = rz_own(r, 0); y < H; y = rz_own(r, y + 1)) {
+  intptr_t const cj = cc ? y * ch / H * cw : 0;
+  for (intptr_t x = 0, i = y * W; x < W; x++, i++) {
+   int32_t o = (int32_t) (bv ? tray_get_int(bv, (uintptr_t) i) : bc);
+   float d = 2;
+   if (cc) {
+    intptr_t const j = cj + x * cw / W;
+    if (cd[j] < 2) o = (int32_t) cc[j], d = (float) cd[j]; }
+   if (under && o >= 0) d = -2;
+   out[i] = o, depth[i] = d; } }
  int const laid = under || r->cc;   // ..the tiles' farthest asked of what was laid, else all far
+ r->bx0 = 0, r->bx1 = r->TW - 1, r->by0 = 0, r->by1 = r->TH - 1;
  for (intptr_t ty = rz_own(r, 0) >> 3; ty < r->TH && ty * 8 < r->yhi; ty++)
   for (intptr_t tx = 0; tx < r->TW; tx++) r->tz[ty * r->TW + tx] = 2, r->tz[r->TW * r->TH + ty * r->TW + tx] = laid;
  if (laid) rz_tiles(r);
  flo_t *const pv = r->pv;
  intptr_t *const bk = r->bk;
  // ..seen, the glass's depths first, alone, then everything
- if (r->gz) for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
-  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++) r->gz[i] = 2;
+ float *const gz = r->gz;
+ if (gz) for (intptr_t y = rz_own(r, 0); y < H; y = rz_own(r, y + 1))
+  for (intptr_t i = y * W, e = i + W; i < e; i++) gz[i] = 2;
  for (r->gzp = r->gz != 0; r->gzp >= 0; r->gzp--) {
   if (galaxyp(r->vs)) rz_batch(r, tray(r->vs), tray(r->ts), r->tx);
   else for (word v = r->vs, t = r->ts; chainp(v); v = B(v), t = B(t))
@@ -461,11 +482,11 @@ static void rz_run(struct rz *r) {
   r->bk = r->bk ? r->bk + tray_nelem(tray(A(t))) / 4 : 0;
   r->pv = pv, r->bk = bk; }
  r->gzp = 0;
- int const dp = (r->flags & rz_depth) != 0;
- for (intptr_t y = rz_own(r, 0); y < r->H; y = rz_own(r, y + 1))
-  for (intptr_t i = y * r->W, e = i + r->W; i < e; i++)
-   if (dp) ((flo_t*) r->ans)[i] = r->depth[i] < -1 ? 2 : (flo_t) r->depth[i];
-   else ((intptr_t*) r->ans)[i] = r->out[i]; }
+ flo_t *const fa = r->flags & rz_depth ? r->ans : 0;
+ intptr_t *const ia = r->ans;
+ for (intptr_t y = rz_own(r, 0); y < H; y = rz_own(r, y + 1))
+  if (fa) for (intptr_t i = y * W, e = i + W; i < e; i++) fa[i] = depth[i] < -1 ? 2 : (flo_t) depth[i];
+  else for (intptr_t i = y * W, e = i + W; i < e; i++) ia[i] = out[i]; }
 
 // each triangle's bands, as rz_draw would keep it: none outside one plane, else the rows its
 // vertices fall on a row's slack either side, or every band where it is cut
