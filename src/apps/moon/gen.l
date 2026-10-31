@@ -416,6 +416,8 @@
                  csx64)
    (deep? pl) (two? >>pl)                           ; a pool affords a priced seat: two remain after the take
    (fbase g) (arm? g ? 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize)
+   ; the frame hangs off its top, so a save slot laid late moves no other (rv64, v6m address up)
+   (cstop? g) (!(rv64? g) && !(v6m? g))
    ; 'bad is both a policy deopt ("take another lane") and "no lane anywhere"; only the second
    ; speaks, so nolane pins the phrase. last pin wins
    (nolane g txt) (pin g 'nolane txt, 'bad)
@@ -1790,7 +1792,7 @@
     (: fb (fbal g) a2 (min a fb)
        (a2 <= 8 ? (nslot g n)
           (: e (aup (peep g 'off 0 + n) a2) off (0 - e)
-             (pin g 'off e,
+             (pins g 'off e 'slal 1,
               pin g 'slots ([off n] . g 'slots),
               off))))
    ; the object under a frame offset, off the slot map -- () when no cell claims it
@@ -4428,6 +4430,10 @@
        _ (arm '(mla) (g \ f \ [[<>>f <>>>f (f 4)] [<>f] 1]))
        _ (arm '(clz) (g \ f \ [[<>>f] [<>f] 1]))
        _ (arm '(jmpt) (g \ f \ [[<>f] () ()]))
+       ; the frame's markers, laid out by csframe: a restore defines the grants, so a body's last
+       ; write to one is dead unless read; neither is pure, so neither drops
+       _ (arm '(saves) (g \ f \ [() () ()]))
+       _ (arm '(rests) (g \ f \ [() (filter (r \ nelem r (fcspool g)) (g 'csset)) ()]))
        ; x64's wide multiply also writes rax (rdx it saves itself)
        _ (arm '(mulh umulh) (g \ f \ [[<>>f <>>>f] ([<>f] + (x86? g ? '(r0) ())) ()]))
        ; a variable shift defines only its dest (x64's count is cl, never moved into): a claimed r1
@@ -6543,7 +6549,7 @@
                                           t)))
                          cspool9 (jrf || lot9 = 'no ? ()
                                     (filter (r \ !(peep cswr r 0)) csf))
-                         ; a cs reg the prologue already saves rides free: its dead ranges owe no new pair
+                         ; a cs reg the prologue already saves, or a grant csframe saves, rides free: its dead ranges owe no new pair
                          csprd (jrf || lot9 = 'no ? ()
                                   (: t9 {}
                                      (go l i) (!(two? l) || (a6 ? 16 12) < i ? 0
@@ -6554,7 +6560,7 @@
                                                        (pin t9 (f9 3) 1) 0,
                                                      go >l (i + 1))))
                                      (go fs 0,
-                                      filter (r9 \ (peep t9 r9 0)) csf)))
+                                      filter (r9 \ (peep t9 r9 0 || elem r9 (g 'csset))) csf)))
                          taken {}                    ; index -> the seats promotion already holds
                          (pfree? tk r is9)
                           (!(two? is9) ? 1
@@ -6954,6 +6960,66 @@
        (rdsp g f @ rd
           (rd @ 'bar 'dark
                 (filter (r \ elem r (csregs g)) <>rd))))
+   ; the frame's saves, laid out from build's markers: each grant the body still names takes a
+   ; slot just under the frame's fixed cells (rbx's, the canary's), every other slot moves down to
+   ; make room, kept aligned, and the frame grows by as much; (saves) becomes the stores, and each
+   ; (rests) the loads of the grants that may be dirty there
+   (csframe g fs)
+    (cz g 'csframe fs
+     (!(two? (g 'csset)) ? fs
+        (: (mark? f) (f = '(saves) || f = '(rests))
+           (names r x) (? (atom? x) (x = r) (any (names r) x))
+           cs (filter (r \ any (f \ !(mark? f) && names r f) fs) (g 'csset))
+           n #cs
+           fb (fbase g)
+           b0 (g 'sspf ? 16 8)
+           d (g 'slal ? (aup (8 * n) (fbal g)) (8 * n))       ; an over-aligned object keeps its alignment
+           hw (foldl (a \ s \ max a (0 - <s)) b0 (g 'slots))
+           dk (aup (hw + d) 16 - aup hw 16)               ; what rides under the slots keeps its room
+           offs (map (k \ 0 - (b0 + 8 * (k + 1))) ^n)
+           sv (map (k \ [(elem (cs k) (fcspool g) ? 'stsd 'st) fb (offs k) (cs k)]) ^n)
+           (rs S) (catmap (k \ ((cs k) @ r
+                                 (? (elem r (fcspool g)) [['ldsd r fb (offs k)]]
+                                    (elem r S) [['ld r fb (offs k)]]
+                                    ()))) ^n)
+           ; the dirty walk: a write dirties a grant until an exit, a label joins its paths (to a
+           ; fixpoint), and each (rests) restores what may be dirty there; an op the table cannot
+           ; read dirties them all, and a jump whose targets go unspelled reaches every label
+           labs (foldl (t \ f \ (two? f && <f = 'label ? (pin t <>f 1) t)) {} fs)
+           lst {}
+           (uni a b) (foldl (s \ r \ elem r s ? s (r . s)) b a)
+           (sub? a b) (!(two? a) ? 1 (elem <a b && sub? >a b))
+           (bmark L S) (: old (lst L) new (uni S old) (sub? new old ? 0 (pin lst L new, 1)))
+           (ball S) (foldl (c \ L \ c + bmark L S) 0 (keys labs))
+           (wr f S) (csdefs g f @ ds (ds @ 'dark (uni cs S) (uni (filter (r \ elem r cs) ds) S)))
+           (walk l S chg acc)                          ; -> [changed the dirty sets at each (rests), last first]
+            (!(two? l) ? [chg acc]
+               (: f <l k (two? f ? <f ()) dead (S = 'dead)
+                  (? (k = 'label) (walk >l (uni (dead ? () S) (lst <>f)) chg acc)
+                     (f = '(rests)) (walk >l 'dead chg ((dead ? () S) . acc))
+                     dead (walk >l S chg acc)
+                     (k = 'br) (walk >l S (chg + bmark <>>f S) acc)
+                     (k = 'jmp && labs <>f) (walk >l 'dead (chg + bmark <>f S) acc)
+                     (elem k '(jmpt jmpr)) (walk >l 'dead (chg + ball S) acc)
+                     (elem k '(ret jmp)) (walk >l 'dead chg acc)
+                     (walk >l (wr f S) chg acc))))
+           lim (1 + #(keys labs) * n)
+           (fix j) (<(walk fs () 0 ()) = 0 ? 0 (j < lim ? (fix (j + 1)) (scare 'csframe-fix (g 'fn))))
+           dts (0 < n ? (fix 0, rev <>(walk fs () 0 ())) ())
+           (down o) (charm? o && o < 0 - b0 ? (o - d) o)
+           (reb f) (: bp (two? f ? (peep a4base <f -1) -1) up (two? f ? (peep uoff <f -1) -1)
+                      (bp >= 0 && up >= 0 && f bp = fb ? (reop f up (down (f up))) f))
+           (kat l i) (? !(two? l) ()
+                        (<l @ ('sub 'sp 'sp k) (charm? k ? i (kat >l (i + 1))) (kat >l (i + 1))))
+           ki (kat fs 0)
+           (lay l i ds) (? !(two? l) ()
+                           (<l = '(saves)) (sv + lay >l (i + 1) ds)
+                           (<l = '(rests)) (rs <ds + lay >l (i + 1) >ds)
+                           (i = ki) (['sub 'sp 'sp (<l 3 + dk)] . lay >l (i + 1) ds)
+                           ((0 < d ? (reb <l) <l) . lay >l (i + 1) ds))
+           (0 < n && !(charm? ki) ? (scare 'csframe-no-frame (g 'fn))
+              (pin g 'slots (map (o \ [o 8]) offs + map (s \ (down <s . >s)) (g 'slots)),
+               lay fs 0 dts)))))
    (cskeep g fs)                                    ; answers fs; a breach scares, naming fn + reg
     (cz g 'cskeep fs (: (rawy? (f . l)) (two? f && <f = 'raw ? 1 (rawy? l))
        ; every target with a cs file; a8 has none and bails
@@ -9269,7 +9335,9 @@
      'ebx ()                   ; i386: ebx joins the seats (cgfn's second build)
      'ltaken ()                ; the labels a &&L names (a computed goto's targets)
      'fpin (g 'sspf)           ; the frame link is asked for by name (unframe stands off)
-     'cssv ()                  ; the callee-saved save forms (a cs grant pins)
+     'cssv ()                  ; the callee-saved save forms (a cs grant pins), or the (saves) marker
+     'csset ()                 ; the grants csframe saves where the body names them
+     'slal ()                  ; a slot asks more than 8-byte alignment (csframe shifts by the frame's)
      'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
      'pcopy ()                 ; the by-reference struct params' copies, laid after the spills (spillp)
      'fnar ()                  ; the float homes' width, narrowed by cgfn's build after a failed colouring
@@ -11629,8 +11697,11 @@
                _ (pin g 'fpar fgr)
                ; wasm's cs seats need no save: a callee's locals are its own
                ; i386's ebx rides the frame's own rbx save (unframe keeps it once r3 is written)
-               _ (two? cuh && !(wasm? g) ?
-                    (map (r9 \ [(elem r9 (fcspool g) ? 'stsd 'st) 'r4 (nslot g 8) r9]) (filter (r9 \ !(ia32? g && r9 = 'r3)) cuh) @ sv
+               ; where the frame hangs off its top, the grants ride markers csframe lays out late
+               cus (filter (r9 \ !(ia32? g && r9 = 'r3)) cuh)
+               _ (? (!(two? cus) || wasm? g) 0
+                    (cstop? g) (pins g 'csset cus 'cssv '((saves)) 'epi ('((rests)) + e0))
+                    (map (r9 \ [(elem r9 (fcspool g) ? 'stsd 'st) 'r4 (nslot g 8) r9]) cus @ sv
                        (pin g 'cssv sv,
                         pin g 'epi (map (f9 \ [(<f9 = 'stsd ? 'ldsd 'ld) (f9 3) 'r4 (f9 2)]) sv + e0))))
                ; empty grants take the bare () policy, so no policy bar can fire
@@ -11724,7 +11795,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (fldop g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf))))))))))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (fldop g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
