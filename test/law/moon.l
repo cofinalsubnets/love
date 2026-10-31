@@ -1464,7 +1464,8 @@
 ; musttail-escape. under fescv the unmarked calls stay calls and the marked one jumps,
 ; unless a frame address is laid for its args
 (: mg9 {} _ (pin mg9 'tgt 'x64) _ (pin mg9 'fn "f9")
-   mepi '((ld r3 r4 -8) (mov sp r4) (pop r4) (ret))
+   mepi '((rests) (mov sp r4) (pop r4) (ret))       ; an x64 fn's epilogue: csframe lays the restores
+   _ (pin mg9 'epi mepi)
    _ (test
       (elem '(jmp g9) (sibcall mg9 ('((label f9) (call g9 must)) + mepi)))
       !(elem '(call g9 must) (sibcall mg9 ('((label f9) (call g9 must)) + mepi))))
@@ -1479,7 +1480,7 @@
     (test
        (2 = (peep mlog 'musttail-not-a-tail 0))
        (1 = (peep mlog 'musttail-escape 0))))
-   (fv9 _) (: t9 {} (pin t9 'tgt 'x64, pin t9 'fescv 1, pin t9 'fn "f9", t9))
+   (fv9 _) (: t9 {} (pin t9 'tgt 'x64, pin t9 'fescv 1, pin t9 'fn "f9", pin t9 'epi mepi, t9))
    mv9 (sibcall (fv9 ()) ('((label f9) (call h9) (call g9 must)) + mepi))
    uv9 (sibcall (fv9 ()) ('((label f9) (call g9)) + mepi))
    _ (test
@@ -1929,10 +1930,10 @@
       (two? irC1)
       (elem '(ld r5 r6 8) c2)                     ; p->size delivered straight to its seat
       (0 = (cells c2)) (0 = (movs c2))               ; no cell, no husk: ld/li/jmp is the whole call
-      (elem '(ld r0 r6 0) ca)                     ; the first cell arg reads through the face and
-      (0 = (cells ca))                               ;   pays a mov (the aim declines onto p's ARMED
-      (elem '(ld r0 r6 8) ca)                     ;   home -- a one-build residual); still no cell
-      (elem '(mov r5 r0) ca)                      ;   anywhere: ld/mov/ld/mov/jmp is the whole call
+      (elem '(ld r5 r6 8) ca)                     ; the second arg lands on its seat; the first
+      (elem '(ld r0 r6 0) ca)                     ;   reads through the face and pays a mov (the
+      (0 = (cells ca))                               ;   aim declines onto p's ARMED home); no cell
+      (1 = (movs ca))                                ;   anywhere: ld/ld/mov/jmp is the whole call
       !(elem '(ld r6 r5 0) ci)                    ; an indirect call bars the aim: neither arg
       !(elem '(ld r5 r5 8) ci)                    ;   is delivered onto its seat, so both must
       (2 = #(filter (f \ two? f && <f = 'ld && !(<>>f = 'sp)) ci))      ; stage -- two loads
@@ -2388,10 +2389,10 @@
       !(elem '(ld r7 r4 -16) rc)))
 
 ; --- cs seats per value: a chain crossing a call at depth >= 2 takes a callee-saved seat;
-; repack emits one save after the r3 save and one restore before each teardown.
+; csframe saves it under the fixed cells and restores it before each teardown.
 (: gS {}
    _ (pin gS 'slots '((-16 8)))
-   fsL '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+   fsL '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
          (li r5 7)
          (label .O)
          (li r9 0)
@@ -2401,25 +2402,25 @@
          (add r9 r9 1) (cmp r9 3) (br lt .L)
          (cmp r5 99) (br lt .O)
          (mov r0 r5)
-         (mov sp r4) (pop r4) (ret))
-   fsS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+         (rests) (mov sp r4) (pop r4) (ret))
+   fsS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
          (li r5 7)
          (st r4 -16 r5) (call g9) (ld r6 r4 -16)
          (mov r0 r6)
-         (mov sp r4) (pop r4) (ret))
-   rl (repack gS fsL)
+         (rests) (mov sp r4) (pop r4) (ret))
+   rl (csframe gS (repack gS fsL))
    rs (repack gS fsS)
    (test
       !(elem '(ld r6 r4 -16) rl)                 ; the crossing chain left the frame..
       (elem '(mov r11 r5) rl)                    ; ..for a callee-saved seat
       (elem '(mov r6 r11) rl)
-      (elem '(st r4 -16 r11) rl)                 ; one save, after the r3 save..
+      (elem '(st r4 -16 r11) rl)                 ; one save, under the fixed cells..
       (elem '(ld r11 r4 -16) rl)                 ; ..one restore, before the teardown
       (elem '(ld r6 r4 -16) rs)                  ; straight-line weight 2: not worth a pair
       ; a sib exit restores too, at the head of the peel: a tail-called fn, self calls included,
       ; re-enters through a prologue whose saves would clobber an unrestored file
       (elem '(ld r11 r4 -16)
-               (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+               (csframe gS (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
                             (li r5 7)
                             (label .O)
                             (li r9 0)
@@ -2429,9 +2430,9 @@
                             (add r9 r9 1) (cmp r9 3) (br lt .L)
                             (cmp r5 99) (br lt .O)
                             (mov r6 r5)
-                            (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp fn))))
+                            (rests) (mov sp r4) (pop r4) (jmp fn)))))
       (elem '(ld r11 r4 -16)
-               (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
+               (csframe gS (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
                             (li r5 7)
                             (label .O)
                             (li r9 0)
@@ -2441,17 +2442,17 @@
                             (add r9 r9 1) (cmp r9 3) (br lt .L)
                             (cmp r5 99) (br lt .O)
                             (mov r6 r5)
-                            (ld r3 r4 -8) (mov sp r4) (pop r4) (jmp far9))))))
+                            (rests) (mov sp r4) (pop r4) (jmp far9)))))))
 
-; --- the same promotion on a64: fp is the base, the sub sits past the lr/fp link, a cs save
+; --- the same promotion on a64: fp is the base, the sub sits past the lr/fp link, csframe's save
 ; follows it and its restore heads the teardown at (lea sp fp 0)
 (: gA9 {'tgt 'a64}
    _ (pin gA9 'slots '((-16 8)))
-   fsP '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16)
+   fsP '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16) (saves)
          (li r5 7) (st fp -16 r5) (call g9) (ld r6 fp -16) (mov r0 r6)
          (li r7 9) (st fp -16 r7) (ld r8 fp -16) (add r0 r0 r8)
-         (lea sp fp 0) (pop fp) (pop lr) (ret))
-   fsL '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16)
+         (rests) (lea sp fp 0) (pop fp) (pop lr) (ret))
+   fsL '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16) (saves)
          (li r5 7)
          (label .O)
          (li r9 0)
@@ -2461,9 +2462,9 @@
          (add r9 r9 1) (cmp r9 3) (br lt .L)
          (cmp r5 99) (br lt .O)
          (mov r0 r5)
-         (lea sp fp 0) (pop fp) (pop lr) (ret))
+         (rests) (lea sp fp 0) (pop fp) (pop lr) (ret))
    rp (repack gA9 fsP)
-   rl (repack gA9 fsL)
+   rl (csframe gA9 (repack gA9 fsL))
    (cssv? f) (two? f && <f = 'st && <>f = 'fp && elem (f 3) (csregs gA9))
    (csld? f) (two? f && <f = 'ld && (f 2) = 'fp && elem <>f (csregs gA9))
    (cspos l) (: (go l i) (? !(two? l) -1 (cssv? <l) i (go >l (i + 1))) (go l 0))
