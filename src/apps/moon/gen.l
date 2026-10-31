@@ -11388,7 +11388,7 @@
                (!r1 ? ()
                   (seat1 (filter (q \ (q != r1)) file) sp @ r2
                      (r2 ? [r1 r2]))))
-           lh {} pw {} cw {}
+           lh {} pw {} cw {} bw {}
            _ (foldl
               (_ \ c \
                 (: sq (c 2) sp (c 3) w2 (c 4) pok (c 5) cok (c 6) fok (c 7)
@@ -11404,7 +11404,7 @@
                               pin cw <p2 1, pin cw <>p2 1,
                               pin lh sq p2)))
                       (cok = 'b)
-                       (seat1 kp sp @ r2 (r2 && claim r2 sp)) ; a blocker claims; nothing is written
+                       (seat1 kp sp @ r2 (r2 && (claim r2 sp, pin bw r2 1))) ; a blocker claims; nothing is written
                       (seat1 kp sp @ r2
                        (r2 && (claim r2 sp, pin cw r2 1, pin lh sq r2))))))
               0 byw)
@@ -11422,14 +11422,14 @@
                       (go 1)),
                    puts ";; lh ", putx (map (k \ [k (lh k)]) (sort (keys lh))), putc 10)
                   0)),
-            [lh (filter (q \ (nelem q pused)) hp9) cu0]))
+            [lh (filter (q \ (nelem q pused)) hp9) cu0 (filter (q \ peep bw q 0) kp)]))
        ; the loop-region splitter. inside a loop, a register whose seated names the loop never mentions is
        ; free: a name live through it parks in its slot at entry and comes back at exit, and the cells the
        ; loop mentions most take it over the loop's ticks, priced by weighted mentions against the transfers.
        ; a calling loop takes only callee-saved seats (no call wrap meets a split); a body with a jump or asm
        ; takes none, nor a loop holding a statement expression (its locals sit outside the ticks).
        ; -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
-       (usplit av9 lh9 cu0 items)
+       (usplit av9 lh9 cu0 bk9 items)
         (: sqm9 (av9 9) uv <>>av9 tak9 (av9 14) spa9 (av9 5)
            kp (filter (q \ nelem q (peep g 'uhomes ())) (cspool g))
            ; every name a subtree mentions or declares, weighted x8 per loop it sits in
@@ -11451,8 +11451,9 @@
            occ (foldl (t \ k \ (: r (lh9 k) e2 (sqm9 k)
                                   (two? e2 && nom? r && lhomable? <>e2 ? (pin t r (<e2 . peep t r ())) t))) {} (sort (keys lh9)))
            ; a fresh callee-saved seat's save is paid on every call of the fn, and the loop may be its
-           ; coldest part: only a loop whose mentions weigh 64 at the fn's entry may take one
-           cs0 (filter (r \ !(peep held r ()) && nelem r cu0) kp)
+           ; coldest part: only a loop whose mentions weigh 64 at the fn's entry may take one, and never a
+           ; seat a blocker holds for repack's chain lane
+           cs0 (filter (r \ !(peep held r ()) && nelem r cu0 && (abl? g 'bkhold || nelem r bk9)) kp)
            (ovl? a b lo hi) !(hi < a || b < lo)
            (busy? t k a b) (any (x \ ovl? a b <x <>x) (peep t k ()))
            rs9 {} ns9 {} ov9 {} sp9 {} cu9 {'cu cu0}
@@ -11588,7 +11589,7 @@
                lh9 (two? lr ? <lr {})
                lp9 (two? lr ? <>lr pool2)
                cu1 (two? lr ? <>>lr ())
-               sx9 (ok9 && two? lr && !(abl? g 'lsplit) ? (usplit av9 lh9 cu1 <><>>>f) [{} {} cu1])
+               sx9 (ok9 && two? lr && !(abl? g 'lsplit) ? (usplit av9 lh9 cu1 (lr 3) <><>>>f) [{} {} cu1])
                cu0 <>>sx9                     ; the splitter's fresh callee-saved seats owe their saves too
                cuh (t2? g ? (cu0 + filter (q \ nelem q cu0) uh9) cu0)   ; ..and thumb2's param homes, callee-saved there
                ; the double params' xmm grants: a read, zero-crossing, once-declared name takes a
