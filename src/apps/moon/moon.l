@@ -383,7 +383,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
         (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))

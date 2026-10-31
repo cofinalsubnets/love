@@ -373,19 +373,16 @@ static void self_bake(char const **argv) {
   execv(exe, (char *const *) argv);
   fprintf(stderr, "love: baked, but can't run again: running unbaked\n"); }
 
-// bake --with/--without: the roster verb's bake, which lays its cat from the carried source
-static int bake_roster(int argc, char const **argv) {
-  char exe[4096];
-  char const *v[256];
-  if (argc > 250 || !host_selfpath(exe, sizeof exe)) return fprintf(stderr, "love: bake: cannot run the roster\n"), 2;
-  v[0] = exe, v[1] = "roster", v[2] = "bake";
-  for (int i = 2; i <= argc; i++) v[i + 1] = argv[i];
-  execv(exe, (char *const *) v);
-  return fprintf(stderr, "love: bake: cannot run the roster\n"), 2; }
+// bake --with/--without/--list/--pick: past the boot, to the bake verb (src/apps/roster.l)
+static bool bake_roster(int argc, char const **argv) {
+  for (int i = 2; i < argc && argv[i][0] == '-'; i++)
+   if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without") || !strcmp(argv[i], "--list") || !strcmp(argv[i], "--pick")) return true;
+   else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "-o")) i++;
+  return false; }
 #else
 #define bsrc_lay_cat(cat, n, at) 0
 #define self_bake(argv) ((void) 0)
-#define bake_roster(argc, argv) (fprintf(stderr, "love: bake: no carried source for a roster\n"), 2)
+#define bake_roster(argc, argv) false
 #endif
 
 // read-eval a bake's cat: a raise ends the bake. the path is a value, never spliced. q is closed
@@ -597,16 +594,18 @@ int main(int argc, char const **argv) {
              *bake_out = NULL;                       // bake -o OUT: a copy of the binary, not this one
   int skip = 0, bare = 0;                            // words that are the prime's, not the program's; bake -n
 #ifndef Love0
-  if (argc >= 2 && !strcmp(argv[1], "bake")) {
+  if (argc >= 2 && !strcmp(argv[1], "bake") && !bake_roster(argc, argv)) {
    int i = 2, in_place = 0;                        // bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]
    for (; i < argc && argv[i][0] == '-' && argv[i][1]; i++)
     if (!strcmp(argv[i], "-l") && i + 1 < argc) bake_load = argv[++i];
     else if (!strcmp(argv[i], "-o") && i + 1 < argc) bake_out = argv[++i];
     else if (!strcmp(argv[i], "-n")) bare = 1;      // no image: the stub back, and no snapshot
     else if (!strcmp(argv[i], "-i")) in_place = 1;  // -i says the default -- this binary -- out loud
-    else if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without")) return bake_roster(argc, argv);
+    else if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without") || !strcmp(argv[i], "--list") || !strcmp(argv[i], "--pick"))
+     return fprintf(stderr, "love: bake: no carried source for a roster\n"), 2;
     else
-     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [--with U,..] [--without U,..] [IMAGE]\n"), 2;
+     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]\n"
+                            "       bake [--with U,..] [--without U,..] [-o OUT] | --list | --pick [-o OUT]\n"), 2;
    bake = i < argc ? argv[i] : "";
    if (*bake && (bake_out || bare))                 // a named IMAGE is a plain image file, never a binary
     return fprintf(stderr, "love: bake: IMAGE writes an image; -o and -n write a binary\n"), 2;

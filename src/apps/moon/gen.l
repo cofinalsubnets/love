@@ -3602,6 +3602,7 @@
                     ; the sret pointer rides the first arg register (a64: x8); the temp's address answers
                     srin (sr6 ? (srpass g sroff srg))
                     srout (sr6 ? (srback g sroff srg))
+                    _ (fcpin g dir va? hd (pf + ezf + pops))
                     (mkv ret 'r0 (pf + spills + ezf + pops + setal + srin + msw ms [['call (intern <>hd)]] + fres + rext g ret + pairin g ret + srout + clean + relods)))
                 (: hr (cgexpr g env hd ())                   ; a function-pointer value: park (x64 rbx; a64 x15), callr
                    pk (pkr g)
@@ -5794,12 +5795,23 @@
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
    (fcalld g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                  fregs16)
+   ; a direct fixed call's float argument registers, by callee, over every site laid: frd reads those
+   ; at such a call, not all eight. a name no site pinned reads all eight
+   (fcpin g dr va? hd fs)
+    (dr && !va? && (x64? g || a64? g) ?
+       (: t (peep g 'fcar {}) nm (intern <>hd)
+          ; every one the laying mentions; a nested call's writes die at the pops that follow it
+          ar (foldl (a \ f \ (? (!(two? f) || elem <f '(call callr callm sys)) a
+                                  (elem <f '(raw asm)) '(f0 f1 f2 f3 f4 f5 f6 f7)
+                                  (lvun a (filter (r9 \ elem r9 '(f0 f1 f2 f3 f4 f5 f6 f7)) >f)))) () fs)
+          (pin g 'fcar t, pin t nm (1 . lvun ar >(peep t nm '(1))))))
    (fnm? g x) (nom? x && (elem x fall9 || fmint? g x))
    (frd g f)                                          ; -> [reads defs] of the float file | 'bar
     (? !(two? f) [() ()]
        (<f @ op
           (? (elem op lvquiet) [() ()]
-             (elem op '(call callr callm sys)) ['(f0 f1 f2 f3 f4 f5 f6 f7) (fcalld g)]
+             (elem op '(call callr callm sys))
+              [(op = 'call && !(abl? g 'fcar) ? (peep (peep g 'fcar {}) <>f () @ (1 . a) a '(f0 f1 f2 f3 f4 f5 f6 f7)) '(f0 f1 f2 f3 f4 f5 f6 f7)) (fcalld g)]
              (retx? f) [(filter (r9 \ elem r9 fall9) (lvret g)) ()]
              (op = 'jmpr) [fall9 ()]
              (elem op '(raw asm)) 'bar
@@ -6040,7 +6052,8 @@
    ; only the mints and the file, a bit each, a call reading its arg file (lvnarrow). a def meets what
    ; lives past it (a mov not its source) and every operand but its first source (either, by vacomm).
    ; a mint meeting a name on its own register keeps it (an alias relied on). colours go copy partner,
-   ; binding, then file. answers 1, or () when a mint has none (vrfix's rasg then keeps the binding)
+   ; binding, then file. answers a colouring, (c _) -> 1, or () when a mint has none (vrfix's rasg
+   ; then keeps the binding)
    ; x64's rcx and rdx join, a64's x1-x3 (x4 is a4ize's): liveness already sees them
    (vafile g) (lvun (lvun (g 'pool0) (rafile g))
                     (? (abl? g 'vrcx) '(r0) (x64? g) '(r0 r1 r2) (a64? g || t2? g) '(r0 r1 r2 r3) '(r0)))
@@ -6054,8 +6067,9 @@
        fx (: t9 (peep g 'vwfix {}) (pin g 'vwfix t9, t9))
        (bdf f l) (filter (y \ vpos f y != 2 && !(vpos f y = 3 && elem <f cm9)) l +
                   (x64? g && elem <f '(mulh umulh) ? '(r2) ()))
+       vc (vcol g fs (g 'vrt) file (f \ lvtx g f file) '(mov) bdf 1)
        (go k) (: _ (pin g 'vbad ())
-                 ok (vcol g fs (g 'vrt) file (f \ lvtx g f file) '(mov) bdf 1)
+                 ok (vc 0)
                  wb (filter (m \ peep g 'vweb {} m) (g 'vbad))
                (? (ok || k = 0 || !(two? wb)) ok
                   (map (m \ pin fx m 1) wb, go (k - 1))))
@@ -6157,11 +6171,13 @@
                  (col <l) (go >l)
                  (pick <l @ r (? r (pin col <l r, go >l)
                                  (: k9 (gp ? 'vbad 'fbad) (pin g k9 (<l . peep g k9 ()), go >l, ())))))
-       (ok1 &&
-          (: _ (fix9 ())
-             _ (w2 0)
-             _ (map (m \ (fixed? m ? (pin col m (t m)))) ms)
-             ((go ms) ? (map (m \ pin t m (col m)) ms, 1)))))
+       ; liveness and interference once; each colouring after reads only the kept webs afresh
+       ready (ok1 && (fix9 (), w2 0, 1))
+       (again _) (ready &&
+                  (map (m \ pin col m ()) ms,
+                   map (m \ (fixed? m ? (pin col m (t m)))) ms,
+                   (go ms) ? (map (m \ pin t m (col m)) ms, 1)))
+       again)
    ; the early assignment: valloc where it runs, before the frame is sized
    (vpre g hd body tl)
     (? (!(x64? g || a64? g || t2? g) || abl? g 'valloc) body
@@ -6170,15 +6186,27 @@
         ((peep g 'vrn 0 && valloc g (dp 'vweb (hd + b2 + tl)) ? (pin g 'vdone 1)),
          (peep g 'frn 0 && (x64? g || a64? g) && !(abl? g 'fcol) && !(fvalloc g (hd + b2 + tl)) && g 'fwh ?
             (: ns (map (g 'fmn) (g 'fbad))
-             (pin g 'fclob 1, (fover? g && two? ns && !(any (n \ n = ()) ns) ? (pin g 'fdn ns))))),
+             (pin g 'fclob 1, (fover? g && two? ns && !(any (n \ n = ()) ns) ? (pin g 'fdn (fkin g (g 'fbad) (hd + b2 + tl))))))),
          b2)))
+   ; the names a failed colouring drops: a split array's element takes along each sibling mentioned no
+   ; more than it, which would miss in the builds after, one or two a build
+   (sfam n) (string? n &&
+              (: (dg j) (0 < j && 48 <= n (j - 1) <= 57 ? (dg (j - 1)) j)
+                 j (dg #n)
+               (j < #n && 2 <= j && n (j - 1) = 115 && n (j - 2) = 96 ? (snip n 0 (j - 2)))))
+   (fkin g ms fs)
+    (: nm (g 'fmn)
+       wc (foldl (a \ f \ (two? f ? (foldl (b \ x \ (nm x ? (pin b x (1 + peep b x 0)) b)) a f) a)) {} fs)
+       cap (foldl (a \ m \ (sfam (nm m) @ q (string? q ? (pin a q (max (peep a q 0) (peep wc m 0))) a))) {} ms)
+     (lvun (map nm ms) (map nm (filter (m \ (sfam (nm m) @ q (string? q && peep wc m 0 <= peep cap q -1))) (sort (keys nm))))))
    ; the float file: what a float mint may take, every register a call writes (a64's v8..v15 owe a save)
    (fvfile g) (x64? g ? fregs16 (fcalld g))
    ; a web the colouring misses keeps its own f0 or f1, the rest colouring around it, a few rounds
    (fvalloc g fs)
     (: fx (: t9 (peep g 'fwfix {}) (pin g 'fwfix t9, t9))
+       vc (vcol g fs (g 'frt) (fvfile g) (frd g) fcpy9 (f \ l \ l) ())
        (go k) (: _ (pin g 'fbad ())
-                 ok (vcol g fs (g 'frt) (fvfile g) (frd g) fcpy9 (f \ l \ l) ())
+                 ok (vc 0)
                  wb (filter (m \ elem ((g 'frt) m) '(f0 f1)) (g 'fbad))
                (? (ok || k = 0 || !(two? wb)) ok
                   (map (m \ pin fx m 1) wb, go (k - 1))))
@@ -11360,7 +11388,7 @@
                (!r1 ? ()
                   (seat1 (filter (q \ (q != r1)) file) sp @ r2
                      (r2 ? [r1 r2]))))
-           lh {} pw {} cw {}
+           lh {} pw {} cw {} bw {}
            _ (foldl
               (_ \ c \
                 (: sq (c 2) sp (c 3) w2 (c 4) pok (c 5) cok (c 6) fok (c 7)
@@ -11376,7 +11404,7 @@
                               pin cw <p2 1, pin cw <>p2 1,
                               pin lh sq p2)))
                       (cok = 'b)
-                       (seat1 kp sp @ r2 (r2 && claim r2 sp)) ; a blocker claims; nothing is written
+                       (seat1 kp sp @ r2 (r2 && (claim r2 sp, pin bw r2 1))) ; a blocker claims; nothing is written
                       (seat1 kp sp @ r2
                        (r2 && (claim r2 sp, pin cw r2 1, pin lh sq r2))))))
               0 byw)
@@ -11394,14 +11422,14 @@
                       (go 1)),
                    puts ";; lh ", putx (map (k \ [k (lh k)]) (sort (keys lh))), putc 10)
                   0)),
-            [lh (filter (q \ (nelem q pused)) hp9) cu0]))
+            [lh (filter (q \ (nelem q pused)) hp9) cu0 (filter (q \ peep bw q 0) kp)]))
        ; the loop-region splitter. inside a loop, a register whose seated names the loop never mentions is
        ; free: a name live through it parks in its slot at entry and comes back at exit, and the cells the
        ; loop mentions most take it over the loop's ticks, priced by weighted mentions against the transfers.
        ; a calling loop takes only callee-saved seats (no call wrap meets a split); a body with a jump or asm
        ; takes none, nor a loop holding a statement expression (its locals sit outside the ticks).
        ; -> [ov splits cu]: name -> ([lo hi reg]..), tick -> [evs prs]
-       (usplit av9 lh9 cu0 items)
+       (usplit av9 lh9 cu0 bk9 items)
         (: sqm9 (av9 9) uv <>>av9 tak9 (av9 14) spa9 (av9 5)
            kp (filter (q \ nelem q (peep g 'uhomes ())) (cspool g))
            ; every name a subtree mentions or declares, weighted x8 per loop it sits in
@@ -11423,8 +11451,9 @@
            occ (foldl (t \ k \ (: r (lh9 k) e2 (sqm9 k)
                                   (two? e2 && nom? r && lhomable? <>e2 ? (pin t r (<e2 . peep t r ())) t))) {} (sort (keys lh9)))
            ; a fresh callee-saved seat's save is paid on every call of the fn, and the loop may be its
-           ; coldest part: only a loop whose mentions weigh 64 at the fn's entry may take one
-           cs0 (filter (r \ !(peep held r ()) && nelem r cu0) kp)
+           ; coldest part: only a loop whose mentions weigh 64 at the fn's entry may take one, and never a
+           ; seat a blocker holds for repack's chain lane
+           cs0 (filter (r \ !(peep held r ()) && nelem r cu0 && (abl? g 'bkhold || nelem r bk9)) kp)
            (ovl? a b lo hi) !(hi < a || b < lo)
            (busy? t k a b) (any (x \ ovl? a b <x <>x) (peep t k ()))
            rs9 {} ns9 {} ov9 {} sp9 {} cu9 {'cu cu0}
@@ -11560,7 +11589,7 @@
                lh9 (two? lr ? <lr {})
                lp9 (two? lr ? <>lr pool2)
                cu1 (two? lr ? <>>lr ())
-               sx9 (ok9 && two? lr && !(abl? g 'lsplit) ? (usplit av9 lh9 cu1 <><>>>f) [{} {} cu1])
+               sx9 (ok9 && two? lr && !(abl? g 'lsplit) ? (usplit av9 lh9 cu1 (lr 3) <><>>>f) [{} {} cu1])
                cu0 <>>sx9                     ; the splitter's fresh callee-saved seats owe their saves too
                cuh (t2? g ? (cu0 + filter (q \ nelem q cu0) uh9) cu0)   ; ..and thumb2's param homes, callee-saved there
                ; the double params' xmm grants: a read, zero-crossing, once-declared name takes a

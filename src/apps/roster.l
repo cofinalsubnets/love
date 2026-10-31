@@ -3,9 +3,10 @@
 ; ones in. the provenance is the verbs module's, laid by the cat's marks; a left-out unit's
 ; verbs stay as stubs that raise it at the first call, and a verb miss on its name raises it,
 ; so leaving one out trades its start for its bytes.
-;   love roster                                        the units, baked, left out or part
-;   love roster bake [--with U,..] [--without U,..] [-o OUT]
-;   love roster pick [-o OUT]                          the same bake, chosen on a checklist
+;   love bake --list                                   the units, baked, left out or part
+;   love bake [--with U,..] [--without U,..] [-o OUT]
+;   love bake --pick [-o OUT]                          the same bake, chosen on a checklist
+; main.c hands these to the bake verb; a plain bake stays its own
 ; a unit's needs are the modules its files cite or borrow, held by another unit
 (module '(roster roster-main roster-units roster-needs roster-lay pick-new pick-step pick-flags pick-args pick-frame)
 (borrow 'posix)
@@ -52,7 +53,7 @@
        (each (fs ()) one,
         each (sort (keys (V 'carried))) (p \ say o "\n(cite (quote verbs) (quote carry) \(show p))\n"),
         say o "\n(cite (quote verbs) (quote mark) ())\n"))
-   (die s) (say err ("roster: " + s + "\n"), 2)
+   (die s) (say err ("bake: " + s + "\n"), 2)
    (commas s) (filter (w \ 0 < #w) (split "," s))
    (list-units _)
     (: us (roster-units ())
@@ -77,8 +78,8 @@
        me (selfpath 0)
        dst (t 'o || me)
        cat (dst + ".roster." + show (getpid 0) + ".l")
-       (? (t 'bad) (die "unknown option \(t 'bad)\nusage: love roster bake [--with U,..] [--without U,..] [-o OUT]")
-          (two? odd) (die "no unit \(<odd): `love roster` lists them")
+       (? (t 'bad) (die "unknown option \(t 'bad)\nusage: love bake [--with U,..] [--without U,..] [-o OUT]")
+          (two? odd) (die "no unit \(<odd): `love bake --list` lists them")
           (two? miss) (<miss @ [k d] (die "\(k) needs \(d): leave both out, or keep \(d)"))
           (: o (open cat "w")
              (!(hot? o) ? (die "cannot write \(cat)")
@@ -143,26 +144,24 @@
        ks (filter (k \ k < n) (map (+ top) ^b))
        rows (map row ks + map (_ \ "\e[K") ^(b - #ks))
        f (pick-flags pk)
-       cmd (two? <f || two? <>f ? ("love roster bake " + join " " (pick-args f)) "the roster as it stands")
+       cmd (two? <f || two? <>f ? ("love bake " + join " " (pick-args f)) "the roster as it stands")
        d (pick-delta pk)
        foot ("the image ~" + (d < 0 ? "-" "+") + kb (abs d) + " against this binary")
-       ("\e[H\e[7m" + cut "love roster pick: space flips, enter bakes, q leaves" + "\e[0m\e[K\r\n"
+       ("\e[H\e[7m" + cut "love bake --pick: space flips, enter bakes, q leaves" + "\e[0m\e[K\r\n"
         + join "\r\n" rows + "\r\n" + cut cmd + "\e[K\r\n" + cut (pk 'msg) + "\e[K\r\n" + cut foot + "\e[K"))
    (pick as)
     (: o (as @ () () ("-o" x) x _ 'bad)
-       (? (o = 'bad) (die "usage: love roster pick [-o OUT]")
-          (atom? (tty 1)) (die "pick wants a terminal; love roster bake takes the flags")
+       (? (o = 'bad) (die "usage: love bake --pick [-o OUT]")
+          (atom? (tty 1)) (die "--pick wants a terminal; --with and --without take the flags")
           (: pk (pick-new ())
              _ (stage (w \ h \ pick-frame pk w h) (pick-step pk) (_ \ pk 'over))
              f (pick-flags pk)
              (? !(pk 'go) 0
-                !(two? <f || two? <>f) (puts "roster: as it stands, nothing to bake\n", 0)
+                !(two? <f || two? <>f) (puts "bake: the roster as it stands, nothing to bake\n", 0)
                 (: args (pick-args f + (o ? ["-o" o] ()))
-                   (puts ("love roster bake " + join " " args + "\n"), flush out, bake args))))))
+                   (puts ("love bake " + join " " args + "\n"), flush out, bake args))))))
    (roster-main as)
-    (as @ () (list-units ())
-          ("bake" . r) (bake r)
-          ("pick" . r) (pick r)
-          ("--help" . _) (puts "usage: love roster [bake [--with U,..] [--without U,..] [-o OUT] | pick [-o OUT]]\n", 0)
-          (x . _) (die "unknown command \(x)"))
-   _ (cite 'verbs 'enlist 'roster roster-main ())))
+    (? (elem "--list" as) (as @ ("--list") (list-units ()) _ (die "usage: love bake --list"))
+       (elem "--pick" as) (pick (filter (a \ a != "--pick") as))
+       (bake as))
+   _ (cite 'verbs 'enlist 'bake roster-main ())))
