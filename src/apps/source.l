@@ -204,7 +204,7 @@
        as ((two? w ? ["--with" (join "," w)] ()) + (two? wo ? ["--without" (join "," wo)] ()))
        (two? as ?
           (: _ (puts ";; baking the roster: \(join " " as)\n")
-             r (spawn ([out "roster" "bake"] + as + ["-o" out]) @ p
+             r (spawn ([out "bake"] + as + ["-o" out]) @ p
                   (charm? p && 0 <= p ? (wait p) 127))
              (0 != r ? (src-die "the roster bake failed (exit \(r))")))))
 
