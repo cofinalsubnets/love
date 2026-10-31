@@ -407,7 +407,9 @@ distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l sr
 manifestfiles = src/apps/manifest/manifest.l
 # the mail reader: mime, the mailbox, smtp and imap under it
 chuchofiles = src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l
-carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+# classic pic and the preprocessors ahead of it, one module: grap's reader is pic's
+picfiles = src/apps/pic/grap.l src/apps/pic/gpic.l src/apps/pic/chem.l src/apps/pic/cli.l
+carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \

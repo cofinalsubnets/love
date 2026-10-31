@@ -1,0 +1,27 @@
+.PS
+copy "chem.pic"
+	textht = 0.16; textwid = .1; cwid = 0.12
+	lineht = 0.2; linewid = 0.2
+Last: 0,0
+
+#CH3
+Last: CH3: atom("CH\s-3\d3\u\s+3", 0.3, 0.16, 0.06, 0.16, 0.12, 0.015) with .L.w at Last.e
+
+#front bond right
+Last: frontbond(0.2, 90, from Last.R.e )
+
+#C
+Last: C: atom("C", 0.12, 0.16, 0.06, 0.16, 0.12, 0.015) with .L.w at Last.end
+
+#back bond up
+Last: backbond(0.2, 0, from Last.C.n )
+
+#OH
+Last: OH: atom("OH", 0.24, 0.16, 0.06, 0.16, 0.12, 0.015) with .C.s at Last.end
+
+#triple bond down from C
+Last: triplebond(0.2, 180, from C.C.s)
+
+#N
+Last: N: atom("N", 0.12, 0.16, 0.06, 0.16, 0.12, 0.015) with .C.n at Last.end
+.PE
