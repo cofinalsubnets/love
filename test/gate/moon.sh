@@ -594,6 +594,13 @@ printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { 
 # -E on a .S defines __ASSEMBLER__, as -c on it does
 printf '#ifdef __ASSEMBLER__\nmovl $1, %%eax\n#endif\n' > "$ho/.asm.S"
 moonrun -E "$ho/.asm.S" | grep -q 'movl' || fail "-E on a .S left __ASSEMBLER__ undefined"
+# -include reads its header first, after every -D, a relative one found from the cwd
+printf '#define INCV (INCD + 1)\n' > "$ho/.inc.h"
+printf 'int main(void) { return INCV; }\n' > "$ho/.inc.c"
+moonrun -E -DINCD=6 -include "$ho/.inc.h" "$ho/.inc.c" | grep -q 'return (6 + 1);' || fail "-include did not read its header first, after -D"
+moonrun -c -DINCD=6 -include "$ho/.inc.h" -o "$ho/.inc.o" "$ho/.inc.c" || fail "-c refused an -include"
+printf '#ifdef INCV\nmovl $1, %%eax\n#endif\n' > "$ho/.inc.S"
+moonrun -c -include "$ho/.inc.h" -o "$ho/.inc.o" "$ho/.inc.S" && objdump -d "$ho/.inc.o" | grep -q 'mov  *\$0x1,%eax' || fail "-include did not reach a .S"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
