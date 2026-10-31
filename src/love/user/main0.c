@@ -29,8 +29,8 @@ static struct g *evals0(struct g *g, char const *const *v) {
 // with args, the build tool through the cli driver; without, the corpus via c0, then again
 // via the self-hosted ev. the bake words are unused: main() has one call for both builds
 struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
-                char const *bake_out) {
-  (void) bake, (void) bake_load, (void) bake_out;
+                char const *bake_out, struct image_opt const *bake_opt) {
+  (void) bake, (void) bake_load, (void) bake_out, (void) bake_opt;
   if (argp) {
     g = evals0(g, prelpost0);
     g = evals0(g, mods0);

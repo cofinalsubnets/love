@@ -77,13 +77,13 @@ else
 fi
 
 # ..and the heap is the crew's, not the carried source's: prof_raw differs from love.raw only in
-# the hot.prof it carries, so their images are one byte string -- the header's fingerprint and
-# carried-C digest included, which a binary's address would break. a table keyed by a binary
-# address, which the carried source moves, breaks it too. both bake to one path: the path a
-# bake writes is in its heap
+# the profiles it carries, so their images by one profile are one byte string -- the header's
+# fingerprint and carried-C digest included, which a binary's address would break. a table keyed
+# by a binary address, which the carried source moves, breaks it too. both bake to one path: the
+# path a bake writes is in its heap
 if [ "$praw" != "$ho/love.raw" ]; then
   for r in p:"$praw" r:"$ho/love.raw"; do
-    env LOVE_NO_IMAGE=1 "${r#*:}" bake -l "$ho/.dist-cat.l" "$w/img" > "$w/img.log" 2>&1 \
+    env LOVE_NO_IMAGE=1 "${r#*:}" bake --profile layout src/tools/hot.calls -l "$ho/.dist-cat.l" "$w/img" > "$w/img.log" 2>&1 \
       || { cat "$w/img.log"; fail "the image bake of ${r#*:} failed"; }
     mv "$w/img" "$w/i${r%%:*}" || fail "cannot keep the image of ${r#*:}"
   done

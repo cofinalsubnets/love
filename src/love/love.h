@@ -479,8 +479,9 @@ void host_spawn_guard(struct g*, int);            // exec-bound forks drop the p
 int raw_mode(intptr_t on);                      // the (raw on) latch; main.c's repl too
 size_t host_selfpath(char*, size_t);
 // ..image.c..
-int image_bake(struct g*, char const *out, int bare), baked_pick(void const **blob, uintptr_t *blen);
-struct g *image_load(char const*, int*), *image_dump(struct g*, char const*);
+struct image_opt;
+int image_bake(struct g*, char const *out, int bare, struct image_opt const*), baked_pick(void const **blob, uintptr_t *blen);
+struct g *image_load(char const*, int*), *image_dump(struct g*, char const*, struct image_opt const*);
 extern uint64_t baked_image[];
 extern uintptr_t baked_image_len;
 // ..gz.c and the other codecs..
@@ -541,6 +542,7 @@ void *image_save(struct g*, uintptr_t *outlen, struct image_bad*);
 // first, more ranges ahead of fewer
 struct image_opt { uintptr_t chunk; uint64_t const *hot; uintptr_t nhot; };
 void *image_save2(struct g*, uintptr_t *outlen, struct image_bad*, struct image_opt const*);
+uint64_t *image_nums(unsigned char const *s, uintptr_t sn, uintptr_t *n);
 struct g
  *love_image_load(void const *buf, uintptr_t len, int kept);   // kept: buf outlives the session; 2: and the image may wake lazily
 int image_why(void const *buf, uintptr_t len);   // a header refused: 0 no, 1 another format, 2 another binary's, 3 other C, 4 damaged
