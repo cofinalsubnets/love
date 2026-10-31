@@ -474,8 +474,10 @@
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
-   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xasm 'mpm mp}))
-    (: ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
+   ; a .S reads as -x assembler-with-cpp does, __ASSEMBLER__ defined
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp}))
+    (: xasm (xa || dotS? src)
+       ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
