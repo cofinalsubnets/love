@@ -131,16 +131,14 @@
 
    ; -- collect function-macro arguments, ts just after '(': -> (args rest seps close) | ().
    ; commas at depth 1 split; seps are those commas, whose spacing #__VA_ARGS__ spells --
-   (collargs ts)
-    (: (go ts depth cur args seps)
-        (atom? ts ? ()
-           (<ts @ t
-              (? (depth = 1 && pv? t ")") [(rev (rev cur . args)) >ts (rev seps) t]
-                 (depth = 1 && pv? t ",") (go >ts depth () (rev cur . args) (t . seps))
-                 (pv? t "(") (go >ts (depth + 1) (t . cur) args seps)
-                 (pv? t ")") (go >ts (depth - 1) (t . cur) args seps)
-                 (go >ts depth (t . cur) args seps))))
-       (go ts 1 () () ()))
+   (collargs ts) (cargo ts 1 () () ())
+   (cargo ts depth cur args seps)
+    (? (atom? ts) ()
+       (depth = 1 && pv? <ts ")") [(rev (rev cur . args)) >ts (rev seps) <ts]
+       (depth = 1 && pv? <ts ",") (cargo >ts depth () (rev cur . args) (<ts . seps))
+       (pv? <ts "(") (cargo >ts (depth + 1) (<ts . cur) args seps)
+       (pv? <ts ")") (cargo >ts (depth - 1) (<ts . cur) args seps)
+       (cargo >ts depth (<ts . cur) args seps))
    (paramidx params name) (: (go l i) (? (atom? l) -1 (<l = name) i (go >l (i + 1)))
                              (go params 0))
 
@@ -222,62 +220,65 @@
        (join (skip args np) (skip seps np)))
 
    ; -- the expander: rescan toks, replacing macro invocations (honoring
-   ; hidesets), fully. mutually recursive with subst via expand-of-arg. --
-   (expand toks macs)
-    (atom? toks ? ()
+   ; hidesets), fully. mutually recursive with subst via expand-of-arg. expr walks with the
+   ; output reversed onto acc, a loop rather than a frame a token --
+   (expand toks macs) (rev (expr toks macs ()))
+   ; the walk itself: a token no macro names passes on one lookup, in a loop the glaze takes;
+   ; a name to expand goes to exhit
+   (expr toks macs acc)
+    (? (atom? toks) acc
+       !(macat? <toks macs) (expr >toks macs (<toks . acc))
+       ; most names are no macro: one lookup says so
+       (atom? (mdef macs (macnm <toks)) && !(peep specials (vof <toks) 0)) (expr >toks macs (<toks . acc))
+       (exhit toks macs acc))
+   (exhit toks macs acc)
        (: t <toks rest >toks
-          (? !(macat? t macs) (t . expand rest macs)
-             ; most names are no macro: one lookup says so
-             (atom? (mdef macs (macnm t)) && !(peep specials (vof t) 0)) (t . expand rest macs)
-             (idv? t "__LINE__") (tok 'num (lof t) (lof t) . expand rest macs)
+          (? (idv? t "__LINE__") (expr rest macs (tok 'num (lof t) (lof t) . acc))
              ; __COUNTER__: per TU, in expansion order, in macs under a key no identifier spells
              (idv? t "__COUNTER__" && !(mdef macs "__COUNTER__"))
-              (peep macs "#counter" 0 @ n (pin macs "#counter" (n + 1), tok 'num n (lof t) . expand rest macs))
+              (peep macs "#counter" 0 @ n (pin macs "#counter" (n + 1), expr rest macs (tok 'num n (lof t) . acc)))
              ; _Pragma(".."): dropped, but for a pack, left for parse to refuse by name
              (idv? t "_Pragma" && two? rest && pv? <rest "(" && two? >rest && kof <>rest = 'str
               && two? >>rest && pv? <>>rest ")" && !(starts? (vof <>rest) "pack"))
-              (expand >>>rest macs)
+              (expr >>>rest macs acc)
              ; ..and one a macro spells (the kernel's __diag): expanded first
              (idv? t "_Pragma" && two? rest && pv? <rest "(")
               (collargs >rest @ ca
-                 (atom? ca ? (t . expand rest macs)
+                 (atom? ca ? (expr rest macs (t . acc))
                     (: x (expand <(<ca) macs)
                        (two? x && atom? >x && kof <x = 'str && !(starts? (vof <x) "pack") && #(<ca) = 1
-                          ? (expand <>ca macs)
-                          (t . expand rest macs)))))
+                          ? (expr <>ca macs acc)
+                          (expr rest macs (t . acc))))))
              (macnm t @ nm
                 (mdef macs nm @ m
-                   (? (atom? m) (t . expand rest macs)          ; no macro, so no hideset to walk
-                      (eleq (iname nm) (hof t)) (t . expand rest macs)  ; blue-painted: leave it
+                   (? (atom? m) (expr rest macs (t . acc))          ; no macro, so no hideset to walk
+                      (eleq (iname nm) (hof t)) (expr rest macs (t . acc))  ; blue-painted: leave it
                       (mobj? m)
                        (: hs (iname nm . hof t)
-                          body (mapadd <>m hs (lof t) (spaced? t))
-                          (expand (body + rest) macs))
+                          (expr (mapadd <>m hs (lof t) (spaced? t) rest) macs acc))
                       (mfun? m && two? rest && pv? <rest "(")
                        (collargs >rest @ ca
-                          (atom? ca ? (t . expand rest macs)
+                          (atom? ca ? (expr rest macs (t . acc))
                              (: args <ca after <>ca
                                 params <>m mbody <>>m mvar <>>>m
                                 hs (iname nm . hof t)
                                 body (subst mbody params args mvar (lof t) macs <>>ca)
-                                (expand (mapadd body hs (lof t) (spaced? (ca 3)) + after) macs))))
-                      (t . expand rest macs)))))))
-   ; give body tokens the hideset + the invocation line; the last takes the invocation's own
-   ; spacing (w), not its definition line's end. a run of tokens shares one hideset, so the
-   ; last union (ph to pu) is kept for the next
-   (mapadd toks hs line w)
-    (: (go l ph pu)
-        (? (atom? l) ()
-           (: t <l h (hof t) u (h == ph ? pu (hunion h hs))
-              (atom? >l ? [(w ? [(kof t) (vof t) line u (sof t) 1] [(kof t) (vof t) line u (sof t)])]
-                 (retok t line u . go >l h u))))
-       (go toks [0] ()))                     ; a fresh cell, never a hideset
+                                (expr (mapadd body hs (lof t) (spaced? (ca 3)) after) macs acc))))
+                      (expr rest macs (t . acc)))))))
+   ; give body tokens the hideset + the invocation line, ahead of tl; the last takes the
+   ; invocation's own spacing (w), not its definition line's end. a run of tokens shares one
+   ; hideset, so the last union (ph to pu) is kept for the next
+   (mapadd toks hs line w tl) (mapgo toks [0] () () hs line w tl)    ; a fresh cell, never a hideset
+   (mapgo l ph pu acc hs line w tl)
+    (? (atom? l) (revcat acc tl)
+       (: t <l h (hof t) u (h == ph ? pu (hunion h hs))
+          (atom? >l ? (revcat ((w ? [(kof t) (vof t) line u (sof t) 1] [(kof t) (vof t) line u (sof t)]) . acc) tl)
+             (mapgo >l h u (retok t line u . acc) hs line w tl))))
    ; a hideset holds interned names, found by identity. the union is h's names hs lacks, then
    ; hs; often h is a tail of hs already
    (iname nm) (inames nm @ c (string? c ? c (: _ (pin inames nm nm) nm)))
-   (hunion h hs) (? (atom? h) hs
-                    (sufq? h hs) hs
-                    (: (go l) (? (atom? l) hs (eleq <l hs) (go >l) (<l . go >l)) (go h)))
+   (hunion h hs) (? (atom? h) hs  (sufq? h hs) hs  (hun h hs))
+   (hun l hs) (? (atom? l) hs (eleq <l hs) (hun >l hs) (<l . hun >l hs))
    (sufq? h l) (? (h == l) 1 (atom? l) 0 (sufq? h >l))
    ; -- #line's operand: a digit sequence, or what one macro-expands to (C11 6.10.4p3).
    ; () when it is neither, which is the directive doing nothing. --
@@ -481,17 +482,21 @@
    (skipfm ts files) (two? ts && fmark? <ts ? (skipfm >ts (fmpush <ts files)) [ts files])
    ; fin finishes each token: bare for C, which parse reads; an assembly source keeps the
    ; whitespace marks, so asmspell spaces where the source did
-   (strcat-pass ts n files fin)
-    (atom? ts ? ()
-       (<ts @ t
-          (? (fmark? t)
-              (fmpush t files @ fs (spanat n fs, strcat-pass >ts n fs fin))
-             !(strk? (kof t)) (fin t . strcat-pass >ts (n + 1) files fin)
-             (: sr (skipfm >ts files) nxt <sr fs <>sr
-                (!(two? nxt && strk? (kof <nxt)) ? (fin t . strcat-pass >ts (n + 1) files fin)
-                   ; the marks we just consumed take effect after the merged token
-                   (? (fmtop fs = fmtop files) () (spanat (n + 1) fs),
-                    strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs fin))))))
+   (strcat-pass ts n files fin) (rev (strcat-acc ts n files fin ()))
+   ; a plain token passes in the loop; a mark or a string goes to strcat-hit
+   (strcat-acc ts n files fin acc)
+    (? (atom? ts) acc
+       !(fmark? <ts || strk? (kof <ts)) (strcat-acc >ts (n + 1) files fin (fin <ts . acc))
+       (strcat-hit ts n files fin acc))
+   (strcat-hit ts n files fin acc)
+    (<ts @ t
+       (? (fmark? t)
+           (fmpush t files @ fs (spanat n fs, strcat-acc >ts n fs fin acc))
+          (: sr (skipfm >ts files) nxt <sr fs <>sr
+             (!(two? nxt && strk? (kof <nxt)) ? (strcat-acc >ts (n + 1) files fin (fin t . acc))
+                ; the marks we just consumed take effect after the merged token
+                (? (fmtop fs = fmtop files) () (spanat (n + 1) fs),
+                 strcat-acc (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) . >nxt) n fs fin acc)))))
 
    ; -- the driver: walk logical lines, run directives, expand active code. macs is a mutable
    ; tablet shared with includes; cond a stack of (active taken line); buf the pending active tokens --
@@ -504,7 +509,7 @@
    (parentactive cond) (atom? cond ? 1 <<cond)
    ; buf accumulates reversed (a run can be ~50k tokens); tokflush restores order. not `flush`,
    ; which would shadow the core port
-   (tokflush buf macs out) (revcat (expand (rev buf) macs) out)
+   (tokflush buf macs out) (expr (rev buf) macs out)
    ; -- the header memo -- a TU's first include is recorded as (path text pre toks post deps);
    ; a later TU matching path, text and pre-state replays the tokens and table. __FILE__ is held
    ; out of the snapshots, and mleak? declines a header that expanded it
