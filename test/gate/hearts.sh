@@ -1,17 +1,13 @@
 #!/bin/sh
-# test/gate/hearts.sh -- hearts builds the arm64 defconfig kernel Image byte-identical to
-# kbuild's. from the pinned tarball: kbuild+clang makes defconfig and Image, then hearts
-# (src/apps/hearts/build.l) makes defconfig, syncconfig and Image from an empty output dir,
-# and the two Images must be the same bytes. both build at one canonical path, since the
-# vdso's build-id hashes debug info that names the source and output dirs and the vdso is
-# in the image; the build's identity is pinned. kbuild's half borrows the host's toolchain
-# (llvm, flex, bison, perl) and a clang+lld we build (src/tools/hearts-llvm.sh: a distro's clang
-# of the same version gives other code, so other images per host). hearts' half borrows only clang/lld/llvm for the kernel's
-# own units: the host programs build with mooncc, certs/extract-cert is ours (xcert.l, no
-# openssl), flex and bison are love's lex and yacc, perl's scripts are ported,
-# and the commands run through lush with kore's verbs. where a tool's bytes reach the Image
-# (config_data.gz), kbuild's half borrows OUR tool too: KGZIP is love's gzip on both sides.
-# heavy (two kernel builds); opt-in by name.
+# test/gate/hearts.sh -- hearts builds the arm64 defconfig kernel Image with mooncc, and it boots.
+# from the pinned tarball and the tree's patches, hearts (src/apps/hearts/build.l) makes defconfig,
+# syncconfig and Image in an empty output dir: every unit by mooncc (its asm by holo) through kcc.l,
+# the link by love's ld, the host programs by mooncc, flex and bison as love's lex and yacc, perl's
+# scripts ported, the commands through lush with kore's verbs. clang keeps what mooncc refuses, one
+# unit at a time, each named in .hearts/kcc.log and listed here; lld links the arm32 compat vdso.
+# the Image then boots under qemu virt to an init of ours (mooncc, love's cpio), which says so and
+# powers off. a green run keeps the Image for test_hearts_boot, named in $C/Image-$V.green.
+# heavy (a kernel build, hours); opt-in by name.
 # usage: hearts.sh LOVE
 . test/gate/skip.sh
 set -u
@@ -29,7 +25,7 @@ J=${HEARTS_GATE_JOBS:-8}
 L=${HEARTS_CLANG:-$C/llvm-22.1.8}
 fail() { echo "FAIL hearts: $*" >&2; exit 1; }
 
-# that clang, first on PATH for both halves: its version, and its code for a probe that tells a
+# that clang, first on PATH for the units mooncc refuses and the compat vdso: its version, and its code for a probe that tells a
 # distro's build of the same version apart
 [ -x "$L/bin/clang" ] || fail "no clang at $L -- build it with src/tools/hearts-llvm.sh"
 PATH=$L/bin:$PATH; export PATH
@@ -68,28 +64,28 @@ EOF
 qs=$(sha256sum < "$q/q.o" | cut -d' ' -f1); rm -rf "$q"
 [ "$qs" = "$QSHA" ] || fail "$L/bin/clang is not the pinned build: the probe compiles to $qs"
 
-for t in make cc c++ clang ld.lld llvm-ar llvm-objcopy flex bison perl curl; do
+for t in cc clang ld.lld curl qemu-system-aarch64; do
   command -v $t >/dev/null 2>&1 || gate_skip "hearts: no $t, skipped"
 done
 # $B is one dir for every session, so a second run waits its turn: the script runs again under
 # bee's exclusive lock named by $B, which a dead holder's pid gives up (src/apps/locks.l)
 [ -n "${HEARTS_HELD:-}" ] || { export HEARTS_HELD=1; exec "$love" bee --lock --out "$B" -- "$love" lush -g "$0" "$1"; }
 mkdir -p "$B" "$C/src" || fail "cannot make $B"
-# a red run keeps both builds to read (the next run clears them); a green one leaves nothing
+# a red run keeps its build and boot log to read (the next run clears them); a green one leaves nothing
 
 tgz=$C/src/linux-$V.tar.xz
 [ -f "$tgz" ] || curl -sSfL -o "$tgz" "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$V.tar.xz" \
   || gate_skip "hearts: cannot fetch linux-$V, skipped"
 [ "$(sha256sum < "$tgz" | cut -d' ' -f1)" = "$SHA" ] || fail "$tgz is not the pinned linux-$V"
-rm -rf "$K" "$O" "$B/ref"
+rm -rf "$K" "$O" "$B/boot"
 (cd "$B" && tar xf "$tgz") || fail "cannot unpack $tgz"
-# the tree's patches over the pinned source, in order, for both halves (src/apps/hearts/patches)
+# the tree's patches over the pinned source, in order (src/apps/hearts/patches)
 for p in "$R"/src/apps/hearts/patches/*.patch; do
   [ -f "$p" ] || continue
   patch -d "$K" -p1 -s < "$p" || fail "cannot apply $p"
 done
 
-# each half compiles for itself: a compile cache would hand hearts kbuild's objects
+# the build's identity, so no clock or host name reaches the image
 export CCACHE_DISABLE=1
 export KBUILD_BUILD_USER=hearts KBUILD_BUILD_HOST=hearts KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='Thu Jan  1 00:00:00 UTC 2026'
@@ -110,36 +106,44 @@ for f in "$R/src/apps/tls/roots.pem" "$x/one.pem" "$x/trail.pem" "$x/lead.pem" "
   if [ -f "$x/r" ] || [ -f "$x/o" ]; then cmp -s "$x/r" "$x/o" || fail "extract-cert '$f' differs from openssl's"; fi
 done
 
-gz="$love gzip"
-# and neither half sees the host's rust or pahole, nor its libc: their versions, and whether the
-# compiler can link a user program (CC_CAN_LINK), reach .config, so the image. an empty sysroot
-# makes that probe fail on every host; defconfig builds no user program for it to touch
-mkdir -p "$B/no-sysroot"
-mk="LLVM=1 ARCH=arm64 RUSTC=false HOSTRUSTC=false BINDGEN=false PAHOLE=false USERCFLAGS=--sysroot=$B/no-sysroot"
-
 mkdir -p "$O"
-# kbuild's host programs build with the host's cc: our clang targets arm only, and their bytes
-# never reach the image
-# shellcheck disable=SC2086
-(cd "$K" && make O="$O" $mk HOSTCC=cc HOSTCXX=c++ KGZIP="$gz" defconfig \
-  && make O="$O" $mk HOSTCC=cc HOSTCXX=c++ KGZIP="$gz" -j"$J" Image) \
-  > "$B/ref.log" 2>&1 || { tail -20 "$B/ref.log"; fail "kbuild's own build failed"; }
-mv "$O" "$B/ref" || fail "cannot set kbuild's build aside"
-
-mkdir -p "$O"
-(cd "$O" && HEARTS_SRC="$K" HEARTS_JOBS="$J" LOVE_BUDGET_MB=${LOVE_BUDGET_MB:-1500} \
-  HEARTS_KGZIP="$gz" \
+(cd "$O" && HEARTS_SRC="$K" HEARTS_JOBS="$J" HEARTS_KGZIP="$love gzip" \
   "$love" "$R/src/apps/hearts/build.l") > "$B/hearts.log" 2>&1 \
   || { tail -20 "$B/hearts.log"; fail "hearts' build failed"; }
+I=$O/arch/arm64/boot/Image
+[ -f "$I" ] || fail "hearts made no Image"
+n=0; [ -f "$O/.hearts/kcc.log" ] && n=$(wc -l < "$O/.hearts/kcc.log")
+[ "$n" -eq 0 ] || { echo "hearts: $n units are clang's:"; sed 's/^/  /' "$O/.hearts/kcc.log"; }
 
-for f in .config kernel/config_data.gz arch/arm64/boot/Image; do
-  [ -f "$O/$f" ] || fail "hearts made no $f"
-  cmp -s "$B/ref/$f" "$O/$f" || fail "$f differs from kbuild's"
-done
-sha=$(sha256sum < "$O/arch/arm64/boot/Image" | cut -c1-16)
+# pid 1: say so, then power off
+d=$B/boot; mkdir -p "$d"
+cat > "$d/init.c" <<'EOF'
+#include <unistd.h>
+#include <sys/reboot.h>
+int main(void) {
+  static char const m[] = "hearts: init ran\n";
+  write(1, m, sizeof m - 1);
+  sync();
+  reboot(0x4321fedc);
+  for (;;) sleep(60); }
+EOF
+"$love" mooncc -t a64 -O2 -o "$d/init" "$d/init.c" || fail "mooncc on init.c"
+(cd "$d" && echo init | "$love" cpio -o -H newc > init.cpio 2> /dev/null) || fail "cpio on init"
+timeout "${HEARTS_BOOT_SECS:-600}" qemu-system-aarch64 -M virt -cpu cortex-a57 -m 1G -display none -no-reboot \
+  -serial file:"$d/serial.log" -kernel "$I" -initrd "$d/init.cpio" \
+  -append "console=ttyAMA0 panic=-1 rdinit=/init" > "$d/qemu.log" 2>&1
+grep -a -q '^hearts: init ran' "$d/serial.log" || { tail -20 "$d/serial.log"; fail "the Image did not boot to init"; }
+grep -a -q 'reboot: Power down' "$d/serial.log" || { tail -20 "$d/serial.log"; fail "init ran, but no power off"; }
+e='WARNING|BUG|Oops|Kernel panic|Internal error'
+w=$(grep -a -c -E "$e" "$d/serial.log")
+[ "$w" -eq 0 ] || { grep -a -E "$e" "$d/serial.log" | head; fail "the boot logged $w faults"; }
+
 # the Image a green run certifies is the one rung 0 boots (test/gate/hearts-boot.sh), kept under
-# its own hash: a tree whose patches make another Image keeps it beside this one
-cp "$O/arch/arm64/boot/Image" "$C/Image-$V-$sha.new" && mv "$C/Image-$V-$sha.new" "$C/Image-$V-$sha" \
+# its own hash and named in Image-$V.green
+sha=$(sha256sum < "$I" | cut -d' ' -f1)
+s16=$(echo "$sha" | cut -c1-16)
+cp "$I" "$C/Image-$V-$s16.new" && mv "$C/Image-$V-$s16.new" "$C/Image-$V-$s16" \
+  && echo "$sha" > "$C/Image-$V.green.new" && mv "$C/Image-$V.green.new" "$C/Image-$V.green" \
   || fail "cannot keep the Image in $C"
-rm -rf "$O" "$B/ref"
-echo "hearts: Image $sha = kbuild+clang's, from linux-$V and the tree's patches, defconfig, host programs by mooncc"
+rm -rf "$O" "$d"
+echo "hearts: Image $s16 by mooncc ($n units clang's) from linux-$V and the tree's patches, defconfig; boots to init"

@@ -24,38 +24,30 @@ static char *bake_scratch(struct g *g, char const *path) {
   if (t) snprintf(t, (size_t) n + 1, "%s.bake.%ld", path, pid);
   return t; }
 
-// LOVE_BAKE_CHUNK the words of a stream chunk, LOVE_BAKE_HOT a file of "a b" word ranges a profile touched
-static void *image_save_env(struct g *g, uintptr_t *len) {
-  struct image_opt o = { 0, NULL, 0 };
-  char const *c = getenv("LOVE_BAKE_CHUNK"), *h = getenv("LOVE_BAKE_HOT");
-  uint64_t *r = NULL;
-  if (c && *c) o.chunk = (uintptr_t) strtoul(c, NULL, 10);
-  FILE *f = h && *h ? fopen(h, "r") : NULL;
-  if (f) {                                        // numbers by hand: moonlibc's scanf takes no %llu
-    uintptr_t cap = 0, n = 0;
-    uint64_t v = 0;
-    int c, in = 0;
-    while ((c = fgetc(f)) != EOF || in) {
-      if (c >= '0' && c <= '9') { v = 10 * v + (uint64_t) (c - '0'), in = 1; continue; }
-      if (!in) continue;
-      if (n + 1 > cap) {
-        uint64_t *t = alloc(NULL, (cap = cap ? 2 * cap : 1024) * sizeof *t);
-        if (!t) break;
-        if (r) memcpy(t, r, n * sizeof *t), alloc(r, 0);
-        r = t; }
-      r[n++] = v, v = 0, in = 0;
-      if (c == EOF) break; }
-    fclose(f);
-    o.hot = r, o.nhot = n / 2; }
-  void *buf = image_save2(g, len, NULL, &o);
-  if (r) alloc(r, 0);
-  return buf; }
+// a profile's text -> its numbers in order: hot.prof's "a b" word ranges, hot.calls's "index
+// count" rows. *n of them, NULL for none
+uint64_t *image_nums(unsigned char const *s, uintptr_t sn, uintptr_t *n) {
+  uint64_t *r = NULL, v = 0;
+  uintptr_t cap = 0;
+  int in = 0;
+  *n = 0;
+  for (uintptr_t i = 0; i <= sn; i++) {
+    int c = i < sn ? s[i] : -1;
+    if (c >= '0' && c <= '9') { v = 10 * v + (uint64_t) (c - '0'), in = 1; continue; }
+    if (!in) continue;
+    if (*n + 1 > cap) {
+      uint64_t *t = alloc(NULL, (cap = cap ? 2 * cap : 1024) * sizeof *t);
+      if (!t) break;
+      if (r) memcpy(t, r, *n * sizeof *t), alloc(r, 0);
+      r = t; }
+    r[(*n)++] = v, v = 0, in = 0; }
+  return r; }
 
 // the one bake to a file. the path is sp[0], a root, read after the dump moves it; noinline
 // keeps these buffers out of lvm_bake's frame, which would defeat its tail-jump (make vmret)
-love_noinline static int image_put(struct g *g) {
+love_noinline static int image_put(struct g *g, struct image_opt const *o) {
   uintptr_t len = 0;
-  void *buf = image_save_env(g, &len);
+  void *buf = image_save2(g, &len, NULL, o);
   if (!buf) return -2;
   char const *path = txt(str(g->sp[0]));          // a love string ends in a NUL
   // beside the target, never on it: a reader mid-write would wake a short image
@@ -71,10 +63,10 @@ love_noinline static int image_put(struct g *g) {
   return alloc(buf, 0), rc; }
 
 // `bake PATH`: the path goes on the stack for image_put; the rc rides g->b
-struct g *image_dump(struct g *g, char const *path) {
+struct g *image_dump(struct g *g, char const *path, struct image_opt const *o) {
   g = strof(g, path);
   if (!ok(g)) return core_of(g)->b = -2, g;
-  int rc = image_put(g);
+  int rc = image_put(g, o);
   g->sp++;
   return g->b = rc, g; }
 
@@ -289,10 +281,10 @@ static int bake_macho(int src, char const *tmp, void const *buf, uintptr_t len,
   return rc; }
 
 // out NULL bakes in place, a path writes a copy; bare lays the stub back, an imageless binary
-int image_bake(struct g *g, char const *out, int bare) {
+int image_bake(struct g *g, char const *out, int bare, struct image_opt const *o) {
   uint64_t stub[ReserveWords] = {1};
   uintptr_t len = sizeof stub;
-  void *buf = bare ? NULL : image_save_env(g, &len);
+  void *buf = bare ? NULL : image_save2(g, &len, NULL, o);
   if (!bare && !buf) return -2;
   // baked_image_len patched by the file offset the running phdrs give; a copy shares the head
   struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0, 0 },
@@ -324,7 +316,7 @@ int image_bake(struct g *g, char const *out, int bare) {
 // FIXME extend LvmCall macro to handle this.
 static lvm(lvm_bake) {
  Pack(g);
- word r = cstrp(g->sp[0]) && !image_put(g) ? putcharm(1) : zero;
+ word r = cstrp(g->sp[0]) && !image_put(g, NULL) ? putcharm(1) : zero;
  Unpack(g);
  Sp[0] = r;
  love_musttail return Next(1); }

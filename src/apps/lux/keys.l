@@ -11,7 +11,8 @@
 ;   (refresh) (reset-layout) (sink) (float-toggle) (next-match FWD)
 ;   (focus-dn) (focus-up) (focus-master) (swap-dn) (swap-up) (swap-master)
 ;   (screen N) (to-screen N)   focus screen N / send the focus to its tag
-; a body-less `:` -- the vocabulary leaks to the driver.
+; a body-less `:` in the module lux, which the driver shares.
+(module 'lux
 (:
    ; --- modifier masks (the X state bits) ---
    shiftm 1  ctrlm 4  altm 8  supm 64                                            ; sup = mod4, alt = mod1
@@ -170,3 +171,4 @@
        fresh (filter (w \ w != f && !(any (= w) cands)) row)
        order (cands + fresh)
        (? (atom? order) () fwd <order <(rev order))))
+) ; module lux

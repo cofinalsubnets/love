@@ -4,6 +4,7 @@
 ; --- the zipper laws ---
 (borrow 'xwire)
 (borrow 'salt)    ; config.l splices salt too, and a splice is not inherited
+(borrow 'lux)     ; core.l through config.l, one module
 (zmk 2 '(1) '(3) @ z3                                                            ; row (1 2 3), 2 focused
  (test
     (zrow (zfrom '(1 2 3)) = '(1 2 3)) !(zfrom ()) !(zrow ())
@@ -384,7 +385,7 @@
  (test (ewmh-cm-win pk = 9) (ewmh-cm-type pk = 5)
          (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
-; --- the config (config.l): every law reads an empty tablet, never lux-conf, so the
+; --- the config (config.l): every law reads an empty tablet, never lux-cfg's, so the
 ; gate means the same on a machine with its own ~/.love/etc/lux.l ---
 (: c0 {}
    lay0 (foldr lux-wrap-of (choice (filter two? (map lux-lay-of (conf-roster c0 'layout '((rtall 1 0.02 0.5) (dwindle phi))))))
@@ -424,7 +425,7 @@
       !(keys-find km supm 120)
       (keys-find km altm 104 = '(go left (-7 0)))                                ; nudge feeds the directional deltas
       (keys-find km altm 52 = '(view 4)) !(keys-find km altm 53)                 ; digit rows stop at the tag count
-      (two? lux-tags) (two? lux-keymap) (lit? lux-manage) (two? lux-layout)))    ; the live ones built, whatever this machine's file says
+      (two? (lux-cfg 'tags)) (two? (lux-cfg 'keymap)) (lit? (lux-cfg 'manage)) (two? (lux-cfg 'layout))))   ; the live ones built, whatever this machine's file says
 
 ; --- key specs: the surface a config writes chords in ---
 (: c2 (foldl (t \ p \ pin t <p >p) {}

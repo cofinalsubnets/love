@@ -547,6 +547,10 @@
     ; autospec is a no-op without a defined fn and a static-data binding: a plain fib group is byte-unchanged
     (: nf '(: (fib n) (? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))) (fib 10))
        (= (autospec nf) nf))
+    ; a call short of or past its fn's params is left a call: unfolded, a partial would answer its body
+    (: pc '(: (keep? rules nom) (? (elem nom rules) 0 1) (pick s n) (? (elem n s) cap cup) zz '(a b)
+              [(map (keep? zz) '(a q)) (pick zz 'a '(1 2))])
+       (= (base-ev (autospec pc)) '((0 1) 1)))
     ; the descent guard: a static-list recursion on a counter shrinks its static weight each level, so it terminates
     (: sd '(: (f s n) (? (< n 1) s (f (cup s) (- n 1))) zz '(aa bb cc dd) (f zz 1))
        (tv sd '(bb cc dd)))

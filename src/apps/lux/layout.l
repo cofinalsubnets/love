@@ -6,7 +6,8 @@
 ;
 ; rect is (x y w h); a placement is (win x y w h). `z` is the focus zipper (core.l): the
 ; row (zrow) and the focus (zfoc). () from a message means unhandled, so modifier stacks
-; fall through. a body-less `:` -- the vocabulary leaks to the driver.
+; fall through. a body-less `:` in the module lux, which the driver shares.
+(module 'lux
 (borrow 'wharf)    ; the bsp layout's plan algebra
 (:
    ; --- geometry: a rect is (x y w h); splits return rect lists ---
@@ -224,3 +225,4 @@
     'minimize (mn-msg lay msg z)
     'choice (ch-msg lay msg z)
     k (lit? k ? (k 'msg lay msg z))))
+) ; module lux

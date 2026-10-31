@@ -10,6 +10,8 @@
    r-pc64  24                                       ; R_X86_64_PC64   S + A - P in eight bytes (a jump table's `key - .`)
    r-32    10                                       ; R_X86_64_32     S + A in 4 bytes (the PVH note's entry)
    r-32s   11                                       ; R_X86_64_32S    S + A, sign-extended (pushq $sym)
+   r-16    12                                       ; R_X86_64_16     S + A in 2 bytes (a 16-bit segment's word)
+   r-8     14                                       ; R_X86_64_8      S + A in a byte
    ; ... a64: a field reloc patches bits of an instruction word; the placeholder carries
    ; the base opcode (the fixup's aux).
    ra-abs64  257                                    ; R_AARCH64_ABS64           S + A
@@ -432,7 +434,7 @@
        rv (target = 'rv64)
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
-       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 rel8))
+       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 rel8 rel16 pc8))
        drset (a64 ? rset ())
        machine (peep elf-machines target 0)
        ; a cross backend joins at runtime; unregistered, lay would lower nothing, silently
@@ -519,6 +521,8 @@
                  'abs64 (o-rela off si rabs (sa + aux))
                  'abs32 (o-rela off si (a64 ? ra-abs32 r-32) (sa + aux))
                  'abs32s (o-rela off si r-32s (sa + aux))
+                 'abs16 (o-rela off si r-16 (sa + aux))
+                 'abs8 (o-rela off si r-8 (sa + aux))
                  ; an 8-byte word measured from its own start
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32; for an

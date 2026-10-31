@@ -116,6 +116,25 @@ if [ "$arch" = a64 ]; then
   moonrun -t a64 -o "$r/abi128.t" test/cc/abi128/host.c "$d/peer128.o" > "$d/abi128.log" 2>&1 \
     || { cat "$d/abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
   a64_job abi128.t "timeout 60 \$RUN ./abi128.t"
+  # thread-locals: clang's at -O0 and -O2 under mooncc's link and moonlibc's threads, a
+  # program calling no libc, and every load and store width's offset (ldst64.s)
+  clang --target=aarch64-linux-gnu -fno-pie -c -o "$d/tlsd.o" test/cc/tls/defs.c 2> "$d/tls.log" \
+    || { cat "$d/tls.log" >&2; fail "tls: clang could not build defs.c"; }
+  for o in 0 2; do
+    clang --target=aarch64-linux-gnu -O$o -fno-pie -c -o "$d/tlsp$o.o" test/cc/tls/peer.c 2> "$d/tls.log" \
+      || { cat "$d/tls.log" >&2; fail "tls: clang -O$o could not build peer.c"; }
+    moonrun -t a64 -no-pie -Wl,-z,noexecstack -o "$r/tls$o.t" test/cc/tls/host.c "$d/tlsp$o.o" "$d/tlsd.o" > "$d/tls.log" 2>&1 \
+      || { cat "$d/tls.log" >&2; fail "tls: mooncc could not link clang -O$o's thread-locals"; }
+    a64_job tls$o.t "timeout 60 \$RUN ./tls$o.t"
+  done
+  moonrun -t a64 -o "$r/tlsb.t" test/cc/tls/bare.c "$d/tlsp2.o" "$d/tlsd.o" > "$d/tls.log" 2>&1 \
+    || { cat "$d/tls.log" >&2; fail "tls: mooncc could not link bare.c"; }
+  a64_job tlsb.t "timeout 60 \$RUN ./tlsb.t"
+  clang --target=aarch64-linux-gnu -c -o "$d/ldst64.o" test/cc/tls/ldst64.s 2> "$d/tls.log" \
+    || { cat "$d/tls.log" >&2; fail "tls: clang could not assemble ldst64.s"; }
+  moonrun -t a64 -o "$r/ldst64.t" test/cc/tls/ldst64.c "$d/ldst64.o" > "$d/tls.log" 2>&1 \
+    || { cat "$d/tls.log" >&2; fail "tls: mooncc could not link ldst64.s"; }
+  a64_job ldst64.t "timeout 60 \$RUN ./ldst64.t"
 
   # the landing law, against clang on protect/units.c: each fn's landing, autiasp before
   # every exit and after every frame record's ldp, no packed access wider, the notes equal
@@ -182,6 +201,11 @@ if [ "$arch" = a64 ]; then
   tail -1 "$r/res/abi64.t.out"
   [ "$(cat "$r/res/abi128.t.rc")" -eq 0 ] || { cat "$r/res/abi128.t.out" >&2; fail "abi128: mooncc and clang disagree on AAPCS64's __int128"; }
   tail -1 "$r/res/abi128.t.out"
+  for t in tls0 tls2 tlsb ldst64; do
+    [ "$(cat "$r/res/$t.t.rc")" -eq 0 ] || { cat "$r/res/$t.t.out" >&2; fail "tls: $t answers $(cat "$r/res/$t.t.rc") $where"; }
+  done
+  readelf -lW "$r/tls2.t" | grep -q ' TLS ' || fail "tls: the a64 link laid no PT_TLS"
+  echo "tls: clang's thread-locals read right $where, -O0 and -O2, two threads, no libc, every width"
 fi
 
 n=0

@@ -22,8 +22,7 @@ rd=/tmp/maclove
 $box "rm -rf $rd && mkdir -p $rd && cat > $rd/love.raw && chmod +x $rd/love.raw" < "$ho/love-macos.raw" \
   || fail "the box could not take love-macos.raw"
 $box "cat > $rd/dist-cat.l" < "$ho/.dist-cat.l" || fail "the box could not take the cat"
-$box "cat > $rd/hot.prof" < src/tools/hot.prof || fail "the box could not take hot.prof"
-$box "cd $rd && env LOVE_NO_IMAGE=1 LOVE_BAKE_HOT=$rd/hot.prof ./love.raw bake -o love -l dist-cat.l" \
+$box "cd $rd && env LOVE_NO_IMAGE=1 ./love.raw bake -o love -l dist-cat.l" \
   || fail "the bake on the box"
 
 out=$($box "cd $rd && ./love -e '(+ 1 2)' && ./love -e '(show love-os)' && ./love uname -s \

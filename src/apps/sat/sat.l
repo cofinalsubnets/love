@@ -1,6 +1,7 @@
 ; sat -- a CDCL solver on the core's mutable maps, with a DPLL baseline as its fuzz oracle.
 ; a literal is a nonzero fixnum (+k var k true, -k false); a clause a list of literals.
-; run: out/love src/apps/sat/sat.l -- the asserts self-gate.
+; the module sat, a carried unit (dimacs.l, flat.l, cli.l join it); test/law/sat.l gates it.
+(module 'sat
 (:
    ; --- literals ---
    (vof l)  |l
@@ -209,35 +210,5 @@
     (: f (gen-formula seed n m) d (solve f n) c (cdcl f n)
        dsat (d != 'unsat) csat (c != 'unsat)
        (? (dsat != csat) 0  !csat 1  (sat? c f)))
-   (fuzz k n m) (all (i \ diff-test (i * 7919 + 1009) n m = 1) ^k)
-
- ; --- stage 1: DPLL against the model checker and combinatorics
- _ (assert
-    (: f '((1 2) (-1 3) (-2 -3)) m (solve f 3)
-       (m != 'unsat && sat? m f))
-    (solve '((1) (-1)) 1 = 'unsat)
-    (: f (cyclic 10) m (solve f 10) (m != 'unsat && sat? m f))
-    (count-models (cyclic 5) 5  = lucas 5)
-    (count-models (cyclic 8) 8  = lucas 8)
-    (count-models (cyclic 10) 10 = lucas 10)
-    (bcp () '((1) (-1)) = 'conflict)
-    (lucas 10 = 123))
- _ (assert    ; --- stage 2: CDCL agrees with DPLL ---
-    (: f '((1 2) (-1 3) (-2 -3)) m (cdcl f 3) (m != 'unsat && sat? m f))
-    (cdcl '((1) (-1)) 1 = 'unsat)
-    (cdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2 = 'unsat)
-    (: f (cyclic 12) m (cdcl f 12) (m != 'unsat && sat? m f))
-    (cdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3 = 'unsat)          ; forces 1=0, then UNSAT
-    (fuzz 60 8 30)                                                            ; near the phase transition
-    (fuzz 40 10 30)
-    (fuzz 30 12 50))
- _ (assert    ; --- stage 3: VSIDS, Luby restarts, phase saving ---
-    (luby 1 = 1) (luby 2 = 1) (luby 3 = 2) (luby 4 = 1) (luby 6 = 2) (luby 7 = 4) (luby 15 = 8)
-    (fuzz 40 12 50)
-    (fuzz 20 14 58)
-    ; php(5) blows past climit 100, so learning and restarts run end to end
-    (cdcl (php 5) (php-vars 5) = 'unsat)
-    (: f (cyclic 80) m (cdcl f 80) (m != 'unsat && sat? m f))
-    (count-cdcl (cyclic 8) 8 = lucas 8)
-    (count-cdcl (cyclic 10) 10 = lucas 10))
- _ (say err "sat: Stages 1-3 ok -- CDCL (learning, backjump, VSIDS, Luby restarts, phase saving) == DPLL on 190 fuzzed + UNSAT pigeonhole + #SAT==Lucas\n"))
+   (fuzz k n m) (all (i \ diff-test (i * 7919 + 1009) n m = 1) ^k))
+) ; module sat

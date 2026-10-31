@@ -104,6 +104,9 @@
                     (j < n && (s j = 102 || s j = 98) && (j + 1 >= n || !(gidc? (s (j + 1)))) ?
                        (go (j + 1) (['lref v (s j)] . acc))
                        (go (sfx j) (['num v] . acc))))
+                ; a character's code: 'a', gas's unclosed 'a, or an escape '\n'
+                (c = 39 && i + 1 < n)
+                 (go (xa-chq s i) (['num (s (i + 1) = 92 && i + 2 < n ? (s (i + 2) @ 110 10 116 9 114 13 98 8 102 12 118 11 97 7 48 0 e e) (s (i + 1)))] . acc))
                 (galpha? c) (span i gidc? @ j (go j (['sym (snip s i j)] . acc)))
                 (c = 37 && i + 1 < n && galpha? (s (i + 1)))
                  (span (i + 1) gidc? @ j (go j (['pct (snip s (i + 1) j)] . acc)))
@@ -193,8 +196,12 @@
                         (? (i >= n) (rev (xa-trim (snip s st n) . acc))
                            (s i = 40 || s i = 91) (g (i + 1) st (d + 1) acc)
                            (s i = 41 || s i = 93) (g (i + 1) st (d - 1) acc)
+                           (s i = 39) (g (xa-chq s i) st d acc)
                            (s i = 44 && d = 0) (g (i + 1) (i + 1) 0 (xa-trim (snip s st i) . acc))
                            (g (i + 1) st d acc))) 0 0 0 ()))
+   ;; past a character constant at i: 'c, 'c' or '\c'
+   (xa-chq s i) (: j (i + 1 < #s && s (i + 1) = 92 ? (i + 3) (i + 2))
+                   (j < #s && s j = 39 ? (j + 1) j))
    (xa-ops rest) (0 = #rest ? () (xa-oplist rest))
    (xa-cut s)   (: i (xa-idx s 32) j (xa-idx s 9)
                    (? (i < 0) j (j < 0) i (i < j) i j))
@@ -273,15 +280,20 @@
    (at-reglook nm) (xa-reg nm @ r (two? r ? r (scare 'as-badreg nm)))
    ; a %reg field, or absent; a 16-bit one (bx bp si di) is marked +32
    (at-mreg f) (0 = #f ? -1 (at-reglook (snip f 1 #f) @ r (<>>r = 2 ? (<>r + 32) <>r)))
+   (at-w4? f) (1 < #f && f 0 = 37 && (at-reglook (snip f 1 #f) @ r <>>r = 4))
    (xa-mregname n) (n >= 32 ? (xa-names ((n - 32) * 32 + 2)) (xa-names (n * 32 + 8)))
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (t @ ("%" + s + ":" + r)
                                        (at-operand (xa-trim r) @ o ['seg (name s) (<o = 'abs ? ['mem -1 -1 1 <>o] o)]))
-         (t 0 = 37) (: nm (snip t 1 #t) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
+         ; x87's stack: %st, %st(i)
+         (t 0 = 37 && starts? (xa-nows t) "%st" && (#(xa-nows t) = 3 || xa-nows t 3 = 40))
+          (xa-nows t @ u ['st (#u = 3 ? 0 (xa-imm (snip u 4 (#u - 1))))])
+         (t 0 = 37) (: nm (xa-trim (snip t 1 #t)) cr (xa-cr nm) dr (xa-dr nm) sr (xa-sr nm)
                        (? (two? cr) cr (two? dr) dr (two? sr) sr (at-reglook nm)))
          (t 0 = 36) (snip t 1 #t @ v
                        (? (xa-num? v) ['im (xa-num v)]
+                          (xa-expr? v && two? (xa-symlin v)) ['ims (name v)]
                           (xa-expr? v) ['im (gimm (gtoks v))]
                           ; a constant expression: $4096/8, $-4*16
                           (two? (gconst v)) ['im <(gconst v)]
@@ -292,18 +304,21 @@
                           ['ims (name (xa-unquote v))]))
          (xa-has? t 40)
          (: op ((: (g i) (i < 1 || t i = 40 ? i (g (i - 1)))) (#t - 1))   ; the last paren: `(2f)(%rip)`
-            d0 (snip t 0 op) n0 #d0
+            d0 (xa-trim (snip t 0 op)) n0 #d0
             disp (1 < n0 && d0 0 = 40 && d0 (n0 - 1) = 41 ? (snip d0 1 (n0 - 1)) d0)
-            inner (snip t (op + 1) (#t - 1))
+            inner (xa-nows (snip t (op + 1) (#t - 1)))
             cv (0 = #disp ? [0] (gconst disp))
             (inner = "%rip" ? (? (two? cv) ['rip () <cv]
                                   (xa-symoff disp @ so ['rip <so >so]))
                (: fs (xa-split inner 44) k #fs
                   so (two? cv ? () (xa-symoff disp))   ; `table(,%rbx,8)`: an absolute symbol
                   d (two? cv ? <cv >so)
+                  ; 32-bit address registers ride a seventh field, 'a32 (the symbol's slot () when none)
+                  a32 (at-w4? <fs || (k > 1 && at-w4? (fs 1)))
                   (k > 3 ? (scare 'as-memform t)
                      (['mem (at-mreg <fs) (k < 2 ? -1 (at-mreg (fs 1)))
-                            (k < 3 ? 1 (xa-imm (fs 2))) d] + (two? so ? [<so]))))))
+                            (k < 3 ? 1 (xa-imm (fs 2))) d]
+                      + (? (two? so) [<so] a32 [()]) + (a32 ? ['a32]))))))
          (xa-num? t) ['abs (xa-num t)]
          ['lbl (name (xa-unquote t))])
    ;; ..which the instruction settles: a branch's target, else memory at that address
@@ -335,6 +350,7 @@
             'cr ("%cr" + show <>o)
             'dr ("%db" + show <>o)
             'sr ("%" + snip "escsssdsfsgs" (2 * <>o) (2 * <>o + 2))
+            'st ("%st(" + show <>o + ")")
             'im ("$" + show <>o)
             'ims ("$" + show <>o)
             'lbl (show <>o)
@@ -454,6 +470,7 @@
             'cr ("cr" + show <>o)
             'dr ("dr" + show <>o)
             'sr (snip "escsssdsfsgs" (2 * <>o) (2 * <>o + 2))
+            'st ("st(" + show <>o + ")")
             'im (show <>o)
             'ims ("OFFSET FLAT:" + show <>o)
             'lbl (show <>o)

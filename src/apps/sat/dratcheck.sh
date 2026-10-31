@@ -5,14 +5,13 @@
 # out/drat on first use -- verify every proof (`s VERIFIED`). the BVA lines are RAT
 # additions on fresh variables, the learnts RUP, the last line the empty clause; the
 # php5raw row pins fbva0 off to check the pure-RUP lane too. the in-gate twin of this
-# check (fd-check, no external dependency) runs inside `make test_sat`.
+# check (fd-check, no external dependency) runs in test/law/sat.l, under `make test_sat`.
 # usage: ./dratcheck.sh   (from src/apps/sat/; `make test_drat` from the root)
 # exits 1 on any non-verified proof; exits 0 with a note when drat-trim is absent
 # and cannot be fetched (offline). NB no `set -e`: drat-trim's exit codes are
 # conventional, the verdict is the `s VERIFIED` line.
 R=../../..
 GL=$R/out/love
-export LOVE_NO_IMAGE=1   # the native kernels ride the `nif` seam the glazed image mops
 OUT=$R/out/drat
 mkdir -p "$OUT"
 DT=$OUT/drat-trim
@@ -36,7 +35,7 @@ DRV='(: f (php @H@) nv (php-vars @H@)@PIN@
 fail=0
 check() { # $1 = row name, $2 = h, $3 = the extra pin form (or empty)
   printf '%s\n' "$DRV" | sed "s/@H@/$2/g; s/@PIN@/$3/" \
-    | { cat "$R/src/apps/sat/sat.l" "$R/src/apps/sat/flat.l" -; } | "$GL" 2>/dev/null > "$OUT/$1.tmp"
+    | { cat "$R/src/apps/sat/sat.l" "$R/src/apps/sat/flat.l"; echo "(borrow 'sat)"; cat; } | "$GL" 2>/dev/null > "$OUT/$1.tmp"
   awk -v c="$OUT/$1.cnf" -v p="$OUT/$1.drat" \
     '/^c ==proof/ { m=1; next } m { print > p; next } { print > c }' "$OUT/$1.tmp"
   rm -f "$OUT/$1.tmp"

@@ -42,6 +42,7 @@
 ;   (stsd base disp f) (ldsd f base disp)      ; movsd [base+disp]<->xmm  (spill / box store)
 ;   (ldsdx f base index scale disp) (stsdx base index scale disp f)   ; the indexed twins (ldssx/stssx single)
 ;   (ldsdl f label)                            ; xmm <- the double at a label (pc-relative, a rodata constant)
+;   (fopm op f base disp) (fopl op f label)    ; a scalar op (addsd .. ucomiss) with its source in memory
 ;   (minsd d s) (maxsd d s)                    ; d <- d < s ? d : s  /  d > s ? d : s (a NaN takes s)
 ;   (addss .. ucomiss minss maxss) (cvtsi2ss cvtui2ss f g) (cvttss2si cvttss2ui g f)   ; the single twins
 ;   (movdxr f g) (movdrx g f)                  ; gp<->f bit moves of a single's 32 bits
@@ -187,7 +188,7 @@
              'rem 4 'urem 4 'umull 4 'smull 4 'umlal 4 'mla 4
              'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3 'decm 2
-             'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2
+             'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2 'fopm 4 'fopl 3
              'minsd 2 'maxsd 2 'cmov 3}
    ;; an emitter row is (arity . emitter); `emsof` builds a backend's tablet from ('op . f) pairs.
    (emsof prs) ({} @ t (foldl (\ _ p (emrow t <p >p)) 0 prs, t))

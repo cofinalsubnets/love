@@ -383,7 +383,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
         (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
@@ -474,8 +474,10 @@
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
-   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xasm 'mpm mp}))
-    (: ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
+   ; a .S reads as -x assembler-with-cpp does, __ASSEMBLER__ defined
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp}))
+    (: xasm (xa || dotS? src)
+       ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
@@ -864,7 +866,8 @@
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
    (rtpull srcs tgt os nostd vb imp?)
     (: mach (peep elf-machines tgt 0)
-       lg (ldledger srcs mach) dt <lg owed <>lg
+       ; a thread template owes the startup that lays the first thread's copy
+       lg (ldledger srcs mach) dt <lg owed (lg 2 ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
        home (two? owed && !nostd && mhome ())

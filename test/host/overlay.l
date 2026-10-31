@@ -3,11 +3,12 @@
 
 (reads (open "src/apps/lux/sigs.l" "r"))
 (reads (open "src/apps/lux/core.l" "r"))
+(borrow 'lux)
 
 (:    chk1 (overlay 'ov-check)
    ; opfix then unglue: a glued sigil factors to a value, which no checker matches by name
    (fix1 f) (unglue (opfix f))
-   (sweep path) (foldl (a \ f \ (cat a (chk1 lux-dom lux-sigs (fix1 f)))) () (forms (open path "r")))
+   (sweep path) (foldl (a \ f \ (cat a (chk1 lux-dom lux-sigs (fix1 f)))) () (lux-peel (forms (open path "r"))))
 
  ; leg 1: the shipped sources check clean...
  _ (test !(sweep "src/apps/lux/core.l")
@@ -100,7 +101,7 @@
 ; leg 6: src/tools/wm2uu.l translates core.l's ops to uu terms, certified in gens' order,
 ; which must answer the fuzz exactly as core.l does
 (reads (open "src/tools/wm2uu.l" "r"))
-(:    cforms (map (f \ unglue (opfix f)) (forms (open "src/apps/lux/core.l" "r")))   ; the surface factored to the core, as above
+(:    cforms (map (f \ unglue (opfix f)) (lux-peel (forms (open "src/apps/lux/core.l" "r"))))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (test (10 = #gens))
  _ (map (g \ (uu 'defn) <g (g 1) (g 2)) gens)   ; the function: these args are computed

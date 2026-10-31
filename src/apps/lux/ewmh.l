@@ -3,7 +3,8 @@
 ;   * root properties a pager reads, re-published by ewmh-sync when the sheaf changes;
 ;   * struts: a dock's _net_wm_strut_partial shrinks the tiling rect; ewmh-toggle flips it.
 ; the strut arithmetic and encodings are pure; ewst is the one mutable cell. a body-less
-; `:` -- leaks all.
+; `:` in the module lux.
+(module 'lux
 (borrow 'xwire)
 (:
    ; --- strut arithmetic. a strut is (left right top bottom ls le rs re ts te bs be):
@@ -101,3 +102,4 @@
    ; --- ClientMessage (event 33) field reads, off the raw bytes ---
    (ewmh-cm-win pkt) (u32 pkt 4)  (ewmh-cm-type pkt) (u32 pkt 8)
    (ewmh-cm-d0 pkt) (u32 pkt 12)  (ewmh-cm-d1 pkt) (u32 pkt 16)  (ewmh-cm-d2 pkt) (u32 pkt 20))
+) ; module lux

@@ -1,9 +1,10 @@
 ; src/apps/lux/core.l -- the pure StackSet, xmonad's StackSet.hs: a focus zipper per
 ; workspace holding every window on it, floats included, a floating map carrying geometry
 ; alone, and the screens. one focus, one home tag, no second copy to drift.
-; src/tools/wm2uu.l reads this file's post-opfix tree: a rewrite that changes the tree,
-; even value-equal, must teach the translator first.
-; a body-less top-level `:`, so the other lux files see this vocabulary once concatenated.
+; src/tools/wm2uu.l reads this file's post-opfix tree, the module peeled (sigs.l's lux-forms):
+; a rewrite that changes the tree, even value-equal, must teach the translator first.
+; a body-less `:` in the module lux, which the other lux files share.
+(module 'lux
 (:
    ; --- the app's own list utility ---
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))    ; first match, else ()
@@ -160,3 +161,4 @@
                   && wsvisible? sh (wscur sh) && znodup? (wsvistags sh)   ; the current tag on a screen, no tag on two,
                   && all (t \ wsknown? sh t) (wsvistags sh))       ; and every screen showing a real tag
    (znodup? l) (? (atom? l) 1 (any (x \ x = <l) >l) 0 (znodup? >l)))
+) ; module lux

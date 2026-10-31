@@ -301,6 +301,15 @@ for o in 0 2; do
   "$ho/.tls$o" || fail "tls: gcc -O$o's thread-locals read wrong under mooncc's link and moonlibc (exit $?)"
 done
 readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
+# ..and with no libc call to pull the startup in, the template does
+moonrun -o "$ho/.tlsb" test/cc/tls/bare.c "$ho/.tlsp2.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
+  || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link bare.c"; }
+"$ho/.tlsb" || fail "tls: a program calling no libc read its thread-locals wrong (exit $?)"
+# ..but mooncc's __thread is a plain global, and the link refuses its read of gcc's
+printf 'extern __thread int tl_ext;\nint main(void) { return tl_ext; }\n' > "$ho/.tlsplain.c"
+moonrun -o "$ho/.tlsplain" "$ho/.tlsplain.c" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
+  && fail "tls: a plain read of gcc's thread-local linked"
+grep -q link-tls-plain "$ho/.tls.log" || { cat "$ho/.tls.log" >&2; fail "tls: a plain read of a thread-local was not refused by name"; }
 
 # ms_abi across compilers: gcc's definitions and calls against mooncc's trampolines and shuffles
 $cc_g -O2 -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.peerms.o" test/cc/msabi/peer.c \
@@ -582,6 +591,9 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 mkdir -p "$ho/.once/b"
 printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
 [ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
+# -E on a .S defines __ASSEMBLER__, as -c on it does
+printf '#ifdef __ASSEMBLER__\nmovl $1, %%eax\n#endif\n' > "$ho/.asm.S"
+moonrun -E "$ho/.asm.S" | grep -q 'movl' || fail "-E on a .S left __ASSEMBLER__ undefined"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
@@ -970,7 +982,7 @@ cok x64 '_Static_assert(1, "ok");' "a TU of one _Static_assert"
 cno x64 '_Static_assert(0, "boom");' "a FAILING lone _Static_assert passed"
 
 # C11 6.5.16.1: an int reaches a pointer only as a null pointer constant
-cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return 0;}\n' "an int returned where a pointer is owed was accepted"
+cno x64 'struct s;\nstatic struct s *f(int x){ if (x) return 1; return 0; }\nint m(void){return f(0) != 0;}\n' "an int returned where a pointer is owed was accepted"
 cok x64 'struct s;\nstatic struct s *f(int x){ if (x) return (struct s*)1; return 0; }\nint m(void){return 0;}\n' "a CAST to the pointer type must still pass"
 
 # a file-scope bound that does not fold refuses by name, never laid as a pointer's worth
@@ -1001,7 +1013,7 @@ taref() {
   printf "$1" > "$ho/.feat.c"
   moonrun -c -t "$2" -o /dev/null "$ho/.feat.c" 2>&1 | grep -q "$3" || fail "file-scope asm: $4"
 }
-taref 'asm(".uleb128 5");\n' x64 "gas-directive" "an unread directive was not refused"
+taref 'asm(".stabs 1");\n' x64 "gas-directive" "an unread directive was not refused"
 taref 'asm(".data\\na: .long a - b\\n.text\\nb:");\n' x64 "gas-data" "a label difference across sections was not refused"
 taref 'int f(void){return 0;}\nasm(".data\\n.long f - .");\n' thumb2 "gas-data-pcrel" "a pc-relative word on arm32 was not refused"
 taref 'asm(".data\\n.byte 1");\n' wasm "no wasm lane" "the wasm lane took a file-scope asm"

@@ -7,6 +7,7 @@
 ;   (display ":7")  (xauthority "/home/me/.Xauthority")
 ; a chord is a list, the key last: a symbol names it, a one-char string, or a keysym number.
 ; conf-* take the tablet, so test/law/lux.l checks the defaults against an empty one.
+(module 'lux
 (borrow 'xwire)
 (borrow 'salt)
 (:
@@ -15,16 +16,6 @@
    (conf-roster c k d) (salt-all c k @ r (two? r ? (filter conf-live? r) d))
    (conf-mod c) (kmod-of (salt-one c 'mod 'sup) supm @ m (m ? m supm))
    (conf-tags c) (salt-one c 'tags 9 @ n (charm? n && (0 < n) ? n 9))
-
-   lux-conf (salt 'lux)
-
-   ; borderWidth = 3, normalBorderColor / focusedBorderColor
-   lux-border (salt-one lux-conf 'border 3)
-   lux-normal-color (salt-one lux-conf 'normal-color "Dark Slate Blue")
-   lux-focused-color (salt-one lux-conf 'focused-color "Light Cyan")
-
-   ; workspaces = map show [1 .. 9]
-   lux-tags (map (+ 1) (jot (conf-tags lux-conf)))
 
    ; layoutHook: l1 ||| l2 with minimize, smartBorders, toggle Full, mirror wraps;
    ;   avoidStruts and windowNavigation live in the driver. phi = fib 32 / fib 31
@@ -47,22 +38,6 @@
                               'toggle-full (toggle-full inner)
                               'mirror      (mirror inner)
                               inner)
-   lux-lays (filter two? (map lux-lay-of
-                              (conf-roster lux-conf 'layout '((rtall 1 0.02 0.5) (dwindle phi)))))
-   lux-wraps (conf-roster lux-conf 'layout-wrap '(minimize smart toggle-full mirror))
-   lux-layout (foldr lux-wrap-of (choice lux-lays) lux-wraps)
-
-   lux-manage (manage-for (conf-roster lux-conf 'center-class mg-center-def)
-                          (conf-roster lux-conf 'float-class mg-float-def)
-                          (conf-roster lux-conf 'ignore-class ()))
-   lux-mod (conf-mod lux-conf)
-   lux-keymap (keys-build lux-mod (salt-one lux-conf 'nudge 20) (conf-tags lux-conf)
-                          (conf-roster lux-conf 'bind ()) (conf-roster lux-conf 'unbind ()))
-
-   ; LUX_NOSTARTUP skips the spawns, for a headless Xvfb harness
-   lux-startup (getenv "LUX_NOSTARTUP" ? ()
-                  (conf-roster lux-conf 'startup
-                               '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
 
    ; the display names the unix socket; the xauthority setting, else $XAUTHORITY, else
    ;   ~/.Xauthority holds the cookie (a display manager may leave a stale ~/.Xauthority)
@@ -70,8 +45,38 @@
                      (snip d 1 #d @ b
                         (: (go i) (i = #b || b i = 46 ? (snip b 0 i) (go (i + 1)))
                            (go 0))))
-   (lux-dispnum u) (lux-dispof (salt-one lux-conf 'display () @ d (string? d ? d (getenv "DISPLAY"))))
    (lux-xauth u) (getenv "XAUTHORITY" @ v (0 < #v ? v (getenv "HOME" + "/.Xauthority")))
-   (lux-auth-for disp) (xauth-cookie (salt-one lux-conf 'xauthority (lux-xauth ())) disp)
-   lux-display ("/tmp/.X11-unix/X" + lux-dispnum ())
-   lux-auth (lux-auth-for (lux-dispnum ())))
+
+   ; the settings, read at the first ask and never at load, where a bake would keep the
+   ; baker's own (lux-cfg 'border): conf border normal-color focused-color tags layout
+   ; manage mod keymap startup dispnum display auth
+   cfg {}
+   (lux-cfg k) (cfg 'read ? (cfg k) (lux-read (), cfg k))
+   (lux-read _)
+    (: c (salt 'lux)
+       lays (filter two? (map lux-lay-of (conf-roster c 'layout '((rtall 1 0.02 0.5) (dwindle phi)))))
+       wraps (conf-roster c 'layout-wrap '(minimize smart toggle-full mirror))
+       m (conf-mod c)
+       d (lux-dispof (salt-one c 'display () @ v (string? v ? v (getenv "DISPLAY"))))
+       (pins cfg 'read 1 'conf c
+             ; borderWidth = 3, normalBorderColor / focusedBorderColor
+             'border (salt-one c 'border 3)
+             'normal-color (salt-one c 'normal-color "Dark Slate Blue")
+             'focused-color (salt-one c 'focused-color "Light Cyan")
+             ; workspaces = map show [1 .. 9]
+             'tags (map (+ 1) (jot (conf-tags c)))
+             'layout (foldr lux-wrap-of (choice lays) wraps)
+             'manage (manage-for (conf-roster c 'center-class mg-center-def)
+                                 (conf-roster c 'float-class mg-float-def)
+                                 (conf-roster c 'ignore-class ()))
+             'mod m
+             'keymap (keys-build m (salt-one c 'nudge 20) (conf-tags c)
+                                 (conf-roster c 'bind ()) (conf-roster c 'unbind ()))
+             ; LUX_NOSTARTUP skips the spawns, for a headless Xvfb harness
+             'startup (getenv "LUX_NOSTARTUP" ? ()
+                         (conf-roster c 'startup
+                                      '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
+             'dispnum d
+             'display ("/tmp/.X11-unix/X" + d)
+             'auth (xauth-cookie (salt-one c 'xauthority (lux-xauth ())) d))))
+) ; module lux

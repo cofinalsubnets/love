@@ -2,9 +2,10 @@
 #include <pthread.h>
 
 /* a thread's record, at the top of its own stack and its thread pointer: self first, as %fs:0
- * reads it, a program's tls template copied just under it. linux clears tid and wakes its
- * futex when the thread is gone, which is all a join waits for; freebsd's thr_exit sets gone
- * instead, and netbsd's _lwp_wait waits on tid */
+ * reads it, a program's tls template copied just under it. a64's template lies above the
+ * thread pointer, so there tp is a control block under the record, its first word the record.
+ * linux clears tid and wakes its futex when the thread is gone, which is all a join waits
+ * for; freebsd's thr_exit sets gone instead, and netbsd's _lwp_wait waits on tid */
 struct __pthread { void *self; void *(*fn)(void *); void *arg; void *ret; void *map; unsigned long len; volatile int tid;
                    volatile long gone; void *tsd[128]; };
 #define PtStack (8UL << 20)
@@ -38,7 +39,11 @@ pthread_t pthread_self(void) {
 #else
   void *tp = __love_tp();
 #endif
-  return tp && tp != __love_mt.mtp ? (pthread_t) tp : PtMain; }
+  if (!tp || tp == __love_mt.mtp) return PtMain;
+#if defined(__aarch64__)
+  if (__love_mt.tlsimg) tp = *(void **) tp;
+#endif
+  return (pthread_t) tp; }
 
 int pthread_equal(pthread_t a, pthread_t b) { return a == b; }
 int pthread_attr_init(pthread_attr_t *a) { a->__unused = 0; return 0; }
@@ -68,7 +73,7 @@ static void __pt_start(struct __pthread *d) { pthread_exit(d->fn(d->arg)); }
 
 #ifdef LvBsdThreads
 /* the BSD's own start: d's record at the top of m, the stack from just under it */
-static long __pt_bsd(struct __pthread *d, void **sp) {
+static long __pt_bsd(struct __pthread *d, void **sp, void *tp) {
   if (__love_osv == 2) {
     long kt = 0;
     struct __fb_thrp p;
@@ -76,9 +81,9 @@ static long __pt_bsd(struct __pthread *d, void **sp) {
     p.fn = (void (*)(void *)) __pt_start, p.arg = d;
     p.sb = d->map, p.ss = (unsigned long) ((char *) sp - (char *) d->map);
 #ifdef __riscv
-    p.tb = (char *) d - 16;                     /* riscv's kernel lays tp 16 past the base (TP_OFFSET) */
+    p.tb = (char *) tp - 16;                    /* riscv's kernel lays tp 16 past the base (TP_OFFSET) */
 #else
-    p.tb = (char *) d;
+    p.tb = (char *) tp;
 #endif
     p.ctid = p.ptid = &kt;
     return fb2(455, (long) &p, sizeof p); }     /* thr_new */
@@ -91,9 +96,9 @@ static long __pt_bsd(struct __pthread *d, void **sp) {
   gr[NbPc] = (unsigned long) __pt_start, gr[NbArg] = (unsigned long) d;
 # if defined(__x86_64__)
   gr[NbSp] = (unsigned long) sp - 8;            /* as a call leaves it: the return slot below 16 */
-  *(unsigned long *) (uc + 264) = (unsigned long) d;
+  *(unsigned long *) (uc + 264) = (unsigned long) tp;
 # else
-  gr[NbSp] = (unsigned long) sp, gr[NbRa] = 0, gr[NbTls] = (unsigned long) d;
+  gr[NbSp] = (unsigned long) sp, gr[NbRa] = 0, gr[NbTls] = (unsigned long) tp;
 # endif
   *(unsigned *) uc |= 0x80004;                  /* _UC_TLSBASE | _UC_CPU */
   return fb3(309, (long) uc, 0, (long) &d->tid); }   /* _lwp_create, joinable */
@@ -111,8 +116,15 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
   unsigned long al = __love_mt.tlsalign > 16 ? __love_mt.tlsalign : 16;
   struct __pthread *d = (struct __pthread *) (((unsigned long) m + PtStack - sizeof *d) & ~(al - 1));
   char *low = (char *) d;
+  void *tls = d;
   d->self = d;
+#if defined(__aarch64__)
+  if (__love_mt.tlsimg) {
+    low = (char *) (((unsigned long) d - __love_mt.tlsoff - __love_mt.tlsblk) & ~(al - 1));
+    tls = low, __love_tlscopy(low), *(void **) low = d; }
+#else
   if (__love_mt.tlsimg) __love_tlscopy(d), low -= __love_mt.tlsblk;
+#endif
   d->fn = fn; d->arg = arg; d->ret = 0; d->map = m; d->len = PtStack; d->tid = 0; d->gone = 0;
   memset(d->tsd, 0, sizeof d->tsd);
   void **sp = (void **) (((unsigned long) low - 16) & ~15UL);
@@ -126,13 +138,11 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
     __love_mt.tls = (int) u.entry; }
   u.entry = (unsigned) __love_mt.tls; u.base = (unsigned) &sp[1];
   sp[2] = (void *) (long) (__love_mt.tls * 8 + 3);
-  void *tls = &u;
-#else
-  void *tls = d;
+  tls = &u;
 #endif
   __love_mt.threads = 1;                        /* before the child can reach malloc */
 #ifdef LvBsdThreads
-  long r = __love_osv >= 2 ? __pt_bsd(d, (void **) (((unsigned long) low - 16) & ~15UL))
+  long r = __love_osv >= 2 ? __pt_bsd(d, (void **) (((unsigned long) low - 16) & ~15UL), tls)
                            : __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, tls);
 #else
   long r = __love_clone(PtFlags, sp, (int *) &d->tid, (int *) &d->tid, tls);

@@ -2,7 +2,7 @@
 ; the BVA grow step fbvag) are x64 kernels assembled through src/love/holo/, offsets baked
 ; as immediates and cached per nv, installed through `nif`. the interpreted twins
 ; fbcp3/fconf3/fdec3/fbvag3 are their spec, deopt fallback and non-x64 engine; `fknob`
-; forces them. runs after sat.l, whose oracle and instances it reuses.
+; forces them. in the module sat after sat.l, whose oracle and instances it reuses.
 ;
 ; a literal is encoded +v -> 2v, -v -> 2v+1; val[v] holds the true encoded literal (0 free).
 ; activities are integers; when vinc passes 2^24 all shift right 8. words are 8-byte
@@ -16,6 +16,7 @@
 ; a watch node at offset p is [cid, next] (0 = nil; words 0-1 of both arenas reserved).
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
+(module 'sat
 (:
    ; --- 8-byte word slots: src/love/mem.c's word nifs --------------------------------
    getw (cite 'guts 'peepw)
@@ -1154,68 +1155,5 @@
                     (? !ok 0
                        (atom? c) 1
                        (go (c . db) >ps)))))))
-     (map dedup-lits f) proof)
-
- ; --- the gate: the flat engine answers exactly like the oracle, kernels == twins
- _ (assert
-    ; tiny SAT / UNSAT
-    (: f '((1 2) (-1 3) (-2 -3)) m (fcdcl f 3) (m != 'unsat && sat? m f))
-    (fcdcl '((1) (-1)) 1 = 'unsat)
-    (fcdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2 = 'unsat)
-    (fcdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3 = 'unsat)
-    ; cyclic: SAT, the model checks, and #SAT == Lucas (solver-independent)
-    (: f (cyclic 12) m (fcdcl f 12) (m != 'unsat && sat? m f))
-    (count-fcdcl (cyclic 8) 8 = lucas 8)
-    (count-fcdcl (cyclic 10) 10 = lucas 10)
-    ; differential fuzz vs the DPLL oracle, mixed SAT/UNSAT near the phase transition
-    (ffuzz 60 8 30)
-    (ffuzz 40 10 30)
-    (ffuzz 30 12 50)
-    (ffuzz 20 14 58)
-    ; native kernels == interpreted twins, verdict for verdict (a no-op switch where they can't build)
-    (fboth (cyclic 14) 14)
-    (fboth (php 4) (php-vars 4))
-    (fboth (php 5) (php-vars 5))
-    ; ..and the BVA transform agrees, not just its verdict (cyclic factors nothing)
-    (fbvaboth (php 4) (php-vars 4))
-    (fbvaboth (php 5) (php-vars 5))
-    (fbvaboth (cyclic 14) 14)
-    ; pigeonhole php(5): UNSAT + resolution-hard (learning, restarts, arena growth end to end)
-    (fcdcl (php 5) (php-vars 5) = 'unsat)
-    ; drat: an UNSAT proof re-checks against the original formula -- rup on the tiny ones,
-    ; BVA's rat lines on php(4), `d` lines under a tiny learnt cap
-    (: f '((1) (-1)) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f 1) _ (pin fdrat0 () 0)
-       (r = 'unsat && 1 = fd-check f (fd-parse (slurp j))))
-    (: f '((1 2) (1 -2) (-1 2) (-1 -2)) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f 2) _ (pin fdrat0 () 0)
-       (r = 'unsat && 1 = fd-check f (fd-parse (slurp j))))
-    (: f (php 4) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f (php-vars 4)) _ (pin fdrat0 () 0)
-       ps (fd-parse (slurp j))
-       bad (map (st \ (0 = <st && 2 = #>st ?        ; negate a literal in every
-                         (0 . -<>st . >>st) st))      ; 2-lit add line:
-            ps)                                                        ; the checker must refuse
-       (r = 'unsat && 1 = fd-check f ps && 0 = fd-check f bad))
-    (: keep (peep fmaxl0 () 0) _ (pin fmaxl0 () 24)
-       f (php 4) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f (php-vars 4))
-       (pin fdrat0 () 0, pin fmaxl0 () keep,
-        r = 'unsat && 1 = fd-check f (fd-parse (slurp j))))
-    ; force the learnt-db reduction path hard (a tiny cap -> reduction every few restarts)
-    ; and re-run the differential battery through it, both engines
-    (: keep (peep fmaxl0 () 0) _ (pin fmaxl0 () 24)
-       ok (fcdcl (php 5) (php-vars 5) = 'unsat &&
-           ffuzz 30 12 50 && fboth (php 4) (php-vars 4))
-       (pin fmaxl0 () keep, ok))
-    ; force fcompact at every level-0 restart (tiny threshold, no multiple): its cid
-    ; remapping and level-0 UNSAT are reachable only here
-    (: keep (peep fcmp0 () 0) kk (peep fcmpk () 2) _ (pin fcmp0 () 64) _ (pin fcmpk () 0)
-       ok (fcdcl (php 5) (php-vars 5) = 'unsat &&
-           ffuzz 30 12 50 && count-fcdcl (cyclic 10) 10 = lucas 10)
-       (pin fcmp0 () keep, pin fcmpk () kk, ok))
-    ; ..and the mark: at fcmpk 2, php(5) compacts, but fewer times than at fcmpk 0
-    (: keep (peep fcmp0 () 0) kk (peep fcmpk () 2) ku (peep fru0 () 400)
-       _ (pin fcmp0 () 64) _ (pin fru0 () 8)
-       (n k) (: _ (pin fcmpk () k) _ (pin fcmpn () 0) v (fcdcl (php 5) (php-vars 5)) [v (peep fcmpn () 0)])
-       every (n 0) marked (n 2)
-       (pin fcmp0 () keep, pin fcmpk () kk, pin fru0 () ku,
-        <every = 'unsat && <marked = 'unsat && 0 < <>marked < <>every)))
- _ (say err ("src/apps/sat/flat: ok -- flat-arena CDCL == DPLL on 150 fuzzed + PHP(5) + #SAT==Lucas"
-             + (two? (fbcpk 8) ? " (native bcp+conf+dec+bvag kernels live)\n" " (interpreted twins)\n"))))
+     (map dedup-lits f) proof))
+) ; module sat

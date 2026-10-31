@@ -437,6 +437,21 @@
    ; .octa: a hex literal past 64 bits, low bytes first; a plain number sign-filled
    _ (chk-eq "gas.octa" "(((\".data\" 1 3 ((raw (103 230 9 106 133 174 103 187 114 243 110 60 58 245 79 165)) (raw (251 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255))))) () () ())"
         (show (gas-top 'x64 ".data\n.octa 0xA54FF53A3C6EF372BB67AE856A09E667\n.octa -5\n")))
+   ; a call's name=value only for a parameter's name: a quoted line's `type=7` stays positional;
+   ; and %r8 %r9 spaced apart are two arguments
+   _ (chk-eq "gas.macro.kwquote" '(".long 9")
+        (gf-expand 'x64 (gf-lines 'x64 ".macro a old, new, f\n.long \\f\n.endm\na \"nop\", \"nop; ANNOTATE type=7\", 9")))
+   _ (chk-eq "gas.macro.regs" '(".long 1")
+        (gf-expand 'x64 (gf-lines 'x64 ".macro m a:req b:req\n.ifc \\a\\b, %r8%r9\n.long 1\n.endif\n.endm\nm %r8 %r9")))
+   ; .irpc: a character at a time
+   _ (chk-eq "gas.irpc" '(".long 0" ".long 1" ".long 2")
+        (gf-expand 'x64 (gf-lines 'x64 ".irpc l, 012\n.long \\l\n.endr")))
+   _ (chk-eq "gimm.char" [39 120] [(gimm (gtoks "'a' - '0' - 10")) (gimm (gtoks "'x"))])
+   ; an escape is one character, and a quoted comma splits neither operands nor a call
+   _ (chk-eq "gimm.charesc" [10 44 58] (map (t \ gimm (gtoks t)) ["'\\n'" "','" "':'"]))
+   _ (chk-eq "xa-oplist.charcomma" ["$','" "%al"] (xa-oplist "$',', %al"))
+   _ (chk-eq "gas.macro.charcomma" '(".byte ',', ':'")
+        (gf-expand 'x64 (gf-lines 'x64 ".macro m a b\n.byte \\a, \\b\n.endm\nm ',', ':'")))
    ; an .elseif chain takes its first true arm, and >> is gas's logical shift
    _ (chk-eq "gas.elseif"
         '(".long 2" ".long 6")

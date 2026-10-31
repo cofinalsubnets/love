@@ -116,12 +116,12 @@ love0: $(love0)
 # the two states of one binary, as two files: the link lays the raw one, and the bake
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
-# the bake is hot-first: src/tools/hotbake.sh lays what short runs touch ahead, by the tree's
-# profile, and glazes a leaf only where the tree's call profile calls it often. `make hotprof`
-# writes both again after a change to anything baked (test_bakerep says when).
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hotbake.sh src/tools/hot.prof src/tools/hot.calls
+# the bake is hot-first: it lays what short runs touch ahead, by the hot.prof the raw carries,
+# and glazes a leaf only where the hot.calls it carries calls it often. `make hotprof` writes
+# both again after a change to anything baked (test_bakerep says when), by src/tools/hotbake.sh.
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hot.prof src/tools/hot.calls
 	@echo 'BAKE	'$@
-	@sh src/tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
+	@LOVE_NO_IMAGE=1 $< bake -o $@ -l $(ho)/.dist-cat.l
 
 .PHONY: hotprof
 hotprof: $(prof_raw) $(ho)/.dist-cat.l
@@ -383,6 +383,8 @@ sbfiles = src/apps/kore/text.l src/apps/kore/diff.l src/apps/dns.l src/apps/sb/m
 # helm the supervisor -- a prototype init, catted the same way. member order is the
 # scope: the unit language, the supervisor over it, the socket over that, the driver last.
 helmfiles = src/apps/helm/unit.l src/apps/helm/sup.l src/apps/helm/moor.l src/apps/helm/helm.l
+# the sat solver, one module: the reference engines, the dimacs reader, the flat engine, the verb
+satfiles = src/apps/sat/sat.l src/apps/sat/dimacs.l src/apps/sat/flat.l src/apps/sat/cli.l
 $(ho)/sb: $(sbfiles)
 $(ho)/lush: $(lushfiles)
 $(ho)/helm: $(helmfiles)
@@ -399,18 +401,26 @@ $(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(lov
 
 distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
             $(holo_obj) src/love/holo/copy.l $(holo_ld) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
+# carried, not baked: each a carry row in the cat, raised off /love at its unit's first call;
+# `love bake --with UNIT` bakes it (src/apps/roster.l). distlist.h lists them after a +
+carryfiles = $(helmfiles) $(satfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
 	 $(note)
-$(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list
+$(ho)/.carry.list: force_dist_list
+	@mkdir -p $(dir $@)
+	@tf=$@.$$$$.tmp; echo '$(carryfiles)' > $$tf; \
+	 $(note)
+$(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p $(dir $@)
 	@for f in $(distfiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
+	@for f in $(carryfiles); do printf '\n(cite (quote verbs) (quote carry) "%s")\n' $$f; done >> $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
 out/lib/distlist.h: Makefile
 	@mkdir -p out/lib
-	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles) + $(carryfiles)' > $$tf; \
 	 $(note)
 .PHONY: dist dist-seed
 

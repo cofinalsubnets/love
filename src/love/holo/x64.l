@@ -531,6 +531,13 @@
          ([pfx] + mrex 0 () xn ixn bn + opc + memx xn base index scale disp))
    (emit-ldsdl d label)                                                                    ; xmm(d) <- [rip+label]
       (xrn d @ dn (catall ['(242) (xrex 0 dn 0) [15 16 (modrm 0 (lo dn) 5)] [(fix 4 'rel32 label 0)]]))
+   ;; a scalar op with its source in memory: d op= [base+disp], or [rip+label]
+   (emit-fopm op d base disp)
+      (: meta (peep x64-sse op 0) pfx (meta 0) dn (xrn d)
+         (catall [(pfx @ 0 () [pfx]) (xrex 0 dn (rn base)) [15 (meta 1)] (mem dn base disp)]))
+   (emit-fopl op d label)
+      (: meta (peep x64-sse op 0) pfx (meta 0) dn (xrn d)
+         (catall [(pfx @ 0 () [pfx]) (xrex 0 dn 0) [15 (meta 1) (modrm 0 (lo dn) 5)] [(fix 4 'rel32 label 0)]]))
    (emit-ldsdx d base index scale disp) (x64-fmemx 242 '(15 16) (xrn d) base index scale disp)
    (emit-stsdx base index scale disp s) (x64-fmemx 242 '(15 17) (xrn s) base index scale disp)
    (emit-ldssx d base index scale disp) (x64-fmemx 243 '(15 16) (xrn d) base index scale disp)
@@ -584,7 +591,7 @@
          ('ldxb . emit-ldxb) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
          ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4) ('decm . emit-decm)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
-         ('ldsdl . emit-ldsdl)
+         ('ldsdl . emit-ldsdl) ('fopm . emit-fopm) ('fopl . emit-fopl)
          ('ld1 . emit-ld1) ('ld2 . emit-ld2) ('ld4 . emit-ld4)
          ('st1 . emit-st1) ('st2 . emit-st2) ('st4 . emit-st4)
          ('si . emit-si) ('si1 . emit-si1) ('si2 . emit-si2) ('si4 . emit-si4)
