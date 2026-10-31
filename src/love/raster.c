@@ -51,7 +51,8 @@ struct rz {
  flo_t const *sm;
  intptr_t SW, SH;
  flo_t fog[5], tone,
-       tl[rz_tn + 2];   // the tone at k c / 255 = i / 32, 0 to 8, eased between
+       tl[rz_tn + 2],   // the tone at k c / 255 = i / 32, 0 to 8, eased between
+       u8[256];         // a channel's byte over 255
  int32_t *out;           // the frame drawn four bytes a pixel, then laid into ans a word each
  float *depth,
        *gz;              // seen: the nearest lens's depth, a pixel each
@@ -195,7 +196,8 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  int lit = 0, under = r->flags & rz_under;   // the sun's view is asked only where some of the sun falls
  for (int i = 0; i < 3; i++) lit |= P[i]->a[5] != 0 || P[i]->a[6] != 0 || P[i]->a[7] != 0;
  int const shade = lit && r->sm,
-           // ..and a pixel steps only the planes it reads
+           // ..and a pixel steps only the planes it reads: a depth alone, its own
+           zo = r->gzp || (r->flags & rz_depth),
            nk = shade ? 2 + rz_na : lit ? 10 : 7;
  for (intptr_t y = rz_own(r, y0); y < y1; y = rz_own(r, y + 1)) {
   // the row's run inside all three edges, found by exact division: the box outside is never walked
@@ -214,72 +216,78 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
   int32_t *o = r->out + y * r->W;
   float *dz = r->depth + y * r->W, *gz = r->gz ? r->gz + y * r->W : 0;
   flo_t *td = r->tz + r->TW * r->TH + (y >> 3) * r->TW;
+  if (zo) {   // a depth alone: its one plane walked, nothing shaded
+   flo_t za = a[0];
+   flo_t const zx = vx[0];
+   for (intptr_t x = xs; x < xe; x++, za += zx) {
+    float const z = (float) za;
+    if (!(za >= -1 && za <= 1)) continue;
+    if (r->gzp) { if (z < gz[x]) gz[x] = z; }
+    else if (z < dz[x] && !(under && o[x] >= 0) && (!r->cls || (r->cls == 1 ? gz && z > gz[x] : !gz || z < gz[x])))
+     dz[x] = z, td[x >> 3] = 1; }
+   continue; }
   for (intptr_t x = xs; x < xe; x++) {
    float const z = (float) a[0];
    if (a[0] >= -1 && a[0] <= 1   // inside all three edges: the run is exact
-       && (r->gzp ? z < gz[x] : z < dz[x] && !(under && o[x] >= 0)
-                                && (!r->cls || (r->cls == 1 ? gz && z > gz[x] : !gz || z < gz[x])))) {
-    if (r->gzp) gz[x] = z;
-    else if (r->flags & rz_depth) dz[x] = z, td[x >> 3] = 1;
-    else {
-    flo_t const w = 1 / a[1], s = persp ? w : 1,
-                sun = shade ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : 1;
-    flo_t c[3] = { (a[4] + a[7] * sun) * s * 255, (a[5] + a[8] * sun) * s * 255, (a[6] + a[9] * sun) * s * 255 };
-    int hole = 0;
-    flo_t tint[3] = { 1, 1, 1 };
-    if (nlv) {   // the level where a pixel's step crosses about a texel
-     flo_t const u = a[2] * s, v = a[3] * s;
-     if (nlv > 1 && !((x - xs) & 7)) {   // ..one level alone is that one
-      L = 0;
-      flo_t const ux = (vx[2] - (persp ? u * vx[1] : 0)) * s, vxx = (vx[3] - (persp ? v * vx[1] : 0)) * s,
-                  uy = (vy[2] - (persp ? u * vy[1] : 0)) * s, vyy = (vy[3] - (persp ? v * vy[1] : 0)) * s;
-      flo_t r2 = ux * ux + vxx * vxx, ry = uy * uy + vyy * vyy;
-      r2 = ry > r2 ? ry : r2;
-      while (r2 > 2 && L + 1 < nlv) r2 /= 4, L++;
-      us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L); }
-     struct rz_tex const *tx = lv + L;
-     intptr_t iu = rz_ifloor(u * us), iv = rz_ifloor(v * us);
-     if (tx->mw) iu &= tx->mw;   // wrapped, by a mask where a side is a power of two
-     else if ((uintptr_t) iu >= (uintptr_t) tx->w) iu %= tx->w, iu += iu < 0 ? tx->w : 0;
-     if (tx->mh) iv &= tx->mh;
-     else if ((uintptr_t) iv >= (uintptr_t) tx->h) iv %= tx->h, iv += iv < 0 ? tx->h : 0;
-     intptr_t const t = tx->px[iv * tx->w + iu];
-     if (t < 0) hole = 1;
-     else if (r->glass) tint[0] = (flo_t) (t >> 16 & 255) / 255, tint[1] = (flo_t) (t >> 8 & 255) / 255, tint[2] = (flo_t) (t & 255) / 255;
-     else c[0] *= (flo_t) (t >> 16 & 255) / 255, c[1] *= (flo_t) (t >> 8 & 255) / 255, c[2] *= (flo_t) (t & 255) / 255; }
-    if (!hole) {
-     if (fs) {   // glass fades clear, what is behind it fogged already
-      flo_t f = (w - fn) * fs;
-      f = f < 0 ? 0 : f > 1 ? 1 : f;
-      for (int k = 0; k < 3; k++)
-       if (r->glass) c[k] -= c[k] * f, tint[k] += (1 - tint[k]) * f;
-       else c[k] += (r->fog[k] - c[k]) * f; }
-     if (r->tone > 0) for (int k = 0; k < 3; k++) {
-      flo_t const x = r->tone * c[k] * (flo_t) (32.0 / 255);
-      intptr_t const i = x <= 0 ? 0 : x >= rz_tn ? rz_tn : (intptr_t) x;
-      flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
-      c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
-     int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
-     if (r->glass) {   // glass: what is there through its tint, its sheen on it; bare, its tint kept
-      int32_t const q = o[x], v = q <= -rz_vb ? (-rz_vb - q) & 0xffffff : 0xffffff, sh = q <= -rz_vb ? ((-rz_vb - q) >> 24) * 4 : 0;
-      if (q >= 0) o[x] = (int32_t) (rz_ch((flo_t) (q >> 16 & 255) * tint[0] + c[0], 0) << 16 | rz_ch((flo_t) (q >> 8 & 255) * tint[1] + c[1], 0) << 8
-                                    | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0));
-      else if (q == -1 || q <= -rz_vb)
-       o[x] = -rz_vb - (int32_t) (rz_ch((flo_t) (v >> 16 & 255) * tint[0], 0) << 16 | rz_ch((flo_t) (v >> 8 & 255) * tint[1], 0) << 8
-                                  | rz_ch((flo_t) (v & 255) * tint[2], 0)
-                                  | (rz_ch(((flo_t) sh * (tint[0] + tint[1] + tint[2]) + c[0] + c[1] + c[2]) / 3, 0) / 4) << 24); }
-     else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, kept as -1 less it
-      int32_t const q = o[x], g = q >= 0 ? q : q <= -rz_vb ? 0 : -1 - q,
-                    s = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), 0) << 8
-                                   | rz_ch(c[2] + (flo_t) (g & 255), 0));
-      o[x] = q >= 0 ? s : -1 - s; }
-     else {   // ..and drawn under, onto a glow kept there, or through a tint
-      int32_t const q = o[x], g = under && q < -1 && q > -rz_vb ? -1 - q : 0;
-      if (under && q <= -rz_vb) {
-       int32_t const v = -rz_vb - q;
-       for (int k = 0; k < 3; k++) c[k] = c[k] * (flo_t) (v >> (16 - 8 * k) & 255) / 255 + (flo_t) ((v >> 24) * 4); }
-      o[x] = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), d) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), d) << 8
-                        | rz_ch(c[2] + (flo_t) (g & 255), d)), dz[x] = z, td[x >> 3] = 1; } } } }
+       && z < dz[x] && !(under && o[x] >= 0) && (!r->cls || (r->cls == 1 ? gz && z > gz[x] : !gz || z < gz[x]))) {
+   flo_t const w = 1 / a[1], s = persp ? w : 1,
+               sun = shade ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : 1;
+   flo_t c[3] = { (a[4] + a[7] * sun) * s * 255, (a[5] + a[8] * sun) * s * 255, (a[6] + a[9] * sun) * s * 255 };
+   int hole = 0;
+   flo_t tint[3] = { 1, 1, 1 };
+   if (nlv) {   // the level where a pixel's step crosses about a texel
+    flo_t const u = a[2] * s, v = a[3] * s;
+    if (nlv > 1 && !((x - xs) & 7)) {   // ..one level alone is that one
+     L = 0;
+     flo_t const ux = (vx[2] - (persp ? u * vx[1] : 0)) * s, vxx = (vx[3] - (persp ? v * vx[1] : 0)) * s,
+                 uy = (vy[2] - (persp ? u * vy[1] : 0)) * s, vyy = (vy[3] - (persp ? v * vy[1] : 0)) * s;
+     flo_t r2 = ux * ux + vxx * vxx, ry = uy * uy + vyy * vyy;
+     r2 = ry > r2 ? ry : r2;
+     while (r2 > 2 && L + 1 < nlv) r2 /= 4, L++;
+     us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L); }
+    struct rz_tex const *tx = lv + L;
+    intptr_t iu = rz_ifloor(u * us), iv = rz_ifloor(v * us);
+    if (tx->mw) iu &= tx->mw;   // wrapped, by a mask where a side is a power of two
+    else if ((uintptr_t) iu >= (uintptr_t) tx->w) iu %= tx->w, iu += iu < 0 ? tx->w : 0;
+    if (tx->mh) iv &= tx->mh;
+    else if ((uintptr_t) iv >= (uintptr_t) tx->h) iv %= tx->h, iv += iv < 0 ? tx->h : 0;
+    intptr_t const t = tx->px[iv * tx->w + iu];
+    if (t < 0) hole = 1;
+    else if (r->glass) tint[0] = r->u8[t >> 16 & 255], tint[1] = r->u8[t >> 8 & 255], tint[2] = r->u8[t & 255];
+    else c[0] *= r->u8[t >> 16 & 255], c[1] *= r->u8[t >> 8 & 255], c[2] *= r->u8[t & 255]; }
+   if (!hole) {
+    if (fs) {   // glass fades clear, what is behind it fogged already
+     flo_t f = (w - fn) * fs;
+     f = f < 0 ? 0 : f > 1 ? 1 : f;
+     for (int k = 0; k < 3; k++)
+      if (r->glass) c[k] -= c[k] * f, tint[k] += (1 - tint[k]) * f;
+      else c[k] += (r->fog[k] - c[k]) * f; }
+    if (r->tone > 0) for (int k = 0; k < 3; k++) {
+     flo_t const x = r->tone * c[k] * (flo_t) (32.0 / 255);
+     intptr_t const i = x <= 0 ? 0 : x >= rz_tn ? rz_tn : (intptr_t) x;
+     flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
+     c[k] = r->tl[i] + (r->tl[i + 1] - r->tl[i]) * (f > 1 ? 1 : f); }
+    int const d = r->flags & rz_dither ? rz_bayer[(y & 3) * 4 + (x & 3)] : 0;
+    if (r->glass) {   // glass: what is there through its tint, its sheen on it; bare, its tint kept
+     int32_t const q = o[x], v = q <= -rz_vb ? (-rz_vb - q) & 0xffffff : 0xffffff, sh = q <= -rz_vb ? ((-rz_vb - q) >> 24) * 4 : 0;
+     if (q >= 0) o[x] = (int32_t) (rz_ch((flo_t) (q >> 16 & 255) * tint[0] + c[0], 0) << 16 | rz_ch((flo_t) (q >> 8 & 255) * tint[1] + c[1], 0) << 8
+                                   | rz_ch((flo_t) (q & 255) * tint[2] + c[2], 0));
+     else if (q == -1 || q <= -rz_vb)
+      o[x] = -rz_vb - (int32_t) (rz_ch((flo_t) (v >> 16 & 255) * tint[0], 0) << 16 | rz_ch((flo_t) (v >> 8 & 255) * tint[1], 0) << 8
+                                 | rz_ch((flo_t) (v & 255) * tint[2], 0)
+                                 | (rz_ch(((flo_t) sh * (tint[0] + tint[1] + tint[2]) + c[0] + c[1] + c[2]) / 3, 0) / 4) << 24); }
+    else if (r->add) {   // a glow: onto what is there, the depth left as it was; bare, kept as -1 less it
+     int32_t const q = o[x], g = q >= 0 ? q : q <= -rz_vb ? 0 : -1 - q,
+                   s = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), 0) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), 0) << 8
+                                  | rz_ch(c[2] + (flo_t) (g & 255), 0));
+     o[x] = q >= 0 ? s : -1 - s; }
+    else {   // ..and drawn under, onto a glow kept there, or through a tint
+     int32_t const q = o[x], g = under && q < -1 && q > -rz_vb ? -1 - q : 0;
+     if (under && q <= -rz_vb) {
+      int32_t const v = -rz_vb - q;
+      for (int k = 0; k < 3; k++) c[k] = c[k] * (flo_t) (v >> (16 - 8 * k) & 255) / 255 + (flo_t) ((v >> 24) * 4); }
+     o[x] = (int32_t) (rz_ch(c[0] + (flo_t) (g >> 16 & 255), d) << 16 | rz_ch(c[1] + (flo_t) (g >> 8 & 255), d) << 8
+                       | rz_ch(c[2] + (flo_t) (g & 255), d)), dz[x] = z, td[x >> 3] = 1; } } }
    for (int k = 0; k < 7; k++) a[k] += vx[k];
    if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
    if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; } } }
@@ -555,6 +563,7 @@ love_noinline static struct g *host_raster(struct g *g) {
  r.m = m;
  for (uintptr_t i = 0; i < 5; i++) r.fog[i] = rz_opt(o, i, 0);
  r.flags = (intptr_t) rz_opt(o, 5, 0), r.tone = rz_opt(o, 6, 0), r.bias = rz_opt(o, 7, 0);
+ for (int i = 0; i < 256; i++) r.u8[i] = (flo_t) i / 255;
  if (r.tone > 0) for (int i = 0; i < rz_tn + 2; i++)
   r.tl[i] = 255 * (1 - rz_exp(-(flo_t) (i < rz_tn ? i : rz_tn) / 32));
  rz_share(g, &r);
