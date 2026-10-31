@@ -601,6 +601,10 @@ moonrun -E -DINCD=6 -include "$ho/.inc.h" "$ho/.inc.c" | grep -q 'return (6 + 1)
 moonrun -c -DINCD=6 -include "$ho/.inc.h" -o "$ho/.inc.o" "$ho/.inc.c" || fail "-c refused an -include"
 printf '#ifdef INCV\nmovl $1, %%eax\n#endif\n' > "$ho/.inc.S"
 moonrun -c -include "$ho/.inc.h" -o "$ho/.inc.o" "$ho/.inc.S" && objdump -d "$ho/.inc.o" | grep -q 'mov  *\$0x1,%eax' || fail "-include did not reach a .S"
+# __BASE_FILE__ names the source, from a header too
+printf 'const char *hb = __BASE_FILE__;\n' > "$ho/.bf.h"
+printf '#include ".bf.h"\nconst char *b = __BASE_FILE__;\n' > "$ho/.bf.c"
+[ "$(moonrun -E "$ho/.bf.c" | grep -c "= \"$ho/.bf.c\";")" -eq 2 ] || fail "__BASE_FILE__ did not name the source"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
@@ -618,9 +622,9 @@ moonrun -fshort-wchar -o "$ho/.sw" "$ho/.sw.c" > /dev/null 2>&1 || fail "-fshort
 "$ho/.sw"; a=$?
 $cc_g -O0 -fshort-wchar -o "$ho/.swg" "$ho/.sw.c" > /dev/null 2>&1 && "$ho/.swg"; b=$?
 [ $a -eq 123 ] && [ $a -eq $b ] || fail "-fshort-wchar (ours $a gcc $b, want 123)"
-# the prefix maps strip the build path from __FILE__
+# the prefix maps strip the build path from __FILE__ and __BASE_FILE__
 mkdir -p "$ho/.mpm/sub"
-printf 'const char *fl(void) { return __FILE__; }\n' > "$ho/.mpm/sub/f.c"
+printf 'const char *fl(void) { return __FILE__; }\nconst char *bf(void) { return __BASE_FILE__; }\n' > "$ho/.mpm/sub/f.c"
 dir=$(cd "$ho/.mpm" && pwd)
 for fl in -fmacro-prefix-map -ffile-prefix-map; do
   moonrun -c $fl="$dir/=" -o "$ho/.mpm/f.o" "$dir/sub/f.c" > /dev/null 2>&1 || fail "$fl compile"

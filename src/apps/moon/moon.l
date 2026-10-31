@@ -364,13 +364,14 @@
                  + gnudefs
                  +
                  (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc on both
-   ; -fmacro-prefix-map=OLD=NEW: __FILE__ with a leading OLD spelled NEW, the last match winning
-   ; (gcc's); laid as a -D over cpp's predefine
+   ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
+   ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
     (: (go l) (? !(two? l) ()
                  (<l @ [o n] (starts? src o ? (n + snip src #o #src) (go >l))))
        f (go mp)
-       (f ? ["__FILE__=\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\""]))
+       q (f ? "\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\"")
+       (f ? ["__FILE__=\(q)" "__BASE_FILE__=\(q)"]))
    ; the shared front end: source -> (1 ast stag sigs ..) | a fatal exit. the -D lines prepend
    ; to the text before the one lex, stamped 1-k..0, so every source line keeps its number
    (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp 'fis fi}))

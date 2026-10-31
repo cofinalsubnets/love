@@ -511,12 +511,12 @@
    ; which would shadow the core port
    (tokflush buf macs out) (expr (rev buf) macs out)
    ; -- the header memo -- a TU's first include is recorded as (path text pre toks post deps);
-   ; a later TU matching path, text and pre-state replays the tokens and table. __FILE__ is held
-   ; out of the snapshots, and mleak? declines a header that expanded it
+   ; a later TU matching path, text and pre-state replays the tokens and table. __FILE__ and
+   ; __BASE_FILE__ are held out of the snapshots, and mleak? declines a header that expanded one
    memo {}                                       ; 'l -> the entries, newest first
    ; the files a TU's #includes opened, newest first, for -MD; a memo entry carries its share
    cppdeps {}
-   (mkey? k) (string? k && !(k = "__FILE__"))
+   (mkey? k) (string? k && !(elem k ["__FILE__" "__BASE_FILE__"]))
    (msnap macs)                                  ; the table as a value `=` can compare
     (sortby (a \ b \ <a <= <b)
             (foldl (acc \ k \ mkey? k ? (acc + [[k (macs k)]]) acc) () (keys macs)))
@@ -734,8 +734,9 @@
                (pin t "__STDC__" ['obj [(tok 'num 1 0)]],
                ; who is compiling: a source picks a spelling only mooncc takes (the kernel's asmops.h)
                 pin t "__mooncc__" ['obj [(tok 'num 1 0)]],
-               ; __FILE__: the TU's path throughout, includes too
+               ; __FILE__: the TU's path throughout, includes too, so __BASE_FILE__ is the same
                 pin t "__FILE__" ['obj [(tok 'str fname 0)]],
+                pin t "__BASE_FILE__" ['obj [(tok 'str fname 0)]],
                 pin t 'fname fname,      ; the same name unwrapped, for the memo's leak check
                ; C11; 201112 lets gnulib take its _Static_assert lane
                 pin t "__STDC_VERSION__" ['obj [(tok 'num 201112 0)]],
