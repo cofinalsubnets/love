@@ -366,13 +366,13 @@
    ; for the globals amble can name, filled at the first ask; the readers are cited before the mop
    aopix {}
    aopnf (cite 'guts 'nifop)  aopgv (cite 'guts 'gv)
-   akeep {}                                                               ; LOVE_BAKE_CALLS's bake indices, read at the first ask
+   akeep {}                                                               ; bake-calls's bake indices, read at the first ask
    (akeepw v i j) (? (i < j) (pin akeep (snip v i j) 1) 0)
    (akeepfill v i j) (? (j = #v) (akeepw v i j)
                         (v j = 32) (: _ (akeepw v i j) (akeepfill v (j + 1) (j + 1)))
                         (akeepfill v i (j + 1)))
    (akeep? k) (: _ (? (peep akeep () 0) 0
-                      (: v (getenv "LOVE_BAKE_CALLS")  _ (pin akeep () 1)
+                      (: v (aopgv 'bake-calls 0)  _ (pin akeep () 1)
                          (? (string? v) (akeepfill v 0 0) 0)))
                  (peep akeep k 0))
    probebox {}                                                            ; slot 0 set: amble answers 1 where it would compile, and emits nothing
@@ -522,15 +522,18 @@
        ; the gate reads an import (the self cell's row) as the sibling call it would be spelled as: a free head, no frame param
        envg (filter (v \ !(elem v simp)) envl)
        gcand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envg go i ac)) (aheads envg go body ()) inits)))
-       drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that
-                                                                         ; drives itself, or a param while small; a declining body or refused lets skip the walks
+       ; free heads and inner lambdas ride only a body that drives itself, or a param while small
+       cst  (lts != 'bad && !(lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))
        ; a text literal costs a quote slot and a native a leaf would not repay: only a body that loops or drives
        drv  (lp || aself? self body || adrv? envg self body)
        txok (!(astr? M) || drv)
-       ; a bake by a call profile (LOVE_BAKE_CALLS, hotbake.sh) keeps a leaf's native only where the profile called it
-       ; often; a profiling bake (LOVE_BAKE_COUNT) gives each leaf that would compile a counting cell instead
-       cnt  (getenv "LOVE_BAKE_COUNT" && !drv)
-       dvok (? cnt 1 (string? (getenv "LOVE_BAKE_CALLS")) (drv || akeep? (show (: fz (gv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0)))) txok)
+       ; a bake by a call profile (bake-calls, the bake's alone) keeps a leaf's native, or one the cost
+       ; rule declines, only where the profile called it often; a counting image (bake-count,
+       ; `bake --profile calls`) gives each a counting cell instead
+       cnt  (gv 'bake-count 0 && (!drv || cst))
+       kept (string? (gv 'bake-calls 0) && akeep? (show (: fz (gv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0))))
+       drok (lts != 'bad && (!cst || cnt || kept))          ; a declining body or refused lets skip the walks
+       dvok (? cnt 1 (string? (gv 'bake-calls 0)) (drv && !cst || kept) txok)
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))

@@ -116,12 +116,12 @@ love0: $(love0)
 # the two states of one binary, as two files: the link lays the raw one, and the bake
 # writes the artifact beside it. `bake -o` is what lets these be separate targets at all --
 # an in-place bake leaves make no file to name, which is what the old .baked stamp stood in for.
-# the bake is hot-first: src/tools/hotbake.sh lays what short runs touch ahead, by the tree's
-# profile, and glazes a leaf only where the tree's call profile calls it often. `make hotprof`
-# writes both again after a change to anything baked (test_bakerep says when).
-$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hotbake.sh src/tools/hot.prof src/tools/hot.calls
+# the bake is hot-first: it lays what short runs touch ahead, by the hot.prof the raw carries,
+# and glazes a leaf only where the hot.calls it carries calls it often. `make hotprof` writes
+# both again after a change to anything baked (test_bakerep says when), by src/tools/hotbake.sh.
+$(ho)/love $(ho)/love.cand: $(ho)/%: $(ho)/%.raw $(ho)/.dist-cat.l src/tools/hot.prof src/tools/hot.calls
 	@echo 'BAKE	'$@
-	@sh src/tools/hotbake.sh $< $@ $(ho)/.dist-cat.l
+	@LOVE_NO_IMAGE=1 $< bake -o $@ -l $(ho)/.dist-cat.l
 
 .PHONY: hotprof
 hotprof: $(prof_raw) $(ho)/.dist-cat.l
