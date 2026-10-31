@@ -521,10 +521,9 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "                                   (still0 p s))))))");
 
   // FIXME why pull from book here? that's mop's job
-  // bake-calls is the glaze's while the crew bakes, and bake-done takes it off after
-  if (bake) g = evals_(g, "(: bake-done (: bk book (\\ _ (: _ (pull bk 'bake-calls 0) (pull bk 'bake-done 0)))))");
+  // a bake pulls book past the crew, and bake-calls with it: the glaze's while the crew bakes
   g = evals_(g, bake
-    ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) _ (pull book 'born 0) (pull book 'book 0))"
+    ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'born 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // snapshot the post-warm heap, then exit
@@ -535,7 +534,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
       int ok = ok(g = bake_eval_file(g, bake_load));
       if (bake_load == cat) unlink(cat);
       if (!ok) return g; }
-    if (!ok(g = evals_(g, "(bake-done 0)"))) return g;
+    if (!ok(g = evals_(g, "(: _ (pull book 'bake-calls 0) (pull book 'book 0))"))) return g;
     int rc = *bake ? (int) core_of(g = image_dump(g, bake, bake_opt))->b : image_bake(g, bake_out, 0, bake_opt);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
