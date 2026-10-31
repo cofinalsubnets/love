@@ -2107,7 +2107,7 @@
    ; a mark already laid it, with the verbs, modules and needs its source on /love names
    (carry p) (pin carried p 1,
               any (f \ <f = p) (ros 'files) ? 0
-                 (src1 p @ t (lazy p (after t "'enlist '") (after t "(module '") (needs p t))))
+                 (src1 p @ t (lazy p (after t "'enlist '") (after t "(module '" + after t "(module (") (needs p t))))
    (src1 p) ((cite 'posix 'open) ("/love/" + p) "r" @ q (hot? q ? (slurp q @ t (cite 'posix 'close q, t)) ""))
    ; the name after each k in t, to the first delimiter; a quoted list's head
    (word1 s) (: n #s
