@@ -11620,8 +11620,7 @@
                             (go params (filter (f9 \ (nelem f9 used && nelem f9 '(f0 f1 f2 f3 f4 f5 f6 f7) && nelem f9 fover9)) (ffile g)),
                              t))))
                e0 (peep g 'epi epi)
-               ; no reset before the first attempt: the VLA prep's slots live in this frame state and a
-               ; reset would re-deal them (ok9 bars VLAs from every path that retries)
+               ; no reset before the first attempt: the frame state already holds the VLA prep's cells
                _ (pins g 'pool0 lp9 'pool lp9)
                _ (rgset g lh9 av9)
                _ (pins g 'spov <sx9 'splits <>sx9)
@@ -11644,13 +11643,13 @@
                                    (elem A '(r0 r1 r2 r3) ? (A . go >l) (go >l))))
                       (go rides))
                (? (qk && two? qrr && qclob? irU qrr)
-                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 (tpl 0) 'pool (tpl 0) 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5),
+                  (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0 'pool0 (tpl 0) 'pool (tpl 0) 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5),
                    attempt ())
                   (bad? irU ||
                    two? av9 && peep g 'lsq 0 != av9 3 ||
                    !(peep g 'dseq 0 = (two? av9 ? (av9 13) (peep g 'dseq 0))))
                   (: fn9 (g 'fnar) fd9 (g 'fdrop)
-                     _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 (tpl 0) 'pool (tpl 0) 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'fnar fn9 'fdrop fd9)
+                     _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0 'pool0 (tpl 0) 'pool (tpl 0) 'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'fnar fn9 'fdrop fd9)
                      sb (spillp () params 0 ())
                      sb (two? vzf ? [(<sb + vzf) <>sb] sb)
                      (build sb))
@@ -11672,6 +11671,7 @@
        ; the one build: seats from alive; a memory sret and varargs take the bare spill build, no seats
        uni9 !(sr6f || vararg)
        _ (sr6f ? (pin g 'sret (ntmp g 'long)))
+       off0 (g 'off) sl0 (g 'slots)            ; the cells dealt before the build (VLA, v6m f-cells, sret), kept by every rebuild
        sp1 (? uni9 ()
               (vararg && a64? g) (vaspill-a64 params)
               (vararg && t32? g) (vaspill-t32 params)
@@ -11687,7 +11687,7 @@
        ; first rebuild's colouring fails too
        (rb irk n9) (? (bad? irk || !(g 'kclob || g 'fclob) || n9 = 0) irk
                       (: kc (g 'kclob || g 'nopool) fn (? (g 'fdn) (g 'fnar) (g 'fclob) (peep g 'fnar 0 + 1) (g 'fnar)) fd (g 'fdn + g 'fdrop)
-                         _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0
+                         _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0
                                  'pool0 (kc ? () (tpl 0)) 'pool (kc ? () (tpl 0))
                                  'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'nopool (kc ? 1 ()) 'kclob () 'fnar fn 'fdrop fd)
                          (rb (uni9 ? (ubuild (alive g f)) (build sp1)) (n9 - 1))))
@@ -11699,7 +11699,7 @@
                     (any r3in? x))
        (rhas? r x) (? (atom? x) (x = r) (any (rhas? r) x))
        irf (? (ia32? g && uni9 && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(r3in? irf0))
-              (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'pool0 (tpl 0) 'pool (tpl 0)
+              (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0 'pool0 (tpl 0) 'pool (tpl 0)
                          'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'ebx 1)
                  (ubuild (alive g f)))
               irf0)
