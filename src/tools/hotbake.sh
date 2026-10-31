@@ -4,9 +4,10 @@
 # chunks, not one in two, and glazes by the hot.calls it carries.
 #   sh src/tools/hotbake.sh -p RAW PROF CAT  profile RAW, writing the word ranges to PROF
 #   sh src/tools/hotbake.sh -c RAW CALLS CAT profile RAW's calls, writing "index count" to CALLS for those kept
-# the call profile: a leaf (a body that neither loops nor drives) keeps its native only when
-# the workloads below called it 1024 times or more; a leaf is known by its place in the bake.
-# its bake gives each leaf a counting cell, and each count is the last power of two it passed.
+# the call profile: a leaf (a body that neither loops nor drives), or one the glaze's cost rule
+# declines, keeps its native only when the workloads below called it 1024 times or more; each is
+# known by its place in the bake. its bake gives each a counting cell, and each count is the last
+# power of two it passed.
 # the word ranges are of the image the call profile glazes, so -p bakes by the tree's hot.calls.
 # the profile is kept in the tree so the image is a function of the tree alone, not of the
 # page size or libc of the machine that bakes it. a change to anything baked moves the

@@ -522,15 +522,18 @@
        ; the gate reads an import (the self cell's row) as the sibling call it would be spelled as: a free head, no frame param
        envg (filter (v \ !(elem v simp)) envl)
        gcand (lts = 'bad ? () (filter (f \ !(f = self)) (foldl (\ ac i (aheads envg go i ac)) (aheads envg go body ()) inits)))
-       drok (lts != 'bad && (lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))   ; free heads and inner lambdas ride only a body that
-                                                                         ; drives itself, or a param while small; a declining body or refused lets skip the walks
+       ; free heads and inner lambdas ride only a body that drives itself, or a param while small
+       cst  (lts != 'bad && !(lp ? 1 (two? gcand || two? ins ? (aself? self body || adrv? envg self body && acells body <= 64) 1)))
        ; a text literal costs a quote slot and a native a leaf would not repay: only a body that loops or drives
        drv  (lp || aself? self body || adrv? envg self body)
        txok (!(astr? M) || drv)
-       ; a bake by a call profile (bake-calls, the bake's alone) keeps a leaf's native only where the profile called it
-       ; often; a counting image (bake-count, `bake --profile calls`) gives each leaf that would compile a counting cell instead
-       cnt  (gv 'bake-count 0 && !drv)
-       dvok (? cnt 1 (string? (gv 'bake-calls 0)) (drv || akeep? (show (: fz (gv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0)))) txok)
+       ; a bake by a call profile (bake-calls, the bake's alone) keeps a leaf's native, or one the cost
+       ; rule declines, only where the profile called it often; a counting image (bake-count,
+       ; `bake --profile calls`) gives each a counting cell instead
+       cnt  (gv 'bake-count 0 && (!drv || cst))
+       kept (string? (gv 'bake-calls 0) && akeep? (show (: fz (gv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0))))
+       drok (lts != 'bad && (!cst || cnt || kept))          ; a declining body or refused lets skip the walks
+       dvok (? cnt 1 (string? (gv 'bake-calls 0)) (drv && !cst || kept) txok)
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
