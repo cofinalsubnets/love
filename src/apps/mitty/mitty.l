@@ -533,7 +533,7 @@
                      (: ds (filter (d \ elem id (wharf-panes <(hb 'faces d))) (hfaces hb)) (two? ds ? <ds ())))
  ; the launcher's list: the desktop's apps first, where this binary has them, then every verb
  mitty-apps ["lush" "vi" "mc" "top" "less" "man" "synth" "manifest" "story" "design" "hexedit"
-            "harp" "pom" "doom" "grass"]
+            "harp" "pom" "doom" "grass" "chucho"]
  (mitty-launch hb sh me)
   (: vs (sort (map show (keys (cite 'verbs 'tab))))
      names (filter (n \ elem n vs) mitty-apps + filter (n \ !(elem n mitty-apps)) vs)

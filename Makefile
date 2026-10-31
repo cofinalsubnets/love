@@ -405,7 +405,9 @@ distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l sr
 # `love bake --with UNIT` bakes it (src/apps/roster.l). distlist.h lists them after a +
 # the spreadsheet
 manifestfiles = src/apps/manifest/manifest.l
-carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+# the mail reader: mime, the mailbox, smtp and imap under it
+chuchofiles = src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l
+carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
