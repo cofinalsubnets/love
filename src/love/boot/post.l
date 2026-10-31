@@ -2113,7 +2113,7 @@
    (word1 s) (: n #s
                 (go i) (i < n && !(elem (s i) [32 9 10 40 41 39 34 59]) ? (go (i + 1)) (snip s 0 i))
                 (go 0))
-   (after t k) (catmap (s \ (0 < #s && s 0 = 40 ? word1 (snip s 1 #s) (word1 s)) @ w (0 < #w ? [(name w)] ()))
+   (after t k) (catmap (s \ (0 < #s && s 0 = 40 ? (word1 (snip s 1 #s)) (word1 s)) @ w (0 < #w ? [(name w)] ()))
                        >(split k t))
    ; the modules a source cites or borrows, and the units other than its own that hold them
    (refs t) (after t "cite '" + after t "borrow '")
