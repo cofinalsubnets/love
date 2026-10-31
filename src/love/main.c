@@ -301,7 +301,8 @@ static struct g *run_program(struct g *g, bool replp) {
 
 #ifdef Love0
 // love0's boot is inle/boot.c
-struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out);
+struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out,
+               struct image_opt const *bake_opt);
 #else
 // src/inle/tasks.l, by which a process on inle runs its own stages
 static char const src_tasks[] =
@@ -378,9 +379,18 @@ static bool bake_roster(int argc, char const **argv) {
   for (int i = 2; i < argc && argv[i][0] == '-'; i++)
    if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without") || !strcmp(argv[i], "--list") || !strcmp(argv[i], "--pick")) return true;
    else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "-o")) i++;
+   else if (!strcmp(argv[i], "--profile")) i += i + 1 < argc && !strcmp(argv[i + 1], "layout") ? 2 : 1;
   return false; }
+
+// a carried file's bytes: a plain bake's profiles, src/tools/hot.prof and hot.calls. NULL for none
+static unsigned char const *bsrc_file(char const *p, uintptr_t *n) {
+  struct tree *t = srctree_len ? tree_carried() : NULL;
+  intptr_t i = t ? tree_find(t, p, strlen(p)) : -1;
+  unsigned char const *b = i < 0 ? NULL : tree_bytes(t, t->rows + i);
+  return *n = b ? t->rows[i].len : 0, b; }
 #else
 #define bsrc_lay_cat(cat, n, at) 0
+#define bsrc_file(p, n) (*(n) = 0, (unsigned char const *) NULL)
 #define self_bake(argv) ((void) 0)
 #define bake_roster(argc, argv) false
 #endif
@@ -401,9 +411,40 @@ static struct g *bake_eval_file(struct g *g, char const *path) {
     "      (: _ (say err (\"love: bake: cannot open \" + bake-load)) _ (put err 10) (quit 1))))");
   return ok(g) ? evals_(g, "(: bake-load ())") : g; }
 
+// a bake's profile, mode 0 plain: the heap laid by the carried hot.prof's ranges, the glaze kept
+// to the leaves hot.calls counted 1024 times or more. 1 (--profile calls) lays the counting image,
+// 2 (--profile layout CALLS) page-sized chunks and no ranges, the glaze kept by CALLS
+struct bake_prof { int mode; char const *calls; struct image_opt o; uint64_t *hot; char *keep; };
+
+static unsigned char *bake_read(char const *p, uintptr_t *n) {
+  FILE *f = fopen(p, "rb");
+  long l = f && !fseek(f, 0, SEEK_END) ? ftell(f) : -1;
+  unsigned char *b = l >= 0 && !fseek(f, 0, SEEK_SET) ? alloc(NULL, (uintptr_t) l + 1) : NULL;
+  if (b && fread(b, 1, (size_t) l, f) != (size_t) l) alloc(b, 0), b = NULL;
+  if (f) fclose(f);
+  return *n = b ? (uintptr_t) l : 0, b; }
+
+static int bake_prof_open(struct bake_prof *b) {
+  uintptr_t hn = 0, cn = 0, nh = 0, nc = 0;
+  unsigned char *cf = b->mode == 2 ? bake_read(b->calls, &cn) : NULL;
+  if (b->mode == 2 && !cf) return fprintf(stderr, "love: bake: cannot read %s\n", b->calls), 0;
+  unsigned char const *h = b->mode ? NULL : bsrc_file("src/tools/hot.prof", &hn),
+                      *c = b->mode == 2 ? cf : b->mode ? NULL : bsrc_file("src/tools/hot.calls", &cn);
+  b->o = (struct image_opt) { b->mode == 2 ? 512 : 0, NULL, 0 };
+  if (h) b->hot = image_nums(h, hn, &nh), b->o.hot = b->hot, b->o.nhot = nh / 2;
+  if (c) {                                        // "index count" rows -> glaze.l's akeep, spaced
+    uint64_t *r = image_nums(c, cn, &nc);
+    char *w = b->keep = alloc(NULL, 21 * (nc / 2) + 1);
+    if (w) *w = 0;
+    for (uintptr_t j = 0; w && j + 1 < nc; j += 2)
+      if (r[j + 1] >= 1024) w += sprintf(w, w == b->keep ? "%lu" : " %lu", (unsigned long) r[j]);
+    if (r) alloc(r, 0); }
+  if (cf) alloc(cf, 0);
+  return 1; }
+
 // FIXME too much code in string literals
 static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
-                       char const *bake_out) {
+                       char const *bake_out, struct image_opt const *bake_opt) {
   // LOVE_NO_MOP keeps the internal names (egg.l)
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
@@ -480,6 +521,8 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "                                   (still0 p s))))))");
 
   // FIXME why pull from book here? that's mop's job
+  // bake-calls is the glaze's while the crew bakes, and bake-done takes it off after
+  if (bake) g = evals_(g, "(: bake-done (: bk book (\\ _ (: _ (pull bk 'bake-calls 0) (pull bk 'bake-done 0)))))");
   g = evals_(g, bake
     ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) _ (pull book 'born 0) (pull book 'book 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
@@ -492,7 +535,8 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
       int ok = ok(g = bake_eval_file(g, bake_load));
       if (bake_load == cat) unlink(cat);
       if (!ok) return g; }
-    int rc = *bake ? (int) core_of(g = image_dump(g, bake))->b : image_bake(g, bake_out, 0);
+    if (!ok(g = evals_(g, "(bake-done 0)"))) return g;
+    int rc = *bake ? (int) core_of(g = image_dump(g, bake, bake_opt))->b : image_bake(g, bake_out, 0, bake_opt);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
   return run_program(g, !argp && isatty(STDIN_FILENO)); }
@@ -593,7 +637,9 @@ int main(int argc, char const **argv) {
              *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal
              *bake_out = NULL;                       // bake -o OUT: a copy of the binary, not this one
   int skip = 0, bare = 0;                            // words that are the prime's, not the program's; bake -n
+  struct image_opt const *bake_opt = NULL;
 #ifndef Love0
+  struct bake_prof bp = { 0, NULL, { 0, NULL, 0 }, NULL, NULL };   // bake --profile
   if (argc >= 2 && !strcmp(argv[1], "bake") && !bake_roster(argc, argv)) {
    int i = 2, in_place = 0;                        // bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]
    for (; i < argc && argv[i][0] == '-' && argv[i][1]; i++)
@@ -601,10 +647,12 @@ int main(int argc, char const **argv) {
     else if (!strcmp(argv[i], "-o") && i + 1 < argc) bake_out = argv[++i];
     else if (!strcmp(argv[i], "-n")) bare = 1;      // no image: the stub back, and no snapshot
     else if (!strcmp(argv[i], "-i")) in_place = 1;  // -i says the default -- this binary -- out loud
+    else if (!strcmp(argv[i], "--profile") && i + 1 < argc && !strcmp(argv[i + 1], "calls")) bp.mode = 1, i++;
+    else if (!strcmp(argv[i], "--profile") && i + 2 < argc && !strcmp(argv[i + 1], "layout")) bp.mode = 2, bp.calls = argv[i += 2];
     else if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without") || !strcmp(argv[i], "--list") || !strcmp(argv[i], "--pick"))
      return fprintf(stderr, "love: bake: no carried source for a roster\n"), 2;
     else
-     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]\n"
+     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [--profile calls | --profile layout CALLS] [IMAGE]\n"
                             "       bake [--with U,..] [--without U,..] [-o OUT] | --list | --pick [-o OUT]\n"), 2;
    bake = i < argc ? argv[i] : "";
    if (*bake && (bake_out || bare))                 // a named IMAGE is a plain image file, never a binary
@@ -641,9 +689,13 @@ int main(int argc, char const **argv) {
   if (!g) g = ini();
   // -n saves no heap, so it skips the warm: it works for a binary whose corpus will not boot
   if (bare) {
-    int rc = image_bake(g, bake_out, 1);
+    int rc = image_bake(g, bake_out, 1, NULL);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
+#ifndef Love0
+  if (bake && !bake_prof_open(&bp)) exit(1);
+  bake_opt = &bp.o;
+#endif
   g = env_budget(g);                               // on whichever g won
   bool argp = argc - skip > 1;
   if (!bake) g = argv_chain(g, argv, argc, skip);   // the line past the primes -- sp[0]
@@ -653,6 +705,12 @@ int main(int argc, char const **argv) {
       g = defv(g, "cmdline");
       if (ok(g)) g->sp++; }
     if (image_load_path && ok(g = defv(strof(g, image_load_path), "love-image"))) g->sp++;
+#ifndef Love0
+    if (bake && bp.keep && ok(g = defv(strof(g, bp.keep), "bake-calls"))) g->sp++;
+    if (bp.mode == 1 && ok(g = push(g, 1, putcharm(1)))) {   // the counting image keeps it
+      g = defv(g, "bake-count");
+      if (ok(g)) g->sp++; }
+#endif
     if (!bake) {
       char const *osn =
 #if defined(__moonlibc__)
@@ -679,7 +737,7 @@ int main(int argc, char const **argv) {
       if (ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
-                        : boot(g, argp, bake, bake_load, bake_out); }
+                        : boot(g, argp, bake, bake_load, bake_out, bake_opt); }
   if (code_of(g) == status_scare) scare_face(g);
   // the status is cli-line's charm at sp[0]; a scare answers 1 through fin
   int rc = (image_load_path || argp) && ok(g) && charmp(g->sp[0])
