@@ -270,6 +270,14 @@
    ls (cr-run cr-r2 "" "--resume")
    c (cr-run cr-r2 "" "--resume back --cmd go on")
    no (cr-run cr-r2 "" "--resume nobody")
+   ; the config it names runs the tree's own out/love when the session's directory has one
+   mj (json-read (uread (cr-r2 + "/.love/run/hive/.resume/mcp.json") @ [1 s] s ""))
+   ms ((mj 1) "mcpServers" "bee")
+   tr (cr-r2 + "/tree")
+   _ (map (\ x (mkdir x 448)) [tr (tr + "/.git") (tr + "/out") (tr + "/sub")])
+   _ (cr-put (tr + "/out") "love" "#!/bin/sh\necho tree \"$@\"\n")
+   _ (hark ["chmod" "+x" (tr + "/out/love")])
+   mrun (cr-sh (tr + "/sub") (ms "command" + " " + join " " (map (\ a ("'" + a + "'")) (ms "args"))))
    ; back's card held by a backgrounded claude (--bg-pty-host): --resume says how to attach or stop it
    bgp (spawn ["sh" "-c" "sleep 30; :" "--bg-pty-host"])
    _ (mkdir (cr-r2 + "/.love/run") 448) _ (mkdir (cr-r2 + "/.love/run/hive") 448) _ (mkdir (cr-r2 + "/.love/run/hive/back") 448)
@@ -285,6 +293,7 @@
       (0 = <m) (0 = <ls) (cr-in (ls 1) "back")
       (0 = <c) (cr-in (c 1) "BEE_NAME=back") (cr-in (c 1) "--resume sid-42 'go on'")
       (cr-in (c 1) "--dangerously-load-development-channels server:bee") (cr-in (c 1) "--mcp-config ")
+      (0 = <mrun) (mrun 1 = "tree bee --mcp\n")
       (1 = <no) (cr-in (no 1) "no session to resume named nobody"))
    0)
 
@@ -476,6 +485,9 @@
    lp-heavy (map (r \ r 1) (drop 1 lp-plan))
    ; a script a lane's recipe names owes that lane, and test/host the host laws' lane
    lp-test (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["test/gate/g.sh" "test/host/x.l"] () lp-cov))
+   ; the glaze, baked, and the profiles a bake lays owe the bake's lanes
+   lp-gl (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["src/love/boot/glaze.l" "src/tools/hot.prof" "src/tools/hot.calls"]
+                         ["src/love/boot/glaze.l"] lp-cov))
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
       (lp-cov "test_quick" = ["test_clay" "test_x" "test_y"])
@@ -498,6 +510,8 @@
       (lp-cov "src/tools/pp.sh" = ["test_p"])
       !(two? (peep lp-cov "src/love/gen.h" ())) !(two? (peep lp-cov "$(ho)/src/x.l" ())) !(two? (peep lp-cov "src/x.l" ()))
       (elem "test_g" lp-test) (elem "test_hostnif" lp-test)
+      (elem "test_ccport" lp-names) (elem "test_fixpoint" lp-names)
+      (elem "test_fixpoint" lp-gl) (elem "test_bakerep" lp-gl) (elem "test_gcstress_bake" lp-gl)
       !(elem "test_clay" lp-names)
       (lp-heavy = sort lp-heavy)
       (<lp-cli = 0)
