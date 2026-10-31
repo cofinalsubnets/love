@@ -934,7 +934,11 @@
               (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
-       m (wasm-link all {'imports '("__love_sys") 'exports 'all})
+       ; a name nothing answers (setjmp's, say) is the program's refusal, not an internal one
+       m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
+               (a \ b \ a @ 'wasm-undefined
+                          (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")
+                          (scare a b)))
        q (open dst "w")
        (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
         say q (wasm-emit m),

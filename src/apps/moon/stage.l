@@ -25,6 +25,7 @@
                 (wpair (gst ir-nolab) ir-nolab)
                 (recse (gst ir-nolab) ir-nolab)
                 (coal (gst ir-nolab) ir-nolab)       ; renames, never re-addresses
+                (csframe (gst ir-nolab) ir-nolab)     ; lays the saves out, before any reader of their shape
                 (unframe (gst ir-nolab) ir-noframe)
                 (rvunframe (gst ir-noframe) ir-noframe)
                 (jr0 (gst ir-noframe) ir-jmpfix)
