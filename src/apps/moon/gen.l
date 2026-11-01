@@ -7770,9 +7770,9 @@
        (go fs {} ())))
 
    ; copy propagation: after (mov a b) later reads of a say b; once nothing reads a the copy
-   ; drops. sp/fp/r4/r3 stay out: pro4?/epim?/sibjmp/unframe read the prologue and epilogue by shape
+   ; drops. sp/fp/r4 stay out: pro4?/epim?/sibjmp/unframe read the prologue and epilogue by shape
    (hmov? f) (two? f && <f = 'mov && nom? <>f && nom? <>>f
-               && !(elem <>f '(sp fp r4 r3)) && !(elem <>>f '(sp fp r4 r3)))
+               && !(elem <>f '(sp fp r4)) && !(elem <>>f '(sp fp r4)))
    ; forms that keep their operands: addrfold owns a mov feeding an address, cskeep reads
    ; (push <cs>) as a save, a variable shift's count must stay in r1
    cpskip (ldops9 + gstops + stxops + siops + leaops + xops + fxops + fstxops + fldops + fstops + vshops +
