@@ -94,6 +94,11 @@ moonrun -c "$ho/.zbs.c" -o "$ho/.zbs.o" || fail "mooncc: a static alias and zero
 [ "$(readelf -SW "$ho/.zbs.o" | sed -E 's/.*\] +//' | awk '$1 == ".bss" {print $5}')" = 000030 ] || fail "a static alias laid bytes of its own, or a zero initializer left .bss"
 [ "$(readelf -sW "$ho/.zbs.o" | awk '$8 == "mdt" {print $3}')" = 80 ] || fail "a static alias's symbol does not carry its table's 80 bytes"
 [ "$(readelf -sW "$ho/.zbs.o" | awk '$8 == "nz" || $8 == "za" {print $8, $7}' | sort | tr '\n' ' ')" = "nz 3 za 4 " ] || fail "int nz = 3 left .data, or long za[4] = {0} is not in .bss"
+# an empty object takes a byte: lockdep's keys, one per site, never share an address
+printf 'struct e {};\nvoid reg(struct e *);\nstatic struct e fk;\nvoid f(void){ static struct e k; reg(&k); reg(&fk); }\n' > "$ho/.emp.c"
+moonrun -c "$ho/.emp.c" -o "$ho/.emp.o" || fail "mooncc: empty objects"
+[ "$(readelf -sW "$ho/.emp.o" | awk '$8 == "fk" {print $3}')" = 1 ] || fail "an empty static took no byte"
+[ "$(readelf -SW "$ho/.emp.o" | sed -E 's/.*\] +//' | awk '$1 == ".bss" {print $5}')" = 000010 ] || fail "two empty statics share an address"
 # an attribute's word counts only inside __attribute__((..)): a parameter named used keeps an
 # unused gnu_inline static off the object, one named weak keeps its function strong
 printf 'static inline __attribute__((gnu_inline)) void set_a(int *s, int used){ *s = used; }\nvoid w(int weak){ (void)weak; }\n' > "$ho/.hdw.c"
@@ -1619,7 +1624,7 @@ for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do
 done
 
 # -- const globals reach .rodata
-# except a const pointee's pointer and a const array of addresses (the linker writes it)
+# except a const pointee's pointer and a const array of addresses (the linker writes it) -- mutp = 0 is zeros, so .bss
 cat > "$ho/.ro.c" <<'EOF'
 const long rotbl[4] = {3,5,7,9};
 const char romsg[] = "const bytes";
@@ -1635,7 +1640,7 @@ moonrun "$ho/.ro.c" -o "$ho/.rox" > /dev/null 2>&1 || fail "mooncc const-lane co
 "$ho/.rox"; a=$?
 [ $a -eq 110 ] || fail "const lane semantics (got $a want 110 = 9 + 'c' + 1 + 0 + 0 + 1)"
 nm "$ho/.rox" > "$ho/.ro.nm" 2>&1 || fail "nm on the const-lane exe"
-for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
+for s in "R rotbl" "R romsg" "B mutp" "D fnp" "D wtbl" "B rozero"; do
   grep -q " $s\$" "$ho/.ro.nm" \
     || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
 done
