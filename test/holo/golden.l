@@ -22,6 +22,8 @@
       ("li.u32"      "b800000090"            ((li r0 2415919104)))     ; mov eax,0x90000000 -- zero-extend, no movabs
       ("li.neg1"     "48c7c0ffffffff"        ((li r0 -1)))
       ("li.movabs"   "48b84c9c8cdac1fc0300"  ((li r0 1122334455667788)))
+      ("li2.dx"      "66ba3412"              ((li2 r2 4660)))          ; mov dx,0x1234 (the rest of rdx stays)
+      ("li2.hireg"   "6641b83412"            ((li2 r7 4660)))          ; mov r8w,0x1234
       ;; register moves (low + REX-extended)
       ("mov.rr"      "4889d8"                ((mov r0 r3)))
       ("mov.ext"     "4d89f8"                ((mov r7 r14)))
@@ -395,6 +397,9 @@
         '((mov r0 sp) (li r1 27668) (vmwrite r1 r0) (la r0 l1.1) (li r10 1) (vmlaunch) (jmp l2.1)
           (label l1.1) (mov r9 r0) (li r10 0) (label l2.1))
         (gas-text 'x64 "movq %rsp, %rax\nmovq $0x6c14, %rcx\nvmwrite %rax, %rcx\nleaq 1f(%rip), %rax\nmovq $1, %r11\nvmlaunch\njmp 2f\n1:\nmovq %rax, %r10\nmovq $0, %r11\n2:"))
+   _ (chk-eq "gas.x64.word"                        ; a word immediate keeps the register's rest; a long writes a segment
+        '((li2 r2 22104) (stseg 3 r0))
+        (gas-text 'x64 "movw $0x5658, %dx\n movl %eax, %ds"))
    _ (chk-eq "gas.x64.contracted"                  ; register-contracted ops drop their named operands
         '((outb) (inl) (rdmsr) (vmrun) (vmread r9 r10) (sgdt r10 0) (vmxon sp 8) (trap) (int 3) (divq r1) (sys))
         (gas-text 'x64 "outb %al, %dx\n inl %dx, %eax\n rdmsr\n vmrun %rax\n vmread %r11, %r10\n sgdt (%r11)\n vmxon 8(%rsp)\n int3\n int $3\n divq %rcx\n syscall"))

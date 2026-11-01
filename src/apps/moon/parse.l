@@ -531,6 +531,7 @@
              (k = 'dot) (ptype ps <>e @ bt (stru? bt ? (fldty ps bt <>>e)))
              (k = 'deref) (ptype ps <>e @ it
                              (? (ptr? it) <>it (arr? it) <>it
+                                (fn? it) it                       ; *f of a function is f, decayed and back
                                 (ptrarg ps <>e @ pt (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
              (k = 'cast) <>e
              (k = 'clit) <>e
@@ -539,7 +540,8 @@
              (k = 'laddr) '(ptr void)
              ; a call through a named function: its 'sigs return type
              (k = 'call) (: sg (two? <>e && <<>e = 'var ? (peep (ps 'sigs) <><>e ()))
-                            (two? sg ? <sg
+                            (? (two? sg) <sg
+                               (<>e = ['var "__builtin_expect"]) 'long   ; gcc's: long, its args left as written
                                ; else through the callee's own type: a function, or a pointer to one
                                (ptype ps <>e @ ft
                                   (? (two? ft && <ft = 'fn) <>ft
