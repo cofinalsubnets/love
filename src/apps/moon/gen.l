@@ -7807,16 +7807,19 @@
    ; (push <cs>) as a save, a variable shift's count must stay in r1
    cpskip (ldops9 + gstops + stxops + siops + leaops + xops + fxops + fstxops + fldops + fstops + vshops +
            x4ops + m4ops + '(cmpm cmprm push))
-   ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot declines
+   ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot
+   ; declines, and so does a pair's low half, whose high half the op reads unnamed
    (cprp g f)
     (elem <f cpskip ? ()
-       (: (go i acc)
+       (: rs <(rdsp g f)
+          (hi? x d) (qtwin x @ [h] (elem h rs && nelem h <d) 0)
+          (go i acc)
            (!(i < #f) ? (rev acc)
               (f i @ x
                  (!(nom? x) ? (go (i + 1) acc)
                     (rdsp g (reop f i 'zq) @ d
                        (? (d = 'bar) (go (i + 1) acc)
-                          (elem 'zq <d && nelem 'zq <>d) (go (i + 1) (i . acc))
+                          (elem 'zq <d && nelem 'zq <>d && !(hi? x d)) (go (i + 1) (i . acc))
                           (go (i + 1) acc))))))
           (go 1 ())))
    ; the substitute must be a stranger to the form's defs (the two-address expansion writes dest
