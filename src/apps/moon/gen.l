@@ -6470,12 +6470,13 @@
                                    (two? o9)
                                     (touch <o9 <>o9 i
                                            (elem <f (leaops + '(leax)))
-                                           ; a cs save/restore wears a promotable temporary's exact shape: a cs mover never promotes
+                                           ; where the saves ride the body (rv64, v6m), a cs save/restore wears a promotable
+                                           ; temporary's exact shape: a cs mover never promotes; elsewhere csframe lays them later
                                            (? !(<>o9 = 8 && X = <o9) 'no
                                               (<f = 'st)
-                                               (elem (f 3) (csregs g) ? 'no 'st)
+                                               (cstop? g || nelem (f 3) (csregs g) ? 'st 'no)
                                               (<f = 'ld)
-                                               (elem (f 1) (csregs g) ? 'no 'ld)
+                                               (cstop? g || nelem (f 1) (csregs g) ? 'ld 'no)
                                               'no)
                                            (? (0 < vstw <f) (f 3)
                                               (0 < vsiw <f) (f 3)
