@@ -1344,7 +1344,8 @@ printf '#error the idirafter stdint.h won\n' > "$ho/.iaft/stdint.h"
 printf '#define BONUS 12\n' > "$ho/.iaft/bonus.h"
 printf '#include <ans.h>\n#include <stdint.h>\n#include <bonus.h>\nint main() { return ANS + BONUS; }\n' > "$ho/.isy.c"
 moonrun -isystem "$ho/.isys" -I "$ho/.flginc" -idirafter "$ho/.iaft" -Wp,-MD,"$ho/.isy.d" -Wp,-MT,isy.o \
-  -o "$ho/.isy" "$ho/.isy.c" > /dev/null 2>&1 || fail "mooncc -isystem/-idirafter/-Wp,-MT"
+  -c -o "$ho/.isy.o" "$ho/.isy.c" > /dev/null 2>&1 || fail "mooncc -isystem/-idirafter/-Wp,-MT"
+moonrun -o "$ho/.isy" "$ho/.isy.o" > /dev/null 2>&1 || fail "mooncc: the -isystem object's link"
 "$ho/.isy"; a=$?
 [ $a -eq 42 ] || fail "mooncc -isystem/-idirafter order (got $a want 42)"
 head -1 "$ho/.isy.d" | grep -q '^isy\.o:' || fail "mooncc -Wp,-MT did not name the rule's target"
