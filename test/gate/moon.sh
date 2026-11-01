@@ -87,6 +87,18 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab" {print $3, $4, $5}')" = "36 OBJECT LOCAL" ] || fail "a file-scope static is not a local object symbol of its 36 bytes (modpost reads a table's name)"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+# a static alias lays no bytes of its own (MODULE_DEVICE_TABLE's), and an initializer of zeros
+# rides .bss as gcc and clang lay it; a const one stays in .rodata
+printf 'struct od { char n[32]; long d; };\nstatic const struct od tbl[] = {{"a", 1}, {""}};\nstatic __typeof__(tbl) mdt __attribute__((used, alias("tbl")));\nstatic int z0 = 0;\nlong za[4] = {0};\nint nz = 3;\nstatic const int cz = 0;\nint *f(int i){ static int loc = 0; return i ? &loc : i > 1 ? (int *)&cz : (int *)tbl + z0; }\n' > "$ho/.zbs.c"
+moonrun -c "$ho/.zbs.c" -o "$ho/.zbs.o" || fail "mooncc: a static alias and zero initializers"
+[ "$(readelf -SW "$ho/.zbs.o" | sed -E 's/.*\] +//' | awk '$1 == ".bss" {print $5}')" = 000030 ] || fail "a static alias laid bytes of its own, or a zero initializer left .bss"
+[ "$(readelf -sW "$ho/.zbs.o" | awk '$8 == "mdt" {print $3}')" = 80 ] || fail "a static alias's symbol does not carry its table's 80 bytes"
+[ "$(readelf -sW "$ho/.zbs.o" | awk '$8 == "nz" || $8 == "za" {print $8, $7}' | sort | tr '\n' ' ')" = "nz 3 za 4 " ] || fail "int nz = 3 left .data, or long za[4] = {0} is not in .bss"
+# an attribute's word counts only inside __attribute__((..)): a parameter named used keeps an
+# unused gnu_inline static off the object, one named weak keeps its function strong
+printf 'static inline __attribute__((gnu_inline)) void set_a(int *s, int used){ *s = used; }\nvoid w(int weak){ (void)weak; }\n' > "$ho/.hdw.c"
+moonrun -c "$ho/.hdw.c" -o "$ho/.hdw.o" || fail "mooncc: parameters named for attributes"
+[ "$(readelf -sW "$ho/.hdw.o" | awk '$8 == "set_a" || $8 == "w" {print $8, $5}' | sort | tr '\n' ' ')" = "w GLOBAL " ] || fail "a parameter named used laid an unused static, or one named weak made its function weak"
 # a function's symbol carries its code's bytes, its next one's pad excluded (objtool walks a
 # function by them); gas's .size f, .-f the same, and the end label stays out of the symtab
 printf 'static int s(int a){ return a * 3 + 1; }\nint f(int a){ return s(a) + s(a + 1); }\n__attribute__((aligned(64))) int g(void){ return 2; }\n' > "$ho/.fsz.c"

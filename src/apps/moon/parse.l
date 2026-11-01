@@ -330,15 +330,19 @@
            "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
            "patchable_function_entry" 1 "__patchable_function_entry__" 1
            "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1}
+   ; a word counts inside an __attribute__((..)) group (a at the depth it opened, else -1), never
+   ; as a parameter's name: `int used` is no attribute. _Alignas is a keyword, counted anywhere
    (hdhits ts)
-    (: (go s d acc) (atom? s ? acc
-                       (<s @ t
-                          (? (d < 1 && (tp? t ";" || tp? t "{")) acc
-                             (tp? t "(") (go >s (d + 1) acc)
-                             (tp? t ")") (go >s (d - 1) acc)
-                             (tkk t = 'id && peep hdword (tkv t) ()) (go >s d (tkv t . acc))
-                             (go >s d acc))))
-       (go ts 0 ()))
+    (: (go s d a acc) (atom? s ? acc
+                         (<s @ t
+                            (? (d < 1 && (tp? t ";" || tp? t "{")) acc
+                               (tp? t "(") (go >s (d + 1) a acc)
+                               (tp? t ")") (go >s (d - 1) (d - 1 <= a ? -1 a) acc)
+                               (a < 0 && (idv? t "__attribute__" || idv? t "__attribute")) (go >s d d acc)
+                               (tkk t = 'id && peep hdword (tkv t) () && (a >= 0 && a < d || tkv t = "_Alignas"))
+                                (go >s d a (tkv t . acc))
+                               (go >s d a acc))))
+       (go ts 0 -1 ()))
    (hwin hw a b) (elem a hw || elem b hw)
 
    ; -- the parse state --

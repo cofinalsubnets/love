@@ -11806,23 +11806,26 @@
        memo (g 'romemo || {})
        (strm nm) (sects nm @ s
                     (s ? s ".data"))
-       ; an uninitialized global rides .bss unless it names its own section
-       (bss? nm) (!(sects nm) && !(two? <>>(peep (g 'glob) nm 0)))
+       ; an uninitialized global rides .bss unless it names its own section, as does one whose
+       ; initializer images to zeros (gcc's and clang's lay); a const one stays a .rodata candidate
+       (bss? nm) (!(sects nm) && (<>>(peep (g 'glob) nm 0) @ init (!(two? init) || !(consts nm) && zero? nm init)))
+       (zero? nm init) (image1 nm <>(peep (g 'glob) nm 0) init @ b (!(bad? b) && !(any (x \ x != 0) b)))
        ; a const global rides .rodata only if its image needs no relocation (a pointer the linker
        ; writes stays in .data, gcc's .data.rel.ro: a -pie startup writes the base there), or
        ; under -fno-pie, where no base moves it
        (ro? nm bytes) (consts nm &&
                        (npic? g || !(foldl (a \ x \ a || fixit? x) () bytes)))
-       ; a const candidate images twice ('d and 'r), so it memoizes; only candidates do
+       ; a global images more than once (bss?, then 'd or 'z, a const candidate 'r too), so it memoizes;
+       ; a refusal images again, its walk pinning the cause
        (image1 nm ty init)
-        (!(consts nm) ? (cgimage g ty init)
-           (memo nm @ m
-              (two? m ? <>m
-                 (cgimage g ty init @ v (pin memo nm [1 v], v)))))
+        (memo nm @ m
+           (two? m ? <>m
+              (cgimage g ty init @ v (bad? v ? v (pin memo nm [1 v], v)))))
        ; zm: 'd the initialized, 'z the bss, 'r the const ones .rodata claims, () everything (a named stream never splits)
        (globs gs want zm acc)
         (? !(two? gs) acc
            !(strm <gs = want) (globs >gs want zm acc)
+           (peep (g 'alias) <gs ()) (globs >gs want zm acc)   ; an alias lays no bytes: its label rides its target's
            (elem zm '(d r) && bss? <gs) (globs >gs want zm acc)
            (zm = 'z && !(bss? <gs)) (globs >gs want zm acc)
            (: ge (peep (g 'glob) <gs 0)
@@ -11977,7 +11980,7 @@
           'novol (two? xtra && 11 < #xtra && !(xtra 11))
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
-          'romemo {}                                ; a const candidate's image, laid once and read by both walks
+          'romemo {}                                ; a global's image, laid once and read by every walk
           'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
           'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
           'pfel ()}                                 ; the pads laid, newest first
