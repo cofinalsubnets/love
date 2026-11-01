@@ -2161,8 +2161,8 @@
                          ; __sync's compare-and-swap: (p old new), the old value or the success
                          (cgexpr g env (args 2) () @ e3
                             (bad? e3 ? 'bad
-                               (: pre (tor0 g e1 + spush 'r0 + asint g e2 + spush 'r0 + asint g e3
-                                       + '((mov r2 r0)) + spop 'r0 + aexp g w + spop 'r1 + acas g w)
+                               (: pre (pk g (tor0 g e1) (pk g (asint g e2) (asint g e3 + '((mov r2 r0))) 'r0 + aexp g w) 'r1
+                                       + acas g w)
                                   (kind = 'vcas ? (mkv pt 'r0 (pre + cvt pt 'r0))
                                      (mkv 'int 'r0 (pre + '((mov r0 r2)))))))))))))))
    (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
@@ -2461,8 +2461,7 @@
            e3f (arm? g ? (relean (tor0 g e3)) (tor0 g e3))
            (bad? e1 || bad? e2 || bad? e3 ? 'bad
               (mkv 'long 'r0 $
-               asint g e1 + spush 'r0 + asint g e2 + spush 'r0 +
-               e3f + '((mov r3 r0)) + spop 'r1 + spop 'r0 + ovf +
+               pk g (asint g e1) (pk g (asint g e2) (e3f + '((mov r3 r0))) 'r1) 'r0 + ovf +
                '((st r3 0 r0) (mov r0 r1)))))
        ; the block moves last: every __builtin_ clause gets first refusal
        (0 < #bi && bi 0 = 109) (cgmem g env bi args)
