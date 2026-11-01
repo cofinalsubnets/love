@@ -22,6 +22,8 @@
       ("li.u32"      "b800000090"            ((li r0 2415919104)))     ; mov eax,0x90000000 -- zero-extend, no movabs
       ("li.neg1"     "48c7c0ffffffff"        ((li r0 -1)))
       ("li.movabs"   "48b84c9c8cdac1fc0300"  ((li r0 1122334455667788)))
+      ("li2.dx"      "66ba3412"              ((li2 r2 4660)))          ; mov dx,0x1234 (the rest of rdx stays)
+      ("li2.hireg"   "6641b83412"            ((li2 r7 4660)))          ; mov r8w,0x1234
       ;; register moves (low + REX-extended)
       ("mov.rr"      "4889d8"                ((mov r0 r3)))
       ("mov.ext"     "4d89f8"                ((mov r7 r14)))
@@ -395,6 +397,9 @@
         '((mov r0 sp) (li r1 27668) (vmwrite r1 r0) (la r0 l1.1) (li r10 1) (vmlaunch) (jmp l2.1)
           (label l1.1) (mov r9 r0) (li r10 0) (label l2.1))
         (gas-text 'x64 "movq %rsp, %rax\nmovq $0x6c14, %rcx\nvmwrite %rax, %rcx\nleaq 1f(%rip), %rax\nmovq $1, %r11\nvmlaunch\njmp 2f\n1:\nmovq %rax, %r10\nmovq $0, %r11\n2:"))
+   _ (chk-eq "gas.x64.word"                        ; a word immediate keeps the register's rest; a long writes a segment
+        '((li2 r2 22104) (stseg 3 r0))
+        (gas-text 'x64 "movw $0x5658, %dx\n movl %eax, %ds"))
    _ (chk-eq "gas.x64.contracted"                  ; register-contracted ops drop their named operands
         '((outb) (inl) (rdmsr) (vmrun) (vmread r9 r10) (sgdt r10 0) (vmxon sp 8) (trap) (int 3) (divq r1) (sys))
         (gas-text 'x64 "outb %al, %dx\n inl %dx, %eax\n rdmsr\n vmrun %rax\n vmread %r11, %r10\n sgdt (%r11)\n vmxon 8(%rsp)\n int3\n int $3\n divq %rcx\n syscall"))
@@ -896,6 +901,10 @@
    _ (chk-eq "gas.thumb"
         '((trap) (brk 3) (nop) (wfi) (li r0 5) (add r0 r0 r1) (ld r1 r0 4) (ret))
         (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr"))
+   ;; ..the A-profile system lane: barrier options (none is sy), svc's old name, a coprocessor read
+   _ (chk-eq "gas.thumb.sys"
+        '((dmb ish) (dsb sy) (yield) (sys) (sys) (mrrc p15 1 r4 r5 c14))
+        (gas-text 'arm "dmb ish\n dsb\n yield\n svc #0\n swi #0\n mrrc p15, 1, r4, r5, c14"))
    ;; ..its register lists, conditional branches, shifted operands and flag-setting forms
    _ (chk-eq "gas.thumb.wide"
         '((pushm (r4 r5 r6 lr)) (br ne l1.1) (alush or r0 r1 r2 shl 3) (adcs r0 r0 1) (umlal r0 r1 r2 r3)
@@ -956,6 +965,11 @@
    ;; movw16/movt16 read their rd back out of hw2
    _ (chk-eq "refix.movw" (hexs (patch-with t2be 'movw16 2271560481 0 4 2)) (rfx 'movw16 base-mw 2271560481 0))
    _ (chk-eq "refix.movt" (hexs (patch-with t2be 'movt16 2271560481 0 4 2)) (rfx 'movt16 base-mt 2271560481 0))
+   ;; lap's halves hold their own addend, imm16 sign-extended as a REL movw/movt reads it (-12, -8)
+   base-mwp (peep t2be 'lapa 0 'movw16p 2)  base-mtp (peep t2be 'lapa 0 'movt16p 2)
+   _ (chk-eq "lapa" "4ff6f472cff6f872" (hexs (base-mwp + base-mtp)))       ; movw r2, #0xfff4 ; movt r2, #0xfff8
+   _ (chk-eq "refix.movwp" (hexs (patch-with t2be 'movw16p 2271560481 256 4 2)) (rfx 'movw16p base-mwp 2271560481 256))
+   _ (chk-eq "refix.movtp" (hexs (patch-with t2be 'movt16p 2271560481 260 4 2)) (rfx 'movt16p base-mtp 2271560481 260))
    ;; ..and an addend this backend never bakes refuses: the base encoding is rebuilt and compared
    rfcaught {} _ (pin rfcaught 0 0)
    _ (hear (a \ b \ a = 'thumb-refix-addend ? (pin rfcaught 0 1, ()) (welp a b)))
@@ -1255,6 +1269,9 @@
       ;; la: the MOVW/MOVT absolute pair, always both; x at +16, so movw #16 ; movt #0, for r0 then r7
       ("t2.la"      "40f21000c0f2000040f21007c0f2000741424300"
                      ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))
+      ;; lap: movw/movt of x less the pc each add reads (x at +20): +8 from +12, then -2 from +22
+      ("t2.lap"     "40f20800c0f2000078444ff6fe77cff6ff777f4441424300"
+                     ((lap r0 x) (lap r7 x) (label x) (raw (65 66 67 0))))
       ;; the 64-bit pair lanes: carry alu, widening multiplies, clz, a variable shift whose count is not r1
       ("t2.adc"     "43eb0101"          ((adc r1 r3 r1)))             ; adc.w r1, r3, r1
       ("t2.adcs"    "53eb0303"          ((adcs r3 r3 r3)))            ; adcs.w r3, r3, r3
@@ -1302,8 +1319,13 @@
       ("t2.cvtss2sd" "b7eec11a"         ((cvtss2sd f1 f1)))           ; vcvt.f64.f32 d1, s2
       ("t2.cvtsd2ss" "b7eec11b"         ((cvtsd2ss f1 f1)))           ; vcvt.f32.f64 s2, d1
       ("t2.smull"   "80fb0102"          ((smull r0 r2 r0 r1)))        ; smull r0, r2, r0, r1
-      ;; the system lane. m-profile has one shareability domain, so `sy` is the only barrier option
+      ;; the system lane: a barrier's option in its low nibble, the generic timer's 64-bit read
       ("t2.dsb"     "bff34f8f"          ((dsb sy)))                   ; dsb sy
+      ("t2.dsbish"  "bff34b8f"          ((dsb ish)))                  ; dsb ish
+      ("t2.dmbish"  "bff35b8f"          ((dmb ish)))                  ; dmb ish
+      ("t2.dmbishld" "bff3598f"         ((dmb ishld)))                ; dmb ishld
+      ("t2.yield"   "10bf"              ((yield)))                    ; yield
+      ("t2.mrrc"    "55ec1e4f"          ((mrrc p15 1 r4 r5 c14)))     ; mrrc p15, #1, r4, r5, c14
       ("t2.isb"     "bff36f8f"          ((isb)))                      ; isb sy
       ("t2.brk"     "abbe"              ((brk 171)))                  ; bkpt 0xab -- the semihosting call
       ("t2.trap"    "00be"              ((trap)))                     ; ..the same instruction at 0

@@ -20,9 +20,11 @@
    (tier v) (tray? v ? (atype v @ c (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's ctor; nil off a tray
    zero? nil?
    ; splice a module just below the head: its names resolve but never shadow yours. a miss
-   ; scares rather than splicing (): a book the walk cannot read faults in map_probe.
+   ; raises the left-out unit that holds it, else scares rather than splicing (): a book the
+   ; walk cannot read faults in map_probe.
    (borrow m)    (: b (tablet? m ? m
-                    (lib () m @ r (r ? r (scare 'no-module m))))
+                    (lib () m @ r (r ? r
+                       ((lib () 'verbs @ V (tablet? V ? (V 'lift m))) @ l (tablet? l ? l (scare 'no-module m))))))
                (tablet? b ? (setstack (<(stack ()) . b . >(stack ()))) b))
    ; a module's tablet, curried to a member: (cite 'holo 'assemble). (cite ()) lists the
    ; registry, a miss answers (). members fold in at compile, so a pin affects only later code.
@@ -2005,7 +2007,7 @@
 ;             script of the same name
 ;   (seat p)  argv[0], by its basename
 ; a verb takes the args after its name and answers a status charm.
-(module '(verbs any? bn call carried carry dash enlist fills fire get holds lazy mark mods need prov ros seat seatof tab trait unit word)
+(module '(verbs any? bn call carried carry dash enlist fills fire get holds lazy lift mark mods need prov refs ros seat seatof tab trait unit word)
 (: tab {}   ; nil? when empty: ask it with peep, not by testing it
    ; the roster's, below: 'files (path . baked) newest first, 'rising while a unit loads;
    ; verb -> path, module -> path, unit -> the units it needs, unit -> 1 once raised,
@@ -2102,8 +2104,23 @@
                       pin need (unit p) (ns + need (unit p)),
                       each vs (v \ (pin prov v p, pin tab v (stub v))))
    ; a file the default bake carries but leaves out (the Makefile's carryfiles), lazy unless
-   ; a mark already laid it
-   (carry p) (pin carried p 1, any (f \ <f = p) (ros 'files) ? 0 (lazy p () () ()))
+   ; a mark already laid it, with the verbs, modules and needs its source on /love names
+   (carry p) (pin carried p 1,
+              any (f \ <f = p) (ros 'files) ? 0
+                 (src1 p @ t (lazy p (after t "'enlist '") (after t "(module '" + after t "(module (") (needs p t))))
+   (src1 p) ((cite 'posix 'open) ("/love/" + p) "r" @ q (hot? q ? (slurp q @ t (cite 'posix 'close q, t)) ""))
+   ; the name after each k in t, to the first delimiter; a quoted list's head
+   (word1 s) (: n #s
+                (go i) (i < n && !(elem (s i) [32 9 10 40 41 39 34 59]) ? (go (i + 1)) (snip s 0 i))
+                (go 0))
+   (after t k) (catmap (s \ (0 < #s && s 0 = 40 ? (word1 (snip s 1 #s)) (word1 s)) @ w (0 < #w ? [(name w)] ()))
+                       >(split k t))
+   ; the modules a source cites or borrows, and the units other than its own that hold them
+   (refs t) (after t "cite '" + after t "borrow '")
+   (needs p t) (foldl (a \ m \ (mods m @ q (string? q && unit q != unit p && !(elem (unit q) a) ? (a + [unit q]) a)))
+                      () (refs t))
+   ; a module, raised with its unit when a left-out file holds it; () when none does
+   (lift m) (lib () m @ M (tablet? M ? M (mods m @ p (string? p && lazies p ? (rise (unit p), lib () m)))))
    ; a stub raises its unit, then runs what the unit pinned in its place
    (stub v) (as \ (rise (unit (prov v)),
                    tab v @ f (lit? f ? (f as)

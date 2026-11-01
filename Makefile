@@ -403,7 +403,16 @@ distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l sr
             $(holo_obj) src/love/holo/copy.l $(holo_ld) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
 # carried, not baked: each a carry row in the cat, raised off /love at its unit's first call;
 # `love bake --with UNIT` bakes it (src/apps/roster.l). distlist.h lists them after a +
-carryfiles = $(helmfiles) $(satfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+# the spreadsheet
+manifestfiles = src/apps/manifest/manifest.l
+# the mail reader: mime, the mailbox, smtp and imap under it
+chuchofiles = src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l
+# classic pic and the preprocessors ahead of it, one module: grap's reader is pic's
+picfiles = src/apps/pic/grap.l src/apps/pic/gpic.l src/apps/pic/chem.l src/apps/pic/cli.l
+# caja, TeX's engine, and the font metrics under it. the engine proper (mouth, build,
+# exec) is the -ini tests', borrowed by path, never carried as a unit
+cajafiles = src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l
+carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \

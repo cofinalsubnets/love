@@ -990,7 +990,7 @@
     'mac2unix "usage: mac2unix [-fkqn] [FILE..]"
     'man "usage: man [-w] [SECTION] NAME.."
     'html2text "usage: html2text [-w COLS] [FILE..]"
-    'markdown "usage: markdown [-t html|roff|text] [-w COLS] [FILE..]"
+    'markdown "usage: markdown [-t html|roff|text|cells|dvi] [-w COLS] [FILE..]"
     'www "usage: www [-w COLS] URL|FILE"
     'im "usage: im [cat|less|convert|pixelize] [-g MODE] [-w COLS] [-h ROWS] FILE.."
     'imless "usage: imless FILE.."

@@ -42,12 +42,12 @@ Two pipelines exist today, and the criterion is their join:
 
 ### a64 (r24: 4439 units, 4370 `.c` + 69 `.S`)
 
-3106 `.c` same as clang, 1258 differ, 6 not finished. Every `.S` is holo's.
+3106 `.c` same as clang, 1258 differ, 3 not finished. Every `.S` is holo's, and the compat vdso
+(`--target=arm-linux-gnueabi`) is mooncc's arm32.
 
 | class | units | note |
 |---|---|---|
-| vdso32, `--target=arm-linux-gnueabi` | 2 | the compat vdso: mooncc's arm32 is not wired in |
-| timeout (300 s) | 4 | pinctrl-rzg2l; .vmlinux.export, kvm inject_fault, hid-input finish in 320-450 s on a loaded box |
+| timeout (300 s) | 3 | .vmlinux.export, kvm inject_fault, hid-input finish in 320-450 s on a loaded box |
 
 The boots below ran on r23's pool: 4285 mooncc objects, 0 culprits; the share of vmlinux.a members
 from mooncc was 4242/4386 = 96.7%; modpost warns 6 (all `__calc_tpm2_event_size`).

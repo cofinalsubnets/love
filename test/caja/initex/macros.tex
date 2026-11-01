@@ -1,0 +1,37 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\$=3 \catcode`\&=4
+\catcode`\^=7 \catcode`\_=8 \catcode`\~=13 \catcode`\^^I=10
+\def\a#1#2{(#2,#1)}\show\a
+\message{\a xy \a{ab}{cd}}
+\def\b#1.#2\end{[#1|#2]}\message{\b one.two\end}
+\long\def\c#1{#1}\show\c \outer\def\d{d}\show\d
+\edef\e{\a12\noexpand\a}\show\e
+\let\f=\a \show\f \let\g\relax\show\g
+\futurelet\h\show\i \show\h
+\expandafter\def\csname x y\endcsname{xy}\expandafter\show\csname x y\endcsname
+\message{\string\a\string{\string~ \number 0042 \romannumeral 1984 \meaning\a}
+\message{\romannumeral 0 \romannumeral -5 \romannumeral 3999}
+\def~{tilde}\show~ \message{\meaning~}
+\uppercase{\message{abc\a xy}}\lowercase{\message{ABC}}
+\count1=17 \message{\the\count1}\advance\count1 by -20 \showthe\count1
+\multiply\count1 3 \showthe\count1 \divide\count1 by 4 \showthe\count1
+\dimen0=1.5pt \showthe\dimen0 \dimen1=-.25in \showthe\dimen1
+\dimen2=3cm \showthe\dimen2 \dimen3=10mm \showthe\dimen3 \dimen4=7bp\showthe\dimen4
+\dimen5=2dd \showthe\dimen5 \dimen6=1cc \showthe\dimen6 \dimen7=12pc \showthe\dimen7
+\dimen8=100sp\showthe\dimen8 \dimen9=\dimen2 \advance\dimen9\dimen3 \showthe\dimen9
+\skip0=1pt plus 2fil minus 3fill \showthe\skip0 \skip1=2pt plus -1fil \showthe\skip1
+\advance\skip0 by\skip1 \showthe\skip0 \multiply\skip0 2\showthe\skip0
+\muskip0=3mu plus 2fill \showthe\muskip0
+\count255='777 \showthe\count255 \count255="7FFF \showthe\count255
+\count255=`a \showthe\count255 \count255=`\^^M \showthe\count255
+\countdef\cc=5 \cc=42 \showthe\cc \show\cc \chardef\ch=`A \show\ch \showthe\ch
+\dimendef\dd=3 \show\dd \skipdef\ss=4 \show\ss \toksdef\tt=7 \show\tt
+\mathchardef\mc="7123 \show\mc \showthe\mc
+\toks0={a#b} \showthe\toks0 \tt=\toks0 \showthe\toks7
+\everypar{x}\showthe\everypar \errhelp{help}\showthe\errhelp
+\tolerance=200 \showthe\tolerance \showthe\hsize \hsize=6in \showthe\hsize
+\parskip=0pt plus 1pt\showthe\parskip \showthe\catcode`\{ \showthe\lccode`A
+\showthe\uccode`b \showthe\sfcode`A \showthe\mathcode`1 \showthe\delcode`.
+\show\undefinedcs \show a \show{ \show } \show# \show$ \show& \show^ \show_ \show\ 
+\show\par \show\relax \show\endcsname \show\fi \show\count \show\tolerance
+\show\parskip \show\hsize \show\everypar \show\toks \show\catcode \show\textfont
+\end

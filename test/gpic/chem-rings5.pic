@@ -1,0 +1,47 @@
+.PS
+copy "chem.pic"
+	textht = 0.16; textwid = .1; cwid = 0.12
+	lineht = 0.2; linewid = 0.2
+Last: 0,0
+
+#R1: ring5 pointing right
+R1: Last: [
+	C: 0,0
+	V0: (0.0788597,0.242705)
+	V1: (0.255195,3.40663e-09)
+	V2: (0.0788597,-0.242705)
+	V3: (-0.206457,-0.15)
+	V4: (-0.206457,0.15)
+	V5: (0.0788597,0.242705)
+	V6: (0.255195,1.70332e-08)
+	line from V1 to V2
+	line from V2 to V3
+	line from V3 to V4
+	line from V4 to V5
+	line from V5 to V1
+] with .V3.w at Last.e 
+
+#bond right from R1.V1
+Last: bond(0.2, 90, from R1.V1.e)
+
+#R2: flatring pointing left put N at 2 with .V1 at Last.end
+R2: Last: [
+	C: 0,0
+	V0: (-0.15,-0.259808)
+	V1: (-0.3,-1.20142e-08)
+	V2: (-0.15,0.259808)
+	V3: (0.15,0.259808)
+	V4: (0.3,2.00237e-08)
+	V5: (0.15,-0.259808)
+	V6: (-0.15,-0.259808)
+	V7: (-0.3,-2.80332e-08)
+	V4: V5; V5: V6
+	line from V1 to V2 chop 0 chop 0.08
+	V2: ellipse invis ht 0.16 wid 0.12 at V2
+	N:atom("N", 0.12, 0.16, 0.06, 0.16, 0.12, 0.015) at V2
+	line from V2 to V3 chop 0.08 chop 0
+	line from V3 to V4 chop 0 chop 0
+	line from V4 to V5 chop 0 chop 0
+	line from V5 to V1 chop 0 chop 0
+]   with .V1 at Last.end
+.PE

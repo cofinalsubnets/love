@@ -1,0 +1,26 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \a \hsize=120pt \parindent=10pt \baselineskip=12pt \lineskiplimit=0pt
+\parfillskip=0pt plus 1fil \tolerance=200 \pretolerance=100 \hbadness=1000 \hyphenpenalty=50
+\setbox1\vbox{This is a paragraph with long words and supercalifragilistic expialidocious text
+that will not fit nicely.\par
+\hangindent=20pt \hangafter=-2 Hanging indentation applies to the first two lines of this
+paragraph, after which lines are full width again for the rest.\par
+\parshape 3 5pt 100pt 10pt 90pt 0pt 120pt Shaped paragraph with parshape lines of
+varying widths and indents goes here for a while.\par
+\leftskip=5pt \rightskip=0pt plus 20pt Ragged right with a left skip of five points,
+running on for a couple of lines here.\par
+\leftskip=0pt \rightskip=0pt \looseness=1 \tolerance=10000 Looseness one makes the
+paragraph a line longer if it can.\par
+\looseness=-1 Looseness minus one tries to make it shorter, if a solution exists here.\par
+Mark\mark{m1} and adjust\vadjust{\kern7pt} and insert\insert100{\hbox{ins}} in a line,
+then more\vadjust{\penalty3} words to see them move out\par
+x\discretionary{pre}{post}{nobreak}y-z\-w\par
+\showlists
+\hbox{\vadjust{\kern 2pt}adjusted}
+\prevdepth=-2000pt \hbox{q}
+\showlists}
+\showbox1
+\shipout\box1
+\end
