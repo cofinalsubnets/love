@@ -36,7 +36,7 @@ Two pipelines exist today, and the criterion is their join:
 | x64 image: setup/realmode `-m16` units (mooncc -t i386), piggy gzip, dd/cat, bzImage as its own PE | — | g-21 (after the boot) |
 | x64 relocs, mkpiggy (host programs) | — | g-05-5f |
 | x64 boot links: setup.elf, realmode.elf, compressed/vmlinux | — | g-ae |
-| objtool's job in mooncc/holo (ORC, retpoline/rethunk/static-call/IBT sites) | — | open |
+| objtool: the kernel's own, by mooncc on elfutils' libelf (libelf.l), `test_hearts_objtool` | — | g-05-5f |
 
 ## 1. kernel C units still compiled by clang
 
@@ -121,9 +121,9 @@ ARM-only; the x64 side needs no X86 one once it is off clang.
 - a64, test_hearts: no GNU make. build.l evaluates kbuild's make text (kbuild.l); a recipe's `$(MAKE)`
   (link-vmlinux.sh's sub-make) goes to `hk-make` = `build.l --sub`. Goals `defconfig syncconfig Image`;
   modules not built
-- x64: build.l fixes ARCH=arm64; image.l and test/gate/hearts*.sh are a64 throughout
+- x64: build.l takes $HEARTS_ARCH; image.l, hearts.sh and hearts-boot.sh are a64 throughout
 - the mixed boots still link through GNU make (kmake.sh, boot.sh)
-- objtool builds through tools/build, a second make system kbuild.l does not take
+- tools/build is a second make system: a `-C` sub-make without `-f` runs under cook, not kbuild.l
 
 ## 7. host programs — g-05-5f
 
@@ -149,7 +149,7 @@ x64 adds, none built by mooncc yet:
 | arch/x86/tools/relocs | 3 | vmlinux.relocs, realmode relocs |
 | boot/compressed/mkpiggy, boot/mkcpustr, entry/vdso/vdso2c | 1 each | |
 | selinux genheaders, scripts/selinux/mdp | 1 each | SELINUX=y |
-| objtool (+ libsubcmd) | 28 | libelf, libz, libzstd, libxxhash; mooncc has no libelf. Its job belongs in mooncc/holo (ORC, retpoline/rethunk/static-call/IBT site lists), not a port |
+| objtool (+ libsubcmd) | 28 | x64: libelf is elfutils', by mooncc without zlib (libelf.l); xxhash and opcodes probe absent. Its vmlinux.o pass is the host objtool's byte for byte |
 
 ## 8. scripts and interpreters
 

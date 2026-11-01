@@ -11,6 +11,7 @@
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
 (borrow 'posix)
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:
  esc (string 27)
@@ -343,8 +344,7 @@
  ; ..and the verb around it: the screen raised here and put back here
  (apartment-run _) (: _ (ttytake rove-modes)
    g (apartment-walk ())
-   (drain-keys (),
-    ttygive rove-modes,
+   (ttygive rove-modes,
     0))
  apartment-usage "usage: love play apartment   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (apartment-main as) (as @ () (apartment-run ())

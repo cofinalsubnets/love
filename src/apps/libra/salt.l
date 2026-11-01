@@ -28,12 +28,12 @@
          (go t, close q, c))))
 
  ; --- the door --------------------------------------------------------------
- ; HOME, not the seat: /usr/bin/love seats at /usr, and nobody's settings live in /usr/etc
- (salt-user a) (getenv "HOME" @ h (string? h && h + "/.love/etc/" + string a + ".l"))
+ ; the nest, not the seat: /usr/bin/love seats at /usr, and nobody's settings live in /usr/etc
+ (salt-user a) (cite 'path 'nest 0 + "/etc/" + string a + ".l")
  (salt-here a) ("." + string a + ".l")
 
- (salt app) (: c {} u (salt-user app)
-             (string? u && salt-file u c,
+ (salt app) (: c {}
+             (salt-file (salt-user app) c,
               salt-file (salt-here app) c,
               c))
 

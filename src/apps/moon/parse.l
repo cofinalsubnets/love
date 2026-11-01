@@ -1097,10 +1097,24 @@
        (atom? br ? ()
           (: dts <>br
              bq (qspec ps ts <br)
-             dr (pdtor ps dts <br)
+             dr (pdtor ps dts (qtyof ps ts <br))
              (atom? dr ? ()
                 (<><dr @ ty
                    [(qmark bq ty) (qtop? dts) <>dr])))))
+   ; a leading typeof's operand, marked: taken only when it strips back to ty, and never
+   ; over a `{`, so a statement expression is not read twice
+   (qtyof ps ts ty)
+    (: (flat ts d) (? (atom? ts) 0
+                      (peekp ts "{") 0
+                      (peekp ts "(") (flat >ts (d + 1))
+                      (peekp ts ")") (d = 0 ? 1 (flat >ts (d - 1)))
+                      (flat >ts d))
+       (keep q) (q && qstrip q = ty ? q ty)
+       (? !(two? ts && tkk <ts = 'id && elem (tkv <ts) tyofid) ty
+          (want >ts "(" @ r1
+             (? (atom? r1 || !(flat r1 0)) ty
+                (tyat? ps r1) (pcqty ps r1 @ cr (two? cr ? (keep <cr) ty))
+                (pasn ps r1 @ er (atom? er ? ty (keep (qtype ps <er))))))))
    ; the controlling expression's marked type, else ptype's unqualified one
    (qtype ps e)
     (ptype ps e @ p
@@ -1748,7 +1762,9 @@
        ; peek the `;` first: want answers () when it matched the last token
        (!(two? r4 && peekp r4 ";") ? ()
           (cfold (pw64 ps) <re @ v
-             (charm? v && v <= 0 ? () ['(tdef) >r4]))))
+             (charm? v && v <= 0 ? (blame r4 (strat? r2 ? "static assertion failed: \(tkv <r2)"
+                                                         "static assertion failed"))
+                ['(tdef) >r4]))))
    (sassert? ts) (two? ts && idv? <ts "_Static_assert")
 
    ; decl := type [dtor [= asn] (, dtor [= asn])*] ;

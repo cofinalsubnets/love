@@ -4,11 +4,12 @@
 ; pixel says its colours as pens here too: 24-bit, or the 256 palette dithered.
 (module (view esc pi clamp flo wrap over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
-         view-deep? view-words view-flag view-arg view-scale view-main view-song view-stage view-set1
+         view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-cells view-pen view-band
          view-rescale view-loading view-spin)
-(borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
+(borrow 'rove)
+(borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'posix)    ; close, for the horn
 (:
@@ -262,7 +263,6 @@
  ; the rove floors a walk hands over to
  (view-run walk) (ttytake rove-modes,
                   walk (),
-                  drain-keys (),
                   ttygive rove-modes,
                   0)
  ; ..or the window its words asked for, or unasked where a window is the whole screen, 640
@@ -327,6 +327,8 @@
    (go as))
  ; ..a word alone that says v of k, and a word whose next one (read w) reads
  (view-flag w k v) (l \ <l = w ? [k v >l])
+ ; ..a window, by -w or --window
+ view-window (l \ elem <l ["-w" "--window"] ? ['md 'window >l])
  (view-arg w k read) (l \ two? >l && <l = w ? [k (read <>l) >>l])
  ; ..--scale N, a picture's pixel N by N of the screen's, N a power of two to 8: fewer
  ; pixels drawn for more frames

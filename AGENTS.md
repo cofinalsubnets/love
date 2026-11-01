@@ -169,7 +169,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`
-- `src/apps/hearts/*` -> `test_hearts` `test_hearts_boot`
+- `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`
 <!-- /lanes -->
 
 `test_slow` runs last, on the exact tree that lands. The `test_cc%` lanes are pattern rules in `test/test.mk`, so grepping for `^test_cc...:` misses them.

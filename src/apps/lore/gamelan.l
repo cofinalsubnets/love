@@ -6,7 +6,8 @@
 ;                            chime's least, 'odds its chance a chunk in thousandths, 'gong
 ;                            its note, 'gong-gain, 'gong-legato, 'gong-every least seconds apart}
 (module (gamelan gamelan-new gamelan-feed)
-(borrow 'rove)                          ; the die, the rate
+(borrow 'rove)
+(borrow 'horn)                          ; the die, the rate
 (borrow 'play)                          ; the voices, the mix
 (:
  fps 30

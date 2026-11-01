@@ -28,8 +28,8 @@
      ; ~/.love/etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
      ; what cannot move the machine's locks
      bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes]
-     bee-salt (: sf (cite 'salt 'salt-file) h (getenv "HOME")
-                 u (? (string? h) (sf "\(h)/.love/etc/bee.l" {}) {})
+     bee-salt (: sf (cite 'salt 'salt-file)
+                 u (sf (cite 'path 'nest 0 + "/etc/bee.l") {})
                  t (sf ".bee.l" {})
                  (foldl (c \ k \ pin c k (t k)) u (filter (k \ elem k bee-tree-keys) (keys t))))
      (slurp-file p) (uread p @ [1 s] s)

@@ -226,12 +226,30 @@
  ; (under " cl", handed down as MAKEFLAGS hands them) and the line's own, and make's built-ins
  (hk-submake K t line made run)
   (: (aft l) (atom? l ? () (ends? <l "hk-make" ? >l (aft >l)))
-     (g l f vs gs) (? (atom? l) [f (rev vs) (rev gs)]
+     ws (aft (words line))
+     (elem "-C" ws && !(elem "-f" ws) ? (hk-cookmake t ws made run) (hk-kmake K t ws made run)))
+ ; a $(MAKE) -C DIR line with no -f leaves kbuild for a tree with its own build (tools/:
+ ; tools/build's Makefile.build, fixdep, its own probes): cook makes it, as a command, handed
+ ; this make's exports and its command line in MAKEFLAGS, as gnu make hands them down. kbuild's
+ ; own -C (__sub-make's) names its -f
+ (hk-cookmake t ws made run)
+  (: (esc v) (cats (map (i \ v i @ c ((elem c [32 9 92] ? "\\" "") + string c)) ^#v))
+     cl (peep t " cl" ())
+     mf ("-- " + join " " (map (n \ n + "=" + esc (hk-expand "$(\(n))" t)) cl))
+     (q w) ("'" + join "'\\''" (split "'" w) + "'")
+     ; its sub-makes are cook's too: MAKE names it, over the run's hk-make
+     text ("export MAKE=" + q (selfpath 0 + " make") + "\n" + join " " ((selfpath 0) . "make" . map q ws))
+     tg ("make " + join " " ws)
+     ; cook is the make below here: kbuild's MAKE and MAKEFLAGS stay behind
+     env (filter (e \ !(elem (e 0) '("MAKE" "MAKEFLAGS"))) (hk-env t))
+     (run tg 'run 0 text (env + [["MAKEFLAGS" mf]]) @ 0 0 _ (pin made " failed" tg, 0)))
+ (hk-kmake K t ws made run)
+  (: (g l f vs gs) (? (atom? l) [f (rev vs) (rev gs)]
                       (<l = "-f" || <l = "-C") (g >>l (<l @ "-f" <>l f) vs gs)
                       (starts? <l "-") (g >l f vs gs)
                       (0 < findsub <l "=") (g >l f (<l . vs) gs)
                       (g >l f vs (<l . gs)))
-     a (g (aft (words line)) (K + "/Makefile") () ())
+     a (g ws (K + "/Makefile") () ())
      ev (hk-env t)
      lv (map (v \ v @ (k + "=" + w) [k w] ["" v]) (a 1))
      cl (uniq (peep t " cl" ()) + map (v \ v 0) lv)

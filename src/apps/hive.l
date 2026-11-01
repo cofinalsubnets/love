@@ -16,8 +16,7 @@
          hive-sweep hive-cards hive-settled)
 (borrow 'posix)
 (:
- (hive-root _) (: r (getenv "BEE_HIVE") h (getenv "HOME")
-                  (? (string? r && 0 < #r) r (string? h) "\(h)/.love/run/hive" "/tmp/bee-hive"))
+ (hive-root _) (getenv "BEE_HIVE" @ r (string? r && 0 < #r ? r (cite 'path 'nest 0 + "/run/hive")))
  (hive-cell nm) "\(hive-root 0)/\(nm)"
  (hive-card nm)
   (: f (open "\(hive-cell nm)/card" "r")

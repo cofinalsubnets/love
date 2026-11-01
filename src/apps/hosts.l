@@ -21,7 +21,7 @@
 (: sh-quote (cite 'lush 'sh-quote)
    (hs-env k) (getenv k @ v (string? v && 0 < #v ? v ()))
    hs-num (cite 'kore 'wg-digits)
-   (hs-path _) (hs-env "BEE_HOSTS" @ p (string? p ? p (getenv "HOME" + "/.love/etc/bee/hosts")))
+   (hs-path _) (hs-env "BEE_HOSTS" @ p (string? p ? p (cite 'path 'nest 0 + "/etc/bee/hosts")))
 
    ; a host's lines into a tablet: reach and caps are words, slots a count, the rest text
    (hs-val k ws) (k @ "reach" ws "caps" ws "slots" (hs-num <ws) (join " " ws))

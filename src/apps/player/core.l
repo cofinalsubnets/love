@@ -333,8 +333,7 @@
    ; the first line is the attach's [snap]; then [ok] [err] [snap] answer commands in order
    ; and every other message is an event. a command led by a number gets its answer led by
    ; it. tasks switch at any call, so shared state is written by one task only
-   (player-dir _) (: e (getenv "PLAYER_RUN") h (getenv "HOME")
-                    (? (string? e && 0 < #e) e (string? h) "\(h)/.love/run/player" "/tmp/player"))
+   (player-dir _) (getenv "PLAYER_RUN" @ e (string? e && 0 < #e ? e (cite 'path 'nest 0 + "/run/player")))
    (player-sock nm) "\(player-dir 0)/\(nm).sock"
    (lines-in s f) (line-of s @ () 0
                     x (: m (sound x @ (m . _) m _ ()) (f m @ 0 0 _ (lines-in s f))))

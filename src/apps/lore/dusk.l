@@ -9,6 +9,7 @@
          bed-w gz gw gh hole-w hole-h arc-z end-z done-ms sp loop fps pelog song-chunk
          sun-pens sky-ramp mang)
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'walk)                          ; the rail
 (borrow 'gamelan)                       ; the song
