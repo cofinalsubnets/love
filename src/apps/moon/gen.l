@@ -4941,7 +4941,7 @@
                         ; a copy chasing back to the dest is a no-op -- not for sp/fp/r4, whose
                         ; copy records outlive the motion (sp moves through the cursor, not defr)
                         (two? old && two? v && <old = <v && <>old = <>v ||
-                         two? v && <v = 2 && <>v = <>f && !(elem <>f '(sp fp r4 r3)) ?
+                         two? v && <v = 2 && <>v = <>f && !(elem <>f '(sp fp r4)) ?
                              (go r 1 cur rg sl ce ci acc)
                            (defr ci rg sl ce <>f,
                             rset rg <>f v,
