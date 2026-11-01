@@ -6883,7 +6883,7 @@
                                        (? (two? f && <f = 'label) (walk >l (dead && !(R <>f)))
                                           dead (walk >l 1)
                                           (two? f ? (pinnoms t >f),
-                                           walk >l (xit? f || two? f && elem <f '(jmp jmpt))))))
+                                           walk >l (gone? f)))))
                    _ (walk fs 0)
                    t)
        (reach R) (live R @ R2 (#(keys R2) = #(keys R) ? R (reach R2)))
@@ -6903,8 +6903,19 @@
                  (two? f && <f = 'jmp &&
                   (<>l @ n (two? n && <n = 'label && <>n = <>f)))
                   (sweep >l 0)
-                 (f . sweep >l (xit? f || two? f && elem <f '(jmp jmpt))))))
+                 (f . sweep >l (gone? f)))))
        (sweep fs 0))
+   ; a form control never passes: an exit, a jump, or a trap (__builtin_trap and unreachable)
+   (gone? f) (xit? f || two? f && elem <f '(jmp jmpt ud2 trap))
+   ; ..again once the late passes have run, which lay a cold arm out of line with a jmp back: what
+   ; follows a trap to the next label never runs (a label's align stays with it)
+   (trapcut fs)
+    (: (go l cut) (? !(two? l) l
+                     (<l @ f (? (two? f && <f = 'label) (f . go >l 0)
+                                (cut && !(two? f && <f = 'align && two? >l && two? <>l && <<>l = 'label)) (go >l 1)
+                                (f . go >l (cut || two? f && elem <f '(ud2 trap))))))
+       (go fs 0))
+   (fldcut g fs) (trapcut (fldop g fs))
 
    ; an idle cs seat: a borrowed x64 cs reg untouched but for its save and restores owes neither.
    ; x64, past cskeep
@@ -11798,7 +11809,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (fldop g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -11950,6 +11961,9 @@
                             (go os i t) (!(two? os) ? t (go >os (i + 1) (cg-orefs <os !(elem i lp) t)))
                             (go >ins 1 t))))
            t fm)
+   ; ..over gas's read of an asm, its sections first ([name _ _ forms]): those forms narrowed as a
+   ; body's, so an opcode in an alternative's replacement (`stac`) keeps no static of that name
+   (cg-arefs r t) (!(two? r) ? t (foldl (t \ s \ (two? s && 3 < #s ? (cg-frefs (s 3) t) t)) (cg-refs >r t) <r))
    (cg-orefs x reg? t)
     (? (nom? x) (reg? && cg-regnom? x ? t (pin t x 1))
        !(two? x) t
@@ -12121,7 +12135,7 @@
            ; what the sectioned bodies call joins the worklist like any other ref
            sq (foldl (a \ x \ unom x @ t (t && !(laid t) ? (t . a) a)) () snoms)
            ; ..and a static the file-scope asm names, which no C reference may reach
-           aq (foldl (a \ x \ unom x @ t (t && !(laid t) ? (t . a) a)) () (keys (cg-refs (g 'asecs) {})))
+           aq (foldl (a \ x \ unom x @ t (t && !(laid t) ? (t . a) a)) () (keys (cg-arefs (g 'asecs) {})))
            _ (drive (roots + sq + aq))
            ; the live globals: one another unit may name (not static), a `used` or sectioned static, an alias's
            ; target, and what a laid body, an asm or a live initializer names. a block-scope static is no svar,
@@ -12141,10 +12155,10 @@
             (: _ (foldl (_ \ k \ (pin gnom <(g 'glob k) k, 0)) 0 (keys (g 'glob)))
                _ (gclose (gadd (filter groot? (keys (g 'glob)))))
                t (foldl (t2 \ k \ cg-refs (lfm k) t2)
-                        (cg-refs (g 'xfns) (cg-refs (g 'fasecs) (cg-refs (g 'asecs) {}))) (keys lfm))
+                        (cg-refs (g 'xfns) (foldl (t \ r \ cg-arefs r t) (cg-arefs (g 'asecs) {}) (g 'fasecs))) (keys lfm))
                _ (gclose (gadd (foldl (a \ x \ peep gnom x () @ s (s ? (s . a) a)) () (keys t))))
                ; ..and what a function's asm names from another section
-               _ (foldl (_ \ x \ unom x @ s (s ? (pin gfr s 1) 0)) 0 (keys (cg-refs (g 'fasecs) {})))
+               _ (foldl (_ \ x \ unom x @ s (s ? (pin gfr s 1) 0)) 0 (keys (foldl (t \ r \ cg-arefs r t) {} (g 'fasecs))))
                q (foldl (a \ s \ two? (fnix s) && !(laid s) ? (s . a) a)
                         () (keys gfr))
                (two? q && !(gripe? (g 'genfail)) ? (drive q, datclose 0) 0))
