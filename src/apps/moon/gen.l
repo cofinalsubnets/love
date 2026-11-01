@@ -8561,7 +8561,7 @@
               (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
-                     md (elem d '(98 119 107 113 99 120 108 97 80 115 104 100) && i + 2 < n && 48 <= tm (i + 2) <= 57 ? d 0)
+                     md (elem d '(98 119 107 113 99 120 108 97 80 115 104 100 81 82) && i + 2 < n && 48 <= tm (i + 2) <= 57 ? d 0)
                      dx (md ? (tm (i + 2)) d)
                      (? (d = 37) (go (i + 2) "\(acc)%")
                         (48 <= dx <= 57)
@@ -8676,6 +8676,8 @@
        ; rip-relative address constant, ('m imm 0 0) an
        ; immediate, ('f reg expr 1 cond) a flag output, ('k sp expr 8) the stack pointer as it stands
        (pinof k e) (k @ 'pick (asmvpin g env e @ p (nom? p ? p k)) k)
+       ; a 64-bit register operand on thumb rides a pair, %Q its low register and %R its high
+       (pr? e2) (t32? g && elem <e2 '(o x i) && e2 3 = 8)
        ; x64's memory operand at an address constant is `sym+k(%rip)`, as gcc spells it, and takes no
        ; register: paravirt's `call *%[op]` must stay the six-byte `ff 15` the kernel patches. a
        ; segment's operand keeps the register: holo lays no %gs: store at a rip address
@@ -8726,6 +8728,7 @@
                        (pinset >l (k . acc)))))
              pinned (pinset ops9 ())
              (bad? pinned ? (asmno g "an asm register pinned twice, or one no operand may take")
+              (any (e2 \ pr? e2 && nom? <>e2 && !(elem <>e2 '(pick fpick))) ops9) (asmno g "a 64-bit asm operand pinned to one register")
                 (: (assign l fr acc)
                     (!(two? l) ? (rev acc)
                        (: e2 <l k <>e2
@@ -8734,6 +8737,8 @@
                               (filter (r9 \ elem r9 >k) fr @ c9
                                  (two? c9 ? (assign >l (filter (r9 \ r9 != <c9) fr) (<c9 . acc)) 'bad))
                              (two? k) (<>k < #acc ? (rev acc <>k @ r9 (assign >l fr (r9 . acc))) 'bad)
+                             (k = 'pick && pr? e2)          ; a thumb pair: two registers, lo then hi
+                              (two? >fr ? (assign >l >>fr ([<fr <>fr] . acc)) 'bad)
                              (k = 'pick)
                               (two? fr ? (assign >l >fr (<fr . acc)) 'bad)
                              (k = 'fpick)
@@ -8778,7 +8783,9 @@
                       (two? labs && two? saves) (asmno g "an asm goto with a callee-saved clobber")
                       (two? labs && two? csops) (asmno g "an asm goto with an esi or edi operand")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
-                         (rtext a9 w) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
+                         (rtext a9 w) (md \ (? (two? a9) (md @ (0 || 81) (gas-reg tgt <a9 4 0) 82 (gas-reg tgt <>a9 4 0) 'bad)
+                                              (elem md '(81 82)) 'bad
+                                              (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
@@ -8813,6 +8820,7 @@
                                                  (loads >l >al (k + 1) (acc + vfs r + [[(gmv (vty r = 'float ? 4 8)) 'r0 'f0]]
                                                                         + (k + 1 = nin ? () (spush 'r0))))
                                                 (flo? (vty r) || stru? (vty r)) (asmno g "a float or struct asm operand")
+                                                (two? <al) (loads >l >al (k + 1) (acc + asll g r + spush 'r0 + spush 'r1))
                                                 (loads >l >al (k + 1) (acc + tor0 g r + (k + 1 = nin ? () (spush 'r0))))))
                                          (loads >l >al k acc))))
                                lf (loads ops9 asgn 0 ())
@@ -8822,7 +8830,8 @@
                                       (!(two? l) ? acc
                                          (elem <<l '(x i b) ?
                                             (pops >l >al (k + 1)
-                                                  ((? (freg? <al) (k + 1 = nin ? [[(fmv <>>><l) <al 'r0]] (spop scr + [[(fmv <>>><l) <al scr]]))
+                                                  ((? (two? <al) (spop <><al + spop <<al)
+                                                      (freg? <al) (k + 1 = nin ? [[(fmv <>>><l) <al 'r0]] (spop scr + [[(fmv <>>><l) <al scr]]))
                                                       (k + 1 = nin) (<al = 'r0 ? () [['mov <al 'r0]])
                                                       (spop <al)) + acc))
                                             (pops >l >al k acc)))
@@ -8839,7 +8848,7 @@
                                      (opush l al acc)
                                       (!(two? l) ? acc
                                          (elem <<l '(o x f) ?
-                                            (opush >l >al (acc + (freg? <al ? () (spush <al))))
+                                            (opush >l >al (acc + (? (two? <al) (spush <<al + spush <><al) (freg? <al) () (spush <al))))
                                             (opush >l >al acc)))
                                      (ostores l al acc)
                                       (!(two? l) ? acc
@@ -8850,9 +8859,12 @@
                                                      (vty lv @ ty
                                                         ; a struct or union a register holds whole ("=r"(lockval)) stores as the integer its size is
                                                         (: wt (stru? ty && <e2 = 'o && !(freg? <al) ? (tsz g ty @ n (elem n [1 2 4 (wsize g)] ? (n @ 1 'uchar 2 'ushort 4 'uint 'ulong) ty)) ty)
-                                                           (flo? wt && !(freg? <al) || stru? wt || arr? wt || bitf? wt ? (asmno g "a float, struct, array or bit-field asm output")
+                                                           (? (flo? wt && !(freg? <al) || stru? wt || arr? wt || bitf? wt) (asmno g "a float, struct, array or bit-field asm output")
+                                                              (two? <al && !(pair? g wt)) (asmno g "a 64-bit asm output into a narrower lvalue")
                                                               (ostores >l >al
-                                                               (vfs lv + (freg? <al ? (fst <>>><l wt <al) (spop 'r1 + [[(stop wt) 'r0 0 'r1]])) + acc))))))))))
+                                                               (vfs lv + (? (two? <al) (spop 'r3 + spop 'r2 + pstw 'r0 0 'r2 'r3)
+                                                                            (freg? <al) (fst <>>><l wt <al)
+                                                                            (spop 'r1 + [[(stop wt) 'r0 0 'r1]])) + acc))))))))))
                                      osf (ostores ops9 asgn ())
                                      ; one register output into a plain memory lvalue (a local's slot, a home's
                                      ; face) stores straight from its register: no cell
@@ -8860,7 +8872,7 @@
                                      one? (1 = #(filter (e2 \ elem <e2 '(o x f)) ops9) && 0 <= oix9)
                                      olv (one? ? (clval g env <>>(ops9 oix9)))
                                      oreg (one? ? (asgn oix9))
-                                     direct (one? && !(freg? oreg) && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
+                                     direct (one? && nom? oreg && !(freg? oreg) && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
                                              && !(vty olv @ ty (flo? ty || stru? ty || arr? ty || bitf? ty)))
                                      (post u9) (fsets ops9 asgn () + (direct ? [[(stop (vty olv)) (vmb olv) (vmo olv) oreg]]
                                                                          (opush ops9 asgn () + osf)))

@@ -30,6 +30,10 @@
    ;; la: always the MOVW/MOVT pair, each a fixup with aux = Rd; a .o leaves
    ;; R_ARM_THM_MOVW_ABS_NC / R_ARM_THM_MOVT_ABS
    (thumb-la d label) (rn d @ dn [(fix 4 'movw16 label dn) (fix 4 'movt16 label dn)])
+   ;; lap: la from the pc, movw/movt of label less the pc the add after them reads; a .o leaves
+   ;; R_ARM_THM_MOVW_PREL_NC / R_ARM_THM_MOVT_PREL
+   (thumb-lap d label) (rn d @ dn ([(fix 4 'movw16p label dn) (fix 4 'movt16p label dn)]
+                                   + t16 (0x4478 | (dn >> 3) << 7 | dn & 7)))   ; add Rd, pc
    ;; (align 4) (lapool Rd) (abs32 word): LDR.W Rd,[pc,#4] ; B.N over ; NOP pad. for playdate,
    ;; whose loader relocates abs32 words, never a MOVW/MOVT pair
    (thumb-lapool d) (rn d @ dn (catall [(t32 (0xF8DF0004 | dn << 12)) (t16 0xE002) (t16 0xBF00)]))
@@ -415,8 +419,14 @@
    (thumb-jmpt d tl labs) (thumb-jmpr d)
    (thumb-callr d) (rn d @ dn (t16 (0x4780 | dn << 3)))    ; blx Rm
 
-   ;; M-profile has one shareability domain: a barrier takes only sy, never widened in silence
-   (thumb-dsb opt) (opt @ 'sy (t32 0xF3BF8F4F) (scare 'thumb-barrier-opt opt))
+   ;; a barrier's option rides its low nibble (M-profile hardware does sy for every one)
+   thumb-bopt {'sy 15 'st 14 'ld 13 'ish 11 'ishst 10 'ishld 9 'nsh 7 'nshst 6 'nshld 5 'osh 3 'oshst 2 'oshld 1}
+   (thumb-dsb opt) (look thumb-bopt opt 'thumb-barrier-opt @ o (t32 (0xF3BF8F40 | o)))
+   (thumb-dmb opt) (look thumb-bopt opt 'thumb-barrier-opt @ o (t32 (0xF3BF8F50 | o)))
+   ;; MRRC pN, opc1, Rt, Rt2, cM: a 64-bit coprocessor read, A-profile's generic timer
+   (thumb-cpn s pre) (: t (show s) (#t > 1 && t 0 = pre ? (foldl (\ a c (a * 10 + c - 48)) 0 (chars (snip t 1 #t))) (scare 'thumb-coproc s)))
+   (thumb-mrrc cp opc d d2 crm)
+      (t32 (0xEC500000 | rn d2 << 16 | rn d << 12 | thumb-cpn cp 112 << 8 | (opc & 15) << 4 | thumb-cpn crm 99 & 15))
    ;; bkpt #imm8: 0xab is the semihosting call, how a board without a uart exits qemu
    (thumb-brk imm) (0 <= imm <= 255 ? (t16 (0xBE00 | imm)) (scare 'thumb-brk-imm imm))
    ;; MRS Rd, <sysm>: only the two stack pointers, for a fault handler
@@ -453,7 +463,7 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lapool . thumb-lapool)
+          ('la . thumb-la) ('lap . thumb-lap) ('lapool . thumb-lapool)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
@@ -465,14 +475,15 @@
           ('div . thumb-div) ('rem . thumb-rem) ('udiv . thumb-udiv) ('urem . thumb-urem)
           ('call . thumb-call)
           ('raw . 1)
-          ('dsb . thumb-dsb) ('brk . thumb-brk)
-          ('mrs . thumb-mrs)
+          ('dsb . thumb-dsb) ('dmb . thumb-dmb) ('brk . thumb-brk)
+          ('mrs . thumb-mrs) ('mrrc . thumb-mrrc)
           ('isb . t32 0xF3BF8F6F)                           ; isb sy
           ('a128 . thumb-a128) ('s128 . thumb-s128) ('c128 . thumb-c128)
           ('n128 . thumb-n128) ('inc128 . thumb-inc128) ('dec128 . thumb-dec128) ('sx128 . thumb-sx128)
           ('shl128 . thumb-shl128) ('shr128 . thumb-shr128) ('sar128 . thumb-sar128)
           ('shl128v . thumb-shl128v) ('shr128v . thumb-shr128v) ('sar128v . thumb-sar128v)
           ('wfi . t16 0xBF30)
+          ('yield . t16 0xBF10)
           ('ret . t16 0x4770)                               ; BX lr
           ('sys . t16 0xDF00)                               ; svc #0
           ('nop . t16 0xBF00)
@@ -496,21 +507,27 @@
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
+            ; lap's halves: the add reads pc 12 bytes past the movw, 8 past the movt
+            'movw16p (thumb-mw16 0xF240 aux (target - (site + 12) & 65535))
+            'movt16p (thumb-mw16 0xF2C0 aux (target - (site + 8) >> 16 & 65535))
             (scare 'badfix kind)))
+   ;; a REL movw/movt's addend is its imm16 sign-extended, the high half's too: lap's own
+   (thumb-lapa kind aux) (kind = 'movw16p ? (thumb-mw16 0xF240 aux 65524) (thumb-mw16 0xF2C0 aux 65528))
 
    ;; the linker's door. ARM is rel: movw16/movt16 read Rd back out of hw2, and the field must
    ;; equal patch's own zero-addend encoding or it refuses -- no inverse scatter. the thumb bit
    ;; in target passes through: every field shifts the offset right by at least one
    (thumb-refix kind bs target site width)
-      (: aux (? (elem kind '(movw16 movt16)) (bs 3 & 15)      ; MOVW/MOVT t3: Rd, hw2 bits 11:8
+      (: aux (? (elem kind '(movw16 movt16 movw16p movt16p)) (bs 3 & 15)      ; MOVW/MOVT t3: Rd, hw2 bits 11:8
                 (kind = 'bcc) ((((bs 1 << 8) | bs 0) >> 6) & 15)  ; Bcc t3: the cond, hw1 bits 9:6
                 0)
-         (thumb-patch kind 0 0 width aux = bs ? 0 (scare 'thumb-refix-addend kind),
+         ((? (elem kind '(movw16p movt16p)) (thumb-lapa kind aux) (thumb-patch kind 0 0 width aux)) = bs ? 0 (scare 'thumb-refix-addend kind),
           thumb-patch kind target site width aux))
 
    thumb2 {'lower thumb-lower
            'patch thumb-patch
            'refix thumb-refix
+           'lapa thumb-lapa
            'nop '(0 191)}                ; nop bf00
    (defbackend 'thumb2 thumb2,
     defbackend 'thumb2sp thumb2,    ; single-precision fpu (playdate): gen softens f64

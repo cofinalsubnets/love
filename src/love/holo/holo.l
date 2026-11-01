@@ -34,6 +34,7 @@
 ;   (set cond d)                               ; d <- (cond holds) ? 1 : 0, from the last cmp's flags
 ;   (call label) (callr d) (callm b o) (ret) (sys)  ; callr: through register d, callm: through memory; sys = syscall/svc
 ;   (la d label)           ; d <- the label's address (pc-relative; data via (label)+(raw ..))
+;   (lap d label)          ; la from the pc on arm, whose la is absolute (-fpic)
 ;   (nop) (trap)
 ;   -- sse2 double lane (x86-64 only; the float glaze): xmm registers f0..f15 --
 ;   (addsd/mulsd/subsd/divsd d s) etc.         ; reg-reg packed/scalar double ops (see x64-sse)
@@ -133,12 +134,12 @@
              'vmlaunch 0 'vmxoff 0
              'vmxon 2 'vmclear 2 'vmptrld 2 'sgdt 2 'sidt 2
              'vmread 2 'vmwrite 2
-             'isb 0 'wfi 0 'wfe 0 'eret 0
+             'isb 0 'wfi 0 'yield 0 'wfe 0 'eret 0
              'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0 'rdpkru 0 'wrpkru 0 'xgetbv 0 'xsetbv 0 'wbinvd 0 'invd 0 'monitor 0 'mwait 0 'monitorx 0 'mwaitx 0 'rdtscp 0
              'carry 4 'alurm 5 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lddr 2 'stdr 2 'lgdt 2 'lidt 2 'invlpg 2
-             'mrs 2 'msr 2 'msri 2
+             'mrs 2 'msr 2 'msri 2 'mrrc 5
              'tlbi 2 'ic 2 'dc 2 'at 2
              'sret 0 'mret 0 'fence 0 'fencei 0
              'csrr 2 'csrw 2 'csrs 2 'csrc 2
@@ -153,7 +154,7 @@
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1
              'li 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
-             'la 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
+             'la 2 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2 'ubfx 4   ; the three-register twins, thumb2's ubfx
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2

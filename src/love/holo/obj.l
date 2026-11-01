@@ -82,6 +82,8 @@
                                (elem k '(b bcc bl)) (patch-with be k off off w (fix-a x))
                                ; movw16/movt16 (thumb2 la): zero imm16 here, bakemw fills it
                                (elem k '(movw16 movt16)) (patch-with be k 0 off w (fix-a x))
+                               ; movw16p/movt16p (thumb2 lap): the addend that counts P to the add's pc
+                               (elem k '(movw16p movt16p)) (peep be 'lapa 0 k (fix-a x))
                                (o-zeros w))
                        ; carry the byte before the field, the x64 opcode that tells a call
                        ; (PLT32) from an address-of (PC32); a blob head is a string, so 0
@@ -151,6 +153,8 @@
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
+   r-thm-movwp 49                                   ; R_ARM_THM_MOVW_PREL_NC ((S+A)|T) - P, low 16   (thumb2 lap)
+   r-thm-movtp 50                                   ; R_ARM_THM_MOVT_PREL    S+A - P, high 16
    ; an 8-byte rel entry (the symbols are elf.l's elf-sym32, st_size 0).
    (o-rel32 offset symidx typ) (catall [(le32 offset) (le32 (symidx * 256 + typ))])
    ; anames maps a C name to its asm label: the strtab spells that, the forms keep the C name
@@ -202,9 +206,9 @@
            (rev (go allrel ())))
        ; the branch kinds too: a branch across sections has no room in its field for the offset
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
-                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 abs32 b bcc bl)))
+                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 movw16p movt16p abs32 b bcc bl)))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
-                      '(movw16 movt16))
+                      '(movw16 movt16 movw16p movt16p))
        locs (locfns + locdat)
        ; -- symbol indices: NULL, a section symbol each, those locals, funcs, globs, exts;
        ; every local ahead of the first global, where .symtab's sh_info points --
@@ -301,6 +305,11 @@
                ('movw16 || 'movt16)
                 (mwloc lbl @ sl
                    (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))
+               ; lap's target is a symbol of its own: its field already holds the addend
+               ('movw16p || 'movt16p)
+                (mwloc lbl @ sl
+                   (<>sl != 0 ? (scare 'obj32-lap-offset lbl)
+                      (o-rel32 off <sl $ k == 'movw16p ? r-thm-movwp r-thm-movtp)))
                (scare 'obj32-reloc k)))
           rs))
        rels (map (o-rels32 * ln-rl) lanes)

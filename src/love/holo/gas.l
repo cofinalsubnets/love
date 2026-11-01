@@ -1354,7 +1354,7 @@
    (gt-r o) (o @ ('reg x _) x (scare 'gas-thumb-register o))
    (gt-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-thumb-operand o))
    (gt-sh? o) (o @ ('sh _ _) 1 _ 0)
-   gt-nils (gtab '((nop nop) (wfi wfi) (isb isb)))
+   gt-nils (gtab '((nop nop) (wfi wfi) (isb isb) (yield yield)))
    gt-alu (gtab '((add add) (sub sub) (and and) (orr or) (eor xor) (mul imul)
                   (adds adds) (subs subs) (adc adc) (adcs adcs) (sbc sbc) (sbcs sbcs) (rsb rsb) (rsbs rsbs)
                   (ands ands) (orrs ors) (eors eors) (bic bic) (bics bics) (orn orn) (addw add) (subw sub)))
@@ -1365,9 +1365,10 @@
     (#os @ k
        (? (ghas? gt-nils m) [[(gt-nils m)]]
           (m = 'bkpt) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((trap)) [['brk n]]))
-          (m = 'svc) '((sys))
-          (m = 'dsb) [['dsb (<>(os 0))]]
+          (m = 'svc || m = 'swi) '((sys))
+          (elem m '(dsb dmb)) [[m (k > 0 ? (<>(os 0)) 'sy)]]
           (m = 'mrs) [['mrs (gt-r (os 0)) (<>(os 1))]]
+          (m = 'mrrc) [['mrrc (<>(os 0)) (gt-v (os 1)) (gt-r (os 2)) (gt-r (os 3)) (<>(os 4))]]   ; coproc opc1 Rt Rt2 CRm
           (m = 'b) [['jmp (<>(os 0))]]
           (m = 'bl) [['call (<>(os 0))]]
           (nom? (gt-bcc m)) [['br (gt-bcc m) (<>(os 0))]]

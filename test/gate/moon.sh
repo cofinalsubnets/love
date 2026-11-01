@@ -758,6 +758,17 @@ moonrun -fcf-protection=full -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 ||
 readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT, SHSTK' || fail "-fcf-protection=full: no IBT, SHSTK mark"
 moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch on i386"
 objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
+# arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute;
+# the arm asks lay on arm alone, and a soft float abi refuses float code as -msoft-float does
+printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\n' > "$ho/.apic.c"
+moonrun -t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft -c -o "$ho/.apic.o" "$ho/.apic.c" > /dev/null 2>&1 || fail "-t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft compile"
+[ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_THM_MOV[WT]_PREL')" = 4 ] || fail "-t arm -fPIC: an address is not a movw/movt PREL pair"
+readelf -rW "$ho/.apic.o" | grep -q 'R_ARM_THM_MOV[WT]_ABS' && fail "-t arm -fPIC laid an absolute movw/movt"
+printf 'double m(double a) { return a * 2; }\n' > "$ho/.asf.c"
+moonrun -t arm -mfloat-abi=soft -c -o "$ho/.asf.o" "$ho/.asf.c" > /dev/null 2>&1 && fail "-mfloat-abi=soft took float code"
+moonrun -mthumb -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mthumb laid on x64"
+moonrun -t thumb2 -mabi=aapcs-linux -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mabi=aapcs-linux laid on m-profile"
+echo "mooncc: -t arm -fpic lays pc-relative movw/movt, and the arm asks keep to arm ok"
 [ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
 moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
 echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
