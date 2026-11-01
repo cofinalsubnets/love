@@ -4,7 +4,8 @@
 ; run: love play wad FILE [MAP] [--kitty|--cells|--window] [--scale 1|2|4|8]
 (module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
 (borrow 'posix)
-(borrow 'rove)                          ; pad, for the status row
+(borrow 'rove)
+(borrow 'horn)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
 (borrow 'view)
 (borrow 'mesh)

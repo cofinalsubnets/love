@@ -15,6 +15,7 @@
 (borrow 'posix)
 (borrow 'x11)
 (borrow 'rove)
+(borrow 'horn)
 (:
  ; --- the floor: tiles in a cask, (x y) indexed; the codes are rove.l's, by dat
 
@@ -1557,7 +1558,6 @@
              ; ..and the card goes back before the walk asks for it
               hn ? (flush hn, close hn),
               g 'over = 'won ? (tower-win g),
-              drain-keys (),
               ttygive rove-modes,
              ; won: the token line is still in the note row, and goes to the shell too.
              ; the shell hears 0 whichever way the climb ended: a count is not a status

@@ -2400,6 +2400,8 @@
                        50 (edpaste p)
                        63 (edrqm p)
                        0)))
+   ; keys still queued were typed at what is leaving, not at the shell; stops at end of input
+   (unkey _) (cue? 0 ? (see in @ -1 () _ (unkey ())))
    (edkey p) (see p @ c
                 (? (c = -1) -7
                    (c != 27) c
@@ -2416,12 +2418,12 @@
    (ttysize rmin cmin) (tty 1 @ ws [(two? ws && rmin < <ws ? <ws 24) (two? ws && cmin < <>ws ? <>ws 80)])
    ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'tap (a press alone,
    ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out).
-   ; ttygive undoes what ttytake set and shows the cursor
+   ; ttygive undoes what ttytake set, shows the cursor, and eats the keys still queued
    (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
                   ('title t) ("\e[22;0t\e]2;\(t)\a") "")
    (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
    (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + catmap ttyon ms), flush out)
-   (ttygive ms) (say out ("\e[0m" + catmap ttyoff (rev ms) + "\e[?25h\e[?1049l"), flush out, raw 0)
+   (ttygive ms) (say out ("\e[0m" + catmap ttyoff (rev ms) + "\e[?25h\e[?1049l"), flush out, two? (tty 0) ? (unkey ()), raw 0)
 
    ; --- the stage: a full-screen tty app as a tablet of functions
    ;   'show w h -> the frame for a w by h screen     'step k    a key

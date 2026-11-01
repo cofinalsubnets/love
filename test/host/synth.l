@@ -9,7 +9,7 @@
 (borrow 'drift)   ; a walk's state, to stand the center somewhere
 (borrow 'opl)     ; a bank for the FM timbre
 (borrow 'bytes)   ; zbytes
-(borrow 'rove)    ; song-rate
+(borrow 'horn)    ; song-rate
 
 (: d0 (synth-digits 0) d1 (synth-digits 1) s0 (synth-shifted 0)
    st (synth-new ())

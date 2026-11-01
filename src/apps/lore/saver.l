@@ -1,12 +1,10 @@
-; src/apps/mitty/saver.l -- mitty's screensavers. a saver draws into a canvas of cells at a
-; time t, and a painter sends only the cells that changed since the last frame.
-;   love mitty -s NAME     a saver on its own, until a key; -s alone names them
-; mitty starts one after (screensaver-idle N) minutes without a key, (screensaver NAME) in
-; ~/.love/etc/mitty.l (cycle and 10 unless said, 0 for never). frames are pure in
-; (rows cols t phase); saver-frame and saver-canvas are gated by test/host/saver.l.
+; src/apps/lore/saver.l -- screensavers, the zero player games. a saver draws into a canvas of
+; cells at a time t, and a painter sends only the cells that changed since the last frame.
+;   love play saver NAME [STYLE]   a saver until a key; no name lists them
+; frames are pure in (rows cols t phase); saver-frame and saver-canvas are gated by test/host/saver.l.
 ;   pom matrix life slop court grass99, and cycle: each in turn, every five minutes
 (module (saver saver-names saver-frame saver-canvas saver-cell saver-moon-lit?
-         saver-watch saver-tick saver-key saver-on? saver-cli)
+         saver-main saver-usage)
 (borrow 'posix)
 (borrow 'cal)
 (:
@@ -36,10 +34,9 @@
  (saver-cell cv y x) (: k (cw * (y * cv 'c + x)) d (cv 'b) [(peep d k 0) (pen-at d (k + 1)) (pen-at d (k + 4))])
 
  ; a glyph byte below 128 is itself; these are the ones above
- marks ["▀" "·" "✉"]
+ marks ["▀" "·"]
  hb 128
  twinkle 129
- mail 130
  glyphs (: t {} _ (each ^128 (i \ pin t i (string i))) _ (each ^#marks (i \ pin t (128 + i) (marks i))) t)
 
  ; the pens and the cursor's steps right, spelled once
@@ -253,54 +250,29 @@
  (saver-make nm r c seed p)
   (: d (savers (base nm)) nw (d 'new)
      {'nm nm 'd d 'r r 'c c 'st (nw r c (seed % 65536) p (style nm)) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
- ; the frame at t ms into the saver; a mark (a pen) puts a ✉ in the top right corner
- (saver-show s t mark)
+ ; the frame at t ms into the saver
+ (saver-show s t)
   (: cv (s 'cv) dr ((s 'd) 'draw) all (s 'all)
      _ (cv-wipe cv)
      _ (dr (s 'st) cv t)
-     _ (? mark (cv-put cv 0 (cv 'c - 2) mail mark sky) 0)
      _ (pin s 'all 0)
      (cv-paint cv (s 'pv) all))
  ; a frame now, the next one a period on; a frame late is skipped, not caught up
- (saver-step s now mark)
+ (saver-step s now)
   (: per (1000 // peep (s 'd) 'fps 10) nx (s 'next + per)
      _ (pin s 'next (nx <= now ? (now + per) nx))
-     (saver-show s (now - s 't0) mark))
+     (saver-show s (now - s 't0)))
  ; headless: a whole frame's escapes, and the canvas it painted
- (saver-frame nm r c t p) (: s (saver-make nm r c 7 p) (saver-show s t 0))
- (saver-canvas nm r c t p) (: s (saver-make nm r c 7 p) _ (saver-show s t 0) (s 'cv))
+ (saver-frame nm r c t p) (: s (saver-make nm r c 7 p) (saver-show s t))
+ (saver-canvas nm r c t p) (: s (saver-make nm r c 7 p) (saver-show s t, s 'cv))
 
- ; --- the idle watch: a saver after mins without a key, and any key back ---
- ; news is a count the screen keeps of what arrived
- (saver-watch nm mins)
-  {'nm nm 'last () 'on () 'bye 0 'n0 0 'k (clock 0 // 1000)
-   'idle (? !(known? nm) 0 (charm? mins || gem? mins) (int (mins * 60000)) 0)}
- (saver-on? w) (w 'on != ())
- (saver-key w now) (? (saver-on? w) (pins w 'on () 'bye 1 'last now, 1) (pin w 'last now, 0))
- ; -> the escapes to send now: a frame, the cursor back as a saver ends, else ""
- (saver-tick w now r c news)
-  (: s (w 'on)
-     (fresh t0 nm) (: s2 (saver-make nm r c now ()) (pins s2 't0 t0 'next now, pin w 'on s2, s2))
-     (turn _) (: k (w 'k + 1) (pin w 'k k, pick (w 'nm) k))
-     (? (w 'last = ()) (pin w 'last now, "")
-        (w 'bye) (pin w 'bye 0, "\e[0m\e[?25h")
-        (s = ()) (? (0 < w 'idle && w 'idle <= now - w 'last)
-                    (: s2 (fresh now (turn 0)) (pin w 'n0 news, "\e[?25l" + saver-step s2 now 0))
-                    "")
-        (r != s 'r || c != s 'c) (saver-step (fresh (s 't0) (s 'nm)) now (news-pen w news))
-        (w 'nm = "cycle" && cycle-ms <= now - s 't0) (saver-step (fresh now (turn 0)) now (news-pen w news))
-        (now < s 'next) ""
-        (saver-step s now (news-pen w news))))
- ; the mail mark's pen once news came, the watch's 'ink or a soft pink
- (news-pen w news) (w 'n0 < news ? (peep w 'ink 218) 0)
-
- ; --- the door: love mitty -s NAME [STYLE] ---
- (saver-cli as)
+ ; --- the door: love play saver NAME [STYLE] ---
+ (saver-main as)
   (: nm (two? as ? (two? >as ? (<as + " " + <>as) <as) ())
      names (foldl (\ a n (a + n + (peep styles n () @ ss (two? ss ? (" [" + join "|" ss + "]") "")) + "\n")) "" saver-names
             + "cycle\n")
      (? (nm = ()) (puts names, 0)
-        (2 < #as || !(known? nm)) (say err ("mitty: no screensaver " + nm + "; there are\n" + names), flush err, 2)
+        (2 < #as || !(known? nm)) (say err ("saver: no saver " + nm + "; there are\n" + names), flush err, 2)
         (saver-run nm)))
  ; until a key: a frame when one is due, a rest until the next
  (saver-run nm)
@@ -311,11 +283,13 @@
             s2 (? (k2 != k) (: n (saver-make (pick nm k2) <z (z 1) now ()) (pins n 't0 now 'next now, n))
                   (<z = s 'r && z 1 = s 'c) s
                   (: n (saver-make (s 'nm) <z (z 1) now ()) (pins n 't0 (s 't0) 'next now, n)))
-            _ (? (s2 'next <= now) (: f (saver-step s2 now 0) (say out f, flush out)) 0)
+            _ (? (s2 'next <= now) (: f (saver-step s2 now) (say out f, flush out)) 0)
             _ (rest (max 5 (s2 'next - clock 0)))
             (go s2 k2)))
      (run _) (: z (ttysize 1 1) k0 (clock 0 // 1000)
                 s0 (saver-make (pick nm k0) <z (z 1) (clock 0) ())
                 (pins s0 't0 (clock 0) 'next (clock 0), go s0 k0))
-     (ttytake ['hide], drain-keys (), mind run () (_ \ (drain-keys (), ttygive ['hide])), 0)))
+     (ttytake ['hide], drain-keys (), mind run () (_ \ ttygive ['hide]), 0))
+ saver-usage "usage: love play saver [NAME [STYLE]]   (no name lists them; cycle plays each in turn; any key leaves)"
+ _ ((cite 'lore 'lore-enlist) 'saver (udoor 'saver saver-main saver-usage 1 1)))
 ) ; module saver

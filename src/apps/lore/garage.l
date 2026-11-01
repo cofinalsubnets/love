@@ -9,6 +9,7 @@
          song-chunk song-cps)
 (borrow 'posix)
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'play)                          ; the voices, the mix
 (:
  esc (string 27)
@@ -272,8 +273,7 @@
  ; ..and the verb around it: the screen raised here and put back here
  (garage-run _) (: _ (ttytake rove-modes)
    g (garage-walk ())
-   (drain-keys (),
-    ttygive rove-modes,
+   (ttygive rove-modes,
     0))
  garage-usage "usage: love play garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (garage-main as) (as @ () (garage-run ())

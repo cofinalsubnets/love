@@ -10,6 +10,7 @@
          slop-song-new slop-song-feed song-wave-of frame-due?
          slop-shore slop-sand slop-wet? slop-drift slop-pal slop-ramp slop-ramp-pen slop-under slop-face)
 (borrow 'rove)
+(borrow 'horn)
 ; borrowing harp shadows prel's rev and every, so the list reverse here is lrev
 (borrow 'harp)
 (borrow 'play)
@@ -432,7 +433,7 @@
               g))
 
  ; ..and the verb around it: the screen raised and put back here
- (slop-run tk pn) (: g (ttytake rove-modes, mind (_ \ slop-walk tk pn) () (_ \ (drain-keys (), ttygive rove-modes)))
+ (slop-run tk pn) (: g (ttytake rove-modes, mind (_ \ slop-walk tk pn) () (_ \ ttygive rove-modes))
                   (puts (g 'over @ 'taken ("the slop has you, " + presses (g 'spent) + " in\n")
                                           ("you turn back, " + presses (g 'spent) + " in\n")),
                    0))

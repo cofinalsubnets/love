@@ -1,13 +1,12 @@
 ; rove -- lore's roguelike engine: the parts any game on the console rides. a floor is tiles
 ; in a cask carved by delve, with a seen cask for what the player has been shown; fov is
 ; line of sight; the painter says a frame into any port, each cell's face the game's own, so
-; frames run headless; then the helm, the sign box, the ~ and {brace} words, paced keys, and
-; the horn's lead paced by the frame gap.
+; frames run headless; then the helm, the sign box, the ~ and {brace} words, and paced keys.
 (module (rove cell-of choice-line floor-new room-apart? room-mid cells-cut cells-from clear? dat deal delve dice dput drain-keys due?
          fill first-n fit fit-in fov hole key-drain key-wait lead legible legible-gap legible-lum lim lit? mix mob-at mob-spots note
-         nth-on oct-at open-book open? pace! pacer pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
+         nth-on oct-at open-book open? pad page-foot paint paint-live pen pen-gap pen-lum pen-rgb pens repeat-gap rgb-pen roll
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-frame sign-over sign-pen
-         sign-rect sign-top sign-tpen snip-l song-fill song-keep song-lead song-lead-max song-lead-of song-rate steer
+         sign-rect sign-top sign-tpen snip-l steer
          tail? tap-dir tap-key tap-steer rove-key rove-modes toward tree-lines tree-next tree-node vlen rove-wander rove-turn rove-press rove-loop)
 (borrow 'posix)
 (borrow 'x11)
@@ -368,42 +367,9 @@
          (k = g 'lk && clock (g 'lt) < gap ? (go n)
             (take k, pins g 'lk k 'lt (clock 0), go (n + 1))))
       n))
+
  ; the queue eaten: keys typed at what stood before are not for what stands now; stops at end of input
  (drain-keys _) (cue? 0 ? (see in @ -1 () _ (drain-keys ())))
-
- ; --- the horn: every sample is a closure call, so wasm plays at a third of the 48k and a
- ;     small core at the 44.1k's half ---
- song-rate (love-arch @ 'wasm 16000 'other 22050 48000)
- ; the queue must outlast the gap between feeds, which on a slow machine is a frame's paint;
- ; the pacer holds the gap at its recent worst, halving every two seconds of clock, and the
- ; lead is two and a half gaps, clamped to song-lead .. song-lead-max
- song-lead (6 * (song-rate // 30))
- song-lead-max (120 * (song-rate // 30))
- (pacer _) {'t (clock 0) 'gap 0.0 'cap song-lead-max 'step 0}
- (pace! p) (: t (clock 0)
-              d (1.0 * (t - p 't))
-              v ((d / 2000.0) 0.5 * p 'gap)
-              ((pins p 't t 'gap (v < d ? d v)),
-               p 'gap))
- (song-lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
-                       (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))
- ; the horn fed up to a lead, while each feed raises the lag: a full ring or run takes nothing,
- ; so a lead past them is never reached and the filler stops rather than loop. answers the feeds
- (song-fill hn lead feed) (:- (go (horn-lag hn) 0) (go l0 k)
-                            (l0 < lead ? (: _ (feed ()) l1 (horn-lag hn) (l0 < l1 ? (go l1 (k + 1)) (k + 1)))
-                               k))
- ; ..the horn kept a pacer's lead ahead, lo at least. a feed the ring parks raises the lag
- ; by under half a feed's: the ring is full there, and the lead stays a feed under it from
- ; then on. the pacer's clock taken again after, so a fill's own wait is never a gap
- (song-keep hn p lo feed) (: n (int (2.5 * pace! p * song-rate / 1000.0))
-   lead (min (p 'cap) (n < lo ? lo (song-lead-max < n ? song-lead-max n)))
-   (go l0 k) (? (l0 >= lead) k
-      (: _ (feed ()) l1 (horn-lag hn) r (l1 - l0) st (p 'step)
-         (? (r <= 0) (k + 1)
-            (r * 2 < st) (pin p 'cap (max (2 * st) (l0 - st)), k + 1)
-            (pin p 'step (max st r), go l1 (k + 1)))))
-   k (go (horn-lag hn) 0)
-   (pin p 't (clock 0), k))
  ; ..and a settle: keys drained for a while, under a box that goes up over what they were typed at
  settle-slice 25
  (settle ms) (0 < ms ? (drain-keys (), rest settle-slice, settle (ms - settle-slice)))

@@ -7,7 +7,8 @@
 (borrow 'stones)
 (borrow 'view)                          ; clamp
 (borrow 'walk)                          ; the frame's time
-(borrow 'rove)                          ; the song's rate, its lead and the pacer
+(borrow 'rove)
+(borrow 'horn)                          ; the song's rate, its lead and the pacer
 (: pd-w 100 pd-h 60
    crank-k (pi / 360.0)                 ; a degree of crank looks half a degree
    ; the land built at the least detail and lit at bake, the sun held at noon so it stays built

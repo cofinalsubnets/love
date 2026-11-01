@@ -8,6 +8,7 @@
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps)
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
 (borrow 'score)                         ; the tune as text
 (borrow 'play)                          ; the voices, the mix
@@ -439,7 +440,7 @@
     g))
  ; the screen raised and put back here, whatever way the week ends. the mouse, not rove's
  ; taps: a press's release breaks key-drain's repeat, so two quick taps are two steps
- (grass-run lk ls) (: g (ttytake ['mouse], mind (_ \ grass-week lk ls) () (_ \ (drain-keys (), ttygive ['mouse])))
+ (grass-run lk ls) (: g (ttytake ['mouse], mind (_ \ grass-week lk ls) () (_ \ ttygive ['mouse]))
                   (puts (grass-final g + "\n"), 0))
  grass-usage "usage: love play grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run grass-look score)

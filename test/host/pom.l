@@ -34,7 +34,7 @@
          (all (\ j (j < 4)) (pm-side lq lit)) (all (\ j (3 < j)) (pm-side lq dim))
          (two? (pm-side fq lit)) (two? (pm-side lq lit))
          (4 = #drawn) (all (\ l (8 = pm-cells l)) drawn)
-         ; -s: the saver's moon, in the saver's pens
+         ; -s: the pen moon
          (sort (pm-cols (pom-moon 0.45 24)) = [0x1c1c1c 0xd7d7af 0xffffd7])
          (12 = #(pom-cells (pom-moon 0.45 24) 0))
          (187 = pom-face 0.45 0.3 -0.05) (230 = pom-face 0.45 0.0 0.0)
