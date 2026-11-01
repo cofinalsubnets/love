@@ -1492,10 +1492,15 @@
    (spush r) ['(sub sp sp 16) ['st 'sp 0 r]]
    ; a register argument's entry, tagged e: its value (gp bits) parks in a cell mint the pops move into place
    (gent g e k c) (vcell g @ p (p ? [[e k p] (c + [['mov p 'r0]])] [[e k] (c + spush 'r0)]))
+   ; a t32 pair argument's entry: r0:r1 park in two cell mints
+   (gent2 g k c) (vcell g @ p (vcell g @ q (p ? [['g2 k p q] (c + [['mov p 'r0] ['mov q 'r1]])] [['g2 k] (c + spush2)])))
    ; a pair's entry: words w0 and w1 park in two cell mints after a, else c lays its cell
    (pent g e a w0 w1 c) (vcell g @ p (vcell g @ q (p ? [(e + [p q]) (a + w0 + [['mov p 'r1]] + w1 + [['mov q 'r1]])] [e (a + c)])))
    ; a park around b: a's r0 holds in a cell mint while b runs, then lands in r
    (pk g a b r) (vcell g @ p (p ? (a + [['mov p 'r0]] + b + [['mov r p]]) (a + spush 'r0 + b + spop r)))
+   ; ..and a's r0:r1 pair, landing in ra:rb
+   (pk2 g a b ra rb) (vcell g @ p (vcell g @ q (p ? (a + [['mov p 'r0] ['mov q 'r1]] + b + [['mov ra p] ['mov rb q]])
+                                                   (a + spush2 + b + spop2 ra rb))))
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
    ; the shuttle skip: a right side whose forms never write r1 or touch sp may run with the left
    ; parked in r1, one mov in place of the push/pop
@@ -1583,8 +1588,8 @@
    (fshut g af bf)
     (? (t2? g && !(sp64? g)) (fpick g bf fpark @ p
                                  (nom? p ? (af + [['movsd p 'f0]] + bf + [['movsd 'f1 p]])
-                                    (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))))
-       (ilp32? g) (af + '((movqrx r0 f0)) + spush2 + bf + spop2 'r2 'r3 + '((movqxr f1 r2)))
+                                    (pk2 g (af + '((movqrx r0 f0))) bf 'r2 'r3 + '((movqxr f1 r2)))))
+       (ilp32? g) (pk2 g (af + '((movqrx r0 f0))) bf 'r2 'r3 + '((movqxr f1 r2)))
        (fsel? g && !(fclob? g bf 'f1)) (af + '((movapd f1 f0)) + bf)
        (: p (fsel? g ? (fpick g bf (fparks g)) ())
           (nom? p ? (fpm g p @ m (af + [['movapd m 'f0]] + bf + [['movapd 'f1 m]]))
@@ -3415,7 +3420,7 @@
                                    acc)))
                        ; i386: a pair rides two registers when two are left, else the stack, spending the rest
                        (pair? g aty && ia32? g && gpc + 2 <= ngp g)
-                        (kls >as (i + 1) (gpc + 2) xmmc ovc ([['g2 gpc] (asll g a + spush2)] . acc))
+                        (kls >as (i + 1) (gpc + 2) xmmc ovc (gent2 g gpc (asll g a) . acc))
                        (pair? g aty && ia32? g)
                         (kls >as (i + 1) (ngp g) xmmc (ovc + 8)
                              (. [['ov ovc 8] (asll g a + pstw 'sp ovc 'r0 'r1)] acc))
@@ -3423,7 +3428,7 @@
                         (aup gpc 2 @ gpe
                            (gpe + 2 <= ngp g ?               ; 8-aligned, closing gp (C.13)
                                (kls >as (i + 1) (gpe + 2) xmmc ovc
-                                    ([['g2 gpe] (asll g a + spush2)] . acc))
+                                    (gent2 g gpe (asll g a) . acc))
                                (aup ovc 8 @ ov8
                                   (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                        (. [['ov ov8 8]
@@ -3459,7 +3464,7 @@
                               (aup gpc 2 @ gpe
                                  (gpe + 2 <= ngp g ?
                                      (kls >as (i + 1) (gpe + 2) xmmc ovc
-                                          ([['g2 gpe] (aval + spush2)] . acc))
+                                          (gent2 g gpe aval . acc))
                                      (aup ovc 8 @ ov8
                                         (kls >as (i + 1) 4 xmmc (ov8 + 8)
                                              (. [['ov ov8 8]
@@ -3529,10 +3534,9 @@
                                       (<kc @ 'g (two? >>kc ? [['mov (argr g <>kc) <>>kc]] (spop (argr g <>kc)))
                                        'gw   ; a wide value: lo then hi off one cell
                                         [['ld (argr g <>kc) 'sp 0] ['ld (argr g (<>kc + 1)) 'sp 8] '(add sp sp 16)]
-                                       'g2   ; the t32 pair: both words off one cell
-                                        [['ld (argr g <>kc) 'sp 0]
-                                           ['ld (argr g (<>kc + 1)) 'sp 4]
-                                           '(add sp sp 16)]
+                                       'g2   ; the t32 pair: both words out of its mints, or off one cell
+                                        (#kc = 4 ? [['mov (argr g <>kc) (kc 2)] ['mov (argr g (<>kc + 1)) (kc 3)]]
+                                           [['ld (argr g <>kc) 'sp 0] ['ld (argr g (<>kc + 1)) 'sp 4] '(add sp sp 16)])
                                        'gn   ; an i386 struct's n words off one cell, in argument order
                                         (catmap (j \ [['ld (argr g (<>kc + j)) 'sp (4 * j)]]) ^(<>>kc)
                                          + '((add sp sp 16)))
@@ -3922,9 +3926,7 @@
                    (mkv (vty a) 'r0 (tor0 g a + pshiftc kind <kc))
                   (cgexpr g env rhs () @ b
                      (bad? b ? 'bad
-                        (mkv (vty a) 'r0 (tor0 g a + spush2 +
-                                          tor0 g b + '((mov r2 r0)) + spop2 'r0 'r1 +
-                                          pshiftv g kind))))))
+                        (mkv (vty a) 'r0 (pk2 g (tor0 g a) (tor0 g b + '((mov r2 r0))) 'r0 'r1 + pshiftv g kind))))))
            (elem op '(shl shr) && d128? (vty a))          ; a wide shift keeps the left type
             (!(w128? g) ? (no128 g)
                (: kind (? (op = 'shl) 'shl128 (usg? (vty a)) 'shr128 'sar128)
@@ -4048,13 +4050,12 @@
                                   ; the pair shuttle: both sides widen to r0:r1, the left pops to r2:r3
                                   (: fa2 (asll g av) fb2 (asll g b)
                                      cln (rclean? g fb2)
-                                     mid2 (fa2 + (cln ? '((mov r2 r0) (mov r3 r1)) spush2) + fb2 + (cln ? () (spop2 'r2 'r3)))
+                                     mid2 (cln ? (fa2 + '((mov r2 r0) (mov r3 r1)) + fb2) (pk2 g fa2 fb2 'r2 'r3))
                                      ; two widened words: one umull or smull on the low halves
                                      (wmul o n) (: a1 (unfill fa2 n) b1 (unfill fb2 n) c1 (rclean? g b1)
                                                   (mkv rt 'r0 (a1 + (c1 ? '((mov r2 r0)) (spush 'r0)) + b1 + (c1 ? () (spop 'r2)) + [[o 'r0 'r1 'r2 'r0]])))
                                      ; helper staging: the numerator on r0:r1, the denominator r2:r3
-                                     mid2d (asll g av + spush2 + asll g b
-                                            + '((mov r2 r0) (mov r3 r1)) + spop2 'r0 'r1)
+                                     mid2d (pk2 g (asll g av) (asll g b + '((mov r2 r0) (mov r3 r1))) 'r0 'r1)
                                      rt (ubin !(ilp32? g) ta tb)
                                      ; i386's helpers are cdecl: the four words on the stack, the answer edx:eax
                                      (cdh h) (mid2d + [['sub 'sp 'sp 16] ['st 'sp 0 'r0] ['st 'sp 4 'r1] ['st 'sp 8 'r2] ['st 'sp 12 'r3]
