@@ -913,6 +913,7 @@
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
+                              pin ps 'tagdef 1,
                               uni ? (pin (ps 'utag) tag2 1) 0,
                               tu ? (pin (ps 'tunion) tag2 1) 0,
                               qmempin ps tag2 qpre,
@@ -980,7 +981,7 @@
                                        (: rest (want ts6 "}")
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
                                           (two? rest ? (ety pos2 lo2 hi2 (max <pa lpk) (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
-                       (consts >ts3 0 1 0 0))
+                       (pin ps 'tagdef 1, consts >ts3 0 1 0 0))
                     ; a tag not yet defined reads its hint, else uint, gcc's non-negative enum
                     (tag && !(peep (ps 'etag) tag ()) ? (spin ps 'efwd tag 1) 0,
                      [(peep (ps 'etag) tag (peep (ps 'ehint) tag 'uint)) ts3])))
@@ -2632,12 +2633,14 @@
        (tkw? <ts 'typedef)
         (pbty ps >ts @ br
            (atom? br ? () (tdeflist ps <br <>br (qspec ps >ts <br) (tdrun ps >ts))))
-       (pbty ps ts @ br
+       (pin ps 'tagdef (), pbty ps ts @ br
           (atom? br ? ()
              (: base <br ts0 <>br
                 gbq (qspec ps ts base)  ; the run's mask, _Generic's
                 (peekp ts0 ";" ? ['(tdef) >ts0]     ; a bare struct/enum definition
                    (: _ (tyattr ts0 @ ta (pinat ps ta (hdhits ta)))   ; what a tag body hid from ptop
+                      ; a tag body ahead of a declarator leaves the form no place to show it
+                      _ (peep ps 'tagdef () ? (pin ps 'tagmark 1))
                       sr (pstars ts0 base)
                       rty <sr ts1 (pquals <>sr)
                       ; the first declarator: a plain name, or a paren declarator through pdtor,
@@ -2893,11 +2896,12 @@
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes) (ps 'nopro)]))
-           (ptop ps ts2 @ r
+           (pin ps 'tagmark (), ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
                     (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
-                       (note <r, tops <>r (msren ps <r . acc)))))))
+                       ; a bare (tdef) after the form stands for the tag body it carried
+                       (note <r, msren ps <r . acc @ a2 (tops <>r (peep ps 'tagmark () ? ('(tdef) . a2) a2))))))))
    ; an ms_abi definition: the body lays as a static __msabi_NAME on the sysv side, and NAME is a
    ; trampoline (msasm) carrying the ms caller's words over and keeping what ms keeps
    (msname nm) "__msabi_\(nm)"
