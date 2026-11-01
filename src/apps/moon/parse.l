@@ -728,8 +728,12 @@
                 (peekp ts2 ";" ?                   ; an anonymous struct/union member
                    (stru? bty ? (pmembers ps >ts2 ([() bty] . acc)))
                    (: mq (qspec ps ts bty)   ; _Generic's mask for this run
-                      lal (specask ps ts)   ; an ask among the specifiers, every declarator's
-                      (asked m a) (max lal a @ n (0 < n ? (m + [() n]) m))
+                      sa (specasks ps ts)   ; an ask among the specifiers, every declarator's
+                      ; (name ty () ask td): td stands in for ty's own alignment, a typedef's
+                      (asked m a)
+                       (: n (max <sa a)
+                          td (0 < <>sa && tdbase? <>m bty ? <>sa 0)
+                          (? (0 < td) (m + [() n td]) (0 < n) (m + [() n]) m))
                       (dfin mem2 toks acc2)          ; after a declarator (+ optional bitfield): , or ;
                        ((<mem2 && mq ? (pin ps 'qmemacc ([<mem2 mq] . peep ps 'qmemacc ())) 0),
                         (peekp toks "," ? (dts >toks (mem2 . acc2))
@@ -752,7 +756,7 @@
                       (two? r ? (pmembers ps <>r (<r + acc)))))))))
    ; layout: a union flattens every offset to 0. a bitfield sits at the bit cursor, bumped to
    ; the next declared-type unit only to avoid straddling (SysV/gcc)
-   (bfmem? m) (two? >>m && charm? (m 2))            ; a member carrying a width: (name ty width); (name ty () N) asks N
+   (bfmem? m) (two? >>m && charm? (m 2))            ; a member carrying a width: (name ty width); (name ty () N [td]) asks N
    ; a struct body's __attribute__((..)) run, before the tag or after the body
    ; -> (packed rest aligned): `packed` inside, and the widest `aligned` ask (0 for none)
    (pattpk ps ts)
@@ -827,7 +831,8 @@
                     (go >l nbit nmx (spl <inner acc)))
                  (incty? ps ty) (: _ (peep ps 'incmem () || pin ps 'incmem name)
                                    (go >l bit mx acc))
-                 (: a (max (pk ? 1 (capa (talign ps ty))) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
+                 (: own (two? (drop 4 m) ? (m 4) (talign ps ty))
+                    a (max (pk ? 1 (capa own)) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
                     sz (tsz ps ty)
                     abit (uni ? 0 (aup bit (a * 8)))
                     at (abit >> 3)
@@ -1037,19 +1042,26 @@
                     r (go >l 1)
                     [<r (<>r | q)]))))
        (go ts ()))
-   ; the widest alignment ask in a specifier run, walked as qrun walks it; 0 for none
-   (specask ps ts)
-    (: (go l sawty a)
-        (atom? l ? a
+   ; a specifier run's alignments, walked as qrun walks it -> (ask td): the widest aligned or
+   ; _Alignas among the specifiers, and the alignment its typedef name carries; 0 for none
+   (specasks ps ts)
+    (: (go l sawty a td)
+        (atom? l ? [a td]
            (<l @ t
-              (? (tkk t = 'kw && (elem (tkv t) qualkw || elem (tkv t) tyspec)) (go >l (sawty || elem (tkv t) tyspec) a)
-                 (tkk t != 'id) a
-                 (tkv t = "__attribute__") (pattpk ps l @ r (go <>r sawty (max a (r 2))))
-                 (tkv t = "_Alignas") (go (qskip l) sawty (max a (alignat? ps l @ n (n ? n 0))))
-                 (elem (tkv t) qualid) (go (qskip l) sawty a)
-                 sawty a
-                 (go >l 1 (max a (peep (ps 'tdask) (tkv t) 0))))))   ; a typedef name brings its ask
-       (go ts () 0))
+              (? (tkk t = 'kw && (elem (tkv t) qualkw || elem (tkv t) tyspec)) (go >l (sawty || elem (tkv t) tyspec) a td)
+                 (tkk t != 'id) [a td]
+                 (tkv t = "__attribute__") (pattpk ps l @ r (go <>r sawty (max a (r 2)) td))
+                 (tkv t = "_Alignas") (go (qskip l) sawty (max a (alignat? ps l @ n (n ? n 0))) td)
+                 (elem (tkv t) qualid) (go (qskip l) sawty a td)
+                 sawty [a td]
+                 (go >l 1 a (peep (ps 'tdask) (tkv t) 0)))))
+       (go ts () 0 0))
+   ; the widest ask in a specifier run, a typedef's alignment counted as one; 0 for none
+   (specask ps ts) (specasks ps ts @ r (max <r <>r))
+   ; what a typedef's run gives it: its own ask, which may lower, else its typedef name's
+   (tdrun ps ts) (specasks ps ts @ r (0 < <r ? <r <>r))
+   ; a declarator's type is the run's own (or an array of it), not a pointer or function to it
+   (tdbase? ty base) (? (ty = base) 1 (arr? ty) (tdbase? <>ty base) ())
    ; a qualifier after the last star qualifies the pointer (`int * const`): a row no
    ; lvalue-converted expression matches
    (qtop? ts)
@@ -2182,18 +2194,21 @@
    (loctypes form) (two? form && elem <form '(decl sdecl) ? <>form)       ; a block decl's entries, () otherwise
    ; a block-scope typedef: each declarator into ps 'types, the old binding on the shadow
    ; list; file scope hands () and drops it. -> (rest sh2) | (); the remainder may be empty
-   (btdefs ps base ts sh bq)
+   (btdefs ps base ts sh bq ra)
     (pdtor ps ts base @ dr
        (atom? dr ? ()
           (: nm <<dr
              old (peep (ps 'types) nm 'none)
              _ (pin (ps 'types) nm <><dr)
              _ (bq ? (pin (ps 'qtdef) nm bq) 0)
-             ; `typedef T n __aligned(N)`: n's declarations ask N, its size unchanged
-             _ (pattpk ps <>dr 2 @ a (0 < a || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm a) 0))
+             ; n's alignment, its size unchanged: `typedef T n __aligned(N)` sets it, else the
+             ; run's (ra) reaches a declarator of the run's own type. it may lower as well as raise
+             _ (pattpk ps <>dr 2 @ a
+                  (: v (? (0 < a) a (tdbase? <><dr base) ra 0)
+                     (0 < v || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm v) 0)))
              sh2 (['types nm old] . sh)
              af (patt <>dr)                ; glibc's trailing __attribute__
-             (? (peekp af ",") (btdefs ps base >af sh2 bq)
+             (? (peekp af ",") (btdefs ps base >af sh2 bq ra)
                 (peekp af ";") [>af sh2]
                 ()))))
 
@@ -2553,7 +2568,7 @@
                             ()))))))))
 
    ; `typedef T a, b;`: btdefs' walk with nothing to shadow, bq the run's mask
-   (tdeflist ps base ts bq) (btdefs ps base ts () bq @ r (two? r ? ['(tdef) <r]))
+   (tdeflist ps base ts bq ra) (btdefs ps base ts () bq ra @ r (two? r ? ['(tdef) <r]))
 
    ; the top level. staticness, section and the other attributes are noted at entry (the
    ; outermost sighting wins) and pinned per name by note.
@@ -2601,7 +2616,7 @@
                  (initless? <><r ? [['xdecl <><r] <>r] r))))
        (tkw? <ts 'typedef)
         (pbty ps >ts @ br
-           (atom? br ? () (tdeflist ps <br <>br (qspec ps >ts <br))))
+           (atom? br ? () (tdeflist ps <br <>br (qspec ps >ts <br) (tdrun ps >ts))))
        (pbty ps ts @ br
           (atom? br ? ()
              (: base <br ts0 <>br

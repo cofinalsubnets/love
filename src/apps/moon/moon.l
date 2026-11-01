@@ -96,8 +96,12 @@
    ; a -D as #define text: the first = becomes a space (-DX -> "X 1", -DF(x)=x -> "F(x) x",
    ; function-like since the ( stays glued)
    (eqsp d) (d @ (k + "=" + v) (k + " " + v) (d + " 1"))
-   ; one line per entry keeps clexat's skew exact; a -U rides as ('u name), in line order
-   (deftext ds) (foldl (a \ d \ string? d ? "\(a)#define \(eqsp d)\n" "\(a)#undef \(<>d)\n") "" ds)
+   ; one line per entry keeps clexat's skew exact; a -U rides as ('u name), in line order, and
+   ; an -include as ('i path), after them all
+   (deftext ds) (foldl (a \ d \ (? (string? d) "\(a)#define \(eqsp d)\n" (<d = 'i) "\(a)#include \"\(<>d)\"\n"
+                                    "\(a)#undef \(<>d)\n")) "" ds)
+   ; -include f as gcc reads it: a relative f found from the cwd first, else by the include chain
+   (fincs fs) (map (f \ ['i (0 < #f && f 0 != 47 && two? (uread f) ? (cwd 0 + "/" + f) f)]) fs)
    ; the -t names, spelled as the prel's arch-canon. the arch predefine rides the -D channel,
    ; so cpp stays target-blind
    (totgt s) (archof s @ t (t || udie 2 "cc: unknown target \(s)"))
@@ -360,17 +364,18 @@
                  + gnudefs
                  +
                  (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc on both
-   ; -fmacro-prefix-map=OLD=NEW: __FILE__ with a leading OLD spelled NEW, the last match winning
-   ; (gcc's); laid as a -D over cpp's predefine
+   ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
+   ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
     (: (go l) (? !(two? l) ()
                  (<l @ [o n] (starts? src o ? (n + snip src #o #src) (go >l))))
        f (go mp)
-       (f ? ["__FILE__=\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\""]))
+       q (f ? "\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] [c])) (chars f)))\"")
+       (f ? ["__FILE__=\(q)" "__BASE_FILE__=\(q)"]))
    ; the shared front end: source -> (1 ast stag sigs ..) | a fatal exit. the -D lines prepend
    ; to the text before the one lex, stamped 1-k..0, so every source line keeps its number
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp}))
-    (: ds9 (cc-defs t + filedef src mp)
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp 'fis fi}))
+    (: ds9 (cc-defs t + filedef src mp + fincs fi)
        ; `-` is stdin, for every door; cdir answers "" (the cwd). then disk, then vb by key
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q
@@ -477,9 +482,9 @@
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
    ; a .S reads as -x assembler-with-cpp does, __ASSEMBLER__ defined
-   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp}))
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp 'fis fi}))
     (: xasm (xa || dotS? src)
-       ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp)
+       ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp + fincs fi)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
@@ -1095,7 +1100,7 @@
    ; every key seeded: a map pattern matches on presence, so a key pinned only with its flag
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
                    'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
@@ -1104,7 +1109,7 @@
     (as @ ()
           (pins t 'is (rev (t 'is))
                   'ds (rev (t 'ds))
-                  'ins (rev (t 'ins))
+                  'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
           ("-c" . r) (flags r (pin t 'c 1))
           ("-E" . r) (flags r (pin t 'E 1))
@@ -1130,6 +1135,7 @@
           ; that slides it (arm32 only)
           ("--emit-relocs" . r) (flags r (pin t 'relo 1))
           ("-I" . d . r) (flags r (fpush t 'is d))
+          ("-include" . f . r) (flags r (fpush t 'fis f))
           ("-D" . d . r) (flags r (fpush t 'ds d))
           ("-U" . d . r) (flags r (fpush t 'ds ['u d]))
           ("-o" . o . r) (flags r (pin t 'o o))

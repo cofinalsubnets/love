@@ -756,6 +756,8 @@
       ((pps "\"a\" u\"b\" \"c\"") = "u\"abc\"")
       (okv? (cpp <>(clexw "#ifdef NOPE\nx\n#endif" 1) () "<law>"))        ; a fully-skipped file is a valid empty TU (crypt.c), not a failure
       ((pps "#define E\nE + E") = "+")                                 ; empty macro body vanishes
+      ; equal tokens out of one expansion are one value: a TU of kernel tables is held whole
+      (cpp <>(clexw "#define M(x) (x)+(x)\nM(a)" 1) () "<law>" @ r (okv? r && fsbody <>r @ l (l 0 == l 4 && l 1 == l 5)))
       ; a refusal is a gripe, and a gripe is a pair: ask okv?/cppno, never `!`
       ((cppno "#if 1\nx") = "unterminated #if -- no #endif")           ; unterminated #if refuses
       ((cppno "#endif") = "#endif without #if")                        ; ..and so does a stray closer
