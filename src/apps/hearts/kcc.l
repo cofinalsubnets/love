@@ -1,8 +1,8 @@
 ; src/apps/hearts/kcc.l -- the kernel's compiler under hearts: kbuild's clang line, a unit compiled
-; by mooncc (and its asm by holo) in mooncc's spelling, for a64 and x64, and clang's own line for the
-; rest. a probe, a -E or -S, another target (the arm32 vdso) and a unit mooncc refuses or outruns go
-; to clang, the last two logged to $HEARTS_KCC_LOG as `target<TAB>why`, so the build says what is
-; still clang's.
+; by mooncc (and its asm by holo) in mooncc's spelling, for a64, x64 and arm32 (the compat vdso),
+; and clang's own line for the rest. a probe, a -E or -S, another target and a unit mooncc refuses
+; or outruns go to clang, the last two logged to $HEARTS_KCC_LOG as `target<TAB>why`, so the build
+; says what is still clang's.
 ; usage: love kcc.l CLANG-ARGS..   (hearts lays .hearts/bin/hk-cc over this, as CC)
 (borrow 'posix)
 (: argv cmdline
@@ -14,12 +14,17 @@
    here (dir (abs (argv 1)))
    (after w) (: k (findsub av [w]) (0 <= k && k + 1 < #av ? (av (k + 1)) ()))
    (src? a) (!(starts? a "-") && (ends? a ".c" || ends? a ".S"))
-   srcs (filter src? av)
+   ; the sources, past an -include's word (the arm32 vdso includes a .c)
+   srcs ((: (go l acc) (? (atom? l) (rev acc)
+                          (<l = "-include" && two? >l) (go >>l acc)
+                          (go >l (src? <l ? (<l . acc) acc))))
+         av ())
    tg (after "-o")
    tgt (filter (a \ starts? a "--target=") av)
    (clang _) (: p (spawn ("clang" . av)) (quit (charm? p && 0 <= p ? (wait p) 127)))
    ; the target as mooncc's -t, a line naming none being a64
-   arch (? (atom? tgt) "a64" (<tgt = "--target=aarch64-linux-gnu") "a64" (<tgt = "--target=x86_64-linux-gnu") "x64" ())
+   arch (? (atom? tgt) "a64" (<tgt = "--target=aarch64-linux-gnu") "a64" (<tgt = "--target=x86_64-linux-gnu") "x64"
+              (<tgt = "--target=arm-linux-gnueabi") "arm" ())
    (moon? _) (elem "-c" av && two? srcs && string? tg && string? arch)
    ; mooncc names no compiler family, and the kernel refuses one it does not know: it is lent the
    ; pinned clang's, the one the .config was made for. it predefines true, false and bool, which
