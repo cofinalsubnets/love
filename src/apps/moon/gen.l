@@ -1490,6 +1490,8 @@
    (spush r) ['(sub sp sp 16) ['st 'sp 0 r]]
    ; a gp argument's entry: its value parks in a cell mint the pops move into its register
    (gent g k c) (vcell g @ p (p ? [['g k p] (c + [['mov p 'r0]])] [['g k] (c + spush 'r0)]))
+   ; a park around b: a's r0 holds in a cell mint while b runs, then lands in r
+   (pk g a b r) (vcell g @ p (p ? (a + [['mov p 'r0]] + b + [['mov r p]]) (a + spush 'r0 + b + spop r)))
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
    ; the shuttle skip: a right side whose forms never write r1 or touch sp may run with the left
    ; parked in r1, one mov in place of the push/pop
@@ -1534,9 +1536,7 @@
           (r1safe? g bf) (af + '((mov r1 r0)) + bf)
           (vspare g (spare g bf) @ s
              (s ? (af + [['mov s 'r0]] + bf + [['mov 'r1 s]])
-                (vcell g @ p
-                   (p ? (af + [['mov p 'r0]] + bf + [['mov 'r1 p]])
-                      (af + spush 'r0 + bf + spop 'r1)))))))
+                (pk g af bf 'r1)))))
    ; the double twin: left in f1, right in f0. a float-file target parks the left in an xmm the
    ; right never writes (f1 itself when it can); else the bits hold in a gp register or the stack
    ; across the right (movqrx aims straight at it); ilp32 moves the pair through the gp stack
@@ -1586,7 +1586,7 @@
           (nom? p ? (fpm g p @ m (af + [['movapd m 'f0]] + bf + [['movapd 'f1 m]]))
              (: s (r1safe? g bf ? 'r1 (vspare g (spare g bf)))
                 (s ? (af + [['movqrx s 'f0]] + bf + [['movqxr 'f1 s]])
-                   (af + '((movqrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movqxr f1 r1))))))))
+                   (pk g (af + '((movqrx r0 f0))) bf 'r1 + '((movqxr f1 r1))))))))
    ; the ops sp64's soften turns into calls (sf-bin's and the converts), which may clobber s0..s15
    (sfcall? op) (elem op '(addsd subsd mulsd divsd cvtsi2sd cvtui2sd cvttsd2si cvttsd2ui cvtss2sd cvtsd2ss ucomisd))
    ; the single lane's park: one word, so a 32-bit target keeps it in a register -- the right
@@ -1599,13 +1599,13 @@
        (t2? g && !soft && nom? (fpick g bf fpark)) (fpick g bf fpark @ p (af + [['movss p 'f0]] + bf + [['movss 'f1 p]]))
        (: s (spare g bf)
           (s ? (af + [['movdrx s 'f0]] + bf + [['movdxr 'f1 s]])
-             (af + '((movdrx r0 f0)) + spush 'r0 + bf + spop 'r1 + '((movdxr f1 r1)))))))
+             (pk g (af + '((movdrx r0 f0))) bf 'r1 + '((movdxr f1 r1)))))))
    ; the count park: the value already in r0 holds in a pool register past the count's
    ; forms bf, then value r0 / count r1 (the variable shifts' and rotates' contract)
    (cshut g bf)
     (vspare g (spare g bf) @ s
        (s ? ([['mov s 'r0]] + bf + ['(mov r1 r0) ['mov 'r0 s]])
-          (spush 'r0 + bf + '((mov r1 r0)) + spop 'r0)))
+          (pk g () (bf + '((mov r1 r0))) 'r0)))
 
    ; the pair kit (ilp32 llong/ullong): a 64-bit value rides r0 (lo) : r1 (hi). pairs never enter
    ; the pool or the immediate lanes: every pair op runs the shuttle, r2:r3 the popped left, r12 the scratch
@@ -2143,11 +2143,11 @@
                    (cgexpr g env (args 1) () @ e2
                       (? (bad? e2) 'bad
                          (kind = 'store)
-                          (mkv 'long 'r0 (<>mo1 + tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1
+                          (mkv 'long 'r0 (pk g (<>mo1 + tor0 g e1) (asint g e2) 'r1
                                           + (<mo1 = 0 || x86? g ? () (afence g))
                                           + [[(stop pt) 'r1 0 'r0]] + (<mo1 = 5 ? (afence g))))
                          (kind = 'rmw)
-                          (mkv pt 'r0 (<>mo1 + tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1 + '((mov r2 r0))
+                          (mkv pt 'r0 (pk g (<>mo1 + tor0 g e1) (asint g e2) 'r1 + '((mov r2 r0))
                                        + armw g w (k 1) + (k 2 = 'new ? '((mov r0 r3))) + cvt pt 'r0))
                          ; __sync's compare-and-swap: (p old new), the old value or the success
                          (cgexpr g env (args 2) () @ e3
@@ -2208,7 +2208,7 @@
               li9 (nlab g ".cci") di (nlab g ".ccid")
               (bad? e1 || bad? e2 ? 'bad
                  (mkv 'long 'r0 $
-                   asint g e1 + spush 'r0 + asint g e2 + '((mov r1 r0)) + spop 'r0 +
+                   pk g (asint g e1) (asint g e2 + '((mov r1 r0))) 'r0 +
                      ['(raw (34 0 59 213))          ; mrs x2, ctr_el0
                        '(li r9 15)
                        '(and r15 r2 r9)
@@ -2377,7 +2377,7 @@
                     [[(w @ 4 'st4 'st) 'r1 0 'r0]])))
               (cgexpr g env <>args () @ e2
                  (bad? e2 ? 'bad
-                    (: pre (tor0 g e1 + spush 'r0 + asint g e2 + spop 'r1)   ; val r0, ptr r1
+                    (: pre (pk g (tor0 g e1) (asint g e2) 'r1)   ; val r0, ptr r1
                        body (? (a64? g)
                                (nlab g ".ts" @ lb
                                   [['label lb]
@@ -2636,7 +2636,7 @@
                               + (b @ 'float '((st4 r1 4 r2)) (z8 g 'r1 8))))))
                      !(stru? (vty rv)) 'bad
                      (mkv (vty lv) 'r0 $
-                        vfs lv + spush 'r0 + tor0 g rv + spop 'r1 +
+                        pk g (vfs lv) (tor0 g rv) 'r1 +
                           ; a complex width flip converts componentwise; else bytes
                           (gcplx? (vty lv) && gcplx? (vty rv) &&
                            !(<>(vty lv) = <>(vty rv)) ?
@@ -2650,12 +2650,12 @@
                         r (cgexpr g env rhs ())
                         (? (bad? r) 'bad
                            (d128? ty)
-                            (mkv ty 'r0 (vfs lv + spush 'r0 + as128 g r + spop 'r1 + stal 'r1 0 8 a 'r0 + stal 'r1 8 8 a 'r2))
+                            (mkv ty 'r0 (pk g (vfs lv) (as128 g r) 'r1 + stal 'r1 0 8 a 'r0 + stal 'r1 8 8 a 'r2))
                            (flo? ty)
                             (ntmp g 'double @ tm
                                (mkv (fvt g ty) 'r0 (vfs lv + spush 'r0 + asfty g r ty + fstv g ty 'r4 tm 'f0
                                                  + [[(uldop n) 'r0 'r4 tm]] + spop 'r1 + stal 'r1 0 n a 'r0)))
-                           (mkv ty 'r0 (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 + cvt ty 'r0
+                           (mkv ty 'r0 (pk g (vfs lv) (asintt g r ty) 'r1 + cvt ty 'r0
                                         + stal 'r1 0 n a 'r0))))))
               (flo? (vty lv0))                     ; a float/double store (value in f0; narrow if float)
                (fdd ?
@@ -2672,7 +2672,7 @@
                         (: rf (asfty g r (vty lv)) p (vspare g (spare g rf))
                            (mkv (fvt g (vty lv)) 'r0
                                 (vfs lv + (p ? ([['mov p 'r0]] + rf + fstv g (vty lv) p 0 'f0)
-                                             (spush 'r0 + rf + spop 'r1 + fstv g (vty lv) 'r1 0 'f0))))))))
+                                             (pk g () rf 'r1 + fstv g (vty lv) 'r1 0 'f0))))))))
               (bitf? (vty lv0) && bfwide? g (vty lv0)) (bfnl g)
               (bitf? (vty lv0))                   ; a bitfield: read-modify-write the unit at r1, the truncated value answers
                (: ua (ua? lv0 ? (vma lv0) ()) lv (matv g lv0)
@@ -2698,7 +2698,7 @@
                   r (cgexpr g env rhs ())
                   (bad? r ? 'bad
                      (mkv (vty lv) 'r0
-                      (vfs lv + spush 'r0 + asll g r + spop 'r2 + pst 'r2 0))))
+                      (pk g (vfs lv) (asll g r) 'r2 + pst 'r2 0))))
               (d128? (vty lv0))                   ; a wide store through a computed address (r1)
                (!(w128? g) ? (no128 g)
                   (: lv (matv g lv0)
@@ -2748,7 +2748,7 @@
                                 (rfree g aR,
                                  mkv ty 'r0 fs)))
                           (mkv ty 'r0
-                           (vfs lv + spush 'r0 + asintt g r ty + spop 'r1 +
+                           (pk g (vfs lv) (asintt g r ty) 'r1 +
                             cvt ty 'r0 + [[(stop ty) 'r1 0 'r0]]))))))))))
        ('post dst step)
         (: rv (<dst = 'var ? (vent g env <>dst) 'bad)
