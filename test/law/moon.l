@@ -2604,6 +2604,22 @@ int main() { return 0; }"
       (0 = calls (fnf 'dyn <>irB) "cached") (1 = calls (fnf 'dyn <>irB) "generic")
       (0 = calls (fnf 'guard <>irB) "bug_on")))
 
+; -- noinstr's no_profile_instrument_function takes only always_inline bodies, as clang splices:
+; a plain static inline stays a call there and splices everywhere else
+(: (calls fs nm) #(filter (f \ two? f && elem <f '(call jmp) && 0 <= findsub (show f) nm) fs)
+   (cgnx src) (cparse <>(clex src) @ r                    ; ..with the parser's tablets, as cc-objbytes hands them
+                (okv? r ? (cgen <>r (r 2) (r 3) (r 4) [(r 5) (r 6) (r 7) (r 8) (r 9) (r 10) (r 11) (r 12) (r 13) ()
+                                                      (r 14) (r 15) (map (i \ ()) ^18) (r 17) (r 18)] 'x64)))
+   srcN ("static inline int trizz(int x) { return x * 3 + 1; }\n"
+         + "static inline __attribute__((__always_inline__)) int fivezz(int x) { return x * 5 + 1; }\n"
+         + "__attribute__((__no_profile_instrument_function__)) int nf(int x) { return trizz(x) + fivezz(x); }\n"
+         + "int pf(int x) { return trizz(x) + fivezz(x); }\nint main(void) { return nf(1) + pf(2) != 28; }")
+   irN (cgnx srcN)
+   (test
+      (two? irN)
+      (1 = calls (fnf 'nf <>irN) "trizz") (0 = calls (fnf 'nf <>irN) "fivezz")
+      (0 = calls (fnf 'pf <>irN) "trizz") (0 = calls (fnf 'pf <>irN) "fivezz")))
+
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: ok")
 (put err 10)

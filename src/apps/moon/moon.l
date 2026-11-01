@@ -447,10 +447,10 @@
    (picla tgt pc fs) (tgt = 'arm && pc ? (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs) fs)
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes nopro]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
