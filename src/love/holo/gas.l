@@ -1584,16 +1584,16 @@
                     (go l 0 ()))
        ; a .set symbol reads as its value, a .req name as its register (vt and rt the names that apply)
        (ssub s) (rsub s sv rq)
-       (rsub s vt rt) (: n #s
-                      (go i acc) (i >= n ? acc
-                                    (s i @ c
-                                       (gidc? c && (i = 0 || !(gidc? (s (i - 1)))) ?
-                                           (: j (word s i) k (snip s i j) v (peep vt k ()) q (peep rt k ())
-                                              ; an alias keeps the arrangement after it (t0.4s)
-                                              d (xa-idx k 46) q2 (0 < d ? (peep rt (snip k 0 d) ()) ())
-                                              (go j (acc + (? (charm? v) (show v) (string? q) q (string? q2) (q2 + snip k d #k) k))))
-                                          (go (i + 1) (acc + string c)))))
-                      (go 0 ""))
+       (rsub s vt rt) (: n #s                     ; the pieces laid once, a line being any length
+                      (go i st acc) (? (i >= n) (cats (rev (snip s st n . acc)))
+                                       (gidc? (s i) && (i = 0 || !(gidc? (s (i - 1)))))
+                                        (: j (word s i) k (snip s i j) v (peep vt k ()) q (peep rt k ())
+                                           ; an alias keeps the arrangement after it (t0.4s)
+                                           d (xa-idx k 46) q2 (0 < d ? (peep rt (snip k 0 d) ()) ())
+                                           (go j j ((? (charm? v) (show v) (string? q) q (string? q2) (q2 + snip k d #k) k)
+                                                    . snip s st i . acc)))
+                                       (go (i + 1) st acc))
+                      (go 0 0 ()))
        (val e) (gimm (gtoks (ssub e)))
        ; `.if \base == %rsp`: two registers compare by name -> [bit] | ()
        (rcmp r) (gtoks (ssub r) @ ts
