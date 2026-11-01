@@ -168,6 +168,15 @@
                   pin (g 'frt) v9 r9,
                   v9))
    (frp g x) (g 'frt x || x)
+   ; a park cell: a mint homed in no register, coloured where one is free and else a frame slot (vspill)
+   (vcell g) (!(abl? g 'vcell) ? (vmint g 'cell))
+   (vspill g fs)
+    (: t (g 'vrt)
+       ps (filter (m \ (t m = 'cell)) (keys t))
+       (!(two? ps) ? fs
+          (: so (foldl (a \ m \ (pin g 'off (aup (peep g 'off 0) 8), pin a m (nslot g 8))) {} (sort ps))
+             (sp1 f) (f @ ('mov D S) (? (charm? (so D)) ['st 'r4 (so D) S] (charm? (so S)) ['ld D 'r4 (so S)] f) f)
+             (map sp1 fs))))
    ; a spare pool register a shuttle borrows for one span, minted so the allocator may move it
    (vspare g r9) (r9 && (x64? g || a64? g || t2? g) && !(abl? g 'ralloc) && !(abl? g 'vspare) ? (vmint g r9) r9)
    (rfree g rz) (rp g rz @ r
@@ -187,11 +196,12 @@
         (two? f && <f = 'mov && vmint? g <>f && !(vmint? g <>>f) && elem <>>f cfl || any9 u)
        (any9 fs ? (rasg2 g fs cfl)))
    ; no r4 on the arm family (a4ize retargets a base-slot r4 to fp by position, and a moved mint
-   ; can sit in a base slot) and no argument register (a ridden arrival's only def is its entry cvt)
+   ; can sit in a base slot), no argument register (a ridden arrival's only def is its entry cvt),
+   ; and not t32's r12, the emitter's own scratch (far memory, a variable shift's count)
    (rafile g)
     (filter (r9 \ !(elem r9 (csregs g) || r9 = fbase g || r9 = 'sp ||
                     elem r9 (argr g) ||
-                    (arm? g && r9 = 'r4)))
+                    (arm? g && r9 = 'r4) || (t32? g && r9 = 'r12)))
             (lvgp g))
    (rasg2 g fs cfile)
     (: t (g 'vrt)
@@ -1522,7 +1532,9 @@
           (r1safe? g bf) (af + '((mov r1 r0)) + bf)
           (vspare g (spare g bf) @ s
              (s ? (af + [['mov s 'r0]] + bf + [['mov 'r1 s]])
-                (af + spush 'r0 + bf + spop 'r1)))))
+                (vcell g @ p
+                   (p ? (af + [['mov p 'r0]] + bf + [['mov 'r1 p]])
+                      (af + spush 'r0 + bf + spop 'r1)))))))
    ; the double twin: left in f1, right in f0. a float-file target parks the left in an xmm the
    ; right never writes (f1 itself when it can); else the bits hold in a gp register or the stack
    ; across the right (movqrx aims straight at it); ilp32 moves the pair through the gp stack
@@ -6173,7 +6185,7 @@
        ; the float lane trusts no first assignment in its file: its parks and wide homes share f3..f7 until
        ; coloured. a seat outside it keeps its register (a64's callee-saved homes), x64's seats past it none
        (fixed? m) (: P (t m)
-                     (? gp (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0 || peep g 'vwfix {} m)
+                     (? gp (P != 'cell && (nelem P file || (peep nb m 0 & peep sm P 0) - (peep nb m 0 & ix m) != 0 || peep g 'vwfix {} m))
                         (nelem P file && nelem P fover9 || peep g 'fwfix {} m)))
        col {}
        (cof n9) (t n9 ? (col n9) n9)
@@ -6191,6 +6203,7 @@
        (go l) (? !(two? l) 1
                  (col <l) (go >l)
                  (pick <l @ r (? r (pin col <l r, go >l)
+                                 (t <l = 'cell) (pin col <l 'cell, go >l)      ; a park misses to its slot
                                  (: k9 (gp ? 'vbad 'fbad) (pin g k9 (<l . peep g k9 ()), go >l, ())))))
        ; liveness and interference once; each colouring after reads only the kept webs afresh
        ready (ok1 && (fix9 (), w2 0, 1))
@@ -11335,8 +11348,8 @@
                     ; and the tail (no prologue form names a register it watches); vrfix only substitutes
                     cgitems g <>sp0 <><>>>f () @ b9
                      (bad? b9 ? b9
-                        (vpre g ([['label (name <>f)]] + <sp0) b9
-                              ('((li r0 0)) + (arm? g ? (peep g 'epi epi-a64) (peep g 'epi epi))))))
+                        (vspill g (vpre g ([['label (name <>f)]] + <sp0) b9
+                                       ('((li r0 0)) + (arm? g ? (peep g 'epi epi-a64) (peep g 'epi epi)))))))
               (bad? body ? 'bad
                  ; i386 enters with esp 12 past a 16 boundary and pushes ebp: 8 more keeps every call aligned
                  (aup (peep g 'off 0) 16 + (ia32? g ? 8 0) @ frame
