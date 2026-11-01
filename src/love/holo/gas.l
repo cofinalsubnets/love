@@ -282,7 +282,8 @@
                             (scare 'gas-x64-operand s))
               (<d = 'rg)
                (gx-r d @ x
-                  (? (<s = 'im) [['li x (? (w = 4) (<>s & 4294967295) (w = 8) <>s (scare 'gas-x64-width w))]]
+                  (? (<s = 'im) (w @ 4 [['li x (<>s & 4294967295)]] 8 [['li x <>s]] 2 [['li2 x (<>s & 65535)]]
+                                   (scare 'gas-x64-width w))
                      (<s = 'rg) ([['mov x (gx-r s)]] + gx-zx x w)
                      (<s = 'mem) (gx-mem s @ bm [[(gx-lop w) x <bm <>bm]])
                      ; a symbol's word (`sym`, `sym(%rip)`): its address, then the load
