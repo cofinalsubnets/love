@@ -10,7 +10,7 @@
                     st (h-wf <md)
                     _ (close >md)
                     [<st (split "\r\n" o) o])
-   games ["apartment" "court" "dusk" "garage" "grass88" "grass99" "shaft" "slop" "stones" "tower" "wad" "wade"]
+   games ["apartment" "court" "dusk" "garage" "grass88" "grass99" "saver" "shaft" "slop" "stones" "tower" "wad" "wade"]
    ls (lo-run [lo-love "play"])
    old (lo-run [lo-love "lore"])
    help (lo-run [lo-love "play" "--help"])
