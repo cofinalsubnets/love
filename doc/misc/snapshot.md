@@ -135,8 +135,13 @@ the verbs and modules each file added at that path. `love bake --list` reads it 
 borrow. `love bake --without U,.. [--with U,..] [-o OUT]` is the roster's bake: a left-out unit
 is a `lazy` form in the cat, its verbs pinned as stubs that read its files off `/love` at their
 first call, and a kept unit's needs stay kept. The Makefile's `carryfiles` are carried but not
-baked: each is a `(cite 'verbs 'carry PATH)` row after the crew, and a verb miss on a left-out
-unit's name raises it, so `love helm` runs from the source and `--with helm` bakes it in.
+baked: each is a `(cite 'verbs 'carry PATH)` row after the crew, read at bake for the verbs it
+enlists (`(cite 'verbs 'enlist 'NAME ..)`), the modules it opens and the units it cites or
+borrows, and laid as a `lazy` form like a left-out unit's. A verb miss on such a unit's name
+raises it, and so does a `borrow` of one of its modules, or `(cite 'verbs 'lift 'MOD)` from code
+that reaches it by cite: so `love helm` runs from the source, kore's `markdown -t dvi` raises
+caja, and `--with helm` bakes it in. A carried unit costs the artifact its source and a few
+stubs, nothing more.
 `love bake --pick` chooses the same flags on a checklist, each unit with its source and an
 estimate of its baked bytes; turning one on takes what it needs along, and off, what needs it. A
 bake starts from the egg, so its image is a function of the code and the roster alone, and the

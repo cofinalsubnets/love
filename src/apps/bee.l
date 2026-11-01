@@ -498,8 +498,10 @@
       (: id (git1 ("rev-parse --verify -q " + sh-quote q))
          (? (0 < #id) [id (lush-out ("git cat-file -p " + sh-quote q))] ["none" ""]))
      ; -> 1 when it landed on old, 0 when someone wrote first
-     (q-swap q old text)
-      (: tmp (bee-hive + "/.queue-" + (me 0)) _ (umkdirs bee-hive 448) _ (uwrite tmp text)
+     ; every write drops a gone row's number from the keep line
+     (q-swap q old text0)
+      (: text (? (two? (q-keeps text0)) (q-keep text0 "" 0) text0)
+         tmp (bee-hive + "/.queue-" + (me 0)) _ (umkdirs bee-hive 448) _ (uwrite tmp text)
          nw (git1 ("hash-object -w " + sh-quote tmp))
          r (says? ("git update-ref " + sh-quote q + " " + nw + (old = "none" ? " ''" (" " + old))) "landed")
          _ (unlink tmp)
@@ -557,9 +559,11 @@
       (? !(string? bee-self) "this bee cannot find its own binary"
          (: _ (umkdirs (dir + "/out") 493)
             ; BEE_AS, not BEE_NAME: the caller's own mcp card holds who while the gate runs, and
-            ; BEE_NAME takes a name only when it is free
-            line ("cd \(sh-quote dir) && BEE_AS=\(sh-quote who) PWD=\(sh-quote dir) exec "
-                  + sh-quote bee-self + " bee --gate " + sh-quote q + cats (map (\ l (" " + sh-quote l)) only)
+            ; BEE_NAME takes a name only when it is free. the tree's own love gates when it has one, so
+            ; the lanes are its lanemap's, not those of whichever bee this server was started from
+            ol (sh-quote (dir + "/out/love"))
+            line ("cd \(sh-quote dir) && b=\(sh-quote bee-self); [ -x \(ol) ] && b=\(ol); BEE_AS=\(sh-quote who) "
+                  + "PWD=\(sh-quote dir) exec \"$b\" bee --gate " + sh-quote q + cats (map (\ l (" " + sh-quote l)) only)
                   + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
             nul (openfd "/dev/null" 0)
             p (spawnio [bee-self "lush" "-c" line] nul nul nul (open-fds 0) 0 0)
@@ -1359,8 +1363,11 @@
          (? (string? id && 0 < #id)
             (: _ (umkdirs bee-resumes 448) (uwrite (bee-resumes + "/" + me 0) (unlines [("claude " + id) ("cwd " + bee-cwd)])))
             0))
-     ; NAME's relaunch line -> [ok text]; the mcp config it names runs bee from this binary, so a
-     ; worktree whose out/love predates the bell still rings
+     ; the mcp config a relaunch names runs the tree's own out/love, as .mcp.json does, so a restart
+     ; after a bee landing takes the new bee; a tree with none runs this binary
+     bee-mcp-sh ("r=$(pwd); while [ \"$r\" != / ] && [ ! -e \"$r/.sb\" ] && [ ! -e \"$r/.git\" ]; do r=$(dirname \"$r\"); done; "
+                 + "if [ -x \"$r/out/love\" ]; then exec \"$r/out/love\" bee --mcp; fi; exec \"" + bee-me + "\" bee --mcp")
+     ; NAME's relaunch line -> [ok text]
      (resume-cmd nm prompt)
       (: s (slurp-file (bee-resumes + "/" + nm))
          r (? (string? s) (foldl (\ t l (l @ ((k && 0 < #k) + " " + v) (pin t k v) t)) {} (lines s)))
@@ -1373,7 +1380,7 @@
                 [0 ("\(nm) is a backgrounded claude session (\(id)): `claude attach \(id)` opens it here, "
                     + "or `claude stop \(id)` and then `love bee --resume \(nm)` (--attach, --stop do either)") id])
             (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
-            (: _ (uwrite mc (json-show {"mcpServers" {"bee" {"command" bee-me "args" ["bee" "--mcp"]}}}))
+            (: _ (uwrite mc (json-show {"mcpServers" {"bee" {"command" "sh" "args" ["-c" bee-mcp-sh]}}}))
                [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=\(sh-quote nm) exec claude"
                    + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sh-quote mc
                    + " --resume " + sh-quote (r "claude") + (0 < #prompt ? (" " + sh-quote prompt) ""))])))

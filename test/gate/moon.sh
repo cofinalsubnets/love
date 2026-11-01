@@ -87,6 +87,23 @@ moonrun -c "$ho/.dsz.c" -o "$ho/.dsz.o" || fail "mooncc: a sized data object"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "big" {print $3}')" = 28 ] || fail "int big[7]'s symbol does not carry its 28 bytes"
 [ "$(readelf -sW "$ho/.dsz.o" | awk '$8 == "tab" {print $3, $4, $5}')" = "36 OBJECT LOCAL" ] || fail "a file-scope static is not a local object symbol of its 36 bytes (modpost reads a table's name)"
 readelf -SW "$ho/.dsz.o" | grep -q '\.init\.data' || fail "a block static lost its section"
+# a static alias lays no bytes of its own (MODULE_DEVICE_TABLE's), and an initializer of zeros
+# rides .bss as gcc and clang lay it; a const one stays in .rodata
+printf 'struct od { char n[32]; long d; };\nstatic const struct od tbl[] = {{"a", 1}, {""}};\nstatic __typeof__(tbl) mdt __attribute__((used, alias("tbl")));\nstatic int z0 = 0;\nlong za[4] = {0};\nint nz = 3;\nstatic const int cz = 0;\nint *f(int i){ static int loc = 0; return i ? &loc : i > 1 ? (int *)&cz : (int *)tbl + z0; }\n' > "$ho/.zbs.c"
+moonrun -c "$ho/.zbs.c" -o "$ho/.zbs.o" || fail "mooncc: a static alias and zero initializers"
+[ "$(readelf -SW "$ho/.zbs.o" | sed -E 's/.*\] +//' | awk '$1 == ".bss" {print $5}')" = 000030 ] || fail "a static alias laid bytes of its own, or a zero initializer left .bss"
+[ "$(readelf -sW "$ho/.zbs.o" | awk '$8 == "mdt" {print $3}')" = 80 ] || fail "a static alias's symbol does not carry its table's 80 bytes"
+[ "$(readelf -sW "$ho/.zbs.o" | awk '$8 == "nz" || $8 == "za" {print $8, $7}' | sort | tr '\n' ' ')" = "nz 3 za 4 " ] || fail "int nz = 3 left .data, or long za[4] = {0} is not in .bss"
+# an empty object takes a byte: lockdep's keys, one per site, never share an address
+printf 'struct e {};\nvoid reg(struct e *);\nstatic struct e fk;\nvoid f(void){ static struct e k; reg(&k); reg(&fk); }\n' > "$ho/.emp.c"
+moonrun -c "$ho/.emp.c" -o "$ho/.emp.o" || fail "mooncc: empty objects"
+[ "$(readelf -sW "$ho/.emp.o" | awk '$8 == "fk" {print $3}')" = 1 ] || fail "an empty static took no byte"
+[ "$(readelf -SW "$ho/.emp.o" | sed -E 's/.*\] +//' | awk '$1 == ".bss" {print $5}')" = 000010 ] || fail "two empty statics share an address"
+# an attribute's word counts only inside __attribute__((..)): a parameter named used keeps an
+# unused gnu_inline static off the object, one named weak keeps its function strong
+printf 'static inline __attribute__((gnu_inline)) void set_a(int *s, int used){ *s = used; }\nvoid w(int weak){ (void)weak; }\n' > "$ho/.hdw.c"
+moonrun -c "$ho/.hdw.c" -o "$ho/.hdw.o" || fail "mooncc: parameters named for attributes"
+[ "$(readelf -sW "$ho/.hdw.o" | awk '$8 == "set_a" || $8 == "w" {print $8, $5}' | sort | tr '\n' ' ')" = "w GLOBAL " ] || fail "a parameter named used laid an unused static, or one named weak made its function weak"
 # a function's symbol carries its code's bytes, its next one's pad excluded (objtool walks a
 # function by them); gas's .size f, .-f the same, and the end label stays out of the symtab
 printf 'static int s(int a){ return a * 3 + 1; }\nint f(int a){ return s(a) + s(a + 1); }\n__attribute__((aligned(64))) int g(void){ return 2; }\n' > "$ho/.fsz.c"
@@ -594,6 +611,17 @@ printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { 
 # -E on a .S defines __ASSEMBLER__, as -c on it does
 printf '#ifdef __ASSEMBLER__\nmovl $1, %%eax\n#endif\n' > "$ho/.asm.S"
 moonrun -E "$ho/.asm.S" | grep -q 'movl' || fail "-E on a .S left __ASSEMBLER__ undefined"
+# -include reads its header first, after every -D, a relative one found from the cwd
+printf '#define INCV (INCD + 1)\n' > "$ho/.inc.h"
+printf 'int main(void) { return INCV; }\n' > "$ho/.inc.c"
+moonrun -E -DINCD=6 -include "$ho/.inc.h" "$ho/.inc.c" | grep -q 'return (6 + 1);' || fail "-include did not read its header first, after -D"
+moonrun -c -DINCD=6 -include "$ho/.inc.h" -o "$ho/.inc.o" "$ho/.inc.c" || fail "-c refused an -include"
+printf '#ifdef INCV\nmovl $1, %%eax\n#endif\n' > "$ho/.inc.S"
+moonrun -c -include "$ho/.inc.h" -o "$ho/.inc.o" "$ho/.inc.S" && objdump -d "$ho/.inc.o" | grep -q 'mov  *\$0x1,%eax' || fail "-include did not reach a .S"
+# __BASE_FILE__ names the source, from a header too
+printf 'const char *hb = __BASE_FILE__;\n' > "$ho/.bf.h"
+printf '#include ".bf.h"\nconst char *b = __BASE_FILE__;\n' > "$ho/.bf.c"
+[ "$(moonrun -E "$ho/.bf.c" | grep -c "= \"$ho/.bf.c\";")" -eq 2 ] || fail "__BASE_FILE__ did not name the source"
 moonrun -c -o "$ho/.used.o" test/cc/230-gnuc.c > /dev/null 2>&1 || fail "230-gnuc did not compile"
 nm "$ho/.used.o" | grep -q " t kept$" || fail "a used static function was swept"
 nm "$ho/.used.o" | grep -q " T thrice$" || fail "gnu_inline's plain inline laid no external definition"
@@ -611,9 +639,9 @@ moonrun -fshort-wchar -o "$ho/.sw" "$ho/.sw.c" > /dev/null 2>&1 || fail "-fshort
 "$ho/.sw"; a=$?
 $cc_g -O0 -fshort-wchar -o "$ho/.swg" "$ho/.sw.c" > /dev/null 2>&1 && "$ho/.swg"; b=$?
 [ $a -eq 123 ] && [ $a -eq $b ] || fail "-fshort-wchar (ours $a gcc $b, want 123)"
-# the prefix maps strip the build path from __FILE__
+# the prefix maps strip the build path from __FILE__ and __BASE_FILE__
 mkdir -p "$ho/.mpm/sub"
-printf 'const char *fl(void) { return __FILE__; }\n' > "$ho/.mpm/sub/f.c"
+printf 'const char *fl(void) { return __FILE__; }\nconst char *bf(void) { return __BASE_FILE__; }\n' > "$ho/.mpm/sub/f.c"
 dir=$(cd "$ho/.mpm" && pwd)
 for fl in -fmacro-prefix-map -ffile-prefix-map; do
   moonrun -c $fl="$dir/=" -o "$ho/.mpm/f.o" "$dir/sub/f.c" > /dev/null 2>&1 || fail "$fl compile"
@@ -758,6 +786,19 @@ moonrun -fcf-protection=full -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 ||
 readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT, SHSTK' || fail "-fcf-protection=full: no IBT, SHSTK mark"
 moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch on i386"
 objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
+# arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute;
+# the arm asks lay on arm alone, and a soft float abi refuses float code as -msoft-float does
+# and tells the linker base aapcs (a vfp one makes ld.lld mark the link hard-float)
+printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\n' > "$ho/.apic.c"
+moonrun -t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft -c -o "$ho/.apic.o" "$ho/.apic.c" > /dev/null 2>&1 || fail "-t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft compile"
+[ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_THM_MOV[WT]_PREL')" = 4 ] || fail "-t arm -fPIC: an address is not a movw/movt PREL pair"
+readelf -rW "$ho/.apic.o" | grep -q 'R_ARM_THM_MOV[WT]_ABS' && fail "-t arm -fPIC laid an absolute movw/movt"
+readelf -A "$ho/.apic.o" | grep -q 'Tag_ABI_VFP_args: VFP registers' && fail "-mfloat-abi=soft still says Tag_ABI_VFP_args: VFP registers"
+printf 'double m(double a) { return a * 2; }\n' > "$ho/.asf.c"
+moonrun -t arm -mfloat-abi=soft -c -o "$ho/.asf.o" "$ho/.asf.c" > /dev/null 2>&1 && fail "-mfloat-abi=soft took float code"
+moonrun -mthumb -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mthumb laid on x64"
+moonrun -t thumb2 -mabi=aapcs-linux -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mabi=aapcs-linux laid on m-profile"
+echo "mooncc: -t arm -fpic lays pc-relative movw/movt, and the arm asks keep to arm ok"
 [ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
 moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
 echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
@@ -863,7 +904,8 @@ $cc_g -O2 -fno-stack-protector -o "$ho/.sspgc" "$ho/.ssp.c" > /dev/null 2>&1 && 
 [ $a -eq $b ] || fail "-fstack-protector-strong: a fair run answers $a, gcc $b"
 "$ho/.ssp" AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; a=$?
 [ $a -eq 42 ] || fail "-fstack-protector-strong: an overflow exits $a, not through __stack_chk_fail"
-# which fns: -strong takes an array, a VLA, an address taken; -all every fn; the attributes per fn
+# which fns: -strong takes an array (or an aggregate holding one), a VLA, an address taken; -all every fn;
+# the attributes per fn
 cat > "$ho/.sspw.c" <<'EOF'
 int g(int *);
 int plain(int x) { return x * 3; }
@@ -871,13 +913,21 @@ int arr(int x) { int a[2] = { x, x }; return g(a); }
 int adr(int x) { return g(&x); }
 __attribute__((no_stack_protector)) int nsp(int x) { int a[2] = { x, x }; return g(a); }
 __attribute__((stack_protect)) int sp(int x) { return x + 1; }
+struct pl { int a; long b; };
+struct pa { int a; struct { char c[4]; } in; };
+struct pl mk(int);
+struct pa mka(int);
+int spl(int x) { struct pl s = mk(x); return s.a; }
+int spa(int x) { struct pa s = mka(x); return s.in.c[x & 3]; }
+int spi(int x) { int *p = &x; return g(p); }
+int spt(int x) { long a, b; return (&a == &b) + x; }
 EOF
 sspw() {        # FLAGS.. -> the fns that read the guard
   moonrun "$@" -c -o "$ho/.sspw.o" "$ho/.sspw.c" > /dev/null 2>&1 || { echo compile; return; }
   objdump -dr "$ho/.sspw.o" | awk '/^[0-9a-f]+ </ { f = $2 } /__stack_chk_guard/ { print f }' | sort -u | tr -d '<>:' | tr '\n' ' '
 }
-[ "$(sspw -fstack-protector-strong)" = "adr arr sp " ] || fail "-fstack-protector-strong guards $(sspw -fstack-protector-strong), not adr arr sp"
-[ "$(sspw -fstack-protector-all)" = "adr arr plain sp " ] || fail "-fstack-protector-all guards $(sspw -fstack-protector-all)"
+[ "$(sspw -fstack-protector-strong)" = "adr arr sp spa spi " ] || fail "-fstack-protector-strong guards $(sspw -fstack-protector-strong), not adr arr sp spa spi"
+[ "$(sspw -fstack-protector-all)" = "adr arr plain sp spa spi spl spt " ] || fail "-fstack-protector-all guards $(sspw -fstack-protector-all)"
 [ "$(sspw -fstack-protector-explicit)" = "sp " ] || fail "-fstack-protector-explicit guards $(sspw -fstack-protector-explicit)"
 [ "$(sspw)" = "" ] || fail "no -fstack-protector, and $(sspw) read the guard"
 # the guard's modes: x86 off a segment (the kernel's gs and a symbol), a64 off a system register
@@ -1607,7 +1657,7 @@ for s in "T main" "T fill" "B bigbuf" "B zed" "R tbl"; do
 done
 
 # -- const globals reach .rodata
-# except a const pointee's pointer and a const array of addresses (the linker writes it)
+# except a const pointee's pointer and a const array of addresses (the linker writes it) -- mutp = 0 is zeros, so .bss
 cat > "$ho/.ro.c" <<'EOF'
 const long rotbl[4] = {3,5,7,9};
 const char romsg[] = "const bytes";
@@ -1623,7 +1673,7 @@ moonrun "$ho/.ro.c" -o "$ho/.rox" > /dev/null 2>&1 || fail "mooncc const-lane co
 "$ho/.rox"; a=$?
 [ $a -eq 110 ] || fail "const lane semantics (got $a want 110 = 9 + 'c' + 1 + 0 + 0 + 1)"
 nm "$ho/.rox" > "$ho/.ro.nm" 2>&1 || fail "nm on the const-lane exe"
-for s in "R rotbl" "R romsg" "D mutp" "D fnp" "D wtbl" "B rozero"; do
+for s in "R rotbl" "R romsg" "B mutp" "D fnp" "D wtbl" "B rozero"; do
   grep -q " $s\$" "$ho/.ro.nm" \
     || fail "const lane: '$s' is not where it belongs ($(grep " ${s#* }\$" "$ho/.ro.nm"))"
 done
