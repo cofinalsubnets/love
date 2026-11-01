@@ -58,7 +58,7 @@ p_lnbe_l  = $(addprefix $(S)/love/holo/,$(addsuffix .l,$(p_link_be)))
 # THE FLOOR IS CATTED, THEN SPLICED. text.l and u.l reopen module 'kore, so their
 # names (uread, udie ..) do not walk for whoever comes after -- and every driver below
 # reads them bare. So the cats emit (borrow 'kore) once the two files have registered it,
-# the Makefile's klink recipe exactly.
+# the Makefile's kproject recipe exactly.
 kore_l = $(S)/apps/kore/text.l $(S)/apps/kore/u.l
 lay_l  = $(kore_l) $(S)/apps/kore/asbook.l \
   $(S)/love/holo/elf.l $(S)/love/holo/obj.l

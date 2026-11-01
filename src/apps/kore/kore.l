@@ -190,20 +190,20 @@
                  (ar-write dst thin ix (go <>old adds ()), 0))))))
 
    ld-usage "usage: ld [-pie] [-t x64|a64|rv64] [-Ttext ADDR] [--readme F] [-T SCRIPT [LLD OPTIONS]] A.o.. -o OUT"
-   ; ld: one linker, lld's command line (klink.l's kl-args). -r, or under a script, klink lays
+   ; ld: one linker, lld's command line (ld.l's ld-args). -r, or under a script, ld.l lays
    ; it as ld.lld would; else holo's static link (link.l): -pie the self-relocating et_dyn, -Ttext
    ; the bare-metal org, --readme plain text into `.love.README`
    (ld-main as)
-    (: o (kl-args as)
+    (: o (ld-args as)
        _ (? (string? o) (udie 2 o) 0)
-       _ (? (o 'ver) (puts ("holo ld (love " + love-version + ") " + kl-lld + "-compatible\n")) 0)
+       _ (? (o 'ver) (puts ("holo ld (love " + love-version + ") " + ld-lld + "-compatible\n")) 0)
        ins (map (i \ i 1) (o 'ins))
        (? (o 'help) (puts (ld-usage + "\n"), 0)
           (o 'ver && atom? ins) 0
           (atom? ins) (udie 2 ld-usage)
           (string? (peep o 'script ()) || o 'reloc || o 'shared)
           (: _ (pin o 'banner ("Linker: love " + <(usplit 43 love-version)))
-             _ (kl-ld o)
+             _ (ld-ld o)
              (? (o 'reloc) 0 (chmod (o 'out) 493)), 0)
           (: _ (#(peep o 'out "") ? () (udie 2 "ld: no -o OUT"))
              t (peep o 'tgt ()) tgt (? (t != ()) t (o 'emu = ()) 'x64 (o 'emu))
