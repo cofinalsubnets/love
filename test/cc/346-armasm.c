@@ -1,7 +1,6 @@
 /* thumb-2 inline asm on A-profile: a 64-bit operand rides a register pair, %Q its low register
  * and %R its high, as an input, an output and both at once; barriers with an option, and yield.
  * targets without a template compute the same. */
-#include <stdio.h>
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -26,12 +25,11 @@ static void bar(void) {}
 #endif
 
 int main(void) {
-  u64 a = 0x00000001ffffffffULL, b = 0x0000000200000001ULL, c = 0xffffffffffffffffULL;
-  u64 s = add64(a, b), w = swap(0x1122334455667788ULL);
+  u64 a = 0x00000001ffffffffULL, b = 0x0000000200000001ULL, c = 0xffffffffffffffffULL, d = 0x7fffffffULL;
   inc(&c);
-  u64 d = 0x7fffffffULL;
   inc(&d);
   bar();
-  printf("%llx %llx %llx %llx %x %llx\n", s, w, c, d, hi(0xabcdef0123456789ULL), join(0x89abcdef, 0x01234567));
-  return (s != 0x0000000400000000ULL) + (c != 0) + (d != 0x80000000ULL);
+  return (add64(a, b) != 0x0000000400000000ULL) + 2 * (swap(0x1122334455667788ULL) != 0x5566778811223344ULL)
+         + 4 * (c != 0) + 8 * (d != 0x80000000ULL) + 16 * (hi(0xabcdef0123456789ULL) != 0xabcdef01)
+         + 32 * (join(0x89abcdef, 0x01234567) != 0x0123456789abcdefULL);
 }
