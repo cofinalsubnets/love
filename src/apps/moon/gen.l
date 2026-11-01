@@ -175,7 +175,9 @@
        ps (filter (m \ (t m = 'cell)) (keys t))
        (!(two? ps) ? fs
           (: so (foldl (a \ m \ (pin g 'off (aup (peep g 'off 0) 8), pin a m (nslot g 8))) {} (sort ps))
-             (sp1 f) (f @ ('mov D S) (? (charm? (so D)) ['st 'r4 (so D) S] (charm? (so S)) ['ld D 'r4 (so S)] f) f)
+             (sp1 f) (f @ ('mov D S) (? (charm? (so D)) ['st 'r4 (so D) S] (charm? (so S)) ['ld D 'r4 (so S)] f)
+                          ('movqxr X S) (charm? (so S) ? ['ldsd X 'r4 (so S)] f)   ; the bits out of a slot load as a double
+                          f)
              (map sp1 fs))))
    ; a spare pool register a shuttle borrows for one span, minted so the allocator may move it
    (vspare g r9) (r9 && (x64? g || a64? g || t2? g) && !(abl? g 'ralloc) && !(abl? g 'vspare) ? (vmint g r9) r9)
@@ -1488,8 +1490,8 @@
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
    ; 8 mod 16 across the inner call, so a whole 16-byte cell
    (spush r) ['(sub sp sp 16) ['st 'sp 0 r]]
-   ; a gp argument's entry: its value parks in a cell mint the pops move into its register
-   (gent g k c) (vcell g @ p (p ? [['g k p] (c + [['mov p 'r0]])] [['g k] (c + spush 'r0)]))
+   ; a register argument's entry, tagged e: its value (gp bits) parks in a cell mint the pops move into place
+   (gent g e k c) (vcell g @ p (p ? [[e k p] (c + [['mov p 'r0]])] [[e k] (c + spush 'r0)]))
    ; a park around b: a's r0 holds in a cell mint while b runs, then lands in r
    (pk g a b r) (vcell g @ p (p ? (a + [['mov p 'r0]] + b + [['mov r p]]) (a + spush 'r0 + b + spop r)))
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
@@ -3373,7 +3375,7 @@
                            cp (tor0 g a + [['lea 'r1 'r4 off]]
                                + (sal? g ? (bcopya 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
                                + [['lea 'r0 'r4 off]])
-                           (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g gpc cp . acc))
+                           (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g 'g gpc cp . acc))
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] (cp + [['st 'sp (8 * ovc) 'r0]])] . acc))))
                        ; a memory-class struct fills n overflow slots, highest eightbyte pushed first
                        (amem? g aty)
@@ -3450,7 +3452,7 @@
                               (: av1 (asf32 g a + '((movdrx r0 f0)))
                                  (gpc < ngp g ?
                                     (kls >as (i + 1) (gpc + 1) xmmc ovc
-                                         (gent g gpc av1 . acc))
+                                         (gent g 'g gpc av1 . acc))
                                     (kls >as (i + 1) gpc xmmc (ovc + 4)
                                          ([['ov ovc 4] (av1 + [['st 'sp ovc 'r0]])] . acc))))
                              ((v6m? g || (t32? g && va?)) && wd2)
@@ -3489,11 +3491,12 @@
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
                              ; a variadic riscv call: every double rides the gp lane
                              (rv64? g && va? && wd2 && gpc < ngp g)
-                              (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g gpc aval . acc))
+                              (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g 'g gpc aval . acc))
                              (rv64? g && va? && wd2)
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] . acc))
-                             (wd2 && xmmc < 8) (kls >as (i + 1) gpc (xmmc + 1) ovc ([['x xmmc] rpush] . acc))
-                             (!wd2 && gpc < ngp g) (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g gpc aval . acc))
+                             (wd2 && xmmc < 8) (kls >as (i + 1) gpc (xmmc + 1) ovc
+                                                    ((ilp32? g ? [['x xmmc] rpush] (gent g 'x xmmc aval)) . acc))
+                             (!wd2 && gpc < ngp g) (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g 'g gpc aval . acc))
                              (ilp32? g) (kls >as (i + 1) gpc xmmc (ovc + 4) ([['ov ovc 4] opush] . acc))
                              (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] . acc)))))))))))
        ; a memory return fills a caller temp whose address rides the first arg register
@@ -3558,7 +3561,8 @@
                                        'sn   ; n float words into n consecutive slots, off the same cell
                                         (catmap (i \ [['ld 'r12 'sp (4 * i)] ['movsnxr (<>kc + i) 'r12]]) ^(<>>kc)
                                          + '((add sp sp 16)))
-                                       (arm? g ? [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]   ; a lone double
+                                       (? (two? >>kc) [['movqxr (xmmreg <>kc) <>>kc]]           ; a lone double
+                                          (arm? g) [['ldsd (xmmreg <>kc) 'sp 0] '(add sp sp 16)]
                                           (spop 'r0 + [['movqxr (xmmreg <>kc) 'r0]]))))))))
                      (go4 kr ()))
              nxmm (: (go5 l5 n5) (!(two? l5) ? n5
