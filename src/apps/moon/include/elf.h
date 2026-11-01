@@ -218,6 +218,7 @@ typedef struct { Elf32_Addr r_offset; Elf32_Word r_info; } Elf32_Rel;
 typedef struct { Elf32_Addr r_offset; Elf32_Word r_info; Elf32_Sword r_addend; } Elf32_Rela;
 typedef struct { Elf64_Addr r_offset; Elf64_Xword r_info; } Elf64_Rel;
 typedef struct { Elf64_Addr r_offset; Elf64_Xword r_info; Elf64_Sxword r_addend; } Elf64_Rela;
+typedef Elf32_Word Elf32_Relr;  typedef Elf64_Xword Elf64_Relr;
 #define ELF32_R_SYM(i) ((i) >> 8)
 #define ELF32_R_TYPE(i) ((unsigned char) (i))
 #define ELF32_R_INFO(s, t) (((s) << 8) + (unsigned char) (t))
@@ -231,9 +232,13 @@ typedef struct { Elf64_Addr r_offset; Elf64_Xword r_info; Elf64_Sxword r_addend;
 #define R_X86_64_64 1
 #define R_X86_64_PC32 2
 #define R_X86_64_PLT32 4
+#define R_X86_64_GOTPCREL 9
 #define R_X86_64_32 10
 #define R_X86_64_32S 11
+#define R_X86_64_PC16 13
+#define R_X86_64_PC8 15
 #define R_X86_64_PC64 24
+#define R_X86_64_GOTPC32 26
 #define R_ARM_NONE 0
 #define R_ARM_PC24 1
 #define R_ARM_ABS32 2
@@ -326,6 +331,26 @@ typedef struct { Elf64_Sxword d_tag; union { Elf64_Xword d_val; Elf64_Addr d_ptr
 /* notes */
 typedef struct { Elf32_Word n_namesz, n_descsz, n_type; } Elf32_Nhdr;
 typedef struct { Elf64_Word n_namesz, n_descsz, n_type; } Elf64_Nhdr;
+
+/* compressed sections, symbol versions, and the rest of the gabi's records */
+typedef struct { Elf32_Word ch_type, ch_size, ch_addralign; } Elf32_Chdr;
+typedef struct { Elf64_Word ch_type, ch_reserved; Elf64_Xword ch_size, ch_addralign; } Elf64_Chdr;
+typedef struct { Elf32_Half si_boundto, si_flags; } Elf32_Syminfo;
+typedef struct { Elf64_Half si_boundto, si_flags; } Elf64_Syminfo;
+typedef struct { Elf32_Half vd_version, vd_flags, vd_ndx, vd_cnt; Elf32_Word vd_hash, vd_aux, vd_next; } Elf32_Verdef;
+typedef struct { Elf64_Half vd_version, vd_flags, vd_ndx, vd_cnt; Elf64_Word vd_hash, vd_aux, vd_next; } Elf64_Verdef;
+typedef struct { Elf32_Word vda_name, vda_next; } Elf32_Verdaux;
+typedef struct { Elf64_Word vda_name, vda_next; } Elf64_Verdaux;
+typedef struct { Elf32_Half vn_version, vn_cnt; Elf32_Word vn_file, vn_aux, vn_next; } Elf32_Verneed;
+typedef struct { Elf64_Half vn_version, vn_cnt; Elf64_Word vn_file, vn_aux, vn_next; } Elf64_Verneed;
+typedef struct { Elf32_Word vna_hash; Elf32_Half vna_flags, vna_other; Elf32_Word vna_name, vna_next; } Elf32_Vernaux;
+typedef struct { Elf64_Word vna_hash; Elf64_Half vna_flags, vna_other; Elf64_Word vna_name, vna_next; } Elf64_Vernaux;
+typedef struct { uint32_t a_type; union { uint32_t a_val; } a_un; } Elf32_auxv_t;
+typedef struct { uint64_t a_type; union { uint64_t a_val; } a_un; } Elf64_auxv_t;
+typedef struct { Elf32_Word l_name, l_time_stamp, l_checksum, l_version, l_flags; } Elf32_Lib;
+typedef struct { Elf64_Word l_name, l_time_stamp, l_checksum, l_version, l_flags; } Elf64_Lib;
+typedef struct { Elf32_Xword m_value; Elf32_Word m_info, m_poffset; Elf32_Half m_repeat, m_stride; } Elf32_Move;
+typedef struct { Elf64_Xword m_value, m_info, m_poffset; Elf64_Half m_repeat, m_stride; } Elf64_Move;
 #define NT_PRSTATUS 1
 #define NT_GNU_ABI_TAG 1
 #define NT_GNU_BUILD_ID 3

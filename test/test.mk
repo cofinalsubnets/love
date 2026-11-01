@@ -10,7 +10,7 @@
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
-  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
+  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_host test_hostegg test_hostnif test_inle test_kboot test_kmitty test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nucleo446 test_nucleo446_smoke \
@@ -630,6 +630,10 @@ hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)
 test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
 	@echo TEST test/gate/hearts-boot.sh
 	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
+# test_hearts_objtool -- x86's objtool by mooncc on elfutils' libelf, its vmlinux.o pass the host's; opt-in
+test_hearts_objtool: host
+	@echo TEST test/gate/hearts-objtool.sh
+	@$(gsh) test/gate/hearts-objtool.sh $(ho)/love
 # test_sqfs -- src/apps/sqfs.l against mksquashfs over four trees, byte for byte; skips without
 gate_love += test_sqfs
 # test_ext4 -- src/apps/ext4.l against mke2fs, byte for byte, five sizes; skips without
