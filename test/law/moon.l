@@ -1692,12 +1692,12 @@
       ('((set eq r0) (cmp r0 0) (set ne r0) (br eq .x)) = (rezx g4 '((set eq r0) (cmp r0 0) (set ne r0) (br eq .x))))
       (elem '(zx4 r0) (rezx g4 '((ldu4 r0 r4 40) (add r0 r0 r1) (zx4 r0) (ret))))
       (elem '(zx4 r0) (rezx g4 '((ldu4 r0 r4 40) (label .z9) (zx4 r0) (ret)))))
-   ; the a64 lane: the sweeps ride fp past a4ize, a cs restore is an anchor, and the immediate
-   ; gates decline what the target cannot encode (si, a non-mask logical, a wide cmp)
+   ; the a64 lane: the sweeps ride fp past a4ize, a cs reload forwards (the restores come later),
+   ; and the immediate gates decline what the target cannot encode (si, a non-mask logical, a wide cmp)
    gA {'tgt 'a64}
    _ (test
       ('((st fp 40 r0) (mov r9 r0)) = (stld gA '((st fp 40 r0) (ld r9 fp 40))))
-      (elem '(ld r19 fp -16) (stld gA '((st fp -16 r19) (ld r19 fp -16))))
+      !(elem '(ld r19 fp -16) (stld gA '((st fp -16 r19) (ld r19 fp -16))))
       (elem '(and r0 r0 r1) (cfoldir gA '((li r1 5) (and r0 r0 r1) (ret))))
       (elem '(and r0 r0 7) (cfoldir gA '((li r1 7) (and r0 r0 r1) (ret))))
       (elem '(st r5 8 r0) (addrfold gA '((li r0 3) (st r5 8 r0) (ret))))

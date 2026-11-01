@@ -7536,9 +7536,10 @@
           (go fs () ()))))
 
    ; store-forward: within a straight run a full-word frame slot rides the register that last
-   ; touched it; r3/cs reloads stay (epilogue anchors); an lea off r4 keeps the adjacent pair only
+   ; touched it; where the restores ride the body (rv64, v6m) cs reloads stay (epilogue anchors);
+   ; an lea off r4 keeps the adjacent pair only
    stldkeep ('r3 . csx64)
-   (stldkp g) (? (a64? g || rv64? g) (csregs g) (ia32? g) '(r3 r5 r6) stldkeep)      ; the epilogue-anchor destinations
+   (stldkp g) (? (cstop? g) () (rv64? g) (csregs g) stldkeep)      ; the epilogue-anchor destinations
    (bdropr bs r9) (filter (e9 \ (<>e9 != r9)) bs)
    (bdropo bs o9) (filter (e9 \ (<e9 - o9 @ d (7 < d || d < -7))) bs)
    (stld g fs)
