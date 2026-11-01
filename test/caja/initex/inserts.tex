@@ -1,0 +1,34 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \a
+\hsize=100pt \vsize=50pt \maxdepth=1pt \topskip=10pt
+\baselineskip=12pt \lineskip=1pt \lineskiplimit=0pt \vbadness=10000
+\tracingpages=1
+\count200=1000 \dimen200=30pt \skip200=4pt
+\hbox{a}\insert200{\hbox{i1}\hbox{i2}\hbox{i3}\penalty-5\hbox{i4}\hbox{i5}}
+\hbox{b}\insert200{\hbox{j1}}\hbox{c}
+\showlists
+\output={\message{out \the\outputpenalty{} \the\insertpenalties}\showlists
+  \showbox200 \shipout\box255 \setbox0\box200 }
+\hbox{d}\hbox{e}\hbox{f}\hbox{g}\hbox{h}\penalty-10000
+\maxdeadcycles=1
+\output={\global\setbox3\box255 }
+\hbox{x}\penalty-10000 \hbox{y}\penalty-10000
+\showthe\deadcycles
+\output={\shipout\box255 \showlists}
+\hbox{depth}\hrule height 2pt depth 8pt \penalty-10000
+\let\eg=} \output={\shipout\box255 \eg\begingroup}
+\hbox{u}\penalty-10000
+\endgroup
+\output={\deadcycles=0 \setbox2\box255 }
+\vadjust{\hbox{adj}}\hbox{v}
+\setbox5\vbox{\hbox{a}\vskip 0pt minus 1fil\hbox{b}\vskip 5pt\hbox{c}}
+\setbox6\vsplit5 to 12pt \showbox6 \showbox5
+\setbox5\vbox{} \setbox6\vsplit5 to 1pt \showbox6
+\insertpenalties=7 \showthe\insertpenalties \deadcycles=3
+\pagedepth=1pt \pageshrink=2pt \pagefilstretch=3pt \showthe\pagedepth
+\showlists
+\penalty-10000
+\output={\shipout\box255 }
+\end

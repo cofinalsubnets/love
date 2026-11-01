@@ -1,0 +1,21 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \a \hsize=100pt \vsize=100pt \baselineskip=12pt \parfillskip=0pt plus 1fil
+\def\x{expanded} \let\eg=}
+\def\long{0123456789abcdefghij0123456789abcdefghij0123456789abcdefghij0123456789abcdefghij}
+\shipout\hbox{\special{\long\long\long\long}\special{}a}
+\immediate\openout1=back.tex
+\immediate\write1{\noexpand\message{read back \x}}
+\immediate\write1{\def\noexpand\y{why}}
+\immediate\closeout1
+\input back \message{\y}
+\output={\shipout\vbox{\write-1{in output \the\outputpenalty}\box255}\immediate\write-1{now}}
+\hbox{p}\penalty-10001
+\shipout\hbox{\write-1{un \eg balanced}\write-1{bal \iffalse{\fi} anced}more}
+\tracingonline=0 \immediate\write16{only log? no, both}
+\immediate\write17{seventeen} \immediate\write-5{minus five}
+\tracingmacros=2 \immediate\write-1{\x}\tracingmacros=0
+\setbox3\hbox{\write-1{copied \x}}\shipout\hbox{\copy3\box3}
+\shipout\vbox{\openout9=nine \write9{nine}\closeout9 \openout 15=\jobname x \write15{x}}
+\end

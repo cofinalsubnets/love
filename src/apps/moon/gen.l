@@ -8241,16 +8241,14 @@
      (ptr? ty) (imaddr g ini @ r                    ; a data pointer: a constant address (word-sized abs label+offset),
                    (r != 'no ? [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
                       (icfold ini @ v (v @ 'no 'bad (imnum g ty v)))))
-     ; a label cast to a word-sized integer ((intptr_t)f) is still its address
-     (<ini = 'cast && !(aggish? ty) && !(flo? ty) && tsz g ty = wsize g)
+     ; a label cast to a word-sized integer ((intptr_t)f) is still its address, and so is one
+     ; plus or minus a constant ((unsigned long)&init_stack + 16384)
+     (elem <ini '(cast bin) && !(aggish? ty) && !(flo? ty) && tsz g ty = wsize g)
       (imaddr g ini @ r
-         (r != 'no ? [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]
+         (? (r != 'no) [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]
+            (<ini = 'bin) (imcexp g ty ini)
             (icfold ini @ v (v @ 'no (imgbytes g ty <>>ini) (imnum g ty v)))))
-     ; a constant expression parse's cfold left: a float through a cast ((int)(0.867 * (1 << 16))), or
-     ; a floating one (2 * 4.5 - 1), which converts as by assignment
-     (!(aggish? ty) && !(flo? ty) && elem <ini '(bin un cast))
-      (imszof g ini @ e
-         (icfold e @ v (v @ 'no (icfold ['cast ty e] @ c (c @ 'no 'bad (imnum g ty c))) (imnum g ty v))))
+     (!(aggish? ty) && !(flo? ty) && elem <ini '(bin un cast)) (imcexp g ty ini)
      (<ini = 'init)
       (unelide g 'none ty ini @ nini
        (?- 'bad
@@ -8316,10 +8314,16 @@
        (fold rows bytes))
    (imgpad g ty w val)                              ; imgbytes padded (with zeros) to w bytes | 'bad
     (imgbytes g ty val @ b (bad? b ? 'bad (b + zeros (w - imbytelen b))))
+   ; a constant expression parse's cfold left: a float through a cast ((int)(0.867 * (1 << 16))), or
+   ; a floating one (2 * 4.5 - 1), which converts as by assignment
+   (imcexp g ty ini)
+    (imszof g ini @ e
+       (icfold e @ v (v @ 'no (icfold ['cast ty e] @ c (c @ 'no 'bad (imnum g ty c))) (imnum g ty v))))
    (cgimage g ty ini)                               ; the full span-padded image | 'bad
     (: raw (imgbytes g ty ini)
        ; round to the word (8 on x64/a64, 4 on t32), past a flexible array's initializer too
-       (bad? raw ? 'bad (: n (imbytelen raw) (raw + zeros (aup (max (tsz g ty) n) (wsize g) - n)))))
+       ; an empty object still takes a byte, so two never share an address
+       (bad? raw ? 'bad (: n (imbytelen raw) (raw + zeros (aup (max (max 1 (tsz g ty)) n) (wsize g) - n)))))
 
    ; the inline-asm register file (cgasm; cgdecl reads it for a register variable's pin)
    asmregs '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
@@ -8561,7 +8565,7 @@
               (? !(c = 37) (go (i + 1) (acc + string c))
                  (i + 1 < n)
                   (: d (tm (i + 1))
-                     md (elem d '(98 119 107 113 99 120 108 97 80 115 104 100) && i + 2 < n && 48 <= tm (i + 2) <= 57 ? d 0)
+                     md (elem d '(98 119 107 113 99 120 108 97 80 115 104 100 81 82) && i + 2 < n && 48 <= tm (i + 2) <= 57 ? d 0)
                      dx (md ? (tm (i + 2)) d)
                      (? (d = 37) (go (i + 2) "\(acc)%")
                         (48 <= dx <= 57)
@@ -8591,8 +8595,21 @@
              (a @ 'no 'no
                   (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? "\(nm)\(<>a)" "\(nm)+\(<>a)")))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
-   (asmw g env e) (peekty g env e @ ty
+   (asmw g env e) ((asmcty g e @ k (k ? k (peekty g env e))) @ ty
                      (bad? ty ? 8 (tsz g ty @ n (elem n '(1 2 4 8) ? n 8))))
+   ; a constant operand's C type, so "a"(3 * 8) is %eax as in gcc: its literals' and casts'
+   ; types through the promotions and conversions. () for anything else
+   (asmcty g e)
+    (knum g e @ k
+       (? (two? k) (k 1)
+          (two? e && <e = 'bin)
+           (asmcty g (e 2) @ ta
+              (? !ta ()
+                 (elem (e 1) '(== != < > <= >= && ||)) 'int
+                 (elem (e 1) '(<< >>)) (pprom ta)
+                 (asmcty g (e 3) @ tb (tb ? (puac !(ilp32? g) ta tb)))))
+          (two? e && <e = 'un) (asmcty g (e 2) @ ta (ta ? (pprom ta)))
+          ()))
    asmho holo-bytes-open                            ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
    ; a template's bytes: one opaque raw, unless it carries a directive or a label beside an
    ; instruction -- then gas-top reads it in place: raw runs split at its labels (numbered per
@@ -8676,6 +8693,8 @@
        ; rip-relative address constant, ('m imm 0 0) an
        ; immediate, ('f reg expr 1 cond) a flag output, ('k sp expr 8) the stack pointer as it stands
        (pinof k e) (k @ 'pick (asmvpin g env e @ p (nom? p ? p k)) k)
+       ; a 64-bit register operand on thumb rides a pair, %Q its low register and %R its high
+       (pr? e2) (t32? g && elem <e2 '(o x i) && e2 3 = 8)
        ; x64's memory operand at an address constant is `sym+k(%rip)`, as gcc spells it, and takes no
        ; register: paravirt's `call *%[op]` must stay the six-byte `ff 15` the kernel patches. a
        ; segment's operand keeps the register: holo lays no %gs: store at a rip address
@@ -8726,6 +8745,7 @@
                        (pinset >l (k . acc)))))
              pinned (pinset ops9 ())
              (bad? pinned ? (asmno g "an asm register pinned twice, or one no operand may take")
+              (any (e2 \ pr? e2 && nom? <>e2 && !(elem <>e2 '(pick fpick))) ops9) (asmno g "a 64-bit asm operand pinned to one register")
                 (: (assign l fr acc)
                     (!(two? l) ? (rev acc)
                        (: e2 <l k <>e2
@@ -8734,6 +8754,8 @@
                               (filter (r9 \ elem r9 >k) fr @ c9
                                  (two? c9 ? (assign >l (filter (r9 \ r9 != <c9) fr) (<c9 . acc)) 'bad))
                              (two? k) (<>k < #acc ? (rev acc <>k @ r9 (assign >l fr (r9 . acc))) 'bad)
+                             (k = 'pick && pr? e2)          ; a thumb pair: two registers, lo then hi
+                              (two? >fr ? (assign >l >>fr ([<fr <>fr] . acc)) 'bad)
                              (k = 'pick)
                               (two? fr ? (assign >l >fr (<fr . acc)) 'bad)
                              (k = 'fpick)
@@ -8778,7 +8800,9 @@
                       (two? labs && two? saves) (asmno g "an asm goto with a callee-saved clobber")
                       (two? labs && two? csops) (asmno g "an asm goto with an esi or edi operand")
                       (: ; the operand printers, one per kind (neutral: a plain register name, "m" as `rN, 0`)
-                         (rtext a9 w) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
+                         (rtext a9 w) (md \ (? (two? a9) (md @ (0 || 81) (gas-reg tgt <a9 4 0) 82 (gas-reg tgt <>a9 4 0) 'bad)
+                                              (elem md '(81 82)) 'bad
+                                              (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
                          (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
@@ -8813,6 +8837,7 @@
                                                  (loads >l >al (k + 1) (acc + vfs r + [[(gmv (vty r = 'float ? 4 8)) 'r0 'f0]]
                                                                         + (k + 1 = nin ? () (spush 'r0))))
                                                 (flo? (vty r) || stru? (vty r)) (asmno g "a float or struct asm operand")
+                                                (two? <al) (loads >l >al (k + 1) (acc + asll g r + spush 'r0 + spush 'r1))
                                                 (loads >l >al (k + 1) (acc + tor0 g r + (k + 1 = nin ? () (spush 'r0))))))
                                          (loads >l >al k acc))))
                                lf (loads ops9 asgn 0 ())
@@ -8822,7 +8847,8 @@
                                       (!(two? l) ? acc
                                          (elem <<l '(x i b) ?
                                             (pops >l >al (k + 1)
-                                                  ((? (freg? <al) (k + 1 = nin ? [[(fmv <>>><l) <al 'r0]] (spop scr + [[(fmv <>>><l) <al scr]]))
+                                                  ((? (two? <al) (spop <><al + spop <<al)
+                                                      (freg? <al) (k + 1 = nin ? [[(fmv <>>><l) <al 'r0]] (spop scr + [[(fmv <>>><l) <al scr]]))
                                                       (k + 1 = nin) (<al = 'r0 ? () [['mov <al 'r0]])
                                                       (spop <al)) + acc))
                                             (pops >l >al k acc)))
@@ -8839,7 +8865,7 @@
                                      (opush l al acc)
                                       (!(two? l) ? acc
                                          (elem <<l '(o x f) ?
-                                            (opush >l >al (acc + (freg? <al ? () (spush <al))))
+                                            (opush >l >al (acc + (? (two? <al) (spush <<al + spush <><al) (freg? <al) () (spush <al))))
                                             (opush >l >al acc)))
                                      (ostores l al acc)
                                       (!(two? l) ? acc
@@ -8850,9 +8876,12 @@
                                                      (vty lv @ ty
                                                         ; a struct or union a register holds whole ("=r"(lockval)) stores as the integer its size is
                                                         (: wt (stru? ty && <e2 = 'o && !(freg? <al) ? (tsz g ty @ n (elem n [1 2 4 (wsize g)] ? (n @ 1 'uchar 2 'ushort 4 'uint 'ulong) ty)) ty)
-                                                           (flo? wt && !(freg? <al) || stru? wt || arr? wt || bitf? wt ? (asmno g "a float, struct, array or bit-field asm output")
+                                                           (? (flo? wt && !(freg? <al) || stru? wt || arr? wt || bitf? wt) (asmno g "a float, struct, array or bit-field asm output")
+                                                              (two? <al && !(pair? g wt)) (asmno g "a 64-bit asm output into a narrower lvalue")
                                                               (ostores >l >al
-                                                               (vfs lv + (freg? <al ? (fst <>>><l wt <al) (spop 'r1 + [[(stop wt) 'r0 0 'r1]])) + acc))))))))))
+                                                               (vfs lv + (? (two? <al) (spop 'r3 + spop 'r2 + pstw 'r0 0 'r2 'r3)
+                                                                            (freg? <al) (fst <>>><l wt <al)
+                                                                            (spop 'r1 + [[(stop wt) 'r0 0 'r1]])) + acc))))))))))
                                      osf (ostores ops9 asgn ())
                                      ; one register output into a plain memory lvalue (a local's slot, a home's
                                      ; face) stores straight from its register: no cell
@@ -8860,7 +8889,7 @@
                                      one? (1 = #(filter (e2 \ elem <e2 '(o x f)) ops9) && 0 <= oix9)
                                      olv (one? ? (clval g env <>>(ops9 oix9)))
                                      oreg (one? ? (asgn oix9))
-                                     direct (one? && !(freg? oreg) && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
+                                     direct (one? && nom? oreg && !(freg? oreg) && vm? olv && !(two? (vfs olv)) && vmb olv != oreg
                                              && !(vty olv @ ty (flo? ty || stru? ty || arr? ty || bitf? ty)))
                                      (post u9) (fsets ops9 asgn () + (direct ? [[(stop (vty olv)) (vmb olv) (vmo olv) oreg]]
                                                                          (opush ops9 asgn () + osf)))
@@ -9950,6 +9979,8 @@
         (: c (? (elem nm d || dn nm) ()
                 ; a body that compiles only spliced, or always_inline, splices at any depth
                 (!(peep (g 'ineed) nm () || peep (g 'alw) nm ()) && 3 < #d) ()
+                ; noinstr's no_profile_instrument_function takes always_inline alone, as clang does
+                (elem <>rf (g 'nopro) && !(peep (g 'alw) nm ())) ()
                 (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)
@@ -11806,23 +11837,26 @@
        memo (g 'romemo || {})
        (strm nm) (sects nm @ s
                     (s ? s ".data"))
-       ; an uninitialized global rides .bss unless it names its own section
-       (bss? nm) (!(sects nm) && !(two? <>>(peep (g 'glob) nm 0)))
+       ; an uninitialized global rides .bss unless it names its own section, as does one whose
+       ; initializer images to zeros (gcc's and clang's lay); a const one stays a .rodata candidate
+       (bss? nm) (!(sects nm) && (<>>(peep (g 'glob) nm 0) @ init (!(two? init) || !(consts nm) && zero? nm init)))
+       (zero? nm init) (image1 nm <>(peep (g 'glob) nm 0) init @ b (!(bad? b) && !(any (x \ x != 0) b)))
        ; a const global rides .rodata only if its image needs no relocation (a pointer the linker
        ; writes stays in .data, gcc's .data.rel.ro: a -pie startup writes the base there), or
        ; under -fno-pie, where no base moves it
        (ro? nm bytes) (consts nm &&
                        (npic? g || !(foldl (a \ x \ a || fixit? x) () bytes)))
-       ; a const candidate images twice ('d and 'r), so it memoizes; only candidates do
+       ; a global images more than once (bss?, then 'd or 'z, a const candidate 'r too), so it memoizes;
+       ; a refusal images again, its walk pinning the cause
        (image1 nm ty init)
-        (!(consts nm) ? (cgimage g ty init)
-           (memo nm @ m
-              (two? m ? <>m
-                 (cgimage g ty init @ v (pin memo nm [1 v], v)))))
+        (memo nm @ m
+           (two? m ? <>m
+              (cgimage g ty init @ v (bad? v ? v (pin memo nm [1 v], v)))))
        ; zm: 'd the initialized, 'z the bss, 'r the const ones .rodata claims, () everything (a named stream never splits)
        (globs gs want zm acc)
         (? !(two? gs) acc
            !(strm <gs = want) (globs >gs want zm acc)
+           (peep (g 'alias) <gs ()) (globs >gs want zm acc)   ; an alias lays no bytes: its label rides its target's
            (elem zm '(d r) && bss? <gs) (globs >gs want zm acc)
            (zm = 'z && !(bss? <gs)) (globs >gs want zm acc)
            (: ge (peep (g 'glob) <gs 0)
@@ -11856,7 +11890,7 @@
                                                 (elem want '(".data" ".bss" ".rodata")) (exact (own ty init) bytes)
                                                 [<(exact (own ty init) bytes)])))))))   ; a named stream: no word's pad past the object
        ; an object's own bytes: its type's, or more where a flexible array's initializer runs past it
-       (own ty init) (max (tsz g ty) (imbytelen (imgbytes g ty init)))
+       (own ty init) (max (max 1 (tsz g ty)) (imbytelen (imgbytes g ty init)))
        ; an image as its object's own bytes, and the word's padding past them apart: the object
        ; writer reads a symbol's size up to the align (modpost holds a device table to it)
        (exact n bs)
@@ -11977,9 +12011,10 @@
           'novol (two? xtra && 11 < #xtra && !(xtra 11))
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
-          'romemo {}                                ; a const candidate's image, laid once and read by both walks
+          'romemo {}                                ; a global's image, laid once and read by every walk
           'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
           'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
+          'nopro (two? xtra && 14 < #xtra ? (xtra 14) ())  ; no_profile_instrument_function names
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never

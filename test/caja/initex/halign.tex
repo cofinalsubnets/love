@@ -1,0 +1,33 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\^=7 \catcode`\&=4
+\time=0 \day=1 \month=1 \year=2000
+\showboxdepth=100 \showboxbreadth=1000 \tracingonline=1
+\font\a=cmr10 \a \hsize=200pt \vsize=300pt \baselineskip=12pt \lineskip=1pt \lineskiplimit=0pt
+\parfillskip=0pt plus 1fil \tolerance=10000 \hbadness=10000
+\setbox1\vbox{\tabskip=2pt\halign{#\hfil\tabskip=4pt plus 1fil&\hfil#&[#]\cr
+a&bb&ccc\cr
+\noalign{\kern3pt\hrule}
+dddd&e\cr
+f\span gg&h\cr
+\omit\vrule width 30pt&\omit&ii\cr
+\multispan&x\cr
+\noalign{\showlists}
+}}
+\showbox1
+\setbox2\vbox{\halign to 150pt{&\hfil#\tabskip=0pt plus 10pt\cr 1&2&3\cr 44&55\cr 6&7&8&9\cr}}
+\showbox2
+\setbox3\vbox{\halign spread 5pt{#\cr a\cr\vrule\cr}}
+\showbox3
+\setbox4\hbox{\valign{\hrule height #pt\vfil&\vskip 2pt#\cr 3&\hbox{x}\cr 5\cr}}
+\showbox4
+\setbox5\vbox{\halign{#&#\cr a&b&c\cr}}
+\setbox5\vbox{\halign{x#y#z\cr}}
+\setbox5\vbox{\halign{x\cr}}
+\setbox5\vbox{\everycr{\noalign{\penalty7}}\halign{#\crcr a\cr\crcr b}}
+\showbox5
+\setbox6\vbox{\halign to 10pt{#\cr wide entry\cr}}
+\showbox6
+\setbox7\vbox{\halign{#\span\a\cr x\cr}}
+\showbox7
+\halign{#\cr top level\cr}
+\showlists
+\end

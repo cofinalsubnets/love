@@ -443,12 +443,14 @@
     (: wn (map name wu)
        (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np}))
+   ; arm under -fpic: an address is pc-relative, movw/movt from the pc an add reads
+   (picla tgt pc fs) (tgt = 'arm && pc ? (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs) fs)
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes nopro]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes] tgt)
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt)
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -459,8 +461,8 @@
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
-                 tforms (wkla tgt wu tforms)
-                 xfns (map ([nm forms al] \ [nm (wkla tgt wu forms) al]) xfns)
+                 tforms (picla tgt pc (wkla tgt wu tforms))
+                 xfns (map ([nm forms al] \ [nm (picla tgt pc (wkla tgt wu forms)) al]) xfns)
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                      + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                      + bpsecs bp + cfsecs cf tgt)
@@ -471,7 +473,7 @@
                         (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
-                    (objsecs32n tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
+                    (objsecs32n tgt (objsec-merge ((objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3)) + xs) <at)
                                 fns gns wks anames)
                     (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
                               fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames)))
@@ -1100,7 +1102,7 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic ()}
+                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1243,6 +1245,10 @@
           (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
           ; the float file refused: code that would touch an xmm or x87 register is a refusal
           ((a . r) && elem a ["-mno-sse" "-mno-sse2" "-mno-80387" "-msoft-float" "-mgeneral-regs-only"]) (flags r (pin t 'nofp 1))
+          ; arm's asks: thumb-2 is what it lays, aapcs-linux the arm target's own abi, and a soft
+          ; float abi refuses the float file as -msoft-float does
+          ("-mfloat-abi=soft" . r) (flags r (pin (fpush t 'a32 "-mfloat-abi=soft") 'nofp 1))
+          ((a . r) && elem a ["-mthumb" "-mabi=aapcs-linux"]) (flags r (fpush t 'a32 a))
           ; no lane of ours would use these, so asking for none of them asks nothing
           ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
           ; every call keeps esp 16-aligned, which satisfies any boundary asked for
@@ -1317,7 +1323,9 @@
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
        _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
-       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
+       a32x (filter (a \ !(elem (f 'tgt) (a = "-mabi=aapcs-linux" ? '(arm) '(thumb1 thumb2 thumb2sp arm)))) (f 'a32))
+       _ (two? a32x && udie 2 "cc: \(<a32x) -- an arm ask; no lane on \(f 'tgt)")
+       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        _ (f 'ssp && pin f 'sspg (sspguard f))
        _ (two? (f 'x6f) && f 'tgt != 'x64 && udie 2 "cc: \(<(f 'x6f)) -- an x86-64 ask; no lane on \(f 'tgt)")
        _ (elem 'thk (f 'xk) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead

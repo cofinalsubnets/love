@@ -82,6 +82,8 @@
                                (elem k '(b bcc bl)) (patch-with be k off off w (fix-a x))
                                ; movw16/movt16 (thumb2 la): zero imm16 here, bakemw fills it
                                (elem k '(movw16 movt16)) (patch-with be k 0 off w (fix-a x))
+                               ; movw16p/movt16p (thumb2 lap): the addend that counts P to the add's pc
+                               (elem k '(movw16p movt16p)) (peep be 'lapa 0 k (fix-a x))
                                (o-zeros w))
                        ; carry the byte before the field, the x64 opcode that tells a call
                        ; (PLT32) from an address-of (PC32); a blob head is a string, so 0
@@ -151,6 +153,8 @@
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
+   r-thm-movwp 49                                   ; R_ARM_THM_MOVW_PREL_NC ((S+A)|T) - P, low 16   (thumb2 lap)
+   r-thm-movtp 50                                   ; R_ARM_THM_MOVT_PREL    S+A - P, high 16
    ; an 8-byte rel entry (the symbols are elf.l's elf-sym32, st_size 0).
    (o-rel32 offset symidx typ) (catall [(le32 offset) (le32 (symidx * 256 + typ))])
    ; anames maps a C name to its asm label: the strtab spells that, the forms keep the C name
@@ -202,9 +206,9 @@
            (rev (go allrel ())))
        ; the branch kinds too: a branch across sections has no room in its field for the offset
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
-                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 abs32 b bcc bl)))
+                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 movw16p movt16p abs32 b bcc bl)))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
-                      '(movw16 movt16))
+                      '(movw16 movt16 movw16p movt16p))
        locs (locfns + locdat)
        ; -- symbol indices: NULL, a section symbol each, those locals, funcs, globs, exts;
        ; every local ahead of the first global, where .symtab's sh_info points --
@@ -301,6 +305,11 @@
                ('movw16 || 'movt16)
                 (mwloc lbl @ sl
                    (o-rel32 off <sl $ k == 'movw16 ? r-thm-movw r-thm-movt))
+               ; lap's target is a symbol of its own: its field already holds the addend
+               ('movw16p || 'movt16p)
+                (mwloc lbl @ sl
+                   (<>sl != 0 ? (scare 'obj32-lap-offset lbl)
+                      (o-rel32 off <sl $ k == 'movw16p ? r-thm-movwp r-thm-movtp)))
                (scare 'obj32-reloc k)))
           rs))
        rels (map (o-rels32 * ln-rl) lanes)
@@ -389,7 +398,8 @@
    ; Tag_ABI_FP_number_model (23) says floats are used.
    ; format: 'A', le32 over all that follows, "aeabi\0", Tag_File (1) with its own le32 length,
    ; then (tag value) uleb128 pairs, a string value NUL-terminated; all here are under 128.
-   (armattrs t)
+   ; vfp 0 is -mfloat-abi=soft: floats pass in core registers, base aapcs
+   (armattrs t vfp)
     (: t1 (t == 'thumb1) a? (t == 'arm)                       ; linux's arm: the fpv5 set is armv8's aarch32
        pairs ('(5) + o-strbytes (? t1 "6-M" a? "8-A" "7E-M") + '(0)   ; Tag_CPU_name
               + [6 (? t1 11 a? 14 13)]                         ; Tag_CPU_arch: v6-M | v8 | v7E-M
@@ -400,7 +410,7 @@
               + '(18 4)                                        ; Tag_ABI_PCS_wchar_t
               + '(23 3)                                        ; Tag_ABI_FP_number_model: IEEE 754
               + '(26 1)                                        ; Tag_ABI_enum_size: small
-              + (t1 ? () '(28 1)))                             ; Tag_ABI_VFP_args: VFP regs
+              + (t1 ? () [28 vfp]))                            ; Tag_ABI_VFP_args: VFP regs | base
        sub ('(1) + le32 (5 + #pairs) + pairs)             ; Tag_File, over its own length
        ('(65) + le32 (10 + #sub) + o-strbytes "aeabi" + '(0) + sub))
 
@@ -413,7 +423,9 @@
       [".data"   1 3 (o-dalign 4 dataforms) dataforms]
       [".bss"    8 3 (o-dalign 4 bssforms) bssforms]]
      + (two? nifforms ? [["love_nifs" 1 3 4 nifforms]] ())
-     + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]]))   ; SHT_ARM_ATTRIBUTES
+     + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target 1)]]]]))   ; SHT_ARM_ATTRIBUTES
+   ; the same under -mfloat-abi=soft
+   (armsoft target secs) (map (s \ (<s = ".ARM.attributes" ? [<s (s 1) (s 2) (s 3) [['raw (armattrs target 0)]]] s)) secs)
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (arch-nom target0 @ target

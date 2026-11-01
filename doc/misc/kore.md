@@ -58,7 +58,8 @@ The `applets` tablet in kore.l; the aliases are make/cook, sh/lush, ls/dir/vdir,
 less/more, im/pngcat/jpegcat/gifcat and imless/pngless/jpegless/gifless (`im cat` and
 `im less`). love's own verbs
 carry the rest of the userland the census counts: `cc` (mooncc, doc/misc/moon.md),
-`mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`.
+`mkdosfs`/`mkfs.vfat` and `fat`, `mc`, `pom`, and classic `pic`, `grap` and `chem` (below,
+carried and not baked).
 
 | where | tools |
 | --- | --- |
@@ -533,9 +534,13 @@ None of this is law 1 — that says `htread` reads what `htshow` writes, and rea
 
 ## markdown (src/apps/kore/lens.l)
 
-`markdown [-t html|roff|text] [-w COLS] [FILE..]` — the same lens, driven the direction papel
+`markdown [-t html|roff|text|cells|dvi] [-w COLS] [FILE..]` — the same lens, driven the direction papel
 drives it. `-t html` (the default) is `md->ht`, `-t roff` is `md->rf`, `-t text` is `md->tty`
-at a width. The roff lane is the build's own page path a command away: `markdown -t roff
+at a width, and `-t cells` is the same words broken into lines by caja's paragraph builder
+(TeX's, in cells). `-t dvi` sets one document (a file or stdin; a man page is read as roff) in pages
+with caja, TeX's engine in love (src/apps/caja/), from Computer Modern's metrics and plain TeX's
+hyphenation patterns in a TeX tree -- `$CAJA_TEXMF`, else TeX Live's usual places. caja is
+carried and not baked: the first `-t cells` or `-t dvi` reads it off `/love`. The roff lane is the build's own page path a command away: `markdown -t roff
 doc/love.md` writes what `doc/love.1` is made of, `.TH` and all, because the `.TH` comes from
 the document's front matter and lapiz reads front matter as the meta block.
 
@@ -680,6 +685,50 @@ row's lower half is transparent as the cell's is, and `-c 256` takes each channe
 level the 256-colour cube shows (0, 95, 135, 175, 215, 255). OUT is a PNG unless its
 extension or `-t` says otherwise; to `.ans` it is the blocks' text itself, `-c 256` in the
 cube's codes.
+
+## pic, grap and chem (src/apps/pic/)
+
+Three troff preprocessors, one carried unit: the source rides the artifact and is not
+baked, so the first `pic`, `grap` or `chem` reads src/apps/pic/ off `/love` and compiles it
+(`love bake --with pic` bakes it in). grap's reader is pic's, so they are one module.
+
+`pic [-nCSU] [FILE..]` and `pic -t [-cCSUz] [FILE..]` are classic pic (gpic.l),
+Kernighan's picture language as GNU pic speaks it: a troff preprocessor that copies a
+document through and turns each picture between `.PS` and `.PE` (or `.PF`, `.PY`) into
+troff's `\D` drawing commands, or with `-t` into tpic `\special`s in a TeX box `\graph`. Its
+output is held byte for byte to groff's own `pic` (`make test_gpic`, the corpus in
+test/gpic): boxes, circles, ellipses, arcs, lines, arrows, splines, moves and text with
+their attributes, places and corners, expressions and variables, blocks, `define`, `for`,
+`if`, `copy` and `copy thru`, `sprintf`, `print` and `command`, colours, polygons, slanted
+boxes and `aligned` text; `-c` and `-z` for TeX. `sh` runs only under `-U`. Not yet: dashed
+or dotted ellipses and rounded boxes, `.PS <file`, groff's `rand`, and its error messages
+(the exit status and what is drawn before an error agree, the words on stderr do not).
+As groff's, a picture's variables and labels carry into the next one, `.lf` lines between
+pictures renumber the document, and `.PS`'s width and height are read as scanf reads them.
+
+`grap [FILE..]` is Kernighan and Bentley's language for graphs (grap.l), a
+preprocessor ahead of pic: each graph between `.G1` and `.G2` becomes a picture of its
+coordinate systems' macros, its frame, its ticks and what it plots. Its output is held byte
+for byte to plan 9's grap (`make test_grap`, the corpus in test/grap), and what it writes is
+drawn by this pic as groff's pic draws plan 9's: frames and their sides, `coord` with log
+axes, automatic ticks as plan 9 chooses them (its steps, slack and margins, log decades and
+their widened ends), `ticks` and `grid` at lists or iterators with their labels and formats,
+`label`, `plot`, `line`, `arrow`, `circle`, `draw`, `new`, `next` and plain numbers,
+`define`, `copy` and `copy thru`, `for`, `if`, `sh`, `sprintf`, `graph` for several in one
+picture, and plan 9's marks (its grap.defines, or a copy of them where plan9port is not).
+`log` and `exp` are base ten and, like `^`, the doubles nearest the true values, as glibc's
+are. Not yet: plan 9's mark left dangling from one graph to the next, and its error
+recovery beyond a line given up.
+
+`chem [FILE..]` is the language for chemical structures (chem.l), a
+preprocessor ahead of pic over groff's chem.pic macros: each diagram between `.cstart` and
+`.cend` (or `begin chem` and `end` inside a picture) becomes pic. Its output is held byte for
+byte to groff's chem (`make test_chem`, the corpus in test/chem): moieties with their
+subscripts and where a bond meets them, bonds of each kind by angle or compass word, length,
+`from` and `to`, rings of three to eight sides, `benzene`, `flatring` and `aromatic`, with
+`pointing`, `put` and `double`, labels, `BP`, strings, `size`, `textht`, `cwid` and `db`, and
+pic and troff lines through. It writes the copy of groff's own chem.pic it finds beside
+groff, and `chem.pic` where there is none.
 
 The decoders: src/apps/png.l (every colour type and depth, Adam7, APNG's frames composed by the
 spec's blend and dispose), src/love/picture/jpeg.c (baseline and progressive, any sampling, grey,
@@ -870,7 +919,8 @@ kore does not is the census's to say.
 
 ## the census (kore against the other userlands)
 
-Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27. A row is a tool
+Taken 2026-09-26; kore's column retaken and plan9port's added 2026-09-27; kore's `grap` and
+`chem` counted 2026-09-30. A row is a tool
 NAME and a mark says the implementation answers to it — the same reach as the inventory,
 nothing about flags (plan9port's `ls` or `grep` answers to the name in Plan 9's manner). Every
 tool kore has is a row, and so is every tool at least two of the others share; a name only
@@ -884,7 +934,7 @@ Not counted in any column: one implementation's spelling of a general tool (kore
 plan9port's `9`).
 
 * **kore** — the `applets` tablet in kore.l, plus the love verbs that are unix tools: `cc`
-  (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `hexedit`, `mc`, `pom`.
+  (mooncc), `mkdosfs`/`mkfs.vfat`, `fat`, `hexedit`, `mc`, `pom`, `grap`, `chem`.
 * **busybox** — `busybox --list`, 1.36.1 as Arch builds it.
 * **toybox** — `toybox` bare, 0.8.14-57 (38ebde21) built from ~/src/toybox at defconfig: the
   pending tools (`sh`, `vi`, `awk`, `bc`, `make` ..) are off, as a release build has them.
@@ -942,6 +992,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `cat` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `cc` | ✓ |  |  | ✓ |  |  |  |
 | `chattr` |  | ✓ | ✓ |  |  |  |  |
+| `chem` | ✓ |  |  |  |  |  |  |
 | `chgrp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `chmod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `chown` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
@@ -1003,6 +1054,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `ftpget` |  | ✓ | ✓ |  |  |  |  |
 | `ftpput` |  | ✓ | ✓ |  |  |  |  |
 | `getopt` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `grap` | ✓ |  |  |  |  | ✓ |  |
 | `grep` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
 | `groups` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `gunzip` | ✓ | ✓ | ✓ | ✓ |  | ✓ |  |
@@ -1258,7 +1310,7 @@ The names only one carries:
   `calendar` `cb` `cleanname` `clock` `cmapcube` `colors` `compress` `core` `crop` `db`
   `delatex` `deroff` `devdraw` `dial` `dict` `disknfs` `dns` `dnsdebug` `dnsquery` `dnstcp`
   `doctype` `dsa2pub` `dsa2ssh` `dsagen` `dsasign` `dump9660` `eqn` `factotum` `fontsrv`
-  `fortune` `freq` `fsize` `g` `getflags` `gif` `grap` `graph` `gview` `hget` `hist` `hoc`
+  `fortune` `freq` `fsize` `g` `getflags` `gif` `graph` `gview` `hget` `hist` `hoc`
   `htmlfmt` `htmlroff` `ico` `idiff` `img` `import` `ipso` `jpg` `label` `lc` `lex` `listen1`
   `lookman` `macedit` `mapd` `mk` `mk9660` `mklatinkbd` `mntgen` `mtime` `namespace`
   `ndbipquery` `ndbmkdb` `ndbmkhash` `ndbmkhosts` `ndbquery` `netfileget` `netfileput`

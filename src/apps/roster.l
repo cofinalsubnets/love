@@ -29,15 +29,10 @@
                    "part  "))
    (named T u) (sort (filter (k \ (T k @ p (string? p && V 'unit p = u))) (keys T)))
    (slurp1 p) (open ("/love/" + p) "r" @ q (hot? q ? (slurp q @ t (close q, t)) ""))
-   ; the name after each "cite '" and "borrow '", to the first delimiter
-   (word1 s) (: n #s
-                (go i) (i < n && !(elem (s i) [32 9 10 40 41 39 34 59]) ? (go (i + 1)) (snip s 0 i))
-                (go 0))
-   (refs t) (catmap (k \ map (s \ name (word1 s)) >(split k t)) ["cite '" "borrow '"])
    (roster-needs u us)
     (: M (V 'mods)
        (dep m) (M m @ p (string? p ? (V 'unit p)))
-       ws (catmap (x \ map dep (refs (slurp1 <x))) (ufiles u))
+       ws (catmap (x \ map dep (V 'refs (slurp1 <x))) (ufiles u))
        (foldl (a \ w \ (string? w && w != u && elem w us && !(elem w a) ? (a + [w]) a)) () ws))
    (q l) ("(quote " + show l + ")")
    ; the cat: each file baked? keeps behind its mark, each other a lazy form with its

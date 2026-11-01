@@ -329,16 +329,21 @@
            "always_inline" 1 "__always_inline__" 1 "noinline" 1 "__noinline__" 1 "used" 1
            "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
            "patchable_function_entry" 1 "__patchable_function_entry__" 1
-           "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1}
+           "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1
+           "no_profile_instrument_function" 1 "__no_profile_instrument_function__" 1}
+   ; a word counts inside an __attribute__((..)) group (a at the depth it opened, else -1), never
+   ; as a parameter's name: `int used` is no attribute. _Alignas is a keyword, counted anywhere
    (hdhits ts)
-    (: (go s d acc) (atom? s ? acc
-                       (<s @ t
-                          (? (d < 1 && (tp? t ";" || tp? t "{")) acc
-                             (tp? t "(") (go >s (d + 1) acc)
-                             (tp? t ")") (go >s (d - 1) acc)
-                             (tkk t = 'id && peep hdword (tkv t) ()) (go >s d (tkv t . acc))
-                             (go >s d acc))))
-       (go ts 0 ()))
+    (: (go s d a acc) (atom? s ? acc
+                         (<s @ t
+                            (? (d < 1 && (tp? t ";" || tp? t "{")) acc
+                               (tp? t "(") (go >s (d + 1) a acc)
+                               (tp? t ")") (go >s (d - 1) (d - 1 <= a ? -1 a) acc)
+                               (a < 0 && (idv? t "__attribute__" || idv? t "__attribute")) (go >s d d acc)
+                               (tkk t = 'id && peep hdword (tkv t) () && (a >= 0 && a < d || tkv t = "_Alignas"))
+                                (go >s d a (tkv t . acc))
+                               (go >s d a acc))))
+       (go ts 0 -1 ()))
    (hwin hw a b) (elem a hw || elem b hw)
 
    ; -- the parse state --
@@ -351,6 +356,7 @@
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
                  pin t 'ainl (),                  ; always_inline function names
                  pin t 'noinl (),                 ; noinline function names
+                 pin t 'nopro (),                 ; no_profile_instrument_function names: clang splices only always_inline into them
                  pin t 'enums {},         ; enum constant -> value
                  pin t 'declaring {},     ; the names being declared now (C11 6.2.1p7)
                  pin t 'labs {},          ; the function's labels (C11 6.8.1p3)
@@ -531,6 +537,7 @@
              (k = 'dot) (ptype ps <>e @ bt (stru? bt ? (fldty ps bt <>>e)))
              (k = 'deref) (ptype ps <>e @ it
                              (? (ptr? it) <>it (arr? it) <>it
+                                (fn? it) it                       ; *f of a function is f, decayed and back
                                 (ptrarg ps <>e @ pt (? (ptr? pt) <>pt (arr? pt) <>pt ()))))
              (k = 'cast) <>e
              (k = 'clit) <>e
@@ -539,7 +546,8 @@
              (k = 'laddr) '(ptr void)
              ; a call through a named function: its 'sigs return type
              (k = 'call) (: sg (two? <>e && <<>e = 'var ? (peep (ps 'sigs) <><>e ()))
-                            (two? sg ? <sg
+                            (? (two? sg) <sg
+                               (<>e = ['var "__builtin_expect"]) 'long   ; gcc's: long, its args left as written
                                ; else through the callee's own type: a function, or a pointer to one
                                (ptype ps <>e @ ft
                                   (? (two? ft && <ft = 'fn) <>ft
@@ -905,6 +913,7 @@
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
+                              pin ps 'tagdef 1,
                               uni ? (pin (ps 'utag) tag2 1) 0,
                               tu ? (pin (ps 'tunion) tag2 1) 0,
                               qmempin ps tag2 qpre,
@@ -972,7 +981,7 @@
                                        (: rest (want ts6 "}")
                                           pa (two? rest ? (pattpk ps rest) [0 rest])
                                           (two? rest ? (ety pos2 lo2 hi2 (max <pa lpk) (modeat ps rest) @ ty (ty = () ? () [ty <>pa])))))))))
-                       (consts >ts3 0 1 0 0))
+                       (pin ps 'tagdef 1, consts >ts3 0 1 0 0))
                     ; a tag not yet defined reads its hint, else uint, gcc's non-negative enum
                     (tag && !(peep (ps 'etag) tag ()) ? (spin ps 'efwd tag 1) 0,
                      [(peep (ps 'etag) tag (peep (ps 'ehint) tag 'uint)) ts3])))
@@ -2411,18 +2420,23 @@
     (ps 'ssp @ lv
        (? (!lv || ps 'curssp = 'no) ()
           (lv = 3 || ps 'curssp) 1
-          (lv < 4) (sspstrong? prms body)
+          (lv < 4) (sspstrong? ps prms body)
           ()))
-   ; an array or aggregate local, a VLA, alloca, or the address of a local or param
-   (sspstrong? prms body)
+   ; an array local or an aggregate holding one, a VLA, alloca, or the address of a local or param
+   (sspstrong? ps prms body)
     (: (dnames x acc) (? (atom? x) acc
                          (<x = 'decl && two? >x) (foldl (a \ d \ (two? d ? (<d . a) a)) acc <>x)
                          (dnames >x (dnames <x acc)))
        ns (dnames body (map cap prms))
        (lroot e) (? (atom? e) () (<e = 'var) <>e (<e = 'dot) (lroot <>e) ())
+       (arrin? ty d) (? (atom? ty) () (elem <ty '(arr varr)) 1
+                        (stru? ty && d < 16) (peep (ps 'stag) <>ty () @ e (two? e && any (f \ arrin? <>>f (d + 1)) <e))
+                        ())
        (hit? x) (? (atom? x) ()
                    (<x = 'decl && two? >x)
-                    (any (d \ two? d && two? <>d && elem <<>d '(arr varr struct union)) <>x)
+                    (any (d \ two? d && arrin? <>d 0) <>x || any hit? <>x)
+                   ; ..but two addresses only compared (typecheck's &__dummy == &__dummy2) escape nowhere
+                   (x @ ('bin op ('addr _) ('addr _)) (elem op '(eq ne)) ()) ()
                    (<x = 'addr && two? >x && elem (lroot <>x) ns) 1
                    (<x = 'call && two? >x) (<>x @ ('var n) (elem n '("alloca" "__builtin_alloca") || any hit? x) (any hit? x))
                    (any hit? x))
@@ -2589,6 +2603,8 @@
      (peep ps 'curweak () ? () (hwin hw "weak" "__weak__" ? (pin ps 'curweak 1))),
      (peep ps 'curinl () ? () (hwin hw "always_inline" "__always_inline__" ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (hwin hw "noinline" "__noinline__" ? (pin ps 'curnoinl 1))),
+     (peep ps 'curnopro () ? ()
+        (hwin hw "no_profile_instrument_function" "__no_profile_instrument_function__" ? (pin ps 'curnopro 1))),
      (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
      (peep ps 'curalign () ? ()
         (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
@@ -2617,12 +2633,14 @@
        (tkw? <ts 'typedef)
         (pbty ps >ts @ br
            (atom? br ? () (tdeflist ps <br <>br (qspec ps >ts <br) (tdrun ps >ts))))
-       (pbty ps ts @ br
+       (pin ps 'tagdef (), pbty ps ts @ br
           (atom? br ? ()
              (: base <br ts0 <>br
                 gbq (qspec ps ts base)  ; the run's mask, _Generic's
                 (peekp ts0 ";" ? ['(tdef) >ts0]     ; a bare struct/enum definition
                    (: _ (tyattr ts0 @ ta (pinat ps ta (hdhits ta)))   ; what a tag body hid from ptop
+                      ; a tag body ahead of a declarator leaves the form no place to show it
+                      _ (peep ps 'tagdef () ? (pin ps 'tagmark 1))
                       sr (pstars ts0 base)
                       rty <sr ts1 (pquals <>sr)
                       ; the first declarator: a plain name, or a paren declarator through pdtor,
@@ -2845,6 +2863,8 @@
               (pin ps 'ainl (<>f . ps 'ainl)),
             peep ps 'curnoinl () && fnp ?
               (pin ps 'noinl (<>f . ps 'noinl)),
+            peep ps 'curnopro () && fnp ?
+              (pin ps 'nopro (<>f . ps 'nopro)),
             ; C11 6.7.4p7: a function every file-scope declaration of which says plain `inline`
             ; has no external definition here
             fnp ? (pin (ps 'c99inl) <>f (peep (ps 'c99inl) <>f 'inl = 'inl && ps 'curlink = 'inl ? 'inl 'ext)),
@@ -2858,6 +2878,7 @@
             pin ps 'curweak (),
             pin ps 'curinl (),
             pin ps 'curnoinl (),
+            pin ps 'curnopro (),
             pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'curtdal (),
@@ -2874,12 +2895,13 @@
                       (acc2 = 'lazyfail ? acc2
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)]))
-           (ptop ps ts2 @ r
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes) (ps 'nopro)]))
+           (pin ps 'tagmark (), ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
                     (why ? (gripe (filat spans (#toks - #ts2)) (<>><ts2) () why)
-                       (note <r, tops <>r (msren ps <r . acc)))))))
+                       ; a bare (tdef) after the form stands for the tag body it carried
+                       (note <r, msren ps <r . acc @ a2 (tops <>r (peep ps 'tagmark () ? ('(tdef) . a2) a2))))))))
    ; an ms_abi definition: the body lays as a static __msabi_NAME on the sysv side, and NAME is a
    ; trampoline (msasm) carrying the ms caller's words over and keeping what ms keeps
    (msname nm) "__msabi_\(nm)"
