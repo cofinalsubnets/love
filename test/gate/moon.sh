@@ -788,10 +788,12 @@ moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/nu
 objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
 # arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute;
 # the arm asks lay on arm alone, and a soft float abi refuses float code as -msoft-float does
+# and tells the linker base aapcs (a vfp one makes ld.lld mark the link hard-float)
 printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\n' > "$ho/.apic.c"
 moonrun -t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft -c -o "$ho/.apic.o" "$ho/.apic.c" > /dev/null 2>&1 || fail "-t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft compile"
 [ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_THM_MOV[WT]_PREL')" = 4 ] || fail "-t arm -fPIC: an address is not a movw/movt PREL pair"
 readelf -rW "$ho/.apic.o" | grep -q 'R_ARM_THM_MOV[WT]_ABS' && fail "-t arm -fPIC laid an absolute movw/movt"
+readelf -A "$ho/.apic.o" | grep -q 'Tag_ABI_VFP_args: VFP registers' && fail "-mfloat-abi=soft still says Tag_ABI_VFP_args: VFP registers"
 printf 'double m(double a) { return a * 2; }\n' > "$ho/.asf.c"
 moonrun -t arm -mfloat-abi=soft -c -o "$ho/.asf.o" "$ho/.asf.c" > /dev/null 2>&1 && fail "-mfloat-abi=soft took float code"
 moonrun -mthumb -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mthumb laid on x64"

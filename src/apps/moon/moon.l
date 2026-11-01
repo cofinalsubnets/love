@@ -473,7 +473,7 @@
                         (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
-                    (objsecs32n tgt (objsec-merge (objsecs3 tgt tforms dforms nforms iforms bforms rforms + xs) <at)
+                    (objsecs32n tgt (objsec-merge ((objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3)) + xs) <at)
                                 fns gns wks anames)
                     (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
                               fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames)))
