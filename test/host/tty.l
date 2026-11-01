@@ -1,7 +1,6 @@
 ; the tty apps on a pty, scribed onto a quay screen. the child sizes itself by stty: a fresh
 ; pty is 0x0 and a parent's settty races its first read. no bare ESC: ESC then a key is alt.
 ; tether is not in love0, so no corpus. run: cat test/00-init.l test/host/00-host.l test/host/tty.l | out/love
-(borrow 'synth)
 (: reaped {}
    deadline 20000
    (waitfor pid) (gather pid @ s
@@ -133,19 +132,25 @@
     ((8 . 6) = at <>d))
  e (run "out/love lore story" "k:q\r" 14 60)
  _ (test ((7 . 6) = at <>e))
-; synth: ESC and a key in one write is alt, striking the quarter tone, not ESC then a plain note
- sq (synth-new ())
- c4 (synth-digits 0 . synth-name (synth-semis sq [0 0 0]))  ; as the legend cells them
- an (synth-name (synth-semis sq [0 0 1]))
- sy (spawn "env HORN=none out/love synth" 16 70)
+; synth: an f key's escape read whole, f4 latching rather than esc leaving; ctrl-w j to the
+; buffer, where i types, and ctrl-w k back to the keys, where w plays
+ sy (spawn "env HORN=none out/love synth" 30 90)
  sm >sy
- a1 (wire sm (string <c4 + " " + >c4))
- _ (say sm "\e1", flush sm)
- _ (rest 300)
+ a1 (wire sm "last -")
  _ (say sm "q", flush sm)
- a2 (slurp sm)
+ a2 (wire sm "last C4")
+ _ (say sm "\eOS", flush sm)
+ a3 (wire sm "latched")
+ _ (say sm "\x17j", flush sm) _ (rest 300)
+ _ (say sm "i", flush sm)
+ a4 (wire sm "INSERT")
+ _ (say sm "\e", flush sm) _ (rest 300)
+ _ (say sm "\x17k", flush sm) _ (rest 300)
+ _ (say sm "w", flush sm)
+ a5 (wire sm "last D4")
+ _ (say sm "\e", flush sm)
  _ (waitfor <sy)
- _ (test !(has? a1 an) (has? a2 an))
+ _ (test (has? a2 "last C4") (has? a3 "latched") (has? a4 "INSERT") (has? a5 "last D4") !(has? a5 "last C5"))
 ; shaft and court: a frame of half blocks, and q ends it
  (blocks m acc k n) ((k < n ? (see m) -1) @ c
                        (c < 0 ? acc

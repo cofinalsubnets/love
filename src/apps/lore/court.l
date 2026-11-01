@@ -716,7 +716,7 @@
                'fps fps 'song (hn \ ()) 'linger 0 'next () 'win (opt 'win)}))
  ; ..and kitty's picture taken down after, where it was put up
  (court-run o) (view-stage o court-walk (_ \ (say out mesh-gone, flush out)))
- court-usage "usage: love play court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--fall none|rain|snow] [--kitty|--cells|--window] [--scale 1|2|4|8]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow; ? the keys; q or esc leaves)"
+ court-usage "usage: love play court [--date YYYY-MM-DD] [--time HH:MM] [--pace N] [--weather clear|partly|mostly|overcast] [--fall none|rain|snow] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (the weather words, rain and snow may stand alone; h l turn, k j step, u n look, [ ] an hour, t the pace, c the cloud, p rain or snow; ? the keys; q or esc leaves)"
  ; --- the words -> the walk's start, or () for words it cannot read; a date or a time
  ; alone keeps the other from now ---
  (court-opts as) (: (ix l w) (: (go i) (i < #l ? (l i = name w ? i (go (i + 1))) ()) (go 0))
@@ -737,7 +737,7 @@
                      (view-arg "--weather" 'cov cov) (view-arg "--fall" 'fall fal)
                      (bare 'fall fal (w \ w = "rain" || w = "snow")) (bare 'cov cov (charm? * cov))
                      (view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells)
-                     (view-flag "--window" 'md 'window) view-scale])
+                     view-window view-scale])
    (tablet? r ?
       (: now0 (court-now ()) l0 (int (now0 0)) d (r 'date) t (r 'time)
          now (d = () && t = () ? now0
