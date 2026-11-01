@@ -369,7 +369,7 @@
    0)
 
 ; a waiting join folds into the earliest waiting row ahead when the heads merge clean but for
-; hot.prof; a conflict, or keep, keeps its slot
+; hot.prof and hot.calls; a conflict, or keep, keeps its slot, and a gone row leaves the keep line
 (: w (bq-world "autofold") lq bq-q
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
    (branch nm files)
@@ -378,8 +378,8 @@
        _ (map (\ f (: _ (bq-put (w 'repo + "/" + <f) (f 1)) (bq-git w ["add" <f]))) files)
        _ (bq-git w ["commit" "-q" "-m" nm])
        (bq-git w ["checkout" "-q" "test"]))
-   _ (branch "p1" [["src/tools/hot.prof" "x\n"] ["p1.txt" "p1\n"]])
-   _ (branch "p2" [["src/tools/hot.prof" "y\n"] ["p2.txt" "p2\n"]])
+   _ (branch "p1" [["src/tools/hot.prof" "x\n"] ["src/tools/hot.calls" "1 1024\n"] ["p1.txt" "p1\n"]])
+   _ (branch "p2" [["src/tools/hot.prof" "y\n"] ["src/tools/hot.calls" "2 2048\n"] ["p2.txt" "p2\n"]])
    _ (branch "c1" [["p1.txt" "other\n"]])
    _ (branch "k1" [["k1.txt" "k\n"]])
    _ (branch "e1" [["e1.txt" "e\n"]])
@@ -394,6 +394,9 @@
    (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines q)) (? (two? ls) (words <ls) ()))
    k0 (calls "dan" [[6 "queue_row" {"state" "waiting" "branch" "k1" "keep" "0"}]])
    q2 (bq-out (bq-git w ["cat-file" "-p" lq]))
+   ; a row kept, then gone without keep 0: no write leaves its number on the keep line
+   k1 (calls "dan" [[7 "queue_row" {"state" "waiting" "branch" "k1" "keep" "1"}] [8 "queue_row" {"state" "left" "branch" "k1"}]])
+   q3 (bq-out (bq-git w ["cat-file" "-p" lq]))
    _ (test
       (row "1" 5 = "waiting")
       (has? (b 2) "folded into row 1 (ant)") (has? (b 2) "but for src/tools/hot.prof")
@@ -402,7 +405,9 @@
       (row "4" 5 = "waiting") !(has? (d 4) "folded into")          ; keep
       (has? q "\nkeep 4\n")
       (has? (e 5) "folded into row 1 (ant)") (row "5" 5 = "folded-into-1")
-      (has? (k0 6) "row now: 4 dan k1") !(has? q2 "\nkeep "))
+      (has? (k0 6) "row now: 4 dan k1") !(has? q2 "\nkeep ")
+      (has? (b 2) "src/tools/hot.calls") (row "2" 5 = "folded-into-1")
+      !(has? q3 "\nkeep ") !(has? q3 "\n4 dan "))
    0)
 
 ; queue_gate: the head row's union gated by bee -- every owed lane through test/gate/lanes.sh (a stub
@@ -462,8 +467,12 @@
    (gated _) (bq-until (\ _ !(has? (row "2") " gating ")) 300)
    g4 (calls "bob" [[12 "queue_gate" {"dir" (w 'repo) "lanes" "test nettest waits"}]])
    _ (gated 0) r4 (row "2")
+   ; a tree with its own out/love gates by it, its lanes its own lanemap's
+   _ (bq-put (w 'repo + "/out/love") (unlines ["#!/bin/sh" "echo \"$@\" > \"$(dirname \"$0\")/gated-by\"" ("exec " + bq-sq bq-love + " \"$@\"")]))
+   _ (hark ["chmod" "+x" (w 'repo + "/out/love")])
    g5 (calls "bob" [[13 "queue_gate" {"dir" (w 'repo) "lanes" "test_kore"}]])
    _ (gated 0) r5 (row "2")
+   by5 (bq-get (w 'repo + "/out/gated-by"))
    ; a row gated on no commit plans test and test_slow alone: refused, never green on that
    n (calls "dan" [[10 "queue_row" {"state" "waiting" "branch" "dan" "keep" "1"}] [11 "queue_gate" {"dir" (w 'repo)}]])
    _ (test
@@ -479,7 +488,7 @@
       ok3 (args3 = "-d out/lanes-gate --slow test_kore test_slow\n")
       (has? (row "2") "test=0") (has? (row "2") "| stood: test") !(has? (row "2") "| red:")
       (has? r4 " green  #") (has? r4 "nettest=0") (has? r4 "waits=0") !(has? r4 "unrun")
-      (has? r5 " green  #") (has? r5 "nettest=0 waits=0")
+      (has? r5 " green  #") (has? r5 "nettest=0 waits=0") (string? by5) (has? by5 "bee --gate ")
       (: st (foldl (\ a x (? (x = "stood:") [] (a = 0 ? 0 (a + [x])))) 0 (words r5))
          (st != 0 && all (\ l (elem l st)) ["test" "nettest" "waits"]))
       (has? (n 11) "is gated on -, not a commit") !(has? (row "4") " gating "))
