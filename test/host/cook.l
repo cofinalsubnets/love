@@ -161,6 +161,17 @@
    ; $@ of a phony target reads as the name (lua's `cd src && $(MAKE) $@`)
    pa (run-cook (mk '(".PHONY: guess" "all: guess" "guess:" "\t@echo \"PA[$@]\"")) "all")
    _ (ok "$@ of a phony target is its name" (has? pa "PA[guess]"))
+   ; a phony with no rule is made by being named (the kernel's tools/Makefile: .PHONY: FORCE)
+   pf (run-cook (mk '(".PHONY: FORCE" "all: FORCE" "\t@echo \"PF[ran]\"")) "all")
+   _ (ok "a phony with no rule forces, it is not refused" (has? pf "PF[ran]"))
+   ; a command-line variable reaches a sub-make through MAKEFLAGS, a space and all, and the
+   ; sub-make's own line wins over it (the kernel's tools/ hand HOSTCC down this way)
+   root (cwd 0)
+   _ (sh ("mkdir -p " + dir + "/sub"))
+   _ (write-file (dir + "/sub/Makefile") "all:\n\t@echo \"SM[$(V)|$(W)]\"\n")
+   sm (run-cook (mk [("MAKE = " + root + "/out/love -l " + root + "/src/apps/cook.l")
+                     "all:" ("\t@$(MAKE) -C " + dir + "/sub W=own")]) "V=a b")
+   _ (ok "a sub-make inherits the command line's variables" (has? sm "SM[a b|own]"))
 
    ; assignment ops
    ops (run-cook (mk '("a := base" "a += more" "b ?= keep" "b ?= nope"

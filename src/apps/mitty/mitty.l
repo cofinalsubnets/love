@@ -569,8 +569,7 @@
                    (? (tablet? hb) (hsail hb, 0) (say err ("mitty: " + hb + "\n"), 1)))
 
  ; --- the server and its clients: a mitty per name on MITTY_RUN/NAME.sock, outliving its terminals ---
- (mitty-dir _) (: e (getenv "MITTY_RUN") h (getenv "HOME")
-                 (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/mitty") "/tmp/mitty"))
+ (mitty-dir _) (getenv "MITTY_RUN" @ e (string? e && 0 < #e ? e (cite 'path 'nest 0 + "/run/mitty")))
  (mitty-sock nm) (mitty-dir 0 + "/" + nm + ".sock")
  (mitty-serve nm as)
   (: _ (umkdirs (mitty-dir 0) 448) path (mitty-sock nm)

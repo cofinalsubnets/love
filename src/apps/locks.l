@@ -150,11 +150,10 @@
        (? (two? ps) 1 ()))
 
    (locks-root _)
-    (: e (getenv "BEE_LOCKS") ru ("/run/user/" + show (getuid 0)) home (getenv "HOME")
+    (: e (getenv "BEE_LOCKS") ru ("/run/user/" + show (getuid 0))
        (? (string? e && 0 < #e) e
           (two? (stat ru)) (ru + "/love-locks")
-          (string? home) (home + "/.love/run/locks")
-          "/tmp/love-locks"))
+          (cite 'path 'nest 0 + "/run/locks")))
 
    (locks-acquire root nm kind who note floor max)
     (kind @ 'exclusive (lk-x-take (root + "/x") (lk-slug nm) nm who note 1)

@@ -8,6 +8,11 @@ struct T { struct S s; long l; };
 
 typedef char *cp;
 
+/* a typeof keeps its operand's qualifiers, the way libsubcmd's option table checks them */
+static const char *name;
+static const char **names;
+struct opt { void *v; _Static_assert(__builtin_types_compatible_p(__typeof__(&name), const char **), "kept"); };
+
 static int lib(void) {
 	char d[8];
 	__builtin_memset(d, 0, 8);
@@ -43,6 +48,11 @@ int main(void) {
 	if (!__builtin_types_compatible_p(int, const int)) return 28;   /* top-level drops */
 	if (!__builtin_types_compatible_p(cp, char *)) return 29;
 	if (!__builtin_types_compatible_p(__typeof__(r), int)) return 30;
+	if (!__builtin_types_compatible_p(__typeof__(name), const char *)) return 31;
+	if (__builtin_types_compatible_p(__typeof__(name), char *)) return 32;
+	if (!__builtin_types_compatible_p(__typeof__(names), const char **)) return 33;
+	if (!__builtin_types_compatible_p(__typeof__(&name), __typeof__(names))) return 34;
+	if (!__builtin_types_compatible_p(__typeof__(const char *), const char *)) return 35;
 
 	if (!__builtin_constant_p(3 + 4)) return 40;
 	if (!__builtin_constant_p(sizeof(struct S))) return 41;

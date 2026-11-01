@@ -241,7 +241,7 @@
    ; --- the pins: a line "host:port spki:<sha-256 of the key's SubjectPublicKeyInfo>" a key.
    ; ~/.love/tls_pins is the override for a server no root vouches for; www's gemini trust on
    ; first use writes the same lines to ~/.love/gemini_hosts ---
-   (pin-path nm) (: h (getenv "HOME") ((? (string? h) h ".") + "/.love/" + nm))
+   (pin-path nm) (cite 'path 'nest 0 + "/" + nm)
    (pin-of path key)
     (: txt (uread path @ [1 s] s "")
        (find l) (? (atom? l) () (: f (split " " <l) (? (1 < #f && <f = key) (f 1) (find >l))))

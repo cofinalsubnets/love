@@ -119,9 +119,10 @@
                       j (stale ? (jobstart item steps) 0)
                       (j ? (pin pending item (j . ta0 . steps), ta0)
                            (settle item ta0 (stale ? steps) done shipped))))))
-            ; no card: a source leaf, which must already exist.
+            ; no card: a source leaf, which must already exist -- or a phony with no rule
+            ; (.PHONY: FORCE), made by being named, as gnu make has it
             (date item @ ta
-             (ta ? 0 (say err "cook: no recipe to make \(item)\n", quit 1),
+             (ta || name? item ? 0 (say err "cook: no recipe to make \(item)\n", quit 1),
               pin done item ta,
               ta)))))
 
@@ -1161,6 +1162,20 @@
       (i >= #w || 0 = i ? ()
          (: e (w (i - 1) = 58 ? (i - 1) i)
             (0 = e ? () (snip w 0 e . sub w (1 + i) #w)))))
+   ; command-line variables travel to sub-makes as gnu make sends them: MAKEFLAGS' words after
+   ; `--`, a space, tab or backslash in a value escaped with a backslash
+   (mfesc v) (cats (map (i \ v i @ c ((elem c [32 9 92] ? "\\" "") + string c)) ^#v))
+   (mfwords s)
+   (: n #s
+      (word w) (cats (map string (rev w)))
+      (go i w ws) (? (n <= i) (rev (two? w ? (word w . ws) ws))
+                     (s i = 92 && i + 1 < n) (go (i + 2) (s (i + 1) . w) ws)
+                     (elem (s i) [32 9]) (go (i + 1) () (two? w ? (word w . ws) ws))
+                     (go (i + 1) (s i . w) ws))
+      (go 0 () ()))
+   (inherited _)
+   (: (after l) (? (atom? l) () (<l = "--") >l (after >l))
+      (filter two? (map varw (after (mfwords (getenv "MAKEFLAGS" @ m (string? m ? m "")))))))
    (parse-args ws)             ; -> a tablet: 'file 'dir 'jobs 'dry 'emit 'help 'ver 'var 'pos
    ((: (loop ws opt) (!(two? ws) ? opt
        (: w <ws r >ws
@@ -1201,7 +1216,9 @@
       _ (peep opt 'dir 0 @ d
            (!d || !(nom? (chdir d)) ? 0
               (udie 2 "cook: cannot cd to \(d)")))
-      _ (pin clivars 0 (opt 'var))
+      ; the line's own variables over the ones a parent make sent, and all of them on down
+      _ (pin clivars 0 (inherited 0 + opt 'var))
+      _ (two? (clivars 0) ? (setenv "MAKEFLAGS" ("-- " + join " " (map (v \ <v + "=" + mfesc >v) (clivars 0)))) 0)
       _ (pin jobs 0 (peep opt 'jobs 1))
       ; ..and the width goes down the environment as a hint; no jobserver
       _ (setenv "COOKJOBS" (show (jobw ())))

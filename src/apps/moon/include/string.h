@@ -10,6 +10,8 @@ int   memcmp(void const*, void const*, size_t);
 void *memchr(void const*, int, size_t);
 void *mempcpy(void*, void const*, size_t);      /* gnu: memcpy answering the end */
 void *rawmemchr(void const*, int);              /* gnu: memchr with no bound */
+void *memmem(void const*, size_t, void const*, size_t);   /* gnu: the first needle */
+void *memccpy(void*, void const*, int, size_t);
 size_t strlen(char const*);
 int   strcmp(char const*, char const*);
 int   strncmp(char const*, char const*, size_t);
@@ -26,6 +28,9 @@ char *strdup(char const*);
 char *strndup(char const*, size_t);
 size_t strnlen(char const*, size_t);
 char *strerror(int);
+int   strerror_r(int, char*, size_t);          /* xsi: 0 or ERANGE */
+size_t strlcpy(char*, char const*, size_t);
+size_t strlcat(char*, char const*, size_t);
 size_t strspn(char const*, char const*);
 size_t strcspn(char const*, char const*);
 char *strpbrk(char const*, char const*);
