@@ -616,13 +616,13 @@
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..and kitty's picture taken down after, where it was put up
  (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
- stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|--window] [--scale 1|2|4|8]   (w a s d or k j step and strafe, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (w a s d or k j step and strafe, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))
      (hm w) (w @ (h + ":" + m) (: a (num h) b (num m) (charm? a && charm? b && a < 24 && b < 60 ? (3600 * a + 60 * b)))
                  _ ())
-     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--window" 'md 'window) view-scale
+     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) view-window view-scale
                      (view-arg "--time" 'time hm)]))
  (stones-main as) (view-main "stones" stones-usage stones-opts stones-run as)
  _ (cite 'lore 'lore-enlist 'stones (udoor 'stones stones-main stones-usage 1 1)))
