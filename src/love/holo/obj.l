@@ -398,7 +398,8 @@
    ; Tag_ABI_FP_number_model (23) says floats are used.
    ; format: 'A', le32 over all that follows, "aeabi\0", Tag_File (1) with its own le32 length,
    ; then (tag value) uleb128 pairs, a string value NUL-terminated; all here are under 128.
-   (armattrs t)
+   ; vfp 0 is -mfloat-abi=soft: floats pass in core registers, base aapcs
+   (armattrs t vfp)
     (: t1 (t == 'thumb1) a? (t == 'arm)                       ; linux's arm: the fpv5 set is armv8's aarch32
        pairs ('(5) + o-strbytes (? t1 "6-M" a? "8-A" "7E-M") + '(0)   ; Tag_CPU_name
               + [6 (? t1 11 a? 14 13)]                         ; Tag_CPU_arch: v6-M | v8 | v7E-M
@@ -409,7 +410,7 @@
               + '(18 4)                                        ; Tag_ABI_PCS_wchar_t
               + '(23 3)                                        ; Tag_ABI_FP_number_model: IEEE 754
               + '(26 1)                                        ; Tag_ABI_enum_size: small
-              + (t1 ? () '(28 1)))                             ; Tag_ABI_VFP_args: VFP regs
+              + (t1 ? () [28 vfp]))                            ; Tag_ABI_VFP_args: VFP regs | base
        sub ('(1) + le32 (5 + #pairs) + pairs)             ; Tag_File, over its own length
        ('(65) + le32 (10 + #sub) + o-strbytes "aeabi" + '(0) + sub))
 
@@ -422,7 +423,9 @@
       [".data"   1 3 (o-dalign 4 dataforms) dataforms]
       [".bss"    8 3 (o-dalign 4 bssforms) bssforms]]
      + (two? nifforms ? [["love_nifs" 1 3 4 nifforms]] ())
-     + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target)]]]]))   ; SHT_ARM_ATTRIBUTES
+     + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target 1)]]]]))   ; SHT_ARM_ATTRIBUTES
+   ; the same under -mfloat-abi=soft
+   (armsoft target secs) (map (s \ (<s = ".ARM.attributes" ? [<s (s 1) (s 2) (s 3) [['raw (armattrs target 0)]]] s)) secs)
 
    (objelf target0 textforms dataforms funcnames globnames wknames nifforms imgforms locnames bssforms rodataforms)
     (arch-nom target0 @ target
