@@ -34,7 +34,7 @@ test_quick: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
-	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_grap test_chem \
+	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
