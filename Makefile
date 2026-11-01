@@ -409,7 +409,10 @@ manifestfiles = src/apps/manifest/manifest.l
 chuchofiles = src/apps/chucho/mime.l src/apps/chucho/box.l src/apps/chucho/smtp.l src/apps/chucho/imap.l src/apps/chucho/chucho.l
 # classic pic and the preprocessors ahead of it, one module: grap's reader is pic's
 picfiles = src/apps/pic/grap.l src/apps/pic/gpic.l src/apps/pic/chem.l src/apps/pic/cli.l
-carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+# caja, TeX's engine, and the font metrics under it. the engine proper (mouth, build,
+# exec) is the -ini tests', borrowed by path, never carried as a unit
+cajafiles = src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l
+carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
