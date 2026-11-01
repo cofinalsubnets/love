@@ -1424,10 +1424,10 @@
    (pal g ty) (sal? g && two? (drop 2 ty) && (ty 2) < tal g <>ty ? (ty 2) ())
    ; a struct type as the value v's address aligns it: v's mark, when it carries one
    (amark ty v) (stru? ty && stru? (vty v) && two? (drop 2 (vty v)) ? [<ty <>ty ((vty v) 2)] ty)
-   (ldw2 g ty)                                     ; a 9..16B aggregate at r0 into its 16-byte cell
-    (salw? g ty ? (: n (tsz g ty) a (tal g ty)
-                     (['(sub sp sp 16)] + ldal 'r1 'r0 8 (n - 8) a + [['st 'sp 8 'r1]] + ldal 'r1 'r0 0 8 a + [['st 'sp 0 'r1]]))
-       cell2w)
+   (w2 g ty)                                       ; a 9..16B aggregate at r0: its two words' loads into r1
+    (salw? g ty ? (: n (tsz g ty) a (tal g ty) [(ldal 'r1 'r0 0 8 a) (ldal 'r1 'r0 8 (n - 8) a)])
+       '(((ld r1 r0 0)) ((ld r1 r0 8))))
+   (ldw2 g ty) (w2 g ty @ [w0 w1] (['(sub sp sp 16)] + w1 + [['st 'sp 8 'r1]] + w0 + [['st 'sp 0 'r1]]))   ; ..into its 16-byte cell
    ; under -mstrict-align, what a mem builtin's pointer is known to align: a named object's own
    ; alignment, anything else a byte
    (memal g env e)
@@ -1492,6 +1492,8 @@
    (spush r) ['(sub sp sp 16) ['st 'sp 0 r]]
    ; a register argument's entry, tagged e: its value (gp bits) parks in a cell mint the pops move into place
    (gent g e k c) (vcell g @ p (p ? [[e k p] (c + [['mov p 'r0]])] [[e k] (c + spush 'r0)]))
+   ; a pair's entry: words w0 and w1 park in two cell mints after a, else c lays its cell
+   (pent g e a w0 w1 c) (vcell g @ p (vcell g @ q (p ? [(e + [p q]) (a + w0 + [['mov p 'r1]] + w1 + [['mov q 'r1]])] [e (a + c)])))
    ; a park around b: a's r0 holds in a cell mint while b runs, then lands in r
    (pk g a b r) (vcell g @ p (p ? (a + [['mov p 'r0]] + b + [['mov r p]]) (a + spush 'r0 + b + spop r)))
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
@@ -3319,11 +3321,8 @@
                        (sse2? g aty)                       ; a two-double struct: its pair (re on top) to an xmm pair
                         (6 < xmmc ? 'bad
                            (kls >as (i + 1) gpc (xmmc + 2) ovc
-                                (. [['x2 xmmc]
-                                         (tor0 g a +
-                                          (? (t32? g) cell4w   ; t32: four word copies
-                                             (a8? g) cell2w    ; a64/riscv's push is a 16-byte cell: lay the pair by hand
-                                             push2w))]
+                                (. (t32? g ? [['x2 xmmc] (tor0 g a + cell4w)]   ; t32: four word copies
+                                      (w2 g aty @ [w0 w1] (pent g ['x2 xmmc] (tor0 g a) w0 w1 (a8? g ? cell2w push2w))))
                                       acc)))
                        (stru? aty && two? (aeb2 g aty))       ; a 9..16B struct (not sse:sse): each eightbyte to a gp or xmm reg, as the param side
                         (: cls (aeb2 g aty) c0 <cls c1 <>cls
@@ -3349,7 +3348,8 @@
                                  xmc1 (f0 @ 'x (xmmc + 1) xmmc)
                                  i1 (f1 @ 'g gpc1 xmc1)
                                  (kls >as (i + 1) (gpc + gpn) (xmmc + xmn) ovc
-                                      (. [['p2 f0 i0 f1 i1] (tor0 g a + (a8? g ? (ldw2 g (amark aty a)) push2w))]
+                                      (. (w2 g (amark aty a) @ [w0 w1]
+                                            (pent g ['p2 f0 i0 f1 i1] (tor0 g a) w0 w1 (a8? g ? (ldw2 g (amark aty a)) push2w)))
                                             acc)))))
                        ; an i386 struct under regparm: its words in registers when that many are left
                        (ia32? g && stru? aty && !(gcplx? aty) && 0 < tsz g aty && gpc + ((aup (tsz g aty) 4) // 4) <= ngp g)
@@ -3540,19 +3540,22 @@
                                         '((ld r0 sp 0) (ld r1 sp 4)
                                            (ld r2 sp 8) (ld r3 sp 12)
                                            (add sp sp 16))
-                                       'x2   ; the struct pair: re then im (a natural 16-byte cell)
-                                        (arm? g ?
+                                       'x2   ; the struct pair: re then im, out of its mints or its 16-byte cell
+                                        (? (#kc = 4) [['movqxr (xmmreg <>kc) (kc 2)] ['movqxr (xmmreg (<>kc + 1)) (kc 3)]]
+                                           (arm? g)
                                            [['ldsd (xmmreg <>kc) 'sp 0] ['ldsd (xmmreg (<>kc + 1)) 'sp 8]
                                             '(add sp sp 16)]
                                            ['(pop r0) ['movqxr (xmmreg <>kc) 'r0]
                                              '(pop r0) ['movqxr (xmmreg (<>kc + 1)) 'r0]])
                                        'p2   ; a general two-eightbyte struct: eb0 (top) then eb1, each into its gp/xmm target
-                                        (a8? g ?
+                                        (: (mv c i p) (c @ 'g [['mov (argr g i) p]] [['movqxr (xmmreg i) p]])
+                                           (? (#kc = 7) (mv <>kc <>>kc (kc 5) + mv (kc 3) (kc 4) (kc 6))
+                                              (a8? g)
                                            ((<>kc @ 'g [['ld (argr g <>>kc) 'sp 0]] [['ldsd (xmmreg <>>kc) 'sp 0]])
                                             + (<>>>kc @ 'g [['ld (argr g <>>>>kc) 'sp 8]] [['ldsd (xmmreg <>>>>kc) 'sp 8]])
                                             + '((add sp sp 16)))
                                            ((<>kc @ 'g [['pop (argr g <>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>kc) 'r0]])
-                                            + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]])))
+                                            + (<>>>kc @ 'g [['pop (argr g <>>>>kc)]] ['(pop r0) ['movqxr (xmmreg <>>>>kc) 'r0]]))))
                                        's    ; a float: the cell's binary32 word into its slot
                                         [['ld 'r12 'sp 0] ['movsnxr <>kc 'r12] '(add sp sp 16)]
                                        'sa   ; an a64 float HFA's n words into s registers k.., off one cell
