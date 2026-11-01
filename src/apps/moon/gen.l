@@ -11736,13 +11736,10 @@
                                  'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'nopool (kc ? 1 ()) 'kclob () 'fnar fn 'fdrop fd)
                          (rb (uni9 ? (ubuild (alive g f)) (build sp1)) (n9 - 1))))
        irf0 (rb irk 6)
-       ; i386: a build that seats esi and edi and leaves ebx alone (no park, no pair scratch -- r3
-       ; only in the frame's own save) builds again with ebx a seat too
-       (r3in? x) (? (atom? x) (x = 'r3)
-                    (x = sav3 || x = '(ld r3 r4 -8)) ()
-                    (any r3in? x))
+       ; i386: a build that seats esi and edi and leaves ebx alone (no park, no pair scratch) builds
+       ; again with ebx a seat too
        (rhas? r x) (? (atom? x) (x = r) (any (rhas? r) x))
-       irf (? (ia32? g && uni9 && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(r3in? irf0))
+       irf (? (ia32? g && uni9 && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(rhas? 'r3 irf0))
               (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0 'pool0 (tpl 0) 'pool (tpl 0)
                          'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'ebx 1)
                  (ubuild (alive g f)))
