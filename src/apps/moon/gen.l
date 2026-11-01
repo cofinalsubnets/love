@@ -1488,6 +1488,8 @@
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
    ; 8 mod 16 across the inner call, so a whole 16-byte cell
    (spush r) ['(sub sp sp 16) ['st 'sp 0 r]]
+   ; a gp argument's entry: its value parks in a cell mint the pops move into its register
+   (gent g k c) (vcell g @ p (p ? [['g k p] (c + [['mov p 'r0]])] [['g k] (c + spush 'r0)]))
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
    ; the shuttle skip: a right side whose forms never write r1 or touch sp may run with the left
    ; parked in r1, one mov in place of the push/pop
@@ -3371,7 +3373,7 @@
                            cp (tor0 g a + [['lea 'r1 'r4 off]]
                                + (sal? g ? (bcopya 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
                                + [['lea 'r0 'r4 off]])
-                           (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] (cp + spush 'r0)] . acc))
+                           (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g gpc cp . acc))
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] (cp + [['st 'sp (8 * ovc) 'r0]])] . acc))))
                        ; a memory-class struct fills n overflow slots, highest eightbyte pushed first
                        (amem? g aty)
@@ -3448,7 +3450,7 @@
                               (: av1 (asf32 g a + '((movdrx r0 f0)))
                                  (gpc < ngp g ?
                                     (kls >as (i + 1) (gpc + 1) xmmc ovc
-                                         ([['g gpc] (av1 + spush 'r0)] . acc))
+                                         (gent g gpc av1 . acc))
                                     (kls >as (i + 1) gpc xmmc (ovc + 4)
                                          ([['ov ovc 4] (av1 + [['st 'sp ovc 'r0]])] . acc))))
                              ((v6m? g || (t32? g && va?)) && wd2)
@@ -3487,11 +3489,11 @@
                                               (aval + pstw 'sp ov8 'r0 'r1)] . acc)))))
                              ; a variadic riscv call: every double rides the gp lane
                              (rv64? g && va? && wd2 && gpc < ngp g)
-                              (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] rpush] . acc))
+                              (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g gpc aval . acc))
                              (rv64? g && va? && wd2)
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] . acc))
                              (wd2 && xmmc < 8) (kls >as (i + 1) gpc (xmmc + 1) ovc ([['x xmmc] rpush] . acc))
-                             (!wd2 && gpc < ngp g) (kls >as (i + 1) (gpc + 1) xmmc ovc ([['g gpc] rpush] . acc))
+                             (!wd2 && gpc < ngp g) (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g gpc aval . acc))
                              (ilp32? g) (kls >as (i + 1) gpc xmmc (ovc + 4) ([['ov ovc 4] opush] . acc))
                              (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] opush] . acc)))))))))))
        ; a memory return fills a caller temp whose address rides the first arg register
@@ -3521,7 +3523,7 @@
                       (!(two? l4) ? acc4
                          (<<l4 @ kc
                             (go4 >l4 (elem <kc '(ov ez ezm ezd ezx) ? acc4 (acc4 +
-                                      (<kc @ 'g (spop (argr g <>kc))
+                                      (<kc @ 'g (two? >>kc ? [['mov (argr g <>kc) <>>kc]] (spop (argr g <>kc)))
                                        'gw   ; a wide value: lo then hi off one cell
                                         [['ld (argr g <>kc) 'sp 0] ['ld (argr g (<>kc + 1)) 'sp 8] '(add sp sp 16)]
                                        'g2   ; the t32 pair: both words off one cell
