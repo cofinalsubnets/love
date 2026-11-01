@@ -874,7 +874,8 @@ $cc_g -O2 -fno-stack-protector -o "$ho/.sspgc" "$ho/.ssp.c" > /dev/null 2>&1 && 
 [ $a -eq $b ] || fail "-fstack-protector-strong: a fair run answers $a, gcc $b"
 "$ho/.ssp" AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; a=$?
 [ $a -eq 42 ] || fail "-fstack-protector-strong: an overflow exits $a, not through __stack_chk_fail"
-# which fns: -strong takes an array, a VLA, an address taken; -all every fn; the attributes per fn
+# which fns: -strong takes an array (or an aggregate holding one), a VLA, an address taken; -all every fn;
+# the attributes per fn
 cat > "$ho/.sspw.c" <<'EOF'
 int g(int *);
 int plain(int x) { return x * 3; }
@@ -882,13 +883,21 @@ int arr(int x) { int a[2] = { x, x }; return g(a); }
 int adr(int x) { return g(&x); }
 __attribute__((no_stack_protector)) int nsp(int x) { int a[2] = { x, x }; return g(a); }
 __attribute__((stack_protect)) int sp(int x) { return x + 1; }
+struct pl { int a; long b; };
+struct pa { int a; struct { char c[4]; } in; };
+struct pl mk(int);
+struct pa mka(int);
+int spl(int x) { struct pl s = mk(x); return s.a; }
+int spa(int x) { struct pa s = mka(x); return s.in.c[x & 3]; }
+int spi(int x) { int *p = &x; return g(p); }
+int spt(int x) { long a, b; return (&a == &b) + x; }
 EOF
 sspw() {        # FLAGS.. -> the fns that read the guard
   moonrun "$@" -c -o "$ho/.sspw.o" "$ho/.sspw.c" > /dev/null 2>&1 || { echo compile; return; }
   objdump -dr "$ho/.sspw.o" | awk '/^[0-9a-f]+ </ { f = $2 } /__stack_chk_guard/ { print f }' | sort -u | tr -d '<>:' | tr '\n' ' '
 }
-[ "$(sspw -fstack-protector-strong)" = "adr arr sp " ] || fail "-fstack-protector-strong guards $(sspw -fstack-protector-strong), not adr arr sp"
-[ "$(sspw -fstack-protector-all)" = "adr arr plain sp " ] || fail "-fstack-protector-all guards $(sspw -fstack-protector-all)"
+[ "$(sspw -fstack-protector-strong)" = "adr arr sp spa spi " ] || fail "-fstack-protector-strong guards $(sspw -fstack-protector-strong), not adr arr sp spa spi"
+[ "$(sspw -fstack-protector-all)" = "adr arr plain sp spa spi spl spt " ] || fail "-fstack-protector-all guards $(sspw -fstack-protector-all)"
 [ "$(sspw -fstack-protector-explicit)" = "sp " ] || fail "-fstack-protector-explicit guards $(sspw -fstack-protector-explicit)"
 [ "$(sspw)" = "" ] || fail "no -fstack-protector, and $(sspw) read the guard"
 # the guard's modes: x86 off a segment (the kernel's gs and a symbol), a64 off a system register

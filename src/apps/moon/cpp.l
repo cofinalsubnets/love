@@ -34,6 +34,7 @@
              "common" 'hint "nocommon" 'hint
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
+             "no_profile_instrument_function" 'do
              ; i386's conventions: gcc ignores them on every target here
              "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no

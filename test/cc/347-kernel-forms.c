@@ -1,8 +1,14 @@
 /* linux forms mooncc refused: typeof(*f) of a function (RCU_INIT_POINTER), an __auto_type over
  * __builtin_expect (data_race(likely(..))), a word-sized integer laid as an address plus a constant
  * (cpu_current_top_of_stack), and on x64 a constant asm operand named by its C type ("a"(3 * 8)
- * is %eax, load_segments) and a word immediate (vmware's movw $port, %dx). exit-code only (55) */
+ * is %eax, load_segments) and a word immediate (vmware's movw $port, %dx); noinstr's __no_profile
+ * names its attribute only where __has_attribute says so. exit-code only (55) */
+#if !__has_attribute(__no_profile_instrument_function__)
+#error no_profile_instrument_function
+#endif
 static int f(int x) { return x + 1; }
+static inline int g(int x) { return x * 3; }
+__attribute__((__no_profile_instrument_function__)) static int np(int x) { return g(x) + 1; }
 static char st[64];
 unsigned long p1 = (unsigned long)&st + 8 - 0;
 unsigned long p2 = (unsigned long)st + (unsigned long)16;
@@ -20,6 +26,7 @@ int main(void)
 	__auto_type v = (__builtin_expect(!!(x == 2), 1));
 	bad |= q(1) != 2 || q2(2) != 3 || v != 1 || sizeof v != sizeof(long);
 	bad |= p1 - (unsigned long)st != 8 || p2 - (unsigned long)st != 16;
+	bad |= np(x) != 7;
 #ifdef __x86_64__
 	unsigned long rd = 0xffffffffffff0000ul;
 	unsigned int ea;

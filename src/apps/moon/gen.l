@@ -9966,6 +9966,8 @@
         (: c (? (elem nm d || dn nm) ()
                 ; a body that compiles only spliced, or always_inline, splices at any depth
                 (!(peep (g 'ineed) nm () || peep (g 'alw) nm ()) && 3 < #d) ()
+                ; noinstr's no_profile_instrument_function takes always_inline alone, as clang does
+                (elem <>rf (g 'nopro) && !(peep (g 'alw) nm ())) ()
                 (cand nm))
            xh (two? mode && <mode = 'exprh)
            xo (xh || mode = 'expr)
@@ -11996,6 +11998,7 @@
           'romemo {}                                ; a const candidate's image, laid once and read by both walks
           'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
           'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
+          'nopro (two? xtra && 14 < #xtra ? (xtra 14) ())  ; no_profile_instrument_function names
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never

@@ -329,7 +329,8 @@
            "always_inline" 1 "__always_inline__" 1 "noinline" 1 "__noinline__" 1 "used" 1
            "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
            "patchable_function_entry" 1 "__patchable_function_entry__" 1
-           "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1}
+           "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1
+           "no_profile_instrument_function" 1 "__no_profile_instrument_function__" 1}
    (hdhits ts)
     (: (go s d acc) (atom? s ? acc
                        (<s @ t
@@ -351,6 +352,7 @@
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
                  pin t 'ainl (),                  ; always_inline function names
                  pin t 'noinl (),                 ; noinline function names
+                 pin t 'nopro (),                 ; no_profile_instrument_function names: clang splices only always_inline into them
                  pin t 'enums {},         ; enum constant -> value
                  pin t 'declaring {},     ; the names being declared now (C11 6.2.1p7)
                  pin t 'labs {},          ; the function's labels (C11 6.8.1p3)
@@ -2413,18 +2415,23 @@
     (ps 'ssp @ lv
        (? (!lv || ps 'curssp = 'no) ()
           (lv = 3 || ps 'curssp) 1
-          (lv < 4) (sspstrong? prms body)
+          (lv < 4) (sspstrong? ps prms body)
           ()))
-   ; an array or aggregate local, a VLA, alloca, or the address of a local or param
-   (sspstrong? prms body)
+   ; an array local or an aggregate holding one, a VLA, alloca, or the address of a local or param
+   (sspstrong? ps prms body)
     (: (dnames x acc) (? (atom? x) acc
                          (<x = 'decl && two? >x) (foldl (a \ d \ (two? d ? (<d . a) a)) acc <>x)
                          (dnames >x (dnames <x acc)))
        ns (dnames body (map cap prms))
        (lroot e) (? (atom? e) () (<e = 'var) <>e (<e = 'dot) (lroot <>e) ())
+       (arrin? ty d) (? (atom? ty) () (elem <ty '(arr varr)) 1
+                        (stru? ty && d < 16) (peep (ps 'stag) <>ty () @ e (two? e && any (f \ arrin? <>>f (d + 1)) <e))
+                        ())
        (hit? x) (? (atom? x) ()
                    (<x = 'decl && two? >x)
-                    (any (d \ two? d && two? <>d && elem <<>d '(arr varr struct union)) <>x)
+                    (any (d \ two? d && arrin? <>d 0) <>x || any hit? <>x)
+                   ; ..but two addresses only compared (typecheck's &__dummy == &__dummy2) escape nowhere
+                   (x @ ('bin op ('addr _) ('addr _)) (elem op '(eq ne)) ()) ()
                    (<x = 'addr && two? >x && elem (lroot <>x) ns) 1
                    (<x = 'call && two? >x) (<>x @ ('var n) (elem n '("alloca" "__builtin_alloca") || any hit? x) (any hit? x))
                    (any hit? x))
@@ -2591,6 +2598,8 @@
      (peep ps 'curweak () ? () (hwin hw "weak" "__weak__" ? (pin ps 'curweak 1))),
      (peep ps 'curinl () ? () (hwin hw "always_inline" "__always_inline__" ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (hwin hw "noinline" "__noinline__" ? (pin ps 'curnoinl 1))),
+     (peep ps 'curnopro () ? ()
+        (hwin hw "no_profile_instrument_function" "__no_profile_instrument_function__" ? (pin ps 'curnopro 1))),
      (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
      (peep ps 'curalign () ? ()
         (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
@@ -2847,6 +2856,8 @@
               (pin ps 'ainl (<>f . ps 'ainl)),
             peep ps 'curnoinl () && fnp ?
               (pin ps 'noinl (<>f . ps 'noinl)),
+            peep ps 'curnopro () && fnp ?
+              (pin ps 'nopro (<>f . ps 'nopro)),
             ; C11 6.7.4p7: a function every file-scope declaration of which says plain `inline`
             ; has no external definition here
             fnp ? (pin (ps 'c99inl) <>f (peep (ps 'c99inl) <>f 'inl = 'inl && ps 'curlink = 'inl ? 'inl 'ext)),
@@ -2860,6 +2871,7 @@
             pin ps 'curweak (),
             pin ps 'curinl (),
             pin ps 'curnoinl (),
+            pin ps 'curnopro (),
             pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'curtdal (),
@@ -2876,7 +2888,7 @@
                       (acc2 = 'lazyfail ? acc2
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes)]))
+                            (ps 'consts) (ps 'rstrs) (ps 'gregs) vol (ps 'anames) (ps 'pfes) (ps 'nopro)]))
            (ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why
