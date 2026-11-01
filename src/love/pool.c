@@ -171,11 +171,13 @@ static int pool_cores(int ncpu) {
 // the operand of a (threads ..) row in ~/.love/etc/love.l into p->salt, or "": a form is
 // read only where it starts a line, past a comment's ;
 static void pool_salt(struct pool *p) {
- char const *h = getenv("HOME");
+ char const *n = getenv("LOVE_NEST"), *h = getenv("HOME");
  char path[256], b[4096];
  p->salt[0] = 0;
- if (!h || strlen(h) > sizeof path - 20) return;
- strcpy(path, h), strcat(path, "/.love/etc/love.l");
+ int named = n && *n;                  // the nest: LOVE_NEST, else $HOME/.love, /.love with no HOME
+ char const *r = named ? n : h ? h : "";
+ if (strlen(r) > sizeof path - 20) return;
+ strcpy(path, r), strcat(path, named ? "/etc/love.l" : "/.love/etc/love.l");
  int fd = open(path, O_RDONLY | O_CLOEXEC);
  if (fd < 0) return;
  long k = read(fd, b, sizeof b - 1);

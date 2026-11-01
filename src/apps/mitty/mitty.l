@@ -574,8 +574,8 @@
                    (pins t 'at now 'x x, x))))))
  ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME [STYLE]) (screensaver-idle
  ; MINUTES), cycle after 10 unless said; a name no saver has, or 0 minutes, is never
- (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
-                   c (? (sf && string? h) (sf (h + "/.love/etc/mitty.l") {}) {})
+ (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch)
+                   c (? sf (sf (cite 'path 'nest 0 + "/etc/mitty.l") {}) {})
                    (word w) (string? w ? w (show w))
                    nm (peep c 'screensaver () @ v (two? v ? (join " " (map word v)) "cycle"))
                    m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
@@ -601,8 +601,7 @@
                    (? (tablet? hb) (hsail hb, 0) (say err ("mitty: " + hb + "\n"), 1)))
 
  ; --- the server and its clients: a mitty per name on MITTY_RUN/NAME.sock, outliving its terminals ---
- (mitty-dir _) (: e (getenv "MITTY_RUN") h (getenv "HOME")
-                 (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/mitty") "/tmp/mitty"))
+ (mitty-dir _) (getenv "MITTY_RUN" @ e (string? e && 0 < #e ? e (cite 'path 'nest 0 + "/run/mitty")))
  (mitty-sock nm) (mitty-dir 0 + "/" + nm + ".sock")
  (mitty-serve nm as)
   (: _ (umkdirs (mitty-dir 0) 448) path (mitty-sock nm)
