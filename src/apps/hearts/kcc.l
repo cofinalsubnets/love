@@ -34,8 +34,10 @@
           "-D__GNUC__=4" "-D__GNUC_MINOR__=2" "-D__GNUC_PATCHLEVEL__=1" "-U" "true" "-U" "false" "-U" "bool"
           "-D__uint128_t=unsigned __int128" "-D__int128_t=__int128" "-I" (here + "/overlay")]
    ; flags mooncc refuses that change nothing it lays: the endianness and target it already has,
-   ; and an -march for the assembler
-   (drop? a) (a = "-mlittle-endian" || starts? a "--target=" || starts? a "-Wa,-march=")
+   ; an -march for the assembler, x64's fatal warnings (holo warns of nothing) and its unrelaxed
+   ; GOTPCRELX (holo lays none)
+   (drop? a) (elem a ["-mlittle-endian" "-Wa,--fatal-warnings" "-Wa,-mrelax-relocations=no"]
+              || starts? a "--target=" || starts? a "-Wa,-march=")
    ; clang's words -> mooncc's; the source and -o are laid apart
    (spell ws a)
     (? (atom? ws) (rev a)
