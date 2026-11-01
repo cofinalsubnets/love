@@ -358,7 +358,7 @@ prim : ID { (cx-id ps $1) }
              (? (idv? <ts "__label__") (plabs ps >ts sh @ r (pin fr 'sh <>r, [cx-kdecl () <r]))
                 (tkw? <ts 'typedef)
                  (: br (pbty ps >ts)
-                    r (two? br ? (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts <br)))
+                    r (two? br ? (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts <br) (tdrun ps >ts)))
                     (atom? r ? () (pin fr 'sh <>r, [cx-kdecl () <r])))
                 !(tyat? ps ts) 'remap
                 (: r (pdecl ps ts)

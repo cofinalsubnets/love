@@ -125,6 +125,8 @@
             (fits32 imm)
             ([(rex 1 0 0 (hi dn)) 199 (modrm 3 0 dn)] + le32 imm)
             ([(rex 1 0 0 (hi dn)) (184 | lo dn)] + le64 imm)))
+   ;; d's low word <- imm by 66 B8+r iw; the rest of d stays
+   (emit-li2 d imm) (rn d @ dn ([102] + (hi dn = 0 ? () [(rex 0 0 0 1)]) + ((184 | lo dn) . le16 imm)))
 
    ;; a fresh-dest add or sub is one lea, not mov + alu: lea sets no flags, and aluops feed none
    (emit-alu op d a b)
@@ -584,7 +586,7 @@
 
    ;; a row is a partial application, a nullary row its bytes, raw the identity (1)
    x64-emitters (emsof
-        [('li . emit-li) ('mov . emit-mov) ('cmp . emit-cmp) ('imul . emit-imul)
+        [('li . emit-li) ('li2 . emit-li2) ('mov . emit-mov) ('cmp . emit-cmp) ('imul . emit-imul)
          ('ld . emit-ld) ('st . emit-st)
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: the same bytes, unseen by the sibcall escape check
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)

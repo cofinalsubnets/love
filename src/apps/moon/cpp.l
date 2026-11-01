@@ -34,6 +34,7 @@
              "common" 'hint "nocommon" 'hint
              "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
+             "no_profile_instrument_function" 'do
              ; i386's conventions: gcc ignores them on every target here
              "regparm" 'hint "stdcall" 'hint "fastcall" 'hint "thiscall" 'hint "pcs" 'no
              "long_call" 'no "short_call" 'no "scalar_storage_order" 'no "target_clones" 'no
@@ -509,14 +510,20 @@
    (parentactive cond) (atom? cond ? 1 <<cond)
    ; buf accumulates reversed (a run can be ~50k tokens); tokflush restores order. not `flush`,
    ; which would shadow the core port
-   (tokflush buf macs out) (expr (rev buf) macs out)
+   ; a flushed token is never rescanned: it drops its hideset and is shared with its equals,
+   ; since one expansion's tokens all carry its line and a TU is held whole
+   (tokflush buf macs out) (foldl (acc \ t \ (itok macs (unhide t) . acc)) out (expand (rev buf) macs))
+   (unhide t) (? (atom? (hof t)) t (spaced? t ? [(kof t) (vof t) (lof t) () (sof t) 1] [(kof t) (vof t) (lof t) () (sof t)]))
+   (itok macs t) (peep macs 'itab () @ tb
+                    (tb = () ? (: n {} _ (pin macs 'itab n) (itok macs t))
+                       (peep tb t () @ u (u = () ? (: _ (pin tb t t) t) u))))
    ; -- the header memo -- a TU's first include is recorded as (path text pre toks post deps);
-   ; a later TU matching path, text and pre-state replays the tokens and table. __FILE__ is held
-   ; out of the snapshots, and mleak? declines a header that expanded it
+   ; a later TU matching path, text and pre-state replays the tokens and table. __FILE__ and
+   ; __BASE_FILE__ are held out of the snapshots, and mleak? declines a header that expanded one
    memo {}                                       ; 'l -> the entries, newest first
    ; the files a TU's #includes opened, newest first, for -MD; a memo entry carries its share
    cppdeps {}
-   (mkey? k) (string? k && !(k = "__FILE__"))
+   (mkey? k) (string? k && !(elem k ["__FILE__" "__BASE_FILE__"]))
    (msnap macs)                                  ; the table as a value `=` can compare
     (sortby (a \ b \ <a <= <b)
             (foldl (acc \ k \ mkey? k ? (acc + [[k (macs k)]]) acc) () (keys macs)))
@@ -734,8 +741,9 @@
                (pin t "__STDC__" ['obj [(tok 'num 1 0)]],
                ; who is compiling: a source picks a spelling only mooncc takes (the kernel's asmops.h)
                 pin t "__mooncc__" ['obj [(tok 'num 1 0)]],
-               ; __FILE__: the TU's path throughout, includes too
+               ; __FILE__: the TU's path throughout, includes too, so __BASE_FILE__ is the same
                 pin t "__FILE__" ['obj [(tok 'str fname 0)]],
+                pin t "__BASE_FILE__" ['obj [(tok 'str fname 0)]],
                 pin t 'fname fname,      ; the same name unwrapped, for the memo's leak check
                ; C11; 201112 lets gnulib take its _Static_assert lane
                 pin t "__STDC_VERSION__" ['obj [(tok 'num 201112 0)]],
@@ -758,7 +766,7 @@
        ; the spans ride the head as one 'fspans token, so cpp keeps its (1 out) channel
        (gripe? r ? r
           (: _ (pin spanacc 'l ())
-             out (strcat-pass r 0 () fin)
+             out (strcat-pass r 0 () (t \ itok macs (fin t)))
              [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)])))       ; an empty list is a valid empty TU
 
    ; -E: the TU as text in gcc -E's shape: tokens by line, a `# N "file"` marker where the file

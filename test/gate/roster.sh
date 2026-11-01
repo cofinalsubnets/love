@@ -13,7 +13,7 @@ fail() { echo "FAIL roster: $*"; exit 1; }
 "$love" bake --list > "$w/units" 2>&1 || fail "love bake --list: $(cat "$w/units")"
 grep -q '^torrent  *baked torrent torrent-show$' "$w/units" || fail "torrent is not listed baked: $(cat "$w/units")"
 grep -q '^harp .*(needs .*lore' "$w/units" || fail "harp's needs miss lore"
-grep -q '^helm  *carry $' "$w/units" || fail "helm is not listed carried"
+grep -q '^helm  *carry helm$' "$w/units" || fail "helm is not listed carried"
 # a carried unit answers its name off /love
 (cd "$w" && "$love" helm --help) > "$w/h0" 2>&1
 grep -q '^usage: helm' "$w/h0" || fail "helm did not raise: $(head -5 "$w/h0")"

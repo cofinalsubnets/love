@@ -756,6 +756,8 @@
       ((pps "\"a\" u\"b\" \"c\"") = "u\"abc\"")
       (okv? (cpp <>(clexw "#ifdef NOPE\nx\n#endif" 1) () "<law>"))        ; a fully-skipped file is a valid empty TU (crypt.c), not a failure
       ((pps "#define E\nE + E") = "+")                                 ; empty macro body vanishes
+      ; equal tokens out of one expansion are one value: a TU of kernel tables is held whole
+      (cpp <>(clexw "#define M(x) (x)+(x)\nM(a)" 1) () "<law>" @ r (okv? r && fsbody <>r @ l (l 0 == l 4 && l 1 == l 5)))
       ; a refusal is a gripe, and a gripe is a pair: ask okv?/cppno, never `!`
       ((cppno "#if 1\nx") = "unterminated #if -- no #endif")           ; unterminated #if refuses
       ((cppno "#endif") = "#endif without #if")                        ; ..and so does a stray closer
@@ -2601,6 +2603,22 @@ int main() { return 0; }"
       (1 = calls (fnf 'fixed <>irB) "cached") (0 = calls (fnf 'fixed <>irB) "generic")
       (0 = calls (fnf 'dyn <>irB) "cached") (1 = calls (fnf 'dyn <>irB) "generic")
       (0 = calls (fnf 'guard <>irB) "bug_on")))
+
+; -- noinstr's no_profile_instrument_function takes only always_inline bodies, as clang splices:
+; a plain static inline stays a call there and splices everywhere else
+(: (calls fs nm) #(filter (f \ two? f && elem <f '(call jmp) && 0 <= findsub (show f) nm) fs)
+   (cgnx src) (cparse <>(clex src) @ r                    ; ..with the parser's tablets, as cc-objbytes hands them
+                (okv? r ? (cgen <>r (r 2) (r 3) (r 4) [(r 5) (r 6) (r 7) (r 8) (r 9) (r 10) (r 11) (r 12) (r 13) ()
+                                                      (r 14) (r 15) (map (i \ ()) ^18) (r 17) (r 18)] 'x64)))
+   srcN ("static inline int trizz(int x) { return x * 3 + 1; }\n"
+         + "static inline __attribute__((__always_inline__)) int fivezz(int x) { return x * 5 + 1; }\n"
+         + "__attribute__((__no_profile_instrument_function__)) int nf(int x) { return trizz(x) + fivezz(x); }\n"
+         + "int pf(int x) { return trizz(x) + fivezz(x); }\nint main(void) { return nf(1) + pf(2) != 28; }")
+   irN (cgnx srcN)
+   (test
+      (two? irN)
+      (1 = calls (fnf 'nf <>irN) "trizz") (0 = calls (fnf 'nf <>irN) "fivezz")
+      (0 = calls (fnf 'pf <>irN) "trizz") (0 = calls (fnf 'pf <>irN) "fivezz")))
 
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: ok")

@@ -33,6 +33,9 @@
       "; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)"]
      ["" ["src/love/snap.c" "src/love/image.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["" ["src/love/snap.c"] ["test_boards"] ", whose links bake their own images through it"]
+     ["" ["src/apps/caja/*" "test/caja/*" "test/gate/caja.sh"] ["test_caja"] ""]
+     ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
+     ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_quick"] ""]
      ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
       ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
