@@ -5785,12 +5785,12 @@
           (? (elem op lvquiet) [() ()]
              (elem op '(call callr callm sys))
               (filter (r9 \ !(elem r9 (csregs g) || vmint? g r9)) u @ c
-                 ; narrow (the allocator's): a call reads its argument file and r0 (x64's al, unless a
-                 ; direct callee's signature is known fixed), a callr its target too
-                 (peep g 'lvnarrow () && op != 'sys ?
-                    [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 && ral? g f || nelem r9 (lvgp g)) c +
-                      (op = 'callr && nom? <>f ? [<>f])) c]
-                    [c c]))
+                 ; a callr reads its target, a cs seat too; narrow (the allocator's): a call reads its
+                 ; argument file and r0 (x64's al, unless a direct callee's signature is known fixed)
+                 ((op = 'callr && nom? <>f ? [<>f]) @ tg
+                    (peep g 'lvnarrow () && op != 'sys ?
+                       [(filter (r9 \ elem r9 (argr g) || r9 = 'r0 && ral? g f || nelem r9 (lvgp g)) c + tg) c]
+                       [(c + tg) c])))
              (retx? f) [(lvret g + csregs g) ()]
              (op = 'jmpr) [(filter (r9 \ !(vmint? g r9)) u) ()]
              (rdsp g f @ d (d @ 'bar 'bar [<d <>d])))))
