@@ -1,0 +1,22 @@
+\catcode`\{=1 \catcode`\}=2 \catcode`\#=6 \catcode`\$=3 \catcode`\&=4
+\catcode`\^=7 \catcode`\_=8 \catcode`\~=13 \catcode`\^^I=10
+\font\a=cmr10 \show\a \message{\fontname\a}
+\font\b=cmr10 scaled 2000 \show\b \message{\fontname\b}
+\font\c=cmr10 at 5pt \show\c \font\d=cmr10 at 10pt \show\d \show\a
+\font\e=cmbx12 scaled\magstep \showthe\fontdimen1\e \showthe\fontdimen6\e
+\showthe\fontdimen2\a \showthe\fontdimen7\a \showthe\fontdimen8\a
+\fontdimen8\e=3pt \showthe\fontdimen8\e \fontdimen9\a=1pt
+\showthe\hyphenchar\a \hyphenchar\a=`- \showthe\hyphenchar\a \showthe\skewchar\a
+\font\f=nosuchfont \show\f \font\g=cmr10 at -1pt \font\h=cmr10 scaled 40000
+\show\nullfont \showthe\fontdimen1\nullfont \fontdimen9\nullfont=1pt
+\textfont1=\a \showthe\textfont1 \show\textfont \scriptfont15=\b \showthe\scriptfont15
+\a \show\a \showthe\font
+\begingroup \b \endgroup \showthe\font
+\font\i=cmr10 scaled 1000 \show\i
+\font\j=cmr10 at 10.00001pt \show\j \font\x=cmr10 scaled 1095 \show\x
+\font\k = cmr10 \font\l=cmr10at\relax \show\l
+\showthe\fontdimen 0\a
+\expandafter\font\csname my font\endcsname=cmtt10 \expandafter\show\csname my font\endcsname
+\def\nm{cmsl10}\font\m=\nm\relax\show\m
+\font~=cmr10 \show~ \font\^^@=cmr10 \show\^^@
+\end

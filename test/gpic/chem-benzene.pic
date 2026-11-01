@@ -1,0 +1,46 @@
+.PS
+copy "chem.pic"
+	textht = 0.16; textwid = .1; cwid = 0.12
+	lineht = 0.2; linewid = 0.2
+Last: 0,0
+
+#R1: benzene pointing right
+R1: Last: [
+	C: 0,0
+	V0: (0.15,0.259808)
+	V1: (0.3,4.00474e-09)
+	V2: (0.15,-0.259808)
+	V3: (-0.15,-0.259808)
+	V4: (-0.3,-1.20142e-08)
+	V5: (-0.15,0.259808)
+	V6: (0.15,0.259808)
+	V7: (0.3,2.00237e-08)
+	line from V1 to V2
+	line from V2 to V3
+	line from V3 to V4
+	line from V4 to V5
+	line from V5 to V6
+	line from V6 to V1
+	circle rad 0.15 at 0,0
+] with .V4.w at Last.e 
+
+#R2: benzene pointing right with .V6 at R1.V2
+R2: Last: [
+	C: 0,0
+	V0: (0.15,0.259808)
+	V1: (0.3,4.00474e-09)
+	V2: (0.15,-0.259808)
+	V3: (-0.15,-0.259808)
+	V4: (-0.3,-1.20142e-08)
+	V5: (-0.15,0.259808)
+	V6: (0.15,0.259808)
+	V7: (0.3,2.00237e-08)
+	line from V1 to V2
+	line from V2 to V3
+	line from V3 to V4
+	line from V4 to V5
+	line from V5 to V6
+	line from V6 to V1
+	circle rad 0.15 at 0,0
+]   with .V6 at R1.V2
+.PE
