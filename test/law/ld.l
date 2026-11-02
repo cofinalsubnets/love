@@ -2,7 +2,7 @@
 ; link's dynamic tables, their hashes against the a64 vdso lld laid; objcopy -S's names; the
 ; RELR probe kbuild links with no script
 
-(borrow 'holo)
+(borrow '(holo hashes))
 (: (klx n) (ld-xxh (string (map (i \ (i * 7 + n) % 256) ^n)))
    (test
       ; --- every length class: empty, 1-3, 4-8, 9-16, 17-128, 129-240, then the stripes
