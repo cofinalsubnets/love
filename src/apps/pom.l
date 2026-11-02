@@ -4,7 +4,7 @@
 ;   pom -e       the date, the phase and the moon drawn to the terminal
 ;   pom -d       every hour of the month; with -e, redrawn in place
 ;   pom -p [N]   the moon now, N pixels square in half-blocks
-;   pom -s [N]   the moon now as the pom saver draws it, its seas and dark limb
+;   pom -s [N]   the moon now in a terminal's pens, its seas and dark limb
 ;   pom -n [N]   the moon now drawn naturally: seas soft, craters bright, earthshine
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
@@ -110,7 +110,7 @@
  maria [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
         [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14]]
  (pom-mare? nx ny) (any ([a b c] \ 2 (nx - a) + 2 (ny - b) < 2 c) maria)
- ; the saver's moon at (nx ny): an xterm pen, sea or highland lit, the limb dark, () off it
+ ; the pen moon at (nx ny): an xterm pen, sea or highland lit, the limb dark, () off it
  (pom-face p nx ny) (? (1.0 < 2 nx + 2 ny) ()
                       (pom-lit? p nx ny) (pom-mare? nx ny ? 187 230)
                       234)
@@ -123,7 +123,7 @@
  ; tycho and copernicus bright; earthshine on the dark side, most near new.
  ; rgb as 0xrrggbb at (nx ny) on the unit disc, () off it ---
  craters [[-0.12 0.64 0.05 0.5] [-0.33 0.06 0.04 0.3] [0.42 -0.38 0.03 0.25]]
- ; the seas, north up: the saver's maria and nectaris beside them
+ ; the seas, north up: the maria, and nectaris beside them
  seas [[-0.35 -0.45 0.28] [0.18 -0.38 0.17] [0.3 -0.05 0.2] [0.68 -0.3 0.12]
        [-0.6 0.0 0.35] [-0.2 0.45 0.18] [0.55 0.2 0.14] [0.38 0.32 0.09]]
  (sat v) (min (max v 0.0) 1.0)
@@ -201,7 +201,7 @@
         (go 1 d e)))
  ; the operand in pairs from the right: HH, then dd, mm, yy, cc
  (pairs op) (: (go i) (i < #op ? (snip op i (i + 2) . go (i + 2))) (rev (go 0)))
- ; -p [N]: the moon N pixels square, 8 unless said, rounded up to even; -s the saver's,
+ ; -p [N]: the moon N pixels square, 8 unless said, rounded up to even; -s the pen moon,
  ; 24 unless said
  (pom-show draw d as)
   (? (two? as && (two? >as || !(digits? <as)))

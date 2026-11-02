@@ -16,3 +16,11 @@ static char const *const __errs[] = { 0,
 char *strerror(int e) {
   if (e > 0 && e <= 34) return (char *) __errs[e];
   static char b[24]; snprintf(b, sizeof b, "error %d", e); return b; }
+
+/* xsi: the message into b, ERANGE when it does not fit */
+int strerror_r(int e, char *b, size_t n) {
+  char const *m = strerror(e);
+  size_t k = strlen(m);
+  if (k >= n) { if (n) { memcpy(b, m, n - 1); b[n - 1] = 0; } return ERANGE; }
+  memcpy(b, m, k + 1);
+  return 0; }

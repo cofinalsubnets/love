@@ -1,5 +1,5 @@
 ; test/host/mitty.l -- mitty over real ptys: pty -> parser -> grid, replies home, panes,
-; stages, faces, the bar, the saver, the server. interactive berthing stays a live probe.
+; stages, faces, the bar, the server. interactive berthing stays a live probe.
 ; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/00-host.l test/host/mitty.l | out/love
 
 (borrow "src/apps/mitty/mooring.l")
@@ -467,43 +467,6 @@
          (["main 2 rows, alice waiting"] = qs)
          ("hive 1 · main 2 rows, alice waiting" = x1)
          (x1 = x2)))
-
-; idle: the saver takes the glass (C-a z winds it on); the waking key is its own and owes a frame
-(: hb (mitty-up 10 40)
-   _ (hberth hb 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
-   _ (pin hb 'saver ((cite 'saver 'saver-watch) "life" 5))
-   f0 (hidle hb)
-   k0 (hwake hb)                                    ; a key with no saver up: activity only
-   f1 (hidle hb)
-   on1 (hidle? hb)
-   _ (hsleep hb)
-   f2 (hidle hb)
-   on2 (hidle? hb)
-   _ (pin (hb 'dirt) () 0)
-   k1 (hwake hb)
-   f3 (hidle hb)
-   (test ("" = f0) (0 = k0) ("" = f1) !on1
-         (has? f2 "\e[?25l") on2
-         (1 = k1) (1 = peep (hb 'dirt) () 0)
-         (has? f3 "\e[?25h") !(hidle? hb)
-         (() = (cite 'saver 'saver-watch "nosuch" 5) 'on)
-         (0 = hsleep (pins (mitty-up 4 10) 'saver ((cite 'saver 'saver-watch) "nosuch" 5)))))
-
-; the saver's clock runs only while the shown face is bare shells at a prompt, or empty
-(: (wound hb) (: w ((cite 'saver 'saver-watch) "life" 5) _ (pin hb 'saver w) _ (pin w 'last (clock 0 - 3600000))
-                 _ (hidle hb) (hidle? hb))
-   (closed hb) (map (id \ hshut hb id) (wharf-panes (hb 'plan)))
-   e (mitty-up 10 40)
-   st (mitty-up 10 40) _ (hberth st 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
-   ca (mitty-up 10 40) _ (hberth ca 'stack 50 (hopen ["cat"] 10 40))
-   sh (mitty-up 10 40) _ (hberth sh 'stack 50 (hopen ["sh"] 10 40))
-   (settled n) (? (hquiet? sh || n <= 0) (hquiet? sh) (: _ (rest 50) (settled (n - 1))))
-   q3 (settled 40)
-   r (: s1 (hquiet? e) s2 (hquiet? st) s3 (hquiet? ca) [s1 s2 s3])
-   on (map (h \ (wound h ? 1 0)) [e st ca sh])
-   _ (map closed [st ca sh])
-   (test (r 0) !(r 1) !(r 2) q3
-         (on = [1 0 0 1])))
 
 ; a pane never attaches to the mitty it is in (MITTY names it): refused, nothing started
 (: d ("out/.mitty-in-" + show (getpid 0))

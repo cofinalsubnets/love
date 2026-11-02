@@ -17,6 +17,7 @@
          light-drift gap-l
          flash-v0 flash-span done-ms turn-step song-chunk)
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'flicker)                       ; the lights' blink
 (borrow 'play)                          ; the voices, the mix

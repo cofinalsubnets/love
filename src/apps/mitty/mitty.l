@@ -8,7 +8,7 @@
 (module '(mitty mitty mitty-stage mitty-up hberth hsail hopen-stage
           hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
-          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx mitty-saver hwake hidle hidle? hsleep hquiet? hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote mitty-window mitty-keybytes mitty-main)
+          hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker mitty-launch mitty-switch mitty-hive mitty-queues mitty-barx hin hout hlive? hgreet hbye hattach hdetach mitty-lush mitty-here mitty-serve mitty-attach mitty-sock mitty-dir mitty-ls mitty-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote mitty-window mitty-keybytes mitty-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
@@ -378,7 +378,6 @@
                       91  (hcopy hb)                    ; [
                       93  (hpaste hb)                   ; ]
                       99  (hfresh hb)                   ; c
-                      122 (hsleep hb)                   ; z
                       100 (peep hb 'serve 0 ? (hdetach hb) 0)   ; d, from a server
                       110 (hcycle hb 1)                 ; n
                       112 (hcycle hb -1)                ; p
@@ -392,32 +391,10 @@
                  (? (ch = -1 && peep hb 'serve 0) (g = peep hb 'gen 0 ? (hdetach hb) 0)   ; a client's eof is its leaving
                     (ch = -1) (hfeed hb 4)                 ; veof follows the user's own eof
                     (ch = -7) (hshut hb (hb 'focus))
-                    (hwake hb) (: (dk _) (cue? (hin hb) ? (see (hin hb), dk 0) 0) (dk 0, oars hb g))   ; the key that ends a saver is the saver's
                     ((? (ch = 1) (hkey hb)
                         (ch = 27 && hpty? p && cue? (hin hb)) (hseq hb)
                         (hfeed hb ch)),
                      oars hb g))))
-
- ; --- idle: 'saver is a watch of src/apps/mitty/saver.l's, which has the glass after its minutes
- ; without a key; the mitty's own frames wait under it, and are laid again whole after ---
- ; a key: 1 when it woke a saver, which then is owed a whole frame
- (hwake hb) (: w (peep hb 'saver ()) k (cite 'saver 'saver-key) _ (pin hb 'forced 0)
-               (? (tablet? w && k && k w (clock 0)) (: _ (hsoil hb) 1) 0))
- ; quiet: every shown pane a shell at its prompt (its tty's group its own). only then does
- ; the saver's clock run
- hshells ["lush" "sh" "bash" "zsh" "dash" "ksh" "mksh" "fish" "tcsh"]
- (hbare? p) (&& (two? p) (hpty? p) (elem (hname p) hshells)
-                (: g (ttypg (hmas p)) (charm? g && g = hpid p)))
- (hquiet? hb) (all (id \ hbare? (hpane hb id)) (wharf-panes (hb 'plan)))
- ; the saver's escapes for now, "" when it has none; and whether it has the glass. C-a z
- ; ('forced) brings it whatever the panes hold
- (hidle hb) (: w (peep hb 'saver ()) t (cite 'saver 'saver-tick)
-               (? !(tablet? w && t) ""
-                  (: _ (? ((cite 'saver 'saver-on?) w || peep hb 'forced 0 || hquiet? hb) 0 (pin w 'last (clock 0)))
-                     (t w (clock 0) (hb 'rows) (hb 'cols) 0))))
- (hidle? hb) (: w (peep hb 'saver ()) (tablet? w && (cite 'saver 'saver-on?) w))
- ; at once, the clock wound past its minutes: C-a z
- (hsleep hb) (: w (peep hb 'saver ()) (? (tablet? w && 0 < w 'idle) (: _ (pin hb 'forced 1) (pin w 'last (clock 0 - w 'idle))) 0))
 
  ; --- the tide: mirror the outer terminal's size onto the whole wharf -------
  ; floored: a fresh pty answers (0 . 0), and a zero wharf never recovers. a mitty with
@@ -447,8 +424,7 @@
  ; and end when the last pane empties ---
  (hswim hb tick) (: b (hb 'dirt) t0 (clock ())
                     (htick hb,
-                     ? (hlive? hb) (hidle hb @ f (0 < #f ? (say (hout hb) f, flush (hout hb)) 0)) 0,
-                     ? !(hlive? hb) 0 (hidle? hb) 0
+                     ? !(hlive? hb) 0
                        (peep b () 0) (pin b () 0, say (hout hb) (hframe hb), flush (hout hb), 0) 0,   ; say is the bulk lane
                      ? (0 = tick % 16) (htide hb) 0,
                      ? (0 = tick % 32) (hbartick hb) 0,
@@ -572,16 +548,8 @@
                 (: hv (mitty-hive 0) qs (mitty-queues 0)
                    x ("hive " + show hv + foldl (a \ q \ a + " · " + q) "" qs)
                    (pins t 'at now 'x x, x))))))
- ; the saver as ~/.love/etc/mitty.l names it: (screensaver NAME [STYLE]) (screensaver-idle
- ; MINUTES), cycle after 10 unless said; a name no saver has, or 0 minutes, is never
- (mitty-saver _) (: sf (cite 'salt 'salt-file) wf (cite 'saver 'saver-watch) h (getenv "HOME")
-                   c (? (sf && string? h) (sf (h + "/.love/etc/mitty.l") {}) {})
-                   (word w) (string? w ? w (show w))
-                   nm (peep c 'screensaver () @ v (two? v ? (join " " (map word v)) "cycle"))
-                   m (peep c 'screensaver-idle () @ v (two? v ? <v 10))
-                   (wf ? (wf nm m) ()))
  ; a mitty laid for the shell at r x c: lush in its panes (argv, when given, in the first), the
- ; bar, the mouse, the saver and the shell's keys; a server's has no tty until a client comes.
+ ; bar, the mouse and the shell's keys; a server's has no tty until a client comes.
  ; answers it, or why it could not
  (mitty-lush as r c serve)
   (: me (selfpath 0) sh (string? me ? [me "lush"] ["sh"])
@@ -590,7 +558,7 @@
         (mitty-up r c @ hb
            (? serve (pins hb 'serve 1 'csize [r c] 'in () 'out ()) 0,
             pin hb 'more (_ \ hopen sh 1 1),
-            pins hb 'bar 1 'mouse 1 'barx (mitty-barx 0) 'saver (mitty-saver 0), hbartick hb, hrelay hb,
+            pins hb 'bar 1 'mouse 1 'barx (mitty-barx 0), hbartick hb, hrelay hb,
             pin (hb 'keys) 32 (_ \ mitty-launch hb sh me),
             pin (hb 'keys) 119 (_ \ mitty-switch hb),
             hberth hb 'stack 50 p0,
@@ -601,8 +569,7 @@
                    (? (tablet? hb) (hsail hb, 0) (say err ("mitty: " + hb + "\n"), 1)))
 
  ; --- the server and its clients: a mitty per name on MITTY_RUN/NAME.sock, outliving its terminals ---
- (mitty-dir _) (: e (getenv "MITTY_RUN") h (getenv "HOME")
-                 (? (string? e && 0 < #e) e (string? h) (h + "/.love/run/mitty") "/tmp/mitty"))
+ (mitty-dir _) (getenv "MITTY_RUN" @ e (string? e && 0 < #e ? e (cite 'path 'nest 0 + "/run/mitty")))
  (mitty-sock nm) (mitty-dir 0 + "/" + nm + ".sock")
  (mitty-serve nm as)
   (: _ (umkdirs (mitty-dir 0) 448) path (mitty-sock nm)
@@ -844,7 +811,6 @@
      (two? as && <as = "--here") (mitty-here >as)
      (two? as && <as = "--window") (mitty-window >as)                  ; in a window of its own
      (two? as && <as = "--ls") (mitty-ls 0)
-     (two? as && elem <as ["-s" "--screensaver"]) ((cite 'saver 'saver-cli) >as)   ; a saver, no mitty
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
         path (mitty-sock nm)
@@ -855,9 +821,8 @@
            (mitty-here rest))))
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
        COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process,
-       --window [-f FONT.hex] one in a window of its own, as with a display and no tty;
-       -s [NAME] a screensaver until a key, -s alone names them
+       --window [-f FONT.hex] one in a window of its own, as with a display and no tty
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
-       space open an app, w go to a pane, z the screensaver now, d detach, C-a a literal C-a"
+       space open an app, w go to a pane, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))
 ) ; module mitty

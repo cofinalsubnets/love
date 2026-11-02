@@ -4,6 +4,7 @@
 #define O_RDONLY         0
 #define O_WRONLY         1
 #define O_RDWR           2
+#define O_ACCMODE        3
 #define O_CREAT         64
 #define O_EXCL         128
 #define O_NOCTTY       256
@@ -59,3 +60,4 @@ int open(char const*, int, ...);
 int openat(int, char const*, int, ...);
 int creat(char const*, unsigned int);
 int fcntl(int, int, ...);
+int posix_fallocate(int, off_t, off_t);

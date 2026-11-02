@@ -3,6 +3,7 @@
 ; run: cat test/00-init.l test/host/rove.l | out/love
 
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'tower)
 
 ; delve: a seed reproduces its floor; floors are connected and bordered

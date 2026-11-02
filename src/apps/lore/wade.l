@@ -13,6 +13,7 @@
          slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms settle-ms wade-aim wade-settle
          texts texts-at)
 (borrow 'rove)
+(borrow 'horn)
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'flicker)                       ; the flame's breath
 (borrow 'walk)                          ; the rail

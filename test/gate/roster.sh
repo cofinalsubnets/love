@@ -12,7 +12,7 @@ fail() { echo "FAIL roster: $*"; exit 1; }
 
 "$love" bake --list > "$w/units" 2>&1 || fail "love bake --list: $(cat "$w/units")"
 grep -q '^torrent  *baked torrent torrent-show$' "$w/units" || fail "torrent is not listed baked: $(cat "$w/units")"
-grep -q '^harp .*(needs .*lore' "$w/units" || fail "harp's needs miss lore"
+grep -q '^lore .*(needs .*harp' "$w/units" || fail "lore's needs miss harp"
 grep -q '^helm  *carry helm$' "$w/units" || fail "helm is not listed carried"
 # a carried unit answers its name off /love
 (cd "$w" && "$love" helm --help) > "$w/h0" 2>&1
@@ -22,13 +22,13 @@ grep -q '^lux  *part ' "$w/units" || fail "lux is not listed part: $(grep '^lux 
 (cd "$w" && "$love" lux --help) > "$w/x0" 2>&1
 grep -q '^usage: love lux' "$w/x0" || fail "lux did not raise: $(head -5 "$w/x0")"
 # the picker's model: a flip writes the bake's flags, off takes along what needs the unit,
-# on what it needs (harp and lore need each other), and enter leaves to bake
+# on what it needs (lore needs harp), and enter leaves to bake
 cat > "$w/pick.l" <<'EOF'
 (borrow 'roster)
 (: pk (pick-new ())
    (at u) (pin pk 'cur (<(filter (k \ (pk 'us k) = u) ^#(pk 'us))))
    (fl u) (: _ (at u) _ (pick-step pk 32) (join " " (pick-args (pick-flags pk))))
-   a (fl "torrent") b (fl "helm") _ (fl "lore") h0 (pk 'on "harp") _ (fl "lore") h1 (pk 'on "harp")
+   a (fl "torrent") b (fl "helm") _ (fl "harp") h0 (pk 'on "lore") _ (fl "lore") h1 (pk 'on "harp")
    f (pick-frame pk 120 40)
    _ (pick-step pk 13)
    (each [a b (show [h0 h1 (1 < #(split "love bake --with helm" f)) (pk 'go)])]
@@ -43,8 +43,8 @@ EOF
 grep -q -- '--list' "$w/u0" || fail "bake's usage: $(cat "$w/u0")"
 
 # a kept unit's needs stay
-"$love" bake --without lore -o "$w/no" > "$w/refuse" 2>&1 && fail "a bake left out lore under harp"
-grep -q 'harp needs lore' "$w/refuse" || fail "the refusal: $(cat "$w/refuse")"
+"$love" bake --without harp -o "$w/no" > "$w/refuse" 2>&1 && fail "a bake left out harp under lore"
+grep -q 'lore needs harp' "$w/refuse" || fail "the refusal: $(cat "$w/refuse")"
 "$love" bake --without nosuch -o "$w/no" > "$w/refuse" 2>&1 && fail "a bake took an unknown unit"
 [ -e "$w/no" ] && fail "a refused bake wrote its binary"
 

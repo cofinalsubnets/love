@@ -18,7 +18,7 @@
          synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
          synth-vols synth-vol0
          synth-pads synth-pad)
-(borrow 'rove)
+(borrow 'horn)
 (borrow 'harp)
 (borrow 'play)
 (borrow 'posix)
@@ -296,7 +296,7 @@
            st 'dirty ? (say out (synth-frame st), flush out, pin st 'dirty 0),
            keys st = 'quit || st 'over ? () (rest 4, go ()))
    (ttytake ['hide],
-    mind go () (_ \ (hn ? (flush hn, close hn), drain-keys (), ttygive ['hide])),
+    mind go () (_ \ (hn ? (flush hn, close hn), ttygive ['hide])),
     0))
  ; --- the window: a note sounds while its key is held. 'hv holds [key semis voice] with no
  ; end; a release fades it into 'vs ---

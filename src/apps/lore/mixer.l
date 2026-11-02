@@ -9,7 +9,8 @@
 ;                           {'near 'far 'fps 'gain 'bus}: whole within near, gone past far; 'bus
 ;                           (st n), if given, answers n frames more to lay under them, (left . right)
 (module (mixer mix-cry mix-new)
-(borrow 'rove)                          ; song-rate
+(borrow 'rove)
+(borrow 'horn)                          ; song-rate
 (:
  (mix-cry st nm at) (: q (st 'sfx) (#q < 8 && #nm > 0 ? (pin st 'sfx ([nm at] . q)) st))
  ; ..a voice started: [samples step at left right], the step the sound's rate over the horn's

@@ -417,15 +417,16 @@ install this binary as ~/.love/bin/love, with lush beside it
        _ (string? me ? 0 (src-die "nest: cannot find this binary"))
        new (nest-read me)
        _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
-       bin "\(home)/.love/bin"
-       _ (mkdir "\(home)/.love" 493) _ (mkdir bin 493)
+       bin (cite 'path 'nest 0 + "/bin")
+       _ (mkdir (cite 'path 'nest 0) 493) _ (mkdir bin 493)
+       shown (bin = "\(home)/.love/bin" ? "~/.love/bin/love" "\(bin)/love")
        r (nest-lay bin "\(bin)/love" new)
        _ (each nest-tools (nm \ "\(bin)/\(nm)" @ p (readlink p = "love" ? 0 (unlink p, symlink "love" p))))
        _ (each (nest-stale bin) (nm \ unlink "\(bin)/\(nm)"))
        _ (each (nest-stale-compat home bin) (nm \ unlink "\(home)/.local/bin/\(nm)"))
        _ (each ("love" . nest-tools) (nest-compat home bin))
-       (puts (r = 'same ? "love nest: ~/.love/bin/love is already this build (\(love-build 0))\n"
-                          "love nest: installed ~/.love/bin/love (\(love-build 0))\n"),
+       (puts (r = 'same ? "love nest: \(shown) is already this build (\(love-build 0))\n"
+                          "love nest: installed \(shown) (\(love-build 0))\n"),
         0))
 
    ; a binding, not a body: the letrec stays body-less, so every name above is the

@@ -8,7 +8,7 @@
 (borrow 'play)    ; harp-read
 (borrow 'opl)     ; a bank for the FM timbre
 (borrow 'bytes)   ; zbytes
-(borrow 'rove)    ; song-rate
+(borrow 'horn)    ; song-rate
 
 ; a tty byte is where its key sits, shifted or not; a key with no byte is 1000 past its place
 (test (synth-tcode 113 = 16) (synth-tcode 81 = 16) (synth-tcode 122 = 44) (synth-tcode 93 = 27) (synth-tcode 125 = 27)

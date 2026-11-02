@@ -31,7 +31,7 @@
      + "# love -- one file, every text\n"
      + "m=$(uname -m)\ncase \"$m\" in\n\(arms)"
      + "*) echo \"love: no text aboard for $m\" >&2; exit 2;;\nesac\n"
-     + "d=\"${HOME:-/tmp}/.love/fat\"\n"
+     + "d=\"${LOVE_NEST:-$HOME/.love}/fat\"\n"
      + "mkdir -p \"$d\" 2>/dev/null || d=\"${TMPDIR:-/tmp}\"\n"
      + "c=\"$d/love-\(id)-$m\"\n"
      + "if [ ! -x \"$c\" ]; then\n"

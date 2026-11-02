@@ -7,6 +7,10 @@
 ; $HEARTS_GOALS  the goals, each made from a fresh read of the Makefile (default
 ;                "defconfig syncconfig Image": syncconfig is the included auto.conf that
 ;                make would remake and restart for)
+; $HEARTS_ARCH   the kernel's ARCH (default arm64). x86 runs objtool, which hearts builds as
+;                kbuild does, by its own Makefile under cook; its libelf comes from the unpacked
+;                elfutils tree $HEARTS_ELFUTILS (libelf.l), and the host programs see the kernel's
+;                uapi headers, the `headers` goal's, after moonlibc's own (a host's linux-api-headers)
 ; $HEARTS_JOBS   commands in flight at once (default 1); a filechk and a sub-make's script run
 ;                here, in order
 ; $HEARTS_PRIOR  1: an earlier build's .cmd files stand as the prior state (hk-make's " prior");
@@ -19,6 +23,7 @@
 ;                and system run the commands' shell, through moonlibc's $LOVE_SH
 ; $HEARTS_LEX, $HEARTS_YACC  the flex and bison the build runs (`make LEX= YACC=`); unset, love's
 ;                lex and yacc, whose C back ends write what flex and bison would
+; $HEARTS_PKG_CONFIG  the pkg-config the host programs ask (`make HOSTPKG_CONFIG=`): objtool's libelf
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
 ; $HEARTS_CC, $HEARTS_LD, $HEARTS_AR  the kernel's compiler, linker and archiver (`make CC= LD= AR=`);
 ;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
@@ -102,6 +107,13 @@
              f (hd + "/job." + show (bump 'n))
              pid (spawn (shc ("{ " + pre + text + "\n} > " + q f + " 2>&1")))
              (pin pids pid [tg f (saved ? text ())], pin jobs tg pid, bump 'live, 0))))
+   ; objtool's libelf, built once into .hearts/libelf with its pkg-config
+   (objlib _)
+    (: eu (getenv "HEARTS_ELFUTILS") out (hd + "/libelf")
+       (? !(string? eu) (puts "hearts: x86 runs objtool, which wants libelf: name an unpacked elfutils tree in HEARTS_ELFUTILS\n", quit 1)
+          (two? (stat (out + "/libelf.a"))) 0
+          (hark [(selfpath 0) (dir (argv 1) + "/libelf.l") eu out] @ r
+             (puts >r, <r = 0 || quit 1))))
    ; mooncc finds its headers and runtime at <its binary>/../lib/love/moon: a seat under .hearts,
    ; a copy of this love beside the tree's own src/apps/moon (build.l sits in src/apps/hearts)
    (seat _)
@@ -140,12 +152,15 @@
          _ (uwrite (hd + "/bin/hk-make") (bang + "HEARTS_JOBS=1 exec " + q (argv 0) + " " + q (argv 1) + " --sub \"$@\"\n"))
          _ (hark ["chmod" "+x" (hd + "/bin/hk-make")])
          _ (seat 0)
+         arch (getenv "HEARTS_ARCH" || "arm64")
+         x86 (elem arch '("x86_64" "x86" "i386"))
+         _ (x86 ? (objlib 0) 0)
          id (filter (n \ string? (getenv n)) ["KBUILD_BUILD_USER" "KBUILD_BUILD_HOST" "KBUILD_BUILD_VERSION" "KBUILD_BUILD_TIMESTAMP"])
          ; no rust or pahole, and no libc to link a user program against, whatever the host has: their
          ; versions and CC_CAN_LINK land in .config, and so the image
          _ (hark ["mkdir" "-p" (hd + "/no-sysroot")])
          cl0 (foldl (a \ n \ pin a n (getenv n))
-                    (pins {} "ARCH" "arm64" "LLVM" "1" "RUSTC" "false" "HOSTRUSTC" "false" "BINDGEN" "false" "PAHOLE" "false"
+                    (pins {} "ARCH" arch "LLVM" "1" "RUSTC" "false" "HOSTRUSTC" "false" "BINDGEN" "false" "PAHOLE" "false"
                              "USERCFLAGS" ("--sysroot=" + hd + "/no-sysroot")) id)
          ; the host programs' popen and system (conf's $(shell)) run moonlibc's $LOVE_SH, the shell the commands run
          cl1 (pins cl0 "HOSTCC" (getenv "HEARTS_HOSTCC" @ h (string? h ? h (hd + "/bin/hk-hostcc")))
@@ -153,11 +168,15 @@
                        "LEX" (selfpath 0 + " lex") "YACC" (selfpath 0 + " yacc")
                        "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar")
                        ; the compat vdso is elf32 arm, which love's ld does not link: lld's
-                       "LD_COMPAT" "ld.lld")
+                       "LD_COMPAT" "ld.lld"
+                       ; x86's objtool: tools/build links and archives with HOSTLD and HOSTAR
+                       @ c (x86 ? (pins c "HOSTCFLAGS" ("-idirafter " + here + "/usr/include")
+                                        "HOSTPKG_CONFIG" (hd + "/libelf/pkg-config")
+                                        "HOSTLD" (selfpath 0 + " ld") "HOSTAR" (selfpath 0 + " ar")) c))
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
                    [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]
-                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"]])
-         goals (words (getenv "HEARTS_GOALS" || "defconfig syncconfig Image"))
+                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"] ["HEARTS_PKG_CONFIG" "HOSTPKG_CONFIG"]])
+         goals (words (getenv "HEARTS_GOALS" || (x86 ? "defconfig syncconfig headers bzImage" "defconfig syncconfig Image")))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
                       (hk-make K top g made {} run, drain 0, puts ("made " + g + " in " + show (clock 0 - t0) + " ms\n"))))

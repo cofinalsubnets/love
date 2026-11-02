@@ -236,12 +236,11 @@
        (hue-paint pens (snip t a b) (a < 1 ? rs (cut rs ()))))
 
    ; --- the theme, and the user's own ------------------------------------------
-   ; a theme file under HOME overrides config.l, read as data with `sound`, never evaled.
+   ; a theme file in the nest overrides config.l, read as data with `sound`, never evaled.
    ; it opening is what counts, not its bytes; a bad row is skipped. the last bare name picks the theme
    (hue-over rows r) (two? r ? (map (o \ (<o = <r ? r o)) rows) rows)
    (hue-file x)                                    ; -> [name rows], name () for none
-    (: h (getenv "HOME")
-       q (string? h ? (open (h + hue-theme-file) "r") ())
+    (: q (open (cite 'path 'nest 0 + "/" + hue-theme-file) "r")
        (hot? q ? (: t (slurp q)
                     (go x nm acc) (sound x @ r
                                      (? !(two? r) [nm (rev acc)]

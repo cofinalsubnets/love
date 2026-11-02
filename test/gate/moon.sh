@@ -1337,6 +1337,37 @@ moonrun -I "$ho/.flginc" -D BONUS=12 -o "$ho/.flg" "$ho/.flg.c" > /dev/null 2>&1
   || fail "mooncc -I/-D/-o"
 "$ho/.flg"; a=$?
 [ $a -eq 42 ] || fail "mooncc -I/-D/-o run (got $a want 42)"
+# -isystem is searched after every -I, -idirafter after our own headers (where a host's kernel
+# uapi sits); -Wp,-MT names the dependency rule's target, as tools/build's fixdep asks
+mkdir -p "$ho/.isys" "$ho/.iaft" && printf '#define ANS 1\n' > "$ho/.isys/ans.h"
+printf '#error the idirafter stdint.h won\n' > "$ho/.iaft/stdint.h"
+printf '#define BONUS 12\n' > "$ho/.iaft/bonus.h"
+printf '#include <ans.h>\n#include <stdint.h>\n#include <bonus.h>\nint main() { return ANS + BONUS; }\n' > "$ho/.isy.c"
+moonrun -isystem "$ho/.isys" -I "$ho/.flginc" -idirafter "$ho/.iaft" -Wp,-MD,"$ho/.isy.d" -Wp,-MT,isy.o \
+  -c -o "$ho/.isy.o" "$ho/.isy.c" > /dev/null 2>&1 || fail "mooncc -isystem/-idirafter/-Wp,-MT"
+moonrun -o "$ho/.isy" "$ho/.isy.o" > /dev/null 2>&1 || fail "mooncc: the -isystem object's link"
+"$ho/.isy"; a=$?
+[ $a -eq 42 ] || fail "mooncc -isystem/-idirafter order (got $a want 42)"
+head -1 "$ho/.isy.d" | grep -q '^isy\.o:' || fail "mooncc -Wp,-MT did not name the rule's target"
+# posix_fallocate grows a file to the length asked, never shrinks it
+cat > "$ho/.falloc.c" <<'EOF'
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+int main(void) {
+	char path[] = "/tmp/mooncc-falloc-XXXXXX";
+	int fd = mkstemp(path);
+	struct stat st;
+	if (fd < 0) return 1;
+	unlink(path);
+	if (posix_fallocate(fd, 0, 4096) || fstat(fd, &st) || st.st_size != 4096) return 2;
+	if (posix_fallocate(fd, 0, 16) || fstat(fd, &st) || st.st_size != 4096) return 3;
+	return 42; }
+EOF
+moonrun -o "$ho/.falloc" "$ho/.falloc.c" > /dev/null 2>&1 || fail "mooncc: posix_fallocate's program"
+"$ho/.falloc"; a=$?
+[ $a -eq 42 ] || fail "posix_fallocate (got $a want 42)"
 
 # -- inline asm
 printf 'int main() { long v; asm("mov $40, %%0" : "=r"(v)); return v + 2; }\n' > "$ho/.casm1.c"
