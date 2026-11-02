@@ -513,7 +513,7 @@
    _ (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" (sha "test") "gated_head" (sha "ant") "leader" "queen"}]])
    _ (calls "bob" [[2 "queue_row" {"state" "waiting" "branch" "union" "gated_on" (sha "test") "gated_head" (sha "union")}]])
    _ (calls "queen" [[3 "queue_row" {"session" "bob" "row" "2" "state" "folded-into-1"}]])
-   _ (calls "bob" [[4 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob")}]])
+   _ (calls "bob" [[4 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob") "keep" "1"}]])
    _ (bq-git w ["checkout" "-q" "bob"])
    r1 (calls "bob" [[5 "queue_gate" {"dir" (w 'repo)}] [6 "queue_gate" {"dir" (w 'repo) "row" "2"}]
                     [7 "queue_gate" {"dir" (w 'repo) "row" "1"}]])
