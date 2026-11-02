@@ -7824,10 +7824,9 @@
    cpskip (ldops9 + gstops + stxops + siops + leaops + xops + fxops + fstxops + fldops + fstops + vshops +
            x4ops + m4ops + '(cmpm cmprm push))
    ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot
-   ; declines, and so does a pair's low half, whose high half the op reads unnamed. an ilp32 movqxr
-   ; names its pair by the low half, which a rename would split
+   ; declines, and so does a pair's low half, whose high half the op reads unnamed
    (cprp g f)
-    (elem <f cpskip || ilp32? g && <f = 'movqxr ? ()
+    (elem <f cpskip ? ()
        (: rs <(rdsp g f)
           (hi? x d) (qtwin x @ [h] (elem h rs && nelem h <d) 0)
           (go i acc)
