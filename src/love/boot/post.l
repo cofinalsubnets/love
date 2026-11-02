@@ -2187,7 +2187,7 @@
    (used m) (ros 'cur @ c
               (string? c ?
                  (mods m @ q (unit c @ u
-                    (string? q && unit q != u && !(elem (unit q) (need u)) ? (pin need u (need u + [unit q])) 0)))))
+                    (string? q && unit q != u && !(elem (unit q) (need u)) ? (pin need u (need u + [(unit q)])) 0)))))
    ; a module, raised with its unit when a left-out file holds it; () when none does
    (lift m) (lib () m @ M (tablet? M ? M (mods m @ p (string? p && lazies p ? (rise (unit p), lib () m) (pk-lift m)))))
    ; a stub raises its unit, then runs what the unit pinned in its place
