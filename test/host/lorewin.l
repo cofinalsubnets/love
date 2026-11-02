@@ -66,7 +66,7 @@
    ground (rgb 636 392)
    ink (any (y \ any (x \ rgb x y = [238 238 238]) (map (+ 8) ^8)) (map (+ 384) ^16))
  (test (out = "") (st 'kp = 2) (100 < lit) sq (ground = [20 20 20]) ink
-       (tablet? (world-opts ["--window"])) ((world-opts ["--window"]) 'md = 'window)))
+       (tablet? (world-opts ["--window"])) ((world-opts ["--window"]) 'md = 'window) ((world-opts ["-w"]) 'md = 'window)))
 
 ; ..and in a bigger window the picture is the window over the scale: at 8 each of its pixels
 ; 8 by 8 of the window's

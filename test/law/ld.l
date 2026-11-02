@@ -1,9 +1,9 @@
-; test/law/klink.l -- holo's kernel link: lld's piece hash, xxh3_64 with seed 0; a -shared
+; test/law/ld.l -- holo's kernel link: lld's piece hash, xxh3_64 with seed 0; a -shared
 ; link's dynamic tables, their hashes against the a64 vdso lld laid; objcopy -S's names; the
 ; RELR probe kbuild links with no script
 
 (borrow 'holo)
-(: (klx n) (kl-xxh (string (map (i \ (i * 7 + n) % 256) ^n)))
+(: (klx n) (ld-xxh (string (map (i \ (i * 7 + n) % 256) ^n)))
    (test
       ; --- every length class: empty, 1-3, 4-8, 9-16, 17-128, 129-240, then the stripes
       (klx 0 = 3244421341483603138) (klx 1 = 16226181191752404715)
@@ -17,14 +17,14 @@
 
 ; --- the vdso's .gnu.version_d hashes, and its .gnu.hash chain, the low bit a bucket's end
 (test
-   (kl-ehash "linux-vdso.so.1" = 233750433) (kl-ehash "LINUX_2.6.39" = 123718537) (kl-ehash "" = 0)
-   (kl-ghash "__kernel_clock_gettime" = 3752411645)
-   (map (n \ kl-ghash n // 2 * 2) ["__kernel_gettimeofday" "__kernel_clock_getres" "__kernel_rt_sigreturn" "__kernel_getrandom"]
+   (ld-ehash "linux-vdso.so.1" = 233750433) (ld-ehash "LINUX_2.6.39" = 123718537) (ld-ehash "" = 0)
+   (ld-ghash "__kernel_clock_gettime" = 3752411645)
+   (map (n \ ld-ghash n // 2 * 2) ["__kernel_gettimeofday" "__kernel_clock_getres" "__kernel_rt_sigreturn" "__kernel_getrandom"]
     = [539402308 3627771288 2440597482 1410158116])
-   (kl-words " V { global: a ; b ; }" = ["V" "{" "global:" "a" ";" "b" ";" "}"]))
+   (ld-words " V { global: a ; b ; }" = ["V" "{" "global:" "a" ";" "b" ";" "}"]))
 
 ; --- a plan: the list exported in .gnu.hash's order, .dynstr the names, soname, version
-(: d (kl-dso {'glob {"a" [0 1] "b" [0 2]} 'order ["a" "x" "b"]} {'soname "s.so" 'symbolic 1 'bti 1}
+(: d (ld-dso {'glob {"a" [0 1] "b" [0 2]} 'order ["a" "x" "b"]} {'soname "s.so" 'symbolic 1 'bti 1}
              " V1 { global: a ; b ; c ; local: * ; } ;")
    sz (: t {} _ (each (d 'synth) (s \ pin t <s (s 1))) t)
    (test
@@ -39,11 +39,11 @@
       (<>st ".hash" = 57) (<>st ".gnu.hash" = 53) (<>st ".rodata" = 103)))
 
 ; --- kbuild's $(LD) lines: the vdso's, vmlinux's inputs in order, and what a probe is refused
-(: v (kl-args ["-EL" "-maarch64elf" "-z" "norelro" "-z" "noexecstack" "-shared" "-soname=linux-vdso.so.1" "-Bsymbolic"
+(: v (ld-args ["-EL" "-maarch64elf" "-z" "norelro" "-z" "noexecstack" "-shared" "-soname=linux-vdso.so.1" "-Bsymbolic"
                "--build-id=sha1" "-n" "-z" "force-bti" "--orphan-handling=warn" "-T" "vdso.lds" "a.o" "b.o" "-o" "vdso.so.dbg"])
-   k (kl-args ["-X" "--pack-dyn-relocs=relr" "--script=./vmlinux.lds" "--strip-debug" "-o" "v1" "--whole-archive" "vmlinux.a"
+   k (ld-args ["-X" "--pack-dyn-relocs=relr" "--script=./vmlinux.lds" "--strip-debug" "-o" "v1" "--whole-archive" "vmlinux.a"
                "x.o" "--no-whole-archive" "--start-group" "lib.a" "--end-group" "ks.o"])
-   r (kl-args ["-EL" "-maarch64elf" "-z" "norelro" "-r" "-o" "vmlinux.o"])
+   r (ld-args ["-EL" "-maarch64elf" "-z" "norelro" "-r" "-o" "vmlinux.o"])
    (test
       (v 'script = "vdso.lds") (v 'out = "vdso.so.dbg") (v 'soname = "linux-vdso.so.1") (v 'emu = 'a64)
       (v 'shared = 1) (v 'symbolic = 1) (v 'nmagic = 1) (v 'bti = 1) (v 'bid = 1) (v 'relro = 0) (v 'orphan = "warn")
@@ -51,22 +51,22 @@
       (k 'script = "./vmlinux.lds") (k 'discard = 'locals) (k 'relr = 1) (k 'strip = 1)
       (k 'ins = [['in "vmlinux.a" 1] ['in "x.o" 1] ['in "lib.a" 0] ['in "ks.o" 0]])
       (r 'reloc = 1) (r 'ins = ())
-      (kl-args ["--no-warn-rwx-segments" "-v"] = "ld: unsupported option --no-warn-rwx-segments")
-      (kl-args ["-z" "max-page-size=4096"] = "ld: unsupported: -z max-page-size=4096")
-      (kl-args ["-o"] = "ld: -o wants a value")
-      (kl-args ["-maarch64elfb"] = "ld: unsupported option -maarch64elfb")
-      ((kl-args ["-v"]) 'ver = 1)
-      (kl-num "0x10000" = 65536) (kl-num "4096" = 4096) (kl-num "4k" = ())))
+      (ld-args ["--no-warn-rwx-segments" "-v"] = "ld: unsupported option --no-warn-rwx-segments")
+      (ld-args ["-z" "max-page-size=4096"] = "ld: unsupported: -z max-page-size=4096")
+      (ld-args ["-o"] = "ld: -o wants a value")
+      (ld-args ["-maarch64elfb"] = "ld: unsupported option -maarch64elfb")
+      ((ld-args ["-v"]) 'ver = 1)
+      (ld-num "0x10000" = 65536) (ld-num "4096" = 4096) (ld-num "4k" = ())))
 
 ; --- the a53 erratum: adrp at a page's 0xff8, a load not writing x0, a load through x0 is refused;
 ; off that word it scans clean, and a section its object names no section symbol for is answered
-(: code (string (cats (map (w \ kl-le w 4) [2415919104 4181721153 4181721091])))
+(: code (string (cats (map (w \ ld-le w 4) [2415919104 4181721153 4181721091])))
    (ob ss) {'id "e.o" 'src code 'nsym (? ss 3 2) 'syms {0 ["" 0 0 0 0 0 0] 1 ["$x" 0 0 1 0 0 0] 2 ["" 0 3 1 0 0 0]}
             'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".text" 1 6 0 12 4 0 0 0]}}
    (lk a ss) {'ot {0 (ob ss)} 'env {'isa {1 a}} 'outs [{'name ".text" 'flags 6 'steps [['isec 0 1 12 4 ".text"]]}]}
    (test
-      (trap (_ \ kl-a53 (lk 4088 0)) () (a \ b \ a) = 'klink-843419)
-      (kl-a53 (lk 4096 0) = [[0 1]]) (kl-a53 (lk 4096 1) = ())))
+      (trap (_ \ ld-a53 (lk 4088 0)) () (a \ b \ a) = 'link-843419)
+      (ld-a53 (lk 4096 0) = [[0 1]]) (ld-a53 (lk 4096 1) = ())))
 
 ; --- -shared with no script lays lld's own layout: kbuild's RELR probe, `void *p = &p;` as
 ; clang -c lays it for aarch64 and mooncc -c for x86-64, linked to the bytes ld.lld 22.1.8 writes
@@ -76,9 +76,9 @@
    (klp-link nm hx)
     (: src ("out/.klp-" + nm + ".o") dst ("out/.klp-" + nm)
        q (open src "w") _ (say q (klp-bytes hx), close q)
-       o (kl-args [src "-shared" "-Bsymbolic" "--pack-dyn-relocs=relr" "-o" dst])
+       o (ld-args [src "-shared" "-Bsymbolic" "--pack-dyn-relocs=relr" "-o" dst])
        _ (pin o 'banner "Linker: LLD 22.1.8")
-       _ (kl-ld o)
+       _ (ld-ld o)
        h (sha256 <>(uread dst))
        (unlink src, unlink dst, h))
    (test
@@ -132,4 +132,4 @@
    (trap (_ \ ldemit ^10 'text 0 () ()) () (a \ b \ a) = 'link-cx)
    (ldemit ^11 'text 7 () () = [7]))
 
-(test_fin (), say err "test/law/klink: ok", put err 10, 0)
+(test_fin (), say err "test/law/ld: ok", put err 10, 0)
