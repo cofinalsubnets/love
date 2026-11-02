@@ -5480,7 +5480,58 @@
           ; the save cells go unwritten now, so a reload of one left anywhere keeps the old frame
           (stale? f) (f @ ('ld r 'fp k) (any (x \ <>x - P = k) sl) ())
           (body = 'bad || any stale? body ? fs
-             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb + body)))))
+             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb + t2sp body (P + (two? sb ? (<sb 3) 0)))))))
+   ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
+   ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
+   ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp
+   (t2sp fs d0)
+    (: lab {}
+       labs (foldl (t \ f \ (<f = 'label ? (pin t <>f 1) t)) {} fs)
+       ch {}
+       (bump t) (pin ch 0 (peep ch 0 0 + 1), t)
+       (rec L d) (peep lab L () @ o (? (o = ()) (bump (pin lab L (charm? d ? d 'x)))
+                                      (o = 'x || o = d) 0
+                                      (bump (pin lab L 'x))))
+       (dd d n) (charm? d ? d + n ())
+       ; a form's effect on the depth: a number, () unknown, 'none where nothing falls through
+       (eff f d)
+        (f @ ('sub 'sp 'sp n) (charm? n ? dd d n ())
+             ('add 'sp 'sp n) (charm? n ? dd d (0 - n) ())
+             ('push _) (dd d 4)
+             ('pop _) (dd d -4)
+             ('pushm rs) (dd d (4 * #rs))
+             ('popm rs) (elem 'pc rs ? 'none (dd d (-4 * #rs)))
+             ('lea 'sp 'fp k) (charm? k ? 0 - k ())
+             ('lea 'sp 'sp k) (charm? k ? dd d (0 - k) ())
+             ('br _ L) (rec L d, d)
+             ('jmp L) ((labs L ? (rec L d)), 'none)
+             ('jmpt _ _ ls) (map (L \ rec L d) ls, 'none)
+             (elem <f '(ret jmpr trap ud2) ? 'none
+                (<>f = 'sp && nelem <f (stops9 + stxops + siops + '(cmp test)) ? () d)))
+       ; at a label the fall-through meets what the branches recorded
+       (at L d) (peep lab L () @ o (? (d = 'none) (o = 'x ? () o)
+                                      (o = () || o = d) d
+                                      ()))
+       (next f d) (d = 'none ? 'none (eff f d))
+       (walk l d)
+        (two? l &&
+         (<l @ f (<f = 'label ? (at <>f d @ d2 (rec <>f d2, walk >l d2))
+                    (walk >l (next f d)))))
+       (fix n) (walk fs d0, peep ch 0 0 @ m (m = n ? 0 (fix m)))
+       _ (fix -1)
+       (fits? f o) (0 <= o && (elem <f (fldops + fstops) ? (o <= 1020 && o % 4 = 0) (o <= 4095)))
+       (sp f d)
+        (? !(charm? d) f
+           (elem <f (ldops9 + fldops + leaops) && <>f != 'sp && f 2 = 'fp && charm? (f 3) && f 3 < 0)
+            (f 3 + d @ o (fits? f o ? [<f <>f 'sp o] f))
+           (elem <f (gstops + fstops) && <>f = 'fp && charm? (f 2) && f 2 < 0)
+            (f 2 + d @ o (fits? f o ? [<f 'sp o (f 3)] f))
+           f)
+       (out l d)
+        (? !(two? l) ()
+           (<l @ f (<f = 'label ? (at <>f d @ d2 (f . out >l d2))
+                      ((sp f d) . out >l (next f d)))))
+       (out fs d0))
    ; -mbranch-protection (a key): pac-ret lays paciasp before each (frpush), autiasp after each (frpop).
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
