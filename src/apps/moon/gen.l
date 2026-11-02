@@ -5489,7 +5489,8 @@
        labs (foldl (t \ f \ (<f = 'label ? (pin t <>f 1) t)) {} fs)
        ch {}
        (bump t) (pin ch 0 (peep ch 0 0 + 1), t)
-       (rec L d) (peep lab L () @ o (? (o = ()) (bump (pin lab L (charm? d ? d 'x)))
+       (rec L d) (peep lab L () @ o (? (d = 'none) 0
+                                      (o = ()) (bump (pin lab L (charm? d ? d 'x)))
                                       (o = 'x || o = d) 0
                                       (bump (pin lab L 'x))))
        (dd d n) (charm? d ? d + n ())
@@ -5509,7 +5510,7 @@
              (elem <f '(ret jmpr trap ud2) ? 'none
                 (<>f = 'sp && nelem <f (stops9 + stxops + siops + '(cmp test)) ? () d)))
        ; at a label the fall-through meets what the branches recorded
-       (at L d) (peep lab L () @ o (? (d = 'none) (o = 'x ? () o)
+       (at L d) (peep lab L () @ o (? (d = 'none) (? (o = ()) 'none (o = 'x) () o)
                                       (o = () || o = d) d
                                       ()))
        (next f d) (d = 'none ? 'none (eff f d))
