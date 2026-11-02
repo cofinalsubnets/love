@@ -107,5 +107,20 @@ if [ $tgt = i386 ]; then
     done
   done
   echo "abi386: $(tail -1 "$d/abi3.out") at each -mregparm, 0 to 3, ours plain and -Os"
+  # skew386: over-aligned locals under -mstack-alignment=4 at each incoming esp, and at the ABI's plain
+  for rp in 0 3; do
+    gcc -m32 -mregparm=$rp -O1 -w -c -o "$d/skp$rp.o" test/cc/skew386/peer.c 2> "$d/skp.log" \
+      || { cat "$d/skp.log" >&2; fail "skew386: gcc could not build peer.c at -mregparm=$rp"; }
+    for sa in "-mstack-alignment=4" "-DSKEWS=1"; do
+      for fl in -O0 -Os; do
+        moonrun -t i386 -mregparm=$rp $sa $fl -c -o "$d/skh.o" test/cc/skew386/host.c > "$d/skh.log" 2>&1 \
+          || { cat "$d/skh.log" >&2; fail "skew386: mooncc $sa $fl could not build host.c at -mregparm=$rp"; }
+        gcc -m32 -no-pie -o "$d/skew" "$d/skh.o" "$d/skp$rp.o" 2> "$d/skl.log" \
+          || { cat "$d/skl.log" >&2; fail "skew386: the link at -mregparm=$rp"; }
+        "$d/skew" > "$d/skew.out" 2>&1 || { cat "$d/skew.out" >&2; fail "skew386: mooncc $sa $fl at -mregparm=$rp"; }
+      done
+    done
+  done
+  echo "skew386: $(tail -1 "$d/skew.out"), -mstack-alignment=4 and plain, -mregparm 0 and 3"
 fi
 echo "$name: $n programs answer as $ref does, built plain and -Os, $nnar narrow and $nhost hosted ones run to an exit, $nwide wide ones refused by both, $nref refused"
