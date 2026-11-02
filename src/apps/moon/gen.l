@@ -5460,22 +5460,24 @@
                     (fp? f) 'bad
                     f)
           (fp? x) (? (atom? x) (x = 'fp) (any fp? x))
-          ; an exit: the restores, in any order, then the frame back and the record (acc runs backwards,
+          ; an exit: the restores it owes, in any order and maybe none (csdrop keeps only the written ones;
+          ; the pop puts back the rest unchanged), then the frame back and the record (acc runs backwards,
           ; already shifted)
           (rst? f) (f @ ('ld r 'fp k) (any (x \ x = [r (k + P)]) sl) ())
-          n #sl
+          (unrst l) (two? l && rst? <l ? (unrst >l) l)
           up ((P = 0 ? () [['sub 'sp 'sp P]]) + ['(lea sp fp 0)])
           (go l acc)
            (? !(two? l) (rev acc)
               (take 3 l = '((lea sp fp 0) (pop fp) (pop lr)))
-               (? (#acc < n || !(all rst? (take n acc))) 'bad
-                  (drop 3 l @ l3
-                     (two? l3 && <l3 = '(ret) ?
-                        (go >l3 ([['popm (rs + '(fp pc))]] + up + drop n acc))
-                        (go l3 ([['popm (rs + '(fp lr))]] + up + drop n acc)))))
+               (drop 3 l @ l3
+                  (two? l3 && <l3 = '(ret) ?
+                     (go >l3 ([['popm (rs + '(fp pc))]] + up + unrst acc))
+                     (go l3 ([['popm (rs + '(fp lr))]] + up + unrst acc))))
               (sh <l @ f (f = 'bad ? 'bad (go >l (f . acc)))))
           body (go <>sv ())
-          (body = 'bad ? fs
+          ; the save cells go unwritten now, so a reload of one left anywhere keeps the old frame
+          (stale? f) (f @ ('ld r 'fp k) (any (x \ <>x - P = k) sl) ())
+          (body = 'bad || any stale? body ? fs
              (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb + body)))))
    ; -mbranch-protection (a key): pac-ret lays paciasp before each (frpush), autiasp after each (frpop).
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
