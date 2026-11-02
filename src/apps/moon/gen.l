@@ -5130,17 +5130,15 @@
                         (f . brj >l))))
        (brj (go fs0 1 0 (fresh 0) (fresh 0) (fresh 0) (fresh 0) ()))))
 
-   ; dead cells: a spush cell nothing loads is write-only, so its store and its sub/add pair drop;
-   ; a live cell converts to a frame slot (one per record depth) and the pair still drops
+   ; dead cells: a spush cell nothing loads is write-only, so its store and its sub/add pair drop
    (deadcell g fs)
     (cz g 'deadcell fs (: pex (map (f \ <>f) (filter (f \ (<f = 'pop)) (peep g 'epi epi)))   ; the epilogue's teardown pops
        cand {}                               ; st-index -> 1 while still droppable
-       clds {}                               ; st-index -> its cell's ld indexes
        dirty {}                              ; sub-index -> 1: the span observed sp
        (dirt st2) (!(two? st2) ? 1
                      ((charm? <>><st2 ? (pin dirty <>><st2 1)),
                       dirt >st2))
-       (scan l i stk sw)                             ; -> the (sub st k add depth) entries | 'no
+       (scan l i stk sw)                             ; -> the (sub st k add) entries | 'no
         (!(two? l) ? sw
            (: f <l r >l
               (? !(two? f) (scan r (i + 1) stk sw)
@@ -5150,8 +5148,8 @@
                      (k = 16 && two? nx && <nx = 'st &&
                       <>nx = 'sp && <>>nx = 0 ?
                         (pin cand (i + 1) 1,
-                         scan >r (i + 2) ([(i + 1) 16 i #stk] . stk) sw)
-                        (scan r (i + 1) ([() k i #stk] . stk) sw)))
+                         scan >r (i + 2) ([(i + 1) 16 i] . stk) sw)
+                        (scan r (i + 1) ([() k i] . stk) sw)))
                  (<f = 'add && <>f = 'sp && charm? <>>>f)
                   (: (unwind st2 k w)
                       (? (k = 0) [st2 w]
@@ -5159,10 +5157,10 @@
                          (: rc <st2 sz <>rc
                             (k < sz ? 'no
                                (unwind >st2 (k - sz)
-                                (charm? <>>rc ? ([<>>rc <rc sz i (rc 3)] . w) w)))))
+                                (charm? <>>rc ? ([<>>rc <rc sz i] . w) w)))))
                      r9 (unwind stk <>>>f ())
                      (r9 @ 'no 'no (scan r (i + 1) <r9 (<>r9 + sw))))
-                 (<f = 'push) (scan r (i + 1) ([() 8 () ()] . stk) sw)
+                 (<f = 'push) (scan r (i + 1) ([() 8 ()] . stk) sw)
                  (<f = 'pop)
                   (? (elem <>f pex) (scan r (i + 1) stk sw)   ; the epilogue's frame pops: path exit
                      (two? stk && !<<stk && <><stk = 8)
@@ -5170,10 +5168,7 @@
                      'no)
                  (elem <f ldops9 && <>>f = 'sp)
                   (two? stk && <<stk && <>>>f = 0 ?
-                     (<<stk @ stx
-                        (pin cand stx (),
-                         pin clds stx (i . peep clds stx ()),
-                         scan r (i + 1) stk sw))
+                     (pin cand <<stk (), scan r (i + 1) stk sw)
                      'no)
                  (elem <f stops9 && <>f = 'sp) 'no
                  (elem <f fldops && <>>f = 'sp) 'no
@@ -5182,53 +5177,17 @@
        ok (scan fs 0 () ())
        (ok @ 'no fs
              (: subdrop {} addsh {}     ; sub-index -> drop; add-index -> shrink bytes
-                stconv {} ldconv {}     ; st/ld-index -> the slot's positive offset
-                pf3 (fs 3)                         ; the prologue's frame sub: (sub sp sp F)
-                cvok (pro4? fs &&
-                      two? pf3 && <pf3 = 'sub && <>pf3 = 'sp && <>>pf3 = 'sp && charm? <>>>pf3)
-                F (cvok ? <>>>pf3 0)
-                (mark w cv) (!(two? w) ? cv
-                               (: e <w sub (e 0) st (e 1) k (e 2) ad (e 3)
-                                  (? (dirty sub) (mark >w cv)
-                                     !(0 = k % 16) (mark >w cv)
-                                     (!st || peep cand st ())
-                                      (pin subdrop sub 1,
-                                       pin addsh ad (peep addsh ad 0 + k),
-                                       mark >w cv)
-                                     (cvok && k = 16) (mark >w (e . cv))
-                                     (mark >w cv))))
-                cvl (mark ok ())
-                ds (: (dd l acc) (!(two? l) ? acc
-                                    (<l 4 @ d
-                                       (dd >l (elem d acc ? acc (d . acc)))))
-                      (dd cvl ()))
-                (rank d l n) (<l = d ? n (rank d >l (n + 1)))
-                _ ((: (cvt l) (!(two? l) ? 1
-                                 (: e <l
-                                    o (F + 8 + 8 * rank (e 4) ds 0)
-                                    (pin subdrop (e 0) 1,
-                                     pin addsh (e 3) (peep addsh (e 3) 0 + 16),
-                                     pin stconv (e 1) o,
-                                     ((: (pl ls) (!(two? ls) ? 1
-                                                    (pin ldconv <ls o, pl >ls)) pl)
-                                      (clds (e 1))),
-                                     cvt >l))) cvt) cvl)
-                F2 (aup (F + 8 * tally ds) 16)
-                ; a converted cell joins the slot map, or deadst/repack bar the fn on an unclaimed r4 touch
-                _ (foldl (_ \ d \ (F + 8) + (8 * rank d ds 0) @ o
-                                    (pin g 'slots ([(0 - o) 8] . peep g 'slots ())))
-                         0 ds)
+                (mark w) (two? w ?
+                            (: e <w sub (e 0) st (e 1) k (e 2) ad (e 3)
+                               ((!(dirty sub) && 0 = k % 16 && (!st || peep cand st ()) ?
+                                   (pin subdrop sub 1, pin addsh ad (peep addsh ad 0 + k))),
+                                mark >w)))
+                _ (mark ok)
                 (drop2 l i) (two? l ?
                                (? (cand i) (drop2 >l (i + 1))
                                   (subdrop i) (drop2 >l (i + 1))
-                                  (: f2 <l
-                                     o9 (stconv i)
-                                     ol (ldconv i)
-                                     s (peep addsh i 0)
-                                     (? o9 (['st 'r4 (0 - o9) <>>>f2] . drop2 >l (i + 1))
-                                        ol ([<f2 <>f2 'r4 (0 - ol)] . drop2 >l (i + 1))
-                                        (two? cvl && i = 3) (['sub 'sp 'sp F2] . drop2 >l (i + 1))
-                                        (s = 0) (f2 . drop2 >l (i + 1))
+                                  (: f2 <l s (peep addsh i 0)
+                                     (? (s = 0) (f2 . drop2 >l (i + 1))
                                         (<>>>f2 - s @ k2
                                            (k2 = 0 ? (drop2 >l (i + 1))
                                               (['add 'sp 'sp k2] . drop2 >l (i + 1))))))))
