@@ -2152,7 +2152,7 @@
 
    ; --- the roster. a bake's cat marks each file ahead of its forms, and a mark lays the verbs
    ; and modules added since the last at the file they came from; (mark ()) closes the cat.
-   ; a carried file is read the same way, and at the close set aside: its verbs stubs that
+   ; a carried file is read too, and at the close set aside: its verbs stubs that
    ; raise its unit off /love at the first call, its modules out of the registry.
    ; (lazy p vs ms ns) stands for a file left out with what a read of it recorded: its verbs,
    ; its modules, and the units it borrows from.
@@ -2167,9 +2167,12 @@
                  each (keys (lib ())) (k \ (nom? k && !(string? (mods k)) ? (pin mods k c) 0))))
    (mark p) (settle (), pin ros 'cur p,
              string? p ? (pin ear 0 used, pin ros 'files ((p . 1) . ros 'files)) (pin ear 0 (), stow ()))
-   ; a file the default bake carries but leaves out (the Makefile's carryfiles), its forms
-   ; behind the row as a mark's are
-   (carry p) (settle (), pin ear 0 used, pin ros 'cur p, pin carried p 1, pin ros 'stowed (p . ros 'stowed))
+   ; a file the default bake carries but leaves out (the Makefile's carryfiles), read off /love
+   ; past the glaze, which would keep its forms in the image
+   (carry p) (settle (), pin ear 0 used, pin ros 'cur p, pin carried p 1, pin ros 'stowed (p . ros 'stowed),
+              (cite 'posix 'open) ("/love/" + p) "r" @ q
+                (hot? q ? (cite 'glaze 'base-ev @ E (each (forms q) (lit? E ? E ev)), cite 'posix 'close q)
+                   (scare 'no-source p)))
    (stow _) (each (rev (ros 'stowed))
                (p \ (each (filter (m \ mods m = p) (keys mods)) (m \ pull (lib ()) m 0),
                      leave p (filter (v \ prov v = p) (keys prov)))),
