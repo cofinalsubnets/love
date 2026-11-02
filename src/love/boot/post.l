@@ -2167,20 +2167,41 @@
                  each (keys (lib ())) (k \ (nom? k && !(string? (mods k)) ? (pin mods k c) 0))))
    (mark p) (settle (), pin ros 'cur p,
              string? p ? (pin ear 0 used, pin ros 'files ((p . 1) . ros 'files)) (pin ear 0 (), stow ()))
-   ; a file the default bake carries but leaves out (the Makefile's carryfiles), read off /love
-   ; past the glaze, which would keep its forms in the image
-   (carry p) (settle (), pin ear 0 used, pin ros 'cur p, pin carried p 1, pin ros 'stowed (p . ros 'stowed),
-              (cite 'posix 'open) ("/love/" + p) "r" @ q
-                (hot? q ? (cite 'glaze 'base-ev @ E (each (forms q) (lit? E ? E ev)), cite 'posix 'close q)
-                   (scare 'no-source p)))
-   (stow _) (each (rev (ros 'stowed))
-               (p \ (each (filter (m \ mods m = p) (keys mods)) (m \ pull (lib ()) m 0),
-                     leave p (filter (v \ prov v = p) (keys prov)))),
-             pin ros 'stowed ())
-   (lazy p vs ms ns) (settle (), pin ear 0 used, pin ros 'cur p,
+   ; a file the default bake carries but leaves out (the Makefile's carryfiles): noted here,
+   ; read at the close
+   (carry p) (settle (), pin carried p 1, pin ros 'stowed (p . ros 'stowed))
+   ; the close lays each carried file as a lazy one, with what a read of it recorded
+   (stow _) (rev (ros 'stowed) @ ps
+              (two? ps ?
+                 (pin ros 'stowed (),
+                  each (sow ps) (r \ r @ [p vs ms ns] (map name ms @ mn (each mn (m \ pull (lib ()) m 0), lazy p (map name vs) mn ns))),
+                  pin ros 'cur ())))
+   ; [p verbs modules needs] for each of ps, names spelled: read in a forked child, so the image
+   ; keeps none of their code, or here, code and all, where nothing forks. a unit's needs ride
+   ; its first file
+   (sow ps) (: (lay _) (each ps (p \ (settle (), pin ros 'cur p, pin ear 0 used, load1 ("/love/" + p))),
+                        settle (), pin ear 0 ())
+               (rec _) (: seen {}
+                          (map (p \ unit p @ u
+                                  [p (map show (filter (v \ prov v = p) (keys prov))) (map show (filter (m \ mods m = p) (keys mods)))
+                                     (seen u ? () (pin seen u 1, need u))])
+                               ps))
+               cl (cite 'posix 'close)
+               (flush out, flush err,
+                pipe 0 @ pp
+                (fork 0 @ k
+                  (? (k < 0) (cl <pp, cl >pp, lay (), rec ())
+                     (k = 0) (cl <pp,
+                              trap (_ \ (lay (), fdopen >pp @ w (say w (show (rec ())), flush w), quit 0)) ()
+                                   (\ a b (say err ";; carry: ", print err a, say err " ", print err b, put err 10,
+                                           flush err, quit 1)))
+                     (: _ (cl >pp)
+                        t (fdopen <pp @ r (slurp r @ t (cl r, t)))
+                        (wait k = 0 ? (sound t @ (x . _) x (scare 'carry-read ps)) (scare 'carry-read ps)))))))
+   (lazy p vs ms ns) (settle (), pin ros 'cur p,
                       each ms (m \ pin mods m p),
                       each vs (v \ pin prov v p),
-                      pin need (unit p) (ns + need (unit p)),
+                      unit p @ u (pin need u (foldl (a \ w \ (elem w a ? a (a + [w]))) (need u) ns)),
                       leave p vs)
    (leave p vs) (pin ros 'files ((p . 0) . ros 'files),
                  pin lefts (unit p) 1,

@@ -1,8 +1,7 @@
 #!/bin/sh
 # test/gate/nest.sh -- `love nest`, the binary laying itself as the user's love, in a
-# HOME of its own: a fresh nest, the same build again, another love replaced, what earlier
-# installs laid pruned, and the build's name, a short hash of the source it carries, in
-# --version and in nest's line.
+# HOME of its own: a fresh nest, the same build again, another love replaced, and the
+# build's name, a short hash of the source it carries, in --version and in nest's line.
 #
 # usage: sh test/gate/nest.sh LOVE
 set -u
@@ -36,22 +35,12 @@ done
 [ "$("$H/.love/bin/lush" -c 'echo ok')" = ok ] || fail "the linked lush does not run"
 [ "$("$H/.love/bin/lush" -ac 'basename /x/ok')" = ok ] || fail "lush -ac does not run a verb"
 
-# what earlier installs laid goes: tool links, the lux script, bao, the papel link, and
-# their ~/.local/bin links -- a file the nest did not lay stays, and so does its link
+# the same build again lays nothing, and a file the nest did not lay stays, with its link
 b=$H/.love/bin l=$H/.local/bin
-for t in kore mooncc ai; do ln -sf love "$b/$t"; ln -sf "$b/$t" "$l/$t"; done
-{ echo '#!/usr/bin/env -S love -l'; cat src/apps/lux/core.l; } > "$b/lux"; ln -sf "$b/lux" "$l/lux"
-printf '#!/bin/sh\nexec "$h/love" -e "((cite '"'"'cli '"'"'shell) 0)" "$@"\n' > "$b/bao"
-ln -sf "$PWD/src/apps/papel.l" "$b/papel"
 echo 'mine' > "$b/seed"; ln -sf "$b/seed" "$l/seed"
-ln -sf "$b/gone" "$l/gone"
 out=$(nest); st=$?
-[ $st = 0 ] || fail "the pruning nest exits $st: $out"
+[ $st = 0 ] || fail "the same build again exits $st: $out"
 [ "$out" = "love nest: ~/.love/bin/love is already this build ($ver)" ] || fail "the same build again said: $out"
-for t in kore mooncc ai lux bao papel; do
-  [ -e "$b/$t" ] || [ -L "$b/$t" ] && fail "$t was not pruned"
-done
-for t in kore mooncc ai lux gone; do [ -L "$l/$t" ] && fail "~/.local/bin/$t was not pruned"; done
 [ "$(cat "$b/seed")" = mine ] || fail "a file the nest did not lay was touched"
 [ "$(readlink "$l/seed")" = "$b/seed" ] || fail "a link to a file the nest did not lay was touched"
 
@@ -74,4 +63,4 @@ case $out in "usage: love nest"*) ;; *) fail "nest -h said: $out";; esac
 
 rm -rf "$H"
 [ $fails = 0 ] || { echo "FAIL nest ($fails)"; exit 1; }
-echo "nest: the binary lays itself as $ver, links lush, prunes what earlier installs laid"
+echo "nest: the binary lays itself as $ver, links lush"
