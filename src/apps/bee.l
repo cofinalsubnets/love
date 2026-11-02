@@ -68,7 +68,8 @@
                            + "who are told. Split those rows out of the union and pass lanes to run only the red ones again: "
                            + "the lanes the last gate passed stand. A message comes when it ends; dir/out/gate.log is its log.")
              {"queue" (prop "refs/queue/NAME") "dir" (prop "the worktree holding the union, its out/ built; the working directory unless given")
-              "lanes" (prop "after a split, the red lanes to run again, space-separated; the slow lane always runs")}
+              "lanes" (prop "after a split, the red lanes to run again, space-separated; the slow lane always runs")
+              "row" (prop "the row to gate, when you hold more than one; else your live row, one not folded into another")}
              ["queue"])
        (tool "lanes" ("The lanes a change owes, in the order to run them, one line each: the lane, light or heavy, "
                       + "its wall seconds on a shared box (? when unmeasured) and the paths that owed it. test comes "
@@ -540,11 +541,15 @@
      ; each red told to the owners of the paths that owed it ---
      (g-git dir a) (chomp (lush-out "git -C \(sh-quote dir) \(a)"))
      (gate-dir in) (: d (field in "dir" bee-cwd) (d 0 @ 47 d "\(bee-cwd)/\(d)"))
-     (gate-why q text who dir)
-      (: rows (q-rows text) r (q-own rows who)
+     ; the row a gate acts on: the one named, else the caller's own
+     (gate-row rows who rp) (? (0 < #rp) rp (q-own rows who))
+     (gate-why q text who dir rp)
+      (: rows (q-rows text) r (gate-row rows who rp)
          ahead (? (r = ()) () (filter (\ p (!(q-folded? (rows p)) && q-num p < q-num r)) (keys rows)))
          prev (foldl (\ a p (? (#a = 0 || q-num a < q-num p) p a)) "" ahead)
          (? (r = ()) "you hold no row in \(q)"
+            !(two? (rows r)) "no row \(r) in \(q)"
+            (rows r 1 != who) "row \(r) is \(rows r 1)'s"
             (q-folded? (rows r)) "row \(r) is \(rows r 5): the union's own row gates"
             ; a plan is from the gated-on: none, and every lane but test and test_slow drops out
             (#(g-git dir ("rev-parse --verify -q " + sh-quote (rows r 3 + "^{commit}"))) = 0)
@@ -555,14 +560,14 @@
             (#(g-git dir "rev-parse --verify -q HEAD") = 0) "no commit checked out in \(dir)"
             (0 < #(g-git dir "status --short --untracked-files=no")) "\(dir) has changes not committed: a gate runs on a commit"
             ""))
-     (gate-spawn q dir who only)
+     (gate-spawn q dir who r only)
       (? !(string? bee-self) "this bee cannot find its own binary"
          (: _ (umkdirs (dir + "/out") 493)
             ; BEE_AS, not BEE_NAME: the caller's own mcp card holds who while the gate runs, and
             ; BEE_NAME takes a name only when it is free. the tree's own love gates when it has one, so
             ; the lanes are its lanemap's, not those of whichever bee this server was started from
             ol (sh-quote (dir + "/out/love"))
-            line ("cd \(sh-quote dir) && b=\(sh-quote bee-self); [ -x \(ol) ] && b=\(ol); BEE_AS=\(sh-quote who) "
+            line ("cd \(sh-quote dir) && b=\(sh-quote bee-self); [ -x \(ol) ] && b=\(ol); BEE_AS=\(sh-quote who) BEE_ROW=\(sh-quote r) "
                   + "PWD=\(sh-quote dir) exec \"$b\" bee --gate " + sh-quote q + cats (map (\ l (" " + sh-quote l)) only)
                   + " >> " + sh-quote (dir + "/out/gate.log") + " 2>&1")
             nul (openfd "/dev/null" 0)
@@ -570,12 +575,12 @@
             _ (? (0 <= nul) (close nul) 0)
             (? !(charm? p && 0 < p) "love bee --gate did not start" (: _ (twirl (\ _ (reap p)) 0) ""))))
      (queue-gate in)
-      (: q (in "queue") who (me 0) dir (gate-dir in) rd (q-read q) only (words (field in "lanes" ""))
+      (: q (in "queue") who (me 0) dir (gate-dir in) rd (q-read q) only (words (field in "lanes" "")) rp (field in "row" "")
          (? (<rd = "none") [0 ("no queue " + q)]
-            (: r (q-own (q-rows (rd 1)) who) why (gate-why q (rd 1) who dir) h (g-git dir "rev-parse HEAD")
+            (: r (gate-row (q-rows (rd 1)) who rp) why (gate-why q (rd 1) who dir rp) h (g-git dir "rev-parse HEAD")
                (? (0 < #why) [0 why]
                   (: w (queue-row1 {"queue" q "state" "gating" "gated_head" h "row" r})
-                     e (? <w (gate-spawn q dir who only) "")
+                     e (? <w (gate-spawn q dir who r only) "")
                      (? !<w w
                         (0 < #e) [0 "row \(r) is gating at \(h), but \(e): write it back to waiting"]
                         [1 ("row \(r) is gating at \(h). love bee --gate runs "
@@ -587,13 +592,14 @@
      (gate-say s) (puts "love bee --gate: \(s)\n", flush out, 0)
      (gate-wait p) (: s (gather p) (? (two? s) <s (nom? s) -1 (rest 1000, gate-wait p)))   ; a gate's hours
      (gate-run q only)
-      (: who (me 0) dir bee-cwd rd (q-read q) text (rd 1) rows (q-rows text) r (q-own rows who)
+      (: who (me 0) dir bee-cwd rd (q-read q) text (rd 1) rows (q-rows text)
+         r (gate-row rows who (getenv "BEE_ROW" @ e (string? e ? e "")))   ; queue_gate names the row it wrote
          row (? (r = ()) () (rows r)) h (git1 "rev-parse HEAD")
          ; an ignore every child inherits: spawnio resets the job signals (int quit pipe tstp ttin ttou)
          ign (filter (\ n ((cite 'posix 'sigign?) n)) (filter (\ n !(elem n [2 3 9 13 19 20 21 22])) (map (+ 1) ^31)))
          (back why) (: _ (gate-say why) _ (queue-row1 {"queue" q "state" "waiting" "row" r})
                        _ (post-as "gate-\(r)" who "queue_gate: row \(r) is waiting again, ungated: \(why)") 1)
-         (? (r = ()) (: _ (gate-say "\(who) holds no row in \(q)") 1)
+         (? (!(two? row) || row 1 != who) (: _ (gate-say "\(who) holds no row \(r) in \(q)") 1)
             (row 4 != h) (back ("row " + r + " gates " + row 4 + ", but HEAD is " + h))
             (#(git1 ("rev-parse --verify -q " + sh-quote (row 3 + "^{commit}"))) = 0)
              (back ("row " + r + " is gated on " + row 3 + ", not a commit, and a plan from it owes no lane"))
@@ -731,11 +737,13 @@
         "leader \(lead)"
         "\(base 0) \(base 1)"])
      ; the rows of a text, and what they say
-     ; a session may hold a row per branch: its rows by position, and the one a land tool acts on --
-     ; its head row when it is the head, else its first
+     ; a session may hold a row per branch: its rows by position, and the one a gate or land tool acts
+     ; on -- its head row when it is the head, else its first not folded into another (a folded row
+     ; never gates or lands alone), else its first
      (q-owns rows who) (sort (filter (\ p (rows p 1 = who)) (keys rows)))
      (q-own rows who)
-      (: ps (q-owns rows who) h (q-head rows)
+      (: ps0 (q-owns rows who) live (filter (\ p !(q-folded? (rows p))) ps0)
+         ps (two? live ? live ps0) h (q-head rows)
          (? !(two? ps) () (elem h ps) h (foldl (\ a p (q-num p < q-num a ? p a)) <ps >ps)))
      ; the row a write sets -> its position, () for a join, or why not: `row` names one, else the
      ; row carrying `branch`, else the session's only row. a branch it has no row for joins anew
