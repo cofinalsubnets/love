@@ -1349,6 +1349,25 @@ moonrun -o "$ho/.isy" "$ho/.isy.o" > /dev/null 2>&1 || fail "mooncc: the -isyste
 "$ho/.isy"; a=$?
 [ $a -eq 42 ] || fail "mooncc -isystem/-idirafter order (got $a want 42)"
 head -1 "$ho/.isy.d" | grep -q '^isy\.o:' || fail "mooncc -Wp,-MT did not name the rule's target"
+# posix_fallocate grows a file to the length asked, never shrinks it
+cat > "$ho/.falloc.c" <<'EOF'
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+int main(void) {
+	char path[] = "/tmp/mooncc-falloc-XXXXXX";
+	int fd = mkstemp(path);
+	struct stat st;
+	if (fd < 0) return 1;
+	unlink(path);
+	if (posix_fallocate(fd, 0, 4096) || fstat(fd, &st) || st.st_size != 4096) return 2;
+	if (posix_fallocate(fd, 0, 16) || fstat(fd, &st) || st.st_size != 4096) return 3;
+	return 42; }
+EOF
+moonrun -o "$ho/.falloc" "$ho/.falloc.c" > /dev/null 2>&1 || fail "mooncc: posix_fallocate's program"
+"$ho/.falloc"; a=$?
+[ $a -eq 42 ] || fail "posix_fallocate (got $a want 42)"
 
 # -- inline asm
 printf 'int main() { long v; asm("mov $40, %%0" : "=r"(v)); return v + 2; }\n' > "$ho/.casm1.c"

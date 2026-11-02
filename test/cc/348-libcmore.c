@@ -1,13 +1,9 @@
 /* the libc the kernel's host tools reach for: memmem, memccpy, strlcpy/strlcat, putenv,
-   posix_fallocate, and the tsearch tree, an in-order walk after deletes */
+   and the tsearch tree, an in-order walk after deletes */
 #define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <search.h>
-#include <sys/stat.h>
 
 static int cmp(void const *a, void const *b) { return *(int const *) a - *(int const *) b; }
 static int seen[64], nseen;
@@ -36,15 +32,6 @@ int main(void) {
 	if (putenv(kv) || strcmp(getenv("HEARTS_PROBE"), "1")) return 10;
 	kv[13] = '2';                              /* the string itself is the variable */
 	if (strcmp(getenv("HEARTS_PROBE"), "2")) return 11;
-
-	char path[] = "/tmp/mooncc-falloc-XXXXXX";
-	int fd = mkstemp(path);
-	if (fd < 0) return 12;
-	unlink(path);
-	struct stat st;
-	if (posix_fallocate(fd, 0, 4096) || fstat(fd, &st) || st.st_size != 4096) return 13;
-	if (posix_fallocate(fd, 0, 16) || fstat(fd, &st) || st.st_size != 4096) return 14;
-	close(fd);
 
 	static int keys[40];
 	void *root = 0;
