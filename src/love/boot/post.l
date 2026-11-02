@@ -2006,6 +2006,60 @@
 
 ) ; module grid
 
+; the reader's words, beside show: a string's first form, a port's forms run, and its forms read
+(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
+; (ev 'ev a) late-binds: post is evaluated before the glaze rebinds ev (and LOVE_NO_GLAZE re-pins it)
+(: (reads p)
+   (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
+                              (a . b) (walk b (ev 'ev a))
+                              z)
+      ; for `in`, shared with the forms evaluated: gulp for speed, but hold nothing across an
+      ; eval. box 0 counts every byte drawn off p, so the walk can put the port back.
+      box {}
+      (drew u) (peep box 0 0)
+      (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
+      ; flow, plus the count
+      (feed u)
+       (see p @ -1 () c
+        (: _ (unsee p c)
+           t (chug p)
+           _ (pin box 0 (drew () + #t))
+           (go k l) (0 >= k ? l (k - 1 @ j (go j (t j . l))))
+         (go #t (once (u \ feed ())))))
+      ; bytes consumed from a to b, by identity, forcing each step: tallying the lazy residue
+      ; would force the whole rest
+      (frc x) (lit? x ? (x ()) x)
+      (upto a b n) (: aa (frc a) bb (frc b)
+                      (? (aa = bb) n
+                         (two? aa)   (upto >aa bb (n + 1))
+                         n))
+      (step cl walked z)
+       (sound cl @
+         'torn (scare 'unfinished-form p)
+         (a . b) (: k (upto cl b 0)
+                    w2 (walked + k)
+                    rem (drew () - w2)
+                    ; one byte short on purpose: the reader has read one ahead
+                    _ (drop (0 < rem ? (rem - 1) 0))
+                    h (inhand p)
+                    v (ev 'ev a)
+                    (h = inhand p ? (drop 0, step b w2 v)
+                                    (start (two? b ? [<b]) v)))
+         (drop 0, z))
+      (start pre z)
+       (see p @
+        -1 (atom? pre ? z (walk pre z))
+        c (unsee p c,
+           inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
+                      (walk (cat pre (trickle p)) z)))
+      ; `in` folded at compile: a rebound `in` fails this in silence
+      (p = in ? (start () 0) (walk (flow p) 0))))
+(: (forms p)
+   ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
+                              (a . b) (g b (a . acc))
+                              (rev acc)))
+    (flow p) ()))
+
 ; verbs -- the registry behind `love mooncc ..` and a `sed` symlink onto the artifact: one
 ; name-keyed tablet, (cite 'verbs 'tab) the real one, mutated by `pin`. never spliced, or
 ; `get` would shadow half the tree. two lookups, with different shadow rules:
@@ -2223,60 +2277,6 @@
                   (say err "pack: unknown option \(<as)\n", flush err, 2)))))
 
 ) ; module verbs
-
-; the reader's words, beside show: a string's first form, a port's forms run, and its forms read
-(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
-; (ev 'ev a) late-binds: post is evaluated before the glaze rebinds ev (and LOVE_NO_GLAZE re-pins it)
-(: (reads p)
-   (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a . b) (walk b (ev 'ev a))
-                              z)
-      ; for `in`, shared with the forms evaluated: gulp for speed, but hold nothing across an
-      ; eval. box 0 counts every byte drawn off p, so the walk can put the port back.
-      box {}
-      (drew u) (peep box 0 0)
-      (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
-      ; flow, plus the count
-      (feed u)
-       (see p @ -1 () c
-        (: _ (unsee p c)
-           t (chug p)
-           _ (pin box 0 (drew () + #t))
-           (go k l) (0 >= k ? l (k - 1 @ j (go j (t j . l))))
-         (go #t (once (u \ feed ())))))
-      ; bytes consumed from a to b, by identity, forcing each step: tallying the lazy residue
-      ; would force the whole rest
-      (frc x) (lit? x ? (x ()) x)
-      (upto a b n) (: aa (frc a) bb (frc b)
-                      (? (aa = bb) n
-                         (two? aa)   (upto >aa bb (n + 1))
-                         n))
-      (step cl walked z)
-       (sound cl @
-         'torn (scare 'unfinished-form p)
-         (a . b) (: k (upto cl b 0)
-                    w2 (walked + k)
-                    rem (drew () - w2)
-                    ; one byte short on purpose: the reader has read one ahead
-                    _ (drop (0 < rem ? (rem - 1) 0))
-                    h (inhand p)
-                    v (ev 'ev a)
-                    (h = inhand p ? (drop 0, step b w2 v)
-                                    (start (two? b ? [<b]) v)))
-         (drop 0, z))
-      (start pre z)
-       (see p @
-        -1 (atom? pre ? z (walk pre z))
-        c (unsee p c,
-           inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
-                      (walk (cat pre (trickle p)) z)))
-      ; `in` folded at compile: a rebound `in` fails this in silence
-      (p = in ? (start () 0) (walk (flow p) 0))))
-(: (forms p)
-   ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a . b) (g b (a . acc))
-                              (rev acc)))
-    (flow p) ()))
 
 ; cli -- the console and command line: the repl and its multi-line editor, the floor handler
 ; (welp), the port-driven line reader (edraw/edln/edlnc), and the host command line, read left
