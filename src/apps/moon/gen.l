@@ -5467,7 +5467,7 @@
           ; already shifted)
           (rst? f) (f @ ('ld r 'fp k) (any (x \ x = [r (k + P)]) sl) ())
           (unrst l) (two? l && rst? <l ? (unrst >l) l)
-          up ((P = 0 ? () [['sub 'sp 'sp P]]) + ['(lea sp fp 0)])
+          up [['spfp P]]                       ; sp back to fp - P, which t2sp lowers by the depth it knows
           (go l acc)
            (? !(two? l) (rev acc)
               (take 3 l = '((lea sp fp 0) (pop fp) (pop lr)))
@@ -5479,8 +5479,11 @@
           body (go <>sv ())
           ; the save cells go unwritten now, so a reload of one left anywhere keeps the old frame
           (stale? f) (f @ ('ld r 'fp k) (any (x \ <>x - P = k) sl) ())
+          ; a body that names neither sp nor fp past its pushes and exits keeps no frame below the saves
+          (fr? x) (? (atom? x) (x = 'fp || x = 'sp) (any fr? x))
+          sb2 (any (f \ (two? f && nelem <f '(push pop spfp) && fr? f)) body ? sb ())
           (body = 'bad || any stale? body ? fs
-             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb + t2sp body (P + (two? sb ? (<sb 3) 0)))))))
+             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb2 + t2sp body (P + (two? sb2 ? (<sb2 3) 0)))))))
    ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
    ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
    ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp
@@ -5504,6 +5507,7 @@
              ('popm rs) (elem 'pc rs ? 'none (dd d (-4 * #rs)))
              ('lea 'sp 'fp k) (charm? k ? (0 - k) ())
              ('lea 'sp 'sp k) (charm? k ? (dd d (0 - k)) ())
+             ('spfp p) p
              ('br _ L) (rec L d, d)
              ('jmp L) ((labs L ? (rec L d)), 'none)
              ('jmpt _ _ ls) (map (L \ rec L d) ls, 'none)
@@ -5522,16 +5526,21 @@
        _ (fix -1)
        (fits? f o) (0 <= o && (elem <f (fldops + fstops) ? (o <= 1020 && o % 4 = 0) (o <= 4095)))
        (sp f d)
-        (? !(charm? d) f
+        (? !(charm? d) [f]
            (elem <f (ldops9 + fldops + leaops) && <>f != 'sp && f 2 = 'fp && charm? (f 3) && f 3 < 0)
-            (f 3 + d @ o (fits? f o ? [<f <>f 'sp o] f))
+            (f 3 + d @ o [(fits? f o ? [<f <>f 'sp o] f)])
            (elem <f (gstops + fstops) && <>f = 'fp && charm? (f 2) && f 2 < 0)
-            (f 2 + d @ o (fits? f o ? [<f 'sp o (f 3)] f))
-           f)
+            (f 2 + d @ o [(fits? f o ? [<f 'sp o (f 3)] f)])
+           [f])
+       (low f d)
+        (f @ ('spfp p) (? !(charm? d) ('((lea sp fp 0)) + (p = 0 ? () [['sub 'sp 'sp p]]))
+                                   (d = p) ()
+                                   [['add 'sp 'sp (d - p)]])
+             (sp f d))
        (out l d)
         (? !(two? l) ()
            (<l @ f (<f = 'label ? (at <>f d @ d2 (f . out >l d2))
-                      ((sp f d) . out >l (next f d)))))
+                      (low f d + out >l (next f d)))))
        (out fs d0))
    ; -mbranch-protection (a key): pac-ret lays paciasp before each (frpush), autiasp after each (frpop).
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
