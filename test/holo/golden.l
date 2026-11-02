@@ -1220,11 +1220,15 @@
       ("t2.cmp"     "b0eb010f"          ((cmp r0 r1)))                ; cmp.w r0, r1
       ("t2.cmpi"    "b0f12a0f"          ((cmp r0 42)))                ; cmp.w r0, #42
       ("t2.mul"     "01fb02f0"          ((imul r0 r1 r2)))            ; mul r0, r1, r2
-      ("t2.ldr"     "d1f80800"          ((ld r0 r1 8)))               ; ldr.w r0, [r1, #8]
-      ("t2.str"     "c1f80800"          ((st r1 8 r0)))               ; str.w r0, [r1, #8]
+      ("t2.ldr"     "8868"              ((ld r0 r1 8)))               ; ldr r0, [r1, #8]
+      ("t2.ldr.w"   "d1f80880"          ((ld r8 r1 8)))               ; ldr.w r8, [r1, #8]
+      ("t2.ldr.sp"  "5698"              ((ld r0 sp 344)))             ; ldr r0, [sp, #344]
+      ("t2.str"     "8860"              ((st r1 8 r0)))               ; str r0, [r1, #8]
+      ("t2.str.w"   "c1f88000"          ((st r1 128 r0)))             ; str.w r0, [r1, #128]
       ("t2.ldr.neg" "51f8040c"          ((ld r0 r1 -4)))             ; ldr r0, [r1, #-4] (T4)
       ("t2.ld1"     "91f90300"          ((ld1 r0 r1 3)))              ; ldrsb.w r0, [r1, #3]
-      ("t2.st1"     "81f80300"          ((st1 r1 3 r0)))              ; strb.w r0, [r1, #3]
+      ("t2.st1"     "c870"              ((st1 r1 3 r0)))              ; strb r0, [r1, #3]
+      ("t2.st1.w"   "81f82000"          ((st1 r1 32 r0)))             ; strb.w r0, [r1, #32]
       ("t2.lea"     "01f20800"          ((lea r0 r1 8)))              ; addw r0, r1, #8
       ("t2.lea.mov" "dd46"              ((lea sp fp 0)))              ; mov sp, r11 -- lea #0 to sp rides the sp-legal 16-bit mov
       ("t2.push"    "4df8044d"          ((push r4)))                  ; str r4, [sp, #-4]!
@@ -1288,7 +1292,7 @@
       ("t2.leax.d"  "04ebcc0909f20409"  ((leax r9 r4 r12 8 4)))       ; add.w r9,r4,r12,lsl#3 ; addw r9,r9,#4
       ("t2.ldx"     "51f82200"          ((ldx r0 r1 r2 4 0)))         ; ldr.w r0, [r1, r2, lsl #2]
       ("t2.ldxb"    "11f80250"          ((ldxb r5 r1 r2 1 0)))        ; ldrb.w r5, [r1, r2]
-      ("t2.ldx.d"   "00eb0300d0f80400"  ((ldx r0 r0 r3 1 4)))         ; disp!=0: add.w r0,r0,r3 ; ldr.w r0,[r0,#4]
+      ("t2.ldx.d"   "00eb03004068"      ((ldx r0 r0 r3 1 4)))         ; disp!=0: add.w r0,r0,r3 ; ldr r0,[r0,#4]
       ;; the scalar-double vfp lane: f0..f15 -> d0..d15, s[2n] the single views; movqxr/movqrx move
       ;; a gp pair (lo, +1 hi). llvm-mc (eabihf, +vfp4d16)
       ("t2.addsd"   "30ee010b"          ((addsd f0 f1)))              ; vadd.f64 d0, d0, d1

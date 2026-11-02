@@ -165,7 +165,17 @@
          (-255 <= off < 0)
          (t32 ((lbase | bn) << 16 | (dt << 12 | (0xC00 | -off))))   ; t4: P=1 U=0 W=0 = 0b1100, imm8=|off|
          (thumb-mem-far bn off + t32 ((ubase | 12) << 16 | dt << 12)))
-   (thumb-mem lbase ubase d base off) (thumb-mem-r lbase ubase (rn d) (rn base) off)
+   ;; the 16-bit forms: ldr/str [sp,#imm8*4], and [Rn,#imm5*size] for word, byte and half, low registers
+   (thumb-narrow ubase dt bn off)
+      (: ld (elem ubase '(0xF8D0 0xF890 0xF8B0))
+         sz (? (elem ubase '(0xF8D0 0xF8C0)) 4 (elem ubase '(0xF890 0xF880)) 1 (elem ubase '(0xF8B0 0xF8A0)) 2 0)
+         op (? (sz = 4) (ld ? 0x6800 0x6000) (sz = 1) (ld ? 0x7800 0x7000) (ld ? 0x8800 0x8000))
+         (? (sz = 0 || 7 < dt || off < 0 || off % sz != 0) ()
+            (sz = 4 && bn = 13 && off <= 1020) (t16 ((ld ? 0x9800 0x9000) | (dt << 8) | (off >> 2)))
+            (bn <= 7 && off < 32 * sz) (t16 (op | ((off // sz) << 6) | (bn << 3) | dt))
+            ()))
+   (thumb-mem lbase ubase d base off)
+      (: dt (rn d) bn (rn base) (thumb-narrow ubase dt bn off @ n (n = () ? (thumb-mem-r lbase ubase dt bn off) n)))
    (thumb-ld d base off)  (thumb-mem 0xF850 0xF8D0 d base off)   ; LDR.W
    (thumb-st base off s)  (thumb-mem 0xF840 0xF8C0 s base off)   ; STR.W
    (thumb-ld4 d base off) (thumb-mem 0xF850 0xF8D0 d base off)
