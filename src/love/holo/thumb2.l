@@ -195,6 +195,11 @@
    (thumb-ldxb d base ix scale disp)
       (disp @ 0 (thumb-memsh 0xF810 d base ix (thumb-shamt scale))
          (catall [(thumb-addsh d base ix (thumb-shamt scale)) (thumb-ldu1 d d disp)]))
+   ;; STR/STRB Rt, [Rn, Rm, LSL #amt]: no scratch for a displacement, so gen folds only disp 0
+   (thumb-stx base ix scale disp s)
+      (disp @ 0 (thumb-memsh 0xF840 s base ix (thumb-shamt scale)) (scare 'stx-disp disp))
+   (thumb-stxb base ix scale disp s)
+      (disp @ 0 (thumb-memsh 0xF800 s base ix (thumb-shamt scale)) (scare 'stx-disp disp))
 
    ;; MOV (register) 16-bit hi form: any of r0..r15, and the only move that may target sp
    ;; (MOV.W / ADDW with Rd=sp, Rn!=sp are unpredictable on v7-M)
@@ -236,6 +241,7 @@
    (thumb-shift op d c)
       (? (op = 'rol) (thumb-shift 'ror d ((32 - c) & 31))
          (op = 'ror && (c & 31) = 0) ()
+         (c = 0) ()                                  ; lsr/asr #0 would mean 32
          (thumb-shift1 op d c))
    (thumb-shift1 op d c) (thumb-shr3 op d d c)
    (thumb-shr3 op d s c)
@@ -464,7 +470,7 @@
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
           ('la . thumb-la) ('lap . thumb-lap) ('lapool . thumb-lapool)
-          ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb)
+          ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
           ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)

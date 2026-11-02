@@ -7148,6 +7148,7 @@
                 (<>nx != <>f) ()
                 !(charm? <>>nx && charm? (f 5)) ()
                 (<>>>nx = <>f) ()
+                (t32? g && f 5 + <>>nx != 0) ()          ; thumb's register-offset store has no displacement
                 [(<nx @ 'st 'stx 'st1 'stxb 'stsd 'stsdx 'stssx) <>>f <>>>f (f 4)
                   (f 5 + <>>nx) <>>>nx])
           hit (? (two? lx || two? sx) ()
@@ -7790,9 +7791,10 @@
    ; (push <cs>) as a save, a variable shift's count must stay in r1
    cpskip (ldops9 + gstops + stxops + siops + leaops + xops + fxops + fstxops + fldops + fstops + vshops +
            x4ops + m4ops + '(cmpm cmprm push))
-   ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot declines
+   ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot declines.
+   ; an ilp32 movqxr names a pair by its low half, which a rename would split
    (cprp g f)
-    (elem <f cpskip ? ()
+    (elem <f cpskip || ilp32? g && <f = 'movqxr ? ()
        (: (go i acc)
            (!(i < #f) ? (rev acc)
               (f i @ x
@@ -11791,7 +11793,7 @@
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
        ; the arm sweeps, then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is
        ; x64-only; rezx is a64's (riscv's 32-bit ops sign-extend)
-       (swp irx) (!(a64? g || rv64? g) ? irx
+       (swp irx) (!(a64? g || rv64? g || t32? g) ? irx
                     (tailst g
                     (deadst g
                      (deaddef g
