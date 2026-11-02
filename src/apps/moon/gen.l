@@ -5438,6 +5438,45 @@
           (lone? f) (two? f && elem <f '(push pop) && elem <>f '(fp lr))
           r (go fs ())
           (any lone? r ? (nolane g "a frame record split\(ontgt g)") r))))
+   ; thumb2's frame by register list: the saves and the frame record push as one, each exit pops them
+   ; with pc. the saves sit just under fp (r4 pads them to an even count), so every negative fp offset
+   ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
+   (t2pm g fs)
+    (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
+                      !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
+       (: r0 (drop 4 fs)
+          sb (<r0 @ ('sub 'sp 'sp n) (charm? n ? [<r0]) ())
+          (svs l acc) (<l @ ('st 'fp k r) (charm? k && k < 0 && elem r (cspool g) && !(any (x \ <x = r) acc) ?
+                                             (svs >l ([r k] . acc)) [acc l])
+                          [acc l])
+          sv (two? sb ? (svs >r0 ()) [() r0])
+          sl <sv
+          rs (filter (r \ any (x \ <x = r) sl || #sl % 2 = 1 && r = 'r4) '(r4 r5 r6 r7 r8 r9 r10))
+          P (4 * #rs)
+          (sh f) (? (elem <f (ldops9 + fldops + leaops) && f 2 = 'fp)
+                     (charm? (f 3) && f 3 < 0 ? [<f <>f 'fp (f 3 - P)] (charm? (f 3) && 0 < f 3 ? f 'bad))
+                    (elem <f (gstops + fstops) && <>f = 'fp)
+                     (charm? (f 2) && f 2 < 0 ? [<f 'fp (f 2 - P) (f 3)] (charm? (f 2) && 0 < f 2 ? f 'bad))
+                    (fp? f) 'bad
+                    f)
+          (fp? x) (? (atom? x) (x = 'fp) (any fp? x))
+          ; an exit: the restores, in any order, then the frame back and the record (acc runs backwards,
+          ; already shifted)
+          (rst? f) (f @ ('ld r 'fp k) (any (x \ x = [r (k + P)]) sl) ())
+          n #sl
+          up ((P = 0 ? () [['sub 'sp 'sp P]]) + ['(lea sp fp 0)])
+          (go l acc)
+           (? !(two? l) (rev acc)
+              (take 3 l = '((lea sp fp 0) (pop fp) (pop lr)))
+               (? (#acc < n || !(all rst? (take n acc))) 'bad
+                  (drop 3 l @ l3
+                     (two? l3 && <l3 = '(ret) ?
+                        (go >l3 ([['popm (rs + '(fp pc))]] + up + drop n acc))
+                        (go l3 ([['popm (rs + '(fp lr))]] + up + drop n acc)))))
+              (sh <l @ f (f = 'bad ? 'bad (go >l (f . acc)))))
+          body (go <>sv ())
+          (body = 'bad ? fs
+             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb + body)))))
    ; -mbranch-protection (a key): pac-ret lays paciasp before each (frpush), autiasp after each (frpop).
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
@@ -11807,7 +11846,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf))))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
