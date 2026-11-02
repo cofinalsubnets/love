@@ -8,7 +8,7 @@
 ; every mutator of 'lines (vput vsplice vrest vload) bumps 'hlgen, and every paint
 ; cache keys on it. 'pens is installed by the face, so this file reads no env.
 (module 'vi
-(borrow 'cli)
+(borrow '(cli re))
 (borrow 'kore) ; the text/u floors
 (borrow 'lint)  ; lint-scan, spliced for this module's compile
 (borrow 'tui)   ; tui-fresh, the diff repaint every full-screen app wants

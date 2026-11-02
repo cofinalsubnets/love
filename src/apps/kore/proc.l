@@ -1,7 +1,7 @@
 ; src/apps/kore/proc.l -- the process and world tools of kore: env, nice, kill, xargs, date,
 ; id, stty, ps, free, who and kin. no nifs of its own. spawn answers the pid or a negative errno
 (module 'kore
-(borrow '(cli bytes cal path posix))
+(borrow '(cli bytes cal path posix re))
 
 (:
    ; -- env: assignments, then print the world or run a command inside it --

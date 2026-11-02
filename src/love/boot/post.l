@@ -2150,7 +2150,7 @@
                    pin ros 'rising ())))
    (rise1 p) (load1 ("/love/" + p))
    (load1 p) ((cite 'posix 'open) p "r" @ q
-               (hot? q ? (cite 'cli 'reads q, cite 'posix 'close q) (scare 'no-source p)))
+               (hot? q ? (reads q, cite 'posix 'close q) (scare 'no-source p)))
 
    ; --- packs: apps and libraries outside the tree, a folder each under ~/.love/pack, named
    ; by the folder. its verbs and modules are what its files enlist and open, found as a

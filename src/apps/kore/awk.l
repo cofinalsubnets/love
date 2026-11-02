@@ -2,7 +2,7 @@
 ; getline, output pipes, an RS other than newline, ARGV/ARGC/ENVIRON, and printf's `*` width
 ; and `#` flag. also the shell's printf, over the same number engine.
 (module 'kore
-(borrow '(posix text))
+(borrow '(posix text re))
 
 (:
    ; -- values --------------------------------------------------------------
