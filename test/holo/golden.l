@@ -1223,6 +1223,9 @@
       ("t2.ldr"     "8868"              ((ld r0 r1 8)))               ; ldr r0, [r1, #8]
       ("t2.ldr.w"   "d1f80880"          ((ld r8 r1 8)))               ; ldr.w r8, [r1, #8]
       ("t2.ldr.sp"  "5698"              ((ld r0 sp 344)))             ; ldr r0, [sp, #344]
+      ("t2.addsp"   "04b0"              ((add sp sp 16)))             ; add sp, #16
+      ("t2.subsp"   "84b0"              ((sub sp sp 16)))             ; sub sp, #16
+      ("t2.subsp.far" "adf6fc7dadf2041d" ((sub sp sp 4352)))          ; subw sp,sp,#4092 ; subw sp,sp,#260: sp's steps stay words
       ("t2.str"     "8860"              ((st r1 8 r0)))               ; str r0, [r1, #8]
       ("t2.str.w"   "c1f88000"          ((st r1 128 r0)))             ; str.w r0, [r1, #128]
       ("t2.ldr.neg" "51f8040c"          ((ld r0 r1 -4)))             ; ldr r0, [r1, #-4] (T4)

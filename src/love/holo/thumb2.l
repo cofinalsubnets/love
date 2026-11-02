@@ -73,9 +73,12 @@
              (t32 (hw1 << 16 | hw2)))
          (chunks p src acc)
           (p <= 0 ? acc
-             (: c (4095 < p ? 4095 p)
+             (: c (? (p <= 4095) p (dn = 13) 4092 4095)       ; sp drops its low bits, so its steps stay words
                 (chunks (p - c) d (acc + one src c))))
-         (pos <= 4095 ? (one a pos) (chunks pos a ())))
+         (? (dn = 13 && rn a = 13 && pos <= 508 && pos % 4 = 0)    ; add/sub sp, #imm7*4
+             (t16 ((fop = 'add ? 0xB000 0xB080) | (pos >> 2)))
+            (pos <= 4095) (one a pos)
+            (chunks pos a ())))
    ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
    (thumb-mimm n)
       (: u (n & 4294967295) b (u & 255) c (u >> 8 & 255)
