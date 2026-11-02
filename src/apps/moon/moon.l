@@ -1272,11 +1272,13 @@
           ((a . r) && elem a ["-mcmodel=small" "-mcmodel=kernel" "-mno-fp-ret-in-387" "-mno-skip-rax-setup"
                               "-mindirect-branch=keep" "-mfunction-return=keep"]) (flags r (fpush t 'x6f a))
           (("-mcmodel=" + w) . r) (udie 2 "cc: -mcmodel=\(w) -- x64's code is rip-relative within 2GB: small and kernel")
-          ; an 8-aligned incoming stack: a local asking more is realigned through a pointer
+          ; an 8-aligned incoming stack (4 on i386, the realmode units' ask): a local asking more is
+          ; realigned through a pointer
           (("-mstack-alignment=" + w) . r)
            (? (w = "16") (flags r t)
               (w = "8") (flags r (fpush (xkon t 'sa8) 'x6f "-mstack-alignment=8"))
-              (udie 2 "cc: -mstack-alignment=\(w) -- 8 or 16"))
+              (w = "4") (flags r (xkon t 'sa4))
+              (udie 2 "cc: -mstack-alignment=\(w) -- 4, 8 or 16"))
           ; varargs calls skip al, the count of vector registers
           ("-mskip-rax-setup" . r) (flags r (fpush (xkon t 'nal) 'x6f "-mskip-rax-setup"))
           ; indirect calls and jumps go through __x86_indirect_thunk_REG, returns through
@@ -1328,6 +1330,7 @@
        _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
+       _ (elem 'sa4 (f 'xk) && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mstack-alignment=4 lays on i386 only")
        _ (f 'kfp && f 'tgt != 'a64 && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
        _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
