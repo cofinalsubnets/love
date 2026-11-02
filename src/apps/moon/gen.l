@@ -168,8 +168,9 @@
                   pin (g 'frt) v9 r9,
                   v9))
    (frp g x) (g 'frt x || x)
-   ; a park cell: a mint homed in no register, coloured where one is free and else a frame slot (vspill)
-   (vcell g) (!(abl? g 'vcell) ? (vmint g 'cell))
+   ; a park cell: a mint homed in no register, coloured where one is free and else a frame slot (vspill).
+   ; v6m keeps the sp cell, the smaller code there
+   (vcell g) (!(abl? g 'vcell || v6m? g) ? (vmint g 'cell))
    (vspill g fs)
     (: t (g 'vrt)
        ps (filter (m \ (t m = 'cell)) (keys t))
