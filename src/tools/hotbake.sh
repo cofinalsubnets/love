@@ -63,6 +63,7 @@ elif [ "${1:-}" = -p ]; then
     echo "line $((i * 7 % 40)) of the lvm fixture: $((i * i)) words, $((40 - i)) left"
     i=$((i + 1))
   done > "$d/w/in"
+  echo 'int main(void) { return 0; }' > "$d/w/m.c"
   run() { (cd "$d/w" && env -i PATH="$d" LOVE_TOUCH_OUT="$d/touch" love "$@" > /dev/null 2>&1 < /dev/null); }
   run -e 1
   run echo hi
@@ -75,6 +76,9 @@ elif [ "${1:-}" = -p ]; then
   run lush -c true
   # a build whose wake is eager (not moonlibc's: HCC, the gcc lanes) records no touch
   [ -s "$d/touch" ] || { echo "hotbake: $raw woke eagerly, no profile" >&2; exit 1; }
+  # the toolchain's class, laid after the commands' so it never thins theirs: an empty range ends a class
+  echo '0 0' >> "$d/touch"
+  run cc -o m m.c
   cp "$d/touch" "$prof"
 else
   echo "usage: hotbake.sh -c RAW CALLS CAT | -p RAW PROF CAT" >&2
