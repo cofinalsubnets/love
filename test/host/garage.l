@@ -3,7 +3,8 @@
 ; run: cat test/00-init.l test/host/00-host.l test/host/garage.l | out/love
 
 (borrow 'garage)
-(borrow 'rove)     ; dat, open?
+(borrow 'rove)
+(borrow 'horn)     ; dat, open?
 
 (: (range a b) (map (+ a) ^(b - a))
    ; the bed cells reachable from where you stand, eight ways a step

@@ -580,6 +580,9 @@
       (two? (cgn "_Static_assert(1 + 2 * 3 == 7, \"folds\"); int main() { return 0; }"))
       (refused? (cgn "int main() { _Static_assert(sizeof(int) == 5, \"bad\"); return 0; }"))
       (refused? (cgn "_Static_assert(0, \"nope\"); int main() { return 0; }"))
+      ; ..saying so with its message, in a struct body too
+      (0 <= findsub (show (cparse <>(clex "struct t { int x; _Static_assert(0, \"boom\"); };")))
+                    "static assertion failed: boom")
       ; every declarator infers its own [] bound, not just the first (or countof() reads zero)
       ((cast "char a[]={1}, b[]={2,2}, c[]={3,3,3};") =
          '(prog ((gdecl (("a" (arr char 1) (init ((num 1))))

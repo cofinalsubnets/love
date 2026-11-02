@@ -26,6 +26,7 @@ int   mkstemp(char*);
 char *mkdtemp(char*);
 int   setenv(char const*, char const*, int);
 int   unsetenv(char const*);
+int   putenv(char*);
 int   atoi(char const*);
 long  atol(char const*);
 double atof(char const*);

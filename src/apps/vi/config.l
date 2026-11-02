@@ -107,5 +107,5 @@
 
    ; the user's own rows, read as data (never evaled) at editor start and folded over the
    ; above; same row shape
-   hue-theme-file "/.love/hue.l")
+   hue-theme-file "hue.l")
 ) ; module 'vi

@@ -50,7 +50,7 @@
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
-     ["" ["src/apps/hearts/*"] ["test_hearts" "test_hearts_boot"] ""]]
+     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
                 "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
    lanes-cost {"test" 195 "test_quick" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730

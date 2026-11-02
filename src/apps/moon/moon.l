@@ -25,6 +25,7 @@
    (mseat _) (selfpath 0 @ x
                 (string? x && "\(cdir x)../lib/love/moon/"))
    (mroots _) (mseat () @ s (string? s ? [mtree s] [mtree]))
+   (oursinc _) (map (r \ "\(r)include/") (mroots ()))
    ; the runtime home: the first root that carries the sources, by read (core.c is in every link)
    (mhome _) (: (go rs) (? !(two? rs) ()
                            (two? (uread "\(<rs)lib/moonlibc/core.c")) <rs
@@ -71,10 +72,11 @@
        s (go ns 0 "")
        (3 < n ? "\(s) (+\(n - 3) more)" s))
    ; #include resolver for a source dir + the -I list: "" searches the src dir, the cwd, then
-   ; -I; <> the -I dirs; both end at our headers. vb, the carried source's table, in the same
-   ; order. -> (1 text child-incf path) | (), the child resolving the hit's own quote includes
+   ; -I; <> the -I dirs; both end at our headers, unless -idirafter laid them among the -I
+   ; already. vb, the carried source's table, in the same order. -> (1 text child-incf path)
+   ; | (), the child resolving the hit's own quote includes
    (incload vb is srcdir name sys?)
-    (: ours (map (r \ "\(r)include/") (mroots ()))
+    (: ours (filter (o \ !(elem o is)) (oursinc ()))
        dirs (sys? ? (is + ours) ([srcdir ""] + is + ours))
        (go ds) (!(two? ds) ? ()
                   (uread (<ds + name) @ r
@@ -1102,12 +1104,12 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 ()}
+                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
     (as @ ()
-          (pins t 'is (rev (t 'is))
+          (pins t 'is (rev (t 'is)) 'isy (rev (t 'isy)) 'ia (rev (t 'ia))
                   'ds (rev (t 'ds))
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
@@ -1122,6 +1124,8 @@
           ("-no-pie" . r) (flags r (pin t 'pie ()))
           ; the stack is never executable already (no PT_GNU_STACK: the kernel maps it rw)
           ((a . r) && elem a '("-Wl,-z,noexecstack" "-Wl,-znoexecstack")) (flags r t)
+          ; the link warns of nothing, so there is no warning to make fatal (kbuild's host link)
+          ("-Wl,--fatal-warnings" . r) (flags r t)
           ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
           ; library each comes from (a DT_NEEDED libNAME.so). without -shared, -l rides through
           ("-shared" . r) (flags r (pin t 'so 1))
@@ -1135,6 +1139,10 @@
           ; that slides it (arm32 only)
           ("--emit-relocs" . r) (flags r (pin t 'relo 1))
           ("-I" . d . r) (flags r (fpush t 'is d))
+          ; -isystem: after every -I dir, ahead of ours; -idirafter: after ours (a host's kernel
+          ; headers sit there, under its libc's)
+          ("-isystem" . d . r) (flags r (fpush t 'isy d))
+          ("-idirafter" . d . r) (flags r (fpush t 'ia d))
           ("-include" . f . r) (flags r (fpush t 'fis f))
           ("-D" . d . r) (flags r (fpush t 'ds d))
           ("-U" . d . r) (flags r (fpush t 'ds ['u d]))
@@ -1209,7 +1217,7 @@
            (uread f @ rt (two? rt ? (flags r (pin t 'rdme <>rt))
                                     (udie 1 "cc: cannot open \(f)")))
           ; gcc's dependency rule: -MD, -MMD (our headers left out), -MF file, -MT/-MQ target,
-          ; -MP an empty rule per header, and kbuild's -Wp,-MD,FILE
+          ; -MP an empty rule per header, and kbuild's -Wp,-MD,FILE (tools/build's -Wp,-MT,TARGET)
           ("-MD" . r) (flags r (pin t 'md 1))
           ("-MMD" . r) (flags r (pins t 'md 1 'mmd 1))
           ("-MP" . r) (flags r (pin t 'mp 1))
@@ -1217,6 +1225,8 @@
           (("-MT" || "-MQ") . w . r) (flags r (pin t 'mt w))
           (("-Wp,-MD," + f) . r) (flags r (pins t 'md 1 'mf f))
           (("-Wp,-MMD," + f) . r) (flags r (pins t 'md 1 'mmd 1 'mf f))
+          (("-Wp,-MT," + w) . r) (flags r (pin t 'mt w))
+          (("-Wp,-MQ," + w) . r) (flags r (pin t 'mt w))
           ((("-I" + d) . r) && #d) (flags r (fpush t 'is d))
           ((("-D" + d) . r) && #d) (flags r (fpush t 'ds d))
           ((("-t" + w) . r) && #w) (flags r (pin t 'tgt (totgt w)))
@@ -1309,7 +1319,7 @@
        ntv (elem love-arch '(x64 a64 rv64) ? love-arch 'x64)     ; unknown grounds keep x64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; -I dirs want a trailing slash: normalised in the tablet, before anything reads
-       _ (pin f 'is (map dirn (f 'is)))
+       _ (pin f 'is (map dirn (f 'is + f 'isy) + (two? (f 'ia) ? (oursinc () + map dirn (f 'ia)) ())))
        _ (f 'fx18 && f 'tgt != 'a64 && udie 2 "cc: -ffixed-x18 names an a64 register, and the target is \(f 'tgt)")
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)

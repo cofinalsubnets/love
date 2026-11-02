@@ -64,6 +64,7 @@ extern void __love_sigret(void);
 extern void __love_sigret0(void);          /* the old frame's sigreturn */
 #endif
 extern int main(int, char**);
+extern int __env_put(char *kv, size_t kn);   /* setenv and putenv: kv takes its key's place */
 
 /* FILE's layout, opaque in stdio.h */
 struct _IO_FILE {

@@ -21,6 +21,8 @@ There are three special forms — **:** (letrec\*/sequence), **?** (cond), and *
 
 With a *file* argument (or **-e**), **love** runs it as the program and exits; any further arguments are the program's, in **argv**. With no program it starts an interactive read-eval-print loop when standard input is a terminal, and otherwise reads and evaluates standard input to end of file.
 
+A first word that names a verb runs that verb instead, with the words after it: `love verbs` lists them. A verb is the binary's own, baked or carried as source and read at its first call, or a pack's. A pack is a folder in the nest's `pack/`, named by the folder, whose `.l` files are read at the first call of a verb they register or the first `borrow` of a module they open, each file after the ones holding modules it needs. A pack with no verb is a library. The binary's verbs always win over a pack's, and `love pack` lists each pack, its verbs and modules, and any name another one answers first.
+
 # OPTIONS
 
 The short flags cluster: **-qe** *expr* is **-q** **-e** *expr*. A letter that takes an argument ends the chain and takes the rest of its own word, or the next word when there is no rest — so **-m8m** and **-m** *8m* are the same. A word carrying a letter that is not an option does not cluster at all, and reaches the *file* lane whole.
@@ -73,6 +75,16 @@ Start the interactive shell:
 > ```
 > love
 > ```
+
+# ENVIRONMENT
+
+**LOVE_NEST**
+:   The nest, where love keeps its settings (`etc/`), its install (`bin/`), its run state (`run/`) and its packs (`pack/`). `$HOME/.love` when unset or empty, and `/.love` with no `HOME`.
+
+# FILES
+
+`~/.love/pack/NAME/`
+:   A pack: its `.l` files, read as one unit when it is first needed.
 
 # EXIT STATUS
 

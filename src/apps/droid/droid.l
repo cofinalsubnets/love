@@ -164,13 +164,13 @@
 
    ; --- the key and its certificate, made once ---
    (apk-keys _)
-    (: f (getenv "HOME" + "/.love/etc/apk.pem")
+    (: f (cite 'path 'nest 0 + "/etc/apk.pem")
        t (uread f @ r (two? r ? <>r))
        (? (string? t) (: k (key-read t) c (pem-in t "CERTIFICATE") (two? c && two? k ? [k <c]))
           (: k (key-new 'p256) nm (name-der "/CN=love")
              c (cert-make {'spki (key-spki k) 'exts () 'key k 'serial 1 'issuer nm 'subject nm
                            'nb 1767225600 'na 3345062400})
-             (? (string? c && (umkdirs (getenv "HOME" + "/.love/etc") 448, uwrite f (key-pem k + pem-out "CERTIFICATE" c)))
+             (? (string? c && (umkdirs (cite 'path 'nest 0 + "/etc") 448, uwrite f (key-pem k + pem-out "CERTIFICATE" c)))
                 [k c]))))
 
    ; --- the bridge, compiled out of the source this love carries ---

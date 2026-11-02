@@ -8,7 +8,8 @@
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-cells view-pen view-band
          view-rescale view-loading view-spin)
-(borrow 'rove)                          ; the pacer, the horn's lead, the keys drained
+(borrow 'rove)
+(borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'posix)    ; close, for the horn
 (:
@@ -262,7 +263,6 @@
  ; the rove floors a walk hands over to
  (view-run walk) (ttytake rove-modes,
                   walk (),
-                  drain-keys (),
                   ttygive rove-modes,
                   0)
  ; ..or the window its words asked for, or unasked where a window is the whole screen, 640
