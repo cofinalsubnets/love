@@ -5438,6 +5438,8 @@
           (lone? f) (two? f && elem <f '(push pop) && elem <>f '(fp lr))
           r (go fs ())
           (any lone? r ? (nolane g "a frame record split\(ontgt g)") r))))
+   ; a frame t2pm will take, as far as is known before the build (a stray save-cell reload is known only after)
+   (pmfr? g) (t2? g && !(g 'hasasm) && !(abl? g 't2pm))
    ; thumb2's frame by register list: the saves and the frame record push as one, each exit pops them
    ; with pc. the saves sit just under fp (r4 pads them to an even count), so every negative fp offset
    ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
@@ -11481,8 +11483,9 @@
                                       pok (? (d1 || fl || !u9) ()
                                              lf9 (2 <= tc)
                                              (peep crs9 nm 0 = 0 && 2 <= tc))
-                                      ; a cs seat pays its save and a reload per exit -- except on wasm, where it has none
-                                      cok (!fl && (wasm? g ? (2 <= tc) (2 < tc && 1 + nx9 < tc)))
+                                      ; a cs seat pays its save and a reload per exit -- except on wasm, where it has none,
+                                      ; and under t2pm, whose one push and pops carry it
+                                      cok (!fl && (wasm? g || pmfr? g ? (2 <= tc) (2 < tc && 1 + nx9 < tc)))
                                       ; a double or float: the files it may take, in order. a zero-crossing name takes the free file
                                       ; first, a crossing one the cs file (priced as cok) then, a double only, a wrapped seat when its
                                       ; weighted mentions outweigh the spill and reload
