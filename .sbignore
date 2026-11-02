@@ -46,6 +46,7 @@ web/favicon.png
 web/wasm/love.wasm
 web/wasm/love.image
 
-# editor and debugger leavings
+# editor and debugger leavings, a core dump among them (qemu's are NAME.core)
 vgcore.*
+*.core
 .gdb_history
