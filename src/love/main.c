@@ -315,8 +315,8 @@ static char const src_distlist[] =
  ;
 
 // lay the roster cat from the carried source beside `at`: the crew baked when no -l names one,
-// each file behind its mark, and past the + a carry row for each carried file (the Makefile's
-// .dist-cat.l, word for word). 1 laid, 0 refused; per-process, as image.c's bake scratch
+// each file behind its mark, and past the + behind a carry row (the Makefile's .dist-cat.l,
+// word for word). 1 laid, 0 refused; per-process, as image.c's bake scratch
 static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
   char exe[4096];                                    // the kernel's PATH_MAX
   if (!srctree_len) return 0;                     // noblob.c: no source aboard
@@ -337,15 +337,10 @@ static int bsrc_lay_cat(char *cat, size_t n, char const *at) {
     w[wl] = 0;
     char mk[300];
     if (!strcmp(w, "+")) { carry = 1; continue; }
-    if (carry) {
-      int mn = snprintf(mk, sizeof mk, "\n(cite (quote verbs) (quote carry) \"%s\")\n", w);
-      if (write(fd, mk, mn) != mn)
-        return close(fd), unlink(cat), fprintf(stderr, "love: bake: the cat would not write\n"), 0;
-      continue; }
     intptr_t i = tree_find(t, w, wl);
     unsigned char const *m = i < 0 ? NULL : tree_bytes(t, t->rows + i);
     uintptr_t ml = i < 0 ? 0 : t->rows[i].len;
-    int mn = snprintf(mk, sizeof mk, "\n(cite (quote verbs) (quote mark) \"%s\")\n", w);
+    int mn = snprintf(mk, sizeof mk, "\n(cite (quote verbs) (quote %s) \"%s\")\n", carry ? "carry" : "mark", w);
     if (!m || write(fd, mk, mn) != mn || (ml && write(fd, m, ml) != (ssize_t) ml)) {
       fprintf(stderr, "love: bake: %s %s\n", w,
               i < 0 ? "is not in the carried source" : m ? "would not write" : "will not decode");
