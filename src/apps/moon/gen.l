@@ -2152,17 +2152,20 @@
                    (cgexpr g env (args 1) () @ e2
                       (? (bad? e2) 'bad
                          (kind = 'store)
-                          (mkv 'long 'r0 (pk g (<>mo1 + tor0 g e1) (asint g e2) 'r1
-                                          + (<mo1 = 0 || x86? g ? () (afence g))
-                                          + [[(stop pt) 'r1 0 'r0]] + (<mo1 = 5 ? (afence g))))
+                          (: q1 (<>mo1 + tor0 g e1) q2 (asint g e2)
+                             (mkv 'long 'r0 (pk g q1 q2 'r1
+                                             + (<mo1 = 0 || x86? g ? () (afence g))
+                                             + [[(stop pt) 'r1 0 'r0]] + (<mo1 = 5 ? (afence g)))))
                          (kind = 'rmw)
-                          (mkv pt 'r0 (pk g (<>mo1 + tor0 g e1) (asint g e2) 'r1 + '((mov r2 r0))
-                                       + armw g w (k 1) + (k 2 = 'new ? '((mov r0 r3))) + cvt pt 'r0))
+                          (: q1 (<>mo1 + tor0 g e1) q2 (asint g e2)
+                             (mkv pt 'r0 (pk g q1 q2 'r1 + '((mov r2 r0))
+                                          + armw g w (k 1) + (k 2 = 'new ? '((mov r0 r3))) + cvt pt 'r0)))
                          ; __sync's compare-and-swap: (p old new), the old value or the success
                          (cgexpr g env (args 2) () @ e3
                             (bad? e3 ? 'bad
-                               (: pre (pk g (tor0 g e1) (pk g (asint g e2) (asint g e3 + '((mov r2 r0))) 'r0 + aexp g w) 'r1
-                                       + acas g w)
+                               (: q1 (tor0 g e1) q2 (asint g e2) q3 (asint g e3)
+                                  q4 (pk g q2 (q3 + '((mov r2 r0))) 'r0)
+                                  pre (pk g q1 (q4 + aexp g w) 'r1 + acas g w)
                                   (kind = 'vcas ? (mkv pt 'r0 (pre + cvt pt 'r0))
                                      (mkv 'int 'r0 (pre + '((mov r0 r2)))))))))))))))
    (cgbuiltin g env bi args)                       ; a builtin call -> its value | 'bad; not one -> 'no
@@ -2386,7 +2389,8 @@
                     [[(w @ 4 'st4 'st) 'r1 0 'r0]])))
               (cgexpr g env <>args () @ e2
                  (bad? e2 ? 'bad
-                    (: pre (pk g (tor0 g e1) (asint g e2) 'r1)   ; val r0, ptr r1
+                    (: q1 (tor0 g e1) q2 (asint g e2)
+                       pre (pk g q1 q2 'r1)   ; val r0, ptr r1
                        body (? (a64? g)
                                (nlab g ".ts" @ lb
                                   [['label lb]
@@ -2460,9 +2464,8 @@
            ; &t's lea must not open the sibs window: lean on arm; x64's raw splice resets it
            e3f (arm? g ? (relean (tor0 g e3)) (tor0 g e3))
            (bad? e1 || bad? e2 || bad? e3 ? 'bad
-              (mkv 'long 'r0 $
-               pk g (asint g e1) (pk g (asint g e2) (e3f + '((mov r3 r0))) 'r1) 'r0 + ovf +
-               '((st r3 0 r0) (mov r0 r1)))))
+              (: q1 (asint g e1) q2 (asint g e2) q3 (pk g q2 (e3f + '((mov r3 r0))) 'r1)
+                 (mkv 'long 'r0 (pk g q1 q3 'r0 + ovf + '((st r3 0 r0) (mov r0 r1)))))))
        ; the block moves last: every __builtin_ clause gets first refusal
        (0 < #bi && bi 0 = 109) (cgmem g env bi args)
        (elem bi '("__builtin_memcpy" "__builtin_memset")) (cgmem g env bi args))
@@ -3925,7 +3928,8 @@
                    (mkv (vty a) 'r0 (tor0 g a + pshiftc kind <kc))
                   (cgexpr g env rhs () @ b
                      (bad? b ? 'bad
-                        (mkv (vty a) 'r0 (pk2 g (tor0 g a) (tor0 g b + '((mov r2 r0))) 'r0 'r1 + pshiftv g kind))))))
+                        (: q1 (tor0 g a) q2 (tor0 g b)
+                           (mkv (vty a) 'r0 (pk2 g q1 (q2 + '((mov r2 r0))) 'r0 'r1 + pshiftv g kind)))))))
            (elem op '(shl shr) && d128? (vty a))          ; a wide shift keeps the left type
             (!(w128? g) ? (no128 g)
                (: kind (? (op = 'shl) 'shl128 (usg? (vty a)) 'shr128 'sar128)
@@ -4054,7 +4058,8 @@
                                      (wmul o n) (: a1 (unfill fa2 n) b1 (unfill fb2 n) c1 (rclean? g b1)
                                                   (mkv rt 'r0 (a1 + (c1 ? '((mov r2 r0)) (spush 'r0)) + b1 + (c1 ? () (spop 'r2)) + [[o 'r0 'r1 'r2 'r0]])))
                                      ; helper staging: the numerator on r0:r1, the denominator r2:r3
-                                     mid2d (pk2 g (asll g av) (asll g b + '((mov r2 r0) (mov r3 r1))) 'r0 'r1)
+                                     q1 (asll g av) q2 (asll g b)
+                                     mid2d (pk2 g q1 (q2 + '((mov r2 r0) (mov r3 r1))) 'r0 'r1)
                                      rt (ubin !(ilp32? g) ta tb)
                                      ; i386's helpers are cdecl: the four words on the stack, the answer edx:eax
                                      (cdh h) (mid2d + [['sub 'sp 'sp 16] ['st 'sp 0 'r0] ['st 'sp 4 'r1] ['st 'sp 8 'r2] ['st 'sp 12 'r3]
