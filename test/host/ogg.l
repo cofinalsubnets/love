@@ -1,12 +1,7 @@
 ; test/host/ogg.l -- src/apps/ogg.l: pages, packets, ogg flac and vorbis through the decoder door,
 ; held to the reference tools where they are
 ; run: cat test/00-init.l test/host/ogg.l | out/love
-(borrow 'posix)
-(borrow 'flac)
-(borrow 'ogg)
-(borrow 'av)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(posix flac ogg av bytes hashes))
 (: dir (cwd 0 + "/out/.oggd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (og-nib c) (? (c < 58) (c - 48) (c - 87))

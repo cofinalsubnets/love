@@ -1,9 +1,7 @@
 ; test/host/player.l -- src/apps/player: the bus (eq.c, fft.c, bus.l) and the core, in process
 ; on HORN=none, which keeps real time: every track is a fraction of a second
 ;   cat test/00-init.l test/host/player.l | out/love
-(borrow 'posix)
-(borrow 'bus)
-(borrow 'pcore)
+(borrow '(posix bus pcore))
 (: dir (cwd 0 + "/out/.playerd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    _ (setenv "HORN" "none")

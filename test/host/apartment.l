@@ -2,8 +2,7 @@
 ; the ending, the song into a jug. a crew module, not in the corpus.
 ; run: cat test/00-init.l test/host/00-host.l test/host/apartment.l | out/love
 
-(borrow 'apartment)
-(borrow 'rove)
+(borrow '(apartment rove))
 
 (: (range a b) (map (+ a) ^(b - a))
    ; the cells walkable from here, eight ways a step

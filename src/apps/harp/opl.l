@@ -7,8 +7,7 @@
 ;   (opl-drum bank n)  the percussion instrument for midi note n, 35..81, or ()
 ; an instrument: {'name 'fixed 'note 'tune 'two 'vs}; 'vs one or two voices {'m 'c 'fb 'conn 'off}
 (module (opl opl-bank opl-voice opl-ops opl-drum opl-freq)
-(borrow 'bytes)
-(borrow 'ops)
+(borrow '(bytes ops))
 (:
  ; --- the bank: a header of 8, 175 instruments of 36 bytes, then their names, 32 each ---
  (op b o) (: r (b o) {'am (r >> 7 & 1) 'vib (r >> 6 & 1) 'egt (r >> 5 & 1) 'ksr (r >> 4 & 1) 'mul (r & 15)

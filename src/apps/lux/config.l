@@ -8,8 +8,7 @@
 ; a chord is a list, the key last: a symbol names it, a one-char string, or a keysym number.
 ; conf-* take the tablet, so test/law/lux.l checks the defaults against an empty one.
 (module 'lux
-(borrow 'xwire)
-(borrow 'salt)
+(borrow '(xwire salt))
 (:
    ; --- the readers: a roster keeps names and forms; an absent roster takes d ---
    (conf-live? e) (two? e || name? e || string? e)

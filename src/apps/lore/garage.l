@@ -7,9 +7,7 @@
          garage-bar garage-lay garage-face garage-stride garage-stir rat-interaction
          car-cells bay-w bay-d bed-h rat-glyph garage-tune garage-song-new garage-song-feed
          song-chunk song-cps)
-(borrow 'posix)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(posix rove horn cli))
 (borrow 'play)                          ; the voices, the mix
 (:
  esc (string 27)

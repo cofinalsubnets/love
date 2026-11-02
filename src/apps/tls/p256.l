@@ -17,8 +17,7 @@
 ; reads at public positions; sha256's hex face. a key's pem goes through base64 by
 ; branches, a once-a-load leak this does not close
 (module 'tls
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(bytes hashes))
 (:
    p2-m 67108863                                        ; 2^26 - 1, one limb
 

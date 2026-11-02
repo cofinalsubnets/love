@@ -1,9 +1,7 @@
 ; dusk headless: all but the tty runner. a crew module, not in the corpus
 ; run: cat test/00-init.l test/host/00-host.l test/host/dusk.l | out/love
 
-(borrow 'dusk)
-(borrow 'view)
-(borrow 'walk)
+(borrow '(dusk view walk))
 (: dusk-kb (view-bind view-binds walk-binds))
 
 (: (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))

@@ -5,10 +5,8 @@
 ; a slot dyld binds by name, flat; a weak import's slot stays 0 where nothing answers it.
 ; dyld's exe enters by LC_MAIN once libSystem's initializers have run; -static by LC_UNIXTHREAD.
 
-(borrow 'hashes)
-(borrow 'bytes)
-
 (module 'holo
+(borrow '(hashes bytes))
 (: macho-cpus {'x64 [16777223 3]}      ; cpu_type_x86_64, cpu_subtype_x86_64_all
 
    ; lc_segment_64 with no sections: the kernel maps the segment, not what it holds

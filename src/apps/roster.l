@@ -9,7 +9,7 @@
 ; main.c hands these to the bake verb; a plain bake stays its own
 ; a unit's needs are the modules its files cite or borrow, held by another unit
 (module '(roster roster-main roster-units roster-needs roster-lay pick-new pick-step pick-flags pick-args pick-frame)
-(borrow 'posix)
+(borrow '(posix cli))
 (: V (cite 'verbs)
    kore "src/apps/kore/kore.l"
    (fs _) (rev (V 'ros 'files))                     ; (path . baked) in cat order

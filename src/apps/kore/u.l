@@ -1,7 +1,7 @@
 ; src/apps/kore/u.l -- the u-floor: the helpers every kore tool stands on, and the only part of
 ; kore that anything outside kore uses. its own file so mooncc's cat does not carry the toolbox.
 (module 'kore
-(borrow 'posix)
+(borrow '(posix cli))
 (borrow 'path) ; lastslash, for the path clips
 (borrow 'text) ; cpat/cpnext/cpn, for tr's sets and wc -m
 (borrow 'cal) ; civil, epoch-days, monl, wdl, for udate

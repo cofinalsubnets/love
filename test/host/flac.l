@@ -1,10 +1,7 @@
 ; test/host/flac.l -- src/apps/flac.l and src/love/audio/flac.c's flac-frame, held to the
 ; reference flac and metaflac where they are
 ; run: cat test/00-init.l test/host/flac.l | out/love
-(borrow 'posix)
-(borrow 'flac)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(posix flac bytes hashes))
 (: dir (cwd 0 + "/out/.flacd")
    ; a meta that wants more, or would skip a block it need not hold
    (fl-more? x) (x = 'more || (two? x && elem <x ['more 'skip]))

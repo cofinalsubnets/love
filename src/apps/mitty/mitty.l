@@ -13,10 +13,7 @@
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (borrow 'mooring)                       ; hopen moor waitfor
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'window)
-(borrow 'font)
+(borrow '(posix bytes window font cli))
 (:
  ; --- the mitty: a tablet holding the whole state (see mitty-up), every pane under one plan.
  ; a pane is (box master pid stage name): a child's has master and pid, a stage's the stage.

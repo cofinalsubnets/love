@@ -5,8 +5,7 @@
 ; GNU ed have it (vim's ex carries on).
 ; out of scope: ^C, ex's file list (next, args), open mode, s's c flag, ed's -x and -r.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
+(borrow '(cli posix))
 
 (:
    ed-usage "usage: ed [-s] [-p PROMPT] [FILE]"

@@ -9,7 +9,7 @@
 ; floor to 16 bits, floats round half to even and saturate. past two channels, two play.
 (module (wav wav-head wav-format wav-pcm wav-desc wav-sniff wav-meta wav-pump wav-gulp wav-drain wav-s16
              aplay-main aplay-usage)
-(borrow 'bytes)
+(borrow '(bytes cli))
 (:
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)
    open (cite 'posix 'open) close (cite 'posix 'close)

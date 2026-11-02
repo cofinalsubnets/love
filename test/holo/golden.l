@@ -1,6 +1,7 @@
 ; the neutral assembler, every backend, the text and gas fronts and the elf linker: exact hex,
 ; checked against objdump or llvm-mc (the mnemonic trails the row). the sources are cat in,
 ; not borrowed: the host bakes its native backend only.
+(borrow 'cli)
 
 (borrow 'holo) ; the cat's wrapped sources just registered the module
 

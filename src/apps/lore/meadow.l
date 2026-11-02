@@ -7,9 +7,7 @@
 ; a scatter's later write wins, so the order is the depth.
 (module (meadow meadow-new meadow-size meadow-pens meadow-frame meadow-sky meadow-light
          meadow-weather meadow-bodies cellm eye)
-(borrow 'view)
-(borrow 'vec)
-(borrow 'sky)
+(borrow '(view vec sky))
 (:
  cellm 0.00635                          ; a flat cell's width, a quarter inch, in metres
  inch 0.0254

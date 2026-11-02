@@ -2,10 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow 'world)
-(borrow 'mesh)
-(borrow 'neon)
-(borrow 'posix)
+(borrow '(world mesh neon posix))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag

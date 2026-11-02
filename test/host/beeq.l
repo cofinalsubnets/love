@@ -1,8 +1,7 @@
 ; bee's merge queue (src/apps/bee.l): one scenario played by `love bee --mcp` sessions in a
 ; scratch repository (fixed names and dates, so the same shas), its own hive and locks; queen leads
 ;   cat test/00-init.l test/host/beeq.l | out/love
-(borrow 'json)
-(borrow 'locks)
+(borrow '(json locks))
 
 (: bq-home (cwd 0)
    bq-love (: l <cmdline (l 0 = 47 ? l (bq-home + "/" + l)))

@@ -2,9 +2,7 @@
 ; zstd-pull steps a block at a time off a reader and zstd-unpack reads the whole string; every
 ; cut of a stream answers the same bytes, or the same word. zstd-pack's frames read back.
 ;   run:  cat test/00-init.l test/host/zstd.l | out/love
-(borrow 'zstd)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(zstd bytes hashes))
 
 (: (zst-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
    (zst-rd ps) ({0 ps} @ t (_ \ (peep t 0 () @ l (two? l ? (pin t 0 >l, <l) ""))))

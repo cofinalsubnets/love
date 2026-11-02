@@ -106,26 +106,29 @@
                    t (snip s b n)
                    (intern (t @ ((x && 0 < #x) + ".l") x t)))
       fsopen (cite 'posix 'open)
-      (m \ (? (tablet? m) (prior m)
-              (string? m)
-              (mname m @ nm
-                 ; the path's mark: its layer, the name its file registered, or 1 mid-read
-                 (peep (lib ()) m () @ v
-                   (? (v = 1) ()
-                      (v != ()) (prior v)
-                      (: q (!fsopen ? () (fsopen m "r"))
-                         (!(hot? q) ? (prior m)
-                            ; the mark goes down before the read, so a file naming itself stops
-                            (: _ (pin (lib ()) m 1)
-                               _ (enter ()) _ (rdev q) w (leave ())
-                               (? !(bare? w)
-                                   (: _ (pin (lib ()) m w)
-                                      _ (? (nil? (lib () nm)) (pin (lib ()) nm w) 0)
-                                      (prior w))
-                                  ; a bare layer: the module the file made under its name, if any
-                                  (lib () nm) (: _ (pin (lib ()) m nm) (prior nm))
-                                  ())))))))
-              (prior m)))))
+      ; a list borrows each in turn
+      (b m) (? (two? m) (each m b)
+               (tablet? m) (prior m)
+               (string? m)
+               (mname m @ nm
+                  ; the path's mark: its layer, the name its file registered, or 1 mid-read
+                  (peep (lib ()) m () @ v
+                    (? (v = 1) ()
+                       (v != ()) (prior v)
+                       (: q (!fsopen ? () (fsopen m "r"))
+                          (!(hot? q) ? (prior m)
+                             ; the mark goes down before the read, so a file naming itself stops
+                             (: _ (pin (lib ()) m 1)
+                                _ (enter ()) _ (rdev q) w (leave ())
+                                (? !(bare? w)
+                                    (: _ (pin (lib ()) m w)
+                                       _ (? (nil? (lib () nm)) (pin (lib ()) nm w) 0)
+                                       (prior w))
+                                   ; a bare layer: the module the file made under its name, if any
+                                   (lib () nm) (: _ (pin (lib ()) m nm) (prior nm))
+                                   ())))))))
+               (prior m))
+      b))
 
 ; a module's macros (its key 0) into the head layer, without its names: ks names them, ()
 ; takes all. the way to get macros from a module reached by `cite`.
@@ -2120,7 +2123,12 @@
    (after t k) (catmap (s \ (0 < #s && s 0 = 40 ? (word1 (snip s 1 #s)) (word1 s)) @ w (0 < #w ? [(name w)] ()))
                        >(split k t))
    ; the modules a source cites or borrows, and the units other than its own that hold them
-   (refs t) (after t "cite '" + after t "borrow '")
+   ; every name a borrow takes, a list's words too
+   (borrowed t) (catmap (s \ (0 < #s && s 0 = 40
+                               ? (: (shut i) (i < #s && s i != 41 ? (shut (i + 1)) i) (map name (words (snip s 1 (shut 1)))))
+                               (word1 s @ w (0 < #w ? [(name w)] ()))))
+                        >(split "borrow '" t))
+   (refs t) (after t "cite '" + borrowed t)
    (needs p t) (foldl (a \ m \ (mods m @ q (string? q && unit q != unit p && !(elem (unit q) a) ? (a + [unit q]) a)))
                       () (refs t))
    ; a module, raised with its unit when a left-out file holds it; () when none does
@@ -2216,19 +2224,7 @@
 
 ) ; module verbs
 
-; cli -- the console and command line: the repl and its multi-line editor, the stream shell
-; (read/reads), the floor handler (welp), the port-driven line reader (edraw/edln/edlnc), and
-; the host command line, read left to right after the program name:
-;   (cli-rail ln)     the walk over ln = (program-name . args)
-;   (cli-line ln tty) a frontend's whole tail: the argv[0] lookup, the rail, the repl, stdin
-; a forked lush child calls cli-line too, in place of exec'ing this binary.
-
-(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
-          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers love-build udoor edcmd edsgr edwide edcut edpad edfit sgr
-          ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
-          edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
-          joinln splitat parseall)
-(borrow 'text)
+; the reader's words, beside show: a string's first form, a port's forms run, and its forms read
 (: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
 ; (ev 'ev a) late-binds: post is evaluated before the glaze rebinds ev (and LOVE_NO_GLAZE re-pins it)
 (: (reads p)
@@ -2282,6 +2278,19 @@
                               (rev acc)))
     (flow p) ()))
 
+; cli -- the console and command line: the repl and its multi-line editor, the floor handler
+; (welp), the port-driven line reader (edraw/edln/edlnc), and the host command line, read left
+; to right after the program name:
+;   (cli-rail ln)     the walk over ln = (program-name . args)
+;   (cli-line ln tty) a frontend's whole tail: the argv[0] lookup, the rail, the repl, stdin
+; a forked lush child calls cli-line too, in place of exec'ing this binary.
+
+(module '(cli shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
+          uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers love-build udoor edcmd edsgr edwide edcut edpad edfit sgr
+          ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
+          edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
+          joinln splitat parseall)
+(borrow 'text)
 (: no (nom 0) eofsym (nom 0) edpasted {}   ; edpasted: a bracketed paste's bytes (edpaste)
    ; on when the terminal confirms mode ?2027 (grapheme clusters): the cursor then steps and
    ; deletes by cluster

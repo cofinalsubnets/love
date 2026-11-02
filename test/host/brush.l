@@ -1,8 +1,7 @@
 ; test/host/brush.l -- src/apps/lore/brush.l: media (the later brush wins), the faces where air
 ; meets solid, turned to the air, none twice; the mesh cut on one grid
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/brush.l | out/love
-(borrow 'brush)
-(borrow 'vec)
+(borrow '(brush vec))
 
 (: room (brush-box 1 [0.0 0.0 0.0] [4.0 3.0 4.0])
    ; a pilaster against the west wall, and over it a buttress, its underside sloping out

@@ -5,10 +5,7 @@
 ; host-side: it loads a crew file. run:  cat test/00-init.l test/host/ssh.l | out/love
 
 (borrow "src/apps/ssh/ssh.l")
-(borrow 'posix)
-(borrow 'tls)
-(borrow 'ssh)
-(borrow 'bytes)
+(borrow '(posix tls ssh bytes))
 
 (: ssht-run (\ n (bytes n (i \ (i * 7 + 1) & 255))))
 

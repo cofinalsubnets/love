@@ -12,8 +12,7 @@
 ; the season rides on the tree, each 0..1: 'share of the crown in leaf (default 1), 'turn
 ; green to yellow, 'seeds of the clusters hanging, 'ripe green through red to tan
 (module (grove grove-new grove-bark grove-wood grove-dots grove-twigs)
-(borrow 'view)
-(borrow 'vec)
+(borrow '(view vec))
 (borrow 'sky)                           ; the light a sky casts
 (borrow 'mesh)                          ; the tubes
 (:

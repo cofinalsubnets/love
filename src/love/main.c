@@ -297,7 +297,7 @@ static struct g *run_program(struct g *g, bool replp) {
   g = love_open(g);
   char const *ng = getenv("LOVE_NO_GLAZE");
   if (ng && *ng) g = evals_(g, glaze_off);
-  return evals(g, replp ? "(cli-line cmdline 1)" : "(cli-line cmdline 0)"); }
+  return evals(g, replp ? "((cite 'cli 'cli-line) cmdline 1)" : "((cite 'cli 'cli-line) cmdline 0)"); }
 
 #ifdef Love0
 // love0's boot is inle/boot.c
@@ -454,24 +454,15 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   g = evals_(g,
     "(borrow 'kanren)"
     "(borrow 'overlay)"
-    "(: overlay (cite 'overlay)"
-    "   ev ((cite 'overlay 'ov-hook) ev))"
+    "(: ev ((cite 'overlay 'ov-hook) ev))"
     "(borrow 'uu)"
-    "(: uu (cite 'uu))"
     "(borrow 'holo)"
   );
   g = shelve(g);
   g = evals_(g, "(borrow 'cli)(borrow 'verbs)");
   g = shelve(g);
-  // off, so their names don't shadow the tree's locals; bao comes off with them and goes back on
-  for (int i = 0; i < 4; i++) g = shelve(g);        // bao, uu, overlay, kanren
-  // FIXME what is this doing? bao was just used
-  g = evals_(g, "(borrow 'cli)"
-    "(transcribe 'kanren ())"                                 // \\\, &&&, |||, zz -- macros, not names
-    "(: unify (cite 'kanren 'unify)  ufail (cite 'kanren 'ufail)"
-    "   ufail? (cite 'kanren 'ufail?)  var (cite 'kanren 'var)"
-    "   s_plus (cite 'kanren 's_plus)  s_star (cite 'kanren 's_star)"
-    "   === (cite 'kanren '===)  =/= (cite 'kanren '=/=))");
+  // off again: no module stays ambient, a file borrows what it names
+  for (int i = 0; i < 4; i++) g = shelve(g);        // cli, uu, overlay, kanren
   g = cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
   g = shelve(g);                                    // holo back to non-ambient

@@ -12,10 +12,7 @@
 ; a message is mailbox's, with 'uid; 'raw holds its text once read. the box keeps its
 ; credentials, to reconnect when the server drops it.
 (module (imap imap-url imap-open imap-raw imap-sync imap-append imap-close imap-parse imap-quote)
-(borrow 'posix)
-(borrow 'mime)
-(borrow 'smtp)
-(borrow 'mailbox)
+(borrow '(posix mime smtp mailbox))
 (:
  im-flags [["\\seen" 83] ["\\answered" 82] ["\\flagged" 70] ["\\draft" 68]]
 

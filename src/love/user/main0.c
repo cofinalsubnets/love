@@ -34,15 +34,13 @@ struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
   if (argp) {
     g = evals0(g, prelpost0);
     g = evals0(g, mods0);
-    g = evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
-    g = shelve(g);
-    return evals(g, "(cli-line cmdline 0)"); }
+    return evals(g, "((cite 'cli 'cli-line) cmdline 0)"); }
   g = evals0(g, prelpost0);
   g = evals0(g, mods0);
-  g = evals_(g, "(borrow 'cli)(borrow 'holo)");
+  g = evals_(g, "(borrow 'holo)");
   g = shelve(g);
   g = evals_(g,
-    "(borrow 'uu)(: uu (cite 'uu))(borrow 'kanren)(borrow 'posix)"
+    "(borrow '(uu kanren posix))"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (. (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"

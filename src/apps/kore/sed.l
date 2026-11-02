@@ -5,9 +5,7 @@
 ; the pure floor: (sparse sc ere?) -> (1 cmds) | (), and (usub nodes repl ln g?) ->
 ; (changed text), the one substitution walk.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'text)
+(borrow '(cli posix text))
 
 (:
    ; -- the substitution: replace matches of nodes in ln by repl (g? = all) --

@@ -17,8 +17,7 @@
          dns-hosts dns-labels resolve-in resolve-via dns-proxy dns-quad
          dns-qtype dns-qedns dns-raw dns-id dns-match? dns-name dns-records dns-v6
          resolve6 resolve6-in dns-hosts6 dns-colon? dns-walk6)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(posix bytes))
 (:
    ; --- files, lines, words ---
    ; absent config reads as "".

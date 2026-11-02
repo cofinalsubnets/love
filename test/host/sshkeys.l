@@ -5,10 +5,7 @@
 ; plain and hashed, and a key copied onto the authorized_keys it reads -- once, then skipped --
 ; and logged in with. copy-id's target is -t's file here, never this user's own ~/.ssh.
 ;   cat test/00-init.l test/host/sshkeys.l | out/love
-(borrow 'posix)
-(borrow 'tls)
-(borrow 'ssh)
-(borrow 'bytes)
+(borrow '(posix tls ssh bytes))
 (: love <cmdline
    dir ((cwd 0) + "/out/.sshkeyst")
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)

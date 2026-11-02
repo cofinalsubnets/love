@@ -5,10 +5,9 @@
 ; symbols pulls moonlibc + lm + sys by need, unless -nostdlib. errors exit 1, usage 2. moon-main
 ; quits with the status; moon-run answers it, for a caller in the image.
 (module 'moon
-(borrow 'kore)
+(borrow '(kore cli))
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
-(borrow 'gz)
-(borrow 'hashes)
+(borrow '(gz hashes))
 
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard

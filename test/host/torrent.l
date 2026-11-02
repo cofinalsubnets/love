@@ -1,14 +1,7 @@
 ; test/host/torrent.l -- the torrent client offline: bencode, metainfo, the tracker's
 ; parsing, and downloads from a seeder on loopback
 ; run: cat test/00-init.l test/host/torrent.l | out/love
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'benc)
-(borrow 'metainfo)
-(borrow 'tracker)
-(borrow 'peerwire)
-(borrow 'swarm)
-(borrow 'hashes)
+(borrow '(posix bytes benc metainfo tracker peerwire swarm hashes))
 
 ; --- bencode ---
 (test ('(42) = bdecode "i42e") ('(-3) = bdecode "i-3e") ('("spam") = bdecode "4:spam")

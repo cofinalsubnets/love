@@ -3,9 +3,7 @@
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/mesh.l | out/love
 (borrow 'mesh)
 (borrow 'view)     ; pi
-(borrow 'sky)
-(borrow 'json)
-(borrow 'lore)
+(borrow '(sky json lore))
 (: W 40 H 24 white [1.0 1.0 1.0]
    (mh-cat l) (foldr (+) () l)
    (mh-q v) (int (min 1.0 (max 0.0 v) * 255.0 + 0.5))

@@ -1,5 +1,6 @@
 ; the option walk: uopt1 splits one word, uopt walks argv into [tablet stacked rest], uoptv reads.
 ; test the answer with `two?`, never for truth: () is the refusal, and an empty tablet nets 0
+(borrow 'cli)
 (: keysof (sort * keys * cap)
    ; a long name maps to a letter's key (--width is -w) or a key of its own
    L {"width" 119 "text" 116 "no-build" 'nb "port" 112}

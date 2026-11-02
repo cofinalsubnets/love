@@ -10,8 +10,7 @@
 ;   (ld-kas id text)      -> the object scripts/kallsyms' .S assembles to, read directly
 
 (module 'holo
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(posix bytes))
 (:
    (ld-s64 v) (? (v >= 9223372036854775808) (v - 18446744073709551616) v)
 
