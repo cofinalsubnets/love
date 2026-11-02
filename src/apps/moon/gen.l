@@ -3269,7 +3269,7 @@
                                   (elem <<<pl '(g g2 g4 gn x x2 p2 ezd) || psh9 >pl))
                      rT (argr g gpc)
                      (dir && gpc < ngp g && !(psh9 acc) &&
-                      !(two? (assoc rT (g 'homes))) ? rT))
+                      !(any (h \ rp g <h = rT) (g 'homes)) ? rT))
               a ((elem <<as '(addr var) ? (pin g 'argpos 1)),
                  cgexpr g env <as aim)
               (pin g 'argpos (),
@@ -4594,7 +4594,7 @@
                      (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g)   ; v6m's pop-pc epilogue can't restore lr for a jmp
                       (anymust? fs ? (scare 'musttail-escape (g 'fn)), fs)
                      (peep g 'epi epi @ ej
-                      (sibs g fs () (elabsx fs {} ej) (map (h \ (frp g <h . >h)) (g 'homes)) ej ['callr (pkr g)])))
+                      (sibs g fs () (elabsx fs {} ej) (map (h \ (rp g (frp g <h) . >h)) (g 'homes)) ej ['callr (pkr g)])))
 
    ; frame elision (frees rbp, the glaze's Ip): slots re-address off sp at off + K9 + D, K9 = K + the
    ; link bytes, so a call at a 16-multiple D keeps push r4's alignment; scan proves D at every label
@@ -6276,7 +6276,7 @@
            (map fix1 (filter (f \ !(idle? f)) f2)))))
 
    ; a pooled mint live across a literal write of its own register (thumb2's pair and call kits
-   ; spell r2, r3 outright) -> 1, and cgfn builds again with no pool
+   ; spell r2, r3 outright) -> 1, and cgfn builds again with no pool. a trap returns to nothing, so it clobbers nothing
    (pclash? g fs)
     (: t (g 'vrt) pl '(r2 r3)
        (pm x) (atom? x && (t x @ p (p && elem p pl)))
@@ -6294,7 +6294,7 @@
        (go l i)
         (? !(two? l) ()
            (<l @ f
-              (? (!(two? f) || elem <f '(label align br jmp ret sx4 zx4)) (go >l (i + 1))
+              (? (!(two? f) || elem <f '(label align br jmp ret trap ud2 sx4 zx4)) (go >l (i + 1))
                  (elem <f '(call callr)) (tcov? i || (two? hm && kit? f) ? 1 (go >l (i + 1)))
                  (rdsp g f @ rd
                     (? (rd = 'bar) (cov? 'bar i ? 1 (go >l (i + 1)))
@@ -8439,9 +8439,10 @@
               apin (two? >>>p && <>>>p ? (gas-regname (gtgt g) <>>>p))
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (nom? apin ? [apin]) . env2)
-              ; a cs home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow
+              ; a cs home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow.
+              ; a mint home stays a mint, so its call wrap is its own def and use, not a literal register's
               _ (hreg && !(two? hreg) && nelem hreg (cspool g) && nelem (frp g hreg) (fcspool g) && (!(fhomable? ty) || ty = 'double && fwrap? g) && !(spr g <p) ?
-                   (pin g 'homes ([(fmint? g hreg ? hreg (rp g hreg)) off <p] . g 'homes)))
+                   (pin g 'homes ([(fmint? g hreg || vmint? g hreg ? hreg (rp g hreg)) off <p] . g 'homes)))
               ; a constant init of a plain slotted scalar is one store-immediate; bool keeps its cvt (0/1)
               si9 (x64t? g && !hreg && <init = 'num && charm? <>init &&
                    !(flo? ty || pair? g ty || d128? ty || ty == 'bool) ?
