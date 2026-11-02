@@ -9743,8 +9743,23 @@
 
    ; -- the inline lane: a small (or always_inline) fn splices its body at the call site, each arg in
    ; a fresh 8-byte temp, each return into r0 then a jump to the splice's end label --
-   ; an always_inline body splices without its canary: the caller's frame is the one guarded
-   (sspcut x) (? !(two? x) x (<x == 'ssp) '(nop) (map sspcut x))
+   ; an always_inline body splices without its canary, each return as written: the caller's frame is the one guarded
+   (sspcut x)
+    (? !(two? x) x
+       (x @ ('blk (('ssp 'set) b ('ssp 'chk))) (sspcut b)
+            ('blk (('decl ((_ _ e))) ('ssp 'chk) ('ret ('var _)))) ['ret (sspcut e)]
+            ('blk (('expr e) ('ssp 'chk) ('ret ()))) ['ret (sspcut e)]
+            ('blk (('ssp 'chk) r)) (sspcut r)
+            ('ssp . _) '(nop)
+            _ (map sspcut x)))
+   ; ..as does any body whose canary guards no buffer: an address-taken scalar (check_mul_overflow's
+   ; &t) lives on in a register once spliced, as gcc decides protection after inlining
+   (sspbuf? g x)
+    (: (arrin? ty d) (? (atom? ty) () (elem <ty '(arr varr)) 1
+                        (stru? ty && d < 16) (peep (g 'stag) <>ty () @ e (two? e && any (f \ arrin? <>>f (d + 1)) <e))
+                        ())
+       (? (atom? x) () (<x = 'decl && two? >x) (any (d \ two? d && arrin? <>d 0) <>x || sspbuf? g >x)
+          (sspbuf? g <x || sspbuf? g >x)))
    (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp "__builtin_alloca")) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell; alloca the caller's frame
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
@@ -9815,8 +9830,19 @@
                     ('cast _ a) (fxless? a)
                     ('un 'not a) (fxless? a)
                     ('bin op a b) (elem op '(eq ne lt le gt ge + - * & | ^) && fxless? a && fxless? b)
+                    (('land || 'lor) a b) (fxless? a && fxless? b)
                     ('sexpr . ss . v . _) ((!(two? v) || fxless? v) && atom? (filter (st \ !(fxlst? st)) ss))
                     ())
+   ; a do-while(0) no break or continue leaves is its body, a block without decls its statements:
+   ; WRITE_ONCE's wrapping weighs and splices as the store it is
+   (do0 x)
+    (: (bc? x) (? !(two? x) () (elem <x '(brk cont)) 1 (elem <x '(do while for)) () (<x = 'switch) (co? x) (any bc? x))
+       (co? x) (? !(two? x) () (<x = 'cont) 1 (elem <x '(do while for)) () (any co? x))
+       (stms ss) (foldr (st \ a \ do0 st @ s2 (s2 @ ('blk l) (any (y \ two? y && <y = 'decl) l ? (s2 . a) (l + a)) (s2 . a))) () ss)
+       (? !(two? x) x
+          (x @ (('do b ('num 0)) && !(bc? b)) (do0 b)
+               ('blk ss) ['blk (stms ss)]
+               (map do0 x))))
    (fxlst? st) (st @ ('decl ps) (atom? (filter (p \ two? >>p && <>>p != ()) ps))
                      ('expr e) (fxless? e)
                      ('nop) 1
@@ -9835,9 +9861,9 @@
                           (dps >x (dps <x a)))
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
-             ; a frame address costs the caller its sibcalls, a return address read in place is the caller's,
-             ; asm bars it unless the body compiles only spliced, as do a statement expression, a compound
-             ; literal and a struct or array local. always_inline waives all but the frame address, as gcc reads it
+             ; a frame address costs the caller its sibcalls, and a return address read in place is the
+             ; caller's, which always_inline waives as gcc reads it. asm, a statement expression, a compound
+             ; literal and a struct or array local splice as any body does, under the size gate
              need (peep (g 'ineed) nm ())
              alw (peep (g 'alw) nm ())
              (bar? x) (two? x ?
@@ -9847,14 +9873,11 @@
                                (bar? a1 || bar? a2 || (a3 @ ('addr ('var v)) () (bar? a3)))
                               ('call ('var b9) _ && b9 = "__builtin_frame_address") 1
                               ('call ('var b9) _ && b9 = "__builtin_return_address") !alw
-                              ('asm . _) (need || alw ? (bar? >x) 1)
-                              (('clit || 'sexpr) . _) (alw ? (bar? >x) 1)
                               (bar? <x || bar? >x)))
              (fv x a) (!(two? x) ? a
                          (x @ ('var v) (elem v loc || elem v a ? a (v . a))
                               (fv >x (fv <x a))))
              (? (bar? body) ()
-                (!alw && foldl (a \ p \ a || stru? <>p || arr? <>p) () dl) ()
                 [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl need]))))
    ; a callee body's returns -> what rs lays for each, no jump: a return ends the list, or an if arm
    ; that always returns, the rest moving into the other arm | 'no. sw: a trailing switch may end it
@@ -12020,8 +12043,8 @@
                           (<f = 'fn && !nolin && g 'reach <>f &&
                            nelem <>f weaks &&
                            nelem <>f noinls ?
-                             ; judged as it would splice: dead arms pruned, a tail past a return cut
-                             ((elem <>f ainls ? (sspcut f) f) @ f9 (ucut (dprune !(ilp32? g) (e \ ()) f9)) @ fi
+                             ; judged as it would splice: dead arms pruned, a tail past a return cut, a do-while(0) unwrapped, a statement that does nothing dropped
+                             ((elem <>f ainls || !(sspbuf? g (f 3)) ? (sspcut f) f) @ f9 (nofx (do0 (ucut (dprune !(ilp32? g) (e \ ()) f9)))) @ fi
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
