@@ -494,6 +494,41 @@
       (has? (n 11) "is gated on -, not a commit") !(has? (row "4") " gating "))
    0)
 
+; queue_gate from a session holding a folded row and a later live one gates the live one, or the
+; row it names; a folded row, or another's, refuses by name
+(: w (bq-world "gaterow") lq bq-q
+   (sha r) (bq-out (bq-git w ["rev-parse" r]))
+   _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
+   _ (bq-put (w 'repo + "/test/gate/lanes.sh") "mkdir -p out/lanes-gate; : > out/lanes-gate/summary; for a in \"$@\"; do case $a in -*|out/*) ;; *) echo \"$a exit=0 secs=0\" >> out/lanes-gate/summary;; esac; done\n")
+   (calls nm cs)
+    (: f (w 'dir + "/" + nm + ".in")
+       _ (bq-put f (foldl (\ a c (a + json-show {"jsonrpc" "2.0" "id" <c "method" "tools/call"
+                                                "params" {"name" (c 1) "arguments" (pin (c 2) "queue" lq)}} + "\n"))
+                         "" cs))
+       r (bq-sh w ("env BEE_NAME=" + nm + " " + bq-sq bq-love + " " + bq-sq bq-app + " --mcp < " + bq-sq f))
+       (foldl (\ t l (: j (json-read l) (? (two? j) (pin t ((j 1) "id") ((j 1) "result" "content" 0 "text")) t)))
+              {} (filter (\ l (0 < #l)) (lines (r 1)))))
+   (row p) (: ls (filter (\ l (starts? l (p + " "))) (lines (bq-out (bq-git w ["cat-file" "-p" lq]))))
+              (? (two? ls) <ls ""))
+   _ (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" (sha "test") "gated_head" (sha "ant") "leader" "queen"}]])
+   _ (calls "bob" [[2 "queue_row" {"state" "waiting" "branch" "union" "gated_on" (sha "test") "gated_head" (sha "union")}]])
+   _ (calls "queen" [[3 "queue_row" {"session" "bob" "row" "2" "state" "folded-into-1"}]])
+   _ (calls "bob" [[4 "queue_row" {"state" "waiting" "branch" "bob" "gated_on" (sha "ant") "gated_head" (sha "bob")}]])
+   _ (bq-git w ["checkout" "-q" "bob"])
+   r1 (calls "bob" [[5 "queue_gate" {"dir" (w 'repo)}] [6 "queue_gate" {"dir" (w 'repo) "row" "2"}]
+                    [7 "queue_gate" {"dir" (w 'repo) "row" "1"}]])
+   _ (bq-git w ["checkout" "-q" "ant"])
+   _ (calls "ant" [[8 "queue_gate" {"dir" (w 'repo)}]])
+   ok1 (bq-until (\ _ (has? (row "1") " green  #")) 300)
+   _ (bq-git w ["checkout" "-q" "bob"])
+   r2 (calls "bob" [[9 "queue_gate" {"dir" (w 'repo)}]])
+   ok2 (bq-until (\ _ (has? (row "3") " green  #")) 300)
+   _ (test
+      (has? (r1 5) "row 1 ahead is waiting")
+      (has? (r1 6) "row 2 is folded-into-1") (has? (r1 7) "row 1 is ant's")
+      ok1 (has? (r2 9) "row 3 is gating at ") ok2 (has? (row "2") " folded-into-1"))
+   0)
+
 ; a heavy ticket needs a row carrying the tree's branch and HEAD, or --no-row, or no queue
 (: w (bq-world "heavyrow") lq bq-q
    (sha r) (bq-out (bq-git w ["rev-parse" r]))
