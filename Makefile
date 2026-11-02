@@ -36,7 +36,7 @@ out/lib/boot0.h: $(boot0_l)
 	   LOVE_NO_IMAGE= $(sed_lit) $$f || exit 1; echo ';'; done > $@
 .PHONY: lib
 lib: out/lib/boot0.h out/lib/baked.h
-lcat_love = $(love0) -l src/love/boot/prel.l
+lcat_love = $(love0)
 # A FORCED WITNESS KEEPS ITS MTIME, and that is the whole point: make cannot depend on a
 # variable's VALUE, so a roster change has to be noticed some other way. Depending on the
 # Makefile instead was measured at 90 s and 42 targets for a bare `touch Makefile` -- the
