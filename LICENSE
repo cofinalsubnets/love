@@ -29,13 +29,6 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
   Definitions and theorem statements from Foundations/PartA.v et al, ported to
   uu's surface with the original names.
 
-src/love/audio/opus/, the Opus codec (decoder; the encoder half is removed)
-  Copyright 1994-2011 IETF Trust, Xiph.Org, Skype Limited, Octasic, Jean-Marc Valin,
-  Timothy B. Terriberry, CSIRO, Gregory Maxwell, Mark Borgerding, Erik de Castro Lopo.
-  BSD 3-Clause; the full text in src/love/audio/opus/COPYING.
-  The reference implementation from RFC 6716, its float build, compiled as one unit
-  by src/love/audio/opus.c. Each file keeps its own license header.
-
 src/apps/hearts/perlasm.l
   A port of Linux's lib/crypto/arm64/sha2-armv8.pl, by Andy Polyakov for the OpenSSL
   project (CRYPTOGAMS), which he relicensed under the GPLv2 for the kernel, as that
