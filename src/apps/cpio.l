@@ -17,9 +17,7 @@
 (module 'cpio
 (borrow 'tar)
 
-(borrow 'path)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(path posix bytes))
 (:
    cpio-mag "070701"
    cpio-trail "TRAILER!!!"
@@ -190,8 +188,7 @@
 ; absent: -H other than newc (refused by name), absolute names (a leading / is stripped),
 ; -tv's ls listing, and -p. the leading directories are always made; -d is accepted.
 (module 'cpiocmd
-(borrow 'tar)
-(borrow 'cpio)
+(borrow '(tar cpio cli))
 
 (borrow 'posix)
 (: cpioc-usage "usage: cpio {-o|-i|-t} [-H newc] [-dutv] [-F|-I|-O FILE] [--quiet]"

@@ -14,9 +14,7 @@
 ; mbox's. an mbox keeps the flags in its Status and X-Status headers: R is S here, O is "not
 ; new", X-Status's A F D are R F T.
 (module (mailbox mb-kind mb-open mb-raw mb-sync mb-append mb-flag mb-has? mb-new? mb-msg mb-head)
-(borrow 'posix)
-(borrow 'mime)
-(borrow 'cal)
+(borrow '(posix mime cal))
 (:
  (mb-dir? p) (stat p @ st (two? st && 16384 = st 2 & 61440))
  (mb-kind p)

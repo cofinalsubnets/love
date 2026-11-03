@@ -6,7 +6,7 @@
 (module (stones stones-run stones-walk stones-main stones-new stones-size stones-detail stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
-(borrow 'rove)
+(borrow '(rove cli))
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'vec)                           ; triples, and the noise
 (borrow 'flicker)                       ; the ghost's pulse

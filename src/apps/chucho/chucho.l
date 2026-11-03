@@ -9,14 +9,7 @@
 (module (chucho chucho-main chucho-run chucho-new chucho-key chucho-frame chucho-order
          chucho-render chucho-reply chucho-forward chucho-build chucho-draft chucho-send
          chucho-thread chucho-vis chucho-wrap chucho-rfcdate ch-send-now)
-(borrow 'posix)
-(borrow 'tui)
-(borrow 'cal)
-(borrow 'text)
-(borrow 'mime)
-(borrow 'mailbox)
-(borrow 'smtp)
-(borrow 'imap)
+(borrow '(posix tui cal text mime mailbox smtp imap cli))
 (:
  ch-hdrs ["date" "from" "to" "cc" "subject"]
  ch-help ["index" "  j k  up down     the cursor          enter    read the message"

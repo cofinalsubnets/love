@@ -5,9 +5,7 @@
 ; tex.web's globals are J's fields; eqtb is the tablets 'eq 'et 'el 'xl; a token is tex.web's
 ; integer; a token list is a love list, a pointer into it the list from there, compared by ==.
 (module 'caja-tex
-(borrow 'posix)
-(borrow 'tfm)
-(borrow 'caja-box)
+(borrow '(posix tfm caja-box))
 (:
    ; --- tex.web's constants, under their own names (let is let-cmd: let is a macro) ------
    hash-size 60000 no-print 16 term-only 17 log-only 18 term-and-log 19 pseudo 20 new-string 21

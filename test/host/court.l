@@ -1,7 +1,6 @@
 ; test/host/court.l -- the courtyard, headless. a crew module, not in the corpus
 
-(borrow 'court)
-(borrow 'vec)
+(borrow '(court vec))
 (borrow 'mesh)    ; a frame's colours as trays
 
 (: day0 (1.0 * 1790812800)                          ; 2026-10-01, midnight on the wall clock
@@ -26,8 +25,7 @@
        (net (col 1 20) < 1.5 * net (col 1 19)) (0.66 * net (col 1 19) < net (col 1 20))))
 
 ; the stars: each one pixel, never a patch; none by day
-(borrow 'sky)
-(borrow 'view)
+(borrow '(sky view))
 (: court-kb (view-bind view-binds court-binds))
 (: (up hr) (: st (pins (at hr) 'px 0.0 'pz 0.0 'ph 1.5 'wx (sky-weather 0)) c (mesh-flat (court-pens st))
               l (c 0 + c 1 + c 2) w (st 'w) n #l b (net l / n * 4.0 + 0.05 < l) i (iota n)

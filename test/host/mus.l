@@ -1,8 +1,6 @@
 ; test/host/mus.l -- doom's MUS scores: one laid here, read, played on a sine and looped
 ;   cat test/00-init.l test/host/00-host.l test/host/mus.l | out/love
-(borrow 'mus)
-(borrow 'opl)
-(borrow 'bytes)
+(borrow '(mus opl bytes))
 (: (mus-t-b l) (foldl (\ a c (a + string c)) "" l)
    ; ..a bank whose first instrument is a sine held while its key is (the modulator silent)
    v (mus-t-b [33 240 15 0 0 63 0 33 240 15 0 0 0 0 0 0])

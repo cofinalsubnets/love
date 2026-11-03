@@ -1111,6 +1111,9 @@
          ('deref x) (hdty9 g env x @ it
                        (two? it && elem <it '(ptr arr) ? <>it ()))
          ('cast ty _) ty
+         ; a conditional's arms share their type, a comma's is its right's: (native ? a : b)->fn's ms_abi
+         ('cond _ a b) (hdty9 g env a @ t (two? t ? t (hdty9 g env b)))
+         ('comma _ b) (hdty9 g env b)
          ; a call's answer: its function's result type, off the sigs row or the head's own type
          ('call h _)
           (: sg (h @ ('var nm) (bad? (vent g env nm) ? (peep (g 'sigs) nm ())) ())
@@ -3269,7 +3272,7 @@
                                   (elem <<<pl '(g g2 g4 gn x x2 p2 ezd) || psh9 >pl))
                      rT (argr g gpc)
                      (dir && gpc < ngp g && !(psh9 acc) &&
-                      !(two? (assoc rT (g 'homes))) ? rT))
+                      !(any (h \ rp g <h = rT) (g 'homes)) ? rT))
               a ((elem <<as '(addr var) ? (pin g 'argpos 1)),
                  cgexpr g env <as aim)
               (pin g 'argpos (),
@@ -4594,7 +4597,7 @@
                      (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g)   ; v6m's pop-pc epilogue can't restore lr for a jmp
                       (anymust? fs ? (scare 'musttail-escape (g 'fn)), fs)
                      (peep g 'epi epi @ ej
-                      (sibs g fs () (elabsx fs {} ej) (map (h \ (frp g <h . >h)) (g 'homes)) ej ['callr (pkr g)])))
+                      (sibs g fs () (elabsx fs {} ej) (map (h \ (rp g (frp g <h) . >h)) (g 'homes)) ej ['callr (pkr g)])))
 
    ; frame elision (frees rbp, the glaze's Ip): slots re-address off sp at off + K9 + D, K9 = K + the
    ; link bytes, so a call at a 16-multiple D keeps push r4's alignment; scan proves D at every label
@@ -5438,6 +5441,110 @@
           (lone? f) (two? f && elem <f '(push pop) && elem <>f '(fp lr))
           r (go fs ())
           (any lone? r ? (nolane g "a frame record split\(ontgt g)") r))))
+   ; a frame t2pm will take, as far as is known before the build (a stray save-cell reload is known only after)
+   (pmfr? g) (t2? g && !(g 'hasasm) && !(abl? g 't2pm))
+   ; thumb2's frame by register list: the saves and the frame record push as one, each exit pops them
+   ; with pc. the saves sit just under fp (r4 pads them to an even count), so every negative fp offset
+   ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
+   (t2pm g fs)
+    (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
+                      !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
+       (: r0 (drop 4 fs)
+          sb (<r0 @ ('sub 'sp 'sp n) (charm? n ? [<r0]) ())
+          (svs l acc) (<l @ ('st 'fp k r) (charm? k && k < 0 && elem r (cspool g) && !(any (x \ <x = r) acc) ?
+                                             (svs >l ([r k] . acc)) [acc l])
+                          [acc l])
+          sv (two? sb ? (svs >r0 ()) [() r0])
+          sl <sv
+          rs (filter (r \ any (x \ <x = r) sl || #sl % 2 = 1 && r = 'r4) '(r4 r5 r6 r7 r8 r9 r10))
+          P (4 * #rs)
+          (sh f) (? (elem <f (ldops9 + fldops + leaops) && f 2 = 'fp)
+                     (charm? (f 3) && f 3 < 0 ? [<f <>f 'fp (f 3 - P)] (charm? (f 3) && 0 < f 3 ? f 'bad))
+                    (elem <f (gstops + fstops) && <>f = 'fp)
+                     (charm? (f 2) && f 2 < 0 ? [<f 'fp (f 2 - P) (f 3)] (charm? (f 2) && 0 < f 2 ? f 'bad))
+                    (fp? f) 'bad
+                    f)
+          (fp? x) (? (atom? x) (x = 'fp) (any fp? x))
+          ; an exit: the restores it owes, in any order and maybe none (csdrop keeps only the written ones;
+          ; the pop puts back the rest unchanged), then the frame back and the record (acc runs backwards,
+          ; already shifted)
+          (rst? f) (f @ ('ld r 'fp k) (any (x \ x = [r (k + P)]) sl) ())
+          (unrst l) (two? l && rst? <l ? (unrst >l) l)
+          up [['spfp P]]                       ; sp back to fp - P, which t2sp lowers by the depth it knows
+          (go l acc)
+           (? !(two? l) (rev acc)
+              (take 3 l = '((lea sp fp 0) (pop fp) (pop lr)))
+               (drop 3 l @ l3
+                  (two? l3 && <l3 = '(ret) ?
+                     (go >l3 ([['popm (rs + '(fp pc))]] + up + unrst acc))
+                     (go l3 ([['popm (rs + '(fp lr))]] + up + unrst acc))))
+              (sh <l @ f (f = 'bad ? 'bad (go >l (f . acc)))))
+          body (go <>sv ())
+          ; the save cells go unwritten now, so a reload of one left anywhere keeps the old frame
+          (stale? f) (f @ ('ld r 'fp k) (any (x \ <>x - P = k) sl) ())
+          ; a body that names neither sp nor fp past its pushes and exits keeps no frame below the saves
+          (fr? x) (? (atom? x) (x = 'fp || x = 'sp) (any fr? x))
+          sb2 (any (f \ (two? f && nelem <f '(push pop spfp) && fr? f)) body ? sb ())
+          (body = 'bad || any stale? body ? fs
+             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb2 + t2sp body (P + (two? sb2 ? (<sb2 3) 0)))))))
+   ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
+   ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
+   ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp
+   (t2sp fs d0)
+    (: lab {}
+       labs (foldl (t \ f \ (<f = 'label ? (pin t <>f 1) t)) {} fs)
+       ch {}
+       (bump t) (pin ch 0 (peep ch 0 0 + 1), t)
+       (rec L d) (peep lab L () @ o (? (d = 'none) 0
+                                      (o = ()) (bump (pin lab L (charm? d ? d 'x)))
+                                      (o = 'x || o = d) 0
+                                      (bump (pin lab L 'x))))
+       (dd d n) (charm? d ? (d + n) ())
+       ; a form's effect on the depth: a number, () unknown, 'none where nothing falls through
+       (eff f d)
+        (f @ ('sub 'sp 'sp n) (charm? n ? (dd d n) ())
+             ('add 'sp 'sp n) (charm? n ? (dd d (0 - n)) ())
+             ('push _) (dd d 4)
+             ('pop _) (dd d -4)
+             ('pushm rs) (dd d (4 * #rs))
+             ('popm rs) (elem 'pc rs ? 'none (dd d (-4 * #rs)))
+             ('lea 'sp 'fp k) (charm? k ? (0 - k) ())
+             ('lea 'sp 'sp k) (charm? k ? (dd d (0 - k)) ())
+             ('spfp p) p
+             ('br _ L) (rec L d, d)
+             ('jmp L) ((labs L ? (rec L d)), 'none)
+             ('jmpt _ _ ls) (map (L \ rec L d) ls, 'none)
+             (elem <f '(ret jmpr trap ud2) ? 'none
+                (<>f = 'sp && nelem <f (stops9 + stxops + siops + '(cmp test)) ? () d)))
+       ; at a label the fall-through meets what the branches recorded
+       (at L d) (peep lab L () @ o (? (d = 'none) (? (o = ()) 'none (o = 'x) () o)
+                                      (o = () || o = d) d
+                                      ()))
+       (next f d) (d = 'none ? 'none (eff f d))
+       (walk l d)
+        (two? l &&
+         (<l @ f (<f = 'label ? (at <>f d @ d2 (rec <>f d2, walk >l d2))
+                    (walk >l (next f d)))))
+       (fix n) (walk fs d0, peep ch 0 0 @ m (m = n ? 0 (fix m)))
+       _ (fix -1)
+       (fits? f o) (0 <= o && (elem <f (fldops + fstops) ? (o <= 1020 && o % 4 = 0) (o <= 4095)))
+       (sp f d)
+        (? !(charm? d) [f]
+           (elem <f (ldops9 + fldops + leaops) && <>f != 'sp && f 2 = 'fp && charm? (f 3) && f 3 < 0)
+            (f 3 + d @ o [(fits? f o ? [<f <>f 'sp o] f)])
+           (elem <f (gstops + fstops) && <>f = 'fp && charm? (f 2) && f 2 < 0)
+            (f 2 + d @ o [(fits? f o ? [<f 'sp o (f 3)] f)])
+           [f])
+       (low f d)
+        (f @ ('spfp p) (? !(charm? d) ('((lea sp fp 0)) + (p = 0 ? () [['sub 'sp 'sp p]]))
+                                   (d = p) ()
+                                   [['add 'sp 'sp (d - p)]])
+             (sp f d))
+       (out l d)
+        (? !(two? l) ()
+           (<l @ f (<f = 'label ? (at <>f d @ d2 (f . out >l d2))
+                      (low f d + out >l (next f d)))))
+       (out fs d0))
    ; -mbranch-protection (a key): pac-ret lays paciasp before each (frpush), autiasp after each (frpop).
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
@@ -6238,7 +6345,7 @@
            (map fix1 (filter (f \ !(idle? f)) f2)))))
 
    ; a pooled mint live across a literal write of its own register (thumb2's pair and call kits
-   ; spell r2, r3 outright) -> 1, and cgfn builds again with no pool
+   ; spell r2, r3 outright) -> 1, and cgfn builds again with no pool. a trap returns to nothing, so it clobbers nothing
    (pclash? g fs)
     (: t (g 'vrt) pl '(r2 r3)
        (pm x) (atom? x && (t x @ p (p && elem p pl)))
@@ -6256,7 +6363,7 @@
        (go l i)
         (? !(two? l) ()
            (<l @ f
-              (? (!(two? f) || elem <f '(label align br jmp ret sx4 zx4)) (go >l (i + 1))
+              (? (!(two? f) || elem <f '(label align br jmp ret trap ud2 sx4 zx4)) (go >l (i + 1))
                  (elem <f '(call callr)) (tcov? i || (two? hm && kit? f) ? 1 (go >l (i + 1)))
                  (rdsp g f @ rd
                     (? (rd = 'bar) (cov? 'bar i ? 1 (go >l (i + 1)))
@@ -8402,9 +8509,10 @@
               apin (two? >>>p && <>>>p ? (gas-regname (gtgt g) <>>>p))
               ; a d128's home is a pair (lo hi) off the cs pool -- ulloc packs two seats
               env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] + (nom? apin ? [apin]) . env2)
-              ; a cs home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow
+              ; a cs home stays off g 'homes: no call wrap, no sib peel, and ezarg must not read its unwritten shadow.
+              ; a mint home stays a mint, so its call wrap is its own def and use, not a literal register's
               _ (hreg && !(two? hreg) && nelem hreg (cspool g) && nelem (frp g hreg) (fcspool g) && (!(fhomable? ty) || ty = 'double && fwrap? g) && !(spr g <p) ?
-                   (pin g 'homes ([(fmint? g hreg ? hreg (rp g hreg)) off <p] . g 'homes)))
+                   (pin g 'homes ([(fmint? g hreg || vmint? g hreg ? hreg (rp g hreg)) off <p] . g 'homes)))
               ; a constant init of a plain slotted scalar is one store-immediate; bool keeps its cvt (0/1)
               si9 (x64t? g && !hreg && <init = 'num && charm? <>init &&
                    !(flo? ty || pair? g ty || d128? ty || ty == 'bool) ?
@@ -11441,8 +11549,9 @@
                                       pok (? (d1 || fl || !u9) ()
                                              lf9 (2 <= tc)
                                              (peep crs9 nm 0 = 0 && 2 <= tc))
-                                      ; a cs seat pays its save and a reload per exit -- except on wasm, where it has none
-                                      cok (!fl && (wasm? g ? (2 <= tc) (2 < tc && 1 + nx9 < tc)))
+                                      ; a cs seat pays its save and a reload per exit -- except on wasm, where it has none,
+                                      ; and under t2pm, whose one push and pops carry it
+                                      cok (!fl && (wasm? g || pmfr? g ? (2 <= tc) (2 < tc && 1 + nx9 < tc)))
                                       ; a double or float: the files it may take, in order. a zero-crossing name takes the free file
                                       ; first, a crossing one the cs file (priced as cok) then, a double only, a wrapped seat when its
                                       ; weighted mentions outweigh the spill and reload
@@ -11808,7 +11917,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
+       (bad? irf ? irf (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf))))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_

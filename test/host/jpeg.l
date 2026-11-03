@@ -2,8 +2,7 @@
 ; trip, cmyk and ycck, exif's turns and the refusals, then where magick is, each of its encodings
 ; decoded against its own
 ;   cat test/00-init.l test/host/jpeg.l | out/love
-(borrow 'posix)
-(borrow 'jpeg)
+(borrow '(posix jpeg))
 (borrow "src/apps/jpeg.l")
 (: dir (cwd 0 + "/out/.jpegd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

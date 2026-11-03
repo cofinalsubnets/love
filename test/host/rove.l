@@ -2,9 +2,7 @@
 ; plays the tty runner. not in the corpus: it leaks its helpers.
 ; run: cat test/00-init.l test/host/rove.l | out/love
 
-(borrow 'rove)
-(borrow 'horn)
-(borrow 'tower)
+(borrow '(rove horn tower))
 
 ; delve: a seed reproduces its floor; floors are connected and bordered
 (: p1 (delve 60 20 (wheel 11) (plan 2))

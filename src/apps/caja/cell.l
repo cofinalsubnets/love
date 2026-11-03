@@ -9,10 +9,7 @@
 ; plane holds 255: ASCII as itself, the rest in arrival order, a new plane when full. a
 ; font is a plane and an SGR attribute. fences, tables, rules and .th are ttyshow's lines.
 (module (caja-cell cc-show)
-(borrow 'text)
-(borrow 'lapiz)
-(borrow 'caja-box)
-(borrow 'caja-par)
+(borrow '(text lapiz caja-box caja-par))
 (:
    U 65536                                    ; a cell
    L (12 * U)                                 ; a line, baseline to baseline

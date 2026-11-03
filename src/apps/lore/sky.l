@@ -11,9 +11,7 @@
 ; horizon too: sky-lit's csun then sky-orb-cloud's
 (module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-near sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
-(borrow 'view)
-(borrow 'vec)
-(borrow 'starmap)
+(borrow '(view vec starmap))
 (:
  (day-secs s) (s - 86400.0 * floor (s / 86400.0))
  ; the sun as [east up north], a unit vector, by solar time and the day of the year

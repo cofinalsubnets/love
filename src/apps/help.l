@@ -4,8 +4,7 @@
 ;   love help [WORD..]     the words start the query; not a terminal, the lines that match
 ;                          print as path:line: text, as grep -n would
 (module (help help-main help-lines)
-(borrow 'posix)
-(borrow 'seek)
+(borrow '(posix seek cli))
 (:
  help-root "/love"
  (help-lines root) (seek-lines (seek-files root))

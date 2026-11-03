@@ -4,10 +4,7 @@
 ; operator feeds back (its recurrence carries the two forms' last-bit differences on); a wave that
 ; jumps (quarter, tri, saw, square) may differ wholly at a frame on the jump, a rounding either side
 ;   cat test/00-init.l test/host/00-host.l test/host/ops.l | out/love
-(borrow 'ops)
-(borrow 'opl)
-(borrow 'play)
-(borrow 'bytes)
+(borrow '(ops opl play bytes))
 (: rate 12000.0 n 900
    (ops-t-diff a b m) (peep a (iota m) 0.0 - peep b (iota m) 0.0)
    (ops-t-worst a b m) (: d (ops-t-diff a b m) (sqrt (amax (d * d))))

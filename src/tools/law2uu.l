@@ -163,7 +163,7 @@
                    (won? r ? (r 2)))))))
 
    ; --- the kernel, live: a strategy is tried, not asserted ---
-   dq (uu 'defq)
+   dq (cite 'uu 'defq)
    _ (hear (\ p e (peep HELPC () 0 @ h (h ? (h p e) 0))))
    (checks? nm ty tm) ('accepted = rejects (\ z (dq nm ty tm)))
 

@@ -1,6 +1,6 @@
 ; uu -- the UniMath corpus, checked by the uu kernel baked from post.l
 ; the kernel surface the corpus reads bare re-leaks here, body-less, for later files
-(: GLOB (uu 'GLOB) HELPC (uu 'HELPC) vof (uu 'vof)
+(: uu (cite 'uu) GLOB (uu 'GLOB) HELPC (uu 'HELPC) vof (uu 'vof)
    capp (uu 'capp) conv (uu 'conv)
    rejects (uu 'rejects)                    ; not defn/defq/axm: a bound head hides its macro,
                                             ; and the macro is what quotes their operands

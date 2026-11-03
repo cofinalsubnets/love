@@ -9,11 +9,9 @@
          slop-tune slop-song-speed slop-song-edge slop-song-vol slop-song-wave
          slop-song-new slop-song-feed song-wave-of frame-due?
          slop-shore slop-sand slop-wet? slop-drift slop-pal slop-ramp slop-ramp-pen slop-under slop-face)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(rove horn cli))
 ; borrowing harp shadows prel's rev and every, so the list reverse here is lrev
-(borrow 'harp)
-(borrow 'play)
+(borrow '(harp play))
 ; posix is optional: the wasm build links none of it and runs this file. borrow, never
 ; splice: a spliced absent module scares, a borrowed one's tty names just go missing
 (borrow 'posix)

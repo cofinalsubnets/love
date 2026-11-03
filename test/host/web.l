@@ -6,9 +6,7 @@
 (borrow "src/apps/vi/hue.l")                       ; the class table, read bare by hueweb
 (borrow 'lapiz)                                ; the document lens, read bare by web
 (borrow 'libra)                                ; ..and the header lifter, likewise
-(borrow 'hueweb)
-(borrow 'kiosko)
-(borrow 'web)
+(borrow '(hueweb kiosko web))
 
 (test
  (elem 'web (cite ()))

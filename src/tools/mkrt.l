@@ -14,8 +14,7 @@
 ; the machine, so the seed's fixpoint carries this object unchanged. arch names the
 ; object format; a cross backend joins from its tree text.
 
-(borrow 'posix)
-(borrow 'gz)
+(borrow '(posix gz))
 (: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
    (rt-rdev cl)
     (sound cl @ 'torn (rt-die "torn backend text")

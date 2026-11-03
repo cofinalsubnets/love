@@ -11,10 +11,7 @@
 ;   (tpiece-len m i)  the length of piece i: plen, but the last
 ;   (tshow m file)    transmission-show's report, the dates in utc
 (module (metainfo tmeta tpiece-len tshow tsize)
-(borrow 'benc)
-(borrow 'bytes)
-(borrow 'cal)
-(borrow 'hashes)
+(borrow '(benc bytes cal hashes))
 (:
  (tm-get t k d) (tablet? t ? (peep t k d) d)
  (tm-str t k) (tm-get t k () @ v (string? v ? v ()))

@@ -1,7 +1,6 @@
 ; kore's www but the screen: urls against RFC 3986 5.4, then kiosko's pages fetched, laid and keyed
 ; run: cat test/00-init.l test/host/www.l | out/love
-(borrow 'kiosko)
-(borrow 'jpeg)
+(borrow '(kiosko jpeg))
 
 (: K (cite 'kore)
    res (K 'ww-resolve) get (K 'ww-get) lay (K 'ww-lay) dump (K 'ww-dump)

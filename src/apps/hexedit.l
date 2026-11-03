@@ -9,10 +9,7 @@
 ; gates headless (test/host/hexedit.l). an edit is a note in a tablet over the file's string.
 ; usage: hexedit [-r] FILE
 (module (hexedit hexedit-main hexedit-run hexedit-new hexedit-key hexedit-frame hexedit-byte)
-(borrow 'holo)
-(borrow 'tui)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(holo tui posix bytes cli))
 (:
  ;; --- the file, and an ELF's .text and symbols over it ---
  ;; elf: () or {'toff 'taddr 'tsize 'syms 'names}; syms addr -> name, names name -> addr

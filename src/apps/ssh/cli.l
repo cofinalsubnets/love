@@ -10,11 +10,7 @@
 ;   ssh-copy-id [-fn] [-i identity_file] [-p port] [-o option=value] [-t target_path] [user@]host
 ;   ssh-keyscan [-Hq] [-f file] [-p port] [-t type] host ..
 (module (ssh-cli ssh-main sshd-main scp-main keygen-main copyid-main keyscan-main kh-name kh-check kh-verdict)
-(borrow 'ssh)
-(borrow 'tls)
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(ssh tls posix bytes hashes))
 
 ; what ssh and scp share: options and the login -- dial, the host key held to known_hosts,
 ; the identity, publickey auth. a failure leaves with 255 through udie; the mains answer status

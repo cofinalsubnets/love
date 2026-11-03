@@ -3,8 +3,7 @@
 ;   love open URL|FILE
 ; android lends another app none of this one's files, so there only a link opens
 (module (open open-main open-link?)
-(borrow 'posix)
-(borrow 'droid)
+(borrow '(posix droid cli))
 (:
  open-usage "usage: love open URL|FILE   in what the system opens it with (under android, a link)"
  ; a scheme of two or more and its colon: "c:" is a dos path, not a link

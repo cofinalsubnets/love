@@ -10,8 +10,7 @@
 ; --- the modules papel stands on ---------------------------------------------------------
 ; papel loads its siblings itself, since two tool files cannot both be -l'd. `root` is this
 ; file's directory off the command line, so siblings come from the tree papel sits in.
-(borrow 'path)
-(borrow 'posix)
+(borrow '(path posix cli))
 (: (findme (a . u)) ; the word that named this file, if any
     (pbase a @ ("papel" || "papel.l") a (findme u))
    root (findme >cmdline @ me (me ? (phead me) "src/apps/"))          ; src/apps/papel.l -> src/apps/

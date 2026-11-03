@@ -1,8 +1,7 @@
 ; test/host/icy.l -- src/apps/icy.l: urls and playlists, then a loopback station (playlist,
 ; redirect, icy wav stream) read back through av's door to the wav's samples
 ;   cat test/00-init.l test/host/icy.l | out/love
-(borrow 'posix)
-(borrow 'icy)
+(borrow '(posix icy))
 (: ic-le (\ v n (string (map (k \ (v >> (8 * k)) & 255) ^n)))
    ; one second of 8 kHz stereo, a different ramp a side
    ic-pcm (: c (cask 32000) (each ^8000 (i \ (pin c (4 * i) (i * 7 & 255), pin c (4 * i + 1) (i // 5 & 255),

@@ -9,9 +9,7 @@
          cube-w cube-h river-h water-rate water-gap inside? stone-lines apartment-song-new apartment-song-feed
          apartment-sfx phrase phrase-gap phrase-ring phrase-slow phrase-every phrase-vary phrase-first
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
-(borrow 'posix)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(posix rove horn cli))
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
 (:
  esc (string 27)

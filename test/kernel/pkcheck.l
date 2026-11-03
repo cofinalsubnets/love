@@ -1,5 +1,4 @@
-(borrow 'harp)
-(borrow 'play)
+(borrow '(harp play))
 ; the pack equivalence law, asked ON THIS SEAT. test/law/harp.l asks it hosted; pinv is C
 ; over a cask and a tray, and neither the truncation nor the byte order is a given on a
 ; machine whose float-to-int is its own.

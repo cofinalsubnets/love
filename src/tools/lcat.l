@@ -7,8 +7,7 @@
 ; the baked header lays every text deflated: SYM the bytes, SYM_raw the inflated length,
 ; every byte a three-digit octal escape so a following digit cannot extend it.
 
-(borrow 'posix)
-(borrow 'gz)
+(borrow '(posix gz))
 
 (: (die m) (say err ("lcat: " + m + "\n"), quit 1)
    (s2cl s) ((: (g i) (i < #s ? (s i . g (i + 1)))) 0)  ; string -> charlist

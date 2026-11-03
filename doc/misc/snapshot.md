@@ -131,15 +131,15 @@ another ISA cannot be baked here, so it ships raw and one `love bake` on the tar
 
 Each file of a cat sits behind a mark, `(cite 'verbs 'mark PATH)`, and the verbs module lays
 the verbs and modules each file added at that path. `love bake --list` reads it back by unit (an app,
-`src/apps/NAME.l` or `src/apps/NAME/`, past kore's table), with the units each one's files cite or
-borrow. `love bake --without U,.. [--with U,..] [-o OUT]` is the roster's bake: a left-out unit
+`src/apps/NAME.l` or `src/apps/NAME/`, past kore's table), with the units each one's files
+borrowed from as the bake read them. `love bake --without U,.. [--with U,..] [-o OUT]` is the roster's bake: a left-out unit
 is a `lazy` form in the cat, its verbs pinned as stubs that read its files off `/love` at their
 first call, and a kept unit's needs stay kept. The Makefile's `carryfiles` are carried but not
-baked: each is a `(cite 'verbs 'carry PATH)` row after the crew, read at bake for the verbs it
-enlists (`(cite 'verbs 'enlist 'NAME ..)`), the modules it opens and the units it cites or
-borrows, and laid as a `lazy` form like a left-out unit's. A verb miss on such a unit's name
-raises it, and so does a `borrow` of one of its modules, or `(cite 'verbs 'lift 'MOD)` from code
-that reaches it by cite: so `love helm` runs from the source, kore's `markdown -t dvi` raises
+baked: each is a `(cite 'verbs 'carry PATH)` row after the crew. At the close a forked child
+reads them off `/love` and sends back what the read recorded -- the verbs each file enlists,
+the modules it registers and the units it borrows from or cites -- and each is laid like a
+left-out unit, its verbs stubs; the image keeps none of their code. A verb miss on such a unit's name raises it, and so does a
+`borrow` or `cite` of one of its modules: so `love helm` runs from the source, kore's `markdown -t dvi` raises
 caja, and `--with helm` bakes it in. A carried unit costs the artifact its source and a few
 stubs, nothing more.
 `love bake --pick` chooses the same flags on a checklist, each unit with its source and an

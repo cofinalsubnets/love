@@ -8,8 +8,7 @@
          dusk-frame dusk-tables dusk-song-new dusk-song-feed sun-at bush-of garage-top
          bed-w gz gw gh hole-w hole-h arc-z end-z done-ms sp loop fps pelog song-chunk
          sun-pens sky-ramp mang)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(rove horn cli))
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'walk)                          ; the rail
 (borrow 'gamelan)                       ; the song

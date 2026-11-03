@@ -14,7 +14,8 @@ fail() { echo "FAIL roster: $*"; exit 1; }
 grep -q '^torrent  *baked torrent torrent-show$' "$w/units" || fail "torrent is not listed baked: $(cat "$w/units")"
 grep -q '^lore .*(needs .*harp' "$w/units" || fail "lore's needs miss harp"
 grep -q '^helm  *carry helm$' "$w/units" || fail "helm is not listed carried"
-# a carried unit answers its name off /love
+# a carried unit answers its name off /love. a module's presence is asked of the registry:
+# a cite of a left-out one raises it
 (cd "$w" && "$love" helm --help) > "$w/h0" 2>&1
 grep -q '^usage: helm' "$w/h0" || fail "helm did not raise: $(head -5 "$w/h0")"
 # lux bakes its wire and carries the rest
@@ -51,13 +52,13 @@ grep -q 'lore needs harp' "$w/refuse" || fail "the refusal: $(cat "$w/refuse")"
 "$love" bake --with helm,lux --without torrent,hexedit,bee -o "$w/l1" > "$w/b1" 2>&1 || fail "the bake: $(tail -5 "$w/b1")"
 "$w/l1" bake --list > "$w/u1" 2>&1 || fail "love bake --list on the configured binary"
 grep -q '^helm  *baked helm$' "$w/u1" || fail "helm is not baked in: $(cat "$w/u1")"
-[ "$("$w/l1" -e "#(cite 'helm)")" != 0 ] || fail "helm's module is not baked"
+[ "$("$w/l1" -e "(? (elem 'helm (cite ())) 1 0)")" = 1 ] || fail "helm's module is not baked"
 grep -q '^lux  *baked lux ' "$w/u1" || fail "lux is not baked in: $(grep '^lux ' "$w/u1")"
-[ "$("$w/l1" -e "#(cite 'lux)")" != 0 ] || fail "lux's module is not baked"
+[ "$("$w/l1" -e "(? (elem 'lux (cite ())) 1 0)")" = 1 ] || fail "lux's module is not baked"
 grep -q '^torrent  *left  torrent torrent-show$' "$w/u1" || fail "torrent is not left out: $(cat "$w/u1")"
 grep -q '^hexedit  *left ' "$w/u1" || fail "hexedit is not left out"
 "$w/l1" verbs | grep -qw torrent-show || fail "the left-out verbs are not listed"
-[ "$("$w/l1" -e "#(cite 'benc)")" = 0 ] || fail "torrent's modules were baked"
+[ "$("$w/l1" -e "(? (elem 'benc (cite ())) 1 0)")" = 0 ] || fail "torrent's modules were baked"
 "$w/l1" torrent-show > "$w/r1" 2>&1
 grep -q '^usage: love torrent-show' "$w/r1" || fail "torrent-show did not raise: $(cat "$w/r1")"
 "$w/l1" hexedit < /dev/null > "$w/r2" 2>&1
@@ -78,5 +79,5 @@ rm -rf "$w/s"
 grep -q '^torrent  *baked ' "$w/u2" || fail "torrent did not come back: $(cat "$w/u2")"
 grep -q '^hexedit  *left ' "$w/u2" || fail "hexedit came back unasked"
 grep -q '^helm  *baked ' "$w/u2" || fail "helm left unasked"
-[ "$("$w/l2" -e "#(cite 'benc)")" != 0 ] || fail "torrent's modules are not baked"
+[ "$("$w/l2" -e "(? (elem 'benc (cite ())) 1 0)")" = 1 ] || fail "torrent's modules are not baked"
 echo "roster: a unit left out, raised, and baked back; a carried one baked in; a configured binary reseeded"

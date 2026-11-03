@@ -3,8 +3,7 @@
 ;   cat test/00-init.l test/host/libra.l | out/love
 
 (borrow 'lint)          ; libra splices this, so the session asks too
-(borrow 'salt)
-(borrow 'libra)
+(borrow '(salt libra))
 (borrow 'lapiz)         ; the doc verb's surfaces, loaded on that verb alone
 
 ; no config anywhere; never (salt 'libra) here, which reads the machine's own ~/.love/etc/libra.l

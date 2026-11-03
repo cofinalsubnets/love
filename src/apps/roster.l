@@ -7,9 +7,9 @@
 ;   love bake [--with U,..] [--without U,..] [-o OUT]
 ;   love bake --pick [-o OUT]                          the same bake, chosen on a checklist
 ; main.c hands these to the bake verb; a plain bake stays its own
-; a unit's needs are the modules its files cite or borrow, held by another unit
+; a unit's needs are the units whose modules its files borrowed as the bake read them
 (module '(roster roster-main roster-units roster-needs roster-lay pick-new pick-step pick-flags pick-args pick-frame)
-(borrow 'posix)
+(borrow '(posix cli))
 (: V (cite 'verbs)
    kore "src/apps/kore/kore.l"
    (fs _) (rev (V 'ros 'files))                     ; (path . baked) in cat order
@@ -29,11 +29,7 @@
                    "part  "))
    (named T u) (sort (filter (k \ (T k @ p (string? p && V 'unit p = u))) (keys T)))
    (slurp1 p) (open ("/love/" + p) "r" @ q (hot? q ? (slurp q @ t (close q, t)) ""))
-   (roster-needs u us)
-    (: M (V 'mods)
-       (dep m) (M m @ p (string? p ? (V 'unit p)))
-       ws (catmap (x \ map dep (V 'refs (slurp1 <x))) (ufiles u))
-       (foldl (a \ w \ (string? w && w != u && elem w us && !(elem w a) ? (a + [w]) a)) () ws))
+   (roster-needs u us) (filter (w \ elem w us) (V 'need u))
    (q l) ("(quote " + show l + ")")
    ; the cat: each file baked? keeps behind its mark, each other a lazy form with its
    ; verbs, modules, and on the unit's first, its needs
@@ -46,7 +42,7 @@
                         ns (seen u ? () (pin seen u 1, roster-needs u us))
                         (say o "\n(cite (quote verbs) (quote lazy) \(show p) \(q (filter (k \ P k = p) (keys P))) \(q (filter (k \ M k = p) (keys M))) \(q ns))\n"))))
        (each (fs ()) one,
-        each (sort (keys (V 'carried))) (p \ say o "\n(cite (quote verbs) (quote carry) \(show p))\n"),
+        each (sort (keys (V 'carried))) (p \ say o "\n(pin (cite (quote verbs) (quote carried)) \(show p) 1)\n"),
         say o "\n(cite (quote verbs) (quote mark) ())\n"))
    (die s) (say err ("bake: " + s + "\n"), 2)
    (commas s) (filter (w \ 0 < #w) (split "," s))

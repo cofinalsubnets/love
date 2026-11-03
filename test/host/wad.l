@@ -1,8 +1,6 @@
 ; test/host/wad.l -- lore's wad: a wad laid here, a room 256 square under the sky with a barrel
 ; in it, read, walked, drawn and heard. run: cat test/00-init.l test/host/wad.l | out/love
-(borrow 'wad)
-(borrow 'mixer)
-(borrow 'bytes)
+(borrow '(wad mixer bytes))
 (: (wad-t-w16 v) (wrle (v < 0 ? (v + 65536) v) 2)
    (wad-t-name s) (s + zbytes (8 - #s))
    (wad-t-cat l) (foldl (\ a s (a + s)) "" l)
