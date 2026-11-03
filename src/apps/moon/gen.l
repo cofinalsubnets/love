@@ -11782,7 +11782,8 @@
        ; the new backend takes the fn whole where it can, before the old build deals a cell; a
        ; refusal hands back what it dealt. lo.l lays after this file: its names resolve at the call
        irn (g 'lo && x64? g ?
-              ((g 'jtabs) @ jt0 ((cite 'moon 'lofn) g f params sig @ 'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0, 'bad) fs fs))
+              ([(g 'jtabs) (g 'fesc) (g 'fescv) (g 'fesca)] @ [jt0 fe0 fv0 fx0]
+                 ((cite 'moon 'lofn) g f params sig @ 'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0 'fesc fe0 'fescv fv0 'fesca fx0, 'bad) fs fs))
               'bad)
        sp1 (? (uni9 || !(bad? irn)) ()
               (vararg && a64? g) (vaspill-a64 params)

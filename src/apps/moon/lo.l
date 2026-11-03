@@ -234,7 +234,8 @@
    ; a refusal, its first cause kept for MOON_LOLOG
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
    ; a frame address become a value: no sibling call may jump past it
-   (loesc g r) (r @ 'r4 (pin g 'fesc 1) 0)
+   ; a frame address become a value: sibcalls stop, a musttail still jumps
+   (loesc g r) (r @ 'r4 (pin g 'fescv 1) 0)
    ; a scalar load from an address
    (loload g [_ r fs] ty off)
     (? (losc? ty) (lomk g @ t [ty t (fs + [[(ldop ty) t r off]])])
