@@ -19,9 +19,69 @@
    ; a value converted to ty, copied when the conversion writes
    (lotr g [vt r fs] ty)
     (? (gcplx? ty || gcplx? vt) (locxsame? vt ty ? [vt r fs] (locvt g [vt r fs] ty))
+       (d128? ty || d128? vt) (lowtr g [vt r fs] ty)
        (lofl? ty || lofl? vt) (lotrf g [vt r fs] ty)
        (two? (cvt ty 'r0) && !(irfit? vt ty)) (lomk g @ t [ty t (fs + [['mov t r]] + cvt ty t)])
        [ty r fs])
+   ; -- the wide pair: a value [ty [lo hi] fs], a local in memory; the kit's ops work rax:rdx, each in
+   ; a fix over the registers it reads and writes --
+   ; a value as a pair -> [fs lo hi] | 'bad: a word widens by its source's signedness
+   (lopair g v)
+    (v @ ([vt [l h] fs] && d128? vt) [fs l h]
+         ([vt _ _] && losc? vt)
+          (: u (usg? vt || ptr? vt)
+             (lotr g v (u ? 'ulong 'long) @ [_ l fs]
+                (lomk g @ h [(fs + (u ? [['li h 0]] [['mov h l] ['sar h 63]])) l h])))
+         _ 'bad)
+   ; ins [register vreg].. moved in, the kit's forms, the pair out of rax:rdx
+   (lokit g ty pre ins uses defs body)
+    (lomk g @ l (lomk g @ h
+       [ty [l h] (pre + map (p \ ['mov <p <>p]) ins + [['fix uses defs body] ['mov l 'r0] ['mov h 'r2]])]))
+   ; to or from the pair: a word widens, the pair read as a word is its low half, its truth either half
+   (lowtr g v ty)
+    (? (d128? ty) (lopair g v @ 'bad (lono g ['cast (vty v) ty]) [fs l h] [ty [l h] fs])
+       (v @ ([vt [l _] fs] && d128? vt && losc? ty) (ty = 'bool ? (lotest g v @ [_ d f2] ['bool d f2]) (lotr g ['ulong l fs] ty))
+            _ (lono g ['cast (vty v) ty])))
+   ; a divisor whose high half is zero: an unsigned word, a literal no less than 0, or a pair widened so
+   (lohz? v) (v @ ([vt _ fs] && !(d128? vt)) (usg? vt || ptr? vt || (fs @ [['li _ k]] (0 <= k) _ ()))
+                  ([vt [_ h] fs] && d128? vt) (rev fs @ (['li x 0] . _) (x = h) _ ())
+                  _ ())
+   (lowbin g op a b kb)
+    (: ta (vty a) tb (vty b) rt (wbin ta tb) u (rt = 'u128)
+       (? (lofl? ta || lofl? tb) (lono g ['bin op ta tb])
+          (elem op '(shl shr))
+           (lopair g a @ 'bad 'bad
+              [fa l h] (: k9 (? (op = 'shl) 'shl128 (usg? ta) 'shr128 'sar128)
+                          v9 (? (op = 'shl) 'shl128v (usg? ta) 'shr128v 'sar128v)
+                          (? !(d128? ta) (lono g ['bin op ta tb])
+                             (two? kb) (? (<kb < 0 || 127 < <kb) (lono g ['shift <kb])
+                                          (<kb = 0) [ta [l h] fa]
+                                          (lokit g ta fa [['r0 l] ['r2 h]] '(r0 r2) '(r0 r2) [[k9 <kb]]))
+                             (b @ ([_ [c _] fb] && d128? tb) (lokit g ta (fa + fb) [['r0 l] ['r2 h] ['r1 c]] '(r0 r1 r2) '(r0 r2) [[v9]])
+                                  ([_ c fb] && losc? tb) (lokit g ta (fa + fb) [['r0 l] ['r2 h] ['r1 c]] '(r0 r1 r2) '(r0 r2) [[v9]])
+                                  _ (lono g ['bin op ta tb])))))
+          (lopair g a @ 'bad 'bad
+             [fa al ah] (lopair g b @ 'bad 'bad
+                [fb bl bh]
+                 (: pre (fa + fb) lr [['r6 al] ['r5 ah] ['r0 bl] ['r2 bh]]
+                    (op @ '+ (lokit g rt pre lr '(r0 r2 r5 r6) '(r0 r2) '((a128r r6 r5)))
+                          ; s128r answers (r6:r5) - (rax:rdx), its operand pair spent
+                          '- (lokit g rt pre lr '(r0 r2 r5 r6) '(r0 r2 r5 r6) '((s128r r6 r5)))
+                          '* (lokit g rt pre lr '(r0 r2 r5 r6) '(r0 r1 r2) '((m128r r6 r5)))
+                          ('& || '| || '^)
+                           (lomk g @ l (lomk g @ h
+                              [rt [l h] (pre + [['mov l al] [(irop op) l l bl] ['mov h ah] [(irop op) h h bh]])]))
+                          ; 0/1 of (r6:r5) cond (rax:rdx)
+                          ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
+                           (lomk g @ d ['long d (pre + map (p \ ['mov <p <>p]) lr +
+                                                 [['fix '(r0 r2 r5 r6) '(r0 r1 r2) [['c128r (scc op u) 'r6 'r5]]] ['mov d 'r0]])])
+                          ; u128 by a divisor whose high half is zero: the dividend in a cell at sp
+                          ('/ || '%)
+                           (u && lohz? b ?
+                              (lokit g rt pre [['r6 al] ['r5 ah] ['r0 bl]] '(r0 r5 r6) '(r0 r1 r2)
+                                 [['sub 'sp 'sp 16] ['st 'sp 0 'r6] ['st 'sp 8 'r5] [(op @ '/ 'dv128 'rm128) 'sp] ['add 'sp 'sp 16]])
+                              (lono g ['bin op ta tb]))
+                          (lono g ['bin op ta tb])))))))
    ; -- C99 complex: a two-part struct, a value its address; arithmetic over the parts in vregs --
    (locxsame? a b) (gcplx? a && gcplx? b && <>a = <>b)
    (lofo n p) (name "\(n)\(p = 'float ? "ss" "sd")")
@@ -99,7 +159,8 @@
        (lomk g @ t [ty t (fs + [[(vt = 'float ? 'cvttss2si 'cvttsd2si) t r]] + cvt ty t)]))
    ; a scalar's truth as an int 0/1: a float against 0.0, a NaN true
    (lotest g [vt r fs])
-    (? (lofl? vt)
+    (? (d128? vt) (lomk g @ d ['int d (fs + [['mov d <r] ['or d d <>r] ['cmp d 0] ['set 'ne d]])])
+       (lofl? vt)
         (: t (lomk g) z (lomkf g) a (lomk g) b (lomk g) d (lomk g)
            ['int d (fs + [['li t 0] ['movqxr z t] [(vt = 'float ? 'ucomiss 'ucomisd) r z]
                           ['set 'ne a] ['set 'p b] ['mov d a] ['or d d b]])])
@@ -178,6 +239,7 @@
    (loload g [_ r fs] ty off)
     (? (losc? ty) (lomk g @ t [ty t (fs + [[(ldop ty) t r off]])])
        (lofl? ty) (lomkf g @ t [ty t (fs + [[(ty = 'float ? 'ldss 'ldsd) t r off]])])
+       (d128? ty) (lomk g @ l (lomk g @ h [ty [l h] (fs + [['ld l r off] ['ld h r (off + 8)]])]))
        (lono g ['load ty]))
    ; an lvalue's value: an array decays, an aggregate refuses
    (lorv g lv)
@@ -215,6 +277,8 @@
                        [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
                                ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u)
                         ['long m ()]]))))
+          (['a [_ b _] ty off] && d128? ty)
+           (lotr g v ty @ [_ [l h] fs] [(fs + [['st b off l] ['st b (off + 8) h]]) [ty [l h] ()]] _ 'bad)
           (['a _ ty _] && gcplx? ty && !(locxsame? (vty v) ty)) (lotr g v ty @ 'bad 'bad v2 (lost g lv v2))
           (['a [_ b _] ty off] && stru? ty)
            (v @ ([vt r fs] && stru? vt && tsz g vt = tsz g ty)
@@ -293,6 +357,7 @@
    (lobin g op a b kb)
     (? (bad? a || bad? b) 'bad
        (gcplx? (vty a) || gcplx? (vty b)) (locxbin g op a b)
+       (d128? (vty a) || d128? (vty b)) (lowbin g op a b kb)
        (lofl? (vty a) || lofl? (vty b)) (lobinf g op a b)
        !(losc? (vty a) && losc? (vty b)) (lono g ['bin op (vty a) (vty b)])
        (: ta (vty a) tb (vty b)
@@ -388,15 +453,17 @@
                             (loz g va vb @ [_ x fx] (loz g vb va @ [_ y fy]
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
             (lox g env e @ ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
-                           ([ty r fs] && lofl? ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
+                           ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad)))
 
    ; -- expressions -> (ty vreg forms) | 'bad --
    (lox g env e)
     (e @ () ['void () ()]
          ['num v]
-          (-9223372036854775808 <= v && v <= 18446744073709551615 ?
-             (lomk g @ t [(numty v) t [['li t v]]]) 'bad)
+          (? (-9223372036854775808 <= v && v <= 18446744073709551615) (lomk g @ t [(numty v) t [['li t v]]])
+             ; past the word: the wide pair, split by // and % (a big has no bitwise ops)
+             ((v < 0 ? (v + 64 2 * 64 2) v) % (64 2 * 64 2) @ u
+                (lomk g @ l (lomk g @ h ['u128 [l h] [['li l (u % 18446744073709551616)] ['li h (u // 18446744073709551616)]]]))))
          ; sizeof a VLA local: its stashed bytes; a VLA type: its dim times its row
          ['szof e2]
           (lopeek g env e2 @
@@ -428,7 +495,13 @@
              l (: lb (lolvbare l)
                   (lorv g lb @ 'bad 'bad
                      o (: ty (vty o)
-                          (lofl? ty ? (lopostf g env l lb o step)
+                          (? (d128? ty)
+                              ; the pair steps by one in the kit, the old answers
+                              (o @ ([_ [ol oh] fo] && (step = 1 || step = -1))
+                                    (lokit g ty fo [['r0 ol] ['r2 oh]] '(r0 r2) '(r0 r2) [[(step = 1 ? 'inc128 'dec128)]] @
+                                       n (lost g lb n @ [fs _] [ty [ol oh] (lolvfs l + fs)] 'bad))
+                                   _ (lono g ['post ty]))
+                             (lofl? ty) (lopostf g env l lb o step)
                              (lostep g (ptr? ty ? ty ['ptr 'void]) @ 'bad 'bad
                              sz (locp g o @ [_ t fo] (lomk g @ n
                                    (lost g lb [(ptr? ty ? ty (rbin g ty 'int)) n [['mov n t] ['add n n (step * sz)]]] @
@@ -441,20 +514,30 @@
                      r (lost g lb r @ [fs [ty x _]] [ty x (lolvfs l + fs)] 'bad))))
          ['cast 'void x] (lox g env x @ [_ _ fs] ['void () fs] 'bad)
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
+         ; a float of a wide value: a constant only, folded exactly, as the old path
+         (['cast ty x] && lofl? ty && d128? (lopeek g env x))
+          (cfold 1 x @ (v && cint? v) (lox g env ['cast ty ['flo (0.0 + v)]]) _ (lono g ['cast 'u128 ty]))
          ['cast ty x]
           (lox g env x @ ([vt r fs] && (gcplx? ty || gcplx? vt) && (losv? ty || gcplx? ty)) (lotr g [vt r fs] ty)
+                         ([vt r fs] && (d128? ty || d128? vt) && (losv? ty || d128? ty) && (losv? vt || d128? vt)) (lotr g [vt r fs] ty)
                          ([vt r fs] && losc? ty && losc? vt)
                           (two? (cvt ty r) ? (locp g [vt r fs] @ [_ t f2] [ty t (f2 + cvt ty t)]) [ty r fs])
                          ([vt r fs] && losv? ty && losv? vt) (lotr g [vt r fs] ty)
-                         'bad)
+                         ; gcc's cast of a struct to its own type
+                         ([vt r fs] && stru? ty && stru? vt && tsz g ty = tsz g vt) [ty r fs]
+                         'bad 'bad
+                         v (lono g ['cast (vty v) ty]))
          ; -1 and ~0 are literals, typed as C reads them
          (['un _ _] && two? (litv e)) (lox g env ['num <(litv e)])
          ['un 'not x]
           (lox g env x @ ([ty r fs] && losc? ty) (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'eq d]])])
-                         ([ty r fs] && lofl? ty) (lotest g [ty r fs] @ [_ t f2] (lomk g @ d ['int d (f2 + [['cmp t 0] ['set 'eq d]])]))
+                         ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ t f2] (lomk g @ d ['int d (f2 + [['cmp t 0] ['set 'eq d]])]))
                          'bad)
          (['un op x] && elem op '(neg bnot))
           (lox g env x @ ([ty r fs] && gcplx? ty && op = 'neg) (locxneg g [ty r fs])
+                         ([ty [l h] fs] && d128? ty)
+                          (op = 'neg ? (lokit g ty fs [['r0 l] ['r2 h]] '(r0 r2) '(r0 r2) '((n128)))
+                             (lomk g @ l2 (lomk g @ h2 [ty [l2 h2] (fs + [['mov l2 l] ['not l2] ['mov h2 h] ['not h2]])])))
                          ([ty r fs] && losc? ty)
              (: uty (usg? ty && !(elem ty '(uchar cchar ushort)))
                 sty (op = 'neg && !uty && s32bin? g ty 'int)
@@ -719,13 +802,14 @@
    ; cl the call form, fv the callee's (vreg forms) | (); va also lays al, the vector count
    ; ms an ms_abi callee: ints only, rcx rdx r8 r9 then the stack above a 32-byte shadow
    (locall1 g env rt ptys va ms as cl fv)
-    (? !(rt = 'void || losv? rt || loagg? g rt) (lono g ['ret rt])
+    (? !(rt = 'void || losv? rt || d128? rt || loagg? g rt) (lono g ['ret rt])
+       (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
        (: (arg e pt)
-           (lox g env e @ ([vt r fs] && losv? vt)
+           (lox g env e @ ([vt r fs] && (losv? vt || d128? vt))
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
-                                 p9 (losv? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                                 p9 (losv? p9 || d128? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
                           ([vt r fs] && loagg? g vt) [vt r fs]
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
@@ -742,13 +826,17 @@
                           (loplace g (hv + vs)))
                    sh (ms ? 32 0)
                    nf (pl 1) rg (pl 2) sk (pl 3) pre (pl 4) rs (map (x \ <x) rg)
-                   d (lomkt g rt) blk (aup (sh + +(map (x \ x 2) sk)) 16)
+                   d (d128? rt ? [(lomk g) (lomk g)] (lomkt g rt))
                    al (va ? [['li 'r0 nf]])
-                   (stk x o) (x @ ['w v _] [[(vty v @ 'float 'stss 'double 'stsd 'st) 'sp o (vreg v)]]
+                   (stk x o) (x @ ['w2 v _] [['st 'sp o <(vreg v)] ['st 'sp (o + 8) <>(vreg v)]]
+                                  ['w v _] [[(vty v @ 'float 'stss 'double 'stsd 'st) 'sp o (vreg v)]]
                                   ['s v n] (locopy g (vreg v) 'sp o n))
-                   sfs (: (go l o acc) (l @ (x . u) (go u (o + x 2) (acc + stk x o)) acc) (go sk sh ()))
+                   ; a pair on the stack sits 16-aligned
+                   (sgo l o acc) (l @ (x . u) ((x @ ['w2 . _] (aup o 16) _ o) @ p (sgo u (p + x 2) (acc + stk x p))) [o acc])
+                   so (sgo sk sh ()) sfs (so 1) blk (aup <so 16)
                    res (? (rt = 'void) ()
                           (lofl? rt) [['movapd d 'f0]]
+                          (d128? rt) [['mov <d 'r0] ['mov <>d 'r2]]
                           (stru? rt) (loesc g 'r4, (sret ? () (loebst g (aclass g rt) 'r4 rto)) + [['lea d 'r4 rto]])
                           (['mov d 'r0] . map (f \ [<f d]) (rext g rt)))
                    [rt (rt = 'void ? () d)
@@ -765,7 +853,10 @@
    (loplace g vs)
     (foldl (s \ v \ (s @ [gi fi rg sk pre]
               (: ty (vty v) x (vreg v)
-                 (? (stru? ty)
+                 (? (d128? ty)
+                     (gi + 2 <= 6 ? [(gi + 2) fi (rg + [[(argregs gi) <x] [(argregs (gi + 1)) <>x]]) sk pre]
+                        [gi fi rg (sk + [['w2 v 16]]) pre])
+                    (stru? ty)
                      (: cls (aclass g ty) sz (tsz g ty)
                         ng #(filter (c \ c = 'int) cls) nx (#cls - ng)
                         (two? cls && gi + ng <= 6 && fi + nx <= 8 ?
@@ -809,6 +900,8 @@
                 (lox g env e @ 'bad 'bad
                    ([_ _ fs] && rt = 'void) (fs + epj)
                    ([vt r fs] && losv? rt && losv? vt) (lotr g [vt r fs] rt @ [_ c f2] (f2 + [(lomv (lofl? rt ? 'f0 'r0) c)] + epj))
+                   ([vt r fs] && d128? rt && (losv? vt || d128? vt))
+                    (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov 'r2 h]] + epj) _ 'bad)
                    ; an aggregate: out through the hidden pointer, or its eightbytes into the return registers
                    ([vt r fs] && stru? rt && tsz g vt = tsz g rt)
                     (g 'losret @ () (: cls (aclass g rt) sz (tsz g rt)
@@ -999,7 +1092,7 @@
                     (naslot g (aup (tsz g ty) 8) (max (tal g ty) (rest @ (_ . _ . a . _) (charm? a ? a 0) _ 0)) @ off
                        (: e2 ([nm 'm off ty] . env)
                           (? (init = ()) (go u e2 acc)
-                             (losv? ty)
+                             (losv? ty || d128? ty)
                               (lox g env init @ 'bad 'bad
                                  v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] (go u e2 (acc + fs)) 'bad))
                              ((init @ ('init . _) 1 ()) || arr? ty && (init @ ('str . _) 1 ()) || clarr? ty init)
@@ -1015,19 +1108,25 @@
     ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (n = <>f ? (lofn1 g f params sig) 'bad)) @ r
        (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
-    (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || loagg? g rt) && all (p \ losv? <>p || loagg? g <>p) params &&
+    (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
             !(g 'abad || g 'sspf))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (stru? rt && !(two? (aclass g rt)))
           _ (pin g 'lon 0)
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
-                  'loret (? (lofl? rt) '(f0) (stru? rt && !sret) (loebregs (aclass g rt)) '(r0)))
+                  'loret (? (lofl? rt) '(f0) (d128? rt) '(r0 r2) (stru? rt && !sret) (loebregs (aclass g rt)) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           (ovm ty ov) ['m (ovb g + 8 * ov) ty]
           (go l gi fi ov env acc)
            (l @ ((nm . ty . _) . u)
-                 (? (stru? ty)
+                 (? (d128? ty)
+                     ; a pair: two gp registers, else 16-aligned above the link
+                     (gi + 2 <= 6 ?
+                        (ntmp g ty @ off (go u (gi + 2) fi ov ([nm 'm off ty] . env)
+                                             (acc + [['st 'r4 off (argregs gi)] ['st 'r4 (off + 8) (argregs (gi + 1))]])))
+                        ((ov + ov % 2) @ o (go u gi fi (o + 2) ((nm . ovm ty o) . env) acc)))
+                    (stru? ty)
                      (: cls (aclass g ty) ng #(filter (c \ c = 'int) cls) nx (#cls - ng)
                         (two? cls && gi + ng <= 6 && fi + nx <= 8 ?
                            (ntmp g ty @ off
