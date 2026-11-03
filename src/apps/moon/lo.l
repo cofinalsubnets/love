@@ -46,7 +46,9 @@
     (u32bin? g (vty v) (vty other) && !(usg? (vty v)) && !(ptr? (vty v)) ?
        (locp g v @ [vt t fs] [vt t (fs + [['zx4 t]])]) v)
 
-   ; the names whose address the body takes: those live in memory
+   ; the names whose address the body takes live in memory, and every name under a call that
+   ; returns twice: its second return restores no register
+   (lotk? g nm) (g 'twice || elem nm (g 'lotk))
    (lotaken x acc)
     (x @ ['addr ['var n]] (elem n acc ? acc (n . acc))
          ; an asm's memory operand takes its name's address
@@ -310,6 +312,8 @@
          ['num v]
           (-9223372036854775808 <= v && v <= 18446744073709551615 ?
              (lomk g @ t [(numty v) t [['li t v]]]) 'bad)
+         ; gcc's &&L
+         ['laddr nm] (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]])
          ['flo v] (lomk g @ t (lomkf g @ w ['double w [['li t (fbits v)] ['movqxr w t]]]))
          ['str s]
           (nlab g ".S" @ lbl
@@ -441,7 +445,7 @@
            (loat g env nm as)
           (['var nm] && bad? (lovar g env nm) && g 'fns nm)
            (g 'sigs nm @
-              ((rt . ptys . va . rest) && !(1 < #nm && nm 0 = 95 && nm 1 = 95))
+              (rt . ptys . va . rest)
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
           _ (lox g env fh @
@@ -707,6 +711,11 @@
             ('brk . _) (assoc 'brk env @ [_ L] [['jmp L]] 'bad)
             ('cont . _) (assoc 'cont env @ [_ L] [['jmp L]] 'bad)
             ['goto nm] [['jmp (name "\(g 'fn).\(nm)")]]
+            ; goto *e: a table jump over every label whose address the fn takes
+            ['igoto e]
+             (map (nm \ name "\(g 'fn).\(nm)") (g 'ltaken) @
+                () (lono g 'igoto)
+                ls (lox g env e @ [_ r fs] (fs + [['jmpt r <ls ls]]) 'bad))
             ['lbl nm] [['label (name "\(g 'fn).\(nm)")]]
             ['switch ce body] (loswitch g env ce body)
             ['case lo hi] (assoc 'sw env @ [_ tab _] (peep tab "\(lo):\(hi)" () @ () 'bad L [['label L]]) 'bad)
@@ -825,11 +834,11 @@
               (: init (rest @ (i . _) i ())
                  ; a register variable: a plain vreg, its register named for asmplan
                  ap (rest @ (_ . x . _) (string? x ? (gas-regname (gtgt g) x)) _ ())
-                 (? (ap && !(nom? ap && asmreg? g ap && losv? ty && nelem nm (g 'lotk))) (lono g 'regasm)
+                 (? (ap && !(nom? ap && asmreg? g ap && losv? ty && !(lotk? g nm))) (lono g 'regasm)
                     (gvarr? ty) (lono g 'vla)
                     (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
                     (gcplx? ty) (lono g 'complex)
-                    (losv? ty && nelem nm (g 'lotk))
+                    (losv? ty && !(lotk? g nm))
                      (lomkt g ty @ r
                         (: _ (ap ? (pin (g 'lopins) r ap))
                            e2 ([nm 'v r ty] . env)
@@ -857,7 +866,7 @@
        (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || loagg? g rt) && all (p \ losv? <>p || loagg? g <>p) params &&
-            !(g 'hasasm || g 'twice || g 'abad || g 'sspf || two? (g 'ltaken)))
+            !(g 'abad || g 'sspf))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (stru? rt && !(two? (aclass g rt)))
           _ (pin g 'lon 0)
@@ -880,7 +889,7 @@
                            (go u gi fi (ov + aslots g ty) ((nm . ovm ty ov) . env) acc)))
                     (lofl? ty ? (8 <= fi) (6 <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc)
                     (: fl (lofl? ty) A (fl ? (xmmreg fi) (argregs gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
-                       (elem nm (g 'lotk) ?
+                       (lotk? g nm ?
                           (ntmp g ty @ off
                              (go u g2 f2 ov ([nm 'm off ty] . env)
                                  (acc + (fl ? [[(ty = 'float ? 'stss 'stsd) 'r4 off A]] (cvt ty A + [[(stop ty) 'r4 off A]])))))
@@ -892,7 +901,7 @@
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
                  body (lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi))))))
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
-                           (g 'hasasm) (g 'twice) (g 'abad) (g 'sspf) (two? (g 'ltaken))], 'bad))
+                           (g 'abad) (g 'sspf)], 'bad))
 
    ; a variadic fn (SysV): a 176-byte save area, gp at +0 step 8, xmm at +48 step 16
    (lovasave g)
