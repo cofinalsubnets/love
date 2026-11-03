@@ -220,6 +220,11 @@
 ;                                      breathing, or flashing as a mast's beacon does
 ;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
 ;                                      on a surface, painted by its layers (swatch.l), quoted
+;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
+;                                      [lo hi] thrown under seed, or a colour, and felt as
+;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
+;                                      'tile 'cobble 'mud 'concrete 'metal 'cloth 'carpet
+;                                      'gravel 'sand 'soil 'grass; a wrong one says what it takes
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
@@ -239,7 +244,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -627,6 +632,66 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ ; --- materials: a texture from its kind and the parameters it changes, a number or [lo hi]
+ ; thrown under the seed, or a colour; [w h metres layers feel] of the parameters, g ---
+ (sh k) ['shade k]
+ (mx c k) ['mix c k]
+ materials
+  {'wood [{'colour (rgb 0.56 0.39 0.23) 'rings 7 'warp 2.5 'grain 0.2 'knots 0.06 'metres 1.0}
+          (g \ [32 64 (g 'metres) [['fill (g 'colour)] ['noise 2 12 (g 'grain)] ['grain (g 'rings) 1.5 (g 'warp) 24 (sh 0.82)]
+                                   ['patches 3 (g 'knots) (sh 0.6)]] 'wood])]
+   'plank [{'colour (rgb 0.6 0.43 0.26) 'rings 7 'warp 2.5 'grain 0.2 'board 16 'metres 1.6}
+           (g \ [64 64 (g 'metres) [['fill (g 'colour)] ['noise 2 12 (g 'grain)] ['grain (g 'rings) 1.5 (g 'warp) 24 (sh 0.85)]
+                                    ['grid 0 (g 'board) 1 (sh 0.55)] ['patches 6 0.25 (sh 0.9)]] 'wood])]
+   'stone [{'colour (rgb 0.5 0.49 0.46) 'grain 0.15 'cracks 0.5 'lichen 0.0 'metres 2.0}
+           (g \ [64 64 (g 'metres) [['fill (g 'colour)] ['noise 3 (g 'grain)] ['patches 6 0.3 (sh 0.85)]
+                                    ['cracks 32 28 1 (8.0 * g 'cracks) (sh (1.0 - 0.6 * g 'cracks))]
+                                    ['patches 3 (g 'lichen) (mx ['rgb 0.45 0.5 0.25] 0.5)] '(noise 1 0.08)] 'hard])]
+   'sandstone [{'colour (rgb 0.72 0.45 0.3) 'pale (rgb 0.86 0.7 0.52) 'beds 9 'warp 1.5 'metres 3.0}
+               (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.08) ['grain (g 'beds) 3 (g 'warp) 40 (mx (g 'pale) 0.35)]
+                                        ['grain (0.37 * g 'beds) 1 (g 'warp) 25 (sh 0.85)] ['patches 8 0.2 (sh 0.9)]] 'hard])]
+   'brick [{'colour (rgb 0.55 0.25 0.18) 'mortar (rgb 0.75 0.72 0.66) 'w 16 'h 6 'vary 0.25 'metres 0.225}
+           (g \ (: w (int (g 'w)) h (int (g 'h)) a (w // 2) m (g 'mortar)
+                  [w (2 * h) (g 'metres) [['fill (g 'colour)] ['patches 3 (g 'vary) (sh 0.8)] '(noise 2 0.1)
+                                          ['rows 0 1 m] ['rows h (h + 1) m] ['within 0 0 w h ['cols 0 1 m]]
+                                          ['within 0 h w (2 * h) ['cols a (a + 1) m]]] 'hard]))]
+   'tile [{'a (rgb 0.8 0.8 0.78) 'b (rgb 0.7 0.7 0.68) 'grout (rgb 0.4 0.4 0.4) 'n 32 'metres 0.6}
+          (g \ (: n (int (g 'n)) h (n // 2)
+                 [n n (g 'metres) [['fill (g 'a)] ['checker h h (g 'b)] '(noise 5 0.1) ['grid h h 1 (g 'grout)]] 'hard]))]
+   'cobble [{'colour (rgb 0.45 0.43 0.4) 'grout (rgb 0.2 0.19 0.18) 'size 10 'w 0.12 'vary 0.3 'metres 1.5}
+            (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.15) ['patches 4 (g 'vary) (sh 0.8)]
+                                     ['cells (g 'size) (g 'w) (g 'grout)] '(noise 5 0.1)] 'hard])]
+   'mud [{'colour (rgb 0.42 0.33 0.24) 'crack (rgb 0.18 0.13 0.09) 'size 14 'w 0.08 'metres 2.0}
+         (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.12) ['patches 5 0.3 (sh 0.9)] ['cells (g 'size) (g 'w) (g 'crack)]] 'soft])]
+   'concrete [{'colour (rgb 0.42 0.41 0.4) 'stain 0.18 'ties 0 'metres 6.0}
+              (g \ [128 128 (g 'metres) ([['fill (g 'colour)] '(noise 6 0.05) ['patches 6 (g 'stain) (sh 0.88)] ['rows 0 1 (sh 0.88)]
+                                          ['rows 64 65 (sh 0.88)]] + (g 'ties > 0.0 ? [['dots 42.667 16 0.8 (sh 0.6)]] ())) 'hard])]
+   'metal [{'colour (rgb 0.46 0.48 0.51) 'grain 0.12 'seams 0 'metres 1.0}
+           (g \ [32 32 (g 'metres) ([['fill (g 'colour)] ['noise 3 (g 'grain)]]
+                                    + (g 'seams > 0.0 ? [['grid 32 32 1 (sh 0.6)] ['dots 8 8 0.8 (sh 0.5)]] ())) 'metal])]
+   'cloth [{'colour (rgb 0.16 0.17 0.22) 'nap 0.3 'metres 0.5}
+           (g \ [16 16 (g 'metres) [['fill (g 'colour)] ['noise 1 (g 'nap)]] 'soft])]
+   'carpet [{'colour (rgb 0.3 0.33 0.39) 'nap 0.25 'metres 2.0}
+            (g \ [64 64 (g 'metres) [['fill (g 'colour)] ['noise 1 (g 'nap)] '(noise 8 0.1) ['patches 5 0.2 (sh 0.9)]] 'soft])]
+   'gravel [{'colour 0.4 'metres 2.0}
+            (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 1 0.35) '(noise 6 0.1) ['patches 4 0.2 (sh 0.85)]] 'hard])]
+   'sand [{'colour (rgb 0.8 0.7 0.5) 'ripple 0.0 'metres 2.0}
+          (g \ [64 64 (g 'metres) ([['fill (g 'colour)] '(noise 1 0.12) '(noise 8 0.08)]
+                                   + (g 'ripple > 0.0 ? [['grain 8 3 (g 'ripple) 20 (sh 0.9)]] ())) 'soft])]
+   'soil [{'colour (rgb 0.36 0.27 0.19) 'stones 0.15 'metres 2.0}
+          (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 1 0.3) ['patches 5 0.3 (sh 0.8)]
+                                   ['patches 2 (g 'stones) (mx ['rgb 0.5 0.48 0.44] 0.5)]] 'soft])]
+   'grass [{'colour (rgb 0.3 0.45 0.18) 'dry 0.3 'metres 2.0}
+           (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 1 0.35) ['patches 6 (g 'dry) (mx ['rgb 0.62 0.58 0.3] 0.3)]
+                                    ['patches 3 0.2 (sh 0.8)]] 'soft])]}
+ (material k s o) (: u "(material KIND seed {PARAM v ..})"
+   (? (!(two? (materials k))) (no (u + ", a KIND of " + show (sort (keys materials))) k)
+      (!(charm? s && 0 <= s < 1000000)) (no u s) (!(tablet? o)) (no u o)
+      (: d (materials k 0)
+         _ (each (keys o) (q \ elem q (keys d) ? 0 (no (u + ", " + show k + " takes " + show (sort (keys d))) q)))
+         (g q) (peep o q (d q) @ v (colour? v ? ['rgb (v 0) (v 1) (v 2)] (pick s q v)))
+         r ((materials k 1) g)
+         (feel (r 4) (texture (r 0) (r 1) (r 2) (['seed s] . r 3))))))
  (feel k t) (: u "(feel 'soft TEXTURE)"
    (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
