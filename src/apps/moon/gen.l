@@ -9850,8 +9850,23 @@
 
    ; -- the inline lane: a small (or always_inline) fn splices its body at the call site, each arg in
    ; a fresh 8-byte temp, each return into r0 then a jump to the splice's end label --
-   ; an always_inline body splices without its canary: the caller's frame is the one guarded
-   (sspcut x) (? !(two? x) x (<x == 'ssp) '(nop) (map sspcut x))
+   ; an always_inline body splices without its canary, each return as written: the caller's frame is the one guarded
+   (sspcut x)
+    (? !(two? x) x
+       (x @ ('blk (('ssp 'set) b ('ssp 'chk))) (sspcut b)
+            ('blk (('decl ((_ _ e))) ('ssp 'chk) ('ret ('var _)))) ['ret (sspcut e)]
+            ('blk (('expr e) ('ssp 'chk) ('ret ()))) ['ret (sspcut e)]
+            ('blk (('ssp 'chk) r)) (sspcut r)
+            ('ssp . _) '(nop)
+            _ (map sspcut x)))
+   ; ..as does any body whose canary guards no buffer: an address-taken scalar (check_mul_overflow's
+   ; &t) lives on in a register once spliced, as gcc decides protection after inlining
+   (sspbuf? g x)
+    (: (arrin? ty d) (? (atom? ty) () (elem <ty '(arr varr)) 1
+                        (stru? ty && d < 16) (peep (g 'stag) <>ty () @ e (two? e && any (f \ arrin? <>>f (d + 1)) <e))
+                        ())
+       (? (atom? x) () (<x = 'decl && two? >x) (any (d \ two? d && arrin? <>d 0) <>x || sspbuf? g >x)
+          (sspbuf? g <x || sspbuf? g >x)))
    (noinl? x) (? (elem x '(sdecl goto lbl vastart varr ssp "__builtin_alloca")) 1   ; varr: a VLA's slots ride cgfn's per-fn prescan; ssp its canary cell; alloca the caller's frame
                  (atom? x) ()
                  (x @ ('call _ as && 6 < tally as) 1 ()) 1     ; an overflow-arg call moves sp -- splicing it bars the caller's unframe
@@ -9922,8 +9937,19 @@
                     ('cast _ a) (fxless? a)
                     ('un 'not a) (fxless? a)
                     ('bin op a b) (elem op '(eq ne lt le gt ge + - * & | ^) && fxless? a && fxless? b)
+                    (('land || 'lor) a b) (fxless? a && fxless? b)
                     ('sexpr . ss . v . _) ((!(two? v) || fxless? v) && atom? (filter (st \ !(fxlst? st)) ss))
                     ())
+   ; a do-while(0) no break or continue leaves is its body, a block without decls its statements:
+   ; WRITE_ONCE's wrapping weighs and splices as the store it is
+   (do0 x)
+    (: (bc? x) (? !(two? x) () (elem <x '(brk cont)) 1 (elem <x '(do while for)) () (<x = 'switch) (co? x) (any bc? x))
+       (co? x) (? !(two? x) () (<x = 'cont) 1 (elem <x '(do while for)) () (any co? x))
+       (stms ss) (foldr (st \ a \ do0 st @ s2 (s2 @ ('blk l) (any (y \ two? y && <y = 'decl) l ? (s2 . a) (l + a)) (s2 . a))) () ss)
+       (? !(two? x) x
+          (x @ (('do b ('num 0)) && !(bc? b)) (do0 b)
+               ('blk ss) ['blk (stms ss)]
+               (map do0 x))))
    (fxlst? st) (st @ ('decl ps) (atom? (filter (p \ two? >>p && <>>p != ()) ps))
                      ('expr e) (fxless? e)
                      ('nop) 1
@@ -9942,9 +9968,9 @@
                           (dps >x (dps <x a)))
              dl (dps body ())
              loc (map (p \ <p) ps + map (p \ <p) dl)
-             ; a frame address costs the caller its sibcalls, a return address read in place is the caller's,
-             ; asm bars it unless the body compiles only spliced, as do a statement expression, a compound
-             ; literal and a struct or array local. always_inline waives all but the frame address, as gcc reads it
+             ; a frame address costs the caller its sibcalls, and a return address read in place is the
+             ; caller's, which always_inline waives as gcc reads it. asm, a statement expression, a compound
+             ; literal and a struct or array local splice as any body does, under the size gate
              need (peep (g 'ineed) nm ())
              alw (peep (g 'alw) nm ())
              (bar? x) (two? x ?
@@ -9954,14 +9980,11 @@
                                (bar? a1 || bar? a2 || (a3 @ ('addr ('var v)) () (bar? a3)))
                               ('call ('var b9) _ && b9 = "__builtin_frame_address") 1
                               ('call ('var b9) _ && b9 = "__builtin_return_address") !alw
-                              ('asm . _) (need || alw ? (bar? >x) 1)
-                              (('clit || 'sexpr) . _) (alw ? (bar? >x) 1)
                               (bar? <x || bar? >x)))
              (fv x a) (!(two? x) ? a
                          (x @ ('var v) (elem v loc || elem v a ? a (v . a))
                               (fv >x (fv <x a))))
              (? (bar? body) ()
-                (!alw && foldl (a \ p \ a || stru? <>p || arr? <>p) () dl) ()
                 [ps body <(peep (g 'sigs) nm ['long ()]) loc (fv body ()) dl need]))))
    ; a callee body's returns -> what rs lays for each, no jump: a return ends the list, or an if arm
    ; that always returns, the rest moving into the other arm | 'no. sw: a trailing switch may end it
@@ -10262,6 +10285,8 @@
        (cvt ty x) (ty @ 'same x ['cast ty x])
        (hascont? x) (? !(two? x) () (<x = 'cont) 1 (hascont? <x || hascont? >x))
        (hasjmp? x) (? !(two? x) () (elem <x '(brk cont goto)) 1 (hasjmp? <x || hasjmp? >x))
+       ; a left operand that decides its && or || (0 &&, 1 ||): the right is never evaluated, nor spliced
+       (dcd? e a) (a @ ('num k) (<e = 'land ? (k = 0) (k != 0)) ())
        ; an arm's weight as a copy, or past any budget when a copy would be wrong (a label, a decl)
        (dsz x) (? (x = ()) 0 !(two? x) 1 (elem <x '(lbl case dflt decl sdecl asm)) 99 (dsz <x + dsz >x))
        ; an expression -> (pre e'): only the positions evaluated first are hoisted
@@ -10278,12 +10303,14 @@
                 ; a short-circuit or a select branches on its first operand, as cbranch lays it -- a
                 ; right operand of statements decides a temporary under nested ifs (its test pushes down)
                 (('land || 'lor) a b)
-                 (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+                 (: ra (hxb a d)
+                    (dcd? e <>ra ? [<ra ['num (<e = 'lor ? 1 0)]]
+                  (: rb (hxh e d (h \ (hxe b d h))) b2 <>rb
                     (!(armc? b2) ? [(<ra + <rb) [<e <>ra b2]]
                        (: t (tmp 'int)
                           s1 ['expr ['asn ['var t] ['num 1]]] s0 ['expr ['asn ['var t] ['num 0]]]
                           st (hs (<e = 'land ? ['if <>ra ['if b2 s1 s0] s0] ['if <>ra s1 ['if b2 s1 s0]]) d)
-                          [(<ra + <rb + [['decl [[t 'int]]]] + st) ['var t]])))
+                          [(<ra + <rb + [['decl [[t 'int]]]] + st) ['var t]])))))
                 ('cond c a b)
                  (: rb (hxh e d (h \ [(hxe a d h) (hxe b d h)])) a2 <<>rb b2 <><>rb
                     ty (armc? a2 || armc? b2 ? (ety e))
@@ -10313,13 +10340,15 @@
              ('un 'not a) (hxb a d @ r [<r ['un 'not <>r]])
              ; a right operand of statements at a test decides a temporary under the left's if
              (('land || 'lor) a b)
-              (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+              (: ra (hxb a d)
+                 (dcd? e <>ra ? [<ra ['num (<e = 'lor ? 1 0)]]
+               (: rb (hxh e d (h \ (hxe b d h))) b2 <>rb
                  ty (armc? b2 ? (ety b))
                  (ty = () ? [(<ra + <rb) [<e <>ra b2]]
                     (: tv (tmp ty)
                        st (hs (<e = 'land ? ['if <>ra ['expr ['asn ['var tv] b2]] ['expr ['asn ['var tv] ['num 0]]]]
                                               ['if <>ra ['expr ['asn ['var tv] ['num 1]]] ['expr ['asn ['var tv] b2]]]) d)
-                       [(<ra + <rb + [['decl [[tv ty]]]] + st) ['var tv]])))
+                       [(<ra + <rb + [['decl [[tv ty]]]] + st) ['var tv]])))))
              (hx e d))
        (hxl l d) (!(two? l) ? [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
@@ -10688,7 +10717,8 @@
     (: w64 !(ilp32? g)
        tak {} tys {}
        ; an asm's memory operand takes its name's address, as kprop reads it
-       (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) '(109 111)) 1 (go (i + 1)))) 0)
+       mc (a64? g ? '(81 109 111) '(109 111))       ; a64's Q is memory too
+       (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) mc) 1 (go (i + 1)))) 0)
        (cen x) (? !(two? x) 0
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
                        ; a register variable keeps its pin, as kprop keeps it
@@ -10848,7 +10878,7 @@
                      ('asm . _)
                       (: (has? c l) ((: (go i) (? (#c <= i) () (elem (c i) l) 1 (go (i + 1)))) 0)
                          (foldl (_ \ o \ <>o @ ('var nm) (pin wrt nm 1) 0) 0 (x 2),
-                          foldl (_ \ o \ (? (has? <o '(109 111)) (<>o @ ('var nm) (pin tak nm 1) 0)
+                          foldl (_ \ o \ (? (has? <o (a64? g ? '(81 109 111) '(109 111))) (<>o @ ('var nm) (pin tak nm 1) 0)
                                             (has? <o '(105 110)) (<>o @ ('var nm) (pin ivs nm 1) 0) 0)) 0 (x 3),
                           c9))
                      (('decl || 'sdecl) ps)
@@ -11041,7 +11071,8 @@
        f2 (fold f)
        (seat x)
         (? (atom? x) x
-           (x @ ('decl ps) ['decl (map (p \ (peep val <p 'no @ k (k = 'no ? p [<p <>p ['num k]]))) ps)]
+           ; an entry it does not take keeps its initializer walked: a statement expression there holds decls
+           (x @ ('decl ps) ['decl (map (p \ (peep val <p 'no @ k (k = 'no ? (<p . <>p . seat >>p) [<p <>p ['num k]]))) ps)]
                 (map seat x)))
        (atom? (keys val) ? () (seat f2)))
    ; every __builtin_constant_p decided on what inlining and kprop left: 1 where its operand folds,
@@ -12128,8 +12159,8 @@
                           (<f = 'fn && !nolin && g 'reach <>f &&
                            nelem <>f weaks &&
                            nelem <>f noinls ?
-                             ; judged as it would splice: dead arms pruned, a tail past a return cut
-                             ((elem <>f ainls ? (sspcut f) f) @ f9 (ucut (dprune !(ilp32? g) (e \ ()) f9)) @ fi
+                             ; judged as it would splice: dead arms pruned, a tail past a return cut, a do-while(0) unwrapped, a statement that does nothing dropped
+                             ((elem <>f ainls || !(sspbuf? g (f 3)) ? (sspcut f) f) @ f9 (nofx (do0 (ucut (dprune !(ilp32? g) (e \ ()) f9)))) @ fi
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
