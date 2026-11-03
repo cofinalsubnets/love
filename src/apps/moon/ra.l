@@ -126,20 +126,27 @@
                   sg (scan ragf (filter fv? vs) () sg @ 'bad 'bad
                         sp [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp])))))
 
-   ; a spilled vreg: a slot, reloaded before each read and stored after each write
+   ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
+   ; until a label or a call ends the run (the last four kept)
    (raspill g fs sp nosp)
     (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
-       (one f)
-        (raops g f @
-           [u d]
-            (: us (filter (x \ elem x sp) u) ds (filter (x \ elem x sp) d)
-               (foldl (a \ x \ elem x a ? a (a + [x])) () (us + ds) @
-                  () [f]
-                  vs (: m (foldl (t \ v \ (lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, pin t v k)) {} vs)
-                        (map (v \ [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)]) us + [(map (x \ peep m x x) f)] +
-                         map (v \ [(lofr? v ? 'stsd 'st) 'r4 (sl v) (m v)]) ds))))
-           _ [f])
-       (catmap one fs))
+       (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
+       (go fs c)
+        (fs @ (f . u)
+               (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
+                  (raops g f @
+                     [u0 d0]
+                      (: us (filter (x \ elem x sp) u0) ds (filter (x \ elem x sp) d0)
+                         vs (foldl (a \ x \ elem x a ? a (x . a)) () (us + ds))
+                         m (foldl (t \ v \ pin t v (raget c0 v @ () (tmp v) k k)) {} vs)
+                         lds (map (v \ [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)]) (filter (v \ raget c0 v = ()) us))
+                         sts (map (v \ [(lofr? v ? 'stsd 'st) 'r4 (sl v) (m v)]) ds)
+                         c2 (take 4 (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
+                         ((vs @ () [f] _ (lds + [(map (x \ peep m x x) f)] + sts)) + go u c2))
+                     _ (f . go u c0)))
+              _ ())
+       (go fs ()))
+   (raget c v) (foldl (a \ e \ (a @ () (<e = v ? <>e) _ a)) () c)
 
    ; -> [forms loc]: the round that fit, over the forms its spills left | 'bad
    (raplan g fs)
