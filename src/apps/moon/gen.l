@@ -1785,9 +1785,9 @@
                    pin g 'slots ([off n] . g 'slots),
                    off))
    ; ..one aligned for a type that asks more than the word: the frame base holds 16 (8 under
-   ; AAPCS32 and -mstack-alignment=8), so a cell's offset rounds to the ask up to that; past it
-   ; no fixed offset can
-   (fbal g) (t32? g || x86k? g 'sa8 ? 8 16)
+   ; AAPCS32, -mstack-alignment=8 and i386, whose ebp sits 8 past the boundary; 4 under i386's =4),
+   ; so a cell's offset rounds to the ask up to that; past it no fixed offset can
+   (fbal g) (? (sa4? g) 4 (t32? g || ia32? g || x86k? g 'sa8) 8 16)
    (naslot g n a)
     (: fb (fbal g) a2 (min a fb)
        (a2 <= 8 ? (nslot g n)
@@ -5468,6 +5468,7 @@
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
    (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk rth ibr cs
+   (sa4? g) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'sa4 <r))   ; i386 -mstack-alignment=4
    (npic? g) (drop 17 (g 'mo) @ r (two? r && <r))   ; -fno-pie said: no load base moves the image
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
    ; the chunks of n bytes at an a-aligned address: (pos width) each, widest first
@@ -6432,8 +6433,9 @@
        pro (a6 ? (epim? >fs pro-a64) (pro4? fs))
        sf (fs ki)
        K (sf @ ('sub 'sp 'sp k) (charm? k ? k))
-       ; a64's spmerge folds an outgoing-arg park into the frame's sub: the excess rides under the slots
-       xk (a6 && charm? K ? (K - aup (peep g 'off 0) 16) 0)
+       ; a64's spmerge folds an outgoing-arg park into the frame's sub, and i386's 8 keeps its calls
+       ; aligned: the excess rides under the slots
+       xk ((a6 || ia32? g) && charm? K ? (K - aup (peep g 'off 0) 16) 0)
        (!(two? slots) || arm? g && !a6 || abl? g 'repack || g 'hasasm || g 'sspf || !pro || !(charm? K) || xk < 0 ? fs
           (: obs {}                            ; base -> (size lo hi esc wordy? first-src)
              ; wordy?: every touch a full-word ld/st at the base; first-src: the first store's reg, () if a load came first
@@ -7148,6 +7150,7 @@
                 (<>nx != <>f) ()
                 !(charm? <>>nx && charm? (f 5)) ()
                 (<>>>nx = <>f) ()
+                (t32? g && f 5 + <>>nx != 0) ()          ; thumb's register-offset store has no displacement
                 [(<nx @ 'st 'stx 'st1 'stxb 'stsd 'stsdx 'stssx) <>>f <>>>f (f 4)
                   (f 5 + <>>nx) <>>>nx])
           hit (? (two? lx || two? sx) ()
@@ -7790,9 +7793,10 @@
    ; (push <cs>) as a save, a variable shift's count must stay in r1
    cpskip (ldops9 + gstops + stxops + siops + leaops + xops + fxops + fstxops + fldops + fstops + vshops +
            x4ops + m4ops + '(cmpm cmprm push))
-   ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot declines
+   ; the read-only positions of a form, probed off rdsp with a stranger ('zq): a read-modify-write slot declines.
+   ; an ilp32 movqxr names a pair by its low half, which a rename would split
    (cprp g f)
-    (elem <f cpskip ? ()
+    (elem <f cpskip || ilp32? g && <f = 'movqxr ? ()
        (: (go i acc)
            (!(i < #f) ? (rev acc)
               (f i @ x
@@ -11791,7 +11795,7 @@
        ; the post-choice chain, typed by stage.l (each pass advances a stage die, so only this order checks):
        ; the arm sweeps, then deadlab, then repack (a dead region's touches would fatten its windows). cmpfuse is
        ; x64-only; rezx is a64's (riscv's 32-bit ops sign-extend)
-       (swp irx) (!(a64? g || rv64? g) ? irx
+       (swp irx) (!(a64? g || rv64? g || t32? g) ? irx
                     (tailst g
                     (deadst g
                      (deaddef g

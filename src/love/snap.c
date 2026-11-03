@@ -388,28 +388,37 @@ static uintptr_t img_remap(struct img_ctx const *x, uintptr_t bo) {
  while (hi - lo > 1) { uintptr_t m = (lo + hi) / 2; if (x->ob[m] <= w) lo = m; else hi = m; }
  return x->nob[lo] * sizeof(word) + (bo - x->ob[lo] * sizeof(word)); }
 
-// the hot-first layout: an object starting in more of the profile's ranges goes ahead, ties
-// as they lie. 0 when there is no room, and the heap's own stands
+// the hot-first layout: the profile's ranges come in classes, an empty range ending one. an
+// object goes by the first class whose ranges it starts in, then by how many of them, ties as
+// they lie, the untouched last. 0 when there is no room, and the heap's own stands
+enum { ImgClasses = 4, ImgKeys = (ImgClasses + 1) * 256 };
+static uintptr_t img_key(unsigned char const *wt, unsigned char const *cl, uintptr_t k) {
+ return (uintptr_t) ((cl[k] ? cl[k] - 1 : ImgClasses) * 256 + 255 - wt[k]); }
 static int img_perm(struct img_ctx *x, unsigned char const *fzm, uintptr_t nw,
                     uint64_t const *hot, uintptr_t nhot) {
  uintptr_t n = 0;
  for (union u *p = cell(x->base); ptr(p) < x->hp; n++) { int fz; p = cell(ptr(p) + hc_stride(x->g, fzm, x->base, p, &fz)); }
- uintptr_t *ob = alloc(NULL, (3 * n + 1) * sizeof(uintptr_t));
- unsigned char *wt = ob ? alloc(NULL, n) : NULL;
+ uintptr_t *ob = alloc(NULL, (3 * n + 1 + ImgKeys + 1) * sizeof(uintptr_t));
+ unsigned char *wt = ob ? alloc(NULL, 2 * n) : NULL;
  if (!wt) { if (ob) alloc(ob, 0); return 0; }
- uintptr_t *nob = ob + n + 1, *ord = nob + n, i = 0;
+ unsigned char *cl = wt + n;                         // each object's weight, then its class from 1
+ uintptr_t *nob = ob + n + 1, *ord = nob + n, *cnt = ord + n, i = 0, at = 0;
  for (union u *p = cell(x->base); ptr(p) < x->hp; i++) {
   int fz; ob[i] = (uintptr_t) (ptr(p) - x->base); p = cell(ptr(p) + hc_stride(x->g, fzm, x->base, p, &fz)); }
  ob[n] = nw;
- memset(wt, 0, n);
+ memset(wt, 0, 2 * n);
+ unsigned char c = 1;
  for (uintptr_t r = 0; r < nhot; r++) {
   uintptr_t a = (uintptr_t) hot[2 * r], b = (uintptr_t) hot[2 * r + 1], lo = 0, hi = n;
+  if (a >= b) { if (c < ImgClasses) c++; continue; }
   while (lo < hi) { uintptr_t m = (lo + hi) / 2; if (ob[m] < a) lo = m + 1; else hi = m; }
-  for (uintptr_t k = lo; k < n && ob[k] < b; k++) if (wt[k] < 255) wt[k]++; }
- uintptr_t cnt[257] = {0}, at = 0;                    // a counting sort, the heaviest first
- for (uintptr_t k = 0; k < n; k++) cnt[255 - wt[k] + 1]++;
- for (int k = 1; k <= 256; k++) cnt[k] += cnt[k - 1];
- for (uintptr_t k = 0; k < n; k++) ord[cnt[255 - wt[k]]++] = k;
+  for (uintptr_t k = lo; k < n && ob[k] < b; k++) {
+   if (!cl[k]) cl[k] = c;
+   if (cl[k] == c && wt[k] < 255) wt[k]++; } }
+ memset(cnt, 0, (ImgKeys + 1) * sizeof *cnt);         // a counting sort, by class, the heaviest first
+ for (uintptr_t k = 0; k < n; k++) cnt[img_key(wt, cl, k) + 1]++;
+ for (int k = 1; k <= ImgKeys; k++) cnt[k] += cnt[k - 1];
+ for (uintptr_t k = 0; k < n; k++) ord[cnt[img_key(wt, cl, k)]++] = k;
  for (uintptr_t j = 0; j < n; j++) { uintptr_t k = ord[j]; nob[k] = at, at += ob[k + 1] - ob[k]; }
  alloc(wt, 0);
  x->ob = ob, x->nob = nob, x->ord = ord, x->nobj = n;

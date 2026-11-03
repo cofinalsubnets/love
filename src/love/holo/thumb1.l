@@ -126,9 +126,8 @@
    ;; base16 the [Rn,#imm5] op, sp16 the [sp,#imm8*4] op, or () where there is no sp form
    (t1-mem base16 sp16 sh d base off ldq)
       (rn d @ dn
-         (reg-eq base 'sp && sp16 ?
-            (off >= 0 && 0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'mem-sp-range off), need-lo d 'mem-sp-hi,
-             t16 (sp16 | (dn << 8 | off >> 2)))
+         (reg-eq base 'sp && sp16 && lo? d && off >= 0 && 0 = off & 3 && off >> 2 <= 255 ?
+            (t16 (sp16 | (dn << 8 | off >> 2)))
             (: u (off >> sh)
                ok (lo? d && lo? base &&
                    off >= 0 && 0 = off & (1 << sh) - 1 && u <= 31)
@@ -175,9 +174,10 @@
 
    ;; ror has no immediate form on v6-M
    (t1-shift op d c)
-      (: dn (rn d)
-         base (op @ 'shl 0x0000 'shr 0x0800 'sar 0x1000 (scare 'badshift op))
-         (t16 (base | ((c & 31) << 6 | (dn << 3 | dn)))))
+      (c = 0 ? ()                                    ; lsrs/asrs #0 would mean 32
+         (: dn (rn d)
+            base (op @ 'shl 0x0000 'shr 0x0800 'sar 0x1000 (scare 'badshift op))
+            (t16 (base | ((c & 31) << 6 | (dn << 3 | dn))))))
    ;; format-4 Rd,Rs: low registers, d != count
    (t1-shiftv op d c)
       (: _ (need-lo c 'shiftv-count-hi) _ (need-lo d 'shiftv-hi)
