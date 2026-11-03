@@ -971,23 +971,27 @@
             ['if c t el]
              (nlab g ".lo" @ le (nlab g ".lo" @ ld
                 (loseq [(br c 0 le) (st t env) (lol [['jmp ld] ['label le]]) (st el env) (lol [['label ld]])])))
+            ; a loop tests at its bottom, entered by a jump to the test
             ['while c body]
-             (nlab g ".lo" @ lc (nlab g ".lo" @ lb
-                (loseq [(lol [['label lc]]) (br c 0 lb) (st body (['brk lb] . ['cont lc] . env)) (lol [['jmp lc] ['label lb]])])))
+             (nlab g ".lo" @ lc (nlab g ".lo" @ lb (nlab g ".lo" @ lt
+                (loseq [(lol [['jmp lc] ['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (lol [['label lc]])
+                        (br c 1 lt) (lol [['label lb]])]))))
             ['do body c]
              (nlab g ".lo" @ lt (nlab g ".lo" @ lc (nlab g ".lo" @ lb
                 (loseq [(lol [['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (lol [['label lc]]) (br c 1 lt) (lol [['label lb]])]))))
             ['for init c stp body]
-             (nlab g ".lo" @ lt (nlab g ".lo" @ lc (nlab g ".lo" @ lb
+             (nlab g ".lo" @ lt (nlab g ".lo" @ lc (nlab g ".lo" @ lb (nlab g ".lo" @ lq
                 ((init @ () [() env]
                          ['decl ps] (lodecl g env ps)
                          [_ x] (lox g env x @ [_ _ fs] [fs env] 'bad)
                          'bad) @
                  [fi e1]
-                  (loseq [(lol (fi + [['label lt]])) (u \ (c @ () () _ (lobr g e1 c 0 lb)))
+                  (loseq [(lol (fi + (c @ () () _ [['jmp lq]]) + [['label lt]]))
                           (st body (['brk lb] . ['cont lc] . e1)) (lol [['label lc]])
-                          (u \ (stp @ () () _ (lox g e1 stp @ [_ _ fs] fs 'bad))) (lol [['jmp lt] ['label lb]])])
-                  'bad))))
+                          (u \ (stp @ () () _ (lox g e1 stp @ [_ _ fs] fs 'bad)))
+                          (u \ (c @ () [['jmp lt] ['label lb]]
+                                   _ (lobr g e1 c 1 lt @ 'bad 'bad fs ([['label lq]] + fs + [['label lb]]))))])
+                  'bad)))))
             ('brk . _) (assoc 'brk env @ [_ L] [['jmp L]] 'bad)
             ('cont . _) (assoc 'cont env @ [_ L] [['jmp L]] 'bad)
             ['goto nm] [['jmp (name "\(g 'fn).\(nm)")]]

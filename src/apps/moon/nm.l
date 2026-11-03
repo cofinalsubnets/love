@@ -16,10 +16,13 @@
            ([op d a b] . nmfuse u)
           (f . u) (f . nmfuse u)
           _ ())
-   ; nothing reaches past a jump or a return but through a label
+   ; nothing reaches past a jump or a return but through a label; a jump to a label just after
+   ; it goes
    (nmreach fs)
-    (fs @ (f . u) (f . nmreach (f @ (('jmp || 'ret) . _) (nmskip u) _ u))
+    (fs @ ((['jmp L] . u) && nmnext? u L) (nmreach u)
+          (f . u) (f . nmreach (f @ (('jmp || 'ret) . _) (nmskip u) _ u))
           _ ())
+   (nmnext? fs L) (fs @ (['label x] . u) (x = L || nmnext? u L) _ ())
    (nmskip fs) (fs @ (('label . _) . _) fs (_ . u) (nmskip u) _ ())
 
    ; a value's upper bound when it is known not negative, forward through a block: an extension
