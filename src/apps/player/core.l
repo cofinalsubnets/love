@@ -15,8 +15,7 @@
 ; where the speaker is, not where the bus is.
 (module (pcore core-new core-send core-watch core-tell core-unwatch core-snap core-close
               core-serve core-attach core-keys core-item player-main)
-(borrow 'bus)
-(borrow 'posix)
+(borrow '(bus posix cli))
 (:
    open (cite 'posix 'open) close (cite 'posix 'close) stat (cite 'posix 'stat)
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)

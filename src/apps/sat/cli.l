@@ -1,6 +1,7 @@
 ; src/apps/sat/cli.l -- `love sat`: a dimacs cnf in, the sat competition's answer out, solved
 ; by flat.l's engine. the last file of the unit: the verb needs the module whole
 (module 'sat
+(borrow 'cli)
 (: sat-usage "usage: love sat [-q] [-p PROOF] [FILE.cnf]
   solve a dimacs cnf, stdin without FILE or with -. prints s SATISFIABLE and a v line,
   or s UNSATISFIABLE, and exits 10 or 20, the sat competition's codes

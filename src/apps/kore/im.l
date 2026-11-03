@@ -5,9 +5,7 @@
 ; else the 256-colour cube; never enlarged. convert keeps a gif's first frame.
 ; www draws a page's pictures through im-art too.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'jpeg)
+(borrow '(cli posix jpeg))
 
 (:
    im-usage (cats ["usage: im [cat] [-g block|sixel|kitty|auto] [-w COLS] [-h ROWS] [FILE..]\n"

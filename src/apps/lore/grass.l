@@ -7,8 +7,7 @@
          grass-bar grass-rows grass-paint grass-hour grass-day grass-temp grass-wind-x grass-lay grass-clouds
          grass-tune grass-song-new grass-song-feed grass-song-cue grass-final grass-tap score song-chunk
          daylight sky-pen compass fx1 week-hours dh fps)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(rove horn cli))
 (borrow 'harp)                          ; the cycle algebra the song is scheduled by
 (borrow 'score)                         ; the tune as text
 (borrow 'play)                          ; the voices, the mix

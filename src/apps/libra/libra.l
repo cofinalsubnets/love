@@ -12,8 +12,7 @@
 ; the head names the exports, so the scanner's helpers stay off the tablet;
 ; `fatal?` is out because test/host/libra.l pins the gate rule against it.
 (module (libra libra-main libra-check libra-doc ldoc-head ldoc-md fatal?)
-(borrow 'lint)
-(borrow 'salt)
+(borrow '(lint salt cli))
 
 (borrow 'posix)
 (:

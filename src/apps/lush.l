@@ -2463,6 +2463,7 @@
 ; line editing is bao's edlnc. ~/.lush_history appends on Enter, so a crash loses nothing.
 
 (module 'lush
+(borrow 'cli)
 (: ; the interactive floor: a scare drops to cooked, says it, and re-prompts
    (lush-help a b)
      (raw 0, puts ";; ", putx a, puts " ", putx b, putc 10, welp a b)
@@ -2617,6 +2618,7 @@
 ; --- lush 🐚 -- the entries: script, -c, flags, the interactive shell ---
 
 (module 'lush
+(borrow 'cli)
 (: ; source a file through the line machinery, quietly absent (the rc/profile floor)
    (sh-src S path)
      (atom? (stat path) ? 0 (: p (open path "r") (sh-lines S p "", close p, 0)))

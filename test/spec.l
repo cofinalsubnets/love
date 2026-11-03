@@ -1,5 +1,6 @@
 ; love spec -- the executable language reference: each section states its laws, the asserts prove them.
 ; runs right after test/00-init.l's harness.
+(borrow 'cli)
 
 ; --- everything is a function --- (f x y) == ((f x) y), (f) == f; numbers are church
 ; numerals; data self-applies.
@@ -610,7 +611,7 @@
   (elem 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
   (8 = (cite 'kanren 'subst '(()) 8))                           ; curried member reach
   !(cite 'kanren 'spec-missing)                                 ; a member miss reads ()
-  (lit? unify) (lit? rand) (lit? reads))                        ; the boot splices serve the bare names
+  (lit? (cite 'kanren 'unify)) (lit? rand) (lit? reads))        ; unify rides its module; rand and reads are base
 
 ; (module 'nm form ..) defines without a file: it opens nm's layer (the registered tablet on a
 ; reopen), evals each form there, registers, and answers the tablet; (module () ..) registers nowhere.

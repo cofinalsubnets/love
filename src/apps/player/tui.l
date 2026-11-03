@@ -11,8 +11,7 @@
 ;
 ; the keys are `helps` below.
 (module (ptui ptui-new ptui-frame ptui-key ptui-tap ptui-run ptui-close ptui-presets)
-(borrow 'pcore)
-(borrow 'seek)
+(borrow '(pcore seek cli))
 (:
    bands ["60" "170" "310" "600" "1k" "3k" "6k" "12k" "14k" "16k"]
    emax 12                               ; the sliders' reach, dB either way, as winamp's

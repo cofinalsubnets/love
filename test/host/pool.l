@@ -2,8 +2,7 @@
 ; read at each call, (threads N) in ~/.love/etc/love.l under it, and a fork's child drawing
 ; on a pool of its own
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
-(borrow 'posix)
-(borrow 'pool)
+(borrow '(posix pool))
 (: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" ()) w)
    ; a frame big enough to share: two big squares, red and blue, one over the other
    (pl-g l) (: f (foldr (+) () l) (gem-tray [(tally f)] f))

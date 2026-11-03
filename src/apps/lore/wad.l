@@ -3,13 +3,10 @@
 ; quads; each thing a sprite turned to the eye. a sector is a batch, laid again alone when it moves
 ; run: love play wad FILE [MAP] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]
 (module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
-(borrow 'posix)
-(borrow 'rove)
+(borrow '(posix rove cli))
 (borrow 'horn)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
-(borrow 'view)
-(borrow 'mesh)
-(borrow 'walk)
+(borrow '(view mesh walk))
 (borrow 'vec)                           ; sq
 (borrow 'mixer)
 (borrow 'opl)                           ; the music's instruments

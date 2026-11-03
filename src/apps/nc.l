@@ -23,7 +23,7 @@
 ; secs are udur's: 3, 1.5, 2m. a bidirectional pump: two tasks each parked in a port
 ; read on its own fd, so no select loop. also kore's `nc` applet.
 (module (nc nc-main)
-(borrow 'dns)
+(borrow '(dns cli))
 
 (borrow 'posix)
 

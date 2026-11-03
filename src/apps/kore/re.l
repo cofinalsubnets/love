@@ -1,10 +1,7 @@
 ; src/apps/kore/re.l -- grep, over the regex door in src/love/boot/post.l. this half reads
 ; files (u's uread/udie, text.l's lines). a toolbox file, no seat -- kore.l is its door.
-(borrow 're)
-
 (module 'kore
-(borrow 'cli)
-(borrow 'text)
+(borrow '(re cli text))
 (borrow 'glob) ; --include and --exclude
 (borrow 'posix) ; readdir, for -r
 (: rebre (cite 're 'rebre) reere (cite 're 'reere)      ; the four engine names grep reads

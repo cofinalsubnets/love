@@ -17,8 +17,7 @@
   i16 x-queryext x-randr-init x-monitors x-warp x-queryptr
   x-dispnum x-authfile x-open x-window x-gc x-title x-protocols x-autorepeat x-putrows x-keysyms
   x-sym x-text x-set1 x-events)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(posix bytes))
 (:
    ; --- byte IO over the socket (little-endian) ---
    (x-w8 s v)  (put s v)

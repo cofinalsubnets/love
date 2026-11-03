@@ -1,5 +1,6 @@
 ; edraw fed keys from a (tap ..) port, output muted. keys: 13 enter, 4 ^D, 127 bsp,
 ; ESC [ D/C/H/F left/right/home/end. eof is edraw's private sentinel, off an empty port
+(borrow 'cli)
 (: edraw (k \ p \ test-mute (_ \ cite 'cli 'edraw k p))
    edln (k \ p \ h \ test-mute (_ \ cite 'cli 'edln k p h))
    edlay (cite 'cli 'edlay)

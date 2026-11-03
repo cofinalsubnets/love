@@ -5,10 +5,7 @@
 ;   (sqfs-tree path)        -> a host directory as a tree (modes kept; owners and times not)
 ; a node: ['dir mode kids] with kids [name node] .., ['file mode bytes], ['link target]
 (module (sqfs sqfs-make sqfs-tree)
-(borrow 'bytes)
-(borrow 'posix)
-(borrow 'gz)
-(borrow 'hashes)
+(borrow '(bytes posix gz hashes))
 (: bsize 131072
    mblk 8192                                       ; a metadata block's payload
    (oops m) (say err ("sqfs: " + m + "\n"), quit 1)

@@ -17,10 +17,7 @@
 ; packet of its end page, -1 on every other.
 (module (ogg ogg-sniff ogg-meta ogg-format ogg-pump ogg-page ogg-cut
              opus-state opus-init opus-packet)
-(borrow 'bytes)
-(borrow 'wav)
-(borrow 'flac)
-(borrow 'hashes)
+(borrow '(bytes wav flac hashes))
 (:
    ; --- pages and packets ----------------------------------------------------
    (ogg-page s o)

@@ -16,7 +16,7 @@
          harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
          twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice held-ops)
 (borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
-(borrow 'bytes)
+(borrow '(bytes cli))
 (borrow 'ops)                           ; the voices' operators, run by tones
 (:
    ; the fs doors by value: a module layer does not see the posix splice; () where there is none

@@ -26,23 +26,23 @@ static struct g *evals0(struct g *g, char const *const *v) {
   g = evals_(g, t);
   return alloc(t, 0), g; }
 
-// with args, the build tool through the cli driver; without, the corpus via c0, then again
-// via the self-hosted ev. the bake words are unused: main() has one call for both builds
+// with args, the build tool hatches the egg first, so it runs on the self-hosted ev as every
+// other love does; without, the corpus via c0, then again via the self-hosted ev. the bake
+// words are unused: main() has one call for both builds
 struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
                 char const *bake_out, struct image_opt const *bake_opt) {
   (void) bake, (void) bake_load, (void) bake_out, (void) bake_opt;
   if (argp) {
-    g = evals0(g, prelpost0);
+    char *pe = join0(g, prelev0);
+    if (pe) g = egg(g, src0_egg, pe, src0_post), alloc(pe, 0);
     g = evals0(g, mods0);
-    g = evals_(g, "(borrow 'cli)(borrow 'kanren)(borrow 'verbs)");
-    g = shelve(g);
-    return evals(g, "(cli-line cmdline 0)"); }
+    return evals(g, "((cite 'cli 'cli-line) cmdline 0)"); }
   g = evals0(g, prelpost0);
   g = evals0(g, mods0);
-  g = evals_(g, "(borrow 'cli)(borrow 'holo)");
+  g = evals_(g, "(borrow 'holo)");
   g = shelve(g);
   g = evals_(g,
-    "(borrow 'uu)(: uu (cite 'uu))(borrow 'kanren)(borrow 'posix)"
+    "(borrow '(uu kanren posix))"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (. (peep s i 0) (g (+ 1 i))))) 0)"
     "   (c0read p) (: q (open p \"r\")"
     "               (? q (: s (slurp q) _ (close q) s)"

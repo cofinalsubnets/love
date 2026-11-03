@@ -3,7 +3,7 @@
 ;   (real 0) runs OS processes: (spawn argv) forks+execs, (glean _) reaps
 ; run: out/love -l src/apps/init/init.l -e "(demos 0)"
 
-(borrow 'posix)
+(borrow '(posix cli))
 (: (note s) (puts s, puts "\n")
 
    ; a unit is (name kind cmd restart deps): kind 'oneshot (an argv for hark) or 'service

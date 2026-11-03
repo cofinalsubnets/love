@@ -10,8 +10,7 @@
 ;   (smtp-conn tls? host port) (smtp-line c) (smtp-take c n) (smtp-put c s)
 ;   (smtp-tls c host port) (smtp-close c)      the line-at-a-time connection, which imap shares
 (module (smtp smtp-send smtp-pipe smtp-url smtp-wire smtp-conn smtp-line smtp-put smtp-close smtp-take smtp-tls)
-(borrow 'posix)
-(borrow 'mime)
+(borrow '(posix mime))
 (:
  (smtp-url u)
   (: tls? (starts? u "smtps://")

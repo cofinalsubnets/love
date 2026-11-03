@@ -2,8 +2,7 @@
 ; a name plays one, a level's path plays it by its kind, an unknown name exits 2, and no game
 ; is a verb of its own.
 ;   cat test/00-init.l test/host/00-host.l test/host/lore.l | out/love
-(borrow 'lore)
-(borrow 'posix)
+(borrow '(lore posix))
 (: lo-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
    ; a run on a pty: its status and its lines
    (lo-run argv) (: md (tether argv) o (slurp >md)

@@ -8,9 +8,7 @@
          settle settle-slice sign-box sign-flow sign-gap sign-line sign-frame sign-over sign-pen
          sign-rect sign-top sign-tpen snip-l steer
          tail? tap-dir tap-key tap-steer rove-key rove-modes toward tree-lines tree-next tree-node vlen rove-wander rove-turn rove-press rove-loop)
-(borrow 'posix)
-(borrow 'x11)
-(borrow 'text)
+(borrow '(posix x11 text cli))
 (:
  ; the computed pens first: a value bound below the lambdas that read it is missing at
  ; the bake, where a literal would fold

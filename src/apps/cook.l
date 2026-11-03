@@ -27,13 +27,12 @@
 (module 'cook
 
 ; the combinators, first so the names walk before anything below compiles against them.
-(borrow 'peg)
+(borrow '(peg cli))
 
 (borrow 'posix)
 
 ; match/anyglob under $(wildcard), the path clips under make's $(dir) family.
-(borrow 'glob)
-(borrow 'path)
+(borrow '(glob path))
 
 (: cards {}          ; the recipe cards: item -> (ingredients orderonly . steps)
    check {}        ; a 1-cell box: the first item declared, the default ticket

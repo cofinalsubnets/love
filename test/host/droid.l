@@ -4,9 +4,7 @@
 
 (borrow "src/apps/droid/droid.l")
 (borrow "src/apps/open.l")
-(borrow 'bytes)
-(borrow 'gz)
-(borrow 'tls)
+(borrow '(bytes gz tls))
 
 (: dr-k (key-new 'p256)
    dr-nm (name-der "/CN=t")

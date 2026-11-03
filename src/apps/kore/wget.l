@@ -6,8 +6,7 @@
 ; word, else index.html. exits are wget's: 1 a bad url or a dead wire, 3 the file, 4 an
 ; answer cut short, 5 a certificate not believed, 8 an error status.
 (module 'kore
-(borrow 'path)
-(borrow 'posix)
+(borrow '(path posix))
 
 (:
    (wg-digits s)

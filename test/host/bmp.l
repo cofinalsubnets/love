@@ -1,9 +1,7 @@
 ; src/apps/bmp.l: small bmps and icons of every depth and header, each decoded to its rgba
 ; by sha-256; where python3's PIL is, more of them held to PIL's decode (magick's where PIL
 ; reads none); last the refusals.  cat test/00-init.l test/host/bmp.l | out/love
-(borrow 'posix)
-(borrow 'hashes)
-(borrow 'bmp)
+(borrow '(posix hashes bmp))
 (borrow "src/apps/bmp.l")
 (: dir (cwd 0 + "/out/.bmpd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

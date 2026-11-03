@@ -8,6 +8,7 @@
 ; needs no bespoke code here: the same `+`/`*` that add numbers and append lists express it.
 ; over n boolean vars x0..x(n-1), clauses (x_i | x_(i+1)) cyclically -- "no two adjacent 0s".
 ; Run: out/love src/apps/sat/kanren-count.l   ->   6726 (n=10).
+(borrow 'kanren)
 (: (boolean x) (x === 0 + x === 1)
    scount (cite 'kanren 'scount)                   ; count the stream without materializing it
    st0 (cite 'kanren 'st0)                         ; the empty state: substitution + constraints

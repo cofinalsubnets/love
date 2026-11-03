@@ -15,8 +15,7 @@
 ; text laid last, after the actions.
 ; not yet: mid-rule actions, string-literal tokens; in love text, error, $$ and $<tag>.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
+(borrow '(cli posix))
 (:
    (yacc-die m) (scare 'yacc-err m)
    (yacc-idc? c) (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || c = 46 || 48 <= c <= 57)

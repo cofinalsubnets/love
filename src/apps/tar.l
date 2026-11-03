@@ -10,9 +10,7 @@
 ; 'gid 'uname 'gname. reads answer (1 _): an empty archive nets nothing, test with two?.
 ; numeric fields are octal ascii; the checksum sums the header with its own field as spaces.
 (module 'tar
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(posix bytes hashes))
 (:
    tar-blk 512
 
@@ -345,8 +343,7 @@
 ; so path-loaded tools take tar with gz alone. statuses: 0, 2 a failure.
 ; wrapped so borrow's names stay off the dist cat's shared layer
 (module 'tarcmd
-(borrow 'gz)
-(borrow 'tar)
+(borrow '(gz tar cli))
 
 (borrow 'posix)
 (: (tarc-die m) (udie 2 "tar: \(m)")

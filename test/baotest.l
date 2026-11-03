@@ -1,5 +1,6 @@
 ; the editor, history zipper and parseall, through (cite 'cli). (ed u l r d) builds a
 ; buffer; b4 and b7 read it back as a list, b7 with the history
+(borrow 'cli)
 
 (: B (cite 'cli)
    ednew (B 'ednew)       edstep (B 'edstep)     edput (B 'edput)       ednl (B 'ednl)

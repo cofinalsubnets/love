@@ -16,10 +16,7 @@
 ; id. the 64-byte chacha key is payload key then length key; the nonce is the sequence
 ; number, the IETF nif's nonce with the counter's high word zero.
 (module 'ssh
-(borrow 'tls)
-(borrow 'dns)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(tls dns posix bytes))
 
 (:
    m32 ((1 << 32) - 1)
