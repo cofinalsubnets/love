@@ -33,10 +33,10 @@
       (sz ".hash" = 32) (sz ".gnu.hash" = 36) (sz ".dynsym" = 72) (sz ".gnu.version" = 6) (sz ".dynamic" = 208)))
 
 ; --- llvm-objcopy's .shstrtab: high by reversed spelling, a name ending the one before sharing it
-(: st (oc-strtab [".hash" ".gnu.hash" ".dynsym" ".dynstr" ".gnu.version" ".gnu.version_d" ".note" ".text"
+(: st (oe-strtab [".hash" ".gnu.hash" ".dynsym" ".dynstr" ".gnu.version" ".gnu.version_d" ".note" ".text"
                   ".altinstructions" ".dynamic" ".rodata" ".shstrtab"])
    (test
-      (<st = "\0.text\0.altinstructions\0.dynstr\0.gnu.version\0.dynsym\0.gnu.hash\0.note\0.gnu.version_d\0.dynamic\0.shstrtab\0.rodata\0")
+      (oc-cat <st = "\0.text\0.altinstructions\0.dynstr\0.gnu.version\0.dynsym\0.gnu.hash\0.note\0.gnu.version_d\0.dynamic\0.shstrtab\0.rodata\0")
       (<>st ".hash" = 57) (<>st ".gnu.hash" = 53) (<>st ".rodata" = 103)))
 
 ; --- kbuild's $(LD) lines: the vdso's, vmlinux's inputs in order, and what a probe is refused
