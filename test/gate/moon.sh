@@ -1624,6 +1624,31 @@ for t in x64 a64; do
   moonrun -t $t -O2 -c "$ho/.pid.c" -o "$ho/.pid.o" || fail "mooncc -t $t: a decided && over an inline asm goto, or a64's Q"
   nm "$ho/.pid.o" | grep -q ' U gone$' && fail "the right of a decided 0 && kept its call on $t"
 done
+# a64 unwind tables (the vdso's -fasynchronous-unwind-tables): an FDE per C function, none for
+# the asm's; each frame shape's rows -- a frameless leaf's sp, the frame record riding x29 with
+# the callee-saved slots, an early return's ret and the body after it -- and pac-ret's sign state
+cat > "$ho/.uwt.c" <<'EOF'
+extern long g(long);
+long leaf(long a) { volatile long t[4]; t[a & 3] = a; return t[1]; }
+long keep(long a, long n) { long s = 0; for (long i = 0; i < n; i++) s += g(i + a); return s; }
+long early(long x) { if (x < 0) return -1; return g(x) + 1; }
+asm(".globl lone\n.type lone, %function\nlone: ret\n.size lone, .-lone");
+EOF
+moonrun -t a64 -O2 -mcmodel=tiny -fasynchronous-unwind-tables -mbranch-protection=pac-ret -c "$ho/.uwt.c" -o "$ho/.uwt.o" \
+  || fail "mooncc -t a64: -mcmodel=tiny -fasynchronous-unwind-tables"
+uw=$(readelf -wF "$ho/.uwt.o")
+[ "$(echo "$uw" | grep -c ' FDE ')" = 3 ] || fail "unwind tables: not one FDE per C function, the asm's left out"
+echo "$uw" | grep -qE '^0+4 +sp\+[0-9]+ *$' || fail "unwind tables: a frameless leaf's sub sp moved no cfa"
+echo "$uw" | grep -qE '^[0-9a-f]+ +x29\+32 +c-[0-9]+ +c-[0-9]+ +c-32 +c-24 *$' || fail "unwind tables: the frame record and two callee-saved slots are not on x29"
+# every function's last row is its entry's again, and early's body after its first ret is framed once more
+echo "$uw" | awk '/ FDE /{if (r != "" && r !~ /^sp\+0( +u)* *$/) bad = 1; r = ""; n++} /^[0-9a-f]+ /{r = $0; sub(/^[0-9a-f]+ +/, "", r)}
+                  / FDE /{st = 0} /^[0-9a-f]+ +x29/{if (st == 2) back = 1; st = 1} /^[0-9a-f]+ +sp\+0 /{if (st == 1) st = 2}
+                  END {if (r !~ /^sp\+0( +u)* *$/) bad = 1; exit bad || !back}' || fail "unwind tables: an epilogue ends off its entry rows, or no row frames the body after an early ret"
+[ "$(readelf -wf "$ho/.uwt.o" | grep -c negate_ra_state)" = 6 ] || fail "unwind tables: pac-ret's paciasp and autiasp do not each flip the ra sign state"
+moonrun -t a64 -O2 -c "$ho/.uwt.c" -o "$ho/.uwt.o" || fail "mooncc -t a64 on .uwt.c"
+readelf -SW "$ho/.uwt.o" | grep -q eh_frame && fail "an .eh_frame laid unasked"
+moonrun -t x64 -c -mcmodel=tiny "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "-mcmodel=tiny taken on x64"
+moonrun -t x64 -c -fasynchronous-unwind-tables "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "unwind tables taken on x64, where none is laid"
 # ..however deep the chain: ten calls down, seven of them always_inline
 for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/323-always-inline-deep.c -o "$ho/.awd.o" || fail "mooncc -t $t: 323-always-inline-deep"
