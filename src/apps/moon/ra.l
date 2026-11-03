@@ -21,20 +21,20 @@
    ; a form's [reads defs] over the file and the vregs | 'bad
    (raops g f)
     ((f @ ('cuse . rs) [rs ()]
-          ('fix u d _) [u d]
+          ['fix u d _] [u d]
           ('call . _) [() (lvgp g + ragf)]
           ('callr . r . _) [[r] (lvgp g + ragf)]
           ('ret . _) [(peep g 'loret '(r0)) ()]
-          ((op d s) && elem op rafbin) [[d s] [d]]
-          ((op d s) && elem op rafmv) [[s] [d]]
-          (('ucomisd || 'ucomiss) a b) [[a b] ()]
-          (('ldsd || 'ldss) d b _) [[b] [d]]
-          (('stsd || 'stss) b _ v) [[b v] ()]
+          ([op d s] && elem op rafbin) [[d s] [d]]
+          ([op d s] && elem op rafmv) [[s] [d]]
+          [('ucomisd || 'ucomiss) a b] [[a b] ()]
+          [('ldsd || 'ldss) d b _] [[b] [d]]
+          [('stsd || 'stss) b _ v] [[b v] ()]
           (('jmp || 'br || 'label) . _) [() ()]
           ((op . d . a . b . _) && elem op divops) [[a b] [d 'r0]]
           (rdsp g f @ 'bar 'bad (u . d . _) [u d])) @
      'bad 'bad
-     (u d) [(filter raok? u) (filter raok? d)])
+     [u d] [(filter raok? u) (filter raok? d)])
 
    ; -- sorted int sets --
    (ramin a b) (? (atom? a) () (atom? b) a
@@ -53,7 +53,7 @@
        ud (: t {}
              (go i) (n <= i ? t
                        (raops g (ft i) @ 'bad 'bad
-                          (u d) (pin t i [(raset (map id u)) (raset (map id d))], go (i + 1))))
+                          [u d] (pin t i [(raset (map id u)) (raset (map id d))], go (i + 1))))
              (go 0))
        (ud @ 'bad 'bad
           _ (: sc (vsucc fs)
@@ -61,7 +61,7 @@
                (sweep i chg)
                 (i < 0 ? chg
                    (: o (foldl (a \ j \ vun a (peep lin j ())) () (peep sc i ()))
-                      li (ud i @ (u d) (vun u (ramin o d)))
+                      li (ud i @ [u d] (vun u (ramin o d)))
                       c2 (#li != #(peep lin i ()) ? 1 chg)
                       (pin lout i o, pin lin i li, sweep (i - 1) c2)))
                (fix _) (sweep (n - 1) 0 @ 1 (fix 0) 0)
@@ -76,7 +76,7 @@
                ; the copies hint their two sides together; a divide's quotient never takes rdx
                hint {} forb {}
                (link x y) (pin hint x (y . peep hint x ()))
-               _ (map (f \ (f @ ((('mov || 'movapd) a b) && raok? a && raok? b) (: x (id a) y (id b) (link x y, link y x))
+               _ (map (f \ (f @ ([('mov || 'movapd) a b] && raok? a && raok? b) (: x (id a) y (id b) (link x y, link y x))
                                 ((op . d . _) && elem op divops) (pin forb (id d) ['r2])
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
@@ -110,7 +110,7 @@
     (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
        (one f)
         (raops g f @
-           (u d)
+           [u d]
             (: us (filter (x \ elem x sp) u) ds (filter (x \ elem x sp) d)
                (foldl (a \ x \ elem x a ? a (a + [x])) () (us + ds) @
                   () [f]
@@ -127,13 +127,13 @@
         (k = 0 ? 'bad
            (raround g fs nosp @
               'bad 'bad
-              (loc ())
+              [loc ()]
                (: (sub x) (lovr? x ? (loc x) x)
                   (catmap (f \ (f @ ('cuse . _) ()
-                                    ('fix _ _ fs) fs
-                                    ((('mov || 'movapd) a b) && sub a = sub b) ()
+                                    ['fix _ _ fs] fs
+                                    ([('mov || 'movapd) a b] && sub a = sub b) ()
                                     (_ . _) [(map sub f)]
                                     [f])) fs))
-              (_ sp) (go (raspill g fs sp nosp) (k - 1))))
+              [_ sp] (go (raspill g fs sp nosp) (k - 1))))
        (go fs 16))
 )) ; module 'moon
