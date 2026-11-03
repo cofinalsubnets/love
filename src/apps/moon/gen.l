@@ -1111,6 +1111,9 @@
          ('deref x) (hdty9 g env x @ it
                        (two? it && elem <it '(ptr arr) ? <>it ()))
          ('cast ty _) ty
+         ; a conditional's arms share their type, a comma's is its right's: (native ? a : b)->fn's ms_abi
+         ('cond _ a b) (hdty9 g env a @ t (two? t ? t (hdty9 g env b)))
+         ('comma _ b) (hdty9 g env b)
          ; a call's answer: its function's result type, off the sigs row or the head's own type
          ('call h _)
           (: sg (h @ ('var nm) (bad? (vent g env nm) ? (peep (g 'sigs) nm ())) ())
