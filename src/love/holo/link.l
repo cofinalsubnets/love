@@ -782,10 +782,10 @@
                  (go >ps (i + 1) () (acc + bypos pend + map (y \ y 2 1) (sort (map (keyed k) ms)))))))
        (go pats 0 () ()))
    ; objects, script, synthetic sections [(name size align) ..] -> [outs orphans], an orphan
-   ; [oi name si] or ('synth name): each
+   ; [oi name si] or ('synth name), under erel a .rela too, which no pattern takes: each
    ; output section tablet gains 'steps, its body with every description expanded to its
    ; ('isec oi si size align name) and ('synth name size align) in order
-   (ld-place objs cmds synth strip)
+   (ld-place objs cmds synth strip erel)
     (: os (ld-outs cmds)
        descs (ld-descs os)
        mt (ld-matcher descs)
@@ -795,7 +795,8 @@
        (scan oi ob)
         (each >^(ob 'shnum)
            (si \ (: r (ob 'sec si) ty (r 1) fl (r 2) nm <r
-                    (? (elem ty ld-skip || 0 < (fl & 2147483648) || peep (peep ob 'drops {}) si 0) 0
+                    (? (erel && ty = 4) (pin orph 'l ([oi nm si] . orph 'l))
+                       (elem ty ld-skip || 0 < (fl & 2147483648) || peep (peep ob 'drops {}) si 0) 0
                        (strip && 0 = (fl & 2) && ld-debug? nm) 0
                        (: m (mt nm)
                           (? (two? m) (put <m [(oi * 65536 + si) ['isec oi si (r 4) (r 5) nm] <>m])
@@ -1136,7 +1137,7 @@
      }
      """)
    (ld-script objs cmds want)
-    (: _ (ld-place objs cmds () 0)
+    (: _ (ld-place objs cmds () 0 0)
        env (ld-lay {'objs objs 'glob {} 'und {}} cmds {'ms {} 'im {}} ())
        isa (env 'isa) osof (env 'osof)
        _ (foldl (\ oi ob
