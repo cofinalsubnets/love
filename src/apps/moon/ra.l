@@ -17,6 +17,9 @@
    (raok? x) (lovr? x || elem x rafile)
    ; the float forms rdsp does not see: two-address ops, copies, compares, the gp crossings
    rafbin '(addsd subsd mulsd divsd minsd maxsd addss subss mulss divss minss maxss xorpd andpd)
+   ; the three-address ops, and those of them that commute
+   raalu '(add sub and or xor imul)
+   racomm '(add and or xor imul)
    rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss movqxr movdxr cvttsd2si cvttss2si movqrx movdrx)
    ; a form's [reads defs] over the file and the vregs | 'bad
    (raops g f)
@@ -71,13 +74,18 @@
                lo {} hi {} pts {}
                (mark x p) (x < np ? (pin pts x (p . peep pts x ()))
                              (pin lo x (min p (peep lo x p)), pin hi x (max p (peep hi x p))))
+               ; a sub's right side outlives its def, which may not overwrite it before the subtract
                _ (map (i \ (map (x \ mark x (2 * i)) (lin i),
                             map (x \ mark x (2 * i + 1)) (lout i),
-                            map (x \ mark x (2 * i + 1)) <>(ud i))) ^n)
-               ; the copies hint their two sides together; a divide's quotient never takes rdx
+                            map (x \ mark x (2 * i + 1)) <>(ud i),
+                            (ft i @ (['sub _ _ b] && raok? b) (mark (id b) (2 * i + 1)) _ 0))) ^n)
+               ; the copies hint their two sides together, a three-address op its def to its left
+               ; side (either side when it commutes); a divide's quotient never takes rdx
                hint {} forb {}
                (link x y) (pin hint x (y . peep hint x ()))
-               _ (map (f \ (f @ ([('mov || 'movapd) a b] && raok? a && raok? b) (: x (id a) y (id b) (link x y, link y x))
+               (link2 a b) (raok? a && raok? b ? (: x (id a) y (id b) (link x y, link y x)))
+               _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
+                                ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
                                 ((op . d . _) && elem op divops) (pin forb (id d) ['r2])
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))

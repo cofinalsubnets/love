@@ -1,0 +1,115 @@
+; src/apps/moon/nm.l -- the new backend's normalise stage, lo.l's forms to lo.l's forms before ra.l:
+; copy-then-op fused to three-address, copies and constants propagated, address arithmetic folded
+; into loads and stores, unreachable forms dropped. each rule keeps the forms' meaning on its own
+(module 'moon
+(borrow 'holo)
+(:
+   ; x64's indexed twin of a load or store, and a store's immediate twin
+   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw}
+   nmxst {'st 'stx 'st1 'stxb}
+   nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
+
+   ; (mov d a) (op d d b) -> (op d a b): b is read before d is written
+   (nmfuse fs)
+    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu)
+           ([op d a b] . nmfuse u)
+          (f . u) (f . nmfuse u)
+          _ ())
+   ; nothing reaches past a jump or a return but through a label
+   (nmreach fs)
+    (fs @ (f . u) (f . nmreach (f @ (('jmp || 'ret) . _) (nmskip u) _ u))
+          _ ())
+   (nmskip fs) (fs @ (('label . _) . _) fs (_ . u) (nmskip u) _ ())
+
+   ; per vreg its defs and its reads -> [defs reads]
+   (nmcnt g fs)
+    (: dn {} un {}
+       (bump t x) (lovr? x ? (pin t x (peep t x 0 + 1)))
+       _ (map (f \ (raops g f @ [u d] (map (bump un) u, map (bump dn) d) _ 0)) fs)
+       [dn un])
+
+   ; a one-def vreg copied from another, or holding a literal that fits an immediate -> [copies literals]
+   (nmmaps fs dn)
+    (: cp {} kc {}
+       (one? x) (lovr? x && peep dn x 0 = 1)
+       _ (map (f \ (f @ ([('mov || 'movapd) x y] && one? x && one? y) (pin cp x y)
+                        (['li x k] && one? x && cint? k && fits32 k) (pin kc x k)
+                        _ 0)) fs)
+       [cp kc])
+   ; two literals under an op, the bitwise ones over naturals only | ()
+   (nmk op x y) (op @ 'add (x + y) 'sub (x - y) 'imul (x * y)
+                      _ (x < 0 || y < 0 ? () (op @ 'and (x & y) 'or (x | y) _ (x ^ y))))
+   ; the copies' readers read the source, and a literal rides where the form takes an immediate;
+   ; a one-def vreg folded to a literal is one from there on
+   (nmsub fs cp kc dn)
+    (: (r x) (peep cp x () @ () x y (r y))
+       (lit d n) ((lovr? d && peep dn d 0 = 1 ? (pin kc d n)), ['li d n])
+       (k x) (peep kc (r x) ())
+       (kv x) (cint? x ? x (k x))
+       (imm f) (f @ ([op d a b] && elem op raalu)
+                     (: x (kv a) y (kv b) n (cint? x && cint? y ? (nmk op x y))
+                        (? (cint? n && fits32 n) (lit d n)
+                           (cint? y) [op d a y]
+                           (cint? x && elem op racomm) [op d b x]
+                           f))
+                    ['cmp a b] (k b @ () f n ['cmp a n])
+                    ([op b o v] && peep nmsi op ()) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
+                    ['mov d y] (k y @ () f n ['li d n])
+                    f)
+       (catmap (f \ (f @ ([('mov || 'movapd) x _] && peep cp x ()) ()
+                         (_ . _) [(imm (map r f))]
+                         [f])) fs))
+
+   ; within a block, a one-def vreg's def while what it read still holds: copies read through, an
+   ; add or lea of a literal moves into the offset, an add of a scaled index into an indexed form
+   (nmloc g fs dn)
+    (: (one? x) (lovr? x && peep dn x 0 = 1)
+       (go fs av)
+        (fs @ (f . u)
+               (f @ ('label . _) (f . go u ())
+                    _ (nmfold f av @ f2
+                       (raops g f2 @ [_ ds]
+                          (: a2 (filter (e \ !(elem (e 0) ds || any (x \ elem x ds) (e 2))) av)
+                             (f2 . go u (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t) ([t f2 (<(raops g f2))] . a2)
+                                             (['mov t y] && one? t && lovr? y) ([t f2 [y]] . a2)
+                                             _ a2)))
+                          _ (f2 . go u ()))))
+              _ ())
+       (go fs ()))
+   (nmav av x) (foldl (a \ e \ (a @ () (e 0 = x ? (e 1)) _ a)) () av)
+   (nmfold f0 av)
+    (: (cpy x) (nmav av x @ ['mov _ y] y _ x)
+       f (f0 @ (('fix || 'cdef || 'cuse) . _) f0 (_ . _) (map cpy f0) f0)
+       (base b o) (nmav av b @ ([('add || 'lea) _ b2 k] && cint? k && cint? o && fits32 (o + k)) [b2 (o + k)] _ ())
+       (idx b o) (nmav av b @ (['add _ b2 x] && lovr? x)
+                               (nmav av x @ (['imul _ i s] && elem s '(1 2 4 8)) [b2 i s o] _ [b2 x 1 o])
+                              _ ())
+       (f @ ([op d b o] && elem op ldops9)
+             (base b o @ [b2 o2] [op d b2 o2]
+                _ (peep nmxld op () @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
+            ([op b o v] && elem op gstops)
+             (base b o @ [b2 o2] [op b2 o2 v]
+                _ (peep nmxst op () @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
+            ([op d b o] && elem op (fldops + leaops)) (base b o @ [b2 o2] [op d b2 o2] _ f)
+            ([op b o v] && elem op (fstops + siops)) (base b o @ [b2 o2] [op b2 o2 v] _ f)
+            ['cmp t 0] (nmav av t @ ['and _ a k] ['test a k] _ f)
+            f))
+
+   ; (op t ..) (mov x t), t's one def and one read: the op writes x
+   (nmsink g fs)
+    (nmcnt g fs @ [dn un]
+       (: (own? f t x) (raops g f @ [u [d]] (d = t && nelem t u && #(filter (y \ y = t) f) = 1 &&
+                                             !(<f = 'sub && elem x u) && nelem <f '(fix call callr cdef))
+                                    _ ())
+          (go fs) (fs @ ((f . [('mov || 'movapd) x t] . u) && lovr? x && lovr? t && lofr? x = lofr? t &&
+                         peep dn t 0 = 1 && peep un t 0 = 1 && own? f t x)
+                         ((map (y \ y = t ? x y) f) . go u)
+                        (f . u) (f . go u)
+                        _ ())
+          (go fs)))
+
+   (nmround g fs) (nmcnt g fs @ [dn _] (nmmaps fs dn @ [cp kc] (nmsink g (radce g (nmloc g (nmsub fs cp kc dn) dn)))))
+   ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
+   (nmall g fs)
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmround g (nmround g (nmreach (nmfuse fs)))))
+)) ; module 'moon
