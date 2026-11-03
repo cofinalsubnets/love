@@ -68,6 +68,8 @@
     (e @ ['var nm]
           (lovar g env nm @ ['v r ty] ['v r ty]
                             ['m off ty] ['a ['long 'r4 ()] ty off]
+                            ; a VLA: its block's address in a cell
+                            ['p po ty] (lomk g @ t ['a ['long t [['ld t 'r4 po]]] ty 0])
                             ['g lbl ty] (lomk g @ t ['a ['long t [['la t lbl]]] ty 0])
                             (lono g ['var nm]))
          ['deref p]
@@ -108,7 +110,7 @@
    ; an lvalue's value: an array decays, an aggregate refuses
    (lorv g lv)
     (lv @ ['v r ty] [ty r ()]
-          ['a [_ r fs] ('arr . et . _) off] (lomk g @ t (loesc g r, [['ptr et] t (fs + [['lea t r off]])]))
+          ['a [_ r fs] (('arr || 'varr) . et . _) off] (lomk g @ t (loesc g r, [['ptr et] t (fs + [['lea t r off]])]))
           (['a [_ r fs] ty off] && stru? ty) (lomk g @ t (loesc g r, [ty t (fs + [['lea t r off]])]))
           ; a function designator decays to its address
           ['a [_ r fs] ('fn . ft) off] (lomk g @ t (loesc g r, [['ptr ('fn . ft)] t (fs + [['lea t r off]])]))
@@ -204,6 +206,16 @@
    (lolvfs lv) (lv @ (('a || 'b) . [_ _ fs] . _) fs ())
    (lolvbare lv) (lv @ [k [t r _] ty off] [k [t r ()] ty off] lv)
 
+   ; a pointer to a VLA steps by its row's bytes, the dim evaluated at the step: p +- i, i + p, p - q
+   ; as the char arithmetic they are -> an expression | ()
+   (lovrow g ty) (ty @ ['ptr ('varr . el . n . _)] ['bin '* ['cast 'long n] ['num (tsz g el)]] _ ())
+   (lovstep g op a b va vb)
+    (: ra (lovrow g (vty va)) rb (lovrow g (vty vb)) (cp x) ['cast ['ptr 'char] x]
+       (? !(elem op '(+ -)) ()
+          (ra && rb) (op = '- ? ['bin '/ ['bin '- (cp a) (cp b)] ra])
+          ra ['cast (vty va) ['bin op (cp a) ['bin '* b ra]]]
+          (rb && op = '+) ['cast (vty vb) ['bin '+ (cp b) ['bin '* a rb]]]
+          ()))
    ; -- binary operators over two values --
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
@@ -312,6 +324,13 @@
          ['num v]
           (-9223372036854775808 <= v && v <= 18446744073709551615 ?
              (lomk g @ t [(numty v) t [['li t v]]]) 'bad)
+         ; sizeof a VLA local: its stashed bytes; a VLA type: its dim times its row
+         ['szof e2]
+          (lopeek g env e2 @
+             ('varr . _ . _ . k . _) (peep (g 'vslots) k () @ [_ so] (lomk g @ t ['ulong t [['ld t 'r4 so]]]) _ (lono g 'vla))
+             ('varr . el . n . _) (lox g env ['cast 'ulong ['bin '* ['cast 'long n] ['num (tsz g el)]]])
+             'bad 'bad
+             ty (lomk g @ t ['ulong t [['li t (tsz g ty)]]]))
          ; gcc's &&L
          ['laddr nm] (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]])
          ['flo v] (lomk g @ t (lomkf g @ w ['double w [['li t (fbits v)] ['movqxr w t]]]))
@@ -406,7 +425,7 @@
           (: kb (elem op '(shl shr) ? (lok g b))
              va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
-             (lobin g op va vb kb))
+             (lovstep g op a b va vb @ () (lobin g op va vb kb) x (lox g env x)))
          ['call fh as] (locall g env fh as)
          ; the va_list's fields, as cgexpr's SysV arms lay them
          ['vastart ap]
@@ -850,6 +869,20 @@
              (it . u) (lost1 g env it @ 'bad 'bad fs (go u env (acc + fs)))
              [acc env])
        (go items env ()))
+   ; a VLA's block: the prior one this site laid given back (a loop runs the decl again), the bytes
+   ; stashed, sp down by them rounded to 16, the block's address stashed. sp moves: no sibcall, no
+   ; unframing
+   (lovla g env ty po so)
+    (lox g env (varn ty) @ ([nt r0 f0] && losc? nt)
+       (lotr g [nt r0 f0] 'long @ [_ n fs]
+          (lomk g @ t (lomk g @ q (lomk g @ z (nlab g ".vla" @ lf
+             (: es (tsz g (varel ty)) (up r) [['add r r 15] ['shr r 4] ['shl r 4]]
+                (pins g 'fesc 1 'hasasm 1,
+                 [['ld t 'r4 so] ['cmp t 0] ['br 'eq lf]] + up t + [['ld q 'r4 po] ['add q q t] ['mov 'sp q] ['label lf]] +
+                 fs + [['mov z n]] + (es = 1 ? () [['imul z z es]]) + [['st 'r4 so z]] + up z +
+                 [['mov q 'sp] ['sub q q z] ['mov 'sp q] ['st 'r4 po q]])))))))
+       'bad 'bad
+       _ (lono g 'vla))
    ; statics: a data label each, laid after the fn, the initializer's names to earlier ones
    ; spelled by label now -> env
    (losdecl g env ps)
@@ -874,7 +907,11 @@
                  ; a register variable: a plain vreg, its register named for asmplan
                  ap (rest @ (_ . x . _) (string? x ? (gas-regname (gtgt g) x)) _ ())
                  (? (ap && !(nom? ap && asmreg? g ap && losv? ty && !(lotk? g nm))) (lono g 'regasm)
-                    (gvarr? ty) (lono g 'vla)
+                    (gvarr? ty)
+                     (? (init != () || gvarr? <>ty) (lono g 'vla)
+                        (peep (g 'vslots) (varix ty) () @
+                           [po so] (lovla g env ty po so @ 'bad 'bad fs (go u ([nm 'p po ty] . env) (acc + fs)))
+                           _ (lono g 'vla)))
                     (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
                     (gcplx? ty) (lono g 'complex)
                     (losv? ty && !(lotk? g nm))
@@ -934,7 +971,9 @@
                                  (acc + (fl ? [[(ty = 'float ? 'stss 'stsd) 'r4 off A]] (cvt ty A + [[(stop ty) 'r4 off A]])))))
                           (lomkt g ty @ r (go u g2 f2 ov ([nm 'v r ty] . env) (acc + [(lomv r A)] + (fl ? () (cvt ty r))))))))
                 [gi fi ov acc env])
-          (go params (sret ? 1 0) 0 0 () (sret ? [['mov sr 'r6]]) @ [gi fi ov pe env]
+          ; each VLA site's size cell reads 0 until its decl runs
+          vz (keys (g 'vslots) @ () () ks (lomk g @ z (['li z 0] . map (k \ ['st 'r4 (g 'vslots k 1) z]) (sort ks))))
+          (go params (sret ? 1 0) 0 0 () ((sret ? [['mov sr 'r6]]) + vz) @ [gi fi ov pe env]
              (pins g 'vagp gi 'vaxmm fi 'vaov ov,
               (va ? (lovasave g)) @ vs
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
