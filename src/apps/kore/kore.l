@@ -340,17 +340,17 @@
         flush out,
         tot 3))
 
-   ; strip: the symbol table and debugging sections out; -g the debugging alone, all a
-   ; relocatable may lose. what the loader maps stays put; the unmapped move up behind it
+   ; strip: the symbol table and debugging sections out, what the loader maps put and the
+   ; unmapped moved up behind it; -g the debugging alone, through holo's objcopy rewrite
    (bu-dbg? nm) (: (pre p) (#p <= #nm && snip nm 0 #p = p)
                    (pre ".debug" || pre ".zdebug" || pre ".stab" || pre ".gnu.debuglto_" || pre ".line"))
-   (bu-strip b all?)                   ; -> the stripped bytes
+   (bu-strip b)                        ; -> the stripped bytes
     (: fs (bu-fs b)
        w64 (b 4 = 2)
        secs (bu-secs fs b)
        sx (ld-f fs b 0 'e-shstrx)
        na (sc \ (sc 3 & 2) = 0)
-       g0 (map (sc \ (<sc > 0) && na sc && (all? && sc 2 = 2 || bu-dbg? (sc 1))) secs)
+       g0 (map (sc \ (<sc > 0) && na sc && (sc 2 = 2 || bu-dbg? (sc 1))) secs)
        (linked-by i gs) (foldl (\ a sc (a || sc 6 = i && gs <sc ? 1 0)) 0 secs)
        (kept-link? i gs) (foldl (\ a sc (a || sc 6 = i && !(gs <sc) ? 1 0)) 0 secs)
        g1 (map (sc \ (g0 <sc) || (sc 2 = 3 && na sc && !(<sc = sx)
@@ -374,7 +374,6 @@
            ; the unmapped sections laid behind the mapped bytes, the name table among them
            lay (foldl (\ a sc (: al (max 1 (sc 8)) at (ld-align al <a)
                                  body (? (<sc = sx) names
-                                         (sc 2 = 2 && !all?) (bu-symfix fs (snip b (sc 4) (sc 4 + sc 5)) nx)
                                          (sc 2 = 8) "" (snip b (sc 4) (sc 4 + sc 5)))
                                  (!(na sc) || <sc = 0 ? a
                                   [(at + #body) (pin <>a <sc at)
@@ -395,11 +394,6 @@
            (foldl (\ a p (a + (string? p ? p (foldl (\ s z (s + string z)) "" p))))
                   ""
                   ([eh (snip b ehs base)] + <>>lay + [(ld-zeros (shoff - <lay))] + hdrs)))))
-   (bu-symfix fs s nx)                 ; a kept symbol table's section numbers, renumbered
-    (: e (ld-n fs 'sy-ent) n (#s // e)
-       (foldl (\ acc i (: h (snip s (i * e) (i * e + e)) x (ld-f fs h 0 'sy-shndx)
-                         (acc + (0 < x && x < 65280 ? (bu-put fs h 'sy-shndx (nx x)) h))))
-              "" ^n))
    (strip-main as)
     (: dbg (foldl (\ a w (a || elem w '("-g" "-S" "-d" "--strip-debug"))) 0 as)
        (go a o fs)
@@ -423,12 +417,12 @@
                (? !(bu-elf? b) (warn (f + ": file format not recognized"))
                   (!dbg && b 16 + 256 * b 17 = 1)
                    (warn (f + ": a relocatable object keeps its symbols here (-g takes its debugging)"))
-                  (: out (bu-strip b !dbg)
+                  (: out (dbg ? (oe-edit f b {'drop () 'flags () 'unneeded () 'all () 'dbg 1 'wild () 'psym () 'palloc ()})
+                              [(bu-strip b)])
                      dst (o ? o f)
                      st (stat f)
-                     q (open dst "w")
-                     (!(hot? q) ? (warn ("unable to write " + dst))
-                        (say q out, close q, two? st ? (chmod dst (st 2 & 4095)) 0, p? && two? st ? (utime dst (st 1)) 0, 0)))))))
+                     (nom? (ld-write dst out) ? (warn ("unable to write " + dst))
+                        (two? st ? (chmod dst (st 2 & 4095)) 0, p? && two? st ? (utime dst (st 1)) 0, 0)))))))
        (foldl (\ a f (max a (one f))) 0 fs ? 1 0))
 
    ; ranlib: an archive written again with the index holo's reader wants
@@ -830,7 +824,7 @@
     'as "usage: as TARGET IN OUT   (TARGET: x64 | a64)"
     'ar "usage: ar rcs OUT MEMBER..  |  ar t OUT"
     'ld ld-usage
-    'objcopy "usage: objcopy [-O binary|ihex] [-S] [-R SEC] [-j SEC] IN OUT"
+    'objcopy "usage: objcopy [-O binary|ihex] [-S] [-g] [-R SEC].. [-j SEC].. [--prefix-symbols=P] [--prefix-alloc-sections=P] [--set-section-flags SEC=FLAGS].. [-w] [--strip-unneeded-symbol=SYM].. IN [OUT]"
     'cat "usage: cat [-AbeEnstTuv] [FILE..]"
     'tac "usage: tac [-br] [-s SEP] [FILE..]"
     'head "usage: head [-qv] [-n N] [-c N] [-N] [FILE..]"
