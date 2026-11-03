@@ -523,6 +523,9 @@
                hw1 (0xF000 | (s << 10 | (aux << 6 | imm6)))
                hw2 (0x8000 | (j1 << 13 | (j2 << 11 | imm11)))
                (t32 (hw1 << 16 | hw2)))
+            ; the narrow forms the 'short hook lays: B T2 (+-2KB) and Bcc T1 (+-256)
+            'b16 (-2048 <= o <= 2046 ? (t16 (0xE000 | (o >> 1 & 2047))) (scare 'thumb-b16-reach o))
+            'b8 (-256 <= o <= 254 ? (t16 (0xD000 | (aux << 8 | (o >> 1 & 255)))) (scare 'thumb-b8-reach o))
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
@@ -543,7 +546,17 @@
          ((? (elem kind '(movw16p movt16p)) (thumb-lapa kind aux) (thumb-patch kind 0 0 width aux)) = bs ? 0 (scare 'thumb-refix-addend kind),
           thumb-patch kind target site width aux))
 
+   ;; the relaxer's hook: a lone wide b or bcc whose pessimistic reach fits goes narrow; the
+   ;; pc reads site + 4 for both widths
+   (thumb-short ins c rel)
+      (: x <c o (rel - 4)
+         (? (#c != 1 || !(fix? x)) ()
+            (fix-k x = 'b) (-2048 <= o <= 2046 ? [(fix 2 'b16 (fix-l x) 0)] ())
+            (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
+            ()))
+
    thumb2 {'lower thumb-lower
+           'short thumb-short
            'patch thumb-patch
            'refix thumb-refix
            'lapa thumb-lapa

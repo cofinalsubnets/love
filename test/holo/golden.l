@@ -1348,6 +1348,19 @@
       ("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
                      ((uremll))))
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb2 (t 2)) 0 t2tests)
+   ;; -- laylax on thumb2: an in-reach b or bcc goes narrow (b t2 +-2KB, bcc t1 +-256), judged at
+   ;; the all-wide layout; goldens from llvm-mc --filetype=obj --
+   tx-be (peep backends 'thumb2 ())
+   (tx prog longs) (laylax prog tx-be 0 {} longs @ p (resolve <p >p tx-be 0))
+   (txn op n) (#(tx ([op] + map (_ \ '(nop)) ^n + ['(label far)]) {}))
+   _ (chk-eq "t2.rlx.loop" "00bf01d000bffbe77047"
+        (hexs (tx '((label top) (nop) (br eq done) (nop) (jmp top) (label done) (ret)) {})))
+   _ (chk-eq "t2.rlx.b.edge" 2048 (txn '(jmp far) 1023))      ; 2046 ahead at the wide layout
+   _ (chk-eq "t2.rlx.b.wide" 2052 (txn '(jmp far) 1024))
+   _ (chk-eq "t2.rlx.bcc.edge" 256 (txn '(br ne far) 127))    ; 254 ahead
+   _ (chk-eq "t2.rlx.bcc.wide" 260 (txn '(br ne far) 128))
+   _ (chk-eq "t2.rlx.weak-stays-long" "00f000b800bf"
+        ({} @ lg (pin lg 'wf 1, hexs (tx '((jmp wf) (label wf) (nop)) lg))))
 
    ;; -- the thumb1 backend: armv6-m, 16-bit, two-address, low registers, no movw/movt (`li`
    ;; byte-builds), no wide alu, no it (`set` branches over), no divide. goldens from llvm-mc
