@@ -1413,11 +1413,13 @@
                    (gf-kin? nm ".bss") [8 3]
                    (gf-kin? nm ".rodata") [1 2]
                    [1 0])
-   ; M and S only license merging, which a section never owes
-   (gf-flags s) (foldl (\ a c (c @ 97 (a | 2) 119 (a | 1) 120 (a | 4) 77 a 83 a
+   ; M merges and S holds strings, each piece entsize bytes; o orders the section by the one
+   ; its words reach (shf_link_order)
+   (gf-flags s) (foldl (\ a c (c @ 97 (a | 2) 119 (a | 1) 120 (a | 4) 77 (a | 16) 83 (a | 32) 111 (a | 128)
                                   (scare 'gas-section-flag (string c))))
                        0 (chars s))
-   ; .section name[, "flags"[, @type[, entsize]]] -> [name type flags]
+   ; .section name[, "flags"[, @type[, entsize]]] -> [name type flags], a merge's entsize
+   ; riding the flags above bit 32
    (gf-sect xs)
     (: nm (xa-unquote <xs) d (gf-dflt nm)
        ty (2 < #xs ?
@@ -1426,7 +1428,9 @@
                           (elem t '("@note" "%note")) 7
                           (scare 'gas-section-type t)))
              <d)
-       [nm ty (1 < #xs ? (gf-flags (xa-unquote (xs 1))) <>d)])
+       fl (1 < #xs ? (gf-flags (xa-unquote (xs 1))) <>d)
+       es (0 < (fl & 16) && 3 < #xs ? (xa-trim (xs 3) @ e (xa-num? e ? (xa-num e) 0)) 0)
+       [nm ty (fl | es << 32)])
    (gf-width tgt mn) (? (mn = ".byte") 1
                         (elem mn '(".short" ".value" ".2byte" ".hword")) 2
                         (mn = ".word") (gx86? tgt ? 2 4)
