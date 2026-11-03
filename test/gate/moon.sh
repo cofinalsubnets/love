@@ -1581,6 +1581,32 @@ for t in x64 a64; do
   nm "$ho/.pis.o" | grep -q ' t ka$' && fail "a canary over a scalar kept a static inline out of line on $t"
   nm "$ho/.pis.o" | grep -q ' U __stack_chk_fail$' || fail "a buffer's canary went missing on $t"
 done
+# ..and never into the right of a decided 0 && (an asm goto to .subsection 1 keeps a dead arm laid),
+# while a64's "Q" over a local, an inlined *&x, takes its address
+cat > "$ho/.pid.c" <<'EOF'
+extern int gone(void);
+static inline int ok(unsigned int c) { switch (c) { case 35: return 0; } return 1; }
+static inline int cap(unsigned long c) {
+  if (!ok(c)) return 0;
+#if defined(__aarch64__)
+  asm goto("nop\n .subsection 1\n b %l[yes]\n .previous\n .hword %[c]" : : [c] "i"(c) : : yes);
+#else
+  asm goto("nop\n .subsection 1\n jmp %l[yes]\n .previous\n .short %c[c]" : : [c] "i"(c) : : yes);
+#endif
+  return 0;
+yes:
+  return 1;
+}
+int f(int x) { do { } while (0 && (!cap(35) && !gone())); return x; }
+#if defined(__aarch64__)
+static unsigned long rd(unsigned long *p) { unsigned long v; asm("ldr %0, %1" : "=r"(v) : "Q"(*p)); return v; }
+unsigned long g(void) { unsigned long y = 7; return rd(&y); }
+#endif
+EOF
+for t in x64 a64; do
+  moonrun -t $t -O2 -c "$ho/.pid.c" -o "$ho/.pid.o" || fail "mooncc -t $t: a decided && over an inline asm goto, or a64's Q"
+  nm "$ho/.pid.o" | grep -q ' U gone$' && fail "the right of a decided 0 && kept its call on $t"
+done
 # ..however deep the chain: ten calls down, seven of them always_inline
 for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/323-always-inline-deep.c -o "$ho/.awd.o" || fail "mooncc -t $t: 323-always-inline-deep"

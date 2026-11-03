@@ -10178,6 +10178,8 @@
        (cvt ty x) (ty @ 'same x ['cast ty x])
        (hascont? x) (? !(two? x) () (<x = 'cont) 1 (hascont? <x || hascont? >x))
        (hasjmp? x) (? !(two? x) () (elem <x '(brk cont goto)) 1 (hasjmp? <x || hasjmp? >x))
+       ; a left operand that decides its && or || (0 &&, 1 ||): the right is never evaluated, nor spliced
+       (dcd? e a) (a @ ('num k) (<e = 'land ? (k = 0) (k != 0)) ())
        ; an arm's weight as a copy, or past any budget when a copy would be wrong (a label, a decl)
        (dsz x) (? (x = ()) 0 !(two? x) 1 (elem <x '(lbl case dflt decl sdecl asm)) 99 (dsz <x + dsz >x))
        ; an expression -> (pre e'): only the positions evaluated first are hoisted
@@ -10194,12 +10196,14 @@
                 ; a short-circuit or a select branches on its first operand, as cbranch lays it -- a
                 ; right operand of statements decides a temporary under nested ifs (its test pushes down)
                 (('land || 'lor) a b)
-                 (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+                 (: ra (hxb a d)
+                    (dcd? e <>ra ? [<ra ['num (<e = 'lor ? 1 0)]]
+                  (: rb (hxh e d (h \ (hxe b d h))) b2 <>rb
                     (!(armc? b2) ? [(<ra + <rb) [<e <>ra b2]]
                        (: t (tmp 'int)
                           s1 ['expr ['asn ['var t] ['num 1]]] s0 ['expr ['asn ['var t] ['num 0]]]
                           st (hs (<e = 'land ? ['if <>ra ['if b2 s1 s0] s0] ['if <>ra s1 ['if b2 s1 s0]]) d)
-                          [(<ra + <rb + [['decl [[t 'int]]]] + st) ['var t]])))
+                          [(<ra + <rb + [['decl [[t 'int]]]] + st) ['var t]])))))
                 ('cond c a b)
                  (: rb (hxh e d (h \ [(hxe a d h) (hxe b d h)])) a2 <<>rb b2 <><>rb
                     ty (armc? a2 || armc? b2 ? (ety e))
@@ -10229,13 +10233,15 @@
              ('un 'not a) (hxb a d @ r [<r ['un 'not <>r]])
              ; a right operand of statements at a test decides a temporary under the left's if
              (('land || 'lor) a b)
-              (: ra (hxb a d) rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+              (: ra (hxb a d)
+                 (dcd? e <>ra ? [<ra ['num (<e = 'lor ? 1 0)]]
+               (: rb (hxh e d (h \ (hxe b d h))) b2 <>rb
                  ty (armc? b2 ? (ety b))
                  (ty = () ? [(<ra + <rb) [<e <>ra b2]]
                     (: tv (tmp ty)
                        st (hs (<e = 'land ? ['if <>ra ['expr ['asn ['var tv] b2]] ['expr ['asn ['var tv] ['num 0]]]]
                                               ['if <>ra ['expr ['asn ['var tv] ['num 1]]] ['expr ['asn ['var tv] b2]]]) d)
-                       [(<ra + <rb + [['decl [[tv ty]]]] + st) ['var tv]])))
+                       [(<ra + <rb + [['decl [[tv ty]]]] + st) ['var tv]])))))
              (hx e d))
        (hxl l d) (!(two? l) ? [() ()]
                     (: r (hx <l d) rs (hxl >l d) [(<r + <rs) (<>r . <>rs)]))
@@ -10604,7 +10610,8 @@
     (: w64 !(ilp32? g)
        tak {} tys {}
        ; an asm's memory operand takes its name's address, as kprop reads it
-       (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) '(109 111)) 1 (go (i + 1)))) 0)
+       mc (a64? g ? '(81 109 111) '(109 111))       ; a64's Q is memory too
+       (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) mc) 1 (go (i + 1)))) 0)
        (cen x) (? !(two? x) 0
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
                        ; a register variable keeps its pin, as kprop keeps it
@@ -10764,7 +10771,7 @@
                      ('asm . _)
                       (: (has? c l) ((: (go i) (? (#c <= i) () (elem (c i) l) 1 (go (i + 1)))) 0)
                          (foldl (_ \ o \ <>o @ ('var nm) (pin wrt nm 1) 0) 0 (x 2),
-                          foldl (_ \ o \ (? (has? <o '(109 111)) (<>o @ ('var nm) (pin tak nm 1) 0)
+                          foldl (_ \ o \ (? (has? <o (a64? g ? '(81 109 111) '(109 111))) (<>o @ ('var nm) (pin tak nm 1) 0)
                                             (has? <o '(105 110)) (<>o @ ('var nm) (pin ivs nm 1) 0) 0)) 0 (x 3),
                           c9))
                      (('decl || 'sdecl) ps)
