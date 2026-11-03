@@ -984,7 +984,8 @@
    (atstat en tmp f) (<en = 'loc ? (f 'r4 <>en) ([['la tmp <>en]] + f tmp 0))
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
-   (peekty g env e)
+   (peekty g env e) (g 'lopeek @ () (peekty0 g env e) f (f g env e))
+   (peekty0 g env e)
     (: n0 (peep g 'n 0) s0 (g 'strs) o0 (peep g 'off 0) sl0 (g 'slots) fe0 (g 'fesc) fv0 (g 'fescv) fx0 (g 'fesca) fa0 (g 'fasecs)
        lv (clval g env e)
        _ (vm? lv ? (rfree g (vmb lv)))
