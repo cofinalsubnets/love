@@ -38,12 +38,10 @@
    ;; whose loader relocates abs32 words, never a MOVW/MOVT pair
    (thumb-lapool d) (rn d @ dn (catall [(t32 (0xF8DF0004 | dn << 12)) (t16 0xE002) (t16 0xBF00)]))
 
-   ;; MOV.W (ORR Rn=15) with sp or pc is unpredictable, so those go by the 16-bit hi form
-   (thumb-sppc? (13 || 15)) 1
-   (thumb-mov d s)
-      (: dn (rn d) sn (rn s)
-         (thumb-sppc? dn || thumb-sppc? sn ? (thumb-movr d s)
-            (t32 (0xEA4F0000 | (dn << 8 | sn)))))
+   ;; mov is the 16-bit hi form, which keeps the flags and reaches sp and pc
+   (thumb-mov d s) (thumb-movr d s)
+   ;; movs Rd,#imm8 (t1) sets the flags: holo lays it only where they are free
+   (thumb-lis d imm) (rn d @ dn (dn <= 7 ? (t16 (0x2000 | (dn << 8 | imm))) (thumb-li d imm)))
 
    ;; the wide three-address register forms: op -> hw1 base
    thumb-alu {'add 0xEB00 'sub 0xEBA0 'and 0xEA00 'or 0xEA40 'xor 0xEA80
@@ -111,9 +109,13 @@
             (thumb-mimm b @ k
                (k < 0 ? (scare 'thumb-alu-imm [op d a b]) (thumb-dpimm (0xF000 | (base & 0x1F0)) (rn d) (rn a) k)))))
 
+   ;; cmp and tst set the flags whatever their width, so low registers and a byte go 16-bit
    (thumb-cmp a b)
       (rn a @ an
-         (reg? b ? (rn b @ bn (t32 ((0xEBB0 | an) << 16 | (0x0F00 | bn))))
+         (? (reg? b) (rn b @ bn (? (an <= 7 && bn <= 7) (t16 (0x4280 | (bn << 3 | an)))
+                                   (an != 15 && bn != 15) (t16 (0x4500 | ((an >> 3) << 7 | (bn << 3 | an & 7))))
+                                   (t32 ((0xEBB0 | an) << 16 | (0x0F00 | bn)))))
+            (an <= 7 && 0 <= b <= 255) (t16 (0x2800 | (an << 8 | b)))
             (thumb-mimm (abs b) @ k
                (k < 0 ? (scare 'cmp-imm-range b)
                   ; a negative compares by cmn
@@ -150,7 +152,7 @@
                 (thumb-aluop 'sbcs 'r5 'r5 'r1)
                 (thumb-addsub-imm 'add 'r2 'r2 1)              ; the quotient bit
                 (thumb-addsub-imm 'sub 'r6 'r6 1)              ; next
-                (thumb-cmp 'r6 0)
+                (t32 0xF1B60F00)                               ; cmp.w r6, #0, wide for the offsets
                 (t16 0xD1E6)                                   ; bne loop
                 (which @ 'div
                  (thumb-movr 'r0 'r2 + thumb-movr 'r1 'r3)
@@ -281,7 +283,7 @@
 
    ;; tst.W: ANDS with Rd=pc; a register or a modified immediate
    (thumb-test a b)
-      (reg? b ? (: an (rn a) bn (rn b) (t32 ((0xEA10 | an) << 16 | (0x0F00 | bn))))
+      (reg? b ? (: an (rn a) bn (rn b) (an <= 7 && bn <= 7 ? (t16 (0x4200 | (bn << 3 | an))) (t32 ((0xEA10 | an) << 16 | (0x0F00 | bn)))))
          (thumb-mimm b @ k (k < 0 ? (scare 'thumb-test-imm ['test a b]) (thumb-dpimm 0xF010 15 (rn a) k))))
 
    ;; MOVW d,#0 ; it cond ; MOVW d,#1 -- MOVW keeps the flags and reaches r0..r12
@@ -455,7 +457,7 @@
          (t32 (0xF3EF0000 | (0x8000 | rn d << 8 | sm))))
 
    thumb-emitters (emsof
-        [('li . thumb-li) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
+        [('li . thumb-li) ('lis . thumb-lis) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
           ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
           ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
@@ -523,6 +525,9 @@
                hw1 (0xF000 | (s << 10 | (aux << 6 | imm6)))
                hw2 (0x8000 | (j1 << 13 | (j2 << 11 | imm11)))
                (t32 (hw1 << 16 | hw2)))
+            ; the narrow forms the 'short hook lays: B T2 (+-2KB) and Bcc T1 (+-256)
+            'b16 (-2048 <= o <= 2046 ? (t16 (0xE000 | (o >> 1 & 2047))) (scare 'thumb-b16-reach o))
+            'b8 (-256 <= o <= 254 ? (t16 (0xD000 | (aux << 8 | (o >> 1 & 255)))) (scare 'thumb-b8-reach o))
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
@@ -543,7 +548,20 @@
          ((? (elem kind '(movw16p movt16p)) (thumb-lapa kind aux) (thumb-patch kind 0 0 width aux)) = bs ? 0 (scare 'thumb-refix-addend kind),
           thumb-patch kind target site width aux))
 
+   ;; the relaxer's hook: a lone wide b or bcc whose pessimistic reach fits goes narrow; the
+   ;; pc reads site + 4 for both widths
+   (thumb-short ins c rel)
+      (: x <c o (rel - 4)
+         (? (#c != 1 || !(fix? x)) ()
+            (fix-k x = 'b) (-2048 <= o <= 2046 ? [(fix 2 'b16 (fix-l x) 0)] ())
+            (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
+            ()))
+
    thumb2 {'lower thumb-lower
+           'short thumb-short
+           'lis 1
+           'flagr '(br set adc sbc adcs sbcs raw)
+           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs ucomisd ucomiss lis)
            'patch thumb-patch
            'refix thumb-refix
            'lapa thumb-lapa
