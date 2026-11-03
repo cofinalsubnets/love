@@ -156,7 +156,7 @@
              (pin g 'strs ([lbl s] . g 'strs),
               lomk g @ t [['ptr (gchar g)] t [['la t lbl]]]))
          ('var nm)
-          (lovar g env nm @ 'bad (g 'fns nm ? (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]]) 'bad)
+          (lovar g env nm @ 'bad (g 'fns nm ? (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]]) (lono g ['var nm]))
                             _ (lorv g (lolv g env e)))
          (('deref _) || ('dot _ _)) (lorv g (lolv g env e))
          (('addr ('var nm)) && bad? (lovar g env nm) && g 'fns nm)
@@ -227,7 +227,10 @@
    ; a call: the first six gp scalars in registers, the rest in a 16-aligned block at sp. a
    ; direct callee is a known fn, an indirect one a pointer value read after the args
    (locall g env fh as)
-    (fh @ (('var nm) && bad? (lovar g env nm) && g 'fns nm)
+    (fh @ (('var nm) && bad? (lovar g env nm) && starts? nm "__builtin_") (lobi g env nm as)
+          (('var nm) && bad? (lovar g env nm) && (two? (atomop nm) || elem nm '("__sync_lock_test_and_set" "__sync_lock_release")))
+           (loat g env nm as)
+          (('var nm) && bad? (lovar g env nm) && g 'fns nm)
            (g 'sigs nm @
               ((rt . ptys . va . rest) && !(1 < #nm && nm 0 = 95 && nm 1 = 95) && !(rest @ ('ms . _) 1 ()))
                (locall1 g env rt ptys va as [['call (intern nm)]] ())
@@ -237,6 +240,130 @@
                (('ptr ('fn rt)) r fs) (locall1 g env rt () 1 as [['callr r]] [r fs])
                'bad 'bad
                (ty . _) (lono g ['callee ty])))
+   ; a snippet over r0..r3 renamed onto fresh vregs, r0 the operand in and the answer out
+   (loren g v fs)
+    (foldl (t \ r \ pin t r (lomk g)) {} '(r0 r1 r2 r3) @
+     t ['long (t 'r0) ([['mov (t 'r0) v]] + map (f \ map (x \ peep t x x) f) fs)])
+   ; raw bytes on fixed registers: the operand in r0, the answer out of it, ds what it writes
+   (lofix g v ds fs)
+    (lomk g @ d ['long d [['mov 'r0 v] ['fix '(r0) ds fs] ['mov d 'r0]]])
+   ; one scalar operand -> [ty r fs] | 'bad
+   (lobi1 g env e)
+    (lox g env e @ ((vt r fs) && losc? vt) [vt r fs]
+                   'bad 'bad
+                   (vt . _) (lono g ['arg vt]))
+   ; a builtin, the old arm its spec
+   (lobi g env nm as)
+    (: (one f) (lobi1 g env <as @ 'bad 'bad (vt r fs) (f r @ 'bad 'bad (t d fs2) [t d (fs + fs2)]))
+       ll (elem nm '("__builtin_clzll" "__builtin_clzl" "__builtin_ctzll" "__builtin_ctzl"))
+       (? (elem nm '("__builtin_expect" "__builtin_prefetch")) (lobi1 g env <as)
+          (elem nm '("__builtin_trap" "__builtin_unreachable"))
+           (lomk g @ d ['long d [['fix () () '((ud2))] ['li d 0]]])
+          (nm = "__builtin_alloca")
+           (? (g 'abad || avz? g) (lono g ['call nm])
+              (one (v \ (: t (lomk g) u (lomk g) d (lomk g)
+                           (pin g 'fesc 1, pin g 'hasasm 1,
+                            ['(ptr void) d [['mov t v] ['add t t 15] ['shr t 4] ['shl t 4] ['lea u 'sp 0]
+                                            ['sub u u t] ['lea 'sp u 0] ['lea d 'sp 0]]])))))
+          (elem nm '("__builtin_return_address" "__builtin_frame_address"))
+           (as @ ((('num k)) && 0 <= k)
+                  (lomk g @ d
+                     (pin g 'fesc 1, pin g 'fpin 1,
+                      ['(ptr void) d (['lean d 'r4 0] . map (_ \ ['ld d d 0]) ^k +
+                                      (nm = "__builtin_return_address" ? [['ld d d 8]]))]))
+                 _ (lono g ['call nm]))
+          (elem nm '("__builtin_clz" "__builtin_clzl" "__builtin_clzll"))
+           (one (v \ lofix g v () ((ll ? () '((shl r0 32))) + '((raw (72 15 189 192 72 131 240 63))))))
+          (elem nm '("__builtin_ctz" "__builtin_ctzl" "__builtin_ctzll"))
+           (one (v \ lofix g v () '((raw (72 15 188 192)))))
+          (nm = "__builtin_bswap16")
+           (one (v \ loren g v '((li r2 255) (mov r1 r0) (shr r1 8) (and r1 r1 r2)
+                                 (and r0 r0 r2) (shl r0 8) (or r0 r0 r1))))
+          (nm = "__builtin_bswap32") (one (v \ loren g v bsw32))
+          (nm = "__builtin_bswap64")
+           (one (v \ loren g v '((li r2 71777214294589695)
+                                 (mov r1 r0) (shr r1 8) (and r1 r1 r2)
+                                 (and r0 r0 r2) (shl r0 8) (or r0 r0 r1)
+                                 (li r2 281470681808895)
+                                 (mov r1 r0) (shr r1 16) (and r1 r1 r2)
+                                 (and r0 r0 r2) (shl r0 16) (or r0 r0 r1)
+                                 (mov r1 r0) (shr r1 32) (shl r0 32) (or r0 r0 r1))))
+          (elem nm '("__builtin_popcount" "__builtin_popcountl" "__builtin_popcountll"))
+           (one (v \ loren g v (popops g (nm = "__builtin_popcount"))))
+          (elem nm '("__builtin_ffs" "__builtin_ffsl" "__builtin_ffsll"))
+           (nlab g ".ffs" @ lz
+              (one (v \ loren g v ((nm = "__builtin_ffs" ? '((li r2 4294967295) (and r0 r0 r2))) +
+                                   ['(cmp r0 0) ['br 'eq lz] '(mov r1 r0) '(sub r1 r1 1) '(xor r0 r0 r1)] +
+                                   popops g (nm = "__builtin_ffs") + [['label lz]]))))
+          (lono g ['call nm])))
+   ; an atomic, x64's arms of cgatomic: raw loops on fixed registers, the operands copied in
+   (loat g env nm as)
+    (: k (atomop nm) kind (k @ (kd . _) kd 'lock)
+       ; the order: a constant, or anything else laid for its effects and taken as seq_cst
+       mo (? (nm @ ("__sync_" + _) 1 ()) [5 ()] (elem kind '(lockfree generic)) [5 ()]
+             (as (#as - 1) @ ('num o) [o ()]
+                             e (lox g env e @ 'bad 'bad (_ _ fs) [5 fs])))
+       (fx u d fs) ['fix u d fs]
+       (? (bad? mo) 'bad
+          (kind = 'generic) (lono g ['call nm])
+          (kind = 'fence) (lomk g @ d ['long d (<>mo + (<mo = 0 ? () [(fx () () (afence g))]) + [['li d 0]])])
+          (kind = 'sfence) (lomk g @ d ['long d (<>mo + [(fx () () (abar g))] + [['li d 0]])])
+          (kind = 'lockfree)
+           (cfold !(ilp32? g) <as @ n
+              (charm? n ? (lomk g @ d ['int d [['li d (elem n (awidths g) ? 1 0)]]]) (lono g ['call nm])))
+          (lobi1 g env <as @
+             'bad 'bad
+             ((('ptr pt) p pf) && amw g pt)
+              (: w (amw g pt) z (lomk g)
+                 (? (kind = 'lock)
+                     (? (nm = "__sync_lock_release")
+                         (? !(elem w '(4 8)) (lono g ['atomic pt])
+                            ['long z (pf + [['li z 0] [(stw w) p 0 z]])])
+                        (lobi1 g env (as 1) @
+                           'bad 'bad
+                           (_ v vf) (? !(elem w '(4 8)) (lono g ['atomic pt])
+                                       (lomk g @ d
+                                          [pt d (pf + vf + [['mov 'r0 v] ['mov 'r1 p]
+                                                            (fx '(r0 r1) '(r0) [['raw (w @ 4 '(135 1) '(72 135 1))]])
+                                                            ['mov d 'r0]] + map (f \ [<f d]) (rext g pt))]))))
+                    (kind = 'load) (lomk g @ d [pt d (<>mo + pf + [[(ldop pt) d p 0]])])
+                    (kind = 'clear)
+                     ['long z (<>mo + pf + [['li z 0] ['st1 p 0 z]] + (<mo = 5 ? [(fx () () (afence g))]))]
+                    (kind = 'tas)
+                     (: o (lomk g) d (lomk g)
+                        ['int d (<>mo + pf + [['li 'r2 1] ['mov 'r1 p] (fx '(r1 r2) '(r0 r3) (armw g 1 'set))
+                                              ['mov o 'r0] ['zx1 o] ['li z 0] ['cmp o z] ['set 'ne d]])])
+                    (kind = 'cas)
+                     (lobi1 g env (as 1) @ 'bad 'bad
+                        (_ ep ef)
+                         (lobi1 g env (as 2) @ 'bad 'bad
+                            (_ dv df)
+                             (: t (lomk g) o (lomk g) d (lomk g) ok (nlab g ".casok")
+                                ['int d (<>mo + pf + ef + df +
+                                         [[(uldop w) t ep 0] ['mov 'r0 t] ['mov 'r1 p] ['mov 'r2 dv]
+                                          (fx '(r0 r1 r2) '(r0 r2 r3) (acas g w))
+                                          ['mov o 'r0] ['mov d 'r2] ['li z 0] ['cmp d z] ['br 'ne ok]
+                                          [(stw w) ep 0 o] ['label ok]])])))
+                    (lobi1 g env (as 1) @
+                       'bad 'bad
+                       (_ v vf)
+                        (? (kind = 'store) ['long z (<>mo + pf + vf + [[(stop pt) p 0 v]] + (<mo = 5 ? [(fx () () (afence g))]))]
+                           (kind = 'rmw)
+                            (lomk g @ d
+                               [pt d (<>mo + pf + vf + [['mov 'r1 p] ['mov 'r2 v] (fx '(r1 r2) '(r0 r3) (armw g w (k 1)))
+                                                        ['mov d (k 2 = 'new ? 'r3 'r0)]] + map (f \ [<f d]) (rext g pt))])
+                           (elem kind '(vcas bcas))
+                            (lobi1 g env (as 2) @ 'bad 'bad
+                               (_ nv nf)
+                                (lomk g @ d
+                                   (kind = 'vcas ?
+                                      [pt d (pf + vf + nf + [['mov 'r0 v] ['mov 'r1 p] ['mov 'r2 nv]
+                                                             (fx '(r0 r1 r2) '(r0 r2 r3) (acas g w)) ['mov d 'r0]]
+                                                    + map (f \ [<f d]) (rext g pt))]
+                                      ['int d (pf + vf + nf + [['mov 'r0 v] ['mov 'r1 p] ['mov 'r2 nv]
+                                                              (fx '(r0 r1 r2) '(r0 r2 r3) (acas g w)) ['mov d 'r2]])])))
+                           (lono g ['call nm])))))
+             (vt . _) (lono g ['atomic vt]))))
    ; cl the call form, fv the callee's (vreg forms) | (); va also lays al, the vector count
    (locall1 g env rt ptys va as cl fv)
     (? !(rt = 'void || losc? rt) (lono g ['ret rt])
