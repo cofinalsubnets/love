@@ -587,6 +587,16 @@
                                    (tsz g (vty va) != tsz g (vty vb) ? (lono g ['cond (vty va) (vty vb)])
                                       (lomk g @ d [(vty va) d (fc + vfs va + [['mov d (vreg va)] ['jmp ld] ['label le]] +
                                                                vfs vb + [['mov d (vreg vb)] ['label ld]])]))
+                                  ; a wide side: both as the pair, each half joined
+                                  (d128? (vty va) || d128? (vty vb))
+                                   (: rt (wbin (vty va) (vty vb))
+                                      (lotr g va rt @ [_ [xl xh] fx]
+                                         (lotr g vb rt @ [_ [yl yh] fy]
+                                            (lomk g @ l (lomk g @ h
+                                               [rt [l h] (fc + fx + [['mov l xl] ['mov h xh] ['jmp ld] ['label le]] +
+                                                          fy + [['mov l yl] ['mov h yh] ['label ld]])]))
+                                            _ 'bad)
+                                         _ 'bad))
                                   !(losv? (vty va) && losv? (vty vb)) (lono g ['cond (vty va) (vty vb)])
                                   (: ta (vty va) tb (vty vb)
                                      fl (lofl? ta || lofl? tb)
@@ -599,6 +609,8 @@
              va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
              (lovstep g op a b va vb @ () (lobin g op va vb kb) x (lox g env x)))
+         ; x86's caches are coherent: the args for their effects alone
+         ['call ['var "__builtin___clear_cache"] as] (loseq (map (x \ (lox g env x @ [_ _ fs] (lol fs) _ (lol 'bad))) as) @ 'bad 'bad fs ['void () fs])
          ['call fh as] (lomem g env fh as @ 'no (locall g env fh as) v v)
          ; the va_list's fields, as cgexpr's SysV arms lay them
          ['vastart ap]
@@ -861,6 +873,12 @@
                      map (p \ lomv <p <>p) rg + al +
                      [('(cuse) + rs + (two? al ? '(r0)) + (fv @ [fr _] [fr] ()))] + cl +
                      res + (blk = 0 ? () [['add 'sp 'sp blk]]))]))))
+   ; the last call of a musttail ret's forms, marked 'must, as the old path's mustret | 'bad
+   (lomust g fs)
+    (: (go l) (l @ () (lono g 'musttail)
+                   ((f . u) && two? f && elem <f '(call callr)) ((f + '(must)) . u)
+                   (f . u) (go u @ 'bad 'bad r (f . r)))
+       (go (rev fs) @ 'bad 'bad r (rev r)))
    ; an indirect call through the old path's park, the one register its sibcall jumps by
    (locr g r) [['mov (pkr g) r] ['callr (pkr g)]]
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
@@ -913,6 +931,8 @@
             ('tdef . _) ()
             ['expr e] (lox g env e @ [_ _ fs] fs 'bad)
             ['ret] (peep g 'epi epi)
+            ; clay's (ret e PRE), a musttail: its call marked for the sibcall that must jump it
+            ['ret e _] (lost1 g env ['ret e] @ 'bad 'bad fs (lomust g fs))
             ['ret e]
              (: rt <(peep (g 'sigs) (g 'fn) ['long ()]) epj (peep g 'epi epi)
                 (lox g env e @ 'bad 'bad
@@ -1053,19 +1073,25 @@
                   (memk g (as 1) @ c
                      (!(charm? c) ? 'no
                         (lox g env <as @ [_ d fd]
-                           (lomk g @ v
-                              ['(ptr void) d (fd + [['li v ((c & 255) * 72340172838076673)]] +
-                                              map (o \ (o + 8 <= n ? ['st d o v] ['st1 d o v])) (lochunks n))])
+                           (lobase [_ d fd] @ [b o]
+                              (lomk g @ v
+                                 ['(ptr void) d (fd + [['li v ((c & 255) * 72340172838076673)]] +
+                                                 map (k \ (k + 8 <= n ? ['st b (o + k) v] ['st1 b (o + k) v])) (lochunks n))]))
                            'bad)))
                  (memnm? g bi "memcpy")
                   (lox g env <as @ [_ d fd]
-                     (lox g env <>as @ [_ s fs]
-                        (lomk g @ t
-                           ['(ptr void) d (fd + fs + catmap (o \ (o + 8 <= n ? [['ld t s o] ['st d o t]] [['ldu1 t s o] ['st1 d o t]])) (lochunks n))])
+                     (lox g env <>as @ sv
+                        (vfs sv @ fs (lobase [_ d fd] @ [db do] (lobase sv @ [sb so]
+                           (lomk g @ t
+                              ['(ptr void) d (fd + fs + catmap (k \ (k + 8 <= n ? [['ld t sb (so + k)] ['st db (do + k) t]]
+                                                                            [['ldu1 t sb (so + k)] ['st1 db (do + k) t]])) (lochunks n))]))))
                         'bad)
                      'bad)
                  'no))
           _ 'no)
+   ; a pointer as a base and offset: a local's address reads off the frame, its lea left to die
+   ; where the value goes unused -> [base off]
+   (lobase v) (v @ [_ t fs] (rev fs @ (['lea t2 'r4 o] . _) (t = t2 ? ['r4 o] [t 0]) _ [t 0]))
    ; the offsets of n bytes in words, then the byte tail
    (lochunks n) (map (i \ 8 * i) ^(n // 8) + map (i \ 8 * (n // 8) + i) ^(n % 8))
    ; a switch's compares: each key, then each wide range as r - lo unsigned at most the span
@@ -1231,8 +1257,9 @@
         (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + 48 + 16 * i) (xmmreg i)]) ^8))))
 
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
-   (lobuild g f fs)
-    ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
+   (lobuild g f fs0)
+    (radce g fs0 @ fs
+     ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      raplan g fs @ 'bad (lono g 'ra)
        [f2 loc]
         ((getenv "MOON_LOLAW" @ () ()
@@ -1241,7 +1268,7 @@
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          rasub f2 loc @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
-             sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body))))
+             sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
