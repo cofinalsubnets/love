@@ -384,7 +384,39 @@
              vb (two? kb ? ['int () ()] (lox g env b))
              (lobin g op va vb kb))
          ['call fh as] (locall g env fh as)
+         ; the va_list's fields, as cgexpr's SysV arms lay them
+         ['vastart ap]
+          (lox g env ap @ [_ p fs]
+             (lomk g @ t (pin g 'fesc 1,
+                ['void () (fs + [['li t (8 * peep g 'vagp 0)] ['st4 p 0 t] ['li t (48 + 16 * peep g 'vaxmm 0)] ['st4 p 4 t]
+                                 ['lea t 'r4 16] ['st p 8 t] ['lea t 'r4 (peep g 'rsa 0)] ['st p 16 t]])]))
+             'bad)
+         ['vaend _] ['void () ()]
+         ['vaarg ap ty]
+          (lox g env ap @ [_ p fs] (lovaarg g p fs ty) 'bad)
          (lono g ['expr <e]))
+
+   ; va_arg off the list at p: the old walk, the list in r0 and the fetch address out of r2,
+   ; renamed; a struct's value is that address
+   (lovaarg g p fs ty)
+    (: lov (nlab g ".vo") ld (nlab g ".vd")
+       fl (lofl? ty) foff (fl ? 4 0) lim (fl ? 176 48) step (fl ? 16 8)
+       ovs (n8 \ ['(ld r2 r0 8) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 8 r3)])
+       walk ([['ld4 'r1 'r0 foff] ['cmp 'r1 lim] ['br 'ge lov] '(ld r2 r0 16) '(add r2 r2 r1)
+              ['add 'r1 'r1 step] ['st4 'r0 foff 'r1] ['jmp ld] ['label lov]] + ovs 8 + [['label ld]])
+       (at w) (loren2 g [['r0 p]] 'r2 'long w @ [_ a f2] [a (fs + f2)])
+       (? (ty = 'float || d128? ty || gcplx? ty) (lono g ['vaarg ty])
+          (stru? ty)
+           (: n8 (8 * aslots g ty)
+              (? (8 < asalign g ty) (lono g ['vaarg ty])
+                 (amem? g ty) (at (ovs n8) @ [a f2] [ty a f2])
+                 (aone g ty = 'int || ipair? g ty)
+                  (at ([['ld4 'r1 'r0 0] ['cmp 'r1 (49 - n8)] ['br 'ge lov] '(ld r2 r0 16) '(add r2 r2 r1)
+                        ['add 'r1 'r1 n8] ['st4 'r0 0 'r1] ['jmp ld] ['label lov]] + ovs n8 + [['label ld]]) @
+                   [a f2] [ty a f2])
+                 (lono g ['vaarg ty])))
+          !(losv? ty) (lono g ['vaarg ty])
+          (at walk @ [a f2] (lomkt g ty @ d [ty d (f2 + [(fl ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
    ; a call: the first six gp scalars in registers, the rest in a 16-aligned block at sp. a
    ; direct callee is a known fn, an indirect one a pointer value read after the args
@@ -689,10 +721,11 @@
     ((getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (n = <>f ? (lofn1 g f params sig) 'bad)) @ r
        (getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
-    (sig @ ((rt . _ . va . _) && !va && (rt = 'void || losv? rt) && all (p \ losv? <>p) params &&
+    (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt) && all (p \ losv? <>p) params &&
             #(filter (p \ !(lofl? <>p)) params) <= 6 && #(filter (p \ lofl? <>p) params) <= 8 &&
             !(g 'hasasm || g 'twice || g 'abad || g 'sspf || two? (g 'ltaken)))
        (: _ (pins g 'lon 0 'lotk (lotaken (f 3) ()) 'lowhy () 'loret (lofl? rt ? '(f0) '(r0)))
+          vs (va ? (lovasave g params))
           (go l gi fi env acc)
            (l @ ((nm . ty . _) . u)
                  (: fl (lofl? ty) A (fl ? (xmmreg fi) (argregs gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
@@ -704,9 +737,16 @@
                 [acc env])
           (go params 0 0 () () @ [pe env]
              (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
-                body (lobuild g f (pe + body + fz0 g <>f + peep g 'epi epi)))))
+                body (lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi)))))
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
                            (g 'hasasm) (g 'twice) (g 'abad) (g 'sspf) (two? (g 'ltaken))], 'bad))
+
+   ; a variadic fn (SysV): a 176-byte save area, gp at +0 step 8, xmm at +48 step 16
+   (lovasave g params)
+    (: rsa (nslot g 176) nf #(filter (p \ lofl? <>p) params)
+       (pins g 'rsa rsa 'vagp (#params - nf) 'vaxmm nf 'fesc 1,
+        map (i \ ['st 'r4 (rsa + 8 * i) (argregs i)]) ^6 +
+        (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + 48 + 16 * i) (xmmreg i)]) ^8))))
 
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs)
