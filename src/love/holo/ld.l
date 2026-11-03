@@ -236,7 +236,8 @@
    ;; --- merging: an output section's SHF_MERGE inputs of one flags, entsize and, for strings,
    ;     align are one synthetic section at the first's place, each distinct piece once: 32
    ;     shards by the piece's hash, first-seen within each, laid at the group's final align.
-   ;     answers 'ms id -> {'size 'align 'flags 'entsize 'type 'tab piece -> off}
+   ;     a section a .rel or .rela targets is laid whole, as lld lays it: its pieces differ only
+   ;     once relocated. answers 'ms id -> {'size 'align 'flags 'entsize 'type 'tab piece -> off}
    ;     and 'im isec key -> [id [[start off] ..]]
    (ld-pieces s off size e str)
     (: end (off + size)
@@ -249,6 +250,10 @@
        (go off off ()))
    (ld-merge ot outs)
     (: ms {} im {} nid {'n 0}
+       rt (: t {}
+             (aim oi si) (: r (ot oi 'sec si) (? (elem (r 1) '(4 9)) (pin t (oi * 65536 + r 8) 1) 0))
+             _ (each (keys ot) (oi \ each >^(ot oi 'shnum) (aim oi)))
+             t)
        (one t)
         (: cur {'l ()}
            (find k) (: (go l) (? (atom? l) -1 (<(<l) = k) (<>(<l)) (go >l)) (go (cur 'l)))
@@ -260,7 +265,7 @@
            (step acc x)
             (? (<x != 'isec) (x . acc)
                (: oi (x 1) si (x 2) ob (ot oi) r (ob 'sec si) fl (r 2)
-                  (? (0 = (fl & 16) || r 6 = 0) (x . acc)
+                  (? (0 = (fl & 16) || r 6 = 0 || peep rt (oi * 65536 + si) 0) (x . acc)
                      (: str (0 < (fl & 32))
                         k [fl (r 6) (? str (r 5) 0)]
                         f (find k)
@@ -827,7 +832,8 @@
        oby {} rby {} orph {'l ()}
        (fresh m k nm) (: t {'name nm 'body () 'steps ()} _ (pin m k t, pin orph 'l (t . orph 'l)) t)
        (join t oi si r) (: _ (pin on (key oi si) (t 'name)) (pin t 'rs (['isec oi si (r 4) (r 5) <r] . peep t 'rs ())))
-       ; lld's addOrphanSections: a .rela's target first, a name an output section already has joins it
+       ; lld's addOrphanSections: a .rela's target first, a name an output section already has joins it,
+       ; a link-order section the one of its name whose members link to its link's output
        (add oi si)
         (: r (ot oi 'sec si)
            (? (peep on (key oi si) () != () || ld-rgone? r) 0
@@ -839,8 +845,24 @@
                      (join (: t (peep rby tn ()) (? (t = ()) (: n (fresh rby tn (".rela" + tn)) _ (pin n 'tgt tn) n) t))
                            oi si r)))
               (: s (peep sby <r ())
-                 (join (? (s != ()) s (: t (peep oby <r ()) (? (t = ()) (fresh oby <r <r) t))) oi si r))))
-       _ (foldl (\ oi ob (: _ (each >^(ob 'shnum) (si \ add oi si)) (oi + 1))) 0 objs)
+                 lo (? (s = () && 0 < (r 2 & 128) && r 7 > 0) (: _ (add oi (r 7)) (peep on (key oi (r 7)) ())) ())
+                 nm (? (lo = ()) <r (<r + "\0" + lo))
+                 ; the first output of a name takes that name's plain members, a link-order one too
+                 (join (? (s != ()) s
+                          (: t (peep oby nm ())
+                             (? (t != ()) t
+                                (: u (fresh oby nm nm)
+                                   _ (? (lo = ()) 0 (: _ (pin u 'lto lo) (? (peep oby <r () = ()) (pin oby <r u) 0)))
+                                   u))))
+                       oi si r))))
+       ; a link-order section is added just after its link, among that section's dependents
+       (lo? oi si) (0 < (ot oi 'sec si 2 & 128))
+       (walk oi ob)
+        (: deps {}
+           _ (each (rev >^(ob 'shnum)) (si \ (? (lo? oi si) (: l (ot oi 'sec si 7) (pin deps l (si . peep deps l ()))) 0)))
+           _ (each >^(ob 'shnum) (si \ (? (lo? oi si) 0 (: _ (add oi si) (each (peep deps si ()) (add oi))))))
+           (oi + 1))
+       _ (foldl (\ oi ob (walk oi ob)) 0 objs)
        orphs (rev (orph 'l))
        outs (os + orphs)
        _ (each outs (t \ pin t 'steps (peep t 'steps () + rev (peep t 'rs ()))))
@@ -983,7 +1005,9 @@
                       {'name ".shstrtab" 'stype 3 'flags 0 'al 1 'sz 0}
                       {'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 'strn) 'pieces (st 'strs)}])
        nmoff {}
-       shn (foldl (\ a t (? (peep nmoff (t 'name) ()) a (: _ (pin nmoff (t 'name) #a) (a + t 'name + "\0")))) "\0" outs)
+       ; a link-order output's name carries its link's after a 0, written without it
+       (wn t) (: nm (t 'name) (go k) (? (k >= #nm) nm (nm k = 0) (snip nm 0 k) (go (k + 1))) (go 0))
+       shn (foldl (\ a t (? (peep nmoff (wn t) ()) a (: _ (pin nmoff (wn t) #a) (a + wn t + "\0")))) "\0" outs)
        _ (pin (outs (n0 + 1)) 'sz #shn, pin (outs (n0 + 1)) 'pieces [shn])
        (alloc? t) (0 < (t 'flags & 2))
        fouts (filter alloc? outs + filter (t \ !(alloc? t)) outs)
@@ -995,10 +1019,11 @@
        (w2 n) (ld-le n 2) (w4 n) (ld-le n 4) (w8 n) (ld-le n 8)
        eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 1) (w2 em) (w4 1) (w8 0) (w8 0) (w8 shoff)
                  (w4 0) (w2 64) (w2 0) (w2 0) (w2 64) (w2 shnum) (w2 (n0 + 2))])
-       (lnk t) (? (t 'stype = 4) [(n0 + 1) (shx (t 'tgt))] [(peep t 'link 0) (peep t 'info 0)])
+       (lnk t) (? (t 'stype = 4) [(n0 + 1) (shx (t 'tgt))]
+                  [(: l (peep t 'lto ()) (? (l = ()) (peep t 'link 0) (shx l))) (peep t 'info 0)])
        ; SHF_INFO_LINK a .rela's alone, as lld resolves an input's
        (sh t) (: l (lnk t) f (t 'flags - (t 'flags & 64) + (? (t 'stype = 4) 64 0))
-                 (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (w8 f) (w8 0) (w8 (t 'off))
+                 (cats [(w4 (nmoff (wn t))) (w4 (t 'stype)) (w8 f) (w8 0) (w8 (t 'off))
                         (w8 (t 'sz)) (w4 <l) (w4 (l 1)) (w8 (t 'al)) (w8 (peep t 'entsize 0))]))
        _ (unlink path)
        q (open path "w")
