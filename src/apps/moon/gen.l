@@ -10964,7 +10964,8 @@
        f2 (fold f)
        (seat x)
         (? (atom? x) x
-           (x @ ('decl ps) ['decl (map (p \ (peep val <p 'no @ k (k = 'no ? p [<p <>p ['num k]]))) ps)]
+           ; an entry it does not take keeps its initializer walked: a statement expression there holds decls
+           (x @ ('decl ps) ['decl (map (p \ (peep val <p 'no @ k (k = 'no ? (<p . <>p . seat >>p) [<p <>p ['num k]]))) ps)]
                 (map seat x)))
        (atom? (keys val) ? () (seat f2)))
    ; every __builtin_constant_p decided on what inlining and kprop left: 1 where its operand folds,
