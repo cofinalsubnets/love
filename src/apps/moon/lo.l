@@ -8,17 +8,39 @@
 (:
 
    (losc? ty) (elem ty ints9 || ty = 'bool || ptr? ty)
+   (lofl? ty) (ty = 'double || ty = 'float)
+   (losv? ty) (losc? ty || lofl? ty)
+   (lomkt g ty) (lofl? ty ? (lomkf g) (lomk g))
+   (lomv d s) (lofr? d ? ['movapd d s] ['mov d s])
    ; a pointer's step: the pointee's size, void and functions one byte
    (lostep g ty) (<>ty @ 'void 1 ('fn . _) 1 ('varr . _) 'bad t (tsz g t))
    (lok g e) (knum g e @ ((k . _) && fits32 k) [k] ())
 
    ; a value converted to ty, copied when the conversion writes
    (lotr g (vt r fs) ty)
-    (two? (cvt ty 'r0) && !(irfit? vt ty) ?
-       (lomk g @ t [ty t (fs + [['mov t r]] + cvt ty t)])
+    (? (lofl? ty || lofl? vt) (lotrf g [vt r fs] ty)
+       (two? (cvt ty 'r0) && !(irfit? vt ty)) (lomk g @ t [ty t (fs + [['mov t r]] + cvt ty t)])
        [ty r fs])
+   ; a conversion through the float file: the 64-bit forms, ulong by the old arms' snippets
+   (lotrf g (vt r fs) ty)
+    (? (vt = ty) [ty r fs]
+       (lofl? vt && lofl? ty) (lomkf g @ t [ty t (fs + [[(ty = 'float ? 'cvtsd2ss 'cvtss2sd) t r]])])
+       (lofl? ty && elem vt '(ulong ullong))
+        (loren2 g [['r0 r]] 'f0 'double ul2d @ (_ d f2) (lotrf g ['double d (fs + f2)] ty))
+       (lofl? ty) (lomkf g @ t [ty t (fs + [[(ty = 'float ? 'cvtsi2ss 'cvtsi2sd) t r]])])
+       (ty = 'bool) (lotest g [vt r fs] @ (_ d f2) ['bool d f2])
+       (elem ty '(ulong ullong))
+        (lotrf g [vt r fs] 'double @ (_ d f1) (loren2 g [['f0 d]] 'r0 ty (dtoul g) @ (_ x f2) [ty x (f1 + f2)]))
+       (lomk g @ t [ty t (fs + [[(vt = 'float ? 'cvttss2si 'cvttsd2si) t r]] + cvt ty t)]))
+   ; a scalar's truth as an int 0/1: a float against 0.0, a NaN true
+   (lotest g (vt r fs))
+    (? (lofl? vt)
+        (: t (lomk g) z (lomkf g) a (lomk g) b (lomk g) d (lomk g)
+           ['int d (fs + [['li t 0] ['movqxr z t] [(vt = 'float ? 'ucomiss 'ucomisd) r z]
+                          ['set 'ne a] ['set 'p b] ['mov d a] ['or d d b]])])
+       (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'ne d]])]))
    ; a copy, so the caller may write it in place
-   (locp g (vt r fs)) (lomk g @ t [vt t (fs + [['mov t r]])])
+   (locp g (vt r fs)) (lomkt g vt @ t [vt t (fs + [(lomv t r)])])
    ; a 32-bit unsigned meeting a signed operand: the signed side's pattern zero-extends
    (loz g v other)
     (u32bin? g (vty v) (vty other) && !(usg? (vty v)) && !(ptr? (vty v)) ?
@@ -57,7 +79,9 @@
    (loesc g r) (r @ 'r4 (pin g 'fesc 1) 0)
    ; a scalar load from an address
    (loload g (_ r fs) ty off)
-    (losc? ty ? (lomk g @ t [ty t (fs + [[(ldop ty) t r off]])]) (lono g ['load ty]))
+    (? (losc? ty) (lomk g @ t [ty t (fs + [[(ldop ty) t r off]])])
+       (lofl? ty) (lomkf g @ t [ty t (fs + [[(ty = 'float ? 'ldss 'ldsd) t r off]])])
+       (lono g ['load ty]))
    ; an lvalue's value: an array decays, an aggregate refuses
    (lorv g lv)
     (lv @ ('v r ty) [ty r ()]
@@ -66,8 +90,9 @@
           'bad)
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
    (lost g lv v)
-    (lv @ ('v r ty) (lotr g v ty @ (_ c fs) [(fs + [['mov r c]]) [ty r ()]])
+    (lv @ ('v r ty) (lotr g v ty @ (_ c fs) [(fs + [(lomv r c)]) [ty r ()]])
           (('a (_ b _) ty off) && losc? ty) (lotr g v ty @ (_ c fs) [(fs + [[(stop ty) b off c]]) [ty c ()]])
+          (('a (_ b _) ty off) && lofl? ty) (lotr g v ty @ (_ c fs) [(fs + [[(ty = 'float ? 'stss 'stsd) b off c]]) [ty c ()]])
           (_ _ ty . _) (lono g ['store ty])
           'bad)
    ; the lvalue's own forms, laid once before its use, and the lvalue without them
@@ -78,6 +103,7 @@
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
     (? (bad? a || bad? b) 'bad
+       (lofl? (vty a) || lofl? (vty b)) (lobinf g op a b)
        !(losc? (vty a) && losc? (vty b)) (lono g ['bin op (vty a) (vty b)])
        (: ta (vty a) tb (vty b)
           (? (locmp? op)
@@ -106,6 +132,27 @@
                  (loz g a b @ (_ x fx) (loz g b a @ (_ y fy) (lomk g @ d
                     [(rbin g ta tb) d (fx + fy + [(io @ ('rem || 'urem) [io d x y 'r0] [io d x y])])]))))
              (lono g ['bin op]))))
+   ; the float lane: both sides to the wider of float and double, two-address
+   (lobinf g op a b)
+    (: ta (vty a) tb (vty b)
+       ft (ta = 'double || tb = 'double ? 'double 'float)
+       s (ft = 'float)
+       (? !(losv? ta && losv? tb) (lono g ['bin op ta tb])
+          (lotr g a ft @ (_ x fx)
+             (lotr g b ft @ (_ y fy)
+                (? (elem op '(+ - * /))
+                    (lomkf g @ d [ft d (fx + fy + [['movapd d x]
+                                                   [(op @ '+ (s ? 'addss 'addsd) '- (s ? 'subss 'subsd) '* (s ? 'mulss 'mulsd) (s ? 'divss 'divsd)) d y]])])
+                   (locmp? op) (lofcmp g op s x y (fx + fy))
+                   (lono g ['bin op ft]))))))
+   ; x64's above and ae are false on a NaN: lt and le compare swapped, eq and ne carry parity
+   (lofcmp g op s x y fs)
+    (: uc (s ? 'ucomiss 'ucomisd)
+       (op @ ('lt || 'le) (lomk g @ d ['int d (fs + [[uc y x] ['set (op = 'lt ? 'above 'ae) d]])])
+             ('gt || 'ge) (lomk g @ d ['int d (fs + [[uc x y] ['set (op = 'gt ? 'above 'ae) d]])])
+             _ (: a (lomk g) b (lomk g) d (lomk g)
+                  ['int d (fs + [[uc x y]] + (op = 'eq ? [['set 'eq a] ['set 'np b] ['mov d a] ['and d d b]]
+                                                          [['set 'ne a] ['set 'p b] ['mov d a] ['or d d b]]))])))
    (lolog n) (n <= 1 ? 0 (1 + lolog (n // 2)))
    ; a shift keeps the left type; x64's variable count rides r1
    (losh g op (ta ra fa) b kb)
@@ -126,6 +173,13 @@
    (loseq l) (foldl (a \ t \ (bad? a ? 'bad (t 0 @ 'bad 'bad fs (a + fs)))) () l)
    (lol x _) x
 
+   ; a float's post step: the old value answers, the store takes it plus the step
+   (lopostf g env l lb o step)
+    (locp g o @ (ty t fo)
+       (lox g env ['num step] @ 'bad 'bad
+          kv (lobin g '+ [ty t ()] kv () @ 'bad 'bad
+                nv (lost g lb nv @ (fs _) [ty t (lolvfs l + fo + fs)] 'bad))))
+
    ; -- branches: to L when e's truth is sense --
    (lobr g env e sense L)
     (: (br x s L2 _) (lobr g env x s L2)
@@ -137,13 +191,14 @@
                 (nlab g ".lo" @ k (loseq [(br a 1 k) (br b 0 L) (lol [['label k]])])))
             ('un 'not x) (lobr g env x (sense ? 0 1) L)
             (('bin op a b) && locmp? op)
-             (lox g env a @ ((ta ra fa) && losc? ta)
-                (lox g env b @ ((tb rb fb) && losc? tb)
-                   (loz g [ta ra fa] [tb rb fb] @ (_ x fx) (loz g [tb rb fb] [ta ra fa] @ (_ y fy)
-                      (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g ta tb)) L]])))
-                   'bad)
-                'bad)
+             (lox g env a @ 'bad 'bad
+                va (lox g env b @ 'bad 'bad
+                      vb (? !(losc? (vty va) && losc? (vty vb))
+                             (lobin g op va vb () @ (_ d fs) (fs + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]) 'bad)
+                            (loz g va vb @ (_ x fx) (loz g vb va @ (_ y fy)
+                               (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
             (lox g env e @ ((ty r fs) && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
+                           ((ty r fs) && lofl? ty) (lotest g [ty r fs] @ (_ d f2) (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad)))
 
    ; -- expressions -> (ty vreg forms) | 'bad --
@@ -151,6 +206,7 @@
     (e @ ('num v)
           (-9223372036854775808 <= v && v <= 18446744073709551615 ?
              (lomk g @ t [(numty v) t [['li t v]]]) 'bad)
+         ('flo v) (lomk g @ t (lomkf g @ w ['double w [['li t (fbits v)] ['movqxr w t]]]))
          ('str s)
           (nlab g ".S" @ lbl
              (pin g 'strs ([lbl s] . g 'strs),
@@ -172,10 +228,11 @@
              l (: lb (lolvbare l)
                   (lorv g lb @ 'bad 'bad
                      o (: ty (vty o)
-                          (lostep g (ptr? ty ? ty ['ptr 'void]) @ 'bad 'bad
+                          (lofl? ty ? (lopostf g env l lb o step)
+                             (lostep g (ptr? ty ? ty ['ptr 'void]) @ 'bad 'bad
                              sz (locp g o @ (_ t fo) (lomk g @ n
                                    (lost g lb [(ptr? ty ? ty (rbin g ty 'int)) n [['mov n t] ['add n n (step * sz)]]] @
-                                      (fs _) [ty t (lolvfs l + fo + fs)] 'bad))))))))
+                                      (fs _) [ty t (lolvfs l + fo + fs)] 'bad)))))))))
          ('rmw op dst rhs)
           (lolv g env dst @ 'bad 'bad
              l (: lb (lolvbare l)
@@ -183,14 +240,18 @@
                   (lobin g op vo vr (elem op '(shl shr) ? (lok g rhs)) @ 'bad 'bad
                      r (lost g lb r @ (fs (ty x _)) [ty x (lolvfs l + fs)] 'bad))))
          ('cast 'void x) (lox g env x @ (_ _ fs) ['void () fs] 'bad)
+         ('cast 'float ('flo v)) (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
          ('cast ty x)
           (lox g env x @ ((vt r fs) && losc? ty && losc? vt)
                           (two? (cvt ty r) ? (locp g [vt r fs] @ (_ t f2) [ty t (f2 + cvt ty t)]) [ty r fs])
+                         ((vt r fs) && losv? ty && losv? vt) (lotr g [vt r fs] ty)
                          'bad)
          ; -1 and ~0 are literals, typed as C reads them
          (('un _ _) && two? (litv e)) (lox g env ['num <(litv e)])
          ('un 'not x)
-          (lox g env x @ ((ty r fs) && losc? ty) (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'eq d]])]) 'bad)
+          (lox g env x @ ((ty r fs) && losc? ty) (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'eq d]])])
+                         ((ty r fs) && lofl? ty) (lotest g [ty r fs] @ (_ t f2) (lomk g @ d ['int d (f2 + [['cmp t 0] ['set 'eq d]])]))
+                         'bad)
          (('un op x) && elem op '(neg bnot))
           (lox g env x @ ((ty r fs) && losc? ty)
              (: uty (usg? ty && !(elem ty '(uchar cchar ushort)))
@@ -198,6 +259,11 @@
                 (locp g [ty r fs] @ (_ d f2)
                    [(? uty ty sty 'int 'long) d
                     (f2 + [[(op = 'neg ? 'neg 'not) d]] + (? uty (ty @ 'uint [['zx4 d]] ()) sty [['sx4 d]] ()))]))
+             ; a float's sign flips through the gp file
+             ((ty r fs) && lofl? ty && op = 'neg)
+              (: t (lomk g) k (lomk g) d (lomkf g) s (ty = 'float)
+                 [ty d (fs + [[(s ? 'movdrx 'movqrx) t r] ['li k (s ? 2147483648 -9223372036854775808)] ['xor t t k]
+                              [(s ? 'movdxr 'movqxr) d t]])])
              'bad)
          ('comma a b) (lox g env a @ (_ _ fa) (lox g env b @ (t r fb) [t r (fa + fb)] 'bad) 'bad)
          (('land || 'lor) . _)
@@ -211,11 +277,13 @@
                       va (lox g env b @ 'bad 'bad
                             vb (? (vty va = 'void || vty vb = 'void)
                                    ['void () (fc + vfs va + [['jmp ld] ['label le]] + vfs vb + [['label ld]])]
-                                  !(losc? (vty va) && losc? (vty vb)) 'bad
+                                  !(losv? (vty va) && losv? (vty vb)) 'bad
                                   (: ta (vty va) tb (vty vb)
-                                     rt (? (ptr? ta) ta (ptr? tb) tb (rbin g ta tb))
-                                     (loz g (lotr g va rt) vb @ (_ x fx) (loz g (lotr g vb rt) va @ (_ y fy) (lomk g @ d
-                                        [rt d (fc + fx + [['mov d x] ['jmp ld] ['label le]] + fy + [['mov d y] ['label ld]])]))))))))))
+                                     fl (lofl? ta || lofl? tb)
+                                     rt (? (ptr? ta) ta (ptr? tb) tb fl (ta = 'double || tb = 'double ? 'double 'float) (rbin g ta tb))
+                                     (z v w) (fl ? (lotr g v rt) (loz g (lotr g v rt) w))
+                                     (z va vb @ (_ x fx) (z vb va @ (_ y fy) (lomkt g rt @ d
+                                        [rt d (fc + fx + [(lomv d x) ['jmp ld] ['label le]] + fy + [(lomv d y) ['label ld]])]))))))))))
          ('bin op a b)
           (: kb (elem op '(shl shr) ? (lok g b))
              va (lox g env a)
@@ -241,9 +309,11 @@
                'bad 'bad
                (ty . _) (lono g ['callee ty])))
    ; a snippet over r0..r3 renamed onto fresh vregs, r0 the operand in and the answer out
-   (loren g v fs)
-    (foldl (t \ r \ pin t r (lomk g)) {} '(r0 r1 r2 r3) @
-     t ['long (t 'r0) ([['mov (t 'r0) v]] + map (f \ map (x \ peep t x x) f) fs)])
+   (loren g v fs) (loren2 g [['r0 v]] 'r0 'long fs)
+   ; ..and over f0..f3 too: ins [register value].. copied in, the answer out of o
+   (loren2 g ins o ty fs)
+    (foldl (t \ r \ pin t r (lofr? r ? (lomkf g) (lomk g))) {} '(r0 r1 r2 r3 f0 f1 f2 f3) @
+     t [ty (t o) (map (p \ lomv (t <p) <>p) ins + map (f \ map (x \ peep t x x) f) fs)])
    ; raw bytes on fixed registers: the operand in r0, the answer out of it, ds what it writes
    (lofix g v ds fs)
     (lomk g @ d ['long d [['mov 'r0 v] ['fix '(r0) ds fs] ['mov d 'r0]]])
@@ -366,25 +436,33 @@
              (vt . _) (lono g ['atomic vt]))))
    ; cl the call form, fv the callee's (vreg forms) | (); va also lays al, the vector count
    (locall1 g env rt ptys va as cl fv)
-    (? !(rt = 'void || losc? rt) (lono g ['ret rt])
+    (? !(rt = 'void || losv? rt) (lono g ['ret rt])
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
        (: (arg e pt)
-           (lox g env e @ ((vt r fs) && losc? vt)
-                           (pt @ 'none [vt r fs] p9 (losc? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+           (lox g env e @ ((vt r fs) && losv? vt)
+                           (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
+                                 p9 (losv? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
           (go l i acc)
            (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [v])))
                 acc)
           (go as 0 () @ 'bad 'bad
-             vs (: n (min 6 #vs) rs (take n argregs) d (lomk g)
-                   sk (drop 6 vs) blk (aup (8 * #sk) 16)
-                   al (va ? [['li 'r0 0]])
-                   res (rt @ 'void () (['mov d 'r0] . map (f \ [<f d]) (rext g rt)))
+             ; each arg to the next register of its file, or past them to the block, in order
+             vs (: pl (foldl (s \ v \ (s @ (gi fi rg sk)
+                                       (? (lofr? (vreg v)) (fi < 8 ? [gi (fi + 1) (rg + [[(xmmreg fi) v]]) sk] [gi fi rg (sk + [v])])
+                                          (gi < 6) [(gi + 1) fi (rg + [[(argregs gi) v]]) sk]
+                                          [gi fi rg (sk + [v])])))
+                              [0 0 () ()] vs)
+                   nf (pl 1) rg (pl 2) sk (pl 3) rs (map (x \ <x) rg)
+                   d (lomkt g rt) blk (aup (8 * #sk) 16)
+                   al (va ? [['li 'r0 nf]])
+                   (stk v) [(vty v @ 'float 'stss 'double 'stsd 'st) 'sp 0 (vreg v)]
+                   res (? (rt = 'void) () (lofl? rt) [['movapd d 'f0]] (['mov d 'r0] . map (f \ [<f d]) (rext g rt)))
                    [rt (rt = 'void ? () d)
                     (catmap vfs vs + (fv @ (_ ffs) ffs ()) +
-                     (blk = 0 ? () ([['sub 'sp 'sp blk]] + map (k \ ['st 'sp (8 * k) (vreg (sk k))]) ^#sk)) +
-                     map (k \ ['mov (rs k) (vreg (vs k))]) ^n + al +
+                     (blk = 0 ? () ([['sub 'sp 'sp blk]] + map (k \ (stk (sk k) @ (o b _ x) [o b (8 * k) x])) ^#sk)) +
+                     map (p \ lomv <p (vreg <>p)) rg + al +
                      [('(cuse) + rs + (va ? '(r0)) + (fv @ (fr _) [fr] ()))] + cl +
                      (blk = 0 ? () [['add 'sp 'sp blk]]) + res)]))))
 
@@ -402,7 +480,7 @@
              (: rt <(peep (g 'sigs) (g 'fn) ['long ()]) epj (peep g 'epi epi)
                 (lox g env e @ 'bad 'bad
                    ((_ _ fs) && rt = 'void) (fs + epj)
-                   ((vt r fs) && losc? rt && losc? vt) (lotr g [vt r fs] rt @ (_ c f2) (f2 + [['mov 'r0 c]] + epj))
+                   ((vt r fs) && losv? rt && losv? vt) (lotr g [vt r fs] rt @ (_ c f2) (f2 + [(lomv (lofl? rt ? 'f0 'r0) c)] + epj))
                    'bad))
             ('blk items) (loitems g env items)
             ('if c t)
@@ -473,8 +551,8 @@
                  (? (rest @ (_ . x . _) x ()) (lono g 'regasm)
                     (gvarr? ty) (lono g 'vla)
                     (init @ ('init . _) 1 ()) (lono g ['init ty])
-                    (losc? ty && nelem nm (g 'lotk))
-                     (lomk g @ r
+                    (losv? ty && nelem nm (g 'lotk))
+                     (lomkt g ty @ r
                         (: e2 ([nm 'v r ty] . env)
                            (init @ () (go u e2 acc)
                                    _ (lox g env init @ 'bad 'bad
@@ -482,7 +560,7 @@
                     (ntmp g ty @ off
                        (: e2 ([nm 'm off ty] . env)
                           (init @ () (go u e2 acc)
-                                  _ (? !(losc? ty) (lono g ['init ty])
+                                  _ (? !(losv? ty) (lono g ['init ty])
                                        (lox g env init @ 'bad 'bad
                                           v (lost g ['a ['long 'r4 ()] ty off] v @ (fs _) (go u e2 (acc + fs)) 'bad))))))))
              [acc env])
@@ -494,17 +572,20 @@
     ((getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (n = <>f ? (lofn1 g f params sig) 'bad)) @ r
        (getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
-    (sig @ ((rt . _ . va . _) && !va && (rt = 'void || losc? rt) && #params <= 6 && all (p \ losc? <>p) params &&
+    (sig @ ((rt . _ . va . _) && !va && (rt = 'void || losv? rt) && all (p \ losv? <>p) params &&
+            #(filter (p \ !(lofl? <>p)) params) <= 6 && #(filter (p \ lofl? <>p) params) <= 8 &&
             !(g 'hasasm || g 'twice || g 'abad || g 'sspf || two? (g 'ltaken)))
-       (: _ (pins g 'lon 0 'lotk (lotaken (f 3) ()) 'lowhy ())
-          (go l i env acc)
+       (: _ (pins g 'lon 0 'lotk (lotaken (f 3) ()) 'lowhy () 'loret (lofl? rt ? '(f0) '(r0)))
+          (go l gi fi env acc)
            (l @ ((nm . ty . _) . u)
-                 (: A (argregs i)
+                 (: fl (lofl? ty) A (fl ? (xmmreg fi) (argregs gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
                     (elem nm (g 'lotk) ?
-                       (ntmp g ty @ off (go u (i + 1) ([nm 'm off ty] . env) (acc + cvt ty A + [[(stop ty) 'r4 off A]])))
-                       (lomk g @ r (go u (i + 1) ([nm 'v r ty] . env) (acc + [['mov r A]] + cvt ty r)))))
+                       (ntmp g ty @ off
+                          (go u g2 f2 ([nm 'm off ty] . env)
+                              (acc + (fl ? [[(ty = 'float ? 'stss 'stsd) 'r4 off A]] (cvt ty A + [[(stop ty) 'r4 off A]])))))
+                       (lomkt g ty @ r (go u g2 f2 ([nm 'v r ty] . env) (acc + [(lomv r A)] + (fl ? () (cvt ty r)))))))
                 [acc env])
-          (go params 0 () () @ (pe env)
+          (go params 0 0 () () @ (pe env)
              (loitems g env (f 3 @ ('blk items) items x [x]) @ 'bad 'bad
                 body (lobuild g f (pe + body + fz0 g <>f + peep g 'epi epi)))))
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
