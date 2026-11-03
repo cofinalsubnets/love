@@ -332,7 +332,7 @@
         """
    _ (test (kly-link (klr-put "s1" kly-s1) = "d0eab407d0166d746ba55adf3261d7380005eb269efd5a9e0e6766354d49cbca"))
    ; a spaced =fill, . = ASSERT(..) and . += n in a section with no inputs, which keeps no exec
-   (test
+   _ (test
       (kly-with """
         PHDRS { text PT_LOAD FLAGS(5); data PT_LOAD FLAGS(6); }
         SECTIONS {
@@ -346,7 +346,18 @@
          _end = .;
         }
         """ (klr-put "s1" kly-s1)
-      = "2c83a02a15ae55361c263391982c49094610a24e68f81a274a7bafe863d2cc6b")))
+      = "2c83a02a15ae55361c263391982c49094610a24e68f81a274a7bafe863d2cc6b"))
+   ; --build-id: the note holds sha256's first 20 bytes over the file with the id still zero
+   (test
+      (: sc "out/.klb.lds" dst "out/.klb" a (klr-put "s1" kly-s1) q (open sc "w")
+         _ (say q "SECTIONS { . = 0; .text : { *(.text) } .notes : { *(.note.*) } .data : { *(.data) } .bss : { *(.bss) } }", close q)
+         _ (ld-ld (ld-args ["-m" "elf_x86_64" "-z" "noexecstack" "-z" "norelro" "-u" "later" "--build-id=sha1" "-T" sc a "-o" dst]))
+         s <>(uread dst) hd (string [4 0 0 0 20 0 0 0 3 0 0 0 71 78 85 0])
+         i ((: (f i) (? (i + 36 > #s) -1 (snip s i (i + 16) = hd) (i + 16) (f (i + 1)))) 0)
+         h (sha256 (snip s 0 i + string (map (_ \ 0) ^20) + snip s (i + 20) #s))
+         (d c) (? (c < 58) (c - 48) (c - 87))
+         _ (unlink a, unlink sc, unlink dst)
+         (i > 0 && map (k \ s (i + k)) ^20 = map (k \ d (h (2 * k)) * 16 + d (h (2 * k + 1))) ^20))))
 
 ; --- ldemit's context is 11 slots, and one short of it is refused, not laid as no bytes
 (test

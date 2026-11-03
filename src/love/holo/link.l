@@ -68,7 +68,8 @@
    ;   'sec        index -> [name type flags off size align entsize link info]
    ;   'syms 'nsym index -> [name bind type shndx value size other], 'nsym 0 with no .symtab
    ;   'rela       target index -> [(off kind sym addend) ..] in file order, the addend ()
-   ;               on a REL; 'rels the same as [(target . entries) ..] in header order
+   ;               on a REL; 'rels the same as [(target . entries) ..] in header order.
+   ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
    (ld-obj id s rels?)
     (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
        fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
@@ -85,7 +86,7 @@
                               (pin sec i [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
                                           (f h ha) (f h he) (f h hl) (f h hi)]))))
        ob {'id id 'src s 'class (? (s 4 = 2) 64 32) 'type (rle16 s 16) 'mach (rle16 s 18) 'shnum shnum
-           'sec sec 'syms {} 'nsym 0 'rela {} 'rels ()}
+           'sec sec 'syms {} 'nsym 0 'rela {} 'rels () 'relz {}}
        ; held to sh_entsize: a wrong stride reads well-formed garbage
        (esz r want) (? (r 6 = ld-n fs want) 0 (scare 'link-entsize <r))
        symi ((: (g i) (? (shnum <= i) -1 (sec i 1 = 2) i (g (i + 1)))) 1)
@@ -99,17 +100,30 @@
                                              (f e yx) (f e yv) (f e yz) (s (e + yo))]))))))
        rty (? (s 4 = 2) 4 9) re (ld-n fs 'rl-ent)
        ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
-       (ents r) (: (go k acc) (? (k < 0) acc
-                                 (: e (r 3 + re * k)
-                                    (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
-                   (go (r 4 // re - 1) ()))
+       ; entries i to j of the section r holds
+       (ents r i j) (: (go k acc) (? (k < i) acc
+                                     (: e (r 3 + re * k)
+                                        (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
+                       (go (j - 1) ()))
        _ (? rels? (each ^shnum (i \ (: r (sec i)
-                                       (? (r 1 = rty) (: _ (esz r 'rl-ent) es (ents r)
-                                                         (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))
-                                          0))))
+                                       (? (r 1 != rty) 0
+                                          (: _ (esz r 'rl-ent)
+                                             (? (rels? = 2) (pin (ob 'relz) (r 8) (q \ (? (q = ()) (r 4 // re) (ents r <q (q 1)))))
+                                                (: es (ents r 0 (r 4 // re)) (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))))))))
             0)
        _ (pin ob 'rels (rev (ob 'rels)))
        ob)
+
+   ; section si's relocations, decoded afresh under 'relz; the target sections that have them
+   (ld-relas ob si) (: z (peep (peep ob 'relz {}) si ()) (? (z = ()) (peep (ob 'rela) si ()) (z [0 (z ())])))
+   (ld-reltgs ob) (keys (ob 'rela) + keys (peep ob 'relz {}))
+   ; a cursor over them, ld-relnext answering the next k at most, () once done
+   (ld-relcur ob si)
+    (: z (peep (peep ob 'relz {}) si ())
+       (? (z = ()) {'l (peep (ob 'rela) si ()) 'n -1} {'f z 'i 0 'n (z ())}))
+   (ld-relnext c k)
+    (? (c 'n < 0) (: l (c 'l) _ (pin c 'l ()) l)
+       (: i (c 'i) j (min (c 'n) (i + k)) _ (pin c 'i j) (? (i < j) ((c 'f) [i j]) ())))
 
    ; --- the relocation table, every machine's: e_machine -> kind -> (width how), how the
    ; field takes S+A at P. RELA: abs whole, pc S+A-P whole, abs32 four bytes in either range,

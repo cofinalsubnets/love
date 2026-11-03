@@ -43,9 +43,9 @@
    ;   'id 'src 'shnum
    ;   'sec          index -> [name type flags off size align entsize link info]
    ;   'syms 'nsym   index -> [name bind type shndx value size other]
-   ;   'rela         target section index -> [(off kind sym addend) ..], ascending by off
+   ;   'relz         target section index -> its relocations' decoder (ld-relas)
    (ld-rel64 id s)
-    (: r (ld-obj id s 1)
+    (: r (ld-obj id s 2)
        _ (r 'class = 64 && r 'type = 1 ? 0 (scare 'link-not-rel64 id))
        _ (r 'nsym > 0 ? 0 (scare 'link-no-symtab id))
        _ (each ^(r 'shnum) (i \ (r 'sec i 1 = 9 ? (scare 'link-rel id))))
@@ -336,7 +336,7 @@
                      (sy 1 = 2 && sy 3 = 0 && atom? (peep (lk 'cx 'glob) <sy ())))
        (one x)
         (: oi (x 1) si (x 2) ob (lk 'ot oi) r (ob 'sec si) key (oi * 65536 + si)
-           (each (? (0 < (r 2 & 2)) (peep (ob 'rela) si ()) ())
+           (each (? (0 < (r 2 & 2)) (ld-relas ob si) ())
               (e \ (? (e 1 != peep lk 'abs 257) 0
                       (wu? ob e) (pin rela 'l ([key e 1] . rela 'l))
                       (peep lk 'relr 1 && r 5 >= 2 && <e % 2 = 0) (pin relr 'l ([key <e] . relr 'l))
@@ -495,17 +495,21 @@
                     (ld-le 3573751839 4 + refix-with be 'adr21 (ld-le (268435456 + rd) 4) v p 4)
                     ()))
               ()))
-       ; under a writer's sink the pieces leave every 4096 fields, not held to the end
+       ; under a writer's sink the pieces leave every 4096 fields, not held to the end. the
+       ; relocations come off a cursor 4096 at a time, one ahead kept for relax
        sink (peep lk 'sink ())
-       (go pos es acc c)
-        (? (atom? es) (snip s pos (o0 + sz) . acc)
+       cur (ld-relcur ob si)
+       (more es) (? (two? es && two? >es) es (: m (ld-relnext cur 4096) (? (atom? m) es (es + m))))
+       (go pos es0 acc c)
+        (: es (more es0)
+         (? (atom? es || <(<es) >= to) (snip s pos (o0 + sz) . acc)
+           (<(<es) < from) (go pos >es acc c)
            (c > 4095 && sink != ()) (: _ (sink acc) (go pos es () 0))
            (: e <es x (relax e (? (two? >es) <(>es) ()))
               (? (two? x) (go (o0 + <e + 8) >(>es) (x . snip s pos (o0 + <e) . acc) (c + 1))
                  (: b (field e)
-                    (go (o0 + <e + #b) >es (b . snip s pos (o0 + <e) . acc) (c + 1))))))
-       (? (r 1 = 8) (ld-zp (to - from) acc)
-          (go (o0 + from) (filter (e \ from <= <e && <e < to) (peep (ob 'rela) si ())) acc 0)))
+                    (go (o0 + <e + #b) >es (b . snip s pos (o0 + <e) . acc) (c + 1)))))))
+       (? (r 1 = 8) (ld-zp (to - from) acc) (go (o0 + from) () acc 0)))
    ;; --- .eh_frame as lld lays it: each input's records split, a CIE once by its bytes and
    ;     personality, in the order first seen, each followed by the FDEs whose function's
    ;     section is laid, then a zero terminator. the inputs give way to one synthetic
@@ -529,7 +533,9 @@
                             (? (len = 0) (rev acc) (len = 4294967295) (scare 'link-eh64 (ob 'id))
                                (go (p + 4 + len) ([p (p + 4 + len) (rle32 s (o0 + p + 4))] . acc)))))
            (go 0 ()))
-       (first oi si a b) (: es (filter (e \ a <= <e && <e < b) (peep (ot oi 'rela) si ()))
+       rc {}
+       (rels oi si) (: k (oi * 65536 + si) _ (? (peep rc k 0 = 0) (pin rc k (ld-relas (ot oi) si)) 0) (rc k))
+       (first oi si a b) (: es (filter (e \ a <= <e && <e < b) (rels oi si))
                             (? (atom? es) () <(sort es)))
        cies {} order {'l ()} nf {'n 0}
        (one x)
@@ -836,8 +842,9 @@
        q (open path "w")
        ; under --build-id the bytes are hashed as they go, the id's own still zero
        hs (? (peep lk 'bid 0) (: h (cask 105) _ (sha256-init h) h) ())
-       (put ps) (each ps (p \ (: b (? (two? p) (cask p) p)
-                                (? (two? p || #p > 0) (: _ (say q b) (? (hs = ()) 0 (sha256-feed hs b))) 0))))
+       ; a piece is a text, a list of bytes or a cask: the hash takes only a text
+       (put ps) (each ps (p \ (: b (? (string? p) p (string p))
+                                (? (#b > 0) (: _ (say q b) (? (hs = ()) 0 (sha256-feed hs b))) 0))))
        ; a section's pieces as they come, newest first; fl counts their bytes
        fl {'n 0}
        (sink acc) (: ps (rev acc) _ (pin fl 'n (fl 'n + foldl (\ a p (a + #p)) 0 ps)) (put ps))
@@ -1024,9 +1031,9 @@
        used {}
        _ (each ^(cx 'n)
            (oi \ (: ob (ot oi)
-                    (each (keys (ob 'rela))
+                    (each (ld-reltgs ob)
                        (tg \ (? (peep on (oi * 65536 + tg) () = ()) 0
-                                (each (ob 'rela tg) (e \ pin used (sk oi (e 2)) 1))))))))
+                                (each (ld-relas ob tg) (e \ pin used (sk oi (e 2)) 1))))))))
        _ (each ^(cx 'n)
            (oi \ (: ob (ot oi) sy (ob 'syms)
                     (each >^(ob 'nsym)
@@ -1101,7 +1108,7 @@
        (? (r 1 = 8) (ld-zp sz acc)
           (r 1 = 4) (foldl (\ a p (p . a)) acc (ld-rrela lk oi (r 8)))
           (0 = (r 2 & 2) && ld-debug? <r)
-           (go o0 (sort (filter (e \ elem (e 1) '(257 258) && undef? e) (peep (ob 'rela) si ()))) acc)
+           (go o0 (sort (filter (e \ elem (e 1) '(257 258) && undef? e) (ld-relas ob si))) acc)
           (snip s o0 (o0 + sz) . acc)))
 
    ; object oi's relocations of section tg as lld -r copies them: the offset from the output
@@ -1119,7 +1126,7 @@
                                         (row off (sidx n * 4294967296 + k) (at oi (sy 3) (sy 4 + e 3) - va n))))
                        (sy 1 = 0) (row off (peep lidx (oi * 16777216 + e 2) 0 * 4294967296 + k) (e 3))
                        (row off (gidx <sy * 4294967296 + k) (e 3)))))
-            (ob 'rela tg)))
+            (ld-relas ob tg)))
 
    ; the relocatable file: no program headers, every address 0, the allocated sections' bytes
    ; first, then .symtab .shstrtab .strtab; answers its size
