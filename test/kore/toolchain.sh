@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/kore/toolchain.sh -- as, ar, ld, objcopy, nm, size, strip, ranlib, x86-64 only
+# test/kore/toolchain.sh -- as, ar, ld, objcopy, nm, size, strip, ranlib, readelf, objdump, x86-64 only
 . "$(dirname "$0")/common.sh"
 
 if [ "$(uname -m)" = x86_64 ]; then
@@ -143,6 +143,29 @@ if command -v readelf >/dev/null 2>&1; then
   done
   LC_ALL=C readelf -h "$ho/.kore-re-x64.o" "$ho/.kore-re-a64.o" > "$g" 2>&1
   korerun readelf -h "$ho/.kore-re-x64.o" "$ho/.kore-re-a64.o" > "$o" 2>&1; same "readelf over two files"
+fi
+# the kernel's tools are llvm's, so llvm is the oracle where it is installed: nm (a name's
+# twins in size then value order, two statics named alike in one exe), readelf -r and
+# objdump -r over each target's objects and exes
+if command -v llvm-nm >/dev/null 2>&1 && command -v llvm-readelf >/dev/null 2>&1 \
+   && command -v llvm-objdump >/dev/null 2>&1; then
+  printf 'int x = 3;\nstatic int y;\nint f(void) { return x + y; }\nint main(void) { return f(); }\n' > "$ho/.kore-re.c"
+  printf 'static int dup(void) { return 1; }\nint a(void) { return dup(); }\n' > "$ho/.kore-tw1.c"
+  printf 'static int dup(void) { volatile int z = 2; return z * 3; }\nint b(void) { return dup(); }\nint a(void);\nint main(void) { return a() + b(); }\n' > "$ho/.kore-tw2.c"
+  moonc "$ho/.kore-tw1.c" "$ho/.kore-tw2.c" -o "$ho/.kore-tw.elf" >/dev/null 2>&1 || fail "kore nm: mooncc twins"
+  fs="$ho/.kore-tw.elf"
+  for t in x64 a64 rv64 thumb2; do
+    moonc -t $t -c "$ho/.kore-re.c" -o "$ho/.kore-ll-$t.o" >/dev/null 2>&1 && fs="$fs $ho/.kore-ll-$t.o"
+    [ $t = thumb2 ] || { moonc -t $t "$ho/.kore-re.c" -o "$ho/.kore-ll-$t.elf" >/dev/null 2>&1 && fs="$fs $ho/.kore-ll-$t.elf"; }
+  done
+  for f in $fs; do
+    for op in "" -n -S; do
+      # shellcheck disable=SC2086
+      llvm-nm $op "$f" > "$g" 2>&1; korerun nm $op "$f" > "$o" 2>&1; same "nm $op $f (llvm-nm)"
+    done
+    llvm-readelf -rW "$f" > "$g" 2>&1; korerun readelf -rW "$f" > "$o" 2>&1; same "readelf -rW $f (llvm-readelf)"
+    llvm-objdump -r "$f" > "$g" 2>&1; korerun objdump -r "$f" > "$o" 2>&1; same "objdump -r $f (llvm-objdump)"
+  done
 fi
 # with no nest and no tree, mooncc takes its toolchain off the binary's own source slice:
 # a stdio hello compiles, links and runs from a scratch dir
@@ -295,4 +318,4 @@ if command -v bison >/dev/null 2>&1; then
   bison -o "$Y/b.c" --defines="$Y/b.h" -t -l "$Y/t.y" 2>/dev/null && moonc "$Y/b.c" "$Y/b" > /dev/null 2>&1 || fail "bison's parser"
   { "$Y/b" < "$Y/in"; printf foo | "$Y/b"; } > "$g"; same "yacc C parser vs bison"
 fi
-echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + lex + yacc ok"
+echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + objdump + lex + yacc ok"
