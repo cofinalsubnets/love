@@ -253,7 +253,8 @@
 ;                                      'apron 'modesty 'seat 'back 'arms 'shelves 'drawers
 ;                                      'doors 'over 'slats, 'fill 'books or a MAKE given each
 ;                                      'fill-w slot as line-up does, 'seed, and 'skin of
-;                                      'top 'frame 'body 'soft, each a texture or a kind
+;                                      'top 'frame 'body 'soft 'feet, each a texture, a skin
+;                                      or a kind; 'feet a star's casters, the frame's unless said
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
 ;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
@@ -842,8 +843,8 @@
            'panels (sides y1)
            'trestle (sides y1 + [(bx (I - W) (0.15 * y1) (0.0 - L) (W - I) (0.15 * y1 + 2.0 * L) L 'frame)])
            'pedestal (: r (0.6 * min W D) [(bx (-3.0 * L) 0.0 (-3.0 * L) (3.0 * L) y1 (3.0 * L) 'frame) (bx (0.0 - r) 0.0 (0.0 - r) r 0.03 r 'frame)])
-           'star ([(bx (0.0 - L) 0.09 (0.0 - L) L y1 L 'frame) (bx -0.28 0.06 (0.0 - L) 0.28 0.09 L 'frame) (bx (0.0 - L) 0.06 -0.28 L 0.09 0.28 'frame)]
-                  + map (c \ bx (c 0 - 0.025) 0.0 (c 1 - 0.025) (c 0 + 0.025) 0.06 (c 1 + 0.025) 'frame) [[0.26 0.0] [-0.26 0.0] [0.0 0.26] [0.0 -0.26]])
+           'star ([(bx (0.0 - L) 0.09 (0.0 - L) L y1 L 'frame) (bx -0.28 0.06 -0.02 0.28 0.09 0.02 'frame) (bx -0.02 0.06 -0.28 0.02 0.09 0.28 'frame)]
+                  + map (c \ bx (c 0 - 0.025) 0.0 (c 1 - 0.025) (c 0 + 0.025) 0.06 (c 1 + 0.025) 'feet) [[0.26 0.0] [-0.26 0.0] [0.0 0.26] [0.0 -0.26]])
            ())
          ; ..fronts toward the user at -z: n drawers one over another, or n doors side by side
          (fronts y0 y1) (: nd (int (g 'drawers)) nr (int (g 'doors)) e 0.008 z0 (0.0 - D - 0.012) z1 (0.0 - D) ym (0.5 * (y0 + y1))

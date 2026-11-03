@@ -418,23 +418,14 @@
 ; the pieces, each standing with its top at y: a floor slab w by d, and the furniture
 (: (slab x y z w d) (skin {'floor carpet 'walls cast 'ceiling cast}
                       (solid (box [(x - 0.5 * w) (y - 0.3) (z - 0.5 * d)] [(x + 0.5 * w) y (z + 0.5 * d)]))))
-(: (desk x y z) [(fit {'all wood} (box [(x - 0.8) (y - 0.04) (z - 0.4)] [(x + 0.8) y (z + 0.4)]))
-                 (fit {'all wood} (box [(x - 0.78) (y - 0.75) (z - 0.38)] [(x - 0.74) (y - 0.04) (z + 0.38)]))
-                 (fit {'all wood} (box [(x + 0.74) (y - 0.75) (z - 0.38)] [(x + 0.78) (y - 0.04) (z + 0.38)]))
-                 (fit {'all wood} (box [(x - 0.74) (y - 0.6) (z + 0.3)] [(x + 0.74) (y - 0.1) (z + 0.33)]))])
-(: (cabinet x y z) (fit {'walls drawers 'floor greysteel 'ceiling greysteel} (box [(x - 0.25) (y - 1.3) (z - 0.3)] [(x + 0.25) y (z + 0.3)])))
+(: (desk x y z) (furnish 'desk [x (y - 0.75) z] 0 {'skin {'top wood 'frame wood}}))
+(: (cabinet x y z) (furnish 'cabinet [x (y - 1.3) z] 0 {'drawers 0 'skin {'body {'walls drawers 'floor greysteel 'ceiling greysteel}}}))
 (: (officedoor x y z) (fit {'all wood} (box [(x - 0.45) (y - 0.05) (z - 1.0)] [(x + 0.45) y (z + 1.0)])))
 (: (copier x y z) [(fit {'all greysteel} (box [(x - 0.5) (y - 1.0) (z - 0.35)] [(x + 0.5) (y - 0.06) (z + 0.35)]))
                    (fit {'all screen} (box [(x - 0.45) (y - 0.06) (z - 0.3)] [(x + 0.45) y (z + 0.3)]))])
-(: (chair x y z) (: f (y - 0.45)
-   [(fit {'all cloth} (box [(x - 0.25) (y - 0.08) (z - 0.25)] [(x + 0.25) y (z + 0.25)]))
-    (fit {'all cloth} (box [(x - 0.25) y (z + 0.2)] [(x + 0.25) (y + 0.5) (z + 0.26)]))
-    (fit {'all greysteel} (box [(x - 0.03) (f + 0.09) (z - 0.03)] [(x + 0.03) (y - 0.08) (z + 0.03)]))
-    ; ..on a cross of spokes, a caster under each end
-    (fit {'all greysteel} (box [(x - 0.28) (f + 0.06) (z - 0.02)] [(x + 0.28) (f + 0.09) (z + 0.02)]))
-    (fit {'all greysteel} (box [(x - 0.02) (f + 0.06) (z - 0.28)] [(x + 0.02) (f + 0.09) (z + 0.28)]))
-    (map (c \ fit {'all screen} (box [(x + c 0 - 0.025) f (z + c 1 - 0.025)] [(x + c 0 + 0.025) (f + 0.06) (z + c 1 + 0.025)]))
-         [[0.26 0] [-0.26 0] [0 0.26] [0 -0.26]])]))
+; ..a swivel chair, its back to the desk
+(: (chair x y z) (furnish 'chair [x (y - 0.45) z] 180 {'w 0.5 'd 0.5 'h 0.95 'top 0.08 'leg 0.03 'legs 'star
+                                                       'skin {'soft cloth 'frame greysteel 'feet screen}}))
 (: (tile x y z) (fit {'all ceiltile} (box [(x - 0.3) (y - 0.02) (z - 0.3)] [(x + 0.3) y (z + 0.3)])))
 (: (monitor x y z) [(fit {'all screen} (box [(x - 0.26) y (z - 0.03)] [(x + 0.26) (y + 0.34) (z + 0.03)]))
                     (fit {'all greysteel} (box [(x - 0.1) (y - 0.02) (z - 0.1)] [(x + 0.1) y (z + 0.1)]))])
