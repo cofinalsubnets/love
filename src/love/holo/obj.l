@@ -552,16 +552,15 @@
                  'abs8 (o-rela off si r-8 (sa + aux))
                  ; an 8-byte word measured from its own start
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
-                 ; x64 counts from the field's end, so the -4. a weak fn binds plt32; a branch
-                 ; (E8/E9 call/jmp, 0F 8x jcc) to a global or an external wants plt32, anything
-                 ; else pc32 (data has no plt stub)
+                 ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
+                 ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
+                 ; anything else pc32 (data has no plt stub)
                  'rel32
                   (o-rela off si
                           (? rv rr-pc32
                              a64 ra-prel32
                              (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
-                             !(elem pv '(232 233) || 128 <= pv && pv <= 143) r-pc32
-                             (o-has? gbset lbl || !(o-where lanes lbl)) r-plt32
+                             (elem pv '(232 233) || 128 <= pv && pv <= 143) r-plt32
                              r-pc32)
                           ((sa + aux) - 4))
                  ; a64: a page delta never resolves inside a .o
