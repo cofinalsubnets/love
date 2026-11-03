@@ -2250,6 +2250,31 @@
        _ (foldl (\ _ e (: l ['label (name (e 0))] en ['label (fn-end (e 1))]
                           (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (x \ (x = l ? [en x] [x])) <>>r)]))) 0 (st 'order))))
                 0 (peep st 'endat ()))
+       ; .set a, s+k: a label of a's own k bytes on from s, in s's section, splitting a run of
+       ; bytes there; one that would land inside a fix, or before an align, stays unlaid
+       (rsplit bs j) (? (j = 0) [() bs] (atom? bs) ()
+                        (: e <bs n (two? e ? (e 1) 1)
+                           (n > j ? () (rsplit >bs (j - n) @ p (two? p ? [(e . <p) <>p])))))
+       (labin fs off t l)
+        (? (off = t) (l . fs)
+           (atom? fs || off > t) ()
+           (: f <fs w (fsz f off)
+              (? (<f = 'raw && t < off + w)
+                  (rsplit <>f (t - off) @ p (two? p ? (['raw <p] . l . ['raw <>p] . >fs)))
+                 (labin >fs (off + w) t l @ r (two? r ? (f . r))))))
+       (labpos fs off l) (? (atom? fs) () (<fs = l) off (labpos >fs (off + fsz <fs off) l))
+       _ (foldl (\ _ a
+                   (: r (trap (\ _ (gf-sum (sxp (sx a) 0) rl)) 0 (\ _ _ 'bad))
+                      (? (starts? a ".L" || string? (labs a) || gbad? r || two? >r) 0
+                         (gf-norm <><r @ ns
+                            (? (#ns != 1 || >(ns 0) != 1) 0
+                               (: l ['label (name <(ns 0))]
+                                  (foldl (\ _ nm (secs nm @ r9 (rev <>>r9) @ fs
+                                                    (? (string? (labs a) || !(elem l fs)) 0
+                                                       (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)] @ fs2
+                                                          (two? fs2 ? (pin labs a nm, pin secs nm [<r9 <>r9 (rev fs2)]) 0)))))
+                                         0 (st 'order))))))))
+                0 (sort (keys sx)))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
