@@ -444,7 +444,8 @@
    (objsecs target0 secs funcnames globnames wknames locnames) (objsecsn target0 secs funcnames globnames wknames locnames {} [() ()])
    (objsecsn target0 secs funcnames globnames wknames locnames anames ax)
     (: target (arch-nom target0)
-       adata (o-names <ax) abss <>ax
+       ; an absolute symbol is (name value), stb_global, or (name value 0), stb_local
+       adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
        rv (target = 'rv64)
@@ -484,13 +485,13 @@
 
        ; -- symbol indices: NULL, a section symbol each, the local statics, funcs, globs,
        ; exts. every local ahead of the first global, where .symtab's sh_info points --
-       nloc #locnames nfun #funcnames nglob #globnames nabs #abss
+       nloc (#locnames + #labss) nfun #funcnames nglob #globnames nabs #abss
        fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob + nabs)
        extidx (o-idx exts estart)
        fnidx (o-idx (map name funcnames) fstart)   ; relocs to a global bind these
        gidx (o-idx (map name globnames) gstart)
 
-       symnames (map (s \ peep anames s s) (locnames + funcnames + globnames + map cap abss + map string exts))
+       symnames (map (s \ peep anames s s) (locnames + map cap labss + funcnames + globnames + map cap abss + map string exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
 
@@ -518,7 +519,8 @@
                                             (elf-sym (stroffs (nloc + nfun + i))
                                                    (elem gs wknames ? 2 1) (o-dtype gs) <w <>w (o-dsize w gs))))
                                  globnames))
-           ; an absolute symbol: stb_global stt_notype, shn_abs
+           ; an absolute symbol: stt_notype, shn_abs
+           lasyms (catall (o-mapi (\ i p (elf-sym (stroffs (#locnames + i)) 0 0 65521 <>p 0)) labss))
            asyms (catall (o-mapi (\ i p (elf-sym (stroffs (nloc + nfun + nglob + i)) 1 0 65521 <>p 0)) abss))
            ; a weak undef resolves to zero at static link
            esyms (catall (o-mapi (\ i e (elf-sym (stroffs (nloc + nfun + nglob + nabs + i))
@@ -526,7 +528,7 @@
                                  exts))
            ; one stt_section symbol per section, in section order
            ssyms (catall (o-mapi (\ i l (elf-sym 0 0 3 (i + 1) 0 0)) lanes))
-           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
+           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms lasyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + nabs + #exts)
 
        ; -- the relocations, by the fixup's kind, never the section. --

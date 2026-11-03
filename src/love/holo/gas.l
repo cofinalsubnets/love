@@ -1815,10 +1815,10 @@
                   (lsplit t @ (ns u) (go (u . >l) ((map (n \ n + ":") ns) + acc)))
                  (go >l ((elem (dname s) gf-symd ? s (ssub s)) . acc)))))
        out (rev (go ls ()))
-       ; each constant a .globl names rides on as `.holoabs name, v`, its last value past the
+       ; each constant but a .L one rides on as `.holoabs name, v`, its last value past the
        ; substitution: one never labelled is an absolute symbol
        gnm (catmap (l \ elem (dname l) [".globl" ".global"] ? (map xa-unquote (xa-oplist (xa-rest (xa-trim l)))) ()) out)
-       habs (map (k \ ".holoabs " + k + ", " + show (sv k)) (sort (filter (k \ charm? (sv k) && elem k gnm) (keys sv))))
+       habs (map (k \ ".holoabs " + k + ", " + show (sv k)) (sort (filter (k \ charm? (sv k) && (elem k gnm || !(starts? k ".L"))) (keys sv))))
        ; a use before its .set reads the value it is first set to, as llvm-mc reads it
        ((atom? (keys sv0) ? out (map (s \ elem (dname s) gf-symd ? s (rsub s sv0 {})) out)) + habs))
    ; .base64's text -> its bytes: six bits a character accumulate, a byte out per eight; padding
@@ -2254,7 +2254,8 @@
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
        ; a .globl constant never labelled: an absolute symbol, (name value)
-       habs (filter (p \ elem <p (st 'globl) && !(string? (labs <p))) (rev (peep st 'abs ())))
+       ; ..and any other constant a local one, (name value 0)
+       habs (catmap (p \ (? (string? (labs <p)) () (elem <p (st 'globl)) [p] [[<p <>p 0]])) (rev (peep st 'abs ())))
        ; a section the text named stays though empty: a linker script may lay it
        ; the aliases onto names this text never labels ride a fifth element, the absolute
        ; symbols a sixth, and the constant sizes a seventh, (name size), only when there are any

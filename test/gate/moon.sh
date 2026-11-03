@@ -134,6 +134,10 @@ readelf -x .text "$ho/.jx.o" | grep -q '90c37404 90909090' || fail "an alternati
 printf '.data\na: .long 1\n.size a, 4\n.type b, @object\nb: .long 2\n.Lbe:\n.size b, .Lbe-b\n.globl c\nc: .quad 0\n.size c, 2*4\n.text\n.globl f\n.type f, @function\nf: ret\n1: nop\n.size f, 1b-f\n' > "$ho/.sz.S"
 moonrun -c "$ho/.sz.S" -o "$ho/.sz.o" || fail "mooncc: an asm's sizes"
 [ "$(readelf -sW "$ho/.sz.o" | awk '$8 ~ /^[abcf]$/ {print $8, $3}' | sort | tr '\n' ' ')" = "a 4 b 4 c 8 f 1 " ] || fail "a .size by a constant or a later label is not the symbol's size"
+printf '.set K, 5\n.set .LK, 9\n.text\n.globl f\nf: call ext\n movl $K, %%eax\n' > "$ho/.set.S"
+moonrun -c "$ho/.set.S" -o "$ho/.set.o" || fail "mooncc: an asm's local constants"
+[ "$(readelf -sW "$ho/.set.o" | awk '$8 == "K" || $8 == ".LK" {print $8, $2, $5, $7}')" = "K 0000000000000005 LOCAL ABS" ] || fail "a local .set constant is not a local absolute symbol, or a .L one is"
+[ "$(readelf -rW "$ho/.set.o" | awk '/R_X86/ {print $5}')" = "ext" ] || fail "a local absolute symbol moved a global's index"
 # an inline asm's section keeps its merge flag and entsize; the pads lie one section per
 # function section, link-ordered to it
 printf 'void f(void){ asm volatile("1: nop\\n.pushsection .altinstructions,\\"aM\\",@progbits,14\\n .long 1b - .\\n .long 0\\n .short 1\\n .byte 2,3,4,5\\n.popsection"); }\n' > "$ho/.psa.c"
