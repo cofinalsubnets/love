@@ -266,6 +266,11 @@
                               [(s ? 'movdxr 'movqxr) d t]])])
              'bad)
          ('comma a b) (lox g env a @ (_ _ fa) (lox g env b @ (t r fb) [t r (fa + fb)] 'bad) 'bad)
+         ; a statement expression: its items, then the value in the env they end on
+         ('sexpr items ve _)
+          (loitems2 g env items @
+             (fs e2) (ve @ () ['void () fs] _ (lox g e2 ve @ (t r f2) [t r (fs + f2)] 'bad))
+             'bad)
          (('land || 'lor) . _)
           (nlab g ".lo" @ lf (nlab g ".lo" @ ld (lomk g @ d
              (lobr g env e 0 lf @ 'bad 'bad
@@ -536,13 +541,31 @@
                    (lost1 g (['brk lb] . ['sw tab ty] . env) body @ 'bad 'bad
                       fb (fs + tst + [['jmp (peep tab 'dflt lb)]] + fb + [['label lb]]))))))
        'bad)
-   ; a block's items, decls threading the env
-   (loitems g env items)
+   ; a block's items, decls threading the env -> forms | 'bad, and with the env it ends on
+   (loitems g env items) (loitems2 g env items @ (fs _) fs 'bad)
+   (loitems2 g env items)
     (: (go l env acc)
         (l @ (('decl ps) . u) (lodecl g env ps @ (fs e2) (go u e2 (acc + fs)) 'bad)
+             (('sdecl ps) . u) (go u (losdecl g env ps) acc)
              (it . u) (lost1 g env it @ 'bad 'bad fs (go u env (acc + fs)))
-             acc)
+             [acc env])
        (go items env ()))
+   ; statics: a data label each, laid after the fn, the initializer's names to earlier ones
+   ; spelled by label now -> env
+   (losdecl g env ps)
+    (foldl (e2 \ p \
+              (: nm <p ty <>p lbl (nlab g "\(g 'fn).")
+                 (fix x) (? !(two? x) x
+                            (<x == 'laddr) ['lsym "\(g 'fn).\(<>x)"]
+                            (<x == 'var && string? <>x)
+                             (? (<>x = nm) ['var lbl] (assoc <>x e2 @ (_ 'g l _) ['var l] x))
+                            (map fix x))
+                 (pin (g 'glob) lbl [lbl ty (fix <>>p)],
+                  (4 < #p && 0 < p 4 ? (pin (g 'aligns) lbl (p 4))),
+                  (5 < #p ? (pin (g 'sects) lbl (p 5))),
+                  pin g 'statics (lbl . g 'statics),
+                  [nm 'g lbl ty] . e2)))
+           env ps)
    ; -> [forms env] | 'bad
    (lodecl g env ps)
     (: (go l env acc)
