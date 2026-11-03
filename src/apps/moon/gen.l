@@ -11764,7 +11764,12 @@
        uni9 !(sr6f || vararg)
        _ (sr6f ? (pin g 'sret (ntmp g 'long)))
        off0 (g 'off) sl0 (g 'slots)            ; the cells dealt before the build (VLA, v6m f-cells, sret), kept by every rebuild
-       sp1 (? uni9 ()
+       ; the new backend takes the fn whole where it can, before the old build deals a cell; a
+       ; refusal hands back what it dealt. lo.l lays after this file: its names resolve at the call
+       irn (g 'lo && x64? g ?
+              ((cite 'moon 'lofn) g f params sig @ 'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0, 'bad) fs fs)
+              'bad)
+       sp1 (? (uni9 || !(bad? irn)) ()
               (vararg && a64? g) (vaspill-a64 params)
               (vararg && t32? g) (vaspill-t32 params)
               (vararg && ia32? g) (vaspill-ia32 params)
@@ -11774,7 +11779,7 @@
               sr6f (spillp () params (a64? g ? 0 1) [['st 'r4 (peep g 'sret 0) (srreg g)]])
               (spillp () params 0 ()))
        sp1 (uni9 || !(two? vzf) ? sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
-       irk (uni9 ? (ubuild (alive g f)) (build sp1))
+       irk (irn @ 'bad (uni9 ? (ubuild (alive g f)) (build sp1)) _ irn)
        ; a pool clash builds again with no pool, a failed float colouring on the eight; once more if the
        ; first rebuild's colouring fails too
        (rb irk n9) (? (bad? irk || !(g 'kclob || g 'fclob) || n9 = 0) irk
@@ -11813,7 +11818,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (bad? irf ? irf (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
+       (? (bad? irf) irf (!(bad? irn)) ((cite 'moon 'lotail) g irf) (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -11985,6 +11990,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
+          'lo (getenv "MOON_BACKEND" @ "new" 1 ())   ; the new backend (lo.l, ra.l), per unit
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
