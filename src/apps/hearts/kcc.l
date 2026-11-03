@@ -27,10 +27,11 @@
               (<tgt = "--target=arm-linux-gnueabi") "arm" ())
    (moon? _) (elem "-c" av && two? srcs && string? tg && string? arch)
    ; mooncc names no compiler family, and the kernel refuses one it does not know: it is lent the
-   ; pinned clang's, the one the .config was made for. it predefines true, false and bool, which
-   ; linux/stddef.h declares; it has __int128 but not clang's typedefs; and the overlay answers
-   ; _THIS_IP_ without &&label, which mooncc lacks
-   ident ["-D__clang__=1" "-D__clang_major__=22" "-D__clang_minor__=1" "-D__clang_patchlevel__=8"
+   ; clang's the .config was made for ($HEARTS_CLANG_VERSION, hk-cc's; else the pinned 22.1.8). it
+   ; predefines true, false and bool, which linux/stddef.h declares; it has __int128 but not clang's
+   ; typedefs; and the overlay answers _THIS_IP_ without &&label, which mooncc lacks
+   cv (split "." (getenv "HEARTS_CLANG_VERSION" @ v (string? v && 0 < #v ? v "22.1.8")))
+   ident ["-D__clang__=1" ("-D__clang_major__=" + cv 0) ("-D__clang_minor__=" + cv 1) ("-D__clang_patchlevel__=" + cv 2)
           "-D__GNUC__=4" "-D__GNUC_MINOR__=2" "-D__GNUC_PATCHLEVEL__=1" "-U" "true" "-U" "false" "-U" "bool"
           "-D__uint128_t=unsigned __int128" "-D__int128_t=__int128" "-I" (here + "/overlay")]
    ; flags mooncc refuses that change nothing it lays: the endianness and target it already has,
