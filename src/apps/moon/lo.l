@@ -199,7 +199,7 @@
                             ['g lbl ty] (lomk g @ t ['a ['long t [['la t lbl]]] ty 0])
                             (lono g ['var nm]))
          ['deref p]
-          (lox g env p @ [['ptr pt] r fs] ['a [['ptr pt] r fs] pt 0] 'bad (_ _ _) (lono g 'deref))
+          (lox g env p @ [['ptr pt] r fs] ['a [['ptr pt] r fs] pt 0] 'bad 'bad (_ _ _) (lono g 'deref))
          ['dot base fld]
           (lolv g env base @ ['a av ty off]
                               (fmem g ty fld @ 'bad (lono g ['member fld])

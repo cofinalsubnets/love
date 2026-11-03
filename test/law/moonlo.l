@@ -81,6 +81,7 @@
                  "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"
                  "int main() { switch (1) { default: return 2; default: return 3; } }"
                  "int main() { switch (1) { case 1 ... 5: return 2; case 3: return 3; } return 0; }"
-                 "int main() { switch (1) { case 1: return 2; case 1: return 3; } return 0; }"])
+                 "int main() { switch (1) { case 1: return 2; case 1: return 3; } return 0; }"
+                 "int main() { return *bb; }"])
       (all (src \ lolaw src @ [n ()] (0 < n) _ 0) corpus)
       (+(map (src \ lolaw src @ [n _] n _ 0) corpus) >= 2 * #corpus)))
