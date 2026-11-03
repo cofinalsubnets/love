@@ -12006,7 +12006,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
-          'lo (getenv "MOON_BACKEND" @ "new" 1 ())   ; the new backend (lo.l, ra.l), per unit
+          'lo (getenv "MOON_BACKEND" @ "old" () _ 1)   ; x64 lowers by lo.l and ra.l unless MOON_BACKEND=old
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
