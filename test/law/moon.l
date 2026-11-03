@@ -1024,9 +1024,9 @@
    ; -- so `vmxon %0` reads back as `vmxon (%r11)`, which is holo's `vmxon r10, 0`.
    want3 (hb 'x64 (asm-text "vmxon r10, 0"))
    g3 (cgn "void f(unsigned long *p) { asm volatile(\"vmxon %0\" : : \"m\"(*p) : \"memory\"); } int main() { return 0; }")
-   ; a tied input rides its output's register; a 32-bit operand spells at its width (%r11d),
-   ; and the 32-bit op lands as the 64-bit one plus the zero-extend
-   want4 (hb 'x64 '((add r10 r10 2) (zx4 r10)))
+   ; a tied input rides its output's register; a 32-bit operand spells at its width (%r10d),
+   ; and the 32-bit op lands as gas's: addl $2, %r10d
+   want4 '(65 131 194 2)
    g4 (cgn "int main() { unsigned a = 40, b; asm(\"addl $2, %0\" : \"=r\"(b) : \"0\"(a)); return b; }")
    ; a register variable pins the operand; a callee-saved clobber is pushed around the body
    want5 (hb 'x64 (asm-text "add r2, r2, 2"))

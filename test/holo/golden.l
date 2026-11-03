@@ -480,8 +480,8 @@
    _ (chk-eq "x64.rip.tail"
         "f6050000000020"                           ; d sits right at the end: disp 0, not 1
         (holo-hex 'x64 '((testm 1 rip (d 0) 32) (label d))))
-   _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
-        '((mov r1 r0) (zx4 r1) (li r0 4294967295))
+   _ (chk-eq "gas.x64.mov32"                       ; movl reg is gas's 89 /r; an immediate is li's b8+r
+        '((raw (137 193)) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))
    _ (chk-eq "gas.a64.cmp"
         ["c68c286e" "203ca24e" "2034624e" "8334a52e" "203ce26e" "208c7f0e" 'gas-a64-operand]
