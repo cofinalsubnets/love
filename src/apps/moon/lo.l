@@ -693,7 +693,45 @@
             ['case lo hi] (assoc 'sw env @ [_ tab _] (peep tab "\(lo):\(hi)" () @ () 'bad L [['label L]]) 'bad)
             ['case cv] (assoc 'sw env @ [_ tab ty] (peep tab (lokey g ty cv) () @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ [_ tab _] (peep tab 'dflt () @ () 'bad L [['label L]]) 'bad)
+            ('asm . _) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
             (lono g ['stmt <s])))
+   ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
+   ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored
+   (loasm g env s)
+    (asmplan g env s @
+       'bad (lono g ['asm (g 'nolane)])
+       [_ _ _ _ _ (_ . _) _ _ _ _] (lono g 'asmgoto)
+       [ops asgn kills saves _ _ _ txt neutral? _]
+       (: tgt (gtgt g)
+          (in? o) (elem <o '(x i b))
+          (out? o) (elem <o '(o x f))
+          (ld o a)
+           (lox g env (o 2) @
+              'bad 'bad
+              ([vt _ _] && stru? vt) (lono g 'asmstruct)
+              [vt r fs] [fs (? (freg? a && lofr? r) ['movapd a r]
+                               (freg? a) [(o 3 <= 4 ? 'movdxr 'movqxr) a r]
+                               (lofr? r) [(vt = 'float ? 'movdrx 'movqrx) a r]
+                               ['mov a r])])
+          (st o a)
+           (lolv g env (o 2) @
+              'bad 'bad
+              lv (lv 2 @ ty
+                    (stru? ty || arr? ty || lofl? ty && !(freg? a) ? (lono g 'asmout)
+                       ; an xmm output into an integer lvalue: its bits
+                       ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
+                          [(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))
+                           (lost g lv [ty t ()] @ [fs _] fs 'bad)]))))
+          ins (filter (i \ in? (ops i)) ^#ops)
+          outs (filter (i \ out? (ops i)) ^#ops)
+          lds (map (i \ ld (ops i) (asgn i)) ins)
+          sts (map (i \ st (ops i) (asgn i)) outs)
+          body (map (r \ ['push r]) saves + asmfsafe txt (asmbody g tgt neutral? txt) + map (r \ ['pop r]) (rev saves)
+                + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
+          (any bad? lds || any bad? sts ? 'bad
+             (catmap (x \ <x) lds + map (x \ x 1) lds +
+              [['fix (map asgn ins) (map asgn outs + kills) body]] +
+              map (x \ <x) sts + catmap (x \ x 1) sts))))
    (lokey g ty cv) (charm? cv ? (cfit g ty cv) 'bad)
    ; a switch as a compare chain: its cases, nested switches aside, each take a label
    (loswitch g env ce body)
@@ -756,7 +794,8 @@
                            (init @ () (go u e2 acc)
                                    _ (lox g env init @ 'bad 'bad
                                         v (lost g ['v r ty] v @ [fs _] (go u e2 (acc + fs)) 'bad)))))
-                    (ntmp g ty @ off
+                    ; a slot aligned to the type's ask or the decl's own, the record's fifth
+                    (naslot g (aup (tsz g ty) 8) (max (tal g ty) (rest @ (_ . _ . a . _) (charm? a ? a 0) _ 0)) @ off
                        (: e2 ([nm 'm off ty] . env)
                           (? (init = ()) (go u e2 acc)
                              (losv? ty)
