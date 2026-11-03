@@ -1,6 +1,6 @@
 ; thumb2 -- the armv7e-m (Cortex-M7) backend for holo, also 'thumb2sp and 'arm. mixed 16/32-bit
 ; Thumb-2; a 32-bit word (hw1<<16)|hw2 lays as le16(hw1) ++ le16(hw2), not le32 (t32 does it).
-; data-processing uses the wide encodings throughout, reaching r0..r12 alike.
+; data-processing is wide but on low registers, where holo frees the flags for the 16-bit twins.
 ; immediates: add/sub take addw/subw #imm12 (a negative flips the op); cmp/cmn, tst and and/or/xor
 ; a modified immediate (and/or also through bic/orn of the complement, and a low run of ones as
 ; ubfx); else it scares (immok keeps it in a register).
@@ -75,6 +75,8 @@
                 (chunks (p - c) d (acc + one src c))))
          (? (dn = 13 && rn a = 13 && pos <= 508 && pos % 4 = 0)    ; add/sub sp, #imm7*4
              (t16 ((fop = 'add ? 0xB000 0xB080) | (pos >> 2)))
+            (dn <= 7 && rn a = 13 && fop = 'add && pos <= 1020 && pos % 4 = 0)   ; add Rd, sp, #imm8*4
+             (t16 (0xA800 | (dn << 8 | (pos >> 2))))
             (pos <= 4095) (one a pos)
             (chunks pos a ())))
    ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
@@ -108,6 +110,69 @@
             ; the rest take a modified immediate only: the register form's op and S bits
             (thumb-mimm b @ k
                (k < 0 ? (scare 'thumb-alu-imm [op d a b]) (thumb-dpimm (0xF000 | (base & 0x1F0)) (rn d) (rn a) k)))))
+   (thumb-lo? r) (atom? r && peep thumb-regs r 99 <= 7)
+   ;; add Rdn, Rm (t2) keeps the flags and reaches the high registers, though not sp or pc
+   (thumb-add d a b)
+      (? !(reg? b) (thumb-aluop 'add d a b)
+         (: dn (rn d) an (rn a) bn (rn b) m (? (dn = an) bn (dn = bn) an -1)
+            (? (m < 0 || elem 13 [dn an bn] || elem 15 [dn an bn]) (thumb-alu-rrr 0xEB00 d a b)
+               (t16 (0x4400 | ((dn >> 3) << 7 | (m << 3 | dn & 7)))))))
+   ;; the flag-setting ops go 16-bit on low registers: outside an it block t1 and t2 set the
+   ;; flags as the wide forms do. the two-register ones are Rdn op= Rm, so d is a (or b, commuting)
+   thumb-alu2 {'ands 0x4000 'eors 0x4040 'adcs 0x4140 'sbcs 0x4180 'ors 0x4300 'muls 0x4340 'bics 0x4380}
+   (thumb-alus op d a b)
+      (: (wide o) (o = 'muls ? (scare 'thumb-muls-wide [o d a b]) (thumb-aluop o d a b))
+         (? !(thumb-lo? d && thumb-lo? a) (wide op)
+            (elem op '(adds subs))
+            (? (thumb-lo? b) (t16 ((op @ 'adds 0x1800 0x1A00) | (rn b << 6 | (rn a << 3 | rn d))))
+               !(charm? b) (wide op)
+               (0 <= b <= 7) (t16 ((op @ 'adds 0x1C00 0x1E00) | (b << 6 | (rn a << 3 | rn d))))
+               (rn d = rn a && 0 <= b <= 255) (t16 ((op @ 'adds 0x3000 0x3800) | (rn d << 8 | b)))
+               (wide op))
+            (op = 'rsbs && charm? b && b = 0) (t16 (0x4240 | (rn a << 3 | rn d)))
+            !(thumb-lo? b) (wide op)
+            (peep thumb-alu2 op 0 @ base
+               (? (base = 0) (wide op)
+                  (rn d = rn a) (t16 (base | (rn b << 3 | rn d)))
+                  (rn d = rn b && elem op '(ands eors adcs ors muls)) (t16 (base | (rn a << 3 | rn d)))
+                  (wide op)))))
+   ;; lsls/lsrs/asrs: an immediate count (lsls #0 is movs), or Rdn by Rm's low byte
+   (thumb-shs3 op d s c)
+      (: ty (op @ 'lsls 0 'lsrs 1 'asrs 2 (scare 'badshift op))
+         (? (reg? c)
+            (? (thumb-lo? d && rn d = rn s && thumb-lo? c) (t16 ((0x4080 + ty * 64) | (rn c << 3 | rn d)))
+               (t32 ((0xFA10 + ty * 32 | rn s) << 16 | (0xF000 | (rn d << 8 | rn c)))))
+            (thumb-lo? d && thumb-lo? s && min ty 1 <= c <= 31)
+            (t16 (ty << 11 | (c << 6 | (rn s << 3 | rn d))))
+            (thumb-shs ty d s c)))
+   (thumb-mvns d s) (thumb-lo? d && thumb-lo? s ? (t16 (0x43C0 | (rn s << 3 | rn d))) (t32 (0xEA7F0000 | (rn d << 8 | rn s))))
+   ;; holo's flag-free rewrite: a plain form whose flag-setting twin goes 16-bit, else ()
+   (thumb-sform ins)
+      (: o <ins lo thumb-lo? d (ins 1)
+         (? !(lo d) ()
+            (elem o '(add sub lea lean) && #ins = 4)
+            (: a (ins 2) b (ins 3)
+               (? !(lo a) ()
+                  (lo b) (o @ 'add ['adds d a b] 'sub ['subs d a b] ())
+                  !(charm? b) ()
+                  (: k (o = 'sub ? -b b) p (abs k)
+                     (0 < p && (p <= 7 || rn d = rn a && p <= 255) ? [(k < 0 ? 'subs 'adds) d a p] ()))))
+            (elem o '(and or xor imul bic) && #ins = 4)
+            (: a (ins 2) b (ins 3)
+               (lo a && lo b && (rn d = rn a || o != 'bic && rn d = rn b)
+                ? [(o @ 'and 'ands 'or 'ors 'xor 'eors 'imul 'muls 'bics) d a b] ()))
+            (elem o '(shl shr sar) && #ins = 3)
+            (ins 2 @ c (charm? c && 1 <= c <= 31 ? [(o @ 'shl 'lsls 'shr 'lsrs 'asrs) d d c] ()))
+            (elem o '(lsl lsr asr) && #ins = 4)
+            (: s (ins 2) c (ins 3)
+               (lo s && (? (charm? c) (1 <= c <= 31) (rn d = rn s && lo c)) ? [(o @ 'lsl 'lsls 'lsr 'lsrs 'asrs) d s c] ()))
+            (elem o '(shlv shrv sarv)) (lo (ins 2) ? [(o @ 'shlv 'lsls 'shrv 'lsrs 'asrs) d d (ins 2)] ())
+            (o = 'neg) ['rsbs d d 0]
+            (o = 'not) ['mvns d d]
+            (o = 'mvn) (lo (ins 2) ? ['mvns d (ins 2)] ())
+            (o = 'inc) ['adds d d 1]
+            (o = 'dec) ['subs d d 1]
+            ()))
 
    ;; cmp and tst set the flags whatever their width, so low registers and a byte go 16-bit
    (thumb-cmp a b)
@@ -197,7 +262,7 @@
    (thumb-shamt scale) (scale @ 1 0 2 1 4 2 8 3 (scare 'badscale scale))
    (thumb-addsh d b ix amt)                                   ; ADD.W Rd, Rb, Rix, LSL #amt
       (: dn (rn d) bn (rn b) xn (rn ix)
-         (t32 ((0xEB00 | bn) << 16 | (dn << 8 | ((amt & 3) << 6 | xn)))))
+         (amt = 0 ? (thumb-add d b ix) (t32 ((0xEB00 | bn) << 16 | (dn << 8 | ((amt & 3) << 6 | xn))))))
    (thumb-leax d base ix scale disp)
       (catall [(thumb-addsh d base ix (thumb-shamt scale))
                 (disp @ 0 () (thumb-addsub-imm 'add d d disp))])
@@ -241,8 +306,10 @@
             (t32 (0xE8BD0000 | m))))
 
    ;; w=4 is a no-op on a 32-bit target
-   (thumb-sxr w d s) (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (rn d << 8 | rn s)))   ; sxtb / sxth Rd, Rm
-   (thumb-zxr w d s) (t32 ((w @ 1 0xFA5FF080 0xFA1FF080) | (rn d << 8 | rn s)))   ; uxtb / uxth Rd, Rm
+   (thumb-sxr w d s) (thumb-lo? d && thumb-lo? s ? (t16 ((w @ 1 0xB240 0xB200) | (rn s << 3 | rn d)))   ; sxtb / sxth Rd, Rm
+                        (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (rn d << 8 | rn s))))
+   (thumb-zxr w d s) (thumb-lo? d && thumb-lo? s ? (t16 ((w @ 1 0xB2C0 0xB280) | (rn s << 3 | rn d)))   ; uxtb / uxth Rd, Rm
+                        (t32 ((w @ 1 0xFA5FF080 0xFA1FF080) | (rn d << 8 | rn s))))
    (thumb-sx w d) (w @ 4 () (thumb-sxr w d d))
    (thumb-zx w d) (w @ 4 () (thumb-zxr w d d))
    (thumb-neg d) (rn d @ dn (t32 ((0xF1C0 | dn) << 16 | dn << 8)))          ; rsb Rd, Rd, #0
@@ -488,6 +555,7 @@
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
+          ('lsls . thumb-shs3 'lsls) ('lsrs . thumb-shs3 'lsrs) ('asrs . thumb-shs3 'asrs) ('mvns . thumb-mvns)
           ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
           ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
@@ -510,6 +578,8 @@
           ('nop . t16 0xBF00)
           ('trap . t16 0xBE00)])                            ; bkpt #0
    _ (map (k \ emrow thumb-emitters k (thumb-aluop k)) (keys thumb-alu))
+   _ (map (k \ emrow thumb-emitters k (thumb-alus k)) '(adds subs ands ors eors bics adcs sbcs rsbs muls))
+   _ (emrow thumb-emitters 'add thumb-add)
    (thumb-lower ins) (lower-via @ f (lit? f ? (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; pc reads as site + 4.
@@ -560,8 +630,9 @@
    thumb2 {'lower thumb-lower
            'short thumb-short
            'lis 1
+           'sform thumb-sform
            'flagr '(br set adc sbc adcs sbcs raw)
-           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs ucomisd ucomiss lis)
+           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss lis)
            'patch thumb-patch
            'refix thumb-refix
            'lapa thumb-lapa
