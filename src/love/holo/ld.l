@@ -163,7 +163,7 @@
           (it \ (: k <it
                    (? (k = 'obj) (add (ld-rel64 <>it <>(uread <>it)))
                       (k = 'tablet) (add <>it)
-                      (k = 'undef) (ref <>it 1)
+                      (k = 'undef) (: _ (ins <>it) (ref <>it 1))
                       (k = 'in)
                        (: p (it 1) s <>(uread p)
                           (? (!(string? s)) (scare 'link-open p)
@@ -779,7 +779,10 @@
        _ (pin sht 'sz #shn, pin sht 'pieces [shn])
        _ (foldl (\ o t
                   (: f (peep t 'load ())
-                     off (? (two? f && <f 'name = t 'name) (? nmagic (ld-al o (t 'al)) (o + (t 'va - o) % pg))
+                     ; lld's computeFileOffset: a load's first congruent to its address, a later
+                     ; NOBITS where the file stands, the rest by the first's offset
+                     off (? (two? f && <f 'name = t 'name) (? nmagic (ld-al o (t 'al)) (o + ((t 'va - o) % pg + pg) % pg))
+                            (t 'stype = 8) o
                             (two? f) (<f 'off + t 'va - <f 'va)
                             (ld-al o (t 'al)))
                      _ (pin t 'off off)
@@ -791,7 +794,7 @@
        shnum (#outs + (? shf 1 2))
        shstx (? shf (#outs0 + 2) (shnum - 1))
        (w2 n) (ld-le n 2) (w4 n) (ld-le n 4) (w8 n) (ld-le n 8)
-       eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 3) (w2 (peep lk 'mach 183)) (w4 1) (w8 entry) (w8 64) (w8 shoff)
+       eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 (peep lk 'etype 3)) (w2 (peep lk 'mach 183)) (w4 1) (w8 entry) (w8 64) (w8 shoff)
                  (w4 0) (w2 64) (w2 56) (w2 nph) (w2 64) (w2 shnum) (w2 shstx)])
        ; a load from its first section, or under flat the first from the file's start
        (ph l) (: a <l b (l 1) fe (b 'off + (? (b 'stype = 8) 0 (b 'sz)))
@@ -1310,8 +1313,6 @@
        body (? flat (ld-fresh ld-shtmpl) (lds-read <>(uread sc)))
        (words h) (? flat [['set "__ld_pg" '= pg] ['set "__ld_hdrs" '= h]] ())
        cmds (words 0 + body)
-       ; a script's PHDRS lays only the headers it names, so no relro is laid there
-       _ (? (o 'relro && !flat && !(elem 'phdrs (map (c \ <c) cmds))) (no "PT_GNU_RELRO: pass -z norelro") 0)
        vt (foldl (\ a c (? (<c = 'version) <>c a)) "" cmds)
        d (? (o 'shared && (flat || 0 < #vt))
             (ld-dso cx {'soname (peep o 'soname ()) 'out out 'symbolic 1 'bti (o 'bti) 'flat flat 'relr (o 'relr)} vt) 0)
@@ -1348,7 +1349,8 @@
        mx (ld-merge ot os)
        lk {'cx cx 'ot ot 'mx mx 'outs os 'cmds (words 0 + body2) 'strip (o 'strip) 'discard (o 'discard)
            'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg
-           'mach em 'abs (? (em = 62) 1 257)}
+           'mach em 'abs (? (em = 62) 1 257)
+           'etype (? (o 'shared || o 'pie) 3 2)}                  ; ET_DYN for -pie and -shared, else ET_EXEC
        _ (? (d = 0) 0 (: _ (pin lk 'dso d) (pin lk 'slink (d 'slink))))
        dy (? (o 'shared) (ld-dynsites lk) {'rela () 'relr ()})
        nrela #(dy 'rela)
@@ -1376,6 +1378,14 @@
        _ (pin lk 'env env)
        ; an output section is in no group
        _ (each os (t \ (? (0 < (peep t 'flags 0 & 512)) (pin t 'flags (t 'flags - 512)) 0)))
+       ; a script with no PHDRS lays PT_GNU_RELRO when a section lld counts relro is laid, which
+       ; love does not: refused. a script's PHDRS lays only the headers it names
+       (relro? t) (: f (peep t 'flags 0)
+                     (!(peep t 'dead 0) && t 'sz > 0 && 0 < (f & 2) && 0 < (f & 1)
+                      && (0 < (f & 1024) || elem (peep t 'stype 1) '(14 15 16)
+                          || elem (t 'name) '(".data.rel.ro" ".dynamic" ".got" ".ctors" ".dtors" ".jcr"))))
+       _ (? (o 'relro && !flat && !(elem 'phdrs (map (c \ <c) cmds)) && any relro? os)
+            (no "PT_GNU_RELRO: pass -z norelro") 0)
        ; x86's code gaps are int3, as lld fills them
        _ (? (em = 62) (each os (t \ (? (0 < (peep t 'flags 0 & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
        _ (? (d = 0) 0 (pin d 'relrsz (8 * #(<>r))))
