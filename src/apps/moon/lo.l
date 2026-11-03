@@ -86,6 +86,7 @@
    (lorv g lv)
     (lv @ ('v r ty) [ty r ()]
           ('a (_ r fs) ('arr . et . _) off) (lomk g @ t (loesc g r, [['ptr et] t (fs + [['lea t r off]])]))
+          (('a (_ r fs) ty off) && stru? ty) (lomk g @ t (loesc g r, [ty t (fs + [['lea t r off]])]))
           ('a av ty off) (loload g av ty off)
           'bad)
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
@@ -93,8 +94,60 @@
     (lv @ ('v r ty) (lotr g v ty @ (_ c fs) [(fs + [(lomv r c)]) [ty r ()]])
           (('a (_ b _) ty off) && losc? ty) (lotr g v ty @ (_ c fs) [(fs + [[(stop ty) b off c]]) [ty c ()]])
           (('a (_ b _) ty off) && lofl? ty) (lotr g v ty @ (_ c fs) [(fs + [[(ty = 'float ? 'stss 'stsd) b off c]]) [ty c ()]])
-          (_ _ ty . _) (lono g ['store ty])
+          (('a (_ b _) ty off) && stru? ty)
+           (v @ ((vt r fs) && stru? vt && tsz g vt = tsz g ty)
+                 (lomk g @ t (loesc g b, [(fs + locopy g r b off (tsz g ty) + [['lea t b off]]) [ty t ()]]))
+                _ (lono g ['store ty]))
+          (_ . _ . ty . _) (lono g ['store ty])
           'bad)
+   ; sz bytes from address s to d + doff, widest first
+   (locopy g s d doff sz)
+    (lomk g @ t
+       (: (go k acc) (? (8 <= sz - k) (go (k + 8) (acc + [['ld t s k] ['st d (doff + k) t]]))
+                        (4 <= sz - k) (go (k + 4) (acc + [['ldu4 t s k] ['st4 d (doff + k) t]]))
+                        (2 <= sz - k) (go (k + 2) (acc + [['ldu2 t s k] ['st2 d (doff + k) t]]))
+                        (1 <= sz - k) (go (k + 1) (acc + [['ldu1 t s k] ['st1 d (doff + k) t]]))
+                        acc)
+          (go 0 ())))
+   ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
+   (lozero g off span)
+    (lomk g @ z
+       (: (go o rem acc) (? (8 <= rem) (go (o + 8) (rem - 8) (acc + [['st 'r4 o z]]))
+                            (0 < rem) (go (o + 1) (rem - 1) (acc + [['st1 'r4 o z]]))
+                            acc)
+          ([['li z 0]] + go off span ())))
+   (lostr g off text) (lomk g @ t (catmap (i \ [['li t (text i)] ['st1 'r4 (off + i) t]]) ^#text))
+   (lofill g env off ty ini0)
+    (unelide g env ty ini0 @ ini
+       (? (ini @ ('str . _) 1 ()) (arr? ty ? (lostr g off (snip <>ini 0 (min #<>ini (tsz g ty)))) (lono g 'strinit))
+          !(ini @ ('init . _) 1 ()) (lono g ['init ty])
+          (arr? ty)
+           (: elt <>ty esz (tsz g elt)
+              (go l idx acc)
+               (l @ (it . u) (: ci (it @ ('didx . k . _) k _ idx)
+                                (loelt g env (off + ci * esz) elt (elval it) @ 'bad 'bad fs (go u (ci + 1) (acc + fs))))
+                    acc)
+              (go <>ini 0 ()))
+          (stru? ty)
+           (: fields <(peep (g 'stag) <>ty 0)
+              (go l cur acc)
+               (l @ (it . u)
+                     (: ci (it @ ('dfield . nm . _) (fidx fields nm) _ cur)
+                        (nthfield fields ci @
+                           'bad (lono g 'field)
+                           fe (? (bitf? (fe 2)) (lono g 'bitfield)
+                                 (loelt g env (off + fe 1) (fe 2) (elval it) @ 'bad 'bad
+                                    fs (go u (fnext g fields ci) (acc + fs))))))
+                    acc)
+              (go <>ini 0 ()))
+          (lono g ['init ty])))
+   (loelt g env off ty val)
+    (? (gcplx? ty) (lono g 'complex)
+       (aggish? ty && (val @ ('init . _) 1 ()) || arr? ty && (val @ ('str . _) 1 ())) (lofill g env off ty val)
+       (stru? ty) (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ (fs _) fs 'bad))
+       (arr? ty) (lono g ['init ty])
+       (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ (fs _) fs 'bad)))
+
    ; the lvalue's own forms, laid once before its use, and the lvalue without them
    (lolvfs lv) (lv @ ('a . (_ _ fs) . _) fs ())
    (lolvbare lv) (lv @ ('a (t r _) ty off) ['a [t r ()] ty off] lv)
@@ -573,7 +626,8 @@
               (: init (rest @ (i . _) i ())
                  (? (rest @ (_ . x . _) x ()) (lono g 'regasm)
                     (gvarr? ty) (lono g 'vla)
-                    (init @ ('init . _) 1 ()) (lono g ['init ty])
+                    (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
+                    (gcplx? ty) (lono g 'complex)
                     (losv? ty && nelem nm (g 'lotk))
                      (lomkt g ty @ r
                         (: e2 ([nm 'v r ty] . env)
@@ -582,10 +636,14 @@
                                         v (lost g ['v r ty] v @ (fs _) (go u e2 (acc + fs)) 'bad)))))
                     (ntmp g ty @ off
                        (: e2 ([nm 'm off ty] . env)
-                          (init @ () (go u e2 acc)
-                                  _ (? !(losv? ty) (lono g ['init ty])
-                                       (lox g env init @ 'bad 'bad
-                                          v (lost g ['a ['long 'r4 ()] ty off] v @ (fs _) (go u e2 (acc + fs)) 'bad))))))))
+                          (? (init = ()) (go u e2 acc)
+                             (losv? ty)
+                              (lox g env init @ 'bad 'bad
+                                 v (lost g ['a ['long 'r4 ()] ty off] v @ (fs _) (go u e2 (acc + fs)) 'bad))
+                             ((init @ ('init . _) 1 ()) || arr? ty && (init @ ('str . _) 1 ()) || clarr? ty init)
+                              (lofill g e2 off ty init @ 'bad 'bad fs (go u e2 (acc + lozero g off (aup (tsz g ty) 8) + fs)))
+                             (stru? ty) (loelt g e2 off ty init @ 'bad 'bad fs (go u e2 (acc + fs)))
+                             (lono g ['init ty]))))))
              [acc env])
        (go ps env ()))
 
