@@ -32,48 +32,66 @@
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
    (nmwid g fs)
     (: lb (vlabs fs)
-       ; a label met with its bounds: every jump to it comes earlier, and no table or asm goto names it
-       bad {}
-       _ (foldl (i \ f \ (f @ ['jmp L] (peep lb L -1 <= i ? (pin bad L 1))
-                              ['br _ L] (peep lb L -1 <= i ? (pin bad L 1))
+       ; a table or asm goto's target knows nothing; a loop's head assumes its bounds until they hold
+       bad {} back {}
+       _ (foldl (i \ f \ (f @ ['jmp L] (peep lb L -1 <= i ? (pin back L 1))
+                              ['br _ L] (peep lb L -1 <= i ? (pin back L 1))
                               ['jmpt _ _ ls] (map (L \ pin bad L 1) ls)
                               (('fix . _) && 4 < #f) (map (L \ pin bad L 1) (f 4))
                               _ 0,
                            i + 1)) 0 fs)
-       pend {}
-       (keep L w) (peep bad L () ? 0 (pin pend L (nmcp w . peep pend L ())))
-       (go fs w i fall)
-        (fs @ (f . u)
-               (: (b x) (cint? x ? (x < 0 ? () x) (peep w x ()))
-                  (f @ ['label L]
-                        (: cs ((fall ? [w] ()) + peep pend L ())
-                           (f . go u (peep bad L () || !(two? cs) ? {} (foldl nmmeet <cs >cs)) (i + 1) 1))
-                       ([op t] && peep nmext op () && b t != () && b t <= nmext op) (go u w (i + 1) 1)
-                       ; a value already 0 or 1 made boolean again
-                       ((['cmp t 0] . ['set 'ne t2] . u2) && t = t2 && lovr? t && b t != () && b t <= 1 && !(nmflg? u2)) (go u2 w (i + 2) 1)
-                       ['jmp L] (keep L w, f . go u w (i + 1) 0)
-                       ['br _ L] (keep L w, f . go u w (i + 1) 1)
-                       (('ret || 'jmpt) . _) (f . go u w (i + 1) 0)
-                       _ (: nb (f @ ['li t k] (b k)
-                                    ['mov t a] (b a)
-                                    ([op t _ _] && peep nmldw op ()) (nmldw op)
-                                    ([op t _ _ _ _] && peep nmldw op ()) (nmldw op)
-                                    ([op t] && peep nmext op ()) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
-                                    ['set _ t] 1
-                                    ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
-                                    [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
-                                    ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
-                                    ['imul t x y] (b x @ () () n (b y @ () () m (n * m)))
-                                    [('shr || 'sar) t k] (b t @ () () n (cint? k ? (n // 2 ** k)))
-                                    ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
-                                    _ ())
-                            _ (raops g f @ [_ ds]
-                               (map (x \ pin w x ()) ds,
-                                f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
-                               _ 0)
-                            (f . go u w (i + 1) 1))))
-              _ ())
-       (go fs {} 0 1))
+       ; one walk under the heads' assumptions A -> [forms, the states into each label, each head's]
+       (rnd A)
+        (: pend {} hs {}
+           (keep L w) (peep bad L () ? 0 (pin pend L (nmcp w . peep pend L ())))
+           (go fs w i fall)
+            (fs @ (f . u)
+                   (: (b x) (cint? x ? (x < 0 ? () x) (peep w x ()))
+                      (f @ ['label L]
+                            (: cs ((fall ? [w] ()) + peep pend L ())
+                               w0 (peep bad L () || !(two? cs) ? {} (foldl nmmeet <cs >cs))
+                               ; a head only jumped back to first guesses the state laid before it
+                               w1 (peep back L () ? (A L @ () (two? cs ? w0 (nmcp w)) a (two? cs ? (nmmeet w0 a) (nmcp a))) w0)
+                               (peep back L () ? (pin hs L (nmcp w1)), f . go u w1 (i + 1) 1))
+                           ([op t] && peep nmext op () && b t != () && b t <= nmext op) (go u w (i + 1) 1)
+                           ; a value already 0 or 1 made boolean again
+                           ((['cmp t 0] . ['set 'ne t2] . u2) && t = t2 && lovr? t && b t != () && b t <= 1 && !(nmflg? u2)) (go u2 w (i + 2) 1)
+                           ['jmp L] (keep L w, f . go u w (i + 1) 0)
+                           ['br _ L] (keep L w, f . go u w (i + 1) 1)
+                           (('ret || 'jmpt) . _) (f . go u w (i + 1) 0)
+                           _ (: nb (f @ ['li t k] (b k)
+                                        ['mov t a] (b a)
+                                        ([op t _ _] && peep nmldw op ()) (nmldw op)
+                                        ([op t _ _ _ _] && peep nmldw op ()) (nmldw op)
+                                        ([op t] && peep nmext op ()) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
+                                        ['set _ t] 1
+                                        ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
+                                        [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
+                                        ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
+                                        ['imul t x y] (b x @ () () n (b y @ () () m (n * m)))
+                                        [('shr || 'sar) t k] (b t @ () () n (cint? k ? (n // 2 ** k)))
+                                        ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
+                                        _ ())
+                                _ (raops g f @ [_ ds]
+                                   (map (x \ pin w x ()) ds,
+                                    f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
+                                   _ 0)
+                                (f . go u w (i + 1) 1))))
+                  _ ())
+           [(go fs {} 0 1) pend hs])
+       ; a head holds when every way in stays under it; one that does not widens, and after six
+       ; rounds every head knows nothing
+       (held? pend hs L) (hs L @ () 1 h (all (c \ all (k \ (h k @ () 1 x (c k @ () 0 v (v <= x)))) (keys h)) (peep pend L ())))
+       (fix A k)
+        (rnd A @ [out pend hs]
+           (filter (L \ !(held? pend hs L)) (keys back) @
+              () out
+              ls (k < 1 ? (rnd (foldl (t \ L \ pin t L {}) {} (keys back)) @ [o2 _ _] o2)
+                    (fix (foldl (t \ L \ pin t L (hs L @ h (nmwide h (foldl nmmeet h (peep pend L ()))))) (nmcp A) ls) (k - 1)))))
+       (fix {} 6))
+   ; a head's bounds after a round: each that grew, to 32 bits or none
+   (nmwide h m) (foldl (t \ k \ (m k @ v (pin t k (h k @ () (nmstep v) x (v <= x ? v (nmstep v)))))) {} (keys m))
+   (nmstep v) (v <= 4294967295 ? 4294967295)
    ; the next form reads the flags a compare left
    (nmflg? u) (u @ ((('br || 'set) . _) . _) 1 _ 0)
    (nmcp w) (foldl (t \ k \ pin t k (w k)) {} (keys w))

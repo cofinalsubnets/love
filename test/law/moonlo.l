@@ -63,6 +63,11 @@
       (nmlit (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 16] ['udiv 'n2 'n0 'n1] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
          = lv [['mov 'n0 'r6] ['mov 'n2 'n0] ['shr 'n2 4] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
+      ; a loop's head keeps the bounds its ways in agree on: the or of two 32-bit values needs no extension
+      (nmwid g (lv [['mov 'n1 'r6] ['zx4 'n1] ['li 'n0 0] ['jmp 'T] ['label 'B] ['or 'n2 'n0 'n1] ['zx4 'n2] ['mov 'n0 'n2]
+                    ['label 'T] ['cmp 'n0 'r5] ['br 'below 'B] ['mov 'r0 'n0] ['ret]])
+         = lv [['mov 'n1 'r6] ['zx4 'n1] ['li 'n0 0] ['jmp 'T] ['label 'B] ['or 'n2 'n0 'n1] ['mov 'n0 'n2]
+               ['label 'T] ['cmp 'n0 'r5] ['br 'below 'B] ['mov 'r0 'n0] ['ret]])
       ; the entry's fast region falling into a call copies its twin back ahead of the argument setup
       (raentry g (lv [['mov 'n0 'r6] ['li 'n1 1] ['mov 'r6 'n1] ['cuse 'r6] ['call 'f] ['mov 'r0 'n0] ['ret]])
          @ [_ _ ['mov a _] ['mov 'r6 _] ['cuse 'r6] ['call 'f] _ _] (a = name "%n0") _ 0)
