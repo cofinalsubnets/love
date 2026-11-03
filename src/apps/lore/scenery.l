@@ -220,6 +220,20 @@
 ;                                      breathing, or flashing as a mast's beacon does
 ;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
 ;                                      on a surface, painted by its layers (swatch.l), quoted
+;   (rock [x y z] seed SHAPE)          a rock standing at x y z: a box cut by planes thrown
+;                                      round it, sunk a little; SHAPE 'boulder 'pebble 'scree
+;                                      'slab 'standing 'altar 'outcrop 'cairn, or a tablet
+;                                      {'like 'boulder 'size [lo hi] ..} changing one: 'size
+;                                      a number, [lo hi], or three of those across, up and
+;                                      along; 'cuts 'bite 'flat 'sink 'bearing; 'n of them
+;                                      'spread metres apart or 'stack-ed, each 'shrink of the
+;                                      last; 'skin a texture, a skin or a material's kind
+;   (hills seed {'scale 'height 'octaves}) (ridges seed ..)  a ground: (\ x z y), up to
+;                                      height above and below it; ridges above it alone
+;   (dunes {'bearing 'length 'height}) (mound [x z] radius top height)  (terrace GROUND step)
+;   (channel [[x z] ..] w depth)       depth down within w of the path, its banks up by 2 w
+;   (rise G G) (blend G G r) (carve G G r)  grounds summed, the higher, the lower, rounded
+;   (ground-of SKIN [[x z] [x z]] step GROUND)  a land over two corners, a point every step
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
 ;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
@@ -244,7 +258,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -692,6 +706,79 @@
          (g q) (peep o q (d q) @ v (colour? v ? ['rgb (v 0) (v 1) (v 2)] (pick s q v)))
          r ((materials k 1) g)
          (feel (r 4) (texture (r 0) (r 1) (r 2) (['seed s] . r 3))))))
+ ; ..a skin by a material's kind, or as given
+ (tex-by t) (nom? t ? (material t 1 {}) t)
+ (skin-by t) (skin-of-any (tex-by t))
+ ; --- rocks: a box cut by planes thrown round it, each square to the ellipsoid in the box where
+ ; it meets it and bite of the way in, so one brush; n of them spread or stacked ---
+ rocks {'boulder {'size [[0.8 1.6] [0.6 1.2] [0.7 1.5]] 'cuts [8 12] 'bite [0.0 0.25] 'sink [0.1 0.25]}
+        'pebble {'size [[0.05 0.15] [0.03 0.08] [0.05 0.15]] 'cuts [6 9] 'bite [0.0 0.2] 'flat 0.3 'sink 0.1}
+        'scree {'size [[0.15 0.4] [0.1 0.25] [0.15 0.4]] 'cuts [6 9] 'bite [0.0 0.25] 'flat 0.2 'sink 0.15}
+        'slab {'size [[1.2 2.2] [0.15 0.35] [0.8 1.6]] 'cuts [5 8] 'bite [0.0 0.15] 'flat 0.6 'sink 0.1}
+        'standing {'size [[0.8 1.2] [2.4 3.4] [0.5 0.8]] 'cuts [6 9] 'bite [0.0 0.12] 'sink [0.1 0.2]}
+        'altar {'size [2.2 0.7 1.0] 'cuts [4 6] 'bite [0.0 0.05] 'flat 0.8 'sink 0.05}
+        'outcrop {'size [[0.8 1.6] [0.6 1.2] [0.7 1.5]] 'cuts [8 12] 'bite [0.0 0.25] 'sink [0.1 0.25] 'n [3 5] 'spread 1.2}
+        'cairn {'size [[0.25 0.4] [0.12 0.2] [0.25 0.4]] 'cuts [6 9] 'bite [0.0 0.2] 'flat 0.5 'sink 0.05 'n [4 7] 'stack 1 'shrink 0.85}}
+ rock-keys ['like 'size 'cuts 'bite 'flat 'sink 'bearing 'n 'spread 'stack 'shrink 'skin]
+ (rock-shape q) (? (nom? q) (rocks q)
+                   (tablet? q) (: b (peep q 'like ()) a (b = () ? {} (rocks b)) (tablet? a ? (foldl (\ t k (pin t k (q k))) (foldl (\ t k (pin t k (a k))) {} (keys a)) (keys q)))))
+ (rock at s q) (: u "(rock [x y z] seed SHAPE)" o (P at u) r (rock-shape q)
+   (? (!(tablet? r)) (no (u + ", a SHAPE " + show (sort (keys rocks)) + " or a tablet over one, {'like 'boulder ..}") q)
+      (!(charm? s)) (no u s)
+      (: _ (each (keys r) (k \ elem k rock-keys ? 0 (no (u + ", a rock takes " + show rock-keys) k)))
+         (g e k d) (pick e k (peep r k d))
+         n (max 1 (int (g s 'n 1))) sk (skin-by (peep r 'skin 'stone))
+         (axes v) (two? v && #v = 3 ? v [v v v])
+         ; ..a piece from its foot's middle c under its own seed e, k the share of its size: [brush top]
+         (piece c e k) (: sz (axes (peep r 'size 1.0)) h (map (j \ 0.5 * k * pick e ['size j] (sz j)) ^3) H (2.0 * h 1)
+           y0 (c 1 - g e 'sink 0.0 * H) m [(c 0) (y0 + h 1) (c 2)] fl (g e 'flat 0.0) bt (peep r 'bite 0.0)
+           (plane i) (: w (2.0 * dice e ['w i] - 1.0) a (2.0 * pi * dice e ['a i])
+                        wy ((w < 0.0 ? -1.0 1.0) * (1.0 - 0.8 * fl) (abs w)) r0 (sqrt (max 0.0 (1.0 - wy * wy)))
+                        d [(r0 * cos a) wy (r0 * sin a)] nn (unit [(d 0 / h 0) (d 1 / h 1) (d 2 / h 2)])
+                        p (v+ m (v* (1.0 - pick e ['bite i] bt) [(h 0 * d 0) (h 1 * d 1) (h 2 * d 2)]))
+                        e1 (unit (cross nn (abs (nn 1) > 0.9 ? [1.0 0.0 0.0] [0.0 1.0 0.0])))
+                        [p (v+ p e1) (v+ p (cross nn e1))])
+           b (skin sk (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) (solid (box [(m 0 - h 0) y0 (m 2 - h 2)] [(m 0 + h 0) (y0 + H) (m 2 + h 2)]))
+                             (map plane ^(int (g e 'cuts 8)))))
+           [(turn (g e 'bearing [0.0 360.0]) [(c 0) (c 2)] [(max (h 0) (max (h 1) (h 2)) < 0.75 ? (with b 'whole 1) b)]) (y0 + H)])
+         ; ..each piece on from the last: stacked on its top, else thrown within spread of the first
+         st (g s 'stack 0.0 > 0.5) sp (g s 'spread 0.0) kk (g s 'shrink 1.0)
+         (go i c k acc) (? (n <= i) (rev acc)
+           (: e (seed-of s i) q (piece c e k)
+              c2 (st ? [(o 0 + 0.1 * (dice e 'x - 0.5)) (q 1 - 0.02) (o 2 + 0.1 * (dice e 'z - 0.5))]
+                       [(o 0 + sp * (2.0 * dice e 'x - 1.0)) (o 1) (o 2 + sp * (2.0 * dice e 'z - 1.0))])
+              (go (i + 1) c2 (k * kk) (q 0 . acc))))
+         (go 0 o 1.0 ()))))
+ ; --- ground: heights (\ x z y) that compose, and a land laid under one ---
+ vn (cite 'vec 'vn)
+ (fbm s o fold) (: u "{'scale 'height 'octaves}" sc (N (peep o 'scale 30.0) u) ht (N (peep o 'height 4.0) u)
+   n (int (peep o 'octaves 4)) k (key s) nm (foldl (\ a i (a + i 0.5)) 0.0 ^n)
+   (\ x z (ht * foldl (\ a i (a + i 0.5 * fold (vn (x / sc * i 2) (z / sc * i 2) (k + 31 * i)))) 0.0 ^n / nm)))
+ (hills s o) (fbm s o (v \ 2.0 * v - 1.0))
+ (ridges s o) (fbm s o (v \ (1.0 - abs (2.0 * v - 1.0)) @ r (r * r)))
+ (dunes o) (: u "(dunes {'bearing 'length 'height})" a (N (peep o 'bearing 0.0) u * pi / 180.0) L (N (peep o 'length 6.0) u)
+   ht (N (peep o 'height 2.0) u) sa (sin a) ca (cos a)
+   (\ x z ((x * sa + z * ca) / L * 2.0 * pi @ t (ht * (0.5 + 0.5 * sin (t + 0.6 * sin t))))))
+ (terrace f step) (: t (N step "(terrace GROUND step)")
+   (\ x z (f x z @ v (: b (t * floor (v / t)) (b + t * ease ((v - b) / t) 0.8 1.0)))))
+ (mound c r top h) (: u "(mound [x z] radius top height)" (? (!(two? c && #c = 2 && all num? c)) (no u c)
+   (\ x z (: dx (x - c 0) dz (z - c 1) (h * (1.0 - ease (sqrt (dx * dx + dz * dz)) top r))))))
+ ; ..a channel along the path [[x z] ..]: its bed depth down within w of it, its banks easing up to 2 w
+ (channel ps w depth) (: u "(channel [[x z] ..] w depth)"
+   (? (!(two? ps && #ps >= 2 && all (q \ two? q && #q = 2 && all num? q) ps)) (no u ps)
+      (: (seg a b x z) (: ux (b 0 - a 0) uz (b 1 - a 1) l2 (ux * ux + uz * uz)
+                        t (l2 > 0.0 ? (max 0.0 (min 1.0 (((x - a 0) * ux + (z - a 1) * uz) / l2))) 0.0)
+                        dx (x - a 0 - t * ux) dz (z - a 1 - t * uz) (dx * dx + dz * dz))
+         (\ x z (sqrt (foldl (\ m i (min m (seg (ps i) (ps (i + 1)) x z))) 1e18 ^(#ps - 1)) @ d (0.0 - depth * (1.0 - ease d w (2.0 * w))))))))
+ (rise f g) (\ x z (f x z + g x z))
+ (blend f g r) (\ x z (smax (f x z) (g x z) r))
+ (carve f g r) (\ x z (smin (f x z) (g x z) r))
+ ; ..a land through rows of points step apart over two corners, at the ground's heights
+ (ground-of t c step gr) (: u "(ground-of SKIN [[x z] [x z]] step GROUND)"
+   (? (!(two? c && #c = 2 && all (q \ two? q && #q = 2 && all num? q) c)) (no u c) (!(num? step && step > 0)) (no u step)
+      (: (span a b) (: n (max 1 (int (abs (b - a) / step + 0.5))) (map (i \ a + (b - a) * i / n) ^(n + 1)))
+         xs (span (f (c 0 0)) (f (c 1 0))) zs (span (f (c 0 1)) (f (c 1 1)))
+         (land (tex-by t) (map (z \ map (x \ [x (f (gr x z)) z]) xs) zs)))))
  (feel k t) (: u "(feel 'soft TEXTURE)"
    (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
