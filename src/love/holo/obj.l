@@ -445,6 +445,7 @@
    (objsecsn target0 secs funcnames globnames wknames locnames anames ax)
     (: target (arch-nom target0)
        adata (o-names <ax) abss <>ax
+       szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
        rv (target = 'rv64)
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
@@ -501,16 +502,17 @@
        ; a data name's type and size: an asm text's as its .type and .size say, else an object
        ; the extent of its data
        (o-dtype nm) (o-has? adata (name nm) ? (two? (o-where lanes (fn-obj nm)) ? 1 0) 1)
-       (o-dsize w nm) (o-has? adata (name nm) ? (o-fsize lanes w nm) (o-size nm))
+       (o-xsize w nm) (peep szt (name nm) () @ z (charm? z ? z (o-fsize lanes w nm)))
+       (o-dsize w nm) (o-has? adata (name nm) ? (o-xsize w nm) (o-size nm))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (secs (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) (o-dtype ls)) <w <>w (x ? (o-fsize lanes w ls) (o-dsize w ls)))))
+                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) (o-dtype ls)) <w <>w (x ? (o-xsize w ls) (o-dsize w ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
-                                             (o-ftype lanes fs) <w <>w (o-fsize lanes w fs))))
+                                             (o-ftype lanes fs) <w <>w (o-xsize w fs))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))

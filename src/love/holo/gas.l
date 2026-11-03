@@ -2048,10 +2048,22 @@
               (mn = ".previous") (st 'cur @ c (pin st 'cur (st 'prev), pin st 'prev c))
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
-              ; .size f, .-f: an end label here, f's st_size; any other size goes unread
+              ; .size f, .-f: an end label here, f's st_size; L-f one at L, once the text is read;
+              ; a constant f's size outright. any other size goes unread
               (mn = ".size")
-               (two? >xs && cats (split " " (xa-trim <>xs)) = ".-" + xa-unquote <xs ?
-                  (emit [['label (fn-end (xa-unquote <xs))]]) 0)
+               (two? >xs ?
+                  (trap (\ _ (: f (xa-unquote <xs) ts (gtoks (xa-trim <>xs))
+                     (? !(any (t \ <t = 'sym || <t = 'lref) ts)
+                         (pin st 'sizes ([f (gimm ts)] . peep st 'sizes ()))
+                        (gf-sum ts rl @ r
+                           (gbad? r || two? >r || <<r != 0 ? 0
+                              (gf-norm <><r @ ns
+                                 (? !(elem (f . -1) ns) 0
+                                    (filter (p \ <p != f) ns @ ls
+                                       (? (#ls != 1 || >(ls 0) != 1) 0
+                                          (<(ls 0) = ".") (emit [['label (fn-end f)]])
+                                          (pin st 'endat ([<(ls 0) f] . peep st 'endat ()))))))))))) 0 (\ _ _ 0))
+                  0)
               ; .type f, @function: f's type label, and @object an object's; stt_notype for a label no .type names
               (mn = ".type")
                (filter (w \ 0 < #w) (map xa-trim (catmap (f \ xa-split f 32) (xa-split rest 44))) @ ws
@@ -2234,18 +2246,24 @@
                                 (pin labs a nm,
                                  pin secs nm [<r <>r (catmap (f \ (f = ['label (name s)] ? [['label (name a)] f] [f])) <>>r)])))))
                 0 (peep st 'alias ()))
+       ; .size f, L-f: f's end label beside L's
+       _ (foldl (\ _ e (: l ['label (name (e 0))] en ['label (fn-end (e 1))]
+                          (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (x \ (x = l ? [en x] [x])) <>>r)]))) 0 (st 'order))))
+                0 (peep st 'endat ()))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
        ; a .globl constant never labelled: an absolute symbol, (name value)
        habs (filter (p \ elem <p (st 'globl) && !(string? (labs <p))) (rev (peep st 'abs ())))
        ; a section the text named stays though empty: a linker script may lay it
-       ; the aliases onto names this text never labels ride a fifth element, and the absolute
-       ; symbols a sixth, only when there are any
+       ; the aliases onto names this text never labels ride a fifth element, the absolute
+       ; symbols a sixth, and the constant sizes a seventh, (name size), only when there are any
+       hsz (rev (peep st 'sizes ()))
        ([(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
          (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))]
-        + (peep st 'xal () @ x (two? x || two? habs ? [(rev x)] ()))
-        + (two? habs ? [habs] ())))
+        + (peep st 'xal () @ x (two? x || two? habs || two? hsz ? [(rev x)] ()))
+        + (two? habs || two? hsz ? [habs] ())
+        + (two? hsz ? [hsz] ())))
 
    ;; text -> IR, by target
    (gas-text tgt src)
