@@ -11,9 +11,7 @@
 ; only as the prior state a rebuild starts from: a target is remade when its command changed, a
 ; prerequisite was remade, or it is gone -- a header edit is not seen.
 (module (hearts-kbuild hk-top hk-topgoal hk-prepare hk-build hk-walk hk-vmlinux hk-rule hk-unit hk-plan hk-make hk-submake hk-envmake hk-path)
-(borrow 'posix)
-(borrow 'cook)
-(borrow 'path)
+(borrow '(posix cook path))
 (:
  hk-vars (cite 'cook 'cook-vars)
  hk-expand (cite 'cook 'cook-expand)

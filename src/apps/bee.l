@@ -2,9 +2,7 @@
 ; usage, settings and protocol: doc/bee.md and bee-usage below.
 ; settings are ~/.love/etc/bee.l's, a form a line; a tree's ./.bee.l may set only bee-tree-keys.
 (module (bee bee-main)
-(borrow 'posix)
-(borrow 'json)
-(borrow 'hashes)
+(borrow '(posix json hashes cli))
 
 ; the code rides in the image and every value is made per run, inside bee-main: a
 ; binding at the top would be made once, at the bake, with the bake's settings and directory

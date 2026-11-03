@@ -10,8 +10,7 @@
 ; test/host/manifest.l probes the engine and the tui through a pty.
 (module '(manifest manifest-main manifest-new manifest-frame manifest-key
           sheet cell cell! worth face stow unstow)
-(borrow 'posix)
-(borrow 'tui)
+(borrow '(posix tui cli))
 (:
  ; --- reading a cell: repl-style, one form, unreadable text is a label ---
  (glean s) (sound ("(" + s + ")") @ (d . _) (two? d ? d))

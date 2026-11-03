@@ -17,10 +17,7 @@
 ; refuses the chain. all public, so plain bignums, no constant time owed. every reader is
 ; total: a short or lying length answers (), never an index past the end.
 (module 'tls
-(borrow 'bytes)
-(borrow 'cal)
-(borrow 'posix)
-(borrow 'hashes)
+(borrow '(bytes cal posix hashes))
 (:
    (vsha s) (unhex (sha256 s))
    (vsha384 s) (unhex (sha384 s))

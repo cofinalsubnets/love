@@ -1,8 +1,7 @@
 ; test/host/im.l -- kore's pictures (src/apps/kore/im.l) and the gif decoder: kinds (netpbm, webp and qoi
 ; written too), sixel and kitty off a quay screen, im's verbs, imless's keys, and gifs against magick where present
 ;   cat test/00-init.l test/host/00-host.l test/host/im.l | out/love
-(borrow 'posix)
-(borrow 'jpeg)
+(borrow '(posix jpeg))
 (: K (cite 'kore)
    kind (K 'im-kind) size (K 'im-size) dec (K 'im-decode) frames (K 'im-frames)
    art (K 'im-art) view (K 'im-view)

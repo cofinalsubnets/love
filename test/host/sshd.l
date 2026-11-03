@@ -1,9 +1,7 @@
 ; kore's sshd and ssh/scp on loopback, openssh's client and scp -O against it where installed
 ; the server is its own process: a pty read here holds this one, so a server in it would never run
 ; run: cat test/00-init.l test/host/00-host.l test/host/sshd.l | out/love
-(borrow 'posix)
-(borrow 'tls)
-(borrow 'ssh)
+(borrow '(posix tls ssh))
 (: love <cmdline
    dir ((cwd 0) + "/out/.sshdt")
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)

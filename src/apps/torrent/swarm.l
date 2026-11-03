@@ -17,10 +17,7 @@
 ;                               read parking until the next piece is had and checked; the
 ;                               playhead follows the reader. a fresh call replaces the last
 (module (swarm swarm-new swarm-run swarm-add! swarm-head! swarm-spans swarm-read swarm-had swarm-port)
-(borrow 'bytes)
-(borrow 'metainfo)
-(borrow 'peerwire)
-(borrow 'hashes)
+(borrow '(bytes metainfo peerwire hashes))
 (:
  blk 16384
  (close q) (cite 'posix 'close q)

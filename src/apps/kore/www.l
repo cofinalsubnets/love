@@ -5,9 +5,7 @@
 ; poured plain with its references after it, as lynx -dump does.
 ; gopher:// and gemini:// open too. out of scope: forms that POST, scripts, cookies.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'hashes)
+(borrow '(cli posix hashes))
 
 (:
    ww-usage "usage: www [-w COLS] URL|FILE"

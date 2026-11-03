@@ -1,6 +1,7 @@
 ; test/host/story.l -- the fiction engine headless: level round trip, turns, window and prompt,
 ; frame, library. the runner is test/host/tty.l's. not in the corpus: it reads the tree.
 ; run: cat test/00-init.l test/host/00-host.l test/host/story.l | out/love
+(borrow 'cli)
 
 (borrow 'story)   ; the artifact's module, warm from the tree
 

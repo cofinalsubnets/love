@@ -6,8 +6,7 @@
 ; nslookup asks resolv.conf's first answering nameserver, no hosts file, no search domains.
 ; ping rides linux's unprivileged echo socket, else a raw one; no reply at all is exit 1.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
+(borrow '(cli posix))
 
 (:
    tn-usage "usage: telnet HOST [PORT]"

@@ -4,7 +4,7 @@
 ; leaves, so a piped script ending :wq never dangles
 (module 'vi
 (borrow 'kore) ; the text/u floors
-(borrow 'posix)
+(borrow '(posix cli))
 
 (:
    ; a state for a file, read or new

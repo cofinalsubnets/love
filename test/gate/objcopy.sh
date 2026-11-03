@@ -70,4 +70,46 @@ fi
 "$ho/love" "$d/ocopy.l" -O binary test/gate/objcopy.sh "$d/mine.out" 2>/dev/null \
   && { echo "FAIL objcopy took a non-ELF"; exit 1; }
 
-echo "$name: $n flattens byte-identical to $oc, two refusals held, i386 and a thumb2 bcc linked bare"
+# the elf written again: llvm-objcopy is the oracle, gnu objcopy lays a file its own way.
+# relocatables by mooncc and, where there is one, the host cc with -g (debug sections, a
+# property note), each through the kernel's flag sets; then a linked exe stripped, flagged
+# and cut by pattern. strip -g is kore's, through the same rewrite
+m=0
+lo=`command -v llvm-objcopy 2>/dev/null || true`
+ls_=`command -v llvm-strip 2>/dev/null || true`
+if [ -n "$lo" ]; then
+  cat > "$d/fx.c" <<'EOF2'
+extern int ext(int);
+static int hits;
+const char tag[] = "fx";
+int bump(int x) { return ext(x) + ++hits + tag[0]; }
+__attribute__((section(".init.text"))) int early(void) { return bump(1); }
+EOF2
+  LOVE_NO_IMAGE= "$ho/love" mooncc -c "$d/fx.c" -o "$d/fx-moon.o" || { echo "FAIL objcopy: mooncc fx.c"; exit 1; }
+  rs="$d/fx-moon.o"
+  if command -v cc >/dev/null 2>&1 && cc -g -O1 -c "$d/fx.c" -o "$d/fx-cc.o" 2>/dev/null; then rs="$rs $d/fx-cc.o"; fi
+  ecmp() {   # ecmp IN OPTS..: ours and llvm's, byte for byte
+    i=$1; shift
+    "$ho/love" "$d/ocopy.l" "$@" "$i" "$d/mine.out" || { echo "FAIL objcopy $* $i"; exit 1; }
+    "$lo" "$@" "$i" "$d/ref.out" || { echo "FAIL $lo $* $i"; exit 1; }
+    cmp "$d/mine.out" "$d/ref.out" > /dev/null || { echo "FAIL objcopy $* $i -- differs from $lo"; exit 1; }
+    m=`expr $m + 1`
+  }
+  for o in $rs; do
+    ecmp "$o" --prefix-symbols=__pi_
+    ecmp "$o" --prefix-symbols=__pi_ --remove-section=.note.gnu.property --prefix-alloc-sections=.init
+    ecmp "$o" --remove-section .data -R '.rela.init*'
+    if [ -n "$ls_" ]; then
+      "$ho/love" strip --strip-debug -o "$d/mine.out" "$o" || { echo "FAIL strip -g $o"; exit 1; }
+      "$ls_" --strip-debug -o "$d/ref.out" "$o"
+      cmp "$d/mine.out" "$d/ref.out" > /dev/null || { echo "FAIL strip -g $o -- differs from $ls_"; exit 1; }
+      m=`expr $m + 1`
+    fi
+  done
+  ecmp "$ho/love" -S
+  ecmp "$ho/love" -R .comment -S
+  ecmp "$ho/love" --set-section-flags .love.rela=noload --set-section-flags '.rel*'=noload
+  ecmp "$ho/love" --remove-section='.love.R*' --remove-section='!.love.README' -R .comment -w --strip-unneeded-symbol='lv_*'
+fi
+
+echo "$name: $n flattens byte-identical to $oc, $m elf rewrites to llvm's, two refusals held, i386 and a thumb2 bcc linked bare"

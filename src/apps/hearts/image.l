@@ -10,13 +10,7 @@
 ;   and OUT/u4.hup (v3, sick); LOVE is a baked a64 love, IMAGE the kernel,
 ;   EFI the chooser, SEED and BADSEED 32-byte keys as hex, STAMP the one time every file
 ;   carries (seconds, default 0): the same inputs give the same bytes on any host.
-(borrow 'bytes)
-(borrow 'posix)
-(borrow 'gz)
-(borrow 'fat)
-(borrow 'sqfs)
-(borrow 'ext4)
-(borrow 'hashes)
+(borrow '(bytes posix gz fat sqfs ext4 hashes))
 (: ; its words are the ones after its own name, whatever loaded ahead of it
    (after l) (atom? l ? () (<l @ (_ + "image.l") >l (after >l)))
    as (after cmdline)

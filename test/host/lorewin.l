@@ -1,10 +1,7 @@
 ; test/host/lorewin.l -- view's loop on a headless window ('evq its events): keys to actions,
 ; held keys at the level's pace, repeat no press, ? help; and the world painted on its paper.
 ; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
-(borrow 'view)
-(borrow 'world)
-(borrow 'posix)
-(borrow 'window)
+(borrow '(view world posix window))
 
 (: _ (setenv "HORN" "none")
    ; events by frame: k held 0-2, p at 3-4, q at 6; or ? down 1-3

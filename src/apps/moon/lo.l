@@ -1289,6 +1289,6 @@
              sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
-    (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (jmpm g (csdrop g (cskeep g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) ir)))))))))))))))))))
+    (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
+     (tailarm g (jmpm g (csdrop g (cskeep g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) ir))))))))))))))))))))
 )) ; module 'moon

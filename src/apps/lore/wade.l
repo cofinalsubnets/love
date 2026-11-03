@@ -12,8 +12,7 @@
          wade-size wade-song-new wade-song-feed moon-at swell rings-at tree-of rw sp loop fps
          slendro song-chunk arc-z morph-z lamp-z lamp-near done-ms settle-ms wade-aim wade-settle
          texts texts-at)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(rove horn cli))
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'flicker)                       ; the flame's breath
 (borrow 'walk)                          ; the rail

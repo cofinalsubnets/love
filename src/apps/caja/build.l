@@ -5,11 +5,7 @@
 ; line_break and the ligature loop are par.l's, vert_break page.l's, packing and shipping
 ; box.l's; eqtb reaches them through J 'params.
 (module 'caja-tex
-(borrow 'posix)
-(borrow 'tfm)
-(borrow 'caja-box)
-(borrow 'caja-par)
-(borrow 'caja-page)
+(borrow '(posix tfm caja-box caja-par caja-page))
 (:
    acc-kern 2 non-char 256 nest-size 500
    box-flag 1073741824 ship-out-flag 1073742336 leader-flag 1073742337

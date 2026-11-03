@@ -337,8 +337,8 @@
        shs-off <>ro               shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
        sht (catall ([(o-zeros 40)]                                             ; 0 NULL
-              + o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
-                                    0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+              + o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
+                                    0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) (l 2 >> 32)))
                        lanes
               + [(elf-shdr32 (shname nsec) 2 0 0 sym-off sym-sz i-str (1 + nsec + nloc) 4 16)   ; .symtab link=.strtab info=first-global
                  (elf-shdr32 (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                   ; .strtab
@@ -379,12 +379,12 @@
      + (two? imgforms ? [[".love.image"  1 3 16 imgforms]] ()))
    ; a named section a compiler emits: progbits on the widest grain its globals ask and no wider,
    ; as objects' pieces may tile one array (the kernel's .videocards); writable unless ro.
-   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 1 forms) forms]
+   (objsec-named nm forms ro) [nm 1 (? (ro = 'lo) 131 ro 2 3) (o-dalign 1 forms) forms]   ; 'lo: wa, link order
    ; ..and the code twin, for a function that named its own section; flags 6 = alloc|execinstr.
    ; the grain is the caller's: one-fn sections at grain N tile at N (love.h's love_typ stride).
    (objsec-code nm forms al) [nm 1 6 al forms]
    ; a data section's alignment pads with zeros, not the backend's nop
-   (o-dal fm) (map (f \ (two? f && <f == 'align ? ['dalign (f 1)] f)) fm)
+   (o-dal fm) (map (f \ (two? f && <f == 'align ? ('dalign . >f) f)) fm)
    ; a file-scope asm's sections, (name type flags forms) each: a name already laid takes the
    ; forms at its tail and keeps its own flags, a new one rides after the rest
    (objsec-merge secs xs)
@@ -438,16 +438,19 @@
    ; -- the general object: a list of sections, each (name type flags align forms), each one
    ; lay: a branch inside resolves in place, a reference across becomes a relocation.
    ; shf_execinstr (flags & 4) picks the relaxer and rset (a64's branches resolve in any
-   ; section). a NOBITS section lays its forms for labels and size but writes no bytes. --
-   (objsecs target0 secs funcnames globnames wknames locnames) (objsecsn target0 secs funcnames globnames wknames locnames {})
-   (objsecsn target0 secs funcnames globnames wknames locnames anames)
+   ; section). a NOBITS section lays its forms for labels and size but writes no bytes. ax is
+   ; what an assembly text adds: its data names, typed and sized as gas does (stt_notype, size 0,
+   ; unless its .type and .size say), and its absolute symbols, each (name value) --
+   (objsecs target0 secs funcnames globnames wknames locnames) (objsecsn target0 secs funcnames globnames wknames locnames {} [() ()])
+   (objsecsn target0 secs funcnames globnames wknames locnames anames ax)
     (: target (arch-nom target0)
+       adata (o-names <ax) abss <>ax
        a64 (target = 'a64)
        rv (target = 'rv64)
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
        rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 rel8 rel16 pc8))
-       drset (a64 ? rset ())
+       drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
        machine (peep elf-machines target 0)
        ; a cross backend joins at runtime; unregistered, lay would lower nothing, silently
        be (backends target @ b
@@ -455,6 +458,8 @@
        ; a weak-defined function's callers go through a relocation, so a strong override wins;
        ; the relaxer must keep them long too
        wkset (o-names wknames)
+       ; ..and on x64 a reach to any global, as gas leaves it: the linker may bind it elsewhere
+       gbset (target = 'x64 ? (o-names (wknames + funcnames + globnames)) wkset)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
@@ -464,10 +469,10 @@
                 (: fm (s 4)
                    p (exec? s ?
                         (laylax @ r
-                           (lit? r ? (r fm be 0 {} wkset)
+                           (lit? r ? (r fm be 0 {} gbset)
                               (scare 'holo-bake-stale 'laylax)))   ; each section at org 0
                         (lay (o-dal fm) be 0 () {}))
-                   w (o-walk be <p >p wkset 1 (exec? s ? rset drset))
+                   w (o-walk be <p >p gbset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
        (ln i) (lanes i)
@@ -478,13 +483,13 @@
 
        ; -- symbol indices: NULL, a section symbol each, the local statics, funcs, globs,
        ; exts. every local ahead of the first global, where .symtab's sh_info points --
-       nloc #locnames nfun #funcnames nglob #globnames
-       fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob)
+       nloc #locnames nfun #funcnames nglob #globnames nabs #abss
+       fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob + nabs)
        extidx (o-idx exts estart)
        fnidx (o-idx (map name funcnames) fstart)   ; relocs to a global bind these
        gidx (o-idx (map name globnames) gstart)
 
-       symnames (map (s \ peep anames s s) (locnames + funcnames + globnames + map string exts))
+       symnames (map (s \ peep anames s s) (locnames + funcnames + globnames + map cap abss + map string exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
 
@@ -493,10 +498,14 @@
        (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
        dsz (o-dsizes secs)
        (o-size nm) (peep dsz (string? nm ? nm (show nm)) 0)
+       ; a data name's type and size: an asm text's as its .type and .size say, else an object
+       ; the extent of its data
+       (o-dtype nm) (o-has? adata (name nm) ? (two? (o-where lanes (fn-obj nm)) ? 1 0) 1)
+       (o-dsize w nm) (o-has? adata (name nm) ? (o-fsize lanes w nm) (o-size nm))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (secs (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) 1) <w <>w (x ? (o-fsize lanes w ls) (o-size ls)))))
+                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) (o-dtype ls)) <w <>w (x ? (o-fsize lanes w ls) (o-dsize w ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
@@ -505,16 +514,18 @@
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
-                                                   (elem gs wknames ? 2 1) 1 <w <>w (o-size gs))))
+                                                   (elem gs wknames ? 2 1) (o-dtype gs) <w <>w (o-dsize w gs))))
                                  globnames))
+           ; an absolute symbol: stb_global stt_notype, shn_abs
+           asyms (catall (o-mapi (\ i p (elf-sym (stroffs (nloc + nfun + nglob + i)) 1 0 65521 <>p 0)) abss))
            ; a weak undef resolves to zero at static link
-           esyms (catall (o-mapi (\ i e (elf-sym (stroffs (nloc + nfun + nglob + i))
+           esyms (catall (o-mapi (\ i e (elf-sym (stroffs (nloc + nfun + nglob + nabs + i))
                                                (o-has? wkset e ? 2 1) 0 0 0 0))
                                  exts))
            ; one stt_section symbol per section, in section order
            ssyms (catall (o-mapi (\ i l (elf-sym 0 0 3 (i + 1) 0 0)) lanes))
-           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms fsyms gsyms esyms]))    ; the NULL symbol leads
-       nsym (1 + nsec + nloc + nfun + nglob + #exts)
+           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
+       nsym (1 + nsec + nloc + nfun + nglob + nabs + #exts)
 
        ; -- the relocations, by the fixup's kind, never the section. --
        ; a label -> (symidx base-addend): a global binds itself (base 0), as gas does, so the
@@ -537,16 +548,16 @@
                  'abs8 (o-rela off si r-8 (sa + aux))
                  ; an 8-byte word measured from its own start
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
-                 ; x64 counts from the field's end, so the -4. a weak fn binds plt32; for an
-                 ; external, a preceding E8/E9 (call/jmp) wants plt32, anything else pc32 (data
-                 ; has no plt stub).
+                 ; x64 counts from the field's end, so the -4. a weak fn binds plt32; a branch
+                 ; (E8/E9 call/jmp, 0F 8x jcc) to a global or an external wants plt32, anything
+                 ; else pc32 (data has no plt stub)
                  'rel32
                   (o-rela off si
                           (? rv rr-pc32
                              a64 ra-prel32
                              (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
-                             (o-where lanes lbl) r-pc32
-                             (elem pv '(232 233)) r-plt32
+                             !(elem pv '(232 233) || 128 <= pv && pv <= 143) r-pc32
+                             (o-has? gbset lbl || !(o-where lanes lbl)) r-plt32
                              r-pc32)
                           ((sa + aux) - 4))
                  ; a64: a page delta never resolves inside a .o
@@ -593,9 +604,11 @@
        shs-off <>ro             shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
 
+       ; a link-order section's sh_link: the section its first word reaches
+       (o-link l) (0 < (l 2 & 128) && two? (l 5) ? (o-where lanes (l 5 0 2) @ w (two? w ? <w 0)) 0)
        sht (catall ([(o-zeros 64)]                                         ; 0 NULL
-              + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
-                                  0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+              + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
+                                  0 (coffs i) (o-blen (ln-bs l)) (o-link l) 0 (l 3) (l 2 >> 32)))
                        lanes
               + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
                  (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab

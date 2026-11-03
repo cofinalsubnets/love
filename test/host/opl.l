@@ -1,7 +1,6 @@
 ; test/host/opl.l -- the FM instruments: a bank laid here, read, and its voices measured
 ;   cat test/00-init.l test/host/opl.l | out/love
-(borrow 'opl)
-(borrow 'bytes)
+(borrow '(opl bytes))
 (: (opl-t-cat l) (foldl (\ a s (a + s)) "" l)
    (opl-t-b l) (opl-t-cat (map string l))
    ; ..an operator's six bytes: 0x20 (sustain, multiple), attack/decay, sustain/release, wave, ksl, level

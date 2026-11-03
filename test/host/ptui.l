@@ -1,8 +1,6 @@
 ; test/host/ptui.l -- src/apps/player/tui.l over an in-process core on HORN=none
 ; run: cat test/00-init.l test/host/ptui.l | out/love
-(borrow 'posix)
-(borrow 'pcore)
-(borrow 'ptui)
+(borrow '(posix pcore ptui))
 (: pt-dir (cwd 0 + "/out/.ptuid")
    _ (hark ["rm" "-rf" pt-dir], mkdir pt-dir 448)
    _ (setenv "HORN" "none")

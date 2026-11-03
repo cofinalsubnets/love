@@ -3,7 +3,7 @@
 ; violet at 8; a needle fifty cents either side of the nearest note; the spectrum C1-B7
 (module (tuner tuner-main tuner-new tuner-yin tuner-hear tuner-cents tuner-note tuner-frame
                tuner-sine tuner-tone tuner-plain tuner-spectrum tuner-glass)
-(borrow 'window)
+(borrow '(window cli))
 (:
    names ["C" "C♯" "D" "D♯" "E" "F" "F♯" "G" "G♯" "A" "A♯" "B"]
    hues [160 202 214 148 41 45 33 99 171]          ; octaves 0..8, red through violet

@@ -1,6 +1,6 @@
 ; a module of its own, so `borrow` splices tar into this layer, not the dist cat's
 (module 'source
-(borrow 'tar)
+(borrow '(tar cli))
 
 (borrow 'posix)
 (: (src-die m) (udie 1 ";; \(m)")
@@ -366,24 +366,6 @@
    ; the one tool linked to love by its own name, the argv[0] door: lush, autonomous by
    ; default, runs every other verb by name (`lush -c 'mooncc ..'`), PATH or no PATH
    nest-tools ["lush"]
-   nest-keep ["love" "lush"]
-   ; what an earlier install laid that is no longer kept: a link to love by another
-   ; name, the lux script, a shell launcher, the papel link. anything else stays
-   (nest-laid? p)
-    (readlink p @ l
-       (? (string? l) (l = "love" || (#l > 17 && snip l (#l - 17) #l = "/src/apps/papel.l"))
-          (nest-read p @ s
-             (string? s && (snip s 0 41 = "#!/usr/bin/env -S love -l\n; src/apps/lux/"
-                            || 0 <= fsub s "((cite 'cli 'shell) 0)" 0)))))
-   (nest-stale bin)
-    (filter (nm \ 0 < #nm && nm 0 != 46 && !(elem nm nest-keep) && nest-laid? "\(bin)/\(nm)")
-            (two? (stat bin) ? (readdir bin) ()))
-   ; a ~/.local/bin link into the nest whose name the nest no longer holds
-   (nest-stale-compat home bin)
-    (: d "\(home)/.local/bin"
-       (filter (nm \ 0 < #nm && nm 0 != 46 && readlink "\(d)/\(nm)" = "\(bin)/\(nm)"
-                     && !(two? (stat "\(bin)/\(nm)")))
-               (two? (stat d) ? (readdir d) ())))
    ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
@@ -422,8 +404,6 @@ install this binary as ~/.love/bin/love, with lush beside it
        shown (bin = "\(home)/.love/bin" ? "~/.love/bin/love" "\(bin)/love")
        r (nest-lay bin "\(bin)/love" new)
        _ (each nest-tools (nm \ "\(bin)/\(nm)" @ p (readlink p = "love" ? 0 (unlink p, symlink "love" p))))
-       _ (each (nest-stale bin) (nm \ unlink "\(bin)/\(nm)"))
-       _ (each (nest-stale-compat home bin) (nm \ unlink "\(home)/.local/bin/\(nm)"))
        _ (each ("love" . nest-tools) (nest-compat home bin))
        (puts (r = 'same ? "love nest: \(shown) is already this build (\(love-build 0))\n"
                           "love nest: installed \(shown) (\(love-build 0))\n"),

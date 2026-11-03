@@ -6,10 +6,7 @@
 ;   (xz-pull rd)            -> g: (xz-next g) the next piece, "" once done, then g's 'ans
 ;   (xz-unf rd mk)          -> (1 n) | the word | 'no: .xz or .lzma, out through mk's (1 w)
 (module 'xz
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'tar)
-(borrow 'hashes)
+(borrow '(posix bytes tar hashes))
 
 (:
    (xz-bytes l) (foldl (a \ b \ a + string b) "" l)
@@ -252,9 +249,7 @@
 ; a level picks the dictionary, never bigger than the input needs; the parse is one greedy
 ; one whatever the level. writes .xz only. status: 0, 1 an error, 2 a warning.
 (module 'xzcmd
-(borrow 'xz)
-(borrow 'path)
-(borrow 'posix)
+(borrow '(xz path posix cli))
 (: xzc-help "xz -- the .xz container in love (src/love/compress/xz.c is the LZMA2 codec)
 usage: xz [-cdfkqtvz] [-0..-9] [-e] [-T N] [-C CHECK] [-S SUF] [FILE..]
   -z  compress (the default)            -d  decompress (unxz; .xz and .lzma)

@@ -1,7 +1,7 @@
 ; grass99 -- grass simulator 1999, the sequel: grass's own week, state, rules and loop,
 ; stood up in three dimensions by meadow, with a tune of its own.
 (module (grass99 grass99-main grass99-look grass99-frame score99)
-(borrow 'rove)
+(borrow '(rove cli))
 (borrow 'grass)                         ; the week: its state, its rules, its loop
 (borrow 'meadow)                        ; the field in three dimensions
 (:

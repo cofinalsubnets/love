@@ -21,8 +21,7 @@
 ; refuses a device under ~33 MB.
 (module (fat fat-mkfs fat-mount fat-ls fat-stat fat-read fat-write fat-mkdir fat-rm
          fat-disk)
-(borrow 'bytes)
-(borrow 'cal)
+(borrow '(bytes cal))
 (:
    ; --- little-endian scalars ---
    (w16 b i v) (pin b i (v & 255), pin b (i + 1) (v >> 8 & 255), ())
@@ -367,7 +366,7 @@
 ; wrote: the same device shape the laws drive.
 ; status: 0 ok, 1 the operation said no, 2 usage or an unreadable image.
 (module 'fatcmd
-(borrow 'fat)
+(borrow '(fat cli))
 
 (borrow 'posix)
 (: fatc-usage "usage: fat {ls|stat|cat|get|put|mkdir|rm|mkfs} IMG [PATH..]"

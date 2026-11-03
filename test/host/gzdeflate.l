@@ -3,8 +3,7 @@
 ; written the cheapest of stored, fixed or dynamic huffman. it splices into module 'gz:
 ;   (borrow 'gz) (borrow "test/host/gzdeflate.l"), then (gz-deflatel s) -> raw deflate bytes
 (module 'gz
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(bytes hashes))
 (:
    ; --- the bit sink ---------------------------------------------------------
    ; deflate packs bits into bytes LSB-first, but a Huffman code is stored

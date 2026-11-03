@@ -2,9 +2,7 @@
 ; animations, by sha-256; then, where PIL writes webp, held to PIL's decode byte for byte; the lossless
 ; encoder read back exactly, here and by PIL; then the refusals.
 ;   cat test/00-init.l test/host/webp.l | out/love
-(borrow 'posix)
-(borrow 'hashes)
-(borrow 'webp)
+(borrow '(posix hashes webp))
 (borrow "src/apps/webp.l")
 (: dir (cwd 0 + "/out/.webpd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

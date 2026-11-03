@@ -120,6 +120,23 @@ printf 'int f(int a){ return a + 1; }\nextern int fa(int) __attribute__((alias("
 moonrun -c "$ho/.fal.c" -o "$ho/.fal.o" || fail "mooncc: a function alias"
 [ "$(readelf -sW "$ho/.fal.o" | awk '$8 == "f" || $8 == "fa" {print $3, $4}' | sort -u | wc -l)" = 1 ] || fail "an alias does not carry its function's type and size"
 readelf -sW "$ho/.fszs.o" | grep -q ' end$' && fail "a function's end label reached the symtab"
+# an asm's relocs and symbols as gas lays them: a branch to a global keeps its reloc (plt32), an
+# address-of is pc32, a named fill is that byte, a same-section reach resolves, a data label
+# is notype size 0 unless .type names it, a .globl constant is absolute
+printf '.text\n.globl g\ng:\n ret\n.globl f\nf:\n call g\n jmp g\n jne g\n lea g(%%rip), %%rax\n ret\n.section .text.pad,"ax"\n ret\n.balign 8, 0x90\n.section .rodata\n.Lt:\n .long 1\nt2:\n .long .Lt - .\n.type tobj, @object\ntobj:\n .long 7\n.size tobj, .-tobj\n.globl dlab\ndlab:\n .long 9\n.globl zabs\nzabs = 0x1234\n' > "$ho/.grl.S"
+moonrun -c "$ho/.grl.S" -o "$ho/.grl.o" || fail "mooncc: an asm's relocs"
+[ "$(readelf -rW "$ho/.grl.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PC32 g " ] || fail "a branch to a global is not plt32 through its reloc, or an address-of is not pc32"
+readelf -x .text.pad "$ho/.grl.o" | grep -q 'c3909090 90909090' || fail ".balign 8, 0x90 is not filled with its byte"
+readelf -SW "$ho/.grl.o" | grep -q 'rela.rodata' && fail "a reach inside .rodata kept a reloc"
+# an inline asm's section keeps its merge flag and entsize; the pads lie one section per
+# function section, link-ordered to it
+printf 'void f(void){ asm volatile("1: nop\\n.pushsection .altinstructions,\\"aM\\",@progbits,14\\n .long 1b - .\\n .long 0\\n .short 1\\n .byte 2,3,4,5\\n.popsection"); }\n' > "$ho/.psa.c"
+moonrun -c "$ho/.psa.c" -o "$ho/.psa.o" || fail "mooncc: a pushsection with flags"
+[ "$(readelf -SW "$ho/.psa.o" | sed -E 's/^ *\[ *[0-9]+\] +//' | awk '$1 == ".altinstructions" {print $6, $7}')" = "0e AM" ] || fail "an asm's \"aM\",@progbits,14 lost its merge flag or entsize"
+printf 'void g(void){}\n__attribute__((section(".init.text"))) void h(void){}\n' > "$ho/.pfl.c"
+moonrun -fpatchable-function-entry=4,2 -c "$ho/.pfl.c" -o "$ho/.pfl.o" || fail "mooncc: patchable entries in two sections"
+[ "$(readelf -SW "$ho/.pfl.o" | sed -E 's/^ *\[ *([0-9]+)\] +/\1 /' | awk '{n[$1] = $2} $2 == "__patchable_function_entries" {p[++k] = $9 " " $8} END {for (i = 1; i <= k; i++) {split(p[i], a, " "); print a[2], n[a[1]]}}' | sort | tr '\n' ' ')" = "WAL .init.text WAL .text " ] || fail "the pads are not one section per function section, link-ordered to it"
+[ "$(readelf -sW "$ho/.grl.o" | awk '$8 == "t2" || $8 == "tobj" || $8 == "dlab" || $8 == "zabs" {print $8, $2, $3, $4, $5, ($7 == "ABS" ? "ABS" : "-")}' | sort | tr '\n' ' ')" = "dlab 000000000000000c 0 NOTYPE GLOBAL - t2 0000000000000004 0 NOTYPE LOCAL - tobj 0000000000000008 4 OBJECT LOCAL - zabs 0000000000001234 0 NOTYPE GLOBAL ABS " ] || fail "an asm data label's type or size is not gas's, or a .globl constant is not absolute"
 # a global in a named section is its object's bytes, no word's pad: the kernel's percpu hot
 # data must fit one cache line
 printf '_Bool b __attribute__((section(".data..h1")));\nint n __attribute__((section(".data..h2"))) = 3;\nchar c[3] __attribute__((section(".data..h3")));\n' > "$ho/.nps.c"
@@ -1564,6 +1581,49 @@ moonrun "$ho/.wklib.o" "$ho/.wkstr2.o" -o "$ho/.lnk4" > /dev/null 2>&1 && "$ho/.
 for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/317-always-inline-body.c -o "$ho/.awi.o" || fail "mooncc -t $t: 317-always-inline-body"
   nm "$ho/.awi.o" | grep -q ' t ii$' && fail "an always_inline body stayed out of line on $t"
+done
+# a plain static inline as well: its statement expressions, compound literal and aggregate locals,
+# a do-while(0) wrapping and on x64 its asm, splice like any body under the size gate
+for t in x64 a64 rv64; do
+  moonrun -t $t -O2 -c test/cc/349-inline-body.c -o "$ho/.pib.o" || fail "mooncc -t $t: 349-inline-body"
+  nm "$ho/.pib.o" | grep -q ' t \(sx\|cl\|sl\|al\|wo\|mul_ok\)$' && fail "a static inline body stayed out of line on $t"
+done
+printf 'static inline int ld(int *p) { int v; asm volatile("movl %%1, %%0" : "=r"(v) : "m"(*p)); return v; }\nint f(int *p) { return ld(p) + ld(p + 1); }\n' > "$ho/.pia.c"
+moonrun -O2 -c "$ho/.pia.c" -o "$ho/.pia.o" || fail "mooncc: a static inline asm body"
+nm "$ho/.pia.o" | grep -q ' t ld$' && fail "a static inline asm body stayed out of line"
+# ..and under -fstack-protector-strong, whose canary over an address-taken scalar splices away,
+# while a buffer's keeps its guard
+printf 'extern void *km(unsigned long);\nextern void fill(char *);\nstatic inline void *ka(unsigned long n, unsigned long s) { unsigned long b; if (__builtin_mul_overflow(n, s, &b)) return 0; return km(b); }\nstatic inline int bf(void) { char c[16]; fill(c); return c[0]; }\nvoid *f(unsigned long n) { return ka(n, 8); }\nint g(void) { return bf(); }\n' > "$ho/.pis.c"
+for t in x64 a64; do
+  moonrun -t $t -O2 -fstack-protector-strong -c "$ho/.pis.c" -o "$ho/.pis.o" || fail "mooncc -t $t: a static inline under the stack protector"
+  nm "$ho/.pis.o" | grep -q ' t ka$' && fail "a canary over a scalar kept a static inline out of line on $t"
+  nm "$ho/.pis.o" | grep -q ' U __stack_chk_fail$' || fail "a buffer's canary went missing on $t"
+done
+# ..and never into the right of a decided 0 && (an asm goto to .subsection 1 keeps a dead arm laid),
+# while a64's "Q" over a local, an inlined *&x, takes its address
+cat > "$ho/.pid.c" <<'EOF'
+extern int gone(void);
+static inline int ok(unsigned int c) { switch (c) { case 35: return 0; } return 1; }
+static inline int cap(unsigned long c) {
+  if (!ok(c)) return 0;
+#if defined(__aarch64__)
+  asm goto("nop\n .subsection 1\n b %l[yes]\n .previous\n .hword %[c]" : : [c] "i"(c) : : yes);
+#else
+  asm goto("nop\n .subsection 1\n jmp %l[yes]\n .previous\n .short %c[c]" : : [c] "i"(c) : : yes);
+#endif
+  return 0;
+yes:
+  return 1;
+}
+int f(int x) { do { } while (0 && (!cap(35) && !gone())); return x; }
+#if defined(__aarch64__)
+static unsigned long rd(unsigned long *p) { unsigned long v; asm("ldr %0, %1" : "=r"(v) : "Q"(*p)); return v; }
+unsigned long g(void) { unsigned long y = 7; return rd(&y); }
+#endif
+EOF
+for t in x64 a64; do
+  moonrun -t $t -O2 -c "$ho/.pid.c" -o "$ho/.pid.o" || fail "mooncc -t $t: a decided && over an inline asm goto, or a64's Q"
+  nm "$ho/.pid.o" | grep -q ' U gone$' && fail "the right of a decided 0 && kept its call on $t"
 done
 # ..however deep the chain: ten calls down, seven of them always_inline
 for t in x64 a64 rv64; do

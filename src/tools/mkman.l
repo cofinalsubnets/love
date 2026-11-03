@@ -3,8 +3,7 @@
 ;   love src/tools/mkman.l file.md [love_version.h]
 ; @VERSION@ is the one placeholder; the second argument fills it from love_version.h, and with
 ; none it rides through, which is what a hand run wants.
-(borrow 'lapiz)
-(borrow 'posix)
+(borrow '(lapiz posix))
 (: (rd p) (open p "r" @ q
              (q ? (slurp q @ t (close q, t))
                 (say err ("mkman: cannot read " + p), put err 10, quit 1)))

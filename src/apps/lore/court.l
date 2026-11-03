@@ -8,7 +8,7 @@
          court-opts court-wx-pick court-fall-pick court-month court-pens court-maps
          tree-grow top-h block-h crown-y runs boxes strands wall-of wall-texel stars windows
          fps yard-a yard-b floor-h floors wall-h eye-h body-r lat paces crate-of plate-of plate-r)
-(borrow 'rove)
+(borrow '(rove cli))
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'vec)                           ; triples, and the noise
 (borrow 'sky)                           ; the sun, its light, the sky's colour

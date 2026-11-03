@@ -1,5 +1,6 @@
 ; the help calling convention: (hear f) installs f, which receives (help a b), the
 ; condition data and nothing else. uninstalled at the end of this file
+(borrow 'cli)
 (: help-log {})
 
 ; a counting ap, keyed by the tag it hears

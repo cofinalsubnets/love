@@ -29,7 +29,8 @@ Two pipelines exist today, and the criterion is their join:
 |---|---|---|
 | kernel C/asm: mooncc + holo for every unit | g-e9 | g-21 (refused/differ classes, by units) |
 | boot of a mooncc kernel | g-e9 (boots: r23) | g-21 (first mixed boot, q35 + OVMF + kvm) |
-| the link and binutils: holo for ld.lld, nm, objcopy, strip, objdump, readelf | g-ae (a64 first) | g-ae |
+| the link: holo for ld.lld | g-ae (a64 first) | g-ae |
+| binutils: kore's nm, objcopy, strip, objdump, readelf | g-e9 | g-e9 |
 | build driver: kbuild.l end to end, no GNU make | g-05-5f | g-05-5f |
 | host programs and their parsers/scripts, the conf `/bin/sh` leak | g-05-5f | g-05-5f |
 | archives: kore ar for kbuild (llvm-ar) | g-05-5f | g-05-5f |
@@ -102,16 +103,16 @@ x64 adds the 37 `-m16` units of setup.bin and realmode (in the 3004).
 No love linker links a kernel yet: holo's `link.l` is a static ELF linker (`ldkern` for inle,
 `ldshared`); kore's `ld` takes no `-T`, `-r` or archives.
 
-## 5. binutils — g-ae; archives g-05-5f
+## 5. binutils — g-e9; archives g-05-5f
 
 | tool | a64 | x64 | love today |
 |---|---|---|---|
 | llvm-ar | 899 (`cDPrST` built-in.a / vmlinux.a, `t`, `mPiT`) | 767 | kore `ar` does `rcs`/`t` only |
-| llvm-objcopy | 46: libstub 33, pi 7, vdso 2, kvm, modinfo, vmlinux ×2, Image | 29: libstub 19, `-O binary` ×3, `-S`, `--prefix-symbols` ×2, vmlinux | holo `copy.l` does `-O binary`/ihex only |
-| llvm-strip | 33 (libstub `--strip-debug`) | 19 | kore `strip`, unused |
-| llvm-objdump | 33 (libstub `-r` checks) | 19 | none |
-| llvm-readelf | 2 (vdso dynamic-reloc check) | 2 | kore `readelf`, unused |
-| llvm-nm | 1 + 4 in link-vmlinux + 1 check-function-names | 3 (voffset, zoffset, pasyms) + 4 | kore `nm`, unused |
+| llvm-objcopy | 46: libstub 33, pi 7, vdso 2, kvm, modinfo, vmlinux ×2, Image | 29: libstub 19, `-O binary` ×3, `-S`, `--prefix-symbols` ×2, vmlinux | kore `objcopy` (holo `copy.l`): every flag set, byte-identical |
+| llvm-strip | 33 (libstub `--strip-debug`) | 19 | kore `strip -g`, byte-identical |
+| llvm-objdump | 33 (libstub `-r` checks) | 19 | kore `objdump -r`, identical text |
+| llvm-readelf | 2 (vdso dynamic-reloc check) | 2 | kore `readelf -rW`, identical text |
+| llvm-nm | 1 + 4 in link-vmlinux + 1 check-function-names | 3 (voffset, zoffset, pasyms) + 4 | kore `nm` (plain, -n, -S), identical text |
 
 `LLVM=1` names `llvm-*` directly, so kore's verbs never shadow them. The pinned llvm-22.1.8 is built
 ARM-only; the x64 side needs no X86 one once it is off clang.

@@ -2,8 +2,7 @@
 ; lays the roff, less.l pages it; man is the search path, the decompression and the handing over.
 ; a lone `.so` redirect is followed once; lapiz reads mdoc pages as well as man ones.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
+(borrow '(cli posix))
 
 (:
    man-usage "usage: man [-w] [SECTION] NAME.."

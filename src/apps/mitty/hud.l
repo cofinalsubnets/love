@@ -5,6 +5,7 @@
 ;   (hud-stage k)   the hud as a stage
 ;   (hud-run k)     the hud on the whole terminal
 (module (hud hud-run hud-stage)
+(borrow 'cli)
 (:
  (soil c) (pin (c 'dirt) () 1)
  ; l as lines at most n columns wide, cut anywhere, every character kept

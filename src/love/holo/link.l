@@ -11,8 +11,7 @@
 ; lays an ELF32 image for a part with no MMU from a map of runs.
 ; loads after src/love/holo/obj.l and lds.l.
 (module 'holo
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(posix bytes))
 
 (:
    ; little-endian reads; a signed u64 field (a RELA addend) goes through s64
@@ -768,7 +767,8 @@
               (? (k = 'none || k = 'SORT_NONE) (go >ps (i + 1) (pend + ms) acc)
                  (go >ps (i + 1) () (acc + bypos pend + map (y \ y 2 1) (sort (map (keyed k) ms)))))))
        (go pats 0 () ()))
-   ; objects, script, synthetic sections [(name size align) ..] -> [outs orphans]: each
+   ; objects, script, synthetic sections [(name size align) ..] -> [outs orphans], an orphan
+   ; [oi name si] or ('synth name): each
    ; output section tablet gains 'steps, its body with every description expanded to its
    ; ('isec oi si size align name) and ('synth name size align) in order
    (ld-place objs cmds synth strip)
@@ -785,7 +785,7 @@
                        (strip && 0 = (fl & 2) && ld-debug? nm) 0
                        (: m (mt nm)
                           (? (two? m) (put <m [(oi * 65536 + si) ['isec oi si (r 4) (r 5) nm] <>m])
-                             (pin orph 'l ([oi nm] . orph 'l))))))))
+                             (pin orph 'l ([oi nm si] . orph 'l))))))))
        _ (foldl (\ oi ob (scan oi ob, oi + 1)) 0 objs)
        _ (foldl (\ k s (: m (mt <s)
                           _ (? (two? m) (put <m [k ['synth <s (s 1) (s 2) <s] <>m])

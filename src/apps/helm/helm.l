@@ -4,10 +4,9 @@
 ;   love -l src/apps/helm/unit.l -l src/apps/helm/sup.l -l src/apps/helm/moor.l \
 ;        -l src/apps/helm/helm.l -e '(helm-main ["-c" "src/apps/helm/sample.l"])'
 (module 'helm
-(borrow 'tar)
+(borrow '(tar cli))
 
-(borrow 'path)
-(borrow 'posix)
+(borrow '(path posix))
 (: helm-usage "helm -- a service supervisor, and a love shell over its socket
 usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first)
        helm check [-c CONF]              read the config and report on it

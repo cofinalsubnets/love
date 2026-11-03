@@ -17,9 +17,7 @@
 ; is taken over, and what flac -d --force-raw-format --endian=little --sign=signed writes.
 (module (flac flac-sniff flac-meta flac-format flac-pump flac-wav-head flac-id3 flac-main metaflac-main
               flac-usage metaflac-usage flac-frame)
-(borrow 'bytes)
-(borrow 'wav)
-(borrow 'hashes)
+(borrow '(bytes wav hashes cli))
 (:
    peepv (cite 'guts 'peepv) pinv (cite 'guts 'pinv)
    open (cite 'posix 'open) close (cite 'posix 'close)

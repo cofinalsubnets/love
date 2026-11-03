@@ -11,8 +11,7 @@
          tile kind-of wall? thing-at pen wrap level-cells)
 ; posix is optional: the wasm build links none of it and runs this file. borrow, never
 ; splice: a spliced absent module scares, a borrowed one's tty names just go missing
-(borrow 'posix)
-(borrow 'text)
+(borrow '(posix text cli))
 (:
  ; --- levels as data ------------------------------------------------------------
  ; in play: level {'title 'rows (strings) 'w 'h 'sx 'sy 'tiles {ch kind ..} 'things {id

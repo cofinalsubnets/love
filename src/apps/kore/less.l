@@ -3,12 +3,9 @@
 ; the face reads keys, performs the file requests the engine leaves, and blits.
 ; long lines wrap; a display row carries its source line, so counts stay the source's.
 ; an sgr sequence rides through at no column and is reopened across a wrap. no -S, marks, or +F.
-(borrow 're)
 
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'text)
+(borrow '(re cli posix text))
 
 (:
    pg-ere (cite 're 'reere) pg-fold (cite 're 'refold) pg-find (cite 're 'refind)

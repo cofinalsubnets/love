@@ -4,8 +4,7 @@
 ; (neon-strokes s) answers [lines w], polylines of [x y] in caps 1 tall; (neon-sign s o al up
 ; out h col) lays s from its bottom left o, h metres tall: {'tube pk 'halo pk 'lamp lamp 'w metres}
 (module (neon neon-font neon-strokes neon-sign)
-(borrow 'vec)
-(borrow 'mesh)
+(borrow '(vec mesh))
 (:
  ; --- the font: each glyph polylines on a grid 4 wide and 6 tall, y up, each line its
  ;     points' x y in a run ---

@@ -1,10 +1,7 @@
 ; src/apps/sb/sb.l -- svalbard, the patch-set vcs. the form at the tail is the only one
 ; that runs as a program.
 (module 'sb
-(borrow 'kore)
-(borrow 'posix)
-(borrow 'hashes)
-(borrow 'xz)
+(borrow '(kore posix hashes xz cli))
 (: zcap 16                                               ; the longest chain of bases a blob rides
    bcache {'n 0}                                         ; derived blob bytes, by hash, bounded
    stc {'old {} 'new {} 'now 0}                          ; the stat cache: path -> (key side)
