@@ -473,6 +473,33 @@
     (: (one f) (lobi1 g env <as @ 'bad 'bad [vt r fs] (f r @ 'bad 'bad [t d fs2] [t d (fs + fs2)]))
        ll (elem nm '("__builtin_clzll" "__builtin_clzl" "__builtin_ctzll" "__builtin_ctzl"))
        (? (elem nm '("__builtin_expect" "__builtin_prefetch")) (lobi1 g env <as)
+       ; the _p forms: the plain one, storing to a fresh temp of the third operand's type
+       (elem nm '("__builtin_add_overflow_p" "__builtin_sub_overflow_p" "__builtin_mul_overflow_p"))
+        (? (#as != 3) (lono g ['call nm])
+           (peekty g env (as 2) @
+              'bad 'bad
+              ty (ntmp g ty @ off
+                    (lox g env (as 2) @ 'bad 'bad
+                       v (lost g ['a ['long 'r4 ()] ty off] v @
+                            [f0 _] (lobi g ([".ovp" 'm off ty] . env) (snip nm 0 (#nm - 2)) [<as <>as ['addr ['var ".ovp"]]] @
+                                      [vt r fs] [vt r (f0 + fs)]
+                                      _ 'bad)
+                            _ 'bad)))))
+       ; the exact a op b stored modulo *r's width, answering whether it did not fit: ovlow's
+       ; expression, or for three signed words the machine's own flag
+       (elem nm '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
+        (? (#as != 3) (lono g ['call nm])
+           (ovlow g env nm as @
+              () (lobi1 g env <as @ 'bad 'bad
+                    a (lobi1 g env <>as @ 'bad 'bad
+                         b (lox g env (as 2) @ 'bad 'bad
+                              [_ p pf] (lomk g @ t (lomk g @ d
+                                 ['int d (vfs a + vfs b + pf + [['mov 'r0 (vreg a)] ['mov 'r1 (vreg b)]
+                                          ['fix '(r0 r1) '(r0 r1)
+                                            [['raw ([72] + (nm @ "__builtin_add_overflow" [1 200] "__builtin_sub_overflow" [41 200] _ [15 175 193])
+                                                    + [15 144 193 72 15 182 201])]]]
+                                          ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])])))))
+              x (lox g env x)))
        ; an infinity, a quiet NaN (the tag ignored): their bits
        (elem nm '("__builtin_inf" "__builtin_nan" "__builtin_nanf"))
         (lomk g @ t (lomkf g @ w ['double w [['li t (nm = "__builtin_inf" ? 9218868437227405312 9221120237041090560)] ['movqxr w t]]]))
