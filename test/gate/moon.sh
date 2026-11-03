@@ -127,6 +127,10 @@ moonrun -c "$ho/.grl.S" -o "$ho/.grl.o" || fail "mooncc: an asm's relocs"
 [ "$(readelf -rW "$ho/.grl.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PC32 g " ] || fail "a branch to a global is not plt32 through its reloc, or an address-of is not pc32"
 readelf -x .text.pad "$ho/.grl.o" | grep -q 'c3909090 90909090' || fail ".balign 8, 0x90 is not filled with its byte"
 readelf -SW "$ho/.grl.o" | grep -q 'rela.rodata' && fail "a reach inside .rodata kept a reloc"
+printf '.text\nf:\n jz 1f\n jmp 2f\n1:\n .fill 130, 1, 0x90\n2:\n ret\n661:\n jz .Lt\n662:\n .skip -(((664f-663f)-(662b-661b)) > 0) * ((664f-663f)-(662b-661b)), 0x90\n.section .r,"ax"\n663:\n jmp .Lt\n nop\n664:\n.text\n.Lt:\n ret\n' > "$ho/.jx.S"
+moonrun -c "$ho/.jx.S" -o "$ho/.jx.o" || fail "mooncc: an asm's short jumps"
+readelf -x .text "$ho/.jx.o" | grep -q '7405e982 00000090' || fail "a jump in reach is not short, or one out of reach not long"
+readelf -x .text "$ho/.jx.o" | grep -q '90c37404 90909090' || fail "an alternative's pad does not hold its replacement's long jump"
 # an inline asm's section keeps its merge flag and entsize; the pads lie one section per
 # function section, link-ordered to it
 printf 'void f(void){ asm volatile("1: nop\\n.pushsection .altinstructions,\\"aM\\",@progbits,14\\n .long 1b - .\\n .long 0\\n .short 1\\n .byte 2,3,4,5\\n.popsection"); }\n' > "$ho/.psa.c"
