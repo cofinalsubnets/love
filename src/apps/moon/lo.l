@@ -158,7 +158,7 @@
          ('var nm)
           (lovar g env nm @ 'bad (g 'fns nm ? (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]]) 'bad)
                             _ (lorv g (lolv g env e)))
-         ('deref _) (lorv g (lolv g env e))
+         (('deref _) || ('dot _ _)) (lorv g (lolv g env e))
          (('addr ('var nm)) && bad? (lovar g env nm) && g 'fns nm)
           (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]])
          ('addr lv)
@@ -233,8 +233,8 @@
                (locall1 g env rt ptys va as [['call (intern nm)]] ())
               (lono g ['call nm]))
           _ (lox g env fh @
-               ((('ptr ('fn rt ptys)) r fs)) (locall1 g env rt ptys 1 as [['callr r]] [r fs])
-               ((('ptr ('fn rt)) r fs)) (locall1 g env rt () 1 as [['callr r]] [r fs])
+               (('ptr ('fn rt ptys)) r fs) (locall1 g env rt ptys 1 as [['callr r]] [r fs])
+               (('ptr ('fn rt)) r fs) (locall1 g env rt () 1 as [['callr r]] [r fs])
                'bad 'bad
                (ty . _) (lono g ['callee ty])))
    ; cl the call form, fv the callee's (vreg forms) | (); va also lays al, the vector count
@@ -386,7 +386,7 @@
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs)
     ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
-     raall g fs @ 'bad 'bad
+     raall g fs @ 'bad (lono g 'ra)
        body ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))
    ; the frame and emit tail the old path ends on

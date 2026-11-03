@@ -15,7 +15,7 @@
    (raops g f)
     ((f @ ('cuse . rs) [rs ()]
           ('call . _) [() (lvgp g)]
-          ('callr r . _) [[r] (lvgp g)]
+          ('callr . r . _) [[r] (lvgp g)]
           ('ret . _) ['(r0) ()]
           (('jmp || 'br || 'label) . _) [() ()]
           ((op . d . a . b . _) && elem op divops) [[a b] [d 'r0]]
