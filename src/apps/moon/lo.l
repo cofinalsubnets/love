@@ -438,7 +438,9 @@
    ; -- branches: to L when e's truth is sense --
    (lobr g env e sense L)
     (: (br x s L2 _) (lobr g env x s L2)
-       (e @ ['land a b]
+       ; a constant condition: the jump or nothing, so no edge leaves that never runs
+       (knum g e @ ((k . _) && cint? k) ((k != 0) = (sense != 0) ? [['jmp L]])
+          _ (e @ ['land a b]
              (sense ? (nlab g ".lo" @ k (loseq [(br a 0 k) (br b 1 L) (lol [['label k]])]))
                 (loseq [(br a 0 L) (br b 0 L)]))
             ['lor a b]
@@ -454,7 +456,7 @@
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
             (lox g env e @ ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
                            ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
-                           'bad)))
+                           'bad))))
 
    ; -- expressions -> (ty vreg forms) | 'bad --
    (lox g env e)
@@ -844,7 +846,7 @@
                      (blk = 0 ? () ([['sub 'sp 'sp blk]] + sfs)) +
                      map (p \ lomv <p <>p) rg + al +
                      [('(cuse) + rs + (va ? '(r0)) + (fv @ [fr _] [fr] ()))] + cl +
-                     (blk = 0 ? () [['add 'sp 'sp blk]]) + res)]))))
+                     res + (blk = 0 ? () [['add 'sp 'sp blk]]))]))))
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
    (loagg? g ty) (stru? ty && 0 < tsz g ty && asalign g ty <= 8)
    ; the args to their registers in order, each file its own count; an aggregate's eightbytes take
@@ -1085,7 +1087,8 @@
                      (lomkt g ty @ r
                         (: _ (ap ? (pin (g 'lopins) r ap))
                            e2 ([nm 'v r ty] . env)
-                           (init @ () (go u e2 acc)
+                           ; no init: a def that lays nothing, so the vreg lives from here
+                           (init @ () (go u e2 (acc + [['cdef r]]))
                                    _ (lox g env init @ 'bad 'bad
                                         v (lost g ['v r ty] v @ [fs _] (go u e2 (acc + fs)) 'bad)))))
                     ; a slot aligned to the type's ask or the decl's own, the record's fifth
@@ -1115,17 +1118,18 @@
           _ (pin g 'lon 0)
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
-                  'loret (? (lofl? rt) '(f0) (d128? rt) '(r0 r2) (stru? rt && !sret) (loebregs (aclass g rt)) '(r0)))
+                  'loret (? (rt = 'void) () (lofl? rt) '(f0) (d128? rt) '(r0 r2) (stru? rt && !sret) (loebregs (aclass g rt)) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           (ovm ty ov) ['m (ovb g + 8 * ov) ty]
-          (go l gi fi ov env acc)
+          ; the copies off the registers first, their conversions after (post)
+          (go l gi fi ov env acc post)
            (l @ ((nm . ty . _) . u)
                  (? (d128? ty)
                      ; a pair: two gp registers, else 16-aligned above the link
                      (gi + 2 <= 6 ?
                         (ntmp g ty @ off (go u (gi + 2) fi ov ([nm 'm off ty] . env)
-                                             (acc + [['st 'r4 off (argregs gi)] ['st 'r4 (off + 8) (argregs (gi + 1))]])))
-                        ((ov + ov % 2) @ o (go u gi fi (o + 2) ((nm . ovm ty o) . env) acc)))
+                                             (acc + [['st 'r4 off (argregs gi)] ['st 'r4 (off + 8) (argregs (gi + 1))]]) post))
+                        ((ov + ov % 2) @ o (go u gi fi (o + 2) ((nm . ovm ty o) . env) acc post)))
                     (stru? ty)
                      (: cls (aclass g ty) ng #(filter (c \ c = 'int) cls) nx (#cls - ng)
                         (two? cls && gi + ng <= 6 && fi + nx <= 8 ?
@@ -1134,19 +1138,20 @@
                                         (cls i = 'sse ? [gi (fi + 1) (fs + [['stsd 'r4 (off + 8 * i) (xmmreg fi)]])]
                                            [(gi + 1) fi (fs + [['st 'r4 (off + 8 * i) (argregs gi)]])])))
                                      [gi fi ()] ^#cls @
-                               [g2 f2 fs] (go u g2 f2 ov ([nm 'm off ty] . env) (acc + fs))))
-                           (go u gi fi (ov + aslots g ty) ((nm . ovm ty ov) . env) acc)))
-                    (lofl? ty ? (8 <= fi) (6 <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc)
+                               [g2 f2 fs] (go u g2 f2 ov ([nm 'm off ty] . env) (acc + fs) post)))
+                           (go u gi fi (ov + aslots g ty) ((nm . ovm ty ov) . env) acc post)))
+                    (lofl? ty ? (8 <= fi) (6 <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc post)
                     (: fl (lofl? ty) A (fl ? (xmmreg fi) (argregs gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
                        (lotk? g nm ?
                           (ntmp g ty @ off
                              (go u g2 f2 ov ([nm 'm off ty] . env)
-                                 (acc + (fl ? [[(ty = 'float ? 'stss 'stsd) 'r4 off A]] (cvt ty A + [[(stop ty) 'r4 off A]])))))
-                          (lomkt g ty @ r (go u g2 f2 ov ([nm 'v r ty] . env) (acc + [(lomv r A)] + (fl ? () (cvt ty r))))))))
-                [gi fi ov acc env])
+                                 ; a narrow store narrows on its own
+                                 (acc + [[(fl ? (ty = 'float ? 'stss 'stsd) (stop ty)) 'r4 off A]]) post))
+                          (lomkt g ty @ r (go u g2 f2 ov ([nm 'v r ty] . env) (acc + [(lomv r A)]) (post + (fl ? () (cvt ty r))))))))
+                [gi fi ov (acc + post) env])
           ; each VLA site's size cell reads 0 until its decl runs
           vz (keys (g 'vslots) @ () () ks (lomk g @ z (['li z 0] . map (k \ ['st 'r4 (g 'vslots k 1) z]) (sort ks))))
-          (go params (sret ? 1 0) 0 0 () ((sret ? [['mov sr 'r6]]) + vz) @ [gi fi ov pe env]
+          (go params (sret ? 1 0) 0 0 () (sret ? [['mov sr 'r6]]) vz @ [gi fi ov pe env]
              (pins g 'vagp gi 'vaxmm fi 'vaov ov,
               (va ? (lovasave g)) @ vs
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
@@ -1164,9 +1169,15 @@
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs)
     ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
-     raall g fs @ 'bad (lono g 'ra)
-       body ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
-             sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))
+     raplan g fs @ 'bad (lono g 'ra)
+       [f2 loc]
+        ((getenv "MOON_LOLAW" @ () ()
+            _ (rachk g fs f2 loc @ ws
+                 (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
+                  pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
+         rasub f2 loc @ body
+         ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
+             sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body))))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g

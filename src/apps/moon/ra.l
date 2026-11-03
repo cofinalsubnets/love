@@ -21,6 +21,7 @@
    ; a form's [reads defs] over the file and the vregs | 'bad
    (raops g f)
     ((f @ ('cuse . rs) [rs ()]
+          ('cdef . rs) [() rs]
           ('fix . u . d . _) [u d]
           ('call . _) [() (lvgp g + ragf)]
           ('callr . r . _) [[r] (lvgp g + ragf)]
@@ -120,20 +121,84 @@
            _ [f])
        (catmap one fs))
 
-   ; -> forms over registers | 'bad
-   (raall g fs)
+   ; -> [forms loc]: the round that fit, over the forms its spills left | 'bad
+   (raplan g fs)
     (: nosp {}
        (go fs k)
         (k = 0 ? 'bad
            (raround g fs nosp @
               'bad 'bad
-              [loc ()]
-               (: (sub x) (lovr? x ? (loc x) x)
-                  (catmap (f \ (f @ ('cuse . _) ()
-                                    ('fix . _ . _ . fs . _) fs
-                                    ([('mov || 'movapd) a b] && sub a = sub b) ()
-                                    (_ . _) [(map sub f)]
-                                    [f])) fs))
+              [loc ()] [fs loc]
               [_ sp] (go (raspill g fs sp nosp) (k - 1))))
        (go fs 16))
+   ; the forms over their registers: a copy onto itself and the use markers gone, a fix its body
+   (rasub fs loc)
+    (: (sub x) (lovr? x ? (loc x) x)
+       (catmap (f \ (f @ (('cuse || 'cdef) . _) ()
+                         ('fix . _ . _ . fs . _) fs
+                         ([('mov || 'movapd) a b] && sub a = sub b) ()
+                         (_ . _) [(map sub f)]
+                         [f])) fs))
+   ; -> forms over registers | 'bad
+   (raall g fs) (raplan g fs @ 'bad 'bad [f2 loc] (rasub f2 loc))
+
+   ; -- the laws' checks over a fn's forms: MOON_LOLAW=1 pins what breaks on g 'lolaw --
+   ; a physical register but the frame and stack bases
+   (raphys? x) (elem x rafile && nelem x '(r4 sp))
+   ; the forms a physical register may stand in or live across: copies, crossings, control
+   raglue '(cdef mov movapd movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
+   ; the forms with a fixed register operand: the count in rcx, a divide's rax
+   rafixed '(fix call callr ret shlv shrv sarv div rem udiv urem)
+   (raund a b) (foldl (s \ x \ elem x s ? s (x . s)) a b)
+   ; -> [forms reads-defs live-in live-out], tablets by index, over names
+   (ralive g fs)
+    (: n #fs ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       ud (foldl (t \ i \ (raops g (ft i) @ 'bad (pin t i [() ()]) p (pin t i p))) {} ^n)
+       sc (vsucc fs) lin {} lout {}
+       (sw i chg)
+        (i < 0 ? chg
+           (: o (foldl (a \ j \ raund a (peep lin j ())) () (peep sc i ()))
+              li (ud i @ [u d] (raund u (filter (x \ nelem x d) o)))
+              c2 (#li != #(peep lin i ()) ? 1 chg)
+              (pin lout i o, pin lin i li, sw (i - 1) c2)))
+       (fix _) (sw (n - 1) 0 @ 1 (fix 0) 0)
+       (fix 0, [ft ud lin lout]))
+   ; a physical register named outside the glue, or live across a form that is not glue
+   (rachkp g fs)
+    (ralive g fs @ [ft ud lin lout]
+       (catmap (i \ (ft i @ (hd . a)
+                       (? (elem hd raglue || elem hd rafixed) ()
+                          (filter raphys? a @ () (filter (x \ raphys? x && elem x (lout i) && nelem x <>(ud i)) (lin i) @
+                                                    () () ps [['across ps (ft i)]])
+                                             ps [['phys ps (ft i)]]))
+                       _ ()))
+               ^#fs))
+   ; a vreg read where some path reaches without its def: defined-on-entry by a forward fixpoint, top 'all
+   (rachkd g fs)
+    (ralive g fs @ [ft ud _ _]
+       (: n #fs sc (vsucc fs)
+          pr (foldl (t \ i \ foldl (t2 \ j \ pin t2 j (i . peep t2 j ())) t (peep sc i ())) {} ^n)
+          dout {}
+          (meet a s) (a @ 'all s _ (s @ 'all a _ (filter (x \ elem x s) a)))
+          (din i) (i = 0 ? () (foldl (a \ p \ meet a (peep dout p 'all)) 'all (peep pr i ())))
+          (sz s) (s @ 'all -1 _ #s)
+          (sw i chg)
+           (n <= i ? chg
+              (: o (din i @ 'all 'all s (raund s (filter lovr? <>(ud i))))
+                 c2 (sz o != sz (peep dout i 'all) ? 1 chg)
+                 (pin dout i o, sw (i + 1) c2)))
+          (fix _) (sw 0 0 @ 1 (fix 0) 0)
+          (fix 0,
+           catmap (i \ (din i @ 'all ()
+                          s (filter (x \ lovr? x && nelem x s) <(ud i) @ () () vs [['undef vs (ft i)]])))
+                  ^n)))
+   ; a vreg live across a call, homed in a register the call clobbers
+   (rachkc g fs loc)
+    (ralive g fs @ [ft _ _ lout]
+       (: cs (lvgp g + ragf)
+          (catmap (i \ (ft i @ (('call || 'callr) . _)
+                          (filter (x \ lovr? x && elem (loc x) cs) (lout i) @ () () vs [['call (map (x \ [x (loc x)]) vs) (ft i)]])
+                          _ ()))
+                  ^#fs)))
+   (rachk g fs f2 loc) (rachkp g fs + rachkd g fs + rachkc g f2 loc)
 )) ; module 'moon

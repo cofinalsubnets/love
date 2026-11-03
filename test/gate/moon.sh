@@ -25,7 +25,7 @@ echo "YACC src/apps/moon/c.y"
   || fail "cgram.l is not c.y's: love yacc -m moon -n cx-tab src/apps/moon/c.y > src/apps/moon/cgram.l"
 
 # -- the laws
-echo "CC src/apps/moon/{lex,cpp,parse,cgram,gen,val}.l test/law/moon.l"
+echo "CC src/apps/moon/{lex,cpp,parse,cgram,gen,val,ra,lo}.l test/law/{moonlo,moon}.l"
 out=$ho/.test_moon.out
 { echo "(borrow 'holo)"
   cat test/00-init.l src/apps/kore/text.l src/apps/kore/u.l   # the kore floors register module 'kore
@@ -34,7 +34,7 @@ out=$ho/.test_moon.out
       src/apps/moon/cgram.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/apps/moon/val.l src/apps/moon/gen.l \
       src/apps/moon/ra.l src/apps/moon/lo.l
   echo "(borrow 'moon)"                    # the cat re-laid module 'moon; law.l reads it bare
-  cat test/law/moon.l
+  cat test/law/moonlo.l test/law/moon.l
 } | "$m" > "$out" 2>&1
 r=$?
 cat "$out"
