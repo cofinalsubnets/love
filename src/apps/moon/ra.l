@@ -1,6 +1,6 @@
-; src/apps/moon/ra.l -- the new backend's allocator over lo.l's forms: liveness per form, one
-; hull per vreg, linear scan, and a spilled vreg reloaded at every touch, the scan then run
-; again. a physical register's live points bar every vreg whose hull holds one
+; src/apps/moon/ra.l -- the new backend's allocator over lo.l's forms: liveness per form, live
+; ranges with holes per vreg, linear scan in start order, and a spilled vreg reloaded at every
+; touch, the scan then run again. a physical register's live points bar every vreg live at one
 (module 'moon
 (borrow 'holo)
 (:
@@ -46,6 +46,15 @@
                   (<b < <a) (ramin a >b)
                   (ramin >a >b))
    (raset l) (foldl (s \ x \ vun s [x]) () l)
+   ; positions, descending with repeats -> ranges [s e] ascending, neighbours joined
+   (rarng l) (foldl (a \ p \ (a @ ([s e] . u) (p = s || p + 1 = s ? ([p e] . u) ([p p] . a)) _ [[p p]])) () l)
+   ; two ascending range lists share a position
+   (raovl a b)
+    (? (atom? a || atom? b) ()
+       (: x <a y <b
+          (? (x 1 < y 0) (raovl >a b)
+             (y 1 < x 0) (raovl a >b)
+             1)))
 
    ; one round: ids, liveness, hulls, the scan -> [loc spills] | 'bad
    (raround g fs nosp)
@@ -72,13 +81,15 @@
                _ (fix 0)
                np #rafile
                lo {} hi {} pts {}
-               (mark x p) (x < np ? (pin pts x (p . peep pts x ()))
-                             (pin lo x (min p (peep lo x p)), pin hi x (max p (peep hi x p))))
+               (mark x p) (pin pts x (p . peep pts x ()),
+                           x < np ? 0 (pin lo x (min p (peep lo x p)), pin hi x (max p (peep hi x p))))
                ; a sub's right side outlives its def, which may not overwrite it before the subtract
                _ (map (i \ (map (x \ mark x (2 * i)) (lin i),
                             map (x \ mark x (2 * i + 1)) (lout i),
                             map (x \ mark x (2 * i + 1)) <>(ud i),
                             (ft i @ (['sub _ _ b] && raok? b) (mark (id b) (2 * i + 1)) _ 0))) ^n)
+               ; each id's live positions as ranges, with the holes between them
+               rg (foldl (t \ x \ pin t x (rarng (pts x))) {} (keys pts))
                ; the copies hint their two sides together, a three-address op its def to its left
                ; side (either side when it commutes); a divide's quotient never takes rdx
                hint {} forb {}
@@ -90,13 +101,14 @@
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
                loc {}
-               (fits? r x) (: s (lo x) e (hi x)
-                              (nelem r (peep forb x ()) && !(any (p \ s <= p && p <= e) (peep pts (id r) ()))))
-               (free? r x act) (!(any (w \ loc w = r) act) && fits? r x)
+               (ovl? x y) (raovl (peep rg x ()) (peep rg y ()))
+               (fits? r x) (nelem r (peep forb x ()) && !(ovl? x (id r)))
+               (free? r x act) (!(any (w \ loc w = r && ovl? w x) act) && fits? r x)
                (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (peep loc y ())) (peep hint x ())))
                ; evict the active hull ending last, where its register serves this one
                (victim x act)
-                (foldl (b \ w \ (? (nosp (nms w) || hi w <= hi x || !(fits? (loc w) x)) b
+                (foldl (b \ w \ (? (nosp (nms w) || hi w <= hi x || !(fits? (loc w) x) ||
+                                     any (y \ y != w && loc y = loc w && ovl? y x) act) b
                                    (b @ () w _ (hi b < hi w ? w b))))
                        () act)
                (scan fl l act sp)
