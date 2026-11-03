@@ -11,7 +11,7 @@
    (lv fs) (map (f \ map (x \ (nom? x && (show x @ t (1 < #t && t 0 = 110 && 48 <= t 1 <= 57)) ? (name "%\(show x)") x)) f) fs)
    g (cparse <>(clex "int main() { return 0; }") @ r <(cgen-core <>r <>>r <>>>r <>>>>r () 'x64))
    ; the corpus: calls on the stack and in registers, aggregates, varargs, the wide pair, control, asm,
-   ; floats, VLAs, complex
+   ; floats, VLAs, complex, small memset and memcpy
    corpus [
     "long f(long a, long b, long c, long d, long e, long f, long g, double x) { return a + g + (long) x; }
      int main() { return f(1, 2, 3, 4, 5, 6, 7, 1.5); }"
@@ -39,6 +39,8 @@
      int main() { return f(5); }"
     "_Complex double f(_Complex double a, _Complex double b) { return a * b + a / b; }
      int main() { return (int) (double) f(1.0, 2.0); }"
+    "void *memset(void *, int, unsigned long); void *memcpy(void *, const void *, unsigned long);
+     struct s { char b[24]; }; int main() { struct s a, b; memset(&a, 1, sizeof a); memcpy(&b, &a, sizeof b); return b.b[3] - 1; }"
      ]
    (test
       ; a physical register in arithmetic, and one live across it

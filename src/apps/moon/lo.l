@@ -1090,16 +1090,16 @@
                  (memnm? g bi "memset")
                   (memk g (as 1) @ c
                      (!(charm? c) ? 'no
-                        (lox g env <as @ [_ d fd]
-                           (lobase [_ d fd] @ [b o]
+                        (lox g env <as @ [ty d fd]
+                           (lobase [ty d fd] @ [b o]
                               (lomk g @ v
                                  ['(ptr void) d (fd + [['li v ((c & 255) * 72340172838076673)]] +
                                                  map (k \ (k + 8 <= n ? ['st b (o + k) v] ['st1 b (o + k) v])) (lochunks n))]))
                            'bad)))
                  (memnm? g bi "memcpy")
-                  (lox g env <as @ [_ d fd]
+                  (lox g env <as @ [ty d fd]
                      (lox g env <>as @ sv
-                        (vfs sv @ fs (lobase [_ d fd] @ [db do] (lobase sv @ [sb so]
+                        (vfs sv @ fs (lobase [ty d fd] @ [db do] (lobase sv @ [sb so]
                            (lomk g @ t
                               ['(ptr void) d (fd + fs + catmap (k \ (k + 8 <= n ? [['ld t sb (so + k)] ['st db (do + k) t]]
                                                                             [['ldu1 t sb (so + k)] ['st1 db (do + k) t]])) (lochunks n))]))))
