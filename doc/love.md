@@ -21,7 +21,7 @@ There are three special forms — **:** (letrec\*/sequence), **?** (cond), and *
 
 With a *file* argument (or **-e**), **love** runs it as the program and exits; any further arguments are the program's, in **argv**. With no program it starts an interactive read-eval-print loop when standard input is a terminal, and otherwise reads and evaluates standard input to end of file.
 
-A first word that names a verb runs that verb instead, with the words after it: `love verbs` lists them. A verb is the binary's own, baked or carried as source and read at its first call, or a pack's. A pack is a folder in the nest's `pack/`, named by the folder, whose `.l` files are read at the first call of a verb they register or the first `borrow` of a module they open, each file after the ones holding modules it needs. A pack with no verb is a library. The binary's verbs always win over a pack's, and `love pack` lists each pack, its verbs and modules, and any name another one answers first.
+A first word that names a verb runs that verb instead, with the words after it: `love verbs` lists them. A verb is the binary's own, baked or carried as source and read at its first call, or a pack's. A pack is a folder in the nest's `pack/`, keyed by the folder's name: `love NAME`, or a `borrow` or `cite` of module NAME, when nothing else answers it, reads the folder's `.l` files in name order. A pack with no verb of its name is a library. The binary's verbs always win over a pack's, and `love pack` lists the packs, marking one whose name the table answers first.
 
 # OPTIONS
 

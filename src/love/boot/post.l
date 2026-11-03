@@ -19,16 +19,21 @@
    star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors
    (tier v) (tray? v ? (atype v @ c (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's ctor; nil off a tray
    zero? nil?
+   ; the roster's ear: while a cat is laid, verbs pins at 0 what hears each borrow and cite
+   ear {}
    ; splice a module just below the head: its names resolve but never shadow yours. a miss
    ; raises the left-out unit that holds it, else scares rather than splicing (): a book the
    ; walk cannot read faults in map_probe.
-   (borrow m)    (: b (tablet? m ? m
+   (borrow m)    (: _ (tablet? m ? 0 (ear 0 @ f (lit? f ? (f m) 0)))
+                    b (tablet? m ? m
                     (lib () m @ r (r ? r
                        ((lib () 'verbs @ V (tablet? V ? (V 'lift m))) @ l (tablet? l ? l (scare 'no-module m))))))
                (tablet? b ? (setstack (<(stack ()) . b . >(stack ()))) b))
    ; a module's tablet, curried to a member: (cite 'holo 'assemble). (cite ()) lists the
-   ; registry, a miss answers (). members fold in at compile, so a pin affects only later code.
-   (cite k)   (k ? (lib () k) (keys (lib ()))))
+   ; registry; a miss raises the left-out unit as borrow does, else answers ()
+   (cite k)   (k ? (: _ (ear 0 @ f (lit? f ? (f k) 0))
+                      (lib () k @ M (M ? M (lib () 'verbs @ V (tablet? V ? (V 'lift k))))))
+                 (keys (lib ()))))
 
 (: putc (put out)
    puts (say out)
@@ -2067,15 +2072,16 @@
 ;             script of the same name
 ;   (seat p)  argv[0], by its basename
 ; a verb takes the args after its name and answers a status charm.
-(module '(verbs any? bn call carried carry dash enlist fills fire get holds lazy lift mark mods need prov refs ros seat seatof tab trait unit word)
+(module '(verbs any? bn call carried carry dash enlist fills fire get holds lazy lift mark mods need prov ros seat seatof tab trait unit used word)
 (: tab {}   ; nil? when empty: ask it with peep, not by testing it
-   ; the roster's, below: 'files (path . baked) newest first, 'rising while a unit loads;
-   ; verb -> path, module -> path, unit -> the units it needs, unit -> 1 once raised,
-   ; unit -> 1 when it has a left-out file, path -> 1 when left out, path -> 1 when carried
+   ; the roster's, below: 'files (path . baked) newest first, 'rising while a unit loads,
+   ; 'stowed the carried paths read this bake; verb -> path, module -> path, unit -> the
+   ; units it borrows from, unit -> 1 once raised, unit -> 1 when it has a left-out file,
+   ; path -> 1 when left out, path -> 1 when carried
    ros {'cur "src/love/boot"}
    prov {} mods {} need {} up {} lefts {} lazies {} carried {}
-   ; the packs read this session, by name, and verb -> the pack that laid it (below)
-   pks {} pkv {}
+   ; the packs read this session, by name (below)
+   pks {}
    ; what a verb says of itself -- name -> {trait v}, v 1 or a function of the call's args:
    ;   'builtin  run in the caller in every mode, ahead of PATH (echo, test ..)
    ;   'self     safe to run in the caller: bounded, reads no stdin, leaves the caller as it
@@ -2146,8 +2152,10 @@
 
    ; --- the roster. a bake's cat marks each file ahead of its forms, and a mark lays the verbs
    ; and modules added since the last at the file they came from; (mark ()) closes the cat.
-   ; (lazy p vs ms ns) stands for a file the bake left out: its verbs, pinned as stubs that
-   ; raise its unit off /love at the first call, its modules, and the units it needs.
+   ; a carried file is read too, and at the close set aside: its verbs stubs that
+   ; raise its unit off /love at the first call, its modules out of the registry.
+   ; (lazy p vs ms ns) stands for a file left out with what a read of it recorded: its verbs,
+   ; its modules, and the units it borrows from.
    ; a unit is an app, src/apps/NAME.l or src/apps/NAME/; any other path is its own
    (unit p) (#p @ n
                (9 < n && snip p 0 9 = "src/apps/" ?
@@ -2157,34 +2165,53 @@
    (settle _) (ros 'cur @ c
                 (each (keys tab) (k \ (string? (prov k) ? 0 (pin prov k c))),
                  each (keys (lib ())) (k \ (nom? k && !(string? (mods k)) ? (pin mods k c) 0))))
-   (mark p) (settle (), pin ros 'cur p, string? p ? (pin ros 'files ((p . 1) . ros 'files)) 0)
+   (mark p) (settle (), pin ros 'cur p,
+             string? p ? (pin ear 0 used, pin ros 'files ((p . 1) . ros 'files)) (pin ear 0 (), stow ()))
+   ; a file the default bake carries but leaves out (the Makefile's carryfiles): noted here,
+   ; read at the close
+   (carry p) (settle (), pin carried p 1, pin ros 'stowed (p . ros 'stowed))
+   ; the close lays each carried file as a lazy one, with what a read of it recorded
+   (stow _) (rev (ros 'stowed) @ ps
+              (two? ps ?
+                 (pin ros 'stowed (),
+                  each (sow ps) (r \ r @ [p vs ms ns] (map name ms @ mn (each mn (m \ pull (lib ()) m 0), lazy p (map name vs) mn ns))),
+                  pin ros 'cur ())))
+   ; [p verbs modules needs] for each of ps, names spelled: read in a forked child, so the image
+   ; keeps none of their code, or here, code and all, where nothing forks. a unit's needs ride
+   ; its first file
+   (sow ps) (: (lay _) (each ps (p \ (settle (), pin ros 'cur p, pin ear 0 used, load1 ("/love/" + p))),
+                        settle (), pin ear 0 ())
+               (rec _) (: seen {}
+                          (map (p \ unit p @ u
+                                  [p (map show (filter (v \ prov v = p) (keys prov))) (map show (filter (m \ mods m = p) (keys mods)))
+                                     (seen u ? () (pin seen u 1, need u))])
+                               ps))
+               cl (cite 'posix 'close)
+               (flush out, flush err,
+                pipe 0 @ pp
+                (fork 0 @ k
+                  (? (k < 0) (cl <pp, cl >pp, lay (), rec ())
+                     (k = 0) (cl <pp,
+                              trap (_ \ (lay (), fdopen >pp @ w (say w (show (rec ())), flush w), quit 0)) ()
+                                   (\ a b (say err ";; carry: ", print err a, say err " ", print err b, put err 10,
+                                           flush err, quit 1)))
+                     (: _ (cl >pp)
+                        t (fdopen <pp @ r (slurp r @ t (cl r, t)))
+                        (wait k = 0 ? (sound t @ (x . _) x (scare 'carry-read ps)) (scare 'carry-read ps)))))))
    (lazy p vs ms ns) (settle (), pin ros 'cur p,
-                      pin ros 'files ((p . 0) . ros 'files),
-                      pin lefts (unit p) 1,
-                      pin lazies p 1,
                       each ms (m \ pin mods m p),
-                      pin need (unit p) (ns + need (unit p)),
-                      each vs (v \ (pin prov v p, pin tab v (stub v))))
-   ; a file the default bake carries but leaves out (the Makefile's carryfiles), lazy unless
-   ; a mark already laid it, with the verbs, modules and needs its source on /love names
-   (carry p) (pin carried p 1,
-              any (f \ <f = p) (ros 'files) ? 0
-                 (slurp1 ("/love/" + p) @ t (lazy p (after t "'enlist '") (after t "(module '" + after t "(module (") (needs p t))))
-   ; the name after each k in t, to the first delimiter; a quoted list's head
-   (word1 s) (: n #s
-                (go i) (i < n && !(elem (s i) [32 9 10 40 41 39 34 59]) ? (go (i + 1)) (snip s 0 i))
-                (go 0))
-   (after t k) (catmap (s \ (0 < #s && s 0 = 40 ? (word1 (snip s 1 #s)) (word1 s)) @ w (0 < #w ? [(name w)] ()))
-                       >(split k t))
-   ; the modules a source cites or borrows, and the units other than its own that hold them
-   ; every name a borrow takes, a list's words too
-   (borrowed t) (catmap (s \ (0 < #s && s 0 = 40
-                               ? (: (shut i) (i < #s && s i != 41 ? (shut (i + 1)) i) (map name (words (snip s 1 (shut 1)))))
-                               (word1 s @ w (0 < #w ? [(name w)] ()))))
-                        >(split "borrow '" t))
-   (refs t) (after t "cite '" + borrowed t)
-   (needs p t) (foldl (a \ m \ (mods m @ q (string? q && unit q != unit p && !(elem (unit q) a) ? (a + [unit q]) a)))
-                      () (refs t))
+                      each vs (v \ pin prov v p),
+                      unit p @ u (pin need u (foldl (a \ w \ (elem w a ? a (a + [w]))) (need u) ns)),
+                      leave p vs)
+   (leave p vs) (pin ros 'files ((p . 0) . ros 'files),
+                 pin lefts (unit p) 1,
+                 pin lazies p 1,
+                 each vs (v \ pin tab v (stub v)))
+   ; a borrow or cite while a file is laid: m's unit, when another's, joins the file's unit's needs
+   (used m) (ros 'cur @ c
+              (string? c ?
+                 (mods m @ q (unit c @ u
+                    (string? q && unit q != u && !(elem (unit q) (need u)) ? (pin need u (need u + [(unit q)])) 0)))))
    ; a module, raised with its unit when a left-out file holds it; () when none does
    (lift m) (lib () m @ M (tablet? M ? M (mods m @ p (string? p && lazies p ? (rise (unit p), lib () m) (pk-lift m)))))
    ; a stub raises its unit, then runs what the unit pinned in its place
@@ -2206,74 +2233,37 @@
    (load1 p) ((cite 'posix 'open) p "r" @ q
                (hot? q ? (reads q, cite 'posix 'close q) (scare 'no-source p)))
 
-   ; --- packs: apps and libraries outside the tree, a folder each under ~/.love/pack, named
-   ; by the folder. its verbs and modules are what its files enlist and open, found as a
-   ; carried file's are, and every .l in it is read at the first call of a verb or borrow of a
-   ; module, a file after those whose modules it cites or borrows. a pack never pins over a
-   ; verb already laid, and a bake reads none
+   ; --- packs: apps and libraries outside the tree, a folder each under ~/.love/pack. the
+   ; folder's name is the key: a miss on verb or module NAME reads pack NAME, its .l files in
+   ; name order. a pack never pins over a verb already laid, and a bake reads none
    (pk-root _) (cite 'path 'nest 0 + "/pack")
-   ; [name dir pack], by name, read once a session; a pack is
-   ; {'files in load order 'verb its verbs 'mods its modules}
-   (pk-all _) (? (pks 'read) (pks 'all)
-                 !(elem 'cmdline (names ())) ()
-                 (: r (pk-root ())
-                    ns ((cite 'posix 'readdir) r @ l (two? l ? (sort (filter (n \ 0 < #n && n 0 != 46) l)) ()))
-                    es (catmap (n \ (r + "/" + n) @ d (pk-read d @ m (tablet? m ? [[n d m]] ()))) ns)
-                    (pin pks 'read 1, pin pks 'all es, es)))
-   ; () for what is not a folder
-   (pk-read d) ((cite 'posix 'readdir) d @ l
-                 (two? l ?
-                    (: fs (sort (filter (f \ dotl? f && f 0 != 46) l))
-                       ts (map (f \ [f (slurp1 (d + "/" + f))]) fs)
-                       {'files (pk-order ts) 'verb (catmap (t \ after (t 1) "'enlist '") ts)
-                        'mods (catmap (t \ pk-opens (t 1)) ts)})))
-   (pk-opens x) (after x "(module '" + after x "(module (")
-   ; the files, each after the ones holding modules it cites or borrows; a cycle keeps name order
-   (pk-order ts) (: n #ts
-                    ms (map (t \ pk-opens (t 1)) ts)
-                    ds (map (k \ refs (ts k 1) @ rs (filter (j \ j != k && any (m \ elem m rs) (ms j)) ^n)) ^n)
-                    (go done left) (? (atom? left) (map (k \ ts k 0) (rev done))
-                                      (filter (k \ all (j \ elem j done) (ds k)) left @ ok
-                                         (two? ok ? (go (<ok . done) (filter (k \ k != <ok) left))
-                                                    (go (<left . done) >left))))
-                    (go () ^n))
-   (slurp1 p) ((cite 'posix 'open) p "r" @ q (hot? q ? (slurp q @ t (cite 'posix 'close q, t)) ""))
-   ; the first pack, by name, whose files enlist verb v, or open module v
-   (pk-find k v) (: (go l) (? (atom? l) ()
-                              (elem v (<l 2 k)) <l
-                              (go >l))
-                    (go (pk-all ())))
-   (packed v) (pk-find 'verb v @ e (two? e ? (pk-up e, tab v)))
-   (pk-lift m) (pk-find 'mods m @ e (two? e ? (pk-up e, lib () m)))
-   ; read a pack's files, then credit it the verbs it laid where nothing else answers
-   (pk-up e) (e @ [n d m]
-               (: was (foldl (t \ v \ (pin t v [(tab v) (traits v)])) {} (keys tab))
-                  (pks n ? 0
-                     (pin pks n 1,
-                      pin ros 'rising 1,
-                      trap (_ \ each (m 'files) (f \ load1 (d + "/" + f))) () (\ a b (pin ros 'rising (), scare a b)),
-                      pin ros 'rising (),
-                      each (keys was) (v \ was v @ [f t] (lit? f ? (pin tab v f, pin traits v t) 0)),
-                      each (m 'verb) (v \ (lit? <(was v) ? 0 (lit? (tab v) ? (pin pkv v n) 0)))))))
-   ; who answers v rather than pack n, or ()
-   (pk-over v n) (pkv v @ o
-                   (? (string? o) (o = n ? () "pack \(o)")
-                      (lit? (tab v) || lefts (show v)) "the table"
-                      (pk-find 'verb v @ e (two? e && <e != n ? "pack \(<e)" ()))))
-   (pk-list _) (pk-root () @ r
-                 (: es (pk-all ())
-                    ((? (atom? es) (puts "pack: none under \(r)\n")
-                       (each es (e \ e @ [n d m]
-                          (puts (: vs (map (v \ pk-over v n @ w (string? w ? "\(v) (\(w) wins)" (show v))) (m 'verb))
-                                   ms (map show (m 'mods))
-                                   mj (two? ms ? [("(modules " + join " " ms + ")")] ())
-                                   vj (join " " (vs + mj))
-                                   "\(n) \(vj)\n"))))),
-                     flush out)))
+   ; a pack's files, () for a name that is no folder of .l files
+   (pk-files n) (? (!(elem 'cmdline (names ())) || 0 = #n || n 0 = 46 || elem 47 (chars n)) ()
+                   ((cite 'posix 'readdir) (pk-root () + "/" + n) @ l
+                      (two? l ? (sort (filter (f \ dotl? f && f 0 != 46) l)))))
+   ; read pack n once a session; 1 when it was read
+   (pk-up n) (pks n ? 0
+               (pk-files n @ fs
+                 (two? fs ?
+                    (: d (pk-root () + "/" + n)
+                       was (foldl (t \ v \ (pin t v [(tab v) (traits v)])) {} (keys tab))
+                       (pin pks n 1,
+                        pin ros 'rising 1,
+                        trap (_ \ each fs (f \ load1 (d + "/" + f))) () (\ a b (pin ros 'rising (), scare a b)),
+                        pin ros 'rising (),
+                        each (keys was) (v \ was v @ [f t] (lit? f ? (pin tab v f, pin traits v t) 0)),
+                        1)))))
+   (packed v) (pk-up (show v) ? (tab v))
+   (pk-lift m) (pk-up (show m) ? (lib () m))
+   (pk-list _) (: r (pk-root ())
+                  ns ((cite 'posix 'readdir) r @ l (two? l ? (sort (filter (n \ two? (pk-files n)) l))))
+                  ((? (atom? ns) (puts "pack: none under \(r)\n")
+                      (each ns (n \ puts (n + (lit? (tab (name n)) || lefts n ? " (the table wins)" "") + "\n")))),
+                   flush out))
    _ (pin tab 'pack
         (as \ (? (atom? as || <as = "--list") (pk-list (), 0)
                   (<as = "--help")
-                   (puts "usage: pack [--list]   (the packs in the nest's pack/, each with the verbs it adds)\n", flush out, 0)
+                   (puts "usage: pack [--list]   (the packs in the nest's pack/, each a verb or module by its name)\n", flush out, 0)
                   (say err "pack: unknown option \(<as)\n", flush err, 2)))))
 
 ) ; module verbs

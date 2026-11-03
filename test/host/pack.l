@@ -1,5 +1,5 @@
-; test/host/pack.l -- directory packs: a pack's verbs run, its files read in the order their
-; modules need, a library pack's module borrowed from a script and from another pack, the
+; test/host/pack.l -- directory packs, keyed by folder name: a pack's verb runs, its files read
+; in name order, a library pack's module borrowed from a script and from another pack, the
 ; table winning over a pack, and LOVE_NEST naming the nest.
 ;   cat test/00-init.l test/host/pack.l | out/love
 (borrow 'posix)
@@ -13,17 +13,19 @@
    ; one line, stderr folded in, with home as HOME
    (run as) (hark ["sh" "-c" ("HOME=" + home + " " + love + " " + as + " 2>&1")])
 
-   ; a.l borrows z.l's module and calls it as it loads, so z.l must be read first; z.l
-   ; borrows a library from another pack
+   ; b.l borrows a.l's module and calls it as it loads, read after it by name; a.l borrows
+   ; a library from another pack
    _ (mkpack "hello"
-       [["a.l" "(module '(hello hello-main)\n(borrow 'hellolib)\n(: msg (greeting \"there\")\n   (hello-main as) (puts (two? as ? (greeting <as) msg), putc 10, flush out, 0))\n(cite 'verbs 'enlist 'hello (as \\ (hello-main as)) ())\n) ; module hello\n"]
-        ["z.l" "(module '(hellolib greeting)\n(borrow 'words)\n(: (greeting w) (hi + w))\n) ; module hellolib\n"]
+       [["b.l" "(module '(hello hello-main)\n(borrow 'hellolib)\n(: msg (greeting \"there\")\n   (hello-main as) (puts (two? as ? (greeting <as) msg), putc 10, flush out, 0))\n(cite 'verbs 'enlist 'hello (as \\ (hello-main as)) ())\n) ; module hello\n"]
+        ["a.l" "(module '(hellolib greeting)\n(borrow 'words)\n(: (greeting w) (hi + w))\n) ; module hellolib\n"]
         ["notes.txt" "not read\n"]])
    ; a library: no verb, one module
    _ (mkpack "words" [["words.l" "(module '(words hi)\n(: hi \"hi \")\n) ; module words\n"]])
    ; a verb of its own, and one the table already has: the table's stays
    _ (mkpack "greet"
        [["greet.l" "(cite 'verbs 'enlist 'greet (as \\ (puts \"greet\\n\", flush out, 0)) ())\n(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
+   ; a pack under a name the table answers is never read
+   _ (mkpack "verbs" [["verbs.l" "(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
    _ (put (dir + "/stray.l") "a file is no pack\n")
 
    r1 (run "hello")
@@ -43,7 +45,7 @@
            (has? >r5 "1")
            (<r6 = 0) (has? >r6 "\"hi \"")
            (<r7 = 0)
-           (>r7 = "greet greet verbs (the table wins)\nhello hello (modules hello hellolib)\nwords (modules words)\n")
+           (>r7 = "greet\nhello\nverbs (the table wins)\nwords\n")
            (<r8 = 0) (>r8 = ("pack: none under " + home + "/none/.love/pack\n"))
            (<r9 = 0) (>r9 = "hi nest\n"))
    (hark ["rm" "-rf" home]))
