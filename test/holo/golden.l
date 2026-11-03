@@ -186,7 +186,7 @@
       ("sar.imm.ext" "49c1fd05"              ((sar r12 5)))      ; r12 -> x86 r13: sar r13,5
       ;; test: 0x85 /r reg,reg ; 0xf7 /0 id reg,imm32
       ("test.rr"     "4885c0"                ((test r0 r0)))     ; test rax,rax (divide-by-zero check)
-      ("test.imm"    "48f7c001000000"        ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard)
+      ("test.imm"    "48a901000000"          ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard), A9 id
       ;; SIB memory: [base + index*scale + disp]. r7->x86 r8, r10->x86 r11 (the map-probe's slot regs)
       ("leax.1.1"    "488d4c0001"            ((leax r1 r0 r0 1 1)))    ; lea rcx,[rax+rax*1+1]
       ("leax.dbl"    "4c8d1c12"              ((leax r10 r2 r2 1 0)))   ; lea r11,[rdx+rdx*1]

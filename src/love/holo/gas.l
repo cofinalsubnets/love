@@ -392,12 +392,21 @@
    ;; ..in a segment of md bits (.code16/.code32/.code64): as.l at that mode; the template lane
    ;; takes over only in the object's own mode, whose backend lays it
    (gx-md tgt) (tgt @ 'i386 32 'i386m16 16 64)
+   ;; a jmp or jcc to a plain label, x64's own mode: a 'jx, short until settle grows it, as gas
+   ;; relaxes -- [it label short-op long-size size site]; the site is flush's to name
+   (gx-jx md tgt it)
+    (: m (it 1) os (it 3)
+       (? (md != 64 || tgt != 'x64 || (it 2) != 0 || #os != 1 || <(os 0) != 'lbl || !(nom? <>(os 0))) ()
+          (m = 'jmp) ['jx it <>(os 0) 235 5 2 ()]
+          (ghas? gx-cc m) ['jx it <>(os 0) (x86-jcc (gx-cc m) - 16) 6 2 ()]
+          ()))
    (gx-exactm md tgt src)
     ; both refusing, as.l's word stands: it names the instruction, the template lane an operand
-    (catmap (it \ (<it = 'op ? (trap (i \ [['raw (as-instrm md i)]]) it
-                                (\ a b (md != gx-md tgt ? (scare a b)
-                                         (trap (i \ (g32? tgt ? (gx-w32 (gx-item i)) (gx-item i))) it (\ _ _ (scare a b))))))
-                     (gx-item it)))
+    (catmap (it \ (? (<it != 'op) (gx-item it)
+                     (gx-jx md tgt it @ j (two? j ? [j]
+                        (trap (i \ [['raw (as-instrm md i)]]) it
+                              (\ a b (md != gx-md tgt ? (scare a b)
+                                       (trap (i \ (g32? tgt ? (gx-w32 (gx-item i)) (gx-item i))) it (\ _ _ (scare a b))))))))))
             (gx-locals (att-read src)))
 
    ;; a64, the ARM dialect: dst first, xN/wN/sp/xzr, #imm, [base, #off], b.cond.
@@ -1809,10 +1818,10 @@
                   (lsplit t @ (ns u) (go (u . >l) ((map (n \ n + ":") ns) + acc)))
                  (go >l ((elem (dname s) gf-symd ? s (ssub s)) . acc)))))
        out (rev (go ls ()))
-       ; each constant a .globl names rides on as `.holoabs name, v`, its last value past the
+       ; each constant but a .L one rides on as `.holoabs name, v`, its last value past the
        ; substitution: one never labelled is an absolute symbol
        gnm (catmap (l \ elem (dname l) [".globl" ".global"] ? (map xa-unquote (xa-oplist (xa-rest (xa-trim l)))) ()) out)
-       habs (map (k \ ".holoabs " + k + ", " + show (sv k)) (sort (filter (k \ charm? (sv k) && elem k gnm) (keys sv))))
+       habs (map (k \ ".holoabs " + k + ", " + show (sv k)) (sort (filter (k \ charm? (sv k) && (elem k gnm || !(starts? k ".L"))) (keys sv))))
        ; a use before its .set reads the value it is first set to, as llvm-mc reads it
        ((atom? (keys sv0) ? out (map (s \ elem (dname s) gf-symd ? s (rsub s sv0 {})) out)) + habs))
    ; .base64's text -> its bytes: six bits a character accumulate, a byte out per eight; padding
@@ -1877,8 +1886,12 @@
                     (pin secs nm [<r <>r (revcat fs <>>r)]))
        (flush _) (st 'run @ r
                     (two? r ? (xa-join "\n" (rev r) @ t
-                                 (pin st 'run (), emit (gx86? tgt ? (gx-exactm (st 'md) tgt t) (gas-text tgt t))))
+                                 (pin st 'run (), emit (gx86? tgt ? (map jxsite (gx-exactm (st 'md) tgt t)) (gas-text tgt t))))
                        0))
+       ; a 'jx's site, a name settle's offsets keep
+       (jxsite f) (two? f && <f = 'jx ?
+                     (peep st 'jxs 0 @ k (pin st 'jxs (k + 1), [(f 0) (f 1) (f 2) (f 3) (f 4) (f 5) (pfx + ".Ljx" + show k)]))
+                     f)
        (goto nm td) (row nm td, pin st 'prev (st 'cur), pin st 'cur nm)
        (raw bs) (two? bs ? (emit [['raw bs]]) 0)
        ; a64's `ldr rt, =expr`: a constant one movz holds is that movz, else a word in the
@@ -2038,10 +2051,22 @@
               (mn = ".previous") (st 'cur @ c (pin st 'cur (st 'prev), pin st 'prev c))
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
-              ; .size f, .-f: an end label here, f's st_size; any other size goes unread
+              ; .size f, .-f: an end label here, f's st_size; L-f one at L, once the text is read;
+              ; a constant f's size outright. any other size goes unread
               (mn = ".size")
-               (two? >xs && cats (split " " (xa-trim <>xs)) = ".-" + xa-unquote <xs ?
-                  (emit [['label (fn-end (xa-unquote <xs))]]) 0)
+               (two? >xs ?
+                  (trap (\ _ (: f (xa-unquote <xs) ts (gtoks (xa-trim <>xs))
+                     (? !(any (t \ <t = 'sym || <t = 'lref) ts)
+                         (pin st 'sizes ([f (gimm ts)] . peep st 'sizes ()))
+                        (gf-sum ts rl @ r
+                           (gbad? r || two? >r || <<r != 0 ? 0
+                              (gf-norm <><r @ ns
+                                 (? !(elem (f . -1) ns) 0
+                                    (filter (p \ <p != f) ns @ ls
+                                       (? (#ls != 1 || >(ls 0) != 1) 0
+                                          (<(ls 0) = ".") (emit [['label (fn-end f)]])
+                                          (pin st 'endat ([<(ls 0) f] . peep st 'endat ()))))))))))) 0 (\ _ _ 0))
+                  0)
               ; .type f, @function: f's type label, and @object an object's; stt_notype for a label no .type names
               (mn = ".type")
                (filter (w \ 0 < #w) (map xa-trim (catmap (f \ xa-split f 32) (xa-split rest 44))) @ ws
@@ -2123,13 +2148,14 @@
        ; offsets in place, again until the sizes hold; then it lays its fill
        (width l) (foldl (\ a x (a + (two? x ? (x 1) 1))) 0 l)
        (noms x t) (? (nom? x) (pin t x 1) (atom? x) t (noms >x (noms <x t)))
-       (fsz f off) (<f @ 'raw (width <>f) 'label 0 ('align || 'dalign) ((<>f - off % <>f) % <>f) 'skipx (f 3) 'lebx (f 3) 'wordx (f 2) 'insx 4
+       (fsz f off) (<f @ 'raw (width <>f) 'label 0 ('align || 'dalign) ((<>f - off % <>f) % <>f) 'skipx (f 3) 'lebx (f 3) 'wordx (f 2) 'insx 4 'jx (f 5)
                          (width (holo-bytes-open tgt [f] (noms f {}))))
        ; label -> its offset, each section's shifted by k times its own large stride
        (offs k) (: t {} si {'i 1}
                    (foldl (\ _ nm (k * 1000003 * si 'i @ b (pin si 'i (si 'i + 1), pin t nm b,
                                                             foldl (\ off f (? (<f = 'label) (pin t (show <>f) (b + off))
                                                                              (<f = 'wordx && 3 < #f) (pin t (f 3) (b + off))   ; its own site
+                                                                             (<f = 'jx) (pin t (f 6) (b + off))
                                                                              0,
                                                                             off + fsz f off))
                                                                   0 (rev <>>(secs nm)),
@@ -2158,7 +2184,15 @@
                                   ['raw [(fix w (w @ 4 'rel32 2 'rel16 'pc8) (name s) (site + w - t l + <<r))]]))))))
        ; an .org may read back while the pads before it still grow: refused once they hold
        (settle n)
-        (: t (offs 0) ch {'c 0}
+        (: t1 (offs 1) ch {'c 0}
+           ; a short jump grows once its label leaves rel8's reach (another section lies a stride
+           ; off), this text, or turns global; never shrinks. a pass that grows one reads again
+           (grow f) (t1 (show (f 2)) @ d (charm? d && !(elem (show (f 2)) (st 'globl)) && fits8 (d - (t1 (f 6) + 2)) ? f
+                                            (pin ch 'g 1, [(f 0) (f 1) (f 2) (f 3) (f 4) (f 4) (f 6)])))
+           _ (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (map (f \ (two? f && <f = 'jx && f 5 = 2 ? (grow f) f)) <>>r)])))
+                    0 (st 'order))
+           t (offs 0)
+           (? (peep ch 'g 0) (n > 64 ? (scare 'gas-skip-settle src) (settle (n + 1)))
            (foldl (\ _ nm (: r (secs nm)
                              fs (map (f \ (? (skip? f)
                                               (: v (skv f t) v2 (v < 0 ? 0 v)
@@ -2172,7 +2206,7 @@
                   0 (st 'order),
             (? !(ch 'c) (two? (peep ch 'back ()) ? (scare 'gas-org-back (ch 'back)) 0)
                (n > 64) (scare 'gas-skip-settle src)   ; a chain of pads settles one a pass
-               (settle (n + 1)))))
+               (settle (n + 1))))))
        ; an instruction over a label difference: the labels beside a `-` read as their offsets,
        ; and what it lays may not move with where its section lands
        (isub s t) (: n #s
@@ -2188,7 +2222,7 @@
        (tspell ts) (catmap (k \ (k @ ('num v) (show v) ('sym s) (two? (sx s) ? ("(" + tspell (sx s) + ")") s) ('ch c) (string c) _ (scare 'gas-immediate k))) ts)
        (sxs s) (gtoks s @ ts (any (k \ <k = 'sym && two? (sx <>k)) ts ? (xa-mnem s + " " + tspell (gtoks (xa-rest s))) s))
        (inlay f t) (sxs (f 1) @ u (gas-text tgt (isub u t) @ a (a = gas-text tgt (isub u (offs 1)) ? a (scare 'gas-immediate (f 1)))))
-       (later? f) (two? f && elem <f '(skipx lebx wordx insx))
+       (later? f) (two? f && elem <f '(skipx lebx wordx insx jx))
        _ (any (nm \ any later? <>>(secs nm)) (st 'order) ?
             (: _ (settle 0)
                t (offs 0)
@@ -2196,6 +2230,7 @@
                              'lebx [['raw (gf-leb (skv f t) (f 2))]]
                              'wordx [(wxlay f t)]
                              'insx (inlay f t)
+                             'jx (f 5 = 2 ? [['raw [(f 3) (fix 1 'rel8 (f 2) 0)]]] [['raw (as-instrm 64 (f 1))]])
                              [f])
                (foldl (\ _ nm (secs nm @ r
                                  (pin secs nm [<r <>r (filter (f \ !(<f = 'raw && atom? <>f))
@@ -2214,18 +2249,50 @@
                                 (pin labs a nm,
                                  pin secs nm [<r <>r (catmap (f \ (f = ['label (name s)] ? [['label (name a)] f] [f])) <>>r)])))))
                 0 (peep st 'alias ()))
+       ; .size f, L-f: f's end label beside L's
+       _ (foldl (\ _ e (: l ['label (name (e 0))] en ['label (fn-end (e 1))]
+                          (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (x \ (x = l ? [en x] [x])) <>>r)]))) 0 (st 'order))))
+                0 (peep st 'endat ()))
+       ; .set a, s+k: a label of a's own k bytes on from s, in s's section, splitting a run of
+       ; bytes there; one that would land inside a fix, or before an align, stays unlaid
+       (rsplit bs j) (? (j = 0) [() bs] (atom? bs) ()
+                        (: e <bs n (two? e ? (e 1) 1)
+                           (n > j ? () (rsplit >bs (j - n) @ p (two? p ? [(e . <p) <>p])))))
+       (labin fs off t l)
+        (? (off = t) (l . fs)
+           (atom? fs || off > t) ()
+           (: f <fs w (fsz f off)
+              (? (<f = 'raw && t < off + w)
+                  (rsplit <>f (t - off) @ p (two? p ? (['raw <p] . l . ['raw <>p] . >fs)))
+                 (labin >fs (off + w) t l @ r (two? r ? (f . r))))))
+       (labpos fs off l) (? (atom? fs) () (<fs = l) off (labpos >fs (off + fsz <fs off) l))
+       _ (foldl (\ _ a
+                   (: r (trap (\ _ (gf-sum (sxp (sx a) 0) rl)) 0 (\ _ _ 'bad))
+                      (? (starts? a ".L" || string? (labs a) || gbad? r || two? >r) 0
+                         (gf-norm <><r @ ns
+                            (? (#ns != 1 || >(ns 0) != 1) 0
+                               (: l ['label (name <(ns 0))]
+                                  (foldl (\ _ nm (secs nm @ r9 (rev <>>r9) @ fs
+                                                    (? (string? (labs a) || !(elem l fs)) 0
+                                                       (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)] @ fs2
+                                                          (two? fs2 ? (pin labs a nm, pin secs nm [<r9 <>r9 (rev fs2)]) 0)))))
+                                         0 (st 'order))))))))
+                0 (sort (keys sx)))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
        ; a .globl constant never labelled: an absolute symbol, (name value)
-       habs (filter (p \ elem <p (st 'globl) && !(string? (labs <p))) (rev (peep st 'abs ())))
+       ; ..and any other constant a local one, (name value 0)
+       habs (catmap (p \ (? (string? (labs <p)) () (elem <p (st 'globl)) [p] [[<p <>p 0]])) (rev (peep st 'abs ())))
        ; a section the text named stays though empty: a linker script may lay it
-       ; the aliases onto names this text never labels ride a fifth element, and the absolute
-       ; symbols a sixth, only when there are any
+       ; the aliases onto names this text never labels ride a fifth element, the absolute
+       ; symbols a sixth, and the constant sizes a seventh, (name size), only when there are any
+       hsz (rev (peep st 'sizes ()))
        ([(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
          (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))]
-        + (peep st 'xal () @ x (two? x || two? habs ? [(rev x)] ()))
-        + (two? habs ? [habs] ())))
+        + (peep st 'xal () @ x (two? x || two? habs || two? hsz ? [(rev x)] ()))
+        + (two? habs || two? hsz ? [habs] ())
+        + (two? hsz ? [hsz] ())))
 
    ;; text -> IR, by target
    (gas-text tgt src)
