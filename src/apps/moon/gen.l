@@ -8337,7 +8337,7 @@
                       0))
    ; callee-saved seats a clobber may name past the asm file: pushed and popped around the body
    (asmsave? g r9) (? (ia32? g) (elem r9 '(r3 r5 r6))
-                      (x64t? g) (elem r9 csx64)
+                      (x64t? g) (r9 = 'r3 || elem r9 csx64)
                       (a64? g) (elem r9 '(r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28))
                       (rv64? g) (elem r9 '(r11 r12 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26))
                       (elem r9 '(r5 r6 r7 r8 r9 r10 r11 r12)))
@@ -8775,8 +8775,8 @@
                              (vclob? g c) (clobs >l acc)
                              (: r9 (neutral? ? (intern c) (gas-regname tgt c))
                                 (? !(nom? r9) (asmno g "an asm clobber of \"\(c)\"")
-                                   (asmreg? g r9) (clobs >l acc)
                                    (asmsave? g r9) (clobs >l (r9 . acc))
+                                   (asmreg? g r9) (clobs >l acc)
                                    (asmno g "an asm clobber of \"\(c)\""))))))
                    saves (clobs <>>>>s ())
                    ; a cs register seated as an operand (i386's esi edi, x64's past scratch) is saved around the asm

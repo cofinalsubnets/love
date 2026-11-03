@@ -38,21 +38,30 @@
    (lolv g env e)
     (e @ ('var nm)
           (lovar g env nm @ ('v r ty) ['v r ty]
-                            ('m off ty) (lomk g @ t (pin g 'fesc 1, ['a ['long t [['lea t 'r4 off]]] ty 0]))
+                            ('m off ty) ['a ['long 'r4 ()] ty off]
                             ('g lbl ty) (lomk g @ t ['a ['long t [['la t lbl]]] ty 0])
-                            'bad)
+                            (lono g ['var nm]))
          ('deref p)
-          (lox g env p @ (('ptr pt) r fs) ['a [['ptr pt] r fs] pt 0] 'bad)
-         'bad)
+          (lox g env p @ (('ptr pt) r fs) ['a [['ptr pt] r fs] pt 0] 'bad (_ _ _) (lono g 'deref))
+         ('dot base fld)
+          (lolv g env base @ ('a av ty off)
+                              (fmem g ty fld @ 'bad (lono g ['member fld])
+                                               (_ ('bitfield . _)) (lono g 'bitfield)
+                                               (o mt) ['a av mt (off + o)])
+                             'bad 'bad
+                             _ (lono g 'dotbase))
+         (lono g ['lval <e]))
    ; a refusal, its first cause kept for MOON_LOLOG
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
+   ; a frame address become a value: no sibling call may jump past it
+   (loesc g r) (r @ 'r4 (pin g 'fesc 1) 0)
    ; a scalar load from an address
    (loload g (_ r fs) ty off)
     (losc? ty ? (lomk g @ t [ty t (fs + [[(ldop ty) t r off]])]) (lono g ['load ty]))
    ; an lvalue's value: an array decays, an aggregate refuses
    (lorv g lv)
     (lv @ ('v r ty) [ty r ()]
-          ('a (_ r fs) ('arr . et . _) off) (lomk g @ t [['ptr et] t (fs + [['lea t r off]])])
+          ('a (_ r fs) ('arr . et . _) off) (lomk g @ t (loesc g r, [['ptr et] t (fs + [['lea t r off]])]))
           ('a av ty off) (loload g av ty off)
           'bad)
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
@@ -69,7 +78,7 @@
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
     (? (bad? a || bad? b) 'bad
-       !(losc? (vty a) && losc? (vty b)) 'bad
+       !(losc? (vty a) && losc? (vty b)) (lono g ['bin op (vty a) (vty b)])
        (: ta (vty a) tb (vty b)
           (? (locmp? op)
               (loz g a b @ (_ x fx) (loz g b a @ (_ y fy) (lomk g @ d
@@ -96,7 +105,7 @@
               (: u (cmpu g ta tb) io (op = '/ ? (u ? 'udiv 'div) (u ? 'urem 'rem))
                  (loz g a b @ (_ x fx) (loz g b a @ (_ y fy) (lomk g @ d
                     [(rbin g ta tb) d (fx + fy + [(io @ ('rem || 'urem) [io d x y 'r0] [io d x y])])]))))
-             'bad)))
+             (lono g ['bin op]))))
    (lolog n) (n <= 1 ? 0 (1 + lolog (n // 2)))
    ; a shift keeps the left type; x64's variable count rides r1
    (losh g op (ta ra fa) b kb)
@@ -153,7 +162,7 @@
          (('addr ('var nm)) && bad? (lovar g env nm) && g 'fns nm)
           (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]])
          ('addr lv)
-          (lolv g env lv @ ('a (_ r fs) ty off) (lomk g @ t [['ptr ty] t (fs + [['lea t r off]])]) 'bad)
+          (lolv g env lv @ ('a (_ r fs) ty off) (lomk g @ t (loesc g r, [['ptr ty] t (fs + [['lea t r off]])])) 'bad)
          ('asn dst rhs)
           (lolv g env dst @ 'bad 'bad
              l (lox g env rhs @ 'bad 'bad
@@ -212,36 +221,52 @@
              va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
              (lobin g op va vb kb))
-         ('call ('var nm) as) (locall g env nm as)
+         ('call fh as) (locall g env fh as)
          (lono g ['expr <e]))
 
-   ; a direct call to a known function, its args gp scalars in the six registers
-   (locall g env nm as)
-    (g 'sigs nm @
-       ((rt . ptys . va . rest) && bad? (lovar g env nm) && g 'fns nm &&
-        !(1 < #nm && nm 0 = 95 && nm 1 = 95) && #as <= 6 &&
-        !(0 < #ptys && !va && #as != #ptys) && !(rest @ ('ms . _) 1 ()) && (rt = 'void || losc? rt))
-        (: (arg e pt)
-            (lox g env e @ ((vt r fs) && losc? vt)
-                            (pt @ 'none [vt r fs] (p9 && losc? p9) (lotr g [vt r fs] p9) 'bad)
-                           'bad)
-           (go l i acc)
-            (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [v])))
-                 acc)
-           (go as 0 () @ 'bad 'bad
-              vs (: n #vs rs (take n argregs) d (lomk g)
-                    al (va ? [['li 'r0 0]])
-                    res (rt @ 'void () (['mov d 'r0] . map (f \ [<f d]) (rext g rt)))
-                    [rt (rt = 'void ? () d)
-                     (catmap vfs vs + map (k \ ['mov (rs k) (vreg (vs k))]) ^n + al +
-                      [['cuse . (rs + (va ? '(r0)))] ['call (intern nm)]] + res)])))
-       (lono g ['call nm]))
+   ; a call: the first six gp scalars in registers, the rest in a 16-aligned block at sp. a
+   ; direct callee is a known fn, an indirect one a pointer value read after the args
+   (locall g env fh as)
+    (fh @ (('var nm) && bad? (lovar g env nm) && g 'fns nm)
+           (g 'sigs nm @
+              ((rt . ptys . va . rest) && !(1 < #nm && nm 0 = 95 && nm 1 = 95) && !(rest @ ('ms . _) 1 ()))
+               (locall1 g env rt ptys va as [['call (intern nm)]] ())
+              (lono g ['call nm]))
+          _ (lox g env fh @
+               ((('ptr ('fn rt ptys)) r fs)) (locall1 g env rt ptys 1 as [['callr r]] [r fs])
+               ((('ptr ('fn rt)) r fs)) (locall1 g env rt () 1 as [['callr r]] [r fs])
+               'bad 'bad
+               (ty . _) (lono g ['callee ty])))
+   ; cl the call form, fv the callee's (vreg forms) | (); va also lays al, the vector count
+   (locall1 g env rt ptys va as cl fv)
+    (? !(rt = 'void || losc? rt) (lono g ['ret rt])
+       (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
+       (: (arg e pt)
+           (lox g env e @ ((vt r fs) && losc? vt)
+                           (pt @ 'none [vt r fs] p9 (losc? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                          'bad 'bad
+                          (vt . _) (lono g ['arg vt]))
+          (go l i acc)
+           (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [v])))
+                acc)
+          (go as 0 () @ 'bad 'bad
+             vs (: n (min 6 #vs) rs (take n argregs) d (lomk g)
+                   sk (drop 6 vs) blk (aup (8 * #sk) 16)
+                   al (va ? [['li 'r0 0]])
+                   res (rt @ 'void () (['mov d 'r0] . map (f \ [<f d]) (rext g rt)))
+                   [rt (rt = 'void ? () d)
+                    (catmap vfs vs + (fv @ (_ ffs) ffs ()) +
+                     (blk = 0 ? () ([['sub 'sp 'sp blk]] + map (k \ ['st 'sp (8 * k) (vreg (sk k))]) ^#sk)) +
+                     map (k \ ['mov (rs k) (vreg (vs k))]) ^n + al +
+                     [('(cuse) + rs + (va ? '(r0)) + (fv @ (fr _) [fr] ()))] + cl +
+                     (blk = 0 ? () [['add 'sp 'sp blk]]) + res)]))))
 
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
     (: (st x e2 _) (lost1 g e2 x)
        (br x s L _) (lobr g env x s L)
        (s @ () ()
+            ((_ . _) . _) (loitems g env s)
             ('nop . _) ()
             ('tdef . _) ()
             ('expr e) (lox g env e @ (_ _ fs) fs 'bad)
@@ -280,17 +305,20 @@
             ('goto nm) [['jmp (name "\(g 'fn).\(nm)")]]
             ('lbl nm) [['label (name "\(g 'fn).\(nm)")]]
             ('switch ce body) (loswitch g env ce body)
+            ('case lo hi) (assoc 'sw env @ (_ tab _) (peep tab "\(lo):\(hi)" () @ () 'bad L [['label L]]) 'bad)
             ('case cv) (assoc 'sw env @ (_ tab ty) (peep tab (lokey g ty cv) () @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ (_ tab _) (peep tab 'dflt () @ () 'bad L [['label L]]) 'bad)
             (lono g ['stmt <s])))
-   (lokey g ty cv) (knum g cv @ (k . _) (cfit g ty k) 'bad)
+   (lokey g ty cv) (charm? cv ? (cfit g ty cv) 'bad)
    ; a switch as a compare chain: its cases, nested switches aside, each take a label
    (loswitch g env ce body)
     (lox g env ce @ ((ty r fs) && losc? ty)
        (: tab {}
           (walk x) (x @ ('switch . _) 0
                         ('case cv) (lokey g ty cv @ 'bad (pin tab 'bad 1) k (pin tab k (nlab g ".lo")))
-                        ('case _ _) (pin tab 'bad 1)
+                        ('case lo hi)
+                         (? !(charm? lo && charm? hi && hi - lo < 64) (pin tab 'bad 1)
+                            (nlab g ".lo" @ L (pin tab "\(lo):\(hi)" L, map (k \ pin tab (cfit g ty (lo + k)) L) ^(hi - lo + 1))))
                         ('dflt . _) (pin tab 'dflt (nlab g ".lo"))
                         (_ . _) (map walk x)
                         0)
