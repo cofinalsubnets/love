@@ -817,6 +817,11 @@
        phr (foldl (\ a c (? (<c = 'phdrs) <>c a)) () (lk 'cmds))
        _ (foldl (\ pv t (? (alloc? t) (: ns (? (two? (peep t 'phdrs ())) (t 'phdrs) pv) _ (pin t 'phn ns) ns) pv)) () outs)
        (in p) (filter (t \ alloc? t && elem (p 'name) (t 'phn)) outs)
+       ; a script with no PHDRS: lld's PT_GNU_RELRO over the relro run, a load opened past it
+       rr (? (flat || two? phr || !(peep lk 'zrelro 0)) [() ()] (ld-relrun outs))
+       rsec <rr
+       rbrk (? (atom? (rr 1)) ()
+               (: e <(rr 1) f (filter (t \ alloc? t && t 'sz > 0 && t 'va >= e 'va) outs) (? (atom? f) () (<f 'name))))
        ; loads [[first last row] ..], row the PHDRS one or ()
        grps (? flat (ld-fgroups outs0) ())
        loads (? (two? phr)
@@ -824,7 +829,7 @@
                 flat (map (g \ [<g (g 1) ()]) (filter (g \ g 2) grps))
                 (rev (foldl (\ acc t
                                (? (!(alloc? t) || t 'sz = 0) acc
-                                  (atom? acc || at? t || perm t != perm (<(<acc))) ([t t ()] . acc)
+                                  (atom? acc || at? t || perm t != perm (<(<acc)) || t 'name = rbrk) ([t t ()] . acc)
                                   ([(<(<acc)) t ()] . >acc)))
                             () outs)))
        _ (each loads (l \ each outs (t \ (? (t 'va >= <l 'va && alloc? t && t 'sz > 0
@@ -836,7 +841,7 @@
                                 (: m <(filter (x \ x 2 != () && elem (x 2 'name) (t 'phn)) loads)
                                    (? (two? m) (pin t 'load m) 0))
                                 0))))
-       nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1))
+       nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1 + (? (two? rsec) 1 0)))
        nres (? flat (#grps + 4) nph)
        hdrs (? w32 (52 + 32 * nres) (64 + 56 * nres))
        names (foldl (\ a t (a + t 'name + "\0")) "\0" outs)
@@ -893,7 +898,9 @@
                  al (? (ty = 1 && !nmagic) pg (foldl (\ m t (max m (t 'al))) 1 ms))
                  (phd ty (? (whole? fl) fl (perm a)) o0 v0 l0 (fe - o0) (b 'va + b 'sz - v0) al))))
        phs (? (two? phr) (map prow phr) flat fphs
-              (map ph loads + [(row 1685382481 6 0 0 0 0 0)]))
+              (map ph loads
+               + (? (two? rsec) [(: a <rsec b <(rev rsec) (row 1685382482 4 (a 'off) (a 'va) (fend b - a 'off) (b 'va + b 'sz - a 'va) 1))] ())
+               + [(row 1685382481 6 0 0 0 0 0)]))
        (lnk t k) (: s (peep slink (t 'name) ()) (? (two? s) (? (k = 0) (shx <s) <>s) (peep t (? (k = 0) 'link 'info) 0)))
        nmoff (: t {} _ (foldl (\ o x (pin t (x 'name) o, o + #(x 'name) + 1)) 1 outs) t)
        (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (wa (t 'flags)) (wa (? (alloc? t) (t 'va) 0)) (wa (t 'off))
@@ -1386,6 +1393,23 @@
    (ld-fresh cmds)
     (: (osec t) (: n {} _ (each (keys t) (k \ pin n k (t k))) n)
        (map (c \ (? (<c = 'sections) ['sections (map (i \ (? (<i = 'osec) ['osec (osec <>i)] i)) <>c)] c)) cmds))
+   ; lld's isRelroSection, with no -z now and no DATA_SEGMENT_RELRO_END
+   (ld-relro? t) (: f (peep t 'flags 0) nm (t 'name)
+                    (0 < (f & 2) && 0 < (f & 1)
+                     && (0 < (f & 1024) || elem (peep t 'stype 1) '(14 15 16)
+                         || elem nm '(".data.rel.ro" ".bss.rel.ro" ".got" ".toc" ".relro_padding" ".dynamic" ".ctors"
+                                      ".dtors" ".jcr" ".eh_frame" ".fini_array" ".init_array" ".preinit_array"))))
+   ; a script's relro with no PHDRS -> [relro sections, [the first section past them] or ()]:
+   ; over the sections a load holds, one run, else refused as lld errs
+   (ld-relrun outs)
+    (: (go l acc end)
+        (? (atom? l) [(rev acc) end]
+           (: t <l (? (ld-relro? t)
+                      (? (two? end) (scare 'link-refuses ("section: " + t 'name + " is not contiguous with other relro sections"))
+                         (go >l (t . acc) end))
+                      (two? acc && atom? end) (go >l acc [t])
+                      (go >l acc end))))
+       (go (filter (t \ 0 < (t 'flags & 2) && !(0 < (t 'flags & 1024) && peep t 'stype 1 = 8)) outs) () ()))
    ; lld's loads with no script, over the allocated sections in order: a new one at a change
    ; of permissions or into or out of relro -> [[first last bytes?] ..], the empty ones kept
    (ld-fgroups outs)
@@ -1531,7 +1555,7 @@
        ot (: t {} _ (foldl (\ i ob (pin t i ob, i + 1)) 0 (cx 'objs)) t)
        mx (ld-merge ot os)
        lk {'cx cx 'ot ot 'mx mx 'outs os 'cmds (words 0 + body2) 'strip (o 'strip) 'discard (o 'discard)
-           'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg
+           'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg 'zrelro (o 'relro && !(o 'nmagic))
            'mach em 'abs (? (em = 62) 1 (em = 3) -1 257)
            'etype (? (o 'shared || o 'pie) 3 2) 'bid (o 'bid)                   ; ET_DYN for -pie and -shared, else ET_EXEC
            'erel (o 'erel) 'on on
@@ -1564,14 +1588,6 @@
        _ (pin lk 'env env)
        ; an output section is in no group
        _ (each os (t \ (? (0 < (peep t 'flags 0 & 512)) (pin t 'flags (t 'flags - 512)) 0)))
-       ; a script with no PHDRS lays PT_GNU_RELRO when a section lld counts relro is laid, which
-       ; love does not: refused. a script's PHDRS lays only the headers it names
-       (relro? t) (: f (peep t 'flags 0)
-                     (!(peep t 'dead 0) && t 'sz > 0 && 0 < (f & 2) && 0 < (f & 1)
-                      && (0 < (f & 1024) || elem (peep t 'stype 1) '(14 15 16)
-                          || elem (t 'name) '(".data.rel.ro" ".dynamic" ".got" ".ctors" ".dtors" ".jcr"))))
-       _ (? (o 'relro && !flat && !(elem 'phdrs (map (c \ <c) cmds)) && any relro? os)
-            (no "PT_GNU_RELRO: pass -z norelro") 0)
        ; x86's code gaps are int3, as lld fills them
        _ (? (elem em '(62 3)) (each os (t \ (? (0 < (peep t 'flags 0 & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
        _ (? (d = 0) 0 (pin d 'relrsz (8 * #(<>r))))
