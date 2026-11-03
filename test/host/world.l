@@ -2,7 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow '(world mesh neon posix))
+(borrow '(world mesh neon posix bough))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -927,5 +927,33 @@
        (n "(furnish 'shelf [0 0 0] 0 {'fill 'books})" > n "(furnish 'shelf [0 0 0] 0 {})" + 20)
        (has? (fu "(furnish 'throne [0 0 0] 0 {})") "a KIND") (has? (fu "(furnish 'desk [0 0 0] 0 {'hue 1})") "furniture takes")
        (has? (fu "(furnish 'desk [0 0 0] 0 'oak)") "(furnish KIND")))
+; plants: every species reads as a tree, a 'like changing one; a plain tree carries none; grown,
+; a seed the same plant and another not, an oak's trunk its height, grass blades and no wood,
+; the dead leafless; a species, a key, a level's key or a leaf's kind not known said back
+(: (pl s) (lv ("(street [-9 0 -9] [9 9 9]) " + s))
+   (sp s) (pl s 'trees 0 'species)
+   kinds ['ailanthus 'oak 'birch 'pine 'willow 'shrub 'grass 'reed 'fern 'dead]
+   (gr k sd) (bough-grow [sd 1.0 1.0 (sp ("(plant [0 0 0] 1 '" + show k + ")"))])
+   (leaves g) (net (g 'kind = 2.0))
+   ok (gr 'oak 4) gs (gr 'grass 4)
+ (test (all (k \ tablet? (sp ("(plant [0 0 0] 3 '" + show k + ")"))) kinds)
+       (sp "(plant [0 0 0] 3 {'like 'birch 'height 20})" 'height = 20) (sp "(plant [0 0 0] 3 {'like 'birch 'height 20})" 'crown = 2.5)
+       (sp "(plant [0 0 0] 3 {'height 2 'leaf {'kind 'needle}})" 'leaf 'kind = 'needle)
+       (!(elem 'species (keys (pl "(tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4)))))" 'trees 0))))
+       (show (ok 'segs) = show (gr 'oak 4 'segs)) (show (ok 'segs) != show (gr 'oak 5 'segs))
+       (ok 'tn = 5) (2.6 <= ok 'fork 1 <= 3.4) (#(bough-solid ok) = 5) (leaves ok > 1000)
+       (#(gs 'segs) = 0) (#(bough-solid gs) = 0) (leaves gs > 100) (leaves (gr 'dead 4) = 0) (leaves (gr 'pine 4) > 1000)
+       (has? (pl "(plant [0 0 0] 3 'kudzu)") "a SPECIES") (has? (pl "(plant [0 0 0] 3 {'like 'oak 'hue 1})") "a plant takes")
+       (has? (pl "(plant [0 0 0] 3 {'levels [{'n 2 'hue 1}]})") "a level takes")
+       (has? (pl "(plant [0 0 0] 3 {'leaf {'kind 'scale}})") "a leaf's 'kind") (has? (pl "(plant [0 0 0] 'x 'oak)") "(plant [x y z]")))
+; ..a desk in moves and a turn stepped comes out of them as a book does, its bearing turned
+(: fkv ((cite 'vi) 'vi-open "")
+   fkf "(move [0.15 0 -0.15] (turn 90 [-27.35 7.4] (move [0.8 0 0.25] (furnish 'desk [-28.15 0 7.15] 160 {}))))"
+   _ ((cite 'vi) 'vload fkv ["(level \"t\"" "  (room [-30 0 4] [-24 3 10])" ("  " + fkf) "  (start [-27 0 5] 0 0))"] "t.l")
+   fkw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} fk (edit-new fkw fkv "")
+   _ (edit-events fk [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
+   _ (pin fk 'sel [3]) _ (edit-events fk [['down 52] ['text "."] ['up 52]])
+   fl (fkv 'lines 2)
+ (test (snip fl 0 18 = "  (furnish 'desk [") (snip fl (#fl - 7) #fl = "-95 {})") (fk 'sel = [3])))
 (test_fin ())
 (puts "world: ok\n")

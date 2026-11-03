@@ -135,6 +135,17 @@
 ;   (tree [x y z] seed TEXTURE)        a tree of heaven grown from seed, its foot at x y z: its
 ;                                      wood in the bark TEXTURE, its trunk in the way and
 ;                                      climbed as a ladder, facing it; fitting a 2 m well
+;   (plant [x y z] seed SPECIES)       a plant grown from seed, its foot at x y z, a tree as
+;                                      the above is to every word after it: SPECIES 'ailanthus
+;                                      'oak 'birch 'pine 'willow 'shrub 'grass 'reed 'fern
+;                                      'dead, or {'like 'oak 'height [lo hi] ..} changing one:
+;                                      'height 'lean 'crook 'girth [foot top] 'pieces 'crown,
+;                                      'levels [{'n 'len 'up 'out 'pieces 'r 'bend 'droop
+;                                      'along 'cone 'head 'twigs 'leaves} ..], 'ends 'tuft 'spray
+;                                      'sprig or (), 'clump 'splay, 'leaf {'kind 'pinnate
+;                                      'frond 'simple 'needle 'blade 'len 'pairs 'leaflet 'wide
+;                                      'arch 'tip 'bow 'colour 'every 'grow} or (), 'fruit
+;                                      {'odds 'n}, 'bark a texture, a kind or bark's {..}
 ;   (vined TREE)                       the tree climbed only once vines have grown up its
 ;                                      trunk to the fork, out of the ground, from when the
 ;                                      loop first plays
@@ -247,7 +258,7 @@
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
 ;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
 ;                                      'tile 'cobble 'mud 'concrete 'metal 'cloth 'carpet
-;                                      'gravel 'sand 'soil 'grass 'card; a wrong one says what it takes
+;                                      'gravel 'sand 'soil 'grass 'card 'bark; a wrong one says what it takes
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
@@ -267,7 +278,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -708,7 +719,9 @@
            (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 1 0.35) ['patches 6 (g 'dry) (mx ['rgb 0.62 0.58 0.3] 0.3)]
                                     ['patches 3 0.2 (sh 0.8)]] 'soft])]
    'card [{'colour (rgb 0.62 0.47 0.3) 'tape (rgb 0.7 0.58 0.4) 'metres 0.5}
-          (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 2 0.06) ['patches 4 0.15 (sh 0.9)] ['rows 14 18 (g 'tape)]] 'soft])]}
+          (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 2 0.06) ['patches 4 0.15 (sh 0.9)] ['rows 14 18 (g 'tape)]] 'soft])]
+   'bark [{'colour (rgb 0.3 0.29 0.27) 'streak 0.3 'marks 0.0 'metres 1.0}
+          (g \ [32 64 (g 'metres) [['fill (g 'colour)] ['noise 1 8 (g 'streak)] '(noise 3 0.1) ['patches 4 0.25 (sh 0.85)] ['noise 6 1 (g 'marks)]] 'wood])]}
  (material k s o) (: u "(material KIND seed {PARAM v ..})"
    (? (!(two? (materials k))) (no (u + ", a KIND of " + show (sort (keys materials))) k)
       (!(charm? s && 0 <= s < 1000000)) (no u s) (!(tablet? o)) (no u o)
@@ -884,6 +897,55 @@
                                     (bx (I + L - W) (y - a) (I + L - D) (W - I - L) y (I + L + 0.02 - D) 'frame)] ())
               (num? m && m > 0.0 ? [(bx (I + 2.0 * L - W) (y - 0.06 - m) (D - 0.1) (W - I - 2.0 * L) (y - 0.06) (D - 0.07) 'frame)] ())]))
          (turn dd [(o 0) (o 2)] parts))))
+ ; --- plants: a species grown from seed as grove grows the tree of heaven, its habit as data
+ ; (grove-habit): a trunk, levels of limbs each off the last, ends, a clump off the foot ---
+ plants
+  {'ailanthus {'height [6.6 7.4] 'lean 0.02 'crook 0.08 'girth [0.3 0.18] 'crown 3.0
+               'levels [{'n 2 'len [2.6 3.8] 'up 0.6 'out 0.35 'pieces 6 'r [0.16 0.07] 'along [0.95 1.0] 'head [9 13]}
+                        {'n [2 3] 'len [2.6 3.8] 'up 0.4 'out 0.9 'pieces 7 'r [0.06 0.022] 'bend 0.35 'droop 0.07 'along [0.3 0.9] 'twigs [0.4 1.0]}]
+               'leaf {'kind 'pinnate} 'fruit {'odds 0.3}}
+   'oak {'height [2.6 3.4] 'lean 0.04 'crook 0.12 'girth [0.45 0.32] 'crown 1.8
+         'levels [{'n [4 5] 'len [3.0 4.2] 'up 0.25 'out 0.7 'pieces 5 'r [0.22 0.08] 'bend 0.5 'along [0.8 1.0]}
+                  {'n [3 4] 'len [1.6 2.6] 'up 0.15 'out 0.8 'pieces 4 'r [0.07 0.025] 'bend 0.6 'droop 0.04 'along [0.3 1.0] 'twigs [0.3 0.7]}]
+         'leaf {'kind 'simple 'pairs [4 7] 'len [0.02 0.05] 'leaflet [0.12 0.18] 'wide 0.4 'colour (rgb 0.2 0.32 0.1) 'every 1 'grow 1.3}
+         'bark {'colour (rgb 0.27 0.25 0.22) 'streak 0.45}}
+   'birch {'height [8.0 10.5] 'lean 0.03 'crook 0.05 'girth [0.14 0.05] 'pieces 6 'crown 2.5
+           'levels [{'n [7 10] 'len [1.6 3.0] 'up 0.45 'out 0.55 'pieces 4 'r [0.045 0.015] 'droop 0.1 'along [0.3 1.0] 'cone 0.6 'twigs [0.3 0.6] 'leaves 3}]
+           'leaf {'kind 'simple 'pairs [4 6] 'len [0.02 0.04] 'leaflet [0.07 0.1] 'wide 0.45 'colour (rgb 0.3 0.45 0.13) 'every 1 'grow 1.4}
+           'bark {'colour (rgb 0.86 0.84 0.8) 'streak 0.1 'marks 0.6}}
+   'pine {'height [9.0 12.0] 'lean 0.01 'crook 0.03 'girth [0.28 0.06] 'pieces 8 'crown 2.5
+          'levels [{'n [16 22] 'len [2.4 3.4] 'up -0.05 'out 1.0 'pieces 3 'r [0.05 0.015] 'bend 0.15 'droop 0.08 'along [0.25 0.98] 'cone 0.95 'twigs [0.2 0.5] 'leaves 3}]
+          'leaf {'kind 'needle 'pairs [10 14] 'leaflet [0.18 0.26] 'wide 0.25 'colour (rgb 0.12 0.24 0.1) 'every 2 'grow 2.0}
+          'bark {'colour (rgb 0.36 0.24 0.18) 'streak 0.35}}
+   'willow {'height [3.5 4.5] 'lean 0.06 'crook 0.15 'girth [0.4 0.26] 'crown 1.0
+            'levels [{'n [4 6] 'len [2.4 3.4] 'up 0.6 'out 0.5 'pieces 5 'r [0.15 0.05] 'along [0.8 1.0]}
+                     {'n [5 8] 'len [3.0 4.5] 'up 0.3 'out 0.6 'pieces 8 'r [0.02 0.008] 'bend 0.2 'droop 0.35 'along [0.2 1.0] 'leaves 3}]
+            'leaf {'kind 'simple 'pairs [2 3] 'len [0.01 0.02] 'leaflet [0.1 0.15] 'wide 0.3 'colour (rgb 0.34 0.48 0.17) 'every 1 'grow 1.6}}
+   'shrub {'height 0.0 'levels [{'n [6 10] 'len [0.8 1.4] 'up 0.9 'out 0.5 'pieces 3 'r [0.025 0.01] 'bend 0.5 'droop 0.02 'along [0.0 0.0] 'leaves 2}]
+           'leaf {'kind 'simple 'pairs [3 5] 'len [0.01 0.03] 'leaflet [0.06 0.09] 'colour (rgb 0.18 0.3 0.1) 'every 1 'grow 1.3}}
+   'grass {'height 0.0 'clump [40 60] 'splay 0.7 'leaf {'kind 'blade 'len [0.3 0.6] 'bow 0.8 'wide 0.2 'colour (rgb 0.32 0.52 0.14) 'every 1 'grow 1.0}}
+   'reed {'height 0.0 'clump [12 18] 'splay 0.3 'leaf {'kind 'blade 'len [1.4 2.0] 'bow 0.5 'wide 0.18 'colour (rgb 0.42 0.5 0.22) 'every 1 'grow 1.0}}
+   'fern {'height 0.0 'clump [8 12] 'splay 0.9 'leaf {'kind 'frond 'len [0.5 0.9] 'pairs [12 16] 'leaflet [0.08 0.12] 'wide 0.35 'arch 0.5 'colour (rgb 0.18 0.36 0.1) 'every 1 'grow 1.3}}
+   'dead {'like 'oak 'leaf () 'ends 'sprig}}
+ plant-keys ['like 'height 'lean 'crook 'girth 'pieces 'crown 'levels 'ends 'clump 'splay 'leaf 'fruit 'bark]
+ limb-keys ['n 'len 'up 'out 'pieces 'r 'bend 'droop 'along 'cone 'head 'twigs 'leaves]
+ leaf-keys ['kind 'len 'pairs 'leaflet 'wide 'arch 'tip 'bow 'colour 'every 'grow]
+ ; ..a species: a preset, or a tablet, {'like PRESET ..} changing one, its own keys over its;
+ ; no leaf none, and no fruit unless it says
+ (species q) (: u "(plant [x y z] seed SPECIES)"
+   (over t ks w) (? (!(tablet? t)) (no u t) (: _ (each (keys t) (k \ elem k ks ? 0 (no (u + ", " + w + " takes " + show ks) k))) t))
+   (like q n) (? (n > 4) (no u q)
+                 (nom? q) (tablet? (plants q) ? (like (plants q) (n + 1)) (no (u + ", a SPECIES of " + show (sort (keys plants))) q))
+                 (: t (over q plant-keys "a plant")
+                    (t 'like @ () t l (: b (like l (n + 1)) (foldl (\ a k (pin a k (t k))) (foldl (\ a k (pin a k (b k))) {} (keys b)) (filter (k \ k != 'like) (keys t)))))))
+   sp (like q 0) lf (peep sp 'leaf {} @ () {'kind 'none} l (over l leaf-keys "a leaf"))
+   _ (each (peep sp 'levels ()) (l \ over l limb-keys "a level"))
+   _ (elem (peep lf 'kind 'pinnate) ['pinnate 'frond 'simple 'needle 'blade 'none] ? 0 (no (u + ", a leaf's 'kind 'pinnate 'frond 'simple 'needle 'blade") (lf 'kind)))
+   (pins sp 'leaf lf 'fruit (peep sp 'fruit {'odds 0.0})))
+ (plant at seed q) (: u "(plant [x y z] seed SPECIES)" p (P at u)
+   (? (!(charm? seed && 0 <= seed < 1000000)) (no u seed)
+      (: sp (species q) bk (peep sp 'bark {})
+         (part 'tree [['at p] ['seed seed] ['tex (texture? bk ? bk (nom? bk ? (material bk 1 {}) (material 'bark 1 bk)))] ['species sp]]))))
  (feel k t) (: u "(feel 'soft TEXTURE)"
    (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
@@ -973,7 +1035,9 @@
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1) (peep d 'hand 0) (d 'glass @ () () g (tname g))])) (of 'door))
        'darks (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'dark 0) (of 'room)))
        'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'vine (peep m 'vine 0) 'xf (peep m 'xf xf-id) 'size (m 'size)
-                          'burnt (peep m 'burnt 0) 'cuts (m 'cuts) 'hole (peep m 'hole 0)}) (of 'tree))
+                          'burnt (peep m 'burnt 0) 'cuts (m 'cuts) 'hole (peep m 'hole 0)}
+                         @ t (tablet? (m 'species) ? (pin t 'species (m 'species)) t))
+                   (of 'tree))
        'cars (map (c \ (: a (c 'door 'at) {'lo (lo2 (c 'lo) (c 'hi)) 'hi (hi2 (c 'lo) (c 'hi))
                                            'door [(a 0) (a 2) (c 'door 'w) (c 'door 'h) (a 1)] 'leave (c 'leave)})) (of 'car))
        'strips (map (s \ (: a (s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'across (s 'across) 'troffer (peep s 'troffer 0) 'unlit (peep s 'unlit 0) 'how (s 'how) 'src (s 'src) 'xf (peep s 'xf xf-id)})) (of 'strip))
