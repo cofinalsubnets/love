@@ -1584,6 +1584,8 @@
                     (go l 0 ()))
        ; a .set symbol reads as its value, a .req name as its register (vt and rt the names that apply)
        (ssub s) (rsub s sv rq)
+       ; a directive naming symbols names them, never their values
+       gf-symd [".globl" ".global" ".weak" ".local" ".hidden" ".protected" ".internal"]
        (rsub s vt rt) (: n #s                     ; the pieces laid once, a line being any length
                       (go i st acc) (? (i >= n) (cats (rev (snip s st n . acc)))
                                        (gidc? (s i) && (i = 0 || !(gidc? (s (i - 1)))))
@@ -1612,7 +1614,7 @@
                                   (0 < j && j < #t && t j = 58 ? (go (xa-trim (snip t (j + 1) #t)) ((snip t 0 j) . ns)) [ns t]))
                      (go (xa-trim s) ()))
        ; a data directive's bytes, its items counted at top-level commas
-       gf-dnil [".globl" ".global" ".weak" ".hidden" ".protected" ".local" ".type" ".size" ".set" ".equ"]
+       gf-dnil [".globl" ".global" ".weak" ".hidden" ".protected" ".local" ".type" ".size" ".set" ".equ" ".holoabs"]
        gf-dsz {".inst" 4 ".word" 4 ".long" 4 ".4byte" 4 ".quad" 8 ".8byte" 8 ".xword" 8 ".hword" 2 ".short" 2 ".2byte" 2 ".byte" 1}
        (lsize r) (? (r = "") 0 (tgt != 'a64) ()
                     (r 0 = 46) (dname r @ d (peep gf-dsz d () @ z
@@ -1798,10 +1800,14 @@
                  ; labels then a macro call, or a directive read here: the labels where its lines lay
                  (lsplit t @ (ns u) (two? ns && (two? (mac (xa-mnem u)) || elem (dname u) xdirs)))
                   (lsplit t @ (ns u) (go (u . >l) ((map (n \ n + ":") ns) + acc)))
-                 (go >l (ssub s . acc)))))
+                 (go >l ((elem (dname s) gf-symd ? s (ssub s)) . acc)))))
        out (rev (go ls ()))
+       ; each constant a .globl names rides on as `.holoabs name, v`, its last value past the
+       ; substitution: one never labelled is an absolute symbol
+       gnm (catmap (l \ elem (dname l) [".globl" ".global"] ? (map xa-unquote (xa-oplist (xa-rest (xa-trim l)))) ()) out)
+       habs (map (k \ ".holoabs " + k + ", " + show (sv k)) (sort (filter (k \ charm? (sv k) && elem k gnm) (keys sv))))
        ; a use before its .set reads the value it is first set to, as llvm-mc reads it
-       (atom? (keys sv0) ? out (map (s \ rsub s sv0 {}) out)))
+       ((atom? (keys sv0) ? out (map (s \ elem (dname s) gf-symd ? s (rsub s sv0 {})) out)) + habs))
    ; .base64's text -> its bytes: six bits a character accumulate, a byte out per eight; padding
    ; and anything else outside the alphabet carries no bits
    (gf-b64v c) (? (65 <= c <= 90) (c - 65) (97 <= c <= 122) (c - 71) (48 <= c <= 57) (c + 4)
@@ -1890,6 +1896,8 @@
                        pin st 'cur c, pin lits nm ())
               0))
        (num e) (gimm (gtoks e))
+       ; an align's fill byte, when one is named (.balign 4,,3 names none)
+       (gf-fill xs) (two? >xs && 0 < #(xa-trim <>xs) ? [(num <>xs & 255)] ())
        ; .org label+k (or k from the section's start): zeros up to it, over data laid since
        (org e)
         (gtoks e @ ts
@@ -2005,9 +2013,10 @@
                    raw (map (i \ 0) ^sz),
                    pins st 'cur c 'prev pv,
                    mn = ".comm" && !(elem nm (peep st 'local ())) ? (pin st 'globl (nm . st 'globl)) 0))
-              (mn = ".balign") (emit [['align (num <xs)]])
-              (mn = ".p2align") (emit [['align (1 << num <xs)]])
-              (mn = ".align") (emit [['align (gx86? tgt ? (num <xs) (1 << num <xs))]])   ; bytes on x86, a power elsewhere
+              ; a fill named (.balign 16, 0x90) is laid as asked, not as nops
+              (mn = ".balign") (emit [(['align (num <xs)] + gf-fill xs)])
+              (mn = ".p2align") (emit [(['align (1 << num <xs)] + gf-fill xs)])
+              (mn = ".align") (emit [(['align (gx86? tgt ? (num <xs) (1 << num <xs))] + gf-fill xs)])   ; bytes on x86, a power elsewhere
               (elem mn '(".section" ".pushsection"))
                (gf-sect xs @ d
                   (mn = ".pushsection" ? (pin st 'stk ([(st 'cur) (st 'prev)] . (st 'stk))) 0,
@@ -2026,11 +2035,15 @@
               (mn = ".size")
                (two? >xs && cats (split " " (xa-trim <>xs)) = ".-" + xa-unquote <xs ?
                   (emit [['label (fn-end (xa-unquote <xs))]]) 0)
-              ; .type f, @function: f's type label; stt_notype for a label no .type names
+              ; .type f, @function: f's type label, and @object an object's; stt_notype for a label no .type names
               (mn = ".type")
                (filter (w \ 0 < #w) (map xa-trim (catmap (f \ xa-split f 32) (xa-split rest 44))) @ ws
-                  (two? >ws && elem (ws 1) '("@function" "%function" "STT_FUNC" "\"function\"" "@gnu_indirect_function") ?
-                     (emit [['label (fn-type (xa-unquote <ws))]]) 0))
+                  (? (two? >ws && elem (ws 1) '("@function" "%function" "STT_FUNC" "\"function\"" "@gnu_indirect_function"))
+                      (emit [['label (fn-type (xa-unquote <ws))]])
+                     (two? >ws && elem (ws 1) '("@object" "%object" "STT_OBJECT" "\"object\""))
+                      (emit [['label (fn-obj (xa-unquote <ws))]])
+                     0))
+              (mn = ".holoabs") (pin st 'abs ([(xa-unquote <xs) (num <>xs)] . peep st 'abs ()))
               ; what a static link never reads: visibility, unwind rows
               (elem mn '(".hidden" ".protected" ".internal" ".file" ".ident" ".thumb_func") || starts? mn ".cfi_") 0
               ; gas takes every undefined name as external already
@@ -2197,11 +2210,15 @@
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
+       ; a .globl constant never labelled: an absolute symbol, (name value)
+       habs (filter (p \ elem <p (st 'globl) && !(string? (labs <p))) (rev (peep st 'abs ())))
        ; a section the text named stays though empty: a linker script may lay it
-       ; the aliases onto names this text never labels ride a fifth element, only when there are any
+       ; the aliases onto names this text never labels ride a fifth element, and the absolute
+       ; symbols a sixth, only when there are any
        ([(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
          (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))]
-        + (peep st 'xal () @ x (two? x ? [(rev x)] ()))))
+        + (peep st 'xal () @ x (two? x || two? habs ? [(rev x)] ()))
+        + (two? habs ? [habs] ())))
 
    ;; text -> IR, by target
    (gas-text tgt src)
