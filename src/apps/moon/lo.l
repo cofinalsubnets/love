@@ -646,9 +646,9 @@
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
           _ (lox g env fh @
-               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys 1 () as [['callr r]] [r fs])
-               [['ptr ['fn rt ptys 'ms]] r fs] (locall1 g env rt ptys () 1 as [['callr r]] [r fs])
-               [['ptr ['fn rt]] r fs] (locall1 g env rt () 1 () as [['callr r]] [r fs])
+               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys 1 () as (locr g r) [r fs])
+               [['ptr ['fn rt ptys 'ms]] r fs] (locall1 g env rt ptys () 1 as (locr g r) [r fs])
+               [['ptr ['fn rt]] r fs] (locall1 g env rt () 1 () as (locr g r) [r fs])
                'bad 'bad
                (ty . _) (lono g ['callee ty])))
    ; a snippet over r0..r3 renamed onto fresh vregs, r0 the operand in and the answer out
@@ -861,6 +861,8 @@
                      map (p \ lomv <p <>p) rg + al +
                      [('(cuse) + rs + (two? al ? '(r0)) + (fv @ [fr _] [fr] ()))] + cl +
                      res + (blk = 0 ? () [['add 'sp 'sp blk]]))]))))
+   ; an indirect call through the old path's park, the one register its sibcall jumps by
+   (locr g r) [['mov (pkr g) r] ['callr (pkr g)]]
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
    (loagg? g ty) (stru? ty && 0 < tsz g ty && asalign g ty <= 8)
    ; the args to their registers in order, each file its own count; an aggregate's eightbytes take
