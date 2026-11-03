@@ -216,8 +216,9 @@
    ; nm: VALUE type NAME over link.l's ld-syms. the letter is ELF's facts: U undefined,
    ; a absolute, C common, W/w weak (V/v a weak object), else section flags pick
    ; b/t/d/r, a non-alloc section N for debug or n, lowercase for a local bind. sorted by
-   ; byte, `LC_ALL=C nm`'s order; -n by value, undefined first; -S adds the size. a64's
-   ; $x/$d mapping symbols are not shown. an archive is not walked (that is `ar t`'s)
+   ; byte, a name's twins by size then value as llvm-nm has them; -n by value, undefined
+   ; first; -S adds the size. a64's $x/$d mapping symbols are not shown. an archive is
+   ; not walked (that is `ar t`'s)
    (nm-sp w) (w < 1 ? "" (nm-sp (w - 1) + " "))
    (nm-hex v w) (: dg "0123456789abcdef"
                    (go k a) (k < 0 ? a (go (k - 1) (a + string (dg (v // k 16 % 16)))))
@@ -239,11 +240,13 @@
        b <>r
        w (b 4 = 2 ? 16 8)
        a64 (b 18 = 183 && b 19 = 0)
+       arm (b 18 = 40 && b 19 = 0)         ; a thumb function's value less its mode bit, as llvm-nm
        ; a section or file symbol names no value of the program's -- nm shows
        ; neither, and an empty name is the null-ish filler a section symbol leaves
        all (filter (sy \ (? !#<sy () (elem (sy 2) '(3 4)) ()
                             (a64 && <sy 0 = 36 && #<sy > 1 && (<sy 1 = 100 || <sy 1 = 120)) () 1))
-                   (ld-syms p b))
+                   (map (sy \ (arm && sy 2 = 2 && 0 < sy 4 & 1 ? [<sy (sy 1) (sy 2) (sy 3) (sy 4 - 1) (sy 5) (sy 6)] sy))
+                        (ld-syms p b)))
        ; "no symbols" is the file's fact, asked before the flags narrow: a -u that
        ; comes back empty says the lanes are all ours, which is an answer, not a lack
        _ (two? all ? () (say err ("nm: " + p + ": no symbols"), put err 10, 1))
@@ -251,7 +254,7 @@
        (def? sy) (? (sy 3 = 0) 0 1)
        ord (? num (map (k \ k 4) (sort (map (sy \ [(def? sy) (sy 4) <sy (sy 5) sy]) keep)))
               srt keep
-              (sortby (\ a b (<a <= <b)) keep))
+              (map (k \ k 3) (sort (map (sy \ [<sy (sy 5) (sy 4) sy]) keep))))
        (wide ? (puts ("\n" + p + ":\n"), 0) 0,
         ; foldl is the printing walk: it answers the accumulator, so nothing is built
         foldl (\ _ sy (puts ((sy 3 = 0 ? (nm-sp w) (nm-hex (sy 4) w))
@@ -650,25 +653,183 @@
                                             + ndx (y 3) + " " + nm + "\n"))))
                           ^n)))
             (filter (sc \ (sc 2 = 2 || sc 2 = 11)) ss)))
+   ; relocation type names by e_machine, llvm's own (llvm/BinaryFormat/ELFRelocs), the prefix apart
+   re-rtypes
+    {62 ["R_X86_64_" {0 "NONE" 1 "64" 2 "PC32" 3 "GOT32" 4 "PLT32" 5 "COPY" 6 "GLOB_DAT" 7 "JUMP_SLOT"
+        8 "RELATIVE" 9 "GOTPCREL" 10 "32" 11 "32S" 12 "16" 13 "PC16" 14 "8" 15 "PC8" 16 "DTPMOD64"
+        17 "DTPOFF64" 18 "TPOFF64" 19 "TLSGD" 20 "TLSLD" 21 "DTPOFF32" 22 "GOTTPOFF" 23 "TPOFF32"
+        24 "PC64" 25 "GOTOFF64" 26 "GOTPC32" 27 "GOT64" 28 "GOTPCREL64" 29 "GOTPC64" 30 "GOTPLT64"
+        31 "PLTOFF64" 32 "SIZE32" 33 "SIZE64" 34 "GOTPC32_TLSDESC" 35 "TLSDESC_CALL" 36 "TLSDESC"
+        37 "IRELATIVE" 41 "GOTPCRELX" 42 "REX_GOTPCRELX" 43 "CODE_4_GOTPCRELX" 44 "CODE_4_GOTTPOFF"
+        45 "CODE_4_GOTPC32_TLSDESC" 50 "CODE_6_GOTTPOFF"}]
+     3 ["R_386_" {0 "NONE" 1 "32" 2 "PC32" 3 "GOT32" 4 "PLT32" 5 "COPY" 6 "GLOB_DAT" 7 "JUMP_SLOT"
+        8 "RELATIVE" 9 "GOTOFF" 10 "GOTPC" 11 "32PLT" 14 "TLS_TPOFF" 15 "TLS_IE" 16 "TLS_GOTIE"
+        17 "TLS_LE" 18 "TLS_GD" 19 "TLS_LDM" 20 "16" 21 "PC16" 22 "8" 23 "PC8" 24 "TLS_GD_32"
+        25 "TLS_GD_PUSH" 26 "TLS_GD_CALL" 27 "TLS_GD_POP" 28 "TLS_LDM_32" 29 "TLS_LDM_PUSH"
+        30 "TLS_LDM_CALL" 31 "TLS_LDM_POP" 32 "TLS_LDO_32" 33 "TLS_IE_32" 34 "TLS_LE_32"
+        35 "TLS_DTPMOD32" 36 "TLS_DTPOFF32" 37 "TLS_TPOFF32" 39 "TLS_GOTDESC" 40 "TLS_DESC_CALL"
+        41 "TLS_DESC" 42 "IRELATIVE" 43 "GOT32X"}]
+     183 ["R_AARCH64_" {0 "NONE" 1 "P32_ABS32" 2 "P32_ABS16" 3 "P32_PREL32" 4 "P32_PREL16"
+        5 "P32_MOVW_UABS_G0" 6 "P32_MOVW_UABS_G0_NC" 7 "P32_MOVW_UABS_G1" 8 "P32_MOVW_SABS_G0"
+        9 "P32_LD_PREL_LO19" 10 "P32_ADR_PREL_LO21" 11 "P32_ADR_PREL_PG_HI21" 12 "P32_ADD_ABS_LO12_NC"
+        13 "P32_LDST8_ABS_LO12_NC" 14 "P32_LDST16_ABS_LO12_NC" 15 "P32_LDST32_ABS_LO12_NC"
+        16 "P32_LDST64_ABS_LO12_NC" 17 "P32_LDST128_ABS_LO12_NC" 18 "P32_TSTBR14" 19 "P32_CONDBR19"
+        20 "P32_JUMP26" 21 "P32_CALL26" 22 "P32_MOVW_PREL_G0" 23 "P32_MOVW_PREL_G0_NC"
+        24 "P32_MOVW_PREL_G1" 25 "P32_GOT_LD_PREL19" 26 "P32_ADR_GOT_PAGE" 27 "P32_LD32_GOT_LO12_NC"
+        28 "P32_LD32_GOTPAGE_LO14" 29 "P32_PLT32" 80 "P32_TLSGD_ADR_PREL21" 81 "P32_TLSGD_ADR_PAGE21"
+        82 "P32_TLSGD_ADD_LO12_NC" 83 "P32_TLSLD_ADR_PREL21" 84 "P32_TLSLD_ADR_PAGE21"
+        85 "P32_TLSLD_ADD_LO12_NC" 86 "P32_TLSLD_LD_PREL19" 87 "P32_TLSLD_MOVW_DTPREL_G1"
+        88 "P32_TLSLD_MOVW_DTPREL_G0" 89 "P32_TLSLD_MOVW_DTPREL_G0_NC" 90 "P32_TLSLD_ADD_DTPREL_HI12"
+        91 "P32_TLSLD_ADD_DTPREL_LO12" 92 "P32_TLSLD_ADD_DTPREL_LO12_NC"
+        93 "P32_TLSLD_LDST8_DTPREL_LO12" 94 "P32_TLSLD_LDST8_DTPREL_LO12_NC"
+        95 "P32_TLSLD_LDST16_DTPREL_LO12" 96 "P32_TLSLD_LDST16_DTPREL_LO12_NC"
+        97 "P32_TLSLD_LDST32_DTPREL_LO12" 98 "P32_TLSLD_LDST32_DTPREL_LO12_NC"
+        99 "P32_TLSLD_LDST64_DTPREL_LO12" 100 "P32_TLSLD_LDST64_DTPREL_LO12_NC"
+        101 "P32_TLSLD_LDST128_DTPREL_LO12" 102 "P32_TLSLD_LDST128_DTPREL_LO12_NC"
+        103 "P32_TLSIE_ADR_GOTTPREL_PAGE21" 104 "P32_TLSIE_LD32_GOTTPREL_LO12_NC"
+        105 "P32_TLSIE_LD_GOTTPREL_PREL19" 106 "P32_TLSLE_MOVW_TPREL_G1" 107 "P32_TLSLE_MOVW_TPREL_G0"
+        108 "P32_TLSLE_MOVW_TPREL_G0_NC" 109 "P32_TLSLE_ADD_TPREL_HI12" 110 "P32_TLSLE_ADD_TPREL_LO12"
+        111 "P32_TLSLE_ADD_TPREL_LO12_NC" 112 "P32_TLSLE_LDST8_TPREL_LO12"
+        113 "P32_TLSLE_LDST8_TPREL_LO12_NC" 114 "P32_TLSLE_LDST16_TPREL_LO12"
+        115 "P32_TLSLE_LDST16_TPREL_LO12_NC" 116 "P32_TLSLE_LDST32_TPREL_LO12"
+        117 "P32_TLSLE_LDST32_TPREL_LO12_NC" 118 "P32_TLSLE_LDST64_TPREL_LO12"
+        119 "P32_TLSLE_LDST64_TPREL_LO12_NC" 120 "P32_TLSLE_LDST128_TPREL_LO12"
+        121 "P32_TLSLE_LDST128_TPREL_LO12_NC" 122 "P32_TLSDESC_LD_PREL19" 123 "P32_TLSDESC_ADR_PREL21"
+        124 "P32_TLSDESC_ADR_PAGE21" 125 "P32_TLSDESC_LD32_LO12" 126 "P32_TLSDESC_ADD_LO12"
+        127 "P32_TLSDESC_CALL" 180 "P32_COPY" 181 "P32_GLOB_DAT" 182 "P32_JUMP_SLOT" 183 "P32_RELATIVE"
+        184 "P32_TLS_DTPREL" 185 "P32_TLS_DTPMOD" 186 "P32_TLS_TPREL" 187 "P32_TLSDESC"
+        188 "P32_IRELATIVE" 257 "ABS64" 258 "ABS32" 259 "ABS16" 260 "PREL64" 261 "PREL32" 262 "PREL16"
+        263 "MOVW_UABS_G0" 264 "MOVW_UABS_G0_NC" 265 "MOVW_UABS_G1" 266 "MOVW_UABS_G1_NC"
+        267 "MOVW_UABS_G2" 268 "MOVW_UABS_G2_NC" 269 "MOVW_UABS_G3" 270 "MOVW_SABS_G0"
+        271 "MOVW_SABS_G1" 272 "MOVW_SABS_G2" 273 "LD_PREL_LO19" 274 "ADR_PREL_LO21"
+        275 "ADR_PREL_PG_HI21" 276 "ADR_PREL_PG_HI21_NC" 277 "ADD_ABS_LO12_NC" 278 "LDST8_ABS_LO12_NC"
+        279 "TSTBR14" 280 "CONDBR19" 282 "JUMP26" 283 "CALL26" 284 "LDST16_ABS_LO12_NC"
+        285 "LDST32_ABS_LO12_NC" 286 "LDST64_ABS_LO12_NC" 287 "MOVW_PREL_G0" 288 "MOVW_PREL_G0_NC"
+        289 "MOVW_PREL_G1" 290 "MOVW_PREL_G1_NC" 291 "MOVW_PREL_G2" 292 "MOVW_PREL_G2_NC"
+        293 "MOVW_PREL_G3" 299 "LDST128_ABS_LO12_NC" 300 "MOVW_GOTOFF_G0" 301 "MOVW_GOTOFF_G0_NC"
+        302 "MOVW_GOTOFF_G1" 303 "MOVW_GOTOFF_G1_NC" 304 "MOVW_GOTOFF_G2" 305 "MOVW_GOTOFF_G2_NC"
+        306 "MOVW_GOTOFF_G3" 307 "GOTREL64" 308 "GOTREL32" 309 "GOT_LD_PREL19" 310 "LD64_GOTOFF_LO15"
+        311 "ADR_GOT_PAGE" 312 "LD64_GOT_LO12_NC" 313 "LD64_GOTPAGE_LO15" 314 "PLT32" 315 "GOTPCREL32"
+        316 "PATCHINST" 317 "FUNCINIT64" 512 "TLSGD_ADR_PREL21" 513 "TLSGD_ADR_PAGE21"
+        514 "TLSGD_ADD_LO12_NC" 515 "TLSGD_MOVW_G1" 516 "TLSGD_MOVW_G0_NC" 517 "TLSLD_ADR_PREL21"
+        518 "TLSLD_ADR_PAGE21" 519 "TLSLD_ADD_LO12_NC" 520 "TLSLD_MOVW_G1" 521 "TLSLD_MOVW_G0_NC"
+        522 "TLSLD_LD_PREL19" 523 "TLSLD_MOVW_DTPREL_G2" 524 "TLSLD_MOVW_DTPREL_G1"
+        525 "TLSLD_MOVW_DTPREL_G1_NC" 526 "TLSLD_MOVW_DTPREL_G0" 527 "TLSLD_MOVW_DTPREL_G0_NC"
+        528 "TLSLD_ADD_DTPREL_HI12" 529 "TLSLD_ADD_DTPREL_LO12" 530 "TLSLD_ADD_DTPREL_LO12_NC"
+        531 "TLSLD_LDST8_DTPREL_LO12" 532 "TLSLD_LDST8_DTPREL_LO12_NC" 533 "TLSLD_LDST16_DTPREL_LO12"
+        534 "TLSLD_LDST16_DTPREL_LO12_NC" 535 "TLSLD_LDST32_DTPREL_LO12"
+        536 "TLSLD_LDST32_DTPREL_LO12_NC" 537 "TLSLD_LDST64_DTPREL_LO12"
+        538 "TLSLD_LDST64_DTPREL_LO12_NC" 539 "TLSIE_MOVW_GOTTPREL_G1" 540 "TLSIE_MOVW_GOTTPREL_G0_NC"
+        541 "TLSIE_ADR_GOTTPREL_PAGE21" 542 "TLSIE_LD64_GOTTPREL_LO12_NC" 543 "TLSIE_LD_GOTTPREL_PREL19"
+        544 "TLSLE_MOVW_TPREL_G2" 545 "TLSLE_MOVW_TPREL_G1" 546 "TLSLE_MOVW_TPREL_G1_NC"
+        547 "TLSLE_MOVW_TPREL_G0" 548 "TLSLE_MOVW_TPREL_G0_NC" 549 "TLSLE_ADD_TPREL_HI12"
+        550 "TLSLE_ADD_TPREL_LO12" 551 "TLSLE_ADD_TPREL_LO12_NC" 552 "TLSLE_LDST8_TPREL_LO12"
+        553 "TLSLE_LDST8_TPREL_LO12_NC" 554 "TLSLE_LDST16_TPREL_LO12" 555 "TLSLE_LDST16_TPREL_LO12_NC"
+        556 "TLSLE_LDST32_TPREL_LO12" 557 "TLSLE_LDST32_TPREL_LO12_NC" 558 "TLSLE_LDST64_TPREL_LO12"
+        559 "TLSLE_LDST64_TPREL_LO12_NC" 560 "TLSDESC_LD_PREL19" 561 "TLSDESC_ADR_PREL21"
+        562 "TLSDESC_ADR_PAGE21" 563 "TLSDESC_LD64_LO12" 564 "TLSDESC_ADD_LO12" 565 "TLSDESC_OFF_G1"
+        566 "TLSDESC_OFF_G0_NC" 567 "TLSDESC_LDR" 568 "TLSDESC_ADD" 569 "TLSDESC_CALL"
+        570 "TLSLE_LDST128_TPREL_LO12" 571 "TLSLE_LDST128_TPREL_LO12_NC" 572 "TLSLD_LDST128_DTPREL_LO12"
+        573 "TLSLD_LDST128_DTPREL_LO12_NC" 580 "AUTH_ABS64" 581 "AUTH_MOVW_GOTOFF_G0"
+        582 "AUTH_MOVW_GOTOFF_G0_NC" 583 "AUTH_MOVW_GOTOFF_G1" 584 "AUTH_MOVW_GOTOFF_G1_NC"
+        585 "AUTH_MOVW_GOTOFF_G2" 586 "AUTH_MOVW_GOTOFF_G2_NC" 587 "AUTH_MOVW_GOTOFF_G3"
+        588 "AUTH_GOT_LD_PREL19" 589 "AUTH_LD64_GOTOFF_LO15" 590 "AUTH_ADR_GOT_PAGE"
+        591 "AUTH_LD64_GOT_LO12_NC" 592 "AUTH_LD64_GOTPAGE_LO15" 593 "AUTH_GOT_ADD_LO12_NC"
+        594 "AUTH_GOT_ADR_PREL_LO21" 595 "AUTH_TLSDESC_ADR_PAGE21" 596 "AUTH_TLSDESC_LD64_LO12"
+        597 "AUTH_TLSDESC_ADD_LO12" 1024 "COPY" 1025 "GLOB_DAT" 1026 "JUMP_SLOT" 1027 "RELATIVE"
+        1028 "TLS_DTPMOD64" 1029 "TLS_DTPREL64" 1030 "TLS_TPREL64" 1031 "TLSDESC" 1032 "IRELATIVE"
+        1041 "AUTH_RELATIVE" 1042 "AUTH_GLOB_DAT" 1043 "AUTH_TLSDESC" 1044 "AUTH_IRELATIVE"}]
+     40 ["R_ARM_" {0 "NONE" 1 "PC24" 2 "ABS32" 3 "REL32" 4 "LDR_PC_G0" 5 "ABS16" 6 "ABS12" 7 "THM_ABS5"
+        8 "ABS8" 9 "SBREL32" 10 "THM_CALL" 11 "THM_PC8" 12 "BREL_ADJ" 13 "TLS_DESC" 14 "THM_SWI8"
+        15 "XPC25" 16 "THM_XPC22" 17 "TLS_DTPMOD32" 18 "TLS_DTPOFF32" 19 "TLS_TPOFF32" 20 "COPY"
+        21 "GLOB_DAT" 22 "JUMP_SLOT" 23 "RELATIVE" 24 "GOTOFF32" 25 "BASE_PREL" 26 "GOT_BREL" 27 "PLT32"
+        28 "CALL" 29 "JUMP24" 30 "THM_JUMP24" 31 "BASE_ABS" 32 "ALU_PCREL_7_0" 33 "ALU_PCREL_15_8"
+        34 "ALU_PCREL_23_15" 35 "LDR_SBREL_11_0_NC" 36 "ALU_SBREL_19_12_NC" 37 "ALU_SBREL_27_20_CK"
+        38 "TARGET1" 39 "SBREL31" 40 "V4BX" 41 "TARGET2" 42 "PREL31" 43 "MOVW_ABS_NC" 44 "MOVT_ABS"
+        45 "MOVW_PREL_NC" 46 "MOVT_PREL" 47 "THM_MOVW_ABS_NC" 48 "THM_MOVT_ABS" 49 "THM_MOVW_PREL_NC"
+        50 "THM_MOVT_PREL" 51 "THM_JUMP19" 52 "THM_JUMP6" 53 "THM_ALU_PREL_11_0" 54 "THM_PC12"
+        55 "ABS32_NOI" 56 "REL32_NOI" 57 "ALU_PC_G0_NC" 58 "ALU_PC_G0" 59 "ALU_PC_G1_NC" 60 "ALU_PC_G1"
+        61 "ALU_PC_G2" 62 "LDR_PC_G1" 63 "LDR_PC_G2" 64 "LDRS_PC_G0" 65 "LDRS_PC_G1" 66 "LDRS_PC_G2"
+        67 "LDC_PC_G0" 68 "LDC_PC_G1" 69 "LDC_PC_G2" 70 "ALU_SB_G0_NC" 71 "ALU_SB_G0" 72 "ALU_SB_G1_NC"
+        73 "ALU_SB_G1" 74 "ALU_SB_G2" 75 "LDR_SB_G0" 76 "LDR_SB_G1" 77 "LDR_SB_G2" 78 "LDRS_SB_G0"
+        79 "LDRS_SB_G1" 80 "LDRS_SB_G2" 81 "LDC_SB_G0" 82 "LDC_SB_G1" 83 "LDC_SB_G2" 84 "MOVW_BREL_NC"
+        85 "MOVT_BREL" 86 "MOVW_BREL" 87 "THM_MOVW_BREL_NC" 88 "THM_MOVT_BREL" 89 "THM_MOVW_BREL"
+        90 "TLS_GOTDESC" 91 "TLS_CALL" 92 "TLS_DESCSEQ" 93 "THM_TLS_CALL" 94 "PLT32_ABS" 95 "GOT_ABS"
+        96 "GOT_PREL" 97 "GOT_BREL12" 98 "GOTOFF12" 99 "GOTRELAX" 100 "GNU_VTENTRY" 101 "GNU_VTINHERIT"
+        102 "THM_JUMP11" 103 "THM_JUMP8" 104 "TLS_GD32" 105 "TLS_LDM32" 106 "TLS_LDO32" 107 "TLS_IE32"
+        108 "TLS_LE32" 109 "TLS_LDO12" 110 "TLS_LE12" 111 "TLS_IE12GP" 112 "PRIVATE_0" 113 "PRIVATE_1"
+        114 "PRIVATE_2" 115 "PRIVATE_3" 116 "PRIVATE_4" 117 "PRIVATE_5" 118 "PRIVATE_6" 119 "PRIVATE_7"
+        120 "PRIVATE_8" 121 "PRIVATE_9" 122 "PRIVATE_10" 123 "PRIVATE_11" 124 "PRIVATE_12"
+        125 "PRIVATE_13" 126 "PRIVATE_14" 127 "PRIVATE_15" 128 "ME_TOO" 129 "THM_TLS_DESCSEQ16"
+        130 "THM_TLS_DESCSEQ32" 132 "THM_ALU_ABS_G0_NC" 133 "THM_ALU_ABS_G1_NC" 134 "THM_ALU_ABS_G2_NC"
+        135 "THM_ALU_ABS_G3" 136 "THM_BF16" 137 "THM_BF12" 138 "THM_BF18" 160 "IRELATIVE"
+        161 "GOTFUNCDESC" 162 "GOTOFFFUNCDESC" 163 "FUNCDESC" 164 "FUNCDESC_VALUE" 165 "TLS_GD32_FDPIC"
+        166 "TLS_LDM32_FDPIC" 167 "TLS_IE32_FDPIC"}]
+     243 ["R_RISCV_" {0 "NONE" 1 "32" 2 "64" 3 "RELATIVE" 4 "COPY" 5 "JUMP_SLOT" 6 "TLS_DTPMOD32"
+        7 "TLS_DTPMOD64" 8 "TLS_DTPREL32" 9 "TLS_DTPREL64" 10 "TLS_TPREL32" 11 "TLS_TPREL64"
+        12 "TLSDESC" 16 "BRANCH" 17 "JAL" 18 "CALL" 19 "CALL_PLT" 20 "GOT_HI20" 21 "TLS_GOT_HI20"
+        22 "TLS_GD_HI20" 23 "PCREL_HI20" 24 "PCREL_LO12_I" 25 "PCREL_LO12_S" 26 "HI20" 27 "LO12_I"
+        28 "LO12_S" 29 "TPREL_HI20" 30 "TPREL_LO12_I" 31 "TPREL_LO12_S" 32 "TPREL_ADD" 33 "ADD8"
+        34 "ADD16" 35 "ADD32" 36 "ADD64" 37 "SUB8" 38 "SUB16" 39 "SUB32" 40 "SUB64" 41 "GOT32_PCREL"
+        43 "ALIGN" 44 "RVC_BRANCH" 45 "RVC_JUMP" 51 "RELAX" 52 "SUB6" 53 "SET6" 54 "SET8" 55 "SET16"
+        56 "SET32" 57 "32_PCREL" 58 "IRELATIVE" 59 "PLT32" 60 "SET_ULEB128" 61 "SUB_ULEB128"
+        62 "TLSDESC_HI20" 63 "TLSDESC_LOAD_LO12" 64 "TLSDESC_ADD_LO12" 65 "TLSDESC_CALL" 191 "VENDOR"}]}
+   (re-rname m t) (: r (peep re-rtypes m ()) n (two? r ? (peep (r 1) t ()) ())
+                     (string? n ? (<r + n) "Unknown"))
+   ; a relocation table's entries as (offset info type symbol addend), the symbol (value
+   ; name) or () for none, a section symbol named by its section, the addend () in a rel
+   (re-rents b ss sc)
+    (: e64 (b 4 = 2) ra (sc 2 = 4) w (e64 ? 8 4) es (ra ? (3 * w) (2 * w))
+       ys (ss (sc 6)) stro (ss (ys 6) 4) ye (e64 ? 24 16)
+       (sym k) (: h (ys 4 + k * ye) ty (b (h + (e64 ? 4 12)) & 15) x (rdle b (h + (e64 ? 6 14)) 2)
+                  [(rdle b (h + (e64 ? 8 4)) w)
+                   (ty = 3 && x < #ss ? (ss x 1) (ld-cstr b (stro + rdle b h 4)))])
+       (sgn v) (v >= 2 ** (8 * w - 1) ? (v - 2 ** (8 * w)) v)
+       (map (k \ (: h (sc 4 + k * es) inf (rdle b (h + w) w)
+                    y (e64 ? (inf >> 32) (inf >> 8)) t (e64 ? (inf & 0xffffffff) (inf & 255))
+                    [(rdle b h w) inf t (y = 0 ? () (sym y)) (ra ? (sgn (rdle b (h + 2 * w) w)) ())]))
+            ^(sc 5 // es)))
+   (re-pad s c) (s + nm-sp (max 1 (c - #s)))
+   ; -r: each table at llvm-readelf -rW's columns; an addend follows a name signed, else bare
+   (re-rels fs b)
+    (: e64 (b 4 = 2) ss (bu-secs fs b) m (rdle b 18 2) w (e64 ? 16 8)
+       cs (e64 ? [18 35 58 75] [10 19 42 53])
+       rs (filter (sc \ (sc 2 = 4 || sc 2 = 9)) ss)
+       (ad a nm) (? !(charm? a) ""
+                    (0 < #nm) ((a < 0 ? " - " " + ") + radix (a < 0 ? (0 - a) a) 16)
+                    (radix (a < 0 ? (a + 2 ** 64) a) 16))
+       (atom? rs ? (say out "\nThere are no relocations in this file.\n")
+        (each rs (sc \ (: es (re-rents b ss sc)
+                          _ (say out ("\nRelocation section '" + sc 1 + "' at offset " + re-0x (sc 4) + " contains "
+                                      + show #es + " entries:\n"
+                                      + (e64 ? "    Offset             Info             Type               Symbol's Value  Symbol's Name"
+                                               " Offset     Info    Type                Sym. Value  Symbol's Name")
+                                      + (sc 2 = 4 ? " + Addend\n" "\n")))
+                          (each es (r \ (: y (r 3) nm (two? y ? (y 1) "")
+                                           l (re-pad (re-pad (re-pad (re-pad (re-hex <r w) (cs 0) + re-hex (r 1) w) (cs 1)
+                                                                      + re-rname m (r 2)) (cs 2)
+                                                             + (two? y ? (re-hex <y w) "")) (cs 3) + nm)
+                                           (say out (l + ad (r 4) nm + "\n"))))))))))
    (readelf-main as)
     (: (usage m) (udie 1 ("readelf: " + m))
        longs {"--file-header" 104 "--program-headers" 108 "--segments" 108 "--section-headers" 83
-              "--sections" 83 "--headers" 101 "--syms" 115 "--symbols" 115 "--wide" 87}
+              "--sections" 83 "--headers" 101 "--syms" 115 "--symbols" 115 "--wide" 87
+              "--relocs" 114}
        (go a o)
         (atom? a ? o
          (: w <a n #w
             (? (w = "--") (pin o 'fs (o 'fs + >a), o)
                (2 < n && snip w 0 2 = "--")
-                (peep longs w () @ k (charm? k ? (pin o k 1, go >a o) (usage (w + " is not here (-h -l -S -s -e -W)"))))
+                (peep longs w () @ k (charm? k ? (pin o k 1, go >a o) (usage (w + " is not here (-h -l -S -s -r -e -W)"))))
                (1 < n && w 0 = 45)
-                (map (c \ (elem c "hlSseW" ? (pin o c 1) (usage ("-" + string c + " is not here (-h -l -S -s -e -W)"))))
+                (map (c \ (elem c "hlSsreW" ? (pin o c 1) (usage ("-" + string c + " is not here (-h -l -S -s -r -e -W)"))))
                           (map w (drop 1 ^n)), go >a o)
                (pin o 'fs (o 'fs + [w]), go >a o))))
        o (go as {'fs ()})
        e? (peep o 101 0)
-       h? (e? || peep o 104 0) l? (e? || peep o 108 0) S? (e? || peep o 83 0) s? (peep o 115 0) w? (peep o 87 0)
+       h? (e? || peep o 104 0) l? (e? || peep o 108 0) S? (e? || peep o 83 0) s? (peep o 115 0) r? (peep o 114 0) w? (peep o 87 0)
        fs (o 'fs)
-       _ (h? || l? || S? || s? ? 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
+       _ (h? || l? || S? || s? || r? ? 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
        _ (two? fs ? 0 (usage "Warning: Nothing to do.\nUsage: readelf <option(s)> elf-file(s)"))
        (one f)
         (uread f @ r
@@ -681,10 +842,40 @@
                       S? ? (re-secs fs2 b w? h?) 0,
                       l? ? (re-segs fs2 b h? w?) 0,
                       s? ? (re-syms fs2 b w?) 0,
+                      r? ? (re-rels fs2 b) 0,
                       1))))))
        ok (foldl (\ a f (one f ? a 0)) 1 fs)
        (flush out, flush err,
         ok ? 0 1))
+
+   ; objdump: -r alone, llvm-objdump's records, a heading per table naming what it patches
+   ; and none for an empty one
+   (od-fmt b) ((b 4 = 2 ? "elf64-" "elf32-")
+               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" "unknown"))
+   (objdump-main as)
+    (: bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-r" "--reloc"))) as)
+       _ (two? bad ? (udie 1 ("objdump: " + <bad + " is not here (-r)")) 0)
+       fs (filter (w \ !(1 < #w && w 0 = 45)) as)
+       _ ((elem "-r" as || elem "--reloc" as) && two? fs ? 0 (udie 1 "Usage: objdump -r FILE.."))
+       (val y a) ((two? y ? (y 1) "*ABS*")
+                  + (charm? a && !(a = 0) ? ((a < 0 ? "-0x" "+0x") + radix (a < 0 ? (0 - a) a) 16) ""))
+       (one f)
+        (uread f @ rd
+           (atom? rd ? (say err ("objdump: error: '" + f + "': No such file or directory\n"), 1)
+            (<>rd @ b
+               (!(bu-elf? b) ? (say err ("objdump: error: '" + f + "': The file was not recognized as a valid object file\n"), 1)
+                  (: ss (bu-secs (bu-fs b) b) w (b 4 = 2 ? 16 8) m (rdle b 18 2)
+                     rs (filter (sc \ (sc 2 = 4 || sc 2 = 9) && 0 < sc 7 && 0 < sc 5) ss)
+                     _ (say out ("\n" + f + ":\tfile format " + od-fmt b + "\n"))
+                     _ (each rs (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
+                                                + urpad (w + 1) "OFFSET" + urpad 25 "TYPE" + "VALUE\n"),
+                                       each (re-rents b ss sc)
+                                            (r \ say out (re-hex <r w + " " + urpad 24 (re-rname m (r 2)) + " "
+                                                          + val (r 3) (r 4) + "\n")))))
+                     0)))))
+       r (foldl (\ a f (max a (one f))) 0 fs)
+       (flush out, flush err,
+        r))
 
    (ranlib-main as)
     (: fs (filter (w \ !(1 < #w && w 0 = 45)) as)
@@ -710,7 +901,7 @@
             'make (cite 'cook 'cook-main) 'cook (cite 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
-            'size size-main 'strip strip-main 'ranlib ranlib-main 'readelf readelf-main
+            'size size-main 'strip strip-main 'ranlib ranlib-main 'readelf readelf-main 'objdump objdump-main
             'objcopy (cite 'holo 'objcopy)   ; the applet is the function: src/love/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
@@ -891,7 +1082,8 @@
     'fsync "usage: fsync [-d] FILE.."
     'dircolors "usage: dircolors [-b|-c|-p|--print-ls-colors] [FILE]"
     'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
-    'readelf "usage: readelf -h|-l|-S|-s|-e [-W] FILE.."
+    'readelf "usage: readelf -h|-l|-S|-s|-r|-e [-W] FILE.."
+    'objdump "usage: objdump -r FILE.."
     'ls "usage: ls [-aACcdFghiLlnoprRsStux1] [--color[=WHEN]] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"
@@ -1058,7 +1250,7 @@
    ; ..and the ones safe to run in a caller's own process
    koreself ['uname 'basename 'dirname 'readlink 'seq 'ls 'dir 'vdir 'cmp 'diff
              'mkdir 'rmdir 'rm 'ln 'touch 'chmod 'mv 'cp 'install 'objcopy
-             'nm 'ar 'ld 'as 'readelf 'size 'strip 'ranlib
+             'nm 'ar 'ld 'as 'readelf 'objdump 'size 'strip 'ranlib
              'date 'cal 'uptime 'arch 'nproc 'hostname 'tty 'whoami 'id
              'groups 'printenv 'which 'realpath 'expr 'free 'ps 'pwdx
              'logname 'users 'who 'pinky 'hostid 'dnsdomainname 'mountpoint 'pathchk

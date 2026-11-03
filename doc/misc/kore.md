@@ -63,7 +63,7 @@ carried and not baked).
 
 | where | tools |
 | --- | --- |
-| kore.l (thin mains) | readelf (binutils' -h -l -S -s -e, at 80 columns or -W, the dynamic symbols' versions with them), diff (diff-main; the patience/myers engines are diff.l), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both), nm, size (binutils' berkeley sums), strip (the symbol table and debugging out of an exe or shared object; `-g` the debugging alone, which is all an object may lose), ranlib (an archive rewritten with its index) |
+| kore.l (thin mains) | readelf (binutils' -h -l -S -s -e, at 80 columns or -W, the dynamic symbols' versions with them; -r as llvm-readelf lays it), objdump (-r, llvm-objdump's records), diff (diff-main; the patience/myers engines are diff.l), as (elf64 over the holo book), ar (GNU-shape archives + the ranlib index over ld-read, byte-identical smoke), ld (holo's static linker: -pie/-t/-Ttext, byte-identical to mooncc's own link), objcopy (a linked ELF flattened to `-O binary` or `-O ihex`, byte-identical to llvm/gnu objcopy on both; any ELF written again with sections dropped, renamed or flagged and symbols prefixed or dropped, byte-identical to llvm-objcopy), nm (llvm-nm's order), size (binutils' berkeley sums), strip (the symbol table and debugging out of an exe or shared object; `-g` the debugging alone, which is all an object may lose, as llvm-strip writes it), ranlib (an archive rewritten with its index) |
 | src/apps/nc.l | nc |
 | src/apps/cook.l | make / cook |
 | core.l, the line tools | cat tac shuf echo head tail wc sort uniq tee |
@@ -958,9 +958,9 @@ over the packages above; util-linux's column added 2026-09-27.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 207 | 389 | 239 | 191 | 107 | 260 | 136 |
-| shared with kore | | 170 | 142 | 135 | 101 | 50 | 12 |
-| carried by no one else | 12 | 136 | 25 | 48 | 0 | 200 | 75 |
+| names | 208 | 389 | 239 | 191 | 107 | 260 | 136 |
+| shared with kore | | 170 | 142 | 136 | 101 | 50 | 12 |
+| carried by no one else | 12 | 136 | 25 | 47 | 0 | 200 | 75 |
 
 What at least three of the other six carry and kore does not: `blkdiscard`, `blkid`,
 `blockdev`, `chrt`, `dmesg`, `eject`, `fallocate`, `flock`, `fmt`, `fsfreeze`, `hwclock`,
@@ -1142,6 +1142,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `nslookup` | ✓ | ✓ |  |  |  |  |  |
 | `numfmt` |  |  |  | ✓ | ✓ |  |  |
 | `objcopy` | ✓ |  |  | ✓ |  |  |  |
+| `objdump` | ✓ |  |  | ✓ |  |  |  |
 | `od` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `openvt` |  | ✓ | ✓ |  |  |  |  |
 | `partprobe` |  | ✓ | ✓ |  |  |  |  |
@@ -1297,11 +1298,11 @@ The names only one carries:
 * **toybox alone** (25): `acpi` `count` `devmem` `fstype` `getconf` `gpiodetect` `gpiofind`
   `gpioget` `gpioinfo` `gpioset` `help` `host` `iorenice` `iotop` `memeater` `mix` `nbd-server`
   `netcat` `oneit` `pwgen` `sntp` `ucsicontrol` `ulimit` `vmstat` `w`
-* **GNU alone** (48): `addr2line` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3` `dwp`
+* **GNU alone** (47): `addr2line` `bashbug` `c++` `c++filt` `c89` `c99` `cpp` `diff3` `dwp`
   `elfedit` `ftp` `gawkbug` `gcov` `gcov-dump` `gcov-tool` `gp-archive` `gp-collect-app`
   `gp-display-html` `gp-display-src` `gp-display-text` `gprof` `gprofng` `gprofng-archive`
   `gprofng-collect-app` `gprofng-display-html` `gprofng-display-src` `gprofng-display-text`
-  `gprofng-gmon` `gzexe` `m4` `objdump` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff` `talk`
+  `gprofng-gmon` `gzexe` `m4` `rcp` `rlogin` `rlogind` `rsh` `rshd` `sdiff` `talk`
   `talkd` `zcmp` `zdiff` `zegrep` `zfgrep` `zforce` `zgrep` `zless` `zmore` `znew`
 * **uutils alone** (0): none
 * **plan9port alone** (200): `"` `""` `9660srv` `9ar` `9c` `9fs` `9import` `9l` `9p` `9pfuse`
