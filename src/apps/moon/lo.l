@@ -49,6 +49,10 @@
    ; the names whose address the body takes: those live in memory
    (lotaken x acc)
     (x @ ['addr ['var n]] (elem n acc ? acc (n . acc))
+         ; an asm's memory operand takes its name's address
+         ('asm . _ . os . is . _)
+          (foldl (a \ o \ (o @ (c . ['var n] . _) (any (k \ elem (c k) '(109 111)) ^#c && nelem n a ? (n . a) a) _ a))
+                 (foldl (a \ y \ lotaken y a) acc x) (os + is))
          (_ . _) (foldl (a \ y \ lotaken y a) acc x)
          acc)
 
@@ -700,8 +704,7 @@
    (loasm g env s)
     (asmplan g env s @
        'bad (lono g ['asm (g 'nolane)])
-       [_ _ _ _ _ (_ . _) _ _ _ _] (lono g 'asmgoto)
-       [ops asgn kills saves _ _ _ txt neutral? _]
+       [ops asgn kills saves _ labs tls txt neutral? _]
        (: tgt (gtgt g)
           (in? o) (elem <o '(x i b))
           (out? o) (elem <o '(o x f))
@@ -726,12 +729,19 @@
           outs (filter (i \ out? (ops i)) ^#ops)
           lds (map (i \ ld (ops i) (asgn i)) ins)
           sts (map (i \ st (ops i) (asgn i)) outs)
-          body (map (r \ ['push r]) saves + asmfsafe txt (asmbody g tgt neutral? txt) + map (r \ ['pop r]) (rev saves)
+          ; a goto's edges are not unframe's to see
+          ab (asmbody g tgt neutral? txt)
+          body (map (r \ ['push r]) saves + (two? labs ? ab (asmfsafe txt ab)) + map (r \ ['pop r]) (rev saves)
                 + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
           (any bad? lds || any bad? sts ? 'bad
-             (catmap (x \ <x) lds + map (x \ x 1) lds +
-              [['fix (map asgn ins) (map asgn outs + kills) body]] +
-              map (x \ <x) sts + catmap (x \ x 1) sts))))
+             (: post (map (x \ <x) sts + catmap (x \ x 1) sts)
+                fx ['fix (map asgn ins) (map asgn outs + kills) body tls]
+                ; an asm goto with outputs jumps to a trampoline per label that stores them and goes on
+                (catmap (x \ <x) lds + map (x \ x 1) lds +
+                 (tls = labs ? (fx . post)
+                    (nlab g "\(g 'fn).ag" @ done
+                       ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +
+                        [['label done]] + post))))))))
    (lokey g ty cv) (charm? cv ? (cfit g ty cv) 'bad)
    ; a switch as a compare chain: its cases, nested switches aside, each take a label
    (loswitch g env ce body)

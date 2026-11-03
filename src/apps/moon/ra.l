@@ -21,7 +21,7 @@
    ; a form's [reads defs] over the file and the vregs | 'bad
    (raops g f)
     ((f @ ('cuse . rs) [rs ()]
-          ['fix u d _] [u d]
+          ('fix . u . d . _) [u d]
           ('call . _) [() (lvgp g + ragf)]
           ('callr . r . _) [[r] (lvgp g + ragf)]
           ('ret . _) [(peep g 'loret '(r0)) ()]
@@ -130,7 +130,7 @@
               [loc ()]
                (: (sub x) (lovr? x ? (loc x) x)
                   (catmap (f \ (f @ ('cuse . _) ()
-                                    ['fix _ _ fs] fs
+                                    ('fix . _ . _ . fs . _) fs
                                     ([('mov || 'movapd) a b] && sub a = sub b) ()
                                     (_ . _) [(map sub f)]
                                     [f])) fs))

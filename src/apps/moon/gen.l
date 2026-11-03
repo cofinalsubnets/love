@@ -8576,7 +8576,8 @@
     (: k (memk g e)
        ; a block-scope static is its data label
        (stat x) (? !(two? x) x
-                   (<x = 'var) (assoc <>x env @ b (two? b && two? <>b && <<>b = 'glob ? ['var <><>b] x))
+                   (<x = 'var) (assoc <>x env @ (_ . 'g . l . _) ['var l]   ; a lo env's
+                                                b (two? b && two? <>b && <<>b = 'glob ? ['var <><>b] x))
                    (stat <x . stat >x))
        e2 (stat e)
        (local? x) (? !(two? x) ()
