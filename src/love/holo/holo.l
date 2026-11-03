@@ -219,7 +219,9 @@
    ;; -- pass one: lower each form, assign addresses, record labels -> (items . labels).
    ;; items accumulate reversed so a whole-program lay stays linear.
    ;; ('align n) pads with the backend's 'pad, the fewest nops to the exact count, else its nop
-   ;; unit cycled; a cycled pad is never executed, so a torn unit is harmless. --
+   ;; unit cycled; a cycled pad is never executed, so a torn unit is harmless. ('align n b), a fill
+   ;; asked for, repeats the byte b --
+   (pad-ins be addr ins) (two? (drop 2 ins) ? (map (i \ ins 2) ^((ins 1 - addr % ins 1) % ins 1)) (pad-to be addr (ins 1)))
    (pad-to be addr n)
       (: k ((n - addr % n) % n)
          pad (be 'pad)
@@ -253,11 +255,11 @@
             (? (<ins = 'label)
                (pin labels (ins 1) addr, lay >prog be addr items labels)
                (<ins = 'align)
-               (revonto (pad-to be addr (ins 1)) items 0 @ r
+               (revonto (pad-ins be addr ins) items 0 @ r
                   (lay >prog be (addr + <r) >r labels))
-               ; ..and in a section nothing executes, zeros: the pad is data a reader sees
+               ; ..and in a section nothing executes, zeros (or the fill asked for): the pad is data a reader sees
                (<ins = 'dalign)
-               (: r (revonto (map (i \ 0) ^((ins 1 - addr % ins 1) % ins 1)) items 0)
+               (: r (revonto (map (i \ (two? (drop 2 ins) ? (ins 2) 0)) ^((ins 1 - addr % ins 1) % ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
                (: r (revonto (lower-with be (zeroidiom be ins >prog)) items 0)
                   (lay >prog be (addr + <r) >r labels)))))
@@ -296,7 +298,7 @@
                         (pin spots (ins 1) addr, pin eras (ins 1) era,
                          plumb >p addr era ((0 . ()) . acc))
                         (<ins = 'align)
-                        (revonto (pad-to be addr (ins 1)) () 0 @ r
+                        (revonto (pad-ins be addr ins) () 0 @ r
                            (plumb >p (addr + <r) (era + 1) (r . acc)))
                         (: r (revonto (lower-with be (zeroidiom be ins >p)) () 0)
                            (plumb >p (addr + <r) era (r . acc))))))
@@ -316,7 +318,7 @@
                      (? (<ins = 'label)
                         (pin labels (ins 1) fa, stitch >p >cs pa fa era items)
                         (<ins = 'align)
-                        (pad-to be fa (ins 1) @ pad
+                        (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
                         (elem <ins '(jmp br))
@@ -357,7 +359,8 @@
    ;; its type label, anywhere: the symbol is stt_func, not stt_notype (a .S label .type never named)
    (fn-end nm)  (intern ((string? nm ? nm (show nm)) + " end"))
    (fn-type nm) (intern ((string? nm ? nm (show nm)) + " func"))
-   (fn-mark? s) (show s @ t (ends? t " end" || ends? t " func"))
+   (fn-obj nm) (intern ((string? nm ? nm (show nm)) + " object"))
+   (fn-mark? s) (show s @ t (ends? t " end" || ends? t " func" || ends? t " object"))
 
    ;; -- hex, for goldens and disassembly. --
    (hex1 d)  (snip "0123456789abcdef" d (d + 1))

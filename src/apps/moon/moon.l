@@ -477,7 +477,9 @@
                     (objsecs32n tgt (objsec-merge ((objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3)) + xs) <at)
                                 fns gns wks anames)
                     (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                              fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames)))
+                              fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames
+                              ; the asm's data names typed as gas types them, and its absolute symbols
+                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ())])))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
