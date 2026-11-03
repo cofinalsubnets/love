@@ -138,6 +138,9 @@ printf '.set K, 5\n.set .LK, 9\n.text\n.globl f\nf: call ext\n movl $K, %%eax\n'
 moonrun -c "$ho/.set.S" -o "$ho/.set.o" || fail "mooncc: an asm's local constants"
 [ "$(readelf -sW "$ho/.set.o" | awk '$8 == "K" || $8 == ".LK" {print $8, $2, $5, $7}')" = "K 0000000000000005 LOCAL ABS" ] || fail "a local .set constant is not a local absolute symbol, or a .L one is"
 [ "$(readelf -rW "$ho/.set.o" | awk '/R_X86/ {print $5}')" = "ext" ] || fail "a local absolute symbol moved a global's index"
+printf ' andl $0xffff0000, %%eax\n andl $4, %%eax\n andb $1, %%al\n testl $0x200, %%eax\n' > "$ho/.acc.S"
+moonrun -c "$ho/.acc.S" -o "$ho/.acc.o" || fail "mooncc: an asm's accumulator forms"
+readelf -x .text "$ho/.acc.o" | grep -q '250000ff ff83e004 2401a900 020000' || fail "an immediate into the accumulator does not take its short form"
 # an inline asm's section keeps its merge flag and entsize; the pads lie one section per
 # function section, link-ordered to it
 printf 'void f(void){ asm volatile("1: nop\\n.pushsection .altinstructions,\\"aM\\",@progbits,14\\n .long 1b - .\\n .long 0\\n .short 1\\n .byte 2,3,4,5\\n.popsection"); }\n' > "$ho/.psa.c"
