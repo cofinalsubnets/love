@@ -163,6 +163,14 @@
           (k == 's32) (: v (s64 (ld-u64 sa)) (fits32 v ? (le32 v)))
           (k == 'u16) (: v (ld-u64 sa) (v <= 65535 ? (le16 v)))
           (k == 'u8) (: v (ld-u64 sa) (v <= 255 ? [v]))
+          ; i386's, as lld checks them: the absolute in either range, a pc16 within 17 bits
+          (elem k '(w32 r32 w16 r16 w8 r8))
+           (: w <r v (s64 (ld-u64 (elem k '(w32 w16 w8) ? sa (sa - p)))) h (2 ** (8 * w))
+              ok (? (k == 'r16) (-65536 <= v && v < 65536)
+                    (elem k '(r32 r8)) (0 - h // 2 <= v && v < h // 2)
+                    (0 - h // 2 <= v && v < h))
+              u ((v % h + h) % h)
+              (ok ? (w @ 4 (le32 u) 2 (le16 u) [u])))
           (refix-with be k bs sa p <r)))
    ; a REL field: S+A whole, or less P, or the backend's
    (ld386 s off sv kind site)
@@ -795,7 +803,7 @@
        (scan oi ob)
         (each >^(ob 'shnum)
            (si \ (: r (ob 'sec si) ty (r 1) fl (r 2) nm <r
-                    (? (erel && ty = 4) (pin orph 'l ([oi nm si] . orph 'l))
+                    (? (erel && elem ty '(4 9)) (pin orph 'l ([oi nm si] . orph 'l))
                        (elem ty ld-skip || 0 < (fl & 2147483648) || peep (peep ob 'drops {}) si 0) 0
                        (strip && 0 = (fl & 2) && ld-debug? nm) 0
                        (: m (mt nm)
@@ -810,8 +818,9 @@
        dmap (: t {} _ (each descs (dd \ pin t (dd 2) dd)) t)
        (expand b) (: dd (dmap b) (ld-order (rev (peep bk <dd ())) (b 3)))
        _ (each os
-            (t \ pin t 'steps
-                   (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body))))
+            (t \ (: _ (pin t 'isds (map expand (filter (b \ <b = 'in) (t 'body))))
+                    (pin t 'steps
+                      (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body))))))
        [os (rev (orph 'l))])
 
    ;; --- 64-bit words. & is wrong on a bignum >= 2^63, so the bit ops go by 32-bit halves

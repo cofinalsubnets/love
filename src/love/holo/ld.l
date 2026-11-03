@@ -46,9 +46,11 @@
    ;   'relz         target section index -> its relocations' decoder (ld-relas)
    (ld-rel64 id s)
     (: r (ld-obj id s 2)
-       _ (r 'class = 64 && r 'type = 1 ? 0 (scare 'link-not-rel64 id))
+       ; i386's are ELF32, their relocations REL; every other machine's ELF64 and RELA
+       i386 (r 'mach = 3)
+       _ (r 'class = (? i386 32 64) && r 'type = 1 ? 0 (scare 'link-not-rel64 id))
        _ (r 'nsym > 0 ? 0 (scare 'link-no-symtab id))
-       _ (each ^(r 'shnum) (i \ (r 'sec i 1 = 9 ? (scare 'link-rel id))))
+       _ (each ^(r 'shnum) (i \ (r 'sec i 1 = (? i386 4 9) ? (scare 'link-rel id))))
        r)
 
    ; the linker's own .comment line, an object after every other, as ld.lld adds its banner
@@ -456,7 +458,9 @@
                      (ld-debug? nm) 0 a)
    ; one input section's bytes with its relocations applied -> pieces, reversed onto acc
    (ld-patch lk x acc)
-    (: oi (x 1) si (x 2) (ld-patchr lk oi si 0 (lk 'ot oi 'sec si 4) (lk 'env 'isa (oi * 65536 + si)) acc))
+    (: oi (x 1) si (x 2) r (lk 'ot oi 'sec si)
+       (? (elem (r 1) '(4 9)) (ld-erela lk oi (r 8) acc)
+          (ld-patchr lk oi si 0 (r 4) (lk 'env 'isa (oi * 65536 + si)) acc)))
    ; bytes from to to of input section si, relocated as laid at base + from
    (ld-patchr lk oi si from to base acc)
     (: ob (lk 'ot oi) r (ob 'sec si) s (ob 'src) o0 (r 3) sz to
@@ -469,10 +473,15 @@
        ; both lifted a turn should it fall below 0, so pages divide as they would unsigned
        (near p0 s0) (: v (p0 + ld-s64 (ld-w (s0 - p0))) (? (v < 0) [(v + ld-m64) (p0 + ld-m64)] [v p0]))
        nal (0 = (r 2 & 2))
-       (field e) (: ro <e k (e 1) p0 (base + ro) s0 (ld-sad lk oi e nal)
+       ; i386's REL: the addend is the field's, sign-extended at its width
+       i386 (mach = 3)
+       (imp e) (: w <(ld-rk 3 (e 1)) v (rdle s (o0 + <e) w) h (2 ** (8 * w - 1))
+                  [<e (e 1) (e 2) (? (v >= h) (v - 2 * h) v)])
+       (field e0) (: e (? i386 (imp e0) e0) ro <e k (e 1) p0 (base + ro) s0 (ld-sad lk oi e nal)
                     q (? (whole? s0) (near p0 s0) [(weak k p0 (e 3)) p0])
                     sa <q p <>q
                     (? (s0 = 'dead) (? (elem k '(257 258)) (ld-le (ld-tomb <r (e 3)) (? (k = 257) 8 4))
+                                       (i386 && k = 1) (ld-le (ld-tomb <r (e 3)) 4)
                                        (scare 'link-dropped [(ob 'id) ro k]))
                        (k = abs && nal) (ld-le sa 8)               ; not loaded: no slide
                        (k = abs)
@@ -663,7 +672,11 @@
        ; a local a copied .rela names stays, .L or not
        used (: u {}
                _ (? (erel && lk 'discard != 'none)
-                    (each (lk 'erels) (t \ each (t 'rs) (x \ each (ld-relas (ot <x) (x 1)) (e \ pin u (sk <x (e 2)) 1)))) 0)
+                    (each (lk 'outs)
+                       (t \ each (t 'steps)
+                             (x \ (? (<x = 'isec && elem (ot (x 1) 'sec (x 2) 1) '(4 9))
+                                     (each (ld-relas (ot (x 1)) (ot (x 1) 'sec (x 2) 8)) (e \ pin u (sk (x 1) (e 2)) 1)) 0))))
+                    0)
                u)
        _ (each ^(cx 'n)
            (oi \ (: ob (ot oi) sy (ob 'syms)
@@ -680,9 +693,10 @@
                                          (lk 'strip && 0 = (q 2 & 2) && ld-debug? <q)
                                          (put oi (ky (sk oi si) (ent <r (? (0 < (q 2 & 16)) 0 (r 4)) (r 5) (r 2) 0 65521)))
                                          0)))))))))
-       ; --emit-relocs: a section symbol for each output a relocation may point into, in its first member's group
+       ; --emit-relocs: a section symbol for each output a relocation may point into, in ld-first's
+       ; group, the script's outputs then the orphans as they were made
        _ (? erel
-            (each (ld-live (lk 'outs))
+            (each (ld-live (peep lk 'sord (lk 'outs)))
                (t \ (: f (ld-first ot t)
                        (? (f = ()) 0 (put <f (ky ['sec (t 'name)] (ent "" (? (0 < (t 'flags & 2)) (t 'va) 0) 0 3 0 (shx (t 'name)))))))))
             0)
@@ -733,8 +747,10 @@
                         1 es)
                (: _ (pin lk 'lidx li) _ (pin lk 'sidx xi) (pin lk 'gidx gi)))
             0)
-       (row e) (cask (ld-le <e 4 + [(e 3) (e 4)] + ld-le (e 5) 2 + ld-le (e 1) 8 + ld-le (e 2) 8))
-       [(#locs + 1) ([(ld-le 0 24)] + map row es) (str 'n) ("\0" . rev (str 'l))])
+       w32 (peep lk 'mach 183 = 3)
+       (row e) (cask (? w32 (ld-le <e 4 + ld-le (e 1) 4 + ld-le (e 2) 4 + [(e 3) (e 4)] + ld-le (e 5) 2)
+                        (ld-le <e 4 + [(e 3) (e 4)] + ld-le (e 5) 2 + ld-le (e 1) 8 + ld-le (e 2) 8)))
+       [(#locs + 1) ([(ld-le 0 (? w32 16 24))] + map row es) (str 'n) ("\0" . rev (str 'l))])
 
    ; the live output sections, and each one's section index
    (ld-live outs) (filter (t \ !(peep t 'dead 0) && t 'name != "/DISCARD/") outs)
@@ -775,20 +791,24 @@
    (ld-elf lk entry path)
     (: outs0 (ld-live (lk 'outs))
        flat (peep lk 'flat 0) pg (peep lk 'pg 65536)
-       ; .shstrtab before .strtab, as lld lays them, unless the script names .strtab
-       shf (flat || !(elem ".strtab" (map (c \ <>c 'name) (filter (c \ <c = 'osec) (ld-flat (lk 'cmds))))))
-       shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 (outs0 + [{'name ".symtab"} {'name ".strtab"}])) t)
+       ; the tables a script names sit after its sections, in its order; the orphans follow,
+       ; then the rest as lld creates them, .symtab .shstrtab .strtab
+       nmd (? flat () (map (c \ <>c 'name) (filter (c \ <c = 'osec) (ld-flat (lk 'cmds)))))
+       tabn (filter (n \ elem n '(".symtab" ".strtab" ".shstrtab")) nmd)
+       tabu (filter (n \ !(elem n tabn)) '(".symtab" ".shstrtab" ".strtab"))
+       sc0 (filter (t \ !(peep t 'orph 0)) outs0) or0 (filter (t \ peep t 'orph 0) outs0)
+       ordn (map (t \ t 'name) sc0 + tabn + map (t \ t 'name) or0 + tabu)
+       shx (: t {} _ (foldl (\ i n (pin t n i, i + 1)) 1 ordn) t)
        st (ld-symtab lk (n \ shx n))
-       sht {'name ".shstrtab" 'stype 3 'flags 0 'al 1}
-       ; --emit-relocs' tables, after .symtab, or after .shstrtab when the script names .strtab
-       rts (map (u \ {'name (u 'name) 'stype 4 'flags 64 'al 8 'entsize 24 'sz (24 * u 'n)
-                      'link (#outs0 + 1) 'info (peep shx (u 'tgt) 0) 'erl (u 'rs)})
-                (peep lk 'erels ()))
-       outs (outs0 + [{'name ".symtab" 'stype 2 'flags 0 'al 8 'sz (24 * #(st 1)) 'entsize 24
-                       'link (#outs0 + (? shf (3 + #rts) 2)) 'info <st 'pieces (st 1)}]
-             + (? shf (rts + [sht]) ())
-             + [{'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 2) 'pieces (st 3)}]
-             + (? shf () (sht . rts)))
+       w32 (peep lk 'mach 183 = 3) se (? w32 16 24)
+       tabs {".symtab" {'name ".symtab" 'stype 2 'flags 0 'al (? w32 4 8) 'sz (se * #(st 1)) 'entsize se
+                        'link (shx ".strtab") 'info <st 'pieces (st 1)}
+             ".strtab" {'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 2) 'pieces (st 3)}
+             ".shstrtab" {'name ".shstrtab" 'stype 3 'flags 0 'al 1}}
+       sht (tabs ".shstrtab")
+       ; --emit-relocs' tables link .symtab and name their target, SHF_INFO_LINK always
+       _ (each or0 (t \ (? (peep t 'tgt () = ()) 0 (: _ (pin t 'link (shx ".symtab")) _ (pin t 'flags (peep t 'flags 0 | 64)) (pin t 'info (peep shx (t 'tgt) 0))))))
+       outs (sc0 + map tabs tabn + or0 + map tabs tabu)
        slink (peep lk 'slink {})
        nmagic (peep lk 'nmagic 0)
        (alloc? t) (0 < (t 'flags & 2))
@@ -818,7 +838,7 @@
                                 0))))
        nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1))
        nres (? flat (#grps + 4) nph)
-       hdrs (64 + 56 * nres)
+       hdrs (? w32 (52 + 32 * nres) (64 + 56 * nres))
        names (foldl (\ a t (a + t 'name + "\0")) "\0" outs)
        fouts (filter alloc? outs + filter (t \ !(alloc? t)) outs)        ; the file: allocated first
        shn names
@@ -835,19 +855,25 @@
                      (off + (? (t 'stype = 8) 0 (t 'sz)))))
                 hdrs fouts)
        last (: l <(rev fouts) (l 'off + (? (l 'stype = 8) 0 (l 'sz))))
-       shoff (ld-al last 8)
+       shoff (ld-al last (? w32 4 8))
        shnum (#outs + 1)
-       shstx (#outs0 + (? shf (2 + #rts) 3))
+       shstx (shx ".shstrtab")
        (w2 n) (ld-le n 2) (w4 n) (ld-le n 4) (w8 n) (ld-le n 8)
-       eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 (peep lk 'etype 3)) (w2 (peep lk 'mach 183)) (w4 1) (w8 entry) (w8 64) (w8 shoff)
-                 (w4 0) (w2 64) (w2 56) (w2 nph) (w2 64) (w2 shnum) (w2 shstx)])
+       ; a word of the class: 4 bytes in ELF32, 8 in ELF64
+       (wa n) (ld-le n (? w32 4 8))
+       eh (cats [[127 69 76 70 (? w32 1 2) 1 1 0 0 0 0 0 0 0 0 0] (w2 (peep lk 'etype 3)) (w2 (peep lk 'mach 183)) (w4 1)
+                 (wa entry) (wa (? w32 52 64)) (wa shoff)
+                 (w4 0) (w2 (? w32 52 64)) (w2 (? w32 32 56)) (w2 nph) (w2 (? w32 40 64)) (w2 shnum) (w2 shstx)])
+       ; a program header: ELF32 keeps its flags after the sizes
+       (phd ty fl o v l fz mz al)
+        (? w32 (cats [(w4 ty) (w4 o) (w4 v) (w4 l) (w4 fz) (w4 mz) (w4 fl) (w4 al)])
+           (cats [(w4 ty) (w4 fl) (w8 o) (w8 v) (w8 l) (w8 fz) (w8 mz) (w8 al)]))
        ; a load from its first section, or under flat the first from the file's start
        (ph l) (: a <l b (l 1) fe (b 'off + (? (b 'stype = 8) 0 (b 'sz)))
                  o0 (? (flat && a 'name = <(<loads) 'name) 0 (a 'off))
                  v0 (a 'va - a 'off + o0) l0 (a 'la - a 'off + o0)
-                 (cats [(w4 1) (w4 (perm a)) (w8 o0) (w8 v0) (w8 l0)
-                        (w8 (fe - o0)) (w8 (b 'va + b 'sz - v0)) (w8 pg)]))
-       (row ty fl o v fz mz al) (cats [(w4 ty) (w4 fl) (w8 o) (w8 v) (w8 v) (w8 fz) (w8 mz) (w8 al)])
+                 (phd 1 (perm a) o0 v0 l0 (fe - o0) (b 'va + b 'sz - v0) pg))
+       (row ty fl o v fz mz al) (phd ty fl o v v fz mz al)
        rro (filter (t \ alloc? t && elem (t 'name) ld-relro) outs0)
        dyn (filter (t \ t 'name = ".dynamic") outs0)
        (fend t) (t 'off + (? (t 'stype = 8) 0 (t 'sz)))
@@ -856,24 +882,23 @@
                 + (? (two? dyn) [(: t <dyn (row 2 6 (t 'off) (t 'va) (t 'sz) (t 'sz) 8))] ())
                 + (? (two? rro) [(: a <rro b <(rev rro)
                                     (row 1685382482 4 (a 'off) (a 'va) (fend b - a 'off) (b 'va + b 'sz - a 'va) 1))] ())
-                + [(row 1685382481 6 0 0 0 0 0)] + [(ld-le 0 (56 * (nres - nph)))]))
+                + [(row 1685382481 6 0 0 0 0 0)] + [(ld-le 0 ((? w32 32 56) * (nres - nph)))]))
        ; a script's header: FILEHDR opens it at offset 0, the headers before its first section
        (prow p)
         (: ms (in p) ty (ld-pt (p 'type)) fl (peep p 'flags ())
-           (? (atom? ms) (cats [(w4 ty) (w4 (? (whole? fl) fl 0)) (ld-le 0 48)])
+           (? (atom? ms) (phd ty (? (whole? fl) fl 0) 0 0 0 0 0 0)
               (: a <ms b <(rev ms) hd (peep p 'FILEHDR 0)
                  o0 (? hd 0 (a 'off)) v0 (? hd (a 'va - hdrs) (a 'va)) l0 (? hd (a 'la - hdrs) (a 'la))
                  fe (b 'off + (? (b 'stype = 8) 0 (b 'sz)))
                  al (? (ty = 1 && !nmagic) pg (foldl (\ m t (max m (t 'al))) 1 ms))
-                 (cats [(w4 ty) (w4 (? (whole? fl) fl (perm a))) (w8 o0) (w8 v0) (w8 l0)
-                        (w8 (fe - o0)) (w8 (b 'va + b 'sz - v0)) (w8 al)]))))
+                 (phd ty (? (whole? fl) fl (perm a)) o0 v0 l0 (fe - o0) (b 'va + b 'sz - v0) al))))
        phs (? (two? phr) (map prow phr) flat fphs
-              (map ph loads + [(cats [(w4 1685382481) (w4 6) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0) (w8 0)])]))
+              (map ph loads + [(row 1685382481 6 0 0 0 0 0)]))
        (lnk t k) (: s (peep slink (t 'name) ()) (? (two? s) (? (k = 0) (shx <s) <>s) (peep t (? (k = 0) 'link 'info) 0)))
        nmoff (: t {} _ (foldl (\ o x (pin t (x 'name) o, o + #(x 'name) + 1)) 1 outs) t)
-       (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (w8 (t 'flags)) (w8 (? (alloc? t) (t 'va) 0)) (w8 (t 'off))
-                     (w8 (t 'sz)) (w4 (lnk t 0)) (w4 (lnk t 1)) (w8 (t 'al)) (w8 (peep t 'entsize 0))])
-       shs ([(ld-le 0 64)] + map sh outs)
+       (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (wa (t 'flags)) (wa (? (alloc? t) (t 'va) 0)) (wa (t 'off))
+                     (wa (t 'sz)) (w4 (lnk t 0)) (w4 (lnk t 1)) (wa (t 'al)) (wa (peep t 'entsize 0))])
+       shs ([(ld-le 0 (? w32 40 64))] + map sh outs)
        _ (unlink path)
        q (open path "w")
        ; under --build-id the bytes are hashed as they go, the id's own still zero
@@ -889,7 +914,7 @@
            (: t <l
               (? (t 'stype = 8 || t 'sz = 0) (body o >l)
                  (: _ (put (rev (ld-zp (t 'off - o) ())), pin fl 'n 0, pin lk 'sink sink)
-                    ps (? (two? (peep t 'pieces ())) (t 'pieces) (two? (peep t 'erl ())) (ld-erela lk t) (ld-emit lk t))
+                    ps (? (two? (peep t 'pieces ())) (t 'pieces) (ld-emit lk t))
                     _ (pin lk 'sink (), sink (rev ps))
                     _ (? (fl 'n = t 'sz) 0 (scare 'link-emit [(t 'name) (fl 'n) (t 'sz)]))
                     (body (t 'off + t 'sz) >l)))))
@@ -1122,39 +1147,40 @@
        {'nl (#locs + 1) 'rows ([(cask (ld-le 0 24))] + map (x \ row (x 1)) (locs + gs))
         'strn (str 'n) 'strs ("\0" . rev (str 'l)) 'lidx lidx 'sidx sidx 'gidx gidx})
 
-   ; the group an output's section symbol joins: its first input's object, -1 a merged
-   ; section's, () when it holds no input a relocation may point into
+   ; the group an output's section symbol joins, as lld picks it: the first input a relocation
+   ; may point into of the last description holding one -- its object, -1 a merged section's
    (ld-first ot t)
-    (: (go l) (? (atom? l) ()
-                 (: x <l (? (<x = 'isec && !(elem (ot (x 1) 'sec (x 2) 1) '(4 9))) [(x 1)]
-                            (<x = 'msec) [-1]
-                            (go >l))))
-       (go (t 'steps)))
+    (: ms (any (x \ <x = 'msec) (t 'steps))
+       (go l) (? (atom? l) ()
+                 (: x <l r (? (<x = 'isec) (ot (x 1) 'sec (x 2)) ())
+                    (? (<x = 'msec || <x = 'synth && x 1 = ".comment") [-1]
+                       (r = () || elem (r 1) '(4 9)) (go >l) (ms && 0 < (r 2 & 16)) [-1] [(x 1)])))
+       f (foldl (\ f d (: g (go d) (? (g = ()) f g))) () (peep t 'isds ()))
+       (? (f = ()) (go (t 'steps)) f))
 
-   ; --emit-relocs: an output .rela's entries, each input's copied as lld does -- the offset
+   ; --emit-relocs: object oi's relocations of section tg copied as lld does -- the offset
    ; the field's address, a section symbol's addend from its output's, one dropped R_NONE --
-   ; handed to lk 'sink every 4096
-   (ld-erela lk t)
-    (: ot (lk 'ot) env (lk 'env) at (env 'at) on (lk 'on) sink (lk 'sink)
+   ; reversed onto acc, handed to lk 'sink every 4096. i386's are REL, the addend left in the field
+   (ld-erela lk oi tg acc)
+    (: ot (lk 'ot) env (lk 'env) at (env 'at) on (lk 'on) sink (peep lk 'sink ())
        lidx (lk 'lidx) sidx (lk 'sidx) gidx (lk 'gidx)
        (va n) (env 'osv n 0)
-       (row off info a) (cask (ld-le off 8 + ld-le info 8 + ld-le a 8))
+       rel? (peep lk 'mach 183 = 3) sh (? rel? 256 4294967296)
+       (row off info a) (cask (? rel? (ld-le off 4 + ld-le info 4) (ld-le off 8 + ld-le info 8 + ld-le a 8)))
        (one ob oi tg e)
         (: sy (ob 'syms (e 2)) k (e 1) off (at oi tg <e)
            (? (e 2 = 0) (row off k (e 3))
               (sy 2 = 3) (: n (peep on (oi * 65536 + sy 3) ())
                             (? (n = () || n = "/DISCARD/") (row off 0 (e 3))
-                               (row off (peep sidx n 0 * 4294967296 + k) (at oi (sy 3) (sy 4 + e 3) - va n))))
-              (sy 1 = 0) (row off (peep lidx (oi * 16777216 + e 2) 0 * 4294967296 + k) (e 3))
-              (row off (peep gidx <sy 0 * 4294967296 + k) (e 3))))
-       (sec acc x)
-        (: oi <x tg (x 1) ob (ot oi) c (ld-relcur ob tg)
-           (go acc) (: m (ld-relnext c 4096)
-                       (? (atom? m) acc
-                          (: a (foldl (\ a e (one ob oi tg e . a)) acc m)
-                             (? (sink = ()) (go a) (: _ (sink a) (go ()))))))
-           (go acc))
-       (rev (foldl sec () (t 'erl))))
+                               (row off (peep sidx n 0 * sh + k) (? rel? 0 (at oi (sy 3) (sy 4 + e 3) - va n)))))
+              (sy 1 = 0) (row off (peep lidx (oi * 16777216 + e 2) 0 * sh + k) (e 3))
+              (row off (peep gidx <sy 0 * sh + k) (e 3))))
+       ob (ot oi) c (ld-relcur ob tg)
+       (go acc) (: m (ld-relnext c 4096)
+                   (? (atom? m) acc
+                      (: a (foldl (\ a e (one ob oi tg e . a)) acc m)
+                         (? (sink = ()) (go a) (: _ (sink a) (go ()))))))
+       (go acc))
 
    ; one input section's bytes under -r: a .rela its entries renumbered, else as read but a
    ; debug section's absolute reference to no definition, which takes lld's tombstone
@@ -1250,7 +1276,7 @@
                                              (65 <= c && c < 71) (c - 55) 99)
                                 (? (d < (? hex 16 10)) (go (i + 1) (a * (? hex 16 10) + d)) ())))
                  (? (#t = 0) () (go (? hex 2 0) 0)))
-   (ld-emu m) (? (elem m '("aarch64elf" "aarch64linux")) 'a64 (elem m '("elf_x86_64")) 'x64
+   (ld-emu m) (? (elem m '("aarch64elf" "aarch64linux")) 'a64 (elem m '("elf_x86_64")) 'x64 (m = "elf_i386") 'i386
                  (elem m '("elf64lriscv")) 'rv64 (elem m '("armelf" "armelf_linux_eabi")) 'arm ())
    (ld-args as)
     (: o {'ins () 'emu () 'apply 0 'discard 'default 'orphan "place" 'whole 0 'relro 1 'reloc 0
@@ -1371,6 +1397,58 @@
                          ([(<(<acc)) t (<acc 2 || t 'sz > 0)] . >acc)))
                    () (ld-live outs))))
 
+   ; a script's SECTIONS items, its last
+   (lk-secs cmds) (foldl (\ a c (? (<c = 'sections) <>c a)) () cmds)
+   ; an output's [inputs? flags type] from its steps, as lld's commitSection takes them
+   (ld-oinfo ot t)
+    (: ms (filter (x \ <x = 'isec || (<x = 'synth && x 2 > 0)) (peep t 'steps ()))
+       (fl x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 2) 2)
+       (ty x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 1) (starts? (x 1) ".note") 7 1)
+       tys (map ty ms) nb (filter (y \ y != 8) tys)
+       [(two? ms && t 'name != "/DISCARD/") (foldl (\ a x (a | fl x)) 0 ms) (? (atom? tys) 1 (atom? nb) 8 <nb)])
+   ; lld's getSectionRank: partition 1, no address set; then not alloc, else by write and exec,
+   ; a note or non-PROGBITS first among the read-only, TLS and relro first among the writable
+   (ld-rank f ty nm relro)
+    (: x (0 < (f & 4)) w (0 < (f & 1)) base 134479872
+       rr (relro && w && (0 < (f & 1024) || elem ty '(14 15 16) || nm = ".data.rel.ro" || starts? nm ".data.rel.ro."
+                          || elem nm '(".bss.rel.ro" ".ctors" ".dtors" ".jcr" ".eh_frame" ".fini_array" ".init_array"
+                                       ".preinit_array" ".dynamic" ".got" ".relro_padding")))
+       (? (0 = (f & 2)) (base | 67108864)
+          (: r (? (!w && !x) (base | 512 | (? (ty = 7) 3 (ty != 1) 4 2048))
+                  x (base | (? w 8192 4096))
+                  (base | 16384 | (? (0 < (f & 1024)) 0 128) | (? rr 0 256)))
+             (? (ty = 8) (r | 64) r))))
+   ; how alike two ranks are: their leading equal bits of 32
+   (ld-prox a b) (: (go n k) (? (k = 0) n (go (n - 1) (k // 2))) (go 32 (ld-xor a b)))
+   ; lld's sortOrphanSections over SECTIONS items l: the orphans by rank, each rank's after the
+   ; section most like it -- the last of the likest, or before a likest ranked above -- past the
+   ; assignments that follow it, at the end when no section with inputs follows
+   (ld-orphpos ot l orphs relro after?)
+    (: (rk t) (: i (ld-oinfo ot t) (ld-rank (i 1) (i 2) (t 'name) relro))
+       (has? c) (<c = 'osec && <(ld-oinfo ot <>c))
+       (skip? c) (elem <c '(set provide) && c 1 != ".")
+       s0 ((: (f k) (? (k >= #l || !(skip? (l k))) k (f (k + 1)))) 0)
+       b (? (s0 < #l && elem <(l s0) '(set assert)) (s0 + 1) s0)
+       (pos l r)
+        (: e #l
+           (px c) (? (has? c) (ld-prox r (rk <>c)) -1)
+           (best j mp i) (? (j >= e) [mp i]
+                            (: p (px (l j))
+                               (? (p > mp || (p = mp && p >= 0 && rk <>(l j) <= r)) (best (j + 1) p j) (best (j + 1) mp i))))
+           bm (best b 0 e) mp <bm i0 (bm 1)
+           (fw j i) (? (j >= e) i (!(has? (l j))) (fw (j + 1) i) (px (l j) != mp) i (fw (j + 1) (j + 1)))
+           (bw i) (? (i = b || has? (l (i - 1))) i (bw (i - 1)))
+           (more? i) (? (i >= e) 0 (has? (l i)) 1 (more? (i + 1)))
+           (sk i) (? (i < e && skip? (l i)) (sk (i + 1)) i)
+           (? (i0 = e) e
+              (: i1 (? (after? || rk <>(l i0) <= r) (fw (i0 + 1) (i0 + 1)) (bw i0))
+                 (? (more? i1) (sk i1) e))))
+       (ins l k xs) (: (go l k acc) (? (k = 0 || atom? l) (rev acc + xs + l) (go >l (k - 1) (<l . acc))) (go l k ()))
+       (grp l q) (? (atom? q) l
+                    (: r <(<q) g (filter (x \ <x = r) q)
+                       (grp (ins l (pos l r) (map (x \ ['osec (x 2)]) g)) (filter (x \ <x != r) q))))
+       (grp l (sort (map (i \ [(rk (orphs i)) i (orphs i)]) ^#orphs))))
+
    ; the link under a script. o from ld-args, o 'banner the .comment line to sign with
    (ld-ld o) (? (o 'reloc) (ld-rel o) (ld-exe o))
    (ld-exe o)
@@ -1385,12 +1463,12 @@
        _ (? (flat && !(o 'relr)) (no "-shared with no script and no --pack-dyn-relocs=relr") 0)
        _ (? (flat && !(o 'relro)) (no "-z norelro with no script") 0)
        cx (ld-load (o 'ins))
-       ; the machine: aarch64 or x86-64
+       ; the machine: aarch64, x86-64 or i386
        em (? (atom? (cx 'objs)) 183 (rle16 (<(cx 'objs) 'src) 18))
-       _ (? (elem [(o 'emu) em] '((() 183) (a64 183) (() 62) (x64 62))) 0
+       _ (? (elem [(o 'emu) em] '((() 183) (a64 183) (() 62) (x64 62) (() 3) (i386 3))) 0
             (no (show (? (o 'emu = ()) em (o 'emu)))))
        _ (pin cx 'objs (cx 'objs + [(ld-banner "<linker>" (peep o 'banner ("Linker: " + ld-lld)))]))
-       pg (peep o 'pg (? (em = 62) 4096 65536))           ; lld's max-page-size
+       pg (peep o 'pg (? (elem em '(62 3)) 4096 65536))   ; lld's max-page-size
        body (? flat (ld-fresh ld-shtmpl) (lds-read <>(uread sc)))
        (words h) (? flat [['set "__ld_pg" '= pg] ['set "__ld_hdrs" '= h]] ())
        cmds (words 0 + body)
@@ -1407,32 +1485,45 @@
        byn (: t {} _ (each <pl (u \ pin t (u 'name) u)) t)
        synz (: t {} _ (each (dsyn + bid) (s \ pin t <s (s 1))) t)
        news {'l ()} bad {'l ()} dyo {'n 0}
-       ; under --emit-relocs each input .rela joins ".rela" + its target's output, in input order
+       ; isec key -> its output's name. under --emit-relocs an input .rela is an orphan named
+       ; ".rela" or ".rel" + its target's output, dropped with its target
        on (: t {} _ (each <pl (u \ each (u 'steps) (x \ (? (<x = 'isec) (pin t (x 1 * 65536 + x 2) (u 'name)) 0)))) t)
-       rby {} rord {'l ()}
-       (rela oi si r)
-        (: tn (peep on (oi * 65536 + r 8) ())
-           (? (tn = () || tn = "/DISCARD/") 0
-              (tn = ".eh_frame") (no "--emit-relocs over .eh_frame")
-              (: nm (".rela" + tn) t (peep rby nm ())
-                 u (? (t != ()) t (: n {'name nm 'tgt tn 'rs () 'n 0} _ (pin rby nm n) _ (pin rord 'l (n . rord 'l)) n))
-                 (pin u 'rs ([oi (r 8)] . u 'rs), pin u 'n (u 'n + r 4 // 24)))))
        (orph x)
         (? (<x = 'synth)
              (? (elem (x 1) '(".rela.dyn" ".relr.dyn")) (pin dyo 'n 1)
                 (peep synz (x 1) 0 = 0) 0
                 (pin bad 'l (x 1 . bad 'l)))
-           (: oi <x nm (x 1) si (x 2) r (cx 'objs oi 'sec si) st ['isec oi si (r 4) (r 5) nm]
+           (: oi <x si (x 2) r (cx 'objs oi 'sec si) rel? (elem (r 1) '(4 9))
+              tn (? rel? (peep on (oi * 65536 + r 8) ()) ())
+              nm (? rel? ((? (r 1 = 4) ".rela" ".rel") + tn) (x 1))
+              st ['isec oi si (r 4) (r 5) nm]
               u (peep byn nm ())
-              (? (r 1 = 4) (rela oi si r)
+              (? (rel? && (tn = () || tn = "/DISCARD/")) 0
+                 (rel? && tn = ".eh_frame") (no "--emit-relocs over .eh_frame")
                  (u != ()) (: _ (pin on (oi * 65536 + si) nm) (pin u 'steps (u 'steps + [st])))
-                 (0 < (r 2 & 2)) (pin bad 'l ((cx 'objs oi 'id + ":(" + nm + ")") . bad 'l))
-                 (: n {'name nm 'body () 'steps [st]} _ (pin on (oi * 65536 + si) nm) _ (pin byn nm n) (pin news 'l (n . news 'l))))))
+                 (0 < (r 2 & 2) && atom? (lk-secs body)) (pin bad 'l ((cx 'objs oi 'id + ":(" + nm + ")") . bad 'l))
+                 (: n {'name nm 'body () 'steps [st] 'orph 1 'tgt tn}
+                    _ (pin on (oi * 65536 + si) nm) _ (pin byn nm n) (pin news 'l (n . news 'l))))))
        _ (each <>pl orph)
        _ (? (two? (bad 'l)) (no ("orphan sections, which love ld does not place: " + show (lds-first (rev (bad 'l)) 8))) 0)
        orphs (rev (news 'l))
-       os (<pl + orphs)
-       body2 (body + map (u \ ['osec u]) orphs)
+       ; --orphan-handling=error under SECTIONS refuses every orphan as lld does, a table the
+       ; script leaves unnamed too, but not a relocation table --emit-relocs copies
+       _ (? (o 'orphan = "error" && two? (lk-secs body))
+            (: sn (map (c \ <>c 'name) (filter (c \ <c = 'osec) (ld-flat (lk-secs body))))
+               l (map (u \ u 'name) (filter (u \ peep u 'tgt () = ()) orphs)
+                  + filter (n \ !(elem n sn)) [".symtab" ".strtab" ".shstrtab"])
+               (? (two? l) (no ("orphan sections, which --orphan-handling=error refuses: " + show (lds-first l 8))) 0))
+            0)
+       ot0 (: t {} _ (foldl (\ i ob (pin t i ob, i + 1)) 0 (cx 'objs)) t)
+       ; an allocated orphan joins SECTIONS where lld's findOrphanPos puts it; the rest follow it
+       (alloc? u) (0 < (ld-oinfo ot0 u 1 & 2))
+       secs2 (ld-orphpos ot0 (lk-secs body) (filter alloc? orphs) (o 'relro) (any (c \ <c = 'phdrs) body))
+       body1 (map (c \ (? (<c = 'sections) ['sections secs2] c)) body)
+       nao (filter (u \ !(alloc? u)) orphs)
+       _ (each orphs (u \ (? (alloc? u) (pin u 'orph 0) 0)))
+       os (ld-outs body1 + nao)
+       body2 (body1 + map (u \ ['osec u]) nao)
        ; .eh_frame and, under --eh-frame-hdr, its header, synthetic as lld lays them
        eh (ld-eh cx os)
        ehs ((? (eh = ()) () [[".eh_frame" (eh 'size) 8 1 2 0]])
@@ -1441,9 +1532,11 @@
        mx (ld-merge ot os)
        lk {'cx cx 'ot ot 'mx mx 'outs os 'cmds (words 0 + body2) 'strip (o 'strip) 'discard (o 'discard)
            'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg
-           'mach em 'abs (? (em = 62) 1 257)
+           'mach em 'abs (? (em = 62) 1 (em = 3) -1 257)
            'etype (? (o 'shared || o 'pie) 3 2) 'bid (o 'bid)                   ; ET_DYN for -pie and -shared, else ET_EXEC
-           'erel (o 'erel) 'erels (map (u \ (: _ (pin u 'rs (rev (u 'rs))) u)) (rev (rord 'l))) 'on on}
+           'erel (o 'erel) 'on on
+           'sord (: sn (map (c \ <>c 'name) (filter (c \ <c = 'osec) (ld-flat (lk-secs body))))
+                    (filter (t \ elem (t 'name) sn) os + filter (u \ !(elem (u 'name) sn)) orphs))}
        _ (? (d = 0) 0 (: _ (pin lk 'dso d) (pin lk 'slink (d 'slink))))
        dy (? (o 'shared) (ld-dynsites lk) {'rela () 'relr ()})
        nrela #(dy 'rela)
@@ -1480,7 +1573,7 @@
        _ (? (o 'relro && !flat && !(elem 'phdrs (map (c \ <c) cmds)) && any relro? os)
             (no "PT_GNU_RELRO: pass -z norelro") 0)
        ; x86's code gaps are int3, as lld fills them
-       _ (? (em = 62) (each os (t \ (? (0 < (peep t 'flags 0 & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
+       _ (? (elem em '(62 3)) (each os (t \ (? (0 < (peep t 'flags 0 & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
        _ (? (d = 0) 0 (pin d 'relrsz (8 * #(<>r))))
        _ (? (o 'a53) (pin lk 'a53 (ld-a53 lk)) 0)
        sd (? (d = 0) {} (ld-dsdata lk))

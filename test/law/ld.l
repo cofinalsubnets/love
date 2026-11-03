@@ -388,15 +388,7 @@
         0000000000000000
         """)
       = "373ec43a451a81b980e2003917f12d52a043f00a2efbb460fd15d5647a715dba"))
-   ; --emit-relocs: each .rela copied after .symtab, or after .shstrtab when the script names
-   ; .strtab; the offsets addresses, a section symbol's addend from its output's
-   (kle-link tabs?)
-    (: sc "out/.kle.lds" dst "out/.kle" q (open sc "w")
-       _ (say q ("SECTIONS { . = 0xffffffff81000000; .text : { *(.text) } .rodata : { *(.rodata .rodata.*) }"
-                 + " .data : { *(.data) } .bss : { *(.bss) } .stuff 0 : { *(.stuff) } .comment 0 : { *(.comment) }"
-                 + (? tabs? " .symtab 0 : { *(.symtab) } .strtab 0 : { *(.strtab) } .shstrtab 0 : { *(.shstrtab) } .rela.dyn : { *(.rela.*) }" "")
-                 + " }"), close q)
-       a (klr-put "ea" """
+   kle-ha """
         7f454c4602010100000000000000000001003e0001000000000000000000
         000000000000000000007802000000000000000000004000000000004000
         0c000b00e800000000488d050000000048c7c300000000488b0d00000000
@@ -444,8 +436,8 @@
         010000000000000000000000000000001100000003000000000000000000
         000000000000000000002002000000000000510000000000000000000000
         0000000001000000000000000000000000000000
-        """)
-       b (klr-put "eb" """
+        """
+   kle-hb """
         7f454c4602010100000000000000000001003e0001000000000000000000
         00000000000000000000a801000000000000000000004000000000004000
         0c000b00488d0500000000c300000000000000000000000000000000796f
@@ -486,15 +478,89 @@
         000001000000000000000000000000000000110000000300000000000000
         000000000000000000000000500100000000000051000000000000000000
         00000000000001000000000000000000000000000000
-        """)
-       o (ld-args ["-m" "elf_x86_64" "-z" "noexecstack" "--discard-none" "--orphan-handling=error"
-                   "--emit-relocs" "-T" sc a b "-o" dst])
+        """
+   ; --emit-relocs: each .rela copied after .symtab, or after .shstrtab when the script names
+   ; .strtab; the offsets addresses, a section symbol's addend from its output's. under
+   ; --orphan-handling=error a table the script leaves unnamed is an orphan lld refuses
+   (kle-link tabs? oh?)
+    (: sc "out/.kle.lds" dst "out/.kle" q (open sc "w")
+       _ (say q ("SECTIONS { . = 0xffffffff81000000; .text : { *(.text) } .rodata : { *(.rodata .rodata.*) }"
+                 + " .data : { *(.data) } .bss : { *(.bss) } .stuff 0 : { *(.stuff) } .comment 0 : { *(.comment) }"
+                 + (? tabs? " .symtab 0 : { *(.symtab) } .strtab 0 : { *(.strtab) } .shstrtab 0 : { *(.shstrtab) } .rela.dyn : { *(.rela.*) }" "")
+                 + " }"), close q)
+       a (klr-put "ea" kle-ha)
+       b (klr-put "eb" kle-hb)
+       o (ld-args (["-m" "elf_x86_64" "-z" "noexecstack" "--discard-none"] + (? oh? ["--orphan-handling=error"] ())
+                   + ["--emit-relocs" "-T" sc a b "-o" dst]))
        _ (pin o 'banner "Linker: LLD 22.1.8")
        _ (ld-ld o)
        h (sha256 <>(uread dst))
        (unlink a, unlink b, unlink sc, unlink dst, h))
-   _ (test (kle-link 1 = "6cb32e716fd35e8eb1517e2ad00fe6b1ebaa8b0fceba4b8dab891561bba05e14"))
-   _ (test (kle-link 0 = "3af8c9cbb60af14aba77186b7728276b3e41ad7e6b5fbddeb9ae63e30c8351f7"))
+   _ (test (kle-link 1 1 = "6cb32e716fd35e8eb1517e2ad00fe6b1ebaa8b0fceba4b8dab891561bba05e14"))
+   _ (test (kle-link 0 0 = "b1610f262a23e35d66b371ddd99edab9c6450fbb8081bfe893667f430d46bcb7"))
+   _ (test (: r (trap (_ \ kle-link 0 1) () (a \ b \ a = 'link-refuses && starts? b "orphan sections, which --orphan-handling"))
+              _ (each ["out/.klr-ea.o" "out/.klr-eb.o" "out/.kle.lds"] unlink)
+              r))
+   ; an allocated orphan by lld's rank, the rest after; i386's ELF32 and REL, its addends in the field
+   kli-ha """
+        7f454c460101010000000000000000000100030001000000000000000000
+        0000f40000000000000034000000000028000b000a00e8fcffffffbb0000
+        0000c3000000000000000000000000000000000000000000000000000100
+        000000000000000000001000010008000000000000000000000010000000
+        0a000000000000000000000010000300005f737461727400660076000100
+        000002020000060000000103000000000000010100000000000001010000
+        002e73796d746162002e737472746162002e7368737472746162002e7265
+        6c2e74657874002e72656c2e64617461002e627373002e72656c2e737475
+        666600000000000000000000000000000000000000000000000000000000
+        00000000000000000000000000001f000000010000000600000000000000
+        340000000b000000000000000000000001000000000000001b0000000900
+        000040000000000000009400000010000000080000000100000004000000
+        08000000290000000100000003000000000000003f000000040000000000
+        000000000000010000000000000025000000090000004000000000000000
+        a400000008000000080000000300000004000000080000002f0000000800
+        000003000000000000004300000000000000000000000000000001000000
+        000000003800000001000000000000000000000043000000040000000000
+        000000000000010000000000000034000000090000004000000000000000
+        ac0000000800000008000000060000000400000008000000010000000200
+        000000000000000000004800000040000000090000000100000004000000
+        1000000009000000030000000000000000000000880000000c0000000000
+        000000000000010000000000000011000000030000000000000000000000
+        b40000003f00000000000000000000000100000000000000
+        """
+   kli-hb """
+        7f454c460101010000000000000000000100030001000000000000000000
+        0000b800000000000000340000000000280009000800c300000000007800
+        000000000000000000000000000000000100000000000000000000001000
+        010003000000000000000000000010000000006600760000000000000000
+        01020000002e73796d746162002e737472746162002e7368737472746162
+        002e74657874002e72656c2e64617461002e627373002e636f6d6d656e74
+        000000000000000000000000000000000000000000000000000000000000
+        00000000000000000000000000001b000000010000000600000000000000
+        340000000100000000000000000000000100000000000000250000000100
+        000003000000000000003500000004000000000000000000000001000000
+        000000002100000009000000400000000000000074000000080000000600
+        00000200000004000000080000002b000000080000000300000000000000
+        390000000000000000000000000000000100000000000000300000000100
+        000030000000000000003900000003000000000000000000000001000000
+        01000000010000000200000000000000000000003c000000300000000700
+        000001000000040000001000000009000000030000000000000000000000
+        6c0000000500000000000000000000000100000000000000110000000300
+        000000000000000000007c00000039000000000000000000000001000000
+        00000000
+        """
+   (kl6-link m ha hb erel?)
+    (: sc "out/.kl6.lds" dst "out/.kl6" q (open sc "w")
+       _ (say q "SECTIONS { . = 0; .text : { *(.text) } .data : { *(.data) } }", close q)
+       a (klr-put "6a" ha) b (klr-put "6b" hb)
+       o (ld-args (["-m" m] + (? erel? ["--emit-relocs"] ()) + ["-T" sc a b "-o" dst]))
+       _ (pin o 'banner "Linker: LLD 22.1.8")
+       _ (ld-ld o)
+       h (sha256 <>(uread dst))
+       (unlink a, unlink b, unlink sc, unlink dst, h))
+   _ (test (kl6-link "elf_x86_64" kle-ha kle-hb 0 = "fcd32c156dfd7fefd1199ca0b2724bc930818fc348c682ffdd6c74afd81c47eb"))
+   _ (test (kl6-link "elf_x86_64" kle-ha kle-hb 1 = "b1fc27e6252d8cb03f3ed7be9a6894b84457d14ac2a6fca1788f81ba8fe9f7cd"))
+   _ (test (kl6-link "elf_i386" kli-ha kli-hb 0 = "7912a6f905b74d3ef14ea5bb18ce31e71972906ce8d486c7e2c50eb113629ea8"))
+   _ (test (kl6-link "elf_i386" kli-ha kli-hb 1 = "70837d2ecad86ff618c564497751dcbd325554f5c43d258c6c7755a2f4e27819"))
    ; --build-id: the note holds sha256's first 20 bytes over the file with the id still zero
    (test
       (: sc "out/.klb.lds" dst "out/.klb" a (klr-put "s1" kly-s1) q (open sc "w")
