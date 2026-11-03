@@ -337,8 +337,8 @@
        shs-off <>ro               shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
        sht (catall ([(o-zeros 40)]                                             ; 0 NULL
-              + o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2)             ; 1..nsec the content sections
-                                    0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+              + o-mapi (\ i l (elf-shdr32 (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
+                                    0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) (l 2 >> 32)))
                        lanes
               + [(elf-shdr32 (shname nsec) 2 0 0 sym-off sym-sz i-str (1 + nsec + nloc) 4 16)   ; .symtab link=.strtab info=first-global
                  (elf-shdr32 (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                   ; .strtab
@@ -379,7 +379,7 @@
      + (two? imgforms ? [[".love.image"  1 3 16 imgforms]] ()))
    ; a named section a compiler emits: progbits on the widest grain its globals ask and no wider,
    ; as objects' pieces may tile one array (the kernel's .videocards); writable unless ro.
-   (objsec-named nm forms ro) [nm 1 (ro ? 2 3) (o-dalign 1 forms) forms]
+   (objsec-named nm forms ro) [nm 1 (? (ro = 'lo) 131 ro 2 3) (o-dalign 1 forms) forms]   ; 'lo: wa, link order
    ; ..and the code twin, for a function that named its own section; flags 6 = alloc|execinstr.
    ; the grain is the caller's: one-fn sections at grain N tile at N (love.h's love_typ stride).
    (objsec-code nm forms al) [nm 1 6 al forms]
@@ -604,9 +604,11 @@
        shs-off <>ro             shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
 
+       ; a link-order section's sh_link: the section its first word reaches
+       (o-link l) (0 < (l 2 & 128) && two? (l 5) ? (o-where lanes (l 5 0 2) @ w (two? w ? <w 0)) 0)
        sht (catall ([(o-zeros 64)]                                         ; 0 NULL
-              + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2)           ; 1..nsec the content sections
-                                  0 (coffs i) (o-blen (ln-bs l)) 0 0 (l 3) 0))
+              + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
+                                  0 (coffs i) (o-blen (ln-bs l)) (o-link l) 0 (l 3) (l 2 >> 32)))
                        lanes
               + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
                  (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab

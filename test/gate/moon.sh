@@ -127,6 +127,14 @@ moonrun -c "$ho/.grl.S" -o "$ho/.grl.o" || fail "mooncc: an asm's relocs"
 [ "$(readelf -rW "$ho/.grl.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PC32 g " ] || fail "a branch to a global is not plt32 through its reloc, or an address-of is not pc32"
 readelf -x .text.pad "$ho/.grl.o" | grep -q 'c3909090 90909090' || fail ".balign 8, 0x90 is not filled with its byte"
 readelf -SW "$ho/.grl.o" | grep -q 'rela.rodata' && fail "a reach inside .rodata kept a reloc"
+# an inline asm's section keeps its merge flag and entsize; the pads lie one section per
+# function section, link-ordered to it
+printf 'void f(void){ asm volatile("1: nop\\n.pushsection .altinstructions,\\"aM\\",@progbits,14\\n .long 1b - .\\n .long 0\\n .short 1\\n .byte 2,3,4,5\\n.popsection"); }\n' > "$ho/.psa.c"
+moonrun -c "$ho/.psa.c" -o "$ho/.psa.o" || fail "mooncc: a pushsection with flags"
+[ "$(readelf -SW "$ho/.psa.o" | sed -E 's/^ *\[ *[0-9]+\] +//' | awk '$1 == ".altinstructions" {print $6, $7}')" = "0e AM" ] || fail "an asm's \"aM\",@progbits,14 lost its merge flag or entsize"
+printf 'void g(void){}\n__attribute__((section(".init.text"))) void h(void){}\n' > "$ho/.pfl.c"
+moonrun -fpatchable-function-entry=4,2 -c "$ho/.pfl.c" -o "$ho/.pfl.o" || fail "mooncc: patchable entries in two sections"
+[ "$(readelf -SW "$ho/.pfl.o" | sed -E 's/^ *\[ *([0-9]+)\] +/\1 /' | awk '{n[$1] = $2} $2 == "__patchable_function_entries" {p[++k] = $9 " " $8} END {for (i = 1; i <= k; i++) {split(p[i], a, " "); print a[2], n[a[1]]}}' | sort | tr '\n' ' ')" = "WAL .init.text WAL .text " ] || fail "the pads are not one section per function section, link-ordered to it"
 [ "$(readelf -sW "$ho/.grl.o" | awk '$8 == "t2" || $8 == "tobj" || $8 == "dlab" || $8 == "zabs" {print $8, $2, $3, $4, $5, ($7 == "ABS" ? "ABS" : "-")}' | sort | tr '\n' ' ')" = "dlab 000000000000000c 0 NOTYPE GLOBAL - t2 0000000000000004 0 NOTYPE LOCAL - tobj 0000000000000008 4 OBJECT LOCAL - zabs 0000000000001234 0 NOTYPE GLOBAL ABS " ] || fail "an asm data label's type or size is not gas's, or a .globl constant is not absolute"
 # a global in a named section is its object's bytes, no word's pad: the kernel's percpu hot
 # data must fit one cache line

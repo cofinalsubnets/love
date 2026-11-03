@@ -12421,12 +12421,14 @@
                      (rev (<r 'xfns) @ src
                         (map (nm \ [nm (forsec nm src) (grain nm src)]) (noms src ()))))
              ; the pads' words, a fixup to each: what ftrace and the kernel's call padding walk
-             ; ..only those whose label the text still lays, once each
-             pfs (: lt (foldl (t \ f \ (two? f && <f = 'label ? (pin t (<>f) 1) t)) {} (<>r + catall (map (x \ x 1) xfns)))
-                    ls (foldl (a \ L \ (lt L && !(elem L a) ? (L . a) a)) () (<r 'pfel))
-                    w (ilp32? <r ? 4 8)
-                    (two? ls ? [["__patchable_function_entries"
-                                 (['align w] . map (L \ ['raw [['fix w (w = 4 ? 'abs32 'abs64) L 0]]]) ls) ()]]))
+             ; ..only those whose label the text still lays, once each, one section per function
+             ; section and ordered by it (shf_link_order), as a discarded .init.text takes its own
+             pfs (: w (ilp32? <r ? 4 8)
+                    (lt fs) (foldl (t \ f \ (two? f && <f = 'label ? (pin t (<>f) 1) t)) {} fs)
+                    (pfsec fs) (lt fs @ t (foldl (a \ L \ (t L && !(elem L a) ? (L . a) a)) () (<r 'pfel) @ ls
+                                  (two? ls ? [["__patchable_function_entries"
+                                               (['align w] . map (L \ ['raw [['fix w (w = 4 ? 'abs32 'abs64) L 0]]]) ls) 'lo]])))
+                    (pfsec <>r + catmap (x \ pfsec (x 1)) xfns))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat (lnames + lvars + lals) (<>>>dat + pfs) <>>>>dat <>>>>>dat
                 xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))

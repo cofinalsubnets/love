@@ -1117,7 +1117,7 @@
               () () ()))
       (tp = '((("__tracepoints_ptrs" 1 2 ((align 4) (raw ((fix 4 rel32 __tracepoint_x 4)))))) () () ()))
       (sc = [[[".static_call.text" 1 6 [['label 'sc] ['label l9] ['raw [233]] ['raw [['fix 4 'rel32 'it 0]]]]]
-              [".discard.annotate_insn" 1 0 [['raw [['fix 4 'rel32 l9 4] 1 0 0 0]]]]]
+              [".discard.annotate_insn" 1 (16 | 8 << 32) [['raw [['fix 4 'rel32 l9 4] 1 0 0 0]]]]]   ; "M", entsize 8 above bit 32
              ["sc"] () ()])
       ((map (s \ [<s (s 1) (s 2)]) <st) =
          '((".text" 1 6) (".a" 1 0) (".b" 1 0) (".text.hot" 1 6) (".rodata.k" 1 2) (".bss" 8 3)))
