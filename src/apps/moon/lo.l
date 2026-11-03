@@ -18,9 +18,74 @@
 
    ; a value converted to ty, copied when the conversion writes
    (lotr g [vt r fs] ty)
-    (? (lofl? ty || lofl? vt) (lotrf g [vt r fs] ty)
+    (? (gcplx? ty || gcplx? vt) (locxsame? vt ty ? [vt r fs] (locvt g [vt r fs] ty))
+       (lofl? ty || lofl? vt) (lotrf g [vt r fs] ty)
        (two? (cvt ty 'r0) && !(irfit? vt ty)) (lomk g @ t [ty t (fs + [['mov t r]] + cvt ty t)])
        [ty r fs])
+   ; -- C99 complex: a two-part struct, a value its address; arithmetic over the parts in vregs --
+   (locxsame? a b) (gcplx? a && gcplx? b && <>a = <>b)
+   (lofo n p) (name "\(n)\(p = 'float ? "ss" "sd")")
+   ; a complex or real value's parts in precision p, a real's im zero -> [fs re im] | 'bad
+   (loparts g v p)
+    (v @ ([vt r fs] && gcplx? vt)
+          (: b (cxb vt) w (tsz g b) re (lomkf g) im (lomkf g)
+             (ld x o) [(b = 'float ? 'ldss 'ldsd) x r o]
+             (cv x) (b = p ? () [[(p = 'double ? 'cvtss2sd 'cvtsd2ss) x x]])
+             [(fs + [(ld re 0)] + cv re + [(ld im w)] + cv im) re im])
+         ([vt _ _] && losv? vt)
+          (lotr g v p @ [_ re f2] (lomk g @ t (lomkf g @ im [(f2 + [['li t 0] [(p = 'float ? 'movdxr 'movqxr) im t]]) re im])))
+         _ 'bad)
+   ; parts in precision p into a fresh temp of complex type rt; its address answers
+   (lopack g rt p [fs re im])
+    (: b (cxb rt) w (tsz g b) o (ntmp g rt)
+       (put x k) ((b = p ? [] [[(b = 'double ? 'cvtss2sd 'cvtsd2ss) x x]]) + [[(b = 'float ? 'stss 'stsd) 'r4 (o + k) x]])
+       (lomk g @ t (loesc g 'r4, [rt t (fs + put re 0 + put im w + [['lea t 'r4 o]])])))
+   ; to or from a complex: a width flip per part, a real's im zero, a complex read as a real its re
+   (locvt g v ty)
+    (? (gcplx? ty) (loparts g v (cxb ty) @ 'bad 'bad ps (lopack g ty (cxb ty) ps))
+       (: p (ty = 'float ? 'float 'double)
+          (loparts g v p @ 'bad 'bad [fs re _] (lotr g [p re fs] ty))))
+   ; + - * / of a complex left (the parser lifts a real one): a float complex over a float complex,
+   ; or / by a real no double, rounds in singles; the rest in doubles, a float answer only of two floats
+   (locxbin g op a b)
+    (: ta (vty a) tb (vty b)
+       fa (gcplx? ta && cxb ta = 'float) fb (gcplx? tb && cxb tb = 'float)
+       rt (fa && fb ? '(struct "__cplx_float") cxdty)
+       (? (!(gcplx? ta) || !(elem op '(+ - * /))) (lono g ['bin op ta tb])
+          (fa && op = '/ && !(gcplx? tb) && tb != 'double) (locxdivr g a b 'float ta)
+          (fa && fb && op != '/) (locxar g op a b 'float ta)
+          (op = '/ && !(gcplx? tb)) (locxdivr g a b 'double rt)
+          (locxar g op a b 'double rt)))
+   ; a real divisor divides each part
+   (locxdivr g a b p rt)
+    (loparts g a p @ 'bad 'bad
+       [fa x y] (lotr g b p @ [_ c fc]
+                   (lomkf g @ re (lomkf g @ im
+                      (lopack g rt p [(fa + fc + [['movapd re x] [(lofo "div" p) re c] ['movapd im y] [(lofo "div" p) im c]]) re im])))))
+   ; (x + yi) op (c + di) over the parts, in the old arms' order
+   (locxar g op a b p rt)
+    (loparts g a p @ 'bad 'bad
+       [fa x y] (loparts g b p @ 'bad 'bad
+                   [fb c d] (lomkf g @ re (lomkf g @ im (lomkf g @ s (lomkf g @ u
+                      (: (o n z w) [(lofo n p) z w] (mv z w) ['movapd z w]
+                         ops (op @ '+ [(mv re x) (o "add" re c) (mv im y) (o "add" im d)]
+                                   '- [(mv re x) (o "sub" re c) (mv im y) (o "sub" im d)]
+                                   ; re = xc - yd, im = yc + xd
+                                   '* [(mv re x) (o "mul" re c) (mv s y) (o "mul" s d) (o "sub" re s)
+                                       (mv s x) (o "mul" s d) (mv im y) (o "mul" im c) (o "add" im s)]
+                                   ; den = c^2 + d^2, re = (xc + yd) / den, im = (yc - xd) / den
+                                   [(mv s c) (o "mul" s c) (mv u d) (o "mul" u d) (o "add" s u)
+                                    (mv re x) (o "mul" re c) (mv u y) (o "mul" u d) (o "add" re u) (o "div" re s)
+                                    (mv im y) (o "mul" im c) (mv u x) (o "mul" u d) (o "sub" im u) (o "div" im s)])
+                         (lopack g rt p [(fa + fb + ops) re im]))))))))
+   ; -z: each part's sign bit flips, a nan's too
+   (locxneg g v)
+    (: p (cxb (vty v))
+       (loparts g v p @ 'bad 'bad
+          [fs x y] (lomk g @ t (lomk g @ k (lomkf g @ re (lomkf g @ im
+                      (: f (p = 'float) (fl z w) [[(f ? 'movdrx 'movqrx) t w] ['li k (f ? 2147483648 -9223372036854775808)] ['xor t t k]
+                                                 [(f ? 'movdxr 'movqxr) z t]]
+                         (lopack g (vty v) p [(fs + fl re x + fl im y) re im]))))))))
    ; a conversion through the float file: the 64-bit forms, ulong by the old arms' snippets
    (lotrf g [vt r fs] ty)
     (? (vt = ty) [ty r fs]
@@ -83,9 +148,16 @@
                              _ (lono g 'dotbase))
          ; a compound literal: a temp filled as a local would be, an lvalue in the frame
          ['clit ty ini]
-          (? (gcplx? ty) (lono g 'complex)
+          ; a complex one is a scalar's: one value converted, or its two parts
+          (? (gcplx? ty && (ini @ ['init [_ _]] 1 _ ()))
+              (map elval <>ini @ [x y] (cxb ty @ b
+                 (lox g env x @ 'bad 'bad
+                    vx (lox g env y @ 'bad 'bad
+                          vy (lotr g vx b @ [_ re fx] (lotr g vy b @ [_ im fy]
+                                (lopack g ty b [(fx + fy) re im] @ [_ t fs] ['a ['long t fs] ty 0])))))))
+             (gcplx? ty && (ini @ ['init (_ . _ . _)] 1 _ ())) (lono g 'complex)
              (ntmp g ty @ off
-                (aggish? ty ?
+                (aggish? ty && !(gcplx? ty) ?
                    (lofill g env off ty ini @ 'bad 'bad fs ['a ['long 'r4 (lozero g off (aup (tsz g ty) 8) + fs)] ty off])
                    (lox g env (ini @ ['init (x . _)] x ['init ()] ['num 0] _ ini) @ 'bad 'bad
                       v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] ['a ['long 'r4 fs] ty off] 'bad)))))
@@ -143,6 +215,7 @@
                        [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
                                ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u)
                         ['long m ()]]))))
+          (['a _ ty _] && gcplx? ty && !(locxsame? (vty v) ty)) (lotr g v ty @ 'bad 'bad v2 (lost g lv v2))
           (['a [_ b _] ty off] && stru? ty)
            (v @ ([vt r fs] && stru? vt && tsz g vt = tsz g ty)
                  (lomk g @ t (loesc g b, [(fs + locopy g r b off (tsz g ty) + [['lea t b off]]) [ty t ()]]))
@@ -196,8 +269,7 @@
               (go <>ini 0 ()))
           (lono g ['init ty])))
    (loelt g env off ty val)
-    (? (gcplx? ty) (lono g 'complex)
-       (aggish? ty && (val @ ('init . _) 1 ()) || arr? ty && (val @ ('str . _) 1 ())) (lofill g env off ty val)
+    (? (aggish? ty && (val @ ('init . _) 1 ()) || arr? ty && (val @ ('str . _) 1 ())) (lofill g env off ty val)
        (stru? ty) (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] fs 'bad))
        (arr? ty) (lono g ['init ty])
        (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] fs 'bad)))
@@ -220,6 +292,7 @@
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
     (? (bad? a || bad? b) 'bad
+       (gcplx? (vty a) || gcplx? (vty b)) (locxbin g op a b)
        (lofl? (vty a) || lofl? (vty b)) (lobinf g op a b)
        !(losc? (vty a) && losc? (vty b)) (lono g ['bin op (vty a) (vty b)])
        (: ta (vty a) tb (vty b)
@@ -369,7 +442,8 @@
          ['cast 'void x] (lox g env x @ [_ _ fs] ['void () fs] 'bad)
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
          ['cast ty x]
-          (lox g env x @ ([vt r fs] && losc? ty && losc? vt)
+          (lox g env x @ ([vt r fs] && (gcplx? ty || gcplx? vt) && (losv? ty || gcplx? ty)) (lotr g [vt r fs] ty)
+                         ([vt r fs] && losc? ty && losc? vt)
                           (two? (cvt ty r) ? (locp g [vt r fs] @ [_ t f2] [ty t (f2 + cvt ty t)]) [ty r fs])
                          ([vt r fs] && losv? ty && losv? vt) (lotr g [vt r fs] ty)
                          'bad)
@@ -380,7 +454,8 @@
                          ([ty r fs] && lofl? ty) (lotest g [ty r fs] @ [_ t f2] (lomk g @ d ['int d (f2 + [['cmp t 0] ['set 'eq d]])]))
                          'bad)
          (['un op x] && elem op '(neg bnot))
-          (lox g env x @ ([ty r fs] && losc? ty)
+          (lox g env x @ ([ty r fs] && gcplx? ty && op = 'neg) (locxneg g [ty r fs])
+                         ([ty r fs] && losc? ty)
              (: uty (usg? ty && !(elem ty '(uchar cchar ushort)))
                 sty (op = 'neg && !uty && s32bin? g ty 'int)
                 (locp g [ty r fs] @ [_ d f2]
@@ -913,7 +988,6 @@
                            [po so] (lovla g env ty po so @ 'bad 'bad fs (go u ([nm 'p po ty] . env) (acc + fs)))
                            _ (lono g 'vla)))
                     (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
-                    (gcplx? ty) (lono g 'complex)
                     (losv? ty && !(lotk? g nm))
                      (lomkt g ty @ r
                         (: _ (ap ? (pin (g 'lopins) r ap))
