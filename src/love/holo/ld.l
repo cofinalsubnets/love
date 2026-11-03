@@ -121,7 +121,7 @@
    ;     parse order, 'ot index -> ob, 'glob nom -> [oi si] the definition, 'und nom -> 0
    ;     defined, 1|2 strong or weak undefined, 'order every name inserted
    (ld-load items)
-    (: cx {'objs () 'n 0 'ot {} 'glob {} 'und {} 'lazy {} 'order () 'seen {} 'grp {}}
+    (: cx {'objs () 'n 0 'ot {} 'glob {} 'und {} 'lazy {} 'order () 'seen {} 'grp {} 'uonly {}}
        glob (cx 'glob) und (cx 'und) lazy (cx 'lazy) ot (cx 'ot) seen (cx 'seen)
        (ins nom) (? (peep seen nom 0) 0 (: _ (pin seen nom 1) (pin cx 'order (nom . cx 'order))))
        (gl ob f) (each >^(ob 'nsym) (si \ (: r (ob 'syms si) (? (r 1 = 0 || #(<r) = 0) 0 (f si r)))))
@@ -133,7 +133,7 @@
            _ (pin cx 'n (oi + 1), pin ot oi ob, pin cx 'objs (ob . cx 'objs))
            _ (gl ob (\ si r (ins <r)))
            _ (gl ob (\ si r (? (gone? r) 0 (def oi si r))))
-           _ (gl ob (\ si r (? (gone? r) (ref <r (r 1)) 0)))
+           _ (gl ob (\ si r (? (gone? r) (: _ (pin (cx 'uonly) <r 0) (ref <r (r 1))) 0)))
            oi)
        (def oi si r)
         (: nom <r cur (peep glob nom ())
@@ -162,7 +162,7 @@
           (it \ (: k <it
                    (? (k = 'obj) (add (ld-rel64 <>it <>(uread <>it)))
                       (k = 'tablet) (add <>it)
-                      (k = 'undef) (: _ (ins <>it) (ref <>it 1))
+                      (k = 'undef) (: _ (ins <>it) _ (? (peep und <>it 0 = 0) (pin (cx 'uonly) <>it 1) 0) (ref <>it 1))
                       (k = 'in)
                        (: p (it 1) s <>(uread p)
                           (? (!(string? s)) (scare 'link-open p)
@@ -477,6 +477,7 @@
                        (k = abs && nal) (ld-le sa 8)               ; not loaded: no slide
                        (k = abs)
                        (? (!(whole? s0)) (ld-le 0 8)
+                          (peep lk 'etype 3 = 2) (ld-le sa 8)                            ; ET_EXEC: nothing slides
                           (peep lk 'relr 1 && r 5 >= 2 && ro % 2 = 0) (ld-le sa 8)       ; relr: the field is the addend
                           (ld-le (? (peep lk 'apply 0) sa 0) 8))
                        (: c (peep (ld-rtab mach) k ())
@@ -696,7 +697,8 @@
                        vs (? (r 3 = 65521) [(r 4) 65521] (string? n) [(at oi (r 3) (r 4)) (shx n)] [0 0])
                        (? (vis = 1 || vis = 2 || loc? nm) (put oi (ent nm <vs (r 5) (r 2) vis (vs 1)))
                           (pin glo 'l (ent nm <vs (r 5) (r 1 * 16 + r 2) vis (vs 1) . glo 'l))))
-                    (peep und nm 0 > 0) (pin glo 'l (ent nm 0 0 (und nm * 16) 0 0 . glo 'l))
+                    ; an undefined only -u named stays out, as lld leaves it
+                    (peep und nm 0 > 0 && !(peep (cx 'uonly) nm 0)) (pin glo 'l (ent nm 0 0 (und nm * 16) 0 0 . glo 'l))
                     0))))
        _ (each names gl)
        ; lld's _DYNAMIC, hidden at .dynamic
@@ -764,7 +766,7 @@
        (at? t) (? (atom? (t 'lma)) (whole? (t 'lma)) 1)
        phr (foldl (\ a c (? (<c = 'phdrs) <>c a)) () (lk 'cmds))
        _ (foldl (\ pv t (? (alloc? t) (: ns (? (two? (peep t 'phdrs ())) (t 'phdrs) pv) _ (pin t 'phn ns) ns) pv)) () outs)
-       (in p) (filter (t \ alloc? t && t 'sz > 0 && elem (p 'name) (t 'phn)) outs)
+       (in p) (filter (t \ alloc? t && elem (p 'name) (t 'phn)) outs)
        ; loads [[first last row] ..], row the PHDRS one or ()
        grps (? flat (ld-fgroups outs0) ())
        loads (? (two? phr)
@@ -778,6 +780,12 @@
        _ (each loads (l \ each outs (t \ (? (t 'va >= <l 'va && alloc? t && t 'sz > 0
                                                 && t 'va <= (l 1) 'va && !(peep t 'load 0))
                                              (pin t 'load l) 0))))
+       ; under PHDRS an empty section rides its header's load too, for its offset
+       _ (? (atom? phr) 0
+            (each outs (t \ (? (alloc? t && t 'sz = 0 && !(two? (peep t 'load ())))
+                                (: m <(filter (x \ x 2 != () && elem (x 2 'name) (t 'phn)) loads)
+                                   (? (two? m) (pin t 'load m) 0))
+                                0))))
        nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1))
        nres (? flat (#grps + 4) nph)
        hdrs (64 + 56 * nres)
