@@ -6,7 +6,9 @@
 // inside every box [x0 y0 x1 y1] of boxes; kind 0-9 a shape of four nums (fill rows cols rect
 // disc grid checker stripes dots patches), 10 a bevel [dx dy w] lit by the first paint and
 // darkened by the second, 11 a polygon of its nums' corners, 12 cracks: a grid [dx dy w] its
-// lines wandering by noise up to the fourth num either side. a paint [tag a b c d]: 0 a hole,
+// lines wandering by noise up to the fourth num either side, 13 grain: rows [every w warp size]
+// wandering by noise, 14 cells: borders [size w] between the points thrown one to a cell.
+// a paint [tag a b c d]: 0 a hole,
 // 1 the colour a b c, 2 shade by a, 3 tint by a b c, 4 mix toward a b c by d, 5 noise of size
 // a b, amount c, seed d. () where an argument is not as it says
 #include "love.h"
@@ -58,6 +60,19 @@ static bool sw_in(struct sw_layer const *l, flo_t x, flo_t y) {
    flo_t const d = n[3] * ((flo_t) 2.0 * sw_vn(x / n[0], y / n[1], l->seed) - (flo_t) 1.0),
                e = n[3] * ((flo_t) 2.0 * sw_vn(x / n[0], y / n[1], l->seed + 1) - (flo_t) 1.0);
    return sw_fmod(x + d, n[0]) < n[2] || sw_fmod(y + e, n[1]) < n[2]; }
+  case 13: return sw_fmod(y + n[2] * ((flo_t) 2.0 * sw_vn(x / n[3], y / n[3], l->seed) - (flo_t) 1.0), n[0]) < n[1];
+  case 14: {   // the two points nearest, of the nine cells round, by their squares
+   flo_t const u = x / n[0], v = y / n[0];
+   int64_t const i = sw_floor(u), j = sw_floor(v);
+   flo_t m0 = (flo_t) 1e9, m1 = (flo_t) 1e9;
+   for (int q = 0; q < 9; q++) {
+    int64_t const ci = i + q % 3 - 1, cj = j + q / 3 - 1;
+    flo_t const px = (flo_t) ci + (flo_t) sw_throw(ci, cj, l->seed) / (flo_t) 1023.0,
+                py = (flo_t) cj + (flo_t) sw_throw(cj, ci, l->seed + 1) / (flo_t) 1023.0,
+                t = (px - u) * (px - u) + (py - v) * (py - v);
+    if (t < m0) m1 = m0, m0 = t;
+    else if (t < m1) m1 = t; }
+   return m1 - m0 < n[1]; }
   default: return 0; } }
 static void sw_paint(struct sw_paint const *p, flo_t c[3], uint8_t *hole, flo_t x, flo_t y) {
  if (p->tag == 0) { *hole = 1; return; }
@@ -114,7 +129,7 @@ static bool sw_read(word pl, struct sw_layer *l, flo_t *f) {
   y->num = f + used, used += y->nnum;
   y->kind = (int) getcharm(part[1]), y->seed = getcharm(part[3]);
   if (!sw_nums(part[0], (flo_t*) y->box, 4 * y->nbox) || !sw_nums(part[2], (flo_t*) y->num, y->nnum) || !sw_paint_of(part[4], &y->p)) return 0;
-  if (y->kind < 0 || y->kind > 12 || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 : y->nnum != 4)) return 0; }
+  if (y->kind < 0 || y->kind > 14 || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 : y->nnum != 4)) return 0; }
  return 1; }
 
 static intptr_t sw_q(flo_t v) {   // a channel 0 to 255

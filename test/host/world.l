@@ -861,5 +861,20 @@
        (0 < #tri < 40) (all (p \ p 0 + p 2 <= 4.0) tri)
        (#ln = 2) (map (q \ rd (q 0 0)) ln = [500000 1600000]) (rd (ln 0 1) = 180000000) (ln 1 2 = 1.0)
        (#(sc 'bulbs) = 6) (all (b \ b 'at 1 = 2.0) (sc 'bulbs))))
+; materials: every kind skins a brush; tile's as station's tiles texel for texel under seed 0;
+; the same seed the same picture and another not; a range thrown inside it; felt as its kind;
+; a kind or a parameter not known said back with what is
+(: M (cite 'scenery 'material) sw (cite 'swatch 'swatch) T (cite 'scenery 'texture)
+   kinds ['wood 'plank 'stone 'sandstone 'brick 'tile 'cobble 'mud 'concrete 'metal 'cloth 'carpet 'gravel 'sand 'soil 'grass]
+   (in k) (lv ("(room [0 0 0] [4 3 4]) (skin {'all (material '" + show k + " 3 {})} (solid (box [1 0 1] [2 1 2])))"))
+   (pic t) (show (sw (t 'w) (t 'h) (t 'layers)))
+   st (T 32 32 0.6 [['fill '(rgb 0.8 0.8 0.78)] ['checker 16 16 '(rgb 0.7 0.7 0.68)] ['noise 5 0.1] ['grid 16 16 1 '(rgb 0.4 0.4 0.4)]])
+   mt (M 'tile 0 {'a [0.8 0.8 0.78] 'b [0.7 0.7 0.68] 'grout [0.4 0.4 0.4]})
+ (test (all (k \ tablet? (in k)) kinds) (pic mt = pic st) (mt 'm = 0.6)
+       (pic (M 'stone 1 {}) = pic (M 'stone 1 {})) (pic (M 'stone 1 {}) != pic (M 'stone 2 {}))
+       (tablet? (M 'wood 4 {'rings [5 9]})) (M 'wood 4 {} 'feel = 'wood) (M 'grass 4 {} 'feel = 'soft)
+       (has? (lv "(room [0 0 0] [4 3 4]) (skin {'all (material 'tofu 3 {})} (solid (box [1 0 1] [2 1 2])))") "a KIND of")
+       (has? (lv "(room [0 0 0] [4 3 4]) (skin {'all (material 'wood 3 {'hue 1})} (solid (box [1 0 1] [2 1 2])))") "wood takes")
+       (has? (lv "(room [0 0 0] [4 3 4]) (skin {'all (material 'wood 1.5 {})} (solid (box [1 0 1] [2 1 2])))") "(material KIND seed")))
 (test_fin ())
 (puts "world: ok\n")
