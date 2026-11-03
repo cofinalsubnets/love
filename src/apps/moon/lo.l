@@ -59,8 +59,9 @@
    ; -- the environment: (name 'v vreg ty) | (name 'm off ty), and ('brk L) ('cont L) ('sw tab ty) --
    (lovar g env nm)
     (assoc nm env @ (_ . en) en
-       (peep (g 'gregs) nm () ? 'bad
-          (g 'glob nm @ (a . b . _) ['g a b] 'bad)))
+       ; a global register variable is its register
+       (peep (g 'gregs) nm () @ (s . y . _) (gas-regname (gtgt g) s @ r (nom? r ? ['v r y] 'bad))
+          _ (g 'glob nm @ (a . b . _) ['g a b] 'bad)))
    (lolv g env e)
     (e @ ['var nm]
           (lovar g env nm @ ['v r ty] ['v r ty]
@@ -90,6 +91,8 @@
     (: o0 (peep g 'off 0) sl0 (g 'slots) s0 (g 'strs) fe0 (g 'fesc) w0 (g 'lowhy)
        ty (lolv g env e @ (('v || 'a || 'b) . _ . ty . _) ty _ (lox g env e @ [t _ _] t _ 'bad))
        (pins g 'off o0 'slots sl0 'strs s0 'fesc fe0 'lowhy w0, ty))
+   ; a register variable named as an asm operand: its register | ()
+   (lovpin g env e) (e @ ['var nm] (lovar g env nm @ ['v r _] (g 'lopins r) _ ()) _ ())
    ; a refusal, its first cause kept for MOON_LOLOG
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
    ; a frame address become a value: no sibling call may jump past it
@@ -719,12 +722,17 @@
           (st o a)
            (lolv g env (o 2) @
               'bad 'bad
-              lv (lv 2 @ ty
-                    (stru? ty || arr? ty || lofl? ty && !(freg? a) ? (lono g 'asmout)
-                       ; an xmm output into an integer lvalue: its bits
-                       ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
-                          [(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))
-                           (lost g lv [ty t ()] @ [fs _] fs 'bad)]))))
+              ; a struct or union a register holds whole stores as the integer its size is
+              (['a av ty off] && stru? ty && <o = 'o && !(freg? a) && elem (tsz g ty) [1 2 4 8])
+               (st1 o a ['a av (tsz g ty @ 1 'uchar 2 'ushort 4 'uint _ 'ulong) off])
+              lv (st1 o a lv))
+          (st1 o a lv)
+           (lv 2 @ ty
+              (stru? ty || arr? ty || lofl? ty && !(freg? a) ? (lono g 'asmout)
+                 ; an xmm output into an integer lvalue: its bits
+                 ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
+                    [(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))
+                     (lost g lv [ty t ()] @ [fs _] fs 'bad)])))
           ins (filter (i \ in? (ops i)) ^#ops)
           outs (filter (i \ out? (ops i)) ^#ops)
           lds (map (i \ ld (ops i) (asgn i)) ins)
@@ -794,13 +802,16 @@
     (: (go l env acc)
         (l @ ((nm . ty . rest) . u)
               (: init (rest @ (i . _) i ())
-                 (? (rest @ (_ . x . _) x ()) (lono g 'regasm)
+                 ; a register variable: a plain vreg, its register named for asmplan
+                 ap (rest @ (_ . x . _) (string? x ? (gas-regname (gtgt g) x)) _ ())
+                 (? (ap && !(nom? ap && asmreg? g ap && losv? ty && nelem nm (g 'lotk))) (lono g 'regasm)
                     (gvarr? ty) (lono g 'vla)
                     (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
                     (gcplx? ty) (lono g 'complex)
                     (losv? ty && nelem nm (g 'lotk))
                      (lomkt g ty @ r
-                        (: e2 ([nm 'v r ty] . env)
+                        (: _ (ap ? (pin (g 'lopins) r ap))
+                           e2 ([nm 'v r ty] . env)
                            (init @ () (go u e2 acc)
                                    _ (lox g env init @ 'bad 'bad
                                         v (lost g ['v r ty] v @ [fs _] (go u e2 (acc + fs)) 'bad)))))
@@ -821,8 +832,8 @@
    ; -- the fn: params home off their registers, then the body -> forms over vregs | 'bad --
    ; MOON_LOLOG=1 names each fn and which path took it; MOON_LOONLY=fn keeps the new path to one fn, for bisecting
    (lofn g f params sig)
-    ((pin g 'lopeek lopeek, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (n = <>f ? (lofn1 g f params sig) 'bad)) @ r
-       (pin g 'lopeek (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
+    ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (n = <>f ? (lofn1 g f params sig) 'bad)) @ r
+       (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || loagg? g rt) && all (p \ losv? <>p || loagg? g <>p) params &&
             !(g 'hasasm || g 'twice || g 'abad || g 'sspf || two? (g 'ltaken)))

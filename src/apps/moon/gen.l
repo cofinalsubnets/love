@@ -8546,7 +8546,7 @@
        (x != 0 && x != em && net (map (k \ y >> k & 1) ^e) = 2))
    ; a `register T v asm("reg")` variable named as an operand: its pin, else ()
    (asmvpin g env e)
-    (g 'lopeek ? () (asmvpin0 env e))   ; a lo env pins none: its register variables refuse
+    (g 'lovpin @ () (asmvpin0 env e) f (f g env e))   ; a lo env keeps its pins apart
    (asmvpin0 env e)
     (e @ ('var nm) (assoc nm env @ en (two? en && two? >>>en ? <>>>en))
          ())
