@@ -34,6 +34,8 @@
           [('ucomisd || 'ucomiss) a b] [[a b] ()]
           [('ldsd || 'ldss) d b _] [[b] [d]]
           [('stsd || 'stss) b _ v] [[b v] ()]
+          [('ldsdx || 'ldssx) d b i _ _] [[b i] [d]]
+          [('stsdx || 'stssx) b i _ _ v] [[b i v] ()]
           (('jmp || 'br || 'label) . _) [() ()]
           ((op . d . a . b . _) && elem op divops) [[a b] [d 'r0]]
           (rdsp g f @ 'bar 'bad (u . d . _) [u d])) @
@@ -105,12 +107,19 @@
                (fits? r x) (nelem r (peep forb x ()) && !(ovl? x (id r)))
                (free? r x act) (!(any (w \ loc w = r && ovl? w x) act) && fits? r x)
                (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (peep loc y ())) (peep hint x ())))
-               ; evict the active hull ending last, where its register serves this one
+               ; a spill's weight: its touches, each 8^loop depth
+               spn (raspans fs)
+               wt (foldl (t \ i \ (vwt spn i @ w (ud i @ [u d] (map (x \ pin t x (peep t x 0 + w)) (vun u d), t)))) {} ^n)
+               (wt? x) (peep wt x 0)
+               ; the lightest active interval whose register serves this one alone, or none when
+               ; this one weighs less and may spill itself
                (victim x act)
-                (foldl (b \ w \ (? (nosp (nms w) || hi w <= hi x || !(fits? (loc w) x) ||
+                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? w x) || !(fits? (loc w) x) ||
                                      any (y \ y != w && loc y = loc w && ovl? y x) act) b
-                                   (b @ () w _ (hi b < hi w ? w b))))
-                       () act)
+                                   (b @ () w _ (wt? w < wt? b ? w b))))
+                       () act @
+                   () ()
+                   w (!(nosp (nms x)) && wt? x <= wt? w ? () w))
                (scan fl l act sp)
                 (l @ ()
                       sp
@@ -125,6 +134,14 @@
                (scan ragp (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
                   sg (scan ragf (filter fv? vs) () sg @ 'bad 'bad
                         sp [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp])))))
+
+   ; the back edges' spans [label jump], for vwt's loop depth
+   (raspans fs)
+    (: lb (vlabs fs)
+       (go l i) (l @ (f . u) (: j (f @ ['jmp t] (peep lb t -1) ['br _ t] (peep lb t -1) _ -1)
+                                (0 <= j && j <= i ? ([j i] . go u (i + 1)) (go u (i + 1))))
+                    _ ())
+       (go fs 0))
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
    ; until a label or a call ends the run (the last four kept)

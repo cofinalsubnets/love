@@ -6,8 +6,8 @@
 (borrow 'holo)
 (:
    ; x64's indexed twin of a load or store, and a store's immediate twin
-   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw}
-   nmxst {'st 'stx 'st1 'stxb}
+   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
+   nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
    nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written
@@ -117,14 +117,14 @@
        (idx b o) (nmav av b @ (['add _ b2 x] && lovr? x)
                                (nmav av x @ (['imul _ i s] && elem s '(1 2 4 8)) [b2 i s o] _ [b2 x 1 o])
                               _ ())
-       (f @ ([op d b o] && elem op ldops9)
+       (f @ ([op d b o] && elem op (ldops9 + fldops))
              (base b o @ [b2 o2] [op d b2 o2]
                 _ (peep nmxld op () @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
-            ([op b o v] && elem op gstops)
+            ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
                 _ (peep nmxst op () @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
-            ([op d b o] && elem op (fldops + leaops)) (base b o @ [b2 o2] [op d b2 o2] _ f)
-            ([op b o v] && elem op (fstops + siops)) (base b o @ [b2 o2] [op b2 o2 v] _ f)
+            ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
+            ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ['cmp t 0] (nmav av t @ ['and _ a k] ['test a k] _ f)
             f))
 
