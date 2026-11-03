@@ -11,8 +11,7 @@
 ; lays an ELF32 image for a part with no MMU from a map of runs.
 ; loads after src/love/holo/obj.l and lds.l.
 (module 'holo
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(posix bytes))
 
 (:
    ; little-endian reads; a signed u64 field (a RELA addend) goes through s64

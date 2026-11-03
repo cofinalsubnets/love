@@ -1,7 +1,6 @@
 ; test/host/gz.l -- src/apps/gz.l and src/apps/tar.l against themselves; GNU tar and gzip
 ; agreeing with us is test/gate/targz.sh's
-(borrow 'gz)
-(borrow 'tar)
+(borrow '(gz tar))
 
 (: (gz-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
    gz-empty ""

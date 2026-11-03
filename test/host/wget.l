@@ -1,8 +1,7 @@
 ; test/host/wget.l -- kore's wget over a real socket against kiosko, and the tls floor under it.
 ; not in the corpus: it needs sockets. a live peer is test/host/wgetnet.l, opt-in.
 ;   cat test/00-init.l test/host/wget.l | out/love
-(borrow 'kiosko)
-(borrow 'tls)
+(borrow '(kiosko tls))
 
 (: T (cite 'tls)
    unhex (T 'unhex) hex (T 'hex)

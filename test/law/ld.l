@@ -3,7 +3,7 @@
 ; RELR probe kbuild links with no script; -r of merge and link-order sections; x86-64 -shared
 ; under a script with COMDAT, .eh_frame and --eh-frame-hdr
 
-(borrow 'holo)
+(borrow '(holo hashes))
 (: (klx n) (ld-xxh (string (map (i \ (i * 7 + n) % 256) ^n)))
    (test
       ; --- every length class: empty, 1-3, 4-8, 9-16, 17-128, 129-240, then the stripes

@@ -2269,12 +2269,7 @@ void kmain(void) {
   struct g *r = g;
   if (!woke) {
    r = cats_egg(g);
-   r = cats_lib(r);                                  // the uses below are splices
-   r = evals_(r,
-    // verbs first: the cat's apps pin into its table, and the cmdline's program word reads it
-    "(borrow 'verbs)"
-    "(borrow 'uu) (: uu (cite 'uu))"                         // the uu kernel the corpus's uu files drive
-    "(borrow 'cli)");
+   r = cats_lib(r);
    r = evals_(r, src_tasks); }
   // seat.l: what this machine is that a host is not, shadowing a woken book's bindings
   r = evals_(r, src_seat);

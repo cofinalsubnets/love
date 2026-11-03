@@ -1,8 +1,7 @@
 ; test/host/grap.l -- grap (src/apps/pic/grap.l) without plan 9 at hand: macros, ticks, log
 ; axes, troff minus; then the command, drawn by pic. test/gate/grap.sh diffs against plan 9.
 ;   cat test/00-init.l test/host/grap.l | out/love
-(borrow 'posix)
-(borrow 'pic)
+(borrow '(posix pic))
 (: K (cite 'pic)
    run (K 'gr-run)
    (grap t) (run ["-"] t @ r (<r = 0 ? (r 1) ""))

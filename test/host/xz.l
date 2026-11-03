@@ -1,7 +1,6 @@
 ; test/host/xz.l -- src/apps/xz.l: xz-pull at every cut answers what xz-unpack does whole.
 ;   run:  cat test/00-init.l test/host/xz.l | out/love
-(borrow 'xz)
-(borrow 'bytes)
+(borrow '(xz bytes))
 
 (: (xzt-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
    (xzt-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))

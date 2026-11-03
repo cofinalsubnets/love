@@ -2,11 +2,7 @@
 ; dl/opus-vectors) held to 11172-4 full accuracy on s16; where ffmpeg is, libopus streams
 ; through the door, lengths matched to the sample
 ;   cat test/00-init.l test/host/opus.l | out/love
-(borrow 'posix)
-(borrow 'ogg)
-(borrow 'av)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(posix ogg av bytes hashes))
 (: dir (cwd 0 + "/out/.opusd")
    peepv (cite (quote guts) (quote peepv))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

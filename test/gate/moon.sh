@@ -119,6 +119,15 @@ printf 'int f(int a){ return a + 1; }\nextern int fa(int) __attribute__((alias("
 moonrun -c "$ho/.fal.c" -o "$ho/.fal.o" || fail "mooncc: a function alias"
 [ "$(readelf -sW "$ho/.fal.o" | awk '$8 == "f" || $8 == "fa" {print $3, $4}' | sort -u | wc -l)" = 1 ] || fail "an alias does not carry its function's type and size"
 readelf -sW "$ho/.fszs.o" | grep -q ' end$' && fail "a function's end label reached the symtab"
+# an asm's relocs and symbols as gas lays them: a branch to a global keeps its reloc (plt32), an
+# address-of is pc32, a named fill is that byte, a same-section reach resolves, a data label
+# is notype size 0 unless .type names it, a .globl constant is absolute
+printf '.text\n.globl g\ng:\n ret\n.globl f\nf:\n call g\n jmp g\n jne g\n lea g(%%rip), %%rax\n ret\n.section .text.pad,"ax"\n ret\n.balign 8, 0x90\n.section .rodata\n.Lt:\n .long 1\nt2:\n .long .Lt - .\n.type tobj, @object\ntobj:\n .long 7\n.size tobj, .-tobj\n.globl dlab\ndlab:\n .long 9\n.globl zabs\nzabs = 0x1234\n' > "$ho/.grl.S"
+moonrun -c "$ho/.grl.S" -o "$ho/.grl.o" || fail "mooncc: an asm's relocs"
+[ "$(readelf -rW "$ho/.grl.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PC32 g " ] || fail "a branch to a global is not plt32 through its reloc, or an address-of is not pc32"
+readelf -x .text.pad "$ho/.grl.o" | grep -q 'c3909090 90909090' || fail ".balign 8, 0x90 is not filled with its byte"
+readelf -SW "$ho/.grl.o" | grep -q 'rela.rodata' && fail "a reach inside .rodata kept a reloc"
+[ "$(readelf -sW "$ho/.grl.o" | awk '$8 == "t2" || $8 == "tobj" || $8 == "dlab" || $8 == "zabs" {print $8, $2, $3, $4, $5, ($7 == "ABS" ? "ABS" : "-")}' | sort | tr '\n' ' ')" = "dlab 000000000000000c 0 NOTYPE GLOBAL - t2 0000000000000004 0 NOTYPE LOCAL - tobj 0000000000000008 4 OBJECT LOCAL - zabs 0000000000001234 0 NOTYPE GLOBAL ABS " ] || fail "an asm data label's type or size is not gas's, or a .globl constant is not absolute"
 # a global in a named section is its object's bytes, no word's pad: the kernel's percpu hot
 # data must fit one cache line
 printf '_Bool b __attribute__((section(".data..h1")));\nint n __attribute__((section(".data..h2"))) = 3;\nchar c[3] __attribute__((section(".data..h3")));\n' > "$ho/.nps.c"

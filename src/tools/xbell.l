@@ -3,10 +3,7 @@
 ;   love src/tools/xbell.l [--dry-run | --init N ID [AT] | --whoami]
 ; --init lays a state, never over one: next is B(N) replying to ID, B(N - 1) due on AT's day.
 ; $XBELL_DIR (~/.local/share/xbell): x.com.oauth.secret ($XBELL_KEYS), config.l, state.l, next.png, log
-(borrow 'json)
-(borrow 'bytes)
-(borrow 'posix)
-(borrow 'hashes)
+(borrow '(json bytes posix hashes cli))
 (:
    home (getenv "HOME" || "")
    dir ((getenv "XBELL_DIR" || (home + "/.local/share/xbell")) + "/")

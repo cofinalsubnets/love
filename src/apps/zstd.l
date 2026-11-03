@@ -4,8 +4,7 @@
 ;   (zstd-pull rd)      -> g: (zstd-next g) the next block's bytes, "" once done, then g's 'ans
 ;   (zstd-unf rd mk)    -> (1 n) | the word | 'no, out through the writer mk answers (1 w)
 (module 'zstd
-(borrow 'bytes)
-(borrow 'tar)
+(borrow '(bytes tar))
 
 (: (zstd-pack s level) (zstde s level)
    zstd-magic 4247762216               ; 28 b5 2f fd, little-endian
@@ -85,8 +84,7 @@
 ; `love zstd`, `unzstd`, `zstdcat`: zstd 1.5's flags, messages and statuses (0, 1 for any
 ; failure). unlike gzip, the input is kept unless --rm.
 (module 'zstdcmd
-(borrow 'zstd)
-(borrow 'posix)
+(borrow '(zstd posix cli))
 (: zsc-help "zstd -- the zstandard compressor
 usage: zstd [-cdfkqtvz] [-#] [--rm] [-o FILE] [FILE..]
   -z  compress (the default)            -d  decompress (unzstd)

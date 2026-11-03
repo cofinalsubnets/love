@@ -5,8 +5,7 @@
 ; a cask is mutable bytes; a tray's pin answers a copy, so trays hold constant tables only.
 ; the wrap registers module 'gz in the dist cat too, so the bake compiles it once.
 (module 'gz
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(bytes hashes))
 (:
    ; --- crc32 (IEEE 802.3: reflected, polynomial 0xedb88320) -----------------
    ; table built once at load; the final xor is the starting 0xffffffff
@@ -287,11 +286,9 @@
 ; compressing reads whole. -l's ratio is the payload's, as GNU's is.
 ; a module of its own, so the borrow of 'gz lands in this layer, not the dist cat's
 (module 'gzcmd
-(borrow 'gz)
-(borrow 'bytes)
+(borrow '(gz bytes cli))
 
-(borrow 'path)
-(borrow 'posix)
+(borrow '(path posix))
 (: gzc-usage "usage: gzip [-cdfklnNqrtv19] [-S SUF] [FILE..]   (gunzip = -d, zcat = -dc)"
    gzc-big ": inflates past 1 GiB, more than is held in memory -- refused"
    gzc-help "gzip -- the RFC 1952 container in love (module 'gz is the codec)

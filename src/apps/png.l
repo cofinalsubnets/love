@@ -11,8 +11,7 @@
 ; rgba is w*h*4 bytes, 8 bits a sample: a 16-bit sample rounds to its nearest 8-bit one,
 ; a low-depth grey scales to the full range. ancillary chunks past tRNS are skipped.
 (module (png png-decode png-frames png-encode png-walk png-unfilter)
-(borrow 'bytes)
-(borrow 'gz)
+(borrow '(bytes gz))
 (:
    png-sig (string 137 + "PNG\r\n\x1a\n")
    png-adam7 [[0 0 8 8] [4 0 8 8] [0 4 4 8] [2 0 4 4] [0 2 2 4] [1 0 2 2] [0 1 1 2]]

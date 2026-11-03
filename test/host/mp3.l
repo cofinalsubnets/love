@@ -1,11 +1,7 @@
 ; test/host/mp3.l -- src/love/audio/mp3.c's nifs and src/apps/mp3.l: a small stream and its
 ; flips, the 11172-4/13818-4 conformance streams (fetched into dl/mp3-vectors), lame against ffmpeg/mpg123
 ;   cat test/00-init.l test/host/mp3.l | out/love
-(borrow 'posix)
-(borrow 'mp3)
-(borrow 'av)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(posix mp3 av bytes hashes))
 (: dir (cwd 0 + "/out/.mp3d")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
    (mp-nib c) (? (c < 58) (c - 48) (c - 87))

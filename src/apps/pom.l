@@ -10,7 +10,7 @@
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
              pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit
              pom-lit? pom-mare? pom-face pom-moon pom-glow pom-glow-at pom-natural)
-(borrow 'cal)
+(borrow '(cal cli))
 (:
  epoch 2444238.5                       ; 1980 january 0.0
  elonge 278.833540                     ; the sun's ecliptic longitude at the epoch

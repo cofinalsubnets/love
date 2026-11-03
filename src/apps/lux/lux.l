@@ -10,7 +10,7 @@
 ; wssane?. the repl never touches the X socket. (lux-restart ()) is the back door.
 (module 'lux
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l
-(borrow 'posix)
+(borrow '(posix cli))
 (: lux-cell {}
    (lux-st u) (lux-cell 'st)
    ; a change waits for the loop's next X event; no wake from here, the wire is the

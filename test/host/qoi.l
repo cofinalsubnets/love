@@ -1,8 +1,7 @@
 ; test/host/qoi.l -- src/apps/qoi.l and qoi.c: every op by hand, round trips, then where PIL is,
 ; each way read alike and our ops byte for byte PIL's encoder's; then the refusals
 ;   cat test/00-init.l test/host/00-host.l test/host/qoi.l | out/love
-(borrow 'posix)
-(borrow 'qoi)
+(borrow '(posix qoi))
 (borrow "src/apps/qoi.l")
 (: dir (cwd 0 + "/out/.qoid")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

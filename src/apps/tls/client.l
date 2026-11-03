@@ -35,10 +35,7 @@
 ; by `%` and `//` -- bit ops on bigs are not a floor this tree stands on yet), which is
 ; milliseconds for one handshake.
 (module 'tls
-(borrow 'dns)
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(dns posix bytes hashes))
 
 (:
    ; --- bytes and words ---

@@ -6,8 +6,7 @@
 (module (score score-parse score-tune score-check score-file score-lines score-bar
          score-strings score-words score-note score-num score-pc score-chord score-key
          score-beats)
-(borrow 'harp)
-(borrow 'posix)
+(borrow '(harp posix))
 (:
  score-beats 4                          ; a bar, unless a beats line says otherwise
  (score-num t) (:- (go 0 0 0 1) (go i n f d)

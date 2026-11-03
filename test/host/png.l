@@ -2,10 +2,7 @@
 ; every colour type, depth and interlace held to magick's rgba; apng by frame sums and PIL's;
 ; then the refusals.
 ;   cat test/00-init.l test/host/png.l | out/love
-(borrow 'posix)
-(borrow 'gz)
-(borrow 'hashes)
-(borrow 'png)
+(borrow '(posix gz hashes png))
 (borrow "src/apps/png.l")
 (: dir (cwd 0 + "/out/.png")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

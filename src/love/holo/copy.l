@@ -11,8 +11,7 @@
 ;
 ; loads after src/love/holo/link.l, whose field table, ld-write and ld-zeros it reads.
 (module 'holo
-(borrow 'kore)
-(borrow 'posix)
+(borrow '(kore posix))
 
 (:
    ;; the pt_loads as (fileoff filesz paddr)

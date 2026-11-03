@@ -7,8 +7,7 @@
 ; every 40 ms. the socket is polled between frames, never waited on: doom's tick keeps the
 ; clock. HORN=none is a silent game. -frames N ends after N drawn frames, for the gate.
 (module 'doom
-(borrow 'xwire)
-(borrow 'posix)
+(borrow '(xwire posix cli))
 (:
    ; a keysym -> doomkeys.h's code, () for none. letters arrive lower-case, as the menus want
    doomkeys {65361 172 65362 173 65363 174 65364 175                              ; arrows

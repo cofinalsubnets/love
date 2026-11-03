@@ -11,9 +11,7 @@
 ; hk is [seed pub]; keys is re-read at each login. no setuid: the server serves only the user
 ; it runs as. no rekey (answered with a disconnect), no forwarding, no subsystems.
 (module 'ssh
-(borrow 'tls)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(tls posix bytes))
 
 (:
    vsd "SSH-2.0-love_sshd"

@@ -4,7 +4,7 @@
 ; every key is a pure step and every frame a pure lay into a port; only design-run ties the
 ; tty, on cli's stage, and the prompts are cli's editor. level, kind, thing and the rest are story's.
 (module (design design-main design-run design-new design-key design-frame)
-(borrow 'story)
+(borrow '(story cli))
 (:
  (design-new lvl p) {'lvl lvl 'path p 'cx (lvl 'sx) 'cy (lvl 'sy) 'mode 'map 'buf (ednew ()) 'msg "" 'new () 'brush 46 'dirty 0 'over 0 'want ()}
  (tell d s) (pin d 'msg s)

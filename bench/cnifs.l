@@ -6,9 +6,7 @@
 ; these run the nifs, never src/apps/gz.l's love twins -- this table times C compilers. the binary
 ; under test lives in out/bench/cc where the module walk misses lib/, so everything is built from
 ; the core, and the inflate stream is laid beside it by ccgen.l through the host love.
-(borrow 'posix)
-(borrow 'hashes)
-(borrow 'gz)
+(borrow '(posix hashes gz))
 (:
    ; varied bytes: crc32 indexes its tables with the data, so an all-NUL message would read one
    ; entry of each. built small and doubled, since a love loop over the whole megabyte costs more

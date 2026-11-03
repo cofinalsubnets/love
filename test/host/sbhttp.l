@@ -1,8 +1,6 @@
 ; test/host/sbhttp.l -- sb pulling a store over a real socket from kiosko, in one process
 ; an sb remote needs no server logic: the walk finds everything from /tips, deps and hunks
-(borrow 'sb)
-(borrow 'kiosko)
-(borrow 'hashes)
+(borrow '(sb kiosko hashes))
 
 (: SD (cite 'sb)
    record (SD 'sb-record) sync (SD 'sb-sync) bank (SD 'sb-bank)

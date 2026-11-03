@@ -1,5 +1,6 @@
-; unify, var and the operators are global, the rest rides (cite 'kanren).
+; the borrow brings unify, var and the operators; the rest rides (cite 'kanren).
 ; search order is unspecified, hence unord_eq
+(borrow 'kanren)
 (: K (cite 'kanren)
    est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)
    smap (K 'smap)  sno (K 'sno)  stake (K 'stake)  walk (K 'walk)  s_app (K 's_app)

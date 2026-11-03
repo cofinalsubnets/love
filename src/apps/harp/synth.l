@@ -18,13 +18,7 @@
          synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
          synth-vols synth-vol0
          synth-pads synth-pad)
-(borrow 'horn)
-(borrow 'harp)
-(borrow 'play)
-(borrow 'posix)
-(borrow 'window)
-(borrow 'opl)
-(borrow 'ops)
+(borrow '(horn harp play posix window opl ops cli))
 (:
  esc (string 27)
  ; the pitched voices of harp's kit, each with how long a strike rings

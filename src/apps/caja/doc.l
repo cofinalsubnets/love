@@ -9,11 +9,7 @@
 ; the pages are \vsplit's, not the page builder's: no marks, no inserts. text is OT1: an
 ; accented letter sets as its base, another Latin-1 sign cmr lacks as ?, past Latin-1 nothing.
 (module (caja-doc cd-fonts cd-job cd-tokens cd-dvi cd-tex)
-(borrow 'text)
-(borrow 'tfm)
-(borrow 'caja-box)
-(borrow 'caja-par)
-(borrow 'caja-page)
+(borrow '(text tfm caja-box caja-par caja-page))
 (:
    pt 65536
    fonts [["cmr10" -1000] ["cmbx10" -1000] ["cmti10" -1000] ["cmtt10" -1000] ["cmbx12" -1000]

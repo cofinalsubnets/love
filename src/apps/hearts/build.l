@@ -84,12 +84,12 @@
    (slot _) (peep cnt 'live 0 >= njobs ? (reap1 0, slot 0) 0)
    (drain _) (0 < peep cnt 'live 0 ? (reap1 0, drain 0) 0)
 
-   ; one command: its exports, a PATH where hk-make is this script, its target's directory
-   ; first. a filechk ('out) writes through a tmp file and leaves an equal target alone ('same);
-   ; a target's own lines run in order, so its earlier job lands first
+   ; one command, under kbuild's set -e: its exports, a PATH where hk-make is this script, its
+   ; target's directory first. a filechk ('out) writes through a tmp file and leaves an equal
+   ; target alone ('same); a target's own lines run in order, so its earlier job lands first
    (run tg kind saved text env)
     (: ex (join "" (map (e \ "export " + e 0 + "=" + q (e 1) + "\n") (filter (e \ ident? (e 0)) env)))
-       pre (ex + "export PATH=" + q (hd + "/bin") + ":\"$PATH\"\nexport MAKE=hk-make\n"
+       pre (ex + "set -e\nexport PATH=" + q (hd + "/bin") + ":\"$PATH\"\nexport MAKE=hk-make\n"
             + "mkdir -p " + q (dir tg) + " && ")
        _ (waitfor tg)
        _ (appendf (hd + "/commands") (tg + "\t" + show kind + "\t" + text + "\n"))
@@ -130,7 +130,8 @@
         uwrite (hd + "/bin/hk-cc")
                (bang + "# the kernel's compiler: mooncc, and clang where it refuses (kcc.l); a unit takes love's\n"
                 + "# own budget, not the driver's: one header-heavy unit's live set passes 800 MB\n"
-                + "unset LOVE_BUDGET_MB\nexport HEARTS_KCC_LOG=" + q (hd + "/kcc.log") + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
+                + "unset LOVE_BUDGET_MB\nexport HEARTS_KCC_LOG=" + q (hd + "/kcc.log")
+                + "\nexport HEARTS_CLANG_VERSION=" + q (hark ["clang" "-dumpversion"] @ r (two? r && <r = 0 ? (chomp >r) "")) + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
         hark ["chmod" "+x" (hd + "/bin/hk-cc")],
         hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],

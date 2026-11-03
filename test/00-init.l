@@ -1,5 +1,6 @@
 ; leads the corpus: posix first, then a no-op for each frontend nif a bare target
 ; (kernel, wasm) lacks, so later mentions compile and answer ()
+(borrow 'cli)
 (cite 'posix ? (borrow 'posix))
 (map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
 (elem 'open (names ()) ? () (ev '(: (open x y) ())))

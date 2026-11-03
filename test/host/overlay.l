@@ -4,6 +4,7 @@
 (reads (open "src/apps/lux/sigs.l" "r"))
 (reads (open "src/apps/lux/core.l" "r"))
 (borrow 'lux)
+(: overlay (cite 'overlay) uu (cite 'uu))
 
 (:    chk1 (overlay 'ov-check)
    ; opfix then unglue: a glued sigil factors to a value, which no checker matches by name

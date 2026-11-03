@@ -14,12 +14,7 @@
 ;   (face-next s)        -> [kind a b c], () when the bridge is gone
 ;   (face-frame s w h fb) a frame of w*h words 0x00rrggbb, scaled onto the window
 (module 'droid
-(borrow 'posix)
-(borrow 'bytes)
-(borrow 'hashes)
-(borrow 'gz)
-(borrow 'tar)
-(borrow 'tls)
+(borrow '(posix bytes hashes gz tar tls cli))
 (:
    ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    ; --- the face ---

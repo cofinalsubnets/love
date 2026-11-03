@@ -15,8 +15,7 @@
 ;   (mime-head-enc s)     -> s as a header may carry it: an encoded word when not ascii
 (module (mime mime-split mime-heads mime-get mime-words mime-b64 mime-qp mime-b64e mime-utf8
          mime-ctype mime-leaves mime-date mime-addrs mime-head-enc mime-num mime-ascii?)
-(borrow 'cal)
-(borrow 'bytes)
+(borrow '(cal bytes))
 (:
  ; windows-1252's 0x80..0x9f, 0 where it leaves a hole
  mime-1252 [8364 0 8218 402 8222 8230 8224 8225 710 8240 352 8249 338 0 381 0

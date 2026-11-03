@@ -1,4 +1,5 @@
 ; post.l's byte and text floor: the classes, the digit readers, radix and utf-8 out
+(borrow 'cli)
 (test
  (digit? 48) (digit? 57) !(digit? 47) !(digit? 58) !(digit? 97)
  (alpha? 65) (alpha? 122) !(alpha? 64) !(alpha? 91) !(alpha? 48)

@@ -1,8 +1,7 @@
 ; test/host/stones.l -- the canyon and the bowl, headless. a crew module, not in the corpus:
 ; cat test/00-init.l test/host/00-host.l test/host/stones.l | out/love
 
-(borrow 'stones)
-(borrow 'vec)
+(borrow '(stones vec))
 (borrow 'view)     ; pi, wrap
 (: stones-kb (view-bind view-binds stones-binds))
 
