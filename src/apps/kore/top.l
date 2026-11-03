@@ -8,9 +8,7 @@
 ; 12 ppid, 13 threads, 14 kernel thread, 15 tgid, 16 uid. the sort key is that index,
 ; and the first twelve are the columns in order.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'text)
+(borrow '(cli posix text))
 
 (:
    tp-usage "usage: top [-b] [-P] [-C] [-n FRAMES] [-d SECS] [-p PID].."

@@ -106,26 +106,29 @@
                    t (snip s b n)
                    (intern (t @ ((x && 0 < #x) + ".l") x t)))
       fsopen (cite 'posix 'open)
-      (m \ (? (tablet? m) (prior m)
-              (string? m)
-              (mname m @ nm
-                 ; the path's mark: its layer, the name its file registered, or 1 mid-read
-                 (peep (lib ()) m () @ v
-                   (? (v = 1) ()
-                      (v != ()) (prior v)
-                      (: q (!fsopen ? () (fsopen m "r"))
-                         (!(hot? q) ? (prior m)
-                            ; the mark goes down before the read, so a file naming itself stops
-                            (: _ (pin (lib ()) m 1)
-                               _ (enter ()) _ (rdev q) w (leave ())
-                               (? !(bare? w)
-                                   (: _ (pin (lib ()) m w)
-                                      _ (? (nil? (lib () nm)) (pin (lib ()) nm w) 0)
-                                      (prior w))
-                                  ; a bare layer: the module the file made under its name, if any
-                                  (lib () nm) (: _ (pin (lib ()) m nm) (prior nm))
-                                  ())))))))
-              (prior m)))))
+      ; a list borrows each in turn
+      (b m) (? (two? m) (each m b)
+               (tablet? m) (prior m)
+               (string? m)
+               (mname m @ nm
+                  ; the path's mark: its layer, the name its file registered, or 1 mid-read
+                  (peep (lib ()) m () @ v
+                    (? (v = 1) ()
+                       (v != ()) (prior v)
+                       (: q (!fsopen ? () (fsopen m "r"))
+                          (!(hot? q) ? (prior m)
+                             ; the mark goes down before the read, so a file naming itself stops
+                             (: _ (pin (lib ()) m 1)
+                                _ (enter ()) _ (rdev q) w (leave ())
+                                (? !(bare? w)
+                                    (: _ (pin (lib ()) m w)
+                                       _ (? (nil? (lib () nm)) (pin (lib ()) nm w) 0)
+                                       (prior w))
+                                   ; a bare layer: the module the file made under its name, if any
+                                   (lib () nm) (: _ (pin (lib ()) m nm) (prior nm))
+                                   ())))))))
+               (prior m))
+      b))
 
 ; a module's macros (its key 0) into the head layer, without its names: ks names them, ()
 ; takes all. the way to get macros from a module reached by `cite`.
@@ -2003,6 +2006,60 @@
 
 ) ; module grid
 
+; the reader's words, beside show: a string's first form, a port's forms run, and its forms read
+(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
+; (ev 'ev a) late-binds: post is evaluated before the glaze rebinds ev (and LOVE_NO_GLAZE re-pins it)
+(: (reads p)
+   (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
+                              (a . b) (walk b (ev 'ev a))
+                              z)
+      ; for `in`, shared with the forms evaluated: gulp for speed, but hold nothing across an
+      ; eval. box 0 counts every byte drawn off p, so the walk can put the port back.
+      box {}
+      (drew u) (peep box 0 0)
+      (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
+      ; flow, plus the count
+      (feed u)
+       (see p @ -1 () c
+        (: _ (unsee p c)
+           t (chug p)
+           _ (pin box 0 (drew () + #t))
+           (go k l) (0 >= k ? l (k - 1 @ j (go j (t j . l))))
+         (go #t (once (u \ feed ())))))
+      ; bytes consumed from a to b, by identity, forcing each step: tallying the lazy residue
+      ; would force the whole rest
+      (frc x) (lit? x ? (x ()) x)
+      (upto a b n) (: aa (frc a) bb (frc b)
+                      (? (aa = bb) n
+                         (two? aa)   (upto >aa bb (n + 1))
+                         n))
+      (step cl walked z)
+       (sound cl @
+         'torn (scare 'unfinished-form p)
+         (a . b) (: k (upto cl b 0)
+                    w2 (walked + k)
+                    rem (drew () - w2)
+                    ; one byte short on purpose: the reader has read one ahead
+                    _ (drop (0 < rem ? (rem - 1) 0))
+                    h (inhand p)
+                    v (ev 'ev a)
+                    (h = inhand p ? (drop 0, step b w2 v)
+                                    (start (two? b ? [<b]) v)))
+         (drop 0, z))
+      (start pre z)
+       (see p @
+        -1 (atom? pre ? z (walk pre z))
+        c (unsee p c,
+           inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
+                      (walk (cat pre (trickle p)) z)))
+      ; `in` folded at compile: a rebound `in` fails this in silence
+      (p = in ? (start () 0) (walk (flow p) 0))))
+(: (forms p)
+   ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
+                              (a . b) (g b (a . acc))
+                              (rev acc)))
+    (flow p) ()))
+
 ; verbs -- the registry behind `love mooncc ..` and a `sed` symlink onto the artifact: one
 ; name-keyed tablet, (cite 'verbs 'tab) the real one, mutated by `pin`. never spliced, or
 ; `get` would shadow half the tree. two lookups, with different shadow rules:
@@ -2120,7 +2177,12 @@
    (after t k) (catmap (s \ (0 < #s && s 0 = 40 ? (word1 (snip s 1 #s)) (word1 s)) @ w (0 < #w ? [(name w)] ()))
                        >(split k t))
    ; the modules a source cites or borrows, and the units other than its own that hold them
-   (refs t) (after t "cite '" + after t "borrow '")
+   ; every name a borrow takes, a list's words too
+   (borrowed t) (catmap (s \ (0 < #s && s 0 = 40
+                               ? (: (shut i) (i < #s && s i != 41 ? (shut (i + 1)) i) (map name (words (snip s 1 (shut 1)))))
+                               (word1 s @ w (0 < #w ? [(name w)] ()))))
+                        >(split "borrow '" t))
+   (refs t) (after t "cite '" + borrowed t)
    (needs p t) (foldl (a \ m \ (mods m @ q (string? q && unit q != unit p && !(elem (unit q) a) ? (a + [unit q]) a)))
                       () (refs t))
    ; a module, raised with its unit when a left-out file holds it; () when none does
@@ -2142,7 +2204,7 @@
                    pin ros 'rising ())))
    (rise1 p) (load1 ("/love/" + p))
    (load1 p) ((cite 'posix 'open) p "r" @ q
-               (hot? q ? (cite 'cli 'reads q, cite 'posix 'close q) (scare 'no-source p)))
+               (hot? q ? (reads q, cite 'posix 'close q) (scare 'no-source p)))
 
    ; --- packs: apps and libraries outside the tree, a folder each under ~/.love/pack, named
    ; by the folder. its verbs and modules are what its files enlist and open, found as a
@@ -2216,72 +2278,19 @@
 
 ) ; module verbs
 
-; cli -- the console and command line: the repl and its multi-line editor, the stream shell
-; (read/reads), the floor handler (welp), the port-driven line reader (edraw/edln/edlnc), and
-; the host command line, read left to right after the program name:
+; cli -- the console and command line: the repl and its multi-line editor, the floor handler
+; (welp), the port-driven line reader (edraw/edln/edlnc), and the host command line, read left
+; to right after the program name:
 ;   (cli-rail ln)     the walk over ln = (program-name . args)
 ;   (cli-line ln tty) a frontend's whole tail: the argv[0] lookup, the rail, the repl, stdin
 ; a forked lush child calls cli-line too, in place of exec'ing this binary.
 
-(module '(cli read reads forms shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
+(module '(cli shell welp edraw edln edlnc edlay cli-rail cli-line stage stage-run ttysize ttytake ttygive edkey edtap edgc
           uopt uopt1 uoptv uoptun uoptbad uoptstray uoptp uoptlast uask uvers love-build udoor edcmd edsgr edwide edcut edpad edfit sgr
           ednew edstep edput ednl edclear edempty? edchars edtext edcol edparses? edframe edload
           edleft edright edbsp eddel edhome edend edtop edbot edup eddown uphist downhist eddetach
           joinln splitat parseall)
 (borrow 'text)
-(: (read s) (sound (hot? s ? (flow s) s) @ (x . _) (ev 'ev x)))
-; (ev 'ev a) late-binds: post is evaluated before the glaze rebinds ev (and LOVE_NO_GLAZE re-pins it)
-(: (reads p)
-   (: (walk cl z) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a . b) (walk b (ev 'ev a))
-                              z)
-      ; for `in`, shared with the forms evaluated: gulp for speed, but hold nothing across an
-      ; eval. box 0 counts every byte drawn off p, so the walk can put the port back.
-      box {}
-      (drew u) (peep box 0 0)
-      (drop n) (unchug p (n - inhand p))     ; the port to n pending; we hold the rest
-      ; flow, plus the count
-      (feed u)
-       (see p @ -1 () c
-        (: _ (unsee p c)
-           t (chug p)
-           _ (pin box 0 (drew () + #t))
-           (go k l) (0 >= k ? l (k - 1 @ j (go j (t j . l))))
-         (go #t (once (u \ feed ())))))
-      ; bytes consumed from a to b, by identity, forcing each step: tallying the lazy residue
-      ; would force the whole rest
-      (frc x) (lit? x ? (x ()) x)
-      (upto a b n) (: aa (frc a) bb (frc b)
-                      (? (aa = bb) n
-                         (two? aa)   (upto >aa bb (n + 1))
-                         n))
-      (step cl walked z)
-       (sound cl @
-         'torn (scare 'unfinished-form p)
-         (a . b) (: k (upto cl b 0)
-                    w2 (walked + k)
-                    rem (drew () - w2)
-                    ; one byte short on purpose: the reader has read one ahead
-                    _ (drop (0 < rem ? (rem - 1) 0))
-                    h (inhand p)
-                    v (ev 'ev a)
-                    (h = inhand p ? (drop 0, step b w2 v)
-                                    (start (two? b ? [<b]) v)))
-         (drop 0, z))
-      (start pre z)
-       (see p @
-        -1 (atom? pre ? z (walk pre z))
-        c (unsee p c,
-           inhand p ? (pin box 0 #pre, step (cat pre (feed ())) 0 z)
-                      (walk (cat pre (trickle p)) z)))
-      ; `in` folded at compile: a rebound `in` fails this in silence
-      (p = in ? (start () 0) (walk (flow p) 0))))
-(: (forms p)
-   ((: (g cl acc) (sound cl @ 'torn (scare 'unfinished-form p)
-                              (a . b) (g b (a . acc))
-                              (rev acc)))
-    (flow p) ()))
-
 (: no (nom 0) eofsym (nom 0) edpasted {}   ; edpasted: a bracketed paste's bytes (edpaste)
    ; on when the terminal confirms mode ?2027 (grapheme clusters): the cursor then steps and
    ; deletes by cluster

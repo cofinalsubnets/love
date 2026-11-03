@@ -18,9 +18,7 @@
 ; (as verify.l reads them), subjectKeyIdentifier=hash and authorityKeyIdentifier=keyid.
 ; ed25519 signs through src/apps/ssh/ed25519.l, p-256 ecdsa through p256.l.
 (module 'tls
-(borrow 'bytes)
-(borrow 'cal)
-(borrow 'hashes)
+(borrow '(bytes cal hashes))
 (:
    oid-ski (unhex "551d0e")
    oid-aki (unhex "551d23")

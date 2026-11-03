@@ -5,8 +5,7 @@
 ;
 ; the verbs are tar's own letters because the muscle memory is worth more than a
 ; better name. the artifact carries no tarball (src/tools/selfpack.l cuts a container).
-(borrow 'tar)
-(borrow 'gz)
+(borrow '(tar gz))
 
 (borrow 'posix)
 (: (tgz-slurp p) (uread p @ [1 s] [1 (s + "")] ())

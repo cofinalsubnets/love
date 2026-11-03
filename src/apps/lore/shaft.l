@@ -16,8 +16,7 @@
          climb-h coyote ladders ladder-w hatches hatch-w door-s door-w door-h light-h light-period light-on
          light-drift gap-l
          flash-v0 flash-span done-ms turn-step song-chunk)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(rove horn cli))
 (borrow 'view)                          ; the screen, its rays, the pens
 (borrow 'flicker)                       ; the lights' blink
 (borrow 'play)                          ; the voices, the mix

@@ -1,9 +1,7 @@
 ; the night river, headless; a crew module, not in the corpus:
 ; cat test/00-init.l test/host/00-host.l test/host/wade.l | out/love
 
-(borrow 'wade)
-(borrow 'view)
-(borrow 'walk)
+(borrow '(wade view walk))
 (: wade-kb (view-bind view-binds walk-binds))
 
 (: (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))

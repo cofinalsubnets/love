@@ -13,10 +13,7 @@
 ; and right after, those bytes' ed25519 signature under /etc/hearts.pub -- then the parts back to
 ; back. it streams: the head is checked before anything is written, each part as it goes to its
 ; place, and the slot is offered to the next boot only once every part matched.
-(borrow 'bytes)
-(borrow 'posix)
-(borrow 'gz)
-(borrow 'hashes)
+(borrow '(bytes posix gz hashes))
 (: argv cmdline
    ; by name: a borrow of 'ssh would bring its own split
    ed-verify (cite 'ssh 'ed-verify)

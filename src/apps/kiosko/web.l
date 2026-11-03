@@ -8,10 +8,7 @@
 ; where DIR is the tree, the github page is laid through our own make first; a bare
 ; DIR gets the source aboard laid under it.
 (module (web web-main sv-make)
-(borrow 'libra)
-(borrow 'hueweb)
-(borrow 'lapiz)
-(borrow 'path)
+(borrow '(libra hueweb lapiz path cli))
 
 (borrow 'posix)
 (:

@@ -2,8 +2,7 @@
 ; west, the song into a jug. not in the corpus: it loads a crew module.
 ; run: cat test/00-init.l test/host/00-host.l test/host/garage.l | out/love
 
-(borrow 'garage)
-(borrow 'rove)
+(borrow '(garage rove))
 (borrow 'horn)     ; dat, open?
 
 (: (range a b) (map (+ a) ^(b - a))

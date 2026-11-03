@@ -13,10 +13,7 @@
 ;
 ; a port from torrent-open seeds nothing; the verb offers every piece it has.
 (module (torrent torrent-open torrent-seek torrent-main torrent-show-main torrent-peers)
-(borrow 'posix)
-(borrow 'metainfo)
-(borrow 'tracker)
-(borrow 'swarm)
+(borrow '(posix metainfo tracker swarm cli))
 (:
  (tt-meta src) (? (tablet? src) src
                   (uread src @ [1 s] (tmeta s) ("cannot read " + src)))

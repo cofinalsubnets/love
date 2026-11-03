@@ -1,5 +1,6 @@
 ; reading a nom not in the book calls (help 'missing nom), whose answer is the value at the site;
 ; with nothing heard it stops the run. welp answers it with the zero point, quietly
+(borrow 'cli)
 (hear welp)
 (test
  ((:) = an-never-defined)                      ; the floor handler

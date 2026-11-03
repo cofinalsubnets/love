@@ -5,8 +5,7 @@
 ;   pom matrix life slop court grass99, and cycle: each in turn, every five minutes
 (module (saver saver-names saver-frame saver-canvas saver-cell saver-moon-lit?
          saver-main saver-usage)
-(borrow 'posix)
-(borrow 'cal)
+(borrow '(posix cal cli))
 (:
  drain-keys (cite 'rove 'drain-keys)
  ; a cell's own dice, kept under 2^32 so no product leaves the fixnums

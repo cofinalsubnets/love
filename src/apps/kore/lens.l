@@ -3,9 +3,7 @@
 ; fragment, no page template. html2text reads a page as prose: an image says its [alt], and on
 ; a terminal a local one is drawn under it.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'cal)
+(borrow '(cli posix cal))
 
 (:
    ; the width the output wants: -w, else the terminal on fd 1, else 80

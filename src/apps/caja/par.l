@@ -19,8 +19,7 @@
 ; where tex.web compares pointers.
 (module (caja-par cp-setup cp-patterns cp-hyphenation cp-hyphen-file cp-mode cp-run cp-vlist
          cp-hbox cp-tex cp-spec cp-lig cp-line-break cp-append-to-vlist)
-(borrow 'tfm)
-(borrow 'caja-box)
+(borrow '(tfm caja-box))
 (:
    non 256                                    ; non_char
    awful 1073741823                           ; awful_bad

@@ -2,8 +2,7 @@
 ; exactly the screen's width even when a name wears colour
 ; run: cat test/00-init.l test/host/00-host.l test/host/mc.l | out/love
 
-(borrow 'posix)
-(borrow 'mc)
+(borrow '(posix mc))
 
 (: R "/tmp/mctest"
    (blurt p s) (open p "w" @ q (hot? q && (say q s, close q, 1)))

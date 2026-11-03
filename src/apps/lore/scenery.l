@@ -222,8 +222,7 @@
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
-(borrow 'view)
-(borrow 'swatch)
+(borrow '(view swatch))
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)

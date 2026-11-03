@@ -1,9 +1,7 @@
 ; test/host/bz2.l -- bz2-pull, a block at a time, held to bz2-unpack of the whole
 ; an error word is compared alone: the pull has put out the blocks before it
 ; run: cat test/00-init.l test/host/bz2.l | out/love
-(borrow 'bz2)
-(borrow 'bytes)
-(borrow 'hashes)
+(borrow '(bz2 bytes hashes))
 
 (: (bzt-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
    (bzt-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))

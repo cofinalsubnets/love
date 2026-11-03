@@ -1,10 +1,7 @@
 ; src/apps/kore/fs.l -- kore's file tools: ls cp mv rm mkdir ln touch chmod stat du df and kin.
 ; an effect op of posix.c answers () on success or an errno nom, so !e is success.
 (module 'kore
-(borrow 'cli)
-(borrow 'cal)
-(borrow 'posix)
-(borrow 'text)
+(borrow '(cli cal posix text))
 (borrow 'glob) ; du --exclude
 
 (:

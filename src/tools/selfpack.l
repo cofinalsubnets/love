@@ -19,10 +19,7 @@
 (borrow "src/apps/sb/http.l")
 (borrow "src/apps/sb/sb.l")   ; for the ignore law only
 
-(borrow 'posix)
-(borrow 'bz2)
-(borrow 'hashes)
-(borrow 'xz)
+(borrow '(posix bz2 hashes xz))
 (: (sp-die m) (say err ("selfpack: " + m + "\n"), quit 1)
    (sp-read p) (uread p @ [1 s] [1 (s + "")] ())
    (sp-write p s) (: q (open p "w")

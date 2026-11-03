@@ -3,8 +3,7 @@
 ; semantics over unsigned 64-bit registers (shr_u vs shr_s, wrapping mul, div_u).
 ; run: cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | out/love
 
-(borrow 'holo)
-(borrow 'posix)
+(borrow '(holo posix))
 
 (: M64 18446744073709551616
    H64 9223372036854775808

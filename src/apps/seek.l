@@ -7,7 +7,7 @@
 ;   ↑↓ ^p ^n  a row     ^b ^f  a page     home end  the ends     ^u  a fresh query
 ;   enter  this one     esc ^c  none
 (module (seek seek-new seek-q seek-key seek-frame seek-run seek-match seek-files seek-lines seek-label)
-(borrow 'posix)
+(borrow '(posix cli))
 (:
  ; the words of a query, spaces apart
  (seek-words q) (filter (w \ 0 < #w) (cite 'kore 'usplit 32 q))

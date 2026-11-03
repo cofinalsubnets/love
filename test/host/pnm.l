@@ -4,9 +4,7 @@
 ; back. then, where python3's PIL is, more held to PIL's decode byte for byte (magick's for the
 ; text kinds, 16-bit grey and pam); last the refusals.
 ;   cat test/00-init.l test/host/pnm.l | out/love
-(borrow 'posix)
-(borrow 'hashes)
-(borrow 'pnm)
+(borrow '(posix hashes pnm))
 (borrow "src/apps/pnm.l")
 (: dir (cwd 0 + "/out/.pnmd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)

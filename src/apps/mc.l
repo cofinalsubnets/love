@@ -15,8 +15,7 @@
 ; every key is a pure step on the state and every frame a pure lay, so the tool gates
 ; headless; only mc-run ties the tty.
 (module (mc mc-main mc-run mc-new mc-key mc-frame mc-read mc-pane mc-at mc-goto mc-cell mc-vis)
-(borrow 'posix)
-(borrow 'tui)
+(borrow '(posix tui cli))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (:
  mc-kitkeys "i=7,p=1,C=1,"          ; image 7, placement 1, cursor stays

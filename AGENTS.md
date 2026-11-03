@@ -125,6 +125,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - strings, lists and trays index by application: "abc" 0 = 97, [1 2 3] 1 = 2, @(5 6 7) 1 = 6,
 ;   a tray of indices gathering; a tray's power is **
 ; - charm? is number predicate; (show 'sym) spells a symbol
+; - no module is ambient: a file borrows what it names, (borrow 'm) or (borrow '(a b ..)) in
+;   order. the door, tty and line editor words (udoor uopt ttytake sgr edln ..) are cli's;
+;   read/reads/forms are base, beside show
 ; - cap/cup are total: <() = >() = (); (= a b) across types answers 0, never dies
 ; - trays (@(..), iota): every numeric word is elementwise with broadcast, = and != too;
 ;   a whole question is a reduction -- aall/aany of a mask, net/prod/amax/amin of a tray --

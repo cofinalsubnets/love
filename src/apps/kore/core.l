@@ -2,9 +2,7 @@
 ; as a charm; udie leaves from deep inside, urun catches it), dispatched by kore.l. loads after
 ; text.l and u.l, its floor. GNU's output faces are held to the byte.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
-(borrow 'text)
+(borrow '(cli posix text))
 
 (:
    ; -- cat: files (or -) onto out, verbatim; a directory lists, the way ls does

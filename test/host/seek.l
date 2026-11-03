@@ -1,8 +1,6 @@
 ; test/host/seek.l -- the picker and help's lines, headless
 ; run: cat test/00-init.l test/host/seek.l | out/love
-(borrow 'seek)
-(borrow 'help)
-(borrow 'posix)
+(borrow '(seek help posix))
 
 (: (sk-keys! d s) (each (map (i \ s i) ^#s) (c \ seek-key d c))
    items ["alpha beta" "beta gamma" "Gamma delta" "alphabet"]

@@ -1,7 +1,6 @@
 ; chem (src/apps/pic/chem.l) without groff; test/gate/chem.sh holds it to groff byte for byte
 ; run: cat test/00-init.l test/host/chem.l | out/love
-(borrow 'posix)
-(borrow 'pic)
+(borrow '(posix pic))
 (: K (cite 'pic)
    run (K 'ch-run)
    (chem t) (run ["-"] t @ r (<r = 0 ? (r 1) ""))

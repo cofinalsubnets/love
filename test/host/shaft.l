@@ -1,8 +1,7 @@
 ; test/host/shaft.l -- the elevator shaft, headless
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/00-host.l test/host/shaft.l | out/love
 
-(borrow 'shaft)
-(borrow 'view)
+(borrow '(shaft view))
 (: shaft-kb (view-bind view-binds shaft-binds))
 
    ; so many frames, a key each or none

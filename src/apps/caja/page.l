@@ -9,8 +9,7 @@
 ;
 ; marks and inserts are not ported; a vlist with neither splits as TeX splits it.
 (module (caja-page cg-vsplit cg-vert-break cg-prune-top)
-(borrow 'caja-box)
-(borrow 'caja-par)
+(borrow '(caja-box caja-par))
 (:
    awful 1073741823
    max-dimen 1073741823

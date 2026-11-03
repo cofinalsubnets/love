@@ -1,6 +1,6 @@
 ; a module of its own, so `borrow` splices tar into this layer, not the dist cat's
 (module 'source
-(borrow 'tar)
+(borrow '(tar cli))
 
 (borrow 'posix)
 (: (src-die m) (udie 1 ";; \(m)")

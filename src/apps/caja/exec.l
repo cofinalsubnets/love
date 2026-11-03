@@ -2,10 +2,7 @@
 ; commands (parts 46 and 49), print_cmd_chr, and the main program (part 51). the last part
 ; of the module caja-tex, after mouth.l and build.l.
 (module 'caja-tex
-(borrow 'posix)
-(borrow 'tfm)
-(borrow 'caja-box)
-(borrow 'caja-par)
+(borrow '(posix tfm caja-box caja-par))
 (:
    ; --- print_cmd_chr (tex.web 227-1346) ---------------------------------------------------
    ; what a command prints when its chr is none of its primitives'

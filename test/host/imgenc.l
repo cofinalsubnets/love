@@ -1,7 +1,6 @@
 ; gif, png and jpeg encoders; pngs read back exact, gifs and jpegs held to magick when present
 ; run: cat test/00-init.l test/host/imgenc.l | out/love
-(borrow 'posix)
-(borrow 'jpeg)
+(borrow '(posix jpeg))
 (borrow "src/apps/gif.l")
 (borrow "src/apps/png.l")
 (: dir (cwd 0 + "/out/.imgenc")

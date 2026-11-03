@@ -9,8 +9,7 @@
 ; patterns read as flex's: "quoted", {NAME}, [classes] with \n-style escapes, . short of a newline.
 ; not yet: start conditions, ^ and $ anchors, r/s trailing context.
 (module 'kore
-(borrow 'cli)
-(borrow 'posix)
+(borrow '(cli posix))
 (:
    lex-meta ".[]()*+?{}|^$\\"
    (lex-die m) (scare 'lex-err m)

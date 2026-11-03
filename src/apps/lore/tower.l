@@ -12,10 +12,7 @@
          carve-floor car-new car-head drive run-down corner? road? climb-hp sky her-lines
          mirror lane-at songs tower-bars tower-tune song-vol song-new song-feed song-tier
          song-sfx garden-bars middle-bars sky-bars heart-bars heart-rate tune?)
-(borrow 'posix)
-(borrow 'x11)
-(borrow 'rove)
-(borrow 'horn)
+(borrow '(posix x11 rove horn cli))
 (:
  ; --- the floor: tiles in a cask, (x y) indexed; the codes are rove.l's, by dat
 

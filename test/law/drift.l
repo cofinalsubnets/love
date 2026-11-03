@@ -1,9 +1,6 @@
 ; the just lattice, the center that walks it, and the tonnetz. ratios are exact, so
 ; lattice laws are equalities; the walk is floats, so its laws are where it lands
-(borrow 'harp)
-(borrow 'just)
-(borrow 'drift)
-(borrow 'tonnetz)
+(borrow '(harp just drift tonnetz))
 (:
    (dr-near a b) (abs (a - b) < 0.000001)
    (dr-rots l) (map (i \ drop i l + take i l) ^#l)

@@ -2,8 +2,7 @@
 ; sha256sum, sha384sum, sha512sum, b2sum, sha3sum, in GNU's faces, and the -c lane that reads
 ; those lines back. loads after fs.l for udirp.
 (module 'kore
-(borrow 'posix)
-(borrow 'hashes)
+(borrow '(posix hashes cli))
 
 (:
    ; [state-width init feed done]

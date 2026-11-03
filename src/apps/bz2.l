@@ -51,9 +51,7 @@
 ;   bunzip2 = bzip2 -d      bzcat = bzip2 -dc
 ; no file, or a bare -, is the filter. -s is taken and changes nothing.
 (module 'bz2cmd
-(borrow 'bz2)
-(borrow 'path)
-(borrow 'posix)
+(borrow '(bz2 path posix cli))
 (: bzc-help "bzip2 -- the block-sorting compressor
 usage: bzip2 [-cdfkqstvz] [-1..-9] [FILE..]
   -z  compress (the default)            -d  decompress (bunzip2)

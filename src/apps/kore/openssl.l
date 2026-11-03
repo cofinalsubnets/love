@@ -3,9 +3,7 @@
 ; (its own total der walk, for printing); trust is the tls module's (verify.l against tls-roots
 ; or -CAfile; client.l, tls 1.3 only); keys, requests and certificates are made by its cert.l.
 (module 'kore
-(borrow 'bytes)
-(borrow 'posix)
-(borrow 'hashes)
+(borrow '(bytes posix hashes))
 
 (:
    (os-tls nm) (cite 'tls nm)

@@ -1,6 +1,7 @@
 ; the pty nifs (src/love/posix.c). a master can EOF before its child is a zombie, so waitfor polls
 ; gather; exited is told by two?, never net: (0) nets to nothing. love0 can't run it twice, so no corpus
 ; run: cat test/00-init.l test/host/pty.l | out/love
+(borrow 'cli)
 (: (waitfor pid)
  (gather pid @ s (? (two? s) s (nom? s) s (rest 2, waitfor pid))))
 

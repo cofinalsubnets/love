@@ -31,9 +31,7 @@
 ; events are its 'evq. off X a selection is the window's own.
 (module '(window window-here? window-whole? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
           window-own window-ask window-typing window-wets)
-(borrow 'xwire)
-(borrow 'posix)
-(borrow 'bytes)
+(borrow '(xwire posix bytes))
 (:
    (inle? _) (elem 'love-os (names ()) ? (elem (ev 'love-os) '(inle wasm)) 0)
    ; KeyPress KeyRelease ButtonPress ButtonRelease PointerMotion Exposure StructureNotify

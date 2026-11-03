@@ -4,6 +4,7 @@
 ; a text that reads as a whole number is a number where one is wanted (`2 < 10a` is 0).
 ; exit 0 the answer is neither "" nor "0", 1 it is, 2 malformed or bad arithmetic.
 (module 'kore
+(borrow 're)
 (:
    ; the operators by level, loosest first; the walk below indexes this list by depth
    ex-ops '(("|") ("&") ("<" "<=" "=" "==" "!=" ">=" ">") ("+" "-") ("*" "/" "%") (":"))

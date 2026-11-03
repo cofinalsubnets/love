@@ -5,8 +5,7 @@
 ;
 ; rides module 'sb, so these names never reach the book
 (module 'sb
-(borrow 'dns)
-(borrow 'posix)
+(borrow '(dns posix))
 (:
    ; "80" -> 80. `int` truncates, it does not parse.
    (digits s)

@@ -1,5 +1,6 @@
 ; test/law/kore.l -- the kore laws: diffs against an lcs oracle with a seeded fuzz, the tool
 ; floors to their GNU faces, the regex floor by hand, a seeded fuzz over bc's algebra
+(borrow '(cli re))
 
 ; --- the classic: Myers' own worked example, D = 5 ---
 (: A '(a b c a b b a) B '(c b a b a c) s (myers A B)

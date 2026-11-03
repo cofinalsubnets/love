@@ -2,8 +2,7 @@
 ; story plays and loaded back the same, and the frame. the runner is a live probe: `love play design`.
 ; run: cat test/00-init.l test/host/00-host.l test/host/design.l | out/love
 
-(borrow 'story)
-(borrow 'design)
+(borrow '(story design))
 
 (: S "/tmp/designtest.l"
    d (design-new (level "a test" 1 1 ["###" "#.#" "###"] {} {}) S)

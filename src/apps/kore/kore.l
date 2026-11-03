@@ -34,7 +34,7 @@
         usleep-main reset-main ts-main fsync-main dircolors-main dc-main readelf-main
         which-main xxd-main tz-zone)
 (borrow 'cli)  ; the option walk and the -h/-v door, both of them love's floor too
-(borrow 'bytes)
+(borrow '(bytes re))
 (borrow 'holo) ; the assembler module: elf64, arbytes, ld-syms, at -- as/ar/ld/nm read it
 (borrow 'posix)
 (:
