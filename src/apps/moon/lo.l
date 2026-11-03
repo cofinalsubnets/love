@@ -668,6 +668,8 @@
            (loat g env nm as)
           (['var nm] && bad? (lovar g env nm) && g 'fns nm)
            (g 'sigs nm @
+              ; a call off its prototype's count goes to the old path, which says so
+              ((_ . ptys . va . _) && 0 < #ptys && (va ? (#as < #ptys) (#as != #ptys))) (lono g 'arity)
               (rt . ptys . va . rest)
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
@@ -1009,6 +1011,10 @@
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
    ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored
+   ; a narrow integer out of a register asm leaves: its own width, the bits above it unsaid
+   (lonar g ty t)
+    (!(charm? (tsz g ty)) || lofl? ty || ty = 'bool ? ()
+       (tsz g ty @ 1 [[(usg? ty ? 'zx1 'sx1) t]] 2 [[(usg? ty ? 'zx2 'sx2) t]] 4 [[(usg? ty ? 'zx4 'sx4) t]] _ ()))
    (loasm g env s)
     (asmplan g env s @
        'bad (lono g ['asm (g 'nolane)])
@@ -1020,9 +1026,10 @@
            (lox g env (o 2) @
               'bad 'bad
               ([vt _ _] && stru? vt) (lono g 'asmstruct)
+              ; a float in a general register is the old path's to refuse
+              ([_ r _] && lofr? r && !(freg? a)) (lono g 'asmfl)
               [vt r fs] [fs (? (freg? a && lofr? r) ['movapd a r]
                                (freg? a) [(o 3 <= 4 ? 'movdxr 'movqxr) a r]
-                               (lofr? r) [(vt = 'float ? 'movdrx 'movqrx) a r]
                                ['mov a r])])
           (st o a)
            (lolv g env (o 2) @
@@ -1037,7 +1044,7 @@
                  ; an xmm output into an integer lvalue: its bits
                  ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
                     [(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))
-                     (lost g lv [ty t ()] @ [fs _] fs 'bad)])))
+                     (lost g lv [ty t ()] @ [fs _] (freg? a ? fs (lonar g ty t + fs)) 'bad)])))
           ins (filter (i \ in? (ops i)) ^#ops)
           outs (filter (i \ out? (ops i)) ^#ops)
           lds (map (i \ ld (ops i) (asgn i)) ins)
@@ -1056,20 +1063,26 @@
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +
                         [['label done]] + post))))))))
    (lokey g ty cv) (cint? cv ? (cfit g ty cv) 'bad)
+   ; a case table already holds a value in [l, h]: a key, or a wide range
+   (locased tab l h)
+    (any (k \ cint? k && l <= k <= h) (keys tab) ||
+     any (r \ (r @ [a n _] (a <= h && l <= a + n))) (peep tab 'rng ()))
    ; a switch as a compare chain: its cases, nested switches aside, each take a label
    (loswitch g env ce body)
     (lox g env ce @ ([ty r fs] && losc? ty)
        (: tab {}
           (walk x) (x @ ('switch . _) 0
-                        ['case cv] (lokey g ty cv @ 'bad (pin tab 'bad 1) k (pin tab k (nlab g ".lo")))
+                        ; a repeated value or default goes to the old path, which says so
+                        ['case cv] (lokey g ty cv @ 'bad (pin tab 'bad 1) k (locased tab k k ? (pin tab 'bad 1) (pin tab k (nlab g ".lo"))))
                         ['case lo hi]
                          (? !(cint? lo && cint? hi && lo <= hi) (pin tab 'bad 1)
+                            (locased tab (cfit g ty lo) (cfit g ty hi)) (pin tab 'bad 1)
                             ; a narrow range a label a value, a wide one a compare of its own
                             (nlab g ".lo" @ L
                                (pin tab "\(lo):\(hi)" L,
                                 hi - lo < 64 ? (map (k \ pin tab (cfit g ty (lo + k)) L) ^(hi - lo + 1))
                                    (pin tab 'rng ([(cfit g ty lo) (hi - lo) L] . peep tab 'rng ())))))
-                        ('dflt . _) (pin tab 'dflt (nlab g ".lo"))
+                        ('dflt . _) (tab 'dflt ? (pin tab 'bad 1) (pin tab 'dflt (nlab g ".lo")))
                         (_ . _) (map walk x)
                         0)
           _ (walk body)

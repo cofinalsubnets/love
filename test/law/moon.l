@@ -5,6 +5,8 @@
 ; a stage refuses with a bare () or, naming a cause, a gripe: `refused?` takes either,
 ; the diagnostics laws pin the gripe and its message.
 (borrow 'posix)
+; the generator's goldens are the old backend's; test/law/moonlo.l holds the new one's
+(setenv "MOON_BACKEND" "old")
 
 (: (refused? x) (!x || gripe? x))
 

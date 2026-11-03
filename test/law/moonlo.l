@@ -3,10 +3,13 @@
 
 ; a source by the new path with the checks on -> [fns checked, what broke] | 'bad
 (: (lolaw src)
-    (setenv "MOON_BACKEND" "new", setenv "MOON_LOLAW" "1",
-     (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () 'x64))) @ v
-       (setenv "MOON_BACKEND" (), setenv "MOON_LOLAW" (),
-        v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad))
+    (getenv "MOON_BACKEND" @ b0
+     (setenv "MOON_BACKEND" "new", setenv "MOON_LOLAW" "1",
+      (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () 'x64))) @ v
+        (setenv "MOON_BACKEND" b0, setenv "MOON_LOLAW" (),
+         v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad)))
+   ; a source through the default backend refused, or griped at
+   (lnay src) (cparse <>(clex src) @ r (okv? r ? (cgen <>r <>>r <>>>r <>>>>r () 'x64) @ () 1 x (gripe? x)))
    ; a planted fn's vregs spelt n0 n1 ..
    (lv fs) (map (f \ map (x \ (nom? x && (show x @ t (1 < #t && t 0 = 110 && 48 <= t 1 <= 57)) ? (name "%\(show x)") x)) f) fs)
    g (cparse <>(clex "int main() { return 0; }") @ r <(cgen-core <>r <>>r <>>>r <>>>>r () 'x64))
@@ -73,5 +76,11 @@
       ; the entry's fast region falling into a call copies its twin back ahead of the argument setup
       (raentry g (lv [['mov 'n0 'r6] ['li 'n1 1] ['mov 'r6 'n1] ['cuse 'r6] ['call 'f] ['mov 'r0 'n0] ['ret]])
          @ [_ _ ['mov a _] ['mov 'r6 _] ['cuse 'r6] ['call 'f] _ _] (a = name "%n0") _ 0)
+      ; what the old path diagnoses, the new one hands it
+      (all lnay ["int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"
+                 "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"
+                 "int main() { switch (1) { default: return 2; default: return 3; } }"
+                 "int main() { switch (1) { case 1 ... 5: return 2; case 3: return 3; } return 0; }"
+                 "int main() { switch (1) { case 1: return 2; case 1: return 3; } return 0; }"])
       (all (src \ lolaw src @ [n ()] (0 < n) _ 0) corpus)
       (+(map (src \ lolaw src @ [n _] n _ 0) corpus) >= 2 * #corpus)))
