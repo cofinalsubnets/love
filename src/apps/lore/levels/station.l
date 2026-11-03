@@ -418,8 +418,6 @@
 ; the pieces, each standing with its top at y: a floor slab w by d, and the furniture
 (: (slab x y z w d) (skin {'floor carpet 'walls cast 'ceiling cast}
                       (solid (box [(x - 0.5 * w) (y - 0.3) (z - 0.5 * d)] [(x + 0.5 * w) y (z + 0.5 * d)]))))
-; ..a fitting, uncut: its faces lit at their corners
-(: (fit t b) (whole (skin t (solid b))))
 (: (desk x y z) [(fit {'all wood} (box [(x - 0.8) (y - 0.04) (z - 0.4)] [(x + 0.8) y (z + 0.4)]))
                  (fit {'all wood} (box [(x - 0.78) (y - 0.75) (z - 0.38)] [(x - 0.74) (y - 0.04) (z + 0.38)]))
                  (fit {'all wood} (box [(x + 0.74) (y - 0.75) (z - 0.38)] [(x + 0.78) (y - 0.04) (z + 0.38)]))

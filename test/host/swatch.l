@@ -61,5 +61,27 @@
        ; the plan not as it says, and sides out of reach
        (swatch-pic 4 4 '((() 12 () 0 (1 0.0 0.0 0.0 0.0) ())) = ()) (swatch-pic 4 4 '(junk) = ())
        (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())))
+; grain, cells and seed: painted in C as in love; a (seed 0) changes nothing, another the
+; noise after it alone; grain's rows wander, cells' borders part the texels
+(: (at l x y) (swatch-texel l x y) red [1.0 0.0 0.0]
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel l)))
+   nat '((fill 0.4) (grain 6 2 2 9 (shade 0.7)) (patches 4 0.4 (rgb 0.8 0.6 0.3)) (cells 7 0.3 (grey 0.1))
+         (noise 3 0.2) (within 2 2 20 14 (seed 4) (cells 5 0.2 hole) (noise 2 0.3)))
+   pa '((fill 0.0) (patches 4 0.5 (rgb 1 0 0)))
+   (texels l) (map (i \ at l (i % 24) (i // 24)) ^(24 * 16))
+   gr (map (i \ at '((fill 0.0) (grain 8 3 2 6 (rgb 1 0 0))) (i % 32) (i // 32) = red) ^(32 * 32))
+   ce (map (i \ at '((fill 0.0) (cells 6 0.3 (rgb 1 0 0))) (i % 32) (i // 32) = red) ^(32 * 32))
+   ro (map (i \ at '((fill 0.0) (rows 0 3 (rgb 1 0 0)) (rows 8 11 (rgb 1 0 0)) (rows 16 19 (rgb 1 0 0)) (rows 24 27 (rgb 1 0 0))) (i % 32) (i // 32) = red) ^(32 * 32))
+ (test (sw-same 24 16 nat) (sw-same 7 13 nat) (sw-same 16 16 ('(seed 999999) . nat))
+       (texels ('(seed 0) . pa) = texels pa) (texels ('(seed 3) . pa) != texels pa)
+       (texels ['(fill 0.0) '(rows 0 2 (grey 0.5)) '(seed 3) '(patches 4 0.5 (rgb 1 0 0))]
+         != texels ['(fill 0.0) '(rows 0 2 (grey 0.5)) '(patches 4 0.5 (rgb 1 0 0))])
+       (texels ['(fill 0.0) '(patches 4 0.5 (rgb 1 0 0)) '(seed 3)] = texels pa)
+       ; a grain's share of rows as its rows', but not the same rows; cells' borders a share
+       (abs (+gr - +ro) < 80) (gr != ro) (50 < +ce < 700)
+       (swatch-fault '((seed 1.5)) 1 = "(seed n)") (swatch-fault '((seed 1000000)) 1 = "(seed n)")
+       (swatch-fault '((grain 6 2 2 (shade 0.7))) 1 = "(grain every w warp size PAINT)")
+       (swatch-fault '((cells 6 (shade 0.7))) 1 = "(cells size w PAINT)")
+       (swatch-fault ['(fill 1) '(seed 2) '(cells 6 0.3 (shade 0.7))] = ())))
 (test_fin ())
 (puts "swatch: ok\n")

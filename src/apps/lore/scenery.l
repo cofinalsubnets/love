@@ -107,6 +107,25 @@
 ;                                      toward bearing, painted that colour; solid
 ;   (rod [x y z] [x y z] radius sides TEXTURE)  a straight bar between two points, sides
 ;                                      flats round, its ends square to it; solid
+;   (lathe [x y z] [[r y] ..] sides SKIN)  a profile turned round the upright through x y z,
+;                                      r out at y up, its heights rising; solid
+;   (sweep [[x y z] ..] radius sides TEXTURE)  a rod bent through the points: a cable, a rail
+;   (fit SKIN SHAPE)                   a small solid, lit at its corners: SKIN a texture or a
+;                                      skin's tablet
+;   (dice seed k)                      0 to 1, thrown for k (a number or a name) under seed
+;   (pick seed k v)                    v a number, or [lo hi] thrown as dice
+;   (seed-of seed i)                   the seed of the i'th of many
+;   (ease v a b) (smin a b r) (smax a b r)  0 to 1 smoothly as v goes a to b; the lesser
+;                                      or greater, rounded within r of the other
+;   (scatter seed [[x z] ..] n MAKE {'gap 'bearing 'ground 'keep?})  n places thrown over
+;                                      two corners, or three or more going round; kept
+;                                      where (keep? x z), and gap from another; each
+;                                      (MAKE [x y z] bearing seed), y off 'ground, a
+;                                      height or (\ x z y); 'bearing a number or [lo hi]
+;   (line-up seed [x y z] [x y z] MAKE {'w 'gap})  side by side from one point toward
+;                                      the other, each w wide (a number or [lo hi]), as
+;                                      many as fit: (MAKE [x y z] bearing seed w), facing
+;                                      across the line
 ;   (grav [x y z] [x y z] DIR)         a grav shaft: a column of air over the plan between the
 ;                                      corners, from the lower's floor to a room's height over
 ;                                      the upper's, motes of light streaming through it; who
@@ -201,6 +220,11 @@
 ;                                      breathing, or flashing as a mast's beacon does
 ;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
 ;                                      on a surface, painted by its layers (swatch.l), quoted
+;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
+;                                      [lo hi] thrown under seed, or a colour, and felt as
+;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
+;                                      'tile 'cobble 'mud 'concrete 'metal 'cloth 'carpet
+;                                      'gravel 'sand 'soil 'grass; a wrong one says what it takes
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
@@ -220,7 +244,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -394,6 +418,70 @@
          ends [[p (v+ p e1) (v+ p e2)] [q (v+ q e1) (v+ q e2)]]
          lo (map (k \ min (p k) (q k) - R - 0.01) ^3) hi (map (k \ max (p k) (q k) + R + 0.01) ^3)
          (with (skin {'all t} (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) (solid (box lo hi)) (flats + ends))) 'whole 1))))
+ ; --- the kit a prop is grown with: dice, easing, and ways to lay things out ---
+ ; ..a die for k under seed, 0 to 1, the same every read; k a number or a name, so each
+ ; parameter throws its own and changing one leaves the rest
+ (key k) (charm? k ? k (foldl (\ a c ((a * 31 + c) % 2147483647)) 7 (chars (show k))))
+ (dice s k) (throw (key k) 0 (key s) 1048576 / 1048576.0)
+ (pick s k v) (? (num? v) (f v) (two? v && #v = 2 && all num? v) (f (v 0) + (v 1 - v 0) * dice s k)
+                 (no "a number, or [lo hi]" v))
+ ; ..the seed of the i'th of many
+ (seed-of s i) (throw (key i) 7 (key s) 2147483647)
+ (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (2 k * (3.0 - 2.0 * k)))
+ ; ..the lesser and the greater, rounded where they come within r
+ (smin a b r) (max 0.0 (r - abs (a - b)) / r @ h (min a b - h * h * r * 0.25))
+ (smax a b r) (0.0 - smin (0.0 - a) (0.0 - b) r)
+ (skin-of-any t) (surface? t ? {'all t} t)
+ (fit t sh) (whole (skin (skin-of-any t) (solid sh)))
+ ; ..a lathe: each span of the profile between two heights a brush cut by a plane along
+ ; each flat, so it stays convex; a span whose radii are both 0, or that does not rise, is none
+ (lathe at prof n t) (: u "(lathe [x y z] [[r y] ..] sides SKIN)" o (P at u)
+   (? (!(charm? n && n >= 3)) (no u n)
+      (!(two? prof && #prof >= 2 && all (q \ two? q && #q = 2 && all num? q && q 0 >= 0) prof)) (no u prof)
+      (: ps (map (map f) prof) sk (skin-of-any t) c (cos (pi / n))
+         (span p q) (: R (max (p 0) (q 0) / c + 0.01)
+           flats (map (k \ (: a (2.0 * pi * k / n) d [(cos a) 0.0 (sin a)] b (v+ o [(p 0 * d 0) (p 1) (p 0 * d 2)])
+                            [b (v+ o [(q 0 * d 0) (q 1) (q 0 * d 2)]) (v+ b [-(d 2) 0.0 (d 0)])]))
+                      ^n)
+           (whole (skin sk (foldl (\ b e (cut (e 0) (e 1) (e 2) b))
+                                  (solid (box [(o 0 - R) (o 1 + p 1) (o 2 - R)] [(o 0 + R) (o 1 + q 1) (o 2 + R)])) flats))))
+         (map (i \ span (ps i) (ps (i + 1))) (filter (i \ ps i 1 < ps (i + 1) 1 && 0.0 < ps i 0 + ps (i + 1) 0) ^(#ps - 1))))))
+ ; ..a sweep: a rod from each point of the path to the next, run on r past each joint so a
+ ; bend is closed, square at the path's own ends
+ (sweep path r n t) (: u "(sweep [[x y z] ..] radius sides TEXTURE)"
+   (? (!(two? path && #path >= 2 && all pt? path)) (no u path) (!(num? r && r > 0)) (no u r)
+      (: ps (map (map f) path) m (#ps - 1) R (f r)
+         (seg i) (: a (ps i) b (ps (i + 1)) d (v+ b (v* -1.0 a)) w (unit d)
+           (rod (i = 0 ? a (v+ a (v* -R w))) (i = m - 1 ? b (v+ b (v* R w))) R n t))
+         (map seg (filter (i \ (ps (i + 1) @ b (abs (b 0 - ps i 0) + abs (b 1 - ps i 1) + abs (b 2 - ps i 2) > 1e-6))) ^m)))))
+ ; ..a polygon's inside, its corners [x z] going round: crossed an odd number of times to the right
+ (poly-in ps) (: n #ps
+   (\ x z (foldl (\ a i (: p (ps i) q (ps ((i + 1) % n))
+                          ((p 1 > z) != (q 1 > z) && x < p 0 + (q 0 - p 0) * (z - p 1) / (q 1 - p 1) ? (1 - a) a)))
+                 0 ^n = 1)))
+ ; ..a scatter: n places thrown over the region, each kept where it is inside, keep? says so
+ ; and none kept before is within gap; then made there, (make [x y z] bearing seed)
+ (scatter s reg n mk o) (: u "(scatter seed [[x z] ..] n MAKE {'gap 'bearing 'ground 'keep?})"
+   (? (!(two? reg && #reg >= 2 && all (q \ two? q && #q = 2 && all num? q) reg)) (no u reg)
+      (!(charm? n && n >= 0)) (no u n) (!(tablet? o)) (no u o)
+      (: rs (map (map f) reg) xs (map (q \ q 0) rs) zs (map (q \ q 1) rs)
+         x0 (foldl min (xs 0) xs) x1 (foldl max (xs 0) xs) z0 (foldl min (zs 0) zs) z1 (foldl max (zs 0) zs)
+         in? (#rs = 2 ? (\ x z 1) (poly-in rs))
+         gap (f (peep o 'gap 0.0)) bg (peep o 'bearing [0.0 360.0]) gr (peep o 'ground 0.0) keep? (peep o 'keep? (\ x z 1))
+         (near? x z got) (any (q \ (q 0 - x) * (q 0 - x) + (q 2 - z) * (q 2 - z) < gap * gap) got)
+         (try i got) (? (n <= i) (rev got)
+           (: e (seed-of s i) x (x0 + (x1 - x0) * dice e 'x) z (z0 + (z1 - z0) * dice e 'z)
+              (in? x z && keep? x z && !(near? x z got) ? (try (i + 1) ([x (num? gr ? (f gr) (gr x z)) z e] . got)) (try (i + 1) got))))
+         (map (q \ mk [(q 0) (q 1) (q 2)] (pick (q 3) 'bearing bg) (q 3)) (try 0 ())))))
+ ; ..a line-up: things side by side from a toward b, each w wide and gap apart, as many as
+ ; fit; (make [x y z] bearing seed w) at each one's middle, facing across the line
+ (line-up s a b mk o) (: u "(line-up seed [x y z] [x y z] MAKE {'w 'gap})" p (P a u) q (P b u)
+   (? (!(tablet? o)) (no u o)
+      (: d (v+ q (v* -1.0 p)) L (sqrt (d 0 * d 0 + d 1 * d 1 + d 2 * d 2)) dir (v* (1.0 / L) d)
+         ws (peep o 'w 1.0) gap (f (peep o 'gap 0.0)) deg (atan2 (d 0) (d 2) * 180.0 / pi + 90.0)
+         (go x i acc) (: e (seed-of s i) w (pick e 'w ws)
+           (L < x + w || w <= 0.0 ? (rev acc) (go (x + w + gap) (i + 1) ((mk (v+ p (v* (x + 0.5 * w) dir)) deg e w) . acc))))
+         (go 0.0 0 ()))))
  ; ..a bare twin mattress, 99 by 190.5 by 25 cm: quilted ivory ticking on top, its border
  ; striped between two pipings, plain under; its corners rounded off in plan and its edges
  ; top and bottom
@@ -544,6 +632,66 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ ; --- materials: a texture from its kind and the parameters it changes, a number or [lo hi]
+ ; thrown under the seed, or a colour; [w h metres layers feel] of the parameters, g ---
+ (sh k) ['shade k]
+ (mx c k) ['mix c k]
+ materials
+  {'wood [{'colour (rgb 0.56 0.39 0.23) 'rings 7 'warp 2.5 'grain 0.2 'knots 0.06 'metres 1.0}
+          (g \ [32 64 (g 'metres) [['fill (g 'colour)] ['noise 2 12 (g 'grain)] ['grain (g 'rings) 1.5 (g 'warp) 24 (sh 0.82)]
+                                   ['patches 3 (g 'knots) (sh 0.6)]] 'wood])]
+   'plank [{'colour (rgb 0.6 0.43 0.26) 'rings 7 'warp 2.5 'grain 0.2 'board 16 'metres 1.6}
+           (g \ [64 64 (g 'metres) [['fill (g 'colour)] ['noise 2 12 (g 'grain)] ['grain (g 'rings) 1.5 (g 'warp) 24 (sh 0.85)]
+                                    ['grid 0 (g 'board) 1 (sh 0.55)] ['patches 6 0.25 (sh 0.9)]] 'wood])]
+   'stone [{'colour (rgb 0.5 0.49 0.46) 'grain 0.15 'cracks 0.5 'lichen 0.0 'metres 2.0}
+           (g \ [64 64 (g 'metres) [['fill (g 'colour)] ['noise 3 (g 'grain)] ['patches 6 0.3 (sh 0.85)]
+                                    ['cracks 32 28 1 (8.0 * g 'cracks) (sh (1.0 - 0.6 * g 'cracks))]
+                                    ['patches 3 (g 'lichen) (mx ['rgb 0.45 0.5 0.25] 0.5)] '(noise 1 0.08)] 'hard])]
+   'sandstone [{'colour (rgb 0.72 0.45 0.3) 'pale (rgb 0.86 0.7 0.52) 'beds 9 'warp 1.5 'metres 3.0}
+               (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.08) ['grain (g 'beds) 3 (g 'warp) 40 (mx (g 'pale) 0.35)]
+                                        ['grain (0.37 * g 'beds) 1 (g 'warp) 25 (sh 0.85)] ['patches 8 0.2 (sh 0.9)]] 'hard])]
+   'brick [{'colour (rgb 0.55 0.25 0.18) 'mortar (rgb 0.75 0.72 0.66) 'w 16 'h 6 'vary 0.25 'metres 0.225}
+           (g \ (: w (int (g 'w)) h (int (g 'h)) a (w // 2) m (g 'mortar)
+                  [w (2 * h) (g 'metres) [['fill (g 'colour)] ['patches 3 (g 'vary) (sh 0.8)] '(noise 2 0.1)
+                                          ['rows 0 1 m] ['rows h (h + 1) m] ['within 0 0 w h ['cols 0 1 m]]
+                                          ['within 0 h w (2 * h) ['cols a (a + 1) m]]] 'hard]))]
+   'tile [{'a (rgb 0.8 0.8 0.78) 'b (rgb 0.7 0.7 0.68) 'grout (rgb 0.4 0.4 0.4) 'n 32 'metres 0.6}
+          (g \ (: n (int (g 'n)) h (n // 2)
+                 [n n (g 'metres) [['fill (g 'a)] ['checker h h (g 'b)] '(noise 5 0.1) ['grid h h 1 (g 'grout)]] 'hard]))]
+   'cobble [{'colour (rgb 0.45 0.43 0.4) 'grout (rgb 0.2 0.19 0.18) 'size 10 'w 0.12 'vary 0.3 'metres 1.5}
+            (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.15) ['patches 4 (g 'vary) (sh 0.8)]
+                                     ['cells (g 'size) (g 'w) (g 'grout)] '(noise 5 0.1)] 'hard])]
+   'mud [{'colour (rgb 0.42 0.33 0.24) 'crack (rgb 0.18 0.13 0.09) 'size 14 'w 0.08 'metres 2.0}
+         (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.12) ['patches 5 0.3 (sh 0.9)] ['cells (g 'size) (g 'w) (g 'crack)]] 'soft])]
+   'concrete [{'colour (rgb 0.42 0.41 0.4) 'stain 0.18 'ties 0 'metres 6.0}
+              (g \ [128 128 (g 'metres) ([['fill (g 'colour)] '(noise 6 0.05) ['patches 6 (g 'stain) (sh 0.88)] ['rows 0 1 (sh 0.88)]
+                                          ['rows 64 65 (sh 0.88)]] + (g 'ties > 0.0 ? [['dots 42.667 16 0.8 (sh 0.6)]] ())) 'hard])]
+   'metal [{'colour (rgb 0.46 0.48 0.51) 'grain 0.12 'seams 0 'metres 1.0}
+           (g \ [32 32 (g 'metres) ([['fill (g 'colour)] ['noise 3 (g 'grain)]]
+                                    + (g 'seams > 0.0 ? [['grid 32 32 1 (sh 0.6)] ['dots 8 8 0.8 (sh 0.5)]] ())) 'metal])]
+   'cloth [{'colour (rgb 0.16 0.17 0.22) 'nap 0.3 'metres 0.5}
+           (g \ [16 16 (g 'metres) [['fill (g 'colour)] ['noise 1 (g 'nap)]] 'soft])]
+   'carpet [{'colour (rgb 0.3 0.33 0.39) 'nap 0.25 'metres 2.0}
+            (g \ [64 64 (g 'metres) [['fill (g 'colour)] ['noise 1 (g 'nap)] '(noise 8 0.1) ['patches 5 0.2 (sh 0.9)]] 'soft])]
+   'gravel [{'colour 0.4 'metres 2.0}
+            (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 1 0.35) '(noise 6 0.1) ['patches 4 0.2 (sh 0.85)]] 'hard])]
+   'sand [{'colour (rgb 0.8 0.7 0.5) 'ripple 0.0 'metres 2.0}
+          (g \ [64 64 (g 'metres) ([['fill (g 'colour)] '(noise 1 0.12) '(noise 8 0.08)]
+                                   + (g 'ripple > 0.0 ? [['grain 8 3 (g 'ripple) 20 (sh 0.9)]] ())) 'soft])]
+   'soil [{'colour (rgb 0.36 0.27 0.19) 'stones 0.15 'metres 2.0}
+          (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 1 0.3) ['patches 5 0.3 (sh 0.8)]
+                                   ['patches 2 (g 'stones) (mx ['rgb 0.5 0.48 0.44] 0.5)]] 'soft])]
+   'grass [{'colour (rgb 0.3 0.45 0.18) 'dry 0.3 'metres 2.0}
+           (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 1 0.35) ['patches 6 (g 'dry) (mx ['rgb 0.62 0.58 0.3] 0.3)]
+                                    ['patches 3 0.2 (sh 0.8)]] 'soft])]}
+ (material k s o) (: u "(material KIND seed {PARAM v ..})"
+   (? (!(two? (materials k))) (no (u + ", a KIND of " + show (sort (keys materials))) k)
+      (!(charm? s && 0 <= s < 1000000)) (no u s) (!(tablet? o)) (no u o)
+      (: d (materials k 0)
+         _ (each (keys o) (q \ elem q (keys d) ? 0 (no (u + ", " + show k + " takes " + show (sort (keys d))) q)))
+         (g q) (peep o q (d q) @ v (colour? v ? ['rgb (v 0) (v 1) (v 2)] (pick s q v)))
+         r ((materials k 1) g)
+         (feel (r 4) (texture (r 0) (r 1) (r 2) (['seed s] . r 3))))))
  (feel k t) (: u "(feel 'soft TEXTURE)"
    (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
