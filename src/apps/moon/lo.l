@@ -72,6 +72,14 @@
                                                [o mt] ['a av mt (off + o)])
                              'bad 'bad
                              _ (lono g 'dotbase))
+         ; a compound literal: a temp filled as a local would be, an lvalue in the frame
+         ['clit ty ini]
+          (? (gcplx? ty) (lono g 'complex)
+             (ntmp g ty @ off
+                (aggish? ty ?
+                   (lofill g env off ty ini @ 'bad 'bad fs ['a ['long 'r4 (lozero g off (aup (tsz g ty) 8) + fs)] ty off])
+                   (lox g env (ini @ ['init (x . _)] x ['init ()] ['num 0] _ ini) @ 'bad 'bad
+                      v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] ['a ['long 'r4 fs] ty off] 'bad)))))
          (lono g ['lval <e]))
    ; a refusal, its first cause kept for MOON_LOLOG
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
@@ -283,7 +291,8 @@
 
    ; -- expressions -> (ty vreg forms) | 'bad --
    (lox g env e)
-    (e @ ['num v]
+    (e @ () ['void () ()]
+         ['num v]
           (-9223372036854775808 <= v && v <= 18446744073709551615 ?
              (lomk g @ t [(numty v) t [['li t v]]]) 'bad)
          ['flo v] (lomk g @ t (lomkf g @ w ['double w [['li t (fbits v)] ['movqxr w t]]]))
@@ -294,7 +303,7 @@
          ['var nm]
           (lovar g env nm @ 'bad (g 'fns nm ? (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]]) (lono g ['var nm]))
                             _ (lorv g (lolv g env e)))
-         (['deref _] || ['dot _ _]) (lorv g (lolv g env e))
+         (['deref _] || ['dot _ _] || ['clit _ _]) (lorv g (lolv g env e))
          (['addr ['var nm]] && bad? (lovar g env nm) && g 'fns nm)
           (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]])
          ['addr lv]
