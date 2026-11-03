@@ -1,6 +1,7 @@
 ; src/apps/moon/nm.l -- the new backend's normalise stage, lo.l's forms to lo.l's forms before ra.l:
 ; copy-then-op fused to three-address, copies and constants propagated, address arithmetic folded
-; into loads and stores, unreachable forms dropped. each rule keeps the forms' meaning on its own
+; into loads and stores, extensions of values already in range dropped, unreachable forms dropped.
+; each rule keeps the forms' meaning on its own
 (module 'moon
 (borrow 'holo)
 (:
@@ -20,6 +21,38 @@
     (fs @ (f . u) (f . nmreach (f @ (('jmp || 'ret) . _) (nmskip u) _ u))
           _ ())
    (nmskip fs) (fs @ (('label . _) . _) fs (_ . u) (nmskip u) _ ())
+
+   ; a value's upper bound when it is known not negative, forward through a block: an extension
+   ; that cannot change its operand goes
+   nmext {'zx1 255 'zx2 65535 'zx4 4294967295 'sx1 127 'sx2 32767 'sx4 2147483647}
+   nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldu4 4294967295 'ldxw 4294967295}
+   (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
+   (nmwid g fs)
+    (: (go fs w)
+        (fs @ (f . u)
+               (: (b x) (cint? x ? (x < 0 ? () x) (peep w x ()))
+                  (f @ ('label . _) (f . go u {})
+                       ([op t] && peep nmext op () && b t != () && b t <= nmext op) (go u w)
+                       _ (: nb (f @ ['li t k] (b k)
+                                    ['mov t a] (b a)
+                                    ([op t _ _] && peep nmldw op ()) (nmldw op)
+                                    ([op t _ _ _ _] && peep nmldw op ()) (nmldw op)
+                                    ([op t] && peep nmext op ()) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
+                                    ['set _ t] 1
+                                    ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
+                                    [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
+                                    ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
+                                    ['imul t x y] (b x @ () () n (b y @ () () m (n * m)))
+                                    [('shr || 'sar) t k] (b t @ () () n (cint? k ? (n // 2 ** k)))
+                                    ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
+                                    _ ())
+                            _ (raops g f @ [_ ds]
+                               (map (x \ pin w x ()) ds,
+                                f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
+                               _ 0)
+                            (f . go u w))))
+              _ ())
+       (go fs {}))
 
    ; per vreg its defs and its reads -> [defs reads]
    (nmcnt g fs)
@@ -108,7 +141,7 @@
                         _ ())
           (go fs)))
 
-   (nmround g fs) (nmcnt g fs @ [dn _] (nmmaps fs dn @ [cp kc] (nmsink g (radce g (nmloc g (nmsub fs cp kc dn) dn)))))
+   (nmround g fs0) (nmwid g fs0 @ fs (nmcnt g fs @ [dn _] (nmmaps fs dn @ [cp kc] (nmsink g (radce g (nmloc g (nmsub fs cp kc dn) dn))))))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
     (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmround g (nmround g (nmreach (nmfuse fs)))))
