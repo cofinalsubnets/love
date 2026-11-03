@@ -177,6 +177,55 @@
    (raget c v) (foldl (a \ e \ (a @ () (<e = v ? <>e) _ a)) () c)
 
    ; -> [forms loc]: the round that fit, over the forms its spills left | 'bad
+   ; the entry's fast region: the forms the entry reaches through no call, a label only when every
+   ; way in comes from the region. a vreg the entry run sets once and the rest of the fn needs lives
+   ; in the region as a twin, copied back on each edge out (a branch's through a stub at the end), so
+   ; the region writes no callee-saved register and swrap can move the frame onto its exits
+   (raentry g fs)
+    (: n #fs
+       ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       sc (vsucc fs) lb (vlabs fs)
+       pr (foldl (t \ i \ foldl (t2 \ j \ pin t2 j (i . peep t2 j ())) t (peep sc i ())) {} ^n)
+       (hd i) (ft i @ (h . _) h _ ())
+       (call? i) (elem (hd i) '(call callr))
+       inr {}
+       (in? i) (peep inr i ())
+       (sw i chg)
+        (n <= i ? chg
+           (: ok (!(call? i) && (i = 0 || (peep pr i () @ () ()
+                                             ps (hd i = 'label ? (all in? ps) (any in? ps)))))
+              (ok && !(in? i) ? (pin inr i 1, sw (i + 1) 1) (sw (i + 1) chg))))
+       (fix _) (sw 0 0 @ 1 (fix 0) 0)
+       _ (fix 0)
+       ; the entry run: up to the first label, jump, branch, call or return
+       k (: (go i) (i < n && nelem (hd i) '(label jmp br call callr ret jmpt fix) ? (go (i + 1)) i) (go 0))
+       dfs (foldl (t \ i \ (raops g (ft i) @ [_ d] (map (x \ pin t x (i . peep t x ())) (filter lovr? d), t) _ t)) {} ^n)
+       outs (foldl (t \ i \ (in? i ? t (raops g (ft i) @ [u d] (map (x \ pin t x 1) (filter lovr? (u + d)), t) _ t))) {} ^n)
+       vs (filter (v \ outs v && (dfs v @ [i] (i < k) _ ()))
+                  (raund () (catmap (i \ raops g (ft i) @ [_ d] (filter lovr? d) _ ()) ^k)))
+       ; an asm goto out of the region has no edge to lay copies on
+       (? (!(two? vs) || !(any (i \ !(in? i)) ^n) ||
+           any (i \ in? i && hd i = 'fix && 4 < #(ft i) && any (j \ !(in? j)) (peep sc i ())) ^n) fs
+          (: tw (foldl (t \ v \ pin t v (lofr? v ? (lomkf g) (lomk g))) {} vs)
+             (cp v) [(lofr? v ? 'movapd 'mov) v (tw v)]
+             cps (map cp vs)
+             (ren f) (f @ (('fix || 'cdef) . _) f (_ . _) (map (x \ peep tw x x) f) f)
+             stubs {}
+             (stub L) (peep stubs L () @ () (nlab g ".lo" @ T (pin stubs L T, T)) T T)
+             body (catmap (i \ (? !(in? i) [(ft i)]
+                                   (: f (ren (ft i))
+                                      nx (i + 1 < n && !(in? (i + 1)) && nelem (hd i) '(jmp ret) ? cps)
+                                      (f @ ['jmp L] (in? (peep lb L -1) ? [f] (cps + [f]))
+                                           ['br c L] ((in? (peep lb L -1) ? [f] [['br c (stub L)]]) + nx)
+                                           ; a table's ways out go by stubs, in the form and in its cells
+                                           ['jmpt t tl ls] [['jmpt t tl (map (L \ in? (peep lb L -1) ? L (stub L)) ls)]]
+                                           _ ([f] + nx)))))
+                          ^n)
+             tls (catmap (i \ (in? i ? (ft i @ ['jmpt _ tl _] [tl] _ ()))) ^n)
+             (cell c) (c @ ['fix 4 'rel32 L o] ['fix 4 'rel32 (peep stubs L L) o] _ c)
+             _ (pin g 'jtabs (map (e \ (e @ ([tl cs] && elem tl tls) [tl (map cell cs)] _ e)) (g 'jtabs)))
+             (body + catmap (L \ [['label (stubs L)]] + cps + [['jmp L]]) (sort (keys stubs))))))
+
    ; a vreg spilled across calls splits there first when that weighs less, a full spill when it
    ; misses again
    (raplan g fs)
