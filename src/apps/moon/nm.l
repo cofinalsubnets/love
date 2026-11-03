@@ -31,11 +31,29 @@
    nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldu4 4294967295 'ldxw 4294967295}
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
    (nmwid g fs)
-    (: (go fs w)
+    (: lb (vlabs fs)
+       ; a label met with its bounds: every jump to it comes earlier, and no table or asm goto names it
+       bad {}
+       _ (foldl (i \ f \ (f @ ['jmp L] (peep lb L -1 <= i ? (pin bad L 1))
+                              ['br _ L] (peep lb L -1 <= i ? (pin bad L 1))
+                              ['jmpt _ _ ls] (map (L \ pin bad L 1) ls)
+                              (('fix . _) && 4 < #f) (map (L \ pin bad L 1) (f 4))
+                              _ 0,
+                           i + 1)) 0 fs)
+       pend {}
+       (keep L w) (peep bad L () ? 0 (pin pend L (nmcp w . peep pend L ())))
+       (go fs w i fall)
         (fs @ (f . u)
                (: (b x) (cint? x ? (x < 0 ? () x) (peep w x ()))
-                  (f @ ('label . _) (f . go u {})
-                       ([op t] && peep nmext op () && b t != () && b t <= nmext op) (go u w)
+                  (f @ ['label L]
+                        (: cs ((fall ? [w] ()) + peep pend L ())
+                           (f . go u (peep bad L () || !(two? cs) ? {} (foldl nmmeet <cs >cs)) (i + 1) 1))
+                       ([op t] && peep nmext op () && b t != () && b t <= nmext op) (go u w (i + 1) 1)
+                       ; a value already 0 or 1 made boolean again
+                       ((['cmp t 0] . ['set 'ne t2] . u2) && t = t2 && lovr? t && b t != () && b t <= 1 && !(nmflg? u2)) (go u2 w (i + 2) 1)
+                       ['jmp L] (keep L w, f . go u w (i + 1) 0)
+                       ['br _ L] (keep L w, f . go u w (i + 1) 1)
+                       (('ret || 'jmpt) . _) (f . go u w (i + 1) 0)
                        _ (: nb (f @ ['li t k] (b k)
                                     ['mov t a] (b a)
                                     ([op t _ _] && peep nmldw op ()) (nmldw op)
@@ -53,9 +71,14 @@
                                (map (x \ pin w x ()) ds,
                                 f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
                                _ 0)
-                            (f . go u w))))
+                            (f . go u w (i + 1) 1))))
               _ ())
-       (go fs {}))
+       (go fs {} 0 1))
+   ; the next form reads the flags a compare left
+   (nmflg? u) (u @ ((('br || 'set) . _) . _) 1 _ 0)
+   (nmcp w) (foldl (t \ k \ pin t k (w k)) {} (keys w))
+   ; two blocks' bounds where they join: the looser of each both know
+   (nmmeet a b) (foldl (t \ k \ (a k @ () t x (b k @ () t y (pin t k (max x y))))) {} (keys a))
 
    ; per vreg its defs and its reads -> [defs reads]
    (nmcnt g fs)
