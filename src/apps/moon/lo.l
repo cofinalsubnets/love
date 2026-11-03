@@ -390,7 +390,12 @@
                       va (lox g env b @ 'bad 'bad
                             vb (? (vty va = 'void || vty vb = 'void)
                                    ['void () (fc + vfs va + [['jmp ld] ['label le]] + vfs vb + [['label ld]])]
-                                  !(losv? (vty va) && losv? (vty vb)) 'bad
+                                  ; two structs: the chosen one's address
+                                  (stru? (vty va) && stru? (vty vb))
+                                   (tsz g (vty va) != tsz g (vty vb) ? (lono g ['cond (vty va) (vty vb)])
+                                      (lomk g @ d [(vty va) d (fc + vfs va + [['mov d (vreg va)] ['jmp ld] ['label le]] +
+                                                               vfs vb + [['mov d (vreg vb)] ['label ld]])]))
+                                  !(losv? (vty va) && losv? (vty vb)) (lono g ['cond (vty va) (vty vb)])
                                   (: ta (vty va) tb (vty vb)
                                      fl (lofl? ta || lofl? tb)
                                      rt (? (ptr? ta) ta (ptr? tb) tb fl (ta = 'double || tb = 'double ? 'double 'float) (rbin g ta tb))
@@ -500,6 +505,13 @@
                                                     + [15 144 193 72 15 182 201])]]]
                                           ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])])))))
               x (lox g env x)))
+       ; |x| is infinite: the bits shifted past the sign are inf's
+       (nm = "__builtin_isinf")
+        (lox g env <as @ ([vt r f0] && lofl? vt)
+           (lotr g [vt r f0] 'double @ [_ w fs]
+              (lomk g @ t (lomk g @ k (lomk g @ d
+                 ['long d (fs + [['movqrx t w] ['shl t 1] ['li k 18437736874454810624] ['cmp t k] ['set 'eq d]])]))))
+           _ (lono g ['call nm]))
        ; an infinity, a quiet NaN (the tag ignored): their bits
        (elem nm '("__builtin_inf" "__builtin_nan" "__builtin_nanf"))
         (lomk g @ t (lomkf g @ w ['double w [['li t (nm = "__builtin_inf" ? 9218868437227405312 9221120237041090560)] ['movqxr w t]]]))
