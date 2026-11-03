@@ -92,9 +92,26 @@
                     ([op b o v] && peep nmsi op ()) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
                     ['mov d y] (k y @ () f n ['li d n])
                     f)
+       ; an unsigned divide or remainder by a power of two: a shift or a mask
+       (pw x) (cint? x && 0 < x && x & (x - 1) = 0)
+       (dv f) (f @ (('udiv . d . a . b . _) && pw (kv b)) [['mov d a] ['shr d (nmlog (kv b))]]
+                   (('urem . d . a . b . _) && pw (kv b) && kv b <= 2147483648) [['and d a (kv b - 1)]]
+                   _ ())
        (catmap (f \ (f @ ([('mov || 'movapd) x _] && peep cp x ()) ()
-                         (_ . _) [(imm (map r f))]
+                         (_ . _) (map r f @ f2 (dv f2 @ () [(imm f2)] fs2 fs2))
                          [f])) fs))
+   (nmlog n) (n <= 1 ? 0 (1 + nmlog (n // 2)))
+   ; a literal and the one-register rewrite after it: one literal
+   nmun {'neg (k \ 0 - k) 'not (k \ -1 - k)
+         'zx1 (k \ (k % 256 + 256) % 256) 'zx2 (k \ (k % 65536 + 65536) % 65536)
+         'zx4 (k \ (k % 4294967296 + 4294967296) % 4294967296)
+         'sx1 (k \ (k % 256 + 256) % 256 @ z (z < 128 ? z (z - 256)))
+         'sx2 (k \ (k % 65536 + 65536) % 65536 @ z (z < 32768 ? z (z - 65536)))
+         'sx4 (k \ (k % 4294967296 + 4294967296) % 4294967296 @ z (z < 2147483648 ? z (z - 4294967296)))}
+   (nmlit fs)
+    (fs @ ((['li t k] . [op t2] . u) && t = t2 && cint? k && peep nmun op ()) (nmlit (['li t ((nmun op) k)] . u))
+          (f . u) (f . nmlit u)
+          _ ())
 
    ; within a block, a one-def vreg's def while what it read still holds: copies read through, an
    ; add or lea of a literal moves into the offset, an add of a scaled index into an indexed form
@@ -144,7 +161,12 @@
                         _ ())
           (go fs)))
 
-   (nmround g fs0) (nmwid g fs0 @ fs (nmcnt g fs @ [dn _] (nmmaps fs dn @ [cp kc] (nmsink g (radce g (nmloc g (nmsub fs cp kc dn) dn))))))
+   (nmround g fs0)
+    (nmwid g (nmlit fs0) @ fs
+       (nmcnt g fs @ [dn _]
+          (nmmaps fs dn @ [cp kc]
+             ; the substitution may add defs, so the block pass counts again
+             (nmsub fs cp kc dn @ f2 (nmcnt g f2 @ [d2 _] (nmsink g (radce g (nmloc g f2 d2))))))))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
     (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmround g (nmround g (nmreach (nmfuse fs)))))

@@ -59,5 +59,9 @@
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 2] ['li 'n2 4] ['imul 'n3 'n1 'n2] ['add 'n4 'n0 'n3] ['ld 'n5 'n4 0]
                     ['mov 'r0 'n5] ['ret]])
          = lv [['mov 'n0 'r6] ['ld 'n5 'n0 8] ['mov 'r0 'n5] ['ret]])
+      ; a literal under not is one literal; an unsigned divide by 16 shifts its own copy, not its source
+      (nmlit (lv [['li 'n0 3] ['not 'n0]])) = lv [['li 'n0 -4]])
+      (nmall g (lv [['mov 'n0 'r6] ['li 'n1 16] ['udiv 'n2 'n0 'n1] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
+         = lv [['mov 'n0 'r6] ['mov 'n2 'n0] ['shr 'n2 4] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
       (all (src \ lolaw src @ [n ()] (0 < n) _ 0) corpus)
       (+(map (src \ lolaw src @ [n _] n _ 0) corpus) >= 2 * #corpus)))
