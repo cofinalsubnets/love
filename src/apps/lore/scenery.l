@@ -107,6 +107,25 @@
 ;                                      toward bearing, painted that colour; solid
 ;   (rod [x y z] [x y z] radius sides TEXTURE)  a straight bar between two points, sides
 ;                                      flats round, its ends square to it; solid
+;   (lathe [x y z] [[r y] ..] sides SKIN)  a profile turned round the upright through x y z,
+;                                      r out at y up, its heights rising; solid
+;   (sweep [[x y z] ..] radius sides TEXTURE)  a rod bent through the points: a cable, a rail
+;   (fit SKIN SHAPE)                   a small solid, lit at its corners: SKIN a texture or a
+;                                      skin's tablet
+;   (dice seed k)                      0 to 1, thrown for k (a number or a name) under seed
+;   (pick seed k v)                    v a number, or [lo hi] thrown as dice
+;   (seed-of seed i)                   the seed of the i'th of many
+;   (ease v a b) (smin a b r) (smax a b r)  0 to 1 smoothly as v goes a to b; the lesser
+;                                      or greater, rounded within r of the other
+;   (scatter seed [[x z] ..] n MAKE {'gap 'bearing 'ground 'keep?})  n places thrown over
+;                                      two corners, or three or more going round; kept
+;                                      where (keep? x z), and gap from another; each
+;                                      (MAKE [x y z] bearing seed), y off 'ground, a
+;                                      height or (\ x z y); 'bearing a number or [lo hi]
+;   (line-up seed [x y z] [x y z] MAKE {'w 'gap})  side by side from one point toward
+;                                      the other, each w wide (a number or [lo hi]), as
+;                                      many as fit: (MAKE [x y z] bearing seed w), facing
+;                                      across the line
 ;   (grav [x y z] [x y z] DIR)         a grav shaft: a column of air over the plan between the
 ;                                      corners, from the lower's floor to a room's height over
 ;                                      the upper's, motes of light streaming through it; who
@@ -220,7 +239,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -394,6 +413,70 @@
          ends [[p (v+ p e1) (v+ p e2)] [q (v+ q e1) (v+ q e2)]]
          lo (map (k \ min (p k) (q k) - R - 0.01) ^3) hi (map (k \ max (p k) (q k) + R + 0.01) ^3)
          (with (skin {'all t} (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) (solid (box lo hi)) (flats + ends))) 'whole 1))))
+ ; --- the kit a prop is grown with: dice, easing, and ways to lay things out ---
+ ; ..a die for k under seed, 0 to 1, the same every read; k a number or a name, so each
+ ; parameter throws its own and changing one leaves the rest
+ (key k) (charm? k ? k (foldl (\ a c ((a * 31 + c) % 2147483647)) 7 (chars (show k))))
+ (dice s k) (throw (key k) 0 (key s) 1048576 / 1048576.0)
+ (pick s k v) (? (num? v) (f v) (two? v && #v = 2 && all num? v) (f (v 0) + (v 1 - v 0) * dice s k)
+                 (no "a number, or [lo hi]" v))
+ ; ..the seed of the i'th of many
+ (seed-of s i) (throw (key i) 7 (key s) 2147483647)
+ (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (2 k * (3.0 - 2.0 * k)))
+ ; ..the lesser and the greater, rounded where they come within r
+ (smin a b r) (max 0.0 (r - abs (a - b)) / r @ h (min a b - h * h * r * 0.25))
+ (smax a b r) (0.0 - smin (0.0 - a) (0.0 - b) r)
+ (skin-of-any t) (surface? t ? {'all t} t)
+ (fit t sh) (whole (skin (skin-of-any t) (solid sh)))
+ ; ..a lathe: each span of the profile between two heights a brush cut by a plane along
+ ; each flat, so it stays convex; a span whose radii are both 0, or that does not rise, is none
+ (lathe at prof n t) (: u "(lathe [x y z] [[r y] ..] sides SKIN)" o (P at u)
+   (? (!(charm? n && n >= 3)) (no u n)
+      (!(two? prof && #prof >= 2 && all (q \ two? q && #q = 2 && all num? q && q 0 >= 0) prof)) (no u prof)
+      (: ps (map (map f) prof) sk (skin-of-any t) c (cos (pi / n))
+         (span p q) (: R (max (p 0) (q 0) / c + 0.01)
+           flats (map (k \ (: a (2.0 * pi * k / n) d [(cos a) 0.0 (sin a)] b (v+ o [(p 0 * d 0) (p 1) (p 0 * d 2)])
+                            [b (v+ o [(q 0 * d 0) (q 1) (q 0 * d 2)]) (v+ b [-(d 2) 0.0 (d 0)])]))
+                      ^n)
+           (whole (skin sk (foldl (\ b e (cut (e 0) (e 1) (e 2) b))
+                                  (solid (box [(o 0 - R) (o 1 + p 1) (o 2 - R)] [(o 0 + R) (o 1 + q 1) (o 2 + R)])) flats))))
+         (map (i \ span (ps i) (ps (i + 1))) (filter (i \ ps i 1 < ps (i + 1) 1 && 0.0 < ps i 0 + ps (i + 1) 0) ^(#ps - 1))))))
+ ; ..a sweep: a rod from each point of the path to the next, run on r past each joint so a
+ ; bend is closed, square at the path's own ends
+ (sweep path r n t) (: u "(sweep [[x y z] ..] radius sides TEXTURE)"
+   (? (!(two? path && #path >= 2 && all pt? path)) (no u path) (!(num? r && r > 0)) (no u r)
+      (: ps (map (map f) path) m (#ps - 1) R (f r)
+         (seg i) (: a (ps i) b (ps (i + 1)) d (v+ b (v* -1.0 a)) w (unit d)
+           (rod (i = 0 ? a (v+ a (v* -R w))) (i = m - 1 ? b (v+ b (v* R w))) R n t))
+         (map seg (filter (i \ (ps (i + 1) @ b (abs (b 0 - ps i 0) + abs (b 1 - ps i 1) + abs (b 2 - ps i 2) > 1e-6))) ^m)))))
+ ; ..a polygon's inside, its corners [x z] going round: crossed an odd number of times to the right
+ (poly-in ps) (: n #ps
+   (\ x z (foldl (\ a i (: p (ps i) q (ps ((i + 1) % n))
+                          ((p 1 > z) != (q 1 > z) && x < p 0 + (q 0 - p 0) * (z - p 1) / (q 1 - p 1) ? (1 - a) a)))
+                 0 ^n = 1)))
+ ; ..a scatter: n places thrown over the region, each kept where it is inside, keep? says so
+ ; and none kept before is within gap; then made there, (make [x y z] bearing seed)
+ (scatter s reg n mk o) (: u "(scatter seed [[x z] ..] n MAKE {'gap 'bearing 'ground 'keep?})"
+   (? (!(two? reg && #reg >= 2 && all (q \ two? q && #q = 2 && all num? q) reg)) (no u reg)
+      (!(charm? n && n >= 0)) (no u n) (!(tablet? o)) (no u o)
+      (: rs (map (map f) reg) xs (map (q \ q 0) rs) zs (map (q \ q 1) rs)
+         x0 (foldl min (xs 0) xs) x1 (foldl max (xs 0) xs) z0 (foldl min (zs 0) zs) z1 (foldl max (zs 0) zs)
+         in? (#rs = 2 ? (\ x z 1) (poly-in rs))
+         gap (f (peep o 'gap 0.0)) bg (peep o 'bearing [0.0 360.0]) gr (peep o 'ground 0.0) keep? (peep o 'keep? (\ x z 1))
+         (near? x z got) (any (q \ (q 0 - x) * (q 0 - x) + (q 2 - z) * (q 2 - z) < gap * gap) got)
+         (try i got) (? (n <= i) (rev got)
+           (: e (seed-of s i) x (x0 + (x1 - x0) * dice e 'x) z (z0 + (z1 - z0) * dice e 'z)
+              (in? x z && keep? x z && !(near? x z got) ? (try (i + 1) ([x (num? gr ? (f gr) (gr x z)) z e] . got)) (try (i + 1) got))))
+         (map (q \ mk [(q 0) (q 1) (q 2)] (pick (q 3) 'bearing bg) (q 3)) (try 0 ())))))
+ ; ..a line-up: things side by side from a toward b, each w wide and gap apart, as many as
+ ; fit; (make [x y z] bearing seed w) at each one's middle, facing across the line
+ (line-up s a b mk o) (: u "(line-up seed [x y z] [x y z] MAKE {'w 'gap})" p (P a u) q (P b u)
+   (? (!(tablet? o)) (no u o)
+      (: d (v+ q (v* -1.0 p)) L (sqrt (d 0 * d 0 + d 1 * d 1 + d 2 * d 2)) dir (v* (1.0 / L) d)
+         ws (peep o 'w 1.0) gap (f (peep o 'gap 0.0)) deg (atan2 (d 0) (d 2) * 180.0 / pi + 90.0)
+         (go x i acc) (: e (seed-of s i) w (pick e 'w ws)
+           (L < x + w || w <= 0.0 ? (rev acc) (go (x + w + gap) (i + 1) ((mk (v+ p (v* (x + 0.5 * w) dir)) deg e w) . acc))))
+         (go 0.0 0 ()))))
  ; ..a bare twin mattress, 99 by 190.5 by 25 cm: quilted ivory ticking on top, its border
  ; striped between two pipings, plain under; its corners rounded off in plan and its edges
  ; top and bottom

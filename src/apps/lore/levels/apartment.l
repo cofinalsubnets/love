@@ -39,7 +39,6 @@
 ; the river: wandering across the plain along x, more the further from the cube; its bed
 ; sunk bed-d, bed-w either side flat and its banks bank-w more, rising easy. by the cube it
 ; parts in two channels sep x either side of its line, the island between
-(: (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (2 k * (3.0 - 2.0 * k))))
 (: (meander x) ((2.0 + 3.0 * ease (abs x) 18.0 45.0) * (sin (x / 9.0 + 1.0) + 0.45 * sin (x / 4.3 + 2.0))))
 (: bed-d 0.6)                            ; how deep the bed lies
 (: bed-w 1.5)                            ; half its floor's width
@@ -49,8 +48,7 @@
 (: lift 0.04)                            ; how far the grass lies over the sand
 (: sep-w 7.0)                            ; how far a channel runs off the line beside the cube
 (: (sep x) (sep-w * (1.0 - ease (abs x) 4.0 16.0)))
-(: (chan x z) (: d (z - meander x) s (sep x) (smin (abs (d - s)) (abs (d + s)))))   ; to the nearer channel
-(: (smin a b) (max 0.0 (2.0 - abs (a - b)) / 2.0 @ h (min a b - h * h * 0.5)))   ; rounded by 2 m between them
+(: (chan x z) (: d (z - meander x) s (sep x) (smin (abs (d - s)) (abs (d + s)) 2.0)))   ; to the nearer channel, rounded by 2 m
 
 ; the cube, on the river's line in the middle of the island
 (: home [0.0 (meander 0.0)])
