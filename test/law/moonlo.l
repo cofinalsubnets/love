@@ -60,8 +60,11 @@
                     ['mov 'r0 'n5] ['ret]])
          = lv [['mov 'n0 'r6] ['ld 'n5 'n0 8] ['mov 'r0 'n5] ['ret]])
       ; a literal under not is one literal; an unsigned divide by 16 shifts its own copy, not its source
-      (nmlit (lv [['li 'n0 3] ['not 'n0]])) = lv [['li 'n0 -4]])
+      (nmlit (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 16] ['udiv 'n2 'n0 'n1] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
          = lv [['mov 'n0 'r6] ['mov 'n2 'n0] ['shr 'n2 4] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
+      ; the entry's fast region falling into a call copies its twin back ahead of the argument setup
+      (raentry g (lv [['mov 'n0 'r6] ['li 'n1 1] ['mov 'r6 'n1] ['cuse 'r6] ['call 'f] ['mov 'r0 'n0] ['ret]])
+         @ [_ _ ['mov a _] ['mov 'r6 _] ['cuse 'r6] ['call 'f] _ _] (a = name "%n0") _ 0)
       (all (src \ lolaw src @ [n ()] (0 < n) _ 0) corpus)
       (+(map (src \ lolaw src @ [n _] n _ 0) corpus) >= 2 * #corpus)))

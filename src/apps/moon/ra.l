@@ -212,14 +212,20 @@
              (ren f) (f @ (('fix || 'cdef) . _) f (_ . _) (map (x \ peep tw x x) f) f)
              stubs {}
              (stub L) (peep stubs L () @ () (nlab g ".lo" @ T (pin stubs L T, T)) T T)
+             ; a fall into a call copies ahead of its argument setup, whose registers the copies may take
+             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd li la lea)) (!(lovr? d)) _ 0)
+             (back i) (0 < i && in? (i - 1) && setup? (i - 1) ? (back (i - 1)) i)
+             pre {}
+             _ (map (i \ (in? i && i + 1 < n && !(in? (i + 1)) && setup? i ? (pin pre (back i) 1))) ^n)
              body (catmap (i \ (? !(in? i) [(ft i)]
                                    (: f (ren (ft i))
-                                      nx (i + 1 < n && !(in? (i + 1)) && nelem (hd i) '(jmp ret) ? cps)
+                                      nx (i + 1 < n && !(in? (i + 1)) && nelem (hd i) '(jmp ret) && !(setup? i) ? cps)
+                                      ((pre i ? cps) +
                                       (f @ ['jmp L] (in? (peep lb L -1) ? [f] (cps + [f]))
                                            ['br c L] ((in? (peep lb L -1) ? [f] [['br c (stub L)]]) + nx)
                                            ; a table's ways out go by stubs, in the form and in its cells
                                            ['jmpt t tl ls] [['jmpt t tl (map (L \ in? (peep lb L -1) ? L (stub L)) ls)]]
-                                           _ ([f] + nx)))))
+                                           _ ([f] + nx))))))
                           ^n)
              tls (catmap (i \ (in? i ? (ft i @ ['jmpt _ tl _] [tl] _ ()))) ^n)
              (cell c) (c @ ['fix 4 'rel32 L o] ['fix 4 'rel32 (peep stubs L L) o] _ c)
