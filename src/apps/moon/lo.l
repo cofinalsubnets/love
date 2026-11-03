@@ -68,7 +68,7 @@
          ['dot base fld]
           (lolv g env base @ ['a av ty off]
                               (fmem g ty fld @ 'bad (lono g ['member fld])
-                                               [_ ('bitfield . _)] (lono g 'bitfield)
+                                               ([o bt] && bitf? bt) (? (bfwide? g bt) (lono g 'bitfield) ['b av bt (off + o)])
                                                [o mt] ['a av mt (off + o)])
                              'bad 'bad
                              _ (lono g 'dotbase))
@@ -88,12 +88,34 @@
           ['a [_ r fs] ('arr . et . _) off] (lomk g @ t (loesc g r, [['ptr et] t (fs + [['lea t r off]])]))
           (['a [_ r fs] ty off] && stru? ty) (lomk g @ t (loesc g r, [ty t (fs + [['lea t r off]])]))
           ['a av ty off] (loload g av ty off)
+          ; a bitfield: its unit, then two shifts (sar signed, shr unsigned; a bool never sign-extends)
+          ['b [_ r fs] bt off]
+           (: uty <>bt bitoff <>>bt width <>>>bt hi (64 - (bitoff + width)) lo (64 - width)
+              (lobfld g bt r off @ [_ t f2]
+                 ['long t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
           'bad)
+   ; a bitfield's unit at b+off into a fresh vreg, and back: one access as its type says, or the
+   ; old arms' chunks when packed, their scratch renamed
+   (lobfld g bt b off)
+    (bfpk? bt ? (loren2 g () 'r2 'long (ldal 'r2 b off (tsz g bt) 8))
+       (lomk g @ t ['long t [[(uldop (tsz g bt)) t b off]]]))
+   (lobfst g bt b off u)
+    (bfpk? bt ? (loren2 g () 'r3 'long (stal b off (tsz g bt) 8 u) @ [_ _ fs] fs)
+       [[(stop <>bt) b off u]])
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
    (lost g lv v)
     (lv @ ['v r ty] (lotr g v ty @ [_ c fs] [(fs + [(lomv r c)]) [ty r ()]])
           (['a [_ b _] ty off] && losc? ty) (lotr g v ty @ [_ c fs] [(fs + [[(stop ty) b off c]]) [ty c ()]])
           (['a [_ b _] ty off] && lofl? ty) (lotr g v ty @ [_ c fs] [(fs + [[(ty = 'float ? 'stss 'stsd) b off c]]) [ty c ()]])
+          ; a bitfield: read-modify-write its unit, the truncated value answers
+          ['b [_ b _] bt off]
+           (: uty <>bt bitoff <>>bt width <>>>bt mask ((1 << width) - 1) cmask (0 - (mask << bitoff) - 1)
+              (lotr g v uty @ [_ c fs]
+                 (: k (lomk g) m (lomk g) u (lomk g) x (lomk g)
+                    (lobfld g bt b off @ [_ u fu]
+                       [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
+                               ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u)
+                        ['long m ()]]))))
           (['a [_ b _] ty off] && stru? ty)
            (v @ ([vt r fs] && stru? vt && tsz g vt = tsz g ty)
                  (lomk g @ t (loesc g b, [(fs + locopy g r b off (tsz g ty) + [['lea t b off]]) [ty t ()]]))
@@ -135,7 +157,12 @@
                      (: ci (it @ ('dfield . nm . _) (fidx fields nm) _ cur)
                         (nthfield fields ci @
                            'bad (lono g 'field)
-                           fe (? (bitf? (fe 2)) (lono g 'bitfield)
+                           fe (? (bitf? (fe 2))
+                                  (? (bfwide? g (fe 2)) (lono g 'bitfield)
+                                     (lox g env (elval it) @ 'bad 'bad
+                                        v (lost g ['b ['long 'r4 ()] (fe 2) (off + fe 1)] v @
+                                             [f2 _] (go u (fnext g fields ci) (acc + f2))
+                                             'bad)))
                                  (loelt g env (off + fe 1) (fe 2) (elval it) @ 'bad 'bad
                                     fs (go u (fnext g fields ci) (acc + fs))))))
                     acc)
@@ -149,8 +176,8 @@
        (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] fs 'bad)))
 
    ; the lvalue's own forms, laid once before its use, and the lvalue without them
-   (lolvfs lv) (lv @ ('a . [_ _ fs] . _) fs ())
-   (lolvbare lv) (lv @ ['a [t r _] ty off] ['a [t r ()] ty off] lv)
+   (lolvfs lv) (lv @ (('a || 'b) . [_ _ fs] . _) fs ())
+   (lolvbare lv) (lv @ [k [t r _] ty off] [k [t r ()] ty off] lv)
 
    ; -- binary operators over two values --
    (locmp? op) (elem op '(eq ne lt le gt ge))
