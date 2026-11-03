@@ -496,14 +496,17 @@
                     (ld-le 3573751839 4 + refix-with be 'adr21 (ld-le (268435456 + rd) 4) v p 4)
                     ()))
               ()))
-       (go pos es acc)
+       ; under a writer's sink the pieces leave every 4096 fields, not held to the end
+       sink (peep lk 'sink ())
+       (go pos es acc c)
         (? (atom? es) (snip s pos (o0 + sz) . acc)
+           (c > 4095 && sink != ()) (: _ (sink acc) (go pos es () 0))
            (: e <es x (relax e (? (two? >es) <(>es) ()))
-              (? (two? x) (go (o0 + <e + 8) >(>es) (x . snip s pos (o0 + <e) . acc))
+              (? (two? x) (go (o0 + <e + 8) >(>es) (x . snip s pos (o0 + <e) . acc) (c + 1))
                  (: b (field e)
-                    (go (o0 + <e + #b) >es (b . snip s pos (o0 + <e) . acc))))))
+                    (go (o0 + <e + #b) >es (b . snip s pos (o0 + <e) . acc) (c + 1))))))
        (? (r 1 = 8) (ld-zp (to - from) acc)
-          (go (o0 + from) (filter (e \ from <= <e && <e < to) (peep (ob 'rela) si ())) acc)))
+          (go (o0 + from) (filter (e \ from <= <e && <e < to) (peep (ob 'rela) si ())) acc 0)))
    ;; --- .eh_frame as lld lays it: each input's records split, a CIE once by its bytes and
    ;     personality, in the order first seen, each followed by the FDEs whose function's
    ;     section is laid, then a zero terminator. the inputs give way to one synthetic
@@ -609,7 +612,7 @@
                                 (go >l (a + m 'size) (ld-mbytes m (gap cur a acc))))
                  (k = 'data) (: _ (pin env 'dot cur) (go >l (cur + x 1) (ld-le (ld-ev env (x 2)) (x 1) . acc)))
                  (k = 'set && x 1 = ".")
-                  (: _ (pin env 'dot cur) v (ld-ev env (x 3))
+                  (: _ (pin env 'dot cur) v (ld-aop (x 2) cur (ld-ev env (x 3)))
                      (go >l v (gap cur v acc)))
                  (go >l cur acc))))
        (? (t 'stype = 8) () (go (t 'steps) (t 'va) ())))
@@ -713,7 +716,7 @@
     (: a (lk 'env 'isa ".note.gnu.build-id")
        t (ld-holder lk a)
        off (t 'off + a - t 'va + 16)
-       h (sha256 <>(uread path))
+       h (peep lk 'bidhash ())
        (d c) (? (c < 58) (c - 48) (c - 87))
        id (map (i \ d (h (2 * i)) * 16 + d (h (2 * i + 1))) ^20)
        (openfd path 4 @ fd
@@ -832,15 +835,21 @@
             + (? shf () [(cats [(w4 #names) (w4 3) (w8 0) (w8 0) (w8 shso) (w8 #shn) (w4 0) (w4 0) (w8 1) (w8 0)])]))
        _ (unlink path)
        q (open path "w")
-       (put ps) (each ps (p \ (? (two? p) (say q (cask p)) (atom? p && #p > 0) (say q p) 0)))
+       ; under --build-id the bytes are hashed as they go, the id's own still zero
+       hs (? (peep lk 'bid 0) (: h (cask 105) _ (sha256-init h) h) ())
+       (put ps) (each ps (p \ (: b (? (two? p) (cask p) p)
+                                (? (two? p || #p > 0) (: _ (say q b) (? (hs = ()) 0 (sha256-feed hs b))) 0))))
+       ; a section's pieces as they come, newest first; fl counts their bytes
+       fl {'n 0}
+       (sink acc) (: ps (rev acc) _ (pin fl 'n (fl 'n + foldl (\ a p (a + #p)) 0 ps)) (put ps))
        (body o l)
         (? (atom? l) o
            (: t <l
               (? (t 'stype = 8 || t 'sz = 0) (body o >l)
-                 (: ps (? (two? (peep t 'pieces ())) (t 'pieces) (ld-emit lk t))
-                    n (foldl (\ a p (a + #p)) 0 ps)
-                    _ (? (n = t 'sz) 0 (scare 'link-emit [(t 'name) n (t 'sz)]))
-                    _ (put (rev (ld-zp (t 'off - o) ())), put ps)
+                 (: _ (put (rev (ld-zp (t 'off - o) ())), pin fl 'n 0, pin lk 'sink sink)
+                    ps (? (two? (peep t 'pieces ())) (t 'pieces) (ld-emit lk t))
+                    _ (pin lk 'sink (), sink (rev ps))
+                    _ (? (fl 'n = t 'sz) 0 (scare 'link-emit [(t 'name) (fl 'n) (t 'sz)]))
                     (body (t 'off + t 'sz) >l)))))
        _ (put (eh . phs))
        e (body hdrs fouts)
@@ -848,6 +857,7 @@
             (: _ (put (rev (ld-zp (shso - e) ()))) (put [shn], put (rev (ld-zp (shoff - shso - #shn) ())))))
        _ (put shs)
        _ (close q)
+       _ (? (hs = ()) 0 (pin lk 'bidhash (sha256-done hs)))
        (shoff + 64 * shnum))
 
    ;; --- the cortex-a53 erratum 843419: an adrp in a page's last two words, a load or store
@@ -1350,7 +1360,7 @@
        lk {'cx cx 'ot ot 'mx mx 'outs os 'cmds (words 0 + body2) 'strip (o 'strip) 'discard (o 'discard)
            'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg
            'mach em 'abs (? (em = 62) 1 257)
-           'etype (? (o 'shared || o 'pie) 3 2)}                  ; ET_DYN for -pie and -shared, else ET_EXEC
+           'etype (? (o 'shared || o 'pie) 3 2) 'bid (o 'bid)}                  ; ET_DYN for -pie and -shared, else ET_EXEC
        _ (? (d = 0) 0 (: _ (pin lk 'dso d) (pin lk 'slink (d 'slink))))
        dy (? (o 'shared) (ld-dynsites lk) {'rela () 'relr ()})
        nrela #(dy 'rela)

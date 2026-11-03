@@ -292,9 +292,7 @@
        = "0cb06dbc7a3b83a575c0692a607b32a02e74c1b67bee0c2d8d888a14338647ee"))
    ; x86-64 static under a script with no PHDRS: the first load at 0 congruent past the
    ; headers, .bss where the file stands, ET_EXEC, -u's name first
-   (kly-link a)
-    (: sc "out/.kly.lds" dst "out/.kly" q (open sc "w")
-       _ (say q """
+   (kly-link a) (kly-with """
         SECTIONS {
          . = 0;
          .text : { *(.text) }
@@ -303,14 +301,16 @@
          .bss : { *(.bss) }
          _end = .;
         }
-        """, close q)
+        """ a)
+   (kly-with txt a)
+    (: sc "out/.kly.lds" dst "out/.kly" q (open sc "w")
+       _ (say q txt, close q)
        o (ld-args ["-m" "elf_x86_64" "-z" "noexecstack" "-z" "norelro" "-u" "later" "-T" sc a "-o" dst])
        _ (pin o 'banner "Linker: LLD 22.1.8")
        _ (ld-ld o)
        h (sha256 <>(uread dst))
        (unlink a, unlink sc, unlink dst, h))
-   (test
-      (kly-link (klr-put "s1" """
+   kly-s1 """
         7f454c4602010100000000000000000001003e0001000000000000000000000000000000000000005001000000000000
         00000000400000000000400008000700488d0500000000488d0d00000000c3c307000000000000000000000000000000
         000000000000000000000000000000000100000010000100000000000000000000000000000000000800000010000300
@@ -329,8 +329,24 @@
         090000000300000000000000000000000000000000000000d00000000000000016000000000000000000000000000000
         010000000000000000000000000000001100000003000000000000000000000000000000000000001801000000000000
         3100000000000000000000000000000001000000000000000000000000000000
-        """)
-       = "d0eab407d0166d746ba55adf3261d7380005eb269efd5a9e0e6766354d49cbca")))
+        """
+   _ (test (kly-link (klr-put "s1" kly-s1) = "d0eab407d0166d746ba55adf3261d7380005eb269efd5a9e0e6766354d49cbca"))
+   ; a spaced =fill, . = ASSERT(..) and . += n in a section with no inputs, which keeps no exec
+   (test
+      (kly-with """
+        PHDRS { text PT_LOAD FLAGS(5); data PT_LOAD FLAGS(6); }
+        SECTIONS {
+         . = 0;
+         .text : { *(.text) . = ALIGN(32); } :text = 0x90909090
+         . = ASSERT(. < 0x1000, "text too big");
+         .pad : { BYTE(1) . += 13; } :text
+         . = ALIGN(4096);
+         .data : { *(.data) } :data
+         .bss : { *(.bss) }
+         _end = .;
+        }
+        """ (klr-put "s1" kly-s1)
+      = "2c83a02a15ae55361c263391982c49094610a24e68f81a274a7bafe863d2cc6b")))
 
 ; --- ldemit's context is 11 slots, and one short of it is refused, not laid as no bytes
 (test

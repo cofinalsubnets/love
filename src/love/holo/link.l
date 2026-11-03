@@ -888,6 +888,12 @@
            (? (n > 0) (go 0) tk))
        (go 0))
 
+   ; a script assignment's op applied to the old value a and the expression's b
+   (ld-aop op a b) (? (op = '=) b (op = '+=) (ld-w (a + b)) (op = '-=) (ld-w (a - b))
+                      (op = '*=) (ld-w (a * b)) (op = '/=) (a // b)
+                      (op = '<<=) (ld-w (a * 2 ** b)) (op = '>>=) (a // 2 ** b)
+                      (op = '&=) (ld-and a b) (op = '|=) (ld-or a b) (scare 'link-assign op))
+
    ;; --- layout: the script's commands in order, SECTIONS inline, in passes until every
    ;     address holds still; the ASSERTs are checked on the last. synth [(name size align
    ;     type flags [entsize ghost]) ..], a ghost lending its flags and align but keeping no
@@ -915,13 +921,14 @@
        (ghost? x) (<x = 'synth && sy (x 1) 6 = 1)
        (held? b) ((<b = 'set && b 1 != ".") || <b = 'data)
        osof {} mof {}                                 ; isec key, merge id -> output section
+       ; a section with no inputs keeps the one before's alloc and write, never its exec
        _ (foldl (\ pf c
                   (? (<c != 'osec) pf
                      (: t <>c mem (filter (x \ mflags x >= 0) (t 'steps))
                         (? (t 'name = "/DISCARD/"
                             || (all ghost? mem && !(elem (t 'name) named) && !(any held? (t 'body))))
                            (: _ (pin t 'dead 1) pf)
-                           (: fl (? (atom? mem) (pf & 7) (foldl (\ a x (a | mflags x)) 0 mem))
+                           (: fl (? (atom? mem) (pf & 3) (foldl (\ a x (a | mflags x)) 0 mem))
                               ty (: ts (map mtype mem) nb (filter (y \ y != 8) ts)
                                     (? (atom? ts) 1 (atom? nb) 8 <nb))
                               _ (pin t 'flags fl, pin t 'stype ty,
@@ -981,15 +988,11 @@
        (ev e) (ld-ev env e)
        (dot u) (env 'dot)
        (setdot v) (pin env 'dot v)
-       (op2 op a b) (? (op = '=) b (op = '+=) (ld-w (a + b)) (op = '-=) (ld-w (a - b))
-                       (op = '*=) (ld-w (a * b)) (op = '/=) (a // b)
-                       (op = '<<=) (ld-w (a * 2 ** b)) (op = '>>=) (a // 2 ** b)
-                       (op = '&=) (ld-and a b) (op = '|=) (ld-or a b) (scare 'link-assign op))
        (cmd final c)
         (: k <c
            (? (k = 'set) (: nm (c 1) v (ev (c 3))
-                            (? (nm = ".") (setdot (op2 (c 2) (dot 0) v))
-                               (setsym nm (op2 (c 2) (peep sv nm 0) v) (c 3))))
+                            (? (nm = ".") (setdot (ld-aop (c 2) (dot 0) v))
+                               (setsym nm (ld-aop (c 2) (peep sv nm 0) v) (c 3))))
               (k = 'provide) (? (peep tk (c 1) 0) (setsym (c 1) (ev (c 2)) (c 2)) 0)
               (k = 'assert) (? (final && ev (c 1) = 0) (scare 'link-assert (c 2)) 0)
               (k = 'data) (setdot (dot 0 + c 1))
