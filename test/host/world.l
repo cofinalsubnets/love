@@ -904,5 +904,28 @@
        (ch 5.0 0.0 = -0.5) (ch 5.0 0.9 = -0.5) (ch 5.0 3.0 = 0.0) (-0.5 < ch 5.0 1.5 < 0.0)
        (S 'rise md md 1.0 1.0 = 4.0) (S 'blend md (\ x z 0.0) 0.1 5.0 5.0 > 0.0) (S 'carve md (\ x z 0.0) 0.1 5.0 5.0 < 0.0)
        (#(gl 'drapes) = 1) (gl 'drapes 0 'land = 1) (#(gl 'drapes 0 'rows) = 3) (#(gl 'drapes 0 'rows 0) = 5)))
+; furniture: station's desk from the desk's own sizes, its top over the floor; a quarter turn
+; swaps its spans; every kind reads; drawers and doors counted; a seed a size thrown again and
+; another not; a role's skin changed; books on the shelves; a kind or a key not known said back
+(: S (k \ cite 'scenery k)
+   (fu s) (lv ("(room [-4 0 -4] [4 3 4]) " + s))
+   (solids l) (filter (b \ b 'air = 0) (l 'brushes)) (bxs s) (map (b \ b 'shape 'box) (solids (fu s)))
+   (near a b) (all (i \ all (j \ abs (a i j - b i j) < 1e-9) ^3) ^2)
+   dk (fu "(furnish 'desk [0 0 0] 0 {})") db (bxs "(furnish 'desk [0 0 0] 0 {})") (bm x y z) (brush-medium (world-new 8 8 dk "" 'sc 'brushes) [x y z])
+   kinds ['table 'desk 'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter 'crate 'carton 'sofa]
+   (n s) #(solids (fu s))
+ (test (near (db 0) [[-0.8 0.71 -0.4] [0.8 0.75 0.4]]) (near (db 1) [[-0.78 0.0 -0.38] [-0.74 0.71 0.38]])
+       (near (db 2) [[0.74 0.0 -0.38] [0.78 0.71 0.38]]) (near (db 3) [[-0.74 0.15 0.3] [0.74 0.65 0.33]]) (#db = 4)
+       (bm 0.0 0.73 0.0 = 0) (bm 0.0 0.5 0.0 = 1) (bm 0.76 0.3 0.0 = 0)
+       (near (bxs "(furnish 'desk [0 0 0] 90 {})" 0) [[-0.4 0.71 -0.8] [0.4 0.75 0.8]])
+       (all (k \ n ("(furnish '" + show k + " [0 0 0] 30 {})") > 0) kinds)
+       (n "(furnish 'cabinet [0 0 0] 0 {})" = 9) (n "(furnish 'cabinet [0 0 0] 0 {'drawers 0 'doors 2})" = 5)
+       (n "(furnish 'counter [0 0 0] 0 {})" = 6) (n "(furnish 'crate [0 0 0] 0 {'slats 3})" = 13)
+       (show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 4})") = show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 4})"))
+       (show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 4})") != show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 5})"))
+       (show (fu "(furnish 'desk [0 0 0] 0 {'skin {'top 'stone}})") != show dk)
+       (n "(furnish 'shelf [0 0 0] 0 {'fill 'books})" > n "(furnish 'shelf [0 0 0] 0 {})" + 20)
+       (has? (fu "(furnish 'throne [0 0 0] 0 {})") "a KIND") (has? (fu "(furnish 'desk [0 0 0] 0 {'hue 1})") "furniture takes")
+       (has? (fu "(furnish 'desk [0 0 0] 0 'oak)") "(furnish KIND")))
 (test_fin ())
 (puts "world: ok\n")

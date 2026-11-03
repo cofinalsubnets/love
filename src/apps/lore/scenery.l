@@ -234,11 +234,20 @@
 ;   (channel [[x z] ..] w depth)       depth down within w of the path, its banks up by 2 w
 ;   (rise G G) (blend G G r) (carve G G r)  grounds summed, the higher, the lower, rounded
 ;   (ground-of SKIN [[x z] [x z]] step GROUND)  a land over two corners, a point every step
+;   (furnish KIND [x y z] bearing {PARAM v ..})  a piece of furniture, the middle of its foot
+;                                      at x y z, its user facing the bearing: 'table 'desk
+;                                      'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter
+;                                      'crate 'carton 'sofa; 'w 'd 'h, 'top, 'legs 'corners
+;                                      'panels 'trestle 'pedestal 'star or (), 'leg 'inset
+;                                      'apron 'modesty 'seat 'back 'arms 'shelves 'drawers
+;                                      'doors 'over 'slats, 'fill 'books or a MAKE given each
+;                                      'fill-w slot as line-up does, 'seed, and 'skin of
+;                                      'top 'frame 'body 'soft, each a texture or a kind
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
 ;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
 ;                                      'tile 'cobble 'mud 'concrete 'metal 'cloth 'carpet
-;                                      'gravel 'sand 'soil 'grass; a wrong one says what it takes
+;                                      'gravel 'sand 'soil 'grass 'card; a wrong one says what it takes
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
@@ -258,7 +267,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -494,7 +503,7 @@
       (: d (v+ q (v* -1.0 p)) L (sqrt (d 0 * d 0 + d 1 * d 1 + d 2 * d 2)) dir (v* (1.0 / L) d)
          ws (peep o 'w 1.0) gap (f (peep o 'gap 0.0)) deg (atan2 (d 0) (d 2) * 180.0 / pi + 90.0)
          (go x i acc) (: e (seed-of s i) w (pick e 'w ws)
-           (L < x + w || w <= 0.0 ? (rev acc) (go (x + w + gap) (i + 1) ((mk (v+ p (v* (x + 0.5 * w) dir)) deg e w) . acc))))
+           (L < x + w || w <= 0.0 ? (rev acc) (go (x + w + gap) (i + 1) (mk (v+ p (v* (x + 0.5 * w) dir)) deg e w . acc))))
          (go 0.0 0 ()))))
  ; ..a bare twin mattress, 99 by 190.5 by 25 cm: quilted ivory ticking on top, its border
  ; striped between two pipings, plain under; its corners rounded off in plan and its edges
@@ -697,14 +706,16 @@
                                    ['patches 2 (g 'stones) (mx ['rgb 0.5 0.48 0.44] 0.5)]] 'soft])]
    'grass [{'colour (rgb 0.3 0.45 0.18) 'dry 0.3 'metres 2.0}
            (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 1 0.35) ['patches 6 (g 'dry) (mx ['rgb 0.62 0.58 0.3] 0.3)]
-                                    ['patches 3 0.2 (sh 0.8)]] 'soft])]}
+                                    ['patches 3 0.2 (sh 0.8)]] 'soft])]
+   'card [{'colour (rgb 0.62 0.47 0.3) 'tape (rgb 0.7 0.58 0.4) 'metres 0.5}
+          (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 2 0.06) ['patches 4 0.15 (sh 0.9)] ['rows 14 18 (g 'tape)]] 'soft])]}
  (material k s o) (: u "(material KIND seed {PARAM v ..})"
    (? (!(two? (materials k))) (no (u + ", a KIND of " + show (sort (keys materials))) k)
       (!(charm? s && 0 <= s < 1000000)) (no u s) (!(tablet? o)) (no u o)
       (: d (materials k 0)
          _ (each (keys o) (q \ elem q (keys d) ? 0 (no (u + ", " + show k + " takes " + show (sort (keys d))) q)))
          (g q) (peep o q (d q) @ v (colour? v ? ['rgb (v 0) (v 1) (v 2)] (pick s q v)))
-         r ((materials k 1) g)
+         r (materials k 1 g)
          (feel (r 4) (texture (r 0) (r 1) (r 2) (['seed s] . r 3))))))
  ; ..a skin by a material's kind, or as given
  (tex-by t) (nom? t ? (material t 1 {}) t)
@@ -779,6 +790,100 @@
       (: (span a b) (: n (max 1 (int (abs (b - a) / step + 0.5))) (map (i \ a + (b - a) * i / n) ^(n + 1)))
          xs (span (f (c 0 0)) (f (c 1 0))) zs (span (f (c 0 1)) (f (c 1 1)))
          (land (tex-by t) (map (z \ map (x \ [x (f (gr x z)) z]) xs) zs)))))
+ ; --- furniture: a top on legs, a body, a back, sized by its style and built facing the
+ ; bearing, the way one using it faces: a bed's head that way, a desk's sitter, a cabinet's
+ ; front toward them ---
+ furniture
+  {'table {'w 1.4 'd 0.8 'h 0.75 'top 0.04 'legs 'corners 'leg 0.025 'inset 0.03 'apron 0.08 'skin {'top 'plank 'frame 'wood}}
+   'desk {'w 1.6 'd 0.8 'h 0.75 'top 0.04 'legs 'panels 'leg 0.02 'inset 0.02 'modesty 0.5 'skin {'top 'plank 'frame 'wood}}
+   'chair {'w 0.48 'd 0.48 'h 0.9 'seat 0.45 'top 0.05 'legs 'corners 'leg 0.02 'inset 0.02 'back 1 'arms 0
+           'skin {'frame 'wood 'soft 'cloth}}
+   'stool {'w 0.36 'd 0.36 'h 0.65 'top 0.04 'legs 'corners 'leg 0.02 'inset 0.02 'skin {'top 'wood 'frame 'wood}}
+   'bench {'w 1.5 'd 0.36 'h 0.45 'top 0.05 'legs 'trestle 'leg 0.03 'inset 0.1 'skin {'top 'plank 'frame 'wood}}
+   'bed {'w 1.0 'd 2.0 'h 0.3 'back 0.9 'skin {'frame 'wood}}
+   'shelf {'w 0.9 'd 0.3 'h 1.8 'top 0.02 'shelves 4 'fill () 'fill-w [0.02 0.05] 'skin {'frame 'wood}}
+   'cabinet {'w 0.5 'd 0.6 'h 1.3 'drawers 4 'doors 0 'skin {'body 'metal 'frame 'metal}}
+   'counter {'w 2.0 'd 0.6 'h 0.9 'top 0.04 'over 0.03 'drawers 0 'doors 2 'skin {'body 'wood 'top 'stone 'frame 'metal}}
+   'crate {'w 0.5 'd 0.35 'h 0.3 'top 0.015 'slats 0 'skin {'frame 'wood}}
+   'carton {'w 0.5 'd 0.4 'h 0.35 'skin {'body 'card}}
+   'sofa {'w 1.9 'd 0.9 'h 0.85 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}}
+ furnish-keys ['w 'd 'h 'top 'legs 'leg 'inset 'apron 'modesty 'seat 'back 'arms 'shelves 'fill 'fill-w 'drawers 'doors 'over 'slats 'seed 'skin]
+ book-colours [(rgb 0.36 0.09 0.07) (rgb 0.1 0.2 0.36) (rgb 0.14 0.3 0.16) (rgb 0.55 0.45 0.2) (rgb 0.2 0.2 0.22) (rgb 0.6 0.3 0.12)]
+ (furnish k at deg st) (: u "(furnish KIND [x y z] bearing {PARAM v ..})" o (P at u) dd (N deg u)
+   (? (!(tablet? (furniture k))) (no (u + ", a KIND of " + show (sort (keys furniture))) k)
+      (!(tablet? st)) (no u st)
+      (: _ (each (keys st) (q \ elem q furnish-keys ? 0 (no (u + ", furniture takes " + show furnish-keys) q)))
+         df (furniture k) s (int (peep st 'seed 1))
+         ; ..a parameter: the style's, else the kind's; a number or [lo hi] thrown under the seed
+         (g q) (peep st q (df q) @ v (num? v || (two? v && #v = 2 && all num? v) ? (pick s q v) v))
+         sks (foldl (\ t q (pin t q (st 'skin q))) (foldl (\ t q (pin t q (df 'skin q))) {} (keys (df 'skin))) (keys (peep st 'skin {})))
+         (role r) (skin-by (peep sks r (peep sks 'frame 'wood)))
+         ; ..a box between two corners, the middle of the foot the origin, x across and z ahead
+         (bx x0 y0 z0 x1 y1 z1 r) (fit (role r) (box [(o 0 + x0) (o 1 + y0) (o 2 + z0)] [(o 0 + x1) (o 1 + y1) (o 2 + z1)]))
+         W (0.5 * g 'w) D (0.5 * g 'd) H (g 'h) T (peep st 'top (peep df 'top 0.0) @ t (pick s 'top t)) L (g 'leg) I (g 'inset)
+         (post x z y1) (bx (x - L) 0.0 (z - L) (x + L) y1 (z + L) 'frame)
+         (sides y1) (map (sx \ bx (sx * (W - I - L) - L) 0.0 (I - D) (sx * (W - I - L) + L) y1 (D - I) 'frame) [-1 1])
+         ; ..legs from the floor up to y1
+         (legs y1) (g 'legs @
+           'corners (map (c \ post (c 0 * (W - I - L)) (c 1 * (D - I - L)) y1) [[-1 -1] [1 -1] [-1 1] [1 1]])
+           'panels (sides y1)
+           'trestle (sides y1 + [(bx (I - W) (0.15 * y1) (0.0 - L) (W - I) (0.15 * y1 + 2.0 * L) L 'frame)])
+           'pedestal (: r (0.6 * min W D) [(bx (-3.0 * L) 0.0 (-3.0 * L) (3.0 * L) y1 (3.0 * L) 'frame) (bx (0.0 - r) 0.0 (0.0 - r) r 0.03 r 'frame)])
+           'star ([(bx (0.0 - L) 0.09 (0.0 - L) L y1 L 'frame) (bx -0.28 0.06 (0.0 - L) 0.28 0.09 L 'frame) (bx (0.0 - L) 0.06 -0.28 L 0.09 0.28 'frame)]
+                  + map (c \ bx (c 0 - 0.025) 0.0 (c 1 - 0.025) (c 0 + 0.025) 0.06 (c 1 + 0.025) 'frame) [[0.26 0.0] [-0.26 0.0] [0.0 0.26] [0.0 -0.26]])
+           ())
+         ; ..fronts toward the user at -z: n drawers one over another, or n doors side by side
+         (fronts y0 y1) (: nd (int (g 'drawers)) nr (int (g 'doors)) e 0.008 z0 (0.0 - D - 0.012) z1 (0.0 - D) ym (0.5 * (y0 + y1))
+           (? (0 < nd) (catmap (i \ (: a (y0 + (y1 - y0) * i / nd + e) b (y0 + (y1 - y0) * (i + 1) / nd - e) m (0.5 * (a + b))
+                                      [(bx (e - W) a z0 (W - e) b z1 'body) (bx -0.06 (m - 0.01) (z0 - 0.02) 0.06 (m + 0.01) z0 'frame)]))
+                               ^nd)
+              (0 < nr) (catmap (j \ (: a (2.0 * W * j / nr - W + e) b (2.0 * W * (j + 1) / nr - W - e) hx (j % 2 = 0 ? (b - 0.05) (a + 0.05))
+                                      [(bx a (y0 + e) z0 b (y1 - e) z1 'body) (bx (hx - 0.01) (ym - 0.06) (z0 - 0.02) (hx + 0.01) (ym + 0.06) z0 'frame)]))
+                               ^nr)
+              ()))
+         ; ..one row along a shelf from x0 to x1 at y, MAKE given each slot as line-up does
+         (row x0 x1 y i mk) (line-up (seed-of s i) [(o 0 + x0) (o 1 + y) (o 2)] [(o 0 + x1) (o 1 + y) (o 2)] mk {'w (peep st 'fill-w (df 'fill-w)) 'gap 0.0})
+         ; ..books under a gap gp: each its own height, depth and cover
+         (books gp bk) (\ a dg e w (: bh (gp * pick e 'h [0.6 0.9]) bd (2.0 * D * pick e 'd [0.6 0.85]) c (bk (int (#bk * dice e 'c)))
+                                     (fit c (box [(a 0 - 0.5 * w) (a 1) (o 2 + D - bd)] [(a 0 + 0.5 * w - 0.002) (a 1 + bh) (o 2 + D)]))))
+         parts
+          (k @
+           'chair (: S (g 'seat) [(bx (0.0 - W) (S - T) (0.0 - D) W S D 'soft) (legs (S - T))
+                                  (g 'back > 0.0 ? [(bx (0.0 - W) S (0.0 - D) W H (0.06 - D) 'soft)] ())
+                                  (g 'arms > 0.0 ? (map (sx \ bx (sx * W - 0.03) (S + 0.2) (0.0 - D) (sx * W + 0.03) (S + 0.24) (0.6 * D) 'frame) [-1 1]) ())])
+           'bed [(bx (0.0 - W) 0.0 (0.0 - D) W H D 'frame) (bx (0.0 - W) 0.0 (D - 0.05) W (g 'back) D 'frame)
+                 (whole (skin {'floor (mattress-top ()) 'walls (mattress-side ()) 'ceiling (mattress-under ())}
+                              (solid (box [(o 0 - W + 0.02) (o 1 + H) (o 2 - D + 0.02)] [(o 0 + W - 0.02) (o 1 + H + 0.22) (o 2 + D - 0.06)]))))]
+           'shelf (: n (max 1 (int (g 'shelves))) t (max 0.012 T) gp ((H - 2.0 * t) / n - t) (at-y i) (t + (H - 2.0 * t) * i / n)
+                    [(bx (0.0 - W) 0.0 (0.0 - D) (t - W) H D 'frame) (bx (W - t) 0.0 (0.0 - D) W H D 'frame)
+                     (bx (0.0 - W) 0.0 (D - 0.01) W H D 'frame)
+                     (map (i \ bx (t - W) (at-y i - t) (0.0 - D) (W - t) (at-y i) (D - 0.01) 'frame) ^(n + 1))
+                     (g 'fill @ () ()
+                        'books (: bk (map (c \ material 'cloth 1 {'colour c}) book-colours)
+                                 (map (i \ row (t - W + 0.005) (W - t - 0.005) (at-y i) i (books gp bk)) ^n))
+                        mk (map (i \ row (t - W) (W - t) (at-y i) i mk) ^n))])
+           'cabinet [(bx (0.0 - W) 0.0 (0.0 - D) W H D 'body) (fronts 0.0 H)]
+           'counter (: v (g 'over) [(bx (0.0 - W) 0.0 (0.0 - D) W (H - T) D 'body) (fronts 0.08 (H - T)) (bx (0.0 - W - v) (H - T) (0.0 - D - v) (W + v) H D 'top)])
+           'crate (: t (max 0.008 T) n (int (g 'slats))
+                    (wall x0 z0 x1 z1) (? (0 < n) (map (i \ bx x0 (t + (H - t) * i / n) z0 x1 (t + (H - t) * (i + 0.6) / n) z1 'frame) ^n)
+                                          [(bx x0 t z0 x1 H z1 'frame)])
+                    [(bx (0.0 - W) 0.0 (0.0 - D) W t D 'frame) (wall (0.0 - W) (0.0 - D) W (t - D)) (wall (0.0 - W) (D - t) W D)
+                     (wall (0.0 - W) (t - D) (t - W) (D - t)) (wall (W - t) (t - D) W (D - t))])
+           'carton [(bx (0.0 - W) 0.0 (0.0 - D) W H D 'body)]
+           'sofa (: S (g 'seat) aw (g 'arms > 0.0 ? 0.18 0.0)
+                   [(map (c \ bx (c 0 * (W - 0.06) - 0.03) 0.0 (c 1 * (D - 0.06) - 0.03) (c 0 * (W - 0.06) + 0.03) 0.1 (c 1 * (D - 0.06) + 0.03) 'frame)
+                         [[-1 -1] [1 -1] [-1 1] [1 1]])
+                    (bx (0.0 - W) 0.1 (0.0 - D) W (S - 0.12) D 'soft) (bx (aw - W) (S - 0.12) (0.22 - D) (W - aw) S D 'soft)
+                    (bx (0.0 - W) (S - 0.12) (0.0 - D) W H (0.22 - D) 'soft)
+                    (aw > 0.0 ? [(bx (0.0 - W) (S - 0.12) (0.22 - D) (aw - W) (S + 0.2) D 'soft)
+                                 (bx (W - aw) (S - 0.12) (0.22 - D) W (S + 0.2) D 'soft)] ())])
+           ; ..a table, desk, stool or bench: a top on legs, an apron under it, a panel m high at the back
+           (: y (H - T) a (g 'apron) m (g 'modesty)
+             [(bx (0.0 - W) y (0.0 - D) W H D 'top) (legs y)
+              (num? a && a > 0.0 ? [(bx (I + L - W) (y - a) (D - I - L - 0.02) (W - I - L) y (D - I - L) 'frame)
+                                    (bx (I + L - W) (y - a) (I + L - D) (W - I - L) y (I + L + 0.02 - D) 'frame)] ())
+              (num? m && m > 0.0 ? [(bx (I + 2.0 * L - W) (y - 0.06 - m) (D - 0.1) (W - I - 2.0 * L) (y - 0.06) (D - 0.07) 'frame)] ())]))
+         (turn dd [(o 0) (o 2)] parts))))
  (feel k t) (: u "(feel 'soft TEXTURE)"
    (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
