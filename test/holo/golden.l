@@ -1193,7 +1193,7 @@
       ("t2.li"      "40f20500"          ((li r0 5)))                  ; movw r0, #5
       ("t2.movt"    "45f27861c1f23421"  ((li r1 305419896)))          ; 0x12345678: movw + movt
       ("t2.li.neg"  "4ff6ff72cff6ff72"  ((li r2 -1)))                 ; movw #0xffff ; movt #0xffff
-      ("t2.mov"     "4fea0300"          ((mov r0 r3)))                ; mov.w r0, r3
+      ("t2.mov"     "1846"              ((mov r0 r3)))                ; mov r0, r3 (t1, flags kept)
       ;; ..but mov.w is orr with rn=15 and cannot name sp or pc, so those take the 16-bit t1.
       ;; unpredictable is not a fault: a wrong encoding here can run green on a board.
       ("t2.movfromsp" "6846"            ((mov r0 sp)))                ; mov r0, sp
@@ -1218,8 +1218,11 @@
       ("t2.popm"    "f0bd"              ((popm (r4 r5 r6 r7 pc))))   ; pop {r4-r7, pc}
       ("t2.popm.w"  "bde8ff40"          ((popm (r0 r1 r2 r3 r4 r5 r6 r7 lr))))   ; ldmia.w sp!, {r0-r7, lr}
       ("t2.pushm.w" "2de90041"          ((pushm (r8 lr))))            ; stmdb sp!, {r8, lr}
-      ("t2.cmp"     "b0eb010f"          ((cmp r0 r1)))                ; cmp.w r0, r1
-      ("t2.cmpi"    "b0f12a0f"          ((cmp r0 42)))                ; cmp.w r0, #42
+      ("t2.cmp"     "8842"              ((cmp r0 r1)))                ; cmp r0, r1
+      ("t2.cmp.hi"  "8845"              ((cmp r8 r1)))                ; cmp r8, r1 (t2)
+      ("t2.cmp.hi2" "4945"              ((cmp r1 r9)))                ; cmp r1, r9 (t2)
+      ("t2.cmpi"    "2a28"              ((cmp r0 42)))                ; cmp r0, #42
+      ("t2.cmpi.w"  "b0f5807f"          ((cmp r0 256)))               ; cmp.w r0, #256
       ("t2.mul"     "01fb02f0"          ((imul r0 r1 r2)))            ; mul r0, r1, r2
       ("t2.ldr"     "8868"              ((ld r0 r1 8)))               ; ldr r0, [r1, #8]
       ("t2.ldr.w"   "d1f80880"          ((ld r8 r1 8)))               ; ldr.w r8, [r1, #8]
@@ -1256,7 +1259,12 @@
       ("t2.shlv"    "00fa01f0"          ((shlv r0 r1)))               ; lsl.w r0, r0, r1 (count in r1)
       ("t2.sdiv"    "91fbf2f0"          ((div r0 r1 r2)))             ; sdiv r0, r1, r2
       ("t2.udiv"    "b1fbf2f0"          ((udiv r0 r1 r2)))            ; udiv r0, r1, r2
-      ("t2.test"    "10ea010f"          ((test r0 r1)))               ; tst.w r0, r1
+      ("t2.test"    "0842"              ((test r0 r1)))               ; tst r0, r1
+      ("t2.test.w"  "18ea010f"          ((test r8 r1)))               ; tst.w r8, r1
+      ;; a byte li goes movs where a flag writer comes before any reader; else movw
+      ("t2.lis"     "05208842"          ((li r0 5) (cmp r0 r1)))      ; movs r0, #5 ; cmp r0, r1
+      ("t2.lis.br"  "40f2050000f00080"  ((li r0 5) (br eq x) (label x)))   ; movw: the beq reads them
+      ("t2.lis.hi"  "40f205088842"      ((li r8 5) (cmp r0 r1)))      ; movw r8, #5: movs is low only
       ("t2.jmpr"    "1847"              ((jmpr r3)))                  ; bx r3
       ("t2.callr"   "9847"              ((callr r3)))                 ; blx r3
       ("t2.ret"     "7047"              ((ret)))                      ; bx lr
@@ -1270,8 +1278,8 @@
       ("t2.call.fwd" "00f001f800bf" ((call l) (nop) (label l)))       ; bl    -> +2
       ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
       ("t2.leaf"    "00eb01007047" ((add r0 r0 r1) (ret)))            ; add.w r0,r0,r1 ; bx lr
-      ;; a counted loop: forward beq and backward bne, both 32-bit t3, land byte-exact on their labels
-      ("t2.loop"    "01eb0000b0eb020f00f0068001f20101b1eb020f7ff4f6af7047"
+      ;; a counted loop: forward beq and backward bne, both 32-bit t3 (holo-bytes does not relax), land byte-exact on their labels
+      ("t2.loop"    "01eb0000904200f0058001f2010191427ff4f8af7047"
                      ((add r0 r1 r0) (label top) (cmp r0 r2) (br eq done)
                        (add r1 r1 1) (cmp r1 r2) (br ne top) (label done) (ret)))
       ;; la: the MOVW/MOVT absolute pair, always both; x at +16, so movw #16 ; movt #0, for r0 then r7
