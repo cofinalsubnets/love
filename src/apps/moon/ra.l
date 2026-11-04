@@ -8,12 +8,15 @@
    ; each target's files, caller-saved first: a callee-saved one costs its save. every x64 xmm is
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
    ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
-   ; park, and its float file is caller-saved whole
+   ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d8-d15
+   ; for their saves
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+               (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
+               (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
    ; what a call clobbers: the caller-saved gp file and every float register the pool takes
@@ -36,12 +39,12 @@
    ; the three-address ops, and those of them that commute
    raalu '(add sub and or xor imul)
    racomm '(add and or xor imul)
-   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss movqxr movdxr cvttsd2si cvttss2si movqrx movdrx)
+   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
    ; each head's own shape, the rest rdsp's
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
            t0 (cls (cls (cls (cls (cls (cls (cls (cls (cls {} 'fbin rafbin) 'fmv rafmv) 'div divops) 'ctl '(jmp br label))
                  'ucom '(ucomisd ucomiss)) 'fld '(ldsd ldss)) 'fst '(stsd stss)) 'fldx '(ldsdx ldssx)) 'fstx '(stsdx stssx))
-           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret)))
+           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret movqrr movrrq)))
    ; a form's [reads defs] over the file and the vregs | 'bad. the answer is the form's own but at
    ; an exit (the fn's return registers), so the unit keeps the rest by their value
    (raops g f)
@@ -55,6 +58,8 @@
                      'cuse [>f ()]
                      'cdef [() >f]
                      'fix (f @ ('fix . u . d . _) [u d] _ (gen f))
+                     'movqrr (f @ [_ d a b] [[a b] [d]] _ (gen f))
+                     'movrrq (f @ [_ a b s] [[s] [a b]] _ (gen f))
                      'call 'call
                      'callr (f @ ('callr . r . _) [[r] 'call] _ (gen f))
                      'ret [(peep g 'loret '(r0)) ()]
@@ -392,7 +397,7 @@
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
    rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd add sub and or xor imul shl shr sar not neg
-                                              sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx))
+                                              sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx movqrr movrrq))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)
        (own x u) #(filter (y \ y = x) u)
