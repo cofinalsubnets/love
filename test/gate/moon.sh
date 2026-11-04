@@ -408,6 +408,26 @@ moonrun -t thumb2 -Os -c -o "$ho/.oszs.o" "$ho/.osz.c" > /dev/null 2>&1 || fail 
 a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
 [ "$a" -lt "$b" ] || fail "thumb2 -Os no smaller: $a bytes against $b"
 
+# a helper spliced at many sites costs its sites: four plain ones stay calls, four in a loop splice
+cat > "$ho/.isite.c" <<'EOF'
+int t[9];
+static int h(int a, int b) { int s = t[a] + b, r = t[b] * a; t[a] = s ^ r; t[b] = s + r; return s - r + t[(a + b) & 7]; }
+#ifdef L
+int f(int n) { int s = 0; for (int i = 0; i < n; i++) s += h(i, 1) + h(i, 2) + h(i, 3) + h(i, 4); return s; }
+#else
+int f(int n) { return h(n, 1) + h(n, 2) + h(n, 3) + h(n, 4); }
+#endif
+EOF
+for d in P L; do
+  moonrun -D $d -c -o "$ho/.isite.o" "$ho/.isite.c" > /dev/null 2>&1 || fail "mooncc the site probe $d"
+  moonrun -D $d -fno-inline -c -o "$ho/.isiten.o" "$ho/.isite.c" > /dev/null 2>&1 || fail "mooncc -fno-inline the site probe $d"
+  a=$(wc -c < "$ho/.isite.o"); b=$(wc -c < "$ho/.isiten.o")
+  case $d in
+    P) [ "$a" -eq "$b" ] || fail "four plain sites spliced: $a bytes against $b out of line" ;;
+    L) [ "$a" -gt "$b" ] || fail "four sites in a loop stayed calls: $a bytes against $b out of line" ;;
+  esac
+done
+
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
