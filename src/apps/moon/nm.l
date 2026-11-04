@@ -6,11 +6,12 @@
 (borrow 'holo)
 (:
    ; x64's indexed twin of a load or store, and a store's immediate twin; a64 has neither the
-   ; 32-bit indexed loads nor a store of an immediate
+   ; 32-bit indexed loads nor a store of an immediate, riscv only the word and byte twins
    nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
    nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
-   (nmxop g op) (peep nmxld op () @ () () xo (x64? g || nelem xo '(ldxw ldxsw) ? xo))
+   (nmxop g op) (peep nmxld op () @ () () xo (? (x64? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo)))
+   (nmxsop g op) (peep nmxst op () @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
@@ -159,22 +160,25 @@
 
    ; within a block, a one-def vreg's def while what it read still holds: copies read through, an
    ; add or lea of a literal moves into the offset, an add of a scaled index into an indexed form
+   ; av: each def that holds, rv: per register the defs that read it, so a write drops them
    (nmloc g fs dn)
     (: (one? x) (lovr? x && peep dn x 0 = 1)
-       (go fs av)
+       (go fs av rv)
         (fs @ (f . u)
-               (f @ ('label . _) (f . go u ())
+               (f @ ('label . _) (f . go u {} {})
                     _ (nmfold g f av @ f2
-                       (raops g f2 @ [_ ds]
-                          (: a2 (filter (e \ !(elem (e 0) ds || any (x \ elem x ds) (e 2))) av)
-                             (f2 . go u (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t) ([t f2 (<(raops g f2))] . a2)
-                                             (['mov t y] && one? t && lovr? y) ([t f2 [y]] . a2)
-                                             (['li t k] && one? t) ([t f2 ()] . a2)
-                                             _ a2)))
-                          _ (f2 . go u ()))))
+                       (raops g f2 @ [rs ds]
+                          (: _ (map (d \ (map (t \ pin av t ()) (peep rv d ()), pin av d (), pin rv d ())) ds)
+                             e (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t) rs
+                                     (['mov t y] && one? t && lovr? y) [y]
+                                     (['li t k] && one? t) ()
+                                     _ 'no)
+                             _ (e = 'no ? 0 (pin av <>f2 f2, map (x \ pin rv x (<>f2 . peep rv x ())) e))
+                             (f2 . go u av rv))
+                          _ (f2 . go u {} {}))))
               _ ())
-       (go fs ()))
-   (nmav av x) (foldl (a \ e \ (a @ () (e 0 = x ? (e 1)) _ a)) () av)
+       (go fs {} {}))
+   (nmav av x) (peep av x ())
    (nmfold g f0 av)
     (: (cpy x) (nmav av x @ ['mov _ y] y _ x)
        f (f0 @ (('fix || 'cdef || 'cuse) . _) f0 (_ . _) (map cpy f0) f0)
@@ -189,7 +193,7 @@
                 _ (nmxop g op @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
-                _ (peep nmxst op () @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
+                _ (nmxsop g op @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
             ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ; an add of a literal onto a literal's sum is one add

@@ -7,10 +7,13 @@
 
    ; each target's files, caller-saved first: a callee-saved one costs its save. every x64 xmm is
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
-   ; to holo and the platform, d8-d15 for their saves
-   (ragp g) (a64? g ? '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+   ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
+   ; park, and its float file is caller-saved whole
+   (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+               (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
-   (ragf g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+   (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+               (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
    ; what a call clobbers: the caller-saved gp file and every float register the pool takes
@@ -18,34 +21,51 @@
    ; the vregs lo.l mints: %nK on the gp file, %wK on the float file
    (lomk g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%n\(k)"))
    (lomkf g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%w\(k)"))
-   (lovr? x) (nom? x && (show x @ s (1 < #s && s 0 = 37 && (s 1 = 110 || s 1 = 119))))
-   (lofr? x) (nom? x && (show x @ s (1 < #s && (s 0 = 37 && s 1 = 119 || s 0 = 102 && 48 <= s 1 <= 57))))
-   (raok? g x) (lovr? x || elem x (rapool g))
+   ; a symbol orders by its spelling, so a prefix is a range: %n.. and %w.., the float file f0..f9..
+   vn0 (name "%n") vn1 (name "%o") vw0 (name "%w") vw1 (name "%x") vf0 (name "f0") vf1 (name "f:")
+   (lovr? x) (nom? x && (vn0 <= x && x < vn1 || vw0 <= x && x < vw1))
+   (lofr? x) (nom? x && (vw0 <= x && x < vw1 || vf0 <= x && x < vf1))
+   ; the unit's pool as a set, and a call's clobbers in it, laid once per unit
+   (rasets g) (peep g 'rasets () @
+                 () (: p (rapool g) s [(foldl (t \ r \ pin t r 1) {} p) (filter (r \ elem r p) (racl g))]
+                       (pin g 'rasets s, s))
+                 s s)
+   (raok? g x) (lovr? x || peep (<(rasets g)) x ())
    ; the float forms rdsp does not see: two-address ops, copies, compares, the gp crossings
    rafbin '(addsd subsd mulsd divsd minsd maxsd addss subss mulss divss minss maxss xorpd andpd)
    ; the three-address ops, and those of them that commute
    raalu '(add sub and or xor imul)
    racomm '(add and or xor imul)
    rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss movqxr movdxr cvttsd2si cvttss2si movqrx movdrx)
+   ; each head's own shape, the rest rdsp's
+   raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
+           t0 (cls (cls (cls (cls (cls (cls (cls (cls (cls {} 'fbin rafbin) 'fmv rafmv) 'div divops) 'ctl '(jmp br label))
+                 'ucom '(ucomisd ucomiss)) 'fld '(ldsd ldss)) 'fst '(stsd stss)) 'fldx '(ldsdx ldssx)) 'fstx '(stsdx stssx))
+           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret)))
    ; a form's [reads defs] over the file and the vregs | 'bad
    (raops g f)
-    ((f @ ('cuse . rs) [rs ()]
-          ('cdef . rs) [() rs]
-          ('fix . u . d . _) [u d]
-          ('call . _) [() (racl g)]
-          ('callr . r . _) [[r] (racl g)]
-          ('ret . _) [(peep g 'loret '(r0)) ()]
-          ([op d s] && elem op rafbin) [[d s] [d]]
-          ([op d s] && elem op rafmv) [[s] [d]]
-          [('ucomisd || 'ucomiss) a b] [[a b] ()]
-          [('ldsd || 'ldss) d b _] [[b] [d]]
-          [('stsd || 'stss) b _ v] [[b v] ()]
-          [('ldsdx || 'ldssx) d b i _ _] [[b i] [d]]
-          [('stsdx || 'stssx) b i _ _ v] [[b i v] ()]
-          (('jmp || 'br || 'label) . _) [() ()]
-          ((op . d . a . b . t) && elem op divops) (x64? g ? [[a b] [d 'r0]] [[a b] (d . t)])
-          (rdsp g f @ 'bar 'bad (u . d . _) [u d])) @
+    ((: (gen f) (rdsp g f @ 'bar 'bad (u . d . _) [u d])
+        (two? f ? (peep raky <f () @
+                     () (gen f)
+                     'cuse [>f ()]
+                     'cdef [() >f]
+                     'fix (f @ ('fix . u . d . _) [u d] _ (gen f))
+                     'call 'call
+                     'callr (f @ ('callr . r . _) [[r] 'call] _ (gen f))
+                     'ret [(peep g 'loret '(r0)) ()]
+                     'fbin (f @ [_ d s] [[d s] [d]] _ (gen f))
+                     'fmv (f @ [_ d s] [[s] [d]] _ (gen f))
+                     'ucom (f @ [_ a b] [[a b] ()] _ (gen f))
+                     'fld (f @ [_ d b _] [[b] [d]] _ (gen f))
+                     'fst (f @ [_ b _ v] [[b v] ()] _ (gen f))
+                     'fldx (f @ [_ d b i _ _] [[b i] [d]] _ (gen f))
+                     'fstx (f @ [_ b i _ _ v] [[b i v] ()] _ (gen f))
+                     'ctl [() ()]
+                     'div (f @ (_ . d . a . b . t) (x64? g ? [[a b] [d 'r0]] [[a b] (d . t)]) _ (gen f)))
+           (gen f))) @
      'bad 'bad
+     'call [() <>(rasets g)]
+     [u 'call] [(filter (raok? g) u) <>(rasets g)]
      [u d] [(filter (raok? g) u) (filter (raok? g) d)])
 
    ; -- sorted int sets --

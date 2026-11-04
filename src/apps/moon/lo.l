@@ -647,18 +647,20 @@
           (lox g env ap @ [_ p fs]
              (lomk g @ t (pin g 'fesc 1,
                 (: ngp (peep g 'vagp 0) nfp (peep g 'vaxmm 0) nov (peep g 'vaov 0) rsa (peep g 'rsa 0)
-                   ['void () (fs + (a64? g ?
+                   ['void () (fs + (? (a64? g)
                       ; AAPCS64: __stack past the named overflow, each top past its file's saves, each offs
                       ; the unnamed registers' bytes below it
                       [['lea t 'r4 (ovb g + 8 * nov)] ['st p 0 t] ['lea t 'r4 (rsa + 64)] ['st p 8 t]
                        ['lea t 'r4 (rsa + 192)] ['st p 16 t] ['li t (0 - 8 * (8 - ngp))] ['st4 p 24 t]
                        ['li t (nofp? g ? 0 (0 - 16 * (8 - nfp)))] ['st4 p 28 t]]
+                      (rv64? g) [['lea t 'r4 (ovb g + 8 * ngp + 8 * nov)] ['st p 0 t]]   ; riscv: past the named words
                       [['li t (8 * ngp)] ['st4 p 0 t] ['li t (48 + 16 * nfp)] ['st4 p 4 t]
                        ['lea t 'r4 (16 + 8 * nov)] ['st p 8 t] ['lea t 'r4 rsa] ['st p 16 t]]))])))
              'bad)
          ['vaend _] ['void () ()]
          ['vaarg ap ty]
           (? (a64? g) (lox g env ap @ [_ p fs] (lovaarg64 g p fs ty) 'bad)
+             (rv64? g) (lox g env ap @ [_ p fs] (lovaargrv g p fs ty) 'bad)
              (x64? g) (lox g env ap @ [_ p fs] (lovaarg g p fs ty) 'bad)
              (lono g 'vaarg))
          (lono g ['expr <e]))
@@ -770,11 +772,12 @@
                             ['(ptr void) d [['mov t v] ['add t t 15] ['shr t 4] ['shl t 4] ['lea u 'sp 0]
                                             ['sub u u t] ['lea 'sp u 0] ['lea d 'sp 0]]])))))
           (elem nm '("__builtin_return_address" "__builtin_frame_address"))
-           (as @ ([['num k]] && 0 <= k)
+           ; riscv's saved ra rides a padded push, and its saved s0 is no caller's base
+           (as @ ([['num k]] && 0 <= k && !(rv64? g && 0 < k))
                   (lomk g @ d
                      (pin g 'fesc 1, pin g 'fpin 1,
                       ['(ptr void) d (['lean d 'r4 0] . map (_ \ ['ld d d 0]) ^k +
-                                      (nm = "__builtin_return_address" ? [['ld d d 8]]))]))
+                                      (nm = "__builtin_return_address" ? [['ld d d (rv64? g ? 16 8)]]))]))
                  _ (lono g ['call nm]))
           (elem nm '("__builtin_clz" "__builtin_clzl" "__builtin_clzll"))
            (one (v \ lofix g v () ((ll ? () '((shl r0 32))) + '((raw (72 15 189 192 72 131 240 63))))))
@@ -885,8 +888,11 @@
                           ([vt r fs] && loagg? g vt) [vt r fs]
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
+          ; a riscv variadic call: an unnamed double rides the gp file
+          (rvva i v) (v @ ([vt r fs] && rv64? g && va && two? ptys && #ptys <= i && lofl? vt)
+                            (lomk g @ t ['long t (fs + [['movqrx t r]])]) _ v)
           (go l i acc)
-           (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [v])))
+           (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [(rvva i v)])))
                 acc)
           ; a returned aggregate lands in a temp; in the memory class its address is the hidden first arg
           sret (losr? g rt)
@@ -974,13 +980,15 @@
            (? (hfab g ty @ b (flo? b && sz <= 4 * tsz g b)) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
               (16 < sz) 'ref
               (map (k \ ['int (8 * k) (min 8 (sz - 8 * k))]) ^(aslots g ty)))
+          ; riscv: SysV's eightbytes to 16 bytes, by reference past them
+          (rv64? g && 16 < sz) 'ref
           (aclass g ty @ () () cls (map (i \ [(cls i) (8 * i) (min 8 (sz - 8 * i))]) ^#cls))))
    ; a return in memory: SysV's memory class, AAPCS64's by-reference size
    (losr? g ty) (stru? ty && (lopcs g ty @ 'ref 1 () 1 _ ()))
-   ; the return registers of pieces pcs: ints rax then rdx (x0 then x1 on a64), floats from f0
+   ; the return registers of pieces pcs: ints rax then rdx (x0 then x1 on a64, a0 a1 on riscv), floats from f0
    (lorregs g pcs)
     (foldl (s \ p \ (s @ [gs xs acc] (<p = 'sse ? [gs (>xs) (acc + [<xs])] [(>gs) xs (acc + [<gs])])))
-           [(a64? g ? '(r0 r1) '(r0 r2)) '(f0 f1 f2 f3) ()] pcs @ [_ _ rs] rs)
+           [(a8? g ? '(r0 r1) '(r0 r2)) '(f0 f1 f2 f3) ()] pcs @ [_ _ rs] rs)
    ; a piece stored from register r at b+off, as wide as its class reads
    (lopst p b off r) (p @ [c o n] [(c = 'sse ? (n = 4 ? 'stss 'stsd) 'st) b (off + o) r])
    ; ..the return registers stored whole into the 8-aligned temp at b+off
@@ -997,6 +1005,12 @@
        (? (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
           (loren2 g [['r0 p]] 'r2 'long walk @ [_ a f2]
              (lomkt g ty @ d [ty d (fs + f2 + [(fl ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
+
+   ; riscv's va_list is a cursor over 8-byte slots, doubles riding gp ones
+   (lovaargrv g p fs ty)
+    (? (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
+       (loren2 g [['r0 p]] 'r2 'long '((ld r2 r0 0) (mov r3 r2) (add r3 r3 8) (st r0 0 r3)) @ [_ a f2]
+          (lomkt g ty @ d [ty d (fs + f2 + [(lofl? ty ? ['ldsd d a 0] [(ldop ty) d a 0])])])))
 
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
@@ -1302,11 +1316,15 @@
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (losr? g rt)
           _ (pin g 'lon 0)
+          ; riscv's saves ride csframe here, so every exit restores at its marker
+          _ (rv64? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
                   'loret (? (rt = 'void) () (lofl? rt) '(f0) (d128? rt) '(r0 r2) (stru? rt && !sret) (lorregs g (lopcs g rt)) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
-          (ovm ty ov) ['m (ovb g + 8 * ov) ty]
+          ; ..past the a0-a7 block a riscv variadic fn pushes
+          ovo (ovb g + (va && rv64? g ? 64 0))
+          (ovm ty ov) ['m (ovo + 8 * ov) ty]
           ; the copies off the registers first, their conversions after (post)
           (go l gi fi ov env acc post)
            (l @ ((nm . ty . _) . u)
@@ -1321,7 +1339,7 @@
                         ; AAPCS64 past 16 bytes: the caller's copy, read through its address in a cell
                         'ref (gi < ngp g ?
                                 (nslot g 8 @ po (go u (gi + 1) fi ov ([nm 'p po ty] . env) (acc + [['st 'r4 po (argr g gi)]]) post))
-                                (go u gi fi (ov + 1) ([nm 'p (ovb g + 8 * ov) ty] . env) acc post))
+                                (go u gi fi (ov + 1) ([nm 'p (ovo + 8 * ov) ty] . env) acc post))
                         pcs (: ng #(filter (p \ <p = 'int) pcs) nx (#pcs - ng)
                                (two? pcs && gi + ng <= ngp g && fi + nx <= 8 ?
                                   (ntmp g ty @ off
@@ -1343,7 +1361,7 @@
                 [gi fi ov (acc + post) env])
           ; each VLA site's size cell reads 0 until its decl runs
           vz (keys (g 'vslots) @ () () ks (lomk g @ z (['li z 0] . map (k \ ['st 'r4 (g 'vslots k 1) z]) (sort ks))))
-          (go params (sret && x64? g ? 1 0) 0 0 () (sret ? [['mov sr (srreg g)]]) vz @ [gi fi ov pe env]
+          (go params (sret && !(a64? g) ? 1 0) 0 0 () (sret ? [['mov sr (srreg g)]]) vz @ [gi fi ov pe env]
              (pins g 'vagp gi 'vaxmm fi 'vaov ov,
               (va ? (lovasave g)) @ vs
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
@@ -1354,11 +1372,11 @@
    ; a variadic fn: SysV's 176-byte save area, gp at +0 step 8, xmm at +48 step 16; AAPCS64's 192,
    ; x0-x7 then q0-q7 at +64
    (lovasave g)
-    (: ng (ngp g) fb (8 * ng) n (fb + 128)
+    (rv64? g ? (pin g 'fesc 1, ()) (: ng (ngp g) fb (8 * ng) n (fb + 128)
        (nslot g n @ rsa
          (pins g 'rsa rsa 'fesc 1,
            map (i \ ['st 'r4 (rsa + 8 * i) (argr g i)]) ^ng +
-           (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + fb + 16 * i) (xmmreg i)]) ^8)))))
+           (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + fb + 16 * i) (xmmreg i)]) ^8))))))
 
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs0)
@@ -1374,8 +1392,15 @@
          ; x64: a frame load only a compare reads becomes the compare's memory operand
          (rasub f2 loc @ b0 (x64? g ? (lofuse g (cmpfuse g b0)) b0)) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
-             (a64? g ? a4ize 1) (sibcall g ([['label (name <>f)]] + (a64? g ? pro-a64 pro4) +
-                                            [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))))
+             (: F (aup (peep g 'off 0) 16)
+                (rv64? g ? (lorvf g (peep (g 'sigs) <>f () @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
+                   ((a64? g ? a4ize 1) (sibcall g ([['label (name <>f)]] + (a64? g ? pro-a64 pro4) + [['sub 'sp 'sp F] '(saves)] + body))))))))))
+   ; riscv links last, so fp is the frame's bottom: the saves laid, each fp slot rebased by the
+   ; frame they leave, then a variadic fn's a0-a7 block ahead of the link
+   (lorvf g va fs)
+    (csframe g fs @ f2
+       (rvslots f2 (f2 3 3) @ f3
+          (va ? (<f3 . (['(sub sp sp 64)] + map (i \ ['st 'sp (8 * i) (argr g i)]) ^8 + >f3)) f3)))
    ; after allocation, a full-word load one form alone reads, dying there, folds into it: a copy
    ; loads its copy, an alu op takes the word as its right side (a commuting one as its left)
    (lofuse g fs)
@@ -1395,5 +1420,5 @@
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (jmpm g (csdrop g (cskeep g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) ir))))))))))))))))))))
+     (tailarm g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) ir)))))))))))))))))))))
 )) ; module 'moon

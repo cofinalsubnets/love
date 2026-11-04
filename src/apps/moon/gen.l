@@ -387,7 +387,7 @@
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    ; the targets the new backend lowers by default, and those it knows at all
    lotgts '(x64 a64)
-   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g) _ (elem (peep g 'tgt 'x64) lotgts))
+   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || g 'tgt = 'rv64) _ (elem (peep g 'tgt 'x64) lotgts))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
@@ -11929,9 +11929,9 @@
        ; the new backend takes the fn whole where it can, before the old build deals a cell; a
        ; refusal hands back what it dealt. lo.l lays after this file: its names resolve at the call
        irn (lo? g ?
-              ([(g 'jtabs) (g 'fesc) (g 'fescv) (g 'fesca) (g 'statics) (g 'fasecs)] @ [jt0 fe0 fv0 fx0 st0 fa0]
+              ([(g 'jtabs) (g 'fesc) (g 'fescv) (g 'fesca) (g 'statics) (g 'fasecs) (g 'epi)] @ [jt0 fe0 fv0 fx0 st0 fa0 ep0]
                  ((cite 'moon 'lofn) g f params sig @
-                   'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0 'fesc fe0 'fescv fv0 'fesca fx0 'statics st0 'fasecs fa0, 'bad)
+                   'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0 'fesc fe0 'fescv fv0 'fesca fx0 'statics st0 'fasecs fa0 'epi ep0, 'bad)
                    fs fs))
               'bad)
        sp1 (? (uni9 || !(bad? irn)) ()
