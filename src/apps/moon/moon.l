@@ -466,7 +466,7 @@
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes nopro]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
@@ -498,8 +498,10 @@
                                 fns gns wks anames)
                     (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
                               fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames
-                              ; the asm's data names typed as gas types them, and its absolute symbols
-                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ())])))
+                              ; the asm's data names typed as gas types them, its absolute symbols and its sizes
+                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())]
+                              ; the functions C laid, not the asm's, under unwind tables
+                              (ua || us ? (fnames + lnames + map (x \ <x) xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
@@ -1088,11 +1090,11 @@
              starts? a "-W" &&
              !(starts? a "-Wl," || starts? a "-Wa," || starts? a "-Wp,"))
    ; the -nostdlib family: no runtime, so an owed symbol is an undefined reference
-   ; the -f flags taken as they stand, the code already being what each asks (no unwind table,
-   ; canary or ident laid, pc-relative where fpic? allows), and the hints that change nothing seen
+   ; the -f flags taken as they stand, the code already being what each asks (no canary or
+   ; ident laid, pc-relative where fpic? allows), and the hints that change nothing seen
    fsound '("-fno-strict-aliasing" "-fstrict-aliasing" "-fno-delete-null-pointer-checks" "-fdelete-null-pointer-checks" "-fno-common"
             "-fno-pie" "-fno-PIE" "-fno-pic" "-fno-PIC" "-fomit-frame-pointer" "-fno-plt"
-            "-fno-asynchronous-unwind-tables" "-fno-unwind-tables" "-fno-exceptions" "-fno-stack-check"
+            "-fno-exceptions" "-fno-stack-check"
             "-fno-stack-clash-protection" "-fno-addrsig" "-fno-ident"
             "-fno-dwarf2-cfi-asm" "-fno-semantic-interposition" "-fintegrated-as" "-fno-integrated-as"
             "-fvisibility=default" "-fstrict-flex-arrays" "-fms-extensions")
@@ -1125,7 +1127,7 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia ()}
+                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1292,7 +1294,14 @@
           ; which the kernel model and the small one both take; long double is double, returned in xmm0
           ((a . r) && elem a ["-mcmodel=small" "-mcmodel=kernel" "-mno-fp-ret-in-387" "-mno-skip-rax-setup"
                               "-mindirect-branch=keep" "-mfunction-return=keep"]) (flags r (fpush t 'x6f a))
+          ; a64's tiny model: its adrp+add pairs reach a superset of tiny's adr
+          ("-mcmodel=tiny" . r) (flags r (pin t 'cmt 1))
           (("-mcmodel=" + w) . r) (udie 2 "cc: -mcmodel=\(w) -- x64's code is rip-relative within 2GB: small and kernel")
+          ; unwind tables, each of the pair on until its -fno-: an a64 .eh_frame, as clang lays it
+          ("-fasynchronous-unwind-tables" . r) (flags r (pin t 'uwa 1))
+          ("-fno-asynchronous-unwind-tables" . r) (flags r (pin t 'uwa ()))
+          ("-funwind-tables" . r) (flags r (pin t 'uws 1))
+          ("-fno-unwind-tables" . r) (flags r (pin t 'uws ()))
           ; an 8-aligned incoming stack (4 on i386, the realmode units' ask): a local asking more is
           ; realigned through a pointer
           (("-mstack-alignment=" + w) . r)
@@ -1344,6 +1353,8 @@
        ; -I dirs want a trailing slash: normalised in the tablet, before anything reads
        _ (pin f 'is (map dirn (f 'is + f 'isy) + (two? (f 'ia) ? (oursinc () + map dirn (f 'ia)) ())))
        _ (f 'fx18 && f 'tgt != 'a64 && udie 2 "cc: -ffixed-x18 names an a64 register, and the target is \(f 'tgt)")
+       _ (f 'cmt && f 'tgt != 'a64 && udie 2 "cc: -mcmodel=tiny -- an a64 model, and the target is \(f 'tgt)")
+       _ ((f 'uwa || f 'uws) && f 'tgt != 'a64 && udie 2 "cc: unwind tables lay on a64 only")
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        ; on macos an x64 link is a mach-o unless -os names another kernel: it meets no ELF

@@ -1,0 +1,357 @@
+; src/apps/moon/ra.l -- the new backend's allocator over lo.l's forms: liveness per form, live
+; ranges with holes per vreg, linear scan in start order, and a spilled vreg reloaded at every
+; touch, the scan then run again. a physical register's live points bar every vreg live at one
+(module 'moon
+(borrow 'holo)
+(:
+
+   ; x64's files, caller-saved first: a callee-saved one costs its save. every xmm is caller-saved
+   ragp '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14)
+   ragf '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15)
+   rapool (ragp + ragf)
+   ; the vregs lo.l mints: %nK on the gp file, %wK on the float file
+   (lomk g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%n\(k)"))
+   (lomkf g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%w\(k)"))
+   (lovr? x) (nom? x && (show x @ s (1 < #s && s 0 = 37 && (s 1 = 110 || s 1 = 119))))
+   (lofr? x) (nom? x && (show x @ s (1 < #s && s 0 = 37 && s 1 = 119)) || elem x ragf)
+   (raok? x) (lovr? x || elem x rapool)
+   ; the float forms rdsp does not see: two-address ops, copies, compares, the gp crossings
+   rafbin '(addsd subsd mulsd divsd minsd maxsd addss subss mulss divss minss maxss xorpd andpd)
+   ; the three-address ops, and those of them that commute
+   raalu '(add sub and or xor imul)
+   racomm '(add and or xor imul)
+   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss movqxr movdxr cvttsd2si cvttss2si movqrx movdrx)
+   ; a form's [reads defs] over the file and the vregs | 'bad
+   (raops g f)
+    ((f @ ('cuse . rs) [rs ()]
+          ('cdef . rs) [() rs]
+          ('fix . u . d . _) [u d]
+          ('call . _) [() (lvgp g + ragf)]
+          ('callr . r . _) [[r] (lvgp g + ragf)]
+          ('ret . _) [(peep g 'loret '(r0)) ()]
+          ([op d s] && elem op rafbin) [[d s] [d]]
+          ([op d s] && elem op rafmv) [[s] [d]]
+          [('ucomisd || 'ucomiss) a b] [[a b] ()]
+          [('ldsd || 'ldss) d b _] [[b] [d]]
+          [('stsd || 'stss) b _ v] [[b v] ()]
+          [('ldsdx || 'ldssx) d b i _ _] [[b i] [d]]
+          [('stsdx || 'stssx) b i _ _ v] [[b i v] ()]
+          (('jmp || 'br || 'label) . _) [() ()]
+          ((op . d . a . b . _) && elem op divops) [[a b] [d 'r0]]
+          (rdsp g f @ 'bar 'bad (u . d . _) [u d])) @
+     'bad 'bad
+     [u d] [(filter raok? u) (filter raok? d)])
+
+   ; -- sorted int sets --
+   (ramin a b) (? (atom? a) () (atom? b) a
+                  (<a < <b) (<a . ramin >a b)
+                  (<b < <a) (ramin a >b)
+                  (ramin >a >b))
+   (raset l) (foldl (s \ x \ vun s [x]) () l)
+   ; positions, descending with repeats -> ranges [s e] ascending, neighbours joined
+   (rarng l) (foldl (a \ p \ (a @ ([s e] . u) (p = s || p + 1 = s ? ([p e] . u) ([p p] . a)) _ [[p p]])) () l)
+   ; two ascending range lists share a position
+   (raovl a b)
+    (? (atom? a || atom? b) ()
+       (: x <a y <b
+          (? (x 1 < y 0) (raovl >a b)
+             (y 1 < x 0) (raovl a >b)
+             1)))
+
+   ; one round: ids, liveness, hulls, the scan -> [loc spills] | 'bad
+   (raround g fs nosp)
+    (: n #fs
+       ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       ids {} nms {}
+       (id x) (peep ids x -1 @ -1 (peep nms 'n 0 @ j (pins nms 'n (j + 1) j x, pin ids x j, j)) k k)
+       _ (map id rapool)
+       ud (: t {}
+             (go i) (n <= i ? t
+                       (raops g (ft i) @ 'bad 'bad
+                          [u d] (pin t i [(raset (map id u)) (raset (map id d))], go (i + 1))))
+             (go 0))
+       (ud @ 'bad 'bad
+          _ (: sc (vsucc fs)
+               lin {} lout {}
+               (sweep i chg)
+                (i < 0 ? chg
+                   (: o (foldl (a \ j \ vun a (peep lin j ())) () (peep sc i ()))
+                      li (ud i @ [u d] (vun u (ramin o d)))
+                      c2 (#li != #(peep lin i ()) ? 1 chg)
+                      (pin lout i o, pin lin i li, sweep (i - 1) c2)))
+               (fix _) (sweep (n - 1) 0 @ 1 (fix 0) 0)
+               _ (fix 0)
+               np #rapool
+               lo {} hi {} pts {}
+               (mark x p) (pin pts x (p . peep pts x ()),
+                           x < np ? 0 (pin lo x (min p (peep lo x p)), pin hi x (max p (peep hi x p))))
+               ; a sub's right side outlives its def, which may not overwrite it before the subtract
+               _ (map (i \ (map (x \ mark x (2 * i)) (lin i),
+                            map (x \ mark x (2 * i + 1)) (lout i),
+                            map (x \ mark x (2 * i + 1)) <>(ud i),
+                            (ft i @ (['sub _ _ b] && raok? b) (mark (id b) (2 * i + 1)) _ 0))) ^n)
+               ; each id's live positions as ranges, with the holes between them
+               rg (foldl (t \ x \ pin t x (rarng (pts x))) {} (keys pts))
+               ; the copies hint their two sides together, a three-address op its def to its left
+               ; side (either side when it commutes); a divide's quotient never takes rdx
+               hint {} forb {}
+               (link x y) (pin hint x (y . peep hint x ()))
+               (link2 a b) (raok? a && raok? b ? (: x (id a) y (id b) (link x y, link y x)))
+               _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
+                                ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
+                                ((op . d . _) && elem op divops) (pin forb (id d) ['r2])
+                                0)) fs)
+               vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
+               loc {}
+               (ovl? x y) (raovl (peep rg x ()) (peep rg y ()))
+               (fits? r x) (nelem r (peep forb x ()) && !(ovl? x (id r)))
+               (free? r x act) (!(any (w \ loc w = r && ovl? w x) act) && fits? r x)
+               (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (peep loc y ())) (peep hint x ())))
+               ; a spill's weight: its touches, each 8^loop depth
+               spn (raspans fs)
+               wt (foldl (t \ i \ (vwt spn i @ w (ud i @ [u d] (map (x \ pin t x (peep t x 0 + w)) (vun u d), t)))) {} ^n)
+               (wt? x) (peep wt x 0)
+               rw (foldl (t \ i \ (vwt spn i @ w (ud i @ [u _] (map (x \ pin t x (peep t x 0 + w)) u, t)))) {} ^n)
+               ; the lightest active interval whose register serves this one alone, or none when
+               ; this one weighs less and may spill itself
+               (victim x act)
+                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? w x) || !(fits? (loc w) x) ||
+                                     any (y \ y != w && loc y = loc w && ovl? y x) act) b
+                                   (b @ () w _ (wt? w < wt? b ? w b))))
+                       () act @
+                   () ()
+                   w (!(nosp (nms x)) && wt? x <= wt? w ? () w))
+               (scan fl l act sp)
+                (l @ ()
+                      sp
+                     (x . u)
+                      (: a2 (filter (w \ lo x <= hi w) act)
+                         (filter (r \ free? r x a2) (hreg x fl) + filter (r \ free? r x a2) fl @
+                          (r . _) (pin loc x r, scan fl u (x . a2) sp)
+                          _ (victim x a2 @
+                               () (nosp (nms x) ? 'bad (scan fl u a2 (nms x . sp)))
+                               w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp))))))
+               (fv? x) (lofr? (nms x))
+               (scan ragp (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
+                  sg (scan ragf (filter fv? vs) () sg @ 'bad 'bad
+                        sp (: si (map id sp)
+                              ; per call, the spilled vregs it outlives; their reloads' weight there
+                              cw {}
+                              cr (foldl (t \ i \ (ft i @ (('call || 'callr) . _)
+                                                      (filter (x \ elem x (lout i)) si @
+                                                         () t
+                                                         xs (vwt spn i @ w (map (x \ pin cw x (peep cw x 0 + w)) xs, pin t i (map nms xs))))
+                                                      _ t)) {} ^n)
+                              ; split where reloading after the calls weighs less than at the reads
+                              sv (map nms (filter (x \ peep cw x () != () && cw x < peep rw x 0) si))
+                              [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp cr sv]))))))
+
+   ; the back edges' spans [label jump], for vwt's loop depth
+   (raspans fs)
+    (: lb (vlabs fs)
+       (go l i) (l @ (f . u) (: j (f @ ['jmp t] (peep lb t -1) ['br _ t] (peep lb t -1) _ -1)
+                                (0 <= j && j <= i ? ([j i] . go u (i + 1)) (go u (i + 1))))
+                    _ ())
+       (go fs 0))
+
+   ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
+   ; until a label or a call ends the run (the last four kept)
+   (raspill g fs sp nosp)
+    (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
+       (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
+       (go fs c)
+        (fs @ (f . u)
+               (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
+                  (raops g f @
+                     [u0 d0]
+                      (: us (filter (x \ elem x sp) u0) ds (filter (x \ elem x sp) d0)
+                         vs (foldl (a \ x \ elem x a ? a (x . a)) () (us + ds))
+                         m (foldl (t \ v \ pin t v (raget c0 v @ () (tmp v) k k)) {} vs)
+                         lds (map (v \ [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)]) (filter (v \ raget c0 v = ()) us))
+                         sts (map (v \ [(lofr? v ? 'stsd 'st) 'r4 (sl v) (m v)]) ds)
+                         c2 (take 4 (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
+                         ((vs @ () [f] _ (lds + [(map (x \ peep m x x) f)] + sts)) + go u c2))
+                     _ (f . go u c0)))
+              _ ())
+       (go fs ()))
+   (raget c v) (foldl (a \ e \ (a @ () (<e = v ? <>e) _ a)) () c)
+
+   ; -> [forms loc]: the round that fit, over the forms its spills left | 'bad
+   ; the entry's fast region: the forms the entry reaches through no call, a label only when every
+   ; way in comes from the region. a vreg the entry run sets once and the rest of the fn needs lives
+   ; in the region as a twin, copied back on each edge out (a branch's through a stub at the end), so
+   ; the region writes no callee-saved register and swrap can move the frame onto its exits
+   (raentry g fs)
+    (: n #fs
+       ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       sc (vsucc fs) lb (vlabs fs)
+       pr (foldl (t \ i \ foldl (t2 \ j \ pin t2 j (i . peep t2 j ())) t (peep sc i ())) {} ^n)
+       (hd i) (ft i @ (h . _) h _ ())
+       (call? i) (elem (hd i) '(call callr))
+       inr {}
+       (in? i) (peep inr i ())
+       (sw i chg)
+        (n <= i ? chg
+           (: ok (!(call? i) && (i = 0 || (peep pr i () @ () ()
+                                             ps (hd i = 'label ? (all in? ps) (any in? ps)))))
+              (ok && !(in? i) ? (pin inr i 1, sw (i + 1) 1) (sw (i + 1) chg))))
+       (fix _) (sw 0 0 @ 1 (fix 0) 0)
+       _ (fix 0)
+       ; the entry run: up to the first label, jump, branch, call or return
+       k (: (go i) (i < n && nelem (hd i) '(label jmp br call callr ret jmpt fix) ? (go (i + 1)) i) (go 0))
+       dfs (foldl (t \ i \ (raops g (ft i) @ [_ d] (map (x \ pin t x (i . peep t x ())) (filter lovr? d), t) _ t)) {} ^n)
+       outs (foldl (t \ i \ (in? i ? t (raops g (ft i) @ [u d] (map (x \ pin t x 1) (filter lovr? (u + d)), t) _ t))) {} ^n)
+       vs (filter (v \ outs v && (dfs v @ [i] (i < k) _ ()))
+                  (raund () (catmap (i \ raops g (ft i) @ [_ d] (filter lovr? d) _ ()) ^k)))
+       ; an asm goto out of the region has no edge to lay copies on
+       (? (!(two? vs) || !(any (i \ !(in? i)) ^n) ||
+           any (i \ in? i && hd i = 'fix && 4 < #(ft i) && any (j \ !(in? j)) (peep sc i ())) ^n) fs
+          (: tw (foldl (t \ v \ pin t v (lofr? v ? (lomkf g) (lomk g))) {} vs)
+             (cp v) [(lofr? v ? 'movapd 'mov) v (tw v)]
+             cps (map cp vs)
+             (ren f) (f @ (('fix || 'cdef) . _) f (_ . _) (map (x \ peep tw x x) f) f)
+             stubs {}
+             (stub L) (peep stubs L () @ () (nlab g ".lo" @ T (pin stubs L T, T)) T T)
+             ; a fall into a call copies ahead of its argument setup, whose registers the copies may take
+             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd li la lea)) (!(lovr? d)) _ 0)
+             (back i) (0 < i && in? (i - 1) && setup? (i - 1) ? (back (i - 1)) i)
+             pre {}
+             _ (map (i \ (in? i && i + 1 < n && !(in? (i + 1)) && setup? i ? (pin pre (back i) 1))) ^n)
+             body (catmap (i \ (? !(in? i) [(ft i)]
+                                   (: f (ren (ft i))
+                                      nx (i + 1 < n && !(in? (i + 1)) && nelem (hd i) '(jmp ret) && !(setup? i) ? cps)
+                                      ((pre i ? cps) +
+                                      (f @ ['jmp L] (in? (peep lb L -1) ? [f] (cps + [f]))
+                                           ['br c L] ((in? (peep lb L -1) ? [f] [['br c (stub L)]]) + nx)
+                                           ; a table's ways out go by stubs, in the form and in its cells
+                                           ['jmpt t tl ls] [['jmpt t tl (map (L \ in? (peep lb L -1) ? L (stub L)) ls)]]
+                                           _ ([f] + nx))))))
+                          ^n)
+             tls (catmap (i \ (in? i ? (ft i @ ['jmpt _ tl _] [tl] _ ()))) ^n)
+             (cell c) (c @ ['fix 4 'rel32 L o] ['fix 4 'rel32 (peep stubs L L) o] _ c)
+             _ (pin g 'jtabs (map (e \ (e @ ([tl cs] && elem tl tls) [tl (map cell cs)] _ e)) (g 'jtabs)))
+             (body + catmap (L \ [['label (stubs L)]] + cps + [['jmp L]]) (sort (keys stubs))))))
+
+   ; a vreg spilled across calls splits there first when that weighs less, a full spill when it
+   ; misses again
+   (raplan g fs)
+    (: nosp {} split {}
+       (go fs k)
+        (k = 0 ? 'bad
+           (raround g fs nosp @
+              'bad 'bad
+              [loc () _ _] [fs loc]
+              [_ sp cr sv] (: s1 (filter (v \ elem v sv && !(split v)) sp)
+                           s2 (filter (v \ nelem v s1) sp)
+                           (map (v \ pin split v 1) s1,
+                            go (raspill g (rasplit g fs s1) s2 nosp) (k - 1)))))
+       (go fs 16))
+   ; a vreg split at its calls: stored after each def, reloaded before a read its register may not
+   ; hold, by a forward must-availability where a call holds none, so no call finds it live
+   (rasplit g fs vs)
+    (: n #fs
+       ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       sl (foldl (t \ v \ pin t v (nslot g 8)) {} vs)
+       (ld v) [(lofr? v ? 'ldsd 'ld) v 'r4 (sl v)]
+       (st v) [(lofr? v ? 'stsd 'st) 'r4 (sl v) v]
+       ud (foldl (t \ i \ pin t i (raops g (ft i) @ [u d] [(filter (x \ elem x vs) u) (filter (x \ elem x vs) d)] _ [() ()])) {} ^n)
+       sc (vsucc fs)
+       pr (foldl (t \ i \ foldl (t2 \ j \ pin t2 j (i . peep t2 j ())) t (peep sc i ())) {} ^n)
+       aout {}
+       (meet a s) (a @ 'all s _ (s @ 'all a _ (filter (x \ elem x s) a)))
+       (ain i) (peep pr i () @ () () ps (foldl (a \ p \ meet a (peep aout p 'all)) 'all ps))
+       (sz s) (s @ 'all -1 _ #s)
+       (sw i chg)
+        (n <= i ? chg
+           (: o (ft i @ (('call || 'callr) . _) ()
+                       _ (ain i @ 'all 'all a (ud i @ [u d] (raund (raund a u) d))))
+              c2 (sz o != sz (peep aout i 'all) ? 1 chg)
+              (pin aout i o, sw (i + 1) c2)))
+       (fix _) (sw 0 0 @ 1 (fix 0) 0)
+       _ (fix 0)
+       (vs @ () fs
+          _ (catmap (i \ (ud i @ [u d] (: a (ain i @ 'all () a a)
+                                          (map ld (filter (x \ nelem x a) u) + [(ft i)] + map st d))))
+                    ^n)))
+   ; the forms over their registers: a copy onto itself and the use markers gone, a fix its body
+   (rasub fs loc)
+    (: (sub x) (lovr? x ? (loc x) x)
+       (catmap (f \ (f @ (('cuse || 'cdef) . _) ()
+                         ('fix . _ . _ . fs . _) fs
+                         ([('mov || 'movapd) a b] && sub a = sub b) ()
+                         (_ . _) [(map sub f)]
+                         [f])) fs))
+   ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
+   ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
+   rapure '(li la lea mov movapd add sub and or xor imul shl shr sar not neg sx1 sx2 sx4 zx1 zx2 zx4 set
+            movqxr movdxr movqrx movdrx)
+   (radce g fs)
+    (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)
+       (own x u) #(filter (y \ y = x) u)
+       (dead? f) (two? f && elem <f rapure &&
+                  (raops g f @ [u d] (two? d && all (x \ lovr? x && peep cnt x 0 = own x u) d) _ ()))
+       f2 (filter (f \ !(dead? f)) fs)
+       (#f2 < #fs ? (radce g f2) fs))
+   ; -> forms over registers | 'bad
+   (raall g fs) (raplan g fs @ 'bad 'bad [f2 loc] (rasub f2 loc))
+
+   ; -- the laws' checks over a fn's forms: MOON_LOLAW=1 pins what breaks on g 'lolaw --
+   ; a physical register but the frame and stack bases
+   (raphys? x) (elem x rapool && nelem x '(r4 sp))
+   ; the forms a physical register may stand in or live across: copies, crossings, control
+   raglue '(cdef mov movapd movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
+   ; the forms with a fixed register operand: the count in rcx, a divide's rax
+   rafixed '(fix call callr ret shlv shrv sarv div rem udiv urem)
+   (raund a b) (foldl (s \ x \ elem x s ? s (x . s)) a b)
+   ; -> [forms reads-defs live-in live-out], tablets by index, over names
+   (ralive g fs)
+    (: n #fs ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       ud (foldl (t \ i \ (raops g (ft i) @ 'bad (pin t i [() ()]) p (pin t i p))) {} ^n)
+       sc (vsucc fs) lin {} lout {}
+       (sw i chg)
+        (i < 0 ? chg
+           (: o (foldl (a \ j \ raund a (peep lin j ())) () (peep sc i ()))
+              li (ud i @ [u d] (raund u (filter (x \ nelem x d) o)))
+              c2 (#li != #(peep lin i ()) ? 1 chg)
+              (pin lout i o, pin lin i li, sw (i - 1) c2)))
+       (fix _) (sw (n - 1) 0 @ 1 (fix 0) 0)
+       (fix 0, [ft ud lin lout]))
+   ; a physical register named outside the glue, or live across a form that is not glue
+   (rachkp g fs)
+    (ralive g fs @ [ft ud lin lout]
+       (catmap (i \ (ft i @ (hd . a)
+                       (? (elem hd raglue || elem hd rafixed) ()
+                          (filter raphys? a @ () (filter (x \ raphys? x && elem x (lout i) && nelem x <>(ud i)) (lin i) @
+                                                    () () ps [['across ps (ft i)]])
+                                             ps [['phys ps (ft i)]]))
+                       _ ()))
+               ^#fs))
+   ; a vreg read where some path reaches without its def: defined-on-entry by a forward fixpoint, top 'all
+   (rachkd g fs)
+    (ralive g fs @ [ft ud _ _]
+       (: n #fs sc (vsucc fs)
+          pr (foldl (t \ i \ foldl (t2 \ j \ pin t2 j (i . peep t2 j ())) t (peep sc i ())) {} ^n)
+          dout {}
+          (meet a s) (a @ 'all s _ (s @ 'all a _ (filter (x \ elem x s) a)))
+          (din i) (i = 0 ? () (foldl (a \ p \ meet a (peep dout p 'all)) 'all (peep pr i ())))
+          (sz s) (s @ 'all -1 _ #s)
+          (sw i chg)
+           (n <= i ? chg
+              (: o (din i @ 'all 'all s (raund s (filter lovr? <>(ud i))))
+                 c2 (sz o != sz (peep dout i 'all) ? 1 chg)
+                 (pin dout i o, sw (i + 1) c2)))
+          (fix _) (sw 0 0 @ 1 (fix 0) 0)
+          (fix 0,
+           catmap (i \ (din i @ 'all ()
+                          s (filter (x \ lovr? x && nelem x s) <(ud i) @ () () vs [['undef vs (ft i)]])))
+                  ^n)))
+   ; a vreg live across a call, homed in a register the call clobbers
+   (rachkc g fs loc)
+    (ralive g fs @ [ft _ _ lout]
+       (: cs (lvgp g + ragf)
+          (catmap (i \ (ft i @ (('call || 'callr) . _)
+                          (filter (x \ lovr? x && elem (loc x) cs) (lout i) @ () () vs [['call (map (x \ [x (loc x)]) vs) (ft i)]])
+                          _ ()))
+                  ^#fs)))
+   (rachk g fs f2 loc) (rachkp g fs + rachkd g fs + rachkc g f2 loc)
+)) ; module 'moon

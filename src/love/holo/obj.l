@@ -435,16 +435,192 @@
          (objsecs target (objsecs4 textforms dataforms nifforms imgforms bssforms rodataforms)
                   funcnames globnames wknames locnames)))
 
+   ; -- a64's .eh_frame, as clang lays it under -fasynchronous-unwind-tables: one CIE, then an
+   ; FDE per function named, its rows read off the laid words. a walk from the entry along the
+   ; branches gives every word a frame state, and a row opens wherever the state changes.
+   ; a state is (reg off sp fp saves ra pro): the cfa is reg+off; sp and fp how far the cfa
+   ; sits above each, () unknown; saves ((dwreg slot) ..), slots cfa-relative; ra 1 while lr
+   ; is signed; pro what the entry's straight line has written, or 'body past its first branch
+   ; or call, where a store saves nothing --
+   ; "zR", code factor 1, data -4, ra x30, pointers pcrel sdata4; the cfa sp+0
+   o-cie [16 0 0 0 0 0 0 0 1 122 82 0 1 124 30 1 27 12 31 0]
+   o-st0 [31 0 0 () () 0 ()]
+   (o-sx v n) (v >= 1 << (n - 1) ? (v - (1 << n)) v)
+   (o-w32 s o) (s o | (s (o + 1) << 8) | (s (o + 2) << 16) | (s (o + 3) << 24))
+   (o-flat l) (catmap (x \ (string? x ? (map (i \ x i) ^#x) [x])) l)
+   ; the registers a callee saves: x19-x30 and d8-d15 (dwarf 72-79)
+   (o-cs? r) (19 <= r && r <= 30 || 72 <= r && r <= 79)
+   ; a word's effect on the state; nm names the function a refusal blames
+   (o-ehst st w nm)
+    (@ st [cb co sd fd sv ra pw]
+       (: rt (w & 31) rn ((w >> 5) & 31) rt2 ((w >> 10) & 31)
+          pro (pw != 'body)
+          (mk cb co sd fd sv ra pw) [cb co sd fd sv ra pw]
+          ; where a base register points, cfa-relative
+          (at r) (? (r = 31) (sd = () ? () (0 - sd)) (r = 29) (fd = () ? () (0 - fd)) ())
+          (wrote st r) (@ st [cb co sd fd sv ra pw] (mk cb co sd fd sv ra (pro ? (r . pw) pw)))
+          ; x29 written: a cfa on it moves to sp
+          (fpw st f)
+           (@ st [cb co sd fd sv ra pw]
+              (? (cb != 29) (mk cb co sd f sv ra pw)
+                 (sd = ()) (scare 'obj-eh-fp nm)
+                 (mk 31 sd sd f sv ra pw)))
+          (spw st d)
+           (@ st [cb co sd fd sv ra pw]
+              (? (cb != 31) (mk cb co d fd sv ra pw)
+                 (d = ()) (scare 'obj-eh-sp nm)
+                 (mk 31 d d fd sv ra pw)))
+          (wr st r) (wrote (r = 29 ? (fpw st ()) st) r)
+          ; a store of a register the entry still holds is its save
+          (sav st r a)
+           (@ st [cb co sd fd sv ra pw]
+              (? (pro && a != () && o-cs? r && !(elem r pw) && !(any (p \ <p = r) sv))
+                 (mk cb co sd fd (sort ([r a] . sv)) ra pw)
+                 st))
+          ; a load back from its slot restores it
+          (rst st r a) (@ st [cb co sd fd sv ra pw] (wr (mk cb co sd fd (filter (p \ p != [r a]) sv) ra pw) r))
+          (wb st r d) (? (r = 31) (spw st (sd = () ? () (sd - d))) (r = 29) (fpw st (fd = () ? () (fd - d))) st)
+          (body st) (@ st [cb co sd fd sv ra pw] (mk cb co sd fd sv ra 'body))
+          (? ; a pair: stp/ldp, writeback or not
+             ((w & 0x3A000000) = 0x28000000)
+              (: opc (w >> 30) v ((w >> 26) & 1) md ((w >> 23) & 3) ld ((w >> 22) & 1)
+                 sc (v = 1 ? (4 << opc) (opc = 2 ? 8 4))
+                 imm (o-sx ((w >> 15) & 127) 7 * sc)
+                 a (at rn) ea (a = () ? () (md = 1 ? a (a + imm)))
+                 wide (v = 0 && opc = 2 || v = 1 && opc = 1)
+                 (dw r) (v = 1 ? (64 + r) r)
+                 e2 (ea = () ? () (ea + 8))
+                 s2 (? (ld = 0) (wide ? (sav (sav st (dw rt) ea) (dw rt2) e2) st)
+                       (rst (rst st (dw rt) (wide ? ea)) (dw rt2) (wide ? e2)))
+                 (md = 1 || md = 3 ? (wb s2 rn imm) s2))
+             ; one register, an unsigned offset, or nine signed bits (plain, post, pre)
+             ((w & 0x3B000000) = 0x39000000 || (w & 0x3B200000) = 0x38000000)
+              (: sz (w >> 30) v ((w >> 26) & 1) opc ((w >> 22) & 3)
+                 sc (v = 1 && opc >= 2 ? 16 (1 << sz))
+                 u ((w & 0x3B000000) = 0x39000000)
+                 ix (u ? 2 ((w >> 10) & 3))
+                 off (u ? (((w >> 10) & 4095) * sc) (o-sx ((w >> 12) & 511) 9))
+                 a (at rn) ea (a = () || ix = 1 ? a (a + off))
+                 wide (sz = 3 && (v = 0 || opc < 2))
+                 r (v = 1 ? (64 + rt) rt)
+                 s2 (? (ix = 2 && !u) (opc = 0 ? st (wr st r))         ; unprivileged
+                       (opc = 0 || v = 1 && opc = 2) (wide ? (sav st r ea) st)
+                       (rst st r (wide ? ea)))
+                 (ix = 1 || ix = 3 ? (wb s2 rn off) s2))
+             ; add/sub immediate: sp and x29 as either end
+             ((w & 0x1F800000) = 0x11000000)
+              (: s ((w >> 29) & 1) v (((w >> 10) & 4095) << (((w >> 22) & 1) * 12))
+                 d ((w >> 30) & 1 = 1 ? (0 - v) v)
+                 (from r) (? (r = 31) (sd = () ? () (sd - d)) (r = 29) (fd = () ? () (fd - d)) ())
+                 (? (s = 1) (rt = 31 ? st (wr st rt))
+                    (rt = 31) (spw st (from rn))
+                    (rt = 29)
+                     (: f (from rn) s2 (wrote (fpw st f) 29)
+                        ; mov x29, sp over the saved frame record: the cfa rides fp
+                        (@ s2 [cb co sd fd sv ra pw]
+                           (cb = 31 && f != () && any (p \ <p = 29) sv ? (mk 29 f sd f sv ra pw) s2)))
+                    (wr st rt)))
+             ; add/sub extended register, logical immediate: rd 31 is sp
+             ((w & 0x1FE00000) = 0x0B200000 && (w >> 29) & 1 = 0 && rt = 31) (spw st ())
+             ((w & 0x1F800000) = 0x12000000 && (w >> 29) & 3 != 3 && rt = 31) (spw st ())
+             ; pac-ret's sign and authenticate, a key and sp's modifier; the others no unwinder reads
+             (w = 0xD503233F) (mk cb co sd fd sv 1 pw)
+             (w = 0xD50323BF) (mk cb co sd fd sv 0 pw)
+             (elem w [0xD503237F 0xD50323FF 0xD503231F 0xD503239F 0xD503235F 0xD50323DF]) (scare 'obj-eh-pac nm)
+             ; a branch or a call ends the entry's straight line; mrs writes its rt
+             ((w & 0x7C000000) = 0x14000000 || (w & 0x7C000000) = 0x34000000 || (w & 0xFF000010) = 0x54000000
+              || (w & 0xFE000000) = 0xD6000000)
+              ((w & 0xFC000000) = 0x94000000 || (w & 0xFFFFFC1F) = 0xD63F0000 ? (body (wrote st 30)) (body st))
+             ((w & 0xFFF00000) = 0xD5300000) (wr st rt)
+             ((w & 0x1C000000) = 0x14000000) st
+             ; anything else writing rd: data processing, fp/simd (a gp rd too), a literal or exclusive load
+             ((w & 0x1C000000) = 0x10000000 || (w & 0x0E000000) = 0x0A000000) (wr st rt)
+             ((w & 0x0E000000) = 0x0E000000) (wrote (wr st rt) (64 + rt))
+             ((w & 0x0A000000) = 0x08000000) ((w >> 22) & 1 = 1 || (w & 0x3B000000) = 0x18000000 ? (wrote (wr st rt) (64 + rt)) st)
+             st)))
+   ; a word's successors within lo..hi; rl the offsets a branch relocation patches (an external target)
+   (o-ehnx w pc lo hi rl)
+    (: (to imm n) (elem pc rl ? () (pc + o-sx imm n * 4 @ t (lo <= t && t < hi ? [t] ())))
+       nx (pc + 4 < hi ? [(pc + 4)] ())
+       (? ((w & 0xFC000000) = 0x14000000) (to (w & 0x3FFFFFF) 26)                             ; b: in reach, else a tail call
+          ((w & 0xFF000010) = 0x54000000 || (w & 0x7E000000) = 0x34000000) (nx + to ((w >> 5) & 0x7FFFF) 19)   ; b.cond, cbz
+          ((w & 0x7E000000) = 0x36000000) (nx + to ((w >> 5) & 0x3FFF) 14)                     ; tbz
+          ((w & 0xFFFFFC1F) = 0xD65F0000 || w = 0xD65F0BFF || w = 0xD65F0FFF) ()            ; ret, retaa, retab
+          ((w & 0xFFFFFC1F) = 0xD61F0000 || (w & 0xFFE0001F) = 0xD4200000 || w < 65536) ()  ; br, brk, udf
+          nx))
+   ; what a row shows of a state: the cfa, the saves, ra
+   (o-ehvis st) [(st 0) (st 1) (st 4) (st 5)]
+   ; a row's dwarf from the last one's
+   (o-ehops a b)
+    (@ a [cb co sv ra]
+       (@ b [cb2 co2 sv2 ra2]
+          (: cfa (? (cb != cb2) ([12 cb2] + uleb co2) (co != co2) (14 . uleb co2) ())
+             rs (catmap ([r l] \ (elem [r l] sv2 ? () (r < 64 ? [(192 + r)] (6 . uleb r)))) sv)
+             os (catmap ([r l] \ (elem [r l] sv ? ()
+                                    (l % 4 != 0) (scare 'obj-eh-slot l)
+                                    (r < 64 && l <= 0) ((128 + r) . uleb (l // -4))
+                                    ([17] + uleb r + sleb (l // -4))))
+                        sv2)
+             (cfa + os + rs + (ra != ra2 ? [45] ())))))
+   (o-ehadv d) (? (d < 64) [(64 + d)] (d < 256) [2 d] (d < 65536) (3 . le16 d) (4 . le32 d))
+   ; one function's rows: s its lane's bytes, lo..hi its code, labs the lane's labels
+   (o-ehrows s lo hi rl labs nm)
+    (: sts {}
+       (s6 st) (take 6 st)
+       ; jst: the state at a br that is no tail call, which a table's targets share
+       (walk stk jst)
+        (? (atom? stk) jst
+           (: pc <stk st (sts pc) w (o-w32 s pc) st2 (o-ehst st w nm)
+              j2 (? ((w & 0xFFFFFC1F) = 0xD61F0000 && s6 st != s6 o-st0) st2 jst)
+              (walk (foldl (\ k t (: o (peep sts t ())
+                                      (? (o = ()) (pin sts t st2, t . k)
+                                         (s6 o = s6 st2) k
+                                         (scare 'obj-eh-merge [nm t]))))
+                           >stk (o-ehnx w pc lo hi rl))
+                    j2)))
+       _ (pin sts lo o-st0)
+       jst (walk [lo] ())
+       ; a label no branch reached: a jump table's case, in the state of its br
+       _ (two? jst ? (filter (t \ lo < t && t < hi && sts t = ()) (map labs (keys labs)) @ left
+                         (walk (map (t \ (pin sts t jst, t)) (uniq (sort left))) ())) 0)
+       pcs (sort (keys sts))
+       (foldl (\ acc pc (@ acc [cur at bs]
+                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops cur n)]))))
+              [(o-ehvis o-st0) lo ()] pcs @ r (r 2)))
+   ; the .eh_frame lane for the functions uw names, () where none is laid
+   (o-eh lanes uw)
+    (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
+                  rl (map (r \ <r) (filter (r \ elem (r 1) '(b26 b19 b14)) (l 5)))
+                  ; by address, one record where names alias
+                  fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
+                                                    (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
+                                             uw)))
+                  (filter (f \ !(any (g \ <g = <f && g 1 != f 1 && g 1 < f 1) fs)) fs))
+       fns (catall (map (l \ ((l 2 & 4) = 0 ? () (at1 l))) lanes))
+       (? (atom? fns) ()
+          (: (one acc f)
+              (@ acc [bs rs]
+                 (@ f [lo k hi s rl lb]
+                    (: ins (o-ehrows s lo hi rl lb k)
+                       fo #bs n (13 + #ins) pad ((4 - n % 4) % 4)
+                       [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
+                        ([(fo + 8) 'secrel32 k 0 0] . rs)])))
+             r (foldl one [o-cie ()] fns)
+             [".eh_frame" 1 2 8 <r (rev <>r) {}])))
+
    ; -- the general object: a list of sections, each (name type flags align forms), each one
    ; lay: a branch inside resolves in place, a reference across becomes a relocation.
    ; shf_execinstr (flags & 4) picks the relaxer and rset (a64's branches resolve in any
    ; section). a NOBITS section lays its forms for labels and size but writes no bytes. ax is
    ; what an assembly text adds: its data names, typed and sized as gas does (stt_notype, size 0,
-   ; unless its .type and .size say), and its absolute symbols, each (name value) --
-   (objsecs target0 secs funcnames globnames wknames locnames) (objsecsn target0 secs funcnames globnames wknames locnames {} [() ()])
-   (objsecsn target0 secs funcnames globnames wknames locnames anames ax)
+   ; unless its .type and .size say), and its absolute symbols, each (name value). uw names the
+   ; functions an a64 .eh_frame describes --
+   (objsecs target0 secs funcnames globnames wknames locnames) (objsecsn target0 secs funcnames globnames wknames locnames {} [() ()] ())
+   (objsecsn target0 secs funcnames globnames wknames locnames anames ax uw)
     (: target (arch-nom target0)
-       adata (o-names <ax) abss <>ax
+       ; an absolute symbol is (name value), stb_global, or (name value 0), stb_local
+       adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
+       szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
        rv (target = 'rv64)
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
@@ -460,12 +636,11 @@
        wkset (o-names wknames)
        ; ..and on x64 a reach to any global, as gas leaves it: the linker may bind it elsewhere
        gbset (target = 'x64 ? (o-names (wknames + funcnames + globnames)) wkset)
-       nsec #secs
-       _ (0 >= nsec ? (scare 'obj-no-sections target))
+       _ (atom? secs ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
        ; the relaxer, for executable sections only; a holo bake without laylax is a stale
        ; binary under a fresh obj.l, and scares
-       lanes (map (s \
+       lanes0 (map (s \
                 (: fm (s 4)
                    p (exec? s ?
                         (laylax @ r
@@ -475,6 +650,8 @@
                    w (o-walk be <p >p gbset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
+       lanes (a64 && two? uw ? (o-eh lanes0 uw @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       nsec #lanes
        (ln i) (lanes i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
        (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
@@ -483,13 +660,13 @@
 
        ; -- symbol indices: NULL, a section symbol each, the local statics, funcs, globs,
        ; exts. every local ahead of the first global, where .symtab's sh_info points --
-       nloc #locnames nfun #funcnames nglob #globnames nabs #abss
+       nloc (#locnames + #labss) nfun #funcnames nglob #globnames nabs #abss
        fstart (1 + nsec + nloc) gstart (fstart + nfun) estart (gstart + nglob + nabs)
        extidx (o-idx exts estart)
        fnidx (o-idx (map name funcnames) fstart)   ; relocs to a global bind these
        gidx (o-idx (map name globnames) gstart)
 
-       symnames (map (s \ peep anames s s) (locnames + funcnames + globnames + map cap abss + map string exts))
+       symnames (map (s \ peep anames s s) (locnames + map cap labss + funcnames + globnames + map cap abss + map string exts))
        str (o-strtab symnames)
        strblob <str stroffs <>str
 
@@ -501,22 +678,24 @@
        ; a data name's type and size: an asm text's as its .type and .size say, else an object
        ; the extent of its data
        (o-dtype nm) (o-has? adata (name nm) ? (two? (o-where lanes (fn-obj nm)) ? 1 0) 1)
-       (o-dsize w nm) (o-has? adata (name nm) ? (o-fsize lanes w nm) (o-size nm))
+       (o-xsize w nm) (peep szt (name nm) () @ z (charm? z ? z (o-fsize lanes w nm)))
+       (o-dsize w nm) (o-has? adata (name nm) ? (o-xsize w nm) (o-size nm))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (secs (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) (o-dtype ls)) <w <>w (x ? (o-fsize lanes w ls) (o-dsize w ls)))))
+                                            (elf-sym (stroffs i) 0 (x ? (o-ftype lanes ls) (o-dtype ls)) <w <>w (x ? (o-xsize w ls) (o-dsize w ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
-                                             (o-ftype lanes fs) <w <>w (o-fsize lanes w fs))))
+                                             (o-ftype lanes fs) <w <>w (o-xsize w fs))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym (stroffs (nloc + nfun + i))
                                                    (elem gs wknames ? 2 1) (o-dtype gs) <w <>w (o-dsize w gs))))
                                  globnames))
-           ; an absolute symbol: stb_global stt_notype, shn_abs
+           ; an absolute symbol: stt_notype, shn_abs
+           lasyms (catall (o-mapi (\ i p (elf-sym (stroffs (#locnames + i)) 0 0 65521 <>p 0)) labss))
            asyms (catall (o-mapi (\ i p (elf-sym (stroffs (nloc + nfun + nglob + i)) 1 0 65521 <>p 0)) abss))
            ; a weak undef resolves to zero at static link
            esyms (catall (o-mapi (\ i e (elf-sym (stroffs (nloc + nfun + nglob + nabs + i))
@@ -524,7 +703,7 @@
                                  exts))
            ; one stt_section symbol per section, in section order
            ssyms (catall (o-mapi (\ i l (elf-sym 0 0 3 (i + 1) 0 0)) lanes))
-           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
+           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms lasyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + nabs + #exts)
 
        ; -- the relocations, by the fixup's kind, never the section. --
@@ -548,16 +727,17 @@
                  'abs8 (o-rela off si r-8 (sa + aux))
                  ; an 8-byte word measured from its own start
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
-                 ; x64 counts from the field's end, so the -4. a weak fn binds plt32; a branch
-                 ; (E8/E9 call/jmp, 0F 8x jcc) to a global or an external wants plt32, anything
-                 ; else pc32 (data has no plt stub)
+                 ; an FDE's pc_begin: the section symbol, so a weak function's is its own
+                 'secrel32 (o-where lanes lbl @ w (o-rela off <w ra-prel32 <>w))
+                 ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
+                 ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
+                 ; anything else pc32 (data has no plt stub)
                  'rel32
                   (o-rela off si
                           (? rv rr-pc32
                              a64 ra-prel32
                              (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
-                             !(elem pv '(232 233) || 128 <= pv && pv <= 143) r-pc32
-                             (o-has? gbset lbl || !(o-where lanes lbl)) r-plt32
+                             (elem pv '(232 233) || 128 <= pv && pv <= 143) r-plt32
                              r-pc32)
                           ((sa + aux) - 4))
                  ; a64: a page delta never resolves inside a .o

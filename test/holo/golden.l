@@ -186,7 +186,7 @@
       ("sar.imm.ext" "49c1fd05"              ((sar r12 5)))      ; r12 -> x86 r13: sar r13,5
       ;; test: 0x85 /r reg,reg ; 0xf7 /0 id reg,imm32
       ("test.rr"     "4885c0"                ((test r0 r0)))     ; test rax,rax (divide-by-zero check)
-      ("test.imm"    "48f7c001000000"        ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard)
+      ("test.imm"    "48a901000000"          ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard), A9 id
       ;; SIB memory: [base + index*scale + disp]. r7->x86 r8, r10->x86 r11 (the map-probe's slot regs)
       ("leax.1.1"    "488d4c0001"            ((leax r1 r0 r0 1 1)))    ; lea rcx,[rax+rax*1+1]
       ("leax.dbl"    "4c8d1c12"              ((leax r10 r2 r2 1 0)))   ; lea r11,[rdx+rdx*1]
@@ -480,8 +480,8 @@
    _ (chk-eq "x64.rip.tail"
         "f6050000000020"                           ; d sits right at the end: disp 0, not 1
         (holo-hex 'x64 '((testm 1 rip (d 0) 32) (label d))))
-   _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
-        '((mov r1 r0) (zx4 r1) (li r0 4294967295))
+   _ (chk-eq "gas.x64.mov32"                       ; movl reg is gas's 89 /r; an immediate is li's b8+r
+        '((raw (137 193)) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))
    _ (chk-eq "gas.a64.cmp"
         ["c68c286e" "203ca24e" "2034624e" "8334a52e" "203ce26e" "208c7f0e" 'gas-a64-operand]
