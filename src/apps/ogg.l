@@ -111,7 +111,7 @@
    ; a whole packet on one page, the same way
    (ogg-shrink c p) (ogg-open c p @ t (tablet? t ? (ogg-close t "") p))
    (ogg-hjoin c held cont pk tl)
-    (: sh (map (p \ ogg-shrink c p) pk)
+    (: sh (map (ogg-shrink c) pk)
        (? !cont [sh (ogg-open c tl)]
           !(tablet? held || two? held) [(two? sh ? >sh ()) (two? sh ? (ogg-open c tl) ())]
           (two? sh) [(ogg-close held <pk . >sh) (ogg-open c tl)]

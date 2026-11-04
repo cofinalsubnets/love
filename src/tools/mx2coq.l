@@ -19,7 +19,7 @@
 
    ridx ^nk                                             ; every kind -- the whole square
    (cell m i j) (m i j)                                 ; a grid is indexed by application
-   (rrow m i) (map (j \ cell m i j) ridx)
+   (rrow m i) (map (cell m i) ridx)
    (rcol m j) (map (i \ cell m i j) ridx)
    ; a kind's dispatch signature: equal signature = same band
    (sig i) [(rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i)]
@@ -95,7 +95,7 @@
    _ (dot (mxdef "addmx" addm))
    _ (dot (mxdef "mulmx" mulm))
    _ (dot ("Definition band (k : kind) : nat := match k with "
-         + (join (map (c \ (c = 0 ? "" " | ") + (bars (i \ kn i) (members c)) + " => " + show c) ^nb))
+         + (join (map (c \ (c = 0 ? "" " | ") + (bars kn (members c)) + " => " + show c) ^nb))
          + " end." + nl))
    _ (dot ("Definition rk : list kind := [" + (commas kn ridx) + "]." + nl + nl))
    _ (dot (bandb "addb" addm))

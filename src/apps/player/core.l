@@ -313,7 +313,7 @@
        _ (sets c [['clients #(c 'w)]])
        id)
    (lunwatch c id)
-    (? !(elem id (map (w \ <w) (c 'w))) 0
+    (? !(elem id (map cap (c 'w))) 0
        (: _ (pin c 'w (filter (w \ <w != id) (c 'w)))
           (sets c [['clients #(c 'w)]])))
    (lclose c) (: _ (halt c) _ (horn-off c)
@@ -345,10 +345,10 @@
                    n (q2 'w)
                    (pin q2 n "\(m)\n", pin q2 'w (n + 1)))
        (take q) (: r (q 'r) w (q 'w) ks (map (k \ k + r) ^(w - r))
-                   ls (map (k \ q k) ks)
+                   ls (map q ks)
                    (each ks (k \ pin q k ()), pin q 'r w, ls))
        (drain _) (: l (foldl (\ a me (a + take (qs me))) () (keys qs))
-                    _ (? (two? l) (: _ (each l (x \ say s x)) (flush s)) 0)
+                    _ (? (two? l) (: _ (each l (say s)) (flush s)) 0)
                     (ob 'on || two? l ? (rest 5, drain 0) 0))
        wr (twirl drain 0)
        id (core-watch c put1)

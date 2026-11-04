@@ -55,7 +55,7 @@
 
    ; the linker's own .comment line, an object after every other, as ld.lld adds its banner
    (ld-banner id t)
-    (: s (string (map (i \ t i) ^#t + [0]))
+    (: s (string (map t ^#t + [0]))
        {'id id 'src s 'shnum 2 'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".comment" 1 48 0 #s 1 1 0 0]}
         'syms {0 ["" 0 0 0 0 0 0]} 'nsym 1 'rela {}})
 
@@ -457,7 +457,7 @@
                  (cats (map (b \ w4 (peep first b 0)) ^nb))
                  (cats (map (i \ w4 (hs i // 2 * 2 + (? (i + 1 = #hs || bk (i + 1) != bk i) 1 0))) ^#hs))])
        strs (sort (map (k \ [(st k) k]) (filter string? (keys st))))
-       dstr (cats ([0] . map (p \ map (i \ p 1 i) ^#(p 1) + [0]) strs))
+       dstr (cats ([0] . map (p \ map (p 1) ^#(p 1) + [0]) strs))
        vd (? (d 'flat) () (cats [(w2 1) (w2 1) (w2 1) (w2 1) (w4 (ld-ehash (d 'base))) (w4 20) (w4 28) (w4 (st (d 'base))) (w4 0)
                  (w2 1) (w2 0) (w2 2) (w2 1) (w4 (ld-ehash (d 'vn))) (w4 20) (w4 0) (w4 (st (d 'vn))) (w4 0)]))
        osv (env 'osv)

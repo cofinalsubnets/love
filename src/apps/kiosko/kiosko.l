@@ -102,10 +102,10 @@
    (penc s) (catmap (c \ (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122 || c = 45
                           || c = 46 || c = 95 || c = 126 || c = 47) ? (string c)
                          ("%" + string (hexd (c // 16)) + string (hexd (c % 16))))
-                    (map (i \ s i) ^#s))
+                    (map s ^#s))
    ; ..and text going into html
    (hesc s) (catmap (c \ c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" 34 "&quot;" 39 "&#39;" (string c))
-                    (map (i \ s i) ^#s))
+                    (map s ^#s))
    ; a segment that starts with a dot: .git, .env, .ssh
    (dotted? p) (: n #p (g i) (? (n - 1 <= i) 0 (p i = 47 && p (i + 1) = 46) 1 (g (i + 1)))
                   (g 0))

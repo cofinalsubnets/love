@@ -97,7 +97,7 @@
  (seeded l s) (: (go l i k acc) (? (atom? l) (rev acc) (seed? <l) (go >l i (k + 1009 * (<l 1)) acc)
                                    (go >l (i + 1) k ([<l (s + 7 * i + k)] . acc)))
                 (go l 0 0 ()))
- (layers l s) (: ls (map (p \ layer (p 0) (p 1)) (seeded l s)) (all two? ls ? (map (g \ <g) ls)))
+ (layers l s) (: ls (map (p \ layer (p 0) (p 1)) (seeded l s)) (all two? ls ? (map cap ls)))
  (run ls c x y) (foldl (\ c g (g c x y)) c ls)
  ; ..the first layer not understood, a within's inner ones searched, and what it takes
  (swatch-fault l) (? (atom? l) ()

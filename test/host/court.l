@@ -179,7 +179,7 @@
 (borrow 'sky)
 
 ; the weather: january leans overcast, july clear; it drifts a notch at a time; a cover chosen holds
-(: (odds m) (map (k \ court-wx-pick m k) ^20) jan (odds 1) jul (odds 7)
+(: (odds m) (map (court-wx-pick m) ^20) jan (odds 1) jul (odds 7)
    (n c l) #(filter (x \ x = c) l)
    st (on 1 15) seen {}
    (hop k) (pin st 'sim (st 'sim + 3600.0), court-move st, pin seen k (st 'wx 'cover))

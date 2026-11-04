@@ -580,7 +580,7 @@
    (put-help J)
     (: _ (J 'interaction > batch-mode ? (pin J 'selector (J 'selector - 1)))
        _ (? (J 'use-err-help) (print-ln J, give-err-help J)
-            (map (s \ print-nl J s) (J 'help)))
+            (map (print-nl J) (J 'help)))
        _ (pin J 'help ()) _ (print-ln J)
        _ (J 'interaction > batch-mode ? (pin J 'selector (J 'selector + 1)))
        (print-ln J))

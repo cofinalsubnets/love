@@ -296,7 +296,7 @@
        gc (yacc-comb (map (j \ [j <>(gts j)]) (jot N)))
        (w16 l) (catmap (v \ [(v & 255) (v >> 8)]) l)
        tab (string (w16 ([T N S R #<>ac #<>gc] + map (r \ lhs r - T) (jot R) + map (r \ #(rhs r)) (jot R) +
-                        map (r \ <r) rows + <ac + map (g \ <g) gts + <gc + <>ac + ac 2 + <>gc + gc 2)))
+                        map cap rows + <ac + map cap gts + <gc + <>ac + ac 2 + <>gc + gc 2)))
        [tab (cf 'sr) (cf 'rr) (rev (cf 'l)) S (map (s \ peep stos s 0) ss)])
    ; rows ((id ((col val)..))..) -> (bases vals checks): row id's col at bases[id] + col where
    ; checks holds id; a row with nothing is based at 65535

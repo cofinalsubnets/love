@@ -8,7 +8,7 @@
    (ons p a b) (map we (filter onset? (p (qi a) (qi b))))
    (cnt p a b) #(p (qi a) (qi b))
    ; a query answers in emission order (a stack interleaves), so value laws sort first
-   (vals p a b) (map (x \ evv x)
+   (vals p a b) (map evv
                      (sortby (u \ v \ (evwb u) < (evwb v))
                              (filter onset? (p (qi a) (qi b)))))
 

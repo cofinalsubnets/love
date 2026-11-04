@@ -889,7 +889,7 @@
    prev (fresh || memo 'ti != ti ? () (memo 'bstate))
    kp {'kept kept 'id idof 'reach (reach-of ap pks wi tft tfm) 'look (b \ [ti (vals (b 'skin)) (b 'lo 1)])
        'bkey (b \ idof [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0) (vals (b 'skin)) (peep b 'whole 0) (peep b 'sig 0)])
-       'prev prev 'hot hot 'stash (st \ pin memo 'bstate st) 'tick tk}
+       'prev prev 'hot hot 'stash (pin memo 'bstate) 'tick tk}
    (on m k) [(mid3 (m 0)) m k]
    ds (lv 'decals) dps (filter (d \ !(sheet? d)) (lv 'drapes))
    ; ..a land's sheet only where it is still the ground: none where a later air brush has
