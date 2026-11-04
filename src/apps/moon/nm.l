@@ -33,8 +33,21 @@
    ; that cannot change its operand goes
    nmext {'zx1 255 'zx2 65535 'zx4 4294967295 'sx1 127 'sx2 32767 'sx4 2147483647}
    nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldu4 4294967295 'ldxw 4294967295}
+   nmwctl {'label 1 'jmp 1 'br 1 'ret 1 'jmpt 1}
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
+   ; the vregs a bound could matter for: an extension's operand, and what its bound is made of
+   (nmdem fs)
+    (: dep {} dem {}
+       (edge t l) (pin dep t (l + dep t))
+       _ (map (f \ (f @ ['mov t a] (edge t [a])
+                         [('and || 'or || 'xor || 'add || 'imul) t x y] (edge t [x y])
+                         _ 0)) fs)
+       (want x) (dem x = () && lovr? x ? (pin dem x 1, map want (dep x)))
+       (map (f \ (f @ ([op t] && nmext op) (want t) ['cmp t 0] (want t) _ 0)) fs, dem))
    (nmwid g fs)
+    (: dem (nmdem fs)
+       (#(keys dem) = 0 ? fs (nmwid1 g fs dem)))
+   (nmwid1 g fs dem)
     (: lb (vlabs fs)
        ; a table or asm goto's target knows nothing; a loop's head assumes its bounds until they hold
        bad {} back {}
@@ -51,6 +64,27 @@
            (go fs w i fall)
             (fs @ (f . u)
                    (: (b x) (cint? x ? (x < 0 ? () x) (w x))
+                      ; any form with no bound to make or use, as itself
+                      (rest _)
+                       (: nb (dem (f 1) = () ? ()
+                                (f @ ['li t k] (b k)
+                                     ['mov t a] (b a)
+                                     ([op t _ _] && nmldw op) (nmldw op)
+                                     ([op t _ _ _ _] && nmldw op) (nmldw op)
+                                     ([op t] && nmext op) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
+                                     ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
+                                     [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
+                                     ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
+                                     ['imul t x y] (b x @ () () n (b y @ () () m (n * m)))
+                                     [('shr || 'sar) t k] (b t @ () () n (cint? k ? (n // 2 ** k)))
+                                     ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
+                                     _ ()))
+                          _ (raops g f @ [_ ds]
+                             (map (x \ w x != () ? (pin w x ())) ds,
+                              f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
+                             _ 0)
+                          (f . go u w (i + 1) 1))
+                      (!(nmwctl <f || nmext <f) ? (rest 0)
                       (f @ ['label L]
                             (: cs ((fall ? [w] ()) + pend L)
                                w0 (bad L || !(two? cs) ? {} (foldl nmmeet <cs >cs))
@@ -63,24 +97,7 @@
                            ['jmp L] (keep L w, f . go u w (i + 1) 0)
                            ['br _ L] (keep L w, f . go u w (i + 1) 1)
                            (('ret || 'jmpt) . _) (f . go u w (i + 1) 0)
-                           _ (: nb (f @ ['li t k] (b k)
-                                        ['mov t a] (b a)
-                                        ([op t _ _] && nmldw op) (nmldw op)
-                                        ([op t _ _ _ _] && nmldw op) (nmldw op)
-                                        ([op t] && nmext op) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
-                                        ['set _ t] 1
-                                        ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
-                                        [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
-                                        ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
-                                        ['imul t x y] (b x @ () () n (b y @ () () m (n * m)))
-                                        [('shr || 'sar) t k] (b t @ () () n (cint? k ? (n // 2 ** k)))
-                                        ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
-                                        _ ())
-                                _ (raops g f @ [_ ds]
-                                   (map (x \ w x != () ? (pin w x ())) ds,
-                                    f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
-                                   _ 0)
-                                (f . go u w (i + 1) 1))))
+                           _ (rest 0))))
                   _ ())
            [(go fs {} 0 1) pend hs])
        ; a head holds when every way in stays under it; one that does not widens, and after six
