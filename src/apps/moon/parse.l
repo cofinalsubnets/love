@@ -695,9 +695,13 @@
               ())
           (: name (tkv <ts2)
              ts3 >ts2
-             (? (peekp ts3 "(")                       ; name(params): ('fn ty), the params balance-skipped
+             (? (peekp ts3 "(")                       ; name(params): ('fn ty pts), as psufs lays a prototype's
                  (skipbal >ts3 1 @ t2
-                    (? !(two? t2) () (illty? ['fn ty]) (illblame 0) [[name ['fn ty]] t2]))
+                    (? !(two? t2) () (illty? ['fn ty]) (illblame 0)
+                       ; K&R heads and a variadic prototype park no types
+                       (: rp (krhead? ps >ts3 ? () (pparams ps >ts3 ()))
+                          pt9 (two? rp && !(rp 2) ? (map caup <rp))
+                          [[name (two? pt9 ? ['fn ty pt9] ['fn ty])] t2])))
                 !(peekp ts3 "[") [[name ty] ts3]
                 (adims ps ts3 () @ dr
                    (atom? dr ? ()
