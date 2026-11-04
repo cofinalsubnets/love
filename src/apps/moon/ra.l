@@ -369,11 +369,12 @@
               (pin lout i o, pin lin i li, sw (i - 1) c2)))
        (fix _) (sw (n - 1) 0 @ 1 (fix 0) 0)
        (fix 0, [ft ud lin lout]))
-   ; a physical register named outside the glue, or live across a form that is not glue
+   ; a physical register named outside the glue, or live across a form that is not glue (an sp
+   ; adjustment is the arm targets' frame teardown)
    (rachkp g fs)
     (ralive g fs @ [ft ud lin lout]
        (catmap (i \ (ft i @ (hd . a)
-                       (? (elem hd raglue || elem hd rafixed) ()
+                       (? (elem hd raglue || elem hd rafixed || elem hd '(lea add sub) && <a = 'sp) ()
                           (filter (raphys? g) a @ () (filter (x \ raphys? g x && elem x (lout i) && nelem x <>(ud i)) (lin i) @
                                                     () () ps [['across ps (ft i)]])
                                              ps [['phys ps (ft i)]]))

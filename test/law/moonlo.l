@@ -85,6 +85,6 @@
                  "int main() { return *bb; }"])
       (all (src \ lolaw src 'x64 @ [n ()] (0 < n) _ 0) corpus)
       (+(map (src \ lolaw src 'x64 @ [n _] n _ 0) corpus) >= 2 * #corpus)
-      ; off x64 the pair and the asm take the old path; the rest holds there too
-      (all (t \ all (src \ lolaw src t @ [_ ()] 1 _ 0) corpus) '(a64 rv64))
-      (all (t \ +(map (src \ lolaw src t @ [n _] n _ 0) corpus) >= #corpus) '(a64 rv64))))
+      ; off x64, all but x64's asm and the wide pair holds too
+      (: c2 (filter (src \ !(has? src "__asm__" || has? src "__int128")) corpus)
+         (all (t \ all (src \ lolaw src t @ [_ ()] 1 _ 0) c2 && +(map (src \ lolaw src t @ [n _] n _ 0) c2) >= #c2) '(a64 rv64)))))

@@ -953,12 +953,17 @@
                                    (gi < ngp g ? [(gi + 1) fi (rg + [[(argr g gi) p]]) sk (pre + cp)]
                                       [gi fi rg (sk + [['w ['long p ()] 8]]) (pre + cp)]))))
                         pcs (: ng #(filter (p \ <p = 'int) pcs) nx (#pcs - ng)
-                               (two? pcs && gi + ng <= ngp g && fi + nx <= 8 ?
+                               (? (two? pcs && gi + ng <= ngp g && fi + nx <= 8)
                                   (foldl (t \ p \ (t @ [gi fi rg sk pre]
                                             (p @ [c o n] (loeb g c x o n @ [w fs]
                                                (c = 'sse ? [gi (fi + 1) (rg + [[(xmmreg fi) w]]) sk (pre + fs)]
                                                   [(gi + 1) fi (rg + [[(argr g gi) w]]) sk (pre + fs)])))))
                                          [gi fi rg sk pre] pcs)
+                                  ; riscv splits a gp pair over the last register and the stack
+                                  (rv64? g && nx = 0 && ng = 2 && gi + 1 = ngp g)
+                                   (loeb g 'int x 0 8 @ [w0 f0]
+                                      (loeb g 'int x 8 ((pcs 1) 2) @ [w1 f1]
+                                         [(ngp g) fi (rg + [[(argr g gi) w0]]) (sk + [['w ['long w1 ()] 8]]) (pre + f0 + f1)]))
                                   ; whole to the block; AAPCS64 then closes the file it wanted
                                   [(a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) rg (sk + [['s v (8 * aslots g ty)]]) pre])))
                     (lofr? x) (fi < 8 ? [gi (fi + 1) (rg + [[(xmmreg fi) x]]) sk pre] [gi fi rg (sk + [['w v 8]]) pre])
@@ -1006,11 +1011,13 @@
           (loren2 g [['r0 p]] 'r2 'long walk @ [_ a f2]
              (lomkt g ty @ d [ty d (fs + f2 + [(fl ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
-   ; riscv's va_list is a cursor over 8-byte slots, doubles riding gp ones
+   ; riscv's va_list is a cursor over 8-byte slots, doubles riding gp ones and a gp composite
+   ; whole slots, its value their address
    (lovaargrv g p fs ty)
-    (? (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
-       (loren2 g [['r0 p]] 'r2 'long '((ld r2 r0 0) (mov r3 r2) (add r3 r3 8) (st r0 0 r3)) @ [_ a f2]
-          (lomkt g ty @ d [ty d (fs + f2 + [(lofl? ty ? ['ldsd d a 0] [(ldop ty) d a 0])])])))
+    (: (at n8) (loren2 g [['r0 p]] 'r2 'long ['(ld r2 r0 0) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 0 r3)] @ [_ a f2] [a (fs + f2)])
+       (? (stru? ty && asalign g ty <= 8 && (aone g ty = 'int || ipair? g ty)) (at (8 * aslots g ty) @ [a f2] [ty a f2])
+          (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
+          (at 8 @ [a f2] (lomkt g ty @ d [ty d (f2 + [(lofl? ty ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
@@ -1348,8 +1355,13 @@
                                                   [(gi + 1) fi (fs + [(lopst p 'r4 off (argr g gi))])])))
                                             [gi fi ()] pcs @
                                       [g2 f2 fs] (go u g2 f2 ov ([nm 'm off ty] . env) (acc + fs) post)))
-                                  (go u (a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
-                                      ((nm . ovm ty ov) . env) acc post))))
+                                  (? (rv64? g && nx = 0 && ng = 2 && gi + 1 = ngp g)
+                                      ; riscv's split pair: the last register, then the first stack slot
+                                      (ntmp g ty @ off (lomk g @ t
+                                         (go u (ngp g) fi (ov + 1) ([nm 'm off ty] . env)
+                                             (acc + [['st 'r4 off (argr g gi)] ['ld t 'r4 (ovo + 8 * ov)] ['st 'r4 (off + 8) t]]) post)))
+                                     (go u (a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
+                                         ((nm . ovm ty ov) . env) acc post)))))
                     (lofl? ty ? (8 <= fi) (ngp g <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc post)
                     (: fl (lofl? ty) A (fl ? (xmmreg fi) (argr g gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
                        (lotk? g nm ?
