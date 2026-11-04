@@ -469,25 +469,32 @@
             (['bin op a b] && locmp? op)
              (lox g env a @ 'bad 'bad
                 va (lox g env b @ 'bad 'bad
-                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb) && nelem op '(eq ne))
+                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb))
                              (lofbr g op va vb sense L)
                             !(losc? (vty va) && losc? (vty vb))
                              (lobin g op va vb () @ [_ d fs] (fs + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]) 'bad)
                             (loz g va vb @ [_ x fx] (loz g vb va @ [_ y fy]
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
             (lox g env e @ ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
-                           ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
+                           ([ty r fs] && lofl? ty) (lomk g @ t (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z [['li t 0] ['movqxr z t]]] sense L)))
+                           ([ty r fs] && d128? ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad))))
 
    ; a float compare straight into its branch: above and ae are false on a NaN, so lt and le
-   ; compare swapped, and the sense flipped takes be and below. eq and ne carry parity: lofcmp's
+   ; compare swapped, and the sense flipped takes be and below. a NaN is ne: parity jumps with
+   ; ne, and steps over eq
    (lofbr g op va vb sense L)
     (: ft (vty va = 'double || vty vb = 'double ? 'double 'float)
        uc (ft = 'float ? 'ucomiss 'ucomisd)
        (lotr g va ft @ [_ x fx]
           (lotr g vb ft @ [_ y fy]
-             (fx + fy + [(elem op '(lt le) ? [uc y x] [uc x y])
-                         ['br (lofcc g (op @ ('lt || 'gt) (sense ? 'above 'be) _ (sense ? 'ae 'below))) L]])
+             ; a64's fcmp answers unordered as ne: no parity there
+             (? (elem op '(eq ne))
+                 (? !(x64? g) (fx + fy + [[uc x y] ['br ((op = 'ne) = (sense != 0) ? 'ne 'eq) L]])
+                    ((op = 'ne) = (sense != 0)) (fx + fy + [[uc x y] ['br 'ne L] ['br 'p L]])
+                    (nlab g ".lo" @ k (fx + fy + [[uc x y] ['br 'p k] ['br 'eq L] ['label k]])))
+                (fx + fy + [(elem op '(lt le) ? [uc y x] [uc x y])
+                            ['br (lofcc g (op @ ('lt || 'gt) (sense ? 'above 'be) _ (sense ? 'ae 'below))) L]]))
              _ 'bad)
           _ 'bad))
 
@@ -1364,10 +1371,27 @@
             _ (rachk g fs f2 loc @ ws
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
-         rasub f2 loc @ body
+         ; x64: a frame load only a compare reads becomes the compare's memory operand
+         (rasub f2 loc @ b0 (x64? g ? (lofuse g (cmpfuse g b0)) b0)) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (a64? g ? a4ize 1) (sibcall g ([['label (name <>f)]] + (a64? g ? pro-a64 pro4) +
                                             [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))))
+   ; after allocation, a full-word load one form alone reads, dying there, folds into it: a copy
+   ; loads its copy, an alu op takes the word as its right side (a commuting one as its left)
+   (lofuse g fs)
+    (: (fold f nx)
+        (f @ ['ld X b o]
+           (nx @ (['mov Y x] && x = X && Y != X) ['ld Y b o]
+                 ([op d a c] && elem op '(add sub and or xor) && c = X && a = d && d != X) ['alurm op 8 d b o]
+                 ([op d a c] && elem op '(add and or xor) && a = X && c = d && d != X) ['alurm op 8 d b o]
+                 _ ())
+           _ ())
+       (go l)
+        (? !(two? l) l
+           (: f <l r (two? >l ? >>l)
+              m (two? >l ? (fold f <>l))
+              (two? m && dieb? g <>f fs r ? (m . go r) (f . go >l))))
+       (go fs))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g

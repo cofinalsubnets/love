@@ -167,6 +167,7 @@
    ; until a label or a call ends the run (the last four kept)
    (raspill g fs sp nosp)
     (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
+       _ (pin g 'rasls (map sl sp + peep g 'rasls ()))
        (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
        (go fs c)
         (fs @ (f . u)
@@ -245,22 +246,45 @@
    ; misses again
    (raplan g fs)
     (: nosp {} split {}
+       _ (pin g 'rasls ())
        (go fs k)
         (k = 0 ? 'bad
            (raround g fs nosp @
               'bad 'bad
-              [loc () _ _] [fs loc]
+              [loc () _ _] [(radse g fs (g 'rasls)) loc]
               [_ sp cr sv] (: s1 (filter (v \ elem v sv && !(split v)) sp)
                            s2 (filter (v \ nelem v s1) sp)
                            (map (v \ pin split v 1) s1,
                             go (raspill g (rasplit g fs s1) s2 nosp) (k - 1)))))
        (go fs 16))
+   ; a spill slot's store goes when no path reads the slot back before writing it again or
+   ; leaving: the slots are ra's own, so only its loads and stores name them
+   (radse g fs sls)
+    (: n #fs
+       ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
+       (slot f) (f @ ([('ld || 'ldsd) _ 'r4 o] && elem o sls) ['ld o]
+                     ([('st || 'stsd) 'r4 o _] && elem o sls) ['st o]
+                     _ ())
+       sc (vsucc fs)
+       lin {} lout {}
+       (sweep i chg)
+        (i < 0 ? chg
+           (: o (foldl (a \ j \ raund a (peep lin j ())) () (peep sc i ()))
+              li (slot (ft i) @ ['ld k] (raund [k] o) ['st k] (filter (x \ x != k) o) _ o)
+              c2 (#li != #(peep lin i ()) || #o != #(peep lout i ()) ? 1 chg)
+              (pin lout i o, pin lin i li, sweep (i - 1) c2)))
+       (fix _) (sweep (n - 1) 0 @ 1 (fix 0) 0)
+       (!(two? sls) ? fs
+          (: _ (fix 0)
+             (catmap (i \ (slot (ft i) @ ['st k] (elem k (peep lout i ()) ? [(ft i)]) _ [(ft i)])) ^n))))
+
    ; a vreg split at its calls: stored after each def, reloaded before a read its register may not
    ; hold, by a forward must-availability where a call holds none, so no call finds it live
    (rasplit g fs vs)
     (: n #fs
        ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
        sl (foldl (t \ v \ pin t v (nslot g 8)) {} vs)
+       _ (pin g 'rasls (map sl vs + peep g 'rasls ()))
        (ld v) [(lofr? v ? 'ldsd 'ld) v 'r4 (sl v)]
        (st v) [(lofr? v ? 'stsd 'st) 'r4 (sl v) v]
        ud (foldl (t \ i \ pin t i (raops g (ft i) @ [u d] [(filter (x \ elem x vs) u) (filter (x \ elem x vs) d)] _ [() ()])) {} ^n)
