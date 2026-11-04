@@ -573,7 +573,7 @@
      sg (foldl (\ a o (? (two? a) a (two? o && <o = 'seg) o ())) () ops0)
      ; outside 64 a bare symbol a non-branch reads is memory at that address (no %rip)
      br? (xa-branch? mn || xa-cc? mn || elem mn '(calll callw jmpl jmpw) || charm? (peep as-loops mn ()))
-     ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? ['mem -1 -1 1 0 <>o] o)) ops0))
+     ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? (xa-symoff (show <>o) @ so ['mem -1 -1 1 >so <so]) o)) ops0))
      (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
         ((md < 64 || as-sys64? mn) && two? (as-sys md mn w ops)) (as-sys md mn w ops)

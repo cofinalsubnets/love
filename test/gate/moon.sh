@@ -1673,6 +1673,58 @@ for t in x64 a64; do
   moonrun -t $t -O2 -c "$ho/.pid.c" -o "$ho/.pid.o" || fail "mooncc -t $t: a decided && over an inline asm goto, or a64's Q"
   nm "$ho/.pid.o" | grep -q ' U gone$' && fail "the right of a decided 0 && kept its call on $t"
 done
+# a compare the lowering knows decides its branch, and the dead arm's references go: a sizeof
+# switch, a value of two defs, a shifted literal in a ternary, and a dead arm holding a value's other def
+cat > "$ho/.kbr.c" <<'EOF'
+extern void gone(void); extern unsigned gv;
+struct d { void *n; };
+static inline void *dn(struct d *d) { if (!0 || !d) return (void *)0; return d->n; }
+int sw(int *p) { int r; switch (sizeof(*p)) { case 1: r = 1; break; case 4: r = *p; break; default: gone(); r = 0; } return r; }
+int two(void) { int x = 1; x = 0; if (x) gone(); return x; }
+int ter(int x) { int s = 4; int m = 1 << 14; return x + (s < m ? s : gv); }
+void arm(struct d *d) { void *np; np = dn(d); if (!np) return; gone(); }
+EOF
+for t in x64 a64; do
+  moonrun -t $t -O2 -c "$ho/.kbr.c" -o "$ho/.kbr.o" || fail "mooncc -t $t: a known compare"
+  nm "$ho/.kbr.o" | grep -qE ' U (gone|gv)$' && fail "a dead arm kept its reference on $t"
+done
+# ..and only a known one: a value a loop writes again, or that a branch joins, stays read
+cat > "$ho/.kbl.c" <<'EOF'
+extern int printf(const char *, ...);
+int m1(int c) { int x = 0; if (c) x = 1; if (x == 1) return 7; return 8; }
+int m2(int c) { int x = 2; for (int i = 0; i < c; i++) { if (x == 2) x = 3; else x = 2; } return x; }
+int m3(void) { long x = -1; if ((unsigned long)x > 5) return 1; return 0; }
+int m4(void) { long x = -1; if (x > 5) return 1; return 0; }
+int main(void) { printf("%d %d %d %d %d %d\n", m1(0), m1(1), m2(2), m2(3), m3(), m4()); return 0; }
+EOF
+moonrun "$ho/.kbl.c" -o "$ho/.kbl" || fail "mooncc: a compare a block does not know"
+[ "$("$ho/.kbl")" = "8 7 2 3 1 0" ] || fail "a compare decided on a value it does not know"
+# a bare sym+k in 16 and 32-bit code is the symbol and its addend, not a symbol of that name
+# a rip reference in a 32-bit object's .code64 reads its data label, not symbol 0
+cat > "$ho/.r64.S" <<'EOF'
+.code64
+.text
+f: lgdt g(%rip)
+ jmpq *b(%rip)
+.section .rodata
+.globl g
+g: .long 7
+.bss
+.space 8
+b: .space 8
+EOF
+moonrun -t i386 -c "$ho/.r64.S" -o "$ho/.r64.o" || fail "holo: a rip reference in i386's .code64"
+readelf -rW "$ho/.r64.o" | grep -q 'PC32 .*\bg\b' || fail "holo: .code64 rip to a global binds its symbol"
+readelf -rW "$ho/.r64.o" | grep -q 'ABS\|PC32 *$' && fail "holo: .code64 rip to a label reads symbol 0"
+cat > "$ho/.s32.S" <<'EOF'
+.code32
+movl y+4, %edx
+.code16
+movw z+2, %dx
+EOF
+moonrun -t x64 -c "$ho/.s32.S" -o "$ho/.s32.o" || fail "holo: a bare sym+k in .code32"
+readelf -rW "$ho/.s32.o" | grep -qE ' y \+ 4$' || fail "holo: a .code32 sym+k lost its addend"
+readelf -rW "$ho/.s32.o" | grep -qE ' z \+ 2$' || fail "holo: a .code16 sym+k lost its addend"
 # a64 unwind tables (the vdso's -fasynchronous-unwind-tables): an FDE per C function, none for
 # the asm's; each frame shape's rows -- a frameless leaf's sp, the frame record riding x29 with
 # the callee-saved slots, an early return's ret and the body after it -- and pac-ret's sign state
