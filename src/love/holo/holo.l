@@ -256,11 +256,13 @@
    (flagjump be l nm k)
       (k < 1 || atom? l ? 0
          (<l @ ins (<ins = 'label && ins 1 = nm ? (flagfree be >l (k - 1)) (flagjump be >l nm (k - 1)))))
+   ; a label's address where it lays; ('label nm k) names k bytes on, inside what follows it
+   (label-addr ins addr) (two? >>ins ? (addr + ins 2) addr)
    (lay prog be addr items labels)
       (!(two? prog) ? (rev items . labels)
          (<prog @ ins
             (? (<ins = 'label)
-               (pin labels (ins 1) addr, lay >prog be addr items labels)
+               (pin labels (ins 1) (label-addr ins addr), lay >prog be addr items labels)
                (<ins = 'align)
                (revonto (pad-ins be addr ins) items 0 @ r
                   (lay >prog be (addr + <r) >r labels))
@@ -304,7 +306,7 @@
                (atom? p ? (rev acc)
                   (<p @ ins
                      (? (<ins = 'label)
-                        (pin spots (ins 1) addr, pin eras (ins 1) era,
+                        (pin spots (ins 1) (label-addr ins addr), pin eras (ins 1) era,
                          plumb >p addr era ((0 . ()) . acc))
                         (<ins = 'align)
                         (revonto (pad-ins be addr ins) () 0 @ r
@@ -333,7 +335,7 @@
                (atom? p ? (rev items . labels)
                   (: ins <p  k <<cs  c ><cs
                      (? (<ins = 'label)
-                        (pin labels (ins 1) fa, stitch >p >cs pa fa era items)
+                        (pin labels (ins 1) (label-addr ins fa), stitch >p >cs pa fa era items)
                         (<ins = 'align)
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
