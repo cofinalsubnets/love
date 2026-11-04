@@ -192,6 +192,8 @@
                 _ (peep nmxst op () @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
             ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
+            ; an add of a literal onto a literal's sum is one add
+            (['add d a k] && cint? k && lovr? a) (base a k @ ([b2 o2] && lovr? b2) ['add d b2 o2] _ f)
             ['cmp t 0] (nmav av t @ ['and _ a k] ['test a k] _ f)
             f))
 

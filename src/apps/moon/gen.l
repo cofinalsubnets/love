@@ -4559,6 +4559,7 @@
        (rv64? g) (butret (peep g 'epi epi-a64) + [['jmpr (pkr g)]])     ; riscv: the park (t4) survives the epilogue
        (t32? g) (butret ejx + [['jmpr (pkr g)]])             ; thumb2: the park r12 survives the epilogue
        (ia32? g) ('((mov r1 r3)) + butret ejx + '((jmpr r1)))    ; i386: ecx, caller-saved and no result's
+       (<>f = 'r10) (butret ejx + '((jmpr r10)))              ; lo.l's park, clear of the epilogue
        ('((mov r10 r3)) + butret ejx + '((jmpr r10))))            ; park first: the x64 epilogue reloads r3
    ; skiprel peels dead reloads after a ret-position call (pool regs only: a cs-reg ld is the epilogue's)
    (skiprel g fs hs)
@@ -4574,7 +4575,7 @@
    (sibs g (f . r) lw el hs ej crf)
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
-                                <f = 'callr && <>f = <>crf) &&
+                                <f = 'callr && (<>f = <>crf || x64? g && <>f = 'r10)) &&
              (!(g 'fesca && !(abl? g 'fesca) || g 'fescv) || must? f))
        rr (cand ? (skiprel g (skipxt g r) hs) r)
        (? (cand && epim? rr ej)

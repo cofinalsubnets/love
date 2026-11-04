@@ -692,7 +692,8 @@
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
           _ (lox g env fh @
-               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys 1 () as (locr g r) [r fs])
+               ; a variadic prototype parks () as an unprototyped one does: al only then
+               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys (two? ptys ? () 1) () as (locr g r) [r fs])
                [['ptr ['fn rt ptys 'ms]] r fs] (locall1 g env rt ptys () 1 as (locr g r) [r fs])
                [['ptr ['fn rt]] r fs] (locall1 g env rt () 1 () as (locr g r) [r fs])
                'bad 'bad
@@ -917,8 +918,9 @@
                    ((f . u) && two? f && elem <f '(call callr)) ((f + '(must)) . u)
                    (f . u) (go u @ 'bad 'bad r (f . r)))
        (go (rev fs) @ 'bad 'bad r (rev r)))
-   ; an indirect call through the old path's park, the one register its sibcall jumps by
-   (locr g r) [['mov (pkr g) r] ['callr (pkr g)]]
+   ; an indirect call through a park its sibcall jumps by: x64's r11, caller-saved and no arg's,
+   ; else the old path's
+   (locr g r) ((x64? g ? 'r10 (pkr g)) @ p [['mov p r] ['callr p]])
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
    (loagg? g ty) (stru? ty && 0 < tsz g ty && asalign g ty <= 8)
    ; the args to their registers in order, each file its own count; an aggregate's eightbytes take
@@ -1315,8 +1317,8 @@
                                (two? pcs && gi + ng <= ngp g && fi + nx <= 8 ?
                                   (ntmp g ty @ off
                                      (foldl (t \ p \ (t @ [gi fi fs]
-                                               (<p = 'sse ? [gi (fi + 1) (fs + [lopst p 'r4 off (xmmreg fi)])]
-                                                  [(gi + 1) fi (fs + [lopst p 'r4 off (argr g gi)])])))
+                                               (<p = 'sse ? [gi (fi + 1) (fs + [(lopst p 'r4 off (xmmreg fi))])]
+                                                  [(gi + 1) fi (fs + [(lopst p 'r4 off (argr g gi))])])))
                                             [gi fi ()] pcs @
                                       [g2 f2 fs] (go u g2 f2 ov ([nm 'm off ty] . env) (acc + fs) post)))
                                   (go u (a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
