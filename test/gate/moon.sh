@@ -128,6 +128,24 @@ moonrun -c "$ho/.grl.S" -o "$ho/.grl.o" || fail "mooncc: an asm's relocs"
 [ "$(readelf -rW "$ho/.grl.o" | awk '/R_X86/ {print $3, $5}' | tr '\n' ' ')" = "R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PLT32 g R_X86_64_PC32 g " ] || fail "a branch to a global is not plt32 through its reloc, or an address-of is not pc32"
 readelf -x .text.pad "$ho/.grl.o" | grep -q 'c3909090 90909090' || fail ".balign 8, 0x90 is not filled with its byte"
 readelf -SW "$ho/.grl.o" | grep -q 'rela.rodata' && fail "a reach inside .rodata kept a reloc"
+printf '.text\nf:\n jz 1f\n jmp 2f\n1:\n .fill 130, 1, 0x90\n2:\n ret\n661:\n jz .Lt\n662:\n .skip -(((664f-663f)-(662b-661b)) > 0) * ((664f-663f)-(662b-661b)), 0x90\n.section .r,"ax"\n663:\n jmp .Lt\n nop\n664:\n.text\n.Lt:\n ret\n' > "$ho/.jx.S"
+moonrun -c "$ho/.jx.S" -o "$ho/.jx.o" || fail "mooncc: an asm's short jumps"
+readelf -x .text "$ho/.jx.o" | grep -q '7405e982 00000090' || fail "a jump in reach is not short, or one out of reach not long"
+readelf -x .text "$ho/.jx.o" | grep -q '90c37404 90909090' || fail "an alternative's pad does not hold its replacement's long jump"
+[ "$(readelf -rW "$ho/.jx.o" | awk '/R_X86/ {print $3, $5}')" = "R_X86_64_PLT32 .text" ] || fail "a branch to a local in another section is not plt32"
+printf '.data\na: .long 1\n.size a, 4\n.type b, @object\nb: .long 2\n.Lbe:\n.size b, .Lbe-b\n.globl c\nc: .quad 0\n.size c, 2*4\n.text\n.globl f\n.type f, @function\nf: ret\n1: nop\n.size f, 1b-f\n' > "$ho/.sz.S"
+moonrun -c "$ho/.sz.S" -o "$ho/.sz.o" || fail "mooncc: an asm's sizes"
+[ "$(readelf -sW "$ho/.sz.o" | awk '$8 ~ /^[abcf]$/ {print $8, $3}' | sort | tr '\n' ' ')" = "a 4 b 4 c 8 f 1 " ] || fail "a .size by a constant or a later label is not the symbol's size"
+printf '.set K, 5\n.set .LK, 9\n.text\n.globl f\nf: call ext\n movl $K, %%eax\n' > "$ho/.set.S"
+moonrun -c "$ho/.set.S" -o "$ho/.set.o" || fail "mooncc: an asm's local constants"
+[ "$(readelf -sW "$ho/.set.o" | awk '$8 == "K" || $8 == ".LK" {print $8, $2, $5, $7}')" = "K 0000000000000005 LOCAL ABS" ] || fail "a local .set constant is not a local absolute symbol, or a .L one is"
+[ "$(readelf -rW "$ho/.set.o" | awk '/R_X86/ {print $5}')" = "ext" ] || fail "a local absolute symbol moved a global's index"
+printf '.text\nf: nop\n nop\n ret\n.set fb, f+1\n.globl fd\n.set fd, f+2\n.data\nd: .long 1, 2\n.set d2, d+2\n' > "$ho/.als.S"
+moonrun -c "$ho/.als.S" -o "$ho/.als.o" || fail "mooncc: an asm's aliases with an offset"
+[ "$(readelf -sW "$ho/.als.o" | awk '$8 == "fb" || $8 == "fd" || $8 == "d2" {print $8, $2, $5}' | sort | tr '\n' ' ')" = "d2 0000000000000002 LOCAL fb 0000000000000001 LOCAL fd 0000000000000002 GLOBAL " ] || fail "a .set over a label and an offset is not a symbol there"
+printf ' andl $0xffff0000, %%eax\n andl $4, %%eax\n andb $1, %%al\n testl $0x200, %%eax\n' > "$ho/.acc.S"
+moonrun -c "$ho/.acc.S" -o "$ho/.acc.o" || fail "mooncc: an asm's accumulator forms"
+readelf -x .text "$ho/.acc.o" | grep -q '250000ff ff83e004 2401a900 020000' || fail "an immediate into the accumulator does not take its short form"
 # an inline asm's section keeps its merge flag and entsize; the pads lie one section per
 # function section, link-ordered to it
 printf 'void f(void){ asm volatile("1: nop\\n.pushsection .altinstructions,\\"aM\\",@progbits,14\\n .long 1b - .\\n .long 0\\n .short 1\\n .byte 2,3,4,5\\n.popsection"); }\n' > "$ho/.psa.c"
@@ -194,6 +212,21 @@ grep -q 'no lane for alloca where an operand is parked' "$ho/.alr.log" || fail "
 printf '#include <string.h>\nstatic void __attribute__((noinline)) dirty(void) { volatile char b[1024]; memset((char *) b, 255, sizeof b); }\nstatic int __attribute__((noinline)) sum(int n) { unsigned char *p = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += p[i]; return s; }\nint main(void) { dirty(); return sum(512) != 0; }\n' > "$ho/.alz.c"
 moonrun -ftrivial-auto-var-init=zero -o "$ho/.alz" "$ho/.alz.c" || fail "mooncc -ftrivial-auto-var-init=zero: alloca"
 "$ho/.alz" || fail "-ftrivial-auto-var-init=zero left an alloca block uncleared"
+# an inline asm's 32- and 8-bit register ops keep their width: flags off bit 31, no upper half shifted in
+cat > "$ho/.a32.c" <<'A32'
+typedef unsigned long u64;
+static int cf(unsigned a) { unsigned char c; asm("addl $1,%1; setc %0" : "=r"(c), "+r"(a)); return c; }
+static int zf(unsigned a) { unsigned char c; asm("incl %1; setz %0" : "=r"(c), "+r"(a)); return c; }
+static int cmph(u64 x) { unsigned char c; unsigned a; asm("movq %2,%q1; cmpl $3,%1; setb %0" : "=r"(c), "=&r"(a) : "r"(x)); return c; }
+static int testh(u64 x) { unsigned char c; unsigned a; asm("movq %2,%q1; test %1,%1; setz %0" : "=r"(c), "=&r"(a) : "r"(x)); return c; }
+static unsigned shr(u64 x) { unsigned r; asm("movq %1,%q0; shrl $4,%0" : "=r"(r) : "r"(x)); return r; }
+static unsigned sar(u64 x) { unsigned r; asm("movq %1,%q0; sarl $4,%0" : "=r"(r) : "r"(x)); return r; }
+static int bcf(unsigned char a) { unsigned char c; asm("addb $1,%1; setc %0" : "=q"(c), "+q"(a)); return c; }
+int main(void) { return !cf(~0u) | !zf(~0u) << 1 | !cmph(0x100000001ul) << 2 | !testh(1ul << 32) << 3
+  | (shr(1ul << 32) != 0) << 4 | (sar(0x80000000ul) != 0xf8000000u) << 5 | !bcf(255) << 6; }
+A32
+moonrun -o "$ho/.a32" "$ho/.a32.c" || fail "mooncc: an inline asm's narrow register ops"
+"$ho/.a32" || fail "an inline asm's narrow register op ran at 64 bits (case mask $?)"
 # an asm's subsection is its function's section's tail (arm64's ALTERNATIVE in an __init fn), laid
 # where the same code without the subsection lands; its numbered labels stay out of the symtab
 printf '__attribute__((section(".init.text"))) int f(int x)\n{ asm volatile("661: nop\\n662:\\n.subsection 1\\n663: nop\\n664:\\n.previous" ::: "memory"); return x + 1; }\nint g(int x) { return x * 2; }\n' > "$ho/.asb.c"
@@ -1625,6 +1658,31 @@ for t in x64 a64; do
   moonrun -t $t -O2 -c "$ho/.pid.c" -o "$ho/.pid.o" || fail "mooncc -t $t: a decided && over an inline asm goto, or a64's Q"
   nm "$ho/.pid.o" | grep -q ' U gone$' && fail "the right of a decided 0 && kept its call on $t"
 done
+# a64 unwind tables (the vdso's -fasynchronous-unwind-tables): an FDE per C function, none for
+# the asm's; each frame shape's rows -- a frameless leaf's sp, the frame record riding x29 with
+# the callee-saved slots, an early return's ret and the body after it -- and pac-ret's sign state
+cat > "$ho/.uwt.c" <<'EOF'
+extern long g(long);
+long leaf(long a) { volatile long t[4]; t[a & 3] = a; return t[1]; }
+long keep(long a, long n) { long s = 0; for (long i = 0; i < n; i++) s += g(i + a); return s; }
+long early(long x) { if (x < 0) return -1; return g(x) + 1; }
+asm(".globl lone\n.type lone, %function\nlone: ret\n.size lone, .-lone");
+EOF
+moonrun -t a64 -O2 -mcmodel=tiny -fasynchronous-unwind-tables -mbranch-protection=pac-ret -c "$ho/.uwt.c" -o "$ho/.uwt.o" \
+  || fail "mooncc -t a64: -mcmodel=tiny -fasynchronous-unwind-tables"
+uw=$(readelf -wF "$ho/.uwt.o")
+[ "$(echo "$uw" | grep -c ' FDE ')" = 3 ] || fail "unwind tables: not one FDE per C function, the asm's left out"
+echo "$uw" | grep -qE '^0+4 +sp\+[0-9]+ *$' || fail "unwind tables: a frameless leaf's sub sp moved no cfa"
+echo "$uw" | grep -qE '^[0-9a-f]+ +x29\+32 +c-[0-9]+ +c-[0-9]+ +c-32 +c-24 *$' || fail "unwind tables: the frame record and two callee-saved slots are not on x29"
+# every function's last row is its entry's again, and early's body after its first ret is framed once more
+echo "$uw" | awk '/ FDE /{if (r != "" && r !~ /^sp\+0( +u)* *$/) bad = 1; r = ""; n++} /^[0-9a-f]+ /{r = $0; sub(/^[0-9a-f]+ +/, "", r)}
+                  / FDE /{st = 0} /^[0-9a-f]+ +x29/{if (st == 2) back = 1; st = 1} /^[0-9a-f]+ +sp\+0 /{if (st == 1) st = 2}
+                  END {if (r !~ /^sp\+0( +u)* *$/) bad = 1; exit bad || !back}' || fail "unwind tables: an epilogue ends off its entry rows, or no row frames the body after an early ret"
+[ "$(readelf -wf "$ho/.uwt.o" | grep -c negate_ra_state)" = 6 ] || fail "unwind tables: pac-ret's paciasp and autiasp do not each flip the ra sign state"
+moonrun -t a64 -O2 -c "$ho/.uwt.c" -o "$ho/.uwt.o" || fail "mooncc -t a64 on .uwt.c"
+readelf -SW "$ho/.uwt.o" | grep -q eh_frame && fail "an .eh_frame laid unasked"
+moonrun -t x64 -c -mcmodel=tiny "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "-mcmodel=tiny taken on x64"
+moonrun -t x64 -c -fasynchronous-unwind-tables "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "unwind tables taken on x64, where none is laid"
 # ..however deep the chain: ten calls down, seven of them always_inline
 for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/323-always-inline-deep.c -o "$ho/.awd.o" || fail "mooncc -t $t: 323-always-inline-deep"

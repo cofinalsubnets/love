@@ -171,6 +171,7 @@
              'add 3 'sub 3 'and 3 'or 3 'xor 3 'imul 3 'mulh 3 'umulh 3
              'adds 3 'subs 3 'adc 3 'adcs 3 'sbc 3 'sbcs 3 'ors 3
              'ands 3 'eors 3 'bic 3 'bics 3 'orn 3 'rsb 3 'rsbs 3
+             'lsls 3 'lsrs 3 'asrs 3 'muls 3 'mvns 2
              'alush 6 'pushm 1 'popm 1   ; thumb2's shifted-register operand and register lists
              'div 3 'udiv 3
              'ld 3 'st 3 'lea 3 'lean 3
@@ -230,12 +231,15 @@
                        !(two? u) (fill j unit)
                        (<u . fill (j - 1) >u))
          (lit? pad ? (pad k) (fill k unit)))
-   ;; (li d 0) -> (xor d d d) where the backend pins 'zeroxor, and (li d k) -> (lis d k) for a byte
-   ;; k where it pins 'lis, each only where nothing reads the flags it clobbers
-   (zeroidiom be ins rest)
-      (? (<ins != 'li) ins
-         (ins 2 = 0 && be 'zeroxor && flagfree be rest 64) ['xor (ins 1) (ins 1) (ins 1)]
-         (be 'lis && charm? (ins 2) && 0 <= ins 2 <= 255 && flagfree be rest 64) ['lis (ins 1) (ins 2)]
+   ;; (li d 0) -> (xor d d d) where the backend pins 'zeroxor, (li d k) -> (lis d k) for a byte k
+   ;; where it pins 'lis, and a form its 'sform hook answers a flag-setting twin for, each only
+   ;; where nothing reads the flags it clobbers
+   (flagidiom be ins rest)
+      (? (<ins = 'li)
+         (? (ins 2 = 0 && be 'zeroxor && flagfree be rest 64) ['xor (ins 1) (ins 1) (ins 1)]
+            (be 'lis && charm? (ins 2) && 0 <= ins 2 <= 255 && flagfree be rest 64) ['lis (ins 1) (ins 2)]
+            ins)
+         (lit? (peep be 'sform 0)) ((be 'sform) ins @ s (two? s && flagfree be rest 64 ? s ins))
          ins)
    ;; the flags are free if a writer, call or ret comes before any reader within k forms. a
    ;; jump goes on at its label when that lies ahead, an unseen target answers no; a label is
@@ -264,7 +268,7 @@
                (<ins = 'dalign)
                (: r (revonto (map (i \ (two? (drop 2 ins) ? (ins 2) 0)) ^((ins 1 - addr % ins 1) % ins 1)) items 0)
                   (lay >prog be (addr + <r) >r labels))
-               (: r (revonto (lower-with be (zeroidiom be ins >prog)) items 0)
+               (: r (revonto (lower-with be (flagidiom be ins >prog)) items 0)
                   (lay >prog be (addr + <r) >r labels)))))
 
    ;; -- pass two: stream the items out, resolving each fixup. an unbound label in `open`
@@ -303,7 +307,7 @@
                         (<ins = 'align)
                         (revonto (pad-ins be addr ins) () 0 @ r
                            (plumb >p (addr + <r) (era + 1) (r . acc)))
-                        (: r (revonto (lower-with be (zeroidiom be ins >p)) () 0)
+                        (: r (revonto (lower-with be (flagidiom be ins >p)) () 0)
                            (plumb >p (addr + <r) era (r . acc))))))
             chunks (plumb prog at0 0 ())
             ;; the pessimistic address of a label this span may legally reach, or ()

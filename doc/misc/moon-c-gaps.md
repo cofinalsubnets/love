@@ -1201,6 +1201,12 @@ fn that calls; clang's a64 leaves keep none either), `-fshort-enums` on the AAPC
 `-fno-short-enums` elsewhere, `-fpic`/`-fPIE` on x64 a64 rv64 wasm, and:
 - `-fpatchable-function-entry=N,M` and its attribute: N nops, M ahead of the entry and the rest
   after its bti or endbr, a word to each pad in `__patchable_function_entries`; x64 i386 a64 rv64.
+- `-fasynchronous-unwind-tables` and `-funwind-tables` on a64: an `.eh_frame` as clang lays it (its
+  CIE, an FDE per C function, none for a file-scope asm's), its rows read off the laid words by
+  holo's obj.l (`o-eh`): a walk from the entry along the branches gives each word its cfa, the
+  callee-saved slots the entry's straight line stores, and pac-ret's sign state. off by default;
+  the a64 vdso asks for them.
+- `-mcmodel=tiny` on a64: its adrp+add pairs reach every address tiny's adr does.
 - `-ftrivial-auto-var-init=zero`: an automatic without an initializer takes a zero one (cgdecl);
   a VLA's block zeroes word by word.
 - `-fcf-protection=branch|return|full` on x86: endbr where an indirect branch lands (an entry
@@ -1229,8 +1235,8 @@ fn that calls; clang's a64 leaves keep none either), `-fshort-enums` on the AAPC
 **taken as they stand:** `-fno-strict-aliasing` (memfw forgets on any root that may overlap),
 `-fno-delete-null-pointer-checks`, `-fno-common` (a tentative lays as a definition), `-fno-pie`,
 `-no-pie`, `-Wl,-z,noexecstack` (no PT_GNU_STACK: the stack maps rw),
-`-fomit-frame-pointer`, the absent-feature `-fno-*` (unwind tables, stack check and clash
-protection, addrsig, ident), `-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers
+`-fomit-frame-pointer`, the absent-feature `-fno-*` (stack check and clash protection, addrsig,
+ident), `-fstrict-flex-arrays[=N]` (`__builtin_object_size` answers
 its unknown), `-fms-extensions`, the placement, alignment, inlining and diagnostic hints,
 `-mno-red-zone` (no store below sp), `-mtune=`, `-mcmodel=kernel` and `=small` on x64 (code
 rip-relative, data words abs64, no abs32 anywhere), `-mno-fp-ret-in-387` on x64 (long double is

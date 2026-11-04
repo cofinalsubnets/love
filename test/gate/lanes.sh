@@ -2,7 +2,7 @@
 # test/gate/lanes.sh -- run a gate's lanes at once: one make, its jobserver the gate's budget,
 # so a gate takes about its slowest lane instead of the sum. a log and an exit per lane.
 #
-# usage: lanes.sh [-j N] [-d DIR] [--slow] LANE|test_extra|test_quick ...
+# usage: lanes.sh [-j N] [-d DIR] [--slow] LANE|test_extra|test_core ...
 #
 #   1. the lanes' own prerequisites (host, love0, a lane another lane names) build once, first
 #   2. what lanes otherwise build from inside their recipes (kernels, the wasm seat) builds once
@@ -72,7 +72,7 @@ db $args
 lanes= groups=
 for a in $args; do
   case $a in
-    test_extra|test_quick)
+    test_extra|test_core)
       has "$a" "$groups" || groups="$groups $a"
       deps "$a" > "$d/$a.group"
       for l in $(cat "$d/$a.group"); do has "$l" "$lanes" || lanes="$lanes $l"; done ;;

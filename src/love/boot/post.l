@@ -2170,11 +2170,13 @@
    ; a file the default bake carries but leaves out (the Makefile's carryfiles): noted here,
    ; read at the close
    (carry p) (settle (), pin carried p 1, pin ros 'stowed (p . ros 'stowed))
-   ; the close lays each carried file as a lazy one, with what a read of it recorded
+   ; the close lays each carried file as a lazy one, with what a read of it recorded; an image
+   ; with no source tree on /love, a foreign cc's, carries none
    (stow _) (rev (ros 'stowed) @ ps
               (two? ps ?
                  (pin ros 'stowed (),
-                  each (sow ps) (r \ r @ [p vs ms ns] (map name ms @ mn (each mn (m \ pull (lib ()) m 0), lazy p (map name vs) mn ns))),
+                  (two? ((cite 'posix 'readdir) "/love/src") ?
+                     (each (sow ps) (r \ r @ [p vs ms ns] (map name ms @ mn (each mn (m \ pull (lib ()) m 0), lazy p (map name vs) mn ns))))),
                   pin ros 'cur ())))
    ; [p verbs modules needs] for each of ps, names spelled: read in a forked child, so the image
    ; keeps none of their code, or here, code and all, where nothing forks. a unit's needs ride

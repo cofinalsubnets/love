@@ -2,9 +2,10 @@
 # test/gate/hearts.sh -- hearts builds the arm64 defconfig kernel Image with mooncc, and it boots.
 # from the pinned tarball and the tree's patches, hearts (src/apps/hearts/build.l) makes defconfig,
 # syncconfig and Image in an empty output dir: every unit by mooncc (its asm by holo) through kcc.l,
-# the link by love's ld, the host programs by mooncc, flex and bison as love's lex and yacc, perl's
-# scripts ported, the commands through lush with kore's verbs. clang keeps what mooncc refuses, one
-# unit at a time, each named in .hearts/kcc.log and listed here; lld links the arm32 compat vdso.
+# the link by love's ld, objcopy, strip, nm, objdump and readelf by kore, the host programs by
+# mooncc, flex and bison as love's lex and yacc, perl's scripts ported, the commands through lush
+# with kore's verbs. clang keeps what mooncc refuses, one unit at a time, each named in
+# .hearts/kcc.log and listed here; lld links the arm32 compat vdso.
 # the Image then boots under qemu virt to an init of ours (mooncc, love's cpio), which says so and
 # powers off. a green run keeps the Image for test_hearts_boot, named in $C/Image-$V.green.
 # heavy (a kernel build, hours); opt-in by name.

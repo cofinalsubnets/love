@@ -68,7 +68,8 @@
    ;   'sec        index -> [name type flags off size align entsize link info]
    ;   'syms 'nsym index -> [name bind type shndx value size other], 'nsym 0 with no .symtab
    ;   'rela       target index -> [(off kind sym addend) ..] in file order, the addend ()
-   ;               on a REL; 'rels the same as [(target . entries) ..] in header order
+   ;               on a REL; 'rels the same as [(target . entries) ..] in header order.
+   ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
    (ld-obj id s rels?)
     (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
        fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
@@ -85,7 +86,7 @@
                               (pin sec i [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
                                           (f h ha) (f h he) (f h hl) (f h hi)]))))
        ob {'id id 'src s 'class (? (s 4 = 2) 64 32) 'type (rle16 s 16) 'mach (rle16 s 18) 'shnum shnum
-           'sec sec 'syms {} 'nsym 0 'rela {} 'rels ()}
+           'sec sec 'syms {} 'nsym 0 'rela {} 'rels () 'relz {}}
        ; held to sh_entsize: a wrong stride reads well-formed garbage
        (esz r want) (? (r 6 = ld-n fs want) 0 (scare 'link-entsize <r))
        symi ((: (g i) (? (shnum <= i) -1 (sec i 1 = 2) i (g (i + 1)))) 1)
@@ -99,17 +100,30 @@
                                              (f e yx) (f e yv) (f e yz) (s (e + yo))]))))))
        rty (? (s 4 = 2) 4 9) re (ld-n fs 'rl-ent)
        ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
-       (ents r) (: (go k acc) (? (k < 0) acc
-                                 (: e (r 3 + re * k)
-                                    (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
-                   (go (r 4 // re - 1) ()))
+       ; entries i to j of the section r holds
+       (ents r i j) (: (go k acc) (? (k < i) acc
+                                     (: e (r 3 + re * k)
+                                        (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
+                       (go (j - 1) ()))
        _ (? rels? (each ^shnum (i \ (: r (sec i)
-                                       (? (r 1 = rty) (: _ (esz r 'rl-ent) es (ents r)
-                                                         (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))
-                                          0))))
+                                       (? (r 1 != rty) 0
+                                          (: _ (esz r 'rl-ent)
+                                             (? (rels? = 2) (pin (ob 'relz) (r 8) (q \ (? (q = ()) (r 4 // re) (ents r <q (q 1)))))
+                                                (: es (ents r 0 (r 4 // re)) (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))))))))
             0)
        _ (pin ob 'rels (rev (ob 'rels)))
        ob)
+
+   ; section si's relocations, decoded afresh under 'relz; the target sections that have them
+   (ld-relas ob si) (: z (peep (peep ob 'relz {}) si ()) (? (z = ()) (peep (ob 'rela) si ()) (z [0 (z ())])))
+   (ld-reltgs ob) (keys (ob 'rela) + keys (peep ob 'relz {}))
+   ; a cursor over them, ld-relnext answering the next k at most, () once done
+   (ld-relcur ob si)
+    (: z (peep (peep ob 'relz {}) si ())
+       (? (z = ()) {'l (peep (ob 'rela) si ()) 'n -1} {'f z 'i 0 'n (z ())}))
+   (ld-relnext c k)
+    (? (c 'n < 0) (: l (c 'l) _ (pin c 'l ()) l)
+       (: i (c 'i) j (min (c 'n) (i + k)) _ (pin c 'i j) (? (i < j) ((c 'f) [i j]) ())))
 
    ; --- the relocation table, every machine's: e_machine -> kind -> (width how), how the
    ; field takes S+A at P. RELA: abs whole, pc S+A-P whole, abs32 four bytes in either range,
@@ -149,6 +163,14 @@
           (k == 's32) (: v (s64 (ld-u64 sa)) (fits32 v ? (le32 v)))
           (k == 'u16) (: v (ld-u64 sa) (v <= 65535 ? (le16 v)))
           (k == 'u8) (: v (ld-u64 sa) (v <= 255 ? [v]))
+          ; i386's, as lld checks them: the absolute in either range, a pc16 within 17 bits
+          (elem k '(w32 r32 w16 r16 w8 r8))
+           (: w <r v (s64 (ld-u64 (elem k '(w32 w16 w8) ? sa (sa - p)))) h (2 ** (8 * w))
+              ok (? (k == 'r16) (-65536 <= v && v < 65536)
+                    (elem k '(r32 r8)) (0 - h // 2 <= v && v < h // 2)
+                    (0 - h // 2 <= v && v < h))
+              u ((v % h + h) % h)
+              (ok ? (w @ 4 (le32 u) 2 (le16 u) [u])))
           (refix-with be k bs sa p <r)))
    ; a REL field: S+A whole, or less P, or the backend's
    (ld386 s off sv kind site)
@@ -767,11 +789,11 @@
               (? (k = 'none || k = 'SORT_NONE) (go >ps (i + 1) (pend + ms) acc)
                  (go >ps (i + 1) () (acc + bypos pend + map (y \ y 2 1) (sort (map (keyed k) ms)))))))
        (go pats 0 () ()))
-   ; objects, script, synthetic sections [(name size align) ..] -> [outs orphans], an orphan
-   ; [oi name si] or ('synth name): each
+   ; objects, script, synthetic sections [(name size align type flags) ..] -> [outs orphans], an orphan
+   ; [oi name si] or ('synth name), under erel a .rela too, which no pattern takes: each
    ; output section tablet gains 'steps, its body with every description expanded to its
-   ; ('isec oi si size align name) and ('synth name size align) in order
-   (ld-place objs cmds synth strip)
+   ; ('isec oi si size align name) and ('synth name size align name type flags) in order
+   (ld-place objs cmds synth strip erel)
     (: os (ld-outs cmds)
        descs (ld-descs os)
        mt (ld-matcher descs)
@@ -781,22 +803,24 @@
        (scan oi ob)
         (each >^(ob 'shnum)
            (si \ (: r (ob 'sec si) ty (r 1) fl (r 2) nm <r
-                    (? (elem ty ld-skip || 0 < (fl & 2147483648) || peep (peep ob 'drops {}) si 0) 0
+                    (? (erel && elem ty '(4 9)) (pin orph 'l ([oi nm si] . orph 'l))
+                       (elem ty ld-skip || 0 < (fl & 2147483648) || peep (peep ob 'drops {}) si 0) 0
                        (strip && 0 = (fl & 2) && ld-debug? nm) 0
                        (: m (mt nm)
                           (? (two? m) (put <m [(oi * 65536 + si) ['isec oi si (r 4) (r 5) nm] <>m])
                              (pin orph 'l ([oi nm si] . orph 'l))))))))
        _ (foldl (\ oi ob (scan oi ob, oi + 1)) 0 objs)
        _ (foldl (\ k s (: m (mt <s)
-                          _ (? (two? m) (put <m [k ['synth <s (s 1) (s 2) <s] <>m])
+                          _ (? (two? m) (put <m [k ['synth <s (s 1) (s 2) <s (s 3) (s 4)] <>m])
                                (pin orph 'l (['synth <s] . orph 'l)))
                           (k + 1)))
                 4294967296 synth)
        dmap (: t {} _ (each descs (dd \ pin t (dd 2) dd)) t)
        (expand b) (: dd (dmap b) (ld-order (rev (peep bk <dd ())) (b 3)))
        _ (each os
-            (t \ pin t 'steps
-                   (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body))))
+            (t \ (: _ (pin t 'isds (map expand (filter (b \ <b = 'in) (t 'body))))
+                    (pin t 'steps
+                      (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body))))))
        [os (rev (orph 'l))])
 
    ;; --- 64-bit words. & is wrong on a bignum >= 2^63, so the bit ops go by 32-bit halves
@@ -887,6 +911,12 @@
            (? (n > 0) (go 0) tk))
        (go 0))
 
+   ; a script assignment's op applied to the old value a and the expression's b
+   (ld-aop op a b) (? (op = '=) b (op = '+=) (ld-w (a + b)) (op = '-=) (ld-w (a - b))
+                      (op = '*=) (ld-w (a * b)) (op = '/=) (a // b)
+                      (op = '<<=) (ld-w (a * 2 ** b)) (op = '>>=) (a // 2 ** b)
+                      (op = '&=) (ld-and a b) (op = '|=) (ld-or a b) (scare 'link-assign op))
+
    ;; --- layout: the script's commands in order, SECTIONS inline, in passes until every
    ;     address holds still; the ASSERTs are checked on the last. synth [(name size align
    ;     type flags [entsize ghost]) ..], a ghost lending its flags and align but keeping no
@@ -914,13 +944,14 @@
        (ghost? x) (<x = 'synth && sy (x 1) 6 = 1)
        (held? b) ((<b = 'set && b 1 != ".") || <b = 'data)
        osof {} mof {}                                 ; isec key, merge id -> output section
+       ; a section with no inputs keeps the one before's alloc and write, never its exec
        _ (foldl (\ pf c
                   (? (<c != 'osec) pf
                      (: t <>c mem (filter (x \ mflags x >= 0) (t 'steps))
                         (? (t 'name = "/DISCARD/"
                             || (all ghost? mem && !(elem (t 'name) named) && !(any held? (t 'body))))
                            (: _ (pin t 'dead 1) pf)
-                           (: fl (? (atom? mem) (pf & 7) (foldl (\ a x (a | mflags x)) 0 mem))
+                           (: fl (? (atom? mem) (pf & 3) (foldl (\ a x (a | mflags x)) 0 mem))
                               ty (: ts (map mtype mem) nb (filter (y \ y != 8) ts)
                                     (? (atom? ts) 1 (atom? nb) 8 <nb))
                               _ (pin t 'flags fl, pin t 'stype ty,
@@ -980,15 +1011,11 @@
        (ev e) (ld-ev env e)
        (dot u) (env 'dot)
        (setdot v) (pin env 'dot v)
-       (op2 op a b) (? (op = '=) b (op = '+=) (ld-w (a + b)) (op = '-=) (ld-w (a - b))
-                       (op = '*=) (ld-w (a * b)) (op = '/=) (a // b)
-                       (op = '<<=) (ld-w (a * 2 ** b)) (op = '>>=) (a // 2 ** b)
-                       (op = '&=) (ld-and a b) (op = '|=) (ld-or a b) (scare 'link-assign op))
        (cmd final c)
         (: k <c
            (? (k = 'set) (: nm (c 1) v (ev (c 3))
-                            (? (nm = ".") (setdot (op2 (c 2) (dot 0) v))
-                               (setsym nm (op2 (c 2) (peep sv nm 0) v) (c 3))))
+                            (? (nm = ".") (setdot (ld-aop (c 2) (dot 0) v))
+                               (setsym nm (ld-aop (c 2) (peep sv nm 0) v) (c 3))))
               (k = 'provide) (? (peep tk (c 1) 0) (setsym (c 1) (ev (c 2)) (c 2)) 0)
               (k = 'assert) (? (final && ev (c 1) = 0) (scare 'link-assert (c 2)) 0)
               (k = 'data) (setdot (dot 0 + c 1))
@@ -1119,7 +1146,7 @@
      }
      """)
    (ld-script objs cmds want)
-    (: _ (ld-place objs cmds () 0)
+    (: _ (ld-place objs cmds () 0 0)
        env (ld-lay {'objs objs 'glob {} 'und {}} cmds {'ms {} 'im {}} ())
        isa (env 'isa) osof (env 'osof)
        _ (foldl (\ oi ob
