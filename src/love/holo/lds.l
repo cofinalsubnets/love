@@ -207,12 +207,13 @@
            (#<l > 1 && <l 0 = 58) (tails >l (snip <l 1 #<l . ph))     ; :phdr
            (#<l > 1 && <l 0 = 62) (tails >l ph)                       ; >region
            (#<l > 1 && <l 0 = 61) (pin t 'fill (lds-x [(snip <l 1 #<l)]), tails >l ph)   ; =fill
+           (<l = "=" && two? >l) (pin t 'fill (lds-x [<>l]), tails >>l ph)        ; = fill
            (<l = ",") (tails >l ph)
            (pin t 'phdrs (rev ph), l))
        (['osec t] . tails >b ()))
 
    (lds-sitem ws)
-    (: w <ws cm (lds-common ws)
+    (: w <ws cm (? (w = "." && <>ws = "=" && ws 2 = "ASSERT") (lds-assert >>ws) (lds-common ws))
        (? (two? cm) (<cm . <>cm)
           (w = ";") (['nop] . >ws)
           (w = "ENTRY") (: c (lds-call ws) (['entry <<c] . lds-semi <>c))

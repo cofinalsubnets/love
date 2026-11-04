@@ -2,7 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow '(world mesh neon posix))
+(borrow '(world mesh neon posix bough))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -830,5 +830,130 @@
            (train [-5 0 -2.8] [5 2.3 -0.2] (door [0 0 -0.2] 1.2 2) -40)")
    gs (world-at 40 24 gl "" 'far) _ (each ^40 (_ \ (pin gs 'dt 0.05, world-move gs)))
  (test ((world-at 40 24 gl "" ()) 'cars 0 'ph = 'wait) (gs 'cars 0 'ph = 'gone) (gs 'cars 0 'o = -40.0)))
+; the prop kit: dice the same each read and their own per name, ranges thrown inside them,
+; the rounded min and max; a lathe and a sweep solid where they turn and run, air past them;
+; a scatter kept inside, apart and on its ground; a line-up as many as fit, facing across
+(: S (k \ cite 'scenery k) dice (S 'dice) pick (S 'pick) smin (S 'smin) smax (S 'smax)
+   scatter (S 'scatter) line-up (S 'line-up)
+   (rd x) (int (x * 1e6 + 0.5))
+   (lq s) (world-read ("(: m (texture 8 8 1 '((fill 0.5)))) (level \"t\" " + s + ")"))
+   lt (lq "(room [0 0 0] [4 3 4]) (lathe [1 0 1] [[0.3 0] [0.3 1]] 8 m) (lathe [3 0 3] [[0.4 0] [0.4 0] [0 1]] 8 m)")
+   lb (world-new 8 8 lt "" 'sc 'brushes) (lm x y z) (brush-medium lb [x y z])
+   sw (lq "(room [0 0 0] [4 3 4]) (sweep [[0.5 0.5 0.5] [2 0.5 0.5] [2 0.5 0.5] [2 0.5 3]] 0.1 6 m)")
+   sb (world-new 8 8 sw "" 'sc 'brushes) (sm x y z) (brush-medium sb [x y z])
+   all20 (scatter 5 [[0 0] [4 4]] 20 (\ at d s [at d]) {})
+   apart (scatter 5 [[0 0] [4 4]] 40 (\ at d s at) {'gap 1.5 'ground (\ x z (x + z))})
+   tri (scatter 9 [[0 0] [4 0] [0 4]] 40 (\ at d s at) {'bearing 30})
+   ln (line-up 1 [0 0 0] [3 0 0] (\ a d s w [a d w]) {'w 1 'gap 0.1})
+   sc (lv "(room [0 0 0] [4 3 4]) (scatter 3 [[0.5 0.5] [3.5 3.5]] 6 (\\ at d s (bulb at (rgb 1 1 1))) {'ground 2})")
+ (test (dice 7 'size = dice 7 'size) (dice 7 'size != dice 7 'girth) (dice 7 'size != dice 8 'size)
+       (0.0 <= dice 7 'size < 1.0) (pick 7 'w 2 = 2.0) (2.0 <= pick 7 'w [2 3] <= 3.0)
+       (pick 7 'w [2 3] = pick 7 'w [2 3])
+       (smin 1.0 5.0 2.0 = 1.0) (smin 1.0 1.0 2.0 = 0.5) (smax 1.0 1.0 2.0 = 1.5) (S 'ease 5.0 0.0 10.0 = 0.5)
+       (#(lt 'brushes) = 3) (lm 1.0 0.5 1.0 = 0) (lm 1.25 0.5 1.0 = 0) (lm 1.4 0.5 1.0 = 1) (lm 1.0 1.2 1.0 = 1)
+       (lm 3.0 0.1 3.3 = 0) (lm 3.0 0.9 3.3 = 1)
+       (has? (lq "(room [0 0 0] [4 3 4]) (lathe [1 0 1] [[0.3 0] [0.3 1]] 2 m)") "(lathe [x y z] [[r y] ..] sides SKIN)")
+       (#(sw 'brushes) = 3) (sm 1.2 0.5 0.5 = 0) (sm 2.0 0.5 0.5 = 0) (sm 2.0 0.5 2.0 = 0) (sm 1.2 0.8 0.5 = 1) (sm 1.0 0.5 2.0 = 1)
+       (#all20 = 20) (all20 = scatter 5 [[0 0] [4 4]] 20 (\ at d s [at d]) {})
+       (all (q \ 0.0 <= q 0 0 <= 4.0 && 0.0 <= q 0 2 <= 4.0 && q 0 1 = 0.0 && 0.0 <= q 1 <= 360.0) all20)
+       (1 < #apart < 40) (all (p \ p 1 = p 0 + p 2) apart)
+       (all (p \ all (q \ p = q || 2.25 <= (p 0 - q 0) * (p 0 - q 0) + (p 2 - q 2) * (p 2 - q 2)) apart) apart)
+       (0 < #tri < 40) (all (p \ p 0 + p 2 <= 4.0) tri)
+       (#ln = 2) (map (q \ rd (q 0 0)) ln = [500000 1600000]) (rd (ln 0 1) = 180000000) (ln 1 2 = 1.0)
+       (#(sc 'bulbs) = 6) (all (b \ b 'at 1 = 2.0) (sc 'bulbs))))
+; materials: every kind skins a brush; tile's as station's tiles texel for texel under seed 0;
+; the same seed the same picture and another not; a range thrown inside it; felt as its kind;
+; a kind or a parameter not known said back with what is
+(: M (cite 'scenery 'material) sw (cite 'swatch 'swatch) T (cite 'scenery 'texture)
+   kinds ['wood 'plank 'stone 'sandstone 'brick 'tile 'cobble 'mud 'concrete 'metal 'cloth 'carpet 'gravel 'sand 'soil 'grass]
+   (in k) (lv ("(room [0 0 0] [4 3 4]) (skin {'all (material '" + show k + " 3 {})} (solid (box [1 0 1] [2 1 2])))"))
+   (pic t) (show (sw (t 'w) (t 'h) (t 'layers)))
+   st (T 32 32 0.6 [['fill '(rgb 0.8 0.8 0.78)] ['checker 16 16 '(rgb 0.7 0.7 0.68)] ['noise 5 0.1] ['grid 16 16 1 '(rgb 0.4 0.4 0.4)]])
+   mt (M 'tile 0 {'a [0.8 0.8 0.78] 'b [0.7 0.7 0.68] 'grout [0.4 0.4 0.4]})
+ (test (all (k \ tablet? (in k)) kinds) (pic mt = pic st) (mt 'm = 0.6)
+       (pic (M 'stone 1 {}) = pic (M 'stone 1 {})) (pic (M 'stone 1 {}) != pic (M 'stone 2 {}))
+       (tablet? (M 'wood 4 {'rings [5 9]})) (M 'wood 4 {} 'feel = 'wood) (M 'grass 4 {} 'feel = 'soft)
+       (has? (lv "(room [0 0 0] [4 3 4]) (skin {'all (material 'tofu 3 {})} (solid (box [1 0 1] [2 1 2])))") "a KIND of")
+       (has? (lv "(room [0 0 0] [4 3 4]) (skin {'all (material 'wood 3 {'hue 1})} (solid (box [1 0 1] [2 1 2])))") "wood takes")
+       (has? (lv "(room [0 0 0] [4 3 4]) (skin {'all (material 'wood 1.5 {})} (solid (box [1 0 1] [2 1 2])))") "(material KIND seed")))
+; rocks: one cut brush, solid at its middle and air past it; a seed the same rock and another
+; not; every shape reads; an outcrop several, a cairn stacked up; a shape or a key not known
+; said back. grounds: hills within their height, ridges over it, a mound's top and foot, a
+; terrace flat then rising, a channel's bed; a land laid over a ground
+(: S (k \ cite 'scenery k) R (S 'rock)
+   (rk s) (lv ("(room [-4 0 -4] [4 3 4]) " + s))
+   (y0 b) (peep (b 'shape) 'prism () @ () (b 'shape 'box 0 1) p (p 0))
+   bo (rk "(rock [0 0 0] 5 'boulder)") bb (world-new 8 8 bo "" 'sc 'brushes) (bm x y z) (brush-medium bb [x y z])
+   shapes ['boulder 'pebble 'scree 'slab 'standing 'altar 'outcrop 'cairn]
+   oc (rk "(rock [0 0 0] 5 'outcrop)") ca (rk "(rock [0 0 0] 5 'cairn)") (rocks l) (filter (b \ b 'air = 0) (l 'brushes)) cb (rocks ca)
+   hl (S 'hills 3 {'height 2}) rg (S 'ridges 3 {'height 2})
+   pts (map (i \ [(1.7 * i) (2.9 * (i % 7))]) ^60)
+   md (S 'mound [1 1] 3 1 2.0) tr (S 'terrace (\ x z x) 1.0) ch (S 'channel [[0 0] [10 0]] 1.0 0.5)
+   gl (rk "(ground-of 'grass [[-2 -1] [2 1]] 1 (hills 3 {}))")
+ (test (#(bo 'brushes) = 2) (bm 0.0 0.3 0.0 = 0) (bm 3.0 0.3 3.0 = 1) (bm 0.0 2.0 0.0 = 1)
+       (show (bo 'brushes) = show (rk "(rock [0 0 0] 5 'boulder)" 'brushes))
+       (show (bo 'brushes) != show (rk "(rock [0 0 0] 6 'boulder)" 'brushes))
+       (all (k \ tablet? (rk ("(rock [0 0 0] 2 '" + show k + ")"))) shapes)
+       (tablet? (rk "(rock [0 0 0] 2 {'like 'slab 'size [3 0.2 2] 'skin 'sandstone})"))
+       (3 <= #(rocks oc) <= 5) (4 <= #cb <= 7) (all (i \ y0 (cb i) < y0 (cb (i + 1))) ^(#cb - 1))
+       (has? (rk "(rock [0 0 0] 2 'pudding)") "a SHAPE") (has? (rk "(rock [0 0 0] 2 {'like 'slab 'hue 1})") "a rock takes")
+       (all (q \ abs (hl (q 0) (q 1)) <= 2.0) pts) (hl 4.2 1.1 = hl 4.2 1.1) (any (q \ abs (hl (q 0) (q 1)) > 0.2) pts)
+       (all (q \ 0.0 <= rg (q 0) (q 1) <= 2.0) pts)
+       (md 1.0 1.0 = 2.0) (md 1.5 1.0 = 2.0) (md 5.0 1.0 = 0.0) (0.0 < md 3.0 1.0 < 2.0)
+       (tr 0.5 0.0 = 0.0) (tr 1.5 0.0 = 1.0) (0.0 < tr 0.9 0.0 < 1.0)
+       (ch 5.0 0.0 = -0.5) (ch 5.0 0.9 = -0.5) (ch 5.0 3.0 = 0.0) (-0.5 < ch 5.0 1.5 < 0.0)
+       (S 'rise md md 1.0 1.0 = 4.0) (S 'blend md (\ x z 0.0) 0.1 5.0 5.0 > 0.0) (S 'carve md (\ x z 0.0) 0.1 5.0 5.0 < 0.0)
+       (#(gl 'drapes) = 1) (gl 'drapes 0 'land = 1) (#(gl 'drapes 0 'rows) = 3) (#(gl 'drapes 0 'rows 0) = 5)))
+; furniture: station's desk from the desk's own sizes, its top over the floor; a quarter turn
+; swaps its spans; every kind reads; drawers and doors counted; a seed a size thrown again and
+; another not; a role's skin changed; books on the shelves; a kind or a key not known said back
+(: S (k \ cite 'scenery k)
+   (fu s) (lv ("(room [-4 0 -4] [4 3 4]) " + s))
+   (solids l) (filter (b \ b 'air = 0) (l 'brushes)) (bxs s) (map (b \ b 'shape 'box) (solids (fu s)))
+   (near a b) (all (i \ all (j \ abs (a i j - b i j) < 1e-9) ^3) ^2)
+   dk (fu "(furnish 'desk [0 0 0] 0 {})") db (bxs "(furnish 'desk [0 0 0] 0 {})") (bm x y z) (brush-medium (world-new 8 8 dk "" 'sc 'brushes) [x y z])
+   kinds ['table 'desk 'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter 'crate 'carton 'sofa]
+   (n s) #(solids (fu s))
+ (test (near (db 0) [[-0.8 0.71 -0.4] [0.8 0.75 0.4]]) (near (db 1) [[-0.78 0.0 -0.38] [-0.74 0.71 0.38]])
+       (near (db 2) [[0.74 0.0 -0.38] [0.78 0.71 0.38]]) (near (db 3) [[-0.74 0.15 0.3] [0.74 0.65 0.33]]) (#db = 4)
+       (bm 0.0 0.73 0.0 = 0) (bm 0.0 0.5 0.0 = 1) (bm 0.76 0.3 0.0 = 0)
+       (near (bxs "(furnish 'desk [0 0 0] 90 {})" 0) [[-0.4 0.71 -0.8] [0.4 0.75 0.8]])
+       (all (k \ n ("(furnish '" + show k + " [0 0 0] 30 {})") > 0) kinds)
+       (n "(furnish 'cabinet [0 0 0] 0 {})" = 9) (n "(furnish 'cabinet [0 0 0] 0 {'drawers 0 'doors 2})" = 5)
+       (n "(furnish 'counter [0 0 0] 0 {})" = 6) (n "(furnish 'crate [0 0 0] 0 {'slats 3})" = 13)
+       (show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 4})") = show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 4})"))
+       (show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 4})") != show (fu "(furnish 'table [0 0 0] 0 {'w [1 2] 'seed 5})"))
+       (show (fu "(furnish 'desk [0 0 0] 0 {'skin {'top 'stone}})") != show dk)
+       (n "(furnish 'shelf [0 0 0] 0 {'fill 'books})" > n "(furnish 'shelf [0 0 0] 0 {})" + 20)
+       (has? (fu "(furnish 'throne [0 0 0] 0 {})") "a KIND") (has? (fu "(furnish 'desk [0 0 0] 0 {'hue 1})") "furniture takes")
+       (has? (fu "(furnish 'desk [0 0 0] 0 'oak)") "(furnish KIND")))
+; plants: every species reads as a tree, a 'like changing one; a plain tree carries none; grown,
+; a seed the same plant and another not, an oak's trunk its height, grass blades and no wood,
+; the dead leafless; a species, a key, a level's key or a leaf's kind not known said back
+(: (pl s) (lv ("(street [-9 0 -9] [9 9 9]) " + s))
+   (sp s) (pl s 'trees 0 'species)
+   kinds ['ailanthus 'oak 'birch 'pine 'willow 'shrub 'grass 'reed 'fern 'dead]
+   (gr k sd) (bough-grow [sd 1.0 1.0 (sp ("(plant [0 0 0] 1 '" + show k + ")"))])
+   (leaves g) (net (g 'kind = 2.0))
+   ok (gr 'oak 4) gs (gr 'grass 4)
+ (test (all (k \ tablet? (sp ("(plant [0 0 0] 3 '" + show k + ")"))) kinds)
+       (sp "(plant [0 0 0] 3 {'like 'birch 'height 20})" 'height = 20) (sp "(plant [0 0 0] 3 {'like 'birch 'height 20})" 'crown = 2.5)
+       (sp "(plant [0 0 0] 3 {'height 2 'leaf {'kind 'needle}})" 'leaf 'kind = 'needle)
+       (!(elem 'species (keys (pl "(tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4)))))" 'trees 0))))
+       (show (ok 'segs) = show (gr 'oak 4 'segs)) (show (ok 'segs) != show (gr 'oak 5 'segs))
+       (ok 'tn = 5) (2.6 <= ok 'fork 1 <= 3.4) (#(bough-solid ok) = 5) (leaves ok > 1000)
+       (#(gs 'segs) = 0) (#(bough-solid gs) = 0) (leaves gs > 100) (leaves (gr 'dead 4) = 0) (leaves (gr 'pine 4) > 1000)
+       (has? (pl "(plant [0 0 0] 3 'kudzu)") "a SPECIES") (has? (pl "(plant [0 0 0] 3 {'like 'oak 'hue 1})") "a plant takes")
+       (has? (pl "(plant [0 0 0] 3 {'levels [{'n 2 'hue 1}]})") "a level takes")
+       (has? (pl "(plant [0 0 0] 3 {'leaf {'kind 'scale}})") "a leaf's 'kind") (has? (pl "(plant [0 0 0] 'x 'oak)") "(plant [x y z]")))
+; ..a desk in moves and a turn stepped comes out of them as a book does, its bearing turned
+(: fkv ((cite 'vi) 'vi-open "")
+   fkf "(move [0.15 0 -0.15] (turn 90 [-27.35 7.4] (move [0.8 0 0.25] (furnish 'desk [-28.15 0 7.15] 160 {}))))"
+   _ ((cite 'vi) 'vload fkv ["(level \"t\"" "  (room [-30 0 4] [-24 3 10])" ("  " + fkf) "  (start [-27 0 5] 0 0))"] "t.l")
+   fkw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} fk (edit-new fkw fkv "")
+   _ (edit-events fk [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
+   _ (pin fk 'sel [3]) _ (edit-events fk [['down 52] ['text "."] ['up 52]])
+   fl (fkv 'lines 2)
+ (test (snip fl 0 18 = "  (furnish 'desk [") (snip fl (#fl - 7) #fl = "-95 {})") (fk 'sel = [3])))
 (test_fin ())
 (puts "world: ok\n")

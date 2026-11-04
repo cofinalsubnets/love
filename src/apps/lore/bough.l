@@ -1,7 +1,8 @@
 ; bough -- a tree to climb, grown as a level loads: a tree of heaven from grove's kit, its
 ; trunk bare and near upright to a fork near 7 m, climbed as a ladder is; its wood kept
 ; inside a 2 m well from 3.8 to 4.7 m. its foot at 0 0 0. a seed may be [seed k g]: the tree
-; grown k times as tall and wide, its wood g times as thick
+; grown k times as tall and wide, its wood g times as thick; or [seed k g SPECIES], a plant
+; grown by grove-habit, no well round it, its leaf's 'colour 'every and 'grow as drawn
 ;   (bough-grow seed)                  the tree grown, which each word below takes for its seed,
 ;                                      so a level grows a tree once
 ;   (bough-solid seed)                 its trunk, [a b r] each piece: what a body climbs
@@ -43,7 +44,13 @@
  ; ..near the well's rim, wood kept inside it and leaves not grown outside
  (rim? p) (: m (max (max (p 0) -(p 0)) (max (p 2) -(p 2))) (3.8 < p 1 && p 1 < 4.7 && 0.85 < m && m < 1.9))
  (inside p) (rim? p ? [(max -0.85 (min 0.85 (p 0))) (p 1) (max -0.85 (min 0.85 (p 2)))] p)
- (grown sd) (: tr (grove-new {'seed (charm? sd ? sd (sd 0)) 'base [0.0 0.0 0.0] 'habit habit 'crown 3.0 'inside inside 'keep? (p \ !(rim? p))})
+ (grown sd) (: sp (charm? sd ? () (peep sd 3 ()))
+   tr (? (tablet? sp)
+         (: lf (peep sp 'leaf {}) t (grove-new {'seed (sd 0) 'base [0.0 0.0 0.0] 'habit (grove-habit sp) 'crown (peep sp 'crown 0.0)
+                                                'leaf lf 'fruit (peep sp 'fruit {})})
+            (pins t 'tn (t 'fork 1 > 0.0 ? (peep sp 'pieces 5) 0) 'leafc (peep lf 'colour [0.24 0.4 0.13])
+                    'every (peep lf 'every 5) 'grow (peep lf 'grow 1.7)))
+         (grove-new {'seed (charm? sd ? sd (sd 0)) 'base [0.0 0.0 0.0] 'habit habit 'crown 3.0 'inside inside 'keep? (p \ !(rim? p))}))
    (charm? sd ? tr (sized tr (sd 1) (sd 2))))
  (sized tr k g) (: (p q) (c* k q)
    (pins tr 'segs (map (s \ [(p (s 0)) (p (s 1)) (g * s 2)]) (tr 'segs)) 'fork (p (tr 'fork))
@@ -51,7 +58,7 @@
          'sx (k * tr 'sx) 'sy (k * tr 'sy) 'sz (k * tr 'sz)))
  (tree-of sd) (tablet? sd ? sd (grown sd))
  (bough-grow sd) (grown sd)
- (bough-solid seed) (take 5 (tree-of seed 'segs))
+ (bough-solid seed) (tree-of seed @ tr (take (peep tr 'tn 5) (tr 'segs)))
  ; ..the crotch: in a box round the fork the thick wood as one surface, blended where it meets,
  ; sampled on a grid and meshed by surface nets; [the mesh, the box] or () for no wood there
  crotch-b 0.55 crotch-h 0.04 crotch-k 0.12
@@ -190,12 +197,12 @@
    (flip m) (mesh (m 0) (map (t \ [(t 0) (t 2) (t 1) (t 3)]) (m 1)))
    ss (atom? cr ? (tr 'segs) (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) (tr 'segs)))
    wood (flip (mesh-join ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ss))))
-   ix (iota ((tr 'kind = 2.0) * (iota #(tr 'kind) % 5 = 0))) n #ix (g q) (tr q ix) f 1.7
+   ix (iota ((tr 'kind = 2.0) * (iota #(tr 'kind) % peep tr 'every 5 = 0))) n #ix (g q) (tr q ix) f (peep tr 'grow 1.7)
    P [(g 'x) (g 'y) (g 'z)] A [(f * g 'ax) (f * g 'ay) (f * g 'az)] W [(f * g 'sx) (f * g 'sy) (f * g 'sz)]
    (corner u s) (map (j \ P j + u * A j + s * W j) ^3) C [(corner -0.5 -1.0) (corner -0.5 1.0) (corner 0.5 0.0)]
    (e q j) (C q j - C 0 j) N0 [(e 2 1 * e 1 2 - e 2 2 * e 1 1) (e 2 2 * e 1 0 - e 2 0 * e 1 2) (e 2 0 * e 1 1 - e 2 1 * e 1 0)]
    up ((N0 1 >= 0.0) * 2.0 - 1.0) L (up / (sqrt (2 (N0 0) + 2 (N0 1) + 2 (N0 2)) + 1e-12)) N (map (j \ N0 j * L) ^3)
-   sh (g 'shade) col [(0.24 * sh) (0.4 * sh) (0.13 * sh)]
+   sh (g 'shade) lc (peep tr 'leafc [0.24 0.4 0.13]) col [(lc 0 * sh) (lc 1 * sh) (lc 2 * sh)]
    (vert i q) (: c (C q) (r T) (T i) [(r (c 0)) (r (c 1)) (r (c 2)) 0.0 0.0 (r (N 0)) (r (N 1)) (r (N 2)) (r (col 0)) (r (col 1)) (r (col 2))])
    leaves (mesh (map (t \ vert (t // 3) (t % 3)) ^(3 * n))
                 (map (t \ (: o (3 * (t // 2)) (t % 2 @ 0 [o (o + 1) (o + 2) -1] [o (o + 2) (o + 1) -1]))) ^(2 * n)))
