@@ -45,7 +45,9 @@
       ("add.movop.i" "488d4805"              ((add r1 r0 5)))     ; lea rcx,[rax+5]
       ;; ('align n) pads to the boundary with the backend's long nops (lay-level, no lowering)
       ("align.pad"   "c30f1f00c3"            ((ret) (align 4) (label x) (ret)))
-      ("align.pad15" "c3660f1f840000000000660f1f440000c3" ((ret) (align 16) (label x) (ret)))
+      ("align.pad15" "c3662e0f1f8400000000000f1f440000c3" ((ret) (align 16) (label x) (ret)))
+      ("align.pad10" "c3c3c3c3c3c3662e0f1f840000000000c3" ((ret) (ret) (ret) (ret) (ret) (ret) (align 16) (label x) (ret)))
+      ("align.pad11" "c3c3c3c3c3662e0f1f84000000000090c3" ((ret) (ret) (ret) (ret) (ret) (align 16) (label x) (ret)))
       ("align.zero"  "c3"                    ((align 16) (ret)))   ; already on the boundary: no pad
       ;; imul (true 3-operand imm form; rr folds two-address)
       ("imul.rr"     "480fafc3"              ((imul r0 r0 r3)))
