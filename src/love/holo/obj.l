@@ -208,7 +208,7 @@
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
                       (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 movw16p movt16p abs32 b bcc bl)))
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
-                      '(movw16 movt16 movw16p movt16p))
+                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 movw16p movt16p)))
        locs (locfns + locdat)
        ; -- symbol indices: NULL, a section symbol each, those locals, funcs, globs, exts;
        ; every local ahead of the first global, where .symtab's sh_info points --
@@ -290,6 +290,7 @@
        (fnsym lbl) (? (o-has? wkset lbl) (peep fnidx lbl 0)
                       (o-has? locidx lbl) (peep locidx lbl 0)
                       (o-has? fnidx lbl) (peep fnidx lbl 0)
+                      (o-has? globidx lbl) (peep globidx lbl 0)
                       (peep extidx lbl 0))
        (o-rels32 rs)
         (catall (map (\ [off k lbl aux _]

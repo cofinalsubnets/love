@@ -9,6 +9,10 @@
    nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
    nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
+   (nmu v) (v < 0 ? (v + 18446744073709551616) v)
+   nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
+         'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
+         'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written
    (nmfuse fs)
@@ -118,7 +122,7 @@
                       _ (x < 0 || y < 0 ? () (op @ 'and (x & y) 'or (x | y) _ (x ^ y))))
    ; the copies' readers read the source, and a literal rides where the form takes an immediate;
    ; a one-def vreg folded to a literal is one from there on
-   (nmsub fs cp kc dn)
+   (nmsub g fs cp kc dn)
     (: (r x) (peep cp x () @ () x y (r y))
        (lit d n) ((lovr? d && peep dn d 0 = 1 ? (pin kc d n)), ['li d n])
        (k x) (peep kc (r x) ())
@@ -138,9 +142,21 @@
        (dv f) (f @ (('udiv . d . a . b . _) && pw (kv b)) [['mov d a] ['shr d (nmlog (kv b))]]
                    (('urem . d . a . b . _) && pw (kv b) && kv b <= 2147483648) [['and d a (kv b - 1)]]
                    _ ())
-       (catmap (f \ (f @ ([('mov || 'movapd) x _] && peep cp x ()) ()
+       ; a compare of two known values decides its branch, lo.l laying a compare before each. in a
+       ; block a value of more defs is known too, from its last literal
+       (kb t x) (cint? x ? x (peep t x () @ () (k x) n n))
+       (kbr l t)
+        (l @ ((['cmp a b] . ['br cc L] . u) && cint? (kb t a) && cint? (kb t b) && peep nmcc cc ())
+              (nmcc cc (kb t a) (kb t b) ? (['jmp L] . kbr u t) (kbr u t))
+             (f . u)
+              (f . kbr u (f @ ('label . _) {}
+                              ['li d n] (pin t d n)
+                              ['mov d y] (kb t y @ () (pin t d ()) n (pin t d n))
+                              _ (raops g f @ [_ ds] (foldl (t2 \ d \ pin t2 d ()) t ds) _ t)))
+             _ ())
+       (kbr (catmap (f \ (f @ ([('mov || 'movapd) x _] && peep cp x ()) ()
                          (_ . _) (map r f @ f2 (dv f2 @ () [(imm f2)] fs2 fs2))
-                         [f])) fs))
+                         [f])) fs) {}))
    (nmlog n) (n <= 1 ? 0 (1 + nmlog (n // 2)))
    ; a literal and the one-register rewrite after it: one literal
    nmun {'neg (k \ 0 - k) 'not (k \ -1 - k)
@@ -151,6 +167,7 @@
          'sx4 (k \ (k % 4294967296 + 4294967296) % 4294967296 @ z (z < 2147483648 ? z (z - 4294967296)))}
    (nmlit fs)
     (fs @ ((['li t k] . [op t2] . u) && t = t2 && cint? k && peep nmun op ()) (nmlit (['li t ((nmun op) k)] . u))
+          ((['li t k] . ['shl t2 n] . u) && t = t2 && cint? k && cint? n && 0 <= n < 32 && fits32 (k * n 2)) (nmlit (['li t (k * n 2)] . u))
           (f . u) (f . nmlit u)
           _ ())
 
@@ -207,8 +224,12 @@
        (nmcnt g fs @ [dn _]
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
-             (nmsub fs cp kc dn @ f2 (nmcnt g f2 @ [d2 _] (nmsink g (radce g (nmloc g f2 d2))))))))
+             (nmsub g fs cp kc dn @ f2 (nmcnt g f2 @ [d2 _] (nmsink g (radce g (nmloc g f2 d2))))))))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmround g (nmround g (nmreach (nmfuse fs)))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nmfuse fs))))
+   ; a decided branch's dead arm may hold a value's other def: round again without it
+   (nmfix g fs)
+    (nmround g (nmround g fs) @ r
+       (deadlabk (cg-refs (g 'fasecs) {}) (nmreach r) @ d (#d < #r ? (nmfix g d) d)))
 )) ; module 'moon
