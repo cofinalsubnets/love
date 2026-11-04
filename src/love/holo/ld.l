@@ -51,6 +51,28 @@
        _ (r 'class = (? i386 32 64) && r 'type = 1 ? 0 (scare 'link-not-rel64 id))
        _ (r 'nsym > 0 ? 0 (scare 'link-no-symtab id))
        _ (each ^(r 'shnum) (i \ (r 'sec i 1 = (? i386 4 9) ? (scare 'link-rel id))))
+       (any (i \ 0 < (r 'sec i 2 & 2048)) ^(r 'shnum) ? (ld-unz r) r))
+
+   ; compressed sections read as lld reads them: inflated, the size and alignment their header's.
+   ; the bytes land past the file's own, so every offset holds and nothing later need know
+   (ld-unz r)
+    (: s (r 'src) id (r 'id) hz (? (r 'class = 64) 24 12) w (? (r 'class = 64) 8 4)
+       (door m f) (: g (cite m f) (? (lit? g) g (scare 'link-compressed [id m])))
+       (out nm v) (? (two? v) <>v (scare 'link-compressed [id nm]))
+       st {'n #s 'ps ()}
+       (one e)
+        (? (0 = (e 2 & 2048)) e
+           (: o (e 3) ty (rle32 s o) n (rdle s (o + hz - 2 * w) w) al (rdle s (o + hz - w) w)
+              z (snip s (o + hz) (o + e 4))
+              b (? (ty = 1) (out <e (door 'gz 'gz-inflate (snip z 2 #z) n))
+                   (ty = 2) (out <e (door 'zstd 'zstd-unpack z))
+                   (scare 'link-compressed [id <e ty]))
+              _ (? (#b = n) 0 (scare 'link-compressed [id <e n #b]))
+              off (st 'n)
+              _ (pin st 'n (off + n), pin st 'ps (b . st 'ps))
+              [<e (e 1) (e 2 - 2048) off n (max al 1) (e 6) (e 7) (e 8)]))
+       sec (spread (map (i \ one (r 'sec i)) ^(r 'shnum)))
+       _ (pin r 'sec sec, pin r 'src (foldl (\ a p (a + p)) s (rev (st 'ps))))
        r)
 
    ; the linker's own .comment line, an object after every other, as ld.lld adds its banner
