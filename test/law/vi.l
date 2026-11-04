@@ -367,9 +367,10 @@
    (mini ls ks) (vgo ls ks @ st (pin st 'w 8, pin st 'h 4, vframe st))
    E$ (string 27)
    _ (test
-      (mini '("ab") "" = (E$ + ("[H" + ("ab" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,1" + (E$ + ("[K" + (E$ + "[1;1H"))))))))))))))))
-      ; a long line slides the view sideways; the cursor never leaves it
-      (mini '("abcdefghij") "$" = (E$ + ("[H" + ("cdefghij" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,10" + (E$ + ("[K" + (E$ + "[1;8H"))))))))))))))))
+      (mini '("ab") "" = (E$ + "[H" + E$ + "[Kab\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n" + E$ + "[Kt  1,1" + E$ + "[1;1H"))
+      ; a long line slides the view sideways; the cursor never leaves it. the row fills the
+      ; width, so nothing erases after it
+      (mini '("abcdefghij") "$" = (E$ + "[H" + E$ + "[Kcdefghij\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n" + E$ + "[Kt  1,10" + E$ + "[1;8H"))
       ; scrolling: the cursor's row stays inside the 3 text rows
       (: st (vgo '("a" "b" "c" "d" "e") "G") _ (pin st 'w 8) _ (pin st 'h 4)
          f (vframe st)
@@ -380,11 +381,11 @@
    (small ls ks) (vgo ls ks @ st (pin st 'w 16, pin st 'h 4, st))
    (hlon st) (pin st 'pens (hues-pens hue-theme ()), pin st 'hl 1, st)
    SY (E$ + "[?2026h") YS (E$ + "[?2026l")
-   (place r s) (E$ + "[" + show r + ";1H" + s + E$ + "[K")
+   (place r s) (E$ + "[" + show r + ";1H" + E$ + "[K" + s)
    _ (test
       ; the first refresh lays the whole screen
       (small '("ab") "" @ st
-       (vfresh st = (SY + E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
+       (vfresh st = (SY + E$ + "[H" + E$ + "[Kab\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n"
               + place 4 "t  1,1" + E$ + "[1;1H" + YS)))
       ; the same state again is the cursor alone
       (small '("ab") "" @ st (vfresh st,
@@ -397,15 +398,15 @@
       ; a scroll is a whole screen again
       (: st (small '("a" "b" "c" "d" "e") "") _ (vfresh st) _ (vfeed st (bytes "G"))
          f (vfresh st)
-         (f = (SY + E$ + "[H" + "c" + E$ + "[K\r\n" + "d" + E$ + "[K\r\n" + "e" + E$ + "[K\r\n"
+         (f = (SY + E$ + "[H" + E$ + "[Kc\r\n" + E$ + "[Kd\r\n" + E$ + "[Ke\r\n"
                  + place 4 "t  5,1" + E$ + "[3;1H" + YS))))
    _ (test
       (: a (small '("ab" "cd") "j") b (small '("ab" "cd") "j")
          (vlay a = (vlay b)))
       (: st (small '("hello" "there") "jl")
          L (vlay st)
-         (vframe st = (E$ + "[H" + <L 0 + E$ + "[K\r\n" + <L 1 + E$ + "[K\r\n" + <L 2 + E$ + "[K\r\n"
-                + <>L + E$ + "[K" + E$ + "[" + show <>>L + ";" + show <>>>L + "H"))))
+         (vframe st = (E$ + "[H" + E$ + "[K" + <L 0 + "\r\n" + E$ + "[K" + <L 1 + "\r\n" + E$ + "[K" + <L 2 + "\r\n"
+                + E$ + "[K" + <>L + E$ + "[" + show <>>L + ";" + show <>>>L + "H"))))
 
 ; --- the painted row is cached against its text: a cursor move re-lexes nothing ---
    _ (test
@@ -573,8 +574,8 @@
 ; --- the status line clips from the left: its tail is the news ---
    (miniw ls ks m) (vgo ls ks @ st (vmsg st m, pin st 'w 8, pin st 'h 4,
                                     vframe st))
-   (frame3 tail) (E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
-                     + tail + E$ + "[K" + E$ + "[1;1H")
+   (frame3 tail) (E$ + "[H" + E$ + "[Kab\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n"
+                     + E$ + "[K" + tail + E$ + "[1;1H")
    _ (test
       ; 11 characters into 8 columns: the head goes and `<` says so
       (miniw '("ab") "" "abcdefghijk" = (frame3 "<efghijk"))
@@ -729,8 +730,8 @@
                                 && string? (ps 'sel)))
       ; every row starts on the ground, and the frame hands the terminal back its own
       (: st (small '("(map f)" "x") "") _ (hlit st "paper") f (vframe st) g (vpen st 'ground "")
-         (fsub f ("\e[H" + g) 0 = 0 && snip f (#f - 4) #f = "\e[0m"
-          && fsub f (g + "~") 0 > 0 && fsub f (g + "t ") 0 > 0))
+         (fsub f ("\e[H\e[K" + g + "\e[K") 0 = 0 && snip f (#f - 4) #f = "\e[0m"
+          && fsub f (g + "\e[K~") 0 > 0 && fsub f (g + "\e[Kt ") 0 > 0))
       (htwin "paper" '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
       (htwin "solarized-light" '("(: css \"a" "b\" 1)") "j")
       (htwin "nord" '("(f a, b)") "vl")

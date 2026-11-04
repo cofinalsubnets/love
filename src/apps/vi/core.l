@@ -1504,15 +1504,15 @@
              (rows (vdrop l0 (top - t0)) (vdrop car top) 0 tops () top @ k
                 (pin st 'laycar [key k],
                  k)))
-       ; a theme that owns the ground sets it at each row's head, so \e[K clears to it
-       g (vpen st 'ground "")
+       ; a theme that owns the ground sets it at each row's head and clears to it
+       g (vpen st 'ground "" @ p (0 < #p ? (p + "\e[K") ""))
        [(0 < #g ? (map (r \ g + r) rs) rs) (g + clipl status) cr cc key])
 
    ; -- the frame: one full redraw as a single text --
    (vframe st)
     (: e (string 27) L (vlay st)
-       (go l acc) (atom? l ? acc (go >l (acc + <l + e + "[K" + "\r\n")))
-       (e + "[H" + go <L "" + <>L + e + "[K"
+       (go l acc) (atom? l ? acc (go >l (acc + e + "[K" + <l + "\r\n")))
+       (e + "[H" + go <L "" + e + "[K" + <>L
           + e + "[" + show <>>L + ";" + show <>>>L + "H" + vgone st))
    ; a frame that set a ground hands the terminal back its own
    (vgone st) (0 < #(vpen st 'ground "") ? "\e[0m" "")
