@@ -9,7 +9,7 @@
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
      bridge -> love  12-byte records (u8 kind, u8 a, u16 0, i32 b, i32 c):
-                     'S' the window's visible part, b by c pixels
+                     'S' the window's visible part, b by c pixels, a=the soft keyboard is up
                      'K' key a=down, b=android keycode, c=the character it types or 0
                      'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
                      'P' a paste's piece, a=its length, up to ten bytes from the third; a=0 ends it
@@ -221,7 +221,7 @@ static void insets(br *b) {
   if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
   pthread_mutex_lock(b->mu); b->vh = b->wh - bot; paint(b); pthread_mutex_unlock(b->mu);
-  put(b, 'S', 0, b->ww, vis(b));
+  put(b, 'S', b->shown, b->ww, vis(b));
 }
 
 /* what a key types: KeyCharacterMap.load(device).get(code, meta), through JNIEnv's table */
@@ -713,7 +713,7 @@ static void *loop(void *p) {
       int c = accept4(b->lsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && b->csock < 0) {
         b->csock = c; ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
-        if (b->ww) put(b, 'S', 0, b->ww, vis(b));
+        if (b->ww) put(b, 'S', b->shown, b->ww, vis(b));
       } else if (c >= 0) close(c);
     } else if (id == CONN) {
       unsigned char k, on;
@@ -878,7 +878,7 @@ static void created(void *a, void *w) {
   b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w); b->gh = 0;
   paint(b);
   pthread_mutex_unlock(b->mu);
-  put(b, 'S', 0, b->ww, vis(b));
+  put(b, 'S', b->shown, b->ww, vis(b));
 }
 
 static void gone(void *a, void *w) {
