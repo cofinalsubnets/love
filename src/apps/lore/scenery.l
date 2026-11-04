@@ -150,7 +150,7 @@
 ;                                      KIND 'apple 'potato 'onion 'carrot 'radish 'cabbage, or
 ;                                      {'like 'apple ..} changing one: 'r [lo hi] its size, 'shape
 ;                                      [[r y] ..] from the top, 'sides, 'lump, 'folds, 'tilt, 'yaw
-;                                      degrees, 'skin a recipe, 'heap {'n 'r 'gap 'c 'shine 'long 'tops 'leaf 'leaves},
+;                                      degrees, 'skin a recipe, 'heap {'paint 'n 'r 'gap 'c 'shine 'long 'tops 'leaf},
 ;                                      'dense a square metre, 'dome
 ;   (pile KIND [x y z] bearing seed {'w 'd 'low 'high 'dome 'dense})  a heap of them on a
 ;                                      stand whose foot's middle is x y z, as furnish's, rising
@@ -981,35 +981,35 @@
  ; sheet painted with them under a few whole ones, the many being costly and the few enough ---
  produces
   {'apple {'r [0.036 0.043] 'shape [[0.05 1.14] [0.06 0.74] [0.5 0.86] [0.92 0.5] [0.96 -0.2] [0.5 -0.84] [0.04 -0.9]]
-           'sides 6 'lump 0.03 'tilt [0 40] 'dense 9 'dome 0.1
-           'skin '((fill (rgb 0.68 0.07 0.06)) (noise 1 8 0.3) (patches 5 0.3 (mix (rgb 0.86 0.6 0.18) 0.55))
-                   (rows 5 11 (mix (rgb 0.74 0.68 0.2) 0.65)) (rows 0 5 (rgb 0.24 0.15 0.07)) (rows 27 32 (rgb 0.28 0.2 0.1)))
-           'heap {'n 7 'r 5.6 'gap (rgb 0.14 0.04 0.03) 'c [(rgb 0.66 0.07 0.06) (rgb 0.74 0.13 0.07) (rgb 0.55 0.05 0.07) (rgb 0.66 0.17 0.07)] 'shine 0.24}}
+           'sides 7 'lump 0.03 'tilt [0 40] 'dense 9 'dome 0.1
+           'skin '((fill (rgb 0.58 0.08 0.08)) (noise 1 8 0.35) (patches 6 0.35 (mix (rgb 0.74 0.66 0.22) 0.6))
+                   (rows 5 11 (mix (rgb 0.72 0.7 0.24) 0.7)) (rows 0 5 (rgb 0.24 0.15 0.07)) (rows 27 32 (rgb 0.28 0.2 0.1)))
+           'heap {'paint 'apple 'n 7 'r 5.6 'gap (rgb 0.14 0.06 0.03) 'c [(rgb 0.62 0.08 0.08) (rgb 0.7 0.12 0.07) (rgb 0.52 0.06 0.08) (rgb 0.66 0.16 0.08) (rgb 0.74 0.66 0.22)] 'shine 0.2}}
    'potato {'r [0.03 0.04] 'shape [[0.03 1.25] [0.6 1.0] [1.0 0.2] [0.9 -0.6] [0.03 -1.25]]
             'sides 6 'lump 0.13 'tilt [60 120] 'dense 9 'dome 0.09
             'skin '((fill (rgb 0.6 0.46 0.29)) (noise 2 0.22) (patches 3 0.25 (shade 0.8)) (dots 9 7 0.8 (shade 0.55)))
-            'heap {'n 6 'r 6.2 'gap (rgb 0.14 0.1 0.06) 'c [(rgb 0.58 0.44 0.27) (rgb 0.52 0.38 0.22) (rgb 0.64 0.5 0.32)]}}
+            'heap {'paint 'potato 'shine 0.02 'n 6 'r 5.6 'gap (rgb 0.14 0.1 0.06) 'c [(rgb 0.58 0.44 0.27) (rgb 0.52 0.38 0.22) (rgb 0.64 0.5 0.32)]}}
    'onion {'r [0.03 0.04] 'shape [[0.06 1.36] [0.1 1.14] [0.42 0.78] [0.92 0.34] [1.0 -0.12] [0.7 -0.7] [0.25 -0.92] [0.05 -1.02]]
            'sides 6 'lump 0.04 'tilt [0 70] 'dense 9 'dome 0.09
            'skin '((fill (rgb 0.72 0.44 0.15)) (noise 1 10 0.3) (stripes 5 1 0 (shade 0.72)) (patches 4 0.2 (mix (rgb 0.86 0.68 0.36) 0.5))
                    (rows 0 7 (rgb 0.6 0.46 0.26)) (rows 28 32 (rgb 0.2 0.13 0.07)))
-           'heap {'n 6 'r 5.8 'gap (rgb 0.16 0.09 0.04) 'c [(rgb 0.74 0.47 0.17) (rgb 0.66 0.38 0.13) (rgb 0.8 0.56 0.25)]}}
+           'heap {'paint 'onion 'shine 0.1 'n 6 'r 5.8 'gap (rgb 0.16 0.09 0.04) 'c [(rgb 0.74 0.47 0.17) (rgb 0.66 0.38 0.13) (rgb 0.8 0.56 0.25)]}}
    'carrot {'r [0.017 0.022] 'shape [[0.05 8.2] [1.2 7.6] [0.4 5.0] [1.0 4.6] [1.0 2.0] [0.75 -1.0] [0.4 -4.0] [0.03 -5.6]]
             'sides 5 'lump 0.05 'tilt [84 104] 'yaw [-20 20] 'dense 9 'dome 0.07
             'skin '((fill (rgb 0.9 0.46 0.09)) (noise 1 3 0.2) (grid 0 4 1 (shade 0.78))
                     (rows 0 12 (rgb 0.2 0.46 0.14)) (noise 2 0.2) (rows 12 14 (rgb 0.5 0.42 0.12)))
-            'heap {'long 30 'n 7 'r 2.6 'gap (rgb 0.14 0.09 0.04) 'c [(rgb 0.9 0.46 0.09) (rgb 0.84 0.4 0.07) (rgb 0.94 0.52 0.14)]
+            'heap {'paint 'carrot 'shine 0.05 'long 30 'n 7 'r 2.6 'gap (rgb 0.14 0.09 0.04) 'c [(rgb 0.9 0.46 0.09) (rgb 0.84 0.4 0.07) (rgb 0.94 0.52 0.14)]
                    'tops (rgb 0.22 0.46 0.14)}}
    'radish {'r [0.016 0.021] 'shape [[0.05 4.0] [1.3 3.6] [0.25 1.1] [0.9 0.74] [1.0 0.0] [0.56 -0.76] [0.1 -1.2] [0.01 -2.3]]
             'sides 5 'lump 0.03 'tilt [50 115] 'dense 12 'dome 0.07
             'skin '((fill (rgb 0.8 0.1 0.25)) (noise 2 0.15) (rows 0 9 (rgb 0.2 0.44 0.13)) (noise 1 2 0.2) (rows 22 32 (rgb 0.92 0.86 0.88)))
-            'heap {'n 8 'r 3.2 'gap (rgb 0.08 0.2 0.06) 'c [(rgb 0.8 0.1 0.25) (rgb 0.86 0.14 0.3) (rgb 0.72 0.08 0.22)] 'shine 0.2
+            'heap {'paint 'radish 'n 8 'r 3.2 'gap (rgb 0.08 0.2 0.06) 'c [(rgb 0.8 0.1 0.25) (rgb 0.86 0.14 0.3) (rgb 0.72 0.08 0.22)] 'shine 0.2
                    'leaf (rgb 0.2 0.44 0.13)}}
    'cabbage {'r [0.085 0.105] 'shape [[0.03 0.95] [0.35 0.92] [0.72 0.72] [0.96 0.3] [1.0 -0.15] [0.8 -0.62] [0.35 -0.88] [0.03 -0.9]]
              'sides 9 'lump 0.03 'folds 0.05 'tilt [0 25] 'dense 4 'dome 0.12
              'skin '((fill (rgb 0.46 0.66 0.3)) (noise 1 8 0.2) (grain 8 1 2 10 (shade 0.72)) (rows 0 10 (mix (rgb 0.7 0.82 0.5) 0.6))
                      (rows 22 32 (shade 0.78)) (noise 2 0.15))
-             'heap {'n 4 'r 11.5 'gap (rgb 0.1 0.2 0.07) 'c [(rgb 0.42 0.62 0.28) (rgb 0.5 0.7 0.34) (rgb 0.36 0.56 0.24)] 'leaves 1}}}
+             'heap {'paint 'cabbage 'shine 0.02 'n 4 'r 11.5 'gap (rgb 0.1 0.2 0.07) 'c [(rgb 0.5 0.7 0.34) (rgb 0.58 0.76 0.4) (rgb 0.44 0.64 0.3)]}}}
  produce-keys ['like 'r 'shape 'sides 'lump 'folds 'tilt 'yaw 'skin 'heap 'dense 'dome]
  (kind-of q) (: u "(produce [x y z] seed KIND)"
    (? (nom? q) (tablet? (produces q) ? (produces q) (no (u + ", a KIND of " + show (sort (keys produces))) q))
@@ -1037,37 +1037,61 @@
  ; edge it crosses, so the picture tiles; its shadow on those under it, its body, its light
  ; toward the bearing's front
  (pile-skin q s deg) (: u "(pile-skin KIND seed bearing)" k (kind-of q) h (k 'heap) n (int (h 'n)) r (h 'r) T 64.0 m (T / n)
-   lg (N deg u * pi / 180.0) fx (0.0 - sin lg) fy (0.0 - cos lg) long (peep h 'long 0.0)
-   (pn c) ['rgb (c 0) (c 1) (c 2)]
-   cs (h 'c) (hint c t) ['mix (pn c) t] warm [1.0 0.9 0.72]
-   (round x y e c rr)
-     ((h 'leaf @ () () lf [['disc (x + rr * pick e 'lx [-1.3 1.3]) (y + rr * pick e 'ly [-1.3 1.3]) (0.8 * rr) (pn lf)]])
-      + [['disc x y (1.16 * rr) (sh 0.45)] ['disc x y rr (pn c)]]
-      + (peep h 'leaves 0 ? (: a (6.28 * dice e 'v) vx (cos a) vy (sin a) (at d) [(x + d * rr * vx) (y + d * rr * vy)]
-                              (leaf d q p) (: z (at d) ['disc (z 0) (z 1) (q * rr) p])
-                              [(leaf 0.2 0.8 (sh 0.76)) (leaf 0.26 0.7 (hint [0.72 0.86 0.5] 0.3))
-                               (leaf 0.42 0.46 (sh 0.78)) (leaf 0.48 0.36 (hint [0.78 0.9 0.58] 0.35))]) ())
-      + [['disc (x + 0.22 * rr * fx) (y + 0.22 * rr * fy) (0.6 * rr) (hint warm 0.1)]
-         ['disc (x + 0.4 * rr * fx) (y + 0.4 * rr * fy) (0.2 * rr) (hint [1.0 1.0 0.95] (peep h 'shine 0.08))]])
-   ; ..a long one lies along the bearing's across, its top toward the back
-   (bar x y e c rr) (: a (lg + pi * pick e 'a [0.42 0.58]) ux (cos a) uy (0.0 - sin a) vx (0.0 - uy) vy ux tc (pn (h 'tops))
-      (span d w0 w1 p) (: sx (x + ux * d) sy (y + uy * d)
-         ['poly (sx + vx * w0) (sy + vy * w0) (sx + ux * long + vx * w1) (sy + uy * long + vy * w1)
-                (sx + ux * long - vx * w1) (sy + uy * long - vy * w1) (sx - vx * w0) (sy - vy * w0) p])
-      [(span 0.0 (1.35 * rr) (0.55 * rr) (sh 0.42)) (span 0.0 rr (0.3 * rr) (pn c)) (span 0.0 (0.32 * rr) (0.1 * rr) (hint warm 0.3))
-       ['disc x y rr (pn c)] ['disc (x - ux * rr) (y - uy * rr) (1.1 * rr) tc]])
-   (body x y e) (: rr (r * pick e 'r [0.86 1.12]) c (cs (int (#cs * dice e 'c)))
-      (long > 0.0 ? (bar x y e c rr) (round x y e c rr)))
+   lg (N deg u * pi / 180.0) fx (0.0 - sin lg) fy (0.0 - cos lg) lx (0.45 * fx) ly (0.45 * fy) cs (h 'c)
+   (pn c) ['rgb (c 0) (c 1) (c 2)] (hint c t) ['mix (pn c) t] sn (peep h 'shine 0.05)
+   (ov x y a b t p) ['oval x y a b t p] (lit x y a b t) ['ball x y a b t lx ly sn]
+   (dg e w) (360.0 * dice e w) (cd d) (cos (d * pi / 180.0)) (sd d) (sin (d * pi / 180.0))
+   ; ..one laid down: its shadow on those under, its body, what marks it, then lit as a globe
+   (apple x y e c rr) (: a (dg e 'a) d (rr * pick e 'd [0.05 0.35]) px (x + d * cd a) py (y + d * sd a) b (dg e 'b) w (rr * 0.93) st (dg e 'st)
+      (streak i) (: t (a + 40.0 + 70.0 * i) (ov (px + 0.34 * rr * cd t) (py + 0.34 * rr * sd t) (0.3 * rr) (0.07 * rr) t (i % 2 = 0 ? (hint [0.9 0.72 0.25] 0.4) (sh 0.72))))
+      ([(ov x y (1.16 * rr) (1.1 * w) b (sh 0.42)) (ov x y rr w b (pn c))
+        (ov (x + 0.34 * rr * cd b) (y + 0.34 * rr * sd b) (0.56 * rr) (0.5 * rr) b (hint [0.74 0.72 0.22] 0.55))]
+       + map streak ^4
+       + [(ov px py (0.21 * rr) (0.18 * rr) a (sh 0.5))
+          ['poly px py (px + 0.05 * rr * sd st) (py - 0.05 * rr * cd st) (px + 0.3 * rr * cd st) (py + 0.3 * rr * sd st) '(rgb 0.2 0.13 0.06)]
+          (lit x y rr w b)]))
+   (potato x y e c rr) (: t (dg e 't) a (rr * pick e 'a [1.1 1.35]) b (rr * pick e 'b [0.78 0.92]) lp (dg e 'lp)
+      (eye i) (: q (dg (seed-of e i) 'q) z (pick (seed-of e i) 'z [0.2 0.65])
+                (ov (x + z * a * cd q) (y + z * b * sd q) (0.1 * rr) (0.07 * rr) q (sh 0.58)))
+      ([(ov x y (1.12 * a) (1.14 * b) t (sh 0.42)) (ov x y a b t (pn c))
+        (ov (x + 0.3 * a * cd t) (y + 0.3 * a * sd t) (0.62 * a) (0.86 * b) (t + 20.0) (pn c))
+        (ov (x + 0.3 * rr * cd lp) (y + 0.3 * rr * sd lp) (0.5 * rr) (0.36 * rr) lp (hint [0.28 0.2 0.11] 0.3))]
+       + map eye ^3 + [(lit x y a b t)]))
+   (onion x y e c rr) (: t (dg e 't) a (1.08 * rr) b (0.96 * rr) ux (cd t) uy (sd t) lf (0.0 - uy)
+      (mer w q) (ov x y (a * 0.97) (b * w) t q)
+      [(ov x y (1.14 * a) (1.14 * b) t (sh 0.42))
+       ['poly (x + 1.3 * a * ux) (y + 1.3 * a * uy) (x + 0.8 * a * ux + 0.22 * rr * lf) (y + 0.8 * a * uy + 0.22 * rr * ux)
+              (x + 0.8 * a * ux - 0.22 * rr * lf) (y + 0.8 * a * uy - 0.22 * rr * ux) (hint [0.86 0.7 0.42] 0.7)]
+       (ov x y a b t (pn c)) (mer 0.78 (sh 0.84)) (mer 0.58 (hint [0.9 0.68 0.34] 0.3)) (mer 0.36 (sh 0.82)) (mer 0.16 (hint [0.9 0.68 0.34] 0.3))
+       (ov (x - 0.86 * a * ux) (y - 0.86 * a * uy) (0.12 * rr) (0.2 * rr) t '(rgb 0.16 0.1 0.05))
+       (lit x y a b t)])
+   (radish x y e c rr) (: t (dg e 't) ux (cd t) uy (sd t) lf (dg e 'lf) lx1 (rr * pick e 'lx [1.0 1.5])
+      [(ov (x + lx1 * cd lf) (y + lx1 * sd lf) (1.2 * rr) (0.5 * rr) lf (pn (h 'leaf)))
+       (ov x y (1.16 * rr) (1.16 * rr) t (sh 0.42)) (ov x y rr rr t (pn c))
+       (ov (x + 0.6 * rr * ux) (y + 0.6 * rr * uy) (0.42 * rr) (0.42 * rr) t '(rgb 0.92 0.86 0.88)) (lit x y rr rr t)])
+   ; ..a long one lies along the bearing's across, its top toward the back: a shoulder, a taper, rings
+   (carrot x y e c rr) (: L (h 'long) t (lg * 180.0 / pi + 90.0 + pick e 't [-14 14]) ux (cd t) uy (0.0 - sd t) tt (0.0 - t) mx (x + 0.5 * L * ux) my (y + 0.5 * L * uy)
+      (ring z) (ov (x + z * L * ux) (y + z * L * uy) (0.12 * rr) (0.85 * rr) tt (sh 0.76))
+      [(ov mx my (0.62 * L) (1.25 * rr) tt (sh 0.42)) (ov (x - 0.1 * L * ux) (y - 0.1 * L * uy) (0.26 * L) (0.75 * rr) (tt + pick e 'tp [-20 20]) (pn (h 'tops)))
+       (ov mx my (0.55 * L) (0.72 * rr) tt (pn c)) (ov (x + 0.25 * L * ux) (y + 0.25 * L * uy) (0.3 * L) rr tt (pn c))
+       (ring 0.2) (ring 0.42) (ring 0.66) (lit mx my (0.55 * L) rr tt)])
+   ; ..a head: leaves wrapped over it at odd angles, each edged, ribs running out of the middle
+   (cabbage x y e c rr) (: t (dg e 't) w (rr * pick e 'w [0.9 1.0])
+      (leaf i) (: q (t + 137.5 * i + pick (seed-of e i) 'j [-25 25]) z (rr * (0.5 - 0.09 * i)) lw (rr * (0.82 - 0.09 * i)) lb (rr * (0.5 - 0.04 * i))
+                 cx (x + z * cd q) cy (y + z * sd q) tn (q + 90.0 + pick (seed-of e i) 'n [-20 20])
+                 [(ov cx cy (1.08 * lw) (1.14 * lb) tn (sh 0.72)) (ov cx cy lw lb tn (hint [0.7 0.84 0.48] (0.12 + 0.09 * i)))
+                  (ov cx cy (0.85 * lw) 0.5 (tn + pick (seed-of e i) 'r [-12 12]) (hint [0.86 0.94 0.68] 0.32))])
+      ([(ov x y (1.12 * rr) (1.12 * w) t (sh 0.4)) (ov x y rr w t (pn c))] + catmap leaf ^5 + [(lit x y rr w t)]))
+   paints {'apple apple 'potato potato 'onion onion 'radish radish 'carrot carrot 'cabbage cabbage}
+   pnt (paints (h 'paint))
+   (body x y e) (pnt x y e (cs (int (#cs * dice e 'c))) (r * pick e 'r [0.88 1.1]))
    ; ..the layer they lie on, dim, filling what they leave
-   (under x y e) (: c (map (v \ 0.42 * v) (cs (int (#cs * dice e 'c))))
-      (long > 0.0 ? (bar-dim x y e c) [['disc x y (1.15 * r) (pn c)]]))
-   (bar-dim x y e c) (: a (lg + pi * pick e 'a [0.42 0.58]) ux (cos a) uy (0.0 - sin a)
-      [['poly (x + uy * r) (y - ux * r) (x + ux * long + uy * r) (y + uy * long - ux * r) (x + ux * long - uy * r) (y + uy * long + ux * r) (x - uy * r) (y + ux * r) (pn c)]])
-   R (long + 2.0 * r)
+   (under x y e) [(ov x y (1.15 * r) (1.05 * r) (dg e 'u) (pn (map (v \ 0.4 * v) (cs (int (#cs * dice e 'c))))))]
+   R (peep h 'long 0.0 + 2.0 * r)
    (cell paint i) (: e (seed-of s i) x (m * ((i % n) + dice e 'x)) y (m * ((i // n) + dice e 'y))
       (catmap (ox \ catmap (oy \ (0.0 - R < x + ox && x + ox < T + R && 0.0 - R < y + oy && y + oy < T + R ? (paint (x + ox) (y + oy) e) ())) [(0.0 - T) 0.0 T]) [(0.0 - T) 0.0 T]))
    order (map (q \ q 1) (sort (map (i \ [(dice (seed-of s i) 'o) i]) ^(n * n))))
-   (texture 64 64 (T * pile-metres k) ([['seed s] ['fill (pn (h 'gap))] '(noise 3 0.2)] + catmap (cell under) (map (i \ n * n + i) order) + catmap (cell body) order + ['(noise 2 0.12) ['patches 6 0.2 (sh 0.82)]])))
+   (texture 64 64 (T * pile-metres k) ([['seed s] ['fill (pn (h 'gap))] '(noise 3 0.2)] + catmap (cell under) (map (i \ n * n + i) order) + catmap (cell body) order + ['(noise 1 0.1) ['patches 6 0.15 (sh 0.86)]])))
  ; ..a texel's metres: the picture's dabs as big as the things
  (pile-metres k) (: rr (pick 1 'r (k 'r)) (rr / k 'heap 'r))
  (pile q at deg s o) (: u "(pile KIND [x y z] bearing seed {'w 'd 'low 'high 'dome 'dense})" c (P at u) dd (N deg u) k (kind-of q)

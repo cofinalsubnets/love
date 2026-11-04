@@ -967,7 +967,7 @@
        (all (k \ abs (low (one k) - 2.0) < 1e-9) kinds)
        (show (one 'onion) = show (one 'onion)) (show (one 'onion 'rows) != show (pr "(produce [1 2 3] 6 'onion)" 'drapes 0 'rows))
        (#<(pr "(produce [0 0 0] 1 {'like 'apple 'sides 9})" 'drapes 0 'rows) = 10)
-       (#pd = 2) (sh 'wrap = 0) (m = 7) (C = 7) (#(th 'rows) % (m + 1) = m)
+       (#pd = 2) (sh 'wrap = 0) (m = 7) (C = 8) (#(th 'rows) % (m + 1) = m)
        (all (i \ th 'rows (m + (m + 1) * i) = map (_ \ ()) ^C) ^(#(th 'rows) // (m + 1)))
        (show pd = show (pr "(pile 'apple [0 0 0] 0 3 {'w 1.2 'd 0.9 'dense 12})" 'drapes))
        (show (th 'rows) != show (pr "(pile 'apple [0 0 0] 0 4 {'w 1.2 'd 0.9 'dense 12})" 'drapes 1 'rows))

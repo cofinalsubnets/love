@@ -61,6 +61,21 @@
        ; the plan not as it says, and sides out of reach
        (swatch-pic 4 4 '((() 12 () 0 (1 0.0 0.0 0.0 0.0) ())) = ()) (swatch-pic 4 4 '(junk) = ())
        (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())))
+; an oval and a ball painted in C as in love: the oval its turned shape, the ball brighter toward
+; its light, only inside itself and over no hole
+(: (at l x y) (swatch-texel l x y) red [1.0 0.0 0.0]
+   rc '((fill 0.0) (oval 16 8 5 3 90 (rgb 1 0 0)))
+   bl '((fill 0.6) (ball 16 16 10 10 0 -0.6 0 0.2))
+   nt '((fill 0.5) (oval 12 10 8 5 33 (rgb 0.7 0.2 0.1)) (oval 20 8 6 2 -70 (shade 0.8)) (ball 14 10 9 6 33 0.3 -0.4 0.3)
+        (within 2 2 28 8 (ball 8 4 5 5 0 0 0.5 0.1)) (rect 0 12 8 16 hole) (ball 4 13 4 4 0 0 0 0.5))
+ (test (show (swatch 32 16 nt) = show (mesh-pic 32 16 (swatch-texel nt)))
+       (at rc 16 12 = red) (at rc 16 1 != red) (at rc 20 8 != red) (at rc 18 8 = red)
+       (at bl 10 16 0 > at bl 22 16 0) (at bl 0 16 0 = 0.6) (at bl 10 16 1 = at bl 10 16 2)
+       (at '((fill hole) (ball 4 4 4 4 0 0 0 0.5)) 4 4 = ())
+       (swatch-fault '((oval 1 2 3 4 (shade 0.7))) 1 = "(oval x y rx ry deg PAINT)")
+       (swatch-fault '((ball 1 2 3 4 5 6 7 (shade 0.7))) 1 = "(ball x y rx ry deg lx ly shine)")
+       (swatch-fault '((ball 1 2 3 4 5 6 7)) 1 = "(ball x y rx ry deg lx ly shine)")
+       (swatch-fault '((ball 1 2 3 4 5 6 7 8)) = ())))
 ; grain, cells and seed: painted in C as in love; a (seed 0) changes nothing, another the
 ; noise after it alone; grain's rows wander, cells' borders part the texels
 (: (at l x y) (swatch-texel l x y) red [1.0 0.0 0.0]
