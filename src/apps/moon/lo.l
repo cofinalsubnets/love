@@ -1302,9 +1302,26 @@
             _ (rachk g fs f2 loc @ ws
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
-         rasub f2 loc @ body
+         ; a frame load only a compare reads becomes the compare's memory operand
+         lofuse g (cmpfuse g (rasub f2 loc)) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))
+   ; after allocation, a full-word load one form alone reads, dying there, folds into it: a copy
+   ; loads its copy, an alu op takes the word as its right side (a commuting one as its left)
+   (lofuse g fs)
+    (: (fold f nx)
+        (f @ ['ld X b o]
+           (nx @ (['mov Y x] && x = X && Y != X) ['ld Y b o]
+                 ([op d a c] && elem op '(add sub and or xor) && c = X && a = d && d != X) ['alurm op 8 d b o]
+                 ([op d a c] && elem op '(add and or xor) && a = X && c = d && d != X) ['alurm op 8 d b o]
+                 _ ())
+           _ ())
+       (go l)
+        (? !(two? l) l
+           (: f <l r (two? >l ? >>l)
+              m (two? >l ? (fold f <>l))
+              (two? m && dieb? g <>f fs r ? (m . go r) (f . go >l))))
+       (go fs))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g

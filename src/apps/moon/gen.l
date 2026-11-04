@@ -4433,6 +4433,7 @@
        _ (arm siops (g \ f \ [[<>f] () ()]))
        _ (arm '(cmpm) (g \ f \ [([<>f] + rg1 <>>>f) () ()]))
        _ (arm '(cmprm) (g \ f \ [[<>f <>>f] () ()]))
+       _ (arm '(alurm) (g \ f \ [[(f 3) (f 4)] [(f 3)] 1]))
        _ (arm leaops (g \ f \ [[<>>f] [<>f] 1]))
        _ (arm xops (g \ f \ [[<>>f <>>>f] [<>f] 1]))
        _ (arm x4ops (g \ f \ [[<>f <>>f <>>>f] [<>f] 1]))
@@ -4491,7 +4492,8 @@
        (peep t <f 'bar @ 'bar 'bar a (a g f)))
    ; a64 renames by position: x4 is also an arg register, so only the base slot's r4 becomes fp
    a4base (: t (foldl (t \ o \ pin t o 2) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
-           (foldl (t \ o \ pin t o 1) t (stops9 + stxops + fstxops + siops + '(cmpm))))
+           t (foldl (t \ o \ pin t o 1) t (stops9 + stxops + fstxops + siops + '(cmpm)))
+         (pin t 'alurm 4))
    (a4ize fs)
     (: (go (f . u))
         (: bp (two? f ? (peep a4base <f -1) -1)
@@ -4605,7 +4607,8 @@
    uoff (: t (foldl (t \ o \ pin t o 3) {} (ldops9 + fldops + leaops + '(cmprm)))
            t (foldl (t \ o \ pin t o 5) t (xops + fxops))
            t (foldl (t \ o \ pin t o 2) t (stops9 + siops + '(cmpm)))
-         (foldl (t \ o \ pin t o 4) t (stxops + fstxops)))
+           t (foldl (t \ o \ pin t o 4) t (stxops + fstxops))
+         (pin t 'alurm 5))
    ; rebuild f with operand i9 replaced
    (reop f i9 v) (: (go (a . u) i) ((i = i9 ? v a) . go u (i + 1)) (go f 0))
    ; riscv slot rebase: fp links at the frame bottom (c.ld/c.sd want unsigned offsets), so fp-relative
@@ -5836,6 +5839,8 @@
                            (<>f = fb ? (mark <>>f 8))
                           (<f = 'cmprm)
                            (<>>f = fb ? (mark <>>>f 8))
+                          (<f = 'alurm)
+                           (f 4 = fb ? (mark (f 5) (f 2)))
                           (elem <f '(lea lean))          ; (lea sp fp 0) is teardown, not an address take
                            (<>>f = fb && <>f != 'sp ? (obmark <>>>f))
                           (elem <f xops || elem <f fxops)   ; a runtime index roams its object
