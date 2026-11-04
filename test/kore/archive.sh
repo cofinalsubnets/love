@@ -348,9 +348,10 @@ fi
 if command -v bzip2 >/dev/null 2>&1; then
   # .bz2 a block at a time, through bunzip2 and tar j
   big bzip2 -1 > "$B/z.bz2"
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" bunzip2 -c "$B/z.bz2" 2> "$o" | wc -c > "$g"
+  # a block is 5 MB and two can be live on top of the image, about 66 MB in all
+  LOVE_BUDGET_MB=96 LOVE_NO_IMAGE= "$m" bunzip2 -c "$B/z.bz2" 2> "$o" | wc -c > "$g"
   [ "$(tr -d ' ' < "$g")" = 1153433600 ] || { cat "$o"; fail "kore bunzip2 of 1100 MiB did not stream: $(cat "$g") bytes"; }
-  LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar tjf "$B/z.bz2" > "$g" 2> "$o"; r=$?
+  LOVE_BUDGET_MB=96 LOVE_NO_IMAGE= "$m" tar tjf "$B/z.bz2" > "$g" 2> "$o"; r=$?
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tjf of 1100 MiB of zeros did not stream (rc $r)"; }
 fi
 rm -rf "$B"
