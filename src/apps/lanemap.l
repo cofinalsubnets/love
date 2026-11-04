@@ -36,7 +36,7 @@
      ["" ["src/apps/caja/*" "test/caja/*" "test/gate/caja.sh"] ["test_caja"] ""]
      ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
      ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
-     ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_quick"] ""]
+     ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_core"] ""]
      ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
       ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
       ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
@@ -53,7 +53,7 @@
      ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
                 "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
-   lanes-cost {"test" 195 "test_quick" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
+   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
