@@ -789,10 +789,10 @@
               (? (k = 'none || k = 'SORT_NONE) (go >ps (i + 1) (pend + ms) acc)
                  (go >ps (i + 1) () (acc + bypos pend + map (y \ y 2 1) (sort (map (keyed k) ms)))))))
        (go pats 0 () ()))
-   ; objects, script, synthetic sections [(name size align) ..] -> [outs orphans], an orphan
+   ; objects, script, synthetic sections [(name size align type flags) ..] -> [outs orphans], an orphan
    ; [oi name si] or ('synth name), under erel a .rela too, which no pattern takes: each
    ; output section tablet gains 'steps, its body with every description expanded to its
-   ; ('isec oi si size align name) and ('synth name size align) in order
+   ; ('isec oi si size align name) and ('synth name size align name type flags) in order
    (ld-place objs cmds synth strip erel)
     (: os (ld-outs cmds)
        descs (ld-descs os)
@@ -811,7 +811,7 @@
                              (pin orph 'l ([oi nm si] . orph 'l))))))))
        _ (foldl (\ oi ob (scan oi ob, oi + 1)) 0 objs)
        _ (foldl (\ k s (: m (mt <s)
-                          _ (? (two? m) (put <m [k ['synth <s (s 1) (s 2) <s] <>m])
+                          _ (? (two? m) (put <m [k ['synth <s (s 1) (s 2) <s (s 3) (s 4)] <>m])
                                (pin orph 'l (['synth <s] . orph 'l)))
                           (k + 1)))
                 4294967296 synth)
