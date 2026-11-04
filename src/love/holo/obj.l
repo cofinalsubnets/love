@@ -166,7 +166,7 @@
        be (peep backends target ())
        x86 (i386? target)
        tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
-       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8))
+       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8 ldl16 ldlw))
        wkset (o-names wknames)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))

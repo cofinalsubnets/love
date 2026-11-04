@@ -15,6 +15,11 @@
    ; a pointer's step: the pointee's size, void and functions one byte
    (lostep g ty) (<>ty @ 'void 1 ('fn . _) 1 ('varr . _) 'bad t (tsz g t))
    (lok g e) (knum g e @ ((k . _) && fits32 k) [k] ())
+   ; d op= k, and lork3 d = a op k: the literal an immediate where the target takes it, else a register
+   (lork g op d k) (lork3 g op d d k)
+   (lork3 g op d a k) (imma g op k ? [[op d a k]] (lomk g @ t [['li t k] [op d a t]]))
+   ; a float compare's condition: arm's fcmp reads unordered as above, so gt and ge stand in
+   (lofcc g c) (arm? g ? (c @ 'above 'gt 'ae 'ge 'be 'le 'below 'lt _ c) c)
 
    ; a value converted to ty, copied when the conversion writes
    (lotr g [vt r fs] ty)
@@ -378,17 +383,18 @@
               (: p (ptr? ta ? a b) i (ptr? ta ? b a)
                  (lostep g (vty p) @ 'bad 'bad
                     sz (lomk g @ s (lomk g @ d
-                          [(vty p) d (vfs a + vfs b + [['mov s (vreg i)]] + (sz = 1 ? () [['imul s s sz]]) +
+                          [(vty p) d (vfs a + vfs b + (sz = 1 ? [['mov s (vreg i)]] (lork3 g 'imul s (vreg i) sz)) +
                                       [['mov d (vreg p)] [(irop op) d d s]])]))))
              (elem op '(+ - * & | ^))
               (: nar (nar32 g op ta tb 1) rt (lonrw op a b (rbin g ta tb))
                  ; a literal right side rides as the immediate
-                 (b @ ([_ t [['li t2 k]]] && t = t2 && fits32 k) (lomk g @ d [rt d (vfs a + [['mov d (vreg a)] [(irop op) d d k]] + (nar ? [[nar d]]))])
+                 (b @ ([_ t [['li t2 k]]] && t = t2 && imma g (irop op) k) (lomk g @ d [rt d (vfs a + [['mov d (vreg a)] [(irop op) d d k]] + (nar ? [[nar d]]))])
                       _ (lomk g @ d [rt d (vfs a + vfs b + [['mov d (vreg a)] [(irop op) d d (vreg b)]] + (nar ? [[nar d]]))])))
              (elem op '(/ %))
               (: u (cmpu g ta tb) io (op = '/ ? (u ? 'udiv 'div) (u ? 'urem 'rem))
-                 (loz g a b @ [_ x fx] (loz g b a @ [_ y fy] (lomk g @ d
-                    [(rbin g ta tb) d (fx + fy + [(io @ ('rem || 'urem) [io d x y 'r0] [io d x y])])]))))
+                 ; a remainder's scratch: x64's rax, else a register apart from both operands
+                 (loz g a b @ [_ x fx] (loz g b a @ [_ y fy] (lomk g @ d (lomk g @ t
+                    [(rbin g ta tb) d (fx + fy + [(io @ ('rem || 'urem) [io d x y (x64? g ? 'r0 t)] [io d x y])])])))))
              (lono g ['bin op]))))
    ; a value's range: a lone literal its own, else its type's | ()
    (lorng v) (v @ ([_ t [['li t2 k]]] && t = t2 && cint? k) [k k] [ty _ _] (irng ty) _ ())
@@ -415,8 +421,8 @@
    ; x64's above and ae are false on a NaN: lt and le compare swapped, eq and ne carry parity
    (lofcmp g op s x y fs)
     (: uc (s ? 'ucomiss 'ucomisd)
-       (op @ ('lt || 'le) (lomk g @ d ['int d (fs + [[uc y x] ['set (op = 'lt ? 'above 'ae) d]])])
-             ('gt || 'ge) (lomk g @ d ['int d (fs + [[uc x y] ['set (op = 'gt ? 'above 'ae) d]])])
+       (op @ ('lt || 'le) (lomk g @ d ['int d (fs + [[uc y x] ['set (lofcc g (op = 'lt ? 'above 'ae)) d]])])
+             ('gt || 'ge) (lomk g @ d ['int d (fs + [[uc x y] ['set (lofcc g (op = 'gt ? 'above 'ae)) d]])])
              _ (: a (lomk g) b (lomk g) d (lomk g)
                   ['int d (fs + [[uc x y]] + (op = 'eq ? [['set 'eq a] ['set 'np b] ['mov d a] ['and d d b]]
                                                           [['set 'ne a] ['set 'p b] ['mov d a] ['or d d b]]))])))
@@ -463,25 +469,32 @@
             (['bin op a b] && locmp? op)
              (lox g env a @ 'bad 'bad
                 va (lox g env b @ 'bad 'bad
-                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb) && nelem op '(eq ne))
+                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb))
                              (lofbr g op va vb sense L)
                             !(losc? (vty va) && losc? (vty vb))
                              (lobin g op va vb () @ [_ d fs] (fs + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]) 'bad)
                             (loz g va vb @ [_ x fx] (loz g vb va @ [_ y fy]
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
             (lox g env e @ ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
-                           ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
+                           ([ty r fs] && lofl? ty) (lomk g @ t (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z [['li t 0] ['movqxr z t]]] sense L)))
+                           ([ty r fs] && d128? ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad))))
 
    ; a float compare straight into its branch: above and ae are false on a NaN, so lt and le
-   ; compare swapped, and the sense flipped takes be and below. eq and ne carry parity: lofcmp's
+   ; compare swapped, and the sense flipped takes be and below. a NaN is ne: parity jumps with
+   ; ne, and steps over eq
    (lofbr g op va vb sense L)
     (: ft (vty va = 'double || vty vb = 'double ? 'double 'float)
        uc (ft = 'float ? 'ucomiss 'ucomisd)
        (lotr g va ft @ [_ x fx]
           (lotr g vb ft @ [_ y fy]
-             (fx + fy + [(elem op '(lt le) ? [uc y x] [uc x y])
-                         ['br (op @ ('lt || 'gt) (sense ? 'above 'be) _ (sense ? 'ae 'below)) L]])
+             ; a64's fcmp answers unordered as ne: no parity there
+             (? (elem op '(eq ne))
+                 (? !(x64? g) (fx + fy + [[uc x y] ['br ((op = 'ne) = (sense != 0) ? 'ne 'eq) L]])
+                    ((op = 'ne) = (sense != 0)) (fx + fy + [[uc x y] ['br 'ne L] ['br 'p L]])
+                    (nlab g ".lo" @ k (fx + fy + [[uc x y] ['br 'p k] ['br 'eq L] ['label k]])))
+                (fx + fy + [(elem op '(lt le) ? [uc y x] [uc x y])
+                            ['br (lofcc g (op @ ('lt || 'gt) (sense ? 'above 'be) _ (sense ? 'ae 'below))) L]]))
              _ 'bad)
           _ 'bad))
 
@@ -533,7 +546,7 @@
                              (lofl? ty) (lopostf g env l lb o step)
                              (lostep g (ptr? ty ? ty ['ptr 'void]) @ 'bad 'bad
                              sz (locp g o @ [_ t fo] (lomk g @ n
-                                   (lost g lb [(ptr? ty ? ty (rbin g ty 'int)) n ([['mov n t] ['add n n (step * sz)]] + (s32bin? g ty 'int ? [['sx4 n]]))] @
+                                   (lost g lb [(ptr? ty ? ty (rbin g ty 'int)) n ([['mov n t]] + lork g 'add n (step * sz) + (s32bin? g ty 'int ? [['sx4 n]]))] @
                                       [fs _] [ty t (lolvfs l + fo + fs)] 'bad)))))))))
          ['rmw op dst rhs]
           (lolv g env dst @ 'bad 'bad
@@ -623,19 +636,31 @@
              va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
              (lovstep g op a b va vb @ () (lobin g op va vb kb) x (lox g env x)))
-         ; x86's caches are coherent: the args for their effects alone
-         ['call ['var "__builtin___clear_cache"] as] (loseq (map (x \ (lox g env x @ [_ _ fs] (lol fs) _ (lol 'bad))) as) @ 'bad 'bad fs ['void () fs])
+         ; x86's caches are coherent: the args for their effects alone. elsewhere the flush is the
+         ; old path's, until the new one lays the line walk
+         ['call ['var "__builtin___clear_cache"] as]
+          (!(x64? g) ? (lono g 'cflush)
+             (loseq (map (x \ (lox g env x @ [_ _ fs] (lol fs) _ (lol 'bad))) as) @ 'bad 'bad fs ['void () fs]))
          ['call fh as] (lomem g env fh as @ 'no (locall g env fh as) v v)
          ; the va_list's fields, as cgexpr's SysV arms lay them
          ['vastart ap]
           (lox g env ap @ [_ p fs]
              (lomk g @ t (pin g 'fesc 1,
-                ['void () (fs + [['li t (8 * peep g 'vagp 0)] ['st4 p 0 t] ['li t (48 + 16 * peep g 'vaxmm 0)] ['st4 p 4 t]
-                                 ['lea t 'r4 (16 + 8 * peep g 'vaov 0)] ['st p 8 t] ['lea t 'r4 (peep g 'rsa 0)] ['st p 16 t]])]))
+                (: ngp (peep g 'vagp 0) nfp (peep g 'vaxmm 0) nov (peep g 'vaov 0) rsa (peep g 'rsa 0)
+                   ['void () (fs + (a64? g ?
+                      ; AAPCS64: __stack past the named overflow, each top past its file's saves, each offs
+                      ; the unnamed registers' bytes below it
+                      [['lea t 'r4 (ovb g + 8 * nov)] ['st p 0 t] ['lea t 'r4 (rsa + 64)] ['st p 8 t]
+                       ['lea t 'r4 (rsa + 192)] ['st p 16 t] ['li t (0 - 8 * (8 - ngp))] ['st4 p 24 t]
+                       ['li t (nofp? g ? 0 (0 - 16 * (8 - nfp)))] ['st4 p 28 t]]
+                      [['li t (8 * ngp)] ['st4 p 0 t] ['li t (48 + 16 * nfp)] ['st4 p 4 t]
+                       ['lea t 'r4 (16 + 8 * nov)] ['st p 8 t] ['lea t 'r4 rsa] ['st p 16 t]]))])))
              'bad)
          ['vaend _] ['void () ()]
          ['vaarg ap ty]
-          (lox g env ap @ [_ p fs] (lovaarg g p fs ty) 'bad)
+          (? (a64? g) (lox g env ap @ [_ p fs] (lovaarg64 g p fs ty) 'bad)
+             (x64? g) (lox g env ap @ [_ p fs] (lovaarg g p fs ty) 'bad)
+             (lono g 'vaarg))
          (lono g ['expr <e]))
 
    ; va_arg off the list at p: the old walk, the list in r0 and the fetch address out of r2,
@@ -674,7 +699,8 @@
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
           _ (lox g env fh @
-               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys 1 () as (locr g r) [r fs])
+               ; a variadic prototype parks () as an unprototyped one does: al only then
+               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys (two? ptys ? () 1) () as (locr g r) [r fs])
                [['ptr ['fn rt ptys 'ms]] r fs] (locall1 g env rt ptys () 1 as (locr g r) [r fs])
                [['ptr ['fn rt]] r fs] (locall1 g env rt () 1 () as (locr g r) [r fs])
                'bad 'bad
@@ -849,8 +875,11 @@
        (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
+       ; past SysV a pair takes the old path
+       (!(x64? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
        (: (arg e pt)
-           (lox g env e @ ([vt r fs] && (losv? vt || d128? vt))
+           (lox g env e @ ([vt r fs] && !(x64? g) && d128? vt) (lono g ['abi vt])
+                          ([vt r fs] && (losv? vt || d128? vt))
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
                                  p9 (losv? p9 || d128? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
                           ([vt r fs] && loagg? g vt) [vt r fs]
@@ -860,18 +889,19 @@
            (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [v])))
                 acc)
           ; a returned aggregate lands in a temp; in the memory class its address is the hidden first arg
-          sret (stru? rt && !(two? (aclass g rt)))
+          sret (losr? g rt)
           (go as 0 () @ 'bad 'bad
              vs (: rto (stru? rt ? (ntmp g rt) 0)
                    hv (sret ? (lomk g @ h [[['ptr rt] h [['lea h 'r4 rto]]]]))
+                   ; the hidden pointer: SysV's first arg, AAPCS64's x8
                    pl (ms ? [0 0 (map (i \ [('(r1 r2 r7 r8) i) (vreg (vs i))]) ^(min 4 #vs))
                              (map (i \ ['w (vs i) 8]) (filter (i \ 3 < i) ^#vs)) ()]
-                          (loplace g (hv + vs)))
+                          (loplace g (a64? g ? vs (hv + vs))))
                    sh (ms ? 32 0)
-                   nf (pl 1) rg (pl 2) sk (pl 3) pre (pl 4) rs (map (x \ <x) rg)
+                   nf (pl 1) rg (pl 2 + (a64? g && sret ? [['r8 (vreg <hv)]])) sk (pl 3) pre (pl 4) rs (map (x \ <x) rg)
                    d (d128? rt ? [(lomk g) (lomk g)] (lomkt g rt))
-                   ; -mskip-rax-setup: no count of the vector registers in al
-                   al (va && !(x86k? g 'nal) ? [['li 'r0 nf]])
+                   ; SysV's count of the vector registers in al, unless -mskip-rax-setup
+                   al (va && x64? g && !(x86k? g 'nal) ? [['li 'r0 nf]])
                    (stk x o) (x @ ['w2 v _] [['st 'sp o <(vreg v)] ['st 'sp (o + 8) <>(vreg v)]]
                                   ['w v _] [[(vty v @ 'float 'stss 'double 'stsd 'st) 'sp o (vreg v)]]
                                   ['s v n] (locopy g (vreg v) 'sp o n))
@@ -881,7 +911,7 @@
                    res (? (rt = 'void) ()
                           (lofl? rt) [['movapd d 'f0]]
                           (d128? rt) [['mov <d 'r0] ['mov <>d 'r2]]
-                          (stru? rt) (loesc g 'r4, (sret ? () (loebst g (aclass g rt) 'r4 rto)) + [['lea d 'r4 rto]])
+                          (stru? rt) (loesc g 'r4, (sret ? () (loebst g (lopcs g rt) 'r4 rto)) + [['lea d 'r4 rto]])
                           (['mov d 'r0] . map (f \ [<f d]) (rext g rt)))
                    [rt (rt = 'void ? () d)
                     (catmap vfs (hv + vs) + (fv @ [_ ffs] ffs ()) + pre +
@@ -895,8 +925,9 @@
                    ((f . u) && two? f && elem <f '(call callr)) ((f + '(must)) . u)
                    (f . u) (go u @ 'bad 'bad r (f . r)))
        (go (rev fs) @ 'bad 'bad r (rev r)))
-   ; an indirect call through the old path's park, the one register its sibcall jumps by
-   (locr g r) [['mov (pkr g) r] ['callr (pkr g)]]
+   ; an indirect call through a park its sibcall jumps by: x64's r11, caller-saved and no arg's,
+   ; else the old path's
+   (locr g r) ((x64? g ? 'r10 (pkr g)) @ p [['mov p r] ['callr p]])
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
    (loagg? g ty) (stru? ty && 0 < tsz g ty && asalign g ty <= 8)
    ; the args to their registers in order, each file its own count; an aggregate's eightbytes take
@@ -906,21 +937,26 @@
     (foldl (s \ v \ (s @ [gi fi rg sk pre]
               (: ty (vty v) x (vreg v)
                  (? (d128? ty)
-                     (gi + 2 <= 6 ? [(gi + 2) fi (rg + [[(argregs gi) <x] [(argregs (gi + 1)) <>x]]) sk pre]
+                     (gi + 2 <= ngp g ? [(gi + 2) fi (rg + [[(argr g gi) <x] [(argr g (gi + 1)) <>x]]) sk pre]
                         [gi fi rg (sk + [['w2 v 16]]) pre])
                     (stru? ty)
-                     (: cls (aclass g ty) sz (tsz g ty)
-                        ng #(filter (c \ c = 'int) cls) nx (#cls - ng)
-                        (two? cls && gi + ng <= 6 && fi + nx <= 8 ?
-                           (foldl (t \ i \ (t @ [gi fi rg sk pre]
-                                     (: c (cls i) n (min 8 (sz - 8 * i))
-                                        (loeb g c x (8 * i) n @ [w fs]
-                                           (c = 'sse ? [gi (fi + 1) (rg + [[(xmmreg fi) w]]) sk (pre + fs)]
-                                              [(gi + 1) fi (rg + [[(argregs gi) w]]) sk (pre + fs)])))))
-                                  [gi fi rg sk pre] ^#cls)
-                           [gi fi rg (sk + [['s v (8 * aslots g ty)]]) pre]))
+                     (lopcs g ty @
+                        ; AAPCS64 past 16 bytes: a copy of the caller's, its address the arg
+                        'ref (ntmp g ty @ off (lomk g @ p
+                                (: cp (loesc g 'r4, locopy g x 'r4 off (tsz g ty) + [['lea p 'r4 off]])
+                                   (gi < ngp g ? [(gi + 1) fi (rg + [[(argr g gi) p]]) sk (pre + cp)]
+                                      [gi fi rg (sk + [['w ['long p ()] 8]]) (pre + cp)]))))
+                        pcs (: ng #(filter (p \ <p = 'int) pcs) nx (#pcs - ng)
+                               (two? pcs && gi + ng <= ngp g && fi + nx <= 8 ?
+                                  (foldl (t \ p \ (t @ [gi fi rg sk pre]
+                                            (p @ [c o n] (loeb g c x o n @ [w fs]
+                                               (c = 'sse ? [gi (fi + 1) (rg + [[(xmmreg fi) w]]) sk (pre + fs)]
+                                                  [(gi + 1) fi (rg + [[(argr g gi) w]]) sk (pre + fs)])))))
+                                         [gi fi rg sk pre] pcs)
+                                  ; whole to the block; AAPCS64 then closes the file it wanted
+                                  [(a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) rg (sk + [['s v (8 * aslots g ty)]]) pre])))
                     (lofr? x) (fi < 8 ? [gi (fi + 1) (rg + [[(xmmreg fi) x]]) sk pre] [gi fi rg (sk + [['w v 8]]) pre])
-                    (gi < 6) [(gi + 1) fi (rg + [[(argregs gi) x]]) sk pre]
+                    (gi < ngp g) [(gi + 1) fi (rg + [[(argr g gi) x]]) sk pre]
                     [gi fi rg (sk + [['w v 8]]) pre]))))
            [0 0 () () ()] vs)
    ; eightbyte n bytes at a+off into a fresh vreg of class c -> [vreg forms]: exact widths, the
@@ -929,13 +965,38 @@
     (? (c = 'sse) (lomkf g @ w [w [[(n <= 4 ? 'ldss 'ldsd) w a off]]])
        (lomk g @ t [t (n @ 8 [['ld t a off]] 4 [['ldu4 t a off]] 2 [['ldu2 t a off]] 1 [['ldu1 t a off]]
                          _ (loren2 g () 'r2 'long (ldal 'r2 a off n 8) @ [_ y fs] (fs + [['mov t y]])))]))
-   ; the return registers of classes cls: int takes rax then rdx, sse xmm0 then xmm1
-   (loebregs cls)
-    (foldl (s \ c \ (s @ [gs xs acc] (c = 'sse ? [gs (>xs) (acc + [<xs])] [(>gs) xs (acc + [<gs])])))
-           ['(r0 r2) '(f0 f1) ()] cls @ [_ _ rs] rs)
-   ; ..stored whole into the 8-aligned temp at b+off
-   (loebst g cls b off)
-    (loebregs cls @ rs (map (i \ [((rs i) @ ('f0 || 'f1) 'stsd _ 'st) b (off + 8 * i) (rs i)]) ^#cls))
+   ; an aggregate's register pieces [class offset bytes].. : SysV's eightbytes; AAPCS64's HFA one
+   ; float register a member, else one gp register an eightbyte to 16 bytes. 'ref when its address
+   ; rides instead (AAPCS64 past 16), () in memory (SysV's class)
+   (lopcs g ty)
+    (: sz (tsz g ty)
+       (? (a64? g)
+           (? (hfab g ty @ b (flo? b && sz <= 4 * tsz g b)) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
+              (16 < sz) 'ref
+              (map (k \ ['int (8 * k) (min 8 (sz - 8 * k))]) ^(aslots g ty)))
+          (aclass g ty @ () () cls (map (i \ [(cls i) (8 * i) (min 8 (sz - 8 * i))]) ^#cls))))
+   ; a return in memory: SysV's memory class, AAPCS64's by-reference size
+   (losr? g ty) (stru? ty && (lopcs g ty @ 'ref 1 () 1 _ ()))
+   ; the return registers of pieces pcs: ints rax then rdx (x0 then x1 on a64), floats from f0
+   (lorregs g pcs)
+    (foldl (s \ p \ (s @ [gs xs acc] (<p = 'sse ? [gs (>xs) (acc + [<xs])] [(>gs) xs (acc + [<gs])])))
+           [(a64? g ? '(r0 r1) '(r0 r2)) '(f0 f1 f2 f3) ()] pcs @ [_ _ rs] rs)
+   ; a piece stored from register r at b+off, as wide as its class reads
+   (lopst p b off r) (p @ [c o n] [(c = 'sse ? (n = 4 ? 'stss 'stsd) 'st) b (off + o) r])
+   ; ..the return registers stored whole into the 8-aligned temp at b+off
+   (loebst g pcs b off) (lorregs g pcs @ rs (map (i \ lopst (pcs i) b off (rs i)) ^#pcs))
+
+   ; AAPCS64's va_list {__stack, __gr_top, __vr_top, __gr_offs, __vr_offs}: a scalar from its file's
+   ; saves while the offs is negative, else from __stack
+   (lovaarg64 g p fs ty)
+    (: lov (nlab g ".vo") ld (nlab g ".vd")
+       fl (lofl? ty) foff (fl ? 28 24) toff (fl ? 16 8) step (fl ? 16 8)
+       walk [['ld4 'r1 'r0 foff] '(cmp r1 0) ['br 'ge lov] ['ld 'r2 'r0 toff] '(add r2 r2 r1)
+             ['add 'r1 'r1 step] ['st4 'r0 foff 'r1] ['jmp ld] ['label lov]
+             '(ld r2 r0 0) '(mov r3 r2) '(add r3 r3 8) '(st r0 0 r3) ['label ld]]
+       (? (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
+          (loren2 g [['r0 p]] 'r2 'long walk @ [_ a f2]
+             (lomkt g ty @ d [ty d (fs + f2 + [(fl ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
@@ -960,11 +1021,11 @@
                     (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov 'r2 h]] + epj) _ 'bad)
                    ; an aggregate: out through the hidden pointer, or its eightbytes into the return registers
                    ([vt r fs] && stru? rt && tsz g vt = tsz g rt)
-                    (g 'losret @ () (: cls (aclass g rt) sz (tsz g rt)
-                                       (foldl (t \ i \ (t @ [acc ws]
-                                                 (loeb g (cls i) r (8 * i) (min 8 (sz - 8 * i)) @ [w f2] [(acc + f2) (ws + [w])])))
-                                              [fs ()] ^#cls @
-                                        [f2 ws] (f2 + map (i \ lomv (loebregs cls i) (ws i)) ^#cls + epj)))
+                    (g 'losret @ () (: pcs (lopcs g rt) rs (lorregs g pcs)
+                                       (foldl (t \ p \ (t @ [acc ws]
+                                                 (p @ [c o n] (loeb g c r o n @ [w f2] [(acc + f2) (ws + [w])]))))
+                                              [fs ()] pcs @
+                                        [f2 ws] (f2 + map (i \ lomv (rs i) (ws i)) ^#pcs + epj)))
                                  h (fs + locopy g r h 0 (tsz g rt) + [['mov 'r0 h]] + epj))
                    'bad))
             ['blk items] (loitems g env items)
@@ -1127,9 +1188,9 @@
    (lochunks n) (map (i \ 8 * i) ^(n // 8) + map (i \ 8 * (n // 8) + i) ^(n % 8))
    ; a switch's compares: each key, then each wide range as r - lo unsigned at most the span
    (lochain g r tab ks)
-    (catmap (k \ (fits32 k ? [['cmp r k] ['br 'eq (tab k)]] (lomk g @ t [['li t k] ['cmp r t] ['br 'eq (tab k)]]))) ks +
+    (catmap (k \ (imma g 'cmp k ? [['cmp r k] ['br 'eq (tab k)]] (lomk g @ t [['li t k] ['cmp r t] ['br 'eq (tab k)]]))) ks +
      catmap (x \ (x @ [lo n L] (lomk g @ t (lomk g @ k
-                   ([['mov t r] ['li k lo] ['sub t t k]] + (fits32 n ? [['cmp t n]] [['li k n] ['cmp t k]]) + [['br 'be L]])))))
+                   ([['mov t r] ['li k lo] ['sub t t k]] + (imma g 'cmp n ? [['cmp t n]] [['li k n] ['cmp t k]]) + [['br 'be L]])))))
             (peep tab 'rng ()))
    ; the table lane, as the old path's jtable: six keys or more, a third full at least, no wide
    ; range, -fno-jump-tables off. rel32 cells off the table's label, one unsigned compare to the
@@ -1163,7 +1224,7 @@
              (: es (tsz g (varel ty)) (up r) [['add r r 15] ['shr r 4] ['shl r 4]]
                 (pins g 'fesc 1 'hasasm 1,
                  [['ld t 'r4 so] ['cmp t 0] ['br 'eq lf]] + up t + [['ld q 'r4 po] ['add q q t] ['mov 'sp q] ['label lf]] +
-                 fs + [['mov z n]] + (es = 1 ? () [['imul z z es]]) + [['st 'r4 so z]] + up z +
+                 fs + [['mov z n]] + (es = 1 ? () (lork g 'imul z es)) + [['st 'r4 so z]] + up z +
                  [['mov q 'sp] ['sub q q z] ['mov 'sp q] ['st 'r4 po q]] +
                  ; -ftrivial-auto-var-init=zero: the block word by word, from its top down
                  (avz? g ? (lomk g @ k (lomk g @ a (nlab g ".vla" @ l1 (nlab g ".vla" @ l2
@@ -1227,19 +1288,23 @@
        (go ps env ()))
 
    ; -- the fn: params home off their registers, then the body -> forms over vregs | 'bad --
-   ; MOON_LOLOG=1 names each fn and which path took it; MOON_LOONLY=fn keeps the new path to one fn, for bisecting
+   ; MOON_LOLOG=1 names each fn and which path took it; MOON_LOONLY="fn .." keeps the new path to those fns, for bisecting
    (lofn g f params sig)
-    ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (n = <>f ? (lofn1 g f params sig) 'bad)) @ r
+    ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (elem <>f (words n) ? (lofn1 g f params sig) 'bad)) @ r
        (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
-            !(g 'abad || g 'sspf))
+            !(g 'abad || g 'sspf) &&
+            ; -mstrict-align's chunked members are the old path's
+            !(sal? g) &&
+            ; past SysV a pair takes the old path
+            (x64? g || !(d128? rt || any (p \ d128? <>p) params)))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
-       (: sret (stru? rt && !(two? (aclass g rt)))
+       (: sret (losr? g rt)
           _ (pin g 'lon 0)
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
-                  'loret (? (rt = 'void) () (lofl? rt) '(f0) (d128? rt) '(r0 r2) (stru? rt && !sret) (loebregs (aclass g rt)) '(r0)))
+                  'loret (? (rt = 'void) () (lofl? rt) '(f0) (d128? rt) '(r0 r2) (stru? rt && !sret) (lorregs g (lopcs g rt)) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           (ovm ty ov) ['m (ovb g + 8 * ov) ty]
           ; the copies off the registers first, their conversions after (post)
@@ -1247,22 +1312,28 @@
            (l @ ((nm . ty . _) . u)
                  (? (d128? ty)
                      ; a pair: two gp registers, else 16-aligned above the link
-                     (gi + 2 <= 6 ?
+                     (gi + 2 <= ngp g ?
                         (ntmp g ty @ off (go u (gi + 2) fi ov ([nm 'm off ty] . env)
-                                             (acc + [['st 'r4 off (argregs gi)] ['st 'r4 (off + 8) (argregs (gi + 1))]]) post))
+                                             (acc + [['st 'r4 off (argr g gi)] ['st 'r4 (off + 8) (argr g (gi + 1))]]) post))
                         ((ov + ov % 2) @ o (go u gi fi (o + 2) ((nm . ovm ty o) . env) acc post)))
                     (stru? ty)
-                     (: cls (aclass g ty) ng #(filter (c \ c = 'int) cls) nx (#cls - ng)
-                        (two? cls && gi + ng <= 6 && fi + nx <= 8 ?
-                           (ntmp g ty @ off
-                              (foldl (t \ i \ (t @ [gi fi fs]
-                                        (cls i = 'sse ? [gi (fi + 1) (fs + [['stsd 'r4 (off + 8 * i) (xmmreg fi)]])]
-                                           [(gi + 1) fi (fs + [['st 'r4 (off + 8 * i) (argregs gi)]])])))
-                                     [gi fi ()] ^#cls @
-                               [g2 f2 fs] (go u g2 f2 ov ([nm 'm off ty] . env) (acc + fs) post)))
-                           (go u gi fi (ov + aslots g ty) ((nm . ovm ty ov) . env) acc post)))
-                    (lofl? ty ? (8 <= fi) (6 <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc post)
-                    (: fl (lofl? ty) A (fl ? (xmmreg fi) (argregs gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
+                     (lopcs g ty @
+                        ; AAPCS64 past 16 bytes: the caller's copy, read through its address in a cell
+                        'ref (gi < ngp g ?
+                                (nslot g 8 @ po (go u (gi + 1) fi ov ([nm 'p po ty] . env) (acc + [['st 'r4 po (argr g gi)]]) post))
+                                (go u gi fi (ov + 1) ([nm 'p (ovb g + 8 * ov) ty] . env) acc post))
+                        pcs (: ng #(filter (p \ <p = 'int) pcs) nx (#pcs - ng)
+                               (two? pcs && gi + ng <= ngp g && fi + nx <= 8 ?
+                                  (ntmp g ty @ off
+                                     (foldl (t \ p \ (t @ [gi fi fs]
+                                               (<p = 'sse ? [gi (fi + 1) (fs + [(lopst p 'r4 off (xmmreg fi))])]
+                                                  [(gi + 1) fi (fs + [(lopst p 'r4 off (argr g gi))])])))
+                                            [gi fi ()] pcs @
+                                      [g2 f2 fs] (go u g2 f2 ov ([nm 'm off ty] . env) (acc + fs) post)))
+                                  (go u (a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
+                                      ((nm . ovm ty ov) . env) acc post))))
+                    (lofl? ty ? (8 <= fi) (ngp g <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc post)
+                    (: fl (lofl? ty) A (fl ? (xmmreg fi) (argr g gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
                        (lotk? g nm ?
                           (ntmp g ty @ off
                              (go u g2 f2 ov ([nm 'm off ty] . env)
@@ -1272,7 +1343,7 @@
                 [gi fi ov (acc + post) env])
           ; each VLA site's size cell reads 0 until its decl runs
           vz (keys (g 'vslots) @ () () ks (lomk g @ z (['li z 0] . map (k \ ['st 'r4 (g 'vslots k 1) z]) (sort ks))))
-          (go params (sret ? 1 0) 0 0 () (sret ? [['mov sr 'r6]]) vz @ [gi fi ov pe env]
+          (go params (sret && x64? g ? 1 0) 0 0 () (sret ? [['mov sr (srreg g)]]) vz @ [gi fi ov pe env]
              (pins g 'vagp gi 'vaxmm fi 'vaov ov,
               (va ? (lovasave g)) @ vs
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
@@ -1280,15 +1351,18 @@
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
                            (g 'abad) (g 'sspf)], 'bad))
 
-   ; a variadic fn (SysV): a 176-byte save area, gp at +0 step 8, xmm at +48 step 16
+   ; a variadic fn: SysV's 176-byte save area, gp at +0 step 8, xmm at +48 step 16; AAPCS64's 192,
+   ; x0-x7 then q0-q7 at +64
    (lovasave g)
-    (nslot g 176 @ rsa
-      (pins g 'rsa rsa 'fesc 1,
-        map (i \ ['st 'r4 (rsa + 8 * i) (argregs i)]) ^6 +
-        (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + 48 + 16 * i) (xmmreg i)]) ^8))))
+    (: ng (ngp g) fb (8 * ng) n (fb + 128)
+       (nslot g n @ rsa
+         (pins g 'rsa rsa 'fesc 1,
+           map (i \ ['st 'r4 (rsa + 8 * i) (argr g i)]) ^ng +
+           (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + fb + 16 * i) (xmmreg i)]) ^8)))))
 
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs0)
+    (!(x64? g) && any (f \ two? f && elem <f '(fix raw)) fs0 ? (lono g 'kit)
     (raentry g (radce g (getenv "MOON_NONM" @ () (nmall g fs0) _ fs0)) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      raplan g fs @ 'bad (lono g 'ra)
@@ -1297,9 +1371,27 @@
             _ (rachk g fs f2 loc @ ws
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
-         rasub f2 loc @ body
+         ; x64: a frame load only a compare reads becomes the compare's memory operand
+         (rasub f2 loc @ b0 (x64? g ? (lofuse g (cmpfuse g b0)) b0)) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
-             sibcall g ([['label (name <>f)]] + pro4 + [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))
+             (a64? g ? a4ize 1) (sibcall g ([['label (name <>f)]] + (a64? g ? pro-a64 pro4) +
+                                            [['sub 'sp 'sp (aup (peep g 'off 0) 16)] '(saves)] + body)))))))
+   ; after allocation, a full-word load one form alone reads, dying there, folds into it: a copy
+   ; loads its copy, an alu op takes the word as its right side (a commuting one as its left)
+   (lofuse g fs)
+    (: (fold f nx)
+        (f @ ['ld X b o]
+           (nx @ (['mov Y x] && x = X && Y != X) ['ld Y b o]
+                 ([op d a c] && elem op '(add sub and or xor) && c = X && a = d && d != X) ['alurm op 8 d b o]
+                 ([op d a c] && elem op '(add and or xor) && a = X && c = d && d != X) ['alurm op 8 d b o]
+                 _ ())
+           _ ())
+       (go l)
+        (? !(two? l) l
+           (: f <l r (two? >l ? >>l)
+              m (two? >l ? (fold f <>l))
+              (two? m && dieb? g <>f fs r ? (m . go r) (f . go >l))))
+       (go fs))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g

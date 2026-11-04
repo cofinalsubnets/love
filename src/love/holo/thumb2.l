@@ -23,13 +23,20 @@
          (t32 (hw1 << 16 | hw2)))
    (thumb-movw d imm16) (thumb-mw16 0xF240 (rn d) imm16)
    (thumb-movt d imm16) (thumb-mw16 0xF2C0 (rn d) imm16)
+   ;; ..else mov.w or mvn.w of a modified immediate, which keep the flags too
    (thumb-li d imm)
       (: u (imm < 0 ? (imm + 4294967296) imm) lo (u & 65535) hi (u >> 16 & 65535)
-         (thumb-movw d lo + (hi = 0 ? () (thumb-movt d hi))))
+         (? (hi = 0) (thumb-movw d lo)
+            (0 <= thumb-mimm u) (thumb-dpimm 0xF040 (rn d) 15 (thumb-mimm u))
+            (0 <= thumb-mimm (4294967295 - u)) (thumb-dpimm 0xF060 (rn d) 15 (thumb-mimm (4294967295 - u)))
+            (thumb-movw d lo + thumb-movt d hi)))
 
    ;; la: always the MOVW/MOVT pair, each a fixup with aux = Rd; a .o leaves
    ;; R_ARM_THM_MOVW_ABS_NC / R_ARM_THM_MOVT_ABS
    (thumb-la d label) (rn d @ dn [(fix 4 'movw16 label dn) (fix 4 'movt16 label dn)])
+   ;; lal: la, or li of a number, with its word pooled at p; the relaxer loads it from there
+   ;; where p is in reach
+   (thumb-lal d x p) (charm? x ? (thumb-li d x) (thumb-la d x))
    ;; lap: la from the pc, movw/movt of label less the pc the add after them reads; a .o leaves
    ;; R_ARM_THM_MOVW_PREL_NC / R_ARM_THM_MOVT_PREL
    (thumb-lap d label) (rn d @ dn ([(fix 4 'movw16p label dn) (fix 4 'movt16p label dn)]
@@ -551,7 +558,7 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lap . thumb-lap) ('lapool . thumb-lapool)
+          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
@@ -598,6 +605,11 @@
             ; the narrow forms the 'short hook lays: B T2 (+-2KB) and Bcc T1 (+-256)
             'b16 (-2048 <= o <= 2046 ? (t16 (0xE000 | (o >> 1 & 2047))) (scare 'thumb-b16-reach o))
             'b8 (-256 <= o <= 254 ? (t16 (0xD000 | (aux << 8 | (o >> 1 & 255)))) (scare 'thumb-b8-reach o))
+            ; lal's pooled loads: ldr Rt, [pc, #imm] from the word-aligned pc, t1 or t2
+            'ldl16 (target - (site + 4 & -4) @ v
+                      (0 <= v <= 1020 && v % 4 = 0 ? (t16 (0x4800 | (aux << 8 | v >> 2))) (scare 'thumb-ldl16-reach v)))
+            'ldlw (target - (site + 4 & -4) @ v
+                     (-4095 <= v <= 4095 ? (t32 ((v < 0 ? 0xF85F 0xF8DF) << 16 | (aux << 12 | abs v))) (scare 'thumb-ldlw-reach v)))
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
@@ -619,10 +631,14 @@
           thumb-patch kind target site width aux))
 
    ;; the relaxer's hook: a lone wide b or bcc whose pessimistic reach fits goes narrow; the
-   ;; pc reads site + 4 for both widths
+   ;; pc reads site + 4 for both widths. a lal loads its pool word where the word-aligned pc,
+   ;; at least site + 2, reaches it
    (thumb-short ins c rel)
       (: x <c o (rel - 4)
-         (? (#c != 1 || !(fix? x)) ()
+         (? (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
+                                              (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
+                                              ()))
+            (#c != 1 || !(fix? x)) ()
             (fix-k x = 'b) (-2048 <= o <= 2046 ? [(fix 2 'b16 (fix-l x) 0)] ())
             (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
             ()))
