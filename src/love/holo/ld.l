@@ -114,6 +114,15 @@
                      ord)
         'rela {3 (rev (map (r \ [<r 257 (ix (r 1)) (r 2)]) (st 'rel)))}})
 
+   ; a pass over all an object's locals reads them afresh where the reader can
+   (ld-symr ob) (peep ob 'symr (ob 'syms))
+   (ld-nloc ob) (peep ob 'nloc (ob 'nsym))
+   ; each symbol past the locals, a global or weak: (f si row)
+   (ld-globs ob f)
+    (: n (ob 'nsym) sy (ob 'syms)
+       (go si) (? (si >= n) 0 (: r (sy si) _ (? (r 1 = 0) 0 (f si r)) (go (si + 1))))
+       (go (max 1 (peep ob 'nloc 1))))
+
    ;; --- inputs, resolved as lld resolves them. items: ('whole path) ('obj path) ('group
    ;     (path ..)) ('in path whole?), an object or an archive by its magic. every global
    ;     name is inserted in first-seen order; a file's definitions resolve before its
@@ -126,7 +135,7 @@
     (: cx {'objs () 'n 0 'ot {} 'glob {} 'und {} 'lazy {} 'order () 'seen {} 'grp {} 'uonly {}}
        glob (cx 'glob) und (cx 'und) lazy (cx 'lazy) ot (cx 'ot) seen (cx 'seen)
        (ins nom) (? (peep seen nom 0) 0 (: _ (pin seen nom 1) (pin cx 'order (nom . cx 'order))))
-       (gl ob f) (each >^(ob 'nsym) (si \ (: r (ob 'syms si) (? (r 1 = 0 || #(<r) = 0) 0 (f si r)))))
+       (gl ob f) (ld-globs ob (\ si r (? (#(<r) = 0) 0 (f si r))))
        ; a definition in a dropped group's section is a reference, as lld takes it
        (add ob)
         (: oi (cx 'n)
@@ -153,13 +162,13 @@
         (: ob (mem 'ob) sy (ob 'syms)
            (go si) (? (si >= ob 'nsym) 0
                       (: r (sy si)
-                         (? (r 1 = 0 || r 3 = 0 || #(<r) = 0) (go (si + 1))
+                         (? (r 3 = 0 || #(<r) = 0) (go (si + 1))
                             (: nom <r _ (ins nom)
                                (? (two? (peep glob nom ())) (go (si + 1))
                                   (peep und nom 0 = 1) (extract mem)
                                   (: _ (? (two? (peep lazy nom ())) 0 (pin lazy nom [mem]))
                                      (go (si + 1))))))))
-           (go 1))
+           (go (max 1 (peep ob 'nloc 1))))
        _ (each items
           (it \ (: k <it
                    (? (k = 'obj) (add (ld-rel64 <>it <>(uread <>it)))
@@ -729,8 +738,8 @@
                     0)
                u)
        _ (each ^(cx 'n)
-           (oi \ (: ob (ot oi) sy (ob 'syms)
-                    (each >^(ob 'nsym)
+           (oi \ (: ob (ot oi) sy (ld-symr ob)
+                    (each >^(ld-nloc ob)
                        (si \ (: r (sy si)
                                 (? (r 1 != 0 || r 2 = 3 || r 3 = 0) 0
                                    ; .L: all under -X, else those in a merge section, as lld drops them; none under --discard-none
@@ -760,10 +769,9 @@
        ; internal is local
        vtab {}
        _ (each ^(cx 'n)
-           (oi \ (: ob (ot oi) sy (ob 'syms)
-                    (each >^(ob 'nsym)
-                       (si \ (: r (sy si) v (r 6 % 4) w (peep vtab <r 0)
-                                (? (r 1 = 0 || v = 0) 0 (pin vtab <r (? (w = 0 || v < w) v w)))))))))
+           (oi \ ld-globs (ot oi)
+              (\ si r (: v (r 6 % 4) w (peep vtab <r 0)
+                         (? (v = 0) 0 (pin vtab <r (? (w = 0 || v < w) v w)))))))
        (gl nm)
         (: v (peep sv nm ())
            (? (whole? v && starts? nm "__ld_") 0
@@ -1039,8 +1047,9 @@
         (: m (peep memo oi ())
            (? (two? m) m
               (: ob (ot oi) ms {} ss {}
-                 _ (each >^(ob 'nsym)
-                      (k \ (: r (ob 'syms k)
+                 sy (ld-symr ob)
+                 _ (each >^(ld-nloc ob)
+                      (k \ (: r (sy k)
                               (? (r 1 != 0 || r 3 = 0 || r 3 >= 65280) 0
                                  (r 2 = 3) (pin ss (r 3) 1)
                                  (0 < (ob 'sec (r 3) 2 & 4) && (xsym? <r || dsym? <r))
@@ -1165,8 +1174,8 @@
                  _ (pin useds oi t)
                  (peep t si 0))))
        _ (each ^(cx 'n)
-           (oi \ (: ob (ot oi) sy (ob 'syms)
-                    (each >^(ob 'nsym)
+           (oi \ (: ob (ot oi) sy (ld-symr ob)
+                    (each >^(ld-nloc ob)
                        (si \ (: r (sy si) sh (r 3)
                                 (? (r 1 != 0 || r 2 = 3 || sh = 0) 0
                                    (sh = 65521) (put oi [(sk oi si) (ent <r (r 4) (r 5) (r 2) (r 6) 65521)])
@@ -1180,13 +1189,10 @@
        ; a name's visibility, the strictest any object gives it; an undefined's type, its first
        vis {} uty {}
        _ (each ^(cx 'n)
-           (oi \ (: ob (ot oi) sy (ob 'syms)
-                    (each >^(ob 'nsym)
-                       (si \ (: r (sy si)
-                                (? (r 1 = 0) 0
-                                   (: v (r 6 % 4) w (peep vis <r 0)
-                                      _ (? (v = 0) 0 (pin vis <r (? (w = 0 || v < w) v w)))
-                                      (? (r 3 = 0 && peep uty <r () = ()) (pin uty <r (r 2)) 0)))))))))
+           (oi \ ld-globs (ot oi)
+              (\ si r (: v (r 6 % 4) w (peep vis <r 0)
+                         _ (? (v = 0) 0 (pin vis <r (? (w = 0 || v < w) v w)))
+                         (? (r 3 = 0 && peep uty <r () = ()) (pin uty <r (r 2)) 0)))))
        (oth nm r6) (r6 - r6 % 4 + peep vis nm 0)
        glo {'l ()}
        (gput nm e) (pin glo 'l ([nm e] . glo 'l))
@@ -1282,7 +1288,7 @@
    (ld-rsymx lk oi)
     (: m (lk 'rsx) v (peep m oi ())
        (? (tray? v) v
-          (: ob (lk 'ot oi) sy (ob 'syms) lidx (lk 'lidx) gidx (lk 'gidx)
+          (: ob (lk 'ot oi) sy (ld-symr ob) lidx (lk 'lidx) gidx (lk 'gidx)
              (one si) (: e (sy si)
                          (? (si = 0) 0 (e 2 = 3) -1 (e 1 = 0) (peep lidx (oi * 16777216 + si) 0) (peep gidx <e 0)))
              x (spread (map one ^(ob 'nsym)))
