@@ -362,7 +362,7 @@
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
    (lost g lv v)
     (lv @ ['v r ty] (lotr g v ty @ [_ c fs] [(fs + lomvs r c) [ty r ()]])
-          (['a [_ b _] ty off] && losc? ty) (lotr g v ty @ [_ c fs] [(fs + [[(stop ty) b off c]]) [ty c ()]])
+          (['a [_ b _] ty off] && losc? ty && !(pair? g ty)) (lotr g v ty @ [_ c fs] [(fs + [[(stop ty) b off c]]) [ty c ()]])
           (['a [_ b _] ty off] && lofl? ty) (lotr g v ty @ [_ c fs] [(fs + [[(ty = 'float ? 'stss 'stsd) b off c]]) [ty c ()]])
           ; a bitfield: read-modify-write its unit, the truncated value answers
           ['b [_ b _] bt off]
@@ -373,7 +373,7 @@
                        [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
                                ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u)
                         ['long m ()]]))))
-          (['a [_ b _] ty off] && d128? ty)
+          (['a [_ b _] ty off] && (d128? ty || pair? g ty))
            (lotr g v ty @ [_ [l h] fs] [(fs + [['st b off l] ['st b (off + (pair? g ty ? 4 8)) h]]) [ty [l h] ()]] _ 'bad)
           (['a _ ty _] && gcplx? ty && !(locxsame? (vty v) ty)) (lotr g v ty @ 'bad 'bad v2 (lost g lv v2))
           (['a [_ b _] ty off] && stru? ty)
@@ -1659,8 +1659,10 @@
 
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs0)
-    (ilp32? g && (g 'lowhy || any (f \ two? f && !(elem <f '(fix jmpt)) && any two? >f) fs0) ||
-     !(x64? g) && any (f \ (f @ ['fix () () [['trap]]] 0 ['fix _ d _] (d != lokl) _ (two? f && elem <f '(fix raw)))) fs0 ? (lono g 'kit)
+    (: (kit? f) (f @ ['fix () () [['trap]]] 0 ['fix _ d _] (d != lokl) _ (two? f && elem <f '(fix raw)))
+       (leak? f) (two? f && !(elem <f '(fix jmpt)) && any two? >f)
+       (? (ilp32? g && (g 'lowhy || any leak? fs0)) (lono g ['pairleak (filter leak? fs0 @ (x . _) x _ ())])
+          (!(x64? g) && any kit? fs0) (lono g ['kit (filter kit? fs0 @ (x . _) <x _ ())])
     (mprof 'ra0 (_ \ raentry g (t2nx g fs0 @ fs1 (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs1)) _ (radce g fs1)))) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      mprof 'raplan (_ \ raplan g fs) @ 'bad (lono g 'ra)
@@ -1674,7 +1676,7 @@
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16)
                 (rv64? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
-                   (((a64? g || t32? g) ? a4ize 1) (sibcall g ([['label (name <>f)]] + (t32? g && (g 'sigs <>f @ s (two? s && s 2)) ? '((push r3) (push r2) (push r1) (push r0))) + (a64? g || t32? g ? pro-a64 pro4) + [['sub 'sp 'sp F] '(saves)] + body))))))))))
+                   (((a64? g || t32? g) ? a4ize 1) (sibcall g ([['label (name <>f)]] + (t32? g && (g 'sigs <>f @ s (two? s && s 2)) ? '((push r3) (push r2) (push r1) (push r0))) + (a64? g || t32? g ? pro-a64 pro4) + [['sub 'sp 'sp F] '(saves)] + body)))))))))))
    ; riscv links last, so fp is the frame's bottom: the saves laid, each fp slot rebased by the
    ; frame they leave, then a variadic fn's a0-a7 block ahead of the link
    (lorvf g va fs)
