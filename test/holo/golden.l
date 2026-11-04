@@ -1899,6 +1899,11 @@
    _ (hear (a \ b \ a = 'i386-badreg ? (pin i3caught 0 a, ()) (welp a b)))
    _ (pin i3caught 0 0, holo-bytes 'i386 '((mov r0 r7)))
    _ (chk-eq "i3.r7.refused" 'i386-badreg (peep i3caught 0 0))
+   _ (pin i3caught 0 0, holo-bytes 'i386 '((la r7 x)))
+   _ (chk-eq "i3.la.r7.refused" 'i386-badreg (peep i3caught 0 0))
+   ;; ..but a symbol may be spelled like one
+   _ (pin i3caught 0 0, holo-bytes 'i386 '((label r8) (call r8) (la r0 r12) (jmp r8)))
+   _ (chk-eq "i3.sym.like.r8" 0 (peep i3caught 0 0))
 
    ;; -- the wasm module writer: each row binaryen's wasm-as bytes for the text (memory64) --
    wtests '(

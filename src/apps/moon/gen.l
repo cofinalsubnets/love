@@ -5343,12 +5343,12 @@
              ([lab] + map (x \ ['push (x 1)]) sl + (N = 4 * nsv ? () [['sub 'sp 'sp (N - 4 * nsv)]]) + rw body)))))
    ; the fall-through's answer: 0, for main's sake -- a void fn has none to give
    (fz0 g nm) (<(peep (g 'sigs) nm ['long ()]) = 'void ? () '((li r0 0)))
-   ; -Os: the straight runs that end in a ret and share a tail keep one copy of it, under a label;
-   ; the others jump there. two forms at least, so a bare ret never trades for a jump
+   ; -Os: the straight runs that end in a ret, or a pop of pc, and share a tail keep one copy of it,
+   ; under a label; the others jump there. two forms at least, so a bare ret never trades for a jump
    (rjoin g fs)
     (cz g 'rjoin fs (? !(osz? g) fs
        (: (bar? f) (!(two? f) || elem <f '(label br jmp jmpr ret raw jmpm))
-          (ret? f) (two? f && <f = 'ret)
+          (ret? f) (two? f && (<f = 'ret || <f = 'popm && elem 'pc (f 1)))
           blks (: (go l i run acc)
                   (? !(two? l) (rev acc)
                      (ret? <l) (go >l (i + 1) () ([i (rev (<l . run))] . acc))
@@ -9948,8 +9948,8 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the body's weight: 99 straight, 43 branchy
-          (!aln && (straight? items ? 99 43) < aweigh <>>>f) ()
+          ; the size gate on the body's weight: 99 straight, 43 branchy; -Os, what a call costs
+          (!aln && (osz? g ? (straight? items ? 8 4) (straight? items ? 99 43)) < aweigh <>>>f) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, evaluated by its statement before anything it
@@ -11985,7 +11985,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (!(bad? irn)) (mprof 'lotail (_ \ (cite 'moon 'lotail) g irf)) (mprof 'oldtail (_ \ dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))))
+       (? (bad? irf) irf (!(bad? irn)) (mprof 'lotail (_ \ (cite 'moon 'lotail) g irf)) (mprof 'oldtail (_ \ dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
