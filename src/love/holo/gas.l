@@ -183,6 +183,13 @@
         (r \ (: t (show <r) e (w \ [<>r <>>r w])
                 (pin gx-mdig <r (e 4), pin gx-mdig (name (t + "q")) (e 8), pin gx-mdig (name (t + "64")) (e 8)))))
    gx-alu '(add sub and or xor imul)
+   ;; ops whose template rows are 64-bit: narrower on a register, as.l lays them, flags and all
+   gx-narrow '(mov add sub and or xor imul cmp test shl sal shr sar rol ror not neg inc dec)
+   ;; ..of registers and immediates; li's word and the xor zeroing are exact already
+   (gx-narrow? m w0 d s ops)
+    (: rw (w0 > 0 ? w0 (d 2))
+       (elem m gx-narrow && <d = 'rg && rw < 8 && all (o \ elem <o '(rg im)) ops
+        && !(m = 'mov && <s = 'im && rw > 1) && !(m = 'xor && s = d)))
    gx-cc (gtab '((je eq) (jz eq) (jne ne) (jnz ne) (jl lt) (jle le) (jg gt) (jge ge)
                  (jb below) (jc below) (jnae below) (ja above) (jnbe above)
                  (jae ae) (jnb ae) (jnc ae) (jbe be) (jna be) (js s) (jns ns) (jo vs) (jno vc)))
@@ -214,6 +221,7 @@
     (: k #ops w (w0 > 0 ? w0 8)
        d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
        (? (ghas? gx-nils m) [[(gx-nils m)]]
+          (gx-narrow? m w0 d s ops) (scare 'gas-x64-op m)
           (k = 0 && two? (peep gx-str m ())) (gx-str m @ e [['str <e <>e]])
           (k = 0 && elem m '(cs ds es ss)) [['seg m]]                   ; a null override, the padding alternatives lay
           (k = 1 && elem <d '(mem rip lbl) && two? (peep gx-mdig m ()))

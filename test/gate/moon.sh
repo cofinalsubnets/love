@@ -212,6 +212,21 @@ grep -q 'no lane for alloca where an operand is parked' "$ho/.alr.log" || fail "
 printf '#include <string.h>\nstatic void __attribute__((noinline)) dirty(void) { volatile char b[1024]; memset((char *) b, 255, sizeof b); }\nstatic int __attribute__((noinline)) sum(int n) { unsigned char *p = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += p[i]; return s; }\nint main(void) { dirty(); return sum(512) != 0; }\n' > "$ho/.alz.c"
 moonrun -ftrivial-auto-var-init=zero -o "$ho/.alz" "$ho/.alz.c" || fail "mooncc -ftrivial-auto-var-init=zero: alloca"
 "$ho/.alz" || fail "-ftrivial-auto-var-init=zero left an alloca block uncleared"
+# an inline asm's 32- and 8-bit register ops keep their width: flags off bit 31, no upper half shifted in
+cat > "$ho/.a32.c" <<'A32'
+typedef unsigned long u64;
+static int cf(unsigned a) { unsigned char c; asm("addl $1,%1; setc %0" : "=r"(c), "+r"(a)); return c; }
+static int zf(unsigned a) { unsigned char c; asm("incl %1; setz %0" : "=r"(c), "+r"(a)); return c; }
+static int cmph(u64 x) { unsigned char c; unsigned a; asm("movq %2,%q1; cmpl $3,%1; setb %0" : "=r"(c), "=&r"(a) : "r"(x)); return c; }
+static int testh(u64 x) { unsigned char c; unsigned a; asm("movq %2,%q1; test %1,%1; setz %0" : "=r"(c), "=&r"(a) : "r"(x)); return c; }
+static unsigned shr(u64 x) { unsigned r; asm("movq %1,%q0; shrl $4,%0" : "=r"(r) : "r"(x)); return r; }
+static unsigned sar(u64 x) { unsigned r; asm("movq %1,%q0; sarl $4,%0" : "=r"(r) : "r"(x)); return r; }
+static int bcf(unsigned char a) { unsigned char c; asm("addb $1,%1; setc %0" : "=q"(c), "+q"(a)); return c; }
+int main(void) { return !cf(~0u) | !zf(~0u) << 1 | !cmph(0x100000001ul) << 2 | !testh(1ul << 32) << 3
+  | (shr(1ul << 32) != 0) << 4 | (sar(0x80000000ul) != 0xf8000000u) << 5 | !bcf(255) << 6; }
+A32
+moonrun -o "$ho/.a32" "$ho/.a32.c" || fail "mooncc: an inline asm's narrow register ops"
+"$ho/.a32" || fail "an inline asm's narrow register op ran at 64 bits (case mask $?)"
 # an asm's subsection is its function's section's tail (arm64's ALTERNATIVE in an __init fn), laid
 # where the same code without the subsection lands; its numbered labels stay out of the symtab
 printf '__attribute__((section(".init.text"))) int f(int x)\n{ asm volatile("661: nop\\n662:\\n.subsection 1\\n663: nop\\n664:\\n.previous" ::: "memory"); return x + 1; }\nint g(int x) { return x * 2; }\n' > "$ho/.asb.c"
