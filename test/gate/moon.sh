@@ -393,6 +393,21 @@ moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "moonc
 "$ho/.f32"; a=$?
 [ $a -eq $b ] || fail "float arithmetic -Os: ours $a gcc $b"
 
+# -Os asks for less: a frame with exits and a helper called three times, thumb2, against plain
+cat > "$ho/.osz.c" <<'EOF'
+int g(int);
+static int h(int a, int b) { int s = 0; for (int i = 0; i < a; i++) { if (i & 1) s += b * i; else s ^= a - i; } return s; }
+int f(int a, int b, int c, int d) {
+ int x = g(a); if (x) return x + b;
+ int y = g(b + x); if (y > c) return y + x + d;
+ int z = g(c + y); if (z < d) return z + y + x;
+ return h(x, y) + h(y, z) + h(z, x) + z; }
+EOF
+moonrun -t thumb2 -c -o "$ho/.osz2.o" "$ho/.osz.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 the size probe"
+moonrun -t thumb2 -Os -c -o "$ho/.oszs.o" "$ho/.osz.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 -Os the size probe"
+a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
+[ "$a" -lt "$b" ] || fail "thumb2 -Os no smaller: $a bytes against $b"
+
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
