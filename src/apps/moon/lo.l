@@ -764,7 +764,7 @@
        (elem nm '("__builtin_inf" "__builtin_nan" "__builtin_nanf"))
         (lomk g @ t (lomkf g @ w ['double w [['li t (nm = "__builtin_inf" ? 9218868437227405312 9221120237041090560)] ['movqxr w t]]]))
           (elem nm '("__builtin_trap" "__builtin_unreachable"))
-           (lomk g @ d ['long d [['fix () () '((ud2))] ['li d 0]]])
+           (lomk g @ d ['long d [['fix () () [[(x64? g ? 'ud2 'trap)]]] ['li d 0]]])
           (nm = "__builtin_alloca")
            (? (g 'abad || avz? g) (lono g ['call nm])
               (one (v \ (: t (lomk g) u (lomk g) d (lomk g)
@@ -1392,7 +1392,7 @@
 
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs0)
-    (!(x64? g) && any (f \ two? f && elem <f '(fix raw)) fs0 ? (lono g 'kit)
+    (!(x64? g) && any (f \ (f @ ['fix () () [['trap]]] 0 _ (two? f && elem <f '(fix raw)))) fs0 ? (lono g 'kit)
     (mprof 'ra0 (_ \ raentry g (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs0)) _ (radce g fs0))) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      mprof 'raplan (_ \ raplan g fs) @ 'bad (lono g 'ra)
