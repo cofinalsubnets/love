@@ -782,8 +782,11 @@ arguments classify before the head evaluates, so it cannot come off the compiled
 declarator with no prototype still parks `()` and its arguments still classify by themselves,
 and so does a VARIADIC one — AAPCS-VFP keeps a variadic argument out of the co-processor
 registers whatever it was declared as, and no `...` rides the type to say so, so a list there
-would place the named parameters wrong. The arity check stays direct-only: only a direct head
-has a name to put in the gripe.
+would place the named parameters wrong. The cost is a gap: a call through a pointer to a
+variadic function lays its arguments unprototyped, which is wrong wherever a variadic argument
+rides apart from a named one -- rv64's floats in gp registers, AAPCS-VFP, wasm's argument list
+-- so `double (*p)(int, ...)` answers garbage there until `...` rides the type. The arity check
+stays direct-only: only a direct head has a name to put in the gripe.
 
 **`--emit-relocs` landed 2026-09-10** on the arm32 lane: a fully linked image that keeps its
 R_ARM_ABS32 sites in `.rel.<lane>` sections, so a loader placing it at a base of its own can

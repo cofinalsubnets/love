@@ -19,7 +19,7 @@ case $arch in
            ccnames="aarch64-linux-gnu-gcc a64-nerves-linux-gnu-gcc"
            ccglob="/usr/local/data/*/.nerves/artifacts/nerves_toolchain_a64*/bin/a64-nerves-linux-gnu-gcc"
            ccvar=AARCH64_CC
-           unsupported="117-vastruct"
+           unsupported=""
            gnopie="181-asmaddr 242-asmprel64"   # an address as an "i" operand: gcc wants no pie
            # gcc 16 lays a64's frame record under the locals, and its frame chain above level 0 is
            # its own: these answer for our frames, held to our x86-64 alone
