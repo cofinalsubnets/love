@@ -1419,6 +1419,10 @@
             ('ins m os) (gt-ins m (map gt-opnd os))
             ()))
 
+   ;; thumb2's written instructions lay as written: holo's flag-setting rewrites are for compiled
+   ;; forms, as a routine may answer in the flags. its branches still relax
+   (gt-asis tgt fs) (tgt = 'thumb1 ? fs (map (f \ (elem <f '(label jmp br) ? f ['asis f])) fs))
+
    ;; file scope: an asm("..") outside any function, or a .s file, is the whole assembler --
    ;; sections, data, exported labels. a run of instructions goes to gas-text; a directive not
    ;; read here scares
@@ -2305,5 +2309,6 @@
        (g32? tgt) (gx-text32 tgt src)
        (: lc {}
           f (? (tgt = 'a64) ga-line (tgt = 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
-          (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64))))))
+          fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64)))
+          (gthumb? tgt ? (gt-asis tgt fs) fs))))
 ) ; module 'holo

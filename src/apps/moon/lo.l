@@ -1705,6 +1705,6 @@
        (go fs))
    ; the frame and emit tail the old path ends on
    (lotail g ir)
-    (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
+    (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
      (tailarm g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) ir)))))))))))))))))))))
 )) ; module 'moon
