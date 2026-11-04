@@ -523,6 +523,8 @@
    (thumb-mrrc cp opc d d2 crm)
       (t32 (0xEC500000 | rn d2 << 16 | rn d << 12 | thumb-cpn cp 112 << 8 | (opc & 15) << 4 | thumb-cpn crm 99 & 15))
    ;; bkpt #imm8: 0xab is the semihosting call, how a board without a uart exits qemu
+   ;; a form gas wrote, as it stands: nothing rewrites it, and the flag scan stops at it
+   (thumb-asis ins) (thumb-lower ins)
    (thumb-brk imm) (0 <= imm <= 255 ? (t16 (0xBE00 | imm)) (scare 'thumb-brk-imm imm))
    ;; MRS Rd, <sysm>: only the two stack pointers, for a fault handler
    thumb-sysm {'msp 8 'psp 9}
@@ -566,7 +568,7 @@
           ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
           ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
-          ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
+          ('asis . thumb-asis) ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
           ('set . thumb-set) ('test . thumb-test)
           ('div . thumb-div) ('rem . thumb-rem) ('udiv . thumb-udiv) ('urem . thumb-urem)
           ('call . thumb-call)
@@ -652,12 +654,16 @@
          (? (a 2 != 0 || !(thumb-lo? (a 1)) || !(elem (b 1) '(eq ne)) || body < 2 || 128 < body) ()
             [(fix 2 'cbz (b 2) ((b 1 = 'ne ? 8 0) | rn (a 1)))]))
 
+   ;; a compiled tail or indirect call, or a pop into the pc: aapcs keeps no flags across any
+   (thumb-flagend ins) (elem <ins '(jmpr callr callm) || <ins = 'popm && elem 'pc (ins 1))
+
    thumb2 {'lower thumb-lower
            'short thumb-short
            'fuse thumb-fuse
+           'flagend thumb-flagend
            'lis 1
            'sform thumb-sform
-           'flagr '(br set adc sbc adcs sbcs raw)
+           'flagr '(br set adc sbc adcs sbcs raw asis)
            'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss lis)
            'patch thumb-patch
            'refix thumb-refix

@@ -899,18 +899,19 @@
           (fence) (wfi) (sfence zr zr) (sfence r0 r1) (li r0 5) (mov r1 r0) (add sp sp -16) (ld r2 sp 8) (st sp 0 r2)
           (cmp r0 r1) (br eq l1.1) (jmp l2.1) (label l1.1) (ret) (label l2.1) (nop))
         (gas-text 'rv64 "csrr a0, time\n csrw stvec, a0\n csrs sie, a0\n csrsi sstatus, 2\n csrci sstatus, 2\n ecall\n ebreak\n unimp\n fence\n wfi\n sfence.vma\n sfence.vma a0, a1\n li a0, 5\n mv a1, a0\n addi sp, sp, -16\n ld a2, 8(sp)\n sd a2, 0(sp)\n beq a0, a1, 1f\n j 2f\n1:\n ret\n2:\n nop"))
+   (gt-bare fs) (map (f \ (<f = 'asis ? (f 1) f)) fs)   ; gas's thumb2 forms, unwrapped
    _ (chk-eq "gas.thumb"
         '((trap) (brk 3) (nop) (wfi) (li r0 5) (add r0 r0 r1) (ld r1 r0 4) (ret))
-        (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr"))
+        (gt-bare (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr")))
    ;; ..the A-profile system lane: barrier options (none is sy), svc's old name, a coprocessor read
    _ (chk-eq "gas.thumb.sys"
         '((dmb ish) (dsb sy) (yield) (sys) (sys) (mrrc p15 1 r4 r5 c14))
-        (gas-text 'arm "dmb ish\n dsb\n yield\n svc #0\n swi #0\n mrrc p15, 1, r4, r5, c14"))
+        (gt-bare (gas-text 'arm "dmb ish\n dsb\n yield\n svc #0\n swi #0\n mrrc p15, 1, r4, r5, c14")))
    ;; ..its register lists, conditional branches, shifted operands and flag-setting forms
    _ (chk-eq "gas.thumb.wide"
         '((pushm (r4 r5 r6 lr)) (br ne l1.1) (alush or r0 r1 r2 shl 3) (adcs r0 r0 1) (umlal r0 r1 r2 r3)
           (lsl r0 r1 r2) (lsr r0 r1 3) (ubfx r0 r1 20 11) (bic r0 r0 1048576) (label l1.1) (popm (r4 r5 r6 pc)))
-        (gas-text 'thumb2 "push {r4-r6, lr}\n bne 1f\n orr r0, r1, r2, lsl #3\n adcs r0, r0, #1\n umlal r0, r1, r2, r3\n lsl r0, r1, r2\n lsr r0, r1, #3\n ubfx r0, r1, #20, #11\n bic r0, r0, #0x100000\n1:\n pop {r4-r6, pc}"))
+        (gt-bare (gas-text 'thumb2 "push {r4-r6, lr}\n bne 1f\n orr r0, r1, r2, lsl #3\n adcs r0, r0, #1\n umlal r0, r1, r2, r3\n lsl r0, r1, r2\n lsr r0, r1, #3\n ubfx r0, r1, #20, #11\n bic r0, r0, #0x100000\n1:\n pop {r4-r6, pc}")))
    ;; ..and the spellings substitution hands a template: a register at a width (GNU's modifier
    ;; letter), an immediate, a memory operand, and back from a clobber's name
    _ (chk-eq "gas.spell.x64" '("%rax" "%r8d" "%dx" "%al" "%r11w" "%rsp" "$3" "3" "(%r11)")
@@ -1422,6 +1423,18 @@
         (hexs (tx '((cmp r0 0) (br eq far) (nop) (label far) (br ne x) (ret) (label x) (ret)) {})))
    _ (chk-eq "t2.rlx.cbz.on" "002801d000d100bf7047"       ; the fall-through reads them
         (hexs (tx '((cmp r0 0) (br eq far) (br ne far) (nop) (label far) (ret)) {})))
+   ;; compiled exits leave no flags to read: an add before one goes 16-bit
+   _ (chk-eq "t2.flag.jmpr" "001d6047" (hexs (tx '((add r0 r0 4) (jmpr r12)) {})))
+   _ (chk-eq "t2.flag.callr" "001d" (snip (hexs (tx '((add r0 r0 4) (callr r3) (br eq x) (label x) (ret)) {})) 0 4))
+   _ (chk-eq "t2.flag.popm" "001d" (snip (hexs (tx '((add r0 r0 4) (popm (r4 pc)) (label x) (br eq x)) {})) 0 4))
+   _ (chk-eq "t2.flag.popm.lr" "00f2" (snip (hexs (tx '((add r0 r0 4) (popm (r4 lr)) (label x) (br eq x)) {})) 0 4))
+   _ (chk-eq "t2.flag.asis" "00f20400" (snip (hexs (tx '((add r0 r0 4) (asis (jmpr r12))) {})) 0 8))
+   ;; what gas wrote stays as written, flags and all
+   _ (chk-eq "t2.asis.cmp" "002800d000bf7047"
+        (hexs (tx '((asis (cmp r0 0)) (br eq far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.asis.add" "00f204007047" (hexs (tx '((asis (add r0 r0 4)) (ret)) {})))
+   _ (chk-eq "t2.asis.gas" "002800d000bf7047"
+        (hexs (tx (gas-text 'thumb2 "cmp r0, #0\n beq 1f\n nop\n1:\n bx lr") {})))
    ;; lal loads its pool word past the align: ldr (t1) near, ldr.w for a high register or within
    ;; 4 KB, else the movw/movt pair it stands for
    (txl d x n) (tx ([['lal d x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})
