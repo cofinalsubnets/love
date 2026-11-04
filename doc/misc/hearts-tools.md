@@ -114,7 +114,8 @@ No love linker links a kernel yet: holo's `link.l` is a static ELF linker (`ldke
 | llvm-readelf | 2 (vdso dynamic-reloc check) | 2 | kore `readelf -rW`, identical text |
 | llvm-nm | 1 + 4 in link-vmlinux + 1 check-function-names | 3 (voffset, zoffset, pasyms) + 4 | kore `nm` (plain, -n, -S), identical text |
 
-`LLVM=1` names `llvm-*` directly, so kore's verbs never shadow them. The pinned llvm-22.1.8 is built
+hearts passes love's objcopy, strip, nm, objdump and readelf on the command line over `LLVM=1`'s
+`llvm-*`; `HEARTS_OBJCOPY` and its kin name another. The pinned llvm-22.1.8 is built
 ARM-only; the x64 side needs no X86 one once it is off clang.
 
 ## 6. build driver — g-05-5f
