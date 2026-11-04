@@ -33,7 +33,7 @@
 
    ; -- numbers --------------------------------------------------------------------
    (gr-fl x) (x * 1.0)
-   (gr-neg0? x) (x = 0 && 1 / (gr-fl x) < 0)
+   (gr-neg0? x) (x = 0 && 1 / gr-fl x < 0)
    ; %g, a negative zero signed as C signs it
    (gr-g x) (gr-neg0? x ? "-0" (aw-gen (gr-fl x) 6))
    (gr-f2 x) (aw-fixed x 2)
@@ -43,13 +43,13 @@
     (? (n = 0) 0.0
        (n < 0) (-1.0 * gr-dbl (0 - n) d)
        (: k0 (53 - (gr-bits n - gr-bits d))
-          (at k) (0 <= k ? [(n * 2 ** k) d] [n (d * 2 ** (0 - k))])
+          (at k) (0 <= k ? [(n * k 2) d] [n (d * -k 2)])
           (fit k) (: r (at k) q (<r // r 1) (? (q < 4503599627370496) (fit (k + 1)) (9007199254740992 <= q) (fit (k - 1)) k))
           k (fit k0)
           r (at k) a <r b (r 1) q (a // b) rm (a - q * b)
           q2 (b < 2 * rm || (2 * rm = b && q % 2 = 1) ? (q + 1) q)
           (q2 = 9007199254740992 ? (gr-fl (4503599627370496 * 2.0 ** (1 - k)))
-           ((q2 * 1.0) * 2.0 ** (0 - k)))))
+           (q2 * 1.0 * -k 2.0))))
    ; a double as n/d exactly, the sign on n
    (gr-rat x) (: a (abs x) r (aw-exact a) (x < 0 ? [(0 - <r) (r 1)] r))
    ; fixed point: a real times 2^gr-p, an integer
@@ -66,7 +66,7 @@
    (gr-lnq n d)
     (: e0 (gr-bits n - gr-bits d)
        ; n/d over 2^e in [0.75, 1.5)
-       (red e) (: a (0 <= e ? n (n * 2 ** (0 - e))) b (0 <= e ? (d * 2 ** e) d)
+       (red e) (: a (0 <= e ? n (n * -e 2)) b (0 <= e ? (d * e 2) d)
                   (? (3 * b <= 2 * a) (red (e + 1)) (4 * a < 3 * b) (red (e - 1)) [a b e]))
        r (red e0)
        (gr-atanh2 (<r - r 1) (<r + r 1) + r 2 * gr-ln2))
@@ -74,9 +74,9 @@
    (gr-expq f)
     (: k (0 <= f ? ((2 * f + gr-ln2) // (2 * gr-ln2)) (0 - (2 * (0 - f) + gr-ln2) // (2 * gr-ln2)))
        r (f - k * gr-ln2)
-       (go term j acc) (term = 0 ? acc (go ((term * r) // (j * gr-one)) (j + 1) (acc + term)))
+       (go term j acc) (term @ 0 acc (go ((term * r) // (j * gr-one)) (j + 1) (acc + term)))
        s (go gr-one 1 0)
-       (0 <= k ? [(s * 2 ** k) gr-one] [s (gr-one * 2 ** (0 - k))]))
+       (0 <= k ? [(s * k 2) gr-one] [s (gr-one * -k 2)]))
    ; the natural log and the powers, each the double nearest the true value, as glibc's are
    (gr-ln x) (x <= 0 ? (scare 'gr-err "log of a number not above zero")
               (gr-rat x @ r (gr-dbl (gr-lnq <r (r 1)) gr-one)))
@@ -90,7 +90,7 @@
    (gr-exp10 y) (gr-rat (gr-fl y * 2.302585092994046) @ r (gr-expd ((<r * gr-one) // r 1)))
    (gr-pow a b)
     (? (a = 0) (b > 0 ? 0.0 (scare 'gr-err "pow of zero"))
-       (a < 0) (gr-pow (0 - a) b @ m (b = floor b && (int b) % 2 != 0 ? (0 - m) m))
+       (a < 0) (gr-pow (0 - a) b @ m (b = floor b && int b % 2 != 0 ? -m m))
        (: ra (gr-rat a) rb (gr-rat b)
           (gr-expd ((<rb * gr-lnq <ra (ra 1)) // rb 1))))
    ; log10 as glibc's: the power of two apart, log's rest in two pieces
@@ -119,7 +119,7 @@
        b (<a < n && t <a = 46 ? (: (fr i m f) (i < n && digit? (t i) ? (fr (i + 1) (m * 10 + t i - 48) (f + 1)) [i m f]) (fr (<a + 1) (a 1) 0)) a)
        i <b m (b 1) f (b 2)
        p (gr-expo t i - f)
-       (? (m = 0) 0.0 (0 <= p) (gr-dbl (m * 10 ** p) 1) (gr-dbl m (10 ** (0 - p)))))
+       (? (m = 0) 0.0 (0 <= p) (gr-dbl (m * p 10) 1) (gr-dbl m (-p 10))))
 
    ; -- errors ------------------------------------------------------------------
    (gr-err g m) (scare 'gr-err m)
@@ -128,7 +128,7 @@
    ; a source: 'file the graph's own lines (a dot not before a figure opens a troff line),
    ; 'text a macro's or a body's expansion, 'for a loop's body, run again while the loop holds
    (gr-src t k) {'t t 'i 0 'k k 'bol 1 'ln 0}
-   (gr-top g) (g 'srcs @ s (two? s ? <s))
+   (gr-top g) (g 'srcs @ (s . _) s)
    ; an expansion inside a copied line keeps that line's place
    (gr-push g s)
     (gr-top g @ t (tablet? t && t 'docln && !(s 'docln) ? (pin s 'docln (t 'docln)) 0,
@@ -139,11 +139,11 @@
    (gr-c1 g) (gr-top g @ s (!(tablet? s) ? -1 (gr-at s 1)))
    (gr-adv g) (: s (gr-top g) c (gr-at s 0)
                  (pin s 'i (s 'i + 1),
-                  c = 10 ? (pin s 'ln (s 'ln + 1)) 0,
+                  c @ 10 (pin s 'ln (s 'ln + 1)) 0,
                   pin s 'bol (c = 10)))
    ; the line of the document the lexer is on, under any expansion
    (gr-fline g) (g 'fsrc @ f (tablet? f ? (f 'ln) 0))
-   (gr-alpha? c) ((65 <= c <= 90) || (97 <= c <= 122) || c = 95)
+   (gr-alpha? c) (65 <= c <= 90 || 97 <= c <= 122 || c = 95)
    (gr-wc? c) (gr-alpha? c || digit? c)
    (gr-blank? c) (c = 32 || c = 9)
    ; the text up to a newline (not taken)
@@ -240,12 +240,12 @@
    ; copy "file", copy [file] thru body|macro [until "word"]: laid out as text and pushed
    (gr-copy g)
     (: _ (gr-skip-blanks g)
-       file (gr-c g = 34 ? (gr-adv g, gr-string g))
+       file (gr-c g @ 34 (gr-adv g, gr-string g))
        _ (gr-skip-blanks g)
        thru (gr-take-word g "thru" ? (gr-thru g gr-delim))
        _ (gr-skip-blanks g)
        until (gr-take-word g "until" ?
-              (gr-skip-blanks g, gr-c g = 34 ? (gr-adv g, gr-string g) (gr-word g)))
+              (gr-skip-blanks g, gr-c g @ 34 (gr-adv g, gr-string g) (gr-word g)))
        text (string? file ?
              (uread file @ r (two? r ? <>r (gr-err g "can't open file \(file)"))))
        (!(string? thru) ?
@@ -299,7 +299,7 @@
               (s 'k = 'for) (gr-for-next g s ? (gr-lex g) (gr-pop g, gr-lex g))
               (s 'endlf ? (gr-o0 g (s 'endlf)) 0, gr-pop g, gr-lex g))
           (: c (gr-c g) c1 (gr-c1 g)
-             (? ((s 'bol) && c = 46 && !(digit? c1))
+             (? (s 'bol && c = 46 && !(digit? c1))
                  (gr-rest-line g @ t (gr-c g = 10 ? (gr-adv g) 0, tok 'troff t))
                 (gr-blank? c) (gr-adv g, gr-lex g)
                 (c = 92 && c1 = 10) (gr-adv g, gr-adv g, gr-lex g)
@@ -316,7 +316,7 @@
    (gr-lex-word g w tok)
     (g 'macros w @ m
      (? (string? m)
-         ((gr-c g = 40 ? (gr-adv g, gr-args g)) @ as
+         ((gr-c g @ 40 (gr-adv g, gr-args g)) @ as
           (gr-push g (gr-src (gr-subst m as) 'text),
            gr-lex g))
         (w = "define") (gr-define g, gr-lex g)
@@ -375,8 +375,8 @@
          "<" (gr-truth (a < b)) ">" (gr-truth (a > b))
          "<=" (gr-truth (a <= b)) ">=" (gr-truth (a >= b))
          "+" (a + b) "-" (a - b) "*" (a * b)
-         "/" (b = 0 ? (gr-err g "division by zero") (gr-fl a / b))
-         "%" (b = 0 ? (gr-err g "modulus by zero") (gr-fl a % gr-fl b))
+         "/" (b @ 0 (gr-err g "division by zero") (gr-fl a / b))
+         "%" (b @ 0 (gr-err g "modulus by zero") (gr-fl a % gr-fl b))
          0)
    (gr-left g sub ops)
     (: (go v) (gr-k g 0 = 'op && elem (gr-v g 0) ops ?
@@ -425,20 +425,19 @@
           (gr-op? g 0 "(") (: _ (gr-next g) e (gr-expr g) (gr-want-op g ")", e))
           (k = 'name && elem v gr-funcs) (gr-next g, gr-func g v (gr-callargs g))
           ; a name is a variable once something set it; before, it is a syntax error
-          (k = 'name) (peep (g 'vars) v 'unset @ x (x = 'unset ? (gr-syn g) (gr-next g, x)))
+          (k = 'name) (peep (g 'vars) v 'unset @ x (x @ 'unset (gr-syn g) (gr-next g, x)))
           (gr-syn g)))
    ; an expression or a string, for print and sprintf's arguments
    (gr-sprintf g)
     (: _ (gr-next g) _ (gr-want-op g "(")
-       f (gr-k g 0 = 'str ? (gr-next g 1) (gr-syn g))
+       f (gr-k g 0 @ 'str (gr-next g 1) (gr-syn g))
        (go acc) (gr-op? g 0 "," ? (gr-next g, go (gr-expr g . acc))
                  (gr-want-op g ")", aw-sprintf f (rev acc) "%g"))
        (go ()))
    ; a string, or sprintf(..) -> the string, or ()
    (gr-text g)
-    (? (gr-k g 0 = 'str) (<>(gr-next g))
-       (gr-w? g 0 "sprintf") (gr-sprintf g)
-       ())
+    (? (gr-k g 0 = 'str) <>(gr-next g)
+       (gr-w? g 0 "sprintf") (gr-sprintf g))
 
    ; -- coordinate systems ------------------------------------------------------------
    ; a system: its name, its ranges as said or found (a log axis's logged at the end), whether
@@ -454,21 +453,21 @@
    (gr-cname? g nm) (tablet? (g 'cs nm))
    ; the system a point takes by default: the default's name as the graph began, which
    ; follows a rename only when that name was grap's buffer already
-   (gr-cur g) (g 'cur @ c (c = 'buf ? (g 'dflt) c))
+   (gr-cur g) (g 'cur @ c (c @ 'buf (g 'dflt) c))
    ; a coord's name before a point or a value, if the next is one
    (gr-optcoord g)
-    (gr-k g 0 = 'name && gr-cname? g (gr-v g 0) ? (<>(gr-next g)) (gr-cur g))
+    (gr-k g 0 = 'name && gr-cname? g (gr-v g 0) ? <>(gr-next g) (gr-cur g))
    ; the value an axis keeps: its log on a log axis
    (gr-axv c ax v) (c (ax = 'x ? 'xlog 'ylog) ? (gr-log10 v) v)
    ; ..a point's, where a log of nothing above zero ends the run
    (gr-ptv c ax v)
-    (c (ax = 'x ? 'xlog 'ylog) && v <= 0 ? (scare 'gr-fatal "can't take log of \(ax) coord \(gr-g v)") (gr-axv c ax v))
+    (c (ax @ 'x 'xlog 'ylog) && v <= 0 ? (scare 'gr-fatal "can't take log of \(ax) coord \(gr-g v)") (gr-axv c ax v))
    ; a value taken into an axis's range: a point's unless a coord said the axis, a tick's
    ; unless a coord said the other one
    (gr-extend c ax v) (gr-extend2 c ax v 0)
    (gr-extend2 c ax v tick)
-    (: l (ax = 'x ? 'xl 'yl) u (ax = 'x ? 'xu 'yu)
-       f (ax = 'x ? (tick ? 'yfix 'xfix) (tick ? 'xfix 'yfix))
+    (: l (ax @ 'x 'xl 'yl) u (ax @ 'x 'xu 'yu)
+       f (ax @ 'x (tick ? 'yfix 'xfix) (tick ? 'xfix 'yfix))
        (c f ? 0
         (v < c l ? (pin c l v) 0, v > c u ? (pin c u v) 0)))
    ; a point [name x y] kept by its system -> its pic, xy_name(x,y)
@@ -497,7 +496,7 @@
     (: _ (gr-next g)
        (item? k) (elem (gr-v g k) ["x" "y" "log"] && gr-k g k = 'name)
        named (gr-k g 0 = 'name && !(item? 0))
-       nm (named ? (<>(gr-next g)) (gr-cur g))
+       nm (named ? <>(gr-next g) (gr-cur g))
        _ (gr-coord g nm)
        (item? 0 ? (gr-coord-set g nm) (pin g 'cur nm, 0)))
    (gr-coord-set g nm)
@@ -562,7 +561,7 @@
      (? (k = 'num) 1
         (gr-op? g 0 "(") 1
         (gr-op? g 0 "-") 1
-        (k = 'name && !(elem (gr-v g 0) gr-kw) && !(gr-cname? g (gr-v g 0))) 1
+        (k = 'name && nelem (gr-v g 0) gr-kw && !(gr-cname? g (gr-v g 0))) 1
         0))
    ; draw|new [name] [linedesc] [mark]
    (gr-draw-stmt g new)
@@ -767,10 +766,10 @@
         (gr-next g,
          (? (sd = ()) (pin g 'auto ())
             (io != ()) (pin g 'auto [sd], gr-autopref g sd, io = 1 ? (pin (g 'autoin) sd 1) 0)
-            (pin g 'auto (filter (s \ s != sd) (g 'auto)))))
+            (pin g 'auto (filter (!= sd) (g 'auto)))))
         (gr-tick-list g 0 @ tl
-         (tl = () ?
-          (sd = () ? 0
+         (tl @ ()
+          (sd @ () 0
            (elem sd (g 'auto) ? 0 (pin g 'auto (sd . g 'auto)),
             gr-autopref g sd,
             io = 1 ? (pin (g 'autoin) sd 1) 0))
@@ -778,23 +777,23 @@
              c (gr-coord g nm)
              (sd = () ? 0 (gr-unauto g sd),
               gr-ol g "Ticks_\(nm):\n\tticklen = \(gr-g len)",
-              map (it \ (: ax (sd = () ? 'x (gr-axis sd)) v (gr-axv c ax (it 0))
+              map (it \ (: ax (sd @ () 'x (gr-axis sd)) v (gr-axv c ax (it 0))
                            (gr-extend2 c ax (it 0) 1,
-                            sd = () ? 0 (gr-tick g sd (io = 1) 0 nm v (gr-tick-label it any kind)))))
+                            sd @ () 0 (gr-tick g sd (io = 1) 0 nm v (gr-tick-label it any kind)))))
                   its))))))
    ; the side an axis's automatic ticks take, when both of its are on
    (gr-autopref g sd) (pin (g 'autopref) (elem sd ['bot 'top] ? 'bot 'left) sd)
    ; explicit ticks or a grid on an axis end its automatic ones
    (gr-unauto g sd)
     ((elem sd ['bot 'top] ? ['bot 'top] ['left 'right]) @ pair
-     (pin g 'auto (filter (s \ !(elem s pair)) (g 'auto))))
+     (pin g 'auto (filter (s \ nelem s pair) (g 'auto))))
    ; grid side [linedesc] [ticks off] at ..|from ..
    (gr-grid-stmt g)
     (: _ (gr-next g) _ (pin g 'drew 1)
        sd (gr-side g 'bot)
        st (gr-linedesc g @ s (string? s ? s ""))
        tl (gr-tick-list g 1)
-       (tl = () ? 0
+       (tl @ () 0
         (: nm <tl its (tl 1) kind (tl 3)
            c (gr-coord g nm)
            (gr-unauto g sd,
@@ -855,14 +854,14 @@
    ; the axis of the default system: [lo hi q values] in the axis's own units
    ; a log axis nothing reached is plan 9's nan, the log of its empty range's low end
    (gr-auto-axis c ax)
-    (: l (c (ax = 'x ? 'xl 'yl)) u (c (ax = 'x ? 'xu 'yu)) lg (c (ax = 'x ? 'xlog 'ylog))
+    (: l (c (ax @ 'x 'xl 'yl)) u (c (ax @ 'x 'xu 'yu)) lg (c (ax @ 'x 'xlog 'ylog))
        (lg && u < l ? ['nan 'nan 1.0 () 'nan 'nan]
         (: lo (lg ? (gr-pow10 l) l) hi (lg ? (gr-pow10 u) u)
            (? (hi < lo) [lo hi 0.0 () lo hi]
               (hi = lo) [lo hi 0.0 [lo] lo hi]
-              lg (gr-log-ticks lo hi !(c (ax = 'x ? 'xfix 'yfix)) @ r [lo hi <r (r 1) (r 2) (r 3)])
+              lg (gr-log-ticks lo hi !(c (ax @ 'x 'xfix 'yfix)) @ r [lo hi <r (r 1) (r 2) (r 3)])
               (gr-q (hi - lo) @ q [lo hi q (gr-lin-ticks lo hi q) lo hi])))))
-   (gr-gn x) (x = 'nan ? "nan" (gr-g x))
+   (gr-gn x) (x @ 'nan "nan" (gr-g x))
    (gr-autoticks g o)
     (: c (g 'cs (g 'dflt))
        au (g 'auto)
@@ -877,7 +876,7 @@
             ; the side of the axis named last, else the other one still on
             (: pf (peep (g 'autopref) <sides <sides) ot (pf = <sides ? (sides 1) <sides)
                sd (? (elem pf au) pf (elem ot au) ot ())
-               lg (c (<sides = 'bot ? 'xlog 'ylog))
+               lg (c (<sides @ 'bot 'xlog 'ylog))
                (sd = () || atom? (a 3) ? 0
                 (gr-ol g "Ticks_\(nm):\n\tticklen = 0.1",
                  map (v \ gr-tick g sd (peep (g 'autoin) sd 0) 1 nm (lg ? (gr-log10 v) v) (gr-tnum v)) (a 3))))
@@ -894,15 +893,15 @@
     (: nm (c 'name) wid (g 'wid) ht (g 'ht)
        _ (say o "\t# \(nm) \(gr-g (c 'xl)) .. \(gr-g (c 'xu)), \(gr-g (c 'yl)) .. \(gr-g (c 'yu))\n")
        ; a log axis's range goes to logs here, after the points and ticks that found it
-       (lg ax) (: l (ax = 'x ? 'xl 'yl) u (ax = 'x ? 'xu 'yu)
-                  (c (ax = 'x ? 'xlog 'ylog) && c l <= c u ?
+       (lg ax) (: l (ax @ 'x 'xl 'yl) u (ax @ 'x 'xu 'yu)
+                  (c (ax @ 'x 'xlog 'ylog) && c l <= c u ?
                    (gr-ptv c ax (c l), pins c l (gr-log10 (c l)) u (gr-log10 (c u)))
                    0))
        _ (lg 'x, lg 'y)
        m (? (g 'mset) (gr-var g "margin") (g 'anyset) 0.0 0.07)
        _ (c 'xfix ? 0 (gr-margin c 'x m))
        _ (c 'yfix ? 0 (gr-margin c 'y m))
-       (map1 ax arg size) (: l (c (ax = 'x ? 'xl 'yl)) u (c (ax = 'x ? 'xu 'yu))
+       (map1 ax arg size) (: l (c (ax @ 'x 'xl 'yl)) u (c (ax @ 'x 'xu 'yu))
                              (l < u ? "(($\(arg))-(\(gr-g l)))*\(gr-g (size / (u - l)))" (gr-g (size / 2))))
        mx (map1 'x "1" wid) my (map1 'y "2" ht) my1 (map1 'y "1" ht)
        (say o ("define xy_\(nm) @ \t\(mx), \(my) @\ndefine x_\(nm) @ \t\(mx)"
@@ -1046,8 +1045,8 @@
                       gr-o0 g ".lf \(k + sk) \(nm)\n")))
                _ (gr-new-graph g "Graph" "")
                ; a frame no frame statement sized takes frameht and framewid, when it is drawn
-               _ (pins g 'ht -1 'wid -1)
-               _ (pins g 'dflt (peep g 'dflt "gg") 'cur (peep g 'dbuf 0 ? 'buf (peep g 'dflt "gg")))
+               _ (pins g 'ht -1 'wid -1
+                         'dflt (peep g 'dflt "gg") 'cur (peep g 'dbuf 0 ? 'buf (peep g 'dflt "gg")))
                ok (trap (_ \ (gr-run-body g (cats (map (x \ "\(x)\n") bl)) (k + 1), 1)) ()
                         (a \ m \ (a @ 'gr-err (gr-gave-up g nm m k bl pe pk, 0) (scare a m))))
                (ok ? (gr-finish g, gr-o0 g ".PE\n.lf \(pk + 1 + sk)\n") 0,

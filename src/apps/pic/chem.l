@@ -22,7 +22,7 @@
                      "\tlineht = 0.2; linewid = 0.2\n"])
 
    ; -- numbers -----------------------------------------------------------------------
-   (ch-fl x) (x * 1.0)
+   ch-fl (* 1.0)
    (ch-g x) (x = 0 && 1 / ch-fl x < 0 ? "-0" (aw-gen (ch-fl x) 6))
    (ch-norm a) (a % 360 @ m (m < 0 ? (m + 360) m))
    ; the eighth of the compass an angle points nearest, 0 north
@@ -36,14 +36,14 @@
                   a (0 < n && (w 0 = 45 || w 0 = 43) ? 1 0) b (dig a)
                   c (b < n && w b = 46 ? (dig (b + 1)) b)
                   (0 < n && a < c && (b > a || c > b + 1) && c = n))
-   (ch-int w) (int (gem w))
+   ch-int (int * gem)
 
    ; -- moieties ----------------------------------------------------------------------
    (ch-upper? c) (65 <= c <= 90)
-   (ch-chars w) (map (i \ w i) ^#w)
+   (ch-chars w) (map w ^#w)
    ; blanks, macro lines and words are grap's: gr-blank?, gr-macro?, gr-words
    ; a moiety's name: its letters and figures
-   (ch-name w) (cats (map (c \ string c) (filter (c \ (ch-upper? c || (97 <= c <= 122) || digit? c)) (ch-chars w))))
+   ch-name (catmap string * filter (c \ ch-upper? c || 97 <= c <= 122 || digit? c) * ch-chars)
    ; its text for troff: figures lowered and shrunk, one point between figures kept among
    ; them, a point before one raised
    (ch-text w)
@@ -111,7 +111,7 @@
           a))
 
    ; -- statements -----------------------------------------------------------------------
-   (ch-o s t) (say (s 'o) t)
+   (ch-o s) (say (s 'o))
    (ch-ol s t) (ch-o s "\(t)\n")
    (ch-join ws) (atom? ws ? "" (foldl (a \ w \ "\(a) \(w)") <ws >ws))
    ; [double|triple|front|back] bond [turns] [length n] [from X | to X.. | pic..], walked as
@@ -131,7 +131,7 @@
        a <r th (r 2)
        ; a to anywhere in it, and the bond runs there, its length none
        len (starts? th "to" || 0 <= fsub th " to " 0 ? 0 (r 1))
-       third (th = "" ? "from \(ch-ref s a) " th)
+       third (th @ "" "from \(ch-ref s a) " th)
        (ch-ol s "\(pre)Last: \(kind)(\(ch-g len), \(a), \(third))",
         pins s 'last 'bond 'dir a))
    ; a moiety, placed against the last thing, or where its pic says
@@ -181,7 +181,7 @@
        puts (r 'puts) anyput (two? puts)
        (put-at k) (: p (filter (p \ <p = k) puts) (two? p ? (<p 1)))
        half (s 'ht0 / 2)
-       (chop k f) (put-at k != () ? (ch-g (half * f)) "0")
+       (chop k f) (put-at k @ () "0" (ch-g (half * f)))
        (chops i j f) (anyput ? " chop \(chop i f) chop \(chop j f)" "")
        ; a pair said either way round is the side from its first vertex
        dbl (map (p \ (: ws (usplit 44 p) a (ch-int <ws) b (ch-int <>ws)
@@ -190,7 +190,7 @@
        _ (map (i \ (: j (i % n + 1)
                       k (i + 1)
                       m (put-at k)
-                      _ (m = () ? 0
+                      _ (m @ () 0
                          (ch-ol s ("\tV\(k): ellipse invis ht \(ch-g (s 'ht0)) wid \(ch-g (s 'cw0))"
                                    + " at V\(k)\n\t\(ch-name m):\(ch-atom s m) at V\(k)")))
                       k2 (k % n + 1)
@@ -232,7 +232,7 @@
    ; a line's things, split at a lone semicolon; a label on the first
    (ch-chunks s l ws)
     (: lab (two? ws && #<ws > 1 && <ws (#<ws - 1) = 58 && ch-upper? (<ws 0) ? (snip <ws 0 (#<ws - 1)))
-       ws1 (lab = () ? ws >ws)
+       ws1 (lab @ () ws >ws)
        ; only a bond is split from what follows it, and that is one moiety's word, whatever
        ; it spells
        (split m) (: (go l acc) (? (atom? l) [m]
@@ -243,7 +243,7 @@
        (go l pre first) (atom? l ? 0
                          (ch-thing s pre <l (first ? l) lab,
                           go >l "" 0))
-       (go cs (lab = () ? "" "\(lab): ") 1))
+       (go cs (lab @ () "" "\(lab): ") 1))
    ; the rings: ring, benzene and flatring six-sided, ringN N-sided by its last figure, 1 to 8
    (ch-ring? w) (elem w ["benzene" "flatring"] || starts? w "ring")
    (ch-ring-sides w) ((starts? w "ring" && 4 < #w ? (w (#w - 1) - 48) 6) @ d (1 <= d <= 8 ? d 6))
@@ -263,7 +263,7 @@
                 'str (ch-ol s "\(pre)Last: \(ch-join ws)", pin s 'last 'other)
                 (ch-ol s (pre + ch-join ws), pin s 'last 'other)),
         ; a label names what the line drew
-        (lab = () ? 0
+        (lab @ () 0
          (pin (s 'names) lab (s 'last @ 'ring (s 'ring) 'atom 'atom 'bond 'bond 'other)))))
 
    ; -- the document -------------------------------------------------------------------
