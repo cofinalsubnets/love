@@ -198,8 +198,8 @@ void host_spawn_guard(struct g *g, int on) {
 // before a fork: a seekable stdin gives back what the reader holds ahead, so parent and
 // child both stand where the reader does (the offset is shared)
 static void stdin_exact(struct g *g) {
- if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // a pipe or a tty
- struct io *i = (struct io*) g->inport;
+ if (!love_inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // a pipe or a tty
+ struct io *i = (struct io*) love_inport;
  int u = getcharm(love_stdin.io.ungetc_buf) != EOF;
  uintptr_t n = io_pending(g, i) + (u ? 1 : 0);
  if (!n || lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR) < 0) return;
