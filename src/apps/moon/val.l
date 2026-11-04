@@ -46,6 +46,8 @@
                        (? (op = 'jmp) (peep lt <>f -1 @ j (j < 0 ? () [j]))
                           (op = 'br) (peep lt <>>f -1 @ j (j < 0 ? nx (j . nx)))
                           (op = 'jmpt) (filter (j \ 0 <= j) (map (L \ peep lt L -1) (f 3)))
+                          ; an asm goto's fix: its labels as well as the fall
+                          (op = 'fix && 4 < #f) (filter (j \ 0 <= j) (map (L \ peep lt L -1) (f 4)) + nx)
                           (elem op '(ret jmpr jmpm ud2)) ()
                           nx)))
               (pin t i ss,

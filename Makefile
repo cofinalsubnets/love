@@ -341,7 +341,7 @@ holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/lds.l src/love/
 holo_ld = src/love/holo/ld.l
 # the compiler over them
 moon_mid = src/apps/moon/floor.l src/apps/moon/ctab.l src/apps/moon/lex.l src/apps/moon/cpp.l src/apps/moon/parse.l src/apps/moon/cgram.l \
-  src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
+  src/apps/moon/val.l src/apps/moon/gen.l src/apps/moon/ra.l src/apps/moon/nm.l src/apps/moon/lo.l src/apps/moon/lib/mksys.l src/apps/moon/moon.l
 # the archives: the codec, then the two containers over it. a kore member rather than
 # a crew one because the distro's /bin IS the kore cat -- a userland that cannot open
 # a tarball is not one, and these are the tools that open every tarball there is.

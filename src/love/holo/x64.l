@@ -102,11 +102,11 @@
    (alu-rr opcode d s)
       (: dn (rn d) sn (rn s)
          [(rex 1 (hi sn) 0 (hi dn)) opcode (modrm 3 sn dn)])
-   ;; 83 /ext ib for a signed byte, else 81 /ext id
+   ;; 83 /ext ib for a signed byte, else 81 /ext id, or rax's own 05+8*ext id
    (alu-ri ext d imm)
       (rn d @ dn
-         (fits8 imm ?
-            [(rex 1 0 0 (hi dn)) 131 (modrm 3 ext dn) (byte imm)]
+         (? (fits8 imm) [(rex 1 0 0 (hi dn)) 131 (modrm 3 ext dn) (byte imm)]
+            (dn = 0) ([(rex 1 0 0 0) (8 * ext + 5)] + le32 imm)
             ([(rex 1 0 0 (hi dn)) 129 (modrm 3 ext dn)] + le32 imm)))
    (alu-step rr ext d y) (reg? y ? (alu-rr rr d y) (alu-ri ext d y))
    (reg-eq a b) (rn a = rn b)
@@ -170,7 +170,8 @@
 
    (emit-test a b)
       (reg? b ? (: an (rn a) bn (rn b) [(rex 1 (hi bn) 0 (hi an)) 133 (modrm 3 bn an)])    ; 85 /r
-         (rn a @ an ([(rex 1 0 0 (hi an)) 247 (modrm 3 0 an)] + le32 b)))                ; F7 /0 id
+         (rn a @ an (an = 0 ? ([(rex 1 0 0 0) 169] + le32 b)                              ; A9 id
+                       ([(rex 1 0 0 (hi an)) 247 (modrm 3 0 an)] + le32 b))))            ; F7 /0 id
 
    ;; rsp cannot index (4 means none), and it is sp, never an r0..r14
    (memx regf base index scale disp) (x86-memx regf (rn base) (rn index) scale disp)
@@ -242,15 +243,17 @@
    (emit-alurm op w d base off)
     (: k (op @ 'add 0 'or 1 'adc 2 'sbb 3 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alurm op))
        (x64-mw w [(8 * k + 2)] [(8 * k + 3)] d base off 0))
-   ;; adc/sbb d, y: 10/11 and 18/19 /r, or 80/83/81 /2 /3
+   ;; adc/sbb d, y: 10/11 and 18/19 /r, or 80/83/81 /2 /3, or the accumulator's 14/15 and 1c/1d
    (emit-carry op w d y)
     (: k (op @ 'adc 2 'sbb 3 (scare 'x64-carry op)) dn (rn d)
        yn (reg? y ? (rn y) 0)
        rx (w = 8 || hi dn != 0 || hi yn != 0 || (w = 1 && (4 <= dn <= 7 || 4 <= yn <= 7)))
        pre ((w = 2 ? [102] ()) + (rx ? [(rex (w = 8 ? 1 0) (hi yn) 0 (hi dn))]))
        (? (reg? y) (pre + [(w = 1 ? (8 * k) (8 * k + 1)) (modrm 3 yn dn)])
+          (dn = 0 && w = 1) (pre + [(8 * k + 4) (byte y)])
           (w = 1) (pre + [128 (modrm 3 k dn) (byte y)])
           (fits8 y) (pre + [131 (modrm 3 k dn) (byte y)])
+          (dn = 0) (pre + [(8 * k + 5)] + imw (w = 8 ? 4 w) y)
           (pre + [129 (modrm 3 k dn)] + imw (w = 8 ? 4 w) y)))
    ;; test m, y: 84/85 /r, or F6/F7 /0
    (emit-testm w base off y)
