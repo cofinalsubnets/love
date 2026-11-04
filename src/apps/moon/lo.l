@@ -463,25 +463,30 @@
             (['bin op a b] && locmp? op)
              (lox g env a @ 'bad 'bad
                 va (lox g env b @ 'bad 'bad
-                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb) && nelem op '(eq ne))
+                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb))
                              (lofbr g op va vb sense L)
                             !(losc? (vty va) && losc? (vty vb))
                              (lobin g op va vb () @ [_ d fs] (fs + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]) 'bad)
                             (loz g va vb @ [_ x fx] (loz g vb va @ [_ y fy]
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
             (lox g env e @ ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
-                           ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
+                           ([ty r fs] && lofl? ty) (lomk g @ t (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z [['li t 0] ['movqxr z t]]] sense L)))
+                           ([ty r fs] && d128? ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad))))
 
    ; a float compare straight into its branch: above and ae are false on a NaN, so lt and le
-   ; compare swapped, and the sense flipped takes be and below. eq and ne carry parity: lofcmp's
+   ; compare swapped, and the sense flipped takes be and below. a NaN is ne: parity jumps with
+   ; ne, and steps over eq
    (lofbr g op va vb sense L)
     (: ft (vty va = 'double || vty vb = 'double ? 'double 'float)
        uc (ft = 'float ? 'ucomiss 'ucomisd)
        (lotr g va ft @ [_ x fx]
           (lotr g vb ft @ [_ y fy]
-             (fx + fy + [(elem op '(lt le) ? [uc y x] [uc x y])
-                         ['br (op @ ('lt || 'gt) (sense ? 'above 'be) _ (sense ? 'ae 'below)) L]])
+             (? (elem op '(eq ne))
+                 ((op = 'ne) = (sense != 0) ? (fx + fy + [[uc x y] ['br 'ne L] ['br 'p L]])
+                    (nlab g ".lo" @ k (fx + fy + [[uc x y] ['br 'p k] ['br 'eq L] ['label k]])))
+                (fx + fy + [(elem op '(lt le) ? [uc y x] [uc x y])
+                            ['br (op @ ('lt || 'gt) (sense ? 'above 'be) _ (sense ? 'ae 'below)) L]]))
              _ 'bad)
           _ 'bad))
 
