@@ -1288,6 +1288,8 @@
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
             !(g 'abad || g 'sspf) &&
+            ; -mstrict-align's chunked members are the old path's
+            !(sal? g) &&
             ; past SysV a pair takes the old path
             (x64? g || !(d128? rt || any (p \ d128? <>p) params)))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
