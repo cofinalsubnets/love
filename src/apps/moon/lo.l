@@ -1244,12 +1244,16 @@
    (losr? g ty) (stru? ty && (lopcs g ty @ 'ref 1 () 1 _ ()))
    ; the return registers of pieces pcs: ints rax then rdx (x0 then x1 on a64, a0 a1 on riscv), floats from f0
    (lorregs g pcs)
-    (foldl (s \ p \ (s @ [gs xs acc] (<p = 'sse ? [gs (>xs) (acc + [<xs])] [(>gs) xs (acc + [<gs])])))
-           [(a8? g ? '(r0 r1) '(r0 r2)) '(f0 f1 f2 f3) ()] pcs @ [_ _ rs] rs)
+    (t32? g && two? pcs && <<pcs = 'sse && <pcs 2 = 4
+     ; t32's float HFA: its s slots, an odd one with no name of its own
+     ? (map (k \ (0 = k & 1 ? (lo32sn k) ['s k])) ^#pcs)
+     (foldl (s \ p \ (s @ [gs xs acc] (<p = 'sse ? [gs (>xs) (acc + [<xs])] [(>gs) xs (acc + [<gs])])))
+           [(a8? g ? '(r0 r1) '(r0 r2)) '(f0 f1 f2 f3) ()] pcs @ [_ _ rs] rs))
    ; a piece stored from register r at b+off, as wide as its class reads
    (lopst p b off r) (p @ [c o n] [(c = 'sse ? (n = 4 ? 'stss 'stsd) 'st) b (off + o) r])
    ; ..the return registers stored whole into the 8-aligned temp at b+off
-   (loebst g pcs b off) (lorregs g pcs @ rs (map (i \ lopst (pcs i) b off (rs i)) ^#pcs))
+   (loebst g pcs b off)
+    (lorregs g pcs @ rs (catmap (i \ (rs i @ ['s k] (vfpsv k b (off + (pcs i) 1)) r [(lopst (pcs i) b off r)])) ^#pcs))
 
    ; AAPCS64's va_list {__stack, __gr_top, __vr_top, __gr_offs, __vr_offs}: a scalar from its file's
    ; saves while the offs is negative, else from __stack
@@ -1300,7 +1304,7 @@
                                        (foldl (t \ p \ (t @ [acc ws]
                                                  (p @ [c o n] (loeb g c r o n @ [w f2] [(acc + f2) (ws + [w])]))))
                                               [fs ()] pcs @
-                                        [f2 ws] (f2 + map (i \ lomv (rs i) (ws i)) ^#pcs + epj)))
+                                        [f2 ws] (f2 + catmap (i \ lorgmv [(rs i) (ws i)]) ^#pcs + epj)))
                                  h (fs + locopy g r h 0 (tsz g rt) + [['mov 'r0 h]] + epj))
                    'bad))
             ['blk items] (loitems g env items)
@@ -1566,7 +1570,7 @@
    ; -- the fn: params home off their registers, then the body -> forms over vregs | 'bad --
    ; MOON_LOLOG=1 names each fn and which path took it; MOON_LOONLY="fn .." keeps the new path to those fns, for bisecting
    ; the t32 signatures this path takes yet
-   (lot32sig g ts) (!(stru? <ts && hfab g <ts = 'float && 4 < tsz g <ts) && all (t \ t = 'void || losv? t || loagg? g t) ts)
+   (lot32sig g ts) (all (t \ t = 'void || losv? t || loagg? g t) ts)
    (lofn g f params sig)
     ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (elem <>f (words n) ? (lofn1 g f params sig) 'bad)) @ r
        (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
@@ -1585,7 +1589,7 @@
           _ (rv64? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
-                  'loret (? (rt = 'void) () (lofl? rt) '(f0) (d128? rt) '(r0 r2) (pair? g rt) '(r0 r1) (stru? rt && !sret) (lorregs g (lopcs g rt)) '(r0)))
+                  'loret (? (rt = 'void) () (lofl? rt) '(f0) (d128? rt) '(r0 r2) (pair? g rt) '(r0 r1) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           ; ..past the a0-a7 block a riscv variadic fn pushes
           ovo (ovb g + (va && rv64? g ? 64 0))

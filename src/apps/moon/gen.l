@@ -477,7 +477,7 @@
           (? !(two? se) ()
              (16 < <>se) ()
              ; AAPCS64: an aggregate not of one float base rides gp registers alone
-             (a64? g && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
+             ((a64? g || t32? g) && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
              (: cls {}
                 (mark o c) (: i (o >> 3) old (cls i)
                               (pin cls i (old = 'int || c = 'int ? 'int 'sse)))
