@@ -60,7 +60,7 @@
       (rachkc g (lv [['li 'n0 1] ['call 'f] ['mov 'r0 'n0] ['ret]]) {(name "%n0") 'r1} @ [['call [[_ 'r1]] _]] 1 _ 0)
       (rachkc g (lv [['li 'n0 1] ['call 'f] ['mov 'r0 'n0] ['ret]]) {(name "%n0") 'r3} = ())
       ; normalise: a copy-then-subtract of itself stays two-address; literals fold through to a load's offset
-      (nmfuse (lv [['mov 'n0 'n1] ['sub 'n0 'n0 'n0]]) = lv [['mov 'n0 'n1] ['sub 'n0 'n0 'n0]])
+      (nmfuse g (lv [['mov 'n0 'n1] ['sub 'n0 'n0 'n0]]) = lv [['mov 'n0 'n1] ['sub 'n0 'n0 'n0]])
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 2] ['li 'n2 4] ['imul 'n3 'n1 'n2] ['add 'n4 'n0 'n3] ['ld 'n5 'n4 0]
                     ['mov 'r0 'n5] ['ret]])
          = lv [['mov 'n0 'r6] ['ld 'n5 'n0 8] ['mov 'r0 'n5] ['ret]])

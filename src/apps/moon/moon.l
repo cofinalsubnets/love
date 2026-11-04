@@ -446,6 +446,26 @@
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
    ; arm under -fpic: an address is pc-relative, movw/movt from the pc an add reads
    (picla tgt pc fs) (tgt = 'arm && pc ? (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs) fs)
+   ; thumb2 and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
+   ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
+   ; where it reaches, else lays movw/movt
+   (lpool tgt pc fs)
+    (? (pc || !(elem tgt '(thumb2 arm)) || elem 'lpool (ablenv 0)) fs
+       (: (onto a xs) (foldl (\ b x (x . b)) a xs)
+          (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
+          (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
+          (big? f) (<f = 'li && #f = 3 && charm? (f 2) && 65535 < (f 2 & 4294967295))
+          (go l ix ps n a)
+           (? !(two? l) (rev (flush ps a))
+              (<l @ f
+                 (? (two? f && (<f = 'la && #f = 3 || big? f))
+                    (peep ix (f 2) 0 @ p
+                       (p != 0 ? (go >l ix ps n (['lal (f 1) (f 2) p] . a))
+                          (name ".lp\(n)" @ q
+                             (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) (['lal (f 1) (f 2) q] . a)))))
+                    (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
+                    (go >l ix ps n (f . a)))))
+          (go fs {} () 0 ())))
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes nopro]
@@ -462,8 +482,8 @@
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
-                 tforms (picla tgt pc (wkla tgt wu tforms))
-                 xfns (map ([nm forms al] \ [nm (picla tgt pc (wkla tgt wu forms)) al]) xfns)
+                 tforms (lpool tgt pc (picla tgt pc (wkla tgt wu tforms)))
+                 xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc (wkla tgt wu forms))) al]) xfns)
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                      + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                      + bpsecs bp + cfsecs cf tgt)

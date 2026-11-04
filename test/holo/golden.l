@@ -1194,7 +1194,9 @@
    t2tests '(
       ("t2.li"      "40f20500"          ((li r0 5)))                  ; movw r0, #5
       ("t2.movt"    "45f27861c1f23421"  ((li r1 305419896)))          ; 0x12345678: movw + movt
-      ("t2.li.neg"  "4ff6ff72cff6ff72"  ((li r2 -1)))                 ; movw #0xffff ; movt #0xffff
+      ("t2.li.neg"  "4ff0ff32"          ((li r2 -1)))                 ; mov.w r2, #0xffffffff
+      ("t2.li.mvn"  "6ff0ff00"          ((li r0 -256)))               ; mvn.w r0, #255
+      ("t2.li.pair" "45f27860c1f23420"  ((li r0 305419896)))          ; movw #0x5678 ; movt #0x1234
       ("t2.mov"     "1846"              ((mov r0 r3)))                ; mov r0, r3 (t1, flags kept)
       ;; ..but mov.w is orr with rn=15 and cannot name sp or pc, so those take the 16-bit t1.
       ;; unpredictable is not a fault: a wrong encoding here can run green on a board.
@@ -1403,6 +1405,14 @@
    _ (chk-eq "t2.rlx.bcc.wide" 260 (txn '(br ne far) 128))
    _ (chk-eq "t2.rlx.weak-stays-long" "00f000b800bf"
         ({} @ lg (pin lg 'wf 1, hexs (tx '((jmp wf) (label wf) (nop)) lg))))
+   ;; lal loads its pool word past the align: ldr (t1) near, ldr.w for a high register or within
+   ;; 4 KB, else the movw/movt pair it stands for
+   (txl d x n) (tx ([['lal d x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})
+   _ (chk-eq "t2.rlx.lal.near" "004800bf01020304" (hexs (txl 'r0 'p 0)))
+   _ (chk-eq "t2.rlx.lal.hi" "dff8008001020304" (hexs (txl 'r8 'p 0)))
+   _ (chk-eq "t2.rlx.lal.mid" 2008 (#(txl 'r0 'p 1000)))
+   _ (chk-eq "t2.rlx.lal.far" 4212 (#(txl 'r0 'p 2100)))
+   _ (chk-eq "t2.rlx.lal.num" "45f27860c1f23420" (snip (hexs (txl 'r0 305419896 2100)) 0 16))
 
    ;; -- the thumb1 backend: armv6-m, 16-bit, two-address, low registers, no movw/movt (`li`
    ;; byte-builds), no wide alu, no it (`set` branches over), no divide. goldens from llvm-mc
