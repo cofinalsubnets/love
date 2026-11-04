@@ -186,7 +186,7 @@
       ("sar.imm.ext" "49c1fd05"              ((sar r12 5)))      ; r12 -> x86 r13: sar r13,5
       ;; test: 0x85 /r reg,reg ; 0xf7 /0 id reg,imm32
       ("test.rr"     "4885c0"                ((test r0 r0)))     ; test rax,rax (divide-by-zero check)
-      ("test.imm"    "48f7c001000000"        ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard)
+      ("test.imm"    "48a901000000"          ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard), A9 id
       ;; SIB memory: [base + index*scale + disp]. r7->x86 r8, r10->x86 r11 (the map-probe's slot regs)
       ("leax.1.1"    "488d4c0001"            ((leax r1 r0 r0 1 1)))    ; lea rcx,[rax+rax*1+1]
       ("leax.dbl"    "4c8d1c12"              ((leax r10 r2 r2 1 0)))   ; lea r11,[rdx+rdx*1]
@@ -480,8 +480,8 @@
    _ (chk-eq "x64.rip.tail"
         "f6050000000020"                           ; d sits right at the end: disp 0, not 1
         (holo-hex 'x64 '((testm 1 rip (d 0) 32) (label d))))
-   _ (chk-eq "gas.x64.mov32"                       ; movl zero-extends: the 64-bit mov, then zx4
-        '((mov r1 r0) (zx4 r1) (li r0 4294967295))
+   _ (chk-eq "gas.x64.mov32"                       ; movl reg is gas's 89 /r; an immediate is li's b8+r
+        '((raw (137 193)) (li r0 4294967295))
         (gas-text 'x64 "movl %eax, %ecx\nmovl $-1, %eax"))
    _ (chk-eq "gas.a64.cmp"
         ["c68c286e" "203ca24e" "2034624e" "8334a52e" "203ce26e" "208c7f0e" 'gas-a64-operand]
@@ -1192,7 +1192,9 @@
    t2tests '(
       ("t2.li"      "40f20500"          ((li r0 5)))                  ; movw r0, #5
       ("t2.movt"    "45f27861c1f23421"  ((li r1 305419896)))          ; 0x12345678: movw + movt
-      ("t2.li.neg"  "4ff6ff72cff6ff72"  ((li r2 -1)))                 ; movw #0xffff ; movt #0xffff
+      ("t2.li.neg"  "4ff0ff32"          ((li r2 -1)))                 ; mov.w r2, #0xffffffff
+      ("t2.li.mvn"  "6ff0ff00"          ((li r0 -256)))               ; mvn.w r0, #255
+      ("t2.li.pair" "45f27860c1f23420"  ((li r0 305419896)))          ; movw #0x5678 ; movt #0x1234
       ("t2.mov"     "1846"              ((mov r0 r3)))                ; mov r0, r3 (t1, flags kept)
       ;; ..but mov.w is orr with rn=15 and cannot name sp or pc, so those take the 16-bit t1.
       ;; unpredictable is not a fault: a wrong encoding here can run green on a board.
@@ -1207,7 +1209,7 @@
       ("t2.subi"    "a1f26400"          ((sub r0 r1 100)))            ; subw r0, r1, #100
       ("t2.addneg"  "a1f20800"          ((add r0 r1 -8)))             ; negative imm flips add->subw
       ;; the flag and carry forms take a modified immediate; a register operand may shift first
-      ("t2.addsi"   "10f10100"          ((adds r0 r0 1)))             ; adds.w r0, r0, #1
+      ("t2.addsi"   "401c"              ((adds r0 r0 1)))             ; adds r0, r0, #1
       ("t2.bici"    "22f48012"          ((bic r2 r2 1048576)))        ; bic r2, r2, #0x100000
       ("t2.rsbi"    "c5f12006"          ((rsb r6 r5 32)))             ; rsb.w r6, r5, #32
       ("t2.alush"   "46ea5056"          ((alush or r6 r6 r0 shr 21))) ; orr.w r6, r6, r0, lsr #21
@@ -1240,10 +1242,11 @@
       ("t2.lea.mov" "dd46"              ((lea sp fp 0)))              ; mov sp, r11 -- lea #0 to sp rides the sp-legal 16-bit mov
       ("t2.push"    "4df8044d"          ((push r4)))                  ; str r4, [sp, #-4]!
       ("t2.pop"     "5df8044b"          ((pop r4)))                   ; ldr r4, [sp], #4
-      ("t2.sx1"     "4ffa80f0"          ((sx1 r0)))                   ; sxtb.w r0, r0
-      ("t2.sx2"     "0ffa83f3"          ((sx2 r3)))                   ; sxth.w r3, r3
-      ("t2.zx1"     "5ffa80f0"          ((zx1 r0)))                   ; uxtb.w r0, r0
-      ("t2.zx2"     "1ffa87f7"          ((zx2 r7)))                   ; uxth.w r7, r7
+      ("t2.sx1"     "40b2"              ((sx1 r0)))                   ; sxtb r0, r0
+      ("t2.sx2"     "1bb2"              ((sx2 r3)))                   ; sxth r3, r3
+      ("t2.zx1"     "c0b2"              ((zx1 r0)))                   ; uxtb r0, r0
+      ("t2.zx2"     "bfb2"              ((zx2 r7)))                   ; uxth r7, r7
+      ("t2.zx1.w"   "5ffa88f8"          ((zx1 r8)))                   ; uxtb.w r8, r8
       ("t2.sx4"     ""                  ((sx4 r0)))                   ; no-op: an int is already the full 32-bit word
       ("t2.neg"     "c0f10000"          ((neg r0)))                   ; rsb.w r0, r0, #0
       ("t2.not"     "6fea0000"          ((not r0)))                   ; mvn.w r0, r0
@@ -1265,6 +1268,36 @@
       ("t2.lis"     "05208842"          ((li r0 5) (cmp r0 r1)))      ; movs r0, #5 ; cmp r0, r1
       ("t2.lis.br"  "40f2050000f00080"  ((li r0 5) (br eq x) (label x)))   ; movw: the beq reads them
       ("t2.lis.hi"  "40f205088842"      ((li r8 5) (cmp r0 r1)))      ; movw r8, #5: movs is low only
+      ;; a plain op goes to its 16-bit flag-setting twin where the flags are free, else stays wide
+      ("t2.s.add3"   "88187047" ((add r0 r1 r2) (ret))) ; adds r0, r1, r2
+      ("t2.s.add3.br" "01eb020000f00080" ((add r0 r1 r2) (br eq x) (label x))) ; add.w: the beq reads them
+      ("t2.s.addhi"  "084400f00080" ((add r0 r0 r1) (br eq x) (label x))) ; add r0, r1 (t2, no flags)
+      ("t2.s.addhi8" "88447047" ((add r8 r1 r8) (ret))) ; add r8, r1
+      ("t2.s.subi3"  "c81e7047" ((sub r0 r1 3) (ret))) ; subs r0, r1, #3
+      ("t2.s.addi8"  "c8307047" ((add r0 r0 200) (ret))) ; adds r0, #200
+      ("t2.s.addneg" "c81e7047" ((add r0 r1 -3) (ret))) ; subs r0, r1, #3
+      ("t2.s.addw"   "01f264007047" ((add r0 r1 100) (ret))) ; addw: no narrow twin
+      ("t2.s.lea"    "083a7047" ((lea r2 r2 -8) (ret))) ; subs r2, #8
+      ("t2.s.and"    "08407047" ((and r0 r0 r1) (ret))) ; ands r0, r1
+      ("t2.s.or.c"   "0a437047" ((or r2 r1 r2) (ret))) ; orrs r2, r1 (commuted)
+      ("t2.s.bic.c"  "21ea00007047" ((bic r0 r1 r0) (ret))) ; bic.w: bic does not commute
+      ("t2.s.xor.br" "80ea010000f00080" ((xor r0 r0 r1) (br eq x) (label x))) ; eor.w: the beq reads them
+      ("t2.s.mul"    "48437047" ((imul r0 r1 r0) (ret))) ; muls r0, r1, r0
+      ("t2.s.shl"    "c0007047" ((shl r0 3) (ret))) ; lsls r0, r0, #3
+      ("t2.s.sar"    "c0177047" ((sar r0 31) (ret))) ; asrs r0, r0, #31
+      ("t2.s.lsr3"   "48097047" ((lsr r0 r1 5) (ret))) ; lsrs r0, r1, #5
+      ("t2.s.lslv"   "88407047" ((shlv r0 r1) (ret))) ; lsls r0, r1
+      ("t2.s.asrr"   "23417047" ((asr r3 r3 r4) (ret))) ; asrs r3, r4
+      ("t2.s.neg"    "40427047" ((neg r0) (ret))) ; rsbs r0, r0, #0
+      ("t2.s.not"    "c9437047" ((not r1) (ret))) ; mvns r1, r1
+      ("t2.s.mvn"    "d1437047" ((mvn r1 r2) (ret))) ; mvns r1, r2
+      ("t2.s.inc"    "401c7047" ((inc r0) (ret))) ; adds r0, r0, #1
+      ("t2.s.dec"    "521e7047" ((dec r2) (ret))) ; subs r2, r2, #1
+      ("t2.s.set"    "00f2010040f2000108bf40f20101" ((add r0 r0 1) (set eq r1))) ; addw: set reads them
+      ("t2.leasp"    "04a8" ((lea r0 sp 16))) ; add r0, sp, #16
+      ("t2.leasp.w"  "0df20040" ((lea r0 sp 1024))) ; addw r0, sp, #1024
+      ("t2.leax.1"   "0844" ((leax r0 r1 r0 1 0))) ; add r0, r1 (t2, no flags)
+      ("t2.leax.4"   "01eb8000" ((leax r0 r1 r0 4 0))) ; add.w r0, r1, r0, lsl #2
       ("t2.jmpr"    "1847"              ((jmpr r3)))                  ; bx r3
       ("t2.callr"   "9847"              ((callr r3)))                 ; blx r3
       ("t2.ret"     "7047"              ((ret)))                      ; bx lr
@@ -1277,9 +1310,9 @@
       ("t2.br.fwd"  "00f0018000bf" ((br eq l) (nop) (label l)))       ; beq.w -> +2
       ("t2.call.fwd" "00f001f800bf" ((call l) (nop) (label l)))       ; bl    -> +2
       ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
-      ("t2.leaf"    "00eb01007047" ((add r0 r0 r1) (ret)))            ; add.w r0,r0,r1 ; bx lr
+      ("t2.leaf"    "40187047"     ((add r0 r0 r1) (ret)))            ; adds r0,r0,r1 (ret frees the flags) ; bx lr
       ;; a counted loop: forward beq and backward bne, both 32-bit t3 (holo-bytes does not relax), land byte-exact on their labels
-      ("t2.loop"    "01eb0000904200f0058001f2010191427ff4f8af7047"
+      ("t2.loop"    "0818904200f00480491c91427ff4f9af7047"
                      ((add r0 r1 r0) (label top) (cmp r0 r2) (br eq done)
                        (add r1 r1 1) (cmp r1 r2) (br ne top) (label done) (ret)))
       ;; la: the MOVW/MOVT absolute pair, always both; x at +16, so movw #16 ; movt #0, for r0 then r7
@@ -1290,7 +1323,8 @@
                      ((lap r0 x) (lap r7 x) (label x) (raw (65 66 67 0))))
       ;; the 64-bit pair lanes: carry alu, widening multiplies, clz, a variable shift whose count is not r1
       ("t2.adc"     "43eb0101"          ((adc r1 r3 r1)))             ; adc.w r1, r3, r1
-      ("t2.adcs"    "53eb0303"          ((adcs r3 r3 r3)))            ; adcs.w r3, r3, r3
+      ("t2.adcs"    "5b41"              ((adcs r3 r3 r3)))            ; adcs r3, r3
+      ("t2.adcs.w"  "51eb0200"          ((adcs r0 r1 r2)))            ; adcs.w r0, r1, r2
       ("t2.sbc"     "63eb0101"          ((sbc r1 r3 r1)))             ; sbc.w r1, r3, r1
       ("t2.sbcs"    "75eb0107"          ((sbcs r7 r5 r1)))            ; sbcs.w r7, r5, r1
       ("t2.ors"     "5cea020c"          ((ors r12 r12 r2)))           ; orrs.w r12, r12, r2
@@ -1304,7 +1338,7 @@
       ("t2.leax.d"  "04ebcc0909f20409"  ((leax r9 r4 r12 8 4)))       ; add.w r9,r4,r12,lsl#3 ; addw r9,r9,#4
       ("t2.ldx"     "51f82200"          ((ldx r0 r1 r2 4 0)))         ; ldr.w r0, [r1, r2, lsl #2]
       ("t2.ldxb"    "11f80250"          ((ldxb r5 r1 r2 1 0)))        ; ldrb.w r5, [r1, r2]
-      ("t2.ldx.d"   "00eb03004068"      ((ldx r0 r0 r3 1 4)))         ; disp!=0: add.w r0,r0,r3 ; ldr r0,[r0,#4]
+      ("t2.ldx.d"   "18444068"          ((ldx r0 r0 r3 1 4)))         ; disp!=0: add r0,r3 ; ldr r0,[r0,#4]
       ;; the scalar-double vfp lane: f0..f15 -> d0..d15, s[2n] the single views; movqxr/movqrx move
       ;; a gp pair (lo, +1 hi). llvm-mc (eabihf, +vfp4d16)
       ("t2.addsd"   "30ee010b"          ((addsd f0 f1)))              ; vadd.f64 d0, d0, d1
@@ -1369,6 +1403,14 @@
    _ (chk-eq "t2.rlx.bcc.wide" 260 (txn '(br ne far) 128))
    _ (chk-eq "t2.rlx.weak-stays-long" "00f000b800bf"
         ({} @ lg (pin lg 'wf 1, hexs (tx '((jmp wf) (label wf) (nop)) lg))))
+   ;; lal loads its pool word past the align: ldr (t1) near, ldr.w for a high register or within
+   ;; 4 KB, else the movw/movt pair it stands for
+   (txl d x n) (tx ([['lal d x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})
+   _ (chk-eq "t2.rlx.lal.near" "004800bf01020304" (hexs (txl 'r0 'p 0)))
+   _ (chk-eq "t2.rlx.lal.hi" "dff8008001020304" (hexs (txl 'r8 'p 0)))
+   _ (chk-eq "t2.rlx.lal.mid" 2008 (#(txl 'r0 'p 1000)))
+   _ (chk-eq "t2.rlx.lal.far" 4212 (#(txl 'r0 'p 2100)))
+   _ (chk-eq "t2.rlx.lal.num" "45f27860c1f23420" (snip (hexs (txl 'r0 305419896 2100)) 0 16))
 
    ;; -- the thumb1 backend: armv6-m, 16-bit, two-address, low registers, no movw/movt (`li`
    ;; byte-builds), no wide alu, no it (`set` branches over), no divide. goldens from llvm-mc

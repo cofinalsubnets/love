@@ -444,18 +444,18 @@
    _ (hark ["mkdir" "-p" (lg-d + "/test/gate") (lg-d + "/out")])
    _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (lg-d + "/test/gate/")])
    _ (hark ["ln" "-s" cr-love (lg-d + "/out/love")])
-   _ (cr-put lg-d "Makefile" ("test_quick: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n"
+   _ (cr-put lg-d "Makefile" ("test_core: test_a test_b\ntest_a:\n\t@true\ntest_b:\n\t@test ! -f red\n"
                               + "test_hdiff: pre\n\t@true\npre: force\n\t@echo x >> made\nforce:\n"))
-   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_quick test_hdiff")
+   (lg-run _) (: r (cr-sh lg-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_core test_hdiff")
                  [<r (cr-get (lg-d + "/out/l/summary"))])
    lg-g (lg-run 0)
    lg-pre (cr-get (lg-d + "/made"))
    _ (cr-put lg-d "red" "")
    lg-r (lg-run 0)
    _ (test
-      (<lg-g = 0) (cr-in (lg-g 1) "test_quick exit=0 ") (cr-in (lg-g 1) "test_hdiff exit=0 ")
+      (<lg-g = 0) (cr-in (lg-g 1) "test_core exit=0 ") (cr-in (lg-g 1) "test_hdiff exit=0 ")
       (lg-pre = "x\n")
-      (<lg-r = 1) (cr-in (lg-r 1) "test_quick exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
+      (<lg-r = 1) (cr-in (lg-r 1) "test_core exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
    0)
 
 ; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
@@ -474,7 +474,7 @@
 
 ; the projection: a star crosses `/`, a lane another owed lane runs drops out, light before heavy,
 ; test first and test_slow last
-(: lp-db "test_quick: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\ntest_g:\n\t@sh test/gate/g.sh .\ntest_v: host\n\t@cat src/apps/vi/core.l \"src/a/q.l\"; echo\nhelp: host\n\t@love src/tools/h.l\ntest_q2: help\ntest_extra: help\ngen: host\n\t@echo src/love/gen.h\ntest_p:\n\t@$(MAKE) $(patsubst %,pp-%,a b)\npp-%:\n\t@sh src/tools/pp.sh $*\n\t@cat $(ho)/src/x.l\n"
+(: lp-db "test_core: test_clay test_x \\\n  host test_y\n#  a comment\n\t@echo hi\n\ntest_a test_inle:\n\t@$(MAKE) -s test_disk\n\t@echo done\nx = test_no\n\t$(MAKE) test_no\ntest_g:\n\t@sh test/gate/g.sh .\ntest_v: host\n\t@cat src/apps/vi/core.l \"src/a/q.l\"; echo\nhelp: host\n\t@love src/tools/h.l\ntest_q2: help\ntest_extra: help\ngen: host\n\t@echo src/love/gen.h\ntest_p:\n\t@$(MAKE) $(patsubst %,pp-%,a b)\npp-%:\n\t@sh src/tools/pp.sh $*\n\t@cat $(ho)/src/x.l\n"
    lp-cov ((cite 'lanemap 'lanes-covers) lp-db)
    lp-plan ((cite 'lanemap 'lanes-plan) ["src/love/gc.c" "src/apps/moon/gen.l" "src/apps/kore/a/b.l" "doc/x.md"]
             ["src/apps/moon/gen.l"] lp-cov)
@@ -490,13 +490,13 @@
                          ["src/love/boot/glaze.l"] lp-cov))
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
-      (lp-cov "test_quick" = ["test_clay" "test_x" "test_y"])
+      (lp-cov "test_core" = ["test_clay" "test_x" "test_y"])
       (lp-cov "test_inle" = ["test_disk"])
       (lp-cov "test_a" = ["test_disk"])
       !(two? (lp-cov "x"))
       (<lp-names = "test")
       (lp-names (#lp-names - 1) = "test_slow")
-      (elem "test_quick" lp-names)
+      (elem "test_core" lp-names)
       (elem "test_kore" lp-names)
       (elem "test_bakerep" lp-names)
       (elem "test_gcstress_bake" lp-names) !(elem "test_gcstress" lp-names)

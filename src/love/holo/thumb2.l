@@ -1,6 +1,6 @@
 ; thumb2 -- the armv7e-m (Cortex-M7) backend for holo, also 'thumb2sp and 'arm. mixed 16/32-bit
 ; Thumb-2; a 32-bit word (hw1<<16)|hw2 lays as le16(hw1) ++ le16(hw2), not le32 (t32 does it).
-; data-processing uses the wide encodings throughout, reaching r0..r12 alike.
+; data-processing is wide but on low registers, where holo frees the flags for the 16-bit twins.
 ; immediates: add/sub take addw/subw #imm12 (a negative flips the op); cmp/cmn, tst and and/or/xor
 ; a modified immediate (and/or also through bic/orn of the complement, and a low run of ones as
 ; ubfx); else it scares (immok keeps it in a register).
@@ -23,13 +23,20 @@
          (t32 (hw1 << 16 | hw2)))
    (thumb-movw d imm16) (thumb-mw16 0xF240 (rn d) imm16)
    (thumb-movt d imm16) (thumb-mw16 0xF2C0 (rn d) imm16)
+   ;; ..else mov.w or mvn.w of a modified immediate, which keep the flags too
    (thumb-li d imm)
       (: u (imm < 0 ? (imm + 4294967296) imm) lo (u & 65535) hi (u >> 16 & 65535)
-         (thumb-movw d lo + (hi = 0 ? () (thumb-movt d hi))))
+         (? (hi = 0) (thumb-movw d lo)
+            (0 <= thumb-mimm u) (thumb-dpimm 0xF040 (rn d) 15 (thumb-mimm u))
+            (0 <= thumb-mimm (4294967295 - u)) (thumb-dpimm 0xF060 (rn d) 15 (thumb-mimm (4294967295 - u)))
+            (thumb-movw d lo + thumb-movt d hi)))
 
    ;; la: always the MOVW/MOVT pair, each a fixup with aux = Rd; a .o leaves
    ;; R_ARM_THM_MOVW_ABS_NC / R_ARM_THM_MOVT_ABS
    (thumb-la d label) (rn d @ dn [(fix 4 'movw16 label dn) (fix 4 'movt16 label dn)])
+   ;; lal: la, or li of a number, with its word pooled at p; the relaxer loads it from there
+   ;; where p is in reach
+   (thumb-lal d x p) (charm? x ? (thumb-li d x) (thumb-la d x))
    ;; lap: la from the pc, movw/movt of label less the pc the add after them reads; a .o leaves
    ;; R_ARM_THM_MOVW_PREL_NC / R_ARM_THM_MOVT_PREL
    (thumb-lap d label) (rn d @ dn ([(fix 4 'movw16p label dn) (fix 4 'movt16p label dn)]
@@ -75,6 +82,8 @@
                 (chunks (p - c) d (acc + one src c))))
          (? (dn = 13 && rn a = 13 && pos <= 508 && pos % 4 = 0)    ; add/sub sp, #imm7*4
              (t16 ((fop = 'add ? 0xB000 0xB080) | (pos >> 2)))
+            (dn <= 7 && rn a = 13 && fop = 'add && pos <= 1020 && pos % 4 = 0)   ; add Rd, sp, #imm8*4
+             (t16 (0xA800 | (dn << 8 | (pos >> 2))))
             (pos <= 4095) (one a pos)
             (chunks pos a ())))
    ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
@@ -108,6 +117,69 @@
             ; the rest take a modified immediate only: the register form's op and S bits
             (thumb-mimm b @ k
                (k < 0 ? (scare 'thumb-alu-imm [op d a b]) (thumb-dpimm (0xF000 | (base & 0x1F0)) (rn d) (rn a) k)))))
+   (thumb-lo? r) (atom? r && peep thumb-regs r 99 <= 7)
+   ;; add Rdn, Rm (t2) keeps the flags and reaches the high registers, though not sp or pc
+   (thumb-add d a b)
+      (? !(reg? b) (thumb-aluop 'add d a b)
+         (: dn (rn d) an (rn a) bn (rn b) m (? (dn = an) bn (dn = bn) an -1)
+            (? (m < 0 || elem 13 [dn an bn] || elem 15 [dn an bn]) (thumb-alu-rrr 0xEB00 d a b)
+               (t16 (0x4400 | ((dn >> 3) << 7 | (m << 3 | dn & 7)))))))
+   ;; the flag-setting ops go 16-bit on low registers: outside an it block t1 and t2 set the
+   ;; flags as the wide forms do. the two-register ones are Rdn op= Rm, so d is a (or b, commuting)
+   thumb-alu2 {'ands 0x4000 'eors 0x4040 'adcs 0x4140 'sbcs 0x4180 'ors 0x4300 'muls 0x4340 'bics 0x4380}
+   (thumb-alus op d a b)
+      (: (wide o) (o = 'muls ? (scare 'thumb-muls-wide [o d a b]) (thumb-aluop o d a b))
+         (? !(thumb-lo? d && thumb-lo? a) (wide op)
+            (elem op '(adds subs))
+            (? (thumb-lo? b) (t16 ((op @ 'adds 0x1800 0x1A00) | (rn b << 6 | (rn a << 3 | rn d))))
+               !(charm? b) (wide op)
+               (0 <= b <= 7) (t16 ((op @ 'adds 0x1C00 0x1E00) | (b << 6 | (rn a << 3 | rn d))))
+               (rn d = rn a && 0 <= b <= 255) (t16 ((op @ 'adds 0x3000 0x3800) | (rn d << 8 | b)))
+               (wide op))
+            (op = 'rsbs && charm? b && b = 0) (t16 (0x4240 | (rn a << 3 | rn d)))
+            !(thumb-lo? b) (wide op)
+            (peep thumb-alu2 op 0 @ base
+               (? (base = 0) (wide op)
+                  (rn d = rn a) (t16 (base | (rn b << 3 | rn d)))
+                  (rn d = rn b && elem op '(ands eors adcs ors muls)) (t16 (base | (rn a << 3 | rn d)))
+                  (wide op)))))
+   ;; lsls/lsrs/asrs: an immediate count (lsls #0 is movs), or Rdn by Rm's low byte
+   (thumb-shs3 op d s c)
+      (: ty (op @ 'lsls 0 'lsrs 1 'asrs 2 (scare 'badshift op))
+         (? (reg? c)
+            (? (thumb-lo? d && rn d = rn s && thumb-lo? c) (t16 ((0x4080 + ty * 64) | (rn c << 3 | rn d)))
+               (t32 ((0xFA10 + ty * 32 | rn s) << 16 | (0xF000 | (rn d << 8 | rn c)))))
+            (thumb-lo? d && thumb-lo? s && min ty 1 <= c <= 31)
+            (t16 (ty << 11 | (c << 6 | (rn s << 3 | rn d))))
+            (thumb-shs ty d s c)))
+   (thumb-mvns d s) (thumb-lo? d && thumb-lo? s ? (t16 (0x43C0 | (rn s << 3 | rn d))) (t32 (0xEA7F0000 | (rn d << 8 | rn s))))
+   ;; holo's flag-free rewrite: a plain form whose flag-setting twin goes 16-bit, else ()
+   (thumb-sform ins)
+      (: o <ins lo thumb-lo? d (ins 1)
+         (? !(lo d) ()
+            (elem o '(add sub lea lean) && #ins = 4)
+            (: a (ins 2) b (ins 3)
+               (? !(lo a) ()
+                  (lo b) (o @ 'add ['adds d a b] 'sub ['subs d a b] ())
+                  !(charm? b) ()
+                  (: k (o = 'sub ? -b b) p (abs k)
+                     (0 < p && (p <= 7 || rn d = rn a && p <= 255) ? [(k < 0 ? 'subs 'adds) d a p] ()))))
+            (elem o '(and or xor imul bic) && #ins = 4)
+            (: a (ins 2) b (ins 3)
+               (lo a && lo b && (rn d = rn a || o != 'bic && rn d = rn b)
+                ? [(o @ 'and 'ands 'or 'ors 'xor 'eors 'imul 'muls 'bics) d a b] ()))
+            (elem o '(shl shr sar) && #ins = 3)
+            (ins 2 @ c (charm? c && 1 <= c <= 31 ? [(o @ 'shl 'lsls 'shr 'lsrs 'asrs) d d c] ()))
+            (elem o '(lsl lsr asr) && #ins = 4)
+            (: s (ins 2) c (ins 3)
+               (lo s && (? (charm? c) (1 <= c <= 31) (rn d = rn s && lo c)) ? [(o @ 'lsl 'lsls 'lsr 'lsrs 'asrs) d s c] ()))
+            (elem o '(shlv shrv sarv)) (lo (ins 2) ? [(o @ 'shlv 'lsls 'shrv 'lsrs 'asrs) d d (ins 2)] ())
+            (o = 'neg) ['rsbs d d 0]
+            (o = 'not) ['mvns d d]
+            (o = 'mvn) (lo (ins 2) ? ['mvns d (ins 2)] ())
+            (o = 'inc) ['adds d d 1]
+            (o = 'dec) ['subs d d 1]
+            ()))
 
    ;; cmp and tst set the flags whatever their width, so low registers and a byte go 16-bit
    (thumb-cmp a b)
@@ -197,7 +269,7 @@
    (thumb-shamt scale) (scale @ 1 0 2 1 4 2 8 3 (scare 'badscale scale))
    (thumb-addsh d b ix amt)                                   ; ADD.W Rd, Rb, Rix, LSL #amt
       (: dn (rn d) bn (rn b) xn (rn ix)
-         (t32 ((0xEB00 | bn) << 16 | (dn << 8 | ((amt & 3) << 6 | xn)))))
+         (amt = 0 ? (thumb-add d b ix) (t32 ((0xEB00 | bn) << 16 | (dn << 8 | ((amt & 3) << 6 | xn))))))
    (thumb-leax d base ix scale disp)
       (catall [(thumb-addsh d base ix (thumb-shamt scale))
                 (disp @ 0 () (thumb-addsub-imm 'add d d disp))])
@@ -241,8 +313,10 @@
             (t32 (0xE8BD0000 | m))))
 
    ;; w=4 is a no-op on a 32-bit target
-   (thumb-sxr w d s) (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (rn d << 8 | rn s)))   ; sxtb / sxth Rd, Rm
-   (thumb-zxr w d s) (t32 ((w @ 1 0xFA5FF080 0xFA1FF080) | (rn d << 8 | rn s)))   ; uxtb / uxth Rd, Rm
+   (thumb-sxr w d s) (thumb-lo? d && thumb-lo? s ? (t16 ((w @ 1 0xB240 0xB200) | (rn s << 3 | rn d)))   ; sxtb / sxth Rd, Rm
+                        (t32 ((w @ 1 0xFA4FF080 0xFA0FF080) | (rn d << 8 | rn s))))
+   (thumb-zxr w d s) (thumb-lo? d && thumb-lo? s ? (t16 ((w @ 1 0xB2C0 0xB280) | (rn s << 3 | rn d)))   ; uxtb / uxth Rd, Rm
+                        (t32 ((w @ 1 0xFA5FF080 0xFA1FF080) | (rn d << 8 | rn s))))
    (thumb-sx w d) (w @ 4 () (thumb-sxr w d d))
    (thumb-zx w d) (w @ 4 () (thumb-zxr w d d))
    (thumb-neg d) (rn d @ dn (t32 ((0xF1C0 | dn) << 16 | dn << 8)))          ; rsb Rd, Rd, #0
@@ -484,10 +558,11 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lap . thumb-lap) ('lapool . thumb-lapool)
+          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
+          ('lsls . thumb-shs3 'lsls) ('lsrs . thumb-shs3 'lsrs) ('asrs . thumb-shs3 'asrs) ('mvns . thumb-mvns)
           ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
           ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
@@ -510,6 +585,8 @@
           ('nop . t16 0xBF00)
           ('trap . t16 0xBE00)])                            ; bkpt #0
    _ (map (k \ emrow thumb-emitters k (thumb-aluop k)) (keys thumb-alu))
+   _ (map (k \ emrow thumb-emitters k (thumb-alus k)) '(adds subs ands ors eors bics adcs sbcs rsbs muls))
+   _ (emrow thumb-emitters 'add thumb-add)
    (thumb-lower ins) (lower-via @ f (lit? f ? (f thumb-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
    ;; pc reads as site + 4.
@@ -528,6 +605,11 @@
             ; the narrow forms the 'short hook lays: B T2 (+-2KB) and Bcc T1 (+-256)
             'b16 (-2048 <= o <= 2046 ? (t16 (0xE000 | (o >> 1 & 2047))) (scare 'thumb-b16-reach o))
             'b8 (-256 <= o <= 254 ? (t16 (0xD000 | (aux << 8 | (o >> 1 & 255)))) (scare 'thumb-b8-reach o))
+            ; lal's pooled loads: ldr Rt, [pc, #imm] from the word-aligned pc, t1 or t2
+            'ldl16 (target - (site + 4 & -4) @ v
+                      (0 <= v <= 1020 && v % 4 = 0 ? (t16 (0x4800 | (aux << 8 | v >> 2))) (scare 'thumb-ldl16-reach v)))
+            'ldlw (target - (site + 4 & -4) @ v
+                     (-4095 <= v <= 4095 ? (t32 ((v < 0 ? 0xF85F 0xF8DF) << 16 | (aux << 12 | abs v))) (scare 'thumb-ldlw-reach v)))
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
@@ -549,10 +631,14 @@
           thumb-patch kind target site width aux))
 
    ;; the relaxer's hook: a lone wide b or bcc whose pessimistic reach fits goes narrow; the
-   ;; pc reads site + 4 for both widths
+   ;; pc reads site + 4 for both widths. a lal loads its pool word where the word-aligned pc,
+   ;; at least site + 2, reaches it
    (thumb-short ins c rel)
       (: x <c o (rel - 4)
-         (? (#c != 1 || !(fix? x)) ()
+         (? (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
+                                              (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
+                                              ()))
+            (#c != 1 || !(fix? x)) ()
             (fix-k x = 'b) (-2048 <= o <= 2046 ? [(fix 2 'b16 (fix-l x) 0)] ())
             (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
             ()))
@@ -560,8 +646,9 @@
    thumb2 {'lower thumb-lower
            'short thumb-short
            'lis 1
+           'sform thumb-sform
            'flagr '(br set adc sbc adcs sbcs raw)
-           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs ucomisd ucomiss lis)
+           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss lis)
            'patch thumb-patch
            'refix thumb-refix
            'lapa thumb-lapa

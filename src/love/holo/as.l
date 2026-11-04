@@ -150,7 +150,12 @@
             (as-emit md w frc [(as-opw (mn @ 'test rr (rr + 2)) w)] (as-regn b) a)
             (ka = 'im)                                                             ; $imm -> r/m
             (: im <>a
-               bs (? (mn = 'mov && kb = 'rg) (as-mov-ri md (as-regn b) w frc im)
+               ; into the accumulator, no Modrm: test's a8/a9, the ALU's 04+8*ext where its
+               ; immediate is a byte's register or no 83 fits it
+               acc? (kb = 'rg && as-regn b = 0 && (mn = 'test || two? alu && (w = 1 || !(fits8 im))))
+               bs (? acc? (catall [(as-osz md w) (as-rexm md frc (as-rexw w) 0 0 0)
+                                   [(mn = 'test ? (as-opw 169 w) (as-opw (<>alu * 8 + 5) w))] (as-imw w im)])
+                     (mn = 'mov && kb = 'rg) (as-mov-ri md (as-regn b) w frc im)
                      (opi > 0) (as-emit md w frc [(as-opw opi w)] 0 b + as-imw w im)
                      (as-alu-i md <>alu w frc b im))
                ; the immediate's width as its encoder laid it: 80/83's byte, else the operand's

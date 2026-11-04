@@ -710,7 +710,7 @@
  ; and a burnt one's cut, its embers and its shadow's hole
  (burn lv kept tick) (: (sun _) (sky-of lv @ () [0.0 1.0 0.0] k (k 'lt 'sun))
    (one o) (: at (o 'at) cs (o 'cuts) pl (two? cs ? (plane-at <cs at) ())
-     g (kept ['grown (o 'seed) (peep o 'size ())] (_ \ bough-grow (tree-seed o))) _ (pin o 'grown g)
+     g (kept ['grown (o 'seed) (peep o 'size ()) (peep o 'species ())] (_ \ bough-grow (tree-seed o))) _ (pin o 'grown g)
      c (o 'burnt || o 'hole ? (bough-sheared g pl) ())
      (mv s) [(c+ (s 0) at) (c+ (s 1) at) (s 2)]
      _ (pins o 'pl pl 'trunk (map mv (tablet? c ? (c 'trunk) (bough-solid g))))
@@ -722,8 +722,9 @@
       (: _ (two? (lv 'trees) ? (tick 'trees ())) rs (map one (lv 'trees)) hs (catmap (q \ q 1) rs)
          (pins lv 'grown 1 'brushes (lv 'brushes + catmap (h \ h 'bs) hs) 'pits (map (h \ h 'dark) hs)
                   'embers (catmap (q \ q 0) rs)))))
- ; ..a tree as bough takes it: grown, else its seed with its size
- (tree-seed o) (peep o 'grown () @ () (o 'size @ () (o 'seed) z [(o 'seed) (z 0) (z 1)]) g g)
+ ; ..a tree as bough takes it: grown, else its seed with its size, and a plant's species
+ (tree-seed o) (peep o 'grown () @ () (: z (o 'size @ () [1.0 1.0] z z) sp (peep o 'species ())
+                                         (? (tablet? sp) [(o 'seed) (z 0) (z 1) sp] (o 'size @ () (o 'seed) [(o 'seed) (z 0) (z 1)]))) g g)
  (tree-mesh o i ts) (: m (? (peep o 'burnt 0) (bough-burnt (tree-seed o) i ts (o 'pl)) (bough-mesh (tree-seed o) i ts))
    (atom? (o 'shade) ? m (mesh-join [m (shade-mesh (o 'shade))])))
  ; ..thin wood's shadow: each slot a black quad a hair over the ground, seen from either side
@@ -2208,9 +2209,10 @@
            'ball "p" 'bulb "p_" 'rod "pp___" 'cut "pppP" 'spinner "p____" 'decal "pvv___" 'ad "pvv___"
            'neon "pv___" 'sconce "pvv__" 'sign "p___" 'poster "p___" 'flames "_s" 'prism "_s" 'drape "_r"
            'coarse "_P" 'whole "P" 'skin "_P" 'solid "P" 'air "P" 'box "pp" 'room "pp" 'street "pp"
-           'window "pp_" 'grav "pp_" 'door "p__" 'strip-light "p" 'bin "p_____"}
+           'window "pp_" 'grav "pp_" 'door "p__" 'strip-light "p" 'bin "p_____"
+           'furnish "_pb_" 'sweep "s___" 'lathe "p___" 'rock "p__" 'plant "p__"}
  rw-square ['box 'room 'street 'window 'grav 'door 'strip-light]
- rw-still ['bin]
+ rw-still ['bin 'lathe 'rock 'plant]
  ; ..a swing of d degrees, a quarter's exact, shifted by t
  (rw-op d t) (: q (floor (d / 90.0 + 0.5)) e (d - 90.0 * q) sq (-1e-9 < e && e < 1e-9) qn ((q % 4 + 4) % 4)
    {'deg d 'sq sq 'qn qn 'co (sq ? (qn @ 0 1.0 1 0.0 2 -1.0 3 0.0) (cos (d * pi / 180.0)))
