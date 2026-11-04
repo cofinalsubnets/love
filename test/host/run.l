@@ -34,6 +34,17 @@
    _ (close w)                       ; the residue lands before the fd dies
    _ (wait pid))
 
+; what the pipe will not take joins the residue whole, in order, past a say that is parked behind it
+(: pr (pipe 0) wfd >pr f "out/.sayrun"
+   pid (spawnio ["sh" "-c" ("sleep 1; cat >" + f)] <pr 1 2 [wfd] -1 0)
+   _ (close <pr)
+   w (fdopen wfd)
+   a (cats (map (i \ show i + "\n") ^60000)) b ("y" * 300000)
+   _ (say w a, say w b, close w, wait pid)
+   got >(hark ["cat" f])
+   _ (hark ["rm" "-f" f])
+   _ (test (#got = #a + #b) (got = a + b)))
+
 (puts "run rung4: ok\n")
 
 ; love ignores sigpipe, yet the console dies on a closed pipe and a child never inherits the

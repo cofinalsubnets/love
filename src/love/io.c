@@ -158,6 +158,20 @@ static love_inline struct g *zungetc(struct g*g, int c) {
  if (!ok(g)) return g;
  g->io->ungetc_buf = putcharm(c);
  return g->b = c, g; }
+// the write backing dressed, with room for m more
+static struct g *bio_wroom(struct g *g, uintptr_t m) {
+ struct bio *b = (struct bio*) g->io;
+ if (!b->wbuf || charmp(b->wbuf)) {
+  if (!ok(g = str0(g, iobuf))) return g;
+  b = (struct bio*) g->io;
+  b->wbuf = g->sp[0];
+  b->wlen = putcharm(0);
+  gen_wb(g, (word) b, b->wbuf);
+  g->sp += 1; }
+ while (getcharm(b->wlen) + m > len(str(b->wbuf))) {   // a short-changed drain left a residue
+  if (!ok(g = bio_wgrow(g))) return g;
+  b = (struct bio*) g->io; }
+ return g; }
 struct g *ioputc(struct g*g, int c) {
  if (!ok(g)) return g;
  struct bio *b = bio_of(g, g->io);
@@ -168,17 +182,9 @@ struct g *ioputc(struct g*g, int c) {
   if (!core_of(g = vt->writen(g, &x, 1))->b && ok(g))   // a sink that grew on the first ask
    g = vt->writen(g, &x, 1);
   return g; }
- if (!b->wbuf || charmp(b->wbuf)) {              // dress the write backing
-  if (!ok(g = str0(g, iobuf))) return g;
-  b = (struct bio*) g->io;
-  b->wbuf = g->sp[0];
-  b->wlen = putcharm(0);
-  gen_wb(g, (word) b, b->wbuf);
-  g->sp += 1; }
+ if (!ok(g = bio_wroom(g, 1))) return g;
+ b = (struct bio*) g->io;
  uintptr_t n = getcharm(b->wlen);
- if (n >= len(str(b->wbuf))) {       // a short-changed drain left a residue
-  if (!ok(g = bio_wgrow(g))) return g;
-  b = (struct bio*) g->io; }
  struct str *w = str(b->wbuf);
  txt(w)[n] = (char) c;
  b->wlen = putcharm(n + 1);
@@ -370,7 +376,7 @@ lvm(lvm_fputs) {
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
-  // the bulk lane only past an empty run, or the stream shuffles; a 0 falls to ioputc
+  // the bulk lane only past an empty run, or the stream shuffles
   struct g *(*wn)(struct g*, unsigned char const*, uintptr_t) = g->io->vt->writen;
   Pack(g);
   g = io_wdrain(g, (struct io*) g->sp[0]);   // buffered puts land before the bulk stroke
@@ -385,6 +391,13 @@ lvm(lvm_fputs) {
     if (!ok(g = wn(g, (unsigned char const*) txt(bytes_of(g->sp[1])) + i, l - i))) break;   // a sink that could not grow
     k = g->b; }
    if (k > 0) i += (uintptr_t) k;
+   else if (wn && bio_of(g, (struct io*) g->sp[0])) {   // the sink is full: the rest joins the run whole
+    if (!ok(g = bio_wroom(g, l - i))) break;
+    struct bio *b = (struct bio*) g->io;
+    uintptr_t n = getcharm(b->wlen);
+    memcpy(txt(str(b->wbuf)) + n, txt(bytes_of(g->sp[1])) + i, l - i);
+    b->wlen = putcharm(n + l - i);
+    i = l; }
    else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
   if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_ghelp, g);
   Unpack(g); }
