@@ -193,7 +193,7 @@
    (lovar g env nm)
     (assoc nm env @ (_ . en) en
        ; a global register variable is its register
-       (peep (g 'gregs) nm () @ (s . y . _) (gas-regname (gtgt g) s @ r (nom? r ? ['v r y] 'bad))
+       (g 'gregs nm @ (s . y . _) (gas-regname (gtgt g) s @ r (nom? r ? ['v r y] 'bad))
           _ (g 'glob nm @ (a . b . _) ['g a b] 'bad)))
    (lolv g env e)
     (e @ ['var nm]
@@ -509,7 +509,7 @@
          ; sizeof a VLA local: its stashed bytes; a VLA type: its dim times its row
          ['szof e2]
           (lopeek g env e2 @
-             ('varr . _ . _ . k . _) (peep (g 'vslots) k () @ [_ so] (lomk g @ t ['ulong t [['ld t 'r4 so]]]) _ (lono g 'vla))
+             ('varr . _ . _ . k . _) (g 'vslots k @ [_ so] (lomk g @ t ['ulong t [['ld t 'r4 so]]]) _ (lono g 'vla))
              ('varr . el . n . _) (lox g env ['cast 'ulong ['bin '* ['cast 'long n] ['num (tsz g el)]]])
              'bad 'bad
              ty (lomk g @ t ['ulong t [['li t (tsz g ty)]]]))
@@ -1086,9 +1086,9 @@
                 ls (lox g env e @ [_ r fs] (fs + [['jmpt r <ls ls]]) 'bad))
             ['lbl nm] [['label (name "\(g 'fn).\(nm)")]]
             ['switch ce body] (loswitch g env ce body)
-            ['case lo hi] (assoc 'sw env @ [_ tab _] (peep tab "\(lo):\(hi)" () @ () 'bad L [['label L]]) 'bad)
-            ['case cv] (assoc 'sw env @ [_ tab ty] (peep tab (lokey g ty cv) () @ () 'bad L [['label L]]) 'bad)
-            ('dflt . _) (assoc 'sw env @ [_ tab _] (peep tab 'dflt () @ () 'bad L [['label L]]) 'bad)
+            ['case lo hi] (assoc 'sw env @ [_ tab _] (tab "\(lo):\(hi)" @ () 'bad L [['label L]]) 'bad)
+            ['case cv] (assoc 'sw env @ [_ tab ty] (tab (lokey g ty cv) @ () 'bad L [['label L]]) 'bad)
+            ('dflt . _) (assoc 'sw env @ [_ tab _] (tab 'dflt @ () 'bad L [['label L]]) 'bad)
             ('asm . _) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
@@ -1148,7 +1148,7 @@
    ; a case table already holds a value in [l, h]: a key, or a wide range
    (locased tab l h)
     (any (k \ cint? k && l <= k <= h) (keys tab) ||
-     any (r \ (r @ [a n _] (a <= h && l <= a + n))) (peep tab 'rng ()))
+     any (r \ (r @ [a n _] (a <= h && l <= a + n))) (tab 'rng))
    ; a switch as a compare chain: its cases, nested switches aside, each take a label
    (loswitch g env ce body)
     (lox g env ce @ ([ty r fs] && losc? ty)
@@ -1163,7 +1163,7 @@
                             (nlab g ".lo" @ L
                                (pin tab "\(lo):\(hi)" L,
                                 hi - lo < 64 ? (map (k \ pin tab (cfit g ty (lo + k)) L) ^(hi - lo + 1))
-                                   (pin tab 'rng ([(cfit g ty lo) (hi - lo) L] . peep tab 'rng ())))))
+                                   (pin tab 'rng ([(cfit g ty lo) (hi - lo) L] . tab 'rng)))))
                         ('dflt . _) (tab 'dflt ? (pin tab 'bad 1) (pin tab 'dflt (nlab g ".lo")))
                         (_ . _) (map walk x)
                         0)
@@ -1212,13 +1212,13 @@
     (catmap (k \ (imma g 'cmp k ? [['cmp r k] ['br 'eq (tab k)]] (lomk g @ t [['li t k] ['cmp r t] ['br 'eq (tab k)]]))) ks +
      catmap (x \ (x @ [lo n L] (lomk g @ t (lomk g @ k
                    ([['mov t r] ['li k lo] ['sub t t k]] + (imma g 'cmp n ? [['cmp t n]] [['li k n] ['cmp t k]]) + [['br 'be L]])))))
-            (peep tab 'rng ()))
+            (tab 'rng))
    ; the table lane, as the old path's jtable: six keys or more, a third full at least, no wide
    ; range, -fno-jump-tables off. rel32 cells off the table's label, one unsigned compare to the
    ; default -> forms | ()
    (lojt g r tab ks dl)
     (: n #ks lo (two? ks ? <ks 0) span (two? ks ? (ks (n - 1) - lo + 1) 0)
-       (? (n < 6 || 4096 < span || span > 3 * n || two? (peep tab 'rng ()) || abl? g 'jtab || njt? g || !(fits32 lo)) ()
+       (? (n < 6 || 4096 < span || span > 3 * n || two? (tab 'rng) || abl? g 'jtab || njt? g || !(fits32 lo)) ()
           (nlab g ".J" @ tl (lomk g @ i (lomk g @ t
              (: labs (foldl (l \ k \ elem (tab k) l ? l (tab k . l)) [dl] ks)
                 (pin g 'jtabs ([tl (catall (map (j \ [['fix 4 'rel32 (peep tab (lo + j) dl) 0]]) ^span))] . g 'jtabs),
@@ -1279,7 +1279,7 @@
                  (? (ap && !(nom? ap && asmreg? g ap && losv? ty && !(lotk? g nm))) (lono g 'regasm)
                     (gvarr? ty)
                      (? (init != () || gvarr? <>ty) (lono g 'vla)
-                        (peep (g 'vslots) (varix ty) () @
+                        (g 'vslots (varix ty) @
                            [po so] (lovla g env ty po so @ 'bad 'bad fs (go u ([nm 'p po ty] . env) (acc + fs)))
                            _ (lono g 'vla)))
                     (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
@@ -1393,19 +1393,19 @@
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs0)
     (!(x64? g) && any (f \ two? f && elem <f '(fix raw)) fs0 ? (lono g 'kit)
-    (raentry g (radce g (getenv "MOON_NONM" @ () (nmall g fs0) _ fs0)) @ fs
+    (mprof 'ra0 (_ \ raentry g (radce g (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs0)) _ fs0))) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
-     raplan g fs @ 'bad (lono g 'ra)
+     mprof 'raplan (_ \ raplan g fs) @ 'bad (lono g 'ra)
        [f2 loc]
         ((getenv "MOON_LOLAW" @ () ()
             _ (rachk g fs f2 loc @ ws
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (rasub f2 loc @ b0 (x64? g ? (lofuse g (cmpfuse g b0)) b0)) @ body
+         (mprof 'rasub (_ \ rasub f2 loc @ b0 (x64? g ? (lofuse g (cmpfuse g b0)) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16)
-                (rv64? g ? (lorvf g (peep (g 'sigs) <>f () @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
+                (rv64? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
                    ((a64? g ? a4ize 1) (sibcall g ([['label (name <>f)]] + (a64? g ? pro-a64 pro4) + [['sub 'sp 'sp F] '(saves)] + body))))))))))
    ; riscv links last, so fp is the frame's bottom: the saves laid, each fp slot rebased by the
    ; frame they leave, then a variadic fn's a0-a7 block ahead of the link

@@ -145,6 +145,8 @@
        (: t (foldl (t \ e \ (show e @ k (pin t k (peep t k 0 + 1)))) {} fs)
           c (foldl (c \ e \ (show e @ k (peep t k 0 > 0 ? (pin t k (t k - 1), c + 1) c))) 0 out)
           (puts "census \(show (g 'fn)) \(show nm) \(#fs - c) \(#out - c)\n", out)))
+   ; MOON_PROF=1 prints a line per timed stage, its name and nanoseconds, for the reader to sum
+   (mprof k th) (getenv "MOON_PROF" @ () (th 0) _ (nclock 0 @ t0 (th 0 @ v (puts ";; prof \(k) \(nclock t0)\n", v))))
    (dp nm fs) (getenv "MOON_DUMP" @ w
                  (string? w && two? fs && two? <fs && w = show (<fs 1) ?
                     (puts ";; \(show nm)\n",
@@ -11930,7 +11932,7 @@
        ; refusal hands back what it dealt. lo.l lays after this file: its names resolve at the call
        irn (lo? g ?
               ([(g 'jtabs) (g 'fesc) (g 'fescv) (g 'fesca) (g 'statics) (g 'fasecs) (g 'epi)] @ [jt0 fe0 fv0 fx0 st0 fa0 ep0]
-                 ((cite 'moon 'lofn) g f params sig @
+                 (mprof 'lo (_ \ (cite 'moon 'lofn) g f params sig) @
                    'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0 'fesc fe0 'fescv fv0 'fesca fx0 'statics st0 'fasecs fa0 'epi ep0, 'bad)
                    fs fs))
               'bad)
@@ -11944,7 +11946,7 @@
               sr6f (spillp () params (a64? g ? 0 1) [['st 'r4 (peep g 'sret 0) (srreg g)]])
               (spillp () params 0 ()))
        sp1 (uni9 || !(two? vzf) ? sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
-       irk (irn @ 'bad (uni9 ? (ubuild (alive g f)) (build sp1)) _ irn)
+       irk (irn @ 'bad (mprof 'oldbuild (_ \ uni9 ? (ubuild (alive g f)) (build sp1))) _ irn)
        ; a pool clash builds again with no pool, a failed float colouring on the eight; once more if the
        ; first rebuild's colouring fails too
        (rb irk n9) (? (bad? irk || !(g 'kclob || g 'fclob) || n9 = 0) irk
@@ -11983,7 +11985,7 @@
                      (cfoldir g irx))))))))))))))))
        ; the copy fold again after repack: a slot copied from a seat repack just minted forwards from it now
        (post irx) (deadst g (deaddef g (copyprop g (stld g (copyprop g (repack g irx))))))
-       (? (bad? irf) irf (!(bad? irn)) ((cite 'moon 'lotail) g irf) (dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf))))))))))))))))))))))))))))))))))))
+       (? (bad? irf) irf (!(bad? irn)) (mprof 'lotail (_ \ (cite 'moon 'lotail) g irf)) (mprof 'oldtail (_ \ dp 'final (fldcut g (thunks g (pushsv g (t2pm g (rjoin g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g (tailarm g (jmpm g (csdrop g (cskeep g (unhome g (jr0 g (rvunframe g (unframe g (csframe g (hz4 g (laacse g (coal g (copyprop g (recse g (wpair g (dp 'post (post (dp 'deadlab (deadlabk (cg-refs (g 'fasecs) {}) (t2nx g (swp irf)))))))))))))))))))))))))))))))))))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -12255,7 +12257,7 @@
            (lay1 nm)
             (: f (fnix nm)
                _ (pins g 'undecl () 'nolane () 'arity ())   ; fresh per fn: the refusal's pins name this fn's cause
-               r (cgfn g f)
+               r (mprof 'fn (_ \ cgfn g f))
                (bad? r ?
                   (: u (g 'undecl)      ; an undeclared id was named
                      nl (g 'nolane)     ; a deliberate refusal named its missing lane
