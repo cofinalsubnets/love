@@ -77,7 +77,7 @@
                                         ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
                                         _ ())
                                 _ (raops g f @ [_ ds]
-                                   (map (x \ pin w x ()) ds,
+                                   (map (x \ w x != () ? (pin w x ())) ds,
                                     f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
                                    _ 0)
                                 (f . go u w (i + 1) 1))))
@@ -98,7 +98,7 @@
    (nmstep v) (v <= 4294967295 ? 4294967295)
    ; the next form reads the flags a compare left
    (nmflg? u) (u @ ((('br || 'set) . _) . _) 1 _ 0)
-   (nmcp w) (foldl (t \ k \ pin t k (w k)) {} (keys w))
+   (nmcp w) (foldl (t \ k \ (w k @ () t v (pin t k v))) {} (keys w))
    ; two blocks' bounds where they join: the looser of each both know
    (nmmeet a b) (foldl (t \ k \ (a k @ () t x (b k @ () t y (pin t k (max x y))))) {} (keys a))
 

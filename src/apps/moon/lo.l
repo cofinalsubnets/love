@@ -1393,7 +1393,7 @@
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
    (lobuild g f fs0)
     (!(x64? g) && any (f \ two? f && elem <f '(fix raw)) fs0 ? (lono g 'kit)
-    (mprof 'ra0 (_ \ raentry g (radce g (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs0)) _ fs0))) @ fs
+    (mprof 'ra0 (_ \ raentry g (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs0)) _ (radce g fs0))) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      mprof 'raplan (_ \ raplan g fs) @ 'bad (lono g 'ra)
        [f2 loc]

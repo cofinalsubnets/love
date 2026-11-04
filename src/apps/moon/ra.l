@@ -341,15 +341,17 @@
                          [f])) fs))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
-   rapure '(li la lea mov movapd add sub and or xor imul shl shr sar not neg sx1 sx2 sx4 zx1 zx2 zx4 set
-            movqxr movdxr movqrx movdrx)
+   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd add sub and or xor imul shl shr sar not neg
+                                              sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)
        (own x u) #(filter (y \ y = x) u)
-       (dead? f) (two? f && elem <f rapure &&
+       (dead? f) (two? f && rapure <f &&
                   (raops g f @ [u d] (two? d && all (x \ lovr? x && peep cnt x 0 = own x u) d) _ ()))
-       f2 (filter (f \ !(dead? f)) fs)
-       (#f2 < #fs ? (radce g f2) fs))
+       ; a form that goes gives back its reads, so a walk from the end takes a chain at once
+       (kill f) (raops g f @ [u _] (map (x \ lovr? x ? (pin cnt x (peep cnt x 0 - 1))) u))
+       (go fs) (foldl (a \ f \ (dead? f ? (kill f, a) (f . a))) () (rev fs) @ f2 (#f2 < #fs ? (go f2) fs))
+       (go fs))
    ; -> forms over registers | 'bad
    (raall g fs) (raplan g fs @ 'bad 'bad [f2 loc] (rasub f2 loc))
 
