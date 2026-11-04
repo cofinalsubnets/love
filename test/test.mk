@@ -357,7 +357,12 @@ test_vi: host
 	    | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(tr '\n' ' ' < $(ho)/.vi1)" = "tw0 three 0ne " ]; } \
 	    || { echo "FAIL kore vi ex :s + :m (exit $$r)"; exit 1; }; \
-	  echo "kore: vi (laws + piped create/dd/q!/undo/ex end-to-end) ok"
+	  rm -f $(ho)/.vi2 $(ho)/.vi3; \
+	  printf 'ione\033:wn\nitwo\033:w\n:N\nAx\033:w\n:q\n:q\n' \
+	    | $(korerun) vi $(ho)/.vi2 $(ho)/.vi3 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi2 $(ho)/.vi3 | tr '\n' ' ')" = "onex two " ]; } \
+	    || { echo "FAIL kore vi arglist (exit $$r)"; exit 1; }; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end) ok"
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`

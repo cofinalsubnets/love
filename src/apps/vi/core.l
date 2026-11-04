@@ -908,6 +908,11 @@
               ("j" "join") ("join" "join") ("p" "print") ("print" "print")
               ("nu" "number") ("number" "number") ("#" "#") ("=" "=")
               ("q" "q") ("w" "w") ("wq" "wq") ("x" "x")
+              ("n" "next") ("next" "next") ("wn" "wnext") ("wnext" "wnext")
+              ("N" "previous") ("pre" "previous") ("prev" "previous") ("previous" "previous")
+              ("pr" "print") ("fir" "first") ("first" "first") ("rew" "first") ("rewind" "first")
+              ("la" "last") ("last" "last") ("ar" "args") ("args" "args")
+              ("r" "r") ("re" "r") ("a" "a") ("f" "find") ("fi" "find")
               ("e" "edit") ("o" "edit") ("edit" "edit")
               ("hl" "hl") ("set" "set") ("lint" "lint")
               ("noh" "nohlsearch") ("nohlsearch" "nohlsearch")
@@ -932,6 +937,37 @@
           (#nm = 1) h
           (nm 1 = 47) (h + snip nm 1 #nm)
           nm))
+   ; -- the arglist -- 'args the files named, 'argi the one in hand, 'argpos the row left in each
+   (varglist st) (st 'args @ a (two? a ? a (0 < #(st 'file) ? [(st 'file)] ())))
+   (vargshow st)
+    (: i (st 'argi)
+       (go l k acc) (? !(two? l) acc
+                       (go >l (k + 1) (acc + (0 < k ? " " "") + (k = i ? "[\(<l)]" <l))))
+       (vmsg st (go (varglist st) 0 "")))
+   ; to file i, whose row comes back with it. the face reads it, the note on its message
+   (vargto st i)
+    (: as (st 'args)
+       (pin (st 'argpos) (st 'file) (st 'row),
+        pins st 'argi i 'arghad (st 'arghad || i = #as - 1)
+                'doe [(as i) (peep (st 'argpos) (as i) 0) " (\(i + 1) of \(#as))"]))
+   (vargstep st i)
+    (? (i < 0) (vmsg st "cannot go before first file")
+       (#(st 'args) <= i) (vmsg st "cannot go beyond last file")
+       (vargto st i))
+   ; the check first: an edit lost to a move past the end would be no move at all
+   (vargmove st i bang)
+    (st 'dirty && !bang ? (vmsg st "no write since last change (add ! to override)") (vargstep st i))
+   ; :next FILES and :args FILES start a new list, on its first
+   (vargnew st arg bang)
+    (st 'dirty && !bang ? (vmsg st "no write since last change (add ! to override)")
+       (pins st 'args (map (vtilde st) (words arg)) 'arghad (),
+        vargto st 0))
+   ; a quit with files unseen says so once; the same quit again goes
+   (vmoretxt st)
+    (#(st 'args) - st 'argi - 1 @ k "\(k) more file\(k = 1 ? "" "s") to edit")
+   (vmore? st bang)
+    (? (bang || st 'arghad || st 'argq || #(st 'args) - st 'argi < 2) ()
+       (: _ (pin st 'argq 1) _ (vmsg st (vmoretxt st)) 1))
    (vexcmd st s i r1 r2 got?)
     (vexword s i @ [j w0]
       (: n #s
@@ -940,6 +976,7 @@
          arg (vextrim (snip s k n))
          nm (0 < #arg ? (vtilde st arg) (st 'file))
          w (vexfull st w0)
+         more? (elem w '("q" "wq" "x") ? (vmore? st bang) (pin st 'argq ()))
          (? (two? w) (vmsg st ("ambiguous: " + w0 + " -- " + foldl (a \ m \ a + " " + m) "" <>w))
             (w = "s") (vexsub st s k r1 r2)
             (w = "global") (vexglob st s k r1 r2 got? ())
@@ -958,11 +995,20 @@
              (vexbad? st r1 r2 ? (vmsg st "out of range")
                 (vexgo st r2, vmsg st (show (r2 - r1 + 1) + " lines")))
             (w = "=") (vmsg st (show (r2 + 1)))
-            (w = "q") (? (bang || !(st 'dirty)) (pin st 'quit 1)
-                         (vmsg st "no write since last change (q! overrides)"))
+            (w = "q") (? (st 'dirty && !bang) (vmsg st "no write since last change (q! overrides)")
+                         more? st
+                         (pin st 'quit 1))
             (w = "w") (pin st 'dow [nm])
-            (w = "wq" || w = "x") (pin st 'dow [nm], pin st 'quit 1)
+            (w = "wq" || w = "x") (pin st 'dow [nm], more? ? st (pin st 'quit 1))
             (w = "edit") (vedit st nm bang)
+            (w = "next") (0 < #arg ? (vargnew st arg bang) (vargmove st (st 'argi + 1) bang))
+            (w = "previous") (vargmove st (st 'argi - 1) bang)
+            (w = "first") (two? (st 'args) ? (vargmove st 0 bang) (vmsg st "no file list"))
+            (w = "last") (two? (st 'args) ? (vargmove st (#(st 'args) - 1) bang) (vmsg st "no file list"))
+            (w = "args") (0 < #arg ? (vargnew st arg bang) (vargshow st))
+            (w = "wnext")
+             (st 'argi + 1 < #(st 'args) ? (pin st 'dow [nm], vargstep st (st 'argi + 1))
+                (vmsg st "cannot go beyond last file"))
             (w = "split") (pin st 'dos ['stack (vtilde st arg)])
             (w = "vsplit") (pin st 'dos ['beside (vtilde st arg)])
             ; a picker over the tree here, the face's to open: its files, or every line
@@ -1102,7 +1148,7 @@
                               (122 || 46) (vskip st r -1 (body // 2))
                               (st 'top))
                        (pins st 'top t 'tops 0, st))
-           (k = 'Z) (c != 90 ? st (pins st 'dow [(st 'file)] 'quit 1))
+           (k = 'Z) (c != 90 ? st (pin st 'dow [(st 'file)], vmore? st () ? st (pin st 'quit 1)))
            ; i and a after an operator name a text object rather than insert mode
            (k = 'ti || k = 'ta)
             (: mr (vobj st (k = 'ta) c n)
@@ -1358,6 +1404,7 @@
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1 'hls 1 'noh ()
      'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore () 'home ()
+     'args () 'argi 0 'argpos (tablet ()) 'arghad () 'argq ()
      'hl (nom? (hues-lang file ls)) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'mtcar () 'gutcar () 'nu () 'ai 1 'aiw () 'lastr () 'w 80 'h 24}
 

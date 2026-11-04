@@ -559,7 +559,8 @@
       (st? (ex '("a") "se sw=3") 'sw = 3)
       (st? (ex '("a") "nu") 'msg = "1 lines")
       (st? (ex '("a") "col") 'msg = "molokai")                      ; colo and colorscheme mean one thing
-      (has? (st? (ex '("a") "n") 'msg) "ambiguous: n")              ; number and nohlsearch do not
+      (has? (st? (ex '("a") "l") 'msg) "ambiguous: l")              ; last and lint do not
+      (st? (ex '("a") "r x") 'msg = "not an ex command: r")         ; no head reaches :rewind
       (st? (ex '("a") "ya") 'reg = '(lin ("a")))
       (: q (vgob '("a") ((bytes ":sen") + [CR]))                    ; the face's word, headed
          _ (pin q 'exmore '("send"))
@@ -809,6 +810,44 @@
       (hk 'html "<style>p { color: red }</style>" 0 = '(keyword keyword keyword type keyword keyword))
       (hc 'html '("<!-- a" "b --> <div" "  id=x>" "y") = [0 1 ['tag "div" 0] 0])
       (hc 'html '("<style>/* a" "b */</style>" "x") = [0 ['css 1] 0]))
+   ; the arglist: the core asks, the face reads, as vfeed on one state stands in for a visit
+   (cmd st c) (vfeed st ((bytes ":\(c)") + [CR]))
+   (three _) (cmd (vnew '("a" "b" "c") "a") "args a b c")
+   _ (test
+      (three () 'doe = '("a" 0 " (1 of 3)"))
+      (three () 'args = '("a" "b" "c"))
+      (cmd (three ()) "n" @ q (q 'argi = 1 && q 'doe = '("b" 0 " (2 of 3)")))
+      (cmd (cmd (three ()) "n") "args" 'msg = "a [b] c")
+      (cmd (three ()) "prev" 'msg = "cannot go before first file")
+      (cmd (three ()) "la" @ q (cmd q "n" 'msg = "cannot go beyond last file"))
+      (cmd (three ()) "la" 'argi = 2)
+      (cmd (cmd (three ()) "la") "rew" 'argi = 0)
+      (cmd (cmd (three ()) "n") "N" 'argi = 0)
+      ; the row left in a file comes back with it
+      (: q (three ())
+         _ (vfeed q (bytes "G"))
+         _ (cmd q "n")
+         _ (cmd q "N")
+         (q 'doe = '("a" 2 " (1 of 3)")))
+      ; a change holds the move until it is written or waived
+      (: q (vfeed (three ()) (bytes "x"))
+         (cmd q "n" 'msg = "no write since last change (add ! to override)" && q 'argi = 0))
+      (: q (vfeed (three ()) (bytes "x")) (cmd q "n!" 'argi = 1))
+      (: q (vfeed (three ()) (bytes "x"))
+         _ (cmd q "wn")
+         (q 'dow = '("a") && q 'argi = 1))
+      ; a quit with files unseen says so once
+      (: q (three ())
+         _ (cmd q "q")
+         a (q 'quit)
+         m (q 'msg)
+         _ (cmd q "q")
+         (!a && m = "2 more files to edit" && q 'quit = 1))
+      (cmd (three ()) "q!" 'quit = 1)
+      (: q (three ()) _ (vfeed q (bytes "ZZ")) (!(q 'quit) && q 'dow = '("a")))
+      (cmd (cmd (three ()) "la") "q" 'quit = 1)
+      (cmd (vnew '("a") "t") "q" 'quit = 1)                         ; no list, nothing to say
+      (cmd (vnew '("a") "t") "args" 'msg = "[t]"))
    _ (test
       (hk 'sh "FOO=bar # c" 0 = '(var comment))
       (hk 'sh "a#b" 0 = ())                               ; # opens a comment only at a word

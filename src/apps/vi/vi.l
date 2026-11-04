@@ -29,11 +29,12 @@
              (0 < #nm ?
                 (open nm "w" @ q
                    (hot? q ? (say q (unlines (s2 'lines)), close q, pin s2 'dirty (),
-                              vmsg s2 (nm + " written"))
-                      (pin s2 'quit (),                   ; a failed wq must not quit
-                       vmsg s2 ("cannot write " + nm))))
-                (pin s2 'quit (), vmsg s2 "no file name")))))
-   ; the ex read requests: (name) put in the buffer; one that does not open is a new file.
+                              vmsg s2 (s2 'argq ? (vmoretxt s2) "\(nm) written"))
+                      (pins s2 'quit () 'doe (),          ; a failed wq or wn stays put
+                       vmsg s2 "cannot write \(nm)")))
+                (pins s2 'quit () 'doe (), vmsg s2 "no file name")))))
+   ; the ex read requests: (name), or (name row note) from the arglist, put in the buffer;
+   ; one that does not open is a new file.
    ; presence is uread's (1 text), so an empty file is a real file
    (doe s2)
     (s2 'doe @ rq
@@ -41,9 +42,10 @@
           (: _ (pin s2 'doe ())
              nm <rq
              r (uread nm)
+             note (string? <>>rq ? <>>rq "")
              (vload s2 (two? r ? (lines <>r)) nm,
-              vmsg s2 (two? r ? (nm + ": " + show #(s2 'lines) + " lines")
-                          (nm + ": new file"))))))
+              two? >rq ? (vexgo s2 <>rq) 0,
+              vmsg s2 (two? r ? "\(nm): \(#(s2 'lines)) lines\(note)" "\(nm): new file\(note)")))))
    ; the ex split requests: (dir name), another buffer beside or under; split is the mitty's
    ; door, or () with no mitty
    (dos s2 split)
@@ -119,8 +121,9 @@
    (vi-main as)
     (: f (two? as ? <as "")
        ; vi reads no options: a dash word would open a file named after it
-       _ (1 < #f && f 0 = 45 ? (udie 2 ("vi: unknown option " + f)))
+       _ (each as (a \ 1 < #a && a 0 = 45 ? (udie 2 "vi: unknown option \(a)") 0))
        st (vi-open f)
+       _ (two? >as ? (pin st 'args as, vmsg st "\(f) (1 of \(#as))") 0)
        br (cite 'mitty)
        (tablet? br ?
           (: sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
