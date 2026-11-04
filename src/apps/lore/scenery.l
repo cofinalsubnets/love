@@ -146,6 +146,17 @@
 ;                                      'frond 'simple 'needle 'blade 'len 'pairs 'leaflet 'wide
 ;                                      'arch 'tip 'bow 'colour 'every 'grow} or (), 'fruit
 ;                                      {'odds 'n}, 'bark a texture, a kind or bark's {..}
+;   (produce [x y z] seed KIND)        a vegetable resting at x y z, drawn and not in the way:
+;                                      KIND 'apple 'potato 'onion 'carrot 'radish 'cabbage, or
+;                                      {'like 'apple ..} changing one: 'r [lo hi] its size, 'shape
+;                                      [[r y] ..] from the top, 'sides, 'lump, 'folds, 'tilt, 'yaw
+;                                      degrees, 'skin a recipe, 'heap {'n 'r 'gap 'c 'shine 'long 'tops 'leaf 'leaves},
+;                                      'dense a square metre, 'dome
+;   (pile KIND [x y z] bearing seed {'w 'd 'low 'high 'dome 'dense})  a heap of them on a
+;                                      stand whose foot's middle is x y z, as furnish's, rising
+;                                      low to high from its front to its back: a lumped sheet
+;                                      painted with them, a few whole ones resting on it
+;   (pile-skin KIND seed bearing)      the picture on that sheet, the things lying for that bearing
 ;   (vined TREE)                       the tree climbed only once vines have grown up its
 ;                                      trunk to the fork, out of the ground, from when the
 ;                                      loop first plays
@@ -171,6 +182,9 @@
 ;   (drape TEXTURE [[[x y z] ..] ..])  a sheet through rows of points, () a gap: each four
 ;                                      neighbours round two triangles, none by a gap; its
 ;                                      front up when the rows run toward z, their points toward x
+;   (wrapped rows DRAPE)               the drape things closed round: each one rows rows, a row of
+;                                      gaps between them, a row's first point its last; its
+;                                      picture once round each, across the points, top to bottom down the rows
 ;   (beyond DRAPE) (hither DRAPE)      the drape seen only through a lens, or only
 ;                                      where no lens is between: what the window shows, and
 ;                                      what is really there
@@ -248,7 +262,7 @@
 ;   (furnish KIND [x y z] bearing {PARAM v ..})  a piece of furniture, the middle of its foot
 ;                                      at x y z, its user facing the bearing: 'table 'desk
 ;                                      'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter
-;                                      'crate 'carton 'sofa; 'w 'd 'h, 'top, 'legs 'corners
+;                                      'crate 'carton 'stand 'sofa; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
 ;                                      'panels 'trestle 'pedestal 'star or (), 'leg 'inset
 ;                                      'apron 'modesty 'seat 'back 'arms 'shelves 'drawers
 ;                                      'doors 'over 'slats, 'fill 'books or a MAKE given each
@@ -279,7 +293,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -396,6 +410,7 @@
  (flow v d) (: u "(flow [du dv] DRAPE)"
    (two? v && #v = 2 && all num? v && kind? d ['drape] ? (with d 'flow (map f v)) (no u (kind? d ['drape] ? v d))))
  (along s d) (: u "(along s DRAPE)" (num? s && kind? d ['drape] ? (with d 'along (f s)) (no u (num? s ? d s))))
+ (wrapped n d) (: u "(wrapped rows DRAPE)" (charm? n && n > 1 && kind? d ['drape] ? (with d 'wrap n) (no u (kind? d ['drape] ? n d))))
  ; ..a bin: brushes, its body's sides and corners cut in toward its foot, hollow up top with an
  ; opening into it on each side, the band over those and a cap a little wider going in
  ; toward the top; its sign on each side
@@ -693,6 +708,10 @@
    'tile [{'a (rgb 0.8 0.8 0.78) 'b (rgb 0.7 0.7 0.68) 'grout (rgb 0.4 0.4 0.4) 'n 32 'metres 0.6}
           (g \ (: n (int (g 'n)) h (n // 2)
                  [n n (g 'metres) [['fill (g 'a)] ['checker h h (g 'b)] '(noise 5 0.1) ['grid h h 1 (g 'grout)]] 'hard]))]
+   'slats [{'colour (rgb 0.56 0.4 0.24) 'gap (rgb 0.13 0.09 0.05) 'board 21 'rings 7 'warp 2.5 'grain 0.2 'metres 0.6}
+           (g \ (: b (int (g 'board))
+                  [64 64 (g 'metres) [['fill (g 'colour)] ['noise 2 12 (g 'grain)] ['grain (g 'rings) 1.5 (g 'warp) 24 (sh 0.85)] ['patches 5 0.2 (sh 0.9)]
+                                      ['grid 0 b 3 (g 'gap)]] 'wood]))]
    'cobble [{'colour (rgb 0.45 0.43 0.4) 'grout (rgb 0.2 0.19 0.18) 'size 10 'w 0.12 'vary 0.3 'metres 1.5}
             (g \ [64 64 (g 'metres) [['fill (g 'colour)] '(noise 2 0.15) ['patches 4 (g 'vary) (sh 0.8)]
                                      ['cells (g 'size) (g 'w) (g 'grout)] '(noise 5 0.1)] 'hard])]
@@ -820,8 +839,9 @@
    'counter {'w 2.0 'd 0.6 'h 0.9 'top 0.04 'over 0.03 'drawers 0 'doors 2 'skin {'body 'wood 'top 'stone 'frame 'metal}}
    'crate {'w 0.5 'd 0.35 'h 0.3 'top 0.015 'slats 0 'skin {'frame 'wood}}
    'carton {'w 0.5 'd 0.4 'h 0.35 'skin {'body 'card}}
+   'stand {'w 1.2 'd 0.9 'h 1.02 'low 0.72 'lip 0.05 'skin {'frame 'wood 'body 'slats}}
    'sofa {'w 1.9 'd 0.9 'h 0.85 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}}
- furnish-keys ['w 'd 'h 'top 'legs 'leg 'inset 'apron 'modesty 'seat 'back 'arms 'shelves 'fill 'fill-w 'drawers 'doors 'over 'slats 'seed 'skin]
+ furnish-keys ['w 'd 'h 'top 'legs 'leg 'inset 'apron 'modesty 'seat 'back 'arms 'shelves 'fill 'fill-w 'drawers 'doors 'over 'slats 'low 'lip 'seed 'skin]
  book-colours [(rgb 0.36 0.09 0.07) (rgb 0.1 0.2 0.36) (rgb 0.14 0.3 0.16) (rgb 0.55 0.45 0.2) (rgb 0.2 0.2 0.22) (rgb 0.6 0.3 0.12)]
  (furnish k at deg st) (: u "(furnish KIND [x y z] bearing {PARAM v ..})" o (P at u) dd (N deg u)
    (? (!(tablet? (furniture k))) (no (u + ", a KIND of " + show (sort (keys furniture))) k)
@@ -884,6 +904,16 @@
                     [(bx (0.0 - W) 0.0 (0.0 - D) W t D 'frame) (wall (0.0 - W) (0.0 - D) W (t - D)) (wall (0.0 - W) (D - t) W D)
                      (wall (0.0 - W) (t - D) (t - W) (D - t)) (wall (W - t) (t - D) W (D - t))])
            'carton [(bx (0.0 - W) 0.0 (0.0 - D) W H D 'body)]
+           ; ..a produce stand: its body sloping up from low at the front to h at the back, boards round
+           ; the slope standing lip over it
+           'stand (: lo (g 'low) lp (g 'lip) e 0.014 sk (role 'frame)
+                    (at x y z) (v+ o [x y z])
+                    (slope up b) (cut (at (0.0 - W) (lo + up) (0.0 - D)) (at W (lo + up) (0.0 - D)) (at (0.0 - W) (H + up) D) b)
+                    (rim x0 x1) (whole (skin sk (slope lp (solid (box (at x0 (lo - 0.09) (e - D)) (at x1 (H + lp) (D - e)))))))
+                    [(whole (skin (role 'body) (slope 0.0 (solid (box (at (0.0 - W) 0.0 (0.0 - D)) (at W H D))))))
+                     (rim (0.0 - W - e) (e - W)) (rim (W - e) (W + e))
+                     (bx (0.0 - W - e) (lo - 0.09) (0.0 - D - e) (W + e) (lo + lp) (e - D) 'frame)
+                     (bx (0.0 - W - e) (H - 0.09) (D - e) (W + e) (H + lp) (D + e) 'frame)])
            'sofa (: S (g 'seat) aw (g 'arms > 0.0 ? 0.18 0.0)
                    [(map (c \ bx (c 0 * (W - 0.06) - 0.03) 0.0 (c 1 * (D - 0.06) - 0.03) (c 0 * (W - 0.06) + 0.03) 0.1 (c 1 * (D - 0.06) + 0.03) 'frame)
                          [[-1 -1] [1 -1] [-1 1] [1 1]])
@@ -947,6 +977,119 @@
    (? (!(charm? seed && 0 <= seed < 1000000)) (no u seed)
       (: sp (species q) bk (peep sp 'bark {})
          (part 'tree [['at p] ['seed seed] ['tex (texture? bk ? bk (nom? bk ? (material bk 1 {}) (material 'bark 1 bk)))] ['species sp]]))))
+ ; --- produce: a thing turned from a profile, its top first, wrapped in one picture; a pile a
+ ; sheet painted with them under a few whole ones, the many being costly and the few enough ---
+ produces
+  {'apple {'r [0.036 0.043] 'shape [[0.05 1.14] [0.06 0.74] [0.5 0.86] [0.92 0.5] [0.96 -0.2] [0.5 -0.84] [0.04 -0.9]]
+           'sides 6 'lump 0.03 'tilt [0 40] 'dense 9 'dome 0.1
+           'skin '((fill (rgb 0.68 0.07 0.06)) (noise 1 8 0.3) (patches 5 0.3 (mix (rgb 0.86 0.6 0.18) 0.55))
+                   (rows 5 11 (mix (rgb 0.74 0.68 0.2) 0.65)) (rows 0 5 (rgb 0.24 0.15 0.07)) (rows 27 32 (rgb 0.28 0.2 0.1)))
+           'heap {'n 7 'r 5.6 'gap (rgb 0.14 0.04 0.03) 'c [(rgb 0.66 0.07 0.06) (rgb 0.74 0.13 0.07) (rgb 0.55 0.05 0.07) (rgb 0.66 0.17 0.07)] 'shine 0.24}}
+   'potato {'r [0.03 0.04] 'shape [[0.03 1.25] [0.6 1.0] [1.0 0.2] [0.9 -0.6] [0.03 -1.25]]
+            'sides 6 'lump 0.13 'tilt [60 120] 'dense 9 'dome 0.09
+            'skin '((fill (rgb 0.6 0.46 0.29)) (noise 2 0.22) (patches 3 0.25 (shade 0.8)) (dots 9 7 0.8 (shade 0.55)))
+            'heap {'n 6 'r 6.2 'gap (rgb 0.14 0.1 0.06) 'c [(rgb 0.58 0.44 0.27) (rgb 0.52 0.38 0.22) (rgb 0.64 0.5 0.32)]}}
+   'onion {'r [0.03 0.04] 'shape [[0.06 1.36] [0.1 1.14] [0.42 0.78] [0.92 0.34] [1.0 -0.12] [0.7 -0.7] [0.25 -0.92] [0.05 -1.02]]
+           'sides 6 'lump 0.04 'tilt [0 70] 'dense 9 'dome 0.09
+           'skin '((fill (rgb 0.72 0.44 0.15)) (noise 1 10 0.3) (stripes 5 1 0 (shade 0.72)) (patches 4 0.2 (mix (rgb 0.86 0.68 0.36) 0.5))
+                   (rows 0 7 (rgb 0.6 0.46 0.26)) (rows 28 32 (rgb 0.2 0.13 0.07)))
+           'heap {'n 6 'r 5.8 'gap (rgb 0.16 0.09 0.04) 'c [(rgb 0.74 0.47 0.17) (rgb 0.66 0.38 0.13) (rgb 0.8 0.56 0.25)]}}
+   'carrot {'r [0.017 0.022] 'shape [[0.05 8.2] [1.2 7.6] [0.4 5.0] [1.0 4.6] [1.0 2.0] [0.75 -1.0] [0.4 -4.0] [0.03 -5.6]]
+            'sides 5 'lump 0.05 'tilt [84 104] 'yaw [-20 20] 'dense 9 'dome 0.07
+            'skin '((fill (rgb 0.9 0.46 0.09)) (noise 1 3 0.2) (grid 0 4 1 (shade 0.78))
+                    (rows 0 12 (rgb 0.2 0.46 0.14)) (noise 2 0.2) (rows 12 14 (rgb 0.5 0.42 0.12)))
+            'heap {'long 30 'n 7 'r 2.6 'gap (rgb 0.14 0.09 0.04) 'c [(rgb 0.9 0.46 0.09) (rgb 0.84 0.4 0.07) (rgb 0.94 0.52 0.14)]
+                   'tops (rgb 0.22 0.46 0.14)}}
+   'radish {'r [0.016 0.021] 'shape [[0.05 4.0] [1.3 3.6] [0.25 1.1] [0.9 0.74] [1.0 0.0] [0.56 -0.76] [0.1 -1.2] [0.01 -2.3]]
+            'sides 5 'lump 0.03 'tilt [50 115] 'dense 12 'dome 0.07
+            'skin '((fill (rgb 0.8 0.1 0.25)) (noise 2 0.15) (rows 0 9 (rgb 0.2 0.44 0.13)) (noise 1 2 0.2) (rows 22 32 (rgb 0.92 0.86 0.88)))
+            'heap {'n 8 'r 3.2 'gap (rgb 0.08 0.2 0.06) 'c [(rgb 0.8 0.1 0.25) (rgb 0.86 0.14 0.3) (rgb 0.72 0.08 0.22)] 'shine 0.2
+                   'leaf (rgb 0.2 0.44 0.13)}}
+   'cabbage {'r [0.085 0.105] 'shape [[0.03 0.95] [0.35 0.92] [0.72 0.72] [0.96 0.3] [1.0 -0.15] [0.8 -0.62] [0.35 -0.88] [0.03 -0.9]]
+             'sides 9 'lump 0.03 'folds 0.05 'tilt [0 25] 'dense 4 'dome 0.12
+             'skin '((fill (rgb 0.46 0.66 0.3)) (noise 1 8 0.2) (grain 8 1 2 10 (shade 0.72)) (rows 0 10 (mix (rgb 0.7 0.82 0.5) 0.6))
+                     (rows 22 32 (shade 0.78)) (noise 2 0.15))
+             'heap {'n 4 'r 11.5 'gap (rgb 0.1 0.2 0.07) 'c [(rgb 0.42 0.62 0.28) (rgb 0.5 0.7 0.34) (rgb 0.36 0.56 0.24)] 'leaves 1}}}
+ produce-keys ['like 'r 'shape 'sides 'lump 'folds 'tilt 'yaw 'skin 'heap 'dense 'dome]
+ (kind-of q) (: u "(produce [x y z] seed KIND)"
+   (? (nom? q) (tablet? (produces q) ? (produces q) (no (u + ", a KIND of " + show (sort (keys produces))) q))
+      (!(tablet? q)) (no u q)
+      (: _ (each (keys q) (k \ elem k produce-keys ? 0 (no (u + ", produce takes " + show produce-keys) k)))
+         b (q 'like @ () {} l (kind-of l))
+         (foldl (\ a k (pin a k (q k))) (foldl (\ a k (pin a k (b k))) {} (keys b)) (filter (k \ k != 'like) (keys q))))))
+ ; ..one thing's rows, its lowest point sink under where it rests: each row a ring, lumped by
+ ; three waves round it, folded, tilted off the upright and swung; a row's last point its first
+ (veg-rows k at e sink) (: R (pick e 'r (k 'r)) n (int (k 'sides)) sh (k 'shape) tl (pick e 'tilt (k 'tilt) * pi / 180.0)
+   yw (pick e 'yaw (peep k 'yaw [0 360]) * pi / 180.0) lp (peep k 'lump 0.0) fd (peep k 'folds 0.0)
+   p1 (6.28 * dice e 'a) p2 (6.28 * dice e 'b) p3 (6.28 * dice e 'c) ct (cos tl) st (sin tl) cy (cos yw) sy (sin yw)
+   (ring q) (map (i \ (: a (2.0 * pi * (i % n) / n) y (q 1)
+                        w (1.0 + lp * (sin (a + p1 + y) + sin (2.0 * a + p2 - y) + 0.6 * sin (3.0 * a + p3)) + fd * sin (4.0 * a + 2.0 * y + p1))
+                        x0 (R * q 0 * w * sin a) z0 (R * q 0 * w * cos a) y0 (R * y)
+                        y1 (y0 * ct - z0 * st) z1 (y0 * st + z0 * ct)
+                        [(x0 * cy + z1 * sy) y1 (z1 * cy - x0 * sy)])) ^(n + 1))
+   rs (map ring sh) lo (foldl (\ m r (foldl (\ m p (min m (p 1))) m r)) 1e9 rs)
+   (map (map (p \ [(at 0 + p 0) (at 1 + p 1 - lo - sink * R) (at 2 + p 2)])) rs))
+ (skin-of k) (texture 32 32 1.0 (k 'skin))
+ (produce at s q) (: u "(produce [x y z] seed KIND)" o (P at u)
+   (? (!(charm? s && 0 <= s < 1000000)) (no u s)
+      (: k (kind-of q) (wrapped #(k 'shape) (drape (skin-of k) (veg-rows k o s 0.0))))))
+ ; ..dabs on a picture t texels across: each one in a jittered cell, painted again past an
+ ; edge it crosses, so the picture tiles; its shadow on those under it, its body, its light
+ ; toward the bearing's front
+ (pile-skin q s deg) (: u "(pile-skin KIND seed bearing)" k (kind-of q) h (k 'heap) n (int (h 'n)) r (h 'r) T 64.0 m (T / n)
+   lg (N deg u * pi / 180.0) fx (0.0 - sin lg) fy (0.0 - cos lg) long (peep h 'long 0.0)
+   (pn c) ['rgb (c 0) (c 1) (c 2)]
+   cs (h 'c) (hint c t) ['mix (pn c) t] warm [1.0 0.9 0.72]
+   (round x y e c rr)
+     ((h 'leaf @ () () lf [['disc (x + rr * pick e 'lx [-1.3 1.3]) (y + rr * pick e 'ly [-1.3 1.3]) (0.8 * rr) (pn lf)]])
+      + [['disc x y (1.16 * rr) (sh 0.45)] ['disc x y rr (pn c)]]
+      + (peep h 'leaves 0 ? (: a (6.28 * dice e 'v) vx (cos a) vy (sin a) (at d) [(x + d * rr * vx) (y + d * rr * vy)]
+                              (leaf d q p) (: z (at d) ['disc (z 0) (z 1) (q * rr) p])
+                              [(leaf 0.2 0.8 (sh 0.76)) (leaf 0.26 0.7 (hint [0.72 0.86 0.5] 0.3))
+                               (leaf 0.42 0.46 (sh 0.78)) (leaf 0.48 0.36 (hint [0.78 0.9 0.58] 0.35))]) ())
+      + [['disc (x + 0.22 * rr * fx) (y + 0.22 * rr * fy) (0.6 * rr) (hint warm 0.1)]
+         ['disc (x + 0.4 * rr * fx) (y + 0.4 * rr * fy) (0.2 * rr) (hint [1.0 1.0 0.95] (peep h 'shine 0.08))]])
+   ; ..a long one lies along the bearing's across, its top toward the back
+   (bar x y e c rr) (: a (lg + pi * pick e 'a [0.42 0.58]) ux (cos a) uy (0.0 - sin a) vx (0.0 - uy) vy ux tc (pn (h 'tops))
+      (span d w0 w1 p) (: sx (x + ux * d) sy (y + uy * d)
+         ['poly (sx + vx * w0) (sy + vy * w0) (sx + ux * long + vx * w1) (sy + uy * long + vy * w1)
+                (sx + ux * long - vx * w1) (sy + uy * long - vy * w1) (sx - vx * w0) (sy - vy * w0) p])
+      [(span 0.0 (1.35 * rr) (0.55 * rr) (sh 0.42)) (span 0.0 rr (0.3 * rr) (pn c)) (span 0.0 (0.32 * rr) (0.1 * rr) (hint warm 0.3))
+       ['disc x y rr (pn c)] ['disc (x - ux * rr) (y - uy * rr) (1.1 * rr) tc]])
+   (body x y e) (: rr (r * pick e 'r [0.86 1.12]) c (cs (int (#cs * dice e 'c)))
+      (long > 0.0 ? (bar x y e c rr) (round x y e c rr)))
+   ; ..the layer they lie on, dim, filling what they leave
+   (under x y e) (: c (map (v \ 0.42 * v) (cs (int (#cs * dice e 'c))))
+      (long > 0.0 ? (bar-dim x y e c) [['disc x y (1.15 * r) (pn c)]]))
+   (bar-dim x y e c) (: a (lg + pi * pick e 'a [0.42 0.58]) ux (cos a) uy (0.0 - sin a)
+      [['poly (x + uy * r) (y - ux * r) (x + ux * long + uy * r) (y + uy * long - ux * r) (x + ux * long - uy * r) (y + uy * long + ux * r) (x - uy * r) (y + ux * r) (pn c)]])
+   R (long + 2.0 * r)
+   (cell paint i) (: e (seed-of s i) x (m * ((i % n) + dice e 'x)) y (m * ((i // n) + dice e 'y))
+      (catmap (ox \ catmap (oy \ (0.0 - R < x + ox && x + ox < T + R && 0.0 - R < y + oy && y + oy < T + R ? (paint (x + ox) (y + oy) e) ())) [(0.0 - T) 0.0 T]) [(0.0 - T) 0.0 T]))
+   order (map (q \ q 1) (sort (map (i \ [(dice (seed-of s i) 'o) i]) ^(n * n))))
+   (texture 64 64 (T * pile-metres k) ([['seed s] ['fill (pn (h 'gap))] '(noise 3 0.2)] + catmap (cell under) (map (i \ n * n + i) order) + catmap (cell body) order + ['(noise 2 0.12) ['patches 6 0.2 (sh 0.82)]])))
+ ; ..a texel's metres: the picture's dabs as big as the things
+ (pile-metres k) (: rr (pick 1 'r (k 'r)) (rr / k 'heap 'r))
+ (pile q at deg s o) (: u "(pile KIND [x y z] bearing seed {'w 'd 'low 'high 'dome 'dense})" c (P at u) dd (N deg u) k (kind-of q)
+   (? (!(charm? s && 0 <= s < 1000000)) (no u s) (!(tablet? o)) (no u o)
+      (: W (0.5 * f (peep o 'w 1.2)) D (0.5 * f (peep o 'd 0.9)) lo (f (peep o 'low 0.72)) hi (f (peep o 'high 1.02))
+         dm (f (peep o 'dome (k 'dome))) e 0.11 x0 (c 0) y0 (c 1) z0 (c 2)
+         p1 (6.28 * dice s 'p) p2 (6.28 * dice s 'q)
+         ; ..its height over the slope: rising off the edges, rolling
+         (over x z) (: b (ease (W - abs x) 0.0 0.22 * ease (D - abs z) 0.0 0.22)
+            (lo + (hi - lo) * (z + D) / (2.0 * D) - 0.012 + b * (dm + 0.022 * sin (9.1 * x + 3.1 * z + p1) * sin (7.3 * z - 4.1 * x + p2)
+                                                                    + 0.012 * sin (23.0 * x + 2.0 * z + p2) * sin (19.0 * z + 3.0 * x + p1))))
+         nx (max 2 (int (2.0 * W / e + 0.5))) nz (max 2 (int (2.0 * D / e + 0.5)))
+         sheet (map (j \ (: z ((2.0 * D * j / nz) - D) (map (i \ (: x ((2.0 * W * i / nx) - W) [(x0 + x) (y0 + over x z) (z0 + z)])) ^(nx + 1)))) ^(nz + 1))
+         R0 (peep k 'r 0 @ (a . _) a a)
+         mg (R0 + 0.03) n (max 1 (int (peep o 'dense (k 'dense) * 4.0 * W * D)))
+         (mk p dg e) (veg-rows k [(x0 + p 0) (y0 + over (p 0) (p 2)) (z0 + p 2)] e 0.35)
+         things (scatter s [[(mg - W) (mg - D)] [(W - mg) (D - mg)]] n mk {'gap (1.7 * R0)})
+         gapr (map (_ \ ()) ^(int (k 'sides) + 1))
+         (turn dd [x0 z0]
+               [(drape (pile-skin q s dd) sheet)
+                (two? things ? [(wrapped #(k 'shape) (drape (skin-of k) (cdr-join gapr things)))] ())]))))
+ (cdr-join g ts) (foldl (\ a t (a + [g] + t)) <ts >ts)
  (feel k t) (: u "(feel 'soft TEXTURE)"
    (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
@@ -1065,7 +1208,7 @@
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'brittle (peep p 'brittle 0) 'lens (p 'lens)}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
-       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'land (d 'kind @ 'land 1 0)}) (of 'drape + of 'land))
+       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'land (d 'kind @ 'land 1 0)}) (of 'drape + of 'land))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0)}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
        'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'glow (peep o 'glow 0) 'in (peep o 'in 0) 'src (o 'src) 'xf (peep o 'xf xf-id)}) (of 'orb))

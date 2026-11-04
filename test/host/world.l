@@ -904,6 +904,7 @@
        (ch 5.0 0.0 = -0.5) (ch 5.0 0.9 = -0.5) (ch 5.0 3.0 = 0.0) (-0.5 < ch 5.0 1.5 < 0.0)
        (S 'rise md md 1.0 1.0 = 4.0) (S 'blend md (\ x z 0.0) 0.1 5.0 5.0 > 0.0) (S 'carve md (\ x z 0.0) 0.1 5.0 5.0 < 0.0)
        (#(gl 'drapes) = 1) (gl 'drapes 0 'land = 1) (#(gl 'drapes 0 'rows) = 3) (#(gl 'drapes 0 'rows 0) = 5)))
+(: (near1 a b) (abs (a 0 - b 0) < 1e-9 && abs (a 1 - b 1) < 1e-9))
 ; furniture: station's desk from the desk's own sizes, its top over the floor; a quarter turn
 ; swaps its spans; every kind reads; drawers and doors counted; a seed a size thrown again and
 ; another not; a role's skin changed; books on the shelves; a kind or a key not known said back
@@ -912,7 +913,7 @@
    (solids l) (filter (b \ b 'air = 0) (l 'brushes)) (bxs s) (map (b \ b 'shape 'box) (solids (fu s)))
    (near a b) (all (i \ all (j \ abs (a i j - b i j) < 1e-9) ^3) ^2)
    dk (fu "(furnish 'desk [0 0 0] 0 {})") db (bxs "(furnish 'desk [0 0 0] 0 {})") (bm x y z) (brush-medium (world-new 8 8 dk "" 'sc 'brushes) [x y z])
-   kinds ['table 'desk 'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter 'crate 'carton 'sofa]
+   kinds ['table 'desk 'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter 'crate 'carton 'stand 'sofa]
    (n s) #(solids (fu s))
  (test (near (db 0) [[-0.8 0.71 -0.4] [0.8 0.75 0.4]]) (near (db 1) [[-0.78 0.0 -0.38] [-0.74 0.71 0.38]])
        (near (db 2) [[0.74 0.0 -0.38] [0.78 0.71 0.38]]) (near (db 3) [[-0.74 0.15 0.3] [0.74 0.65 0.33]]) (#db = 4)
@@ -946,6 +947,37 @@
        (has? (pl "(plant [0 0 0] 3 'kudzu)") "a SPECIES") (has? (pl "(plant [0 0 0] 3 {'like 'oak 'hue 1})") "a plant takes")
        (has? (pl "(plant [0 0 0] 3 {'levels [{'n 2 'hue 1}]})") "a level takes")
        (has? (pl "(plant [0 0 0] 3 {'leaf {'kind 'scale}})") "a leaf's 'kind") (has? (pl "(plant [0 0 0] 'x 'oak)") "(plant [x y z]")))
+; produce: every kind a closed thing, its rows its profile's, each row's last point its first,
+; resting where it was put; a seed the same one and another not; a 'like changing one; a pile a
+; painted sheet and whole ones gapped apart, thrown by its seed; the sheet and things swung by a
+; bearing; drawn; a stand's slope and lip where they stand; a kind or a key not known said back
+(: (pr s) (lv ("(room [-9 0 -9] [9 9 9]) " + s))
+   (one k) (pr ("(produce [1 2 3] 5 '" + show k + ")") 'drapes 0)
+   (low d) (foldl (\ m r (foldl (\ m q (min m (q 1))) m r)) 1e9 (d 'rows))
+   kinds ['apple 'potato 'onion 'carrot 'radish 'cabbage]
+   pd (pr "(pile 'apple [0 0 0] 0 3 {'w 1.2 'd 0.9 'dense 12})" 'drapes) sh (pd 0) th (pd 1) m (th 'wrap) C #<(th 'rows)
+   tn (pr "(pile 'carrot [0 0 0] 90 3 {'w 2 'd 0.6})" 'drapes 0)
+   (span d k) (: qs (catmap (r \ filter two? r) (d 'rows)) vs (map (q \ q k) qs) [(foldl min 1e9 vs) (foldl max -1e9 vs)])
+   st (lv "(room [-4 0 -4] [4 3 4]) (furnish 'stand [0 0 0] 0 {'w 1.2 'd 0.8 'low 0.7 'h 1 'lip 0.05})")
+   bm (brush-medium (world-new 8 8 st "" 'sc 'brushes))
+   ap (lv "(room [-4 0 -4] [4 3 4]) (ambient (rgb 1 1 1)) (start [0 0.2 -1] 0 -40) (produce [0 0.8 0] 1 'cabbage)")
+   no (lv "(room [-4 0 -4] [4 3 4]) (ambient (rgb 1 1 1)) (start [0 0.2 -1] 0 -40)")
+   (pens l) (show (world-pens (world-new 64 40 l "")))
+ (test (all (k \ (: d (one k) (d 'wrap = #(d 'rows) && all (r \ r 0 = r (#r - 1)) (d 'rows)))) kinds)
+       (all (k \ abs (low (one k) - 2.0) < 1e-9) kinds)
+       (show (one 'onion) = show (one 'onion)) (show (one 'onion 'rows) != show (pr "(produce [1 2 3] 6 'onion)" 'drapes 0 'rows))
+       (#<(pr "(produce [0 0 0] 1 {'like 'apple 'sides 9})" 'drapes 0 'rows) = 10)
+       (#pd = 2) (sh 'wrap = 0) (m = 7) (C = 7) (#(th 'rows) % (m + 1) = m)
+       (all (i \ th 'rows (m + (m + 1) * i) = map (_ \ ()) ^C) ^(#(th 'rows) // (m + 1)))
+       (show pd = show (pr "(pile 'apple [0 0 0] 0 3 {'w 1.2 'd 0.9 'dense 12})" 'drapes))
+       (show (th 'rows) != show (pr "(pile 'apple [0 0 0] 0 4 {'w 1.2 'd 0.9 'dense 12})" 'drapes 1 'rows))
+       (near1 (span sh 0) [-0.6 0.6]) (near1 (span sh 2) [-0.45 0.45]) (near1 (span tn 0) [-0.3 0.3]) (near1 (span tn 2) [-1.0 1.0])
+       (sh 'rows 0 0 1 < sh 'rows (#(sh 'rows) - 1) 0 1)
+       (bm [0.0 0.84 0.0] = 0) (bm [0.0 0.9 0.0] = 1) (bm [0.0 0.8 0.385] = 0) (bm [0.0 1.03 0.399] = 0) (bm [0.0 1.03 0.3] = 1)
+       (pens ap != pens no)
+       (has? (pr "(produce [0 0 0] 1 'kale)") "a KIND") (has? (pr "(produce [0 0 0] 1 {'like 'apple 'hue 1})") "produce takes")
+       (has? (pr "(produce [0 0 0] 'x 'apple)") "(produce [x y z]") (has? (pr "(pile 'apple [0 0 0] 0 3 'big)") "(pile KIND")
+       (has? (pr "(wrapped 1 (produce [0 0 0] 1 'apple))") "(wrapped rows")))
 ; ..a desk in moves and a turn stepped comes out of them as a book does, its bearing turned
 (: fkv ((cite 'vi) 'vi-open "")
    fkf "(move [0.15 0 -0.15] (turn 90 [-27.35 7.4] (move [0.8 0 0.25] (furnish 'desk [-28.15 0 7.15] 160 {}))))"
