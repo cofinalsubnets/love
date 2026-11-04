@@ -211,13 +211,23 @@
                      synconf w (x + bw) (y + bw) cw ch)))))
        owns (tablet 8)                                                              ; WM_TRANSIENT_FOR, read once: owner | 0
        (owner w) (peep owns w -1 @ p (p != -1 ? p (x-transient s w @ q (pin owns w (q ? q 0), q))))
-       (unled! w) (pull mapd w 0, pull owed w 0, pull owns w 0)               ; the window left management: clear its ledger
+       stamped (tablet 8)                                                           ; windows wearing a fullscreen or maximize state
+       (stamp-atoms u) (map ewmh-atom ["_NET_WM_STATE_FULLSCREEN" "_NET_WM_STATE_MAXIMIZED_VERT" "_NET_WM_STATE_MAXIMIZED_HORZ"])
+       (seed-stamp! w) (x-getprop-atoms s w (ewmh-atom "_NET_WM_STATE") @ st
+                          (any (a \ any (= a) (stamp-atoms ())) st ? (pin stamped w 1) 0))
+       (unstamp! w) (peep stamped w 0 ?                                             ; a tile is neither: the client hears so
+                      (x-getprop-atoms s w (ewmh-atom "_NET_WM_STATE") @ st
+                         (pull stamped w 0,
+                          x-chprop32 s w (ewmh-atom "_NET_WM_STATE") 4
+                                     (filter (a \ !(any (= a) (stamp-atoms ()))) st))))
+       (unled! w) (pull mapd w 0, pull owed w 0, pull owns w 0, pull stamped w 0)   ; the window left management: clear its ledger
        (render sh lays)                                                               ; every screen: its tag's placements configured, the dropped unmapped, floats on top
         (: f (wsfoc sh)                                                              ; the focus is the sheaf's, float or tile alike
            (tiles p)                                                                 ; one screen (tag rect): tile the tag into its rect, answer the placed
             (: t <p pls <(lay-tile (lay-at lays t) (trect-of <>p) (wstilezof sh t))
                _ (map (q \ (: w (q 0) bw (#q < 6 ? (lux-cfg 'border) (q 5))                ; smartBorders sets 0 on a singleton/fullscreen
-                             (bord! w bw (w = f ? fpix npix),                        ; focusedBorderColor / normalBorderColor
+                             (unstamp! w,
+                              bord! w bw (w = f ? fpix npix),                        ; focusedBorderColor / normalBorderColor
                               move! w (q 1) (q 2)                                    ; the client is the tile less its border
                                     (mx2 1 (q 3 - 2 * bw)) (mx2 1 (q 4 - 2 * bw))))) pls)
                (map cap pls))
@@ -374,6 +384,7 @@
                        sh2 (manage-window (lux-cfg 'manage) c sh1)
                        (wsknownw? sh2 win ?                                          ; managed (tiled or floated) -> place it
                           (x-chprop32 s win (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0),    ; the ICCCM stamp: a restart finds us even hidden
+                           seed-stamp! win,
                            watch win,
                            frame! win (x-getgeom s win),
                            render sh2 lays,
@@ -485,10 +496,11 @@
                             (? (want = !!on) (loop sh lays hist)
                                want (wsdofloat (wsmap sh (zfocto cw)) cw rect @ sh2
                                        (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 atoms,
+                                        pin stamped cw 1,
                                         render sh2 lays, refocus sh2,
                                         line ("lux: " + word + " " + show cw), loop sh2 lays hist))
                                (wssink sh cw @ sh2
-                                  (x-chprop32 s cw (ewmh-atom "_NET_WM_STATE") 4 (),
+                                  (unstamp! cw,
                                    render sh2 lays, line ("lux: un" + word + " " + show cw), loop sh2 lays hist))))
                        (? (ty = ewmh-atom "_NET_WM_STATE" &&                       ; _net_wm_state add/remove/toggle fullscreen (ewmhFullscreen)
                               wsknownw? sh cw && (fs? (ewmh-cm-d1 pkt) || fs? (ewmh-cm-d2 pkt)))
@@ -547,6 +559,7 @@
        (take-in sh ws)
         (foldl (ss \ w \ wsview (admit (wsview ss (adopt-tag w)) w) <(lux-cfg 'tags)) sh ws @ sh2
            (map (w \ x-chprop32 s w (x-intern s "WM_STATE") (x-intern s "WM_STATE") '(1 0)) ws,
+            map seed-stamp! ws,                                           ; survivors come back tiled, so their states go
             map watch ws,                                                 ; survivors get the mouse wires too
             map (w \ x-manageable? s w ? (pin mapd w 1) 0) ws,                   ; the viewable adoptees are mapped
             map (w \ frame! w (x-getgeom s w)) ws,
