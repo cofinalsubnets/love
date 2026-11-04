@@ -331,8 +331,18 @@
              (? (whole? g) (g + a)
                 (sy 1 = 2) ()
                 (scare 'link-undef [(ob 'id) <sy])))))
-   ; the dynamic sites: {'relr [[key ro] ..] 'rela [[key entry weak?] ..]}, in input order
-   (ld-dynsites lk)
+   ; an entry's symbol absolute as lld's isAbsolute sees it: SHN_ABS, or a script's symbol
+   ; outside every section. env () is before layout, when a script's symbols count relative
+   (ld-absym? lk env oi e)
+    (: ob (lk 'ot oi) sy (ob 'syms (e 2))
+       (? (sy 2 = 3 || sy 1 = 0) (sy 3 = 65521)
+          (: v (? (env = ()) () (peep (env 'sv) <sy ()))
+             (? (whole? v) (: q (peep (env 'ssec) <sy ()) !(string? q || q = 'aether))
+                (: g (peep (lk 'cx 'glob) <sy ())
+                   (? (two? g) (lk 'ot <g 'syms (g 1) 3 = 65521) 0))))))
+   ; the dynamic sites: {'relr [[key ro] ..] 'rela [[key entry weak?] ..]}, in input order.
+   ; a -pie's weak undefined is absolute, and a site in a read-only section wants -z notext
+   (ld-dynsites lk env)
     (: relr {'l ()} rela {'l ()}
        (wu? ob e) (: sy (ob 'syms (e 2))
                      (sy 1 = 2 && sy 3 = 0 && atom? (peep (lk 'cx 'glob) <sy ())))
@@ -340,7 +350,9 @@
         (: oi (x 1) si (x 2) ob (lk 'ot oi) r (ob 'sec si) key (oi * 65536 + si)
            (each (? (0 < (r 2 & 2)) (ld-relas ob si) ())
               (e \ (? (e 1 != peep lk 'abs 257) 0
-                      (wu? ob e) (pin rela 'l ([key e 1] . rela 'l))
+                      (wu? ob e) (? (peep lk 'pie 0) 0 (pin rela 'l ([key e 1] . rela 'l)))
+                      (ld-absym? lk env oi e) 0
+                      (0 = (r 2 & 1) && !(peep lk 'notext 0)) (scare 'link-textrel [(ob 'id) <r <e])
                       (peep lk 'relr 1 && r 5 >= 2 && <e % 2 = 0) (pin relr 'l ([key <e] . relr 'l))
                       (pin rela 'l ([key e 0] . rela 'l))))))
        _ (each (rev (ld-isecs (lk 'outs))) one)
@@ -372,17 +384,18 @@
                                     (go (i + 1) st acc))
                    (go 0 0 ()))
    ; with no version script (opts 'flat) every definition of default or protected
-   ; visibility is exported, unversioned, and the table carries no soname
+   ; visibility is exported, unversioned, and the table carries no soname; a -pie's exports none
    (ld-dso cx opts vt)
     (: ws (ld-words vt)
-       fl (peep opts 'flat 0)
+       pie (peep opts 'pie 0)
+       fl (peep opts 'flat 0 || pie)
        vn <ws
        (gs l on acc) (? (atom? l) (rev acc) (<l = "global:") (gs >l 1 acc) (<l = "local:") (gs >l 0 acc)
                         (on && <l != ";") (gs >l on (<l . acc)) (gs >l on acc))
        ex (: t {} _ (each (gs >ws 0 ()) (n \ pin t n 1)) t)
        (vis? n) (: g (peep (cx 'glob) n ())
                    (? (two? g) (: v ((cx 'objs) <g 'syms (g 1) 6 & 3) (v = 0 || v = 3)) 0))
-       ds (filter (n \ (? fl (vis? n) (peep ex n 0 && two? (peep (cx 'glob) n ())))) (cx 'order))
+       ds (? pie () (filter (n \ (? fl (vis? n) (peep ex n 0 && two? (peep (cx 'glob) n ())))) (cx 'order)))
        nb (max (#ds // 4) 1)
        syms (map (p \ p 2) (sort (map (i \ [(ld-ghash (ds i) % nb) i (ds i)]) ^#ds)))
        ; the version base is named by -soname, else by the output as given, and with no
@@ -392,19 +405,36 @@
        _ (each (ds + (? fl () [base vn])) (s \ (? (whole? (peep st s ())) 0 (: _ (pin st s (st 'n)) (pin st 'n (st 'n + #s + 1))))))
        mw ((: (go p) (? (p > #syms * 12 // 64) p (go (p * 2)))) 1)
        n (#syms + 1)
-       dt (cats [(? (fl || !(string? so)) () [[14 'soname]]) (? (opts 'symbolic) [[30 'symbolic]] ()) (? (opts 'bti) [[1879048193 'zero]] ())
-                 (? (fl && opts 'relr) [[36 ".relr.dyn"] [35 'relrsz] [37 'relrent]] ())
-                 [[6 ".dynsym"] [11 'syment] [5 ".dynstr"] [10 'strsz] [1879047925 ".gnu.hash"] [4 ".hash"]]
-                 (? fl () [[1879048176 ".gnu.version"] [1879048188 ".gnu.version_d"] [1879048189 'nverdef]])
-                 [[0 'zero]]])
-       {'exports ex 'syms syms 'vn vn 'soname so 'base base 'str st 'nb nb 'mw mw 'dt dt 'flat fl
-        'synth ([[".hash" (4 * (2 + 2 * n)) 4 5 2 4] [".gnu.hash" (16 + 8 * mw + 4 * nb + 4 * #syms) 8 1879048182 2 0]
-                [".dynsym" (24 * n) 8 11 2 24] [".dynstr" (st 'n) 1 3 2 0]]
-                + (? fl () [[".gnu.version" (2 * n) 2 1879048191 2 2] [".gnu.version_d" 56 4 1879048189 2 0]])
-                + [[".dynamic" (16 * #dt) 8 6 3 16]
-                [".got" 0 8 1 3 0 1] [".got.plt" 0 8 1 3 0 1] [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]])
-        'slink {".hash" [".dynsym" 0] ".gnu.hash" [".dynsym" 0] ".dynsym" [".dynstr" 1] ".gnu.version" [".dynsym" 0]
-                ".gnu.version_d" [".dynstr" 2] ".dynamic" [".dynstr" 0]}})
+       d {'exports ex 'syms syms 'vn vn 'soname so 'base base 'str st 'nb nb 'mw mw 'flat fl 'pie pie
+          'symbolic (peep opts 'symbolic 0) 'bti (peep opts 'bti 0) 'notext (peep opts 'notext 0)
+          'slink {".hash" [".dynsym" 0] ".gnu.hash" [".dynsym" 0] ".dynsym" [".dynstr" 1] ".gnu.version" [".dynsym" 0]
+                  ".gnu.version_d" [".dynstr" 2] ".dynamic" [".dynstr" 0]}}
+       _ (? pie (pin (d 'slink) ".rela.dyn" [".dynsym" 0]) 0)
+       ; in lld's order of creation, which orders the orphans of one rank; .dynamic's size is
+       ; its tags', ld-dtags once laid
+       (pin d 'synth
+            ([[".dynsym" (24 * n) 8 11 2 24]]
+             + (? fl () [[".gnu.version" (2 * n) 2 1879048191 2 2] [".gnu.version_d" 56 4 1879048189 2 0]])
+             + [[".gnu.hash" (16 + 8 * mw + 4 * nb + 4 * #syms) 8 1879048182 2 0] [".hash" (4 * (2 + 2 * n)) 4 5 2 4]
+                [".dynamic" (16 * #(ld-dtags d {})) 8 6 3 16] [".dynstr" (st 'n) 1 3 2 0]
+                [".got" 0 8 1 3 0 1] [".got.plt" 0 8 1 3 0 1] [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]])))
+   ; a symbol's value, a script's first
+   (ld-symv env n) (: v (peep (env 'sv) n ()) (? (whole? v) v ((env 'gv) n)))
+   ; .dynamic's tags in lld's order. q: 'rela 'relc 'relr counts, 'arrs the array and init tags
+   (ld-dtags d q)
+    (: fl (d 'flat) so (d 'soname) f ((? (d 'symbolic) 2 0) | (? (d 'notext) 4 0))
+       (cats [(? (fl || !(string? so)) () [[14 'soname]]) (? (f = 0) () [[30 f]])
+              (? (d 'pie) [[1879048187 134217728] [21 0]] ())
+              (? (peep q 'rela 0 = 0) ()
+                 ([[7 ".rela.dyn"] [8 'relasz] [9 24]] + (? (peep q 'relc 0 = 0) () [[1879048185 'relacount]])))
+              (? (peep q 'relr 0 = 0) () [[36 ".relr.dyn"] [35 'relrsz] [37 'relrent]])
+              (? (d 'bti) [[1879048193 0]] ())
+              [[6 ".dynsym"] [11 'syment] [5 ".dynstr"] [10 'strsz]]
+              (? (d 'notext) [[22 0]] ())
+              [[1879047925 ".gnu.hash"] [4 ".hash"]]
+              (peep q 'arrs ())
+              (? fl () [[1879048176 ".gnu.version"] [1879048188 ".gnu.version_d"] [1879048189 'nverdef]])
+              [[0 0]]]))
    (ld-dsdata lk)
     (: d (lk 'dso) env (lk 'env) isa (env 'isa) glob (lk 'cx 'glob) ot (lk 'ot) shx (ld-shx (lk 'outs))
        syms (d 'syms) st (d 'str) n (#syms + 1) nb (d 'nb) mw (d 'mw)
@@ -430,8 +460,11 @@
        dstr (cats ([0] . map (p \ map (i \ p 1 i) ^#(p 1) + [0]) strs))
        vd (? (d 'flat) () (cats [(w2 1) (w2 1) (w2 1) (w2 1) (w4 (ld-ehash (d 'base))) (w4 20) (w4 28) (w4 (st (d 'base))) (w4 0)
                  (w2 1) (w2 0) (w2 2) (w2 1) (w4 (ld-ehash (d 'vn))) (w4 20) (w4 0) (w4 (st (d 'vn))) (w4 0)]))
-       (dv k) (? (string? k) (isa k) (k = 'soname) (st (d 'soname)) (k = 'symbolic) 2 (k = 'syment) 24
-                 (k = 'strsz) (st 'n) (k = 'nverdef) 2 (k = 'relrsz) (peep d 'relrsz 0) (k = 'relrent) 8 0)
+       osv (env 'osv)
+       (dv k) (? (whole? k) k (string? k) (isa k) (two? k) (? (<k = 'osa) <(osv (k 1)) (<k = 'osz) (osv (k 1) 1) (ld-symv env (k 1)))
+                 (k = 'soname) (st (d 'soname)) (k = 'syment) 24
+                 (k = 'strsz) (st 'n) (k = 'nverdef) 2 (k = 'relrsz) (peep d 'relrsz 0) (k = 'relrent) 8
+                 (k = 'relasz) (peep d 'relasz 0) (k = 'relacount) (peep d 'relacount 0) 0)
        dyn (cats (map (e \ w8 <e + w8 (dv (e 1))) (d 'dt)))
        one (\ b [#b [b]])
        {".hash" (one sysv) ".gnu.hash" (one gh) ".dynsym" (one (cats ((ld-le 0 24) . map dsym syms)))
@@ -447,9 +480,9 @@
        (map (i \ (? (i < 4) ((lo >> (8 * i)) & 255) (i < 8) ((hi >> (8 * (i - 4))) & 255) 0)) ^w))
    ; .rela.dyn: RELATIVE first, then the weak ABS64s, each by address
    (ld-rela lk dy)
-    (: isa (lk 'env 'isa)
+    (: isa (lk 'env 'isa) x64 (peep lk 'mach 183 = 62)
        es (map (r \ (: k <r e (r 1) p (isa k + <e)
-                     (? (r 2) [1 p 257 (e 3)] [0 p 1027 (ld-sa lk (k // 65536) e)])))
+                     (? (r 2) [1 p (? x64 1 257) (e 3)] [0 p (? x64 8 1027) (ld-sa lk (k // 65536) e)])))
                (dy 'rela))
        (map (x \ ld-le (x 1) 8 + ld-le (x 2) 8 + ld-le (x 3) 8) (sort es)))
    ; what a non-alloc section's absolute reference to a dropped section reads, as lld
@@ -485,10 +518,15 @@
                                        (scare 'link-dropped [(ob 'id) ro k]))
                        (k = abs && nal) (ld-le sa 8)               ; not loaded: no slide
                        (k = abs)
-                       (? (!(whole? s0)) (ld-le 0 8)
+                       (? (!(whole? s0)) (ld-le (? (peep lk 'shared 1) 0 sa) 8)         ; -shared binds it at load
                           (peep lk 'etype 3 = 2) (ld-le sa 8)                            ; ET_EXEC: nothing slides
+                          (ld-absym? lk (lk 'env) oi e) (ld-le sa 8)
                           (peep lk 'relr 1 && r 5 >= 2 && ro % 2 = 0) (ld-le sa 8)       ; relr: the field is the addend
                           (ld-le (? (peep lk 'apply 0) sa 0) 8))
+                       ; a narrower absolute can't slide: lld wants -fPIC
+                       (!nal && peep lk 'etype 3 = 3 && whole? s0 && elem [mach k] '((62 10) (62 11) (62 12) (62 14) (183 258))
+                        && !(ld-absym? lk (lk 'env) oi e))
+                        (scare 'link-pic [(ob 'id) ro k])
                        (: c (peep (ld-rtab mach) k ())
                           _ (? (two? c) 0 (scare 'link-reloc [(ob 'id) k]))
                           f (ld-fix be c (map (i \ s (o0 + ro + i)) ^4) sa p)
@@ -731,8 +769,8 @@
                     (peep und nm 0 > 0 && !(peep (cx 'uonly) nm 0)) (pin glo 'l (ky nm (ent nm 0 0 (und nm * 16) 0 0) . glo 'l))
                     0))))
        _ (each names gl)
-       ; lld's _DYNAMIC, hidden at .dynamic
-       _ (? (dso = 0) 0
+       ; lld's _DYNAMIC, hidden at .dynamic, gone with it
+       _ (? (dso = 0 || !(whole? (peep (env 'isa) ".dynamic" ()))) 0
             (: a (env 'isa ".dynamic") (put -1 (ent "_DYNAMIC" a 0 0 2 (shx (ld-holder lk a 'name))))))
        ; the erratum scan's section symbols, each at the end of its object's locals
        _ (each (peep lk 'a53 ()) (x \ (: oi <x si (x 1) (put oi (ent "" (at oi si 0) 0 3 0 (shx (oname oi si)))))))
@@ -841,7 +879,14 @@
                                 (: m <(filter (x \ x 2 != () && elem (x 2 'name) (t 'phn)) loads)
                                    (? (two? m) (pin t 'load m) 0))
                                 0))))
-       nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1 + (? (two? rsec) 1 0)))
+       dyn (filter (t \ t 'name = ".dynamic") outs0)
+       ; lld's PT_NOTE over each run of allocated notes, a script with no PHDRS
+       notes (? (two? phr || flat) ()
+                (rev <(foldl (\ s t (? (alloc? t && t 'stype = 7)
+                                       (? (s 1) [([(<(<(<s))) t] . >(<s)) 1] [([t t] . <s) 1])
+                                       [<s 0]))
+                             [() 0] outs)))
+       nph (? (two? phr) #phr flat (#loads + 4) (#loads + 1 + #dyn + #notes + (? (two? rsec) 1 0)))
        nres (? flat (#grps + 4) nph)
        hdrs (? w32 (52 + 32 * nres) (64 + 56 * nres))
        names (foldl (\ a t (a + t 'name + "\0")) "\0" outs)
@@ -880,7 +925,6 @@
                  (phd 1 (perm a) o0 v0 l0 (fe - o0) (b 'va + b 'sz - v0) pg))
        (row ty fl o v fz mz al) (phd ty fl o v v fz mz al)
        rro (filter (t \ alloc? t && elem (t 'name) ld-relro) outs0)
-       dyn (filter (t \ t 'name = ".dynamic") outs0)
        (fend t) (t 'off + (? (t 'stype = 8) 0 (t 'sz)))
        fphs (? flat
                ([(row 6 4 64 64 (56 * nres) (56 * nres) 8)] + map ph loads
@@ -899,9 +943,11 @@
                  (phd ty (? (whole? fl) fl (perm a)) o0 v0 l0 (fe - o0) (b 'va + b 'sz - v0) al))))
        phs (? (two? phr) (map prow phr) flat fphs
               (map ph loads
+               + (? (two? dyn) [(: t <dyn (row 2 6 (t 'off) (t 'va) (t 'sz) (t 'sz) 8))] ())
                + (? (two? rsec) [(: a <rsec b <(rev rsec) (row 1685382482 4 (a 'off) (a 'va) (fend b - a 'off) (b 'va + b 'sz - a 'va) 1))] ())
-               + [(row 1685382481 6 0 0 0 0 0)]))
-       (lnk t k) (: s (peep slink (t 'name) ()) (? (two? s) (? (k = 0) (shx <s) <>s) (peep t (? (k = 0) 'link 'info) 0)))
+               + [(row 1685382481 6 0 0 0 0 0)]
+               + map (g \ (: a <g b (g 1) (row 4 (perm a) (a 'off) (a 'va) (fend b - a 'off) (b 'va + b 'sz - a 'va) (max (a 'al) (b 'al))))) notes))
+       (lnk t k) (: s (peep slink (t 'name) ()) (? (two? s) (? (k = 0) (peep shx <s 0) <>s) (peep t (? (k = 0) 'link 'info) 0)))
        nmoff (: t {} _ (foldl (\ o x (pin t (x 'name) o, o + #(x 'name) + 1)) 1 outs) t)
        (sh t) (cats [(w4 (nmoff (t 'name))) (w4 (t 'stype)) (wa (t 'flags)) (wa (? (alloc? t) (t 'va) 0)) (wa (t 'off))
                      (wa (t 'sz)) (w4 (lnk t 0)) (w4 (lnk t 1)) (wa (t 'al)) (wa (peep t 'entsize 0))])
@@ -1287,11 +1333,12 @@
                  (elem m '("elf64lriscv")) 'rv64 (elem m '("armelf" "armelf_linux_eabi")) 'arm ())
    (ld-args as)
     (: o {'ins () 'emu () 'apply 0 'discard 'default 'orphan "place" 'whole 0 'relro 1 'reloc 0
-          'shared 0 'symbolic 0 'a53 0 'nmagic 0 'bti 0 'relr 0 'strip 0 'ver 0 'bid 0 'pie 0 'tgt () 'und () 'ehh 0 'erel 0}
+          'shared 0 'symbolic 0 'a53 0 'nmagic 0 'bti 0 'relr 0 'strip 0 'ver 0 'bid 0 'pie 0 'tgt () 'und () 'ehh 0 'erel 0 'notext 0}
        (pre? a p) (#a > #p && snip a 0 #p = p)
        (aft a p) (snip a #p #a)
        (zopt z) (? (z = "norelro") (pin o 'relro 0) (z = "relro") (pin o 'relro 1)
-                   (elem z '("noexecstack" "notext" "text" "nodelete")) o
+                   (z = "notext") (pin o 'notext 1) (z = "text") (pin o 'notext 0)
+                   (elem z '("noexecstack" "nodelete")) o
                    (z = "force-bti") (pin o 'bti 1)
                    (pre? z "max-page-size=") (: n (ld-num (aft z "max-page-size="))
                                                 (? (whole? n && n > 0 && (n & (n - 1)) = 0) (pin o 'pg n) ()))
@@ -1426,8 +1473,8 @@
    ; an output's [inputs? flags type] from its steps, as lld's commitSection takes them
    (ld-oinfo ot t)
     (: ms (filter (x \ <x = 'isec || (<x = 'synth && x 2 > 0)) (peep t 'steps ()))
-       (fl x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 2) 2)
-       (ty x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 1) (starts? (x 1) ".note") 7 1)
+       (fl x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 2) (whole? (x 6)) (x 6) 2)
+       (ty x) (? (<x = 'isec) (ot (x 1) 'sec (x 2) 1) (whole? (x 5)) (x 5) (starts? (x 1) ".note") 7 1)
        tys (map ty ms) nb (filter (y \ y != 8) tys)
        [(two? ms && t 'name != "/DISCARD/") (foldl (\ a x (a | fl x)) 0 ms) (? (atom? tys) 1 (atom? nb) 8 <nb)])
    ; lld's getSectionRank: partition 1, no address set; then not alloc, else by write and exec,
@@ -1497,26 +1544,29 @@
        (words h) (? flat [['set "__ld_pg" '= pg] ['set "__ld_hdrs" '= h]] ())
        cmds (words 0 + body)
        vt (foldl (\ a c (? (<c = 'version) <>c a)) "" cmds)
+       ; a -pie lays the dynamic tables a -shared does, exporting nothing
+       pie (o 'pie && !(o 'shared))
+       _ (? (pie && em = 3) (no "-pie for i386") 0)
+       dyn (o 'shared || pie)
        d (? (o 'shared && (flat || 0 < #vt))
-            (ld-dso cx {'soname (peep o 'soname ()) 'out out 'symbolic 1 'bti (o 'bti) 'flat flat 'relr (o 'relr)} vt) 0)
+            (ld-dso cx {'soname (peep o 'soname ()) 'out out 'symbolic 1 'bti (o 'bti) 'flat flat 'relr (o 'relr) 'notext (o 'notext)} vt)
+            pie (ld-dso cx {'pie 1 'out out 'bti (o 'bti) 'relr (o 'relr) 'notext (o 'notext)} vt) 0)
        dsyn (? (d = 0) () (d 'synth))
        bid (? (o 'bid) [[".note.gnu.build-id" 36 4 7 2]] ())
-       dyns ((? (o 'shared) (? (o 'relr) [".rela.dyn" ".relr.dyn"] [".rela.dyn"]) ()) + (? flat [".relro_padding"] ()))
+       dyns ((? dyn (? (o 'relr) [".rela.dyn" ".relr.dyn"] [".rela.dyn"]) ()) + (? flat [".relro_padding"] ()))
        ehp (? (o 'ehh) [[".eh_frame_hdr" 0 4]] ())
-       pl (ld-place (cx 'objs) cmds (map (s \ [<s (s 1) (s 2)]) dsyn + map (n \ [n 0 (? (n = ".relro_padding") 1 8)]) dyns + bid + ehp) (o 'strip) (o 'erel))
+       pl (ld-place (cx 'objs) cmds (bid + dsyn + map (n \ (? (n = ".relro_padding") [n 0 1 8 3] [n 0 8 (? (n = ".rela.dyn") 4 19) 2])) dyns + ehp)
+                    (o 'strip) (o 'erel))
        ; orphans as lld places them under a script: an empty synthetic section goes, an input
        ; joins the output section of its name, else a non-alloc one opens one after them all
        byn (: t {} _ (each <pl (u \ pin t (u 'name) u)) t)
-       synz (: t {} _ (each (dsyn + bid) (s \ pin t <s (s 1))) t)
-       news {'l ()} bad {'l ()} dyo {'n 0}
+       syn (: t {} _ (each (bid + dsyn) (s \ pin t <s s)) t)
+       news {'l ()} bad {'l ()}
        ; isec key -> its output's name. under --emit-relocs an input .rela is an orphan named
        ; ".rela" or ".rel" + its target's output, dropped with its target
        on (: t {} _ (each <pl (u \ each (u 'steps) (x \ (? (<x = 'isec) (pin t (x 1 * 65536 + x 2) (u 'name)) 0)))) t)
        (orph x)
-        (? (<x = 'synth)
-             (? (elem (x 1) '(".rela.dyn" ".relr.dyn")) (pin dyo 'n 1)
-                (peep synz (x 1) 0 = 0) 0
-                (pin bad 'l (x 1 . bad 'l)))
+        (? (<x = 'synth) 0
            (: oi <x si (x 2) r (cx 'objs oi 'sec si) rel? (elem (r 1) '(4 9))
               tn (? rel? (peep on (oi * 65536 + r 8) ()) ())
               nm (? rel? ((? (r 1 = 4) ".rela" ".rel") + tn) (x 1))
@@ -1530,6 +1580,19 @@
                     _ (pin on (oi * 65536 + si) nm) _ (pin byn nm n) (pin news 'l (n . news 'l))))))
        _ (each <>pl orph)
        _ (? (two? (bad 'l)) (no ("orphan sections, which love ld does not place: " + show (lds-first (rev (bad 'l)) 8))) 0)
+       ot0 (: t {} _ (foldl (\ i ob (pin t i ob, i + 1)) 0 (cx 'objs)) t)
+       ab (? (em = 62) 1 (em = 3) -1 257)
+       ; the dynamic sites before layout, a script's symbols counted relative
+       dy0 (? dyn (ld-dynsites {'cx cx 'ot ot0 'outs (<pl + rev (news 'l)) 'relr (o 'relr) 'abs ab 'pie pie 'notext (o 'notext)} ())
+              {'rela () 'relr ()})
+       ; a synthetic orphan opens an output of its name after the inputs', as lld creates them
+       (sorph x)
+        (: nm (x 1)
+           s (? (nm = ".rela.dyn") [nm (24 * #(dy0 'rela)) 8 4 2] (nm = ".relr.dyn") [nm (8 * #(dy0 'relr)) 8 19 2] (peep syn nm ()))
+           (? (atom? s || s 1 = 0 || s 6 = 1) 0
+              (: n {'name nm 'body () 'steps [['synth nm (s 1) (s 2) nm (s 3) (s 4)]] 'orph 1}
+                 _ (pin byn nm n) (pin news 'l (n . news 'l)))))
+       _ (each (filter (x \ <x = 'synth) <>pl) sorph)
        orphs (rev (news 'l))
        ; --orphan-handling=error under SECTIONS refuses every orphan as lld does, a table the
        ; script leaves unnamed too, but not a relocation table --emit-relocs copies
@@ -1539,7 +1602,6 @@
                   + filter (n \ !(elem n sn)) [".symtab" ".strtab" ".shstrtab"])
                (? (two? l) (no ("orphan sections, which --orphan-handling=error refuses: " + show (lds-first l 8))) 0))
             0)
-       ot0 (: t {} _ (foldl (\ i ob (pin t i ob, i + 1)) 0 (cx 'objs)) t)
        ; an allocated orphan joins SECTIONS where lld's findOrphanPos puts it; the rest follow it
        (alloc? u) (0 < (ld-oinfo ot0 u 1 & 2))
        secs2 (ld-orphpos ot0 (lk-secs body) (filter alloc? orphs) (o 'relro) (any (c \ <c = 'phdrs) body))
@@ -1556,44 +1618,58 @@
        mx (ld-merge ot os)
        lk {'cx cx 'ot ot 'mx mx 'outs os 'cmds (words 0 + body2) 'strip (o 'strip) 'discard (o 'discard)
            'relr (o 'relr) 'apply (o 'apply) 'nmagic (o 'nmagic) 'flat flat 'pg pg 'zrelro (o 'relro && !(o 'nmagic))
-           'mach em 'abs (? (em = 62) 1 (em = 3) -1 257)
+           'mach em 'abs ab 'shared (o 'shared) 'pie pie 'notext (o 'notext)
            'etype (? (o 'shared || o 'pie) 3 2) 'bid (o 'bid)                   ; ET_DYN for -pie and -shared, else ET_EXEC
            'erel (o 'erel) 'on on
            'sord (: sn (map (c \ <>c 'name) (filter (c \ <c = 'osec) (ld-flat (lk-secs body))))
                     (filter (t \ elem (t 'name) sn) os + filter (u \ !(elem (u 'name) sn)) orphs))}
        _ (? (d = 0) 0 (: _ (pin lk 'dso d) (pin lk 'slink (d 'slink))))
-       dy (? (o 'shared) (ld-dynsites lk) {'rela () 'relr ()})
-       nrela #(dy 'rela)
-       _ (? (dyo 'n && (two? (dy 'rela) || two? (dy 'relr))) (no "orphan sections, which love ld does not place: .rela.dyn") 0)
+       ; .dynamic's counts, its array tags for the live outputs, and _init's and _fini's if defined
+       (dtq env dy)
+        {'rela #(dy 'rela) 'relc #(filter (x \ x 2 = 0) (dy 'rela)) 'relr #(dy 'relr)
+         'arrs (cats (map (p \ (? (any (t \ t 'name = <p && !(peep t 'dead 0)) os) [[(p 1) ['osa <p]] [(p 2) ['osz <p]]] ()))
+                          [[".preinit_array" 32 33] [".init_array" 25 27] [".fini_array" 26 28]])
+                + cats (map (p \ (? (whole? (peep (peep env 'sv {}) <p ()) || two? (peep (cx 'glob) <p ())) [[(p 1) ['sym <p]]] ()))
+                            [["_init" 12] ["_fini" 13]]))}
+       (dz q) (? (d = 0) 0 (16 * #(ld-dtags d q)))
        ; an empty .rela.dyn or .relr.dyn lends its flags as lld's removed synthetic sections do;
        ; with no script lld keeps aarch64's empty .rela.dyn
-       (dsec n z ty es) [n z 8 ty 2 es (? (z = 0 && !(flat && ty = 4 && em = 183) && atom? (? (ty = 4) (dy 'rela) (dy 'relr))) 1 0)]
-       _ (? (flat && two? (dy 'rela)) (no "-shared with no script and a .rela.dyn") 0)
-       (lay rz pz h) (ld-lay cx (words h + body2) mx
-                        (dsyn + bid + ehs + (? (o 'shared) [(dsec ".rela.dyn" (24 * nrela) 4 24)] ())
-                         + (? (o 'shared && o 'relr) [(dsec ".relr.dyn" rz 19 8)] ())
-                         + (? flat [[".relro_padding" pz 1 8 3 0 0]] ())))
+       (dsec n z ty es l) [n z 8 ty 2 es (? (z = 0 && !(flat && ty = 4 && em = 183) && atom? l) 1 0)]
+       _ (? (flat && two? (dy0 'rela)) (no "-shared with no script and a .rela.dyn") 0)
+       (lay rz pz h dy z) (ld-lay cx (words h + body2) mx
+                            (map (s \ (? (<s = ".dynamic") [".dynamic" z 8 6 3 16] s)) dsyn + bid + ehs
+                             + (? dyn [(dsec ".rela.dyn" (24 * #(dy 'rela)) 4 24 (dy 'rela))] ())
+                             + (? (dyn && o 'relr) [(dsec ".relr.dyn" rz 19 8 (dy 'relr))] ())
+                             + (? flat [[".relro_padding" pz 1 8 3 0 0]] ())))
        ; .relr.dyn's size moves the layout it encodes, and with no script so do the relro
-       ; padding and the headers, one for each load before the empty ones go: lay until they hold
-       (go n rz pz h)
-        (: env (lay rz pz h) isa (env 'isa)
-           w (ld-relr (sort (map (p \ isa <p + <>p) (dy 'relr))))
+       ; padding and the headers, one for each load before the empty ones go; a script's
+       ; absolute symbols move the sites and so .dynamic: lay until they hold
+       (go n rz pz h dy z)
+        (: env (lay rz pz h dy z) isa (env 'isa)
+           dy2 (? dyn (ld-dynsites lk env) dy)
+           q (dtq env dy2) z2 (dz q)
+           w (ld-relr (sort (map (p \ isa <p + <>p) (dy2 'relr))))
            rr (peep (env 'sv) "__ld_rr" 0)
            pz2 (? flat (ld-al rr 4096 - rr) 0)
            h2 (? flat (64 + 56 * (4 + #(ld-fgroups os))) 0)
-           (? (8 * #w = rz && pz2 = pz && h2 = h) [env w] (n > 8) (scare 'link-relr n)
-              (go (n + 1) (8 * #w) pz2 h2)))
-       r (go 0 0 0 0)
-       env <r
+           (? (8 * #w = rz && pz2 = pz && h2 = h && #(dy2 'rela) = #(dy 'rela) && #(dy2 'relr) = #(dy 'relr) && z2 = z)
+              [env w dy2 q]
+              (n > 8) (scare 'link-relr n)
+              (go (n + 1) (8 * #w) pz2 h2 dy2 z2)))
+       r (go 0 0 0 0 dy0 (dz (dtq {} dy0)))
+       env <r dy (r 2) nrela #(dy 'rela)
+       _ (? (atom? (dy 'rela) = atom? (dy0 'rela) && atom? (dy 'relr) = atom? (dy0 'relr)) 0
+            (no "a script's absolute symbols empty or fill .rela.dyn"))
        _ (pin lk 'env env)
        ; an output section is in no group
        _ (each os (t \ (? (0 < (peep t 'flags 0 & 512)) (pin t 'flags (t 'flags - 512)) 0)))
        ; x86's code gaps are int3, as lld fills them
        _ (? (elem em '(62 3)) (each os (t \ (? (0 < (peep t 'flags 0 & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
-       _ (? (d = 0) 0 (pin d 'relrsz (8 * #(<>r))))
+       _ (? (d = 0) 0 (: _ (pin d 'relrsz (8 * #(<>r)), pin d 'relasz (24 * nrela), pin d 'relacount (r 3 'relc))
+                         (pin d 'dt (ld-dtags d (r 3)))))
        _ (? (o 'a53) (pin lk 'a53 (ld-a53 lk)) 0)
        sd (? (d = 0) {} (ld-dsdata lk))
-       _ (? (o 'shared) (: _ (pin sd ".rela.dyn" [(24 * nrela) (ld-rela lk dy)])
+       _ (? dyn (: _ (pin sd ".rela.dyn" [(24 * nrela) (ld-rela lk dy)])
                            (pin sd ".relr.dyn" [(8 * #(<>r)) (map (x \ ld-le x 8) <>r)])) 0)
        _ (? (o 'bid) (pin sd ".note.gnu.build-id" [36 [[4 0 0 0 20 0 0 0 3 0 0 0 71 78 85 0] (ld-le 0 20)]]) 0)
        _ (? (eh = ()) 0
