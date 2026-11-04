@@ -103,29 +103,52 @@
              (go 0))
        (ud @ 'bad 'bad
           _ (: sc (vsucc fs)
+               ; a block runs on from each form to the next but for its last; descending, as [first last]
+               lead (foldl (t \ i \ (sc i @ ([j] && j = i + 1) t
+                                        js (map (j \ pin t j 1) js, pin t (i + 1) 1, t))) (pin {} 0 1) ^n)
+               bs (: (go l) (l @ (s . u) ([s ((u @ (t . _) t _ n) - 1)] . go u) _ ())
+                     (rev (go (filter lead ^n))))
+               ; a block's reads before any write in it, and its writes, by its first form
+               (bud1 s i a w) (ud i @ [u d] (: a2 (vun u (ramin a d)) w2 (vun w d)
+                                               (i = s ? [a2 w2] (bud1 s (i - 1) a2 w2))))
+               bud (foldl (t \ b \ (b @ [s e] (pin t s (bud1 s e () ())))) {} bs)
                lin {} lout {}
-               (sweep i chg)
-                (i < 0 ? chg
-                   (: o (foldl (a \ j \ vun a (lin j)) () (sc i))
-                      li (ud i @ [u d] (vun u (ramin o d)))
-                      c2 (#li != #(lin i) ? 1 chg)
-                      (pin lout i o, pin lin i li, sweep (i - 1) c2)))
-               (fix _) (sweep (n - 1) 0 @ 1 (fix 0) 0)
+               (sweep l chg)
+                (l @ ([s e] . u)
+                      (: o (foldl (a \ j \ vun a (lin j)) () (sc e))
+                         li (bud s @ [a w] (vun a (ramin o w)))
+                         c2 (#li != #(lin s) ? 1 chg)
+                         (pin lout s o, pin lin s li, sweep u c2))
+                     _ chg)
+               (fix _) (sweep bs 0 @ 1 (fix 0) 0)
                _ (fix 0)
                np #(rapool g)
-               lo {} hi {} pts {}
-               (mark x p) (pin pts x (p . pts x),
-                           x < np ? 0 (pin lo x (min p (peep lo x p)), pin hi x (max p (peep hi x p))))
-               ; a sub's right side outlives its def, which may not overwrite it before the subtract
-               _ (map (i \ (map (x \ mark x (2 * i)) (lin i),
-                            map (x \ mark x (2 * i + 1)) (lout i),
-                            map (x \ mark x (2 * i + 1)) <>(ud i),
-                            (ft i @ (['sub _ _ b] && raok? g b) (mark (id b) (2 * i + 1))
-                                    ; a remainder's scratch is written before its operands are done
-                                    ((op _ a b _) && elem op '(rem urem) && !(x64? g)) (map (x \ raok? g x ? (mark (id x) (2 * i + 1))) [a b])
-                                    _ 0))) ^n)
-               ; each id's live positions as ranges, with the holes between them
-               rg (foldl (t \ x \ pin t x (rarng (pts x))) {} (keys pts))
+               ; each id's live positions as ranges, with the holes between them, laid last to first
+               lo {} hi {} rg {}
+               (add x s e) ((rg x @ ([a b] . u) (e + 1 = a ? (pin rg x ([s b] . u)) (pin rg x ([s e] . rg x)))
+                                    _ (pin rg x [[s e]], x < np ? 0 (pin hi x e))),
+                            x < np ? 0 (pin lo x s))
+               ; a sub's right side outlives its def, which may not overwrite it before the subtract;
+               ; a remainder's scratch is written before its operands are done
+               (late i) (ft i @ (['sub _ _ b] && raok? g b) [(id b)]
+                                ((op _ a b _) && elem op '(rem urem) && !(x64? g)) (map id (filter (raok? g) [a b]))
+                                _ ())
+               ; open: each id live here, to the end of its range. a form touches only what it names
+               (blk s e)
+                (: op {}
+                   (on x p) (op x @ () (pin op x p) _ 0)
+                   (step i)
+                    (ud i @ [u d]
+                       (: p (2 * i + 1)
+                          (map (x \ on x p) d,
+                           map (x \ (op x != () || elem x u ? (on x p) (add x p p))) (late i),
+                           map (x \ (nelem x u ? (add x p (op x), pin op x ()))) d,
+                           map (x \ on x (2 * i)) u,
+                           s < i ? (step (i - 1)))))
+                   (map (x \ pin op x (2 * e + 1)) (lout s),
+                    step e,
+                    map (x \ (op x @ () 0 t (add x (2 * s) t))) (keys op)))
+               _ (foldl (_ \ b \ (b @ [s e] (blk s e))) 0 bs)
                ; the copies hint their two sides together, a three-address op its def to its left
                ; side (either side when it commutes); a divide's quotient never takes rdx
                hint {} forb {}
@@ -137,9 +160,14 @@
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
                loc {}
-               (ovl? x y) (raovl (rg x) (rg y))
+               ; x the interval being placed: nothing before it matters to later ones either, so y's
+               ; ranges behind it are passed for good
+               cu {}
+               (past l p) (l @ ([_ e] . u) (e < p && two? u ? (past u p) l) _ l)
+               (ovl? x y) (raovl (rg x) (past (cu y @ () (rg y) c c) (lo x) @ l (pin cu y l, l)))
                (fits? r x) (nelem r (forb x) && !(ovl? x (id r)))
-               (free? r x act) (!(any (w \ loc w = r && ovl? w x) act) && fits? r x)
+               (free? r x act) (!(any (w \ loc w = r && ovl? x w) act) && fits? r x)
+               (pick l x act) (l @ (r . u) (free? r x act ? r (pick u x act)) _ ())
                (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (loc y)) (hint x)))
                ; a spill's weight: its touches, each 8^loop depth
                spn (raspans fs)
@@ -149,8 +177,8 @@
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
                (victim x act)
-                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? w x) || !(fits? (loc w) x) ||
-                                     any (y \ y != w && loc y = loc w && ovl? y x) act) b
+                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) ||
+                                     any (y \ y != w && loc y = loc w && ovl? x y) act) b
                                    (b @ () w _ (wt? w < wt? b ? w b))))
                        () act @
                    () ()
@@ -160,11 +188,11 @@
                       sp
                      (x . u)
                       (: a2 (filter (w \ lo x <= hi w) act)
-                         (filter (r \ free? r x a2) (hreg x fl) + filter (r \ free? r x a2) fl @
-                          (r . _) (pin loc x r, scan fl u (x . a2) sp)
-                          _ (victim x a2 @
+                         ((pick (hreg x fl) x a2 @ () (pick fl x a2) r r) @
+                          () (victim x a2 @
                                () (nosp (nms x) ? 'bad (scan fl u a2 (nms x . sp)))
-                               w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp))))))
+                               w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp)))
+                          r (pin loc x r, scan fl u (x . a2) sp))))
                (fv? x) (lofr? (nms x))
                (scan (ragp g) (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
                   sg (scan (ragf g) (filter fv? vs) () sg @ 'bad 'bad
@@ -172,7 +200,7 @@
                               ; per call, the spilled vregs it outlives; their reloads' weight there
                               cw {}
                               cr (foldl (t \ i \ (ft i @ (('call || 'callr) . _)
-                                                      (filter (x \ elem x (lout i)) si @
+                                                      (filter (x \ raovl (rg x) [[(2 * i + 1) (2 * i + 1)]]) si @
                                                          () t
                                                          xs (vwt spn i @ w (map (x \ pin cw x (peep cw x 0 + w)) xs, pin t i (map nms xs))))
                                                       _ t)) {} ^n)
