@@ -33,7 +33,7 @@
    ; that cannot change its operand goes
    nmext {'zx1 255 'zx2 65535 'zx4 4294967295 'sx1 127 'sx2 32767 'sx4 2147483647}
    nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldu4 4294967295 'ldxw 4294967295}
-   nmwctl {'label 1 'jmp 1 'br 1 'ret 1 'jmpt 1}
+   nmwctl {'label 1 'jmp 1 'br 1 'ret 1 'jmpt 1 'cmp 1}
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
    ; the vregs a bound could matter for: an extension's operand, and what its bound is made of
    (nmdem fs)
@@ -66,12 +66,14 @@
                    (: (b x) (cint? x ? (x < 0 ? () x) (w x))
                       ; any form with no bound to make or use, as itself
                       (rest _)
-                       (: nb (dem (f 1) = () ? ()
+                       (: t0 (<f = 'set ? (f 2) (f 1))
+                          nb (dem t0 = () ? ()
                                 (f @ ['li t k] (b k)
                                      ['mov t a] (b a)
                                      ([op t _ _] && nmldw op) (nmldw op)
                                      ([op t _ _ _ _] && nmldw op) (nmldw op)
                                      ([op t] && nmext op) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
+                                     ['set _ t] 1
                                      ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
                                      [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
                                      ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
@@ -81,7 +83,7 @@
                                      _ ()))
                           _ (raops g f @ [_ ds]
                              (map (x \ w x != () ? (pin w x ())) ds,
-                              f @ ((_ . t . _) && lovr? t && elem t ds && nb != () && nb < 4611686018427387904) (pin w t nb) _ 0)
+                              lovr? t0 && elem t0 ds && nb != () && nb < 4611686018427387904 ? (pin w t0 nb))
                              _ 0)
                           (f . go u w (i + 1) 1))
                       (!(nmwctl <f || nmext <f) ? (rest 0)
@@ -93,7 +95,8 @@
                                (back L ? (pin hs L (nmcp w1)), f . go u w1 (i + 1) 1))
                            ([op t] && nmext op && b t != () && b t <= nmext op) (go u w (i + 1) 1)
                            ; a value already 0 or 1 made boolean again
-                           ((['cmp t 0] . ['set 'ne t2] . u2) && t = t2 && lovr? t && b t != () && b t <= 1 && !(nmflg? u2)) (go u2 w (i + 2) 1)
+                           ['cmp t 0] (u @ ((['set 'ne t2] . u2) && t = t2 && lovr? t && b t != () && b t <= 1 && !(nmflg? u2)) (go u2 w (i + 2) 1)
+                                           _ (rest 0))
                            ['jmp L] (keep L w, f . go u w (i + 1) 0)
                            ['br _ L] (keep L w, f . go u w (i + 1) 1)
                            (('ret || 'jmpt) . _) (f . go u w (i + 1) 0)
