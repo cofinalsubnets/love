@@ -257,7 +257,7 @@
    ;     shards by the piece's hash, first-seen within each, laid at the group's final align.
    ;     a section a .rel or .rela targets is laid whole, as lld lays it: its pieces differ only
    ;     once relocated. answers 'ms id -> {'size 'align 'flags 'entsize 'type 'tab piece -> off}
-   ;     and 'im isec key -> [id [[start off] ..]]
+   ;     and 'im isec key -> [id starts offs], two trays by piece
    (ld-pieces s off size e str)
     (: end (off + size)
        (zero? i) (: (go k) (? (k >= e) 1 (s (i + k) != 0) 0 (go (k + 1))) (go 0))
@@ -308,7 +308,7 @@
                   (pin m 'size (foldl shard 0 ^32)))
        _ (each (keys ms) (id \ lay (ms id)))
        _ (each (keys im) (k \ (: v (im k) tab (ms <v 'tab)
-                                 (pin im k [<v (map (q \ [<q (tab (q 1))]) (v 1))]))))
+                                 (pin im k [<v (spread (map (q \ <q) (v 1))) (spread (map (q \ tab (q 1)) (v 1)))]))))
        {'ms ms 'im im})
 
    ;; --- relocation. a -shared -Bsymbolic image binds every definition home, so an ABS64 in
@@ -474,10 +474,22 @@
    ;; --- emission. pieces are texts and byte lists, laid in file order
    ld-z64 (cask (ld-zeros 65536))
    (ld-zp n acc) (? (n <= 0) acc (n <= 65536) (snip ld-z64 0 n . acc) (ld-zp (n - 65536) (ld-z64 . acc)))
+   ; pieces gathered to blocks for f, a text at a time: a write(2) each is a kernel's .strtab's
+   ; whole cost. -> [add flush]; add takes a text or a cask
+   (ld-blocks f)
+    (: st {'j (jug 0) 'n 0}
+       (fl u) (? (st 'n = 0) 0 (: s (slurp (st 'j)) _ (pin st 'j (jug 0), pin st 'n 0) (f s)))
+       (add p) (? (#p < 1048576)
+                  (: _ (say (st 'j) p, pin st 'n (st 'n + #p)) (? (st 'n < 1048576) 0 (fl 0)))
+                  (: _ (fl 0) (f (? (string? p) p (string p)))))
+       [add fl])
    ; n's low w bytes, little-endian; one split into 32-bit halves, then shifts
    (ld-le n w)
     (: u (ld-w n) lo (u % 4294967296) hi (u // 4294967296)
        (map (i \ (? (i < 4) ((lo >> (8 * i)) & 255) (i < 8) ((hi >> (8 * (i - 4))) & 255) 0)) ^w))
+   ; v laid over 4 or 8 bytes of a cask
+   (ld-pin4 b o v) (pin b o (v & 255), pin b (o + 1) (v >> 8 & 255), pin b (o + 2) (v >> 16 & 255), pin b (o + 3) (v >> 24 & 255))
+   (ld-pin8 b o v) (: u (ld-w v) _ (ld-pin4 b o (u % 4294967296)) (ld-pin4 b (o + 4) (u // 4294967296)))
    ; .rela.dyn: RELATIVE first, then the weak ABS64s, each by address
    (ld-rela lk dy)
     (: isa (lk 'env 'isa) x64 (peep lk 'mach 183 = 62)
@@ -957,8 +969,8 @@
        ; under --build-id the bytes are hashed as they go, the id's own still zero
        hs (? (peep lk 'bid 0) (: h (cask 105) _ (sha256-init h) h) ())
        ; a piece is a text, a list of bytes or a cask: the hash takes only a text
-       (put ps) (each ps (p \ (: b (? (string? p) p (string p))
-                                (? (#b > 0) (: _ (say q b) (? (hs = ()) 0 (sha256-feed hs b))) 0))))
+       bl (ld-blocks (b \ (: _ (say q b) (? (hs = ()) 0 (sha256-feed hs b)))))
+       (put ps) (each ps (p \ (? (#p > 0) (<bl (? (two? p) (string p) p)) 0)))
        ; a section's pieces as they come, newest first; fl counts their bytes
        fl {'n 0}
        (sink acc) (: ps (rev acc) _ (pin fl 'n (fl 'n + foldl (\ a p (a + #p)) 0 ps)) (put ps))
@@ -975,6 +987,7 @@
        e (body hdrs fouts)
        _ (put (rev (ld-zp (shoff - e) ())))
        _ (put shs)
+       _ (bl 1 0)
        _ (close q)
        _ (? (hs = ()) 0 (pin lk 'bidhash (sha256-done hs)))
        (shoff + 64 * shnum))
@@ -1119,7 +1132,7 @@
        ; x86's code gaps are int3, as lld fills them; aarch64's stay zero
        _ (? (em = 62) (each live (t \ (? (0 < (t 'flags & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
        shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 live) t)
-       lk {'cx cx 'ot ot 'mx mx 'outs live 'cmds cmds2 'env env 'on on 'discard (o 'discard) 'patch ld-rpatch}
+       lk {'cx cx 'ot ot 'mx mx 'outs live 'cmds cmds2 'env env 'on on 'discard (o 'discard) 'patch ld-rpatch 'rsx {}}
        st (ld-rsyms lk shx)
        _ (each ['lidx 'sidx 'gidx] (k \ pin lk k (st k)))
        (ld-relf lk st em out))
@@ -1140,13 +1153,17 @@
        (put oi e) (: g (peep groups oi ())
                      _ (? (g = ()) (pin gord 'l (oi . gord 'l)) 0)
                      (pin groups oi (e . g)))
-       ; a local a kept .rela names stays, .L or not
-       used {}
-       _ (each ^(cx 'n)
-           (oi \ (: ob (ot oi)
-                    (each (ld-reltgs ob)
-                       (tg \ (? (peep on (oi * 65536 + tg) () = ()) 0
-                                (each (ld-relas ob tg) (e \ pin used (sk oi (e 2)) 1))))))))
+       ; a local a kept .rela names stays, .L or not; an object's read when one is in question
+       useds {}
+       (used? oi si)
+        (: u (peep useds oi ())
+           (? (u != ()) (peep u si 0)
+              (: t {} ob (ot oi)
+                 _ (each (ld-reltgs ob)
+                      (tg \ (? (peep on (oi * 65536 + tg) () = ()) 0
+                               (each (ld-relas ob tg) (e \ pin t (e 2) 1)))))
+                 _ (pin useds oi t)
+                 (peep t si 0))))
        _ (each ^(cx 'n)
            (oi \ (: ob (ot oi) sy (ob 'syms)
                     (each >^(ob 'nsym)
@@ -1155,8 +1172,8 @@
                                    (sh = 65521) (put oi [(sk oi si) (ent <r (r 4) (r 5) (r 2) (r 6) 65521)])
                                    (: n (peep on (oi * 65536 + sh) ())
                                       (? (n = ()) 0
-                                         (starts? <r ".L" && lk 'discard != 'none && !(peep used (sk oi si) 0)
-                                          && (lk 'discard = 'locals || 0 < (ob 'sec sh 2 & 16))) 0
+                                         (starts? <r ".L" && lk 'discard != 'none
+                                          && (lk 'discard = 'locals || 0 < (ob 'sec sh 2 & 16)) && !(used? oi si)) 0
                                          (put oi [(sk oi si) (ent <r (at oi sh (r 4) - va n) (r 5) (r 2) (r 6) (shx n))]))))))))))
        ; a section symbol for each output a relocation may point into, in its first member's group
        _ (each (lk 'outs) (t \ (: f (ld-first ot t) (? (f = ()) 0 (put <f [['sec (t 'name)] (ent "" 0 0 3 0 (shx (t 'name)))])))))
@@ -1196,8 +1213,14 @@
        _ (foldl (\ i x (: tg <x _ (? (two? tg) (pin sidx (tg 1) i) (pin lidx tg i)) (i + 1))) 1 locs)
        gs (rev (glo 'l))
        _ (foldl (\ i x (: _ (pin gidx <x i) (i + 1))) (#locs + 1) gs)
-       (row e) (cask (ld-le <e 4 + [(e 3) (e 4)] + ld-le (e 5) 2 + ld-le (e 1) 8 + ld-le (e 2) 8))
-       {'nl (#locs + 1) 'rows ([(cask (ld-le 0 24))] + map (x \ row (x 1)) (locs + gs))
+       rows (cask (24 * (#locs + #gs + 1)))
+       (row o x)
+        (: e (x 1)
+           _ (ld-pin4 rows o <e, pin rows (o + 4) (e 3), pin rows (o + 5) (e 4), pin rows (o + 6) (e 5 & 255),
+              pin rows (o + 7) (e 5 >> 8), ld-pin8 rows (o + 8) (e 1), ld-pin8 rows (o + 16) (e 2))
+           (o + 24))
+       _ (foldl row 24 (locs + gs))
+       {'nl (#locs + 1) 'rows [rows] 'nrow (#locs + #gs + 1)
         'strn (str 'n) 'strs ("\0" . rev (str 'l)) 'lidx lidx 'sidx sidx 'gidx gidx})
 
    ; the group an output's section symbol joins, as lld picks it: the first input a relocation
@@ -1249,33 +1272,51 @@
            (: e <es w (? (e 1 = 257) 8 4)
               (go (o0 + <e + w) >es (string (ld-le (ld-tomb <r (e 3)) w) . snip s pos (o0 + <e) . acc))))
        (? (r 1 = 8) (ld-zp sz acc)
-          (r 1 = 4) (foldl (\ a p (p . a)) acc (ld-rrela lk oi (r 8)))
+          (r 1 = 4) (ld-rrela lk oi r . acc)
           (0 = (r 2 & 2) && ld-debug? <r)
            (go o0 (sort (filter (e \ elem (e 1) '(257 258) && undef? e) (ld-relas ob si))) acc)
           (snip s o0 (o0 + sz) . acc)))
 
-   ; object oi's relocations of section tg as lld -r copies them: the offset from the output
-   ; section's 0, a section symbol's addend from its output's, one dropped turned R_NONE
-   (ld-rrela lk oi tg)
-    (: ob (lk 'ot oi) env (lk 'env) at (env 'at) on (lk 'on)
-       lidx (lk 'lidx) sidx (lk 'sidx) gidx (lk 'gidx)
+   ; object oi's symbols as -r numbers them: si -> its index, -1 a section symbol's, which its
+   ; relocation decides; kept per object in lk 'rsx
+   (ld-rsymx lk oi)
+    (: m (lk 'rsx) v (peep m oi ())
+       (? (tray? v) v
+          (: ob (lk 'ot oi) sy (ob 'syms) lidx (lk 'lidx) gidx (lk 'gidx)
+             (one si) (: e (sy si)
+                         (? (si = 0) 0 (e 2 = 3) -1 (e 1 = 0) (peep lidx (oi * 16777216 + si) 0) (peep gidx <e 0)))
+             x (spread (map one ^(ob 'nsym)))
+             _ (pin m oi x)
+             x)))
+   ; relocation section r of object oi as lld -r copies it: the offset from the output
+   ; section's 0, a section symbol's addend from its output's, one dropped turned R_NONE. the
+   ; input's bytes, each row's changed fields laid over them
+   (ld-rrela lk oi r)
+    (: ob (lk 'ot oi) env (lk 'env) at (env 'at) on (lk 'on) sidx (lk 'sidx)
        (va n) (env 'osv n 0)
-       tv (va (on (oi * 65536 + tg)))
-       (row off info a) (cask (ld-le off 8 + ld-le info 8 + ld-le a 8))
-       (map (e \ (: sy (ob 'syms (e 2)) k (e 1) off (at oi tg <e - tv)
-                    (? (e 2 = 0) (row off k (e 3))
-                       (sy 2 = 3) (: n (peep on (oi * 65536 + sy 3) ())
-                                     (? (n = ()) (row off 0 (e 3))
-                                        (row off (sidx n * 4294967296 + k) (at oi (sy 3) (sy 4 + e 3) - va n))))
-                       (sy 1 = 0) (row off (peep lidx (oi * 16777216 + e 2) 0 * 4294967296 + k) (e 3))
-                       (row off (gidx <sy * 4294967296 + k) (e 3)))))
-            (ld-relas ob tg)))
+       s (ob 'src) o0 (r 3) sy (ob 'syms) x (ld-rsymx lk oi) sz (r 4)
+       dt (at oi (r 8) 0 - va (on (oi * 65536 + r 8)))
+       b (cask sz)
+       _ (pour b 0 s o0 sz)
+       (w4 o v) (ld-pin4 b o v)
+       (w8 o v) (ld-pin8 b o v)
+       (go k)
+        (? (k >= sz) b
+           (: e0 (o0 + k) si (rle32 s (e0 + 12)) v (x si)
+              _ (w8 k (rle64 s e0 + dt))
+              _ (? (v >= 0) (w4 (k + 12) v)
+                   (: e (sy si) n (peep on (oi * 65536 + e 3) ())
+                      (? (n = () || n = "/DISCARD/") (: _ (w4 (k + 8) 0) (w4 (k + 12) 0))
+                         (: _ (w4 (k + 12) (sidx n))
+                            (w8 (k + 16) (at oi (e 3) (e 4 + ld-s64 (rle64 s (e0 + 16))) - va n))))))
+              (go (k + 24))))
+       (go 0))
 
    ; the relocatable file: no program headers, every address 0, the allocated sections' bytes
    ; first, then .symtab .shstrtab .strtab; answers its size
    (ld-relf lk st em path)
     (: outs0 (lk 'outs) n0 #outs0 shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 outs0) t)
-       outs (outs0 + [{'name ".symtab" 'stype 2 'flags 0 'al 8 'sz (24 * #(st 'rows)) 'entsize 24
+       outs (outs0 + [{'name ".symtab" 'stype 2 'flags 0 'al 8 'sz (24 * st 'nrow) 'entsize 24
                        'link (n0 + 3) 'info (st 'nl) 'pieces (st 'rows)}
                       {'name ".shstrtab" 'stype 3 'flags 0 'al 1 'sz 0}
                       {'name ".strtab" 'stype 3 'flags 0 'al 1 'sz (st 'strn) 'pieces (st 'strs)}])
@@ -1302,7 +1343,8 @@
                         (w8 (t 'sz)) (w4 <l) (w4 (l 1)) (w8 (t 'al)) (w8 (peep t 'entsize 0))]))
        _ (unlink path)
        q (open path "w")
-       (put ps) (each ps (p \ (? (two? p) (say q (cask p)) (atom? p && #p > 0) (say q p) 0)))
+       bl (ld-blocks (say q))
+       (put ps) (each ps (p \ (? (two? p) (<bl (cask p)) (#p > 0) (<bl p) 0)))
        (body o l)
         (? (atom? l) o
            (: t <l
@@ -1315,6 +1357,7 @@
        _ (put [eh])
        e (body 64 fouts)
        _ (put (rev (ld-zp (shoff - e) ())), put ([(ld-le 0 64)] + map sh outs))
+       _ (bl 1 0)
        _ (close q)
        (shoff + 64 * shnum))
 
