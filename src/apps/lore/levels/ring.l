@@ -38,7 +38,6 @@
 ; the ground: swells that come round whole every way, the river's bed sunk along it, flat
 ; round the well and the lift's foot, and over the hall never lower than a slab over its
 ; ceiling; each asked of x a number or a tray of them
-(: (ease v a b) (: k (min 1.0 (max 0.0 ((v - a) / (b - a)))) (2 k * (3.0 - 2.0 * k))))
 (: (span v) (max v -v))
 ; ..a die for a and b, 0 to 1
 (: (h01 a b) (: s (sin (a * 12.9898 + b * 78.233 + 0.5) * 43758.5453) (s - floor s)))

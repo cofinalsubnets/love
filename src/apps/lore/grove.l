@@ -11,16 +11,21 @@
 ; 'head limb i0 n, 'spray q d len n lf, 'sprig q d, 'tuft q d
 ; the season rides on the tree, each 0..1: 'share of the crown in leaf (default 1), 'turn
 ; green to yellow, 'seeds of the clusters hanging, 'ripe green through red to tan
-(module (grove grove-new grove-bark grove-wood grove-dots grove-twigs)
+(module (grove grove-new grove-habit grove-bark grove-wood grove-dots grove-twigs)
 (borrow '(view vec))
 (borrow 'sky)                           ; the light a sky casts
 (borrow 'mesh)                          ; the tubes
 (:
  (rr g lo hi) (lo + (hi - lo) * rnd g)
+ (num? v) (charm? v || gem? v)
  ; d turned off by ang toward a thrown bearing round it
  (spread g d ang) (turn d (turn (side d) d (rr g 0.0 tau)) ang)
  (grove-new p) (: g (rnd-new (p 'seed)) segs {'n 0} pts {'n 0}
    inside (peep p 'inside 1) keep? (peep p 'keep? 0) crown-y (peep p 'crown 0.0)
+   ; ..the leaf and the fruit, as a species gives them: a number, or [lo hi] thrown
+   lf (peep p 'leaf {}) lk (peep lf 'kind 'pinnate) fr (peep p 'fruit {})
+   (lr t k lo hi) (peep t k () @ () (rr g lo hi) v (num? v ? (1.0 * v) (rr g (v 0) (v 1))))
+   (lp k lo hi) (peep lf k () @ () (rr g lo hi) v (num? v ? (1.0 * v) (rr g (v 0) (v 1 + 0.99))))
    (seg! a b r) (pins segs (segs 'n) [a b r] 'n (segs 'n + 1))
    ; a point: its middle q, its long axis ax, its half-width sw, its kind (2 a leaflet, 3
    ; a seed), its shade, how yellow it turns, and its phase
@@ -35,20 +40,39 @@
                          (rev acc))
        (go 0 o d [o]))
    (dir a b) (unit (c+ b (c* -1.0 a)))
-   ; a leaf: a stalk arching out of q along d and down, its leaflets in pairs, the middle
-   ; ones the longest, and a third of the time one at its tip
-   (leaf! q d) (q 1 < crown-y ? ()
-     (: rl (rr g 0.5 0.9) np (int (rr g 8.0 12.99)) rd (unit (c+ d [0.0 -0.3 0.0]))
-        sv (side rd) nv (cross rd sv) sh (rr g 0.75 1.15) ye (2 (rnd g)) ph (rr g 0.0 tau) ll (rr g 0.09 0.13)
-        (at u) (c+ q (c+ (c* (rl * u) rd) [0.0 (-0.25 * rl * u * u) 0.0]))
-        (blade c ax lw) (pt! c (c* lw ax) (c* (0.2 * lw) (unit (cross ax nv))) 2 sh ye ph)
+   ; a leaf of its kind, none below the crown
+   (leaf! q d) (q 1 < crown-y ? () (lk @ 'simple (simple! q d) 'needle (needle! q d) 'blade (grass! q d) 'none () (pinnate! q d)))
+   ; ..pinnate, or a frond: a stalk arching out of q along d and down, its leaflets in pairs,
+   ; the middle ones the longest, and a third of the time one at its tip
+   (pinnate! q d)
+     (: rl (lr lf 'len 0.5 0.9) np (int (lp 'pairs 8.0 12.99)) rd (unit (c+ d [0.0 -0.3 0.0]))
+        sv (side rd) nv (cross rd sv) sh (rr g 0.75 1.15) ye (2 (rnd g)) ph (rr g 0.0 tau) ll (lr lf 'leaflet 0.09 0.13)
+        ar (0.0 - peep lf 'arch 0.25) wd (peep lf 'wide 0.2)
+        (at u) (c+ q (c+ (c* (rl * u) rd) [0.0 (ar * rl * u * u) 0.0]))
+        (blade c ax lw) (pt! c (c* lw ax) (c* (wd * lw) (unit (cross ax nv))) 2 sh ye ph)
         (each ^np (m \ (: u ((m + 0.7) / (np + 0.4)) lw (ll * (0.65 + 0.45 * sin (pi * (0.2 + 0.75 * u))))
                           (each [1.0 -1.0] (sg \ (: ax (unit (c+ (c* sg sv) (c* 0.4 rd)))
                                                     (blade (c+ (at u) (c* (0.5 * lw) ax)) ax lw)))))),
-         rnd g < 0.33 ? (blade (c+ (at 1.0) (c* (0.5 * ll) rd)) rd (0.8 * ll)))))
+         rnd g < peep lf 'tip 0.33 ? (blade (c+ (at 1.0) (c* (0.5 * ll) rd)) rd (0.8 * ll))))
+   ; ..one blade at c along ax, lw long and wd of that wide, facing off nv
+   (blade! c ax lw wd nv sh ye ph) (pt! c (c* lw ax) (c* (wd * lw) (unit (cross ax nv))) 2 sh ye ph)
+   ; ..simple: 'pairs blades, each on a short stalk fanned out of q round d
+   (simple! q d) (: sh (rr g 0.75 1.15) ye (2 (rnd g)) ph (rr g 0.0 tau) n (int (lp 'pairs 1.0 1.99)) rd (unit (c+ d [0.0 -0.3 0.0]))
+     (each ^n (i \ (: ax (n > 1 ? (spread g rd (rr g 0.3 1.1)) rd) sl (lr lf 'len 0.03 0.08) ll (lr lf 'leaflet 0.06 0.1)
+                     (blade! (c+ q (c* (sl + 0.5 * ll) ax)) ax ll (peep lf 'wide 0.4) (cross ax (side ax)) sh ye ph)))))
+   ; ..needles: a bundle fanned out of q round d
+   (needle! q d) (: sh (rr g 0.75 1.15) ph (rr g 0.0 tau)
+     (each ^(int (lp 'pairs 8.0 12.99)) (i \ (: ax (spread g d (rr g 0.2 1.0)) ll (lr lf 'leaflet 0.08 0.12)
+                                              (blade! (c+ q (c* (0.5 * ll) ax)) ax ll (peep lf 'wide 0.05) (side ax) sh 0.0 ph)))))
+   ; ..a grass blade: from q along d, bowing over as it goes and narrowing to its tip
+   (grass! q d) (: L (lr lf 'len 0.25 0.5) k 4 bw (peep lf 'bow 0.6) sh (rr g 0.75 1.15) ye (2 (rnd g)) ph (rr g 0.0 tau)
+     nv (cross d (side d)) wd (peep lf 'wide 0.15)
+     (go i p) (i < k ? (: dd (unit (c+ d [0.0 (0.0 - bw * i / k) 0.0])) e (c+ p (c* (L / k) dd))
+                         (blade! (lerp p e 0.5) dd (L / k) (wd * (1.0 - 0.6 * i / k)) nv sh ye ph, go (i + 1) e)))
+     (go 0 q))
    ; a cluster of seeds hanging under q: a loose drooping head of winged seeds, each turned
    ; its own way
-   (seeds! q) (: c (c+ q [0.0 (rr g -0.25 -0.15) 0.0]) ph (rr g 0.0 tau) n (int (rr g 25.0 45.0))
+   (seeds! q) (: c (c+ q [0.0 (rr g -0.25 -0.15) 0.0]) ph (rr g 0.0 tau) n (int (lr fr 'n 25.0 45.0))
      (each ^n (i \ (: o [(rr g -0.11 0.11) (rr g -0.12 0.08) (rr g -0.11 0.11)]
                      ax (unit [(rr g -1.0 1.0) (rr g -1.0 0.3) (rr g -1.0 1.0)])
                      (pt! (c+ c o) (c* 0.035 ax) (c* 0.006 (side ax)) 3 (rr g 0.8 1.1) 0.0 ph)))))
@@ -64,7 +88,7 @@
                  (j \ (: td (unit (c+ (spread g d (rr g 0.3 1.0)) [0.0 0.15 0.0])) e (inside (c+ q (c* (rr g 0.12 0.35) td)))
                          (seg! q e 0.018,
                           each ^(int (rr g 2.0 4.99)) (i \ leaf! e (spread g td (rr g 0.2 1.0))),
-                          rnd g < 0.3 ? (seeds! e)))))
+                          rnd g < peep fr 'odds 0.3 ? (seeds! e)))))
    ; a head: a knot of short thick stubs at the end of a limb b, from its joint i0 on, and
    ; off each stub long thin twigs fanning out and up
    (head! b i0 n) (: k (#b - 1) ld (dir (b (k - 1)) (b k))
@@ -74,13 +98,44 @@
                       each ^(int (rr g 2.0 3.99)) (i \ spray! (st 2) (unit (c+ (spread g e (rr g 0.2 0.8)) [0.0 0.2 0.0])) (rr g 0.8 1.3) 2 0.55))))))   ; its twigs, a tuft at 0.55 of their ends
    ; the kit a scene's habit grows the wood with; the habit answers the fork
    kit {'rr (rr g) 'spread (spread g) 'dir dir 'seg seg! 'branch branch! 'head head! 'spray spray!
-        'sprig sprig! 'tuft tuft!}
+        'sprig sprig! 'tuft tuft! 'leaf leaf!}
    base (p 'base) fk ((p 'habit) kit)
    n (pts 'n) (fld k) (gem-tray [n] (map (i \ 1.0 * pts i k) ^n))
    (vec k j) (gem-tray [n] (map (i \ pts i k j) ^n))
    {'segs (map segs ^(segs 'n)) 'base base 'fork fk
     'x (vec 0 0) 'y (vec 0 1) 'z (vec 0 2) 'ax (vec 1 0) 'ay (vec 1 1) 'az (vec 1 2) 'sx (vec 2 0) 'sy (vec 2 1) 'sz (vec 2 2)
     'kind (fld 3) 'shade (fld 4) 'yel (fld 5) 'ph (fld 6)})
+ ; a habit from a species as data: a trunk 'height tall in 'pieces, its top 'lean off the
+ ; upright, its joints 'crook off the line, 'girth [foot top] thick; each of 'levels grows
+ ; 'n limbs off the one before, 'along it, 'up and 'out, 'len long and shorter by 'cone
+ ; toward its tip, 'pieces 'r 'bend 'droop as branch takes them, a 'head, 'twigs off each
+ ; joint, 'leaves at each joint; 'ends at the last level's ends and each twig's; 'clump
+ ; leaves 'splay-ed off the foot
+ (grove-habit sp) (\ k (: rr (k 'rr) spread (k 'spread) dir (k 'dir) seg! (k 'seg) branch! (k 'branch) head! (k 'head) leaf! (k 'leaf)
+   (th t q d) (peep t q d @ v (num? v ? (1.0 * v) (rr (v 0) (v 1))))
+   (end! q d) (peep sp 'ends 'tuft @ 'tuft (k 'tuft q d) 'sprig (k 'sprig q d) 'spray (k 'spray q d (rr 0.8 1.3) 2 0.55) ())
+   h (th sp 'height 0.0) hh (max h 0.05) tn (peep sp 'pieces 5) gr (peep sp 'girth [0.2 0.1]) cr (peep sp 'crook 0.0)
+   b (rr 0.0 tau) ln (th sp 'lean 0.0) top [(ln * hh * cos b) hh (ln * hh * sin b)]
+   tq (map (i \ (: p (c* (i / (1.0 * tn)) top) (0 < i < tn ? (c+ p [(rr (0.0 - cr) cr) 0.0 (rr (0.0 - cr) cr)]) p))) ^(tn + 1))
+   _ (h > 0.05 ? (each ^tn (i \ seg! (tq i) (tq (i + 1)) (gr 0 + (gr 1 - gr 0) * i / tn))))
+   ; ..a point t of the way along joints js, and the way they run there
+   (on js t) (: m (#js - 1) x (t * m) i (min (m - 1) (int x)) [(lerp (js i) (js (i + 1)) (x - i)) (dir (js i) (js (i + 1)))])
+   (grow js ls) (? (atom? ls) (end! (js (#js - 1)) (dir (js (#js - 2)) (js (#js - 1))))
+     (: L <ls al (peep L 'along [0.5 1.0]) r (peep L 'r [0.05 0.02]) cn (peep L 'cone 0.0) hd (peep L 'head ()) tw (peep L 'twigs ())
+        (each ^(int (th L 'n 3.0 + 0.5))
+          (j \ (: t (rr (al 0) (al 1)) a (on js t)
+                  d (unit (c+ (spread (a 1) (th L 'out 0.5 * 1.5708)) [0.0 (th L 'up 0.0) 0.0]))
+                  bb (branch! (a 0) d (th L 'len 1.0 * (1.0 - cn * t)) (peep L 'pieces 4) (r 0) (r 1) (th L 'bend 0.3) (th L 'droop 0.0))
+                  ((two? hd ? (head! bb 1 (int (rr (hd 0) (hd 1 + 0.99))))),
+                   (each (drop 1 ^#bb) (i \ (: e (dir (bb (i - 1)) (bb i)) (each ^(int (th L 'leaves 0.0 + 0.5)) (_ \ leaf! (bb i) (spread e (rr 0.4 1.2))))))),
+                   (two? tw ? (each (drop 2 ^#bb) (i \ (: e (dir (bb (i - 1)) (bb i))
+                                                          tb (branch! (bb i) (unit (c+ (spread e (rr 0.5 1.1)) [0.0 -0.4 0.0])) (rr (tw 0) (tw 1)) 2 0.018 0.01 0.4 0.15)
+                                                          (end! (tb 2) (dir (tb 1) (tb 2))))))),
+                   grow bb >ls))))))
+   cl (peep sp 'clump ()) lv (peep sp 'levels ())
+   _ (two? cl ? (each ^(int (rr (cl 0) (cl 1) + 0.5)) (i \ leaf! [0.0 0.0 0.0] (spread [0.0 1.0 0.0] (rr 0.0 (peep sp 'splay 0.5))))))
+   _ (two? lv ? (grow tq lv))
+   (h > 0.05 ? (tq tn) [0.0 0.0 0.0])))
  ; which of the tree's points are on it: the leaves and the seeds the season has kept
  (in-leaf tr) (: q (tr 'ph / tau)
    ((tr 'kind = 2.0) * (q < peep tr 'share 1.0) + (tr 'kind = 3.0) * (q < peep tr 'seeds 0.0)))
