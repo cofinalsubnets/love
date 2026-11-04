@@ -668,7 +668,7 @@
    (pms? ps) (peep ps 'tgt 'x64 = 'x64)
    (pdtor ps ts base) (pdtor0 ps ts base @ dr (two? dr && pms? ps && msin? ts <>dr ? [(msent <dr) <>dr] dr))
    (msin? a b) (? (atom? a || a = b) () (tkk <a = 'id && elem (tkv <a) '("ms_abi" "__ms_abi__")) 1 (msin? >a b))
-   (msty t) (? (fn? t) [<t <>t (2 < #t ? t 2) 'ms]
+   (msty t) (? (fn? t) [<t <>t (2 < #t ? (t 2)) 'ms]
                (two? t && elem <t '(ptr arr varr)) (<t . (msty <>t . >>t))
                t)
    (msent e) (<e . (msty <>e . >>e))
