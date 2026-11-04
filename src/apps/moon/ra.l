@@ -225,8 +225,8 @@
        (go fs 0))
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
-   ; until a label or a call ends the run (the last four kept)
-   (raspill g fs sp nosp)
+   ; until a label or a call ends the run (the last nk kept)
+   (raspill g fs sp nosp nk)
     (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
        _ (pin g 'rasls (map sl sp + g 'rasls))
        (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
@@ -240,7 +240,7 @@
                          m (foldl (t \ v \ pin t v (raget c0 v @ () (tmp v) k k)) {} vs)
                          lds (map (v \ [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)]) (filter (v \ raget c0 v = ()) us))
                          sts (map (v \ [(lofr? v ? 'stsd 'st) 'r4 (sl v) (m v)]) ds)
-                         c2 (take 4 (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
+                         c2 (take nk (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
                          ((vs @ () [f] _ (lds + [(map (x \ peep m x x) f)] + sts)) + go u c2))
                      _ (f . go u c0)))
               _ ())
@@ -305,7 +305,9 @@
 
    ; a vreg spilled across calls splits there first when that weighs less, a full spill when it
    ; misses again
-   (raplan g fs)
+   ; a small file can run out under the temps a spill keeps: then again with none kept
+   (raplan g fs) ((raplan1 g fs 4) @ 'bad (raplan1 g fs 0) r r)
+   (raplan1 g fs nk)
     (: nosp {} split {}
        _ (pin g 'rasls ())
        (go fs k)
@@ -316,7 +318,7 @@
               [_ sp cr sv] (: s1 (filter (v \ elem v sv && !(split v)) sp)
                            s2 (filter (v \ nelem v s1) sp)
                            (map (v \ pin split v 1) s1,
-                            go (raspill g (rasplit g fs s1) s2 nosp) (k - 1)))))
+                            go (raspill g (rasplit g fs s1) s2 nosp nk) (k - 1)))))
        (go fs 16))
    ; a spill slot's store goes when no path reads the slot back before writing it again or
    ; leaving: the slots are ra's own, so only its loads and stores name them
