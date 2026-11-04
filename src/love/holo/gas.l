@@ -1423,8 +1423,8 @@
    ;; sections, data, exported labels. a run of instructions goes to gas-text; a directive not
    ;; read here scares
    (gf-kin? nm b) (nm = b || starts? nm (b + "."))
-   ; gas's own defaults for a section named without flags: the standard four and their dotted
-   ; kin, .init/.fini, and otherwise none -- not even allocated
+   ; a section's defaults by its name, kept under any flags it is given as well: the standard
+   ; four and their dotted kin, .init/.fini, and otherwise none -- not even allocated
    (gf-dflt nm) (? (gf-kin? nm ".text" || elem nm '(".init" ".fini")) [1 6]
                    (gf-kin? nm ".data") [1 3]
                    (gf-kin? nm ".bss") [8 3]
@@ -1445,7 +1445,7 @@
                           (elem t '("@note" "%note")) 7
                           (scare 'gas-section-type t)))
              <d)
-       fl (1 < #xs ? (gf-flags (xa-unquote (xs 1))) <>d)
+       fl (<>d | (1 < #xs ? (gf-flags (xa-unquote (xs 1))) 0))
        es (0 < (fl & 16) && 3 < #xs ? (xa-trim (xs 3) @ e (xa-num? e ? (xa-num e) 0)) 0)
        [nm ty (fl | es << 32)])
    (gf-width tgt mn) (? (mn = ".byte") 1
@@ -1776,6 +1776,8 @@
                  (two? (req t)) (req t @ (nm rg) (pin rq nm (ssub rg), go >l acc))
                  (w = ".unreq") (pin rq (xa-trim r) (), go >l acc)
                  ; gas's `name = expr` is `.set name, expr`
+                 ; ..but `. = expr` moves the location
+                 (gf-eqset? t && xa-trim (snip t 0 (xa-idx t 61)) = ".") (go ((".org " + snip t (1 + xa-idx t 61) #t) . >l) acc)
                  (gf-eqset? t) (go ((".set " + xa-trim (snip t 0 (xa-idx t 61)) + ", " + snip t (1 + xa-idx t 61) #t) . >l) acc)
                  (elem w '(".set" ".equ"))
                   (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs "")) rv (ssub v)
@@ -2256,6 +2258,7 @@
                              !(string? nm) (pin st 'xal ([a s] . peep st 'xal ()))
                              (secs nm @ r
                                 (pin labs a nm,
+                                 pin st 'als ([a s 0] . peep st 'als ()),
                                  pin secs nm [<r <>r (catmap (f \ (f = ['label (name s)] ? [['label (name a)] f] [f])) <>>r)])))))
                 0 (peep st 'alias ()))
        ; .size f, L-f: f's end label beside L's
@@ -2287,9 +2290,25 @@
                                   (foldl (\ _ nm (secs nm @ r9 (rev <>>r9) @ fs
                                                     (? (string? (labs a) || !(elem l fs)) 0
                                                        (pin labs a nm,
+                                                        pin st 'als ([a <(ns 0) <<r] . peep st 'als ()),
                                                         pin secs nm [<r9 <>r9 (rev (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)]))]))))
                                          0 (st 'order))))))))
                 0 (sort (keys sx)))
+       ; an alias takes its target's size and type, past what its own text says; one k bytes on
+       ; ends k bytes on, so the size still reads the target's
+       (laid? l) (any (nm \ elem l <>>(secs nm)) (st 'order))
+       (beside l n) (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (f \ (f = l ? [n f] [f])) <>>r)]))) 0 (st 'order))
+       _ (foldl (\ _ e (e @ [a s k]
+                          (: szs (peep st 'sizes ())
+                             (szof n) (filter (p \ <p = n) szs)
+                             (typed? n) (laid? ['label (fn-type n)] || laid? ['label (fn-obj n)])
+                             (? (typed? a) 0
+                                (beside ['label (fn-type s)] ['label (fn-type a)],
+                                 beside ['label (fn-obj s)] ['label (fn-obj a)]),
+                              (? (laid? ['label (fn-end a)] || two? (szof a)) 0
+                                 (two? (szof s)) (pin st 'sizes ([a <>(<(szof s))] . szs))
+                                 (beside ['label (fn-end s)] (labk ['label (fn-end a)] k)))))))
+                0 (rev (peep st 'als ())))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
