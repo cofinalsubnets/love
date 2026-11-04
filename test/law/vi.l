@@ -813,6 +813,33 @@
    ; the arglist: the core asks, the face reads, as vfeed on one state stands in for a visit
    (cmd st c) (vfeed st ((bytes ":\(c)") + [CR]))
    (three _) (cmd (vnew '("a" "b" "c") "a") "args a b c")
+   ; the ex line's Tab: the first match, the next, the word again
+   (line st) (edtext (st 'cmd))
+   (tabbed ks) (vfeed (vnew '("a") "t") (bytes ":\(ks)"))
+   (tab st) (vfeed st [9])
+   fake (d \ d = "" ? '("alpha" "alto" "bin/" ".hid") (d = "bin/" ? '("x") ()))
+   (withf ks) (: q (vnew '("a") "t") _ (pin q 'files fake) (vfeed q (bytes ":\(ks)")))
+   _ (test
+      (line (tab (tabbed "spl")) = "split")
+      (line (tab (tabbed "2,3del")) = "2,3delete")
+      (line (tab (tabbed "ne")) = "next")
+      (line (tab (tabbed "n")) = "next")
+      (line (tab (tab (tabbed "n"))) = "nohlsearch")
+      (line (tab (tab (tab (tab (tabbed "n"))))) = "n")             ; past the last, as typed
+      (line (tab (tab (tab (tab (tab (tabbed "n")))))) = "next")
+      (line (tab (tabbed "zz")) = "zz")
+      (line (vfeed (tab (tabbed "n")) (bytes "x")) = "nextx")       ; a key ends the round
+      (line (tab (tabbed "set wr")) = "set wrap")
+      (line (tab (tabbed "colo no")) = "colo nord")
+      (line (tab (tabbed "s/a")) = "s/a")                           ; no word to finish, no tab laid
+      (line (tab (withf "e al")) = "e alpha")
+      (line (tab (tab (withf "e al"))) = "e alto")
+      (line (tab (withf "e b")) = "e bin/")
+      (line (tab (tab (withf "e b"))) = "e bin/x")                  ; a lone match goes on inward
+      (line (tab (withf "e .")) = "e .hid")
+      (line (tab (withf "n a b")) = "n a bin/")
+      (line (tab (tabbed "e al")) = "e al")                         ; no door, no files
+      (: q (vnew '("a") "t") _ (vfeed q (bytes "/x")) (line (tab q) = "x")))
    _ (test
       (three () 'doe = '("a" 0 " (1 of 3)"))
       (three () 'args = '("a" "b" "c"))

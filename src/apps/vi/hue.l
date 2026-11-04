@@ -47,10 +47,6 @@
    (hue-delim? c) (elem c hue-brk)
    (hue-term? c)  (c < 33 || elem c hue-stop)
    (hue-sig? c)   (elem c hue-sigils)
-   (hue-at? s i t)                                         ; does s carry t at i?
-    (: n #s m #t
-       (go k) (? (m <= k) 1 (n <= i + k) () (s (i + k) = t k) (go (k + 1)) ())
-       (go 0))
 
    ; --- the book --------------------------------------------------------------
    ; the vocabulary is asked of the book, not curated; sigil-leading names go to the punct lanes
@@ -167,7 +163,7 @@
         (n <= i ? [(rev acc) 0]
            (s i @ c
               (? (hue-blank? c) (w (i + 1) acc)
-                 (any (t \ hue-at? s i t) hue-eols) [(rev (emit acc 'comment i n)) 0]
+                 (any (t \ sits? s i t) hue-eols) [(rev (emit acc 'comment i n)) 0]
                  (c = hue-str && i + 2 < n && s (i + 1) = hue-str && s (i + 2) = hue-str) (raw i acc)
                  (c = hue-str) (wstr (i + 1) i acc)
                  (c = hue-quo) (tend (i + 1) @ j (w j (emit acc 'atom i j)))
@@ -191,13 +187,13 @@
    (hue-hx c) (? (48 <= c && c <= 57) (c - 48) (65 <= c && c <= 70) (c - 55) (c - 87))
    (hue-byte t k) (hue-hx (t k) * 16 + hue-hx (t (k + 1)))
    (hue-faces fs) (foldl (a \ f \ a + (f = 'bold ? "1;" "3;")) "" fs)
-   (hue-rgb g) (show (hue-byte g 1) + ";" + show (hue-byte g 3) + ";" + show (hue-byte g 5))
+   (hue-rgb g) "\(hue-byte g 1);\(hue-byte g 3);\(hue-byte g 5)"
    ; a row's ground, when it has one, rides as its fifth and sixth columns
    (hue-pen row deep)
     (: n (row 1) g (row 2) fs (row 3)
        ("\e[" + hue-faces fs
-        + (deep ? ("38;2;" + hue-rgb g) ("38;5;" + show n))
-        + (#row < 6 ? "" (deep ? (";48;2;" + hue-rgb (row 5)) (";48;5;" + show (row 4))))
+        + (deep ? "38;2;\(hue-rgb g)" "38;5;\(n)")
+        + (#row < 6 ? "" (deep ? ";48;2;\(hue-rgb (row 5))" ";48;5;\(row 4)"))
         + "m"))
    ; a theme with a Normal row owns the ground: 'ground sets it, 'off ends a run back on
    ; it rather than on the terminal's; Visual is the selection's, MatchParen a mate's, LineNr the
@@ -241,7 +237,7 @@
    ; it opening is what counts, not its bytes; a bad row is skipped. the last bare name picks the theme
    (hue-over rows r) (two? r ? (map (o \ (<o = <r ? r o)) rows) rows)
    (hue-file x)                                    ; -> [name rows], name () for none
-    (: q (open (cite 'path 'nest 0 + "/" + hue-theme-file) "r")
+    (: q (open "\(cite 'path 'nest 0)/\(hue-theme-file)" "r")
        (hot? q ? (: t (slurp q)
                     (go x nm acc) (sound x @ r
                                      (? !(two? r) [nm (rev acc)]

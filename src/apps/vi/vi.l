@@ -7,12 +7,17 @@
 (borrow '(posix cli))
 
 (:
+   ; a directory's names for the ex line's Tab, a directory's with its slash
+   (vi-files d)
+    (: p (0 < #d ? d ".")
+       ns (readdir p)
+       (two? ns ? (map (n \ (stat "\(p)/\(n)" @ e (two? e && 16384 = e 2 & 61440 ? "\(n)/" n))) ns)))
    ; a state for a file, read or new
    (vi-open f)
     (: r (0 < #f ? (uread f))
        st (vnew (two? r ? (lines <>r)) f)
-       (pin st 'home (getenv "HOME"),
-        0 < #f && atom? r ? (vmsg st (f + ": new file")),
+       (pin st 'home (getenv "HOME"), pin st 'files vi-files,
+        0 < #f && atom? r ? (vmsg st "\(f): new file"),
         (vi-theme st ())))
    ; the pens, and the door :colorscheme rings to swap them: the face reads the env and the
    ; theme file, the engine neither
@@ -73,7 +78,7 @@
           (uread f @ r
              (vload s2 (two? r ? (lines <>r)) f,
               pins s2 'row row 'col 0,
-              vmsg s2 (f + ": " + show #(s2 'lines) + " lines")))))
+              vmsg s2 "\(f): \(#(s2 'lines)) lines"))))
    ; a key while the picker is up is the picker's; when it goes the buffer is drawn whole
    (vseek s2 c)
     (: d (s2 'seek)

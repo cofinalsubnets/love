@@ -622,7 +622,7 @@
        hit (0 < dir ? (fwd r 0) (bwd r 0))
        (two? hit ?
         (pin st 'row <hit, vgole st (vhead (ls <hit) <>hit), st)
-        (vmsg st $ "not found: " + st 'pattx)))
+        (vmsg st "not found: \(st 'pattx)")))
    ; * and # -- the word under the cursor becomes the search. a name in this tree
    ; is full of BRE metacharacters (`map*`, `1.5`, `\`), so every one of them is
    ; spelled out, and 'patw asks the hunt for the boundaries the engine has no node for
@@ -777,11 +777,11 @@
        (? !(two? sp) (vmsg st "bad substitution")
           (vexbad? st r1 r2) (vmsg st "out of range")
           (vexsubs st <>sp <>>sp r1 r2 <>>>sp @ hits
-             (? !(two? hits) (vmsg st $ "not found: " + st 'pattx)
+             (? !(two? hits) (vmsg st "not found: \(st 'pattx)")
                 (: _ (vsnap st)
                    lr (vexlay st hits)
                    (vexgo st lr,
-                    vmsg st (show #hits + (1 = #hits ? " line" " lines") + " changed")))))))
+                    vmsg st "\(#hits) line\(1 = #hits ? "" "s") changed"))))))
 
    ; -- global --
    ; g/v collect the matching rows, then run the body on each from the last up,
@@ -814,15 +814,15 @@
           (s i @ dl
              (vexdelim s (i + 1) dl @ [j pat]
                (vexpat st pat @ cp
-                  (? !(two? cp) (vmsg st $ "bad pattern: " + pat)
+                  (? !(two? cp) (vmsg st "bad pattern: \(pat)")
                      (: _ (0 < #pat ? (pins st 'pat <>cp 'pattx pat 'patw () 'noh ()))
                         sp (vexgbody st (vextrim (snip s j n)))
                         (? !(two? sp) (vmsg st "not a global command")
                            (vexhits st <>cp a b inv? @ rows
-                              (? !(two? rows) (vmsg st $ "not found: " + st 'pattx)
+                              (? !(two? rows) (vmsg st "not found: \(st 'pattx)")
                                  (<sp = 'p)
                                   (vexgo st (vexlast rows),
-                                   vmsg st (show #rows + " lines"))
+                                   vmsg st "\(#rows) lines")
                                  (vexplan st rows sp @ plan
                                     (? !(two? plan) (vmsg st "not found")
                                        (vsnap st,
@@ -873,23 +873,23 @@
            (pin st 'wrap (nm = "wrap" ? 1 ()),
             vmsg st (st 'wrap ? "wrap" "nowrap"))
           (elem nm '("nu" "number" "nonu" "nonumber"))
-           (pin st 'nu (2 < #nm && snip nm 0 2 = "no" ? () 1),
+           (pin st 'nu (starts? nm "no" ? () 1),
             vmsg st (st 'nu ? "number" "nonumber"))
           (elem nm '("hls" "hlsearch" "nohls" "nohlsearch"))
-           (pin st 'hls (2 < #nm && snip nm 0 2 = "no" ? () 1),
+           (pin st 'hls (starts? nm "no" ? () 1),
             vmsg st (st 'hls ? "hlsearch" "nohlsearch"))
           (elem nm '("ai" "autoindent" "noai" "noautoindent"))
-           (pin st 'ai (2 < #nm && snip nm 0 2 = "no" ? () 1),
+           (pin st 'ai (starts? nm "no" ? () 1),
             vmsg st (st 'ai ? "autoindent" "noautoindent"))
-          !(nm = "sw" || nm = "shiftwidth") (vmsg st $ "not an option: " + nm)
-          !(charm? j) (vmsg st $ "shiftwidth=" + show (st 'sw))
+          !(nm = "sw" || nm = "shiftwidth") (vmsg st "not an option: \(nm)")
+          !(charm? j) (vmsg st "shiftwidth=\(st 'sw)")
           (: t (vextrim (snip arg (j + 1) n)) k #t
              (dig? i) (i < k && 48 <= t i <= 57)
              (go i acc) (dig? i ? (go (i + 1) (10 * acc + (t i - 48))) acc)
              (? (0 = k || !(dig? 0)) (vmsg st "shiftwidth wants a number")
                 (go 0 0 @ v
                    (pin st 'sw (v < 1 ? 1 v),
-                    vmsg st $ "shiftwidth=" + show (st 'sw)))))))
+                    vmsg st "shiftwidth=\(st 'sw)"))))))
 
    ; -- the dispatch --
    (vexword s i)                                   ; the command name at i
@@ -924,7 +924,7 @@
    (vexfull st w)
     (: ws (vexwords + map (x \ [x x]) (st 'exmore))
        hit (filter (p \ w = <p) ws)
-       heads (filter (p \ (#<p @ k (#w < k && w = snip <p 0 #w))) ws)
+       heads (filter (p \ (#w < #<p && starts? <p w)) ws)
        means (foldl (a \ p \ (elem <>p a ? a (<>p . a))) () heads)
        (? (two? hit) <>(<hit)
           !(two? means) w
@@ -968,6 +968,64 @@
    (vmore? st bang)
     (? (bang || st 'arghad || st 'argq || #(st 'args) - st 'argi < 2) ()
        (: _ (pin st 'argq 1) _ (vmsg st (vmoretxt st)) 1))
+   ; -- completion on the ex line, by the rules of vim's default: Tab lays the first match,
+   ; each Tab after it the next, past the last the word as typed. 'tabs holds the round:
+   ; [line-before-the-word word matches next]. any other key ends it
+   vexopts '("ai" "autoindent" "hls" "hlsearch" "noai" "noautoindent" "nohls" "nohlsearch"
+             "nonu" "nonumber" "nowrap" "nu" "number" "shiftwidth" "sw" "wrap")
+   vexfilew '("edit" "w" "wq" "x" "split" "vsplit" "next" "wnext" "args" "explore")
+   (vheads p l) (sort (filter (w \ starts? w p) l))
+   ; every full name a head could mean: an abbreviation stands aside for the word it opens
+   (vtabwords st p)
+    (: ws (vexwords + map (x \ [x x]) (st 'exmore))
+       (long? e) (any (o \ <>o = <>e && #<e < #<o && starts? <o <e) ws)
+       (vheads p (map cap (filter (e \ !(elem <e '("r" "re" "a" "N")) && !(long? e)) ws))))
+   (vtabfiles st tok)
+    (st 'files @ f
+       (!(lit? f) ? ()
+          (: (cut k) (k < 1 || tok (k - 1) = 47 ? k (cut (k - 1)))
+             c (cut #tok)
+             dir (snip tok 0 c)
+             base (snip tok c #tok)
+             ns (filter (w \ !(elem w '("./" "../" "." "..")) && (0 < #base && base 0 = 46 || w 0 != 46))
+                        (f (vtilde st dir)))
+             (map (w \ dir + w) (vheads base ns)))))
+   ; the words at the end of line l: [where the word opens, its matches], or () with nothing to complete
+   (vtabs st l)
+    (: n #l
+       a (hues-run l 0 (c \ elem c "0123456789,;%$.+- "))
+       e (hues-run l a (c \ 97 <= c <= 122))
+       (blank k) (k <= e || l (k - 1) = 32 ? k (blank (k - 1)))
+       b (blank n)
+       (? (e = n) [a (vtabwords st (snip l a n))]
+          (b <= e) ()
+          (vexfull st (snip l a e) @ w
+             (: tok (snip l b n)
+                (? (elem w vexfilew) [b (vtabfiles st tok)]
+                   (w = "set") [b (vheads tok vexopts)]
+                   (w = "colorscheme") [b (vheads tok (map (t \ show <t) hue-themes))]
+                   ())))))
+   (vtablay st t lead w)
+    (: e (eddetach t)
+       (pin e 'l (rev (chars (lead + w))), pin st 'cmd e))
+   (vtabnext st t r)
+    (: lead <r w <>r ms <>>r i <>>>r
+       (pin st 'tabs [lead w ms (i = #ms ? 0 (i + 1))],
+        vtablay st t lead (i < #ms ? (ms i) w)))
+   (vtab st t)
+    (st 'tabs @ r
+       (two? r ? (vtabnext st t r)
+          (: l (string (rev (t 'l)))
+             q (vtabs st l)
+             (? (!(two? q) || !(two? <>q)) st
+                (: lead (snip l 0 <q) ms <>q
+                   (two? >ms ? (vtabnext st t [lead (snip l <q #l) ms 0])
+                      (vtablay st t lead <ms)))))))
+   ; the round's matches after the line, cut to the width it leaves
+   (vtabhint st room)
+    (st 'tabs @ r
+       (: s (two? r ? (foldl (a \ w \ "\(a)  \(w)") " " <>>r) "")
+          (#s < room ? s (snip s 0 (max 0 room)))))
    (vexcmd st s i r1 r2 got?)
     (vexword s i @ [j w0]
       (: n #s
@@ -977,7 +1035,7 @@
          nm (0 < #arg ? (vtilde st arg) (st 'file))
          w (vexfull st w0)
          more? (elem w '("q" "wq" "x") ? (vmore? st bang) (pin st 'argq ()))
-         (? (two? w) (vmsg st ("ambiguous: " + w0 + " -- " + foldl (a \ m \ a + " " + m) "" <>w))
+         (? (two? w) (vmsg st "ambiguous: \(w0) -- \(foldl (a \ m \ "\(a) \(m)") "" <>w)")
             (w = "s") (vexsub st s k r1 r2)
             (w = "global") (vexglob st s k r1 r2 got? ())
             (w = "v") (vexglob st s k r1 r2 got? 1)
@@ -993,7 +1051,7 @@
             ; spell control characters, and this frame does not
             (w = "print" || w = "number" || w = "#")
              (vexbad? st r1 r2 ? (vmsg st "out of range")
-                (vexgo st r2, vmsg st (show (r2 - r1 + 1) + " lines")))
+                (vexgo st r2, vmsg st "\(r2 - r1 + 1) lines"))
             (w = "=") (vmsg st (show (r2 + 1)))
             (w = "q") (? (st 'dirty && !bang) (vmsg st "no write since last change (q! overrides)")
                          more? st
@@ -1022,7 +1080,7 @@
             (w = "colorscheme") (vcolo st arg)
             (w = "lint") (vlint st)                    ; libra's scan, on the buffer
             ; unknown here, but left on the state: a face with more ex words takes it
-            (pin st 'dox [w arg], vmsg st $ "not an ex command: " + w))))
+            (pin st 'dox [w arg], vmsg st "not an ex command: \(w)"))))
    ; :colorscheme NAME swaps the pens through the face's door; bare, it names the one in force.
    ; the painted rows and the laid frame are keyed without the pens, so both caches go
    (vcolo st nm)
@@ -1030,9 +1088,9 @@
        (? (0 = #nm) (vmsg st (st 'theme @ t (string? t ? t "molokai")))
           !(lit? f) (vmsg st "no themes in this editor")
           (f nm @ p
-             (? !(tablet? p) (vmsg st ("no theme: " + nm))
+             (? !(tablet? p) (vmsg st "no theme: \(nm)")
                 (pin st 'pens p, pin st 'theme nm, pin st 'hlrow (tablet ()), pin st 'laycar (),
-                 vmsg st ("colorscheme " + nm))))))
+                 vmsg st "colorscheme \(nm)")))))
    (vex st)
     (: s (edtext (st 'cmd))
        n #s
@@ -1370,7 +1428,9 @@
            ; the line is cli's prompt; a backspace on nothing leaves too, which is vi's
            ; own rule and no prompt's
            (st 'cmd @ t
-              (? ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
+             (: _ (c = 9 ? 0 (pin st 'tabs ()))
+              (? (c = 9) (m = 'c ? (vtab st t) st)
+                 ((c = 127 || c = 8 || c = -3) && edempty? t) (pin st 'mode 'n)
                  ; up and down off the prompt's own rows walk its history
                  (c = -8 && !(two? (t 'u)) || c = -9 && !(two? (t 'd))) ((c = -8 ? uphist downhist) t, st)
                  (edcmd st 'cmd c
@@ -1383,8 +1443,8 @@
                               (two? b ?
                                  (pins st 'pat <>b 'pattx s 'patw () 'noh (),
                                   vhunt st (st 'dir))
-                                 (vmsg st $ "bad pattern: " + s))))))
-                  (_ \ pin st 'mode (m = 's ? (vback st) 'n)))))
+                                 (vmsg st "bad pattern: \(s)"))))))
+                  (_ \ pin st 'mode (m = 's ? (vback st) 'n))))))
           ; normal
           (? (st 'pc) (vpcu st c)
              (48 <= c <= 57 && (48 < c || 0 < st 'cnt))
@@ -1404,7 +1464,7 @@
      'file file 'dirty () 'msg "" 'sw 2
      'cmd "" 'pat () 'pattx "" 'patw () 'dir 1 'hls 1 'noh ()
      'quit () 'dow () 'doe () 'dos () 'dox () 'va () 'exmore () 'home ()
-     'args () 'argi 0 'argpos (tablet ()) 'arghad () 'argq ()
+     'args () 'argi 0 'argpos (tablet ()) 'arghad () 'argq () 'tabs () 'files ()
      'hl (nom? (hues-lang file ls)) 'pens () 'lex () 'hlcar () 'hlgen 0 'hlrow (tablet ())
      'lncar () 'laycar () 'mtcar () 'gutcar () 'nu () 'ai 1 'aiw () 'lastr () 'w 80 'h 24}
 
@@ -1530,12 +1590,12 @@
               r (gut fr k + lay raw <cl i win fr)
               (wrap? && k + 1 < hgt raw ? (rows l cl (i + 1) (k + 1) (r . acc) fr)
                  (rows >l >cl (i + 1) 0 (r . acc) (fr + 1)))))
-       status (? (st 'mode = 'c) (":" + edtext (st 'cmd))
+       status (? (st 'mode = 'c) (edtext (st 'cmd) @ x (":\(x)" + vtabhint st (sw - #x - 1)))
                  (st 'mode = 's) ((0 < st 'dir ? "/" "?") + edtext (st 'cmd))
                  (0 < #(st 'msg)) (st 'msg)
                  ((? (0 < #(st 'file)) (st 'file) "[no name]") + (st 'dirty ? " [+]" "")
                   + (st 'mode @ 'i " -- INSERT --" 'v " -- VISUAL --" 'V " -- VISUAL LINE --" "")
-                  + "  " + show (st 'row + 1) + "," + show (st 'col + 1)))
+                  + "  \(st 'row + 1),\(st 'col + 1)"))
        ; in ex and search mode you are typing on the status line, so that is
        ; where the cursor goes: after the prefix, at the editor's column
        said? (st 'mode = 'c || st 'mode = 's)
@@ -1561,7 +1621,7 @@
     (: e (string 27) L (vlay st)
        (go l acc) (atom? l ? acc (go >l (acc + e + "[K" + <l + "\r\n")))
        (e + "[H" + go <L "" + e + "[K" + <>L
-          + e + "[" + show <>>L + ";" + show <>>>L + "H" + vgone st))
+          + "\(e)[\(<>>L);\(<>>>L)H" + vgone st))
    ; a frame that set a ground hands the terminal back its own
    (vgone st) (0 < #(vpen st 'ground "") ? "\e[0m" "")
    ; a pen off the face's table, or d when there is none such
