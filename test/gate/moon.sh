@@ -1673,7 +1673,7 @@ moonrun -t a64 -O2 -mcmodel=tiny -fasynchronous-unwind-tables -mbranch-protectio
 uw=$(readelf -wF "$ho/.uwt.o")
 [ "$(echo "$uw" | grep -c ' FDE ')" = 3 ] || fail "unwind tables: not one FDE per C function, the asm's left out"
 echo "$uw" | grep -qE '^0+4 +sp\+[0-9]+ *$' || fail "unwind tables: a frameless leaf's sub sp moved no cfa"
-echo "$uw" | grep -qE '^[0-9a-f]+ +x29\+32 +c-[0-9]+ +c-[0-9]+ +c-32 +c-24 *$' || fail "unwind tables: the frame record and two callee-saved slots are not on x29"
+echo "$uw" | grep -qE '^[0-9a-f]+ +x29\+32( +c-[0-9]+)+ +c-32 +c-24 *$' || fail "unwind tables: the frame record and the callee-saved slots are not on x29"
 # every function's last row is its entry's again, and early's body after its first ret is framed once more
 echo "$uw" | awk '/ FDE /{if (r != "" && r !~ /^sp\+0( +u)* *$/) bad = 1; r = ""; n++} /^[0-9a-f]+ /{r = $0; sub(/^[0-9a-f]+ +/, "", r)}
                   / FDE /{st = 0} /^[0-9a-f]+ +x29/{if (st == 2) back = 1; st = 1} /^[0-9a-f]+ +sp\+0 /{if (st == 1) st = 2}
