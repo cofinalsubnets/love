@@ -1403,6 +1403,25 @@
    _ (chk-eq "t2.rlx.bcc.wide" 260 (txn '(br ne far) 128))
    _ (chk-eq "t2.rlx.weak-stays-long" "00f000b800bf"
         ({} @ lg (pin lg 'wf 1, hexs (tx '((jmp wf) (label wf) (nop)) lg))))
+   ;; a low register's cmp with 0 and its eq or ne go cbz or cbnz, forward, where no path reads
+   ;; the flags; goldens from llvm-mc
+   (txc n) (tx ('(cmp r0 0) . ['(br eq far)] + map (_ \ '(nop)) ^n + '((label far) (ret))) {})
+   _ (chk-eq "t2.rlx.cbz" "00b100bf7047" (hexs (txc 1)))
+   _ (chk-eq "t2.rlx.cbnz" "0bb900bf00bf7047"
+        (hexs (tx '((cmp r3 0) (br ne far) (nop) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.edge" "f8b3" (snip (hexs (txc 64)) 0 4))
+   _ (chk-eq "t2.rlx.cbz.wide" 136 (#(txc 65)))
+   _ (chk-eq "t2.rlx.cbz.next" "0028ffd07047" (hexs (txc 0)))
+   _ (chk-eq "t2.rlx.cbz.hi" "b8f1000f00d000bf7047"
+        (hexs (tx '((cmp r8 0) (br eq far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.reg" "884200d000bf7047"
+        (hexs (tx '((cmp r0 r1) (br eq far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.lt" "002800db00bf7047"
+        (hexs (tx '((cmp r0 0) (br lt far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.at" "002800d000bf00d170477047"   ; the target reads the flags
+        (hexs (tx '((cmp r0 0) (br eq far) (nop) (label far) (br ne x) (ret) (label x) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.on" "002801d000d100bf7047"       ; the fall-through reads them
+        (hexs (tx '((cmp r0 0) (br eq far) (br ne far) (nop) (label far) (ret)) {})))
    ;; lal loads its pool word past the align: ldr (t1) near, ldr.w for a high register or within
    ;; 4 KB, else the movw/movt pair it stands for
    (txl d x n) (tx ([['lal d x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})

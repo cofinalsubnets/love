@@ -295,6 +295,8 @@
    ;; `longs` names labels that stay long (the object writer's weak set, kept as relocations).
    ;; (lal d l p) is la of l whose word sits at p, a pool ahead: the hook may load it from there.
    ;; its span may cross aligns, each counted at its widest pad on top of the distance.
+   ;; 'fuse, (\ cmp br rel -> bytes | ()): one encoding of a cmp and the br right after it, asked
+   ;; only where nothing on either path reads the flags the pair no longer sets.
    ;; local names avoid scan/rw/skip, which collide with moon/kore names in a cat'd stream. --
    (laylax prog be at0 labels longs)
       (!(lit? (peep be 'short 0)) ? (lay prog be at0 () labels)
@@ -328,12 +330,23 @@
                      (peep longs l 0) ()
                      (peep eras l -1 < era) ()
                      (t + (peep grows (eras l) 0 - peep grows era 0))))
+            ;; ..a cmp and its branch laid as one, from the hook, where the flags die with them
+            fuse-with (peep be 'fuse 0)
+            (fuse-of ins rest era pa)
+               (? (!(lit? fuse-with) || <ins != 'cmp || !(two? rest) || <(<rest) != 'br) ()
+                  (tgt-of (<rest 2) era @ t
+                     (? !(imm? t) ()
+                        (fuse-with ins <rest (t - pa) @ sc
+                           (two? sc && flagfree be >rest 128 && flagjump be >rest (<rest 2) 128 ? sc ())))))
             ;; pass two: pessimistic addresses (pa) decide, final ones (fa) pin labels and pads
             (stitch p cs pa fa era items)
                (atom? p ? (rev items . labels)
-                  (: ins <p  k <<cs  c ><cs
+                  (: ins <p  k <<cs  c ><cs  fu (fuse-of ins >p era pa)
                      (? (<ins = 'label)
                         (pin labels (ins 1) fa, stitch >p >cs pa fa era items)
+                        (two? fu)
+                        (: r (revonto fu items 0)
+                           (stitch >>p >>cs (pa + k + <<>cs) (fa + <r) era >r))
                         (<ins = 'align)
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)

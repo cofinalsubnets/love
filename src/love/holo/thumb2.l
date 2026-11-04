@@ -605,6 +605,8 @@
             ; the narrow forms the 'short hook lays: B T2 (+-2KB) and Bcc T1 (+-256)
             'b16 (-2048 <= o <= 2046 ? (t16 (0xE000 | (o >> 1 & 2047))) (scare 'thumb-b16-reach o))
             'b8 (-256 <= o <= 254 ? (t16 (0xD000 | (aux << 8 | (o >> 1 & 255)))) (scare 'thumb-b8-reach o))
+            ; cbz and cbnz, forward only: aux = Rn, bit 3 for cbnz
+            'cbz (0 <= o <= 126 ? (t16 (0xB100 | ((aux & 8) << 8 | ((o >> 6 & 1) << 9 | ((o >> 1 & 31) << 3 | aux & 7))))) (scare 'thumb-cbz-reach o))
             ; lal's pooled loads: ldr Rt, [pc, #imm] from the word-aligned pc, t1 or t2
             'ldl16 (target - (site + 4 & -4) @ v
                       (0 <= v <= 1020 && v % 4 = 0 ? (t16 (0x4800 | (aux << 8 | v >> 2))) (scare 'thumb-ldl16-reach v)))
@@ -643,8 +645,16 @@
             (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
             ()))
 
+   ;; a low register's compare with 0 and its eq or ne branch go cbz or cbnz. the 6 bytes laid
+   ;; leave a body that only shrinks, and at least 2 bytes of it, as cbz can't reach its own next
+   (thumb-fuse a b rel)
+      (rel - 6 @ body
+         (? (a 2 != 0 || !(thumb-lo? (a 1)) || !(elem (b 1) '(eq ne)) || body < 2 || 128 < body) ()
+            [(fix 2 'cbz (b 2) ((b 1 = 'ne ? 8 0) | rn (a 1)))]))
+
    thumb2 {'lower thumb-lower
            'short thumb-short
+           'fuse thumb-fuse
            'lis 1
            'sform thumb-sform
            'flagr '(br set adc sbc adcs sbcs raw)
