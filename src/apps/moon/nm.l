@@ -138,6 +138,11 @@
        _ (map (f \ (raops g f @ [u d] (map (bump un) u, map (bump dn) d) _ 0)) fs)
        [dn un])
 
+   ; only the defs
+   (nmdn g fs)
+    (: dn {}
+       (map (f \ (raops g f @ [_ d] (map (x \ lovr? x ? (pin dn x (peep dn x 0 + 1))) d) _ 0)) fs, dn))
+
    ; a one-def vreg copied from another, or holding a literal that fits an immediate -> [copies literals]
    (nmmaps fs dn)
     (: cp {} kc {}
@@ -245,10 +250,10 @@
 
    (nmround g fs0)
     (nmwid g (nmlit fs0) @ fs
-       (nmcnt g fs @ [dn _]
+       (nmdn g fs @ dn
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
-             (nmsub g fs cp kc dn @ f2 (nmcnt g f2 @ [d2 _] (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
+             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
    ; off x64, a multiply by a power of two the fold left a register for is a shift
    (nmshl g fs dn)
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
