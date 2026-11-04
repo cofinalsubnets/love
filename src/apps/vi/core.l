@@ -1472,10 +1472,11 @@
        (gut fr k) (? (gw < 1) "" (0 < k) (vblanks gw)
                      (show (fr + 1) @ t (vpen st 'lnr "" @ p
                         (p + vblanks (gw - 1 - #t) + t + (0 < #p ? vpen st 'off "\e[0m" "") + " "))))
+       past (vpen st 'nontext "" @ p (0 < #p ? (p + "~" + vpen st 'off "\e[0m") "~"))
        ; 'lines and the carry are lists: drop to the corner once and step from there
        (rows l cl i k acc fr)
         (? (body <= i) (rev acc)
-           !(two? l) (rows l cl (i + 1) 0 ("~" . acc) fr)
+           !(two? l) (rows l cl (i + 1) 0 (past . acc) fr)
            (: raw <l
               win (wrap? ? (vdrop (vsegs raw w) k @ sg [<sg (two? >sg ? <>sg #raw) 0])
                      (vwin raw left w))

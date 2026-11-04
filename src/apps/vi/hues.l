@@ -2,10 +2,13 @@
 ; hue-lex does, (lx s in keep) -> [runs out]; `in` is 0 at the top, else what a line left open.
 (module 'vi
 (:
-   ; class -> vim group for the classes only these lexers emit
+   ; class -> vim group for the classes only these lexers emit, then the group to fall back
+   ; on where a theme has no row for the first
    hues-classes
     '((keyword Statement) (type Type) (pre PreProc) (func Function)
-      (var Identifier) (attr Type) (ent Special) (added Function) (removed Operator))
+      (var Identifier) (attr Type) (ent Special) (added Function) (removed Operator)
+      (storage StorageClass Type) (label Label Statement)
+      (precond PreCondit PreProc) (macro2 Macro PreProc))
 
    ; --- bytes ---
    (hues-dig? c) (48 <= c <= 57)
@@ -53,8 +56,11 @@
    ; $fields, 'rx /regex/ where an operand is due. carry: 1 in /* */, 2 in a js `template`
    hues-c
     {'kw (hues-kws
-          '((keyword "if else for while do switch case default break continue return goto sizeof _Alignof alignof _Generic asm __asm__ __attribute__ typeof __typeof__ _Static_assert static_assert")
-            (type "void char short int long float double signed unsigned _Bool bool _Complex size_t ssize_t ptrdiff_t intptr_t uintptr_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t FILE va_list struct union enum typedef static extern register inline restrict volatile const auto _Atomic _Thread_local thread_local _Noreturn _Alignas alignas constexpr")
+          '((keyword "if else for while do switch break continue return goto _Generic asm __asm__ _Static_assert static_assert")
+            (label "case default")
+            (dyad "sizeof _Alignof alignof typeof __typeof__")
+            (storage "static extern register inline restrict volatile const auto _Atomic _Thread_local thread_local _Noreturn _Alignas alignas constexpr")
+            (type "void char short int long float double signed unsigned _Bool bool _Complex size_t ssize_t ptrdiff_t intptr_t uintptr_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t FILE va_list struct union enum typedef")
             (const "NULL true false EOF stdin stdout stderr __FILE__ __LINE__ __func__ nullptr")))
      'q "\"'" 'ln "//" 'bc 1 'cpp 1}
    hues-jsp
@@ -83,11 +89,24 @@
        (tq i a acc)
         (hues-qend s i 96 92 @ j
            (j ? (w j (emit acc 'string a j)) [(rev (emit acc 'string a n)) 2]))
-       (pre i acc)                                     ; #directive, and an <include>
-        (: j (hues-skip s (i + 1)) e (hues-idend s j) acc2 (emit acc 'pre i e) k (hues-skip s e)
-           (snip s j e = "include" && k < n && s k = 60 ?
-               (: m (hues-find s k ">") f (m < n ? (m + 1) n) (w f (emit acc2 'string k f)))
-              (w e acc2)))
+       ; #directive, and an <include>. the line wears its directive's class but for its comments,
+       ; strings and numbers, and a line ending in \ hands the class on
+       (pre i acc)
+        (: j (hues-skip s (i + 1)) e (hues-idend s j) d (snip s j e) k (hues-skip s e)
+           (d = "include" && k < n && s k = 60 ?
+               (: m (hues-find s k ">") f (m < n ? (m + 1) n) (w f (emit (emit acc 'pre i e) 'string k f)))
+              (: c (? (elem d '("if" "ifdef" "ifndef" "elif" "else" "endif")) 'precond
+                      (elem d '("define" "undef")) 'macro2
+                      'pre)
+                 (ppl i e acc c))))
+       (ppl i e acc c)
+        (w e () @ [rs st]
+           (: (go p l a)
+               (? !(two? l) (p < n ? (emit a c p n) a)
+                  !(c = 'macro2 || elem <(<l) '(comment string number)) (go p >l a)
+                  (: x <>(<l) y <>>(<l)
+                     (go y >l (emit (p < x ? (emit a c p x) a) <(<l) x y))))
+              [(rev (go i rs acc)) (st != 0 ? st (0 < n && s (n - 1) = 92 ? c 0))]))
        (w i acc)
         (n <= i ? [(rev acc) 0]
            (: c (s i) d (i + 1 < n ? (s (i + 1)) 0)
@@ -105,7 +124,7 @@
                  (hues-dig? c || c = 46 && hues-dig? d) (hues-numend s i @ j (w j (emit acc 'number i j)))
                  (hues-alf? c) (: j (hues-idend s i) k (kw (snip s i j)) (w j (nom? k ? (emit acc k i j) acc)))
                  (w (i + 1) acc))))
-       (in @ 1 (cm 0 0 ()) 2 (tq 0 0 ()) (w 0 ())))
+       (nom? in ? (ppl 0 0 () in) (in @ 1 (cm 0 0 ()) 2 (tq 0 0 ()) (w 0 ()))))
    (hues-js s in keep) (hues-cl hues-jsp s in keep)
    (hues-awk s in keep) (hues-cl hues-awkp s in keep)
 
@@ -203,8 +222,9 @@
    ; mk is make's recipe line, where $(..) is make's and runs to its mate
    hues-shkw
     (hues-kws
-     '((keyword "if then else elif fi for while until do done case esac in function select time return break continue exit local export readonly shift set unset eval exec trap source . [[ ]] !")
-       (func "echo printf cd read pwd alias unalias umask wait kill getopts command type hash test [ ] ulimit jobs fg bg")
+     '((keyword "if then else elif fi for while until do done case esac in function select time return break continue exit local export readonly shift set unset eval exec trap source [[ ]] ! echo printf bg cd command fc getopts hash jobs read times type ulimit umask unalias wait basename cat chgrp chmod chown cksum clear cmp comm cp cut date dirname du egrep expr fgrep find fmt fold getconf grep head iconv id join kill killall less ln login logname ls md5sum mkdir mkfifo mknod mktemp mv newgrp nice nohup od paste pathchk printenv pwd readlink realpath rename rev rm rmdir sed sha1sum sha224sum sha256sum sha384sum sha512sum sleep sort strip stty sum sync tail tee test tput tr tty uname uniq wc which xargs")
+       (func "alias fg")
+       (dyad ". [ ]")
        (const "true false")))
    (hues-untab s) (snip s (hues-run s 0 (= 9)) #s)
    (hues-sh s in keep) (hues-shx () s in keep)
@@ -214,6 +234,9 @@
        (brk? c) (elem c " \t;|&()<>`")
        (wstart? i) (i < 1 || brk? (s (i - 1)))
        (out hd) (string? hd ? hd 0)
+       deref (mk ? 'var 'pre)
+       (qopen i acc) (mk ? acc (emit acc 'dyad i (i + 1)))
+       (qshut a i acc) (mk ? (emit acc 'string a (i + 1)) (emit (emit acc 'string a i) 'dyad i (i + 1)))
        (dol i)                                         ; s i is $: past the parameter, or i
         (: j (i + 1) c (j < n ? (s j) 0)
            (? (c = 123) (hues-close s j)
@@ -222,14 +245,21 @@
               (mk && c = 36 && j + 1 < n && hues-alf? (s (j + 1))) (hues-idend s (j + 1))  ; $$x, the shell's
               (elem c (mk ? "0123456789?@#$!*-<^+%|" "0123456789?@#$!*-")) (j + 1)
               i))
+       (redir i)                                       ; > >> <& >&1
+        (: j (hues-run s i (c \ elem c "<>&")) (hues-run s j hues-dig?))
+       (flag? i)                                       ; -x, --long, +x after a blank
+        (elem (s i) "-+" && 0 < i && hues-bl? (s (i - 1)) && i + 1 < n &&
+         (s (i + 1) @ c (hues-idc? c || elem c "-#@")))
+       (fndef e)                                       ; past `()` when a name defines
+        (e < n && s e = 40 ? (hues-skip s (e + 1) @ k (k < n && s k = 41 ? (k + 1) ())) ())
        (sq i a acc hd)
         (hues-find s i "'" @ j
-           (n <= j ? [(rev (emit acc 'string a n)) 1] (w (j + 1) (emit acc 'string a (j + 1)) hd)))
+           (n <= j ? [(rev (emit acc 'string a n)) 1] (w (j + 1) (qshut a j acc) hd)))
        (dq i a acc hd)                                 ; the string in pieces around its parameters
         (n <= i ? [(rev (emit acc 'string a n)) 2] (s i @
          92 (dq (i + 2) a acc hd)
-         34 (w (i + 1) (emit acc 'string a (i + 1)) hd)
-         36 (dol i @ e (i < e ? (dq e e (emit (emit acc 'string a i) 'var i e) hd)
+         34 (w (i + 1) (qshut a i acc) hd)
+         36 (dol i @ e (i < e ? (dq e e (emit (emit acc 'string a i) deref i e) hd)
                                 (dq (i + 1) a acc hd)))
          (dq (i + 1) a acc hd)))
        (here i acc hd)                                 ; <<[-]['"]word
@@ -244,18 +274,22 @@
            (s i @ c
               (? (hues-bl? c) (w (i + 1) acc hd)
                  (c = 35 && wstart? i) [(rev (emit acc 'comment i n)) (out hd)]
-                 (c = 92) (w (i + 2) acc hd)
-                 (c = 39) (sq (i + 1) i acc hd)
-                 (c = 34) (dq (i + 1) i acc hd)
-                 (c = 36) (dol i @ e (i < e ? (w e (emit acc 'var i e) hd) (w (i + 1) acc hd)))
+                 (c = 92) (w (i + 2) (i + 1 = n && !mk ? (emit acc 'dyad i n) acc) hd)
+                 (c = 39) (mk ? (sq (i + 1) i acc hd) (sq (i + 1) (i + 1) (qopen i acc) hd))
+                 (c = 34) (mk ? (dq (i + 1) i acc hd) (dq (i + 1) (i + 1) (qopen i acc) hd))
+                 (c = 36) (dol i @ e (i < e ? (w e (emit acc deref i e) hd) (w (i + 1) acc hd)))
                  (hue-at? s i "<<" && !(hue-at? s i "<<<")) (here i acc hd)
+                 (!mk && elem c "<>") (redir i @ e (w e (emit acc 'dyad i e) hd))
+                 (!mk && flag? i) (hues-wend s i @ e (w e (emit acc 'ent i e) hd))
                  (brk? c) (w (i + 1) acc hd)
                  (: e (hues-wend s i) t (snip s i e) a (hues-idend s i)
-                    (? (i < a && a < n && s a = 61 && !(hues-dig? c) && wstart? i)
+                    (? (!mk && wstart? i && fndef e)
+                        (w e (emit acc 'func i e) hd)
+                       (i < a && a < n && s a = 61 && !(hues-dig? c) && wstart? i)
                         (w a (emit acc 'var i a) hd)
                        (wstart? i && (n <= e || brk? (s e)))
                         (hues-shkw t @ k
-                           (w e (? (nom? k) (emit acc k i e) (hue-num? t) (emit acc 'number i e) acc) hd))
+                           (w e (? (nom? k) (mk ? acc (emit acc k i e)) (hue-num? t) (emit acc 'number i e) acc) hd))
                        (w e acc hd))))))
        (? (string? in) (hues-untab s = in ? [(rev (emit () 'pre 0 n)) 0] [(rev (emit () 'string 0 n)) in])
           (in = 1) (sq 0 0 () ())
@@ -266,6 +300,9 @@
    ; a tab-led line is a recipe and reads as sh. otherwise the head decides: a
    ; directive, a NAME = of any flavour, or the targets before a rule's colon
    hues-mkdirs (words "include -include sinclude ifeq ifneq ifdef ifndef else endif define endef export unexport override undefine vpath private")
+   hues-mkconds (words "ifeq ifneq ifdef ifndef else endif")
+   hues-mkspec (words ".SUFFIXES .PHONY .DEFAULT .PRECIOUS .IGNORE .SILENT .NOTPARALLEL .POSIX .EXPORT_ALL_VARIABLES .DELETE_ON_ERROR .INTERMEDIATE .KEEP_STATE .LIBPATTERNS .ONESHELL .SECONDARY")
+   hues-mkfns (words "abspath addprefix addsuffix and basename call dir error eval file filter-out filter findstring firstword flavor foreach guile if info intcmp join lastword let notdir or origin patsubst realpath shell sort strip subst suffix value warning wildcard word wordlist words")
    (hues-mkref s i) (i + 1 @ j (? (#s <= j) j (elem (s j) "({") (hues-close s j) (j + 1)))
    (hues-assign s i)                                   ; the name's end, or ()
     (: j (hues-run s i (\ c !(elem c " \t:=?+!#"))) k (hues-skip s j)
@@ -285,17 +322,25 @@
           emit (hue-emit keep)
           (rest i acc)
            (n <= i ? [(rev acc) 0] (s i @
-            92 (rest (i + 2) acc)
+            92 (rest (i + 2) (i + 1 = n ? (emit acc 'ent i n) acc))
             35 [(rev (emit acc 'comment i n)) 0]
-            36 (hues-mkref s i @ j (rest j (emit acc 'var i j)))
+            36 (hues-mkref s i @ j
+                  (: f (i + 2) g (hues-mkw s f)
+                     (rest j (i + 1 < n && s (i + 1) = 40 && elem (snip s f g) hues-mkfns
+                                ? (emit (emit (emit acc 'var i f) 'keyword f g) 'var g j)
+                                (emit acc 'var i j)))))
             (rest (i + 1) acc)))
           lead (hues-skip s 0)
           e (hues-mkw s lead)
           a (hues-assign s lead)
           t (hues-colon s lead)
-          (? (elem (snip s lead e) hues-mkdirs) (rest e (emit () 'pre lead e))
+          (? (hue-at? s lead "include" || hue-at? s lead "-include" || hue-at? s lead "sinclude")
+              (elem (snip s lead e) hues-mkdirs ? [[['pre lead n]] 0] (rest lead ()))
+             (elem (snip s lead e) hues-mkconds) (rest e (emit () 'precond lead e))
+             (elem (snip s lead e) hues-mkdirs) (rest e (emit () 'pre lead e))
              a (rest a (emit () 'var lead a))
-             t (rest t (emit () 'func lead t))
+             (t && elem (snip s lead t) hues-mkspec) (rest (t + 1) (emit () 'keyword lead (t + 1)))
+             t (rest (t + 1) (emit () 'func lead (t + 1)))
              (rest lead ()))))
 
    ; --- json ---
@@ -651,7 +696,7 @@
 
    ; --- the pens: hue.l's, and one per class above ---
    (hues-pens rows deep)
-    (foldl (b \ c \ (: r (filter (r \ <r = hue-grp c) rows)
+    (foldl (b \ c \ (: r (catmap (g \ filter (r \ <r = g) rows) >c)
                        (two? r ? (pin b (hue-cls c) (hue-pen <r deep)) b)))
            (hue-pens rows deep) hues-classes)
    (hues-wake x) (hues-pens (hue-rows x) (hue-deep ())))
