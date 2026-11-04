@@ -385,6 +385,9 @@
    (wasm? {'tgt 'wasm}) 1          ; ..which wasm rides whole; it differs only where its machine lacks an op
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
+   ; the targets the new backend lowers by default, and those it knows at all
+   lotgts '(x64 a64)
+   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g) _ (elem (peep g 'tgt 'x64) lotgts))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
@@ -464,13 +467,15 @@
    (uldop sz) (sz @ 1 'ldu1 2 'ldu2 4 'ldu4 'ld)
    (fnty g nm) (g 'sigs nm @ sig        ; return and params riding when sig'd
                 (two? sig ? ['fn <sig <>sig] '(fn)))
-   ; the SysV eightbyte classes of a by-value aggregate (its value is its address in r0): '(int) /
+   ; the eightbyte classes of a by-value aggregate (its value is its address in r0): '(int) /
    ; '(sse) at <=8 bytes, two symbols at 9..16, () for a scalar, an unsized tag or >16 (memory)
    (aclass g ty)
     (!(stru? ty) || ia32? g ? ()                     ; i386 classes nothing: every aggregate is memory
        (peep (g 'stag) <>ty 0 @ se
           (? !(two? se) ()
              (16 < <>se) ()
+             ; AAPCS64: an aggregate not of one float base rides gp registers alone
+             (a64? g && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
              (: cls {}
                 (mark o c) (: i (o >> 3) old (cls i)
                               (pin cls i (old = 'int || c = 'int ? 'int 'sse)))
@@ -7039,7 +7044,8 @@
              dv128 rm128 inc128 dec128 shl128 shr128 sar128 shl128v shr128v sar128v)
    (csdefs g f)                                       ; the cs regs one form writes | 'dark
     (? (elem <f csquiet) ()
-       (elem <f divops) (filter (r \ elem r (csregs g)) [<>f])   ; idiv self-saves r2: its dst only
+       ; idiv self-saves r2: its dst only; elsewhere a remainder's scratch is written too
+       (elem <f divops) (filter (r \ elem r (csregs g)) (f @ (_ . d . _ . _ . t . _) (x86? g ? [d] [d t]) _ [<>f]))
        (rdsp g f @ rd
           (rd @ 'bar 'dark
                 (filter (r \ elem r (csregs g)) <>rd))))
@@ -11916,9 +11922,11 @@
        off0 (g 'off) sl0 (g 'slots)            ; the cells dealt before the build (VLA, v6m f-cells, sret), kept by every rebuild
        ; the new backend takes the fn whole where it can, before the old build deals a cell; a
        ; refusal hands back what it dealt. lo.l lays after this file: its names resolve at the call
-       irn (g 'lo && x64? g ?
-              ([(g 'jtabs) (g 'fesc) (g 'fescv) (g 'fesca)] @ [jt0 fe0 fv0 fx0]
-                 ((cite 'moon 'lofn) g f params sig @ 'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0 'fesc fe0 'fescv fv0 'fesca fx0, 'bad) fs fs))
+       irn (lo? g ?
+              ([(g 'jtabs) (g 'fesc) (g 'fescv) (g 'fesca) (g 'statics) (g 'fasecs)] @ [jt0 fe0 fv0 fx0 st0 fa0]
+                 ((cite 'moon 'lofn) g f params sig @
+                   'bad (pins g 'n n0 'strs strs0 'off off0 'slots sl0 'jtabs jt0 'fesc fe0 'fescv fv0 'fesca fx0 'statics st0 'fasecs fa0, 'bad)
+                   fs fs))
               'bad)
        sp1 (? (uni9 || !(bad? irn)) ()
               (vararg && a64? g) (vaspill-a64 params)
@@ -12141,7 +12149,7 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
-          'lo (getenv "MOON_BACKEND" @ "old" () _ 1)   ; x64 lowers by lo.l and ra.l unless MOON_BACKEND=old
+          'lo (getenv "MOON_BACKEND" @ "old" () "new" 'all _ 1)   ; lotgts lower by lo.l unless MOON_BACKEND=old; new takes every target lo.l knows
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)

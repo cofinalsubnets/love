@@ -5,16 +5,19 @@
 (module 'moon
 (borrow 'holo)
 (:
-   ; x64's indexed twin of a load or store, and a store's immediate twin
+   ; x64's indexed twin of a load or store, and a store's immediate twin; a64 has neither the
+   ; 32-bit indexed loads nor a store of an immediate
    nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
    nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
+   (nmxop g op) (peep nmxld op () @ () () xo (x64? g || nelem xo '(ldxw ldxsw) ? xo))
 
-   ; (mov d a) (op d d b) -> (op d a b): b is read before d is written
-   (nmfuse fs)
-    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu)
-           ([op d a b] . nmfuse u)
-          (f . u) (f . nmfuse u)
+   ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
+   ; cannot read sp
+   (nmfuse g fs)
+    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu && (x64? g || a != 'sp))
+           ([op d a b] . nmfuse g u)
+          (f . u) (f . nmfuse g u)
           _ ())
    ; nothing reaches past a jump or a return but through a label; a jump to a label just after
    ; it goes
@@ -118,7 +121,7 @@
                       _ (x < 0 || y < 0 ? () (op @ 'and (x & y) 'or (x | y) _ (x ^ y))))
    ; the copies' readers read the source, and a literal rides where the form takes an immediate;
    ; a one-def vreg folded to a literal is one from there on
-   (nmsub fs cp kc dn)
+   (nmsub g fs cp kc dn)
     (: (r x) (peep cp x () @ () x y (r y))
        (lit d n) ((lovr? d && peep dn d 0 = 1 ? (pin kc d n)), ['li d n])
        (k x) (peep kc (r x) ())
@@ -126,17 +129,17 @@
        (imm f) (f @ ([op d a b] && elem op raalu)
                      (: x (kv a) y (kv b) n (cint? x && cint? y ? (nmk op x y))
                         (? (cint? n && fits32 n) (lit d n)
-                           (cint? y) [op d a y]
-                           (cint? x && elem op racomm) [op d b x]
+                           (cint? y && imma g op y) [op d a y]
+                           (cint? x && elem op racomm && imma g op x) [op d b x]
                            f))
-                    ['cmp a b] (k b @ () f n ['cmp a n])
-                    ([op b o v] && peep nmsi op ()) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
+                    ['cmp a b] (k b @ () f n (imma g 'cmp n ? ['cmp a n] f))
+                    ([op b o v] && x64? g && peep nmsi op ()) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
                     ['mov d y] (k y @ () f n ['li d n])
                     f)
        ; an unsigned divide or remainder by a power of two: a shift or a mask
        (pw x) (cint? x && 0 < x && x & (x - 1) = 0)
        (dv f) (f @ (('udiv . d . a . b . _) && pw (kv b)) [['mov d a] ['shr d (nmlog (kv b))]]
-                   (('urem . d . a . b . _) && pw (kv b) && kv b <= 2147483648) [['and d a (kv b - 1)]]
+                   (('urem . d . a . b . _) && pw (kv b) && imma g 'and (kv b - 1)) [['and d a (kv b - 1)]]
                    _ ())
        (catmap (f \ (f @ ([('mov || 'movapd) x _] && peep cp x ()) ()
                          (_ . _) (map r f @ f2 (dv f2 @ () [(imm f2)] fs2 fs2))
@@ -161,26 +164,29 @@
        (go fs av)
         (fs @ (f . u)
                (f @ ('label . _) (f . go u ())
-                    _ (nmfold f av @ f2
+                    _ (nmfold g f av @ f2
                        (raops g f2 @ [_ ds]
                           (: a2 (filter (e \ !(elem (e 0) ds || any (x \ elem x ds) (e 2))) av)
                              (f2 . go u (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t) ([t f2 (<(raops g f2))] . a2)
                                              (['mov t y] && one? t && lovr? y) ([t f2 [y]] . a2)
+                                             (['li t k] && one? t) ([t f2 ()] . a2)
                                              _ a2)))
                           _ (f2 . go u ()))))
               _ ())
        (go fs ()))
    (nmav av x) (foldl (a \ e \ (a @ () (e 0 = x ? (e 1)) _ a)) () av)
-   (nmfold f0 av)
+   (nmfold g f0 av)
     (: (cpy x) (nmav av x @ ['mov _ y] y _ x)
        f (f0 @ (('fix || 'cdef || 'cuse) . _) f0 (_ . _) (map cpy f0) f0)
+       ; a scale is a literal, or a register a literal loaded (a64 multiplies registers alone)
+       (scl s) (cint? s ? s (nmav av s @ ['li _ k] k _ ()))
        (base b o) (nmav av b @ ([('add || 'lea) _ b2 k] && cint? k && cint? o && fits32 (o + k)) [b2 (o + k)] _ ())
        (idx b o) (nmav av b @ (['add _ b2 x] && lovr? x)
-                               (nmav av x @ (['imul _ i s] && elem s '(1 2 4 8)) [b2 i s o] _ [b2 x 1 o])
+                               (nmav av x @ (['imul _ i s] && elem (scl s) '(1 2 4 8)) [b2 i (scl s) o] _ [b2 x 1 o])
                               _ ())
        (f @ ([op d b o] && elem op (ldops9 + fldops))
              (base b o @ [b2 o2] [op d b2 o2]
-                _ (peep nmxld op () @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
+                _ (nmxop g op @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
                 _ (peep nmxst op () @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
@@ -207,8 +213,15 @@
        (nmcnt g fs @ [dn _]
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
-             (nmsub fs cp kc dn @ f2 (nmcnt g f2 @ [d2 _] (nmsink g (radce g (nmloc g f2 d2))))))))
+             (nmsub g fs cp kc dn @ f2 (nmcnt g f2 @ [d2 _] (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
+   ; off x64, a multiply by a power of two the fold left a register for is a shift
+   (nmshl g fs dn)
+    (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
+       kv (foldl (t \ f \ (f @ (['li k n] && lovr? k && peep dn k 0 = 1) (pin t k n) _ t)) {} fs)
+       (p2 n) (cint? n && 1 < n && n & (n - 1) = 0)
+       (x64? g ? fs
+          (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmround g (nmround g (nmreach (nmfuse fs)))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmround g (nmround g (nmreach (nmfuse g fs)))))
 )) ; module 'moon

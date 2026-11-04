@@ -5,16 +5,22 @@
 (borrow 'holo)
 (:
 
-   ; x64's files, caller-saved first: a callee-saved one costs its save. every xmm is caller-saved
-   ragp '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14)
-   ragf '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15)
-   rapool (ragp + ragf)
+   ; each target's files, caller-saved first: a callee-saved one costs its save. every x64 xmm is
+   ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
+   ; to holo and the platform, d8-d15 for their saves
+   (ragp g) (a64? g ? '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
+               '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
+   (ragf g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+               '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
+   (rapool g) (ragp g + ragf g)
+   ; what a call clobbers: the caller-saved gp file and every float register the pool takes
+   (racl g) (lvgp g + ragf g)
    ; the vregs lo.l mints: %nK on the gp file, %wK on the float file
    (lomk g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%n\(k)"))
    (lomkf g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%w\(k)"))
    (lovr? x) (nom? x && (show x @ s (1 < #s && s 0 = 37 && (s 1 = 110 || s 1 = 119))))
-   (lofr? x) (nom? x && (show x @ s (1 < #s && s 0 = 37 && s 1 = 119)) || elem x ragf)
-   (raok? x) (lovr? x || elem x rapool)
+   (lofr? x) (nom? x && (show x @ s (1 < #s && (s 0 = 37 && s 1 = 119 || s 0 = 102 && 48 <= s 1 <= 57))))
+   (raok? g x) (lovr? x || elem x (rapool g))
    ; the float forms rdsp does not see: two-address ops, copies, compares, the gp crossings
    rafbin '(addsd subsd mulsd divsd minsd maxsd addss subss mulss divss minss maxss xorpd andpd)
    ; the three-address ops, and those of them that commute
@@ -26,8 +32,8 @@
     ((f @ ('cuse . rs) [rs ()]
           ('cdef . rs) [() rs]
           ('fix . u . d . _) [u d]
-          ('call . _) [() (lvgp g + ragf)]
-          ('callr . r . _) [[r] (lvgp g + ragf)]
+          ('call . _) [() (racl g)]
+          ('callr . r . _) [[r] (racl g)]
           ('ret . _) [(peep g 'loret '(r0)) ()]
           ([op d s] && elem op rafbin) [[d s] [d]]
           ([op d s] && elem op rafmv) [[s] [d]]
@@ -37,10 +43,10 @@
           [('ldsdx || 'ldssx) d b i _ _] [[b i] [d]]
           [('stsdx || 'stssx) b i _ _ v] [[b i v] ()]
           (('jmp || 'br || 'label) . _) [() ()]
-          ((op . d . a . b . _) && elem op divops) [[a b] [d 'r0]]
+          ((op . d . a . b . t) && elem op divops) (x64? g ? [[a b] [d 'r0]] [[a b] (d . t)])
           (rdsp g f @ 'bar 'bad (u . d . _) [u d])) @
      'bad 'bad
-     [u d] [(filter raok? u) (filter raok? d)])
+     [u d] [(filter (raok? g) u) (filter (raok? g) d)])
 
    ; -- sorted int sets --
    (ramin a b) (? (atom? a) () (atom? b) a
@@ -64,7 +70,7 @@
        ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
        ids {} nms {}
        (id x) (peep ids x -1 @ -1 (peep nms 'n 0 @ j (pins nms 'n (j + 1) j x, pin ids x j, j)) k k)
-       _ (map id rapool)
+       _ (map id (rapool g))
        ud (: t {}
              (go i) (n <= i ? t
                        (raops g (ft i) @ 'bad 'bad
@@ -81,7 +87,7 @@
                       (pin lout i o, pin lin i li, sweep (i - 1) c2)))
                (fix _) (sweep (n - 1) 0 @ 1 (fix 0) 0)
                _ (fix 0)
-               np #rapool
+               np #(rapool g)
                lo {} hi {} pts {}
                (mark x p) (pin pts x (p . peep pts x ()),
                            x < np ? 0 (pin lo x (min p (peep lo x p)), pin hi x (max p (peep hi x p))))
@@ -89,17 +95,20 @@
                _ (map (i \ (map (x \ mark x (2 * i)) (lin i),
                             map (x \ mark x (2 * i + 1)) (lout i),
                             map (x \ mark x (2 * i + 1)) <>(ud i),
-                            (ft i @ (['sub _ _ b] && raok? b) (mark (id b) (2 * i + 1)) _ 0))) ^n)
+                            (ft i @ (['sub _ _ b] && raok? g b) (mark (id b) (2 * i + 1))
+                                    ; a remainder's scratch is written before its operands are done
+                                    ((op _ a b _) && elem op '(rem urem) && !(x64? g)) (map (x \ raok? g x ? (mark (id x) (2 * i + 1))) [a b])
+                                    _ 0))) ^n)
                ; each id's live positions as ranges, with the holes between them
                rg (foldl (t \ x \ pin t x (rarng (pts x))) {} (keys pts))
                ; the copies hint their two sides together, a three-address op its def to its left
                ; side (either side when it commutes); a divide's quotient never takes rdx
                hint {} forb {}
                (link x y) (pin hint x (y . peep hint x ()))
-               (link2 a b) (raok? a && raok? b ? (: x (id a) y (id b) (link x y, link y x)))
+               (link2 a b) (raok? g a && raok? g b ? (: x (id a) y (id b) (link x y, link y x)))
                _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
                                 ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
-                                ((op . d . _) && elem op divops) (pin forb (id d) ['r2])
+                                ((op . d . _) && elem op divops && x64? g) (pin forb (id d) ['r2])
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
                loc {}
@@ -132,8 +141,8 @@
                                () (nosp (nms x) ? 'bad (scan fl u a2 (nms x . sp)))
                                w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp))))))
                (fv? x) (lofr? (nms x))
-               (scan ragp (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
-                  sg (scan ragf (filter fv? vs) () sg @ 'bad 'bad
+               (scan (ragp g) (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
+                  sg (scan (ragf g) (filter fv? vs) () sg @ 'bad 'bad
                         sp (: si (map id sp)
                               ; per call, the spilled vregs it outlives; their reloads' weight there
                               cw {}
@@ -297,7 +306,7 @@
 
    ; -- the laws' checks over a fn's forms: MOON_LOLAW=1 pins what breaks on g 'lolaw --
    ; a physical register but the frame and stack bases
-   (raphys? x) (elem x rapool && nelem x '(r4 sp))
+   (raphys? g x) (elem x (rapool g) && nelem x '(r4 sp))
    ; the forms a physical register may stand in or live across: copies, crossings, control
    raglue '(cdef mov movapd movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
    ; the forms with a fixed register operand: the count in rcx, a divide's rax
@@ -321,7 +330,7 @@
     (ralive g fs @ [ft ud lin lout]
        (catmap (i \ (ft i @ (hd . a)
                        (? (elem hd raglue || elem hd rafixed) ()
-                          (filter raphys? a @ () (filter (x \ raphys? x && elem x (lout i) && nelem x <>(ud i)) (lin i) @
+                          (filter (raphys? g) a @ () (filter (x \ raphys? g x && elem x (lout i) && nelem x <>(ud i)) (lin i) @
                                                     () () ps [['across ps (ft i)]])
                                              ps [['phys ps (ft i)]]))
                        _ ()))
@@ -348,7 +357,7 @@
    ; a vreg live across a call, homed in a register the call clobbers
    (rachkc g fs loc)
     (ralive g fs @ [ft _ _ lout]
-       (: cs (lvgp g + ragf)
+       (: cs (racl g)
           (catmap (i \ (ft i @ (('call || 'callr) . _)
                           (filter (x \ lovr? x && elem (loc x) cs) (lout i) @ () () vs [['call (map (x \ [x (loc x)]) vs) (ft i)]])
                           _ ()))
