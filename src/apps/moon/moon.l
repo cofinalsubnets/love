@@ -478,8 +478,8 @@
                                 fns gns wks anames)
                     (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
                               fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames
-                              ; the asm's data names typed as gas types them, and its absolute symbols
-                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ())]
+                              ; the asm's data names typed as gas types them, its absolute symbols and its sizes
+                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())]
                               ; the functions C laid, not the asm's, under unwind tables
                               (ua || us ? (fnames + lnames + map (x \ <x) xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
