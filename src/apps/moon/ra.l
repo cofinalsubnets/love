@@ -89,6 +89,13 @@
              (y 1 < x 0) (raovl a >b)
              1)))
 
+   ; a fn's blocks, descending, as [first last]: each form runs on to the next but a block's last
+   (rablocks sc n)
+    (: lead (foldl (t \ i \ (sc i @ ([j] && j = i + 1) t
+                                js (map (j \ pin t j 1) js, pin t (i + 1) 1, t))) (pin {} 0 1) ^n)
+       (go l) (l @ (s . u) ([s ((u @ (t . _) t _ n) - 1)] . go u) _ ())
+       (rev (go (filter lead ^n))))
+
    ; one round: ids, liveness, hulls, the scan -> [loc spills] | 'bad
    (raround g fs nosp)
     (: n #fs
@@ -103,11 +110,7 @@
              (go 0))
        (ud @ 'bad 'bad
           _ (: sc (vsucc fs)
-               ; a block runs on from each form to the next but for its last; descending, as [first last]
-               lead (foldl (t \ i \ (sc i @ ([j] && j = i + 1) t
-                                        js (map (j \ pin t j 1) js, pin t (i + 1) 1, t))) (pin {} 0 1) ^n)
-               bs (: (go l) (l @ (s . u) ([s ((u @ (t . _) t _ n) - 1)] . go u) _ ())
-                     (rev (go (filter lead ^n))))
+               bs (rablocks sc n)
                ; a block's reads before any write in it, and its writes, by its first form
                (bud1 s i a w) (ud i @ [u d] (: a2 (vun u (ramin a d)) w2 (vun w d)
                                                (i = s ? [a2 w2] (bud1 s (i - 1) a2 w2))))
@@ -312,24 +315,43 @@
        (go fs 16))
    ; a spill slot's store goes when no path reads the slot back before writing it again or
    ; leaving: the slots are ra's own, so only its loads and stores name them
-   (radse g fs sls)
-    (: n #fs
-       ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
-       (slot f) (f @ ([('ld || 'ldsd) _ 'r4 o] && elem o sls) ['ld o]
-                     ([('st || 'stsd) 'r4 o _] && elem o sls) ['st o]
-                     _ ())
+   (radse g fs sls) (!(two? sls) ? fs (radse1 g fs sls))
+   (radse1 g fs sls)
+    (: isl (foldl (t \ o \ pin t o 1) {} sls)
+       sl {}
+       _ (foldl (i \ f \ (f @ ([('ld || 'ldsd) _ 'r4 o] && isl o) (pin sl i ['ld o])
+                              ([('st || 'stsd) 'r4 o _] && isl o) (pin sl i ['st o])
+                              _ 0,
+                           i + 1)) 0 fs)
        sc (vsucc fs)
+       bs (rablocks sc #fs)
+       ; a block's reads before any write in it, and its writes, by its first form
+       (bud1 s i a w)
+        (sl i @ ['ld k] (bnext s i (raund [k] a) w)
+                ['st k] (bnext s i (filter (x \ x != k) a) (raund [k] w))
+                _ (bnext s i a w))
+       (bnext s i a w) (i = s ? [a w] (bud1 s (i - 1) a w))
+       bud (foldl (t \ b \ (b @ [s e] (pin t s (bud1 s e () ())))) {} bs)
        lin {} lout {}
-       (sweep i chg)
-        (i < 0 ? chg
-           (: o (foldl (a \ j \ raund a (lin j)) () (sc i))
-              li (slot (ft i) @ ['ld k] (raund [k] o) ['st k] (filter (x \ x != k) o) _ o)
-              c2 (#li != #(lin i) || #o != #(lout i) ? 1 chg)
-              (pin lout i o, pin lin i li, sweep (i - 1) c2)))
-       (fix _) (sweep (n - 1) 0 @ 1 (fix 0) 0)
-       (!(two? sls) ? fs
-          (: _ (fix 0)
-             (catmap (i \ (slot (ft i) @ ['st k] (elem k (lout i) ? [(ft i)]) _ [(ft i)])) ^n))))
+       (sweep l chg)
+        (l @ ([s e] . u)
+              (: o (foldl (a \ j \ raund a (lin j)) () (sc e))
+                 li (bud s @ [a w] (raund a (filter (x \ nelem x w) o)))
+                 c2 (#li != #(lin s) || #o != #(lout s) ? 1 chg)
+                 (pin lout s o, pin lin s li, sweep u c2))
+             _ chg)
+       (fix _) (sweep bs 0 @ 1 (fix 0) 0)
+       _ (fix 0)
+       ; a store goes when nothing after it in its block, or past, reads the slot first
+       dead {}
+       (walk s i o)
+        (: o2 (sl i @ ['ld k] (raund [k] o)
+                      ['st k] ((nelem k o ? (pin dead i 1)), filter (x \ x != k) o)
+                      _ o)
+           (s < i ? (walk s (i - 1) o2)))
+       _ (map (b \ (b @ [s e] (walk s e (lout s)))) bs)
+       (keep l i) (l @ (f . u) (dead i ? (keep u (i + 1)) (f . keep u (i + 1))) _ ())
+       (keep fs 0))
 
    ; a vreg split at its calls: stored after each def, reloaded before a read its register may not
    ; hold, by a forward must-availability where a call holds none, so no call finds it live
