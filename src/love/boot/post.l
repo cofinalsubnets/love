@@ -16,7 +16,12 @@
    (cuuap x) >><x
    stdin in stdout out stderr err
    sine sin cosine cos tangent tan fabs abs
-   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors
+   ; a shape is a dimension list or a lone number; 0 and () are rank 0
+   (trayed w sh l) (tray w (sh = 0 || sh = () ? sh (a-shape sh)) l)
+   ; a star-tray's tier is the widest of its numbers; the others name theirs
+   star-tray (trayed 1)
+   galaxy star-tray
+   gem-tray (trayed 0.0) twin-tray (trayed (twin 0 0)) top-tray (trayed ())
    (tier v) (tray? v ? (atype v @ c (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's ctor; nil off a tray
    zero? nil?
    ; the roster's ear: while a cat is laid, verbs pins at 0 what hears each borrow and cite
@@ -268,7 +273,6 @@
 
 (:: 'suite (l \ (. 'do (. (. 'assert >l) [['puts <l] ['puts ": ok\n"]]))))
 
-(: (array s) (a-shape s @ sh (a-coll sh (foldl (*) 1 sh) 0)))
 
 ; --- coin: a user kind, a table of methods keyed by the noms the C side reads:
 ; name + * ap hot - net star /, net one of payload tally ratio. (coin 'nm spec) registers
@@ -828,7 +832,7 @@
          (<t @ m (px o <m sn, px o <>m sn))
        (plist o x sn)))
 
-  ; --- trays. rank 1 is @(…), past that (array '(shape) elem…). an object tray quotes
+  ; --- trays. rank 1 is @(…), past that (galaxy '(shape) [elem…]), or top-tray for object cells, which quote
   ; what would otherwise re-evaluate.
   ; a flat index to its row-major coordinate
   (coord sh i) (atom? >sh ? (i . ())
@@ -838,7 +842,8 @@
                (ty = 3 && (nom? e || two? e) ? (put o 39) 0, px o e sn))
     (gs l f) (two? l ? ((f ? 0 (put o 32)), pnum o <l, gs >l 0) 0)
     (rank v = 1 ? (say o "@(", each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), put o 41)
-       (say o "(array '(", gs sh 1, put o 41, each ^n (i \ (put o 32, pel i)), put o 41)))
+       (say o (ty = 3 ? "(top-tray '(" "(galaxy '("), gs sh 1, say o ") [",
+        each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), say o "])")))
 
   ; --- maps print {k v …}. a map can hold itself, so the path rides as [maps depth mark],
   ; matched by identity: the nearest 64 maps, and the mark, the map at the last power-of-two

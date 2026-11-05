@@ -776,11 +776,25 @@ struct g *big_read_dec(struct g *g) { return big_read_radix(g, 10, limb_dec_chun
 struct g *big_read_hex(struct g *g) { return big_read_radix(g, 16, limb_hex_chunk, 2); }
 struct g *big_read_oct(struct g *g) { return big_read_radix(g,  8, limb_oct_chunk, 1); }
 
+// the widest tier among a list's numbers, the rest skipped: a big past the word or a coin is O
+static intptr_t tray_tier(word l) {
+ intptr_t ty = love_Z;
+ for (; chainp(l) && ty < love_O; l = B(l)) {
+  word x = A(l);
+  intptr_t k = twinp(x) ? love_C : gemp(x) ? love_R : coinp(x) ? love_O : love_Z;
+  if (bigp(x)) {                               // past the word, the low word's sign disagrees
+   intptr_t sl = ((struct big*) x)->slen;
+   if (sl > wlimbs || sl < -wlimbs || (wbig_get(x) < 0) != (sl < 0)) k = love_O; }
+  if (k > ty) ty = k; }
+ return ty; }
+
 // (tray witness shape vals), mopped behind prel's *-tray: the witness names the tier by example,
-// 0 Z, 0.0 R, ~(0 0) C, else O; vals fill row-major. a negative dim or over-rank -> zero
+// 0 Z, 0.0 R, ~(0 0) C, 1 the widest of vals, else O; vals fill row-major. a negative dim or
+// over-rank -> zero
 lvm(lvm_trayctor) {
  word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
- intptr_t ty = twinp(t) ? love_C : gemp(t) ? love_R
+ intptr_t ty = t == putcharm(1) ? tray_tier(Sp[2])
+             : twinp(t) ? love_C : gemp(t) ? love_R
              : intp(t) ? love_Z : love_O;
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; chainp(l); l = B(l)) {
