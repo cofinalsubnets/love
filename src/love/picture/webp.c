@@ -1,7 +1,7 @@
 // src/love/picture/webp.c
 // (webp-pixels s) -> the w*h*4 rgba of a webp -- an animation's first frame, laid on its
 // canvas; webp-frame below lays the rest -- | why not: 1 not a webp, 2 cut short, 3 a kind it
-// can't read (an interframe), 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8,
+// can't read (an interframe), 4 a bad stream, 5 past 2^28 pixels, 6 no room. lossy (vp8,
 // rfc 6386) with or without an ALPH plane, and lossless (vp8l, rfc 9649); the pixels are
 // libwebp's WebPDecodeRGBA's. webp-encode, at the foot, writes lossless.
 #include "love.h"
@@ -214,7 +214,7 @@ static void wp_drop(struct wp_mem *m, void *p) {
   if (m->p[i] == p) { alloc(p, 0), m->p[i] = m->p[--m->n]; return; } }
 static void wp_free(struct wp_mem *m) { while (m->n) alloc(m->p[--m->n], 0); }
 
-static int wp_big(uint64_t w, uint64_t h) { return w * h > (1u << 24); }
+static int wp_big(uint64_t w, uint64_t h) { return w * h > (1u << 28); }
 
 // vp8l, the lossless image
 struct wl_tr { unsigned type, bits, xs; uint32_t *data; };

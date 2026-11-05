@@ -24,7 +24,7 @@
         "VP8 " [(rdle s 26 2 & 16383) (rdle s 28 2 & 16383)]
         "VP8L" (s 20 != 47 ? "a bad stream"
                 [((rdle s 21 2 & 16383) + 1) (((rdle s 22 3 >> 6) & 16383) + 1)])
-        "VP8X" (: w (rdle s 24 3 + 1) h (rdle s 27 3 + 1) (16777216 < w * h ? "too big" [w h]))
+        "VP8X" (: w (rdle s 24 3 + 1) h (rdle s 27 3 + 1) (268435456 < w * h ? "too big" [w h]))
         "a bad stream"))
 
 
