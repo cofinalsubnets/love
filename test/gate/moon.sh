@@ -147,6 +147,22 @@ printf '.text\nf: call ext\n.set tc, f+3\n.data\n.long 1\n.globl inq\nd: .quad f
 moonrun -c "$ho/.alf.S" -o "$ho/.alf.o" || fail "mooncc: an asm's aliases inside a field"
 [ "$(readelf -sW "$ho/.alf.o" | awk '$8 ~ /^(tc|inq|in1|neg|past|pad)$/ {print $8, $2}' | sort | tr '\n' ' ')" = "in1 0000000000000005 inq 0000000000000010 neg fffffffffffffffc pad 0000000000000021 past 0000000000000067 tc 0000000000000003 " ] || fail "an alias inside a relocated field, a pad or past its section is not where it points"
 [ "$(readelf -rW "$ho/.alf.o" | awk '/^0+14 / {print $5, $NF} /^0+18 / {print $5, $NF}' | tr '\n' ' ')" = "inq 0 .data 5 " ] || fail "a word over an alias does not name the global one, or a local one's place"
+printf '.section .rodata.cst16.x,"aM",@progbits,16\n.Lp: .quad 1,1\nq: .quad 2,2\n.text\nlea .Lp(%%rip), %%rax\nlea q(%%rip), %%rcx\nmovabs $q, %%rdx\n' > "$ho/.mrg.S"
+moonrun -c "$ho/.mrg.S" -o "$ho/.mrg.o" || fail "mooncc: an asm's reach into a merging section"
+[ "$(readelf -rW "$ho/.mrg.o" | awk '/R_X86/ {print $5, $6 $7}' | tr '\n' ' ')" = ".Lp -4 q -4 .rodata.cst16.x +10 " ] || fail "a reach with a constant into a merging section does not name its label"
+printf '.text\ns: nop\n. = s + 4\nnop\n. = 8\nnop\n. = . + 2\nnop\n' > "$ho/.dot.S"
+moonrun -c "$ho/.dot.S" -o "$ho/.dot.o" || fail "mooncc: an asm's . = expr"
+readelf -x .text "$ho/.dot.o" | grep -q '90000000 90000000 90000090' || fail ". = expr does not move the location"
+[ -z "$(readelf -sW "$ho/.dot.o" | awk '$8 == "."')" ] || fail ". = expr lays a symbol"
+printf '.code16\nimull $0x01010101, %%eax\nimul $3, %%bx\n' > "$ho/.imr.S"
+moonrun -c "$ho/.imr.S" -o "$ho/.imr.o" || fail "mooncc: an asm's imul by a constant alone"
+readelf -x .text "$ho/.imr.o" | grep -q '6669c001 0101016b db03' || fail "imul \$k, %%r is not imul \$k, %%r, %%r"
+printf '.section .data.a,"a"\n.long 1\n.section .text.a,"a"\n.long 1\n.section .data.n,""\n.long 1\n.section .foo,"a"\n.long 1\n' > "$ho/.flg.S"
+moonrun -c "$ho/.flg.S" -o "$ho/.flg.o" || fail "mooncc: an asm's section flags"
+[ "$(readelf -SW "$ho/.flg.o" | sed -E 's/^ *\[ *[0-9]+\] +//' | awk '$1 ~ /^(\.data\.a|\.text\.a|\.data\.n|\.foo)$/ {print $1, $7}' | tr '\n' ' ')" = ".data.a WA .text.a AX .data.n WA .foo A " ] || fail "a section's flags by its name do not stand beside those it is given"
+printf '.text\n.type s, @function\ns: nop\nnop\n.size s, .-s\n.set al, s\n.set al2, s+1\n.data\n.type o, @object\no: .quad 0\n.size o, 8\n.set oa, o\n.set ob, o+2\n.type oc, @function\n.size oc, 3\n.set oc, o\n' > "$ho/.asz.S"
+moonrun -c "$ho/.asz.S" -o "$ho/.asz.o" || fail "mooncc: an asm's sized aliases"
+[ "$(readelf -sW "$ho/.asz.o" | awk '$8 ~ /^(al|al2|oa|ob|oc)$/ {print $8, $2 + 0, $3, $4}' | sort | tr '\n' ' ')" = "al 0 2 FUNC al2 1 2 FUNC oa 0 8 OBJECT ob 2 8 OBJECT oc 0 3 FUNC " ] || fail "an alias does not take its target's size and type"
 printf ' andl $0xffff0000, %%eax\n andl $4, %%eax\n andb $1, %%al\n testl $0x200, %%eax\n' > "$ho/.acc.S"
 moonrun -c "$ho/.acc.S" -o "$ho/.acc.o" || fail "mooncc: an asm's accumulator forms"
 readelf -x .text "$ho/.acc.o" | grep -q '250000ff ff83e004 2401a900 020000' || fail "an immediate into the accumulator does not take its short form"
@@ -396,6 +412,21 @@ $cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fai
 moonrun -Os -o "$ho/.f32" test/cc/278-f32-fuzz.c > /dev/null 2>&1 || fail "mooncc -Os the float fuzz"
 "$ho/.f32"; a=$?
 [ $a -eq $b ] || fail "float arithmetic -Os: ours $a gcc $b"
+
+# -Os asks for less: a frame with exits and a helper called three times, thumb2, against plain
+cat > "$ho/.osz.c" <<'EOF'
+int g(int);
+static int h(int a, int b) { int s = 0; for (int i = 0; i < a; i++) { if (i & 1) s += b * i; else s ^= a - i; } return s; }
+int f(int a, int b, int c, int d) {
+ int x = g(a); if (x) return x + b;
+ int y = g(b + x); if (y > c) return y + x + d;
+ int z = g(c + y); if (z < d) return z + y + x;
+ return h(x, y) + h(y, z) + h(z, x) + z; }
+EOF
+moonrun -t thumb2 -c -o "$ho/.osz2.o" "$ho/.osz.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 the size probe"
+moonrun -t thumb2 -Os -c -o "$ho/.oszs.o" "$ho/.osz.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 -Os the size probe"
+a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
+[ "$a" -lt "$b" ] || fail "thumb2 -Os no smaller: $a bytes against $b"
 
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
@@ -1662,6 +1693,58 @@ for t in x64 a64; do
   moonrun -t $t -O2 -c "$ho/.pid.c" -o "$ho/.pid.o" || fail "mooncc -t $t: a decided && over an inline asm goto, or a64's Q"
   nm "$ho/.pid.o" | grep -q ' U gone$' && fail "the right of a decided 0 && kept its call on $t"
 done
+# a compare the lowering knows decides its branch, and the dead arm's references go: a sizeof
+# switch, a value of two defs, a shifted literal in a ternary, and a dead arm holding a value's other def
+cat > "$ho/.kbr.c" <<'EOF'
+extern void gone(void); extern unsigned gv;
+struct d { void *n; };
+static inline void *dn(struct d *d) { if (!0 || !d) return (void *)0; return d->n; }
+int sw(int *p) { int r; switch (sizeof(*p)) { case 1: r = 1; break; case 4: r = *p; break; default: gone(); r = 0; } return r; }
+int two(void) { int x = 1; x = 0; if (x) gone(); return x; }
+int ter(int x) { int s = 4; int m = 1 << 14; return x + (s < m ? s : gv); }
+void arm(struct d *d) { void *np; np = dn(d); if (!np) return; gone(); }
+EOF
+for t in x64 a64; do
+  moonrun -t $t -O2 -c "$ho/.kbr.c" -o "$ho/.kbr.o" || fail "mooncc -t $t: a known compare"
+  nm "$ho/.kbr.o" | grep -qE ' U (gone|gv)$' && fail "a dead arm kept its reference on $t"
+done
+# ..and only a known one: a value a loop writes again, or that a branch joins, stays read
+cat > "$ho/.kbl.c" <<'EOF'
+extern int printf(const char *, ...);
+int m1(int c) { int x = 0; if (c) x = 1; if (x == 1) return 7; return 8; }
+int m2(int c) { int x = 2; for (int i = 0; i < c; i++) { if (x == 2) x = 3; else x = 2; } return x; }
+int m3(void) { long x = -1; if ((unsigned long)x > 5) return 1; return 0; }
+int m4(void) { long x = -1; if (x > 5) return 1; return 0; }
+int main(void) { printf("%d %d %d %d %d %d\n", m1(0), m1(1), m2(2), m2(3), m3(), m4()); return 0; }
+EOF
+moonrun "$ho/.kbl.c" -o "$ho/.kbl" || fail "mooncc: a compare a block does not know"
+[ "$("$ho/.kbl")" = "8 7 2 3 1 0" ] || fail "a compare decided on a value it does not know"
+# a bare sym+k in 16 and 32-bit code is the symbol and its addend, not a symbol of that name
+# a rip reference in a 32-bit object's .code64 reads its data label, not symbol 0
+cat > "$ho/.r64.S" <<'EOF'
+.code64
+.text
+f: lgdt g(%rip)
+ jmpq *b(%rip)
+.section .rodata
+.globl g
+g: .long 7
+.bss
+.space 8
+b: .space 8
+EOF
+moonrun -t i386 -c "$ho/.r64.S" -o "$ho/.r64.o" || fail "holo: a rip reference in i386's .code64"
+readelf -rW "$ho/.r64.o" | grep -q 'PC32 .*\bg\b' || fail "holo: .code64 rip to a global binds its symbol"
+readelf -rW "$ho/.r64.o" | grep -q 'ABS\|PC32 *$' && fail "holo: .code64 rip to a label reads symbol 0"
+cat > "$ho/.s32.S" <<'EOF'
+.code32
+movl y+4, %edx
+.code16
+movw z+2, %dx
+EOF
+moonrun -t x64 -c "$ho/.s32.S" -o "$ho/.s32.o" || fail "holo: a bare sym+k in .code32"
+readelf -rW "$ho/.s32.o" | grep -qE ' y \+ 4$' || fail "holo: a .code32 sym+k lost its addend"
+readelf -rW "$ho/.s32.o" | grep -qE ' z \+ 2$' || fail "holo: a .code16 sym+k lost its addend"
 # a64 unwind tables (the vdso's -fasynchronous-unwind-tables): an FDE per C function, none for
 # the asm's; each frame shape's rows -- a frameless leaf's sp, the frame record riding x29 with
 # the callee-saved slots, an early return's ret and the body after it -- and pac-ret's sign state

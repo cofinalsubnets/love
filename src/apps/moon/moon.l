@@ -385,11 +385,11 @@
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
        txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap (incbins <>r is src)) <>r)
-       lx (clexw (deftext ds9 + txt) (1 - #ds9))
+       lx (mprof 'lex (_ \ clexw (deftext ds9 + txt) (1 - #ds9)))
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
-       pp (cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
+       pp (mprof 'cpp (_ \ cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src))
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1})   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
         (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
@@ -470,8 +470,8 @@
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes nopro]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
-       (: ob (cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt)
+       (: ob (mprof 'cgen (_ \ cgen-obj ast stag sigs weaks
+                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt))
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",

@@ -108,7 +108,7 @@ static struct g *io_wdrain(struct g *g, struct io *i) {
 // bao's `reads` folded; the frontend rewinds the fd offset it ran ahead
 static love_inline struct bio *rbio_of(struct g *g, struct io *i) {
  struct bio *b = bio_of(g, i);
- return b ? b : i == &love_stdin.io ? (struct bio*) core_of(g)->inport : NULL; }
+ return b ? b : i == &love_stdin.io ? (struct bio*) love_inport : NULL; }
 
 static struct g *io_refill(struct g *g) {                  // g is ok here: zgetc guards
  struct bio *b = rbio_of(g, g->io);
@@ -158,6 +158,20 @@ static love_inline struct g *zungetc(struct g*g, int c) {
  if (!ok(g)) return g;
  g->io->ungetc_buf = putcharm(c);
  return g->b = c, g; }
+// the write backing dressed, with room for m more
+static struct g *bio_wroom(struct g *g, uintptr_t m) {
+ struct bio *b = (struct bio*) g->io;
+ if (!b->wbuf || charmp(b->wbuf)) {
+  if (!ok(g = str0(g, iobuf))) return g;
+  b = (struct bio*) g->io;
+  b->wbuf = g->sp[0];
+  b->wlen = putcharm(0);
+  gen_wb(g, (word) b, b->wbuf);
+  g->sp += 1; }
+ while (getcharm(b->wlen) + m > len(str(b->wbuf))) {   // a short-changed drain left a residue
+  if (!ok(g = bio_wgrow(g))) return g;
+  b = (struct bio*) g->io; }
+ return g; }
 struct g *ioputc(struct g*g, int c) {
  if (!ok(g)) return g;
  struct bio *b = bio_of(g, g->io);
@@ -168,17 +182,9 @@ struct g *ioputc(struct g*g, int c) {
   if (!core_of(g = vt->writen(g, &x, 1))->b && ok(g))   // a sink that grew on the first ask
    g = vt->writen(g, &x, 1);
   return g; }
- if (!b->wbuf || charmp(b->wbuf)) {              // dress the write backing
-  if (!ok(g = str0(g, iobuf))) return g;
-  b = (struct bio*) g->io;
-  b->wbuf = g->sp[0];
-  b->wlen = putcharm(0);
-  gen_wb(g, (word) b, b->wbuf);
-  g->sp += 1; }
+ if (!ok(g = bio_wroom(g, 1))) return g;
+ b = (struct bio*) g->io;
  uintptr_t n = getcharm(b->wlen);
- if (n >= len(str(b->wbuf))) {       // a short-changed drain left a residue
-  if (!ok(g = bio_wgrow(g))) return g;
-  b = (struct bio*) g->io; }
  struct str *w = str(b->wbuf);
  txt(w)[n] = (char) c;
  b->wlen = putcharm(n + 1);
@@ -370,7 +376,7 @@ lvm(lvm_fputs) {
  if (iop(Sp[0]) && (strp(Sp[1]) || caskp(Sp[1]))) {
   g->io = (struct io*) Sp[0];
   uintptr_t i = 0, l = len(bytes_of(Sp[1]));
-  // the bulk lane only past an empty run, or the stream shuffles; a 0 falls to ioputc
+  // the bulk lane only past an empty run, or the stream shuffles
   struct g *(*wn)(struct g*, unsigned char const*, uintptr_t) = g->io->vt->writen;
   Pack(g);
   g = io_wdrain(g, (struct io*) g->sp[0]);   // buffered puts land before the bulk stroke
@@ -385,6 +391,13 @@ lvm(lvm_fputs) {
     if (!ok(g = wn(g, (unsigned char const*) txt(bytes_of(g->sp[1])) + i, l - i))) break;   // a sink that could not grow
     k = g->b; }
    if (k > 0) i += (uintptr_t) k;
+   else if (wn && bio_of(g, (struct io*) g->sp[0])) {   // the sink is full: the rest joins the run whole
+    if (!ok(g = bio_wroom(g, l - i))) break;
+    struct bio *b = (struct bio*) g->io;
+    uintptr_t n = getcharm(b->wlen);
+    memcpy(txt(str(b->wbuf)) + n, txt(bytes_of(g->sp[1])) + i, l - i);
+    b->wlen = putcharm(n + l - i);
+    i = l; }
    else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
   if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_ghelp, g);
   Unpack(g); }
@@ -434,24 +447,15 @@ static struct g *facex(struct g *g, word x, int d) {
    if (!chainp(B(x))) return ioputc(g, ')'); } }
  return ioputn(ioputc(g, '\\'), (intptr_t) x, 36); }
 
-// ";; a b" on err, or the bare oom as ";; oom (ask nursery major)", ask 0 when the refusal was not the collector's
+// ";; a b" on err: the reason a C lane left, else the last scare's
 void scare_face(struct g *g) {
  if (!(g = core_of(g))) return;
+ word r = g->scare_c, a = chainp(r) ? A(r) : g->scare_a, b = chainp(r) ? B(r) : g->scare_b;
  g->io = &love_stderr.io;
- if (zerop(g->scare_a) && zerop(g->scare_b)) {
-  uintptr_t ask = g->ask, len = g->len, major = g->major_len;
-  g = ioputs(g, ";; oom (");
-  if (ok(g)) g = ioputn(g, (intptr_t) ask, 10);
-  if (ok(g)) g = ioputc(g, ' ');
-  if (ok(g)) g = ioputn(g, (intptr_t) len, 10);
-  if (ok(g)) g = ioputc(g, ' ');
-  if (ok(g)) g = ioputn(g, (intptr_t) major, 10);
-  if (ok(g)) g = ioputc(g, ')'); }
- else {
-  g = ioputs(g, ";; ");
-  if (ok(g)) g = facex(g, g->scare_a, 0);
-  g = ioputc(g, ' ');
-  if (ok(g)) g = facex(g, g->scare_b, 0); }
+ g = ioputs(g, ";; ");
+ if (ok(g)) g = facex(g, a, 0);
+ g = ioputc(g, ' ');
+ if (ok(g)) g = facex(g, b, 0);
  g = ioputc(g, '\n');
  zflush(g); }
 
@@ -844,7 +848,7 @@ static struct g *rd_done(struct g *g, word v) {
  for (word h; RdKind(h = g->sp[i]) > RkAll; i += (RdKind(h) == RkMono ? 2 : 1) + RdUnder(h));
  g->ip = cell(g->sp[i + 1]), g->sp += i + 2, g->sp[0] = v;
  return g; }
-static struct g *rd_torn(struct g *g) { return rd_done(g, g->rnom[RnTorn]); }
+static struct g *rd_torn(struct g *g) { return rd_done(g, g->nom[RnTorn]); }
 
 static struct g *rd_enter(struct g *g, int k) {       // [x ..]
  if (!ok(g = have(g, RdRegs + 2))) return g;
@@ -1014,7 +1018,7 @@ static struct g *rd_weave(struct g *g) {
  for (uintptr_t i = 0; i < cnt; i++) l = rd_cons(g, g->sp[RdRegs + i], l);
  rd_shut(g, cnt + 1), g->sp[RdCnt] = putcharm(RdUnder(h));
  g->sp[RdVal] = !cnt ? EmptyString : one != ZeroPoint ? one
-  : rd_cons(g, g->rnom[RnWeave], rd_cons(g, rd_cons(g, g->rnom[RnList], l), ZeroPoint));
+  : rd_cons(g, g->nom[RnWeave], rd_cons(g, rd_cons(g, g->nom[RnList], l), ZeroPoint));
  return RdGo(RsDatum); }
 
 static struct g *rd_str(struct g *g) {
@@ -1140,11 +1144,11 @@ static struct g *rd_read(struct g *g) {
   if (c == '\'') { RdStep(n, p); rd_frame(g, RkQuote), g->sp[RdCur] = n; continue; }
   if (c == '@' || c == ',' || (m & RcSign)) {            // each looks one char past itself
    RdStep(n, p);
-   if (c == ',') return g->sp[RdVal] = g->rnom[RnComma], g->sp[RdCur] = n, RdGo(RsDatum);
+   if (c == ',') return g->sp[RdVal] = g->nom[RnComma], g->sp[RdCur] = n, RdGo(RsDatum);
    if (c == '@') {                                       // a run, the tuple wrap, or the plain @
     if (rd_c(src, n) & RcOp) return rd_op(g);
     if (rd_glued(src, n)) { rd_frame(g, RkLift), g->sp[RdCur] = n; continue; }
-    return g->sp[RdVal] = g->rnom[RnAt], g->sp[RdCur] = n, RdGo(RsDatum); }
+    return g->sp[RdVal] = g->nom[RnAt], g->sp[RdCur] = n, RdGo(RsDatum); }
    return (rd_c(src, n) & RcDig) || rd_at(src, n) == '.' ? rd_tok(g, false) : rd_op(g); }   // a numeral's sign
   return m & RcOp ? rd_op(g) : rd_tok(g, m & RcDig); } }
 
@@ -1160,8 +1164,8 @@ static struct g *rd_close(struct g *g) {
  rd_shut(g, cnt + 1), g->sp[RdCnt] = putcharm(RdUnder(h)), g->sp[RdCur] = n;
  int const k = RdKind(h);
  g->sp[RdVal] = k == RkParen || k == RkHole ? l
-  : l == ZeroPoint && k != RkList ? rd_cons(g, g->rnom[k == RkHash ? RnTablet : RnIota], rd_cons(g, putcharm(0), ZeroPoint))
-  : rd_cons(g, g->rnom[k == RkList ? RnList : k == RkHash ? RnHash : RnTuple], l);
+  : l == ZeroPoint && k != RkList ? rd_cons(g, g->nom[k == RkHash ? RnTablet : RnIota], rd_cons(g, putcharm(0), ZeroPoint))
+  : rd_cons(g, g->nom[k == RkList ? RnList : k == RkHash ? RnHash : RnTuple], l);
  return RdGo(RsDatum); }
 
 // a string's residue, laid as cells
@@ -1191,10 +1195,10 @@ static struct g *rd_datum(struct g *g) {
   word const o = g->sp[RdRegs + 1];
   rd_shut(g, k == RkMono ? 2 : 1), g->sp[RdCnt] = putcharm(RdUnder(h));
   g->sp[RdVal] =
-     k == RkQuote ? rd_cons(g, g->rnom[RnQuote], rd_cons(g, v, ZeroPoint))             // 'x: (\ x)
-   : k == RkMono ? rd_cons(g, g->rnom[RnMono], rd_cons(g, rd_cons(g, o, rd_cons(g, v, ZeroPoint)), ZeroPoint))
-   : v == ZeroPoint ? rd_cons(g, g->rnom[RnIota], rd_cons(g, putcharm(0), ZeroPoint))    // @x
-   : rd_cons(g, g->rnom[RnTuple], chainp(v) ? v : rd_cons(g, v, ZeroPoint)); } }
+     k == RkQuote ? rd_cons(g, g->nom[RnQuote], rd_cons(g, v, ZeroPoint))             // 'x: (\ x)
+   : k == RkMono ? rd_cons(g, g->nom[RnMono], rd_cons(g, rd_cons(g, o, rd_cons(g, v, ZeroPoint)), ZeroPoint))
+   : v == ZeroPoint ? rd_cons(g, g->nom[RnIota], rd_cons(g, putcharm(0), ZeroPoint))    // @x
+   : rd_cons(g, g->nom[RnTuple], chainp(v) ? v : rd_cons(g, v, ZeroPoint)); } }
 
 static struct g *rd_all(struct g *g) {
  uintptr_t const cnt = getcharm(g->sp[RdCnt]);

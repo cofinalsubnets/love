@@ -52,7 +52,7 @@ uintptr_t love_fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
 intptr_t love_fd_readn(struct g *g, int fd, unsigned char *dst, uintptr_t n) {
  if (__love_osv < 0) return k_row_read(fd, dst, n);
  ssize_t k;
- if (fd == STDIN_FILENO && core_of(g)->inflag) k = read(fd, dst, n);   // the bit is already ours
+ if (fd == STDIN_FILENO && love_inflag) k = read(fd, dst, n);   // the bit is already ours
  else {
   int fl = fcntl(fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
   if (off) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
@@ -103,6 +103,7 @@ static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
 
 struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
+word love_inflag, love_inport;
 struct fio
  love_stdin = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) },
  love_stdout = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(STDOUT_FILENO) },
