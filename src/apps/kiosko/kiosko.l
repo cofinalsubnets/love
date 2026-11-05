@@ -148,22 +148,31 @@
          + "Cross-Origin-Opener-Policy: same-origin\r\n"
          + "Cross-Origin-Embedder-Policy: require-corp\r\n"
          + "Connection: close\r\n\r\n")
-   (tagged c code why ctype body head? tag)
+   (headed c code why ctype body head? more)
    (each ["HTTP/1.1 \(code) \(why)\r\n"
           "Content-Type: \(ctype)\r\n"
           "Content-Length: \(#body)\r\n"
-          (string? tag ? "ETag: \(tag)\r\n" "")
+          more
           tail] (say c),
     !head? ? (say c body),
     flush c,
     code)
-   (reply c code why ctype body head?) (tagged c code why ctype body head? ())
+   (reply c code why ctype body head?) (headed c code why ctype body head? "")
+   ; a request header's line, lowercase, or "" with none
+   (hline blk name)
+   (: h (lower blk) i (fsub h ("\n" + name + ":") 0)
+      e (i < 0 ? -1 (fsub h "\n" (i + 1)))
+      (i < 0 ? "" (snip h i (e < 0 ? #h e))))
    ; a file's tag: its size and modified time. a list of tags, or *, may come back
    (etag full) (stat full @ (s . m . _) "\"\(s)-\(m)\"")
    (seen? blk tag)
-   (: h (lower blk) i (fsub h "\nif-none-match:" 0)
-      e (i < 0 ? -1 (fsub h "\n" (i + 1)))
-      (0 <= i && (fsub (snip h i (e < 0 ? #h e)) tag 0 >= 0 || fsub (snip h i (e < 0 ? #h e)) "*" 0 >= 0)))
+   (: l (hline blk "if-none-match") (fsub l tag 0 >= 0 || fsub l "*" 0 >= 0))
+   ; ..and its gzipped copy, kept beside it: one no older than the file, for who takes gzip
+   (zipped blk full)
+   (: z (full + ".gz")
+      (? (fsub (hline blk "accept-encoding") "gzip" 0 < 0) ()
+         (stat z @ (_ . m . _) (stat full @ (_ . n . _) (n <= m ? z ()))
+                   _ ())))
    ; an error is a page too -- small, and readable when a browser shows it
    (oops c code why head?)
    (reply c code why "text/html; charset=utf-8"
@@ -189,10 +198,11 @@
 ; clean, not a reset. `make`, asked before the disk, takes (path head) and answers
 ; [ctype body] or () for "not mine"; a () make is the plain static server.
 (: (file c full ctype blk head? meth raw)
-   (: tag (etag full)
-      (? (seen? blk tag) (each ["HTTP/1.1 304 Not Modified\r\nETag: \(tag)\r\n" tail] (say c), flush c, [304 meth raw])
-         (gulp full @ b
-            (got? b ? (tagged c 200 "OK" ctype b head? tag, [200 meth raw])
+   (: z (zipped blk full) from (string? z ? z full) tag (etag from)
+      more "ETag: \(tag)\r\nVary: Accept-Encoding\r\n"
+      (? (seen? blk tag) (each ["HTTP/1.1 304 Not Modified\r\n" more tail] (say c), flush c, [304 meth raw])
+         (gulp from @ b
+            (got? b ? (headed c 200 "OK" ctype b head? (string? z ? (more + "Content-Encoding: gzip\r\n") more), [200 meth raw])
                (oops c 403 "Forbidden" head?, [403 meth raw]))))))
 (: (serve1 root make c)
    (: blk (reqblk c)

@@ -85,6 +85,22 @@
    _ (put-file "tagged.txt" "two")
    _ (test (code (cond "/tagged.txt" t1) = "200") (tag (get "/tagged.txt") != t1))
 
+   ; a gzipped copy goes to who takes gzip, under its own tag; an older copy to nobody
+   (zask p more) (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n" + more + "\r\n"))
+   az "Accept-Encoding: deflate, gzip\r\n"
+   _ (put-file "z.txt" "plain")
+   _ (rest 5)
+   _ (put-file "z.txt.gz" "zipped")
+   zy (zask "/z.txt" az) zn (get "/z.txt")
+   _ (test (has? zy "zipped") (has? zy "Content-Encoding: gzip") (has? zy "text/plain")
+           (has? zn "plain") !(has? zn "Content-Encoding") (has? zn "Vary: Accept-Encoding")
+           (tag zy != tag zn)
+           (code (zask "/z.txt" (az + "If-None-Match: " + tag zy + "\r\n")) = "304")
+           (code (zask "/z.txt" (az + "If-None-Match: " + tag zn + "\r\n")) = "200"))
+   _ (rest 5)
+   _ (put-file "z.txt" "plain again")
+   _ (test (has? (zask "/z.txt" az) "plain again"))
+
    ; the guard, first
    _ (test
       (code (get "/../../etc/passwd") = "403")
