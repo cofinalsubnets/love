@@ -4,7 +4,7 @@
 
 (borrow "src/apps/droid/droid.l")
 (borrow "src/apps/open.l")
-(borrow '(bytes gz tls))
+(borrow '(bytes gz tls hashes))
 
 (: dr-k (key-new 'p256)
    dr-nm (name-der "/CN=t")
@@ -23,9 +23,9 @@
               (go (i + 30 + nl + cs) ([(snip z (i + 30) (i + 30 + nl)) (? ok b 'badcrc)] . acc))))
        (go 0 ()))
    dr-eo (#dr-z - 22)
-   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" ()))
-   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"]))
-   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"]))
+   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" () 0))
+   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"] 0))
+   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"] 0))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -82,9 +82,16 @@
    (test (rdle dr-rz 8 2 = 0) (snip dr-rz 44 48 = "abcd")     ; stored, and on a word
          (rdbe dr-png 16 4 = 432) (rdbe dr-png 20 4 = 432)
          (#dr-pix = 432 * 55)
-         (dr-pix (103 * 55 + 14) = 0) (dr-pix (104 * 55 + 15) = 255)  ; the heart's first lit pixel
+         (dr-pix (103 * 55 + 18) = 0) (dr-pix (104 * 55 + 14) = 0) (dr-pix (104 * 55 + 18) = 255)  ; the heart's first lit pixel
          (dr-gl = ic-rows)
          (rdle (ic-arsc 0) 0 2 = 2) (rdle (ic-arsc 0) 4 4 = #(ic-arsc 0))))
+;; the service's class: the header's own sums and sizes
+(: dr-dx (dx-service 0)
+   (test (snip dr-dx 0 8 = ("dex\n035" + string [0]))
+         (rdle dr-dx 8 4 = dx-adler (snip dr-dx 12 #dr-dx))
+         (snip dr-dx 12 32 = unhex (sha1 (snip dr-dx 32 #dr-dx)))
+         (rdle dr-dx 32 4 = #dr-dx) (rdle dr-dx 36 4 = 112)
+         (has? dr-dx "Lpics/salt/love/Service;") (has? dr-dx "onStartCommand")))
 
 ;; window over the bridge's wire, the bridge played here
 (borrow 'window)

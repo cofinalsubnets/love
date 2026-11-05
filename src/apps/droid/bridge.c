@@ -45,7 +45,9 @@
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
    is linked under its own name and as open, a link handed on through the framework's door.
    when love, the bottom of a stack, ends the next deck has the screen, or with none left it is
-   started again; the app ends as android ends it. */
+   started again; the app ends as android ends it. with assets/stay, which holds the app's label, a
+   foreground service keeps the process: the activity going leaves the decks running, the next
+   takes them up, and a last love ending with no activity ends the app. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -115,18 +117,22 @@ typedef struct {
 } deck;
 
 typedef struct {
-  ANativeActivity *a; void *looper, *win, *queue;
+  ANativeActivity *a; void *vm, *looper, *win, *queue;   /* a is 0 between activities, stay's only; the act lock guards it */
   int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, vh, shown;
   int bare;                               /* the client on top has not been told its pixels are gone */
   deck decks[NDECK], *d;                  /* d is on the screen */
-  int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
+  int up, ears, stay;                     /* in sight (onStart to onStop); hear threads alive; the service keeps us */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
-  long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
+  long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
+  char argv[2048], label[64]; long nargv;
   uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
   char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], line[2048]; int nline;
 } br;
 
 #define LOG(s) __android_log_write(4, "love", s)
+
+/* the bridge a service's call and the next activity find: android hands them no context of ours */
+static br *the;
 
 static int readall(int fd, void *p, size_t n) {
   char *c = p;
@@ -220,7 +226,7 @@ static int frame(br *b, int fd) {
 /* the soft keyboard, through the InputMethodManager: android 12 ignores NativeActivity's own
    ask, its view being no text editor, but takes a toggle; down is a hide from the window */
 static void keyboard(br *b, void *e, int on) {
-  if (!e) return;
+  if (!e || !b->a) return;
   void *const *t = *(void *const **) e;
   void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
   void *(*callo)(void *, void *, void *, ...) = t[34]; void (*callv)(void *, void *, void *, ...) = t[61];
@@ -243,7 +249,7 @@ static void keyboard(br *b, void *e, int on) {
 /* the part the soft keyboard leaves, asked of the decor view's insets (ime, 8) while love
    types: a whole screen's window is not resized for it. a change goes to love as its size */
 static void insets(br *b) {
-  void *e = b->env; if (!e || !b->ww) return;
+  void *e = b->env; if (!e || !b->ww || !b->a) return;
   void *const *t = *(void *const **) e;
   void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
   void *(*callo)(void *, void *, void *, ...) = t[34]; void *(*fid)(void *, void *, char const *, char const *) = t[94];
@@ -319,7 +325,7 @@ static void *clipboard(br *b, void *e) {
 /* n bytes of utf-8 as the clipboard's text, through ClipData.newPlainText */
 static void *jtext(void *, char const *, size_t);
 static void copied(br *b, char const *s, size_t n) {
-  void *e = b->env; if (!e) return;
+  void *e = b->env; if (!e || !b->a) return;
   void *const *t = *(void *const **) e;
   void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
   int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
@@ -357,7 +363,7 @@ static int copy(br *b, int fd) {
 static void paste(br *b) {
   enum { most = 1 << 16 };
   void *e = b->env; char *s = 0; int n = 0, got = 0;
-  if (e) {
+  if (e && b->a) {
     void *const *t = *(void *const **) e;
     void (*clear)(void *) = t[17]; int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
     void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
@@ -593,6 +599,7 @@ static void op(sess *s, void *e, char *r, size_t n) {
   char k = n ? r[0] : 0;
   if (k == 's') { void *j = jtext(e, r + 1, n - 1); if (!caught(e, s->fd)) keep(s, e, j); return; }
   r[n] = 0;
+  if ((k == 'a' || k == 'l') && !s->b->a) { answer(s->fd, 'e', "no activity", 11); return; }
   for (size_t i = 1, w0 = 1; n > 1 && i <= n && nw < ARGS + 4; i++)   /* "" a word too, the last one as well */
     if (!r[i]) w[nw++] = r + w0, w0 = i + 1;
   if (k == 'a') keep(s, e, s->b->a->clazz);
@@ -803,6 +810,7 @@ static void over(br *b, deck *d) {
   d->pid = 0;
   deck *n = 0;
   for (int i = 0; i < NDECK && !n; i++) if (b->decks[i].pid > 0) n = b->decks + i;
+  if (!n && !b->a) _exit(0);
   if (!n) { spawn(b, d); return; }
   char p[640];
   ALooper_removeFd(b->looper, d->lsock); close(d->lsock); d->lsock = -1;
@@ -812,9 +820,9 @@ static void over(br *b, deck *d) {
 
 static void *loop(void *p) {
   br *b = p;
-  void *const *vt = *(void *const **) b->a->vm;
+  void *const *vt = *(void *const **) b->vm;
   int (*attach)(void *, void **, void *) = vt[4]; int (*detach)(void *) = vt[5];
-  if (attach(b->a->vm, &b->env, 0)) b->env = 0;
+  if (attach(b->vm, &b->env, 0)) b->env = 0;
   b->looper = ALooper_prepare(1);
   ALooper_addFd(b->looper, b->d->lsock, LISTEN, 1, 0, b->d);
   ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
@@ -824,7 +832,8 @@ static void *loop(void *p) {
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
-    int id = ALooper_pollOnce(b->d->typing || b->shown ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
+    int id = ALooper_pollOnce(__atomic_load_n(&b->a, 2) && (b->d->typing || b->shown) ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
+    pthread_mutex_lock(b->act);                /* the activity stays through what this does */
     if (b->d->typing || b->shown) insets(b);
     if (id == LISTEN) {
       deck *l = d;
@@ -881,19 +890,19 @@ static void *loop(void *p) {
     } else if (id == LOG) {
       if (logs(b)) ALooper_removeFd(b->looper, b->logfd);
     } else if (id == INPUT) input(b);
+    pthread_mutex_unlock(b->act);
   }
   if (b->env) {
     void (*delg)(void *, void *) = (*(void *const **) b->env)[22];
     if (b->kcm) delg(b->env, b->kcm);
-    detach(b->a->vm);
+    detach(b->vm);
   }
   return 0;
 }
 
 static void spawn(br *b, deck *d) {
   char *av[32], exe[600], *ev[64], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
-  void *as = AAssetManager_open(b->a->assetManager, "argv", 3);
-  char const *s = as ? AAsset_getBuffer(as) : 0; long n = as ? AAsset_getLength(as) : 0;
+  char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
   for (long i = 0; i < n && k < 31; ) { av[k++] = (char *) s + i; while (i < n && s[i]) i++; i++; }
@@ -925,7 +934,6 @@ static void spawn(br *b, deck *d) {
   ev[e] = 0;
   d->pid = fork();
   if (!d->pid) { dup2(b->logw, 1); dup2(b->logw, 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
-  if (as) AAsset_close(as);
 }
 
 /* assets/app into the data directory, fresh each start */
@@ -1007,19 +1015,27 @@ static void created(void *a, void *w) {
 
 static void gone(void *a, void *w) {
   br *b = me(a);
-  pthread_mutex_lock(b->mu); b->win = 0; pthread_mutex_unlock(b->mu);
+  pthread_mutex_lock(b->mu); if (b->win == w) b->win = 0; pthread_mutex_unlock(b->mu);
 }
 static void qin(void *a, void *q) {
   br *b = me(a); b->queue = q;
   if (b->looper) AInputQueue_attachLooper(q, b->looper, INPUT, 0, 0);
 }
 static void qout(void *a, void *q) {
-  br *b = me(a); AInputQueue_detachLooper(q); b->queue = 0;
+  br *b = me(a); AInputQueue_detachLooper(q); if (b->queue == q) b->queue = 0;
 }
 static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
-static void stop(void *a) { __atomic_store_n(&me(a)->up, 0, 3); }
+static void stop(void *a) { if (me(a)->a == a) __atomic_store_n(&me(a)->up, 0, 3); }
 static void destroy(void *a) {
   br *b = me(a);
+  if (b->stay) {                               /* the decks run on; an old activity's end, one taken over, is nothing */
+    if (b->a == a) {
+      pthread_mutex_lock(b->act); b->a = 0; pthread_mutex_unlock(b->act);
+      b->shown = 0; b->vh = 0; b->bare = 1;
+    }
+    return;
+  }
+  the = 0;
   for (int i = 0; i < NDECK; i++) if (b->decks[i].pid > 0) kill(b->decks[i].pid, 15), waitpid(b->decks[i].pid, 0, 0);
   for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
@@ -1035,7 +1051,93 @@ static void destroy(void *a) {
   if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
 
+/* the service's onStartCommand: its notification, or with an action the quit it carries.
+   the quit goes through the activity's end when there is one, a screen left up would come back */
+static int onstart(void *e, void *self, void *in, int flags, int id) {
+  br *b = the;
+  void *const *t = *(void *const **) e;
+  void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
+  int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+  void *(*newo)(void *, void *, void *, ...) = t[28]; void *(*cls)(void *, void *) = t[31];
+  void *(*mid)(void *, void *, char const *, char const *) = t[33]; void *(*callo)(void *, void *, void *, ...) = t[34];
+  void (*callv)(void *, void *, void *, ...) = t[61];
+  void *(*smid)(void *, void *, char const *, char const *) = t[113]; void *(*cso)(void *, void *, void *, ...) = t[114];
+  void *(*str)(void *, char const *) = t[167];
+  if (!b || push(e, 32)) return 2;             /* START_NOT_STICKY */
+  void *sc = cls(e, self), *ic = find(e, "android/content/Intent");
+  void *ni = mid(e, ic, "<init>", "(Landroid/content/Context;Ljava/lang/Class;)V");
+  if (in && callo(e, in, mid(e, ic, "getAction", "()Ljava/lang/String;"))) {
+    callv(e, self, mid(e, sc, "stopSelf", "()V"));
+    if (b->a) { void *ac = b->a->clazz; b->stay = 0; callv(e, ac, mid(e, cls(e, ac), "finishAndRemoveTask", "()V")); }
+    else {
+      for (int i = 0; i < NDECK; i++) if (b->decks[i].pid > 0) kill(b->decks[i].pid, 15);
+      _exit(0);
+    }
+  } else {
+    char const *pis = "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;";
+    char const *nb0 = "android/app/Notification$Builder";
+    void *pc = find(e, "android/app/PendingIntent");
+    void *open = newo(e, ic, ni, self, find(e, "android/app/NativeActivity"));
+    void *po = cso(e, pc, smid(e, pc, "getActivity", pis), self, 0, open, 0x04000000);   /* FLAG_IMMUTABLE */
+    void *quit = newo(e, ic, ni, self, sc);
+    callo(e, quit, mid(e, ic, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;"), str(e, "quit"));
+    void *pq = cso(e, pc, smid(e, pc, "getService", pis), self, 1, quit, 0x04000000);
+    void *cc = find(e, "android/app/NotificationChannel");
+    void *ch = newo(e, cc, mid(e, cc, "<init>", "(Ljava/lang/String;Ljava/lang/CharSequence;I)V"), str(e, "love"), str(e, b->label), 2);   /* low: no sound */
+    void *nm = callo(e, self, mid(e, sc, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;"), str(e, "notification"));
+    callv(e, nm, mid(e, cls(e, nm), "createNotificationChannel", "(Landroid/app/NotificationChannel;)V"), ch);
+    void *nc = find(e, nb0), *nb = newo(e, nc, mid(e, nc, "<init>", "(Landroid/content/Context;Ljava/lang/String;)V"), self, str(e, "love"));
+    callo(e, nb, mid(e, nc, "setSmallIcon", "(I)Landroid/app/Notification$Builder;"), 0x7f010001);   /* droid.l's ic-fg */
+    callo(e, nb, mid(e, nc, "setContentTitle", "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;"), str(e, b->label));
+    callo(e, nb, mid(e, nc, "setContentIntent", "(Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;"), po);
+    callo(e, nb, mid(e, nc, "setOngoing", "(Z)Landroid/app/Notification$Builder;"), 1);
+    callo(e, nb, mid(e, nc, "addAction", "(ILjava/lang/CharSequence;Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;"), 0, str(e, "quit"), pq);
+    void *n = callo(e, nb, mid(e, nc, "build", "()Landroid/app/Notification;"));
+    callv(e, self, mid(e, sc, "startForeground", "(ILandroid/app/Notification;)V"), 1, n);
+  }
+  clear(e); pop(e, 0);
+  return 2;
+}
+
+/* the service started, onStartCommand laid first; a class not to be had leaves the app without it */
+static void service(br *b, ANativeActivity *a) {
+  struct { char const *name, *sig; void *fn; } m = {"onStartCommand", "(Landroid/content/Intent;II)I", (void *) onstart};
+  void *e = a->env; void *const *t = *(void *const **) e;
+  void (*clear)(void *) = t[17]; int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
+  void *(*find)(void *, char const *) = t[6]; void *(*newo)(void *, void *, void *, ...) = t[28];
+  void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
+  void *(*callo)(void *, void *, void *, ...) = t[34]; void *(*str)(void *, char const *) = t[167];
+  int (*reg)(void *, void *, void const *, int) = t[215];
+  if (push(e, 16)) { clear(e); b->stay = 0; return; }
+  void *ac = a->clazz, *ld = callo(e, ac, mid(e, cls(e, ac), "getClassLoader", "()Ljava/lang/ClassLoader;"));
+  void *c = callo(e, ld, mid(e, cls(e, ld), "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"), str(e, "pics.salt.love.Service"));
+  if (c && !thrown(e) && !reg(e, c, &m, 1)) {
+    void *ic = find(e, "android/content/Intent");
+    void *i = newo(e, ic, mid(e, ic, "<init>", "(Landroid/content/Context;Ljava/lang/Class;)V"), ac, c);
+    callo(e, ac, mid(e, cls(e, ac), "startForegroundService", "(Landroid/content/Intent;)Landroid/content/ComponentName;"), i);
+  }
+  if (thrown(e)) LOG("no service"), b->stay = 0;
+  clear(e); pop(e, 0);
+  if (!b->stay) the = 0;
+}
+
+static void hook(ANativeActivity *a, br *b) {
+  a->instance = b;
+  a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
+  a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
+  a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
+  a->callbacks->onStart = start; a->callbacks->onStop = stop;
+  immersive(a);
+}
+
 void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
+  if (the) {
+    br *o = the;
+    hook(a, o);
+    pthread_mutex_lock(o->act); o->a = a; pthread_mutex_unlock(o->act);
+    ALooper_wake(o->looper);
+    return;
+  }
   br *b = mmap(0, sizeof *b, 3, 0x22, -1, 0);
   Dl_info d; dladdr((void *) ANativeActivity_onCreate, &d);
   snprintf(b->dir, sizeof b->dir, "%s", d.dli_fname);
@@ -1046,13 +1148,24 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   snprintf(b->horn, sizeof b->horn, "%s/horn", b->data);
   snprintf(b->ear, sizeof b->ear, "%s/ear", b->data);
   snprintf(b->droid, sizeof b->droid, "%s/droid", b->data);
-  b->a = a; b->d = b->decks; a->instance = b;
+  b->a = a; b->vm = a->vm; b->d = b->decks;
   for (int i = 0; i < NDECK; i++) b->decks[i].csock = b->decks[i].lsock = -1;
-  a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
-  a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
-  a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
-  a->callbacks->onStart = start; a->callbacks->onStop = stop;
-  immersive(a);
+  hook(a, b);
+  void *as = AAssetManager_open(a->assetManager, "argv", 3);
+  if (as) {
+    b->nargv = AAsset_getLength(as);
+    if (b->nargv > (long) sizeof b->argv) b->nargv = sizeof b->argv;
+    char const *s = AAsset_getBuffer(as);
+    for (long i = 0; i < b->nargv; i++) b->argv[i] = s[i];
+    AAsset_close(as);
+  }
+  if ((as = AAssetManager_open(a->assetManager, "stay", 3))) {
+    long k = AAsset_getLength(as); char const *s = AAsset_getBuffer(as);
+    if (k >= (long) sizeof b->label) k = sizeof b->label - 1;
+    for (long i = 0; i < k; i++) b->label[i] = s[i];
+    b->stay = 1; the = b;
+    AAsset_close(as);
+  }
   int lp[2]; pipe2(lp, O_CLOEXEC);             /* every love's stdout and stderr; ours open, so it never ends */
   b->logfd = lp[0]; b->logw = lp[1]; fcntl(lp[0], 4, O_NONBLOCK);   /* F_SETFL: the loop never waits on it */
   struct sockaddr_un hu = {1}; snprintf(hu.path, sizeof hu.path, "%s", b->horn);
@@ -1068,6 +1181,7 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   b->dsock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->dsock, &du, sizeof du); listen(b->dsock, 4);
   perms(a);
+  if (b->stay) service(b, a);
   lay(b); deckup(b, b->d);
   pthread_create(&b->th, 0, loop, b);
 }
