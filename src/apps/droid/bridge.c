@@ -8,15 +8,19 @@
                      'I' u8 on: the soft keyboard up, then toggled at each touch, or down
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
+                     'D': the decks asked for, as 'D' records
+                     'G' u8 id: that deck on the screen, 255 a new one
      bridge -> love  12-byte records (u8 kind, u8 a, u16 0, i32 b, i32 c):
                      'S' the window's visible part, b by c pixels, a=1 the soft keyboard is up,
                      a=2 what love drew is gone: all of it again, the size unchanged or not
                      'K' key a=down, b=android keycode, c=the character it types or 0
                      'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
                      'P' a paste's piece, a=its length, up to ten bytes from the third; a=0 ends it
+                     'D' a deck: a=its id, b=its love's pid, c=1 on the screen; a=255 ends the list
    the face takes clients in a stack, love first and then any window it starts: the top has the
    screen, the input and the keyboard, the frames of those under it are read and let go. the top
-   gone, the next has its keyboard back and an 'S' with a=2.
+   gone, the next has its keyboard back and an 'S' with a=2. a deck is one such stack; those not
+   on the screen run on, their frames let go alike, and one coming back is told the same.
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
@@ -40,7 +44,8 @@
    directory before each start, which is love's cwd and HOME. love inherits the app's own
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
    is linked under its own name and as open, a link handed on through the framework's door.
-   when love, the bottom of the stack, ends it is started again; the app ends as android ends it. */
+   when love, the bottom of a stack, ends the next deck has the screen, or with none left it is
+   started again; the app ends as android ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -102,11 +107,18 @@ void *opendir(char const *); struct dirent *readdir(void *); int closedir(void *
 enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
 enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
+/* a session: a love, the windows it started in a stack, a socket of its own so they land here */
+enum { NDECK = 8 };
+typedef struct {
+  int pid, lsock, csock, typing;
+  int under[3], utyping[3], nunder;       /* the clients csock covers, oldest first, and what each asked of the keyboard */
+} deck;
+
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
-  int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, dsock, vh, typing, shown;
+  int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, vh, shown;
   int bare;                               /* the client on top has not been told its pixels are gone */
-  int under[3], utyping[3], nunder;       /* the clients csock covers, oldest first, and what each asked of the keyboard */
+  deck decks[NDECK], *d;                  /* d is on the screen */
   int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
@@ -121,12 +133,15 @@ static int readall(int fd, void *p, size_t n) {
   while (n) { ssize_t k = read(fd, c, n); if (k <= 0) return -1; c += k; n -= (size_t) k; }
   return 0;
 }
-static void put(br *b, int kind, int a, int x, int y) {
+static void rec(int fd, int kind, int a, int x, int y) {
   unsigned char r[12] = {(unsigned char) kind, (unsigned char) a};
   int v[2] = {x, y}; char const *s = (char const *) v;
   for (int i = 0; i < 8; i++) r[4 + i] = (unsigned char) s[i];
+  if (fd >= 0) write(fd, r, 12);
+}
+static void put(br *b, int kind, int a, int x, int y) {
   pthread_mutex_lock(b->mu);
-  if (b->csock >= 0) write(b->csock, r, 12);
+  rec(b->d->csock, kind, a, x, y);
   pthread_mutex_unlock(b->mu);
 }
 
@@ -182,7 +197,7 @@ static int frame(br *b, int fd) {
   int w = h[0] | h[1] << 8, ht = h[2] | h[3] << 8, y0 = h[4] | h[5] << 8, n = h[6] | h[7] << 8;
   size_t sz = (size_t) w * (size_t) ht * 4;
   if (y0 + n > ht) return -1;
-  if (fd != b->csock) return drain(fd, (size_t) n * (size_t) w * 4);
+  if (fd != b->d->csock) return drain(fd, (size_t) n * (size_t) w * 4);
   if (w != b->fw || ht != b->fh || !b->fb) {   /* a new size: a fresh black frame, the window's paint held off */
     pthread_mutex_lock(b->mu);
     if (sz > b->fbsz) {
@@ -283,7 +298,7 @@ static void input(br *b) {
     } else {
       int ac = AMotionEvent_getAction(e) & 0xff, vh = vis(b);
       int t = ac == 0 || ac == 5 ? 0 : ac == 1 || ac == 6 || ac == 3 ? 1 : 2;
-      if (t == 0 && b->typing && !b->shown) keyboard(b, b->env, 1);
+      if (t == 0 && b->d->typing && !b->shown) keyboard(b, b->env, 1);
       if (b->ww && vh && b->fw)
         put(b, 'T', t, (int) (AMotionEvent_getX(e, 0) * (float) b->fw / (float) b->ww),
                        (int) (AMotionEvent_getY(e, 0) * (float) b->fh / (float) vh));
@@ -382,7 +397,7 @@ static void paste(br *b) {
     }
     r[rn - 12] = 'P';
     pthread_mutex_lock(b->mu);
-    if (b->csock >= 0) writeall(b->csock, r, rn);
+    if (b->d->csock >= 0) writeall(b->d->csock, r, rn);
     pthread_mutex_unlock(b->mu);
     munmap(r, rn);
   }
@@ -715,35 +730,84 @@ static void *hear(void *p) {
   return 0;
 }
 
-static int covered(br *b, int fd) {
-  for (int i = 0; i < b->nunder; i++) if (b->under[i] == fd) return i;
+static void face(br *b, deck *d, char *p, size_t n) {
+  int i = (int) (d - b->decks);
+  if (i) snprintf(p, n, "%s.%d", b->sock, i); else snprintf(p, n, "%s", b->sock);
+}
+static int covered(deck *d, int fd) {
+  for (int i = 0; i < d->nunder; i++) if (d->under[i] == fd) return i;
   return -1;
 }
+static deck *owner(br *b, int fd) {
+  for (int i = 0; i < NDECK; i++)
+    if (b->decks[i].csock == fd || covered(b->decks + i, fd) >= 0) return b->decks + i;
+  return 0;
+}
 
-/* a client gone: the one under it has the screen again. answers 0 when it was love, at the
+/* a client gone: the one under it has the top again. answers 0 when it was love, at the
    bottom, and every window it started goes with it */
-static int leave(br *b, int fd) {
-  int i = covered(b, fd), bottom = i == 0 || (i < 0 && !b->nunder), top = i < 0, typing = b->typing;
+static int leave(br *b, deck *d, int fd) {
+  int i = covered(d, fd), bottom = i == 0 || (i < 0 && !d->nunder), top = i < 0, typing = d->typing, shown = d == b->d;
   ALooper_removeFd(b->looper, fd);
   pthread_mutex_lock(b->mu);
   close(fd);
   if (bottom) {
-    for (int j = 1; j < b->nunder; j++) ALooper_removeFd(b->looper, b->under[j]), close(b->under[j]);
-    if (i == 0) ALooper_removeFd(b->looper, b->csock), close(b->csock);
-    b->nunder = 0; b->csock = -1;
+    for (int j = 1; j < d->nunder; j++) ALooper_removeFd(b->looper, d->under[j]), close(d->under[j]);
+    if (i == 0) ALooper_removeFd(b->looper, d->csock), close(d->csock);
+    d->nunder = 0; d->csock = -1;
   } else if (top) {
-    typing = b->utyping[--b->nunder]; b->csock = b->under[b->nunder]; blank(b);
+    typing = d->utyping[--d->nunder]; d->csock = d->under[d->nunder]; if (shown) blank(b);
   } else {
-    for (b->nunder--; i < b->nunder; i++) b->under[i] = b->under[i + 1], b->utyping[i] = b->utyping[i + 1];
+    for (d->nunder--; i < d->nunder; i++) d->under[i] = d->under[i + 1], d->utyping[i] = d->utyping[i + 1];
   }
   pthread_mutex_unlock(b->mu);
   if (bottom) return 0;
-  if (top) {
-    if (typing != b->typing) keyboard(b, b->env, b->typing = typing);
+  if (top && shown) {
+    if (typing != d->typing) keyboard(b, b->env, d->typing = typing);
     b->bare = 1;
     if (b->ww) sized(b);
-  }
+  } else if (top) d->typing = typing;
   return 1;
+}
+
+/* deck n on the screen, told its pixels are gone */
+static void turn(br *b, deck *n) {
+  if (n == b->d) return;
+  int was = b->d->typing;
+  pthread_mutex_lock(b->mu);
+  b->d = n; blank(b);
+  pthread_mutex_unlock(b->mu);
+  if (n->typing != was) keyboard(b, b->env, n->typing);   /* up is a toggle */
+  b->bare = 1;
+  if (b->ww) sized(b);
+}
+
+static void spawn(br *b, deck *d);
+
+/* a deck's own socket, face for the first, and its love */
+static void deckup(br *b, deck *d) {
+  char p[640];
+  face(b, d, p, sizeof p);
+  struct sockaddr_un u = {1}; snprintf(u.path, sizeof u.path, "%s", p);
+  unlink(p);
+  d->lsock = socket(1, 1 | O_CLOEXEC, 0);
+  bind(d->lsock, &u, sizeof u); listen(d->lsock, 1);
+  if (b->looper) ALooper_addFd(b->looper, d->lsock, LISTEN, 1, 0, d);
+  spawn(b, d);
+}
+
+/* a deck's love ended: the next has the screen and this one goes, or it was the last and starts
+   again, as a page boots its line */
+static void over(br *b, deck *d) {
+  if (d->pid > 0) waitpid(d->pid, 0, 0);
+  d->pid = 0;
+  deck *n = 0;
+  for (int i = 0; i < NDECK && !n; i++) if (b->decks[i].pid > 0) n = b->decks + i;
+  if (!n) { spawn(b, d); return; }
+  char p[640];
+  ALooper_removeFd(b->looper, d->lsock); close(d->lsock); d->lsock = -1;
+  face(b, d, p, sizeof p); unlink(p);
+  if (d == b->d) turn(b, n);
 }
 
 static void *loop(void *p) {
@@ -752,7 +816,7 @@ static void *loop(void *p) {
   int (*attach)(void *, void **, void *) = vt[4]; int (*detach)(void *) = vt[5];
   if (attach(b->a->vm, &b->env, 0)) b->env = 0;
   b->looper = ALooper_prepare(1);
-  ALooper_addFd(b->looper, b->lsock, LISTEN, 1, 0, 0);
+  ALooper_addFd(b->looper, b->d->lsock, LISTEN, 1, 0, b->d);
   ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
   ALooper_addFd(b->looper, b->hsock, HORN, 1, 0, 0);
   ALooper_addFd(b->looper, b->esock, EAR, 1, 0, 0);
@@ -760,35 +824,41 @@ static void *loop(void *p) {
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
-    int id = ALooper_pollOnce(b->typing || b->shown ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
-    if (b->typing || b->shown) insets(b);
+    int id = ALooper_pollOnce(b->d->typing || b->shown ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
+    if (b->d->typing || b->shown) insets(b);
     if (id == LISTEN) {
-      int c = accept4(b->lsock, 0, 0, O_CLOEXEC);
-      if (c >= 0 && (b->csock < 0 || b->nunder < 3)) {
+      deck *l = d;
+      int c = accept4(l->lsock, 0, 0, O_CLOEXEC);
+      if (c >= 0 && (l->csock < 0 || l->nunder < 3)) {
         pthread_mutex_lock(b->mu);
-        if (b->csock >= 0) b->under[b->nunder] = b->csock, b->utyping[b->nunder++] = b->typing;
-        b->csock = c; blank(b);
+        if (l->csock >= 0) l->under[l->nunder] = l->csock, l->utyping[l->nunder++] = l->typing;
+        l->csock = c; if (l == b->d) blank(b);
         pthread_mutex_unlock(b->mu);
         ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
-        if (b->ww) sized(b);
+        if (l == b->d && b->ww) sized(b);
+        else if (b->ww) rec(c, 'S', b->shown, b->ww, vis(b));
       } else if (c >= 0) close(c);
-    } else if (id == CONN && (fd == b->csock || covered(b, fd) >= 0)) {   /* a client closed in this batch is passed over */
+    } else if (id == CONN && owner(b, fd)) {   /* a client closed in this batch is passed over */
+      deck *o = owner(b, fd);
       unsigned char k, on;
       int bad = readall(fd, &k, 1);
       if (!bad && k == 'I') {
         bad = readall(fd, &on, 1);
-        if (!bad && fd == b->csock) keyboard(b, b->env, b->typing = on);
-        else if (!bad) b->utyping[covered(b, fd)] = on;
+        if (!bad && fd == o->csock) { if (o == b->d && on != o->typing) keyboard(b, b->env, on); o->typing = on; }   /* up is a toggle */
+        else if (!bad) o->utyping[covered(o, fd)] = on;
       } else if (!bad && k == 'C') bad = copy(b, fd);
-      else if (!bad && k == 'V') { if (fd == b->csock) paste(b); }
-      else if (!bad) bad = k != 'F' || frame(b, fd);
-      if (bad && !leave(b, fd)) {                 /* love ended: it starts again, as a page boots its line */
-        if (b->pid > 0) waitpid(b->pid, 0, 0);
-        if (b->logfd >= 0) ALooper_removeFd(b->looper, b->logfd), close(b->logfd);
-        b->nline = 0;
-        spawn(b);
-        ALooper_addFd(b->looper, b->logfd, LOG, 1, 0, 0);
+      else if (!bad && k == 'V') { if (fd == b->d->csock) paste(b); }
+      else if (!bad && k == 'D') {
+        for (int i = 0; i < NDECK; i++) if (b->decks[i].pid > 0) rec(fd, 'D', i, b->decks[i].pid, b->decks + i == b->d);
+        rec(fd, 'D', 255, 0, 0);
+      } else if (!bad && k == 'G') {
+        bad = readall(fd, &on, 1);
+        if (!bad && on == 255) {
+          for (int i = 0; i < NDECK; i++) if (b->decks[i].pid <= 0) { b->decks[i].typing = b->d->typing; deckup(b, b->decks + i); turn(b, b->decks + i); break; }
+        } else if (!bad && on < NDECK && b->decks[on].pid > 0) turn(b, b->decks + on);
       }
+      else if (!bad) bad = k != 'F' || frame(b, fd);
+      if (bad && !leave(b, o, fd)) over(b, o);
     } else if (id == HORN) {
       long t; int c = accept4(b->hsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && !pthread_create(&t, 0, play, (void *) (long) c)) pthread_detach(t);
@@ -820,8 +890,8 @@ static void *loop(void *p) {
   return 0;
 }
 
-static void spawn(br *b) {
-  char *av[32], exe[600], *ev[64], home[600], tmp[600], face[640], horn[640], ear[640], droid[640], bin[620], path[1400];
+static void spawn(br *b, deck *d) {
+  char *av[32], exe[600], *ev[64], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
   void *as = AAssetManager_open(b->a->assetManager, "argv", 3);
   char const *s = as ? AAsset_getBuffer(as) : 0; long n = as ? AAsset_getLength(as) : 0;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
@@ -829,19 +899,19 @@ static void spawn(br *b) {
   for (long i = 0; i < n && k < 31; ) { av[k++] = (char *) s + i; while (i < n && s[i]) i++; i++; }
   av[k] = 0;
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
-  snprintf(face, sizeof face, "LOVE_FACE=%s", b->sock); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
+  face(b, d, sk, sizeof sk); snprintf(fc, sizeof fc, "LOVE_FACE=%s", sk); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
-  void *d = opendir(bin);                      /* DATA/bin is the bridge's: every link goes, then names[]'s */
-  for (struct dirent *de; d && (de = readdir(d)); )
+  void *bd = opendir(bin);                     /* DATA/bin is the bridge's: every link goes, then names[]'s */
+  for (struct dirent *de; bd && (de = readdir(bd)); )
     if (de->type == 10) snprintf(path, sizeof path, "%s/%s", bin, de->name), unlink(path);   /* DT_LNK */
-  if (d) closedir(d);
+  if (bd) closedir(bd);
   static char const *const names[] = { "love", "open" };
   for (unsigned i = 0; i < sizeof names / sizeof *names; i++) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = face; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;
   int e = 7;                                   /* then the app's own, but for the ones set here */
   static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
@@ -853,10 +923,8 @@ static void spawn(br *b) {
       if (!*o) mine = 1; }
     if (!mine) ev[e++] = *v; }
   ev[e] = 0;
-  int p[2]; pipe2(p, O_CLOEXEC);
-  b->pid = fork();
-  if (!b->pid) { dup2(p[1], 1); dup2(p[1], 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
-  close(p[1]); b->logfd = p[0]; fcntl(p[0], 4, O_NONBLOCK);     /* F_SETFL: the loop never waits on it */
+  d->pid = fork();
+  if (!d->pid) { dup2(b->logw, 1); dup2(b->logw, 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
   if (as) AAsset_close(as);
 }
 
@@ -925,7 +993,7 @@ static void immersive(ANativeActivity *a) {
 static void focus(void *a, int has) {
   br *b = me(a);
   if (has) immersive(a);
-  if (has && b->typing && !b->shown) keyboard(b, ((ANativeActivity *) a)->env, 1);   /* an ask before focus is lost */
+  if (has && b->d->typing && !b->shown) keyboard(b, ((ANativeActivity *) a)->env, 1);   /* an ask before focus is lost */
 }
 static void created(void *a, void *w) {
   br *b = me(a);
@@ -952,13 +1020,17 @@ static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
 static void stop(void *a) { __atomic_store_n(&me(a)->up, 0, 3); }
 static void destroy(void *a) {
   br *b = me(a);
-  if (b->pid > 0) kill(b->pid, 15), waitpid(b->pid, 0, 0);
+  for (int i = 0; i < NDECK; i++) if (b->decks[i].pid > 0) kill(b->decks[i].pid, 15), waitpid(b->decks[i].pid, 0, 0);
   for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
-  for (int i = 0; i < b->nunder; i++) close(b->under[i]);
-  if (b->csock >= 0) close(b->csock);
-  close(b->lsock); close(b->hsock); close(b->esock); close(b->dsock); close(b->logfd);
-  unlink(b->sock); unlink(b->horn); unlink(b->ear); unlink(b->droid);
+  for (int i = 0; i < NDECK; i++) {
+    deck *d = b->decks + i; char p[640];
+    for (int j = 0; j < d->nunder; j++) close(d->under[j]);
+    if (d->csock >= 0) close(d->csock);
+    if (d->lsock >= 0) close(d->lsock), face(b, d, p, sizeof p), unlink(p);
+  }
+  close(b->hsock); close(b->esock); close(b->dsock); close(b->logfd); close(b->logw);
+  unlink(b->horn); unlink(b->ear); unlink(b->droid);
   if (b->fb) munmap(b->fb, b->fbsz);
   if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
@@ -974,16 +1046,15 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   snprintf(b->horn, sizeof b->horn, "%s/horn", b->data);
   snprintf(b->ear, sizeof b->ear, "%s/ear", b->data);
   snprintf(b->droid, sizeof b->droid, "%s/droid", b->data);
-  b->a = a; b->csock = -1; a->instance = b;
+  b->a = a; b->d = b->decks; a->instance = b;
+  for (int i = 0; i < NDECK; i++) b->decks[i].csock = b->decks[i].lsock = -1;
   a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
   a->callbacks->onStart = start; a->callbacks->onStop = stop;
   immersive(a);
-  struct sockaddr_un u = {1}; snprintf(u.path, sizeof u.path, "%s", b->sock);
-  unlink(b->sock);
-  b->lsock = socket(1, 1 | O_CLOEXEC, 0);
-  bind(b->lsock, &u, sizeof u); listen(b->lsock, 1);
+  int lp[2]; pipe2(lp, O_CLOEXEC);             /* every love's stdout and stderr; ours open, so it never ends */
+  b->logfd = lp[0]; b->logw = lp[1]; fcntl(lp[0], 4, O_NONBLOCK);   /* F_SETFL: the loop never waits on it */
   struct sockaddr_un hu = {1}; snprintf(hu.path, sizeof hu.path, "%s", b->horn);
   unlink(b->horn);
   b->hsock = socket(1, 1 | O_CLOEXEC, 0);
@@ -997,6 +1068,6 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   b->dsock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->dsock, &du, sizeof du); listen(b->dsock, 4);
   perms(a);
-  lay(b); spawn(b);
+  lay(b); deckup(b, b->d);
   pthread_create(&b->th, 0, loop, b);
 }
