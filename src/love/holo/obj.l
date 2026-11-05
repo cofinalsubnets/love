@@ -241,7 +241,7 @@
        (bakeabs bytes rs)
         (: (go rs bs) (!(two? rs) ? bs
                          (<rs @ r
-                            (go >rs (? (<>r == 'abs32) (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))
+                            (go >rs (? (<>r == 'abs32 || <>r == 'abs32d) (a32loc <>>r <>>>r @ sl (o-put32 bs <r <>sl))
                                        (<>r == 'abs16) (a32loc <>>r <>>>r @ sl (o-putbs bs <r (le16 <>sl)))
                                        (<>r == 'abs8) (a32loc <>>r <>>>r @ sl (o-putbs bs <r [(<>sl & 255)]))
                                        bs))))
@@ -309,7 +309,7 @@
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
                'bcc (o-rel32 off (fnsym lbl) r-thm-jump19)  ; a Bcc.W into another section
-               'abs32 (a32loc lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
+               ('abs32 || 'abs32d) (a32loc lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
                'abs16 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-16))
                'abs8 (a32loc lbl aux @ sl (o-rel32 off <sl r-386-8))
                ('movw16 || 'movt16)
@@ -753,7 +753,7 @@
                  ; aux is the constant byte offset of a &arr[i] / &s.field
                  'abs64 (o-rela off si rabs (sa + aux))
                  'abs32 (o-rela off si (a64 ? ra-abs32 r-32) (sa + aux))
-                 'abs32s (o-rela off si r-32s (sa + aux))
+                 ('abs32s || 'abs32d) (o-rela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
                  'abs16 (o-rela off si r-16 (sa + aux))
                  'abs8 (o-rela off si r-8 (sa + aux))
                  ; an 8-byte word measured from its own start
