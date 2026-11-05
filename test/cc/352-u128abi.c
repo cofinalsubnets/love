@@ -9,7 +9,7 @@ __attribute__((noinline)) u ret(void) { return ((u)0x0123456789abcdefULL << 64) 
 __attribute__((noinline)) s neg(s a) { return -a; }
 __attribute__((noinline)) u cond(int c, u a, unsigned long long b) { return c ? a : b; }
 struct S { char c; u v; short t; };
-__attribute__((noinline)) u fld(struct S *p) { p->v += 5; u o = p->v; p->v = o + 1; return o; }
+__attribute__((noinline)) u fld(struct S *p) { p->v += 5; return p->v++ ; }
 u gl = 7; s gs = -9;
 int main(void) {
   u a = ret(), b = (u)0xffffffffffffffffULL + 3;

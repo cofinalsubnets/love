@@ -1420,6 +1420,8 @@
             ((_ . _) . _) (loitems g env s)
             ('nop . _) ()
             ('tdef . _) ()
+            ; the canary at fp-16, the frame keeps its cell; the blob puts back what it borrows
+            ('ssp k) [['fix () () (sspblob g k)]]
             ['expr e] (lox g env e @ [_ _ fs] fs 'bad)
             ['ret] (peep g 'epi epi)
             ; clay's (ret e PRE), a musttail: its call marked for the sibcall that must jump it
@@ -1740,7 +1742,7 @@
        (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
-            !(g 'abad || g 'sspf) &&
+            !(g 'abad) &&
             ; -mstrict-align's chunked members are the old path's
             !(sal? g) &&
             ; past SysV and AAPCS64 a pair takes the old path
@@ -1815,7 +1817,7 @@
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
                  body (lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi))))))
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
-                           (g 'abad) (g 'sspf)], 'bad))
+                           (g 'abad)], 'bad))
 
    ; a variadic fn: SysV's 176-byte save area, gp at +0 step 8, xmm at +48 step 16; AAPCS64's 192,
    ; x0-x7 then q0-q7 at +64
