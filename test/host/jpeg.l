@@ -219,4 +219,12 @@ for n in ('cmpil', 'cmyk', 'ycck'):
    _ (test (jpeg-pixels (fake + snip real 2 #real) 1 = 4))
    0)
 
+; the limit is 2^28 pixels: one past it is refused, and a picture past 2^24 reads back
+(: rgba (string (cask (4 * 4097 * 4097)))
+   j (jpeg-encode 4097 4097 rgba 50)
+   _ (test (jpeg-pixels "\xff\xd8\xff\xc0\0\x0b\x08\x40\x01\x40\x01\x01\x01\x11\0" 1 = 5)
+           (jpeg-size j = [4097 4097])
+           (#(jpeg-pixels j 1) = #rgba))
+   0)
+
 (test_fin (), puts "jpeg: ok", putc 10, 0)

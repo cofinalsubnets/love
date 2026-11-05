@@ -4,7 +4,7 @@
 // (jpeg-pixels s o) -> the rgba of a baseline or progressive jpeg, grey, ycbcr (rgb by
 // adobe's word), or cmyk (ycck by adobe's), any sampling, laid upright by exif orientation o
 // (1..8) | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't read (arithmetic,
-// lossless, 12-bit), 4 a bad table or scan, 5 past 2^24 pixels
+// lossless, 12-bit), 4 a bad table or scan, 5 past 2^28 pixels
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>
@@ -381,7 +381,7 @@ static int jd_sof(struct jd *d, const uint8_t *p, int n, int m) {
  d->h = (int) ld16be(p + 1), d->w = (int) ld16be(p + 3), d->nc = p[5], d->prog = m == 0xc2;
  if (!d->h || !d->w || (d->nc != 1 && d->nc != 3 && d->nc != 4)) return 3;
  if (n < 6 + 3 * d->nc) return 4;
- if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 24) return 5;
+ if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 28) return 5;
  d->hmax = d->vmax = 1;
  for (int i = 0; i < d->nc; i++) {
   struct jd_comp *c = &d->c[i];
