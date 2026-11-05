@@ -650,7 +650,7 @@
              'bad 'bad
              ty (lomk g @ t ['ulong t [['li t (tsz g ty)]]]))
          ; gcc's &&L
-         ['laddr nm] (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]])
+         ['laddr nm] (wasm? g ? (lono g e) (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]]))
          ['flo v] (lomkf g @ w ['double w (lobits g w (fbits v))])
          ['str s]
           (nlab g ".S" @ lbl
@@ -921,7 +921,7 @@
                                             ['sub u u t] ['lea 'sp u 0] ['lea d 'sp 0]]])))))
           (elem nm '("__builtin_return_address" "__builtin_frame_address"))
            ; riscv's saved ra rides a padded push, and its saved s0 is no caller's base
-           (as @ ([['num k]] && 0 <= k && !(rv64? g && 0 < k))
+           (as @ ([['num k]] && 0 <= k && !(rv64? g && 0 < k) && !(wasm? g && nm = "__builtin_return_address"))
                   (lomk g @ d
                      (pin g 'fesc 1, pin g 'fpin 1,
                       ['(ptr void) d (['lean d 'r4 0] . map (_ \ ['ld d d 0]) ^k +
@@ -1525,7 +1525,7 @@
    ; default -> forms | ()
    (lojt g r tab ks dl)
     (: n #ks lo (two? ks ? <ks 0) span (two? ks ? (ks (n - 1) - lo + 1) 0)
-       (? (n < 6 || 4096 < span || span > 3 * n || two? (tab 'rng) || abl? g 'jtab || njt? g || ilp32? g || !(fits32 lo)) ()
+       (? (n < 6 || 4096 < span || span > 3 * n || two? (tab 'rng) || abl? g 'jtab || njt? g || ilp32? g || wasm? g || !(fits32 lo)) ()
           (nlab g ".J" @ tl (lomk g @ i (lomk g @ t
              (: labs (foldl (l \ k \ elem (tab k) l ? l (tab k . l)) [dl] ks)
                 (pin g 'jtabs ([tl (catall (map (j \ [['fix 4 'rel32 (peep tab (lo + j) dl) 0]]) ^span))] . g 'jtabs),
