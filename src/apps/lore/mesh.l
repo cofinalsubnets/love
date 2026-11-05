@@ -326,7 +326,7 @@
  (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
  ; --- a level's screen: 'kitty 1 kitty's pixels, 'win a window, else half blocks ---
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
- ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across.
+ ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty's fits kitty-w each way.
  ; a window's picture is 'pic-w by 'pic-h, the window over 'scale (1 2 4 or 8, else 2): each
  ; of its pixels 'scale of the window's each way
  kitty-w 640
@@ -334,7 +334,7 @@
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (st 'win)
    wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
-         'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // w // s)) 1)))
+         'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // max w h // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
  (mesh-dims st) (: k (peep st 'kp 1) (tablet? (st 'win) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
  ; ..a frame f: kitty alternates ids 7 and 8 in one synchronised update, the old taken down

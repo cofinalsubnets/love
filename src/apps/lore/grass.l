@@ -401,8 +401,8 @@
  ; ..lk the look: the title and the opening's rows, the frame a sign stands over, and the
  ; paint a tick says -- the flat field's, or a sequel's
  grass-look {'ttl open-ttl 'rows open-rows 'frame grass-frame 'paint grass-paint}
- ; a phone's keyboard takes a moment to go, and the screen grows when it has
- (settled a n) (rest 500, ttysize 7 19 @ b (b = a || n < 1 ? b (settled b (n - 1))))
+ ; a phone takes a moment to turn and its keyboard to go, and the screen is sized when they have
+ (settled a n) (rest 700, ttysize 7 19 @ b (b = a || n < 1 ? b (settled b (n - 1))))
  (grass-week lk ls) (: ws (ttysize 7 19 @ w (string? (getenv "LOVE_FACE") ? (settled w 3) w))
    r (<ws - 1) c <>ws
    g (grass-new r c (wheel (clock 0)))
@@ -442,7 +442,8 @@
     g))
  ; the screen raised and put back here, whatever way the week ends. the mouse, not rove's
  ; taps: a press's release breaks key-drain's repeat, so two quick taps are two steps
- (grass-run lk ls) (: g (ttytake ['mouse 'nokeys], mind (_ \ grass-week lk ls) () (_ \ ttygive ['mouse 'nokeys]))
+ (grass-run lk ls) (: g ((cite 'droid 'droid-side) 1, ttytake ['mouse 'nokeys],
+                          mind (_ \ grass-week lk ls) () (_ \ (ttygive ['mouse 'nokeys], (cite 'droid 'droid-side) 0)))
                   (puts (grass-final g + "\n"), 0))
  grass-usage "usage: love play grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run grass-look score)

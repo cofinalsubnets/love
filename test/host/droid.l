@@ -212,6 +212,16 @@
  (dw-ev7 = [['size 540 304]]) (dw-rh7 = [70 28 2 144 1 48 1 96 0])
  (dw-i8 = [73 0]) (dw-ev8 = [['size 540 450]])
  (dw-ev9 = ()) (dw-ev10 = [['size 540 450]]) ([540 450] = window-size dw-w))
+;; thumbs: a second finger is nothing to a button's window, each its own record once asked for;
+;; back is esc's place
+(: _ (say dc (dw-rec 84 4 30 40 + dw-rec 75 1 4 0), flush dc)
+   _ (rest 50)
+   ev0 (window-events dw-w)
+   on (window-thumbs dw-w)
+   _ (say dc (dw-rec 84 0 10 20 + dw-rec 84 6 30 40 + dw-rec 84 5 30 41), flush dc)
+   _ (rest 50)
+   ev (window-events dw-w)
+   (test (ev0 = [['down 1]]) (on = 1) (ev = [['finger 0 0 10 20] ['finger 1 2 30 40] ['finger 1 1 30 41]])))
 (: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 ; the framework's door: a fake bridge answers each op by its letter and keeps the records;

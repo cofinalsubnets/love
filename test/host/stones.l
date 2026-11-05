@@ -181,5 +181,15 @@
  (test (z1 > z0) (mag (x1 - x0) < 1e-9) (x2 > x1) (mag (z2 - z1) < 1e-9)
        (mag (th - 0.1) < 1e-9) (mag (ph - 0.05) < 1e-9) (sw 'th = th) (sw 'ph = ph)))
 
+;; thumbs: a tap is space, or the choice it lands on; a tall terminal's kitty picture fits 640 each way
+(: st (at 12.0 7) t (menu-top st)
+   _ (pin st 'dlg 0)
+   tap1 (stones-tap st 0 (16 * (t + 1) + 3)) tap5 (stones-tap st 0 (16 * (t + 5))) off (stones-tap st 0 (16 * t))
+   _ (pin st 'dlg ())
+   tall ((stones-size (pins st 'kitty 1 'scale 2) 45 47) 'kp)
+   wide ((stones-size (pins st 'kitty 1 'scale 2) 80 24) 'kp)
+   (test (stones-tap st 0 0 = [32]) (tap1 = [49]) (tap5 = [53]) (off = ())
+         (tall = 3) (wide = 4)))
+
 (test_fin ())
 (puts "stones: ok\n")

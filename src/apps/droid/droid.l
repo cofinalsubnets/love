@@ -58,6 +58,10 @@
    (jni-sget s c nm ty) (jni-op s ("f" + show c + string 0 + nm + string 0 + ty))
    (jni-text s h) (jni-op s ("t" + show h))
    (jni-drop s h) (charm? h ? (jni-op s ("d" + show h)) 0)
+   ; the app held sideways, or as the phone likes; nothing off a phone
+   (droid-side on)
+    (jni-open 0 @ s
+       (port? s ? (: a (jni-act s) (charm? a ? (jni-call s a "setRequestedOrientation" "(I)V" [(on ? 6 -1)])), close s)))
    ; a uri to what views it, an ACTION_VIEW intent the activity starts: 0, or the failed step's answer
    (droid-view s u)
     (: (on r k) (two? r ? r (k r))

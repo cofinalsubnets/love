@@ -3,7 +3,7 @@
 ; the land is triangles (mesh.l) built once from the shapes whose distance field the player
 ; walks against, relit as the sun moves. stones-new, stones-step and stones-frame are pure;
 ; only stones-walk and stones-run touch the tty.
-(module (stones stones-run stones-walk stones-main stones-new stones-size stones-detail stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
+(module (stones stones-run stones-walk stones-main stones-new stones-tap menu-top stones-size stones-detail stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow '(rove cli))
@@ -23,10 +23,12 @@
  reach 2.2                                ; how near the altar a kneel goes to it
  dlg-pause 1.0                            ; seconds after an act before the choices come back
  help-t 12.0                              ; seconds the keys are named at the start
+ thumb-text "left thumb walks  ·  right thumb looks  ·  tap interacts  ·  back leaves"
  help-text "h/j/k/l move  ·  u/n look up/down  ·  space interacts  ·  ? keys"
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
  ; ..the stones' own keys, over view's
+ (help-of st) (st 'win && string? (getenv "LOVE_FACE") ? thumb-text help-text)
  stones-binds {93 'more 91 'less 32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait
                119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
  picks ['breathe 'weep 'bleed 'beg 'wait]                ; acts', as actions
@@ -389,9 +391,10 @@
  (stones-sky st v e lt k w h) (: sky (sky-of st e lt k)
    all (iota (w * h)) B (all * 0 - 1)
    [(mesh-haze v lt (st 'wx) (st 'sim)) (two? sky ? (<>sky v B -1) (pin B all (sky v all)))])
+ (menu-top st) (: r (st 'h // 2) (max 0 (r - r // 3 - (#acts + 3) // 2)))
  (stones-frame st) (: w (st 'w) h (st 'h) k (peep st 'kp 1) f0 (stones-pens st) kit (st 'kitty)
    ; ..the choices centred a third of the way up the screen
-   dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (max 0 (r - r // 3 - (bh + 1) // 2)) c0 (max 0 ((w - bw) // 2))
+   dl (charm? (st 'dlg)) r (h // 2) bw 22 bh (#acts + 2) r0 (menu-top st) c0 (max 0 ((w - bw) // 2))
    hp (st 'mt < help-t && !dl)
    ; ..the frame the choices are put away, their cells blanked once: a terminal keeping
    ; text and picture in one cell would lose the picture there every frame
@@ -422,7 +425,7 @@
    bg (pen [22 17 14 233]) hi (pen [244 234 216 230]) lo (pen [156 144 128 245]) fg (pen [196 184 166 250])
    (line j) (: i (j - 1) (0 < j && j < bh - 1 ? ((i = c ? " › " "   ") + show (i + 1) + "  " + acts i) ""))
    (? (charm? c) (foldl (\ t j (pin t (r0 + j) [c0 (view-cells (pad (line j) bw " ")) (j - 1 = c ? hi lo) bg])) {} ^bh)
-      (st 'mt < help-t) {(r - 1) [0 (view-cells (pad (pad "" (max 0 ((w - vlen help-text) // 2)) " " + help-text) w " ")) fg bg]}
+      (st 'mt < help-t) (help-of st @ t {(r - 1) [0 (view-cells (pad (pad "" (max 0 ((w - vlen t) // 2)) " " + t) w " ")) fg bg]})
       {}))
  ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
  ; the choices; under kitty, blanked a while after
@@ -603,6 +606,7 @@
                                ; ..the land built and lit before the first frame, which the song's
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
+               'stick [119 115 97 100] 'tap stones-tap
                'size stones-size 'frame stones-frame 'key stones-step 'look stones-look
                'binds (view-bind view-binds stones-binds) 'listed (view-listed ['strafe-left 'strafe-right 'kneel 'finer 'coarser 'more 'less])
                'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
@@ -614,8 +618,11 @@
                'held (st \ !(charm? (st 'dlg)))
                ; ..to apartment's music box and its drone
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
- ; ..and kitty's picture taken down after, where it was put up
- (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
+ ; ..a tap: a choice where the choices are up, else what space does
+ (stones-tap st x y) (? (charm? (st 'dlg)) (y // 16 - menu-top st - 1 @ i (0 <= i < #acts ? [(49 + i)] ())) [32])
+ ; ..and kitty's picture taken down after, where it was put up; held sideways on a phone
+ (stones-run o) ((cite 'droid 'droid-side) 1,
+                 mind (_ \ view-stage o stones-walk (_ \ (say out mesh-gone, flush out))) () (_ \ (cite 'droid 'droid-side) 0))
  stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (w a s d or k j step and strafe, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)

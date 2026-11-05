@@ -14,7 +14,7 @@
                      'S' the window's visible part, b by c pixels, a=1 the soft keyboard is up,
                      a=2 what love drew is gone: all of it again, the size unchanged or not
                      'K' key a=down, b=android keycode, c=the character it types or 0
-                     'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
+                     'T' touch a=action (0 down 1 up 2 move) + 4 * the finger, b c in frame pixels
                      'P' a paste's piece, a=its length, up to ten bytes from the third; a=0 ends it
                      'D' a deck: a=its id, b=its love's pid, c=1 on the screen; a=255 ends the list
    the face takes clients in a stack, love first and then any window it starts: the top has the
@@ -80,6 +80,7 @@ int AInputQueue_getEvent(void *, void **); int AInputQueue_preDispatchEvent(void
 void AInputQueue_finishEvent(void *, void *, int);
 int AInputEvent_getType(void const *); int AInputEvent_getDeviceId(void const *); int AKeyEvent_getMetaState(void const *); int AKeyEvent_getAction(void const *); int AKeyEvent_getKeyCode(void const *);
 int AMotionEvent_getAction(void const *); float AMotionEvent_getX(void const *, size_t); float AMotionEvent_getY(void const *, size_t);
+size_t AMotionEvent_getPointerCount(void const *); int AMotionEvent_getPointerId(void const *, size_t);
 void *AAssetManager_open(void *, char const *, int); void const *AAsset_getBuffer(void *);
 long AAsset_getLength(void *); void AAsset_close(void *);
 void *AAssetManager_openDir(void *, char const *); char const *AAssetDir_getNextFileName(void *); void AAssetDir_close(void *);
@@ -299,15 +300,16 @@ static void input(br *b) {
     int handled = 1;
     if (AInputEvent_getType(e) == 1) {
       int k = AKeyEvent_getKeyCode(e), down = AKeyEvent_getAction(e) == 0;
-      put(b, 'K', down, k, down ? typed(b, e) : 0);
-      handled = k != 4;                   /* back still backs out */
+      handled = k != 4 || b->d->nunder;   /* back backs out, or a window over a love takes it */
+      if (handled) put(b, 'K', down, k, down ? typed(b, e) : 0);
     } else {
-      int ac = AMotionEvent_getAction(e) & 0xff, vh = vis(b);
-      int t = ac == 0 || ac == 5 ? 0 : ac == 1 || ac == 6 || ac == 3 ? 1 : 2;
+      int raw = AMotionEvent_getAction(e), ac = raw & 0xff, ix = raw >> 8 & 0xff, vh = vis(b);
+      int t = ac == 0 || ac == 5 ? 0 : ac == 1 || ac == 6 || ac == 3 ? 1 : 2, one = ac != 2 && ac != 3;   /* a move and a cancel are every finger's */
       if (t == 0 && b->d->typing && !b->shown) keyboard(b, b->env, 1);
-      if (b->ww && vh && b->fw)
-        put(b, 'T', t, (int) (AMotionEvent_getX(e, 0) * (float) b->fw / (float) b->ww),
-                       (int) (AMotionEvent_getY(e, 0) * (float) b->fh / (float) vh));
+      for (size_t i = 0; b->ww && vh && b->fw && i < AMotionEvent_getPointerCount(e); i++)
+        if (!one || (int) i == ix)
+          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) (AMotionEvent_getX(e, i) * (float) b->fw / (float) b->ww),
+                                                                 (int) (AMotionEvent_getY(e, i) * (float) b->fh / (float) vh));
     }
     AInputQueue_finishEvent(b->queue, e, handled);
   }
@@ -1123,7 +1125,7 @@ static void service(br *b, ANativeActivity *a) {
 
 static void hook(ANativeActivity *a, br *b) {
   a->instance = b;
-  a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowDestroyed = gone;
+  a->callbacks->onNativeWindowCreated = created; a->callbacks->onNativeWindowResized = created; a->callbacks->onNativeWindowDestroyed = gone;
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
   a->callbacks->onStart = start; a->callbacks->onStop = stop;

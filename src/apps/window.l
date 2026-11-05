@@ -1,7 +1,6 @@
 ; src/apps/window.l -- a window: pixels out, input events in, the same face on X and on inle.
 ;
 ;   (window-here? _)          whether there is a screen to open one on
-;   (window-whole? _)         whether a window there is the whole screen (inle)
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
 ;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
@@ -19,6 +18,9 @@
 ;   (window-close win)
 ;   (window-own win sel text) text held as the selection sel, 'primary or 'clipboard
 ;   (window-ask win sel)      the selection sel asked for: its text comes as [paste s]
+;   (window-thumbs win)       on a phone, the keyboard down and each finger's touch as ['finger
+;                             id action x y] for the button's records, action 0 down 1 up 2 move: 1;
+;                             elsewhere 0
 ;   (window-typing win on)    a phone's soft keyboard up or down, and a row of the keys it lacks
 ;   (window-wets sc)          the rows of quay screen sc dirty since the last asking (wet clears)
 ;
@@ -29,8 +31,8 @@
 ; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
-(module '(window window-here? window-whole? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
-          window-own window-ask window-typing window-wets)
+(module '(window window-here? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
+          window-own window-ask window-typing window-thumbs window-wets)
 (borrow '(xwire posix bytes))
 (:
    (inle? _) (elem 'love-os (names ()) ? (elem (ev 'love-os) '(inle wasm)) 0)
@@ -69,8 +71,8 @@
                 (zip (map (+ 29) ^26) [30 48 46 32 18 33 34 35 23 36 37 38 50 49 24 25 16 19 31 20 22 47 17 45 21 44]
                  + zip (map (+ 7) ^10) [11 2 3 4 5 6 7 8 9 10]
                  + zip (map (+ 131) ^12) [59 60 61 62 63 64 65 66 67 68 87 88]
-                 + zip [66 67 61 62 111 112 19 20 21 22 122 123 92 93 124 59 60 113 114 57 58 115 55 56 68 69 70 71 72 73 74 75 76]
-                       [28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
+                 + zip [4 66 67 61 62 111 112 19 20 21 22 122 123 92 93 124 59 60 113 114 57 58 115 55 56 68 69 70 71 72 73 74 75 76]
+                       [1 28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
    ; the keys a phone's keyboard lacks, a row under the paper while it types: [label key
    ; text]. ctrl and alt hold for the next key, and ≡ turns the row to the bridge's decks
    droid-row [["esc" 1 ""] ["|" 43 "|"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""] ["paste" 'paste ""] ["≡" 'decks ""]
@@ -165,7 +167,9 @@
                       (? !(charm? p) (0 < #t ? [['text t]] ())
                          (a && two? (win 'held)) (droid-key win p t)
                          ([[(a ? 'down 'up) p]] + (0 < #t ? [['text t]] ()))))
-          (k = 84) (? (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
+          (k = 84) (? (peep win 'thumbs 0) [['finger (a >> 2) (a & 3) b c]]
+                      (3 < a) ()
+                      (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
                       (a = 0) (droid-tap win b (c - win 'h))
                       ())
           ()))
@@ -186,7 +190,6 @@
        (go more))
 
    (window-here? _) (inle? 0 || 0 < #(getenv "DISPLAY") || string? (getenv "LOVE_FACE"))
-   (window-whole? _) (inle? 0)
    (window-open w h title) (? (inle? 0) (inle-open-win ())
                               (string? (getenv "LOVE_FACE")) (droid-open-win ())
                               (x-open-win w h title))
@@ -314,6 +317,7 @@
    (window-close win) (win 'how = 'x || win 'how = 'droid ? (close (win 's)) (kpaper 0))
    ; on a phone the keyboard comes with the row, and the paper gives it room; put away by
    ; hand, the bridge's next size takes the row with it
+   (window-thumbs win) (win 'how = 'droid ? (pin win 'thumbs 1, window-typing win 0, 1) 0)
    (window-typing win on)
     (win 'how = 'droid ? (: s (win 's) _ (say s ("I" + wrle (on ? 1 0) 1), flush s)
                             (pins win 'typing on 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))
