@@ -139,6 +139,12 @@
            'asn 25 'rmw 25 'comma 20
            'un 90 'deref (cidx? e ? 100 90) 'addr 90
            'cast 90 'clit 90 100))
+   ; an operand of a shift or bitwise op keeps its parens where -Wparentheses asks for them
+   (cbit op x p)
+    (? (elem op '(shl shr & ^ |))
+       (x @ ('bin o _ _) (? (o == op || (op == '| && elem o '(shl shr))) (ce x p) "(\(ce x 0))")
+            (ce x p))
+       (ce x p))
    ; ce: render e, parenthesized when it binds looser than p
    (ce e p) (: q (cprec e) t (craw e) (q < p ? "(\(t))" t))
    ; a node too short to bind falls to /*?*/, which clay-ok? refuses first
@@ -151,7 +157,7 @@
         ('chr v) (cchr v)
         ('var v) v
         ('bin op l r) (look binprec op 100 @ p
-                       "\(ce l p) \(look binop op "?") \(ce r (p + 1))")
+                       "\(cbit op l p) \(look binop op "?") \(cbit op r (p + 1))")
         ('land l r) "\(ce l 40) && \(ce r 41)"
         ('lor l r) "\(ce l 35) || \(ce r 36)"
         ; ?: and = are right-associative, so the tight side flips

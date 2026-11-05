@@ -29,15 +29,7 @@ static inline void inf_build(struct inf_code *c, const uint8_t *lens, unsigned n
   code <<= 1; } }
 
 // the walk for codes past the table: an entry, or -1 where none matches
-static inline int inf_walk(const struct inf_code *c, uint64_t bb) {
- int code = 0, first = 0, index = 0, cnt;
- unsigned l;
- for (l = 1; l < 16; l++) {
-  code |= (int) ((bb >> (l - 1)) & 1);
-  cnt = c->cnt[l];
-  if (code - cnt < first) return (int) c->sym[index + (code - first)] << 4 | (int) l;
-  index += cnt; first = (first + cnt) << 1; code <<= 1; }
- return -1; }
+#include "inf_gen.h"
 
 // lengths for the counts in hc, nsym of them (under 4096): the leaves sorted by count, ties to
 // the lower symbol, merged through a second queue; while the code is deeper than lim every

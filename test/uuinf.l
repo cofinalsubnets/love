@@ -975,3 +975,126 @@
          (idpath false))
        g))))))))))))
  )
+
+; --- what the generated inf_walk owes, test/uuinfvc.l asks for these ---
+(test
+ (defq inf-powfit (pi x nat (pi l nat (pi w nat (pi g (inf-lt x (inf-pow l)) (pi h (inf-le l w)
+     (inf-lt x (inf-pow w)))))))
+   (lam x (lam l (lam w (lam g (lam h
+     (inf-lttrans x (inf-pow l) (inf-pow w) g (inf-powle l w h))))))))
+ (defq inf-lew (pi l nat (pi w nat (pi g (inf-lt l 16) (pi h (inf-le 31 w) (inf-le l w)))))
+   (lam l (lam w (lam g (lam h
+     (istransnatleh l 16 w (inf-ltle l 16 g) (istransnatleh 16 31 w (idpath false) h)))))))
+ (defq inf-subsucc (pi n nat (pi l nat (pi g (inf-lt l n)
+     (paths nat (natminus n l) (succ (natminus n (succ l)))))))
+   (lam n (nat_rect (lam q (pi l nat (pi g (inf-lt l q) (paths nat (natminus q l) (succ (natminus q (succ l)))))))
+     (lam l (lam g (fromempty (paths nat (natminus 0 l) (succ (natminus 0 (succ l)))) (nopathsfalsetotrue g))))
+     (lam m (lam IH (lam l (nat_rect
+       (lam r (pi g (inf-lt r (succ m)) (paths nat (natminus (succ m) r) (succ (natminus (succ m) (succ r))))))
+       (lam g (maponpaths nat nat (lam x (succ x)) m (natminus m 0) (pathsinv0 nat (natminus m 0) m (natminusn0 m))))
+       (lam j (lam u (lam g (IH j g))))
+       l))))
+     n)))
+ (defq inf-subfall (pi n nat (pi l nat (pi g (inf-lt l n) (inf-lt (natminus n (succ l)) (natminus n l)))))
+   (lam n (lam l (lam g
+     (transportf nat (lam y (inf-lt (natminus n (succ l)) y))
+       (succ (natminus n (succ l))) (natminus n l)
+       (pathsinv0 nat (natminus n l) (succ (natminus n (succ l))) (inf-subsucc n l g))
+       (inf-lelts (natminus n (succ l)) (natminus n (succ l)) (isreflnatleh (natminus n (succ l)))))))))
+ ; the counts to come, one length on: the walk's index and the fill's idx both step so
+ (defq inf-sumnext (pi cnt (pi l nat nat) (pi n nat (pi l nat (pi idx nat (pi m nat (pi g (inf-lt l n)
+     (pi h (inf-le (add idx (inf-sum cnt (natminus n l) l)) m)
+       (inf-le (add (add idx (cnt l)) (inf-sum cnt (natminus n (succ l)) (succ l))) m))))))))
+   (lam cnt (lam n (lam l (lam idx (lam m (lam g (lam h
+     (inf-bstep cnt m (natminus n (succ l)) l idx
+       (transportf nat (lam y (inf-le (add idx (inf-sum cnt y l)) m))
+         (natminus n l) (succ (natminus n (succ l))) (inf-subsucc n l g) h))))))))))
+ (defq inf-sumhead (pi cnt (pi l nat nat) (pi n nat (pi l nat (pi idx nat (pi m nat (pi g (inf-lt l n)
+     (pi h (inf-le (add idx (inf-sum cnt (natminus n l) l)) m)
+       (inf-le (add idx (cnt l)) m))))))))
+   (lam cnt (lam n (lam l (lam idx (lam m (lam g (lam h
+     (istransnatleh (add idx (cnt l))
+       (add (add idx (cnt l)) (inf-sum cnt (natminus n (succ l)) (succ l))) m
+       (inf-leaddr (add idx (cnt l)) (inf-sum cnt (natminus n (succ l)) (succ l)))
+       (inf-sumnext cnt n l idx m g h))))))))))
+ ; a multiple of p + 1 and j more leaves j, and p + 1 more is a multiple again
+ (defq inf-modbump (pi p nat (pi x nat (pi e (paths nat (inf-mod (succ p) x) 0) (pi j nat (pi g (inf-le j p)
+     (paths nat (inf-mod (succ p) (add j x)) j))))))
+   (lam p (lam x (lam e (lam j (nat_rect
+     (lam q (pi g (inf-le q p) (paths nat (inf-mod (succ p) (add q x)) q)))
+     (lam g e)
+     (lam k (lam IH (lam g
+       (transportf nat
+         (lam r (paths nat (bool_rect (lam b nat) (succ r) 0 (natgtb (succ p) (succ r))) (succ k)))
+         k (inf-mod (succ p) (add k x))
+         (pathsinv0 nat (inf-mod (succ p) (add k x)) k
+           (IH (istransnatleh k (succ k) p (natlehsucc k k (isreflnatleh k)) g)))
+         (transportf bool (lam b (paths nat (bool_rect (lam c nat) (succ k) 0 b) (succ k)))
+           true (natgtb (succ p) (succ k))
+           (pathsinv0 bool (natgtb (succ p) (succ k)) true (inf-lelts (succ k) p g))
+           (idpath (succ k)))))))
+     j))))))
+ (defq inf-modtop (pi p nat (pi x nat (pi e (paths nat (inf-mod (succ p) x) 0)
+     (paths nat (inf-mod (succ p) (add (succ p) x)) 0))))
+   (lam p (lam x (lam e
+     (transportf nat
+       (lam r (paths nat (bool_rect (lam b nat) (succ r) 0 (natgtb (succ p) (succ r))) 0))
+       p (inf-mod (succ p) (add p x))
+       (pathsinv0 nat (inf-mod (succ p) (add p x)) p (inf-modbump p x e p (isreflnatleh p)))
+       (transportf bool (lam b (paths nat (bool_rect (lam c nat) (succ p) 0 b) 0))
+         false (natgtb (succ p) (succ p))
+         (pathsinv0 bool (natgtb (succ p) (succ p)) false (isreflnatleh p))
+         (idpath 0)))))))
+ (defq inf-moddbl (pi x nat (paths nat (inf-mod 2 (add x x)) 0))
+   (lam x (nat_rect (lam q (paths nat (inf-mod 2 (add q q)) 0))
+     (idpath 0)
+     (lam k (lam IH
+       (transportf nat (lam y (paths nat (inf-mod 2 (succ y)) 0))
+         (succ (add k k)) (add k (succ k))
+         (pathsinv0 nat (add k (succ k)) (succ (add k k)) (natplusnsm k k))
+         (inf-modtop 1 (add k k) IH))))
+     x)))
+ ; of any modulus, or the kernel unfolds inf-mod sixteen levels over a stuck term, 2^16 nodes
+ (defn inf-times (pi p nat (pi s nat nat))
+   (lam p (lam s (nat_rect (lam q nat) 0 (lam k (lam r (add (succ p) r))) s))))
+ (defq inf-timeslow (pi p nat (pi s nat (paths nat (inf-mod (succ p) (inf-times p s)) 0)))
+   (lam p (lam s (nat_rect (lam q (paths nat (inf-mod (succ p) (inf-times p q)) 0))
+     (idpath 0)
+     (lam k (lam IH (inf-modtop p (inf-times p k) IH)))
+     s))))
+ (defq inf-by16low (pi s nat (paths nat (inf-mod 16 (inf-by16 s)) 0))
+   (lam s (inf-timeslow 15 s)))
+ (defq inf-by16add (pi a nat (pi b nat (paths nat (inf-by16 (add a b)) (add (inf-by16 a) (inf-by16 b)))))
+   (lam a (lam b (nat_rect (lam q (paths nat (inf-by16 (add q b)) (add (inf-by16 q) (inf-by16 b))))
+     (idpath (inf-by16 b))
+     (lam k (lam IH
+       (pathscomp0 nat (add 16 (inf-by16 (add k b))) (add 16 (add (inf-by16 k) (inf-by16 b)))
+         (add (add 16 (inf-by16 k)) (inf-by16 b))
+         (maponpaths nat nat (lam x (add 16 x)) (inf-by16 (add k b)) (add (inf-by16 k) (inf-by16 b)) IH)
+         (pathsinv0 nat (add (add 16 (inf-by16 k)) (inf-by16 b)) (add 16 (add (inf-by16 k) (inf-by16 b)))
+           (natplusassoc 16 (inf-by16 k) (inf-by16 b))))))
+     a))))
+ (defq inf-by16pow (pi k nat (paths nat (inf-by16 (inf-pow k)) (inf-pow (add 4 k))))
+   (lam k (nat_rect (lam q (paths nat (inf-by16 (inf-pow q)) (inf-pow (add 4 q))))
+     (idpath 16)
+     (lam j (lam IH
+       (pathscomp0 nat (inf-by16 (add (inf-pow j) (inf-pow j)))
+         (add (inf-by16 (inf-pow j)) (inf-by16 (inf-pow j)))
+         (add (inf-pow (add 4 j)) (inf-pow (add 4 j)))
+         (inf-by16add (inf-pow j) (inf-pow j))
+         (transportf nat
+           (lam y (paths nat (add (inf-by16 (inf-pow j)) (inf-by16 (inf-pow j))) (add y y)))
+           (inf-by16 (inf-pow j)) (inf-pow (add 4 j)) IH
+           (idpath (add (inf-by16 (inf-pow j)) (inf-by16 (inf-pow j))))))))
+     k)))
+ ; (s << 4) | l for s of h bits, h at most 16: it fits any int of 31 bits or more
+ (defq inf-by16or (pi x nat (pi b nat (pi h nat (pi w nat (pi g (inf-lt x (inf-pow h)) (pi i (inf-lt b 16)
+     (pi j (inf-le h 16) (pi k (inf-le 31 w) (inf-lt (add (inf-by16 x) b) (inf-pow w))))))))))
+   (lam x (lam b (lam h (lam w (lam g (lam i (lam j (lam k
+     (inf-lttrans (add (inf-by16 x) b) (inf-pow (add 4 h)) (inf-pow w)
+       (transportf nat (lam y (inf-lt (add (inf-by16 x) b) y))
+         (inf-by16 (inf-pow h)) (inf-pow (add 4 h)) (inf-by16pow h)
+         (inf-entry x b (inf-pow h) g i))
+       (inf-powle (add 4 h) w
+         (istransnatleh (add 4 h) 20 w (inf-addl 4 h 16 j) (istransnatleh 20 31 w (idpath false) k)))))))))))))
+ )
