@@ -306,11 +306,11 @@
               '((fill hole)
                 (disc 32 18 8 (rgb 0.25 0.6 1)) (disc 20 39 8 (rgb 0.25 0.6 1)) (disc 44 39 8 (rgb 0.25 0.6 1))
                 (disc 32 18 4 (rgb 0.75 0.95 1)) (disc 20 39 4 (rgb 0.75 0.95 1)) (disc 44 39 4 (rgb 0.75 0.95 1)))))
-(: (shaft-pane x y) (window [(x - 0.8) y 15.9] [(x + 0.8) (y + 1.7) 16.4] glass @ (a p) [(skin {'all concrete} a) p]))
+(: (shaft-pane x y) (window [(x - 0.7) y 15.9] [(x + 0.7) (y + 1.3) 16.4] glass @ (a p) [(skin {'all concrete} a) p]))
 (: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -9 16.3] [(x + 1) 12 18.3]))
               (decal [x -8.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -8.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
               (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
-              (shaft-pane x -4.9) (shaft-pane x -0.9)])
+              (shaft-pane x -4.7) (shaft-pane x -0.7) (shaft-pane x 3.3)])
 ; ..the station's lamps: steel fittings, three-sided, on the walls
 (: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
 (: (lamp at n d) (sconce at n d 1.4 sconcemetal))
@@ -648,7 +648,7 @@
   (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
-  ; wing, two windows up over each doorway into its glow
+  ; wing, three windows up over each doorway into its glow
   (grav [0.7 -9 16.3] [2.7 9 18.3] 'up)
   (grav [-2.7 -9 16.3] [-0.7 9 18.3] 'down)
   (shaft 1.7) (shaft -1.7)
