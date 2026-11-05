@@ -113,7 +113,8 @@
    ; touch is the left button, or a key of the row
    (droid-events win r)
     (r @ [k a b c]
-       (? (k = 83) (: _ (pins win 'H (c // droid-scale) 'row (a > 0 && peep win 'typing 0 ? droid-rowh 0))
+       (? (k = 83) (: _ (pins win 'H (c // droid-scale) 'row (a & 1 && peep win 'typing 0 ? droid-rowh 0))
+                      _ (a & 2 ? (pin win 'w 0))               ; no size is the paper's now, so this one is news
                       [['size (b // droid-scale) (c // droid-scale - win 'row)]])
           (k = 80) (peep win 'pst "" @ t (a = 0 ? (pin win 'pst "", [['paste t]]) (pin win 'pst (t + b), ())))
           (k = 75 && b = 279) (a ? (droid-paste win) 0, ())   ; a keyboard's paste key

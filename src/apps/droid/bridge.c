@@ -9,13 +9,14 @@
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
      bridge -> love  12-byte records (u8 kind, u8 a, u16 0, i32 b, i32 c):
-                     'S' the window's visible part, b by c pixels, a=the soft keyboard is up
+                     'S' the window's visible part, b by c pixels, a=1 the soft keyboard is up,
+                     a=2 what love drew is gone: all of it again, the size unchanged or not
                      'K' key a=down, b=android keycode, c=the character it types or 0
                      'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
                      'P' a paste's piece, a=its length, up to ten bytes from the third; a=0 ends it
    the face takes clients in a stack, love first and then any window it starts: the top has the
    screen, the input and the keyboard, the frames of those under it are read and let go. the top
-   gone, the next has its keyboard back and an 'S' to paint again by.
+   gone, the next has its keyboard back and an 'S' with a=2.
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
@@ -104,6 +105,7 @@ enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOE
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
   int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, dsock, vh, typing, shown;
+  int bare;                               /* the client on top has not been told its pixels are gone */
   int under[3], utyping[3], nunder;       /* the clients csock covers, oldest first, and what each asked of the keyboard */
   int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
@@ -126,6 +128,11 @@ static void put(br *b, int kind, int a, int x, int y) {
   pthread_mutex_lock(b->mu);
   if (b->csock >= 0) write(b->csock, r, 12);
   pthread_mutex_unlock(b->mu);
+}
+
+static void sized(br *b) {
+  put(b, 'S', b->shown | b->bare << 1, b->ww, vis(b));
+  b->bare = 0;
 }
 
 static int writeall(int fd, void const *p, size_t n) {
@@ -232,7 +239,7 @@ static void insets(br *b) {
   if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
   pthread_mutex_lock(b->mu); b->vh = b->wh - bot; paint(b); pthread_mutex_unlock(b->mu);
-  put(b, 'S', b->shown, b->ww, vis(b));
+  sized(b);
 }
 
 /* what a key types: KeyCharacterMap.load(device).get(code, meta), through JNIEnv's table */
@@ -728,7 +735,8 @@ static int leave(br *b, int fd) {
   if (bottom) return 0;
   if (top) {
     if (typing != b->typing) keyboard(b, b->env, b->typing = typing);
-    if (b->ww) put(b, 'S', b->shown, b->ww, vis(b));
+    b->bare = 1;
+    if (b->ww) sized(b);
   }
   return 1;
 }
@@ -757,7 +765,7 @@ static void *loop(void *p) {
         b->csock = c;
         pthread_mutex_unlock(b->mu);
         ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
-        if (b->ww) put(b, 'S', b->shown, b->ww, vis(b));
+        if (b->ww) sized(b);
       } else if (c >= 0) close(c);
     } else if (id == CONN && (fd == b->csock || covered(b, fd) >= 0)) {   /* a client closed in this batch is passed over */
       unsigned char k, on;
@@ -921,7 +929,7 @@ static void created(void *a, void *w) {
   b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w); b->gh = 0;
   paint(b);
   pthread_mutex_unlock(b->mu);
-  put(b, 'S', b->shown, b->ww, vis(b));
+  sized(b);
 }
 
 static void gone(void *a, void *w) {
