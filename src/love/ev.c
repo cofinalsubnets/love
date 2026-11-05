@@ -1063,7 +1063,7 @@ lvm(lvm_tap) {
 
 // the callee must be a cur of exactly n: the compiler's width is a guess about a name, so a
 // miss scares rather than entering a non-function past its prologue
-static bool apn_ok(word f, size_t n) {
+static love_inline bool apn_ok(word f, size_t n) {
  return evenp(f) && cell(f)[0].ap == lvm_cur && cell(f)[1].x == putcharm(n); }
 
 lvm(lvm_apn) {

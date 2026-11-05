@@ -9947,6 +9947,14 @@
              (a @ ('un 'not ('un 'not a2)) (aweigh a2) (aweigh a))
             ('var _) 1
             (foldl (n \ y \ n + aweigh y) 0 x)))
+   ; the size gate: 99 straight, 43 branchy, and what the sites cost together, more where one sits
+   ; in a loop; -Os, what a call costs
+   (inlgate g nm st w)
+    (: n (peep (g 'csites) nm 0)
+       (? (osz? g) (w <= (st ? 8 4))
+          ((st ? 99 43) < w) ()
+          (n < 2) 1
+          (w * n <= (? (peep (g 'cloop) nm ()) 800 100))))
    (inlok? g f sig aln)                             ; aln: always_inline waives the size gate
     (: rt (two? sig ? <sig 'long)
        items <><>>>f
@@ -9963,8 +9971,7 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the body's weight: 99 straight, 43 branchy; -Os, what a call costs
-          (!aln && (osz? g ? (straight? items ? 8 4) (straight? items ? 99 43)) < aweigh <>>>f) ()
+          (!aln && !(inlgate g <>f (straight? items) (aweigh <>>>f))) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, evaluated by its statement before anything it
@@ -12174,7 +12181,7 @@
           'census (cenv 0)
           'lo (getenv "MOON_BACKEND" @ "old" () "new" 'all _ 1)   ; lotgts lower by lo.l unless MOON_BACKEND=old; new takes every target lo.l knows
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -12219,6 +12226,12 @@
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
                                     pin (g 'inl) <>f fi) 0)) 0),
                           recfns >fs)))
+       _ (: (go x lp) (? !(two? x) 0
+                         (x @ ('call . ('var nm) . r) (pin (g 'csites) nm (1 + peep (g 'csites) nm 0),
+                                                       (lp ? (pin (g 'cloop) nm 1) 0), go r lp)
+                              (('while || 'for || 'do) . r) (go r 1)
+                              (go <x lp, go >x lp)))
+            (go <>ast ()))
        _ (recfns <>ast)
        _ (: (go ns) (!(two? ns) ? 1 (pin (g 'fns) <ns 1, go >ns))
             (go (keys sigs)))
