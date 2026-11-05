@@ -265,10 +265,15 @@
    (locxneg g v)
     (: p (cxb (vty v))
        (loparts g v p @ 'bad 'bad
-          [fs x y] (lomk g @ t (lomk g @ k (lomkf g @ re (lomkf g @ im
-                      (: f (p = 'float) (fl z w) [[(f ? 'movdrx 'movqrx) t w] ['li k (f ? 2147483648 -9223372036854775808)] ['xor t t k]
-                                                 [(f ? 'movdxr 'movqxr) z t]]
-                         (lopack g (vty v) p [(fs + fl re x + fl im y) re im]))))))))
+          [fs x y] (lomkf g @ re (lomkf g @ im
+                      (lopack g (vty v) p [(fs + lofneg g p re x + lofneg g p im y) re im])))))
+   ; a float's sign flipped through the general registers, a 32-bit double's in its high word
+   (lofneg g ty d r)
+    (lomk g @ t (lomk g @ k
+       (? (ty = 'float || !(ilp32? g))
+          (: s (ty = 'float) [[(s ? 'movdrx 'movqrx) t r] ['li k (s ? 2147483648 -9223372036854775808)] ['xor t t k]
+                              [(s ? 'movdxr 'movqxr) d t]])
+          (lomk g @ h [['movrrq t h r] ['li k 2147483648] ['xor h h k] ['movqrr d t h]]))))
    ; a conversion through the float file: the 64-bit forms, ulong by the old arms' snippets
    (lotrf g [vt r fs] ty)
     (? (vt = ty) [ty r fs]
@@ -385,7 +390,7 @@
    ; a bitfield's unit at b+off into a fresh vreg, and back: one access as its type says, or the
    ; old arms' chunks when packed, their scratch renamed
    (lobfld g bt b off)
-    (? (ilp32? g && (bfpk? bt || pair? g <>bt)) (lono g 'bitfield)
+    (? (wsize g < tsz g bt) (lono g 'bitfield)
        (bfpk? bt) (loren2 g () 'r2 'long (ldal 'r2 b off (tsz g bt) 8))
        (lomk g @ t ['long t [[(uldop (tsz g bt)) t b off]]]))
    (lobfst g bt b off u)
@@ -399,7 +404,7 @@
           ; a bitfield: read-modify-write its unit, the truncated value answers
           ['b [_ b _] bt off]
            (: uty <>bt bitoff <>>bt width <>>>bt mask ((1 << width) - 1) cmask (0 - (mask << bitoff) - 1)
-              (lotr g v uty @ [_ c fs]
+              (lotr g v (pair? g uty ? 'ulong uty) @ [_ c fs]
                  (: k (lomk g) m (lomk g) u (lomk g) x (lomk g)
                     (lobfld g bt b off @ [_ u fu]
                        [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
@@ -740,11 +745,7 @@
                     (f2 + [[(op = 'neg ? 'neg 'not) d]] + (? uty (ty @ 'uint [['zx4 d]] ()) sty [['sx4 d]] ()))]))
              ; a float's sign flips through the gp file
              ([ty r fs] && lofl? ty && op = 'neg)
-              (: t (lomk g) k (lomk g) d (lomkf g) s (ty = 'float) h (lomk g)
-                 [ty d (fs + (? (s || !(ilp32? g))
-                                [[(s ? 'movdrx 'movqrx) t r] ['li k (s ? 2147483648 -9223372036854775808)] ['xor t t k]
-                                 [(s ? 'movdxr 'movqxr) d t]]
-                                [['movrrq t h r] ['li k 2147483648] ['xor h h k] ['movqrr d t h]]))])
+              (lomkf g @ d [ty d (fs + lofneg g ty d r)])
              'bad)
          ['comma a b] (lox g env a @ [_ _ fa] (lox g env b @ [t r fb] [t r (fa + fb)] 'bad) 'bad)
          ; a statement expression: its items, then the value in the env they end on
@@ -1516,7 +1517,11 @@
                     (nlab g "\(g 'fn).ag" @ done
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +
                         [['label done]] + post))))))))
-   (lokey g ty cv) (cint? cv ? (cfit g ty cv) 'bad)
+   ; a case value at the switch's width; a 32-bit pair keeps all 64 bits
+   (lofit g ty v)
+    (!(pair? g ty) ? (cfit g ty v)
+       (u64 v @ u (usg? ty || u < 9223372036854775808 ? u (u - 18446744073709551616))))
+   (lokey g ty cv) (cint? cv ? (lofit g ty cv) 'bad)
    ; a case table already holds a value in [l, h]: a key, or a wide range
    (locased tab l h)
     (any (k \ cint? k && l <= k <= h) (keys tab) ||
@@ -1530,12 +1535,12 @@
                         ['case cv] (lokey g ty cv @ 'bad (pin tab 'bad 1) k (locased tab k k ? (pin tab 'bad 1) (pin tab k (nlab g ".lo"))))
                         ['case lo hi]
                          (? !(cint? lo && cint? hi && lo <= hi) (pin tab 'bad 1)
-                            (locased tab (cfit g ty lo) (cfit g ty hi)) (pin tab 'bad 1)
+                            (locased tab (lofit g ty lo) (lofit g ty hi)) (pin tab 'bad 1)
                             ; a narrow range a label a value, a wide one a compare of its own
                             (nlab g ".lo" @ L
                                (pin tab "\(lo):\(hi)" L,
-                                hi - lo < 64 ? (map (k \ pin tab (cfit g ty (lo + k)) L) ^(hi - lo + 1))
-                                   (pin tab 'rng ([(cfit g ty lo) (hi - lo) L] . tab 'rng)))))
+                                hi - lo < 64 ? (map (k \ pin tab (lofit g ty (lo + k)) L) ^(hi - lo + 1))
+                                   (pin tab 'rng ([(lofit g ty lo) (hi - lo) L] . tab 'rng)))))
                         ('dflt . _) (tab 'dflt ? (pin tab 'bad 1) (pin tab 'dflt (nlab g ".lo")))
                         (_ . _) (map walk x)
                         0)
@@ -1544,7 +1549,7 @@
              (nlab g ".lo" @ lb
                 (: ks (sort (filter cint? (keys tab)))
                    dl (peep tab 'dflt lb)
-                   tst (lojt g r tab ks dl @ () (lochain g r tab ks) fs fs)
+                   tst (two? r ? (lochainp g [ty r ()] tab ks) (lojt g r tab ks dl @ () (lochain g r tab ks) fs fs))
                    (lost1 g (['brk lb] . ['sw tab ty] . env) body @ 'bad 'bad
                       fb (fs + tst + [['jmp dl]] + fb + [['label lb]]))))))
        'bad)
@@ -1585,6 +1590,20 @@
      catmap (x \ (x @ [lo n L] (lomk g @ t (lomk g @ k
                    ([['mov t r] ['li k lo] ['sub t t k]] + (imma g 'cmp n ? [['cmp t n]] [['li k n] ['cmp t k]]) + [['br 'be L]])))))
             (tab 'rng))
+   ; ..over a 32-bit pair: the high halves first, a wide range its 64-bit difference
+   (lochainp g v tab ks)
+    (: (hl k) (u64 k @ u [(u % 4294967296) (u // 4294967296)])
+       r (vreg v)
+       (key k L) (hl k @ [a b] (nlab g ".lo" @ n (lomk g @ t
+                    [['li t b] ['cmp <>r t] ['br 'ne n] ['li t a] ['cmp <r t] ['br 'eq L] ['label n]])))
+       (catmap (k \ key k (tab k)) ks +
+        catmap (x \ (x @ [lo n L]
+                     (hl lo @ [a b] (lomk g @ p (lomk g @ q
+                        (lobin g '- v [(vty v) [p q] [['li p a] ['li q b]]] () @ [_ [dl dh] fs]
+                           (hl n @ [c d] (nlab g ".lo" @ e (lomk g @ t
+                              (fs + [['li t d] ['cmp dh t] ['br 'below L] ['br 'above e] ['li t c] ['cmp dl t] ['br 'be L] ['label e]]))))
+                         _ (lono g 'case, ())))))))
+               (tab 'rng)))
    ; the table lane, as the old path's jtable: six keys or more, a third full at least, no wide
    ; range, -fno-jump-tables off. rel32 cells off the table's label, one unsigned compare to the
    ; default -> forms | ()
