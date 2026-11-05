@@ -1847,7 +1847,7 @@
    ; reaches it. every divide owns r0..r3 in holo
    (lov6 g fs)
     (: hi {} los {} his {}
-       (dbl? f) (f @ ['ldsd d _ _] d ['movqrr d _ _] d _ ())
+       (dbl? f) (f @ ['ldsd d _ _] d ['movqrr d _ _] d ['stsd _ _ s] s ['movrrq _ _ s] s _ ())
        (mem t x) (peep t x () @ () (lomk g @ n (pin t x n, n)) n n)
        (l x) (mem los x) (h x) (mem his x)
        _ (map (f \ dbl? f @ () () d (pin hi d 1)) fs)
@@ -1867,6 +1867,7 @@
              ['movdrx r s] [['mov r (l s)]]
              [('div || 'udiv) d a b] (dv [<f 'r0 'r0 'r1] d a b)
              [('rem || 'urem) d a b _] (dv [<f 'r0 'r0 'r1 'r2] d a b)
+             (('cdef || 'cuse) . xs) [(<f . catmap (x \ (lovr? x && lofr? x ? (hi x ? [(l x) (h x)] [(l x)]) [x])) xs)]
              ((_ . _) && any (x \ lovr? x && lofr? x) f) (lono g ['softop <f], [f])
              _ [f])
        (catmap sp fs))
