@@ -176,6 +176,7 @@
 ;   (brittle WINDOW)                   its pane broken by a tap, and gone: then the way through
 ;   (lens [x y z] WINDOW)              its pane, on the face toward x y z, one a beyond drape is
 ;                                      seen through; other glass shows only what is there
+;   (mirage WINDOW)                    its pane seen, and nothing to a body
 ;   (decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)  a picture laid on a surface,
 ;                                      its middle at x y z, facing n, its top toward u; its
 ;                                      texture's holes show what is under it
@@ -218,6 +219,8 @@
 ;                                      its hinge to its latch's: a tap swings it open degrees
 ;                                      clockwise from above, and shut again; in a
 ;                                      body's way where it hangs
+;   (headstone [x y z] bearing TEXTURE)  a small headstone, the middle of its foot at x y z,
+;                                      facing bearing: solid, and nothing more
 ;   (grave [x y z] bearing NAME TEXTURE)  a small headstone, the middle of its foot at x y z,
 ;                                      facing bearing: tapped, the player kneels before it,
 ;                                      the name shown, to weep or leave; solid
@@ -277,8 +280,8 @@
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
-;   (feel 'soft TEXTURE)               the texture as it sounds landed on: 'soft, 'hard (any
-;                                      not felt), 'wood or 'metal
+;   (feel 'soft TEXTURE)               the texture as it sounds walked and landed on: 'soft,
+;                                      'hard (any not felt), 'wood, 'metal, 'grass, 'sand or 'gravel
 ;   (laid TEXTURE degrees [du dv])     the texture as a skin or textures lays it, turned
 ;                                      degrees from u toward v and shifted du dv metres its
 ;                                      own way; a floor's u is x and v z, a wall's u along it
@@ -293,7 +296,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -393,6 +396,8 @@
    (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
  (brittle w) (: u "(brittle (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
    (#ps @ 1 (map (p \ kind? p ['pane] ? (with p 'brittle 1) p) (flat [w])) (no u w)))
+ (mirage w) (: u "(mirage (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
+   (#ps @ 1 (map (p \ kind? p ['pane] ? (with p 'mirage 1) p) (flat [w])) (no u w)))
  (lens at w) (: u "(lens [x y z] (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
    (? (!(pt? at)) (no u at) (#ps = 1) (map (p \ kind? p ['pane] ? (with p 'lens (P at u)) p) (flat [w])) (no u w)))
  ; ..a decal: its middle, and points a metre on along its facing and its up
@@ -654,12 +659,14 @@
    (? (!(num? h) || h <= 0) (no u h) (!(num? deg)) (no u deg) (!(texture? t)) (no u t)
       (part 'gate [['at (P a u)] ['np (P b u)] ['h (N h u)] ['swing (N deg u)] ['tex t]])))
  ; ..a headstone, its face toward north and then turned: a slab arched over, on a plinth
- (grave at deg nm t) (: u "(grave [x y z] bearing NAME TEXTURE)" p (P at u) d (N deg u) x (p 0) y (p 1) z (p 2)
+ (headstone at deg t) (: u "(headstone [x y z] bearing TEXTURE)" p (P at u) d (N deg u) x (p 0) y (p 1) z (p 2)
+   (texture? t ? (turn d [x z] [(skin {'all t} (solid (box [(x - 0.19) (y - 0.1) (z - 0.09)] [(x + 0.19) (y + 0.04) (z + 0.09)])))
+                                (skin {'all t} (solid (box [(x - 0.14) (y + 0.04) (z - 0.04)] [(x + 0.14) (y + 0.24) (z + 0.04)])))
+                                (rod [x (y + 0.24) (z - 0.04)] [x (y + 0.24) (z + 0.04)] 0.14 12 t)])
+      (no u t)))
+ (grave at deg nm t) (: u "(grave [x y z] bearing NAME TEXTURE)" p (P at u)
    (? (!(string? nm)) (no u nm) (!(texture? t)) (no u t)
-      [(turn d [x z] [(skin {'all t} (solid (box [(x - 0.19) (y - 0.1) (z - 0.09)] [(x + 0.19) (y + 0.04) (z + 0.09)])))
-                      (skin {'all t} (solid (box [(x - 0.14) (y + 0.04) (z - 0.04)] [(x + 0.14) (y + 0.24) (z + 0.04)])))
-                      (rod [x (y + 0.24) (z - 0.04)] [x (y + 0.24) (z + 0.04)] 0.14 12 t)])
-       (part 'grave [['at p] ['deg d] ['name nm]])]))
+      [(headstone at deg t) (part 'grave [['at p] ['deg (N deg u)] ['name nm]])]))
  (glow o) (kind? o ['orb] ? (with o 'glow 1) (no "(glow ORB)" o))
  (inward o) (kind? o ['orb] ? (with o 'in 1) (no "(inward ORB)" o))
  (herald at size reach t file nm) (: u "(herald [x y z] size reach TEXTURE FILE ENTRY)"
@@ -1115,7 +1122,7 @@
                 (two? things ? [(wrapped #(k 'shape) (drape (skin-of k) (cdr-join gapr things)))] ())]))))
  (cdr-join g ts) (foldl (\ a t (a + [g] + t)) <ts >ts)
  (feel k t) (: u "(feel 'soft TEXTURE)"
-   (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
+   (? (!(elem k ['soft 'hard 'wood 'metal 'grass 'sand 'gravel])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
    (? (!(texture? t)) (no u t) (!(num? deg)) (no u deg) (!(two? off && #off = 2 && all num? off)) (no u off)
       {'kind 'laid 'tex t 'deg (f deg) 'off (map f off)}))
@@ -1230,7 +1237,7 @@
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
-       'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'brittle (peep p 'brittle 0) 'lens (p 'lens)}) (of 'pane))
+       'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'brittle (peep p 'brittle 0) 'mirage (peep p 'mirage 0) 'lens (p 'lens)}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'land (d 'kind @ 'land 1 0)}) (of 'drape + of 'land))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0)}) (of 'ad))

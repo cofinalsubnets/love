@@ -51,7 +51,7 @@
    tar-shast 105
 
    ; --- writing ---
-   (tar-kindc k) (k @ 'dir 53 'link 50 48)   ; '5' '2' '0'
+   (tar-kindc k) (k @ 'dir 53 'link 50 'hard 49 48)   ; '5' '2' '1' '0'
    (tar-head e)                             ; -> the 512-byte header | ()
     (: n (tar-get e 'nom "")
        kind (tar-get e 'kind 'file)
@@ -142,9 +142,11 @@
                              pre (tar-txt h 345 155)
                              nom (#pre ? (pre + "/" + name) name)
                              tc (h 156)
-                             ; '5' '2'/'1', and 'g' a pax global header: what packed it, read past
-                             kind (tc @ 53 'dir (50 || 49) 'link 103 'global 'file)
-                             sz ((kind == 'file || kind == 'global) && tar-oct h 124 12)
+                             ; '5' '2' '1'; 'g' a pax global header, what packed it, read past;
+                             ; 'x' 'L' 'K' say of the next member; devices and fifos are not laid
+                             kind (tc @ 53 'dir 50 'link 49 'hard 103 'global 120 'pax 76 'longn 75 'longl
+                                        (51 || 52 || 54) 'special 'file)
+                             sz ((kind == 'file || tar-meta? {'kind kind}) && tar-oct h 124 12)
                              [1 {'nom nom 'kind kind
                                  'mode (tar-oct h 100 8)
                                  'uid (tar-oct h 108 8)
@@ -154,6 +156,36 @@
                                  'uname (tar-txt h 265 32)
                                  'gname (tar-txt h 297 32)}
                               sz]))))
+   (tar-meta? e) (tar-get e 'kind 'file @ 'global 1 'pax 1 'longn 1 'longl 1 0)
+   ; a meta member's body noted on over, what the next member is to take -> over
+   (tar-note over e b)
+    (tar-get e 'kind 'file @
+       'longn (pin over 'nom (tar-txt b 0 #b))
+       'longl (pin over 'to (tar-txt b 0 #b))
+       'pax (tar-pax over b)
+       over)
+   ; pax records, "len key=value\n" with len counting the whole record; a malformed one ends them
+   (tar-pax over b)
+    (:- (go 0)
+     (dec i e v) (i < e ? (dec (i + 1) e (v * 10 + b i - 48)) v)
+     (num j v) (? (#b <= j) () (48 <= b j <= 57) (num (j + 1) (v * 10 + b j - 48)) (b j = 32) [j v] ())
+     (eqs j e) (? (e <= j) () (b j = 61) j (eqs (j + 1) e))
+     (go i)
+      (: nv (i < #b && num i 0)
+         (? (!(two? nv) || nv 1 < 1 || #b < i + nv 1 || i + nv 1 <= nv 0 + 1) over
+            (: st (nv 0 + 1) en (i + nv 1 - 1) q (eqs st en)
+               (? !q over
+                  (: k (snip b st q) w (q + 1)
+                     ((k @ "path" (pin over 'nom (snip b w en))
+                           "linkpath" (pin over 'to (snip b w en))
+                           "size" (pin over 'size (dec w en 0))
+                           0),
+                      go (i + nv 1))))))))
+   ; a size that is not the header's cannot be walked
+   (tar-sized? over sz) (: z (peep over 'size ()) (!(charm? z) || z = sz))
+   (tar-over over e)
+    (: n (peep over 'nom ()) t (peep over 'to ())
+       (string? n && pin e 'nom n, string? t && pin e 'to t, e))
    (tar-read1 s n o)                        ; -> (1 entry next) | () | 'end
     (tar-zero? s o ? 'end
        (: r (tar-hdr (snip s o (o + tar-blk)))   e (r && r 1)   sz (r && r 2)
@@ -165,12 +197,15 @@
    ; an archive ends at its zero block: running out of input first is torn, not a finish,
    ; so a truncated download extracts nothing rather than half a tree
    (tar-unpack s)
-    (:- (go 0 ())
+    (:- (go 0 () {})
      n #s
-     (go o acc) (n - o >= tar-blk ?
+     (go o acc over) (n - o >= tar-blk ?
                  (tar-read1 s n o @ r
                   (? (r == 'end) [1 (rev acc)]
-                      r (go <>>r (tar-get <(>r) 'kind 'file @ 'global acc (<>r . acc)))))))
+                     !r ()
+                     (: e <>r
+                        (? (tar-meta? e) (go <>>r acc (tar-note over e (tar-get e 'body "")))
+                           (tar-sized? over #(tar-get e 'body "")) (go <>>r ((tar-over over e) . acc) {})))))))
 
    ; --- reading off a stream ---
    ; a source is a reader rd (rd _ the next piece, "" at the end) behind a buffer
@@ -207,16 +242,23 @@
                      (o < #b ? (pins s 'b "" 'o 0, snip b o #b) (peep s 'rd () 0))))
    ; (f e b) per member, e with 'size and no 'body; (tar-body s b wr) pours b, the rest
    ; is read past. f answers 1 to go on. -> (1 count) | () torn or bad sum | 'stop
-   (tar-walk s f) (:- (go 0) (go k)
+   (tar-walk s f) (:- (go 0 {}) (go k over)
     (tar-take s tar-blk @ h
      (? (#h < tar-blk) ()
         (tar-zero? h 0) [1 k]
         (tar-hdr h @ r
-         (r ? (: sz (r 2)  b {'left sz}   meta (tar-get (r 1) 'kind 'file = 'global)
-          (pin (r 1) 'size sz,
-           (!meta && f (r 1) b != 1 ? 'stop
-              (peep b 'left 0 + padk sz tar-blk @ n
-                 (tar-pour s n (x \ 0) < n ? () (go (meta ? k (k + 1)))))))))))) )
+         (r ? (: sz (r 2)  b {'left sz}   e (r 1)   pd (padk sz tar-blk)
+          (? (tar-meta? e)
+             (: cl {'s ""}
+                (? (1048576 < sz) ()
+                   ((tar-pour s sz (x \ pin cl 's (cl 's + x))) < sz) ()
+                   (tar-pour s pd (x \ 0) < pd) ()
+                   (go k (tar-note over e (cl 's)))))
+             (tar-sized? over sz)
+             (pin (tar-over over e) 'size sz,
+              (f e b != 1 ? 'stop
+                 (peep b 'left 0 + pd @ n
+                    (tar-pour s n (x \ 0) < n ? () (go (k + 1) {}))))))))))))
    (tar-body s b wr) (: n (peep b 'left 0) got (tar-pour s n wr) (pin b 'left (n - got), got = n))
 
    ; --- the filesystem, in and out ---
@@ -308,6 +350,10 @@
    ; -> 1 laid | 0 refused | 'fail
    (tar-put warn root e fill)
     (: nom (tar-get e 'nom "")
+       ; a hard link's target names a member already laid, from root
+       hg (tar-get e 'kind 'file == 'hard && tar-segs (tar-get e 'to ""))
+       hl (hg && tar-lay root <>hg)
+       hq (hl && tar-at? <>hl 32768 && <>hl)
        sg (tar-segs nom)
        lp (sg && tar-lay root <>sg)
        p (lp && <>lp)
@@ -316,8 +362,13 @@
             !lp (warn "\(nom): Cannot extract through a symbolic link or a file")
             (atom? <>sg) 0
             (tar-link-at? p && unlink p))
+       no (? !lp 1
+             (kind == 'special) (warn "\(nom): Device or fifo not extracted", 1)
+             (kind == 'hard && !hq) (warn "\(nom): Cannot hard link to \(tar-get e 'to "")", 1)
+             0)
        ; the mode is laid back with chmod: open and mkdir create at the umask's pleasure
-       ok (? !lp 1
+       ok (? no 1
+             (kind == 'hard) (two? (lstat p) && unlink p, !(hardlink hq p))
              (kind == 'dir)  (mkdir p 493,
                               tar-dir-at? p && chmod p (tar-perm (tar-get e 'mode 493)),
                               tar-dir-at? p)
@@ -327,7 +378,7 @@
                 (hot? q && (fill q, close q,
                             tar-at? p 32768 && chmod p (tar-perm (tar-get e 'mode 420)),
                             tar-there? p))))
-       (? !lp 0 ok 1 'fail))
+       (? no 0 ok 1 'fail))
    (tar-scatter? warn root es)              ; -> (1 count refused)
     (:- (go es 0 0) (go xs k r)
      (atom? xs ? [1 k r]
@@ -356,12 +407,6 @@
                        'J (tarc-lazy 'xz 'xz-pack "xz" a 8388608 'crc64)
                        'zst (tarc-lazy 'zstd 'zstd-pack "zstd" a 3)
                        a)
-   (tarc-unzip z b)                    ; -> (1 bytes) | ()
-    (z @ 'z (gz-unzip b)
-         'j (tarc-lazy 'bz2 'bz2-unpack "bzip2" b @ v (two? v && v))
-         'J (tarc-lazy 'xz 'xz-unpack "xz" b @ v (two? v && v))
-         'zst (tarc-lazy 'zstd 'zstd-unpack "zstd" b @ v (two? v && v))
-         [1 b])
    (tarc-sniff b) (?
     (2 <= #b && b 0 = 31 && b 1 = 139) 'z
     (4 <= #b && snip b 0 3 = "BZh") 'j
@@ -431,7 +476,7 @@
     (: ms (peep t 'mem ())   n (tarc-num (peep t 'strip ""))   seen {}
        (pin t 'seen seen,
         (e \ (: nm (tarc-nom e)
-                hit (!(two? ms) ? 1 (: m (filter (m \ tarc-has? nm m) ms) (each m (m \ pin seen m 1), two? m)))
+                hit (!(two? ms) ? 1 (: m (filter (tarc-has? nm) ms) (each m (m \ pin seen m 1), two? m)))
                 c (hit && tarc-cut nm n)
                 (c && 0 < #c ? [1 (pin (tarc-copy e) 'nom c)])))))
    (tarc-unseen t)
@@ -460,7 +505,7 @@
    (tarc-perm e)
     (: md (tar-get e 'mode 420)
        (bit b c) (0 < md & b ? c "-")
-       ((tar-get e 'kind 'file @ 'dir "d" 'link "l" "-")
+       ((tar-get e 'kind 'file @ 'dir "d" 'link "l" 'hard "h" "-")
         + bit 256 "r" + bit 128 "w" + bit 64 "x" + bit 32 "r" + bit 16 "w" + bit 8 "x"
         + bit 4 "r" + bit 2 "w" + bit 1 "x"))
    (tarc-lpad w s) (w <= #s ? s (tarc-lpad w (" " + s)))
@@ -471,7 +516,7 @@
        nom (tar-get e 'nom "")
        (tarc-perm e + " " + og + " " + tarc-lpad (18 - #og) sz + " "
         + tarc-date (tar-get e 'mtime 0) + " " + nom
-        + (tar-get e 'kind 'file = 'link ? (" -> " + tar-get e 'to "") "")))
+        + (tar-get e 'kind 'file @ 'link (" -> " + tar-get e 'to "") 'hard (" link to " + tar-get e 'to "") "")))
 
    ; --- the three modes ---
    (tarc-arch t) (peep t 'f "-")
@@ -520,7 +565,6 @@
        _ (!(hot? q) && tarc-die "\(a): Cannot open: No such file or directory")
        raw (tar-src (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q)))))
        z (peep t 'z () @ w (w ? w (tarc-sniff (tar-peek raw 6))))
-       (all r a) (r 0 @ p (#p @ 0 (cats (rev a)) (all r (p . a))))
        (drain src) (: (dr r) (#(r 0) @ 0 0 (dr r)) (dr (tar-rd src)))
        (z @ 'z
           (: g (gz-pull (tar-rd raw))   src (tar-src (_ \ gz-next g))
@@ -531,9 +575,7 @@
              next (cite m (nom "\(m)-next"))
              src (tar-src (_ \ next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
-          (: u (z ? (tarc-unzip z (all (tar-rd raw) ())) [1 raw])
-             (!u && tarc-die "\(a): not a \(tarc-zname z) stream, or its check disagrees",
-              [(z ? (tar-src ({0 <>u} @ t1 (_ \ (peep t1 0 "" @ v (pin t1 0 "", v))))) raw) 0 z]))))
+          [raw 0 z]))
    ; the codec's check first: a torn stream underneath reads as a torn archive above
    (tarc-end t sf w)
     (tarc-arch t @ a

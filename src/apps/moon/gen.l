@@ -694,7 +694,7 @@
        (grab k acc) (k < 1 ? (rev acc)
                        (ralloc g @ r
                           (r ? (grab (k - 1) (r . acc))
-                             (map (x \ (rfree g x)) acc, 'no))))
+                             (map (rfree g) acc, 'no))))
        (? (t32? g || wasm? g) 'no               ; neither machine has a wide multiply
           (abl? g 'divk) 'no
           (n < 3) 'no
@@ -5325,7 +5325,7 @@
                           [(rev acc) l])
           sv (charm? N ? (svs >>fs ()) [() ()])
           sl <sv body <>sv
-          offs (map (x \ <x) sl)
+          offs (map cap sl)
           ; an exit: the restores in any order, the frame back, ret
           nsv #sl
           (exit? l) (: lds (take nsv l) tl (drop nsv l)
@@ -5377,7 +5377,7 @@
           (k < 2 ? fs
              (: lj (nlab g ".ej")
                 le (<(rev blks))
-                ends (map (b \ <b) blks)
+                ends (map cap blks)
                 (go l i) (? !(two? l) ()
                             (i + k - 1 = <le) (['label lj] . (<l . go >l (i + 1)))
                             (elem (i + k - 1) ends) (['jmp lj] . go (drop k l) (i + k))
@@ -6713,8 +6713,8 @@
                          (chains9 b)                 ; one cell -> ((S pref defs ((use dst ext)..) xc)..)
                           (: w (obs b)
                              tl (rev (tls b))
-                             sts (map (t \ <t) (filter (t \ (0 < vstw <>t || 0 < vsiw <>t)) tl))
-                             lds (map (t \ <t) (filter (t \ (0 < vldw <>t)) tl))
+                             sts (map cap (filter (t \ (0 < vstw <>t || 0 < vsiw <>t)) tl))
+                             lds (map cap (filter (t \ (0 < vldw <>t)) tl))
                              ot (foldl (t9 \ t \ pin t9 <t <>t) {} tl)
                              rg9 (foldl (t9 \ t \ pin t9 <t (t 2)) {} tl)
                              (rich us) (map (u \ [u (rg9 u) (xt9 (ot u))]) us)
@@ -6869,7 +6869,7 @@
                                             rc (ra || tw <= cw2 ? () (cstake (filter (r \ cok? r && dok? r) cspool9) ri))
                                             r (ra || rc)
                                             (!r ? ()
-                                               (pclaim taken r (ri + map (e \ <e) en),
+                                               (pclaim taken r (ri + map cap en),
                                                 pin spb b 1,
                                                 foldl (_ \ t \ pin pxm <t [r xc]) 0 ins,
                                                 foldl (_ \ e \ lay9 (<>e = 'pre ? bfr aft) <e [lop r fb b]) 0 en,
@@ -6912,8 +6912,8 @@
                          (lset9 b)
                           (: w (obs b)
                              tl (rev (tls b))
-                             sts (map (t \ <t) (filter (t \ (0 < vstw <>t || 0 < vsiw <>t)) tl))
-                             lds (map (t \ <t) (filter (t \ (0 < vldw <>t)) tl))
+                             sts (map cap (filter (t \ (0 < vstw <>t || 0 < vsiw <>t)) tl))
+                             lds (map cap (filter (t \ (0 < vldw <>t)) tl))
                              clv (clv9 b <>w <>>w sts lds)
                              st9 (foldl (t \ d \ pin t d 1) {} sts)
                              (go i acc) (i < <>w ? acc
@@ -8636,7 +8636,7 @@
     (: n #c9
        c0 (n > 0 ? (c9 0) 0)
        x86 (x64t? g)
-       cs (map (i \ c9 i) ^n)
+       cs (map c9 ^n)
        (in? l) (all (c \ elem c l) cs)
        (? (n < 1) 'bad
           (n = 1 && 48 <= c0 <= 57) ['tie (c0 - 48)]
@@ -8667,7 +8667,7 @@
        (mov1 z) (: m ((1 << z) - 1) u (v & m) (one16 u || one16 (m - u) || a64bm? v z))
        (fit c) (c @ 73 (addi v) 74 (addi (0 - v)) 75 (a64bm? v 32) 76 (a64bm? v 64)
                     77 (mov1 32) 78 (mov1 64) 90 (v = 0) 105 1 110 1 0)
-       (any fit (map (i \ c9 i) ^#c9)))
+       (any fit (map c9 ^#c9)))
    ; v at z bits is a logical immediate: a rotated run of ones in an element repeated across it
    (a64bm? v z)
     (: u (v & ((1 << z) - 1))
@@ -8798,7 +8798,7 @@
        (live? r) (? !(string? (r 3)) 1
                     (: own (lbls (take 3 r) {})
                        outs (filter (n \ starts? n (r 3) && !(own n)) (map show (keys (cg-refs (take 3 r) {}))))
-                       (all (n \ have n) outs)))
+                       (all have outs)))
        (asecs-of g (filter live? (rev (g 'fasecs)))))
    ; a refusal that names what the asm asked for, for cgfn's report
    (asmno g msg) (pin g 'nolane msg, 'bad)
@@ -8806,7 +8806,7 @@
    (asmwhy a b) "it has no lane for (\(show a) \(show b))"
    ; a line the assembler cannot read refuses the function, naming the line's piece
    (cgasm g env s)
-    (trap (s9 \ cgasm1 g env s9) s
+    (trap (cgasm1 g env) s
           (a \ b \ (a = 'leave ? (scare a b) (asmno g "an asm \(asmwhy a b)"))))
    (cgasm1 g env s)
     (asmplan g env s @
@@ -8984,7 +8984,7 @@
                    ckill (filter nom? (map (c \ (neutral? ? (intern c) (gas-regname tgt c)))
                                            (filter (c \ !(c = "memory" || c = "cc" || vclob? g c)) <>>>>s)))
                    ; a vector clobber, as the float file names it
-                   vkill (map (c \ name "f\(snip c (starts? c "xmm" ? 3 1) #c)") (filter (c \ vclob? g c) <>>>>s))
+                   vkill (map (c \ name "f\(snip c (starts? c "xmm" ? 3 1) #c)") (filter (vclob? g) <>>>>s))
                    xcs (x64t? g ? '(r3 r11 r12 r13 r14) ())
                    asgn (assign ops9 (filter (r9 \ (nelem r9 pinned && nelem r9 ckill)) (asmpk g + xcs)) ())
                    ; a v register's bits ride a free gp register in and out of it
@@ -9187,7 +9187,7 @@
        _ (prel items)
        _ (pexl items)
        ; ..plus the double params: outside the gp walk, but a wrapset must see them (their crossings)
-       pgs (pgo params 0 () + map (p9 \ <p9) (filter (p9 \ fhomable? <>p9) params))
+       pgs (pgo params 0 () + map cap (filter (p9 \ fhomable? <>p9) params))
        univ (filter (nm \ dcl nm = 1 && !(tak nm)) (pgs + n9 'loc))
        ; a homable param outside the universe still homes, so it must ride every wrapset
        pales (filter (nm \ (nelem nm univ)) pgs)
@@ -9424,7 +9424,7 @@
        ; evaluates, so a right that parks again doubles it. a miss costs speed only (the cell lane)
        wdn (: (go i acc) (peep n9 'sq 0 < i ? acc
                              (sqm i @ e2 (go (i + 1) (two? e2 && d128? <>e2 ? (<e2 . acc) acc))))
-              (go 1 (map (p \ <p) (filter (p \ d128? <>p) params))))
+              (go 1 (map cap (filter (p \ d128? <>p) params))))
        (wide? e) (atom? e ? ()
                     (e @ ('cast ty _) (d128? ty) ('var nm) (elem nm wdn) ('bin _ l r) (wide? l || wide? r) ()))
        (wpd e) (atom? e ? 0
@@ -9924,7 +9924,7 @@
                     (<l = 'decl) (foldl (a \ d \ (two? >>d && pvl a <>>d) ? (<d . a) a) pn <>l)
                     (dv >l (dv <l pn)))
        (pvl pn e) (!(two? e) ? () (e @ ('var v) (elem v pn) (pvl pn <e || pvl pn >e)))
-       pn (dv x (map (p \ <p) ps))
+       pn (dv x (map cap ps))
        (pv? e) (pvl pn e)
        (imm? c) (#c @ n ((: (go i) (? (i >= n) () (elem (c i) '(105 110)) 1 (go (i + 1)))) 0))
        (go y) (? !(two? y) ()
@@ -10018,7 +10018,7 @@
                           (<x = 'decl) (foldl (a2 \ p \ p . a2) a <>x)
                           (dps >x (dps <x a)))
              dl (dps body ())
-             loc (map (p \ <p) ps + map (p \ <p) dl)
+             loc (map cap ps + map cap dl)
              ; a frame address costs the caller its sibcalls, and a return address read in place is the
              ; caller's, which always_inline waives as gcc reads it. asm, a statement expression, a compound
              ; literal and a struct or array local splice as any body does, under the size gate
@@ -10356,7 +10356,7 @@
                 (('land || 'lor) a b)
                  (: ra (hxb a d)
                     (dcd? e <>ra ? [<ra ['num (<e = 'lor ? 1 0)]]
-                  (: rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+                  (: rb (hxh e d (hxe b d)) b2 <>rb
                     (!(armc? b2) ? [(<ra + <rb) [<e <>ra b2]]
                        (: t (tmp 'int)
                           s1 ['expr ['asn ['var t] ['num 1]]] s0 ['expr ['asn ['var t] ['num 0]]]
@@ -10393,7 +10393,7 @@
              (('land || 'lor) a b)
               (: ra (hxb a d)
                  (dcd? e <>ra ? [<ra ['num (<e = 'lor ? 1 0)]]
-               (: rb (hxh e d (h \ (hxe b d h))) b2 <>rb
+               (: rb (hxh e d (hxe b d)) b2 <>rb
                  ty (armc? b2 ? (ety b))
                  (ty = () ? [(<ra + <rb) [<e <>ra b2]]
                     (: tv (tmp ty)
@@ -10452,7 +10452,7 @@
                 ; a test's && || whose right still holds a callee of statements: the right decides its own if
                 ; under (or beside) the left's, the small arm copied -- each test then pushes down
                 ('if (('land || 'lor) a b) t e && 40 > dsz (? (<<>s = 'land) e t))
-                 (: rb (hxh s d (h \ (hxe b d h))) b2 <>rb
+                 (: rb (hxh s d (hxe b d)) b2 <>rb
                     (!(armc? b2) ? (hif <>s t e d)
                        (<rb + hs (<<>s = 'land ? ['if a ['if b2 t e] e] ['if a t ['if b2 t e]]) d)))
                 ('if c t e) (hif c t e d)
@@ -10589,7 +10589,7 @@
                    (sm? n) (cint? n && 0 <= n && n < 2147483648)
                    ok (sm? v && all (it \ (it @ ('case . lo . r) (sm? lo && (!(two? r) || sm? <r)) 1)) items)
                    k (ok ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
-                   (glb? l) (any (it \ glbl? it) l)
+                   (glb? l) (any glbl? l)
                    (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
                       ['switch c (map (dprunel w64 ty lk) (drop k items))])))
             (map (dprunel w64 ty lk) x)))
@@ -10608,7 +10608,7 @@
        (cutl keep l) (? !(two? l) l
                         (: h (go keep <l)
                            (exits? h && !(ncase? >l) && !(any keep (defs >l ())) ? [h] (h . cutl keep >l))))
-       (fix keep) (: r (go keep (f 3)) t (refs r {}) (all (n \ keep n) (keys t) ? r (fix (foldl (a \ n \ pin a n 1) keep (keys t)))))
+       (fix keep) (: r (go keep (f 3)) t (refs r {}) (all keep (keys t) ? r (fix (foldl (a \ n \ pin a n 1) keep (keys t)))))
        ([<f <>f <>>f (fix {})] + >>>>f))
    (ncase? x) (? !(two? x) () (<x = 'switch) () (elem <x '(case dflt)) 1 (ncase? <x || ncase? >x))
    ; -- respell: a name declared twice in one fn conflates in alive and kprop, so each later decl
@@ -10729,7 +10729,7 @@
    ; to closure. a superset of the laid: propagation and the splice only drop names
    (cgreach fs sfns als)
     (: fnx (foldl (t \ f \ (<f = 'fn ? (pin t <>f f) t)) {} fs)
-       atg (map (k \ als k) (keys als))
+       atg (map als (keys als))
        (idc? c) (c = 95 || 48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
        (idws s acc) ((: (go i j acc) (? (#s <= i) (j < i ? (snip s j i . acc) acc)
                                         (idc? (s i)) (go (i + 1) j acc)
@@ -11013,7 +11013,7 @@
            (foldl (a \ y \ a || nogo? y k) () x))
        (dnames x)                                   ; the locals the body declares
         (? (atom? x) ()
-           (<x = 'decl) (map (p \ <p) <>x)
+           (<x = 'decl) (map cap <>x)
            (foldl (a \ y \ a + dnames y) () x))
        (copy x k kt i ds)
         (? (atom? x) x
@@ -11538,7 +11538,7 @@
                        ; the IR sweeps stay out of the arm build (a64 sweeps post-choice, where r4 is unambiguously fp:
                        ; a raw r4 is also the 5th argument); a4ize retargets r4 -> fp after sibcall. no sav3: r3 is caller-saved
                        ((? (v6m? g) (ir \ t16la (t16slots ir frame))   ; v6m: fp-neg slots -> r4-positive (after a4ize), then la -> literal pool
-                           (sp64? g) (ir \ t16la ir)       ; playdate: la -> pooled abs32 word (its loader can't relocate MOVW/MOVT)
+                           (sp64? g) t16la       ; playdate: la -> pooled abs32 word (its loader can't relocate MOVW/MOVT)
                            (rv64? g) (ir \ rvslots ir frame)  ; riscv: fp-neg slots -> fp-positive, for the C forms
                            1)
                         (a4ize
@@ -11602,7 +11602,7 @@
            navl (? (3 < #hp9) (#hp9 - 2) (1 < #hp9) 1 0)   ; the file already lost the param homes: keep one grantable seat while two remain
            (firstn l n) (atom? l || n < 1 ? () (<l . firstn >l (n - 1)))
            ; arrival registers rank last: a seat there evicts what the sweeps still forward from it
-           arr9 (map (i \ (argr g i)) (jot (#params < ngp g ? #params (ngp g))))
+           arr9 (map (argr g) (jot (#params < ngp g ? #params (ngp g))))
            hp8 (filter (q \ (nelem q arr9)) hp9 + filter (q \ (elem q arr9)) hp9)
            pfile (firstn hp8 navl)
            kp (filter (q \ nelem q (peep g 'uhomes ())) (cspool g))
@@ -11726,7 +11726,7 @@
                           (<e == 'decl) (foldl (t2 \ p \ (two? p ? (pin t2 <p (w + peep t2 <p 0), mn9 >p w t2) t2)) t <>e)
                           (: w2 (elem <e '(while do for) ? (w * 8) w)
                              (foldl (t2 \ x \ mn9 x w2 t2) t e)))
-           (has9 ks e) (? (atom? e) () (elem <e ks) 1 (any (x \ has9 ks x) e))
+           (has9 ks e) (? (atom? e) () (elem <e ks) 1 (any (has9 ks) e))
            ; a local's name -> its type, and -> its gp seat; every seat's register -> its names
            nty (: (go i t) (sqm9 i @ e2 (? (atom? e2) t (go (i + 1) (pin t <e2 <>e2)))) (go 1 {}))
            ; ..and its decl's place: the tie-break, never the spelling (an inlined body's names are
@@ -11762,7 +11762,7 @@
                                       lhomable? (nty nm) && !(busy? ns9 nm a b))
                                 (sort (keys ms))))
                (take9 m)
-                (: rs (sortby (x \ y \ cost x < cost y) (filter (r \ ok? m r) (sort (keys occ) + cs0)))
+                (: rs (sortby (x \ y \ cost x < cost y) (filter (ok? m) (sort (keys occ) + cs0)))
                    (two? rs &&
                     (: r <rs c (cost r + in9 m + out9 m)
                        ; priced at one trip per entry: the mentions an iteration saves pay the transfers
@@ -11884,7 +11884,7 @@
                ; seat the locals left, in arrival order
                fgr ({} @ t
                       (!ok9 ? t
-                         (: used (map (k \ lh9 k) (keys lh9))
+                         (: used (map lh9 (keys lh9))
                             crs9 <>av9 rdc9 (av9 7) uv <>>av9
                             (go ps free)
                              (? !(two? ps) 0
@@ -12257,7 +12257,7 @@
                     (one <>f)))))
        ; the file-scope asm, one text in declaration order (gas's section state runs across them)
        asrc (foldl (a \ f \ <f = 'tasm ? "\(a)\(<>f)\n" a) "" <>ast)
-       _ (pin g 'asecs (0 < #asrc ? (trap (t \ gas-top tgt t) asrc
+       _ (pin g 'asecs (0 < #asrc ? (trap (gas-top tgt) asrc
                                          (a \ b \ (a = 'leave ? (scare a b)
                                                      (pin g 'genfail (gripe () () () "an assembly line \(asmwhy a b)"), ()))))))
        ; its `.set a, t` onto a name the C defines: an alias of the C's own
@@ -12316,7 +12316,7 @@
                      ; the wide relation's order, narrowed: tablet keys run in no fixed order, so
                      ; walking the narrow tablet's own would re-deal the layout
                      pr (cg-frefs fm {})
-                     (filter (k \ pr k) (keys (cg-refs fm {}))))))
+                     (filter pr (keys (cg-refs fm {}))))))
            (drive q)
             (gripe? (g 'genfail) || !(two? q) ? 0
                (<q @ nm
@@ -12369,7 +12369,7 @@
                         () (keys gfr))
                (two? q && !(gripe? (g 'genfail)) ? (drive q, datclose 0) 0))
            _ (datclose 0)
-           _ (pin g 'globs (filter (k \ live k) (g 'globs)))
+           _ (pin g 'globs (filter live (g 'globs)))
            gf (g 'genfail)
            (gripe? gf ? gf
               (cgdata g @ dat

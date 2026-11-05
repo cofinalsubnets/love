@@ -108,8 +108,9 @@ const fetchOpen = (url) => {
   catch (e) { body = null; return -ENOENT; }
   return body.length; };
 // ..and 3, at the reset, is a kexec: the slot holds a path, a NUL and a boot line, and
-// the file's bytes become the module the machine boots next, with that line, no image --
-// the way a page reloads what the machine built. the boot message is rewritten in place,
+// the file's bytes become the module the machine boots next, with that line and the image
+// beside it (x.wasm's x.image), else none and a long wake -- the way a page reloads what the
+// machine built. the boot message is rewritten in place,
 // so every reset after it boots the new module too
 const lift = (when, msg) => {
   if (!ex) return;
@@ -125,18 +126,27 @@ const lift = (when, msg) => {
   if (kind === 3) { let e = n + 1; while (e < lift_n && raw[e]) e++; cmd = dec.decode(raw.slice(n + 1, e)); }
   Atomics.store(ctl, 3, 0);
   const at = top + 256, buf = top + 512, bufn = 4096 - 512;
-  u8().set(raw.subarray(0, n), at);
-  const fd = Number(call(ex.k_fs_open, at, n, 114));     // 'r'
-  if (fd < 0) { post(kind === 3 ? { kexec: path, error: -fd } : { lift: path, error: -fd }); return; }
-  const parts = [];
-  for (;;) {
-    const k = Number(call(ex.k_fd_read, fd, buf, bufn));
-    if (k <= 0) break;
-    parts.push(u8().slice(buf, buf + k)); }
-  call(ex.k_fd_close, fd);
-  const bytes = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
-  for (let o = 0, i = 0; i < parts.length; o += parts[i++].length) bytes.set(parts[i], o);
-  if (kind === 3) { msg.wasm = bytes.buffer; msg.image = null; msg.cmd = cmd; post({ kexec: path, cmd }); return path; }
+  // a file off the machine's tree: its bytes, or the errno
+  const slurp = (name) => {
+    const nm = new TextEncoder().encode(name);
+    u8().set(nm, at);
+    const fd = Number(call(ex.k_fs_open, at, nm.length, 114));     // 'r'
+    if (fd < 0) return -fd;
+    const parts = [];
+    for (;;) {
+      const k = Number(call(ex.k_fd_read, fd, buf, bufn));
+      if (k <= 0) break;
+      parts.push(u8().slice(buf, buf + k)); }
+    call(ex.k_fd_close, fd);
+    const bytes = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+    for (let o = 0, i = 0; i < parts.length; o += parts[i++].length) bytes.set(parts[i], o);
+    return bytes; };
+  const bytes = slurp(path);
+  if (typeof bytes === 'number') { post(kind === 3 ? { kexec: path, error: bytes } : { lift: path, error: bytes }); return; }
+  if (kind === 3) {
+    const im = path.endsWith('.wasm') ? slurp(path.slice(0, -5) + '.image') : 0;
+    msg.wasm = bytes.buffer; msg.image = typeof im === 'number' ? null : im.buffer; msg.cmd = cmd;
+    post({ kexec: path, cmd, image: !!msg.image }); return path; }
   post({ lift: path, bytes }); };
 
 // the canvas was resized under the running machine: the page leaves the new size in the

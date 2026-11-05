@@ -4,7 +4,7 @@
 
 (borrow "src/apps/droid/droid.l")
 (borrow "src/apps/open.l")
-(borrow '(bytes gz tls))
+(borrow '(bytes gz tls hashes))
 
 (: dr-k (key-new 'p256)
    dr-nm (name-der "/CN=t")
@@ -23,9 +23,9 @@
               (go (i + 30 + nl + cs) ([(snip z (i + 30) (i + 30 + nl)) (? ok b 'badcrc)] . acc))))
        (go 0 ()))
    dr-eo (#dr-z - 22)
-   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" ()))
-   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"]))
-   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"]))
+   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" () 0))
+   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"] 0))
+   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"] 0))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -70,6 +70,28 @@
  (has? dr-sd (v2-digest [(snip dr-z 0 dr-b0) (snip dr-z dr-b0 dr-eo) (snip dr-z dr-eo #dr-z)]))
  (has? dr-sd dr-c)
  (1 = sig-ok? (unhex "2a8648ce3d040302") (spki-key dr-spk (der dr-spk 0 #dr-spk)) dr-sd dr-sig))
+
+;; the icon: the favicon's heart and red, and a resource table android reads in place
+(: dr-rz (ap-zip [["resources.arsc" "abcd"] ["x" "y"]])
+   dr-png (ic-png 0)
+   dr-iend (fsub dr-png "IDAT" 0)
+   dr-pix (gz-inflate (snip dr-png (dr-iend + 6) (dr-iend + rdbe dr-png (dr-iend - 4) 4)) (432 * 55) @ r (? (two? r) <>r ""))
+   dr-q (open "src/love/quay/cga_8x8.c" "r") dr-src (slurp dr-q) _ (close dr-q)
+   dr-cell (split "{" (filter (l \ has? l "// [") (lines dr-src) 3))
+   dr-gl (map (w \ read w) (take 7 (split "," <(split "}" (dr-cell 1)))))
+   (test (rdle dr-rz 8 2 = 0) (snip dr-rz 44 48 = "abcd")     ; stored, and on a word
+         (rdbe dr-png 16 4 = 432) (rdbe dr-png 20 4 = 432)
+         (#dr-pix = 432 * 55)
+         (dr-pix (103 * 55 + 18) = 0) (dr-pix (104 * 55 + 14) = 0) (dr-pix (104 * 55 + 18) = 255)  ; the heart's first lit pixel
+         (dr-gl = ic-rows)
+         (rdle (ic-arsc 0) 0 2 = 2) (rdle (ic-arsc 0) 4 4 = #(ic-arsc 0))))
+;; the service's class: the header's own sums and sizes
+(: dr-dx (dx-service 0)
+   (test (snip dr-dx 0 8 = ("dex\n035" + string [0]))
+         (rdle dr-dx 8 4 = dx-adler (snip dr-dx 12 #dr-dx))
+         (snip dr-dx 12 32 = unhex (sha1 (snip dr-dx 32 #dr-dx)))
+         (rdle dr-dx 32 4 = #dr-dx) (rdle dr-dx 36 4 = 112)
+         (has? dr-dx "Lpics/salt/love/Service;") (has? dr-dx "onStartCommand")))
 
 ;; window over the bridge's wire, the bridge played here
 (borrow 'window)
@@ -120,12 +142,36 @@
    _ (rest 50)
    dw-ev4 (window-events dw-w)
    ; the row's paste key and a keyboard's ask the same, and the row's last key types
-   _ (say dc (dw-rec 84 0 482 514 + dw-rec 75 1 279 0 + dw-rec 75 0 279 0 + dw-rec 84 0 482 562), flush dc)
+   _ (say dc (dw-rec 84 0 450 514 + dw-rec 75 1 279 0 + dw-rec 75 0 279 0 + dw-rec 84 0 450 562), flush dc)
    _ (rest 50)
    dw-ev5 (window-events dw-w)
    dw-v2 (dw-take 2)
    dw-sz5 (window-size dw-w)
    dw-pl5 #(window-paper dw-w)
+   ; the row's ≡ asks the decks; the row turns to them, a tap on one says it and the keys come back
+   dw-row (9 + 540 * 96 * 4)
+   (dw-tap x) (say dc (dw-rec 84 0 x 514), flush dc, rest 50, window-events dw-w)
+   _ (dw-tap 510)
+   dw-dk (dw-take 1)
+   dw-rd11 (dw-beside dw-row)
+   _ (say dc (dw-rec 68 1 (getpid 0) 1 + dw-rec 68 3 (getpid 0) 0 + dw-rec 68 255 0 0), flush dc)
+   _ (rest 50)
+   dw-ev11 (window-events dw-w)
+   _ (catch dw-rd11)
+   dw-rd12 (dw-beside (2 + dw-row))
+   _ (dw-tap 200)
+   dw-g (dw-snip (catch dw-rd12) 2)
+   ; ..and past the last, a new one
+   _ (dw-tap 510)
+   _ (dw-take 1)
+   dw-rd13 (dw-beside dw-row)
+   _ (say dc (dw-rec 68 0 (getpid 0) 1 + dw-rec 68 255 0 0), flush dc)
+   _ (rest 50)
+   _ (window-events dw-w)
+   _ (catch dw-rd13)
+   dw-rd14 (dw-beside (2 + dw-row))
+   _ (dw-tap 200)
+   dw-g2 (dw-snip (catch dw-rd14) 2)
    ; the keyboard put away by hand: the row goes and the paper has its room; back, and both return
    _ (say dc (dw-rec 83 0 1080 1200), flush dc)
    _ (rest 50)
@@ -142,7 +188,14 @@
    _ (window-events dw-w)
    _ (say dc (dw-rec 83 1 1080 900), flush dc)
    _ (rest 50)
-   dw-ev8 (window-events dw-w))
+   dw-ev8 (window-events dw-w)
+   ; the size it has is no news, unless what it drew is gone
+   _ (say dc (dw-rec 83 0 1080 900), flush dc)
+   _ (rest 50)
+   dw-ev9 (window-events dw-w)
+   _ (say dc (dw-rec 83 2 1080 900), flush dc)
+   _ (rest 50)
+   dw-ev10 (window-events dw-w))
 (test
  ([540 1200] = dw-sz)
  (dw-ev = [['down 30] ['text "a"] ['up 30] ['down 28] ['press 1 10 20] ['move 11 21] ['size 540 600]])
@@ -154,9 +207,21 @@
  (dw-c = [67 3 0 0 0 104 195 169]) (dw-v = [86])
  (dw-ev4 = [['paste "abcdefghié!"]])
  (dw-ev5 = [['down 53] ['text "/"] ['up 53]]) (dw-v2 = [86 86])
+ (dw-dk = [68]) (dw-ev11 = ()) (dw-g = [71 3]) (dw-g2 = [71 255])
  (dw-ev6 = [['size 540 600]]) (dw-sz6 = [540 600])
  (dw-ev7 = [['size 540 304]]) (dw-rh7 = [70 28 2 144 1 48 1 96 0])
- (dw-i8 = [73 0]) (dw-ev8 = [['size 540 450]]))
+ (dw-i8 = [73 0]) (dw-ev8 = [['size 540 450]])
+ (dw-ev9 = ()) (dw-ev10 = [['size 540 450]]) ([540 450] = window-size dw-w))
+;; thumbs: a second finger is nothing to a button's window, each its own record once asked for;
+;; back is esc's place
+(: _ (say dc (dw-rec 84 4 30 40 + dw-rec 75 1 4 0), flush dc)
+   _ (rest 50)
+   ev0 (window-events dw-w)
+   on (window-thumbs dw-w)
+   _ (say dc (dw-rec 84 0 10 20 + dw-rec 84 6 30 40 + dw-rec 84 5 30 41), flush dc)
+   _ (rest 50)
+   ev (window-events dw-w)
+   (test (ev0 = [['down 1]]) (on = 1) (ev = [['finger 0 0 10 20] ['finger 1 2 30 40] ['finger 1 1 30 41]])))
 (: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 ; the framework's door: a fake bridge answers each op by its letter and keeps the records;

@@ -5,7 +5,7 @@
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-coarse mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
 (borrow '(view window vec sky json))
 (borrow 'lore)                          ; lamp-light, in C
@@ -280,9 +280,16 @@
      ts (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])
      (#N @ 0 f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
- (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
-   c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
-   [(255.0 * c 0 0) (255.0 * c 1 0) (255.0 * c 2 0)])
+ ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
+ ; 60 degrees off th, so a turn carries no sample across a cloud's edge. the ring is the costly
+ ; part and the sky slow, so wx keeps it for ten seconds and 40 metres
+ (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e) as (iota 24 * (pi / 12.0))
+   key [(int (sim / 10.0)) (int (e 0 / 40.0)) (int (e 2 / 40.0))] kept (peep wx 'haze-ring ())
+   c (two? kept && <kept = key ? (kept 1)
+        (: r (sky-near lt wx (sin as) (as * 0.0) (cos as) (e 0) (e 2) sim) (pin wx 'haze-ring [key r], r)))
+   q (cos (th - as) - 0.5) w ((q > 0.0) * q * q) s (net w)
+   (ch k) (255.0 * net (w * c k) / s)
+   [(ch 0) (ch 1) (ch 2)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a
@@ -320,13 +327,13 @@
    (go 0))
  ; ..a terminal that shows kitty's pixels, by its environment
  (mesh-kitty? _) (: (has e s) (has? (getenv e) s)
-   (? (0 < #(getenv "MITTY")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
+   (? (0 < #(getenv "MITTY") + #(getenv "PIER")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
       (has "TERM_PROGRAM" "ghostty") 1 (has "TERM_PROGRAM" "WezTerm") 1 0))
  ; ..and a picture taken down
  (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"
  ; --- a level's screen: 'kitty 1 kitty's pixels, 'win a window, else half blocks ---
  (mesh-mode md) (md @ 'kitty 1 'cells 0 'window 0 (mesh-kitty? ()))
- ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty aims at kitty-w across.
+ ; ..w cells by r rows, two pixels a row; 'kp pixels a column: kitty's fits kitty-w each way.
  ; a window's picture is 'pic-w by 'pic-h, the window over 'scale (1 2 4 or 8, else 2): each
  ; of its pixels 'scale of the window's each way
  kitty-w 640
@@ -334,9 +341,17 @@
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (st 'win)
    wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
-         'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // w // s)) 1)))
+         'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // max w h // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
  (mesh-dims st) (: k (peep st 'kp 1) (tablet? (st 'win) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
+ ; ..a body's sway b [up right pitch roll] for the eye. a window's coarsest pixels would make it
+ ; hop, so there the server's enlarging slides the picture instead, by its own pixels; a body
+ ; two metres from what it sees, and the eye stays still
+ (mesh-sway st b fov w) (: s (mesh-scale st) win (st 'win)
+   (? (8 <= s && tablet? win && window-slides? win)
+      (: foc (s * w / 2.0 / tan (fov / 2.0))
+         (pin st 'slide [(int (foc * b 1 / 2.0)) (int (0.0 - foc * (b 2 + b 0 / 2.0)))], [0.0 0.0 0.0 0.0]))
+      (pin st 'slide [0 0], b)))
  ; ..a frame f: kitty alternates ids 7 and 8 in one synchronised update, the old taken down
  ; once the new is over it (one id reused blanks first); or the cells, bands over them
  (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
@@ -354,7 +369,7 @@
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
-   up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs))
+   up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs) (peep st 'slide [0 0]))
    _ (up ? (each rs (mesh-under f w h P W H)) (frame-paint f w (max 1 (min (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))

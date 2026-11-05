@@ -64,7 +64,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
                                                       " -> tmpfs")))
              ; `love` is no verb, it is the seat every name wears
              ws (sort ("love" . map string (keys (cite 'verbs 'tab))))
-             n  (net (map (w \ hlink1 exe dir w) ws))
+             n  (net (map (hlink1 exe dir) ws))
              (hnote ("underlay " + show n + " names on " + exe),
               n)))))
    ; --- the scatter: the carried tree, inflated into RAM -----------------------

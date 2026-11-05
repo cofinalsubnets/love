@@ -30,7 +30,7 @@
     (test
      (: b (tl-box ())
         f (tui-fresh b 3 'g1 () ["one" "two"] "st" 3 1)
-      (tl-esc f = "^[?2026h^[Hone^[K\r\ntwo^[K\r\n^[3;1Hst^[K^[3;1H^[?2026l"))
+      (tl-esc f = "^[?2026h^[H^[Kone\r\n^[Ktwo\r\n^[3;1H^[Kst^[3;1H^[?2026l"))
      ; the same rows again at the same geometry: no body, no status, just the cursor
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 () ["one" "two"] "st" 3 1)
@@ -40,12 +40,12 @@
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 () ["one" "two"] "st" 3 1)
         f (tui-fresh b 3 'g1 () ["one" "TWO"] "st" 3 1)
-      (tl-esc f = "^[?2026h^[2;1HTWO^[K^[3;1H^[?2026l"))
+      (tl-esc f = "^[?2026h^[2;1H^[KTWO^[3;1H^[?2026l"))
      ; the status alone moved
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 () ["one" "two"] "st" 3 1)
         f (tui-fresh b 3 'g1 () ["one" "two"] "ST" 3 1)
-      (tl-esc f = "^[?2026h^[3;1HST^[K^[3;1H^[?2026l"))),
+      (tl-esc f = "^[?2026h^[3;1H^[KST^[3;1H^[?2026l"))),
 
     ; --- fresh: the geometry is what says the rows still line up ---
     (test
@@ -53,12 +53,12 @@
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 () ["one" "two"] "st" 3 1)
         f (tui-fresh b 3 'g2 () ["one" "two"] "st" 3 1)
-      (tl-esc f = "^[?2026h^[Hone^[K\r\ntwo^[K\r\n^[3;1Hst^[K^[3;1H^[?2026l"))
+      (tl-esc f = "^[?2026h^[H^[Kone\r\n^[Ktwo\r\n^[3;1H^[Kst^[3;1H^[?2026l"))
      ; a shorter frame than the last still places every row it has
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 () ["one" "two" "three"] "st" 3 1)
         f (tui-fresh b 3 'g1 () ["one" "XX"] "st" 3 1)
-      (tl-esc f = "^[?2026h^[2;1HXX^[K^[3;1H^[?2026l"))),
+      (tl-esc f = "^[?2026h^[2;1H^[KXX^[3;1H^[?2026l"))),
 
     ; --- fresh: the content key short-circuits the body, and () means there is none ---
     (test
@@ -71,12 +71,12 @@
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 'k1 ["one" "two"] "st" 3 1)
         f (tui-fresh b 3 'g1 'k2 ["one" "TWO"] "st" 3 1)
-      (tl-esc f = "^[?2026h^[2;1HTWO^[K^[3;1H^[?2026l"))
+      (tl-esc f = "^[?2026h^[2;1H^[KTWO^[3;1H^[?2026l"))
      ; () is no key at all: it must never read as "equal to the last ()"
      (: b (tl-box ())
         _ (tui-fresh b 3 'g1 () ["one" "two"] "st" 3 1)
         f (tui-fresh b 3 'g1 () ["one" "TWO"] "st" 3 1)
-      (tl-esc f = "^[?2026h^[2;1HTWO^[K^[3;1H^[?2026l"))),
+      (tl-esc f = "^[?2026h^[2;1H^[KTWO^[3;1H^[?2026l"))),
 
     test_fin (),
     say err "test/law/tui: the window follow + the diff repaint ok", put err 10, 0))

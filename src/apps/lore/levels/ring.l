@@ -19,7 +19,7 @@
 
 ; the textures: grass, stone and the river's water; below, the rooms'
 ; wallpaper, carpet and ceiling tiles, and the well's concrete
-(: grass (feel 'soft (texture 64 64 2
+(: grass (feel 'grass (texture 64 64 2
           '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
             (patches 5 0.12 (rgb 0.5 0.66 0.26))))))
 (: stone (feel 'hard (texture 32 32 1.2 '((fill (grey 0.55)) (noise 2 0.15) (patches 4 0.2 (shade 0.8))))))
@@ -317,7 +317,7 @@
     (skin {'all paint} (air (box [(sx - 0.81) (hub - 1.31) -0.81] [(sx + 0.81) (cy + 0.01) 0.81])))   ; the hatch, a hair wider than the platform, so the floor never overlaps it
     (map (x \ strip-light [(sx + x) (hub + 1.21) 0]) [-2.3 -1.25 1.25 2.3])
     (block [(sx + 1.9) cy -1.13] [(sx + 2.94) (cy + 0.2) 0.9] wood)
-    (sleep-bed [(sx + 2.42) (cy + 0.2) -1.1] 0 "station.l" 'walk-in)   ; lain on, back to the station's walk-in
+    (sleep-bed [(sx + 2.42) (cy + 0.2) -1.1] 0 "earth.l" 'walk-in)   ; lain on, back to the station's walk-in
     (map (q \ pa [(sx + q 0 * 2.95) (hub + 1.21) (q 1 * 1.14)] [-(q 0) -(q 1)]) [[1 1] [1 -1] [-1 1] [-1 -1]])]))
 
 (level "the ring"

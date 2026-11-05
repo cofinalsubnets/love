@@ -453,7 +453,7 @@ intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t);
 uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t);
 intptr_t port_fd(word);                         // the fd under a love port, or -1
 uintptr_t love_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
-extern struct port_vt const to_vt, closed_vt, ci_vt;
+extern struct port_vt const to_vt, closed_vt, ci_vt, state_vt;
 // poll(2)'s struct pollfd, so the host polls the block directly (main.c static-asserts it)
 struct wait_fd { int fd; short events, revents; };
 
@@ -787,6 +787,14 @@ static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str
 static love_inline uint8_t *cask_bytes(word x, uintptr_t *n) {
  struct str *s = cask_str(x);
  return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+// a state: a port with no door, holding a nif's bytes. only the nifs that made it read or write them
+struct state { struct io io; struct str *str; };
+static love_inline struct str *state_str(word x) {
+ return evenp(x) && cell(x)->ap == lvm_port_io && ((struct io*) x)->vt == &state_vt ? ((struct state*) x)->str : NULL; }
+static love_inline uint8_t *state_bytes(word x, uintptr_t *n) {
+ struct str *s = state_str(x);
+ return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+
 
 // --- numbers ---
 #define isnum(x) (charmp(x) || gemp(x) || bigp(x))
@@ -1079,6 +1087,7 @@ static love_inline union u *tag_head(struct tag *t) {
 // a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
 // state into; NULL when the room was refused (*gp is then not ok)
 union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
+union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
 static love_inline word *gap(struct g *g, word **top) {

@@ -324,13 +324,13 @@
                         (pin x 'bad "its keyUsage does not read"))
                     (oid = oid-eku)
                      (der-seq c v 48 @ s
-                        (two? s && all (t \ <t = 6) s ? (pin x 'eku (map (t \ der-body c t) s))
+                        (two? s && all (t \ <t = 6) s ? (pin x 'eku (map (der-body c) s))
                            (pin x 'bad "its extendedKeyUsage does not read")))
                     (oid = oid-san)
                      (der-seq c v 48 @ s
                         (two? s ?
-                            (pins x 'dns (map (t \ der-body c t) (filter (t \ <t = 130) s))
-                                    'ips (map (t \ der-body c t) (filter (t \ <t = 135) s)))
+                            (pins x 'dns (map (der-body c) (filter (t \ <t = 130) s))
+                                    'ips (map (der-body c) (filter (t \ <t = 135) s)))
                            (pin x 'bad "its subjectAltName does not read")))
                     (oid = oid-nc)                 ; [0] permitted, [1] excluded: subtrees of [tag base]
                      (: s (der-seq c v 48)
@@ -362,7 +362,7 @@
           (#p < 3 || snip p 0 2 != "*.") 0
           (: rest (snip p 1 #p)                          ; ".example.com"
              k (fsub h "." 0)
-             (? (k < 1 || elem 42 (map (i \ rest i) ^#rest)) 0
+             (? (k < 1 || elem 42 (map rest ^#rest)) 0
                 (#(split "." rest) < 3) 0                 ; "*.com" names a whole suffix
                 (snip h k #h = rest ? 1 0)))))
    (host-ok? x host)
@@ -399,7 +399,7 @@
     (x 'ncp + x 'nce @ gs
        (? (atom? gs) ()
           (any (g \ nelem <g [129 130 134 135]) gs) "it constrains a kind of name not checked here"
-          (filter (n \ nc-why x n) nms @ bad
+          (filter (nc-why x) nms @ bad
              (two? bad ? ("the name " + nm-show <bad + " " + nc-why x <bad)))))
 
    ; --- the roots: the host's bundle, read once a process ---

@@ -76,7 +76,7 @@
 
 ; a terminal answering DECRQM ?2027 set makes the editor work by grapheme cluster
 (: edkey (cite 'cli 'edkey) edgc (cite 'cli 'edgc)
-   (bs s) (map (i \ s i) (jot #s))
+   (bs s) (map s (jot #s))
    fam "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"         ; 👨‍👩‍👧: 18 bytes, three wide chars
    ((test (0 = edkey (ed-keys (bs "\e[?2027;2$y"))) (0 = edgc 'on)
           (0 = edkey (ed-keys (bs "\e[?2027;1$y"))) (1 = edgc 'on)),

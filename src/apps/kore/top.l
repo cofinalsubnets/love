@@ -134,7 +134,7 @@
    ; previous read there is no difference, so the first frame is the average since boot.
    (tp-cpud now was)
     (two? was ? (map (i \ (tp-at now i - tp-at was i)) (jot 8))
-     (map (i \ (tp-at now i)) (jot 8)))
+     (map (tp-at now) (jot 8)))
    (tp-cpuline now was)
     (: d (tp-cpud now was)
        tot (tp-sum (map (x \ (x < 0 ? 0 x)) d) @ v (0 < v ? v 1))
@@ -293,7 +293,7 @@
        (tr-pen st 'lbl + upad lw lbl + tr-pen st 'txt + (m ? "[" " ") + tr-bar st segs bw
         + tr-pen st 'txt + (m ? "]" " ") + tr-pen st 'num + upad tw text + tr-pen st 'txt))
    (tr-cpum st i now was lw w)
-    (: d (map (x \ max 0 x) (tp-cpud now was))
+    (: d (map (max 0) (tp-cpud now was))
        tot (tp-sum d @ v (0 < v ? v 1))
        sy (d 2 + d 5 + d 6 + d 7)
        busy (d 0 + d 1 + sy)

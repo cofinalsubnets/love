@@ -213,7 +213,7 @@
        grid? (? l? 0 o1? 0 (x? || c? || tty?) 1 0)
        down? !x?
        (tf st) (? (peep t 117 0) (ust-at st 9) (peep t 99 0) (ust-at st 10) (st 3))
-       key (? (peep t 83 0) (st \ <st) tm? tf ())
+       key (? (peep t 83 0) cap tm? tf ())
        F? (peep t 70 0) p? (peep t 112 0)
        o {'n (peep t 110 0) 'g (peep t 103 0) 'o (peep t 111 0) 'h h? 'tf tf
           ; a long row's link wears, under -F, the mark of what it names
@@ -976,7 +976,7 @@
        (go l acc) (atom? l ? (rev acc)
                    (words <l @ w
                     (go >l (3 <= #w ? ([(udf-esc (w 0)) (udf-esc (w 1)) (w 2)] . acc) acc))))
-       (two? r ? (go (filter (s \ #s) (lines <>r)) ())))
+       (two? r ? (go (filter tally (lines <>r)) ())))
    ; each mount's root within its device, by point, from /proc/self/mountinfo
    (udf-roots _)
     (: r (uread "/proc/self/mountinfo") t {}

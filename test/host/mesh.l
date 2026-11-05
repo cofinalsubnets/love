@@ -93,7 +93,7 @@
        (map shape tx = [[8 8] [4 4] [2 2] [1 1]])
        (peep (tx 0) [0 0] 0 = 16711680) (peep (tx 2) [0 0] 0 = 16711680) (peep (tx 2) [0 1] 0 = 255)
        (peep (hx 0) [0 0] 0 = -1) (peep (hx 1) [0 0] 0 = -1) (peep (hx 1) [0 1] 0 = -1) (peep (hx 1) [1 0] 0 != -1)
-       (#(jn 0) = 48) (#(jn 1) = 24) (jn 1 12 0 = 24) (amax (gem-tray [72] (mh-cat (map (t \ take 3 t) (jn 1)))) = 47)
+       (#(jn 0) = 48) (#(jn 1) = 24) (jn 1 12 0 = 24) (amax (gem-tray [72] (mh-cat (map (take 3) (jn 1)))) = 47)
        (mv 0 0 1 = bx 0 0 1 + 2.0)
        (has? (mesh-cells f0 W H 1 0 {}) "38;2;") (has? (mesh-cells f0 W H 0 (view-bayer W H) {}) "38;5;")
        (mh-count "\r\n" (mesh-cells f0 W H 1 0 {}) = H // 2 - 1)

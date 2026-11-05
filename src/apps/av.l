@@ -62,7 +62,7 @@
    (av-open-all q) (av-opens q 0)
    (av-opens q skip?)
     (: cs (av-codecs ())
-       (av-read q (h \ av-claim cs h) "" skip? @
+       (av-read q (av-claim cs) "" skip? @
          ['short _] "no codec here reads this stream"
          [() _] "no codec here reads this stream"
          [c h] (? (string? c) c

@@ -153,7 +153,7 @@
                               m2 (m = () ? (cask w @ k
                                               (pin t c k, pin lo c x, k)) m)
                               (pin m2 x (peep m2 x 0 | 1 << y - y0), pin hi c x))))
-           (map (x \ map (y \ dot x y) ys) ^w,
+           (map (x \ map (dot x) ys) ^w,
             "\(ujoinc 36 (map (c \ "#\(c - 1)\(rle (t c) (lo c) (hi c))") (sort (keys t))))-"))
        ("\eP0;1;0q\"1;1;\(w);\(h)"
         + catmap colour ^#cols
@@ -459,7 +459,7 @@
            _ (dirty || moved ? (puts (pv-frame st), flush out) 0)
            n (im-swig in b)
            ks (charm? n && 0 < n ? (pv-keys (snip (string b) 0 n)))
-           (map (c \ pv-step st c) ks,
+           (map (pv-step st) ks,
             (st 'quit ? 0
              (pv-tick st (clock 0) @ t
                 (two? ks || t ? 0 (rest (1 < pv-nf st && st 'play ? 15 50)),

@@ -178,4 +178,22 @@
     hark ["rm" "-rf" dir],
     0))
 
+; the shapes a source lays before coding: 8-bit wav unsigned, raw big-endian
+(: u8 (cats (map (i \ string (128 + (i * 7) % 100)) (jot 4096)))
+   (wle n k) (wrle n k)
+   wav ("RIFF" + wle (36 + #u8) 4 + "WAVEfmt " + wle 16 4 + wle 1 2 + wle 1 2 + wle 8000 4 + wle 8000 4 + wle 1 2 + wle 8 2
+        + "data" + wle #u8 4 + u8)
+   be (cats (map (i \ string 0 + string ((i * 5) % 200)) (jot 4096)))
+   (put p s) (open p "w" @ q (say q s, close q))
+   (back c) (hark ["sh" "-c" ("cd " + dir + " && " + c)])
+   _ (mkdir dir 448)
+   _ (put (dir + "/w8.wav") wav)
+   _ (put (dir + "/be.raw") be)
+   _ (back "../love flac -s -f -o w8.flac w8.wav && ../love flac -s -d -f -o w8.out w8.flac")
+   _ (back "../love flac -s -f --force-raw-format --endian=big --sign=signed --channels=1 --bps=16 --sample-rate=8000 -o be.flac be.raw && ../love flac -s -d -f --force-raw-format --endian=big --sign=signed -o be.out be.flac")
+   (rd p) (open p "r" @ q (: s (slurp q) (close q, s)))
+   _ (test (rd (dir + "/w8.out") = wav) (rd (dir + "/be.out") = be))
+   _ (hark ["rm" "-rf" dir])
+   0)
+
 (test_fin (), puts "flac: ok", putc 10, 0)

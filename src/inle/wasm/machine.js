@@ -590,7 +590,7 @@ export async function loveMachine(root) {
   canvas.addEventListener('pointerdown', e => {
     if (grabbed && !locked() && e.pointerType === 'mouse') lock();
     (e.pointerType === 'touch' ? canvas : keys).focus({ preventScroll: true });
-    canvas.setPointerCapture?.(e.pointerId), held = e.pointerId;
+    if (!locked()) canvas.setPointerCapture?.(e.pointerId), held = e.pointerId;   // a lock refuses a capture
     send(0, button(e.button), e); });
   canvas.addEventListener('pointerup', e => {
     if (grabbed && !locked() && e.pointerType === 'mouse') lock();
