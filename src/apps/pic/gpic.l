@@ -100,8 +100,8 @@
                   (put o c, gr-adv g, go n)))
        (go 0))
    ; a numeral's value as groff's pic reads one: the whole part by tens, each figure of the
-   ; fraction a tenth of the last one's weight, then times 10^exponent. not the nearest
-   ; double (0.3 reads 0.30000000000000004), and every place it matters says so
+   ; fraction a tenth of the last one's weight, then times the double nearest 10^exponent.
+   ; not the nearest double (0.3 reads 0.30000000000000004), and every place it matters says so
    (gp-decimal t)
     (: n #t
        (whole i v) (i < n && digit? (t i) ? (whole (i + 1) (v * 10.0 + (t i - 48))) [i v])
@@ -112,8 +112,7 @@
        r2 (<r1 < n && t <r1 = 46 ? (frac (<r1 + 1) (r1 1) 1.0) r1)
        i <r2 v (r2 1)
        e (gr-expo t i)
-       p (foldl (a \ _ \ a * 10.0) 1.0 ^(abs e))
-       (e < 0 ? (v * (1.0 / p)) (v * p)))
+       (v * (e < 0 ? (gr-dbl 1 (10 ** (0 - e))) (gr-dbl (10 ** e) 1))))
    ; a number off the text: digits, a fraction, an exponent; a trailing i is inches and
    ; dropped; 1st 2nd 3rd 4th is an ordinal
    (gp-number g)
@@ -575,7 +574,7 @@
    (gp-sprintf g i)
     (!(gp-op? g i "(" && gp-k g (i + 1) = 'str) ? ()
      (: f (gp-v g (i + 1))
-        (go j acc) (? (gp-op? g j ")") [(aw-sprintf f (rev acc) "%g") (j + 1)]
+        (go j acc) (? (gp-op? g j ")") [(aw-csprintf f (rev acc) "%g") (j + 1)]
                       (gp-op? g j ",") (gp-expr g (j + 1) @ [v k] (go k (v . acc)) ()))
         (go (i + 2) ())))
    ; a text: "string" or sprintf(..) -> [string next]
