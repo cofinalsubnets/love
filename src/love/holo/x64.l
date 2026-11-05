@@ -59,7 +59,7 @@
                      [(byte d)]))
           'abs64 (le64 (target + aux))
          ;; truncated: right only where the address fits (a flat low kernel image, i386)
-         'abs32 ((target + aux) % 4294967296 @ v
+         ('abs32 || 'abs32d) ((target + aux) % 4294967296 @ v
                    (le32 (v < 0 ? (v + 4294967296) v)))
          ;; a sign-extended dword (pushq $sym), as for a kernel at -2 GiB
          'abs32s ((target + aux) @ v (fits32 v ? (le32 (v < 0 ? (v + 4294967296) v)) (scare 'abs32s-range v)))
