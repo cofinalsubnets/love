@@ -24,6 +24,12 @@ take ~1,760, 18 `dmul` ~910, the compares and conversions ~160, and mooncc's cod
 itself ~1,370 -- the gap left to gcc is that code (frame traffic, constants, moves). The
 ~25-instruction overhead per call in the last two columns is the caller's own staging.
 
+Whole programs: `sh test/thumb2/perf/perf.sh meter [TARGET] [DIR]` boots love on qemu's M7 and counts
+the instructions of the boot and of `work.l` (facets, tray kernels, scalar floats, a bignum quotient, a
+sort) with a qemu plugin; a run repeats exactly, and DIR keeps a build apart for a compare. On a word-32
+love `flo_t` is `float` (love.h), in the FPU on thumb2sp; soft doubles come from `lm_*` and a few paths in
+num.c and io.c.
+
 ## what this branch carries (gated: see the commit)
 
 - `(u64) a * b` of two widened words is one `umull` / `smull` (gen.l `wmul`, read off pwid's fill)
