@@ -1781,3 +1781,6 @@ lvm(lvm_vmap2) {
  bshape_put(r->shape, R, a, b);
  vmap2_fill(r, a, b, fn);
  love_musttail return Push(word(r)); }
+
+flo_t love_fmod(flo_t a, flo_t b) {
+ return a - love_trunc(a / b) * b; }
