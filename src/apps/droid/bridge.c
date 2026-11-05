@@ -760,8 +760,8 @@ static void *loop(void *p) {
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
-    int id = ALooper_pollOnce(b->typing ? 200 : -1, &fd, &ev, &d);
-    if (b->typing) insets(b);
+    int id = ALooper_pollOnce(b->typing || b->shown ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
+    if (b->typing || b->shown) insets(b);
     if (id == LISTEN) {
       int c = accept4(b->lsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && (b->csock < 0 || b->nunder < 3)) {

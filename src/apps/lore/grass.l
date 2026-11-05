@@ -402,7 +402,7 @@
  ; paint a tick says -- the flat field's, or a sequel's
  grass-look {'ttl open-ttl 'rows open-rows 'frame grass-frame 'paint grass-paint}
  ; a phone's keyboard takes a moment to go, and the screen grows when it has
- (settled a n) (rest 300, ttysize 7 19 @ b (b = a || n < 1 ? b (settled b (n - 1))))
+ (settled a n) (rest 500, ttysize 7 19 @ b (b = a || n < 1 ? b (settled b (n - 1))))
  (grass-week lk ls) (: ws (ttysize 7 19 @ w (string? (getenv "LOVE_FACE") ? (settled w 3) w))
    r (<ws - 1) c <>ws
    g (grass-new r c (wheel (clock 0)))
