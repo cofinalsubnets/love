@@ -538,10 +538,11 @@
           (n = 1 && starts? nm "set" && 0 < as-ccl nm 3) (as-emit md 1 (as-frc d) [15 (as-ccl nm 3 + 16)] 0 d)
           (n = 1 && elem mn '(mul imul div idiv))
            (as-emit md w (as-frc d) [(as-opw 247 w)] (mn @ 'mul 4 'imul 5 'div 6 7) d)
+          ; imul $k, %r is imul $k, %r, %r
+          (mn = 'imul && (n = 3 && <(ops 2) = 'im || n = 2 && <d = 'rg && <s = 'im))
+           (: k <>(n = 3 ? (ops 2) s) f (n = 3 ? s d) n (? (fits8 k) 1 (w = 2) 2 4)
+              (as-imt (as-emit md w (as-frcs ops) [(fits8 k ? 107 105)] (as-regn d) f + (fits8 k ? [(byte k)] (as-imw (w = 8 ? 4 w) k))) n f))
           (n = 2 && mn = 'imul && <d = 'rg) (as-emit md w (as-frcs ops) [15 175] (as-regn d) s)
-          (n = 3 && mn = 'imul && <(ops 2) = 'im)
-           (: k <>(ops 2) n (? (fits8 k) 1 (w = 2) 2 4)
-              (as-imt (as-emit md w (as-frcs ops) [(fits8 k ? 107 105)] (as-regn d) s + (fits8 k ? [(byte k)] (as-imw (w = 8 ? 4 w) k))) n s))
           ; xchg with the accumulator: 90+r, as gas lays it (not eax with itself: 90 is nop, and
           ; the 32-bit exchange must zero the upper half)
           (n = 2 && mn = 'xchg && 1 < w && <d = 'rg && <s = 'rg && (as-regn d = 0 || as-regn s = 0)
@@ -573,7 +574,7 @@
      sg (foldl (\ a o (? (two? a) a (two? o && <o = 'seg) o ())) () ops0)
      ; outside 64 a bare symbol a non-branch reads is memory at that address (no %rip)
      br? (xa-branch? mn || xa-cc? mn || elem mn '(calll callw jmpl jmpw) || charm? (peep as-loops mn ()))
-     ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? ['mem -1 -1 1 0 <>o] o)) ops0))
+     ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? (xa-symoff (show <>o) @ so ['mem -1 -1 1 >so <so]) o)) ops0))
      (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
         ((md < 64 || as-sys64? mn) && two? (as-sys md mn w ops)) (as-sys md mn w ops)

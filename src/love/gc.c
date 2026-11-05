@@ -368,12 +368,13 @@ static uintptr_t sv_size(struct g *g) {
  return w < top ? w : top; }
 
 // the collector, asked for req0 words: a minor unless the rem set missed or the major lacks
-// headroom. the ask rides g while it works, so an oom can say it
+// headroom. a refusal leaves the reason (oom . ask), in a cell made at boot, as nothing can be made now
 static struct g *please_(struct g *g, uintptr_t req0);
 love_noinline struct g *please(struct g *g, uintptr_t req0) {
- g->ask = req0;
- g = please_(g, req0);
- if (ok(g)) g->ask = 0;
+ if (ok(g = please_(g, req0))) return g;
+ struct g *c = core_of(g);
+ word r = c->nom[NomOom];
+ if (r) ((struct chain*) r)->b = putcharm(req0), c->scare_c = r;
  return g; }
 static struct g *please_(struct g *g, uintptr_t req0) {
  if (req0 > words_max) return encode(g, status_scare);   // before any sum can wrap

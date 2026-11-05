@@ -10,11 +10,11 @@
  ; lead is two and a half gaps, clamped to song-lead .. song-lead-max
  song-lead (6 * (song-rate // 30))
  song-lead-max (120 * (song-rate // 30))
- (pacer _) {'t (clock 0) 'gap 0.0 'cap song-lead-max 'step 0}
+ (pacer _) (clock 0 @ t {'t t 'w t 'gap 0.0 'cap song-lead-max 'step 0})
  (pace! p) (: t (clock 0)
               d (1.0 * (t - p 't))
-              v ((d / 2000.0) 0.5 * p 'gap)
-              ((pins p 't t 'gap (v < d ? d v)),
+              v (((t - p 'w) / 2000.0) 0.5 * p 'gap)
+              ((pins p 't t 'w t 'gap (v < d ? d v)),
                p 'gap))
  (song-lead-of gap) (int (2.5 * gap * song-rate / 1000.0) @ n
                        (n < song-lead ? song-lead (song-lead-max < n ? song-lead-max n)))

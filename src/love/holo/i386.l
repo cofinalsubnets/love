@@ -330,7 +330,8 @@
    i386-ems16 (i386-ems 1)
    i386-wide '(r7 r8 r9 r10 r11 r12 r13 r14)
    (i386-lower ems ins)
-    (: _ (each >ins (o \ elem o i386-wide && scare 'i386-badreg [o ins]))
+    (: _ (each (<ins @ 'call () 'jmp () 'la [ins 1] >ins)   ; those name a symbol
+              (o \ elem o i386-wide && scare 'i386-badreg [o ins]))
      (lower-via ems ins))
    (i386-be ems)
     {'lower (i386-lower ems)

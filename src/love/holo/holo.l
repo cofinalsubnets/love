@@ -154,7 +154,7 @@
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1
              'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
-             'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
+             'asis 1 'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2 'ubfx 4   ; the three-register twins, thumb2's ubfx
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
@@ -243,13 +243,15 @@
          ins)
    ;; the flags are free if a writer, call or ret comes before any reader within k forms. a
    ;; jump goes on at its label when that lies ahead, an unseen target answers no; a label is
-   ;; transparent, as only the fall-through carries these flags.
+   ;; transparent, as only the fall-through carries these flags. a backend's 'flagend names the
+   ;; other forms that leave the flags to no one.
    (flagfree be l k)
       (k < 1 || atom? l ? 0
          (<(<l) @ o
             (? (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
+               (lit? (peep be 'flagend 0) && (be 'flagend) <l) 1
                (o = 'jmp) (flagjump be >l (<l 1) k)
                (elem o '(jmpr jmpm jmpt)) 0
                (flagfree be >l (k - 1)))))
@@ -297,6 +299,8 @@
    ;; `longs` names labels that stay long (the object writer's weak set, kept as relocations).
    ;; (lal d l p) is la of l whose word sits at p, a pool ahead: the hook may load it from there.
    ;; its span may cross aligns, each counted at its widest pad on top of the distance.
+   ;; 'fuse, (\ cmp br rel -> bytes | ()): one encoding of a cmp and the br right after it, asked
+   ;; only where nothing on either path reads the flags the pair no longer sets.
    ;; local names avoid scan/rw/skip, which collide with moon/kore names in a cat'd stream. --
    (laylax prog be at0 labels longs)
       (!(lit? (peep be 'short 0)) ? (lay prog be at0 () labels)
@@ -330,12 +334,23 @@
                      (peep longs l 0) ()
                      (peep eras l -1 < era) ()
                      (t + (peep grows (eras l) 0 - peep grows era 0))))
+            ;; ..a cmp and its branch laid as one, from the hook, where the flags die with them
+            fuse-with (peep be 'fuse 0)
+            (fuse-of ins rest era pa)
+               (? (!(lit? fuse-with) || <ins != 'cmp || !(two? rest) || <(<rest) != 'br) ()
+                  (tgt-of (<rest 2) era @ t
+                     (? !(imm? t) ()
+                        (fuse-with ins <rest (t - pa) @ sc
+                           (two? sc && flagfree be >rest 128 && flagjump be >rest (<rest 2) 128 ? sc ())))))
             ;; pass two: pessimistic addresses (pa) decide, final ones (fa) pin labels and pads
             (stitch p cs pa fa era items)
                (atom? p ? (rev items . labels)
-                  (: ins <p  k <<cs  c ><cs
+                  (: ins <p  k <<cs  c ><cs  fu (fuse-of ins >p era pa)
                      (? (<ins = 'label)
                         (pin labels (ins 1) (label-addr ins fa), stitch >p >cs pa fa era items)
+                        (two? fu)
+                        (: r (revonto fu items 0)
+                           (stitch >>p >>cs (pa + k + <<>cs) (fa + <r) era >r))
                         (<ins = 'align)
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)

@@ -523,6 +523,8 @@
    (thumb-mrrc cp opc d d2 crm)
       (t32 (0xEC500000 | rn d2 << 16 | rn d << 12 | thumb-cpn cp 112 << 8 | (opc & 15) << 4 | thumb-cpn crm 99 & 15))
    ;; bkpt #imm8: 0xab is the semihosting call, how a board without a uart exits qemu
+   ;; a form gas wrote, as it stands: nothing rewrites it, and the flag scan stops at it
+   (thumb-asis ins) (thumb-lower ins)
    (thumb-brk imm) (0 <= imm <= 255 ? (t16 (0xBE00 | imm)) (scare 'thumb-brk-imm imm))
    ;; MRS Rd, <sysm>: only the two stack pointers, for a fault handler
    thumb-sysm {'msp 8 'psp 9}
@@ -566,7 +568,7 @@
           ('ubfx . thumb-ubfx) ('lsl . thumb-sh3 'shl) ('lsr . thumb-sh3 'shr) ('asr . thumb-sh3 'sar) ('mvn . thumb-mvn)
           ('uxtb . thumb-zxr 1) ('uxth . thumb-zxr 2) ('sxtb . thumb-sxr 1) ('sxth . thumb-sxr 2)
           ('neg . thumb-neg) ('not . thumb-not) ('inc . thumb-inc) ('dec . thumb-dec)
-          ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
+          ('asis . thumb-asis) ('jmp . thumb-jmp) ('br . thumb-br) ('jmpr . thumb-jmpr) ('jmpt . thumb-jmpt) ('callr . thumb-callr)
           ('set . thumb-set) ('test . thumb-test)
           ('div . thumb-div) ('rem . thumb-rem) ('udiv . thumb-udiv) ('urem . thumb-urem)
           ('call . thumb-call)
@@ -605,6 +607,8 @@
             ; the narrow forms the 'short hook lays: B T2 (+-2KB) and Bcc T1 (+-256)
             'b16 (-2048 <= o <= 2046 ? (t16 (0xE000 | (o >> 1 & 2047))) (scare 'thumb-b16-reach o))
             'b8 (-256 <= o <= 254 ? (t16 (0xD000 | (aux << 8 | (o >> 1 & 255)))) (scare 'thumb-b8-reach o))
+            ; cbz and cbnz, forward only: aux = Rn, bit 3 for cbnz
+            'cbz (0 <= o <= 126 ? (t16 (0xB100 | ((aux & 8) << 8 | ((o >> 6 & 1) << 9 | ((o >> 1 & 31) << 3 | aux & 7))))) (scare 'thumb-cbz-reach o))
             ; lal's pooled loads: ldr Rt, [pc, #imm] from the word-aligned pc, t1 or t2
             'ldl16 (target - (site + 4 & -4) @ v
                       (0 <= v <= 1020 && v % 4 = 0 ? (t16 (0x4800 | (aux << 8 | v >> 2))) (scare 'thumb-ldl16-reach v)))
@@ -643,11 +647,23 @@
             (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
             ()))
 
+   ;; a low register's compare with 0 and its eq or ne branch go cbz or cbnz. the 6 bytes laid
+   ;; leave a body that only shrinks, and at least 2 bytes of it, as cbz can't reach its own next
+   (thumb-fuse a b rel)
+      (rel - 6 @ body
+         (? (a 2 != 0 || !(thumb-lo? (a 1)) || !(elem (b 1) '(eq ne)) || body < 2 || 128 < body) ()
+            [(fix 2 'cbz (b 2) ((b 1 = 'ne ? 8 0) | rn (a 1)))]))
+
+   ;; a compiled tail or indirect call, or a pop into the pc: aapcs keeps no flags across any
+   (thumb-flagend ins) (elem <ins '(jmpr callr callm) || <ins = 'popm && elem 'pc (ins 1))
+
    thumb2 {'lower thumb-lower
            'short thumb-short
+           'fuse thumb-fuse
+           'flagend thumb-flagend
            'lis 1
            'sform thumb-sform
-           'flagr '(br set adc sbc adcs sbcs raw)
+           'flagr '(br set adc sbc adcs sbcs raw asis)
            'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss lis)
            'patch thumb-patch
            'refix thumb-refix
