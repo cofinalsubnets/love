@@ -51,6 +51,11 @@
            (lomk g @ l (lomk g @ h
               [ty [l h] (f2 + [['movapd 'f0 x] ['fix '(f0) lokl (cvtdll g (usg? ty))] ['mov l 'r0] ['mov h 'r1]])])))
        (pair? g ty) (lop g [vt r fs] @ [f2 l h] [ty [l h] f2])
+       (lofl? ty && sp64? g)
+        (lomkf g @ d
+           [ty d (fs + [['mov 'r0 <r] ['mov 'r1 <>r] '(cuse r0 r1)
+                        ['call (ty = 'float ? (usg? vt ? '__aeabi_ul2f '__aeabi_l2f) (usg? vt ? '__aeabi_ul2d '__aeabi_l2d))]
+                        (ty = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])])])
        (lofl? ty)
         (lomkf g @ d
            [ty d (fs + [['mov 'r0 <r] ['mov 'r1 <>r] ['fix '(r0 r1) lokl (cvtlld g (usg? vt) (ty = 'float))]
@@ -1661,9 +1666,40 @@
            map (i \ ['st 'r4 (rsa + 8 * i) (argr g i)]) ^ng +
            (nofp? g ? () (map (i \ ['stsd 'r4 (rsa + fb + 16 * i) (xmmreg i)]) ^8))))))
 
+   ; sp64's fpu has no double arithmetic: each op calls its helper, doubles in core pairs. a compare
+   ; takes the branch or set behind it, where a parity dance folds to one answer
+   (losoft g l)
+    (: (ga x lo hi) ['movrrq lo hi x]
+       a2 (x \ y \ [(ga x 'r0 'r1) (ga y 'r2 'r3) '(cuse r0 r1 r2 r3)])
+       a1 (x \ [(ga x 'r0 'r1) '(cuse r0 r1)])
+       (ansd d) ['movqrr d 'r0 'r1]
+       (cc c tail9 u)
+        (sf-cc c @ [h k] [['call h] '(cmp r0 0) (tail9 k)] _ (lono g ['softcc c], []))
+       (go l)
+        (!(two? l) ? l
+           (: f <l r >l
+              (f @ ([op d y] && sf-bin op) (a2 d y + [['call (sf-bin op)] (ansd d)] + go r)
+                   [('cvtsi2sd || 'cvtui2sd) d x]
+                    ([['mov 'r0 x] '(cuse r0) ['call (<f = 'cvtsi2sd ? '__aeabi_i2d '__aeabi_ui2d)] (ansd d)] + go r)
+                   [('cvttsd2si || 'cvttsd2ui) d x]
+                    (a1 x + [['call (<f = 'cvttsd2si ? '__aeabi_d2iz '__aeabi_d2uiz)] ['mov d 'r0]] + go r)
+                   ['cvtss2sd d x] ([['movdrx 'r0 x] '(cuse r0) '(call __aeabi_f2d) (ansd d)] + go r)
+                   ['cvtsd2ss d x] (a1 x + ['(call __aeabi_d2f) ['movdxr d 'r0]] + go r)
+                   ['ucomisd a b]
+                    (a2 a b + (r @ (['set 'eq _] . ['set 'np _] . ['mov d _] . ['and _ _ _] . u)
+                                   (cc 'eq (k \ ['set k d]) u + go u)
+                                 (['set 'ne _] . ['set 'p _] . ['mov d _] . ['or _ _ _] . u)
+                                   (cc 'ne (k \ ['set k d]) u + go u)
+                                 (['br c L] . u) (cc c (k \ ['br k L]) u + go u)
+                                 (['set c d] . u) (cc c (k \ ['set k d]) u + go u)
+                                 _ (lono g ['softcc (two? r ? <r)], [])))
+                   (f . go r))))
+       (go l))
+
    ; allocated, then framed: the link, the frame, the saves marker csframe lays out
-   (lobuild g f fs0)
-    (: (kit? f) (f @ ['fix () () [['trap]]] 0 ['fix _ d _] (d != lokl) _ (two? f && elem <f '(fix raw)))
+   (lobuild g f fs9)
+    (: fs0 (sp64? g ? (losoft g fs9) fs9)
+       (kit? f) (f @ ['fix () () [['trap]]] 0 ['fix _ d _] (d != lokl) _ (two? f && elem <f '(fix raw)))
        (leak? f) (two? f && !(elem <f '(fix jmpt)) && any two? >f)
        (? (ilp32? g && (g 'lowhy || any leak? fs0)) (lono g ['pairleak (filter leak? fs0 @ (x . _) x _ ())])
           (!(x64? g) && any kit? fs0) (lono g ['kit (filter kit? fs0 @ (x . _) <x _ ())])
@@ -1706,5 +1742,5 @@
    ; the frame and emit tail the old path ends on
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) ir)))))))))))))))))))))
+     (tailarm g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g ? (t16la ir) ir))))))))))))))))))))))
 )) ; module 'moon
