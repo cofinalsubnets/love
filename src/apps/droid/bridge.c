@@ -164,6 +164,11 @@ static void paint(br *b) {
   }
 }
 
+/* the frame black, for the client taking it: a grid need not reach its edges. the lock held */
+static void blank(br *b) {
+  if (b->fb) for (size_t i = 0; i < (size_t) b->fw * (size_t) b->fh; i++) b->fb[i] = 0;
+}
+
 static int drain(int fd, size_t n) {
   char sink[4096];
   for (size_t k; n; n -= k) { k = n < sizeof sink ? n : sizeof sink; if (readall(fd, sink, k)) return -1; }
@@ -727,7 +732,7 @@ static int leave(br *b, int fd) {
     if (i == 0) ALooper_removeFd(b->looper, b->csock), close(b->csock);
     b->nunder = 0; b->csock = -1;
   } else if (top) {
-    typing = b->utyping[--b->nunder]; b->csock = b->under[b->nunder];
+    typing = b->utyping[--b->nunder]; b->csock = b->under[b->nunder]; blank(b);
   } else {
     for (b->nunder--; i < b->nunder; i++) b->under[i] = b->under[i + 1], b->utyping[i] = b->utyping[i + 1];
   }
@@ -762,7 +767,7 @@ static void *loop(void *p) {
       if (c >= 0 && (b->csock < 0 || b->nunder < 3)) {
         pthread_mutex_lock(b->mu);
         if (b->csock >= 0) b->under[b->nunder] = b->csock, b->utyping[b->nunder++] = b->typing;
-        b->csock = c;
+        b->csock = c; blank(b);
         pthread_mutex_unlock(b->mu);
         ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
         if (b->ww) sized(b);
