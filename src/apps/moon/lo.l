@@ -608,7 +608,6 @@
    (lospec? g env e)
     (e @ ['var nm] (lovar g env nm @ (['v _ ty] && losc? ty) 1
                                      (['m _ ty] && losc? ty) 1
-                                     (['g _ ty] && losc? ty && !(elem nm (g 'weaks))) 1
                                      _ ())
          ['num _] 1
          ['bin op a b] (!(elem op '(/ %)) && lospec? g env a && lospec? g env b)
