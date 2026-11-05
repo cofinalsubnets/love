@@ -1,7 +1,7 @@
-// src/love/pool.c -- the runtime's one thread pool, one per g: fork-join over C kernels.
-//   par_run(g, n, fn, ctx)  fn(ctx, i) for each chunk i of 0..n-1, the caller taking chunks
+// src/love/pool.c -- the runtime's one thread pool: fork-join over C kernels.
+//   par_run(n, fn, ctx)     fn(ctx, i) for each chunk i of 0..n-1, the caller taking chunks
 //                           too; back once all are done
-//   par_width(g, n)         the width a run of n chunks takes now, for a kernel whose chunks
+//   par_width(n)            the width a run of n chunks takes now, for a kernel whose chunks
 //                           cost more split than whole: at 1 it runs whole instead
 //   (par-width n)           the same from love, for the laws, and (par-cpus m) the rounding
 //                           (module pool)
@@ -221,28 +221,26 @@ static void pool_fresh(struct pool *p) {
 #endif
 
 #if PoolThreads
-// g's pool, made at the first ask; NULL off linux or with no memory
-static struct pool *pool_of(struct g *g) {
- struct pool *p = g->pool;
+// the process's one pool, made at the first ask; NULL off linux
+static struct pool the_pool;
+static struct pool *pool_of(void) {
+ struct pool *p = &the_pool;
  if (__love_osv < 1 || __love_osv > 3) return NULL;   // threads are clone's, thr_new's and _lwp_create's
- if (!p) {
-  if (!(p = alloc(NULL, sizeof *p))) return NULL;
-  memset(p, 0, sizeof *p);
+ if (!p->ncpu) {
   long c = sysconf(_SC_NPROCESSORS_ONLN);
   p->ncpu = c < 1 ? 1 : (int) c;
   p->ncore = pool_cores(p->ncpu);
   p->fd = open("/proc/stat", O_RDONLY | O_CLOEXEC);
   p->fp = open("/proc/pressure/cpu", O_RDONLY | O_CLOEXEC);
   p->width = 1;
-  pool_fresh(p);
-  g->pool = p; }
+  pool_fresh(p); }
  else if (p->pid != getpid()) pool_fresh(p);  // a fork's child: the workers stayed behind
  return p; }
 #endif
 
-intptr_t par_width(struct g *g, intptr_t n) {
+intptr_t par_width(intptr_t n) {
 #if PoolThreads
- struct pool *p = n > 1 ? pool_of(g) : NULL;
+ struct pool *p = n > 1 ? pool_of() : NULL;
  if (!p || p->busy || p->ncpu < 2) return 1;
  uint64_t t = pool_ns();
  int tick = !p->at || t - p->at >= PoolTick;
@@ -265,15 +263,15 @@ intptr_t par_width(struct g *g, intptr_t n) {
  if (w > n) w = n;
  return w < 1 ? 1 : w;
 #else
- (void) g, (void) n;
+ (void) n;
  return 1;
 #endif
 }
 
-void par_run(struct g *g, intptr_t n, void (*fn)(void *, intptr_t), void *ctx) {
+void par_run(intptr_t n, void (*fn)(void *, intptr_t), void *ctx) {
 #if PoolThreads
- intptr_t w = par_width(g, n);
- struct pool *p = w > 1 ? g->pool : NULL;
+ intptr_t w = par_width(n);
+ struct pool *p = w > 1 ? &the_pool : NULL;
  if (p && p->nw < w - 1) {                     // workers made as a width first wants them
   sigset_t all, was;                           // ..each with every signal blocked: they are the caller's
   memset(&all, 0xff, sizeof all);
@@ -296,14 +294,13 @@ void par_run(struct g *g, intptr_t n, void (*fn)(void *, intptr_t), void *ctx) {
  p->busy = 0;
  pthread_mutex_unlock(&p->mu);
 #else
- (void) g;
  pool_serial(n, fn, ctx);
 #endif
 }
 
 love_noinline static struct g *host_par_width(struct g *g) {
  word nw = g->sp[0];
- g->sp[0] = putcharm(oddp(nw) ? par_width(g, getcharm(nw)) : 1);
+ g->sp[0] = putcharm(oddp(nw) ? par_width(getcharm(nw)) : 1);
  return g; }
 static LvmWrap(lvm_par_width, host_par_width)
 LvDef("par-width", par_width, 1, NULL);

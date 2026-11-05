@@ -368,7 +368,7 @@ struct g *big_shift(struct g *g, int vop) {
  int na = bigp(a) ? big_nlimbs(a) : wlimbs;
  int ls = khuge ? 0 : k / limb_bits, bs = khuge ? 0 : k % limb_bits;
  int w = left ? na + ls + 2 : na + 2;
- if (left && khuge) return encode(g, status_scare);   // 2^huge: no heap holds it
+ if (left && khuge) return g->scare = words_max, encode(g, status_scare);   // 2^huge: no heap holds it
  uintptr_t res_area = Width(struct big) + b2w((size_t) w * sizeof(love_limb)),
            ws_words = b2w((size_t) w * sizeof(love_limb));
  if (!ok(g = have(g, res_area + ws_words))) return g;
@@ -1464,7 +1464,7 @@ lvm(lvm_sort) {
    if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];
    else        while (x < m && y < hi) {
     intptr_t c = cmp3(g, a[y], a[x]);
-    if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
+    if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_raise, g); }   // the spine unlaid first
     b[o++] = c < 0 ? a[y++] : a[x++]; }
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
@@ -1511,7 +1511,7 @@ static lvm(lvm_cmp_ord) {
  else if (!(isnum(a) || twinp(a))) {
   Pack(g);                                                 // cmp3's walks take the gap
   intptr_t c = cmp3(g, a, b);
-  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_raise, g); }
   r = vcmp_int(op, c, 0); }
  else if (twinp(a) || twinp(b)) {
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
@@ -1535,7 +1535,7 @@ static lvm(lvm_extreme2) {
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); love_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
  Pack(g);
  intptr_t c = cmp3(g, a, b);
- if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+ if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_raise, g); }
  love_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; love_musttail return Ap(lvm_extreme2, g); }
 lvm(lvm_min2) { g->b = (word) 0; love_musttail return Ap(lvm_extreme2, g); }

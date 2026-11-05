@@ -677,7 +677,7 @@ static struct g *img_canon_symbols(struct g *g) {
  uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
  word *s = map_slots(m),
       *pairs = alloc(NULL, 2 * cap * sizeof(word));
- if (!pairs) return encode(g, status_scare);
+ if (!pairs) return g->scare = 2 * cap, encode(g, status_scare);
  for (uintptr_t j = 0; j < cap; j++)
   if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
  { struct img_ord o = { img_lt_pair, pairs, 2 };
@@ -1186,7 +1186,11 @@ void *image_save2(struct g *g, uintptr_t *outlen, struct image_bad *bad, struct 
  uintptr_t nw = 0;
  char *cseg = NULL; uintptr_t ncode = 0;
  uintptr_t *cb = NULL, ncb = 0;
- word *blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb);
+ word in = g->hook[hook_inport];         // stdin's port is this process's, no image's: a root
+ g->hook[hook_inport] = zero;            // ..through img_build's collections, and not a hook
+ word *blob;
+ avec(g, in, blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb));
+ g->hook[hook_inport] = in;
  if (!blob) { if (cseg) alloc(cseg, 0); return NULL; }
  void *buf = img_wire(g, &H, blob, nw, cseg, cb, ncb, outlen);
  if (cseg) alloc(cseg, 0);
