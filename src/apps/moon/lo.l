@@ -619,7 +619,7 @@
     (? (relish? c && a = ['num 1] && b = ['num 0]) (lox g env c)
        (relish? c && a = ['num 0] && b = ['num 1]) (lox g env ['un 'not c])
        !(x64? g || a64? g) 'no
-       (wrany? c || callish? c) 'no
+       (wrany? c || callish? c || two? (knum g c)) 'no
        (lominmax g env c a b @ 'no (losel1 g env c a b) v v))
    ; minsd and maxsd are x64's, fmin's NaN apart
    (lominmax g env c a b)

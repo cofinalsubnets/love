@@ -18,7 +18,7 @@ set -u
 tgt=$1
 ho=$2
 m=$3
-narrow="354-idioms 105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
+narrow="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 case $tgt in
   arm)  name=test_ccarm; ref=arm-none-eabi-gcc; run=qemu-arm; gopt=-O1
         refuse="161-enumwide"
