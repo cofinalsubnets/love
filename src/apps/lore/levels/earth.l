@@ -604,8 +604,6 @@
   (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
   ; ..a bare mattress along the car's floor at its east end, gone with it
   (mattress [5.4 -5 -5.94] 90)
-  ; ..and on the platform outside its door a red plush mouse, looking in
-  (plush [0.7 -5 -3.6] 200 "mouse.glb")
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the

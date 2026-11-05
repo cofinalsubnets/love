@@ -20,6 +20,8 @@
           '((fill (rgb 0.16 0.36 0.5)) (noise 24 4 0.18) (patches 8 0.15 (rgb 0.4 0.6 0.72)) (noise 1 0.06))))
 ; ..the cubes' glass, faintly green and smeared
 (: pane (texture 64 64 2 '((fill (rgb 0.6 0.74 0.7)) (noise 24 8 0.12) (patches 10 0.2 (shade 1.08)))))
+; ..the stone in the yard's corner
+(: granite (feel 'hard (texture 32 32 0.4 '((fill (grey 0.58)) (noise 1 0.12) (noise 4 0.08) (patches 5 0.25 (rgb 0.5 0.56 0.36))))))
 ; ..the yard's: its iron, its fence's boards, and the tree's bark burnt black
 (: iron (feel 'hard (texture 16 16 1 '((fill (grey 0.16)) (noise 2 0.1)))))
 (: palings (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.6 0.45 0.3)) (noise 1 12 0.2) (patches 4 0.2 (shade 0.85))))))
@@ -117,7 +119,8 @@
     (mattress [x 0.02 (z - 0.6)] 0)]))
 
 ; the yard: glass bays between iron posts round a grass floor and a glass roof, the house
-; against its east side; a wooden fence round the outside of it from the house's two sides
+; against its east side; a wooden fence round the outside of it from the house's two sides,
+; and a headstone in the corner far from the house, on the left coming out, facing the tree
 (: yx0 sx0 yx1 -116.2 yz0 sz0 yz1 sz1 yh 5.0)
 (: yxs (map (i \ yx0 + 4.0 * i) ^5) yzs (map (i \ yz0 + 4.0 * i) ^5) yard-mid [-124.2 2.5 22.0])
 (: (yard-pane lo hi) (lens yard-mid (window lo hi pane)))
@@ -134,10 +137,11 @@
     (yard-pane [yx0 (yh - 0.06) yz0] [yx1 yh yz1])
     (map (x \ [(post x (yz0 - 0.07)) (post x (yz1 + 0.07))]) yxs)
     (map (z \ [(post (yx0 - 0.07) z) (post (yx1 + 0.07) z)]) [yz0 yz1])
+    (grave [-131.0 hy 15.2] 45 "" granite)
     (wooden (fence [[-115.2 -0.2 16.0] [-115.2 0.0 13.0] [-133.2 0.0 13.0] [-133.2 0.0 31.0] [-115.2 0.0 31.0] [-115.2 -0.2 28.0]] 1.3 palings))])
 
 ; the house: one room, open to the plain on the east, a sliding glass door in its back wall
-; onto the yard; a sofa, a table, shelves and a rug, a bulb overhead
+; onto the yard; a sofa, a table with a red plush mouse on it, shelves and a rug, a bulb overhead
 (: (piece t lo hi) (skin {'all t} (solid (box lo hi))))
 (: house
    [(skin {'walls siding 'floor tar 'ceiling plaster} (solid (box [-116.2 -0.6 16.0] [-104.0 3.2 28.0])))
@@ -147,6 +151,7 @@
     (piece cloth [-113.0 hy 26.9] [-109.4 0.48 27.75]) (piece cloth [-113.0 hy 27.52] [-109.4 0.95 27.8])
     (piece cloth [-113.25 hy 26.9] [-113.0 0.68 27.8]) (piece cloth [-109.4 hy 26.9] [-109.15 0.68 27.8])
     (piece oak [-112.0 hy 24.6] [-110.4 0.42 25.6])
+    (plush [-111.2 0.42 25.1] 270 "mouse.glb")
     (piece oak [-113.5 hy 16.2] [-110.5 2.0 16.6])
     (bulb [-110.0 2.8 22.0] (rgb 1.0 0.85 0.62))])
 
