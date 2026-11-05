@@ -58,3 +58,10 @@
          (kwin-lay [d] "wwa" = [['text "wwa"] d])
          (kwin-lay [d u] "a" = [['text "a"] d u])
          (kwin-lay () "a" = [['text "a"]])))
+; a shell here has no process to replace, and exec still runs its word: a driving make's love0
+; is a script of just that
+(: (r-in a) (cite 'doom 'run-in "/home" a)
+   (test (r-in ["sh" "-c" "exec love -e 0"] = 0)
+         (r-in ["sh" "-c" "(exec love -e 0)"] = 0)
+         (r-in ["sh" "-c" "exec cat /dev/null; exit 3"] = 0)
+         (r-in ["sh" "-c" "exec no-such-word"] = 127)))
