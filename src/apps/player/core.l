@@ -343,7 +343,7 @@
        (put1 m) (: me (myself 0 @ p (charm? p ? p 0)) q (peep qs me ())
                    q2 (? (tablet? q) q (: t {'w 0 'r 0} (pin qs me t, t)))
                    n (q2 'w)
-                   (pin q2 n "\(m)\n", pin q2 'w (n + 1)))
+                   (pin q2 n "\(show m)\n", pin q2 'w (n + 1)))
        (take q) (: r (q 'r) w (q 'w) ks (map (k \ k + r) ^(w - r))
                    ls (map q ks)
                    (each ks (k \ pin q k ()), pin q 'r w, ls))
@@ -441,7 +441,7 @@
    ; the protocol on stdin and stdout, over a core in process
    (player-pipe fs)
     (: c (core-new "main")
-       (line m) (say out "\(m)\n", flush out)
+       (line m) (say out "\(show m)\n", flush out)
        id (core-watch c line)
        _ (each fs (p \ (core-send c ['add p]) @ ['ok _] 0 r (line r)))
        _ (? (0 < #(c 'q)) (core-send c ['play 0]) 0)
