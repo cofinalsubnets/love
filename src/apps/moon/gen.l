@@ -1988,6 +1988,92 @@
    ; -- the gcc builtins --
    ; popcount of r0 by the swar fold (masks and adds only, so every target), clobbering r1 r2.
    ; the 32-bit form masks first: the word above bit 31 is not ours to count
+   ; clz over r0, or the pair r0:r1 at 32 bits when ll
+   (clzops g ll)
+    (: pre (ll ? () '((shl r0 32)))    ; clz32(x) = clz64(x << 32), clearing upper garbage
+       (? (ia32? g)                    ; bsr and xor 31 a word at a time
+           (: cz (m16b g + '(15 189 192) + m16b g + '(131 240 31))         ; bsr eax,eax; xor eax,31
+              lz (nlab g ".cz") ld (nlab g ".czd")
+              (!ll ? [['raw cz]]
+                 ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) ['raw cz] ['jmp ld]
+                  ['label lz] ['raw cz] '(add r0 r0 32) ['label ld]]))
+          (t32? g && !ll)              ; one word: clz or __clzsi2
+           (v6m? g ? '((call __clzsi2)) '((clz r0 r0)))
+          (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
+           (: lz (nlab g ".cz") ld (nlab g ".czd")
+              (v6m? g ?   ; no clz on v6-M
+                 ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
+                  ['label lz] '(call __clzsi2) '(add r0 r0 32) ['label ld]]
+                 ['(cmp r1 0) ['br 'eq lz] '(clz r0 r1) ['jmp ld]
+                  ['label lz] '(clz r0 r0) '(add r0 r0 32) ['label ld]]))
+          (rv64? g)                      ; no clz in rv64i: a binary search
+           (: ls (map (k \ (nlab g ".cz")) '(0 1 2 3 4 5))
+              step (kk \ lb2 \ ['(mov r2 r0) ['shr 'r2 (64 - kk)] '(cmp r2 0) ['br 'ne lb2]
+                                 ['add 'r1 'r1 kk] ['shl 'r0 kk] ['label lb2]])
+              (pre + '((li r1 0))
+               + step 32 (ls 0) + step 16 (ls 1) + step 8 (ls 2)
+               + step 4 (ls 3) + step 2 (ls 4) + step 1 (ls 5)
+               + '((mov r0 r1))))
+          (pre + (a64? g ? '((raw (0 16 192 218)))                    ; clz x0, x0
+                    '((raw (72 15 189 192 72 131 240 63)))))))   ; bsr rax,rax; xor rax,63
+   ; ctz over r0, or the pair r0:r1 on i386 when ll
+   (ctzops g ll)
+    (? (ia32? g)                     ; bsf: lo, or hi + 32 when lo is 0
+        (: tz (m16b g + '(15 188 192))
+           lz (nlab g ".tz") ld (nlab g ".tzd")
+           (!ll ? [['raw tz]]
+              ['(cmp r0 0) ['br 'eq lz] ['raw tz] ['jmp ld]
+               ['label lz] '(mov r0 r1) ['raw tz] '(add r0 r0 32) ['label ld]]))
+       (t32? g)
+        (v6m? g ? '((call __ctzsi2))
+           '((li r1 0) (sub r1 r1 r0) (and r0 r0 r1)     ; x & -x, then 31 - clz
+             (clz r0 r0) (li r1 31) (sub r0 r1 r0)))
+       (rv64? g)
+        (: ls (map (k \ (nlab g ".tz")) '(0 1 2 3 4 5))
+           step (kk \ mk \ lb2 \ [['li 'r3 mk] '(mov r2 r0) '(and r2 r2 r3) '(cmp r2 0)
+                                   ['br 'ne lb2] ['add 'r1 'r1 kk] ['shr 'r0 kk] ['label lb2]])
+           ('((li r1 0))
+            + step 32 4294967295 (ls 0) + step 16 65535 (ls 1)
+            + step 8 255 (ls 2) + step 4 15 (ls 3)
+            + step 2 3 (ls 4) + step 1 1 (ls 5)
+            + '((mov r0 r1))))
+       (a64? g && ll) '((raw (0 0 192 218 0 16 192 218)))   ; rbit x0,x0; clz x0,x0
+       (a64? g) '((raw (0 0 192 90 0 16 192 90)))           ; rbit w0,w0; clz w0,w0
+       '((raw (72 15 188 192))))                            ; bsf rax,rax: REX.W serves both widths
+   ; a pair's bytes reversed at 32 bits: the words trade places
+   (bs64ops g)
+    (ia32? g ? ('((mov r2 r0) (mov r0 r1) (mov r1 r2))
+                + [['raw (m16b g + [15 200] + m16b g + [15 201])]])   ; bswap eax; bswap ecx
+       ('((sub sp sp 16) (st sp 0 r0) (mov r0 r1)) + bsw32
+        + '((st sp 4 r0) (ld r0 sp 0)) + bsw32
+        + '((mov r1 r0) (ld r0 sp 4) (add sp sp 16))))
+   ; a pair's popcount at 32 bits: each word's, summed
+   (pc64ops g)
+    ('((sub sp sp 16) (st sp 0 r1)) + popops g 1
+     + '((st sp 4 r0) (ld r0 sp 0)) + popops g 1
+     + '((ld r1 sp 4) (add r0 r0 r1) (add sp sp 16)))
+   ; a checked add, sub or mul over r0 and r1: r0 the result, r1 the overflow bit
+   (ovfops g bi)
+    (: rx (x64? g ? [72] (m16b g))   ; x64 widens with REX.W; i386 is the word already
+       opb (rx + (? (bi = "__builtin_add_overflow") '(1 200)      ; add rax,rcx
+                    (bi = "__builtin_sub_overflow") '(41 200)     ; sub rax,rcx
+                    '(15 175 193)))                               ; imul rax,rcx
+       (? !(arm? g)
+           [['raw (opb + '(15 144 193) + rx + '(15 182 201))]]   ; op; seto cl; movzx rcx,cl
+          !(bi = "__builtin_mul_overflow")
+           [[(bi @ "__builtin_add_overflow" 'adds 'subs) 'r0 'r0 'r1] '(set vs r1)]
+          (v6m? g)                          ; no smull: __aeabi_lmul on the widened words,
+           (spush 'r3 +                     ; then hi vs lo>>31. r3 = &t, saved
+            '((mov r2 r1) (mov r1 r0) (sar r1 31)
+              (mov r3 r2) (sar r3 31) (call __aeabi_lmul)
+              (mov r2 r0) (sar r2 31) (subs r1 r1 r2) (set ne r1)) +
+            spop 'r3)
+          (t32? g)                          ; smull, then hi vs lo>>31
+           '((smull r0 r2 r0 r1) (mov r12 r0) (sar r12 31)
+             (subs r1 r2 r12) (set ne r1))
+          (: lo (nlab g ".vo") l2 (nlab g ".vd")
+             [['mulo 'r0 'r0 'r1 'r2 lo] '(li r1 0) ['jmp l2]
+              ['label lo] '(li r1 1) ['label l2]])))
    (popops g w32)
     (: fold (k \ ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
        (w32 ? ((ilp32? g ? () '((li r2 4294967295) (and r0 r0 r2)))
@@ -2292,82 +2378,25 @@
         (: e1 (cgexpr g env <args ())
            ; the `l` spelling is the target's long
            ll (? (bi = "__builtin_clz") () (bi = "__builtin_clzll") 1 !(ilp32? g))
-           pre (ll ? () '((shl r0 32)))    ; clz32(x) = clz64(x << 32), clearing upper garbage
-           (? (bad? e1) 'bad
-              ; i386: bsr and xor 31 a word at a time
-              (ia32? g)
-               (: cz (m16b g + '(15 189 192) + m16b g + '(131 240 31))         ; bsr eax,eax; xor eax,31
-                  lz (nlab g ".cz") ld (nlab g ".czd")
-                  (mkv 'long 'r0 (!ll ? (asint g e1 + [['raw cz]])
-                                    (asll g e1 + ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) ['raw cz] ['jmp ld]
-                                                 ['label lz] ['raw cz] '(add r0 r0 32) ['label ld]]))))
-              (t32? g && !ll)              ; one word: clz or __clzsi2
-               (mkv 'long 'r0 (asint g e1 +
-                  (v6m? g ? '((call __clzsi2)) '((clz r0 r0)))))
-              (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
-               (: lz (nlab g ".cz") ld (nlab g ".czd")
-                  (mkv 'long 'r0 (asll g e1 +
-                    (v6m? g ?   ; no clz on v6-M
-                       ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
-                          ['label lz] '(call __clzsi2) '(add r0 r0 32) ['label ld]]
-                       ['(cmp r1 0) ['br 'eq lz] '(clz r0 r1) ['jmp ld]
-                          ['label lz] '(clz r0 r0) '(add r0 r0 32) ['label ld]]))))
-              (rv64? g)                      ; no clz in rv64i: a binary search
-               (: ls (map (k \ (nlab g ".cz")) '(0 1 2 3 4 5))
-                  step (kk \ lb2 \ ['(mov r2 r0) ['shr 'r2 (64 - kk)] '(cmp r2 0) ['br 'ne lb2]
-                                     ['add 'r1 'r1 kk] ['shl 'r0 kk] ['label lb2]])
-                  (mkv 'long 'r0 (asint g e1 + pre +
-                    ('((li r1 0))
-                     + step 32 (ls 0) + step 16 (ls 1) + step 8 (ls 2)
-                     + step 4 (ls 3) + step 2 (ls 4) + step 1 (ls 5)
-                     + '((mov r0 r1))))))
-              (mkv 'long 'r0 (asint g e1 + pre +
-                              (a64? g ? '((raw (0 16 192 218)))                    ; clz x0, x0
-                                 '((raw (72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
+           (bad? e1 ? 'bad
+              (mkv 'long 'r0 ((ilp32? g && ll ? (asll g e1) (asint g e1)) + clzops g ll))))
        ; ctz(0) stays UB; the 32-bit spelling's upper garbage is harmless
        (elem bi '("__builtin_ctzll" "__builtin_ctzl" "__builtin_ctz"))
         (: e1 (cgexpr g env <args ())
            ll (? (bi = "__builtin_ctz") () (bi = "__builtin_ctzll") 1 !(ilp32? g))
            (? (bad? e1) 'bad
-              (ia32? g)                     ; bsf: lo, or hi + 32 when lo is 0
-               (: tz (m16b g + '(15 188 192))
-                  lz (nlab g ".tz") ld (nlab g ".tzd")
-                  (mkv 'long 'r0 (!ll ? (asint g e1 + [['raw tz]])
-                                    (asll g e1 + ['(cmp r0 0) ['br 'eq lz] ['raw tz] ['jmp ld]
-                                                 ['label lz] '(mov r0 r1) ['raw tz] '(add r0 r0 32) ['label ld]]))))
               (ll && t32? g) (nolane g "no lane for \(bi)\(ontgt g)")
-              (t32? g)
-               (mkv 'long 'r0 (asint g e1 +
-                  (v6m? g ? '((call __ctzsi2))
-                     '((li r1 0) (sub r1 r1 r0) (and r0 r0 r1)     ; x & -x, then 31 - clz
-                        (clz r0 r0) (li r1 31) (sub r0 r1 r0)))))
-              (rv64? g)
-               (: ls (map (k \ (nlab g ".tz")) '(0 1 2 3 4 5))
-                  step (kk \ mk \ lb2 \ [['li 'r3 mk] '(mov r2 r0) '(and r2 r2 r3) '(cmp r2 0)
-                                          ['br 'ne lb2] ['add 'r1 'r1 kk] ['shr 'r0 kk] ['label lb2]])
-                  (mkv 'long 'r0 (asint g e1 +
-                    ('((li r1 0))
-                     + step 32 4294967295 (ls 0) + step 16 65535 (ls 1)
-                     + step 8 255 (ls 2) + step 4 15 (ls 3)
-                     + step 2 3 (ls 4) + step 1 1 (ls 5)
-                     + '((mov r0 r1))))))
-              (mkv 'long 'r0 (asint g e1 +
-                              (? (a64? g && ll) '((raw (0 0 192 218 0 16 192 218)))   ; rbit x0,x0; clz x0,x0
-                                 (a64? g) '((raw (0 0 192 90 0 16 192 90)))   ; rbit w0,w0; clz w0,w0
-                                 '((raw (72 15 188 192))))))))                ; bsf rax,rax: REX.W serves both widths
+              (mkv 'long 'r0 ((ilp32? g && ll ? (asll g e1) (asint g e1)) + ctzops g ll))))
        ; bswap: masked shift/or expansions, no raw, so unframe stays alive
        (elem bi '("__builtin_bswap16" "__builtin_bswap32" "__builtin_bswap64"))
         (? (bi = "__builtin_bswap64" && ia32? g)   ; i386: the words trade places
             (cgexpr g env <args () @ e1
                (bad? e1 ? 'bad
-                  (mkv 'ullong 'r0 (asll g e1 + '((mov r2 r0) (mov r0 r1) (mov r1 r2))
-                                    + [['raw (m16b g + [15 200] + m16b g + [15 201])]]))))   ; bswap eax; bswap ecx
+                  (mkv 'ullong 'r0 (asll g e1 + bs64ops g))))
            (bi = "__builtin_bswap64" && ilp32? g)   ; the words trade places
             (cgexpr g env <args () @ e1
                (bad? e1 ? 'bad
-                  (mkv 'ullong 'r0 (asll g e1 + '((sub sp sp 16) (st sp 0 r0) (mov r0 r1)) + bsw32
-                                    + '((st sp 4 r0) (ld r0 sp 0)) + bsw32
-                                    + '((mov r1 r0) (ld r0 sp 4) (add sp sp 16))))))
+                  (mkv 'ullong 'r0 (asll g e1 + bs64ops g))))
            (cgexpr g env <args () @ e1
               (bad? e1 ? 'bad
                  (mkv 'long 'r0 (asint g e1 +
@@ -2387,9 +2416,7 @@
         (? (bi = "__builtin_popcountll" && ilp32? g)   ; each word's count, summed
             (cgexpr g env <args () @ e1
                (bad? e1 ? 'bad
-                  (mkv 'long 'r0 (asll g e1 + '((sub sp sp 16) (st sp 0 r1)) + popops g 1
-                                  + '((st sp 4 r0) (ld r0 sp 0)) + popops g 1
-                                  + '((ld r1 sp 4) (add r0 r0 r1) (add sp sp 16))))))
+                  (mkv 'long 'r0 (asll g e1 + pc64ops g))))
            (cgexpr g env <args () @ e1
               (bad? e1 ? 'bad
                  (mkv 'long 'r0 (asint g e1 + popops g (bi = "__builtin_popcount" || ilp32? g))))))
@@ -2458,28 +2485,7 @@
            e3 (elem <<>>args '(addr var) ? (pin g 'argpos 1),
                cgexpr g env <>>args ())
            _ (pin g 'argpos ())
-           ; x64 widens with REX.W; i386 is the word already
-           rx (x64? g ? [72] (m16b g))
-           opb (rx + (? (bi = "__builtin_add_overflow") '(1 200)      ; add rax,rcx
-                        (bi = "__builtin_sub_overflow") '(41 200)     ; sub rax,rcx
-                        '(15 175 193)))                               ; imul rax,rcx
-           ; the op leaves r0 the result, r1 the overflow bit
-           ovf (? !(arm? g)
-                  [['raw (opb + '(15 144 193) + rx + '(15 182 201))]]   ; op; seto cl; movzx rcx,cl
-                  !(bi = "__builtin_mul_overflow")
-                   [[(bi @ "__builtin_add_overflow" 'adds 'subs) 'r0 'r0 'r1] '(set vs r1)]
-                  (v6m? g)                          ; no smull: __aeabi_lmul on the widened words,
-                   (spush 'r3 +                     ; then hi vs lo>>31. r3 = &t, saved
-                    '((mov r2 r1) (mov r1 r0) (sar r1 31)
-                      (mov r3 r2) (sar r3 31) (call __aeabi_lmul)
-                      (mov r2 r0) (sar r2 31) (subs r1 r1 r2) (set ne r1)) +
-                    spop 'r3)
-                  (t32? g)                          ; smull, then hi vs lo>>31
-                   '((smull r0 r2 r0 r1) (mov r12 r0) (sar r12 31)
-                      (subs r1 r2 r12) (set ne r1))
-                  (: lo (nlab g ".vo") l2 (nlab g ".vd")
-                     [['mulo 'r0 'r0 'r1 'r2 lo] '(li r1 0) ['jmp l2]
-                        ['label lo] '(li r1 1) ['label l2]]))
+           ovf (ovfops g bi)
            ; &t's lea must not open the sibs window: lean on arm; x64's raw splice resets it
            e3f (arm? g ? (relean (tor0 g e3)) (tor0 g e3))
            (bad? e1 || bad? e2 || bad? e3 ? 'bad

@@ -579,7 +579,12 @@
    ; -- branches: to L when e's truth is sense --
    ; the builtins a 32-bit target lowers here: the rest's snippets count on the 64-bit word
    lobi32 '("__builtin_expect" "__builtin_prefetch" "__builtin_inf" "__builtin_nan" "__builtin_nanf"
-            "__builtin_trap" "__builtin_unreachable" "__builtin_return_address" "__builtin_frame_address")
+            "__builtin_trap" "__builtin_unreachable" "__builtin_return_address" "__builtin_frame_address"
+            "__builtin_clz" "__builtin_clzl" "__builtin_clzll" "__builtin_ctz" "__builtin_ctzl" "__builtin_ctzll"
+            "__builtin_bswap16" "__builtin_bswap32" "__builtin_bswap64" "__builtin_isinf" "__builtin_alloca"
+            "__builtin_popcount" "__builtin_popcountl" "__builtin_popcountll" "__builtin_ffs" "__builtin_ffsl" "__builtin_ffsll"
+            "__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"
+            "__builtin_add_overflow_p" "__builtin_sub_overflow_p" "__builtin_mul_overflow_p")
    (lopr? g a b) (losc? (vty a) && losc? (vty b) && (pair? g (vty a) || pair? g (vty b)))
    (lobr g env e sense L)
     (: (br x s L2 _) (lobr g env x s L2)
@@ -862,15 +867,26 @@
    (loren2 g ins o ty fs)
     (foldl (t \ r \ pin t r (lofr? r ? (lomkf g) (lomk g))) {} '(r0 r1 r2 r3 f0 f1 f2 f3) @
      t [ty (t o) (map (p \ lomv (t <p) <>p) ins + map (f \ map (x \ peep t x x) f) fs)])
-   ; raw bytes on fixed registers: the operand in r0, the answer out of it, ds what it writes
+   ; forms on fixed registers: the operand in r0, the answer out of it, ds what it writes
    (lofix g v ds fs)
-    (!(x64? g) ? (lono g ['kit fs])
-       (lomk g @ d ['long d [['mov 'r0 v] ['fix '(r0) ds fs] ['mov d 'r0]]]))
+    (lomk g @ d ['long d [['mov 'r0 v] ['fix '(r0) ds fs] ['mov d 'r0]]])
+   ; ..a pair's operand in r0:r1, to a word in r0 or a pair in r0:r1
+   (lofixp g v pr fs)
+    (lotr g v 'llong @
+     'bad 'bad
+     [_ [l h] f0]
+      (: b [['mov 'r0 l] ['mov 'r1 h] ['fix '(r0 r1) lokl fs]]
+         (lomk g @ d
+            (pr ? (lomk g @ e ['ullong [d e] (f0 + b + [['mov d 'r0] ['mov e 'r1]])])
+               ['long d (f0 + b + [['mov d 'r0]])]))))
    ; one scalar operand -> [ty r fs] | 'bad
    (lobi1 g env e)
     (lox g env e @ ([vt r fs] && losc? vt) [vt r fs]
                    'bad 'bad
                    (vt . _) (lono g ['arg vt]))
+   ; a builtin of a pair at 32 bits, pr if it answers one
+   (lobp g env e pr fs)
+    (lox g env e @ 'bad 'bad v (lofixp g v pr fs))
    ; a builtin, the old arm its spec
    (lobi g env nm as)
     (: (one f) (lobi1 g env <as @ 'bad 'bad [vt r fs] (f r @ 'bad 'bad [t d fs2] [t d (fs + fs2)]))
@@ -894,22 +910,24 @@
        (elem nm '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
         (? (#as != 3) (lono g ['call nm])
            (ovlow g env nm as @
-              () (!(x64? g) ? (lono g ['call nm]) (lobi1 g env <as @ 'bad 'bad
+              () (lobi1 g env <as @ 'bad 'bad
                     a (lobi1 g env <>as @ 'bad 'bad
                          b (lox g env (as 2) @ 'bad 'bad
                               [_ p pf] (lomk g @ t (lomk g @ d
                                  ['int d (vfs a + vfs b + pf + [['mov 'r0 (vreg a)] ['mov 'r1 (vreg b)]
-                                          ['fix '(r0 r1) '(r0 r1)
-                                            [['raw ([72] + (nm @ "__builtin_add_overflow" [1 200] "__builtin_sub_overflow" [41 200] _ [15 175 193])
-                                                    + [15 144 193 72 15 182 201])]]]
-                                          ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])]))))))
+                                          ['fix '(r0 r1) (x64? g ? '(r0 r1) lokl) (ovfops g nm)]
+                                          ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])])))))
               x (lox g env x)))
        ; |x| is infinite: the bits shifted past the sign are inf's
        (nm = "__builtin_isinf")
         (lox g env <as @ ([vt r f0] && lofl? vt)
            (lotr g [vt r f0] 'double @ [_ w fs]
-              (lomk g @ t (lomk g @ k (lomk g @ d
-                 ['long d (fs + [['movqrx t w] ['shl t 1] ['li k 18437736874454810624] ['cmp t k] ['set 'eq d]])]))))
+              (ilp32? g ?
+                 (lomk g @ l (lomk g @ h (lomk g @ k (lomk g @ d
+                    ['long d (fs + [['movrrq l h w] ['li k 2147483647] ['and h h k] ['li k 2146435072]
+                                    ['xor h h k] ['or h h l] ['cmp h 0] ['set 'eq d]])]))))
+                 (lomk g @ t (lomk g @ k (lomk g @ d
+                    ['long d (fs + [['movqrx t w] ['shl t 1] ['li k 18437736874454810624] ['cmp t k] ['set 'eq d]])])))))
            _ (lono g ['call nm]))
        ; an infinity, a quiet NaN (the tag ignored): their bits
        (elem nm '("__builtin_inf" "__builtin_nan" "__builtin_nanf"))
@@ -931,13 +949,19 @@
                                       (nm = "__builtin_return_address" ? [['ld d d (rv64? g ? 16 (wsize g))]]))]))
                  _ (lono g ['call nm]))
           (elem nm '("__builtin_clz" "__builtin_clzl" "__builtin_clzll"))
-           (one (v \ lofix g v () ((ll ? () '((shl r0 32))) + '((raw (72 15 189 192 72 131 240 63))))))
+           (: w (nm = "__builtin_clzll" || !(nm = "__builtin_clz") && !(ilp32? g))
+              (ilp32? g && w ? (lobp g env <as 0 (clzops g w))
+                 (one (v \ lofix g v (x64? g || a64? g ? () lokl) (clzops g w)))))
           (elem nm '("__builtin_ctz" "__builtin_ctzl" "__builtin_ctzll"))
-           (one (v \ lofix g v () '((raw (72 15 188 192)))))
+           (: w (nm = "__builtin_ctzll" || !(nm = "__builtin_ctz") && !(ilp32? g))
+              (? (ilp32? g && w)
+                  (t32? g ? (lono g ['call nm]) (lobp g env <as 0 (ctzops g w)))
+                 (one (v \ lofix g v (x64? g || a64? g ? () lokl) (ctzops g w)))))
           (nm = "__builtin_bswap16")
            (one (v \ loren g v '((li r2 255) (mov r1 r0) (shr r1 8) (and r1 r1 r2)
                                  (and r0 r0 r2) (shl r0 8) (or r0 r0 r1))))
           (nm = "__builtin_bswap32") (one (v \ loren g v bsw32))
+          (nm = "__builtin_bswap64" && ilp32? g) (lobp g env <as 1 (bs64ops g))
           (nm = "__builtin_bswap64")
            (one (v \ loren g v '((li r2 71777214294589695)
                                  (mov r1 r0) (shr r1 8) (and r1 r1 r2)
@@ -946,13 +970,16 @@
                                  (mov r1 r0) (shr r1 16) (and r1 r1 r2)
                                  (and r0 r0 r2) (shl r0 16) (or r0 r0 r1)
                                  (mov r1 r0) (shr r1 32) (shl r0 32) (or r0 r0 r1))))
+          (nm = "__builtin_popcountll" && ilp32? g) (lobp g env <as 0 (pc64ops g))
           (elem nm '("__builtin_popcount" "__builtin_popcountl" "__builtin_popcountll"))
-           (one (v \ loren g v (popops g (nm = "__builtin_popcount"))))
+           (one (v \ loren g v (popops g (nm = "__builtin_popcount" || ilp32? g))))
+          (nm = "__builtin_ffsll" && ilp32? g) (lono g ['call nm])
           (elem nm '("__builtin_ffs" "__builtin_ffsl" "__builtin_ffsll"))
            (nlab g ".ffs" @ lz
-              (one (v \ loren g v ((nm = "__builtin_ffs" ? '((li r2 4294967295) (and r0 r0 r2))) +
-                                   ['(cmp r0 0) ['br 'eq lz] '(mov r1 r0) '(sub r1 r1 1) '(xor r0 r0 r1)] +
-                                   popops g (nm = "__builtin_ffs") + [['label lz]]))))
+              (: w32 (nm = "__builtin_ffs" || ilp32? g)
+                 (one (v \ loren g v ((w32 && !(ilp32? g) ? '((li r2 4294967295) (and r0 r0 r2))) +
+                                      ['(cmp r0 0) ['br 'eq lz] '(mov r1 r0) '(sub r1 r1 1) '(xor r0 r0 r1)] +
+                                      popops g w32 + [['label lz]])))))
           (lono g ['call nm])))
    ; an atomic, x64's arms of cgatomic: raw loops on fixed registers, the operands copied in
    (loat g env nm as)
