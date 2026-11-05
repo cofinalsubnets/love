@@ -388,8 +388,8 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    ; the targets the new backend lowers by default, and those it knows at all
-   lotgts '(x64 a64 rv64 thumb2 thumb2sp arm)
-   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || elem (g 'tgt) '(rv64 thumb2 thumb2sp arm)) _ (elem (peep g 'tgt 'x64) lotgts))
+   lotgts '(x64 a64 rv64 thumb2 thumb2sp arm i386 thumb1)
+   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || elem (g 'tgt) '(rv64 thumb2 thumb2sp arm i386 thumb1)) _ (elem (peep g 'tgt 'x64) lotgts))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
@@ -7040,8 +7040,8 @@
    (csdrop g fs)
     (cz g 'csdrop fs (: (sv? f r) (two? f && <f = 'st && <>f = 'sp && f 3 == r)
        (rs? f r) (two? f && <f = 'ld && <>f = r && <>>f = 'sp)
-       (idle? r) (vany (f \ sv? f r) fs &&
-                  !(vany (f \ two? f && elem r >f && !(sv? f r || rs? f r)) fs))
+       ; a store that first names r saves its entry value; a later one passes something loaded
+       (idle? r) (filter (f \ two? f && elem r >f) fs @ (h . t) (sv? h r && !(any (f \ !(rs? f r)) t)) _ ())
        dr (x64t? g && !(g 'hasasm) && !(vany (f \ two? f && elem <f '(raw asm)) fs) ?
              (filter idle? (csx g)))
        (!(two? dr) ? fs
@@ -7071,7 +7071,7 @@
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
            fcs (a64? g ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
-           nm (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (csregs g) + fcs))
+           nm (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs))
            r3 (x86? g && elem 'r3 nm)
            cs (filter (r \ !(r3 && r = 'r3)) nm)
            n #cs
@@ -11961,7 +11961,7 @@
        ; i386: a build that seats esi and edi and leaves ebx alone (no park, no pair scratch) builds
        ; again with ebx a seat too
        (rhas? r x) (? (atom? x) (x = r) (any (rhas? r) x))
-       irf (? (ia32? g && uni9 && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(rhas? 'r3 irf0))
+       irf (? (ia32? g && uni9 && bad? irn && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(rhas? 'r3 irf0))
               (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0 'pool0 (tpl 0) 'pool (tpl 0)
                          'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'ebx 1)
                  (ubuild (alive g f)))
