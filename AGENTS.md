@@ -170,6 +170,13 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)
 - `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
+- what moon emits through, `src/love/holo/{x64,holo,as,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- `src/love/holo/a64.l` -> `test_moon` `test_cca64`
+- `src/love/holo/rv64.l` -> `test_moon` `test_ccrv64`
+- `src/love/holo/i386.l` -> `test_moon` `test_cci386`
+- `src/love/holo/thumb1.l` -> `test_moon` `test_ccthumb1`
+- `src/love/holo/thumb2.l` -> `test_moon` `test_ccthumb2` `test_ccarm`
+- `src/love/holo/wasm.l`, `src/love/holo/wasmfn.l` -> `test_moon` `test_ccwasm`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`

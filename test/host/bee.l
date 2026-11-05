@@ -488,8 +488,18 @@
    ; the glaze, baked, and the profiles a bake lays owe the bake's lanes
    lp-gl (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["src/love/boot/glaze.l" "src/tools/hot.prof" "src/tools/hot.calls"]
                          ["src/love/boot/glaze.l"] lp-cov))
+   ; what moon emits through owes moon's lanes: x64's encoder all of them, another's its own target
+   (lp-of p) (map (r \ <r) ((cite 'lanemap 'lanes-plan) [p] () lp-cov))
+   lp-x (lp-of "src/love/holo/x64.l")
+   lp-t2 (lp-of "src/love/holo/thumb2.l")
+   lp-dec (lp-of "src/love/holo/decode.l")
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
+      (all (l \ elem l lp-x) ["test_moon" "test_clay" "test_cca64" "test_ccwasm" "test_ccport" "test_moonfuzz" "test_holo"])
+      (all (l \ elem l lp-t2) ["test_moon" "test_ccthumb2" "test_ccarm" "test_holo"])
+      !(elem "test_cca64" lp-t2)
+      (elem "test_holo" lp-dec)
+      !(elem "test_moon" lp-dec)
       (lp-cov "test_core" = ["test_clay" "test_x" "test_y"])
       (lp-cov "test_inle" = ["test_disk"])
       (lp-cov "test_a" = ["test_disk"])

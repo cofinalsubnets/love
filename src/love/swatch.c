@@ -7,7 +7,8 @@
 // disc grid checker stripes dots patches), 10 a bevel [dx dy w] lit by the first paint and
 // darkened by the second, 11 a polygon of its nums' corners, 12 cracks: a grid [dx dy w] its
 // lines wandering by noise up to the fourth num either side, 13 grain: rows [every w warp size]
-// wandering by noise, 14 cells: borders [size w] between the points thrown one to a cell.
+// wandering by noise, 14 cells: borders [size w] between the points thrown one to a cell, 15 an
+// oval [x y rx ry cos sin], 16 that oval shaded as a globe by light [lx ly lz] and shine, no paint.
 // a paint [tag a b c d]: 0 a hole,
 // 1 the colour a b c, 2 shade by a, 3 tint by a b c, 4 mix toward a b c by d, 5 noise of size
 // a b, amount c, seed d. () where an argument is not as it says
@@ -33,6 +34,18 @@ static flo_t sw_vn(flo_t x, flo_t z, int64_t s) {
              lo = p + ex * (q - p), hi = r + ex * (t - r);
  return lo + ez * (hi - lo); }
 static flo_t sw_sq(flo_t v) { return v * v; }
+double lm_sqrt(double);
+// a texel in an oval's own axes, a unit circle
+static flo_t sw_u(flo_t const *n, flo_t x, flo_t y) { return ((x + (flo_t) 0.5 - n[0]) * n[4] + (y + (flo_t) 0.5 - n[1]) * n[5]) / n[2]; }
+static flo_t sw_v(flo_t const *n, flo_t x, flo_t y) { return ((y + (flo_t) 0.5 - n[1]) * n[4] - (x + (flo_t) 0.5 - n[0]) * n[5]) / n[3]; }
+static void sw_ball(flo_t const *n, flo_t c[3], flo_t x, flo_t y) {
+ flo_t const u = sw_u(n, x, y), v = sw_v(n, x, y), q = u * u + v * v;
+ if (q >= (flo_t) 1.0) return;
+ flo_t const nz = (flo_t) lm_sqrt((double) ((flo_t) 1.0 - q)), nx = u * n[4] - v * n[5], ny = u * n[5] + v * n[4],
+             e = nx * n[6] + ny * n[7] + nz * n[8], d = e > (flo_t) 0.0 ? e : (flo_t) 0.0,
+             k = ((flo_t) 0.38 + (flo_t) 0.8 * d) * ((flo_t) 0.66 + (flo_t) 0.34 * nz),
+             d2 = d * d, d4 = d2 * d2, d8 = d4 * d4, sp = n[9] * (d8 * d8);
+ for (int j = 0; j < 3; j++) c[j] = c[j] * k + sp; }
 
 static bool sw_in(struct sw_layer const *l, flo_t x, flo_t y) {
  flo_t const *n = l->num;
@@ -73,6 +86,7 @@ static bool sw_in(struct sw_layer const *l, flo_t x, flo_t y) {
     if (t < m0) m1 = m0, m0 = t;
     else if (t < m1) m1 = t; }
    return m1 - m0 < n[1]; }
+  case 15: return sw_sq(sw_u(n, x, y)) + sw_sq(sw_v(n, x, y)) < (flo_t) 1.0;
   default: return 0; } }
 static void sw_paint(struct sw_paint const *p, flo_t c[3], uint8_t *hole, flo_t x, flo_t y) {
  if (p->tag == 0) { *hole = 1; return; }
@@ -105,6 +119,7 @@ static void sw_rows(void *ctx, intptr_t b) {
      flo_t const dx = l->num[0], dy = l->num[1], w = l->num[2], u = sw_fmod(fx, dx), v = sw_fmod(fy, dy);
      if (u >= dx - w || v >= dy - w) sw_paint(&l->d, c, hole, fx, fy);
      else if (u < w || v < w) sw_paint(&l->p, c, hole, fx, fy); }
+    else if (l->kind == 16) { if (!*hole) sw_ball(l->num, c, fx, fy); }
     else if (sw_in(l, fx, fy)) sw_paint(&l->p, c, hole, fx, fy); } } }
 
 static bool sw_nums(word l, flo_t *o, uintptr_t n) {
@@ -129,7 +144,8 @@ static bool sw_read(word pl, struct sw_layer *l, flo_t *f) {
   y->num = f + used, used += y->nnum;
   y->kind = (int) getcharm(part[1]), y->seed = getcharm(part[3]);
   if (!sw_nums(part[0], (flo_t*) y->box, 4 * y->nbox) || !sw_nums(part[2], (flo_t*) y->num, y->nnum) || !sw_paint_of(part[4], &y->p)) return 0;
-  if (y->kind < 0 || y->kind > 14 || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 : y->nnum != 4)) return 0; }
+  if (y->kind < 0 || y->kind > 16 || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 :
+      y->kind == 15 ? y->nnum != 6 || y->num[2] == 0 || y->num[3] == 0 : y->kind == 16 ? y->nnum != 10 || y->num[2] == 0 || y->num[3] == 0 : y->nnum != 4)) return 0; }
  return 1; }
 
 static intptr_t sw_q(flo_t v) {   // a channel 0 to 255
