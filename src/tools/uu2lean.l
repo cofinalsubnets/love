@@ -33,6 +33,7 @@
    bs (intern "\\")
    nl "\n"
    b8 "⟨"  b9 "⟩"
+   sugar (cite 'uu 'sugar)
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
    (lines l) (foldl (a \ s \ a + s + nl) "" l)
 
@@ -43,8 +44,8 @@
    ; --- collect (kind nm T t) entries (defns live inside the laws) ---
    (deq? c) (two? c && (<c = 'defn || <c = 'defq))
    (axq? c) (two? c && <c = 'axm)
-   (entry c) (? (deq? c) ['def (unq (c 1)) (unq (c 2)) (unq (c 3))]
-                (axq? c) ['axm (unq (c 1)) (unq (c 2)) ()])
+   (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
+                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])
    (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
    (gather fs acc) (two? fs ?
                       (gather >fs (<fs @ F

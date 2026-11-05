@@ -8,7 +8,7 @@
    (lam z (coprod_rect (lam w (paths zed (zsucc (zpred w)) w))
              (lam n (nat_rect (lam q (paths zed (zsucc (zpred (ii1 q))) (ii1 q)))
                        (idpath (ii1 0))
-                       (lam k (lam r (idpath (ii1 (succ k)))))
+                       (lam k r (idpath (ii1 (succ k))))
                        n))
              (lam n (idpath (ii2 n)))
              z)))
@@ -17,47 +17,47 @@
              (lam n (idpath (ii1 n)))
              (lam n (nat_rect (lam q (paths zed (zpred (zsucc (ii2 q))) (ii2 q)))
                        (idpath (ii2 0))
-                       (lam k (lam r (idpath (ii2 (succ k)))))
+                       (lam k r (idpath (ii2 (succ k))))
                        n))
              z))))
 
 ; --- a step on +'s right argument comes out front, by definitional equations alone ---
 (test
  (defq uv-zadd-succ
-   (pi a zed (pi b zed (paths zed (zadd a (zsucc b)) (zsucc (zadd a b)))))
-   (lam a (lam b
+   (pi a zed b zed (paths zed (zadd a (zsucc b)) (zsucc (zadd a b))))
+   (lam a b
       (coprod_rect (lam w (paths zed (zadd a (zsucc w)) (zsucc (zadd a w))))
          (lam n (idpath (zsucc (zadd a (ii1 n)))))
          (lam n (nat_rect (lam q (paths zed (zadd a (zsucc (ii2 q))) (zsucc (zadd a (ii2 q)))))
                    (pathsinv0 zed (zsucc (zpred a)) a (uv-zsucc-pred a))
-                   (lam k (lam r (pathsinv0 zed (zsucc (zpred (zadd a (ii2 k))))
+                   (lam k r (pathsinv0 zed (zsucc (zpred (zadd a (ii2 k))))
                                                 (zadd a (ii2 k))
-                                    (uv-zsucc-pred (zadd a (ii2 k))))))
+                                    (uv-zsucc-pred (zadd a (ii2 k)))))
                    n))
-         b))))
+         b)))
  (defq uv-zadd-pred
-   (pi a zed (pi b zed (paths zed (zadd a (zpred b)) (zpred (zadd a b)))))
-   (lam a (lam b
+   (pi a zed b zed (paths zed (zadd a (zpred b)) (zpred (zadd a b))))
+   (lam a b
       (coprod_rect (lam w (paths zed (zadd a (zpred w)) (zpred (zadd a w))))
          (lam n (nat_rect (lam q (paths zed (zadd a (zpred (ii1 q))) (zpred (zadd a (ii1 q)))))
                    (idpath (zpred a))
-                   (lam k (lam r (pathsinv0 zed (zpred (zsucc (zadd a (ii1 k))))
+                   (lam k r (pathsinv0 zed (zpred (zsucc (zadd a (ii1 k))))
                                                 (zadd a (ii1 k))
-                                    (uv-zpred-succ (zadd a (ii1 k))))))
+                                    (uv-zpred-succ (zadd a (ii1 k)))))
                    n))
          (lam n (idpath (zpred (zadd a (ii2 n)))))
-         b)))))
+         b))))
 
 ; --- ..and so + associates, by induction on the right argument alone ---
 (test
  (defq uv-zadd-assoc
-   (pi a zed (pi b zed (pi c zed (paths zed (zadd (zadd a b) c) (zadd a (zadd b c))))))
-   (lam a (lam b (lam c
+   (pi a zed b zed c zed (paths zed (zadd (zadd a b) c) (zadd a (zadd b c))))
+   (lam a b c
       (coprod_rect (lam w (paths zed (zadd (zadd a b) w) (zadd a (zadd b w))))
          (lam n (nat_rect
                    (lam q (paths zed (zadd (zadd a b) (ii1 q)) (zadd a (zadd b (ii1 q)))))
                    (idpath (zadd a b))
-                   (lam k (lam IH (pathscomp0 zed
+                   (lam k IH (pathscomp0 zed
                              (zsucc (zadd (zadd a b) (ii1 k)))
                              (zsucc (zadd a (zadd b (ii1 k))))
                              (zadd a (zsucc (zadd b (ii1 k))))
@@ -65,12 +65,12 @@
                                 (zadd (zadd a b) (ii1 k)) (zadd a (zadd b (ii1 k))) IH)
                              (pathsinv0 zed (zadd a (zsucc (zadd b (ii1 k))))
                                             (zsucc (zadd a (zadd b (ii1 k))))
-                                (uv-zadd-succ a (zadd b (ii1 k)))))))
+                                (uv-zadd-succ a (zadd b (ii1 k))))))
                    n))
          (lam n (nat_rect
                    (lam q (paths zed (zadd (zadd a b) (ii2 q)) (zadd a (zadd b (ii2 q)))))
                    (pathsinv0 zed (zadd a (zpred b)) (zpred (zadd a b)) (uv-zadd-pred a b))
-                   (lam k (lam IH (pathscomp0 zed
+                   (lam k IH (pathscomp0 zed
                              (zpred (zadd (zadd a b) (ii2 k)))
                              (zpred (zadd a (zadd b (ii2 k))))
                              (zadd a (zpred (zadd b (ii2 k))))
@@ -78,41 +78,41 @@
                                 (zadd (zadd a b) (ii2 k)) (zadd a (zadd b (ii2 k))) IH)
                              (pathsinv0 zed (zadd a (zpred (zadd b (ii2 k))))
                                             (zpred (zadd a (zadd b (ii2 k))))
-                                (uv-zadd-pred a (zadd b (ii2 k)))))))
+                                (uv-zadd-pred a (zadd b (ii2 k))))))
                    n))
-         c)))))
+         c)))
  ; ..and 0 is its unit on both sides
  (defq uv-zadd-runit (pi a zed (paths zed (zadd a zzero) a)) (lam a (idpath a)))
  (defq uv-zadd-lunit (pi b zed (paths zed (zadd zzero b) b))
    (lam b (coprod_rect (lam w (paths zed (zadd zzero w) w))
              (lam n (nat_rect (lam q (paths zed (zadd zzero (ii1 q)) (ii1 q)))
                        (idpath (ii1 0))
-                       (lam k (lam IH (maponpaths zed zed (lam x (zsucc x))
-                                         (zadd zzero (ii1 k)) (ii1 k) IH)))
+                       (lam k IH (maponpaths zed zed (lam x (zsucc x))
+                                         (zadd zzero (ii1 k)) (ii1 k) IH))
                        n))
              (lam n (nat_rect (lam q (paths zed (zadd zzero (ii2 q)) (ii2 q)))
                        (idpath (ii2 0))
-                       (lam k (lam IH (maponpaths zed zed (lam x (zpred x))
-                                         (zadd zzero (ii2 k)) (ii2 k) IH)))
+                       (lam k IH (maponpaths zed zed (lam x (zpred x))
+                                         (zadd zzero (ii2 k)) (ii2 k) IH))
                        n))
              b))))
 
 ; --- a step on the left argument comes out front too: the half bit's carry needs it ---
 (test
  (defq uv-zadd-lsucc
-   (pi a zed (pi b zed (paths zed (zadd (zsucc a) b) (zsucc (zadd a b)))))
-   (lam a (lam b
+   (pi a zed b zed (paths zed (zadd (zsucc a) b) (zsucc (zadd a b))))
+   (lam a b
       (coprod_rect (lam w (paths zed (zadd (zsucc a) w) (zsucc (zadd a w))))
          (lam n (nat_rect (lam q (paths zed (zadd (zsucc a) (ii1 q)) (zsucc (zadd a (ii1 q)))))
                    (idpath (zsucc a))
-                   (lam k (lam IH (maponpaths zed zed (lam x (zsucc x))
-                                     (zadd (zsucc a) (ii1 k)) (zsucc (zadd a (ii1 k))) IH)))
+                   (lam k IH (maponpaths zed zed (lam x (zsucc x))
+                                     (zadd (zsucc a) (ii1 k)) (zsucc (zadd a (ii1 k))) IH))
                    n))
          (lam n (nat_rect (lam q (paths zed (zadd (zsucc a) (ii2 q)) (zsucc (zadd a (ii2 q)))))
                    (pathscomp0 zed (zpred (zsucc a)) a (zsucc (zpred a))
                       (uv-zpred-succ a)
                       (pathsinv0 zed (zsucc (zpred a)) a (uv-zsucc-pred a)))
-                   (lam k (lam IH
+                   (lam k IH
                       (pathscomp0 zed
                          (zpred (zadd (zsucc a) (ii2 k)))
                          (zadd a (ii2 k))
@@ -125,16 +125,16 @@
                                (zadd (zsucc a) (ii2 k)) (zsucc (zadd a (ii2 k))) IH)
                             (uv-zpred-succ (zadd a (ii2 k))))
                          (pathsinv0 zed (zsucc (zpred (zadd a (ii2 k)))) (zadd a (ii2 k))
-                            (uv-zsucc-pred (zadd a (ii2 k)))))))
+                            (uv-zsucc-pred (zadd a (ii2 k))))))
                    n))
-         b)))))
+         b))))
 
 ; --- the three integer shapes the carry asks for, named once ---
 (test
  (defq uv-zsl
-   (pi p zed (pi q zed (pi r zed
-      (paths zed (zsucc (zadd (zadd p q) r)) (zadd p (zsucc (zadd q r)))))))
-   (lam p (lam q (lam r
+   (pi p zed q zed r zed
+      (paths zed (zsucc (zadd (zadd p q) r)) (zadd p (zsucc (zadd q r)))))
+   (lam p q r
       (pathscomp0 zed
          (zsucc (zadd (zadd p q) r))
          (zsucc (zadd p (zadd q r)))
@@ -142,39 +142,39 @@
          (maponpaths zed zed (lam x (zsucc x))
             (zadd (zadd p q) r) (zadd p (zadd q r)) (uv-zadd-assoc p q r))
          (pathsinv0 zed (zadd p (zsucc (zadd q r))) (zsucc (zadd p (zadd q r)))
-            (uv-zadd-succ p (zadd q r))))))))
+            (uv-zadd-succ p (zadd q r))))))
  (defq uv-zls
-   (pi p zed (pi q zed (pi r zed
-      (paths zed (zadd (zsucc (zadd p q)) r) (zsucc (zadd p (zadd q r)))))))
-   (lam p (lam q (lam r
+   (pi p zed q zed r zed
+      (paths zed (zadd (zsucc (zadd p q)) r) (zsucc (zadd p (zadd q r)))))
+   (lam p q r
       (pathscomp0 zed
          (zadd (zsucc (zadd p q)) r)
          (zsucc (zadd (zadd p q) r))
          (zsucc (zadd p (zadd q r)))
          (uv-zadd-lsucc (zadd p q) r)
          (maponpaths zed zed (lam x (zsucc x))
-            (zadd (zadd p q) r) (zadd p (zadd q r)) (uv-zadd-assoc p q r)))))))
+            (zadd (zadd p q) r) (zadd p (zadd q r)) (uv-zadd-assoc p q r)))))
  (defq uv-zlr
-   (pi p zed (pi q zed (pi r zed
-      (paths zed (zadd (zsucc (zadd p q)) r) (zadd p (zsucc (zadd q r)))))))
-   (lam p (lam q (lam r
+   (pi p zed q zed r zed
+      (paths zed (zadd (zsucc (zadd p q)) r) (zadd p (zsucc (zadd q r)))))
+   (lam p q r
       (pathscomp0 zed
          (zadd (zsucc (zadd p q)) r)
          (zsucc (zadd p (zadd q r)))
          (zadd p (zsucc (zadd q r)))
          (uv-zls p q r)
          (pathsinv0 zed (zadd p (zsucc (zadd q r))) (zsucc (zadd p (zadd q r)))
-            (uv-zadd-succ p (zadd q r)))))))))
+            (uv-zadd-succ p (zadd q r)))))))
 
 ; --- ..and the half-integers associate: eight cases on the three half bits ---
 (test
- (defn uv-rac (pi p zed (pi x bool (pi q zed (pi y bool (pi r zed (pi z bool UU))))))
-   (lam p (lam x (lam q (lam y (lam r (lam z
+ (defn uv-rac (pi p zed x bool q zed y bool r zed z bool UU)
+   (lam p x q y r z
       (paths rea (radd (radd (rmk p x) (rmk q y)) (rmk r z))
-                 (radd (rmk p x) (radd (rmk q y) (rmk r z)))))))))))
+                 (radd (rmk p x) (radd (rmk q y) (rmk r z))))))
  (defq uv-radd-assoc-c
-   (pi p zed (pi x bool (pi q zed (pi y bool (pi r zed (pi z bool (uv-rac p x q y r z)))))))
-   (lam p (lam x (lam q (lam y (lam r (lam z
+   (pi p zed x bool q zed y bool r zed z bool (uv-rac p x q y r z))
+   (lam p x q y r z
       (bool_rect (lam X (uv-rac p X q y r z))
          ; x = true
          (bool_rect (lam Y (uv-rac p true q Y r z))
@@ -210,20 +210,20 @@
                   false false (uv-zadd-assoc p q r) (idpath false))
                z)
             y)
-         x))))))))
+         x)))
  (defq uv-radd-assoc
-   (pi a rea (pi b rea (pi c rea (paths rea (radd (radd a b) c) (radd a (radd b c))))))
-   (lam a (lam b (lam c
-      (uv-radd-assoc-c (pr1 a) (pr2 a) (pr1 b) (pr2 b) (pr1 c) (pr2 c))))))
+   (pi a rea b rea c rea (paths rea (radd (radd a b) c) (radd a (radd b c))))
+   (lam a b c
+      (uv-radd-assoc-c (pr1 a) (pr2 a) (pr1 b) (pr2 b) (pr1 c) (pr2 c))))
  ; ..and so do the measures, component by component
  (defq uv-madd-assoc
-   (pi a msr (pi b msr (pi c msr (paths msr (madd (madd a b) c) (madd a (madd b c))))))
-   (lam a (lam b (lam c
+   (pi a msr b msr c msr (paths msr (madd (madd a b) c) (madd a (madd b c))))
+   (lam a b c
       (uv-pairpath rea rea
          (radd (radd (pr1 a) (pr1 b)) (pr1 c)) (radd (pr1 a) (radd (pr1 b) (pr1 c)))
          (radd (radd (pr2 a) (pr2 b)) (pr2 c)) (radd (pr2 a) (radd (pr2 b) (pr2 c)))
          (uv-radd-assoc (pr1 a) (pr1 b) (pr1 c))
-         (uv-radd-assoc (pr2 a) (pr2 b) (pr2 c)))))))
+         (uv-radd-assoc (pr2 a) (pr2 b) (pr2 c)))))
  ; ..and 0 a unit on both sides of both: (orb h false) is stuck on a neutral h
  (defq uv-radd-runit (pi a rea (paths rea (radd a rzero) a))
    (lam a (bool_rect (lam X (paths rea (radd (rmk (pr1 a) X) rzero) (rmk (pr1 a) X)))
@@ -255,19 +255,19 @@
 ; --- + as love answers. a mixed band degenerates (the chain answers whole), buying
 ; --- associativity with no side conditions; append replaces the left spine's tail ---
 (test
- (defn vappd (pi d nat (pi t (vtre d) (pi w val val)))
-   (lam d (nat_rect (lam q (pi t (vtre q) (pi w val val)))
-             (lam t (lam w w))
-             (lam k (lam IH (lam t (lam w
+ (defn vappd (pi d nat t (vtre d) w val val)
+   (lam d (nat_rect (lam q (pi t (vtre q) w val val))
+             (lam t w w)
+             (lam k IH t w
                 (coprod_rect (lam z val)
                    (lam m w)
                    (lam p (vlink (tpair k (vfst k p)) (IH (vsnd k p) w)))
-                   t)))))
+                   t))
              d)))
- (defn vapp (pi u val (pi w val val)) (lam u (lam w (vappd (pr1 u) (pr2 u) w))))
+ (defn vapp (pi u val w val val) (lam u w (vappd (pr1 u) (pr2 u) w)))
  ; the lane a pair of bands takes
- (defn vlane (pi i nat (pi j nat nat))
-   (lam i (lam j (bool_rect (lam x nat)
+ (defn vlane (pi i nat j nat nat)
+   (lam i j (bool_rect (lam x nat)
                     mxLbin_unit
                     (bool_rect (lam y nat)
                        mxLbin_unit
@@ -276,9 +276,9 @@
                           (bool_rect (lam w nat) mxLbin_b mxLadd_seq (nateqb i bNum))
                           (nateqb j bNum))
                        (nateqb j bUnit))
-                    (nateqb i bUnit)))))
- (defn vadd (pi u val (pi w val val))
-   (lam u (lam w (bool_rect (lam x val)
+                    (nateqb i bUnit))))
+ (defn vadd (pi u val w val val)
+   (lam u w (bool_rect (lam x val)
                     w
                     (bool_rect (lam y val)
                        u
@@ -293,7 +293,7 @@
                              (nateqb (vband u) bNum))
                           (nateqb (vband w) bNum))
                        (nateqb (vband w) bUnit))
-                    (nateqb (vband u) bUnit)))))
+                    (nateqb (vband u) bUnit))))
  (vof 0 'true = vof 0 '(veq (vadd vnilv (nval 3)) (nval 3)))
  (vof 0 'true = vof 0 '(veq (vadd (nval 3) vnilv) (nval 3)))
  (vof 0 'true = vof 0 '(veq (vadd (nval 2) (nval 3)) (nval 5)))
@@ -312,24 +312,24 @@
 ; --- right does not; the pad is invisible to append ---
 (test
  (defq uv-vapp-padl
-   (pi a nat (pi b nat (pi t (vtre a) (pi w val
-      (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true)))))
+   (pi a nat b nat t (vtre a) w val
+      (paths bool (veq (vappd (mx2 a b) (padl a b t) w) (vappd a t w)) true))
    (lam a (nat_rect
-             (lam q (pi b nat (pi t (vtre q) (pi w val
+             (lam q (pi b nat t (vtre q) w val
                        (paths bool (veq (vappd (mx2 q b) (padl q b t) w)
-                                        (vappd q t w)) true)))))
-             (lam b (lam t (lam w
+                                        (vappd q t w)) true)))
+             (lam b t w
                 (nat_rect (lam r (paths bool
                              (veq (vappd (mx2 0 r) (padl 0 r t) w) (vappd 0 t w)) true))
                    (uv-veq-refl w)
-                   (lam k (lam sk (uv-veq-refl w)))
-                   b))))
-             (lam j (lam IH (lam b
-                (nat_rect (lam r (pi t (vtre (succ j)) (pi w val
+                   (lam k sk (uv-veq-refl w))
+                   b))
+             (lam j IH b
+                (nat_rect (lam r (pi t (vtre (succ j)) w val
                              (paths bool (veq (vappd (mx2 (succ j) r) (padl (succ j) r t) w)
-                                              (vappd (succ j) t w)) true))))
-                   (lam t (lam w (uv-veq-refl (vappd (succ j) t w))))
-                   (lam k (lam sk (lam t (lam w
+                                              (vappd (succ j) t w)) true)))
+                   (lam t w (uv-veq-refl (vappd (succ j) t w)))
+                   (lam k sk t w
                       (coprod_rect (lam z (paths bool
                                      (veq (vappd (succ (mx2 j k)) (padl (succ j) (succ k) z) w)
                                           (vappd (succ j) z w)) true))
@@ -341,23 +341,23 @@
                                     (vappd j (vsnd j pp) w)
                                     (uv-padl-bwd j k (vfst j pp))
                                     (IH k (vsnd j pp) w)))
-                         t)))))
-                   b))))
+                         t))
+                   b))
              a)))
  (defq uv-vapp-padr
-   (pi a nat (pi b nat (pi t (vtre b) (pi w val
-      (paths bool (veq (vappd (mx2 a b) (padr a b t) w) (vappd b t w)) true)))))
+   (pi a nat b nat t (vtre b) w val
+      (paths bool (veq (vappd (mx2 a b) (padr a b t) w) (vappd b t w)) true))
    (lam a (nat_rect
-             (lam q (pi b nat (pi t (vtre b) (pi w val
+             (lam q (pi b nat t (vtre b) w val
                        (paths bool (veq (vappd (mx2 q b) (padr q b t) w)
-                                        (vappd b t w)) true)))))
-             (lam b (lam t (lam w (uv-veq-refl (vappd b t w)))))
-             (lam j (lam IH (lam b
-                (nat_rect (lam r (pi t (vtre r) (pi w val
+                                        (vappd b t w)) true)))
+             (lam b t w (uv-veq-refl (vappd b t w)))
+             (lam j IH b
+                (nat_rect (lam r (pi t (vtre r) w val
                              (paths bool (veq (vappd (mx2 (succ j) r) (padr (succ j) r t) w)
-                                              (vappd r t w)) true))))
-                   (lam t (lam w (uv-veq-refl w)))
-                   (lam k (lam sk (lam t (lam w
+                                              (vappd r t w)) true)))
+                   (lam t w (uv-veq-refl w))
+                   (lam k sk t w
                       (coprod_rect (lam z (paths bool
                                      (veq (vappd (succ (mx2 j k)) (padr (succ j) (succ k) z) w)
                                           (vappd (succ k) z w)) true))
@@ -369,24 +369,24 @@
                                     (vappd k (vsnd k pp) w)
                                     (uv-padr-bwd j k (vfst k pp))
                                     (IH k (vsnd k pp) w)))
-                         t)))))
-                   b))))
+                         t))
+                   b))
              a)))
  ; ..and so append associates: the bracketings differ only in the middle result's height
  (defq uv-vapp-assoc
-   (pi d nat (pi t (vtre d) (pi v val (pi w val
-      (paths bool (veq (vapp (vappd d t v) w) (vappd d t (vapp v w))) true)))))
+   (pi d nat t (vtre d) v val w val
+      (paths bool (veq (vapp (vappd d t v) w) (vappd d t (vapp v w))) true))
    (lam d (nat_rect
-             (lam q (pi t (vtre q) (pi v val (pi w val
+             (lam q (pi t (vtre q) v val w val
                        (paths bool (veq (vapp (vappd q t v) w)
-                                        (vappd q t (vapp v w))) true)))))
-             (lam t (lam v (lam w (uv-veq-refl (vapp v w)))))
-             (lam k (lam IH (lam t
-                (coprod_rect (lam z (pi v val (pi w val
+                                        (vappd q t (vapp v w))) true)))
+             (lam t v w (uv-veq-refl (vapp v w)))
+             (lam k IH t
+                (coprod_rect (lam z (pi v val w val
                                (paths bool (veq (vapp (vappd (succ k) z v) w)
-                                                (vappd (succ k) z (vapp v w))) true))))
-                   (lam m (lam v (lam w (uv-veq-refl (vapp v w)))))
-                   (lam p (lam v (lam w
+                                                (vappd (succ k) z (vapp v w))) true)))
+                   (lam m v w (uv-veq-refl (vapp v w)))
+                   (lam p v w
                       (uv-veq-link
                          (tpair (mx2 k (pr1 (vappd k (vsnd k p) v)))
                                 (padl k (pr1 (vappd k (vsnd k p) v)) (vfst k p)))
@@ -404,8 +404,8 @@
                             (vappd k (vsnd k p) (vapp v w))
                             (uv-vapp-padr k (pr1 (vappd k (vsnd k p) v))
                                             (pr2 (vappd k (vsnd k p) v)) w)
-                            (IH (vsnd k p) v w))))))
-                   t))))
+                            (IH (vsnd k p) v w))))
+                   t))
              d))))
 
 ; --- vadd's cell is the lane mx.l's `+` matrix dispatches to, all nine pairs, so a
@@ -448,7 +448,7 @@
                                   (uv-veq-refl vnilv) u))
                         (lam m (uv-veq-refl (tpair 0 (ii2 m))))
                         t))
-              (lam k (lam IH (lam t
+              (lam k IH t
                  (coprod_rect
                     (lam w (paths bool (veq (vadd (tpair (succ k) w) vnilv)
                                             (tpair (succ k) w)) true))
@@ -464,42 +464,42 @@
                               (lam m (uv-veq-refl (tpair (succ k) (ii1 (ii2 m)))))
                               a))
                     (lam p (uv-veq-refl (tpair (succ k) (ii2 p))))
-                    t))))
+                    t))
               (pr1 v)) (pr2 v))))
  ; numbers add, by the measure's own monoid
- (defq uv-vadd-num (pi a msr (pi b msr (paths val (vadd (vnum a) (vnum b)) (vnum (madd a b)))))
-   (lam a (lam b (idpath (vnum (madd a b))))))
+ (defq uv-vadd-num (pi a msr b msr (paths val (vadd (vnum a) (vnum b)) (vnum (madd a b))))
+   (lam a b (idpath (vnum (madd a b)))))
  (defq uv-vadd-num-assoc
-   (pi a msr (pi b msr (pi c msr
+   (pi a msr b msr c msr
       (paths val (vadd (vadd (vnum a) (vnum b)) (vnum c))
-                 (vadd (vnum a) (vadd (vnum b) (vnum c)))))))
-   (lam a (lam b (lam c
+                 (vadd (vnum a) (vadd (vnum b) (vnum c)))))
+   (lam a b c
       (maponpaths msr val (lam w (vnum w))
-         (madd (madd a b) c) (madd a (madd b c)) (uv-madd-assoc a b c))))))
+         (madd (madd a b) c) (madd a (madd b c)) (uv-madd-assoc a b c))))
  ; a mixed band degenerates: the chain answers whole and the number is gone
  (defq uv-vadd-degen-l
-   (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))))
-   (lam m (lam a (lam b (idpath (vlink a b))))))
+   (pi m msr a val b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))
+   (lam m a b (idpath (vlink a b))))
  (defq uv-vadd-degen-r
-   (pi m msr (pi a val (pi b val (paths val (vadd (vlink a b) (vnum m)) (vlink a b)))))
-   (lam m (lam a (lam b (idpath (vlink a b))))))
+   (pi m msr a val b val (paths val (vadd (vlink a b) (vnum m)) (vlink a b)))
+   (lam m a b (idpath (vlink a b))))
  ; ..and the net sees it go: + associates with no side conditions, and is not a hom
  (defq uv-vadd-degen-net
-   (pi m msr (pi a val (pi b val
-      (paths msr (vnet (vadd (vnum m) (vlink a b))) (vnet (vlink a b))))))
-   (lam m (lam a (lam b (idpath (vnet (vlink a b)))))))
+   (pi m msr a val b val
+      (paths msr (vnet (vadd (vnum m) (vlink a b))) (vnet (vlink a b))))
+   (lam m a b (idpath (vnet (vlink a b)))))
  ; chains append
  (defq uv-vadd-seq
-   (pi a val (pi b val (pi c val (pi d val
-      (paths val (vadd (vlink a b) (vlink c d)) (vapp (vlink a b) (vlink c d)))))))
-   (lam a (lam b (lam c (lam d (idpath (vapp (vlink a b) (vlink c d)))))))))
+   (pi a val b val c val d val
+      (paths val (vadd (vlink a b) (vlink c d)) (vapp (vlink a b) (vlink c d))))
+   (lam a b c d (idpath (vapp (vlink a b) (vlink c d))))))
 
 ; --- + associates over all twenty-seven cells (spec.v's destruct x, y, z); all but the
 ; --- numeric and chain cells are one reflexivity, bought by the degeneration ---
 (test
- (defn uv-aa (pi u val (pi v val (pi w val UU)))
-   (lam u (lam v (lam w
-      (paths bool (veq (vadd (vadd u v) w) (vadd u (vadd v w))) true)))))
+ (defn uv-aa (pi u val v val w val UU)
+   (lam u v w
+      (paths bool (veq (vadd (vadd u v) w) (vadd u (vadd v w))) true)))
  (defq uv-aa-uuu
    (uv-aa vnilv vnilv vnilv)
    (uv-veq-refl vnilv))
@@ -507,91 +507,91 @@
    (pi c msr (uv-aa vnilv vnilv (vnum c)))
    (lam c (uv-veq-refl (vnum c))))
  (defq uv-aa-uus
-   (pi e val (pi f val (uv-aa vnilv vnilv (vlink e f))))
-   (lam e (lam f (uv-veq-refl (vlink e f)))))
+   (pi e val f val (uv-aa vnilv vnilv (vlink e f)))
+   (lam e f (uv-veq-refl (vlink e f))))
  (defq uv-aa-unu
    (pi b msr (uv-aa vnilv (vnum b) vnilv))
    (lam b (uv-veq-refl (vnum b))))
  (defq uv-aa-unn
-   (pi b msr (pi c msr (uv-aa vnilv (vnum b) (vnum c))))
-   (lam b (lam c (uv-veq-refl (vnum (madd b c))))))
+   (pi b msr c msr (uv-aa vnilv (vnum b) (vnum c)))
+   (lam b c (uv-veq-refl (vnum (madd b c)))))
  (defq uv-aa-uns
-   (pi b msr (pi e val (pi f val (uv-aa vnilv (vnum b) (vlink e f)))))
-   (lam b (lam e (lam f (uv-veq-refl (vlink e f))))))
+   (pi b msr e val f val (uv-aa vnilv (vnum b) (vlink e f)))
+   (lam b e f (uv-veq-refl (vlink e f))))
  (defq uv-aa-usu
-   (pi c val (pi d val (uv-aa vnilv (vlink c d) vnilv)))
-   (lam c (lam d (uv-veq-refl (vlink c d)))))
+   (pi c val d val (uv-aa vnilv (vlink c d) vnilv))
+   (lam c d (uv-veq-refl (vlink c d))))
  (defq uv-aa-usn
-   (pi c val (pi d val (pi e msr (uv-aa vnilv (vlink c d) (vnum e)))))
-   (lam c (lam d (lam e (uv-veq-refl (vlink c d))))))
+   (pi c val d val e msr (uv-aa vnilv (vlink c d) (vnum e)))
+   (lam c d e (uv-veq-refl (vlink c d))))
  (defq uv-aa-uss
-   (pi c val (pi d val (pi e val (pi f val (uv-aa vnilv (vlink c d) (vlink e f))))))
-   (lam c (lam d (lam e (lam f (uv-veq-refl (vapp (vlink c d) (vlink e f))))))))
+   (pi c val d val e val f val (uv-aa vnilv (vlink c d) (vlink e f)))
+   (lam c d e f (uv-veq-refl (vapp (vlink c d) (vlink e f)))))
  (defq uv-aa-nuu
    (pi a msr (uv-aa (vnum a) vnilv vnilv))
    (lam a (uv-veq-refl (vnum a))))
  (defq uv-aa-nun
-   (pi a msr (pi c msr (uv-aa (vnum a) vnilv (vnum c))))
-   (lam a (lam c (uv-veq-refl (vnum (madd a c))))))
+   (pi a msr c msr (uv-aa (vnum a) vnilv (vnum c)))
+   (lam a c (uv-veq-refl (vnum (madd a c)))))
  (defq uv-aa-nus
-   (pi a msr (pi e val (pi f val (uv-aa (vnum a) vnilv (vlink e f)))))
-   (lam a (lam e (lam f (uv-veq-refl (vlink e f))))))
+   (pi a msr e val f val (uv-aa (vnum a) vnilv (vlink e f)))
+   (lam a e f (uv-veq-refl (vlink e f))))
  (defq uv-aa-nnu
-   (pi a msr (pi b msr (uv-aa (vnum a) (vnum b) vnilv)))
-   (lam a (lam b (uv-veq-refl (vnum (madd a b))))))
+   (pi a msr b msr (uv-aa (vnum a) (vnum b) vnilv))
+   (lam a b (uv-veq-refl (vnum (madd a b)))))
  (defq uv-aa-nnn
-   (pi a msr (pi b msr (pi c msr (uv-aa (vnum a) (vnum b) (vnum c)))))
-   (lam a (lam b (lam c
+   (pi a msr b msr c msr (uv-aa (vnum a) (vnum b) (vnum c)))
+   (lam a b c
       (uv-veq-of (vnum (madd (madd a b) c)) (vnum (madd a (madd b c)))
          (maponpaths msr val (lam x (vnum x))
-            (madd (madd a b) c) (madd a (madd b c)) (uv-madd-assoc a b c)))))))
+            (madd (madd a b) c) (madd a (madd b c)) (uv-madd-assoc a b c)))))
  (defq uv-aa-nns
-   (pi a msr (pi b msr (pi e val (pi f val (uv-aa (vnum a) (vnum b) (vlink e f))))))
-   (lam a (lam b (lam e (lam f (uv-veq-refl (vlink e f)))))))
+   (pi a msr b msr e val f val (uv-aa (vnum a) (vnum b) (vlink e f)))
+   (lam a b e f (uv-veq-refl (vlink e f))))
  (defq uv-aa-nsu
-   (pi a msr (pi c val (pi d val (uv-aa (vnum a) (vlink c d) vnilv))))
-   (lam a (lam c (lam d (uv-veq-refl (vlink c d))))))
+   (pi a msr c val d val (uv-aa (vnum a) (vlink c d) vnilv))
+   (lam a c d (uv-veq-refl (vlink c d))))
  (defq uv-aa-nsn
-   (pi a msr (pi c val (pi d val (pi e msr (uv-aa (vnum a) (vlink c d) (vnum e))))))
-   (lam a (lam c (lam d (lam e (uv-veq-refl (vlink c d)))))))
+   (pi a msr c val d val e msr (uv-aa (vnum a) (vlink c d) (vnum e)))
+   (lam a c d e (uv-veq-refl (vlink c d))))
  (defq uv-aa-nss
-   (pi a msr (pi c val (pi d val (pi e val (pi f val (uv-aa (vnum a) (vlink c d) (vlink e f)))))))
-   (lam a (lam c (lam d (lam e (lam f (uv-veq-refl (vapp (vlink c d) (vlink e f)))))))))
+   (pi a msr c val d val e val f val (uv-aa (vnum a) (vlink c d) (vlink e f)))
+   (lam a c d e f (uv-veq-refl (vapp (vlink c d) (vlink e f)))))
  (defq uv-aa-suu
-   (pi a val (pi b val (uv-aa (vlink a b) vnilv vnilv)))
-   (lam a (lam b (uv-veq-refl (vlink a b)))))
+   (pi a val b val (uv-aa (vlink a b) vnilv vnilv))
+   (lam a b (uv-veq-refl (vlink a b))))
  (defq uv-aa-sun
-   (pi a val (pi b val (pi e msr (uv-aa (vlink a b) vnilv (vnum e)))))
-   (lam a (lam b (lam e (uv-veq-refl (vlink a b))))))
+   (pi a val b val e msr (uv-aa (vlink a b) vnilv (vnum e)))
+   (lam a b e (uv-veq-refl (vlink a b))))
  (defq uv-aa-sus
-   (pi a val (pi b val (pi e val (pi f val (uv-aa (vlink a b) vnilv (vlink e f))))))
-   (lam a (lam b (lam e (lam f (uv-veq-refl (vapp (vlink a b) (vlink e f))))))))
+   (pi a val b val e val f val (uv-aa (vlink a b) vnilv (vlink e f)))
+   (lam a b e f (uv-veq-refl (vapp (vlink a b) (vlink e f)))))
  (defq uv-aa-snu
-   (pi a val (pi b val (pi c msr (uv-aa (vlink a b) (vnum c) vnilv))))
-   (lam a (lam b (lam c (uv-veq-refl (vlink a b))))))
+   (pi a val b val c msr (uv-aa (vlink a b) (vnum c) vnilv))
+   (lam a b c (uv-veq-refl (vlink a b))))
  (defq uv-aa-snn
-   (pi a val (pi b val (pi c msr (pi e msr (uv-aa (vlink a b) (vnum c) (vnum e))))))
-   (lam a (lam b (lam c (lam e (uv-veq-refl (vlink a b)))))))
+   (pi a val b val c msr e msr (uv-aa (vlink a b) (vnum c) (vnum e)))
+   (lam a b c e (uv-veq-refl (vlink a b))))
  (defq uv-aa-sns
-   (pi a val (pi b val (pi c msr (pi e val (pi f val (uv-aa (vlink a b) (vnum c) (vlink e f)))))))
-   (lam a (lam b (lam c (lam e (lam f (uv-veq-refl (vapp (vlink a b) (vlink e f)))))))))
+   (pi a val b val c msr e val f val (uv-aa (vlink a b) (vnum c) (vlink e f)))
+   (lam a b c e f (uv-veq-refl (vapp (vlink a b) (vlink e f)))))
  (defq uv-aa-ssu
-   (pi a val (pi b val (pi c val (pi d val (uv-aa (vlink a b) (vlink c d) vnilv)))))
-   (lam a (lam b (lam c (lam d (uv-veq-refl (vapp (vlink a b) (vlink c d))))))))
+   (pi a val b val c val d val (uv-aa (vlink a b) (vlink c d) vnilv))
+   (lam a b c d (uv-veq-refl (vapp (vlink a b) (vlink c d)))))
  (defq uv-aa-ssn
-   (pi a val (pi b val (pi c val (pi d val (pi e msr (uv-aa (vlink a b) (vlink c d) (vnum e)))))))
-   (lam a (lam b (lam c (lam d (lam e (uv-veq-refl (vapp (vlink a b) (vlink c d)))))))))
+   (pi a val b val c val d val e msr (uv-aa (vlink a b) (vlink c d) (vnum e)))
+   (lam a b c d e (uv-veq-refl (vapp (vlink a b) (vlink c d)))))
  (defq uv-aa-sss
-   (pi a val (pi b val (pi c val (pi d val (pi e val (pi f val (uv-aa (vlink a b) (vlink c d) (vlink e f))))))))
-   (lam a (lam b (lam c (lam d (lam e (lam f
-      (uv-vapp-assoc (pr1 (vlink a b)) (pr2 (vlink a b)) (vlink c d) (vlink e f))))))))))
+   (pi a val b val c val d val e val f val (uv-aa (vlink a b) (vlink c d) (vlink e f)))
+   (lam a b c d e f
+      (uv-vapp-assoc (pr1 (vlink a b)) (pr2 (vlink a b)) (vlink c d) (vlink e f)))))
 
 ; --- and over paths: a generic crossing over three neutrals carries the whole
 ; --- unreduced dispatch, and conv pays for it twice ---
 (test
- (defn uv-paa (pi u val (pi v val (pi w val UU)))
-   (lam u (lam v (lam w
-      (paths pval (pin (vadd (vadd u v) w)) (pin (vadd u (vadd v w))))))))
+ (defn uv-paa (pi u val v val w val UU)
+   (lam u v w
+      (paths pval (pin (vadd (vadd u v) w)) (pin (vadd u (vadd v w))))))
  (defq uv-paa-uuu
    (uv-paa vnilv vnilv vnilv)
    (uv-veq-paths (vadd (vadd vnilv vnilv) vnilv) (vadd vnilv (vadd vnilv vnilv))
@@ -601,124 +601,124 @@
    (lam c (uv-veq-paths (vadd (vadd vnilv vnilv) (vnum c)) (vadd vnilv (vadd vnilv (vnum c)))
       (uv-aa-uun c))))
  (defq uv-paa-uus
-   (pi e val (pi f val (uv-paa vnilv vnilv (vlink e f))))
-   (lam e (lam f (uv-veq-paths (vadd (vadd vnilv vnilv) (vlink e f)) (vadd vnilv (vadd vnilv (vlink e f)))
-      (uv-aa-uus e f)))))
+   (pi e val f val (uv-paa vnilv vnilv (vlink e f)))
+   (lam e f (uv-veq-paths (vadd (vadd vnilv vnilv) (vlink e f)) (vadd vnilv (vadd vnilv (vlink e f)))
+      (uv-aa-uus e f))))
  (defq uv-paa-unu
    (pi b msr (uv-paa vnilv (vnum b) vnilv))
    (lam b (uv-veq-paths (vadd (vadd vnilv (vnum b)) vnilv) (vadd vnilv (vadd (vnum b) vnilv))
       (uv-aa-unu b))))
  (defq uv-paa-unn
-   (pi b msr (pi c msr (uv-paa vnilv (vnum b) (vnum c))))
-   (lam b (lam c (uv-veq-paths (vadd (vadd vnilv (vnum b)) (vnum c)) (vadd vnilv (vadd (vnum b) (vnum c)))
-      (uv-aa-unn b c)))))
+   (pi b msr c msr (uv-paa vnilv (vnum b) (vnum c)))
+   (lam b c (uv-veq-paths (vadd (vadd vnilv (vnum b)) (vnum c)) (vadd vnilv (vadd (vnum b) (vnum c)))
+      (uv-aa-unn b c))))
  (defq uv-paa-uns
-   (pi b msr (pi e val (pi f val (uv-paa vnilv (vnum b) (vlink e f)))))
-   (lam b (lam e (lam f (uv-veq-paths (vadd (vadd vnilv (vnum b)) (vlink e f)) (vadd vnilv (vadd (vnum b) (vlink e f)))
-      (uv-aa-uns b e f))))))
+   (pi b msr e val f val (uv-paa vnilv (vnum b) (vlink e f)))
+   (lam b e f (uv-veq-paths (vadd (vadd vnilv (vnum b)) (vlink e f)) (vadd vnilv (vadd (vnum b) (vlink e f)))
+      (uv-aa-uns b e f))))
  (defq uv-paa-usu
-   (pi c val (pi d val (uv-paa vnilv (vlink c d) vnilv)))
-   (lam c (lam d (uv-veq-paths (vadd (vadd vnilv (vlink c d)) vnilv) (vadd vnilv (vadd (vlink c d) vnilv))
-      (uv-aa-usu c d)))))
+   (pi c val d val (uv-paa vnilv (vlink c d) vnilv))
+   (lam c d (uv-veq-paths (vadd (vadd vnilv (vlink c d)) vnilv) (vadd vnilv (vadd (vlink c d) vnilv))
+      (uv-aa-usu c d))))
  (defq uv-paa-usn
-   (pi c val (pi d val (pi e msr (uv-paa vnilv (vlink c d) (vnum e)))))
-   (lam c (lam d (lam e (uv-veq-paths (vadd (vadd vnilv (vlink c d)) (vnum e)) (vadd vnilv (vadd (vlink c d) (vnum e)))
-      (uv-aa-usn c d e))))))
+   (pi c val d val e msr (uv-paa vnilv (vlink c d) (vnum e)))
+   (lam c d e (uv-veq-paths (vadd (vadd vnilv (vlink c d)) (vnum e)) (vadd vnilv (vadd (vlink c d) (vnum e)))
+      (uv-aa-usn c d e))))
  (defq uv-paa-uss
-   (pi c val (pi d val (pi e val (pi f val (uv-paa vnilv (vlink c d) (vlink e f))))))
-   (lam c (lam d (lam e (lam f (uv-veq-paths (vadd (vadd vnilv (vlink c d)) (vlink e f)) (vadd vnilv (vadd (vlink c d) (vlink e f)))
-      (uv-aa-uss c d e f)))))))
+   (pi c val d val e val f val (uv-paa vnilv (vlink c d) (vlink e f)))
+   (lam c d e f (uv-veq-paths (vadd (vadd vnilv (vlink c d)) (vlink e f)) (vadd vnilv (vadd (vlink c d) (vlink e f)))
+      (uv-aa-uss c d e f))))
  (defq uv-paa-nuu
    (pi a msr (uv-paa (vnum a) vnilv vnilv))
    (lam a (uv-veq-paths (vadd (vadd (vnum a) vnilv) vnilv) (vadd (vnum a) (vadd vnilv vnilv))
       (uv-aa-nuu a))))
  (defq uv-paa-nun
-   (pi a msr (pi c msr (uv-paa (vnum a) vnilv (vnum c))))
-   (lam a (lam c (uv-veq-paths (vadd (vadd (vnum a) vnilv) (vnum c)) (vadd (vnum a) (vadd vnilv (vnum c)))
-      (uv-aa-nun a c)))))
+   (pi a msr c msr (uv-paa (vnum a) vnilv (vnum c)))
+   (lam a c (uv-veq-paths (vadd (vadd (vnum a) vnilv) (vnum c)) (vadd (vnum a) (vadd vnilv (vnum c)))
+      (uv-aa-nun a c))))
  (defq uv-paa-nus
-   (pi a msr (pi e val (pi f val (uv-paa (vnum a) vnilv (vlink e f)))))
-   (lam a (lam e (lam f (uv-veq-paths (vadd (vadd (vnum a) vnilv) (vlink e f)) (vadd (vnum a) (vadd vnilv (vlink e f)))
-      (uv-aa-nus a e f))))))
+   (pi a msr e val f val (uv-paa (vnum a) vnilv (vlink e f)))
+   (lam a e f (uv-veq-paths (vadd (vadd (vnum a) vnilv) (vlink e f)) (vadd (vnum a) (vadd vnilv (vlink e f)))
+      (uv-aa-nus a e f))))
  (defq uv-paa-nnu
-   (pi a msr (pi b msr (uv-paa (vnum a) (vnum b) vnilv)))
-   (lam a (lam b (uv-veq-paths (vadd (vadd (vnum a) (vnum b)) vnilv) (vadd (vnum a) (vadd (vnum b) vnilv))
-      (uv-aa-nnu a b)))))
+   (pi a msr b msr (uv-paa (vnum a) (vnum b) vnilv))
+   (lam a b (uv-veq-paths (vadd (vadd (vnum a) (vnum b)) vnilv) (vadd (vnum a) (vadd (vnum b) vnilv))
+      (uv-aa-nnu a b))))
  (defq uv-paa-nnn
-   (pi a msr (pi b msr (pi c msr (uv-paa (vnum a) (vnum b) (vnum c)))))
-   (lam a (lam b (lam c (uv-veq-paths (vadd (vadd (vnum a) (vnum b)) (vnum c)) (vadd (vnum a) (vadd (vnum b) (vnum c)))
-      (uv-aa-nnn a b c))))))
+   (pi a msr b msr c msr (uv-paa (vnum a) (vnum b) (vnum c)))
+   (lam a b c (uv-veq-paths (vadd (vadd (vnum a) (vnum b)) (vnum c)) (vadd (vnum a) (vadd (vnum b) (vnum c)))
+      (uv-aa-nnn a b c))))
  (defq uv-paa-nns
-   (pi a msr (pi b msr (pi e val (pi f val (uv-paa (vnum a) (vnum b) (vlink e f))))))
-   (lam a (lam b (lam e (lam f (uv-veq-paths (vadd (vadd (vnum a) (vnum b)) (vlink e f)) (vadd (vnum a) (vadd (vnum b) (vlink e f)))
-      (uv-aa-nns a b e f)))))))
+   (pi a msr b msr e val f val (uv-paa (vnum a) (vnum b) (vlink e f)))
+   (lam a b e f (uv-veq-paths (vadd (vadd (vnum a) (vnum b)) (vlink e f)) (vadd (vnum a) (vadd (vnum b) (vlink e f)))
+      (uv-aa-nns a b e f))))
  (defq uv-paa-nsu
-   (pi a msr (pi c val (pi d val (uv-paa (vnum a) (vlink c d) vnilv))))
-   (lam a (lam c (lam d (uv-veq-paths (vadd (vadd (vnum a) (vlink c d)) vnilv) (vadd (vnum a) (vadd (vlink c d) vnilv))
-      (uv-aa-nsu a c d))))))
+   (pi a msr c val d val (uv-paa (vnum a) (vlink c d) vnilv))
+   (lam a c d (uv-veq-paths (vadd (vadd (vnum a) (vlink c d)) vnilv) (vadd (vnum a) (vadd (vlink c d) vnilv))
+      (uv-aa-nsu a c d))))
  (defq uv-paa-nsn
-   (pi a msr (pi c val (pi d val (pi e msr (uv-paa (vnum a) (vlink c d) (vnum e))))))
-   (lam a (lam c (lam d (lam e (uv-veq-paths (vadd (vadd (vnum a) (vlink c d)) (vnum e)) (vadd (vnum a) (vadd (vlink c d) (vnum e)))
-      (uv-aa-nsn a c d e)))))))
+   (pi a msr c val d val e msr (uv-paa (vnum a) (vlink c d) (vnum e)))
+   (lam a c d e (uv-veq-paths (vadd (vadd (vnum a) (vlink c d)) (vnum e)) (vadd (vnum a) (vadd (vlink c d) (vnum e)))
+      (uv-aa-nsn a c d e))))
  (defq uv-paa-nss
-   (pi a msr (pi c val (pi d val (pi e val (pi f val (uv-paa (vnum a) (vlink c d) (vlink e f)))))))
-   (lam a (lam c (lam d (lam e (lam f (uv-veq-paths (vadd (vadd (vnum a) (vlink c d)) (vlink e f)) (vadd (vnum a) (vadd (vlink c d) (vlink e f)))
-      (uv-aa-nss a c d e f))))))))
+   (pi a msr c val d val e val f val (uv-paa (vnum a) (vlink c d) (vlink e f)))
+   (lam a c d e f (uv-veq-paths (vadd (vadd (vnum a) (vlink c d)) (vlink e f)) (vadd (vnum a) (vadd (vlink c d) (vlink e f)))
+      (uv-aa-nss a c d e f))))
  (defq uv-paa-suu
-   (pi a val (pi b val (uv-paa (vlink a b) vnilv vnilv)))
-   (lam a (lam b (uv-veq-paths (vadd (vadd (vlink a b) vnilv) vnilv) (vadd (vlink a b) (vadd vnilv vnilv))
-      (uv-aa-suu a b)))))
+   (pi a val b val (uv-paa (vlink a b) vnilv vnilv))
+   (lam a b (uv-veq-paths (vadd (vadd (vlink a b) vnilv) vnilv) (vadd (vlink a b) (vadd vnilv vnilv))
+      (uv-aa-suu a b))))
  (defq uv-paa-sun
-   (pi a val (pi b val (pi e msr (uv-paa (vlink a b) vnilv (vnum e)))))
-   (lam a (lam b (lam e (uv-veq-paths (vadd (vadd (vlink a b) vnilv) (vnum e)) (vadd (vlink a b) (vadd vnilv (vnum e)))
-      (uv-aa-sun a b e))))))
+   (pi a val b val e msr (uv-paa (vlink a b) vnilv (vnum e)))
+   (lam a b e (uv-veq-paths (vadd (vadd (vlink a b) vnilv) (vnum e)) (vadd (vlink a b) (vadd vnilv (vnum e)))
+      (uv-aa-sun a b e))))
  (defq uv-paa-sus
-   (pi a val (pi b val (pi e val (pi f val (uv-paa (vlink a b) vnilv (vlink e f))))))
-   (lam a (lam b (lam e (lam f (uv-veq-paths (vadd (vadd (vlink a b) vnilv) (vlink e f)) (vadd (vlink a b) (vadd vnilv (vlink e f)))
-      (uv-aa-sus a b e f)))))))
+   (pi a val b val e val f val (uv-paa (vlink a b) vnilv (vlink e f)))
+   (lam a b e f (uv-veq-paths (vadd (vadd (vlink a b) vnilv) (vlink e f)) (vadd (vlink a b) (vadd vnilv (vlink e f)))
+      (uv-aa-sus a b e f))))
  (defq uv-paa-snu
-   (pi a val (pi b val (pi c msr (uv-paa (vlink a b) (vnum c) vnilv))))
-   (lam a (lam b (lam c (uv-veq-paths (vadd (vadd (vlink a b) (vnum c)) vnilv) (vadd (vlink a b) (vadd (vnum c) vnilv))
-      (uv-aa-snu a b c))))))
+   (pi a val b val c msr (uv-paa (vlink a b) (vnum c) vnilv))
+   (lam a b c (uv-veq-paths (vadd (vadd (vlink a b) (vnum c)) vnilv) (vadd (vlink a b) (vadd (vnum c) vnilv))
+      (uv-aa-snu a b c))))
  (defq uv-paa-snn
-   (pi a val (pi b val (pi c msr (pi e msr (uv-paa (vlink a b) (vnum c) (vnum e))))))
-   (lam a (lam b (lam c (lam e (uv-veq-paths (vadd (vadd (vlink a b) (vnum c)) (vnum e)) (vadd (vlink a b) (vadd (vnum c) (vnum e)))
-      (uv-aa-snn a b c e)))))))
+   (pi a val b val c msr e msr (uv-paa (vlink a b) (vnum c) (vnum e)))
+   (lam a b c e (uv-veq-paths (vadd (vadd (vlink a b) (vnum c)) (vnum e)) (vadd (vlink a b) (vadd (vnum c) (vnum e)))
+      (uv-aa-snn a b c e))))
  (defq uv-paa-sns
-   (pi a val (pi b val (pi c msr (pi e val (pi f val (uv-paa (vlink a b) (vnum c) (vlink e f)))))))
-   (lam a (lam b (lam c (lam e (lam f (uv-veq-paths (vadd (vadd (vlink a b) (vnum c)) (vlink e f)) (vadd (vlink a b) (vadd (vnum c) (vlink e f)))
-      (uv-aa-sns a b c e f))))))))
+   (pi a val b val c msr e val f val (uv-paa (vlink a b) (vnum c) (vlink e f)))
+   (lam a b c e f (uv-veq-paths (vadd (vadd (vlink a b) (vnum c)) (vlink e f)) (vadd (vlink a b) (vadd (vnum c) (vlink e f)))
+      (uv-aa-sns a b c e f))))
  (defq uv-paa-ssu
-   (pi a val (pi b val (pi c val (pi d val (uv-paa (vlink a b) (vlink c d) vnilv)))))
-   (lam a (lam b (lam c (lam d (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) vnilv) (vadd (vlink a b) (vadd (vlink c d) vnilv))
-      (uv-aa-ssu a b c d)))))))
+   (pi a val b val c val d val (uv-paa (vlink a b) (vlink c d) vnilv))
+   (lam a b c d (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) vnilv) (vadd (vlink a b) (vadd (vlink c d) vnilv))
+      (uv-aa-ssu a b c d))))
  (defq uv-paa-ssn
-   (pi a val (pi b val (pi c val (pi d val (pi e msr (uv-paa (vlink a b) (vlink c d) (vnum e)))))))
-   (lam a (lam b (lam c (lam d (lam e (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) (vnum e)) (vadd (vlink a b) (vadd (vlink c d) (vnum e)))
-      (uv-aa-ssn a b c d e))))))))
+   (pi a val b val c val d val e msr (uv-paa (vlink a b) (vlink c d) (vnum e)))
+   (lam a b c d e (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) (vnum e)) (vadd (vlink a b) (vadd (vlink c d) (vnum e)))
+      (uv-aa-ssn a b c d e))))
  (defq uv-paa-sss
-   (pi a val (pi b val (pi c val (pi d val (pi e val (pi f val (uv-paa (vlink a b) (vlink c d) (vlink e f))))))))
-   (lam a (lam b (lam c (lam d (lam e (lam f (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) (vlink e f)) (vadd (vlink a b) (vadd (vlink c d) (vlink e f)))
-      (uv-aa-sss a b c d e f)))))))))
+   (pi a val b val c val d val e val f val (uv-paa (vlink a b) (vlink c d) (vlink e f)))
+   (lam a b c d e f (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) (vlink e f)) (vadd (vlink a b) (vadd (vlink c d) (vlink e f)))
+      (uv-aa-sss a b c d e f))))
  ; over paths both () spellings pin to pnilv, so the right unit's veq caveat is gone
  (defq uv-pvadd-runit (pi v val (paths pval (pin (vadd v vnilv)) (pin v)))
    (lam v (uv-veq-paths (vadd v vnilv) v (uv-vadd-runit v))))
  (defq uv-pvapp-assoc
-   (pi d nat (pi t (vtre d) (pi v val (pi w val
-      (paths pval (pin (vapp (vappd d t v) w)) (pin (vappd d t (vapp v w))))))))
-   (lam d (lam t (lam v (lam w (uv-veq-paths (vapp (vappd d t v) w)
+   (pi d nat t (vtre d) v val w val
+      (paths pval (pin (vapp (vappd d t v) w)) (pin (vappd d t (vapp v w)))))
+   (lam d t v w (uv-veq-paths (vapp (vappd d t v) w)
                                              (vappd d t (vapp v w))
-                                  (uv-vapp-assoc d t v w))))))))
+                                  (uv-vapp-assoc d t v w)))))
 
 ; --- * at the integer rung: the halves are not closed under *, so off a whole measure
 ; --- `*` leaves the carrier ---
 (test
  (defn znegof (pi n nat zed)
-   (lam n (nat_rect (lam q zed) (ii1 0) (lam k (lam r (ii2 k))) n)))
+   (lam n (nat_rect (lam q zed) (ii1 0) (lam k r (ii2 k)) n)))
  (defn zabs (pi z zed nat)
    (lam z (coprod_rect (lam w nat) (lam n n) (lam n (succ n)) z)))
- (defn zmul (pi a zed (pi b zed zed))
-   (lam a (lam b (coprod_rect (lam w zed)
+ (defn zmul (pi a zed b zed zed)
+   (lam a b (coprod_rect (lam w zed)
       (lam p (coprod_rect (lam w zed)
                 (lam q (ii1 (mul p q)))
                 (lam q (znegof (mul p (succ q))))
@@ -727,10 +727,10 @@
                 (lam q (znegof (mul (succ p) q)))
                 (lam q (ii1 (mul (succ p) (succ q))))
                 b))
-      a))))
+      a)))
  (defn mzed (pi m msr zed) (lam m (pr1 (pr1 m))))
- (defn mmulz (pi a msr (pi b msr msr))
-   (lam a (lam b (rmsr (zrea (zmul (mzed a) (mzed b)))))))
+ (defn mmulz (pi a msr b msr msr)
+   (lam a b (rmsr (zrea (zmul (mzed a) (mzed b))))))
  (defn vcount (pi v val nat) (lam v (zabs (mzed (vnet v)))))  ; |count| -- love repeats by it
  (vof 0 '(ii1 6) = vof 0 '(zmul (ii1 2) (ii1 3)))
  (vof 0 '(ii2 5) = vof 0 '(zmul (ii2 1) (ii1 3))) ; -2 * 3 = -6
@@ -741,31 +741,31 @@
 ; --- a number repeats a chain |count| times; two chains take the cartesian, each pair a
 ; --- 2-list: why the carrier nests ---
 (test
- (defn vrep (pi n nat (pi c val val))
-   (lam n (lam c (nat_rect (lam q val) vnilv (lam k (lam r (vapp c r))) n))))
- (defn vrowd (pi d nat (pi t (vtre d) (pi x val val)))
-   (lam d (nat_rect (lam q (pi t (vtre q) (pi x val val)))
-             (lam t (lam x vnilv))
-             (lam k (lam IH (lam t (lam x
+ (defn vrep (pi n nat c val val)
+   (lam n c (nat_rect (lam q val) vnilv (lam k r (vapp c r)) n)))
+ (defn vrowd (pi d nat t (vtre d) x val val)
+   (lam d (nat_rect (lam q (pi t (vtre q) x val val))
+             (lam t x vnilv)
+             (lam k IH t x
                 (coprod_rect (lam z val)
                    (lam m vnilv)
                    (lam p (vlink (vlink x (vlink (tpair k (vfst k p)) vnilv))
                                  (IH (vsnd k p) x)))
-                   t)))))
+                   t))
              d)))
- (defn vrow (pi b val (pi x val val)) (lam b (lam x (vrowd (pr1 b) (pr2 b) x))))
- (defn vcartd (pi d nat (pi t (vtre d) (pi b val val)))
-   (lam d (nat_rect (lam q (pi t (vtre q) (pi b val val)))
-             (lam t (lam b vnilv))
-             (lam k (lam IH (lam t (lam b
+ (defn vrow (pi b val x val val) (lam b x (vrowd (pr1 b) (pr2 b) x)))
+ (defn vcartd (pi d nat t (vtre d) b val val)
+   (lam d (nat_rect (lam q (pi t (vtre q) b val val))
+             (lam t b vnilv)
+             (lam k IH t b
                 (coprod_rect (lam z val)
                    (lam m vnilv)
                    (lam p (vapp (vrow b (tpair k (vfst k p))) (IH (vsnd k p) b)))
-                   t)))))
+                   t))
              d)))
- (defn vcart (pi u val (pi w val val)) (lam u (lam w (vcartd (pr1 u) (pr2 u) w))))
- (defn vmul (pi u val (pi w val val))
-   (lam u (lam w (bool_rect (lam x val)
+ (defn vcart (pi u val w val val) (lam u w (vcartd (pr1 u) (pr2 u) w)))
+ (defn vmul (pi u val w val val)
+   (lam u w (bool_rect (lam x val)
                     vnilv                                    ; () * x = ()
                     (bool_rect (lam y val)
                        vnilv                                 ; x * () = ()
@@ -780,7 +780,7 @@
                              (nateqb (vband u) bNum))
                           (nateqb (vband w) bNum))
                        (nateqb (vband w) bUnit))
-                    (nateqb (vband u) bUnit))))))
+                    (nateqb (vband u) bUnit)))))
 
 ; --- the laws * owes: the zero annihilates either side, with no case on the shape ---
 (test
@@ -789,24 +789,24 @@
    (lam v (bool_rect (lam X (paths val (bool_rect (lam x val) vnilv vnilv X) vnilv))
              (idpath vnilv) (idpath vnilv) (nateqb (vband v) bUnit))))
  (defq uv-vmul-num
-   (pi a msr (pi b msr (paths val (vmul (vnum a) (vnum b)) (vnum (mmulz a b)))))
-   (lam a (lam b (idpath (vnum (mmulz a b))))))
+   (pi a msr b msr (paths val (vmul (vnum a) (vnum b)) (vnum (mmulz a b))))
+   (lam a b (idpath (vnum (mmulz a b)))))
  (defq uv-vmul-rep-l
-   (pi m msr (pi a val (pi b val
-      (paths val (vmul (vnum m) (vlink a b)) (vrep (vcount (vnum m)) (vlink a b))))))
-   (lam m (lam a (lam b (idpath (vrep (vcount (vnum m)) (vlink a b)))))))
+   (pi m msr a val b val
+      (paths val (vmul (vnum m) (vlink a b)) (vrep (vcount (vnum m)) (vlink a b))))
+   (lam m a b (idpath (vrep (vcount (vnum m)) (vlink a b)))))
  (defq uv-vmul-rep-r
-   (pi m msr (pi a val (pi b val
-      (paths val (vmul (vlink a b) (vnum m)) (vrep (vcount (vnum m)) (vlink a b))))))
-   (lam m (lam a (lam b (idpath (vrep (vcount (vnum m)) (vlink a b)))))))
+   (pi m msr a val b val
+      (paths val (vmul (vlink a b) (vnum m)) (vrep (vcount (vnum m)) (vlink a b))))
+   (lam m a b (idpath (vrep (vcount (vnum m)) (vlink a b)))))
  (defq uv-vmul-cart
-   (pi a val (pi b val (pi c val (pi d val
-      (paths val (vmul (vlink a b) (vlink c d)) (vcart (vlink a b) (vlink c d)))))))
-   (lam a (lam b (lam c (lam d (idpath (vcart (vlink a b) (vlink c d))))))))
+   (pi a val b val c val d val
+      (paths val (vmul (vlink a b) (vlink c d)) (vcart (vlink a b) (vlink c d))))
+   (lam a b c d (idpath (vcart (vlink a b) (vlink c d)))))
  ; 0 copies is (), yet () and 0 stay apart
  (defq uv-vmul-zero-count
-   (pi a val (pi b val (paths val (vmul (nval 0) (vlink a b)) vnilv)))
-   (lam a (lam b (idpath vnilv)))))
+   (pi a val b val (paths val (vmul (nval 0) (vlink a b)) vnilv))
+   (lam a b (idpath vnilv))))
 
 ; --- the demos: * computes, and the cartesian is the shape love answers ---
 (test
