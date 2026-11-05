@@ -30,6 +30,14 @@ fail() { echo "FAIL playdate: $*" >&2; exit 1; }
 echo "TEST out/playdate/main.o (the device main, no SDK)"
 $mk -C src/love/user/playdate probe || fail "the device main does not compile"
 
+# the stones want no SDK either: baked on qemu's M7, woken, ten frames walked with the song fed
+echo "TEST out/mps2/love-pds.img (the stones, no SDK)"
+if command -v qemu-system-arm > /dev/null; then
+  $mk -C src/inle/mps2 imgpds || fail "the stones image does not bake and wake"
+else
+  echo "test_playdate: no qemu-system-arm, the stones image skipped"
+fi
+
 echo "TEST out/playdate/love.pdx"
 if [ -z "${PLAYDATE_SDK_PATH:-}" ]; then
   gate_skip "test_playdate: the device main compiles; no PLAYDATE_SDK_PATH, the pdx half skipped"
@@ -56,5 +64,12 @@ case $ent in *[13579bdf]) ;; *) fail "entry $ent has no thumb bit" ;; esac
   echo '(pdbin-check "out/playdate/love.pdx/pdex.bin"'
   echo '  (pdreloc-check "out/playdate/pdex.elf" "out/playdate/pdex-alt.elf" 1048576))'
 } | "$lv" || fail "the relocation table is not exactly the words that move, or pdc dropped some"
+
+echo "TEST out/playdate-stones/love.pdx"
+$mk -C src/love/user/playdate game=stones || fail "the stones build"
+e=out/playdate-stones/pdex.elf
+u=$(llvm-readelf -s $e | grep -c "UND [a-zA-Z_]")
+[ "$u" -eq 0 ] || fail "the stones' pdex.elf has $u undefined symbols"
+llvm-readelf -s $e | grep -qw eventHandlerShim || fail "the stones have no eventHandlerShim"
 
 echo "test_playdate: love.pdx -- every device object and the LINK are mooncc's, no foreign tool; resolved, thumb entry, ABS32 words only, and the table proven against a second base"
