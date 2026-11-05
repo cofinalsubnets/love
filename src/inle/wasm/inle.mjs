@@ -155,7 +155,7 @@ cpu.on('message', (m) => {
       if (serialSeen.includes(after)) pressAll(5000); } }
   else if (m.kexec !== undefined) {
     if (m.error) { process.stderr.write(`inle: kexec ${m.kexec}: errno ${m.error}\n`); process.exitCode = 1; }
-    else process.stderr.write(`inle: booting ${m.kexec} -- ${m.cmd}\n`); }
+    else process.stderr.write(`inle: booting ${m.kexec}${m.image ? ' and its image' : ''} -- ${m.cmd}\n`); }
   else if (m.lift !== undefined) {
     if (m.error) { process.stderr.write(`inle: lift ${m.lift}: errno ${m.error}\n`); process.exitCode = 1; }
     else {

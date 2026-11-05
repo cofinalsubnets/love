@@ -1163,12 +1163,12 @@ test_doomwasm-run:
 	   || { tail -20 out/wasm/kexec.log; echo "FAIL test_doomwasm (kexec)"; exit 1; }
 	@echo "  kexec: ok -- fetched, booted, drawn, and quit"
 	@echo TEST test/kernel/sitedoom.l "(love doom boots the origin's prebuilt, and with none goes on to build)"
-	@rm -rf out/wasm/origin0 && mkdir -p out/wasm/origin0 out/wasm/origin/out/doom && cp out/doom/love.wasm out/wasm/origin/out/doom/site.wasm
+	@rm -rf out/wasm/origin0 && mkdir -p out/wasm/origin0 out/wasm/origin/out/doom && cp out/doom/love.wasm out/wasm/origin/out/doom/site.wasm && cp out/doom/wasm/love.image out/wasm/origin/out/doom/site.image
 	@INLE_RAM=512 $(NODE) $(S)/inle/wasm/inle.mjs --fb 640x400 --origin out/wasm/origin \
 	   --after "I_InitGraphics: Auto-scaling" --press "Escape ArrowUp Enter KeyY" --for 150 \
 	   --image out/wasm/love.image $(R)/out/love.wasm test/kernel/sitedoom.l \
 	   < /dev/null > out/wasm/sitedoom.log 2>&1; \
-	 grep -q "inle: booting /doom-site.wasm" out/wasm/sitedoom.log \
+	 grep -q "inle: booting /doom-site.wasm and its image" out/wasm/sitedoom.log \
 	 && grep -q "I_InitGraphics: DOOM screen size" out/wasm/sitedoom.log \
 	   || { tail -20 out/wasm/sitedoom.log; echo "FAIL test_doomwasm (sitedoom prebuilt)"; exit 1; }
 	@INLE_RAM=512 $(NODE) $(S)/inle/wasm/inle.mjs --origin out/wasm/origin0 --for 60 \

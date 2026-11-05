@@ -12,6 +12,7 @@
 #include <string.h>
 #include "doomgeneric.h"
 #include "doomkeys.h"
+#include "d_event.h"
 #include "i_system.h"
 
 bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch);
@@ -19,7 +20,8 @@ void k_scan_arm(int on);
 int k_scan_pop(void);
 uintptr_t k_clock_ms(void);
 void k_sleep(uintptr_t ms);
-void k_fb_touch(void);
+void k_fb_touch(void), k_mouse_arm(int);
+int k_mouse_take(int*);
 
 // laid by src/tools/mkblob.l
 extern unsigned char const doom_wad[];
@@ -38,7 +40,7 @@ static struct {
  uintptr_t epoch;
  int keys[dh_keys];                  // pressed << 8 | key
  unsigned kh, kt;
- int frame, started, quit;
+ int frame, started, quit, mb;
  char wad[256];
 } dh;
 
@@ -50,7 +52,7 @@ extern int show_endoom;
 void DG_Init(void) {
  dh.epoch = hosted() ? love_clock() : k_clock_ms();
  show_endoom = 0;
- if (!hosted()) k_scan_arm(1); }
+ if (!hosted()) k_scan_arm(1), k_mouse_arm(1); }
 
 // the frame centred, unscaled: a smaller mode shows the part that fits
 void DG_DrawFrame(void) {
@@ -88,6 +90,8 @@ static unsigned char sc_key(int sc) {
   case 0x2a: case 0x36: return KEY_RSHIFT;
   case 0x38: case 0x138: return KEY_LALT;
   case 0x39: return KEY_USE;                       // space
+  case 0x33: return KEY_STRAFE_L;                  // , and .
+  case 0x34: return KEY_STRAFE_R;
   case 0x3a: return KEY_CAPSLOCK;
   // the arrows and the keypad alike: doom's KEYP_8 is KEY_UPARROW
   case 0x48: case 0x148: return KEY_UPARROW;
@@ -105,6 +109,14 @@ static unsigned char sc_key(int sc) {
  if (sc > 0 && sc < (int) sizeof sc_ascii - 1) return (unsigned char) sc_ascii[sc];
  return 0; }
 
+// the mouse turns and its buttons fire, strafe and step; forward and back it leaves alone
+static void dg_mouse(void) {
+ int dx, b = k_mouse_take(&dx);
+ if (!dx && b == dh.mb) return;
+ dh.mb = b;
+ event_t e = { .type = ev_mouse, .data1 = b, .data2 = dx };
+ D_PostEvent(&e); }
+
 int DG_GetKey(int *pressed, unsigned char *key) {
  if (hosted()) {
   if (dh.kh == dh.kt) return 0;
@@ -112,7 +124,7 @@ int DG_GetKey(int *pressed, unsigned char *key) {
   return *pressed = v >> 8 & 1, *key = (unsigned char) v, 1; }
  for (;;) {
   int c = k_scan_pop();
-  if (c < 0) return 0;
+  if (c < 0) return dg_mouse(), 0;
   unsigned char k = sc_key((c & ~0x80) | (c & 0x100));
   if (!k) continue;
   return *pressed = !(c & 0x80), *key = k, 1; } }
@@ -127,7 +139,7 @@ static void dg_create(void) {
 static void doom_run(void) {
  memcpy(dh.wad, "/usr/share/doom1.wad", 21);   // the baked row
  for (dg_create(); !dh.quit;) doomgeneric_Tick();
- k_scan_arm(0); }
+ k_scan_arm(0), k_mouse_arm(0); }
 
 static lvm(lvm_doom) {
  doom_run();

@@ -1208,6 +1208,7 @@ site-wasm: wasm
 # ..and doom for `love site` alone, renamed into place whole. under out/, so never in a commit
 site-doom:
 	@{ DL=$(dl) sh test/gate/dl.sh doomgeneric doom1.wad && $(MAKE) -s wasm DOOM=1 && \
+	   cp out/doom/wasm/love.image out/doom/site.image.tmp && mv out/doom/site.image.tmp out/doom/site.image && \
 	   cp out/doom/love.wasm out/doom/site.wasm.tmp && mv out/doom/site.wasm.tmp out/doom/site.wasm; } \
 	   > out/site-doom.log 2>&1 || echo 'site-doom: no prebuilt doom, see out/site-doom.log'
 web/wasm/love.wasm: $(ko)/love.wasm
