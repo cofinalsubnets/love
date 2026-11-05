@@ -173,7 +173,6 @@
 ;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
 ;                                      across its middle the thin way: what is beyond it
 ;                                      seen through the texture, the light on it; solid
-;   (brittle WINDOW)                   its pane broken by a tap, and gone: then the way through
 ;   (lens [x y z] WINDOW)              its pane, on the face toward x y z, one a beyond drape is
 ;                                      seen through; other glass shows only what is there
 ;   (mirage WINDOW)                    its pane seen, and nothing to a body
@@ -296,7 +295,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -394,8 +393,6 @@
  ; ..a window: its opening, and its pane
  (window lo hi t) (: u "(window [x y z] [x y z] TEXTURE)" a (P lo u) b (P hi u)
    (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
- (brittle w) (: u "(brittle (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
-   (#ps @ 1 (map (p \ kind? p ['pane] ? (with p 'brittle 1) p) (flat [w])) (no u w)))
  (mirage w) (: u "(mirage (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
    (#ps @ 1 (map (p \ kind? p ['pane] ? (with p 'mirage 1) p) (flat [w])) (no u w)))
  (lens at w) (: u "(lens [x y z] (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
@@ -1237,7 +1234,7 @@
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
-       'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'brittle (peep p 'brittle 0) 'mirage (peep p 'mirage 0) 'lens (p 'lens)}) (of 'pane))
+       'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'mirage (peep p 'mirage 0) 'lens (p 'lens)}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'land (d 'kind @ 'land 1 0)}) (of 'drape + of 'land))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0)}) (of 'ad))

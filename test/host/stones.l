@@ -197,4 +197,10 @@
          (tall = 3) (wide = 4)))
 
 (test_fin ())
+;; a foot in the sand: a walk asks for it, and it joins the song at once, a voice that sounds and ends
+(: fs (stones-new 80 48 [(1.0 * 1790812800 + 12.0 * 3600.0) 3600] 1) fv {'fpos 1000 'vs []}
+   _ (pins fs 'sw 3.1 'sfx ()) _ (each ^30 (_ \ (stones-step fs (stones-kb 119), pin fs 'dt (1.0 / 30.0), stones-move fs)))
+   heard (map cap (peep fs 'sfx ())) _ (stones-steps fv fs) V (fv 'vs 0)
+ (test (two? heard) (all (s \ snip s 0 10 = "step sand ") heard) (peep fs 'sfx () = ()) (#(fv 'vs) = #heard)
+       (1000 < V 0) (0.0 < amax (abs ((V 1) (iota 2000 + 1000)))) (0.0 = amax (abs ((V 1) (iota 100 + V 0))))))
 (puts "stones: ok\n")

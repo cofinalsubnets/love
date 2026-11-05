@@ -586,29 +586,20 @@
    sa (world-new 8 8 (world-read (sl + "(flow [0.5 0] (along 2 " + sd + ")))")) "" 'sc) ca (sa 'sheets 0 'pk 'cols)
  (test (amin (ca 3) = 16.0) (amax (ca 3) = 24.0) (amin (ca 4) = -4.0) (amax (ca 4) = 4.0)
        (has? (world-read (sl + "(along 'a " + sd + "))")) "(along s DRAPE)")))
-;; a brittle pane: a tap with it before the eye rings it as steel, a second breaks it, leaving
-;; its shards; one not brittle stays
-(: bw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
-   bp (world-read (bw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))")) bq (world-read (bw + "(window [1 0.5 -0.2] [3 2.5 0] t))"))
-   (tap l) (world-step (world-step (world-new 8 8 l "") 'tap) 'tap) (tapped l) (keys (peep (tap l) 'broke {}))
-   once (world-step (world-new 8 8 bp "") 'tap)
- (test (bp 'panes 0 'brittle = 1) (bq 'panes 0 'brittle = 0) (tapped bp = [0]) (tapped bq = ()) (#(peep (tap bp) 'shards ()) = 1) (#(peep (tap bq) 'shards ()) = 0)
-       (keys (peep once 'broke {}) = ()) (keys (peep once 'knocked {}) = [0]) (elem "land metal 1" (map (q \ q 0) (peep once 'sfx ())))
-       (has? (world-read (bw + "(brittle 3))")) "(brittle (window ..))")))
 ;; on foot: a walk's steps sound as the floor does, a jump is silent and its landing heard, a
-;; sprint goes further and winds the body, heard once it does, and standing it eases
+;; sprint goes further and winds the body, unheard, and standing it eases
 (: gw "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 1] 0 0))"
    (go st a n) (each ^n (_ \ ((a ? (world-step st a) st), pin st 'dt (1.0 / 30.0), world-move st)))
    (cries st) (map cap (peep st 'sfx ()))
    wk (world-new 8 8 (world-read gw) "") _ (go wk 'forward 60) wz (wk 'pz) wc (cries wk) wbob (peep wk 'wa 0.0) wsteps (filter (s \ snip s 0 5 = "step ") wc)
    (firsts-of l) (rev >(rev l))
-   rn (world-new 8 8 (world-read gw) "") _ (go rn 'sprint 60) rz (rn 'pz) rpf (rn 'puff) _ (go rn 'sprint 300) rpf2 (rn 'puff) rc (catmap (_ \ (pin rn 'sfx (), go rn 'sprint 12, cries rn)) ^8)
+   rn (world-new 8 8 (world-read gw) "") _ (go rn 'sprint 60) rz (rn 'pz) rpf (rn 'puff) _ (go rn 'sprint 300) rpf2 (rn 'puff)
    rrate (rn 'bp) _ (go rn () 300) rest (rn 'puff) rb (rn 'wa)
    jp (world-new 8 8 (world-read gw) "") _ (world-step jp 'jump) jc (cries jp)
  (test (all (s \ snip s 0 10 = "step wood " && 48 <= s 10 < 54) wsteps) (2 < #(uniq (sort wsteps))) (all (p \ <p != >p) (zip >wsteps (firsts-of wsteps))) (0.0 < wbob)
        (1.5 * (wz - 1.0) < rz - 1.0) (0.1 < rpf) (rpf < rpf2) (0.8 < rpf2)
-       !(any (s \ snip s 0 5 = "gasp ") wc) (any (s \ s = "gasp i2") rc) (any (s \ s = "gasp o2") rc)
-       (rest < 0.7 * rpf2) (rb < 0.001) (jc = ()) (1000 < #(world-sound "step wood 0" 0)) (1000 < #(world-sound "gasp o2" 0))
+       (atom? (world-sound "gasp o2"))
+       (rest < 0.7 * rpf2) (rb < 0.001) (jc = ()) (1000 < #(world-sound "step wood 0" 0))
        (1000 < #(world-sound "land grass 0" 0))))
 ;; --sway swells from nothing as speed changes, and settles; a window's coarsest pixels take
 ;; a body's sway as a slide of the picture, where its server can
@@ -634,13 +625,12 @@
        (past "(mirage (window [1 0 1.9] [3 2.5 2] t))" > 2.2) (past "(window [1 0 1.9] [3 2.5 2] t)" < 1.9)
        (has? (world-read (mw + "(mirage 3))")) "(mirage (window ..))")))
 ;; ..a lens: on the face toward its point its glass less 2^24, the only glass a beyond drape is
-;; seen through, the other face plain; its shards plain
+;; seen through, the other face plain
 (: lw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
-   bl (world-read (lw + "(brittle (lens [2 1 2] (window [1 0.5 -0.2] [3 2.5 0] t))))")) bn (world-read (lw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))"))
+   bl (world-read (lw + "(lens [2 1 2] (window [1 0.5 -0.2] [3 2.5 0] t)))")) bn (world-read (lw + "(window [1 0.5 -0.2] [3 2.5 0] t))"))
    gl (world-new 8 8 bl "") (ts s) (s 'sc 'panes 0 'pk 'tris) (gt s) (amin (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
    (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
  (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
-       (peep (<(peep (world-step (world-step gl 'tap) 'tap) 'shards ()) 'pk 'tris) 3 0 > -16777216)
        (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
 ;; ..a land: solid under its sheet and open over it, stood on where its rows put it, drawn
 ;; as a drape

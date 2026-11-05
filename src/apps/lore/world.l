@@ -1254,7 +1254,7 @@
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(shine-at (q 0) b key)])) (sc 'lights i key)) ^#ks)
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   gone (peep st 'broke {}) glass (map (i \ relit (sc 'panes i 'pk) (sc 'panes i 'lit)) (filter (i \ peep gone i 0 = 0) ^#(sc 'panes)))
+   glass (map (i \ relit (sc 'panes i 'pk) (sc 'panes i 'lit)) ^#(sc 'panes))
    ; ..the sheets apart from the chunks, their texels drifting as they flow
    (drift x w) (x - w * floor (x / w))
    sheets (map (c \ (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
@@ -1270,7 +1270,6 @@
    (ok i) (lv 'orbs i 'coarse) ois ^#(lv 'orbs)
    orbs (map orb (filter (i \ ok i = 1) ois)) cos (map orb (filter (i \ ok i > 1) ois) @ l (tablet? sf ? (map (bent-tris sf) l) l)) ck (foldl (\ a i (max a (ok i))) 1 ois)
    _ (two? cos ? (pin v 'under (mesh-coarse v [(map (b \ b 0) cos) (map (b \ b 1) cos)] (sc 'texs) fog 8 gain ck)))
-   shards (map (s \ relit (s 'pk) (s 'lit)) (st 'shards))
    ; ..a lift's platform where it has got to, each leaf of its gates swung out as far as it
    ; is open, its pad and tether
    lifts (catmap (i \ (: q (sc 'lifts i) s (st 'lifts i) c (lv 'lifts i) f (q 'fix) u (1.0 - s 'g) w (2 u * (3.0 - 2.0 * u))
@@ -1288,7 +1287,7 @@
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(lv 'gates))
    ; ..what moves laid on a surface frame by frame, what stands laid with the scene
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
-   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + bd shards + by 'shine + bd spins + glass + bd glazed + by 'glow
+   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + by 'glow
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
@@ -1361,7 +1360,7 @@
    (pane? q) (any (p \ (: lo (p 'lo) hi (p 'hi) th 0.1
                        (lo 0 - th < q 0 && q 0 < hi 0 + th && lo 2 - th < q 1 && q 1 < hi 2 + th
                         && any (y \ lo 1 <= y && y <= hi 1) [(fl + 0.3) (fl + 1.7)])))
-               (filter (p \ peep p 'mirage 0 = 0) (panes-of st)))
+               (filter (p \ peep p 'mirage 0 = 0) (st 'lvl 'panes)))
    ; ..air from a step over the feet to the head, all the way: nothing thinner than a body
    ; slipped between; among only the brushes the body is within
    near (filter (c \ c 'lo 0 - 0.01 <= x + r && x - r <= c 'hi 0 + 0.01 && c 'lo 2 - 0.01 <= z + r && z - r <= c 'hi 2 + 0.01) bs)
@@ -1519,12 +1518,9 @@
    _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0 || peep st 'aloft 0 = 1))
    _ (each (st 'balls) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(lv 'cars)))
- ; ..the body's frame, on foot or not: a foot down sounds as the floor does, and a hard breath is heard
- (gait! st dt on) (: v (on ? (sqrt (2 (peep st 'vx 0.0) + 2 (peep st 'vz 0.0))) 0.0) _ (gesture-gait st dt v (running? st)) pf (st 'puff)
-   _ (st 'foot = 1 && on ? (: v (foot-next (peep st 'stepv 0) (st 'sw)) (pin st 'stepv v, mix-cry st ("step " + show (feel-under st) + " " + show v) ())))
-   (st 'gasp != 0 && pf > 0.25 ? (mix-cry st ("gasp " + (st 'gasp = 1 ? "i" "o") + show (pf < 0.5 ? 0 (pf < 0.8 ? 1 2))) ()) st))
- ; ..which of six sounds a foot makes next, never the last: the stride's own fraction shuffles it
- (foot-next v sw) ((v + 1 + int (5000.0 * sw) % 5) % 6)
+ ; ..the body's frame, on foot or not: a foot down sounds as the floor does
+ (gait! st dt on) (: v (on ? (sqrt (2 (peep st 'vx 0.0) + 2 (peep st 'vz 0.0))) 0.0) _ (gesture-gait st dt v (running? st))
+   (st 'foot = 1 && on ? (: k (foot-next (peep st 'stepv 0) (st 'sw)) (pin st 'stepv k, mix-cry st ("step " + show (feel-under st) + " " + show k) ())) st))
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in; 'aloft 1 off that floor
  (grav-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) v (peep st 'gv 0.0)
    in (filter (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (st 'lvl 'gravs))
@@ -1614,13 +1610,6 @@
  ; winds a throw, half a second to the hardest, and let go it flies; the right button lets
  ; it fall where it is
  reach 2.2 throw-lo 3.0 throw-hi 11.0 wind-t 0.5
- ; ..the panes still whole; a brittle one the eye's line meets within reach, its number; it
- ; tapped, ringing as steel does the first time and broken the next
- (panes-of st) (: b (peep st 'broke {}) ps (st 'lvl 'panes) (map ps (filter (i \ peep b i 0 = 0) ^#ps)))
- (tap-at st) (: e (eye-at st) d (look-way st) b (peep st 'broke {}) ps (st 'lvl 'panes)
-   (in? p q) (!(any (k \ q k < p 'lo k - 0.06 || p 'hi k + 0.06 < q k) ^3))
-   (hit i) (: p (ps i) (peep p 'brittle 0 = 1 && peep b i 0 = 0 && any (j \ in? p (c+ e (c* (0.05 * j) d))) ^(int (reach / 0.05))))
-   (filter hit ^#ps @ () () l <l))
  ; ..a door opened by hand the eye's line meets within reach, its number
  (door-at st) (: e (eye-at st) d (look-way st) ds (st 'lvl 'doors)
    ; ..the leaf where it stands, swung an about its hinge, a knob's reach either side of it
@@ -1630,10 +1619,9 @@
    (hit i) (: q (ds i) an (peep (peep st 'swing {}) i 1.0 * peep (st 'doors) i 0.0 * swing-wide)
      (q 'hand = 1 && any (j \ in? q an (c+ e (c* (0.05 * j) d))) ^(int (reach / 0.05))))
    (filter hit ^#ds @ () () l <l))
- ; ..what a tap does: a door opened by hand swung the other way, else a pane knocked; () where
- ; it meets neither
+ ; ..what a tap does: a door opened by hand swung the other way; () where it meets none
  (touch st) (? (charm? (st 'dlg)) (pick! st (st 'dlg)) (peep st 'eye 'walk != 'walk) st (touch-at st))
- (touch-at st) (door-at st @ () (tap-at st @ () (deck-at st @ () (switch-at st @ () (gate-at st @ () (grave-at st @ () (sleep-at st @ () () i (sleep! st i)) i (kneel! st i)) i (swing! st i)) i (send! st i)) _ (play! st)) i (tap! st i))
+ (touch-at st) (door-at st @ () (deck-at st @ () (switch-at st @ () (gate-at st @ () (grave-at st @ () (sleep-at st @ () () i (sleep! st i)) i (kneel! st i)) i (swing! st i)) i (send! st i)) _ (play! st))
    i (: o (peep st 'opened {}) q (st 'lvl 'doors i) m (0.5 * (q 'a + q 'b)) p (P (q 'ax) (q 'c) 0.0 m)
         (copy t) (foldl (\ u k (pin u k (t k))) {} (keys t)) opening (peep o i 0 = 0)
         ; ..opened its way out, or with none away from the eye, the way it swung kept as it shuts
@@ -1788,27 +1776,6 @@
       ""))
  (dim-box f W x0 y0 bw bh) (: i (iota (bw * bh)) ix ((y0 + i // bw) * W + x0 + i % bw) v (f ix)
    (pin f ix ((((v >> 16 & 255) * 2 // 5) << 16) | (((v >> 8 & 255) * 2 // 5) << 8) | ((v & 255) * 2 // 5))))
- (tap! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3) kn (peep st 'knocked {})
-   (peep kn i 0 = 0 ? (mix-cry (pin st 'knocked (pin (foldl (\ t k (pin t k 1)) {} (keys kn)) i 1)) "land metal 1" [(m 0) (m 2)])
-      (break! st i)))
- (break! st i) (: p (st 'lvl 'panes i) m (map (k \ 0.5 * (p 'lo k + p 'hi k)) ^3)
-   (mix-cry (pins st 'broke (pin (foldl (\ t k (pin t k 1)) {} (keys (peep st 'broke {}))) i 1) 'shards (shards-of st i . st 'shards))
-            "shatter" [(m 0) (m 2)]))
- ; ..what is left of pane i on the ground: shards of its glass, three of four thrown away from
- ; the eye and as far as a stride and a half, the rest dropped back toward it, each lying on
- ; the floor where it fell
- shard-n 80
- (shards-of st i) (: sc (st 'sc) p (st 'lvl 'panes i) lo (p 'lo) hi (p 'hi) ax ((hi 0 - lo 0) < (hi 2 - lo 2) ? 0 2) al (2 - ax)
-   m (0.5 * (lo ax + hi ax)) away (st (ax @ 0 'px 'pz) > m ? -1.0 1.0) tx (peep (sc 'panes i 'pk 'tris) 3 -3 @ g (g < -3 - 16777216 + 1 ? (g + 16777216) g)) bs (sc 'brushes)
-   (h k j) (: v (sin (12.9898 * k + 78.233 * j + 37.719 * i) * 43758.5453) (v - floor v))
-   (one k) (: a (lo al + (hi al - lo al) * h k 1) o (away * (h k 2 < 0.75 ? (1.6 * sq (h k 3)) -(0.6 * h k 3)))
-     x (ax @ 0 (m + o) a) z (ax @ 0 a (m + o)) g (floor-at (column bs x z) x z (lo 1)) y ((charm? g || gem? g) ? (g + 0.004) (lo 1 - 0.25))
-     r (0.03 + 0.09 * sq (h k 4)) t0 (tau * h k 5)
-     (map (c \ (: t (t0 + c * 2.1 + 0.6 * h k (6 + c)) q (r * (0.55 + 0.45 * h k (9 + c)))
-                 [(x + q * cos t) y (z + q * sin t) (64.0 * h k (12 + c)) (64.0 * h k (15 + c)) 0.0 1.0 0.0 0.55 0.6 0.6]))
-          ^3))
-   pk (mesh-pack (mesh (catmap one ^shard-n) (catmap (k \ [[(3 * k) (3 * k + 1) (3 * k + 2) tx] [(3 * k) (3 * k + 2) (3 * k + 1) tx]]) ^shard-n)))
-   {'pk pk 'lit ((sc 'lit) pk)})
  (look-way st) (: th (st 'th) ph (st 'ph) [(sin th * cos ph) (sin ph) (cos th * cos ph)])
  (eye-at st) [(st 'px) (st 'py) (st 'pz)]
  (wind-k st) (st 'wind @ () 0.0 t0 (min 1.0 ((st 'mt - t0) / wind-t)))
@@ -1844,7 +1811,7 @@
    bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (st 'sc 'brushes))
    (solid? q) (brush-medium bs q != 1
                || any (w \ w 'lo 0 - 0.05 < q 0 && q 0 < w 'hi 0 + 0.05 && w 'lo 1 < q 1 && q 1 < w 'hi 1
-                            && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (panes-of st))
+                            && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (st 'lvl 'panes))
    n (max 1 (min 10 (int (mag3 (b 'v) * dt / (0.5 * r)) + 1))) h (dt / n)
    (set3 p k x) (map (j \ j = k ? x (p j)) ^3)
    (axis s k) (: p (s 0) v (s 1) vk (v k) q (set3 p k (p k + vk * h + (vk < 0.0 ? -r r)))
@@ -1982,8 +1949,6 @@
  ;     rate] for the mixer ---
  snd-rate 11025
  (snd-t secs) (iota (int (secs * snd-rate)) / (1.0 * snd-rate))
- ; ..noise from a hash of each sample's time, about -1..1
- (snd-noise t) (: h (sin (t * 12345.678 + 0.5) * 43758.5453) (2.0 * (h - floor h) - 1.0))
  ; ..a landing's thump, k its weight 0 1 or 2: carpet dull, concrete sharp, wood hollow, steel
  ; ringing; and the scuff of a jump
  (snd-low t) (snd-noise (floor (t * 900.0) / 900.0))
@@ -1993,42 +1958,13 @@
               'metal (0.4 * o 70.0 25.0 + 0.22 * (o 523.0 7.0 + 0.7 * o 1287.0 9.0 + 0.5 * o 2151.0 12.0) + 0.2 * snd-noise t * exp (-90.0 * t))
               (0.6 * o 85.0 26.0 + 0.35 * snd-noise t * exp (-70.0 * t) + 0.15 * snd-low t * exp (-20.0 * t))))
     snd-rate])
- ; ..noise smoothed under hz, each hold joined to the next, no edge to buzz
- (snd-soft t hz) (: u (t * hz) i (floor u) f (u - i) a (snd-noise (i / hz)) (a + (snd-noise ((i + 1.0) / hz) - a) * f))
- ; ..a foot on each feel, v which of six: no two alike in pitch, weight, length or grain. what
- ; gives underfoot rises gently and rolls heel to toe; what does not is struck
- step-rate 22050
- (step-sound f v) (: p ([1.0 1.09 0.93 1.05 0.97 1.13] v) g ([1.0 0.82 0.92 1.08 0.76 0.95] v) d ([0.1 0.125 0.085 0.14 0.11 0.095] v)
-   T (0.26 + 0.02 * v) t (iota (int (T * step-rate)) / (1.0 * step-rate)) z (t + 3.7 * (v + 1))
-   (o hz k) (sin (tau * hz * p * t) * exp -(k * t))
-   (n k) (snd-noise z * exp -(k * t))
-   (give u k) ((u > 0.0) * (1.0 - exp (-90.0 * (u * (u > 0.0)))) * exp -(k * (u * (u > 0.0))))
-   (heel k) (give t k + 0.6 * give (t - d) k)
-   (hush hz) (snd-soft z (hz * p))
-   (grit hz) (: q (snd-soft (z + 1.3) hz) (0.35 + 1.6 * q * (q > 0.0)))
-   thud (sin (tau * 62.0 * p * t) * give t 26.0)
-   [(g * (f @ "grass" (0.2 * (0.6 * hush 3600.0 + 0.4 * hush 9000.0) * grit 110.0 * heel 24.0 + 0.03 * thud)
-           "sand" (0.26 * (0.5 * hush 3400.0 + 0.5 * hush 10000.0) * grit 260.0 * heel 17.0 + 0.025 * thud)
-           "gravel" (0.3 * (0.5 * hush 2400.0 + 0.5 * snd-noise z) * grit 420.0 * heel 26.0 + 0.07 * thud)
-           "soft" (0.2 * o 70.0 30.0 + 0.05 * hush 900.0 * exp (-40.0 * t))
-           "wood" (0.2 * o 150.0 42.0 + 0.1 * o 390.0 70.0 + 0.05 * n 130.0)
-           "metal" (0.16 * o 110.0 42.0 + 0.07 * o 860.0 24.0 + 0.04 * o 1730.0 32.0 + 0.05 * n 140.0)
-           (0.2 * o 120.0 55.0 + 0.09 * n 150.0)))
-    step-rate])
- ; ..a breath drawn or let go, each harder k louder
- (gasp-sound out k) (: T (out ? 0.42 0.34) g ([0.035 0.07 0.12] k) t (snd-t T) e (sin (pi * t / T))
-   [(g * e * e * (0.6 * snd-low (t * (out ? 0.8 1.3)) + 0.4 * snd-noise t)) snd-rate])
  (world-sound nm) (: pre (#nm > 5 ? (snip nm 0 5) "") (? (pre = "step ") (step-sound (snip nm 5 (#nm - 2)) (nm (#nm - 1) - 48))
-                                                       (pre = "gasp ") (gasp-sound (nm 5 = 111) (nm 6 - 48))
                                                        (cry-sound nm)))
  (cry-sound nm) (#nm > 5 && snip nm 0 5 = "land " ? (: w (snip nm 5 (#nm - 2)) (land-sound (w @ ("soft" || "grass" || "sand") 'soft "wood" 'wood "metal" 'metal _ 'hard) (nm (#nm - 1) - 48))) (nm @
    "chime" (: t (snd-t 1.0) a (t < 0.42) (tone f u) (sin (tau * f * u) * exp (-5.0 * u))
              [(0.35 * (a * tone 659.3 t + (1 - a) * tone 523.3 (t - 0.42))) snd-rate])
    "ward" (: t (snd-t 1.6) (bell f k) (sin (tau * f * t) * exp -(k * t))
             [(0.2 * (bell 1318.5 2.4 + 0.6 * bell 1975.5 3.0 + 0.3 * bell 2793.8 4.5) * min (t * 300.0) 1.0) snd-rate])
-   "shatter" (: t (snd-t 1.4) (tink d f) (: u (t - d) ((u > 0.0) * sin (tau * f * u) * exp (-12.0 * u)))
-               [(0.45 * snd-noise t * exp (-10.0 * t) * min (t * 400.0) 1.0 + 0.3 * sin (tau * 95.0 * t) * exp (-30.0 * t)
-                 + 0.12 * (tink 0.0 3135.9 + tink 0.07 4186.0 + tink 0.15 2637.0 + tink 0.26 3951.1 + tink 0.4 2960.0 + tink 0.62 3520.0)) snd-rate])
    "hiss" (: t (snd-t 0.7) [(0.25 * snd-noise t * exp (-4.0 * t) * min (t * 40.0) 1.0) snd-rate])
    "click" (: t (snd-t 0.06) [(0.5 * snd-noise t * exp (-160.0 * t) + 0.3 * sin (tau * 1800.0 * t) * exp (-90.0 * t)) snd-rate])
    "bounce" (: t (snd-t 0.25) [(0.6 * sin (tau * 150.0 * t) * exp (-22.0 * t) + 0.25 * snd-noise t * exp (-60.0 * t)) snd-rate])
