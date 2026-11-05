@@ -49,7 +49,7 @@
           r (at k) a <r b (r 1) q (a // b) rm (a - q * b)
           q2 (b < 2 * rm || (2 * rm = b && q % 2 = 1) ? (q + 1) q)
           (q2 = 9007199254740992 ? (gr-fl (4503599627370496 * 2.0 ** (1 - k)))
-           ((q2 * 1.0) * 2.0 ** (0 - k)))))
+           (1000 < k ? ((q2 * 1.0) * 2.0 ** -1000 * 2.0 ** (1000 - k)) ((q2 * 1.0) * 2.0 ** (0 - k))))))
    ; a double as n/d exactly, the sign on n
    (gr-rat x) (: a (abs x) r (aw-exact a) (x < 0 ? [(0 - <r) (r 1)] r))
    ; fixed point: a real times 2^gr-p, an integer
@@ -432,7 +432,7 @@
     (: _ (gr-next g) _ (gr-want-op g "(")
        f (gr-k g 0 = 'str ? (gr-next g 1) (gr-syn g))
        (go acc) (gr-op? g 0 "," ? (gr-next g, go (gr-expr g . acc))
-                 (gr-want-op g ")", aw-sprintf f (rev acc) "%g"))
+                 (gr-want-op g ")", aw-csprintf f (rev acc) "%g"))
        (go ()))
    ; a string, or sprintf(..) -> the string, or ()
    (gr-text g)
@@ -710,7 +710,7 @@
            fmt (gr-text g)
            down (gr-down? op by)
            (go v acc n) (1000 < n || (down ? (v < b) (v > b)) ? (rev acc)
-                         (go (gr-step op v by) ([v (string? fmt ? (aw-sprintf fmt [v] "%g"))] . acc) (n + 1)))
+                         (go (gr-step op v by) ([v (string? fmt ? (aw-csprintf fmt [v] "%g"))] . acc) (n + 1)))
            its (go a () 0)
            [nm its 1 'from (string? fmt)])
        ())
@@ -733,8 +733,8 @@
                     j (spec (i + 1))
                     (n <= j ? (slurp o)
                      (: f (snip s i (j + 1)) c (s j)
-                        (say o (? (elem c [100 105 120 88 111 117 99]) (aw-sprintf f [0] "%g")
-                                  (elem c [102 101 103 69 71]) (aw-sprintf f [0.0] "%g")
+                        (say o (? (elem c [100 105 120 88 111 117 99]) (aw-csprintf f [0] "%g")
+                                  (elem c [102 101 103 69 71]) (aw-csprintf f [0.0] "%g")
                                   ""),
                          go (j + 1))))))
        (go 0))
