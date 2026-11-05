@@ -784,7 +784,7 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
 // ===== the nifs: str0 may collect, so the state is found again after it =====
 #define ZS_HEAD ((sizeof(struct zs_st) + 7) & ~(uintptr_t) 7)
 static struct str *zs_cask(word x) {
- struct str *s = cask_str(x);
+ struct str *s = state_str(x);
  struct zs_st *S = s && s->len > ZS_HEAD ? (struct zs_st*) s->bytes : NULL;
  return S && S->magic == ZS_MAGIC && S->cap + ZS_SLACK == s->len - ZS_HEAD ? s : NULL; }
 
@@ -792,9 +792,9 @@ love_noinline static struct g *host_zstd_new(struct g *g) {
  word ww = g->sp[0];
  if (!oddp(ww) || getcharm(ww) < 0 || (uintptr_t) getcharm(ww) > ZS_WMAX) return g->sp[0] = ZeroPoint, g;
  uintptr_t win = (uintptr_t) getcharm(ww), cap = win + zs_room(win), n = ZS_HEAD + cap + ZS_SLACK;
- union u *k = new_cask(&g, n, offsetof(struct zs_st, lit));
+ union u *k = new_state(&g, n, offsetof(struct zs_st, lit));
  if (!k) return g;
- struct zs_st *S = (struct zs_st*) cask(k)->str->bytes;
+ struct zs_st *S = (struct zs_st*) ((struct state*) k)->str->bytes;
  S->magic = ZS_MAGIC, S->cap = cap, S->win = win, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
  xx_init(&S->x);
  return g->sp[0] = word(k), g; }

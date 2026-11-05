@@ -62,7 +62,7 @@
                (<fs . pre >fs))
    (emit1 g)
     (: nm (g 0) fs (plift (g 1))
-       (each fs (f \ puts "\n ; \(nm)  \(f)"),
+       (each fs (f \ puts "\n ; \(nm)  \(show f)"),
         puts "\n (defn \(nm) nlist",
         each fs (f \ lift1 f @ q
                        (puts "\n    (ncons \(q 0) (ncons \(q 1) (ncons \(q 2) (ncons \(q 3)")),

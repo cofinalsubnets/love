@@ -499,7 +499,7 @@
   (apart? (kinds 1) (kinds 2)) (apart? (kinds 2) (kinds 3)) (apart? (kinds 1) (kinds 3))))
 
 ; a tier is built of its own stuff, and a cell's face is the cell's own dice, not the clock's
-(: (kit th) (<(th 1) . map (r \ <r) (th 2))
+(: (kit th) (<(th 1) . map cap (th 2))
    (marks th) (map (i \ <(tile-face th 1 1 (i % 40) (i // 40) 5)) ^400)
    (all-of? l ks) (foldl (a \ x \ (a && elem x ks)) 1 l)
  (test
@@ -786,6 +786,9 @@
  (test (g0 = law 0.0 (1.0 * (t1 - t0))) (g1 = law g0 (1.0 * (t2 - t1))) (g2 = law g1 d2)
        (55.0 <= g1)
        (d2 < 300.0 && d2 < g1 * 0.9 ? (g1 * 0.9 < g2 <= g1) 1)))   ; a long gap held over a short one after it
+; ..and a fill's wait, out of the gap, still counts toward letting it go
+(: p (pacer ()) t (clock 0) _ (pins p 'gap 5000.0 't t 'w (t - 2000))
+   (test (pace! p <= 2500.0)))
 ; the filler feeds up to the lead, bounded even past the card's ring; the lag counts what
 ; the port still holds
 (: h (horn song-rate 2)

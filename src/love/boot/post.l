@@ -902,8 +902,8 @@
 ; `dot` says a string or cask verbatim, anything else shown, and answers its operand
 (: (print o x) (px o x (), x)
    (show x) (jug 0 @ o (px o x (), slurp o))
-   ; a text with holes, "a \(x) b": its runs verbatim, a string verbatim, the rest shown
-   (weave l) (jug 0 @ o (each l (x \ string? x ? (say o x) (px o x ())), slurp o))
+   ; a text with holes, "a \(x) b": its runs verbatim, a string or a list as its text, the rest shown
+   (weave l) (jug 0 @ o (each l (x \ string? x || two? x || x = () ? (say o (string x)) (px o x ())), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
 

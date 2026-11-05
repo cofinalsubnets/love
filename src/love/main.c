@@ -29,10 +29,10 @@ love_noinline intptr_t nclock(void) {
 
 static void stdin_give(struct g *g) {
  if (!g || !ok(g)) return;
- if (g->inflag)                                          // the blocking bit was ours
-  fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(g->inflag)), g->inflag = 0;
- if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
- uintptr_t n = io_pending(g, (struct io*) g->inport)
+ if (love_inflag)                                        // the blocking bit was ours
+  fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(love_inflag)), love_inflag = 0;
+ if (!love_inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
+ uintptr_t n = io_pending(g, (struct io*) love_inport)
              + (getcharm(love_stdin.io.ungetc_buf) != EOF ? 1 : 0);
  if (n) lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR); }
 
@@ -42,9 +42,11 @@ static struct g *stdin_take(struct g *g) {
   if (isatty(STDIN_FILENO)) return g;
   int fl = fcntl(STDIN_FILENO, F_GETFL);                  // a pipe: take the bit and the bytes
   if (fl >= 0 && ((fl & O_NONBLOCK) || fcntl(STDIN_FILENO, F_SETFL, fl | O_NONBLOCK) >= 0))
-   g->inflag = putcharm(fl); }                            // already-nonblocking restores to itself
+   love_inflag = putcharm(fl); }                            // already-nonblocking restores to itself
  if (!ok(g = io_alloc(g, STDIN_FILENO))) return g;
- g->inport = g->sp[0], g->sp++;
+ static struct love_r root = { &love_inport, 0 };
+ love_inport = g->sp[0], g->sp++;
+ root.n = g->root, g->root = &root;
  return g; }
 
 _lvm(k_lvm_quit);
@@ -71,13 +73,13 @@ static lvm(lvm_exit) {
 static void stdin_hand(struct g *g) {
  stdin_give(g);
  if (!g || !ok(g)) return;
- if (!g->inport || lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) return;   // seekable: the seek said it all
+ if (!love_inport || lseek(STDIN_FILENO, 0, SEEK_CUR) >= 0) return;   // seekable: the seek said it all
  unsigned char res[iobuf + 1];
  uintptr_t n = 0;
  if (getcharm(love_stdin.io.ungetc_buf) != EOF)
   res[n++] = (unsigned char) getcharm(love_stdin.io.ungetc_buf),
   love_stdin.io.ungetc_buf = putcharm(EOF);
- n += io_read_drain(g, (struct io*) g->inport, res + n, sizeof res - n);
+ n += io_read_drain(g, (struct io*) love_inport, res + n, sizeof res - n);
  if (!n) return;                                                    // the fd is already exact
  int p[2];
  if (pipe(p)) return;

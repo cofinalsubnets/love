@@ -526,7 +526,7 @@
    _ (chk-eq "gas.a64.refuse"
         '(gas-a64-operand gas-a64-operand gas-a64-width gas-a64-width gas-a64-operand gas-a64-operand
           a64-bitmask-imm gas-a64-operand gas-a64-operand gas-a64-operand)
-        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+        (map (l \ trap (gas-text 'a64) l (\ a b a))
              ["cmp x0, x1, ror #2" "neg x1, x2, lsl #64" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
               "ret x2, x3" "and w0, w0, #0" "ldr x0, [x1, x2, lsl #2]" "ldr x0, [x1], #300" "lsl w0, w1, #32"]))
    ;; the hints, inverted logicals, carry pair, reversals, unprivileged pair and the kernel's
@@ -569,7 +569,7 @@
               "sha256h2 q1, q2, v4.4s" "sha256su0 v16.4s, v17.4s" "sha256su1 v16.4s, v18.4s, v19.4s"
               "mrs x0, id_aa64isar0_el1" "ldr q1, [x2, #-16]!" "ldr q1, [x2, #-16]" "ldr q3, [x0, #8]"]))
    _ (chk-eq "gas.a64.simd.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand)
-        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+        (map (l \ trap (gas-text 'a64) l (\ a b a))
              ["sha256h q0, q1, v4.16b" "sha256su0 v16.4s" "ldr q0, [x1, #300]"]))
    ;; the prefetches, scaled or not; and a move to or from sp, which is add #0 (orr's 31 is xzr)
    _ (chk-eq "gas.a64.prfm"
@@ -722,7 +722,7 @@
    _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
-        (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
+        (map (x \ trap (gas-top 'a64) x (\ a b a))
              ["661: nop\n .align 4\n662:\n .rept (662b-661b)/4\n nop\n .endr\n" ".rept (2f-1f)/4\n nop\n .endr\n1: nop\n2:\n"]))
    ;; the bitfield moves as llvm-mc lays them; mixed widths, an immediate past the width, sp, a
    ;; short or register operand refuse
@@ -865,13 +865,13 @@
    _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
         (show [(gas-top 'a64 ".quad 0b01, 0B11, 0b1011\nmov x0, #0b101\n.byte 0b11111111\n.quad (0b1 << 4) | 0b10\n")
                (holo-hex 'a64 (gas-text 'a64 "0:\n nop\n b 0b\n b 0f\n0:\n"))
-               (map (l \ trap (x \ gas-top 'a64 x) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
+               (map (l \ trap (gas-top 'a64) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
    ;; an argument that is one quoted string passes its inside, positional or by name
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro alt insn1, insn2, cap, enable = 1\n\\insn1\n\\insn2\n.endm\nalt nop, \"dmb sy\", 90\n.macro s a\n.ascii \"\\a\"\n.endm\ns \"x y\"\n.macro t a, b\nmov \\a, \\b\n.endm\nt \"x0\", \"x1\"\nt x0 \"x1\"\nt a=\"x2\", b=x3\n.macro w a\n.ifc \\a,dmb sy\nnop\n.endif\n.endm\nw \"dmb sy\"\n")))
    ;; .org to a label past instructions: zeros up to it; one behind refuses
    _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () () ()) gas-org-back)"
-        (show (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
+        (show (map (x \ trap (gas-top 'a64) x (\ a b a))
                    ["a: nop\n b a\n mov x0, x1\n .org a + 16\n nop\n"
                     ".macro v\n.Ls\\@: nop\n b .Ls\\@\n .org .Ls\\@ + 16\n.endm\n v\n v\n"
                     "a: nop\n nop\n nop\n .org a + 4\n nop\n"])))
@@ -890,7 +890,7 @@
    _ (chk-eq "gas.a64.zr" "e0031faaff0301aa3f001feb20001f8be20303aa3f001f6ae4031fcbe503064a3f0002cb"
         (holo-hex 'a64 (gas-text 'a64 "mov x0, xzr\n mov xzr, x1\n cmp x1, xzr\n add x0, x1, xzr\n orr x2, xzr, x3\n tst w1, wzr\n neg x4, xzr\n eor w5, wzr, w6\n sub xzr, x1, x2")))
    _ (chk-eq "gas.a64.adrp.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
-        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+        (map (l \ trap (gas-text 'a64) l (\ a b a))
              ["adrp w1, sym" "add w1, w1, :lo12:sym" "ldr x0, [x1, :lo12:sym]!" "ldr x0, [x1, :got:sym]"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)
@@ -901,18 +901,19 @@
           (fence) (wfi) (sfence zr zr) (sfence r0 r1) (li r0 5) (mov r1 r0) (add sp sp -16) (ld r2 sp 8) (st sp 0 r2)
           (cmp r0 r1) (br eq l1.1) (jmp l2.1) (label l1.1) (ret) (label l2.1) (nop))
         (gas-text 'rv64 "csrr a0, time\n csrw stvec, a0\n csrs sie, a0\n csrsi sstatus, 2\n csrci sstatus, 2\n ecall\n ebreak\n unimp\n fence\n wfi\n sfence.vma\n sfence.vma a0, a1\n li a0, 5\n mv a1, a0\n addi sp, sp, -16\n ld a2, 8(sp)\n sd a2, 0(sp)\n beq a0, a1, 1f\n j 2f\n1:\n ret\n2:\n nop"))
+   (gt-bare fs) (map (f \ (<f = 'asis ? (f 1) f)) fs)   ; gas's thumb2 forms, unwrapped
    _ (chk-eq "gas.thumb"
         '((trap) (brk 3) (nop) (wfi) (li r0 5) (add r0 r0 r1) (ld r1 r0 4) (ret))
-        (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr"))
+        (gt-bare (gas-text 'thumb2 "bkpt #0\n bkpt #3\n nop\n wfi\n mov r0, #5\n add r0, r0, r1\n ldr r1, [r0, #4]\n bx lr")))
    ;; ..the A-profile system lane: barrier options (none is sy), svc's old name, a coprocessor read
    _ (chk-eq "gas.thumb.sys"
         '((dmb ish) (dsb sy) (yield) (sys) (sys) (mrrc p15 1 r4 r5 c14))
-        (gas-text 'arm "dmb ish\n dsb\n yield\n svc #0\n swi #0\n mrrc p15, 1, r4, r5, c14"))
+        (gt-bare (gas-text 'arm "dmb ish\n dsb\n yield\n svc #0\n swi #0\n mrrc p15, 1, r4, r5, c14")))
    ;; ..its register lists, conditional branches, shifted operands and flag-setting forms
    _ (chk-eq "gas.thumb.wide"
         '((pushm (r4 r5 r6 lr)) (br ne l1.1) (alush or r0 r1 r2 shl 3) (adcs r0 r0 1) (umlal r0 r1 r2 r3)
           (lsl r0 r1 r2) (lsr r0 r1 3) (ubfx r0 r1 20 11) (bic r0 r0 1048576) (label l1.1) (popm (r4 r5 r6 pc)))
-        (gas-text 'thumb2 "push {r4-r6, lr}\n bne 1f\n orr r0, r1, r2, lsl #3\n adcs r0, r0, #1\n umlal r0, r1, r2, r3\n lsl r0, r1, r2\n lsr r0, r1, #3\n ubfx r0, r1, #20, #11\n bic r0, r0, #0x100000\n1:\n pop {r4-r6, pc}"))
+        (gt-bare (gas-text 'thumb2 "push {r4-r6, lr}\n bne 1f\n orr r0, r1, r2, lsl #3\n adcs r0, r0, #1\n umlal r0, r1, r2, r3\n lsl r0, r1, r2\n lsr r0, r1, #3\n ubfx r0, r1, #20, #11\n bic r0, r0, #0x100000\n1:\n pop {r4-r6, pc}")))
    ;; ..and the spellings substitution hands a template: a register at a width (GNU's modifier
    ;; letter), an immediate, a memory operand, and back from a clobber's name
    _ (chk-eq "gas.spell.x64" '("%rax" "%r8d" "%dx" "%al" "%r11w" "%rsp" "$3" "3" "(%r11)")
@@ -1405,6 +1406,37 @@
    _ (chk-eq "t2.rlx.bcc.wide" 260 (txn '(br ne far) 128))
    _ (chk-eq "t2.rlx.weak-stays-long" "00f000b800bf"
         ({} @ lg (pin lg 'wf 1, hexs (tx '((jmp wf) (label wf) (nop)) lg))))
+   ;; a low register's cmp with 0 and its eq or ne go cbz or cbnz, forward, where no path reads
+   ;; the flags; goldens from llvm-mc
+   (txc n) (tx ('(cmp r0 0) . ['(br eq far)] + map (_ \ '(nop)) ^n + '((label far) (ret))) {})
+   _ (chk-eq "t2.rlx.cbz" "00b100bf7047" (hexs (txc 1)))
+   _ (chk-eq "t2.rlx.cbnz" "0bb900bf00bf7047"
+        (hexs (tx '((cmp r3 0) (br ne far) (nop) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.edge" "f8b3" (snip (hexs (txc 64)) 0 4))
+   _ (chk-eq "t2.rlx.cbz.wide" 136 (#(txc 65)))
+   _ (chk-eq "t2.rlx.cbz.next" "0028ffd07047" (hexs (txc 0)))
+   _ (chk-eq "t2.rlx.cbz.hi" "b8f1000f00d000bf7047"
+        (hexs (tx '((cmp r8 0) (br eq far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.reg" "884200d000bf7047"
+        (hexs (tx '((cmp r0 r1) (br eq far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.lt" "002800db00bf7047"
+        (hexs (tx '((cmp r0 0) (br lt far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.at" "002800d000bf00d170477047"   ; the target reads the flags
+        (hexs (tx '((cmp r0 0) (br eq far) (nop) (label far) (br ne x) (ret) (label x) (ret)) {})))
+   _ (chk-eq "t2.rlx.cbz.on" "002801d000d100bf7047"       ; the fall-through reads them
+        (hexs (tx '((cmp r0 0) (br eq far) (br ne far) (nop) (label far) (ret)) {})))
+   ;; compiled exits leave no flags to read: an add before one goes 16-bit
+   _ (chk-eq "t2.flag.jmpr" "001d6047" (hexs (tx '((add r0 r0 4) (jmpr r12)) {})))
+   _ (chk-eq "t2.flag.callr" "001d" (snip (hexs (tx '((add r0 r0 4) (callr r3) (br eq x) (label x) (ret)) {})) 0 4))
+   _ (chk-eq "t2.flag.popm" "001d" (snip (hexs (tx '((add r0 r0 4) (popm (r4 pc)) (label x) (br eq x)) {})) 0 4))
+   _ (chk-eq "t2.flag.popm.lr" "00f2" (snip (hexs (tx '((add r0 r0 4) (popm (r4 lr)) (label x) (br eq x)) {})) 0 4))
+   _ (chk-eq "t2.flag.asis" "00f20400" (snip (hexs (tx '((add r0 r0 4) (asis (jmpr r12))) {})) 0 8))
+   ;; what gas wrote stays as written, flags and all
+   _ (chk-eq "t2.asis.cmp" "002800d000bf7047"
+        (hexs (tx '((asis (cmp r0 0)) (br eq far) (nop) (label far) (ret)) {})))
+   _ (chk-eq "t2.asis.add" "00f204007047" (hexs (tx '((asis (add r0 r0 4)) (ret)) {})))
+   _ (chk-eq "t2.asis.gas" "002800d000bf7047"
+        (hexs (tx (gas-text 'thumb2 "cmp r0, #0\n beq 1f\n nop\n1:\n bx lr") {})))
    ;; lal loads its pool word past the align: ldr (t1) near, ldr.w for a high register or within
    ;; 4 KB, else the movw/movt pair it stands for
    (txl d x n) (tx ([['lal d x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})
@@ -1867,6 +1899,11 @@
    _ (hear (a \ b \ a = 'i386-badreg ? (pin i3caught 0 a, ()) (welp a b)))
    _ (pin i3caught 0 0, holo-bytes 'i386 '((mov r0 r7)))
    _ (chk-eq "i3.r7.refused" 'i386-badreg (peep i3caught 0 0))
+   _ (pin i3caught 0 0, holo-bytes 'i386 '((la r7 x)))
+   _ (chk-eq "i3.la.r7.refused" 'i386-badreg (peep i3caught 0 0))
+   ;; ..but a symbol may be spelled like one
+   _ (pin i3caught 0 0, holo-bytes 'i386 '((label r8) (call r8) (la r0 r12) (jmp r8)))
+   _ (chk-eq "i3.sym.like.r8" 0 (peep i3caught 0 0))
 
    ;; -- the wasm module writer: each row binaryen's wasm-as bytes for the text (memory64) --
    wtests '(

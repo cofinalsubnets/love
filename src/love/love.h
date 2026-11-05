@@ -240,8 +240,13 @@ extern const struct mint mint_zero;
 
 // --- the core ---
 struct port_vt;
-// the reader's names (g->rnom): its wraps, two lone chars, the torn answer, the flow
-enum { RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave, RnN };
+#include "kinds.h"
+// g->nom, interned at boot: enum q's rows, a kind table's keys and the built-in coins' names, the
+// reader's and compiler's names, and last the oom's reason, (oom . ask), its ask a charm written in place
+enum { KnName = KN, KnAdd, KnMul, KnApply, KnSub, KnNet, KnStar, KnDiv,
+       KnPayload, KnLt, KnEq, KnInt, KnCeil, KnLambda, KnCask, KnPort, KnCoin,
+       RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave,
+       RnDef, RnCond, NomOom, NomN };
 // lisp functions C calls, by (seal-hook n f)'s n; the task's own sit in its node: -1 help, -2 stdio
 enum hook {
  hook_numap,     // numeric application (church exponentiation)
@@ -268,7 +273,6 @@ struct g {
  // the one scratch word: a port refill, a write's count, a Have's ask. set it as the last
  // act before the return that hands it back
  word b;
- word inflag;           // fd 0's flags as found (a charm), 0 left alone
  uintptr_t next_serial,
            next_wake_at, // the next snapshot's wake_at; 0 always runnable
            clock_at;     // the last sweep tick's clock
@@ -314,9 +318,6 @@ struct g {
    walk,                          // the most room a walk under one op wanted past the gap: the op takes it, runs again
    minor0, major0, ratio,         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
    push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
- uintptr_t cbase, croom;          // c0's outermost C frame (0 outside one), and the stack it may take
- uintptr_t ask;                   // the collector's ask while it works: an oom's first datum
- uintptr_t clips;                 // the bytes quay's osc 52 bodies hold from alloc, every screen's
  struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
@@ -328,11 +329,8 @@ struct g {
      hook[hook_n],
      lib,        // name -> book (borrow, cite, leave)
      errs,        // errno -> its nom
-     kinds,       // enum q row -> its nom (kinds.h)
      kreg,        // name -> (serial . table), post.l's `coin`
-     knom[20],    // the kind table's keys and the built-in coins' names
-     rnom[RnN],   // interned at boot so a read allocates none
-     inport;      // the buffered stdin port, or 0
+     nom[NomN];
    union {
     word x;
     struct io {
@@ -455,7 +453,7 @@ intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t);
 uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t);
 intptr_t port_fd(word);                         // the fd under a love port, or -1
 uintptr_t love_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
-extern struct port_vt const to_vt, closed_vt, ci_vt;
+extern struct port_vt const to_vt, closed_vt, ci_vt, state_vt;
 // poll(2)'s struct pollfd, so the host polls the block directly (main.c static-asserts it)
 struct wait_fd { int fd; short events, revents; };
 
@@ -557,6 +555,8 @@ void code_warm(struct g *g);
 void scare_face(struct g*);
 
 extern struct fio love_stdin, love_stdout, love_stderr;
+extern word love_inflag,  // fd 0's flags as found (a charm), 0 left alone
+            love_inport;  // the buffered stdin port, a root once taken, or 0
 
 // --- allocation and roots ---
 #define avail(g) ((uintptr_t)(g->sp-g->hp))
@@ -656,7 +656,6 @@ static love_inline uintptr_t rot(uintptr_t x) {
 // enum q, the dispatch lattice: each dyadic lane one contiguous range, max the promotion join
 // (cmp_rank remaps for compare order). enum d: what a heap object's hot says it is, so a switch
 // needs no default. both rosters are laid by mx.l: edit that, not kinds.h
-#include "kinds.h"
 // any value -> its enum q, a tray refined by element tier
 enum q kind(word);
 extern union u const numap_drive[], obin_drive[];          // [ap; swap; ret0], runs (num-ap n x)
@@ -788,6 +787,14 @@ static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str
 static love_inline uint8_t *cask_bytes(word x, uintptr_t *n) {
  struct str *s = cask_str(x);
  return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+// a state: a port with no door, holding a nif's bytes. only the nifs that made it read or write them
+struct state { struct io io; struct str *str; };
+static love_inline struct str *state_str(word x) {
+ return evenp(x) && cell(x)->ap == lvm_port_io && ((struct io*) x)->vt == &state_vt ? ((struct state*) x)->str : NULL; }
+static love_inline uint8_t *state_bytes(word x, uintptr_t *n) {
+ struct str *s = state_str(x);
+ return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+
 
 // --- numbers ---
 #define isnum(x) (charmp(x) || gemp(x) || bigp(x))
@@ -1007,11 +1014,9 @@ static love_inline word coin_load(word x) { return ((struct coin*) x)->payload; 
 // the kind table's keys: closures run in the VM. absent, net is the payload's, < and = the
 // coin band then the payload (a map key or sort reads the payload regardless), int and ceil
 // the measure's. star truthy: a numeral powers through its *. KnLambda on: `kind`'s answers
-enum { KnName, KnAdd, KnMul, KnApply, KnSub, KnNet, KnStar, KnDiv,
-       KnPayload, KnLt, KnEq, KnInt, KnCeil, KnLambda, KnCask, KnPort, KnCoin, KnN };
 // a kind table's slot, () if absent or not a tablet
 static love_inline word kind_get(struct g *g, word kind, intptr_t i) {
- return tabp(kind) ? mapget(g, ZeroPoint, core_of(g)->knom[i], kind) : ZeroPoint; }
+ return tabp(kind) ? mapget(g, ZeroPoint, core_of(g)->nom[i], kind) : ZeroPoint; }
 
 // --- truth and equality ---
 // x is false iff its net's real part is not positive. the net is complex and additive, so a
@@ -1074,6 +1079,7 @@ static love_inline union u *tag_head(struct tag *t) {
 // a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
 // state into; NULL when the room was refused (*gp is then not ok)
 union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
+union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
 static love_inline word *gap(struct g *g, word **top) {
@@ -1083,7 +1089,7 @@ static love_inline word *gap(struct g *g, word **top) {
  return *top = g->sp, g->hp; }
 
 // --- stack and op helpers ---
-static love_inline struct g *pushq(struct g*g) { return intern(strof(g, "\\")); }
+static love_inline struct g *pushq(struct g*g) { return push(g, 1, core_of(g)->nom[RnQuote]); }
 static love_inline struct g *push0(struct g*g) { return push(g, 1, zero); }
 static love_inline size_t llen(word l) {
  size_t n = 0;

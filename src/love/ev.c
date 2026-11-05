@@ -47,7 +47,6 @@ static struct g
  *lbox(struct g *g),
  *ldels(struct g *g, word lam, word l),
  *lset(struct g *g, word y, int k, word v),
- *pushl(struct g*g),
  *rev(struct g *g, word l),
  *sset(struct g *g, word s, int k, word v);
 static word
@@ -57,7 +56,6 @@ static word
  memq(struct g *g, word l, word k),
  sget(struct g *g, word s, int k);
 // ev
-static love_inline struct g *pushl(struct g*g) { return intern(strof(g, "\\")); }
 static love_noinline struct g *c0(struct g *g, lvm_t *y);
 struct g *eval(struct g *g);
 
@@ -153,6 +151,8 @@ static struct g *append(struct g *g) {
  return g; }
 
 // the C stack a compile may take below its outermost frame: 3/4 of the host's rlimit, else love_cstack
+// the C stack's floor, this process's: compiles nest through eval, and all run on the one stack
+static uintptr_t c0_floor;
 static uintptr_t c0_room(void) {
  uintptr_t room = love_cstack;
 #if __STDC_HOSTED__
@@ -178,13 +178,11 @@ static love_noinline struct g *c0(struct g *g, lvm_t *y) {
  word x = g->sp[0];
  g->sp[0] = (word) c1_yield;
  mm(g, &c); mm(g, &x);
- char here;                                      // the floor is measured from the outermost compile
- uintptr_t base0 = g->cbase;
- if (!base0) g->cbase = (uintptr_t) &here, g->croom = c0_room();
+ char here;                                      // the floor is measured from the first compile
+ if (!c0_floor) c0_floor = (uintptr_t) &here > c0_room() ? (uintptr_t) &here - c0_room() : 1;
  if (ok(g = analyze(g, &c, x)))
    g = c1(c0_ix(g, &c, y, word(g->ip)), &c);
  um(g), um(g);
- core_of(g)->cbase = base0;
  return g; }
 
 static Cata(c1) {
@@ -386,45 +384,35 @@ out:
         Kp[1].x = putcharm(i),
         pull(g, c); }
 
-// a compile past its room of C stack scares (deep (used room)) before the stack runs out
-static love_noinline bool c0_deep(struct g *g) {
+// a compile past its room of C stack scares (deep . room) before the stack runs out
+static love_noinline bool c0_deep(void) {
  char here;
- struct g *c = core_of(g);
- return c->cbase && c->cbase > (uintptr_t) &here && c->cbase - (uintptr_t) &here > c->croom; }
+ return (uintptr_t) &here < c0_floor; }
 static love_noinline struct g *c0_scare(struct g *g) {
- char here;
- struct g *c = core_of(g);
- intptr_t used = (intptr_t) (c->cbase - (uintptr_t) &here), room = (intptr_t) c->croom;
- g = intern(strof(g, "deep"));
- g = gxl(push(g, 2, putcharm(room), ZeroPoint));
- g = gxr(gxl(push(g, 1, putcharm(used))));
+ g = gxr(push(intern(strof(g, "deep")), 1, putcharm(c0_room())));
  if (ok(g)) g->scare_c = pop1(g);
  return encode(core_of(g), status_scare); }
 
 static love_noinline Ana(analyze) {
  if (!ok(g)) return g;
- if (c0_deep(g)) return c0_scare(g);
+ if (c0_deep()) return c0_scare(g);
  if (nomp(x) && x != ZeroPoint) return ana_v(g, c, x);
  if (!chainp(x)) return ana_q(g, c, x); // non-chains are self quoting
  word a = A(x), b = B(x);
- struct str *nm;                             // a special form: a 1-char named head (\ : ?)
- if (chainp(b) && (nm = nom_str(g, a)) && len(nm) == 1)  // with no operand it is (f) == f
-  switch (*txt(nm)) {
-   case '\\': return ana_l(g, c, b);
-   case ':': return ana_d(g, c, b);
-   case '?': return ana_c(g, c, b); }
+ if (chainp(b)) {                            // a special form; with no operand it is (f) == f
+  if (a == g->nom[RnQuote]) return ana_l(g, c, b);
+  if (a == g->nom[RnDef]) return ana_d(g, c, b);
+  if (a == g->nom[RnCond]) return ana_c(g, c, b); }
  return ana_2(g, c, x, a, b); }
 
 
 // nom p -> m over x, quoted data kept -> the result on sp0
 static struct g *subst1(struct g *g, word x, word p, word m) {
  if (!ok(g)) return g;
- if (c0_deep(g)) return c0_scare(g);
+ if (c0_deep()) return c0_scare(g);
  if (x == p) return push(g, 1, m);
  if (!chainp(x)) return push(g, 1, x);
- { struct str *nm; word a = A(x);
-   if (nomp(a) && (nm = nom_str(g, a)) && len(nm) == 1 && *txt(nm) == '\\' &&
-       chainp(B(x)) && !chainp(BB(x))) return push(g, 1, x); }   // (\ q): a quote is data
+ if (A(x) == g->nom[RnQuote] && chainp(B(x)) && !chainp(BB(x))) return push(g, 1, x);   // (\ q): a quote is data
  struct love_r *mm0 = g->root;
  mm(g, &x); mm(g, &p); mm(g, &m);
  g = subst1(g, A(x), p, m);
@@ -550,7 +538,7 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
 
 
 static struct g *ana_ap_r2l(struct g *g, struct env **c, word x) {
- if (ok(g) && c0_deep(g)) return c0_scare(g);
+ if (ok(g) && c0_deep()) return c0_scare(g);
  if (chainp(x)) {
   word y = A(x);
   avec(g, y, g = ana_ap_r2l(g, c, B(x)));
@@ -559,9 +547,7 @@ static struct g *ana_ap_r2l(struct g *g, struct env **c, word x) {
  return g; }
 
 static love_inline bool lambp(struct g *g, word x) {
- struct str *n;
- return chainp(x) && chainp(B(x)) && chainp(B(B(x))) &&
-  (n = nom_str(g, A(x))) && len(n) == 1 && txt(n)[0] == '\\'; }
+ return chainp(x) && chainp(B(x)) && chainp(B(B(x))) && A(x) == core_of(g)->nom[RnQuote]; }
 
 // onto a fresh spine, the source never written
 static struct g *rev(struct g *g, word l) {          // -> the reversed copy, pushed
@@ -644,7 +630,7 @@ static love_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
  while (chainp(exp) && chainp(B(exp))) {
   for (d = A(exp), e = AB(exp); chainp(d) && !nomp(d); e = pop1(g), d = A(d)) {  // a named sym is a chain: stop at it
    g = gxl(push(g, 2, e, zero));
-   g = append(gxl(pushl(push(g, 1, B(d)))));
+   g = append(gxl(pushq(push(g, 1, B(d)))));
    if (!ok(g)) return forget(); }
   g = gxl(push(g, 2, d, nom));
   g = gxl(push(g, 2, e, def));
@@ -686,7 +672,7 @@ static love_inline struct g *ana_d(struct g *g, struct env **b, word exp) {
   if (ok(g)) g = lset(g, A(e), LImps, pop1(g)); }
 
  g = eset(g, c, ELams, lam);
- g = append(gxl(pushl(push(g, 2, nom, exp))));
+ g = append(gxl(pushq(push(g, 2, nom, exp))));
 
  if (!ok(g)) return forget();
  exp = pop1(g);
@@ -1046,15 +1032,15 @@ lvm(lvm_coinmk) {
 lvm(lvm_load) {
  Sp[0] = coinp(Sp[0]) ? coin_load(Sp[0]) : Sp[0];
  love_musttail return Next(1); }
-// (kind x) -> the kind's nom off g->kinds, refined in the hot row: a coin's own name or coin,
+// (kind x) -> the kind's nom, refined in the hot row: a coin's own name or coin,
 // else lambda, cask, port
 lvm(lvm_kind) {
  word x = Sp[0], n = ZeroPoint;
- if (coinp(x)) { n = kind_get(g, coin_kind(x), KnName); if (n == ZeroPoint) n = g->knom[KnCoin]; }
- else if (caskp(x)) n = g->knom[KnCask];
- else if (iop(x)) n = g->knom[KnPort];
- else if (kind(x) == KHot) n = g->knom[KnLambda];
- if (n == ZeroPoint) Pack(g), n = mapget(g, zero, putcharm(kind(x)), g->kinds);   // packed: the probe's walks use the free room
+ if (coinp(x)) { n = kind_get(g, coin_kind(x), KnName); if (n == ZeroPoint) n = g->nom[KnCoin]; }
+ else if (caskp(x)) n = g->nom[KnCask];
+ else if (iop(x)) n = g->nom[KnPort];
+ else if (kind(x) == KHot) n = g->nom[KnLambda];
+ if (n == ZeroPoint) n = g->nom[kind(x)];
  Sp[0] = n;
  love_musttail return Next(1); }
 op11(lvm_coinp, coinp(Sp[0]) ? putcharm(1) : zero)   // a struck coin, not the rest of the hot row

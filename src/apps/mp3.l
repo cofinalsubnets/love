@@ -14,7 +14,7 @@
 ; a frame whose channels differ from the stream's first (a mode change) is laid in its shape:
 ; one doubled, or two averaged.
 (module (mp3 mp3-sniff mp3-meta mp3-format mp3-pump mpg123-main mpg123-usage
-             mp3-state mp3-head mp3-frame)
+             mp3-new mp3-head mp3-frame)
 (borrow '(bytes wav cli))
 (:
    open (cite 'posix 'open) close (cite 'posix 'close)
@@ -126,7 +126,7 @@
            string o)))
    ; f 0 for s16, 1 for f32; emit gets each run past m's skip and short of its total
    (mp3-run q h0 m f emit)
-    (: st (cask (mp3-state 0)) want (m 'ch) w (f ? 4 2)
+    (: st (mp3-new 0) want (m 'ch) w (f ? 4 2)
        left {'skip (m 'skip * want * w) 'rest (m 'total * want * w)}
        (out pcm)
         (: k (left 'skip)

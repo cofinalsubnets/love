@@ -15,9 +15,9 @@
 
 (:
    ; little-endian reads; a signed u64 field (a RELA addend) goes through s64
-   (rle16 s i) (rdle s i 2)
-   (rle32 s i) (rdle s i 4)
-   (rle64 s i) (rdle s i 8)
+   (rle16 s i) (? (i + 2 > #s) (rdle s i 2) (s i + s (i + 1) * 256))
+   (rle32 s i) (? (i + 4 > #s) (rdle s i 4) (s i + s (i + 1) * 256 + s (i + 2) * 65536 + s (i + 3) * 16777216))
+   (rle64 s i) (? (i + 8 > #s) (rdle s i 8) (rle32 s i + rle32 s (i + 4) * 4294967296))
    ; a field of any width: the table below asks for 1, 2, 3, 4 and 8
    (rlew s i n) (n < 1 ? 0 (s i + 256 * rlew s (i + 1) (n - 1)))
 
@@ -51,7 +51,7 @@
                     (sh-size 20 4) (sh-link 24 4) (sh-info 28 4) (sh-align 32 4) (sh-esz 36 4)
                     (sy-name 0 4) (sy-info 12 1) (sy-shndx 14 2) (sy-val 4 4) (sy-size 8 4)
                     (rl-off 0 4) (rl-kind 4 1) (rl-sym 5 3)))
-   (ld-cstr s i) (: (go j) (s j = 0 ? (snip s i j) (go (j + 1))) (go i))
+   (ld-cstr s i) (: j (subidx s "\0" i) (snip s i (? (j < 0) #s j)))
    (ld-zeros n) (n >= 1 ? (0 . ld-zeros (n - 1)))
    (ld-align a v) (a < 2 ? v (v % a @ r (r = 0 ? v (v + a - r))))
    ; a segment's address for file offset f: the next page at or after v plus f's place in a
@@ -66,14 +66,16 @@
    ;     through it. rels? reads the relocations too. -> a tablet
    ;   'id 'src 'class 32|64 'type 'mach 'shnum
    ;   'sec        index -> [name type flags off size align entsize link info]
-   ;   'syms 'nsym index -> [name bind type shndx value size other], 'nsym 0 with no .symtab
+   ;   'syms 'nsym index -> [name bind type shndx value size other], 'nsym 0 with no .symtab;
+   ;               'nloc the first global's index. 'sec is a tray, 'syms one that indexes;
+   ;               under rels? 2 a function that does, with 'symr, by index
    ;   'rela       target index -> [(off kind sym addend) ..] in file order, the addend ()
    ;               on a REL; 'rels the same as [(target . entries) ..] in header order.
    ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
    (ld-obj id s rels?)
     (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
        fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
-       (f b r) (rdle s (b + <r) <>r)
+       (f b r) (: i (b + <r) w <>r (? (w = 4) (rle32 s i) (w = 8) (rle64 s i) (w = 2) (rle16 s i) (rdle s i w)))
        (fx nm) (ld-row fs nm)
        shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
        _ (shnum = 0 || ld-f fs s 0 'e-shent = ld-n fs 'sh-ent ? 0 (scare 'link-shentsize id))
@@ -81,10 +83,10 @@
        hn (fx 'sh-name) ht (fx 'sh-type) hf (fx 'sh-flags) ho (fx 'sh-off) hz (fx 'sh-size)
        ha (fx 'sh-align) he (fx 'sh-esz) hl (fx 'sh-link) hi (fx 'sh-info)
        shstro (? (shnum = 0) 0 (f (shoff + she * ld-f fs s 0 'e-shstrx) ho))
-       sec {}
-       _ (each ^shnum (i \ (: h (shoff + she * i)
-                              (pin sec i [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
-                                          (f h ha) (f h he) (f h hl) (f h hi)]))))
+       sec (spread (map (i \ (: h (shoff + she * i)
+                               [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
+                                (f h ha) (f h he) (f h hl) (f h hi)]))
+                        ^shnum))
        ob {'id id 'src s 'class (? (s 4 = 2) 64 32) 'type (rle16 s 16) 'mach (rle16 s 18) 'shnum shnum
            'sec sec 'syms {} 'nsym 0 'rela {} 'rels () 'relz {}}
        ; held to sh_entsize: a wrong stride reads well-formed garbage
@@ -93,11 +95,21 @@
        _ (? (symi < 0) 0
             (: y (sec symi) _ (esz y 'sy-ent) ye (ld-n fs 'sy-ent) stro (sec (y 7) 3)
                yn (fx 'sy-name) yi (fx 'sy-info) yo (<yi + 1) yx (fx 'sy-shndx)
-               yv (fx 'sy-val) yz (fx 'sy-size) syms (ob 'syms) n (y 4 // ye)
-               _ (pin ob 'nsym n)
-               (each ^n (i \ (: e (y 3 + ye * i) info (f e yi)
-                                (pin syms i [(ld-cstr s (stro + f e yn)) (info >> 4) (info & 15)
-                                             (f e yx) (f e yv) (f e yz) (s (e + yo))]))))))
+               yv (fx 'sy-val) yz (fx 'sy-size) n (y 4 // ye)
+               nl (min (y 8) n)
+               _ (pin ob 'nsym n, pin ob 'nloc nl)
+               (row i) (: e (y 3 + ye * i) info (f e yi)
+                          [(ld-cstr s (stro + f e yn)) (info >> 4) (info & 15)
+                           (f e yx) (f e yv) (f e yz) (s (e + yo))])
+               (? (rels? = 2)
+                  ; at a kernel's scale a local is read when asked for, kept once a relocation has;
+                  ; 'symr reads afresh, for a pass over them all
+                  (: g (spread (map (i \ row (i + nl)) ^(n - nl))) memo {}
+                     (sym i) (? (i >= nl) (g (i - nl))
+                                (: m (peep memo i ())
+                                   (? (two? m) m (: v (row i) _ (pin memo i v) v))))
+                     (pin ob 'symr row, pin ob 'syms sym))
+                  (pin ob 'syms (spread (map row ^n))))))
        rty (? (s 4 = 2) 4 9) re (ld-n fs 'rl-ent)
        ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
        ; entries i to j of the section r holds
@@ -1685,7 +1697,7 @@
                           (go >ls ([<p (p 1) (p 2) fl (p 4 + q 2)] . >acc))
                           (go >ls ([l <q <>q fl (q 2)] . acc)))))
                (go shl0 ()))
-       shl (map (e \ <e) secs)
+       shl (map cap secs)
        lanesx ({} @ t (foldl (\ i l (pin t l i, i + 1)) 1 shl, t))
        st (ldstab objs glo lanesx elf-sym32 16)
        ; -- the abs32 sites by lane, each an Elf32_Rel R_ARM_ABS32 against symbol 0 (value 0),

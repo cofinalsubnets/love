@@ -336,7 +336,7 @@
          (: w (n < 2 ? 0 (xa-sfxw (s (n - 1)))) st (w = 0 ? 'x (name (snip s 0 (n - 1))))
             (w > 0 && elem st xa-sfxable ? [st w] [l 0]))))
    (at-insn mn rest)
-      (: mw (at-mnw mn) st <mw ops (map (o \ xa-abs st o) (rev (map at-operand (xa-ops rest))))
+      (: mw (at-mnw mn) st <mw ops (map (xa-abs st) (rev (map at-operand (xa-ops rest))))
          (? (xa-branch? st) ['op st 0 ops]
             (!(two? ops) && nom? (xa-strl st)) ['op (xa-strl st) 0 ()]
             (st = 'mov && xa-xmm? ops) ['op (mw 1 = 4 ? 'movd 'movq) (xa-gprw ops) ops]
@@ -435,8 +435,8 @@
             (: r (xa-reg t) cr (xa-cr t) dr (xa-dr t)
                (? (two? r) (0 . r) (two? cr) (0 . cr) (two? dr) (0 . dr) (0 . ['lbl (name (xa-unquote t))])))))
    (in-insn mn rest)
-      (: l (name (lower mn)) prs (map (t \ in-operand l t) (xa-ops rest))
-         ops (map (p \ >p) prs)
+      (: l (name (lower mn)) prs (map (in-operand l) (xa-ops rest))
+         ops (map cup prs)
          psz (foldl (\ a p (a > 0 ? a <p)) 0 prs)
          (? (xa-att-nil l) ['op (xa-att-nil l) 0 ops]
             (xa-branch? l) ['op l 0 (map (o \ (<o = 'rg || <o = 'mem || <o = 'rip) ? ['ind o] o) ops)]

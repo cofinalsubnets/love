@@ -1997,7 +1997,7 @@
               _ (each opens close)
               _ (? (sh-fd0? fdmap) (chug in) 0)       ; the old stdin's read-ahead goes with it
               (? (atom? argv) (pin S 'sh-status 0, 0)
-                 ((S 'sh-subfds) || (0 < (S 'sh-online))) (sh-execkid S argv)
+                 ((S 'sh-subfds) || (0 < (S 'sh-online)) || !(string? (sh-seat ()))) (sh-execkid S argv)
                  (sh-execgo S argv)))))
    ; a forkless subshell's redirects outlive the exec only to its end: each fd's first
    ; save is kept for sh-subback
@@ -2007,7 +2007,7 @@
            (pin S 'sh-subrds
               (foldl (\ a e (? (sh-smem? <e (map cap a)) a ((<e . dup <e) . a))) rs fdmap))))
    ; a forkless subshell -- a $( ) body, an sh-oneline -- has no process of its own to
-   ; replace: argv runs as a child, and its status ends the subshell
+   ; replace, nor has any shell on the kernel: argv runs as a child, and its status ends it
    (sh-execkid S argv)
      (: _ (flush out) _ (flush err)
         pid (? (sh-known? S <argv) (spawnmap (sh-spawnv S argv) () () (sh-pgm S 0) (sh-fgm S 0)) ())

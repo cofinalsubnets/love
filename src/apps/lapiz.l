@@ -258,7 +258,7 @@
                   'img    ("<img src=\"" + hqa <>>x + "\" alt=\"" + hqa <>x + "\">")
                   "")
    ; an attribute's value: hq's three and the quote that would end it
-   (hqa s)  (catmap (c \ c @ 34 "&quot;" 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)) (map (i \ s i) ^#s))
+   (hqa s)  (catmap (c \ c @ 34 "&quot;" 38 "&amp;" 60 "&lt;" 62 "&gt;" (string c)) (map s ^#s))
    (hitems l t) "\(join "\n" (map (i \ "<li>" + hti i + "</li>") l))\n</\(t)>"
    (hmeta kvs)  (join "\n" (map (p \ "<meta name=\"\(string <p)\" content=\"\(hq <>p)\">") (mfilled kvs)))
    (hdefs l)    "<dl>\n\(join "\n" (map (it \ "<dt>" + hti <it + "</dt>\n<dd>" + hti <>it + "</dd>") l))\n</dl>"
@@ -477,7 +477,7 @@
             (? (two? w && <w 0 = 64) (shut (i + 1) 1 @ z (go z z acc))
                (: z (hfind b (i + 1) "}")
                   t (snip b (i + 1) (z - 1))
-                  d (lower (string (filter (c \ !(elem c '(32 9 10 13))) (map (j \ t j) ^#t))))
+                  d (lower (string (filter (c \ !(elem c '(32 9 10 13))) (map t ^#t))))
                   hide (hhas d "display:none" || hhas d "visibility:hidden")
                   (go z z (? hide (foldl (\ a x (cls x + a)) acc (split "," sel)) acc)))))))
    (hnoshow s i e)
@@ -624,13 +624,13 @@
                    (? (k < 1) s (a = 'r) (rep " " k + s)
                       (a = 'c) (rep " " (k // 2) + s + rep " " (k - k // 2)) (s + rep " " k)))
    (tblines x)
-    (: al (x 1) rows ((map tplain (x 2)) . (map (r \ map tplain r) (x 3)))
+    (: al (x 1) rows ((map tplain (x 2)) . (map (map tplain) (x 3)))
        ws (foldl (a \ r \ map (p \ max <p <>p) (zipm a (map tvw r))) (map (_ \ 0) (x 1)) rows)
        (line r) (: (g as wz cs) (atom? cs ? "" (tpad <as <wz <cs @ c
                                                  (atom? >cs ? c (c + "  " + g >as >wz >cs))))
                    (g al ws r))
        (strip s) (: (b j) (0 < j && s (j - 1) = 32 ? (b (j - 1)) j) (snip s 0 (b #s)))
-       ([(strip (line <rows)) (join "  " (map (n \ rep "-" n) ws))] + map (r \ strip (line r)) >rows)))
+       ([(strip (line <rows)) (join "  " (map (rep "-") ws))] + map (r \ strip (line r)) >rows)))
 
 ; ---------------------------------------------------------------- roff (man), show
 (: (rq s) ((: (g i acc)
@@ -666,7 +666,7 @@
    (rtable x)
     (tblines x @ ls
        (foldl (a \ l \ a && tvw l <= 78) 1 ls ? (rfb ['fence "" (catmap (ln \ "\(ln)\n") ls)])
-          (map tplain (x 2) @ hd (catmap (r \ rrow hd r) (x 3)))))
+          (map tplain (x 2) @ hd (catmap (rrow hd) (x 3)))))
    (rfb x) (<x @ 'meta    (rth <>x)
                  'head    ((<>x < 2 ? ".SH " ".SS ") + rfi <>>x + "\n")
                  'para    (".PP\n" + rfill (rfi <>x))
@@ -966,7 +966,7 @@
                         (: ar (filter (w \ !(bsddel? w)) (two? ws ? >ws ()))
                            dl (filter bsddel? (two? ws ? >ws ()))
                            [([(bsdfont st 'b (two? ws ? <ws "")
-                               + "(" + join ", " (map (a \ bsdfont st 'i a) ar) + ")" + bsdsee? st) 0 0]
+                               + "(" + join ", " (map (bsdfont st 'i) ar) + ")" + bsdsee? st) 0 0]
                              . map bsddp dl) rest]))
           (m = "Fo") (two? r ? (pin st 'fa 0, [[[(bsdfont st 'b <r + "(") 0 1]] >r]) [() r])
           (m = "Fa" && charm? (st 'fa))
@@ -1074,7 +1074,7 @@
           (m = "Fn" || m = "Fo") (: l (bsdtext st (m . toks)) (syn ? [".br" l] [l]))
           (m = "Lb") [(two? toks ? (bsdkv bsdlib <toks @ x (two? x ? <x "library \\(lq\(<toks)\\(rq")) "")]
           (m = "Ex") (: ns (filter (w \ w != "-std") toks) ns2 (two? ns ? ns [(st 'name)])
-                        [(bsdlead ("The " + bsdand (map (n \ bsdfont st 'b n) ns2)
+                        [(bsdlead ("The " + bsdand (map (bsdfont st 'b) ns2)
                                    + (atom? >ns2 ? " utility exits" " utilities exit")
                                    + "\\~0 on success, and\\~>0 if an error occurs."))])
           (m = "Rv") (: ns (filter (w \ w != "-std") toks) ns2 (two? ns ? ns [(st 'name)])

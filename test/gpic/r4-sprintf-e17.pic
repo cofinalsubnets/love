@@ -1,0 +1,9 @@
+.PS
+print sprintf("%.17g %.17g %.17g", 1e22, 1e-22, 1e24)
+print sprintf("%.17g %.17g %.17g", 1e29, 1e-23, 1e300)
+print sprintf("%.17g %.17g %.17g", 1e-300, 1.5e100, 2.5e-100)
+print sprintf("%.17g %.17g", 3e-1, 7e-3)
+x = 1e330
+print sprintf("%g|%e|%f|%5.1f|%G|%E", x, x, x, x, x, x)
+print sprintf("%+g|% g|%-6g|%05g|%g", x, x, x, x, -x)
+.PE

@@ -27,7 +27,7 @@
      "fff328c40b0000034801c00000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]))
    ; every frame from 0, one state -> samples, s16 (f 0) or f32 (f 1) | why; a short last frame ends it
-   (mp-all s f) (: st (cask (mp3-state 0))
+   (mp-all s f) (: st (mp3-new 0)
                    (go o acc) (? (o >= #s) (cats (rev acc))
                                  (mp3-frame st s o f @ (pcm . nx) (go nx (pcm . acc)) 2 (cats (rev acc)) w w))
                    (go 0 ()))
@@ -36,8 +36,8 @@
    _ (test (mp3-head tiny 0 = (72 | (1 << 12) | (16000 << 16))) (mp3-head "abcd" 0 = 0) (mp3-head tiny 1 = 0)
            (mp-all tiny 0 @ pcm (string? pcm && #pcm = 12672 && sha256 pcm = want) _ 0)
            (mp-all tiny 1 @ pcm (string? pcm && #pcm = 25344) _ 0)
-           (mp3-frame (cask (mp3-state 0)) (snip tiny 0 50) 0 0 = 2)
-           (mp3-frame (cask (mp3-state 0)) tiny 1 0 = 1)
+           (mp3-frame (mp3-new 0) (snip tiny 0 50) 0 0 = 2)
+           (mp3-frame (mp3-new 0) tiny 1 0 = 1)
            (mp3-frame (cask 10) tiny 0 0 = 3)
            (tablet? tm) (tm 'rate = 16000) (tm 'ch = 1) (tm 'at = 0) (tm 'total = 0) (tm 'tags = ())
            (mp3-format tm 'align = 2)

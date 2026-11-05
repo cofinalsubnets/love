@@ -29,7 +29,7 @@
    (a64-li d imm)
       (: _ (constellation? imm ? 0 (scare 'badimm imm))
          dn (rn d) u (u64 imm)
-         ls (map (k \ a64-lane u k) ^4)
+         ls (map (a64-lane u) ^4)
          ; movn when more lanes are all ones than zero; movk patches the rest
          neg (#(filter (l \ l != 65535) ls) < #(filter (l \ l != 0) ls))
          skip (neg ? 65535 0)

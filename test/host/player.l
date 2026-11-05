@@ -104,7 +104,7 @@
    c (core-new "t")
    ev {}
    (heard f) (filter f (rev (peep ev 'l ())))
-   (sets k) (map (m \ m 1) (heard (m \ <m = 'set && elem k (map (kv \ <kv) (m 1)))))
+   (sets k) (map (m \ m 1) (heard (m \ <m = 'set && elem k (map cap (m 1)))))
    id (core-watch c (m \ pin ev 'l (m . peep ev 'l ())))
    (st k) (core-send c ['status] @ [_ s _] (<(filter (kv \ <kv = k) s) 1))
    (waits k v n) (? (st k = v || n = 0) (st k = v) (rest 20, waits k v (n - 1)))
@@ -126,7 +126,7 @@
            (core-send c ['eq [3 0 0 0 0 0 0 0 0 -3]] = ['ok])
            (core-send c ['play] = ['ok]) (waits 'state 'stop 150)
            (foldr (\ x a (two? a && <a = x ? a (x . a))) ()
-                  (map (s \ (<(filter (kv \ <kv = 'song) s)) 1) (filter (s \ elem 'song (map (kv \ <kv) s)) (sets 'song)))
+                  (map (s \ (<(filter (kv \ <kv = 'song) s)) 1) (filter (s \ elem 'song (map cap s)) (sets 'song)))
               = [0 1 2 -1]))
    ; pause holds the place, and play goes on from it
    _ (test (core-send c ['play 0] = ['ok]) (rest 60, core-send c ['pause] = ['ok]) (st 'state = 'pause)

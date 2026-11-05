@@ -13,7 +13,7 @@
    (nib c) (? (c < 58) (c - 48) (c - 87))
    (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
                                string c))
-   (px d) (map (k \ d 2 k) (jot #(d 2)))
+   (px d) (map (d 2) (jot #(d 2)))
 
    ; -- fixtures --
    p1-pbm (unx (cats [

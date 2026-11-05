@@ -113,7 +113,9 @@
    ; touch is the left button, or a key of the row
    (droid-events win r)
     (r @ [k a b c]
-       (? (k = 83) (: _ (pin win 'H (c // droid-scale)) [['size (b // droid-scale) (c // droid-scale - win 'row)]])
+       (? (k = 83) (: _ (pins win 'H (c // droid-scale) 'row (a & 1 && peep win 'typing 0 ? droid-rowh 0))
+                      _ (a & 2 ? (pin win 'w 0))               ; no size is the paper's now, so this one is news
+                      [['size (b // droid-scale) (c // droid-scale - win 'row)]])
           (k = 80) (peep win 'pst "" @ t (a = 0 ? (pin win 'pst "", [['paste t]]) (pin win 'pst (t + b), ())))
           (k = 75 && b = 279) (a ? (droid-paste win) 0, ())   ; a keyboard's paste key
           (k = 75) (: p (peep droid-set1 b ()) t (a && 32 <= c && c != 127 ? (utf8 c) "")
@@ -187,7 +189,7 @@
           _ (x-w8 k 53, x-w8 k (win 'depth), x-w16 k 4, x-w32 k (r 'pm), x-w32 k (win 'xw), x-w16 k w, x-w16 k h)
           _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'src), x-w32 k (r 'pm), x-w32 k (r 'fmt), x-w32 k 0)
           _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'dst), x-w32 k (win 'xw), x-w32 k (r 'fmt), x-w32 k 0)
-          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (v \ x-w32 k v))
+          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (x-w32 k))
           (pins r 'pw w 'ph h 'sc [(win 'w) (win 'h)] 'made 1)))
    (window-blit win pic w h ys)
     (: r (win 'how = 'x ? (x-render win) 0) H (win 'h)
@@ -267,10 +269,11 @@
 
    (window-sized win) (: ev (window-events win) _ (pin win 'said (peep win 'said () + ev)) (window-size win))
    (window-close win) (win 'how = 'x || win 'how = 'droid ? (close (win 's)) (kpaper 0))
-   ; on a phone the keyboard comes with the row, and the paper gives it room
+   ; on a phone the keyboard comes with the row, and the paper gives it room; put away by
+   ; hand, the bridge's next size takes the row with it
    (window-typing win on)
     (win 'how = 'droid ? (: s (win 's) _ (say s ("I" + wrle (on ? 1 0) 1), flush s)
-                            (pins win 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))
+                            (pins win 'typing on 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))
        0)
    (window-wets sc) (: (bits d base i acc) (i < 32 ? (bits d base (i + 1) (d >> i & 1 ? ((base + i) . acc) acc)) acc)
                        (go k acc) (k < 8 ? (go (k + 1) (bits (wet sc k) (32 * k) 0 acc)) acc)
