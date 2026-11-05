@@ -175,6 +175,10 @@ moonrun -c "$ho/.pcr.S" -o "$ho/.pcr.o" || fail "mooncc: an asm's pc32 fields"
 [ "$(readelf -rW "$ho/.pcr.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_X86_64_PC32 R_X86_64_PLT32 R_X86_64_PC32 R_X86_64_PC32 R_X86_64_PLT32 R_X86_64_PLT32 " ] || fail "pc32 and plt32 are not clang's"
 [ "$(readelf -SW "$ho/.pcr.o" | awk '{sub(/^ *\[ *[0-9]+\] */,"")} $1 == ".text" {print $1, $NF} $1 == ".rodata" || $1 == ".bss" {print $1}' | tr '\n' ' ')" = ".text 4 " ] || fail "an asm source's default sections are not clang's"
 [ "$(readelf -sW "$ho/.pcr.o" | awk '$8 ~ /^(un|hu1|hu2)$/ {print $8, $6, $7}' | sort | tr '\n' ' ')" = "hu1 HIDDEN UND hu2 PROTECTED UND un DEFAULT UND " ] || fail "an undefined name's visibility or .globl is lost"
+# a word over two labels on a64: relocs from clang
+printf '.text\nf: nop\n.long ext - f\n.long x - f\n1: .long ext - 1b\n2: .long ext + 4 - 2b\n.data\nx: .long 0\n' > "$ho/.a6p.S"
+moonrun -t a64 -c "$ho/.a6p.S" -o "$ho/.a6p.o" || fail "mooncc -t a64: a word over two labels"
+[ "$(readelf -rW "$ho/.a6p.o" | awk '$3 ~ /^R_/ {print $3, $5, $7}' | tr '\n' ' ')" = "R_AARCH64_PREL32 ext 4 R_AARCH64_PREL32 .data 8 R_AARCH64_PREL32 ext 0 R_AARCH64_PREL32 ext 4 " ] || fail "a word over two labels on a64 is no PREL32"
 # elf32: a pc-relative reach into data binds a symbol, never symbol 0
 printf '.text\n.code64\njmpq *x(%%rip)\n.code32\n.bss\nx: .long 0\n' > "$ho/.i3r.S"
 moonrun -t i386 -c "$ho/.i3r.S" -o "$ho/.i3r.o" || fail "mooncc: an i386 asm's reach into data"

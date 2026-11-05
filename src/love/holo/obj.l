@@ -760,7 +760,7 @@
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
                  'secrel32 (o-where wx lbl @ w (o-rela off <w ra-prel32 <>w))
-                 'pc32 (o-rela off si (rv ? rr-pc32 r-pc32) ((sa + aux) - 4))
+                 'pc32 (o-rela off si (? a64 ra-prel32 rv rr-pc32 r-pc32) ((sa + aux) - 4))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
                  ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
                  ; anything else pc32 (data has no plt stub)
