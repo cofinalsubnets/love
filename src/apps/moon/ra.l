@@ -12,11 +12,13 @@
    ; for their saves
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+               (v6m? g) '(r0 r1 r2 r3 r5 r6)
                (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
                (ia32? g) '(r0 r1 r2 r5 r6 r3)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
+               (v6m? g) ()
                (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                (ia32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
@@ -233,7 +235,9 @@
        _ (pin g 'rasls (map sl sp + g 'rasls))
        (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
        (go fs c)
-        (fs @ (f . u)
+        (fs @ ((['mov p v] && !(lovr? p) && elem v sp && raget c v = ()) . u)   ; a fixed register's reload needs no temp, which might take another's
+               (['ld p 'r4 (sl v)] . go u c)
+              (f . u)
                (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
                   (raops g f @
                      [u0 d0]

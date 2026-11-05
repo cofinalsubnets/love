@@ -18,7 +18,7 @@
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
    (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
-   (nmxsop g op) (t32? g ? (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
+   (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
