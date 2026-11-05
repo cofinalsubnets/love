@@ -88,7 +88,7 @@ hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-decls
         159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 315-alloca-stack
         298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign
         111-int128 151-w128fuzz 314-u128union 352-u128abi 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 348-libcmore 353-intuint"
-narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct"
+narrow="354-idioms 81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct"
 # gcc's arm build follows no frame chain past level 1, so it cannot witness 297
 nowit="297-frameaddr"
 

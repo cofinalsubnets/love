@@ -963,16 +963,14 @@
              (pathsinv0 nat (add (add op l) 8) (add op (add l 8)) (natplusassoc op l 8))
              (inf-addl op (add l 8) 266 (inf-addr l 258 8 h)))))
        r)))
- ; and its budget for a pair, topped up to 48: 12 + 5 + 9 + 13 bits leave bc no wrap
+ ; and its budget for a pair, topped up to 48: 15 + 5 + 15 + 13 bits leave bc no wrap
  (defq inf-fastbits (pi a nat b nat c nat d nat bc nat
-     ga (inf-le a 12) gb (inf-le b 5) gc (inf-le c 9) gd (inf-le d 13) g (inf-le 48 bc)
+     ga (inf-le a 15) gb (inf-le b 5) gc (inf-le c 15) gd (inf-le d 13) g (inf-le 48 bc)
        (inf-le (add a (add b (add c d))) bc))
    (lam a b c d bc ga gb gc gd g
      (istransnatleh (add a (add b (add c d))) 48 bc
-       (istransnatleh (add a (add b (add c d))) 39 48
-         (inf-add2 a 12 (add b (add c d)) 27 ga
-           (inf-add2 b 5 (add c d) 22 gb (inf-add2 c 9 d 13 gc gd)))
-         (idpath false))
+       (inf-add2 a 15 (add b (add c d)) 33 ga
+         (inf-add2 b 5 (add c d) 28 gb (inf-add2 c 15 d 13 gc gd)))
        g)))
  )
 
@@ -1357,3 +1355,220 @@
      (lam k IH (inf-letrans k (inf-by16 k) (add 15 (inf-by16 k)) IH (inf-leaddl (inf-by16 k) 15)))
      q)))
 )
+
+; --- what the generated bit reader owes ---
+(test
+ (defq inf-wlit (pi x nat w nat gw (inf-le 32 w) g (inf-le x 64) (inf-lt x (inf-pow w)))
+   (lam x w gw g (inf-lelt x 64 (inf-pow w) g
+     (inf-lttrans 64 128 (inf-pow w) (idpath true) (inf-powle 7 w (inf-letrans 7 32 w (idpath false) gw))))))
+ (defq inf-modpos (pi p nat x nat g (inf-lt 0 p) (inf-lt (inf-mod p x) p))
+   (lam p x (nat_rect (lam q (pi g (inf-lt 0 q) (inf-lt (inf-mod q x) q)))
+     (lam g (fromempty (inf-lt (inf-mod 0 x) 0) (nopathsfalsetotrue g)))
+     (lam j IH g (inf-modlt j x))
+     p)))
+ (defq inf-masklt (pi x nat k nat (inf-lt (inf-mod (inf-pow k) x) (inf-pow k)))
+   (lam x k (inf-modpos (inf-pow k) x (inf-powpos k))))
+ (defq inf-fill1b (pi ip nat cons nat bc nat i (inf-bits-inv ip cons bc)
+     (inf-bits-inv (add ip 1) cons (add bc 8)))
+   (lam ip cons bc i
+     (pathscomp0 nat (inf-by8 (add ip 1)) (add (inf-by8 ip) (inf-by8 1)) (add cons (add bc 8))
+       (inf-by8add ip 1)
+       (pathscomp0 nat (add (inf-by8 ip) 8) (add (add cons bc) 8) (add cons (add bc 8))
+         (maponpaths nat nat (lam z (add z 8)) (inf-by8 ip) (add cons bc) i)
+         (natplusassoc cons bc 8)))))
+ (defq inf-subfall1 (pi n nat l nat g (inf-lt l n) (inf-lt (natminus n (add l 1)) (natminus n l)))
+   (lam n l g
+     (inf-lttr (natminus n (succ l)) (natminus n (add l 1)) (natminus n l)
+       (maponpaths nat nat (lam z (natminus n z)) (succ l) (add l 1) (pathsinv0 nat (add l 1) (succ l) (inf-add1 l)))
+       (inf-subfall n l g))))
+ (defq inf-nfit (pi a nat k nat n nat w nat g (inf-le a n) h (inf-le k 8) f (inf-lt (add n 8) (inf-pow w))
+     (inf-lt (add a k) (inf-pow w)))
+   (lam a k n w g h f (inf-lelt (add a k) (add n 8) (inf-pow w) (inf-add2 a n k 8 g h) f)))
+ (defq inf-roomle (pi a nat c nat l nat g (inf-le l (natminus c a)) h (inf-le a c) (inf-le (add a l) c))
+   (lam a c l g h (inf-letl (add a l) (add a (natminus c a)) c (inf-addsub a c h) (inf-addl a l (natminus c a) g))))
+ ; dropping to a byte: what stays is whole bytes, so its >> 3 reads back exactly
+ (defq inf-modle8 (pi x nat (inf-le (inf-mod 8 x) x))
+   (lam x (inf-letl (inf-mod 8 x) (add (inf-by8 (inf-div8 x)) (inf-mod 8 x)) x (inf-divmod x)
+     (inf-leaddl (inf-mod 8 x) (inf-by8 (inf-div8 x))))))
+ (defq inf-by8low (pi q nat (paths nat (inf-mod 8 (inf-by8 q)) 0)) (lam q (inf-timeslow 7 q)))
+ (defq inf-bytes (pi x nat (paths nat (natminus x (inf-mod 8 x)) (inf-by8 (inf-div8 x))))
+   (lam x (pathscomp0 nat (natminus x (inf-mod 8 x))
+       (natminus (add (inf-mod 8 x) (inf-by8 (inf-div8 x))) (inf-mod 8 x)) (inf-by8 (inf-div8 x))
+     (maponpaths nat nat (lam z (natminus z (inf-mod 8 x))) x (add (inf-mod 8 x) (inf-by8 (inf-div8 x)))
+       (pathscomp0 nat x (add (inf-by8 (inf-div8 x)) (inf-mod 8 x)) (add (inf-mod 8 x) (inf-by8 (inf-div8 x)))
+         (pathsinv0 nat (add (inf-by8 (inf-div8 x)) (inf-mod 8 x)) x (inf-divmod x))
+         (natpluscomm (inf-by8 (inf-div8 x)) (inf-mod 8 x))))
+     (inf-cancel (inf-mod 8 x) (inf-by8 (inf-div8 x))))))
+ (defq inf-whole8 (pi x nat e (paths nat (inf-mod 8 x) 0) (paths nat (inf-by8 (inf-div8 x)) x))
+   (lam x e (pathscomp0 nat (inf-by8 (inf-div8 x)) (add (inf-by8 (inf-div8 x)) 0) x
+     (pathsinv0 nat (add (inf-by8 (inf-div8 x)) 0) (inf-by8 (inf-div8 x)) (natplusr0 (inf-by8 (inf-div8 x))))
+     (pathscomp0 nat (add (inf-by8 (inf-div8 x)) 0) (add (inf-by8 (inf-div8 x)) (inf-mod 8 x)) x
+       (maponpaths nat nat (lam z (add (inf-by8 (inf-div8 x)) z)) 0 (inf-mod 8 x) (pathsinv0 nat (inf-mod 8 x) 0 e))
+       (inf-divmod x)))))
+ (defq inf-dropwhole (pi x nat (paths nat (inf-by8 (inf-div8 (natminus x (inf-mod 8 x)))) (natminus x (inf-mod 8 x))))
+   (lam x (inf-whole8 (natminus x (inf-mod 8 x))
+     (pathscomp0 nat (inf-mod 8 (natminus x (inf-mod 8 x))) (inf-mod 8 (inf-by8 (inf-div8 x))) 0
+       (maponpaths nat nat (inf-mod 8) (natminus x (inf-mod 8 x)) (inf-by8 (inf-div8 x)) (inf-bytes x))
+       (inf-by8low (inf-div8 x))))))
+ (defq inf-dropinv (pi ip nat cons nat bc nat i (inf-bits-inv ip cons bc)
+     (inf-bits-inv ip (add cons (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc))))))
+   (lam ip cons bc i
+     (pathscomp0 nat (inf-by8 ip) (add (add cons (inf-mod 8 bc)) (natminus bc (inf-mod 8 bc)))
+       (add (add cons (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc)))))
+       (inf-take ip cons bc (inf-mod 8 bc) (inf-modle8 bc) i)
+       (maponpaths nat nat (lam z (add (add cons (inf-mod 8 bc)) z))
+         (natminus bc (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc))))
+         (pathsinv0 nat (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc)))) (natminus bc (inf-mod 8 bc))
+           (inf-dropwhole bc))))))
+ ; pos = ip - q reads no bit consumed: byte pos, in bits, is what was consumed
+ (defq inf-posb (pi ip nat cons nat q nat i (inf-bits-inv ip cons (inf-by8 q))
+     (paths nat (inf-by8 (natminus ip q)) cons))
+   (lam ip cons q i
+     (pathscomp0 nat (inf-by8 (natminus ip q))
+       (natminus (add (inf-by8 q) (inf-by8 (natminus ip q))) (inf-by8 q)) cons
+       (pathsinv0 nat (natminus (add (inf-by8 q) (inf-by8 (natminus ip q))) (inf-by8 q)) (inf-by8 (natminus ip q))
+         (inf-cancel (inf-by8 q) (inf-by8 (natminus ip q))))
+       (pathscomp0 nat (natminus (add (inf-by8 q) (inf-by8 (natminus ip q))) (inf-by8 q))
+         (natminus (add (inf-by8 q) cons) (inf-by8 q)) cons
+         (maponpaths nat nat (lam z (natminus z (inf-by8 q)))
+           (add (inf-by8 q) (inf-by8 (natminus ip q))) (add (inf-by8 q) cons)
+           (pathscomp0 nat (add (inf-by8 q) (inf-by8 (natminus ip q)))
+             (inf-by8 (add q (natminus ip q))) (add (inf-by8 q) cons)
+             (pathsinv0 nat (inf-by8 (add q (natminus ip q))) (add (inf-by8 q) (inf-by8 (natminus ip q)))
+               (inf-by8add q (natminus ip q)))
+             (pathscomp0 nat (inf-by8 (add q (natminus ip q))) (inf-by8 ip) (add (inf-by8 q) cons)
+               (maponpaths nat nat inf-by8 (add q (natminus ip q)) ip (inf-addsub q ip (inf-pos ip cons q i)))
+               (pathscomp0 nat (inf-by8 ip) (add cons (inf-by8 q)) (add (inf-by8 q) cons)
+                 i (natpluscomm cons (inf-by8 q))))))
+         (inf-cancel (inf-by8 q) cons)))))
+ ; a stored block ends past pos, and consumption grows
+ (defq inf-storedc (pi ip nat cons nat m nat q nat k nat l nat i (inf-bits-inv ip (add cons m) (inf-by8 q))
+     (inf-le cons (inf-by8 (add (add (natminus ip q) k) l))))
+   (lam ip cons m q k l i
+     (inf-letrans cons (add cons m) (inf-by8 (add (add (natminus ip q) k) l))
+       (inf-leaddr cons m)
+       (inf-letr (inf-by8 (natminus ip q)) (add cons m) (inf-by8 (add (add (natminus ip q) k) l))
+         (inf-posb ip (add cons m) q i)
+         (inf-by8mono (natminus ip q) (add (add (natminus ip q) k) l)
+           (inf-letrans (natminus ip q) (add (natminus ip q) k) (add (add (natminus ip q) k) l)
+             (inf-leaddr (natminus ip q) k) (inf-leaddr (add (natminus ip q) k) l)))))))
+ ; min (d - op) l, as the copy takes it
+ (defq inf-htt (pi d nat op nat l nat g (inf-lt (natminus d op) l) (paths nat (natminus d op) (inf-h d op l)))
+   (lam d op l g (inf-case (natgtb l (natminus d op))
+     (lam b (pi e (paths bool b true) (paths nat (natminus d op) (bool_rect (lam c nat) (natminus d op) l b))))
+     (lam e h (idpath (natminus d op)))
+     (lam e h (fromempty (paths nat (natminus d op) l) (nopathsfalsetotrue h)))
+     g)))
+ (defq inf-hff (pi d nat op nat l nat g (inf-le l (natminus d op)) (paths nat l (inf-h d op l)))
+   (lam d op l g (inf-case (natgtb l (natminus d op))
+     (lam b (pi e (paths bool b false) (paths nat l (bool_rect (lam c nat) (natminus d op) l b))))
+     (lam e h (fromempty (paths nat l (natminus d op)) (nopathstruetofalse h)))
+     (lam e h (idpath l))
+     g)))
+ ; a built code's counts: each is at most the symbols, the zero's the build sets
+ (defq inf-cphi (pi C (pi k nat nat) L (pi i nat nat) n nat u nat
+     hk (pi k nat g (inf-le 1 k) (paths nat (C k) (inf-count L k n)))
+     h0 (inf-lt (C 0) u) gm (inf-lt n u) i nat (inf-lt (C i) u))
+   (lam C L n u hk h0 gm i
+     (nat_rect (lam q (inf-lt (C q) u))
+       h0
+       (lam j IH (inf-lelt (C (succ j)) n u
+         (inf-letr (inf-count L (succ j) n) (C (succ j)) n
+           (pathsinv0 nat (C (succ j)) (inf-count L (succ j) n) (hk (succ j) (idpath false)))
+           (inf-cntle L (succ j) n))
+         gm))
+       i)))
+ (defq inf-wfit288 (pi w nat gw (inf-le 32 w) (inf-lt 288 (inf-pow w)))
+   (lam w gw (inf-lttrans 288 512 (inf-pow w) (idpath true) (inf-powle 9 w (inf-letrans 9 32 w (idpath false) gw)))))
+ (defq inf-wnine (pi w nat gw (inf-le 32 w) (inf-lt 512 (inf-pow w)))
+   (lam w gw (inf-lttrans 512 1024 (inf-pow w) (idpath true) (inf-powle 10 w (inf-letrans 10 32 w (idpath false) gw)))))
+ (defq inf-pos3 (pi x nat y nat p (inf-lt 0 y) (inf-lt 0 (add x y)))
+   (lam x y p (inf-lelt 0 x (add x y) (idpath false) (inf-ltaddpos x y p))))
+ (defn inf-shift (pi f (pi k nat nat) a nat k nat nat) (lam f a k (f (add a k))))
+ (defq inf-bitsub (pi a nat b nat c nat g (inf-le (add a b) c) (inf-le b (natminus c a)))
+   (lam a b c g (inf-letr (natminus (add a b) a) b (natminus c a) (inf-cancel a b) (inf-submono (add a b) c a g))))
+ ; the pair's bits, each out of what the last left
+ (defq inf-fastb1 (pi a nat b nat bc nat ga (inf-le a 15) gb (inf-le b 5) g (inf-le 48 bc) (inf-le b (natminus bc a)))
+   (lam a b bc ga gb g
+     (inf-bitsub a b bc (inf-letrans (add a b) 48 bc (inf-letrans (add a b) 20 48 (inf-add2 a 15 b 5 ga gb) (idpath false)) g))))
+ (defq inf-fastb2 (pi a nat b nat c nat bc nat ga (inf-le a 15) gb (inf-le b 5) gc (inf-le c 15) g (inf-le 48 bc)
+     (inf-le c (natminus (natminus bc a) b)))
+   (lam a b c bc ga gb gc g
+     (inf-bitsub b c (natminus bc a) (inf-bitsub a (add b c) bc
+       (inf-letrans (add a (add b c)) 48 bc (inf-letrans (add a (add b c)) 35 48 (inf-add2 a 15 (add b c) 20 ga (inf-add2 b 5 c 15 gb gc)) (idpath false)) g)))))
+ (defq inf-fastb3 (pi a nat b nat c nat d nat bc nat ga (inf-le a 15) gb (inf-le b 5) gc (inf-le c 15) gd (inf-le d 13) g (inf-le 48 bc)
+     (inf-le d (natminus (natminus (natminus bc a) b) c)))
+   (lam a b c d bc ga gb gc gd g
+     (inf-bitsub c d (natminus (natminus bc a) b) (inf-bitsub b (add c d) (natminus bc a) (inf-bitsub a (add b (add c d)) bc
+       (inf-fastbits a b c d bc ga gb gc gd g))))))
+ ; a table's base and its extra bits stay under what base + 2^bits does
+ (defq inf-baseadd (pi a nat x nat m nat T nat g (inf-le (add a (inf-pow x)) T) (inf-lt (add a (inf-mod (inf-pow x) m)) T))
+   (lam a x m T g (inf-lttrans (add a (inf-mod (inf-pow x) m)) (add a (inf-pow x)) T (inf-ltaddl a (inf-mod (inf-pow x) m) (inf-pow x) (inf-masklt m x)) g)))
+ (defq inf-step8 (pi k nat l nat g (inf-lt k l) (inf-le (add k 8) (add l 7)))
+   (lam k l g (inf-letr (add (add k 1) 7) (add k 8) (add l 7) (natplusassoc k 1 7) (inf-addr (add k 1) l 7 (inf-lt1 k l g)))))
+ (defq inf-basele (pi a nat x nat m nat T nat h (inf-lt m (inf-pow x)) g (inf-le (add a (inf-pow x)) T) (inf-lt (add a m) T))
+   (lam a x m T h g (inf-lttrans (add a m) (add a (inf-pow x)) T (inf-ltaddl a m (inf-pow x) h) g)))
+ ; less taken leaves more
+ (defq inf-subanti (pi a nat b nat c nat g (inf-le a b) (inf-le (natminus c b) (natminus c a)))
+   (lam a (nat_rect (lam q (pi b nat c nat g (inf-le q b) (inf-le (natminus c b) (natminus c q))))
+     (lam b c g (inf-letl (natminus c b) c (natminus c 0) (pathsinv0 nat (natminus c 0) c (natminusn0 c)) (inf-suble c b)))
+     (lam k IH b (nat_rect (lam z (pi c nat g (inf-le (succ k) z) (inf-le (natminus c z) (natminus c (succ k)))))
+       (lam c g (fromempty (inf-le (natminus c 0) (natminus c (succ k))) (nopathstruetofalse g)))
+       (lam m u c (nat_rect (lam y (pi g (inf-le (succ k) (succ m)) (inf-le (natminus y (succ m)) (natminus y (succ k)))))
+         (lam g (idpath false))
+         (lam y v g (IH m y g))
+         c))
+       b))
+     a)))
+ (defq inf-subfrom (pi a nat b nat c nat d nat h (inf-le a b) g (inf-lt b c) p (inf-lt 0 d)
+     (inf-lt (natminus c (add b d)) (natminus c a)))
+   (lam a b c d h g p (inf-lttrans (natminus c (add b d)) (natminus c b) (natminus c a) (inf-subby b c d g p) (inf-subanti a b c h))))
+ ; what is consumed stays within the input, so taking more always lowers what is left
+ (defq inf-substrict (pi a nat b nat c nat h (inf-lt a b) g (inf-le b c) (inf-lt (natminus c b) (natminus c a)))
+   (lam a b c h g (inf-lelt (natminus c b) (natminus c (succ a)) (natminus c a)
+     (inf-subanti (succ a) b c (inf-ltsu a b h)) (inf-subfall c a (inf-lttrans a b c h g)))))
+ (defq inf-consfall (pi ip nat c nat bc nat n nat a nat i (inf-bits-inv ip c bc) g (inf-le ip n) h (inf-lt a c)
+     (inf-lt (natminus (inf-by8 n) c) (natminus (inf-by8 n) a)))
+   (lam ip c bc n a i g h (inf-substrict a c (inf-by8 n) h
+     (inf-letrans c (add c bc) (inf-by8 n) (inf-leaddr c bc) (inf-letr (inf-by8 ip) (add c bc) (inf-by8 n) i (inf-by8mono ip n g))))))
+ ; a table's fact, over its whole domain: none of them answers true, which the kernel can run
+ (defn inf-anyb (pi P (pi k nat bool) n nat bool)
+   (lam P n (nat_rect (lam q bool) false (lam k r (bool_rect (lam b bool) true r (P k))) n)))
+ (defq inf-orl (pi a bool r bool e (paths bool (bool_rect (lam b bool) true r a) false) (paths bool a false))
+   (lam a (bool_rect (lam x (pi r bool e (paths bool (bool_rect (lam b bool) true r x) false) (paths bool x false)))
+     (lam r e (fromempty (paths bool true false) (nopathstruetofalse e)))
+     (lam r e (idpath false))
+     a)))
+ (defq inf-orr (pi a bool r bool e (paths bool (bool_rect (lam b bool) true r a) false) (paths bool r false))
+   (lam a (bool_rect (lam x (pi r bool e (paths bool (bool_rect (lam b bool) true r x) false) (paths bool r false)))
+     (lam r e (fromempty (paths bool r false) (nopathstruetofalse e)))
+     (lam r e e)
+     a)))
+ (defq inf-anyno (pi P (pi k nat bool) n nat e (paths bool (inf-anyb P n) false) k nat g (inf-lt k n) (paths bool (P k) false))
+   (lam P n (nat_rect (lam q (pi e (paths bool (inf-anyb P q) false) k nat g (inf-lt k q) (paths bool (P k) false)))
+     (lam e k g (fromempty (paths bool (P k) false) (nopathsfalsetotrue g)))
+     (lam m IH e k g
+       (inf-case (inf-eqb m k) (lam x (paths bool (P k) false))
+         (lam e1 (transportf nat (lam x (paths bool (P x) false)) m k (inf-eqp m k e1) (inf-orl (P m) (inf-anyb P m) e)))
+         (lam e1 (IH (inf-orr (P m) (inf-anyb P m) e) k (inf-ltne k m (inf-ltsle k m g) e1)))))
+     n)))
+ ; one entry of a table, zero off it
+ (defn inf-tv (pi i nat v nat k nat nat) (lam i v k (bool_rect (lam b nat) v 0 (inf-eqb i k))))
+ ; the code's scale: a symbol times 16 fits its table entry, and doubling through length 15 fits w
+ (defq inf-dkpow (pi a nat k nat (paths nat (inf-dk (inf-pow a) k) (inf-pow (add k a))))
+   (lam a k (nat_rect (lam q (paths nat (inf-dk (inf-pow a) q) (inf-pow (add q a))))
+     (idpath (inf-pow a))
+     (lam j IH (maponpaths nat nat (lam z (add z z)) (inf-dk (inf-pow a) j) (inf-pow (add j a)) IH))
+     k)))
+ (defq inf-topk (pi w nat gw (inf-le 32 w) k nat g (inf-le k 15) (inf-lt (inf-dk (inf-pow 12) k) (inf-pow w)))
+   (lam w gw k g
+     (inf-lttr (inf-pow (add k 12)) (inf-dk (inf-pow 12) k) (inf-pow w)
+       (pathsinv0 nat (inf-dk (inf-pow 12) k) (inf-pow (add k 12)) (inf-dkpow 12 k))
+       (inf-lttrans (inf-pow (add k 12)) (add (inf-pow (add k 12)) (inf-pow (add k 12))) (inf-pow w)
+         (inf-ltaddpos (inf-pow (add k 12)) (inf-pow (add k 12)) (inf-powpos (add k 12)))
+         (inf-powle (succ (add k 12)) w
+           (inf-ltsu (add k 12) w (inf-lelt (add k 12) 27 w (inf-addr k 15 12 g) (inf-lttrans 27 32 w (idpath true) gw))))))))
+ (defq inf-topq (inf-le (inf-by16 (inf-pow 12)) (inf-pow 16))
+   (inf-letr (inf-pow (add 4 12)) (inf-by16 (inf-pow 12)) (inf-pow 16)
+     (pathsinv0 nat (inf-by16 (inf-pow 12)) (inf-pow (add 4 12)) (inf-by16pow 12))
+     (inf-refl (inf-pow 16)))))

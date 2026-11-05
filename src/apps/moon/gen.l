@@ -2727,6 +2727,85 @@
              "s" 's "ns" 'ns "o" 'vs "no" 'vc "p" 'p "np" 'np}
    (ontgt g) " on \(peep g 'tgt 'x64)"
    (asmwhy a b) "it has no lane for (\(show a) \(show b))"
+   (dblab g d) (u64 (fbits d) @ u
+                  (pin (g 'dbls) u 1,
+                   dbname u))
+   ; a little-endian byte gather (T)p[0] | (T)p[1] << 8 | .. off one unsigned char pointer: one load
+   (gather g env e)
+    (!(x64? g || a64? g) || abl? g 'gath || sal? g ? ()
+       (: (orl x) (x @ ('bin '| a b) (orl a + orl b) [x])
+          (unc x) (x @ ('cast _ y) (unc y) x)
+          (kn x) (knum g x @ k (two? k && charm? <k ? <k))
+          ; a term -> [base byte shift type] | ()
+          (trm x)
+           (: sy (x @ ('bin 'shl y2 kx) (kn kx @ s (charm? s ? [y2 s])) [x 0])
+              (!(two? sy) ? ()
+                 (: y <sy ct (y @ ('cast t _) t ()) d (unc y)
+                    (!(two? d && <d = 'deref && elem (rotty g env d) '(uchar cchar)) ? ()
+                       (: A <>d
+                          bk (A @ ('bin '+ b9 kx) (kn kx @ k (charm? k ? [b9 k]))
+                                  ('bin '+ kx b9) (kn kx @ k (charm? k ? [b9 k]))
+                                  [A 0])
+                          (two? bk ? [<bk <>bk <>sy ct]))))))
+          ts (map trm (orl e))
+          n #ts
+          (!(elem n '(2 4 8)) || !(foldl (a \ t \ a && two? t) 1 ts) ? ()
+             (: B <<ts T (ts 0 3)
+                (fit t) (<t = B && <<t = 'var && t 2 = 8 * <>t && t 3 = T)
+                (!(foldl (a \ t \ a && fit t) 1 ts) || !(elem T ints9) || pair? g T ||
+                 tsz g T < n || !(sort (map (t \ <>t) ts) = jot n) ? ()
+                   ['cast T ['deref ['cast ['ptr (n @ 2 'ushort 4 'uint 'ulong)] B]]])))))
+   (lbmen fs l) (!(two? fs) ? 0 ((two? <fs && elem l <fs ? 1 0) + lbmen >fs l))   ; forms naming l
+   ; the reciprocal divide (Granlund-Montgomery, libdivide's derivation) -> [M shift add?]; add?
+   ; is the case where M wants a 65th bit, folded back by hand. M comes back as its signed representative
+   (magic1 d bw sgn)
+    (: L (lg2 d)
+       W (1 << bw)
+       P (1 << (sgn ? (bw - 1 + L) (bw + L)))
+       q (P // d)
+       r (P - q * d)
+       (sig m) (m >= W // 2 ? (m - W) m)
+       (d - r < 1 << L ? [(sig ((q + 1) % W)) (sgn ? (L - 1) L) 0]
+          [(sig ((q + q + (r + r >= d ? 1 0) + 1) % W)) L 1]))
+   ; the immediate lane: the left in a register, a constant on the right -> one imm-form op. a
+   ; pointer +/- scales the constant; an unsigned / or % by a power of two reduces to shr/and. (ty forms) | 'no
+   (pow2? n) (0 < n && 0 = n & (n - 1))
+   ; the selects, tried before the branch lowering -> a value | 'no: `c ? 1 : 0` over a relation is
+   ; its own value; `a < b ? a : b` and its twins are minsd/maxsd (strict lt/gt: <= differs on a
+   ; signed zero); calm, deref-free, non-trapping int arms ride a cmov -- both arms evaluate before
+   ; the condition, so nothing that could fault, trap or be written by it may speculate
+   (relish? e) (two? e && (e @ ('bin op _ _) (elem op '(eq ne lt le gt ge))
+                              ('land _ _) 1 ('lor _ _) 1 ('un 'not _) 1 ()))
+   (rot4? g) (x64t? g || a64? g)             ; carries the rotate ops (ror4/rorv/rorv4); elsewhere the shifts stand
+   (rotc? g w big n)                                ; big reads (W - n), n pure and shared
+    (big @ ('bin '- wide sub)
+             (rotk g wide @ kb
+                (charm? kb && kb = w && sub = n && rotp? n)))
+   (rotk g e)
+    (knum g e @ k (two? k ? <k (cfold !(ilp32? g) e)))
+   ; the rotate idiom (x >> n) | (x << (W - n)), x an unsigned W-bit pure operand: one rotate.
+   ; a rotl count rides negated (the count reads mod W)
+   (rotp? e)                                        ; pure: safe to evaluate once for the source's twice
+    (e @ ((k . _) && elem k '(num flo flof str var)) 1
+         ((k . x . _) && elem k '(deref dot moor addr)) (rotp? x)
+         ('cast _ x) (rotp? x)
+         ('bin _ a b) (rotp? a && rotp? b)
+         ('un _ x) (rotp? x)
+         ())
+   (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width; ilp32's long long is a pair
+    (rotty g env e @ 'uint 32 'ulong (ilp32? g ? 32 64) 'ullong (ilp32? g ? () 64))
+   ; does the AST write anything? a face's base register must survive the rhs, so a
+   ; store rides the face only past a write-free right side (calls clobber the pool too)
+   (wrany? (a . u))
+    (elem a '(asn post call asm vastart vaarg sexpr) || wrany? a || wrany? u)
+   (rotty g env e)                                  ; the operand's declared type, by static peek
+    (e @ ('var _) (peekty g env e @ t (bad? t ? () t))
+         ('cast . ty . _) ty
+         ('deref p) (rotty g env p @ t (? (ptr? t) <>t (arr? t) <>t ()))
+         ('bin op x y && elem op '(+ -))         ; index arithmetic keeps the ptr/arr side's type
+          (rotty g env x @ a
+             (ptr? a || arr? a ? a
+                (rotty g env y @ b (ptr? b || arr? b ? b)))))
    (asmno g msg) (pin g 'nolane msg, 'bad)
    ; an asm's operands seated and its template spelt, for either backend -> [ops9 asgn kills saves csops
    ; labs tls txt neutral? scr] | 'bad: ops9 GNU order, asgn each one's register, kills the caller-saved
