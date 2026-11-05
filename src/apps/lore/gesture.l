@@ -12,7 +12,7 @@
 ;   (gesture-gait st dt v run)            a walker's frame, v metres a second over the ground, run
 ;                                         1 at a sprint: 'wa the stride's show, 'puff 0 to 1, up
 ;                                         at a run and slowly down, 'bp the breath, quicker and
-;                                         harder for it; 'foot 1 as a foot lands, 'gasp 1 or -1
+;                                         harder for it; 'foot 1 as a foot lands
 ;                                         as a breath turns in or out; with 'sway, 'lean a nod
 ;                                         as the walk starts or stops, and nothing else moved
 ;   (gesture-body st)                     what that does to the eye, [up right pitch roll]
@@ -70,11 +70,10 @@
  (gesture-gait st dt v run) (: sw0 (peep st 'sw 0.0) sw (sw0 + pi * v * dt / gait-step) goes (v > 0.2)
    wa0 (peep st 'wa 0.0) wa (wa0 + min 1.0 (dt / 0.12) * ((goes ? (run ? bob-run bob-walk) 0.0) - wa0))
    pf0 (peep st 'puff 0.0) pf (pf0 + (goes && run ? ((1.0 - pf0) * dt / puff-up) (0.0 - pf0 * dt / puff-down)))
-   bp0 (peep st 'bp 0.0) bp (bp0 + dt * (1.55 + 3.4 * pf)) n (floor (bp / pi))
+   bp0 (peep st 'bp 0.0) bp (bp0 + dt * (1.55 + 3.4 * pf))
    _ (? (peep st 'sway 0) (: x (peep st 'lean 0.0) r (peep st 'leanv 0.0 + lean-kick * (v - peep st 'v0 0.0)) e (exp -(lean-w * dt)) q ((r + lean-w * x) * dt)
                             (pins st 'v0 v 'lean ((x + q) * e) 'leanv ((r - lean-w * q) * e))))
-   (pins st 'sw sw 'wa wa 'puff pf 'bp bp 'foot (floor (sw / pi) > floor (sw0 / pi) ? 1 0)
-            'gasp (n > floor (bp0 / pi) ? (int n % 2 = 0 ? 1 -1) 0)))
+   (pins st 'sw sw 'wa wa 'puff pf 'bp bp 'foot (floor (sw / pi) > floor (sw0 / pi) ? 1 0)))
  (gesture-body st) (: wa (peep st 'wa 0.0) sw (peep st 'sw 0.0) pf (peep st 'puff 0.0) bp (peep st 'bp 0.0)
    c (cos (2.0 * sw)) s (sin sw)
    [((0.005 + 0.03 * pf) * sin bp - wa * c) (0.6 * wa * s)

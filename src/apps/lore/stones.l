@@ -4,7 +4,7 @@
 ; walks against, relit as the sun moves. stones-new, stones-step and stones-frame are pure;
 ; only stones-walk and stones-run touch the tty.
 (module (stones stones-run stones-walk stones-main stones-new stones-tap menu-top stones-size stones-detail stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
-         stones-frame stones-pens stones-opts stones-field stones-ground stones-blocks slot-x
+         stones-frame stones-pens stones-steps stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
 (borrow '(rove cli))
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -14,6 +14,8 @@
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (borrow 'mesh)                          ; the triangles, lit and drawn
 (borrow 'gesture)                       ; the eye's kneel, its acts, its rise
+(borrow 'mixer)                         ; a foot's sound
+(borrow 'horn)                          ; song-rate
 (borrow 'window)                        ; how big a tap's window is
 (:
  fps 20
@@ -481,6 +483,11 @@
       (elem a ['strafe-left 'strafe-right]) (: d ((a @ 'strafe-right 1.0 -1.0) * walk-v * dt) th (st 'th)
                                                (put! st (st 'px + d * cos th) (st 'pz - d * sin th)))
       (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
+ ; ..the feet asked for since the last frame, voices of the song from here on
+ (stones-steps s st) (: fx (st 'sfx) at (s 'fpos)
+   (foot f) (: q (step-sound "sand" (f 0 (#(f 0) - 1) - 48)) a (q 0) r (1.0 * q 1 / song-rate)
+     [(at + int (#a / r) + 2) (ix \ peep a (int ((ix - at) * r)) 0.0) 1.15 1.15])
+   (two? fx ? (pin st 'sfx (), pin s 'vs (s 'vs + map foot fx)) s))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain
  (stones-move st) (: g (stones-ground (st 'px) (st 'pz)) y (st 'py) mt (peep st 'mt 0.0 + peep st 'dt (1.0 / fps))
@@ -489,7 +496,8 @@
    _ (drops! st dt)
    ; ..the body, from how far the keys carried it since the last
    _ (: x (st 'px) z (st 'pz) dx (x - peep st 'ox x) dz (z - peep st 'oz z)
-        (gesture-gait (pins st 'ox x 'oz z) dt (st 'eye = 'walk ? (sqrt (2 dx + 2 dz) / dt) 0.0) (mt - peep st 'run-at -9.0 < 0.2)))
+        (gesture-gait (pins st 'ox x 'oz z) dt (st 'eye = 'walk ? (sqrt (2 dx + 2 dz) / dt) 0.0) (mt - peep st 'run-at -9.0 < 0.2),
+         st 'foot = 1 ? (: k (foot-next (peep st 'stepv 0) (st 'sw)) (pin st 'stepv k, mix-cry st ("step sand " + show k) ()))))
    (? (st 'eye = 'move) (: mv (st 'mv) _ (gesture-play st dt spawn!)
                            ; ..and the choices after, a pause on from the move's end
                            (pin st 'dlg-at (st 'eye != 'move && peep mv 'dlg 0 ? (mt + dlg-pause) (st 'dlg-at))))
@@ -621,8 +629,8 @@
                'fps fps 'linger 800 'next () 'win (o 'win)
                ; ..a walking key held walks, but not through the choices
                'held (st \ !(charm? (st 'dlg)))
-               ; ..to apartment's music box and its drone
-               'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
+               ; ..to apartment's music box and its drone, a foot's sound laid in
+               'song (hn \ ((hn ? ((cite 'apartment 'apartment-song-new) hn (wheel (clock 0)))) @ s (s ? (st \ (stones-steps s st, (cite 'apartment 'apartment-song-feed) s)))))})
  ; ..a tap: a choice where the choices are up, else what space does
  ; ..a tap: on the choices, the one it lands on; a top corner leaves; kneeling, it stands; else
  ; the bottom of the screen, or the altar where it is seen, kneels
