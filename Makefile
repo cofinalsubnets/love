@@ -8,7 +8,7 @@ CCACHE :=
 endif
 
 # bootstrap interpreter
-love0 = out/love0
+love0 = $(if $(LOVE),out/drive0,out/love0)
 
 .PHONY: all install uninstall clean distclean host kernel wasm wasm_seat love0 lint ulp fonts web \
   site serve site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
@@ -219,7 +219,6 @@ holocat_dep =
 # is the prerequisite that goes with it -- there is nothing to wait for.
 m = $(LOVE)
 mdep =
-love0 = out/drive0
 $(love0): force_src
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; printf '#!/bin/sh\nexec %s "$$@"\n' '$(LOVE)' > $$tf; chmod 755 $$tf; \
@@ -356,7 +355,7 @@ kore_net = src/apps/tls/bytes.l src/apps/tls/verify.l src/apps/tls/client.l src/
 crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
   src/apps/fat.l \
   src/apps/source.l src/apps/lapiz.l \
-  src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/web.l \
+  src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l src/apps/harp/horn.l \
   src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
@@ -445,7 +444,7 @@ endif
 dist: dist-seed   # the binary, carrying its own source
 
 # what a release is not: the benches and the board seats. the wasm seat rides -- a
-# laid tree serves its own page (`love web`) -- and the page's generated files are
+# laid tree serves its own page (`love site`) -- and the page's generated files are
 # .sbignore's to drop, which selfpack reads too. each nom is matched as a path prefix
 # at a segment boundary (src/tools/selfpack.l).
 dist_drop = bench
@@ -1187,7 +1186,7 @@ site-serve: host out/toolmd.stamp
 # headers, which is what lets the page's machine run without a service worker.
 SERVEPORT ?= 8080
 serve: host
-	@$(ho)/love web -p $(SERVEPORT) $R
+	@$(ho)/love site -p $(SERVEPORT) $R
 
 # `make wasm` is the machine: the kernel module, and the heap image beside it. the module
 # is the KERNEL LANE at $a=wasm -- one roster, one flag set, per-TU objects under out/wasm/
@@ -1205,6 +1204,12 @@ wasm_seat: $(k_mod) $(if $(NODE),$(ko)/wasm/love.image,)
 # ..copied under a second make, whose stat of the module is after the seat laid it
 site-wasm: wasm
 	@$(MAKE) -s web/wasm/love.wasm $(if $(NODE),web/wasm/love.image,)
+.PHONY: site-doom
+# ..and doom for `love site` alone, renamed into place whole. under out/, so never in a commit
+site-doom:
+	@{ DL=$(dl) sh test/gate/dl.sh doomgeneric doom1.wad && $(MAKE) -s wasm DOOM=1 && \
+	   cp out/doom/love.wasm out/doom/site.wasm.tmp && mv out/doom/site.wasm.tmp out/doom/site.wasm; } \
+	   > out/site-doom.log 2>&1 || echo 'site-doom: no prebuilt doom, see out/site-doom.log'
 web/wasm/love.wasm: $(ko)/love.wasm
 	@mkdir -p web/wasm; echo '$(t_cp)	'$@; cp $< $@
 web/wasm/love.image: $(ko)/wasm/love.image

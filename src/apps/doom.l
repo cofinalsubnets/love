@@ -152,6 +152,12 @@
        (enter _) (: _ (note "booting \(mod)")
                     e (ev 'kexec mod "sh -c 'doom; sh'")
                     (fail "cannot boot \(mod) (\(e))"))
+       ; `love site`'s prebuilt, where the origin has one; kexec answers only if it could not boot
+       got "/doom-site.wasm"
+       _ (elem 'kexec (names ()) && !(two? (stat mod)) &&
+          (ev 'fetch "/out/doom/site.wasm" got @
+             0 (note "booting the origin's doom", ev 'kexec got "sh -c 'doom; sh'")
+             _ 0))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
           (two? (stat mod)) (enter 0)
           ; a task shares no environment with its spawner here, so cook's settings go on its line
