@@ -168,7 +168,7 @@
    ; --- encoding ------------------------------------------------------------
    flac-level-bs [1152 1152 1152 4096 4096 4096 4096 4096 4096]
    ; a field keeps its width while its value is () (the head laid ahead), as wrbe would not
-   (flac-be v n) (string (map (k \ (v // (256 ** (n - 1 - k))) % 256) ^n))
+   (flac-be v n) (: w (v = () ? 0 v) (string (map (k \ (w // (256 ** (n - 1 - k))) % 256) ^n)))
    (flac-le v n) (string (map (k \ (v // (256 ** k)) % 256) ^n))
    (flac-unhex h) (string (map (i \ (: (d c) (c < 58 ? (c - 48) (c - 87)) (d (h (2 * i)) * 16 + d (h (2 * i + 1))))) ^(#h // 2)))
    (flac-block last t body) (string [((last ? 128 0) + t)] + flac-be #body 3 + body)
