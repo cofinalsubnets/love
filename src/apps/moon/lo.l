@@ -153,8 +153,9 @@
          _ 'bad)
    ; ins [register vreg].. moved in, the kit's forms, the pair out of rax:rdx
    (lokit g ty pre ins uses defs body)
-    (lomk g @ l (lomk g @ h
-       [ty [l h] (pre + map (p \ ['mov <p <>p]) ins + [['fix uses defs body] ['mov l 'r0] ['mov h 'r2]])]))
+    (!(x64? g) ? (lono g ['kit <body])
+       (lomk g @ l (lomk g @ h
+          [ty [l h] (pre + map (p \ ['mov <p <>p]) ins + [['fix uses defs body] ['mov l 'r0] ['mov h 'r2]])])))
    ; to or from the pair: a word widens, the pair read as a word is its low half, its truth either half
    (lowtr g v ty)
     (? (d128? ty) (lopair g v @ 'bad (lono g ['cast (vty v) ty]) [fs l h] [ty [l h] fs])
@@ -191,8 +192,9 @@
                               [rt [l h] (pre + [['mov l al] [(irop op) l l bl] ['mov h ah] [(irop op) h h bh]])]))
                           ; 0/1 of (r6:r5) cond (rax:rdx)
                           ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
-                           (lomk g @ d ['long d (pre + map (p \ ['mov <p <>p]) lr +
-                                                 [['fix '(r0 r2 r5 r6) '(r0 r1 r2) [['c128r (scc op u) 'r6 'r5]]] ['mov d 'r0]])])
+                           (!(x64? g) ? (lono g ['kit 'c128r])
+                              (lomk g @ d ['long d (pre + map (p \ ['mov <p <>p]) lr +
+                                                    [['fix '(r0 r2 r5 r6) '(r0 r1 r2) [['c128r (scc op u) 'r6 'r5]]] ['mov d 'r0]])]))
                           ; u128 by a divisor whose high half is zero: the dividend in a cell at sp
                           ('/ || '%)
                            (u && lohz? b ?
@@ -862,7 +864,8 @@
      t [ty (t o) (map (p \ lomv (t <p) <>p) ins + map (f \ map (x \ peep t x x) f) fs)])
    ; raw bytes on fixed registers: the operand in r0, the answer out of it, ds what it writes
    (lofix g v ds fs)
-    (lomk g @ d ['long d [['mov 'r0 v] ['fix '(r0) ds fs] ['mov d 'r0]]])
+    (!(x64? g) ? (lono g ['kit fs])
+       (lomk g @ d ['long d [['mov 'r0 v] ['fix '(r0) ds fs] ['mov d 'r0]]]))
    ; one scalar operand -> [ty r fs] | 'bad
    (lobi1 g env e)
     (lox g env e @ ([vt r fs] && losc? vt) [vt r fs]
@@ -891,7 +894,7 @@
        (elem nm '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow"))
         (? (#as != 3) (lono g ['call nm])
            (ovlow g env nm as @
-              () (lobi1 g env <as @ 'bad 'bad
+              () (!(x64? g) ? (lono g ['call nm]) (lobi1 g env <as @ 'bad 'bad
                     a (lobi1 g env <>as @ 'bad 'bad
                          b (lox g env (as 2) @ 'bad 'bad
                               [_ p pf] (lomk g @ t (lomk g @ d
@@ -899,7 +902,7 @@
                                           ['fix '(r0 r1) '(r0 r1)
                                             [['raw ([72] + (nm @ "__builtin_add_overflow" [1 200] "__builtin_sub_overflow" [41 200] _ [15 175 193])
                                                     + [15 144 193 72 15 182 201])]]]
-                                          ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])])))))
+                                          ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])]))))))
               x (lox g env x)))
        ; |x| is infinite: the bits shifted past the sign are inf's
        (nm = "__builtin_isinf")
@@ -959,8 +962,11 @@
              (as (#as - 1) @ ['num o] [o ()]
                              e (lox g env e @ 'bad 'bad [_ _ fs] [5 fs])))
        (fx u d fs) ['fix u d fs]
+       ; t32's exclusive loops keep strex's status in r4, named so the frame saves it
+       (lx u d fs) (fx u d (t32? g ? ('(li r4 0) . fs) fs))
        (? (bad? mo) 'bad
           (kind = 'generic) (lono g ['call nm])
+          (m16? g && elem kind '(rmw tas cas vcas bcas)) (lono g ['atomic nm])
           (kind = 'fence) (lomk g @ d ['long d (<>mo + (<mo = 0 ? () [(fx () () (afence g))]) + [['li d 0]])])
           (kind = 'sfence) (lomk g @ d ['long d (<>mo + [(fx () () (abar g))] + [['li d 0]])])
           (kind = 'lockfree)
@@ -970,23 +976,32 @@
              'bad 'bad
              ([['ptr pt] p pf] && amw g pt)
               (: w (amw g pt) z (lomk g)
-                 (? (kind = 'lock)
+                 ; a fence ahead of a store or a load's read, and after one
+                 fa (mo0 \ (mo0 = 0 || x86? g ? () [(fx () () (afence g))]))
+                 fb (mo0 \ (mo0 = 5 && !(x86? g) ? [(fx () () (afence g))]))
+                 (? (ilp32? g && w = 8) (lono g ['atomic pt])
+                    (elem kind '(rmw cas vcas bcas tas) && !(elem (kind = 'tas ? 1 w) (awidths g))) (lono g ['atomic pt])
+                    (kind = 'lock)
                      (? (nm = "__sync_lock_release")
                          (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
+                            !(x86? g)
+                             ['long z (pf + [['mov 'r1 p] ['li 'r0 0] ['fix '(r0 r1) '(r0 r1) (arel g w)] ['li z 0]])]
                             ['long z (pf + [['li z 0] [(stw w) p 0 z]])])
                         (lobi1 g env (as 1) @
                            'bad 'bad
                            [_ v vf] (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
                                        (lomk g @ d
                                           [pt d (pf + vf + [['mov 'r0 v] ['mov 'r1 p]
-                                                            (fx '(r0 r1) '(r0) [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])
-                                                            ['mov d 'r0]] + map (f \ [<f d]) (rext g pt))]))))
-                    (kind = 'load) (lomk g @ d [pt d (<>mo + pf + [[(ldop pt) d p 0]])])
+                                                            (fx '(r0 r1) (x86? g ? '(r0) '(r0 r2 r3)) (axchg g w))
+                                                            ['mov d 'r0]] + cvt pt d)]))))
+                    (kind = 'load)
+                     (lomk g @ d [pt d (<>mo + pf + fb (<mo) + [[(ldop pt) d p 0]] + fa (<mo))])
                     (kind = 'clear)
-                     ['long z (<>mo + pf + [['li z 0] ['st1 p 0 z]] + (<mo = 5 ? [(fx () () (afence g))]))]
+                     ['long z (<>mo + pf + [['li z 0]] + (<mo = 0 || x86? g ? () [(fx () () (afence g))]) + [['st1 p 0 z]]
+                               + (<mo = 5 ? [(fx () () (afence g))]))]
                     (kind = 'tas)
                      (: o (lomk g) d (lomk g)
-                        ['int d (<>mo + pf + [['li 'r2 1] ['mov 'r1 p] (fx '(r1 r2) '(r0 r3) (armw g 1 'set))
+                        ['int d (<>mo + pf + [['li 'r2 1] ['mov 'r1 p] (lx '(r1 r2) '(r0 r3) (armw g 1 'set))
                                               ['mov o 'r0] ['zx1 o] ['li z 0] ['cmp o z] ['set 'ne d]])])
                     (kind = 'cas)
                      (lobi1 g env (as 1) @ 'bad 'bad
@@ -995,28 +1010,28 @@
                             [_ dv df]
                              (: t (lomk g) o (lomk g) d (lomk g) ok (nlab g ".casok")
                                 ['int d (<>mo + pf + ef + df +
-                                         [[(uldop w) t ep 0] ['mov 'r0 t] ['mov 'r1 p] ['mov 'r2 dv]
-                                          (fx '(r0 r1 r2) '(r0 r2 r3) (acas g w))
+                                         [[(uldop w) t ep 0] ['mov 'r0 t]] + aexp g w + [['mov 'r1 p] ['mov 'r2 dv]
+                                          (lx '(r0 r1 r2) '(r0 r2 r3) (acas g w))
                                           ['mov o 'r0] ['mov d 'r2] ['li z 0] ['cmp d z] ['br 'ne ok]
                                           [(stw w) ep 0 o] ['label ok]])])))
                     (lobi1 g env (as 1) @
                        'bad 'bad
                        [_ v vf]
-                        (? (kind = 'store) ['long z (<>mo + pf + vf + [[(stop pt) p 0 v]] + (<mo = 5 ? [(fx () () (afence g))]))]
+                        (? (kind = 'store) ['long z (<>mo + pf + vf + fa (<mo) + [[(stop pt) p 0 v]] + (<mo = 5 ? [(fx () () (afence g))]))]
                            (kind = 'rmw)
                             (lomk g @ d
-                               [pt d (<>mo + pf + vf + [['mov 'r1 p] ['mov 'r2 v] (fx '(r1 r2) '(r0 r3) (armw g w (k 1)))
-                                                        ['mov d (k 2 = 'new ? 'r3 'r0)]] + map (f \ [<f d]) (rext g pt))])
+                               [pt d (<>mo + pf + vf + [['mov 'r1 p] ['mov 'r2 v] (lx '(r1 r2) '(r0 r3) (armw g w (k 1)))
+                                                        ['mov d (k 2 = 'new ? 'r3 'r0)]] + cvt pt d)])
                            (elem kind '(vcas bcas))
                             (lobi1 g env (as 2) @ 'bad 'bad
                                [_ nv nf]
                                 (lomk g @ d
                                    (kind = 'vcas ?
-                                      [pt d (pf + vf + nf + [['mov 'r0 v] ['mov 'r1 p] ['mov 'r2 nv]
-                                                             (fx '(r0 r1 r2) '(r0 r2 r3) (acas g w)) ['mov d 'r0]]
-                                                    + map (f \ [<f d]) (rext g pt))]
-                                      ['int d (pf + vf + nf + [['mov 'r0 v] ['mov 'r1 p] ['mov 'r2 nv]
-                                                              (fx '(r0 r1 r2) '(r0 r2 r3) (acas g w)) ['mov d 'r2]])])))
+                                      [pt d (pf + vf + nf + [['mov 'r0 v]] + aexp g w + [['mov 'r1 p] ['mov 'r2 nv]
+                                                             (lx '(r0 r1 r2) '(r0 r2 r3) (acas g w)) ['mov d 'r0]]
+                                                    + cvt pt d)]
+                                      ['int d (pf + vf + nf + [['mov 'r0 v]] + aexp g w + [['mov 'r1 p] ['mov 'r2 nv]
+                                                              (lx '(r0 r1 r2) '(r0 r2 r3) (acas g w)) ['mov d 'r2]])])))
                            (lono g ['call nm])))))
              (vt . _) (lono g ['atomic vt]))))
    ; cl the call form, fv the callee's (vreg forms) | (); va also lays al, the vector count
@@ -1396,7 +1411,7 @@
             ['case lo hi] (assoc 'sw env @ [_ tab _] (tab "\(lo):\(hi)" @ () 'bad L [['label L]]) 'bad)
             ['case cv] (assoc 'sw env @ [_ tab ty] (tab (lokey g ty cv) @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ [_ tab _] (tab 'dflt @ () 'bad L [['label L]]) 'bad)
-            ('asm . _) (t32? g ? (lono g 'asm) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a])))))
+            ('asm . _) (!(x64? g) ? (lono g 'asm) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a])))))
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
    ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored
@@ -1793,10 +1808,8 @@
        (ret4? f) (f @ ['raw ([194 4 0] || [102 194 4 0])] 1 ['jmpr 'r3] 1 _ 0)
        ret4 (filter ret4? fs9 @ (x . _) x _ ())
        fs0 (? (sp64? g) (losoft g fs9) (v6m? g) (map (f \ ret4? f ? '(ret) f) (lov6 g (losoft g fs9))) (ia32? g) (map (f \ ret4? f ? '(ret) f) fs9) fs9)
-       (kit? f) (f @ ['fix () () [['trap]]] 0 ['fix _ d _] (d != lokl) _ (two? f && elem <f '(fix raw)))
        (leak? f) (two? f && !(elem <f '(fix jmpt)) && any two? >f)
        (? (ilp32? g && (g 'lowhy || any leak? fs0)) (lono g ['pairleak (filter leak? fs0 @ (x . _) x _ ())])
-          (!(x64? g || v6m? g) && any kit? fs0) (lono g ['kit (filter kit? fs0 @ (x . _) <x _ ())])
     (mprof 'ra0 (_ \ raentry g (t2nx g fs0 @ fs1 (li32 (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs1)) _ (radce g fs1))))) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      mprof 'raplan (_ \ raplan g fs) @ 'bad (lono g 'ra)

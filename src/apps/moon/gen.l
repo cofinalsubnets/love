@@ -2085,6 +2085,30 @@
           body (catall (map tw ([lx] + ops + [sx])) + le2 0x2C00)      ; cmp r4, #0
           dmb (tw 0xF3BF8F5F)
           [['raw (dmb + body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + dmb)]]))   ; bne back
+   ; an exchange: value r0, pointer r1 -> the old value r0, r2 r3 spent
+   (axchg g w)
+    (? (wasm? g) [[(w @ 4 'ldu4 'ld) 'r2 'r1 0] [(stw w) 'r1 0 'r0] '(mov r0 r2)]
+       (a64? g)
+        (nlab g ".ts" @ lb
+           [['label lb]
+            ['raw (w @ 4 '(34 252 95 136) '(34 252 95 200))]   ; ldaxr w2/x2, [x1]
+            ['raw (w @ 4 '(32 124 3 136) '(32 124 3 200))]     ; stxr w3, w0/x0, [x1]
+            '(cmp r3 0) ['br 'ne lb] '(mov r0 r2)])
+       (rv64? g)
+        [['raw (w @ 4 '(47 165 165 12) '(47 181 165 12))]]      ; amoswap.w/d.aq a0,a0,(a1)
+       (t32? g)                                                 ; ldrex r2 / strex r3, r0, [r1] until it holds, dmb
+        (: body (tw 0xE8512F00 + tw 0xE8410300 + le2 0x2B00)    ; cmp r3, #0
+           [['raw (body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + tw 0xF3BF8F5F)]
+            '(mov r0 r2)])
+       [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])   ; xchg eax/rax, (rcx)
+   ; a lock's release: zero in r0, pointer r1
+   (arel g w)
+    (? (a64? g) [['raw (w @ 4 '(32 252 159 136) '(32 252 159 200))]]   ; stlr w0/x0, [x1]
+       (t32? g) ([['raw (tw 0xF3BF8F5F)]] + [['st4 'r1 0 'r0]])                ; dmb sy, then the store
+       (wasm? g) [[(w @ 4 'st4 'st) 'r1 0 'r0]]
+       (rv64? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
+                  [[(w = 4 ? 'st4 'st) 'r1 0 'r0]])
+       [[(w @ 4 'st4 'st) 'r1 0 'r0]])
    ; a compare-and-swap: expected r0 (widened as the loop's load widens), pointer r1, desired r2 ->
    ; the old value r0, success (0/1) r2
    (acas g w)
@@ -2393,29 +2417,12 @@
               !w (nolane g "\(bi) wants an int* or a long*/T** (the pointee sizes the exchange)")
               (bi = "__sync_lock_release")
                (mkv 'long 'r0 (tor0 g e1 +
-                 '((mov r1 r0) (li r0 0)) +
-                 (? (a64? g) [['raw (w @ 4 '(32 252 159 136) '(32 252 159 200))]]   ; stlr w0/x0, [x1]
-                    (t32? g) ([['raw (tw 0xF3BF8F5F)]] + [['st4 'r1 0 'r0]])                ; dmb sy, then the store
-                    (rv64? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
-                             [[(w = 4 ? 'st4 'st) 'r1 0 'r0]])
-                    [[(w @ 4 'st4 'st) 'r1 0 'r0]])))
+                 '((mov r1 r0) (li r0 0)) + arel g w))
               (cgexpr g env <>args () @ e2
                  (bad? e2 ? 'bad
                     (: q1 (tor0 g e1) q2 (asint g e2)
                        pre (pk g q1 q2 'r1)   ; val r0, ptr r1
-                       body (? (a64? g)
-                               (nlab g ".ts" @ lb
-                                  [['label lb]
-                                   ['raw (w @ 4 '(34 252 95 136) '(34 252 95 200))]   ; ldaxr w2/x2, [x1]
-                                   ['raw (w @ 4 '(32 124 3 136) '(32 124 3 200))]     ; stxr w3, w0/x0, [x1]
-                                   '(cmp r3 0) ['br 'ne lb] '(mov r0 r2)])
-                              (rv64? g)
-                               [['raw (w @ 4 '(47 165 165 12) '(47 181 165 12))]]      ; amoswap.w/d.aq a0,a0,(a1)
-                              (t32? g)                                                 ; ldrex r2 / strex r3, r0, [r1] until it holds, dmb
-                               (: body (tw 0xE8512F00 + tw 0xE8410300 + le2 0x2B00)    ; cmp r3, #0
-                                  [['raw (body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + tw 0xF3BF8F5F)]
-                                   '(mov r0 r2)])
-                              [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])   ; xchg eax/rax, (rcx)
+                       body (axchg g w)
                        (mkv pt 'r0 (pre + body + cvt pt 'r0)))))))
        (bi = "__builtin_isinf")
         (cgexpr g env <args () @ e1
