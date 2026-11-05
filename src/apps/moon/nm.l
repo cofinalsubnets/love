@@ -9,13 +9,16 @@
    ; 32-bit indexed loads nor a store of an immediate, riscv only the word and byte twins
    nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
+   ; t32's word is ld4 and st4 too, and it has no float index
+   nmxl32 {'ld 'ldx 'ld4 'ldx 'ldu4 'ldx 'ldu1 'ldxb}
+   nmxs32 {'st 'stx 'st4 'stx 'st1 'stxb}
    nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
    (nmu v) (v < 0 ? (v + 18446744073709551616) v)
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (nmxld op @ () () xo (? (x64? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo)))
-   (nmxsop g op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x64? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxsop g op) (t32? g ? (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
@@ -244,12 +247,12 @@
                 _ (nmxop g op @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
-                _ (nmxsop g op @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
+                _ (nmxsop g op @ () f xo (idx b o @ ([b2 i s o2] && (o2 = 0 || !(t32? g))) [xo b2 i s o2 v] _ f)))
             ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ; an add of a literal onto a literal's sum is one add
             (['add d a k] && cint? k && lovr? a) (base a k @ ([b2 o2] && lovr? b2) ['add d b2 o2] _ f)
-            ['cmp t 0] (nmav av t @ ['and _ a k] ['test a k] _ f)
+            ['cmp t 0] (nmav av t @ (['and _ a k] && (!(charm? k) || immok g 'log k)) ['test a k] _ f)
             f))
 
    ; (op t ..) (mov x t), t's one def and one read: the op writes x

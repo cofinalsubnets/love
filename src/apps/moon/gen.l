@@ -388,8 +388,8 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    ; the targets the new backend lowers by default, and those it knows at all
-   lotgts '(x64 a64 rv64)
-   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || g 'tgt = 'rv64) _ (elem (peep g 'tgt 'x64) lotgts))
+   lotgts '(x64 a64 rv64 thumb2 thumb2sp arm)
+   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || elem (g 'tgt) '(rv64 thumb2 thumb2sp arm)) _ (elem (peep g 'tgt 'x64) lotgts))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
@@ -477,7 +477,7 @@
           (? !(two? se) ()
              (16 < <>se) ()
              ; AAPCS64: an aggregate not of one float base rides gp registers alone
-             (a64? g && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
+             ((a64? g || t32? g) && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
              (: cls {}
                 (mark o c) (: i (o >> 3) old (cls i)
                               (pin cls i (old = 'int || c = 'int ? 'int 'sse)))
@@ -4454,6 +4454,8 @@
        ; live read and the forwarders keep a stale def
        _ (arm '(movqxr) (g \ f \ [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]))
        _ (arm '(movqrx) (g \ f \ [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]))
+       _ (arm '(movrrq) (_ \ f \ [[(f 3)] [(f 1) (f 2)] 1]))
+       _ (arm '(movqrr) (_ \ f \ [[(f 2) (f 3)] [(f 1)] 1]))
        ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
        _ (arm '(movsnxr) (g \ f \ [[<>>f] () ()]))
        _ (arm '(movsnrx) (g \ f \ [() [<>f] 1]))
