@@ -650,7 +650,7 @@
              'bad 'bad
              ty (lomk g @ t ['ulong t [['li t (tsz g ty)]]]))
          ; gcc's &&L
-         ['laddr nm] (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]])
+         ['laddr nm] (wasm? g ? (lono g e) (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]]))
          ['flo v] (lomkf g @ w ['double w (lobits g w (fbits v))])
          ['str s]
           (nlab g ".S" @ lbl
@@ -921,7 +921,7 @@
                                             ['sub u u t] ['lea 'sp u 0] ['lea d 'sp 0]]])))))
           (elem nm '("__builtin_return_address" "__builtin_frame_address"))
            ; riscv's saved ra rides a padded push, and its saved s0 is no caller's base
-           (as @ ([['num k]] && 0 <= k && !(rv64? g && 0 < k))
+           (as @ ([['num k]] && 0 <= k && !(rv64? g && 0 < k) && !(wasm? g && nm = "__builtin_return_address"))
                   (lomk g @ d
                      (pin g 'fesc 1, pin g 'fpin 1,
                       ['(ptr void) d (['lean d 'r4 0] . map (_ \ ['ld d d 0]) ^k +
@@ -979,7 +979,7 @@
                            [_ v vf] (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
                                        (lomk g @ d
                                           [pt d (pf + vf + [['mov 'r0 v] ['mov 'r1 p]
-                                                            (fx '(r0 r1) '(r0) [['raw (w @ 4 '(135 1) '(72 135 1))]])
+                                                            (fx '(r0 r1) '(r0) [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])
                                                             ['mov d 'r0]] + map (f \ [<f d]) (rext g pt))]))))
                     (kind = 'load) (lomk g @ d [pt d (<>mo + pf + [[(ldop pt) d p 0]])])
                     (kind = 'clear)
@@ -1525,7 +1525,7 @@
    ; default -> forms | ()
    (lojt g r tab ks dl)
     (: n #ks lo (two? ks ? <ks 0) span (two? ks ? (ks (n - 1) - lo + 1) 0)
-       (? (n < 6 || 4096 < span || span > 3 * n || two? (tab 'rng) || abl? g 'jtab || njt? g || ilp32? g || !(fits32 lo)) ()
+       (? (n < 6 || 4096 < span || span > 3 * n || two? (tab 'rng) || abl? g 'jtab || njt? g || ilp32? g || wasm? g || !(fits32 lo)) ()
           (nlab g ".J" @ tl (lomk g @ i (lomk g @ t
              (: labs (foldl (l \ k \ elem (tab k) l ? l (tab k . l)) [dl] ks)
                 (pin g 'jtabs ([tl (catall (map (j \ [['fix 4 'rel32 (peep tab (lo + j) dl) 0]]) ^span))] . g 'jtabs),
@@ -1724,13 +1724,13 @@
        (go l)
         (!(two? l) ? l
            (: f <l r >l
-              (f @ ([op d y] && sf-bin1 op)
+              (f @ ([op d y] && v6m? g && sf-bin1 op)
                     ([['movdrx 'r0 d] ['movdrx 'r1 y] '(cuse r0 r1) ['call (sf-bin1 op)] ['movdxr d 'r0]] + go r)
-                   [('cvtsi2ss || 'cvtui2ss) d x]
+                   ([('cvtsi2ss || 'cvtui2ss) d x] && v6m? g)
                     ([['mov 'r0 x] '(cuse r0) ['call (<f = 'cvtsi2ss ? '__aeabi_i2f '__aeabi_ui2f)] ['movdxr d 'r0]] + go r)
-                   [('cvttss2si || 'cvttss2ui) d x]
+                   ([('cvttss2si || 'cvttss2ui) d x] && v6m? g)
                     ([['movdrx 'r0 x] '(cuse r0) ['call (<f = 'cvttss2si ? '__aeabi_f2iz '__aeabi_f2uiz)] ['mov d 'r0]] + go r)
-                   ['ucomiss a b]
+                   (['ucomiss a b] && v6m? g)
                     ([['movdrx 'r0 a] ['movdrx 'r1 b] '(cuse r0 r1)]
                      + (r @ (['set 'eq _] . ['set 'np _] . ['mov d _] . ['and _ _ _] . u)
                               (fcc 'eq (k \ ['set k d]) u + go u)
