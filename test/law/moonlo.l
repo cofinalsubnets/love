@@ -1,11 +1,11 @@
 ; test/law/moonlo.l -- the new backend's invariants (lo.l, ra.l): each check bites a planted break,
 ; then holds over every fn a corpus lowers by the new path. run by test_moon, before moon.l's laws.
 
-; a source by the new path with the checks on -> [fns checked, what broke] | 'bad
-(: (lolaw src)
+; a source by the new path for tgt with the checks on -> [fns checked, what broke] | 'bad
+(: (lolaw src tgt)
     (getenv "MOON_BACKEND" @ b0
      (setenv "MOON_BACKEND" "new", setenv "MOON_LOLAW" "1",
-      (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () 'x64))) @ v
+      (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () tgt))) @ v
         (setenv "MOON_BACKEND" b0, setenv "MOON_LOLAW" (),
          v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad)))
    ; a source through the default backend refused, or griped at
@@ -83,5 +83,8 @@
                  "int main() { switch (1) { case 1 ... 5: return 2; case 3: return 3; } return 0; }"
                  "int main() { switch (1) { case 1: return 2; case 1: return 3; } return 0; }"
                  "int main() { return *bb; }"])
-      (all (src \ lolaw src @ [n ()] (0 < n) _ 0) corpus)
-      (+(map (src \ lolaw src @ [n _] n _ 0) corpus) >= 2 * #corpus)))
+      (all (src \ lolaw src 'x64 @ [n ()] (0 < n) _ 0) corpus)
+      (+(map (src \ lolaw src 'x64 @ [n _] n _ 0) corpus) >= 2 * #corpus)
+      ; off x64, all but x64's asm and the wide pair holds too
+      (: c2 (filter (src \ !(has? src "__asm__" || has? src "__int128")) corpus)
+         (all (t \ all (src \ lolaw src t @ [_ ()] 1 _ 0) c2 && +(map (src \ lolaw src t @ [n _] n _ 0) c2) >= #c2) '(a64 rv64)))))

@@ -337,14 +337,10 @@
                                 (rows 32 33 (rgb 0.25 0.16 0.09)) (rows 48 49 (rgb 0.25 0.16 0.09)) (noise 12 2 0.18) (patches 5 0.2 (shade 0.85)))))
 (: shopwall (texture 32 32 2 '((fill (rgb 0.78 0.72 0.58)) (noise 8 0.06))))
 (: crate (texture 32 32 0.6 '((fill (rgb 0.55 0.4 0.24)) (rows 9 11 (rgb 0.3 0.2 0.11)) (rows 20 22 (rgb 0.3 0.2 0.11)) (noise 10 2 0.2))))
-(: (heap a b c r) (texture 64 64 0.6 [['fill a] ['dots 8 8 r b] ['dots 16 16 (0.8 * r) c] '(noise 2 0.25)]))
-(: apples (heap '(rgb 0.22 0.03 0.03) '(rgb 0.74 0.08 0.06) '(rgb 0.55 0.7 0.12) 3.4))
-(: potatoes (heap '(rgb 0.16 0.11 0.07) '(rgb 0.6 0.45 0.28) '(rgb 0.52 0.38 0.22) 3.8))
-(: onions (heap '(rgb 0.18 0.1 0.05) '(rgb 0.74 0.5 0.22) '(rgb 0.55 0.24 0.42) 3.6))
-(: radishes (heap '(rgb 0.1 0.24 0.08) '(rgb 0.82 0.1 0.26) '(rgb 0.94 0.88 0.9) 2.4))
-(: cabbages (heap '(rgb 0.08 0.2 0.06) '(rgb 0.42 0.62 0.28) '(rgb 0.62 0.78 0.46) 7.2))
-(: carrots (texture 64 64 0.6 '((fill (rgb 0.14 0.09 0.05)) (stripes 6 3 0.4 (rgb 0.9 0.45 0.08))
-                                (within 0 0 64 14 (fill (rgb 0.12 0.32 0.08)) (stripes 3 1 -0.7 (rgb 0.3 0.6 0.15))) (noise 2 0.2))))
+(: apples (pile-skin 'apple 1 0))
+(: potatoes (pile-skin 'potato 1 0))
+(: onions (pile-skin 'onion 1 0))
+(: cabbages (pile-skin 'cabbage 1 0))
 (: countertop (texture 32 32 1 '((fill (rgb 0.2 0.32 0.26)) (noise 6 0.12))))
 ; ..the hot bar a tile two full hotel pans deep and four along, their foods
 (: hotbar (texture 64 24 2 '((fill (rgb 0.6 0.62 0.64))
@@ -373,12 +369,11 @@
 (: shelfsteel (texture 16 16 0.5 '((fill (rgb 0.5 0.52 0.55)) (noise 4 0.15))))
 (: cardboard (texture 32 32 0.5 '((fill (rgb 0.62 0.46 0.28)) (noise 8 0.1) (rows 13 19 (rgb 0.5 0.3 0.16)) (disc 26 6 3 (rgb 0.3 0.45 0.15)))))
 (: cardtop (texture 32 32 0.5 '((fill (rgb 0.66 0.5 0.31)) (cols 15 17 (rgb 0.82 0.74 0.56)) (noise 8 0.1))))
-; ..a produce stand: a crate from x0 z0 to x1 z1, its top sloping down toward face ('n 's 'e
-; or 'w) under its produce
-(: (stand x0 z0 x1 z1 face t) (: lo 8.72 hi 9.02
-     pl (face @ 's [[x0 lo z0] [x1 lo z0] [x0 hi z1]] 'n [[x0 lo z1] [x1 lo z1] [x0 hi z0]]
-               'e [[x1 lo z0] [x1 lo z1] [x0 hi z0]] 'w [[x0 lo z0] [x0 lo z1] [x1 hi z0]])
-     (skin {'walls crate 'floor t} (cut (pl 0) (pl 1) (pl 2) (solid (box [x0 8 z0] [x1 hi z1]))))))
+; ..a produce stand from x0 z0 to x1 z1, sloping down toward face ('n 's 'e or 'w) under a
+; pile of KIND
+(: (stand x0 z0 x1 z1 face k s) (: at [(0.5 * (x0 + x1)) 8 (0.5 * (z0 + z1))] dx (x1 - x0) dz (z1 - z0)
+     deg (face @ 's 0 'n 180 'e 270 'w 90) w (elem face ['s 'n] ? dx dz) d (elem face ['s 'n] ? dz dx)
+     [(furnish 'stand at deg {'w w 'd d}) (pile k at deg s {'w w 'd d})]))
 ; ..a shelf's cartons at y from z 6.78 on, under top: widths and heights by turns, some open
 (: (cartons y top k) (: ws [0.5 0.42 0.55 0.46 0.5 0.44 0.52 0.48] hs [0.32 0.4 0.28 0.45 0.36 0.3 0.42 0.34]
      tops [cardtop apples cardtop potatoes cardtop cardtop onions cardtop cabbages cardtop]
@@ -673,12 +668,12 @@
   (door [-33.25 8 16.6] 1.2 2.2)
   ; ..in from the door, apples on the right and potatoes and onions on the left; along the
   ; west wall carrots, radishes and cabbages
-  (stand -37 17.7 -34.6 18.6 's apples)
-  (stand -37 14.4 -35.9 15.3 'n potatoes)
-  (stand -35.7 14.4 -34.6 15.3 'n onions)
-  (stand -44.5 18.1 -43.6 19.6 'e carrots)
-  (stand -44.5 16.4 -43.6 17.9 'e radishes)
-  (stand -44.5 14.4 -43.6 16.2 'e cabbages)
+  (stand -37 17.7 -34.6 18.6 's 'apple 1)
+  (stand -37 14.4 -35.9 15.3 'n 'potato 2)
+  (stand -35.7 14.4 -34.6 15.3 'n 'onion 3)
+  (stand -44.5 18.1 -43.6 19.6 'e 'carrot 4)
+  (stand -44.5 16.4 -43.6 17.9 'e 'radish 5)
+  (stand -44.5 14.4 -43.6 16.2 'e 'cabbage 6)
   ; ..across from the window the counter: the hot bar under its glass, and the register, its
   ; screens to the shop and the cashier; a gap at its east end into the kitchen
   (skin {'walls crate 'floor countertop} (solid (box [-44.5 8 12] [-38 8.95 12.8])))

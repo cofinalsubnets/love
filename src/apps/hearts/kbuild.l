@@ -260,7 +260,9 @@
      (first r) (filter (w \ !(starts? w "." && findsub w "/" < 0) && findsub w "%" < 0) (r 0))
      gs (two? (a 2) ? (a 2) (take 1 (catmap first (hk-rx nt))))
      seen {}
-     (each gs (x \ hk-make K nt x made seen run), 0))
+     _ (each gs (x \ hk-make K nt x made seen run))
+     ; a sub-make is done when its goals are: a recipe's next line may run what a file goal made
+     (peep made " wait" 0 @ w (lit? w ? (each gs (w * hk-dot)) 0), 0))
 
  ; a make started from the environment, as a recipe's own script starts one (link-vmlinux.sh's
  ; ${MAKE} -f scripts/Makefile.build obj=init ..): each environment variable a variable, as

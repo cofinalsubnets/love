@@ -474,10 +474,9 @@ differed. That instrument costs nothing and nobody had pointed it at the tray op
 
 `test_cts` holds c-testsuite's 220 programs to the output they ship (doc/misc/moon.md). Its roster is
 **refusals only**, each loud and named — no program in the corpus compiles clean and answers
-wrong on any of the three native targets. 212 answer on x64 and 8 refuse (9 on a64, 10 on rv64,
-the target rows below). `roster_wrong` stays in the gate, empty, because the day one comes back
+wrong on any of the three native targets. 217 answer and 3 refuse on each of them. `roster_wrong` stays in the gate, empty, because the day one comes back
 it belongs there and `wrong` is the kind that must stay loud. The wasm lane (`test_cts_wasm`,
-node as the machine) answers 210 with rv64's 9 refusals and carries the roster's one `wrong`
+node as the machine) answers 215 with 4 refusals and carries the roster's one `wrong`
 line — 00187, which writes a file and reads it back where the loader's kernel has no
 filesystem. That is the machine's line, not the compiler's, and it sits under `wrong` so the
 seat growing files is heard.
@@ -650,12 +649,12 @@ never silent**.
 | lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 | arm |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | `__int128` | ✓ | ✓ | — | rt.c | rt.c | — | rt.c |
-| `_Complex` arithmetic | ✓ | ✓ | — | ✓ | — | — | ✓ |
+| `_Complex` arithmetic | ✓ | ✓ | ✓ | ✓ | — | — | ✓ |
 | variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | composite passed at a variadic call site | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| composite NAMED in a variadic parameter list | ✓ | ✓ | — | ✓ | ✓ | — | ✓ |
+| composite NAMED in a variadic parameter list | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -710,16 +709,14 @@ overflow block on x64 (SysV's rule; the param side already bound it there, and t
 `xdrawcursor(int,int,Glyph,int,int,Glyph)` in st). **The SSE twin still refuses**: five
 `struct { float a,b,c; }` by value exhausts xmm0–7 and `cgfn` gives up — the same rule, the
 other register file, and c-testsuite's 00204 is the probe.
-**a64, rv64 and t32 refuse the gp case too** — deliberately, because each has a
-*different* rule:
+**a64, rv64 and t32 take the gp case by different rules:**
 AAPCS64 closes the gp file behind a stack composite (C.13), rv64 SPLITS one across the
 register/stack seam, and thumb2's family splits at r3 only while the stack is empty (the
-caller and callee above). Three rules, three rungs; do not fold them.
+caller and callee above). Three rules; do not fold them.
 
-**A by-value composite NAMED in a variadic parameter list rides x64, a64 and thumb2's family**
-(`vaspill`, `vaspill-a64`, `vaspill-t32`: on t32 every named param is read in place off the
-pushed r0-r3 and the caller's block, the base pcs's rule); `vaspill-rv` refuses the shape, and
-v6-M refuses it whole.
+**A by-value composite NAMED in a variadic parameter list rides x64, a64, rv64 and thumb2's family**
+(on t32 every named param is read in place off the pushed r0-r3 and the caller's block, the base
+pcs's rule); wasm and v6-M refuse it whole.
 that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
 
@@ -729,8 +726,8 @@ and a MEMORY-class one from there; a64 from the x save area, else `__stack` with
 behind it, and its memory class through the slot's pointer; rv64 walks `__ap`. an SSE-touching one
 on x64, an HFA on a64, one aligned past 8, and v6-M refuse; thumb2's family walks `__ap`, a
 composite at its own alignment and a double or pair 8-aligned. the a64 caller lays a 9..16B gp composite
-the registers no longer hold on the stack and closes the file (C.13); rv64's caller still refuses
-that straddle, so 266 sits on rv64's and wasm's unsupported lists.
+the registers no longer hold on the stack and closes the file (C.13); rv64's caller splits that
+straddle, and 266 sits on wasm's unsupported list.
 
 - **register-exhausted stack HFAs on thumb2** (9+ double args), and doubles, pairs and structs
   across a VARIADIC seam on v6-M.

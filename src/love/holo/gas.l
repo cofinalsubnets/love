@@ -1419,12 +1419,16 @@
             ('ins m os) (gt-ins m (map gt-opnd os))
             ()))
 
+   ;; thumb2's written instructions lay as written: holo's flag-setting rewrites are for compiled
+   ;; forms, as a routine may answer in the flags. its branches still relax
+   (gt-asis tgt fs) (tgt = 'thumb1 ? fs (map (f \ (elem <f '(label jmp br) ? f ['asis f])) fs))
+
    ;; file scope: an asm("..") outside any function, or a .s file, is the whole assembler --
    ;; sections, data, exported labels. a run of instructions goes to gas-text; a directive not
    ;; read here scares
    (gf-kin? nm b) (nm = b || starts? nm (b + "."))
-   ; gas's own defaults for a section named without flags: the standard four and their dotted
-   ; kin, .init/.fini, and otherwise none -- not even allocated
+   ; a section's defaults by its name, kept under any flags it is given as well: the standard
+   ; four and their dotted kin, .init/.fini, and otherwise none -- not even allocated
    (gf-dflt nm) (? (gf-kin? nm ".text" || elem nm '(".init" ".fini")) [1 6]
                    (gf-kin? nm ".data") [1 3]
                    (gf-kin? nm ".bss") [8 3]
@@ -1445,7 +1449,7 @@
                           (elem t '("@note" "%note")) 7
                           (scare 'gas-section-type t)))
              <d)
-       fl (1 < #xs ? (gf-flags (xa-unquote (xs 1))) <>d)
+       fl (<>d | (1 < #xs ? (gf-flags (xa-unquote (xs 1))) 0))
        es (0 < (fl & 16) && 3 < #xs ? (xa-trim (xs 3) @ e (xa-num? e ? (xa-num e) 0)) 0)
        [nm ty (fl | es << 32)])
    (gf-width tgt mn) (? (mn = ".byte") 1
@@ -1776,6 +1780,8 @@
                  (two? (req t)) (req t @ (nm rg) (pin rq nm (ssub rg), go >l acc))
                  (w = ".unreq") (pin rq (xa-trim r) (), go >l acc)
                  ; gas's `name = expr` is `.set name, expr`
+                 ; ..but `. = expr` moves the location
+                 (gf-eqset? t && xa-trim (snip t 0 (xa-idx t 61)) = ".") (go ((".org " + snip t (1 + xa-idx t 61) #t) . >l) acc)
                  (gf-eqset? t) (go ((".set " + xa-trim (snip t 0 (xa-idx t 61)) + ", " + snip t (1 + xa-idx t 61) #t) . >l) acc)
                  (elem w '(".set" ".equ"))
                   (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs "")) rv (ssub v)
@@ -2180,10 +2186,14 @@
        (wxlay f t)
         (trap (\ _ ['raw (gf-le (skv f t) (f 2))]) 0
               (\ a b (: w (f 2) site (t (f 3)) t1 (offs 1)
-                         r (gf-sum (f 1) (\ _ _ ()))
+                         r (gf-sum (sxp (f 1) 0) (\ _ _ ()))
                          ns (gbad? r || two? >r ? () (gf-norm <><r))
                          up (filter (p \ >p = 1) ns) dn (filter (p \ >p = -1) ns)
-                         (? (!(#ns = 2 && #up = 1 && #dn = 1)) (scare a b)
+                         k1 <(f 1)
+                         ; a .set name over one label: one this text lays below answers for itself
+                         (? (#ns = 1 && #up = 1)
+                             ['raw (gf-word tgt w (atom? >(f 1) && !(starts? <>k1 ".L") && string? (labs <<up) ? <>k1 (tspell (f 1))) rl)]
+                            (!(#ns = 2 && #up = 1 && #dn = 1)) (scare a b)
                             (: s <<up l <<dn
                                (? (!(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; l in the field's section
                                   ['raw [(fix w (w @ 4 'rel32 2 'rel16 'pc8) (name s) (site + w - t l + <<r))]]))))))
@@ -2252,6 +2262,7 @@
                              !(string? nm) (pin st 'xal ([a s] . peep st 'xal ()))
                              (secs nm @ r
                                 (pin labs a nm,
+                                 pin st 'als ([a s 0] . peep st 'als ()),
                                  pin secs nm [<r <>r (catmap (f \ (f = ['label (name s)] ? [['label (name a)] f] [f])) <>>r)])))))
                 0 (peep st 'alias ()))
        ; .size f, L-f: f's end label beside L's
@@ -2259,17 +2270,20 @@
                           (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (x \ (x = l ? [en x] [x])) <>>r)]))) 0 (st 'order))))
                 0 (peep st 'endat ()))
        ; .set a, s+k: a label of a's own k bytes on from s, in s's section, splitting a run of
-       ; bytes there; one that would land inside a fix, or before an align, stays unlaid
-       (rsplit bs j) (? (j = 0) [() bs] (atom? bs) ()
+       ; bytes there; inside a fix, or any other form, it lays before that with what is left
+       (rsplit bs j) (? (atom? bs) [() () j]
                         (: e <bs n (two? e ? (e 1) 1)
-                           (n > j ? () (rsplit >bs (j - n) @ p (two? p ? [(e . <p) <>p])))))
+                           (n > j ? [() bs j] (rsplit >bs (j - n) @ p [(e . <p) <>p (p 2)]))))
+       (labk l k) (k = 0 ? l [<l <>l k])
        (labin fs off t l)
         (? (off = t) (l . fs)
-           (atom? fs || off > t) ()
+           (atom? fs) [(labk l (t - off))]
+           (off > t) (labk l (t - off) . fs)
            (: f <fs w (fsz f off)
-              (? (<f = 'raw && t < off + w)
-                  (rsplit <>f (t - off) @ p (two? p ? (['raw <p] . l . ['raw <>p] . >fs)))
-                 (labin >fs (off + w) t l @ r (two? r ? (f . r))))))
+              (? (off + w <= t) (f . labin >fs (off + w) t l)
+                 (<f = 'raw) (rsplit <>f (t - off) @ p
+                                ((atom? <p ? () [['raw <p]]) + (labk l (p 2) . ['raw <>p] . >fs)))
+                 (labk l (t - off) . fs))))
        (labpos fs off l) (? (atom? fs) () (<fs = l) off (labpos >fs (off + fsz <fs off) l))
        _ (foldl (\ _ a
                    (: r (trap (\ _ (gf-sum (sxp (sx a) 0) rl)) 0 (\ _ _ 'bad))
@@ -2279,10 +2293,26 @@
                                (: l ['label (name <(ns 0))]
                                   (foldl (\ _ nm (secs nm @ r9 (rev <>>r9) @ fs
                                                     (? (string? (labs a) || !(elem l fs)) 0
-                                                       (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)] @ fs2
-                                                          (two? fs2 ? (pin labs a nm, pin secs nm [<r9 <>r9 (rev fs2)]) 0)))))
+                                                       (pin labs a nm,
+                                                        pin st 'als ([a <(ns 0) <<r] . peep st 'als ()),
+                                                        pin secs nm [<r9 <>r9 (rev (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)]))]))))
                                          0 (st 'order))))))))
                 0 (sort (keys sx)))
+       ; an alias takes its target's size and type, past what its own text says; one k bytes on
+       ; ends k bytes on, so the size still reads the target's
+       (laid? l) (any (nm \ elem l <>>(secs nm)) (st 'order))
+       (beside l n) (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (f \ (f = l ? [n f] [f])) <>>r)]))) 0 (st 'order))
+       _ (foldl (\ _ e (e @ [a s k]
+                          (: szs (peep st 'sizes ())
+                             (szof n) (filter (p \ <p = n) szs)
+                             (typed? n) (laid? ['label (fn-type n)] || laid? ['label (fn-obj n)])
+                             (? (typed? a) 0
+                                (beside ['label (fn-type s)] ['label (fn-type a)],
+                                 beside ['label (fn-obj s)] ['label (fn-obj a)]),
+                              (? (laid? ['label (fn-end a)] || two? (szof a)) 0
+                                 (two? (szof s)) (pin st 'sizes ([a <>(<(szof s))] . szs))
+                                 (beside ['label (fn-end s)] (labk ['label (fn-end a)] k)))))))
+                0 (rev (peep st 'als ())))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
@@ -2305,5 +2335,6 @@
        (g32? tgt) (gx-text32 tgt src)
        (: lc {}
           f (? (tgt = 'a64) ga-line (tgt = 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
-          (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64))))))
+          fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64)))
+          (gthumb? tgt ? (gt-asis tgt fs) fs))))
 ) ; module 'holo

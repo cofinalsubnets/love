@@ -299,6 +299,24 @@
       _ (must "moor-refuses" ("11" = ask "(+ 5 6)"))
       _ (must "moor-standing" (i0 = ask chidx))
 
+      ; 6a. fullscreen, then sunk: the client hears it left the state, and can ask again
+      wf (w1 + 30)
+      (fs? w) (any (= a-fs) (x-getprop-atoms s w a-st))
+      (floating? w) ("1" = ask ("(wsfloating? (cap (lux-st ())) " + show w + ")"))
+      _ (mkwin s wf root)
+      _ (waitp "fs-managed" (u \ "1" = ask ("(wsknownw? (cap (lux-st ())) " + show wf + ")")) 50)
+      _ (cmsg wf a-st 1 a-fs 0)
+      _ (waitp "fs-floats" (u \ floating? wf) 50)
+      _ (must "fs-stamped" (fs? wf))
+      _ (ask ("(sink! " + show wf + ")"), nudge ())
+      _ (waitp "fs-sunk-unstamped" (u \ !(fs? wf)) 50)
+      _ (cmsg wf a-st 1 a-fs 0)
+      _ (waitp "fs-floats-again" (u \ floating? wf && fs? wf) 50)
+      _ (cmsg wf a-st 0 a-fs 0)
+      _ (waitp "fs-removed" (u \ !(floating? wf) && !(fs? wf)) 50)
+      _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wf, x-flush s)
+      _ (waitp "fs-gone" (u \ "0" = ask ("(wsknownw? (cap (lux-st ())) " + show wf + ")")) 50)
+
       ; 6b. a layout is the tag's own: flip on tag 1, view tag 2 (the configured stack), tag 1 kept its flip
       _ (ask "(msg! 'next-layout)")
       _ (nudge ())
@@ -490,12 +508,18 @@
                            r (: (go acc) (see p @ (-1 || 10) acc ch (go (acc + string ch)))
                                 (go ""))
                            (close p, r))))
+      wz (w1 + 31)                                                               ; fullscreen across the restart: adopted tiled, unstamped
+      _ (mkwin s wz root)
+      _ (waitp "wz-managed" (u \ "1" = ask ("(wsknownw? (cap (lux-st ())) " + show wz + ")")) 50)
+      _ (cmsg wz a-st 1 a-fs 0)
+      _ (waitp "wz-stamped" (u \ fs? wz) 50)
       _ (ask "(pin lux-cell 'gen 'old)")
       pid0 (ask "(getpid 0)")
       (say rc "(lux-restart ())\n", flush rc,
        waitp "restart-reborn" (u \ = "()" (askonce "(peep lux-cell 'gen ())")) 100,
        waitp "restart-same-pid" (u \ = pid0 (askonce "(getpid 0)")) 50,
        waitp "restart-adopts" (u \ any (k \ = k wr) (x-getprop-atoms s root a-li)) 100,
+       waitp "restart-unstamps" (u \ !(fs? wz)) 100,
        close rc,
 
        close s3, close s,

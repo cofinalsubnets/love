@@ -608,13 +608,14 @@
  ; from the way it faces most, a floor's or a wall's; a corner's normal across its neighbours;
  ; one beyond or hither carries its class over its texture's index, as facets' seen takes it
  (drape-mesh d tt) (: rs (d 'rows) i (tix tt (d 'tex) + 16777216 * peep d 'seen 0) t (tt (tix tt (d 'tex))) k (t 1 / t 3) R #rs C #<rs
-   (at r c) ((r < 0) || (r >= R) || (c < 0) || (c >= C) ? () (rs r c))
+   wr (peep d 'wrap 0)
+   (at r c) (? ((r < 0) || (r >= R)) () (wr > 0) (rs r ((c + C - 1) % (C - 1))) ((c < 0) || (c >= C)) () (rs r c))
    (or a b) (a @ () b a)
    (nrm r c p) (: dr (c+ (or (at (r + 1) c) p) (c* -1.0 (or (at (r - 1) c) p))) dc (c+ (or (at r (c + 1)) p) (c* -1.0 (or (at r (c - 1)) p)))
                   n (cross dr dc) (dot n n < 1e-12 ? [0.0 1.0 0.0] (unit n)))
    pn (foldl (\ m q (: p (rs (q 0) (q 1)) (p @ () m (pin m (q 0 * C + q 1) [p (nrm (q 0) (q 1) p)])))) {} (catmap (r \ map (c \ [r c]) ^C) ^R))
    (face ks) (: s (foldl (\ a q (c+ a (pn q 1))) [0.0 0.0 0.0] ks)
-     (abs (s 1) >= max (abs (s 0)) (abs (s 2)) ? 1 (abs (s 0) > abs (s 2) ? 0 2)))
+     (? (wr > 0) 1 (abs (s 1) >= max (abs (s 0)) (abs (s 2))) 1 (abs (s 0) > abs (s 2)) 0 2))
    qs (catmap (r \ catmap (c \ (: ks [(r * C + c) (r * C + c + 1) ((r + 1) * C + c + 1) ((r + 1) * C + c)]
                                         (all (q \ pn q != ()) ks ? [[ks (face ks)]] ()))) ^(C - 1)) ^(R - 1))
    ; ..a vertex to each corner and way it is laid
@@ -630,7 +631,9 @@
    (wide t r) (: w (foldl (\ a c (: p (rs r c) (p @ () a (: g (a 1 @ () 0.0 (a 2 + gone (a 1) p)) [([c g] . a 0) p g])))) [() () 0.0] ^C)
      (foldl (\ t q (pin t (r * C + q 0) (q 1 - 0.5 * w 2))) t (w 0)))
    vs (al @ () {} (foldl wide {} ^R))
-   (laid kk ax p) (al @ () (uv ax p) [(k * us (kk // C)) (k * peep vs kk 0.0)])
+   ; ..or wrapped: its picture once round each thing, across the points and down its wr rows
+   (round kk) [(1.0 * t 1 * (kk % C) / (C - 1)) (1.0 * t 2 * ((kk // C) % (wr + 1)) / (wr - 1))]
+   (laid kk ax p) (? (wr > 0) (round kk) (al = ()) (uv ax p) [(k * us (kk // C)) (k * peep vs kk 0.0)])
    (id q j) (peep (ix 0) (3 * (q 0 j) + q 1) 0)
    (mesh (map (v \ (: e (pn (v 0)) (e 0 + laid (v 0) (v 1) (e 0) + e 1 + white))) (rev (ix 2)))
          (catmap (q \ [[(id q 0) (id q 1) (id q 2) i] [(id q 0) (id q 2) (id q 3) i]]) qs)))
@@ -2247,9 +2250,9 @@
            'neon "pv___" 'sconce "pvv__" 'sign "p___" 'poster "p___" 'flames "_s" 'prism "_s" 'drape "_r"
            'coarse "_P" 'whole "P" 'skin "_P" 'solid "P" 'air "P" 'box "pp" 'room "pp" 'street "pp"
            'window "pp_" 'grav "pp_" 'door "p__" 'strip-light "p" 'bin "p_____"
-           'furnish "_pb_" 'sweep "s___" 'lathe "p___" 'rock "p__" 'plant "p__"}
+           'furnish "_pb_" 'sweep "s___" 'lathe "p___" 'rock "p__" 'plant "p__" 'produce "p__" 'pile "_pb__"}
  rw-square ['box 'room 'street 'window 'grav 'door 'strip-light]
- rw-still ['bin 'lathe 'rock 'plant]
+ rw-still ['bin 'lathe 'rock 'plant 'produce]
  ; ..a swing of d degrees, a quarter's exact, shifted by t
  (rw-op d t) (: q (floor (d / 90.0 + 0.5)) e (d - 90.0 * q) sq (-1e-9 < e && e < 1e-9) qn ((q % 4 + 4) % 4)
    {'deg d 'sq sq 'qn qn 'co (sq ? (qn @ 0 1.0 1 0.0 2 -1.0 3 0.0) (cos (d * pi / 180.0)))
