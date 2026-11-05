@@ -136,7 +136,7 @@
    (nmwide h m) (foldl (t \ k \ (m k @ v (pin t k (h k @ () (nmstep v) x (v <= x ? v (nmstep v)))))) {} (keys m))
    (nmstep v) (v <= 4294967295 ? 4294967295)
    ; the next form reads the flags a compare left
-   (nmflg? u) (u @ ((('br || 'set) . _) . _) 1 _ 0)
+   (nmflg? u) (u @ ((('br || 'set || 'cmov) . _) . _) 1 _ 0)
    (nmcp w) (foldl (t \ k \ (w k @ () t v (pin t k v))) {} (keys w))
    ; two blocks' bounds where they join: the looser of each both know
    (nmmeet a b) (foldl (t \ k \ (a k @ () t x (b k @ () t y (pin t k (max x y))))) {} (keys a))
@@ -186,12 +186,14 @@
        (dv f) (f @ (('udiv . d . a . b . _) && pw (kv b)) [['mov d a] ['shr d (nmlog (kv b))]]
                    (('urem . d . a . b . _) && pw (kv b) && imma g 'and (kv b - 1)) [['and d a (kv b - 1)]]
                    _ ())
-       ; a compare of two known values decides its branch, lo.l laying a compare before each. in a
+       ; a compare of two known values decides its branch or select, lo.l laying a compare before each. in a
        ; block a value of more defs is known too, from its last literal
        (kb t x) (cint? x ? x (peep t x () @ () (k x) n n))
        (kbr l t)
         (l @ ((['cmp a b] . ['br cc L] . u) && cint? (kb t a) && cint? (kb t b) && peep nmcc cc ())
               (nmcc cc (kb t a) (kb t b) ? (['jmp L] . kbr u t) (kbr u t))
+             ((['cmp a b] . ['cmov cc d s] . u) && cint? (kb t a) && cint? (kb t b) && peep nmcc cc ())
+              (kbr (nmcc cc (kb t a) (kb t b) ? (['mov d s] . u) u) t)
              (f . u)
               (f . kbr u (f @ ('label . _) {}
                               ['li d n] (pin t d n)

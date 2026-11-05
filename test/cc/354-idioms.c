@@ -11,8 +11,8 @@ int main(void){ long vs[] = {0,1,-1,2,-2,7,-7,8,-8,9,-9,99,-99,100,-100,1000,-10
   S(short,7);S(unsigned char,5);
   puts("");
   int a=(int)v,b=(int)(v>>3); unsigned u=(unsigned)v; unsigned long w=(unsigned long)v; double d=(double)v,e=(double)b;
-  printf("%d %d %d %ld %u %lu %u %lu %g %g %g %g\n", a<b?a:b, a>b?a:b, a?b:7, a==3?v:w, u>3?u:a, (u>>5)|(u<<27)?w:3, (u>>5)|(u<<27), (w<<13)|(w>>51), d<e?d:e, d>e?d:e, d<e?e:d, d>e?e:d);
-  int n=(a&31)+1; if(n==32)n=1; printf("%u %u %lu\n",(u>>n)|(u<<(32-n)),(u<<n)|(u>>(32-n)),(w>>n)|(w<<(64-n)));
+  printf("%d %d %d %ld %u %lu %u %lu %g %g %g %g\n", a<b?a:b, a>b?a:b, a?b:7, a==3?v:w, u>3?u:a, (u>>5)|(u<<27)?w:3, (u>>5)|(u<<27), (w<<13)|(w>>(8*sizeof w-13)), d<e?d:e, d>e?d:e, d<e?e:d, d>e?e:d);
+  int n=(a&31)+1; if(n==32)n=1; printf("%u %u %lu\n",(u>>n)|(u<<(32-n)),(u<<n)|(u>>(32-n)),(w>>n)|(w<<(8*sizeof w-n)));
   unsigned char p[8]; for(int j=0;j<8;j++)p[j]=(unsigned char)(w>>(j*8));
   printf("%u %lu %u\n",(unsigned)p[0]|(unsigned)p[1]<<8|(unsigned)p[2]<<16|(unsigned)p[3]<<24,(unsigned long)p[0]|(unsigned long)p[1]<<8|(unsigned long)p[2]<<16|(unsigned long)p[3]<<24|(unsigned long)p[4]<<32|(unsigned long)p[5]<<40|(unsigned long)p[6]<<48|(unsigned long)p[7]<<56,(unsigned short)((unsigned)p[0]|(unsigned)p[1]<<8));
  }
