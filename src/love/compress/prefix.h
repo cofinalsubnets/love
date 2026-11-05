@@ -7,28 +7,7 @@
 // a tab entry is (symbol << 4) | length, 0 meaning walk it; sym (nsym) and tab (1 << root) are the caller's
 struct inf_code { uint16_t cnt[16], *sym, *tab; unsigned root; };
 
-static inline void inf_build(struct inf_code *c, const uint8_t *lens, unsigned nsym,
-                             uint16_t *sym, uint16_t *tab, unsigned root) {
- unsigned ofs[16], l, i, code = 0, idx = 0, size = 1u << root;
- memset(c->cnt, 0, sizeof c->cnt);
- memset(sym, 0, (size_t) nsym * sizeof *sym);
- memset(tab, 0, (size_t) size * sizeof *tab);
- for (i = 0; i < nsym; i++) c->cnt[lens[i]]++;
- c->cnt[0] = 0;                                  // a zero length is no code
- ofs[1] = 0;
- for (l = 1; l < 15; l++) ofs[l + 1] = ofs[l] + c->cnt[l];
- for (i = 0; i < nsym; i++) if (lens[i]) sym[ofs[lens[i]]++] = (uint16_t) i;
- c->sym = sym; c->tab = tab; c->root = root;
- for (l = 1; l < 16; l++) {                      // canonical order, shortest first
-  for (i = 0; i < c->cnt[l]; i++, code++) {
-   unsigned s = sym[idx++], rev = 0, b, j;
-   if (l > root) continue;
-   for (b = 0; b < l; b++) rev |= ((code >> b) & 1) << (l - 1 - b);   // the code, as read
-   for (j = rev; j < size; j += 1u << l)
-    if (!tab[j]) tab[j] = (uint16_t) ((s << 4) | l); }
-  code <<= 1; } }
-
-// the walk for codes past the table: an entry, or -1 where none matches
+// the build of the table, and the walk for codes past it: an entry, or -1 where none matches
 #include "inf_gen.h"
 
 // lengths for the counts in hc, nsym of them (under 4096): the leaves sorted by count, ties to
