@@ -83,7 +83,7 @@
    (dw-msg lay msg z) (msg @ 'expand (rt-set lay 1 (lay 1 * 1.1))       ; expand/shrink nudge the spiral ratio
                              'shrink (rt-set lay 1 (mx2 1.05 (lay 1 / 1.1))))
 
-   ; --- BSP: mitty's wharf plan as a layout, synced with the row on every tile: a new window
+   ; --- BSP: pier's wharf plan as a layout, synced with the row on every tile: a new window
    ;     splits the focused one (else the last) along `dir` at `pct`, a gone one gives its half
    ;     to its sibling. gap is between halves, in the rect's units ---
    ; the record: ['bsp plan dir pct gap], plan () until the first tile meets a window

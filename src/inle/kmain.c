@@ -1066,7 +1066,7 @@ static void pipe_wclose(int fd) {
   k_row_zero(fd);
   if (p) p->wrefs--, pipe_free(p); }
 
-// the pty: master, slave and signal rows over one k_pty. the master (a mitty pane) writes keys
+// the pty: master, slave and signal rows over one k_pty. the master (a pier pane) writes keys
 // through the line discipline into in and reads out; the slave the other way, \n as \r\n under
 // opost. ^C ^\ ^Z put a signal on the signal row for the tethering task to answer with still.
 // cooked, a read takes at most one whole line, ^D on an empty one the end; raw as the host's
@@ -2310,7 +2310,7 @@ void kmain(void) {
   }
   // the crew off the registry's miss, every boot: the load is idempotent, its source row the guard
   r = evals_(r, "((cite 'verbs 'fills) crewload)");
-  // the program word dispatches off the registry. an empty line is a mitty, lush in its
+  // the program word dispatches off the registry. an empty line is a pier, lush in its
   // first pane; once that ends or fails, the console shell
   r = evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = evals_(r,
@@ -2324,7 +2324,7 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = evals_(r,
-   "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
+   "(: pr (k-prog (. \"pier\" (. \"--here\" ())))"
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare's face on serial before reset

@@ -320,7 +320,7 @@
    (go 0))
  ; ..a terminal that shows kitty's pixels, by its environment
  (mesh-kitty? _) (: (has e s) (has? (getenv e) s)
-   (? (0 < #(getenv "MITTY")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
+   (? (0 < #(getenv "MITTY") + #(getenv "PIER")) 1 (has "TERM" "kitty") 1 (0 < #(getenv "KITTY_WINDOW_ID")) 1
       (has "TERM_PROGRAM" "ghostty") 1 (has "TERM_PROGRAM" "WezTerm") 1 0))
  ; ..and a picture taken down
  (mesh-kitty-del id) "\(esc)_Ga=d,d=I,i=\(id),q=2\(esc)\\"

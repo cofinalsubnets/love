@@ -1,13 +1,13 @@
-; test/gate/kmitty.l -- test_kmitty: an empty boot line brings the x64 console up a mitty, lush in
+; test/gate/kpier.l -- test_kpier: an empty boot line brings the x64 console up a pier, lush in
 ; its first pane. keys go in through qemu's monitor (sendkey, the console's own keyboard): a
 ; command runs in the pane and its answer is painted, `exit` ends the last pane and the console
 ; shell stands in, and (reset 0) at it ends the machine -- qemu exits by itself, never by the
 ; ceiling. the serial line mirrors the console; a marker is read with the escapes stripped,
-; since the mitty paints its cells between them. argv = (this elf); run on the host love.
+; since the pier paints its cells between them. argv = (this elf); run on the host love.
 (borrow 'posix)
 
 (: elf <>argv
-   dir ("/tmp/kmitty-" + show (getpid 0))
+   dir ("/tmp/kpier-" + show (getpid 0))
    _ (mkdir dir 448)
    ser (dir + "/serial") disk (dir + "/disk")
    mach (hark ["uname" "-m"])
@@ -52,7 +52,7 @@
    tail (text 0 @ t (snip t (max 0 (#t - 600)) #t))
    _ (hark ["rm" "-rf" dir])
    (ok1 && bar && ok2 && ok3 && self
-    ? (puts "kmitty: ok -- the console came up a mitty, lush ran in its pane, exit gave the shell, reset ended the machine\n")
-    (say err ("test_kmitty FAILED: prompt " + show ok1 + " bar " + show bar + " answer " + show ok2
+    ? (puts "kpier: ok -- the console came up a pier, lush ran in its pane, exit gave the shell, reset ended the machine\n")
+    (say err ("test_kpier FAILED: prompt " + show ok1 + " bar " + show bar + " answer " + show ok2
               + " shell " + show ok3 + " exit " + show st + "\n-- the console's last words:\n" + tail + "\n"),
      quit 1)))

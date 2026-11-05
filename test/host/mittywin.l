@@ -1,4 +1,4 @@
-; test/host/mittywin.l -- `love mitty --window` under Xvfb: pixels read by GetImage, keys
+; test/host/mittywin.l -- `love mitty` and `love pier --window` under Xvfb: pixels read by GetImage, keys
 ; sent by XTEST; the child paints red, green, blue as its input arrives. no Xvfb -> a skip
 ; run: cat test/00-init.l test/host/mittywin.l | out/love
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
@@ -15,7 +15,7 @@
    dn (rdnum >xv)
    _ (test (charm? dn))
    kid "[ \"$COLORTERM\" = truecolor ] && printf '\\033[41m  \\033[m'; read l; [ \"$l\" = a ] && printf '\\033[42m  \\033[m'; read m; [ \"$m\" = a ] && printf '\\033[44m  \\033[m'; sleep 60"
-   ph (tether ["env" "HORN=none" "MITTY=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--window" "sh" "-c" kid])
+   ph (tether ["env" "HORN=none" "PIER=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "pier" "--window" "sh" "-c" kid])
    _ (rest 4000)
    XW (cite 'xwire)
    (w8 s v) (XW 'x-w8 s v) (w16 s v) (XW 'x-w16 s v) (w32 s v) (XW 'x-w32 s v)
@@ -51,7 +51,7 @@
    _ (test ([0 128 0] = until 4 20 [0 128 0] 40))                ; green: the child read `a`
    ; GetSelectionOwner
    (owner a) (: _ (w8 s 23, w8 s 0, w16 s 2, w32 s a, XW 'x-flush s) hdr (XW 'x-reply s) (XW 'u32 hdr 8))
-   ; a plain drag where the mitty wants no press is the window's too: it takes the primary
+   ; a plain drag where the pier wants no press is the window's too: it takes the primary
    _ (fakeat 6 0 4 8, fake 4 1, fakeat 6 0 30 8, fakeat 6 0 60 8, fake 5 1)
    _ (rest 300)
    _ (test (win = owner 1))
@@ -67,19 +67,19 @@
    _ (test (win = owner cb))
    _ (fakeat 6 0 300 200)
    right0 (lit 400 0 240 64)
-   _ (chord 38, tap 55)                                          ; C-a v: a pane beside
+   _ (chord 56, tap 55)                                          ; C-b v: a pane beside
    (grew n) (lit 400 0 240 64 @ v (right0 < v || n < 1 ? v (rest 100, grew (n - 1))))
    right1 (grew 60)
    _ (test (right0 < right1))
-   _ (chord 38, tap 53)                                          ; C-a x
+   _ (chord 56, tap 53)                                          ; C-b x
    _ (rest 1500)
-   _ (chord 38, tap 53)                                          ; ..and the child's
+   _ (chord 56, tap 53)                                          ; ..and the child's
    (wfn p n) (gather p @ g2 (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
    st (wfn <ph 5000)
-   ; --plain: the program alone in the window, so C-a is its own and it ends the window
+   ; love mitty: the program alone in the window, so C-a is its own and it ends the window
    _ ((two? st ? 0 (still <ph 15, wfx <ph)), test (two? st) (0 = <st))
    kid2 "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = \"$(printf '\\001')\" ] && printf '\\033[42m  \\033[m'; read m"
-   ph2 (tether ["env" "HORN=none" "MITTY=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--plain" "sh" "-c" kid2])
+   ph2 (tether ["env" "HORN=none" "MITTY=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "mitty" "sh" "-c" kid2])
    _ (rest 3000, pin on () (top ()))
    _ (test ([128 0 0] = until 4 4 [128 0 0] 40))
    _ (chord 38, tap 36)
