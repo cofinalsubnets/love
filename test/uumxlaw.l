@@ -12,12 +12,12 @@
 (test
  (defq mx-add-factors-through-bands
    (paths bool
-     (mxsq (lam a (lam b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband b))))))
+     (mxsq (lam a b (nateqb (mxadd a b) (mxaddband (mxband a) (mxband b)))))
      true)
    (idpath true))
  (defq mx-mul-factors-through-bands
    (paths bool
-     (mxsq (lam a (lam b (nateqb (mxmul a b) (mxmulband (mxband a) (mxband b))))))
+     (mxsq (lam a b (nateqb (mxmul a b) (mxmulband (mxband a) (mxband b)))))
      true)
    (idpath true)))
 
@@ -28,17 +28,17 @@
    (paths bool (mxall mxnl (lam l (nateqb (mxmirror (mxmirror l)) l))) true)
    (idpath true))
  (defq mx-add-dispatch-commutes
-   (paths bool (mxsq (lam a (lam b (nateqb (mxadd a b) (mxmirror (mxadd b a)))))) true)
+   (paths bool (mxsq (lam a b (nateqb (mxadd a b) (mxmirror (mxadd b a))))) true)
    (idpath true))
  (defq mx-mul-dispatch-commutes
-   (paths bool (mxsq (lam a (lam b (nateqb (mxmul a b) (mxmirror (mxmul b a)))))) true)
+   (paths bool (mxsq (lam a b (nateqb (mxmul a b) (mxmirror (mxmul b a))))) true)
    (idpath true)))
 
 ; --- the partition, named: the numeric band, the text band, and kmint alone ---
 (test
  ; mxnumeric is mx.l's mx-numk, lifted
- (defn mxiff (pi a bool (pi b bool bool))            ; uuval's beqb sorts after this file
-   (lam a (lam b (orb (andb a b) (andb (negb a) (negb b))))))
+ (defn mxiff (pi a bool b bool bool)            ; uuval's beqb sorts after this file
+   (lam a b (orb (andb a b) (andb (negb a) (negb b)))))
  (defn mxpoint (pi k nat bool) (lam k (nateqb (mxband k) (mxband mxKMint))))
  ; exactly mx-numk is the numeric band
  (defq mx-numerics-one-band

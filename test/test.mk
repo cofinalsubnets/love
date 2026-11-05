@@ -371,13 +371,14 @@ test_moon: host $(love0)
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
 mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:kinds-h:mx-ok src/love/nifs.h:src/love/nifs.l:nifs-h:nifs-ok \
-         src/love/quay/xterm256.h:src/love/quay/quay.l:q-c:q-ok src/love/quay/cp437.h:src/love/quay/quay.l:q-437:q-437-ok src/love/love_data.ld:src/love/mx.l:mx-ld:mx-ok
+         src/love/quay/xterm256.h:src/love/quay/quay.l:q-c:q-ok src/love/quay/cp437.h:src/love/quay/quay.l:q-437:q-437-ok src/love/love_data.ld:src/love/mx.l:mx-ld:mx-ok \
+         src/love/compress/inf_gen.h:src/love/compress/inf.l:inf-h:inf-ok test/uuinfvc.l:src/love/compress/inf.l:inf-vc:inf-ok
 # \# is load-bearing: a bare # in a make variable starts a comment
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
 # the egg lane: the crew in the warm book shadows names these generators use
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld "(src/love/mx.l + src/love/nifs.l + quay.l on $m)"
+	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h uuinfvc.l "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # each header depends on its table alone ($(m) would close a loop); with no love it stands
@@ -397,7 +398,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h and src/love/love_data.ld regenerate identically"
+	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h and uuinfvc.l regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 # test_moonfuzz -- each test/cc file mutated eight ways: no scare, no hang, G1 where it parses.
 # mooncc runs in this process, so the budget reaches it (peak ~215 MB, passes at 60; ~1 min)

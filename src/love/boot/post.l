@@ -1602,8 +1602,8 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defn defq GLOB HELPC lof rejects vof)
-(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {})
+(module '(uu axm bridge capp chk conv defcx defn defq defvc GLOB HELPC lof rejects sugar vof)
+(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
@@ -1797,25 +1797,53 @@
          (inf-spine cx en d (inf cx en d <t) >t))))
 
 ; --- drivers: defn checks then pins; an axiom's value is its own neutral name; rejects runs a
+; sugar, gone before the kernel sees a term: (pi x A y B C) and (lam x y b) nest, and a context
+; defcx names binds its telescope, (under cx C) as pis and (given cx b) as lams. the exporters read it too
+(: (cx-of c) (CX c @ b (two? b ? b (scare 'uu-no-context c)))
+   (pis r) (r @ [b] (sugar b) (x . A . u) ['pi x (sugar A) (pis u)])
+   (lams r) (r @ [b] (sugar b) (x . u) ['lam x (lams u)])
+   (cx-pis bs b) (bs @ ([x A] . u) ['pi x A (cx-pis u b)] (sugar b))
+   (cx-lams bs b) (bs @ ([x _] . u) ['lam x (cx-lams u b)] (sugar b))
+   (sugar t)
+    (atom? t ? t
+     (t @ ('pi . r) (pis r)
+          ('lam . r) (lams r)
+          ['under c b] (cx-pis (cx-of c) b)
+          ['given c b] (cx-lams (cx-of c) b)
+          (map sugar t)))
+   ; (defcx name [parent] (x A) ..): a parent's binders first
+   (defcx nm r)
+    (: own (x \ [<x (sugar (x 1))])
+     (pin CX nm (name? <r ? (cx-of <r + map own >r) (map own r)), nm)))
+
 ; thunk expecting the kernel to refuse
-(: (defn nm T t)
-   (: Tv (chk 0 0 0 T 'UU,
+(: (defn nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
      pin GLOB nm [Tv (vof 0 t)],
      pin SRC nm [t],
      nm))
-   (axm nm T)
-   (chk 0 0 0 T 'UU,
-    pin GLOB nm [(vof 0 T) ['nv nm]],
-    nm)
+   (axm nm T0)
+   (: T (sugar T0)
+    (chk 0 0 0 T 'UU,
+     pin GLOB nm [(vof 0 T) ['nv nm]],
+     nm))
    ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
    ; never builds its beta-normal form
-   (defq nm T t)
-   (: Tv (chk 0 0 0 T 'UU,
+   (defq nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
      pin GLOB nm [Tv ['nv nm]],
+     nm))
+   ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
+   ; ran, and a cite of it is unbound
+   (defvc nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
+          vof 0 T)
+    (chk 0 0 0 t Tv,
+     pin GLOB nm 1,
      nm))
    (rejects th)
    (: r (call-cc (k \ (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
@@ -1883,7 +1911,9 @@
 (: q (map qlit)
  (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
   :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
-  :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l))))
+  :: 'defvc (l \ l @ [_ _ _] (defvc . q l) (scare 'uu-defq-arity l)),
+  :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l)),
+  :: 'defcx (l \ [defcx (qlit <l) (qlit >l)])))
 
 ) ; module uu
 
