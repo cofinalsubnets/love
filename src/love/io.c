@@ -641,7 +641,7 @@ lvm(lvm_gem) {
  Sp[0] = mk_gem(&Hp, (flo_t) d);
  love_musttail return Next(1); }
 
-// (string x): a charlist, a name or a charm's low byte as a string; other kinds through hook 7
+// (string x): a list's charms, a name or a charm's low byte as a string; other kinds through hook 7
 lvm(lvm_string) {
  word x = Sp[0];
  if (charmp(x)) {
@@ -657,12 +657,14 @@ lvm(lvm_string) {
   Sp[0] = nm ? word(nm) : word(EmptyString);
   love_musttail return Next(1); }
  if (chainp(x)) {
-  uintptr_t n = llen(x), req = str_width(n);
+  uintptr_t n = 0;
+  for (word l = x; chainp(l); l = B(l)) n += charmp(A(l));
+  uintptr_t req = str_width(n);
   Have(req);
   struct str *s = (void*) Hp;
   Hp += req;
   ini_str(s, n);
-  for (uintptr_t i = 0; n--; x = B(x)) txt(s)[i++] = (char) getcharm(A(x));
+  for (uintptr_t i = 0; chainp(x); x = B(x)) if (charmp(A(x))) txt(s)[i++] = (char) getcharm(A(x));
   love_musttail return Answer(word(s)); }
  if (caskp(x)) {
   uintptr_t n = len(cask(x)->str), req = str_width(n);

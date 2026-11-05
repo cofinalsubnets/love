@@ -212,7 +212,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
    ;     the paper, 8 by 16 a cell ---
    (glass t)
     (window-open 640 480 "tuner" @ wd
-     (? !(tablet? wd) (say err "tuner: no window (\(wd))\n", 1)
+     (? !(tablet? wd) (say err "tuner: no window (\(show wd))\n", 1)
         (tuner-glass t wd, window-close wd, 0)))
    ; t's frames on wd until a close, esc, q or t's own end; a frame follows every turn's events
    (tuner-glass t wd)

@@ -748,7 +748,7 @@
                        st (stat p)
                        (? !(two? st) a
                           (sdir? st) "\(a)\(f)/\n\(mcshape "\(p)/")"
-                          "\(a)\(f)\n\(st)\n")))
+                          "\(a)\(f)\n\(show st)\n")))
            "" (sort (readdir d)))
    ; the toolchain dirs, as bytes and as shape
    (mcsrctext home) (mctree "\(home)include/" + mctree "\(home)lib/")
@@ -780,7 +780,7 @@
        src (two? ims ? (mcsrcid home) "")
        ; the ablation knob compiles a different runtime; unset stays out of the key
        ab (getenv "MOON_ABLATE" @ s (string? s && 0 < #s ? "\nabl \(s)" ""))
-       (two? ims ? (sha256 "moon-rt 2\n\(x)\n\(mccid x)\n\(ims)\n\(src)\(ab)")))
+       (two? ims ? (sha256 "moon-rt 2\n\(x)\n\(mccid x)\n\(show ims)\n\(src)\(ab)")))
    ; an entry, read back and checked for its magic -> (1 bytes) | ()
    (mcget d f mag)
     (: r (uread (d + f))
@@ -799,7 +799,7 @@
    (mccid p)
     (: st (stat p)
        d (mcdir ())
-       k (string? d && two? st && sha256 "moon-cid 1\n\(p)\n\(st)")
+       k (string? d && two? st && sha256 "moon-cid 1\n\(p)\n\(show st)")
        hit (string? k && mcget d "\(k).cid" "cid1 ")
        (two? hit && utime "\(d)\(k).cid" (clock ()),        ; the sweep orders by use
         two? hit ? (snip <>hit 5 69)
