@@ -513,6 +513,16 @@
           ra ['cast (vty va) ['bin op (cp a) ['bin '* b ra]]]
           (rb && op = '+) ['cast (vty vb) ['bin '+ (cp b) ['bin '* a rb]]]
           ()))
+   ; an int's + - * ride a long, overflow left to the word. beside an unsigned int C says the
+   ; int converts, so a long this tree calls an int does
+   (lo32i? g env e)
+    (e @ ['bin ('+ || '- || '* || '/ || '% || '& || '| || '^) a b] (lo32i? g env a && lo32i? g env b)
+         ['bin ('shl || 'shr) a _] (lo32i? g env a)
+         ['un ('neg || 'bnot) x] (lo32i? g env x)
+         ['cond _ a b] (lo32i? g env a && lo32i? g env b)
+         _ (elem (lopeek g env e) '(int short schar char cchar uchar ushort bool)))
+   (loui g env e v w)
+    (two? v && two? w && vty v = 'long && u32? g (vty w) && lo32i? g env e ? (lotr g v 'uint) v)
    ; -- binary operators over two values --
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
@@ -633,8 +643,9 @@
             ['un 'not x] (lobr g env x (sense ? 0 1) L)
             (['bin op a b] && locmp? op)
              (lox g env a @ 'bad 'bad
-                va (lox g env b @ 'bad 'bad
-                      vb (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb))
+                va0 (lox g env b @ 'bad 'bad
+                      vb0 (: va (loui g env a va0 vb0) vb (loui g env b vb0 va0)
+                            (? ((lofl? (vty va) || lofl? (vty vb)) && losv? (vty va) && losv? (vty vb))
                              (lofbr g op va vb sense L)
                             (lopr? g va vb)
                              (lop g va @ [fa al ah] (lop g vb @ [fb bl bh]
@@ -642,7 +653,7 @@
                             !(losc? (vty va) && losc? (vty vb))
                              (lobin g op va vb () @ [_ d fs] (fs + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]) 'bad)
                             (loz g va vb @ [_ x fx] (loz g vb va @ [_ y fy]
-                               (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]]))))))
+                               (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]])))))))
             (lox g env e @ ([ty r fs] && pair? g ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
                            ([ty r fs] && lofl? ty) (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z (lobits g z 0)] sense L))
@@ -731,7 +742,7 @@
           (lolv g env dst @ 'bad 'bad
              l (: lb (lolvbare l)
                   vo (lorv g lb) vr (lox g env rhs)
-                  (lobin g op vo vr (elem op '(shl shr) ? (lok g rhs)) @ 'bad 'bad
+                  (lobin g op vo (elem op '(shl shr) ? vr (loui g env rhs vr vo)) (elem op '(shl shr) ? (lok g rhs)) @ 'bad 'bad
                      r (lost g lb r @ [fs [ty x _]] [ty x (lolvfs l + fs)] 'bad))))
          ['cast 'void x] (lox g env x @ [_ _ fs] ['void () fs] 'bad)
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
@@ -808,17 +819,18 @@
                                             _ 'bad)
                                          _ 'bad))
                                   !(losv? (vty va) && losv? (vty vb)) (lono g ['cond (vty va) (vty vb)])
-                                  (: ta (vty va) tb (vty vb)
+                                  (: xa (loui g env a va vb) xb (loui g env b vb va) ta (vty xa) tb (vty xb)
                                      fl (lofl? ta || lofl? tb)
                                      rt (? (ptr? ta) ta (ptr? tb) tb fl (ta = 'double || tb = 'double ? 'double 'float) (rbin g ta tb))
                                      (z v w) (fl ? (lotr g v rt) (loz g (lotr g v rt) w))
-                                     (z va vb @ [_ x fx] (z vb va @ [_ y fy] (lomkv g rt @ d
+                                     (z xa xb @ [_ x fx] (z xb xa @ [_ y fy] (lomkv g rt @ d
                                         [rt d (fc + fx + lomvs d x + [['jmp ld] ['label le]] + fy + lomvs d y + [['label ld]])]))))))))))
          ['bin op a b]
           (: kb (elem op '(shl shr) ? (lok g b))
              va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
-             (lovstep g op a b va vb @ () (lobin g op va vb kb) x (lox g env x)))
+             (: sh (elem op '(shl shr)) va2 (sh ? va (loui g env a va vb)) vb2 (sh ? vb (loui g env b vb va))
+                (lovstep g op a b va2 vb2 @ () (lobin g op va2 vb2 kb) x (lox g env x))))
          ; a64 walks the lines; elsewhere the args for their effects alone
          ['call ['var "__builtin___clear_cache"] as]
           (a64? g && #as = 2 ?
