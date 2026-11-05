@@ -17,13 +17,13 @@
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x64? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
    (nmxsop g op) (t32? g ? (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
    (nmfuse g fs)
-    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu && (x64? g || a != 'sp))
+    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu && (x86? g || a != 'sp))
            ([op d a b] . nmfuse g u)
           (f . u) (f . nmfuse g u)
           _ ())
@@ -175,7 +175,7 @@
                            (cint? x && elem op racomm && imma g op x) [op d b x]
                            f))
                     ['cmp a b] (k b @ () f n (imma g 'cmp n ? ['cmp a n] f))
-                    ([op b o v] && x64? g && nmsi op) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
+                    ([op b o v] && x86? g && nmsi op) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
                     ['mov d y] (k y @ () f n ['li d n])
                     f)
        ; an unsigned divide or remainder by a power of two: a shift or a mask
@@ -279,7 +279,7 @@
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
        kv (foldl (t \ f \ (f @ (['li k n] && lovr? k && peep dn k 0 = 1) (pin t k n) _ t)) {} fs)
        (p2 n) (cint? n && 1 < n && n & (n - 1) = 0)
-       (x64? g ? fs
+       (x86? g ? fs
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)

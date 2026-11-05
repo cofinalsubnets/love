@@ -13,10 +13,12 @@
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
+               (ia32? g) '(r0 r1 r2 r5 r6 r3)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
                (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
+               (ia32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
    ; what a call clobbers: the caller-saved gp file and every float register the pool takes
@@ -71,7 +73,7 @@
                      'fldx (f @ [_ d b i _ _] [[b i] [d]] _ (gen f))
                      'fstx (f @ [_ b i _ _ v] [[b i v] ()] _ (gen f))
                      'ctl [() ()]
-                     'div (f @ (_ . d . a . b . t) (x64? g ? [[a b] [d 'r0]] [[a b] (d . t)]) _ (gen f)))
+                     'div (f @ (_ . d . a . b . t) (x86? g ? [[a b] [d 'r0]] [[a b] (d . t)]) _ (gen f)))
            (gen f))) @
      'bad 'bad
      'call [() <>(rasets g)]
@@ -139,7 +141,7 @@
                ; a sub's right side outlives its def, which may not overwrite it before the subtract;
                ; a remainder's scratch is written before its operands are done
                (late i) (ft i @ (['sub _ _ b] && raok? g b) [(id b)]
-                                ((op _ a b _) && elem op '(rem urem) && !(x64? g)) (map id (filter (raok? g) [a b]))
+                                ((op _ a b _) && elem op '(rem urem) && !(x86? g)) (map id (filter (raok? g) [a b]))
                                 _ ())
                ; open: each id live here, to the end of its range. a form touches only what it names
                (blk s e)
@@ -164,7 +166,7 @@
                (link2 a b) (raok? g a && raok? g b ? (: x (id a) y (id b) (link x y, link y x)))
                _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
                                 ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
-                                ((op . d . _) && elem op divops && x64? g) (pin forb (id d) ['r2])
+                                ((op . d . _) && elem op divops && x86? g) (pin forb (id d) ['r2])
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
                loc {}
