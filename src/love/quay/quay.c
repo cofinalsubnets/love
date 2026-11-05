@@ -59,7 +59,7 @@ void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16, c->pgen = 0;
   cb_store(c, sn);
   cb_hist(c, 0), c->twin = 0;
-  c->flag = cb_show | cb_wrap;
+  c->flag = cb_show | cb_wrap, c->nokeys = 0;
   c->arg = 0, c->esc = 0, c->pn = 0, c->on = 0, c->rd = 0, c->ps = 0;
   c->ucp = 0, c->un = 0, c->ol = 0, c->clip = 0, c->cn = 0, c->cst = 0, c->cfz = 0;
   for (int k = 0; k < 8; k++) c->dmg[k] = 0;
@@ -925,7 +925,7 @@ static void cb_ris(struct cb *c) {
   c->gset = c->sgset = 0;
   c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0;
   c->top = 0, c->bot = c->rows - 1u;
-  c->flag = (uint16_t) (cb_show | cb_wrap | lnm);
+  c->flag = (uint16_t) (cb_show | cb_wrap | lnm), c->nokeys = 0;
   c->wpos = c->spos = 0;
   c->esc = 0, c->pn = 0, c->arg = 0, c->on = 0, c->un = 0, c->ol = 0, c->sslot = 0, c->sm = 0, c->kopen = 0;
   c->ps = 0;
@@ -992,6 +992,7 @@ static void cb_rqm(struct cb *c, int priv) {
   else if (p == 1006) s = f & cb_msgr ? 1 : 2;
   else if (p == 2004) s = f & cb_paste ? 1 : 2;
   else if (p == 2027) s = f & cb_gc ? 1 : 2;
+  else if (p == 7727) s = c->nokeys ? 1 : 2;
   else if (p == 47 || p == 1047 || p == 1049) s = f & cb_alt ? 1 : 2;
   cb_say(c, priv ? "\033[?" : "\033["), cb_sayn(c, p), cb_say(c, ";"), cb_sayn(c, (uint32_t) s), cb_say(c, "$y"); }
 
@@ -1010,6 +1011,7 @@ static void cb_mode(struct cb *c, int priv, int on) {
     else if (p == 1006) c->flag = on ? c->flag | cb_msgr : c->flag & (uint16_t) ~cb_msgr;
     else if (p == 2004) c->flag = on ? c->flag | cb_paste : c->flag & (uint16_t) ~cb_paste;
     else if (p == 2027) c->flag = on ? c->flag | cb_gc : c->flag & (uint16_t) ~cb_gc;
+    else if (p == 7727) c->nokeys = on ? 1 : 0;
     else if (p == 6) {
       c->flag = on ? c->flag | cb_origin : c->flag & (uint16_t) ~cb_origin;
       cb_goto(c, 0, 0); }

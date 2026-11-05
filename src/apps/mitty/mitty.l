@@ -699,11 +699,106 @@
                     (window-show win (a * 16) ((b + 1) * 16), two? l ? (run <l <l >l) 0))
      (two? ys ? (run <ys <ys >ys) 0, cur))
 
+ ; --- a window's face over the screen in box gx: its events, the pointer, the selection, and the
+ ;     paper where the screen changed. held keeps the keys and the press. o is what it faces: 'send
+ ;     bytes for the program; 'wants r c b whether it takes a press; 'size r c a new grid; 'paste
+ ;     text; 'close; 'key k, 1 for a key of its own; 'turn each turn. answers the loop to twirl ---
+ (mw-face win gx font held dirty o)
+  (: send (o 'send)
+     (soil _) (pin dirty () (max 1 (peep dirty () 0)))
+     ; the pointer, sent in the form the glass was asked for, a move once a cell;
+     ; the window's own where the mitty wants no press, or under shift. a press
+     ; decides for its drag and release
+     (point how b x y) (: sc (peep gx () 0)
+                          row (max 0 (min (gaze sc 1 - 1) (y // 16))) col (max 0 (min (gaze sc 2 - 1) (x // 8)))
+                          at (row * 65536 + col)
+                          bb (how = 2 ? (peep held 'btn 3) (peep mw-xbtn b 3))
+                          mine (? (how != 0 && charm? (peep held 'btn ())) (peep held 'mine 0)
+                                  (held 'shift || !(gaze sc 3 & 7680) || !(o 'wants row col bb)) 1
+                                  0)
+                          _ (how = 0 ? (pin held 'mine mine) 0)
+                          (how = 2 && at = peep held 'at -1 ? 0
+                             (: _ (pin held 'at at)
+                                (? (mine && bb < 3)
+                                    (mw-choose win sc held how bb ((row - gaze sc 8) * gaze sc 2 + col), soil 0)
+                                   mine 0
+                                   (send (mouse sc (bb + mw-mods held) row col how))))))
+     ; the keys the window keeps: ctrl+shift+C and V, shift+Insert
+     (ours k) (? (held 'ctrl && held 'shift && k = 46)
+                   (peep gx () 0 @ sc (gaze sc 10 < gaze sc 11 ? (window-own win 'clipboard (copied sc (gaze sc 10) (gaze sc 11))) 0), 1)
+                 (held 'ctrl && held 'shift && k = 47) (window-ask win 'clipboard, 1)
+                 (held 'shift && !(held 'ctrl) && k = 338) (window-ask win 'primary, 1)
+                 0)
+     (event e) (: k (e 1)
+                  (? (<e = 'down) (: md (peep mw-modkeys k ())
+                                     (? md (pin held md 1) (ours k) 0 ((peep o 'key (_ \ 0)) k) 0 (send (mitty-keybytes k held))))
+                     (<e = 'up) (peep mw-modkeys k () @ md (md ? (pin held md ()) 0))
+                     (<e = 'text) (held 'ctrl || held 'alt ? 0 (send k))
+                     (<e = 'press) (: _ (pin held 'btn (peep mw-xbtn k 3)) (point 0 k (e 2) (e 3)))
+                     (<e = 'release) (: v (point 1 k (e 2) (e 3)) _ (pin held 'btn ()) v)
+                     (<e = 'move) (point 2 0 (e 1) (e 2))
+                     (<e = 'size) (: r2 (max 2 ((e 2) // 16)) c2 (max 20 ((e 1) // 8)) sc (peep gx () 0)
+                                     (pin gx () (regrid sc (cask (regrid sc () r2 c2)) r2 c2),
+                                      o 'size r2 c2,
+                                      pin dirty () 2))
+                     (<e = 'paste) (o 'paste k)
+                     (<e = 'lost) (k = 'primary ? (pin held 'sel (), select (peep gx () 0) 0 0 -1, soil 0) 0)
+                     (<e = 'close) (o 'close ())
+                     0))
+     (look last) (: _ (each (window-events win) event)
+                    _ (o 'turn ())
+                    d (peep dirty () 0)
+                    l2 (0 < d ? (pin dirty () 0, mw-paint win gx font (d = 2) last) last)
+                    (peep held 'over () ? () (rest 8, look l2)))
+     look)
+
+ ; -f FONT.hex, leading a window's words: the font, and the words past it
+ (mw-font as) (? (two? as && <as = "-f" && two? >as) (uread <>as @ t (two? t ? (font-hex <>t))))
+ (mw-args as) (? (two? as && <as = "-f") (two? >as ? >>as ()) as)
+
+ ; --- mitty-plain: a program in a window on the one screen, with no mitty between: the terminal
+ ;     alone. argv as mitty-window's, the shell when none; it ends with the program. answers 0, or
+ ;     1 and why it could not. a program asks a phone's keyboard away by ?7727 ---
+ (mitty-plain as0)
+  (: font (mw-font as0) as (mw-args as0)
+  (window-open 640 384 "mitty" @ win
+   (? !(tablet? win) (say err ("mitty: no window (" + show win + ")\n"), flush err, 1)
+      (: wh (window-size win) r (max 2 ((wh 1) // 16)) c (max 20 (<wh // 8))
+         me (selfpath 0)
+         _ (setenv "COLORTERM" "truecolor")
+         _ (setenv "MITTY" "--here")                  ; its pictures take, as a mitty's do
+         p (hopen (two? as ? as (string? me ? [me "lush"] ["sh"])) r c)
+         (? (atom? p) (say err ("mitty: cannot start: " + show p + "\n"), flush err, window-close win, 1)
+            (: gx (hbox p) m (hmas p) dirty {1} held {'typing 1}
+               _ (window-typing win 1)
+               (send s) (0 < #s ? (peer (peep gx () 0) 0, say m s, flush m) 0)
+               ; shift with pgup and pgdn look back, half a screen at a time
+               (key k) (: sc (peep gx () 0) n (gaze sc 1 // 2)
+                          (? !(held 'shift) 0
+                             (k = 329) (peer sc (gaze sc 8 + n), pin dirty () 2, 1)
+                             (k = 337) (peer sc (max 0 (gaze sc 8 - n)), pin dirty () 2, 1)
+                             0))
+               ; the clipboard and the keyboard, as the program last said
+               (turn _) (: sc (peep gx () 0) want (gaze sc 13 ? 0 1)
+                           (clipped sc @ (pc + ";" + d) (d = "" || d = "?" ? 0 (window-own win 'clipboard (b64d d))) _ 0,
+                            want = held 'typing ? 0 (pin held 'typing want, window-typing win want)))
+               look (mw-face win gx font held dirty
+                     {'send send 'key key 'wants (r \ c \ b \ 1) 'size (r \ c \ settty m r c)
+                      'paste (t \ 0 < #t ? (send (pasted (peep gx () 0) t)) 0)
+                      'close (_ \ still (hpid p) 1) 'turn turn})
+               face (twirl (_ \ look -1) 0)
+               (moor-to gx m m dirty,
+                waitfor (hpid p),
+                pin held 'over 1,
+                landed? face ? (catch face) (freeze face),
+                close m,
+                window-close win,
+                0)))))))
+
  ; --- mitty-window: the mitty for the shell (argv in its first pane, when given) in a window
  ;     of 80 by 24 cells. answers 0, or 1 and why it could not ---
  (mitty-window as0)
-  (: font (? (two? as0 && <as0 = "-f" && two? >as0) (uread <>as0 @ t (two? t ? (font-hex <>t))))
-     as (? (two? as0 && <as0 = "-f") (two? >as0 ? >>as0 ()) as0)
+  (: font (mw-font as0) as (mw-args as0)
   (window-open 640 384 "mitty" @ win
    (? !(tablet? win) (say err ("mitty: no window (" + show win + ")\n"), flush err, 1)
       (: wh (window-size win) r (max 2 ((wh 1) // 16)) c (max 20 (<wh // 8))
@@ -730,48 +825,8 @@
                                    (two? at && wharf-id at != hb 'focus) 1
                                    (two? p && hpty? p) (gaze (peep (hbox p) () 0) 3 & 7680 ? 1 0)
                                    0))
-               ; the pointer, sent in the form the glass was asked for, a move once a cell;
-               ; the window's own where the mitty wants no press, or under shift. a press
-               ; decides for its drag and release
-               (point how b x y) (: sc (peep gx () 0)
-                                    row (max 0 (min (gaze sc 1 - 1) (y // 16))) col (max 0 (min (gaze sc 2 - 1) (x // 8)))
-                                    at (row * 65536 + col)
-                                    bb (how = 2 ? (peep held 'btn 3) (peep mw-xbtn b 3))
-                                    mine (? (how != 0 && charm? (peep held 'btn ())) (peep held 'mine 0)
-                                            (held 'shift || !(gaze sc 3 & 7680) || !(hubs row col bb)) 1
-                                            0)
-                                    _ (how = 0 ? (pin held 'mine mine) 0)
-                                    (how = 2 && at = peep held 'at -1 ? 0
-                                       (: _ (pin held 'at at)
-                                          (? (mine && bb < 3)
-                                              (mw-choose win sc held how bb ((row - gaze sc 8) * gaze sc 2 + col), soil 0)
-                                             mine 0
-                                             (send (mouse sc (bb + mw-mods held) row col how))))))
-               ; the keys the window keeps: ctrl+shift+C and V, shift+Insert
-               (ours k) (? (held 'ctrl && held 'shift && k = 46)
-                             (peep gx () 0 @ sc (gaze sc 10 < gaze sc 11 ? (window-own win 'clipboard (copied sc (gaze sc 10) (gaze sc 11))) 0), 1)
-                           (held 'ctrl && held 'shift && k = 47) (window-ask win 'clipboard, 1)
-                           (held 'shift && !(held 'ctrl) && k = 338) (window-ask win 'primary, 1)
-                           0)
-               (event e) (: k (e 1)
-                            (? (<e = 'down) (: md (peep mw-modkeys k ())
-                                               (? md (pin held md 1) (ours k) 0 (send (mitty-keybytes k held))))
-                               (<e = 'up) (peep mw-modkeys k () @ md (md ? (pin held md ()) 0))
-                               (<e = 'text) (held 'ctrl || held 'alt ? 0 (send k))
-                               (<e = 'press) (: _ (pin held 'btn (peep mw-xbtn k 3)) (point 0 k (e 2) (e 3)))
-                               (<e = 'release) (: v (point 1 k (e 2) (e 3)) _ (pin held 'btn ()) v)
-                               (<e = 'move) (point 2 0 (e 1) (e 2))
-                               (<e = 'size) (: r2 (max 2 ((e 2) // 16)) c2 (max 20 ((e 1) // 8)) sc (peep gx () 0)
-                                               (pin gx () (regrid sc (cask (regrid sc () r2 c2)) r2 c2),
-                                                pin hb 'csize [r2 c2],
-                                                pin dirty () 2))
-                               (<e = 'paste) (0 < #k ? (send ("\e[200~" + k + "\e[201~")) 0)
-                               (<e = 'lost) (k = 'primary ? (pin held 'sel (), select (peep gx () 0) 0 0 -1, soil 0) 0)
-                               (<e = 'close) (each (wharf-panes (hb 'plan)) (id \ (hpane hb id @ p (hpty? p ? (still (hpid p) 1) 0))))
-                               0))
                up (twirl (_ \ oars hb 0) 0)
                pump (twirl (_ \ moor-to gx fin kout dirty) 0)
-               ; the glass's turn: the window's events, then the paper where the glass changed
                ; the mitty writes every cell of a frame, and a write ends the glass's
                ; selection: it is kept here with its text, and laid again while that holds
                (keep _) (: sc (peep gx () 0) s0 (gaze sc 10) s1 (gaze sc 11) k (peep held 'sel ())
@@ -782,12 +837,11 @@
                ; the bar while there is more than one pane or face to show on it
                (lone _) (: want (1 < #(wharf-panes (hb 'plan)) || two? (hfaces hb) ? 1 0)
                            (want = peep hb 'bar 0 ? 0 (pin hb 'bar want, hrelay hb, hsoil hb)))
-               (look last) (: _ (each (window-events win) event)
-                              _ (keep 0)
-                              _ (lone 0)
-                              d (peep dirty () 0)
-                              l2 (0 < d ? (pin dirty () 0, mw-paint win gx font (d = 2) last) last)
-                              (peep held 'over () ? () (rest 8, look l2)))
+               look (mw-face win gx font held dirty
+                     {'send send 'wants hubs 'size (r \ c \ pin hb 'csize [r c])
+                      'paste (t \ 0 < #t ? (send ("\e[200~" + t + "\e[201~")) 0)
+                      'close (_ \ each (wharf-panes (hb 'plan)) (id \ (hpane hb id @ p (hpty? p ? (still (hpid p) 1) 0))))
+                      'turn (_ \ (keep 0, lone 0))})
                face (twirl (_ \ look -1) 0)
                (hswim hb 1,                                   ; ... until the last pane empties
                 map (t \ landed? t ? (catch t) (freeze t)) (hb 'jobs),
@@ -807,6 +861,7 @@
   (? (two? as && <as = "--serve" && two? >as) (mitty-serve <>as >>as)
      (two? as && <as = "--here") (mitty-here >as)
      (two? as && <as = "--window") (mitty-window >as)                  ; in a window of its own
+     (two? as && <as = "--plain") (mitty-plain >as)                    ; ..and the program alone in it
      (two? as && <as = "--ls") (mitty-ls 0)
      (: nm (two? as && <as = "-n" && two? >as ? <>as "main")
         rest (two? as && <as = "-n" && two? >as ? >>as as)
@@ -819,6 +874,7 @@
  mitty-usage "usage: love mitty [-n NAME] [COMMAND ..]   the mitty NAME (main), started when none is up;
        COMMAND in its first pane. love mitty --ls lists them; --here runs one in this process,
        --window [-f FONT.hex] one in a window of its own, as with a display and no tty
+       --plain [-f FONT.hex] [COMMAND ..] the terminal alone in a window: no panes, COMMAND or the shell
   C-a: s v split, h j k l steer, x shut, [ ] copy and paste, c n p 0-9 faces, b a model,
        space open an app, w go to a pane, d detach, C-a a literal C-a"
  _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))

@@ -127,6 +127,7 @@
  tap-keys {'(-1 0) 104 '(1 0) 108 '(0 -1) 107 '(0 1) 106
            '(-1 -1) 121 '(1 -1) 117 '(-1 1) 98 '(1 1) 110}
  (grass-tap g c now) (: me (g 'me)
+   _ (g 'r <= <>c ? (grass-key g 113 now))               ; the bar, where a phone has no q
    n (int (me 'ht * rpi * (1.0 + me 's) + 0.5))
    d (tap-dir (<c - me 'x) (<>c - (g 'r - 4 - n // 2)))
    (d = [0 0] ? g (grass-key g (tap-keys d) now)))
@@ -400,7 +401,9 @@
  ; ..lk the look: the title and the opening's rows, the frame a sign stands over, and the
  ; paint a tick says -- the flat field's, or a sequel's
  grass-look {'ttl open-ttl 'rows open-rows 'frame grass-frame 'paint grass-paint}
- (grass-week lk ls) (: ws (ttysize 7 19)
+ ; a phone's keyboard takes a moment to go, and the screen grows when it has
+ (settled a n) (rest 300, ttysize 7 19 @ b (b = a || n < 1 ? b (settled b (n - 1))))
+ (grass-week lk ls) (: ws (ttysize 7 19 @ w (string? (getenv "LOVE_FACE") ? (settled w 3) w))
    r (<ws - 1) c <>ws
    g (grass-new r c (wheel (clock 0)))
    bs (filter (b \ !(b 'err)) (score-parse ls))
@@ -439,7 +442,7 @@
     g))
  ; the screen raised and put back here, whatever way the week ends. the mouse, not rove's
  ; taps: a press's release breaks key-drain's repeat, so two quick taps are two steps
- (grass-run lk ls) (: g (ttytake ['mouse], mind (_ \ grass-week lk ls) () (_ \ ttygive ['mouse]))
+ (grass-run lk ls) (: g (ttytake ['mouse 'nokeys], mind (_ \ grass-week lk ls) () (_ \ ttygive ['mouse 'nokeys]))
                   (puts (grass-final g + "\n"), 0))
  grass-usage "usage: love play grass88   (dance: arrows, hjkl, or tap about your blade; q or esc leaves)"
  (grass-main as) (as @ () (grass-run grass-look score)

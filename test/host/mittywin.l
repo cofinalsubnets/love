@@ -22,9 +22,10 @@
    s (XW 'x-connect ("/tmp/.X11-unix/X" + show dn))
    _ (test (hot? s))
    sc (XW 'x-setup s ())
-   win (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))
+   (top _) (: kids <>(XW 'x-querytree s (XW 'scr-root sc)) (last l) (two? >l ? (last >l) <l) (last kids))
+   win (top ()) on {win}
    ; GetImage, ZPixmap: a w by h piece of the window at (x,y), its bytes bgrx
-   (grab x y w h) (: _ (w8 s 73, w8 s 2, w16 s 5, w32 s win)
+   (grab x y w h) (: _ (w8 s 73, w8 s 2, w16 s 5, w32 s (on ()))
                      _ (w16 s x, w16 s y, w16 s w, w16 s h, w32 s 4294967295)
                      _ (XW 'x-flush s)
                      hdr (XW 'x-reply s)
@@ -75,8 +76,18 @@
    _ (chord 38, tap 53)                                          ; ..and the child's
    (wfn p n) (gather p @ g2 (two? g2 ? g2 (n < 1 ? () (rest 2, wfn p (n - 1)))))
    st (wfn <ph 5000)
-   ((two? st ? 0 (still <ph 15, wfx <ph)),
-    test (two? st) (0 = <st),
+   ; --plain: the program alone in the window, so C-a is its own and it ends the window
+   _ ((two? st ? 0 (still <ph 15, wfx <ph)), test (two? st) (0 = <st))
+   kid2 "printf '\\033[41m  \\033[m'; read l; [ \"$l\" = \"$(printf '\\001')\" ] && printf '\\033[42m  \\033[m'; read m"
+   ph2 (tether ["env" "HORN=none" "MITTY=" "COLORTERM=" ("DISPLAY=:" + show dn) "out/love" "mitty" "--plain" "sh" "-c" kid2])
+   _ (rest 3000, pin on () (top ()))
+   _ (test ([128 0 0] = until 4 4 [128 0 0] 40))
+   _ (chord 38, tap 36)
+   _ (test ([0 128 0] = until 4 20 [0 128 0] 40))                ; green: C-a reached the program
+   _ (tap 36)
+   st2 (wfn <ph2 5000)
+   ((two? st2 ? 0 (still <ph2 15, wfx <ph2)),
+    test (two? st2) (0 = <st2),
     close s,
     still <xv 15,
     wfx <xv,

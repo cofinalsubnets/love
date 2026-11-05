@@ -29,6 +29,8 @@
     (4 = gaze s 1) (10 = gaze s 2)   ; rows, cols
     (0 = gaze s 4) (3 = gaze s 5)    ; the scroll region opens full
     (3 = (3 & gaze s 3))               ; cursor shown + autowrap on
+    (0 = gaze s 13)                    ; a phone's keyboard stays until asked away
+    (scribe s "\e[?7727h", 1 = gaze s 13) (scribe s "\e[?7727l", 0 = gaze s 13)
     (0 = cur s)
     (0 = chat s 0)
     !(glass s 40 0)
