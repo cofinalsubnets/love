@@ -11,7 +11,6 @@ static unsigned long long st = 0x243f6a8885a308d3ULL;
 static unsigned long long rnd(void) {
  st ^= st << 13; st ^= st >> 7; st ^= st << 17; return st; }
 
-/* a macro, not a call: a wide value is not carried as a parameter on any target */
 #define mix(v) do { u128 v_ = (v); h = (h ^ v_) * (u128) 0x9e3779b97f4a7c15ULL + 1; } while (0)
 
 int main(void) {
@@ -38,7 +37,7 @@ int main(void) {
   mix(n << 127); mix(n >> 127); mix((u128) (((s128) n) >> 127));
 
   /* the widening product, the general one, and the carry chain both ways */
-  mix((u128) a * b); mix(n * (u128) d);
+  mix((u128) a * b); mix(n * (u128) d); mix(n * (((u128) d << 64) | a));
   mix(n + (u128) d); mix(n - (u128) d); mix(-n);
 
   /* every relation, both signednesses */

@@ -29,7 +29,7 @@ case $arch in
            ccnames="riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc"
            ccglob=""
            ccvar=RISCV64_CC
-           unsupported="111-int128 151-w128fuzz 314-u128union 297-frameaddr"
+           unsupported="111-int128 151-w128fuzz 314-u128union 352-u128abi 297-frameaddr"
            gnopie= gnogcc= ;;
   *) echo "ccarch.sh: unknown target $arch" >&2; exit 1 ;;
 esac

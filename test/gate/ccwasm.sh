@@ -13,7 +13,7 @@ m=$2
 name=test_ccwasm
 # return addresses, frame chains and label values live off linear memory, longjmp has no
 # unwind to ride, and a module has no symbol table for 294's asm labels
-unsupported="111-int128 151-w128fuzz 314-u128union 160-rangeinit 229-labelvalue 256-inline-retaddr 294-asmlabel 297-frameaddr 345-jmpsave"
+unsupported="111-int128 151-w128fuzz 314-u128union 352-u128abi 160-rangeinit 229-labelvalue 256-inline-retaddr 294-asmlabel 297-frameaddr 345-jmpsave"
 # x64 alone for these: clang lacks __builtin_*_overflow_p, emcc's malloc aborts where C
 # answers NULL, its aligned_alloc keeps C11's size rule, its __divsc3 isn't libgcc's
 noemcc="268-overflow-p 298-malloc-wrap 300-aligned-alloc 280-cxf-fuzz"
