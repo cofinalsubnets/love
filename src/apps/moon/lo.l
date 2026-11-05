@@ -30,7 +30,7 @@
    (lomvs d s) (two? d ? [['mov <d <s] ['mov <>d <>s]] [(lomv d s)])
    ; a value converted to ty, copied when the conversion writes
    (lotr g [vt r fs] ty)
-    (? (ilp32? g && (d128? ty || gcplx? ty)) (lono g ['wide ty], [ty r fs])
+    (? (ilp32? g && d128? ty) (lono g ['wide ty], [ty r fs])
        (ilp32? g && (pair? g ty || pair? g vt)) (lotrp g [vt r fs] ty)
        (gcplx? ty || gcplx? vt) (locxsame? vt ty ? [vt r fs] (locvt g [vt r fs] ty))
        (d128? ty || d128? vt) (lowtr g [vt r fs] ty)
@@ -639,7 +639,7 @@
    ; -- expressions -> (ty vreg forms) | 'bad --
    ; what the 32-bit targets take yet: no wide or complex value, and a pair's two registers
    (lox g env e)
-    (lox0 g env e @ ((ty . _) && ilp32? g && (d128? ty || gcplx? ty)) (lono g ['wide ty])
+    (lox0 g env e @ ((ty . _) && ilp32? g && d128? ty) (lono g ['wide ty])
                     ((ty . r . _) && pair? g ty && !(two? r)) (lono g ['pairleak ty])
                     v v)
    (lox0 g env e)
