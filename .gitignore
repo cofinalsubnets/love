@@ -6,6 +6,7 @@ vgcore.*
 .claude/*
 !.claude/settings.json
 /out/
+/web/wasm/*.gz
 # the build stamp, written by selfpack into the archive and read back by an unpacked release
 /STAMP
 # downloaded, never built: OVMF, package sources. outside out/ so `make clean`
