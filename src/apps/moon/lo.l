@@ -1724,13 +1724,13 @@
        (go l)
         (!(two? l) ? l
            (: f <l r >l
-              (f @ ([op d y] && sf-bin1 op)
+              (f @ ([op d y] && v6m? g && sf-bin1 op)
                     ([['movdrx 'r0 d] ['movdrx 'r1 y] '(cuse r0 r1) ['call (sf-bin1 op)] ['movdxr d 'r0]] + go r)
-                   [('cvtsi2ss || 'cvtui2ss) d x]
+                   ([('cvtsi2ss || 'cvtui2ss) d x] && v6m? g)
                     ([['mov 'r0 x] '(cuse r0) ['call (<f = 'cvtsi2ss ? '__aeabi_i2f '__aeabi_ui2f)] ['movdxr d 'r0]] + go r)
-                   [('cvttss2si || 'cvttss2ui) d x]
+                   ([('cvttss2si || 'cvttss2ui) d x] && v6m? g)
                     ([['movdrx 'r0 x] '(cuse r0) ['call (<f = 'cvttss2si ? '__aeabi_f2iz '__aeabi_f2uiz)] ['mov d 'r0]] + go r)
-                   ['ucomiss a b]
+                   (['ucomiss a b] && v6m? g)
                     ([['movdrx 'r0 a] ['movdrx 'r1 b] '(cuse r0 r1)]
                      + (r @ (['set 'eq _] . ['set 'np _] . ['mov d _] . ['and _ _ _] . u)
                               (fcc 'eq (k \ ['set k d]) u + go u)
