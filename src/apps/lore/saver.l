@@ -96,7 +96,7 @@
      (cell y x) (: u (pen x (2 * y)) l (pen x (2 * y + 1))
                    (? (u = () && l = ()) () [y x (u = () ? sky u) (l = () ? sky l)]))
      (? (rad <= 0) ()
-        (filter two? (catmap (y \ map (x \ cell y x) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))))
+        (filter two? (catmap (y \ map (cell y) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))))
  ; a few dozen stars, each [y x period phase], off the caption's row
  (pom-new r c seed p0 sty)
   (: n (min 64 (max 16 (r * c // 50)))

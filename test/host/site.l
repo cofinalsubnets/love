@@ -1,17 +1,17 @@
-; test/host/web.l -- `love web`'s maker (src/apps/kiosko/web.l), driven with no socket;
+; test/host/site.l -- `love site`'s maker (src/apps/kiosko/site.l), driven with no socket;
 ; the server half is test/host/kiosko.l's
-; run: cat test/00-init.l test/host/web.l | out/love
+; run: cat test/00-init.l test/host/site.l | out/love
 
 (borrow "src/apps/vi/config.l")                    ; the theme: hue-theme
 (borrow "src/apps/vi/hue.l")                       ; the class table, read bare by hueweb
-(borrow 'lapiz)                                ; the document lens, read bare by web
+(borrow 'lapiz)                                ; the document lens, read bare by site
 (borrow 'libra)                                ; ..and the header lifter, likewise
-(borrow '(hueweb kiosko web))
+(borrow '(hueweb kiosko site))
 
 (test
- (elem 'web (cite ()))
- (elem 'web-main (keys (cite 'web)))
- (lit? (peep (cite 'verbs 'tab) 'web ())))
+ (elem 'site (cite ()))
+ (elem 'site-main (keys (cite 'site)))
+ (lit? (peep (cite 'verbs 'tab) 'site ())))
 
 ; the maker joins root and path itself, so the fixture is a real directory
 (: dir "/tmp/servetest"

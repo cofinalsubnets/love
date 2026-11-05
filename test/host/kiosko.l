@@ -65,6 +65,42 @@
       (has? (get "/echo") "GET /echo")
       ("404" = code (get "/nope")))
 
+   ; a file answers with its tag, and asked again with it, 304 and no body; a changed file, a
+   ; hook's answer and an index.html in a directory each do the right thing
+   (tag r) (: i (fsub r "ETag: " 0) (i < 0 ? () (snip r (i + 6) (fsub r "\r\n" i))))
+   (cond p t) (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\nIf-None-Match: " + t + "\r\n\r\n"))
+   t0 (tag (get "/index.html"))
+   nm (cond "/index.html" t0)
+   wk (ask ("GET /index.html HTTP/1.1\r\nhost: x\r\nif-none-match: W/\"zz\", " + t0 + "\r\n\r\n"))
+   _ (test (string? t0)
+           (code nm = "304") !(has? nm "<h1>root</h1>") (has? nm t0) (has? nm "Cross-Origin-Opener-Policy")
+           (code wk = "304")
+           (code (cond "/index.html" "\"stale\"") = "200")
+           (code (cond "/" t0) = "304")
+           (tag (get "/made") = ())
+           (code (cond "/made" "*") = "200"))
+   _ (put-file "tagged.txt" "one")
+   t1 (tag (get "/tagged.txt"))
+   _ (rest 5)
+   _ (put-file "tagged.txt" "two")
+   _ (test (code (cond "/tagged.txt" t1) = "200") (tag (get "/tagged.txt") != t1))
+
+   ; a gzipped copy goes to who takes gzip, under its own tag; an older copy to nobody
+   (zask p more) (ask ("GET " + p + " HTTP/1.1\r\nHost: x\r\n" + more + "\r\n"))
+   az "Accept-Encoding: deflate, gzip\r\n"
+   _ (put-file "z.txt" "plain")
+   _ (rest 5)
+   _ (put-file "z.txt.gz" "zipped")
+   zy (zask "/z.txt" az) zn (get "/z.txt")
+   _ (test (has? zy "zipped") (has? zy "Content-Encoding: gzip") (has? zy "text/plain")
+           (has? zn "plain") !(has? zn "Content-Encoding") (has? zn "Vary: Accept-Encoding")
+           (tag zy != tag zn)
+           (code (zask "/z.txt" (az + "If-None-Match: " + tag zy + "\r\n")) = "304")
+           (code (zask "/z.txt" (az + "If-None-Match: " + tag zn + "\r\n")) = "200"))
+   _ (rest 5)
+   _ (put-file "z.txt" "plain again")
+   _ (test (has? (zask "/z.txt" az) "plain again"))
+
    ; the guard, first
    _ (test
       (code (get "/../../etc/passwd") = "403")

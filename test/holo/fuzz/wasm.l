@@ -94,7 +94,7 @@
    ; the expectations, as json for the runner: name, argument, the answer the model says
    (row i x) ("{\"name\":\"f" + show i + "\",\"arg\":\"" + show x
               + "\",\"want\":\"" + show (run (progs i) x) + "\"}")
-   rows (cats (map (i \ map (x \ row i x) args) ^N))
+   rows (cats (map (i \ map (row i) args) ^N))
    q (open "out/.wasmfuzz.json" "w")
    (say q ("[" + (foldl (a \ r \ a = "" ? r (a + "," + r)) "" rows) + "]\n"),
     close q,

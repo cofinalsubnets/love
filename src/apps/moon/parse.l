@@ -2382,7 +2382,7 @@
                                         (foldl (_ \ n \ visit n) 0 (trefs <>lb <>>lb ())))
                      0)
        roots (foldl (a \ f \ (lz? f ? a (refs f () a))) (refs (ps 'hoist) () ()) acc)
-       _ (foldl (_ \ n \ visit n) 0 (roots + map (k \ ps 'alias k) (keys (ps 'alias))))
+       _ (foldl (_ \ n \ visit n) 0 (roots + map (ps 'alias) (keys (ps 'alias))))
        (one f) (: lb <>>>f
                   _ (pins ps 'currstr (lb 3) 'curssp (lb 4))
                   _ (map (q \ pin (ps 'qstage) <q <>q) (lb 5))
@@ -2614,6 +2614,7 @@
       ; gnu_inline (gnu89's) the other way about
       (peep ps 'curlink () ? ()
          (pin ps 'curlink (leadkw? ps ts 'inline && !!(leadextern? ps ts) = !!(hwin hw "gnu_inline" "__gnu_inline__") ? 'inl 'ext))),
+      (peep ps 'curkwi () ? () (leadkw? ps ts 'inline ? (pin ps 'curkwi 1))),
       ptop9 ps ts))
    ; the attributes a declaration names, hw its head words. ptop reads them at entry, where the
    ; scans stop at the first `{`, and ptop9 again past a struct/union/enum body
@@ -2850,8 +2851,10 @@
                    (gogl <>f)))
            st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign) va (max (an ? an 0) (peep ps 'curtdal 0))
            fnp (elem <f '(fn proto))
-           ; a `used` static is kept though nothing here calls it (gen's dead-static sweep)
-           (st && fnp ? (pin (ps 'sfns) <>f (ps 'curused || peep (ps 'sfns) <>f () = 'used ? 'used 1)),
+           ; a `used` static is kept though nothing here calls it (gen's dead-static sweep); an
+           ; 'inl one lays for no asm that names it
+           (st && fnp ? (peep (ps 'sfns) <>f () @ was
+                           (pin (ps 'sfns) <>f (? (ps 'curused || was = 'used) 'used (ps 'curkwi || was = 'inl) 'inl 1))),
            ; a function may name its section and alignment too (where code lands, its spacing)
             sc && fnp ? (pin (ps 'sects) <>f sc),
             an && fnp ? (pin (ps 'aligns) <>f an),
@@ -2889,6 +2892,7 @@
             ; has no external definition here
             fnp ? (pin (ps 'c99inl) <>f (peep (ps 'c99inl) <>f 'inl = 'inl && ps 'curlink = 'inl ? 'inl 'ext)),
             pin ps 'curlink (),
+            pin ps 'curkwi (),
            ; restrict params, filed per function: `p` may be restrict in one and plain in the next
             (ps 'currstr @ rs
                (rs && fnp ? (pin (ps 'rstrs) <>f (rev rs)))),
@@ -2910,7 +2914,7 @@
         ; the hoisted block-scope externs lead the program; a later real definition takes the
         ; entry back (C's tentative rule)
         (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
-           (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl ? (pin (ps 'sfns) nm 1))) (keys (ps 'c99inl))),
+           (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl && peep (ps 'sfns) nm () != 'used ? (pin (ps 'sfns) nm 'inl))) (keys (ps 'c99inl))),
                       (peep ps 'lazy () ? (lzres ps acc) acc) @ acc2
                       (acc2 = 'lazyfail ? acc2
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid

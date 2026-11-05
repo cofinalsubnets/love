@@ -838,6 +838,7 @@ static void ct_lost(struct celt *c, float *pcm, int N, int LM) {
  for (int k = 0; k < C; k++) syn[k] = c->s.mem[k] + CT_HIST - N;
  if (c->s.lost >= 5 || c->start != 0) {
   float amp[2 * CT_BANDS], *X = c->x, *freq = c->freq;
+  for (int k = 0; k < C; k++) memmove(c->s.mem[k], c->s.mem[k] + N, sizeof(float) * (unsigned) (CT_HIST - N));
   if (c->s.lost >= 5) ct_amps(c->start, c->end, amp, c->s.bg, C);
   else {
    float decay = c->s.lost == 0 ? 1.5f : .5f;

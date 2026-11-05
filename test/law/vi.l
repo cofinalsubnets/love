@@ -367,9 +367,10 @@
    (mini ls ks) (vgo ls ks @ st (pin st 'w 8, pin st 'h 4, vframe st))
    E$ (string 27)
    _ (test
-      (mini '("ab") "" = (E$ + ("[H" + ("ab" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,1" + (E$ + ("[K" + (E$ + "[1;1H"))))))))))))))))
-      ; a long line slides the view sideways; the cursor never leaves it
-      (mini '("abcdefghij") "$" = (E$ + ("[H" + ("cdefghij" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("~" + (E$ + ("[K\r\n" + ("t  1,10" + (E$ + ("[K" + (E$ + "[1;8H"))))))))))))))))
+      (mini '("ab") "" = (E$ + "[H" + E$ + "[Kab\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n" + E$ + "[Kt  1,1" + E$ + "[1;1H"))
+      ; a long line slides the view sideways; the cursor never leaves it. the row fills the
+      ; width, so nothing erases after it
+      (mini '("abcdefghij") "$" = (E$ + "[H" + E$ + "[Kcdefghij\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n" + E$ + "[Kt  1,10" + E$ + "[1;8H"))
       ; scrolling: the cursor's row stays inside the 3 text rows
       (: st (vgo '("a" "b" "c" "d" "e") "G") _ (pin st 'w 8) _ (pin st 'h 4)
          f (vframe st)
@@ -380,11 +381,11 @@
    (small ls ks) (vgo ls ks @ st (pin st 'w 16, pin st 'h 4, st))
    (hlon st) (pin st 'pens (hues-pens hue-theme ()), pin st 'hl 1, st)
    SY (E$ + "[?2026h") YS (E$ + "[?2026l")
-   (place r s) (E$ + "[" + show r + ";1H" + s + E$ + "[K")
+   (place r s) (E$ + "[" + show r + ";1H" + E$ + "[K" + s)
    _ (test
       ; the first refresh lays the whole screen
       (small '("ab") "" @ st
-       (vfresh st = (SY + E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
+       (vfresh st = (SY + E$ + "[H" + E$ + "[Kab\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n"
               + place 4 "t  1,1" + E$ + "[1;1H" + YS)))
       ; the same state again is the cursor alone
       (small '("ab") "" @ st (vfresh st,
@@ -397,15 +398,15 @@
       ; a scroll is a whole screen again
       (: st (small '("a" "b" "c" "d" "e") "") _ (vfresh st) _ (vfeed st (bytes "G"))
          f (vfresh st)
-         (f = (SY + E$ + "[H" + "c" + E$ + "[K\r\n" + "d" + E$ + "[K\r\n" + "e" + E$ + "[K\r\n"
+         (f = (SY + E$ + "[H" + E$ + "[Kc\r\n" + E$ + "[Kd\r\n" + E$ + "[Ke\r\n"
                  + place 4 "t  5,1" + E$ + "[3;1H" + YS))))
    _ (test
       (: a (small '("ab" "cd") "j") b (small '("ab" "cd") "j")
          (vlay a = (vlay b)))
       (: st (small '("hello" "there") "jl")
          L (vlay st)
-         (vframe st = (E$ + "[H" + <L 0 + E$ + "[K\r\n" + <L 1 + E$ + "[K\r\n" + <L 2 + E$ + "[K\r\n"
-                + <>L + E$ + "[K" + E$ + "[" + show <>>L + ";" + show <>>>L + "H"))))
+         (vframe st = (E$ + "[H" + E$ + "[K" + <L 0 + "\r\n" + E$ + "[K" + <L 1 + "\r\n" + E$ + "[K" + <L 2 + "\r\n"
+                + E$ + "[K" + <>L + E$ + "[" + show <>>L + ";" + show <>>>L + "H"))))
 
 ; --- the painted row is cached against its text: a cursor move re-lexes nothing ---
    _ (test
@@ -558,7 +559,8 @@
       (st? (ex '("a") "se sw=3") 'sw = 3)
       (st? (ex '("a") "nu") 'msg = "1 lines")
       (st? (ex '("a") "col") 'msg = "molokai")                      ; colo and colorscheme mean one thing
-      (has? (st? (ex '("a") "n") 'msg) "ambiguous: n")              ; number and nohlsearch do not
+      (has? (st? (ex '("a") "l") 'msg) "ambiguous: l")              ; last and lint do not
+      (st? (ex '("a") "r x") 'msg = "not an ex command: r")         ; no head reaches :rewind
       (st? (ex '("a") "ya") 'reg = '(lin ("a")))
       (: q (vgob '("a") ((bytes ":sen") + [CR]))                    ; the face's word, headed
          _ (pin q 'exmore '("send"))
@@ -573,8 +575,8 @@
 ; --- the status line clips from the left: its tail is the news ---
    (miniw ls ks m) (vgo ls ks @ st (vmsg st m, pin st 'w 8, pin st 'h 4,
                                     vframe st))
-   (frame3 tail) (E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
-                     + tail + E$ + "[K" + E$ + "[1;1H")
+   (frame3 tail) (E$ + "[H" + E$ + "[Kab\r\n" + E$ + "[K~\r\n" + E$ + "[K~\r\n"
+                     + E$ + "[K" + tail + E$ + "[1;1H")
    _ (test
       ; 11 characters into 8 columns: the head goes and `<` says so
       (miniw '("ab") "" "abcdefghijk" = (frame3 "<efghijk"))
@@ -591,9 +593,10 @@
 ; --- the syntax paint (hue.l) ---
    hbk (hue-book ())
    hlx (s \ in \ keep \ hue-lex hbk s in keep)
-   (klass s) (map (r \ <r) <(hue-lex hbk s 0 1))
+   (klass s) (map cap <(hue-lex hbk s 0 1))
    (runs s in) <(hue-lex hbk s in 1)
    ; strip SGR only: the frame's geometry stays
+   ; a frame's text and motions: its colours and erases gone
    (bare s)
     (: n #s
        (dig? c) ((48 <= c && c <= 57) || c = 59)
@@ -602,7 +605,7 @@
            ((s i = 27) && (i + 1) < n && (s (i + 1) = 91))
             (: (sk j) (j < n && dig? (s j) ? (sk (j + 1)) j)
                k (sk (i + 2))
-               (k < n && (s k = 109) ? (go (k + 1) acc)
+               (k < n && (s k = 109 || s k = 75) ? (go (k + 1) acc)
                   (go (i + 1) (acc + string (s i)))))
            (go (i + 1) (acc + string (s i))))
        (go 0 ""))
@@ -678,7 +681,8 @@
       (hue-pen '(Statement 161 "#F92672" (bold)) 1 = "\e[1;38;2;249;38;114m")
       (hue-pens hue-theme () @ ps (all (c \ string? (ps (hue-cls c))) hue-classes))
       (hues-pens hue-theme () @ ps (all (c \ string? (ps (hue-cls c))) hues-classes))
-      (all (r \ <r = 'Search || any (c \ hue-grp c = <r) hue-classes || any (c \ hue-grp c = <r) hues-classes)
+      (all (r \ elem <r '(Normal Visual LineNr NonText MatchParen Search) || any (c \ hue-grp c = <r) hue-classes
+                 || any (c \ hue-grp c = <r) hues-classes)
            hue-theme))
 
 ; --- paint invariance: colour adds colour and moves nothing ---
@@ -701,7 +705,7 @@
                         !(name? <r && hcol? (r 1) && hhex? (r 2) && all (f \ elem f '(bold italic)) (r 3)) 0
                         (n = 6) (hcol? (r 4) && hhex? (r 5))
                         1))
-   (hgrp? g) (elem g '(Normal Visual Search) || any (c \ hue-grp c = g) hue-classes
+   (hgrp? g) (elem g '(Normal Visual Search LineNr NonText MatchParen) || any (c \ hue-grp c = g) hue-classes
               || any (c \ hue-grp c = g) hues-classes)
    (hgot rs g) (two? (filter (r \ <r = g) rs))
    (hthm? t) (: rs <>t ps (hues-pens rs ())
@@ -723,14 +727,15 @@
       ; a ground rides a pen as its fifth and sixth columns
       (hue-pen '(Normal 234 "#1f1c19" () 231 "#fffdf9") () = "\e[38;5;234;48;5;231m")
       (hue-pen '(Normal 234 "#1f1c19" () 231 "#fffdf9") 1 = "\e[38;2;31;28;25;48;2;255;253;249m")
-      ; molokai leaves the terminal its ground; paper owns one and paints the selection
-      (hues-pens hue-theme () @ ps (peep ps 'ground () = () && peep ps 'sel () = ()))
+      ; molokai as vim paints it on 256 colours; paper owns a ground and paints the selection
+      (hues-pens hue-theme () @ ps (ps 'ground = "\e[38;5;252;48;5;233m" && ps 'off = "\e[0m" + ps 'ground
+                                    && ps 'lnr = "\e[38;5;250;48;5;236m" && ps 'storage = "\e[38;5;208m"))
       (hues-pens hpaper () @ ps (string? (ps 'ground) && ps 'off = "\e[0m" + ps 'ground
                                 && string? (ps 'sel)))
       ; every row starts on the ground, and the frame hands the terminal back its own
       (: st (small '("(map f)" "x") "") _ (hlit st "paper") f (vframe st) g (vpen st 'ground "")
-         (fsub f ("\e[H" + g) 0 = 0 && snip f (#f - 4) #f = "\e[0m"
-          && fsub f (g + "~") 0 > 0 && fsub f (g + "t ") 0 > 0))
+         (fsub f ("\e[H\e[K" + g + "\e[K") 0 = 0 && snip f (#f - 4) #f = "\e[0m"
+          && fsub f (g + "\e[K~") 0 > 0 && fsub f (g + "\e[Kt ") 0 > 0))
       (htwin "paper" '("(map (+ 1) '(1 2 3)) ; hi" "(: x 2)") "")
       (htwin "solarized-light" '("(: css \"a" "b\" 1)") "j")
       (htwin "nord" '("(f a, b)") "vl")
@@ -768,7 +773,7 @@
            (hue-name "nord" = "nord"))
 
 ; --- hues.l: the name, else a shell #!, picks the lexer ---
-   (hk g s in) (map (r \ <r) <(hues-lexer g s in 1))
+   (hk g s in) (map cap <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
    _ (test
       (hues-lang "a/b.c" () = 'c)
@@ -784,7 +789,12 @@
       !(hues-lang "run" ["#!/usr/bin/env python3"]))
    _ (test
       (hk 'c "#include <stdio.h>" 0 = '(pre string))
-      (hk 'c "static int x = 0x1f; // n" 0 = '(type type number comment))
+      (hk 'c "static int x = 0x1f; // n" 0 = '(storage type number comment))
+      ; a directive's line wears its class, and a continued one hands it on
+      (hk 'c "#if X // n" 0 = '(precond comment))
+      (hk 'c "#define X \"s\" \\" 0 = '(macro2 string macro2))
+      (hk 'c "  case 1:" 0 = '(label number))
+      (hk 'c "#define X (int)sizeof(0)" 0 = '(macro2 type macro2 dyad macro2 number macro2))
       (hk 'c "if (c == '\\'') return \"a\\\"b\";" 0 = '(keyword string keyword string))
       (hk 'c "x = 1.5e-3f;" 0 = '(number))
       (hk 'c "c */ d" 1 = '(comment))
@@ -800,21 +810,91 @@
       (hk 'html "<style>p { color: red }</style>" 0 = '(keyword keyword keyword type keyword keyword))
       (hc 'html '("<!-- a" "b --> <div" "  id=x>" "y") = [0 1 ['tag "div" 0] 0])
       (hc 'html '("<style>/* a" "b */</style>" "x") = [0 ['css 1] 0]))
+   ; the arglist: the core asks, the face reads, as vfeed on one state stands in for a visit
+   (cmd st c) (vfeed st ((bytes ":\(c)") + [CR]))
+   (three _) (cmd (vnew '("a" "b" "c") "a") "args a b c")
+   ; the ex line's Tab: the first match, the next, the word again
+   (line st) (edtext (st 'cmd))
+   (tabbed ks) (vfeed (vnew '("a") "t") (bytes ":\(ks)"))
+   (tab st) (vfeed st [9])
+   fake (d \ d = "" ? '("alpha" "alto" "bin/" ".hid") (d = "bin/" ? '("x") ()))
+   (withf ks) (: q (vnew '("a") "t") _ (pin q 'files fake) (vfeed q (bytes ":\(ks)")))
+   _ (test
+      (line (tab (tabbed "spl")) = "split")
+      (line (tab (tabbed "2,3del")) = "2,3delete")
+      (line (tab (tabbed "ne")) = "next")
+      (line (tab (tabbed "n")) = "next")
+      (line (tab (tab (tabbed "n"))) = "nohlsearch")
+      (line (tab (tab (tab (tab (tabbed "n"))))) = "n")             ; past the last, as typed
+      (line (tab (tab (tab (tab (tab (tabbed "n")))))) = "next")
+      (line (tab (tabbed "zz")) = "zz")
+      (line (vfeed (tab (tabbed "n")) (bytes "x")) = "nextx")       ; a key ends the round
+      (line (tab (tabbed "set wr")) = "set wrap")
+      (line (tab (tabbed "colo no")) = "colo nord")
+      (line (tab (tabbed "s/a")) = "s/a")                           ; no word to finish, no tab laid
+      (line (tab (withf "e al")) = "e alpha")
+      (line (tab (tab (withf "e al"))) = "e alto")
+      (line (tab (withf "e b")) = "e bin/")
+      (line (tab (tab (withf "e b"))) = "e bin/x")                  ; a lone match goes on inward
+      (line (tab (withf "e .")) = "e .hid")
+      (line (tab (withf "n a b")) = "n a bin/")
+      (line (tab (tabbed "e al")) = "e al")                         ; no door, no files
+      (: q (vnew '("a") "t") _ (vfeed q (bytes "/x")) (line (tab q) = "x")))
+   _ (test
+      (three () 'doe = '("a" 0 " (1 of 3)"))
+      (three () 'args = '("a" "b" "c"))
+      (cmd (three ()) "n" @ q (q 'argi = 1 && q 'doe = '("b" 0 " (2 of 3)")))
+      (cmd (cmd (three ()) "n") "args" 'msg = "a [b] c")
+      (cmd (three ()) "prev" 'msg = "cannot go before first file")
+      (cmd (three ()) "la" @ q (cmd q "n" 'msg = "cannot go beyond last file"))
+      (cmd (three ()) "la" 'argi = 2)
+      (cmd (cmd (three ()) "la") "rew" 'argi = 0)
+      (cmd (cmd (three ()) "n") "N" 'argi = 0)
+      ; the row left in a file comes back with it
+      (: q (three ())
+         _ (vfeed q (bytes "G"))
+         _ (cmd q "n")
+         _ (cmd q "N")
+         (q 'doe = '("a" 2 " (1 of 3)")))
+      ; a change holds the move until it is written or waived
+      (: q (vfeed (three ()) (bytes "x"))
+         (cmd q "n" 'msg = "no write since last change (add ! to override)" && q 'argi = 0))
+      (: q (vfeed (three ()) (bytes "x")) (cmd q "n!" 'argi = 1))
+      (: q (vfeed (three ()) (bytes "x"))
+         _ (cmd q "wn")
+         (q 'dow = '("a") && q 'argi = 1))
+      ; a quit with files unseen says so once
+      (: q (three ())
+         _ (cmd q "q")
+         a (q 'quit)
+         m (q 'msg)
+         _ (cmd q "q")
+         (!a && m = "2 more files to edit" && q 'quit = 1))
+      (cmd (three ()) "q!" 'quit = 1)
+      (: q (three ()) _ (vfeed q (bytes "ZZ")) (!(q 'quit) && q 'dow = '("a")))
+      (cmd (cmd (three ()) "la") "q" 'quit = 1)
+      (cmd (vnew '("a") "t") "q" 'quit = 1)                         ; no list, nothing to say
+      (cmd (vnew '("a") "t") "args" 'msg = "[t]"))
    _ (test
       (hk 'sh "FOO=bar # c" 0 = '(var comment))
       (hk 'sh "a#b" 0 = ())                               ; # opens a comment only at a word
       (hk 'sh "if [ \"$x\" = 1 ]; then echo ${y}; fi" 0
-          = '(keyword func string var string number func keyword func var keyword))
+          = '(keyword dyad dyad pre dyad number dyad keyword keyword pre keyword))
       (hc 'sh '("cat <<-'EOF'" "body $x" "\tEOF" "x") = '(0 "EOF" "EOF" 0))
       (hk 'sh "body $x" "EOF" = '(string))
       (hk 'sh "\tEOF" "EOF" = '(pre))
-      (hc 'sh '("a 'b" "c' \"d" "e\"" "x") = '(0 1 2 0)))
+      (hc 'sh '("a 'b" "c' \"d" "e\"" "x") = '(0 1 2 0))
+      (hk 'sh "f() { sed -n $1 2>&1; }" 0 = '(func keyword ent pre number dyad))
+      (hk 'sh "a \\" 0 = '(dyad)))
    _ (test
       (hk 'make "CC ?= cc # c" 0 = '(var comment))
       (hk 'make "$(ho)/love: a.o $(b)" 0 = '(func var))
-      (hk 'make "ifeq ($(A),1)" 0 = '(pre var))
-      (hk 'make "\techo $@ $(X) 'q'" 0 = '(func var var string))   ; a recipe is sh
-      (<(hues-lexer 'make "\ttest -s $$t" 0 1) = '((func 1 5) (var 9 12)))
+      (hk 'make "ifeq ($(A),1)" 0 = '(precond var))
+      (hk 'make "include $(R)/c.mk" 0 = '(pre))
+      (hk 'make ".PHONY: a" 0 = '(keyword))
+      (hk 'make "X := $(shell ls) \\" 0 = '(var var keyword var ent))
+      (hk 'make "\techo $@ $(X) 'q'" 0 = '(var var string))         ; a recipe paints no words
+      (<(hues-lexer 'make "\ttest -s $$t" 0 1) = '((var 9 12)))
       (hk 'make "x.o: CFLAGS=1" 0 = '(func)))
    _ (test
       (map (f \ hues-lang f ()) ["x.md" "x.json" "x.s" "x.S" "x.asm" "x.diff" "x.patch" "x.awk"

@@ -814,7 +814,7 @@
          line (pos + " " + who + " " + pick "branch" 2 + " " + pick "gated_on" 3 + " " + pick "gated_head" 4
                + " " + st + (0 < #note ? ("  # " + note) ""))
          (? (st = "left") (? (at < 0) [text "" ("no row for " + who)]
-                             [(unlines (map (\ i (ls i)) (filter (\ i (i != at)) ^#ls))) "" ""])
+                             [(unlines (map ls (filter (\ i (i != at)) ^#ls))) "" ""])
             (0 <= at) [(unlines (map (\ i (i = at ? line (ls i))) ^#ls)) line ""]
             [(unlines (ls + [line])) line ""]))
      ; where a line's trailing `  # note` starts, with its spaces; #l when it has none
@@ -1319,7 +1319,7 @@
      (hud-lines-of qs) (catmap (s \ hud-queue <s (s 1) + [""]) qs + hud-locks 0 + [""] + hud-sessions 0)
      (hud-lines _) (hud-lines-of (q-sections (lush-out bee-qcmd)))
      ; the sessions the user may write to, and the one a talk starts with: the first queue's leader
-     (hud-peers _) (map (p \ <p) (filter (p \ !(user-card? (p 1))) (settled 0)))
+     (hud-peers _) (map cap (filter (p \ !(user-card? (p 1))) (settled 0)))
 
      ; the branch checked out, for the card
      bee-branch (chomp (lush-out "git branch --show-current 2>/dev/null"))

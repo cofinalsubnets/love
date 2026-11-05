@@ -902,8 +902,8 @@
 ; `dot` says a string or cask verbatim, anything else shown, and answers its operand
 (: (print o x) (px o x (), x)
    (show x) (jug 0 @ o (px o x (), slurp o))
-   ; a text with holes, "a \(x) b": its runs verbatim, a string verbatim, the rest shown
-   (weave l) (jug 0 @ o (each l (x \ string? x ? (say o x) (px o x ())), slurp o))
+   ; a text with holes, "a \(x) b": its runs verbatim, a string or a list as its text, the rest shown
+   (weave l) (jug 0 @ o (each l (x \ string? x || two? x || x = () ? (say o (string x)) (px o x ())), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
 
@@ -1616,6 +1616,12 @@
    (donr P z s m) (charm? m ?
     (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc))) (go 0 z))
     (m @ ['succ n] (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
+   ; a step that never reads its recursive result needs none computed, a case and no fold:
+   ; a double recursion, natgtb or natminus, costs a sum of its literals and not their binomial
+   (dosr P z s m) (charm? m ? (m = 0 ? z (vapp (vapp s (m - 1)) 0))
+    (m @ ['succ n] (vapp (vapp s n) 0) ['nnr P z s m]))
+   (reads? x t) (t == x || two? t && (reads? x <t || reads? x >t))
+   (stepless? s) (s @ ['lam _ ['lam u b]] !(reads? u b) 0)
    (dobr P x y v) (v @ 'true x  'false y  ['nbr P x y v])
    (dour P x v) (v @ 'tt x ['nur P x v])
    (docr P f g v) (v @ ['i1 a] (vapp f a) ['i2 b] (vapp g b) ['ncr P f g v])
@@ -1640,7 +1646,8 @@
          ['paths A a b]         (: cA (comp A) ca (comp a) cb (comp b)
                                  (en \ ['paths (cA en) (ca en) (cb en)]))
          ['nat_rect P z s n]    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
-                                 (en \ donr (cP en) (cz en) (cs en) (cn en)))
+                                   go (stepless? s ? dosr donr)
+                                 (en \ go (cP en) (cz en) (cs en) (cn en)))
          ['tpair a b]           (: ca (comp a) cb (comp b) (en \ ['chain (ca en) (cb en)]))
          ['idpath a]            (comp a @ ca (en \ ['refl (ca en)]))
          ['paths_rect P r e]    (: cP (comp P) cr (comp r) ce (comp e)

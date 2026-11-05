@@ -199,7 +199,7 @@
 (:
    sc-match (cite 'glob 'match)
    (sc-oct m) (: (d k) (string (48 + (m >> k & 7))) (d 9 + d 6 + d 3 + d 0))
-   (sc-unoct s) (foldl (a \ c \ a * 8 + c - 48) 0 (map (i \ s i) (jot #s)))
+   (sc-unoct s) (foldl (a \ c \ a * 8 + c - 48) 0 (map s (jot #s)))
    (sc-isdir? p) (: st (stat p) (two? st ? (st 2 & 61440 = 16384) 0))
    (sc-base p) (: q (1 < #p && p (#p - 1) = 47 ? (snip p 0 (#p - 1)) p)
                   (last (split q 47)))
@@ -260,7 +260,7 @@
                 (k = 67 || k = 68)
                  (: mode (sc-unoct (f 0)) size (unum (f 1)) name (join " " >>f)
                     dest (asdir ? (dir + "/" + name) dir)
-                    (? (0 = #name || name = "." || name = ".." || elem 47 (map (i \ name i) (jot #name))
+                    (? (0 = #name || name = "." || name = ".." || elem 47 (map name (jot #name))
                         || !(sc-want? want name))
                         ((io 'wr) (string 2 + "scp: unexpected filename: " + name + "\n"), errs + 1)
                        (k = 68)
@@ -295,7 +295,7 @@
         io))
    (sc-chan t)
     (: io (tablet 4)
-       (pins io 'rd (n \ ch-read t n) 'line (_ \ ch-line t) 'wr (s \ ch-write t s)
+       (pins io 'rd (ch-read t) 'line (_ \ ch-line t) 'wr (ch-write t)
                'err (m \ (say err ("scp: " + m + "\n"), flush err)),
         io))
    ; "[user@]host:path" -> [user host path], or () for a local path (no colon, or a slash first)
@@ -326,7 +326,7 @@
     _ (? (string? okc) (die okc) 0)
     io (sc-chan t)
     ; the names a download may bring: each source's own, its glob matched; a brace takes any
-    want (map (r \ (: b (sc-base (r 2)) (elem 123 (map (i \ b i) (jot #b)) ? "*" b))) rs)
+    want (map (r \ (: b (sc-base (r 2)) (elem 123 (map b (jot #b)) ? "*" b))) rs)
     e (? up (sc-source io srcs rec pres) (sc-sink io want target rec pres))
     st (ch-end t)
     (0 < e || st != 0 ? 1 0)))
@@ -452,7 +452,7 @@
        (opt 82)                                                  ; -R
         (: hs (khfind (opt 82))
            (? (atom? hs) (say err ("Host " + opt 82 + " not found in " + kh + "\n"), 0)
-              (: t (kg-slurp kh) ns (map (h \ <h) hs)
+              (: t (kg-slurp kh) ns (map cap hs)
                  keep (: (k ls n) (? (atom? ls) () (elem n ns) (k >ls (n + 1)) (<ls . k >ls (n + 1)))
                          (k (split t 10) 1))
                  mode (stat kh 2 & 511)

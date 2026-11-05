@@ -1,6 +1,6 @@
 ; test/kernel/nest.l -- the artifact rebuilds its own wasm module aboard: the source laid off
 ; the carried tarball, cook driven with this kernel as the toolchain, and the module linked
-; under the seat's collector budget -- what `love web` and `love doom` do on the page. a
+; under the seat's collector budget -- what `love site` and `love doom` do on the page. a
 ; task shares no environment with its spawner here, so what cook is told goes on its line.
 (: nest ("/home/love-" + love-version)
    mod (nest + "/out/love.wasm")

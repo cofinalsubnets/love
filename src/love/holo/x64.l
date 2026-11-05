@@ -50,7 +50,7 @@
    (x86-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x86-seg s))      ; the override prefix for the next form
    ;; pc-relative kinds measure from the field's end; aux is a byte addend
    (x86-patch kind target site width aux)
-      (kind @ 'rel32 (le32 (target + aux - (site + width)))
+      (kind @ ('rel32 || 'pc32) (le32 (target + aux - (site + width)))
           'rel64 (le64 (target + aux - (site + width)))
           'rel16 (: d (target + aux - (site + width))
                     (-32768 <= d <= 32767 ? 0 (scare 'rel16-range d), le16 d))
@@ -59,7 +59,7 @@
                      [(byte d)]))
           'abs64 (le64 (target + aux))
          ;; truncated: right only where the address fits (a flat low kernel image, i386)
-         'abs32 ((target + aux) % 4294967296 @ v
+         ('abs32 || 'abs32d) ((target + aux) % 4294967296 @ v
                    (le32 (v < 0 ? (v + 4294967296) v)))
          ;; a sign-extended dword (pushq $sym), as for a kernel at -2 GiB
          'abs32s ((target + aux) @ v (fits32 v ? (le32 (v < 0 ? (v + 4294967296) v)) (scare 'abs32s-range v)))

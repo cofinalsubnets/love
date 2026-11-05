@@ -315,7 +315,7 @@
  ; the latch: a note struck rings until struck again, its key the semitone past the
  ; window's codes; let go, every note held fades
  (synth-drone st s) (: k (1000.0 + s) (any (p \ <p = k) (st 'hv) ? (synth-free st k) (synth-hold st k s)))
- (synth-latch st) (? (st 'latch) (foldl synth-free (pins st 'latch 0 'dirty 1) (uniq (map (p \ <p) (st 'hv))))
+ (synth-latch st) (? (st 'latch) (foldl synth-free (pins st 'latch 0 'dirty 1) (uniq (map cap (st 'hv))))
                      (pins st 'latch 1 'dirty 1))
  (synth-lline st) (: ns (foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv))))
    (? (st 'latch) ("  latched" + ns) (two? (st 'hv)) ("  held" + ns) ""))
@@ -374,7 +374,7 @@
                              (peep synth-vis k () @ c (charm? c ? (wfeed st [c]) st)))
         (any (p \ <p = k) (st 'hv)) (st 'latch ? (synth-free st k) st)
         (k = 1) (pins st 'over 1)
-        (synth-down st k (s \ synth-hold st k s))))
+        (synth-down st k (synth-hold st k))))
  ; rw x rh pixels of col (0xrrggbb) at x y
  (fill p w x y rw rh col)
   (? (rw < 1 || rh < 1) 0
@@ -420,7 +420,7 @@
         (: hf (synth-horn st) hn <hf feed <>hf wh (window-size win)
            _ (tablet? vi ? (synth-wedit st vi (vi 'vi-open f) <wh (wh 1)) (synth-wlay st <wh (wh 1)))
            (go _) (feed (),
-                   each (window-events win) (r \ synth-wstep st r),
+                   each (window-events win) (synth-wstep st),
                    st 'dirty || st 'vd ? (synth-paint st win, window-show win 0 (window-size win 1), pins st 'dirty 0 'vd 0),
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),

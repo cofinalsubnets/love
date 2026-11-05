@@ -1,6 +1,6 @@
 ; test/host/gz.l -- src/apps/gz.l and src/apps/tar.l against themselves; GNU tar and gzip
 ; agreeing with us is test/gate/targz.sh's
-(borrow '(gz tar))
+(borrow '(gz tar bytes))
 
 (: (gz-mk n f) (: b (cask n) (go i) (n <= i ? (string b) (pin b i (f i), go (i + 1))) (go 0))
    gz-empty ""
@@ -148,5 +148,16 @@
 (test
  (: z (gz-zip9 gz-text "a.txt" 7) u (gz-unzip z) h (gz-head z)
     (two? u & (<>u = gz-text) & (h 2 = "a.txt") & (#z <= #(gz-zip gz-text "a.txt" 7)) ? 1 0)))
+
+; reserved flags and a wrong header crc are refused; a hint past deflate's ratio is not believed
+(: z (gz-zip "hello" "" 7)
+   (with k v) (cask #z @ c (pour c 0 z 0 #z, pin c k v, string c))
+   crc (gz-crc32 "\x1f\x8b\x08\x02\0\0\0\0\0\x03") h "\x1f\x8b\x08\x02\0\0\0\0\0\x03"
+   body (snip z 10 #z)
+   _ (test (gz-unzip (with 3 32) = ())
+           (gz-unzip (h + wrle (crc & 65535) 2 + body) @ r (two? r && <>r = "hello"))
+           (gz-unzip (h + wrle ((crc & 65535) ^ 1) 2 + body) = ())
+           (inflate "\x03\0" 1073741824 = ""))
+   0)
 
 (puts "gz: ok") (putc 10)

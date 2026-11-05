@@ -17,7 +17,7 @@
              65360 199 65367 207 65365 201 65366 209 65379 210 65535 211          ; home end pgup pgdn ins del
              65470 187 65471 188 65472 189 65473 190 65474 191                    ; f1..f5
              65475 192 65476 193 65477 194 65478 195 65479 196 65480 215 65481 216 ; f6..f12
-             32 162}                                                              ; space: use
+             32 162 44 160 46 161}                                                ; space: use; , .: strafe
    (keyof sym) (doomkeys sym @ k (? (charm? k) k (32 < sym < 127) sym))
 
    ; --- the driver ---
@@ -152,6 +152,13 @@
        (enter _) (: _ (note "booting \(mod)")
                     e (ev 'kexec mod "sh -c 'doom; sh'")
                     (fail "cannot boot \(mod) (\(e))"))
+       ; `love site`'s prebuilt, where the origin has one; kexec answers only if it could not boot
+       got "/doom-site.wasm"
+       _ (elem 'kexec (names ()) && !(two? (stat mod)) &&
+          (ev 'fetch "/out/doom/site.wasm" got @
+             0 (ev 'fetch "/out/doom/site.image" "/doom-site.image",
+                note "booting the origin's doom", ev 'kexec got "sh -c 'doom; sh'")
+             _ 0))
        (? !(elem 'kexec (names ())) (fail "this machine cannot boot what it builds")
           (two? (stat mod)) (enter 0)
           ; a task shares no environment with its spawner here, so cook's settings go on its line

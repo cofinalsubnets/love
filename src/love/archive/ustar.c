@@ -4,8 +4,15 @@
 
 uintptr_t ustar_octal(unsigned char const *p, int n) {
   uintptr_t v = 0;
-  for (int i = 0; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');
+  int s = 0;
+  while (s < n && p[s] == ' ') s++;
+  for (int i = s; i < n && p[i] >= '0' && p[i] <= '7'; i++) v = v * 8 + (uintptr_t)(p[i] - '0');
   return v; }
+
+bool ustar_summed(unsigned char const *h) {
+  uintptr_t sum = 8 * ' ';
+  for (int i = 0; i < 512; i++) if (i < 148 || i >= 156) sum += h[i];
+  return sum == ustar_octal(h + 148, 8); }
 
 bool ustar_member(unsigned char const *h) {
   return (h[156] == '0' || h[156] == 0 || h[156] == '2') && !memcmp(h + 257, "ustar", 5); }

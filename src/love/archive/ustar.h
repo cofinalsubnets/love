@@ -7,6 +7,9 @@
 // a ustar header field, octal, NUL/space terminated -- size at +124, mtime at +136
 uintptr_t ustar_octal(unsigned char const *p, int n);
 
+// the header's own checksum holds: every byte summed, its field as spaces
+bool ustar_summed(unsigned char const *h);
+
 // ustar-branded, and a plain file or a symlink: directories are skipped
 bool ustar_member(unsigned char const *h);
 #define ustar_islink(h) ((h)[156] == '2')
