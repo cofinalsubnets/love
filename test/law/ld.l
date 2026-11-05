@@ -806,4 +806,10 @@
    (trap (_ \ ldemit ^10 'text 0 () ()) () (a \ b \ a) = 'link-cx)
    (ldemit ^11 'text 7 () () = [7]))
 
+; a unit of many small sections, each named by a word: the writer's cost grows with them, not as their square
+(: (ms-asm n) (foldl (\ a i (a + ".section \"s" + show i + "\",\"a\"\nl" + show i + ": .long g" + show i + " - .\n.long l" + show i + "\n")) "" ^n)
+   tops {1000 (gas-top 'x64 (ms-asm 1000)) 4000 (gas-top 'x64 (ms-asm 4000))}
+   (ms-obj n) (tops n @ r (objsecsn 'x64 (objsec-merge [[".text" 1 6 4 ()]] <r) (r 1) (r 2) (r 3) () {} [() ()] ()))
+   (test (test-linear ms-obj 1000) (test-grows test-words ms-obj 1000)))
+
 (test_fin (), say err "test/law/ld: ok", put err 10, 0)

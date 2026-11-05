@@ -100,22 +100,28 @@
    (o-put32 bytes off val) (o-putbs bytes off (le32 val))
 
    ; a lane is one laid section: (name type flags align bytes relocs labels).
-   ; o-where: a label -> (shndx offset), 1-based, or ().
-   (o-where lanes lbl)
-    (: (go ls i) (!(two? ls) ? ()
+   ; o-wix: every label -> (shndx offset), 1-based, the first lane's that has it.
+   ; o-where reads it, () for none.
+   (o-wix lanes)
+    (: t {}
+       (go ls i) (? (atom? ls) t
                     (<ls 6 @ lb
-                       (o-has? lb lbl ? [i (peep lb lbl 0)] (go >ls (i + 1)))))
+                       (foldl (\ _ k (o-has? t k ? 0 (pin t k [i (peep lb k 0)]))) 0 (keys lb),
+                        go >ls (i + 1))))
        (go lanes 1))
+   (o-where wx lbl) (peep wx lbl ())
+   ; lane index -> lane, so a walk by index is no walk of the list
+   (o-rows ls) (: t {} (go es i) (atom? es ? t (pin t i <es, go >es (i + 1))) (go ls 0))
    ; a func symbol's size: its end label's offset less its own, in the same lane, else 0
-   (o-fsize lanes w nm) (o-where lanes (fn-end nm) @ e (two? e && <e = <w ? (<>e - <>w) 0))
-   (o-ftype lanes nm) (two? (o-where lanes (fn-type nm)) ? 2 0)        ; stt_func | stt_notype
+   (o-fsize wx w nm) (o-where wx (fn-end nm) @ e (two? e && <e = <w ? (<>e - <>w) 0))
+   (o-ftype wx nm) (two? (o-where wx (fn-type nm)) ? 2 0)        ; stt_func | stt_notype
    ; labels a relocation names that no lane defines, each an undef symbol; first-seen order
-   (o-exts lanes rels)
+   (o-exts wx rels)
     (: seen {}
        (go rs acc)
         (!(two? rs) ? acc
            (<rs 2 @ lbl
-              (o-where lanes lbl || o-has? seen lbl ? (go >rs acc)
+              (o-where wx lbl || o-has? seen lbl ? (go >rs acc)
                (pin seen lbl 1, go >rs (lbl . acc)))))
        (rev (go rels ())))
 
@@ -183,12 +189,13 @@
                    w (o-walk be <p >p wkset (exec? s ? 1) rset)
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
-       (ln i) (lanes i)
+       wx (o-wix lanes) lnt (o-rows lanes)
+       (ln i) (peep lnt i ())
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
        (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
-       (sec-exec? si) (exec? (secs (si - 1)))            ; by 1-based shndx
-       allrel (foldl (a \ l \ a + ln-rl l) () lanes)
-       exts (o-exts lanes allrel)
+       (sec-exec? si) (exec? (ln (si - 1)))            ; by 1-based shndx
+       allrel (catall (map ln-rl lanes))
+       exts (o-exts wx allrel)
        fnset (o-names funcnames)
        gset (o-names globnames)
        ; a relocated label with no symbol of its own gets a local one, addend 0: on its section
@@ -199,7 +206,7 @@
            (go rs acc)
             (!(two? rs) ? acc
                (: r <rs lbl (r 2)
-                  w (elem (r 1) kinds ? (o-where lanes lbl))
+                  w (elem (r 1) kinds ? (o-where wx lbl))
                   (go >rs (? !(two? w) acc
                              !(pick <w lbl) acc
                              (o-has? seen lbl) acc
@@ -226,7 +233,7 @@
         (? (o-has? globidx lbl) [(peep globidx lbl 0) aux]
            (o-has? fnidx lbl)   [(peep fnidx lbl 0) aux]
            (o-has? locidx lbl)  [(peep locidx lbl 0) aux]
-           (o-where lanes lbl @ w
+           (o-where wx lbl @ w
               (two? w ? [<w (<>w + aux)] [(peep extidx lbl 0) aux])))
        ; a movw16/movt16 target -> (symidx addend); its aux is Rd, not an addend
        (mwloc lbl) (a32loc lbl 0)
@@ -259,22 +266,22 @@
        lbytes (map (l \ (ln-rl l @ rs (bakepc (bakemw (bakeabs (ln-bs l) rs) rs) rs))) lanes)
        symnames (map (s \ peep anames s s) (map (string * cap) locs + funcnames + globnames + map string exts))
        str (o-strtab symnames)
-       strblob <str stroffs <>str
+       strblob <str stroffs (o-rows <>str)
        ; -- the symbol table. on arm a func symbol's value carries the thumb bit, which
        ; R_ARM_THM_CALL folds into T; data syms stay even. a symbol's section is wherever its
        ; bytes went. --
-       (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
+       (o-place nm) (o-where wx (name nm) @ w (two? w ? w '(1 0)))
        dsz (o-dsizes secs)
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
                                            (sec-exec? si ?
-                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) (o-fsize lanes [si off] (cap e)))   ; stb_local stt_func, +thumb bit
+                                              (elf-sym32 (stroffs i) 0 2 si (off | tb) (o-fsize wx [si off] (cap e)))   ; stb_local stt_func, +thumb bit
                                               (elf-sym32 (stroffs i) 0 1 si off 0))))      ; stb_local stt_object
                                  locs))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
                                             (elf-sym32 (stroffs (nloc + i))
                                                      (elem fs wknames ? 2 1)         ; stb_weak vs stb_global
-                                                     2 <w (<>w | tb) (o-fsize lanes w fs))))   ; stt_func, +thumb bit
+                                                     2 <w (<>w | tb) (o-fsize wx w fs))))   ; stt_func, +thumb bit
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
                                             (elf-sym32 (stroffs (nloc + nfun + i))
@@ -322,7 +329,7 @@
                 + map (l \ ".rel" + <l) lanes
                 + '(".shstrtab"))
        shstr (o-strtab shnames)
-       shstrblob <shstr shoffs <>shstr
+       shstrblob <shstr shoffs (o-rows <>shstr)
        shname shoffs
        ; -- file layout: header, section contents packed tight, then the sht. the indices:
        ; 0 NULL, the content sections, .symtab, .strtab, a .rel per content section, .shstrtab --
@@ -331,12 +338,12 @@
        h-sz 52
        (o-offs32 i off acc) (nsec <= i ? [(rev acc) off]
                                (o-offs32 (i + 1) (off + ln-fsz (ln i)) (off . acc)))
-       co (o-offs32 0 h-sz ())    coffs <co
+       co (o-offs32 0 h-sz ())    coffs (o-rows <co)
        sym-off <>co               sym-sz (nsym * 16)
        str-off (sym-off + sym-sz) str-sz #strblob
        (o-roffs32 i off acc) (nsec <= i ? [(rev acc) off]
                                 (o-roffs32 (i + 1) (off + rcnt i * 8) (off . acc)))
-       ro (o-roffs32 0 (str-off + str-sz) ())   roffs <ro
+       ro (o-roffs32 0 (str-off + str-sz) ())   roffs (o-rows <ro)
        shs-off <>ro               shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
        sht (catall ([(o-zeros 40)]                                             ; 0 NULL
@@ -391,11 +398,14 @@
    ; a file-scope asm's sections, (name type flags forms) each: a name already laid takes the
    ; forms at its tail and keeps its own flags, a new one rides after the rest
    (objsec-merge secs xs)
-    (foldl (\ a x (: nm <x fs (x 3)
-                     (any (s \ <s = nm) a ?
-                        (map (s \ (<s = nm ? [nm (s 1) (s 2) (o-dalign (s 3) fs) (s 4 + fs)] s)) a)
-                        (a + [[nm (x 1) (x 2) (o-dalign 1 fs) fs]]))))
-           secs xs)
+    (: more {} inn (foldl (\ t s (pin t <s 1)) {} secs)       ; a name's asm sections, latest first
+       news (foldl (\ a x (: l (peep more <x ())
+                             (pin more <x (x . l), (atom? l && !(inn <x) ? (x . a) a))))
+                   () xs)
+       (grown nm al f) (rev (peep more nm ()) @ l
+                          [(foldl (\ a x (o-dalign a (x 3))) al l) (catall (f . map (x \ x 3) l))])
+       (map (s \ (grown <s (s 3) (s 4) @ g [<s (s 1) (s 2) <g <>g])) secs
+        + map (x \ (grown <x 1 () @ g [<x (x 1) (x 2) <g <>g])) (rev news)))
    ; the .ARM.attributes an arm32 object owes its linker, which refuses a pair that cannot
    ; merge. an unstated tag reads 0 and disarms the check; ld compares VFP_args only where
    ; Tag_ABI_FP_number_model (23) says floats are used.
@@ -655,22 +665,24 @@
               secs)
        lanes (a64 && two? uw ? (o-eh lanes0 uw @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
        nsec #lanes
-       (ln i) (lanes i)
+       wx (o-wix lanes) lnt (o-rows lanes)
+       (ln i) (peep lnt i ())
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
        (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
-       allrel (foldl (a \ l \ a + ln-rl l) () lanes)
-       ext0 (o-exts lanes allrel)
+       allrel (catall (map ln-rl lanes))
+       ext0 (o-exts wx allrel)
        exts (ext0 + filter (u \ !(elem u ext0)) (map name (3 < #ax ? (ax 3) ())))
        vist (foldl (\ t p (pin t (name <p) <>p)) {} (4 < #ax ? (ax 4) ()))
        (o-vis nm b) (peep vist (name nm) 0 @ v (v = 0 ? b (o-putbs b 5 [v])))
        ; x64: a reach with a constant into a merging section names its label; section + constant
        ; cannot say which piece it means. those no text named locally join the locals
        (rel-c k aux) (k @ ('rel32 || 'pc32) (aux - 4) 'rel64 (aux - 8) aux)
-       (mrg? r) (: w (o-where lanes (r 2))
+       (mrg? r) (: w (o-where wx (r 2))
                    (two? w && 0 < ((ln (<w - 1)) 2 & 16) && !(o-has? gbset (r 2)) && rel-c (r 1) (r 3) != 0))
        mlabs (target = 'x64 ? (uniq (map (r \ show (r 2)) (filter mrg? allrel))) ())
        mset (o-names mlabs)
-       mnew (filter (l \ !(elem l loc0)) mlabs)
+       loc0s (o-names loc0)
+       mnew (filter (l \ !(o-has? loc0s (intern l))) mlabs)
        mnews (o-names mnew)
        locnames (loc0 + mnew)
        locidx (o-idx (map name locnames) (1 + nsec))
@@ -685,23 +697,23 @@
 
        symnames (map (s \ peep anames s s) (locnames + map cap labss + funcnames + globnames + map cap abss + map string exts))
        str (o-strtab symnames)
-       strblob <str stroffs <>str
+       strblob <str stroffs (o-rows <>str)
 
        ; -- the symbol table, locals first. a symbol's section is wherever its bytes went;
        ; o-place falls back to section 1 for a name never laid --
-       (o-place nm) (o-where lanes (name nm) @ w (two? w ? w '(1 0)))
+       (o-place nm) (o-where wx (name nm) @ w (two? w ? w '(1 0)))
        dsz (o-dsizes secs)
        (o-size nm) (peep dsz (string? nm ? nm (show nm)) 0)
        ; a data name's type and size: an asm text's as its .type and .size say, else an object
        ; the extent of its data
        (o-asm? nm) (o-has? adata (name nm) || o-has? mnews (name nm))
-       (o-xtype nm) (two? (o-where lanes (fn-obj nm)) ? 1 (o-ftype lanes nm))
+       (o-xtype nm) (two? (o-where wx (fn-obj nm)) ? 1 (o-ftype wx nm))
        (o-dtype nm) (o-asm? nm ? (o-xtype nm) 1)
-       (o-xsize w nm) (peep szt (name nm) () @ z (charm? z ? z (o-fsize lanes w nm)))
+       (o-xsize w nm) (peep szt (name nm) () @ z (charm? z ? z (o-fsize wx w nm)))
        (o-dsize w nm) (o-asm? nm ? (o-xsize w nm) (o-size nm))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
-                                            x (exec? (secs (<w - 1)))
+                                            x (exec? (ln (<w - 1)))
                                             (elf-sym (stroffs i) 0 (x ? (o-xtype ls) (o-dtype ls)) <w <>w (x ? (o-xsize w ls) (o-dsize w ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
@@ -732,7 +744,7 @@
        (secsym lbl)
         (? (o-has? fnidx lbl) [(peep fnidx lbl 0) 0]
            (o-has? gidx lbl)  [(peep gidx lbl 0) 0]
-           (o-where lanes lbl @ w (two? w ? w [(peep extidx lbl 0) 0])))
+           (o-where wx lbl @ w (two? w ? w [(peep extidx lbl 0) 0])))
        rabs (? a64 ra-abs64 rv rr-64 r-64)
        (o-rels rs)
         (catall (map (\ [off k lbl aux pv]
@@ -747,7 +759,7 @@
                  ; an 8-byte word measured from its own start
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
-                 'secrel32 (o-where lanes lbl @ w (o-rela off <w ra-prel32 <>w))
+                 'secrel32 (o-where wx lbl @ w (o-rela off <w ra-prel32 <>w))
                  'pc32 (o-rela off si (rv ? rr-pc32 r-pc32) ((sa + aux) - 4))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
                  ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
@@ -783,7 +795,7 @@
                 + map (i \ ".rela" + <(ln i)) rl
                 + '(".shstrtab"))
        shstr (o-strtab shnames)
-       shstrblob <shstr shoffs <>shstr
+       shstrblob <shstr shoffs (o-rows <>shstr)
        shname shoffs
 
        ; -- file layout: header, section contents packed tight (sh_addralign places them),
@@ -795,17 +807,17 @@
        ; the content offsets, in section order; a NOBITS sh_offset is a placeholder.
        (o-offs i off acc) (nsec <= i ? [(rev acc) off]
                              (o-offs (i + 1) (off + ln-fsz (ln i)) (off . acc)))
-       co (o-offs 0 h-sz ())    coffs <co
+       co (o-offs 0 h-sz ())    coffs (o-rows <co)
        sym-off <>co             sym-sz (nsym * 24)
        str-off (sym-off + sym-sz) str-sz #strblob
        (o-roffs i off acc) (nsec <= i ? [(rev acc) off]
                               (o-roffs (i + 1) (off + rcnt i * 24) (off . acc)))
-       ro (o-roffs 0 (str-off + str-sz) ())    roffs <ro
+       ro (o-roffs 0 (str-off + str-sz) ())    roffs (o-rows <ro)
        shs-off <>ro             shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
 
        ; a link-order section's sh_link: the section its first word reaches
-       (o-link l) (0 < (l 2 & 128) && two? (l 5) ? (o-where lanes (l 5 0 2) @ w (two? w ? <w 0)) 0)
+       (o-link l) (0 < (l 2 & 128) && two? (l 5) ? (o-where wx (l 5 0 2) @ w (two? w ? <w 0)) 0)
        sht (catall ([(o-zeros 64)]                                         ; 0 NULL
               + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
                                   0 (coffs i) (o-blen (ln-bs l)) (o-link l) 0 (l 3) (l 2 >> 32)))
