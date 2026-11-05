@@ -1394,7 +1394,7 @@
           (c = 58) (leave (), vnorm st c)
           (elem (arrow c) vmotions) (vnorm st (arrow c))
           st))
-   (vdigits k) (show k @ s (map (i \ s i) (jot #s)))
+   (vdigits k) (show k @ s (map s (jot #s)))
    (vdot st raw)
     (st 'dot @ d
        (atom? d ? (vmsg st "nothing to repeat")

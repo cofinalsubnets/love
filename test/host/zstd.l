@@ -27,7 +27,7 @@
 (test
  (lit? zstd-block)
  ; every level reads back, the empty input too, and one byte over and over
- (zst-all (l \ zst-back zst-mix l) [1 2 3 5 9 12 19])
+ (zst-all (zst-back zst-mix) [1 2 3 5 9 12 19])
  (zst-back "" 3)
  (zst-back "x" 3)
  (zst-back (cats (map (_ \ "z") (jot 70000))) 3)

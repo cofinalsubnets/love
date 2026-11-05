@@ -77,7 +77,7 @@
        _    (string? d ? (chdir d) 0)
        pid  (henv-with (peep u 'env []) (_ \ (spawnmap argv fm cl 0 0)))
        (string? d ? (chdir old) 0,
-        each cl (f \ close f),
+        each cl close,
         pid))
 
    ; --- act: one unit up ---
@@ -186,7 +186,7 @@
    ; shutdown walks 'order newest first: dependents before what they depend on. the flag
    ; suspends restarts for the walk.
    (hshutdown _)
-    (hput 'shutting 1, each (hcell 'order []) (nm \ hstop1 nm), hnote "all stopped", 1)
+    (hput 'shutting 1, each (hcell 'order []) hstop1, hnote "all stopped", 1)
 
    ; --- reload: re-read the config and adopt it; nothing restarts ---
    (hreload _)

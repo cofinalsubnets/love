@@ -9,7 +9,7 @@
 
 (borrow 'posix)
 (: (be32 n) [((n >> 24) & 255) ((n >> 16) & 255) ((n >> 8) & 255) (n & 255)]
-   (bytes s) (map (i \ s i) ^#s)
+   (bytes s) (map s ^#s)
    (cat l)   (foldl (+) () l)
    (num s)   (foldl (\ a c (a * 10 + c - 48)) 0 (bytes s))
    (hexd c)  (? (c <= 57) (c - 48) (c <= 70) (c - 55) (c - 87))

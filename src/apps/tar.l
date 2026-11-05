@@ -431,7 +431,7 @@
     (: ms (peep t 'mem ())   n (tarc-num (peep t 'strip ""))   seen {}
        (pin t 'seen seen,
         (e \ (: nm (tarc-nom e)
-                hit (!(two? ms) ? 1 (: m (filter (m \ tarc-has? nm m) ms) (each m (m \ pin seen m 1), two? m)))
+                hit (!(two? ms) ? 1 (: m (filter (tarc-has? nm) ms) (each m (m \ pin seen m 1), two? m)))
                 c (hit && tarc-cut nm n)
                 (c && 0 < #c ? [1 (pin (tarc-copy e) 'nom c)])))))
    (tarc-unseen t)

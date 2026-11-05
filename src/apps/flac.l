@@ -142,7 +142,7 @@
              fin (\ v (p @ "-" v (close q, v)))
              (? (string? m) (fin (flac-err "\(nm): ERROR: \(m)"))
                 (o "t") (: b (cask 89) _ (md5-init b)
-                          r (flac-pump q (snip hb (m 'at) #hb) (pin m 'whole 1) (pcm \ md5-feed b pcm))
+                          r (flac-pump q (snip hb (m 'at) #hb) (pin m 'whole 1) (md5-feed b))
                           sum (md5-done b)
                           (fin (? (string? r) (flac-err "\(nm): ERROR while decoding data: \(r)")
                                   (m 'md5 != "00000000000000000000000000000000" && sum != m 'md5)

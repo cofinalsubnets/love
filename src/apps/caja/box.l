@@ -306,7 +306,7 @@
    (cb-special J s)
     (synch-h J, synch-v J,
      #s < 256 ? (dvi-out J 239, dvi-out J #s) (dvi-out J 242, dvi-four J #s),
-     map (b \ dvi-out J b) (map s ^#s))
+     map (dvi-out J) (map s ^#s))
    ; leaders of boxes l long over w2 from J's ax, the box's edge at org: ax moved to the first
    ; box, answering the gap between boxes -- aligned (100), centered (101) or expanded
    (lead-start J ax org sub l w2)

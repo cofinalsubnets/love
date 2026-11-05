@@ -499,7 +499,7 @@
   (apart? (kinds 1) (kinds 2)) (apart? (kinds 2) (kinds 3)) (apart? (kinds 1) (kinds 3))))
 
 ; a tier is built of its own stuff, and a cell's face is the cell's own dice, not the clock's
-(: (kit th) (<(th 1) . map (r \ <r) (th 2))
+(: (kit th) (<(th 1) . map cap (th 2))
    (marks th) (map (i \ <(tile-face th 1 1 (i % 40) (i // 40) 5)) ^400)
    (all-of? l ks) (foldl (a \ x \ (a && elem x ks)) 1 l)
  (test

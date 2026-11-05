@@ -526,7 +526,7 @@
    _ (chk-eq "gas.a64.refuse"
         '(gas-a64-operand gas-a64-operand gas-a64-width gas-a64-width gas-a64-operand gas-a64-operand
           a64-bitmask-imm gas-a64-operand gas-a64-operand gas-a64-operand)
-        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+        (map (l \ trap (gas-text 'a64) l (\ a b a))
              ["cmp x0, x1, ror #2" "neg x1, x2, lsl #64" "add w0, x1, w2" "ldrsw w0, [x1]" "add w0, wzr, #1"
               "ret x2, x3" "and w0, w0, #0" "ldr x0, [x1, x2, lsl #2]" "ldr x0, [x1], #300" "lsl w0, w1, #32"]))
    ;; the hints, inverted logicals, carry pair, reversals, unprivileged pair and the kernel's
@@ -569,7 +569,7 @@
               "sha256h2 q1, q2, v4.4s" "sha256su0 v16.4s, v17.4s" "sha256su1 v16.4s, v18.4s, v19.4s"
               "mrs x0, id_aa64isar0_el1" "ldr q1, [x2, #-16]!" "ldr q1, [x2, #-16]" "ldr q3, [x0, #8]"]))
    _ (chk-eq "gas.a64.simd.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand)
-        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+        (map (l \ trap (gas-text 'a64) l (\ a b a))
              ["sha256h q0, q1, v4.16b" "sha256su0 v16.4s" "ldr q0, [x1, #300]"]))
    ;; the prefetches, scaled or not; and a move to or from sp, which is add #0 (orr's 31 is xzr)
    _ (chk-eq "gas.a64.prfm"
@@ -722,7 +722,7 @@
    _ (chk-eq "gas.macro.at" "(((\".text\" 1 6 ((jmp .Lx0) (label .Lx0) (jmp .Lx1) (label .Lx1)))) () () ())"
         (show (gas-top 'a64 "\t.macro m\n\tb .Lx\\@\n.Lx\\@:\n\t.endm\n\tm\n\tm\n")))
    _ (chk-eq "gas.a64.lbldist.refuse" '(gas-immediate gas-immediate)
-        (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
+        (map (x \ trap (gas-top 'a64) x (\ a b a))
              ["661: nop\n .align 4\n662:\n .rept (662b-661b)/4\n nop\n .endr\n" ".rept (2f-1f)/4\n nop\n .endr\n1: nop\n2:\n"]))
    ;; the bitfield moves as llvm-mc lays them; mixed widths, an immediate past the width, sp, a
    ;; short or register operand refuse
@@ -865,13 +865,13 @@
    _ (chk-eq "gas.a64.binlit" "((((\".text\" 1 6 ((raw (1 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 11 0 0 0 0 0 0 0)) (raw (160 0 128 210)) (raw (255)) (raw (18 0 0 0 0 0 0 0))))) () () ()) \"1f2003d5ffffff1701000014\" (gas-data gas-data gas-data gas-data gas-immediate))"
         (show [(gas-top 'a64 ".quad 0b01, 0B11, 0b1011\nmov x0, #0b101\n.byte 0b11111111\n.quad (0b1 << 4) | 0b10\n")
                (holo-hex 'a64 (gas-text 'a64 "0:\n nop\n b 0b\n b 0f\n0:\n"))
-               (map (l \ trap (x \ gas-top 'a64 x) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
+               (map (l \ trap (gas-top 'a64) l (\ a b a)) [".quad 0b2\n" ".quad 0b1x\n" ".quad 0b_1\n" ".quad 0b1_0\n" "mov x0, #0b12\n"])]))
    ;; an argument that is one quoted string passes its inside, positional or by name
    _ (chk-eq "gas.macro.quote" '("nop" "dmb sy" ".ascii \"x y\"" "mov x0, x1" "mov x0, x1" "mov x2, x3" "nop" "")
         (gf-expand 'a64 (gf-lines 'a64 ".macro alt insn1, insn2, cap, enable = 1\n\\insn1\n\\insn2\n.endm\nalt nop, \"dmb sy\", 90\n.macro s a\n.ascii \"\\a\"\n.endm\ns \"x y\"\n.macro t a, b\nmov \\a, \\b\n.endm\nt \"x0\", \"x1\"\nt x0 \"x1\"\nt a=\"x2\", b=x3\n.macro w a\n.ifc \\a,dmb sy\nnop\n.endif\n.endm\nw \"dmb sy\"\n")))
    ;; .org to a label past instructions: zeros up to it; one behind refuses
    _ (chk-eq "gas.a64.org" "((((\".text\" 1 6 ((label a) (nop) (jmp a) (mov r0 r1) (label .Lorg0) (raw (0 0 0 0)) (nop)))) () () ()) (((\".text\" 1 6 ((label .Ls0) (nop) (jmp .Ls0) (label .Lorg0) (raw (0 0 0 0 0 0 0 0)) (label .Ls1) (nop) (jmp .Ls1) (label .Lorg1) (raw (0 0 0 0 0 0 0 0))))) () () ()) gas-org-back)"
-        (show (map (x \ trap (y \ gas-top 'a64 y) x (\ a b a))
+        (show (map (x \ trap (gas-top 'a64) x (\ a b a))
                    ["a: nop\n b a\n mov x0, x1\n .org a + 16\n nop\n"
                     ".macro v\n.Ls\\@: nop\n b .Ls\\@\n .org .Ls\\@ + 16\n.endm\n v\n v\n"
                     "a: nop\n nop\n nop\n .org a + 4\n nop\n"])))
@@ -890,7 +890,7 @@
    _ (chk-eq "gas.a64.zr" "e0031faaff0301aa3f001feb20001f8be20303aa3f001f6ae4031fcbe503064a3f0002cb"
         (holo-hex 'a64 (gas-text 'a64 "mov x0, xzr\n mov xzr, x1\n cmp x1, xzr\n add x0, x1, xzr\n orr x2, xzr, x3\n tst w1, wzr\n neg x4, xzr\n eor w5, wzr, w6\n sub xzr, x1, x2")))
    _ (chk-eq "gas.a64.adrp.refuse" '(gas-a64-operand gas-a64-operand gas-a64-operand gas-a64-operand)
-        (map (l \ trap (x \ gas-text 'a64 x) l (\ a b a))
+        (map (l \ trap (gas-text 'a64) l (\ a b a))
              ["adrp w1, sym" "add w1, w1, :lo12:sym" "ldr x0, [x1, :lo12:sym]!" "ldr x0, [x1, :got:sym]"]))
    _ (chk-eq "gas.a64.lse.refuse"
         '(gas-a64-operand gas-a64-op gas-a64-operand gas-a64-operand gas-a64-operand)

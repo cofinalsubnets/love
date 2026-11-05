@@ -267,7 +267,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
               (: t (tuner-new ref (dm ? "demo" (getenv "HORN_IN" @ x (string? x && #x ? x "mic"))))
                  _ (twirl (_ \ (dm ? (demo t (clock 0)) (listen t h "" 0))) ())
                  _ (wn ? (glass t)
-                       (stage-run {'show (w \ ht \ paint t w ht) 'step (k \ step t k) 'over? (_ \ t 'over)
+                       (stage-run {'show (w \ ht \ paint t w ht) 'step (step t) 'over? (_ \ t 'over)
                                    'tick (_ \ 1) 'every 50 'modes ['hide]}))
                  _ (pin t 'over 1)                ; the ear stops
                  _ (dm ? 0 (close h))             ; and the device: run in-process the port

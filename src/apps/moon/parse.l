@@ -2382,7 +2382,7 @@
                                         (foldl (_ \ n \ visit n) 0 (trefs <>lb <>>lb ())))
                      0)
        roots (foldl (a \ f \ (lz? f ? a (refs f () a))) (refs (ps 'hoist) () ()) acc)
-       _ (foldl (_ \ n \ visit n) 0 (roots + map (k \ ps 'alias k) (keys (ps 'alias))))
+       _ (foldl (_ \ n \ visit n) 0 (roots + map (ps 'alias) (keys (ps 'alias))))
        (one f) (: lb <>>>f
                   _ (pins ps 'currstr (lb 3) 'curssp (lb 4))
                   _ (map (q \ pin (ps 'qstage) <q <>q) (lb 5))

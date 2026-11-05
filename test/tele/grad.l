@@ -42,7 +42,7 @@
         loss   (fwd leaves)
         _ (back loss)
         ag (map grad leaves)
-        good (lall (map (p \ okp fwd ins ag p) (jot #ins)))
+        good (lall (map (okp fwd ins ag) (jot #ins)))
         (ok nm good))
 
    ; -- fixtures

@@ -434,7 +434,7 @@
    ; an asm's own labels, local in the symtab as gas lays them: modpost finds an export by its
    ; __export_symbol_ label. gas's numbered (l911.1, a function's fn.asm.3.l911.1) and pool (.L..) labels stay out
    (asmlocs secs)
-    (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
+    (: (digs? s) (0 < #s && all digit? (map s (jot #s)))
        (lnum? sp) (rev (split "." sp) @ p (1 < #p && starts? <>p "l" && digs? (snip <>p 1 #(<>p)) && digs? <p))
        (lab f) (two? f && <f = 'label && !(fn-mark? <>f) ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
@@ -501,7 +501,7 @@
                               ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                               [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())]
                               ; the functions C laid, not the asm's, under unwind tables
-                              (ua || us ? (fnames + lnames + map (x \ <x) xfns) ()))))
+                              (ua || us ? (fnames + lnames + map cap xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
@@ -536,7 +536,7 @@
    ; else the object's with .d; -MT the target, else the object
    (cc-deps src dst t)
     (: ours (map (r \ "\(r)include/") (mroots ()))
-       (sys? p) (any (d \ starts? p d) ours || (t 'vb && starts? p "include/"))
+       (sys? p) (any (starts? p) ours || (t 'vb && starts? p "include/"))
        hs (filter (p \ !(t 'mmd && sys? p)) (uniq (rev (peep cppdeps 'l ()))))
        df (t 'mf || (dst @ (b + ".o") "\(b).d" "\(dst).d"))
        txt ("\(t 'mt || dst): \(join " \\\n  " (src . hs))\n"

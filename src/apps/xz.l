@@ -297,12 +297,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
                 (: k {}
                    (no m) (xzc-moan t m, ())
                    (mk _) (? (peep t 't 0) [1 (s \ 0)]
-                             (peep t 'c 0) [1 (s \ say out s)]
+                             (peep t 'c 0) [1 (say out)]
                              (<>stem @ dst
                                 (two? (lstat dst) && !(peep t 'f 0) ? (no (dst + ": File exists"))
                                    (open dst "w" @ o
                                       (!(hot? o) ? (no (dst + ": Cannot write"))
-                                         (pins k 'o o 'dst dst, [1 (s \ say o s)]))))))
+                                         (pins k 'o o 'dst dst, [1 (say o)]))))))
                    u (xz-unf (xzc-rd q) mk)
                    _ (close q)
                    o (peep k 'o ())   laid (hot? o)   dst (peep k 'dst "")
@@ -324,7 +324,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
                          (peep t 'c 0 ? (say out z, 0) (xzc-put t p (p + suf) z st)))))))))
    (xzc-filter t)
     (? (peep t 'd 0)
-       (xz-unf (xzc-rd in) (_ \ [1 (peep t 't 0 ? (s \ 0) (s \ say out s))]) @ u
+       (xz-unf (xzc-rd in) (_ \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
           (atom? u ? (xzc-moan t ("(stdin): " + xzc-why u), 1) 0))
        (two? (tty out) && !(peep t 'f 0))
         (say err "xz: Compressed data cannot be written to a terminal\n", 1)

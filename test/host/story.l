@@ -5,7 +5,7 @@
 
 (borrow 'story)   ; the artifact's module, warm from the tree
 
-(: (keys! g s) (each (map (i \ s i) ^#s) (c \ story-key g c))
+(: (keys! g s) (each (map s ^#s) (story-key g))
 
    L (load-level "src/apps/lore/levels/lighthouse.l")
    _ (test L (13 = L 'w) (14 = L 'h) (6 = L 'sx) (8 = L 'sy)

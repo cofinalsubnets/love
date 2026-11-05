@@ -122,11 +122,11 @@ no file, or a bare -, is the filter: stdin -> stdout"
              dst (to ? () (zsc-dst t p))
              (no m) (zsc-say t m, ())
              (mk _) (? (peep t 't 0) [1 (s \ 0)]
-                       (peep t 'c 0) [1 (s \ say out s)]
+                       (peep t 'c 0) [1 (say out)]
                        (two? (lstat dst) && !(peep t 'f 0)) (no (dst + " already exists; not overwritten"))
                        (open dst "w" @ o
                           (!(hot? o) ? (no ("can't open " + dst + " for writing"))
-                             (pin k 'o o, [1 (s \ say o s)]))))
+                             (pin k 'o o, [1 (say o)]))))
              u (? (to || dst) (zstd-unf (zsc-rd q) mk) 'name)
              _ (close q)
              o (peep k 'o ())   laid (hot? o)

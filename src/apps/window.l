@@ -189,7 +189,7 @@
           _ (x-w8 k 53, x-w8 k (win 'depth), x-w16 k 4, x-w32 k (r 'pm), x-w32 k (win 'xw), x-w16 k w, x-w16 k h)
           _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'src), x-w32 k (r 'pm), x-w32 k (r 'fmt), x-w32 k 0)
           _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'dst), x-w32 k (win 'xw), x-w32 k (r 'fmt), x-w32 k 0)
-          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (v \ x-w32 k v))
+          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (x-w32 k))
           (pins r 'pw w 'ph h 'sc [(win 'w) (win 'h)] 'made 1)))
    (window-blit win pic w h ys)
     (: r (win 'how = 'x ? (x-render win) 0) H (win 'h)

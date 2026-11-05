@@ -76,7 +76,7 @@
 ; --- -shared with no script lays lld's own layout: kbuild's RELR probe, `void *p = &p;` as
 ; clang -c lays it for aarch64 and mooncc -c for x86-64, linked to the bytes ld.lld 22.1.8 writes
 (: (klp-dig c) (? (c < 58) (c - 48) (c - 87))
-   (klp-bytes t) (: h (filter (c \ c > 32) (map (i \ t i) ^#t))
+   (klp-bytes t) (: h (filter (c \ c > 32) (map t ^#t))
                     (string (map (i \ klp-dig (h (2 * i)) * 16 + klp-dig (h (2 * i + 1))) ^(#h // 2))))
    (klp-link nm hx)
     (: src ("out/.klp-" + nm + ".o") dst ("out/.klp-" + nm)

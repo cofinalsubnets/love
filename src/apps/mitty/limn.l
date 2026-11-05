@@ -93,7 +93,7 @@
                            (pin t sl (two? e ? [<e <>e (e 2) (e 3) (max (e 4) i) (max (e 5) q)]
                                         [i q (g >> 8 & 255) (g & 255) i q])))
                         0))
-       (each ^r (i \ each ^c (q \ cell i q)),
+       (each ^r (i \ each ^c (cell i)),
         t))
    ; each picture's view: [slot gen row col x y pw ph nc nr] -- top-left tile, the part x y pw ph
    ; in its own pixels, over nc x nr cells

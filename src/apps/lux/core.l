@@ -93,7 +93,7 @@
    (wsunfl w fl) (filter (p \ <p != w) fl)
    (wsfloating? sh w) (any (p \ <p = w) (wsfloat sh))
    (wsrect sh w) (: p (assoc w (wsfloat sh)) (two? p ? <>p))
-   (wsflof sh t) (filter (w \ wsfloating? sh w) (wsringof sh t))
+   (wsflof sh t) (filter (wsfloating? sh) (wsringof sh t))
    (wsflhere sh) (wsflof sh (wscur sh))
    (wsvisflof sh t) (map (w \ [w (wsrect sh w)]) (wsflof sh t))  ; as (window rect), for the painter
    (wsvisfl sh) (wsvisflof sh (wscur sh))
@@ -136,7 +136,7 @@
    ; --- the whole sheaf ---
    (wsallw sh) (foldl (a \ p \ a + zrow <>p) () (wsboard sh))
    (wstiled sh) (filter (w \ !(wsfloating? sh w)) (wsallw sh))
-   (wsfloatw sh) (filter (w \ wsfloating? sh w) (wsallw sh))
+   (wsfloatw sh) (filter (wsfloating? sh) (wsallw sh))
    (wswins sh) (wstiled sh + wsstack (wsfloatw sh) (wsfoc sh) (w \ ()))   ; the stacking order a pager reads, bottom to top
    (wsstack fl foc par)                                            ; floats bottom to top: the ring's top-first order
     (: (up w) (par w @ p (p != w && any (= p) fl ? p))             ; reversed, the focus and its owners last, a transient
@@ -159,6 +159,6 @@
    (wssane? sh) (wsknown? sh (wscur sh) && znodup? (wsallw sh)     ; the invariant: no window twice,
                   && all (p \ wsknownw? sh <p) (wsfloat sh)        ; no rect without a window,
                   && wsvisible? sh (wscur sh) && znodup? (wsvistags sh)   ; the current tag on a screen, no tag on two,
-                  && all (t \ wsknown? sh t) (wsvistags sh))       ; and every screen showing a real tag
+                  && all (wsknown? sh) (wsvistags sh))       ; and every screen showing a real tag
    (znodup? l) (? (atom? l) 1 (any (x \ x = <l) >l) 0 (znodup? >l)))
 ) ; module lux

@@ -2180,10 +2180,14 @@
        (wxlay f t)
         (trap (\ _ ['raw (gf-le (skv f t) (f 2))]) 0
               (\ a b (: w (f 2) site (t (f 3)) t1 (offs 1)
-                         r (gf-sum (f 1) (\ _ _ ()))
+                         r (gf-sum (sxp (f 1) 0) (\ _ _ ()))
                          ns (gbad? r || two? >r ? () (gf-norm <><r))
                          up (filter (p \ >p = 1) ns) dn (filter (p \ >p = -1) ns)
-                         (? (!(#ns = 2 && #up = 1 && #dn = 1)) (scare a b)
+                         k1 <(f 1)
+                         ; a .set name over one label: one this text lays below answers for itself
+                         (? (#ns = 1 && #up = 1)
+                             ['raw (gf-word tgt w (atom? >(f 1) && !(starts? <>k1 ".L") && string? (labs <<up) ? <>k1 (tspell (f 1))) rl)]
+                            (!(#ns = 2 && #up = 1 && #dn = 1)) (scare a b)
                             (: s <<up l <<dn
                                (? (!(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; l in the field's section
                                   ['raw [(fix w (w @ 4 'rel32 2 'rel16 'pc8) (name s) (site + w - t l + <<r))]]))))))
@@ -2259,17 +2263,20 @@
                           (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (x \ (x = l ? [en x] [x])) <>>r)]))) 0 (st 'order))))
                 0 (peep st 'endat ()))
        ; .set a, s+k: a label of a's own k bytes on from s, in s's section, splitting a run of
-       ; bytes there; one that would land inside a fix, or before an align, stays unlaid
-       (rsplit bs j) (? (j = 0) [() bs] (atom? bs) ()
+       ; bytes there; inside a fix, or any other form, it lays before that with what is left
+       (rsplit bs j) (? (atom? bs) [() () j]
                         (: e <bs n (two? e ? (e 1) 1)
-                           (n > j ? () (rsplit >bs (j - n) @ p (two? p ? [(e . <p) <>p])))))
+                           (n > j ? [() bs j] (rsplit >bs (j - n) @ p [(e . <p) <>p (p 2)]))))
+       (labk l k) (k = 0 ? l [<l <>l k])
        (labin fs off t l)
         (? (off = t) (l . fs)
-           (atom? fs || off > t) ()
+           (atom? fs) [(labk l (t - off))]
+           (off > t) (labk l (t - off) . fs)
            (: f <fs w (fsz f off)
-              (? (<f = 'raw && t < off + w)
-                  (rsplit <>f (t - off) @ p (two? p ? (['raw <p] . l . ['raw <>p] . >fs)))
-                 (labin >fs (off + w) t l @ r (two? r ? (f . r))))))
+              (? (off + w <= t) (f . labin >fs (off + w) t l)
+                 (<f = 'raw) (rsplit <>f (t - off) @ p
+                                ((atom? <p ? () [['raw <p]]) + (labk l (p 2) . ['raw <>p] . >fs)))
+                 (labk l (t - off) . fs))))
        (labpos fs off l) (? (atom? fs) () (<fs = l) off (labpos >fs (off + fsz <fs off) l))
        _ (foldl (\ _ a
                    (: r (trap (\ _ (gf-sum (sxp (sx a) 0) rl)) 0 (\ _ _ 'bad))
@@ -2279,8 +2286,8 @@
                                (: l ['label (name <(ns 0))]
                                   (foldl (\ _ nm (secs nm @ r9 (rev <>>r9) @ fs
                                                     (? (string? (labs a) || !(elem l fs)) 0
-                                                       (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)] @ fs2
-                                                          (two? fs2 ? (pin labs a nm, pin secs nm [<r9 <>r9 (rev fs2)]) 0)))))
+                                                       (pin labs a nm,
+                                                        pin secs nm [<r9 <>r9 (rev (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)]))]))))
                                          0 (st 'order))))))))
                 0 (sort (keys sx)))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
