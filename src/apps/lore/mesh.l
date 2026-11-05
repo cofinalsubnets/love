@@ -5,7 +5,7 @@
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-coarse mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-show mesh-win mesh-gone
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
 (borrow '(view window vec sky json))
 (borrow 'lore)                          ; lamp-light, in C
@@ -344,6 +344,14 @@
          'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // max w h // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
  (mesh-dims st) (: k (peep st 'kp 1) (tablet? (st 'win) ? [(st 'pic-w) (st 'pic-h)] [(k * st 'w) (k * st 'h)]))
+ ; ..a body's sway b [up right pitch roll] for the eye. a window's coarsest pixels would make it
+ ; hop, so there the server's enlarging slides the picture instead, by its own pixels; a body
+ ; two metres from what it sees, and the eye stays still
+ (mesh-sway st b fov w) (: s (mesh-scale st) win (st 'win)
+   (? (8 <= s && tablet? win && window-slides? win)
+      (: foc (s * w / 2.0 / tan (fov / 2.0))
+         (pin st 'slide [(int (foc * b 1 / 2.0)) (int (0.0 - foc * (b 2 + b 0 / 2.0)))], [0.0 0.0 0.0 0.0]))
+      (pin st 'slide [0 0], b)))
  ; ..a frame f: kitty alternates ids 7 and 8 in one synchronised update, the old taken down
  ; once the new is over it (one id reused blanks first); or the cells, bands over them
  (mesh-show st f text bands) (: w (st 'w) h (st 'h) k (peep st 'kp 1)
@@ -361,7 +369,7 @@
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
-   up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs))
+   up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs) (peep st 'slide [0 0]))
    _ (up ? (each rs (mesh-under f w h P W H)) (frame-paint f w (max 1 (min (W // w) (H // h))) P W))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))

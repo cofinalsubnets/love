@@ -2,7 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow '(world mesh neon posix bough))
+(borrow '(world mesh neon posix bough gesture))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -600,15 +600,29 @@
 (: gw "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 1] 0 0))"
    (go st a n) (each ^n (_ \ ((a ? (world-step st a) st), pin st 'dt (1.0 / 30.0), world-move st)))
    (cries st) (map cap (peep st 'sfx ()))
-   wk (world-new 8 8 (world-read gw) "") _ (go wk 'forward 60) wz (wk 'pz) wc (cries wk) wbob (peep wk 'wa 0.0)
+   wk (world-new 8 8 (world-read gw) "") _ (go wk 'forward 60) wz (wk 'pz) wc (cries wk) wbob (peep wk 'wa 0.0) wsteps (filter (s \ snip s 0 5 = "step ") wc)
+   (firsts-of l) (rev >(rev l))
    rn (world-new 8 8 (world-read gw) "") _ (go rn 'sprint 60) rz (rn 'pz) rpf (rn 'puff) _ (go rn 'sprint 300) rpf2 (rn 'puff) rc (catmap (_ \ (pin rn 'sfx (), go rn 'sprint 12, cries rn)) ^8)
    rrate (rn 'bp) _ (go rn () 300) rest (rn 'puff) rb (rn 'wa)
    jp (world-new 8 8 (world-read gw) "") _ (world-step jp 'jump) jc (cries jp)
- (test (any (s \ s = "step wood 0") wc) (any (s \ s = "step wood 1") wc) (0.0 < wbob)
+ (test (all (s \ snip s 0 10 = "step wood " && 48 <= s 10 < 54) wsteps) (2 < #(uniq (sort wsteps))) (all (p \ <p != >p) (zip >wsteps (firsts-of wsteps))) (0.0 < wbob)
        (1.5 * (wz - 1.0) < rz - 1.0) (0.1 < rpf) (rpf < rpf2) (0.8 < rpf2)
        !(any (s \ snip s 0 5 = "gasp ") wc) (any (s \ s = "gasp i2") rc) (any (s \ s = "gasp o2") rc)
        (rest < 0.7 * rpf2) (rb < 0.001) (jc = ()) (1000 < #(world-sound "step wood 0" 0)) (1000 < #(world-sound "gasp o2" 0))
        (1000 < #(world-sound "land grass 0" 0))))
+;; --sway swells from nothing as speed changes, and settles; a window's coarsest pixels take
+;; a body's sway as a slide of the picture, where its server can
+(: lq (\ n v (: st {'sway 1} _ (each ^n (i \ gesture-gait st (1.0 / 60.0) (i = 0 ? 0.0 v) 0)) (st 'lean)))
+   wb [0.01 0.02 0.03 0.04] sl {'scale 8 'win {'how 'x 'rd {}}} eb (mesh-sway sl wb 1.5 240) nb (mesh-sway {'scale 4 'win {'how 'x 'rd {}}} wb 1.5 240)
+ (test (lq 2 3.0 < 0.008) (0.012 < lq 10 3.0) (lq 90 3.0 < 0.001)
+       (eb = [0.0 0.0 0.0 0.0]) (5 < sl 'slide 0 < 15) (-40 < sl 'slide 1 < -30) (nb = wb)
+       (mesh-sway {'scale 8 'win 0} wb 1.5 240 = wb)))
+;; a foot makes no sound carried in a grav shaft
+(: gs "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0) (grav [1 0 4.3] [3 6 6.3] 'up) (air (box [1.2 0 3.9] [2.8 2.5 4.4]))"
+   (stepping z) (: st (pins (world-new 8 8 (world-read ("(level \"t\" (textures {}) " + gs + ")")) "") 'pz z 'sw 3.1)
+     _ (each ^10 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)))
+     (any (q \ snip (q 0) 0 5 = "step ") (peep st 'sfx ())))
+ (test (stepping 1.0) !(stepping 4.5)))
 ;; a headstone stands, and is no grave
 (: hs (world-read "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) (headstone [2 0 3] 45 t))")
  (test (#(hs 'brushes) > 1) (peep hs 'graves () = ())))

@@ -65,11 +65,14 @@
    [x (ch 'y - 0.022 * sq (sin q)) z (ch 'th) (ch 'ph) (ch 'ro + 0.012 * sin q)])
  (gesture-breath t) [(0.005 * sin (t * 1.55)) (0.004 * sin (t * 1.55 - 0.8))]
  gait-step 1.3 bob-walk 0.016 bob-run 0.032 puff-up 5.0 puff-down 18.0
+ ; ..a change of speed kicks the nod's rate, never its place: it swells and settles as a damped spring
+ lean-w 7.0 lean-kick 0.133
  (gesture-gait st dt v run) (: sw0 (peep st 'sw 0.0) sw (sw0 + pi * v * dt / gait-step) goes (v > 0.2)
    wa0 (peep st 'wa 0.0) wa (wa0 + min 1.0 (dt / 0.12) * ((goes ? (run ? bob-run bob-walk) 0.0) - wa0))
    pf0 (peep st 'puff 0.0) pf (pf0 + (goes && run ? ((1.0 - pf0) * dt / puff-up) (0.0 - pf0 * dt / puff-down)))
    bp0 (peep st 'bp 0.0) bp (bp0 + dt * (1.55 + 3.4 * pf)) n (floor (bp / pi))
-   _ (? (peep st 'sway 0) (pins st 'v0 v 'lean ((peep st 'lean 0.0 + 0.007 * (v - peep st 'v0 0.0)) * exp (-4.0 * dt))))
+   _ (? (peep st 'sway 0) (: x (peep st 'lean 0.0) r (peep st 'leanv 0.0 + lean-kick * (v - peep st 'v0 0.0)) e (exp -(lean-w * dt)) q ((r + lean-w * x) * dt)
+                            (pins st 'v0 v 'lean ((x + q) * e) 'leanv ((r - lean-w * q) * e))))
    (pins st 'sw sw 'wa wa 'puff pf 'bp bp 'foot (floor (sw / pi) > floor (sw0 / pi) ? 1 0)
             'gasp (n > floor (bp0 / pi) ? (int n % 2 = 0 ? 1 -1) 0)))
  (gesture-body st) (: wa (peep st 'wa 0.0) sw (peep st 'sw 0.0) pf (peep st 'puff 0.0) bp (peep st 'bp 0.0)

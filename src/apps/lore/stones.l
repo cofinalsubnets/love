@@ -370,7 +370,7 @@
  fov (pi / 2.0)
  sky-k 2
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
- (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (gesture-body st)
+ (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (mesh-sway st (gesture-body st) fov w)
    e [(st 'px + b 1 * cos (st 'th)) (st 'py + b 0) (st 'pz - b 1 * sin (st 'th))]
    v (mesh-eye w h e (st 'th) (st 'ph + b 2) (peep st 'ro 0.0 + b 3) fov 0.05 900.0)
    hs (peep st 'keep-sky 0 ? (kept-by st 'sky-kept (sky-key st lt) (_ \ stones-sky st v e lt k w h)) ())

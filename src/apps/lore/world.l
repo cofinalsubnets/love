@@ -1187,7 +1187,7 @@
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)) ())))
  (level-pens st sh) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0))
-   hb (tablet? sh ? [0.0 0.0 0.0 0.0] (gesture-body st))
+   hb (tablet? sh ? [0.0 0.0 0.0 0.0] (mesh-sway st (gesture-body st) fov w))
    e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px + hb 1 * cos (st 'th)) (st 'py + dip st + hb 0) (st 'pz - hb 1 * sin (st 'th))])
    th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph + hb 2))
    ; ..under a sky, the sky where nothing is drawn; out in a street, seen further, its haze
@@ -1513,13 +1513,15 @@
    _ (each (st 'gates) (s \ pin s 'g (s 'want < s 'g ? (max 0.0 (s 'g - swing-v * dt)) (min (1.0 * s 'want) (s 'g + swing-v * dt)))))
    _ (fly || kn ? st (lift-ride st))
    _ (fly || kn || hoisting? st || peep st 'cling 0 = 1 || riding? st ? st (floor-step st dt))
-   _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0))
+   _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0 || peep st 'gv 0.0 != 0.0))
    _ (each (st 'balls) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(lv 'cars)))
  ; ..the body's frame, on foot or not: a foot down sounds as the floor does, and a hard breath is heard
  (gait! st dt on) (: v (on ? (sqrt (2 (peep st 'vx 0.0) + 2 (peep st 'vz 0.0))) 0.0) _ (gesture-gait st dt v (running? st)) pf (st 'puff)
-   _ (st 'foot = 1 && on ? (mix-cry st ("step " + show (feel-under st) + " " + show (int (st 'sw / pi) % 2)) ()))
+   _ (st 'foot = 1 && on ? (: v (foot-next (peep st 'stepv 0) (st 'sw)) (pin st 'stepv v, mix-cry st ("step " + show (feel-under st) + " " + show v) ())))
    (st 'gasp != 0 && pf > 0.25 ? (mix-cry st ("gasp " + (st 'gasp = 1 ? "i" "o") + show (pf < 0.5 ? 0 (pf < 0.8 ? 1 2))) ()) st))
+ ; ..which of six sounds a foot makes next, never the last: the stride's own fraction shuffles it
+ (foot-next v sw) ((v + 1 + int (5000.0 * sw) % 5) % 6)
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
  (grav-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) v (peep st 'gv 0.0)
    in (filter (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (st 'lvl 'gravs))
@@ -1988,17 +1990,28 @@
               'metal (0.4 * o 70.0 25.0 + 0.22 * (o 523.0 7.0 + 0.7 * o 1287.0 9.0 + 0.5 * o 2151.0 12.0) + 0.2 * snd-noise t * exp (-90.0 * t))
               (0.6 * o 85.0 26.0 + 0.35 * snd-noise t * exp (-70.0 * t) + 0.15 * snd-low t * exp (-20.0 * t))))
     snd-rate])
- ; ..a foot on each feel, the two feet a little apart
- (step-sound f k) (: p ([1.0 1.08] k) t (snd-t 0.22) (o hz d) (sin (tau * hz * p * t) * exp -(d * t))
-   (n d) (snd-noise t * exp -(d * t)) (l d) (snd-low (t * p) * exp -(d * t))
-   [(f @ "grass" (0.09 * n 28.0 + 0.1 * l 40.0)
-         "sand" (0.13 * n 20.0 + 0.08 * l 45.0)
-         "gravel" (0.16 * n 30.0 + 0.11 * (t > 0.045) * snd-noise t * exp (-34.0 * (t - 0.045)) + 0.07 * l 50.0)
-         "soft" (0.2 * o 70.0 30.0 + 0.06 * l 40.0)
-         "wood" (0.2 * o 150.0 42.0 + 0.1 * o 390.0 70.0 + 0.05 * n 130.0)
-         "metal" (0.16 * o 110.0 42.0 + 0.07 * o 860.0 24.0 + 0.04 * o 1730.0 32.0 + 0.05 * n 140.0)
-         (0.2 * o 120.0 55.0 + 0.09 * n 150.0))
-    snd-rate])
+ ; ..noise smoothed under hz, each hold joined to the next, no edge to buzz
+ (snd-soft t hz) (: u (t * hz) i (floor u) f (u - i) a (snd-noise (i / hz)) (a + (snd-noise ((i + 1.0) / hz) - a) * f))
+ ; ..a foot on each feel, v which of six: no two alike in pitch, weight, length or grain. what
+ ; gives underfoot rises gently and rolls heel to toe; what does not is struck
+ step-rate 22050
+ (step-sound f v) (: p ([1.0 1.09 0.93 1.05 0.97 1.13] v) g ([1.0 0.82 0.92 1.08 0.76 0.95] v) d ([0.1 0.125 0.085 0.14 0.11 0.095] v)
+   T (0.26 + 0.02 * v) t (iota (int (T * step-rate)) / (1.0 * step-rate)) z (t + 3.7 * (v + 1))
+   (o hz k) (sin (tau * hz * p * t) * exp -(k * t))
+   (n k) (snd-noise z * exp -(k * t))
+   (give u k) ((u > 0.0) * (1.0 - exp (-90.0 * (u * (u > 0.0)))) * exp -(k * (u * (u > 0.0))))
+   (heel k) (give t k + 0.6 * give (t - d) k)
+   (hush hz) (snd-soft z (hz * p))
+   (grit hz) (: q (snd-soft (z + 1.3) hz) (0.35 + 1.6 * q * (q > 0.0)))
+   thud (sin (tau * 62.0 * p * t) * give t 26.0)
+   [(g * (f @ "grass" (0.2 * (0.6 * hush 3600.0 + 0.4 * hush 9000.0) * grit 110.0 * heel 24.0 + 0.03 * thud)
+           "sand" (0.26 * (0.5 * hush 3400.0 + 0.5 * hush 10000.0) * grit 260.0 * heel 17.0 + 0.025 * thud)
+           "gravel" (0.3 * (0.5 * hush 2400.0 + 0.5 * snd-noise z) * grit 420.0 * heel 26.0 + 0.07 * thud)
+           "soft" (0.2 * o 70.0 30.0 + 0.05 * hush 900.0 * exp (-40.0 * t))
+           "wood" (0.2 * o 150.0 42.0 + 0.1 * o 390.0 70.0 + 0.05 * n 130.0)
+           "metal" (0.16 * o 110.0 42.0 + 0.07 * o 860.0 24.0 + 0.04 * o 1730.0 32.0 + 0.05 * n 140.0)
+           (0.2 * o 120.0 55.0 + 0.09 * n 150.0)))
+    step-rate])
  ; ..a breath drawn or let go, each harder k louder
  (gasp-sound out k) (: T (out ? 0.42 0.34) g ([0.035 0.07 0.12] k) t (snd-t T) e (sin (pi * t / T))
    [(g * e * e * (0.6 * snd-low (t * (out ? 0.8 1.3)) + 0.4 * snd-noise t)) snd-rate])
