@@ -3846,7 +3846,7 @@
          ('un _ x) (rotp? x)
          ())
    (rotty g env e)                                  ; the operand's declared type, by static peek
-    (e @ ('var nm) (vent g env nm @ en (bad? en ? () <>>en))
+    (e @ ('var _) (peekty g env e @ t (bad? t ? () t))
          ('cast . ty . _) ty
          ('deref p) (rotty g env p @ t (? (ptr? t) <>t (arr? t) <>t ()))
          ('bin op x y && elem op '(+ -))         ; index arithmetic keeps the ptr/arr side's type

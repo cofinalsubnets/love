@@ -48,7 +48,7 @@
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
            t0 (cls (cls (cls (cls (cls (cls (cls (cls (cls {} 'fbin rafbin) 'fmv rafmv) 'div divops) 'ctl '(jmp br label))
                  'ucom '(ucomisd ucomiss)) 'fld '(ldsd ldss)) 'fst '(stsd stss)) 'fldx '(ldsdx ldssx)) 'fstx '(stsdx stssx))
-           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret movqrr movrrq)))
+           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret movqrr movrrq ldsdl)))
    ; a form's [reads defs] over the file and the vregs | 'bad. the answer is the form's own but at
    ; an exit (the fn's return registers), so the unit keeps the rest by their value
    (raops g f)
@@ -75,6 +75,7 @@
                      'fldx (f @ [_ d b i _ _] [[b i] [d]] _ (gen f))
                      'fstx (f @ [_ b i _ _ v] [[b i v] ()] _ (gen f))
                      'ctl [() ()]
+                     'ldsdl (f @ [_ d _] [() [d]] _ (gen f))
                      'div (f @ (_ . d . a . b . t) (x86? g ? [[a b] [d 'r0]] [[a b] (d . t)]) _ (gen f)))
            (gen f))) @
      'bad 'bad
