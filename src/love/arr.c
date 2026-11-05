@@ -997,7 +997,7 @@ lvm(lvm_pow) {
   love_musttail return Push(word(v)); }
  if (isnum(a) && isnum(b)) {
   flo_t ad = toflo(a), bd = toflo(b);
-  if (ad < 0 && !__builtin_isinf(ad) && flo_fracp(bd)) {
+  if (ad < 0 && ad - ad == 0 && flo_fracp(bd)) {
    flo_t m = love_pow(-ad, bd), re = m * love_cospi(bd), im = m * love_sinpi(bd);
    Have(twin_req);
    *++Sp = mk_twin(&Hp, re, im); love_musttail return Next(1); } }

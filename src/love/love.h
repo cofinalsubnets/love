@@ -883,10 +883,18 @@ static love_inline flo_t love_trunc(flo_t x) {
  if (x != x) return x;
  flo_t m = x < 0 ? -x : x;
 #if Bits == 32
- if (m < (flo_t) 2147483648.0) return (flo_t) (int32_t) x;   // a word's: int64's may go through double
-#endif
+ return m < (flo_t) 8388608.0 ? (flo_t) (int32_t) x : x;     // from 2^23 a float is whole
+#else
  if (m > (flo_t) 9.22e18) return x;
- return (flo_t) (int64_t) x; }
+ return (flo_t) (int64_t) x;
+#endif
+}
+// a float to int64: on a 32-bit word that goes through double, so a word's take the short way
+static love_noinline __attribute__((unused)) int64_t flo_i64(flo_t x) {
+#if Bits == 32
+ if (x >= -(flo_t) 2147483648.0 && x < (flo_t) 2147483648.0) return (int32_t) x;
+#endif
+ return (int64_t) x; }
 static love_inline flo_t love_fmod(flo_t a, flo_t b) {
  return a - love_trunc(a / b) * b; }
 // the math lvms' function argument, in g->b

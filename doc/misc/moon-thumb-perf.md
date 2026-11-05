@@ -66,13 +66,14 @@ num.c and io.c.
    `song ... ms` lines go back in for the run
 2. **gas: a numeric label never defined** (`b 7f`, no `7:`) assembles as an undefined `l7.1`
    and fails only at the link, on every target; GNU refuses it at the line
-3. **the codegen the lanes now show**: params stored to the frame and reloaded, `cmp` with an imm12 out of modified reach (`0x7fe`) through r0, the a64/rv64 sweeps
+3. **constants mooncc leaves to run time**: `(flo_t) -1e9` and `(flo_t) (32.0 / 255)` lay a soft double each pass (love's own are respelled); an `int64_t` from a float lays 174 bytes inline where gcc calls `__aeabi_f2lz` for 12 (`cvtdll`)
+4. **the codegen the lanes now show**: params stored to the frame and reloaded, `cmp` with an imm12 out of modified reach (`0x7fe`) through r0, the a64/rv64 sweeps
    (`swp`) not run on thumb2 at all, a negated literal (`== -0x1fe00`) not folded to an immediate. rt.c checked with `perf.sh diff` against HEAD's (libgcc is no oracle: it mis-rounds
    `0x4340000000000000 + 0xc13e9b8531b800e9`, exact is ...7b)
-4. **pair-homed params** (`homefold`): a `uint64_t` param lives in the frame today
-5. **seat pressure**: past six cs seats every name spills (C `dadd` had 19 candidates);
+5. **pair-homed params** (`homefold`): a `uint64_t` param lives in the frame today
+6. **seat pressure**: past six cs seats every name spills (C `dadd` had 19 candidates);
    rank by weighted mentions and split. `MOON_DUMP=<fn>` prints ulloc's ranking and map
-6. float homes for thumb2 params/locals (a loop reloads `k` from the frame), indexed and
+7. float homes for thumb2 params/locals (a loop reloads `k` from the frame), indexed and
    post-increment addressing, one `push {..}` prologue
 
 ## method and traps

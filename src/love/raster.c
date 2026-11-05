@@ -271,7 +271,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       if (glass) c[k] -= c[k] * f, tint[k] += (1 - tint[k]) * f;
       else c[k] += (fog[k] - c[k]) * f; }
     if (tone > 0) for (int k = 0; k < 3; k++) {
-     flo_t const x = tone * c[k] * (flo_t) (32.0 / 255);
+     flo_t const x = tone * c[k] * (flo_t) 0.12549019607843137;
      intptr_t const i = x <= 0 ? 0 : x >= rz_tn ? rz_tn : (intptr_t) x;
      flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
      c[k] = tl[i] + (tl[i + 1] - tl[i]) * (f > 1 ? 1 : f); }
