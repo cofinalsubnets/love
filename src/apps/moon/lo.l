@@ -216,7 +216,7 @@
              (cv x) (b = p ? () [[(p = 'double ? 'cvtss2sd 'cvtsd2ss) x x]])
              [(fs + [(ld re 0)] + cv re + [(ld im w)] + cv im) re im])
          ([vt _ _] && losv? vt)
-          (lotr g v p @ [_ re f2] (lomk g @ t (lomkf g @ im [(f2 + [['li t 0] [(p = 'float ? 'movdxr 'movqxr) im t]]) re im])))
+          (lotr g v p @ [_ re f2] (lomk g @ t (lomkf g @ im [(f2 + [['li t 0] (? (p = 'float) ['movdxr im t] (ilp32? g) ['movqrr im t t] ['movqxr im t])]) re im])))
          _ 'bad)
    ; parts in precision p into a fresh temp of complex type rt; its address answers
    (lopack g rt p [fs re im])
@@ -1192,8 +1192,9 @@
         (l @ () (rev acc)
              (ty . u)
               (: nw (lo32words g ty)
-                 (? (!va && !(lofl? ty) && gi + nw <= ngp g) (go u (gi + nw) ov (['r gi nw] . acc))
-                    (go u (lofl? ty ? gi (ngp g)) (ov + 4 * nw) (['m ov] . acc)))))
+                 ; a float or a complex spends no register
+                 (? (!va && !(lofl? ty || gcplx? ty) && gi + nw <= ngp g) (go u (gi + nw) ov (['r gi nw] . acc))
+                    (go u (lofl? ty || gcplx? ty ? gi (ngp g)) (ov + 4 * nw) (['m ov] . acc)))))
        (go ts 0 0 ()))
    (lo32cl g ts va)
     (ia32? g ? (lo386cl g ts va)
@@ -1323,7 +1324,7 @@
    ; rides instead (AAPCS64 past 16), () in memory (SysV's class)
    (lopcs g ty)
     (: sz (tsz g ty)
-       (? (ia32? g) ()
+       (? (ia32? g) (cxf32? g ty ? [['int 0 4] ['int 4 4]])   ; a float complex answers on edx:eax
           (t32? g)
            (? (t32f? g && t32hfa? g ty) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
               (sz <= 4) [['int 0 sz]]
