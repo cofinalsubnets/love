@@ -27,7 +27,6 @@ static Cata(c1_ar, lvm_t *i, word ar);
 static cata c1, c1_apn, c1_cond_exit, c1_cond_pop_exit, c1_cur, c1_i,
             c1_ix, c1_recv, c1_ret, c1_var, c1_yield;
 static love_noinline Ana(analyze);
-static love_noinline word missing_tag(struct g *g);
 static bool
  lambp(struct g *g, word x),
  lexbound(struct g *g, struct env *d, word x);
@@ -35,7 +34,7 @@ static lvm_t
  ap_next, help_ret_more, help_ret_scare, lvm_add_coin, lvm_coin_op, lvm_mul_coin,
  lvm_numap, lvm_numtap, lvm_resume;
 static struct g
- *love_raise(struct g *c, word a, word b, union u const *K),
+ *love_raise(struct g *c, union u const *K),
  *ana_ap(struct g *g, struct env **c, intptr_t x),
  *ana_ap_r2l(struct g *g, struct env **c, word x),
  *ana_d(struct g *g, struct env **b, word exp),
@@ -59,12 +58,12 @@ static word
 static love_noinline struct g *c0(struct g *g, lvm_t *y);
 struct g *eval(struct g *g);
 
-// a function's compile state
+// a function's compile state. fars: a let's binding names, pinned before its lambdas compile
+enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, EFars, EN };
 struct env {
  struct env *par; // enclosing scope
- word tab, // the mutable scope, a tablet keyed by the E* fixnums, as ev.l's (c 'stk) (c 'imp)
-  len,     // thread length: a fixnum, so no store to it needs a barrier
-  end[]; };
+ word len,        // thread length: a fixnum, so no store to it needs a barrier
+  v[EN]; };       // the mutable scope, as ev.l's (c 'stk) (c 'imp)
 
 static Ana(ana_2, word, word);
 static Cata(pull) { return ok(g) ? ((cata*) pop1(g))(g, c) : g; }
@@ -75,14 +74,9 @@ static love_inline struct g *c0_ix(struct g *g, struct env **c, lvm_t *i, word x
 static love_inline struct g *c0_i(struct g *g, struct env **c, lvm_t *i) {
  return incl(*c, 1), push(g, 2, c1_i, i); }
 
-// mapput barriers its own stores, so none of these writes needs one
-// fars: a let's binding names, pinned before its lambdas compile
-enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, EFars };
-static love_inline word eget(struct g *g, struct env *e, int k) {
- return mapget(g, zero, putcharm(k), e->tab); }
+static love_inline word eget(struct g *g, struct env *e, int k) { return e->v[k]; }
 static struct g *eset(struct g *g, struct env **c, int k, word v) {
- g = push(g, 3, putcharm(k), v, (*c)->tab);   // sp0 key, sp1 val, sp2 map
- if (ok(g = mapput(g))) g->sp++;           // mapput leaves the map: drop it
+ if (ok(g)) (*c)->v[k] = v, gen_wb_cell(g, (*c)->v + k, v);
  return g; }
 // a let's lambda entry is (name . box): the box holds the thread and imports, and backpatch
 // and the capture fixpoint write through it, so it is a tablet, never a patched cons (ev.l's mkc)
@@ -115,19 +109,14 @@ static struct g *lbox(struct g *g) {
  return g->sp[1] = g->sp[0], g->sp++, g; }
 static struct g *enscope(struct g *g, struct env *par, word args, word imps) {
  uintptr_t const n = Width(struct env) + Width(struct tag);
- g = push(g, 3, args, imps, par);
- g = map_new(g);                                   // sp0 = tab, then args/imps/par
- if (ok(g = have(g, n))) {
-  struct env *c = bump(g, n);
-  c->len = zero;
-  c->tab = g->sp[0];
-  c->par = (struct env*) g->sp[3];
-  g->sp[3] = (word) tagthread((union u*)c, Width(struct env)); }   // env at sp3; tab/args/imps stay
- if (!ok(g)) return g;
- { struct env *e = (struct env*) g->sp[3];                     // re-read after every put: a
-   g = eset(g, &e, EArgs, g->sp[1]);                           // grow inside mapput moves it
-   if (ok(g)) e = (struct env*) g->sp[3], g = eset(g, &e, EImps, g->sp[2]); }
- return ok(g) ? (g->sp += 3, g) : g; }
+ g = push(g, 3, par, args, imps);
+ if (!ok(g) || !ok(g = have(g, n))) return g;
+ struct env *c = bump(g, n);
+ c->par = (struct env*) g->sp[0], c->len = zero;
+ for (int k = 0; k < EN; k++) c->v[k] = zero;
+ c->v[EArgs] = g->sp[1], c->v[EImps] = g->sp[2];
+ g->sp += 2, g->sp[0] = (word) tagthread((union u*) c, Width(struct env));
+ return g; }
 
 
 static word memq(struct g *g, word l, word k) {
@@ -384,14 +373,12 @@ out:
         Kp[1].x = putcharm(i),
         pull(g, c); }
 
-// a compile past its room of C stack scares (deep . room) before the stack runs out
+// a compile past its room of C stack scares before the stack runs out
 static love_noinline bool c0_deep(void) {
  char here;
  return (uintptr_t) &here < c0_floor; }
 static love_noinline struct g *c0_scare(struct g *g) {
- g = gxr(push(intern(strof(g, "deep")), 1, putcharm(c0_room())));
- if (ok(g)) g->scare_c = pop1(g);
- return encode(core_of(g), status_scare); }
+ return g->scare = ScareDeep, encode(g, status_scare); }
 
 static love_noinline Ana(analyze) {
  if (!ok(g)) return g;
@@ -745,7 +732,7 @@ lvm(lvm_defglob) {
  Sp -= 3;
  word k = Ip[1].x, v = Sp[3];
  Sp[0] = k, Sp[1] = v, Sp[2] = A(g->stack), Pack(g);          // into the head layer
- if (!ok(g = mapput(g))) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g = mapput(g))) love_musttail return Ap(_lvm_raise, g);
  Unpack(g), Sp += 1, Ip += 2;
  love_musttail return Continue(); }
 
@@ -850,7 +837,7 @@ lvm(lvm_sortby) {
  LvmResume(g, sortby_setup) }
 
 // a raise calls (help a b) through help_drive; help_ret_more hands the result to the raise site's
-// [resume a b], so (scare a b) and `missing` resume; a bare scare is observed, then escapes to C
+// [resume a b], so (scare a b) and `missing` resume; any other is observed, then escapes to C
 static lvm(help_ret_more) {   // [result resume a b ..] -> resume sees result
  Ip = cell(Sp[1]);
  Sp[3] = Sp[0];
@@ -863,18 +850,26 @@ static union u const help_scare_k[] = { {help_ret_scare} };
 static union u const help_drive[] =
  { {lvm_ap}, {.ap = ap_next}, {.ap = lvm_ret0} };
 
+// a scare's two words, for its help and the exit face
+void scare_args(struct g *c, word *a, word *b) {
+ intptr_t const s = c->scare;
+ if (s == ScareRuntime) { *a = c->sp[1], *b = c->sp[2]; return; }
+ word n = c->nom[s >= 0 ? NomOom : NomOom - 1 - s];
+ *a = n ? n : zero;                       // boot, before the table
+ *b = s >= 0 ? putcharm(s) : s == ScareDeep ? putcharm(c0_room()) : zero; }
+
 // with nothing heard, or still too tight after a collect, the scare goes back to C. callers
-// Pack first; a/b ride the scare_a/b stash across the collect
-love_noinline static struct g *love_raise(struct g *c, word a, word b, union u const *K) {
- c->scare_a = a, c->scare_b = b;  // for the exit face
- word h = *task_help(c);
+// Pack first; help_more_k's raise has [resume a b] on the stack, any other names its case
+love_noinline static struct g *love_raise(struct g *c, union u const *K) {
+ word h = *task_help(c), a, b;
  if (h != ZeroPoint && avail(c) < 4) {
   struct g *p = please(c, 4);
   if (!ok(p)) return encode(core_of(p), status_scare);
   c = p;                                        // moved: re-derive
-  a = c->scare_a, b = c->scare_b;
   h = *task_help(c); }
  if (h != ZeroPoint && avail(c) >= 4) {
+  if (K == help_more_k) a = c->sp[1], b = c->sp[2];
+  else scare_args(c, &a, &b);
   word *sp = c->sp -= 4;          // [a h b K | raise site data ..]
   sp[0] = a, sp[1] = h;
   sp[2] = b;
@@ -886,36 +881,20 @@ love_noinline static struct g *love_raise(struct g *c, word a, word b, union u c
   return c;                       // ok-g: the trampoline dispatches help_drive
 #endif
  }
+ if (K == help_more_k) c->scare = ScareRuntime;   // only now: a handled scare leaves the reason be
  return encode(c, status_scare);
 }
-// a failed op's scare: the reason a C lane left, else bare; terminal
-lvm(_lvm_ghelp) {
- struct g *c = core_of(g);
- word r = c->scare_c;                          // (tag . datum), or zero
- c->scare_c = zero;
- return love_raise(c, chainp(r) ? A(r) : zero, chainp(r) ? B(r) : zero, help_scare_k); }
-// a wait nothing could wake: terminal. the tag may collect, so it is minted packed
-static love_noinline word deadlock_tag(struct g *g) {
- struct g *h = intern(strof(g, "deadlock"));
- return ok(h) ? pop1(h) : 0; }
-lvm(lvm_deadlock) {
- Pack(g);
- word a = deadlock_tag(g);
- if (!a) love_musttail return Ap(_lvm_ghelp, g);
- return love_raise(g, a, zero, help_scare_k); }
+// a failed op's scare, its reason in g->scare; terminal
+lvm(_lvm_raise) { return love_raise(core_of(g), help_scare_k); }
+// a wait nothing could wake: terminal
+lvm(lvm_deadlock) { return Pack(g), g->scare = ScareDeadlock, love_raise(g, help_scare_k); }
 // (scare a b): the help's result is its value; with nothing heard, terminal
 lvm(lvm_scare) {
  Have1();                          // the resume push only: love_raise buys its own frame
- word a = Sp[0], b = Sp[1];
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
- return Pack(g), love_raise(g, a, b, help_more_k); }
+ return Pack(g), love_raise(g, help_more_k); }
 // a name bound to zero is distinct from no entry
 static union u const no_entry[1];
-// may collect: Pack first and hold no heap local across it -> the tag, or 0
-static love_noinline word missing_tag(struct g *g) {
- struct g *h = intern(strof(g, "missing"));
- return ok(h) ? pop1(h) : 0; }
-
 // the live book by name, never self-patching. a miss raises (help 'missing nom), terminal
 // with nothing heard: a repl's help answers it, a file's stops
 lvm(lvm_index) {
@@ -925,18 +904,13 @@ lvm(lvm_index) {
   *--Sp = v,
   Ip += 2,
   Continue();
- Pack(g);
- word a = missing_tag(g);          // may collect
- if (!a) love_musttail return Ap(_lvm_ghelp, g);   // no tag to be had: the bare scare, still packed
- Unpack(g);
- Have(3);                          // a collect here re-dispatches the op: `a` is never read stale
- word b = Ip[1].x;
+ Have(3);                          // a collect here re-dispatches the op
  Sp -= 3;
- Sp[0] = word(Ip + 2), Sp[1] = a, Sp[2] = b;   // help_more_k's layout
- return Pack(g), love_raise(g, a, b, help_more_k); }
+ Sp[0] = word(Ip + 2), Sp[1] = g->nom[NomMissing], Sp[2] = Ip[1].x;   // help_more_k's layout
+ return Pack(g), love_raise(g, help_more_k); }
 // the fused aps leave Ip on an operand, where a plain Have() would re-dispatch: gc and re-Ap
 #define NumapHave(self) if (Sp < Hp + 2) { \
- Pack(g); g = please(g, 2); if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g); \
+ Pack(g); g = please(g, 2); if (!ok(g)) love_musttail return Ap(_lvm_raise, g); \
  Unpack(g); love_musttail return Ap(self, g); }
 static lvm(lvm_numap) {
  NumapHave(lvm_numap);
@@ -1069,7 +1043,7 @@ static love_inline bool apn_ok(word f, size_t n) {
 lvm(lvm_apn) {
  size_t n = getcharm(Ip[1].x);
  union u *r = Ip + 2;
- if (!apn_ok(Sp[n], n)) return Pack(g), love_raise(g, zero, zero, help_scare_k);
+ if (!apn_ok(Sp[n], n)) return Pack(g), g->scare = ScareApply, love_raise(g, help_scare_k);
  Ip = cell(Sp[n]) + 2;                    // FIXME: past the cur; the compiler should skip it
  Sp[n] = word(r);
  YieldCheck();
@@ -1079,7 +1053,7 @@ lvm(lvm_apn) {
 lvm(lvm_tapn) {
  size_t n = getcharm(Ip[1].x),
         r = getcharm(Ip[2].x);
- if (!apn_ok(Sp[n], n)) return Pack(g), love_raise(g, zero, zero, help_scare_k);
+ if (!apn_ok(Sp[n], n)) return Pack(g), g->scare = ScareApply, love_raise(g, help_scare_k);
  Ip = cell(Sp[n]) + 2;
  word *o = Sp;
  for (Sp += r + 1; n--; Sp[n] = o[n]);

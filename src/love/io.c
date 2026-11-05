@@ -104,12 +104,11 @@ static struct g *io_wdrain(struct g *g, struct io *i) {
   if ((uintptr_t) k < n) memmove(w, w + k, n - (uintptr_t) k);
   b->wlen = putcharm(n - (uintptr_t) k); } }
 #define IoWouldBlock (-2)   // io_refill's third answer beside a byte and EOF; never escapes lvm_fgetc
-word love_inport;
 // the static stdin may read through a borrowed bio (`inport`), so `in` keeps the identity
 // bao's `reads` folded; the frontend rewinds the fd offset it ran ahead
 static love_inline struct bio *rbio_of(struct g *g, struct io *i) {
  struct bio *b = bio_of(g, i);
- return b ? b : i == &love_stdin.io ? (struct bio*) love_inport : NULL; }
+ return b ? b : i == &love_stdin.io && evenp(g->hook[hook_inport]) ? (struct bio*) g->hook[hook_inport] : NULL; }
 
 static struct g *io_refill(struct g *g) {                  // g is ok here: zgetc guards
  struct bio *b = rbio_of(g, g->io);
@@ -343,12 +342,12 @@ lvm(lvm_fputc) {
   // backpressure as in lvm_fputs, the drain behind the test or each put is a write(2)
   if (io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
    g = io_wdrain(g, (struct io*) g->sp[0]);
-   if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+   if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
    if (io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
     Unpack(g);
     g->next_wake_at = love_clock() + 1;
     love_musttail return Ap(lvm_yield_sw, g); } }
-  if (!ok(g = ioputc(g, getcharm(g->sp[1])))) love_musttail return Ap(_lvm_ghelp, g);
+  if (!ok(g = ioputc(g, getcharm(g->sp[1])))) love_musttail return Ap(_lvm_raise, g);
   Unpack(g); }
  love_musttail return Nextp(1, 1); }
 
@@ -359,7 +358,7 @@ lvm(lvm_fflush) {
  if (iop(Sp[0])) {
   g->io = (struct io*) Sp[0];
   Pack(g);
-  if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_ghelp, g);
+  if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_raise, g);
   if (io_wpending(g, (struct io*) g->sp[0])) {
    Unpack(g);
    g->next_wake_at = love_clock() + 1;      // the write residue's poll
@@ -401,7 +400,7 @@ lvm(lvm_fputs) {
     b->wlen = putcharm(n + l - i);
     i = l; }
    else g = ioputc(g, txt(bytes_of(g->sp[1]))[i++]); }
-  if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_ghelp, g);
+  if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_raise, g);
   Unpack(g); }
  love_musttail return Nextp(1, 1); }
 
@@ -413,7 +412,7 @@ lvm(lvm_fputbn) {
  if (iop(Sp[0])) {
    Pack(g);
    g = gfputbn(g, getcharm(Sp[1]), getcharm(Sp[2]), (struct io*) Sp[0]);
-   if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+   if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
    Unpack(g);
    Sp[2] = Sp[1]; }
  love_musttail return Nextp(1, 2); }
@@ -449,10 +448,11 @@ static struct g *facex(struct g *g, word x, int d) {
    if (!chainp(B(x))) return ioputc(g, ')'); } }
  return ioputn(ioputc(g, '\\'), (intptr_t) x, 36); }
 
-// ";; a b" on err: the reason a C lane left, else the last scare's
+// ";; a b" on err: the scare's reason
 void scare_face(struct g *g) {
  if (!(g = core_of(g))) return;
- word r = g->scare_c, a = chainp(r) ? A(r) : g->scare_a, b = chainp(r) ? B(r) : g->scare_b;
+ word a, b;
+ scare_args(g, &a, &b);
  g->io = &love_stderr.io;
  g = ioputs(g, ";; ");
  if (ok(g)) g = facex(g, a, 0);
@@ -537,12 +537,12 @@ lvm(lvm_fgetc) {
   if (bio_wpending(bb)) {                 // our unsent ask goes out before we wait for the answer
    g->io = i;
    Pack(g);
-   if (!ok(g = io_wdrain(g, i))) love_musttail return Ap(_lvm_ghelp, g);
+   if (!ok(g = io_wdrain(g, i))) love_musttail return Ap(_lvm_raise, g);
    Unpack(g); }
   // no readiness check first: zgetc's read answers it, and an output fd would park forever
   Pack(g);
   g->io = i;
-  if (!ok(g = zgetc(g))) love_musttail return Ap(_lvm_ghelp, g);
+  if (!ok(g = zgetc(g))) love_musttail return Ap(_lvm_raise, g);
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
    intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
@@ -570,7 +570,7 @@ lvm(lvm_fungetc) {
   struct io *i = (struct io*) Sp[0];
   Pack(g);
   g->io = i;
-  if (!ok(g = zungetc(g, getcharm(g->sp[1])))) love_musttail return Ap(_lvm_ghelp, g);
+  if (!ok(g = zungetc(g, getcharm(g->sp[1])))) love_musttail return Ap(_lvm_raise, g);
   Unpack(g); }
  love_musttail return Nextp(1, 1); }
 

@@ -629,7 +629,7 @@ clang: `cannot perform a tail call to function 'callee' because its signature is
 with the calling function`. This is the one gap that undermines an invariant rather than a
 value — `love_musttail` is *owed*, and the whole discipline rests on a shape that cannot jump
 REFUSING at compile (love.h). A check that passes the incompatible case means mooncc alone
-cannot police it. Measured 2026-08-15: 58 converted `ghelp` tails, mooncc took all 58, clang
+cannot police it. Measured 2026-08-15: 58 converted `_lvm_raise` tails, mooncc took all 58, clang
 named the 5 that were extra-arg lvms.
 
 **`make vmret` does not cover this.** It reads the shipped binary, which mooncc builds — so
