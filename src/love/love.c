@@ -224,24 +224,16 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
    for (uintptr_t n = countof(errnames); ok(g) && n--;)
     g = mapput(push(intern(strof(g, errnames[n].n)), 1, putcharm(errnames[n].v)));
    if (ok(g)) g->errs = pop1(g); }
-  // the kind roster (g->kinds): enum q row -> its nom, `kind`'s answer for a built-in
-  if (ok(g = map_new(g))) {
-   char const *p = kind_names;
-   for (intptr_t i = 0; ok(g) && *p; i++) {
-    while (*p == ' ') p++;
-    char nm[16], *q = nm;
-    while (*p && *p != ' ') *q++ = *p++;
-    *q = 0;
-    g = mapput(push(intern(strof(g, nm)), 1, putcharm(i))); }
-   if (ok(g)) g->kinds = pop1(g); }
-  // g->knom: love.h's Kn rows; g->kreg: name -> (serial . table), pinned by post.l's `coin`
-  { char const *const ns[KnN] = { "name", "+", "*", "ap", "-", "net", "star", "/",
-                                  "payload", "<", "=", "int", "ceil", "lambda", "cask", "port", "coin" };
-    for (int i = 0; ok(g) && i < KnN; i++)
-     if (ok(g = intern(strof(g, ns[i])))) g->knom[i] = pop1(g); }
-  { char const *const ns[RnN] = { "\\", "list", "hash", "tuple", "tablet", "iota", "mono", "torn", "@", ",", "weave" };
-    for (int i = 0; ok(g) && i < RnN; i++)
-     if (ok(g = intern(strof(g, ns[i])))) g->rnom[i] = pop1(g); }
+  // g->nom, in its enum's order; g->kreg: name -> (serial . table), pinned by post.l's `coin`
+  { char const *p = kind_names " name + * ap - net star / payload < = int ceil lambda cask port coin"
+                               " \\ list hash tuple tablet iota mono torn @ , weave : ?";
+    for (int i = 0; ok(g) && i < NomOom; i++) {
+     while (*p == ' ') p++;
+     char nm[16], *q = nm;
+     while (*p && *p != ' ') *q++ = *p++;
+     *q = 0;
+     if (ok(g = intern(strof(g, nm)))) g->nom[i] = pop1(g); }
+    if (ok(g = gxr(push(intern(strof(g, "oom")), 1, putcharm(0))))) g->nom[NomOom] = pop1(g); }
   if (ok(g = map_new(g))) g->kreg = pop1(g);
  }
  return g; }

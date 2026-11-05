@@ -11,6 +11,8 @@ static int sp(int x) { return x + 100; }
 static int (*volatile fp)(int) = r8;                /* named only by an initializer */
 static int tail(int x) { return mov(x); }           /* a sibcall to an opcode's name */
 static int (*pick(int k))(int) { return k ? sp : f0; }
+static int r12(int x) { return x + 2; }             /* its address taken in a body */
+static int r13;                                     /* a variable, written and read */
 
 int main(void) {
   int bad = 0;
@@ -21,5 +23,9 @@ int main(void) {
   if (add(3, 4) != 7) bad |= 8;
   if (tail(3) != 6) bad |= 16;
   if (pick(1)(1) != 101 || pick(0)(3) != 12) bad |= 32;
+  int (*h)(int) = r12;
+  if (h(1) != 3) bad |= 64;
+  r13 = 5;
+  if (r13 != 5) bad |= 128;
   return bad;
 }

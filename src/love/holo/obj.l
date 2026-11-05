@@ -167,7 +167,7 @@
        be (peep backends target ())
        x86 (i386? target)
        tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
-       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8 ldl16 ldlw))
+       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8 cbz ldl16 ldlw))
        wkset (o-names wknames)
        nsec #secs
        _ (0 >= nsec ? (scare 'obj-no-sections target))
@@ -292,6 +292,7 @@
        (fnsym lbl) (? (o-has? wkset lbl) (peep fnidx lbl 0)
                       (o-has? locidx lbl) (peep locidx lbl 0)
                       (o-has? fnidx lbl) (peep fnidx lbl 0)
+                      (o-has? globidx lbl) (peep globidx lbl 0)
                       (peep extidx lbl 0))
        (o-rels32 rs)
         (catall (map (\ [off k lbl aux _]
