@@ -407,12 +407,6 @@
                        'J (tarc-lazy 'xz 'xz-pack "xz" a 8388608 'crc64)
                        'zst (tarc-lazy 'zstd 'zstd-pack "zstd" a 3)
                        a)
-   (tarc-unzip z b)                    ; -> (1 bytes) | ()
-    (z @ 'z (gz-unzip b)
-         'j (tarc-lazy 'bz2 'bz2-unpack "bzip2" b @ v (two? v && v))
-         'J (tarc-lazy 'xz 'xz-unpack "xz" b @ v (two? v && v))
-         'zst (tarc-lazy 'zstd 'zstd-unpack "zstd" b @ v (two? v && v))
-         [1 b])
    (tarc-sniff b) (?
     (2 <= #b && b 0 = 31 && b 1 = 139) 'z
     (4 <= #b && snip b 0 3 = "BZh") 'j
@@ -571,7 +565,6 @@
        _ (!(hot? q) && tarc-die "\(a): Cannot open: No such file or directory")
        raw (tar-src (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q)))))
        z (peep t 'z () @ w (w ? w (tarc-sniff (tar-peek raw 6))))
-       (all r a) (r 0 @ p (#p @ 0 (cats (rev a)) (all r (p . a))))
        (drain src) (: (dr r) (#(r 0) @ 0 0 (dr r)) (dr (tar-rd src)))
        (z @ 'z
           (: g (gz-pull (tar-rd raw))   src (tar-src (_ \ gz-next g))
@@ -582,9 +575,7 @@
              next (cite m (nom "\(m)-next"))
              src (tar-src (_ \ next g))
              [src (_ \ (drain src, two? (peep g 'ans ()))) z])
-          (: u (z ? (tarc-unzip z (all (tar-rd raw) ())) [1 raw])
-             (!u && tarc-die "\(a): not a \(tarc-zname z) stream, or its check disagrees",
-              [(z ? (tar-src ({0 <>u} @ t1 (_ \ (peep t1 0 "" @ v (pin t1 0 "", v))))) raw) 0 z]))))
+          [raw 0 z]))
    ; the codec's check first: a torn stream underneath reads as a torn archive above
    (tarc-end t sf w)
     (tarc-arch t @ a
