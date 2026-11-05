@@ -554,3 +554,19 @@ static love_noinline intptr_t gcp(struct g *g, struct gcx *X, word x) {
  // a minor's nursery object survives once, but one a tenure reaches; the rest tenure
  bool sv = X->s_lo && nur && !X->ten;
  return seen(X, in_data((void*) w) ? copy_data(g, X, src, sv) : copy_thread(g, X, src, sv)); }
+
+void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want) {
+ uintptr_t n = (uintptr_t) (hi - base), w = (n < 32 ? 64 : 2 * n) + want;
+ if (w > g->walk) g->walk = w; }
+struct g *walk_room(struct g *g) {
+ uintptr_t w = g->walk + (uintptr_t) (g->sp - g->hp);
+ g->walk = 0;
+ return have(g, w); }
+struct tag *ttag(struct g *g, union u *k) {
+ // k forward to its terminator, in whichever pool holds it
+ word *lo, *hi;
+ if (ptr(k) >= g->major_base && ptr(k) < g->major_hp) lo = g->major_base, hi = g->major_hp;
+ else if (ptr(k) >= g->sv_base && ptr(k) < g->sv_hp) lo = g->sv_base, hi = g->sv_hp;
+ else lo = ptr(g), hi = topof(g);
+ while (!tagp(k->x, lo, hi)) k++;
+ return (struct tag*) k; }

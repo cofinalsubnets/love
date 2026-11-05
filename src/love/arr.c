@@ -1228,3 +1228,13 @@ lvm(lvm_carg) {
   emit_gem(_res, r);
   love_musttail return Answer(_res); }
  love_musttail return Answer(ZeroPoint); }
+
+void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
+                              uintptr_t R, uintptr_t const *shape) {
+ w->R = R, w->shape = shape, w->oa = w->ob = 0;
+ for (uintptr_t j = 0; j < R; j++) w->idx[j] = 0;
+ bstride(va, R, w->ca), bstride(vb, R, w->cb); }
+void bc_step(struct bcast *w) {
+ for (intptr_t j = (intptr_t) w->R - 1; j >= 0; j--) {
+  if (++w->idx[j] < (intptr_t) w->shape[j]) { w->oa += w->ca[j], w->ob += w->cb[j]; return; }
+  w->idx[j] = 0, w->oa -= ((intptr_t) w->shape[j] - 1) * w->ca[j], w->ob -= ((intptr_t) w->shape[j] - 1) * w->cb[j]; } }
