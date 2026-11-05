@@ -22,8 +22,9 @@ sleep 5 & kill $!; wait $!; echo "process $?"
 (while :; do :; done) & kill $!; wait $!; echo "task $?"
 (cd /etc; true) & wait; pwd
 x=$(echo in | cat); echo "[$x]"
+sh -c 'exec true; exit 9'; echo "exec $?"
 exit 3"""
-   want "3\n2\nx\nstage 6\nprocess 143\ntask 143\n/tmp\n[in]\n"
+   want "3\n2\nx\nstage 6\nprocess 143\ntask 143\n/tmp\n[in]\nexec 0\n"
    a (run ["sh" "-c" line])
    fails (? (cwd 0 != "/tmp") "the shell moved its parent's cwd"
             (<a != 3) ("status " + show <a + ", not 3")
