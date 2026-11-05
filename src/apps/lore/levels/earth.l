@@ -306,10 +306,11 @@
               '((fill hole)
                 (disc 32 18 8 (rgb 0.25 0.6 1)) (disc 20 39 8 (rgb 0.25 0.6 1)) (disc 44 39 8 (rgb 0.25 0.6 1))
                 (disc 32 18 4 (rgb 0.75 0.95 1)) (disc 20 39 4 (rgb 0.75 0.95 1)) (disc 44 39 4 (rgb 0.75 0.95 1)))))
-(: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -5 16.3] [(x + 1) 12 18.3]))
-              (decal [x -4.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -4.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
+(: (shaft-pane x y) (window [(x - 0.8) y 15.9] [(x + 0.8) (y + 1.7) 16.4] glass @ (a p) [(skin {'all concrete} a) p]))
+(: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -9 16.3] [(x + 1) 12 18.3]))
+              (decal [x -8.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -8.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
               (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
-              (window [(x - 0.8) -0.9 15.9] [(x + 0.8) 0.8 16.4] glass)])
+              (shaft-pane x -4.9) (shaft-pane x -0.9)])
 ; ..the station's lamps: steel fittings, three-sided, on the walls
 (: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
 (: (lamp at n d) (sconce at n d 1.4 sconcemetal))
@@ -567,48 +568,48 @@
 (level "the station"
   (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
-  (start [0 -5 -5.9] 0 0)
+  (start [0 -9 -5.9] 0 0)
   ; first a second of a clear noon sky, broken cloud, looking up; then the car
   (shot 1 (sky 13 'partly) 30 55)
   ; a dim light everywhere, the lamps' thrown back off the concrete
   (ambient (rgb 0.15 0.15 0.16))
-  ; the hall, 38 metres across, ten high and 16 long
-  (room [-19 -5 0] [19 5 16])
+  ; the hall, 38 metres across, fourteen high and 16 long
+  (room [-19 -9 0] [19 5 16])
   ; the platform, its floor a grate, its ends in line with the hallways' outer walls, and
   ; the track a metre below it running on into the tunnels, under the car's floor, cabling
   ; on the walls up to the platform
-  (skin {'floor grate} (room [-11 -5 -4.52] [11 2 0]))
-  (skin {'walls cabling 'floor rails} (room [-70 -6 -7.6] [70 -5 -4.52]))
-  (room [-11 -5 -7.6] [11 2 -4.52])
-  (room [-70 -5 -7.6] [70 -2 -4.52])
+  (skin {'floor grate} (room [-11 -9 -4.52] [11 2 0]))
+  (skin {'walls cabling 'floor rails} (room [-70 -10 -7.6] [70 -9 -4.52]))
+  (room [-11 -9 -7.6] [11 2 -4.52])
+  (room [-70 -9 -7.6] [70 -6 -4.52])
   ; solid blocks standing in from the side walls, mirrored about x 0, their corners out in
   ; the air chamfered; the hallway between them and each wing's chamber south open onto
   ; the platform
   (mirror-x 0
-   [(block [-19 -5 0] [-11 5 4] [[-11 4]])
-    (block [-7 -5 0] [-3 5 4] [[-7 0] [-3 0] [-7 4] [-3 4]])
-    (block [-15 -5 8] [-11 5 10] [[-15 8] [-11 8]])
-    (block [-7 -5 8] [-3 5 10] [[-7 8] [-3 8]])
-    (solid (box [-19 -5 16] [-3 5 10]))
+   [(block [-19 -9 0] [-11 5 4] [[-11 4]])
+    (block [-7 -9 0] [-3 5 4] [[-7 0] [-3 0] [-7 4] [-3 4]])
+    (block [-15 -9 8] [-11 5 10] [[-15 8] [-11 8]])
+    (block [-7 -9 8] [-3 5 10] [[-7 8] [-3 8]])
+    (solid (box [-19 -9 16] [-3 5 10]))
     ; ..the lamps, each looking along its wall, some across, some up or down it
-    (lamp [-3 -2.2 2] [1 0 0] [0 0 1])
-    (lamp [-3 -2.2 9] [1 0 0] [0 0 -1])
-    (lamp [-11 -2.2 2] [1 0 0] [0 0 1])
-    (lamp [-19 0.5 7] [1 0 0] [0 1 0])
-    (lamp [-3 1.5 13] [1 0 0] [0 -1 0])
-    (lamp [-11 -2.5 -2.3] [1 0 0] [0 0 1])
-    (lamp [-5 -2.5 0] [0 0 -1] [-1 0 0])
+    (lamp [-3 -6.2 2] [1 0 0] [0 0 1])
+    (lamp [-3 -6.2 9] [1 0 0] [0 0 -1])
+    (lamp [-11 -6.2 2] [1 0 0] [0 0 1])
+    (lamp [-19 -3.5 7] [1 0 0] [0 1 0])
+    (lamp [-3 -2.5 13] [1 0 0] [0 -1 0])
+    (lamp [-11 -6.5 -2.3] [1 0 0] [0 0 1])
+    (lamp [-5 -6.5 0] [0 0 -1] [-1 0 0])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
-    (solid (box [-11 -5 -4.52] [-1 -4.6 -4.36]))
-    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -4.6 -4.47] [-1 -4.0 -4.41]))])
-    (solid (box [-11 -4.0 -4.48] [-1 -3.94 -4.4]))])
+    (solid (box [-11 -9 -4.52] [-1 -8.6 -4.36]))
+    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -8.6 -4.47] [-1 -8.0 -4.41]))])
+    (solid (box [-11 -8.0 -4.48] [-1 -7.94 -4.4]))])
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
-  (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
+  (train [-9 -9 -7.24] [9 -6.7 -4.64] (door [0 -9 -4.64] 1.4 2.0) -55)
   ; ..a bare mattress along the car's floor at its east end, gone with it
-  (mattress [5.4 -5 -5.94] 90)
+  (mattress [5.4 -9 -5.94] 90)
   ; a telescope in the west wing's north corner, looking out across it
-  (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
+  (telescope [-17.2 -9 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
   ; ends at a blank wall, painted a half court with its hoop on the wall
@@ -647,12 +648,12 @@
   (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
-  ; wing, a window a metre and a half over each doorway into its glow
-  (grav [0.7 -5 16.3] [2.7 9 18.3] 'up)
-  (grav [-2.7 -5 16.3] [-0.7 9 18.3] 'down)
+  ; wing, two windows up over each doorway into its glow
+  (grav [0.7 -9 16.3] [2.7 9 18.3] 'up)
+  (grav [-2.7 -9 16.3] [-0.7 9 18.3] 'down)
   (shaft 1.7) (shaft -1.7)
-  (air (box [0.9 -5 15.9] [2.5 -2.4 16.4]))
-  (air (box [-2.5 -5 15.9] [-0.9 -2.4 16.4]))
+  (air (box [0.9 -9 15.9] [2.5 -6.4 16.4]))
+  (air (box [-2.5 -9 15.9] [-0.9 -6.4 16.4]))
   (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
   (skin {'all concrete} (air (box [-2.5 9 18.2] [-0.9 11.6 19.1])))
   ; the natural food center at the street's west end, three storeys, its floor a step below
@@ -863,16 +864,16 @@
     (coarse 4 (glow (orb orb-at 6 pinkorb 0.06)))
     (coarse 4 (glow (inward (orb orb-at 5.95 pinkin 0.06))))
     (herald orb-at 1.6 5.9 smiley "ring.l" ())])
-  (poster [-4.7 -3.8 6.4] 0.7 1.0 ())
+  (poster [-4.7 -7.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
   ; chamber beside it, a lamp, and a door in its east wall
-  (room [11.3 -5 0.3] [18.7 -1.8 3.7])
-  (window [10.95 -4.1 0.6] [11.35 -2.4 3.4] glass)
-  (lamp [13 -3.4 0.3] [0 0 1] [1 0 0])
-  (door [18.7 -5 2] 1.2 2.2)
+  (room [11.3 -9 0.3] [18.7 -5.8 3.7])
+  (window [10.95 -8.1 0.6] [11.35 -6.4 3.4] glass)
+  (lamp [13 -7.4 0.3] [0 0 1] [1 0 0])
+  (door [18.7 -9 2] 1.2 2.2)
   ; the bins: on the platform against the blocks either side of the hallway and at its
   ; ends, and in each wing against the front block
   (mirror-x 0
-   [(bin [-5 -5 -0.4] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-10.5 -5 -1.0] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-15 -5 4.4] 0.55 0.55 0.95 binmetal binsign)]))
+   [(bin [-5 -9 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-10.5 -9 -1.0] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-15 -9 4.4] 0.55 0.55 0.95 binmetal binsign)]))

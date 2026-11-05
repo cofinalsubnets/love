@@ -1516,7 +1516,7 @@
    _ (each (st 'gates) (s \ pin s 'g (s 'want < s 'g ? (max 0.0 (s 'g - swing-v * dt)) (min (1.0 * s 'want) (s 'g + swing-v * dt)))))
    _ (fly || kn ? st (lift-ride st))
    _ (fly || kn || hoisting? st || peep st 'cling 0 = 1 || riding? st ? st (floor-step st dt))
-   _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0 || peep st 'gv 0.0 != 0.0))
+   _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0 || peep st 'aloft 0 = 1))
    _ (each (st 'balls) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(lv 'cars)))
  ; ..the body's frame, on foot or not: a foot down sounds as the floor does, and a hard breath is heard
@@ -1525,15 +1525,15 @@
    (st 'gasp != 0 && pf > 0.25 ? (mix-cry st ("gasp " + (st 'gasp = 1 ? "i" "o") + show (pf < 0.5 ? 0 (pf < 0.8 ? 1 2))) ()) st))
  ; ..which of six sounds a foot makes next, never the last: the stride's own fraction shuffles it
  (foot-next v sw) ((v + 1 + int (5000.0 * sw) % 5) % 6)
- ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
+ ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in; 'aloft 1 off that floor
  (grav-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) v (peep st 'gv 0.0)
    in (filter (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (st 'lvl 'gravs))
    (two? in
     ? (: g <in d ((g 'dir @ 'up (g 'hi 1) (g 'lo 1)) - fl)
          want ((d < 0.0 ? -1.0 1.0) * grav-v * sat (mag d / 0.8 + 0.08)) v2 (v + (want - v) * sat (3.0 * dt))
          m (v2 * dt) step (mag m > mag d ? d m)
-         (pins st 'py (fl + step + eye-h) 'gv v2))
-      (pin st 'gv 0.0)))
+         (pins st 'py (fl + step + eye-h) 'gv v2 'aloft (g 'lo 1 + 0.05 < fl + step ? 1 0)))
+      (pins st 'gv 0.0 'aloft 0)))
  ; ..what the feet stand on: a step up climbed, a step down or an edge fallen from to what
  ; is under, a jump flown till it comes down on something; not in a grav shaft nor on a
  ; car's track, whose floors are their own

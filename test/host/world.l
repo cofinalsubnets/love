@@ -617,12 +617,12 @@
  (test (lq 2 3.0 < 0.008) (0.012 < lq 10 3.0) (lq 90 3.0 < 0.001)
        (eb = [0.0 0.0 0.0 0.0]) (5 < sl 'slide 0 < 15) (-40 < sl 'slide 1 < -30) (nb = wb)
        (mesh-sway {'scale 8 'win 0} wb 1.5 240 = wb)))
-;; a foot makes no sound carried in a grav shaft
-(: gs "(room [0 0 0] [8 3 4]) (start [2 0 2] 0 0) (grav [1 0 4.3] [3 6 6.3] 'up) (air (box [1.2 0 3.9] [2.8 2.5 4.4]))"
-   (stepping z) (: st (pins (world-new 8 8 (world-read ("(level \"t\" (textures {}) " + gs + ")")) "") 'pz z 'sw 3.1)
-     _ (each ^10 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)))
+;; a foot makes no sound carried in a grav shaft, and does on its floor
+(: gs "(level \"t\" (room [0 0 0] [8 3 8]) (start [2 0 2] 0 0) (grav [1 0 3] [3 3 5] 'down))"
+   (stepping y) (: st (pins (world-new 8 8 (world-read gs) "") 'pz 3.5 'py (y + eye-h) 'sw 3.1)
+     _ (each ^4 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)))
      (any (q \ snip (q 0) 0 5 = "step ") (peep st 'sfx ())))
- (test (stepping 1.0) !(stepping 4.5)))
+ (test (stepping 0.0) !(stepping 2.0)))
 ;; a headstone stands, and is no grave
 (: hs (world-read "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) (headstone [2 0 3] 45 t))")
  (test (#(hs 'brushes) > 1) (peep hs 'graves () = ())))
