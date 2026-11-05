@@ -2172,6 +2172,41 @@
           dmb (tw 0xF3BF8F5F)
           [['raw (dmb + body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + dmb)]]))   ; bne back
    ; an exchange: value r0, pointer r1 -> the old value r0, r2 r3 spent
+   ; a64's flush of [r0, r1): dc cvau, ic ivau per line, strides off ctr_el0. it writes r2 r3 r9 r15
+   (a64flush g)
+    (: lb (nlab g ".ccd") db (nlab g ".ccdd")
+       li9 (nlab g ".cci") di (nlab g ".ccid")
+     ['(raw (34 0 59 213))          ; mrs x2, ctr_el0
+       '(li r9 15)
+       '(and r15 r2 r9)
+       '(li r3 4)
+       '(raw (111 32 207 154))      ; lsl x15, x3, x15 -- isize
+       '(shr r2 16)
+       '(and r2 r2 r9)
+       '(raw (98 32 194 154))       ; lsl x2, x3, x2 -- dsize
+       '(sub r3 r2 1)
+       '(not r3)
+       '(and r9 r0 r3)            ; begin & ~(dsize-1)
+       ['label lb]
+       '(cmp r9 r1)
+       ['br 'ae db]
+       '(raw (41 123 11 213))       ; dc cvau, x9
+       '(add r9 r9 r2)
+       ['jmp lb]
+       ['label db]
+       '(raw (159 59 3 213))        ; dsb ish
+       '(sub r3 r15 1)
+       '(not r3)
+       '(and r9 r0 r3)            ; begin & ~(isize-1)
+       ['label li9]
+       '(cmp r9 r1)
+       ['br 'ae di]
+       '(raw (41 117 11 213))         ; ic ivau, x9
+       '(add r9 r9 r15)
+       ['jmp li9]
+       ['label di]
+       '(raw (159 59 3 213))          ; dsb ish
+       '(raw (223 63 3 213))]) ; isb
    (axchg g w)
     (? (wasm? g) [[(w @ 4 'ldu4 'ld) 'r2 'r1 0] [(stw w) 'r1 0 'r0] '(mov r0 r2)]
        (a64? g)
@@ -2333,47 +2368,13 @@
        ; a hint: only the address evaluates, for its effects
        (bi = "__builtin_prefetch") (cgexpr g env <args ())
        (bi = "__builtin___clear_cache")
-        ; x86 keeps I-cache coherent. a64: dc cvau, ic ivau per line, strides off ctr_el0.
-        ; scratch r2/r3/r9/r15 only: r10-r14 are the homes
+        ; x86 keeps I-cache coherent; a64 walks the lines
         (!(a64? g) ? (mkv 'long 'r0 ())
            (: e1 (cgexpr g env <args ())
               e2 (cgexpr g env <>args ())
-              lb (nlab g ".ccd") db (nlab g ".ccdd")
-              li9 (nlab g ".cci") di (nlab g ".ccid")
               (bad? e1 || bad? e2 ? 'bad
                  (mkv 'long 'r0 $
-                   pk g (asint g e1) (asint g e2 + '((mov r1 r0))) 'r0 +
-                     ['(raw (34 0 59 213))          ; mrs x2, ctr_el0
-                       '(li r9 15)
-                       '(and r15 r2 r9)
-                       '(li r3 4)
-                       '(raw (111 32 207 154))      ; lsl x15, x3, x15 -- isize
-                       '(shr r2 16)
-                       '(and r2 r2 r9)
-                       '(raw (98 32 194 154))       ; lsl x2, x3, x2 -- dsize
-                       '(sub r3 r2 1)
-                       '(not r3)
-                       '(and r9 r0 r3)            ; begin & ~(dsize-1)
-                       ['label lb]
-                       '(cmp r9 r1)
-                       ['br 'ae db]
-                       '(raw (41 123 11 213))       ; dc cvau, x9
-                       '(add r9 r9 r2)
-                       ['jmp lb]
-                       ['label db]
-                       '(raw (159 59 3 213))        ; dsb ish
-                       '(sub r3 r15 1)
-                       '(not r3)
-                       '(and r9 r0 r3)            ; begin & ~(isize-1)
-                       ['label li9]
-                       '(cmp r9 r1)
-                       ['br 'ae di]
-                       '(raw (41 117 11 213))         ; ic ivau, x9
-                       '(add r9 r9 r15)
-                       ['jmp li9]
-                       ['label di]
-                       '(raw (159 59 3 213))          ; dsb ish
-                       '(raw (223 63 3 213))]))))     ; isb
+                   pk g (asint g e1) (asint g e2 + '((mov r1 r0))) 'r0 + a64flush g))))
        (elem bi '("__builtin_clzll" "__builtin_clzl" "__builtin_clz"))
         (: e1 (cgexpr g env <args ())
            ; the `l` spelling is the target's long

@@ -790,10 +790,12 @@
              va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
              (lovstep g op a b va vb @ () (lobin g op va vb kb) x (lox g env x)))
-         ; x86's caches are coherent: the args for their effects alone. elsewhere the flush is the
-         ; old path's, until the new one lays the line walk
+         ; a64 walks the lines; elsewhere the args for their effects alone
          ['call ['var "__builtin___clear_cache"] as]
-          (!(x64? g) ? (lono g 'cflush)
+          (a64? g && #as = 2 ?
+             (lox g env <as @ 'bad 'bad [_ a fa]
+                (lox g env <>as @ 'bad 'bad [_ b fb]
+                   ['void () (fa + fb + [['mov 'r0 a] ['mov 'r1 b] ['fix '(r0 r1) '(r2 r3 r9) (a64flush g)]])]))
              (loseq (map (x \ (lox g env x @ [_ _ fs] (lol fs) _ (lol 'bad))) as) @ 'bad 'bad fs ['void () fs]))
          ['call fh as] (lomem g env fh as @ 'no (locall g env fh as) v v)
          ; the va_list's fields, as cgexpr's SysV arms lay them
@@ -1355,7 +1357,18 @@
        walk [['ld4 'r1 'r0 foff] '(cmp r1 0) ['br 'ge lov] ['ld 'r2 'r0 toff] '(add r2 r2 r1)
              ['add 'r1 'r1 step] ['st4 'r0 foff 'r1] ['jmp ld] ['label lov]
              '(ld r2 r0 0) '(mov r3 r2) '(add r3 r3 8) '(st r0 0 r3) ['label ld]]
-       (? (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
+       ; a gp composite: whole, from the save area while it fits, else the stack, closing the file;
+       ; past 16 bytes a slot holding its copy's address
+       (? (refm? g ty) (loren2 g [['r0 p]] 'r2 'long walk @ [_ a f2]
+                          (lomk g @ d [ty d (fs + f2 + [['ld d a 0]])]))
+          (stru? ty && asalign g ty <= 8 && !(hfab g ty @ b (flo? b)))
+           (: n8 (8 * aslots g ty)
+              (loren2 g [['r0 p]] 'r2 'long
+                 [['ld4 'r1 'r0 24] '(cmp r1 0) ['br 'ge lov] '(mov r3 r1) ['add 'r3 'r3 n8] ['st4 'r0 24 'r3]
+                  '(cmp r3 1) ['br 'ge lov] '(ld r2 r0 8) '(add r2 r2 r1) ['jmp ld] ['label lov]
+                  '(ld r2 r0 0) '(mov r3 r2) ['add 'r3 'r3 n8] '(st r0 0 r3) ['label ld]]
+               @ [_ a f2] [ty a (fs + f2)]))
+          (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
           (loren2 g [['r0 p]] 'r2 'long walk @ [_ a f2]
              (lomkt g ty @ d [ty d (fs + f2 + [(fl ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
