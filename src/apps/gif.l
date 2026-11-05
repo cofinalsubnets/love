@@ -149,7 +149,7 @@
     (? (#s < 13 || snip s 0 4 != "GIF8") "not a gif"
        (: w (rdle s 6 2) h (rdle s 8 2)
           (? (w * h = 0) "not a gif"
-             (16777216 < w * h) "too big"
+             (268435456 < w * h) "too big"
              (: (go p cv gc acc)
                  (? (#acc = most || #s <= p || s p = 59) acc
                     (s p = 33)
