@@ -41,7 +41,7 @@
    ; -- numbers -----------------------------------------------------------------
    (gp-neg0? x) (x = 0 && 1 / (gr-fl x) < 0)
    ; %.<nd>f, a negative zero signed as C signs it
-   (gp-f x nd) (gp-neg0? x ? ("-" + aw-fixed 0 nd) (aw-fixed x nd))
+   (gp-f x nd) (gp-neg0? x ? "-\(aw-fixed 0 nd)" (aw-fixed x nd))
    (gp-3 x) (gp-f x 3)
    (gp-in x) "\(gp-3 x)i"
    ; %g
@@ -51,7 +51,7 @@
 
    ; -- errors ------------------------------------------------------------------
    ; a picture's error gives it up; the document goes on and pic leaves 1
-   (gp-err g m) (scare 'gp-err m)
+   (gp-err g) (scare 'gp-err)
 
    ; -- the lexer: sources -----------------------------------------------------------
    ; 'file the picture's lines (counted; a line opening with a dot is troff's), 'text a
@@ -112,8 +112,8 @@
        r2 (<r1 < n && t <r1 = 46 ? (frac (<r1 + 1) (r1 1) 1.0) r1)
        i <r2 v (r2 1)
        e (gr-expo t i)
-       p (abs e 10.0)
-       (e < 0 ? (v / p) (v * p)))
+       p (foldl (a \ _ \ a * 10.0) 1.0 ^(abs e))
+       (e < 0 ? (v * (1.0 / p)) (v * p)))
    ; a number off the text: digits, a fraction, an exponent; a trailing i is inches and
    ; dropped; 1st 2nd 3rd 4th is an ordinal
    (gp-number g)
@@ -235,7 +235,7 @@
        (go (g 'fr)))
    (gp-var g nm)
     (gp-find-var g nm @ f
-     (tablet? f ? (f 'vars nm) (gp-err g ("there is no variable '" + nm + "'"))))
+     (tablet? f ? (f 'vars nm) (gp-err g "there is no variable '\(nm)'")))
    (gp-setvar g nm v) (pin (g 'fr 'vars) nm (gr-fl v))
    (gp-root g) (: (go f) (tablet? (f 'up) ? (go (f 'up)) f) (go (g 'fr)))
    (gp-reset g nms)
@@ -362,7 +362,6 @@
    (gp-size o k) (peep o k 0.0)
 
    ; -- places and positions ---------------------------------------------------------
-   (gp-corner-name s) (gp-corners s)
    ; .v2 .vertex 2 .mid1 .midpoint 3 -> ['v 2] ['mid 3], the number () when it is to follow
    (gp-vx-name s)
     (: n #s (lead i) (i < n && gr-alpha? (s i) ? (lead (i + 1)) i)
@@ -392,8 +391,8 @@
        (go l k) (? (atom? l) () (hit <l) (k = 1 ? <l (go >l (k - 1))) (go >l k))
        (go os n))
    (gp-nth-err g ty n back)
-    ((? (two? ty) ("\"" + <>ty + "\"") (ty = 'block) "[]" (show ty)) @ nm
-     (gp-err g ("there is no " + gp-ordinal n + (back ? " last " " ") + nm)))
+    ((? (two? ty) "\"\(<>ty)\"" (ty = 'block) "[]" (show ty)) @ nm
+     (gp-err g "there is no \(gp-ordinal n)\(back ? " last " " ")\(nm)"))
    (gp-ordinal n)
     (: s (show n) m (n % 100) d (n % 10)
        (s + (? (11 <= m <= 13) "th" (d = 1) "st" (d = 2) "nd" (d = 3) "rd" "th")))
@@ -420,7 +419,7 @@
             (tablet? p && 65 <= d 0 <= 90)
              (peep (peep p 'labels {}) d () @ q
               (q @ () (gp-err g "there is no label '\(d)' in the block") (dots q (j + 1))))
-            (gp-corner-name d != ()) [(gp-corner g p (gp-corner-name d)) (j + 1)]
+            (gp-corners d != ()) [(gp-corner g p (gp-corners d)) (j + 1)]
             (elem d ["x" "y" "ht" "height" "wid" "width" "rad" "radius" "diam" "diameter"]) [p j]
             (gp-vx-name d != ())
              (gp-vx-name d @ vx
@@ -430,8 +429,8 @@
        (? (k = 'label)
            (gp-label g v @ p (p @ () (gp-err g "there is no place '\(v)'") (dots p (i + 1))))
           (gp-w? g i "Here") [(g 'fr 'here) (i + 1)]
-          ((k = 'word || k = 'dot) && gp-corner-name v != () && gp-w? g (i + 1) "of")
-           (gp-place g (i + 2) @ [p j] [(gp-corner g p (gp-corner-name v)) j] ())
+          ((k = 'word || k = 'dot) && gp-corners v != () && gp-w? g (i + 1) "of")
+           (gp-place g (i + 2) @ [p j] [(gp-corner g p (gp-corners v)) j] ())
           (gp-nth g i @ [o j] (dots o j) ())))
    ; (x, y) or x, y
    (gp-pair g i)
@@ -598,9 +597,9 @@
                 "<->" (pin sp 'ah 3, i + 1)
                 ())
           (k != 'word) (dir 0)
-          (elem v ["ht" "height"]) (ex (e \ pin sp 'ht e))
-          (elem v ["wid" "width"]) (ex (e \ pin sp 'wid e))
-          (elem v ["rad" "radius"]) (ex (e \ pin sp 'rad e))
+          (elem v ["ht" "height"]) (ex (pin sp 'ht))
+          (elem v ["wid" "width"]) (ex (pin sp 'wid))
+          (elem v ["rad" "radius"]) (ex (pin sp 'rad))
           (elem v ["diam" "diameter"]) (ex (e \ pin sp 'rad (e / 2)))
           (elem v ["up" "down" "left" "right"])
            (: d (name v) r (gp-opt-expr g (i + 1))
@@ -608,10 +607,10 @@
           (v = "then")
            (two? (sp 'cur) ? (gp-seg-close sp, pin sp 'then 1, i + 1)
             (pins sp 'segs (gp-seg-then g sp . sp 'segs) 'then 1, i + 1))
-          (v = "from") (pos (p \ pin sp 'from p))
+          (v = "from") (pos (pin sp 'from))
           (v = "to") (pos (p \ (gp-seg-close sp, pins sp 'cur ['abs p] 'then 0 'to p)))
           (v = "by") (gp-pair g (i + 1) @ [p j] (gp-seg-add sp p, j) (gp-syn g (i + 1)))
-          (v = "at") (pos (p \ pin sp 'at p))
+          (v = "at") (pos (pin sp 'at))
           (v = "with") (gp-with g (i + 1) sp)
           (v = "chop") (opt (e \ pin sp 'chop (e . sp 'chop)))
           (v = "dashed") (opt (e \ pins sp 'dashed 1 'dw e))
@@ -621,7 +620,7 @@
           ; a bare fill anywhere is fillval, whatever amounts are said
           (elem v ["fill" "filled"]) (opt (e \ (? (e = ()) (pins sp 'fill (gp-var g "fillval") 'filldflt 1)
                                                   (peep sp 'filldflt 0) 0 (pin sp 'fill e))))
-          (elem v ["thick" "thickness"]) (ex (e \ pin sp 'thick e))
+          (elem v ["thick" "thickness"]) (ex (pin sp 'thick))
           (v = "same") (pin sp 'same 1, i + 1)
           (v = "cw") (pin sp 'cw 1, i + 1)
           (v = "ccw") (pin sp 'cw 0, i + 1)
@@ -636,14 +635,14 @@
           (v = "shaded") (gp-text g (i + 1) @ [s j] (pin sp 'shaded s, j) (gp-syn g (i + 1)))
           (elem v ["color" "colour" "colored" "coloured"])
            (gp-text g (i + 1) @ [s j] (pins sp 'outline s 'shaded s, j) (gp-syn g (i + 1)))
-          (v = "xslanted") (ex (e \ pin sp 'xsl e))
-          (v = "yslanted") (ex (e \ pin sp 'ysl e))
+          (v = "xslanted") (ex (pin sp 'xsl))
+          (v = "yslanted") (ex (pin sp 'ysl))
           (dir 0)))
    ; with .corner, with .A.B.corner (into a block), or with a position
    (gp-with g i sp)
     (: (dots j acc) (gp-k g j = 'dot ? (dots (j + 1) (gp-v g j . acc)) [(rev acc) j])
        (? (gp-k g i = 'dot) (dots i () @ [ps j] (pin sp 'with ps, j) ())
-          (gp-k g i = 'word && gp-corner-name (gp-v g i) != ()) (pin sp 'with [(gp-v g i)], i + 1)
+          (gp-k g i = 'word && gp-corners (gp-v g i) != ()) (pin sp 'with [(gp-v g i)], i + 1)
           (gp-position g i @ [p j] (pin sp 'with p, j) (gp-syn g i))))
    (gp-attrs g i sp) (gp-attr g i sp @ j (j = () ? i (gp-attrs g j sp)))
 
@@ -672,7 +671,7 @@
         pin fr 'here (gp-add c (gp-mul (gp-unit d) half))))
    ; a with path's offset from the centre: a corner, or into a block's labels
    (gp-with-off g o ps round)
-    (? (atom? >ps && gp-corner-name <ps != ()) (gp-off round (o 'w) (o 'h) (gp-corner-name <ps))
+    (? (atom? >ps && gp-corners <ps != ()) (gp-off round (o 'w) (o 'h) (gp-corners <ps))
        (atom? >ps && gp-vx-name <ps != ()) (gp-sub (gp-corner g o (gp-vx-name <ps)) (o 'c))
        (o 'ty = 'block)
         (: q (o 'labels <ps)
@@ -682,8 +681,8 @@
        (gp-err g "with: not a block"))
    (gp-with-at g o ps)
     (? (atom? ps) (gp-pos g o)
-       (atom? >ps && gp-corner-name <ps != ()) (gp-corner g o (gp-corner-name <ps))
-       (peep (peep o 'labels {}) <ps () @ q (q = () ? (gp-err g ("there is no label '" + <ps + "' in the block")) (gp-with-at g q >ps))))
+       (atom? >ps && gp-corners <ps != ()) (gp-corner g o (gp-corners <ps))
+       (peep (peep o 'labels {}) <ps () @ q (q = () ? (gp-err g "there is no label '\(<ps)' in the block") (gp-with-at g q >ps))))
    (gp-make-closed g sp ty w h)
     ({'ty ty 'kw ty 'w w 'h h} @ o
      (gp-common g sp o,
@@ -740,7 +739,7 @@
        ; with and at put that corner of the path, or that point, at at
        wv (sp 'with) to (sp 'at)
        ((? (wat && string? <wv)
-            ((gp-vx-name <wv != () ? (gp-vx-name <wv) (gp-corner-name <wv)) @ c
+            ((gp-vx-name <wv != () ? (gp-vx-name <wv) (gp-corners <wv)) @ c
              (gp-shift o (gp-sub to (gp-corner g o c))))
            wat (gp-shift o (gp-sub to wv))
            0),
@@ -881,7 +880,7 @@
    (gp-assign g nm e local?)
     (? local?
         (gp-find-var g nm @ f
-         (tablet? f ? (pin (f 'vars) nm (gr-fl e)) (gp-err g ("variable '" + nm + "' not defined"))))
+         (tablet? f ? (pin (f 'vars) nm (gr-fl e)) (gp-err g "variable '\(nm)' not defined")))
        (nm = "scale") (gp-set-scale g e)
        (gp-setvar g nm e))
    (gp-reset-stmt g i)
@@ -889,15 +888,15 @@
                      (gp-op? g j ",") (go (j + 1) acc)
                      [(rev acc) j])
        r (go i ())
-       (two? (r 0) ? (gp-reset g (r 0)) (gp-reset g (map (d \ <d) gp-defaults)),
+       (two? (r 0) ? (gp-reset g (r 0)) (gp-reset g (map cap gp-defaults)),
         r 1))
    ; print's and command's arguments, each text, a position or a number, run together
    (gp-args-text g i)
     (: (go j acc)
-        (gp-k g j = 'nl || gp-k g j = 'eof || gp-op? g j "]" || gp-op? g j "}" ? [(cats (rev acc)) j]
+        (gp-k g j = 'nl || gp-k g j = 'eof || gp-op? g j "]" || gp-op? g j "}" ? [(join "" (rev acc)) j]
          (gp-text g j @ [s k] (go k (s . acc))
            (gp-position g j @ r
-            (two? r ? (go (r 1) ((gp-g (r 0 0) + ", " + gp-g (r 0 1)) . acc))
+            (two? r ? (go (r 1) ("\(gp-g (r 0 0)), \(gp-g (r 0 1))" . acc))
              (gp-expr g j @ [e k] (go k (gp-g e . acc)) (gp-syn g j))))))
        (go i ()))
    (gp-print g i) (gp-args-text g i @ [s j] (say err "\(s)\n", j) ())
@@ -947,69 +946,68 @@
    ; -- troff --------------------------------------------------------------------------
    ; the writer carries the page's transform ('llx 'ury 'sf) and the thickness and fill it
    ; last set, so it says each only when it moves
-   (gp-o g s) (say (g 'o) s)
+   (gp-o g) (say (g 'o))
    (gp-X g p) ((<p - g 'llx) * g 'sf)
    (gp-Y g p) ((g 'ury - p 1) * g 'sf)
-   (gp-at-p g p) ("\\h'" + gp-in (gp-X g p) + "'\\v'" + gp-in (gp-Y g p) + "'")
-   (gp-d g a b) (gp-in (gp-X g b - gp-X g a) + " " + gp-in (gp-Y g b - gp-Y g a))
+   (gp-at-p g p) "\\h'\(gp-in (gp-X g p))'\\v'\(gp-in (gp-Y g p))'"
+   (gp-d g a b) "\(gp-in (gp-X g b - gp-X g a)) \(gp-in (gp-Y g b - gp-Y g a))"
    ; a path's displacements, each from the point before
-   (gp-join l) (atom? l ? "" (foldl (a \ s \ a + " " + s) <l >l))
+   (gp-join l) (atom? l ? "" (foldl (a \ s \ "\(a) \(s)") <l >l))
    (gp-ds g ps) (: (go l acc) (atom? >l ? (gp-join (rev acc)) (go >l (gp-d g <l <>l . acc))) (go ps ()))
-   (gp-draw g p cmd) (gp-o g (gp-at-p g p + "\\D'" + cmd + "'\n.sp -1\n"))
+   (gp-draw g p cmd) (gp-o g "\(gp-at-p g p)\\D'\(cmd)'\n.sp -1\n")
    (gp-thick g t)
     (g 'cthick = t || g 'nflag ? 0
      (pin g 'cthick t,
-      gp-o g ("\\D't " + gp-3 t + "p'\\h'" + gp-3 (-1.0 * t) + "p'\n.sp -1\n")))
+      gp-o g "\\D't \(gp-3 t)p'\\h'\(gp-3 (-1.0 * t))p'\n.sp -1\n"))
    (gp-fillto g f)
     (g 'cfill = f || g 'nflag ? 0
      (pin g 'cfill f,
-      gp-o g ("\\&\\D'Fg " + gp-3 (1.0 - f) + "'\n.sp -1\n")))
+      gp-o g "\\&\\D'Fg \(gp-3 (1.0 - f))'\n.sp -1\n"))
    ; a line drawn solid, dashed or dotted
    (gp-seg g o a b)
     (o 'lt @ lt
      (lt @ 'dashed (gp-dash g o a b)
            'dotted (gp-dots g o a b)
-           (gp-draw g a ("l " + gp-d g a b))))
+           (gp-draw g a "l \(gp-d g a b)")))
    (gp-dw g o) (o 'dw @ w (w = () ? (gp-var g "dashwid") w))
    (gp-dash g o a b)
     (: v (gp-sub b a) l (gp-len v) w (gp-dw g o)
-       (l <= 2 * w ? (gp-draw g a ("l " + gp-d g a b))
+       (l <= 2 * w ? (gp-draw g a "l \(gp-d g a b)")
         (: n (int ((l - w) / (2 * w) + 0.5))
            dv (gp-mul v (w / l)) gap ((l - w) / n)
            gv (gp-mul v (gap / l))
            ; too short for a gap is drawn whole
-           (n < 1 ? (gp-draw g a ("l " + gp-d g a b))
-            (map (k \ (gp-add a (gp-mul gv k) @ s (gp-draw g s ("l " + gp-d g s (gp-add s dv))))) ^(n + 1))))))
+           (n < 1 ? (gp-draw g a "l \(gp-d g a b)")
+            (map (k \ (gp-add a (gp-mul gv k) @ s (gp-draw g s "l \(gp-d g s (gp-add s dv))"))) ^(n + 1))))))
    (gp-dots g o a b)
     (: v (gp-sub b a) n (int (gp-len v / gp-dw g o + 0.5)) e (n @ 0 v [(<v / n) (v 1 / n)])
        ; a side shorter than half a gap has one dot
        (n = 0 ? (gp-dot g a) (map (k \ gp-dot g (gp-add a (gp-mul e k))) ^(n + 1))))
    ; a dot: a line of no length, or without groff's extensions a period
    (gp-dot g p)
-    (g 'nflag ? (gp-o g ("\\h'" + gp-in (gp-X g p) + "-(\\w'.'u/2u)'\\v'" + gp-in (gp-Y g p) + "+0.04m'.\n.sp -1\n"))
-     (gp-draw g p ("l " + gp-d g p p)))
+    (g 'nflag ? (gp-o g "\\h'\(gp-in (gp-X g p))-(\\w'.'u/2u)'\\v'\(gp-in (gp-Y g p))+0.04m'.\n.sp -1\n")
+     (gp-draw g p "l \(gp-d g p p)"))
    (gp-visible? o) !(o 'invis)
    ; aligned text on a path is turned along it, by postscript around the strings
    (gp-turned g o)
     (: st (o 'st) en (o 'en)
        (!(g 'nflag) && peep o 'aligned 0 && elem (o 'ty) ['line 'spline 'arc] && st != en))
-   (gp-ps g s) (gp-o g (".if \\n(0p \\{\\\n" + s + "\n.sp -1\n.\\}\n"))
+   (gp-ps g s) (gp-o g ".if \\n(0p \\{\\\n\(s)\n.sp -1\n.\\}\n")
    (gp-text-at g o c)
     (: ts (o 'txt) n #ts turn (gp-turned g o)
        (n = 0 ? 0
         (gp-thick g -1.0,
          (turn ?
           (gp-sub (o 'en) (o 'st) @ d
-           (gp-ps g (gp-at-p g c + "\\X'ps: exec gsave currentpoint 2 copy translate "
-                     + gp-f (-1.0 * atan2 (d 1) <d * 180 / pi) 4 + " rotate neg exch neg exch translate'")))
+           (gp-ps g ("\(gp-at-p g c)\\X'ps: exec gsave currentpoint 2 copy translate "
+                     + "\(gp-f (-1.0 * atan2 (d 1) <d * 180 / pi) 4) rotate neg exch neg exch translate'")))
           0),
          map (k \ (: t (ts k) s (t 's)
-                   h (? (peep t 'ljust 0) ("\\h'" + gp-in (gp-X g c) + "'")
-                        (peep t 'rjust 0) ("\\h'" + gp-in (gp-X g c) + "-\\w'" + s + "'u'")
-                        ("\\h'" + gp-in (gp-X g c) + "-(\\w'" + s + "'u/2u)'"))
-                   vv ("\\v'" + gp-in (gp-Y g c) + "-(" + show (n - 1) + "v/2u)+" + show k + "v+0.22m"
-                       + (? (peep t 'above 0) "-.5v" (peep t 'below 0) "+.5v" "") + "'")
-                   (gp-o g (".lf " + show (t 'ln) + "\n" + h + vv + s + "\n.sp -1\n"))))
+                   h (? (peep t 'ljust 0) "\\h'\(gp-in (gp-X g c))'"
+                        (peep t 'rjust 0) "\\h'\(gp-in (gp-X g c))-\\w'\(s)'u'"
+                        "\\h'\(gp-in (gp-X g c))-(\\w'\(s)'u/2u)'")
+                   vv "\\v'\(gp-in (gp-Y g c))-(\(n - 1)v/2u)+\(k)v+0.22m\(? (peep t 'above 0) "-.5v" (peep t 'below 0) "+.5v" "")'"
+                   (gp-o g ".lf \(t 'ln)\n\(h)\(vv)\(s)\n.sp -1\n")))
            (gp-said ts),
          turn ? (gp-ps g "\\X'ps: exec grestore'") 0)))
    ; the strings of a text that are said: an empty one keeps its place and draws nothing
@@ -1028,9 +1026,9 @@
        (gp-barbs o p u k @ [t v1 v2]
         (o 'asolid ?
          (c != () ? (gp-col-on g c c) (gp-fillto g 1.0),
-          gp-draw g p ("P " + gp-ds g [p v1 v2]),
+          gp-draw g p "P \(gp-ds g [p v1 v2])",
           gp-thick g 0.1,
-          gp-draw g p ("p " + gp-ds g [p v1 v2]),
+          gp-draw g p "p \(gp-ds g [p v1 v2])",
           c != () && !last ? (gp-col-off g c c) 0)
          (gp-thick g (o 'thick),
           gp-draw g v2 "l \(gp-d g v2 t)",
@@ -1050,7 +1048,7 @@
    ; extensions there are none
    (gp-colour g o)
     (g 'nflag || g 'mode = 'tex ? [() ()] [(o 'shaded) (o 'outline)])
-   (gp-col-on g f c) (f @ () 0 (gp-o g (".fcolor " + f + "\n")), c != () ? (gp-o g (".gcolor " + c + "\n")) 0)
+   (gp-col-on g f c) (f @ () 0 (gp-o g ".fcolor \(f)\n"), c != () ? (gp-o g ".gcolor \(c)\n") 0)
    (gp-col-off g f c) (f @ () 0 (gp-o g ".fcolor\n"), c @ () 0 (gp-o g ".gcolor\n"))
    ; filled: by a shaded colour, else by a gray
    (gp-fill? g o) (!(g 'nflag) && (o 'fill != () || gp-colour g o 0 != ()))
@@ -1067,12 +1065,12 @@
             path (gp-col-on g () c, heads ? (gp-col-off g () c) 0)
             (gp-col-on g f c))
        _ (? (g 'mode = 'tex) (gp-tx-obj g o)
-          (ty = 'troff) (gp-o g (".lf " + show (o 'ln) + "\n" + o 'line + "\n"))
-          (ty = 'block) (map (x \ gp-tr-obj g x) (o 'objs))
+          (ty = 'troff) (gp-o g ".lf \(o 'ln)\n\(o 'line)\n")
+          (ty = 'block) (map (gp-tr-obj g) (o 'objs))
           (ty = 'box) (0 < peep o 'rad 0.0 ? (gp-tr-rbox g o) (gp-tr-box g o))
           (ty = 'polygon) (gp-tr-poly g o (o 'pts) 0)
-          (ty = 'circle) (gp-tr-round g o "c" ("c " + gp-in (2 * o 'r * g 'sf)))
-          (ty = 'ellipse) (gp-tr-round g o "e" ("e " + gp-in (o 'w * g 'sf) + " " + gp-in (o 'h * g 'sf)))
+          (ty = 'circle) (gp-tr-round g o "c" "c \(gp-in (2 * o 'r * g 'sf))")
+          (ty = 'ellipse) (gp-tr-round g o "e" "e \(gp-in (o 'w * g 'sf)) \(gp-in (o 'h * g 'sf))")
           (ty = 'arc) (gp-tr-arc g o)
           (elem ty ['line 'spline]) (gp-headless? g o ? 0 (gp-tr-line g o))
           0)
@@ -1098,10 +1096,10 @@
    ; side from the last corner to the first and on round
    (gp-tr-poly g o vs fill-invis)
     (: v0 <vs vis (gp-visible? o)
-       (gp-fill? g o && (vis || fill-invis) ? (gp-fill-set g o, gp-draw g v0 ("P " + gp-ds g vs)) 0,
+       (gp-fill? g o && (vis || fill-invis) ? (gp-fill-set g o, gp-draw g v0 "P \(gp-ds g vs)") 0,
         (!vis ? 0
          (gp-thick g (o 'thick),
-          (o 'lt = 'solid && !(g 'nflag) ? (gp-draw g v0 ("p " + gp-ds g vs))
+          (o 'lt = 'solid && !(g 'nflag) ? (gp-draw g v0 "p \(gp-ds g vs)")
            (: (go prev l) (atom? l ? 0 (gp-seg g o prev <l, go <l >l)) (go (<(rev vs)) vs)))))))
    ; a box with round corners -> [r discs bands arcs straights]: filled as four discs (the
    ; corners' centres) and two bands, drawn as four quarter arcs [start centre end] and the
@@ -1121,19 +1119,19 @@
          [[x1 (y1 - r)] [x1 (y0 + r)]] [[(x1 - r) y0] [(x0 + r) y0]]]])
    (gp-tr-rbox g o)
     (gp-rbox o @ [r ds bs as ss]
-     (: (disc p) (gp-draw g [(<p - r) (p 1)] ("C " + gp-in (2 * r * g 'sf)))
+     (: (disc p) (gp-draw g [(<p - r) (p 1)] "C \(gp-in (2 * r * g 'sf))")
         _ (gp-fill? g o ?
            (gp-fill-set g o,
             disc <ds, gp-thick g 1.0, map disc >ds,
-            map (q \ gp-draw g <q ("P " + gp-ds g q)) bs)
+            map (q \ gp-draw g <q "P \(gp-ds g q)") bs)
            0)
         (!(gp-visible? o) ? 0
          (gp-thick g (o 'thick),
-          map (a \ gp-draw g <a ("a " + gp-d g <a (a 1) + " " + gp-d g (a 1) (a 2))) as,
-          map (e \ gp-draw g <e ("l " + gp-d g <e <>e)) ss))))
+          map (a \ gp-draw g <a "a \(gp-d g <a (a 1)) \(gp-d g (a 1) (a 2))") as,
+          map (e \ gp-draw g <e "l \(gp-d g <e <>e)") ss))))
    (gp-tr-round g o f cmd)
-    (: c (o 'c) at ("\\h'" + gp-in (gp-X g c - o 'w / 2 * g 'sf) + "'\\v'" + gp-in (gp-Y g c) + "'")
-       (draw cmd) (gp-o g (at + "\\D'" + cmd + "'\n.sp -1\n"))
+    (: c (o 'c) at "\\h'\(gp-in (gp-X g c - o 'w / 2 * g 'sf))'\\v'\(gp-in (gp-Y g c))'"
+       (draw cmd) (gp-o g "\(at)\\D'\(cmd)'\n.sp -1\n")
        _ (gp-fill? g o ? (gp-fill-set g o, draw (upper f + snip cmd 1 #cmd)) 0)
        ; a circle takes its thickness once filled, drawn or not
        _ (f = "c" && gp-fill? g o ? (gp-thick g (o 'thick)) 0)
@@ -1227,9 +1225,9 @@
     (: c (o 'c) r (bits 2)
      (<bits @ 'dash (map (ab \ (: s (gp-on-r c r <ab) e (gp-on-r c r (ab 1))
                                    (gp-draw g s "a \(gp-d g s c) \(gp-d g c e)"))) (bits 1))
-              'dot (map (a \ gp-dot g (gp-on-r c r a)) (bits 1))
+              'dot (map (gp-dot g * gp-on-r c r) (bits 1))
               'arcs (map ([m r a b] \ (: s (gp-on-r m r a) e (gp-on-r m r b)
-                                       (gp-draw g s ("a " + gp-d g s m + " " + gp-d g m e)))) (bits 1))
+                                       (gp-draw g s "a \(gp-d g s m) \(gp-d g m e)"))) (bits 1))
               'pts (map (gp-dot g) (bits 1))
               0))
    ; ..and in TeX: tpic arcs, and dots as small discs as wide as the pen
@@ -1237,21 +1235,19 @@
     (: c (o 'c) r (bits 2)
        t (o 'thick) dr (show (int ((t < 0 ? t t) / 72.0 * 1000.0 / 2 + 0.5)))
        (<bits @ 'dash (map (ab \ (: rr (show (gp-mi (r * g 'sf))) a1 (-1.0 * ab 1) a2 (-1.0 * <ab) _ (gp-opn g o)
-                                     (gp-sp g ("ar " + gp-tx-xy g c + " " + rr + " " + rr + " " + gp-f a1 6
-                                               + " " + gp-f (a1 > a2 ? (tau - <ab) a2) 6))))
+                                     (gp-sp g "ar \(gp-tx-xy g c) \(rr) \(rr) \(gp-f a1 6) \(gp-f (a1 > a2 ? (tau - <ab) a2) 6)")))
                             (bits 1))
                 ; -z: a dot is a stroke of no length
                 'dot (g 'zflag ?
                       (gp-opn g o, map (a \ (gp-on-r c r a @ p (gp-tx-path g [p p] "fp"))) (bits 1))
-                      (map (a \ (gp-sp g "sh 1", gp-sp g ("ia " + gp-tx-xy g (gp-on-r c r a) + " " + dr + " " + dr + " 0 6.28319")))
+                      (map (a \ (gp-sp g "sh 1", gp-sp g "ia \(gp-tx-xy g (gp-on-r c r a)) \(dr) \(dr) 0 6.28319"))
                            (bits 1)))
                 'arcs (map ([m r a b] \ (: rr (show (gp-mi (r * g 'sf))) a1 (-1.0 * b) a2 (-1.0 * a) _ (gp-opn g o)
-                                           (gp-sp g ("ar \(gp-tx-xy g m) \(rr) \(rr) \(gp-f a1 6) "
-                                                     + gp-f (a1 > a2 ? (tau - a) a2) 6))))
+                                           (gp-sp g "ar \(gp-tx-xy g m) \(rr) \(rr) \(gp-f a1 6) \(gp-f (a1 > a2 ? (tau - a) a2) 6)")))
                            (bits 1))
                 'pts (g 'zflag ?
                       (gp-opn g o, map (p \ gp-tx-path g [p p] "fp") (bits 1))
-                      (map (p \ (gp-sp g "sh 1", gp-sp g ("ia " + gp-tx-xy g p + " " + dr + " " + dr + " 0 6.28319")))
+                      (map (p \ (gp-sp g "sh 1", gp-sp g "ia \(gp-tx-xy g p) \(dr) \(dr) 0 6.28319"))
                            (bits 1)))
                 0))
    ; an arc's head points from the arc's point its own length back round, and the arc
@@ -1281,7 +1277,7 @@
         a (ccw ? s e) b (ccw ? e s)
         _ (gp-thick g (o 'thick))
         bits (gp-curve-bits2 g o s e)
-        (<bits @ 'solid (gp-draw g a ("a " + gp-d g a c + " " + gp-d g c b))
+        (<bits @ 'solid (gp-draw g a "a \(gp-d g a c) \(gp-d g c b)")
                  'line (gp-seg g o a b)
                  (gp-tr-bits g o bits))))
    ; a head on an end with no length has no way to point: said, and the path not drawn
@@ -1289,7 +1285,7 @@
     (: ps (o 'pts) n #ps ah (peep o 'ah 0)
        (flat p q) (p = q)
        (((ah & 1) && flat (ps 0) (ps 1)) || ((ah & 2) && flat (ps (n - 2)) (ps (n - 1))) ?
-        (say err ("pic:" + peep g 'name "-" + ":" + show (peep g 'pk 0) + ": error: cannot draw arrow on object with zero length\n"), 1)
+        (say err "pic:\(peep g 'name "-"):\(peep g 'pk 0): error: cannot draw arrow on object with zero length\n", 1)
         0))
    ; a path's end drawn k short: the side times k over its length, off the end
    (gp-back p q k) (: v (gp-sub p q) l (gp-len v) (l = 0 ? (gp-sub p [k 0.0]) (gp-sub p (gp-mul v (k / l)))))
@@ -1309,7 +1305,7 @@
        ps2 (gp-clip o)
        (!vis ? 0
         (gp-thick g (o 'thick),
-         (spl ? (gp-draw g <ps2 ("~ " + gp-ds g ps2))
+         (spl ? (gp-draw g <ps2 "~ \(gp-ds g ps2)")
           (: (go l) (atom? >l ? 0 (gp-seg g o <l <>l, go >l)) (go ps2))))))
    (gp-tr-picture g os args)
     (: bb (foldl (b \ o \ gp-bb-join b (gp-bbox o)) () os)
@@ -1354,17 +1350,17 @@
        a2 (: (sp i) (i < #args && gr-blank? (args i) ? (sp (i + 1)) i) k (sp 0) (snip args k #args))
        ; each picture says its first fill again; the thickness carries over
        (pin g 'cfill (),
-        gp-o g (".PS " + gp-in H + " " + gp-in W + (0 < #a2 ? (" " + a2) "") + "\n"),
-        gp-o g (".\\\" " + gp-g (b 0) + " " + gp-g (b 1) + " " + gp-g (b 2) + " " + gp-g (b 3) + "\n"),
-        gp-o g (".\\\" " + gp-in (gp-X g [(b 0) (b 1)]) + " " + gp-in (gp-Y g [(b 0) (b 1)]) + " "
-                + gp-in (gp-X g [(b 2) (b 3)]) + " " + gp-in (gp-Y g [(b 2) (b 3)]) + "\n"),
-        gp-o g (".nr 00 \\n(.u\n.nf\n.nr 0x 1\n\\h'" + gp-in W + "'\n.sp -1\n"
+        gp-o g ".PS \(gp-in H) \(gp-in W)\(0 < #a2 ? " \(a2)" "")\n",
+        gp-o g ".\\\" \(gp-g (b 0)) \(gp-g (b 1)) \(gp-g (b 2)) \(gp-g (b 3))\n",
+        gp-o g (".\\\" \(gp-in (gp-X g [(b 0) (b 1)])) \(gp-in (gp-Y g [(b 0) (b 1)])) "
+                + "\(gp-in (gp-X g [(b 2) (b 3)])) \(gp-in (gp-Y g [(b 2) (b 3)]))\n"),
+        gp-o g (".nr 00 \\n(.u\n.nf\n.nr 0x 1\n\\h'\(gp-in W)'\n.sp -1\n"
                 + ".ds gpic*saved-stroke-color default\n.ds gpic*saved-fill-color default\n"
                 + ".if !'\\n[.m]'' .ds gpic*saved-stroke-color \\n[.m]\n"
                 + ".if !'\\n[.M]'' .ds gpic*saved-fill-color \\n[.M]\n"),
-        map (o \ gp-tr-obj g o) os,
+        map (gp-tr-obj g) os,
         gp-thick g -1.0,
-        gp-o g ((g 'top ? "" (".sp " + gp-in H + "+1\n")) + ".if \\n(00 .fi\n.br\n.nr 0x 0\n"
+        gp-o g ((g 'top ? "" ".sp \(gp-in H)+1\n") + ".if \\n(00 .fi\n.br\n.nr 0x 0\n"
                 + ".gcolor \\*[gpic*saved-stroke-color]\n.fcolor \\*[gpic*saved-fill-color]\n")))
 
    ; -- TeX: tpic's specials ------------------------------------------------------------
@@ -1372,23 +1368,23 @@
    (gp-mi v) (int (v * 1000.0 + 0.5))
    (gp-tin x) "\(gp-3 x)in"
    (gp-sp g s) (gp-o g "    \\special{\(s)}%\n")
-   (gp-tx-xy g p) (show (gp-mi (gp-X g p)) + " " + show (gp-mi (gp-Y g p)))
+   (gp-tx-xy g p) "\(gp-mi (gp-X g p)) \(gp-mi (gp-Y g p))"
    ; the pen, said when it moves: a width in milli-inches, 8 unless the line says
    (gp-pen g t) (gp-pen-n g (t < 0 ? 8 (int (t / 72.0 * 1000.0 + 0.5))))
    ; an object's pen: its thickness, else under -c the .ps it was made under, said afresh
    ; at each stroke and never remembered
-   (gp-opn g o) (o 'thick < 0 && g 'cflag ? (gp-sp g ("pn " + show (peep o 'cpen 8))) (gp-pen g (o 'thick)))
-   (gp-pen-n g n) (g 'cpen = n ? 0 (pin g 'cpen n, gp-sp g ("pn " + show n)))
-   (gp-shade g f) (gp-sp g ("sh " + gp-3 f))
-   (gp-tx-path g ps fin) (map (p \ gp-sp g ("pa " + gp-tx-xy g p)) ps, gp-sp g fin)
+   (gp-opn g o) (o 'thick < 0 && g 'cflag ? (gp-sp g "pn \(peep o 'cpen 8)") (gp-pen g (o 'thick)))
+   (gp-pen-n g n) (g 'cpen = n ? 0 (pin g 'cpen n, gp-sp g "pn \(n)"))
+   (gp-shade g f) (gp-sp g "sh \(gp-3 f)")
+   (gp-tx-path g ps fin) (map (p \ gp-sp g "pa \(gp-tx-xy g p)") ps, gp-sp g fin)
    ; how a path ends: stroked, dashed, dotted, or filled unstroked
    (gp-tx-end g o)
     (o 'lt @ lt
-     (lt @ 'dashed ("da " + gp-3 (gp-dw g o * g 'sf)) 'dotted ("dt " + gp-3 (gp-dw g o * g 'sf)) "fp"))
+     (lt @ 'dashed "da \(gp-3 (gp-dw g o * g 'sf))" 'dotted "dt \(gp-3 (gp-dw g o * g 'sf))" "fp"))
    (gp-tx-obj g o)
     (: ty (o 'ty) vis (gp-visible? o) fill (o 'fill != () || o 'shaded != ()) gray (o 'fill != () && o 'shaded = ())
        ((? (ty = 'troff) (gp-o g ((g 'cflag && starts? (o 'line) "." ? ("\\" + snip (o 'line) 1 #(o 'line)) (o 'line)) + "%\n"))
-           (ty = 'block) (map (x \ gp-tx-obj g x) (o 'objs))
+           (ty = 'block) (map (gp-tx-obj g) (o 'objs))
            (ty = 'box && 0 < peep o 'rad 0.0) (gp-tx-rbox g o)
            (ty = 'box)
             (: vs (gp-box-vs o) sw (vs 3)
@@ -1406,8 +1402,8 @@
            ; draw it whole
            (ty = 'circle && vis && o 'lt != 'solid)
             (: rr (show (gp-mi (o 'r * g 'sf))) bits (gp-curve-bits g o)
-               (gray ? (gp-shade g (o 'fill), gp-sp g ("ia " + gp-tx-xy g (o 'c) + " " + rr + " " + rr + " 0 6.28319")) 0,
-                <bits = 'solid ? (gp-opn g o, gp-sp g ("ar " + gp-tx-xy g (o 'c) + " " + rr + " " + rr + " 0 6.28319"))
+               (gray ? (gp-shade g (o 'fill), gp-sp g "ia \(gp-tx-xy g (o 'c)) \(rr) \(rr) 0 6.28319") 0,
+                <bits = 'solid ? (gp-opn g o, gp-sp g "ar \(gp-tx-xy g (o 'c)) \(rr) \(rr) 0 6.28319")
                  (gp-tx-bits g o bits)))
            (ty = 'circle || ty = 'ellipse)
             (vis || gray ?
@@ -1417,8 +1413,7 @@
               ; scaled to the page round its centre unscaled
               (vis && o 'lt != 'solid && o 'w > 0 && o 'h > 0 ?
                (gp-tx-bits g o (gp-ell-bits o (o 'lt) (gp-dw g o) (o 'w * g 'sf) (o 'h * g 'sf)))
-               (gp-sp g ((vis ? "ar " "ia ") + gp-tx-xy g (o 'c) + " " + show (gp-mi (o 'w / 2 * g 'sf))
-                         + " " + show (gp-mi (o 'h / 2 * g 'sf)) + " 0 6.28319"))))
+               (gp-sp g "\(vis ? "ar " "ia ")\(gp-tx-xy g (o 'c)) \(gp-mi (o 'w / 2 * g 'sf)) \(gp-mi (o 'h / 2 * g 'sf)) 0 6.28319")))
              0)
            (ty = 'arc) (vis ? (gp-tx-arc g o) 0)
            (elem ty ['line 'spline]) (vis && !(gp-headless? g o) ? (gp-tx-line g o) 0)
@@ -1428,7 +1423,7 @@
    (gp-tx-rbox g o)
     (gp-rbox o @ [r ds bs as ss]
      (: rr (show (gp-mi (r * g 'sf)))
-        (disc p) (gp-shade g (o 'fill), gp-sp g ("ia " + gp-tx-xy g p + " " + rr + " " + rr + " 0 6.28319"))
+        (disc p) (gp-shade g (o 'fill), gp-sp g "ia \(gp-tx-xy g p) \(rr) \(rr) 0 6.28319")
         (band vs) (gp-shade g (o 'fill), gp-pen g 1.0, gp-tx-path g (<(rev vs) . vs) "ip")
         _ (o 'fill != () && o 'shaded = () ? (map disc ds, map band bs) 0)
         ; the pen set for each piece, as -c shows
@@ -1441,11 +1436,11 @@
        (map (k \ (: t (ts k) s (t 's)
                     m (2 * k - (n - 1) + (peep t 'above 0 ? -1 0) + (peep t 'below 0 ? 1 0))
                     _ (m = 0 ? (gp-o g "    \\graphtemp=.5ex\n")
-                       (gp-o g ("    \\graphtemp=\\baselineskip\n    \\multiply\\graphtemp by " + show m
+                       (gp-o g ("    \\graphtemp=\\baselineskip\n    \\multiply\\graphtemp by \(m)"
                                 + "\n    \\divide\\graphtemp by 2\n    \\advance\\graphtemp by .5ex\n")))
-                    box (? (peep t 'ljust 0) (s + "\\hss") (peep t 'rjust 0) ("\\hss " + s) ("\\hss " + s + "\\hss"))
-                    (gp-o g ("    \\advance\\graphtemp by " + gp-tin (gp-Y g c) + "\n    \\rlap{\\kern " + gp-tin (gp-X g c)
-                             + "\\lower\\graphtemp\\hbox to 0pt{" + box + "}}%\n"))))
+                    box (? (peep t 'ljust 0) "\(s)\\hss" (peep t 'rjust 0) "\\hss \(s)" "\\hss \(s)\\hss")
+                    (gp-o g ("    \\advance\\graphtemp by \(gp-tin (gp-Y g c))\n    \\rlap{\\kern \(gp-tin (gp-X g c))"
+                             + "\\lower\\graphtemp\\hbox to 0pt{\(box)}}%\n"))))
             (gp-said ts)))
    ; a tpic arc runs clockwise down the page, so from the pic arc's end to its start
    (gp-tx-ang g c p) (-1.0 * atan2 (p 1 - c 1) (<p - <c))
@@ -1492,8 +1487,8 @@
        _ (ah & 2 ? (gp-tx-head g o q0 (gp-sub q0 q1)) 0)
        (gp-opn g o,
         ; a dotted spline's width goes negative, as tpic says dots
-        gp-tx-path g (gp-clip o) (spl ? (o 'lt @ lt (? (lt = 'solid) "sp" (lt = 'dotted) ("sp " + gp-3 (0 - gp-dw g o * g 'sf))
-                                                     ("sp " + gp-3 (gp-dw g o * g 'sf))))
+        gp-tx-path g (gp-clip o) (spl ? (o 'lt @ lt (? (lt = 'solid) "sp" (lt = 'dotted) "sp \(gp-3 (0 - gp-dw g o * g 'sf))"
+                                                     "sp \(gp-3 (gp-dw g o * g 'sf))"))
                                    (gp-tx-end g o))))
    (gp-tx-picture g os)
     (: nm (g 'figname) W (g 'W) H (g 'H)
@@ -1503,7 +1498,7 @@
                 + "\\ifx\\graphtemp\\undefined\n  \\csname newdimen\\endcsname\\graphtemp\n\\fi\n"
                 + "\\expandafter\\setbox\\csname \(nm)\\endcsname\n =\\vtop{\\vskip 0pt\\hbox{%\n"),
         map (gp-tx-obj g) os,
-        gp-o g ("    \\hbox{\\vrule depth\(gp-tin H) width0pt height 0pt}%\n    \\kern \(gp-tin W)\n  }%\n}%\n")))
+        gp-o g "    \\hbox{\\vrule depth\(gp-tin H) width0pt height 0pt}%\n    \\kern \(gp-tin W)\n  }%\n}%\n"))
 
    ; -- a picture ----------------------------------------------------------------------
    ; a picture's outer frame: its objects are its own, its variables the document's, set
@@ -1527,7 +1522,7 @@
    ; draws what came before it (2), one at a line's end or a missing place draws nothing
    (gp-gave-up g nm m args)
     (: ln (g 'errk @ () (gp-line g) (g 'errln))
-       _ (say err "pic:\(nm):\(ln): error: \(m)\n pic:\(nm):\(ln): error: giving up on this picture\n")
+       _ (say err "pic:\(nm):\(ln): error: \(m)\npic:\(nm):\(ln): error: giving up on this picture\n")
        _ (pin g 'status 1)
        os (rev (g 'fr 'objs))
        (!(g 'between) || atom? os ? -1 (gp-tr-picture g os args, 2)))
@@ -1551,7 +1546,7 @@
    (gp-end? g l) (gp-macro? g l ".PE" || gp-macro? g l ".PF" || gp-macro? g l ".PY")
    (gp-doc g nm text)
     (: ls (lines text) n #ls
-       _ (g 'mode = 'troff ? (gp-o g (".lf " + show (g 'prevln) + " \"" + nm + "\n")) 0)
+       _ (g 'mode = 'troff ? (gp-o g ".lf \(g 'prevln) \"\(nm)\n") 0)
        _ (pin g 'name nm)
        (go ls k)
         (? (atom? ls) 0
@@ -1564,9 +1559,9 @@
                bl (r 0) pe (r 1) pk (r 2)
                _ (pin g 'pk pk)
                _ (pin g 'top (string? pe && !(gp-macro? g pe ".PE")))
-               t (cats (map (x \ x + "\n") bl))
+               t (catmap (x \ "\(x)\n") bl)
                tex (g 'mode = 'tex)
-               _ (tex ? 0 (gp-o g (".lf " + show k + (peep g 'lfname 0 ? (" \"" + g 'name) "") + "\n")))
+               _ (tex ? 0 (gp-o g ".lf \(k)\(peep g 'lfname 0 ? " \"\(g 'name)" "")\n"))
                _ (pin g 'lfname 0)
                o0 (g 'o)
                _ (pin g 'o (jug 0))
@@ -1578,10 +1573,10 @@
                _ (pin g 'o o0)
                endln (drew = 2 ? (g 'errln) pk)
                ((? (drew < 1) 0 tex (gp-o g pic)
-                   (gp-o g (pic + ".lf " + show endln + "\n" + (string? pe ? pe ".PE") + "\n"))),
-                tex ? 0 (gp-o g (".lf " + show (pk + 1) + "\n")),
+                   (gp-o g "\(pic).lf \(endln)\n\(string? pe ? pe ".PE")\n")),
+                tex ? 0 (gp-o g ".lf \(pk + 1)\n"),
                 go (r 3) (pk + 1)))
-           (: _ (gp-o g (<ls + "\n"))
+           (: _ (gp-o g "\(<ls)\n")
               lf (g 'mode = 'troff ? (gp-lf <ls))
               (two? lf && string? (lf 1) ? (pins g 'name (lf 1) 'lfname 1) 0,
                go >ls (two? lf ? <lf (k + 1)))))
@@ -1601,7 +1596,7 @@
                      67 (pin g 'Cflag 1) 83 (pins g 'unsafe 0 'safe 1)
                      85 (peep g 'safe 0 ? 0 (pin g 'unsafe 1))
                      (68 || 84) 0
-                     (say err ("pic: warning: command-line option '-\(string c)' is obsolete; ignoring\n")))
+                     (say err "pic: warning: command-line option '-\(string c)' is obsolete; ignoring\n"))
        (flags l)
         (? (atom? l) ()
            (<l = "--") >l
@@ -1612,7 +1607,7 @@
        _ (g 'mode = 'troff ?
           (gp-o g ".do if !dPS .ds PS\n.do if !dPE .ds PE\n.do if !dPF .ds PF\n.do if !dPY .ds PY\n") 0)
        (gr-files fs sin (gp-doc g)
-                 (f \ (say err ("pic: fatal error: cannot open '" + f + "': No such file or directory\n"),
+                 (f \ (say err "pic: fatal error: cannot open '\(f)': No such file or directory\n",
                         pin g 'status 3)),
         [(g 'status) (slurp (g 'o))]))
 )

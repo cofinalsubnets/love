@@ -96,9 +96,9 @@
           (k = 'other) "from \(x).\(ch-cmp a)"
           (1 < #x && x 0 = 46 && ch-upper? (x 1)) "from Last\(x).\(ch-cmp a)"
           (0 < dot && place (snip x 0 dot) && place (snip x (dot + 1) #x)) "from \(x).\(ch-cmp a)"
-          ("from " + ch-fields l)))
+          "from \(ch-fields l)"))
    ; words as chem lays them back, each with a blank after, up to a comment
-   (ch-fields l) (atom? l || starts? <l "#" ? "" (<l + " " + ch-fields >l))
+   (ch-fields l) (atom? l || starts? <l "#" ? "" "\(<l) \(ch-fields >l)")
    ; a word that turns a bond: one with a figure or a way anywhere in it
    (ch-turn? w) (any digit? (ch-chars w) || any (d \ 0 <= fsub w d 0) (keys ch-dirs))
    ; ..to: a leading integer's degrees, a way's by its exact name (else up), or no turn

@@ -32,7 +32,7 @@
           "thru" "dotted" "dashed" "invis" "solid" "sprintf"]
 
    ; -- numbers --------------------------------------------------------------------
-   (gr-fl x) (x * 1.0)
+   gr-fl (* 1.0)
    (gr-neg0? x) (x = 0 && 1 / gr-fl x < 0)
    ; %g, a negative zero signed as C signs it
    (gr-g x) (gr-neg0? x ? "-0" (aw-gen (gr-fl x) 6))
@@ -122,7 +122,7 @@
        (? (m = 0) 0.0 (0 <= p) (gr-dbl (m * p 10) 1) (gr-dbl m (-p 10))))
 
    ; -- errors ------------------------------------------------------------------
-   (gr-err g m) (scare 'gr-err m)
+   (gr-err g) (scare 'gr-err)
 
    ; -- the lexer: sources -----------------------------------------------------------
    ; a source: 'file the graph's own lines (a dot not before a figure opens a troff line),
@@ -260,8 +260,8 @@
    (gr-thru-line thru l) "\(gr-subst thru (gr-words l))\n"
    ; copy's lines (the file's, else those after this one) up to until, each through thru
    (gr-thru-lines g file text thru until)
-    (: ls (string? file ? (gr-cut-until (lines text) until) (map (p \ <p) (gr-take-lines g until)))
-       (cats (map (l \ gr-thru-line thru l) ls)))
+    (: ls (string? file ? (gr-cut-until (lines text) until) (map cap (gr-take-lines g until)))
+       (catmap (gr-thru-line thru) ls))
    ; copy's thru: a macro by name, else a body read by delim
    (gr-thru g delim)
     (: _ (gr-skip-blanks g)
@@ -923,7 +923,7 @@
         _ (g 'ht < 0 ? (pin g 'ht (gr-var g "frameht")) 0)
         _ (g 'wid < 0 ? (pin g 'wid (gr-var g "framewid")) 0)
         _ (say o "\(g 'gname): [\n")
-        cs (map (nm \ g 'cs nm) (g 'corder))
+        cs (map (g 'cs) (g 'corder))
         ; the automatic ticks see the ranges the margins leave
         (map (c \ gr-coord-defs g c o) cs,
          gr-frame g o,
@@ -1053,7 +1053,7 @@
                 go (r 2) (pk + 1)))
            (gr-o0 g "\(<ls)\n", go >ls (k + 1)))
        (go ls 1))
-   (gr-o0 g s) (say (g 'o) s)
+   (gr-o0 g) (say (g 'o))
    ; a graph given up: said, and what it drew let go. the lines after the one it failed
    ; on go through as they are, and grap's count of lines is one short from then on. the
    ; status stays 0, as plan 9's does
