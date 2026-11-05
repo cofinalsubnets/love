@@ -58,12 +58,12 @@ static word
 static love_noinline struct g *c0(struct g *g, lvm_t *y);
 struct g *eval(struct g *g);
 
-// a function's compile state
+// a function's compile state. fars: a let's binding names, pinned before its lambdas compile
+enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, EFars, EN };
 struct env {
  struct env *par; // enclosing scope
- word tab, // the mutable scope, a tablet keyed by the E* fixnums, as ev.l's (c 'stk) (c 'imp)
-  len,     // thread length: a fixnum, so no store to it needs a barrier
-  end[]; };
+ word len,        // thread length: a fixnum, so no store to it needs a barrier
+  v[EN]; };       // the mutable scope, as ev.l's (c 'stk) (c 'imp)
 
 static Ana(ana_2, word, word);
 static Cata(pull) { return ok(g) ? ((cata*) pop1(g))(g, c) : g; }
@@ -74,14 +74,9 @@ static love_inline struct g *c0_ix(struct g *g, struct env **c, lvm_t *i, word x
 static love_inline struct g *c0_i(struct g *g, struct env **c, lvm_t *i) {
  return incl(*c, 1), push(g, 2, c1_i, i); }
 
-// mapput barriers its own stores, so none of these writes needs one
-// fars: a let's binding names, pinned before its lambdas compile
-enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, EFars };
-static love_inline word eget(struct g *g, struct env *e, int k) {
- return mapget(g, zero, putcharm(k), e->tab); }
+static love_inline word eget(struct g *g, struct env *e, int k) { return e->v[k]; }
 static struct g *eset(struct g *g, struct env **c, int k, word v) {
- g = push(g, 3, putcharm(k), v, (*c)->tab);   // sp0 key, sp1 val, sp2 map
- if (ok(g = mapput(g))) g->sp++;           // mapput leaves the map: drop it
+ if (ok(g)) (*c)->v[k] = v, gen_wb_cell(g, (*c)->v + k, v);
  return g; }
 // a let's lambda entry is (name . box): the box holds the thread and imports, and backpatch
 // and the capture fixpoint write through it, so it is a tablet, never a patched cons (ev.l's mkc)
@@ -114,19 +109,14 @@ static struct g *lbox(struct g *g) {
  return g->sp[1] = g->sp[0], g->sp++, g; }
 static struct g *enscope(struct g *g, struct env *par, word args, word imps) {
  uintptr_t const n = Width(struct env) + Width(struct tag);
- g = push(g, 3, args, imps, par);
- g = map_new(g);                                   // sp0 = tab, then args/imps/par
- if (ok(g = have(g, n))) {
-  struct env *c = bump(g, n);
-  c->len = zero;
-  c->tab = g->sp[0];
-  c->par = (struct env*) g->sp[3];
-  g->sp[3] = (word) tagthread((union u*)c, Width(struct env)); }   // env at sp3; tab/args/imps stay
- if (!ok(g)) return g;
- { struct env *e = (struct env*) g->sp[3];                     // re-read after every put: a
-   g = eset(g, &e, EArgs, g->sp[1]);                           // grow inside mapput moves it
-   if (ok(g)) e = (struct env*) g->sp[3], g = eset(g, &e, EImps, g->sp[2]); }
- return ok(g) ? (g->sp += 3, g) : g; }
+ g = push(g, 3, par, args, imps);
+ if (!ok(g) || !ok(g = have(g, n))) return g;
+ struct env *c = bump(g, n);
+ c->par = (struct env*) g->sp[0], c->len = zero;
+ for (int k = 0; k < EN; k++) c->v[k] = zero;
+ c->v[EArgs] = g->sp[1], c->v[EImps] = g->sp[2];
+ g->sp += 2, g->sp[0] = (word) tagthread((union u*) c, Width(struct env));
+ return g; }
 
 
 static word memq(struct g *g, word l, word k) {
