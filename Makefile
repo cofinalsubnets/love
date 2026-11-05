@@ -1203,13 +1203,20 @@ wasm_seat: $(k_mod) $(if $(NODE),$(ko)/wasm/love.image,)
 # is given and builds nothing.
 # ..copied under a second make, whose stat of the module is after the seat laid it
 site-wasm: wasm
-	@$(MAKE) -s web/wasm/love.wasm $(if $(NODE),web/wasm/love.image,)
+	@$(MAKE) -s web/wasm/love.wasm.gz $(if $(NODE),web/wasm/love.image.gz,)
+# ..and each gzipped beside itself, for kiosko to send; never in a commit
+sitegz = $(if $(LOVE),$(LOVE),out/love) gzip -c -9 $< > $@.tmp && mv $@.tmp $@
+%.wasm.gz: %.wasm
+	@$(sitegz)
+%.image.gz: %.image
+	@$(sitegz)
 .PHONY: site-doom
 # ..and doom for `love site` alone, renamed into place whole. under out/, so never in a commit
 site-doom:
 	@{ DL=$(dl) sh test/gate/dl.sh doomgeneric doom1.wad && $(MAKE) -s wasm DOOM=1 && \
 	   cp out/doom/wasm/love.image out/doom/site.image.tmp && mv out/doom/site.image.tmp out/doom/site.image && \
-	   cp out/doom/love.wasm out/doom/site.wasm.tmp && mv out/doom/site.wasm.tmp out/doom/site.wasm; } \
+	   cp out/doom/love.wasm out/doom/site.wasm.tmp && mv out/doom/site.wasm.tmp out/doom/site.wasm && \
+	   $(MAKE) -s $(if $(LOVE),LOVE=$(LOVE),) out/doom/site.image.gz out/doom/site.wasm.gz; } \
 	   > out/site-doom.log 2>&1 || echo 'site-doom: no prebuilt doom, see out/site-doom.log'
 web/wasm/love.wasm: $(ko)/love.wasm
 	@mkdir -p web/wasm; echo '$(t_cp)	'$@; cp $< $@
