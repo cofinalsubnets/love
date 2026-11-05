@@ -1602,7 +1602,7 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defn defq GLOB HELPC lof rejects sugar vof)
+(module '(uu axm bridge capp chk conv defcx defn defq defvc GLOB HELPC lof rejects sugar vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
@@ -1837,6 +1837,14 @@
     (chk 0 0 0 t Tv,
      pin GLOB nm [Tv ['nv nm]],
      nm))
+   ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
+   ; ran, and a cite of it is unbound
+   (defvc nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
+          vof 0 T)
+    (chk 0 0 0 t Tv,
+     pin GLOB nm 1,
+     nm))
    (rejects th)
    (: r (call-cc (k \ (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
     (pin HELPC () 0, r)))
@@ -1903,6 +1911,7 @@
 (: q (map qlit)
  (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
   :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
+  :: 'defvc (l \ l @ [_ _ _] (defvc . q l) (scare 'uu-defq-arity l)),
   :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l)),
   :: 'defcx (l \ [defcx (qlit <l) (qlit >l)])))
 

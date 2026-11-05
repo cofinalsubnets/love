@@ -170,7 +170,7 @@
     (map (c \ (vc? c ?
                  (: lab <c goal (c 1) hy (c 2) cx (cx-of hy)
                     pf (expand (sp 'macros) (peep (sp 'proofs) lab 'tt))
-                    "; \(lab)\n (defq inf-vc-\(sp 'short)-\(lab) (under \(cx) \(show (close-pi hy goal)))\n   (given \(cx) \(show (close-lam hy pf))))\n")
+                    "; \(lab)\n (defvc inf-vc-\(sp 'short)-\(lab) (under \(cx) \(show (close-pi hy goal)))\n   (given \(cx) \(show (close-lam hy pf))))\n")
                  (cx-text c)))
          (spec-all sp))
    ; a vc the proofs do not answer, for the author; a proof no vc asks for

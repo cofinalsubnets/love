@@ -6,7 +6,7 @@
                                             ; and the macro is what quotes their operands
    lof (uu 'lof) bridge (uu 'bridge))
 ; ..so hoist the three macros here, in a form of their own: c0 compiles a whole form at once
-(: _ (transcribe 'uu '(defn defq axm defcx)))
+(: _ (transcribe 'uu '(defn defq defvc axm defcx)))
 
 ; with `uu` missing every defn is a truthy no-op and the corpus paints fake green
 (test
@@ -2294,6 +2294,10 @@
 (hear (p \ e \ peep HELPC () 0 @ h (h ? (h p e) 0)))
 (test
  ('rejected = rejects (z \ defn uu-bad1 (paths nat 1 2) (idpath 1)))
+ ; an obligation is checked and kept by no one: a false one refused, a cite of a true one unbound
+ ('rejected = rejects (z \ defvc uu-vc-false (paths nat 1 2) (idpath 1)))
+ (defvc uu-vc-true (paths nat 1 1) (idpath 1))
+ ('rejected = rejects (z \ defq uu-vc-cite (paths nat 1 1) uu-vc-true))
  ('rejected = rejects (z \ defn uu-bad2 (pi x nat nat) (lam x (succ y))))
  ('rejected = rejects (z \ defn uu-bad3 nat (lam x x)))
  ('rejected = rejects (z \ defn uu-bad4 (coprod nat bool) (ii1 true)))

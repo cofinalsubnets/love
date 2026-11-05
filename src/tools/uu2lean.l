@@ -1,5 +1,5 @@
 ; uu2lean: love's uu proof corpus exported to lean 4, the twin of uu2coq.l. loads and
-; certifies the uu files, reads them as data, and translates every (defn/defq nm T t) in
+; certifies the uu files, reads them as data, and translates every (defn/defq/defvc nm T t) in
 ; the MLTT fragment; lean re-checks the same terms.
 ;
 ; a def exports iff in the fragment and every global it mentions exports -- a dependency
@@ -42,7 +42,7 @@
    (leann nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries (defns live inside the laws) ---
-   (deq? c) (two? c && (<c = 'defn || <c = 'defq))
+   (deq? c) (two? c && (<c = 'defn || <c = 'defq || <c = 'defvc))
    (axq? c) (two? c && <c = 'axm)
    (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
                 (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])

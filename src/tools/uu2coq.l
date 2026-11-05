@@ -1,6 +1,6 @@
 ; uu2coq: love's internal proof corpus (test/uu*.l), exported to Rocq.
 ; loads uu's kernel (certifying every defn against its type), re-reads the files as data,
-; and translates each (defn/defq nm T t) in the MLTT fragment to Gallina. coqc re-checks
+; and translates each (defn/defq/defvc nm T t) in the MLTT fragment to Gallina. coqc re-checks
 ; them, and supplies the universe check uu (type-in-type) lacks. skips are counted.
 ; a def exports iff it is translatable and every global it mentions exports: the
 ; univalence tower drops (it bottoms out at an `axm`).
@@ -42,7 +42,7 @@
    (bvar x) (: s (string x) (? (peep gkw s 0) (s + "_") s))
 
    ; --- collect (kind nm T t) entries (defns live inside asserts) ---
-   (deq? c) (two? c && (<c = 'defn || <c = 'defq))
+   (deq? c) (two? c && (<c = 'defn || <c = 'defq || <c = 'defvc))
    (axq? c) (two? c && <c = 'axm)
    (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
                 (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])
