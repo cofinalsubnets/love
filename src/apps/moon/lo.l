@@ -152,8 +152,11 @@
                 (lomk g @ h [(fs + (u ? [['li h 0]] [['mov h l] ['sar h 63]])) l h])))
          _ 'bad)
    ; ins [register vreg].. moved in, the kit's forms, the pair out of rax:rdx
+   ; holo lays the wide kit on x64 and a64; a pair comes back in rax:rdx or x0:x1
+   (lo128? g) (x64? g || a64? g)
+   (lohi g) (x64? g ? 'r2 'r1)
    (lokit g ty pre ins uses defs body)
-    (!(x64? g) ? (lono g ['kit <body])
+    (!(lo128? g) ? (lono g ['kit <body])
        (lomk g @ l (lomk g @ h
           [ty [l h] (pre + map (p \ ['mov <p <>p]) ins + [['fix uses defs body] ['mov l 'r0] ['mov h 'r2]])])))
    ; to or from the pair: a word widens, the pair read as a word is its low half, its truth either half
@@ -192,7 +195,7 @@
                               [rt [l h] (pre + [['mov l al] [(irop op) l l bl] ['mov h ah] [(irop op) h h bh]])]))
                           ; 0/1 of (r6:r5) cond (rax:rdx)
                           ('eq || 'ne || 'lt || 'le || 'gt || 'ge)
-                           (!(x64? g) ? (lono g ['kit 'c128r])
+                           (!(lo128? g) ? (lono g ['kit 'c128r])
                               (lomk g @ d ['long d (pre + map (p \ ['mov <p <>p]) lr +
                                                     [['fix '(r0 r2 r5 r6) '(r0 r1 r2) [['c128r (scc op u) 'r6 'r5]]] ['mov d 'r0]])]))
                           ; u128 by a divisor whose high half is zero: the dividend in a cell at sp
@@ -1068,11 +1071,11 @@
        (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
-       ; past SysV a pair takes the old path
-       (!(x64? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
+       ; past SysV and AAPCS64 a pair takes the old path
+       (!(lo128? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
        (ilp32? g && !(lot32sig g (rt . ptys))) (lono g 'abi)
        (: (arg e pt)
-           (lox g env e @ ([vt r fs] && !(x64? g) && d128? vt) (lono g ['abi vt])
+           (lox g env e @ ([vt r fs] && !(lo128? g) && d128? vt) (lono g ['abi vt])
                           ([vt r fs] && (losv? vt || d128? vt))
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
                                  p9 (losv? p9 || d128? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
@@ -1112,7 +1115,7 @@
                    res (? (rt = 'void) ()
                           (lofl? rt && v6m? g) [(rt = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])]
                           (lofl? rt) ((ia32? g ? [['fix () lokl [['raw (x87raw g (rt = 'float) 1)]]]]) + [['movapd d 'f0]])
-                          (d128? rt) [['mov <d 'r0] ['mov <>d 'r2]]
+                          (d128? rt) [['mov <d 'r0] ['mov <>d (lohi g)]]
                           (pair? g rt) [['mov <d 'r0] ['mov <>d (ia32? g ? 'r2 'r1)]]
                           (stru? rt) (loesc g 'r4, (sret ? (ia32? g && !(srreg? g va) ? [['fix () lokl [['raw (m16b g + [131 236 4])]]]])
                                                           (loebst g (lopcs g rt) 'r4 rto)) + [['lea d 'r4 rto]])
@@ -1145,8 +1148,10 @@
                         (ge + 2 <= ngp g ? [(ge + 2) fi (rg + [[(argr g ge) <x] [(argr g (ge + 1)) <>x]]) sk pre]
                            [(ngp g) fi rg (sk + [['w2 v 8]]) pre]))
                     (d128? ty)
-                     (gi + 2 <= ngp g ? [(gi + 2) fi (rg + [[(argr g gi) <x] [(argr g (gi + 1)) <>x]]) sk pre]
-                        [gi fi rg (sk + [['w2 v 16]]) pre])
+                     ; AAPCS64: an even pair, and none left closes the file
+                     ((a64? g ? (gi + gi % 2) gi) @ j
+                        (j + 2 <= ngp g ? [(j + 2) fi (rg + [[(argr g j) <x] [(argr g (j + 1)) <>x]]) sk pre]
+                           [(a64? g ? (ngp g) gi) fi rg (sk + [['w2 v 16]]) pre]))
                     (stru? ty)
                      (lopcs g ty @
                         ; AAPCS64 past 16 bytes: a copy of the caller's, its address the arg
@@ -1388,7 +1393,7 @@
                                                                                                                + (ia32? g && lofl? rt ? [['fix '(f0) lokl [['raw (x87raw g (rt = 'float) ())]]]])
                                                                                                                + epj))
                    ([vt r fs] && d128? rt && (losv? vt || d128? vt))
-                    (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov 'r2 h]] + epj) _ 'bad)
+                    (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov (lohi g) h]] + epj) _ 'bad)
                    ; an aggregate: out through the hidden pointer, or its eightbytes into the return registers
                    ([vt r fs] && stru? rt && tsz g vt = tsz g rt)
                     (g 'losret @ () (: pcs (lopcs g rt) rs (lorregs g pcs)
@@ -1675,8 +1680,8 @@
             !(g 'abad || g 'sspf) &&
             ; -mstrict-align's chunked members are the old path's
             !(sal? g) &&
-            ; past SysV a pair takes the old path
-            (x64? g || !(d128? rt || any (p \ d128? <>p) params)) &&
+            ; past SysV and AAPCS64 a pair takes the old path
+            (lo128? g || !(d128? rt || any (p \ d128? <>p) params)) &&
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (losr? g rt)
@@ -1685,7 +1690,7 @@
           _ (rv64? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
-                  'loret (? (rt = 'void) () (lofl? rt) (v6m? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) '(r0 r2) (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
+                  'loret (? (rt = 'void) () (lofl? rt) (v6m? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) ['r0 (lohi g)] (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           ; ..past the a0-a7 block a riscv variadic fn pushes
           ovo (ovb g + (va && rv64? g ? 64 0))
@@ -1703,11 +1708,12 @@
                            (lomkv g ty @ r (go u (ge + 2) fi ov ([nm 'v r ty] . env)
                                                (acc + [['mov <r (argr g ge)] ['mov <>r (argr g (ge + 1))]]) post))))
                     (d128? ty)
-                     ; a pair: two gp registers, else 16-aligned above the link
-                     (gi + 2 <= ngp g ?
-                        (ntmp g ty @ off (go u (gi + 2) fi ov ([nm 'm off ty] . env)
-                                             (acc + [['st 'r4 off (argr g gi)] ['st 'r4 (off + 8) (argr g (gi + 1))]]) post))
-                        ((ov + ov % 2) @ o (go u gi fi (o + 2) ((nm . ovm ty o) . env) acc post)))
+                     ; a pair: two gp registers, else 16-aligned above the link; AAPCS64's are even
+                     ((a64? g ? (gi + gi % 2) gi) @ j
+                        (j + 2 <= ngp g ?
+                           (ntmp g ty @ off (go u (j + 2) fi ov ([nm 'm off ty] . env)
+                                                (acc + [['st 'r4 off (argr g j)] ['st 'r4 (off + 8) (argr g (j + 1))]]) post))
+                           ((ov + ov % 2) @ o (go u (a64? g ? (ngp g) gi) fi (o + 2) ((nm . ovm ty o) . env) acc post))))
                     (stru? ty)
                      (lopcs g ty @
                         ; AAPCS64 past 16 bytes: the caller's copy, read through its address in a cell
