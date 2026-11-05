@@ -50,7 +50,7 @@
    (x86-seg s) (s @ 'fs [100] 'gs [101] 'es [38] 'cs [46] 'ss [54] 'ds [62] (scare 'x86-seg s))      ; the override prefix for the next form
    ;; pc-relative kinds measure from the field's end; aux is a byte addend
    (x86-patch kind target site width aux)
-      (kind @ 'rel32 (le32 (target + aux - (site + width)))
+      (kind @ ('rel32 || 'pc32) (le32 (target + aux - (site + width)))
           'rel64 (le64 (target + aux - (site + width)))
           'rel16 (: d (target + aux - (site + width))
                     (-32768 <= d <= 32767 ? 0 (scare 'rel16-range d), le16 d))

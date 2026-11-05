@@ -494,12 +494,13 @@
                         (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
-                    (objsecs32n tgt (objsec-merge ((objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3)) + xs) <at)
+                    (objsecs32n tgt (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                                 fns gns wks anames)
-                    (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
+                    (objsecsn tgt (objsec-merge ((dotS? src || dots? src ? [[".text" 1 6 4 ()]] (objsecs4 tforms dforms nforms iforms bforms rforms)) + xs) <at)
                               fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames
                               ; the asm's data names typed as gas types them, its absolute symbols and its sizes
-                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())]
+                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
+                               (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
                               ; the functions C laid, not the asm's, under unwind tables
                               (ua || us ? (fnames + lnames + map (x \ <x) xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))

@@ -163,6 +163,22 @@ moonrun -c "$ho/.flg.S" -o "$ho/.flg.o" || fail "mooncc: an asm's section flags"
 printf '.text\n.type s, @function\ns: nop\nnop\n.size s, .-s\n.set al, s\n.set al2, s+1\n.data\n.type o, @object\no: .quad 0\n.size o, 8\n.set oa, o\n.set ob, o+2\n.type oc, @function\n.size oc, 3\n.set oc, o\n' > "$ho/.asz.S"
 moonrun -c "$ho/.asz.S" -o "$ho/.asz.o" || fail "mooncc: an asm's sized aliases"
 [ "$(readelf -sW "$ho/.asz.o" | awk '$8 ~ /^(al|al2|oa|ob|oc)$/ {print $8, $2 + 0, $3, $4}' | sort | tr '\n' ' ')" = "al 0 2 FUNC al2 1 2 FUNC oa 0 8 OBJECT ob 2 8 OBJECT oc 0 3 FUNC " ] || fail "an alias does not take its target's size and type"
+# holo's own layout against clang's: jumps relax in every mode, past a .fill chain that settles first; an
+# immediate over a label difference starts at its byte form; 66 before a lock; moffs outside 64
+printf '.text\n.code16\njne 1f\n1: jmp 2f\n2: inc %%cx\n.code32\njne 3f\n3: jmp 4f\n4: inc %%ecx\ndec %%ecx\nmov %%eax, 0x1234\nmov 0x1234, %%al\n.code64\na: nop\nb: addq $b-a, %%rbx\naddq $c-a, %%rbx\npushq $b-a\nlock btsw $1, (%%rax)\nxchgq %%r15, %%r14\nmovq $0xffffffff80000000, %%rax\naddq $0xffffffffffffffff, %%rax\nmovq %%rax, %%ds\nd: jmp e\n.fill d + 16 - ., 1, 0xcc\n.fill d + 32 - ., 1, 0xcc\n.fill d + 48 - ., 1, 0xcc\n.fill d + 64 - ., 1, 0xcc\n.fill d + 80 - ., 1, 0xcc\n.fill d + 96 - ., 1, 0xcc\n.fill d + 112 - ., 1, 0xcc\ne: nop\n.fill 300, 1, 0x90\nc:\n' > "$ho/.rlx.S"
+moonrun -c "$ho/.rlx.S" -o "$ho/.rlx.o" || fail "mooncc: an asm's relaxed forms"
+[ "$(readelf -x .text "$ho/.rlx.o" | awk '/^  0x/ {for(i=2;i<=5;i++) s=s $i} END{print substr(s,1,120)}')" = "7500eb00417500eb004149a334120000a034120000904883c3014881c3c20100006a0166f00fba28014d87f748c7c0000000804883c0ff488ed8eb6e" ] || fail "an asm's relaxed forms are not clang's bytes"
+# a field that is no 64-bit branch is pc32; an asm source has .text at 4 and only the sections it names;
+# an unreferenced .globl stays, visibility reaches an undefined name
+printf '.globl un\n.hidden hu1\n.protected hu2\n.text\ns: leaq 0(%%rip), %%rax\n1: subq $x-1b, %%rax\ncall g\n.code32\ncall g\njmp g\n.code64\ncall hu1\ncall hu2\n.data\nx: .long 0\n' > "$ho/.pcr.S"
+moonrun -c "$ho/.pcr.S" -o "$ho/.pcr.o" || fail "mooncc: an asm's pc32 fields"
+[ "$(readelf -rW "$ho/.pcr.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_X86_64_PC32 R_X86_64_PLT32 R_X86_64_PC32 R_X86_64_PC32 R_X86_64_PLT32 R_X86_64_PLT32 " ] || fail "pc32 and plt32 are not clang's"
+[ "$(readelf -SW "$ho/.pcr.o" | awk '{sub(/^ *\[ *[0-9]+\] */,"")} $1 == ".text" {print $1, $NF} $1 == ".rodata" || $1 == ".bss" {print $1}' | tr '\n' ' ')" = ".text 4 " ] || fail "an asm source's default sections are not clang's"
+[ "$(readelf -sW "$ho/.pcr.o" | awk '$8 ~ /^(un|hu1|hu2)$/ {print $8, $6, $7}' | sort | tr '\n' ' ')" = "hu1 HIDDEN UND hu2 PROTECTED UND un DEFAULT UND " ] || fail "an undefined name's visibility or .globl is lost"
+# elf32: a pc-relative reach into data binds a symbol, never symbol 0
+printf '.text\n.code64\njmpq *x(%%rip)\n.code32\n.bss\nx: .long 0\n' > "$ho/.i3r.S"
+moonrun -t i386 -c "$ho/.i3r.S" -o "$ho/.i3r.o" || fail "mooncc: an i386 asm's reach into data"
+[ "$(readelf -rW "$ho/.i3r.o" | awk '$3 == "R_386_PC32" {print $5}')" = "x" ] || fail "an i386 pc-relative reach into data lost its symbol"
 printf ' andl $0xffff0000, %%eax\n andl $4, %%eax\n andb $1, %%al\n testl $0x200, %%eax\n' > "$ho/.acc.S"
 moonrun -c "$ho/.acc.S" -o "$ho/.acc.o" || fail "mooncc: an asm's accumulator forms"
 readelf -x .text "$ho/.acc.o" | grep -q '250000ff ff83e004 2401a900 020000' || fail "an immediate into the accumulator does not take its short form"
