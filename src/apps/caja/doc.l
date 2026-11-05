@@ -116,7 +116,7 @@
    (table J ind aligns head rows)
     (: cols #aligns
        hrow (map (c \ ['f bf] . inl-toks bf c + [['f rm]]) head)
-       brows (map (r \ map (c \ inl-toks rm c) r) rows)
+       brows (map (r \ map (inl-toks rm) r) rows)
        (wd toks) (cp-hbox J rm () toks 'width)
        ws (map (k \ foldl max 0 (map (r \ wd (r k)) (hrow . brows))) ^cols)
        sep (12 * pt)
@@ -126,7 +126,7 @@
        total (+ws + sep * (cols - 1))
        ([(skip (4 * pt)) (row hrow) (skip (2 * pt)) ['hrule total 26214 0] (skip (3 * pt))]
         + map row brows + [(skip (4 * pt))]))
-   (blocks J ind doc) (catmap (b \ block J ind b) doc)
+   (blocks J ind doc) (catmap (block J ind) doc)
    (block J ind b)
     (b 0 @
      'meta (: kv (b 1) (get k) (filter (p \ p 0 = k) kv @ e (two? e ? (e 0 1) ""))
@@ -165,7 +165,7 @@
        (go v0 1,
         cb-dvi J))
    (cd-tex J doc hyph)
-    (map (k \ J 'params k) ['year 'month 'day 'time] @ d
+    (map (J 'params) ['year 'month 'day 'time] @ d
        ("\\catcode`\\{=1 \\catcode`\\}=2 \\batchmode\\year=\(d 0) \\month=\(d 1) \\day=\(d 2) \\time=\(d 3)\n"
         + "\\def\\sp{ }\\input \(hyph)\n\\defaulthyphenchar=45\n"
         + catmap (k \ (fonts k @ e

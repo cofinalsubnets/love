@@ -1549,7 +1549,7 @@
         items <anp
         feed (<>anp ? aw-feedt aw-feed)
         _ (aw-nil? fs || pin (aw-g E) "FS" (aw-unesc fs))
-        _ (map (v \ aw-cmdas E v) vs)
+        _ (map (aw-cmdas E) vs)
         ; exit outside end still runs the end rules (POSIX); an exit inside them ends it
         (ending b)
          (peep E 'ph 'end == 'end

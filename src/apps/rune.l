@@ -261,7 +261,7 @@
                       (go p (vtrim g) (vtrim h)))
    ; ... and pairwise up a tree, for the whole list
    (hliftn P p f gs)
-   (#gs @ 1 [(vtrim (map (c \ zmod P c) f))] t
+   (#gs @ 1 [(vtrim (map (zmod P) f))] t
     (: hn (cnorm ((t - t % 2) /// 2))
        ga (ltake hn gs)
        gb (ldrop hn gs)

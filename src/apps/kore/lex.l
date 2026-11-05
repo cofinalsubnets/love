@@ -321,7 +321,7 @@
                  (lex-pre? x "/*") (comment l @ [c r] (add 'code c, defs r))
                  (#(lex-trim x) = 0) (defs >l)
                  (lex-sp? (x 0)) (add 'code x, defs >l)
-                 (lex-pre? x "%option") (map (w \ add 'opts w) (words (snip x 7 #x)), defs >l)
+                 (lex-pre? x "%option") (map (add 'opts) (words (snip x 7 #x)), defs >l)
                  (lex-pre? x "%x") (map (w \ add 'scs [w 1]) (words (snip x 2 #x)), defs >l)
                  (lex-pre? x "%s") (map (w \ add 'scs [w ()]) (words (snip x 2 #x)), defs >l)
                  (x 0 = 37) (defs >l)
@@ -605,7 +605,7 @@
         + lex-carr "unsigned short" "yy_acc" (a 4)
         + lex-carr "unsigned short" "yy_trans" (a 3)
         + lex-carr "unsigned short" "yy_starts" (a 5)
-        + lex-carr "unsigned char" "yy_tck" (0 . map (c \ <c) tcs)
+        + lex-carr "unsigned char" "yy_tck" (0 . map cap tcs)
         + lex-carr "int" "yy_tcn" (0 . map (c \ c 1) tcs)
         + "\n" + lex-crun
         + (has "noinput" ? "" lex-cinput)

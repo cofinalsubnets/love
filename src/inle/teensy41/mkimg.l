@@ -10,7 +10,7 @@
       s <>r  n #s                                    ; 0 bytes: no qemu baked it, and main.c,
                                                      ; finding no image, bakes the egg
       ir [['label '_binary_love_img_start]
-          ['raw (map (i \ s i) ^n)]
+          ['raw (map s ^n)]
           ['label '_binary_love_img_end]]
       (write-bytes dst
        (objsecs32 'thumb2 [[".love.image" 1 2 8 ir]] ()

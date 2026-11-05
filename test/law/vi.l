@@ -591,7 +591,7 @@
 ; --- the syntax paint (hue.l) ---
    hbk (hue-book ())
    hlx (s \ in \ keep \ hue-lex hbk s in keep)
-   (klass s) (map (r \ <r) <(hue-lex hbk s 0 1))
+   (klass s) (map cap <(hue-lex hbk s 0 1))
    (runs s in) <(hue-lex hbk s in 1)
    ; strip SGR only: the frame's geometry stays
    (bare s)
@@ -768,7 +768,7 @@
            (hue-name "nord" = "nord"))
 
 ; --- hues.l: the name, else a shell #!, picks the lexer ---
-   (hk g s in) (map (r \ <r) <(hues-lexer g s in 1))
+   (hk g s in) (map cap <(hues-lexer g s in 1))
    (hc g ls) (hue-carry (hues-lexer g) ls)
    _ (test
       (hues-lang "a/b.c" () = 'c)

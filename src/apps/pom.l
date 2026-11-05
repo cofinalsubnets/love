@@ -117,7 +117,7 @@
  ; ..and n by n of it as rgb, for pom-cells
  (pom-moon p n) (: (px i j) (pom-face p ((j + 0.5) * 2 / n - 1) ((i + 0.5) * 2 / n - 1)
                               @ k (charm? k ? (xrgb k)))
-                   (map (i \ map (j \ px i j) ^n) ^n))
+                   (map (i \ map (px i) ^n) ^n))
  ; --- the moon drawn naturally: lommel-seeliger with a little lambert (a full moon nearly
  ; flat to its limb), the sun's way by the phase; seas soft and bluer, highlands mottled,
  ; tycho and copernicus bright; earthshine on the dark side, most near new.

@@ -695,7 +695,7 @@
       ((cobx "struct s { char c; } v __attribute__((aligned(16))) = { 1 }; int main() { return 0; }" 2) !=
         (cobx "struct s { char c; } v = { 1 }; int main() { return 0; }" 2))
       ; a function's body is no tag body: the next declaration's section stays its own
-      ((map (x \ <x) (cobx "struct s { long a; }; struct s f(void) { struct s v = { 1 }; return v; } __attribute__((section(\".n\"))) long n = 1; int main() { return (int) (f().a + n); }" 8)) = [".n"])
+      ((map cap (cobx "struct s { long a; }; struct s f(void) { struct s v = { 1 }; return v; } __attribute__((section(\".n\"))) long n = 1; int main() { return (int) (f().a + n); }" 8)) = [".n"])
       ; a braced bitfield images its unit's bits: {0,1} is bit 1 alone, 5 with 21 above is 5 + 21*8
       ((cobx "struct B { unsigned a:1; unsigned b:1; } g = {0,1}; int main(){return 0;}" 2) =
         '((label g) (raw (2 0 0 0)) (align 1) (raw (0 0 0 0))))
@@ -2230,9 +2230,9 @@
                  (? (peep esc (vspc sb) 0) (row >l acc)
                     (badc? es) (row >l acc)
                     (: allts (sort (: (g l2 a) (atom? l2 ? a
-                                                  (<l2 @ e (g >l2 (vapp (map (t \ <t) <>>e) a))))
+                                                  (<l2 @ e (g >l2 (vapp (map cap <>>e) a))))
                                       (g es ())))
-                       offs (vuq (sort (map (e \ <e) es)))
+                       offs (vuq (sort (map cap es)))
                        ws (vuq (sort (map (e \ <>e) es)))
                        sifed (vany (e \ vany (t \ 0 < vsiw <>t) <>>e) es)
                        full (ws = '(8) && #offs = 1 && !sifed)
@@ -2245,14 +2245,14 @@
                        dfs (sort (: (g l2 a)
                                     (atom? l2 ? a
                                        (<l2 @ e
-                                          (g >l2 (vapp (map (t \ <t)
+                                          (g >l2 (vapp (map cap
                                                             (vkeep (t \ 0 < vstw <>t || 0 < vsiw <>t) <>>e))
                                                        a))))
                                     (g es ())))
                        uss (sort (: (g l2 a)
                                     (atom? l2 ? a
                                        (<l2 @ e
-                                          (g >l2 (vapp (map (t \ <t) (vkeep (t \ 0 < vldw <>t) <>>e))
+                                          (g >l2 (vapp (map cap (vkeep (t \ 0 < vldw <>t) <>>e))
                                                        a))))
                                     (g es ())))
                        (row >l ([sb base (full ? 1 0) (across ? 1 0) (sifed ? 1 0)

@@ -86,7 +86,7 @@
 ; the buffer's ex words: send, cps, stop, and a complaint for any other
 (: st (synth-new ()) buf (vi-open "") _ (pin buf 'lines ["bd sn" "hh"])
    face (vi-face buf {'ex (synth-ex st)})
-   (ex s) (":" + s @ t (map (face 1) (map (i \ t i) ^#t + [13])))
+   (ex s) (":" + s @ t (map (face 1) (map t ^#t + [13])))
    _ (ex "send") m1 (buf 'msg) on (st 'on) t (st 'lmsg)
    _ (ex "cps 1") m2 (buf 'msg) c (st 'cps)
    _ (ex "cps") m3 (buf 'msg)
@@ -261,8 +261,8 @@
    _ (run wet 1) t1 (wet 'fxt) ring (en (run wet 30))
    f (synth-frame wet)
    (loud _) (: st (synth-new ())
-               (each [1059 1063 1063 1060 1064 1064 1064 1061 1065 1065 1066 1067 1067 9 9] (k \ synth-step st k),
-                each [113 101 116] (k \ synth-step st k),
+               (each [1059 1063 1063 1060 1064 1064 1064 1061 1065 1065 1066 1067 1067 9 9] (synth-step st),
+                each [113 101 116] (synth-step st),
                 run st 300))
    l1 (loud ()) l2 (loud ())
    ws (synth-new ()) _ (synth-wstep ws ['down 59]) _ (synth-wstep ws ['down 63]) _ (synth-wstep ws ['down 61])
@@ -311,8 +311,8 @@
    _ (synth-wstep hs ['up 16]) rl (hs 'rls 16) fading (#(hs 'vs))
    r1 (run hs 60) r2 (run hs 180) r3 (run hs 30)
    (loud _) (: st (pst "pad")
-               (each [1059 1063 1063 1060 1064 1064 1064 1061 1065 1065] (k \ synth-step st k),
-                each [113 101 116] (k \ synth-step st k),
+               (each [1059 1063 1063 1060 1064 1064 1064 1061 1065 1065] (synth-step st),
+                each [113 101 116] (synth-step st),
                 run st 420))
    l1 (loud ()) l2 (loud ())
  (test (all (nm \ elem nm (map (p \ p 0) synth-timbres)) ["pad" "glass" "wash"])
@@ -387,8 +387,8 @@
    cv (synth-ceil / synth-vols (#synth-vols - 1))
    (loud v) (: s (synth-new ()) j (jug 0)
                _ (pin s 'vol v)
-               _ (each [1059 1063 1063 1066 1067 1062] (k \ synth-step s k))
-               _ (each [-24.0 -12.0 -5.0 4.0 7.0] (n \ synth-drone s n))
+               _ (each [1059 1063 1063 1066 1067 1062] (synth-step s))
+               _ (each [-24.0 -12.0 -5.0 4.0 7.0] (synth-drone s))
                ms (map (_ \ synth-mix s) ^240)
                _ (each ^60 (i \ synth-feed s j)) b (slurp j)
                [(pk ms) (foldl max 0 (map (i \ abs (s16 b i)) ^(#b // 2)))])

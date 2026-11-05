@@ -37,7 +37,7 @@
                (string (go 0 () 0)))
 
    hexd "0123456789abcdef"
-   (hx2 b) ((i \ hexd i) @ c (string ((c ((b >> 4) & 15)) . ((c (b & 15)) . ()))))
+   (hx2 b) (hexd @ c (string ((c ((b >> 4) & 15)) . ((c (b & 15)) . ()))))
    (bytes-of w n) (: (go i acc) (n <= i ? acc (go (i + 1) (acc + ("0x" + hx2 ((w >> (8 * i)) & 255)) + " ")))
                      (go 0 ""))
 

@@ -113,7 +113,7 @@
           'para    (par ind 0 () (inl "" <>x))
           'fence   (map (verb ind) (lns <>>x))
           'quote   (doc <>x w (ind + 4))
-          'bullets (catmap (l \ item ind "• " l) <>x)
+          'bullets (catmap (item ind "• ") <>x)
           'numbers (<>x @ l (catmap (k \ item ind "\(k + 1). " (l k)) ^#l))
           'deflist (defs <>x ind)
           'table   (map (l \ verb ind (unpad l)) (lns (ttyshow [x] (w - ind + 5))))
