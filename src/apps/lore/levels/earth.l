@@ -1,4 +1,4 @@
-; `love play src/apps/lore/levels/station.l`, and `love play edit` the same
+; `love play src/apps/lore/levels/earth.l`, and `love play edit` the same
 (borrow 'scenery)
 
 ; the textures, their layers listed at the top of src/apps/lore/swatch.l. (tiles n m a b
@@ -524,11 +524,12 @@
    (a @ 'deg (atan2 dx dz * 180 / 3.14159265) (atan2 dy (sqrt (2 dx + 2 dz)) * 180 / 3.14159265))))
 
 ;; the city round about, for the eye alone: roofs at the street's walls' height out into
-;; the haze, and blocks standing up off them, taller further out; none over the streets or
-;; the climb. drapes, not brushes: nothing to walk on, nothing lit apart
+;; the haze, and blocks standing up off them, taller further out, set back from the streets
+;; so none seems to stand on a wall. drapes, not brushes: nothing to walk on, nothing lit apart
 (: city-y 45.0 city-lot 20.0 city-n 8)
 (: city-at [32.5 43.0])                  ; the lots' middle, under the climb
-(: city-keep [[-48.0 11.0] [63.0 73.0]]) ; the streets and the climb, left open
+(: city-keep [[-45.0 14.0] [60.0 70.0]]) ; the streets and the climb, no roofs laid
+(: city-back [[-85.0 -26.0] [85.0 96.0]]) ; ..and no blocks out to here
 (: (city-u i j k) (sin (i * 12.9898 + j * 78.233 + k * 37.719) * 43758.5453 @ v (v - floor v)))
 ; ..a lot's block, or () for bare roof: its plan inset off the lot's edges, a storey's four
 ; metres a step up, more of them the further out
@@ -538,7 +539,7 @@
       (: a (2.0 + 4.0 * city-u i j 1) b (2.0 + 4.0 * city-u i j 2) c (2.0 + 4.0 * city-u i j 3) e (2.0 + 4.0 * city-u i j 4)
          h (4.0 * (1 + int (u * u * u * (2.0 + 2.2 * d))))
          [(x - r + a) (z - r + b) (x + r - c) (z + r - e) (city-y + h)]))))
-(: (city-clear? q) (: k city-keep
+(: (city-clear? q) (: k city-back
    (q 2 < k 0 0 || k 1 0 < q 0 || q 3 < k 0 1 || k 1 1 < q 1)))
 (: city-blocks (filter (q \ two? q && city-clear? q)
                  (catmap (i \ map (j \ city-block (i - city-n) (j - city-n)) ^(2 * city-n + 1)) ^(2 * city-n + 1))))
@@ -546,14 +547,16 @@
 (: (city-walls q) (: y0 (city-y - 0.1) y1 (q 4) (ring y) [[(q 0) y (q 1)] [(q 2) y (q 1)] [(q 2) y (q 3)] [(q 0) y (q 3)] [(q 0) y (q 1)]]
    [(drape facade [(ring y0) (ring y1)])
     (drape gravel [[[(q 0) y1 (q 1)] [(q 2) y1 (q 1)]] [[(q 0) y1 (q 3)] [(q 2) y1 (q 3)]]])]))
-; ..and the roofs between, four strips round what is left open, a point each lot's width
+; ..and the roofs between, four strips round what is left open and two in its corners the
+; streets and the climb leave, a point each lot's width
 (: city-edge (city-lot * (city-n + 0.5)))
 (: (city-span a b) (: n (int ((b - a) / city-lot) + 1) (map (i \ a + (b - a) * i / n) ^(n + 1))))
 (: (city-roof x0 z0 x1 z1) (drape gravel (map (z \ map (x \ [x city-y z]) (city-span x0 x1)) (city-span z0 z1))))
 (: city-roofs (: X0 (city-at 0 - city-edge) X1 (city-at 0 + city-edge) Z0 (city-at 1 - city-edge) Z1 (city-at 1 + city-edge)
                  k city-keep
    [(city-roof X0 Z0 X1 (k 0 1)) (city-roof X0 (k 1 1) X1 Z1)
-    (city-roof X0 (k 0 1) (k 0 0) (k 1 1)) (city-roof (k 1 0) (k 0 1) X1 (k 1 1))]))
+    (city-roof X0 (k 0 1) (k 0 0) (k 1 1)) (city-roof (k 1 0) (k 0 1) X1 (k 1 1))
+    (city-roof (k 0 0) 47.0 5.0 (k 1 1)) (city-roof 45.0 (k 0 1) (k 1 0) 20.0)]))
 (: city [city-roofs (map city-walls city-blocks)])
 
 

@@ -126,7 +126,7 @@
        (walk 'px > -4.7 + body-r - 0.01) (walk 'px < -4.2)
        (brush-medium (rs 'sc 'brushes) [-4.85 2.0 1.6] = 0) (brush-medium (rs 'sc 'brushes) [-4.6 3.3 1.6] = 1)
        (up 'py = 0.5 + eye-h) (mag (up 'ph - 10.0 * pi / 180.0) < 1e-9) (mag (up 'th - pi / 2.0) < 1e-9)
-       (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (world-load "src/apps/lore/levels/station.l"))))
+       (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (world-load "src/apps/lore/levels/earth.l"))))
 ; a bin: solid at its foot, hollow up top and open on every side there, capped, a sign on each
 ; side; a window: glass between two rooms that stops a walk where its sill does not, and a lamp
 ; in the room within a room lights that room
@@ -595,6 +595,13 @@
  (test (bp 'panes 0 'brittle = 1) (bq 'panes 0 'brittle = 0) (tapped bp = [0]) (tapped bq = ()) (#(peep (tap bp) 'shards ()) = 1) (#(peep (tap bq) 'shards ()) = 0)
        (keys (peep once 'broke {}) = ()) (keys (peep once 'knocked {}) = [0]) (elem "land metal 1" (map (q \ q 0) (peep once 'sfx ())))
        (has? (world-read (bw + "(brittle 3))")) "(brittle (window ..))")))
+;; a mirage: a pane still there to see, and a body walks through it; plain glass stops it
+(: mw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
+   (past w) (: st (world-new 8 8 (world-read (mw + w + ")")) "") (each ^90 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)), st 'pz))
+   ml (world-read (mw + "(mirage (window [1 0 1.9] [3 2.5 2] t)))"))
+ (test (ml 'panes 0 'mirage = 1) (#(ml 'panes) = 1)
+       (past "(mirage (window [1 0 1.9] [3 2.5 2] t))" > 2.2) (past "(window [1 0 1.9] [3 2.5 2] t)" < 1.9)
+       (has? (world-read (mw + "(mirage 3))")) "(mirage (window ..))")))
 ;; ..a lens: on the face toward its point its glass less 2^24, the only glass a beyond drape is
 ;; seen through, the other face plain; its shards plain
 (: lw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "

@@ -280,9 +280,14 @@
      ts (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])
      (#N @ 0 f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
- (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e)
-   c (sky-near lt wx (gem-tray [1] [(sin th)]) (gem-tray [1] [0.02]) (gem-tray [1] [(cos th)]) (e 0) (e 2) sim)
-   [(255.0 * c 0 0) (255.0 * c 1 0) (255.0 * c 2 0)])
+ ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
+ ; 60 degrees off th, so a turn carries no sample across a cloud's edge
+ (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e) n 24 as (map (i \ 2.0 * pi * i / n) ^n)
+   (tr f) (gem-tray [n] (map f as))
+   c (sky-near lt wx (tr sin) (tr (_ \ 0.0)) (tr cos) (e 0) (e 2) sim)
+   w (tr (a \ (cos (th - a) - 0.5 @ q (q > 0.0 ? (q * q) 0.0)))) s (net w)
+   (ch k) (255.0 * net (w * c k) / s)
+   [(ch 0) (ch 1) (ch 2)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a

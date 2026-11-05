@@ -128,6 +128,7 @@
            '(-1 -1) 121 '(1 -1) 117 '(-1 1) 98 '(1 1) 110}
  (grass-tap g c now) (: me (g 'me)
    _ (g 'r <= <>c ? (grass-key g 113 now))               ; the bar, where a phone has no q
+   _ (<>c <= 0 && g 'c - 6 <= <c ? (grass-key g 113 now)) ; ..and the corner over the score
    n (int (me 'ht * rpi * (1.0 + me 's) + 0.5))
    d (tap-dir (<c - me 'x) (<>c - (g 'r - 4 - n // 2)))
    (d = [0 0] ? g (grass-key g (tap-keys d) now)))
@@ -336,7 +337,8 @@
    gap (g 'c - wide l - wide r @ n (n < 2 ? 2 n))
    (l + gap (t \ t + " ") "" + r))
  (grass-bar g) (g 'me 'hy < 12.0 ? ("you are wilting  " + g 'msg)
-                  (g 'msg || "dance: arrows or hjkl   q leaves"))
+                  (g 'msg || (string? (getenv "LOVE_FACE") ? "dance: tap around you   this bar or the top right corner leaves"
+                                                            "dance: arrows or hjkl   q leaves")))
  (grass-final g) (g 'over @ 'done ("seven days: " + show (g 'pts) + " points, " + fx1 (g 'me 'ht) + "inches tall")
                                   ("you left the field on day " + show (1 + grass-day g)))
 

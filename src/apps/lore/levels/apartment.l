@@ -103,21 +103,21 @@
 (: (around f) [(f xa (flats tso)) (f (xw + [-150.0]) lts) (f ([64.0] + xe) lts) (f xa (flats tn))])
 (: sides [(xw + [-150.0]) ([64.0] + xe)])
 
-; a cube with its middle at x z, all glass: four walls and a roof round a grass floor, sealed,
-; the plain seen through the glass's inner face; in the one woken in one pane breaks to a tap
-(: (cube x z home) (: a 2.0 h 3.4 t 0.04 up (z > meander x)
-   (glass w) (lens [x 1.5 z] w)
-   (wall lo hi river) (: w (glass (window lo hi pane)) (home && river ? (brittle w) w))
+; a cube with its middle at x z, all glass: four walls and a roof round a grass floor, the
+; plain seen through the glass's inner face, and the walls nothing to a body
+(: (cube x z) (: a 2.0 h 3.4 t 0.04
+   (glass lo hi) (lens [x 1.5 z] (window lo hi pane))
+   (wall lo hi) (mirage (glass lo hi))
    [(drape grass [[[(x - a) 0.02 (z - a)] [(x + a) 0.02 (z - a)]] [[(x - a) 0.02 (z + a)] [(x + a) 0.02 (z + a)]]])
-    (wall [(x - a) 0 (z - a)] [(x + a) h (z - a + t)] up)
-    (wall [(x - a) 0 (z + a - t)] [(x + a) h (z + a)] !up)
-    (wall [(x - a) 0 (z - a)] [(x - a + t) h (z + a)] 0)
-    (wall [(x + a - t) 0 (z - a)] [(x + a) h (z + a)] 0)
-    (wall [(x - a) (h - t) (z - a)] [(x + a) h (z + a)] 0)
+    (wall [(x - a) 0 (z - a)] [(x + a) h (z - a + t)])
+    (wall [(x - a) 0 (z + a - t)] [(x + a) h (z + a)])
+    (wall [(x - a) 0 (z - a)] [(x - a + t) h (z + a)])
+    (wall [(x + a - t) 0 (z - a)] [(x + a) h (z + a)])
+    (glass [(x - a) (h - t) (z - a)] [(x + a) h (z + a)])
     (mattress [x 0.02 (z - 0.6)] 0)]))
 
 ; the yard: glass bays between iron posts round a grass floor and a glass roof, the house
-; against its east side; a wooden fence round it from the glass either side of the house
+; against its east side; a wooden fence round the outside of it from the house's two sides
 (: yx0 sx0 yx1 -116.2 yz0 sz0 yz1 sz1 yh 5.0)
 (: yxs (map (i \ yx0 + 4.0 * i) ^5) yzs (map (i \ yz0 + 4.0 * i) ^5) yard-mid [-124.2 2.5 22.0])
 (: (yard-pane lo hi) (lens yard-mid (window lo hi pane)))
@@ -134,7 +134,7 @@
     (yard-pane [yx0 (yh - 0.06) yz0] [yx1 yh yz1])
     (map (x \ [(post x (yz0 - 0.07)) (post x (yz1 + 0.07))]) yxs)
     (map (z \ [(post (yx0 - 0.07) z) (post (yx1 + 0.07) z)]) [yz0 yz1])
-    (wooden (fence [[-116.4 hy 15.0] [-131.2 hy 15.0] [-131.2 hy 29.0] [-116.4 hy 29.0]] 1.3 palings))])
+    (wooden (fence [[-115.2 -0.2 16.0] [-115.2 0.0 13.0] [-133.2 0.0 13.0] [-133.2 0.0 31.0] [-115.2 0.0 31.0] [-115.2 -0.2 28.0]] 1.3 palings))])
 
 ; the house: one room, open to the plain on the east, a sliding glass door in its back wall
 ; onto the yard; a sofa, a table, shelves and a rug, a bulb overhead
@@ -160,9 +160,9 @@
   (void [-146 -2 -60] [60 40 60])
   (land sand (rows-by xs lts 0.0))
   (map (fs \ drape mud (rows-by xs fs 0.02)) [lo-bed hi-bed])
-  ; ..heard out on it, the wind and now and then a bell; by the burnt tree, a throb
+  ; ..heard out on it, the wind and now and then a bell; in the burnt tree's yard, a throb
   (hum 'wind [-146 -2 -60] [60 40 60]) (hum 'bells [-146 -2 -60] [60 40 60])
-  (hum 'throb [-129.5 -1 18.5] [-123.5 5 24.5])
+  (hum 'throb [yx0 -1 yz0] [yx1 yh yz1])
   ; ..and what the glass shows over it all: grass, and the river running
   (beyond (drape grass (rows-by xs lts lift)))
   (beyond (flow [0.7 0] (drape water (level-on xs [-2.7 -1.3 0.0 1.3 2.7] river-y))))
@@ -172,9 +172,9 @@
   (map (beyond * drape grass) (around (\ xs fs (rows-by xs fs lift))))
   (map (q \ beyond (flow [0.7 0] (drape water (level-on q [-2.7 -1.3 0.0 1.3 2.7] river-y)))) sides)
   ; the cube woken in
-  (cube (home 0) (home 1) 1)
+  (cube (home 0) (home 1))
   ; the house and its yard, the tree in it short and stout and sheared through, its shadow a
   ; hole the player falls down, to wake at the station
   house yard
   (shadow-hole (sheared [-126.5 2.86 21.5] [-123.5 1.81 21.5] [-126.5 3.31 24.5] (sized 0.333 1.4 (tree [-126.5 hy 21.5] 7 charred))))
-  (fall -40 "station.l" ()))
+  (fall -40 "earth.l" ()))

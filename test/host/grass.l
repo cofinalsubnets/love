@@ -97,6 +97,9 @@
          (pts = 1 + 2 + 3 + 4) (g 'pts = pts)))          ; a tap on the blade itself is nothing
 ; ..and a tap on the bar leaves
 (: g (fresh ()) (grass-tap g [3 (g 'r)] 1000, test (g 'over = 'fled)))
+; ..and on the top right corner, and nowhere else along the top
+(: g (fresh ()) (grass-tap g [(g 'c - 2) 0] 1000, test (g 'over = 'fled)))
+(: g (fresh ()) (grass-tap g [(g 'c - 8) 0] 1000, test (g 'over != 'fled)))
 
 ; the words: up says what is in the sky, down something else
 (: g (fresh ())

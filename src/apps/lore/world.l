@@ -45,7 +45,7 @@
  chunk-m 8.0 cell 0.25 cell-top 2.0                   ; how fine the surfaces are cut near a lamp, for the
                                           ; light, and how coarse far from every one
  watch-every 10                           ; frames between looks at the files
- the-level "src/apps/lore/levels/station.l"
+ the-level "src/apps/lore/levels/earth.l"
  ; --- the level, read: (world-read s) runs a level file's text into a tablet {'name 'start
  ;     'rooms 'doors 'strips 'bulbs 'posters 'signs 'brushes 'textures}, or a string saying why not ---
  ; ..a brush with no inside: a box flat in some direction, a prism no height
@@ -1356,7 +1356,7 @@
    (pane? q) (any (p \ (: lo (p 'lo) hi (p 'hi) th 0.1
                        (lo 0 - th < q 0 && q 0 < hi 0 + th && lo 2 - th < q 1 && q 1 < hi 2 + th
                         && any (y \ lo 1 <= y && y <= hi 1) [(fl + 0.3) (fl + 1.7)])))
-               (panes-of st))
+               (filter (p \ peep p 'mirage 0 = 0) (panes-of st)))
    ; ..air from a step over the feet to the head, all the way: nothing thinner than a body
    ; slipped between; among only the brushes the body is within
    near (filter (c \ c 'lo 0 - 0.01 <= x + r && x - r <= c 'hi 0 + 0.01 && c 'lo 2 - 0.01 <= z + r && z - r <= c 'hi 2 + 0.01) bs)
