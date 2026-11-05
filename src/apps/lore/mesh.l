@@ -281,11 +281,13 @@
      (#N @ 0 f (facets w h f (v 'cam) (lace cols) ts () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (1.5 * lt 'expo)]))))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
- ; 60 degrees off th, so a turn carries no sample across a cloud's edge
- (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e) n 24 as (map (i \ 2.0 * pi * i / n) ^n)
-   (tr f) (gem-tray [n] (map f as))
-   c (sky-near lt wx (tr sin) (tr (_ \ 0.0)) (tr cos) (e 0) (e 2) sim)
-   w (tr (a \ (cos (th - a) - 0.5 @ q (q > 0.0 ? (q * q) 0.0)))) s (net w)
+ ; 60 degrees off th, so a turn carries no sample across a cloud's edge. the ring is the costly
+ ; part and the sky slow, so wx keeps it for ten seconds and 40 metres
+ (mesh-haze v lt wx sim) (: th (v 'th) e (v 'e) as (iota 24 * (pi / 12.0))
+   key [(int (sim / 10.0)) (int (e 0 / 40.0)) (int (e 2 / 40.0))] kept (peep wx 'haze-ring ())
+   c (two? kept && <kept = key ? (kept 1)
+        (: r (sky-near lt wx (sin as) (as * 0.0) (cos as) (e 0) (e 2) sim) (pin wx 'haze-ring [key r], r)))
+   q (cos (th - as) - 0.5) w ((q > 0.0) * q * q) s (net w)
    (ch k) (255.0 * net (w * c k) / s)
    [(ch 0) (ch 1) (ch 2)])
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
