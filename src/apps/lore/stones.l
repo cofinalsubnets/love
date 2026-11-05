@@ -14,22 +14,23 @@
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (borrow 'mesh)                          ; the triangles, lit and drawn
 (borrow 'gesture)                       ; the eye's kneel, its acts, its rise
+(borrow 'window)                        ; how big a tap's window is
 (:
  fps 20
  lat (37.0 * pi / 180.0)               ; the colorado plateau
  eye-h 1.6 body-r 0.25
- walk-v 2.6 turn-v 1.6 tilt-v 1.2         ; metres, and radians, a second
+ walk-v 2.6 turn-v 1.6 tilt-v 1.2 run-k 1.65  ; metres, and radians, a second; how much faster a sprint
  kneel-h 1.12                             ; the eye kneeling
  reach 2.2                                ; how near the altar a kneel goes to it
  dlg-pause 1.0                            ; seconds after an act before the choices come back
  help-t 12.0                              ; seconds the keys are named at the start
- thumb-text "left thumb walks  ·  right thumb looks  ·  tap interacts  ·  back leaves"
- help-text "h/j/k/l move  ·  u/n look up/down  ·  space interacts  ·  ? keys"
+ thumb-text "left thumb walks  ·  right thumb looks  ·  tap the altar or the bottom to kneel  ·  a top corner leaves"
+ help-text "h/j/k/l move  ·  u/n look up/down  ·  space kneels  ·  ? keys"
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
  ; ..the stones' own keys, over view's
  (help-of st) (st 'win && string? (getenv "LOVE_FACE") ? thumb-text help-text)
- stones-binds {93 'more 91 'less 32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait
+ stones-binds {87 'sprint 75 'sprint 93 'more 91 'less 32 'kneel 13 'choose 10 'choose 49 'breathe 50 'weep 51 'bleed 52 'beg 53 'wait
                119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
  picks ['breathe 'weep 'bleed 'beg 'wait]                ; acts', as actions
  rise-acts ['kneel 'forward 'back 'strafe-left 'strafe-right 'turn-left 'turn-right 'look-up 'look-down]
@@ -369,9 +370,9 @@
  fov (pi / 2.0)
  sky-k 2
  ; ..'kp pixels a column, and twice that a row: one, for half blocks
- (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (gesture-breath (peep st 'mt 0.0))
-   e [(st 'px) (st 'py + b 0) (st 'pz)]
-   v (mesh-eye w h e (st 'th) (st 'ph + b 1) (peep st 'ro 0.0) fov 0.05 900.0)
+ (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (gesture-body st)
+   e [(st 'px + b 1 * cos (st 'th)) (st 'py + b 0) (st 'pz - b 1 * sin (st 'th))]
+   v (mesh-eye w h e (st 'th) (st 'ph + b 2) (peep st 'ro 0.0 + b 3) fov 0.05 900.0)
    hs (peep st 'keep-sky 0 ? (kept-by st 'sky-kept (sky-key st lt) (_ \ stones-sky st v e lt k w h)) ())
    hz (two? hs ? <hs (mesh-haze v lt (st 'wx) (st 'sim)))
    sc0 (scene st) db (drop-batch st lt)
@@ -476,6 +477,7 @@
       (st 'eye = 'kneel) (elem a rise-acts ? (rise! st) st)
       (st 'eye != 'walk) st
       (a = 'kneel) (move! st (altar-near? st ? (kneel-move st) (kneel-here st)))
+      (a = 'sprint) (walk-key (pin st 'run-at (peep st 'mt 0.0)) 'forward {'walk (run-k * walk-v * dt)} put! @ () st s s)
       (elem a ['strafe-left 'strafe-right]) (: d ((a @ 'strafe-right 1.0 -1.0) * walk-v * dt) th (st 'th)
                                                (put! st (st 'px + d * cos th) (st 'pz - d * sin th)))
       (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.45 'down -1.2} put! @ () st s s)))
@@ -485,6 +487,9 @@
    dt (peep st 'dt (1.0 / fps))
    _ (pins st 'sim (st 'sim + 1.0 / fps) 'mt mt)
    _ (drops! st dt)
+   ; ..the body, from how far the keys carried it since the last
+   _ (: x (st 'px) z (st 'pz) dx (x - peep st 'ox x) dz (z - peep st 'oz z)
+        (gesture-gait (pins st 'ox x 'oz z) dt (st 'eye = 'walk ? (sqrt (2 dx + 2 dz) / dt) 0.0) (mt - peep st 'run-at -9.0 < 0.2)))
    (? (st 'eye = 'move) (: mv (st 'mv) _ (gesture-play st dt spawn!)
                            ; ..and the choices after, a pause on from the move's end
                            (pin st 'dlg-at (st 'eye != 'move && peep mv 'dlg 0 ? (mt + dlg-pause) (st 'dlg-at))))
@@ -606,10 +611,10 @@
                                ; ..the land built and lit before the first frame, which the song's
                                ; pace would otherwise take for the frames' and run far ahead
                                (scene st, st)))
-               'stick [119 115 97 100] 'tap stones-tap
+               'stick [119 115 97 100 87] 'tap stones-tap
                'size stones-size 'frame stones-frame 'key stones-step 'look stones-look
-               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['strafe-left 'strafe-right 'kneel 'finer 'coarser 'more 'less])
-               'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
+               'binds (view-bind view-binds stones-binds) 'listed (view-listed ['sprint 'strafe-left 'strafe-right 'kneel 'finer 'coarser 'more 'less])
+               'walking (view-walking + ['sprint 'strafe-left 'strafe-right]) 'repeat [0 0]
                ; ..the frame's own time, kept for the next frame's keys: a slow frame steps further
                'tick (st \ (walk-dt st,
                             stones-move st))
@@ -619,17 +624,33 @@
                ; ..to apartment's music box and its drone
                'song (view-song (cite 'apartment 'apartment-song-new) (cite 'apartment 'apartment-song-feed))})
  ; ..a tap: a choice where the choices are up, else what space does
- (stones-tap st x y) (? (charm? (st 'dlg)) (y // 16 - menu-top st - 1 @ i (0 <= i < #acts ? [(49 + i)] ())) [32])
+ ; ..a tap: on the choices, the one it lands on; a top corner leaves; kneeling, it stands; else
+ ; the bottom of the screen, or the altar where it is seen, kneels
+ (stones-tap st x y) (? (charm? (st 'dlg)) (y // 16 - menu-top st - 1 @ i (0 <= i < #acts ? [(49 + i)] ()))
+                        (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1)
+                           (? (v < 0.15 && (u < 0.15 || 0.85 < u)) [113]
+                              (st 'eye != 'walk || 0.88 < v || altar-seen? st u v) [32]
+                              ())))
+ ; ..whether u v, fractions of the window, lie within the altar as the eye sees it
+ (altar-seen? st u v) (: al <(st 'blocks) dm (mesh-dims st) e [(st 'px) (st 'py) (st 'pz)]
+   c (mesh-eye <dm (dm 1) e (st 'th) (st 'ph) 0.0 fov 0.05 900.0) fx (1.0 / tan (fov / 2.0)) fy (fx * <dm / dm 1)
+   g (stones-ground (al 0) (al 2))
+   ps (catmap (sx \ catmap (sz \ map (y \ [(al 0 + sx * al 4) y (al 2 + sz * al 6)]) [g (g + 2.0 * al 5)]) [-1.0 1.0]) [-1.0 1.0])
+   ; ..its corners' places, all before the eye
+   (at p) (: d (c- p e) z (dot d (c 'f)) (z < 0.1 ? () [(0.5 + 0.5 * fx * dot d (c 'r) / z) (0.5 - 0.5 * fy * dot d (c 'u) / z)]))
+   qs (map at ps) m 0.02
+   (all two? qs && foldl min 9.0 (map cap qs) - m <= u && u <= foldl max -9.0 (map cap qs) + m
+    && foldl min 9.0 (map caup qs) - m <= v && v <= foldl max -9.0 (map caup qs) + m))
  ; ..and kitty's picture taken down after, where it was put up; held sideways on a phone
  (stones-run o) ((cite 'droid 'droid-side) 1,
                  mind (_ \ view-stage o stones-walk (_ \ (say out mesh-gone, flush out))) () (_ \ (cite 'droid 'droid-side) 0))
- stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (w a s d or k j step and strafe, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
+ stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w a s d or k j step and strafe, W or K sprint, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)
   (: (num w) (0 < #w && all (c \ 48 <= c <= 57) (chars w) ? <(sound w))
      (hm w) (w @ (h + ":" + m) (: a (num h) b (num m) (charm? a && charm? b && a < 24 && b < 60 ? (3600 * a + 60 * b)))
                  _ ())
-     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) view-window view-scale
+     (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--sway" 'sway 1) view-window view-scale
                      (view-arg "--time" 'time hm)]))
  (stones-main as) (view-main "stones" stones-usage stones-opts stones-run as)
  _ (cite 'lore 'lore-enlist 'stones (udoor 'stones stones-main stones-usage 1 1)))

@@ -391,7 +391,7 @@
 ;; rises, its top floors drifting off into slabs and furniture hung in the air, a way up
 ;; across them to a pink orb over it all; the higher, the lighter the pull
 ; ..the roofs round it, seen from the climb: gravel
-(: gravel (texture 32 32 2 '((fill (grey 0.4)) (noise 1 0.35) (noise 6 0.1) (patches 4 0.2 (shade 0.85)))))
+(: gravel (feel 'gravel (texture 32 32 2 '((fill (grey 0.4)) (noise 1 0.35) (noise 6 0.1) (patches 4 0.2 (shade 0.85))))))
 ; ..the tower: pale panels outside, poured concrete where it is broken
 (: cladding (texture 64 64 4 '((fill (rgb 0.66 0.67 0.69)) (noise 6 0.06) (rows 0 2 (shade 0.8)) (cols 0 2 (shade 0.85)) (cols 32 33 (shade 0.9)))))
 (: cast (texture 128 128 6

@@ -311,7 +311,7 @@
    _ (lfall 0) _ (world-step ls 'jump) _ (lgo 3) lq (ls 'fv) lqy (ls 'py - eye-h)
    _ (lput 1.5 0.0 8.5) _ (lgo 2) _ (world-step ls 'jump) (lhead i) (? (i > 30 || ls 'fv = 0.0) i (: _ (lgo 1) (lhead (i + 1))))
    lh (lhead 0) lhy (ls 'py - eye-h) _ (world-step ls 'jump) lh2 (ls 'fv)
- (test (lc0 = ["land hard 0" "hop"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
+ (test (lc0 = ["land hard 0"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
        (lk1 = 4.4) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
 ; a body caught under something, as a landing may leave it, walks out away from it and not
 ; further in, nor along it
@@ -595,6 +595,23 @@
  (test (bp 'panes 0 'brittle = 1) (bq 'panes 0 'brittle = 0) (tapped bp = [0]) (tapped bq = ()) (#(peep (tap bp) 'shards ()) = 1) (#(peep (tap bq) 'shards ()) = 0)
        (keys (peep once 'broke {}) = ()) (keys (peep once 'knocked {}) = [0]) (elem "land metal 1" (map (q \ q 0) (peep once 'sfx ())))
        (has? (world-read (bw + "(brittle 3))")) "(brittle (window ..))")))
+;; on foot: a walk's steps sound as the floor does, a jump is silent and its landing heard, a
+;; sprint goes further and winds the body, heard once it does, and standing it eases
+(: gw "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 1] 0 0))"
+   (go st a n) (each ^n (_ \ ((a ? (world-step st a) st), pin st 'dt (1.0 / 30.0), world-move st)))
+   (cries st) (map cap (peep st 'sfx ()))
+   wk (world-new 8 8 (world-read gw) "") _ (go wk 'forward 60) wz (wk 'pz) wc (cries wk) wbob (peep wk 'wa 0.0)
+   rn (world-new 8 8 (world-read gw) "") _ (go rn 'sprint 60) rz (rn 'pz) rpf (rn 'puff) _ (go rn 'sprint 300) rpf2 (rn 'puff) rc (catmap (_ \ (pin rn 'sfx (), go rn 'sprint 12, cries rn)) ^8)
+   rrate (rn 'bp) _ (go rn () 300) rest (rn 'puff) rb (rn 'wa)
+   jp (world-new 8 8 (world-read gw) "") _ (world-step jp 'jump) jc (cries jp)
+ (test (any (s \ s = "step wood 0") wc) (any (s \ s = "step wood 1") wc) (0.0 < wbob)
+       (1.5 * (wz - 1.0) < rz - 1.0) (0.1 < rpf) (rpf < rpf2) (0.8 < rpf2)
+       !(any (s \ snip s 0 5 = "gasp ") wc) (any (s \ s = "gasp i2") rc) (any (s \ s = "gasp o2") rc)
+       (rest < 0.7 * rpf2) (rb < 0.001) (jc = ()) (1000 < #(world-sound "step wood 0" 0)) (1000 < #(world-sound "gasp o2" 0))
+       (1000 < #(world-sound "land grass 0" 0))))
+;; a headstone stands, and is no grave
+(: hs (world-read "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) (headstone [2 0 3] 45 t))")
+ (test (#(hs 'brushes) > 1) (peep hs 'graves () = ())))
 ;; a mirage: a pane still there to see, and a body walks through it; plain glass stops it
 (: mw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
    (past w) (: st (world-new 8 8 (world-read (mw + w + ")")) "") (each ^90 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)), st 'pz))

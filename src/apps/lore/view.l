@@ -119,7 +119,7 @@
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
  ; ..a thumb's pixels before it counts as moved, and how much further its drag looks than a mouse
- view-thumb-still 10 view-thumb-look 2
+ view-thumb-still 10 view-thumb-look 2 view-thumb-run 50
  view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
  ; the arrows; the rest come by what they type
@@ -208,7 +208,7 @@
         !(tablet? f) ()
         (a = 2) (: dx (x - f 'x0) dy (y - f 'y0) d view-thumb-still
                    ks (? (f 'walk) (axis 'stick-x (? (dx < -d) (stick 2) (d < dx) (stick 3) ())
-                                    + axis 'stick-y (? (dy < -d) (stick 0) (d < dy) (stick 1) ()))
+                                    + axis 'stick-y (? (#stick > 4 && dy < -view-thumb-run) (stick 4) (dy < -d) (stick 0) (d < dy) (stick 1) ()))
                          (: _ (pins ms 'dx (ms 'dx + view-thumb-look * (x - f 'x)) 'dy (ms 'dy + view-thumb-look * (y - f 'y))) ()))
                    (pins f 'x x 'y y 'far (f 'far || d < abs dx || d < abs dy ? 1 0), ks))
         (: ks (f 'far ? () (lv 'tap st x y))

@@ -205,6 +205,8 @@
 ;                                      its hinge to its latch's: a tap swings it open degrees
 ;                                      clockwise from above, and shut again; in a
 ;                                      body's way where it hangs
+;   (headstone [x y z] bearing TEXTURE)  a small headstone, the middle of its foot at x y z,
+;                                      facing bearing: solid, and nothing more
 ;   (grave [x y z] bearing NAME TEXTURE)  a small headstone, the middle of its foot at x y z,
 ;                                      facing bearing: tapped, the player kneels before it,
 ;                                      the name shown, to weep or leave; solid
@@ -264,8 +266,8 @@
 ;   (skin {'walls T 'floor T 'ceiling T 'all T} BRUSH)  the textures on a brush's faces, a
 ;                                      floor any face turned up and a ceiling down
 ;   (textures {'wall T 'floor T 'ceiling T 'door T 'train T})  the textures where no skin says
-;   (feel 'soft TEXTURE)               the texture as it sounds landed on: 'soft, 'hard (any
-;                                      not felt), 'wood or 'metal
+;   (feel 'soft TEXTURE)               the texture as it sounds walked and landed on: 'soft,
+;                                      'hard (any not felt), 'wood, 'metal, 'grass, 'sand or 'gravel
 ;   (laid TEXTURE degrees [du dv])     the texture as a skin or textures lays it, turned
 ;                                      degrees from u toward v and shifted du dv metres its
 ;                                      own way; a floor's u is x and v z, a wall's u along it
@@ -280,7 +282,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens mirage grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window brittle lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -642,12 +644,14 @@
    (? (!(num? h) || h <= 0) (no u h) (!(num? deg)) (no u deg) (!(texture? t)) (no u t)
       (part 'gate [['at (P a u)] ['np (P b u)] ['h (N h u)] ['swing (N deg u)] ['tex t]])))
  ; ..a headstone, its face toward north and then turned: a slab arched over, on a plinth
- (grave at deg nm t) (: u "(grave [x y z] bearing NAME TEXTURE)" p (P at u) d (N deg u) x (p 0) y (p 1) z (p 2)
+ (headstone at deg t) (: u "(headstone [x y z] bearing TEXTURE)" p (P at u) d (N deg u) x (p 0) y (p 1) z (p 2)
+   (texture? t ? (turn d [x z] [(skin {'all t} (solid (box [(x - 0.19) (y - 0.1) (z - 0.09)] [(x + 0.19) (y + 0.04) (z + 0.09)])))
+                                (skin {'all t} (solid (box [(x - 0.14) (y + 0.04) (z - 0.04)] [(x + 0.14) (y + 0.24) (z + 0.04)])))
+                                (rod [x (y + 0.24) (z - 0.04)] [x (y + 0.24) (z + 0.04)] 0.14 12 t)])
+      (no u t)))
+ (grave at deg nm t) (: u "(grave [x y z] bearing NAME TEXTURE)" p (P at u)
    (? (!(string? nm)) (no u nm) (!(texture? t)) (no u t)
-      [(turn d [x z] [(skin {'all t} (solid (box [(x - 0.19) (y - 0.1) (z - 0.09)] [(x + 0.19) (y + 0.04) (z + 0.09)])))
-                      (skin {'all t} (solid (box [(x - 0.14) (y + 0.04) (z - 0.04)] [(x + 0.14) (y + 0.24) (z + 0.04)])))
-                      (rod [x (y + 0.24) (z - 0.04)] [x (y + 0.24) (z + 0.04)] 0.14 12 t)])
-       (part 'grave [['at p] ['deg d] ['name nm]])]))
+      [(headstone at deg t) (part 'grave [['at p] ['deg (N deg u)] ['name nm]])]))
  (glow o) (kind? o ['orb] ? (with o 'glow 1) (no "(glow ORB)" o))
  (inward o) (kind? o ['orb] ? (with o 'in 1) (no "(inward ORB)" o))
  (herald at size reach t file nm) (: u "(herald [x y z] size reach TEXTURE FILE ENTRY)"
@@ -951,7 +955,7 @@
       (: sp (species q) bk (peep sp 'bark {})
          (part 'tree [['at p] ['seed seed] ['tex (texture? bk ? bk (nom? bk ? (material bk 1 {}) (material 'bark 1 bk)))] ['species sp]]))))
  (feel k t) (: u "(feel 'soft TEXTURE)"
-   (? (!(elem k ['soft 'hard 'wood 'metal])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
+   (? (!(elem k ['soft 'hard 'wood 'metal 'grass 'sand 'gravel])) (no u k) (!(texture? t)) (no u t) (with t 'feel k)))
  (laid t deg off) (: u "(laid TEXTURE degrees [du dv])"
    (? (!(texture? t)) (no u t) (!(num? deg)) (no u deg) (!(two? off && #off = 2 && all num? off)) (no u off)
       {'kind 'laid 'tex t 'deg (f deg) 'off (map f off)}))

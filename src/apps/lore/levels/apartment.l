@@ -6,14 +6,14 @@
 (borrow 'scenery)
 
 ; the textures: what is there, sand and the bed's mud, cracked as it dried
-(: sand (feel 'soft (texture 64 64 3
+(: sand (feel 'sand (texture 64 64 3
          '((fill (rgb 0.8 0.68 0.48)) (noise 1 0.12) (noise 9 0.08) (patches 6 0.25 (shade 0.9))
            (patches 4 0.12 (rgb 0.88 0.78 0.6))))))
 (: mud (texture 64 64 4.4
         '((fill (rgb 0.69 0.53 0.37)) (noise 2 0.08) (patches 6 0.2 (shade 0.92))
           (cracks 16 16 1.2 3 (rgb 0.53 0.37 0.12)))))
 ; ..what the glass shows: grass, and water drifting down the river
-(: grass (feel 'soft (texture 64 64 2
+(: grass (feel 'grass (texture 64 64 2
           '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
             (patches 5 0.12 (rgb 0.5 0.66 0.26))))))
 (: water (texture 64 64 4
@@ -137,7 +137,7 @@
     (yard-pane [yx0 (yh - 0.06) yz0] [yx1 yh yz1])
     (map (x \ [(post x (yz0 - 0.07)) (post x (yz1 + 0.07))]) yxs)
     (map (z \ [(post (yx0 - 0.07) z) (post (yx1 + 0.07) z)]) [yz0 yz1])
-    (grave [-131.0 hy 15.2] 45 "" granite)
+    (headstone [-131.0 hy 15.2] 45 granite)
     (wooden (fence [[-115.2 -0.2 16.0] [-115.2 0.0 13.0] [-133.2 0.0 13.0] [-133.2 0.0 31.0] [-115.2 0.0 31.0] [-115.2 -0.2 28.0]] 1.3 palings))])
 
 ; the house: one room, open to the plain on the east, a sliding glass door in its back wall

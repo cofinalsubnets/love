@@ -34,6 +34,7 @@
  eye-h 1.6 body-r 0.25
  mattress-w 0.99 mattress-l 1.905 mattress-h 0.25    ; scenery's
  walk-v 3.4 turn-v 2.0 tilt-v 1.2         ; metres, and radians, a second
+ run-k 1.65                               ; how much faster a sprint
  ball-r 0.12 ball-e 0.72 ball-kick 2.6    ; a ball: its radius, its bounce, the least kick
  plush-e 0.2                                         ; a plush's bounce
  door-v 1.4 door-near 2.4 door-t 0.03 swing-wide 1.75  ; the doors: their pace, how near opens one, half their thickness, how wide one by hand swings
@@ -1186,8 +1187,9 @@
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)) ())))
  (level-pens st sh) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0))
-   e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px) (st 'py + dip st) (st 'pz)])
-   th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph))
+   hb (tablet? sh ? [0.0 0.0 0.0 0.0] (gesture-body st))
+   e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px + hb 1 * cos (st 'th)) (st 'py + dip st + hb 0) (st 'pz - hb 1 * sin (st 'th))])
+   th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph + hb 2))
    ; ..under a sky, the sky where nothing is drawn; out in a street, seen further, its haze
    ; for fog
    sk (sky-here (sc 'surf) (sc 'sky) e) sim (tablet? sk ? (sk 'sim + st 'mt) 0.0)
@@ -1196,7 +1198,7 @@
         && !(tablet? (sc 'surf) && any (b \ b 'air = 1 && !(peep b 'open 0) && b 'land = () && in? (b 'lo) (b 'hi)) (sc 'brushes)))
    ; ..on a surface, the eye's view laid there, and the sky seen as from the level's own
    sf (sc 'surf) fr (tablet? sf ? 300.0 (out ? 150.0 60.0))
-   vl (mesh-eye w h e th ph (tablet? sh ? 0.0 (peep st 'ro 0.0)) fov 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
+   vl (mesh-eye w h e th ph (tablet? sh ? 0.0 (peep st 'ro 0.0 + hb 3)) fov 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
    fog (out ? (: hz (mesh-haze vl (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) (tablet? sf ? 90.0 50.0) fr]) [0.0 0.0 0.0 30.0 60.0])
    ; ..the sky asked about every sky-k pixels a 160 across, or a kitty column, however shown
    sk0 (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (max k (w // 160) @ 1 1 q (sky-k * q)) (mesh-sky-memo st)) 0)
@@ -1388,7 +1390,7 @@
  ; landing is kept for the landing
  coyote-t 0.12 jq-t 0.15
  (can-jump? st) (!(hoisting? st) && peep st 'gv 0.0 = 0.0 && st 'mt - peep st 'gt -9.0 <= coyote-t)
- (jump! st) (mix-cry (pins st 'fv jump-v 'gt -9.0 'jq -9.0) "hop" ())
+ (jump! st) (pins st 'fv jump-v 'gt -9.0 'jq -9.0)
  mantle-h 0.6                             ; how far over the feet a ledge is hoisted onto
  (put! st x z) (walk-slide st x z world-free?)
  hoist-s 0.35                             ; seconds a pull up takes
@@ -1409,14 +1411,14 @@
  mouse-k 0.0025
  (world-look st dx dy) (two? (st 'cut) || peep st 'eye 'walk != 'walk ? st (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2}))
  ; ..the world's own keys, over view's
- world-binds {101 'tap 112 'where 119 'forward 115 'back 97 'strafe-left 100 'strafe-right 32 'jump 13 'choose 10 'choose 49 'weep 50 'leave}
+ world-binds {101 'tap 112 'where 119 'forward 87 'sprint 75 'sprint 115 'back 97 'strafe-left 100 'strafe-right 32 'jump 13 'choose 10 'choose 49 'weep 50 'leave}
  ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
  ; way to go, summed for the frame's walk. any key during the shots skips them
  (world-step st a) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st)
    (go f s) (pins st 'mf (peep st 'mf 0 + f) 'ms (peep st 'ms 0 + s))
    (up u) (pin st 'mu (peep st 'mu 0 + u))
    (? (two? (st 'cut)) (cue st) (charm? (st 'dlg)) (grave-key st a) (peep st 'eye 'walk != 'walk) (kneeling-key st a)
-      (a @ 'forward (go 1 0) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
+      (a @ 'forward (go 1 0) 'sprint (pin (go 1 0) 'run-at (st 'mt)) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
       'jump (? fly (up 1) (can-jump? st) (jump! st) (pin st 'jq (st 'mt)))
       'sink (fly ? (up -1) st)
       'tap (touch st @ () st t t)
@@ -1426,7 +1428,7 @@
  ; ..the frame's walk: the ways summed, no faster for two at once, and how fast it went; while
  ; a kick off a void's wall lasts, none of the walk into the wall, and the kick's own way
  (walk! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) n (sqrt (2 f + 2 s)) th (st 'th) x0 (st 'px) z0 (st 'pz)
-   k (walk-v * dt / max 1.0 n) dx (k * (f * sin th + s * cos th)) dz (k * (f * cos th - s * sin th)) b (kick st)
+   k (walk-v * dt / max 1.0 n * (running? st ? run-k 1.0)) dx (k * (f * sin th + s * cos th)) dz (k * (f * cos th - s * sin th)) b (kick st)
    d (surf-step st (atom? b ? [dx dz] (: e (min 0.0 (dx * b 0 + dz * b 1)) w (e - b 2 * dt) [(dx - w * b 0) (dz - w * b 1)])))
    x (x0 + d 0) z (z0 + d 1)
    _ (? (n > 0 || two? b) (: _ (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))
@@ -1434,6 +1436,7 @@
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
  ; ..stopped going past a void's edge it rings there, and not again for a moment; in the air
  ; the way into the wall turns back out of it, kick-e as fast and a hop up, dying away
+ (running? st) (st 'mt - peep st 'run-at -9.0 < 0.2)
  ward-near 0.05 ward-t 0.7 kick-t 0.8 kick-e 0.8 kick-up 2.0
  (kick st) (st 'kick @ () () q (: v (q 2 * exp ((q 3 - st 'mt) / kick-t)) (v < 0.2 ? () [(q 0) (q 1) v])))
  (ward! st x z dt) (: fl (st 'py - eye-h) r (body-r + ward-near)
@@ -1510,8 +1513,13 @@
    _ (each (st 'gates) (s \ pin s 'g (s 'want < s 'g ? (max 0.0 (s 'g - swing-v * dt)) (min (1.0 * s 'want) (s 'g + swing-v * dt)))))
    _ (fly || kn ? st (lift-ride st))
    _ (fly || kn || hoisting? st || peep st 'cling 0 = 1 || riding? st ? st (floor-step st dt))
+   _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0))
    _ (each (st 'balls) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(lv 'cars)))
+ ; ..the body's frame, on foot or not: a foot down sounds as the floor does, and a hard breath is heard
+ (gait! st dt on) (: v (on ? (sqrt (2 (peep st 'vx 0.0) + 2 (peep st 'vz 0.0))) 0.0) _ (gesture-gait st dt v (running? st)) pf (st 'puff)
+   _ (st 'foot = 1 && on ? (mix-cry st ("step " + show (feel-under st) + " " + show (int (st 'sw / pi) % 2)) ()))
+   (st 'gasp != 0 && pf > 0.25 ? (mix-cry st ("gasp " + (st 'gasp = 1 ? "i" "o") + show (pf < 0.5 ? 0 (pf < 0.8 ? 1 2))) ()) st))
  ; ..a grav shaft carries who stands in it toward its floor, gathering speed and easing in
  (grav-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) v (peep st 'gv 0.0)
    in (filter (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (st 'lvl 'gravs))
@@ -1980,8 +1988,24 @@
               'metal (0.4 * o 70.0 25.0 + 0.22 * (o 523.0 7.0 + 0.7 * o 1287.0 9.0 + 0.5 * o 2151.0 12.0) + 0.2 * snd-noise t * exp (-90.0 * t))
               (0.6 * o 85.0 26.0 + 0.35 * snd-noise t * exp (-70.0 * t) + 0.15 * snd-low t * exp (-20.0 * t))))
     snd-rate])
- (world-sound nm) (#nm > 5 && snip nm 0 5 = "land " ? (: w (snip nm 5 (#nm - 2)) (land-sound (w @ "soft" 'soft "wood" 'wood "metal" 'metal _ 'hard) (nm (#nm - 1) - 48))) (nm @
-   "hop" (: t (snd-t 0.15) [(0.18 * snd-low (t * 1.7) * exp (-35.0 * t) + 0.15 * sin (tau * 110.0 * t) * exp (-40.0 * t)) snd-rate])
+ ; ..a foot on each feel, the two feet a little apart
+ (step-sound f k) (: p ([1.0 1.08] k) t (snd-t 0.22) (o hz d) (sin (tau * hz * p * t) * exp -(d * t))
+   (n d) (snd-noise t * exp -(d * t)) (l d) (snd-low (t * p) * exp -(d * t))
+   [(f @ "grass" (0.09 * n 28.0 + 0.1 * l 40.0)
+         "sand" (0.13 * n 20.0 + 0.08 * l 45.0)
+         "gravel" (0.16 * n 30.0 + 0.11 * (t > 0.045) * snd-noise t * exp (-34.0 * (t - 0.045)) + 0.07 * l 50.0)
+         "soft" (0.2 * o 70.0 30.0 + 0.06 * l 40.0)
+         "wood" (0.2 * o 150.0 42.0 + 0.1 * o 390.0 70.0 + 0.05 * n 130.0)
+         "metal" (0.16 * o 110.0 42.0 + 0.07 * o 860.0 24.0 + 0.04 * o 1730.0 32.0 + 0.05 * n 140.0)
+         (0.2 * o 120.0 55.0 + 0.09 * n 150.0))
+    snd-rate])
+ ; ..a breath drawn or let go, each harder k louder
+ (gasp-sound out k) (: T (out ? 0.42 0.34) g ([0.035 0.07 0.12] k) t (snd-t T) e (sin (pi * t / T))
+   [(g * e * e * (0.6 * snd-low (t * (out ? 0.8 1.3)) + 0.4 * snd-noise t)) snd-rate])
+ (world-sound nm) (: pre (#nm > 5 ? (snip nm 0 5) "") (? (pre = "step ") (step-sound (snip nm 5 (#nm - 2)) (nm (#nm - 1) - 48))
+                                                       (pre = "gasp ") (gasp-sound (nm 5 = 111) (nm 6 - 48))
+                                                       (cry-sound nm)))
+ (cry-sound nm) (#nm > 5 && snip nm 0 5 = "land " ? (: w (snip nm 5 (#nm - 2)) (land-sound (w @ ("soft" || "grass" || "sand") 'soft "wood" 'wood "metal" 'metal _ 'hard) (nm (#nm - 1) - 48))) (nm @
    "chime" (: t (snd-t 1.0) a (t < 0.42) (tone f u) (sin (tau * f * u) * exp (-5.0 * u))
              [(0.35 * (a * tone 659.3 t + (1 - a) * tone 523.3 (t - 0.42))) snd-rate])
    "ward" (: t (snd-t 1.6) (bell f k) (sin (tau * f * t) * exp -(k * t))
@@ -2121,11 +2145,11 @@
                                ld (_ \ view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin))
                                nm (o 'entry) came (peep o 'came 0)
                                st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
-                                        'win (o 'win) 'path p 'scale (peep o 'scale 2))
+                                        'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
                                (world-watch (world-size st w (h // 2)))))
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
-               'binds (view-bind view-binds world-binds) 'listed (view-listed ['strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
-               'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0] 'held (st \ peep st 'eye 'walk = 'walk)
+               'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
+               'walking (view-walking + ['sprint 'strafe-left 'strafe-right]) 'repeat [0 0] 'held (st \ peep st 'eye 'walk = 'walk)
                'tick (st \ (walk-dt st,
                             world-move st,
                             (st 't % watch-every @ 0 (world-watch st))))
@@ -2142,9 +2166,9 @@
    (? (atom? g) st
       (: p (g 0) l2 (world-load p)
          (string? l2 ? (say err ("world: " + p + ": " + l2 + "\n"), flush err, st) (world-go (pins o 'level p 'entry (g 1) 'came 1) l2)))))
- world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (w s or k j step, a d sidestep, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w s or k j step, W or K sprint, a d sidestep, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice
- (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) view-window view-scale
+ (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--sway" 'sway 1) view-window view-scale
                                     (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])
  (world-main as) (view-main "world" world-usage world-opts world-run as)
  ; --- the editor: the level's text in vi on the right and its scene on the left, in one

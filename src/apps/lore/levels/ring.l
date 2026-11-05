@@ -19,7 +19,7 @@
 
 ; the textures: grass, stone and the river's water; below, the rooms'
 ; wallpaper, carpet and ceiling tiles, and the well's concrete
-(: grass (feel 'soft (texture 64 64 2
+(: grass (feel 'grass (texture 64 64 2
           '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
             (patches 5 0.12 (rgb 0.5 0.66 0.26))))))
 (: stone (feel 'hard (texture 32 32 1.2 '((fill (grey 0.55)) (noise 2 0.15) (patches 4 0.2 (shade 0.8))))))
