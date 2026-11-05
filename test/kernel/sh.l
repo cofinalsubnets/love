@@ -50,3 +50,11 @@
    s1 (lush-crd "/tmp/l-sh-ct")
    (unlink "/tmp/l-sh-ct",
     test (((cite 'view 'view-deep?) 0) = 1) (s1 = "truecolor\n")))
+; a window's text comes whole: one byte after a last key is that key's; a held key's repeats
+; in front of it go first, or the new key would read as the held one
+(: d ['down 30] u ['up 30]
+   (test (kwin-lay [d] "" = [d])
+         (kwin-lay [d] "a" = [d ['text "a"]])
+         (kwin-lay [d] "wwa" = [['text "wwa"] d])
+         (kwin-lay [d u] "a" = [['text "a"] d u])
+         (kwin-lay () "a" = [['text "a"]])))
