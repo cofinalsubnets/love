@@ -259,6 +259,7 @@ enum hook {
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
  hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
+ hook_inport,    // not lisp: the buffered stdin port, once taken; rides no image
  hook_n };
 
 struct g {
@@ -296,7 +297,6 @@ struct g {
  // the rem set: old cells that took a young pointer; a rem_miss forces the next collection major
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // bounded by LvRemCap
- uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child
  int8_t lean;                             // grow streak; a grow needs lean >= 2
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
@@ -318,7 +318,6 @@ struct g {
    walk,                          // the most room a walk under one op wanted past the gap: the op takes it, runs again
    minor0, major0, ratio,         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
    push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
- struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
   struct {
@@ -492,8 +491,8 @@ intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
 uint32_t crc32(unsigned char const*, uintptr_t);
 void sha256_of(unsigned char const*, uintptr_t, unsigned char*);
 // the thread pool (pool.c): fn(ctx, i) for chunks 0..n-1, C kernels only
-void par_run(struct g*, intptr_t, void (*)(void*, intptr_t), void*);
-intptr_t par_width(struct g*, intptr_t);
+void par_run(intptr_t, void (*)(void*, intptr_t), void*);
+intptr_t par_width(intptr_t);
 // the carried source (archive/srctree.h); noblob.c's zero without one
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
@@ -555,15 +554,13 @@ void code_warm(struct g *g);
 void scare_face(struct g*);
 
 extern struct fio love_stdin, love_stdout, love_stderr;
-extern word love_inflag,  // fd 0's flags as found (a charm), 0 left alone
-            love_inport;  // the buffered stdin port, a root once taken, or 0
+extern word love_inflag;  // fd 0's flags as found (a charm), 0 left alone
 
 // --- allocation and roots ---
 #define avail(g) ((uintptr_t)(g->sp-g->hp))
 #define avec(g, y, ...) (mm(g,&(y)),(__VA_ARGS__),um(g))
 #define mm(g,r) ((core_of(g)->root=&((struct love_r){(word*)(r),core_of(g)->root})))
 #define um(g) (core_of(g)->root=core_of(g)->root->n)
-extern struct g *love_system;   // only gen_grow moves it
 struct g
  *please(struct g*, uintptr_t),
  *force(struct g*, bool),

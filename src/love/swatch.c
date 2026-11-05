@@ -176,7 +176,7 @@ love_noinline static struct g *host_swatch_pic(struct g *g) {
  if (good && ok(g = have(g, words))) {
   if (sw_read(g->sp[2], ls, f)) {
    struct sw s = {ls, nl, w, h, c, hole};
-   par_run(g, (h + sw_band - 1) / sw_band, sw_rows, &s);
+   par_run((h + sw_band - 1) / sw_band, sw_rows, &s);
    struct tray *lv[64];
    intptr_t m = w, n = h;
    for (uintptr_t k = 0; k < nlev; k++, m /= 2, n /= 2) {

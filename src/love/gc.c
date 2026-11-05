@@ -357,7 +357,6 @@ struct g *gen_grow(struct g *g, uintptr_t len1) {
  h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
  alloc(g, 0);
- love_system = h;                              // the one place a state changes address
  return h; }
 
 // the survivors' room: none at the budget's edge, where the pools keep gcsize.v's bounds;

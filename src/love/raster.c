@@ -529,10 +529,10 @@ static void rz_bandrun(void *c, intptr_t i) {
 static void rz_share(struct g *g, struct rz *r) {
  rz_prep(r);
  intptr_t const nb = (r->H + rz_band - 1) / rz_band;
- if (r->W * r->H < rz_par || par_width(g, nb) < 2) { r->nth = 1, r->ylo = 0, r->yhi = r->H, r->bk = 0, rz_run(r); return; }
+ if (r->W * r->H < rz_par || par_width(nb) < 2) { r->nth = 1, r->ylo = 0, r->yhi = r->H, r->bk = 0, rz_run(r); return; }
  r->nth = nb;
  if (r->bk) rz_bins(r, nb);
- par_run(g, nb, rz_bandrun, r); }
+ par_run(nb, rz_bandrun, r); }
 
 love_noinline static struct g *host_raster(struct g *g) {
  word *a = g->sp;

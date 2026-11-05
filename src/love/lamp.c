@@ -145,7 +145,7 @@ static struct g *lp_light(struct g *g, word cl, uintptr_t ib, uintptr_t il, bool
     if (ib) bb = B(bb); }
    struct tray *o[3];
    for (int m = 0; m < 3; m++) o[m] = ini_tray(bump(g, w), love_R, 1), o[m]->shape[0] = nv, t.out[m] = tray_data(o[m]), r[m] = word(o[m]);
-   par_run(g, (intptr_t) ((nv + lp_chunk - 1) / lp_chunk), lp_share, &t); }
+   par_run((intptr_t) ((nv + lp_chunk - 1) / lp_chunk), lp_share, &t); }
   else for (int m = 0; m < 3; m++) r[m] = mk_gem(&g->hp, (flo_t) 0.0);
   word l = ZeroPoint;
   for (int m = 3; m--; ) l = word(ini_chain(bump(g, chain_req), (intptr_t) r[m], (intptr_t) l));
@@ -281,7 +281,7 @@ love_noinline static struct g *host_lamp_open(struct g *g) {
   for (int m = 0; m < 3; m++) {
    struct tray *o = ini_tray(bump(g, w), love_R, 1);
    o->shape[0] = nv, t.out[m] = tray_data(o), r[m] = word(o); }
-  par_run(g, (intptr_t) ((nv + lp_chunk - 1) / lp_chunk), dy_share, &t);
+  par_run((intptr_t) ((nv + lp_chunk - 1) / lp_chunk), dy_share, &t);
   word l = ZeroPoint;
   for (int m = 3; m--; ) l = word(ini_chain(bump(g, chain_req), (intptr_t) r[m], (intptr_t) l));
   g->sp[0] = l; }

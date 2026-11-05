@@ -50,14 +50,12 @@
    ("ram-words " = snip (rd "/proc/meminfo") 0 10)
    ; ffalloc's invariant: blocks in address order, none touching
    (elem "free-ordered 1" (split "\n" (rd "/proc/meminfo")))
-   ("pool-words " = snip (rd "/proc/gauge") 0 11)
    ; `cmdline` is (. "love" bootargv): the file opens on that word and ends with a newline
    ("love" = snip (rd "/proc/cmdline") 0 4)
    (rd "/proc/cmdline" @ c (10 = c (#c - 1)))
    !(wr "/proc/cmdline" "no")
    ; the ramfs never reads its own mode bits, so the refusal has to be the open's
    !(wr "/proc/meminfo" "no")
-   !(wr "/proc/gauge" "no")
    ; the pen opens even with no console, as on every headless lane
    (port? (open "/proc/vt/fg" "r"))
    (port? (open "/proc/vt/bg" "r"))

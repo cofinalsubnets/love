@@ -243,10 +243,6 @@ word love_err(struct g *g, int e) {
  word v = mapget(g, 0, putcharm(e), g->errs);
  return v ? v : mapget(g, 0, zero, g->errs); }
 
-// the system process, a mutable global: inle's /proc reads it from under the syscall
-// boundary, where no g is in hand. moved only by gen_grow
-struct g *love_system;
-
 // the once-laid tables, filled by the first start (ini or love_image_load), read-only after.
 // arm32 has no exchange, and its boards start one core before any interrupt
 static int once_lock, once_done;
@@ -277,7 +273,7 @@ struct g *ini(void) {
  struct g *g = alloc(NULL, len0 * sizeof(word));
  if (g == NULL) return encode(g, status_scare);
  g = ini_0(g, len0);
- return ok(g) ? (love_system = g) : g; }
+ return g; }
 
 // ===== stack =====
 static struct g *pushr(struct g *g, uintptr_t m, uintptr_t n, va_list xs) {

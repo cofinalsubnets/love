@@ -528,7 +528,7 @@ static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
 static char const k_plift[] = "proc/lift";
 __attribute__((weak)) void k_lift_ask(unsigned char const *p, uintptr_t n) { (void) p; (void) n; }
 // filled at open from the running machine, below the grow door they need
-static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
+static char const k_pmem[] = "proc/meminfo";
 static char const k_pcmd[] = "proc/cmdline";
 // the image the door handed in, for a process to wake from
 static char const k_pimg[] = "proc/image";
@@ -578,7 +578,7 @@ static intptr_t k_hosted(char const *cp, uintptr_t cn) {
 
 // a move or a removal leaves these be: a special row, and every directory above one
 static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
-                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero, k_mnt };
+                                      k_pmem, k_pcmd, k_dnull, k_dzero, k_mnt };
 // one entry per baked row, growing with create and mkdir. the cwd is canonical ("" the root)
 static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
                            .npins = countof(k_pins), .grab = k_grab, .drop = k_drop, .now = k_clock_ms };
@@ -600,7 +600,7 @@ static bool k_fs_init(void) {
   static struct { char const *path, *to; uintptr_t mode; bool dir; } const rows[] = {
     { "tmp", NULL, 0755, true },
     { k_vtfg, NULL, 0644, false }, { k_vtbg, NULL, 0644, false },     // the console's colours
-    { k_pmem, NULL, 0444, false }, { k_pgauge, NULL, 0444, false },   // filled at each open
+    { k_pmem, NULL, 0444, false },                                    // filled at each open
     { k_dnull, NULL, 0666, false }, { k_dzero, NULL, 0666, false },   // always empty (k_dev_slot)
     { "usr/bin", NULL, 0755, true },
     { k_vtscale, NULL, 0644, false },                                  // the glyph scale
@@ -711,8 +711,7 @@ static void k_vt_write(int i, int slot) {
 // /proc's live rows, filled at open from the free list and the collector: `key value` lines, in words
 static int k_proc_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_pmem - 1 && !memcmp(p, k_pmem, n)) return 1;
-  if (n == sizeof k_pgauge - 1 && !memcmp(p, k_pgauge, n)) return 2;
-  if (n == sizeof k_pcmd - 1 && !memcmp(p, k_pcmd, n)) return 3;
+  if (n == sizeof k_pcmd - 1 && !memcmp(p, k_pcmd, n)) return 2;
   return 0; }
 
 static int k_dec(char *b, int at, uintptr_t v) {
@@ -744,25 +743,6 @@ static int k_meminfo(char *b) {
   at = k_row(b, at, "fs-entries", ents);
   return k_row(b, at, "fs-heap-bytes", bytes); }
 
-// love.c's lvm_gauge roster, named
-static int k_gauge(char *b, struct g const *g) {
-  int at = k_row(b, 0, "pool-words", g->len);
-  at = k_row(b, at, "heap-words", (uintptr_t) (g->hp - ptr(g)));
-  at = k_row(b, at, "stack-words", (uintptr_t) (ptr(g) + g->len - g->sp));
-  at = k_row(b, at, "collections", g->n_gc);
-  at = k_row(b, at, "minors", g->n_minor);
-  at = k_row(b, at, "pool-peak", g->max_len);
-  at = k_row(b, at, "heap-peak", g->max_heap);
-  at = k_row(b, at, "seen-words", g->n_seen);
-  at = k_row(b, at, "evac-words", g->n_evac);
-  at = k_row(b, at, "old-words", (uintptr_t) (g->major_hp - g->major_base));
-  at = k_row(b, at, "major-cap", g->major_len);
-  at = k_row(b, at, "rem-miss", g->rem_miss);
-  at = k_row(b, at, "rem-peak", g->rem_hi);
-  at = k_row(b, at, "resizes", g->n_resize);
-  at = k_row(b, at, "minor-peak", g->minor_hi);
-  return k_row(b, at, "major-peak", g->major_hi); }
-
 // the program word, then the raw boot line, as linux writes its own
 static int k_bootline(char *b) {
   int at = 0;
@@ -775,9 +755,8 @@ static int k_bootline(char *b) {
 
 // at the open of a read; a refusal leaves the last content
 static void k_proc_read(int i, int slot) {
-  if (slot == 2 && !love_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
-  int n = slot == 1 ? k_meminfo(b) : slot == 3 ? k_bootline(b) : k_gauge(b, love_system);
+  int n = slot == 1 ? k_meminfo(b) : k_bootline(b);
   if (!vfs_fit(&k_fs, i, (uintptr_t) n)) return;
   memcpy(k_fs.ents[i].bytes, b, (uintptr_t) n);
   k_fs.ents[i].len = (uintptr_t) n; }

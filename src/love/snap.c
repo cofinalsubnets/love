@@ -1186,7 +1186,11 @@ void *image_save2(struct g *g, uintptr_t *outlen, struct image_bad *bad, struct 
  uintptr_t nw = 0;
  char *cseg = NULL; uintptr_t ncode = 0;
  uintptr_t *cb = NULL, ncb = 0;
- word *blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb);
+ word in = g->hook[hook_inport];         // stdin's port is this process's, no image's: a root
+ g->hook[hook_inport] = zero;            // ..through img_build's collections, and not a hook
+ word *blob;
+ avec(g, in, blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb));
+ g->hook[hook_inport] = in;
  if (!blob) { if (cseg) alloc(cseg, 0); return NULL; }
  void *buf = img_wire(g, &H, blob, nw, cseg, cb, ncb, outlen);
  if (cseg) alloc(cseg, 0);
