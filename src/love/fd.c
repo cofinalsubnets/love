@@ -103,7 +103,7 @@ static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
 
 struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
-word love_inflag, love_inport;
+word love_inflag;
 struct fio
  love_stdin = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(STDIN_FILENO) },
  love_stdout = { { lvm_port_io, &love_fd_port_vt, putcharm(EOF) }, putcharm(STDOUT_FILENO) },

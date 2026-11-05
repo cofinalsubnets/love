@@ -86,10 +86,11 @@
                                (elem k '(movw16p movt16p)) (peep be 'lapa 0 k (fix-a x))
                                (o-zeros w))
                        ; carry the byte before the field, the x64 opcode that tells a call
-                       ; (PLT32) from an address-of (PC32); a blob head is a string, so 0
+                       ; (PLT32) from an address-of (PC32); a blob head is a string, so 0.
+                       ; an 8x is a jcc only after its 0F, else it is a Modrm
                        (o-walkr be >items labels wkset internal? rset (off + w)
                                 (rev fill + bacc)
-                                ([off k lbl (fix-a x) (two? bacc && charm? <bacc ? <bacc 0)] . racc)))))
+                                ([off k lbl (fix-a x) (two? bacc && charm? <bacc && (<bacc < 128 || 143 < <bacc || >bacc && <>bacc = 15) ? <bacc 0)] . racc)))))
              (o-walkr be >items labels wkset internal? rset (off + item-len x) (x . bacc) racc))))
    (o-zeros n) (n >= 1 ? (0 . o-zeros (n - 1)))
    (o-take l n) (two? l && n >= 1 ? (<l . o-take >l (n - 1)))
@@ -206,9 +207,10 @@
            (rev (go allrel ())))
        ; the branch kinds too: a branch across sections has no room in its field for the offset
        locfns (o-locs (\ si lbl (sec-exec? si && !(o-has? fnset lbl)))
-                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 movw16p movt16p abs32 b bcc bl)))
+                      (x86 ? '(rel32 pc32 rel16 pc8) '(movw16 movt16 movw16p movt16p abs32 b bcc bl)))
+       ; ..and a pc-relative reach into data, whose field has no room for the offset either
        locdat (o-locs (\ si lbl (!(sec-exec? si) && !(o-has? gset lbl)))
-                      (x86 ? '(rel32 rel16 pc8) '(movw16 movt16 movw16p movt16p)))
+                      (x86 ? '(rel32 pc32 rel16 pc8) '(movw16 movt16 movw16p movt16p)))
        locs (locfns + locdat)
        ; -- symbol indices: NULL, a section symbol each, those locals, funcs, globs, exts;
        ; every local ahead of the first global, where .symtab's sh_info points --
@@ -249,7 +251,7 @@
        (bakepc bytes rs)
         (: (go rs bs) (!(two? rs) ? bs
                          (<rs @ r
-                            (go >rs (? (<>r == 'rel32) (o-put32 bs <r (<>>>r - 4))
+                            (go >rs (? (<>r == 'rel32 || <>r == 'pc32) (o-put32 bs <r (<>>>r - 4))
                                        (<>r == 'rel16) (o-putbs bs <r (le16 (<>>>r - 2)))
                                        (<>r == 'pc8) (o-putbs bs <r [((<>>>r - 1) & 255)])
                                        bs))))
@@ -294,7 +296,7 @@
                       (peep extidx lbl 0))
        (o-rels32 rs)
         (catall (map (\ [off k lbl aux _]
-          (k @ 'rel32 (o-rel32 off (fnsym lbl) r-386-pc32)
+          (k @ ('rel32 || 'pc32) (o-rel32 off (fnsym lbl) r-386-pc32)
                'rel16 (o-rel32 off (fnsym lbl) r-386-pc16)
                'pc8 (o-rel32 off (fnsym lbl) r-386-pc8)
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
@@ -626,7 +628,7 @@
        rv (target = 'rv64)
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
-       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 rel8 rel16 pc8))
+       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 pc32 rel8 rel16 pc8))
        drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
        machine (peep elf-machines target 0)
        ; a cross backend joins at runtime; unregistered, lay would lower nothing, silently
@@ -657,10 +659,13 @@
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
        (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
        allrel (foldl (a \ l \ a + ln-rl l) () lanes)
-       exts (o-exts lanes allrel)
+       ext0 (o-exts lanes allrel)
+       exts (ext0 + filter (u \ !(elem u ext0)) (map name (3 < #ax ? (ax 3) ())))
+       vist (foldl (\ t p (pin t (name <p) <>p)) {} (4 < #ax ? (ax 4) ()))
+       (o-vis nm b) (peep vist (name nm) 0 @ v (v = 0 ? b (o-putbs b 5 [v])))
        ; x64: a reach with a constant into a merging section names its label; section + constant
        ; cannot say which piece it means. those no text named locally join the locals
-       (rel-c k aux) (k @ 'rel32 (aux - 4) 'rel64 (aux - 8) aux)
+       (rel-c k aux) (k @ ('rel32 || 'pc32) (aux - 4) 'rel64 (aux - 8) aux)
        (mrg? r) (: w (o-where lanes (r 2))
                    (two? w && 0 < ((ln (<w - 1)) 2 & 16) && !(o-has? gbset (r 2)) && rel-c (r 1) (r 3) != 0))
        mlabs (target = 'x64 ? (uniq (map (r \ show (r 2)) (filter mrg? allrel))) ())
@@ -700,20 +705,20 @@
                                             (elf-sym (stroffs i) 0 (x ? (o-xtype ls) (o-dtype ls)) <w <>w (x ? (o-xsize w ls) (o-dsize w ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
-                                            (elf-sym (stroffs (nloc + i))
+                                            (o-vis fs (elf-sym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
-                                             (o-xtype fs) <w <>w (o-xsize w fs))))
+                                             (o-xtype fs) <w <>w (o-xsize w fs)))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
-                                            (elf-sym (stroffs (nloc + nfun + i))
-                                                   (elem gs wknames ? 2 1) (o-dtype gs) <w <>w (o-dsize w gs))))
+                                            (o-vis gs (elf-sym (stroffs (nloc + nfun + i))
+                                                   (elem gs wknames ? 2 1) (o-dtype gs) <w <>w (o-dsize w gs)))))
                                  globnames))
            ; an absolute symbol: stt_notype, shn_abs
            lasyms (catall (o-mapi (\ i p (elf-sym (stroffs (#locnames + i)) 0 0 65521 <>p 0)) labss))
            asyms (catall (o-mapi (\ i p (elf-sym (stroffs (nloc + nfun + nglob + i)) 1 0 65521 <>p 0)) abss))
            ; a weak undef resolves to zero at static link
-           esyms (catall (o-mapi (\ i e (elf-sym (stroffs (nloc + nfun + nglob + nabs + i))
-                                               (o-has? wkset e ? 2 1) 0 0 0 0))
+           esyms (catall (o-mapi (\ i e (o-vis e (elf-sym (stroffs (nloc + nfun + nglob + nabs + i))
+                                               (o-has? wkset e ? 2 1) 0 0 0 0)))
                                  exts))
            ; one stt_section symbol per section, in section order
            ssyms (catall (o-mapi (\ i l (elf-sym 0 0 3 (i + 1) 0 0)) lanes))
@@ -743,6 +748,7 @@
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
                  'secrel32 (o-where lanes lbl @ w (o-rela off <w ra-prel32 <>w))
+                 'pc32 (o-rela off si (rv ? rr-pc32 r-pc32) ((sa + aux) - 4))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
                  ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
                  ; anything else pc32 (data has no plt stub)
