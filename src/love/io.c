@@ -104,6 +104,7 @@ static struct g *io_wdrain(struct g *g, struct io *i) {
   if ((uintptr_t) k < n) memmove(w, w + k, n - (uintptr_t) k);
   b->wlen = putcharm(n - (uintptr_t) k); } }
 #define IoWouldBlock (-2)   // io_refill's third answer beside a byte and EOF; never escapes lvm_fgetc
+word love_inport;
 // the static stdin may read through a borrowed bio (`inport`), so `in` keeps the identity
 // bao's `reads` folded; the frontend rewinds the fd offset it ran ahead
 static love_inline struct bio *rbio_of(struct g *g, struct io *i) {
