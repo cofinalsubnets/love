@@ -9,10 +9,14 @@
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
      bridge -> love  12-byte records (u8 kind, u8 a, u16 0, i32 b, i32 c):
-                     'S' the window's visible part, b by c pixels
+                     'S' the window's visible part, b by c pixels, a=1 the soft keyboard is up,
+                     a=2 what love drew is gone: all of it again, the size unchanged or not
                      'K' key a=down, b=android keycode, c=the character it types or 0
                      'T' touch a=action (0 down 1 up 2 move), b c in frame pixels
                      'P' a paste's piece, a=its length, up to ten bytes from the third; a=0 ends it
+   the face takes clients in a stack, love first and then any window it starts: the top has the
+   screen, the input and the keyboard, the frames of those under it are read and let go. the top
+   gone, the next has its keyboard back and an 'S' with a=2.
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
@@ -36,7 +40,7 @@
    directory before each start, which is love's cwd and HOME. love inherits the app's own
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
    is linked under its own name and as open, a link handed on through the framework's door.
-   when love ends it is started again; the app ends as android ends it. */
+   when love, the bottom of the stack, ends it is started again; the app ends as android ends it. */
 
 typedef unsigned long size_t; typedef long ssize_t; typedef int pid_t; typedef unsigned uint32_t;
 
@@ -101,6 +105,8 @@ enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOE
 typedef struct {
   ANativeActivity *a; void *looper, *win, *queue;
   int ww, wh, fw, fh, lsock, csock, logfd, pid, quit, hsock, esock, dsock, vh, typing, shown;
+  int bare;                               /* the client on top has not been told its pixels are gone */
+  int under[3], utyping[3], nunder;       /* the clients csock covers, oldest first, and what each asked of the keyboard */
   int up, ears;                           /* in sight (onStart to onStop); hear threads alive */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8];                    /* pthread_t, pthread_mutex_t (zero is unlocked) */
@@ -122,6 +128,11 @@ static void put(br *b, int kind, int a, int x, int y) {
   pthread_mutex_lock(b->mu);
   if (b->csock >= 0) write(b->csock, r, 12);
   pthread_mutex_unlock(b->mu);
+}
+
+static void sized(br *b) {
+  put(b, 'S', b->shown | b->bare << 1, b->ww, vis(b));
+  b->bare = 0;
 }
 
 static int writeall(int fd, void const *p, size_t n) {
@@ -153,13 +164,25 @@ static void paint(br *b) {
   }
 }
 
-/* rows of a frame, kept whole here */
-static int frame(br *b) {
+/* the frame black, for the client taking it: a grid need not reach its edges. the lock held */
+static void blank(br *b) {
+  if (b->fb) for (size_t i = 0; i < (size_t) b->fw * (size_t) b->fh; i++) b->fb[i] = 0;
+}
+
+static int drain(int fd, size_t n) {
+  char sink[4096];
+  for (size_t k; n; n -= k) { k = n < sizeof sink ? n : sizeof sink; if (readall(fd, sink, k)) return -1; }
+  return 0;
+}
+
+/* rows of a frame, kept whole here; a covered client's let go */
+static int frame(br *b, int fd) {
   unsigned char h[8];
-  if (readall(b->csock, h, 8)) return -1;
+  if (readall(fd, h, 8)) return -1;
   int w = h[0] | h[1] << 8, ht = h[2] | h[3] << 8, y0 = h[4] | h[5] << 8, n = h[6] | h[7] << 8;
   size_t sz = (size_t) w * (size_t) ht * 4;
   if (y0 + n > ht) return -1;
+  if (fd != b->csock) return drain(fd, (size_t) n * (size_t) w * 4);
   if (w != b->fw || ht != b->fh || !b->fb) {   /* a new size: a fresh black frame, the window's paint held off */
     pthread_mutex_lock(b->mu);
     if (sz > b->fbsz) {
@@ -172,7 +195,7 @@ static int frame(br *b) {
     pthread_mutex_unlock(b->mu);
     if (!b->fb) return -1;
   }
-  if (readall(b->csock, b->fb + (size_t) y0 * (size_t) w, (size_t) n * (size_t) w * 4)) return -1;
+  if (readall(fd, b->fb + (size_t) y0 * (size_t) w, (size_t) n * (size_t) w * 4)) return -1;
   pthread_mutex_lock(b->mu);
   paint(b);
   pthread_mutex_unlock(b->mu);
@@ -221,7 +244,7 @@ static void insets(br *b) {
   if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
   pthread_mutex_lock(b->mu); b->vh = b->wh - bot; paint(b); pthread_mutex_unlock(b->mu);
-  put(b, 'S', 0, b->ww, vis(b));
+  sized(b);
 }
 
 /* what a key types: KeyCharacterMap.load(device).get(code, meta), through JNIEnv's table */
@@ -300,19 +323,18 @@ static void copied(br *b, char const *s, size_t n) {
 }
 
 /* a selection from love: its length, then its bytes; one past 16M is read and let go */
-static int copy(br *b) {
-  unsigned char h[4]; char sink[4096];
-  if (readall(b->csock, h, 4)) return -1;
+static int copy(br *b, int fd) {
+  unsigned char h[4];
+  if (readall(fd, h, 4)) return -1;
   size_t n = h[0] | h[1] << 8 | h[2] << 16 | (size_t) h[3] << 24;
   char *s = n && n < 1 << 24 ? mmap(0, n, 3, 0x22, -1, 0) : 0;
   if (s == (void *) -1) s = 0;
   if (s) {
-    if (readall(b->csock, s, n)) return munmap(s, n), -1;
+    if (readall(fd, s, n)) return munmap(s, n), -1;
     copied(b, s, n); munmap(s, n);
     return 0;
   }
-  for (size_t k; n; n -= k) { k = n < sizeof sink ? n : sizeof sink; if (readall(b->csock, sink, k)) return -1; }
-  return 0;
+  return drain(fd, n);
 }
 
 /* the clipboard's first item as text to love, ten bytes a record and an empty one to end,
@@ -693,6 +715,37 @@ static void *hear(void *p) {
   return 0;
 }
 
+static int covered(br *b, int fd) {
+  for (int i = 0; i < b->nunder; i++) if (b->under[i] == fd) return i;
+  return -1;
+}
+
+/* a client gone: the one under it has the screen again. answers 0 when it was love, at the
+   bottom, and every window it started goes with it */
+static int leave(br *b, int fd) {
+  int i = covered(b, fd), bottom = i == 0 || (i < 0 && !b->nunder), top = i < 0, typing = b->typing;
+  ALooper_removeFd(b->looper, fd);
+  pthread_mutex_lock(b->mu);
+  close(fd);
+  if (bottom) {
+    for (int j = 1; j < b->nunder; j++) ALooper_removeFd(b->looper, b->under[j]), close(b->under[j]);
+    if (i == 0) ALooper_removeFd(b->looper, b->csock), close(b->csock);
+    b->nunder = 0; b->csock = -1;
+  } else if (top) {
+    typing = b->utyping[--b->nunder]; b->csock = b->under[b->nunder]; blank(b);
+  } else {
+    for (b->nunder--; i < b->nunder; i++) b->under[i] = b->under[i + 1], b->utyping[i] = b->utyping[i + 1];
+  }
+  pthread_mutex_unlock(b->mu);
+  if (bottom) return 0;
+  if (top) {
+    if (typing != b->typing) keyboard(b, b->env, b->typing = typing);
+    b->bare = 1;
+    if (b->ww) sized(b);
+  }
+  return 1;
+}
+
 static void *loop(void *p) {
   br *b = p;
   void *const *vt = *(void *const **) b->a->vm;
@@ -711,22 +764,25 @@ static void *loop(void *p) {
     if (b->typing) insets(b);
     if (id == LISTEN) {
       int c = accept4(b->lsock, 0, 0, O_CLOEXEC);
-      if (c >= 0 && b->csock < 0) {
-        b->csock = c; ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
-        if (b->ww) put(b, 'S', 0, b->ww, vis(b));
+      if (c >= 0 && (b->csock < 0 || b->nunder < 3)) {
+        pthread_mutex_lock(b->mu);
+        if (b->csock >= 0) b->under[b->nunder] = b->csock, b->utyping[b->nunder++] = b->typing;
+        b->csock = c; blank(b);
+        pthread_mutex_unlock(b->mu);
+        ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
+        if (b->ww) sized(b);
       } else if (c >= 0) close(c);
-    } else if (id == CONN) {
+    } else if (id == CONN && (fd == b->csock || covered(b, fd) >= 0)) {   /* a client closed in this batch is passed over */
       unsigned char k, on;
-      int bad = readall(b->csock, &k, 1);
+      int bad = readall(fd, &k, 1);
       if (!bad && k == 'I') {
-        bad = readall(b->csock, &on, 1);
-        if (!bad) keyboard(b, b->env, b->typing = on);
-      } else if (!bad && k == 'C') bad = copy(b);
-      else if (!bad && k == 'V') paste(b);
-      else if (!bad) bad = k != 'F' || frame(b);
-      if (bad) {                                  /* love ended: it starts again, as a page boots its line */
-        ALooper_removeFd(b->looper, b->csock);
-        pthread_mutex_lock(b->mu); close(b->csock); b->csock = -1; pthread_mutex_unlock(b->mu);
+        bad = readall(fd, &on, 1);
+        if (!bad && fd == b->csock) keyboard(b, b->env, b->typing = on);
+        else if (!bad) b->utyping[covered(b, fd)] = on;
+      } else if (!bad && k == 'C') bad = copy(b, fd);
+      else if (!bad && k == 'V') { if (fd == b->csock) paste(b); }
+      else if (!bad) bad = k != 'F' || frame(b, fd);
+      if (bad && !leave(b, fd)) {                 /* love ended: it starts again, as a page boots its line */
         if (b->pid > 0) waitpid(b->pid, 0, 0);
         if (b->logfd >= 0) ALooper_removeFd(b->looper, b->logfd), close(b->logfd);
         b->nline = 0;
@@ -878,7 +934,7 @@ static void created(void *a, void *w) {
   b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w); b->gh = 0;
   paint(b);
   pthread_mutex_unlock(b->mu);
-  put(b, 'S', 0, b->ww, vis(b));
+  sized(b);
 }
 
 static void gone(void *a, void *w) {
@@ -899,6 +955,7 @@ static void destroy(void *a) {
   if (b->pid > 0) kill(b->pid, 15), waitpid(b->pid, 0, 0);
   for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
+  for (int i = 0; i < b->nunder; i++) close(b->under[i]);
   if (b->csock >= 0) close(b->csock);
   close(b->lsock); close(b->hsock); close(b->esock); close(b->dsock); close(b->logfd);
   unlink(b->sock); unlink(b->horn); unlink(b->ear); unlink(b->droid);
