@@ -1,6 +1,6 @@
 ; the editor's laws: key sequences drive the pure engine and read the tablet back;
 ; no tty, port or file. (vgo lines keys) feeds the bytes to a fresh buffer
-(borrow 'vi)
+(borrow '(vi cli))
 
 (: (bytes s) (: n #s (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc))) (go (n - 1) ()))
    (vgo ls ks) (vfeed (vnew ls "t") (bytes ks))
