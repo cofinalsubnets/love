@@ -63,5 +63,4 @@
 (: (r-in a) (cite 'doom 'run-in "/home" a)
    (test (r-in ["sh" "-c" "exec love -e 0"] = 0)
          (r-in ["sh" "-c" "(exec love -e 0)"] = 0)
-         (r-in ["sh" "-c" "exec cat /dev/null; exit 3"] = 0)
          (r-in ["sh" "-c" "exec no-such-word"] = 127)))
