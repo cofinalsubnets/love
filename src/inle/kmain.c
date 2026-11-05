@@ -1431,7 +1431,7 @@ love_noinline static struct g *k_disk_read(struct g *g) {
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
   if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper raises
   if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
     g->sp[0] = ZeroPoint;
   return g->sp[2] = g->sp[0], g->sp += 2, g; }
@@ -1487,7 +1487,7 @@ love_noinline static struct g *k_svm_run(struct g *g) {
   uint64_t code = 0, rax = 0, rip = 0;
   if (!k_svm_ok()) return g->sp[0] = ZeroPoint, g;
   // the pages ride a string's bytes, as blk.c's: nothing allocates before the vmrun
-  if (!ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper raises
   if (k_svm_spike(txt(g->sp[0]), &code, &rax, &rip) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
   if (!ok(g = have(g, 3 * Width(struct chain)))) return g;
@@ -1511,7 +1511,7 @@ static lvm(lvm_vmx) {
 love_noinline static struct g *k_vmx_run(struct g *g) {
   uint64_t reason = 0, rax = 0, rip = 0, err = 0;
   if (!k_vmx_ok()) return g->sp[0] = ZeroPoint, g;
-  if (!ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper raises
   if (k_vmx_spike(txt(g->sp[0]), &reason, &rax, &rip, &err) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
   if (!ok(g = have(g, 4 * Width(struct chain)))) return g;

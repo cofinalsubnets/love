@@ -138,7 +138,6 @@ static struct { short v; char n[16]; } const errnames[] = {
 static struct g *ini_0(struct g*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct g));
  g->len = len0;
- g->scare_a = g->scare_b = g->scare_c = zero;   // v0..end is GC-walked: raw 0 is not a value
  for (int i = 0; i < hook_n; i++) g->hook[i] = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  g->major_len = love_major0;
@@ -226,14 +225,13 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
    if (ok(g)) g->errs = pop1(g); }
   // g->nom, in its enum's order; g->kreg: name -> (serial . table), pinned by post.l's `coin`
   { char const *p = kind_names " name + * ap - net star / payload < = int ceil lambda cask port coin"
-                               " \\ list hash tuple tablet iota mono torn @ , weave : ?";
-    for (int i = 0; ok(g) && i < NomOom; i++) {
+                               " \\ list hash tuple tablet iota mono torn @ , weave : ? oom deep deadlock code apply missing";
+    for (int i = 0; ok(g) && i < NomN; i++) {
      while (*p == ' ') p++;
      char nm[16], *q = nm;
      while (*p && *p != ' ') *q++ = *p++;
      *q = 0;
-     if (ok(g = intern(strof(g, nm)))) g->nom[i] = pop1(g); }
-    if (ok(g = gxr(push(intern(strof(g, "oom")), 1, putcharm(0))))) g->nom[NomOom] = pop1(g); }
+     if (ok(g = intern(strof(g, nm)))) g->nom[i] = pop1(g); } }
   if (ok(g = map_new(g))) g->kreg = pop1(g);
  }
  return g; }
@@ -324,7 +322,7 @@ op11(lvm_nclock, putcharm(nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 static lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
- if (!ok(g = force(g, charmp(n) && getcharm(n) > 0))) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g = force(g, charmp(n) && getcharm(n) > 0))) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; love_musttail return Continue(); }
@@ -431,7 +429,7 @@ lvm(lvm_arena) {
 // an arity-1 entry and three behind a curried one's
 lvm(lvm_lazy) {
  union u *h = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 3 : Ip - 1;
- if (code_seat(g, (char const*) h->ap)) { Pack(g); love_musttail return Ap(_lvm_ghelp, encode(g, status_scare)); }
+ if (code_seat(g, (char const*) h->ap)) { Pack(g), g->scare = ScareCode; love_musttail return Ap(_lvm_raise, encode(g, status_scare)); }
  Ip->ap = h->ap;
  love_musttail return Continue(); }
 
@@ -971,7 +969,7 @@ static lvm(lvm_link) {
    love_musttail return Push(_res); } } \
  if ((vop) == vop_mul) love_musttail return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = big_binop(g, vop); \
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g); \
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g); \
  Unpack(g); love_musttail return Continue(); }
 #define avm_slowdiv(op, vop, c_op, fexpr, zarm) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \

@@ -181,7 +181,7 @@ love_noinline static struct g *scr_pour(struct g *g) {
 static lvm(lvm_scribe) {
  Pack(g);
  g = scr_pour(g);
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
@@ -314,7 +314,7 @@ love_noinline static struct g *host_reply(struct g *g) {
 static lvm(lvm_reply) {
  Pack(g);
  g = host_reply(g);
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  Ip += 1; love_musttail return Continue(); }
 

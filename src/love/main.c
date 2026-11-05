@@ -209,7 +209,7 @@ static lvm(lvm_herald) {
 static lvm(lvm_harkdrain) {
  Pack(g);
  g = host_harkdrain(g);
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  if (Sp[2] != putcharm(-1)) love_musttail return Ap(lvm_yield_sw, g);
  Sp[4] = Sp[0];                                           // the answer over the state

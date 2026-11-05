@@ -677,7 +677,7 @@ static struct g *img_canon_symbols(struct g *g) {
  uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
  word *s = map_slots(m),
       *pairs = alloc(NULL, 2 * cap * sizeof(word));
- if (!pairs) return encode(g, status_scare);
+ if (!pairs) return g->scare = 2 * cap, encode(g, status_scare);
  for (uintptr_t j = 0; j < cap; j++)
   if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
  { struct img_ord o = { img_lt_pair, pairs, 2 };

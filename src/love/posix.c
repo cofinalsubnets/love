@@ -1522,7 +1522,7 @@ static lvm(lvm_close) {
       g->io = io;
       Pack(g);
       g = io_wflush(g, io);
-      if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+      if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
       // a short write parks; nothing is mutated yet, so the re-run is this close whole
       if (io_wpending(g, (struct io*) g->sp[0])) {
         Unpack(g);
