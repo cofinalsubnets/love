@@ -71,7 +71,7 @@ static void evac_data(struct g *g, struct gcx *X) {
 
 // the write barrier: every old->young edge goes through gen_wb into the rem set, so a minor
 // under a complete set is sound (gc.v barrier_sound); an overflow (rem_miss) forces a major
-static bool young(struct g *g, word p) {
+static love_inline bool young(struct g *g, word p) {
  return evenp(p) && ((ptr(p) >= (word*) g->end && ptr(p) < g->hp) || (ptr(p) >= g->sv_base && ptr(p) < g->sv_hp)); }
 
 // the index: entry numbers probed from an object's hash, one at or past rem_n free. cleared with

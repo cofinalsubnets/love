@@ -185,7 +185,7 @@ static bool dy_land_y(struct dbr const *b, flo_t x, flo_t z, flo_t *h) {
   if ((d < 0 ? -d : d) < (flo_t) 1e-12) continue;
   flo_t const u = ((bb[2] - cc[2]) * (x - cc[0]) + (cc[0] - bb[0]) * (z - cc[2])) / d,
               w = ((cc[2] - a[2]) * (x - cc[0]) + (a[0] - cc[0]) * (z - cc[2])) / d, r = (flo_t) 1.0 - u - w;
-  if (u >= (flo_t) -1e-9 && w >= (flo_t) -1e-9 && r >= (flo_t) -1e-9) return *h = u * a[1] + w * bb[1] + r * cc[1], 1; }
+  if (u >= -(flo_t) 1e-9 && w >= -(flo_t) 1e-9 && r >= -(flo_t) 1e-9) return *h = u * a[1] + w * bb[1] + r * cc[1], 1; }
  return 0; }
 static bool dy_box(struct dbr const *b, flo_t const p[3], flo_t e, flo_t top) {
  for (int k = 0; k < 3; k++) if (!(b->lo[k] - e < p[k] && p[k] < b->hi[k] + e + (k == 1 ? top : (flo_t) 0.0))) return 0;
@@ -202,7 +202,7 @@ static bool dy_planes(struct dbr const *b, flo_t const p[3]) {
 // open air puts a point out, a solid buries it, a room carved where it is buried brings it in,
 // but one standing up out of the land is open, as it was before the land
 static void dy_point(struct day const *t, flo_t const p[3], flo_t w[3]) {
- flo_t o = 0, u = 0, past = 1, G = (flo_t) -1e9, h;
+ flo_t o = 0, u = 0, past = 1, G = -(flo_t) 1e9, h;
  for (uintptr_t j = t->v0; t->tall && j < t->nb; j++)
   if (t->b[j].kind & 4 && dy_land_y(t->b + j, p[0], p[2], &h)) G = G < h ? h : G;
  for (uintptr_t j = 0; j < t->nb; j++) {

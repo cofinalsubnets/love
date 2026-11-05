@@ -2,7 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow '(world mesh neon posix bough))
+(borrow '(world mesh neon posix bough gesture))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -126,7 +126,7 @@
        (walk 'px > -4.7 + body-r - 0.01) (walk 'px < -4.2)
        (brush-medium (rs 'sc 'brushes) [-4.85 2.0 1.6] = 0) (brush-medium (rs 'sc 'brushes) [-4.6 3.3 1.6] = 1)
        (up 'py = 0.5 + eye-h) (mag (up 'ph - 10.0 * pi / 180.0) < 1e-9) (mag (up 'th - pi / 2.0) < 1e-9)
-       (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (world-load "src/apps/lore/levels/station.l"))))
+       (has? pos "(start [0.0 0.0 1.0] 0.0 0.0)") (tablet? (world-load "src/apps/lore/levels/earth.l"))))
 ; a bin: solid at its foot, hollow up top and open on every side there, capped, a sign on each
 ; side; a window: glass between two rooms that stops a walk where its sill does not, and a lamp
 ; in the room within a room lights that room
@@ -311,7 +311,7 @@
    _ (lfall 0) _ (world-step ls 'jump) _ (lgo 3) lq (ls 'fv) lqy (ls 'py - eye-h)
    _ (lput 1.5 0.0 8.5) _ (lgo 2) _ (world-step ls 'jump) (lhead i) (? (i > 30 || ls 'fv = 0.0) i (: _ (lgo 1) (lhead (i + 1))))
    lh (lhead 0) lhy (ls 'py - eye-h) _ (world-step ls 'jump) lh2 (ls 'fv)
- (test (lc0 = ["land hard 0" "hop"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
+ (test (lc0 = ["land hard 0"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
        (lk1 = 4.4) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
 ; a body caught under something, as a landing may leave it, walks out away from it and not
 ; further in, nor along it
@@ -586,23 +586,51 @@
    sa (world-new 8 8 (world-read (sl + "(flow [0.5 0] (along 2 " + sd + ")))")) "" 'sc) ca (sa 'sheets 0 'pk 'cols)
  (test (amin (ca 3) = 16.0) (amax (ca 3) = 24.0) (amin (ca 4) = -4.0) (amax (ca 4) = 4.0)
        (has? (world-read (sl + "(along 'a " + sd + "))")) "(along s DRAPE)")))
-;; a brittle pane: a tap with it before the eye rings it as steel, a second breaks it, leaving
-;; its shards; one not brittle stays
-(: bw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
-   bp (world-read (bw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))")) bq (world-read (bw + "(window [1 0.5 -0.2] [3 2.5 0] t))"))
-   (tap l) (world-step (world-step (world-new 8 8 l "") 'tap) 'tap) (tapped l) (keys (peep (tap l) 'broke {}))
-   once (world-step (world-new 8 8 bp "") 'tap)
- (test (bp 'panes 0 'brittle = 1) (bq 'panes 0 'brittle = 0) (tapped bp = [0]) (tapped bq = ()) (#(peep (tap bp) 'shards ()) = 1) (#(peep (tap bq) 'shards ()) = 0)
-       (keys (peep once 'broke {}) = ()) (keys (peep once 'knocked {}) = [0]) (elem "land metal 1" (map (q \ q 0) (peep once 'sfx ())))
-       (has? (world-read (bw + "(brittle 3))")) "(brittle (window ..))")))
+;; on foot: a walk's steps sound as the floor does, a jump is silent and its landing heard, a
+;; sprint goes further and winds the body, unheard, and standing it eases
+(: gw "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 1] 0 0))"
+   (go st a n) (each ^n (_ \ ((a ? (world-step st a) st), pin st 'dt (1.0 / 30.0), world-move st)))
+   (cries st) (map cap (peep st 'sfx ()))
+   wk (world-new 8 8 (world-read gw) "") _ (go wk 'forward 60) wz (wk 'pz) wc (cries wk) wbob (peep wk 'wa 0.0) wsteps (filter (s \ snip s 0 5 = "step ") wc)
+   (firsts-of l) (rev >(rev l))
+   rn (world-new 8 8 (world-read gw) "") _ (go rn 'sprint 60) rz (rn 'pz) rpf (rn 'puff) _ (go rn 'sprint 300) rpf2 (rn 'puff)
+   rrate (rn 'bp) _ (go rn () 300) rest (rn 'puff) rb (rn 'wa)
+   jp (world-new 8 8 (world-read gw) "") _ (world-step jp 'jump) jc (cries jp)
+ (test (all (s \ snip s 0 10 = "step wood " && 48 <= s 10 < 54) wsteps) (2 < #(uniq (sort wsteps))) (all (p \ <p != >p) (zip >wsteps (firsts-of wsteps))) (0.0 < wbob)
+       (1.5 * (wz - 1.0) < rz - 1.0) (0.1 < rpf) (rpf < rpf2) (0.8 < rpf2)
+       (atom? (world-sound "gasp o2"))
+       (rest < 0.7 * rpf2) (rb < 0.001) (jc = ()) (1000 < #(world-sound "step wood 0" 0))
+       (1000 < #(world-sound "land grass 0" 0))))
+;; --sway swells from nothing as speed changes, and settles; a window's coarsest pixels take
+;; a body's sway as a slide of the picture, where its server can
+(: lq (\ n v (: st {'sway 1} _ (each ^n (i \ gesture-gait st (1.0 / 60.0) (i = 0 ? 0.0 v) 0)) (st 'lean)))
+   wb [0.01 0.02 0.03 0.04] sl {'scale 8 'win {'how 'x 'rd {}}} eb (mesh-sway sl wb 1.5 240) nb (mesh-sway {'scale 4 'win {'how 'x 'rd {}}} wb 1.5 240)
+ (test (lq 2 3.0 < 0.008) (0.012 < lq 10 3.0) (lq 90 3.0 < 0.001)
+       (eb = [0.0 0.0 0.0 0.0]) (5 < sl 'slide 0 < 15) (-40 < sl 'slide 1 < -30) (nb = wb)
+       (mesh-sway {'scale 8 'win 0} wb 1.5 240 = wb)))
+;; a foot makes no sound carried in a grav shaft, and does on its floor
+(: gs "(level \"t\" (room [0 0 0] [8 3 8]) (start [2 0 2] 0 0) (grav [1 0 3] [3 3 5] 'down))"
+   (stepping y) (: st (pins (world-new 8 8 (world-read gs) "") 'pz 3.5 'py (y + eye-h) 'sw 3.1)
+     _ (each ^4 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)))
+     (any (q \ snip (q 0) 0 5 = "step ") (peep st 'sfx ())))
+ (test (stepping 0.0) !(stepping 2.0)))
+;; a headstone stands, and is no grave
+(: hs (world-read "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) (headstone [2 0 3] 45 t))")
+ (test (#(hs 'brushes) > 1) (peep hs 'graves () = ())))
+;; a mirage: a pane still there to see, and a body walks through it; plain glass stops it
+(: mw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
+   (past w) (: st (world-new 8 8 (world-read (mw + w + ")")) "") (each ^90 (_ \ (world-step st 'forward, pin st 'dt (1.0 / 30.0), world-move st)), st 'pz))
+   ml (world-read (mw + "(mirage (window [1 0 1.9] [3 2.5 2] t)))"))
+ (test (ml 'panes 0 'mirage = 1) (#(ml 'panes) = 1)
+       (past "(mirage (window [1 0 1.9] [3 2.5 2] t))" > 2.2) (past "(window [1 0 1.9] [3 2.5 2] t)" < 1.9)
+       (has? (world-read (mw + "(mirage 3))")) "(mirage (window ..))")))
 ;; ..a lens: on the face toward its point its glass less 2^24, the only glass a beyond drape is
-;; seen through, the other face plain; its shards plain
+;; seen through, the other face plain
 (: lw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 180 0) "
-   bl (world-read (lw + "(brittle (lens [2 1 2] (window [1 0.5 -0.2] [3 2.5 0] t))))")) bn (world-read (lw + "(brittle (window [1 0.5 -0.2] [3 2.5 0] t)))"))
+   bl (world-read (lw + "(lens [2 1 2] (window [1 0.5 -0.2] [3 2.5 0] t)))")) bn (world-read (lw + "(window [1 0.5 -0.2] [3 2.5 0] t))"))
    gl (world-new 8 8 bl "") (ts s) (s 'sc 'panes 0 'pk 'tris) (gt s) (amin (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
    (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
  (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
-       (peep (<(peep (world-step (world-step gl 'tap) 'tap) 'shards ()) 'pk 'tris) 3 0 > -16777216)
        (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
 ;; ..a land: solid under its sheet and open over it, stood on where its rows put it, drawn
 ;; as a drape

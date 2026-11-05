@@ -94,12 +94,8 @@ nowit="297-frameaddr"
 
 case $tgt in
   thumb2) refuse="68-static-assert 161-enumwide" ;;
-  thumb1) refuse="67-varargs-double 88-varargs-overflow 97-muslrungs 68-static-assert 82-znvalue 85-aggval 100-complex 280-cxf-fuzz 101-vla 344-fixedregs 102-bigstruct 111-int128
-                  117-vastruct 129-sync 151-w128fuzz 314-u128union 161-enumwide 228-strictalign 266-vaarg-struct 338-farity" ;;
+  thumb1) refuse="68-static-assert 100-complex 280-cxf-fuzz 111-int128 129-sync 151-w128fuzz 314-u128union 161-enumwide" ;;
 esac
-
-# v6-m's double varargs need rt.c's soft-float, which is not linked here
-[ $tgt = thumb1 ] && hosted="$hosted 71-varargs-sysv"
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }
 

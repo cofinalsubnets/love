@@ -87,7 +87,7 @@
      _ (pins c 'why why 'mine (#why = 0))
      _ (hud-read c)
      {'show (\ w h (: _ (pins c 'rows h 'cols w) (hud-frame c)))
-      'step (\ n (hud-key c n))
+      'step (hud-key c)
       'over? (\ _ (c 'over))
       'tick (\ _ (: t (clock 0) b (c 'dirt) qw (k 'qwatch)
                     _ (? (c 'mine && 1000 < t - c 'polled) (: _ (pin c 'polled t) (hud-inbox c)) 0)

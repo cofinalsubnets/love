@@ -1,9 +1,9 @@
-; test/host/mitty.l -- mitty over real ptys: pty -> parser -> grid, replies home, panes,
+; test/host/pier.l -- pier over real ptys: pty -> parser -> grid, replies home, panes,
 ; stages, faces, the bar, the server. interactive berthing stays a live probe.
-; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/00-host.l test/host/mitty.l | out/love
+; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/00-host.l test/host/pier.l | out/love
 
 (borrow "src/apps/mitty/mooring.l")
-(borrow "src/apps/mitty/mitty.l")
+(borrow "src/apps/mitty/pier.l")
 (borrow "src/apps/mitty/wharf.l")
 (borrow "src/apps/mitty/limn.l")
 (borrow 'bytes)
@@ -57,10 +57,10 @@
   waitfor <md,
   close >md))
 
-; utf-8 round trip through full mitty on its own pty: ─ and é come back out the same
+; utf-8 round trip through full pier on its own pty: ─ and é come back out the same
  ; the octal escapes ride through two love readers before sh: hence \\\\
-(: md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
-           "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"]))"])
+(: md (tether ["out/love" "-l" "src/apps/mitty/pier.l"
+           "-e" "(: _ (borrow 'pier) (pier [\"sh\" \"-c\" \"printf 'x\\\\342\\\\224\\\\200y\\\\303\\\\251z'; sleep 1\"]))"])
  outb (slurp >md)
  st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (test (two? st)
@@ -68,7 +68,7 @@
        (has? outb "\xc3\xa9z"),
   close >md))
 
-; many panes on one wharf: mitty's entry needs a tty and blocks, so these drive its
+; many panes on one wharf: pier's entry needs a tty and blocks, so these drive its
 ; pieces directly. a pane is (box master pid)
 (: (mkhb r c argv)
     (: p0 (hopen argv r c)
@@ -135,7 +135,7 @@
        ('((1 0 0 10 21)) = hb2 'lay)
        (21 = gaze (scrof hb2 1) 2),
   hshut hb2 1,
-  test (() = hb2 'plan)                    ; the empty wharf ends mitty's swim
+  test (() = hb2 'plan)                    ; the empty wharf ends pier's swim
        (() = wharf-panes (hb2 'plan))
        (() = hb2 'focus),
   waitfor p1, waitfor p2,                 ; reap, or they outlive the file
@@ -145,7 +145,7 @@
 ; tick door paints on a yes, its last step shuts the pane
 (: (scrof hb id) (peep (hbox (hpane hb id)) () 0)
    keys {} ticks {}
-   sg (mitty-stage (w \ h \ ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
+   sg (pier-stage (w \ h \ ("\e[H\e[2J" + show w + "x" + show h + " k" + show (peep keys () 0) + " t" + show (peep ticks () 0)))
                    (c \ (pin keys () c))
                    (_ \ (113 = peep keys () 0)))
    (mkhb r c sg argv)
@@ -208,7 +208,7 @@
    _ (waitfor (hpid (hpane hb 1)))
    rows (hscreen-text (hpane hb 1))
    t0 (hclip-text hb)
-   st (hcopy hb)                            ; C-a [
+   st (hcopy hb)                            ; C-b [
    _ (hfeed hb 121, hfeed hb 121)           ; yy
    clip (peep (hb 'clip) () ())
    t1 (hclip-text hb)
@@ -230,7 +230,7 @@
    _ (hshut hb2 1)
    _ (waitfor p2)
    got {}
-   sg (mitty-stage (w \ h \ "\e[Hstage") (c \ 0) (_ \ 0))
+   sg (pier-stage (w \ h \ "\e[Hstage") (c \ 0) (_ \ 0))
    _ (pin sg 'paste (v \ (pin got () v)))
    hb3 (mkhb 10 20 (hopen-stage sg 10 20) ["sh" "-c" "sleep 30"])
    (pin (hb3 'clip) () ['lin ["a" "b"]],
@@ -255,8 +255,8 @@
          ("" = osclip "printf '\\033]52;c;?\\a'")))
 
 ; a stage over a real pty: frame out through the painter, keys in through edkey, q ends it
-(: md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
-             "-e" "(: _ (borrow 'mitty) b {} (mitty (mitty-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])
+(: md (tether ["out/love" "-l" "src/apps/mitty/pier.l"
+             "-e" "(: _ (borrow 'pier) b {} (pier (pier-stage (\\ w h (\"\\e[Hstage \" + show w)) (\\ c (pin b () c)) (\\ _ (= 113 (peep b () 0))))))"])
  _ (test (two? md))
  m >md
  _ (rest 1200)
@@ -267,14 +267,14 @@
   (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md)),
   close m))
 
-; C-a v over a real pty: the prefix lives in the key pump. a fresh pty reports 0x0, so
-; mitty falls back to 24x80: 39 + bar + 40
-(: md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
-             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"sleep 5\"]))"])
+; C-b v over a real pty: the prefix lives in the key pump. a fresh pty reports 0x0, so
+; pier falls back to 24x80: 39 + bar + 40
+(: md (tether ["out/love" "-l" "src/apps/mitty/pier.l"
+             "-e" "(: _ (borrow 'pier) (pier [\"sh\" \"-c\" \"sleep 5\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 1200)
- _ (put m 1, put m 118, flush m)           ; C-a v: split beside
+ _ (put m 2, put m 118, flush m)           ; C-b v: split beside
  outb (slurp m)
  (test (has? outb "\e[1;40H")              ; the bar's column, 39 zero-based
        (has? outb limn-down)                   ; drawn with the box glyph
@@ -287,11 +287,11 @@
 (: _ (setenv "BK" ("printf 'TOPMARK" + cats (map (_ \ "\\n") (jot 30)) + "'; stty raw -echo; "
                  + "printf '\\033[?1000h\\033[?1006h\\033[?2004h'; r=$(dd bs=1 count=33 2>/dev/null); "
                  + "printf '%s' \"$r\" | cat -v; sleep 1"))
- md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
-             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/pier.l"
+             "-e" "(: _ (borrow 'pier) (pier [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
- ; read until mitty asks the outer terminal for the mouse, then send
+ ; read until pier asks the outer terminal for the mouse, then send
  (upto acc) (? (has? acc "\e[?1000h") acc
                (see m @ c (c < 0 ? acc
                              (: bf (cask 8192) n (swig m bf)
@@ -311,8 +311,8 @@
 (: (count h n i k) (i + #n < #h + 1 ? (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BK" ("sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; "
                  + "printf '\\033[5;1Hzz'; sleep 1; printf '\\033[2J\\033[H\\033P0;1;0q#0;2;0;100;0#0!7~\\033\\\\'; sleep 2"))
- md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
-             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/pier.l"
+             "-e" "(: _ (borrow 'pier) (pier [\"sh\" \"-c\" \"eval \\\"$BK\\\"\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 500)
@@ -330,8 +330,8 @@
 ; and as sixels where DA says 4: laid once, not again when the child writes elsewhere
 (: (count h n i k) (i + #n < #h + 1 ? (count h n (i + 1) (n = snip h i (i + #n) ? (k + 1) k)) k)
  _ (setenv "BS" "sleep 1; printf '\\033P0;1;0q#0;2;100;0;0#0!10~-#0!10~\\033\\\\'; sleep 1; printf '\\033[5;1Hzz'; sleep 1")
- md (tether ["out/love" "-l" "src/apps/mitty/mitty.l"
-             "-e" "(: _ (borrow 'mitty) (mitty [\"sh\" \"-c\" \"eval \\\"$BS\\\"\"]))"])
+ md (tether ["out/love" "-l" "src/apps/mitty/pier.l"
+             "-e" "(: _ (borrow 'pier) (pier [\"sh\" \"-c\" \"eval \\\"$BS\\\"\"]))"])
  _ (test (two? md))
  m >md
  _ (rest 500)
@@ -346,9 +346,9 @@
   close m))
 
 ; faces: each its own plan over one table of panes; an emptied face hands over the glass
-(: (dsg tag) (mitty-stage (\ w h tag) (\ c 0) (\ _ 0))
+(: (dsg tag) (pier-stage (\ w h tag) (\ c 0) (\ _ 0))
    n {0}
-   hb (mitty-up 10 20)
+   hb (pier-up 10 20)
    _ (pin hb 'more (_ \ (pin n () (peep n () 0 + 1), hopen-stage (dsg ("pane" + show (peep n () 0))) 1 1)))
    _ (hberth hb 'stack 50 (hb 'more ()))
    _ (hsplit hb 'beside)
@@ -365,21 +365,21 @@
    _ (hshut hb 2)                                   ; face 0 emptied: face 5 takes the glass
    (test (5 = hb 'face) (() = hfaces hb) ([4] = wharf-panes (hb 'plan)) (4 = hb 'focus)))
 
-; the clip goes out through osc 52 once when it changes, and mitty is a verb
-(: hb (mitty-up 4 10)
-   _ (hberth hb 'stack 50 (hopen-stage (mitty-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
+; the clip goes out through osc 52 once when it changes, and pier is a verb
+(: hb (pier-up 4 10)
+   _ (hberth hb 'stack 50 (hopen-stage (pier-stage (\ w h "x") (\ c 0) (\ _ 0)) 1 1))
    _ (test (["" "Zg==" "Zm8=" "Zm9v" "YQpi/w=="] = map (s \ b64e s 1) ["" "f" "fo" "foo" "a\nb\xff"])
            !(has? (hframe hb) "\e]52"))
    _ (pin (hb 'clip) () ['chr "hi"])
    (test (has? (hframe hb) "\e]52;c;aGk=\a")
          !(has? (hframe hb) "\e]52")
-         !(() = peep (cite 'verbs 'tab) 'mitty ())))
+         !(() = peep (cite 'verbs 'tab) 'pier ())))
 
 ; the bar: the bottom row, the shown face lit; a click on a label shows that face; names off argv
-(: hb (mitty-up 10 40)
+(: hb (pier-up 10 40)
    _ (pins hb 'bar 1 'barx (_ \ "XTRA"))
-   _ (pin hb 'more (_ \ hopen-stage (mitty-stage (\ w h "s") (\ c 0) (\ _ 0)) 1 1))
-   _ (hberth hb 'stack 50 (hopen-stage (pin (mitty-stage (\ w h "s") (\ c 0) (\ _ 0)) 'name "TOPPANE") 1 1))
+   _ (pin hb 'more (_ \ hopen-stage (pier-stage (\ w h "s") (\ c 0) (\ _ 0)) 1 1))
+   _ (hberth hb 'stack 50 (hopen-stage (pin (pier-stage (\ w h "s") (\ c 0) (\ _ 0)) 'name "TOPPANE") 1 1))
    _ (hfresh hb)
    _ (hfresh hb)                                     ; faces 0 1 2, 2 shown
    _ (hbartick hb)
@@ -396,8 +396,8 @@
          ("lush" = hname-of ["/x/out/love" "lush"]) ("vi" = hname-of ["/usr/bin/vi" "f"]) ("love" = hname-of ["love"])))
 
 ; the picker narrows as typed; enter becomes what its item opens; no pane, or esc, closes it
-(: (stg nm) (pin (mitty-stage (\ w h nm) (\ c 0) (\ _ 0)) 'name nm)
-   hb (mitty-up 12 40)
+(: (stg nm) (pin (pier-stage (\ w h nm) (\ c 0) (\ _ 0)) 'name nm)
+   hb (pier-up 12 40)
    _ (hberth hb 'stack 50 (hopen-stage (stg "base") 1 1))
    went {0}
    items [["alpha" (_ \ hopen-stage (stg "ALPHA") 1 1)]
@@ -424,8 +424,8 @@
          ([1 2] = sort (wharf-panes (hb 'plan)))))
 
 ; a bar dragged by the mouse; with 'mouse on, drags are asked for even of a pane that wants none
-(: (stg nm) (mitty-stage (\ w h nm) (\ c 0) (\ _ 0))
-   hb (mitty-up 10 40)
+(: (stg nm) (pier-stage (\ w h nm) (\ c 0) (\ _ 0))
+   hb (pier-up 10 40)
    _ (pin hb 'mouse 1)
    _ (hberth hb 'stack 50 (hopen-stage (stg "a") 1 1))
    _ (hberth hb 'beside 50 (hopen-stage (stg "b") 1 1))
@@ -445,7 +445,7 @@
          ("\e[?1002h" = hmice hb 0)))
 
 ; the shell's bar text: the hive's live cards only, and a queue's rows and head
-(: d ("out/.mitty-bar-" + show (getpid 0))
+(: d ("out/.pier-bar-" + show (getpid 0))
    _ (hark ["sh" "-c" ("rm -rf " + d + "; mkdir -p " + d + "/hive/live " + d + "/hive/dead; "
                        + "printf 'pid " + show (getpid 0) + "\\nstate idle\\n' > " + d + "/hive/live/card; "
                        + "printf 'pid 999999\\n' > " + d + "/hive/dead/card; "
@@ -454,9 +454,9 @@
                        + "git update-ref refs/queue/main $h")])
    _ (setenv "BEE_HIVE" (d + "/hive"))
    _ (setenv "GIT_DIR" (d + "/repo/.git"))
-   hv (mitty-hive 0)
-   qs (mitty-queues 0)
-   bx (mitty-barx 0)
+   hv (pier-hive 0)
+   qs (pier-queues 0)
+   bx (pier-barx 0)
    x1 (bx ())
    _ (setenv "BEE_HIVE" (d + "/none"))
    x2 (bx ())                                                ; within ten seconds: as it was
@@ -468,40 +468,107 @@
          ("hive 1 · main 2 rows, alice waiting" = x1)
          (x1 = x2)))
 
-; a pane never attaches to the mitty it is in (MITTY names it): refused, nothing started
-(: d ("out/.mitty-in-" + show (getpid 0))
-   _ (setenv "MITTY_RUN" d)
-   _ (setenv "MITTY" (mitty-sock "zz"))
-   r (mitty-main ["-n" "zz"])
-   _ (setenv "MITTY" "") _ (setenv "MITTY_RUN" "")
+; a pane never attaches to the pier it is in (PIER names it): refused, nothing started
+(: d ("out/.pier-in-" + show (getpid 0))
+   _ (setenv "PIER_RUN" d)
+   _ (setenv "PIER" (pier-sock "zz"))
+   r (pier-main ["new" "-s" "zz"])
+   _ (setenv "PIER" "") _ (setenv "PIER_RUN" "")
    (test (1 = r) !(two? (stat (d + "/zz.sock")))))
 
-; the server outlives its clients; the next client sees the screen; the last exit ends it
-(: d ("out/.mitty-srv-" + show (getpid 0))
+; tmux's keys after the prefix: % and " split, arrows steer, o goes round, the prefix itself is literal
+(: pi (pipe 0) kr (fdopen <pi) kw (fdopen >pi)
+   hb (pier-up 10 40)
+   (stg _) (hopen-stage (pier-stage (\ w h "s") (\ c 0) (\ _ 0)) 1 1)
+   _ (pins hb 'in kr 'more stg)
+   _ (hberth hb 'stack 50 (stg 0))
+   (key s) (say kw s, flush kw, hkey hb)
+   a (hb 'focus)
+   _ (key "%")
+   b (hb 'focus)
+   beside (hb 'plan 0)
+   _ (key "\e[D")
+   left (hb 'focus)
+   _ (key "\e[C")
+   right (hb 'focus)
+   _ (key "\"")
+   c (hb 'focus)
+   _ (key "o") round (hb 'focus)
+   _ (setenv "PIER_PREFIX" "C-a") ha (pier-up 2 20) _ (setenv "PIER_PREFIX" "")
+   (close kw, close kr,
+    test (a != b) ('beside = beside)
+         (a = left) (b = right)
+         (c != b) (3 = #(wharf-panes (hb 'plan)))
+         (a = round)                                 ; past the last, to the first
+         (2 = hb 'prefix) (1 = ha 'prefix)))
+
+; tmux's commands on a server: new -d, ls, a duplicate refused, split-window and select-pane from
+; outside, ls leaving the attached client be, attach to none refused, kill-session ending it
+(: d ("out/.pier-cmd-" + show (getpid 0))
    _ (hark ["rm" "-rf" d])
-   _ (setenv "MITTY_RUN" d)
+   _ (setenv "PIER_RUN" d) _ (setenv "PIER" "")
+   (p as) (hark ("out/love" . "pier" . as))
+   (rd s ms) (: (go acc t) (? (t <= 0) acc
+                               (cue? s) (see s @ b (b < 0 ? acc (go (acc + string b) t)))
+                               (rest 50, go acc (t - 50)))
+                (go "" ms))
+   r0 (p ["new" "-d" "-s" "c"])
+   ls0 (p ["ls"])
+   dup (p ["new" "-d" "-s" "c"])
+   none (p ["attach" "-t" "nosuch"])
+   s (connect ['unix (d + "/c.sock")])
+   _ (say s (pier-size 12 60), flush s)
+   _ (rd s 800)
+   sp (p ["split-window" "-h" "-t" "c" "sh" "-c" "echo SPL''IT; read x; echo GOT$x; sleep 20"])
+   o1 (rd s 800)
+   _ (say s "zz\r", flush s)
+   o2 (rd s 800)
+   sel (p ["select-pane" "-L" "-t" "c"])
+   _ (rest 100)
+   _ (p ["ls"])                                      ; asks, and the glass stays
+   _ (say s "echo FIR''ST\r", flush s)
+   o3 (rd s 800)
+   bad (p ["select-pane" "-t" "c"])
+   kl (p ["kill-session" "-t" "c"])
+   o4 (rd s 1500)
+   _ (rest 300)
+   gone !(two? (stat (d + "/c.sock")))
+   _ (close s) _ (setenv "PIER_RUN" "") _ (hark ["rm" "-rf" d])
+   (test (0 = <r0) (has? >ls0 "c")
+         (0 != <dup) (0 != <none)
+         (0 = <sp) (has? o1 "SPLIT")
+         (has? o2 "GOTzz")
+         (0 = <sel) (has? o3 "FIRST")
+         (0 != <bad)
+         (0 = <kl) (has? o4 "\e[?1049l")
+         gone))
+
+; the server outlives its clients; the next client sees the screen; the last exit ends it
+(: d ("out/.pier-srv-" + show (getpid 0))
+   _ (hark ["rm" "-rf" d])
+   _ (setenv "PIER_RUN" d)
    path (d + "/s.sock")
-   md (tether ["out/love" "mitty" "--serve" "s"])
+   md (tether ["out/love" "pier" "--serve" "s"])
    (rd s ms) (: (go acc t) (? (t <= 0) acc
                                (cue? s) (see s @ b (b < 0 ? acc (go (acc + string b) t)))
                                (: _ (rest 50) (go acc (t - 50))))
                 (go "" ms))
    (up n) (? (n = 0) () (: s (connect ['unix path]) (hot? s ? s (: _ (rest 50) (up (n - 1))))))
    s1 (up 60)
-   _ (say s1 (mitty-size 12 50), flush s1)
+   _ (say s1 (pier-size 12 50), flush s1)
    o1 (rd s1 1500)
    _ (say s1 "echo HAR''BOUR\r", flush s1)
    o1b (rd s1 1500)
    _ (close s1)
    _ (rest 300)
    s2 (up 20)
-   _ (say s2 (mitty-size 12 50), flush s2)
+   _ (say s2 (pier-size 12 50), flush s2)
    o2 (rd s2 1500)
    _ (say s2 "exit\r", flush s2)
    o3 (rd s2 4000)
    _ (rest 300)
    gone !(two? (stat path))
-   _ (setenv "MITTY_RUN" "")
+   _ (setenv "PIER_RUN" "")
    _ (hark ["rm" "-rf" d])
    (test (hot? s1) (has? o1 "\e[?1049h")
          (has? o1b "HARBOUR")
@@ -512,4 +579,4 @@
     close >md))
 
 (test_fin ())
-(puts "mitty: ok")
+(puts "pier: ok")

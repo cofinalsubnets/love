@@ -15,7 +15,7 @@ static int gf_open(struct gf *g, const uint8_t *s, uintptr_t n, intptr_t o) {
  g->s = s, g->n = n;
  if (n < 13 || memcmp(s, "GIF8", 4)) return 1;
  g->sw = ld16le(s + 6), g->sh = ld16le(s + 8);
- if (!g->sw || !g->sh || (uintptr_t) g->sw * (uintptr_t) g->sh > (uintptr_t) 1 << 24) return 1;
+ if (!g->sw || !g->sh || (uintptr_t) g->sw * (uintptr_t) g->sh > (uintptr_t) 1 << 28) return 1;
  if (o < 13 || (uintptr_t) o + 10 > n || s[o] != 0x2c) return 2;
  const uint8_t *d = s + o;
  g->o = (uintptr_t) o, g->fx = ld16le(d + 1), g->fy = ld16le(d + 3);

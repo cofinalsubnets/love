@@ -2,7 +2,7 @@
 ; run: cat test/00-init.l test/host/seek.l | out/love
 (borrow '(seek help posix))
 
-(: (sk-keys! d s) (each (map (i \ s i) ^#s) (c \ seek-key d c))
+(: (sk-keys! d s) (each (map s ^#s) (seek-key d))
    items ["alpha beta" "beta gamma" "Gamma delta" "alphabet"]
    d (seek-new items (x \ x) (x \ "> " + x) "t")
    _ (test (d 'n = 4) (d 'sel = 0) (d 'q = ""))
@@ -45,7 +45,7 @@
    _ (test (seek-files "." = ["a.l" "b/bin" "b/c.l"]))
    st ((cite 'vi 'vi-open) "")
    fc ((cite 'vi 'vi-face) st {})
-   (vk s) (each (map (i \ s i) ^#s) (c \ (fc 1) c))
+   (vk s) (each (map s ^#s) (c \ (fc 1) c))
    _ (vk ":find c\r")
    _ (test (!(nil? (st 'seek))) ((st 'seek) 'n = 1) (has? ((fc 0) 60 10) "b/c.l"))
    _ ((fc 1) 13, test (() = st 'seek) (st 'file = "b/c.l") (st 'lines = ["stage three"]))

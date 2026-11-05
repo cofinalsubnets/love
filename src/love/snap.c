@@ -159,7 +159,7 @@ static intptr_t image_fn_resolve(intptr_t j) {
 // the out-of-pool immortals; NULL is met in a mid-eval dump's undressed rbuf/wbuf. every port
 // vtable belongs here: a port's head carries its vt
 static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &love_stdin, (word) &love_stdout, (word) &love_stderr, 0, map_gap,
- (word) &love_fd_port_vt, (word) &to_vt, (word) &closed_vt, (word) &ci_vt,
+ (word) &love_fd_port_vt, (word) &to_vt, (word) &closed_vt, (word) &ci_vt, (word) &state_vt,
  (word) yield_c };   // g->ip's parked value
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
@@ -167,7 +167,7 @@ static intptr_t image_imm_index(word v) {
 // the buffer codec: save compacts and serializes {header, dictionary, token stream}; load
 // validates, expands, decodes in place. a mismatched buffer -> NULL, a normal boot
 /* bump on any wire format change, renumbering image_immortals included */
-#define ImageMagic 0x38304f4e5349411aULL
+#define ImageMagic 0x39304f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)

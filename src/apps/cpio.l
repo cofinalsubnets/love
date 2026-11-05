@@ -266,7 +266,7 @@
       (: src <sc   bad {0 0}
          w (cpio-walk src (e \ b \ (: _ (pin e 'nom (cpioc-strip (peep e 'nom "")))
                                      _ (cpioc-tell t (peep e 'nom ""))
-                                     r (cpio-put cpioc-moan "" e (peep t 'u 0) (q \ tar-body src b (x \ say q x)))
+                                     r (cpio-put cpioc-moan "" e (peep t 'u 0) (q \ tar-body src b (say q)))
                                      (r = 'refused && pin bad 0 1,
                                       (r = 'fail ? 'stop 1)))))
          (!(two? w || w = 'stop) ? (cpioc-moan "premature end of archive", 1)

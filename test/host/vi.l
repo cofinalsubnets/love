@@ -1,4 +1,4 @@
-; test/host/vi.l -- vi on a mitty, over a real pty
+; test/host/vi.l -- vi on a pier, over a real pty
 ; the engine's laws are test/law/vi.l; this drives panes: :vs, :sp, the prefix, :q
 ;   cat test/00-init.l test/host/vi.l | out/love
 
@@ -21,14 +21,14 @@
    b1 (say! m "ihello\e")
    b2 (say! m ":vs\r")                     ; 39 + bar + 40
    b3 (say! m "isecond\e")
-   b4 (say! m "\x01h")                     ; C-a h
+   b4 (say! m "\x02h")                     ; C-b h
    b5 (say! m "Aagain\e")
    b6 (say! m ":sp\r")                     ; a third, under the first
    b7 (say! m ":q\r")
-   ba (say! m "yy\x01l")                    ; the first line yanked, over to the second pane
+   ba (say! m "yy\x02l")                    ; the first line yanked, over to the second pane
    bb (say! m "p")                          ; one register across panes
-   bc (say! m "\x01]")                      ; C-a ]: the mitty's put
-   b8 (say! m "\x01h:q!\r")                ; the first, dirty
+   bc (say! m "\x02]")                      ; C-b ]: the pier's put
+   b8 (say! m "\x02h:q!\r")                ; the first, dirty
    b9 (say! m ":q!\r")                     ; the last pane, and vi
    st (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 2, wf p))) (wf <md))
  (test (has? b0 "\e[?1049h")

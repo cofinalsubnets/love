@@ -41,7 +41,7 @@
 
  ; --- devirt: collect +/* sites whose operands are statically numeric ---
  (sites env e) (? (atom? e) 0
-   (: h <e sub (catmap (s \ sites env s) >e)
+   (: h <e sub (catmap (sites env) >e)
       ((h = '+ || h = '*) && num? (kindof env <>e) && num? (kindof env <>>e) ? (e . sub) sub)))
 
  ; --- report ---

@@ -647,7 +647,7 @@
           (: t (os-slurp (peep st "-in" ()))
              (? !(string? t) (say err ("base64: cannot open " + st "-in" + "\n"), 1)
                 (: v (? (st 'd)
-                        (: s (string (filter (c \ !(elem c [9 10 13 32])) (map (i \ t i) ^#t)))
+                        (: s (string (filter (c \ !(elem c [9 10 13 32])) (map t ^#t)))
                            (ubdec ub64set 6 s @ [_ b] b ()))
                         (: e (ubenc ub64set 6 t) (? (st 'a) e (ubwrap 64 e))))
                    (? !(string? v) (say err "base64: bad base64 decode\n", 1)

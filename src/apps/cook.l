@@ -832,7 +832,7 @@
                   'xassign ((on ? (assign1 as (r1 c) (r2 c) (r3 c) 0,
                                    xport as (expand (r1 c) as 0)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  'xname   ((on ? (each (split-ws (expand (r1 c) as 0)) (n \ xport as n)) 0),
+                  'xname   ((on ? (each (split-ws (expand (r1 c) as 0)) (xport as)) 0),
                             loop rest (flushr cur rules) 0 cond)
                   'inc    (on ? (catmap (f \ (mklist as f, file-lines f)) (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))

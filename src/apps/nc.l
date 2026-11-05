@@ -100,7 +100,7 @@
                   (c = -1 ? 0
                      (crlf (unsee in c, chug in) @ b
                         (dump 62 b,
-                         paced (x \ dsend p to x) b,
+                         paced (dsend p to) b,
                          pin seen 0 (clock 0),
                          dup p to))))
     (dwrite d) (dump 60 d, paced (x \ (say out x, flush out)) d, pin seen 0 (clock 0))

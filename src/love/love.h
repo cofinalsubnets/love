@@ -453,7 +453,7 @@ intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t);
 uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t);
 intptr_t port_fd(word);                         // the fd under a love port, or -1
 uintptr_t love_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
-extern struct port_vt const to_vt, closed_vt, ci_vt;
+extern struct port_vt const to_vt, closed_vt, ci_vt, state_vt;
 // poll(2)'s struct pollfd, so the host polls the block directly (main.c static-asserts it)
 struct wait_fd { int fd; short events, revents; };
 
@@ -779,6 +779,13 @@ static love_inline struct str *bytes_of(word x) { return caskp(x) ? cask(x)->str
 static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str : NULL; }
 // a cask's bytes, 8-aligned to hold a C state, and their count; NULL for anything else
 uint8_t *cask_bytes(word x, uintptr_t *n);
+// a state: a port with no door, holding a nif's bytes. only the nifs that made it read or write them
+struct state { struct io io; struct str *str; };
+static love_inline struct str *state_str(word x) {
+ return evenp(x) && cell(x)->ap == lvm_port_io && ((struct io*) x)->vt == &state_vt ? ((struct state*) x)->str : NULL; }
+static love_inline uint8_t *state_bytes(word x, uintptr_t *n) {
+ struct str *s = state_str(x);
+ return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
 
 // --- numbers ---
 #define isnum(x) (charmp(x) || gemp(x) || bigp(x))
@@ -875,10 +882,18 @@ static love_inline flo_t love_trunc(flo_t x) {
  if (x != x) return x;
  flo_t m = x < 0 ? -x : x;
 #if Bits == 32
- if (m < (flo_t) 2147483648.0) return (flo_t) (int32_t) x;   // a word's: int64's may go through double
-#endif
+ return m < (flo_t) 8388608.0 ? (flo_t) (int32_t) x : x;     // from 2^23 a float is whole
+#else
  if (m > (flo_t) 9.22e18) return x;
- return (flo_t) (int64_t) x; }
+ return (flo_t) (int64_t) x;
+#endif
+}
+// a float to int64: on a 32-bit word that goes through double, so a word's take the short way
+static love_noinline __attribute__((unused)) int64_t flo_i64(flo_t x) {
+#if Bits == 32
+ if (x >= -(flo_t) 2147483648.0 && x < (flo_t) 2147483648.0) return (int32_t) x;
+#endif
+ return (int64_t) x; }
 flo_t love_fmod(flo_t a, flo_t b);
 // the math lvms' function argument, in g->b
 typedef flo_t (*flo1)(flo_t);
@@ -1049,6 +1064,7 @@ static love_inline union u *tag_head(struct tag *t) {
 // a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
 // state into; NULL when the room was refused (*gp is then not ok)
 union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
+union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
 static love_inline word *gap(struct g *g, word **top) {

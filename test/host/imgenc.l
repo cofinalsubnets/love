@@ -82,4 +82,11 @@
     hark ["rm" "-rf" dir],
     0))
 
+; the screen limit is 2^28 pixels: a small image on a screen past 2^24 lays, past 2^28 is refused
+(: e (gif-encode 2 2 (string (cask 16)))
+   (screen w h) (cask #e @ c (pour c 0 e 0 #e, pin c 6 (w & 255), pin c 7 (w >> 8), pin c 8 (h & 255), pin c 9 (h >> 8), string c))
+   _ (test (gif-frames (screen 16385 16384) 1 = "too big")
+           (gif-frames (screen 4097 4097) 1 @ r (two? r && r 0 = 4097 && #(r 2 0 0) = 4 * 4097 * 4097)))
+   0)
+
 (test_fin (), puts "imgenc: ok", putc 10, 0)

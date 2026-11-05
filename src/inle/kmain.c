@@ -48,14 +48,16 @@ static struct {
 // snap ask for history scroll. a paste streams through q (pasting, pbr, pprev); a press anchors
 // a selection (anchor, tp, clicks; at the cell). a window holding the paper (hold) takes the
 // pointer on pq/pqh/pqt and hears the paper's size (sw, sh); grabbed, it hears a pointer of
-// its own (vx, vy) that the real one's steps move, from its last place (lx, ly; lon once known)
+// its own (vx, vy) that the real one's steps move, from its last place (lx, ly; lon once known).
+// a game with its own mouse (mouse) hears its motion across (mdx) and its buttons (mb)
 static struct { uint8_t g, q[64], qh, qt; uint16_t lost;
                 uint8_t raw, r[64], rh, rt;
                 int16_t peer; uint8_t snap;          // shift+pgup/pgdn asks, a key snaps back
                 uint8_t pasting, pbr, pprev, clicks;
                 intptr_t anchor; uint64_t tp; uint32_t at;
                 uint8_t hold, pqh, pqt; uint16_t pq[16][4], sw, sh;
-                uint8_t grab, lon; uint16_t vx, vy, lx, ly; } kkb;
+                uint8_t grab, lon; uint16_t vx, vy, lx, ly;
+                uint8_t mouse, mb; int32_t mdx; } kkb;
 // k_uart feeds the same queue; an interrupt cannot wait, so a drop is counted, saturating
 void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 63;
@@ -171,6 +173,13 @@ static void k_aim(uint32_t *how, uint32_t *y, uint32_t *x) {
 // a move once a cell: the mouse report if asked (cb_mouse), else (or with shift) the left
 // button selects (a second, third quick press the word, the line), the wheel scrolls
 void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
+  if (kkb.mouse) {
+    uint32_t const btn = b & ~28u;
+    if (how == 3) kkb.mdx += (int16_t) x;
+    else if (how < 2 && btn < 3) {
+      uint8_t const bit = btn == 0 ? 1 : btn == 2 ? 2 : 4;   // doom's order: left, right, middle
+      kkb.mb = how ? kkb.mb & ~bit : kkb.mb | bit; }
+    return; }
   if (kkb.hold) {
     if (kkb.grab) k_aim(&how, &y, &x);
     if (how > 2) return;
@@ -422,6 +431,9 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 #define kb_code_end 79
 #define kb_code_pgup 73
 #define kb_code_pgdn 81
+// a game's own mouse: the seat locks its pointer while armed
+void k_mouse_arm(int on) { kkb.mouse = on != 0, kkb.mb = 0, kkb.mdx = 0, k_hold_out(on != 0); }
+int k_mouse_take(int *dx) { k_kb_poll(); *dx = kkb.mdx, kkb.mdx = 0; return kkb.mb; }
 // a code is the PS/2 byte, an 0xe0 prefix folded into 0x100 on the next (bit 7 the break)
 void k_scan_arm(int on) { kkb.raw = on ? 1 : 0, kkb.rh = kkb.rt = 0; }
 // a seat handed its codes asks before leaving a lane full that nothing would empty
@@ -1045,7 +1057,7 @@ static void pipe_wclose(int fd) {
   k_row_zero(fd);
   if (p) p->wrefs--, pipe_free(p); }
 
-// the pty: master, slave and signal rows over one k_pty. the master (a mitty pane) writes keys
+// the pty: master, slave and signal rows over one k_pty. the master (a pier pane) writes keys
 // through the line discipline into in and reads out; the slave the other way, \n as \r\n under
 // opost. ^C ^\ ^Z put a signal on the signal row for the tethering task to answer with still.
 // cooked, a read takes at most one whole line, ^D on an empty one the end; raw as the host's
@@ -2289,7 +2301,7 @@ void kmain(void) {
   }
   // the crew off the registry's miss, every boot: the load is idempotent, its source row the guard
   r = evals_(r, "((cite 'verbs 'fills) crewload)");
-  // the program word dispatches off the registry. an empty line is a mitty, lush in its
+  // the program word dispatches off the registry. an empty line is a pier, lush in its
   // first pane; once that ends or fails, the console shell
   r = evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = evals_(r,
@@ -2303,7 +2315,7 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = evals_(r,
-   "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
+   "(: pr (k-prog (. \"pier\" (. \"--here\" ())))"
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare's face on serial before reset

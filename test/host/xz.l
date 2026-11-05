@@ -41,4 +41,11 @@
  ; the crc64 sits behind the data, ahead of the index (12 bytes here) and the footer (12)
  (<(xzt-pull (xzt-flip xzt-a (#xzt-a - 28)) 64) = 'check))
 
+; a refused chunk ends the state; no flipped byte of a container reads as the whole does
+(: st (lzma2-new 65536)
+   _ (test (lzma2-chunk st "\xc0\0\0\0\x01\xe0x" = ()) (lzma2-chunk st "\x01\0\0a" = ()) (kind st = 'port))
+   (go i) (? (#xzt-a <= i) 1 (<(xz-unpack (xzt-flip xzt-a i)) = 1) 0 (go (i + 1)))
+   _ (test (go 0))
+   0)
+
 (test_fin (), puts "xz: ok -- every cut of a container reads as the whole does\n", 0)

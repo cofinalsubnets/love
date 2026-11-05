@@ -94,7 +94,12 @@
 (test
   ("cycle \(esc-c) of \(#esc-l)" = "cycle 7 of 3")
   ("\(esc-c - 1)\(esc-c + 1)" = "68")
-  ("a \("b") c" = "a b c")                 ("\(quote q) \(esc-l)" = "q (1 2 3)")
+  ("a \("b") c" = "a b c")                 ("\(quote q) \(show esc-l)" = "q (1 2 3)")
+  ("<\(())>" = "<>")                      ("a\([104 105])b" = "ahib")
+  ("\([0 255])" = string [0 255])         ("\(chars "hi")" = "hi")
+  ("\([300])" = string 300)                ("\([1.5])" = "")
+  ("\([[104]])" = "")                      ("\(quote (a 104 b))" = "h")
+  ("\(["hi" "yo"])" = "")                  (string [104 'a 105] = string [104] + string [105])
   ("n \("in \(esc-c)") m" = "n in 7 m")    ("\\(x)" = "\\" + "(x)")
   ((sound "\"a \\(x) b\"") = [['weave ['list "a " '(x) " b"]]])
   ((sound "\"\\(#l) \\(# l)\"") = [['weave ['list (cap (sound "(#l)")) " " '(# l)]]])
