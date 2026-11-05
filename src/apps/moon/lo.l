@@ -852,7 +852,7 @@
    (locall g env fh as)
     (fh @ (['var nm] && bad? (lovar g env nm) && starts? nm "__builtin_") (lobi g env nm as)
           (['var nm] && bad? (lovar g env nm) && (two? (atomop nm) || elem nm '("__sync_lock_test_and_set" "__sync_lock_release")))
-           (v6m? g ? (lono g ['atomic nm]) (loat g env nm as))
+           (loat g env nm as)
           (['var nm] && bad? (lovar g env nm) && g 'fns nm)
            (g 'sigs nm @
               ; a call off its prototype's count goes to the old path, which says so
@@ -1013,7 +1013,7 @@
                  fa (mo0 \ (mo0 = 0 || x86? g ? () [(fx () () (afence g))]))
                  fb (mo0 \ (mo0 = 5 && !(x86? g) ? [(fx () () (afence g))]))
                  (? (ilp32? g && w = 8) (lono g ['atomic pt])
-                    (elem kind '(rmw cas vcas bcas tas) && !(elem (kind = 'tas ? 1 w) (awidths g))) (lono g ['atomic pt])
+                    (elem kind '(rmw cas vcas bcas tas lock) && !(elem (kind = 'tas ? 1 w) (awidths g))) (lono g ['atomic pt])
                     (kind = 'lock)
                      (? (nm = "__sync_lock_release")
                          (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
