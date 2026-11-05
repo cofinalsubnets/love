@@ -355,12 +355,14 @@
                             ['g lbl ty] (lomk g @ t ['a ['long t [['la t lbl]]] ty 0])
                             (lono g ['var nm]))
          ['deref p]
-          (lox g env p @ [['ptr pt] r fs] ['a [['ptr pt] r fs] pt 0] 'bad 'bad (_ _ _) (lono g 'deref))
+          (lox g env p @ [['ptr pt] r fs] ['a [['ptr pt] r fs] pt 0]
+                       [['ptr pt a] r fs] (loal g [['ptr pt] r fs] pt 0 a)
+                       'bad 'bad (_ _ _) (lono g 'deref))
          ['dot base fld]
           (lolv g env base @ ['a av ty off]
                               (fmem g ty fld @ 'bad (lono g ['member fld])
-                                               ([o bt] && bitf? bt) (? (bfwide? g bt) (lono g 'bitfield) ['b av bt (off + o)])
-                                               [o mt] ['a av mt (off + o)])
+                                               ([o bt] && bitf? bt) (? (bfwide? g bt) (lono g 'bitfield) ['b av bt (off + o) (lobfa g bt (loma g ty o))])
+                                               [o mt] (loal g av mt (off + o) (loma g ty o)))
                              'bad 'bad
                              _ (lono g 'dotbase))
          ; a compound literal: a temp filled as a local would be, an lvalue in the frame
@@ -383,7 +385,7 @@
    ; the type of e without its forms (arrays undecayed), every accumulator handed back: peekty over a lo env
    (lopeek g env e)
     (: o0 (peep g 'off 0) sl0 (g 'slots) s0 (g 'strs) fe0 (g 'fesc) w0 (g 'lowhy)
-       ty (lolv g env e @ (('v || 'a || 'b) . _ . ty . _) ty _ (lox g env e @ [t _ _] t _ 'bad))
+       ty (lolv g env e @ (('v || 'a || 'b || 'u) . _ . ty . _) ty _ (lox g env e @ [t _ _] t _ 'bad))
        (pins g 'off o0 'slots sl0 'strs s0 'fesc fe0 'lowhy w0, ty))
    ; a register variable named as an asm operand: its register | ()
    (lovpin g env e) (e @ ['var nm] (lovar g env nm @ ['v r _] (g 'lopins r) _ ()) _ ())
@@ -407,54 +409,77 @@
           ; a function designator decays to its address
           ['a [_ r fs] ('fn . ft) off] (lomk g @ t (loesc g r, [['ptr ('fn . ft)] t (fs + [['lea t r off]])]))
           ['a av ty off] (loload g av ty off)
+          ['u [_ r fs] (('arr || 'varr) . et . _) off a] (lomk g @ t (loesc g r, [['ptr et a] t (fs + [['lea t r off]])]))
+          ['u av ty off a] (loldu g av ty off a)
           ; a bitfield: its unit, then two shifts (sar signed, shr unsigned; a bool never sign-extends)
-          ['b [_ r fs] bt off]
+          ['b [_ r fs] bt off a]
            (: uty <>bt bitoff <>>bt width <>>>bt hi (8 * wsize g - (bitoff + width)) lo (8 * wsize g - width)
-              (lobfld g bt r off @ [_ t f2]
+              (lobfld g bt r off a @ [_ t f2]
                  ['long t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
           'bad)
    ; a bitfield's unit at b+off into a fresh vreg, and back: one access as its type says, or the
    ; old arms' chunks when packed, their scratch renamed
-   (lobfld g bt b off)
+   (lobfld g bt b off a)
     (? (wsize g < tsz g bt) (lono g 'bitfield)
-       (bfpk? bt) (loren2 g () 'r2 'long (ldal 'r2 b off (tsz g bt) 8))
+       (bfpk? bt || a) (loga g b off (tsz g bt) (a ? a 8))
        (lomk g @ t ['long t [[(uldop (tsz g bt)) t b off]]]))
-   (lobfst g bt b off u)
-    (bfpk? bt ? (loren2 g () 'r3 'long (stal b off (tsz g bt) 8 u) @ [_ _ fs] fs)
+   (lobfst g bt b off u a)
+    (bfpk? bt || a ? (lostu g b off (tsz g bt) (a ? a 8) u)
        [[(stop <>bt) b off u]])
+   ; -- -mstrict-align: no access wider than the alignment its address carries --
+   ; what a member at o keeps of its struct's alignment
+   (loma g ty o) (lowb o @ 0 (tal g ty) lb (min (tal g ty) lb))
+   ; an lvalue at an a-aligned address: a struct short of it keeps a on its type, the rest ride 'u
+   (loal g av ty off a)
+    (? !(sal? g && a < (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
+       (stru? ty) ['a av [<ty <>ty a] off]
+       ['u av ty off a])
+   ; ..a bitfield's unit its alignment where that falls short, else ()
+   (lobfa g bt a) (sal? g && a < tsz g bt ? a)
+   ; ..an initializer's slot in the frame, its offset all it knows
+   (loelv g ty off) (loal g ['long 'r4 ()] ty off (lowb off @ 0 16 b b))
+   ; n bytes at b+off by the chunks a carries, and back
+   (loga g b off n a) (loren2 g () 'r2 'long (ldal 'r2 b off n a))
+   (lostu g b off n a v) (loren2 g () 'r3 'long (stal b off n a v) @ [_ _ fs] fs)
+   (loldu g [_ r fs] ty off a)
+    (? (d128? ty) (loga g r off 8 a @ [_ l fl] (loga g r (off + 8) 8 a @ [_ h fh] [ty [l h] (fs + fl + fh)]))
+       (lofl? ty) (loga g r off (tsz g ty) a @ [_ t f2] (lomkf g @ w [ty w (fs + f2 + [[(ty = 'float ? 'movdxr 'movqxr) w t]])]))
+       (loga g r off (tsz g ty) a @ [_ t f2] [ty t (fs + f2 + cvt ty t)]))
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
    (lost g lv v)
     (lv @ ['v r ty] (lotr g v ty @ [_ c fs] [(fs + lomvs r c) [ty r ()]])
           (['a [_ b _] ty off] && losc? ty && !(pair? g ty)) (lotr g v ty @ [_ c fs] [(fs + [[(stop ty) b off c]]) [ty c ()]])
           (['a [_ b _] ty off] && lofl? ty) (lotr g v ty @ [_ c fs] [(fs + [[(ty = 'float ? 'stss 'stsd) b off c]]) [ty c ()]])
           ; a bitfield: read-modify-write its unit, the truncated value answers
-          ['b [_ b _] bt off]
+          ['u [_ b _] ty off a]
+           (lotr g v ty @
+              [_ c fs] (? (d128? ty) [(fs + lostu g b off 8 a <c + lostu g b (off + 8) 8 a <>c) [ty c ()]]
+                          (lofl? ty) (lomk g @ t [(fs + [[(ty = 'float ? 'movdrx 'movqrx) t c]] + lostu g b off (tsz g ty) a t) [ty c ()]])
+                          [(fs + lostu g b off (tsz g ty) a c) [ty c ()]])
+              _ 'bad)
+          ['b [_ b _] bt off a]
            (: uty <>bt bitoff <>>bt width <>>>bt mask ((1 << width) - 1) cmask (0 - (mask << bitoff) - 1)
               (lotr g v (pair? g uty ? 'ulong uty) @ [_ c fs]
                  (: k (lomk g) m (lomk g) u (lomk g) x (lomk g)
-                    (lobfld g bt b off @ [_ u fu]
+                    (lobfld g bt b off a @ [_ u fu]
                        [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
-                               ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u)
+                               ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u a)
                         ['long m ()]]))))
           (['a [_ b _] ty off] && (d128? ty || pair? g ty))
            (lotr g v ty @ [_ ws fs] [(fs + map (k \ ['st b (off + k * (pair? g ty ? 4 (lowd g))) (ws k)]) ^#ws) [ty ws ()]] _ 'bad)
           (['a _ ty _] && gcplx? ty && !(locxsame? (vty v) ty)) (lotr g v ty @ 'bad 'bad v2 (lost g lv v2))
           (['a [_ b _] ty off] && stru? ty)
            (v @ ([vt r fs] && stru? vt && tsz g vt = tsz g ty)
-                 (lomk g @ t (loesc g b, [(fs + locopy g r b off (tsz g ty) + [['lea t b off]]) [ty t ()]]))
+                 (lomk g @ t (loesc g b, [(fs + locopya g r b off (tsz g ty) (min (tal g vt) (tal g ty)) + [['lea t b off]]) [ty t ()]]))
                 _ (lono g ['store ty]))
           (_ . _ . ty . _) (lono g ['store ty])
           'bad)
    ; sz bytes from address s to d + doff, widest first
-   (locopy g s d doff sz)
-    (lomk g @ t
-       (: w (wsize g)
-          (go k) (? (w = 8 && 8 <= sz - k) (['ld t s k] . ['st d (doff + k) t] . go (k + 8))
-                    (4 <= sz - k) (['ldu4 t s k] . ['st4 d (doff + k) t] . go (k + 4))
-                    (2 <= sz - k) (['ldu2 t s k] . ['st2 d (doff + k) t] . go (k + 2))
-                    (1 <= sz - k) (['ldu1 t s k] . ['st1 d (doff + k) t] . go (k + 1))
-                    ())
-          (go 0)))
+   (locopy g s d doff sz) (locopya g s d doff sz (wsize g))
+   ; ..no wider than an alignment a, which -mstrict-align holds it to
+   (locopya g s d doff sz a)
+    (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
+   (loch g a) (sal? g ? a (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
    (lozero g off span)
     (lomk g @ z
@@ -485,7 +510,7 @@
                            fe (? (bitf? (fe 2))
                                   (? (bfwide? g (fe 2)) (lono g 'bitfield)
                                      (lox g env (elval it) @ 'bad 'bad
-                                        v (lost g ['b ['long 'r4 ()] (fe 2) (off + fe 1)] v @
+                                        v (lost g ['b ['long 'r4 ()] (fe 2) (off + fe 1) (lobfa g (fe 2) (lowb (off + fe 1)))] v @
                                              [f2 _] (go u (fnext g fields ci) (acc + f2))
                                              'bad)))
                                  (loelt g env (off + fe 1) (fe 2) (elval it) @ 'bad 'bad
@@ -495,13 +520,12 @@
           (lono g ['init ty])))
    (loelt g env off ty val)
     (? (aggish? ty && (val @ ('init . _) 1 ()) || arr? ty && (val @ ('str . _) 1 ())) (lofill g env off ty val)
-       (stru? ty) (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] fs 'bad))
        (arr? ty) (lono g ['init ty])
-       (lox g env val @ 'bad 'bad v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] fs 'bad)))
+       (lox g env val @ 'bad 'bad v (lost g (loelv g ty off) v @ [fs _] fs 'bad)))
 
    ; the lvalue's own forms, laid once before its use, and the lvalue without them
-   (lolvfs lv) (lv @ (('a || 'b) . [_ _ fs] . _) fs ())
-   (lolvbare lv) (lv @ [k [t r _] ty off] [k [t r ()] ty off] lv)
+   (lolvfs lv) (lv @ (('a || 'b || 'u) . [_ _ fs] . _) fs ())
+   (lolvbare lv) (lv @ [k [t r _] ty off] [k [t r ()] ty off] [k [t r _] ty off a] [k [t r ()] ty off a] lv)
 
    ; a pointer to a VLA steps by its row's bytes, the dim evaluated at the step: p +- i, i + p, p - q
    ; as the char arithmetic they are -> an expression | ()
@@ -717,7 +741,7 @@
          (['addr ['var nm]] && bad? (lovar g env nm) && g 'fns nm)
           (lomk g @ t [['ptr (fnty g nm)] t [['la t (name nm)]]])
          ['addr lv]
-          (lolv g env lv @ ['a [_ r fs] ty off] (lomk g @ t (loesc g r, [['ptr ty] t (fs + [['lea t r off]])])) 'bad)
+          (lolv g env lv @ (('a || 'u) . [_ r fs] . ty . off . _) (lomk g @ t (loesc g r, [['ptr ty] t (fs + [['lea t r off]])])) 'bad)
          ['asn dst rhs]
           (lolv g env dst @ 'bad 'bad
              l (lox g env rhs @ 'bad 'bad
@@ -981,11 +1005,11 @@
           (elem nm '("__builtin_trap" "__builtin_unreachable"))
            (lomk g @ d ['long d [['fix () () [[(x86? g ? 'ud2 'trap)]]] ['li d 0]]])
           (nm = "__builtin_alloca")
-           (? (g 'abad || avz? g) (lono g ['call nm])
+           (? (g 'abad) (lono g ['call nm])
               (one (v \ (: t (lomk g) u (lomk g) d (lomk g)
                            (pin g 'fesc 1, pin g 'hasasm 1,
-                            ['(ptr void) d [['mov t v] ['add t t 15] ['shr t 4] ['shl t 4] ['lea u 'sp 0]
-                                            ['sub u u t] ['lea 'sp u 0] ['lea d 'sp 0]]])))))
+                            ['(ptr void) d ([['mov t v] ['add t t 15] ['shr t 4] ['shl t 4] ['lea u 'sp 0]
+                                             ['sub u u t] ['lea 'sp u 0]] + (avz? g ? (lovz g u t)) + [['lea d 'sp 0]])])))))
           (elem nm '("__builtin_return_address" "__builtin_frame_address"))
            ; riscv's saved ra rides a padded push, and its saved s0 is no caller's base
            (as @ ([['num k]] && 0 <= k && !(rv64? g && 0 < k) && !(wasm? g && nm = "__builtin_return_address"))
@@ -1146,13 +1170,13 @@
                    ; SysV's count of the vector registers in al, unless -mskip-rax-setup
                    al (va && x64? g && !(x86k? g 'nal) ? [['li 'r0 nf]])
                    (stk x o) (x @ ['at v n _] (: ty (vty v)
-                                              (? (stru? ty) (locopy g (vreg v) 'sp o n)
+                                              (? (stru? ty) (locopya g (vreg v) 'sp o n (tal g ty))
                                                  (pair? g ty) [['st 'sp o <(vreg v)] ['st 'sp (o + 4) <>(vreg v)]]
                                                  (d128? ty) (map (k \ ['st 'sp (o + 4 * k) (vreg v k)]) ^4)
                                                  [[(ty @ 'float 'stss 'double 'stsd 'st) 'sp o (vreg v)]]))
                                   ['w2 v n] [['st 'sp o <(vreg v)] ['st 'sp (o + n // 2) <>(vreg v)]]
                                   ['w v _] [[(vty v @ 'float 'stss 'double 'stsd 'st) 'sp o (vreg v)]]
-                                  ['s v n] (locopy g (vreg v) 'sp o n))
+                                  ['s v n] (locopya g (vreg v) 'sp o n (tal g (vty v))))
                    ; a pair on the stack sits 16-aligned
                    (sgo l o acc) (l @ (x . u) ((x @ ['w2 _ n] (aup o n) ['at _ _ f] f _ o) @ p (sgo u (p + x 2) (acc + stk x p))) [o acc])
                    so (sgo sk sh ()) sfs (so 1) blk (aup <so 16)
@@ -1200,13 +1224,13 @@
                      (lopcs g ty @
                         ; AAPCS64 past 16 bytes: a copy of the caller's, its address the arg
                         'ref (ntmp g ty @ off (lomk g @ p
-                                (: cp (loesc g 'r4, locopy g x 'r4 off (tsz g ty) + [['lea p 'r4 off]])
+                                (: cp (loesc g 'r4, locopya g x 'r4 off (tsz g ty) (tal g (vty v)) + [['lea p 'r4 off]])
                                    (gi < ngp g ? [(gi + 1) fi (rg + [[(argr g gi) p]]) sk (pre + cp)]
                                       [gi fi rg (sk + [['w ['long p ()] 8]]) (pre + cp)]))))
                         pcs (: ng #(filter (p \ <p = 'int) pcs) nx (#pcs - ng)
                                (? (two? pcs && gi + ng <= ngp g && fi + nx <= 8)
                                   (foldl (t \ p \ (t @ [gi fi rg sk pre]
-                                            (p @ [c o n] (loeb g c x o n @ [w fs]
+                                            (p @ [c o n] (loeba g c x o n (tal g (vty v)) @ [w fs]
                                                (c = 'sse ? [gi (fi + 1) (rg + [[(xmmreg fi) w]]) sk (pre + fs)]
                                                   [(gi + 1) fi (rg + [[(argr g gi) w]]) sk (pre + fs)])))))
                                          [gi fi rg sk pre] pcs)
@@ -1361,6 +1385,11 @@
     (? (c = 'sse) (lomkf g @ w [w [[(n <= 4 ? 'ldss 'ldsd) w a off]]])
        (lomk g @ t [t (n @ 8 [['ld t a off]] 4 [['ldu4 t a off]] 2 [['ldu2 t a off]] 1 [['ldu1 t a off]]
                          _ (loren2 g () 'r2 'long (ldal 'r2 a off n 8) @ [_ y fs] (fs + [['mov t y]])))]))
+   ; ..no wider than al where -mstrict-align holds it, a float's bits through a word
+   (loeba g c a off n al)
+    (? !(sal? g && al < n) (loeb g c a off n)
+       (c = 'sse) (loga g a off n al @ [_ t fs] (lomkf g @ w [w (fs + [[(n <= 4 ? 'movdxr 'movqxr) w t]])]))
+       (loga g a off n al @ [_ t fs] [t fs]))
    ; an aggregate's register pieces [class offset bytes].. : SysV's eightbytes; AAPCS64's HFA one
    ; float register a member, else one gp register an eightbyte to 16 bytes. 'ref when its address
    ; rides instead (AAPCS64 past 16), () in memory (SysV's class)
@@ -1457,10 +1486,10 @@
                    ([vt r fs] && stru? rt && tsz g vt = tsz g rt)
                     (g 'losret @ () (: pcs (lopcs g rt) rs (lorregs g pcs)
                                        (foldl (t \ p \ (t @ [acc ws]
-                                                 (p @ [c o n] (loeb g c r o n @ [w f2] [(acc + f2) (ws + [w])]))))
+                                                 (p @ [c o n] (loeba g c r o n (tal g vt) @ [w f2] [(acc + f2) (ws + [w])]))))
                                               [fs ()] pcs @
                                         [f2 ws] (f2 + catmap (i \ lorgmv [(rs i) (ws i)]) ^#pcs + epj)))
-                                 h (fs + locopy g r h 0 (tsz g rt) + [['mov 'r0 h]] + epj))
+                                 h (fs + locopya g r h 0 (tsz g rt) (tal g vt) + [['mov 'r0 h]] + epj))
                    'bad))
             ['blk items] (loitems g env items)
             ['if c t]
@@ -1611,15 +1640,15 @@
                            (lobase [ty d fd] @ [b o]
                               (lomk g @ v
                                  ['(ptr void) d (fd + [['li v ((c & 255) * (wsize g = 4 ? 16843009 72340172838076673))]] +
-                                                 map (k \ (k + wsize g <= n ? ['st b (o + k) v] ['st1 b (o + k) v])) (lochunks g n))]))
+                                                 map ([p k] \ [(stw k) b (o + p) v]) (alchunks n (lomemal g env <as)))]))
                            'bad)))
                  (memnm? g bi "memcpy")
                   (lox g env <as @ [ty d fd]
                      (lox g env <>as @ sv
                         (vfs sv @ fs (lobase [ty d fd] @ [db do] (lobase sv @ [sb so]
                            (lomk g @ t
-                              ['(ptr void) d (fd + fs + catmap (k \ (k + wsize g <= n ? [['ld t sb (so + k)] ['st db (do + k) t]]
-                                                                            [['ldu1 t sb (so + k)] ['st1 db (do + k) t]])) (lochunks g n))]))))
+                              ['(ptr void) d (fd + fs + catmap ([p k] \ [[(uldop k) t sb (so + p)] [(stw k) db (do + p) t]])
+                                                       (alchunks n (min (lomemal g env <as) (lomemal g env <>as))))]))))
                         'bad)
                      'bad)
                  'no))
@@ -1627,8 +1656,12 @@
    ; a pointer as a base and offset: a local's address reads off the frame, its lea left to die
    ; where the value goes unused -> [base off]
    (lobase v) (v @ [_ t fs] (rev fs @ (['lea t2 'r4 o] . _) (t = t2 ? ['r4 o] [t 0]) _ [t 0]))
-   ; the offsets of n bytes in words, then the byte tail
-   (lochunks g n) (wsize g @ w (map (i \ w * i) ^(n // w) + map (i \ w * (n // w) + i) ^(n % w)))
+   ; what a mem builtin's pointer is known to align: under -mstrict-align a named object's own, else a byte
+   (lomemal g env e)
+    (!(sal? g) ? (wsize g)
+       (e @ ['cast _ x] (lomemal g env x)
+            ['addr ['var nm]] (lovar g env nm @ ['m _ ty] (tal g ty) ['g _ ty] (tal g ty) _ 1)
+            1))
    ; a switch's compares: each key, then each wide range as r - lo unsigned at most the span
    (lochain g r tab ks)
     (catmap (k \ (imma g 'cmp k ? [['cmp r k] ['br 'eq (tab k)]] (lomk g @ t [['li t k] ['cmp r t] ['br 'eq (tab k)]]))) ks +
@@ -1683,12 +1716,14 @@
                  [['ld t 'r4 so] ['cmp t 0] ['br 'eq lf]] + up t + [['ld q 'r4 po] ['add q q t] ['mov 'sp q] ['label lf]] +
                  fs + [['mov z n]] + (es = 1 ? () (lork g 'imul z es)) + [['st 'r4 so z]] + up z +
                  [['mov q 'sp] ['sub q q z] ['mov 'sp q] ['st 'r4 po q]] +
-                 ; -ftrivial-auto-var-init=zero: the block word by word, from its top down
-                 (avz? g ? (lomk g @ k (lomk g @ a (nlab g ".vla" @ l1 (nlab g ".vla" @ l2
-                    [['li k 0] ['label l1] ['cmp z 0] ['br 'eq l2] ['sub z z 8] ['mov a q] ['add a a z] ['st a 0 k]
-                     ['jmp l1] ['label l2]]))))))))))))
+                 (avz? g ? (lovz g q z)))))))))
        'bad 'bad
        _ (lono g 'vla)))
+   ; -ftrivial-auto-var-init=zero: z bytes at q word by word, from the top down, z spent
+   (lovz g q z)
+    (lomk g @ k (lomk g @ a (nlab g ".vla" @ l1 (nlab g ".vla" @ l2
+       [['li k 0] ['label l1] ['cmp z 0] ['br 'eq l2] ['sub z z (wsize g)] ['mov a q] ['add a a z] ['st a 0 k]
+        ['jmp l1] ['label l2]]))))
    ; statics: a data label each, laid after the fn, the initializer's names to earlier ones
    ; spelled by label now -> env
    (losdecl g env ps)
@@ -1755,8 +1790,6 @@
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
             !(g 'abad) &&
-            ; -mstrict-align's chunked members are the old path's
-            !(sal? g) &&
             ; past SysV and AAPCS64 a pair takes the old path
             (lo128? g || !(d128? rt || any (p \ d128? <>p) params)) &&
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
