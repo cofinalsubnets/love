@@ -71,6 +71,21 @@
  (has? dr-sd dr-c)
  (1 = sig-ok? (unhex "2a8648ce3d040302") (spki-key dr-spk (der dr-spk 0 #dr-spk)) dr-sd dr-sig))
 
+;; the icon: the favicon's heart and red, and a resource table android reads in place
+(: dr-rz (ap-zip [["resources.arsc" "abcd"] ["x" "y"]])
+   dr-png (ic-png 0)
+   dr-iend (fsub dr-png "IDAT" 0)
+   dr-pix (gz-inflate (snip dr-png (dr-iend + 6) (dr-iend + rdbe dr-png (dr-iend - 4) 4)) (432 * 55) @ r (? (two? r) <>r ""))
+   dr-q (open "src/love/quay/cga_8x8.c" "r") dr-src (slurp dr-q) _ (close dr-q)
+   dr-cell (split "{" (filter (l \ has? l "// [") (lines dr-src) 3))
+   dr-gl (map (w \ read w) (take 7 (split "," <(split "}" (dr-cell 1)))))
+   (test (rdle dr-rz 8 2 = 0) (snip dr-rz 44 48 = "abcd")     ; stored, and on a word
+         (rdbe dr-png 16 4 = 432) (rdbe dr-png 20 4 = 432)
+         (#dr-pix = 432 * 55)
+         (dr-pix (103 * 55 + 14) = 0) (dr-pix (104 * 55 + 15) = 255)  ; the heart's first lit pixel
+         (dr-gl = ic-rows)
+         (rdle (ic-arsc 0) 0 2 = 2) (rdle (ic-arsc 0) 4 4 = #(ic-arsc 0))))
+
 ;; window over the bridge's wire, the bridge played here
 (borrow 'window)
 (: dw-path ((getenv "TMPDIR" @ t (string? t ? t "/tmp")) + "/droid-face-" + show (getpid 0))
