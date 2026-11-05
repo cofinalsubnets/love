@@ -756,8 +756,9 @@ void __moon_m128(uint64_t rlo, uint64_t rhi, uint64_t llo, uint64_t lhi) {
   uint64_t volatile *c = &llo;
   uint64_t hi, lo;
   mul64(llo, rlo, &hi, &lo);
+  hi += llo * rhi + lhi * rlo;
   c[0] = lo;
-  c[1] = hi + llo * rhi + lhi * rlo; }
+  c[1] = hi; }
 
 /* the cell's u128 by the u64 divisor in the right's low half, a bit at a time below the high
  * word's own divide: the quotient, or the remainder (its high half 0) */

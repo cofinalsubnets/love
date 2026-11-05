@@ -39,14 +39,14 @@
     (: d {'c c 'st {} 'q () 'spec () 'peak () 'scope () 'vis 'spec 'focus 'list 'sel 0 'top 0
           'band 0 'preset 0 'sort -1 'msg "" 'msgat 0 'posat (clock 0) 'tick 0 'over 0 'feed ()
           'pick () 'geo {} 'help 0}
-       (pin d 'id (core-watch c (m \ hear d m))))
+       (pin d 'id (core-watch c (hear d))))
    (ptui-close d) (: _ (? (d 'feed) (core-tell (d 'c) (d 'id) ['feed (<(d 'feed)) 0 0]) 0) (core-unwatch (d 'c) (d 'id)))
 
    ; --- what the core says ---
    (hear d m)
     (<m @ 'snap (pins d 'st (al (m 1)) 'q (map al ((m 2) 1)) 'posat (clock 0))
           'set (: _ (each (m 1) (kv \ pin (d 'st) <kv (kv 1)))
-                  (? (elem 'pos (map (kv \ <kv) (m 1))) (pin d 'posat (clock 0)) d))
+                  (? (elem 'pos (map cap (m 1))) (pin d 'posat (clock 0)) d))
           'queue (pin d 'q (map al (m 2)))
           'msg (pins d 'msg (m 1) 'msgat (clock 0))
           'spec (pin d 'spec (m 2))
@@ -125,7 +125,7 @@
                                           (m | (<a <= y && y <= a 1 ? lb k 0) | (<b <= y && y <= b 1 ? rb k 0))))
                                  0 ^4)
                      (bits = 0 ? " " (u8 (10240 + bits))))
-       (map (r \ " " + sgr "32" (cats (map (x \ cell r x) ^(n // 2)))) ^vh))
+       (map (r \ " " + sgr "32" (cats (map (cell r) ^(n // 2)))) ^vh))
    ; the eq: preamp and the ten bands as sliders, the chosen one lit while the eq has focus
    (eq d w eh)
     (: rows (max 1 (eh - 1)) cw (max 3 ((w - 1) // 11))
@@ -139,7 +139,7 @@
                      s (fit (" " + g) cw)
                      (? (on && i = d 'band) (sgr "7" s) (r = k ? (sgr "36" s) (sgr "2" s))))
        labels (cats (map (i \ fit (" " + names i) cw) ^11))
-       ((map (r \ " " + cats (map (i \ cell r i) ^11)) ^rows) + [(" " + labels)]))
+       ((map (r \ " " + cats (map (cell r) ^11)) ^rows) + [(" " + labels)]))
    (playlist d w ph)
     (: q (d 'q) n #q sel (clamp 0 (max 0 (n - 1)) (d 'sel)) _ (pin d 'sel sel)
        top (d 'top @ t (? (sel < t) sel (t + ph <= sel) (sel - ph + 1) t)) _ (pin d 'top top)
@@ -247,6 +247,6 @@
           d))
 
    (ptui-run d)
-    (stage-run {'show (w \ h \ ptui-frame d w h) 'step (k \ ptui-key d k) 'over? (_ \ d 'over)
+    (stage-run {'show (w \ h \ ptui-frame d w h) 'step (ptui-key d) 'over? (_ \ d 'over)
                 'tick (_ \ 1) 'modes ['mouse 'hide] 'shut (_ \ ptui-close d)}))
 ) ; module ptui

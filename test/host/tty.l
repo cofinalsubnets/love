@@ -39,7 +39,7 @@
              (go i) (? (r * c <= i) () (64 = chat s i) ((i // c) . (i % c)) (go (i + 1)))
              (go 0))
    (spawn cmd r c)
-    (guard (tether ["sh" "-c" ("stty rows " + show r + " columns " + show c + " -echo; exec " + cmd)]))
+    (guard (tether ["sh" "-c" ("stty rows " + show r + " columns " + show c + " -echo; DISPLAY=; export DISPLAY; exec " + cmd)]))
    ; -> [stream screen]
    (run cmd keys r c)
     (: t (spawn cmd r c)
@@ -74,7 +74,7 @@
 
 ; keys left behind the quit must not reach the shell: z takes the sign down, q leaves,
 ; and the non-blocking cat reads whatever survived
- dr (: t (guard (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; out/love lore tower; "
+ dr (: t (guard (tether ["sh" "-c" ("stty rows 20 columns 70 -echo; DISPLAY=; export DISPLAY; out/love lore tower; "
                                     + "stty -icanon min 0 time 3; cat")]))
        m >t
        ; wait for raw mode, else the echo hides the leftovers

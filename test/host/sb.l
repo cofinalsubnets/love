@@ -556,7 +556,7 @@
 (: (dg-r i) ((i * 7919 + 13) * 104729 % 1000003)
    (dg-tab t) (map (k \ [k (t k)]) (sort (keys t)))
    (dg-all d ids) [(sort (d 'tips)) (dg-tab (d 'snap)) (dg-tab (d 'cf)) (dg-tab (d 'last))
-                   (dv-count d) (map (i \ dv-dep d i) ids)
+                   (dv-count d) (map (dv-dep d) ids)
                    (map (p \ [p (sort (dv-hist d p))]) (sort (keys (d 'last))))]
    (dg-same a b) (: ids (sort (keys (a 'mem) + keys (b 'mem))) (seq (dg-all a ids) (dg-all b ids)))
    ; patch i on a line's state: path p rewritten over what it held, or deleted

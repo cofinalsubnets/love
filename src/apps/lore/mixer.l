@@ -8,10 +8,38 @@
 ;                           (ear st) the listener [x z th], th radians from +z toward +x; o
 ;                           {'near 'far 'fps 'gain 'bus}: whole within near, gone past far; 'bus
 ;                           (st n), if given, answers n frames more to lay under them, (left . right)
-(module (mixer mix-cry mix-new)
+;   (foot-next v sw)        which of six takes a foot makes next, v the last and sw the stride
+;   (step-sound f v)        take v of a foot on feel f, a string: [samples rate]
+(module (mixer mix-cry mix-new snd-noise snd-soft foot-next step-sound)
 (borrow 'rove)
 (borrow 'horn)                          ; song-rate
 (:
+ ; ..noise from a hash of each sample's time, about -1..1
+ (snd-noise t) (: h (sin (t * 12345.678 + 0.5) * 43758.5453) (2.0 * (h - floor h) - 1.0))
+ ; ..noise smoothed under hz, each hold joined to the next, no edge to buzz
+ (snd-soft t hz) (: u (t * hz) i (floor u) f (u - i) a (snd-noise (i / hz)) (a + (snd-noise ((i + 1.0) / hz) - a) * f))
+ ; ..never the last: the stride's own fraction shuffles it
+ (foot-next v sw) ((v + 1 + int (5000.0 * sw) % 5) % 6)
+ ; ..a foot on each feel, v which of six: no two alike in pitch, weight, length or grain. what
+ ; gives underfoot rises gently and rolls heel to toe; what does not is struck
+ step-rate 22050
+ (step-sound f v) (: p ([1.0 1.09 0.93 1.05 0.97 1.13] v) g ([1.0 0.82 0.92 1.08 0.76 0.95] v) d ([0.1 0.125 0.085 0.14 0.11 0.095] v)
+   T (0.26 + 0.02 * v) t (iota (int (T * step-rate)) / (1.0 * step-rate)) z (t + 3.7 * (v + 1))
+   (o hz k) (sin (tau * hz * p * t) * exp -(k * t))
+   (n k) (snd-noise z * exp -(k * t))
+   (give u k) ((u > 0.0) * (1.0 - exp (-90.0 * (u * (u > 0.0)))) * exp -(k * (u * (u > 0.0))))
+   (heel k) (give t k + 0.6 * give (t - d) k)
+   (hush hz) (snd-soft z (hz * p))
+   (grit hz) (: q (snd-soft (z + 1.3) hz) (0.35 + 1.6 * q * (q > 0.0)))
+   thud (sin (tau * 62.0 * p * t) * give t 26.0)
+   [(g * (f @ "grass" (0.2 * (0.6 * hush 3600.0 + 0.4 * hush 9000.0) * grit 110.0 * heel 24.0 + 0.03 * thud)
+           "sand" (0.26 * (0.5 * hush 3400.0 + 0.5 * hush 10000.0) * grit 260.0 * heel 17.0 + 0.025 * thud)
+           "gravel" (0.3 * (0.5 * hush 2400.0 + 0.5 * snd-noise z) * grit 420.0 * heel 26.0 + 0.07 * thud)
+           "soft" (0.2 * o 70.0 30.0 + 0.05 * hush 900.0 * exp (-40.0 * t))
+           "wood" (0.2 * o 150.0 42.0 + 0.1 * o 390.0 70.0 + 0.05 * n 130.0)
+           "metal" (0.16 * o 110.0 42.0 + 0.07 * o 860.0 24.0 + 0.04 * o 1730.0 32.0 + 0.05 * n 140.0)
+           (0.2 * o 120.0 55.0 + 0.09 * n 150.0)))
+    step-rate])
  (mix-cry st nm at) (: q (st 'sfx) (#q < 8 && #nm > 0 ? (pin st 'sfx ([nm at] . q)) st))
  ; ..a voice started: [samples step at left right], the step the sound's rate over the horn's
  (voice S at E near far) (: dx (atom? at ? 0.0 (at 0 - E 0)) dz (atom? at ? 0.0 (at 1 - E 1)) d (sqrt (2 dx + 2 dz))

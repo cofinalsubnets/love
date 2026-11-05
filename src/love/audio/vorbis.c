@@ -1,7 +1,7 @@
 // vorbis.c -- vorbis i audio (xiph's spec), decoded
 // (vorbis-size id setup)  -> the bytes a decoder's state needs for these headers (the
 //                            identification and setup packets), a charm | -why
-// (vorbis-init b id setup) -> 0, b (a cask that size) laid as the decoder | why
+// (vorbis-new id setup)   -> a decoder's state | why
 // (vorbis-packet b p f)   -> one audio packet's samples, interleaved in wav's channel order,
 //                            s16le (f 0) or f32le (f 1): "" for the first packet, which only
 //                            primes the overlap | why
@@ -107,7 +107,9 @@ struct vfl {                  // a floor 1
 struct vres { int type, nclass, classbook; uint32_t begin, end, psize; int books[64][8]; };
 struct vmap { int submaps, steps, mag[256], ang[256], mux[256], fl[16], res[16]; };
 struct vmode { int block, map; };
+#define VB_MAGIC 0x766f7262
 struct vh {                   // the head of the arena
+ uint32_t magic;
  int ch, rate, bs[2], ncb, nfl, nres, nmap, nmode;
  uint32_t cb, fl, res, map, mode;
  uint32_t win[2], pre[2], post[2], tw[2], rev[2];   // per block size: window, dct-iv and fft tables
@@ -219,6 +221,7 @@ static int vb_floor(struct vbit *b, struct vfl *f) {
  for (int i = 0; i < f->values; i++) f->ord[i] = i;
  for (int i = 1; i < f->values; i++)
   for (int j = i; j > 0 && f->x[f->ord[j - 1]] > f->x[f->ord[j]]; j--) { int t = f->ord[j]; f->ord[j] = f->ord[j - 1], f->ord[j - 1] = t; }
+ for (int i = 1; i < f->values; i++) if (f->x[f->ord[i - 1]] == f->x[f->ord[i]]) return 4;   // no two points share an x
  for (int i = 2; i < f->values; i++) {
   int lo = 0, hi = 1;
   for (int j = 0; j < i; j++) {
@@ -295,7 +298,9 @@ static int vb_setup(struct va *a, const uint8_t *id, uint32_t idn, const uint8_t
   struct vfl fc, *f = a->b ? (struct vfl*) (a->b + h->fl) + i : &fc;
   int r = vb_floor(&b, f);
   if (r) return r;
-  for (int c = 0; c < 16; c++) if (f->cbook[c] >= h->ncb) return 4; }
+  for (int c = 0; c < 16; c++) {
+   if (f->cbook[c] >= h->ncb) return 4;
+   for (int k = 0; k < 1 << f->csub[c]; k++) if (f->sbook[c][k] >= h->ncb) return 4; } }
  h->nres = (int) vb_get(&b, 6) + 1, h->res = va_get(a, sizeof(struct vres) * (uint32_t) h->nres);
  for (int i = 0; i < h->nres; i++) {
   struct vres rc, *r = a->b ? (struct vres*) (a->b + h->res) + i : &rc;
@@ -510,7 +515,8 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
   for (int i = 0; i < half; i++) {
    int k = fc[i];
    x[i] = fz[c] ? x[i] * vb_idb[k < 0 ? 0 : k > 255 ? 255 : k] : 0; }
-  vb_dct4(base, h, blk, x, cc, z);
+  if (fz[c]) vb_dct4(base, h, blk, x, cc, z);     // a silent channel's transform is silence
+  else memset(cc, 0, sizeof(double) * (size_t) half);
   for (int i = 0; i < n; i++) {                // the imdct off the dct-iv's symmetries
    int mm = i + half / 2;
    x[i] = mm < half ? cc[mm] : mm < 2 * half ? -cc[2 * half - 1 - mm] : -cc[mm - 2 * half]; }
@@ -543,24 +549,30 @@ static love_inline struct g *host_vorbis_size(struct g *g) {
  return g->sp[1] = r, g->sp += 1, g; }
 static lvm(lvm_vorbis_size) LvmCall(g, host_vorbis_size)
 
-static love_inline struct g *host_vorbis_init(struct g *g) {
- uintptr_t n = 0;
- uint8_t *b = cask_bytes(g->sp[0], &n);
- word r = putcharm(3);
- if (b && strp(g->sp[1]) && strp(g->sp[2]) && n < 0x7fffffffu) {
-  struct str *i = str(g->sp[1]), *s = str(g->sp[2]);
-  struct va a = {b, 0, (uint32_t) n, 0};
-  int e = vb_setup(&a, (const uint8_t*) i->bytes, (uint32_t) i->len, (const uint8_t*) s->bytes, (uint32_t) s->len);
-  r = putcharm(e ? e : a.bad ? 3 : 0); }
- return g->sp[2] = r, g->sp += 2, g; }
-static lvm(lvm_vorbis_init) LvmCall(g, host_vorbis_init)
+static int vb_heads(struct g *g, struct va *a) {
+ return vb_setup(a, (const uint8_t*) txt(g->sp[0]), (uint32_t) len(g->sp[0]), (const uint8_t*) txt(g->sp[1]), (uint32_t) len(g->sp[1])); }
+love_noinline static struct g *host_vorbis_new(struct g *g) {
+ if (!strp(g->sp[0]) || !strp(g->sp[1])) return g->sp[1] = putcharm(3), g->sp += 1, g;
+ struct va c = {NULL, 0, 0, 0};
+ int e = vb_heads(g, &c);
+ if (!e && (c.bad || c.used > (64u << 20))) e = 3;
+ if (e) return g->sp[1] = putcharm(e), g->sp += 1, g;
+ union u *k = new_state(&g, c.used + 8, c.used + 8);
+ if (!k) return g;
+ struct str *o = ((struct state*) k)->str;
+ struct va a = {(uint8_t*) o->bytes, 0, (uint32_t) o->len, 0};
+ e = vb_heads(g, &a);
+ if (e || a.bad) return g->sp[1] = putcharm(e ? e : 3), g->sp += 1, g;
+ ((struct vh*) o->bytes)->magic = VB_MAGIC;
+ return g->sp[1] = word(k), g->sp += 1, g; }
+static lvm(lvm_vorbis_new) LvmCall(g, host_vorbis_new)
 
 love_noinline static struct g *host_vorbis_packet(struct g *g) {
  uintptr_t n = 0;
- uint8_t *b = cask_bytes(g->sp[0], &n);
+ uint8_t *b = state_bytes(g->sp[0], &n);
  if (!b || n < sizeof(struct vh) || !strp(g->sp[1]) || !oddp(g->sp[2])) return g->sp[2] = putcharm(3), g->sp += 2, g;
  struct vh *h = (struct vh*) b;
- if (!h->ch || !h->mode) return g->sp[2] = putcharm(3), g->sp += 2, g;
+ if (h->magic != VB_MAGIC) return g->sp[2] = putcharm(3), g->sp += 2, g;
  struct str *p = str(g->sp[1]);
  intptr_t f = getcharm(g->sp[2]);
  int ns = vb_audio(b, h, (const uint8_t*) p->bytes, (uint32_t) p->len);
@@ -568,11 +580,11 @@ love_noinline static struct g *host_vorbis_packet(struct g *g) {
  uintptr_t k = (uintptr_t) ns * (uintptr_t) h->ch, on = k * (f ? 4u : 2u);
  if (!ok(g = have(g, str_width(on)))) return g;
  struct str *out = ini_str(bump(g, str_width(on)), on);
- b = cask_bytes(g->sp[0], &n);                     // re-read: have may move it
+ b = state_bytes(g->sp[0], &n);                   // re-read: have may move it
  pcm_lay((uint8_t*) out->bytes, (const float*) (b + ((struct vh*) b)->out), k, f, 1);
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_vorbis_packet) LvmCall(g, host_vorbis_packet)
 
 LvDef("vorbis-size", vorbis_size, 2, "ogg");
-LvDef("vorbis-init", vorbis_init, 3, "ogg");
+LvDef("vorbis-new", vorbis_new, 2, "ogg");
 LvDef("vorbis-packet", vorbis_packet, 3, "ogg");

@@ -63,7 +63,7 @@
                     ("[" + f a + " " + f c + " " + f d + " " + f e + "]")))
    (line f) (foldl (acc \ b \ acc + (0 < b ? " " "") + word f b) "" ^beats)
    {'notes (line cell) 'legs (line dur) 'bass bs 'beats beats
-    'pitches (map (x \ <x) (filter two? sl))})
+    'pitches (map cap (filter two? sl))})
  ; a bar per line and per |; a key or beats line sets the lines under it
  (score-lines s) (split "\n" s)
  (score-parse ls) (:
@@ -88,7 +88,7 @@
  (score-tune bs cps) (:
    (secs b n) (n * 1.25 / (cps * b 'beats * 4.0))    ; n sixteenths, in seconds
    mel (slowcat (map (b \ pset (pset (note (mini (b 'notes)))
-                                    (legato (pmap (n \ secs b n) (mini (b 'legs)))))
+                                    (legato (pmap (secs b) (mini (b 'legs)))))
                               (hit (pure "box")))
                      bs))
    low (slowcat (map (b \ (b 'bass = () ? (mini "~")

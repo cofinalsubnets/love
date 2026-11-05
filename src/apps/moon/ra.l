@@ -8,12 +8,19 @@
    ; each target's files, caller-saved first: a callee-saved one costs its save. every x64 xmm is
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
    ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
-   ; park, and its float file is caller-saved whole
+   ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d8-d15
+   ; for their saves
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+               (v6m? g) '(r0 r1 r2 r3 r5 r6)
+               (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
+               (ia32? g) '(r0 r1 r2 r5 r6 r3)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
+               (v6m? g) ()
+               (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
+               (ia32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
    ; what a call clobbers: the caller-saved gp file and every float register the pool takes
@@ -36,12 +43,12 @@
    ; the three-address ops, and those of them that commute
    raalu '(add sub and or xor imul)
    racomm '(add and or xor imul)
-   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss movqxr movdxr cvttsd2si cvttss2si movqrx movdrx)
+   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
    ; each head's own shape, the rest rdsp's
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
            t0 (cls (cls (cls (cls (cls (cls (cls (cls (cls {} 'fbin rafbin) 'fmv rafmv) 'div divops) 'ctl '(jmp br label))
                  'ucom '(ucomisd ucomiss)) 'fld '(ldsd ldss)) 'fst '(stsd stss)) 'fldx '(ldsdx ldssx)) 'fstx '(stsdx stssx))
-           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret)))
+           (foldl (t \ op \ pin t op op) t0 '(cuse cdef fix call callr ret movqrr movrrq)))
    ; a form's [reads defs] over the file and the vregs | 'bad. the answer is the form's own but at
    ; an exit (the fn's return registers), so the unit keeps the rest by their value
    (raops g f)
@@ -55,6 +62,8 @@
                      'cuse [>f ()]
                      'cdef [() >f]
                      'fix (f @ ('fix . u . d . _) [u d] _ (gen f))
+                     'movqrr (f @ [_ d a b] [[a b] [d]] _ (gen f))
+                     'movrrq (f @ [_ a b s] [[s] [a b]] _ (gen f))
                      'call 'call
                      'callr (f @ ('callr . r . _) [[r] 'call] _ (gen f))
                      'ret [(peep g 'loret '(r0)) ()]
@@ -66,7 +75,7 @@
                      'fldx (f @ [_ d b i _ _] [[b i] [d]] _ (gen f))
                      'fstx (f @ [_ b i _ _ v] [[b i v] ()] _ (gen f))
                      'ctl [() ()]
-                     'div (f @ (_ . d . a . b . t) (x64? g ? [[a b] [d 'r0]] [[a b] (d . t)]) _ (gen f)))
+                     'div (f @ (_ . d . a . b . t) (x86? g ? [[a b] [d 'r0]] [[a b] (d . t)]) _ (gen f)))
            (gen f))) @
      'bad 'bad
      'call [() <>(rasets g)]
@@ -134,7 +143,7 @@
                ; a sub's right side outlives its def, which may not overwrite it before the subtract;
                ; a remainder's scratch is written before its operands are done
                (late i) (ft i @ (['sub _ _ b] && raok? g b) [(id b)]
-                                ((op _ a b _) && elem op '(rem urem) && !(x64? g)) (map id (filter (raok? g) [a b]))
+                                ((op _ a b _) && elem op '(rem urem) && !(x86? g)) (map id (filter (raok? g) [a b]))
                                 _ ())
                ; open: each id live here, to the end of its range. a form touches only what it names
                (blk s e)
@@ -159,7 +168,7 @@
                (link2 a b) (raok? g a && raok? g b ? (: x (id a) y (id b) (link x y, link y x)))
                _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
                                 ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
-                                ((op . d . _) && elem op divops && x64? g) (pin forb (id d) ['r2])
+                                ((op . d . _) && elem op divops && x86? g) (pin forb (id d) ['r2])
                                 0)) fs)
                vs (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ np <= x) (keys lo)))
                loc {}
@@ -220,13 +229,15 @@
        (go fs 0))
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
-   ; until a label or a call ends the run (the last four kept)
-   (raspill g fs sp nosp)
+   ; until a label or a call ends the run (the last nk kept)
+   (raspill g fs sp nosp nk)
     (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
        _ (pin g 'rasls (map sl sp + g 'rasls))
        (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
        (go fs c)
-        (fs @ (f . u)
+        (fs @ ((['mov p v] && !(lovr? p) && elem v sp && raget c v = ()) . u)   ; a fixed register's reload needs no temp, which might take another's
+               (['ld p 'r4 (sl v)] . go u c)
+              (f . u)
                (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
                   (raops g f @
                      [u0 d0]
@@ -235,7 +246,7 @@
                          m (foldl (t \ v \ pin t v (raget c0 v @ () (tmp v) k k)) {} vs)
                          lds (map (v \ [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)]) (filter (v \ raget c0 v = ()) us))
                          sts (map (v \ [(lofr? v ? 'stsd 'st) 'r4 (sl v) (m v)]) ds)
-                         c2 (take 4 (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
+                         c2 (take nk (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
                          ((vs @ () [f] _ (lds + [(map (x \ peep m x x) f)] + sts)) + go u c2))
                      _ (f . go u c0)))
               _ ())
@@ -300,7 +311,9 @@
 
    ; a vreg spilled across calls splits there first when that weighs less, a full spill when it
    ; misses again
-   (raplan g fs)
+   ; a small file can run out under the temps a spill keeps: then again with none kept
+   (raplan g fs) ((raplan1 g fs 4) @ 'bad (raplan1 g fs 0) r r)
+   (raplan1 g fs nk)
     (: nosp {} split {}
        _ (pin g 'rasls ())
        (go fs k)
@@ -311,7 +324,7 @@
               [_ sp cr sv] (: s1 (filter (v \ elem v sv && !(split v)) sp)
                            s2 (filter (v \ nelem v s1) sp)
                            (map (v \ pin split v 1) s1,
-                            go (raspill g (rasplit g fs s1) s2 nosp) (k - 1)))))
+                            go (raspill g (rasplit g fs s1) s2 nosp nk) (k - 1)))))
        (go fs 16))
    ; a spill slot's store goes when no path reads the slot back before writing it again or
    ; leaving: the slots are ra's own, so only its loads and stores name them
@@ -392,7 +405,7 @@
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
    rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd add sub and or xor imul shl shr sar not neg
-                                              sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx))
+                                              sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx movqrr movrrq))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)
        (own x u) #(filter (y \ y = x) u)

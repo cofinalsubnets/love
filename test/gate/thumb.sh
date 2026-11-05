@@ -189,5 +189,10 @@ thumb2sp)
     ""
   lane r  test/thumb2/libr.c  test/thumb2/harnessr.c "" 13 30 "thumb2sp memory returns" \
     " = every composite past 4 bytes that is no HFA returns through the hidden pointer in r0; 100+n names the first miss -- see test/thumb2/harnessr.c"
+  # a float is in the fpu here: what draws asks no soft float or double of rt.c
+  for f in raster lamp poly swatch; do
+    LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"
+    arm-none-eabi-nm -u "$d/nosoft.o" | grep -E '__aeabi_(dadd|dsub|dmul|ddiv|dcmp|i2d|ui2d|fadd|fsub|fmul|fdiv|fcmp|i2f|ui2f|f2iz|f2uiz)' && fail "$f.c calls a soft float or double"
+  done
   echo "test_thumb2sp: mooncc -t thumb2sp (soft f64 over __aeabi, AAPCS-VFP floats) -> 48+45+9+16+18+13 differential checks vs gcc on qemu Cortex-M4" ;;
 esac

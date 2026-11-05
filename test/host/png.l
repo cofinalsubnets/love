@@ -205,7 +205,7 @@ for n in (2, 4, 16, 256):
            (ok? ? (png-decode (snip good 0 (#good - 20)) = "truncated") 1)
            (ok? ? (png-decode (flip good (#good - 30)) = "bad crc in IDAT") 1)
            (ok? ? (png-decode (flip good 20) = "bad crc in IHDR") 1))
-   ; refused before allocating: a header past 2^24 pixels, data too short for its header
+   ; refused before allocating: a header past 2^28 pixels, data too short for its header
    wrbe (cite 'bytes 'wrbe) zb (cite 'bytes 'zbytes)
    (chunk ty b) (wrbe #b 4 + ty + b + wrbe (crc32 (ty + b)) 4)
    (mkpng w h z) (bytes [137 80 78 71 13 10 26 10]
@@ -229,7 +229,10 @@ for n in (2, 4, 16, 256):
          (png-frames "GIF89a" 10 = "not a png")
          (atom? (filter (i \ !(png-frames (recrc (flip hand i)) 10 @ d (string? d || two? d))) (jot #hand)))
          (png-decode (mkpng 100000 100000 (zb 64)) = "too big")
-         (png-decode (mkpng 4097 4096 (zb 64)) = "too big")
+         (png-decode (mkpng 16385 16384 (zb 64)) = "too big")
+         (png-decode (mkpng 16384 16384 (zb 64)) = "too big")       ; 2^28, but a filter byte per row past inflate's 1 GiB
+         (png-decode (mkpng 16383 16383 (zb 64)) = "short image data")
+         (#((png-decode (mkpng 4097 4096 (zb (4096 * (1 + 4 * 4097))))) 2) = 4 * 4097 * 4096)
          (png-decode (mkpng 8 8 (zb 64)) = "short image data")
          (png-decode (mkpng 2 2 (zb 18)) = [2 2 (zb 16)]),
     hark ["rm" "-rf" dir],

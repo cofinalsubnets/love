@@ -89,46 +89,44 @@
  ((top-tray '(2) '(10 20)) + @(1 2) @ s (11 = peep s 0 0 && 22 = peep s 1 0)))
 
 ; --- `array`: the tier inferred, a number or list shape, the elements curried in after it ---
-(: oa-q (array 2 'hello 'world)
-   oa-bn (array 2 (100 2) 5)                  ; bignum -> o, stored exactly
-   oa-m  (array [2 2] 1 2 3 4))
+(: oa-q (top-tray 2 ['hello 'world])
+   oa-bn (galaxy 2 [(100 2) 5])                  ; bignum -> o, stored exactly
+   oa-m  (galaxy [2 2] [1 2 3 4]))
 (test
  ; ints -> z, any float -> r, past the 64-bit tower -> o
- (star-tray = tier (array 3 1 2 3))
- (gem-tray = tier (array 3 1 2.0 3))
+ (star-tray = tier (galaxy 3 [1 2 3]))
+ (gem-tray = tier (galaxy 3 [1 2.0 3]))
  (top-tray = tier oa-q)
  (top-tray = tier oa-bn)
  ; numeric shape -> rank-1 vector of length ($ n); a non-positive shape is empty
- (1 = rank (array 4 1 2 3 4))
- (0 = #(array -3)) ("@()" = show (array -3))
+ (1 = rank (galaxy 4 [1 2 3 4]))
+ (0 = #(galaxy -3 [])) ("@()" = show (galaxy -3 []))
  (2 = rank oa-m)   (4 = peep oa-m [1 1] 0)
  ('world = peep oa-q 1 0)
  ((100 2) = peep oa-bn 0 0)                  ; full bignum, not truncated
- ; currying: a partial collector is a function; completing it builds the array
- ("@('a 'b)" = show (array 2 'a 'b))
- ; (array 0) -> empty rank-1 array, no elements to collect; it prints @()
- ("@()" = show (array 0))
+ ("@('a 'b)" = show (top-tray 2 ['a 'b]))
+ ("@()" = show (galaxy [0] []))
  ; a numeric array result prints as @(..)
- ("@(1 2 3)" = show (array 3 1 2 3))
+ ("@(1 2 3)" = show (galaxy 3 [1 2 3]))
  ; saturating shape coercion: a float / complex / vector dimension -> ($ d)
- (3 = #(array 2.9 7 8 9))
- (3 = #(array (3 ~ 4) 0 0 0))             ; ($ (3 ~ 4)) = 3, the real part
- (8 = #(array [2.0 3.5] 1 2 3 4 5 6 7 8))
+ (3 = #(galaxy 2.9 [7 8 9]))
+ (3 = #(galaxy (3 ~ 4) [0 0 0]))             ; ($ (3 ~ 4)) = 3, the real part
+ (8 = #(galaxy [2.0 3.5] [1 2 3 4 5 6 7 8]))
  ; @ reader macro: @(e …) is sugar for a rank-1 array, type inferred
  (top-tray = tier @((100 2) 1))
- (aall (@(1 2 3) = array 3 1 2 3)))
+ (aall (@(1 2 3) = galaxy 3 [1 2 3])))
 
 ; --- the measure recurses into each element, so an all-zero tray nets 0 ---
-(: oa-z2 (array 2 (0 ~ 0) (0 ~ 0))
-   oa-c2 (array 2 (0 ~ 0) (3 ~ 4))               ; re 3 -> ceil 3
-   oa-b2 (array 2 (100 2) 0))                 ; bignum element saturates pin, forces o
+(: oa-z2 (galaxy 2 [(0 ~ 0) (0 ~ 0)])
+   oa-c2 (galaxy 2 [(0 ~ 0) (3 ~ 4)])               ; re 3 -> ceil 3
+   oa-b2 (galaxy 2 [(100 2) 0]))                 ; bignum element saturates pin, forces o
 (test
  (twin-tray = tier oa-z2) (twin-tray = tier oa-c2) (top-tray = tier oa-b2)
  (0 = $oa-z2) !oa-z2
  (3 = $oa-c2) !!oa-c2
  !!oa-b2                       ; a bignum element is truthy
  (0 = $(top-tray '(2 2) 0))
- !!(array 2 'a 'b))
+ !!(top-tray 2 ['a 'b]))
 
 ; --- `=` reads through a cell to its value, so the hash does too, never the pointers
 (: oa-k1 @(("a" + "b") [1 2] 'sym)
@@ -141,8 +139,8 @@
  !(aall (oa-k1 = @("ab" [1 3] 'sym)))   ; a cell apart is a key apart: the mask has a 0
  !(dig oa-k1 = dig @("ab" [1 3] 'sym))
  (0 = (oa-k1 = @("ab" [1 2])))      ; ..and so is a shape apart: no mask, a 0
- (aall (array [2 2] "a" "b" "c" "d" = array [2 2] ("" + "a") "b" "c" "d"))   ; rank-N alike, cell by cell
- (dig (array [2 2] "a" "b" "c" "d") = dig (array [2 2] ("" + "a") "b" "c" "d"))
+ (aall (top-tray [2 2] ["a" "b" "c" "d"] = top-tray [2 2] [("" + "a") "b" "c" "d"]))   ; rank-N alike, cell by cell
+ (dig (top-tray [2 2] ["a" "b" "c" "d"]) = dig (top-tray [2 2] [("" + "a") "b" "c" "d"]))
  ; the cells move and the key stays findable
  (0 = oa-churn 80) (2 = peep oa-t oa-k1 0) (dig oa-k1 = dig oa-k2))
 

@@ -48,14 +48,16 @@ static struct {
 // snap ask for history scroll. a paste streams through q (pasting, pbr, pprev); a press anchors
 // a selection (anchor, tp, clicks; at the cell). a window holding the paper (hold) takes the
 // pointer on pq/pqh/pqt and hears the paper's size (sw, sh); grabbed, it hears a pointer of
-// its own (vx, vy) that the real one's steps move, from its last place (lx, ly; lon once known)
+// its own (vx, vy) that the real one's steps move, from its last place (lx, ly; lon once known).
+// a game with its own mouse (mouse) hears its motion across (mdx) and its buttons (mb)
 static struct { uint8_t g, q[64], qh, qt; uint16_t lost;
                 uint8_t raw, r[64], rh, rt;
                 int16_t peer; uint8_t snap;          // shift+pgup/pgdn asks, a key snaps back
                 uint8_t pasting, pbr, pprev, clicks;
                 intptr_t anchor; uint64_t tp; uint32_t at;
                 uint8_t hold, pqh, pqt; uint16_t pq[16][4], sw, sh;
-                uint8_t grab, lon; uint16_t vx, vy, lx, ly; } kkb;
+                uint8_t grab, lon; uint16_t vx, vy, lx, ly;
+                uint8_t mouse, mb; int32_t mdx; } kkb;
 // k_uart feeds the same queue; an interrupt cannot wait, so a drop is counted, saturating
 void kq(uint8_t b) {
   uint8_t n = (kkb.qt + 1) & 63;
@@ -171,6 +173,13 @@ static void k_aim(uint32_t *how, uint32_t *y, uint32_t *x) {
 // a move once a cell: the mouse report if asked (cb_mouse), else (or with shift) the left
 // button selects (a second, third quick press the word, the line), the wheel scrolls
 void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x) {
+  if (kkb.mouse) {
+    uint32_t const btn = b & ~28u;
+    if (how == 3) kkb.mdx += (int16_t) x;
+    else if (how < 2 && btn < 3) {
+      uint8_t const bit = btn == 0 ? 1 : btn == 2 ? 2 : 4;   // doom's order: left, right, middle
+      kkb.mb = how ? kkb.mb & ~bit : kkb.mb | bit; }
+    return; }
   if (kkb.hold) {
     if (kkb.grab) k_aim(&how, &y, &x);
     if (how > 2) return;
@@ -422,6 +431,9 @@ _Static_assert(countof(kb2ascii) == countof(shift_kb2ascii), "one scancode table
 #define kb_code_end 79
 #define kb_code_pgup 73
 #define kb_code_pgdn 81
+// a game's own mouse: the seat locks its pointer while armed
+void k_mouse_arm(int on) { kkb.mouse = on != 0, kkb.mb = 0, kkb.mdx = 0, k_hold_out(on != 0); }
+int k_mouse_take(int *dx) { k_kb_poll(); *dx = kkb.mdx, kkb.mdx = 0; return kkb.mb; }
 // a code is the PS/2 byte, an 0xe0 prefix folded into 0x100 on the next (bit 7 the break)
 void k_scan_arm(int on) { kkb.raw = on ? 1 : 0, kkb.rh = kkb.rt = 0; }
 // a seat handed its codes asks before leaving a lane full that nothing would empty
@@ -528,7 +540,7 @@ static char const k_vtfg[] = "proc/vt/fg", k_vtbg[] = "proc/vt/bg",
 static char const k_plift[] = "proc/lift";
 __attribute__((weak)) void k_lift_ask(unsigned char const *p, uintptr_t n) { (void) p; (void) n; }
 // filled at open from the running machine, below the grow door they need
-static char const k_pmem[] = "proc/meminfo", k_pgauge[] = "proc/gauge";
+static char const k_pmem[] = "proc/meminfo";
 static char const k_pcmd[] = "proc/cmdline";
 // the image the door handed in, for a process to wake from
 static char const k_pimg[] = "proc/image";
@@ -578,7 +590,7 @@ static intptr_t k_hosted(char const *cp, uintptr_t cn) {
 
 // a move or a removal leaves these be: a special row, and every directory above one
 static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
-                                      k_pmem, k_pgauge, k_pcmd, k_dnull, k_dzero, k_mnt };
+                                      k_pmem, k_pcmd, k_dnull, k_dzero, k_mnt };
 // one entry per baked row, growing with create and mkdir. the cwd is canonical ("" the root)
 static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
                            .npins = countof(k_pins), .grab = k_grab, .drop = k_drop, .now = k_clock_ms };
@@ -600,7 +612,7 @@ static bool k_fs_init(void) {
   static struct { char const *path, *to; uintptr_t mode; bool dir; } const rows[] = {
     { "tmp", NULL, 0755, true },
     { k_vtfg, NULL, 0644, false }, { k_vtbg, NULL, 0644, false },     // the console's colours
-    { k_pmem, NULL, 0444, false }, { k_pgauge, NULL, 0444, false },   // filled at each open
+    { k_pmem, NULL, 0444, false },                                    // filled at each open
     { k_dnull, NULL, 0666, false }, { k_dzero, NULL, 0666, false },   // always empty (k_dev_slot)
     { "usr/bin", NULL, 0755, true },
     { k_vtscale, NULL, 0644, false },                                  // the glyph scale
@@ -711,8 +723,7 @@ static void k_vt_write(int i, int slot) {
 // /proc's live rows, filled at open from the free list and the collector: `key value` lines, in words
 static int k_proc_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_pmem - 1 && !memcmp(p, k_pmem, n)) return 1;
-  if (n == sizeof k_pgauge - 1 && !memcmp(p, k_pgauge, n)) return 2;
-  if (n == sizeof k_pcmd - 1 && !memcmp(p, k_pcmd, n)) return 3;
+  if (n == sizeof k_pcmd - 1 && !memcmp(p, k_pcmd, n)) return 2;
   return 0; }
 
 static int k_dec(char *b, int at, uintptr_t v) {
@@ -744,25 +755,6 @@ static int k_meminfo(char *b) {
   at = k_row(b, at, "fs-entries", ents);
   return k_row(b, at, "fs-heap-bytes", bytes); }
 
-// love.c's lvm_gauge roster, named
-static int k_gauge(char *b, struct g const *g) {
-  int at = k_row(b, 0, "pool-words", g->len);
-  at = k_row(b, at, "heap-words", (uintptr_t) (g->hp - ptr(g)));
-  at = k_row(b, at, "stack-words", (uintptr_t) (ptr(g) + g->len - g->sp));
-  at = k_row(b, at, "collections", g->n_gc);
-  at = k_row(b, at, "minors", g->n_minor);
-  at = k_row(b, at, "pool-peak", g->max_len);
-  at = k_row(b, at, "heap-peak", g->max_heap);
-  at = k_row(b, at, "seen-words", g->n_seen);
-  at = k_row(b, at, "evac-words", g->n_evac);
-  at = k_row(b, at, "old-words", (uintptr_t) (g->major_hp - g->major_base));
-  at = k_row(b, at, "major-cap", g->major_len);
-  at = k_row(b, at, "rem-miss", g->rem_miss);
-  at = k_row(b, at, "rem-peak", g->rem_hi);
-  at = k_row(b, at, "resizes", g->n_resize);
-  at = k_row(b, at, "minor-peak", g->minor_hi);
-  return k_row(b, at, "major-peak", g->major_hi); }
-
 // the program word, then the raw boot line, as linux writes its own
 static int k_bootline(char *b) {
   int at = 0;
@@ -775,9 +767,8 @@ static int k_bootline(char *b) {
 
 // at the open of a read; a refusal leaves the last content
 static void k_proc_read(int i, int slot) {
-  if (slot == 2 && !love_system) return;          // no process to ask; meminfo is ours alone
   char b[768];
-  int n = slot == 1 ? k_meminfo(b) : slot == 3 ? k_bootline(b) : k_gauge(b, love_system);
+  int n = slot == 1 ? k_meminfo(b) : k_bootline(b);
   if (!vfs_fit(&k_fs, i, (uintptr_t) n)) return;
   memcpy(k_fs.ents[i].bytes, b, (uintptr_t) n);
   k_fs.ents[i].len = (uintptr_t) n; }
@@ -1066,7 +1057,7 @@ static void pipe_wclose(int fd) {
   k_row_zero(fd);
   if (p) p->wrefs--, pipe_free(p); }
 
-// the pty: master, slave and signal rows over one k_pty. the master (a mitty pane) writes keys
+// the pty: master, slave and signal rows over one k_pty. the master (a pier pane) writes keys
 // through the line discipline into in and reads out; the slave the other way, \n as \r\n under
 // opost. ^C ^\ ^Z put a signal on the signal row for the tethering task to answer with still.
 // cooked, a read takes at most one whole line, ^D on an empty one the end; raw as the host's
@@ -1452,7 +1443,7 @@ love_noinline static struct g *k_disk_read(struct g *g) {
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
   if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper raises
   if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
     g->sp[0] = ZeroPoint;
   return g->sp[2] = g->sp[0], g->sp += 2, g; }
@@ -1508,7 +1499,7 @@ love_noinline static struct g *k_svm_run(struct g *g) {
   uint64_t code = 0, rax = 0, rip = 0;
   if (!k_svm_ok()) return g->sp[0] = ZeroPoint, g;
   // the pages ride a string's bytes, as blk.c's: nothing allocates before the vmrun
-  if (!ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, k_svm_need()))) return g;      // OOM: the wrapper raises
   if (k_svm_spike(txt(g->sp[0]), &code, &rax, &rip) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
   if (!ok(g = have(g, 3 * Width(struct chain)))) return g;
@@ -1532,7 +1523,7 @@ static lvm(lvm_vmx) {
 love_noinline static struct g *k_vmx_run(struct g *g) {
   uint64_t reason = 0, rax = 0, rip = 0, err = 0;
   if (!k_vmx_ok()) return g->sp[0] = ZeroPoint, g;
-  if (!ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper ghelps
+  if (!ok(g = str0(g, k_vmx_need()))) return g;       // OOM: the wrapper raises
   if (k_vmx_spike(txt(g->sp[0]), &reason, &rax, &rip, &err) < 0)
     return g->sp[1] = ZeroPoint, g->sp += 1, g;
   if (!ok(g = have(g, 4 * Width(struct chain)))) return g;
@@ -2310,7 +2301,7 @@ void kmain(void) {
   }
   // the crew off the registry's miss, every boot: the load is idempotent, its source row the guard
   r = evals_(r, "((cite 'verbs 'fills) crewload)");
-  // the program word dispatches off the registry. an empty line is a mitty, lush in its
+  // the program word dispatches off the registry. an empty line is a pier, lush in its
   // first pane; once that ends or fails, the console shell
   r = evals_(r, "(: cmdline (. \"love\" bootargv) argv cmdline)");
   r = evals_(r,
@@ -2324,7 +2315,7 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = evals_(r,
-   "(: pr (k-prog (. \"mitty\" (. \"--here\" ())))"
+   "(: pr (k-prog (. \"pier\" (. \"--here\" ())))"
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare's face on serial before reset

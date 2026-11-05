@@ -345,7 +345,7 @@ static void lsf2a(int16_t *a, const int16_t *f, int d) {
  int dd = d >> 1, i, k;
  for (k = 0; k < d; k++) {
   int fi = f[k] >> 8, ff = f[k] - (fi << 8);
-  c[ord[k]] = rnd((sk_cos[fi] << 8) + (sk_cos[fi + 1] - sk_cos[fi]) * ff, 4); }
+  c[ord[k]] = rnd((sk_cos[fi] * 256) + (sk_cos[fi + 1] - sk_cos[fi]) * ff, 4); }
  lsf_poly(p, c, dd), lsf_poly(q, c + 1, dd);
  for (k = 0; k < dd; k++) {
   int32_t pt = p[k + 1] + p[k], qt = q[k + 1] - q[k];
@@ -535,7 +535,7 @@ static void params(struct sk_ch *c, struct sk_ctl *k, int cond) {
                                  : (ns == 4 ? (w = 34, sk_lags_wb) : (w = 12, sk_lags_wb10));
   for (i = 0; i < ns; i++) k->pitch[i] = lim(lo + x->lag + cb[i * w + x->contour], lo, hi);
   for (i = 0; i < ns; i++)
-   for (j = 0; j < 5; j++) k->b[5 * i + j] = (int16_t) (sk_vq[x->per][x->ltp[i] * 5 + j] << 7);
+   for (j = 0; j < 5; j++) k->b[5 * i + j] = (int16_t) (sk_vq[x->per][x->ltp[i] * 5 + j] * 128);
   k->scale = sk_ltp_scale[x->scale]; }
  else x->per = 0, k->scale = 0; }
 

@@ -13,18 +13,18 @@
 
    ; --- the shapes ---
    ; empty and all-nonzero catch a loop bound off by one at either end
-   (seq sh) (foldl (*) 1 sh @ k (foldl (g \ j \ (g (j + 1))) (array sh) (jot k)))
+   (seq sh) (foldl (*) 1 sh @ k (galaxy sh (map (+ 1) (jot k))))
    zs [(iota 0) (iota 1) (iota 2) (iota 9) (iota 64)
        (1 + iota 1) (1 + iota 2) (1 + iota 9) (1 + iota 64) (1 + iota 4096)
-       (array '(3) -1 2 3) (array '(3) -1 0 3) (array '(3) 1 2 0) (array '(3) 0 2 3)
-       (array '(2 2) 1 2 3 4) (array '(2 2) 1 2 3 0) (array '(2 3) 1 1 1 1 1 1)
-       (array '(2 2 2) 1 1 1 1 1 1 1 0) (array '(4 0) )]
+       (galaxy '(3) [-1 2 3]) (galaxy '(3) [-1 0 3]) (galaxy '(3) [1 2 0]) (galaxy '(3) [0 2 3])
+       (galaxy '(2 2) [1 2 3 4]) (galaxy '(2 2) [1 2 3 0]) (galaxy '(2 3) [1 1 1 1 1 1])
+       (galaxy '(2 2 2) [1 1 1 1 1 1 1 0]) (galaxy '(4 0) [] )]
    ; the Z trays the two-argument kernels sweep, every rank and both orders of every shape
    ts [(seq '(1)) (seq '(3)) (seq '(4)) (seq '(6)) (seq '(2 2)) (seq '(2 3)) (seq '(3 2))
        (seq '(4 2)) (seq '(2 4)) (seq '(3 3)) (seq '(2 2 2)) (seq '(1 3)) (seq '(3 1)) (iota 0)]
    ; everything a kernel must hand back: floats, objects, scalars, the zero point, text, a list
-   ds [(array '(2 2) 1.0 2.0 3.0 4.0) (array '(3) 1.0 0.0 2.0)
-       (array '(2) 'a 'b) (array '(2) () ())
+   ds [(galaxy '(2 2) [1.0 2.0 3.0 4.0]) (galaxy '(3) [1.0 0.0 2.0])
+       (top-tray '(2) ['a 'b]) (top-tray '(2) [() ()])
        5 0 -3 2.5 () "text" '(1 2 3)]
 
    ; `=` is a mask on a tray; aall asks the whole question

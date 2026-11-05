@@ -63,8 +63,8 @@ grep -q '^hexedit  *left ' "$w/u1" || fail "hexedit is not left out"
 grep -q '^usage: love torrent-show' "$w/r1" || fail "torrent-show did not raise: $(cat "$w/r1")"
 "$w/l1" hexedit < /dev/null > "$w/r2" 2>&1
 grep -q '^usage: hexedit' "$w/r2" || fail "hexedit did not raise: $(head -5 "$w/r2")"
-# raising bee keeps the verbs of the kept units it needs (mitty)
-[ "$("$w/l1" -e "(: V (cite 'verbs) _ ((V 'get 'bee) [\"--help\"]) [(lit? (V 'tab 'mitty)) (lit? (V 'tab 'bee))])" 2>/dev/null | tail -1)" = "(1 1)" ] \
+# raising bee keeps the verbs of the kept units it needs (pier)
+[ "$("$w/l1" -e "(: V (cite 'verbs) _ ((V 'get 'bee) [\"--help\"]) [(lit? (V 'tab 'pier)) (lit? (V 'tab 'bee))])" 2>/dev/null | tail -1)" = "(1 1)" ] \
   || fail "raising bee lost a kept unit's verb"
 
 # the roster rides the image, so a configured binary reseeds to its own bytes

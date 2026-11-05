@@ -91,7 +91,7 @@
          (unit 'worker 'service ["sh" "-c" "exit 0"] 'on-fail ())       ; exits 0 -> settles
          (unit 'flaky  'service ["sh" "-c" "exit 1"] 'on-fail ())]      ; exits 1 -> restart, then give up
         (note "-- REAL processes: spawn each, then poll glean (the SIGCHLD core) --",
-         each units (u \ rstart pids u),
+         each units (rstart pids),
          rloop units pids tries #units 500,
          note "-- all real children reaped --")))
 
@@ -129,7 +129,7 @@
                      (unit 'flap 'service ["sh" "-c" "exit 1"]             'on-fail ())]
               _ (note "-- PERCEIVE: park on a signalfd; a heartbeat task ticks alongside (the merge) --")
               hb (twirl (_ \ (heart 5 40)) 0)             ; parks on the clock
-              (each units (u \ rstart pids u),
+              (each units (rstart pids),
                watch sig units pids tries #units,
                catch hb,                                 ; the orphan law
                0)))))

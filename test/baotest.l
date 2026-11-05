@@ -19,7 +19,7 @@
    (k7 u l r d hu hd cur) (u . l . r . d . hu . hd . cur)
    (fr u l r d) (edframe (ed u l r d))
    ; a key list through edstep, answering the buffer
-   (typed t ks) (each ks (c \ edstep t c), t)
+   (typed t ks) (each ks (edstep t), t)
    results [
    ; --- edleft / edright / edbsp / eddel / edhome / edend ---
   ((k4 () '(1) '(2 3) ()) = (b4 (edleft (ed () '(2 1) '(3) ()))))

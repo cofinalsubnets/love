@@ -224,7 +224,7 @@
       (synth-down st k (s \ (st 'latch ? (synth-drone st s) (synth-strike st s))))))
 
  ; --- the screen, the tty's and the window's; synth-rows is what the keys' pane is given on
- ; the mitty ---
+ ; the pier ---
  synth-rows 15
  (synth-face st how)
   (esc + "[H" + esc + "[2J"
@@ -241,7 +241,7 @@
    + "  tab: timbre   up/down: octave   " + (st 'fm ? "left/right: fm instrument   " "") + "esc: leave\r\n"
    + "  f1 f2 f3 f8: reverb echo chorus shimmer   f5 f6 f7 f9: wetter\r\n"
    + "  f4: latch   f10: the loop   f11 f12: volume   pgup pgdn: cps"
-   + (tablet? (st 'buf) ? ("   enter: send\r\n  ctrl-w w: the buffer" + (how = 'tty ? ", or C-a j and C-a k" "")
+   + (tablet? (st 'buf) ? ("   enter: send\r\n  ctrl-w w: the buffer" + (how = 'tty ? ", or the prefix and j and the prefix and k" "")
                            + "; there :send :play :stop :cps N")
          ""))
  (synth-frame st) (synth-face st 'tty)
@@ -315,7 +315,7 @@
  ; the latch: a note struck rings until struck again, its key the semitone past the
  ; window's codes; let go, every note held fades
  (synth-drone st s) (: k (1000.0 + s) (any (p \ <p = k) (st 'hv) ? (synth-free st k) (synth-hold st k s)))
- (synth-latch st) (? (st 'latch) (foldl synth-free (pins st 'latch 0 'dirty 1) (uniq (map (p \ <p) (st 'hv))))
+ (synth-latch st) (? (st 'latch) (foldl synth-free (pins st 'latch 0 'dirty 1) (uniq (map cap (st 'hv))))
                      (pins st 'latch 1 'dirty 1))
  (synth-lline st) (: ns (foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv))))
    (? (st 'latch) ("  latched" + ns) (two? (st 'hv)) ("  held" + ns) ""))
@@ -374,7 +374,7 @@
                              (peep synth-vis k () @ c (charm? c ? (wfeed st [c]) st)))
         (any (p \ <p = k) (st 'hv)) (st 'latch ? (synth-free st k) st)
         (k = 1) (pins st 'over 1)
-        (synth-down st k (s \ synth-hold st k s))))
+        (synth-down st k (synth-hold st k))))
  ; rw x rh pixels of col (0xrrggbb) at x y
  (fill p w x y rw rh col)
   (? (rw < 1 || rh < 1) 0
@@ -420,27 +420,27 @@
         (: hf (synth-horn st) hn <hf feed <>hf wh (window-size win)
            _ (tablet? vi ? (synth-wedit st vi (vi 'vi-open f) <wh (wh 1)) (synth-wlay st <wh (wh 1)))
            (go _) (feed (),
-                   each (window-events win) (r \ synth-wstep st r),
+                   each (window-events win) (synth-wstep st),
                    st 'dirty || st 'vd ? (synth-paint st win, window-show win 0 (window-size win 1), pins st 'dirty 0 'vd 0),
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
             0))))
  synth-usage "usage: love synth [--fm FILE] [-w|--window] [LOOP]   (z to / and q to ] play, the rows above them the sharps; tab the timbre, up and down the octave, f1 f2 f3 f8 reverb echo chorus shimmer and f5 f6 f7 f9 wetter, f4 the latch, f10 the loop, f11 f12 the volume, enter sends the buffer, pgup pgdn the cps, ctrl-w w the buffer and back, esc leaves)\n       in a window a note sounds while its key is held, or a finger on the strip of keys; on a tty a key is a strike\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
- ; --- the mitty: the keys a stage over a vi stage on the loop's text. ctrl-w then w, j or k
- ; goes between them as C-a j and k do ---
- (synth-mitty br vi f o) (: _ (synth-warm ()) st (synth-new o)
+ ; --- the pier: the keys a stage over a vi stage on the loop's text. ctrl-w then w, j or k
+ ; goes between them as the prefix and j and k do ---
+ (synth-pier br vi f o) (: _ (synth-warm ()) st (synth-new o)
    hf (synth-horn st) hn <hf feed <>hf
-   sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
+   sz (br 'hsize 0) hb (br 'pier-up <sz <>sz)
    buf (vi 'vi-open f)
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))
    _ (pin st 'buf buf)
    face (vi 'vi-face buf {'ex (synth-ex st) 'reg (hb 'clip)})
    (cw d k) (pin st 'cw 0, elem k [119 d] ? (br 'hsteer hb (d = 106 ? 'down 'up)) 0)
-   keys (br 'mitty-stage (w \ h \ (pin st 'dirty 0, synth-frame st))
+   keys (br 'pier-stage (w \ h \ (pin st 'dirty 0, synth-frame st))
                          (k \ (? (st 'cw) (cw 106 k) (k = 23) (pin st 'cw 1) (synth-step st k)))
                          (_ \ (st 'over)))
    _ (pins keys 'tick (_ \ (feed (), st 'dirty)) 'key synth-key)   ; an f key whole
-   text (br 'mitty-stage (face 0)
+   text (br 'pier-stage (face 0)
                          (k \ (? (st 'cw) (cw 107 k) (k = 23 && buf 'mode = 'n) (pin st 'cw 1) (face 1 k)))
                          (_ \ (buf 'quit || st 'over)))
    _ (pin text 'paste (face 3))
@@ -453,7 +453,7 @@
     hn ? (flush hn, close hn),
     0))
  ; --fm FILE first, its bank read whole or refused; -w or --window anywhere after
- (synth-main as) (: br (cite 'mitty) vi (cite 'vi)
+ (synth-main as) (: br (cite 'pier) vi (cite 'vi)
    fw (two? as && <as = "--fm") f (fw && two? >as ? <>as "")
    fm (fw ? (uread f @ r (opl-bank (two? r ? (r 1) ""))) ())
    rs0 (fw ? (two? >as ? >>as ()) as) o {'fm fm}
@@ -462,7 +462,7 @@
    (? (fw && atom? fm) (say err ("synth: " + f + ": no FM bank (an op2 file, or a wad with GENMIDI)\n"), flush err, 1)
       (1 < #rs) (say err ("synth: " + synth-usage + "\n"), flush err, 2)
       wn (synth-window o (two? rs ? <rs ""))
-      (tablet? br && tablet? vi) (synth-mitty br vi (two? rs ? <rs "") o)
+      (tablet? br && tablet? vi) (synth-pier br vi (two? rs ? <rs "") o)
       (synth-run o)))
  _ (pins (cite 'verbs 'tab) 'synth (udoor 'synth synth-main synth-usage 1 1)))
 ) ; module synth

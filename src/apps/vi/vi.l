@@ -1,18 +1,23 @@
 ; src/apps/vi/vi.l -- the terminal face over core.l: keys off `in`, vframe's escapes onto
 ; `out`, and the write requests ex leaves on the state. kore is its door (`love vi FILE`).
-; a mitty where the seat has one, else cli's stage: raw tty, alternate screen, port EOF
+; a pier where the seat has one, else cli's stage: raw tty, alternate screen, port EOF
 ; leaves, so a piped script ending :wq never dangles
 (module 'vi
 (borrow 'kore) ; the text/u floors
 (borrow '(posix cli))
 
 (:
+   ; a directory's names for the ex line's Tab, a directory's with its slash
+   (vi-files d)
+    (: p (0 < #d ? d ".")
+       ns (readdir p)
+       (two? ns ? (map (n \ (stat "\(p)/\(n)" @ e (two? e && 16384 = e 2 & 61440 ? "\(n)/" n))) ns)))
    ; a state for a file, read or new
    (vi-open f)
     (: r (0 < #f ? (uread f))
        st (vnew (two? r ? (lines <>r)) f)
-       (pin st 'home (getenv "HOME"),
-        0 < #f && atom? r ? (vmsg st (f + ": new file")),
+       (pin st 'home (getenv "HOME"), pin st 'files vi-files,
+        0 < #f && atom? r ? (vmsg st "\(f): new file"),
         (vi-theme st ())))
    ; the pens, and the door :colorscheme rings to swap them: the face reads the env and the
    ; theme file, the engine neither
@@ -29,11 +34,12 @@
              (0 < #nm ?
                 (open nm "w" @ q
                    (hot? q ? (say q (unlines (s2 'lines)), close q, pin s2 'dirty (),
-                              vmsg s2 (nm + " written"))
-                      (pin s2 'quit (),                   ; a failed wq must not quit
-                       vmsg s2 ("cannot write " + nm))))
-                (pin s2 'quit (), vmsg s2 "no file name")))))
-   ; the ex read requests: (name) put in the buffer; one that does not open is a new file.
+                              vmsg s2 (s2 'argq ? (vmoretxt s2) "\(nm) written"))
+                      (pins s2 'quit () 'doe (),          ; a failed wq or wn stays put
+                       vmsg s2 "cannot write \(nm)")))
+                (pins s2 'quit () 'doe (), vmsg s2 "no file name")))))
+   ; the ex read requests: (name), or (name row note) from the arglist, put in the buffer;
+   ; one that does not open is a new file.
    ; presence is uread's (1 text), so an empty file is a real file
    (doe s2)
     (s2 'doe @ rq
@@ -41,11 +47,12 @@
           (: _ (pin s2 'doe ())
              nm <rq
              r (uread nm)
+             note (string? <>>rq ? <>>rq "")
              (vload s2 (two? r ? (lines <>r)) nm,
-              vmsg s2 (two? r ? (nm + ": " + show #(s2 'lines) + " lines")
-                          (nm + ": new file"))))))
-   ; the ex split requests: (dir name), another buffer beside or under; split is the mitty's
-   ; door, or () with no mitty
+              two? >rq ? (vexgo s2 <>rq) 0,
+              vmsg s2 (two? r ? "\(nm): \(#(s2 'lines)) lines\(note)" "\(nm): new file\(note)")))))
+   ; the ex split requests: (dir name), another buffer beside or under; split is the pier's
+   ; door, or () with no pier
    (dos s2 split)
     (s2 'dos @ rq
        (atom? rq ? s2
@@ -71,7 +78,7 @@
           (uread f @ r
              (vload s2 (two? r ? (lines <>r)) f,
               pins s2 'row row 'col 0,
-              vmsg s2 (f + ": " + show #(s2 'lines) + " lines")))))
+              vmsg s2 "\(f): \(#(s2 'lines)) lines"))))
    ; a key while the picker is up is the picker's; when it goes the buffer is drawn whole
    (vseek s2 c)
     (: d (s2 'seek)
@@ -114,18 +121,19 @@
        _ (pins st 'dirty dirty 'row (0 < row ? (row - 1) 0))
        fc (vi-face st {})
        (stage (fc 0) (fc 1) (fc 2)))
-   ; the visit: on a mitty every buffer a pane (:sp :vs, C-a s, C-a v), one register between
+   ; the visit: on a pier every buffer a pane (:sp :vs, the prefix and s, the prefix and v), one register between
    ; them; else cli's stage, one buffer full screen
    (vi-main as)
     (: f (two? as ? <as "")
        ; vi reads no options: a dash word would open a file named after it
-       _ (1 < #f && f 0 = 45 ? (udie 2 ("vi: unknown option " + f)))
+       _ (each as (a \ 1 < #a && a 0 = 45 ? (udie 2 "vi: unknown option \(a)") 0))
        st (vi-open f)
-       br (cite 'mitty)
+       _ (two? >as ? (pin st 'args as, vmsg st "\(f) (1 of \(#as))") 0)
+       br (cite 'pier)
        (tablet? br ?
-          (: sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
+          (: sz (br 'hsize 0) hb (br 'pier-up <sz <>sz)
              (stage-of s) (: fc (vi-face s {'split split 'explore explore 'reg (hb 'clip)})
-                              sg (br 'mitty-stage (fc 0) (fc 1) (fc 2))
+                              sg (br 'pier-stage (fc 0) (fc 1) (fc 2))
                               (pin sg 'paste (fc 3), sg))
              ; a buffer's pane, kept on it so a door can show it again
              (berth-of s r c) (br 'hopen-stage (stage-of s) r c @ p (pin s 'vpane p, p))
@@ -137,7 +145,7 @@
                               _ (pin ms 'open (f \ (vpicked s f,
                                                       s 'vpane @ p (nil? p ? 0 (br 'hshow p)),
                                                       br 'hsoil hb)))
-                              sg (br 'mitty-stage (w \ h \ (mc 'mc-frame) ms w h) (c \ (mc 'mc-key) ms c) (_ \ ms 'over))
+                              sg (br 'pier-stage (w \ h \ (mc 'mc-frame) ms w h) (c \ (mc 'mc-key) ms c) (_ \ ms 'over))
                               (pin sg 'name "mc", br 'hberth hb 'beside 35 (br 'hopen-stage sg 1 1)))
              (pin hb 'more (_ \ (berth-of (vi-open "") 1 1)),
               br 'hberth hb 'stack 50 (berth-of st <sz <>sz),

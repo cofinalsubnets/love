@@ -71,7 +71,7 @@ static void evac_data(struct g *g, struct gcx *X) {
 
 // the write barrier: every old->young edge goes through gen_wb into the rem set, so a minor
 // under a complete set is sound (gc.v barrier_sound); an overflow (rem_miss) forces a major
-static bool young(struct g *g, word p) {
+static love_inline bool young(struct g *g, word p) {
  return evenp(p) && ((ptr(p) >= (word*) g->end && ptr(p) < g->hp) || (ptr(p) >= g->sv_base && ptr(p) < g->sv_hp)); }
 
 // the index: entry numbers probed from an object's hash, one at or past rem_n free. cleared with
@@ -357,7 +357,6 @@ struct g *gen_grow(struct g *g, uintptr_t len1) {
  h->n_resize += 1;
  if (h->len > h->max_len) h->max_len = h->len;
  alloc(g, 0);
- love_system = h;                              // the one place a state changes address
  return h; }
 
 // the survivors' room: none at the budget's edge, where the pools keep gcsize.v's bounds;
@@ -368,13 +367,11 @@ static uintptr_t sv_size(struct g *g) {
  return w < top ? w : top; }
 
 // the collector, asked for req0 words: a minor unless the rem set missed or the major lacks
-// headroom. a refusal leaves the reason (oom . ask), in a cell made at boot, as nothing can be made now
+// headroom. a refusal leaves its ask as the scare's reason
 static struct g *please_(struct g *g, uintptr_t req0);
 love_noinline struct g *please(struct g *g, uintptr_t req0) {
  if (ok(g = please_(g, req0))) return g;
- struct g *c = core_of(g);
- word r = c->nom[NomOom];
- if (r) ((struct chain*) r)->b = putcharm(req0), c->scare_c = r;
+ core_of(g)->scare = (intptr_t) (req0 > words_max ? words_max : req0);
  return g; }
 static struct g *please_(struct g *g, uintptr_t req0) {
  if (req0 > words_max) return encode(g, status_scare);   // before any sum can wrap

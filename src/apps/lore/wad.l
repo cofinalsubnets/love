@@ -2,7 +2,7 @@
 ; each subsector a floor and ceiling fan cut by the nodes' lines and its segs; each side three
 ; quads; each thing a sprite turned to the eye. a sector is a batch, laid again alone when it moves
 ; run: love play wad FILE [MAP] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]
-(module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
+(module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-look wad-mouse wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
 (borrow '(posix rove cli))
 (borrow 'horn)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
@@ -686,11 +686,13 @@
    (pins st 'msg "a secret" 'secrets (peep st 'secrets 0 + 1)))
  ; --- the tic, 35 a second: movers, monsters, missiles, switches, lights, the gun and the body,
  ;     what is taken, what the floor does; then what moved laid again ---
+ ; ..the button down keeps firing, as far as the gun's cooldown lets it
+ (trigger st) (peep st 'trig 0 = 1 ? (fire st) st)
  (tic st) (: s (pins st 'sol () 'gcd (max 0 (st 'gcd - 1)) 't (st 't + 1) 'dc (max 0 (peep st 'dc 0 - 1)) 'bc (max 0 (peep st 'bc 0 - 1)))
    _ (pin s 'movers (filter (m \ move-tic s m = 1) (s 'movers)))
    _ (each (s 'objs) (o \ (o 'gone @ 1 0 (o 'proj @ 1 (fly s o) (two? (o 'm) ? (think s o) 0)))))
    _ (pin s 'flips (filter (f \ (f 0 > s 't ? 1 (: _ (flip s (f 1)) 0))) (s 'flips)))
-   s2 (take (glide (drive (shine (gun-tic (glance s))))))
+   s2 (take (glide (drive (shine (gun-tic (glance (trigger s)))))))
    q (wad-sector (s2 'M) (s2 'px) (s2 'pz)) S (s2 'M 'secs q)
    _ (peep sore (S 5) 0 > 0 && s2 't % 32 = 0 && s2 'py - eye-h <= S 0 + 1 && s2 'suit < s2 't ? (hurt s2 (sore (S 5))) 0)
    _ (S 5 @ 9 (secret s2 q) 0)
@@ -722,7 +724,7 @@
    th (wrap (st 'th + r * ((run || tt > 6) ? 0.12271846303085129 0.06135923151542565)))
    fm (f * (run ? 1.5625 0.78125)) sm (s * (run ? 1.25 0.75))
    (st 'hp <= 0 ? st (pins st 'tt tt 'th th 'vx (st 'vx + fm * sin th + sm * cos th) 'vz (st 'vz + fm * cos th - sm * sin th))))
- wad-binds {101 'use 32 'use 102 'fire 49 'gun1 50 'gun2 51 'gun3 52 'gun4 53 'gun5 54 'gun6
+ wad-binds {119 'forward 115 'back 101 'use 32 'use 102 'fire 49 'gun1 50 'gun2 51 'gun3 52 'gun4 53 'gun5 54 'gun6
             97 'strafe-left 100 'strafe-right 44 'strafe-left 46 'strafe-right 114 'run}
  (wad-step st a) (: dt (peep st 'dt (1.0 / fps))
    (? (st 'hp <= 0) (a @ 'use (restart st) st)
@@ -730,13 +732,17 @@
       (a @ 'use (use st) 'fire (fire st) 'gun1 (pick st 0) 'gun2 (pick st 1) 'gun3 (pick st 2) 'gun4 (pick st 3)
            'gun5 (pick st 4) 'gun6 (pick st 5) 'run (pins st 'run (1 - st 'run) 'msg (st 'run @ 1 "walk" "run"))
            _ (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put! @ () st s s))))
+ ; ..the mouse looks; the left button holds the trigger
+ mouse-k 0.0025
+ (wad-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
+ (wad-mouse st ev bt) (bt = 1 ? (pin st 'trig (ev = 'press ? 1 0)) st)
  (wad-walk o M)
    (view-walk {'new (w \ h \ (wad-size (pins (wad-new w h (o 'wad) M) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                              'win (o 'win) 'scale (peep o 'scale 2))
                                        w (h // 2)))
-               'size wad-size 'frame wad-frame 'key wad-step
+               'size wad-size 'frame wad-frame 'key wad-step 'look wad-look 'mouse wad-mouse
                'binds (view-bind view-binds wad-binds) 'listed (view-listed ['use 'fire 'strafe-left 'strafe-right 'run 'gun1 'gun2 'gun3 'gun4 'gun5 'gun6 'finer 'coarser])
-               'tick wad-tick 'repeat [30 30]
+               'tick wad-tick 'repeat [30 30] 'walking (view-walking + ['strafe-left 'strafe-right])
                'fps fps 'linger 0 'next () 'song (hn \ (hn ? (wad-mixer hn (o 'wad)) ())) 'win (o 'win)})
  ; ..a file's wad and map, or why not
  (wad-open f m) (: wd (wad-read f) M (tablet? wd ? (wad-map wd m) ())
@@ -744,7 +750,7 @@
  (wad-run o) (wad-open (o 'file) (o 'map) @
    [wd M] (view-stage (pin o 'wad wd) (o2 \ wad-walk o2 M) (_ \ (say out mesh-gone, flush out)))
    why (say err ("wad: " + why + "\n"), flush err, 1))
- wad-usage "usage: love play wad FILE [MAP] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (h l turn, k j step, a d strafe, r run, u n look, e or space use, f fire, 1-6 guns; ? the keys; q or esc leaves)"
+ wad-usage "usage: love play wad FILE [MAP] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]   (w s or k j step, a d strafe, h l turn, r run, u n look, e or space use, f fire, 1-6 guns; in a window a click holds the mouse, which looks, its left button fires and esc lets it go; ? the keys; q or esc leaves)"
  ; ..FILE and MAP first, then view's words
  (wad-opts as) (: pos (\ l (two? l && string? <l && #<l > 0 && <l 0 != 45))
    f (pos as ? <as ()) r (pos as ? >as as) m (pos r ? <r "E1M1") rest (pos r ? >r r)

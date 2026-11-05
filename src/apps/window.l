@@ -1,17 +1,18 @@
 ; src/apps/window.l -- a window: pixels out, input events in, the same face on X and on inle.
 ;
 ;   (window-here? _)          whether there is a screen to open one on
-;   (window-whole? _)         whether a window there is the whole screen (inle)
 ;   (window-open w h title)   a window, or a nom: 'no-display 'refused 'no-paper
 ;   (window-paper win)        its paper: a cask of w x h pixels 0x00rrggbb, what `dye` paints
 ;   (window-size win)         (w h)
 ;   (window-sized win)        (w h) as the screen has it now: the events waiting read, so the
 ;                             paper follows a resize, and kept for window-events
 ;   (window-show win y0 y1)   the paper's rows y0..y1-1 out to the screen
-;   (window-blit win pic w h ys)  a picture w x h, 32-bit pixels as the paper's, out to the
+;   (window-blit win pic w h ys at)  a picture w x h, 32-bit pixels as the paper's, out to the
 ;                             whole window but the rows ys, [y0 y1] spans the paper shows, the
-;                             server enlarging it; 0 where it cannot, the picture to be
-;                             painted onto the paper
+;                             server enlarging it, at [x y] window pixels into it, its edges
+;                             carried on past; 0 where it cannot, the picture to be painted
+;                             onto the paper
+;   (window-slides? win)      whether window-blit can
 ;   (window-hold win on)      the pointer held in the window and hidden, on 1, or let go, on
 ;                             0; 1 where it was done
 ;   (window-warp win x y)     the pointer moved to x y in the window
@@ -19,6 +20,9 @@
 ;   (window-close win)
 ;   (window-own win sel text) text held as the selection sel, 'primary or 'clipboard
 ;   (window-ask win sel)      the selection sel asked for: its text comes as [paste s]
+;   (window-thumbs win)       on a phone, the keyboard down and each finger's touch as ['finger
+;                             id action x y] for the button's records, action 0 down 1 up 2 move: 1;
+;                             elsewhere 0
 ;   (window-typing win on)    a phone's soft keyboard up or down, and a row of the keys it lacks
 ;   (window-wets sc)          the rows of quay screen sc dirty since the last asking (wet clears)
 ;
@@ -29,8 +33,8 @@
 ; scaled by LOVE_FACE_SCALE, 2 unless said) the whole screen, whatever w h asked.
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
-(module '(window window-here? window-whole? window-open window-paper window-size window-sized window-show window-blit window-hold window-warp window-events window-close
-          window-own window-ask window-typing window-wets)
+(module '(window window-here? window-open window-paper window-size window-sized window-show window-blit window-slides? window-hold window-warp window-events window-close
+          window-own window-ask window-typing window-thumbs window-wets)
 (borrow '(xwire posix bytes))
 (:
    (inle? _) (elem 'love-os (names ()) ? (elem (ev 'love-os) '(inle wasm)) 0)
@@ -69,27 +73,54 @@
                 (zip (map (+ 29) ^26) [30 48 46 32 18 33 34 35 23 36 37 38 50 49 24 25 16 19 31 20 22 47 17 45 21 44]
                  + zip (map (+ 7) ^10) [11 2 3 4 5 6 7 8 9 10]
                  + zip (map (+ 131) ^12) [59 60 61 62 63 64 65 66 67 68 87 88]
-                 + zip [66 67 61 62 111 112 19 20 21 22 122 123 92 93 124 59 60 113 114 57 58 115 55 56 68 69 70 71 72 73 74 75 76]
-                       [28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
+                 + zip [4 66 67 61 62 111 112 19 20 21 22 122 123 92 93 124 59 60 113 114 57 58 115 55 56 68 69 70 71 72 73 74 75 76]
+                       [1 28 14 15 57 1 339 328 336 331 333 327 335 329 337 338 42 54 29 285 56 312 58 51 52 41 12 13 26 27 43 39 40 53]))
    ; the keys a phone's keyboard lacks, a row under the paper while it types: [label key
-   ; text]. ctrl and alt hold for the next key
-   droid-row [["esc" 1 ""] ["|" 43 "|"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""] ["paste" 'paste ""]
-              ["tab" 15 ""] ["ctrl" 29 ""] ["alt" 56 ""] ["←" 331 ""] ["↓" 336 ""] ["→" 333 ""] ["pgdn" 337 ""] ["/" 53 "/"]]
-   droid-per 8                                         ; keys a row
+   ; text]. ctrl and alt hold for the next key, and ≡ turns the row to the bridge's decks
+   droid-row [["esc" 1 ""] ["|" 43 "|"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""] ["paste" 'paste ""] ["≡" 'decks ""]
+              ["tab" 15 ""] ["ctrl" 29 ""] ["alt" 56 ""] ["←" 331 ""] ["↓" 336 ""] ["→" 333 ""] ["pgdn" 337 ""] ["/" 53 "/"] ["~" 41 "~"]]
+   droid-per 9                                         ; keys a row
+   droid-dper 4                                        ; decks a row, and the last place is a new one
    droid-rowh 96                                       ; two keys of three cells
    (droid-cols t) #(filter (b \ b & 192 != 128) (chars t))
    (droid-sp n) (n < 1 ? "" (" " + droid-sp (n - 1)))
-   ; the row painted in the console's font, a held modifier lit
-   (droid-strip win)
-    (: w (win 'w) c (w // 8) sc (screen (cask (screen () 6 c)) 6 c) held (win 'held)
-       (key r i) (droid-row (droid-per * r + i) @ [lab k _]
-                    (: x0 (i * c // droid-per) n ((i + 1) * c // droid-per - x0) pad ((n - droid-cols lab) // 2)
-                       bg (? (elem k held) "60;110;170" ((r + i) % 2 = 0) "44;44;44" "28;28;28")
-                       (each ^3 (j \ scribe sc ("\e[" + show (3 * r + j + 1) + ";" + show (x0 + 1) + "H\e[38;2;220;220;220;48;2;" + bg + "m"
-                                               + (j = 1 ? (droid-sp pad + lab + droid-sp (n - pad - droid-cols lab)) (droid-sp n)))))))
-       _ (each ^2 (r \ each ^droid-per (key r)))
+   ; two rows of per cells, [label lit], painted in the console's font
+   (droid-cells win per cells)
+    (: w (win 'w) c (w // 8) sc (screen (cask (screen () 6 c)) 6 c)
+       (cell i) (cells i @ [lab lit]
+                  (: r (i // per) j (i % per) x0 (j * c // per) n ((j + 1) * c // per - x0)
+                     t (snip lab 0 (min #lab n)) pad ((n - droid-cols t) // 2)
+                     bg (? lit "60;110;170" ((r + j) % 2 = 0) "44;44;44" "28;28;28")
+                     (each ^3 (y \ scribe sc ("\e[" + show (3 * r + y + 1) + ";" + show (x0 + 1) + "H\e[38;2;220;220;220;48;2;" + bg + "m"
+                                             + (y = 1 ? (droid-sp pad + t + droid-sp (n - pad - droid-cols t)) (droid-sp n)))))))
+       _ (each ^#cells cell)
        st (cask (w * droid-rowh * 4))
        (each ^6 (y \ dye sc st w y -1 ()), st))
+   ; what a process runs: its word after love, a program's own name
+   (droid-file p) (open p "r" @ q (hot? q ? (slurp q @ s (close q, s)) ""))
+   (droid-base t) (last (cite 'kore 'usplit 47 t))
+   (droid-word pid)
+    (filter (w \ 0 < #w) (cite 'kore 'usplit 0 (droid-file ("/proc/" + show pid + "/cmdline"))) @ ws
+       (? (atom? ws) "?"
+          (droid-base <ws @ n (elem n ["love" "liblove.so"] && two? >ws ? <>ws n))))
+   ; a process's parent, from stat: the second word past the name's last )
+   (droid-ppid t) (cite 'kore 'usplit 41 t @ ps (read ((cite 'kore 'usplit 32 (last ps)) 2)))
+   ; the newest process under pid, and on down: what its deck is doing
+   (droid-leaf pid)
+    (: ps (filter charm? (map (n \ read n) (filter (n \ 47 < n 0 < 58) (readdir "/proc"))))
+       up (foldl (t \ p \ (droid-file ("/proc/" + show p + "/stat") @ s
+                            (0 < #s ? (pin t p (droid-ppid s)) t))) {} ps)
+       (down p) (filter (q \ peep up q () = p) ps @ k (two? k ? (down (last k)) p))
+       (down pid))
+   ; the decks as cells, then a new one; the rest of the places empty
+   (droid-dcells ds)
+    (: cs (map (d \ d @ [i p c] [(show (i + 1) + " " + droid-word (droid-leaf p)) (c = 1)]) ds)
+       (take (2 * droid-dper) (cs + [["+" 0]] + map (_ \ ["" 0]) ^(2 * droid-dper))))
+   ; the row: the decks while they are asked, else the keys, a held modifier lit
+   (droid-strip win)
+    (peep win 'decks () @ ds
+       (two? ds ? (droid-cells win droid-dper (droid-dcells ds))
+          (droid-cells win droid-per (map (k \ [<k (elem (k 1) (win 'held))]) droid-row))))
    (droid-send win y n px)
     (: s (win 's) (say s ("F" + wrle (win 'w) 2 + wrle (win 'H) 2 + wrle y 2 + wrle n 2), say s px, flush s))
    (droid-row-show win) (0 < win 'row ? (droid-send win (win 'h) (win 'row) (droid-strip win)) 0)
@@ -101,27 +132,46 @@
     (: held (win 'held) _ (pin win 'held ())
        ev (map (m \ ['down m]) held + [['down k]] + (0 < #t ? [['text t]] ()) + [['up k]] + map (m \ ['up m]) held)
        (two? held ? (droid-row-show win) 0, ev))
+   ; a place on a row of per
+   (droid-at win per x y) (per * min 1 (y // (droid-rowh // 2)) + min (per - 1) (x * per // win 'w))
+   ; a touch on the decks: that one on the screen, or a new one; past them the row comes back
+   (droid-dtap win ds n)
+    (: s (win 's)
+       (pin win 'decks (),
+        ? (n < #ds) (say s ("G" + string [<(ds n)]), flush s)
+          (n = #ds) (say s ("G" + string [255]), flush s)
+          0,
+        droid-row-show win, ()))
    ; a touch on the row: a modifier held or let go, else its key
    (droid-tap win x y)
-    (droid-row (droid-per * min 1 (y // (droid-rowh // 2)) + min (droid-per - 1) (x * droid-per // win 'w)) @ [_ k t]
-       (? (k = 'paste) (droid-paste win, ())
-          (k = 29 || k = 56) (: held (win 'held)
-                                (pin win 'held (elem k held ? (filter (m \ m != k) held) (k . held)),
-                                 droid-row-show win, ()))
-          (droid-key win k t)))
+    (peep win 'decks () @ ds
+       (two? ds ? (droid-dtap win ds (droid-at win droid-dper x y))
+          (droid-row (droid-at win droid-per x y) @ [_ k t]
+             (? (k = 'paste) (droid-paste win, ())
+                (k = 'decks) (: s (win 's) (say s "D", flush s, ()))
+                (k = 29 || k = 56) (: held (win 'held)
+                                      (pin win 'held (elem k held ? (filter (m \ m != k) held) (k . held)),
+                                       droid-row-show win, ()))
+                (droid-key win k t)))))
    ; a record -> the window's events. a key's text is android's map under meta state c; a
    ; touch is the left button, or a key of the row
    (droid-events win r)
     (r @ [k a b c]
-       (? (k = 83) (: _ (pins win 'H (c // droid-scale) 'row (a > 0 && peep win 'typing 0 ? droid-rowh 0))
+       (? (k = 83) (: _ (pins win 'H (c // droid-scale) 'row (a & 1 && peep win 'typing 0 ? droid-rowh 0))
+                      _ (a & 2 ? (pin win 'w 0))               ; no size is the paper's now, so this one is news
                       [['size (b // droid-scale) (c // droid-scale - win 'row)]])
+          ; the decks, one record each, and the row turned to them at the end
+          (k = 68) (a = 255 ? (pin win 'decks (rev (peep win 'dk ())), pin win 'dk (), droid-row-show win, ())
+                      (pin win 'dk ([a b c] . peep win 'dk ()), ()))
           (k = 80) (peep win 'pst "" @ t (a = 0 ? (pin win 'pst "", [['paste t]]) (pin win 'pst (t + b), ())))
           (k = 75 && b = 279) (a ? (droid-paste win) 0, ())   ; a keyboard's paste key
           (k = 75) (: p (peep droid-set1 b ()) t (a && 32 <= c && c != 127 ? (utf8 c) "")
                       (? !(charm? p) (0 < #t ? [['text t]] ())
                          (a && two? (win 'held)) (droid-key win p t)
                          ([[(a ? 'down 'up) p]] + (0 < #t ? [['text t]] ()))))
-          (k = 84) (? (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
+          (k = 84) (? (peep win 'thumbs 0) [['finger (a >> 2) (a & 3) b c]]
+                      (3 < a) ()
+                      (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
                       (a = 0) (droid-tap win b (c - win 'h))
                       ())
           ()))
@@ -142,7 +192,6 @@
        (go more))
 
    (window-here? _) (inle? 0 || 0 < #(getenv "DISPLAY") || string? (getenv "LOVE_FACE"))
-   (window-whole? _) (inle? 0)
    (window-open w h title) (? (inle? 0) (inle-open-win ())
                               (string? (getenv "LOVE_FACE")) (droid-open-win ())
                               (x-open-win w h title))
@@ -186,11 +235,12 @@
                         x-w8 k op, x-w8 k 7, x-w16 k 2, x-w32 k (r 'dst),
                         x-w8 k 54, x-w8 k 0, x-w16 k 2, x-w32 k (r 'pm)) 0)                 ; FreePixmap
           _ (x-w8 k 53, x-w8 k (win 'depth), x-w16 k 4, x-w32 k (r 'pm), x-w32 k (win 'xw), x-w16 k w, x-w16 k h)
-          _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'src), x-w32 k (r 'pm), x-w32 k (r 'fmt), x-w32 k 0)
+          _ (x-w8 k op, x-w8 k 4, x-w16 k 6, x-w32 k (r 'src), x-w32 k (r 'pm), x-w32 k (r 'fmt), x-w32 k 1, x-w32 k 3)   ; repeat, pad
           _ (x-w8 k op, x-w8 k 4, x-w16 k 5, x-w32 k (r 'dst), x-w32 k (win 'xw), x-w32 k (r 'fmt), x-w32 k 0)
-          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (v \ x-w32 k v))
+          _ (x-w8 k op, x-w8 k 28, x-w16 k 11, x-w32 k (r 'src), each [mx 0 0 0 my 0 0 0 65536] (x-w32 k))
           (pins r 'pw w 'ph h 'sc [(win 'w) (win 'h)] 'made 1)))
-   (window-blit win pic w h ys)
+   (window-slides? win) (win 'how = 'x && tablet? (x-render win))
+   (window-blit win pic w h ys at)
     (: r (win 'how = 'x ? (x-render win) 0) H (win 'h)
        ; ..the rows between the spans left, each [y0 y1]
        gaps (foldl (\ g s (: a (max 0 (s 0)) b (min H (s 1)) e <g (? (b <= a) g ([b (e 1)] . [(e 0) (min a (e 1))] . >g)))) [[0 H]] (sort ys))
@@ -202,7 +252,7 @@
              _ (each (filter (g \ g 0 < g 1) gaps)
                  (g \ (x-w8 k op, x-w8 k 8, x-w16 k 9, x-w8 k 1, x-w8 k 0, x-w16 k 0,          ; Composite, Src
                     x-w32 k (r 'src), x-w32 k 0, x-w32 k (r 'dst),
-                    x-w16 k 0, x-w16 k (g 0), x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k (g 0),
+                    x-w16 k (at 0 & 65535), x-w16 k (g 0 + at 1 & 65535), x-w16 k 0, x-w16 k 0, x-w16 k 0, x-w16 k (g 0),
                     x-w16 k (win 'w), x-w16 k (g 1 - g 0))))
              _ (x-flush k)
              _ (x-let win)
@@ -270,6 +320,7 @@
    (window-close win) (win 'how = 'x || win 'how = 'droid ? (close (win 's)) (kpaper 0))
    ; on a phone the keyboard comes with the row, and the paper gives it room; put away by
    ; hand, the bridge's next size takes the row with it
+   (window-thumbs win) (win 'how = 'droid ? (pin win 'thumbs 1, window-typing win 0, 1) 0)
    (window-typing win on)
     (win 'how = 'droid ? (: s (win 's) _ (say s ("I" + wrle (on ? 1 0) 1), flush s)
                             (pins win 'typing on 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))

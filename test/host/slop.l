@@ -159,7 +159,7 @@
                                 (p h) (pin b () (h 'spent)) ())
                (sandy-top? h) (h 'wtop @ w
                                  (any (x \ (w <= slop-shore h x + slop-sand h x)) ^80))
-               (wet-top? h) (h 'wtop @ w (any (x \ slop-wet? h w x) ^80))
+               (wet-top? h) (h 'wtop @ w (any (slop-wet? h w) ^80))
                (go n) (g 'over ? [n (slop-sy g) (peep sand () -1) (peep shore () -1)]
                        (seen? g sand sandy-top?,
                         seen? g shore wet-top?,

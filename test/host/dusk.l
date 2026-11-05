@@ -5,7 +5,7 @@
 (: dusk-kb (view-bind view-binds walk-binds))
 
 (: (pen? s n) (has? s ("38;5;" + show n + ";") || has? s (";48;5;" + show n + "m"))
-   (sun? f) (any (p \ pen? f p) sun-pens)
+   (sun? f) (any (pen? f) sun-pens)
    (at z) (dusk-frame (pins (dusk-new 80 48) 'pz z))
    (sun th z) (sun-at (pins (dusk-new 80 48) 'th th 'pz z)))
 

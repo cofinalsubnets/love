@@ -224,7 +224,7 @@ lvm(lvm_yield_sw) {
            need = my_height + restore_h + 9;
  if (room(Hp, Sp) < need) {
   Pack(g);
-  if (!ok(g = please(push(g, 1, next), need))) love_musttail return Ap(_lvm_ghelp, g);
+  if (!ok(g = please(push(g, 1, next), need))) love_musttail return Ap(_lvm_raise, g);
   next = cell(pop1(g));
   Unpack(g);
   next_stack = next + 8; }   // recompute: next was forwarded by gc

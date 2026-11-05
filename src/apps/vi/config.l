@@ -1,31 +1,40 @@
-; src/apps/vi/config.l -- the theme: molokai, two hues our own, as plain data the painter reads.
+; src/apps/vi/config.l -- the theme: molokai, as plain data the painter reads.
 ;
 ; keyed by vim highlight group, not syntax class: hue.l says a comment is a Comment, this says
 ; what a Comment looks like. the values are molokai's (Tomas Restrepo's, after Wimer
-; Hazenberg's monokai), the cterm numbers its 256-colour fallback.
+; Hazenberg's monokai) as vim paints it on 256 colours; each "#rrggbb" is its number's own,
+; so a truecolor terminal looks the same.
 ;
 ; a row is `(group cterm256 "#rrggbb" faces)`, faces drawn from (bold italic); a ground, when
 ; the row has one, rides after as a second cterm256 and "#rrggbb".
 (module 'vi
 (:
    hue-theme
-    '((Comment    59  "#75715E" ())
-      (String     144 "#E6DB74" ())
-      (Number     135 "#AE81FF" ())
-      (Constant   135 "#AE81FF" (bold))
-      (Statement  161 "#F92672" (bold))
-      (Function   118 "#A6E22E" ())
-      (Identifier 214 "#ffaa1e" ())          ; ours, over molokai's #fd971f/208
-      (Special    81  "#62d2f2" (italic))    ; ours, over molokai's #66d9ef
-      (Operator   161 "#F92672" ())
-      (Delimiter  241 "#8F8F8F" ())
-      (Type       81  "#66D9EF" ())          ; these two paint only src/apps/vi/hues.l's classes
-      (PreProc    118 "#A6E22E" ())
-      (Search     0   "#000000" () 222 "#FFE792"))
+    '((Normal       252 "#d0d0d0" () 233 "#121212")
+      (Visual       252 "#d0d0d0" () 235 "#262626")
+      (LineNr       250 "#bcbcbc" () 236 "#303030")
+      (NonText      59  "#5f5f5f" ())
+      (MatchParen   233 "#121212" (bold) 208 "#ff8700")
+      (Search       0   "#000000" () 222 "#ffd787")
+      (Comment      59  "#5f5f5f" ())
+      (String       144 "#afaf87" ())
+      (Number       135 "#af5fff" ())
+      (Constant     135 "#af5fff" (bold))
+      (Statement    161 "#d7005f" (bold))
+      (Function     118 "#87ff00" ())
+      (Identifier   208 "#ff8700" ())
+      (Special      81  "#5fd7ff" ())
+      (Operator     161 "#d7005f" ())
+      (Delimiter    241 "#626262" ())
+      (Type         81  "#5fd7ff" ())
+      (PreProc      118 "#87ff00" ())
+      (PreCondit    118 "#87ff00" (bold))
+      (Macro        193 "#d7ffaf" ())
+      (StorageClass 208 "#ff8700" ())
+      (Label        229 "#ffffaf" ()))
 
-   ; the named themes, by a bare name in the theme file or :colorscheme. molokai keeps the
-   ; terminal's ground; the others carry Normal, Visual and Search, whose ground is a fifth and
-   ; sixth column, cterm256 and "#rrggbb". nord's, tokyo-night's and solarized's values are
+   ; the named themes, by a bare name in the theme file or :colorscheme. each carries Normal,
+   ; Visual and Search, whose ground is a fifth and sixth column, cterm256 and "#rrggbb". nord's, tokyo-night's and solarized's values are
    ; upstream's (LICENSE); paper is the tree's own
    hue-themes
     [['molokai hue-theme]

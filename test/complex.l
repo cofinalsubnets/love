@@ -78,9 +78,9 @@
 ; body-less `:`, so ca-* stay global: roundtrip.l reads them
 (: ca-z (twin-tray '(3) 0)                             ; zero-filled
    ca-v (twin-tray '(2) [(1 ~ 2) (3 ~ 4)])
-   ca-a (array 3 (1 ~ 1) (2 ~ 2) (3 ~ 3))     ; `array` infers the tier
+   ca-a (galaxy 3 [(1 ~ 1) (2 ~ 2) (3 ~ 3)])     ; `galaxy` infers the tier
    ca-r @((1 ~ 0) (0 ~ 1))                     ; `@` too
-   ca-m (array '(2 2) (1 ~ 0) (0 ~ 1) (2 ~ 0) (0 ~ 2)))
+   ca-m (galaxy '(2 2) [(1 ~ 0) (0 ~ 1) (2 ~ 0) (0 ~ 2)]))
 
 (test
  (twin-tray = tier ca-v)   (twin-tray = tier ca-z)   (twin-tray = tier ca-a)
@@ -150,6 +150,6 @@
  ((!ca-v ? 1 0) = (0 = sat ca-v ? 1 0))
  ((!ca-z ? 1 0) = (0 = sat ca-z ? 1 0))
 
- ; --- printer: rank 1 as @(..), rank 2+ as (array ..) ---
+ ; --- printer: rank 1 as @(..), rank 2+ as (galaxy ..) ---
  ("@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show ca-v)
- ("(array '(2 2) (1.0 ~ 0.0) (0.0 ~ 1.0) (2.0 ~ 0.0) (0.0 ~ 2.0))" = show ca-m))
+ ("(galaxy '(2 2) [(1.0 ~ 0.0) (0.0 ~ 1.0) (2.0 ~ 0.0) (0.0 ~ 2.0)])" = show ca-m))

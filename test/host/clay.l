@@ -227,8 +227,8 @@ here")) = "// two lines" + nl + "// here" + nl))
     ; - is left associative: a - (b - c) needs the parens back
     (e '(bin - (var "a") (bin - (var "b") (var "c"))) = "int r = a - (b - c);" + nl)
     (e '(bin - (bin - (var "a") (var "b")) (var "c")) = "int r = a - b - c;" + nl)
-    ; shifts bind tighter than the comparisons, looser than the arithmetic
-    (e '(bin shl (bin + (var "a") (var "b")) (num 1)) = "int r = a + b << 1;" + nl)
+    ; shifts bind tighter than the comparisons; arithmetic under a shift keeps its parens, as cc asks
+    (e '(bin shl (bin + (var "a") (var "b")) (num 1)) = "int r = (a + b) << 1;" + nl)
     (e '(bin eq (bin shr (var "a") (num 3)) (num 0)) = "int r = a >> 3 == 0;" + nl)
     ; ?: is right-associative and binds looser than ||
     (e '(cond (lor (var "a") (var "b")) (num 1) (cond (var "c") (num 2) (num 3)))

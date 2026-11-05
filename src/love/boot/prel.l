@@ -640,7 +640,7 @@
 
 )
 
-; --- array element-type inference + shape coercion (shared by `tuple` and `array`).
+; --- tray element-type inference + shape coercion (shared by `tuple` and `galaxy`).
 ; a-type answers a witness star of the highest tier present: `tray` reads the tier off a
 ; witness. a shape dimension may be any numeric and saturates to a nat.
 (: ; the int tier is a question of magnitude, not of the numeral's box. whole? first: love
@@ -661,11 +661,6 @@
                  (list 'pin (hashtx >>a) <a <>a)))
 (:: 'hash (a \ (hashtx a)))
 
-; (array shape elem..): shape is a dimension list or a lone number, and fixes the count, so
-; the elements are ordinary trailing args
-(: (a-coll sh n acc) (n < 1 ? (: d (rev acc) (tray (a-type d) sh d))
-                              (x \ (a-coll sh (n - 1) (x . acc))))
-)
 
 ; an object tray whose cells C does not take -- a tray, a coin, a twin: op k (C's enum vop) over
 ; the cells C paired, each the whole op, so a cell that is itself a tray goes round again.

@@ -1,0 +1,28 @@
+; test/thumb2/perf/work.l -- what perf.sh meter counts past boot: float-bound love on a board. facets'
+; frames, plain and toned, tray kernels as the drone runs them, scalar floats, bignums' true quotient, a sort
+(: fb-n 500 fb-w 160 fb-h 120
+   (fb-lcg s) ((s * 1103515245 + 12345) % 2147483648)
+   (fb-rs n s) (: (go i s acc) (i < n ? (fb-lcg s @ t (go (i + 1) t ((t / 2147483648.0) . acc))) acc) (go 0 s ()))
+   fb-u (fb-rs (fb-n * 9) 7)
+   (fb-at i) (fb-u i)
+   (fb-vx i k) (: z (0.0 - (0.3 + 30.0 * fb-at (9 * i + 2)))
+                  [((fb-at (9 * i) * 2.4 - 1.2) * (0.0 - z) + 0.4 * k) ((fb-at (9 * i + 1) * 2.4 - 1.2) * (0.0 - z) + 0.4 * (k % 2)) (z - 0.2 * k)
+                   (8.0 * k) (8.0 * (k % 2)) (fb-at (9 * i + 3)) (fb-at (9 * i + 4)) (fb-at (9 * i + 5))])
+   fb-vs (gem-tray [(fb-n * 3 * 8)] (foldr (+) () (map (i \ fb-vx i 0 + fb-vx i 1 + fb-vx i 2) ^fb-n)))
+   fb-ts (star-tray [(fb-n * 4)] (foldr (+) () (map (i \ [(3 * i) (3 * i + 1) (3 * i + 2) (i % 2 ? 0 -1)]) ^fb-n)))
+   fb-tex (star-tray [64 64] (map (k \ (k * 2654435761) % 16777216) ^4096))
+   fb-pm (gem-tray [16] [1.0 0.0 0.0 0.0 0.0 0.45 0.0 0.0 0.0 0.0 -1.002 -0.2002 0.0 0.0 -1.0 0.0])
+   (fb-one _) (facets fb-w fb-h 0 fb-pm fb-vs fb-ts [[fb-tex]] ())
+   a (foldl (\ _ _ (fb-one 0)) () ^4)
+   (fb-lit _) (facets fb-w fb-h 0 fb-pm fb-vs fb-ts [[fb-tex]] (gem-tray [8] [0.0 0.0 0.0 0.0 0.0 0.0 1.5 0.0]))   ; through the tone curve
+   a2 (foldl (\ _ _ (fb-lit 0)) () ^4)
+   ph (gem-tray [735] (map (i \ i * 0.0085) ^735))
+   (drone k) (: s (sin (ph * k)) f (floor (s * 8.0)) (net (s * 0.5 + f * 0.25 + s * s)))
+   b (foldl (\ t k (t + drone k)) 0.0 (map (+ 1) ^40))
+   (hyp x y) ((1 / 2) (x * x + y * y))
+   c (foldl (\ t i (t + hyp (i * 0.5) (i + 0.25))) 0.0 ^20000)
+   d (foldl (\ t i (t + ((2 ** (900 + i)) / (3 ** (400 + i))))) 0.0 ^60)
+   e (sort (fb-rs 8000 3))
+   _ (putx ['perf (net a) (net a2) b c d (e 0)])
+   _ (putc 10)
+   0)

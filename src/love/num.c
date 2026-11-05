@@ -368,7 +368,7 @@ struct g *big_shift(struct g *g, int vop) {
  int na = bigp(a) ? big_nlimbs(a) : wlimbs;
  int ls = khuge ? 0 : k / limb_bits, bs = khuge ? 0 : k % limb_bits;
  int w = left ? na + ls + 2 : na + 2;
- if (left && khuge) return encode(g, status_scare);   // 2^huge: no heap holds it
+ if (left && khuge) return g->scare = words_max, encode(g, status_scare);   // 2^huge: no heap holds it
  uintptr_t res_area = Width(struct big) + b2w((size_t) w * sizeof(love_limb)),
            ws_words = b2w((size_t) w * sizeof(love_limb));
  if (!ok(g = have(g, res_area + ws_words))) return g;
@@ -776,11 +776,25 @@ struct g *big_read_dec(struct g *g) { return big_read_radix(g, 10, limb_dec_chun
 struct g *big_read_hex(struct g *g) { return big_read_radix(g, 16, limb_hex_chunk, 2); }
 struct g *big_read_oct(struct g *g) { return big_read_radix(g,  8, limb_oct_chunk, 1); }
 
+// the widest tier among a list's numbers, the rest skipped: a big past the word or a coin is O
+static intptr_t tray_tier(word l) {
+ intptr_t ty = love_Z;
+ for (; chainp(l) && ty < love_O; l = B(l)) {
+  word x = A(l);
+  intptr_t k = twinp(x) ? love_C : gemp(x) ? love_R : coinp(x) ? love_O : love_Z;
+  if (bigp(x)) {                               // past the word, the low word's sign disagrees
+   intptr_t sl = ((struct big*) x)->slen;
+   if (sl > wlimbs || sl < -wlimbs || (wbig_get(x) < 0) != (sl < 0)) k = love_O; }
+  if (k > ty) ty = k; }
+ return ty; }
+
 // (tray witness shape vals), mopped behind prel's *-tray: the witness names the tier by example,
-// 0 Z, 0.0 R, ~(0 0) C, else O; vals fill row-major. a negative dim or over-rank -> zero
+// 0 Z, 0.0 R, ~(0 0) C, 1 the widest of vals, else O; vals fill row-major. a negative dim or
+// over-rank -> zero
 lvm(lvm_trayctor) {
  word t = Sp[0], shp = Sp[1];                  // vals = Sp[2]
- intptr_t ty = twinp(t) ? love_C : gemp(t) ? love_R
+ intptr_t ty = t == putcharm(1) ? tray_tier(Sp[2])
+             : twinp(t) ? love_C : gemp(t) ? love_R
              : intp(t) ? love_Z : love_O;
  uintptr_t rank = 0, nelem = 1;
  for (word l = shp; chainp(l); l = B(l)) {
@@ -1464,7 +1478,7 @@ lvm(lvm_sort) {
    if (allfix) while (x < m && y < hi) b[o++] = (intptr_t) a[y] < (intptr_t) a[x] ? a[y++] : a[x++];
    else        while (x < m && y < hi) {
     intptr_t c = cmp3(g, a[y], a[x]);
-    if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }   // the spine unlaid first
+    if (c == cmp_torn) { Hp = (word*) spine; WalkAgain(); Pack(g); love_musttail return Ap(_lvm_raise, g); }   // the spine unlaid first
     b[o++] = c < 0 ? a[y++] : a[x++]; }
    while (x < m) b[o++] = a[x++];
    while (y < hi) b[o++] = a[y++]; }
@@ -1511,7 +1525,7 @@ static lvm(lvm_cmp_ord) {
  else if (!(isnum(a) || twinp(a))) {
   Pack(g);                                                 // cmp3's walks take the gap
   intptr_t c = cmp3(g, a, b);
-  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+  if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_raise, g); }
   r = vcmp_int(op, c, 0); }
  else if (twinp(a) || twinp(b)) {
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
@@ -1535,7 +1549,7 @@ static lvm(lvm_extreme2) {
  if ((coinp(a) || coinp(b)) && coin_lt(g, a, b)) { g->b = (word) (4 | ismax); love_musttail return Ap(lvm_coin_cmp, g); }   // max asks b < a, min a < b
  Pack(g);
  intptr_t c = cmp3(g, a, b);
- if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_ghelp, g); }
+ if (c == cmp_torn) { WalkAgain(); Pack(g); love_musttail return Ap(_lvm_raise, g); }
  love_musttail return Push((ismax ? c >= 0 : c <= 0) ? a : b); }
 lvm(lvm_max2) { g->b = (word) 1; love_musttail return Ap(lvm_extreme2, g); }
 lvm(lvm_min2) { g->b = (word) 0; love_musttail return Ap(lvm_extreme2, g); }

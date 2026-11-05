@@ -159,7 +159,7 @@ static intptr_t image_fn_resolve(intptr_t j) {
 // the out-of-pool immortals; NULL is met in a mid-eval dump's undressed rbuf/wbuf. every port
 // vtable belongs here: a port's head carries its vt
 static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &love_stdin, (word) &love_stdout, (word) &love_stderr, 0, map_gap,
- (word) &love_fd_port_vt, (word) &to_vt, (word) &closed_vt, (word) &ci_vt,
+ (word) &love_fd_port_vt, (word) &to_vt, (word) &closed_vt, (word) &ci_vt, (word) &state_vt,
  (word) yield_c };   // g->ip's parked value
 static intptr_t image_imm_index(word v) {
  for (uintptr_t i = 0; i < countof(image_immortals); i++) if (image_immortals[i] == v) return (intptr_t) i;
@@ -167,7 +167,7 @@ static intptr_t image_imm_index(word v) {
 // the buffer codec: save compacts and serializes {header, dictionary, token stream}; load
 // validates, expands, decodes in place. a mismatched buffer -> NULL, a normal boot
 /* bump on any wire format change, renumbering image_immortals included */
-#define ImageMagic 0x38304f4e5349411aULL
+#define ImageMagic 0x39304f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -677,7 +677,7 @@ static struct g *img_canon_symbols(struct g *g) {
  uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
  word *s = map_slots(m),
       *pairs = alloc(NULL, 2 * cap * sizeof(word));
- if (!pairs) return encode(g, status_scare);
+ if (!pairs) return g->scare = 2 * cap, encode(g, status_scare);
  for (uintptr_t j = 0; j < cap; j++)
   if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
  { struct img_ord o = { img_lt_pair, pairs, 2 };
@@ -1186,7 +1186,11 @@ void *image_save2(struct g *g, uintptr_t *outlen, struct image_bad *bad, struct 
  uintptr_t nw = 0;
  char *cseg = NULL; uintptr_t ncode = 0;
  uintptr_t *cb = NULL, ncb = 0;
- word *blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb);
+ word in = g->hook[hook_inport];         // stdin's port is this process's, no image's: a root
+ g->hook[hook_inport] = zero;            // ..through img_build's collections, and not a hook
+ word *blob;
+ avec(g, in, blob = img_build(g, &H, bad, opt, &nw, &cseg, &ncode, &cb, &ncb));
+ g->hook[hook_inport] = in;
  if (!blob) { if (cseg) alloc(cseg, 0); return NULL; }
  void *buf = img_wire(g, &H, blob, nw, cseg, cb, ncb, outlen);
  if (cseg) alloc(cseg, 0);

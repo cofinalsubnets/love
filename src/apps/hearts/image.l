@@ -29,7 +29,7 @@
    esp-type (guidb "C12A7328-F81F-11D2-BA4B-00A0C93EC93B")
    linux-type (guidb "0FC63DAF-8483-4772-8E79-3D69D8477DE4")
    (made name) (snip (hex2b (sha256 ("hearts rung 0 " + name))) 0 16)   ; the same ids every build
-   (u16name s) (join "" (map (c \ le c 2) (map (i \ s i) ^#s)))
+   (u16name s) (join "" (map (c \ le c 2) (map s ^#s)))
    (entry p) (p @ [nm ty at n _]
                (ty + made nm + le at 8 + le (at + n - 1) 8 + le 0 8
                 + (u16name nm @ w (w + zbytes (72 - #w)))))

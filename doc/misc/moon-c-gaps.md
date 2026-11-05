@@ -204,8 +204,7 @@ Four of them carry an edge worth knowing:
   constant expression folds, so `aligned(2 * sizeof(long))` counts); the `.o`'s section header
   asks the linker for a global's boundary. The row below.
 
-- **variable-length arrays** ride x64, a64, rv64, thumb2, thumb2sp and arm; thumb1 says `no
-  lane for a variable-length array on thumb1`. a VLA with an *initializer* refuses everywhere
+- **variable-length arrays** ride every target. a VLA with an *initializer* refuses everywhere
   (`parse error near =`) — C's own rule, not a gap. `__builtin_alloca` is absent on every
   target, so a VLA is the only dynamic frame allocation here.
 - **wide and prefixed literals** desugar to a *bounded compound literal* of the element type
@@ -630,7 +629,7 @@ clang: `cannot perform a tail call to function 'callee' because its signature is
 with the calling function`. This is the one gap that undermines an invariant rather than a
 value — `love_musttail` is *owed*, and the whole discipline rests on a shape that cannot jump
 REFUSING at compile (love.h). A check that passes the incompatible case means mooncc alone
-cannot police it. Measured 2026-08-15: 58 converted `ghelp` tails, mooncc took all 58, clang
+cannot police it. Measured 2026-08-15: 58 converted `_lvm_raise` tails, mooncc took all 58, clang
 named the 5 that were extra-arg lvms.
 
 **`make vmret` does not cover this.** It reads the shipped binary, which mooncc builds — so
@@ -650,12 +649,12 @@ never silent**.
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | `__int128` | ✓ | ✓ | — | rt.c | rt.c | — | rt.c |
 | `_Complex` arithmetic | ✓ | ✓ | ✓ | ✓ | — | — | ✓ |
-| variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| composite passed at a variadic call site | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| composite NAMED in a variadic parameter list | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
-| va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| composite passed at a variadic call site | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| composite NAMED in a variadic parameter list | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| va_arg of a composite, ≤16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | composite return, 16B all-int | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | composite return, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `__builtin_bswap64` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -733,10 +732,6 @@ straddle, and 266 sits on wasm's unsupported list.
   across a VARIADIC seam on v6-M.
 - **signed 64-bit `/` and `%` on t32** call out to the runtime's own `__divdi3`/`__moddi3`
   (src/apps/moon/lib/rt.c) on all three targets.
-- **thumb1 varargs** — the pop-pc epilogue cannot drop the r0-r3 block; `vaspill-t32` refuses
-  v6-M whole.
-- **thumb1 `leax`** — the indexed-call variant (`a[i]()` over a local array) hits
-  `;; lea-range (r0 r4 8)`, the scaled-indexed-address gap.
 - **the `__sync` spin-lock pair on thumb1** — `no lane for <name> on thumb1`: v6-M has no
   LDREX/STREX. thumb2's family takes the pair through them, a dmb behind; `bswap64` and
   `popcountll` ride every target, a 32-bit one a word at a time.
