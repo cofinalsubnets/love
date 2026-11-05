@@ -12311,8 +12311,9 @@
                     (go <>ast ()))
            ; what the sectioned bodies call joins the worklist like any other ref
            sq (foldl (a \ x \ unom x @ t (t && !(laid t) ? (t . a) a)) () snoms)
-           ; ..and a static the file-scope asm names, which no C reference may reach
-           aq (foldl (a \ x \ unom x @ t (t && !(laid t) ? (t . a) a)) () (keys (cg-arefs (g 'asecs) {})))
+           ; ..and a static the file-scope asm names, which no C reference may reach. an inline's
+           ; name stays undefined for the link: only a call lays one
+           aq (foldl (a \ x \ unom x @ t (t && !(laid t) && peep sfns t () != 'inl ? (t . a) a)) () (keys (cg-arefs (g 'asecs) {})))
            _ (drive (roots + sq + aq))
            ; the live globals: one another unit may name (not static), a `used` or sectioned static, an alias's
            ; target, and what a laid body, an asm or a live initializer names. a block-scope static is no svar,
