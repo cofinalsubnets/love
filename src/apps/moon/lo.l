@@ -979,7 +979,7 @@
                            [_ v vf] (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
                                        (lomk g @ d
                                           [pt d (pf + vf + [['mov 'r0 v] ['mov 'r1 p]
-                                                            (fx '(r0 r1) '(r0) [['raw (w @ 4 '(135 1) '(72 135 1))]])
+                                                            (fx '(r0 r1) '(r0) [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])
                                                             ['mov d 'r0]] + map (f \ [<f d]) (rext g pt))]))))
                     (kind = 'load) (lomk g @ d [pt d (<>mo + pf + [[(ldop pt) d p 0]])])
                     (kind = 'clear)

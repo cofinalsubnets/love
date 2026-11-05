@@ -388,8 +388,8 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    ; the targets the new backend lowers by default, and those it knows at all
-   lotgts '(x64 a64 rv64 thumb2 thumb2sp arm i386 thumb1 wasm)
-   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || elem (g 'tgt) '(rv64 thumb2 thumb2sp arm i386 thumb1 wasm)) _ (elem (peep g 'tgt 'x64) lotgts))
+   lotgts '(x64 a64 rv64 thumb2 thumb2sp arm i386 i386m16 thumb1 wasm)
+   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || elem (g 'tgt) '(rv64 thumb2 thumb2sp arm i386 i386m16 thumb1 wasm)) _ (elem (peep g 'tgt 'x64) lotgts))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
