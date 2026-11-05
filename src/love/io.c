@@ -325,6 +325,7 @@ static struct g *to_writen(struct g *g, unsigned char const *src, uintptr_t n) {
 struct port_vt const
  to_vt     = { noop_flush, to_writen, NULL,     NULL },       // a string sink: prel's `jug`
  closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
+ state_vt  = { noop_flush, NULL,      NULL,     NULL },       // a nif's state: no door, and no word opens it
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
  love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
 

@@ -212,4 +212,9 @@ open(d + '/anims', 'w').write(chr(10).join(man) + chr(10))
     hark ["rm" "-rf" dir],
     0))
 
+; an extended canvas past 2^24 pixels is refused before it is laid
+(: _ (test (webp-size "RIFF\x16\0\0\0WEBPVP8X\n\0\0\0\x02\0\0\0\xff\xff\0\xff\xff\0" = "too big")
+           (webp-frames "RIFF\x16\0\0\0WEBPVP8X\n\0\0\0\x02\0\0\0\xff\xff\0\xff\xff\0" 64 = "too big"))
+   0)
+
 (test_fin (), puts "webp: ok", putc 10, 0)

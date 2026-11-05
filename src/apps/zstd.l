@@ -64,10 +64,11 @@
    (zstd-unpack s) (zstd-d s @ u (string? u ? [1 u] (zs-walk s)))
    (zs-walk s)
     (: g (zstd-pull (zs-once s))
-       (go acc) (zstd-next g @ p
-                  (#p = 0 ? (atom? (g 'ans) ? (g 'ans) [1 (two? acc ? (cats (rev acc)) "")])
-                     (go (p . acc))))
-       (go ()))
+       (go acc n) (zstd-next g @ p
+                  (? (#p = 0) (atom? (g 'ans) ? (g 'ans) [1 (two? acc ? (cats (rev acc)) "")])
+                     (1073741824 < n + #p) 'big
+                     (go (p . acc) (n + #p))))
+       (go () 0))
    ; mk is asked for the writer before the first byte out; an early failure never asks
    (zstd-unf rd mk)
     (: g (zstd-pull rd)   p (zstd-next g)

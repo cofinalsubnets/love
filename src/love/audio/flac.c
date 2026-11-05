@@ -107,9 +107,11 @@ static void ff_res(struct fb *b, int64_t *x, int bs, int order) {
 static void ff_sub(struct fb *b, int64_t *x, int bs, int w) {
  if (fb_bits(b, 1)) { b->bad = b->bad ? b->bad : 4; return; }
  int t = (int) fb_bits(b, 6), wasted = 0;
- if (fb_bits(b, 1)) wasted = (int) fb_unary(b) + 1;
+ if (fb_bits(b, 1)) {
+  uint64_t q = fb_unary(b);
+  if (!b->bad && q + 1 >= (uint64_t) w) b->bad = 4;
+  wasted = b->bad ? 0 : (int) q + 1; }
  if (b->bad) return;
- if (wasted >= w) { b->bad = 4; return; }
  w -= wasted;
  if (t == 0) { int64_t v = fb_sbits(b, w); for (int i = 0; i < bs; i++) x[i] = v; }
  else if (t == 1) for (int i = 0; i < bs && !b->bad; i++) x[i] = fb_sbits(b, w);
@@ -119,10 +121,11 @@ static void ff_sub(struct fb *b, int64_t *x, int bs, int w) {
   for (int i = 0; i < order; i++) x[i] = fb_sbits(b, w);
   ff_res(b, x, bs, order);
   if (b->bad) return;
-  for (int i = order; i < bs; i++)
-   x[i] += order == 1 ? x[i - 1] : order == 2 ? 2 * x[i - 1] - x[i - 2]
-         : order == 3 ? 3 * x[i - 1] - 3 * x[i - 2] + x[i - 3]
-         : order == 4 ? 4 * x[i - 1] - 6 * x[i - 2] + 4 * x[i - 3] - x[i - 4] : 0; }
+  for (int i = order; i < bs; i++) {              // unsigned: a hostile residual wraps
+   uint64_t a = order > 0 ? (uint64_t) x[i - 1] : 0, c2 = order > 1 ? (uint64_t) x[i - 2] : 0,
+            c3 = order > 2 ? (uint64_t) x[i - 3] : 0, c4 = order > 3 ? (uint64_t) x[i - 4] : 0;
+   x[i] = (int64_t) ((uint64_t) x[i] + (order == 1 ? a : order == 2 ? 2 * a - c2
+         : order == 3 ? 3 * a - 3 * c2 + c3 : order == 4 ? 4 * a - 6 * c2 + 4 * c3 - c4 : 0)); } }
  else if (t >= 32) {
   int order = t - 31;
   if (order > bs) { b->bad = 4; return; }
@@ -134,11 +137,11 @@ static void ff_sub(struct fb *b, int64_t *x, int bs, int w) {
   ff_res(b, x, bs, order);
   if (b->bad) return;
   for (int i = order; i < bs; i++) {
-   int64_t s = 0;
-   for (int j = 0; j < order; j++) s += c[j] * x[i - 1 - j];
-   x[i] += ff_floor(s, shift); } }
+   uint64_t s = 0;
+   for (int j = 0; j < order; j++) s += (uint64_t) c[j] * (uint64_t) x[i - 1 - j];
+   x[i] = (int64_t) ((uint64_t) x[i] + (uint64_t) ff_floor((int64_t) s, shift)); } }
  else { b->bad = 4; return; }
- if (wasted) for (int i = 0; i < bs; i++) x[i] *= (int64_t) 1 << wasted; }
+ if (wasted) for (int i = 0; i < bs; i++) x[i] = (int64_t) ((uint64_t) x[i] << wasted); }
 
 // the subframes into x (nch planes of bs), coupling undone, the footer checked -> 0 | why
 static int ff_body(struct fb *b, struct fh *h, int64_t *x, uintptr_t o) {

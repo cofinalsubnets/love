@@ -22,7 +22,7 @@ static love_inline struct g *host_inflate(struct g *g) {
  int guessed;
  if (!strp(sw) || !oddp(nw)) { g->sp[1] = ZeroPoint, g->sp += 1; return g; }
  hint = getcharm(nw);
- guessed = hint > 0 && (uintptr_t) hint <= INF_MAX;
+ guessed = hint > 0 && (uintptr_t) hint <= INF_MAX && (uintptr_t) hint / 1032 <= len(sw) + 1;   // deflate says at most 1032 bytes a byte
  want = guessed ? (int64_t) hint
                 : inf_run((const uint8_t*) txt(sw), len(sw), 0, INF_MAX);
  for (;;) {
@@ -254,13 +254,13 @@ wait:
 }
 
 static struct str *inf_cask(word x) {
- struct str *s = cask_str(x);
+ struct str *s = state_str(x);
  return s && s->len == sizeof(struct inf_st) && ((struct inf_st*) s->bytes)->magic == IS_MAGIC ? s : NULL; }
 
 static love_noinline struct g *host_inflate_new(struct g *g) {
- union u *k = new_cask(&g, sizeof(struct inf_st), sizeof(struct inf_st));
+ union u *k = new_state(&g, sizeof(struct inf_st), sizeof(struct inf_st));
  if (!k) return g;
- ((struct inf_st*) cask(k)->str->bytes)->magic = IS_MAGIC;
+ ((struct inf_st*) ((struct state*) k)->str->bytes)->magic = IS_MAGIC;
  return g->sp[0] = word(k), g; }
 
 static love_noinline struct g *host_inflate_feed(struct g *g) {
@@ -725,6 +725,7 @@ static int64_t df_go(const uint8_t *s, uintptr_t i0, uintptr_t n, uint8_t *out, 
   struct df_opt *o = alloc(NULL, sizeof *o);
   uintptr_t nb = (DF_OBLOCK + 1) * (3 * sizeof(uint32_t) + 3 * sizeof(uint16_t)) + DF_OBLOCK * sizeof(uint32_t),
             nf = (3u << 16) + 2 * DF_WSIZE;
+  nb = (nb + 3) & ~(uintptr_t) 3;                 // the finder's words after the 16-bit arrays
   uint8_t *b = o ? alloc(NULL, nb + nf * sizeof(uint32_t)) : NULL;
   if (!b) { if (o) alloc(o, 0); return -1; }
   uint32_t *h = (uint32_t*) (b + nb);

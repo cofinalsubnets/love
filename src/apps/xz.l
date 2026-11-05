@@ -63,14 +63,16 @@
           (xz-bhead (snip s i (i + hs)) @ bh
              (atom? bh ? bh
                 (: d0 (i + hs)
-                   cl (charm? (bh 0) ? (bh 0) (lzma2len (snip s d0 #s) @ n (charm? n ? n -1)))
+                   cl (lzma2len (snip s d0 (charm? (bh 0) ? (min #s (d0 + bh 0)) #s)) @ n (charm? n ? n -1))
                    u (0 <= cl && d0 + cl <= #s ? (lzma2d (snip s d0 (d0 + cl))) ())
                    cz (xz-csize cid)
                    e (d0 + cl + padk cl 4)
-                   (? (cl < 0 || #s < d0 + cl) 'end
+                   (? (cl < 0 || #s < d0 + cl) (charm? (bh 0) && d0 + bh 0 <= #s ? 'corrupt 'end)
+                      (charm? (bh 0) && bh 0 != cl) 'corrupt
                       (u = 1) 'big
                       (!(string? u) || charm? (bh 1) && #u != bh 1) 'corrupt
                       (#s < e + cz) 'end
+                      (e <= #s && net (snip s (d0 + cl) e) != 0) 'corrupt
                       (0 < cz && snip s e (e + cz) != xz-check cid u ? 'check
                          [u (e + cz) (hs + cl + cz) #u])))))))
    (xz-stream s i)                     ; a stream at i -> (bytes next) | a word
@@ -86,7 +88,8 @@
                        (s j = 0) [acc j (rev recs)]
                        (xz-block s j cid @ b
                           (atom? b ? b
-                             (blocks <>b (acc + <b) ([<>>b (b 3)] . recs)))))
+                             (1073741824 < #acc + #<b ? 'big
+                                (blocks <>b (acc + <b) ([<>>b (b 3)] . recs))))))
                    r (blocks (i + 12) "" ())
                    (atom? r ? r
                       (: ix <>r recs <>>r
@@ -208,6 +211,7 @@
               (charm? (bh 0) && bh 0 != cl || charm? (bh 1) && bh 1 != g 'un ? (xz-fin g 'corrupt)
                  (: pd (tar-take src (padk cl 4))   ck (tar-take src cz)
                     (? (#pd < padk cl 4 || #ck < cz) (xz-fin g 'end)
+                       (net pd != 0) (xz-fin g 'corrupt)
                        (0 < cz && ck != xz-ckend (g 'cid) (g 'ck)) (xz-fin g 'check)
                        (pins g 'recs ([(g 'hs + cl + cz) (g 'un)] . g 'recs) 'st () 'mode 'block,
                         xz-next g)))))
