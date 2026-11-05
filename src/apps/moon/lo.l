@@ -872,11 +872,11 @@
    ; ms an ms_abi callee: ints only, rcx rdx r8 r9 then the stack above a 32-byte shadow
    (locall1 g env rt ptys va ms as cl fv)
     (? !(rt = 'void || losv? rt || d128? rt || loagg? g rt) (lono g ['ret rt])
-       (ms && any d128? (rt . ptys)) (lono g 'msabi)
+       (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
        ; past SysV a pair takes the old path
-       (!(x64? g) && (ms || d128? rt || any d128? ptys)) (lono g 'abi)
+       (!(x64? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
        (: (arg e pt)
            (lox g env e @ ([vt r fs] && !(x64? g) && d128? vt) (lono g ['abi vt])
                           ([vt r fs] && (losv? vt || d128? vt))
@@ -898,7 +898,7 @@
                              (map (i \ ['w (vs i) 8]) (filter (i \ 3 < i) ^#vs)) ()]
                           (loplace g (a64? g ? vs (hv + vs))))
                    sh (ms ? 32 0)
-                   nf (pl 1) rg (pl 2 + (a64? g && sret ? [['r8 (vreg <hv)]])) sk (pl 3) pre (pl 4) rs (map cap rg)
+                   nf (pl 1) rg (pl 2 + (a64? g && sret ? [['r8 (vreg <hv)]])) sk (pl 3) pre (pl 4) rs (map (x \ <x) rg)
                    d (d128? rt ? [(lomk g) (lomk g)] (lomkt g rt))
                    ; SysV's count of the vector registers in al, unless -mskip-rax-setup
                    al (va && x64? g && !(x86k? g 'nal) ? [['li 'r0 nf]])
@@ -1068,7 +1068,7 @@
             ['case lo hi] (assoc 'sw env @ [_ tab _] (peep tab "\(lo):\(hi)" () @ () 'bad L [['label L]]) 'bad)
             ['case cv] (assoc 'sw env @ [_ tab ty] (peep tab (lokey g ty cv) () @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ [_ tab _] (peep tab 'dflt () @ () 'bad L [['label L]]) 'bad)
-            ('asm . _) (trap (loasm g env) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
+            ('asm . _) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
    ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored
@@ -1115,10 +1115,10 @@
           body (map (r \ ['push r]) saves + (two? labs ? ab (asmfsafe txt ab)) + map (r \ ['pop r]) (rev saves)
                 + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
           (any bad? lds || any bad? sts ? 'bad
-             (: post (map cap sts + catmap (x \ x 1) sts)
+             (: post (map (x \ <x) sts + catmap (x \ x 1) sts)
                 fx ['fix (map asgn ins) (map asgn outs + kills) body tls]
                 ; an asm goto with outputs jumps to a trampoline per label that stores them and goes on
-                (catmap cap lds + map (x \ x 1) lds +
+                (catmap (x \ <x) lds + map (x \ x 1) lds +
                  (tls = labs ? (fx . post)
                     (nlab g "\(g 'fn).ag" @ done
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +

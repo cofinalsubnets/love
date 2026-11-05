@@ -167,7 +167,7 @@
         (n <= i ? [(rev acc) 0]
            (s i @ c
               (? (hue-blank? c) (w (i + 1) acc)
-                 (any (hue-at? s i) hue-eols) [(rev (emit acc 'comment i n)) 0]
+                 (any (t \ hue-at? s i t) hue-eols) [(rev (emit acc 'comment i n)) 0]
                  (c = hue-str && i + 2 < n && s (i + 1) = hue-str && s (i + 2) = hue-str) (raw i acc)
                  (c = hue-str) (wstr (i + 1) i acc)
                  (c = hue-quo) (tend (i + 1) @ j (w j (emit acc 'atom i j)))
