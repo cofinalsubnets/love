@@ -81,9 +81,10 @@
        (go 0))
    (vfpm m i n) (m | (((1 << n) - 1) << i))
    vfpx 65535
-   ; an even slot is the single view of dK; an odd one has no f-register name, so its word rides r12
+   ; an even slot is the single view of dK; an odd one has no f-register name, so its word rides
+   ; r12 into the scratch s30, leaving r12 for a far home's address
    (vfpsv k base off) (0 = k & 1 ? [['stss base off (xmmreg (k // 2))]]   ; slot k -> a 4-byte home
-                         [['movsnrx 'r12 k] ['st base off 'r12]])
+                         [['movsnrx 'r12 k] ['movdxr 'f15 'r12] ['stss base off 'f15]])
    (bad? x) (x = 'bad)
    ; the value tuple (ty reg forms); the flo lane keeps the f0 protocol and dispatches on vty
    (vty v) <v

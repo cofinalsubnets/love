@@ -241,6 +241,8 @@
          (t32 ((ubase | bn) << 16 | (dt << 12 | off)))
          (-255 <= off < 0)
          (t32 ((lbase | bn) << 16 | (dt << 12 | (0xC00 | -off))))   ; t4: P=1 U=0 W=0 = 0b1100, imm8=|off|
+         (dt = 12 && !(ubase & 16))                                 ; a store: r12 can't be value and address
+         (scare 'far-store-r12 off)
          (thumb-mem-far bn off + t32 ((ubase | 12) << 16 | dt << 12)))
    ;; the 16-bit forms: ldr/str [sp,#imm8*4], and [Rn,#imm5*size] for word, byte and half, low registers
    (thumb-narrow ubase dt bn off)
