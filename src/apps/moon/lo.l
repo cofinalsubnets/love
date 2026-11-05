@@ -301,7 +301,7 @@
     (x @ ['addr ['var n]] (elem n acc ? acc (n . acc))
          ; an asm's memory operand takes its name's address
          ('asm . _ . os . is . _)
-          (foldl (a \ o \ (o @ (c . ['var n] . _) (any (k \ elem (c k) '(109 111)) ^#c && nelem n a ? (n . a) a) _ a))
+          (foldl (a \ o \ (o @ (c . ['var n] . _) (any (k \ elem (c k) '(109 111 81)) ^#c && nelem n a ? (n . a) a) _ a))
                  (foldl (a \ y \ lotaken y a) acc x) (os + is))
          (_ . _) (foldl (a \ y \ lotaken y a) acc x)
          acc)
@@ -1438,14 +1438,13 @@
             ['case lo hi] (assoc 'sw env @ [_ tab _] (tab "\(lo):\(hi)" @ () 'bad L [['label L]]) 'bad)
             ['case cv] (assoc 'sw env @ [_ tab ty] (tab (lokey g ty cv) @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ [_ tab _] (tab 'dflt @ () 'bad L [['label L]]) 'bad)
-            ('asm . _) (!(x64? g) ? (lono g 'asm) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a])))))
+            ('asm . _) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
    ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored
    ; a narrow integer out of a register asm leaves: its own width, the bits above it unsaid
    (lonar g ty t)
-    (!(charm? (tsz g ty)) || lofl? ty || ty = 'bool ? ()
-       (tsz g ty @ 1 [[(usg? ty ? 'zx1 'sx1) t]] 2 [[(usg? ty ? 'zx2 'sx2) t]] 4 [[(usg? ty ? 'zx4 'sx4) t]] _ ()))
+    (!(charm? (tsz g ty)) || lofl? ty || ty = 'bool ? () (cvt ty t))
    (loasm g env s)
     (asmplan g env s @
        'bad (lono g ['asm (g 'nolane)])
@@ -1457,11 +1456,14 @@
            (lox g env (o 2) @
               'bad 'bad
               ([vt _ _] && stru? vt) (lono g 'asmstruct)
+              ; a thumb pair: the value's two halves
+              (v && two? a) (lotr g v 'llong @ [_ [l h] fs] [fs [['mov <a l] ['mov <>a h]]] _ 'bad)
+              ([_ r _] && two? r) (lono g 'asmwide)
               ; a float in a general register is the old path's to refuse
               ([_ r _] && lofr? r && !(freg? a)) (lono g 'asmfl)
-              [vt r fs] [fs (? (freg? a && lofr? r) ['movapd a r]
-                               (freg? a) [(o 3 <= 4 ? 'movdxr 'movqxr) a r]
-                               ['mov a r])])
+              [vt r fs] [fs [(? (freg? a && lofr? r) ['movapd a r]
+                                (freg? a) [(o 3 <= 4 ? 'movdxr 'movqxr) a r]
+                                ['mov a r])]])
           (st o a)
            (lolv g env (o 2) @
               'bad 'bad
@@ -1471,10 +1473,12 @@
               lv (st1 o a lv))
           (st1 o a lv)
            (lv 2 @ ty
-              (stru? ty || arr? ty || lofl? ty && !(freg? a) ? (lono g 'asmout)
+              (? (stru? ty || arr? ty || lofl? ty && !(freg? a) || !(two? a) != !(pair? g ty)) (lono g 'asmout)
+                 (two? a) (lomk g @ l (lomk g @ h
+                             [[['mov l <a] ['mov h <>a]] (lost g lv [ty [l h] ()] @ [fs _] fs 'bad)]))
                  ; an xmm output into an integer lvalue: its bits
                  ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
-                    [(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))
+                    [[(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))]
                      (lost g lv [ty t ()] @ [fs _] (freg? a ? fs (lonar g ty t + fs)) 'bad)])))
           ins (filter (i \ in? (ops i)) ^#ops)
           outs (filter (i \ out? (ops i)) ^#ops)
@@ -1484,11 +1488,12 @@
           ab (asmbody g tgt neutral? txt)
           body (map (r \ ['push r]) saves + (two? labs ? ab (asmfsafe txt ab)) + map (r \ ['pop r]) (rev saves)
                 + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
+          (flat l) (catmap (a \ two? a ? a [a]) l)
           (any bad? lds || any bad? sts ? 'bad
-             (: post (map (x \ <x) sts + catmap (x \ x 1) sts)
-                fx ['fix (map asgn ins) (map asgn outs + kills) body tls]
+             (: post (catmap (x \ <x) sts + catmap (x \ x 1) sts)
+                fx ['fix (flat (map asgn ins)) (flat (map asgn outs) + kills) body tls]
                 ; an asm goto with outputs jumps to a trampoline per label that stores them and goes on
-                (catmap (x \ <x) lds + map (x \ x 1) lds +
+                (catmap (x \ <x) lds + catmap (x \ x 1) lds +
                  (tls = labs ? (fx . post)
                     (nlab g "\(g 'fn).ag" @ done
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +
