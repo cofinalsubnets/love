@@ -3,6 +3,8 @@
 #        moon: mooncc's bench and lm.c over src rt.c; libgcc: the same over libgcc; gcc: gcc -O2 throughout
 #   sh test/thumb2/perf/perf.sh diff [REV]                 src rt.c against REV's (HEAD), 160k cases bit for bit
 #   sh test/thumb2/perf/perf.sh probe                      kit.c and kit2.c on thumb2sp and thumb2; 0 = held
+#   sh test/thumb2/perf/perf.sh meter [TARGET] [DIR]       love on qemu's M7 (thumb2sp unless named): the instructions its boot
+#        and work.l execute, counted by insn.c, and .text; DIR keeps a build apart for a compare
 # wants out/love, arm-none-eabi-{gcc,ld,gdb}, qemu-system-arm, and test_thumb2sp's out/thumb2sp (start.o, link.ld)
 p=test/thumb2/perf
 o=out/thumb2perf
@@ -65,6 +67,26 @@ diff1() {
   timeout 300 qemu-system-arm -M mps2-an386 -semihosting -nographic -kernel $o/dh.elf < /dev/null
 }
 
+# the stones baker's objects carry facets, and its text is ours: an empty one counts the boot, work.l the work
+meter() {
+  t=${1:-thumb2sp}; m=$o/${2:-$t}
+  mkdir -p $m out/mps2
+  gcc -shared -fPIC -O2 $(pkg-config --cflags glib-2.0) -o $o/insn.so $p/insn.c || exit 2
+  one() { # one STONES.H -> the instructions the baker executes
+    rm -f $m/main-baker-pds.o
+    make -s -C src/inle/mps2 o=$m p_tgt=$t \
+      "mps2_cc=\$(MOONCC) -t $t -D tco=1 -D __STDC_HOSTED__=0 -I$m -I. -Isrc/love -Iout/lib" \
+      "mps2_ld=\$(MOONCC) -t $t -Ttext 0 -Tdata 0x20000000 -nostdlib" ../../../$m/baker-pds.elf > /dev/null || exit 3
+    timeout 1800 qemu-system-arm -M mps2-an500 -semihosting -nographic -kernel $m/baker-pds.elf -plugin $o/insn.so \
+      < /dev/null 2>&1 | awk '$1 == "insns" {print $2}'
+  }
+  printf '" "\n' > $m/stones.h
+  b=$(one)
+  LOVE_NO_IMAGE= out/love src/tools/lcat.l $p/work.l > $m/stones.h || exit 4
+  w=$(one)
+  echo "$t boot $b work $((w - b)) text $(arm-none-eabi-size $m/baker-pds.elf | awk 'NR == 2 {print $1}')"
+}
+
 probe() {
   rc=0
   for t in thumb2sp thumb2; do
@@ -90,5 +112,6 @@ case $1 in
 count) count $2 ;;
 diff) diff1 $2 ;;
 probe) probe ;;
-*) echo "perf.sh count [moon|libgcc|gcc] | diff [REV] | probe"; exit 1 ;;
+meter) meter $2 $3 ;;
+*) echo "perf.sh count [moon|libgcc|gcc] | diff [REV] | probe | meter [TARGET] [DIR]"; exit 1 ;;
 esac
