@@ -231,8 +231,8 @@ struct jd {
  uintptr_t mcux, mcuy;
  int ns, sc[4], ss, se, ah, al; };
 
-// scans past this many are ignored; a real progressive file has about ten
-#define JD_MAXSCANS 1000
+// scans past this many are ignored; a real progressive file has about ten, and each walks every block
+#define JD_MAXSCANS 100
 
 // entropy bytes, msb first into acc; a marker (or the end) feeds zeros
 static void jd_fill(struct jd *d) {
@@ -442,7 +442,7 @@ static int jd_dht(struct jd *d, const uint8_t *p, int n) {
   p += 17 + total, n -= 17 + total; }
  return 0; }
 
-// the markers from the top: up to the frame header when head, else through every scan
+// the markers from the top: up to the first scan when head, else through every scan
 static int jd_walk(struct jd *d, int head) {
  d->frame = 0, d->scans = 0, d->ri = 0, d->adobe = 0, d->pos = 2;
  if (d->n < 4 || d->s[0] != 0xff || d->s[1] != 0xd8) return 1;
@@ -452,7 +452,7 @@ static int jd_walk(struct jd *d, int head) {
   if (d->pos >= d->n) return d->scans ? 0 : 2;
   int m = d->s[d->pos++];
   if (m == 0xd9) return d->scans ? 0 : 2;
-  if (m == 0x01 || (m >= 0xd0 && m <= 0xd7)) continue;
+  if (!m || m == 0x01 || (m >= 0xd0 && m <= 0xd8)) continue;
   if (d->pos + 2 > d->n) return d->scans ? 0 : 2;
   int len = (int) ld16be(d->s + d->pos);
   if (len < 2 || d->pos + (uintptr_t) len > d->n) return d->scans ? 0 : 2;
@@ -460,14 +460,14 @@ static int jd_walk(struct jd *d, int head) {
   d->pos += (uintptr_t) len;
   if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
    if (d->frame) return 4;
-   if ((why = jd_sof(d, p, n, m)) || head) return why; }
+   if ((why = jd_sof(d, p, n, m))) return why; }
   else if (m == 0xc4) why = jd_dht(d, p, n);
   else if (m == 0xdb) why = jd_dqt(d, p, n);
   else if (m == 0xdd) d->ri = n >= 2 ? (int) ld16be(p) : 0;
   else if (m == 0xee) { if (n >= 12 && !memcmp(p, "Adobe", 5)) d->adobe = 1, d->transform = p[11]; }
   else if (m == 0xdc) return 3;
   else if (m == 0xda) {
-   if (head) return 4;
+   if (head) return d->frame ? 0 : 4;
    if (d->scans >= JD_MAXSCANS) return 0;
    if ((why = jd_sos(d, p, n))) return why;
    jd_scan(d), d->scans++; }

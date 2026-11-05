@@ -9,7 +9,7 @@
    ; a vector's packets (each a length, a range word, the bytes) on a fresh decoder of ch
    ; channels at gain g (dB in Q7.8) -> its samples, s16 | why
    (op-vec s ch g)
-    (: st (cask (opus-state ch)) r (opus-init st ch g)
+    (: st (opus-new ch g) r (charm? st ? st 0)
        (go i acc) (? (i + 8 > #s) (cats (rev acc))
                      (: k (rdbe s i 4) (opus-packet st (snip s (i + 8) (i + 8 + k)) 0 @ x
                                          (go (i + 8 + k) (string? x ? (x . acc) acc)))))
@@ -30,8 +30,8 @@
                   (av-t-full (op-vec b 2 0) r && op-mono (op-vec b 1 0) r))
    ; -6 dB of output gain (-1536 in Q7.8) is every sample times 10^(-6/20), to the step
    (op-half a b) (#a = #b && 2 < #a && (: d (av-t-s16 b - av-t-s16 a * 0.5011872336272722) (aall (d <= 1) && aall (d >= -1))))
-   _ (test (opus-state 2 > opus-state 1) (opus-state 3 = ()) (opus-init (cask 10) 2 0 = 1)
-           (opus-init (cask (opus-state 2)) 2 0 = 0) (opus-init (cask (opus-state 2)) 2 32768 = 1))
+   _ (test (opus-new 3 0 = 1) (opus-new 2 32768 = 1) (kind (opus-new 2 0) = 'port)
+           (opus-packet (cask 64) "" 0 = 1))
    _ (? (0 < #(av-t-rd (vd + "/testvector01.bit")))
          (test (all op-vecs vs)
                (: b (av-t-rd (vd + "/testvector01.bit")) (op-half (op-vec b 2 0) (op-vec b 2 -1536))))

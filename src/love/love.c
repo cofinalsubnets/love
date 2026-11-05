@@ -627,6 +627,17 @@ union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear) {
  cask(k)->ap = lvm_cask, cask(k)->str = s;
  return tagthread(k, Width(struct cask)); }
 
+union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) {
+ uintptr_t sreq = str_width(n), breq = Width(struct state) + Width(struct tag);
+ struct g *g = *gp = have(*gp, sreq + breq);
+ if (!ok(g)) return NULL;
+ struct str *s = ini_str(bump(g, sreq), n);
+ memset(s->bytes, 0, clear);
+ union u *k = bump(g, breq);
+ struct state *o = (struct state*) k;
+ o->io.ap = lvm_port_io, o->io.vt = &state_vt, o->io.ungetc_buf = putcharm(EOF), o->str = s;
+ return tagthread(k, Width(struct state)); }
+
 // tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__
 #define code_sync(a, b) ((void) (a), (void) (b))

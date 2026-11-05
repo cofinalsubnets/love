@@ -238,4 +238,21 @@ EOF
 "$love" "$w/repack6.l" || fail "the re-pack of a 077 lay is not the pack of the tree"
 echo "  OK a lay under umask 077 keeps every archived mode, dirs included, and re-packs to one sha"
 
+# GNU's hard links, long names and device members
+mkdir -p "$w/hl/d" "$w/hlx"
+echo data > "$w/hl/d/b"
+ln "$w/hl/d/b" "$w/hl/d/a"
+long=$(printf "n%.0s" $(seq 1 120))
+echo longn > "$w/hl/$long"
+for fmt in gnu pax; do
+  tar --format=$fmt -C "$w/hl" -cf "$w/hl.$fmt.tar" d "$long"
+  rm -rf "$w/hlx"; mkdir "$w/hlx"
+  "$love" tar xf "$w/hl.$fmt.tar" -C "$w/hlx" || fail "$fmt: love tar refused"
+  [ "$(cat "$w/hlx/d/a")" = data ] || fail "$fmt: the hard link does not read"
+  [ ! -L "$w/hlx/d/a" ] || fail "$fmt: the hard link came out a symlink"
+  [ "$(cat "$w/hlx/$long")" = longn ] || fail "$fmt: the long name was lost"
+  [ "$(ls -A "$w/hlx" | wc -l)" = 2 ] || fail "$fmt: metadata came out as files"
+done
+echo "  OK hard links and long names, gnu and pax"
+
 echo "targz: src/apps/tar.l + src/apps/gz.l agree with GNU tar and GNU gzip both ways -- ok"

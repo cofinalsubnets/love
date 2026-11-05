@@ -86,9 +86,11 @@
        (go h o first)
         (flac-frame h o bps ch @
           (pcm . nx) (emit pcm, go h nx 0)
-          2 (wav-gulp q @ g (? (string? g) (go (snip h o #h + g) 0 first)
-                               (o >= #h || tail? h o) 0
-                               (flac-why 2)))
+          ; a frame past any a shape can hold is no frame: its bytes are not held for ever
+          2 (16777216 < #h - o ? (flac-why 4)
+               (wav-gulp q @ g (? (string? g) (go (snip h o #h + g) 0 first)
+                                  (o >= #h || tail? h o) 0
+                                  (flac-why 2))))
           1 (? (o >= #h) (wav-gulp q @ g (string? g ? (go g 0 first) 0))
                (tail? h o) 0
                first (hunt h o)
@@ -177,7 +179,7 @@
            "unsupported \(f 'ext ? "WAVEFORMATEXTENSIBLE chunk with non-PCM format" "format type") \(f 'tag)"
           (k != 's && k != 'u) "can't encode \(f 'desc) samples"
           (bits < 4 || bits > 32 || w != (bits + 7) // 8) "can't encode \(f 'desc) samples"
-          (pcm \ (: le (big ? (flac-lay pcm w 1 0) pcm) (k = 'u ? (flac-lay le w 0 1) le)))))
+          (pcm \ (: le (big ? (flac-lay pcm w 0 1 0) pcm) (k = 'u ? (flac-lay le w 0 0 1) le)))))
    ; the input as [format meta held pump port] | why not
    (flac-src o q)
     (? (o "raw")

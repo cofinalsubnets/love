@@ -213,4 +213,10 @@ for n in ('cmpil', 'cmyk', 'ycck'):
     hark ["rm" "-rf" dir],
     0))
 
+; both marker walks pass a stray ff 00, so a frame after it is the frame for both
+(: real (jpeg-encode 16 16 (string (cask 1024)) 80)
+   fake "\xff\xd8\xff\0\0\x0f\xff\xc0\0\x0b\x08\0\x01\0\x01\x01\x01\x11\0"
+   _ (test (jpeg-pixels (fake + snip real 2 #real) 1 = 4))
+   0)
+
 (test_fin (), puts "jpeg: ok", putc 10, 0)
