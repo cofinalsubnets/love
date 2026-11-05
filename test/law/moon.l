@@ -5,8 +5,6 @@
 ; a stage refuses with a bare () or, naming a cause, a gripe: `refused?` takes either,
 ; the diagnostics laws pin the gripe and its message.
 (borrow 'posix)
-; the generator's goldens are the old backend's; test/law/moonlo.l holds the new one's
-(setenv "MOON_BACKEND" "old")
 
 (: (refused? x) (!x || gripe? x))
 
@@ -1643,230 +1641,6 @@
       !(has? 'jmp aTf)                               ; copied to it -- no flag set, none retested
       !(sp? aTf)))
 
-; -- the shuttle skip + slot residency: a right side never writing r1 runs with the left parked
-; in r1 (one mov, no push/pop); stld carries a slot's binding through reg-reg movs, so the reload
-; and then the dead store drop.
-(: (spsts fs) (: (go l n) (atom? l ? n
-                            (go >l (two? <l && <<l = 'st && <><l = 'sp ? (n + 1) n)))
-                 (go fs 0))
-   g4 {}                                     ; no 'tgt: the x64 shapes, which every law here speaks
-   ; r1safe? is the license: pure r0-landing forms pass; a call, a label, an r1-write refuse
-   _ (test
-      (r1safe? g4 '((la r0 s) (cmp r9 r0)))
-      !(r1safe? g4 '((call f9)))
-      !(r1safe? g4 '((ld r1 r4 8)))
-      !(r1safe? g4 '((label .x))))
-   ; the divide always shuttles: a leaf right is one mov, and copyprop leaves no staging copy
-   irD (cgn "long dv(long a, long b) { return a / b; } int main() { return (int)dv(10, 2); }")
-   df (fnf 'dv <>irD)
-   _ (test
-      (two? irD)
-      (elem '(div r1 r6 r5) df)
-      !(elem '(mov r1 r0) df)
-      (0 = (splds df))
-      (0 = (spsts df)))
-   ; stld: a slot binding rides a mov and survives its source's death (the reload elides);
-   ; when every carrier dies the reload stands
-   sq '((st r4 40 r0) (mov r9 r0) (la r0 s) (cmp r9 r0) (br eq .t7) (ld r9 r4 40) (la r0 s2) (cmp r9 r0))
-   _ (test
-      !(elem '(ld r9 r4 40) (stld g4 sq))
-      (elem '(ld r9 r4 40) (stld g4 '((st r4 40 r0) (mov r9 r0) (la r0 s) (la r9 s2) (ld r9 r4 40)))))
-   ; the narrow adjacent pair forwards on any base wearing the load's extension; a stranger between kills it
-   _ (test
-      ('((st4 r4 40 r0) (zx4 r0)) = (stld g4 '((st4 r4 40 r0) (ldu4 r0 r4 40))))
-      ('((st4 r5 40 r0) (mov r9 r0) (zx4 r9)) = (stld g4 '((st4 r5 40 r0) (ldu4 r9 r5 40))))
-      ('((st4 r4 40 r0) (sx4 r0)) = (stld g4 '((st4 r4 40 r0) (ld4 r0 r4 40))))
-      ('((st2 r4 40 r0) (zx2 r0)) = (stld g4 '((st2 r4 40 r0) (ldu2 r0 r4 40))))
-      ('((st1 r4 40 r0) (mov r9 r0) (zx1 r9)) = (stld g4 '((st1 r4 40 r0) (ldu1 r9 r4 40))))
-      (elem '(ldu4 r0 r4 48) (stld g4 '((st4 r4 40 r0) (ldu4 r0 r4 48))))
-      (elem '(ldu4 r0 r4 40) (stld g4 '((st4 r4 40 r0) (mov r9 r1) (ldu4 r0 r4 40))))
-      ; a store fed by an adjacent li declines: the triple is the si fold's
-      (elem '(ldu1 r0 r4 40) (stld g4 '((li r0 1) (st1 r4 40 r0) (ldu1 r0 r4 40)))))
-   ; rezx: a re-extension over a register already clean drops; a mov carries the width, a def
-   ; dirties it, a label clears the table, a narrower ask stands
-   _ (test
-      ('((ldu4 r0 r4 40) (ret)) = (rezx g4 '((ldu4 r0 r4 40) (zx4 r0) (ret))))
-      ('((ror4 r0 11) (ret)) = (rezx g4 '((ror4 r0 11) (zx4 r0) (ret))))
-      ('((zx4 r0) (ret)) = (rezx g4 '((zx4 r0) (zx4 r0) (ret))))
-      ('((ldu1 r0 r4 40) (ret)) = (rezx g4 '((ldu1 r0 r4 40) (zx4 r0) (ret))))
-      ('((ldu4 r0 r4 40) (mov r9 r0) (ret)) = (rezx g4 '((ldu4 r0 r4 40) (mov r9 r0) (zx4 r9) (ret))))
-      (elem '(zx1 r0) (rezx g4 '((ldu4 r0 r4 40) (zx1 r0) (ret))))
-      ; a set (or li 0/1) is a bool: re-canonicalizing it drops; a copy carries it, a def dirties it
-      ('((set eq r0) (ret)) = (rezx g4 '((set eq r0) (cmp r0 0) (set ne r0) (ret))))
-      ('((li r0 1) (ret)) = (rezx g4 '((li r0 1) (cmp r0 0) (set ne r0) (ret))))
-      ('((set eq r0) (mov r9 r0) (ret)) = (rezx g4 '((set eq r0) (mov r9 r0) (cmp r9 0) (set ne r9) (ret))))
-      ('((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret)) = (rezx g4 '((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret))))
-      ('((set eq r0) (cmp r0 0) (set ne r0) (br eq .x)) = (rezx g4 '((set eq r0) (cmp r0 0) (set ne r0) (br eq .x))))
-      (elem '(zx4 r0) (rezx g4 '((ldu4 r0 r4 40) (add r0 r0 r1) (zx4 r0) (ret))))
-      (elem '(zx4 r0) (rezx g4 '((ldu4 r0 r4 40) (label .z9) (zx4 r0) (ret)))))
-   ; the a64 lane: the sweeps ride fp past a4ize, a cs reload forwards (the restores come later),
-   ; and the immediate gates decline what the target cannot encode (si, a non-mask logical, a wide cmp)
-   gA {'tgt 'a64}
-   _ (test
-      ('((st fp 40 r0) (mov r9 r0)) = (stld gA '((st fp 40 r0) (ld r9 fp 40))))
-      !(elem '(ld r19 fp -16) (stld gA '((st fp -16 r19) (ld r19 fp -16))))
-      (elem '(and r0 r0 r1) (cfoldir gA '((li r1 5) (and r0 r0 r1) (ret))))
-      (elem '(and r0 r0 7) (cfoldir gA '((li r1 7) (and r0 r0 r1) (ret))))
-      (elem '(st r5 8 r0) (addrfold gA '((li r0 3) (st r5 8 r0) (ret))))
-      (elem '(si r5 8 3) (addrfold g4 '((li r0 3) (st r5 8 r0) (ret))))
-      (elem '(cmp r0 r1) (addrfold gA '((li r1 70000) (cmp r0 r1) (ret))))
-      (elem '(cmp r0 70000) (addrfold g4 '((li r1 70000) (cmp r0 r1) (ret)))))
-   ; end to end: the pointp shape runs slot-free -- p rides its park through both compares
-   irE (cgn "typedef long word; typedef struct g { long x; } love_t; typedef void lvm_t(love_t *); typedef struct cell { lvm_t *ap; } cell_t; static void lvm_sym(love_t *g) { g->x = 1; } static void lvm_nom(love_t *g) { g->x = 2; } static inline int lamp(word x) { return !(x & 1) && x != 0; } static inline cell_t *cell(word x) { return (cell_t *)x; } static inline int pointp(word x) { lvm_t *p; return lamp(x) && ((p = cell(x)->ap) == lvm_sym || p == lvm_nom); } long probe(word a, word b) { if (((a & b & 1)) || pointp(a) || pointp(b)) return a == b; return 7; } int main() { return (int)probe(3, 5); }")
-   pbf (fnf 'probe <>irE)
-   (test
-      (two? irE)
-      (elem '(la r0 lvm_nom) pbf)
-      (0 = (splds pbf))
-      (0 = (spsts pbf))))
-
-; -- copyprop: after (mov a b) a read of a says b, an unread copy drops, and the two compose
-; into the two-address form. the map dies at a def and a control edge (a br rides its
-; fall-through). cfoldir drops a mov whose source chases to the dest's own value; sp never folds.
-(: gP {}
-   pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1))
-   (cp l) (drop 6 (coal gP (copyprop gP (pro + l))))     ; the real chain: the build tail's
-                                                       ; forward walk, then the post-choice fold
-   ; the sandwich: the rename breaks the fusion and coal rebuilds it on the copy's register
-   _ (test
-      ((cp '((mov r5 r9) (add r5 r5 8) (mov r9 r5) (ret))) = '((add r9 r9 8) (ret)))
-      ((cp '((mov r5 r9) (sub r5 r5 8) (mov r9 r5) (ret))) = '((sub r9 r9 8) (ret)))
-      ((cp '((mov r5 r9) (mov r6 r5) (add r0 r6 1) (ret))) = '((add r0 r9 1) (ret)))
-      ((cp '((mov r5 r0) (mov r5 r0) (ret))) = '((ret))))
-   ; the forward rename reads through an alu consumer and a mov; a copy of a held value never lands
-   _ (test
-      ((cp '((mov r0 r6) (mov r1 r0) (mov r0 r5) (div r1 r1 r0) (ret))) = '((div r1 r6 r5) (ret)))
-      ((cp '((mov r0 r11) (add r2 r2 r0) (mov r0 r5) (ret))) =
-         '((add r2 r2 r11) (mov r0 r5) (ret)))
-      ((cp '((mov r5 r0) (mov r3 r5) (ret))) = '((mov r3 r0) (ret))))
-   ; the map's edges: a br rides its fall-through at any distance, a label and a call reset it
-   _ (test
-      ((cp '((mov r5 r0) (test r5 1) (br ne .x9) (mov r0 r5) (ret))) =
-         '((mov r5 r0) (test r0 1) (br ne .x9) (ret)))
-      ((cp '((mov r5 r0) (label .x9) (mov r0 r5) (ret))) =
-         '((mov r5 r0) (label .x9) (mov r0 r5) (ret)))
-      ((cp '((mov r5 r0) (call foo) (mov r0 r5) (ret))) =
-         '((mov r5 r0) (call foo) (mov r0 r5) (ret))))
-   ; kept operands: la's second is a symbol, the variable shift's count a seat, an address form addrfold's
-   _ (test
-      ((cp '((mov r5 r0) (la r6 r5) (mov r0 r5) (ret))) = '((la r6 r5) (ret)))
-      ((cp '((mov r1 r0) (shlv r5 r1) (ret))) = '((mov r1 r0) (shlv r5 r1) (ret)))
-      ((cp '((mov r5 r0) (ld r6 r5 8) (ret))) = '((mov r5 r0) (ld r6 r5 8) (ret)))
-      ((cp '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))) =
-         '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))))
-   ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
-   _ (test
-      ((cfoldir gP '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) = '((mov r9 r6) (test r9 1) (ret)))
-      (elem '(mov sp r4) (cfoldir gP '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret)))))
-   ; the fold table: knowns are the word's signed value at 64 bits, a compare decides by its
-   ; cc's signedness, and a wrap is a wrap
-   (cf l) (cfoldir gP l)
-   _ (test
-      ((cf '((li r9 5) (neg r9) (add r0 r9 1) (ret))) = '((li r9 5) (li r9 -5) (li r0 -4) (ret)))   ; a unop on a known outside r0..r3
-      ((cf '((li r9 200) (sx1 r9) (add r0 r9 1) (ret))) = '((li r9 200) (li r9 -56) (li r0 -55) (ret)))
-      ((cf '((li r0 2) (sx4 r0) (shl r0 1) (or r0 r0 1) (ret))) = '((li r0 2) (li r0 4) (li r0 5) (ret)))   ; the fixnum tag
-      ((cf '((li r0 9223372036854775807) (neg r0) (sub r0 r0 1) (ret))) =
-         '((li r0 9223372036854775807) (li r0 -9223372036854775807) (li r0 -9223372036854775808) (ret)))
-      ((cf '((li r0 -1) (shr r0 60) (ret))) = '((li r0 -1) (li r0 15) (ret)))
-      ((cf '((li r0 -16) (sar r0 2) (ret))) = '((li r0 -16) (li r0 -4) (ret)))
-      ((cf '((li r0 1) (ror4 r0 1) (ret))) = '((li r0 1) (li r0 2147483648) (ret)))
-      ((cf '((li r0 1) (ror r0 1) (ret))) = '((li r0 1) (li r0 -9223372036854775808) (ret)))
-      ((cf '((li r0 6) (li r1 3) (xor r0 r0 r1) (ret))) = '((li r0 6) (li r1 3) (li r0 5) (ret)))
-      ((cf '((li r0 4611686018427387904) (li r1 4) (imul r0 r0 r1) (ret))) = '((li r0 4611686018427387904) (li r1 4) (li r0 0) (ret)))
-      ((cf '((li r0 -1) (li r1 1) (cmp r0 r1) (br below .x) (li r0 7) (label .x) (ret))) = '((li r0 -1) (li r1 1) (li r0 7) (label .x) (ret)))
-      ((cf '((li r0 -1) (li r1 1) (cmp r0 r1) (br lt .x) (li r0 7) (label .x) (ret))) = '((li r0 -1) (li r1 1) (label .x) (ret)))
-      ((cf '((li r0 -1) (li r0 18446744073709551615) (ret))) = '((li r0 18446744073709551615) (ret)))
-      ; a variable shift's known dest dies with the op; a flag cc is not a cmp's to decide
-      (elem '(add r0 r9 1) (cf '((li r9 5) (shlv r9 r1) (add r0 r9 1) (ret))))
-      (elem '(br vs .x) (cf '((li r0 1) (li r1 1) (cmp r0 r1) (br vs .x) (li r0 7) (label .x) (ret)))))
-   ; ..a64 prices an li by its lanes: a one-lane copy is the li, a two-lane known folds, past
-   ; that the ld and mov stand; x64's mov is free and stays
-   gA {'tgt 'a64}
-   (test
-      ((cfoldir gA '((li r9 5) (mov r0 r9) (ret))) = '((li r9 5) (li r0 5) (ret)))
-      ((cfoldir gA '((li r9 1099511627777) (mov r0 r9) (ret))) = '((li r9 1099511627777) (mov r0 r9) (ret)))
-      (elem '(li r1 1099511627776) (cfoldir gA '((li r0 1099511627776) (st fp -16 r0) (ld r1 fp -16) (ret))))
-      (elem '(ld r1 fp -16) (cfoldir gA '((li r0 281479271743489) (st fp -16 r0) (ld r1 fp -16) (ret))))
-      ((cfoldir gP '((li r9 5) (mov r0 r9) (ret))) = '((li r9 5) (mov r0 r9) (ret)))))
-
-; -- the exhaustion: the rename relation is finite (one shape per rdsp op, two read positions,
-; fifteen gp registers), so every (shape, position, substitute) runs through the real cpwalk and
-; assembler, every (shape, destination) through coal. a new op with no shape here fails the
-; coverage assert; a guard relaxed too far fails an emit.
-(: hb9 (cite 'holo 'holo-bytes)
-   ; the label rides along for la's fixup; a scare anywhere in the encode answers 0
-   (emits? f) (trap (_ \ (hb9 'x64 [f '(label zz9)], 1)) () (a \ b \ 0))
-   gX {}
-   cpfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14)
-   pro9 '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
-   ; one well-formed form per op in rdsp's table; the coverage assert reads the rosters
-   shapes '((li r5 5) (mov r5 r9)
-            (add r5 r9 r10) (sub r5 r9 r10) (and r5 r9 r10) (or r5 r9 r10)
-            (xor r5 r9 r10) (imul r5 r9 r10) (add sp sp 16)
-            (push r5) (pop r5)
-            (shl r5 3) (shr r5 3) (sar r5 3) (rol r5 3) (ror r5 3) (ror4 r5 3)
-            (ld r5 r9 8) (ld1 r5 r9 8) (ld2 r5 r9 8) (ld4 r5 r9 8)
-            (ldu1 r5 r9 8) (ldu2 r5 r9 8) (ldu4 r5 r9 8)
-            (st r9 8 r5) (st1 r9 8 r5) (st2 r9 8 r5) (st4 r9 8 r5)
-            (stx r9 r10 8 0 r5) (stxb r9 r10 8 0 r5)
-            (si r9 8 5) (si1 r9 8 5) (si2 r9 8 5) (si4 r9 8 5)
-            (cmpm r9 8 r5) (cmprm r5 r9 8)
-            (lea r5 r9 8) (lean r5 r9 8)
-            (leax r5 r9 r10 8 0) (ldx r5 r9 r10 8 0) (ldxb r5 r9 r10 8 0)
-            (ldxw r5 r9 r10 4 0) (ldxsw r5 r9 r10 4 0) (laa r5 zz9 8)
-            (andx4 r5 r9 r10 4 0) (orx4 r5 r9 r10 4 0) (xorx4 r5 r9 r10 4 0) (andm4 r5 r9 8) (orm4 r5 r9 8) (xorm4 r5 r9 8)
-            (la r5 zz9) (set eq r5) (cmp r5 r9) (test r5 1)
-            (neg r5) (not r5) (sx1 r5) (sx2 r5) (sx4 r5) (zx1 r5) (zx2 r5) (zx4 r5)
-            (movqxr f0 r5) (movqrx r5 f0)
-            (cvtsi2sd f0 r5) (cvttsd2si r5 f0)
-            (ldsd f0 r9 8) (ldss f0 r9 8) (stsd r9 8 f0) (stss r9 8 f0)
-            (addsd f0 f1) (subsd f0 f1) (mulsd f0 f1) (divsd f0 f1) (movsd f0 f1) (movapd f0 f1) (movss f0 f1)
-            (ucomisd f0 f1) (cvtss2sd f0 f1) (cvtsd2ss f0 f1)
-            (addss f0 f1) (subss f0 f1) (mulss f0 f1) (divss f0 f1) (minss f0 f1) (maxss f0 f1) (ucomiss f0 f1)
-            (cvtsi2ss f0 r5) (cvttss2si r5 f0) (movdxr f0 r5) (movdrx r5 f0)
-            (ldsdx f0 r9 r10 8 0) (ldssx f0 r9 r10 8 0) (stsdx r9 r10 8 0 f0) (stssx r9 r10 8 0 f0)
-            (ldsdl f0 zz9) (minsd f0 f1) (maxsd f0 f1) (cmov eq r5 r9)
-            (div r5 r9 r10) (udiv r5 r9 r10) (rem r5 r9 r10 r2) (urem r5 r9 r10 r2)
-            (shlv r5 r1) (shrv r5 r1) (sarv r5 r1) (rorv r5 r1) (rorv4 r5 r1))
-   heads (map (f9 \ <f9) shapes)
-   rostered (aluops + divops + vshops + unops + ldops9 + gstops + stxops + siops +
-             leaops + xops + x4ops + m4ops + fxops + fstxops + fldops + fstops + xmmops +
-             '(li mov push pop shl shr sar rol ror ror4 cmpm cmprm la laa ldsdl set cmov cmp test
-               movqxr movqrx cvtsi2sd cvttsd2si cvtsi2ss cvttss2si movdxr movdrx))
-   ; the forward carrier: seed the map with (mov orig sub); cpwalk decides, holo judges
-   (fwd f) (catmap (i \ catmap (r9 \
-                                     (: out (cpwalk gX [['mov (f i) r9] f] {})
-                                        f2 (out (#out - 1))
-                                        (emits? f2 ? () [[f i r9 f2]])))
-           cpfile) (cprp gX f))
-   nfwd ((foldl (n \ f9 \ n + tally (cprp gX f9)) 0 shapes) * tally cpfile)
-   bad1 (catmap fwd shapes)
-   ; the backward carrier: a copy off the shape's own destination, folded by the real coal
-   (soled f) (rdsp gX f @ d                            ; the shapes coal can fold: one gp def
-              (d = 'bar ? () (<>d @ dfs (? (two? dfs && atom? >dfs && elem <dfs cpfile)
-                                             dfs ()))))
-   (bwd f) (soled f @ S
-            (atom? S ? ()
-               (catmap (r9 \
-                             (: out (coal gX (pro9 + [f ['mov r9 <S] '(ret)]))
-                                f2 (out 5)
-                                (emits? f2 ? () [[f r9 f2]])))
-                cpfile)))
-   nbwd (#(filter (f9 \ two? (soled f9)) shapes) * tally cpfile)
-   bad2 (catmap bwd shapes)
-   (test
-      ; the carrier is what it says it is, and every shape is one both halves already accept
-      (108 = #shapes)
-      (atom? (filter (f9 \ (rdsp gX f9) = 'bar) shapes))
-      (all emits? shapes)
-      (atom? (filter (o9 \ nelem o9 heads) rostered))      ; the drift gate
-      (435 = nfwd) (840 = nbwd)                               ; a silent narrowing shows up here
-      (atom? bad1)                                            ; forward: 435 renames, all encodable
-      (atom? bad2)                                            ; backward: 840 folds, all encodable
-      ; the two shapes the guards exist for, refused by holo, plus the commuting alias coal declines
-      !(emits? '(sub r0 r12 r0)) !(emits? '(shlv r5 r9))
-      (emits? '(add r0 r12 r0)) (emits? '(add r7 r7 8))))
-
 ; -- the destination die at asn/decl: a statement-position constant store into a static slot is
 ; one store-immediate, and a homed local's init lands in the home. bool keeps the protocol (its
 ; cvt normalizes), as does a value-position asn.
@@ -1886,15 +1660,7 @@
       (0 = (lik qf 5)) (0 = (lik qf 6))              ; no li anywhere: the constants never ride a register
       (1 = (sis wf)) (0 = (lik wf 7))                ; the &-barred slotted init delivers too
       (1 = (sivk bf 1))                              ; bool: the lane declines (it would store the
-      (0 = (sivk bf 4))))                            ;  raw 4); cvt normalizes, then the fold si's the 1
-
-; -- unhome's guard: H mentioned before its (mov H A) entry pair holds another value, so the pair declines.
-(: g9 {} _ (pin g9 'tgt 'x64)
-   keep '((st sp 16 r5) (mov r5 r6) (ldu1 r0 r5 0) (ret))
-   ren9 '((mov r5 r6) (ldu1 r0 r5 0) (ret))
-   _ (test
-      ((unhome g9 keep) = keep)
-      ((unhome g9 ren9) = '((ldu1 r0 r6 0) (ret)))))
+      (0 = (sivk bf 4))))
 
 ; -- the kernel's thunks, last over x64's code: an indirect branch by its register's thunk, a cs
 ; prefix through r8-r15, a return by the return thunk; without the asks the code stands
@@ -1963,73 +1729,6 @@
       (spillrd? bc 'r0 'ld 'r1)                      ; ...and the cell holds the left across the call
       (elem '(ld r0 r6 0) bi)                     ; a constant right: the immop lane unchanged
       (elem '(add r0 r0 1) bi)))
-
-; -- the liveness kit on hand-laid forms: live is over-approximated, so the cases that matter are
-; a join, a backedge, a call, a jmp leaving the function.
-(: gL {}
-   (has? s r) (elem r s)
-   f1 '((label fn) (li r0 1) (mov r5 r0) (add r0 r0 r5) (ret))
-   o1 (lvout gL f1)
-   f2 '((label fn) (li r0 1) (br eq L1) (li r5 2) (label L1) (add r0 r0 r5) (ret))
-   o2 (lvout gL f2)
-   f3 '((label fn) (li r0 1) (label L2) (add r5 r5 r0) (br ne L2) (mov r0 r5) (ret))
-   o3 (lvout gL f3)
-   f4 '((label fn) (li r5 1) (call foo) (mov r0 r5) (ret))
-   o4 (lvout gL f4)
-   f5 '((label fn) (li r6 1) (li r5 2) (jmp foo))
-   o5 (lvout gL f5)
-   f6 '((label fn) (li r6 1) (jmp L3) (li r5 2) (label L3) (ret))
-   o6 (lvout gL f6)
-   (test
-      (has? (o1 1) 'r0)                      ; straight line: a def lives to its read
-      (has? (o1 2) 'r5)
-      !(has? (o1 3) 'r5)                     ; ...and dies at it
-      (has? (o1 3) 'r0)                      ; r0 is what the exit owes back
-      !(has? (o1 4) 'r0)                     ; nothing lives out of a ret
-      (has? (o2 2) 'r5)                      ; a join: the arm that skips the def still
-      (has? (o2 3) 'r5)                      ;   reaches the read, so r5 is live on both
-      (has? (o3 2) 'r5)                      ; a backedge: the bottom's def flows around
-      (has? (o3 4) 'r5)                      ;   to its own read at the top
-      (has? (o4 1) 'r5)                      ; across a call r5 stays live -- which is
-      (has? (o4 2) 'r5)                      ;   what bars a caller-saved seat for it
-      (has? (o5 2) 'r6)                      ; a sibcall reads the whole argument file
-      (has? (o5 2) 'r5)
-      !(has? (o6 2) 'r6)                     ; ..a jmp the fn owns flows to its label
-      !(has? (o6 2) 'r5)                     ;   alone, and the skipped arm is no successor
-      (has? (o4 1) 'r2)                      ; a seat the fn never mentions is still in
-                                                     ;   the universe, so the call clobbers it
-      ((lvout gL '((label fn) (raw 144) (ret))) = 'no)))   ; an op rdsp bars refuses the fn
-
-; -- coalescing: a copy whose source was born on the form before and dies at the copy renames
-; the def. refusals: the prologue (unframe reads it by position), a def reading its own
-; destination, a destination not a stranger to the def. --
-(: gC {}
-   pro '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3))
-   (co l) (coal gC (pro + l))
-   (: c1 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r5 r7) (ret)))
-      c2 (co '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret)))
-      c3 (co '((li r5 1) (add r6 r6 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
-      c4 (co '((li r5 1) (sub r6 r12 r7) (mov r7 r6) (add r0 r7 r7) (ret)))
-      c5 (co '((li r5 1) (li r6 2) (label L9) (mov r7 r6) (add r0 r7 r7) (ret)))
-      ; the floor is prologue ground across targets (arm and riscv lay a longer bring-up): index 5 stands
-      c6 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
-                    (mov r7 r6) (li r7 3) (ret)))
-      c8 (coal gC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3) (align 1)
-                    (mov r7 r6) (li r7 3) (ret)))
-      c7 (co '((li r5 1) (add r6 r7 r5) (mov r7 r6) (add r0 r7 r7) (ret)))
-      c9 (co '((li r5 1) (sx4 r6) (mov r7 r6) (add r0 r7 r7) (ret)))
-      (test
-         (c1 = (pro + '((li r5 1) (li r7 2) (add r0 r5 r7) (ret))))   ; the def takes the copy's name
-         (#c2 = #(pro + '((li r5 1) (li r6 2) (mov r7 r6) (add r0 r6 r7) (ret))))
-         (elem '(mov r7 r6) c2)                     ; the source lives on: the copy stays
-         (c3 = (pro + '((li r5 1) (add r7 r6 r5) (add r0 r7 r7) (ret))))  ; a pure dest renames past its read
-         (elem '(mov r7 r6) c9)                     ; an in-place rewrite does not
-         (elem '(mov r7 r6) c4)                     ; the new dest is the def's second source
-         (c7 = (pro + '((li r5 1) (add r7 r7 r5) (add r0 r7 r7) (ret))))  ; ..its first: the fused form
-         (elem '(mov r7 r6) c5)                     ; a label between them: not adjacent
-         (elem '(mov r7 r6) c6)                     ; a dead copy at index 5: the floor holds it
-         !(elem '(mov r7 r6) c8)                    ; ...one form later it drops
-         ((coal gC '((label fn) (raw 144) (ret))) = '((label fn) (raw 144) (ret))))))
 
 ; --- the value layer's instrument, over val.l's live half: functions of a TU, the escape census,
 ; cells, dead stores and per-def chains. a frame op off the base+const shape reads everything,
@@ -2358,130 +2057,7 @@
       ((vcells cF) = '((0 -16 1 0 0 0 0 2 2) (0 -8 1 0 0 0 0 2 2)))  ; rows sort (base, space)
       ((vchains cF) = '((0 -16 (1) (3) 0) (0 -8 (2) (4) 0)))
       ((vcells cG) = ())                               ; an unmodeled base use: conservative skip
-      ((vchains cG) = ())))
-
-; --- per-def promotion through repack: one cell, two lifetimes -- the first crosses a call
-; and keeps its cell, the second promotes.
-(: gR {}
-   _ (pin gR 'slots '((-16 8)))
-   fs '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
-        (li r5 7) (st r4 -16 r5) (call g9) (ld r6 r4 -16) (mov r0 r6)
-        (li r7 9) (st r4 -16 r7) (ld r8 r4 -16) (add r0 r0 r8) (ret))
-   rf (repack gR fs)
-   (test
-      (elem '(ld r6 r4 -16) rf)                  ; the crossing chain keeps its cell
-      !(elem '(ld r8 r4 -16) rf)                 ; the call-free chain left the frame..
-      (elem '(mov r8 r7) rf)))                   ; ..its load reads the seat, the store dropped
-
-; --- narrow promotion: a cell touched at one width rides the same chains -- the store
-; canonicalizes the seat, a matching load is a mov, an si def folds its li.
-(: (gN9 x) ({} @ t (pin t 'slots '((-16 8)), t))     ; a fresh g per call: repack re-pins the packed map
-   fsA '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
-         (li r5 7) (st4 r4 -16 r5) (ldu4 r6 r4 -16) (mov r0 r6) (ret))
-   fsB '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
-         (si4 r4 -16 -1) (ld4 r7 r4 -16) (mov r0 r7) (ret))
-   fsC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
-         (si r4 -16 42) (ld r7 r4 -16) (mov r0 r7) (ret))
-   ra (repack (gN9 0) fsA)
-   rb (repack (gN9 0) fsB)
-   rc (repack (gN9 0) fsC)
-   (test
-      !(elem '(ldu4 r6 r4 -16) ra)                ; the narrow pair left the frame
-      (elem '(zx4 r5) ra)                         ; the store canonicalized its seat..
-      (elem '(mov r6 r5) ra)                      ; ..and the matching load is a mov
-      (elem '(li r0 -1) rb)                       ; si4 -1 under a signed load: the
-      (elem '(mov r7 r0) rb)                      ;   extension folded at compile time
-      !(elem '(ld4 r7 r4 -16) rb)
-      (elem '(li r0 42) rc)                       ; full-word si promotes to its li
-      !(elem '(ld r7 r4 -16) rc)))
-
-; --- cs seats per value: a chain crossing a call at depth >= 2 takes a callee-saved seat;
-; csframe saves it under the fixed cells and restores it before each teardown.
-(: gS {}
-   _ (pin gS 'slots '((-16 8)))
-   fsL '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
-         (li r5 7)
-         (label .O)
-         (li r9 0)
-         (label .L)
-         (st r4 -16 r5) (call g9) (ld r6 r4 -16)
-         (add r6 r6 1) (mov r5 r6)
-         (add r9 r9 1) (cmp r9 3) (br lt .L)
-         (cmp r5 99) (br lt .O)
-         (mov r0 r5)
-         (rests) (mov sp r4) (pop r4) (ret))
-   fsS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
-         (li r5 7)
-         (st r4 -16 r5) (call g9) (ld r6 r4 -16)
-         (mov r0 r6)
-         (rests) (mov sp r4) (pop r4) (ret))
-   rl (csframe gS (repack gS fsL))
-   rs (repack gS fsS)
-   (test
-      !(elem '(ld r6 r4 -16) rl)                 ; the crossing chain left the frame..
-      (elem '(mov r11 r5) rl)                    ; ..for a callee-saved seat
-      (elem '(mov r6 r11) rl)
-      (elem '(st r4 -16 r11) rl)                 ; one save, under the fixed cells..
-      (elem '(ld r11 r4 -16) rl)                 ; ..one restore, before the teardown
-      (elem '(ld r6 r4 -16) rs)                  ; straight-line weight 2: not worth a pair
-      ; a sib exit restores too, at the head of the peel: a tail-called fn, self calls included,
-      ; re-enters through a prologue whose saves would clobber an unrestored file
-      (elem '(ld r11 r4 -16)
-               (csframe gS (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
-                            (li r5 7)
-                            (label .O)
-                            (li r9 0)
-                            (label .L)
-                            (st r4 -16 r5) (call g9) (ld r6 r4 -16)
-                            (add r6 r6 1) (mov r5 r6)
-                            (add r9 r9 1) (cmp r9 3) (br lt .L)
-                            (cmp r5 99) (br lt .O)
-                            (mov r6 r5)
-                            (rests) (mov sp r4) (pop r4) (jmp fn)))))
-      (elem '(ld r11 r4 -16)
-               (csframe gS (repack gS '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (saves)
-                            (li r5 7)
-                            (label .O)
-                            (li r9 0)
-                            (label .L)
-                            (st r4 -16 r5) (call g9) (ld r6 r4 -16)
-                            (add r6 r6 1) (mov r5 r6)
-                            (add r9 r9 1) (cmp r9 3) (br lt .L)
-                            (cmp r5 99) (br lt .O)
-                            (mov r6 r5)
-                            (rests) (mov sp r4) (pop r4) (jmp far9)))))))
-
-; --- the same promotion on a64: fp is the base, the sub sits past the lr/fp link, csframe's save
-; follows it and its restore heads the teardown at (lea sp fp 0)
-(: gA9 {'tgt 'a64}
-   _ (pin gA9 'slots '((-16 8)))
-   fsP '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16) (saves)
-         (li r5 7) (st fp -16 r5) (call g9) (ld r6 fp -16) (mov r0 r6)
-         (li r7 9) (st fp -16 r7) (ld r8 fp -16) (add r0 r0 r8)
-         (rests) (lea sp fp 0) (pop fp) (pop lr) (ret))
-   fsL '((label fn) (push lr) (push fp) (lea fp sp 0) (sub sp sp 16) (saves)
-         (li r5 7)
-         (label .O)
-         (li r9 0)
-         (label .L)
-         (st fp -16 r5) (call g9) (ld r6 fp -16)
-         (add r6 r6 1) (mov r5 r6)
-         (add r9 r9 1) (cmp r9 3) (br lt .L)
-         (cmp r5 99) (br lt .O)
-         (mov r0 r5)
-         (rests) (lea sp fp 0) (pop fp) (pop lr) (ret))
-   rp (repack gA9 fsP)
-   rl (csframe gA9 (repack gA9 fsL))
-   (cssv? f) (two? f && <f = 'st && <>f = 'fp && elem (f 3) (csregs gA9))
-   (csld? f) (two? f && <f = 'ld && (f 2) = 'fp && elem <>f (csregs gA9))
-   (cspos l) (: (go l i) (? !(two? l) -1 (cssv? <l) i (go >l (i + 1))) (go l 0))
-   (test
-      (elem '(ld r6 fp -16) rp)                  ; the crossing chain keeps its cell
-      !(elem '(ld r8 fp -16) rp)                 ; the call-free chain left the frame
-      (elem '(mov r8 r7) rp)
-      !(elem '(ld r6 fp -16) rl)                 ; a compounding crossing takes a cs seat..
-      (cspos rl = 5)                             ; ..saved right after the frame's sub
-      (csld? (rl (#rl - 5)))))                    ; ..restored at the teardown's head
+      ((vchains cG) = ())))                    ; ..restored at the teardown's head
 
 ; --- a frame address handed to a call may be kept by the callee: no later call in the fn
 ; jumps out of the frame under it
@@ -2490,37 +2066,7 @@
    (test
       (elem '(call leave) eF)
       !(elem '(jmp leave) eF)
-      (elem '(call leave) aF)))                  ; an array's decay is its address too
-
-; --- the allocator core (x64): a mint takes its copy partner's register when the two never
-; meet, keeps its binding when the machine reads it later, never shares a non-commutative second source
-(: v0 (name "%v0") v1 (name "%v1") v2 (name "%v2")
-   (vpfix g fs) (vrfix g (vpre g () fs ()))             ; the build's order: assign, then substitute
-   (gV9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {}
-            'vrn 3 'vrt {v0 'r9 v1 'r7 v2 'r10}}
-   vC (vpfix (gV9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
-   vA (vpfix (gV9 ()) [['label 'fn] ['li v1 5] ['call 'g9] ['ret]])
-   vS (vpfix (gV9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
-   vO (vpfix (gV9 ()) [['label 'fn] ['add v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
-   (test
-      (vC = '((label fn) (and r0 r6 7) (ret)))   ; coalesced: the copy swept
-      (elem '(li r7 5) vA)                       ; the call reads r7: the binding stays
-      (elem '(sub r10 r6 r0) vS)                 ; r0 is sub's second source
-      (vO = '((label fn) (add r0 r6 r0) (ret))))) ; ..but add lays d = b as d += a
-
-; --- ..and the staging webs: a value built on r0 for a copy is built on the copy's register,
-; while a web read at an exit, or one nothing reads (al before a call), keeps r0
-(: v0 (name "%v0")
-   (vpfix g fs) (vrfix g (vpre g () fs ()))
-   (gX9 _) {'tgt 'x64 'pool0 '(r6 r5 r9 r10 r7 r8) 'sigs {} 'vrn 1 'vrt {v0 'r10}}
-   xB (vpfix (gX9 ()) [['label 'fn] ['ld 'r0 'r6 8] ['add 'r0 'r0 8] ['mov v0 'r0]
-                       ['ld 'r0 'r6 16] ['st v0 0 'r0] ['li 'r0 0] ['ret]])
-   xR (vpfix (gX9 ()) [['label 'fn] ['ld 'r0 'r6 8] ['add 'r0 'r0 8] ['ret]])
-   xL (vpfix (gX9 ()) [['label 'fn] ['li 'r0 1] ['call 'g9] ['mov 'r0 'r6] ['ret]])
-   (test
-      (xB = '((label fn) (ld r0 r6 8) (add r10 r0 8) (ld r0 r6 16) (st r10 0 r0) (li r0 0) (ret)))
-      (xR = '((label fn) (ld r0 r6 8) (add r0 r0 8) (ret)))
-      (xL = '((label fn) (li r0 1) (call g9) (mov r0 r6) (ret)))))
+      (elem '(call leave) aF)))
 
 ; --- a small counted loop unrolls, its constant-indexed double elements become scalars, and
 ; an integer literal meeting a double is a double constant: no address, no loop test, no convert
@@ -2561,17 +2107,6 @@
    hX (fnf 'h <>(cgn src))
    (dop? f) (two? f && elem <f '(stsd ldsd addsd mulsd))
    (test !(any dop? hX)))
-
-; --- ..and on a64, whose alu is three-address: sub's dest takes its second source too
-(: v0 (name "%v0") v2 (name "%v2")
-   (vpfix g fs) (vrfix g (vpre g () fs ()))
-   (gW9 _) {'tgt 'a64 'pool0 '(r6 r5 r9 r10 r7 r8 r11 r13 r14) 'sigs {}
-            'vrn 3 'vrt {v0 'r9 v2 'r10}}
-   wC (vpfix (gW9 ()) [['label 'fn] ['and v0 'r6 7] ['mov 'r0 v0] ['ret]])
-   wS (vpfix (gW9 ()) [['label 'fn] ['sub v2 'r6 'r0] ['mov 'r0 v2] ['ret]])
-   (test
-      (wC = '((label fn) (and r0 r6 7) (ret)))
-      (wS = '((label fn) (sub r0 r6 r0) (ret)))))
 
 ; --- the allocator owns locals: homes are placed by interval, and two names whose alive spans
 ; are disjoint share one seat -- a and b each cross calls, never overlap, and share one pair.

@@ -259,7 +259,7 @@
    (locxbin g op a b)
     (: ta (vty a) tb (vty b)
        fa (gcplx? ta && cxb ta = 'float) fb (gcplx? tb && cxb tb = 'float)
-       rt (fa && fb ? '(struct "__cplx_float") cxdty)
+       rt (fa && fb ? '(struct "__cplx_float") '(struct "__cplx_double"))
        (? (!(gcplx? ta) || !(elem op '(+ - * /))) (lono g ['bin op ta tb])
           (fa && op = '/ && !(gcplx? tb) && tb != 'double) (locxdivr g a b 'float ta)
           (fa && fb && op != '/) (locxar g op a b 'float ta)

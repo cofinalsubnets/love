@@ -8,6 +8,8 @@
 (borrow 'kore)
 (borrow 'holo) ; the assembler + linker
 (:
+   x86rn {'r0 "rax" 'r1 "rcx" 'r2 "rdx" 'r3 "rbx" 'r4 "rbp" 'r5 "rsi" 'r6 "rdi" 'r7 "r8"
+          'r8 "r9" 'r9 "r10" 'r10 "r11" 'r11 "r12" 'r12 "r13" 'r13 "r14" 'r14 "r15"}
    ; bswap32 in place on r0 through r1-r3
    bsw32 '((li r2 255)
            (mov r1 r0) (shr r1 24) (and r1 r1 r2)
@@ -188,7 +190,6 @@
    ; 'bad is both a policy deopt ("take another lane") and "no lane anywhere"; only the second
    ; speaks, so nolane pins the phrase. last pin wins
    (nolane g txt) (pin g 'nolane txt, 'bad)
-   (ontgt g) " on \(peep g 'tgt 'x64)"
    ; the immediate gate: what each target's ALU/cmp immediates reach
    (immok g cls n)
     (? (a64? g)
@@ -1447,10 +1448,6 @@
                        (two? k ? (<k + (['jmpm (f 2) (k 1)] . go (k 2)))
                           (f . go >l))))
           (go fs))))
-   ; -mindirect-branch=thunk-extern and -mfunction-return=thunk-extern, last over x64's code: an
-   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk
-   x86rn {'r0 "rax" 'r1 "rcx" 'r2 "rdx" 'r3 "rbx" 'r4 "rbp" 'r5 "rsi" 'r6 "rdi" 'r7 "r8"
-          'r8 "r9" 'r9 "r10" 'r10 "r11" 'r11 "r12" 'r12 "r13" 'r13 "r14" 'r14 "r15"}
    (thunks g fs)
     (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs)
        (via op r) (: s (intern "__x86_indirect_thunk_\(x86rn r)")
@@ -2724,9 +2721,13 @@
                        (all have outs)))
        (asecs-of g (filter live? (rev (g 'fasecs)))))
    ; a refusal that names what the asm asked for, for cgfn's report
-   (asmno g msg) (pin g 'nolane msg, 'bad)
-   ; what gas or holo could not read, as a sentence: the reader's own name for it and the piece
+   asmflags {"e" 'eq "z" 'eq "ne" 'ne "nz" 'ne "c" 'below "b" 'below "nae" 'below
+             "nc" 'ae "ae" 'ae "nb" 'ae "a" 'above "nbe" 'above "be" 'be "na" 'be
+             "g" 'gt "nle" 'gt "ge" 'ge "nl" 'ge "l" 'lt "nge" 'lt "le" 'le "ng" 'le
+             "s" 's "ns" 'ns "o" 'vs "no" 'vc "p" 'p "np" 'np}
+   (ontgt g) " on \(peep g 'tgt 'x64)"
    (asmwhy a b) "it has no lane for (\(show a) \(show b))"
+   (asmno g msg) (pin g 'nolane msg, 'bad)
    ; an asm's operands seated and its template spelt, for either backend -> [ops9 asgn kills saves csops
    ; labs tls txt neutral? scr] | 'bad: ops9 GNU order, asgn each one's register, kills the caller-saved
    ; and vector clobbers, saves the callee-saved ones pushed around the body
@@ -2741,7 +2742,7 @@
        ; register input, ('b reg (addr expr) 0) a memory input or output, ('g text 0 0) one at a
        ; rip-relative address constant, ('m imm 0 0) an
        ; immediate, ('f reg expr 1 cond) a flag output, ('k sp expr 8) the stack pointer as it stands
-       (pinof k e) (k @ 'pick (asmvpin g env e @ p (nom? p ? p k)) k)
+       (pinof k e) (k @ 'pick ((g 'lovpin) g env e @ p (nom? p ? p k)) k)
        ; a 64-bit register operand on thumb rides a pair, %Q its low register and %R its high
        (pr? e2) (t32? g && elem <e2 '(o x i) && e2 3 = 8)
        ; x64's memory operand at an address constant is `sym+k(%rip)`, as gcc spells it, and takes no
