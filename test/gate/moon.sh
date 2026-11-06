@@ -723,11 +723,9 @@ for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
   printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
   moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
 done
-# #pragma pack refuses an operand it does not read and a bit-field it would let straddle
+# #pragma pack refuses an operand it does not read
 printf '#pragma pack(3)\nstruct s { char c; int i; };\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not one mooncc reads" || fail "#pragma pack(3) was taken"
-printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho/.attr.c"
-moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
 # atomics refuse by name: a generic form, a width past the exclusives, armv6-m's read-modify-write

@@ -53,7 +53,7 @@ gstatic() {
   $GCC -O0 -w -static $gf -o "$1" "$2"
 }
 a64_via=qemu
-int128s="111-int128 151-w128fuzz 314-u128union 352-u128abi"
+int128s="111-int128 151-w128fuzz 314-u128union 352-u128abi 362-w128ops"
 narrow32="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 
 case $tgt in
@@ -74,7 +74,7 @@ case $tgt in
     x64ref=1
     GCC=${RISCV64_CC:-}
     [ -n "$GCC" ] || GCC=$(first riscv64-linux-gnu-gcc riscv64-unknown-linux-gnu-gcc riscv64-unknown-elf-gcc)
-    refuse="$int128s 297-frameaddr"
+    refuse="297-frameaddr"
     gref() { gstatic "$@"; } ;;
   wasm)
     NODE=$(first node)
@@ -87,7 +87,7 @@ case $tgt in
     gext=.js
     # return addresses, frame chains and label values live off linear memory, longjmp has no
     # unwind to ride, and a module has no symbol table for 294's asm labels
-    refuse="$int128s 160-rangeinit 229-labelvalue 256-inline-retaddr 294-asmlabel 297-frameaddr 345-jmpsave"
+    refuse="160-rangeinit 229-labelvalue 256-inline-retaddr 294-asmlabel 297-frameaddr 345-jmpsave"
     # clang lacks __builtin_*_overflow_p, emcc's malloc aborts where C answers NULL, its
     # aligned_alloc keeps C11's size rule, its __divsc3 isn't libgcc's
     nogcc="268-overflow-p 298-malloc-wrap 300-aligned-alloc 280-cxf-fuzz"
@@ -96,7 +96,7 @@ case $tgt in
     need arm-none-eabi-gcc qemu-arm
     a64_qemu=qemu-arm
     GCC=arm-none-eabi-gcc
-    refuse="161-enumwide"
+    refuse="161-enumwide 364-w128float"
     w128=$int128s
     wide="68-static-assert 120-bfinit"
     narrow=$narrow32
@@ -105,16 +105,16 @@ case $tgt in
   i386)
     a64_qemu=
     GCC="gcc -m32"
-    refuse=$int128s
+    refuse="$int128s 364-w128float"
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow=$narrow32
     gref() { gcc -m32 -msse2 -mfpmath=sse -w -o "$1" "$2" -lm; } ;;
   thumb1|thumb2)
     thumb_board $tgt "$d"
     if [ $tgt = thumb1 ]; then
-      refuse="68-static-assert $int128s 129-sync 161-enumwide"
+      refuse="68-static-assert $int128s 364-w128float 129-sync 161-enumwide"
     else
-      refuse="68-static-assert 161-enumwide"
+      refuse="68-static-assert 364-w128float 161-enumwide"
     fi
     a64_qemu="qemu-system-arm -M $mach -semihosting -nographic -kernel"
     pretty="qemu $mach"

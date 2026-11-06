@@ -364,7 +364,7 @@
                  + booldefs dia
                  + gnudefs
                  +
-                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc on both
+                 (elem tgt '(x64 a64 rv64 wasm) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc's
    ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
    ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)

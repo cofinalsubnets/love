@@ -1,7 +1,16 @@
 // bit-fields under #pragma pack run on from the cursor at every N, a packed one may touch nine
 // bytes, and an unnamed one asks the struct no alignment off AAPCS
+#ifdef SHOW
 #include <stdio.h>
-#include <string.h>
+#endif
+static unsigned long long hash = 14695981039346656037ULL;
+static void mix(unsigned long long x) {
+#ifdef SHOW
+  printf("%llx\n", x);
+#endif
+  for (int i = 0; i < 8; i++, x >>= 8) hash = (hash ^ (x & 255)) * 1099511628211ULL; }
+static int answer(void) { return (int) ((hash ^ hash >> 32) % 251); }
+static void zero(void *p, int v, int n) { volatile unsigned char *b = p; for (int i = 0; i < n; i++) b[i] = (unsigned char) v; }
 
 #pragma pack(push, 1)
 struct a1 { char c; int x : 30; char d; };
@@ -40,55 +49,54 @@ struct n2 sn2 = { 99, -0x123456789abcdLL, -7 };
 struct a1 sa1 = { 1, -2, 3 };
 struct a8 sa8 = { 4, 0x1234567 };
 
-static void dump(const char *s, const void *p, int n) {
-  const unsigned char *b = p;
-  printf("%s %d", s, n);
-  for (int i = 0; i < n; i++) printf(" %02x", b[i]);
-  puts("");
+static void dump(const void *p, int n) {
+  const volatile unsigned char *b = p;
+  mix((unsigned) n);
+  for (int i = 0; i < n; i++) mix(b[i]);
 }
 
 int main(void) {
-#define SZ(T) printf(#T " %d %d\n", (int) sizeof(T), (int) _Alignof(T))
+#define SZ(T) mix(sizeof(T)), mix(_Alignof(T))
   SZ(struct a1); SZ(struct i1); SZ(struct c2); SZ(struct a8); SZ(struct j8);
   SZ(struct a16); SZ(union u16); SZ(struct n1); SZ(struct n2); SZ(struct n3);
   SZ(struct ua); SZ(struct ub); SZ(struct ug); SZ(union uk); SZ(union ul);
   SZ(union um); SZ(union un); SZ(struct ud); SZ(struct ue);
-  dump("sn1", &sn1, sizeof sn1); dump("sn2", &sn2, sizeof sn2);
-  dump("sa1", &sa1, sizeof sa1); dump("sa8", &sa8, sizeof sa8);
+  dump(&sn1, sizeof sn1); dump(&sn2, sizeof sn2);
+  dump(&sa1, sizeof sa1); dump(&sa8, sizeof sa8);
 
-  volatile struct n1 a; memset((void *) &a, 0, sizeof a);
+  volatile struct n1 a; zero((void *) &a, 0, sizeof a);
   a.c = 5; a.v = 0x8123456789abcdefULL; a.e = 17;
-  dump("a", (void *) &a, sizeof a);
-  printf("%u %llx %u\n", (unsigned) a.c, (unsigned long long) a.v, (unsigned) a.e);
+  dump((void *) &a, sizeof a);
+  mix(a.c); mix(a.v); mix(a.e);
   a.v += 0x100000000000ULL; a.v++;
-  printf("%llx\n", (unsigned long long) a.v);
-  printf("%llx\n", (unsigned long long) (a.v = 0xfedcba9876543210ULL));
-  printf("%u %u\n", (unsigned) a.c, (unsigned) a.e);
+  mix(a.v);
+  mix(a.v = 0xfedcba9876543210ULL);
+  mix(a.c); mix(a.e);
 
-  struct n2 b; memset(&b, 0xff, sizeof b);
-  b.v = -3; dump("b", &b, sizeof b); printf("%lld %d\n", (long long) b.v, (int) b.e);
-  b.v = 0x123456789abcdLL; b.c = 0; b.e = 0; dump("b", &b, sizeof b);
+  struct n2 b; zero(&b, 0xff, sizeof b);
+  b.v = -3; dump(&b, sizeof b); mix(b.v); mix(b.e);
+  b.v = 0x123456789abcdLL; b.c = 0; b.e = 0; dump(&b, sizeof b);
   long long r = (b.v = 1LL << 58);       // past the width: the value truncated, its top bit the sign
-  printf("%lld %lld\n", r, (long long) b.v);
-  b.v = sn2.v - 1; printf("%lld\n", (long long) b.v);
+  mix(r); mix(b.v);
+  b.v = sn2.v - 1; mix(b.v);
 
-  struct n3 c; memset(&c, 0, sizeof c);
-  c.v = -1; dump("c", &c, sizeof c); printf("%lld\n", (long long) c.v);
-  c.c = 1; c.e = 0x7f; c.v = 2; dump("c", &c, sizeof c);
-  long long q = c.v * 3 + 1; printf("%lld\n", q);
+  struct n3 c; zero(&c, 0, sizeof c);
+  c.v = -1; dump(&c, sizeof c); mix(c.v);
+  c.c = 1; c.e = 0x7f; c.v = 2; dump(&c, sizeof c);
+  long long q = c.v * 3 + 1; mix(q);
 
-  struct i1 d; memset(&d, 0, sizeof d);
-  d.a = 3; d.b = 0x7edcba9876543210LL; d.d = 9; dump("d", &d, sizeof d);
-  printf("%d %llx %d\n", (int) d.a, (unsigned long long) d.b, (int) d.d);
+  struct i1 d; zero(&d, 0, sizeof d);
+  d.a = 3; d.b = 0x7edcba9876543210LL; d.d = 9; dump(&d, sizeof d);
+  mix(d.a); mix(d.b); mix(d.d);
 
-  struct c2 e; memset(&e, 0, sizeof e);
-  e.a = -1; e.b = 0x1abcdef0; e.s = -2; dump("e", &e, sizeof e);
-  printf("%d %x %d\n", (int) e.a, (int) e.b, (int) e.s);
+  struct c2 e; zero(&e, 0, sizeof e);
+  e.a = -1; e.b = 0x1abcdef0; e.s = -2; dump(&e, sizeof e);
+  mix(e.a); mix(e.b); mix(e.s);
 
-  struct j8 f; memset(&f, 0, sizeof f);
-  f.c = 1; f.s = -5; f.x = 0xabcde; f.y = -0x123456789LL; dump("f", &f, sizeof f);
-  printf("%d %d %x %lld\n", (int) f.c, (int) f.s, (int) f.x, (long long) f.y);
+  struct j8 f; zero(&f, 0, sizeof f);
+  f.c = 1; f.s = -5; f.x = 0xabcde; f.y = -0x123456789LL; dump(&f, sizeof f);
+  mix(f.c); mix(f.s); mix(f.x); mix(f.y);
 
-  union u16 u; memset(&u, 0, sizeof u); u.y = -2; dump("u", &u, sizeof u); printf("%d\n", (int) u.x);
-  return 0;
+  union u16 u; zero(&u, 0, sizeof u); u.y = -2; dump(&u, sizeof u); mix(u.x);
+  return answer();
 }

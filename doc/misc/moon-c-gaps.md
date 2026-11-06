@@ -1476,6 +1476,15 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c. One departure, kept: a
   written-back `ldp` of one register twice (`ldp fp, fp, [sp], #16`) refuses: the Arm ARM calls it
   unpredictable, and llvm-mc, which lays it, refuses the offset form and `ldpsw`.
+- **`__int128` on rv64 and wasm**, in words and an unsigned compare's carry where x64 and a64 lay
+  the kit; riscv's pair splits over the last register, checked against gcc's objects. On every target
+  with the wide value a divide takes any divisor, signed too (`__udivti3` and kin, moonlibc's ti.c;
+  rt.c's `__moon_ud128` and kin on t32), and on 64-bit targets it converts to and from float and
+  double (`__floattidf`, `__fixdfti` and kin). t32 refuses those conversions by name, i386 and v6-M
+  the type, as gcc does. Laws 362-w128ops.c, 364-w128float.c.
+- **`(float)` of an unsigned 64-bit value with its top bit set** rounded twice, through double:
+  it halves with the lost bit stuck on instead. Law 363-u64float.c.
+- **a wide local's `x++`** answered the new value, in registers. Law 362-w128ops.c.
 - **packed bit-fields, on every target**: the bits run on from the last member, crossing what
   would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as
   unpacked (`struct { char c; unsigned x : 30; }` packed was 8 bytes aligned 4, gcc's 5 aligned

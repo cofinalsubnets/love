@@ -770,5 +770,34 @@ static void dv128(uint64_t d, uint64_t lo, uint64_t hi, uint64_t volatile *c, in
     if (top || r >= d) r -= d, ql |= sl64(1, i); }
   if (rem) c[0] = r, c[1] = 0;
   else c[0] = ql, c[1] = qh; }
+/* any divisor: bit by bit, the quotient in qlo:qhi and the remainder in rlo:rhi */
+static void dvw128(uint64_t dl, uint64_t dh, uint64_t lo, uint64_t hi, uint64_t *q, uint64_t *r) {
+  uint64_t rl = 0, rh = 0, ql = 0, qh = 0;
+  for (int32_t i = 127; i >= 0; i--) {
+    uint64_t top = rh >> 63;
+    rh = rh << 1 | rl >> 63;
+    rl = rl << 1 | (i >= 64 ? sr64(hi, i - 64) : sr64(lo, i)) & 1;
+    if (top || rh > dh || (rh == dh && rl >= dl)) {
+      rh -= dh + (rl < dl);
+      rl -= dl;
+      if (i >= 64) qh |= sl64(1, i - 64);
+      else ql |= sl64(1, i); } }
+  q[0] = ql, q[1] = qh, r[0] = rl, r[1] = rh; }
+static void negw(uint64_t *x) { x[0] = -x[0], x[1] = ~x[1] + !x[0]; }
+
+/* unsigned and signed, wanting the remainder or not: a signed one divides magnitudes */
+static void dvw(uint64_t dl, uint64_t dh, uint64_t lo, uint64_t hi, uint64_t volatile *c, int32_t sgn, int32_t rem) {
+  uint64_t n[2] = {lo, hi}, d[2] = {dl, dh}, q[2], r[2];
+  int32_t nn = sgn && (int64_t) hi < 0, dn = sgn && (int64_t) dh < 0;
+  if (nn) negw(n);
+  if (dn) negw(d);
+  dvw128(d[0], d[1], n[0], n[1], q, r);
+  if (rem ? nn : nn != dn) negw(rem ? r : q);
+  c[0] = rem ? r[0] : q[0];
+  c[1] = rem ? r[1] : q[1]; }
+void __moon_ud128(uint64_t rl, uint64_t rh, uint64_t lo, uint64_t hi) { dvw(rl, rh, lo, hi, &lo, 0, 0); }
+void __moon_um128(uint64_t rl, uint64_t rh, uint64_t lo, uint64_t hi) { dvw(rl, rh, lo, hi, &lo, 0, 1); }
+void __moon_sd128(uint64_t rl, uint64_t rh, uint64_t lo, uint64_t hi) { dvw(rl, rh, lo, hi, &lo, 1, 0); }
+void __moon_sm128(uint64_t rl, uint64_t rh, uint64_t lo, uint64_t hi) { dvw(rl, rh, lo, hi, &lo, 1, 1); }
 void __moon_dv128(uint64_t d, uint64_t x, uint64_t lo, uint64_t hi) { (void) x; dv128(d, lo, hi, &lo, 0); }
 void __moon_rm128(uint64_t d, uint64_t x, uint64_t lo, uint64_t hi) { (void) x; dv128(d, lo, hi, &lo, 1); }
