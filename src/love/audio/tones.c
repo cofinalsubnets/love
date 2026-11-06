@@ -32,6 +32,11 @@ float lm_expf(float);
 #endif
 
 enum { tn_row = 49, tn_segs = 6, tn_seg0 = 19 };
+#if Bits == 64
+enum { tn_lfo = 0 };
+#else
+enum { tn_lfo = 15 };   // vibrato and tremolo taken each 16 frames and held
+#endif
 #define tn_ln10_20 ((flo_t) 0.11512925464970229)   // ln 10 / 20
 #define tn_floor ((flo_t) 1.5848931924611134e-05)    // 96 dB down
 
@@ -112,13 +117,16 @@ static void tn_op(flo_t const *o, flo_t const *mod, flo_t *y, flo_t *L, flo_t *R
   flo_t ek = k != 0 ? tn_exp(k * t) : 0, rk = k != 0 ? tn_exp(k * dt) : 1,
         ed = g != 0 ? tn_exp(-ka * t) : 0, rd = g != 0 ? tn_exp(-ka * dt) : 1;
   flo_t const vamp = vib != 0 && vr != 0 ? f * vib / (vr * (flo_t) 6.283185307179586) : 0;
+  flo_t tg = 1, vx = 0;
   for (; i < n; i++, t += dt) {
    if (t >= E.next) tn_enter(&E, t, dt);
-   flo_t a = tn_amp(&E) * lvl;
-   if (trem != 0) a *= tn_exp(-trem * ((flo_t) 0.5 - (flo_t) 0.5 * tn_sin(tr * t + (flo_t) 0.25)) * tn_ln10_20);
+   if (!(i & tn_lfo)) {
+    if (trem != 0) tg = tn_exp(-trem * ((flo_t) 0.5 - (flo_t) 0.5 * tn_sin(tr * t + (flo_t) 0.25)) * tn_ln10_20);
+    if (vamp != 0) vx = vamp * (1 - tn_sin(vr * t + (flo_t) 0.25)); }
+   flo_t a = tn_amp(&E) * lvl * tg;
    flo_t x = k != 0 ? f * (ek - 1) / k : f * t;
    if (g != 0) x += g * (1 - ed);
-   if (vamp != 0) x += vamp * (1 - tn_sin(vr * t + (flo_t) 0.25));
+   x += vx;
    if (mod) x += dep * mod[i];
    if (fb != 0) x += fb * (a1 + a2);
    flo_t const v = a == 0 ? 0 : a * tn_wave(w, x, f0 + i);
