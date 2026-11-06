@@ -21,7 +21,7 @@
    (el-rb en s d v)
    (? (two? s && two? v && conv d v <s) (s 1)
       (atom? v) v
-      (: R (x \ el-rb en s d x) fd (el-refold R s d v)
+      (: R (x \ el-rb en s d x) fd (peep ELH 2 0 = 1 ? () (el-refold en R s d v))
        (? (two? fd) <fd
        (: 
          (under c) (el-rb en s (d + 1) (c ['nv d]))
@@ -51,16 +51,28 @@
 
    ; --- refolds: a value that is a head's unfolding, its arguments found by matching, reads as
    ; --- that head: the statement's heads and those of elfold ---
-   (el-m d0 d p v)
+   (el-m en d0 d p v)
    (: x (el-res p) y (el-res v)
-    (? (el-same? x y) 1
-       (el-meta? x) (el-esc d0 d d y ? 0 (el-solve x y))
-       (two? x && two? y) (<x == <y && (<x = 'clo ? (el-m d0 (d + 1) (<>x ['nv d]) (<>y ['nv d]))
-                                         (: (go u w) (? (two? u && two? w) (el-m d0 d <u <w && go >u >w) (u == w)) (go >x >y))))
-       (x == y)))
+    (x @ ['na f a] (el-res f @
+           ['lam _] (el-m en d0 d (el-app (el-res f) a) y)
+           g (el-meta? g ? (el-mho en d0 d g a y) (el-mst en d0 d x y)))
+         (el-mst en d0 d x y)))
+   (el-mst en d0 d x y)
+   (? (el-same? x y) 1
+      (el-meta? x) (el-esc d0 d d y ? 0 (el-solve x y))
+      (two? x && two? y) (<x == <y && (<x = 'clo ? (el-m en d0 (d + 1) (<>x ['nv d]) (<>y ['nv d]))
+                                        (: (go u w) (? (two? u && two? w) (el-m en d0 d <u <w && go >u >w) (u == w)) (go >x >y))))
+      (x == y))
+   ; ?f a: ?f is y with a abstracted, as a motive is
+   (el-mho en d0 d g a y)
+   (: z (el-fresh d)
+      t (pin ELH 2 1, el-rb en [a z] (d + 1) y)
+      v (pin ELH 2 0, el-vof (el-env en d) ['lam z t])
+    (el-esc d0 d d v ? 0 (el-solve g v)))
+   (el-env en d) (: (go j) (j < d ? ([(el-fresh j) ['nv j]] . go (j + 1)) en) (go 0))
    ; a level the match went under may not leave it
    (el-esc d0 d e v)
-   (v @ ['nv k] (charm? k && d0 <= k && k < d)
+   (v @ ['nv j] (charm? j && d0 <= j && j < d)
         ['clo f] (el-esc d0 d (e + 1) (f ['nv e]))
         (two? v && (el-esc d0 d e <v || el-esc d0 d e >v)))
    (el-pat f T)
@@ -75,12 +87,12 @@
       (<v = 'clo) (el-has (d + 1) s (<>v ['nv d]))
       (conv d v s || any (el-has d s) >v))
    (el-hides s d v ms) (two? s && el-has d <s v && !(any (el-has d <s) (map el-res ms)))
-   (el-refold R s d v)
+   (el-refold en R s d v)
    (: (go cs)
-      (cs @ ([t f T tag] . u)
+      (cs @ ([t f T tag _] . u)
        (? (two? v && <v == tag)
           (el-pat f T @ [p ms]
-           (? (el-m d d p v && !(two? (filter (m \ el-meta? (el-res m)) ms)) && !(el-hides s d v ms))
+           (? (el-m en d d p v && !(two? (filter (m \ el-meta? (el-res m)) ms)) && !(el-hides s d v ms))
               [(ms @ () t (el-cat (two? t ? t [t]) (map R (map el-res ms))))]
               (go u)))
           (go u))
@@ -89,8 +101,13 @@
    (el-cand t)
    (two? (peep GLOB (two? t ? <t t) 0) ?
     (: f (vof 0 t) T (el-ty 0 0 0 t)
-     (el-pat f T @ [p _] (two? p && !(el-meta? p) ? [[t f T <p]] ())))
+     (el-pat f T @ [p _] (two? p && !(el-meta? p) ? [[t f T <p (el-size 0 p)]] ())))
     ())
+   ; the larger unfolding first: a head reads before the heads it is made of
+   (el-size d v) (? (atom? v) 1
+                    (<v = 'clo) (el-size (d + 1) (<>v ['nv d]))
+                    (el-size d <v + el-size d >v))
+   (el-ins c l) (l @ (x . u) (x 4 > c 4 ? (x . el-ins c u) (c . l)) [c])
    (el-heads t)
    (? (nom? t) (two? (peep GLOB t 0) ? [t] ())
       (atom? t) ()
@@ -179,7 +196,7 @@
       (pass _) (: (go i u n) (u @ (a . w) (go (i + 1) w (n + (try i a))) n) (go 0 as 0))
       (loop _) (pass 0 > 0 ? (loop 0) 0)
       (arg i a) (peep ts i 0 @ b (two? b ? <b (hole? a ?
-                   (el-res (ms i) @ v (el-rb en 0 d v @ b (el-open? b ? (scare 'el-hole [t i]) b)))
+                   (el-rb en 0 d (Z (ms i)) @ b (el-open? b ? (scare 'el-hole [t i]) b))
                    (scare 'el-stuck [t i]))))
       (terms _) (: (go i u) (u @ (a . w) ((arg i a) . go (i + 1) w) ()) (go 0 as))
      (G == 0 ? 0 (el-uni d (res 0) G), loop 0, h . terms 0))
@@ -247,7 +264,7 @@
 
    (elq nm T0 t0)
    (: T (el-sugar T0)
-      G (el-chk 0 0 0 T 'UU, pin ELH 0 (catmap el-cand (el-cat (el-uniq (el-heads T)) (peep ELH 1 ()))), vof 0 T)
+      G (el-chk 0 0 0 T 'UU, pin ELH 0 (foldl (l \ c \ el-ins c l) () (catmap el-cand (el-uniq (el-cat (el-heads T) (peep ELH 1 ()))))), vof 0 T)
       t (el 0 0 0 (el-sugar t0) G)
     (pin ELT nm t, ev ['defq nm T t])))
 (: el-count {})
