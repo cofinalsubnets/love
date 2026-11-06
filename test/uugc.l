@@ -103,7 +103,9 @@
 
 ; --- gnatb reads as equality ---
 (test
- (elq 'gnatbeq '(pi a nat b nat h (paths bool (gnatb a b) true) (paths nat a b))
+ (elfold '(gnl gif (gnil nat) (gcons nat)))
+
+(elq 'gnatbeq '(pi a nat b nat h (paths bool (gnatb a b) true) (paths nat a b))
    '(lam a b (cases (isdeceqnat a b) (lam e h e) (lam ne h (absurd (nopathsfalsetotrue h))))))
  (elq 'gnatbne '(pi a nat b nat h (paths bool (gnatb a b) false) (gneg (paths nat a b)))
    '(lam a b (cases (isdeceqnat a b) (lam e h (absurd (nopathstruetofalse h))) (lam ne h ne))))

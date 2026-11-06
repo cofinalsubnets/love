@@ -9,7 +9,7 @@
 ;   (rw e h)         h proves the goal with e's right end read as its left
 ;   (sym p) (trans p q) (cong f p) rfl (absurd e)
 
-(: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {} ELF {}
+(: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {} ELH {}
    (el-cat a b) (a @ (x . u) (x . el-cat u b) b)
    (el-app f a) (vof [['f f] ['a a]] '(f a))
    (el-fresh d) (intern ("ez" + show d))
@@ -20,9 +20,9 @@
    (el-rb en s d v)
    (? (two? s && two? v && conv d v <s) (s 1)
       (atom? v) v
-      (: fd (el-found s d v (peep ELF en ()))
+      (: R (x \ el-rb en s d x) fd (el-refold R s d v)
        (? (two? fd) <fd
-       (: R (x \ el-rb en s d x)
+       (: 
          (under c) (el-rb en s (d + 1) (c ['nv d]))
        (v @
         ['nv k] (charm? k ? (el-nm en k) (peep ELM k 0 @ m (two? m ? (R <m) k)))
@@ -48,30 +48,55 @@
         ['U l] ['UU l]
         (scare 'el-readback v))))))
 
-   ; --- folds: a statement's subterm reads back as itself, not as its normal form ---
-   (el-found s d v fs)
-   (fs @ ([val tm] . u) (conv d v val ? [(two? s && nom? (s 2) ? (el-sub (s 2) (s 1) tm) tm)] (el-found s d v u)) ())
-   (el-sub x y t) (? (t == x) y (two? t) (map (el-sub x y) t) t)
-   (el-subs t) (? (nom? t) (el-tyname? t ? [t] ())
-                  (atom? t) ()
-                  (el-cat (el-spine? t ? [t] ()) (catmap el-subs t)))
-   ; a named type: the exports' universes see a name where its expansion would not fit
-   (el-tyname? t) (GLOB t @ (g . _) (g == 'UU && two? (vof 0 t)) 0)
-   (el-spine? t) (nom? <t && !(memq <t '(pi total2 lam tpair paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect ii1 ii2)))
-   (el-bound? en t) (? (charm? t) 1
-                       (nom? t) (two? (assq t en) || two? (peep GLOB t 0) || memq t '(UU nat bool unit empty zero tt true false))
-                       (t @ (a . u) (el-bound? en a && el-bound? en u) 1))
-   ; the terms in scope, with their values, for one binder list
-   (el-folds en) (catmap (t \ (el-bound? en t ? [[(vof en t) t]] ())) (peep ELF 0 ()))
-
-   (el-rd en d v) (two? (peep ELF en 0) ? 0 (pin ELF en (el-folds en)), el-rb en 0 d v)
+   ; --- refolds: a value that is a head's unfolding, its arguments found by matching, reads as
+   ; --- that head: the statement's heads and those of elfold ---
+   (el-m d0 d p v)
+   (: x (el-res p) y (el-res v)
+    (? (el-meta? x) (el-esc d0 d d y ? 0 (el-solve x y))
+       (two? x && two? y) (<x == <y && (<x = 'clo ? (el-m d0 (d + 1) (<>x ['nv d]) (<>y ['nv d]))
+                                         (: (go u w) (? (two? u && two? w) (el-m d0 d <u <w && go >u >w) (u == w)) (go >x >y))))
+       (x == y)))
+   ; a level the match went under may not leave it
+   (el-esc d0 d e v)
+   (v @ ['nv k] (charm? k && d0 <= k && k < d)
+        ['clo f] (el-esc d0 d (e + 1) (f ['nv e]))
+        (two? v && (el-esc d0 d e <v || el-esc d0 d e >v)))
+   (el-pat f T)
+   (: (go f T i ms)
+      (T @ ['pi _ q] (: m ['nv (intern ("er" + show i))]
+                      (pin ELM (m 1) 0, go (el-app f m) (capp q m) (i + 1) (m . ms)))
+           [f (rev ms)])
+    (go f T 0 ()))
+   ; a head whose own body holds the scrutinee would hide it from the motive
+   (el-has d s v)
+   (? (atom? v) 0
+      (<v = 'clo) (el-has (d + 1) s (<>v ['nv d]))
+      (conv d v s || any (el-has d s) >v))
+   (el-hides s d v ms) (two? s && el-has d <s v && !(any (el-has d <s) (map el-res ms)))
+   (el-refold R s d v)
+   (: (go cs)
+      (cs @ ([t f T tag] . u)
+       (? (two? v && <v == tag)
+          (el-pat f T @ [p ms]
+           (? (el-m d d p v && !(two? (filter (m \ el-meta? (el-res m)) ms)) && !(el-hides s d v ms))
+              [(ms @ () t (el-cat (two? t ? t [t]) (map (m \ R (el-res m)) ms)))]
+              (go u)))
+          (go u))
+       ())
+    (go (peep ELH 0 ())))
+   (el-cand t)
+   (: f (vof 0 t) T (el-ty 0 0 0 t)
+    (el-pat f T @ [p _] (two? p && !(el-meta? p) ? [[t f T <p]] ())))
+   (el-heads t)
+   (? (nom? t) (two? (peep GLOB t 0) ? [t] ())
+      (atom? t) ()
+      (catmap el-heads t))
+   (el-uniq l) (l @ (x . u) (: w (el-uniq u) (memq x w ? w (x . w))) ())
+   (elfold ts) (pin ELH 1 (map el-sugar ts), 1)
 
    ; the goal with s read as a fresh binder: the motive of an eliminator of s
    (el-motive en d G s)
-   (: z (el-fresh d) n (s @ ['nv k] (charm? k ? (el-nm en k) 0) 0)
-    (pin ELF en (), 
-     pin ELF en (filter (f \ nom? n || !(el-reads z (el-rb en [s z n] (d + 1) <f))) (el-folds en)),
-     el-rb en [s z n] (d + 1) G @ b (pin ELF en (el-folds en), ['lam z b])))
+   (: z (el-fresh d) ['lam z (el-rb en [s z] (d + 1) G)])
 
    ; --- the type of an elaborated term ---
    (el-ty cx en d t)
@@ -142,7 +167,7 @@
       (pass _) (: (go i u n) (u @ (a . w) (go (i + 1) w (n + (try i a))) n) (go 0 as 0))
       (loop _) (pass 0 > 0 ? (loop 0) 0)
       (arg i a) (peep ts i 0 @ b (two? b ? <b (hole? a ?
-                   (el-res (ms i) @ v (el-rd en d v @ b (el-open? b ? (scare 'el-hole [t i]) b)))
+                   (el-res (ms i) @ v (el-rb en 0 d v @ b (el-open? b ? (scare 'el-hole [t i]) b)))
                    (scare 'el-stuck [t i]))))
       (terms _) (: (go i u) (u @ (a . w) ((arg i a) . go (i + 1) w) ()) (go 0 as))
      (G == 0 ? 0 (el-uni d (res 0) G), loop 0, h . terms 0))
@@ -151,7 +176,7 @@
 
    ; --- check against the goal ---
    (el cx en d t G)
-   (: R (el-rd en d)
+   (: R (el-rb en 0 d)
       A (x \ el-inf cx en d x)
       Ty (x \ el-ty cx en d x)
       Sp (x \ el-spine cx en d x G)
@@ -180,8 +205,7 @@
       (: l2 (A l)
        (Ty l2 @ ['sig _ q]
         (capp q 1 @ ['sig A1 _]
-         (el-tails l2 c,
-          Sp ['grec (R A1) ['el-raw (el-motive en d G (V l2))] n c l2])
+         (Sp ['grec (R A1) ['el-raw (el-motive en d G (V l2))] n c l2])
          (scare 'el-ind t))
         (scare 'el-ind t)))
      ['cases w f g]
@@ -200,15 +224,9 @@
         (memq <t '(pi total2 paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) t
         (Sp t))))
 
-   ; induction binds the tail by c's second name: what the statement says of l, it says of the tail
-   (el-tails l c)
-   (c @ ['lam _ ['lam tl _]]
-    (: fs (peep ELF 0 ()) (pin ELF 0 (el-cat fs (map (el-sub l tl) (filter (el-reads l) fs)))))
-    0)
-   (el-reads x t) (? (t == x) 1 (two? t) (el-reads x <t || el-reads x >t) 0)
-
    (elq nm T0 t0)
-   (: T (el-sugar T0) G (el-chk 0 0 0 T 'UU, pin ELF 0 (el-subs T), vof 0 T)
+   (: T (el-sugar T0)
+      G (el-chk 0 0 0 T 'UU, pin ELH 0 (catmap el-cand (el-cat (el-uniq (el-heads T)) (peep ELH 1 ()))), vof 0 T)
       t (el 0 0 0 (el-sugar t0) G)
     (pin ELT nm t, ev ['defq nm T t])))
 (: el-count {})
