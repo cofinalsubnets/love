@@ -52,8 +52,11 @@
    (el-found s d v fs)
    (fs @ ([val tm] . u) (conv d v val ? [(two? s && nom? (s 2) ? (el-sub (s 2) (s 1) tm) tm)] (el-found s d v u)) ())
    (el-sub x y t) (? (t == x) y (two? t) (map (el-sub x y) t) t)
-   (el-subs t) (? (atom? t) ()
+   (el-subs t) (? (nom? t) (el-tyname? t ? [t] ())
+                  (atom? t) ()
                   (el-cat (el-spine? t ? [t] ()) (catmap el-subs t)))
+   ; a named type: the exports' universes see a name where its expansion would not fit
+   (el-tyname? t) (GLOB t @ (g . _) (g == 'UU && two? (vof 0 t)) 0)
    (el-spine? t) (nom? <t && !(memq <t '(pi total2 lam tpair paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect ii1 ii2)))
    (el-bound? en t) (? (charm? t) 1
                        (nom? t) (two? (assq t en) || two? (peep GLOB t 0) || memq t '(UU nat bool unit empty zero tt true false))

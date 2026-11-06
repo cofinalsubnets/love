@@ -103,18 +103,10 @@
 
 ; --- gnatb reads as equality ---
 (test
- (defq gnatbeq (pi a nat b nat h (paths bool (gnatb a b) true) (paths nat a b))
-   (lam a b (coprod_rect
-     (lam c (pi h (paths bool (coprod_rect (lam c2 bool) (lam e true) (lam ne false) c) true) (paths nat a b)))
-     (lam e h e)
-     (lam ne h (fromempty (paths nat a b) (nopathsfalsetotrue h)))
-     (isdeceqnat a b))))
- (defq gnatbne (pi a nat b nat h (paths bool (gnatb a b) false) (gneg (paths nat a b)))
-   (lam a b (coprod_rect
-     (lam c (pi h (paths bool (coprod_rect (lam c2 bool) (lam e true) (lam ne false) c) false) (gneg (paths nat a b))))
-     (lam e h (fromempty (gneg (paths nat a b)) (nopathstruetofalse h)))
-     (lam ne h ne)
-     (isdeceqnat a b))))
+ (elq 'gnatbeq '(pi a nat b nat h (paths bool (gnatb a b) true) (paths nat a b))
+   '(lam a b (cases (isdeceqnat a b) (lam e h e) (lam ne h (absurd (nopathsfalsetotrue h))))))
+ (elq 'gnatbne '(pi a nat b nat h (paths bool (gnatb a b) false) (gneg (paths nat a b)))
+   '(lam a b (cases (isdeceqnat a b) (lam e h (absurd (nopathstruetofalse h))) (lam ne h ne))))
  (defq gnatbrefl (pi a nat (paths bool (gnatb a a) true))
    (lam a (coprod_rect
      (lam c (paths bool (coprod_rect (lam c2 bool) (lam e true) (lam ne false) c) true))
@@ -126,14 +118,12 @@
 
 ; --- membership: presentb reads as present, and app and filter and flat keep it ---
 (test
- (defq gany2in (pi a nat l gnl h (paths bool (gany a l) true) (gin a l))
-   (lam a (grec nat (lam l (pi h (paths bool (gany a l) true) (gin a l)))
-     (lam h (fromempty empty (nopathsfalsetotrue h)))
-     (lam x t ih
-       (gdest (gnatb a x)
-         (lam c (pi h (paths bool (gif bool c true (gany a t)) true) (gin a (gcons nat x t))))
-         (lam e h (ii1 (pathsinv0 nat a x (gnatbeq a x e))))
-         (lam e h (ii2 (ih h))))))))
+ (elq 'gany2in '(pi a nat l gnl h (paths bool (gany a l) true) (gin a l))
+   '(lam a l (ind l
+      (lam h (absurd (nopathsfalsetotrue h)))
+      (lam x t ih (ifb (gnatb a x)
+        (lam e h (ii1 (sym (gnatbeq _ _ e))))
+        (lam e h (ii2 (ih h))))))))
  (defq gin2any (pi a nat l gnl h (gin a l) (paths bool (gany a l) true))
    (lam a (grec nat (lam l (pi h (gin a l) (paths bool (gany a l) true)))
      (lam h (fromempty (paths bool false true) h))
@@ -162,21 +152,14 @@
            (lam p2 (ii1 (ii2 p2))) (lam p2 (ii2 p2)) (ih p)))
         h))
      l)))
- (defq gfilterin
-   (pi f (pi x nat bool) y nat l gnl h (gin y l) hf (paths bool (f y) true) (gin y (gfilter f l)))
-   (lam f y l (grec nat (lam q (pi h (gin y q) hf (paths bool (f y) true) (gin y (gfilter f q))))
-     (lam h hf (fromempty empty h))
-     (lam x t ih h hf
-       (gdest (f x) (lam c (gin y (gif gnl c (gcons nat x (gfilter f t)) (gfilter f t))))
-         (lam e (coprod_rect (lam q (coprod (paths nat x y) (gin y (gfilter f t))))
-           (lam p (ii1 p)) (lam p (ii2 (ih p hf))) h))
-         (lam e (coprod_rect (lam q (gin y (gfilter f t)))
-           (lam p (fromempty (gin y (gfilter f t))
-             (nopathsfalsetotrue
-               (pathscomp0 bool false (f x) true (pathsinv0 bool (f x) false e)
-                 (pathscomp0 bool (f x) (f y) true (maponpaths nat bool f x y p) hf)))))
-           (lam p (ih p hf)) h))))
-     l)))
+ (elq 'gfilterin '(pi f (pi x nat bool) y nat l gnl h (gin y l) hf (paths bool (f y) true) (gin y (gfilter f l)))
+   '(lam f y l (ind l
+      (lam h hf (absurd h))
+      (lam x t ih h hf (ifb (f x)
+        (lam e (cases h (lam p (ii1 p)) (lam p (ii2 (ih p hf)))))
+        (lam e (cases h
+          (lam p (absurd (nopathsfalsetotrue (trans (sym e) (trans (cong f p) hf)))))
+          (lam p (ih p hf)))))))))
  (defq ginflat
    (pi f (pi x nat gnl) y nat a nat l gnl h (gin a l) i (gin y (f a)) (gin y (gflat f l)))
    (lam f y a l (grec nat (lam q (pi h (gin a q) i (gin y (f a)) (gin y (gflat f q))))
@@ -190,15 +173,12 @@
 
 ; --- edges: an absent address has none, an edge witnesses its source, an append reads through ---
 (test
- (defq gedgesabsent (pi a nat r greg h (gneg (gpresent a r)) (paths gnl (gedges a r) (gnil nat)))
-   (lam a (grec gobj (lam r (pi h (gneg (gpresent a r)) (paths gnl (gedges a r) (gnil nat))))
-     (lam h (idpath (gnil nat)))
-     (lam o t ih h
-       (gdest (gnatb a (pr1 o))
-         (lam c (paths gnl (gif gnl c (pr2 o) (gedges a t)) (gnil nat)))
-         (lam e (fromempty (paths gnl (pr2 o) (gnil nat))
-           (h (ii1 (pathsinv0 nat a (pr1 o) (gnatbeq a (pr1 o) e))))))
-         (lam e (ih (lam p (h (ii2 p))))))))))
+ (elq 'gedgesabsent '(pi a nat r greg h (gneg (gpresent a r)) (paths gnl (gedges a r) (gnil nat)))
+   '(lam a r (ind r
+      (lam h rfl)
+      (lam o t ih h (ifb (gnatb a (pr1 o))
+        (lam e (absurd (h (ii1 (sym (gnatbeq _ _ e))))))
+        (lam e (ih (lam p (h (ii2 p))))))))))
  (defq gedgespresent (pi a nat b nat r greg h (gin b (gedges a r)) (gpresent a r))
    (lam a b (grec gobj (lam r (pi h (gin b (gedges a r)) (gpresent a r)))
      (lam h (fromempty empty h))
@@ -207,20 +187,14 @@
          (lam c (pi h (gin b (gif gnl c (pr2 o) (gedges a t))) (gpresent a (gcons gobj o t))))
          (lam e h (ii1 (pathsinv0 nat a (pr1 o) (gnatbeq a (pr1 o) e))))
          (lam e h (ii2 (ih h))))))))
- (defq gedgesappl
-   (pi a nat p greg q greg h (gpresent a p) (paths gnl (gedges a (gapp gobj p q)) (gedges a p)))
-   (lam a p q (grec gobj (lam r (pi h (gpresent a r) (paths gnl (gedges a (gapp gobj r q)) (gedges a r))))
-     (lam h (fromempty (paths gnl (gedges a q) (gnil nat)) h))
-     (lam o t ih h
-       (gdest (gnatb a (pr1 o))
-         (lam c (paths gnl (gif gnl c (pr2 o) (gedges a (gapp gobj t q))) (gif gnl c (pr2 o) (gedges a t))))
-         (lam e (idpath (pr2 o)))
-         (lam e (coprod_rect (lam w (paths gnl (gedges a (gapp gobj t q)) (gedges a t)))
-           (lam m (fromempty (paths gnl (gedges a (gapp gobj t q)) (gedges a t))
-             (gnatbne a (pr1 o) e (pathsinv0 nat (pr1 o) a m))))
-           (lam m (ih m))
-           h))))
-     p)))
+ (elq 'gedgesappl '(pi a nat p greg q greg h (gpresent a p) (paths gnl (gedges a (gapp gobj p q)) (gedges a p)))
+   '(lam a p q (ind p
+      (lam h (absurd h))
+      (lam o t ih h (ifb (gnatb a (pr1 o))
+        (lam e rfl)
+        (lam e (cases h
+          (lam m (absurd (gnatbne _ _ e (sym m))))
+          (lam m (ih m)))))))))
  (defq gedgesappr
    (pi a nat p greg q greg h (gneg (gpresent a p)) (paths gnl (gedges a (gapp gobj p q)) (gedges a q)))
    (lam a p q (grec gobj (lam r (pi h (gneg (gpresent a r)) (paths gnl (gedges a (gapp gobj r q)) (gedges a q))))
