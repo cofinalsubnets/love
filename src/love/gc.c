@@ -458,10 +458,12 @@ static struct g *please_(struct g *g, uintptr_t req0) {
     while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;
     g->lean = 0, g->win_alloc = g->win_copied = 0; }
   } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0; }
+ uintptr_t room = words_max;
  if (g->budget) {
   // appel's cap, leaving the major room for a worst-case promotion: /8 at the budget,
   // where the room past live holds two nurseries
-  uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / (at_share(g) ? 8 : 4) : 0;
+  uintptr_t lv = 2 * g->major_live0;
+  room = g->budget > lv ? (g->budget - lv) / (at_share(g) ? 8 : 4) : 0;
   if (arena > room) arena = room; }
  // the pool was denied room for this nursery's promotion, so the nursery gives; the floors still win
  if (tight) {
@@ -472,7 +474,8 @@ static struct g *please_(struct g *g, uintptr_t req0) {
  if (arena > len1) {
   uintptr_t const c = gc_ncap(g), fr = (uintptr_t) ((g->major_base + g->major_len) - g->major_hp),
                   fit = fr > req0 + 16 ? fr - req0 - 16 : 0, top = c < fit ? c : fit;
-  arena = top > len1 ? top : len1; }
+  arena = top > len1 ? top : len1;
+  if (arena > room) arena = room > len1 ? room : len1; }
  if (arena < g->minor0) arena = g->minor0;
  if (arena < req) arena = req;                                 // the pending allocation fits
 #ifdef LvGcCheck
