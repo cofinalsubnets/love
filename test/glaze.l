@@ -226,7 +226,6 @@
 
 ; --- a map param's probe reads and writes the group's own registers ---
 (: gzmp-t (pins (tablet 8) 5 50 6 60 7 70)
-   gzmp-n0 (peep (ev 'fires) () 0)
    gzmp-r (ev '(: (scan m i acc) (? (< i 8) (scan m (+ i 1) (+ acc (peep m i 0))) acc)
                   (fill m i) (? (< i 3) (fill (pin m i (+ i 1)) (+ i 1)) m)
                   (go m) (scan (fill m 0) 0 0)
