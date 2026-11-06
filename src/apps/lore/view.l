@@ -330,7 +330,8 @@
                          (tty 1 @ ws [0 0 (two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])) draw)
  ; ..the loading screen a level has unless it says another: the box black, and in its middle
  ; the moon going through its phases, a month in view-spin-n draws, new to full lit from the
- ; right, drawn as pom draws it naturally; in a terminal its eight faces, two cells wide
+ ; right, drawn as pom draws it naturally from a camera circling it; in a terminal its eight
+ ; faces, two cells wide
  view-spin-bg 0 view-spin-n 24
  view-spin-cells ["\u{1f311}" "\u{1f312}" "\u{1f313}" "\u{1f314}" "\u{1f315}" "\u{1f316}" "\u{1f317}" "\u{1f318}"]
  (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
@@ -340,7 +341,7 @@
       (: Q (min bw bh // 5) k (max 1 ((Q + 63) // 64)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
          x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
          I (iota (2 S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
-         in (2 x + 2 y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (2 A * 4))
+         in (2 x + 2 y < 1.0) f (bg + in * ((cite 'pom 'pom-orbit-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (2 A * 4))
          Z (cask (4 * bw))
          fr (peep ld 'fresh (n = 0)) _ (fr ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
          (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))
