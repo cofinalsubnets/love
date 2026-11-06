@@ -5,6 +5,7 @@
 ;   (f a _ b)  a spine; _ is an argument found by unifying with the goal or a later argument
 ;   (rev (h ..) t)   t proves the goal with h back under it, h applied after
 ;   (ind l n c)      induction on a list; c binds x, t, ih
+;   (nind k z c)     induction on a nat; c binds j, ih
 ;   (cases w f g)    a coprod; (ifb c f g) a bool, f and g binding c's value as a path
 ;   (rw e h)         h proves the goal with e's right end read as its left
 ;   (sym p) (trans p q) (cong f p) rfl (absurd e)
@@ -36,9 +37,9 @@
         ['i1 a] ['ii1 (R a)]
         ['i2 b] ['ii2 (R b)]
         ['refl a] ['idpath (R a)]
-        ['na f a] [(R f) (R a)]
-        ['np1 w] ['pr1 (R w)]
-        ['np2 w] ['pr2 (R w)]
+        ['na f a] (el-res f @ ['lam _] (R (el-app (el-res f) a)) [(R f) (R a)])
+        ['np1 w] (el-res w @ ['chain a _] (R a) ['pr1 (R w)])
+        ['np2 w] (el-res w @ ['chain _ b] (R b) ['pr2 (R w)])
         ['nnr P z c m] ['nat_rect (R P) (R z) (R c) (R m)]
         ['nbr P x y w] ['bool_rect (R P) (R x) (R y) (R w)]
         ['nur P x w] ['unit_rect (R P) (R x) (R w)]
@@ -52,7 +53,8 @@
    ; --- that head: the statement's heads and those of elfold ---
    (el-m d0 d p v)
    (: x (el-res p) y (el-res v)
-    (? (el-meta? x) (el-esc d0 d d y ? 0 (el-solve x y))
+    (? (el-same? x y) 1
+       (el-meta? x) (el-esc d0 d d y ? 0 (el-solve x y))
        (two? x && two? y) (<x == <y && (<x = 'clo ? (el-m d0 (d + 1) (<>x ['nv d]) (<>y ['nv d]))
                                          (: (go u w) (? (two? u && two? w) (el-m d0 d <u <w && go >u >w) (u == w)) (go >x >y))))
        (x == y)))
@@ -79,14 +81,16 @@
        (? (two? v && <v == tag)
           (el-pat f T @ [p ms]
            (? (el-m d d p v && !(two? (filter (m \ el-meta? (el-res m)) ms)) && !(el-hides s d v ms))
-              [(ms @ () t (el-cat (two? t ? t [t]) (map (m \ R (el-res m)) ms)))]
+              [(ms @ () t (el-cat (two? t ? t [t]) (map R (map el-res ms))))]
               (go u)))
           (go u))
        ())
     (go (peep ELH 0 ())))
    (el-cand t)
-   (: f (vof 0 t) T (el-ty 0 0 0 t)
-    (el-pat f T @ [p _] (two? p && !(el-meta? p) ? [[t f T <p]] ())))
+   (two? (peep GLOB (two? t ? <t t) 0) ?
+    (: f (vof 0 t) T (el-ty 0 0 0 t)
+     (el-pat f T @ [p _] (two? p && !(el-meta? p) ? [[t f T <p]] ())))
+    ())
    (el-heads t)
    (? (nom? t) (two? (peep GLOB t 0) ? [t] ())
       (atom? t) ()
@@ -100,7 +104,7 @@
 
    ; --- the type of an elaborated term ---
    (el-ty cx en d t)
-   (: T (x \ el-ty cx en d x) V (vof en)
+   (: T (x \ el-ty cx en d x) V (el-vof en)
     (? (charm? t) 'nat
        (nom? t) (t @ ('UU || 'nat || 'bool || 'unit || 'empty) 'UU
                      'zero 'nat
@@ -128,15 +132,23 @@
    (el-res v) (v @ ['nv k] (nom? k ? (peep ELM k 0 @ m (two? m ? (el-res <m) v)) v) v)
    (el-solve v w) (v @ ['nv k] (pin ELM k [w], 1) 0)
    (el-same? x y) (x @ ['nv k] (y @ ['nv j] (k = j) 0) 0)
+   ; a metavariable applied is not first order: it waits for its own argument
+   (el-flex? v) (v @ ['na f _] (: g (el-res f) (el-meta? g || el-flex? g)) 0)
    (el-uni d a b)
    (: x (el-res a) y (el-res b)
     (? (el-same? x y) 1
        (el-meta? x) (el-solve x y)
        (el-meta? y) (el-solve y x)
+       (el-flex? x || el-flex? y) 0
        (two? x && two? y && <x == <y)
         (<x = 'clo ? (el-uni (d + 1) (<>x ['nv d]) (<>y ['nv d]))
           (: (go u w) (two? u && two? w ? (el-uni d <u <w, go >u >w) 0) (go >x >y)))
        0))
+   ; a term still naming an open metavariable reads it as that neutral
+   (el-metas t) (? (nom? t) (peep ELM t 1 = 0 ? [[t ['nv t]]] ())
+                   (two? t) (catmap el-metas t)
+                   ())
+   (el-vof en t) (vof (el-cat (el-metas t) en) t)
    (el-open? t) (? (nom? t) (peep ELM t 1 = 0)
                    (two? t) (el-open? <t || el-open? >t)
                    0)
@@ -153,17 +165,17 @@
       (res _) (: (go T vs) (vs @ (v . u) (T @ ['pi _ q] (go (capp q v) u) (scare 'el-not-a-pi t)) T)
              (go Ht ms))
       Zen (el-cat (map (m \ [(m 1) m]) ms) en)
-      Z (v \ vof Zen (el-rb en 0 d v))
+      Z (v \ el-vof Zen (el-rb en 0 d v))
       ts {}
       (hole? a) (a = '_)
-      (needs-goal? a) (two? a && memq <a '(lam tpair ii1 ii2 rev ind cases ifb rw rfl absurd))
+      (needs-goal? a) (two? a && memq <a '(lam tpair ii1 ii2 rev ind nind cases ifb rw rfl absurd))
       (try i a)
       (: D (Z (dom i)) open (el-open? (el-rb en 0 d D))
        (? (two? (peep ts i 0)) 0
           (hole? a) 0
           (open && (needs-goal? a || a = 'rfl)) 0
-          open (: b (el-inf cx en d a) (pin ts i [b], el-uni d D (el-ty cx en d b), el-solve (ms i) (vof en b), 1))
-          (: b (el cx en d a D) (pin ts i [b], el-solve (ms i) (vof en b), 1))))
+          open (: b (el-inq cx en d a D) (pin ts i [b], el-uni d D (el-ty cx en d b), el-solve (ms i) (el-vof en b), 1))
+          (: b (el cx en d a D) (pin ts i [b], el-solve (ms i) (el-vof en b), 1))))
       (pass _) (: (go i u n) (u @ (a . w) (go (i + 1) w (n + (try i a))) n) (go 0 as 0))
       (loop _) (pass 0 > 0 ? (loop 0) 0)
       (arg i a) (peep ts i 0 @ b (two? b ? <b (hole? a ?
@@ -172,7 +184,8 @@
       (terms _) (: (go i u) (u @ (a . w) ((arg i a) . go (i + 1) w) ()) (go 0 as))
      (G == 0 ? 0 (el-uni d (res 0) G), loop 0, h . terms 0))
 
-   (el-inf cx en d t) (two? t && !(memq <t '(pi total2 paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) ? (el cx en d t 0) t)
+   (el-inf cx en d t) (el-inq cx en d t 0)
+   (el-inq cx en d t G) (two? t && !(memq <t '(pi total2 paths coprod succ idpath nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) ? (el cx en d t G) t)
 
    ; --- check against the goal ---
    (el cx en d t G)
@@ -180,7 +193,7 @@
       A (x \ el-inf cx en d x)
       Ty (x \ el-ty cx en d x)
       Sp (x \ el-spine cx en d x G)
-      V (vof en)
+      V (el-vof en)
     (t @
      ['lam x b] (G @ ['pi A1 q] (['nv d] @ fr ['lam x (el ([x A1] . cx) ([x fr] . en) (d + 1) b (capp q fr))])
                      (scare 'el-lam-needs-pi t))
@@ -199,8 +212,9 @@
                   ['transportf (R A1) M (R x) (R y) e2 (el cx en d h (el-app Mv x))])
                  (scare 'el-rw t)))
      ['rev hs b]
-      (: (wrap u) (u @ (h . w) ['pi h (R (assq h cx 1)) (wrap w)] (R G))
-       (: Gt (wrap hs) (. (el cx en d b (V Gt)) hs)))
+      (: ns (two? hs ? hs [hs])
+         (wrap u) (u @ (h . w) ['pi h (R (assq h cx 1)) (wrap w)] (R G))
+       (: Gt (wrap ns) (. (el cx en d b (V Gt)) ns)))
      ['ind l n c]
       (: l2 (A l)
        (Ty l2 @ ['sig _ q]
@@ -219,9 +233,16 @@
      ['ifb c f g]
       (: c2 (A c)
        (Sp ['gdest c2 ['el-raw (el-motive en d G (V c2))] f g]))
+     ['nind n z c]
+      (: n2 (A n) M (el-motive en d G (V n2)) Mv (V M) e2 [['M Mv]]
+       ['nat_rect M (el cx en d z (vof e2 '(M 0))) (el cx en d c (vof e2 '(pi j nat (pi ih (M j) (M (succ j)))))) n2])
+     ['let x a b] (: a2 (A a) ['let x a2 (el ([x (Ty a2)] . cx) ([x (V a2)] . en) d b G)])
+     ['the T b] ['the T (el cx en d b (V T))]
+     ['pr1 w] ['pr1 (A w)]
+     ['pr2 w] ['pr2 (A w)]
      ['el-raw u] u
      (? (atom? t) t
-        (memq <t '(pi total2 paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) t
+        (memq <t '(pi total2 paths coprod succ idpath nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) t
         (Sp t))))
 
    (elq nm T0 t0)
