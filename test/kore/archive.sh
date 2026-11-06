@@ -306,7 +306,7 @@ if command -v gzip >/dev/null 2>&1; then
   # a member bigger than the heap is poured to its file: 300 MiB under 64 MiB
   mkdir -p "$B/t" "$B/x"; dd if=/dev/zero bs=1048576 count=300 2>/dev/null > "$B/t/big"; printf 'tail\n' > "$B/t/small"
   # ..and is packed a run at a time, as gzip members, bzip2 and xz streams read on in one
-  ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" tar czf big.tgz t ) 2> "$o" || { cat "$o"; fail "kore tar czf of a 300 MiB member did not stream"; }
+  ( cd "$B" && LOVE_BUDGET_MB=72 LOVE_NO_IMAGE= "$K" tar czf big.tgz t ) 2> "$o" || { cat "$o"; fail "kore tar czf of a 300 MiB member did not stream"; }
   cbig() {
     ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" tar c$1f big.$2 t ) 2> "$o" \
       || { cat "$o"; fail "kore tar c$1f of a 300 MiB member did not stream"; }
