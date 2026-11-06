@@ -91,8 +91,10 @@ ho = out$(hsuf)
 # build (HCC) records no profile, and profiles its own link only to say so
 ifneq ($(HCC),)
 prof_raw = $(ho)/love.raw
+macho_o = $(ho)/o/love/macho.o
 else
 prof_raw = $(ho)/love.praw
+macho_o = $(ho)/moon/love/macho.o
 endif
 h_o = $(love_c:$(S)/%.c=$(ho)/o/%.o)
 host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
@@ -110,7 +112,8 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
 	 $(note)
-host: $(ho)/love $(ho)/love.1 $(ho)/cook.1
+# macho.o for its compile alone: no link here takes it
+host: $(macho_o) $(ho)/love $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
 # the two states of one binary, as two files: the link lays the raw one, and the bake
@@ -253,7 +256,7 @@ $$($(1)_love_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/love.o: out/lib/love_version.h   # only this TU carries the version id
-$$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
+$$($(1)_host_o) $$($(1)_seat_o) $$($(2))/love/macho.o: $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
@@ -302,13 +305,14 @@ $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootf
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
-# love for macos: the same objects as dyld's mach-o (the horn reaches AudioToolbox through
+# love for macos: the same objects but its bake's, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), unbaked -- the image is its own binary's, so the bake runs on the box
 # (test_macos_love)
-$(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
+mac_o = $(filter-out %/love/elfbake.o,$(moon_o)) $(moon_d)/love/macho.o
+$(ho)/love-macos.raw: out/moonlibc.o $(mac_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -os macos -pie $(mac_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@

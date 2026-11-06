@@ -478,6 +478,9 @@ int raw_mode(intptr_t on);                      // the (raw on) latch; main.c's 
 size_t host_selfpath(char*, size_t);
 // ..image.c..
 struct image_opt;
+int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win);
+// ..elfbake.c or macho.c, one per link: 0 laid, >0 not laid for growth, <0 failed
+int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win);
 int image_bake(struct g*, char const *out, int bare, struct image_opt const*), baked_pick(void const **blob, uintptr_t *blen);
 struct g *image_load(char const*, int*), *image_dump(struct g*, char const*, struct image_opt const*);
 extern uint64_t baked_image[];

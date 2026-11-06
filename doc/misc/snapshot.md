@@ -98,7 +98,7 @@ the image outgrows it, and no shipped zeros.
 It has to stay a real allocated section rather than loose bytes at EOF: `strip` (which
 `install -s` runs) keeps the section and drops a bare trailer.
 
-The rule `src/love/image.c` checks is only that **`.image` ENDS the segment carrying it**, which
+The rule `src/love/elfbake.c` checks is only that **`.image` ENDS the segment carrying it**, which
 covers both shapes with the same arithmetic: a section alone in the highest `PT_LOAD` (ld/lld)
 and one riding the tail of the single segment holo lays. It reads that off the binary's own
 section headers rather than a build flag, so neither lane is told which it is, and a link that
