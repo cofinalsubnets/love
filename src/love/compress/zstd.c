@@ -673,12 +673,12 @@ static uintptr_t ze_seqs(const struct ze_seq *sq, uintptr_t ns, uint8_t *cd, uin
  return w.bad ? 0 : (uintptr_t) (w.p - o); }
 
 // --- the parse --------------------------------------------------------------------------------
-// a level: the window, the hash, how far down a chain, a length that ends the search, lazy or not
+// a level: the window, the hash, how far down a chain, a length that ends the search, steps of lookahead
 struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt, fast; };
-static const uint16_t ze_depth[20] = { 1, 1, 2, 4, 6, 8, 12, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192 };
+static const uint8_t ze_depth[16] = { 0, 0, 0, 0, 4, 6, 8, 12, 16, 12, 16, 24, 32, 48, 64, 96 };
 static struct ze_cfg ze_cfg(int lv) {
  return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 1 ? 14 : lv <= 2 ? 16 : lv <= 3 ? 17 : lv <= 6 ? 19 : 20,
-                          ze_depth[lv], lv <= 3 ? 24 : lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv >= 4, lv >= 16, lv <= 3 ? 6 : 0 }; }
+                          lv < 16 ? ze_depth[lv] : 0, lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv < 4 ? 0 : lv <= 8 ? 1 : 2, lv >= 16, lv <= 3 ? 6 : 0 }; }
 struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; };
 static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before p in its chain
  for (; m->ins < p && m->ins + 4 <= m->n; m->ins++) {
@@ -933,22 +933,33 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
   ze_fast(m, cf->fast, a, e, rp, lit, &nl, sq, &ns);
   for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml; }
  else
- while (p < e) {
-  uint64_t off = 0, o2 = 0, r0 = rp[0];
-  uintptr_t k = 0;
-  if (p >= r0 && p - r0 < p && r0 <= m->wmask) {             // the last distance again, first
-   uintptr_t r = lzf_mlen(s + p - r0, s + p, (unsigned) (e - p));
-   if (r >= 4) k = r, off = r0; }
+ while (p + 8 <= e) {
+  uint64_t off = 0, o2 = 0;
+  uintptr_t k = 0, q = p, t = p;
+  if (rp[0] <= p + 1 && rp[0] <= m->wmask) {     // the last distance a byte on
+   uintptr_t r = lzf_mlen(s + p + 1 - rp[0], s + p + 1, (unsigned) (e - p - 1));
+   if (r >= 4) k = r, off = rp[0], q = p + 1; }
   uintptr_t f = ze_find(m, p, e, &o2);
-  if (f > k + 1) k = f, off = o2;
-  if (k && cf->lazy && p + 1 < e) {              // one step on, a longer one wins
-   uintptr_t f1 = ze_find(m, p + 1, e, &o2);
-   if (f1 > k + 1) { p++; k = f1, off = o2; } }
+  if (f > k) k = f, off = o2, q = p;
   if (!k) { p += 1 + ((p - l0) >> 8); continue; }   // a long run of nothing found is passed over faster
-  uintptr_t ll = p - l0;
+  for (unsigned d = 1; d <= cf->lazy && t + 9 <= e && k < m->good; d++) {   // up to lazy steps on, a better one starts over
+   int cost = off == rp[0] ? 0 : (int) zs_hb((uint32_t) off + 1);         // a repeat's distance is free
+   t++;
+   if (off != rp[0] && rp[0] <= t && rp[0] <= m->wmask) {
+    uintptr_t r = lzf_mlen(s + t - rp[0], s + t, (unsigned) (e - t));
+    if (r >= 4 && (int) r * 3 > (int) k * 3 - cost + (d == 1 ? 1 : 2)) { k = r, off = rp[0], q = t, d = 0; continue; } }
+   f = ze_find(m, t, e, &o2);
+   if (f && (int) f * 4 - (int) zs_hb((uint32_t) o2 + 1) > (int) k * 4 - cost + (d == 1 ? 4 : 7)) k = f, off = o2, q = t, d = 0; }
+  while (q > l0 && q > off && s[q - 1] == s[q - 1 - off]) q--, k++;       // what the hash missed, behind it
+  uintptr_t ll = q - l0;
   memcpy(lit + nl, s + l0, ll), nl += ll;
   sq[ns].ll = (uint32_t) ll, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, ll, off), ns++;
-  p += k, l0 = p; }
+  p = q + k, l0 = p;
+  while (p + 8 <= e && rp[1] <= p && rp[1] <= m->wmask && !((ZLD(s + p - rp[1]) ^ ZLD(s + p)) << 32)) {   // the second distance, no literals between
+   uint64_t r1 = rp[1];
+   k = lzf_mlen(s + p - r1, s + p, (unsigned) (e - p));
+   sq[ns].ll = 0, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, 0, r1), ns++;
+   p += k, l0 = p; } }
  memcpy(lit + nl, s + l0, e - l0), nl += e - l0;
  body = ze_comp(lit, nl, sq, ns, cd, n, last, o, cap);
  if (body) {
