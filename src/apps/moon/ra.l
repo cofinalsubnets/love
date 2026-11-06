@@ -238,9 +238,11 @@
        (go fs c)
         (fs @ ((['mov p v] && !(lovr? p) && elem v sp && raget c v = ()) . u)   ; a fixed register's reload needs no temp, which might take another's
                (['ld p 'r4 (sl v)] . go u c)
-              ; t32's odd s-register arrives by r12 with the float file full: to its slot straight
+              ; t32's odd s-register goes by r12 with the float file full: to and from its slot straight
               ((['movdxr v r] && t32? g && elem v sp) . u)
                (['st 'r4 (sl v) r] . go u (filter (e \ <e != v) c))
+              ((['movdrx r v] && t32? g && elem v sp && !(lovr? r) && raget c v = ()) . u)
+               (['ld r 'r4 (sl v)] . go u c)
               (f . u)
                (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
                   (raops g f @
