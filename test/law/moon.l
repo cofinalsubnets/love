@@ -239,7 +239,7 @@
                        (: f2 <fs r (ldofs >fs op rg)
                           (? (two? f2 && <f2 = op && <>f2 = rg && <>>f2 = 'sp)
                              (<>>>f2 . r) r)))
-   ; a law never spells a frame offset (repack re-chooses them): name a slot by its owning register
+   ; a law never spells a frame offset: name a slot by its owning register
    (sof fs op rg) (stofs fs op rg @ l (two? l ? <l))          ; the slot rg stores itself to
    (nldrg fs rg) #(ldofs fs 'ld rg)          ; slots rg reloads from -- 1 = its cs
                                                     ; restore alone, i.e. it has no home
@@ -1334,7 +1334,7 @@
       (0 = #(stofs tcf 'st 'r9))              ; never a cell
       (0 = #(stofs bnf 'st 'r5)))
    ; -- d128 locals home as cs pairs: a loop-carried __int128 takes (lo hi) off the cs pool,
-   ; mov pairs on the r0:r2 protocol, no slot; &-taken and ++ deopt through clval.
+   ; mov pairs on the r0:r2 protocol, no slot; &-taken and ++ deopt.
    irV (cgn "long w2(long *a, int n) { unsigned __int128 c = 0; for (int i = 0; i < n; i++) { for (int k = 0; k < 2; k++) { c = c + (unsigned __int128) a[i] * 3; a[i] = (long) c; } } return (long)(c >> 64); } int main() { return 0; }")
    vf (fnf 'w2 <>irV)
    ; -- the schoolbook row: the product stays on the pair, the limb is built in the park,
@@ -1350,7 +1350,7 @@
       (: (sv r) (two? (filter (f \ two? f && <f = 'st && <>f = 'sp && (f 3) = r) mrf))
          (us r) (two? (filter (f \ two? f && elem r >f && !(<f = 'st && <>f = 'sp) && !(<f = 'ld && <>>f = 'sp)) mrf))
          (0 = #(filter (r \ sv r && !(us r)) '(r11 r12 r13 r14)))))
-   ; recse never renames an in-place def: a zx4 behind an add extends what the add wrote
+   ; never renames an in-place def: a zx4 behind an add extends what the add wrote
    irP (cgn "void pz(unsigned *pa, unsigned a, unsigned b, unsigned top) { pa[a] = top + 1; pa[b] = top + 1; } int main() { return 0; }")
    pzf (fnf 'pz <>irP)
    _ (test

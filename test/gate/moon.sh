@@ -68,6 +68,9 @@ for f in test/cc/*.c; do
   "$ho/.ccb"; a=$?
   $cc_g -O0 -o "$ho/.ccbg" "$f" && "$ho/.ccbg"; b=$?
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
+  moonrun -Os -o "$ho/.ccb" "$f" > /dev/null 2>&1 || fail "mooncc -Os compile $f"
+  "$ho/.ccb"; c=$?
+  [ $a -eq $c ] || fail "mooncc battery $f -Os (ours $c, plain $a)"
   # ..and again with the hardening flags, which change no answer
   moonrun -fcf-protection=full -ftrivial-auto-var-init=zero -fstack-protector-all -o "$ho/.ccb" "$f" "$ho/.sspg.o" > /dev/null 2>&1 ||
     fail "mooncc -fcf-protection -ftrivial-auto-var-init -fstack-protector-all compile $f"

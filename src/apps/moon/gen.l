@@ -1,8 +1,6 @@
-; the code generator: AST -> (1 ir-forms) | (), in holo's neutral IR. every expression
-; computes into r0 and carries its type (cgexpr answers (type forms)); the ALU is 64-bit and
-; widths bite only at memory and casts. clval answers an lvalue's address in r0 + pointee type.
-; a float is 4 bytes in memory but always a double in an xmm register.
-; refused, not fudged: ptr+ptr, deref of a non-pointer, assigning to an array.
+; the code generator's frame and finish: AST -> (1 ir-forms) | (), in holo's neutral IR. lo.l
+; lowers each function to vregs, ra.l colours them, and the passes here lay the frame and tidy
+; what ra left. this file also holds the kits, types and tables lo.l calls.
 ; stage.l types each pass against its sig there: a new pass declares one.
 (module 'moon
 (borrow 'kore)
@@ -29,7 +27,7 @@
          (cvtsi2sd f1 r0)
          (addsd f0 f1))
    ; the ISA families, the one place an op's membership is stated (an op off every list is opaque).
-   ; off every list is opaque). an op that can base on r4 must also join a4base + uoff and deadst's scans
+   ; off every list is opaque). an op that can base on r4 must also join a4base + uoff
    ldops9 '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4)
    gstops '(st st1 st2 st4)
    fldops '(ldsd ldss) fstops '(stsd stss)
@@ -41,8 +39,7 @@
    fxops '(ldsdx ldssx) fstxops '(stsdx stssx)      ; x64: no gp effect
    siops '(si si1 si2 si4)                          ; the store-immediates
    aluops '(add sub and or xor imul)
-   ; the flag family sets or reads the flags for the form beside it: never pure (deaddef would
-   ; lift it), never in aluops (the two-address rewrites); off every list rdsp answers 'bar
+   ; the flag family sets or reads the flags for the form beside it: never pure, never in aluops (the two-address rewrites); off every list rdsp answers 'bar
    flagops '(adds subs adcs sbcs adc sbc ors)
    divops '(div rem udiv urem)
    ; (umull dl dh a b) defines two; udivll/uremll are nullary, owning r0..r3 (r4..r7 saved inside)
@@ -80,9 +77,6 @@
    (vreg v) <>v
    (vfs v) <>>v
    fregs16 '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15)
-   ; the vreg shadow: ralloc mints a nom (%v0 ..) mapped in g 'vrt to a physical, and vrfix
-   ; substitutes at build's last link. every g-table holds physicals; rp resolves a nom for the machine
-   (rp g rz) (g 'vrt rz || rz)
    ; MOON_ABLATE="tpool,cs" holds named mechanisms empty, for pricing. read per unit at run time
    ; (a value binding would fold at bake)
    (ablenv _)
@@ -113,17 +107,6 @@
                      map (f \ (putx f, putc 10)) fs,
                      fs)
                     fs))
-   (vmint g r9) (: k9 (peep g 'vrn 0)
-                   v9 (name "%v\(k9)")
-                 (pin g 'vrn (k9 + 1),
-                  pin (g 'vrt) v9 r9,
-                  v9))
-   ; the float file's own shadow: a mint in g 'frt the gp lanes never see, resolved by vrfix too
-   (fmint? g x) !!(g 'frt x)
-   (frp g x) (g 'frt x || x)
-   ; a park cell: a mint homed in no register, coloured where one is free and else a frame slot (vspill).
-   ; v6m keeps the sp cell, the smaller code there
-   (vcell g) (!(abl? g 'vcell || v6m? g) ? (vmint g 'cell))
    (callish? (a . u))                                ; does the AST reach a call? (an inline splice still may)
     ; a statement expression resets the pool per statement: a barrier, like a call
     (a = 'call || a = 'sexpr || callish? a || callish? u)
@@ -180,7 +163,7 @@
                  (rv64? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
                  (v6m? g) '(r5 r6)                    ; the 16-bit str/ldr reach r0-r7 only, and r7 is fp
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
-                 (ia32? g) (g 'ebx ? '(r5 r6 r3) '(r5 r6))   ; esi edi, and ebx where nothing parks there (cgfn); ebp the frame
+                 (ia32? g) '(r5 r6)   ; esi edi, and ebx where nothing parks there (cgfn); ebp the frame
                  (arm? g) ()
                  csx64)
    (deep? pl) (two? >>pl)                           ; a pool affords a priced seat: two remain after the take
@@ -440,19 +423,6 @@
    ; the type of an expression without its emission (arrays undecayed); every accumulator the
    ; walk touched is handed back as it was
    (peekty g env e) ((g 'lopeek) g env e)
-   ; the fn's read graph, flow-blind: each local to the names its decl init and its writes read
-   (rdgraph x)
-    (: t {}
-       (nms e acc) (? !(two? e) acc (<e = 'var) (<>e . acc) (foldl (a \ y \ nms y a) acc e))
-       (edge v e) (pin t v (nms e (peep t v ())))
-       (go e) (? !(two? e) 0
-                 (: _ (e @ ('decl ps) (map (p \ two? >>p && edge <p <>>p) ps)
-                           ('asn ('var v) r) (edge v r)
-                           ('rmw _ ('var v) r) (edge v r)
-                           0)
-                    _ (map go e)
-                    0))
-       (go x, t))
    (negcc c) (c @ 'eq 'ne 'ne 'eq 'lt 'ge 'ge 'lt 'le 'gt 'gt 'le 'below 'ae 'ae 'below
                  'be 'above 'above 'be 's 'ns 'ns 's 'p 'np 'np 'p 'vs 'vc 'vs)
    ; n little-endian bytes of a constant (the global initializer image)
@@ -471,8 +441,6 @@
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
    ; 8 mod 16 across the inner call, so a whole 16-byte cell
    (spush r) ['(sub sp sp 16) ['st 'sp 0 r]]
-   ; a park around b: a's r0 holds in a cell mint while b runs, then lands in r
-   (pk g a b r) (vcell g @ p (p ? (a + [['mov p 'r0]] + b + [['mov r p]]) (a + spush 'r0 + b + spop r)))
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
    ; the pair kit (ilp32 llong/ullong): a 64-bit value rides r0 (lo) : r1 (hi). pairs never enter
    ; the pool or the immediate lanes: every pair op runs the shuttle, r2:r3 the popped left, r12 the scratch
@@ -564,7 +532,7 @@
    (wbin ta tb) (? (d128? ta && d128? tb) (ta = 'u128 || tb = 'u128 ? 'u128 'i128)
                    (d128? ta) ta tb)                ; a word side converts to the wide side's type
    ; a fresh n-byte frame cell -> its (negative) offset; every cell registers in g 'slots
-   ; ((off n)..), the object map deadst and repack read (an lea escapes the whole object)
+   ; ((off n)..), the frame's object map
    (nslot g n) (: off -(peep g 'off 0 + n)
                   (pin g 'off (peep g 'off 0 + n),
                    pin g 'slots ([off n] . g 'slots),
@@ -877,7 +845,7 @@
    ; reader ops, not `at`: the laws cat gen.l without holo, where `at` is unbound
    (varix ty) <>>>ty                                ; a decl's slot index (4-long only)
    ; rbx is callee-saved and gen uses it (callr park, va_arg): csframe saves it at slot -8 when written
-   pro4 '((push r4) (mov r4 sp))                    ; the x64 frame link (unframe strips it; repack requires it)
+   pro4 '((push r4) (mov r4 sp))                    ; the x64 frame link (unframe strips it)
    sav3 '(st r4 -8 r3)
    epi '((mov sp r4) (pop r4) (ret))
    ; a64: lr pushed before fp, no rbx slot; the sp hop rides lea since mov to/from sp is ORR (31 is xzr)
@@ -950,8 +918,8 @@
        _ (arm '(cmov) (g \ f \ [[<>>f <>>>f] [<>>f] 1]))
        _ (arm '(cmp test) (g \ f \ [(rg1 <>f + rg1 <>>f) () ()]))
        _ (arm unops (g \ f \ [[<>f] [<>f] 1]))
-       ; vmov Df, Rlo, Rlo+1 names only the low half: qtwin spells the high one, else deaddef kills a
-       ; live read and the forwarders keep a stale def
+       ; vmov Df, Rlo, Rlo+1 names only the low half: qtwin spells the high one, else a dead-store sweep
+       ; kills a live read
        _ (arm '(movqxr) (g \ f \ [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]))
        _ (arm '(movqrx) (g \ f \ [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]))
        _ (arm '(movrrq) (_ \ f \ [[(f 3)] [(f 1) (f 2)] 1]))
@@ -986,7 +954,7 @@
        ; a variable shift defines only its dest (x64's count is cl, never moved into): a claimed r1
        ; def would make the pair lane's carry-in look dead
        _ (arm vshops (g \ f \ [[<>f <>>f] [<>f] ()]))
-       ; the wide kit: the pair rides r2:r0 unspelled, so copyprop never renames it; x64 spends rcx in
+       ; the wide kit: the pair rides r2:r0 unspelled; x64 spends rcx in
        ; m128r/c128r and s128r answers through the park; the four-word face carries all four, r12 scratch
        _ (arm '(sx128) (g \ f \ (t32w? g ? ['(r1) '(r2 r3) 1] ['(r0) '(r2) 1])))
        _ (arm '(n128 inc128 dec128 shl128 shr128 sar128)
@@ -1057,33 +1025,24 @@
        (ia32? g) ('((mov r1 r3)) + butret ejx + '((jmpr r1)))    ; i386: ecx, caller-saved and no result's
        (<>f = 'r10) (butret ejx + '((jmpr r10)))              ; lo.l's park, clear of the epilogue
        ('((mov r10 r3)) + butret ejx + '((jmpr r10))))            ; park first: the x64 epilogue reloads r3
-   ; skiprel peels dead reloads after a ret-position call (pool regs only: a cs-reg ld is the epilogue's)
-   (skiprel g fs hs)
-    (!(two? fs) ? fs
-       (<fs @ f
-          (!(two? f && (elem <f ldops9 || <f = 'ldsd) && <>>f = 'r4) ? fs
-             (filter (h2 \ (<h2 = <>f) && <>h2 = <>>>f) hs @ h   ; a home serves several spans: match reg and slot
-                (? (two? h) (skiprel g >fs hs)
-                   (elem <>f (g 'pool0)) (skiprel g >fs hs)
-                   fs)))))
    ; a tail call's result extension may go: on x64 and a64 every caller extends
    (skipxt g l) (? (two? l && (x64? g || a64? g) && two? <l && elem <<l '(sx1 sx2 sx4 zx1 zx2 zx4) && <>(<l) = 'r0) >l l)
-   (sibs g (f . r) lw el hs ej crf)
+   (sibs g (f . r) lw el ej crf)
     (: lw2 (two? f && <f = 'lea && <>>f = 'r4 || lw)
        cand (!lw2 && two? f && (<f = 'call && two? >f ||
                                 <f = 'callr && (<>f = <>crf || x64? g && <>f = 'r10)) &&
-             (!(g 'fesca && !(abl? g 'fesca) || g 'fescv) || must? f))
-       rr (cand ? (skiprel g (skipxt g r) hs) r)
+             (!(g 'fescv) || must? f))
+       rr (cand ? (skipxt g r) r)
        (? (cand && epim? rr ej)
-           (sibjmp g f ej + sibs g (drop #ej rr) () el hs ej crf)
+           (sibjmp g f ej + sibs g (drop #ej rr) () el ej crf)
           (cand && lbl-epi? rr ej)
-           (sibjmp g f ej + sibs g rr () el hs ej crf)
+           (sibjmp g f ej + sibs g rr () el ej crf)
           (cand && (<rr @ nx (two? nx && <nx = 'jmp && peep el <>nx ())))
-           (sibjmp g f ej + sibs g >rr () el hs ej crf)
+           (sibjmp g f ej + sibs g >rr () el ej crf)
           (cand && lbl-jmp? rr el)
-           (sibjmp g f ej + sibs g rr () el hs ej crf)
+           (sibjmp g f ej + sibs g rr () el ej crf)
           ((must? f ? (scare 'musttail-not-a-tail [(g 'fn) f]) 0),
-           f . sibs g r (two? f && elem <f '(call callr callm raw) ? () lw2) el hs ej crf)))       ; raw: a builtin splice consumes its address like a call
+           f . sibs g r (two? f && elem <f '(call callr callm raw) ? () lw2) el ej crf)))       ; raw: a builtin splice consumes its address like a call
    ; musttail: a pre-slotted ret (clay's (ret e PRE)) marks its call 'must; sibs jumps or scares
    (must? f) (two? f && elem <f '(call callr callm) && elem 'must >>f)
    (anymust? (a . u)) (must? a || anymust? u)
@@ -1093,7 +1052,7 @@
                      (g 'fesc || g 'fescv && abl? g 'fescv || v6m? g)   ; v6m's pop-pc epilogue can't restore lr for a jmp
                       (anymust? fs ? (scare 'musttail-escape (g 'fn)), fs)
                      (peep g 'epi epi @ ej
-                      (sibs g fs () (elabsx fs {} ej) (map (h \ (rp g (frp g <h) . >h)) (g 'homes)) ej ['callr (pkr g)])))
+                      (sibs g fs () (elabsx fs {} ej) ej ['callr (pkr g)])))
 
    ; frame elision (frees rbp, the glaze's Ip): slots re-address off sp at off + K9 + D, K9 = K + the
    ; link bytes, so a call at a 16-multiple D keeps push r4's alignment; scan proves D at every label
@@ -1814,7 +1773,7 @@
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
    (fcalld g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                  fregs16)
-   (fnm? g x) (nom? x && (elem x fall9 || fmint? g x))
+   (fnm? g x) (nom? x && elem x fall9)
    (frd g f)                                          ; -> [reads defs] of the float file | 'bar
     (? !(two? f) [() ()]
        (<f @ op
@@ -1995,7 +1954,7 @@
                      note >l (i + 1))))
              _ (note fs 1)
              dr (filter defs (csregs g))
-             ; a fn no path leaves owes nothing back (deadlab took its epilogue, deadst its saves)
+             ; a fn no path leaves owes nothing back (its epilogue is gone)
              (anyx? l) (two? l ?
                           (<l @ f
                              (xit? f || xjmp? f labs ? 1
@@ -2102,7 +2061,7 @@
        (go fs0 ()))
 
    ; cmp load-op fusion: (ld X b o)(cmp X y) -> (cmpm b o y), (cmp r X) -> (cmprm r b o) when X
-   ; dies beyond. after addrfold; x64 and full-word only (a narrow cmp's flags shift with the extension)
+   ; dies beyond. x64 and full-word only (a narrow cmp's flags shift with the extension)
    (cmpfuse g fs)
     (cz g 'cmpfuse fs (: (go (f . r))
            (: nx (two? r ? <r)
@@ -2816,7 +2775,7 @@
        tmpl <>s
        tgt (gtgt g)
        neutral? (two? >>>>>>s)                      ; the holo attribute: the template is neutral text
-       ; asm goto's labels, mangled as cgstmt's lbl; %lN spells one, and the blob leaves them as fixes
+       ; asm goto's labels, mangled as the statement's lbl; %lN spells one, and the blob leaves them as fixes
        labs (map (nm \ (name "\(g 'fn).\(nm)")) <>>>>>s)
        ; one operand list, GNU order: ('o|'x reg expr w) an output (x in-out), ('i reg expr w) a
        ; register input, ('b reg (addr expr) 0) a memory input or output, ('g text 0 0) one at a
@@ -2952,40 +2911,21 @@
                              (asmno g "an asm \"\(show (gas-nolong tgt txt))\", which 64-bit mode has no encoding for")
                             [ops9 asgn (filter (r9 \ nelem r9 saves) ckill + vkill) saves csops labs tls txt neutral? scr]))))))))
 
-   ; the seat channels' neutral state; per-fn entry and the build teardown share it
-   (rgreset g)
-    (pins g
-     'livtab ()  ; liveness (set only for a seat-bearing build)
-     'lhome ()   ; locals-homing map (cgdecl's hook reads it)
-     'rgon ()    ; ...and its seat-bearing flag (the splice decl gate)
-     'fpar {}    ; double params granted an xmm seat (ubuild fills it, spill reads it)
-     'spov {}    ; the loop splitter's seats: name -> ([lo hi reg]..) (vent and cgdecl read it)
-     'splits {}  ; ..and its transfers: a loop's tick -> [evicted promoted] (cgstmt lays them)
-     'homes ())  ; non-leaf home set (call-fixed + sibs read it)
    ; every per-fn pin and its neutral, one roster: a new per-fn pin registers here (the computed
    ; ones -- fn, epi, pool, vslots, fc, sret -- re-pin at their owner)
    (fnreset g)
-    (pins (rgreset g)          ; the seat channels' neutral state -- disjoint pin set
+    (pins g
      'off (g 'sspf ? 16 8)      ; the frame cursor: slot -8 = saved r3 (see epi), -16 the canary
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
      'fescv ()                 ; ..a frame address become a value (a musttail call still jumps)
      'lpm ()                   ; lprop's answers: the fn's tree passes are done with them
      'kpm ()                   ; ..and kprop's
-     'fesca ()                 ; ..and a frame address handed a call (a later call may not jump past it)
-     'inlining ()              ; statement-expression depth (stq's conservative wrapset)
      'hasasm ()                ; an asm statement pins it (homing off)
      'twice ()                 ; a call returning twice pins it (no callee-saved pool)
-     'ebx ()                   ; i386: ebx joins the seats (cgfn's second build)
      'ltaken ()                ; the labels a &&L names (a computed goto's targets)
      'fpin (g 'sspf)           ; the frame link is asked for by name (unframe stands off)
-     'cssv ()                  ; the callee-saved save forms (a cs grant pins), or the (saves) marker
-     'slal ()                  ; a slot asks more than 8-byte alignment (csframe shifts by the frame's)
-     'sret ()                  ; the memory-return slot (the driver re-pins under sr6f)
-     'pcopy ()                 ; the by-reference struct params' copies, laid after the spills (spillp)
-     'fnar ()                  ; the float homes' width, narrowed by cgfn's build after a failed colouring
-     'fclob ()                 ; ..which that failure pins
-     'fdrop ())                ; the float names a failed colouring of the seats past the file took homes from
+     'slal ())                 ; a slot asks more than 8-byte alignment (csframe shifts by the frame's)
 
    ; __builtin_{add,sub,mul}_overflow(a, b, r): the exact a op b, stored in *r's type modulo its
    ; width, answering whether it did not fit. operands are sign + 64-bit magnitude; a carry past 64
@@ -4301,7 +4241,6 @@
        params <>>f
        _ (: (has? x) (? (atom? x) () (<x = 'ssp) 1 (any has? x)) (pin g 'sspf (has? (f 3))))   ; a canary keeps its cell
        _ (fnreset g)                                 ; the whole per-fn pin record wiped
-       _ (pin g 'rdg (rdgraph >>>f))
        ; -- VLA prep: each site takes a pointer slot + a size slot, the size zeroed after the param
        ; spill (the decl lane reads 0 = never allocated) --
        _ (pins g 'fn <>f 'vslots {})
