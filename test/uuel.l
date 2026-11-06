@@ -12,7 +12,8 @@
 ; a motive abstracts a term from the goal's normal form, so one a head's computation hides needs
 ; writing out. (elfold '(h ..)) names the heads a normal form reads back through, with the statement's
 
-(: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {} ELH {}
+(: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {} ELH {} el-count {}
+   (el-tick _) (: n (peep el-count 0 0) (pin el-count 0 (n + 1), n))
    (el-cat a b) (a @ (x . u) (x . el-cat u b) b)
    (el-app f a) (vof [['f f] ['a a]] '(f a))
    (el-fresh d) (intern ("ez" + show d))
@@ -269,5 +270,3 @@
       G (el-chk 0 0 0 T 'UU, pin ELH 0 (foldl (l \ c \ el-ins c l) () (catmap el-cand (el-uniq (el-cat (el-heads T) (peep ELH 1 ()))))), vof 0 T)
       t (el 0 0 0 (el-sugar t0) G)
     (pin ELT nm t, ev ['defq nm T t])))
-(: el-count {})
-(: (el-tick _) (: n (peep el-count 0 0) (pin el-count 0 (n + 1), n)))
