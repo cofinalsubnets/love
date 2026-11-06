@@ -27,9 +27,14 @@
 (test
  (lit? zstd-block)
  ; every level reads back, the empty input too, and one byte over and over
- (zst-all (zst-back zst-mix) [1 2 3 5 9 12 19])
+ (zst-all (zst-back zst-mix) [1 2 3 5 9 12 16 17 18 19])
  (zst-back "" 3)
  (zst-back "x" 3)
+ (zst-back "" 19)
+ (zst-back "x" 19)
+ (zst-back (cats (map (_ \ "z") (jot 70000))) 19)
+ ; the optimal parse beats the chain on source, and text beside noise splits its blocks
+ (uread "src/love/compress/zstd.c" @ [1 c] (: z (zstd-pack (c + "") 19) (#z * 100 < #(zstd-pack (c + "") 15) * 97 && zstd-d z = c + "")))
  (zst-back (cats (map (_ \ "z") (jot 70000))) 3)
  (#zst-a < #zst-text // 20)
  (zst-same zst-a zst-ks)

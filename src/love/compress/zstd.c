@@ -16,6 +16,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include "lzfind.h"
 
 // eight bytes as a little-endian word, and back: one load where the machine takes an unaligned
 // one (bytes.h), else the gather
@@ -212,10 +213,18 @@ static intptr_t zs_tree(struct zs_st *S, const uint8_t *p, uintptr_t n) {
 static int zs_hstream(const struct zs_huf *t, unsigned lg, const uint8_t *p, uintptr_t n, uint8_t *o, uintptr_t k) {
  struct zs_br r;
  if (!zs_brinit(&r, p, (intptr_t) n)) return 0;
- uintptr_t i = 0;
- for (; i + 4 <= k; i += 4) {                    // four codes of at most 11 bits to a reload
-  zs_reload(&r);
-  for (int j = 0; j < 4; j++) { struct zs_huf e = t[zs_peek(&r, lg)]; o[i + j] = e.sym, r.u += e.nb; } }
+ uintptr_t i = 0, u = r.u, sh = 64 - lg;
+ const uint8_t *q = r.p;
+ for (; i + 5 <= k && q - r.s >= 8 && u <= 64; i += 5) {   // five codes of at most 11 bits to a load, on locals
+  q -= u >> 3, u &= 7;
+  uint64_t w = ZLD(q) << u;
+  struct zs_huf e;
+  e = t[w >> sh], o[i] = e.sym, w <<= e.nb, u += e.nb;
+  e = t[w >> sh], o[i + 1] = e.sym, w <<= e.nb, u += e.nb;
+  e = t[w >> sh], o[i + 2] = e.sym, w <<= e.nb, u += e.nb;
+  e = t[w >> sh], o[i + 3] = e.sym, w <<= e.nb, u += e.nb;
+  e = t[w >> sh], o[i + 4] = e.sym, u += e.nb; }
+ if (i) r.p = q, r.c = ZLD(q), r.u = (unsigned) u;
  for (; i < k; i++) { zs_reload(&r); struct zs_huf e = t[zs_peek(&r, lg)]; o[i] = e.sym, r.u += e.nb; }
  return zs_left(&r) == 0; }
 
@@ -422,7 +431,7 @@ static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, uintptr_t *on) {
  *on = (uintptr_t) fcs;
  return w; }
 
-// ===== the coder: a hash-chain parse, huffman literals, fse sequences =====
+// ===== the coder: a hash-chain parse, an optimal one from level 16, huffman literals, fse sequences =====
 struct ze_bw { uint8_t *p, *e; uint64_t acc; unsigned nb; int bad; };   // bits out, low first
 static void ze_bits(struct ze_bw *w, uint64_t v, unsigned k) {          // k <= 32
  w->acc |= (v & (((uint64_t) 1 << k) - 1)) << w->nb, w->nb += k;
@@ -468,8 +477,8 @@ static void ze_norm(const uint32_t *cnt, unsigned ns, uint32_t total, unsigned a
  unsigned big = 0;
  for (unsigned s = 0; s < ns; s++) {
   int32_t v = cnt[s] ? (int32_t) (((uint64_t) cnt[s] * (uint32_t) size + total / 2) / total) : 0;
-  if (cnt[s] && v < 1) v = 1;
-  norm[s] = (int16_t) v, sum += v;
+  if (cnt[s] && v < 1) v = -1;                   // under one cell: it takes a cell, at the full width
+  norm[s] = (int16_t) v, sum += v < 0 ? 1 : v;
   if (cnt[s] > cnt[big]) big = s; }
  while (sum > size) {                            // the largest give back what rounding added
   unsigned m = big;
@@ -655,11 +664,11 @@ static uintptr_t ze_seqs(const struct ze_seq *sq, uintptr_t ns, uint8_t *cd, uin
 
 // --- the parse --------------------------------------------------------------------------------
 // a level: the window, the hash, how far down a chain, a length that ends the search, lazy or not
-struct ze_cfg { unsigned wlog, hlog, depth, good, lazy; };
+struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt; };
 static const uint16_t ze_depth[20] = { 1, 1, 2, 4, 6, 8, 12, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192 };
 static struct ze_cfg ze_cfg(int lv) {
  return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 2 ? 17 : lv <= 3 ? 18 : lv <= 6 ? 19 : 20,
-                          ze_depth[lv], lv <= 3 ? 24 : lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv >= 4 }; }
+                          ze_depth[lv], lv <= 3 ? 24 : lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv >= 4, lv >= 16 }; }
 struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; };
 static uint32_t ze_h4(const uint8_t *p, unsigned hl) { return (uint32_t) (xx_rd(p, 4) * 2654435761u) >> (32 - hl); }
 static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before p in its chain
@@ -700,9 +709,163 @@ static uint32_t ze_ov(uint64_t *rep, uintptr_t ll, uint64_t off) {
  rep[2] = rep[1], rep[1] = rep[0], rep[0] = off;
  return (uint32_t) off + 3; }
 
+// --- the optimal parse: the cheapest way through the next stretch, off lzfind.h's tree --------
+// prices in 256ths of a bit, off the running counts of what was coded. a node's price holds the
+// code of its open literal run, as though the run ended there
+#define ZO_OPTS 4096u
+#define ZO_NICEMAX 256u
+#define ZO_MAXM 64u
+#define ZO_INF 0x3fffffffu
+struct zo_nd { uint32_t price, ml, off, ll; uint64_t rep[3]; };
+struct zo_op { uint32_t at, ml, off; };
+struct zo {
+ struct lzf f;
+ uint32_t lit[256], ll[36], ml[53], of[32], pl[256], pll[36], pml[53], pof[32], tick;
+ uint32_t ls[ZO_MAXM], ds[ZO_MAXM];
+ struct zo_op ops[ZO_OPTS / 3 + 2];
+ struct zo_nd nd[ZO_OPTS + ZO_NICEMAX + 2]; };
+static uint32_t zo_w(uint32_t x) { unsigned h = zs_hb(x); return (h << 8) + (uint32_t) (((uint64_t) x << 8) >> h) - 256; }   // log2, near enough
+static void zo_set(uint32_t *p, const uint32_t *c, unsigned n, uint32_t cap) {
+ uint32_t t = 0;
+ for (unsigned s = 0; s < n; s++) t += c[s] + 1;
+ uint32_t wt = zo_w(t);
+ for (unsigned s = 0; s < n; s++) { uint32_t v = wt - zo_w(c[s] + 1); p[s] = v > cap ? cap : v; } }
+static void zo_price(struct zo *Z) {
+ zo_set(Z->pl, Z->lit, 256, 11 << 8), zo_set(Z->pll, Z->ll, 36, 12 << 8);
+ zo_set(Z->pml, Z->ml, 53, 12 << 8), zo_set(Z->pof, Z->of, 32, 12 << 8);
+ for (unsigned s = 0; s < 256; s++) if (Z->pl[s] < 256) Z->pl[s] = 256;   // a huffman code is a bit at least
+ Z->tick = 256; }
+static unsigned zo_llc(uintptr_t ll) { return ll < 64 ? ze_code(zs_llbase, 36, (uint32_t) ll) : zs_hb((uint32_t) ll) + 19; }
+static unsigned zo_mlc(uintptr_t ml) { return ml < 131 ? ze_code(zs_mlbase, 53, (uint32_t) ml) : zs_hb((uint32_t) ml - 3) + 36; }
+static uint32_t zo_lp(struct zo const *Z, uintptr_t ll) { unsigned c = zo_llc(ll); return Z->pll[c] + ((uint32_t) zs_llbits[c] << 8); }
+static uint32_t zo_mp(struct zo const *Z, uintptr_t ml) { unsigned c = zo_mlc(ml); return Z->pml[c] + ((uint32_t) zs_mlbits[c] << 8); }
+static uint32_t zo_op(struct zo const *Z, uint32_t ov) { unsigned c = zs_hb(ov); return Z->pof[c] + (c << 8); }
+// counts before a first look: the bytes as they stand, short lengths likelier
+static void zo_seed(struct zo *Z, const uint8_t *s, uintptr_t n) {
+ memset(Z->lit, 0, sizeof Z->lit);
+ for (uintptr_t i = 0; i < n; i++) Z->lit[s[i]]++;
+ for (unsigned c = 0; c < 36; c++) Z->ll[c] = c < 4 ? 8u >> c : 1;
+ for (unsigned c = 0; c < 53; c++) Z->ml[c] = c < 8 ? 4 : 1;
+ for (unsigned c = 0; c < 32; c++) Z->of[c] = c < 2 ? 4 : 1;
+ zo_price(Z); }
+static void zo_halve(uint32_t *c, unsigned n) { for (unsigned s = 0; s < n; s++) c[s] >>= 1; }
+// the sequences of s[a, e), in sq and lit -> *pnl literals, *pns sequences; rp moved as the reader moves it
+static void zo_parse(struct zo *Z, const uint8_t *s, uintptr_t a, uintptr_t e, uint64_t *rp, uint8_t *lit,
+                     uintptr_t *pnl, struct ze_seq *sq, uintptr_t *pns) {
+ struct zo_nd *nd = Z->nd;
+ struct lzf *f = &Z->f;
+ uintptr_t p = a, l0 = a, nl = 0, ns = 0, nice = f->nice;
+ while (p < e) {
+  uint32_t last = 0, cur = 0, tail = 0, toff = 0;
+  nd[0].price = zo_lp(Z, p - l0), nd[0].ml = 0, nd[0].ll = (uint32_t) (p - l0);
+  memcpy(nd[0].rep, rp, sizeof nd[0].rep);
+  for (;; cur++) {
+   struct zo_nd *c = nd + cur;
+   uintptr_t q = p + cur;
+   if (cur) {                                     // this node's repeats, off the op that reached it
+    struct zo_nd *b = nd + cur - (c->ml ? c->ml : 1);
+    memcpy(c->rep, b->rep, sizeof c->rep);
+    if (c->ml) ze_ov(c->rep, b->ll, c->off); }
+   if (q >= e || cur >= ZO_OPTS) break;
+   uintptr_t left = e - q, ll = c->ll;
+   uint32_t base = c->price, top = 2;
+   uint32_t bm = base + zo_lp(Z, 0);
+   // the repeats, best first in reach of nice
+   for (unsigned i = 0; i < 3 && !tail; i++) {
+    unsigned x = i + !ll;
+    uint64_t d = x == 3 ? c->rep[0] - 1 : c->rep[x];
+    if (!d || d > q || d > f->wmask) continue;
+    uintptr_t k = ze_len(s + q - d, s + q, left);
+    if (k < 3) continue;
+    if (k >= nice) { tail = (uint32_t) k, toff = (uint32_t) d; break; }
+    uint32_t po = bm + zo_op(Z, i + 1);
+    while (last < cur + k) nd[++last].price = ZO_INF;
+    for (uintptr_t L = k; L >= 3; L--) {
+     uint32_t v = po + zo_mp(Z, L);
+     struct zo_nd *t = nd + cur + L;
+     if (v < t->price) t->price = v, t->ml = (uint32_t) L, t->off = (uint32_t) d, t->ll = 0; } }
+   if (tail) break;
+   uintptr_t lim = f->n - q;
+   unsigned m = lzf_all(f, q, lim > 65535 ? 65535 : (unsigned) lim, 65535, Z->ls, Z->ds);
+   for (unsigned j = 0; j < m; j++) {
+    uintptr_t k = Z->ls[j] > left ? left : Z->ls[j];
+    if (k < 3 || k <= top) continue;
+    uint32_t d = Z->ds[j] + 1;
+    if (k >= nice) { tail = (uint32_t) (k + ze_len(s + q - d + k, s + q + k, left - k)), toff = d; break; }
+    uint32_t po = bm + zo_op(Z, d + 3);
+    while (last < cur + k) nd[++last].price = ZO_INF;
+    for (uintptr_t L = top + 1; L <= k; L++) {
+     uint32_t v = po + zo_mp(Z, L);
+     struct zo_nd *t = nd + cur + L;
+     if (v < t->price) t->price = v, t->ml = (uint32_t) L, t->off = d, t->ll = 0; }
+    top = (uint32_t) k; }
+   if (tail) break;
+   if (last < cur + 1) nd[++last].price = ZO_INF;  // the literal
+   uint32_t v = base + Z->pl[s[q]] + zo_lp(Z, ll + 1) - zo_lp(Z, ll);
+   if (v < nd[cur + 1].price) nd[cur + 1].price = v, nd[cur + 1].ml = 0, nd[cur + 1].ll = (uint32_t) (ll + 1);
+   if (cur + 1 == last) { cur++; { struct zo_nd *z = nd + cur, *b = z - (z->ml ? z->ml : 1); memcpy(z->rep, b->rep, sizeof z->rep); if (z->ml) ze_ov(z->rep, b->ll, z->off); } break; } }
+  // back from the end, the matches in order
+  unsigned no = 0;
+  if (tail) Z->ops[no].at = cur, Z->ops[no].ml = tail, Z->ops[no].off = toff, no++;
+  for (uint32_t i = cur; i; ) {
+   if (nd[i].ml) Z->ops[no].at = i - nd[i].ml, Z->ops[no].ml = nd[i].ml, Z->ops[no].off = nd[i].off, no++, i -= nd[i].ml;
+   else i--; }
+  while (no--) {
+   struct zo_op const *o = Z->ops + no;
+   uintptr_t st = p + o->at, n = st - l0;
+   memcpy(lit + nl, s + l0, n), nl += n;
+   for (uintptr_t i = 0; i < n; i++) Z->lit[s[l0 + i]]++;
+   uint32_t ov = ze_ov(rp, n, o->off);
+   sq[ns].ll = (uint32_t) n, sq[ns].ml = o->ml, sq[ns].ov = ov, ns++;
+   Z->ll[zo_llc(n)]++, Z->ml[zo_mlc(o->ml)]++, Z->of[zs_hb(ov)]++;
+   l0 = st + o->ml;
+   if (!--Z->tick) zo_price(Z); }
+  p += cur + tail; }
+ *pnl = nl, *pns = ns; }
+
+// --- the splitter: a block's sequences cut where two sets of tables come out cheaper -----------
+static uint64_t ze_ent(const uint32_t *c, unsigned n) {                // the bits c's symbols cost at their own odds
+ uint32_t t = 0;
+ uint64_t b = 0;
+ for (unsigned s = 0; s < n; s++) t += c[s];
+ if (!t) return 0;
+ uint32_t wt = zo_w(t);
+ for (unsigned s = 0; s < n; s++) if (c[s]) b += (uint64_t) c[s] * (wt - zo_w(c[s]));
+ return b >> 8; }
+// sequences [i, j) with the literals at lit -> the bits they would take as a block of their own
+static uint64_t ze_est(const uint8_t *lit, uintptr_t nl, const struct ze_seq *sq, uintptr_t ns) {
+ uint32_t cl[256] = {0}, cll[36] = {0}, cml[53] = {0}, cof[32] = {0};
+ uint64_t x = 0;
+ unsigned k = 0;
+ for (uintptr_t i = 0; i < nl; i++) cl[lit[i]]++;
+ for (unsigned t = 0; t < 256; t++) k += !!cl[t];
+ for (uintptr_t i = 0; i < ns; i++) {
+  unsigned a = zo_llc(sq[i].ll), b = zo_mlc(sq[i].ml), c = zs_hb(sq[i].ov);
+  cll[a]++, cml[b]++, cof[c]++, x += (uint64_t) zs_llbits[a] + zs_mlbits[b] + c; }
+ return ze_ent(cl, 256) + 4 * k + ze_ent(cll, 36) + ze_ent(cml, 53) + ze_ent(cof, 32) + x + 8 * 40; }
+#define ZE_LEAVES 32
+// cuts past the halves that pay into cut, ascending; lo, hi index sq, lits where lo's literals start
+static unsigned ze_split(const uint8_t *lit, const struct ze_seq *sq, uintptr_t lo, uintptr_t hi, uintptr_t nl,
+                         uintptr_t *cut, unsigned nc, unsigned depth) {
+ uintptr_t m = lo + (hi - lo) / 2, la = 0;
+ if (!depth || hi - lo < 256 || nc + 2 > ZE_LEAVES) return nc;
+ for (uintptr_t i = lo; i < m; i++) la += sq[i].ll;
+ if (ze_est(lit, la, sq + lo, m - lo) + ze_est(lit + la, nl - la, sq + m, hi - m) >= ze_est(lit, nl, sq + lo, hi - lo)) return nc;
+ nc = ze_split(lit, sq, lo, m, la, cut, nc, depth - 1);
+ cut[nc++] = m;
+ return ze_split(lit + la, sq, m, hi, nl - la, cut, nc, depth - 1); }
+// one compressed block: literals, then sequences -> its bytes, or 0 where it would not be shorter than n
+static uintptr_t ze_comp(const uint8_t *lit, uintptr_t nl, const struct ze_seq *sq, uintptr_t ns, uint8_t *cd,
+                         uintptr_t n, int last, uint8_t *o, uintptr_t cap) {
+ if (cap <= 3) return 0;
+ uintptr_t lz = ze_lits(lit, nl, o + 3, cap - 3), sz = lz ? ze_seqs(sq, ns, cd, o + 3 + lz, cap - 3 - lz) : 0, body = lz + sz;
+ if (!lz || !sz || body >= n) return 0;
+ o[0] = (uint8_t) (body << 3 | 4 | last), o[1] = (uint8_t) (body >> 5), o[2] = (uint8_t) (body >> 13);
+ return 3 + body; }
+
 // one block of s at [a, e) -> its bytes, header first, in o
 static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a, uintptr_t e, int last,
-                          uint64_t *rep, uint8_t *lit, struct ze_seq *sq, uint8_t *cd, uint8_t *o, uintptr_t cap) {
+                          uint64_t *rep, uint8_t *lit, struct ze_seq *sq, uint8_t *cd, uint8_t *o, uintptr_t cap, struct zo *Z) {
  const uint8_t *s = m->s;
  uintptr_t n = e - a, p = a, l0 = a, nl = 0, ns = 0, body = 0;
  uint64_t rp[3] = { rep[0], rep[1], rep[2] };
@@ -711,6 +874,17 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
  if (same && n > 3) {
   o[0] = (uint8_t) (n << 3 | 2 | last), o[1] = (uint8_t) (n >> 5), o[2] = (uint8_t) (n >> 13), o[3] = s[a];
   return 4; }
+ if (Z) {
+  if (!a) {                                      // the first block twice: its own counts, then a clean tree
+   zo_seed(Z, s + a, n);
+   zo_parse(Z, s, a, e, rp, lit, &nl, sq, &ns);
+   memset(Z->f.h2, 0, 4u << 16), memset(Z->f.h3, 0, 4u << 16), memset(Z->f.h4, 0, (uintptr_t) 4 << Z->f.h4bits);
+   Z->f.ins = 0, rp[0] = rep[0], rp[1] = rep[1], rp[2] = rep[2], nl = ns = 0;
+   zo_price(Z); }
+  zo_parse(Z, s, a, e, rp, lit, &nl, sq, &ns);
+  for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml;
+  zo_halve(Z->lit, 256), zo_halve(Z->ll, 36), zo_halve(Z->ml, 53), zo_halve(Z->of, 32); }
+ else
  while (p < e) {
   uint64_t off = 0, o2 = 0, r0 = rp[0];
   uintptr_t k = 0;
@@ -728,19 +902,25 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
   sq[ns].ll = (uint32_t) ll, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, ll, off), ns++;
   p += k, l0 = p; }
  memcpy(lit + nl, s + l0, e - l0), nl += e - l0;
- if (cap > 3) {
-  uintptr_t lz = ze_lits(lit, nl, o + 3, cap - 3), sz = lz ? ze_seqs(sq, ns, cd, o + 3 + lz, cap - 3 - lz) : 0;
-  body = lz && sz ? lz + sz : 0; }
- if (body && body < n) {
-  o[0] = (uint8_t) (body << 3 | 4 | last), o[1] = (uint8_t) (body >> 5), o[2] = (uint8_t) (body >> 13);
+ body = ze_comp(lit, nl, sq, ns, cd, n, last, o, cap);
+ if (body) {
+  uintptr_t cut[ZE_LEAVES], nc = Z ? ze_split(lit, sq, 0, ns, nl, cut, 0, 6) : 0, at = body, li = 0, q = 0, done = 0;
+  for (uintptr_t i = 0; nc && i <= nc; i++) {     // beside the whole, kept only if shorter
+   uintptr_t j = i < nc ? cut[i] : ns, l = 0, m = 0;
+   for (uintptr_t t = q; t < j; t++) l += sq[t].ll, m += sq[t].ll + sq[t].ml;
+   if (i == nc) l = nl - li, m = n - done;
+   uintptr_t k = ze_comp(lit + li, l, sq + q, j - q, cd, m, i == nc && last, o + at, cap - at);
+   if (!k) { at = body; break; }
+   at += k, li += l, q = j, done += m; }
+  if (at > body && at - body < body) memmove(o, o + body, at - body), body = at - body;
   rep[0] = rp[0], rep[1] = rp[1], rep[2] = rp[2];
-  return 3 + body; }
+  return body; }
  if (n + 3 > cap) return 0;                      // stored: the reader's repeats stand as they were
  o[0] = (uint8_t) (n << 3 | last), o[1] = (uint8_t) (n >> 5), o[2] = (uint8_t) (n >> 13);
  memcpy(o + 3, s + a, n);
  return 3 + n; }
 
-static uintptr_t ze_cap(uintptr_t n) { return n + 3 * (n / ZS_BMAX + 1) + 32; }
+static uintptr_t ze_cap(uintptr_t n) { return 2 * n + 3 * (n / ZS_BMAX + 1) + 64; }   // a split lays itself beside the whole
 // s whole -> the frame in o, cap ze_cap(n) | 0
 static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uintptr_t cap) {
  struct ze_cfg cf = ze_cfg(lv);
@@ -761,13 +941,26 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;
  if (good) memset(m.head, 0, ((uintptr_t) 1 << cf.hlog) * 4);
+ struct zo *Z = NULL;
+ uint32_t *bt = NULL;
+ if (good && cf.opt) {
+  unsigned h4b = cf.wlog < 20 ? cf.wlog : 20, d = lv >= 19 ? 128 : lv >= 18 ? 64 : lv >= 17 ? 32 : 24, nc = lv >= 19 ? 256 : lv >= 18 ? 128 : lv >= 17 ? 64 : 48;
+  Z = alloc(NULL, sizeof *Z);
+  bt = alloc(NULL, (((uintptr_t) 2 << 16) + ((uintptr_t) 1 << h4b) + 2 * wsz) * 4);
+  good = Z && bt;
+  if (good) {
+   memset(bt, 0, (((uintptr_t) 2 << 16) + ((uintptr_t) 1 << h4b)) * 4);
+   Z->f = (struct lzf) { s, n, bt, bt + (1u << 16), bt + (2u << 16), bt + (2u << 16) + ((uintptr_t) 1 << h4b),
+                         (uint32_t) wsz - 1, (uint32_t) wsz, 0, h4b, d, 8, nc, ZO_MAXM }; } }
  uint64_t rep[3] = { 1, 4, 8 };
  for (uintptr_t a = 0; good; ) {
   uintptr_t e = n - a > ZS_BMAX ? a + ZS_BMAX : n,
-            k = ze_block(&m, &cf, a, e, e == n, rep, lit, sq, cd, o + at, cap - at);
+            k = ze_block(&m, &cf, a, e, e == n, rep, lit, sq, cd, o + at, cap - at, Z);
   if (!k) good = 0;
   at += k, a = e;
   if (a == n) break; }
+ if (Z) alloc(Z, 0);
+ if (bt) alloc(bt, 0);
  if (m.head) alloc(m.head, 0);
  if (m.chain) alloc(m.chain, 0);
  if (lit) alloc(lit, 0);
