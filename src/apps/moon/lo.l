@@ -1712,11 +1712,12 @@
            (lv 2 @ ty
               (? (stru? ty || arr? ty || lofl? ty && !(freg? a) || !(two? a) != !(pair? g ty)) (lono g 'asmout)
                  (two? a) (lomk g @ l (lomk g @ h
-                             [[['mov l <a] ['mov h <>a]] (lost g lv [ty [l h] ()] @ [fs _] fs 'bad)]))
+                             [[['mov l <a] ['mov h <>a]] (lost g lv [ty [l h] ()] @ [fs _] fs 'bad) (lolvfs lv)]))
                  ; an xmm output into an integer lvalue: its bits
                  ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
                     [[(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))]
-                     (lost g lv [ty t ()] @ [fs _] (freg? a ? fs (lonar g ty t + fs)) 'bad)])))
+                     (lost g lv [ty t ()] @ [fs _] (freg? a ? fs (lonar g ty t + fs)) 'bad)
+                     (lolvfs lv)])))
           ins (filter (i \ in? (ops i)) ^#ops)
           outs (filter (i \ out? (ops i)) ^#ops)
           lds (map (i \ ld (ops i) (asgn i)) ins)
@@ -1730,7 +1731,8 @@
              (: post (catmap (x \ <x) sts + catmap (x \ x 1) sts)
                 fx ['fix (flat (map asgn ins)) (flat (map asgn outs) + kills) body tls]
                 ; an asm goto with outputs jumps to a trampoline per label that stores them and goes on
-                (catmap (x \ <x) lds + catmap (x \ x 1) lds +
+                ; an output's address is worked out before the inputs take their registers
+                (catmap (x \ x 2) sts + catmap (x \ <x) lds + catmap (x \ x 1) lds +
                  (tls = labs ? (fx . post)
                     (nlab g "\(g 'fn).ag" @ done
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +

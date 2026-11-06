@@ -106,9 +106,10 @@ void *malloc(size_t n) { return mallocw(b2w(n)); }
 void free(void *p) { ff_free(&freelist, p); }
 
 #ifdef BAKER_STONES
-// the device's horn.c rides the baker and the waker for its rows; qemu has no speaker, so it refuses
-int k_horn_open(int rate) { return -1; }
-intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
+// the device's horn.c rides the baker and the waker for its rows; qemu has no speaker, so one that
+// swallows, and never lags: the wake's frames feed the song once each
+int k_horn_open(int rate) { return 0; }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return (intptr_t) n; }
 uintptr_t k_horn_lag(void) { return 0; }
 void k_horn_close(void) {}
 #endif
@@ -170,10 +171,10 @@ int main(void) {
     "(: ok (&& "
     SEAT_OK
 #if defined(BAKER_STONES)
-    "          (tablet? (pd-at 'st))"           // the land built and kept, and ten frames walked
+    "          (tablet? (pd-at 'st))"           // the land built and kept, ten frames walked, the song opened and fed
     "          (: t0 (clock 0) _ (each ^10 (_ \\ pd-frame ())) t1 (clock 0)"
     "             _ (puts (\"; ten frames, ms \" + show (t1 - t0) + \"\\n\"))"
-    "             (0 < (pd-at 'st) 'pz)))"
+    "             (0 < (pd-at 'st) 'pz && tablet? (pd-at 'song))))"
 #elif defined(BAKER_RUNE)
     "          (! ((cite ()) = ())))"           // rune registered
 #else
