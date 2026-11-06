@@ -22,7 +22,10 @@
    zst-m (zstd-pack zst-mix 9)
    ; a skippable frame: magic 0x184d2a5?, a length, that many bytes
    zst-skip ("\x5a\x2a\x4d\x18" + wrle 5 4 + "hello")
-   (zst-flip s k) (cask #s @ c (pour c 0 s 0 #s, pin c k (s k ^ 1), string c))
+   (zst-xor s k b) (cask #s @ c (pour c 0 s 0 #s, pin c k (s k ^ b), string c))
+   (zst-flip s k) (zst-xor s k 1)
+   ; the same frame with its checksum and the flag that wants it taken off
+   zst-nk (zst-xor (snip zst-a 0 (#zst-a - 4)) 4 4)
    (zst-back s l) (zstd-unpack (zstd-pack s l) @ u (two? u && <>u = s)))
 (test
  (lit? zstd-block)
@@ -36,6 +39,11 @@
  ; the optimal parse beats the chain on source, and text beside noise splits its blocks
  (uread "src/love/compress/zstd.c" @ [1 c] (: z (zstd-pack (c + "") 19) (#z * 100 < #(zstd-pack (c + "") 15) * 97 && zstd-d z = c + "")))
  (zst-back (cats (map (_ \ "z") (jot 70000))) 3)
+ ; the fast parse reads past a run of nothing, up to the last byte, and its tables grow by level
+ (zst-all (zst-back zst-noise) [1 2 3])
+ (zst-all (zst-back "abcdefgh") [1 2 3])
+ (zst-all (zst-back "abcdefghabcdefgh") [1 2 3])
+ (uread "src/love/compress/zstd.c" @ [1 c] (#(zstd-pack (c + "") 3) <= #(zstd-pack (c + "") 1)))
  (#zst-a < #zst-text // 20)
  (zst-same zst-a zst-ks)
  (zst-same zst-m [7 4096 100000])
@@ -50,6 +58,10 @@
  (zst-same "hello, not zstd" zst-ks)
  ; the checksum is held: a flipped bit in it is 'check
  (zstd-unpack (zst-flip zst-a (#zst-a - 2)) = 'check)
+ ; and a frame with none reads as well, before or after one with
+ (zstd-unpack (zst-nk + zst-a) = [1 (zst-text + zst-text)])
+ (zstd-unpack (zst-a + zst-nk) = [1 (zst-text + zst-text)])
+ (zst-same zst-nk zst-ks)
  ; torn at every length, and a flipped bit anywhere: the same answer whole or pulled
  (zstd-unpack (snip zst-a 0 (#zst-a - 1)) = 'end)
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (snip zst-a 0 i) [7 4096]) 0 (go (i + 13))) (go 0))

@@ -37,7 +37,7 @@ struct xx_st { uint64_t v[4], total; uint8_t mem[32]; unsigned memn; };
 struct zs_fse { uint16_t base; uint8_t sym, nb; };
 struct zs_huf { uint8_t sym, nb; };
 struct zs_st {
- uint32_t magic, have;                           // have: the tree 1 and tables 2 4 8, for repeat
+ uint32_t magic, have, ck;                       // have: the tree 1 and tables 2 4 8, for repeat; ck: xxh64 wanted
  uintptr_t cap, win, n;                          // the window's bytes, the frame's window, held
  uint64_t rep[3];
  unsigned hlog, lllog, oflog, mllog;
@@ -396,7 +396,8 @@ static intptr_t zs_block(struct zs_st *S, uint8_t *w, const uint8_t *b, uintptr_
   intptr_t k = n == sz ? zs_lits(S, b, n, &lit, &nl) : -1, got = k < 0 ? -1 : zs_seqs(S, w, b + k, n - (uintptr_t) k, lit, nl);
   if (got < 0) return -1;
   sz = (uintptr_t) got; }
- xx_feed(&S->x, o, sz), S->n += sz;
+ if (S->ck) xx_feed(&S->x, o, sz);
+ S->n += sz;
  return (intptr_t) sz; }
 
 // a frame whole, when s is one frame that says its size and nothing else, into one buffer: no
@@ -417,7 +418,7 @@ static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, uintptr_t *on) {
  if (good) {
   memset(S, 0, offsetof(struct zs_st, lit));
   S->cap = (uintptr_t) fcs + ZS_BMAX, S->win = (uintptr_t) fcs, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
-  xx_init(&S->x); }
+  S->ck = d >> 2 & 1, xx_init(&S->x); }
  for (int last = 0; good && !last; ) {
   if (n - i < 3) { good = 0; break; }
   uintptr_t bh = (uintptr_t) xx_rd(s + i, 3), k = (bh >> 1 & 3) == 1 ? 1 : bh >> 3;
@@ -673,11 +674,11 @@ static uintptr_t ze_seqs(const struct ze_seq *sq, uintptr_t ns, uint8_t *cd, uin
 
 // --- the parse --------------------------------------------------------------------------------
 // a level: the window, the hash, how far down a chain, a length that ends the search, lazy or not
-struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt; };
+struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt, fast; };
 static const uint16_t ze_depth[20] = { 1, 1, 2, 4, 6, 8, 12, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192 };
 static struct ze_cfg ze_cfg(int lv) {
- return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 2 ? 17 : lv <= 3 ? 18 : lv <= 6 ? 19 : 20,
-                          ze_depth[lv], lv <= 3 ? 24 : lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv >= 4, lv >= 16 }; }
+ return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 1 ? 14 : lv <= 2 ? 16 : lv <= 3 ? 17 : lv <= 6 ? 19 : 20,
+                          ze_depth[lv], lv <= 3 ? 24 : lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv >= 4, lv >= 16, lv <= 3 ? 6 : 0 }; }
 struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; };
 static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before p in its chain
  for (; m->ins < p && m->ins + 4 <= m->n; m->ins++) {
@@ -709,6 +710,49 @@ static uint32_t ze_ov(uint64_t *rep, uintptr_t ll, uint64_t off) {
    return ov; } }
  rep[2] = rep[1], rep[1] = rep[0], rep[0] = off;
  return (uint32_t) off + 3; }
+
+// --- the fast parse: no chains, the last place of a long hash and of a short one -------------
+static love_inline uint32_t ze_hf(uint64_t w, unsigned bits) { return (uint32_t) ((w * 0xcf1bbcdcb7a56463ull) >> (64 - bits)); }
+static love_inline void ze_fins(const struct ze_mf *m, uintptr_t t) {
+ uint64_t w = ZLD(m->s + t);
+ m->chain[ze_hf(w, m->hlog + 1)] = m->head[ze_hf(w << 24, m->hlog)] = (uint32_t) t + 1; }
+// the sequences of s[a, e), as ze_block's; the last bytes stay literals
+static void ze_fast(struct ze_mf *m, unsigned step, uintptr_t a, uintptr_t e, uint64_t *rp, uint8_t *lit,
+                    uintptr_t *pnl, struct ze_seq *sq, uintptr_t *pns) {
+ const uint8_t *s = m->s;
+ uint32_t *st = m->head, *lt = m->chain;
+ unsigned sb = m->hlog, lb = sb + 1;
+ uintptr_t p = a, l0 = a, nl = 0, ns = 0, w = m->wmask;
+ while (p + 9 <= e) {
+  uint64_t w8 = ZLD(s + p), w1 = ZLD(s + p + 1), off, r0 = rp[0];
+  uint32_t hl = ze_hf(w8, lb), hs = ze_hf(w8 << 24, sb), cl = lt[hl], cs = st[hs];
+  uintptr_t q = p, k;
+  lt[hl] = st[hs] = (uint32_t) p + 1;
+  if (r0 <= p + 1 && r0 <= w && !((ZLD(s + p + 1 - r0) ^ w1) << 32))
+   q = p + 1, off = r0, k = lzf_mlen(s + q - r0, s + q, (unsigned) (e - q));
+  else if (cl && p - (cl - 1) <= w && ZLD(s + cl - 1) == w8)
+   off = p - (cl - 1), k = lzf_mlen(s + cl - 1, s + p, (unsigned) (e - p));
+  else if (cs && p - (cs - 1) <= w && !((ZLD(s + cs - 1) ^ w8) << 24)) {
+   uint32_t h1 = ze_hf(w1, lb), c1 = lt[h1];
+   off = p - (cs - 1), k = lzf_mlen(s + cs - 1, s + p, (unsigned) (e - p));
+   lt[h1] = (uint32_t) p + 2;
+   if (c1 && p + 1 - (c1 - 1) <= w && ZLD(s + c1 - 1) == w1) {     // a long one a byte on is worth the wait
+    uintptr_t k1 = lzf_mlen(s + c1 - 1, s + p + 1, (unsigned) (e - p - 1));
+    if (k1 > k) q = p + 1, off = p + 1 - (c1 - 1), k = k1; } }
+  else { p += 1 + ((p - l0) >> step); continue; }
+  while (q > l0 && q > off && s[q - 1] == s[q - 1 - off]) q--, k++;   // what the hash missed, behind it
+  uintptr_t ll = q - l0;
+  memcpy(lit + nl, s + l0, ll), nl += ll;
+  sq[ns].ll = (uint32_t) ll, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, ll, off), ns++;
+  p = q + k, l0 = p;
+  if (p + 9 > e) break;
+  ze_fins(m, q + 2), ze_fins(m, p - 2);           // two places inside it for those to come
+  while (p + 9 <= e && rp[1] <= p && rp[1] <= w && !((ZLD(s + p - rp[1]) ^ ZLD(s + p)) << 32)) {   // the second distance, no literals between
+   uint64_t d = rp[1];
+   k = lzf_mlen(s + p - d, s + p, (unsigned) (e - p));
+   sq[ns].ll = 0, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, 0, d), ns++;
+   p += k, l0 = p; } }
+ *pnl = nl, *pns = ns; }
 
 // --- the optimal parse: the cheapest way through the next stretch, off lzfind.h's tree --------
 // prices in 256ths of a bit, off the running counts of what was coded. a node's price holds the
@@ -885,6 +929,9 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
   zo_parse(Z, s, a, e, rp, lit, &nl, sq, &ns);
   for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml;
   zo_halve(Z->lit, 256), zo_halve(Z->ll, 36), zo_halve(Z->ml, 53), zo_halve(Z->of, 32); }
+ else if (cf->fast) {
+  ze_fast(m, cf->fast, a, e, rp, lit, &nl, sq, &ns);
+  for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml; }
  else
  while (p < e) {
   uint64_t off = 0, o2 = 0, r0 = rp[0];
@@ -937,11 +984,13 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  if (!ss) o[at++] = (uint8_t) ((cf.wlog - 10) << 3);
  for (unsigned i = 0; i < fz; i++) o[at++] = (uint8_t) (fcs >> 8 * i);
  uintptr_t wsz = (uintptr_t) 1 << cf.wlog;
- struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, ((uintptr_t) 1 << cf.hlog) * 4), alloc(NULL, wsz * 4), cf.hlog, cf.depth, cf.good };
+ uintptr_t cn = cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;     // the fast parse's long table, in chain's room
+ struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, ((uintptr_t) 1 << cf.hlog) * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good };
  uint8_t *lit = alloc(NULL, ZS_BMAX), *cd = alloc(NULL, 3 * (ZS_BMAX / 3 + 1));
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;
  if (good) memset(m.head, 0, ((uintptr_t) 1 << cf.hlog) * 4);
+ if (good && cf.fast) memset(m.chain, 0, cn * 4);
  struct zo *Z = NULL;
  uint32_t *bt = NULL;
  if (good && cf.opt) {
@@ -989,7 +1038,7 @@ love_noinline static struct g *host_zstd_new(struct g *g) {
  union u *k = new_state(&g, n, offsetof(struct zs_st, lit));
  if (!k) return g;
  struct zs_st *S = (struct zs_st*) ((struct state*) k)->str->bytes;
- S->magic = ZS_MAGIC, S->cap = cap, S->win = win, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
+ S->magic = ZS_MAGIC, S->cap = cap, S->win = win, S->ck = 1, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
  xx_init(&S->x);
  return g->sp[0] = word(k), g; }
 
