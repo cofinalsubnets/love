@@ -4,7 +4,7 @@
    lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
    the wire, little-endian:
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
-                     w by h frame, scaled to what the window shows
+                     w by h frame, each pixel the whole number of the window's that fit
                      'I' u8 on: the soft keyboard up, then toggled at each touch, or down
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
@@ -95,7 +95,7 @@ void *AAssetManager_open(void *, char const *, int); void const *AAsset_getBuffe
 long AAsset_getLength(void *); void AAsset_close(void *);
 void *AAssetManager_openDir(void *, char const *); char const *AAssetDir_getNextFileName(void *); void AAssetDir_close(void *);
 int dladdr(void const *, Dl_info *);
-pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int); int fcntl(int, int, ...);
+void *memcpy(void *, void const *, size_t); pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int); int fcntl(int, int, ...);
 int dup2(int, int); int close(int); ssize_t read(int, void *, size_t); ssize_t write(int, void const *, size_t);
 void _exit(int); pid_t waitpid(pid_t, int *, int); int kill(pid_t, int); int chdir(char const *);
 int open(char const *, int, ...); int unlink(char const *);
@@ -136,7 +136,7 @@ typedef struct {
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
   char argv[2048], label[64]; long nargv;
-  uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
+  uint32_t *fb; size_t fbsz;              /* a frame as love sent it */
   char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], line[2048]; int nline;
 } br;
 
@@ -175,19 +175,24 @@ static int writeall(int fd, void const *p, size_t n) {
 
 static int vis(br *b) { return b->vh > 0 && b->vh < b->wh ? b->vh : b->wh; }
 
-/* the frame swizzled onto the window's visible part (its top vh rows, the rest black),
-   which the window scales; under the lock */
+/* how many of the window's pixels a frame's pixel is: whole, so none is filtered */
+static int zoom(br *b) { return b->fw && b->ww >= b->fw ? b->ww / b->fw : 1; }
+
+/* the frame swizzled onto the window's visible part, each pixel k by k; the rest black.
+   under the lock */
 static void paint(br *b) {
   int w = b->fw, ht = b->fh;
   if (b->win && b->fb && w) {
-    int vh = vis(b), gh = vh ? (int) ((long) ht * b->wh / vh) : ht;
-    if (gh != b->gh) ANativeWindow_setBuffersGeometry(b->win, w, gh, 1), b->gh = gh;
+    int k = zoom(b), vh = vis(b);
     ANativeWindow_Buffer o;
     if (!ANativeWindow_lock(b->win, &o, 0)) {
       for (int y = 0; y < o.height; y++) {
-        uint32_t const *s = b->fb + (size_t) y * (size_t) w; uint32_t *d = (uint32_t *) o.bits + (size_t) y * (size_t) o.stride;
+        uint32_t *d = (uint32_t *) o.bits + (size_t) y * (size_t) o.stride;
+        int sy = y / k;
+        if (y % k && y < vh && sy < ht) { memcpy(d, d - o.stride, (size_t) o.width * 4); continue; }
+        uint32_t const *s = b->fb + (size_t) sy * (size_t) w;
         for (int x = 0; x < o.width; x++) {
-          uint32_t v = y < ht && x < w ? s[x] : 0;
+          uint32_t v = y < vh && sy < ht && x / k < w ? s[x / k] : 0;
           d[x] = 0xff000000u | (v & 0xff00) | (v >> 16 & 0xff) | (v & 0xff) << 16;
         }
       }
@@ -223,7 +228,7 @@ static int frame(br *b, int fd) {
       if (b->fb == (void *) -1) b->fb = 0, b->fbsz = 0;
     }
     if (b->fb) for (size_t i = 0; i < (size_t) w * (size_t) ht; i++) b->fb[i] = 0;
-    b->fw = b->fb ? w : 0; b->fh = ht; b->gh = 0;
+    b->fw = b->fb ? w : 0; b->fh = ht;
     pthread_mutex_unlock(b->mu);
     if (!b->fb) return -1;
   }
@@ -259,6 +264,7 @@ static void keyboard(br *b, void *e, int on) {
 
 /* the part the soft keyboard leaves, asked of the decor view's insets (ime, 8) while love
    types: a whole screen's window is not resized for it. a change goes to love as its size */
+static int imeover(int sys, int stable) { return sys > stable ? sys : 0; }
 static void insets(br *b) {
   void *e = b->env; if (!e || !b->ww || !b->a) return;
   void *const *t = *(void *const **) e;
@@ -272,11 +278,11 @@ static void insets(br *b) {
   void *v = w ? callo(e, w, mid(e, cls(e, w), "getDecorView", "()Landroid/view/View;")) : 0;
   void *wi = v ? callo(e, v, mid(e, cls(e, v), "getRootWindowInsets", "()Landroid/view/WindowInsets;")) : 0;
   void *gi = wi ? mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;") : 0;
-  if (!gi) clear(e);                     /* before api 30: what's over the stable part */
+  if (!gi) clear(e);                     /* before api 30: all of it, past the stable bars alone */
   void *in = gi ? callo(e, wi, gi, 8) : 0;
   int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I"))
-          : wi && !gi ? calli(e, wi, mid(e, cls(e, wi), "getSystemWindowInsetBottom", "()I"))
-                      - calli(e, wi, mid(e, cls(e, wi), "getStableInsetBottom", "()I")) : -1;
+          : wi && !gi ? imeover(calli(e, wi, mid(e, cls(e, wi), "getSystemWindowInsetBottom", "()I")),
+                                calli(e, wi, mid(e, cls(e, wi), "getStableInsetBottom", "()I"))) : -1;
   clear(e); pop(e, 0);
   if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
@@ -323,8 +329,8 @@ static void input(br *b) {
       if (t == 0 && b->d->typing && !b->shown) keyboard(b, b->env, 1);
       for (size_t i = 0; b->ww && vh && b->fw && i < AMotionEvent_getPointerCount(e); i++)
         if (!one || (int) i == ix)
-          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) (f32of(AMotionEvent_getX(e, i)) * (float) b->fw / (float) b->ww),
-                                                                 (int) (f32of(AMotionEvent_getY(e, i)) * (float) b->fh / (float) vh));
+          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) f32of(AMotionEvent_getX(e, i)) / zoom(b),
+                                                                 (int) f32of(AMotionEvent_getY(e, i)) / zoom(b));
     }
     AInputQueue_finishEvent(b->queue, e, handled);
   }
@@ -1024,7 +1030,7 @@ static void created(void *a, void *w) {
   br *b = me(a);
   ANativeWindow_setBuffersGeometry(w, 0, 0, 1);
   pthread_mutex_lock(b->mu);
-  b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w); b->gh = 0;
+  b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w);
   paint(b);
   pthread_mutex_unlock(b->mu);
   sized(b);

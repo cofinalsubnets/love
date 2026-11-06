@@ -1016,4 +1016,8 @@
    fl (fkv 'lines 2)
  (test (snip fl 0 18 = "  (furnish 'desk [") (snip fl (#fl - 7) #fl = "-95 {})") (fk 'sel = [3])))
 (test_fin ())
+; a level's reading told to the loading screen, a form at a time
+(: n {'n 0} l (world-reading "(: a 1) (level \"t\" (room [0 0 0] [2 2 2]))" (_ \ _ \ pin n 'n (n 'n + 1)))
+   (test (tablet? l) (n 'n = 2)))
+
 (puts "world: ok\n")
