@@ -398,6 +398,7 @@
    (lovpin g env e) (e @ ['var nm] (lovar g env nm @ ['v r _] (g 'lopins r) _ ()) _ ())
    ; a refusal, its first cause kept for lorefuse
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
+   (lowno g nm w) (nolane g "no lane for \(nm) on a \(show w)-byte object\(ontgt g)")
    (loarity g who n va m)
     (pin g 'arity "\(who) wants \(show n)\(va ? " or more" "")\(n = 1 ? " argument" " arguments"), given \(show m)", lono g 'arity)
    ; what a refusal says, unless its arm named it already
@@ -406,7 +407,8 @@
        (g 'lowhy @ ['var nm] (pin g 'undecl nm, 'bad)
                    why (nolane g "no lane for \(lowant g why)\(ontgt g)")))
    (lowant g why)
-    (why @ 'complex "C99 complex arithmetic"
+    (why @ ('fn . _) (g 'abad ? "alloca where an operand is parked on the stack" "this function's signature")
+           'complex "C99 complex arithmetic"
            'vla "this variable-length array"
            'bitfield "a bit-field wider than a word"
            'igoto "a computed goto"
@@ -1200,8 +1202,8 @@
        ; t32's exclusive loops keep strex's status in r4, named so the frame saves it
        (lx u d fs) (fx u d (t32? g ? ('(li r4 0) . fs) fs))
        (? (bad? mo) 'bad
-          (kind = 'generic) (lono g ['call nm])
-          (m16? g && elem kind '(rmw tas cas vcas bcas)) (lono g ['atomic nm])
+          (kind = 'generic) (nolane g "\(nm) is not carried out (its _n form is)")
+          (m16? g && elem kind '(rmw tas cas vcas bcas)) (nolane g "no lane for an atomic read-modify-write\(ontgt g)")
           (kind = 'fence) (lomk g @ d ['long d (<>mo + (<mo = 0 ? () [(fx () () (afence g))]) + [['li d 0]])])
           (kind = 'sfence) (lomk g @ d ['long d (<>mo + [(fx () () (abar g))] + [['li d 0]])])
           (kind = 'lockfree)
@@ -1214,17 +1216,17 @@
                  ; a fence ahead of a store or a load's read, and after one
                  fa (mo0 \ (mo0 = 0 || x86? g ? () [(fx () () (afence g))]))
                  fb (mo0 \ (mo0 = 5 && !(x86? g) ? [(fx () () (afence g))]))
-                 (? (ilp32? g && w = 8) (lono g ['atomic pt])
-                    (elem kind '(rmw cas vcas bcas tas lock) && !(elem (kind = 'tas ? 1 w) (awidths g))) (lono g ['atomic pt])
+                 (? (ilp32? g && w = 8) (lowno g nm w)
+                    (elem kind '(rmw cas vcas bcas tas lock) && !(elem (kind = 'tas ? 1 w) (awidths g))) (lowno g nm (kind = 'tas ? 1 w))
                     (kind = 'lock)
                      (? (nm = "__sync_lock_release")
-                         (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
+                         (? !(elem w (ilp32? g ? '(4) '(4 8))) (lowno g nm w)
                             !(x86? g)
                              ['long z (pf + [['mov 'r1 p] ['li 'r0 0] ['fix '(r0 r1) '(r0 r1) (arel g w)] ['li z 0]])]
                             ['long z (pf + [['li z 0] [(stw w) p 0 z]])])
                         (lobi1 g env (as 1) @
                            'bad 'bad
-                           [_ v vf] (? !(elem w (ilp32? g ? '(4) '(4 8))) (lono g ['atomic pt])
+                           [_ v vf] (? !(elem w (ilp32? g ? '(4) '(4 8))) (lowno g nm w)
                                        (lomk g @ d
                                           [pt d (pf + vf + [['mov 'r0 v] ['mov 'r1 p]
                                                             (fx '(r0 r1) (x86? g ? '(r0) '(r0 r2 r3)) (axchg g w))
