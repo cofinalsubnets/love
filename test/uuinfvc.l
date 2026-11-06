@@ -15,6 +15,7 @@
 ; reads: inflate-feed copies op bytes of out and n - ip of the input, which inf_stfeed's ensures bound -- gz.c
 ; link: struct inf_tabs, lens and hist hold what the specs' arrays say; the same file, unchecked -- inf.l
 ; link: a spec's operation means its C: two readers of one form, compared by test_gz -- inf.l
+; link: LD64 is 8 bytes little endian, an In element a byte, and a mask the sum of its bits -- fillv, takev
 (test
  (defn inf-tlb (pi k nat nat) (lam k (add (inf-tv 0 3 k) (add (inf-tv 1 4 k) (add (inf-tv 2 5 k) (add (inf-tv 3 6 k) (add (inf-tv 4 7 k) (add (inf-tv 5 8 k) (add (inf-tv 6 9 k) (add (inf-tv 7 10 k) (add (inf-tv 8 11 k) (add (inf-tv 9 13 k) (add (inf-tv 10 15 k) (add (inf-tv 11 17 k) (add (inf-tv 12 19 k) (add (inf-tv 13 23 k) (add (inf-tv 14 27 k) (add (inf-tv 15 31 k) (add (inf-tv 16 35 k) (add (inf-tv 17 43 k) (add (inf-tv 18 51 k) (add (inf-tv 19 59 k) (add (inf-tv 20 67 k) (add (inf-tv 21 83 k) (add (inf-tv 22 99 k) (add (inf-tv 23 115 k) (add (inf-tv 24 131 k) (add (inf-tv 25 163 k) (add (inf-tv 26 195 k) (add (inf-tv 27 227 k) (inf-tv 28 258 k)))))))))))))))))))))))))))))))
  (defn inf-tle (pi k nat nat) (lam k (add (inf-tv 0 0 k) (add (inf-tv 1 0 k) (add (inf-tv 2 0 k) (add (inf-tv 3 0 k) (add (inf-tv 4 0 k) (add (inf-tv 5 0 k) (add (inf-tv 6 0 k) (add (inf-tv 7 0 k) (add (inf-tv 8 1 k) (add (inf-tv 9 1 k) (add (inf-tv 10 1 k) (add (inf-tv 11 1 k) (add (inf-tv 12 2 k) (add (inf-tv 13 2 k) (add (inf-tv 14 2 k) (add (inf-tv 15 2 k) (add (inf-tv 16 3 k) (add (inf-tv 17 3 k) (add (inf-tv 18 3 k) (add (inf-tv 19 3 k) (add (inf-tv 20 4 k) (add (inf-tv 21 4 k) (add (inf-tv 22 4 k) (add (inf-tv 23 4 k) (add (inf-tv 24 5 k) (add (inf-tv 25 5 k) (add (inf-tv 26 5 k) (add (inf-tv 27 5 k) (inf-tv 28 0 k)))))))))))))))))))))))))))))))
@@ -4080,5 +4081,118 @@
   (pi xx nat ha (inf-lt xx op) (paths nat (Ot xx) (O0 xx))) cl
   (pi xx nat ha (inf-le (add op l) xx) (paths nat (Ot xx) (O0 xx))) (lam xx ha (ch xx (inf-letrans (add op k) (add op l) xx (inf-addl op k l a3) ha)))
   (pi ti nat ha (inf-lt ti l) hb (inf-lt (add op ti) d) (paths nat (Ot (add op ti)) (Dd (add (natminus nd (natminus d op)) ti)))) (lam ti ha hb (inf-ltnle (paths nat (Ot (add op ti)) (Dd (add ((natminus nd (natminus d op))) ti))) (add op ti) d hb (inf-letrans d op (add op ti) g1 (inf-leaddr op ti))))
+ )
+ (defcx inf-fillv (In (pi k nat nat)) (n nat) (w nat) (cons0 nat) (ip0 nat) (bc0 nat) (bb0 (pi j nat nat)) (gw (inf-le 32 w)) (gn (inf-lt (add n 8) (inf-pow w))) (gi (inf-le ip0 n)) (gs (inf-le bc0 63)) (ga (inf-bits-inv 0 ip0 cons0 bc0)) (gx (pi j nat h (inf-lt j bc0) (paths nat (bb0 j) (inf-ib In (add cons0 j))))) (gy (pi j nat (inf-le (bb0 j) (inf-ib In (add cons0 j))))) )
+ (defvcs inf-vc-fillv-i1 1 inf-fillv ()
+  (inf-lt (add ip0 8) (inf-pow w)) (inf-lelt (add ip0 8) (add n 8) (inf-pow w) (inf-addr ip0 n 8 gi) gn)
+ )
+ (defvcs inf-vc-fillv-a1 1 inf-fillv (g1 (inf-le (add ip0 8) n))
+  (inf-le (add ip0 8) n) g1
+  (inf-lt bc0 64) (inf-lelts bc0 63 (gs))
+ )
+ (defvcs inf-vc-fillv-a2 1 inf-fillv (g1 (inf-le (add ip0 8) n))
+  (inf-le (inf-div8 bc0) 7) (inf-div8le bc0 (gs))
+  (inf-lt (add ip0 (natminus 7 (inf-div8 bc0))) (inf-pow w)) (inf-lelt ((add ip0 ((natminus 7 (inf-div8 bc0))))) n (inf-pow w) (inf-letrans ((add ip0 ((natminus 7 (inf-div8 bc0))))) (add ip0 8) n ((inf-addl ip0 ((natminus 7 (inf-div8 bc0))) 8 (inf-letrans ((natminus 7 (inf-div8 bc0))) 7 8 (inf-suble 7 (inf-div8 bc0)) (idpath false)))) g1) ((inf-lelt n (add n 8) (inf-pow w) (inf-leaddr n 8) gn)))
+ )
+ (defvcs inf-vc-fillv-a3 1 inf-fillv (g1 (inf-le (add ip0 8) n))
+  (inf-le bc0 63) gs
+  (inf-lt (add 56 (inf-mod 8 bc0)) (inf-pow w)) (inf-wlit (add 56 (inf-mod 8 bc0)) w gw (inf-or56 bc0))
+ )
+ (defvcs inf-vc-fillv-end 1 inf-fillv (g1 (inf-le (add ip0 8) n))
+  (inf-le (add ip0 (natminus 7 (inf-div8 bc0))) n) (inf-letrans ((add ip0 ((natminus 7 (inf-div8 bc0))))) (add ip0 8) n ((inf-addl ip0 ((natminus 7 (inf-div8 bc0))) 8 (inf-letrans ((natminus 7 (inf-div8 bc0))) 7 8 (inf-suble 7 (inf-div8 bc0)) (idpath false)))) g1)
+  (inf-le (add 56 (inf-mod 8 bc0)) 63) (inf-or56 bc0)
+  (inf-bits-inv 0 (add ip0 (natminus 7 (inf-div8 bc0))) cons0 (add 56 (inf-mod 8 bc0))) (inf-fillw 0 ip0 cons0 bc0 (gs) ga)
+  (inf-le cons0 cons0) (inf-refl cons0)
+  (pi j nat h (inf-lt j (add 56 (inf-mod 8 bc0))) (paths nat ((inf-bor bb0 (inf-bshl (inf-bld In ip0) bc0)) j) (inf-ib In (add cons0 j)))) (inf-fillx In bb0 (inf-bld In ip0) 64 cons0 bc0 (inf-by8 ip0) ga gx gy (inf-bldg In ip0) (add 56 (inf-mod 8 bc0)) (inf-letrans (add 56 (inf-mod 8 bc0)) 63 (add 64 bc0) (inf-or56 bc0) (inf-letrans 63 64 (add 64 bc0) (idpath false) (inf-leaddr 64 bc0))) (inf-letrans (add 56 (inf-mod 8 bc0)) 63 64 (inf-or56 bc0) (idpath false)))
+  (pi j nat (inf-le ((inf-bor bb0 (inf-bshl (inf-bld In ip0) bc0)) j) (inf-ib In (add cons0 j)))) (inf-filly In bb0 (inf-bld In ip0) 64 cons0 bc0 (inf-by8 ip0) ga gy (inf-bldg In ip0) (inf-bldz In ip0))
+  (paths nat cons0 cons0) (idpath cons0)
+  (pi ha (inf-lt (add 56 (inf-mod 8 bc0)) 56) (paths nat (add ip0 (natminus 7 (inf-div8 bc0))) n)) (lam ha (inf-ltnle (paths nat ((add ip0 ((natminus 7 (inf-div8 bc0))))) n) (add 56 (inf-mod 8 bc0)) 56 ha (inf-leaddr 56 (inf-mod 8 bc0))))
+ )
+ (defvcs inf-vc-fillv-w1e 1 inf-fillv (g1 (inf-lt n (add ip0 8)))
+  (inf-le ip0 n) gi
+  (inf-le bc0 63) gs
+  (inf-bits-inv 0 ip0 cons0 bc0) ga
+  (pi j nat h (inf-lt j bc0) (paths nat (bb0 j) (inf-ib In (add cons0 j)))) gx
+  (pi j nat (inf-le (bb0 j) (inf-ib In (add cons0 j)))) gy
+ )
+ (defcx inf-fillv-w1 inf-fillv (g1 (inf-lt n (add ip0 8))) (ip nat) (bc nat) (bb (pi j nat nat)) (j1 (inf-le ip n)) (j3 (inf-le bc 63)) (j4 (inf-bits-inv 0 ip cons0 bc)) (j5 (pi j nat h (inf-lt j bc) (paths nat (bb j) (inf-ib In (add cons0 j))))) (j6 (pi j nat (inf-le (bb j) (inf-ib In (add cons0 j))))) )
+ (defvcs inf-vc-fillv-end 9 inf-fillv-w1 (w1 (inf-lt ip n) g2 (inf-lt 55 bc))
+  (inf-le ip n) j1
+  (inf-le bc 63) j3
+  (inf-bits-inv 0 ip cons0 bc) j4
+  (inf-le cons0 cons0) (inf-refl cons0)
+  (pi j nat h (inf-lt j bc) (paths nat (bb j) (inf-ib In (add cons0 j)))) j5
+  (pi j nat (inf-le (bb j) (inf-ib In (add cons0 j)))) j6
+  (paths nat cons0 cons0) (idpath cons0)
+  (pi ha (inf-lt bc 56) (paths nat ip n)) (lam ha (inf-ltnle (paths nat ip n) bc 56 ha (inf-ltsu 55 bc g2)))
+ )
+ (defvcs inf-vc-fillv-b2 1 inf-fillv-w1 (w1 (inf-lt ip n) g2 (inf-le bc 55))
+  (inf-lt ip n) w1
+  (inf-lt bc 64) (inf-lelt bc 55 64 g2 (idpath true))
+ )
+ (defvcs inf-vc-fillv-b3 1 inf-fillv-w1 (w1 (inf-lt ip n) g2 (inf-le bc 55))
+  (inf-lt (add ip 1) (inf-pow w)) (inf-lelt ((add ip 1)) n (inf-pow w) (inf-lt1 ip n w1) ((inf-lelt n (add n 8) (inf-pow w) (inf-leaddr n 8) gn)))
+ )
+ (defvcs inf-vc-fillv-b4 1 inf-fillv-w1 (w1 (inf-lt ip n) g2 (inf-le bc 55))
+  (inf-lt (add bc 8) (inf-pow w)) (inf-wlit (add bc 8) w gw ((inf-addr bc 55 8 g2)))
+ )
+ (defvcs inf-vc-fillv-w1b 1 inf-fillv-w1 (w1 (inf-lt ip n) g2 (inf-le bc 55))
+  (inf-le (add ip 1) n) (inf-lt1 ip n w1)
+  (inf-le (add bc 8) 63) ((inf-addr bc 55 8 g2))
+  (inf-bits-inv 0 (add ip 1) cons0 (add bc 8)) (inf-fill1b 0 ip cons0 bc j4)
+  (pi j nat h (inf-lt j (add bc 8)) (paths nat ((inf-bor bb (inf-bshl (inf-bbyte (In ip)) bc)) j) (inf-ib In (add cons0 j)))) (inf-fillx In bb (inf-bbyte (In ip)) 8 cons0 bc (inf-by8 ip) j4 j5 j6 (inf-bytg In ip) (add bc 8) (inf-eqle (add bc 8) (add 8 bc) (natpluscomm bc 8)) (inf-letrans (add bc 8) 63 64 ((inf-addr bc 55 8 g2)) (idpath false)))
+  (pi j nat (inf-le ((inf-bor bb (inf-bshl (inf-bbyte (In ip)) bc)) j) (inf-ib In (add cons0 j)))) (inf-filly In bb (inf-bbyte (In ip)) 8 cons0 bc (inf-by8 ip) j4 j6 (inf-bytg In ip) (lam r h (inf-bytz (In ip) r h)))
+  (inf-lt (natminus n (add ip 1)) (natminus n ip)) (inf-subfall1 n ip w1)
+ )
+ (defvcs inf-vc-fillv-end 17 inf-fillv-w1 (w1 (inf-le n ip))
+  (inf-le ip n) j1
+  (inf-le bc 63) j3
+  (inf-bits-inv 0 ip cons0 bc) j4
+  (inf-le cons0 cons0) (inf-refl cons0)
+  (pi j nat h (inf-lt j bc) (paths nat (bb j) (inf-ib In (add cons0 j)))) j5
+  (pi j nat (inf-le (bb j) (inf-ib In (add cons0 j)))) j6
+  (paths nat cons0 cons0) (idpath cons0)
+  (pi ha (inf-lt bc 56) (paths nat ip n)) (lam ha (inf-ant ip n j1 w1))
+ )
+ (defcx inf-takev (In (pi k nat nat)) (n nat) (w nat) (cons0 nat) (ip0 nat) (bc0 nat) (bb0 (pi j nat nat)) (gw (inf-le 32 w)) (gn (inf-lt (add n 8) (inf-pow w))) (gi (inf-le ip0 n)) (gs (inf-le bc0 63)) (ga (inf-bits-inv 0 ip0 cons0 bc0)) (gx (pi j nat h (inf-lt j bc0) (paths nat (bb0 j) (inf-ib In (add cons0 j))))) (gy (pi j nat (inf-le (bb0 j) (inf-ib In (add cons0 j))))) (k nat) (gk (inf-le k 13)) )
+ (defvcs inf-vc-takev-c1 1 inf-takev ()
+  (inf-le 32 w) gw
+  (inf-lt (add n 8) (inf-pow w)) gn
+  (inf-le ip0 n) gi
+  (inf-le bc0 63) gs
+  (inf-bits-inv 0 ip0 cons0 bc0) ga
+  (pi j nat h (inf-lt j bc0) (paths nat (bb0 j) (inf-ib In (add cons0 j)))) gx
+  (pi j nat (inf-le (bb0 j) (inf-ib In (add cons0 j)))) gy
+ )
+ (defcx inf-takev-c1 inf-takev (ipc1 nat) (bcc1 nat) (bbc1 (pi j nat nat)) (consc1 nat) (c1e1 (inf-le ipc1 n)) (c1e3 (inf-le bcc1 63)) (c1e4 (inf-bits-inv 0 ipc1 consc1 bcc1)) (c1e5 (inf-le cons0 consc1)) (c1ex (pi j nat h (inf-lt j bcc1) (paths nat (bbc1 j) (inf-ib In (add consc1 j))))) (c1ey (pi j nat (inf-le (bbc1 j) (inf-ib In (add consc1 j))))) (c1ec (paths nat consc1 cons0)) (c1ef (pi ha (inf-lt bcc1 56) (paths nat ipc1 n))) )
+ (defvcs inf-vc-takev-r1 1 inf-takev-c1 (g1 (inf-lt bcc1 k))
+  (inf-le ipc1 n) c1e1
+  (inf-le bcc1 63) c1e3
+  (inf-bits-inv 0 ipc1 consc1 bcc1) c1e4
+  (inf-le cons0 consc1) c1e5
+  (inf-lt (inf-by8 n) (add cons0 k)) (inf-short ipc1 n consc1 cons0 bcc1 k c1e4 (c1ef (inf-lttrans bcc1 k 56 g1 (inf-letrans k 13 56 gk (idpath false)))) c1ec g1)
+ )
+ (defvcs inf-vc-takev-d1 1 inf-takev-c1 (g1 (inf-le k bcc1))
+  (inf-lt k 32) ((inf-lttrans k 16 32 (inf-lelts k 15 (inf-letrans k 13 15 gk (idpath false))) (idpath false)))
+  (inf-lt (inf-val bbc1 k) (inf-pow w)) (inf-powfit (inf-val bbc1 k) k w (inf-vallt bbc1 k) (inf-letrans k 13 w gk (inf-letrans 13 32 w (idpath false) gw)))
+ )
+ (defvcs inf-vc-takev-d2 1 inf-takev-c1 (g1 (inf-le k bcc1))
+  (inf-lt k 64) (inf-lttrans k 16 64 (inf-lelts k 15 (inf-letrans k 13 15 gk (idpath false))) (idpath false))
+ )
+ (defvcs inf-vc-takev-d3 1 inf-takev-c1 (g1 (inf-le k bcc1))
+  (inf-le k bcc1) g1
+  (inf-lt (natminus bcc1 k) (inf-pow w)) (inf-wlit ((natminus bcc1 k)) w gw (inf-letrans ((natminus bcc1 k)) bcc1 63 (inf-suble bcc1 k) c1e3))
+ )
+ (defvcs inf-vc-takev-r2 1 inf-takev-c1 (g1 (inf-le k bcc1))
+  (inf-le ipc1 n) c1e1
+  (inf-le (natminus bcc1 k) 63) (inf-sub63 bcc1 k c1e3)
+  (inf-bits-inv 0 ipc1 (add consc1 k) (natminus bcc1 k)) (inf-take 0 ipc1 consc1 bcc1 k g1 c1e4)
+  (inf-le cons0 (add consc1 k)) (inf-letrans cons0 consc1 ((add consc1 k)) c1e5 (inf-leaddr consc1 k))
+  (inf-le (add cons0 k) (add consc1 k)) (inf-addr cons0 consc1 k c1e5)
+  (inf-lt (inf-val bbc1 k) (inf-pow k)) (inf-vallt bbc1 k)
+  (pi j nat h (inf-lt j (natminus bcc1 k)) (paths nat ((inf-bshr bbc1 k) j) (inf-ib In (add (add consc1 k) j)))) (inf-shrx In bbc1 consc1 bcc1 k g1 c1ex)
+  (pi j nat (inf-le ((inf-bshr bbc1 k) j) (inf-ib In (add (add consc1 k) j)))) (inf-shry In bbc1 consc1 k c1ey)
+  (paths nat (inf-val bbc1 k) (inf-get In cons0 k)) (inf-takev In bbc1 consc1 cons0 bcc1 k c1ec g1 c1ex)
+  (paths nat (add consc1 k) (add cons0 k)) (maponpaths nat nat (lam z (add z k)) consc1 cons0 c1ec)
  )
  )

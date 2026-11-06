@@ -16,6 +16,10 @@
    (fit t) ['inf-lt t '(inf-pow w)]
    (quit-on s) (puts "\(s)\n", quit 1)
 
+   ; a spec may hold a word as what each of its bits is, 'bitv naming it: a function, as an array is
+   (bitv? sp x) (elem x (peep sp 'bitv ()))
+   (ty sp n) (has? (sp 'arrays) n || bitv? sp n ? '(pi j nat nat) 'nat)
+
    ; --- a spec's expressions, as a term and as what they owe -----------------------------------
    (tm sp v e)
     (: (T x) (tm sp v x)
@@ -33,7 +37,12 @@
              ('cast x) (T x)
              ('u16 x) (T x)
              ('u8 x) (T x)
-             ('mask x k) ['inf-mod ['inf-pow (T k)] (T x)]
+             ('mask x k) (bitv? sp x ? ['inf-val (T x) (T k)] ['inf-mod ['inf-pow (T k)] (T x)])
+             ('bor64 a b) ['inf-bor (T a) (T b)]
+             ('shl64 a k) ['inf-bshl (T a) (T k)]
+             ('shr64 a k) ['inf-bshr (T a) (T k)]
+             ('ld64 A i) ['inf-bld (has? v A ? (lk v A) A) (T i)]
+             ('w64 x) ['inf-bbyte (T x)]
              ('low x m) ['inf-mod (m + 1) (T x)]
              ('div8 x) ['inf-div8 (T x)]
              ('or56 x) ['add 56 ['inf-mod 8 (T x)]])))
@@ -155,14 +164,13 @@
    (mentions? x t) (t == x || two? t && (mentions? x <t || mentions? x >t))
    (loop sp L x from to by invs body rest v hy k)
     (: w (writes sp body)
-       (ty n) (has? (sp 'arrays) n ? '(pi j nat nat) 'nat)
        names (uniq (map (a \ <a) v))
        carried (x . filter (n \ n != x && elem n w) names)
        ; the loop's head: what it writes a fresh name, the rest as they stand
        kept (filter (a \ !(elem <a carried)) v)
        _ (map (a \ any (n \ mentions? n >a) carried ? (quit-on "inf: \(L) rebinds a name \(<a) holds") 0) kept)
        head (map (n \ (n . n)) carried + kept)
-       bind (map (n \ (n . ty n)) (rev carried))
+       bind (map (n \ (n . ty sp n)) (rev carried))
        hinv (rev (map (i \ (<i . sub head <>i)) invs))
        nm "\(cx-of hy)-\(L)"
        hy3 (('cx . nm) . (hinv + (bind + hy)))
@@ -184,13 +192,12 @@
    ; a break leaves with what stands there, no condition learned
    (wloop sp L c m invs body rest v hy k)
     (: w (writes sp body)
-       (ty n) (has? (sp 'arrays) n ? '(pi j nat nat) 'nat)
        names (uniq (map (a \ <a) v))
        carried (filter (n \ elem n w) names)
        kept (filter (a \ !(elem <a carried)) v)
        _ (map (a \ any (n \ mentions? n >a) carried ? (quit-on "inf: \(L) rebinds a name \(<a) holds") 0) kept)
        head (map (n \ (n . n)) carried + kept)
-       bind (map (n \ (n . ty n)) (rev carried))
+       bind (map (n \ (n . ty sp n)) (rev carried))
        hinv (rev (map (i \ (<i . sub head <>i)) invs))
        nm "\(cx-of hy)-\(L)"
        hy3 (('cx . nm) . (hinv + (bind + hy)))
@@ -230,7 +237,7 @@
        after (map (a \ (<a . fresh L <a)) st + map (a \ (<a . fresh L <>a)) os)
        post (after + (res = () ? () [('res . res)]) + pre)
        v2 (map (a \ (<a . fresh L <a)) st + map (a \ (<>a . fresh L <>a)) os + v)
-       bs ((res = () ? () [(res . 'nat)]) + rev (map (a \ (>a . (has? (f 'arrays) <a ? '(pi j nat nat) 'nat))) after))
+       bs ((res = () ? () [(res . 'nat)]) + rev (map (a \ (>a . ty f <a)) after))
        hs (rev (map (e \ (intern "\(L)\(<e)" . callsub post <>e)) (f 'ensures)))
        ; a negative answer goes straight up: the caller's stop stands on the callee's
        hn (rev (map (e \ (intern "\(L)\(<e)" . callsub post <>e)) (f 'stops)))
@@ -276,8 +283,7 @@
              (: w (uniq (filter (n \ has? v n || any (i \ mentions? n <>i) invs) (writes sp th + writes sp el)))
                 _ (map (a \ any (n \ mentions? n >a) w ? (quit-on "inf: \(L) rebinds a name \(<a) holds") 0) (filter (a \ !(elem <a w)) v))
                 v3 (map (n \ (n . fresh L n)) w + v)
-                (ty n) (has? (sp 'arrays) n ? '(pi j nat nat) 'nat)
-                bs (rev (map (n \ (fresh L n . ty n)) w))
+                         bs (rev (map (n \ (fresh L n . ty sp n)) w))
                 hs (rev (map (i \ (<i . sub v3 <>i)) invs))
                 (meet v2 h2) (vcs "\(L)j" (map (i \ sub v2 <>i) invs) h2)
               (vcs (show L) (cond-ob sp v c) hy
@@ -290,7 +296,9 @@
             (L 'brk) ((sp 'brk) v hy)
             (L 'havoc x e)
              (: y (fresh L x)
-              (vcs (show L) (ob sp v e) hy + run sp >ss ((x . y) . v) ((y . 'nat) . hy) k))
+              (vcs (show L) (ob sp v e) hy
+               + (bitv? sp x ? (run sp >ss ((x . tm sp v e) . v) hy k)
+                  (run sp >ss ((x . y) . v) ((y . 'nat) . hy) k))))
             ; a word holds what fits a word
             (L 'havw x e g)
              (: y (fresh L x)
