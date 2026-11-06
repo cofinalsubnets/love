@@ -11,6 +11,7 @@
          phrase-echoes drone-voice drone-notes song-chunk npc-glyph bones-glyph)
 (borrow '(posix rove horn cli))
 (borrow 'play)                          ; the voices, the mix; harp is cited, never borrowed
+(borrow 'ops)                           ; the drone's operators
 (:
  esc (string 27)
  ; --- the plain: tiles in a cask, (x y) indexed. 1 grass, 2 sand, 3 a path, 4 the river,
@@ -259,19 +260,20 @@
  drone-notes [-24.5 -17.5]              ; the phrase's c and g, two octaves under middle c's, flat as they are
  drone-gain 2.22
  drone-swell 0.05                       ; the undulation, in cycles a second..
- drone-swell-depth 0.35                 ; ..and how much of the drone it takes away at its ebb
+ drone-swell-db 3.74                    ; ..and how much of the drone it takes away at its ebb
+ drone-loop 20                          ; seconds till it repeats
  drone-waver 0.3                        ; the pitch's wander, in cycles a second..
  drone-waver-depth 2.0                  ; ..and its reach, in radians of phase
- ; the drone is a voice like the box's (frame numbers to amplitudes) with an end frame never
- ; reached: the two notes summed, the phase wavering, scaled by the swell. each wave's turns
- ; are cut to the one under way, so a single float keeps its angle small an hour in
- (drone-voice _) (: fs (map (n \ 261.6255653005986 * exp (n * ln2-12)) drone-notes)
-                    (turn x) (twopi * (x - floor x))
-                    (fn ix) (: t (ix * (1.0 / song-rate))
-                               ph (sin (turn (t * drone-waver)) * drone-waver-depth)
-                               sw (1.0 - drone-swell-depth * (0.5 + 0.5 * sin (turn (t * drone-swell))))
-                               (foldl (acc \ f \ acc + sin (turn (t * f) + ph)) (t * 0.0) fs * (sw / #fs)))
-                    [1099511627776 fn (drone-gain * 0.5) (drone-gain * 0.5)])
+ ; the drone is a voice like the box's, its end frame never reached: the two notes summed,
+ ; the phase wavering, the swell taking its dB. every rate a whole number of cycles a loop,
+ ; so the voice repeats exactly and a single float keeps its phase small an hour in
+ (drone-voice _) (: (fit f) (floor (f * drone-loop + 0.5) / drone-loop)
+                    (op n) (: f (fit (261.6255653005986 * exp (n * ln2-12)))
+                       {'f f 'wave 0 'l (1.0 / #drone-notes) 'segs [[0.0 1 1.0 0.0 0.0]]
+                        'vib (drone-waver-depth * drone-waver / f) 'vrate drone-waver
+                        'trem drone-swell-db 'trate drone-swell})
+                    v (ops-voice (map op drone-notes) 0 1099511627776 1.0 1.0 song-rate)
+                    [(v 0) (ix \ v 1 (ix % (drone-loop * song-rate))) (drone-gain * 0.5) (drone-gain * 0.5)])
  (apartment-song-new h st) {'h h 'fpos 0 'vs [[0 (drone-voice ())]] 'sb {st}
                             'next (phrase-first * song-rate) 'struck 0}
  (strike! s at v) (pin s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]))
