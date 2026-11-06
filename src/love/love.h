@@ -289,7 +289,6 @@ struct g {
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // bounded by LvRemCap
  uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child
- int8_t lean;                             // grow streak; a grow needs lean >= 2
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
 #endif
