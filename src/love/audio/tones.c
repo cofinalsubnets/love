@@ -43,8 +43,12 @@ static love_inline flo_t tn_sin(flo_t x) {
  if (u > (flo_t) 0.25) u = (flo_t) 0.5 - u;
  else if (u < -(flo_t) 0.25) u = -(flo_t) 0.5 - u;
  flo_t const z = u * (flo_t) 6.283185307179586, q = z * z;
+#if Bits == 64
  return z * (1 + q * (-(flo_t) 0.16666666666666666 + q * ((flo_t) 0.008333333333333333 + q * (-(flo_t) 0.0001984126984126984
           + q * ((flo_t) 2.7557319223985893e-06 + q * (-(flo_t) 2.505210838544172e-08 + q * (flo_t) 1.6059043836821613e-10))))));
+#else
+ return z * ((flo_t) 0.9999966158999021 + q * (-(flo_t) 0.166648283792627 + q * ((flo_t) 0.008306325205790568 + q * -(flo_t) 0.00018363653481551223)));
+#endif
 }
 // harp's noise: the frame's number hashed, so a frame always draws the same sample
 static flo_t tn_noise(int64_t ix) {
