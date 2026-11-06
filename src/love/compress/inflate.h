@@ -60,3 +60,14 @@ intptr_t inflate_raw(const unsigned char *in, uintptr_t n, unsigned char *out, u
 intptr_t inflate_dict(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap,
                          const unsigned char *dic, uintptr_t nd) {
  return (intptr_t) inf_rund(in, n, out, cap, dic, nd); }
+// chunks sharing one code: the code a block of no tokens, read once into tabs; a chunk its tokens
+// behind the block type deflate reserves, so it can't be taken for a stream
+uintptr_t inflate_tabs_size(void) { return sizeof(struct inf_tabs); }
+int inflate_tabs_load(const unsigned char *in, uintptr_t n, void *tabs) {
+ return inf_rundt(in, n, NULL, 0, 0, 0, tabs) == 0; }
+int inflate_shared_is(const unsigned char *in, uintptr_t n) { return n && (in[0] & 7) == 7; }
+intptr_t inflate_shared(const unsigned char *in, uintptr_t n, unsigned char *out, uintptr_t cap, void *tabs) {
+ struct inf_rd r = { in, 0, out, tabs, n, 0, 0, cap, 0, 0, 0 };
+ if (inf_take(&r, 3) != 7) return -1;
+ int x = inf_block(&r);
+ return x < 0 ? x : (intptr_t) r.op; }

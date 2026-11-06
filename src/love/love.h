@@ -480,7 +480,11 @@ extern uintptr_t baked_image_len;
 intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          inflate_dict(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, unsigned char const*, uintptr_t),
          deflate_raw(struct g*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
-         deflate_dict(struct g*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+         deflate_dict(struct g*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
+         deflate_hot(struct g*, unsigned char const*, uintptr_t const*, uintptr_t, unsigned char*, uintptr_t, uintptr_t*, unsigned char*, uintptr_t),
+         inflate_shared(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, void*);
+uintptr_t inflate_tabs_size(void);
+int inflate_tabs_load(unsigned char const*, uintptr_t, void*), inflate_shared_is(unsigned char const*, uintptr_t);
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
