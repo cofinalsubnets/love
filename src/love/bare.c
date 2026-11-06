@@ -5,8 +5,6 @@
 
 void love_fd_close(int fd) { }
 void love_fd_drain(int fd, void const *p, uintptr_t n) { }
-// no kernel bracket to drain, so the image bakes the book it was handed
-uintptr_t knifs_slice(struct def const **s) { return *s = NULL, 0; }
 // the heap runs where it lies: no second, executable window
 char *code_window(char *p) { return p; }
 

@@ -321,6 +321,22 @@
    ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
    ; the boot stub is laid, not stored: the cat below evals off the carried tree in the
    ; Makefile's order. the arch is this binary's own, read off e_machine
+   ; the kernel's objects come from the carried source, by its own Makefile, in a tree
+   ; laid beside OUT and gone after: answers each object as [path bytes]
+   (kern-objs out exe)
+    (: d "\(out).src"
+       _ (mkdir d 493)
+       root (src-nest d)
+       here (cwd 0)
+       _ (!(chdir root) ? 0 (src-die "can't enter \(root)"))
+       _ (src-arm "." exe)
+       st (src-run exe ["make" "-s" "-j" "LOVE=\(exe)" "kart_objs"])
+       _ (0 != st ? (src-die "the kernel's objects did not build (exit \(st))"))
+       obs (map (p \ uread p @ [1 s] [p (s + "")] (src-die "no object \(p)"))
+                (words (uread "out/kart.list" @ [1 s] (s + "") "")))
+       _ (chdir here)
+       _ (src-run exe ["rm" "-rf" d])
+       obs)
    (kern-pick nm)
     (uread "/love/\(nm)" @ [1 s] (s + "") (src-die "the carried tree has no \(nm)"))
    (kern-b16 s i) (s i + 256 * s (i + 1))
@@ -343,7 +359,7 @@
              (src-die "no boot door for this machine"))
        ; the stream evals in its own layer, so the inputs cross on the verb table,
        ; the one tablet every layer reaches, under a key pulled back off after
-       _ (pins kern-box 'pie pie 'out out 'arch arch)
+       _ (pins kern-box 'pie pie 'out out 'arch arch 'kobs (kern-objs out exe))
        vt (cite 'verbs 'tab)
        _ (pin vt 'kern-in kern-box)
        cat ("(borrow 'holo)"
@@ -355,7 +371,7 @@
             + kern-pick "src/tools/kproject.l"
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
-            + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
+            + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0) (peep kb 'kobs 0)))")
        (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0)),
         pull vt 'kern-in 0,
         puts ";; wrote \(out) (\(arch))\n",

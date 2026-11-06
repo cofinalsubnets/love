@@ -96,18 +96,9 @@ static uintptr_t image_objsize(struct g *g, union u *p) {
  word *term = (word*) ttag(g, p);
  return (uintptr_t)(term - (word*) p) + 1; }
 // the host nif slice: the link-order love_nifs bracket, indexed by position -- so its order
-// and count are image contract, checked by name in image_fp. the kernel's bracket (kmain.c's
-// knifs) rides behind the host's; a link without one answers none
-uintptr_t knifs_slice(struct def const **s);
-static love_inline uintptr_t image_nhost(void) {
- struct def const *ks;
- return (uintptr_t)(__stop_love_nifs - __start_love_nifs) + knifs_slice(&ks); }
-static love_inline struct def const *image_host_def(uintptr_t k) {
- uintptr_t nh = (uintptr_t)(__stop_love_nifs - __start_love_nifs);
- struct def const *ks;
- if (k < nh) return __start_love_nifs + k;
- knifs_slice(&ks);
- return ks + (k - nh); }
+// and count are image contract, checked by name in image_fp
+static love_inline uintptr_t image_nhost(void) { return (uintptr_t)(__stop_love_nifs - __start_love_nifs); }
+static love_inline struct def const *image_host_def(uintptr_t k) { return __start_love_nifs + k; }
 static love_inline intptr_t image_host_x(uintptr_t k) { return image_host_def(k)->v.x; }
 
 // the op index: (address, kind:index) pairs, open-addressed, laid in the tables' own order so
