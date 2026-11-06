@@ -905,6 +905,10 @@
                   (lobin g op vo (elem op '(shl shr) ? vr (loui g env rhs vr vo)) (elem op '(shl shr) ? (lok g rhs)) @ 'bad 'bad
                      r (lost g lb r @ [fs [ty x _]] [ty x (lolvfs l + fs)] 'bad))))
          ['cast 'void x] (lox g env x @ [_ _ fs] ['void () fs] 'bad)
+         ; a function type's value is its address, a function's own type standing
+         ['cast ('fn . ft) x]
+          (lox g env x @ ([vt r fs] && ptr? vt) [(vt @ ('ptr ('fn . _)) vt _ ['ptr ('fn . ft)]) r fs]
+                         v v)
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
          ; a float of a wide value: a constant only, folded exactly
          (['cast ty x] && lofl? ty && d128? (lopeek g env x))

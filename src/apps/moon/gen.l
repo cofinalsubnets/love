@@ -216,8 +216,8 @@
                        (immok g 'log n || t32? g && !(v6m? g) && elem op '(and or) && -2147483648 <= n < 4294967296
                         && (t2imm? (-1 - n) || op = 'and && 0 < n && 0 = n & (n + 1))))   ; bic, orn, a low run's ubfx
    (uldop sz) (sz @ 1 'ldu1 2 'ldu2 4 'ldu4 'ld)
-   (fnty g nm) (g 'sigs nm @ sig        ; return and params riding when sig'd
-                (two? sig ? ['fn <sig <>sig] '(fn)))
+   (fnty g nm) (g 'sigs nm @ sig        ; return and params riding when sig'd, a variadic's as an unprototyped one's
+                (two? sig ? ['fn <sig (sig 2 ? () <>sig)] '(fn)))
    ; the eightbyte classes of a by-value aggregate (its value is its address in r0): '(int) /
    ; '(sse) at <=8 bytes, two symbols at 9..16, () for a scalar, an unsized tag or >16 (memory)
    (aclass g ty)
