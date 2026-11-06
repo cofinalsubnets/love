@@ -1253,7 +1253,8 @@
            (lox g env e @ ([vt r fs] && !(lo128? g) && d128? vt) (lono g ['abi vt])
                           ([vt r fs] && (losv? vt || d128? vt))
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
-                                 p9 (losv? p9 || d128? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                                 p9 (losv? p9 || d128? p9 || gcplx? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                          ([vt r fs] && gcplx? vt && gcplx? pt && !(locxsame? vt pt)) (lotr g [vt r fs] pt)
                           ([vt r fs] && loagg? g vt) [vt r fs]
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
@@ -1577,7 +1578,7 @@
             ['ret e _] (lost1 g env ['ret e] @ 'bad 'bad fs (lomust g fs))
             ['ret e]
              (: rt <(peep (g 'sigs) (g 'fn) ['long ()]) epj (peep g 'epi epi)
-                (lox g env (losv? rt && d128? (lopeek g env e) ? ['cast rt e] e) @ 'bad 'bad
+                (lox g env (losv? rt && d128? (lopeek g env e) || gcplx? rt ? ['cast rt e] e) @ 'bad 'bad
                    ([_ _ fs] && rt = 'void) (fs + epj)
                    ; an int's upper half is the caller's to extend
                    ([vt r fs] && pair? g rt && losv? vt)
