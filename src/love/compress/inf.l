@@ -79,6 +79,8 @@
                          ('eq a b) (ob sp v a + ob sp v b)
                          ('wide d) (ob sp v d)
                          ('widec d) (ob sp v d)
+                         ('over a b) (ob sp v a + ob sp v b)
+                         ('room _) ()
                          ('tru) ())
    (cond-tt sp v c) (c @ ('ltsub a b d) ['inf-lt (tm sp v a) ['add (tm sp v d) (tm sp v b)]]
                          ('lt a b) ['inf-lt (tm sp v a) (tm sp v b)]
@@ -89,6 +91,8 @@
                          ('eq _ _) 'unit
                          ('wide d) ['inf-le 8 (tm sp v d)]
                          ('widec _) 'unit
+                         ('over _ _) 'unit
+                         ('room _) 'unit
                          ('tru) 'unit)
    (cond-ff sp v c) (c @ ('ltsub a b d) ['inf-le ['add (tm sp v d) (tm sp v b)] (tm sp v a)]
                          ('lt a b) ['inf-le (tm sp v b) (tm sp v a)]
@@ -98,7 +102,9 @@
                          ('ne _ _) 'unit
                          ('eq _ _) 'unit
                          ('wide _) 'unit
-                         ('widec _) 'unit)
+                         ('widec _) 'unit
+                         ('over a b) ['inf-lt ['add (tm sp v a) (tm sp v b)] ['inf-pow (tm sp v 'w)]]
+                         ('room _) 'unit)
 
    ; --- the walk: a statement's obligations, each with the binders in force, in order -----------
    ; a vc is (label goal . binders); binders is ((name . type) ..), latest first
@@ -119,6 +125,8 @@
                         (_ 'call f _ _ os) (written (callee sp f) os)
                         (_ 'try x f _ _ os) (x . written (callee sp f) os)
                         (_ 'tryr x f _ _ os _) (x . written (callee sp f) os)
+                        (_ 'calx x f _ _ os) (x . written (callee sp f) os)
+                        (_ 'new x o _ _) [x o]
                         (_ 'for x _ _ _ b) (x . writes sp b)
                         (_ 'forby x _ _ _ _ b) (x . writes sp b)
                         ())
@@ -193,7 +201,7 @@
      (: n (1 + peep sp 'cxn 0) _ (pin sp 'cxn n)
         nm "inf-\(sp 'short)-c\(n)"
       (['cx nm (cx-of hy) (rev (added hy))] . k (('cx . nm) . hy))))
-   (call sp L f inst os res v hy cont)
+   (call sp L f inst os res stop v hy cont)
     (: st (f 'state)
        args (map (a \ two? a ? (<a . sub v <>a) (a . sub v a)) inst)
        pre (map (a \ (<>a . lk v <a)) st + args)
@@ -204,8 +212,13 @@
        v2 (map (a \ (<a . fresh L <a)) st + map (a \ (<>a . fresh L <>a)) os + v)
        bs ((res = () ? () [(res . 'nat)]) + rev (map (a \ (>a . (has? (f 'arrays) <a ? '(pi j nat nat) 'nat))) after))
        hs (rev (map (e \ (intern "\(L)\(<e)" . callsub post <>e)) (f 'ensures)))
+       ; a negative answer goes straight up: the caller's stop stands on the callee's
+       hn (rev (map (e \ (intern "\(L)\(<e)" . callsub post <>e)) (f 'stops)))
+       _ (stop && stops? sp && !(stops? f) ? (quit-on "inf: \(sp 'short) passes up a stop \(f 'short) does not state") 0)
      (vcs (show L) (map (r \ callsub pre <>r) owed) hy
+      + (stop && stops? sp ? (vcs "\(L)s" (map (e \ sub v2 <>e) (sp 'stops)) (hn + bs + hy)) ())
       + cxed sp (hs + bs + hy) (\ h (cont v2 h))))
+   (stops? sp) (peep sp 'stops 0 != 0)
    (run sp ss v hy k)
     (atom? ss ? (k v hy)
      (<ss @ (L 'set x e)
@@ -263,27 +276,43 @@
                              + run sp >ss v hy k)
             (L 'pokew A i e) (vcs (show L) (ob sp v i + [['inf-le ['add (tm sp v i) 8] (lk (sp 'arrays) A @ a (a 1))]] + ob sp v e) hy
                               + run sp >ss v hy k)
-            (L 'mcopy A i B j n)
-             (: bound (\ X (lk (sp 'arrays) X @ a (a 1)))
-              (vcs (show L) (ob sp v i + ob sp v j + ob sp v n
-                             + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound A)]
-                                ['inf-le ['add (tm sp v j) (tm sp v n)] (bound B)]]) hy
-               + run sp >ss v hy k))
-            (L 'call f as inst os) (call sp L (callee sp f) inst os () v hy (\ v2 h2 (run sp >ss v2 h2 k)))
+            (L 'mcopy A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss v hy k)
+            (L 'mmove A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss v hy k)
+            ; a pointer into an array: its view stands inside
+            (L 'view _ A i n)
+             (vcs (show L) (ob sp v i + ob sp v n + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]]) hy
+              + run sp >ss v hy k)
+            ; alloc answers NULL or e bytes, and here the bytes are a fresh name's
+            (L 'new x o e g)
+             (: y (fresh L x) z (fresh L o)
+              (vcs (show L) (ob sp v e) hy
+               + run sp >ss ((x . y) . ((o . z) . v))
+                     ((g . ['pi 'g ['inf-lt 0 y] ['paths 'nat z (tm sp v e)]]) . ((z . 'nat) . ((y . 'nat) . hy))) k))
+            (L 'free _) (run sp >ss v hy k)
+            (L 'call f as inst os) (call sp L (callee sp f) inst os () 0 v hy (\ v2 h2 (run sp >ss v2 h2 k)))
             (L 'try x f as inst os)
              (: y (fresh L x)
-              (call sp L (callee sp f) inst os y v hy
+              (call sp L (callee sp f) inst os y 1 v hy
                (\ v2 h2 (run sp >ss ((x . y) . v2) h2 k))))
             (L 'tryr x f as inst os _)
              (: y (fresh L x)
-              (call sp L (callee sp f) inst os y v hy
+              (call sp L (callee sp f) inst os y 1 v hy
+               (\ v2 h2 (run sp >ss ((x . y) . v2) h2 k))))
+            (L 'calx x f as inst os)
+             (: y (fresh L x)
+              (call sp L (callee sp f) inst os y 0 v hy
                (\ v2 h2 (run sp >ss ((x . y) . v2) h2 k))))
             (L 'ret e) (vcs (show L) (ob sp v e + ensured sp ((tm-res sp v e) . v)) hy)
-            (L 'retneg _) ()
+            (L 'retneg _) (vcs (show L) (map (e \ sub v <>e) (sp 'stops)) hy)
             (L 'for x from to invs body) (loop sp L x from to () invs body >ss v hy k)
             (L 'forby x from to by invs body) (loop sp L x from to by invs body >ss v hy k)
             (quit-on "inf: \(sp 'short) has a statement the walk cannot read: \(show <ss)")))
    (callee sp f) (<(filter (c \ c 'name = f) (sp 'calls)))
+   (bound sp v X) (sub v (lk (sp 'arrays) X @ a (a 1)))
+   (mv-ob sp v A i B j n)
+    (ob sp v i + ob sp v j + ob sp v n
+     + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]
+        ['inf-le ['add (tm sp v j) (tm sp v n)] (bound sp v B)]])
    (ensured sp v) (map (e \ sub v <>e) (sp 'ensures))
    (tm-res sp v e) ('res . tm sp v e)
    ; each vc numbered within its label, in its order; a path run twice keeps counting
@@ -325,9 +354,15 @@
    (auto sp hy g)
     (: bs (filter (b \ <b != 'cx) hy + map (r \ (<r . <>r)) (sp 'requires))
        (held t) (: c (canon t) (filter (b \ canon >b = c) bs @ m (two? m ? <<m ())))
-       ; a <= b through what is held: a stated step, x - y <= x, x <= x + y
+       ; a feed's limit: named, since a literal 2^30 in a statement would unfold
+       plim (has? (sp 'requires) 'lim ? ['inf-pow 'lim] ())
+       ; a <= b through what is held: a stated step, x - y <= x, x <= x + y, up the powers
        (ups a) (cats (map (b \ >b @ ['inf-le x y] (x = a ? [[y <b]] ()) ['inf-lt x y] (x = a ? [[y ['inf-ltle x y <b]]] ()) ()) bs)
+                + (lit? a && a <= 512 ? [[['inf-pow 9] '(idpath false)]] ())
                 + (a @ ['natminus x y] [[x ['inf-suble x y]]]
+                       ['inf-pow k] (cats (map (b \ >b @ ['inf-le x y] (x = k ? [[['inf-pow y] ['inf-powle k y <b]]] ()) ()) bs)
+                                     + (lit? k && k <= 19 && plim
+                                        ? [[plim ['inf-powle k 'lim ['inf-letrans k 19 'lim '(idpath false) 'hl]]]] ()))
                        ['inf-mod p x] (lit? p && 0 < p
                                        ? ([[(p - 1) ['inf-ltsle a (p - 1) ['inf-modlt (p - 1) x]]]]
                                           + (p = 8 ? [[x ['inf-modle8 x]]] ()))
@@ -354,6 +389,11 @@
                !gw ()
                (lit? a) (a <= 63 ? ['inf-wlit a w gw '(idpath false)] ())
                (chain a 63 4) ['inf-wlit a w gw (chain a 63 4)]
+               (a @ ['inf-pow k] (lit? k && k < 32)) ['inf-wpow w (a 1) gw '(idpath true)]
+               (plim && chain a plim 4)
+                ['inf-lelt a plim ['inf-pow w] (chain a plim 4) ['inf-wpow w 'lim gw ['inf-lttrans 'lim 31 32 'hm '(idpath false)]]]
+               (plim && a @ ['add x y] (chain x plim 4 && chain y plim 4))
+                ['inf-fitlim w 'lim (a 1) (a 2) gw 'hm (chain (a 1) plim 4) (chain (a 2) plim 4)]
                ; under anything that fits
                (: (go l) (atom? l ? ()
                           (: t >(<l)
@@ -436,6 +476,8 @@
                        ('eq a b) ['bin 'eq (cl sp a) (cl sp b)]
                        ('wide d) ['land ['var "wideld"] ['bin 'le ['num 8] (cl sp d)]]
                        ('widec d) ['land ['var "wideld"] ['bin 'eq (cl sp d) ['num 1]]]
+                       ('over a b) ['bin 'lt ['bin '- ['cast '(named "uintptr_t") ['un 'neg ['num 1]]] (cl sp b)] (cl sp a)]
+                       ('room x) ['bin 'ne (cl sp x) ['un 'neg ['num 2]]]
                        ('tru) ['num 1])
    ; x = x op e goes as x op= e
    (cl-set sp x e)
@@ -455,6 +497,7 @@
                         (_ 'gset _ _) ()
                         (L 'try x f as _ _) [[L 'set-call x f as] [L 'if-neg x]]
                         (L 'tryr x f as _ _ c) [[L 'set-call x f as] [L 'if-negr x c]]
+                        (L 'calx x f as _ _) [[L 'set-call x f as]]
                         [s])
                ss))
    (cl-body sp ss) (said ss @ [s] (cl-stmt sp s) u ['blk (map (cl-stmt sp) u)])
@@ -482,6 +525,10 @@
          (L 'poke A i e) ['expr ['asn ['deref ['bin '+ (base sp A) (cl sp i)]] (cl sp e)]]
          (L 'pokew A i e) ['expr ['call ['var "ST64"] [['bin '+ (base sp A) (cl sp i)] (cl sp e)]]]
          (L 'mcopy A i B j n) ['expr ['call ['var "memcpy"] [['bin '+ (base sp A) (cl sp i)] ['bin '+ (base sp B) (cl sp j)] (cl sp n)]]]
+         (L 'mmove A i B j n) ['expr ['call ['var "memmove"] [['bin '+ (base sp A) (cl sp i)] ['bin '+ (base sp B) (cl sp j)] (cl sp n)]]]
+         (L 'view f A i _) ['expr ['asn ['dot ['deref ['var "r"]] f] ['bin '+ (base sp A) (cl sp i)]]]
+         (L 'new x _ e _) ['expr ['asn (cv sp x) ['call ['var "alloc"] [['num 0] (cl sp e)]]]]
+         (L 'free x) ['expr ['call ['var "alloc"] [(cv sp x) ['num 0]]]]
          (L 'call f as _ _) ['expr ['call ['var f] (map (cl sp) as)]]
          (L 'set-call x f as) ['expr ['asn (cv sp x) ['call ['var f] (map (cl sp) as)]]]
          (L 'if-neg x) ['if ['bin 'lt (cv sp x) ['num 0]] ['ret (cv sp x)] ()]
@@ -504,6 +551,7 @@
      'ret 'int
      'params '(("c" (ptr (const (struct "inf_code")))) ("bb" (named "uint64_t")))
      'decls '((int (code 0) (first 0) (index 0) (cnt)) (uint (l)))
+     'stops ()
      'ensures '((e1 (inf-lt res (inf-pow w))))
      'arrays '((Cn (f "cnt") 16) (Sy (f "sym") n))
      'requires
@@ -922,6 +970,7 @@
      'params (rd-params + '(("k" uint))) 'fields rd-fields 'state rd-state 'arrays rd-arrays
      'requires (rd-req + '((k nat) (gk (inf-le k 13))))
      'decls '((int (v)))
+     'stops rd-ens
      'ensures (rd-ens + '((e6 (inf-le (add cons0 k) cons)) (e7 (inf-lt res (inf-pow k)))))
      'calls [fill]
      'body
@@ -970,6 +1019,7 @@
          (gt (inf-le (inf-sum Cn 15 1) m))
          (gr (inf-le root 15))))
      'decls '((int (e) (x) (sy)) (uint (u)))
+     'stops rd-ens
      'ensures rd-ens
      'calls [fill walk]
      'body
@@ -1451,6 +1501,7 @@
         ((named "uintptr_t") (ip (raw (dot (deref (var "r")) "ip"))) (op (raw (dot (deref (var "r")) "op")))
                              (bc (raw (dot (deref (var "r")) "bc"))) (e) (f) (sy) (x) (l) (d) (k) (dd) (y))
         (int (ans 0)))
+     'stops (rd-ens + ot-ens)
      'ensures (rd-ens + ot-ens)
      'body
       '((w1 while (le (+ op 266) cap) (natminus cap op)
@@ -1715,7 +1766,11 @@
        "w1b-11" '(inf-letrans cons0 T3 T4 (inf-letrans cons0 T2 T3 (inf-letrans cons0 T1 T2 (inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea)) (inf-leaddr T1 Xl)) (inf-leaddr T2 Fa)) (inf-leaddr T3 Xd))
        "w1b-12" '(inf-letrans op0 op (add op La) j6 (inf-leaddr op La))
        "w1b-13" 'Gb
-       "w1b-14" '(inf-subby op cap La Opc Lp)}}
+       "w1b-14" '(inf-subby op cap La Opc Lp)
+       "r3-2" '(inf-letrans C4 C3 63 (inf-suble C3 Xd) (inf-letrans C3 C2 63 (inf-suble C2 Fa) (inf-letrans C2 C1 63 (inf-suble C1 Xl) (inf-letrans C1 bci7 63 (inf-suble bci7 Ea) m3))))
+       "r3-3" '(inf-take carry ipi7 T3 C3 Xd G4 (inf-take carry ipi7 T2 C2 Fa G3 (inf-take carry ipi7 T1 C1 Xl G2 (inf-take carry ipi7 cons bci7 Ea G1 m4))))
+       "r3-4" '(inf-letrans cons0 T3 T4 (inf-letrans cons0 T2 T3 (inf-letrans cons0 T1 T2 (inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea)) (inf-leaddr T1 Xl)) (inf-leaddr T2 Fa)) (inf-leaddr T3 Xd))
+       "r2-3" '(inf-take carry ipi7 T2 C2 Fa G3 (inf-take carry ipi7 T1 C1 Xl G2 (inf-take carry ipi7 cons bci7 Ea G1 m4)))}}
 
    ; a block's symbols, to its end: each one lowers the room left, so the loop ends whatever the tables say
    block
@@ -1946,6 +2001,7 @@
      'params (sym 'params) 'fields rd-fields 'state rd-state 'arrays (sym 'arrays)
      'requires sym-req
      'decls '((int (x)))
+     'stops rd-ens
      'ensures rd-ens
      'calls [fill sym]
      'body
@@ -1965,6 +2021,7 @@
      'arrays (rd-arrays + co-arrays)
      'requires (rd-req + co-req + ms-req '(last mode stage) + co-inv0)
      'decls '((int (x)) (uint (typ) (dr)))
+     'stops (rd-ens + co-ens)
      'ensures (rd-ens + co-ens + '((e6 (inf-le (add cons0 3) cons))))
      'calls [take fixed]
      'body
@@ -1993,6 +2050,7 @@
      'arrays rd-arrays
      'requires (rd-req + ms-req '(rem mode))
      'decls '((uint (ln) (nl)) ((named "uint64_t") (y)))
+     'stops rd-ens
      'ensures rd-ens
      'calls [fill]
      'body
@@ -2014,8 +2072,9 @@
      'params ms-params 'fields rd-fields 'sfields ms-fields
      'state (rd-state + '((Cl Cl0)) + ms-state '(hlit hdist hclen i mode))
      'arrays (rd-arrays + '((Cl (s "cl") 19)))
-     'requires (rd-req + '((Cl0 (pi k nat nat))) + ms-req '(hlit hdist hclen i mode))
+     'requires (rd-req + '((Cl0 (pi k nat nat)) (a2 (pi k nat (inf-le (Cl0 k) 15)))) + ms-req '(hlit hdist hclen i mode))
      'decls '(((named "uint64_t") (y)))
+     'stops (rd-ens + '((a2 (pi k nat (inf-le (Cl k) 15)))))
      'ensures (rd-ens + '((a2 (pi k nat (inf-le (Cl k) 15)))))
      'calls [fill]
      'body
@@ -2053,9 +2112,16 @@
        + '((Cl0 (pi k nat nat)) (Lz0 (pi k nat nat)) (Cs0 (pi k nat nat)) (Ct0 (pi k nat nat)) (Cc0 (pi k nat nat))
            (Ob (pi k nat nat)) (hclen nat)
            (hord (pi k nat g (inf-lt k 19) (inf-lt (Ob k) 19)))
-           (a2 (pi k nat (inf-le (Cl0 k) 15))))
-       + ms-req '(i prev stage mode))
+           (a2 (pi k nat (inf-le (Cl0 k) 15)))
+           (b2 (pi j nat (inf-le (Lz0 j) 15))))
+       + sub [('Cc . 'Cc0) ('Cs . 'Cs0)] st-cc
+       + ms-req '(i prev stage mode) + '((b1 (inf-le prev0 15))))
      'decls '((int (x)))
+     'stops
+      (rd-ens + st-cc
+       + '((b1 (inf-le prev 15))
+           (b2 (pi j nat (inf-le (Lz j) 15)))
+           (a2 (pi k nat (inf-le (Cl k) 15)))))
      'ensures
       (rd-ens + st-cc
        + '((b1 (inf-le prev 15))
@@ -2106,14 +2172,14 @@
       (rd-req + co-req + st-cc0
        + '((Lz0 (pi k nat nat)) (hlit nat) (hdist nat)
            (b2 (pi j nat (inf-le (Lz0 j) 15))))
-       + ms-req '(i prev stage sy mode) + co-inv0)
+       + ms-req '(i prev stage sy mode) + '((b1 (inf-le prev0 15))) + co-inv0)
      'decls '((int (x)) (uint (tot) (rr) (v) (k)))
+     'stops (rd-ens + co-ens + st-cl)
      'ensures (rd-ens + co-ens + st-cl)
      'calls [take sy1 build]
      'body
       ['(i0 if g0 (lt 288 hlit) ((r0 retneg 3)))
        '(i00 if g00 (lt 32 hdist) ((r00 retneg 3)))
-       '(i01 if g01 (lt 15 prev) ((r01 retneg 3)))
        '(s0 set tot (+ hlit hdist))
        ['w1 'while '(lt i tot) '(natminus tot i)
         (['(b1 (inf-le prev 15)) '(b2 (pi j nat (inf-le (Lz j) 15)))] + st-rd)
@@ -2211,6 +2277,7 @@
      'arrays (rd-arrays + ot-arrays)
      'requires (rd-req + ot-req + '((gz (inf-lt 0 out)) (last nat)) + ms-req '(rem mode))
      'decls '(((named "uintptr_t") (k)))
+     'stops (rd-ens + ot-ens)
      'ensures (rd-ens + ot-ens)
      'body
       (['(j0 join g0 (nz rem)
@@ -2266,7 +2333,12 @@
        "s7-1" '(inf-lelt (add ip0 kj3) n (inf-pow w) Rn Nw)
        "j1j-1" 'Rn
        "j1j-3" '(inf-advb carry ip0 consj0 bcj0 kj3 r4)
-       "j1j-6" 'Rm}}
+       "j1j-6" 'Rm
+       "r7-3" '(inf-advb carry ip0 consj0 bcj0 kj3 r4)
+       "r7-5" 'Rm
+       "r8-1" 'Rn
+       "r8-3" '(inf-advb carry ip0 consj0 bcj0 kj3 r4)
+       "r8-5" 'Rm}}
 
    ; a block's symbols. the fast lane is the one-shot's; past it, one symbol at a time, and each stage
    ; says what is already taken. a stage read back answers for its own values: the literal, the length
@@ -2281,6 +2353,7 @@
      'arrays (block 'arrays)
      'requires (block 'requires + '((gz (inf-lt 0 out)) (last nat)) + ms-req '(mode stage sy len dist))
      'decls '((int (x) (y)) ((named "uintptr_t") (l) (d)))
+     'stops (rd-ens + ot-ens)
      'ensures (rd-ens + ot-ens)
      'calls [take sy1 copy fast]
      'body
@@ -2298,7 +2371,7 @@
                   (r0 ret 0))))))
              ()
              ((k1 (inf-le ip n)) (k3 (inf-le bc 63)) (k4 (inf-bits-inv carry ip cons bc)) (k5 (inf-le cons0 cons))
-              (k6 (inf-le o0 op)) (k7 (inf-le op cap))))
+              (k6 (inf-le o0 op)) (k7 (inf-le op cap)) (k8 (inf-le op0 op))))
             (t2 try x "inf_sy1" ((raw (var "r")) (taddr "lit") (tf "ltab") LROOT)
                 (In n w carry (Cn Lc) (Sy Ls) (Tb Lt) (m lm) h (root LROOT)) ())
             (d1 havoc sy x)
@@ -2310,7 +2383,7 @@
               (d3 havoc stage 1))))
            ()
            ((k1 (inf-le ip n)) (k3 (inf-le bc 63)) (k4 (inf-bits-inv carry ip cons bc)) (k5 (inf-le cons0 cons))
-            (k6 (inf-le o0 op)) (k7 (inf-le op cap))))
+            (k6 (inf-le o0 op)) (k7 (inf-le op cap)) (k8 (inf-le op0 op))))
           (i7 ife g7 (eq stage 4)
            ((i8 if g8 (le cap op) ((r2 retneg 2)))
             (i9 if g9 (lt 255 sy) ((r3 retneg 3)))
@@ -2375,12 +2448,12 @@
       {"i1-1" '(inf-lelt (add ip 8) (add n 8) (inf-pow w) (inf-addr ip n 8 r1) gn)
        "i3-1" '(inf-lelt (add op 266) (add cap 266) (inf-pow w) (inf-addr op cap 266 o2) gcf)
        "i1j-5" '(inf-letrans o0 op opt1 Oo t1e9)
-       "i1j-11" 'Oo
-       "i1j-17" 'Oo
+       "i1j-12" 'Oo
+       "i1j-19" 'Oo
        "t2-9" '(inf-lelt lm 288 (inf-pow w) c4 (inf-wfit288 w gw))
        "r1-6" '(inf-letrans op0 op opi1 o1 Ok1)
        "r1-12" '(inf-letrans op0 op opi1 o1 Ok1)
-       "i0j-17" 'Oo
+       "i0j-19" 'Oo
        "p1-1" '(inf-lttrans opi0 cap oc g8 Lt8)
        "s1-1" '(inf-lelt (add opi0 1) cap (inf-pow w) (inf-lt1 opi0 cap g8) Cw)
        "w1b-5" '(inf-letrans op0 opi0 (add opi0 1) Oz (inf-leaddr opi0 1))
@@ -2435,6 +2508,7 @@
      'arrays st-arrays
      'requires st-req
      'decls '((int (x)))
+     'stops st-ens
      'ensures st-ens
      'calls [stlen ststo sttab stcl stln stsy]
      'body
@@ -2473,6 +2547,7 @@
      'arrays st-arrays
      'requires st-req
      'decls '((int (x)))
+     'stops st-ens
      'ensures st-ens
      'calls [sthead strest]
      'body
@@ -2488,6 +2563,136 @@
       {"w1b-21" '(inf-consfall carry ipt3 const3 bct3 n cons t3e4 t3e1
                   (inf-lttrans cons (add cons 3) const3 (inf-ltaddpos cons 3 (idpath true))
                     (inf-letrans (add cons 3) const2 const3 t2e6 t3e5)))}}
+
+   ; the C's widths and the theorems' are these; named in a statement, so 2^30 is never computed
+   inf-lim 30 inf-lw 15 inf-lh 16
+   ; the window kept: the last 32 KiB of what this feed wrote and what came before. it slides only when
+   ; hist fills, so any run of feeds copies each byte at most twice
+   stkeep
+    {'name "inf_stkeep" 'short "stkeep"
+     'attrs '("static")
+     'ret 'void
+     'params ms-params 'fields '(op) 'sfields '(hlen)
+     'state '((hlen hlen0))
+     'arrays '((Hi (s "hist") (inf-pow lim)) (Ot (r "out") oc))
+     'requires
+      '((w nat) (op nat) (oc nat) (hlen0 nat) (lw nat) (lim nat)
+        (gw (inf-le 32 w))
+        (gop (inf-le op oc))
+        (hww (inf-le lw lim)) (hs (inf-le (succ lw) lim)) (hm (inf-lt lim 31))
+        (gh (inf-le hlen0 (inf-pow lim))))
+     'decls [['uint ['lw ['raw ['num inf-lw]]] ['lim ['raw ['num inf-lh]]]] '((named "uintptr_t") (k))]
+     'ensures ()
+     'calls ()
+     'body
+      '((i1 ife g1 (le (pow lw) op)
+         ((m1 mcopy Hi 0 Ot (- op (pow lw)) (pow lw))
+          (d1 dec hlen (pow lw)))
+         ((j1 join g2 (lt (pow lim) (+ hlen op))
+           ((j2 join g3 (lt hlen (pow lw)) ((d2 dec k hlen)) ((d3 dec k (pow lw)))
+             ((a1 (inf-le k hlen)) (a2 (inf-le k (inf-pow lw)))))
+            (m2 mmove Hi 0 Hi (- hlen k) k)
+            (d4 dec hlen k))
+           ()
+           ((a3 (inf-le (add hlen op) (inf-pow lim)))))
+          (m3 mcopy Hi hlen Ot 0 op)
+          (d5 dec hlen (+ hlen op)))))
+     'macros '((Pf (inf-powle lw lim hww)))
+     'proofs
+      {"m1-4" 'Pf
+       "m1-5" '(inf-letrans (add (natminus op (inf-pow lw)) (inf-pow lw)) op oc (inf-subfit op (inf-pow lw) g1) gop)
+       "m2-2" '(inf-letrans kj2 (inf-pow lw) (inf-pow lim) a2 Pf)
+       "m2-3" '(inf-letrans (add (natminus hlen0 kj2) kj2) hlen0 (inf-pow lim) (inf-subfit hlen0 kj2 a1) gh)
+       "j1j-1" '(inf-letrans (add kj2 op) (inf-pow (succ lw)) (inf-pow lim)
+                 (inf-powdbl lw kj2 op a2 (inf-ltle op (inf-pow lw) g1)) (inf-powle (succ lw) lim hs))
+       "m3-2" 'gop}}
+
+   ; one feed: a state from the last, new bytes, an output grown by doubling as the step stops for room,
+   ; up to 1 GiB. nothing a caller passes is believed; hlen is checked, the rest of the state is what
+   ; the last stop left
+   stf-state (st-all + '((out out0) (oc oc0) (cap cap0) (nd nd0) (hlen hlen0)))
+   stf-req ('((nin nat) (out0 nat) (oc0 nat) (cap0 nat) (nd0 nat) (hlen0 nat) (lim nat) (lw nat) (lh nat)
+             (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hll (inf-le lh lim)) (hww (inf-le lw lh)) (hsw (inf-le (succ lw) lh))
+             (hlh (inf-lt lh 31)) (hf (inf-le (succ (succ (succ lh))) lim)) (h12 (inf-le 12 lh)))
+            + filter (r \ !(elem <r '(n carry out oc cap nd gn gi ga gop go gcap gcf gnd gz))) st-req)
+   stf-ens
+    ('((e1 (inf-le ip nin)) (e3 (inf-le bc 63)) (e8 (inf-le op cap)) (eg (pi g (inf-lt 0 out) (paths nat oc cap))))
+     + co-ens + st-cc + st-cl + '((a2 (pi k nat (inf-le (Cl k) 15)))))
+   stfeed
+    {'name "inf_stfeed" 'short "stfeed"
+     'attrs '("static")
+     'ret 'int
+     'params (ms-params + '(("in" (ptr (const (named "uint8_t")))) ("nin" (named "uintptr_t"))))
+     'fields (ot-fields + '(t)) 'sfields (ms-fields + '(hlen))
+     'state stf-state
+     'arrays (st-arrays + '((Hi (s "hist") (inf-pow lh)) (Nb (v "nb") noc)))
+     'requires stf-req
+     'decls [['uint ['lim ['raw ['num inf-lim]]] ['lw ['raw ['num inf-lw]]] ['lh ['raw ['num inf-lh]]]] '(int (x)) '((named "uintptr_t") (ncap)) '((ptr (named "uint8_t")) (nb))]
+     'stops stf-ens
+     'ensures stf-ens
+     'calls [ststep stkeep]
+     'body
+      ['(d0 dec out 0) '(d1 dec ip 0) '(d2 dec op 0) '(d3 dec cap 0) '(g0 gset oc 0)
+       '(i1 if g1 (over nin 8) ((r1 retneg 3)))
+       '(i2 if g2 (lt (pow lh) hlen) ((r2 retneg 3)))
+       '(j1 join g3 (lt hlen (pow lw)) ((d4 dec nd hlen)) ((d5 dec nd (pow lw)))
+         ((n1 (inf-le nd hlen)) (n2 (inf-le nd (inf-pow lw)))))
+       '(v1 view "dic" Hi (- hlen nd) nd)
+       '(d6 store "in" (raw (var "in")))
+       '(d7 dec n nin)
+       '(j2 join g4 (le nin (pow lh))
+         ((d8 set cap (+ (shl (shl nin 1) 1) (pow 12))))
+         ((d10 dec cap (pow lh)))
+         ((n3 (inf-le cap (inf-pow lim))) (n5 (inf-lt 0 cap))))
+       '(n4 new out oc cap g6)
+       '(i4 if g7 (z out) ((r3 retneg 2)))
+       '(g8 gset carry (add cons0 bc0))
+       ['w1 'while '(tru) '(natminus (inf-pow lim) cap)
+        (st-rd + '((o2 (inf-le op cap)) (k1 (inf-le cap (inf-pow lim))) (k2 (inf-lt 0 out))
+                   (k3 (pi g (inf-lt 0 out) (paths nat oc cap))) (k6 (inf-lt 0 cap)))
+         + co-ens + st-cc + st-cl + '((a2 (pi k nat (inf-le (Cl k) 15)))))
+        ['(c1 calx x "inf_ststep" ((raw (var "r")) (raw (var "s")))
+              (In n w carry out oc cap nd q h LROOT DROOT CROOT Ob Lb Le Db De) ())
+         '(i5 if g9 (room x) ((b1 brk)))
+         '(i6 if g10 (le (pow lim) cap) ((b2 brk)))
+         '(j3 join g11 (lt cap (- (pow lim) cap)) ((d11 dec ncap (shl cap 1))) ((d12 dec ncap (pow lim)))
+           ((k4 (inf-lt cap ncap)) (k5 (inf-le ncap (inf-pow lim)))))
+         '(n5 new nb noc ncap g12)
+         '(i7 if g13 (z nb) ((b3 brk)))
+         '(m1 mcopy Nb 0 Ot 0 op)
+         '(f1 free out)
+         '(d13 dec out nb)
+         '(d14 dec cap ncap)
+         '(g14 gset oc noc)]]
+       '(c2 call "inf_stkeep" ((raw (var "r")) (raw (var "s"))) (w op oc lw (lim lh)) ())
+       '(r4 ret x)]
+     'macros
+      '((X4 (add (add nin nin) (add nin nin)))
+        (Xl (inf-four lh lim nin g4 hf))
+        (Wl (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
+        (Dc (inf-roomle cap (inf-pow lim) cap (inf-ltle cap (natminus (inf-pow lim) cap) g11) k1))
+        (Op (inf-letl opc1 cap oc (pathsinv0 nat oc cap (k3 k2)) c1e8)))
+     'proofs
+      {"r1-4" '(lam g (idpath 0))
+       "r2-4" '(lam g (idpath 0))
+       "v1-2" '(inf-letrans (add (natminus hlen0 ndj1) ndj1) hlen0 (inf-pow lh) (inf-subfit hlen0 ndj1 n1) g2)
+       "d8-2" '(inf-lelt X4 (inf-pow lim) (inf-pow w) Xl Wl)
+       "d8-5" '(inf-fitlim w lim X4 (inf-pow 12) gw hm Xl (inf-powle 12 lim (inf-letrans 12 lh lim h12 hll)))
+       "w1e-3" '(natplusr0 (add cons0 bc0))
+       "c2-2" 'Op
+       "c2-8" 'Op
+       "c2-14" 'Op
+       "j3j-1" '(inf-ltdbl cap k6)
+       "j3j-2" 'Dc
+       "d11-1" '(inf-lelt (add cap cap) (inf-pow lim) (inf-pow w) Dc Wl)
+       "m1-1" '(inf-letl opc1 ncapj3 nocn5 (pathsinv0 nat nocn5 ncapj3 (g12 g13))
+                 (inf-letrans opc1 cap ncapj3 c1e8 (inf-ltle cap ncapj3 k4)))
+       "m1-2" 'Op
+       "j2j-1" '(inf-fourp lh lim nin (inf-pow 12) g4 (inf-powle 12 lh h12) hf)
+       "j2j-2" '(inf-lttrans 0 (inf-pow 12) (add X4 (inf-pow 12)) (inf-powpos 12) (inf-leaddl (inf-pow 12) X4))
+       "j2j-4" '(inf-powpos lh)
+       "w1b-9" '(inf-lttrans 0 cap ncapj3 k6 (inf-ltle cap ncapj3 k4))
+       "w1b-24" '(inf-subdown (inf-pow lim) cap ncapj3 k4 k5)}}
 
    ; --- the constants, one list for the C and the uu -----------------------------------------------
    inf-tables
@@ -2526,13 +2731,24 @@
     // what a stop keeps of a block in the reading: the mode and where in it
     struct inf_ms {
      unsigned mode, last, rem, hlit, hdist, hclen, i, prev, stage, sy, len, dist;
-     uint8_t lens[320], cl[19]; };
+     uint8_t lens[320], cl[19];
+     uintptr_t hlen;                  // hist's bytes, of which the last 32 KiB are the window
+     uint8_t hist[1 << 16]; };
+    // a stream between feeds. its pointers go stale when the state moves: a feed lays them again
+    struct inf_st {
+     uint64_t magic;
+     struct inf_rd r;
+     struct inf_tabs t;
+     struct inf_ms m; };
     """
 
-   ; what no spec reads: inf_rundt, in inflate.h, hands inf_go a reader at zero
+   ; the one way in: what a caller might pass that would not fit a word is refused here, and the reader
+   ; starts at zero. what is left the caller's: out holds cap bytes
    top
-    {'name "inf_rundt" 'short "top"
-     'ret 'int 'params () 'fields ()
+    {'name "inf_start" 'short "top"
+     'attrs '("static")
+     'ret '(named "int64_t")
+     'params rd-params 'fields (ot-fields + '(t))
      'state co-state
      'arrays ()
      'requires
@@ -2541,19 +2757,20 @@
         (Dc0 (pi k nat nat)) (Ds0 (pi k nat nat)) (Dt0 (pi k nat nat)) (lm0 nat) (dm0 nat)
         (Cs0 (pi k nat nat)) (Ct0 (pi k nat nat)) (Cc0 (pi k nat nat))
         (gw (inf-le 32 w))
-        (gn (inf-lt (add n 8) (inf-pow w)))
-        (go (pi g (inf-lt 0 out) (paths nat oc cap)))
-        (gcap (inf-lt (add cap 8) (inf-pow w)))
-        (gcf (inf-lt (add cap 266) (inf-pow w)))
-        (gnd (inf-lt (add cap nd) (inf-pow w))))
-     'decls '((int (ip 0) (bc 0) (bb 0) (cons 0) (op 0)))
+        (go (pi g (inf-lt 0 out) (paths nat oc cap))))
+     'decls '(((named "int64_t") (x)))
      'ensures ()
      'calls [go]
      'body
-      [['c1 'call "inf_go" ()
+      ['(i1 if g1 (over n 8) ((r1 retneg 1)))
+       '(i2 if g2 (over cap 266) ((r2 retneg 1)))
+       '(i3 if g3 (over cap nd) ((r3 retneg 1)))
+       '(d1 dec ip 0) '(d2 dec bc 0) '(d3 dec bb 0) '(d4 dec op 0) '(g4 gset cons 0)
+       ['c1 'try 'x "inf_go" '((raw (var "r")))
         ('(In n w out oc cap nd Cs0 Ct0 Cc0 (Ob inf-tob) (Lb inf-tlb) (Le inf-tle) (Db inf-tdb) (De inf-tde)
            (h 16) (q (inf-pow 12))) + inf-roots)
-        ()]]
+        ()]
+       '(r4 ret x)]
      'macros ()
      'proofs
       {"c1-4" '(idpath false)
@@ -2561,6 +2778,7 @@
        "c1-11" 'inf-topq
        "c1-12" '(idpath true)
        "c1-13" '(inf-topk w gw)
+       "c1-7" '(inf-lelt (add cap 8) (add cap 266) (inf-pow w) (inf-addl cap 8 266 (idpath false)) g2)
        "c1-18" '(lam k g (inf-lelts (inf-tob k) 18 (inf-anyno (lam j (natgtb (inf-tob j) 18)) 19 (idpath false) k g)))
        "c1-19" '(inf-anyno (lam j (natgtb (inf-tle j) 5)) 29 (idpath false))
        "c1-20" '(inf-anyno (lam j (natgtb (add (inf-tlb j) (inf-pow (inf-tle j))) 259)) 29 (idpath false))
@@ -2568,103 +2786,94 @@
        "c1-22" '(inf-anyno (lam j (natgtb (inf-tde j) 13)) 30 (idpath false))
        "c1-23" '(inf-anyno (lam j (natgtb (add (inf-tdb j) (inf-pow (inf-tde j))) (inf-pow 16))) 30 (idpath false))}}
 
-   ; what no spec reads: a feed. the state a stream starts in, zeroes, is one inf_ststep takes; and what
-   ; any stop left it takes again, over new bytes and a new output, ip and op at zero, the carry
-   ; whatever was consumed and buffered by then
+   ; what no spec reads: the feeds. the state a stream starts in, zeroes, is one inf_stfeed takes; and
+   ; what any feed left it takes again, over new bytes
    st-tabs ['(Ob inf-tob) '(Lb inf-tlb) '(Le inf-tle) '(Db inf-tdb) '(De inf-tde) '(h 16) '(q (inf-pow 12))]
-   st-feed-req
-    '((In (pi k nat nat)) (n nat) (w nat) (out nat) (oc nat) (cap nat) (nd nat)
-      (gw (inf-le 32 w))
-      (gn (inf-lt (add n 8) (inf-pow w)))
-      (go (pi g (inf-lt 0 out) (paths nat oc cap)))
-      (gcap (inf-lt (add cap 8) (inf-pow w)))
-      (gcf (inf-lt (add cap 266) (inf-pow w)))
-      (gnd (inf-lt (add cap nd) (inf-pow w)))
-      (gz (inf-lt 0 out)))
    st0
     {'name "inf_feed0" 'short "st0"
      'ret 'int 'params () 'fields ()
      'state ()
      'arrays ()
-     'requires st-feed-req
-     'decls [['int '(ip 0) '(bc 0) '(bb 0) '(cons 0) '(op 0) '(lm 0) '(dm 0)
+     'requires '((In (pi k nat nat)) (nin nat) (w nat) (gw (inf-le 32 w)))
+     'decls [['int '(ip 0) '(bc 0) '(bb 0) '(cons 0) '(op 0) '(lm 0) '(dm 0) '(out 0) '(oc 0) '(cap 0) '(nd 0) '(hlen 0)
               '(Lc inf-zero) '(Ls inf-zero) '(Lt inf-zero) '(Dc inf-zero) '(Ds inf-zero) '(Dt inf-zero)
               '(Cl inf-zero) '(Lz inf-zero) '(Cs inf-zero) '(Ct inf-zero) '(Cc inf-zero)
               '(last 0) '(rem 0) '(hclen 0) '(i 0) '(prev 0) '(stage 0) '(sy 0) '(len 0) '(dist 0) '(mode 0) '(hlit 0) '(hdist 0)]]
      'ensures ()
-     'calls [ststep]
-     'body [['c1 'call "inf_ststep" () ('(In n w (carry 0) out oc cap nd) + st-tabs + inf-roots) ()]]
+     'calls [stfeed]
+     'body [['c1 'call "inf_stfeed" () ('(In nin w) + st-tabs + inf-roots + [['lim inf-lim] ['lw inf-lw] ['lh inf-lh]]) ()]]
      'macros ()
      'proofs
-      {"c1-5" '(idpath 0)
-       "c1-11" 'inf-topq
-       "c1-12" '(idpath true)
-       "c1-13" '(inf-topk w gw)
-       "c1-19" '(lam k g (inf-lelts (inf-tob k) 18 (inf-anyno (lam j (natgtb (inf-tob j) 18)) 19 (idpath false) k g)))
-       "c1-20" '(inf-anyno (lam j (natgtb (inf-tle j) 5)) 29 (idpath false))
-       "c1-21" '(inf-anyno (lam j (natgtb (add (inf-tlb j) (inf-pow (inf-tle j))) 259)) 29 (idpath false))
-       "c1-22" '(inf-anyno (lam j (natgtb 3 (inf-tlb j))) 29 (idpath false))
-       "c1-23" '(inf-anyno (lam j (natgtb (inf-tde j) 13)) 30 (idpath false))
-       "c1-24" '(inf-anyno (lam j (natgtb (add (inf-tdb j) (inf-pow (inf-tde j))) (inf-pow 16))) 30 (idpath false))
-       "c1-25" '(lam k (inf-powpos 16))
-       "c1-26" '(idpath false)
-       "c1-29" '(idpath false)
-       "c1-31" '(lam j (idpath false))
-       "c1-32" '(lam k (idpath false))}}
+      {"c1-5" '(idpath false)
+       "c1-7" '(idpath false)
+       "c1-12" 'inf-topq
+       "c1-13" '(idpath true)
+       "c1-14" '(inf-topk w gw)
+       "c1-18" '(lam k g (inf-lelts (inf-tob k) 18 (inf-anyno (lam j (natgtb (inf-tob j) 18)) 19 (idpath false) k g)))
+       "c1-19" '(inf-anyno (lam j (natgtb (inf-tle j) 5)) 29 (idpath false))
+       "c1-20" '(inf-anyno (lam j (natgtb (add (inf-tlb j) (inf-pow (inf-tle j))) 259)) 29 (idpath false))
+       "c1-21" '(inf-anyno (lam j (natgtb 3 (inf-tlb j))) 29 (idpath false))
+       "c1-22" '(inf-anyno (lam j (natgtb (inf-tde j) 13)) 30 (idpath false))
+       "c1-23" '(inf-anyno (lam j (natgtb (add (inf-tdb j) (inf-pow (inf-tde j))) (inf-pow 16))) 30 (idpath false))
+       "c1-24" '(lam k (inf-powpos 16))
+       "c1-25" '(idpath false)
+       "c1-28" '(idpath false)
+       "c1-30" '(lam j (idpath false))
+       "c1-31" '(lam k (idpath false))}}
    stn
     {'name "inf_feedn" 'short "stn"
      'ret 'int 'params () 'fields ()
-     'state (filter (a \ !(elem <a '(ip op))) st-all)
+     'state stf-state
      'arrays ()
-     'requires (filter (r \ !(elem <r '(carry ip0 op0 gi ga gop))) st-req)
-     'decls '((int (ip 0) (op 0)))
+     'requires (stfeed 'requires + '((In2 (pi k nat nat)) (nin2 nat)))
+     'decls ()
      'ensures ()
-     'calls [ststep]
-     'body [['c1 'call "inf_ststep" () ('(In n w (carry (add cons0 bc0)) out oc cap nd q h LROOT DROOT CROOT Ob Lb Le Db De)) ()]]
+     'calls [stfeed]
+     'body
+      [['c1 'call "inf_stfeed" () ('(In nin w lim lw lh q h LROOT DROOT CROOT Ob Lb Le Db De)) ()]
+       ['c2 'call "inf_stfeed" () ('((In In2) (nin nin2) w lim lw lh q h LROOT DROOT CROOT Ob Lb Le Db De)) ()]]
      'macros ()
-     'proofs {"c1-5" '(natplusr0 (add cons0 bc0))}}
+     'proofs {}}
 
    ; what the theorem assumes, and who answers for it. a row leaves when its caller is proved
    inf-ledger
     '(("gw" "the word is 32 bits or more" "every target")
-      ("gn" "n + 8 fits a word: the input is in memory, not at the top of it" "every caller")
-      ("go" "out nonzero holds cap bytes" "every caller")
-      ("gcap gcf" "cap + 266 fits a word" "every caller")
-      ("gnd" "cap + nd fits a word" "every caller")
-      ("caller" "(inflate s n): a string's length, cap the hint or INF_MAX, out a string or NULL" "gz.c")
-      ("caller" "inflate_raw: the efi slot's image, cap its stated size" "uefi/slot.c")
+      ("go" "out nonzero holds cap bytes: it reaches inf_start as inf_rd's out" "every caller below")
+      ("caller" "(inflate s n): out a str0 of cap, the hint or the counted length" "gz.c")
+      ("caller" "inflate_raw: an idat, out at f0 in a region of cap, f0 + fsz <= cap checked there" "quay/png.c")
+      ("caller" "inflate_raw: a gzip member, out from AllocatePool of the size it states" "uefi/slot.c")
       ("caller" "inflate_raw: a carried tree entry" "archive/srctree.c")
       ("caller" "inflate_raw: a carried text" "cats.c")
       ("caller" "inflate_raw, inflate_dict: an image's dictionary and pages" "love.c")
-      ("caller" "inflate_raw: an idat, cap its filtered size" "quay/png.c")
       ("caller" "inflate_raw: a layer's run" "snap.c")
-      ("state" "inflate-feed's state is zeroes or what the last step left: a port no love can write, its size and magic checked" "gz.c")
-      ("caller" "inflate-feed: a string's length, cap at most INF_MAX and grown only past op, out from alloc" "gz.c")
-      ("caller" "inflate-feed: dic is hist's last nd bytes, and nd at most what hist holds" "gz.c")
-      ("link" "struct inf_tabs and lens hold what co-arrays and dyn's arrays say; the same file, unchecked" "inf.l")
+      ("alloc" "alloc(0, c) answers NULL or c bytes" "inf_stfeed's alloc")
+      ("state" "inflate-feed's state is zeroes or what the last feed left: a port no love can write, its size and magic checked" "gz.c")
+      ("wiring" "inflate-feed lays r->t and the tables' pointers at hand, before inf_stfeed" "gz.c")
+      ("reads" "inflate-feed copies op bytes of out and n - ip of the input, which inf_stfeed's ensures bound" "gz.c")
+      ("link" "struct inf_tabs, lens and hist hold what the specs' arrays say; the same file, unchecked" "inf.l")
       ("link" "a spec's operation means its C: two readers of one form, compared by test_gz" "inf.l"))
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
 
-   inf-specs [walk build fill take sym stored copy fixed dyn fast block go sy1 sthead stlen sttab stcl stln ststo stsy strest ststep]
-   inf-run-specs [fill take sym stored fixed dyn copy fast block go]
+   inf-specs [walk build fill take sym stored copy fixed dyn fast block go top sy1 sthead stlen sttab stcl stln ststo stsy strest ststep stkeep stfeed]
+   inf-run-specs [fill take sym stored fixed dyn copy fast block go top]
    inf-rh (cats ["// inf_run_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                  (cats (map table-c inf-tables))
                  "// table roots: a longer code walks bits, so these trade 2^root fill writes against walks\n"
                  (cats (map root-c inf-roots))
                  inf-rh-head inf-rh-nl
                  (cats (map (s \ clay-show (cl-fn s)) inf-run-specs))])
-   inf-st-specs [sy1 sthead stlen ststo sttab stcl stln stsy strest ststep]
+   inf-st-specs [sy1 sthead stlen ststo sttab stcl stln stsy strest ststep stkeep stfeed]
    inf-sh (cats ["// inf_st_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                  inf-sh-head inf-rh-nl
                  (cats (map (s \ clay-show (cl-fn s)) inf-st-specs))])
    ; test/uuinfvc.l
    inf-vc (cats ["; test/uuinfvc.l -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
-                 "; the ledger: what the theorems of inf_rundt and inf_feedn leave open, each with who answers for it\n"
+                 "; the ledger: what the theorems of inf_start and inf_stfeed leave open, each with who answers for it\n"
                  (ledger-text inf-ledger)
                  "(test\n"
                  (cats (map table-uu inf-tables))
-                 (cats (map (s \ cats (vc-text s)) (inf-specs + [top st0 stn]))) " )\n"])
+                 (cats (map (s \ cats (vc-text s)) (inf-specs + [st0 stn]))) " )\n"])
    inf-h (cats ["// inf_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) [walk build]))])
    inf-ok (all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) inf-specs
-           && all (s \ atom? (vc-open s) && atom? (vc-stale s)) [top st0 stn]))
+           && all (s \ atom? (vc-open s) && atom? (vc-stale s)) [st0 stn]))

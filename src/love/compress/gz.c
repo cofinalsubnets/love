@@ -48,49 +48,16 @@ LvDef("inflate", inflate, 2, "gz");
 // (inflate-new 0) -> a state. (inflate-feed st s) -> what s inflated to while the stream wants
 // more; (out . rest) once it ends in s; () malformed; 1 past INF_MAX in one feed. an empty s ends
 // the input: the tail reads against zeros as inf_run's does, an open stream is torn. the machine
-// is inf_st_gen.h, proved in test/uuinfvc.l; a stop keeps all it needs in the state
+// and the output's growth are inf_st_gen.h, proved in test/uuinfvc.l
 #include "inf_st_gen.h"
-#define IS_HIST 32768u
 #define IS_MAGIC 0x6c6f76656966u
-struct inf_st {
- uint64_t magic;
- struct inf_rd r;                                // its pointers, and t's, go stale when the state moves:
- struct inf_tabs t;                              // a feed lays them again
- struct inf_ms m;
- uintptr_t hn;                                   // hist's bytes, of which the last 32 KiB are the window
- uint8_t hist[2 * IS_HIST]; };
 
-// the window slides only when hist fills, so any run of feeds copies each byte at most twice
-static void inf_keep(struct inf_st *S, const uint8_t *b, uintptr_t on) {
- uintptr_t h = S->hn;
- if (on >= IS_HIST) memcpy(S->hist, b + on - IS_HIST, IS_HIST), h = IS_HIST;
- else {
-  if (h + on > sizeof S->hist) {
-   uintptr_t k = h < IS_HIST ? h : IS_HIST;
-   memmove(S->hist, S->hist + h - k, k), h = k; }
-  memcpy(S->hist + h, b, on), h += on; }
- S->hn = h; }
-
-// one call of the machine, the output grown by doubling as it stops for room. 1 the stream ended,
-// 0 it wants more, -1 malformed, -2 past INF_MAX or out of memory
-static int inf_feed(struct inf_st *S, const uint8_t *in, uintptr_t n, uint8_t **bp) {
- struct inf_rd *r = &S->r;
- uintptr_t nd = S->hn < IS_HIST ? S->hn : IS_HIST, cap = 4 * n + 4096;
- if (cap > INF_MAX) cap = INF_MAX;
- uint8_t *b = alloc(NULL, cap);
- if (!b) return -2;
+// 1 the stream ended, 0 it wants more, -1 malformed, -2 past INF_MAX or out of memory
+static int inf_feed(struct inf_st *S, const uint8_t *in, uintptr_t n) {
  S->t.lit.tab = S->t.ltab, S->t.dst.tab = S->t.dtab, S->t.cl.tab = S->t.ctab;
  S->t.lit.sym = S->t.lsym, S->t.dst.sym = S->t.dsym, S->t.cl.sym = S->t.csym;
- r->in = in, r->dic = S->hist + S->hn - nd, r->out = b, r->t = &S->t;
- r->n = n, r->ip = 0, r->op = 0, r->cap = cap, r->nd = nd;
- int x;
- while ((x = inf_ststep(r, &S->m)) == -2) {
-  uintptr_t c = cap * 2 > INF_MAX ? INF_MAX : cap * 2;
-  uint8_t *g = c > cap ? alloc(NULL, c) : NULL;
-  if (!g) break;
-  memcpy(g, b, r->op), alloc(b, 0);
-  r->out = b = g, r->cap = cap = c; }
- *bp = b;
+ S->r.t = &S->t;
+ int x = inf_stfeed(&S->r, &S->m, in, n);
  return x == 1 ? 1 : x == -2 ? -2 : x == -1 && n ? 0 : -1; }
 
 static struct str *inf_cask(word x) {
@@ -107,13 +74,13 @@ static love_noinline struct g *host_inflate_feed(struct g *g) {
  struct str *cs = inf_cask(g->sp[0]);
  if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  struct inf_st *S = (struct inf_st*) cs->bytes;
- uint8_t *b = NULL, tail[8];
+ uint8_t *b, tail[8];
  uintptr_t n = len(g->sp[1]), rn = 0;
- int x = inf_feed(S, (const uint8_t*) txt(g->sp[1]), n, &b);
- if (!b) return g->sp[1] = putcharm(1), g->sp += 1, g;
+ int x = inf_feed(S, (const uint8_t*) txt(g->sp[1]), n);
+ b = S->r.out;
+ if (!b) return g->sp[1] = x == -2 ? putcharm(1) : ZeroPoint, g->sp += 1, g;
  uintptr_t on = S->r.op, ip = S->r.ip;
  S->r.bb &= ((uint64_t) 1 << S->r.bc) - 1;       // what is past bc is ip's byte, read again next
- inf_keep(S, b, on);
  if (x == 1) {                                   // the rest: whole bytes still buffered, then the feed's tail
   S->r.bb >>= S->r.bc & 7, S->r.bc -= S->r.bc & 7;
   for (; S->r.bc; S->r.bb >>= 8, S->r.bc -= 8) tail[rn++] = (uint8_t) S->r.bb; }

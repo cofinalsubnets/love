@@ -392,3 +392,20 @@ static int64_t inf_go(struct inf_rd *r) {
  }
  return r->op;
 }
+static int64_t inf_start(struct inf_rd *r) {
+ int64_t x;
+ if ((uintptr_t) -1 - 8 < r->n)
+  return -1;
+ if ((uintptr_t) -1 - 266 < r->cap)
+  return -1;
+ if ((uintptr_t) -1 - r->nd < r->cap)
+  return -1;
+ r->ip = 0;
+ r->bc = 0;
+ r->bb = 0;
+ r->op = 0;
+ x = inf_go(r);
+ if (x < 0)
+  return x;
+ return x;
+}

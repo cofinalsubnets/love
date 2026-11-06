@@ -2,7 +2,15 @@
 // what a stop keeps of a block in the reading: the mode and where in it
 struct inf_ms {
  unsigned mode, last, rem, hlit, hdist, hclen, i, prev, stage, sy, len, dist;
- uint8_t lens[320], cl[19]; };
+ uint8_t lens[320], cl[19];
+ uintptr_t hlen;                  // hist's bytes, of which the last 32 KiB are the window
+ uint8_t hist[1 << 16]; };
+// a stream between feeds. its pointers go stale when the state moves: a feed lays them again
+struct inf_st {
+ uint64_t magic;
+ struct inf_rd r;
+ struct inf_tabs t;
+ struct inf_ms m; };
 static inline int inf_sy1(struct inf_rd *r, struct inf_code const *c, uint16_t const *t, unsigned int root) {
  int x;
  inf_fill(r);
@@ -141,8 +149,6 @@ static inline int inf_stln(struct inf_rd *r, struct inf_ms *s) {
  if (288 < s->hlit)
   return -3;
  if (32 < s->hdist)
-  return -3;
- if (15 < s->prev)
   return -3;
  tot = s->hlit + s->hdist;
  while (s->i < tot) {
@@ -331,4 +337,75 @@ static int inf_ststep(struct inf_rd *r, struct inf_ms *s) {
    return x;
  }
  return 1;
+}
+static void inf_stkeep(struct inf_rd *r, struct inf_ms *s) {
+ unsigned int lw = 15, lim = 16;
+ uintptr_t k;
+ if (1u << lw <= r->op) {
+  memcpy(s->hist + 0, r->out + (r->op - (1u << lw)), 1u << lw);
+  s->hlen = 1u << lw;
+ } else {
+  if (1u << lim < s->hlen + r->op) {
+   if (s->hlen < 1u << lw) {
+    k = s->hlen;
+   } else {
+    k = 1u << lw;
+   }
+   memmove(s->hist + 0, s->hist + (s->hlen - k), k);
+   s->hlen = k;
+  }
+  memcpy(s->hist + s->hlen, r->out + 0, r->op);
+  s->hlen += r->op;
+ }
+}
+static int inf_stfeed(struct inf_rd *r, struct inf_ms *s, uint8_t const *in, uintptr_t nin) {
+ unsigned int lim = 30, lw = 15, lh = 16;
+ int x;
+ uintptr_t ncap;
+ uint8_t *nb;
+ r->out = 0;
+ r->ip = 0;
+ r->op = 0;
+ r->cap = 0;
+ if ((uintptr_t) -1 - 8 < nin)
+  return -3;
+ if (1u << lh < s->hlen)
+  return -3;
+ if (s->hlen < 1u << lw) {
+  r->nd = s->hlen;
+ } else {
+  r->nd = 1u << lw;
+ }
+ r->dic = s->hist + (s->hlen - r->nd);
+ r->in = in;
+ r->n = nin;
+ if (nin <= 1u << lh) {
+  r->cap = (nin << 1 << 1) + (1u << 12);
+ } else {
+  r->cap = 1u << lh;
+ }
+ r->out = alloc(0, r->cap);
+ if (!r->out)
+  return -2;
+ while (1) {
+  x = inf_ststep(r, s);
+  if (x != -2)
+   break;
+  if (1u << lim <= r->cap)
+   break;
+  if (r->cap < (1u << lim) - r->cap) {
+   ncap = r->cap << 1;
+  } else {
+   ncap = 1u << lim;
+  }
+  nb = alloc(0, ncap);
+  if (!nb)
+   break;
+  memcpy(nb + 0, r->out + 0, r->op);
+  alloc(r->out, 0);
+  r->out = nb;
+  r->cap = ncap;
+ }
+ inf_stkeep(r, s);
+ return x;
 }
