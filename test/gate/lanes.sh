@@ -9,7 +9,8 @@
 #   3. one `make -k -jN` over the rest: a chain below runs its lanes in turn, every other lane
 #      on its own; each a sub-make on the shared jobserver, assuming step 1's targets old
 #   4. the lanes that rebuild love0 under another cc, alone
-#   5. --slow: test_slow last and alone, on the same tree, only after every lane is green
+#   5. --slow: test_slow last and alone, on the same tree, only after every lane is green,
+#      taking the lanes this run just passed as passed
 #
 # heavy slots are the caller's: `love bee --lock --heavy --out out -- sh test/gate/lanes.sh ..`.
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary; the last run's in DIR.prev.
@@ -208,9 +209,13 @@ if [ $red -ne 0 ]; then
   exit 1
 fi
 
-# step 5: the merge gate, last and alone on the tree that passed
+# step 5: the merge gate, last and alone on the tree that passed. a red or a moved love stopped
+# above, so a lane it names that ran here ran on this tree; test_inle runs test_kernel_wasm
 if [ -n "$slow" ]; then
-  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -- test_slow
+  o=
+  for l in $lanes; do o="$o -o $l"; done
+  has test_inle "$lanes" && o="$o -o test_kernel_wasm"
+  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $o -- test_slow
   sum test_slow >> "$d/summary"
   tail -1 "$d/summary"
   echo "wall=$(( $(date +%s) - t0 ))"
