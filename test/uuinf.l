@@ -1589,3 +1589,171 @@
    (inf-letr (inf-pow (add 4 12)) (inf-by16 (inf-pow 12)) (inf-pow 16)
      (pathsinv0 nat (inf-by16 (inf-pow 12)) (inf-pow (add 4 12)) (inf-by16pow 12))
      (inf-refl (inf-pow 16)))))
+
+; --- a byte's value: what inf_copy writes, for any bytes ---
+(test
+ (defn inf-blk (pi f (pi j nat nat) i nat g (pi j nat nat) s nat n nat x nat nat)
+   (lam f i g s n x
+     (bool_rect (lam b nat) (f x)
+       (bool_rect (lam b nat) (g (add s (natminus x i))) (f x) (natgtb (add i n) x))
+       (natgtb i x))))
+ (defq inf-blklo (pi f (pi j nat nat) i nat g (pi j nat nat) s nat n nat x nat h (inf-lt x i)
+     (paths nat (inf-blk f i g s n x) (f x)))
+   (lam f i g s n x h
+     (maponpaths bool nat (lam b (bool_rect (lam c nat) (f x)
+         (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) (natgtb (add i n) x)) b))
+       (natgtb i x) true h)))
+ (defq inf-blkin (pi f (pi j nat nat) i nat g (pi j nat nat) s nat n nat x nat a (inf-le i x) h (inf-lt x (add i n))
+     (paths nat (inf-blk f i g s n x) (g (add s (natminus x i)))))
+   (lam f i g s n x a h
+     (pathscomp0 nat (inf-blk f i g s n x)
+       (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) (natgtb (add i n) x))
+       (g (add s (natminus x i)))
+       (maponpaths bool nat (lam b (bool_rect (lam c nat) (f x)
+           (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) (natgtb (add i n) x)) b))
+         (natgtb i x) false a)
+       (maponpaths bool nat (lam b (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) b))
+         (natgtb (add i n) x) true h))))
+ (defq inf-blkhi (pi f (pi j nat nat) i nat g (pi j nat nat) s nat n nat x nat h (inf-le (add i n) x)
+     (paths nat (inf-blk f i g s n x) (f x)))
+   (lam f i g s n x h
+     (pathscomp0 nat (inf-blk f i g s n x)
+       (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) (natgtb (add i n) x))
+       (f x)
+       (maponpaths bool nat (lam b (bool_rect (lam c nat) (f x)
+           (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) (natgtb (add i n) x)) b))
+         (natgtb i x) false (inf-letrans i (add i n) x (inf-leaddr i n) h))
+       (maponpaths bool nat (lam b (bool_rect (lam c nat) (g (add s (natminus x i))) (f x) b))
+         (natgtb (add i n) x) false h))))
+ ; the order's two sides
+ (defq inf-ltcan (pi c nat a nat b nat h (inf-lt (add c a) (add c b)) (inf-lt a b))
+   (lam c (nat_rect (lam q (pi a nat b nat h (inf-lt (add q a) (add q b)) (inf-lt a b)))
+     (lam a b h h)
+     (lam k IH a b h (IH a b h))
+     c)))
+ (defq inf-addcan (pi c nat a nat b nat e (paths nat (add c a) (add c b)) (paths nat a b))
+   (lam c (nat_rect (lam q (pi a nat b nat e (paths nat (add q a) (add q b)) (paths nat a b)))
+     (lam a b e e)
+     (lam k IH a b e (IH a b (maponpaths nat nat (lam z (nat_rect (lam y nat) 0 (lam p u p) z))
+       (succ (add k a)) (succ (add k b)) e)))
+     c)))
+ (defq inf-ltcong (pi a nat b nat c nat d nat e (paths nat a b) f (paths nat c d) h (inf-lt a c) (inf-lt b d))
+   (lam a b c d e f h
+     (transportf nat (lam z (inf-lt b z)) c d f
+       (transportf nat (lam z (inf-lt z c)) a b e h))))
+ (defq inf-lecong (pi a nat b nat c nat d nat e (paths nat a b) f (paths nat c d) h (inf-le a c) (inf-le b d))
+   (lam a b c d e f h
+     (transportf nat (lam z (inf-le b z)) c d f
+       (transportf nat (lam z (inf-le z c)) a b e h))))
+ (defq inf-subadd (pi a nat b nat (paths nat (natminus (add a b) a) b))
+   (lam a b (inf-addcan a (natminus (add a b) a) b (inf-addsub a (add a b) (inf-leaddr a b)))))
+ ; (a - c) + (b - a) = b - c
+ (defq inf-subsum (pi a nat b nat c nat g (inf-le c a) h (inf-le a b)
+     (paths nat (add (natminus a c) (natminus b a)) (natminus b c)))
+   (lam a b c g h
+     (inf-addcan c (add (natminus a c) (natminus b a)) (natminus b c)
+       (pathscomp0 nat (add c (add (natminus a c) (natminus b a))) (add (add c (natminus a c)) (natminus b a)) (add c (natminus b c))
+         (pathsinv0 nat (add (add c (natminus a c)) (natminus b a)) (add c (add (natminus a c) (natminus b a))) (natplusassoc c (natminus a c) (natminus b a)))
+         (pathscomp0 nat (add (add c (natminus a c)) (natminus b a)) b (add c (natminus b c))
+           (pathscomp0 nat (add (add c (natminus a c)) (natminus b a)) (add a (natminus b a)) b
+             (maponpaths nat nat (lam z (add z (natminus b a))) (add c (natminus a c)) a (inf-addsub c a g))
+             (inf-addsub a b h))
+           (pathsinv0 nat (add c (natminus b c)) b (inf-addsub c b (inf-letrans c a b g h))))))))
+ ; x - d < y when x < y + d
+ (defq inf-subltr (pi x nat y nat d nat g (inf-le d x) h (inf-lt x (add y d)) (inf-lt (natminus x d) y))
+   (lam x y d g h
+     (inf-ltcan d (natminus x d) y
+       (inf-ltcong x (add d (natminus x d)) (add y d) (add d y)
+         (pathsinv0 nat (add d (natminus x d)) x (inf-addsub d x g))
+         (natpluscomm y d) h))))
+ (defq inf-ltnle (pi P UU a nat b nat h (inf-lt a b) g (inf-le b a) P)
+   (lam P a b h g (fromempty P (nopathstruetofalse
+     (pathscomp0 bool true (natgtb b a) false (pathsinv0 bool (natgtb b a) true h) g)))))
+ (defq inf-addassoc (pi a nat b nat c nat (paths nat (add a (add b c)) (add (add a b) c)))
+   (lam a b c (pathsinv0 nat (add (add a b) c) (add a (add b c)) (natplusassoc a b c))))
+ ; one write of n bytes from n back, n no more than d: the copy so far stays a copy
+ (defq inf-lzself (pi f (pi j nat nat) op nat k nat d nat n nat t nat
+     gd (inf-le d (add op k)) gn (inf-le n d) gt (inf-lt t (add k n)) g1 (inf-le d (add op t))
+     IH (pi u nat a (inf-lt u k) b (inf-le d (add op u)) (paths nat (f (add op u)) (f (natminus (add op u) d))))
+     (paths nat (inf-blk f (add op k) f (natminus (add op k) d) n (add op t))
+                (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d))))
+   (lam f op k d n t gd gn gt g1 IH
+     (inf-case (natgtb k t)
+       (lam b (paths nat (inf-blk f (add op k) f (natminus (add op k) d) n (add op t))
+                         (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d))))
+       (lam e (pathscomp0 nat (inf-blk f (add op k) f (natminus (add op k) d) n (add op t)) (f (add op t))
+                (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d))
+                (inf-blklo f (add op k) f (natminus (add op k) d) n (add op t) (inf-ltaddl op t k e))
+                (pathscomp0 nat (f (add op t)) (f (natminus (add op t) d))
+                  (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d))
+                  (IH t e g1)
+                  (pathsinv0 nat (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d)) (f (natminus (add op t) d))
+                    (inf-blklo f (add op k) f (natminus (add op k) d) n (natminus (add op t) d)
+                      (inf-lelt (natminus (add op t) d) (add op t) (add op k) (inf-suble (add op t) d) (inf-ltaddl op t k e)))))))
+       (lam e (pathscomp0 nat (inf-blk f (add op k) f (natminus (add op k) d) n (add op t))
+                (f (natminus (add op t) d))
+                (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d))
+                (pathscomp0 nat (inf-blk f (add op k) f (natminus (add op k) d) n (add op t))
+                  (f (add (natminus (add op k) d) (natminus (add op t) (add op k))))
+                  (f (natminus (add op t) d))
+                  (inf-blkin f (add op k) f (natminus (add op k) d) n (add op t) (inf-addl op k t e)
+                    (inf-ltcong (add op t) (add op t) (add op (add k n)) (add (add op k) n)
+                      (idpath (add op t)) (inf-addassoc op k n) (inf-ltaddl op t (add k n) gt)))
+                  (maponpaths nat nat f (add (natminus (add op k) d) (natminus (add op t) (add op k))) (natminus (add op t) d)
+                    (inf-subsum (add op k) (add op t) d gd (inf-addl op k t e))))
+                (pathsinv0 nat (inf-blk f (add op k) f (natminus (add op k) d) n (natminus (add op t) d)) (f (natminus (add op t) d))
+                  (inf-blklo f (add op k) f (natminus (add op k) d) n (natminus (add op t) d)
+                    (inf-subltr (add op t) (add op k) d g1
+                      (inf-lttrans (add op t) (add (add op k) n) (add (add op k) d)
+                        (inf-ltcong (add op t) (add op t) (add op (add k n)) (add (add op k) n)
+                          (idpath (add op t)) (inf-addassoc op k n)
+                          (inf-ltaddl op t (add k n) gt))
+                        (inf-addl (add op k) n d gn))))))))))
+ ; an index in the write's reach, for the loop's other invariants
+ (defq inf-lzlo (pi f (pi j nat nat) O (pi j nat nat) op nat k nat g (pi j nat nat) s nat n nat x nat
+     h (inf-lt x op) IH (paths nat (f x) (O x))
+     (paths nat (inf-blk f (add op k) g s n x) (O x)))
+   (lam f O op k g s n x h IH
+     (pathscomp0 nat (inf-blk f (add op k) g s n x) (f x) (O x)
+       (inf-blklo f (add op k) g s n x (inf-lttrans x op (add op k) h (inf-leaddr op k)))
+       IH)))
+ (defq inf-lzhi (pi f (pi j nat nat) O (pi j nat nat) op nat k nat g (pi j nat nat) s nat n nat x nat
+     h (inf-le (add op (add k n)) x) IH (pi z (inf-le (add op k) x) (paths nat (f x) (O x)))
+     (paths nat (inf-blk f (add op k) g s n x) (O x)))
+   (lam f O op k g s n x h IH
+     (pathscomp0 nat (inf-blk f (add op k) g s n x) (f x) (O x)
+       (inf-blkhi f (add op k) g s n x
+         (inf-letr (add op (add k n)) (add (add op k) n) x (inf-addassoc op k n) h))
+       (IH (inf-letrans (add op k) (add op (add k n)) x (inf-addl op k (add k n) (inf-leaddr k n)) h)))))
+ ; d > op: the first bytes are the dictionary's
+ (defq inf-lzdict (pi f (pi j nat nat) op nat D (pi j nat nat) S nat m nat t nat h (inf-lt t m)
+     (paths nat (inf-blk f op D S m (add op t)) (D (add S t))))
+   (lam f op D S m t h
+     (pathscomp0 nat (inf-blk f op D S m (add op t)) (D (add S (natminus (add op t) op))) (D (add S t))
+       (inf-blkin f op D S m (add op t) (inf-leaddr op t) (inf-ltaddl op t m h))
+       (maponpaths nat nat (lam z (D (add S z))) (natminus (add op t) op) t (inf-subadd op t)))))
+ ; a position past d is past the dictionary's part
+ (defq inf-lzpast (pi d nat op nat m nat t nat g (inf-le m (natminus d op)) o (inf-lt op d) h (inf-lt t m)
+     (inf-lt (add op t) d))
+   (lam d op m t g o h
+     (inf-ltcong (add op t) (add op t) (add op (natminus d op)) d (idpath (add op t))
+       (inf-addsub op d (inf-ltle op d o))
+       (inf-ltaddl op t (natminus d op) (inf-lttrans t m (natminus d op) h g)))))
+ ; t short of l and of d - op is short of the dictionary's part
+ (defq inf-hgt (pi d nat op nat l nat t nat g (inf-lt t l) h (inf-lt (add op t) d) (inf-lt t (inf-h d op l)))
+   (lam d op l t g h (inf-case (natgtb l (natminus d op))
+     (lam b (inf-lt t (bool_rect (lam c nat) (natminus d op) l b)))
+     (lam e (inf-ltcan op t (natminus d op)
+       (inf-ltcong (add op t) (add op t) d (add op (natminus d op)) (idpath (add op t))
+         (pathsinv0 nat (add op (natminus d op)) d
+           (inf-addsub op d (inf-letrans op (add op t) d (inf-leaddr op t) (inf-ltle (add op t) d h))))
+         h)))
+     (lam e g))))
+ ; the claim is not empty: at op 1, d 2, the third byte copied is the dictionary's, two bytes back
+ (defq inf-lzeg (pi Ot (pi j nat nat) D (pi j nat nat) S nat
+     e1 (pi t nat a (inf-lt t 4) b (inf-le 2 (add 1 t)) (paths nat (Ot (add 1 t)) (Ot (natminus (add 1 t) 2))))
+     e2 (pi t nat a (inf-lt t 4) b (inf-lt (add 1 t) 2) (paths nat (Ot (add 1 t)) (D (add S t))))
+     (paths nat (Ot 3) (D (add S 0))))
+   (lam Ot D S e1 e2
+     (pathscomp0 nat (Ot 3) (Ot 1) (D (add S 0)) (e1 2 (idpath true) (idpath false)) (e2 0 (idpath true) (idpath true)))))
+ )

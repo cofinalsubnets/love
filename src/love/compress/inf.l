@@ -930,6 +930,90 @@
        "w3b-1" '(inf-lt1 k l w3)
        "w3b-2" '(inf-subfall1 l k w3)}}
 
+   ; the bytes inf_copy leaves, for the same C (inf-ok holds them the same): each past d is its byte d
+   ; back as it ends up, each short of d the dictionary's, and nothing else moves
+   (lz-self K s) [s ['pi 'ti 'nat 'ha ['inf-lt 'ti K] 'hb '(inf-le d (add op ti)) '(paths nat (Ot (add op ti)) (Ot (natminus (add op ti) d)))]]
+   (lz-lo s) [s '(pi xx nat ha (inf-lt xx op) (paths nat (Ot xx) (O0 xx)))]
+   (lz-hi K s) [s ['pi 'xx 'nat 'ha ['inf-le ['add 'op K] 'xx] '(paths nat (Ot xx) (O0 xx))]]
+   (lz-inv K a b c) [(lz-self K a) (lz-lo b) (lz-hi K c)]
+   lz
+    {'name "inf_copy" 'short "lz"
+     'attrs (copy 'attrs) 'ret 'void 'params (copy 'params) 'fields (copy 'fields) 'arrays (copy 'arrays)
+     'decls (copy 'decls)
+     'macros
+      (copy 'macros +
+       '((S0 (natminus nd (natminus d op)))
+         (Sk (natminus (add op k) d))
+         (One (inf-ltsu 0 d gp))
+         (Bk (inf-dknowrap d op l k (inf-ltle op d g1) (inf-letr mj1 (inf-h d op l) k f1 a1) w1))
+         (Su (pathsinv0 nat (add k 1) (succ k) (inf-add1 k)))))
+     'model [('Ot . 'O0)]
+     'requires (copy 'requires + '((O0 (pi j nat nat)) (Dd (pi j nat nat)) (gp (inf-lt 0 d))))
+     'ensures
+      (lz-inv 'l 'e1 'e3 'e4
+       + ['(e2 (pi ti nat ha (inf-lt ti l) hb (inf-lt (add op ti) d)
+                 (paths nat (Ot (add op ti)) (Dd (add (natminus nd (natminus d op)) ti)))))])
+     'body
+      [['i1 'ife 'g1 '(lt op d)
+        ['(s1 set m l)
+         '(j1 join g2 (lt (- d op) l) ((s2 set m (- d op))) () ((f1 (paths nat m (inf-h d op l)))))
+         '(m1 mcopy Ot op Dd (- nd (- d op)) m)
+         ['w1 'for 'k 'm 'l
+          (['(a1 (inf-le m k)) '(a0 (inf-le k l))
+            '(ad (pi ti nat ha (inf-lt ti m) (paths nat (Ot (add op ti)) (Dd (add (natminus nd (natminus d op)) ti)))))]
+           + lz-inv 'k 'as 'al 'ah)
+          '((p1 poke Ot (+ op k) (at Ot (- (+ op k) d))))]]
+        [['j2 'join 'g3 '(wide d)
+          [['w2 'while '(le (+ k 8) l) '(natminus l k)
+            ('(a2 (inf-le k l)) . lz-inv 'k 'bs 'bl 'bh)
+            '((p2 pokew Ot (+ op k) (ld64 Ot (- (+ op k) d)))
+              (s3 set k (+ k 8)))]]
+          ()
+          ('(f3 (inf-le k l)) . lz-inv 'k 'fs 'fl 'fh)]
+         ['w3 'while '(lt k l) '(natminus l k)
+          ('(a3 (inf-le k l)) . lz-inv 'k 'cs 'cl 'ch)
+          '((p3 poke Ot (+ op k) (at Ot (- (+ op k) d)))
+            (s4 set k (+ k 1)))]]]]
+     'proofs
+      (: more
+          {"w1e-2" 'Hl
+           "w1e-3" '(lam ti ha (inf-lzdict O0 op Dd S0 mj1 ti ha))
+           "w1e-4" '(lam ti ha hb (inf-ltnle (paths nat (inf-blk O0 op Dd S0 mj1 (add op ti)) (inf-blk O0 op Dd S0 mj1 (natminus (add op ti) d)))
+                      (add op ti) d (inf-lzpast d op mj1 ti Hd g1 ha) hb))
+           "w1e-5" '(lam xx ha (inf-blklo O0 op Dd S0 mj1 xx ha))
+           "w1e-6" '(lam xx ha (inf-blkhi O0 op Dd S0 mj1 xx ha))
+           "w1b-3" '(inf-ltsu k l w1)
+           "w1b-4" '(lam ti ha (pathscomp0 nat (inf-blk Ot (add op k) Ot Sk 1 (add op ti)) (Ot (add op ti)) (Dd (add S0 ti))
+                      (inf-blklo Ot (add op k) Ot Sk 1 (add op ti) (inf-ltaddl op ti k (inf-lttrans ti mj1 k ha a1)))
+                      (ad ti ha)))
+           "w1b-5" '(lam ti ha hb (inf-lzself Ot op k d 1 ti Bk One
+                      (inf-ltcong ti ti (succ k) (add k 1) (idpath ti) Su ha) hb as))
+           "w1b-6" '(lam xx ha (inf-lzlo Ot O0 op k Ot Sk 1 xx ha (al xx ha)))
+           "w1b-7" '(lam xx ha (inf-lzhi Ot O0 op k Ot Sk 1 xx
+                      (inf-letr (add op (succ k)) (add op (add k 1)) xx (maponpaths nat nat (lam z (add op z)) (succ k) (add k 1) Su) ha)
+                      (lam z (ah xx z))))
+           "end-1" '(lam ti ha hb (as ti (inf-lttrans ti l k ha w1) hb))
+           "end-3" '(lam xx ha (ah xx (inf-letrans (add op k) (add op l) xx (inf-addl op k l a0) ha)))
+           "end-4" '(lam ti ha hb (ad ti (inf-ltcong ti ti (inf-h d op l) mj1 (idpath ti) Hm (inf-hgt d op l ti ha hb))))
+           "w2e-2" '(lam ti ha hb (inf-ltnle (paths nat (O0 (add op ti)) (O0 (natminus (add op ti) d))) ti 0 ha (idpath false)))
+           "w2e-3" '(lam xx ha (idpath (O0 xx)))
+           "w2e-4" '(lam xx ha (idpath (O0 xx)))
+           "j2j-6" '(lam ti ha hb (inf-ltnle (paths nat (O0 (add op ti)) (O0 (natminus (add op ti) d))) ti 0 ha (idpath false)))
+           "j2j-7" '(lam xx ha (idpath (O0 xx)))
+           "j2j-8" '(lam xx ha (idpath (O0 xx)))
+           "w2b-2" '(lam ti ha hb (inf-lzself Ot op k d 8 ti Dop g3 ha hb bs))
+           "w2b-3" '(lam xx ha (inf-lzlo Ot O0 op k Ot Sk 8 xx ha (bl xx ha)))
+           "w2b-4" '(lam xx ha (inf-lzhi Ot O0 op k Ot Sk 8 xx ha (lam z (bh xx z))))
+           "w2b-5" (copy 'proofs "w2b-2")
+           "w3b-2" '(lam ti ha hb (inf-lzself Ot op k d 1 ti Dop One ha hb cs))
+           "w3b-3" '(lam xx ha (inf-lzlo Ot O0 op k Ot Sk 1 xx ha (cl xx ha)))
+           "w3b-4" '(lam xx ha (inf-lzhi Ot O0 op k Ot Sk 1 xx ha (lam z (ch xx z))))
+           "end-5" '(lam ti ha hb (cs ti (inf-lttrans ti l k ha w3) hb))
+           "end-7" '(lam xx ha (ch xx (inf-letrans (add op k) (add op l) xx (inf-addl op k l a3) ha)))
+           "end-8" '(lam ti ha hb (inf-ltnle (paths nat (Ot (add op ti)) (Dd (add S0 ti))) (add op ti) d hb
+                      (inf-letrans d op (add op ti) g1 (inf-leaddr op ti))))}
+         (foldl (t \ k \ pin t k (peep more k (copy 'proofs k))) {} (keys (copy 'proofs) + keys more)))}
+
    ; the fast lane: topped up below 15 bits, and to 48 before a pair. with 266 bytes of room a copy may
    ; overrun in whole words. a code past its root (the distance's peeked before the length is taken)
    ; leaves the lane, so it makes no call. 1 block end, 0 short of margin, -1 malformed
@@ -2333,8 +2417,9 @@
                  (ledger-text inf-ledger)
                  "(test\n"
                  (cats (map table-uu inf-tables))
-                 (cats (map (s \ cats (vc-text s)) (inf-specs + [st0 stn]))) " )\n"])
+                 (cats (map (s \ cats (vc-text s)) (inf-specs + [st0 stn lz]))) " )\n"])
    inf-h (cats ["// inf_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) [walk build]))])
    inf-ok (0 < #inf-vc && all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) inf-specs
-           && all (s \ atom? (vc-open s) && atom? (vc-stale s)) [st0 stn]))
+           && all (s \ atom? (vc-open s) && atom? (vc-stale s)) [st0 stn lz]
+           && cl-fn lz = cl-fn copy))

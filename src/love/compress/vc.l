@@ -138,11 +138,20 @@
                         (_ 'tryr x f _ _ os _) (x . written (callee sp f) os)
                         (_ 'calx x f _ _ os) (x . written (callee sp f) os)
                         (_ 'new x o _ _) [x o]
+                        (_ 'poke A _ _) (tracked sp A)
+                        (_ 'pokew A _ _) (tracked sp A)
+                        (_ 'mcopy A _ _ _ _) (tracked sp A)
                         (_ 'for x _ _ _ b) (x . writes sp b)
                         (_ 'forby x _ _ _ _ b) (x . writes sp b)
                         ())
                ss))
    (written f os) (map (a \ <a) (f 'state) + map (a \ <>a) os)
+   ; a spec may track an array's bytes, 'model naming what it holds at entry; a write is then inf-blk
+   (tracked sp A) (has? (peep sp 'model ()) A ? [A] ())
+   (wrote sp v A i B j n)
+    (has? (peep sp 'model ()) A
+     ? ((A . ['inf-blk (lk v A) (tm sp v i) (has? v B ? (lk v B) B) (tm sp v j) n]) . v)
+     v)
    (mentions? x t) (t == x || two? t && (mentions? x <t || mentions? x >t))
    (loop sp L x from to by invs body rest v hy k)
     (: w (writes sp body)
@@ -289,18 +298,18 @@
                + run sp >ss ((x . y) . v) ((g . ['inf-lt y ['inf-pow (tm sp v 'w)]]) . ((y . 'nat) . hy)) k))
             (L 'ghost x e g) (run sp >ss ((x . x) . v) ((g . ['paths 'nat x (sub v e)]) . ((x . 'nat) . hy)) k)
             (L 'poke A i e) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]] + ob sp v e) hy
-                             + run sp >ss v hy k)
+                             + run sp >ss (poked sp v A i e 1) hy k)
             (L 'pokew A i e) (vcs (show L) (ob sp v i + [['inf-le ['add (tm sp v i) 8] (lk (sp 'arrays) A @ a (a 1))]] + ob sp v e) hy
-                              + run sp >ss v hy k)
-            (L 'mcopy A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss v hy k)
-            (L 'mmove A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss v hy k)
+                              + run sp >ss (poked sp v A i e 8) hy k)
+            (L 'mcopy A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss (wrote sp v A i B j (tm sp v n)) hy k)
+            (L 'mmove A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss (untracked sp A v) hy k)
             (L 'dstore _ _) (run sp >ss v hy k)
             ; a pointer into an array: one element, inside
-            (L 'ptr _ A i) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]]) hy + run sp >ss v hy k)
+            (L 'ptr _ A i) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]]) hy + run sp >ss (untracked sp A v) hy k)
             ; a pointer into an array: its view stands inside
             (L 'view _ A i n)
              (vcs (show L) (ob sp v i + ob sp v n + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]]) hy
-              + run sp >ss v hy k)
+              + run sp >ss (untracked sp A v) hy k)
             ; alloc answers NULL or e bytes, and here the bytes are a fresh name's
             (L 'new x o e g)
              (: y (fresh L x) z (fresh L o)
@@ -328,6 +337,15 @@
             (quit-on "inf: \(sp 'short) has a statement the walk cannot read: \(show <ss)")))
    (callee sp f) (<(filter (c \ c 'name = f) (sp 'calls)))
    (bound sp v X) (sub v (lk (sp 'arrays) X @ a (a 1)))
+   ; what could write a tracked array the walk does not follow
+   (untracked sp A v) (has? (peep sp 'model ()) A ? (quit-on "inf: \(sp 'short) reaches tracked \(A) by a way the walk cannot follow") v)
+   ; a tracked poke's bytes come from an array, or the walk cannot say what they are
+   (poked sp v A i e n)
+    (has? (peep sp 'model ()) A
+     ? (e @ ('at B j) (wrote sp v A i B j n)
+            ('ld64 B j) (wrote sp v A i B j n)
+            (quit-on "inf: \(sp 'short) pokes a tracked \(A) with \(show e)"))
+     v)
    (mv-ob sp v A i B j n)
     (ob sp v i + ob sp v j + ob sp v n
      + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]
@@ -346,10 +364,11 @@
    ; a declaration with an initial value starts the walk holding it; an array or a parameter, itself
    (start sp)
     (foldl (v \ d \ foldl (v \ x \ two? >x && !(two? <>x && <<>x == 'raw) ? ((<x . <>x) . v) v) v >d)
-           (map (a \ (<a . <>a)) (sp 'state) + map (a \ (<a . <a)) (sp 'arrays + sp 'requires)) (sp 'decls))
+           (peep sp 'model () + map (a \ (<a . <>a)) (sp 'state) + map (a \ (<a . <a)) (sp 'arrays + sp 'requires)) (sp 'decls))
    (spec-all sp)
     (: top "inf-\(sp 'short)" rq (map (a \ (<a . <>a)) (sp 'requires))
        _ (pin sp 'cxn 0)
+       _ (peep sp 'model () && peep sp 'calls () ? (quit-on "inf: \(sp 'short) tracks an array across a call") 0)
      (['cx top () rq] . number (run sp (sp 'body) (start sp) [('cx . top)] (\ v hy (vcs "end" (ensured sp v) hy)))))
    (vc? c) (<c != 'cx)
    (spec-vcs sp) (filter vc? (spec-all sp))
