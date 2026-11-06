@@ -109,16 +109,16 @@ static int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n,
 // its one phdr and shdr, fsync, rename. 0 done, >0 not laid for growth, <0 a failure
 static int bake_tail(struct g *g, int src, char const *tmp, void const *buf, uintptr_t len,
                      uint64_t lenoff, uint64_t imgoff, mode_t mode) {
-  Elf64_Ehdr eh;
-  Elf64_Shdr *sh = NULL;
-  Elf64_Phdr *ph = NULL;
+  ElfW(Ehdr) eh;
+  ElfW(Shdr) *sh = NULL;
+  ElfW(Phdr) *ph = NULL;
   char *str = NULL, *win = NULL;
   size_t nsh, nph, si = 0, pi;
   uint64_t head, off, cur, al, pad;
   int dst = -1, rc = 1;
   if (pread(src, &eh, sizeof eh, 0) != (ssize_t) sizeof eh) return -6;
-  if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != ELFCLASS64
-      || eh.e_shentsize != sizeof(Elf64_Shdr) || eh.e_phentsize != sizeof(Elf64_Phdr)
+  if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != (sizeof(void *) == 8 ? ELFCLASS64 : ELFCLASS32)
+      || eh.e_shentsize != sizeof *sh || eh.e_phentsize != sizeof *ph
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
   sh = alloc(NULL, nsh * sizeof *sh), ph = alloc(NULL, nph * sizeof *ph);

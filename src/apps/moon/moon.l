@@ -491,7 +491,7 @@
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
-                 ; arm32 has no .image lane and no local func symbols (objsecs3 refuses the first)
+                 ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
                        (two? (filter (k \ anames k != k) (keys anames)))
