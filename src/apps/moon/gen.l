@@ -4173,6 +4173,72 @@
                                (<x = 'decl) ['decl (rd <>x)]
                                (map rw x))))
        (abl? g 'sra || !(two? ok) ? f (rw f)))
+   ; a pointer parameter nothing keeps: named only through * or ->, its address and its value unasked
+   (nocap? p x)
+    (? (atom? x) 1
+       (x @ ['var n] (n != p)
+            ['addr y] !(nmen p y)
+            ['dot ['deref ['var _]] _] 1
+            ['deref ['var _]] 1
+            _ !(any (q \ !(nocap? p q)) x)))
+   (nmen nm x) (? (atom? x) 0 (x @ ['var n] (n = nm) (any (nmen nm) x)))
+   ; -- a local struct of scalars, named only by member or by & to a call that keeps no pointer,
+   ; becomes its members as scalars, which the allocator may seat; around such a call they copy to
+   ; the struct and back. types carry no volatile, so a unit naming one is left alone --
+   (srs g f)
+    (: w64 !(ilp32? g)
+       (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
+       (mems t) (t @ ('struct . _) (peep (g 'stag) <>t 0 @ e (two? e ? <e)) ())
+       (over a b) (a 1 < b 1 + tsz g (b 2) && b 1 < a 1 + tsz g (a 2))
+       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ !(scal? (x 2))) m) &&
+                               !(any (a \ any (b \ !(<a = <b) && over a b) m) m)))
+       cand {} dcl {} bad {} use {} site {} tmps {'k 0 'l ()}
+       (one x p) (pin dcl <p (1 + peep dcl <p 0), <x = 'decl && !(two? (p 2)) && clean? <>p ? (pin cand <p <>p) 0)
+       (cen x) (? (atom? x) 0
+                  (elem <x '(decl sdecl)) (map (one x) <>x)
+                  (map cen x))
+       _ (cen f)
+       (cand? nm) (two? (peep cand nm ()))
+       (fine? fn) (!(dcl fn) && !(two? (assoc fn <>>f)) && two? (g 'sigs fn) &&
+                   (<(g 'sigs fn) @ t (t = 'void || scal? t)))
+       (arg nc as i) (as i @ a
+                        (a @ (['addr ['var nm]] && cand? nm && fine? (nc 0) && <>nc i = 1 &&
+                              !(any (j \ !(j = i) && nmen nm (as j)) ^#as))
+                              (pin site nm 1)
+                              _ (scan a)))
+       (scan x) (? (atom? x) 0
+                   (x @ ['dot ['var nm] fl] (cand? nm ? (pin use nm (elem fl (peep use nm ()) ? (use nm) (fl . peep use nm ()))) 0)
+                        ['var nm] (pin bad nm 1)
+                        ['addr ['var nm]] (pin bad nm 1)
+                        ['addr ['dot ['var nm] _]] (pin bad nm 1)
+                        ['call ['var fn] as] (g 'nocap fn @ c (map (arg [fn c] as) ^#as))
+                        _ (map scan x)))
+       _ (two? (keys cand) ? (scan f))
+       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
+       (sn nm fl) "\(nm)`m\(fl)"
+       (fty nm fl) (assoc fl (mems (cand nm)) @ m (m 2))
+       (rd ps) (? !(two? ps) ()
+                  (elem <<ps ok) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (use <<ps) + (peep site <<ps 0 ? [<ps]) + rd >ps)
+                  (rw <ps . rd >ps))
+       (seq l) (two? >l ? ['comma <l (seq >l)] <l)
+       (rwcall fn as)
+        (: nms (filter (nm \ any (a \ a @ ['addr ['var n]] (n = nm) 0) as) ok)
+           c ['call ['var fn] (map rw as)]
+           (? !(two? nms) c
+              (: in (catmap (nm \ map (fl \ ['asn ['dot ['var nm] fl] ['var (sn nm fl)]]) (use nm)) nms)
+                 out (catmap (nm \ map (fl \ ['asn ['var (sn nm fl)] ['dot ['var nm] fl]]) (use nm)) nms)
+                 rt <(g 'sigs fn)
+                 (? (rt = 'void) (seq (in + [c] + out))
+                    (: k (tmps 'k) t "`s\(k)"
+                       _ (pins tmps 'k (k + 1) 'l ([t rt ()] . tmps 'l))
+                       (seq (in + [['asn ['var t] c]] + out + [['var t]])))))))
+       (rw x) (? (atom? x) x
+                 (x @ (['dot ['var nm] fl] && elem nm ok) ['var (sn nm fl)]
+                      ['decl ps] ['decl (rd ps)]
+                      ['call ['var fn] as] (rwcall fn as)
+                      _ (map rw x)))
+       (? (abl? g 'srs || !(g 'novol) || !(two? ok)) f
+          (rw f @ r (tmps 'l @ l (two? l ? [<r <>r <>>r (r 3 @ ['blk is] ['blk (['decl l] . is)])] r)))))
    ; an overflow builtin over two constant operands into a local only it &-takes and nothing else
    ; writes, answered here: the local's decl takes the exact value at its width, the call whether it
    ; fit, so kprop carries the local on -> f | ()
@@ -4234,7 +4300,7 @@
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
     (: f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
                       u0 (unrl g k0)
-                      k1 (sra g (u0 = k0 ? k0 (kprop g u0)))
+                      k1 (srs g (sra g (u0 = k0 ? k0 (kprop g u0))))
                       (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1)))
                 @ f1 (kprop g (ucut (dprune !(ilp32? g) (e \ ()) (lprop g f1)))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
@@ -4474,7 +4540,7 @@
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'csites {} 'cloop {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -4509,6 +4575,7 @@
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
                           ; ..and one that is a single `return E`, for kcall to answer where E is one constant
                           (<f = 'fn && nelem <>f weaks ? ((f 3) @ ('blk . is . _) (two? is && !(two? >is) && <<is = 'ret && two? >(<is) ? (pin (g 'fnret) <>f <>(<is)) 0) 0) 0),
+                          (<f = 'fn && nelem <>f weaks ? (pin (g 'nocap) <>f (map (p \ ptr? <>p && nocap? <p (f 3) ? 1 0) <>>f)) 0),
                           (<f = 'fn && !nolin && g 'reach <>f &&
                            nelem <>f weaks &&
                            nelem <>f noinls ?
