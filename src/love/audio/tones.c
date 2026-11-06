@@ -35,23 +35,23 @@ enum { tn_row = 49, tn_segs = 6, tn_seg0 = 19 };
 #define tn_ln10_20 ((flo_t) 0.11512925464970229)   // ln 10 / 20
 #define tn_floor ((flo_t) 1.5848931924611134e-05)    // 96 dB down
 
-static love_inline flo_t tn_fl(flo_t x) { flo_t f = (flo_t) (int64_t) x; return f > x ? f - 1 : f; }
+static love_inline flo_t tn_fl(flo_t x) { flo_t f = (flo_t) (intptr_t) x; return f > x ? f - 1 : f; }
 // sine of x turns: folded to a quarter turn either side of 0, then its series to z^13
 static love_inline flo_t tn_sin(flo_t x) {
  flo_t u = x - tn_fl(x);
  if (u > (flo_t) 0.5) u -= 1;
  if (u > (flo_t) 0.25) u = (flo_t) 0.5 - u;
- else if (u < (flo_t) -0.25) u = (flo_t) -0.5 - u;
+ else if (u < -(flo_t) 0.25) u = -(flo_t) 0.5 - u;
  flo_t const z = u * (flo_t) 6.283185307179586, q = z * z;
- return z * (1 + q * ((flo_t) -1 / 6 + q * ((flo_t) 1 / 120 + q * ((flo_t) -1 / 5040 + q * ((flo_t) 1 / 362880
-          + q * ((flo_t) -1 / 39916800 + q * ((flo_t) 1 / 6227020800.0)))))));
+ return z * (1 + q * (-(flo_t) 0.16666666666666666 + q * ((flo_t) 0.008333333333333333 + q * (-(flo_t) 0.0001984126984126984
+          + q * ((flo_t) 2.7557319223985893e-06 + q * (-(flo_t) 2.505210838544172e-08 + q * (flo_t) 1.6059043836821613e-10))))));
 }
 // harp's noise: the frame's number hashed, so a frame always draws the same sample
 static flo_t tn_noise(int64_t ix) {
  uint64_t a = ((uint64_t) ix * 1103515245u + 12345u) & 0xffffffffu;
  uint64_t b = ((a ^ a >> 16) * 2246822507u) & 0xffffffffu;
  uint64_t c = ((b ^ b >> 13) * 3266489909u) & 0xffffffffu;
- return (flo_t) (c >> 16 & 65535) * (flo_t) 0.000030517578125 - 1; }
+ return (flo_t) (int) (c >> 16 & 65535) * (flo_t) 0.000030517578125 - 1; }
 static love_inline flo_t tn_wave(int w, flo_t x, int64_t ix) {
  flo_t u, s;
  switch (w) {

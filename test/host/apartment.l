@@ -160,7 +160,7 @@
        ; a phrase is its notes and each note's echoes
        (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3, pin s3 'next 0, apartment-song-feed s3)
           vs >(s3 'vs)
-          (#vs = #phrase * (1 + #phrase-echoes) && all (v \ v 0 < 1099511627776) vs))
+          (#vs = #phrase * (1 + #phrase-echoes) && all (v \ v 1 0 < 1099511627776) vs))
        (2 <= k2 - k1 <= 4)
        (s2 'struck = k2) (s2 'next = s 'next)
        (0 < n1) !(g 'sfx)

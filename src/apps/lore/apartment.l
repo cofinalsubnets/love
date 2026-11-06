@@ -272,9 +272,9 @@
                                sw (1.0 - drone-swell-depth * (0.5 + 0.5 * sin (turn (t * drone-swell))))
                                (foldl (acc \ f \ acc + sin (turn (t * f) + ph)) (t * 0.0) fs * (sw / #fs)))
                     [1099511627776 fn (drone-gain * 0.5) (drone-gain * 0.5)])
- (apartment-song-new h st) {'h h 'fpos 0 'vs [(drone-voice ())] 'sb {st}
+ (apartment-song-new h st) {'h h 'fpos 0 'vs [[0 (drone-voice ())]] 'sb {st}
                             'next (phrase-first * song-rate) 'struck 0}
- (strike! s at v) (pin s 'vs (s 'vs + [(mkvoice at v song-rate)]))
+ (strike! s at v) (pin s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]))
  ; a note and its echoes, each a voice of its own
  (note! s at v) (strike! s at v,
                  each phrase-echoes (e \ strike! s (at + int (<e * song-rate)) (pin (pins {} 's (v 's) 'note (v 'note) 'legato (v 'legato)) 'gain (v 'gain * e 1))))
@@ -290,18 +290,15 @@
                          'next (base + song-rate * (phrase-every - phrase-vary + roll sb (2 * phrase-vary + 1))))))
  ; the drum: a kick and a snare together, and the snare's crack again a beat behind
  (apartment-sfx s g) (: fx (g 'sfx)
-                        (at k v) (mkvoice (s 'fpos + int (k * song-rate)) v song-rate)
+                        (at k v) (: f (s 'fpos + int (k * song-rate)) [f (mkvoice f v song-rate)])
                         (drum _) [(at 0.0 {'s "bd" 'gain 0.9}) (at 0.0 {'s "sn" 'gain 0.6})
                                   (at 0.12 {'s "sn" 'gain 0.3 'speed 1.4})]
                         vs (foldl (acc \ f \ (f @ 'drum (cat acc (drum ())) acc)) () fx)
                         (pin g 'sfx (),
-                         pin s 'vs (s 'vs + filter two? vs)))
+                         pin s 'vs (s 'vs + filter (p \ two? (p 1)) vs)))
  (apartment-song-feed s) (:
    _ (s 'next <= s 'fpos + song-chunk ? (phrase! s))
-   base (s 'fpos)
-   live (filter (v \ v 0 >= base) (s 'vs))
-   ((pins s 'vs live 'fpos (base + song-chunk)),
-    say (s 'h) (pack (mixdown live base song-chunk) song-chunk song-gain)))
+   (song-out s song-chunk song-gain))
 
  ; --- the walk, on a stage already raised; the wait is the song ---
  (apartment-walk _) (: ws (ttysize 7 19)
