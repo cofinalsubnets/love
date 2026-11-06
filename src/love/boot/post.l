@@ -1607,7 +1607,7 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defn defq defvc GLOB HELPC lof rejects sugar vof)
+(module '(uu axm bridge capp chk conv defcx defn defq defvc defvcs GLOB HELPC lof rejects sugar vcs-of vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
@@ -1850,6 +1850,13 @@
     (chk 0 0 0 t Tv,
      pin GLOB nm 1,
      nm))
+   ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..
+   (vcs-of l)
+    (l @ (nm . i . c . bs . r)
+     (: (names b) (two? b ? (<b . names >>b) ())
+        (go i r) (two? r ? ([(intern "\(nm)-\(i)") ['under c ('pi . bs + [<r])] ['given c ('lam . names bs + [(r 1)])]] . go (i + 1) >>r) ())
+      (go i r)))
+   (defvcs l) (map (e \ defvc <e (e 1) (e 2)) (vcs-of l))
    (rejects th)
    (: r (call-cc (k \ (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
     (pin HELPC () 0, r)))
@@ -1917,6 +1924,7 @@
  (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
   :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
   :: 'defvc (l \ l @ [_ _ _] (defvc . q l) (scare 'uu-defq-arity l)),
+  :: 'defvcs (l \ #l > 3 && #l % 2 = 0 ? [defvcs (qlit l)] (scare 'uu-defq-arity l)),
   :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l)),
   :: 'defcx (l \ [defcx (qlit <l) (qlit >l)])))
 

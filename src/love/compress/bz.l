@@ -501,5 +501,5 @@
                 (ledger-text bz-ledger)
                 "(test\n"
                 (cats (map (s \ cats (vc-text s)) bz-specs)) " )\n"])
-   bz-ok (all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) bz-specs
+   bz-ok (0 < #bz-vc && all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) bz-specs
           && bz-tn <= 1 << bz-lim && bz-ms < 1 << 32 && bz-tl = 20))

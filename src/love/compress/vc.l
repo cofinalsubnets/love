@@ -341,7 +341,7 @@
         (atom? l ? ()
          (<l @ ['cx _ _ _] (<l . go >l)
                [L g h] (: j (1 + peep t L 0) _ (pin t L j)
-                        (["\(L)-\(j)" g h] . go >l))))
+                        (["\(L)-\(j)" g h L j] . go >l))))
        (go l))
    ; a declaration with an initial value starts the walk holding it; an array or a parameter, itself
    (start sp)
@@ -358,8 +358,6 @@
    ; a vc stands under its loop's context, with pis and lams for what it adds
    (cx-of hy) (<<hy = 'cx ? >(<hy) (cx-of >hy))
    (added hy) (<<hy = 'cx ? () (<hy . added >hy))
-   (close-pi hy g) (added hy @ e (atom? e ? g ('pi . cats (map (b \ [<b >b]) (rev e)) + [g])))
-   (close-lam hy t) (added hy @ e (atom? e ? t ('lam . map (b \ <b) (rev e) + [t])))
    (cx-text c)
     (c @ ['cx nm up bs] " (defcx \(nm)\(up = () ? "" " \(up)") \(cats (map (b \ "(\(<b) \(show >b)) ") bs)))\n")
    ; what needs no author: a hypothesis as it stands, one a step weaker, x <= x, or a closed comparison.
@@ -454,13 +452,18 @@
    (proof-of sp c) (peep (sp 'proofs) <c () @ p (p ? p (auto sp (c 2) (c 1))))
    ; a proof may name a spec's macros, which may name each other
    (expand ms t) (sub ms t @ u (u = t ? t (expand ms u)))
-   (vc-text sp)
-    (map (c \ (vc? c ?
-                 (: lab <c goal (c 1) hy (c 2) cx (cx-of hy)
-                    pf (expand (sp 'macros) (proof-of sp c @ p (p ? p 'tt)))
-                    "; \(lab)\n (defvc inf-vc-\(sp 'short)-\(lab) (under \(cx) \(show (close-pi hy goal)))\n   (given \(cx) \(show (close-lam hy pf))))\n")
-                 (cx-text c)))
-         (spec-all sp))
+   ; one label's vcs in a row, under one context and binders, are one defvcs
+   (vc-run a b) (vc? b && a 3 = b 3 && b 4 = a 4 + 1 && cx-of (a 2) = cx-of (b 2) && added (a 2) = added (b 2))
+   (vc-goal sp c) "  \(show (c 1)) \(show (expand (sp 'macros) (proof-of sp c @ p (p ? p 'tt))))\n"
+   (vc-rest sp c l) (two? l && vc-run c <l ? (vc-goal sp <l . vc-rest sp <l >l) (" )\n" . vc-lay sp l))
+   (vc-lay sp l)
+    (atom? l ? ()
+     (: c <l
+      (vc? c
+       ? (" (defvcs inf-vc-\(sp 'short)-\(c 3) \(c 4) \(cx-of (c 2)) \(show (cats (map (b \ [<b >b]) (rev (added (c 2))))))\n"
+          . vc-goal sp c . vc-rest sp c >l)
+       (cx-text c . vc-lay sp >l))))
+   (vc-text sp) (vc-lay sp (spec-all sp))
    ; a vc the proofs do not answer, for the author; a proof no vc asks for
    (vc-open sp) (filter (c \ !(proof-of sp c)) (spec-vcs sp))
    (vc-stale sp) (: ls (map (c \ <c) (spec-vcs sp))

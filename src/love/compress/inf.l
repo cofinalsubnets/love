@@ -2336,5 +2336,5 @@
                  (cats (map (s \ cats (vc-text s)) (inf-specs + [st0 stn]))) " )\n"])
    inf-h (cats ["// inf_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) [walk build]))])
-   inf-ok (all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) inf-specs
+   inf-ok (0 < #inf-vc && all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) inf-specs
            && all (s \ atom? (vc-open s) && atom? (vc-stale s)) [st0 stn]))
