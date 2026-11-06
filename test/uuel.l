@@ -8,7 +8,9 @@
 ;   (nind k z c)     induction on a nat; c binds j, ih
 ;   (cases w f g)    a coprod; (ifb c f g) a bool, f and g binding c's value as a path
 ;   (rw e h)         h proves the goal with e's right end read as its left
-;   (sym p) (trans p q) (cong f p) rfl (absurd e)
+;   (sym p) (trans p q) (cong f p) rfl (absurd e) (let x a b) (the T t)
+; a motive abstracts a term from the goal's normal form, so one a head's computation hides needs
+; writing out. (elfold '(h ..)) names the heads a normal form reads back through, with the statement's
 
 (: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {} ELH {}
    (el-cat a b) (a @ (x . u) (x . el-cat u b) b)

@@ -443,10 +443,11 @@
  (elq 'gchinv '(pi r greg P (pi a nat UU) hs (gstepok r P) fuel nat black gnl gray gnl res gnl
        (gchgoal r P fuel black gray res))
    '(lam r P hs fuel (nind fuel
-     (lam black gray res (ind gray
+     (lam black gray res (grec nat (lam q (gchgoal r P 0 black q res))
        (lam hc nd hcl hp (gchdone r P black res hc nd hcl hp))
-       (lam a gs ih hc nd hcl hp (absurd (gnone res hc)))))
-     (lam f ih black gray res (ind gray
+       (lam a gs ih hc nd hcl hp (absurd (gnone res hc)))
+       gray))
+     (lam f ih black gray res (grec nat (lam q (gchgoal r P (succ f) black q res))
        (lam hc nd hcl hp (gchdone r P black res hc nd hcl hp))
        (lam a gs ih2 hc nd hcl hp
            (let W (gapp nat black (gcons nat a gs))
@@ -471,7 +472,8 @@
              (tpair (pr1 X)
                (tpair
                  (lam y h ((pr1 (pr2 X)) y (rw e2 (ginappl y W G h))))
-                 (pr2 (pr2 X))))))))))))))))))
+                 (pr2 (pr2 X))))))))))))
+       gray))))))
 
 ; --- nodup bounds copies by the from-space, which closes the fuel argument ---
 (test
@@ -493,13 +495,14 @@
          (total2 res gnl (paths gopt (gcheney r fuel black gray) (ii1 res))))))
  (elq 'gcheneyenough '(pi r greg fuel nat black gnl gray gnl (genough r fuel black gray))
    '(lam r fuel (nind fuel
-     (lam black gray (ind gray
+     (lam black gray (grec nat (lam q (genough r 0 black q))
        (lam nd inc lt (tpair black rfl))
        (lam a gs ih nd inc lt (absurd (nopathstruetofalse (trans
          (sym (ggtadd (pr1 black) (pr1 (gcons nat a gs)) (pr1 r) lt))
          (rw (glenapp black (gcons nat a gs))
-           (rw (gfstlen r) (gpigeon (gapp nat black (gcons nat a gs)) nd (gfst r) inc)))))))))
-     (lam f ih black gray (ind gray
+           (rw (gfstlen r) (gpigeon (gapp nat black (gcons nat a gs)) nd (gfst r) inc)))))))
+       gray))
+     (lam f ih black gray (grec nat (lam q (genough r (succ f) black q))
        (lam nd inc lt (tpair black rfl))
        (lam a gs ih2 nd inc lt
            (let W (gapp nat black (gcons nat a gs))
@@ -514,7 +517,8 @@
                  (lam h (inc x h))
                  (lam h (ggraypresent r W (gedges a r) x h))))
                (rw (sym (glenapp black (gcons nat a (gnil nat))))
-                 (rw (sym (gaddstep f (pr1 black))) lt)))))))))))))))
+                 (rw (sym (gaddstep f (pr1 black))) lt))))))))))
+       gray)))))
  ; the scan pointer catches the allocation pointer
  (elq 'gdrainterminates '(pi r greg roots gnl (total2 res gnl (paths gopt (gdrain r roots) (ii1 res))))
    '(lam r roots
@@ -574,5 +578,8 @@
  ; nothing live lost does not come free: membership needs the drain's own answer
  ('rejected = rejects (z \ defq gbadsound
    (pi r greg roots gnl res gnl y nat hr (greach r roots y) (gin y res))
-   (lam r roots res y hr (fromempty (gin y res) hr)))))
+   (lam r roots res y hr (fromempty (gin y res) hr))))
+ ; the elaborator proves nothing: what it makes the kernel still checks
+ ('rejected = rejects (z \ elq 'gbadrfl '(paths nat 0 1) 'rfl))
+ ('rejected = rejects (z \ elq 'gbadind '(pi l gnl (paths nat (pr1 l) 0)) '(lam l (ind l rfl (lam x t ih rfl))))))
 (hear test-strict)
