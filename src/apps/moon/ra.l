@@ -1,4 +1,4 @@
-; src/apps/moon/ra.l -- the new backend's allocator over lo.l's forms: liveness per form, live
+; src/apps/moon/ra.l -- the backend's allocator over lo.l's forms: liveness per form, live
 ; ranges with holes per vreg, linear scan in start order, and a spilled vreg reloaded at every
 ; touch, the scan then run again. a physical register's live points bar every vreg live at one
 (module 'moon

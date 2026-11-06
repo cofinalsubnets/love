@@ -1917,7 +1917,8 @@
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
            fcs (a64? g ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
-           nm (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs))
+           ; wasm's registers are the function's own locals: a call leaves them, none is saved
+           nm (wasm? g ? () (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs)))
            r3 (x86? g && elem 'r3 nm)
            cs (filter (r \ !(r3 && r = 'r3)) nm)
            n #cs
@@ -4358,7 +4359,7 @@
              @ e9 (cstop? g ? ('((rests)) + e9) e9)))
        ; lo.l lays after this file: its names resolve at the call
        (mprof 'lo (_ \ (cite 'moon 'lofn) g f params sig) @
-         'bad (g 'nolane ? 'bad (nolane g "no lane for \(show (g 'lowhy))\(ontgt g)"))
+         'bad ((cite 'moon 'lorefuse) g)
          fs (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
@@ -4531,7 +4532,6 @@
     (: g {'n 0 'brk () 'brkm () 'cnt () 'cases () 'glob {} 'globs () 'strs () 'clits () 'clitm {} 'dbls {} 'jtabs () 'statics ()
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
-          'lo (getenv "MOON_BACKEND" @ "old" () "new" 'all _ 1)   ; lotgts lower by lo.l unless MOON_BACKEND=old; new takes every target lo.l knows
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
           'fns {} 'csites {} 'cloop {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)

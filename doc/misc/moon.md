@@ -80,11 +80,10 @@ piece. ~14k lines of love (the laws in test/law/moon.l).
   stays 64-bit —
   sound because signed overflow is UB — and widths bite only at memory and casts. This is also
   where the register story lives (its own section below).
-* **lo.l, nm.l, ra.l** — x64's backend: lo.l lowers a fn to three-address forms over vregs, nm.l
+* **lo.l, nm.l, ra.l** — the backend: lo.l lowers a fn to three-address forms over vregs, nm.l
   normalises them (copies, literals, widths, indexed loads), ra.l allocates over live ranges with
   holes (spill weights by loop depth, splits across calls, the entry's fast region in caller-saved
-  twins). A fn it refuses takes gen's own build; `MOON_BACKEND=old` takes it for every fn, and
-  test/law/moonlo.l holds its invariants.
+  twins). A fn with no lane is refused by name, and test/law/moonlo.l holds the invariants.
 * **clay.l** — C as love data (doc/misc/clay.md).
 * **stage.l** — the pipeline's stages, typed: each pass's signature (input stage → output
   stage). The moon gate checks gen.l *as data* against it, so a new pass declares its sig there

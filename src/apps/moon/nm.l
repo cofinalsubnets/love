@@ -1,4 +1,4 @@
-; src/apps/moon/nm.l -- the new backend's normalise stage, lo.l's forms to lo.l's forms before ra.l:
+; src/apps/moon/nm.l -- the backend's normalise stage, lo.l's forms to lo.l's forms before ra.l:
 ; copy-then-op fused to three-address, copies and constants propagated, address arithmetic folded
 ; into loads and stores, extensions of values already in range dropped, unreachable forms dropped.
 ; each rule keeps the forms' meaning on its own
@@ -30,6 +30,16 @@
            ([op d a b] . nmfuse g u)
           (f . u) (f . nmfuse g u)
           _ ())
+   ; a branch over a lone jump is the jump's branch; thumb's short branches stay put, and only
+   ; x64's reaches a symbol
+   (nminv g fs)
+    (t32? g ? fs
+       (: labs (map (f \ f 1) (filter (f \ two? f && <f = 'label) fs))
+          (go l) (l @ ((['br cc L] . ['jmp X] . u) && nmnext? u L && elem cc '(eq ne lt le gt ge below be above ae s ns) && (x64? g || elem X labs))
+                       (['br (negcc cc) X] . go u)
+                      (f . u) (f . go u)
+                      _ ())
+          (go fs)))
    ; nothing reaches past a jump or a return but through a label; a jump to a label just after
    ; it goes
    (nmreach fs)
@@ -288,7 +298,7 @@
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nmfuse g fs))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nminv g (nmfuse g fs)))))
    ; a decided branch's dead arm may hold a value's other def: round again without it
    (nmfix g fs)
     (nmround g (nmround g fs) @ r

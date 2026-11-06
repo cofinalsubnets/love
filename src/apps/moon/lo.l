@@ -1,7 +1,7 @@
-; src/apps/moon/lo.l -- the new backend's lowering: AST -> forms over vregs (%nK). a physical
+; src/apps/moon/lo.l -- the backend's lowering: AST -> forms over vregs (%nK). a physical
 ; register appears only in a copy next to the form that demands it (args, results, returns,
-; params on entry, the shift count). x64's integer core; any other arm answers 'bad and the
-; fn takes the old path whole. ra.l lays first and mints the vregs. a value is (ty vreg forms), an lvalue ('v vreg ty) or
+; params on entry, the shift count). an arm with no lane answers 'bad and lorefuse names why.
+; ra.l lays first and mints the vregs. a value is (ty vreg forms), an lvalue ('v vreg ty) or
 ; ('a addr-value ty off). ra.l allocates what this lays
 (module 'moon
 (borrow 'holo)
@@ -26,7 +26,9 @@
    (lofcc g c) (arm? g ? (c @ 'above 'gt 'ae 'ge 'be 'le 'below 'lt _ c) c)
 
    ; a fresh register for a value, and the copy of one: a 32-bit pair is two of each
-   (lomkv g ty) (pair? g ty ? (lomk g @ l (lomk g @ h [l h])) (lomkt g ty))
+   (lomkv g ty) (pair? g ty || lovw? g ty ? (lomk g @ l (lomk g @ h [l h])) (lomkt g ty))
+   ; a 64-bit word pair's __int128 local lives in two vregs
+   (lovw? g ty) (d128? ty && lo128? g && !(t32w? g))
    (lomvs d s) (two? d ? [['mov <d <s] ['mov <>d <>s]] [(lomv d s)])
    ; a value converted to ty, copied when the conversion writes
    (lotr g [vt r fs] ty)
@@ -43,7 +45,7 @@
    (lop g v)
     (v @ ([vt [l h] fs] && pair? g vt) [fs l h]
          [vt r fs] (lomk g @ l (lomk g @ h [(fs + [['mov l r]] + (usg? vt || ptr? vt ? [['li h 0]] [['mov h l] ['sar h 31]])) l h])))
-   ; to or from a pair: the float file through the old arms' kits, a word its low half
+   ; to or from a pair: the float file through kits, a word its low half
    (lotrp g [vt r fs] ty)
     (? (pair? g ty && pair? g vt) [ty r fs]
        (pair? g ty && lofl? vt && v6m? g)
@@ -212,7 +214,8 @@
                           ; s128r answers (r6:r5) - (rax:rdx), its operand pair spent
                           '- (t4 ? (lowfx g rt pre as bs '((s128 sp)))
                                 (lokit g rt pre lr '(r0 r2 r5 r6) '(r0 r2 r5 r6) '((s128r r6 r5))))
-                          '* (t4 ? (lowrt g rt pre as bs '__moon_m128)
+                          '* (? t4 (lowrt g rt pre as bs '__moon_m128)
+                                (lohz? a && lohz? b) (lokit g rt pre [['r0 <bs] ['r5 <as]] '(r0 r5) '(r0 r2) '((mw128r r5)))
                                 (lokit g rt pre lr '(r0 r2 r5 r6) '(r0 r1 r2) '((m128r r6 r5))))
                           ('& || '| || '^)
                            (lomkw g @ ds
@@ -271,7 +274,7 @@
        [fa x y] (lotr g b p @ [_ c fc]
                    (lomkf g @ re (lomkf g @ im
                       (lopack g rt p [(fa + fc + [['movapd re x] [(lofo "div" p) re c] ['movapd im y] [(lofo "div" p) im c]]) re im])))))
-   ; (x + yi) op (c + di) over the parts, in the old arms' order
+   ; (x + yi) op (c + di) over the parts
    (locxar g op a b p rt)
     (loparts g a p @ 'bad 'bad
        [fa x y] (loparts g b p @ 'bad 'bad
@@ -300,7 +303,10 @@
           (: s (ty = 'float) [[(s ? 'movdrx 'movqrx) t r] ['li k (s ? 2147483648 -9223372036854775808)] ['xor t t k]
                               [(s ? 'movdxr 'movqxr) d t]])
           (lomk g @ h [['movrrq t h r] ['li k 2147483648] ['xor h h k] ['movqrr d t h]]))))
-   ; a conversion through the float file: the 64-bit forms, ulong by the old arms' snippets
+   ; an integer literal a double holds exactly converts now
+   (lokfl? vt r fs)
+    (fs @ [['li d n]] (d = r && cint? n && -9007199254740992 <= n <= 9007199254740992 && !(usg? vt && n < 0)) _ ())
+   ; a conversion through the float file: the 64-bit forms, ulong by a kit
    (lotrf g [vt r fs] ty)
     (? (vt = ty) [ty r fs]
        (lofl? vt && lofl? ty) (lomkf g @ t [ty t (fs + [[(ty = 'float ? 'cvtsd2ss 'cvtss2sd) t r]])])
@@ -308,6 +314,7 @@
        (ilp32? g && lofl? vt && usg? ty && 4 = tsz g ty) (lomk g @ t [ty t (fs + [[(vt = 'float ? 'cvttss2ui 'cvttsd2ui) t r]])])
        (lofl? ty && elem vt '(ulong ullong))
         (loren2 g [['r0 r]] 'f0 'double ul2d @ [_ d f2] (lotrf g ['double d (fs + f2)] ty))
+       (lofl? ty && lokfl? vt r fs) (lox g () (: v ['flo (0.0 + (<fs 2))] (ty = 'float ? ['cast 'float v] v)))
        (lofl? ty) (lomkf g @ t [ty t (fs + [[(ty = 'float ? 'cvtsi2ss 'cvtsi2sd) t r]])])
        (ty = 'bool) (lotest g [vt r fs] @ [_ d f2] ['bool d f2])
        (elem ty '(ulong ullong))
@@ -389,8 +396,28 @@
        (pins g 'off o0 'slots sl0 'strs s0 'fesc fe0 'lowhy w0, ty))
    ; a register variable named as an asm operand: its register | ()
    (lovpin g env e) (e @ ['var nm] (lovar g env nm @ ['v r _] (g 'lopins r) _ ()) _ ())
-   ; a refusal, its first cause kept for MOON_LOLOG
+   ; a refusal, its first cause kept for lorefuse
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
+   (loarity g who n va m)
+    (pin g 'arity "\(who) wants \(show n)\(va ? " or more" "")\(n = 1 ? " argument" " arguments"), given \(show m)", lono g 'arity)
+   ; what a refusal says, unless its arm named it already
+   (lorefuse g)
+    (g 'nolane ? 'bad
+       (g 'lowhy @ ['var nm] (pin g 'undecl nm, 'bad)
+                   why (nolane g "no lane for \(lowant g why)\(ontgt g)")))
+   (lowant g why)
+    (why @ 'complex "C99 complex arithmetic"
+           'vla "this variable-length array"
+           'bitfield "a bit-field wider than a word"
+           'igoto "a computed goto"
+           'msabi "an ms_abi call with a float or struct in its signature"
+           ('abi || ('abi _)) "this signature's wide values"
+           ['arg t] "passing this \(tsz g t)-byte struct by value"
+           ['ret t] "returning this \(tsz g t)-byte struct by value"
+           (('vaarg . _) || 'vaarg) "this va_arg"
+           ['atomic _] "this atomic operation"
+           (('wide _) || ('cast 'u128 _)) "__int128 here"
+           _ (show why))
    ; a frame address become a value: no sibling call may jump past it
    ; a frame address become a value: sibcalls stop, a musttail still jumps
    (loesc g r) (r @ 'r4 (pin g 'fescv 1) 0)
@@ -418,7 +445,7 @@
                  ['long t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
           'bad)
    ; a bitfield's unit at b+off into a fresh vreg, and back: one access as its type says, or the
-   ; old arms' chunks when packed, their scratch renamed
+   ; chunks when packed, their scratch renamed
    (lobfld g bt b off a)
     (? (wsize g < tsz g bt) (lono g 'bitfield)
        (bfpk? bt || a) (loga g b off (tsz g bt) (a ? a 8))
@@ -647,6 +674,9 @@
                                            [rt d (fx + fy + [['mov d y]] + bl + [['cmov cc d x]])])))
                                         'no))
                                   _ 'no))))))))
+   ; __builtin_expect's mark on an arm: tailarm leaves a hot one, lays a cold one past the function
+   (lohint g t le)
+    (t @ ('blk (('nop m) . _)) (elem m '(hot cold) ? (pin g m (le . g m))) _ ())
    ; -- binary operators over two values --
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
@@ -874,7 +904,7 @@
                      r (lost g lb r @ [fs [ty x _]] [ty x (lolvfs l + fs)] 'bad))))
          ['cast 'void x] (lox g env x @ [_ _ fs] ['void () fs] 'bad)
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
-         ; a float of a wide value: a constant only, folded exactly, as the old path
+         ; a float of a wide value: a constant only, folded exactly
          (['cast ty x] && lofl? ty && d128? (lopeek g env x))
           (cfold 1 x @ (v && cint? v) (lox g env ['cast ty ['flo (0.0 + v)]]) _ (lono g ['cast 'u128 ty]))
          ['cast ty x]
@@ -1027,8 +1057,8 @@
            (loat g env nm as)
           (['var nm] && bad? (lovar g env nm) && g 'fns nm)
            (g 'sigs nm @
-              ; a call off its prototype's count goes to the old path, which says so
-              ((_ . ptys . va . _) && 0 < #ptys && (va ? (#as < #ptys) (#as != #ptys))) (lono g 'arity)
+              ; a call off its prototype's count refuses
+              ((_ . ptys . va . _) && 0 < #ptys && (va ? (#as < #ptys) (#as != #ptys))) (loarity g "call to '\(nm)'" #ptys va #as)
               (rt . ptys . va . rest)
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
@@ -1065,7 +1095,7 @@
    ; a builtin of a pair at 32 bits, pr if it answers one
    (lobp g env e pr fs)
     (lox g env e @ 'bad 'bad v (lofixp g v pr fs))
-   ; a builtin, the old arm its spec
+   ; a builtin, its spec
    (lobi g env nm as)
     (: (one f) (lobi1 g env <as @ 'bad 'bad [vt r fs] (f r @ 'bad 'bad [t d fs2] [t d (fs + fs2)]))
        ll (elem nm '("__builtin_clzll" "__builtin_clzl" "__builtin_ctzll" "__builtin_ctzl"))
@@ -1245,15 +1275,15 @@
     (? !(rt = 'void || losv? rt || d128? rt || loagg? g rt) (lono g ['ret rt])
        (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
-       (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
-       ; past SysV and AAPCS64 a pair takes the old path
+       (0 < #ptys && !va && #as != #ptys) (loarity g "this call" #ptys va #as)
+       ; past SysV and AAPCS64 a pair has no lane
        (!(lo128? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
        (ilp32? g && !(lot32sig g (rt . ptys))) (lono g 'abi)
        (: (arg e pt)
            (lox g env e @ ([vt r fs] && !(lo128? g) && d128? vt) (lono g ['abi vt])
                           ([vt r fs] && (losv? vt || d128? vt))
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
-                                 p9 (losv? p9 || d128? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                                 p9 (losv? p9 || d128? p9 || gcplx? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
                           ([vt r fs] && loagg? g vt) [vt r fs]
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
@@ -1302,14 +1332,13 @@
                      catmap lorgmv rg + al +
                      [('(cuse) + rs + (two? al ? '(r0)))] + cl +
                      res + (blk = 0 ? () [['add 'sp 'sp blk]]))]))))
-   ; the last call of a musttail ret's forms, marked 'must, as the old path's mustret | 'bad
+   ; the last call of a musttail ret's forms, marked 'must | 'bad
    (lomust g fs)
     (: (go l) (l @ () (lono g 'musttail)
                    ((f . u) && two? f && elem <f '(call callr)) ((f + '(must)) . u)
                    (f . u) (go u @ 'bad 'bad r (f . r)))
        (go (rev fs) @ 'bad 'bad r (rev r)))
-   ; an indirect call through a park its sibcall jumps by: x64's r11, caller-saved and no arg's,
-   ; else the old path's
+   ; an indirect call through a park its sibcall jumps by: x64's r11, caller-saved and no arg's
    (locr g r) ((x64? g ? 'r10 (pkr g)) @ p [['mov p r] ['callr p]])
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
    (loagg? g ty) (stru? ty && 0 < tsz g ty && asalign g ty <= 8)
@@ -1601,10 +1630,10 @@
                    'bad))
             ['blk items] (loitems g env items)
             ['if c t]
-             (nlab g ".lo" @ le (loseq [(br c 0 le) (st t env) (lol [['label le]])]))
+             (nlab g ".lo" @ le (lohint g t le, loseq [(br c 0 le) (st t env) (lol [['label le]])]))
             ['if c t el]
              (nlab g ".lo" @ le (nlab g ".lo" @ ld
-                (loseq [(br c 0 le) (st t env) (lol [['jmp ld] ['label le]]) (st el env) (lol [['label ld]])])))
+                (lohint g t le, loseq [(br c 0 le) (st t env) (lol [['jmp ld] ['label le]]) (st el env) (lol [['label ld]])])))
             ; a loop tests at its bottom, entered by a jump to the test
             ['while c body]
              (nlab g ".lo" @ lc (nlab g ".lo" @ lb (nlab g ".lo" @ lt
@@ -1660,7 +1689,7 @@
               ; a thumb pair: the value's two halves
               (v && two? a) (lotr g v 'llong @ [_ [l h] fs] [fs [['mov <a l] ['mov <>a h]]] _ 'bad)
               ([_ r _] && two? r) (lono g 'asmwide)
-              ; a float in a general register is the old path's to refuse
+              ; a float in a general register refuses
               ([_ r _] && lofr? r && !(freg? a)) (lono g 'asmfl)
               [vt r fs] [fs [(? (freg? a && lofr? r) ['movapd a r]
                                 (freg? a) [(o 3 <= 4 ? 'movdxr 'movqxr) a r]
@@ -1713,7 +1742,7 @@
     (lox g env ce @ ([ty r fs] && losc? ty)
        (: tab {}
           (walk x) (x @ ('switch . _) 0
-                        ; a repeated value or default goes to the old path, which says so
+                        ; a repeated value or default refuses
                         ['case cv] (lokey g ty cv @ 'bad (pin tab 'bad 1) k (locased tab k k ? (pin tab 'bad 1) (pin tab k (nlab g ".lo"))))
                         ['case lo hi]
                          (? !(cint? lo && cint? hi && lo <= hi) (pin tab 'bad 1)
@@ -1735,7 +1764,7 @@
                    (lost1 g (['brk lb] . ['sw tab ty] . env) body @ 'bad 'bad
                       fb (fs + tst + [['jmp dl]] + fb + [['label lb]]))))))
        'bad)
-   ; memset and memcpy of a small constant size, straight-line, as the old path's cgmem: not where
+   ; memset and memcpy of a small constant size, straight-line: not where
    ; a local shadows the name or the fn is the library's own -> the destination | 'no
    (lomem g env fh as)
     (fh @ (['var bi] && string? bi && 3 = #as && !(abl? g 'meminl) && !(two? (assoc bi env)) && g 'fn != bi)
@@ -1790,7 +1819,7 @@
                               (fs + [['li t d] ['cmp dh t] ['br 'below L] ['br 'above e] ['li t c] ['cmp dl t] ['br 'be L] ['label e]]))))
                          _ (lono g 'case, ())))))))
                (tab 'rng)))
-   ; the table lane, as the old path's jtable: six keys or more, a third full at least, no wide
+   ; the table lane: six keys or more, a third full at least, no wide
    ; range, -fno-jump-tables off. rel32 cells off the table's label, one unsigned compare to the
    ; default -> forms | ()
    (lojt g r tab ks dl)
@@ -1862,7 +1891,7 @@
                            [po so] (lovla g env ty po so @ 'bad 'bad fs (go u ([nm 'p po ty] . env) (acc + fs)))
                            _ (lono g 'vla)))
                     (losv? ty && (init @ ('init . _) 1 ())) (lono g ['init ty])
-                    (losv? ty && !(lotk? g nm))
+                    ((losv? ty || lovw? g ty) && !(lotk? g nm))
                      (lomkv g ty @ r
                         (: _ (ap ? (pin (g 'lopins) r ap))
                            e2 ([nm 'v r ty] . env)
@@ -1889,16 +1918,16 @@
        (go ps env ()))
 
    ; -- the fn: params home off their registers, then the body -> forms over vregs | 'bad --
-   ; MOON_LOLOG=1 names each fn and which path took it; MOON_LOONLY="fn .." keeps the new path to those fns, for bisecting
+   ; MOON_LOLOG=1 names each fn, and why it refused
    ; the t32 signatures this path takes yet
    (lot32sig g ts) (all (t \ t = 'void || losv? t || loagg? g t || d128? t && t32w? g) ts)
    (lofn g f params sig)
-    ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, getenv "MOON_LOONLY" @ () (lofn1 g f params sig) n (elem <>f (words n) ? (lofn1 g f params sig) 'bad)) @ r
-       (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "old \(show (g 'lowhy))" "new")\n", r)))
+    ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, lofn1 g f params sig) @ r
+       (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "refused \(show (g 'lowhy))" "ok")\n", r)))
    (lofn1 g f params sig)
     (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
             !(g 'abad) &&
-            ; past SysV and AAPCS64 a pair takes the old path
+            ; past SysV and AAPCS64 a pair has no lane
             (lo128? g || !(d128? rt || any (p \ d128? <>p) params)) &&
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
@@ -2105,7 +2134,7 @@
        (go fs))
    ; v6-M: a frame slot off r4, the frame's bottom, its size known once csframe has laid the saves
    (lov6s g fs) (!(v6m? g) ? fs (filter (f \ f @ ('sub 'sp 'sp k) (charm? k) _ ()) fs @ ((_ _ _ k) . _) (t16slots fs k) _ fs))
-   ; the frame and emit tail the old path ends on
+   ; the frame and emit tail
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
      (tailarm g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir)))))))))))))))))))))))
