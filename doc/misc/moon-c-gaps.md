@@ -526,6 +526,11 @@ global and dropped everywhere else — after a struct body too, so the kernel's 
   up into it, every later use `(*p)` until a declaration shadows the name, an initializer built
   as a compound literal and assigned in — an array's as a one-member struct of its bytes.
 - **a by-value struct aligned past 8** as an argument still refuses by name (`asalign`'s guard).
+- **`_Alignof` and `__alignof__`** answer a type name's ask, its typedef's or its run's, and a named
+  object's or a member's (test/cc/358-alignof.c, held to gcc). types carry no alignment, so an object
+  reached through a pointer or an index answers its type's: `__alignof__(*p)` for `ai *p` and
+  `__alignof__(a[0])` for an array of an aligned typedef are low, and a global `ai *gp` answers high.
+  layout is right in all of them.
 
 ### what the %f hunt actually found — and the trap in it
 

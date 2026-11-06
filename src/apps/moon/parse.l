@@ -319,8 +319,8 @@
                          ; `_Alignas(T)` is `_Alignof(T)`
                          (idv? t "_Alignas" && peekp >s "(")
                           (two? >>s && tkk <>>s = 'num ? (tkv <>>s)
-                             (pcty ps >>s @ tr
-                                (two? tr ? (talign ps <tr) (go >s d))))
+                             (pctya ps >>s @ tr
+                                (two? tr ? (tyask ps <tr) (go >s d))))
                          (go >s d))))
        (go ts 0))
    ; the words the scans above answer to, read in one walk by their bounds: a scan whose
@@ -382,6 +382,8 @@
                  pin t 'anames {},        ; a file-scope asm label: nm -> its symbol
                  pin t 'currstr (),               ; ..accumulating for the current declaration
                  pin t 'aligns {},        ; global name -> its aligned(N)
+                 pin t 'fasks {},         ; tag -> ((member its alignment)..), where a member's is not its type's
+                 pin t 'lasks {},         ; local name -> its aligned(N)
                  pin t 'tdask {},         ; typedef name -> the aligned(N) its declarator asks
                  pin t 'pfes {},          ; fn name -> its patchable_function_entry (N M)
                  pin t 'locals {},        ; local/param name -> its declared type
@@ -790,9 +792,20 @@
    (alask lay a) (a > lay 2 ? [<lay (a * ((lay 1 + a - 1) // a)) a] lay)
    ; a member type with no size yet (C11 6.7.2.1p3): a struct not laid out, or an array of one
    (incty? ps ty) (? (arr? ty) (incty? ps <>ty) (stru? ty) (atom? (peep (ps 'stag) <>ty 0)) ())
+   ; a member's alignment: an ask outranks packed, as gcc has it
+   (memal ps m pk)
+    (: own (two? (drop 4 m) ? (m 4) (talign ps <>m))
+       (max (pk ? 1 (packcap ps own)) (two? >>>m ? (m 3) 0)))
+   ; #pragma pack's cap on a member's alignment
+   (packcap ps x) (peep ps 'pack 0 @ cap (0 < cap && cap < x ? cap x))
+   ; the members whose alignment is not their type's, __alignof__'s; an anonymous one's come with it
+   (memasks ps ms pk)
+    (catmap (m \ (? (<>m = 'label || bfmem? m) ()
+                     !<m (stru? <>m ? (peep (ps 'fasks) <><>m ()))
+                     (: a (memal ps m pk) (a != talign ps <>m ? [[<m a]])))) ms)
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
-    (: cap (peep ps 'pack 0)                         ; #pragma pack's cap on a member's alignment
-       (capa x) (0 < cap && cap < x ? cap x)
+    (: cap (peep ps 'pack 0)
+       (capa x) (packcap ps x)
        (go l bit mx acc)
         (atom? l ?
            (: a2 (mx < 1 ? 1 mx)
@@ -843,8 +856,7 @@
                     (go >l nbit nmx (spl <inner acc)))
                  (incty? ps ty) (: _ (peep ps 'incmem () || pin ps 'incmem name)
                                    (go >l bit mx acc))
-                 (: own (two? (drop 4 m) ? (m 4) (talign ps ty))
-                    a (max (pk ? 1 (capa own)) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
+                 (: a (memal ps m pk)
                     sz (tsz ps ty)
                     abit (uni ? 0 (aup bit (a * 8)))
                     at (abit >> 3)
@@ -917,6 +929,7 @@
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
+                              pin (ps 'fasks) tag2 (memasks ps <mr (<pb | <pa)),
                               pin ps 'tagdef 1,
                               uni ? (pin (ps 'utag) tag2 1) 0,
                               tu ? (pin (ps 'tunion) tag2 1) 0,
@@ -1019,6 +1032,21 @@
        (atom? br ? ()
           (pdtor ps <>br <br @ dr
              (two? dr ? [<><dr <>dr]))))
+   ; a type name with the ask its run lays on it, on the run's own type or an array of it: ((ty ask) rest)
+   (pctya ps ts)
+    (pbty ps ts @ br
+       (atom? br ? ()
+          (pdtor ps <>br <br @ dr
+             (two? dr ? [[<><dr (tdbase? <><dr <br ? (tdrun ps ts) 0)] <>dr]))))
+   ; what such a type name aligns to: an ask may lower as well as raise
+   (tyask ps st) (0 < st 1 ? (st 1) (talign ps <st))
+   ; an expression's alignment: a named object's ask or a member's over its type's
+   (exal ps e ty)
+    (e @ ['var nm] (peep (ps 'locals) nm 'none = 'none ? (fn? ty ? (talign ps ty) (max (talign ps ty) (peep (ps 'aligns) nm 0)))
+                      (max (talign ps ty) (peep (ps 'lasks) nm 0)))
+         ['dot b m] (ptype ps b @ bt
+                       (assoc m (stru? bt ? (peep (ps 'fasks) <>bt ())) @ f (two? f ? <>f (talign ps ty))))
+         _ (talign ps ty))
 
    (pdecay ty) (? (arr? ty) ['ptr <>ty] (fn? ty) ['ptr ty] ty)   ; _Generic's lvalue conversion
    ; -- the qualifiers _Generic needs (6.5.1.1). types here carry no const/volatile, so its
@@ -1858,7 +1886,7 @@
        (atom? br ? ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; _Generic's, staged below
-             lal (specask ps ts)   ; an ask among the specifiers, every declarator's
+             lal (specasks ps ts)   ; an ask among the specifiers, every declarator's, and its typedef's
              sct (stat ? (secat? ts @ sc (string? sc ? sc (secat? (tyattr ts0)))))   ; a block static's section, past a tag body too
              (peekp ts0 ";" ? [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
@@ -1878,7 +1906,7 @@
                                    [(tkv <>>ts30) >>>>ts30])
                              pinl0 (two? ap ? [<ap])
                              ; the ask past the type's own rides a fifth slot, the fourth () unless pinned
-                             ask (max lal (pattpk ps <>dr 2))
+                             ask (max (max <lal (tdbase? ty base ? <>lal 0)) (pattpk ps <>dr 2))
                              pinl1 (talign ps ty < ask ? ((two? pinl0 ? pinl0 [()]) + [ask]) pinl0)
                              ; ..and a static's section a sixth, the slots before it padded
                              pinl (sct ? (take 2 (pinl1 + [() 0]) + [sct]) pinl1)
@@ -2216,9 +2244,13 @@
    (bindloc ps ent shadows) (: nm <ent
                                 old (peep (ps 'locals) nm 'none)
                                 oq (peep (ps 'qtys) nm 'none)
+                                oa (peep (ps 'lasks) nm 'none)
                                 (pin (ps 'locals) nm <>ent,
                                  qtake ps nm <>ent,
-                                 ['locals nm old] . ['qtys nm oq] . shadows))
+                                 ; the record's fifth slot, the ask past the type's own
+                                 (? (charm? (ent 4) && 0 < ent 4) (pin (ps 'lasks) nm (ent 4))
+                                    (oa != 'none) (pull (ps 'lasks) nm 0)),
+                                 ['locals nm old] . ['qtys nm oq] . ['lasks nm oa] . shadows))
    (bindlocs ps ents shadows) (atom? ents ? shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (two? form && elem <form '(decl sdecl) ? <>form)       ; a block decl's entries, () otherwise
    ; a block-scope typedef: each declarator into ps 'types, the old binding on the shadow
