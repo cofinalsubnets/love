@@ -1243,7 +1243,7 @@
    ; ms an ms_abi callee: ints only, rcx rdx r8 r9 then the stack above a 32-byte shadow
    (locall1 g env rt ptys va ms as cl fv)
     (? !(rt = 'void || losv? rt || d128? rt || loagg? g rt) (lono g ['ret rt])
-       (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
+       (ms && any d128? (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
        ; past SysV and AAPCS64 a pair takes the old path
@@ -1639,7 +1639,7 @@
             ['case lo hi] (assoc 'sw env @ [_ tab _] (tab "\(lo):\(hi)" @ () 'bad L [['label L]]) 'bad)
             ['case cv] (assoc 'sw env @ [_ tab ty] (tab (lokey g ty cv) @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ [_ tab _] (tab 'dflt @ () 'bad L [['label L]]) 'bad)
-            ('asm . _) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
+            ('asm . _) (trap (loasm g env) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
    ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored

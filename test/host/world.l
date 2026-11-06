@@ -985,7 +985,7 @@
    kinds ['apple 'potato 'onion 'carrot 'radish 'cabbage]
    pd (pr "(pile 'apple [0 0 0] 0 3 {'w 1.2 'd 0.9 'dense 12})" 'drapes) sh (pd 0) th (pd 1) m (th 'wrap) C #<(th 'rows)
    tn (pr "(pile 'carrot [0 0 0] 90 3 {'w 2 'd 0.6})" 'drapes 0)
-   (span d k) (: qs (catmap (r \ filter two? r) (d 'rows)) vs (map (q \ q k) qs) [(foldl min 1e9 vs) (foldl max -1e9 vs)])
+   (span d k) (: qs (catmap (filter two?) (d 'rows)) vs (map (q \ q k) qs) [(foldl min 1e9 vs) (foldl max -1e9 vs)])
    st (lv "(room [-4 0 -4] [4 3 4]) (furnish 'stand [0 0 0] 0 {'w 1.2 'd 0.8 'low 0.7 'h 1 'lip 0.05})")
    bm (brush-medium (world-new 8 8 st "" 'sc 'brushes))
    ap (lv "(room [-4 0 -4] [4 3 4]) (ambient (rgb 1 1 1)) (start [0 0.2 -1] 0 -40) (produce [0 0.8 0] 1 'cabbage)")
