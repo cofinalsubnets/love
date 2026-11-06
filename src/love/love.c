@@ -524,10 +524,16 @@ static lvm(lvm_sitsp) {
   if (!m || (0 <= i && i + m <= (intptr_t) len(s) && !memcmp(txt(s) + i, txt(t), (size_t) m))) v = putcharm(1); }
  love_musttail return Answerp(2, v); }
 
-// (subidx s t i): the first index >= i where t sits in s, or -1; an empty t is at i while i <= #s
+// (subidx s t i): the first index >= i where t, a text or one charm, sits in s, or -1; an empty t
+// is at i while i <= #s
 static lvm(lvm_subidx) {
  intptr_t r = -1;
- if (strp(Sp[0]) && strp(Sp[1])) {
+ if (strp(Sp[0]) && oddp(Sp[1])) {
+  struct str *s = str(Sp[0]);
+  intptr_t n = (intptr_t) len(s), c = getcharm(Sp[1]), i = oddp(Sp[2]) ? max(getcharm(Sp[2]), 0) : 0;
+  char const *p = 0 <= c && c < 256 && i < n ? memchr(txt(s) + i, (int) c, (size_t) (n - i)) : NULL;
+  if (p) r = p - txt(s); }
+ else if (strp(Sp[0]) && strp(Sp[1])) {
   struct str *s = str(Sp[0]), *t = str(Sp[1]);
   intptr_t n = (intptr_t) len(s), m = (intptr_t) len(t), i = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
   if (!m) r = i <= n ? i : -1;
