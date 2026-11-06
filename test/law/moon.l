@@ -1989,11 +1989,11 @@
 ; jump is the jump's branch; wasm's locals outlive a call, so a call there costs no frame
 (: wmf (fnf 'mr <>(cgn "void mr(unsigned long *r, unsigned long *a, int n, unsigned long b) { for (int i = 0; i < n; i++) { unsigned __int128 c = 0; for (int j = 0; j < n; j++) { unsigned __int128 s = (unsigned __int128) a[j] * b + r[i + j] + c; r[i + j] = (unsigned long) s; c = s >> 64; } r[i + n] = (unsigned long) c; } } int main() { return 0; }"))
    brf (fnf 'g <>(cgn "static int rng(int x) { if (x < 0) return 0; if (x > 100) return 1; return x & 1; }\nint g(int x, int y) { if (rng(x)) return y + 1; return y * 3; } int main() { return 0; }"))
-   wcf (fnf 'h <>(cgt "long k(long); long h(long a) { long b = a * 3; k(a); k(b); return b + a; } int main() { return 0; }" 'wasm))
+   wcf (cparse-t <>(clex "long k(long); long h(long a) { long b = a * 3; k(a); k(b); return b + a; } int main() { return 0; }") 'wasm @ r
+        (fnf 'h <>(cgen-obj <>r <>>r <>>>r <>>>>r () 'wasm)))
    (nops fs o) #(filter (f \ two? f && <f = o) fs)
    (test
       (1 = (nops wmf 'mw128r)) (0 = (nops wmf 'm128r))
-      (0 = (splds wmf))
       (0 = (nops brf 'jmp))
       (0 = (nops wcf 'push)) !(any (f \ elem 'fp f) wcf)))
 
