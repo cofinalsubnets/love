@@ -2993,7 +2993,7 @@
  (defvc inf-vc-top-c1-13 (under inf-top (pi g1 (inf-lt (add n 8) (inf-pow w)) g2 (inf-lt (add cap 266) (inf-pow w)) g3 (inf-lt (add cap nd) (inf-pow w)) (pi k nat g (inf-le k 15) (inf-lt (inf-dk (inf-pow 12) k) (inf-pow w)))))
    (given inf-top (lam g1 g2 g3 (inf-topk w gw))))
 ; c1-14
- (defvc inf-vc-top-c1-14 (under inf-top (pi g1 (inf-lt (add n 8) (inf-pow w)) g2 (inf-lt (add cap 266) (inf-pow w)) g3 (inf-lt (add cap nd) (inf-pow w)) (inf-le 12 15)))
+ (defvc inf-vc-top-c1-14 (under inf-top (pi g1 (inf-lt (add n 8) (inf-pow w)) g2 (inf-lt (add cap 266) (inf-pow w)) g3 (inf-lt (add cap nd) (inf-pow w)) (inf-le 11 15)))
    (given inf-top (lam g1 g2 g3 (idpath false))))
 ; c1-15
  (defvc inf-vc-top-c1-15 (under inf-top (pi g1 (inf-lt (add n 8) (inf-pow w)) g2 (inf-lt (add cap 266) (inf-pow w)) g3 (inf-lt (add cap nd) (inf-pow w)) (inf-le 9 15)))
@@ -8084,7 +8084,7 @@
  (defvc inf-vc-st0-c1-14 (under inf-st0 (pi k nat g (inf-le k 15) (inf-lt (inf-dk (inf-pow 12) k) (inf-pow w))))
    (given inf-st0 (inf-topk w gw)))
 ; c1-15
- (defvc inf-vc-st0-c1-15 (under inf-st0 (inf-le 12 15))
+ (defvc inf-vc-st0-c1-15 (under inf-st0 (inf-le 11 15))
    (given inf-st0 (idpath false)))
 ; c1-16
  (defvc inf-vc-st0-c1-16 (under inf-st0 (inf-le 9 15))

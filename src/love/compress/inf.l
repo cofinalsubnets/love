@@ -2162,7 +2162,7 @@
       ("gz_dbase" "uint16_t" inf-tdb (1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537 2049 3073 4097 6145 8193 12289 16385 24577))
       ("gz_dext" "uint8_t" inf-tde (0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13))
       ("gz_clord" "uint8_t" inf-tob (16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15)))
-   inf-roots '((LROOT 12) (DROOT 9) (CROOT 7))
+   inf-roots '((LROOT 11) (DROOT 9) (CROOT 7))
    (commas l) (two? >l ? "\(show <l), \(commas >l)" (show <l))
    (table-c t) (t @ [nm ty _ vs] "static const \(ty) \(nm)[\(show #vs)] = { \(commas vs) };\n")
    (table-terms i vs)
@@ -2171,7 +2171,7 @@
    (root-c r) "#define \(show <r) \(show <>r)\n"
    inf-rh-head
     """
-    // one block's decode tables, 10 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
+    // one block's decode tables, 7 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
     // stack inflates with it
     struct inf_tabs {
      uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT], lsym[288], dsym[32], csym[19];
