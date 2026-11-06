@@ -508,15 +508,12 @@ vec-%:
 # the fixpoint: love1 rebuilds every TU into love2, byte-identical; the link list is make's
 # objects, never a glob. test_extra only
 test_fixpoint: host $(moon_seat_o) $(love0) $(ho)/mooncc0.image
-	@$(MAKE) -s a=$(hosta) $(ko)/$(hosta)/mkvec.l
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
-	  gate_kern_c='$(k_free_c)' gate_seat_c='$(S)/love/noblob.c' \
-	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(kart_o)
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c $(S)/love/user/nokern.c' \
+	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(moon_d)/love/user/nokern.o
 # the cross fixpoint under qemu-user; opt-in (`make xa=rv64 test_xfixpoint`), skips without qemu
-test_xfixpoint: $(x_o) $(x_seat_o) $(xkart_o) $(love0) $(ho)/mooncc0.image
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(wildcard $S/inle/$(xa)/*.c)' \
-	  gate_kern_c='$(k_free_c)' gate_seat_c='$(S)/love/noblob.c' \
-	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xkart_o)
+test_xfixpoint: $(x_o) $(x_seat_o) $(xod)/love/user/nokern.o $(love0) $(ho)/mooncc0.image
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c $(S)/love/user/nokern.c' \
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xod)/love/user/nokern.o
 # test_fat -- the fat container: native answer, deterministic pack, foreign member under qemu-user
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
