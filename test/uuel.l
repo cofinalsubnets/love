@@ -10,6 +10,7 @@
 ;   (sym p) (trans p q) (cong f p) rfl (absurd e)
 
 (: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {}
+   (el-cat a b) (a @ (x . u) (x . el-cat u b) b)
    (el-app f a) (vof [['f f] ['a a]] '(f a))
    (el-fresh d) (intern ("ez" + show d))
    ; a level reads as the binder that holds it, else as a binder the readback made
@@ -103,7 +104,8 @@
                (go Ht ms 0))
       (res _) (: (go T vs) (vs @ (v . u) (T @ ['pi _ q] (go (capp q v) u) (scare 'el-not-a-pi t)) T)
              (go Ht ms))
-      Z (v \ vof en (el-rb en 0 d v))
+      Zen (el-cat (map (m \ [(m 1) m]) ms) en)
+      Z (v \ vof Zen (el-rb en 0 d v))
       ts {}
       (hole? a) (a = '_)
       (needs-goal? a) (two? a && memq <a '(lam tpair ii1 ii2 rev ind cases ifb rw rfl absurd))
@@ -122,7 +124,7 @@
       (terms _) (: (go i u) (u @ (a . w) ((arg i a) . go (i + 1) w) ()) (go 0 as))
      (G == 0 ? 0 (el-uni d (res 0) G), loop 0, h . terms 0))
 
-   (el-inf cx en d t) (two? t && !(memq <t '(pi total2 paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) ? (el-spine cx en d t 0) t)
+   (el-inf cx en d t) (two? t && !(memq <t '(pi total2 paths coprod succ pr1 pr2 the idpath let nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) ? (el cx en d t 0) t)
 
    ; --- check against the goal ---
    (el cx en d t G)
