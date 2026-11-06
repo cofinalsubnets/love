@@ -652,8 +652,8 @@ never silent**.
 
 | lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 | arm |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `__int128` | ✓ | ✓ | — | rt.c | rt.c | — | rt.c |
-| `_Complex` arithmetic | ✓ | ✓ | ✓ | ✓ | — | — | ✓ |
+| `__int128` | ✓ | ✓ | ✓ | rt.c | rt.c | — | rt.c |
+| `_Complex` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c | ✓ |
 | variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -720,7 +720,7 @@ caller and callee above). Three rules; do not fold them.
 
 **A by-value composite NAMED in a variadic parameter list rides x64, a64, rv64 and thumb2's family**
 (on t32 every named param is read in place off the pushed r0-r3 and the caller's block, the base
-pcs's rule); wasm and v6-M refuse it whole.
+pcs's rule), and wasm and v6-M too.
 that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
 
@@ -1543,7 +1543,7 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   forms keep the C name. `asm`, `__asm__`, `__asm`, and adjacent strings. The plain `asm`
   spelling had refused (`parse error near asm`, which stopped process.c); the other two had
   dropped the label in silence, so the symbol kept its C name and a caller naming the label
-  missed it. A label that renames refuses on wasm, which lays no symbol table. Two C names on
+  missed it. Two C names on
   one label in one file lay the label defined and undefined, which ld and lld bind as one.
   Law 294-asmlabel.c.
 - **a test pushed down through a `!` keeps a missing else missing** (arm64 `do_page_fault`'s
