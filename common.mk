@@ -118,11 +118,11 @@ love_c = $(love_tu_c) $S/apps/moon/lib/moonlibc/math/lm.c $S/apps/moon/lib/moonl
 # the per-ISA set ONE machine's build takes; the directory is the roster, empty on an arch with
 # no seat, which is what the rebuild gates read to skip their kernel half.
 hosta_c = $(wildcard $S/inle/$(hosta)/*.c)
-# ..and the surface over the interface: src/love/ less the core, the board seat (bare.c, nohorn.c)
-# and noblob.c, which a LINK names for itself, plus the nif libraries in its folders. user and kernel
+# ..and the surface over the interface: src/love/ less the core, the board seat (bare.c, nohorn.c),
+# noblob.c and macho.c, which a LINK names for itself, plus the nif libraries in its folders. user and kernel
 # mode both take it -- moonlibc's __love_sys is the one door under it, whoever answers. drop a
 # src/love/<app>.c in and its nifs register with no rule edit.
-host_c = $(filter-out $(addprefix $S/love/,$(love_tu) bare.c nohorn.c noblob.c),$(wildcard $S/love/*.c)) \
+host_c = $(filter-out $(addprefix $S/love/,$(love_tu) bare.c nohorn.c noblob.c macho.c),$(wildcard $S/love/*.c)) \
          $(filter-out $S/love/$(love_codec),$(wildcard $(patsubst %,$S/love/%/*.c,$(love_libs))))
 # the tree cuts at moonlibc's interface: src/love/ is everything over it, src/love/user/ the seats
 # where another kernel answers, and src/inle/ kernel mode, where we do. quay draws into a buffer

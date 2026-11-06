@@ -159,14 +159,14 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/kore/*` -> `test_kore` `test_hostnif`
 - `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l` -> `test_hostnif`
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)
-- `src/love/snap.c`, `src/love/image.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
+- `src/love/snap.c`, `src/love/image.c`, `src/love/elfbake.c`, `src/love/macho.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - `src/love/snap.c` -> `test_boards`, whose links bake their own images through it
 - `src/apps/caja/*`, `test/caja/*`, `test/gate/caja.sh` -> `test_caja`
 - `src/apps/tfm.l`, `test/gate/tfm.sh`, `test/gate/tfm.l` -> `test_tfm` `test_caja`, which caja borrows for its fonts
 - `src/apps/pic/*`, `test/gate/fzgen.l` -> `test_gpic` `test_grap` `test_chem`
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_core`
 - the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk` -> `test_gcstress`, in the queue's union; a `.l`, doc, app or test diff never owes it
-- what the bake runs, `src/love/{gc,snap,image,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
+- what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)
 - `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
