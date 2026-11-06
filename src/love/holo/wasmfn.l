@@ -532,6 +532,7 @@
        ;;    defined: every function's name and its own labels, every data label
        dlanes (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7)
        defd ({} @ t (map (\ fn (pin t <fn 1, w-labels-into t <>fn)) fns,
+                     map (a \ pin t <a 1) als,
                      map (w-labels-into t) dlanes,
                      t))
        refs (keys ({} @ t (map (\ fn (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))

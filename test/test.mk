@@ -410,17 +410,9 @@ test_moonfuzz: host
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
 	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
-# every test/cc/*.c by `mooncc -t $*` under qemu-user, held to x64; unbuildable ones must refuse
-test_cca64 test_ccrv64: test_cc%: host
-	@$(gsh) test/gate/ccarch.sh $* $(ho) $m
-# the battery on 32-bit linux: gcc -m32, or arm-none-eabi-gcc's newlib under qemu-arm
-test_cci386 test_ccarm: test_cc%: host
-	@$(gsh) test/gate/cc32.sh $* $(ho) $m
-# test_ccwasm -- the battery on wasm, node as the machine
-gate_hm += test_ccwasm
-# the battery on M-profile: no qemu-user, ILP32, so arm-none-eabi-gcc's build is the oracle
-test_ccthumb1 test_ccthumb2: test_cc%: host
-	@$(gsh) test/gate/ccthumb.sh $* $(ho) $m
+# every test/cc/*.c by `mooncc -t $*`, plain and -Os, held to its references; the table is in ccbat.sh
+test_cca64 test_ccrv64 test_cci386 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
+	@$(gsh) test/gate/ccbat.sh $* $(ho) $m
 # c-testsuite held to its shipped stdout, misses rostered in cts.sh
 test_cts: host
 	@DL=$(dl) $(gsh) test/gate/cts.sh x64 $(ho) $m
@@ -663,14 +655,10 @@ gate_love += test_cpio
 gate_love += test_tfm
 # test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
 gate_love += test_caja
-# test_gpic -- classic pic (src/apps/pic/gpic.l) against groff's, byte for byte; test/gpic/open
-# counted, not gated. skips without groff
-gate_love += test_gpic
-# test_grap -- grap against plan9port's, both through our pic against groff's; test/grap/open
-# counted. skips without plan9port
-gate_love += test_grap
-# test_chem -- chem against groff's, likewise; test/chem/open counted. skips without groff's chem
-gate_love += test_chem
+# pic, grap and chem against their references, byte for byte; test/TOOL/open counted, skips without one
+test_gpic test_grap test_chem: test_%: host
+	@echo TEST test/gate/pictool.sh $*
+	@$(gsh) test/gate/pictool.sh $* $(ho)/love
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host
 	@echo TEST test/holo/golden.l
