@@ -1735,13 +1735,13 @@
              (: rt <(peep (g 'sigs) (g 'fn) ['long ()]) epj (peep g 'epi epi)
                 (lox g env (losv? rt && d128? (lopeek g env e) || gcplx? rt ? ['cast rt e] e) @ 'bad 'bad
                    ([_ _ fs] && rt = 'void) (fs + epj)
-                   ; an int's upper half is the caller's to extend
+                   ; an int's upper half is the caller's to extend; lp64 has it leave sign-extended, unsigned too
                    ([vt r fs] && pair? g rt && losv? vt)
                     (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov (ia32? g ? 'r2 'r1) h]] + epj))
                    ([vt r fs] && lofl? rt && losv? vt && v6m? g)
                     (lotr g [vt r fs] rt @ [_ c f2] (f2 + [(rt = 'float ? ['movdrx 'r0 c] ['movrrq 'r0 'r1 c])] + epj))
                    ([vt r fs] && losv? rt && losv? vt)
-                    (lotr g [vt r fs] (elem rt '(int uint) && losc? vt ? 'long rt) @ [_ c f2] (f2 + [(lomv (lofl? rt ? 'f0 'r0) c)]
+                    (lotr g [vt r fs] (elem rt '(int uint) && losc? vt ? (g 'tgt = 'rv64 ? 'int 'long) rt) @ [_ c f2] (f2 + [(lomv (lofl? rt ? 'f0 'r0) c)]
                                                                                                                + (ia32? g && lofl? rt ? [['fix '(f0) lokl [['raw (x87raw g (rt = 'float) ())]]]])
                                                                                                                + epj))
                    ([vt r fs] && d128? rt && (losv? vt || d128? vt))

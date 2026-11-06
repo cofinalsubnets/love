@@ -363,8 +363,8 @@
                     ('uchar || 'cchar) [['zx1 r]] 'ushort [['zx2 r]] 'uint [['zx4 r]]
                     'bool [['cmp r 0] ['set 'ne r]])
    ; a narrow integer answer from a call: SysV and AAPCS64 leave the bits above it to the caller,
-   ; so it extends here; riscv's and AAPCS32's callee extends, and ours always does
-   (rext g ty) (? (!(x86? g || a64? g) || abl? g 'rext) ()
+   ; so it extends here; lp64's callee sign-extends even an unsigned, which ours reads zero-extended
+   (rext g ty) (? (!(x86? g || a64? g || rv64? g) || abl? g 'rext) ()
                   (ty = 'bool) [['zx1 'r0]]
                   (elem ty '(char schar cchar uchar short ushort int uint)) (cvt ty 'r0)
                   ())
