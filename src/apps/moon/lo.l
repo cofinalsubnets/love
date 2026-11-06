@@ -368,7 +368,7 @@
          ['dot base fld]
           (lolv g env base @ ['a av ty off]
                               (fmem g ty fld @ 'bad (lono g ['member fld])
-                                               ([o bt] && bitf? bt) (? (bfwide? g bt) (lono g 'bitfield) ['b av bt (off + o) (lobfa g bt (loma g ty o))])
+                                               ([o bt] && bitf? bt) ['b av bt (off + o) (lobfa g bt (loma g ty o))]
                                                [o mt] (loal g av mt (off + o) (loma g ty o)))
                              'bad 'bad
                              _ (lono g 'dotbase))
@@ -410,7 +410,6 @@
     (why @ ('fn . _) (g 'abad ? "alloca where an operand is parked on the stack" "this function's signature")
            'complex "C99 complex arithmetic"
            'vla "this variable-length array"
-           'bitfield "a bit-field wider than a word"
            'igoto "a computed goto"
            'msabi "an ms_abi call with a float or struct in its signature"
            ('abi || ('abi _)) "this signature's wide values"
@@ -441,20 +440,37 @@
           ['u [_ r fs] (('arr || 'varr) . et . _) off a] (lomk g @ t (loesc g r, [['ptr et a] t (fs + [['lea t r off]])]))
           ['u av ty off a] (loldu g av ty off a)
           ; a bitfield: its unit, then two shifts (sar signed, shr unsigned; a bool never sign-extends)
+          (['b [_ r fs] bt off a] && wsize g < tsz g bt)
+           (: w (bt 3)
+              (lobfwld g bt r off @ [ul uh fu]
+                 (lopshk g 'shl 'ullong (fs + fu) ul uh (64 - (bt 2 + w)) @ [_ [sl sh] f2]
+                    (lopshk g (usg? <>bt ? 'shr 'sar) 'ullong f2 sl sh (64 - w) @ [_ [l h] f3]
+                       (lobfwv g bt l h f3)))))
           ['b [_ r fs] bt off a]
            (: uty <>bt bitoff <>>bt width <>>>bt hi (8 * wsize g - (bitoff + width)) lo (8 * wsize g - width)
               (lobfld g bt r off a @ [_ t f2]
-                 ['long t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
+                 [(pprom bt) t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
           'bad)
    ; a bitfield's unit at b+off into a fresh vreg, and back: one access as its type says, or the
    ; chunks when packed, their scratch renamed
    (lobfld g bt b off a)
-    (? (wsize g < tsz g bt) (lono g 'bitfield)
-       (bfpk? bt || a) (loga g b off (tsz g bt) (a ? a 8))
+    (bfpk? bt || a ? (loga g b off (tsz g bt) (lobfal g a))
        (lomk g @ t ['long t [[(uldop (tsz g bt)) t b off]]]))
    (lobfst g bt b off u a)
-    (bfpk? bt || a ? (lostu g b off (tsz g bt) (a ? a 8) u)
+    (bfpk? bt || a ? (lostu g b off (tsz g bt) (lobfal g a) u)
        [[(stop <>bt) b off u]])
+   ; what a packed unit's chunks may assume: v6-M takes no word off its alignment
+   (lobfal g a) (a ? a (v6m? g ? 1 8))
+   ; a unit past the word, as two: 8 bytes as its type says, or a packed one's chunks
+   (lobfwld g bt b off)
+    (bfpk? bt
+     ? (loga g b off 4 (lobfal g ()) @ [_ l fl] (loga g b (off + 4) (tsz g bt - 4) (lobfal g ()) @ [_ h fh] [l h (fl + fh)]))
+     (lomk g @ l (lomk g @ h [l h [['ld l b off] ['ld h b (off + 4)]]])))
+   (lobfwst g bt b off l h)
+    (bfpk? bt ? (lostu g b off 4 (lobfal g ()) l + lostu g b (off + 4) (tsz g bt - 4) (lobfal g ()) h)
+       [['st b off l] ['st b (off + 4) h]])
+   ; a field's two words as the value it promotes to
+   (lobfwv g bt l h fs) (pprom bt @ t (pair? g t ? [t [l h] fs] [t l fs]))
    ; -- -mstrict-align: no access wider than the alignment its address carries --
    ; what a member at o keeps of its struct's alignment
    (loma g ty o) (lowb o @ 0 (tal g ty) lb (min (tal g ty) lb))
@@ -486,14 +502,27 @@
                           (lofl? ty) (lomk g @ t [(fs + [[(ty = 'float ? 'movdrx 'movqrx) t c]] + lostu g b off (tsz g ty) a t) [ty c ()]])
                           [(fs + lostu g b off (tsz g ty) a c) [ty c ()]])
               _ 'bad)
+          (['b [_ b _] bt off a] && wsize g < tsz g bt)
+           (: w (bt 3) wm ((1 << w) - 1) fm (wm << bt 2) (lo32 x) (x % 4294967296) (hi32 x) (x // 4294967296)
+              (lotr g v 'ullong @ [_ [cl ch] fs]
+                 (lomk g @ k (lomk g @ ml (lomk g @ mh
+                    (lopshk g 'shl 'ullong () ml mh (bt 2) @ [_ [sl sh] f2]
+                       (lobfwld g bt b off @ [ul uh fu]
+                          ((usg? <>bt ? (lopshk g 'shr 'ullong () ml mh 0) (lopshk g 'shl 'ullong () ml mh (64 - w) @ [_ [tl th] f3] (lopshk g 'sar 'ullong f3 tl th (64 - w)))) @ [_ [al ah] f4]
+                             [(fs + [['mov ml cl] ['li k (lo32 wm)] ['and ml ml k] ['mov mh ch] ['li k (hi32 wm)] ['and mh mh k]] + f2 + fu +
+                               [['li k (4294967295 - lo32 fm)] ['and ul ul k] ['li k (4294967295 - hi32 fm)] ['and uh uh k]
+                                ['or ul ul sl] ['or uh uh sh]] + lobfwst g bt b off ul uh + f4)
+                              (lobfwv g bt al ah ())]))))))))
           ['b [_ b _] bt off a]
            (: uty <>bt bitoff <>>bt width <>>>bt mask ((1 << width) - 1) cmask (0 - (mask << bitoff) - 1)
               (lotr g v (pair? g uty ? 'ulong uty) @ [_ c fs]
                  (: k (lomk g) m (lomk g) u (lomk g) x (lomk g)
                     (lobfld g bt b off a @ [_ u fu]
-                       [(fs + [['mov m c] ['li k mask] ['and m m k]] + fu + [['li k cmask] ['and u u k]
-                               ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u a)
-                        ['long m ()]]))))
+                       [(fs + [['mov m c] ['li k (cfit g 'long mask)] ['and m m k]] + fu + [['li k (cfit g 'long cmask)] ['and u u k]
+                               ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u a +
+                         ; the field's value, a signed one's top bit its sign
+                         (usg? uty || uty = 'bool || 8 * wsize g <= width ? () [['shl m (8 * wsize g - width)] ['sar m (8 * wsize g - width)]]))
+                        [(pprom bt) m ()]]))))
           (['a [_ b _] ty off] && (d128? ty || pair? g ty))
            (lotr g v ty @ [_ ws fs] [(fs + map (k \ ['st b (off + k * (pair? g ty ? 4 (lowd g))) (ws k)]) ^#ws) [ty ws ()]] _ 'bad)
           (['a _ ty _] && gcplx? ty && !(locxsame? (vty v) ty)) (lotr g v ty @ 'bad 'bad v2 (lost g lv v2))
@@ -537,11 +566,10 @@
                         (nthfield fields ci @
                            'bad (lono g 'field)
                            fe (? (bitf? (fe 2))
-                                  (? (bfwide? g (fe 2)) (lono g 'bitfield)
-                                     (lox g env (elval it) @ 'bad 'bad
-                                        v (lost g ['b ['long 'r4 ()] (fe 2) (off + fe 1) (lobfa g (fe 2) (lowb (off + fe 1)))] v @
-                                             [f2 _] (go u (fnext g fields ci) (acc + f2))
-                                             'bad)))
+                                  (lox g env (elval it) @ 'bad 'bad
+                                     v (lost g ['b ['long 'r4 ()] (fe 2) (off + fe 1) (lobfa g (fe 2) (lowb (off + fe 1)))] v @
+                                          [f2 _] (go u (fnext g fields ci) (acc + f2))
+                                          'bad))
                                  (loelt g env (off + fe 1) (fe 2) (elval it) @ 'bad 'bad
                                     fs (go u (fnext g fields ci) (acc + fs))))))
                     acc)

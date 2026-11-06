@@ -1605,7 +1605,6 @@
    ; a bitfield's unit, n bytes at b+o: one word as its type says, or by chunks when packed (its
    ; own n bytes, every one exact) or misaligned (a, the alignment its face carries)
    (bfpk? bt) (two? (drop 4 bt))
-   (bfwide? g bt) (bfpk? bt && wsize g < tsz g bt)   ; a packed unit past the register
    bp-paci '(raw (63 35 3 213))                     ; paciasp
    bp-auti '(raw (191 35 3 213))                    ; autiasp
    bp-btic '(raw (95 36 3 213))                     ; bti c
