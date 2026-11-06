@@ -289,12 +289,19 @@
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
              (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
-   ; off x64, a multiply by a power of two the fold left a register for is a shift
+   ; a multiply by a power of two the fold left is a shift, off x86 through a register;
+   ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
        kv (foldl (t \ f \ (f @ (['li k n] && lovr? k && peep dn k 0 = 1) (pin t k n) _ t)) {} fs)
        (p2 n) (cint? n && 1 < n && n & (n - 1) = 0)
-       (x86? g ? fs
+       (odd n) (n & 1 = 1 ? n (odd (n >> 1)))
+       (x86k d a k) (odd k @ m ((m = 1 ? (a = d ? () [['mov d a]]) [['leax d a a (m - 1) 0]]) + (1 < k // m ? [['shl d (lg (k // m))]])))
+       (kx86? k) (cint? k && 1 < k && (k & (k - 1) = 0 || elem (odd k) '(3 5 9)))
+       (go fs) (fs @ ((['mov d a] . ['imul d2 x k] . u) && d = d2 && d = x && kx86? k) (x86k d a k + go u)
+                     (f . u) (((f @ (['imul d a k] && kx86? k) (x86k d a k) _ [f])) + go u)
+                     ())
+       (x86? g ? (go fs)
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)

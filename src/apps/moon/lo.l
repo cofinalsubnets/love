@@ -13,7 +13,7 @@
    (lomkt g ty) (lofl? ty ? (lomkf g) (lomk g))
    ; a double's bits into the float file, and out: a 32-bit target's two words any two registers
    (lobits g d bits)
-    (ilp32? g ? (lomk g @ l (lomk g @ h [['li l (bits % 4294967296)] ['li h (bits // 4294967296)] ['movqrr d l h]]))
+    (ilp32? g ? (u64 bits @ u (lomk g @ l (lomk g @ h [['li l (u % 4294967296)] ['li h (u // 4294967296)] ['movqrr d l h]])))
        (lomk g @ t [['li t bits] ['movqxr d t]]))
    (lomv d s) (lofr? d ? ['movapd d s] ['mov d s])
    ; a pointer's step: the pointee's size, void and functions one byte
@@ -48,7 +48,7 @@
    ; to or from a pair: the float file through kits, a word its low half
    (lotrp g [vt r fs] ty)
     (? (pair? g ty && pair? g vt) [ty r fs]
-       (pair? g ty && lofl? vt && v6m? g)
+       (pair? g ty && lofl? vt && t32? g)
         (lotr g [vt r fs] 'double @ [_ x f2]
            (lomk g @ l (lomk g @ h
               [ty [l h] (f2 + [['movrrq 'r0 'r1 x] '(cuse r0 r1) ['call (usg? ty ? '__aeabi_d2ulz '__aeabi_d2lz)] ['mov l 'r0] ['mov h 'r1]])])))
@@ -791,6 +791,8 @@
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
     (? (bad? a || bad? b) 'bad
+       ; a literal multiplier sits on the right
+       (op = '* && losc? (vty a) && (a @ ([_ t [['li t2 k]]] && t = t2) 1 0) && !(b @ ([_ t [['li t2 k]]] && t = t2) 1 0)) (lobin g op b a ())
        (gcplx? (vty a) || gcplx? (vty b)) (locxbin g op a b)
        (d128? (vty a) || d128? (vty b)) (lowbin g op a b kb)
        (lofl? (vty a) || lofl? (vty b)) (lobinf g op a b)
@@ -949,9 +951,14 @@
     (lox0 g env e @ ((ty . _) && ilp32? g && d128? ty && !(lo128? g)) (lono g ['wide ty])
                     ((ty . r . _) && pair? g ty && !(two? r)) (lono g ['pairleak ty])
                     v v)
+   ; a tree of double literals, which folds as the runtime would answer: a float inside rounds first
+   (lokd? e) (e @ ['flo _] 1 ['un 'neg x] (lokd? x) ['bin op a b] (elem op '(+ - * /) && (lokd? a && lokn? b || lokn? a && lokd? b)) ['cast 'double x] (lokn? x) 0)
+   (lokn? e) (e @ ['num _] 1 (lokd? e))
    (lox0 g env e)
     (e @ () ['void () ()]
          ['lov v] v                                 ; a value already lowered
+         ((('bin || 'un) . _) && lokd? e && gem? (ffold e)) (lox g env ['flo (ffold e)])
+         (['cast 'float x] && <x != 'flo && lokd? x && gem? (ffold x)) (lox g env ['cast 'float ['flo (ffold x)]])
          (['num v] && ilp32? g && 2147483647 < v && v <= 4294967295) (lomk g @ t ['ulong t [['li t v]]])
          (['num v] && ilp32? g && !(-2147483648 <= v && v <= 2147483647) && -9223372036854775808 <= v <= 18446744073709551615)
           (u64 v @ u (lomk g @ l (lomk g @ h [(v < 0 ? 'llong 'ullong) [l h] [['li l (u % 4294967296)] ['li h (u // 4294967296)]]])))
