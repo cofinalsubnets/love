@@ -588,15 +588,10 @@ static love_inline struct g *have(struct g *g, uintptr_t n) {
 }
 // a walk keeps its worklist in the gap it was lent: spent, it asks for twice the region and
 // gives up, and its op takes the room and runs again. walks nest, so the ask is the largest
-static love_inline void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want) {
- uintptr_t n = (uintptr_t) (hi - base), w = (n < 32 ? 64 : 2 * n) + want;
- if (w > g->walk) g->walk = w; }
+void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want);
 // the ask is on top of the room there is: an op's own scratch may sit ahead of the walk's.
 // a host lane's: the room taken (which may collect), the ask cleared; operands ride the stack
-static love_inline struct g *walk_room(struct g *g) {
- uintptr_t w = g->walk + (uintptr_t) (g->sp - g->hp);
- g->walk = 0;
- return have(g, w); }
+struct g *walk_room(struct g *g);
 // an op's: the room through lvm_gc, which runs the op again on its operands as they were
 #define WalkAgain() do { if (g->walk) { uintptr_t _w = g->walk + room(Hp, Sp); g->walk = 0; have_gc(_w) } } while (0)
 static love_inline void *bump(struct g *g, uintptr_t n) {   // the nursery's; gc.c bumps the major
@@ -783,9 +778,7 @@ static love_inline struct str *bytes_of(word x) { return caskp(x) ? cask(x)->str
 // a cask's str, or NULL for anything else
 static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str : NULL; }
 // a cask's bytes, 8-aligned to hold a C state, and their count; NULL for anything else
-static love_inline uint8_t *cask_bytes(word x, uintptr_t *n) {
- struct str *s = cask_str(x);
- return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+uint8_t *cask_bytes(word x, uintptr_t *n);
 // a state: a port with no door, holding a nif's bytes. only the nifs that made it read or write them
 struct state { struct io io; struct str *str; };
 static love_inline struct str *state_str(word x) {
@@ -793,7 +786,6 @@ static love_inline struct str *state_str(word x) {
 static love_inline uint8_t *state_bytes(word x, uintptr_t *n) {
  struct str *s = state_str(x);
  return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
-
 
 // --- numbers ---
 #define isnum(x) (charmp(x) || gemp(x) || bigp(x))
@@ -902,8 +894,7 @@ static love_noinline __attribute__((unused)) int64_t flo_i64(flo_t x) {
  if (x >= -(flo_t) 2147483648.0 && x < (flo_t) 2147483648.0) return (int32_t) x;
 #endif
  return (int64_t) x; }
-static love_inline flo_t love_fmod(flo_t a, flo_t b) {
- return a - love_trunc(a / b) * b; }
+flo_t love_fmod(flo_t a, flo_t b);
 // the math lvms' function argument, in g->b
 typedef flo_t (*flo1)(flo_t);
 typedef flo_t (*flo2)(flo_t, flo_t);
@@ -972,15 +963,9 @@ flo_t vop_flo(int op, flo_t a, flo_t b);
 // the broadcast odometer, rightmost axis fastest, carrying each operand's offset by its stride
 // (0 on a size-1 axis); in the fill's frame, so an lvm wrapper stays a leaf
 struct bcast { uintptr_t R; uintptr_t const *shape; intptr_t oa, ob, ca[maxrank], cb[maxrank], idx[maxrank]; };
-static love_inline void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
-                              uintptr_t R, uintptr_t const *shape) {
- w->R = R, w->shape = shape, w->oa = w->ob = 0;
- for (uintptr_t j = 0; j < R; j++) w->idx[j] = 0;
- bstride(va, R, w->ca), bstride(vb, R, w->cb); }
-static love_inline void bc_step(struct bcast *w) {
- for (intptr_t j = (intptr_t) w->R - 1; j >= 0; j--) {
-  if (++w->idx[j] < (intptr_t) w->shape[j]) { w->oa += w->ca[j], w->ob += w->cb[j]; return; }
-  w->idx[j] = 0, w->oa -= ((intptr_t) w->shape[j] - 1) * w->ca[j], w->ob -= ((intptr_t) w->shape[j] - 1) * w->cb[j]; } }
+void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
+                              uintptr_t R, uintptr_t const *shape);
+void bc_step(struct bcast *w);
 
 // --- maps ---
 // a map: a fixed header [lvm_map_lookup, backing, serial, tag] and an open-addressed backing
@@ -1022,8 +1007,7 @@ static love_inline word coin_load(word x) { return ((struct coin*) x)->payload; 
 // coin band then the payload (a map key or sort reads the payload regardless), int and ceil
 // the measure's. star truthy: a numeral powers through its *. KnLambda on: `kind`'s answers
 // a kind table's slot, () if absent or not a tablet
-static love_inline word kind_get(struct g *g, word kind, intptr_t i) {
- return tabp(kind) ? mapget(g, ZeroPoint, core_of(g)->nom[i], kind) : ZeroPoint; }
+word kind_get(struct g *g, word kind, intptr_t i);
 
 // --- truth and equality ---
 // x is false iff its net's real part is not positive. the net is complex and additive, so a
@@ -1073,14 +1057,8 @@ static love_inline word ini_tablet(union u *h, word b, word serial) {
  t->ap = lvm_map_lookup, t->back = b, t->serial = serial;
  return word(tagthread(h, Width(struct tablet))); }
 #define topof(g) ((word*)g+g->len)
-static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g, union u *k) {
- // k forward to its terminator, in whichever pool holds it
- word *lo, *hi;
- if (ptr(k) >= g->major_base && ptr(k) < g->major_hp) lo = g->major_base, hi = g->major_hp;
- else if (ptr(k) >= g->sv_base && ptr(k) < g->sv_hp) lo = g->sv_base, hi = g->sv_hp;
- else lo = ptr(g), hi = topof(g);
- while (!tagp(k->x, lo, hi)) k++;
- return (struct tag*) k; }
+struct tag { union u *head; union u end[]; };
+struct tag *ttag(struct g*, union u*);
 static love_inline union u *tag_head(struct tag *t) {
  return cell(word(t->head) & ~(word) 3); }
 // a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C

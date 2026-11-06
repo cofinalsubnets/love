@@ -547,6 +547,106 @@
          _ (elem (lopeek g env e) '(int short schar char cchar uchar ushort bool)))
    (loui g env e v w)
     (two? v && two? w && vty v = 'long && u32? g (vty w) && lo32i? g env e ? (lotr g v 'uint) v)
+   ; -- the idioms read whole --
+   ; x / or % a positive literal: a shift, or the reciprocal's high word -> a value | 'no
+   (lomulh g u t m x)
+    ((u ? 'umulh 'mulh) @ op
+       (x86? g ? [['mov 'r0 x] ['li 'r1 m] ['fix '(r0 r1) '(r0 r1) [[op 'r1 'r0 'r1]]] ['mov t 'r1]]
+          [['li t m] [op t t x]]))
+   (lodivk g op a b)
+    (b @ ([_ t0 [['li t1 n]]] && t0 = t1 && cint? n && 0 < n && !(abl? g 'divk))
+          (: u (cmpu g (vty a) (vty b)) rt (rbin g (vty a) (vty b)) bw (8 * wsize g) rem (op = '%)
+             (? (u && pow2? n) 'no
+                (pow2? n) (loz g a b @ [_ x fx] (lodivp g rem x fx rt n bw))
+                (t32? g || wasm? g || n < 3 || !(n < 1 << (u ? bw (bw - 1)))) 'no
+                (loz g a b @ [_ x fx] (lodivm g rem u x fx rt n bw))))
+         _ 'no)
+   ; C rounds toward zero and sar toward -inf: a negative dividend takes n - 1 first
+   (lodivp g rem x fx rt n bw)
+    (lomk g @ t (lomk g @ d
+       (: k (lg2 n) bias ([['mov t x] ['sar t (bw - 1)] ['shr t (bw - k)] ['add t t x]])
+          (? (n = 1) [rt d (rem ? (fx + [['li d 0]]) (fx + [['mov d x]]))]
+             rem [rt d (fx + bias + lork g 'and t (0 - n) + [['mov d x] ['sub d d t]])]
+             [rt t (fx + bias + [['sar t k]])]))))
+   ; Granlund-Montgomery's reciprocal, magic1's M, its 65th bit folded back
+   (lodivm g rem u x fx rt n bw)
+    (magic1 n bw !u @ [m s add]
+       (lomk g @ t (lomk g @ f
+          (: hi (fx + lomulh g u t m x)
+             (back q a) (lork g 'imul q n + [['mov a x] ['sub a a q]])
+             (? !u (: q (hi + (add ? [['add t t x]]) + (0 < s ? [['sar t s]]) + [['mov f x] ['sar f (bw - 1)] ['sub t t f]])
+                      (rem ? [rt f (q + back t f)] [rt t q]))
+                add (: q (hi + [['mov f x] ['sub f f t] ['shr f 1] ['add f f t]] + (0 < s ? [['shr f s]]))
+                       (rem ? [rt t (q + back f t)] [rt f q]))
+                (: q (hi + (0 < s ? [['shr t s]]))
+                   (rem ? [rt f (q + back t f)] [rt t q])))))))
+   ; (x >> n) | (x << (W - n)), either way round: one rotate -> a value | 'bad | 'no
+   (lorot g env L R)
+    (L @ ['bin o1 _ _]
+          (R @ ['bin o2 _ _]
+                (? (!(rot4? g) || !(elem o1 '(shl shr)) || !(elem o2 '(shl shr)) || o1 = o2) 'no
+                   (: s (o1 = 'shr ? L R) l (o1 = 'shr ? R L) x <>>s cs <>>>s cl <>>>l
+                      (!(<>>l = x) || !(rotp? x) ? 'no
+                         (rotw g env x @
+                            () 'no
+                            w (: ks (rotk g cs) kl (rotk g cl) rt (w = 32 ? 'uint 'ulong)
+                                 (? (charm? ks && charm? kl)
+                                     (ks + kl = w && 0 < ks && ks < w ?
+                                        (lox g env x @ [_ r fs] (lomk g @ d [rt d (fs + [['mov d r] [(w = 32 ? 'ror4 'ror) d ks]])]) 'bad 'bad)
+                                        'no)
+                                    (charm? ks || charm? kl) 'no
+                                    (rotc? g w cl cs) (lorotv g env x w cs () rt)
+                                    (rotc? g w cs cl) (lorotv g env x w cl 1 rt)
+                                    'no))))))
+                _ 'no)
+         _ 'no)
+   (lorotv g env x w c ng rt)
+    (lox g env x @ 'bad 'bad
+       [_ r fx] (lox g env c @ 'bad 'bad
+          [_ k fk] (lomk g @ d [rt d (fx + fk + [['mov d r] ['mov 'r1 k]] + (ng ? [['neg 'r1]]) + [[(w = 32 ? 'rorv4 'rorv) d 'r1]])])))
+   ; c ? a : b with no branch, its arms laid ahead of the compare: what cannot fault or be written by it -> a value | 'bad | 'no
+   (lospec? g env e)
+    (e @ ['var nm] (lovar g env nm @ (['v _ ty] && losc? ty) 1
+                                     (['m _ ty] && losc? ty) 1
+                                     _ ())
+         ['num _] 1
+         ['bin op a b] (!(elem op '(/ %)) && lospec? g env a && lospec? g env b)
+         ['un _ a] (lospec? g env a)
+         ['cast ty a] (!(flo? ty || d128? ty) && lospec? g env a)
+         ())
+   (losel g env c a b)
+    (? (relish? c && a = ['num 1] && b = ['num 0]) (lox g env c)
+       (relish? c && a = ['num 0] && b = ['num 1]) (lox g env ['un 'not c])
+       !(x64? g || a64? g) 'no
+       (wrany? c || callish? c || two? (knum g c)) 'no
+       (lominmax g env c a b @ 'no (losel1 g env c a b) v v))
+   ; minsd and maxsd are x64's, fmin's NaN apart
+   (lominmax g env c a b)
+    (c @ (['bin op p q] && x64? g && elem op '(lt gt) && (a = p && b = q || a = q && b = p) && !(wrany? a || callish? a || wrany? b || callish? b))
+          (lox g env a @ 'bad 'bad
+             ([ta x fx] && ta = 'double)
+              (lox g env b @ 'bad 'bad
+                 ([tb y fy] && tb = 'double)
+                  (lomkf g @ d ['double d (fx + fy + [['movapd d x] [(a = p ? (op @ 'lt 'minsd 'maxsd) (op @ 'lt 'maxsd 'minsd)) d y]])])
+                 _ 'no)
+             _ 'no)
+         _ 'no)
+   (losel1 g env c a b)
+    (? !(lospec? g env a && lospec? g env b) 'no
+       (lox g env a @ 'bad 'bad
+          va (lox g env b @ 'bad 'bad
+             vb (: xa (loui g env a va vb) xb (loui g env b vb va) ta (vty xa) tb (vty xb)
+                   (? (lofl? ta || lofl? tb || !(losc? ta && losc? tb)) 'no
+                      (: rt (? (ptr? ta) ta (ptr? tb) tb (rbin g ta tb)) (z v w) (loz g (lotr g v rt) w)
+                         L (nlab g ".lo")
+                         (lobr g env c 1 L @ 'bad 'bad
+                            fc (rev fc @ (['br cc L2] . u)
+                                  (: bl (rev u)
+                                     (L2 = L && lbmen fc L = 1 ?
+                                        (z xa xb @ [_ x fx] (z xb xa @ [_ y fy] (lomk g @ d
+                                           [rt d (fx + fy + [['mov d y]] + bl + [['cmov cc d x]])])))
+                                        'no))
+                                  _ 'no))))))))
    ; -- binary operators over two values --
    (locmp? op) (elem op '(eq ne lt le gt ge))
    (lobin g op a b kb)
@@ -581,10 +681,11 @@
                  (b @ ([_ t [['li t2 k]]] && t = t2 && imma g (irop op) k) (lomk g @ d [rt d (vfs a + [['mov d (vreg a)] [(irop op) d d k]] + (nar ? [[nar d]]))])
                       _ (lomk g @ d [rt d (vfs a + vfs b + [['mov d (vreg a)] [(irop op) d d (vreg b)]] + (nar ? [[nar d]]))])))
              (elem op '(/ %))
+              (lodivk g op a b @ v (v != 'no ? v
               (: u (cmpu g ta tb) io (op = '/ ? (u ? 'udiv 'div) (u ? 'urem 'rem))
                  ; a remainder's scratch: x64's rax, else a register apart from both operands
                  (loz g a b @ [_ x fx] (loz g b a @ [_ y fy] (lomk g @ d (lomk g @ t
-                    [(rbin g ta tb) d (fx + fy + [(io @ ('rem || 'urem) [io d x y (x86? g ? 'r0 t)] [io d x y])])])))))
+                    [(rbin g ta tb) d (fx + fy + [(io @ ('rem || 'urem) [io d x y (x86? g ? 'r0 t)] [io d x y])])])))))))
              (lono g ['bin op]))))
    ; a value's range: a lone literal its own, else its type's | ()
    (lorng v) (v @ ([_ t [['li t2 k]]] && t = t2 && cint? k) [k k] [ty _ _] (irng ty) _ ())
@@ -729,7 +830,10 @@
              ty (lomk g @ t ['ulong t [['li t (tsz g ty)]]]))
          ; gcc's &&L
          ['laddr nm] (wasm? g ? (lono g e) (lomk g @ t [['ptr 'void] t [['la t (name "\(g 'fn).\(nm)")]]]))
-         ['flo v] (lomkf g @ w ['double w (lobits g w (fbits v))])
+         ['flo v] (lomkf g @ w
+                    ['double w (? (x64? g && fsel? g) [['ldsdl w (dblab g v)]]
+                                  ((a64? g || rv64? g) && fsel? g) (lomk g @ t [['la t (dblab g v)] ['ldsd w t 0]])
+                                  (lobits g w (fbits v)))])
          ['str s]
           (nlab g ".S" @ lbl
              (pin g 'strs ([lbl s] . g 'strs),
@@ -821,6 +925,7 @@
              (lobr g env e 0 lf @ 'bad 'bad
                 f ['int d (f + [['li d 1] ['jmp ld] ['label lf] ['li d 0] ['label ld]])]))))
          ['cond c a b]
+          ((fsel? g ? (losel g env c a b) 'no) @ sel (sel != 'no ? sel
           (nlab g ".lo" @ le (nlab g ".lo" @ ld
              (lobr g env c 0 le @ 'bad 'bad
                 fc (lox g env a @ 'bad 'bad
@@ -848,13 +953,16 @@
                                      rt (? (ptr? ta) ta (ptr? tb) tb fl (ta = 'double || tb = 'double ? 'double 'float) (rbin g ta tb))
                                      (z v w) (fl ? (lotr g v rt) (loz g (lotr g v rt) w))
                                      (z xa xb @ [_ x fx] (z xb xa @ [_ y fy] (lomkv g rt @ d
-                                        [rt d (fc + fx + lomvs d x + [['jmp ld] ['label le]] + fy + lomvs d y + [['label ld]])]))))))))))
+                                        [rt d (fc + fx + lomvs d x + [['jmp ld] ['label le]] + fy + lomvs d y + [['label ld]])]))))))))))))
          ['bin op a b]
           (: kb (elem op '(shl shr) ? (lok g b))
-             va (lox g env a)
+             gz (op = '| ? (gather g env e))
+             ro (op = '| && !gz ? (lorot g env a b) 'no)
+             (? gz (lox g env gz) (ro != 'no) ro
+             (: va (lox g env a)
              vb (two? kb ? ['int () ()] (lox g env b))
-             (: sh (elem op '(shl shr)) va2 (sh ? va (loui g env a va vb)) vb2 (sh ? vb (loui g env b vb va))
-                (lovstep g op a b va2 vb2 @ () (lobin g op va2 vb2 kb) x (lox g env x))))
+             sh (elem op '(shl shr)) va2 (sh ? va (loui g env a va vb)) vb2 (sh ? vb (loui g env b vb va))
+                (lovstep g op a b va2 vb2 @ () (lobin g op va2 vb2 kb) x (lox g env x)))))
          ; a64 walks the lines; elsewhere the args for their effects alone
          ['call ['var "__builtin___clear_cache"] as]
           (a64? g && #as = 2 ?
