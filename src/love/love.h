@@ -53,14 +53,6 @@ static love_inline size_t b2w(size_t b) {
 #ifndef iobuf
 #define iobuf 4096
 #endif
-// slack on every avail check against off-by-one overshoots; 0 under Love0, to keep it strict
-#ifndef avail_floor
-# ifdef Love0
-#  define avail_floor 0
-# else
-#  define avail_floor 8
-# endif
-#endif
 // this link bakes the crew from the source it carries; love0 lays that blob, wasm has no self on disk
 #if !defined(Love0) && !defined(__wasm__)
 # define LvBakeSrc 1
@@ -179,10 +171,10 @@ union u {
 // a variable ask is held to the room Sp - Hp, which no n can wrap; a small constant keeps
 // the one-instruction Hp + n, which wraps only within 32 KB of the address space's top
 #define room(Hp, Sp) (((uintptr_t) (Sp) - (uintptr_t) (Hp)) / sizeof(word))
-#define have_gc(n) { g->b = (n) + avail_floor; love_musttail return Ap(lvm_gc, g); }
+#define have_gc(n) { g->b = (n); love_musttail return Ap(lvm_gc, g); }
 #define Have(n) do { \
-  if (__builtin_constant_p(n) && (n) <= 4096) { if (Sp < Hp + (n) + avail_floor) have_gc(n) } \
-  else if (room(Hp, Sp) < (uintptr_t) (n) + avail_floor) have_gc(n) } while (0)
+  if (__builtin_constant_p(n) && (n) <= 4096) { if (Sp < Hp + (n)) have_gc(n) } \
+  else if (room(Hp, Sp) < (uintptr_t) (n)) have_gc(n) } while (0)
 #define Have1() Have(1)
 #define pop1(g) (*(g)->sp++)
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; love_musttail return Continue(); }
@@ -299,7 +291,6 @@ struct g {
  // the rem set: old cells that took a young pointer; a rem_miss forces the next collection major
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // bounded by LvRemCap
- int8_t lean;                             // grow streak; a grow needs lean >= 2
  intptr_t scare;                          // why the last scare: an oom's ask, or a Scare case
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
