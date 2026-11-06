@@ -61,6 +61,7 @@ love_noinline static struct g *host_qoid(struct g *g) {
  int why = qoi_head((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), &w, &h);
  if (why) return g->sp[0] = putcharm(why), g;
  uintptr_t k = (uintptr_t) w * h * 4;
+ if (len(g->sp[0]) - 14 < k / 4 / 62) return g->sp[0] = putcharm(2), g;   // a byte says at most 62 pixels
  if (!ok(g = str0(g, k))) return g;               // pushes: out over s
  why = qoi_ops((const uint8_t*) txt(g->sp[1]), len(g->sp[1]), (uint8_t*) txt(g->sp[0]), k);
  if (why) return g->sp[1] = putcharm(why), g->sp += 1, g;
@@ -109,7 +110,7 @@ static uintptr_t qoi_enc(const uint8_t *px, uint32_t w, uint32_t h, uint8_t *o) 
 love_noinline static struct g *host_qoie(struct g *g) {
  if (!oddp(g->sp[0]) || !oddp(g->sp[1]) || !strp(g->sp[2])) return g->sp[2] = ZeroPoint, g->sp += 2, g;
  intptr_t w = getcharm(g->sp[0]), h = getcharm(g->sp[1]);
- if (w < 1 || h < 1 || (uint64_t) w * (uint64_t) h > (1u << 24) || len(g->sp[2]) != (uint64_t) w * (uint64_t) h * 4)
+ if (w < 1 || h < 1 || w > 1 << 24 || h > 1 << 24 || (uint64_t) w * (uint64_t) h > (1u << 24) || len(g->sp[2]) != (uint64_t) w * (uint64_t) h * 4)
   return g->sp[2] = ZeroPoint, g->sp += 2, g;
  uintptr_t k = qoi_enc((const uint8_t*) txt(g->sp[2]), (uint32_t) w, (uint32_t) h, NULL);
  if (!ok(g = str0(g, k))) return g;               // pushes: out over the three

@@ -1697,7 +1697,7 @@
                           (go >ls ([<p (p 1) (p 2) fl (p 4 + q 2)] . >acc))
                           (go >ls ([l <q <>q fl (q 2)] . acc)))))
                (go shl0 ()))
-       shl (map (e \ <e) secs)
+       shl (map cap secs)
        lanesx ({} @ t (foldl (\ i l (pin t l i, i + 1)) 1 shl, t))
        st (ldstab objs glo lanesx elf-sym32 16)
        ; -- the abs32 sites by lane, each an Elf32_Rel R_ARM_ABS32 against symbol 0 (value 0),

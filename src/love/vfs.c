@@ -11,6 +11,7 @@ static int vfs_tar_walk(struct vfs *v, unsigned char const *t, uintptr_t n, stru
  for (uintptr_t o = 0; o + 512 <= n && t[o];) {
   unsigned char const *h = t + o;
   uintptr_t sz = ustar_octal(h + 124, 12);
+  if (!ustar_summed(h) || sz > n - o - 512) return -1;
   if (ustar_member(h)) {
    if (rows) {
     char nm[256];

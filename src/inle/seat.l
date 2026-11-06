@@ -169,7 +169,13 @@
                              (b = 27) (kwin-text acc 1)
                              (b < 32 || b = 127) (kwin-text acc 0)
                              (kwin-text (acc + string b) 0)))
+   ; ..the text comes whole, so one byte after a last key is that key's; else it leads, for no
+   ; key to take a held key's repeats
+   (kwin-lay l t) (? (#t = 0) l
+                     (#t = 1 && two? l && <(rev l 0) = 'down) (l + [['text t]])
+                     (['text t] . l))
+   ; ..and after the codes, so a byte is in before its key is
    (kwin-events _)
     (: (go acc) (kscan 0 @ e (e = () ? (rev acc) (go (kwin-rec e . acc))))
-       t (kwin-text "" 0)
-       (go () @ l (0 < #t ? (l + [['text t]]) l))))
+       l (go ())
+       (kwin-lay l (kwin-text "" 0))))

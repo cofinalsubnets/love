@@ -50,9 +50,9 @@ static void lz_reset(struct lz_model *m) {
 
 // the props byte, pb lp lc packed as ((pb * 5) + lp) * 9 + lc
 static int lz_props(struct lz_model *m, unsigned b, unsigned maxlclp) {
- if (b >= 225) return 0;
+ if (b >= 225 || b % 9 + b / 9 % 5 > maxlclp) return 0;
  m->lc = b % 9; b /= 9; m->lp = b % 5; m->pb = b / 5;
- return m->lc + m->lp <= maxlclp; }
+ return 1; }
 
 static unsigned lz_litst(unsigned s) { return s < 4 ? 0 : s < 10 ? s - 3 : s - 6; }
 
@@ -76,9 +76,14 @@ static void rd_norm(struct lz_rd *r) {
 #define LZ_BIT(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
  if (cd < q_) rg = q_, *p_ = (lzp) (w_ + ((LZ_ONE - w_) >> LZ_MOVE)), b = 0; \
  else rg -= q_, cd -= q_, *p_ = (lzp) (w_ - (w_ >> LZ_MOVE)), b = 1; }
-// branchless, for a tree's unpredictable bits: k_, the sign of cd - q, is all ones for a 0
+// branchless, for a tree's unpredictable bits: k_ is all ones for a 0, the sign of cd - q where a word holds it
+#if UINTPTR_MAX > 0xffffffffu
+#define LZ_LT(a, b) ((uintptr_t) ((intptr_t) ((a) - (b)) >> 63))
+#else
+#define LZ_LT(a, b) (0 - (uintptr_t) ((a) < (b)))
+#endif
 #define LZ_BITF(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_, k_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
- k_ = (uintptr_t) ((intptr_t) (cd - q_) >> 63), b = k_ + 1; \
+ k_ = LZ_LT(cd, q_), b = k_ + 1; \
  rg = q_ + ((rg - q_ - q_) & ~k_), cd -= q_ & ~k_; \
  *p_ = (lzp) (w_ + (((LZ_ONE - w_) >> LZ_MOVE) & k_) - ((w_ >> LZ_MOVE) & ~k_)); }
 #define LZ_TREE(pp, n, v) LZ_CALL(lz_ftree(&cs, (pp), (uintptr_t) 1 << (n)), v)
@@ -393,7 +398,7 @@ static void xp_price(struct xe_px *x, const struct lz_model *m) {
    x->slot[ls][sl] = xp_tree(x, m->slot[ls], 6, sl) + (sl >= 14 ? ((sl >> 1) - 5) << 4 : 0);
   for (uint32_t d = 0; d < 128; d++) {
    unsigned sl = xe_slot(d), fb = (sl >> 1) - 1;
-   uint32_t base = (2 | (sl & 1)) << fb;
+   uint32_t base = sl < 4 ? 0 : (2 | (sl & 1)) << fb;
    x->dist[ls][d] = x->slot[ls][sl] + (sl >= 4 ? xp_rtree(x, m->spec + base - sl - 1, fb, d - base) : 0); } }
  for (unsigned i = 0; i < 16; i++) x->align[i] = xp_rtree(x, m->align, 4, i);
  x->left = 256; }
@@ -775,7 +780,7 @@ struct lm_st { uint64_t magic, n, cap, dict, tot, want, litn; uint32_t range, co
                uint8_t pin[LZ_REQ + 4]; struct lz_model m; };
 #define LM_HEAD ((sizeof(struct lm_st) + 7) & ~(uintptr_t) 7)
 static struct str *lm_cask(word x) {
- struct str *s = cask_str(x);
+ struct str *s = state_str(x);
  struct lm_st *S = s && s->len > LM_HEAD ? (struct lm_st*) s->bytes : NULL;
  return S && S->magic == LM_MAGIC && LM_HEAD + S->litn * sizeof(lzp) + S->cap == s->len ? s : NULL; }
 love_noinline static struct g *host_lzma_new(struct g *g) {
@@ -791,9 +796,9 @@ love_noinline static struct g *host_lzma_new(struct g *g) {
  if (dict > XZ_MAX) return g->sp[2] = putcharm(1), g->sp += 2, g;
  uintptr_t litn = (uintptr_t) 0x300 << (pm.lc + pm.lp), cap = dict + LM_ROOM,
            n = LM_HEAD + litn * sizeof(lzp) + cap;
- union u *k = new_cask(&g, n, LM_HEAD);
+ union u *k = new_state(&g, n, LM_HEAD);
  if (!k) return g;
- struct lm_st *S = (struct lm_st*) cask(k)->str->bytes;
+ struct lm_st *S = (struct lm_st*) ((struct state*) k)->str->bytes;
  S->magic = LM_MAGIC, S->cap = cap, S->dict = dict, S->litn = litn, S->want = (uint64_t) want;
  S->m.lc = pm.lc, S->m.lp = pm.lp, S->m.pb = pm.pb, S->m.lit = (lzp*) ((char*) S + LM_HEAD);
  lz_reset(&S->m);
@@ -828,7 +833,7 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
    else if (rc == 1 && last && o.n < o.cap - LZ_MAXLEN) rc = 0;   // the input over, the stream not
    used = (uintptr_t) (r.p - buf); }
   if (rc == 2) S->done = 1; }
- if (!rc) return alloc(buf, 0), g->sp[1] = ZeroPoint, g->sp += 1, g;
+ if (!rc) return S->magic = 0, alloc(buf, 0), g->sp[1] = ZeroPoint, g->sp += 1, g;
  uintptr_t on = S->n - o0, rest = in - used;
  if (rc == 3) {                                       // the rest kept for the next feed
   memcpy(S->pin, buf + used, rest), S->pend = (uint32_t) rest, rest = 0; }
@@ -866,16 +871,16 @@ love_noinline static struct g *host_crc64_on(struct g *g) {
 
 #define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)
 static struct str *l2_cask(word x) {
- struct str *s = cask_str(x);
+ struct str *s = state_str(x);
  struct l2_st *S = s && s->len > L2_HEAD ? (struct l2_st*) s->bytes : NULL;
  return S && S->magic == L2_MAGIC && S->cap == s->len - L2_HEAD ? s : NULL; }
 love_noinline static struct g *host_lzma2_new(struct g *g) {
  word dw = g->sp[0];
  if (!oddp(dw) || getcharm(dw) < 4096 || (uintptr_t) getcharm(dw) > XZ_MAX) return g->sp[0] = ZeroPoint, g;
  uintptr_t dict = (uintptr_t) getcharm(dw), n = L2_HEAD + dict + L2_ROOM(dict);
- union u *k = new_cask(&g, n, L2_HEAD);
+ union u *k = new_state(&g, n, L2_HEAD);
  if (!k) return g;
- struct l2_st *S = (struct l2_st*) cask(k)->str->bytes;
+ struct l2_st *S = (struct l2_st*) ((struct state*) k)->str->bytes;
  S->magic = L2_MAGIC, S->cap = dict + L2_ROOM(dict), S->dict = dict, S->needdict = S->needprops = 1;
  return g->sp[0] = word(k), g; }
 love_noinline static struct g *host_lzma2_chunk(struct g *g) {
@@ -885,7 +890,7 @@ love_noinline static struct g *host_lzma2_chunk(struct g *g) {
  S->m.lit = S->lit;                                 // the cask moves: the pointer is laid again
  uintptr_t o0 = 0;
  intptr_t got = l2_step(S, (uint8_t*) cs->bytes + L2_HEAD, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), &o0);
- if (got < 0) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ if (got < 0) return S->magic = 0, g->sp[1] = ZeroPoint, g->sp += 1, g;   // a torn state is no state
  if (!ok(g = str0(g, (uintptr_t) got))) return g;   // pushes: out over st and c
  memcpy(txt(g->sp[0]), l2_cask(g->sp[1])->bytes + L2_HEAD + o0, (uintptr_t) got);
  return g->sp[2] = g->sp[0], g->sp += 2, g; }

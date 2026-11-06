@@ -319,7 +319,7 @@ some literal
         ; wide tables overrun neither straight nor through roff, laid a row at a time
         (: d (mdread (slurpf "doc/misc/kore.md"))
            ; the width is characters: a check mark is three bytes and one column
-           (cols l) (flush l @ f #(filter (c \ !(128 <= c && c < 192)) (map (i \ f i) ^#f)))
+           (cols l) (flush l @ f #(filter (c \ !(128 <= c && c < 192)) (map f ^#f)))
            (test (foldl (a \ l \ (a && cols l <= 80)) 1 (lines (ttyshow d 80)))
                  (foldl (a \ l \ (a && cols l <= 80)) 1 (lines (ttyshow (rfread (rfshow d)) 80))))),
         ; a roff page the tree did not write still lays out, every block within the width

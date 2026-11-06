@@ -434,7 +434,7 @@
    ; an asm's own labels, local in the symtab as gas lays them: modpost finds an export by its
    ; __export_symbol_ label. gas's numbered (l911.1, a function's fn.asm.3.l911.1) and pool (.L..) labels stay out
    (asmlocs secs)
-    (: (digs? s) (0 < #s && all digit? (map (i \ s i) (jot #s)))
+    (: (digs? s) (0 < #s && all digit? (map s (jot #s)))
        (lnum? sp) (rev (split "." sp) @ p (1 < #p && starts? <>p "l" && digs? (snip <>p 1 #(<>p)) && digs? <p))
        (lab f) (two? f && <f = 'label && !(fn-mark? <>f) ? (show <>f @ sp (lnum? sp || starts? sp ".L" ? () sp)))
        (filter string? (catall (map (s \ map lab (s 3)) secs))))
@@ -494,14 +494,15 @@
                         (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
-                    (objsecs32n tgt (objsec-merge ((objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3)) + xs) <at)
+                    (objsecs32n tgt (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                                 fns gns wks anames)
-                    (objsecsn tgt (objsec-merge (objsecs4 tforms dforms nforms iforms bforms rforms + xs) <at)
-                              fns gns wks (lnames + filter (s \ !(elem s fns || elem s gns || elem s lnames)) (asmlocs <at)) anames
+                    (objsecsn tgt (objsec-merge ((dotS? src || dots? src ? [[".text" 1 6 4 ()]] (objsecs4 tforms dforms nforms iforms bforms rforms)) + xs) <at)
+                              fns gns wks (lnames + (foldl (\ t s (pin t s 1)) {} (fns + gns + lnames) @ have (filter (s \ !(peep have s 0)) (asmlocs <at)))) anames
                               ; the asm's data names typed as gas types them, its absolute symbols and its sizes
-                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())]
+                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
+                               (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
                               ; the functions C laid, not the asm's, under unwind tables
-                              (ua || us ? (fnames + lnames + map (x \ <x) xfns) ()))))
+                              (ua || us ? (fnames + lnames + map cap xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
@@ -536,7 +537,7 @@
    ; else the object's with .d; -MT the target, else the object
    (cc-deps src dst t)
     (: ours (map (r \ "\(r)include/") (mroots ()))
-       (sys? p) (any (d \ starts? p d) ours || (t 'vb && starts? p "include/"))
+       (sys? p) (any (starts? p) ours || (t 'vb && starts? p "include/"))
        hs (filter (p \ !(t 'mmd && sys? p)) (uniq (rev (peep cppdeps 'l ()))))
        df (t 'mf || (dst @ (b + ".o") "\(b).d" "\(dst).d"))
        txt ("\(t 'mt || dst): \(join " \\\n  " (src . hs))\n"
@@ -748,7 +749,7 @@
                        st (stat p)
                        (? !(two? st) a
                           (sdir? st) "\(a)\(f)/\n\(mcshape "\(p)/")"
-                          "\(a)\(f)\n\(st)\n")))
+                          "\(a)\(f)\n\(show st)\n")))
            "" (sort (readdir d)))
    ; the toolchain dirs, as bytes and as shape
    (mcsrctext home) (mctree "\(home)include/" + mctree "\(home)lib/")
@@ -780,7 +781,7 @@
        src (two? ims ? (mcsrcid home) "")
        ; the ablation knob compiles a different runtime; unset stays out of the key
        ab (getenv "MOON_ABLATE" @ s (string? s && 0 < #s ? "\nabl \(s)" ""))
-       (two? ims ? (sha256 "moon-rt 2\n\(x)\n\(mccid x)\n\(ims)\n\(src)\(ab)")))
+       (two? ims ? (sha256 "moon-rt 2\n\(x)\n\(mccid x)\n\(show ims)\n\(src)\(ab)")))
    ; an entry, read back and checked for its magic -> (1 bytes) | ()
    (mcget d f mag)
     (: r (uread (d + f))
@@ -799,7 +800,7 @@
    (mccid p)
     (: st (stat p)
        d (mcdir ())
-       k (string? d && two? st && sha256 "moon-cid 1\n\(p)\n\(st)")
+       k (string? d && two? st && sha256 "moon-cid 1\n\(p)\n\(show st)")
        hit (string? k && mcget d "\(k).cid" "cid1 ")
        (two? hit && utime "\(d)\(k).cid" (clock ()),        ; the sweep orders by use
         two? hit ? (snip <>hit 5 69)

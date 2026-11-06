@@ -212,7 +212,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
    ;     the paper, 8 by 16 a cell ---
    (glass t)
     (window-open 640 480 "tuner" @ wd
-     (? !(tablet? wd) (say err "tuner: no window (\(wd))\n", 1)
+     (? !(tablet? wd) (say err "tuner: no window (\(show wd))\n", 1)
         (tuner-glass t wd, window-close wd, 0)))
    ; t's frames on wd until a close, esc, q or t's own end; a frame follows every turn's events
    (tuner-glass t wd)
@@ -267,7 +267,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
               (: t (tuner-new ref (dm ? "demo" (getenv "HORN_IN" @ x (string? x && #x ? x "mic"))))
                  _ (twirl (_ \ (dm ? (demo t (clock 0)) (listen t h "" 0))) ())
                  _ (wn ? (glass t)
-                       (stage-run {'show (w \ ht \ paint t w ht) 'step (k \ step t k) 'over? (_ \ t 'over)
+                       (stage-run {'show (w \ ht \ paint t w ht) 'step (step t) 'over? (_ \ t 'over)
                                    'tick (_ \ 1) 'every 50 'modes ['hide]}))
                  _ (pin t 'over 1)                ; the ear stops
                  _ (dm ? 0 (close h))             ; and the device: run in-process the port

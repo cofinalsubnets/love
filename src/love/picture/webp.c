@@ -1,7 +1,7 @@
 // src/love/picture/webp.c
 // (webp-pixels s) -> the w*h*4 rgba of a webp -- an animation's first frame, laid on its
 // canvas; webp-frame below lays the rest -- | why not: 1 not a webp, 2 cut short, 3 a kind it
-// can't read (an interframe), 4 a bad stream, 5 past 2^24 pixels, 6 no room. lossy (vp8,
+// can't read (an interframe), 4 a bad stream, 5 past 2^28 pixels, 6 no room. lossy (vp8,
 // rfc 6386) with or without an ALPH plane, and lossless (vp8l, rfc 9649); the pixels are
 // libwebp's WebPDecodeRGBA's. webp-encode, at the foot, writes lossless.
 #include "love.h"
@@ -214,7 +214,7 @@ static void wp_drop(struct wp_mem *m, void *p) {
   if (m->p[i] == p) { alloc(p, 0), m->p[i] = m->p[--m->n]; return; } }
 static void wp_free(struct wp_mem *m) { while (m->n) alloc(m->p[--m->n], 0); }
 
-static int wp_big(uintptr_t w, uintptr_t h) { return w * h > (1u << 24); }
+static int wp_big(uint64_t w, uint64_t h) { return w * h > (1u << 28); }
 
 // vp8l, the lossless image
 struct wl_tr { unsigned type, bits, xs; uint32_t *data; };
@@ -558,8 +558,8 @@ static void vp_wht(const int16_t *in, int16_t *out) {
   out[0] = (int16_t) ((a0 + a1) >> 3), out[16] = (int16_t) ((a3 + a2) >> 3);
   out[32] = (int16_t) ((a0 - a1) >> 3), out[48] = (int16_t) ((a3 - a2) >> 3); } }
 static uint8_t vp_c1(int v) { return (uint8_t) (v < 0 ? 0 : v > 255 ? 255 : v); }
-#define VP_MUL1(a) ((((a) * 20091) >> 16) + (a))
-#define VP_MUL2(a) (((a) * 35468) >> 16)
+#define VP_MUL1(a) ((int) (((int64_t) (a) * 20091) >> 16) + (a))
+#define VP_MUL2(a) ((int) (((int64_t) (a) * 35468) >> 16))
 static void vp_idct(const int16_t *in, uint8_t *dst) {
  int c[16], *t = c, i;
  for (i = 0; i < 4; i++, t += 4, in++) {
@@ -1031,7 +1031,7 @@ static int wp_info(const uint8_t *s, uintptr_t n, struct wp_info *f) {
   f->w = ld24le(p + 12) + 1, f->h = ld24le(p + 15) + 1;
   f->p = p + 8 + sz + (sz & 1), f->e = e, f->fx = f->fy = 0, f->fw = f->w, f->fh = f->h;
   if (wp_big(f->w, f->h)) return 5;
-  if (!anim) return 0;
+  if (!anim) return p + 8 + sz + (sz & 1) + 8 > e ? 2 : 0;   // an image chunk follows
   for (p = f->p; p + 8 <= e; p += 8 + sz + (sz & 1)) {   // the first ANMF
    sz = ld32le(p + 4);
    if (sz > (uintptr_t) (e - p - 8)) return 2;

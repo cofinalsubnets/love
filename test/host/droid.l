@@ -142,7 +142,14 @@
    _ (window-events dw-w)
    _ (say dc (dw-rec 83 1 1080 900), flush dc)
    _ (rest 50)
-   dw-ev8 (window-events dw-w))
+   dw-ev8 (window-events dw-w)
+   ; the size it has is no news, unless what it drew is gone
+   _ (say dc (dw-rec 83 0 1080 900), flush dc)
+   _ (rest 50)
+   dw-ev9 (window-events dw-w)
+   _ (say dc (dw-rec 83 2 1080 900), flush dc)
+   _ (rest 50)
+   dw-ev10 (window-events dw-w))
 (test
  ([540 1200] = dw-sz)
  (dw-ev = [['down 30] ['text "a"] ['up 30] ['down 28] ['press 1 10 20] ['move 11 21] ['size 540 600]])
@@ -156,7 +163,8 @@
  (dw-ev5 = [['down 53] ['text "/"] ['up 53]]) (dw-v2 = [86 86])
  (dw-ev6 = [['size 540 600]]) (dw-sz6 = [540 600])
  (dw-ev7 = [['size 540 304]]) (dw-rh7 = [70 28 2 144 1 48 1 96 0])
- (dw-i8 = [73 0]) (dw-ev8 = [['size 540 450]]))
+ (dw-i8 = [73 0]) (dw-ev8 = [['size 540 450]])
+ (dw-ev9 = ()) (dw-ev10 = [['size 540 450]]) ([540 450] = window-size dw-w))
 (: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 ; the framework's door: a fake bridge answers each op by its letter and keeps the records;

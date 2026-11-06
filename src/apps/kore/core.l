@@ -155,7 +155,7 @@
        cap (string? nv ? (unum nv @ v (charm? v ? v (sdie ("invalid line count: " + nv)))))
        ; the records as [count seat]: -i reads each seat off the range, the rest pin a tablet
        (laid ls) (: lt {}
-                    (go l i) (two? l ? (pin lt i <l, go >l (i + 1)) [i (i \ (lt i))])
+                    (go l i) (two? l ? (pin lt i <l, go >l (i + 1)) [i lt])
                     (go ls 0))
        (range s) (: n #s
                     lh (s @ ((a && 0 < #a) + "-" + b) [(unum a) (unum b)] [() ()])
@@ -1827,7 +1827,7 @@
        (rows lss) (some lss ?
                    (emit (jn (map (l \ (two? l ? <l "")) lss)),
                     rows (map (l \ (two? l ? >l)) lss)))
-       lss (map (f \ (urows "paste" f)) fs)
+       lss (map (urows "paste") fs)
        (s? ? (foldl (_ \ l \ emit (jn l)) 0 lss) (rows lss),
         flush out, 0))
 

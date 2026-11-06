@@ -24,7 +24,7 @@
    nk #kinds
    ridx ^nk
    (cell m i j) (m i j)                              ; a grid is indexed by application
-   (rrow m i) (map (j \ cell m i j) ridx)
+   (rrow m i) (map (cell m i) ridx)
    (rcol m j) (map (i \ cell m i j) ridx)
    ; a kind's dispatch signature: its row and column in both matrices; equal signature,
    ; same band

@@ -1944,6 +1944,15 @@
          (lam j (lam u (IH j)))
          m))))
       n)))
+ ; a step that ignores its recursive result is a case, whatever the head; these two are out of
+ ; reach if it folds, the binomial of their literals
+ (28 = vof 0 '(natminus 285 257))
+ (vof 0 'false = vof 0 '(natgtb 300 400))
+ (defq uu-case-succ (pi n nat (paths nat (nat_rect (lam q nat) 7 (lam k (lam u k)) (succ n)) n))
+   (lam n (idpath n)))
+ (7 = vof 0 '(nat_rect (lam q nat) 7 (lam k (lam u k)) 0))
+ (4 = vof 0 '(nat_rect (lam q nat) 7 (lam k (lam u k)) 5))
+ (12 = vof 0 '(nat_rect (lam q nat) 7 (lam k (lam u (succ u))) 5))
  (defq natminus0n (pi n nat (paths nat (natminus 0 n) 0))
    (lam n (idpath 0)))
  (defq natminusn0 (pi n nat (paths nat (natminus n 0) n))

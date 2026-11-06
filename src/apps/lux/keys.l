@@ -79,7 +79,7 @@
                          (two? k && two? >r ? (kb <k <>k (kb-act-of <>r) . acc) acc)))
            () rows)
    (keys-drop modm t specs)                                                      ; remove every chord named in specs
-    (filter two? (map (s \ kspec modm s) specs) @ ks
+    (filter two? (map (kspec modm) specs) @ ks
        (atom? ks ? t
           (filter (r \ !(any (k \ <k = kb-mods r && <>k = kb-sym r) ks)) t)))
 
@@ -94,7 +94,7 @@
                                                      (kb (modm | shiftm) sym ['swapd dir delta])
                                                      (kb (modm | ctrlm) sym ['resize dir delta])])
                                             <>d)))
-   (keys-dir-for modm nud) (foldl cat () (map (d \ kdir-rows modm d) (kdirs-for nud)))
+   (keys-dir-for modm nud) (foldl cat () (map (kdir-rows modm) (kdirs-for nud)))
 
    ; --- the custom command block, exactly the config's table ---
    (keys-cmd-for modm) [

@@ -36,7 +36,7 @@
    _ (window-show win 0 200)
    ; the events until f holds of them, or a deadline that bites only when they never come
    (drain-to f acc n) (window-events win @ l (acc + l @ a (f a || n < 1 ? a (rest 50, drain-to f a (n - 1)))))
-   (saw e) (a \ elem e a)
+   (saw e) (elem e)
    XW (cite 'xwire)
    (w8 s v) (XW 'x-w8 s v) (w16 s v) (XW 'x-w16 s v) (w32 s v) (XW 'x-w32 s v)
    s (XW 'x-connect ("/tmp/.X11-unix/X" + show dn))

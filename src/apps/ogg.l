@@ -16,7 +16,7 @@
 ; -> a decoder (packet granule) -> samples | why. granule is the stream's length on the last
 ; packet of its end page, -1 on every other.
 (module (ogg ogg-sniff ogg-meta ogg-format ogg-pump ogg-page ogg-cut
-             opus-state opus-init opus-packet)
+             opus-new opus-packet)
 (borrow '(bytes wav flac hashes))
 (:
    ; --- pages and packets ----------------------------------------------------
@@ -42,7 +42,7 @@
     (? !cont [pk tl]
        !(string? held) [(two? pk ? >pk ()) (two? pk ? tl ())]
        (two? pk) [(held + <pk . >pk) tl]
-       [() (held + (string? tl ? tl ""))])
+       (: j (held + (string? tl ? tl "")) [() (67108864 < #j ? () j)]))    ; past any real packet: dropped
 
    ; --- the codecs ----------------------------------------------------------
    ; flac (ogg mapping 1.0): "\x7fFLAC" 1 0, a count, then "fLaC" and STREAMINFO; then a
@@ -70,8 +70,8 @@
           (? (n < 0) (ogg-vb-why (0 - n))
              {'rate (rdle id 12 4) 'ch (id 11) 'tags (ogg-tags (ps 1) 7) 'vb [id su] 'size n})))
    (ogg-vb-start m)
-    (: st (cask (m 'size)) r (vorbis-init st (m 'vb 0) (m 'vb 1)) w (2 * m 'ch) n {'n 0}
-       (? (r != 0) (\ pkt gr ())
+    (: st (vorbis-new (m 'vb 0) (m 'vb 1)) w (2 * m 'ch) n {'n 0}
+       (? (charm? st) (\ pkt gr ())
           (\ pkt gr (vorbis-packet st pkt 0 @
                       pcm (? !(string? pcm) ()                 ; a packet that is no block is passed over
                              (: k (#pcm // w) t (n 'n) c (? (0 <= gr && gr < t + k) (max 0 (gr - t)) k)
@@ -86,8 +86,8 @@
              {'rate 48000 'ch ch 'pre (rdle p 10 2) 'gain (rdle p 16 2 @ g (g - 65536 * (g >= 32768)))
               'tags (ogg-tags (ps 1) 8)})))
    (ogg-op-start m)
-    (: st (cask (opus-state (m 'ch))) r (opus-init st (m 'ch) (m 'gain)) w (2 * m 'ch) n {'n 0}
-       (r != 0 ? (\ pkt gr ())
+    (: st (opus-new (m 'ch) (m 'gain)) w (2 * m 'ch) n {'n 0}
+       (charm? st ? (\ pkt gr ())
         (\ pkt gr (opus-packet st pkt 0 @
                     pcm (? !(string? pcm) ()                 ; a packet that will not decode is passed over
                            (: k (#pcm // w) t (n 'n) lo (max 0 (m 'pre - t))
@@ -111,7 +111,7 @@
    ; a whole packet on one page, the same way
    (ogg-shrink c p) (ogg-open c p @ t (tablet? t ? (ogg-close t "") p))
    (ogg-hjoin c held cont pk tl)
-    (: sh (map (p \ ogg-shrink c p) pk)
+    (: sh (map (ogg-shrink c) pk)
        (? !cont [sh (ogg-open c tl)]
           !(tablet? held || two? held) [(two? sh ? >sh ()) (two? sh ? (ogg-open c tl) ())]
           (two? sh) [(ogg-close held <pk . >sh) (ogg-open c tl)]

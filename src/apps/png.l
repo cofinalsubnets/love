@@ -115,7 +115,7 @@
        (? (#ih != 13) "bad IHDR"
           (!chs || !ok) "bad colour type or depth"
           (w < 1 || h < 1) "empty image"
-          (16777216 < w * h) "too big"
+          (268435456 < w * h) "too big"
           (ih 10 != 0 || ih 11 != 0 || ih 12 > 1) "bad IHDR methods"
           {'w w 'h h 'dep dep 'ty ty 'chs chs 'lace (ih 12)
            'bpp (chs * dep // 8 @ b (b < 1 ? 1 b))}))
@@ -231,8 +231,9 @@
    (png-pixels hd z)
     (? (#z < 2 || (z 0 * 256 + z 1) % 31 != 0 || z 0 & 15 != 8 || z 1 & 32) "bad zlib header"
        (: need (png-need hd)
-          r (gz-inflate (snip z 2 #z) need)
-          (? (atom? r) "bad deflate stream"
+          r (1073741824 < need ? 'big (gz-inflate (snip z 2 #z) need))    ; inflate's own ceiling
+          (? (r = 'big) "too big"
+             (atom? r) "bad deflate stream"
              (#<>r < need) "short image data"
              (: c <>r
                 w (hd 'w) h (hd 'h) out (cask (4 * w * h))
