@@ -822,20 +822,20 @@
                  (bfmem? m)                          ; a bitfield member: (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
-                    _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
                     _ (w > ubits && pin ps 'widebf 1)             ; wider than its type: C's constraint
-                    nmx (pk || a <= mx ? mx a)                    ; packed: the unit asks no alignment
-                    ; packed: the bits run on from the cursor; the unit is the n bytes they touch
+                    ; the struct's alignment: an unnamed field asks none but under AAPCS, and #pragma pack outranks packed
+                    nmx (max mx (? !(name || paapcs? ps) 1  (0 < cap) (capa a)  pk 1  a))
+                    ; packed or under any #pragma pack: the bits run on from the cursor; the unit is the n bytes they touch
+                    run (pk || 0 < cap)
                     pn (((& bit 7) + w + 7) >> 3)
-                    _ (pk && pn > 8 && pin ps 'pkwidebf 1)
                     ; `:0` aligns the cursor off a union; AAPCS also raises the struct's alignment
                     za (paapcs? ps && mx < a ? a mx)
                     (? (w = 0) (go >l (uni ? bit (aup bit (a * 8))) za acc)
-                       (uni && pk) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
+                       (uni && run) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
                                       (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
-                              (go >l (bit < ubits ? ubits bit) nmx (name ? (fld . acc) acc)))
-                       pk (: fld (name ? [name (bit >> 3) ['bitfield ty (& bit 7) w pn]])
+                              (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
+                       run (: fld (name ? [name (bit >> 3) ['bitfield ty (& bit 7) w pn]])
                              (go >l (bit + w) nmx (name ? (fld . acc) acc)))
                        (: bit2 ((& bit (ubits - 1)) + w > ubits ? (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (bit2 >> 3) (0 - usz))              ; the aligned unit holding the bits
@@ -923,9 +923,7 @@
                           (: pa (pattpk ps <>mr)       ; a trailing packed lays align-1
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
-                             (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
-                                (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
-                                (peep ps 'pkwidebf ()) (pin ps 'pkwidebf (), clblame "a packed bit-field spanning more than 8 bytes is not carried out")
+                             (? (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,

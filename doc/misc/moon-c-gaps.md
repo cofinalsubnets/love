@@ -240,7 +240,7 @@ Four of them carry an edge worth knowing:
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
 **`#pragma pack`** — `()`, `(N)`, `(push[, N])`, `(pop)`, N one of 1 2 4 8 16 — which caps each
 member's natural alignment at N for the structs laid while it stands (acpi's tables); another
-operand refuses, and so does a bit-field it would let straddle a unit, and `_Pragma("pack ..")`
+operand refuses, a bit-field's bits run on from the cursor at every N as a packed one's do, and `_Pragma("pack ..")`
 stays in the stream and refuses at parse — **`#pragma once`**, which reads a header once per
 TU by its resolved path, and **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
@@ -1540,8 +1540,7 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 
 Still open on this side (g-21's probes):
 
-- a packed bit-field whose bytes outrun a register (five on a 32-bit target, nine anywhere)
-  refuses by name; gcc carries both. On thumb, a struct member of a packed struct is not copied
+- on thumb, a struct member of a packed struct is not copied
   at all (`struct I v = p->in`, `f(p->in)`), refused with no cause named.
 - where the re-run stops now, on this side: the four units a register variable named `r0`
   stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`.

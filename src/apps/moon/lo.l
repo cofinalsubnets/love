@@ -439,6 +439,12 @@
           ['a av ty off] (loload g av ty off)
           ['u [_ r fs] (('arr || 'varr) . et . _) off a] (lomk g @ t (loesc g r, [['ptr et a] t (fs + [['lea t r off]])]))
           ['u av ty off a] (loldu g av ty off a)
+          ; a field past eight bytes: a word's bits and the ninth byte's
+          (['b [_ r fs] bt off a] && 8 < tsz g bt)
+           (lobf9 bt @ [fl fh nl]
+              (lorv g ['b ['long r ()] fl off a] @ l
+                 (lotr g (lorv g ['b ['long r ()] fh (off + 8) a]) 'ullong @ h
+                    (lobf9v g bt (lobin g '| l (lobfk g 'shl h nl) ()) @ [t d f2] [t d (fs + f2)]))))
           ; a bitfield: its unit, then two shifts (sar signed, shr unsigned; a bool never sign-extends)
           (['b [_ r fs] bt off a] && wsize g < tsz g bt)
            (: w (bt 3)
@@ -469,6 +475,12 @@
    (lobfwst g bt b off l h)
     (bfpk? bt ? (lostu g b off 4 (lobfal g ()) l + lostu g b (off + 4) (tsz g bt - 4) (lobfal g ()) h)
        [['st b off l] ['st b (off + 4) h]])
+   ; a field over nine bytes, as the field in the first eight, the one in the last, and the first's width
+   (lobf9 bt) (64 - bt 2 @ nl [['bitfield 'ullong (bt 2) nl 8] ['bitfield 'ullong 0 (bt 3 - nl) 1] nl])
+   ; a shift by a constant, and those bits as the field's value
+   (lobfk g op v k) (lomk g @ t (lobin g op v ['int t [['li t k]]] [k]))
+   (lobf9v g bt u)
+    (: sh (64 - bt 3) (lotr g (sh = 0 ? u (lobfk g 'shr (lotr g (lobfk g 'shl u sh) (usg? <>bt ? 'ullong 'llong)) sh)) (pprom bt)))
    ; a field's two words as the value it promotes to
    (lobfwv g bt l h fs) (pprom bt @ t (pair? g t ? [t [l h] fs] [t l fs]))
    ; -- -mstrict-align: no access wider than the alignment its address carries --
@@ -502,6 +514,13 @@
                           (lofl? ty) (lomk g @ t [(fs + [[(ty = 'float ? 'movdrx 'movqrx) t c]] + lostu g b off (tsz g ty) a t) [ty c ()]])
                           [(fs + lostu g b off (tsz g ty) a c) [ty c ()]])
               _ 'bad)
+          (['b [_ b _] bt off a] && 8 < tsz g bt)
+           (lobf9 bt @ [fl fh nl]
+              (lotr g v 'ullong @ u
+                 (['ullong (vreg u) ()] @ c
+                    (lost g ['b ['long b ()] fl off a] c @ [f1 _]
+                       (lost g ['b ['long b ()] fh (off + 8) a] (lobfk g 'shr c nl) @ [f2 _]
+                          (lobf9v g bt c @ [t d f3] [(vfs u + f1 + f2 + f3) [t d ()]]))))))
           (['b [_ b _] bt off a] && wsize g < tsz g bt)
            (: w (bt 3) wm ((1 << w) - 1) fm (wm << bt 2) (lo32 x) (x % 4294967296) (hi32 x) (x // 4294967296)
               (lotr g v 'ullong @ [_ [cl ch] fs]
