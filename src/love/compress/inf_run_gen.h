@@ -5,10 +5,10 @@ static const uint16_t gz_dbase[30] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 
 static const uint8_t gz_dext[30] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
 static const uint8_t gz_clord[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 // table roots: a longer code walks bits, so these trade 2^root fill writes against walks
-#define LROOT 12
+#define LROOT 11
 #define DROOT 9
 #define CROOT 7
-// one block's decode tables, 10 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
+// one block's decode tables, 7 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
 // stack inflates with it
 struct inf_tabs {
  uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT], lsym[288], dsym[32], csym[19];

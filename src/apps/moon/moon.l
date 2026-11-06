@@ -7,7 +7,7 @@
 (module 'moon
 (borrow '(kore cli))
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
-(borrow '(gz hashes))
+(borrow '(gz hashes zstd))
 
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard
@@ -833,7 +833,7 @@
    (rtcid home)
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
      (_ \ sha256 "moon-rtc 1\n\(mcsrctext home)"))
-   ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-gz), served
+   ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-zst), served
    ; only when the home hashes to the stamped id. cut under -os linux: impl.h parts the kernels
    ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error)
    (rtcarried home tgt os)
@@ -841,11 +841,10 @@
        (elem tgt '(i386 arm) && elem os '(freebsd netbsd)) ()
        (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
           (!(string? nm) ? ()
-             (runtime-gz nm @ z
+             (runtime-zst nm @ z
                 (!(string? z) ? ()
-                   (: ok (string? home ? (rtcid home = runtime-gz "id") 1)
-                      ; inflate does not validate, so the archive magic is the check
-                      a (ok && inflate z 0)
+                   (: ok (string? home ? (rtcid home = runtime-zst "id") 1)
+                      a (ok && zstd-d z)
                       (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))))
    ; the carried archive first; the cache key is cut only on the lane it refused
    (rtarch home tgt os vb)
