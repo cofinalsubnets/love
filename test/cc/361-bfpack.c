@@ -59,8 +59,17 @@ int main(void) {
 #define SZ(T) mix(sizeof(T)), mix(_Alignof(T))
   SZ(struct a1); SZ(struct i1); SZ(struct c2); SZ(struct a8); SZ(struct j8);
   SZ(struct a16); SZ(union u16); SZ(struct n1); SZ(struct n2); SZ(struct n3);
+#ifdef __aarch64__
+#define IS(T, n, al) if (sizeof(T) != n || _Alignof(T) != al) return 200
+  IS(struct ua, 4, 4); IS(struct ub, 4, 4); IS(struct ug, 8, 8); IS(union uk, 4, 4); IS(union ul, 8, 8);
+  IS(union um, 8, 8); IS(union un, 4, 2); IS(struct ud, 2, 2); IS(struct ue, 2, 2);
+  // a64's gate holds it to x64's answer: those layouts, once this one's are checked
+  static const char x64[] = { 2, 1, 3, 1, 2, 1, 1, 1, 8, 8, 5, 1, 4, 2, 2, 1, 2, 2 };
+  for (int i = 0; i < (int) sizeof x64; i++) mix(x64[i]);
+#else
   SZ(struct ua); SZ(struct ub); SZ(struct ug); SZ(union uk); SZ(union ul);
   SZ(union um); SZ(union un); SZ(struct ud); SZ(struct ue);
+#endif
   dump(&sn1, sizeof sn1); dump(&sn2, sizeof sn2);
   dump(&sa1, sizeof sa1); dump(&sa8, sizeof sa8);
 

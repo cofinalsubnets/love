@@ -1484,6 +1484,10 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   the type, as gcc does. Laws 362-w128ops.c, 364-w128float.c.
 - **`(float)` of an unsigned 64-bit value with its top bit set** rounded twice, through double:
   it halves with the lost bit stuck on instead. Law 363-u64float.c.
+- **setjmp and longjmp on wasm**: longjmp throws a tag with the buffer, and a function that calls
+  `__sigsetjmp` runs its dispatch loop in a `try_table`, landing a buffer of its own back at the
+  site (wasmfn.l). Wants an engine with wasm exceptions (try_table). Law 345-jmpsave.c.
+- **an asm label on wasm** renames through the object. Law 294-asmlabel.c.
 - **a wide local's `x++`** answered the new value, in registers. Law 362-w128ops.c.
 - **packed bit-fields, on every target**: the bits run on from the last member, crossing what
   would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as

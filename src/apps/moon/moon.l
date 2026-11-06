@@ -494,9 +494,7 @@
                  ; arm32 has no .image lane and no local func symbols (objsecs3 refuses the first)
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
-                       (two? (filter (k \ anames k != k) (keys anames)))
-                        (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
-                       (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
+                       (show (wasm-labels anames [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks])))
                     (elf32? tgt)
                     (: s32 (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                        (i386? tgt ? (objsecs32x tgt s32 fns gns wks anames locs asmax)
@@ -524,6 +522,12 @@
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"), say q <>pp, close q))
               (puts <>pp, flush out)))
+   ; an asm label's name through a wasm object, which has no symbol table to rename in: code
+   ; names a symbol by nom, the object's name lists by string
+   (wasm-labels an ob)
+    (: t ({} @ t (map (k \ (pin t k (an k), pin t (nom k) (nom (an k)))) (keys an), t))
+       (sub x) (two? x ? (sub <x . sub >x) (peep t x x))
+       (two? (filter (k \ an k != k) (keys an)) ? (sub ob) ob))
    ; a wasm object is text: write-bytes walks a byte list, and a string lands as an empty file
    (cc-obj src dst (t @ {'tgt tgt}))
     (pin cppdeps 'l (),
@@ -969,7 +973,7 @@
               (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
-       ; a name nothing answers (setjmp's, say) is the program's refusal, not an internal one
+       ; a name nothing answers is the program's refusal, not an internal one
        m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
                (a \ b \ a @ 'wasm-undefined
                           (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")

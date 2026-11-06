@@ -85,9 +85,8 @@ case $tgt in
     [ -n "$GCC" ] || [ ! -x /usr/lib/emscripten/emcc ] || GCC=/usr/lib/emscripten/emcc
     grun=$NODE
     gext=.js
-    # return addresses, frame chains and label values live off linear memory, longjmp has no
-    # unwind to ride, and a module has no symbol table for 294's asm labels
-    refuse="160-rangeinit 229-labelvalue 256-inline-retaddr 294-asmlabel 297-frameaddr 345-jmpsave"
+    # return addresses, frame chains and label values live off linear memory
+    refuse="160-rangeinit 229-labelvalue 256-inline-retaddr 297-frameaddr"
     # clang lacks __builtin_*_overflow_p, emcc's malloc aborts where C answers NULL, its
     # aligned_alloc keeps C11's size rule, its __divsc3 isn't libgcc's
     nogcc="268-overflow-p 298-malloc-wrap 300-aligned-alloc 280-cxf-fuzz"
