@@ -76,6 +76,7 @@
                          ('nz a) (ob sp v a)
                          ('z a) (ob sp v a)
                          ('ne a b) (ob sp v a + ob sp v b)
+                         ('eq a b) (ob sp v a + ob sp v b)
                          ('wide d) (ob sp v d)
                          ('widec d) (ob sp v d)
                          ('tru) ())
@@ -85,6 +86,7 @@
                          ('nz a) ['inf-lt 0 (tm sp v a)]
                          ('z a) ['paths 'nat (tm sp v a) 0]
                          ('ne _ _) 'unit
+                         ('eq _ _) 'unit
                          ('wide d) ['inf-le 8 (tm sp v d)]
                          ('widec _) 'unit
                          ('tru) 'unit)
@@ -94,6 +96,7 @@
                          ('nz a) ['paths 'nat (tm sp v a) 0]
                          ('z a) ['inf-lt 0 (tm sp v a)]
                          ('ne _ _) 'unit
+                         ('eq _ _) 'unit
                          ('wide _) 'unit
                          ('widec _) 'unit)
 
@@ -104,6 +107,7 @@
    ; what a body writes, whatever the path
    (writes sp ss)
     (cats (map (s \ s @ (_ 'set x _) [x]
+                        (_ 'dec x _) [x]
                         (_ 'aset A _ _) [A]
                         (_ 'clear A _) [A]
                         (_ 'if _ _ th) (writes sp th)
@@ -114,6 +118,7 @@
                         (_ 'join _ _ th el _) (writes sp th + writes sp el)
                         (_ 'call f _ _ os) (written (callee sp f) os)
                         (_ 'try x f _ _ os) (x . written (callee sp f) os)
+                        (_ 'tryr x f _ _ os _) (x . written (callee sp f) os)
                         (_ 'for x _ _ _ b) (x . writes sp b)
                         (_ 'forby x _ _ _ _ b) (x . writes sp b)
                         ())
@@ -184,9 +189,10 @@
    (fresh L x) (intern "\(x)\(L)")
    ; what a call or a join adds stands in a context of its own, so what follows does not spell it again
    (cxed sp hy k)
-    (: n (1 + peep sp 'cxn 0) _ (pin sp 'cxn n)
-       nm "inf-\(sp 'short)-c\(n)"
-     (['cx nm (cx-of hy) (rev (added hy))] . k (('cx . nm) . hy)))
+    (atom? (added hy) ? (k hy)
+     (: n (1 + peep sp 'cxn 0) _ (pin sp 'cxn n)
+        nm "inf-\(sp 'short)-c\(n)"
+      (['cx nm (cx-of hy) (rev (added hy))] . k (('cx . nm) . hy))))
    (call sp L f inst os res v hy cont)
     (: st (f 'state)
        args (map (a \ two? a ? (<a . sub v <>a) (a . sub v a)) inst)
@@ -205,6 +211,9 @@
      (<ss @ (L 'set x e)
              (vcs (show L) (ob sp v e + [(fit (tm sp v e))]) hy
               + run sp >ss ((x . tm sp v e) . v) hy k)
+            ; x - y does not wrap, and fits where x did
+            (L 'dec x e)
+             (vcs (show L) (ob sp v e) hy + run sp >ss ((x . tm sp v e) . v) hy k)
             (L 'let _ ds)
              (: (go ds v)
                  (atom? ds ? (run sp >ss v hy k)
@@ -265,10 +274,15 @@
              (: y (fresh L x)
               (call sp L (callee sp f) inst os y v hy
                (\ v2 h2 (run sp >ss ((x . y) . v2) h2 k))))
+            (L 'tryr x f as inst os _)
+             (: y (fresh L x)
+              (call sp L (callee sp f) inst os y v hy
+               (\ v2 h2 (run sp >ss ((x . y) . v2) h2 k))))
             (L 'ret e) (vcs (show L) (ob sp v e + ensured sp ((tm-res sp v e) . v)) hy)
             (L 'retneg _) ()
             (L 'for x from to invs body) (loop sp L x from to () invs body >ss v hy k)
-            (L 'forby x from to by invs body) (loop sp L x from to by invs body >ss v hy k)))
+            (L 'forby x from to by invs body) (loop sp L x from to by invs body >ss v hy k)
+            (quit-on "inf: \(sp 'short) has a statement the walk cannot read: \(show <ss)")))
    (callee sp f) (<(filter (c \ c 'name = f) (sp 'calls)))
    (ensured sp v) (map (e \ sub v <>e) (sp 'ensures))
    (tm-res sp v e) ('res . tm sp v e)
@@ -303,26 +317,58 @@
    ; what needs no author: a hypothesis as it stands, one a step weaker, x <= x, or a closed comparison.
    ; the kernel checks these like any other
    (lit? t) (charm? t && 0 <= t)
+   ; a term with its pi binders numbered, so two that differ only in those compare equal
+   (canon t)
+    (: (bind l i) (atom? >l ? [canon <l]
+                   (: x (intern "_\(i)") (canon (l 1) . x . bind (sub [(<l . x)] >>l) (i + 1))))
+     (two? t ? (<t == 'pi ? ('pi . bind >t 0) (map canon t)) t))
    (auto sp hy g)
     (: bs (filter (b \ <b != 'cx) hy + map (r \ (<r . <>r)) (sp 'requires))
-       (held t) (filter (b \ >b = t) bs @ m (two? m ? <<m ()))
+       (held t) (: c (canon t) (filter (b \ canon >b = c) bs @ m (two? m ? <<m ())))
+       ; a <= b through what is held: a stated step, x - y <= x, x <= x + y
+       (ups a) (cats (map (b \ >b @ ['inf-le x y] (x = a ? [[y <b]] ()) ['inf-lt x y] (x = a ? [[y ['inf-ltle x y <b]]] ()) ()) bs)
+                + (a @ ['natminus x y] [[x ['inf-suble x y]]]
+                       ['inf-mod p x] (lit? p && 0 < p
+                                       ? ([[(p - 1) ['inf-ltsle a (p - 1) ['inf-modlt (p - 1) x]]]]
+                                          + (p = 8 ? [[x ['inf-modle8 x]]] ()))
+                                       ())
+                       ()))
+       (chain a b d)
+        (? (a = b) ['inf-refl a]
+           (d < 1) ()
+           (held ['inf-le a b]) (held ['inf-le a b])
+           (lit? a && lit? b) (a <= b ? '(idpath false) ())
+           (: viaadd (b @ ['add x y] (chain a x (d - 1) @ p (p ? ['inf-letrans a x b p ['inf-leaddr x y]] ())) ())
+              (go l) (atom? l ? ()
+                      (: e <l m <e
+                         r (m = a ? () (chain m b (d - 1)))
+                         (r ? ['inf-letrans a m b (e 1) r] (go >l))))
+              (viaadd ? viaadd (go (ups a)))))
      (g @ ('inf-le a b)
            (? (a == 0) '(idpath false)
               (lit? a && lit? b) (a <= b ? '(idpath false) ())
-              (a = b) ['inf-refl a]
-              (held g) (held g)
-              (held ['inf-lt a b]) ['inf-ltle a b (held ['inf-lt a b])]
-              ())
+              (chain a b 4))
           ('inf-lt a ('inf-pow w))
            (: gw (held ['inf-le 32 w])
             (? (held g) (held g)
                !gw ()
-               (lit? a) (a <= 64 ? ['inf-wlit a w gw '(idpath false)] ())
-               (held ['inf-le a 64]) ['inf-wlit a w gw (held ['inf-le a 64])]
-               ()))
+               (lit? a) (a <= 63 ? ['inf-wlit a w gw '(idpath false)] ())
+               (chain a 63 4) ['inf-wlit a w gw (chain a 63 4)]
+               ; under anything that fits
+               (: (go l) (atom? l ? ()
+                          (: t >(<l)
+                             r (t @ ['inf-lt u ['inf-pow x]] (x = w ? (chain a u 4) ()) ())
+                             (r ? ['inf-lelt a (t 1) (t 2) r <<l] (go >l))))
+                (go bs))))
+          ('inf-bits-inv c ip ('add cons k) ('natminus bc k2))
+           (: i (held ['inf-bits-inv c ip cons bc])
+              p (k = k2 ? (chain k bc 3) ())
+            (i && p ? ['inf-take c ip cons bc k p i] (held g)))
           ('inf-lt a b)
            (? (lit? a && lit? b) (a < b ? '(idpath true) ())
-              (held g))
+              (held g) (held g)
+              (lit? b && 0 < b) (chain a (b - 1) 4 @ p (p ? ['inf-lelts a (b - 1) p] ()))
+              ())
           (held g)))
    (proof-of sp c) (peep (sp 'proofs) <c () @ p (p ? p (auto sp (c 2) (c 1))))
    ; a proof may name a spec's macros, which may name each other
@@ -343,10 +389,13 @@
    (base sp A) (lk (sp 'arrays) A @ a
                 (<a @ ('f n) ['dot ['deref ['var "c"]] n]
                       ('r n) ['dot ['deref ['var "r"]] n]
+                      ('s n) ['dot ['deref ['var "s"]] n]
                       ('t n) ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]
                       ('v n) ['var n]))
    ; a name the struct holds, or a local
-   (cv sp x) (elem x (sp 'fields) ? ['dot ['deref ['var "r"]] (string x)] ['var (string x)])
+   (cv sp x) (? (elem x (sp 'fields)) ['dot ['deref ['var "r"]] (string x)]
+                (elem x (sp 'sfields)) ['dot ['deref ['var "s"]] (string x)]
+                ['var (string x)])
    (cl sp e)
     (: (C x) (cl sp x)
      (? (charm? e) ['num e]
@@ -384,6 +433,7 @@
                        ('nz a) (cl sp a)
                        ('z a) ['un 'not (cl sp a)]
                        ('ne a b) ['bin 'ne (cl sp a) (cl sp b)]
+                       ('eq a b) ['bin 'eq (cl sp a) (cl sp b)]
                        ('wide d) ['land ['var "wideld"] ['bin 'le ['num 8] (cl sp d)]]
                        ('widec d) ['land ['var "wideld"] ['bin 'eq (cl sp d) ['num 1]]]
                        ('tru) ['num 1])
@@ -404,6 +454,7 @@
                         (_ 'ghost _ _ _) ()
                         (_ 'gset _ _) ()
                         (L 'try x f as _ _) [[L 'set-call x f as] [L 'if-neg x]]
+                        (L 'tryr x f as _ _ c) [[L 'set-call x f as] [L 'if-negr x c]]
                         [s])
                ss))
    (cl-body sp ss) (said ss @ [s] (cl-stmt sp s) u ['blk (map (cl-stmt sp) u)])
@@ -427,12 +478,14 @@
          (L 'brk) ['brk]
          (L 'store f e) ['expr ['asn ['dot ['deref ['var "r"]] f] (cl sp e)]]
          (L 'havoc x e) (cl-set sp x e)
+         (L 'dec x e) (cl-set sp x e)
          (L 'poke A i e) ['expr ['asn ['deref ['bin '+ (base sp A) (cl sp i)]] (cl sp e)]]
          (L 'pokew A i e) ['expr ['call ['var "ST64"] [['bin '+ (base sp A) (cl sp i)] (cl sp e)]]]
          (L 'mcopy A i B j n) ['expr ['call ['var "memcpy"] [['bin '+ (base sp A) (cl sp i)] ['bin '+ (base sp B) (cl sp j)] (cl sp n)]]]
          (L 'call f as _ _) ['expr ['call ['var f] (map (cl sp) as)]]
          (L 'set-call x f as) ['expr ['asn (cv sp x) ['call ['var f] (map (cl sp) as)]]]
          (L 'if-neg x) ['if ['bin 'lt (cv sp x) ['num 0]] ['ret (cv sp x)] ()]
+         (L 'if-negr x c) ['if ['bin 'lt (cv sp x) ['num 0]] ['ret ['un 'neg ['num c]]] ()]
          (L 'ret e) ['ret (cl sp e)]
          (L 'retneg n) ['ret ['un 'neg ['num n]]]
          (L 'for x from to invs body) (cl-for sp x from to ['post ['var (string x)] 1] body)
@@ -782,20 +835,20 @@
    ; n bytes at in; ip read so far, bc of them buffered in bb and cons consumed. a call leaves the
    ; reader sound: nothing past n, nothing lost, and consumption only grows
    rd-req
-    '((In (pi k nat nat)) (n nat) (w nat) (cons0 nat) (ip0 nat) (bc0 nat) (bb0 nat)
+    '((In (pi k nat nat)) (n nat) (w nat) (carry nat) (cons0 nat) (ip0 nat) (bc0 nat) (bb0 nat)
       (gw (inf-le 32 w))
       (gn (inf-lt (add n 8) (inf-pow w)))
       (gi (inf-le ip0 n))
-      (gb (inf-le bc0 64))
-      (gs (inf-shiftok bc0 ip0 n))
-      (ga (inf-bits-inv ip0 cons0 bc0)))
+      (gs (inf-le bc0 63))
+      (ga (inf-bits-inv carry ip0 cons0 bc0)))
    rd-state '((ip ip0) (bc bc0) (bb bb0) (cons cons0))
    rd-ens
     '((e1 (inf-le ip n))
-      (e2 (inf-le bc 64))
-      (e3 (inf-shiftok bc ip n))
-      (e4 (inf-bits-inv ip cons bc))
+      (e3 (inf-le bc 63))
+      (e4 (inf-bits-inv carry ip cons bc))
       (e5 (inf-le cons0 cons)))
+   ; a stream read at one go: nothing came before its bytes
+   (one-go l) (sub [('carry . 0)] (filter (r \ <r != 'carry) l))
    rd-fields '(ip bc bb n)
    rd-params '(("r" (ptr (struct "inf_rd"))))
    rd-arrays '((In (r "in") n))
@@ -817,58 +870,48 @@
           (a3 set bc (or56 bc)))
          ((w1 while (lt ip n) (natminus n ip)
            ((j1 (inf-le ip n))
-            (j2 (inf-le bc 64))
-            (j3 (inf-lt n (add ip 8)))
-            (j4 (inf-bits-inv ip cons bc)))
-           ((b1 if g2 (lt 56 bc) ((b0 brk)))
+            (j3 (inf-le bc 63))
+            (j4 (inf-bits-inv carry ip cons bc)))
+           ((b1 if g2 (lt 55 bc) ((b0 brk)))
             (b2 havoc bb (bor64 bb (shl64 (w64 (at In ip)) bc)))
             (b3 set ip (+ ip 1))
             (b4 set bc (+ bc 8)))))))
      'macros
       (rd-macs +
-       '((B6 (inf-shiftfill bc0 ip0 n gs g1))
+       '((B6 gs)
          (D7 (natminus 7 (inf-div8 bc0)))
          (Ip (add ip0 D7))
          (Il (inf-addl ip0 D7 8 (inf-letrans D7 7 8 (inf-suble 7 (inf-div8 bc0)) (idpath false))))
          (M6 (inf-addl 56 (inf-mod 8 bc0) 8 (inf-ltle (inf-mod 8 bc0) 8 (inf-modlt 7 bc0))))
-         (B8 (inf-addr bc 56 8 g2))
-         (I1 (add ip 1))))
+         (B8 (inf-addr bc 55 8 g2))
+          (I1 (add ip 1))))
      'proofs
       {"i1-1" '(inf-lelt (add ip0 8) (add n 8) (inf-pow w) (inf-addr ip0 n 8 gi) gn)
        "a1-1" 'g1
        "a1-2" '(inf-lelts bc0 63 B6)
        "a2-1" '(inf-div8le bc0 B6)
        "a2-2" '(inf-lelt Ip n (inf-pow w) (inf-letrans Ip (add ip0 8) n Il g1) Nw)
-       "a3-1" 'B6
-       "a3-2" '(inf-wlit (add 56 (inf-mod 8 bc0)) w gw M6)
+       "a3-2" '(inf-wlit (add 56 (inf-mod 8 bc0)) w gw (inf-or56 bc0))
        "end-1" '(inf-letrans Ip (add ip0 8) n Il g1)
-       "end-2" 'M6
-       "end-3" '(inf-shiftwide bc0 Ip n)
-       "end-4" '(inf-fillw ip0 cons0 bc0 B6 ga)
-       "end-5" '(inf-refl cons0)
+       "end-2" '(inf-or56 bc0)
+       "end-3" '(inf-fillw carry ip0 cons0 bc0 B6 ga)
+       "end-4" '(inf-refl cons0)
        "w1e-1" 'gi
-       "w1e-2" 'gb
-       "w1e-3" 'g1
-       "w1e-4" 'ga
-       "end-6" 'j1
-       "end-7" 'j2
-       "end-8" '(ii2 j3)
-       "end-9" 'j4
-       "end-10" '(inf-refl cons0)
+       "w1e-3" 'ga
+       "end-5" 'j1
+       "end-7" 'j4
+       "end-8" '(inf-refl cons0)
        "b2-1" 'w1
-       "b2-2" '(inf-lelt bc 56 64 g2 (idpath true))
+       "b2-2" '(inf-lelt bc 55 64 g2 (idpath true))
        "b3-1" '(inf-lelt I1 n (inf-pow w) (inf-lt1 ip n w1) Nw)
        "b4-1" '(inf-wlit (add bc 8) w gw B8)
        "w1b-1" '(inf-lt1 ip n w1)
        "w1b-2" 'B8
-       "w1b-3" '(inf-lttrans n (add ip 8) (add I1 8) j3 (inf-addr ip I1 8 (inf-leaddr ip 1)))
-       "w1b-4" '(inf-fill1b ip cons0 bc j4)
-       "w1b-5" '(inf-subfall1 n ip w1)
-       "end-11" 'j1
-       "end-12" 'j2
-       "end-13" '(ii2 j3)
-       "end-14" 'j4
-       "end-15" '(inf-refl cons0)}}
+       "w1b-3" '(inf-fill1b carry ip cons0 bc j4)
+       "w1b-4" '(inf-subfall1 n ip w1)
+       "end-9" 'j1
+       "end-11" 'j4
+       "end-12" '(inf-refl cons0)}}
 
    ; TAKE: k bits, or -1 short of them. the fill first, wanted or not, reads no further than the
    ; next call's would
@@ -882,7 +925,7 @@
      'ensures (rd-ens + '((e6 (inf-le (add cons0 k) cons)) (e7 (inf-lt res (inf-pow k)))))
      'calls [fill]
      'body
-      '((c1 call "inf_fill" ((raw (var "r"))) (In n w) ())
+      '((c1 call "inf_fill" ((raw (var "r"))) (In n w carry) ())
         (i1 if g1 (lt bc k) ((r1 retneg 1)))
         (d1 set v (mask bb k))
         (d2 havoc bb (shr64 bb k))
@@ -895,19 +938,18 @@
         (Bc (natminus bcc1 k))
         (Co (add consc1 k)))
      'proofs
-      {"c1-1" 'gw "c1-2" 'gn "c1-3" 'gi "c1-4" 'gb "c1-5" 'gs "c1-6" 'ga
+      {"c1-1" 'gw "c1-2" 'gn "c1-3" 'gi "c1-5" 'ga
        "d1-1" 'K3
        "d1-2" '(inf-powfit Ma k w (inf-masklt bbc1 k) (inf-letrans k 13 w gk (inf-letrans 13 32 w (idpath false) gw)))
        "d2-1" '(inf-lttrans k 16 64 (inf-lelts k 15 (inf-letrans k 13 15 gk (idpath false))) (idpath false))
        "d3-1" 'g1
-       "d3-2" '(inf-wlit Bc w gw (inf-letrans Bc bcc1 64 (inf-suble bcc1 k) c1e2))
+       "d3-2" '(inf-wlit Bc w gw (inf-letrans Bc bcc1 63 (inf-suble bcc1 k) c1e3))
        "r2-1" 'c1e1
-       "r2-2" '(inf-letrans Bc bcc1 64 (inf-suble bcc1 k) c1e2)
-       "r2-3" '(inf-shifttake bcc1 ipc1 n k c1e3)
-       "r2-4" '(inf-take ipc1 consc1 bcc1 k g1 c1e4)
-       "r2-5" '(inf-letrans cons0 consc1 Co c1e5 (inf-leaddr consc1 k))
-       "r2-6" '(inf-addr cons0 consc1 k c1e5)
-       "r2-7" '(inf-masklt bbc1 k)}}
+       "r2-2" '(inf-sub63 bcc1 k c1e3)
+       "r2-3" '(inf-take carry ipc1 consc1 bcc1 k g1 c1e4)
+       "r2-4" '(inf-letrans cons0 consc1 Co c1e5 (inf-leaddr consc1 k))
+       "r2-5" '(inf-addr cons0 consc1 k c1e5)
+       "r2-6" '(inf-masklt bbc1 k)}}
 
    ; SYM: a symbol off the code: the table where it reaches, the walk where it does not. e and sy are
    ; whatever the table holds: nothing here rests on them, and the caller checks sy
@@ -931,7 +973,7 @@
      'ensures rd-ens
      'calls [fill walk]
      'body
-      '((c1 call "inf_fill" ((raw (var "r"))) (In n w) ())
+      '((c1 call "inf_fill" ((raw (var "r"))) (In n w carry) ())
         (d1 havoc e (at Tb (mask bb root)))
         (i1 join g1 (z e)
          ((w0 try x "inf_walk" ((raw (var "c")) bb) (Cn Sy (bit (inf-sb bb)) (n m) h w) ())
@@ -951,7 +993,7 @@
         (Ul (inf-ltsle U1 15 (inf-modlt 15 ei1)))
         (Bc (natminus bcc1 U1)))
      'proofs
-      {"c1-1" 'gw "c1-2" 'gn "c1-3" 'gi "c1-4" 'gb "c1-5" 'gs "c1-6" 'ga
+      {"c1-1" 'gw "c1-2" 'gn "c1-3" 'gi "c1-5" 'ga
        "d1-1" 'Rw
        "d1-2" '(inf-masklt bbc1 root)
        "w0-1" '(lam i (inf-ltsle (inf-sb bbc1 i) 1 (inf-modlt 1 (inf-shr bbc1 i))))
@@ -962,15 +1004,14 @@
        "w0-6" 'gm
        "w0-7" 'gt
        "d2-1" '(idpath true)
-       "d3-1" '(inf-wlit U1 w gw (inf-letrans U1 15 64 Ul (idpath false)))
+       "d3-1" '(inf-wlit U1 w gw (inf-letrans U1 15 63 Ul (idpath false)))
        "d4-1" '(inf-lelt U1 15 64 Ul (idpath true))
        "d5-1" 'g2
-       "d5-2" '(inf-wlit Bc w gw (inf-letrans Bc bcc1 64 (inf-suble bcc1 U1) c1e2))
+       "d5-2" '(inf-wlit Bc w gw (inf-letrans Bc bcc1 63 (inf-suble bcc1 U1) c1e3))
        "r2-1" 'c1e1
-       "r2-2" '(inf-letrans Bc bcc1 64 (inf-suble bcc1 U1) c1e2)
-       "r2-3" '(inf-shifttake bcc1 ipc1 n U1 c1e3)
-       "r2-4" '(inf-take ipc1 consc1 bcc1 U1 g2 c1e4)
-       "r2-5" '(inf-letrans cons0 consc1 (add consc1 U1) c1e5 (inf-leaddr consc1 U1))}}
+       "r2-2" '(inf-sub63 bcc1 U1 c1e3)
+       "r2-3" '(inf-take carry ipc1 consc1 bcc1 U1 g2 c1e4)
+       "r2-4" '(inf-letrans cons0 consc1 (add consc1 U1) c1e5 (inf-leaddr consc1 U1))}}
 
    ; --- a block's parts, and the whole -----------------------------------------------------------
    ; the tables hold what inflate.h declares; a code is its counts, symbols and table.
@@ -1014,9 +1055,9 @@
      'params rd-params 'fields ot-fields
      'state (rd-state + '((op op0)))
      'arrays (rd-arrays + ot-arrays)
-     'requires (rd-req + ot-req)
+     'requires (one-go (rd-req + ot-req))
      'decls '((uint (dr) (ln) (x16) (nl)) ((named "uintptr_t") (pos)))
-     'ensures (rd-ens + ot-ens)
+     'ensures (one-go (rd-ens + ot-ens))
      'body
       '((d1 set dr (low bc 7))
         (d2 havoc bb (shr64 bb dr))
@@ -1042,7 +1083,7 @@
        '((D8 (inf-mod 8 bc0))
          (Bd (natminus bc0 D8))
          (Dl (inf-ltle D8 8 (inf-modlt 7 bc0)))
-         (Ble (inf-letrans Bd bc0 64 (inf-suble bc0 D8) gb))
+         (Ble (inf-letrans Bd bc0 63 (inf-suble bc0 D8) gs))
          (Q (inf-div8 Bd))
          (Pos (natminus ip0 Q))
          (P4 (add Pos 4))
@@ -1057,7 +1098,7 @@
          (New (add P4 Ln))
          (Cw (inf-lelt cap (add cap 8) (inf-pow w) (inf-leaddr cap 8) gcap))))
      'proofs
-      {"d1-1" '(inf-wlit D8 w gw (inf-letrans D8 8 64 Dl (idpath false)))
+      {"d1-1" '(inf-wlit D8 w gw (inf-letrans D8 8 63 Dl (idpath false)))
        "d2-1" '(inf-lttrans D8 8 64 (inf-modlt 7 bc0) (idpath false))
        "d3-1" '(inf-modle8 bc0)
        "d3-2" '(inf-wlit Bd w gw Ble)
@@ -1076,11 +1117,11 @@
        "d10-2" '(inf-lelt New n (inf-pow w) Nd Nw)
        "d12-1" '(inf-powpos w)
        "r5-1" 'Nd
-       "r5-3" '(ii1 (idpath false))
-       "r5-4" '(pathsinv0 nat (add (inf-by8 New) 0) (inf-by8 New) (natplusr0 (inf-by8 New)))
-       "r5-5" '(inf-storedc ip0 cons0 D8 Q 4 Ln Pv)
-       "r5-6" 'Rm
-       "r5-7" '(inf-leaddr op0 Ln)}}
+       "r5-2" '(idpath false)
+       "r5-3" '(pathsinv0 nat (add (inf-by8 New) 0) (inf-by8 New) (natplusr0 (inf-by8 New)))
+       "r5-4" '(inf-storedc ip0 cons0 D8 Q 4 Ln Pv)
+       "r5-5" 'Rm
+       "r5-6" '(inf-leaddr op0 Ln)}}
 
    ; one code's lens are read from lz[from..]
    fixed
@@ -1121,7 +1162,7 @@
      'proofs
       {"w1e-2" '(lam k (idpath false))
        "s4-1" '(inf-lttrans i 288 320 w1 (idpath false))
-       "s4-2" '(inf-wlit vj3 w gw (inf-letrans vj3 15 64 b3 (idpath false)))
+       "s4-2" '(inf-wlit vj3 w gw (inf-letrans vj3 15 63 b3 (idpath false)))
        "w1b-1" '(inf-lelt (succ i) 288 (inf-pow w) (inf-ltsu i 288 w1) (inf-wfit288 w gw))
        "w1b-2" '(inf-ltsu i 288 w1)
        "w1b-3" '(inf-updle Lz i vj3 15 a2 b3)
@@ -1130,7 +1171,7 @@
        "c1-2" 'Q2
        "c1-4" 'Pw
        "s5-1" '(inf-lttrans i 30 320 w2 (idpath false))
-       "w2b-1" '(inf-wlit (succ i) w gw (inf-letrans (succ i) 30 64 (inf-ltsu i 30 w2) (idpath false)))
+       "w2b-1" '(inf-wlit (succ i) w gw (inf-letrans (succ i) 30 63 (inf-ltsu i 30 w2) (idpath false)))
        "w2b-2" '(inf-ltsu i 30 w2)
        "w2b-3" '(inf-updle Lz i 5 15 a4 (idpath false))
        "w2b-4" '(inf-subfall 30 i w2)
@@ -1155,19 +1196,19 @@
      'ensures (rd-ens + co-ens)
      'calls [fill take sym build]
      'body
-      '((t1 try x "inf_take" ((raw (var "r")) 5) (In n w (k 5)) ())
+      '((t1 try x "inf_take" ((raw (var "r")) 5) (In n w carry (k 5)) ())
         (s1 set hlit (+ x 257))
-        (t2 try x "inf_take" ((raw (var "r")) 5) (In n w (k 5)) ())
+        (t2 try x "inf_take" ((raw (var "r")) 5) (In n w carry (k 5)) ())
         (s2 set hdist (+ x 1))
-        (t3 try x "inf_take" ((raw (var "r")) 4) (In n w (k 4)) ())
+        (t3 try x "inf_take" ((raw (var "r")) 4) (In n w carry (k 4)) ())
         (s3 set hclen (+ x 4))
         (c1 clear Cl (szof (var "cl")))
         (w1 for i 0 hclen
          ((a1 (inf-le i hclen))
           (a2 (pi k nat (inf-le (Cl k) 15)))
           (a3 (inf-le hclen 19))
-          (r1 (inf-le ip n)) (r2 (inf-le bc 64)) (r3 (inf-shiftok bc ip n)) (r4 (inf-bits-inv ip cons bc)) (r5 (inf-le cons0 cons)))
-         ((t4 try x "inf_take" ((raw (var "r")) 3) (In n w (k 3)) ())
+          (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)))
+         ((t4 try x "inf_take" ((raw (var "r")) 3) (In n w carry (k 3)) ())
           (s4 aset Cl (at Ob i) x)))
         (c2 call "inf_build" ((taddr "cl") (raw (var "cl")) 19 (tf "csym") (tf "ctab") CROOT)
             ((Ln Cl) (nsym 19) (root CROOT) q (u (inf-pow h)) w) ((Cn Cc) (Sy Cs) (Tb Ct)))
@@ -1177,24 +1218,24 @@
         (w2 while (lt i tot) (natminus tot i)
          ((b1 (inf-le prev 15))
           (b2 (pi j nat (inf-le (Lz j) 15)))
-          (r1 (inf-le ip n)) (r2 (inf-le bc 64)) (r3 (inf-shiftok bc ip n)) (r4 (inf-bits-inv ip cons bc)) (r5 (inf-le cons0 cons)))
+          (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)))
          ((t5 try sy "inf_sym" ((raw (var "r")) (taddr "cl") (tf "ctab") CROOT)
-              (In n w (Cn Cc) (Sy Cs) (Tb Ct) (m 19) h (root CROOT)) ())
+              (In n w carry (Cn Cc) (Sy Cs) (Tb Ct) (m 19) h (root CROOT)) ())
           (j1 join g1 (lt sy 16)
            ((s6 set rr 1) (s7 set v sy))
            ((i1 if g2 (lt 18 sy) ((r1 retneg 1)))
             (j2 join g3 (le sy 16)
-             ((t6 try x "inf_take" ((raw (var "r")) 2) (In n w (k 2)) ())
+             ((t6 try x "inf_take" ((raw (var "r")) 2) (In n w carry (k 2)) ())
               (s8 set rr (+ x 3)) (s9 set v prev))
              ((j3 join g4 (le sy 17)
-               ((t7 try x "inf_take" ((raw (var "r")) 3) (In n w (k 3)) ())
+               ((t7 try x "inf_take" ((raw (var "r")) 3) (In n w carry (k 3)) ())
                 (s10 set rr (+ x 3)))
-               ((t8 try x "inf_take" ((raw (var "r")) 7) (In n w (k 7)) ())
+               ((t8 try x "inf_take" ((raw (var "r")) 7) (In n w carry (k 7)) ())
                 (s11 set rr (+ x 11)))
-               ((f1 (inf-lt 0 rr)) (f2 (inf-le rr 138)) (r1 (inf-le ip n)) (r2 (inf-le bc 64)) (r3 (inf-shiftok bc ip n)) (r4 (inf-bits-inv ip cons bc)) (r5 (inf-le cons0 cons))))
+               ((f1 (inf-lt 0 rr)) (f2 (inf-le rr 138)) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))))
               (s12 set v 0))
-             ((f3 (inf-lt 0 rr)) (f4 (inf-le rr 138)) (f5 (inf-le v 15)) (r1 (inf-le ip n)) (r2 (inf-le bc 64)) (r3 (inf-shiftok bc ip n)) (r4 (inf-bits-inv ip cons bc)) (r5 (inf-le cons0 cons)))))
-           ((f6 (inf-lt 0 rr)) (f7 (inf-le rr 138)) (f8 (inf-le v 15)) (r1 (inf-le ip n)) (r2 (inf-le bc 64)) (r3 (inf-shiftok bc ip n)) (r4 (inf-bits-inv ip cons bc)) (r5 (inf-le cons0 cons))))
+             ((f3 (inf-lt 0 rr)) (f4 (inf-le rr 138)) (f5 (inf-le v 15)) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)))))
+           ((f6 (inf-lt 0 rr)) (f7 (inf-le rr 138)) (f8 (inf-le v 15)) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))))
           (w3 for k 0 rr
            ((c1 (inf-le k rr))
             (c2 (pi j nat (inf-le (Lz j) 15))))
@@ -1231,45 +1272,45 @@
         (Xq (inf-ltle 320 q gq2)))
      'proofs
       {"s1-1" '(inf-lelt H 288 (inf-pow w) Hl (inf-wfit288 w gw))
-       "s2-1" '(inf-wlit Hd w gw (inf-letrans Hd 32 64 Hm (idpath false)))
-       "s3-1" '(inf-wlit Hc w gw (inf-letrans Hc 19 64 Hn (idpath false)))
+       "s2-1" '(inf-wlit Hd w gw (inf-letrans Hd 32 63 Hm (idpath false)))
+       "s3-1" '(inf-wlit Hc w gw (inf-letrans Hc 19 63 Hn (idpath false)))
        "w1e-2" '(lam k (idpath false))
        "w1e-3" 'Hn
-       "w1e-8" 'C3
+       "w1e-7" 'C3
        "s4-1" '(inf-lttrans i Hc 19 w1 a3)
        "s4-2" '(hord i (inf-lttrans i Hc 19 w1 a3))
        "s4-3" '(inf-lttrans xt4 8 (inf-pow w) t4e7 (inf-powle 3 w (inf-letrans 3 32 w (idpath false) gw)))
-       "w1b-1" '(inf-wlit (succ i) w gw (inf-letrans (succ i) 19 64 (inf-ltsu i 19 (inf-lttrans i Hc 19 w1 a3)) (idpath false)))
+       "w1b-1" '(inf-wlit (succ i) w gw (inf-letrans (succ i) 19 63 (inf-ltsu i 19 (inf-lttrans i Hc 19 w1 a3)) (idpath false)))
        "w1b-2" '(inf-ltsu i Hc w1)
        "w1b-3" '(inf-updle Cl (Ob i) xt4 15 a2 (inf-letrans xt4 8 15 (inf-ltle xt4 8 t4e7) (idpath false)))
-       "w1b-9" '(inf-letrans cons0 cons const4 r5 t4e5)
-       "w1b-10" '(inf-subfall Hc i w1)
+       "w1b-8" '(inf-letrans cons0 cons const4 r5 t4e5)
+       "w1b-9" '(inf-subfall Hc i w1)
        "c2-1" '(lam k g (a2 k))
        "c2-2" '(inf-lttrans 19 320 q (idpath true) Xq)
        "c2-4" 'Pw
        "s5-1" '(inf-lelt (add H Hd) 320 (inf-pow w) T3 W3)
        "w2e-2" '(lam j (idpath false))
-       "t5-7" 'c2e1
-       "t5-8" 'c2e2
-       "s7-1" '(inf-wlit syt5 w gw (inf-letrans syt5 16 64 (inf-ltle syt5 16 g1) (idpath false)))
+       "t5-6" 'c2e1
+       "t5-7" 'c2e2
+       "s7-1" '(inf-wlit syt5 w gw (inf-letrans syt5 16 63 (inf-ltle syt5 16 g1) (idpath false)))
        "j1j-3" '(inf-ltsle syt5 15 g1)
-       "j1j-8" '(inf-letrans cons0 cons const5 r5 t5e5)
-       "s8-1" '(inf-wlit (add xt6 3) w gw (inf-letrans (add xt6 3) 6 64 X6 (idpath false)))
-       "s9-1" '(inf-wlit prev w gw (inf-letrans prev 15 64 b1 (idpath false)))
+       "j1j-7" '(inf-letrans cons0 cons const5 r5 t5e5)
+       "s8-1" '(inf-wlit (add xt6 3) w gw (inf-letrans (add xt6 3) 6 63 X6 (idpath false)))
+       "s9-1" '(inf-wlit prev w gw (inf-letrans prev 15 63 b1 (idpath false)))
        "j2j-1" '(inf-pos3 xt6 3 (idpath true))
        "j2j-2" '(inf-letrans (add xt6 3) 6 138 X6 (idpath false))
-       "j2j-8" '(inf-letrans cons0 const5 const6 (inf-letrans cons0 cons const5 r5 t5e5) t6e5)
-       "s10-1" '(inf-wlit (add xt7 3) w gw (inf-letrans (add xt7 3) 10 64 X7 (idpath false)))
+       "j2j-7" '(inf-letrans cons0 const5 const6 (inf-letrans cons0 cons const5 r5 t5e5) t6e5)
+       "s10-1" '(inf-wlit (add xt7 3) w gw (inf-letrans (add xt7 3) 10 63 X7 (idpath false)))
        "j3j-1" '(inf-pos3 xt7 3 (idpath true))
        "j3j-2" '(inf-letrans (add xt7 3) 10 138 X7 (idpath false))
-       "j3j-7" '(inf-letrans cons0 const5 const7 (inf-letrans cons0 cons const5 r5 t5e5) t7e5)
+       "j3j-6" '(inf-letrans cons0 const5 const7 (inf-letrans cons0 cons const5 r5 t5e5) t7e5)
        "s11-1" '(inf-lelt (add xt8 11) 512 (inf-pow w) (inf-letrans (add xt8 11) 138 512 X8 (idpath false)) (inf-lttrans 512 1024 (inf-pow w) (idpath true) (inf-powle 10 w (inf-letrans 10 32 w (idpath false) gw))))
-       "j3j-8" '(inf-pos3 xt8 11 (idpath true))
-       "j3j-9" 'X8
-       "j3j-14" '(inf-letrans cons0 const5 const8 (inf-letrans cons0 cons const5 r5 t5e5) t8e5)
+       "j3j-7" '(inf-pos3 xt8 11 (idpath true))
+       "j3j-8" 'X8
+       "j3j-12" '(inf-letrans cons0 const5 const8 (inf-letrans cons0 cons const5 r5 t5e5) t8e5)
        "i2-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
        "s13-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
-       "s13-3" '(inf-wlit vj1 w gw (inf-letrans vj1 15 64 f8 (idpath false)))
+       "s13-3" '(inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
        "w3b-1" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
        "w3b-2" '(inf-ltsu k rrj1 w3)
        "w3b-3" '(inf-updle Lz (add i k) vj1 15 c2 f8)
@@ -1278,16 +1319,16 @@
        "w3b-6" '(inf-ltsu k rrj1 w3)
        "w3b-8" '(inf-subfall rrj1 k w3)
        "s14-1" '(inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 Ti f7) W4)
-       "s15-1" '(inf-wlit vj1 w gw (inf-letrans vj1 15 64 f8 (idpath false)))
-       "w2b-8" '(inf-subby i (add H Hd) rrj1 w2 f6)
+       "s15-1" '(inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
+       "w2b-7" '(inf-subby i (add H Hd) rrj1 w2 f6)
        "c4-1" '(lam k g (b2 k))
        "c4-2" '(inf-lelt H 288 q Hl (inf-lttrans 288 320 q (idpath true) Xq))
        "c4-4" 'Pw
        "c5-1" '(lam k g (b2 (add H k)))
        "c5-2" '(inf-lelt Hd 32 q Hm (inf-lttrans 32 320 q (idpath true) Xq))
        "c5-4" 'Pw
-       "r2-6" 'c4e1 "r2-7" 'c4e2 "r2-8" 'c4e3 "r2-9" 'Hl
-       "r2-10" 'c5e1 "r2-11" 'c5e2 "r2-12" 'c5e3 "r2-13" 'Hm}}
+       "r2-5" 'c4e1 "r2-6" 'c4e2 "r2-7" 'c4e3 "r2-8" 'Hl
+       "r2-9" 'c5e1 "r2-10" 'c5e2 "r2-11" 'c5e3 "r2-12" 'Hm}}
 
    ; a match's bytes: out, or the dictionary behind it
    copy
@@ -1413,15 +1454,15 @@
      'ensures (rd-ens + ot-ens)
      'body
       '((w1 while (le (+ op 266) cap) (natminus cap op)
-         ((j1 (inf-le ip n)) (j2 (inf-le bc 64)) (j3 (inf-shiftok bc ip n))
-          (j4 (inf-bits-inv ip cons bc)) (j5 (inf-le cons0 cons)) (j6 (inf-le op0 op)) (j7 (inf-le op cap)))
+         ((j1 (inf-le ip n)) (j3 (inf-le bc 63))
+          (j4 (inf-bits-inv carry ip cons bc)) (j5 (inf-le cons0 cons)) (j6 (inf-le op0 op)) (j7 (inf-le op cap)))
          ((i1 join g1 (lt bc 15)
            ((i2 if g2 (lt n (+ ip 8)) ((b1 brk)))
             (f1 havoc bb (bor64 bb (shl64 (ld64 In ip) bc)))
             (f2 set ip (+ ip (- 7 (div8 bc))))
             (f3 set bc (or56 bc)))
            ()
-           ((h1 (inf-le ip n)) (h2 (inf-le bc 64)) (h3 (inf-shiftok bc ip n)) (h4 (inf-bits-inv ip cons bc)) (h5 (inf-le 15 bc))))
+           ((h1 (inf-le ip n)) (h3 (inf-le bc 63)) (h4 (inf-bits-inv carry ip cons bc)) (h5 (inf-le 15 bc))))
           (d1 havoc e (at Lt (mask bb LROOT)))
           (i3 if g3 (z e) ((b2 brk)))
           (d2 havoc sy (shr64 e 4))
@@ -1444,7 +1485,7 @@
               (f5 set ip (+ ip (- 7 (div8 bc))))
               (f6 set bc (or56 bc)))
              ()
-             ((m1 (inf-le ip n)) (m2 (inf-le bc 64)) (m3 (inf-shiftok bc ip n)) (m4 (inf-bits-inv ip cons bc)) (m5 (inf-le 48 bc))))
+             ((m1 (inf-le ip n)) (m3 (inf-le bc 63)) (m4 (inf-bits-inv carry ip cons bc)) (m5 (inf-le 48 bc))))
             (d9 set x (at Le (- sy 257)))
             (d10 havoc y (shr64 bb (+ (low e 15) x)))
             (d11 havoc f (at Dt (mask y DROOT)))
@@ -1570,73 +1611,67 @@
        "f1-2" '(inf-lttrans bc 15 64 g1 (idpath false))
        "f2-1" '(inf-div8le bc B1)
        "f2-2" '(inf-lelt I1 n (inf-pow w) L1 Nw)
-       "f3-1" 'B1
-       "f3-2" '(inf-wlit (add 56 (inf-mod 8 bc)) w gw M1)
+       "f3-2" '(inf-wlit (add 56 (inf-mod 8 bc)) w gw (inf-or56 bc))
        "i1j-1" 'L1
-       "i1j-2" 'M1
-       "i1j-3" '(inf-shiftwide bc I1 n)
-       "i1j-4" '(inf-fillw ip cons bc B1 j4)
-       "i1j-5" '(inf-letrans 15 56 (add 56 (inf-mod 8 bc)) (idpath false) (inf-leaddr 56 (inf-mod 8 bc)))
+       "i1j-2" '(inf-or56 bc)
+       "i1j-3" '(inf-fillw carry ip cons bc B1 j4)
+       "i1j-4" '(inf-letrans 15 56 (add 56 (inf-mod 8 bc)) (idpath false) (inf-leaddr 56 (inf-mod 8 bc)))
        "d1-1" '(inf-lelt LROOT 15 32 gl (idpath true))
        "d1-2" '(inf-masklt bbi1 LROOT)
        "d3-1" 'E6
        "d4-1" 'Eb
-       "d4-2" '(inf-wlit Ec w gw (inf-letrans Ec bci1 64 (inf-suble bci1 Ea) h2))
+       "d4-2" '(inf-wlit Ec w gw (inf-letrans Ec bci1 63 (inf-suble bci1 Ea) h3))
        "p1-1" 'Op0
        "s1-1" '(inf-lelt (add op 1) cap (inf-pow w) (inf-lt1 op cap Opc) Cw)
-       "w1b-2" '(inf-letrans Ec bci1 64 (inf-suble bci1 Ea) h2)
-       "w1b-3" '(inf-shifttake bci1 ipi1 n Ea h3)
-       "w1b-4" '(inf-take ipi1 cons bci1 Ea Eb h4)
-       "w1b-5" '(inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea))
-       "w1b-6" '(inf-letrans op0 op (add op 1) j6 (inf-leaddr op 1))
-       "w1b-7" '(inf-lt1 op cap Opc)
-       "w1b-8" '(inf-subfall1 cap op Opc)
+       "w1b-2" '(inf-sub63 bci1 Ea h3)
+       "w1b-3" '(inf-take carry ipi1 cons bci1 Ea Eb h4)
+       "w1b-4" '(inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea))
+       "w1b-5" '(inf-letrans op0 op (add op 1) j6 (inf-leaddr op 1))
+       "w1b-6" '(inf-lt1 op cap Opc)
+       "w1b-7" '(inf-subfall1 cap op Opc)
        "d6-1" 'E6
        "d7-1" 'Eb
-       "d7-2" '(inf-wlit Ec w gw (inf-letrans Ec bci1 64 (inf-suble bci1 Ea) h2))
-       "r4-16" '(inf-letrans Ec bci1 64 (inf-suble bci1 Ea) h2)
-       "r4-17" '(inf-shifttake bci1 ipi1 n Ea h3)
-       "r4-18" '(inf-take ipi1 cons bci1 Ea Eb h4)
-       "r4-19" '(inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea))
+       "d7-2" '(inf-wlit Ec w gw (inf-letrans Ec bci1 63 (inf-suble bci1 Ea) h3))
+       "r4-14" '(inf-sub63 bci1 Ea h3)
+       "r4-15" '(inf-take carry ipi1 cons bci1 Ea Eb h4)
+       "r4-16" '(inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea))
        "i8-1" '(inf-lelt (add ipi1 8) (add n 8) (inf-pow w) (inf-addr ipi1 n 8 h1) gn)
        "f4-2" '(inf-lttrans bci1 48 64 g7 (idpath false))
        "f5-1" '(inf-div8le bci1 B2)
        "f5-2" '(inf-lelt I2 n (inf-pow w) L2 Nw)
-       "f6-1" 'B2
-       "f6-2" '(inf-wlit (add 56 (inf-mod 8 bci1)) w gw M2)
+       "f6-2" '(inf-wlit (add 56 (inf-mod 8 bci1)) w gw (inf-or56 bci1))
        "i7j-1" 'L2
-       "i7j-2" 'M2
-       "i7j-3" '(inf-shiftwide bci1 I2 n)
-       "i7j-4" '(inf-fillw ipi1 cons bci1 B2 h4)
-       "i7j-5" '(inf-letrans 48 56 (add 56 (inf-mod 8 bci1)) (idpath false) (inf-leaddr 56 (inf-mod 8 bci1)))
+       "i7j-2" '(inf-or56 bci1)
+       "i7j-3" '(inf-fillw carry ipi1 cons bci1 B2 h4)
+       "i7j-4" '(inf-letrans 48 56 (add 56 (inf-mod 8 bci1)) (idpath false) (inf-leaddr 56 (inf-mod 8 bci1)))
        "d9-1" 'I7
        "d9-2" 'I9
-       "d9-3" '(inf-wlit Xl w gw (inf-letrans Xl 5 64 X5 (idpath false)))
-       "d10-1" '(inf-wlit (add Ea Xl) w gw (inf-letrans (add Ea Xl) 20 64 (inf-add2 Ea 15 Xl 5 E5 X5) (idpath false)))
+       "d9-3" '(inf-wlit Xl w gw (inf-letrans Xl 5 63 X5 (idpath false)))
+       "d10-1" '(inf-wlit (add Ea Xl) w gw (inf-letrans (add Ea Xl) 20 63 (inf-add2 Ea 15 Xl 5 E5 X5) (idpath false)))
        "d10-2" '(inf-lelt (add Ea Xl) 20 64 (inf-add2 Ea 15 Xl 5 E5 X5) (idpath true))
        "d11-1" '(inf-lelt DROOT 15 32 gd (idpath true))
        "d11-2" '(inf-masklt yd10 DROOT)
        "d12-1" 'E6
        "d13-1" 'G1
-       "d13-2" '(inf-wlit C1 w gw (inf-letrans C1 bci7 64 (inf-suble bci7 Ea) m2))
+       "d13-2" '(inf-wlit C1 w gw (inf-letrans C1 bci7 63 (inf-suble bci7 Ea) m3))
        "d15-1" 'I7
        "d15-2" 'I9
        "d15-3" '(inf-lelt Xl 5 32 X5 (idpath true))
        "d15-4" 'Lw
        "d16-1" '(inf-lelt Xl 5 64 X5 (idpath true))
        "d17-1" 'G2
-       "d17-2" '(inf-wlit C2 w gw (inf-letrans C2 64 64 (inf-letrans C2 C1 64 (inf-suble C1 Xl) (inf-letrans C1 bci7 64 (inf-suble bci7 Ea) m2)) (idpath false)))
+       "d17-2" '(inf-wlit C2 w gw (inf-letrans C2 C1 63 (inf-suble C1 Xl) (inf-letrans C1 bci7 63 (inf-suble bci7 Ea) m3)))
        "d19-1" '(inf-lttrans Fa 16 64 Fz (idpath false))
        "d20-1" 'G3
-       "d20-2" '(inf-wlit C3 w gw (inf-letrans C3 C2 64 (inf-suble C2 Fa) (inf-letrans C2 C1 64 (inf-suble C1 Xl) (inf-letrans C1 bci7 64 (inf-suble bci7 Ea) m2))))
+       "d20-2" '(inf-wlit C3 w gw (inf-letrans C3 C2 63 (inf-suble C2 Fa) (inf-letrans C2 C1 63 (inf-suble C1 Xl) (inf-letrans C1 bci7 63 (inf-suble bci7 Ea) m3))))
        "d23-1" 'S3
-       "d23-2" '(inf-wlit Xd w gw (inf-letrans Xd 13 64 X3 (idpath false)))
+       "d23-2" '(inf-wlit Xd w gw (inf-letrans Xd 13 63 X3 (idpath false)))
        "d24-1" 'S3
        "d24-2" '(inf-lelt Xd 13 32 X3 (idpath true))
        "d24-3" 'Dw
        "d25-1" '(inf-lelt Xd 13 64 X3 (idpath true))
        "d26-1" 'G4
-       "d26-2" '(inf-wlit C4 w gw (inf-letrans C4 C3 64 (inf-suble C3 Xd) (inf-letrans C3 C2 64 (inf-suble C2 Fa) (inf-letrans C2 C1 64 (inf-suble C1 Xl) (inf-letrans C1 bci7 64 (inf-suble bci7 Ea) m2)))))
+       "d26-2" '(inf-wlit C4 w gw (inf-letrans C4 C3 63 (inf-suble C3 Xd) (inf-letrans C3 C2 63 (inf-suble C2 Fa) (inf-letrans C2 C1 63 (inf-suble C1 Xl) (inf-letrans C1 bci7 63 (inf-suble bci7 Ea) m3)))))
        "i12-1" '(inf-lelt (add op nd) (add cap nd) (inf-pow w) (inf-addr op cap nd j7) gnd)
        "s3-1" 'Lw
        "s4-2" '(inf-lelt (natminus Da op) Da (inf-pow w) (inf-suble Da op) Dw)
@@ -1675,13 +1710,12 @@
        "w5b-1" '(inf-lt1 k La w5)
        "w5b-2" '(inf-subfall1 La k w5)
        "s9-1" 'Pa
-       "w1b-10" '(inf-letrans C4 C3 64 (inf-suble C3 Xd) (inf-letrans C3 C2 64 (inf-suble C2 Fa) (inf-letrans C2 C1 64 (inf-suble C1 Xl) (inf-letrans C1 bci7 64 (inf-suble bci7 Ea) m2))))
-       "w1b-11" '(inf-shifttake C3 ipi7 n Xd (inf-shifttake C2 ipi7 n Fa (inf-shifttake C1 ipi7 n Xl (inf-shifttake bci7 ipi7 n Ea m3))))
-       "w1b-12" '(inf-take ipi7 T3 C3 Xd G4 (inf-take ipi7 T2 C2 Fa G3 (inf-take ipi7 T1 C1 Xl G2 (inf-take ipi7 cons bci7 Ea G1 m4))))
-       "w1b-13" '(inf-letrans cons0 T3 T4 (inf-letrans cons0 T2 T3 (inf-letrans cons0 T1 T2 (inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea)) (inf-leaddr T1 Xl)) (inf-leaddr T2 Fa)) (inf-leaddr T3 Xd))
-       "w1b-14" '(inf-letrans op0 op (add op La) j6 (inf-leaddr op La))
-       "w1b-15" 'Gb
-       "w1b-16" '(inf-subby op cap La Opc Lp)}}
+       "w1b-9" '(inf-letrans C4 C3 63 (inf-suble C3 Xd) (inf-letrans C3 C2 63 (inf-suble C2 Fa) (inf-letrans C2 C1 63 (inf-suble C1 Xl) (inf-letrans C1 bci7 63 (inf-suble bci7 Ea) m3))))
+       "w1b-10" '(inf-take carry ipi7 T3 C3 Xd G4 (inf-take carry ipi7 T2 C2 Fa G3 (inf-take carry ipi7 T1 C1 Xl G2 (inf-take carry ipi7 cons bci7 Ea G1 m4))))
+       "w1b-11" '(inf-letrans cons0 T3 T4 (inf-letrans cons0 T2 T3 (inf-letrans cons0 T1 T2 (inf-letrans cons0 cons T1 j5 (inf-leaddr cons Ea)) (inf-leaddr T1 Xl)) (inf-leaddr T2 Fa)) (inf-leaddr T3 Xd))
+       "w1b-12" '(inf-letrans op0 op (add op La) j6 (inf-leaddr op La))
+       "w1b-13" 'Gb
+       "w1b-14" '(inf-subby op cap La Opc Lp)}}
 
    ; a block's symbols, to its end: each one lowers the room left, so the loop ends whatever the tables say
    block
@@ -1718,20 +1752,20 @@
      'calls [fill take sym copy fast]
      'body
       '((w1 while (tru) (natminus cap op)
-         ((j1 (inf-le ip n)) (j2 (inf-le bc 64)) (j3 (inf-shiftok bc ip n))
-          (j4 (inf-bits-inv ip cons bc)) (j5 (inf-le cons0 cons)) (j6 (inf-le op0 op)) (j7 (inf-le op cap)))
+         ((j1 (inf-le ip n)) (j3 (inf-le bc 63))
+          (j4 (inf-bits-inv carry ip cons bc)) (j5 (inf-le cons0 cons)) (j6 (inf-le op0 op)) (j7 (inf-le op cap)))
          ((g0 ghost o0 op eo)
           (i1 join g1 (nz out)
            ((i2 if g2 (le (+ ip 8) n)
              ((i3 if g3 (le (+ op 266) cap)
                ((t1 try x "inf_fast_run" ((raw (var "r")))
-                 (In n w out oc cap nd Lt Dt Lb Le Db De h LROOT DROOT) ())
+                 (In n w carry out oc cap nd Lt Dt Lb Le Db De h LROOT DROOT) ())
                 (i4 if g4 (nz x) ((b1 brk))))))))
            ()
-           ((k1 (inf-le ip n)) (k2 (inf-le bc 64)) (k3 (inf-shiftok bc ip n))
-            (k4 (inf-bits-inv ip cons bc)) (k5 (inf-le cons0 cons)) (k6 (inf-le o0 op)) (k7 (inf-le op cap))))
+           ((k1 (inf-le ip n)) (k3 (inf-le bc 63))
+            (k4 (inf-bits-inv carry ip cons bc)) (k5 (inf-le cons0 cons)) (k6 (inf-le o0 op)) (k7 (inf-le op cap))))
           (t2 try sy "inf_sym" ((raw (var "r")) (taddr "lit") (tf "ltab") LROOT)
-              (In n w (Cn Lc) (Sy Ls) (Tb Lt) (m lm) h (root LROOT)) ())
+              (In n w carry (Cn Lc) (Sy Ls) (Tb Lt) (m lm) h (root LROOT)) ())
           (i5 ife g5 (lt sy 256)
            ((i6 if g6 (le cap op) ((r1 retneg 2)))
             (i7 join g7 (nz out) ((p1 poke Ot op (u8 sy))) () ())
@@ -1739,13 +1773,13 @@
            ((i8 if g8 (le sy 256) ((b2 brk)))
             (i9 if g9 (lt 285 sy) ((r2 retneg 1)))
             (s2 set l (at Lb (- sy 257)))
-            (t3 try x "inf_take" ((raw (var "r")) (at Le (- sy 257))) (In n w (k (Le (natminus sy 257)))) ())
+            (t3 try x "inf_take" ((raw (var "r")) (at Le (- sy 257))) (In n w carry (k (Le (natminus sy 257)))) ())
             (s3 set l (+ l x))
             (t4 try sd "inf_sym" ((raw (var "r")) (taddr "dst") (tf "dtab") DROOT)
-                (In n w (Cn Dc) (Sy Ds) (Tb Dt) (m dm) h (root DROOT)) ())
+                (In n w carry (Cn Dc) (Sy Ds) (Tb Dt) (m dm) h (root DROOT)) ())
             (i10 if g10 (lt 29 sd) ((r3 retneg 1)))
             (s4 set d (at Db sd))
-            (t5 try y "inf_take" ((raw (var "r")) (at De sd)) (In n w (k (De sd))) ())
+            (t5 try y "inf_take" ((raw (var "r")) (at De sd)) (In n w carry (k (De sd))) ())
             (s5 set d (+ d y))
             (i11 if g11 (lt (+ op nd) d) ((r4 retneg 1)))
             (i12 if g12 (lt (- cap op) l) ((r5 retneg 2)))
@@ -1777,46 +1811,46 @@
      'proofs
       {"i2-1" '(inf-lelt (add ip 8) (add n 8) (inf-pow w) (inf-addr ip n 8 j1) gn)
        "i3-1" '(inf-lelt (add op 266) (add cap 266) (inf-pow w) (inf-addr op cap 266 j7) gcf)
-       "r6-5" '(inf-letrans cons0 cons const1 j5 t1e5)
-       "r6-7" '(inf-letrans op0 op opt1 j6 t1e9)
-       "i1j-5" '(inf-letrans cons0 cons const1 j5 t1e5)
-       "i1j-6" '(inf-letrans o0 op opt1 Oo t1e9)
-       "i1j-13" 'Oo
-       "i1j-20" 'Oo
-       "i1j-27" 'Oo
-       "t2-7" 'c1
-       "t2-8" 'c2
-       "t2-10" '(inf-lelt lm 288 (inf-pow w) c4 (inf-wfit288 w gw))
+       "r6-4" '(inf-letrans cons0 cons const1 j5 t1e5)
+       "r6-6" '(inf-letrans op0 op opt1 j6 t1e9)
+       "i1j-4" '(inf-letrans cons0 cons const1 j5 t1e5)
+       "i1j-5" '(inf-letrans o0 op opt1 Oo t1e9)
+       "i1j-11" 'Oo
+       "i1j-17" 'Oo
+       "i1j-23" 'Oo
+       "t2-6" 'c1
+       "t2-7" 'c2
+       "t2-9" '(inf-lelt lm 288 (inf-pow w) c4 (inf-wfit288 w gw))
        "p1-1" '(inf-lttrans opi1 cap oc g6 (inf-letl cap cap oc (pathsinv0 nat oc cap (go g7)) (inf-refl cap)))
        "s1-1" '(inf-lelt (add opi1 1) cap (inf-pow w) (inf-lt1 opi1 cap g6) Cw)
-       "w1b-5" '(inf-letrans cons0 consi1 const2 k5 t2e5)
-       "w1b-6" '(inf-letrans op0 opi1 (add opi1 1) Op6 (inf-leaddr opi1 1))
-       "w1b-7" '(inf-lt1 opi1 cap g6)
-       "w1b-8" '(inf-subfrom op opi1 cap 1 Ok g6 (idpath true))
-       "r6-12" '(inf-letrans cons0 consi1 const2 k5 t2e5)
-       "r6-14" 'Op6
+       "w1b-4" '(inf-letrans cons0 consi1 const2 k5 t2e5)
+       "w1b-5" '(inf-letrans op0 opi1 (add opi1 1) Op6 (inf-leaddr opi1 1))
+       "w1b-6" '(inf-lt1 opi1 cap g6)
+       "w1b-7" '(inf-subfrom op opi1 cap 1 Ok g6 (idpath true))
+       "r6-10" '(inf-letrans cons0 consi1 const2 k5 t2e5)
+       "r6-12" 'Op6
        "s2-1" '(inf-ltsu 256 syt2 g8)
        "s2-2" 'L9
        "s2-3" '(inf-lelt (Lb Ii) 259 (inf-pow w) (inf-letrans (Lb Ii) (add (Lb Ii) (inf-pow Xl)) 259 (inf-leaddr (Lb Ii) (inf-pow Xl)) Hh)
                  (inf-lelt 259 512 (inf-pow w) (idpath false) W9))
-       "t3-7" '(inf-letrans Xl 5 13 (hle Ii L9) (idpath false))
+       "t3-6" '(inf-letrans Xl 5 13 (hle Ii L9) (idpath false))
        "s3-1" '(inf-lttrans La 259 (inf-pow w) Lz (inf-ltle 259 (inf-pow w) (inf-lelt 259 512 (inf-pow w) (idpath false) W9)))
-       "t4-7" 'c5
-       "t4-8" 'c6
-       "t4-10" '(inf-wlit dm w gw (inf-letrans dm 32 64 c8 (idpath false)))
+       "t4-6" 'c5
+       "t4-7" 'c6
+       "t4-9" '(inf-wlit dm w gw (inf-letrans dm 32 63 c8 (idpath false)))
        "s4-1" 'S3
        "s4-2" '(inf-lttrans (Db sdt4) (inf-pow h) (inf-pow w)
                  (inf-lttrans (Db sdt4) (add (Db sdt4) (inf-pow Xd)) (inf-pow h) (inf-ltaddpos (Db sdt4) (inf-pow Xd) (inf-powpos Xd)) (hdb sdt4 S3)) Hw)
-       "t5-7" '(hde sdt4 S3)
+       "t5-6" '(hde sdt4 S3)
        "s5-1" 'Dw
        "i11-1" '(inf-lelt (add opi1 nd) (add cap nd) (inf-pow w) (inf-addr opi1 cap nd k7) gnd)
        "c1-2" 'Dw
        "c1-4" 'Rm
        "s6-1" '(inf-lelt (add opi1 La) cap (inf-pow w) Rm Cw)
-       "w1b-13" '(inf-letrans cons0 const4 const5 (inf-letrans cons0 const3 const4 (inf-letrans cons0 const2 const3 (inf-letrans cons0 consi1 const2 k5 t2e5) t3e5) t4e5) t5e5)
-       "w1b-14" '(inf-letrans op0 opi1 (add opi1 La) Op6 (inf-leaddr opi1 La))
-       "w1b-15" 'Rm
-       "w1b-16" '(inf-subfrom op opi1 cap La Ok Ol Lp)}}
+       "w1b-11" '(inf-letrans cons0 const4 const5 (inf-letrans cons0 const3 const4 (inf-letrans cons0 const2 const3 (inf-letrans cons0 consi1 const2 k5 t2e5) t3e5) t4e5) t5e5)
+       "w1b-12" '(inf-letrans op0 opi1 (add opi1 La) Op6 (inf-leaddr opi1 La))
+       "w1b-13" 'Rm
+       "w1b-14" '(inf-subfrom op opi1 cap La Ok Ol Lp)}}
 
    ; the blocks: each takes at least its three header bits, so the loop ends
    go
@@ -1827,7 +1861,7 @@
      'state (rd-state + '((op op0)) + co-state)
      'arrays (rd-arrays + ot-arrays + co-arrays)
      'requires
-      (rd-req + ot-req + co-req +
+      (one-go (rd-req + ot-req + co-req) +
        '((gcf (inf-lt (add cap 266) (inf-pow w)))
          (Ob (pi k nat nat)) (Cs0 (pi k nat nat)) (Ct0 (pi k nat nat)) (Cc0 (pi k nat nat))
          (hord (pi k nat g (inf-lt k 19) (inf-lt (Ob k) 19)))
@@ -1842,19 +1876,19 @@
      'calls [take stored fixed dyn block]
      'body
       '((w1 while (z last) (natminus (inf-by8 n) cons)
-         ((j1 (inf-le ip n)) (j2 (inf-le bc 64)) (j3 (inf-shiftok bc ip n))
-          (j4 (inf-bits-inv ip cons bc)) (j7 (inf-le op cap)))
+         ((j1 (inf-le ip n)) (j3 (inf-le bc 63))
+          (j4 (inf-bits-inv 0 ip cons bc)) (j7 (inf-le op cap)))
          ((g0 ghost c0 cons ec)
-          (t1 try last "inf_take" ((raw (var "r")) 1) (In n w (k 1)) ())
-          (t2 try typ "inf_take" ((raw (var "r")) 2) (In n w (k 2)) ())
+          (t1 try last "inf_take" ((raw (var "r")) 1) (In n w (carry 0) (k 1)) ())
+          (t2 try typ "inf_take" ((raw (var "r")) 2) (In n w (carry 0) (k 2)) ())
           (i1 ife g1 (z typ)
            ((t3 try x "inf_stored" ((raw (var "r"))) (In n w out oc cap nd) ()))
            ((i2 if g2 (le 3 typ) ((r1 retneg 1)))
             (i3 join g3 (le typ 1)
              ((c1 call "inf_fixed" ((raw (var "r"))) (w (u (inf-pow h)) q h LROOT DROOT CROOT) ()))
-             ((t4 try x "inf_dyn" ((raw (var "r"))) (In n w q h LROOT DROOT CROOT Ob Cs0 Ct0 Cc0) ()))
-             ((k1 (inf-le ip n)) (k2 (inf-le bc 64)) (k3 (inf-shiftok bc ip n))
-              (k4 (inf-bits-inv ip cons bc)) (k5 (inf-le const2 cons))
+             ((t4 try x "inf_dyn" ((raw (var "r"))) (In n w (carry 0) q h LROOT DROOT CROOT Ob Cs0 Ct0 Cc0) ()))
+             ((k1 (inf-le ip n)) (k3 (inf-le bc 63))
+              (k4 (inf-bits-inv 0 ip cons bc)) (k5 (inf-le const2 cons))
               (c1 (pi k nat (inf-lt (Lc k) (inf-pow h))))
               (c2 (pi k nat (inf-lt (Ls k) (inf-pow h))))
               (c3 (inf-le (inf-sum Lc 15 1) lm))
@@ -1864,16 +1898,596 @@
               (c7 (inf-le (inf-sum Dc 15 1) dm))
               (c8 (inf-le dm 32))))
             (t5 try x "inf_block" ((raw (var "r")))
-                (In n w out oc cap nd Lc Ls Lt Dc Ds Dt lm dm Lb Le Db De h LROOT DROOT) ())))))
+                (In n w (carry 0) out oc cap nd Lc Ls Lt Dc Ds Dt lm dm Lb Le Db De h LROOT DROOT) ())))))
         (r2 ret op))
      'macros
       '((T1 (inf-ltaddpos cons 1 (idpath true))))
      'proofs
-      {"w1b-6" '(inf-consfall ipt3 const3 bct3 n cons t3e4 t3e1
+      {"w1b-5" '(inf-consfall 0 ipt3 const3 bct3 n cons t3e4 t3e1
                   (inf-lttrans cons (add cons 1) const3 T1 (inf-letrans (add cons 1) const2 const3 (inf-letrans (add cons 1) const1 const2 t1e6 t2e5) t3e5)))
-       "w1b-12" '(inf-consfall ipt5 const5 bct5 n cons t5e4 t5e1
+       "w1b-10" '(inf-consfall 0 ipt5 const5 bct5 n cons t5e4 t5e1
                    (inf-lttrans cons (add cons 1) const5 T1
                      (inf-letrans (add cons 1) consi3 const5 (inf-letrans (add cons 1) const2 consi3 (inf-letrans (add cons 1) const1 const2 t1e6 t2e5) k5) t5e5)))}}
+
+   ; --- the stream: the same reader, stopped and started. a function answers 0 having moved on, -1 short
+   ; of input, -2 short of room, -3 malformed; each stop leaves what the next call needs in s. the
+   ; output is the wrapper's to grow, so nothing here allocates. modes, 0 to 7: head, stored's length,
+   ; stored, table, code lengths' lengths, lengths, symbols, done
+   ms-fields '(mode last rem hlit hdist hclen i prev stage sy len dist)
+   ms-params (rd-params + '(("s" (ptr (struct "inf_ms")))))
+   (ms-state l) (map (x \ [x (intern "\(x)0")]) l)
+   (ms-req l) (map (x \ [(intern "\(x)0") 'nat]) l)
+   ; the invariant a stop keeps, read back on the next call
+   st-rd '((r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)))
+   st-op '((o1 (inf-le op0 op)) (o2 (inf-le op cap)))
+   (st-drop L k e)
+    [[(intern "\(L)a") 'havoc 'bb ['shr64 'bb k]]
+     [(intern "\(L)b") 'set 'bc ['- 'bc k]]
+     [(intern "\(L)c") 'gset 'cons ['add 'cons e]]]
+   (st-end L) [[L 'ife (intern "g\(L)") '(nz last)
+                [[(intern "\(L)a") 'havoc 'mode 7]]
+                [[(intern "\(L)b") 'havoc 'mode 0]]]]
+   sym-req (sym 'requires)
+   ; the codes as a stop left them
+   co-inv0 (sub [('Lc . 'Lc0) ('Ls . 'Ls0) ('Dc . 'Dc0) ('Ds . 'Ds0) ('lm . 'lm0) ('dm . 'dm0)] co-ens)
+   ; what a code's build asks, and what it leaves: the lengths' lengths' code, stop to stop
+   st-co-req (filter (r \ !(elem <r '(Lc0 Ls0 Lt0 Dc0 Ds0 Dt0 lm0 dm0))) co-req)
+   st-cc '((d1 (pi k nat (inf-lt (Cc k) (inf-pow h))))
+           (d2 (pi k nat (inf-lt (Cs k) (inf-pow h))))
+           (d3 (inf-le (inf-sum Cc 15 1) 19)))
+   st-cc0 ('((Cc (pi k nat nat)) (Cs (pi k nat nat)) (Ct (pi k nat nat))) + st-cc)
+   st-cl '((b1 (inf-le prev 15)) (b2 (pi j nat (inf-le (Lz j) 15))))
+
+   ; a symbol, once it can be whole: 15 bits, or the input over
+   sy1
+    {'name "inf_sy1" 'short "sy1"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params (sym 'params) 'fields rd-fields 'state rd-state 'arrays (sym 'arrays)
+     'requires sym-req
+     'decls '((int (x)))
+     'ensures rd-ens
+     'calls [fill sym]
+     'body
+      '((c1 call "inf_fill" ((raw (var "r"))) (In n w carry) ())
+        (i1 join g1 (lt bc 15) ((i2 if g2 (nz n) ((r1 retneg 1)))) () ())
+        (t1 tryr x "inf_sym" ((raw (var "r")) (raw (var "c")) (raw (var "t")) root) (In n w carry Cn Sy Tb m h root) () 3)
+        (r2 ret x))
+     'macros () 'proofs {}}
+
+   ; a block's head, three bits whole
+   sthead
+    {'name "inf_sthead" 'short "sthead"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields rd-fields 'sfields ms-fields
+     'state (rd-state + co-state + ms-state '(last mode stage))
+     'arrays (rd-arrays + co-arrays)
+     'requires (rd-req + co-req + ms-req '(last mode stage) + co-inv0)
+     'decls '((int (x)) (uint (typ) (dr)))
+     'ensures (rd-ens + co-ens + '((e6 (inf-le (add cons0 3) cons))))
+     'calls [take fixed]
+     'body
+      ['(t1 try x "inf_take" ((raw (var "r")) 3) (In n w carry (k 3)) ())
+       '(d1 havoc last (low x 1))
+       '(d2 havoc typ (shr64 x 1))
+       ['i1 'ife 'g1 '(z typ)
+        (['(d3 set dr (low bc 7))] + st-drop 'd4 'dr 'dr + ['(d5 havoc mode 1)])
+        ['(i2 if g2 (le 3 typ) ((r1 retneg 3)))
+         '(i3 ife g3 (le typ 1)
+           ((c1 call "inf_fixed" ((raw (var "r"))) (w (u (inf-pow h)) q h LROOT DROOT CROOT) ())
+            (d6 havoc mode 6)
+            (d7 havoc stage 0))
+           ((d8 havoc mode 3)))]]
+       '(r2 ret 0)]
+     'macros ()
+     'proofs {"d4b-1" '(inf-modle8 bct1)}}
+
+   ; a stored block's two lengths, whole
+   stlen
+    {'name "inf_stlen" 'short "stlen"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields rd-fields 'sfields ms-fields
+     'state (rd-state + ms-state '(rem mode))
+     'arrays rd-arrays
+     'requires (rd-req + ms-req '(rem mode))
+     'decls '((uint (ln) (nl)) ((named "uint64_t") (y)))
+     'ensures rd-ens
+     'calls [fill]
+     'body
+      (['(c1 call "inf_fill" ((raw (var "r"))) (In n w carry) ())
+        '(i1 if g1 (lt bc 32) ((r1 retneg 1)))
+        '(d1 havoc ln (mask bb 16))
+        '(d2 havoc y (shr64 bb 16))
+        '(d3 havoc nl (mask y 16))
+        '(i2 if g2 (ne (low (bxor ln 65535) 65535) nl) ((r2 retneg 3)))]
+       + st-drop 'd4 32 32
+       + ['(d5 havoc rem ln) '(d6 havoc mode 2) '(r3 ret 0)])
+     'macros () 'proofs {}}
+
+   ; the table's three counts, whole, and the lengths' lengths cleared
+   sttab
+    {'name "inf_sttab" 'short "sttab"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields rd-fields 'sfields ms-fields
+     'state (rd-state + '((Cl Cl0)) + ms-state '(hlit hdist hclen i mode))
+     'arrays (rd-arrays + '((Cl (s "cl") 19)))
+     'requires (rd-req + '((Cl0 (pi k nat nat))) + ms-req '(hlit hdist hclen i mode))
+     'decls '(((named "uint64_t") (y)))
+     'ensures (rd-ens + '((a2 (pi k nat (inf-le (Cl k) 15)))))
+     'calls [fill]
+     'body
+      (['(c1 call "inf_fill" ((raw (var "r"))) (In n w carry) ())
+        '(i1 if g1 (lt bc 14) ((r1 retneg 1)))
+        '(d1 havoc hlit (+ (mask bb 5) 257))
+        '(d2 havoc y (shr64 bb 5))
+        '(d3 havoc hdist (+ (mask y 5) 1))
+        '(d4 havoc y (shr64 bb 10))
+        '(d5 havoc hclen (+ (mask y 4) 4))]
+       + st-drop 'd6 14 14
+       + ['(c2 clear Cl (szof (dot (deref (var "s")) "cl")))
+          '(d7 havoc i 0) '(d8 havoc mode 4) '(r2 ret 0)])
+     'macros
+      '((M1 (inf-mod (inf-pow 5) bbc1))
+        (M2 (inf-mod (inf-pow 5) yd2))
+        (M3 (inf-mod (inf-pow 4) yd4)))
+     'proofs
+      {"d1-2" '(inf-lelt (add M1 257) 288 (inf-pow w) (inf-addr M1 31 257 (inf-ltsle M1 31 (inf-masklt bbc1 5))) (inf-wfit288 w gw))
+       "d3-2" '(inf-wlit (add M2 1) w gw (inf-letrans (add M2 1) 32 63 (inf-addr M2 31 1 (inf-ltsle M2 31 (inf-masklt yd2 5))) (idpath false)))
+       "d5-2" '(inf-wlit (add M3 4) w gw (inf-letrans (add M3 4) 19 63 (inf-addr M3 15 4 (inf-ltsle M3 15 (inf-masklt yd4 4))) (idpath false)))
+       "r2-5" '(lam k (idpath false))}}
+
+   ; the lengths' lengths, and their code built
+   stcl
+    {'name "inf_stcl" 'short "stcl"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields (rd-fields + '(t)) 'sfields ms-fields
+     'state (rd-state + '((Cl Cl0) (Lz Lz0) (Cs Cs0) (Ct Ct0) (Cc Cc0)) + ms-state '(i prev stage mode))
+     'arrays (rd-arrays + '((Cl (s "cl") 19) (Lz (s "lens") 320) (Ob (v "gz_clord") 19)
+                            (Cc (t "cl") 16) (Cs (t "csym") 19) (Ct (t "ctab") (inf-pow CROOT))))
+     'requires
+      (rd-req + st-co-req
+       + '((Cl0 (pi k nat nat)) (Lz0 (pi k nat nat)) (Cs0 (pi k nat nat)) (Ct0 (pi k nat nat)) (Cc0 (pi k nat nat))
+           (Ob (pi k nat nat)) (hclen nat)
+           (hord (pi k nat g (inf-lt k 19) (inf-lt (Ob k) 19)))
+           (a2 (pi k nat (inf-le (Cl0 k) 15))))
+       + ms-req '(i prev stage mode))
+     'decls '((int (x)))
+     'ensures
+      (rd-ens + st-cc
+       + '((b1 (inf-le prev 15))
+           (b2 (pi j nat (inf-le (Lz j) 15)))
+           (a2 (pi k nat (inf-le (Cl k) 15)))))
+     'calls [take build]
+     'body
+      '((i0 if g0 (lt 19 hclen) ((r0 retneg 3)))
+        (w1 while (lt i hclen) (natminus hclen i)
+         ((a2 (pi k nat (inf-le (Cl k) 15)))
+          (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)))
+         ((t1 try x "inf_take" ((raw (var "r")) 3) (In n w carry (k 3)) ())
+          (s1 aset Cl (at Ob i) x)
+          (s2 set i (+ i 1))))
+        (c1 call "inf_build" ((taddr "cl") (raw (dot (deref (var "s")) "cl")) 19 (tf "csym") (tf "ctab") CROOT)
+            ((Ln Cl) (nsym 19) (root CROOT) q (u (inf-pow h)) w) ((Cn Cc) (Sy Cs) (Tb Ct)))
+        (c2 clear Lz (szof (dot (deref (var "s")) "lens")))
+        (d1 havoc i 0)
+        (d2 set prev 0)
+        (d3 havoc stage 0)
+        (d4 havoc mode 5)
+        (r2 ret 0))
+     'macros
+      '((Hi (inf-lttrans i hclen 19 w1 g0))
+        (Pw (inf-powle h w (inf-letrans h 16 w gh (inf-letrans 16 32 w (idpath false) gw)))))
+     'proofs
+      {"s1-1" 'Hi
+       "s1-2" '(hord i Hi)
+       "s1-3" '(inf-lttrans xt1 8 (inf-pow w) t1e7 (inf-powle 3 w (inf-letrans 3 32 w (idpath false) gw)))
+       "s2-1" '(inf-wlit (add i 1) w gw (inf-letrans (add i 1) 19 63 (inf-lt1 i 19 Hi) (idpath false)))
+       "w1b-1" '(inf-updle Cl (Ob i) xt1 15 a2 (inf-letrans xt1 8 15 (inf-ltle xt1 8 t1e7) (idpath false)))
+       "w1b-6" '(inf-subfall1 hclen i w1)
+       "c1-1" '(lam k g (a2 k))
+       "c1-2" '(inf-lttrans 19 320 q (idpath true) (inf-ltle 320 q gq2))
+       "c1-4" 'Pw
+       "r2-9" '(lam j (idpath false))}}
+
+   ; the code lengths: a run may overshoot, and its write is clamped. a stop between a symbol and its
+   ; extra bits resumes on stage
+   stln
+    {'name "inf_stln" 'short "stln"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields (rd-fields + '(t)) 'sfields ms-fields
+     'state (rd-state + co-state + '((Lz Lz0)) + ms-state '(i prev stage sy mode))
+     'arrays (rd-arrays + co-arrays + '((Lz (s "lens") 320) (Cs (t "csym") 19) (Ct (t "ctab") (inf-pow CROOT))))
+     'requires
+      (rd-req + co-req + st-cc0
+       + '((Lz0 (pi k nat nat)) (hlit nat) (hdist nat)
+           (b2 (pi j nat (inf-le (Lz0 j) 15))))
+       + ms-req '(i prev stage sy mode) + co-inv0)
+     'decls '((int (x)) (uint (tot) (rr) (v) (k)))
+     'ensures (rd-ens + co-ens + st-cl)
+     'calls [take sy1 build]
+     'body
+      ['(i0 if g0 (lt 288 hlit) ((r0 retneg 3)))
+       '(i00 if g00 (lt 32 hdist) ((r00 retneg 3)))
+       '(i01 if g01 (lt 15 prev) ((r01 retneg 3)))
+       '(s0 set tot (+ hlit hdist))
+       ['w1 'while '(lt i tot) '(natminus tot i)
+        (['(b1 (inf-le prev 15)) '(b2 (pi j nat (inf-le (Lz j) 15)))] + st-rd)
+        [['j0 'join 'g2 '(z stage)
+          '((t1 try x "inf_sy1" ((raw (var "r")) (taddr "cl") (tf "ctab") CROOT)
+                (In n w carry (Cn Cc) (Sy Cs) (Tb Ct) (m 19) h (root CROOT)) ())
+            (d1 havoc sy x)
+            (d2 havoc stage 1))
+          ()
+          st-rd]
+         ['j1 'join 'g3 '(lt sy 16)
+          '((s1 set rr 1) (s2 set v sy))
+          ['(i1 if g4 (lt 18 sy) ((r1 retneg 3)))
+           ['j2 'join 'g5 '(le sy 16)
+            '((t2 try x "inf_take" ((raw (var "r")) 2) (In n w carry (k 2)) ())
+              (s3 set rr (+ x 3))
+              (s4 set v prev))
+            [['j3 'join 'g6 '(le sy 17)
+              '((t3 try x "inf_take" ((raw (var "r")) 3) (In n w carry (k 3)) ())
+                (s5 set rr (+ x 3)))
+              '((t4 try x "inf_take" ((raw (var "r")) 7) (In n w carry (k 7)) ())
+                (s6 set rr (+ x 11)))
+              ('((f1 (inf-lt 0 rr)) (f2 (inf-le rr 138))) + st-rd)]
+             '(s7 set v 0)]
+            ('((f3 (inf-lt 0 rr)) (f4 (inf-le rr 138)) (f5 (inf-le v 15))) + st-rd)]]
+          ('((f6 (inf-lt 0 rr)) (f7 (inf-le rr 138)) (f8 (inf-le v 15))) + st-rd)]
+         '(w3 for k 0 rr
+           ((c1 (inf-le k rr))
+            (c2 (pi j nat (inf-le (Lz j) 15))))
+           ((i2 if g7 (lt (+ i k) 320) ((s8 aset Lz (+ i k) v)))))
+         '(s9 set i (+ i rr))
+         '(s10 set prev v)
+         '(d3 havoc stage 0)]]
+       '(c4 call "inf_build" ((taddr "lit") (raw (dot (deref (var "s")) "lens")) hlit (tf "lsym") (tf "ltab") LROOT)
+            ((Ln Lz) (nsym hlit) (root LROOT) q (u (inf-pow h)) w) ((Cn Lc) (Sy Ls) (Tb Lt)))
+       '(d4 gset lm hlit)
+       '(c5 call "inf_build" ((taddr "dst") (raw (bin + (dot (deref (var "s")) "lens") (dot (deref (var "s")) "hlit"))) hdist (tf "dsym") (tf "dtab") DROOT)
+            ((Ln (inf-shift Lz hlit)) (nsym hdist) (root DROOT) q (u (inf-pow h)) w) ((Cn Dc) (Sy Ds) (Tb Dt)))
+       '(d5 gset dm hdist)
+       '(d6 havoc mode 6)
+       '(d7 havoc stage 0)
+       '(r2 ret 0)]
+     'macros
+      '((Pw (inf-powle h w (inf-letrans h 16 w gh (inf-letrans 16 32 w (idpath false) gw))))
+        (W9 (inf-wnine w gw))
+        (W3 (inf-lelt 320 512 (inf-pow w) (idpath false) W9))
+        (W4 (inf-lelt 458 512 (inf-pow w) (idpath false) W9))
+        (W1 (inf-lelt 138 512 (inf-pow w) (idpath false) W9))
+        (T3 (inf-add2 hlit 288 hdist 32 g0 g00))
+        (Ti (inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) T3))
+        (Ik (inf-add2 i 320 k 138 Ti (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7)))
+        (Rk (inf-letrans (succ k) rrj1 138 (inf-ltsu k rrj1 w3) f7))
+        (X2 (inf-addr xt2 3 3 (inf-ltsle xt2 3 t2e7)))
+        (X3 (inf-addr xt3 7 3 (inf-ltsle xt3 7 t3e7)))
+        (X4 (inf-addr xt4 127 11 (inf-ltsle xt4 127 t4e7)))
+        (Xq (inf-ltle 320 q gq2)))
+     'proofs
+      {"s0-1" '(inf-lelt (add hlit hdist) 320 (inf-pow w) T3 W3)
+       "j1j-3" '(inf-ltsle syj0 15 g3)
+       "s3-1" '(inf-wlit (add xt2 3) w gw (inf-letrans (add xt2 3) 6 63 X2 (idpath false)))
+       "j2j-1" '(inf-pos3 xt2 3 (idpath true))
+       "j2j-2" '(inf-letrans (add xt2 3) 6 138 X2 (idpath false))
+       "s5-1" '(inf-wlit (add xt3 3) w gw (inf-letrans (add xt3 3) 10 63 X3 (idpath false)))
+       "j3j-1" '(inf-pos3 xt3 3 (idpath true))
+       "j3j-2" '(inf-letrans (add xt3 3) 10 138 X3 (idpath false))
+       "s6-1" '(inf-lelt (add xt4 11) 512 (inf-pow w) (inf-letrans (add xt4 11) 138 512 X4 (idpath false)) (inf-lttrans 512 1024 (inf-pow w) (idpath true) (inf-powle 10 w (inf-letrans 10 32 w (idpath false) gw))))
+       "j3j-7" '(inf-pos3 xt4 11 (idpath true))
+       "j3j-8" 'X4
+       "i2-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
+       "s8-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
+       "w3b-1" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
+       "w3b-2" '(inf-ltsu k rrj1 w3)
+       "w3b-3" '(inf-updle Lz (add i k) vj1 15 c2 f8)
+       "w3b-4" '(inf-subfall rrj1 k w3)
+       "w3b-5" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
+       "w3b-6" '(inf-ltsu k rrj1 w3)
+       "w3b-8" '(inf-subfall rrj1 k w3)
+       "s9-1" '(inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 Ti f7) W4)
+       "w1b-7" '(inf-subby i (add hlit hdist) rrj1 w1 f6)
+       "c4-1" '(lam k g (b2 k))
+       "c4-2" '(inf-lelt hlit 288 q g0 (inf-lttrans 288 320 q (idpath true) Xq))
+       "c4-4" 'Pw
+       "c5-1" '(lam k g (b2 (add hlit k)))
+       "c5-2" '(inf-lelt hdist 32 q g00 (inf-lttrans 32 320 q (idpath true) Xq))
+       "c5-4" 'Pw}}
+
+   ; stored's bytes: what the buffer holds first, then straight from the input. what bb holds past bc is
+   ; a byte ip has not passed, so it goes before ip does
+   ststo
+    {'name "inf_ststo" 'short "ststo"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields ot-fields 'sfields ms-fields
+     'state (rd-state + '((op op0)) + ms-state '(rem mode))
+     'arrays (rd-arrays + ot-arrays)
+     'requires (rd-req + ot-req + '((gz (inf-lt 0 out)) (last nat)) + ms-req '(rem mode))
+     'decls '(((named "uintptr_t") (k)))
+     'ensures (rd-ens + ot-ens)
+     'body
+      (['(j0 join g0 (nz rem)
+          ((w1 while (nz rem) rem
+            ((r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))
+             (o1 (inf-le op0 op)) (o2 (inf-le op cap)))
+            ((i1 if g1 (lt bc 8) ((b1 brk)))
+             (i2 if g2 (le cap op) ((r6 retneg 2)))
+             (p1 poke Ot op (u8 (low bb 255)))
+             (s1 set op (+ op 1))
+             (d1a havoc bb (shr64 bb 8))
+             (d1b set bc (- bc 8))
+             (d1c gset cons (add cons 8))
+             (s2 dec rem (- rem 1)))))
+          ()
+          ((r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))
+           (o1 (inf-le op0 op)) (o2 (inf-le op cap))))
+        '(j1 join g3 (nz rem)
+          ((d2 havoc bb 0)
+           (s3 set k (- n ip))
+           (j2 join g4 (lt rem k) ((s4 set k rem)) ()
+            ((f1 (inf-le k rem)) (f2 (inf-le k (natminus n ip)))))
+           (j3 join g5 (lt (- cap op) k) ((s5 set k (- cap op))) ()
+            ((f3 (inf-le k rem)) (f4 (inf-le k (natminus n ip))) (f5 (inf-le k (natminus cap op)))))
+           (m1 mcopy Ot op In ip k)
+           (s6 set op (+ op k))
+           (s7 set ip (+ ip k))
+           (d3 gset cons (add cons (inf-by8 k)))
+           (s8 dec rem (- rem k))
+           (i3 if g6 (nz rem)
+            ((i4 if g7 (lt ip n) ((r7 retneg 2)))
+             (r8 retneg 1))))
+          ()
+          ((r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))
+           (o1 (inf-le op0 op)) (o2 (inf-le op cap))))]
+       + st-end 'e1 + ['(r9 ret 0)])
+     'macros
+      '((Cw (inf-lelt cap (add cap 8) (inf-pow w) (inf-leaddr cap 8) gcap))
+        (Co (inf-letl cap cap oc (pathsinv0 nat oc cap (go gz)) (inf-refl cap)))
+        (Nw (inf-lelt n (add n 8) (inf-pow w) (inf-leaddr n 8) gn))
+        (Rm (inf-roomle opj0 cap kj3 f5 o2))
+        (Rn (inf-roomle ip0 n kj3 f4 gi))
+        (Op1 (inf-lt1 op cap g2)))
+     'proofs
+      {"p1-1" '(inf-lttrans op cap oc g2 Co)
+       "s1-1" '(inf-lelt (add op 1) cap (inf-pow w) Op1 Cw)
+       "s2-1" '(inf-ltsu 0 rem w1)
+       "w1b-6" 'Op1
+       "w1b-7" '(inf-dec1 rem w1)
+       "m1-1" '(inf-letl (add opj0 kj3) cap oc (pathsinv0 nat oc cap (go gz)) Rm)
+       "m1-2" 'Rn
+       "s6-1" '(inf-lelt (add opj0 kj3) cap (inf-pow w) Rm Cw)
+       "s7-1" '(inf-lelt (add ip0 kj3) n (inf-pow w) Rn Nw)
+       "j1j-1" 'Rn
+       "j1j-3" '(inf-advb carry ip0 consj0 bcj0 kj3 r4)
+       "j1j-6" 'Rm}}
+
+   ; a block's symbols. the fast lane is the one-shot's; past it, one symbol at a time, and each stage
+   ; says what is already taken. a stage read back answers for its own values: the literal, the length
+   ; code, the distance code and the length are looked at where they are used. the room lowers each
+   ; way round, so the loop ends
+   stsy
+    {'name "inf_stsy" 'short "stsy"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields (ot-fields + '(t)) 'sfields ms-fields
+     'state (rd-state + '((op op0)) + ms-state '(mode stage sy len dist))
+     'arrays (block 'arrays)
+     'requires (block 'requires + '((gz (inf-lt 0 out)) (last nat)) + ms-req '(mode stage sy len dist))
+     'decls '((int (x) (y)) ((named "uintptr_t") (l) (d)))
+     'ensures (rd-ens + ot-ens)
+     'calls [take sy1 copy fast]
+     'body
+      ['(w1 while (tru) (natminus cap op)
+         ((r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))
+          (o1 (inf-le op0 op)) (o2 (inf-le op cap)))
+         ((g0 ghost o0 op eo)
+          (i0 join g0 (z stage)
+           ((i1 join g1 (le (+ ip 8) n)
+             ((i3 if g3 (le (+ op 266) cap)
+               ((t1 tryr x "inf_fast_run" ((raw (var "r")))
+                 (In n w carry out oc cap nd Lt Dt Lb Le Db De h LROOT DROOT) () 3)
+                (i4 if g4 (nz x)
+                 ((e1 ife ge1 (nz last) ((e1a havoc mode 7)) ((e1b havoc mode 0)))
+                  (r0 ret 0))))))
+             ()
+             ((k1 (inf-le ip n)) (k3 (inf-le bc 63)) (k4 (inf-bits-inv carry ip cons bc)) (k5 (inf-le cons0 cons))
+              (k6 (inf-le o0 op)) (k7 (inf-le op cap))))
+            (t2 try x "inf_sy1" ((raw (var "r")) (taddr "lit") (tf "ltab") LROOT)
+                (In n w carry (Cn Lc) (Sy Ls) (Tb Lt) (m lm) h (root LROOT)) ())
+            (d1 havoc sy x)
+            (i5 ife g5 (lt x 256)
+             ((d2 havoc stage 4))
+             ((i6 if g6 (le x 256)
+               ((e2 ife ge2 (nz last) ((e2a havoc mode 7)) ((e2b havoc mode 0)))
+                (r1 ret 0)))
+              (d3 havoc stage 1))))
+           ()
+           ((k1 (inf-le ip n)) (k3 (inf-le bc 63)) (k4 (inf-bits-inv carry ip cons bc)) (k5 (inf-le cons0 cons))
+            (k6 (inf-le o0 op)) (k7 (inf-le op cap))))
+          (i7 ife g7 (eq stage 4)
+           ((i8 if g8 (le cap op) ((r2 retneg 2)))
+            (i9 if g9 (lt 255 sy) ((r3 retneg 3)))
+            (p1 poke Ot op (u8 sy))
+            (s1 set op (+ op 1))
+            (d4 havoc stage 0))
+           ((j1 join g10 (eq stage 1)
+             ((i10 if g11 (lt sy 257) ((r4 retneg 3)))
+              (i11 if g12 (lt 285 sy) ((r5 retneg 3)))
+              (s2 set l (at Lb (- sy 257)))
+              (t3 try y "inf_take" ((raw (var "r")) (at Le (- sy 257))) (In n w carry (k (Le (natminus sy 257)))) ())
+              (d5 havoc len (+ l y))
+              (d6 havoc stage 2))
+             ()
+             ((m1 (inf-le ip n)) (m3 (inf-le bc 63)) (m4 (inf-bits-inv carry ip cons bc)) (m5 (inf-le cons0 cons))))
+            (j2 join g13 (eq stage 2)
+             ((t4 try x "inf_sy1" ((raw (var "r")) (taddr "dst") (tf "dtab") DROOT)
+                  (In n w carry (Cn Dc) (Sy Ds) (Tb Dt) (m dm) h (root DROOT)) ())
+              (d7 havoc sy x)
+              (d8 havoc stage 3))
+             ()
+             ((n1 (inf-le ip n)) (n3 (inf-le bc 63)) (n4 (inf-bits-inv carry ip cons bc)) (n5 (inf-le cons0 cons))))
+            (j3 join g14 (eq stage 3)
+             ((i12 if g15 (lt 29 sy) ((r6 retneg 3)))
+              (s3 set d (at Db sy))
+              (t5 try y "inf_take" ((raw (var "r")) (at De sy)) (In n w carry (k (De sy))) ())
+              (d9 havoc dist (+ d y))
+              (d10 havoc stage 5))
+             ()
+             ((q1 (inf-le ip n)) (q3 (inf-le bc 63)) (q4 (inf-bits-inv carry ip cons bc)) (q5 (inf-le cons0 cons))))
+            (i13 if g16 (lt (pow 15) dist) ((r7 retneg 3)))
+            (i14 if g17 (lt (+ op nd) dist) ((r8 retneg 3)))
+            (i15 if g18 (z len) ((r9 retneg 3)))
+            (i16 if g19 (lt (- cap op) len) ((r10 retneg 2)))
+            (c1 call "inf_copy" ((raw (var "r")) (raw (dot (deref (var "s")) "len")) (raw (dot (deref (var "s")) "dist"))) (w (l len) (d dist) op out oc cap nd) ())
+            (s4 set op (+ op len))
+            (d11 havoc stage 0)))))]
+     'macros
+      '((Cw (inf-lelt cap (add cap 8) (inf-pow w) (inf-leaddr cap 8) gcap))
+        (W9 (inf-wnine w gw))
+        (W5 (inf-lelt 259 512 (inf-pow w) (idpath false) W9))
+        (Oo (inf-letr op o0 op (pathsinv0 nat o0 op eo) (inf-refl op)))
+        (Ok1 (inf-letr o0 op opi1 eo k6))
+        (Ok (inf-letr o0 op opi0 eo k6))
+        (Oz (inf-letrans op0 op opi0 o1 Ok))
+        (Ii (natminus syi0 257))
+        (L9 (inf-lidx syi0 g12))
+        (Xl (Le Ii))
+        (Hh (hlb Ii L9))
+        (La (add (Lb Ii) yt3))
+        (Lz (inf-basele (Lb Ii) Xl yt3 259 t3e7 Hh))
+        (S3 (inf-lelts syj2 29 g15))
+        (Xd (De syj2))
+        (Hw (inf-powle h w (inf-letrans h 16 w gh (inf-letrans 16 32 w (idpath false) gw))))
+        (Da (add (Db syj2) yt5))
+        (Dw (inf-lttrans Da (inf-pow h) (inf-pow w) (inf-basele (Db syj2) Xd yt5 (inf-pow h) t5e7 (hdb syj2 S3)) Hw))
+        (P15 (inf-powlt 15 w (inf-lttrans 15 16 w (idpath true) (inf-letrans 16 32 w (idpath false) gw))))
+        (Rm (inf-roomle opi0 cap lenj1 g19 k7))
+        (Ol (inf-lttrans opi0 (add opi0 lenj1) cap (inf-ltaddpos opi0 lenj1 g18) Rm))
+        (Lt8 (inf-letl cap cap oc (pathsinv0 nat oc cap (go gz)) (inf-refl cap))))
+     'proofs
+      {"i1-1" '(inf-lelt (add ip 8) (add n 8) (inf-pow w) (inf-addr ip n 8 r1) gn)
+       "i3-1" '(inf-lelt (add op 266) (add cap 266) (inf-pow w) (inf-addr op cap 266 o2) gcf)
+       "i1j-5" '(inf-letrans o0 op opt1 Oo t1e9)
+       "i1j-11" 'Oo
+       "i1j-17" 'Oo
+       "t2-9" '(inf-lelt lm 288 (inf-pow w) c4 (inf-wfit288 w gw))
+       "r1-6" '(inf-letrans op0 op opi1 o1 Ok1)
+       "r1-12" '(inf-letrans op0 op opi1 o1 Ok1)
+       "i0j-17" 'Oo
+       "p1-1" '(inf-lttrans opi0 cap oc g8 Lt8)
+       "s1-1" '(inf-lelt (add opi0 1) cap (inf-pow w) (inf-lt1 opi0 cap g8) Cw)
+       "w1b-5" '(inf-letrans op0 opi0 (add opi0 1) Oz (inf-leaddr opi0 1))
+       "w1b-6" '(inf-lt1 opi0 cap g8)
+       "w1b-7" '(inf-subfrom op opi0 cap 1 Ok g8 (idpath true))
+       "s2-2" 'L9
+       "s2-3" '(inf-lelt (Lb Ii) 259 (inf-pow w) (inf-letrans (Lb Ii) (add (Lb Ii) (inf-pow Xl)) 259 (inf-leaddr (Lb Ii) (inf-pow Xl)) Hh) W5)
+       "t3-6" '(inf-letrans Xl 5 13 (hle Ii L9) (idpath false))
+       "d5-1" '(inf-lttrans La 259 (inf-pow w) Lz (inf-ltle 259 (inf-pow w) W5))
+       "s3-2" '(inf-lttrans (Db syj2) (inf-pow h) (inf-pow w)
+                 (inf-lttrans (Db syj2) (add (Db syj2) (inf-pow Xd)) (inf-pow h) (inf-ltaddpos (Db syj2) (inf-pow Xd) (inf-powpos Xd)) (hdb syj2 S3)) Hw)
+       "t5-6" '(hde syj2 S3)
+       "d9-1" 'Dw
+       "i13-2" 'P15
+       "i14-1" '(inf-lelt (add opi0 nd) (add cap nd) (inf-pow w) (inf-addr opi0 cap nd k7) gnd)
+       "c1-2" '(inf-lelt distj3 (inf-pow 15) (inf-pow w) g16 P15)
+       "c1-4" 'Rm
+       "s4-1" '(inf-lelt (add opi0 lenj1) cap (inf-pow w) Rm Cw)
+       "w1b-12" '(inf-letrans op0 opi0 (add opi0 lenj1) Oz (inf-leaddr opi0 lenj1))
+       "w1b-13" 'Rm
+       "w1b-14" '(inf-subfrom op opi0 cap lenj1 Ok Ol g18)}}
+
+   ; what a stop keeps, whole
+   st-names '(last rem hclen i prev stage sy len dist mode hlit hdist)
+   st-all (rd-state + '((op op0)) + co-state + '((Cl Cl0) (Lz Lz0) (Cs Cs0) (Ct Ct0) (Cc Cc0)) + ms-state st-names)
+   st-arrays (block 'arrays + '((Cl (s "cl") 19) (Lz (s "lens") 320) (Ob (v "gz_clord") 19)
+                                (Cc (t "cl") 16) (Cs (t "csym") 19) (Ct (t "ctab") (inf-pow CROOT))))
+   st-req
+    (rd-req + ot-req + co-req +
+     '((gcf (inf-lt (add cap 266) (inf-pow w))) (gz (inf-lt 0 out))
+       (Cl0 (pi k nat nat)) (Lz0 (pi k nat nat)) (Cs0 (pi k nat nat)) (Ct0 (pi k nat nat)) (Cc0 (pi k nat nat))
+       (Ob (pi k nat nat))
+       (hord (pi k nat g (inf-lt k 19) (inf-lt (Ob k) 19)))
+       (Lb (pi k nat nat)) (Le (pi k nat nat)) (Db (pi k nat nat)) (De (pi k nat nat))
+       (hle (pi k nat g (inf-lt k 29) (inf-le (Le k) 5)))
+       (hlb (pi k nat g (inf-lt k 29) (inf-le (add (Lb k) (inf-pow (Le k))) 259)))
+       (hlc (pi k nat g (inf-lt k 29) (inf-le 3 (Lb k))))
+       (hde (pi k nat g (inf-lt k 30) (inf-le (De k) 13)))
+       (hdb (pi k nat g (inf-lt k 30) (inf-le (add (Db k) (inf-pow (De k))) (inf-pow h)))))
+     + ms-req st-names + co-inv0
+     + sub [('Cc . 'Cc0) ('Cs . 'Cs0) ('prev . 'prev0) ('Lz . 'Lz0) ('Cl . 'Cl0)]
+           (st-cc + st-cl + '((a2 (pi k nat (inf-le (Cl k) 15))))))
+   st-ens (rd-ens + ot-ens + co-ens + st-cc + st-cl + '((a2 (pi k nat (inf-le (Cl k) 15)))))
+   st-inst '(In n w carry out oc cap nd q h LROOT DROOT CROOT Ob Lb Le Db De)
+   ; every mode but the head, in stream order: each arm moves on or stops, so a run reaches the next head
+   strest
+    {'name "inf_strest" 'short "strest"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params ms-params 'fields (ot-fields + '(t)) 'sfields ms-fields
+     'state st-all
+     'arrays st-arrays
+     'requires st-req
+     'decls '((int (x)))
+     'ensures st-ens
+     'calls [stlen ststo sttab stcl stln stsy]
+     'body
+      [['j1 'join 'g1 '(eq mode 1)
+        '((t1 try x "inf_stlen" ((raw (var "r")) (raw (var "s"))) (In n w carry) ()))
+        () st-rd]
+       ['j2 'join 'g2 '(eq mode 2)
+        '((t2 try x "inf_ststo" ((raw (var "r")) (raw (var "s"))) (In n w carry out oc cap nd last) ()))
+        () (st-rd + st-op)]
+       ['j3 'join 'g3 '(eq mode 3)
+        '((t3 try x "inf_sttab" ((raw (var "r")) (raw (var "s"))) (In n w carry) ()))
+        () (st-rd + '((a2 (pi k nat (inf-le (Cl k) 15)))))]
+       ['j4 'join 'g4 '(eq mode 4)
+        '((t4 try x "inf_stcl" ((raw (var "r")) (raw (var "s")))
+              (In n w carry q h LROOT DROOT CROOT Ob hclen) ()))
+        () (st-rd + st-cc + st-cl + '((a2 (pi k nat (inf-le (Cl k) 15)))))]
+       ['j5 'join 'g5 '(eq mode 5)
+        '((t5 try x "inf_stln" ((raw (var "r")) (raw (var "s")))
+              (In n w carry q h LROOT DROOT CROOT Cc Cs Ct hlit hdist) ()))
+        () (st-rd + co-ens + st-cl)]
+       ['j6 'join 'g6 '(eq mode 6)
+        '((t6 try x "inf_stsy" ((raw (var "r")) (raw (var "s")))
+              (In n w carry out oc cap nd Lc Ls Lt Dc Ds Dt lm dm Lb Le Db De h LROOT DROOT last) ()))
+        () (st-rd + st-op)]
+       '(r1 ret 0)]
+     'macros () 'proofs {}}
+
+   ; one call, to the end of the stream or the first stop: 1 ended. each head takes three bits, so the
+   ; loop ends
+   ststep
+    {'name "inf_ststep" 'short "ststep"
+     'attrs '("static")
+     'ret 'int
+     'params ms-params 'fields (ot-fields + '(t)) 'sfields ms-fields
+     'state st-all
+     'arrays st-arrays
+     'requires st-req
+     'decls '((int (x)))
+     'ensures st-ens
+     'calls [sthead strest]
+     'body
+      [['t1 'try 'x "inf_strest" '((raw (var "r")) (raw (var "s"))) st-inst ()]
+       ['w1 'while '(z mode) '(natminus (add carry (inf-by8 n)) cons)
+        (st-rd + st-op + co-ens + st-cc + st-cl + '((a2 (pi k nat (inf-le (Cl k) 15)))))
+        ['(g0 ghost c0 cons ec)
+         '(t2 try x "inf_sthead" ((raw (var "r")) (raw (var "s"))) (In n w carry q h LROOT DROOT CROOT) ())
+         ['t3 'try 'x "inf_strest" '((raw (var "r")) (raw (var "s"))) st-inst ()]]]
+       '(r1 ret 1)]
+     'macros ()
+     'proofs
+      {"w1b-21" '(inf-consfall carry ipt3 const3 bct3 n cons t3e4 t3e1
+                  (inf-lttrans cons (add cons 3) const3 (inf-ltaddpos cons 3 (idpath true))
+                    (inf-letrans (add cons 3) const2 const3 t2e6 t3e5)))}}
 
    ; --- the constants, one list for the C and the uu -----------------------------------------------
    inf-tables
@@ -1907,6 +2521,13 @@
      unsigned bc; };
     """
    inf-rh-nl "\n"
+   inf-sh-head
+    """
+    // what a stop keeps of a block in the reading: the mode and where in it
+    struct inf_ms {
+     unsigned mode, last, rem, hlit, hdist, hclen, i, prev, stage, sy, len, dist;
+     uint8_t lens[320], cl[19]; };
+    """
 
    ; what no spec reads: inf_rundt, in inflate.h, hands inf_go a reader at zero
    top
@@ -1935,17 +2556,73 @@
         ()]]
      'macros ()
      'proofs
-      {"c1-5" '(ii1 (idpath false))
-       "c1-6" '(idpath 0)
-       "c1-12" 'inf-topq
-       "c1-13" '(idpath true)
-       "c1-14" '(inf-topk w gw)
+      {"c1-4" '(idpath false)
+       "c1-5" '(idpath 0)
+       "c1-11" 'inf-topq
+       "c1-12" '(idpath true)
+       "c1-13" '(inf-topk w gw)
+       "c1-18" '(lam k g (inf-lelts (inf-tob k) 18 (inf-anyno (lam j (natgtb (inf-tob j) 18)) 19 (idpath false) k g)))
+       "c1-19" '(inf-anyno (lam j (natgtb (inf-tle j) 5)) 29 (idpath false))
+       "c1-20" '(inf-anyno (lam j (natgtb (add (inf-tlb j) (inf-pow (inf-tle j))) 259)) 29 (idpath false))
+       "c1-21" '(inf-anyno (lam j (natgtb 3 (inf-tlb j))) 29 (idpath false))
+       "c1-22" '(inf-anyno (lam j (natgtb (inf-tde j) 13)) 30 (idpath false))
+       "c1-23" '(inf-anyno (lam j (natgtb (add (inf-tdb j) (inf-pow (inf-tde j))) (inf-pow 16))) 30 (idpath false))}}
+
+   ; what no spec reads: a feed. the state a stream starts in, zeroes, is one inf_ststep takes; and what
+   ; any stop left it takes again, over new bytes and a new output, ip and op at zero, the carry
+   ; whatever was consumed and buffered by then
+   st-tabs ['(Ob inf-tob) '(Lb inf-tlb) '(Le inf-tle) '(Db inf-tdb) '(De inf-tde) '(h 16) '(q (inf-pow 12))]
+   st-feed-req
+    '((In (pi k nat nat)) (n nat) (w nat) (out nat) (oc nat) (cap nat) (nd nat)
+      (gw (inf-le 32 w))
+      (gn (inf-lt (add n 8) (inf-pow w)))
+      (go (pi g (inf-lt 0 out) (paths nat oc cap)))
+      (gcap (inf-lt (add cap 8) (inf-pow w)))
+      (gcf (inf-lt (add cap 266) (inf-pow w)))
+      (gnd (inf-lt (add cap nd) (inf-pow w)))
+      (gz (inf-lt 0 out)))
+   st0
+    {'name "inf_feed0" 'short "st0"
+     'ret 'int 'params () 'fields ()
+     'state ()
+     'arrays ()
+     'requires st-feed-req
+     'decls [['int '(ip 0) '(bc 0) '(bb 0) '(cons 0) '(op 0) '(lm 0) '(dm 0)
+              '(Lc inf-zero) '(Ls inf-zero) '(Lt inf-zero) '(Dc inf-zero) '(Ds inf-zero) '(Dt inf-zero)
+              '(Cl inf-zero) '(Lz inf-zero) '(Cs inf-zero) '(Ct inf-zero) '(Cc inf-zero)
+              '(last 0) '(rem 0) '(hclen 0) '(i 0) '(prev 0) '(stage 0) '(sy 0) '(len 0) '(dist 0) '(mode 0) '(hlit 0) '(hdist 0)]]
+     'ensures ()
+     'calls [ststep]
+     'body [['c1 'call "inf_ststep" () ('(In n w (carry 0) out oc cap nd) + st-tabs + inf-roots) ()]]
+     'macros ()
+     'proofs
+      {"c1-5" '(idpath 0)
+       "c1-11" 'inf-topq
+       "c1-12" '(idpath true)
+       "c1-13" '(inf-topk w gw)
        "c1-19" '(lam k g (inf-lelts (inf-tob k) 18 (inf-anyno (lam j (natgtb (inf-tob j) 18)) 19 (idpath false) k g)))
        "c1-20" '(inf-anyno (lam j (natgtb (inf-tle j) 5)) 29 (idpath false))
        "c1-21" '(inf-anyno (lam j (natgtb (add (inf-tlb j) (inf-pow (inf-tle j))) 259)) 29 (idpath false))
        "c1-22" '(inf-anyno (lam j (natgtb 3 (inf-tlb j))) 29 (idpath false))
        "c1-23" '(inf-anyno (lam j (natgtb (inf-tde j) 13)) 30 (idpath false))
-       "c1-24" '(inf-anyno (lam j (natgtb (add (inf-tdb j) (inf-pow (inf-tde j))) (inf-pow 16))) 30 (idpath false))}}
+       "c1-24" '(inf-anyno (lam j (natgtb (add (inf-tdb j) (inf-pow (inf-tde j))) (inf-pow 16))) 30 (idpath false))
+       "c1-25" '(lam k (inf-powpos 16))
+       "c1-26" '(idpath false)
+       "c1-29" '(idpath false)
+       "c1-31" '(lam j (idpath false))
+       "c1-32" '(lam k (idpath false))}}
+   stn
+    {'name "inf_feedn" 'short "stn"
+     'ret 'int 'params () 'fields ()
+     'state (filter (a \ !(elem <a '(ip op))) st-all)
+     'arrays ()
+     'requires (filter (r \ !(elem <r '(carry ip0 op0 gi ga gop))) st-req)
+     'decls '((int (ip 0) (op 0)))
+     'ensures ()
+     'calls [ststep]
+     'body [['c1 'call "inf_ststep" () ('(In n w (carry (add cons0 bc0)) out oc cap nd q h LROOT DROOT CROOT Ob Lb Le Db De)) ()]]
+     'macros ()
+     'proofs {"c1-5" '(natplusr0 (add cons0 bc0))}}
 
    ; what the theorem assumes, and who answers for it. a row leaves when its caller is proved
    inf-ledger
@@ -1961,11 +2638,14 @@
       ("caller" "inflate_raw, inflate_dict: an image's dictionary and pages" "love.c")
       ("caller" "inflate_raw: an idat, cap its filtered size" "quay/png.c")
       ("caller" "inflate_raw: a layer's run" "snap.c")
+      ("state" "inflate-feed's state is zeroes or what the last step left: a port no love can write, its size and magic checked" "gz.c")
+      ("caller" "inflate-feed: a string's length, cap at most INF_MAX and grown only past op, out from alloc" "gz.c")
+      ("caller" "inflate-feed: dic is hist's last nd bytes, and nd at most what hist holds" "gz.c")
       ("link" "struct inf_tabs and lens hold what co-arrays and dyn's arrays say; the same file, unchecked" "inf.l")
       ("link" "a spec's operation means its C: two readers of one form, compared by test_gz" "inf.l"))
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
 
-   inf-specs [walk build fill take sym stored copy fixed dyn fast block go]
+   inf-specs [walk build fill take sym stored copy fixed dyn fast block go sy1 sthead stlen sttab stcl stln ststo stsy strest ststep]
    inf-run-specs [fill take sym stored fixed dyn copy fast block go]
    inf-rh (cats ["// inf_run_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                  (cats (map table-c inf-tables))
@@ -1973,14 +2653,18 @@
                  (cats (map root-c inf-roots))
                  inf-rh-head inf-rh-nl
                  (cats (map (s \ clay-show (cl-fn s)) inf-run-specs))])
+   inf-st-specs [sy1 sthead stlen ststo sttab stcl stln stsy strest ststep]
+   inf-sh (cats ["// inf_st_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
+                 inf-sh-head inf-rh-nl
+                 (cats (map (s \ clay-show (cl-fn s)) inf-st-specs))])
    ; test/uuinfvc.l
    inf-vc (cats ["; test/uuinfvc.l -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
-                 "; the ledger: what inf_rundt's theorem leaves open, each with who answers for it\n"
+                 "; the ledger: what the theorems of inf_rundt and inf_feedn leave open, each with who answers for it\n"
                  (ledger-text inf-ledger)
                  "(test\n"
                  (cats (map table-uu inf-tables))
-                 (cats (map (s \ cats (vc-text s)) (inf-specs + [top]))) " )\n"])
+                 (cats (map (s \ cats (vc-text s)) (inf-specs + [top st0 stn]))) " )\n"])
    inf-h (cats ["// inf_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) [walk build]))])
    inf-ok (all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) inf-specs
-           && atom? (vc-open top) && atom? (vc-stale top)))
+           && all (s \ atom? (vc-open s) && atom? (vc-stale s)) [top st0 stn]))

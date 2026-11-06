@@ -642,27 +642,26 @@
      (pathscomp0 nat (add a (add b c)) (add a (add c b)) (add (add a c) b)
        (maponpaths nat nat (lam w (add a w)) (add b c) (add c b) (natpluscomm b c))
        (pathsinv0 nat (add (add a c) b) (add a (add c b)) (natplusassoc a c b))))))
- ; the invariant is (by8 ip) = cons + bc: read, consumed, buffered. no subtraction in it
- (defn inf-bits-inv (pi ip nat cons nat bc nat UU)
-   (lam ip cons bc (paths nat (inf-by8 ip) (add cons bc))))
+ ; the invariant is carry + (by8 ip) = cons + bc: what came before these bytes, read, consumed,
+ ; buffered. a stream read at one go carries 0
+ (defn inf-bits-inv (pi carry nat ip nat cons nat bc nat UU)
+   (lam carry ip cons bc (paths nat (add carry (inf-by8 ip)) (add cons bc))))
+ (defq inf-carry (pi b nat x nat y nat c nat i (paths nat (add b x) c) (paths nat (add b (add x y)) (add c y)))
+   (lam b x y c i
+     (pathscomp0 nat (add b (add x y)) (add (add b x) y) (add c y)
+       (pathsinv0 nat (add (add b x) y) (add b (add x y)) (natplusassoc b x y))
+       (maponpaths nat nat (lam z (add z y)) (add b x) c i))))
  ; TAKE
- (defq inf-take (pi ip nat cons nat bc nat k nat g (inf-le k bc) i (inf-bits-inv ip cons bc)
-     (inf-bits-inv ip (add cons k) (natminus bc k)))
-   (lam ip cons bc k g i
-     (pathscomp0 nat (inf-by8 ip) (add cons bc) (add (add cons k) (natminus bc k))
+ (defq inf-take (pi carry nat ip nat cons nat bc nat k nat g (inf-le k bc) i (inf-bits-inv carry ip cons bc)
+     (inf-bits-inv carry ip (add cons k) (natminus bc k)))
+   (lam carry ip cons bc k g i
+     (pathscomp0 nat (add carry (inf-by8 ip)) (add cons bc) (add (add cons k) (natminus bc k))
        i
        (pathscomp0 nat (add cons bc) (add cons (add k (natminus bc k))) (add (add cons k) (natminus bc k))
          (maponpaths nat nat (lam w (add cons w)) bc (add k (natminus bc k))
            (pathsinv0 nat (add k (natminus bc k)) bc (inf-addsub k bc g)))
          (pathsinv0 nat (add (add cons k) (natminus bc k)) (add cons (add k (natminus bc k)))
-           (natplusassoc cons k (natminus bc k))))))) 
- ; FILL's slow path: a byte
- (defq inf-fill1 (pi ip nat cons nat bc nat i (inf-bits-inv ip cons bc)
-     (inf-bits-inv (succ ip) cons (add 8 bc)))
-   (lam ip cons bc i
-     (pathscomp0 nat (add 8 (inf-by8 ip)) (add 8 (add cons bc)) (add cons (add 8 bc))
-       (maponpaths nat nat (lam w (add 8 w)) (inf-by8 ip) (add cons bc) i)
-       (inf-lswap 8 cons bc))))
+           (natplusassoc cons k (natminus bc k)))))))
  ; bc + 8 * (7 - (bc >> 3)) is 56 + (bc & 7), which is bc | 56
  (defq inf-fillw56 (pi bc nat g (inf-le bc 63)
      (paths nat (add bc (inf-by8 (natminus 7 (inf-div8 bc)))) (add 56 (inf-mod 8 bc))))
@@ -687,53 +686,31 @@
              (maponpaths nat nat inf-by8 (add (inf-div8 bc) (natminus 7 (inf-div8 bc))) 7
                (inf-addsub (inf-div8 bc) 7 (inf-div8le bc g)))))))))
  ; FILL's wide path: ip += 7 - (bc >> 3), bc |= 56, and what spilled is read again
- (defq inf-fillw (pi ip nat cons nat bc nat g (inf-le bc 63) i (inf-bits-inv ip cons bc)
-     (inf-bits-inv (add ip (natminus 7 (inf-div8 bc))) cons (add 56 (inf-mod 8 bc))))
-   (lam ip cons bc g i
-     (pathscomp0 nat (inf-by8 (add ip (natminus 7 (inf-div8 bc))))
-       (add (inf-by8 ip) (inf-by8 (natminus 7 (inf-div8 bc))))
+ (defq inf-fillw (pi carry nat ip nat cons nat bc nat g (inf-le bc 63) i (inf-bits-inv carry ip cons bc)
+     (inf-bits-inv carry (add ip (natminus 7 (inf-div8 bc))) cons (add 56 (inf-mod 8 bc))))
+   (lam carry ip cons bc g i
+     (pathscomp0 nat (add carry (inf-by8 (add ip (natminus 7 (inf-div8 bc)))))
+       (add carry (add (inf-by8 ip) (inf-by8 (natminus 7 (inf-div8 bc)))))
        (add cons (add 56 (inf-mod 8 bc)))
-       (inf-by8add ip (natminus 7 (inf-div8 bc)))
-       (pathscomp0 nat (add (inf-by8 ip) (inf-by8 (natminus 7 (inf-div8 bc))))
+       (maponpaths nat nat (lam z (add carry z)) (inf-by8 (add ip (natminus 7 (inf-div8 bc))))
+         (add (inf-by8 ip) (inf-by8 (natminus 7 (inf-div8 bc)))) (inf-by8add ip (natminus 7 (inf-div8 bc))))
+       (pathscomp0 nat (add carry (add (inf-by8 ip) (inf-by8 (natminus 7 (inf-div8 bc)))))
          (add (add cons bc) (inf-by8 (natminus 7 (inf-div8 bc))))
          (add cons (add 56 (inf-mod 8 bc)))
-         (maponpaths nat nat (lam w (add w (inf-by8 (natminus 7 (inf-div8 bc))))) (inf-by8 ip) (add cons bc) i)
+         (inf-carry carry (inf-by8 ip) (inf-by8 (natminus 7 (inf-div8 bc))) (add cons bc) i)
          (pathscomp0 nat (add (add cons bc) (inf-by8 (natminus 7 (inf-div8 bc))))
            (add cons (add bc (inf-by8 (natminus 7 (inf-div8 bc)))))
            (add cons (add 56 (inf-mod 8 bc)))
            (natplusassoc cons bc (inf-by8 (natminus 7 (inf-div8 bc))))
            (maponpaths nat nat (lam w (add cons w)) (add bc (inf-by8 (natminus 7 (inf-div8 bc))))
              (add 56 (inf-mod 8 bc)) (inf-fillw56 bc g)))))))
- ; the wide path's shift: bc <= 63 or the wide path is shut for good. the slow path may leave 64
- (defn inf-shiftok (pi bc nat ip nat n nat UU)
-   (lam bc ip n (coprod (inf-le bc 63) (inf-lt n (add ip 8)))))
- (defq inf-shiftfill (pi bc nat ip nat n nat s (inf-shiftok bc ip n)
-     w (inf-le (add ip 8) n) (inf-le bc 63))
-   (lam bc ip n s w
-     (coprod_rect (lam c (inf-le bc 63))
-       (lam a a)
-       (lam b (fromempty (inf-le bc 63) (natlehtonegnatgth (add ip 8) n w b)))
-       s)))
- ; the slow path keeps it: ip only grows there
- (defq inf-shiftslow (pi bc nat ip nat n nat s (inf-lt n (add ip 8))
-     (inf-shiftok (add 8 bc) (succ ip) n))
-   (lam bc ip n s
-     (ii2 (inf-lttrans n (add ip 8) (add (succ ip) 8) s
-       (natlehsucc (add ip 8) (add ip 8) (isreflnatleh (add ip 8)))))))
- (defq inf-shiftwide (pi bc nat ip nat n nat
-     (inf-shiftok (add 56 (inf-mod 8 bc)) ip n))
-   (lam bc ip n
-     (ii1 (inf-addl 56 (inf-mod 8 bc) 7 (inf-ltsle (inf-mod 8 bc) 7 (inf-modlt 7 bc))))))
- ; TAKE only lowers bc, and a small one stays small
- (defq inf-shifttake (pi bc nat ip nat n nat k nat s (inf-shiftok bc ip n)
-     (inf-shiftok (natminus bc k) ip n))
-   (lam bc ip n k s
-     (coprod_rect (lam c (inf-shiftok (natminus bc k) ip n))
-       (lam a (ii1 (istransnatleh (natminus bc k) bc 63 (inf-suble bc k) a)))
-       (lam b (ii2 b))
-       s)))
+ ; a wide fill leaves bc | 56, and a take only lowers bc: a shift by bc stays under the word
+ (defq inf-or56 (pi bc nat (inf-le (add 56 (inf-mod 8 bc)) 63))
+   (lam bc (inf-addl 56 (inf-mod 8 bc) 7 (inf-ltsle (inf-mod 8 bc) 7 (inf-modlt 7 bc)))))
+ (defq inf-sub63 (pi bc nat k nat s (inf-le bc 63) (inf-le (natminus bc k) 63))
+   (lam bc k s (istransnatleh (natminus bc k) bc 63 (inf-suble bc k) s)))
  ; a stored block's pos = ip - (bc >> 3), bc whole bytes by then: it does not wrap
- (defq inf-pos (pi ip nat cons nat q nat i (inf-bits-inv ip cons (inf-by8 q)) (inf-le q ip))
+ (defq inf-pos (pi ip nat cons nat q nat i (inf-bits-inv 0 ip cons (inf-by8 q)) (inf-le q ip))
    (lam ip cons q i
      (inf-by8refl q ip
        (inf-letl (inf-by8 q) (add cons (inf-by8 q)) (inf-by8 ip)
@@ -1358,9 +1335,9 @@
 
 ; --- what the generated bit reader owes ---
 (test
- (defq inf-wlit (pi x nat w nat gw (inf-le 32 w) g (inf-le x 64) (inf-lt x (inf-pow w)))
-   (lam x w gw g (inf-lelt x 64 (inf-pow w) g
-     (inf-lttrans 64 128 (inf-pow w) (idpath true) (inf-powle 7 w (inf-letrans 7 32 w (idpath false) gw))))))
+ (defq inf-wlit (pi x nat w nat gw (inf-le 32 w) g (inf-le x 63) (inf-lt x (inf-pow w)))
+   (lam x w gw g (inf-lelt x 63 (inf-pow w) g
+     (inf-lttrans 63 128 (inf-pow w) (idpath true) (inf-powle 7 w (inf-letrans 7 32 w (idpath false) gw))))))
  (defq inf-modpos (pi p nat x nat g (inf-lt 0 p) (inf-lt (inf-mod p x) p))
    (lam p x (nat_rect (lam q (pi g (inf-lt 0 q) (inf-lt (inf-mod q x) q)))
      (lam g (fromempty (inf-lt (inf-mod 0 x) 0) (nopathsfalsetotrue g)))
@@ -1368,13 +1345,13 @@
      p)))
  (defq inf-masklt (pi x nat k nat (inf-lt (inf-mod (inf-pow k) x) (inf-pow k)))
    (lam x k (inf-modpos (inf-pow k) x (inf-powpos k))))
- (defq inf-fill1b (pi ip nat cons nat bc nat i (inf-bits-inv ip cons bc)
-     (inf-bits-inv (add ip 1) cons (add bc 8)))
-   (lam ip cons bc i
-     (pathscomp0 nat (inf-by8 (add ip 1)) (add (inf-by8 ip) (inf-by8 1)) (add cons (add bc 8))
-       (inf-by8add ip 1)
-       (pathscomp0 nat (add (inf-by8 ip) 8) (add (add cons bc) 8) (add cons (add bc 8))
-         (maponpaths nat nat (lam z (add z 8)) (inf-by8 ip) (add cons bc) i)
+ (defq inf-fill1b (pi carry nat ip nat cons nat bc nat i (inf-bits-inv carry ip cons bc)
+     (inf-bits-inv carry (add ip 1) cons (add bc 8)))
+   (lam carry ip cons bc i
+     (pathscomp0 nat (add carry (inf-by8 (add ip 1))) (add carry (add (inf-by8 ip) 8)) (add cons (add bc 8))
+       (maponpaths nat nat (lam z (add carry z)) (inf-by8 (add ip 1)) (add (inf-by8 ip) 8) (inf-by8add ip 1))
+       (pathscomp0 nat (add carry (add (inf-by8 ip) 8)) (add (add cons bc) 8) (add cons (add bc 8))
+         (inf-carry carry (inf-by8 ip) 8 (add cons bc) i)
          (natplusassoc cons bc 8)))))
  (defq inf-subfall1 (pi n nat l nat g (inf-lt l n) (inf-lt (natminus n (add l 1)) (natminus n l)))
    (lam n l g
@@ -1410,18 +1387,18 @@
      (pathscomp0 nat (inf-mod 8 (natminus x (inf-mod 8 x))) (inf-mod 8 (inf-by8 (inf-div8 x))) 0
        (maponpaths nat nat (inf-mod 8) (natminus x (inf-mod 8 x)) (inf-by8 (inf-div8 x)) (inf-bytes x))
        (inf-by8low (inf-div8 x))))))
- (defq inf-dropinv (pi ip nat cons nat bc nat i (inf-bits-inv ip cons bc)
-     (inf-bits-inv ip (add cons (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc))))))
+ (defq inf-dropinv (pi ip nat cons nat bc nat i (inf-bits-inv 0 ip cons bc)
+     (inf-bits-inv 0 ip (add cons (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc))))))
    (lam ip cons bc i
      (pathscomp0 nat (inf-by8 ip) (add (add cons (inf-mod 8 bc)) (natminus bc (inf-mod 8 bc)))
        (add (add cons (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc)))))
-       (inf-take ip cons bc (inf-mod 8 bc) (inf-modle8 bc) i)
+       (inf-take 0 ip cons bc (inf-mod 8 bc) (inf-modle8 bc) i)
        (maponpaths nat nat (lam z (add (add cons (inf-mod 8 bc)) z))
          (natminus bc (inf-mod 8 bc)) (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc))))
          (pathsinv0 nat (inf-by8 (inf-div8 (natminus bc (inf-mod 8 bc)))) (natminus bc (inf-mod 8 bc))
            (inf-dropwhole bc))))))
  ; pos = ip - q reads no bit consumed: byte pos, in bits, is what was consumed
- (defq inf-posb (pi ip nat cons nat q nat i (inf-bits-inv ip cons (inf-by8 q))
+ (defq inf-posb (pi ip nat cons nat q nat i (inf-bits-inv 0 ip cons (inf-by8 q))
      (paths nat (inf-by8 (natminus ip q)) cons))
    (lam ip cons q i
      (pathscomp0 nat (inf-by8 (natminus ip q))
@@ -1442,7 +1419,7 @@
                  i (natpluscomm cons (inf-by8 q))))))
          (inf-cancel (inf-by8 q) cons)))))
  ; a stored block ends past pos, and consumption grows
- (defq inf-storedc (pi ip nat cons nat m nat q nat k nat l nat i (inf-bits-inv ip (add cons m) (inf-by8 q))
+ (defq inf-storedc (pi ip nat cons nat m nat q nat k nat l nat i (inf-bits-inv 0 ip (add cons m) (inf-by8 q))
      (inf-le cons (inf-by8 (add (add (natminus ip q) k) l))))
    (lam ip cons m q k l i
      (inf-letrans cons (add cons m) (inf-by8 (add (add (natminus ip q) k) l))
@@ -1527,10 +1504,22 @@
  (defq inf-substrict (pi a nat b nat c nat h (inf-lt a b) g (inf-le b c) (inf-lt (natminus c b) (natminus c a)))
    (lam a b c h g (inf-lelt (natminus c b) (natminus c (succ a)) (natminus c a)
      (inf-subanti (succ a) b c (inf-ltsu a b h)) (inf-subfall c a (inf-lttrans a b c h g)))))
- (defq inf-consfall (pi ip nat c nat bc nat n nat a nat i (inf-bits-inv ip c bc) g (inf-le ip n) h (inf-lt a c)
-     (inf-lt (natminus (inf-by8 n) c) (natminus (inf-by8 n) a)))
-   (lam ip c bc n a i g h (inf-substrict a c (inf-by8 n) h
-     (inf-letrans c (add c bc) (inf-by8 n) (inf-leaddr c bc) (inf-letr (inf-by8 ip) (add c bc) (inf-by8 n) i (inf-by8mono ip n g))))))
+ (defq inf-consfall (pi carry nat ip nat c nat bc nat n nat a nat i (inf-bits-inv carry ip c bc) g (inf-le ip n) h (inf-lt a c)
+     (inf-lt (natminus (add carry (inf-by8 n)) c) (natminus (add carry (inf-by8 n)) a)))
+   (lam carry ip c bc n a i g h (inf-substrict a c (add carry (inf-by8 n)) h
+     (inf-letrans c (add c bc) (add carry (inf-by8 n)) (inf-leaddr c bc)
+       (inf-letr (add carry (inf-by8 ip)) (add c bc) (add carry (inf-by8 n)) i (inf-addl carry (inf-by8 ip) (inf-by8 n) (inf-by8mono ip n g)))))))
+ ; a stored run skips the buffer: k bytes read, 8k bits consumed
+ (defq inf-advb (pi carry nat ip nat cons nat bc nat k nat i (inf-bits-inv carry ip cons bc)
+     (inf-bits-inv carry (add ip k) (add cons (inf-by8 k)) bc))
+   (lam carry ip cons bc k i
+     (pathscomp0 nat (add carry (inf-by8 (add ip k))) (add carry (add (inf-by8 ip) (inf-by8 k))) (add (add cons (inf-by8 k)) bc)
+       (maponpaths nat nat (lam z (add carry z)) (inf-by8 (add ip k)) (add (inf-by8 ip) (inf-by8 k)) (inf-by8add ip k))
+       (pathscomp0 nat (add carry (add (inf-by8 ip) (inf-by8 k))) (add (add cons bc) (inf-by8 k)) (add (add cons (inf-by8 k)) bc)
+         (inf-carry carry (inf-by8 ip) (inf-by8 k) (add cons bc) i)
+         (inf-swap3 cons bc (inf-by8 k))))))
+ (defq inf-dec1 (pi n nat g (inf-lt 0 n) (inf-lt (natminus n 1) n))
+   (lam n g (transportf nat (lam x (inf-lt (natminus n 1) x)) (natminus n 0) n (natminusn0 n) (inf-subfall n 0 g))))
  ; a table's fact, over its whole domain: none of them answers true, which the kernel can run
  (defn inf-anyb (pi P (pi k nat bool) n nat bool)
    (lam P n (nat_rect (lam q bool) false (lam k r (bool_rect (lam b bool) true r (P k))) n)))

@@ -29,7 +29,7 @@ static inline void inf_fill(struct inf_rd *r) {
   r->bc |= 56;
  } else {
   while (r->ip < r->n) {
-   if (56 < r->bc)
+   if (55 < r->bc)
     break;
    r->bb |= (uint64_t) r->in[r->ip] << r->bc;
    r->ip++;
