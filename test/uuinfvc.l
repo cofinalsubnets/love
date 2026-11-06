@@ -7200,13 +7200,13 @@
    (given inf-stkeep (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))
 ; i1-2
  (defvc inf-vc-stkeep-i1-2 (under inf-stkeep (inf-lt (inf-pow lw) (inf-pow w)))
-   (given inf-stkeep (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) (inf-pow lim) (inf-pow lim) (inf-powle lw lim hww) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))))
+   (given inf-stkeep (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; m1-1
  (defvc inf-vc-stkeep-m1-1 (under inf-stkeep (pi g1 (inf-le (inf-pow lw) op) (inf-lt lw 32)))
    (given inf-stkeep (lam g1 (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; m1-2
  (defvc inf-vc-stkeep-m1-2 (under inf-stkeep (pi g1 (inf-le (inf-pow lw) op) (inf-lt (inf-pow lw) (inf-pow w))))
-   (given inf-stkeep (lam g1 (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) (inf-pow lim) (inf-pow lim) (inf-powle lw lim hww) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stkeep (lam g1 (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; m1-3
  (defvc inf-vc-stkeep-m1-3 (under inf-stkeep (pi g1 (inf-le (inf-pow lw) op) (inf-le (inf-pow lw) op)))
    (given inf-stkeep (lam g1 g1)))
@@ -7221,13 +7221,13 @@
    (given inf-stkeep (lam g1 (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; d1-2
  (defvc inf-vc-stkeep-d1-2 (under inf-stkeep (pi g1 (inf-le (inf-pow lw) op) (inf-lt (inf-pow lw) (inf-pow w))))
-   (given inf-stkeep (lam g1 (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) (inf-pow lim) (inf-pow lim) (inf-powle lw lim hww) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stkeep (lam g1 (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; j1-1
  (defvc inf-vc-stkeep-j1-1 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) (inf-lt lim 32)))
    (given inf-stkeep (lam g1 (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))
 ; j1-2
  (defvc inf-vc-stkeep-j1-2 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) (inf-lt (inf-pow lim) (inf-pow w))))
-   (given inf-stkeep (lam g1 (inf-lelt (inf-pow lim) (inf-pow lim) (inf-pow w) (inf-refl (inf-pow lim)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stkeep (lam g1 (inf-wpow w lim gw (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; j1-3
  (defvc inf-vc-stkeep-j1-3 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) (inf-lt (add hlen0 op) (inf-pow w))))
    (given inf-stkeep (lam g1 (inf-fitlim w lim hlen0 op gw hm gh (inf-letrans op (inf-pow lw) (inf-pow lim) (inf-ltle op (inf-pow lw) g1) (inf-letrans (inf-pow lw) (inf-pow lim) (inf-pow lim) (inf-powle lw lim hww) (inf-refl (inf-pow lim))))))))
@@ -7236,7 +7236,7 @@
    (given inf-stkeep (lam g1 g2 (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; j2-2
  (defvc inf-vc-stkeep-j2-2 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) g2 (inf-lt (inf-pow lim) (add hlen0 op)) (inf-lt (inf-pow lw) (inf-pow w))))
-   (given inf-stkeep (lam g1 g2 (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) (inf-pow lim) (inf-pow lim) (inf-powle lw lim hww) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stkeep (lam g1 g2 (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; j2j-1
  (defvc inf-vc-stkeep-j2j-1 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) g2 (inf-lt (inf-pow lim) (add hlen0 op)) g3 (inf-lt hlen0 (inf-pow lw)) (inf-le hlen0 hlen0)))
    (given inf-stkeep (lam g1 g2 g3 (inf-refl hlen0))))
@@ -7248,7 +7248,7 @@
    (given inf-stkeep (lam g1 g2 g3 (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; d3-2
  (defvc inf-vc-stkeep-d3-2 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) g2 (inf-lt (inf-pow lim) (add hlen0 op)) g3 (inf-le (inf-pow lw) hlen0) (inf-lt (inf-pow lw) (inf-pow w))))
-   (given inf-stkeep (lam g1 g2 g3 (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) hlen0 (inf-pow lim) g3 gh) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stkeep (lam g1 g2 g3 (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lim 31 hww (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; j2j-3
  (defvc inf-vc-stkeep-j2j-3 (under inf-stkeep (pi g1 (inf-lt op (inf-pow lw)) g2 (inf-lt (inf-pow lim) (add hlen0 op)) g3 (inf-le (inf-pow lw) hlen0) (inf-le (inf-pow lw) hlen0)))
    (given inf-stkeep (lam g1 g2 g3 g3)))
@@ -7341,7 +7341,7 @@
    (given inf-stfeed (lam g1 (inf-lelts lh 31 (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; i2-2
  (defvc inf-vc-stfeed-i2-2 (under inf-stfeed (pi g1 (inf-lt (add nin 8) (inf-pow w)) (inf-lt (inf-pow lh) (inf-pow w))))
-   (given inf-stfeed (lam g1 (inf-lelt (inf-pow lh) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed (lam g1 (inf-wpow w lh gw (inf-lelts lh 31 (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; r2-1
  (defvc inf-vc-stfeed-r2-1 (under inf-stfeed (pi g1 (inf-lt (add nin 8) (inf-pow w)) g2 (inf-lt (inf-pow lh) hlen0) (inf-le 0 nin)))
    (given inf-stfeed (lam g1 g2 (idpath false))))
@@ -7401,7 +7401,7 @@
    (given inf-stfeed (lam g1 g2 (inf-lelts lw 31 (inf-letrans lw lh 31 hww (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; j1-2
  (defvc inf-vc-stfeed-j1-2 (under inf-stfeed (pi g1 (inf-lt (add nin 8) (inf-pow w)) g2 (inf-le hlen0 (inf-pow lh)) (inf-lt (inf-pow lw) (inf-pow w))))
-   (given inf-stfeed (lam g1 g2 (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) (inf-pow lh) (inf-pow lim) (inf-powle lw lh hww) (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim)))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed (lam g1 g2 (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lh 31 hww (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))))
 ; j1j-1
  (defvc inf-vc-stfeed-j1j-1 (under inf-stfeed (pi g1 (inf-lt (add nin 8) (inf-pow w)) g2 (inf-le hlen0 (inf-pow lh)) g3 (inf-lt hlen0 (inf-pow lw)) (inf-le hlen0 hlen0)))
    (given inf-stfeed (lam g1 g2 g3 (inf-refl hlen0))))
@@ -7413,7 +7413,7 @@
    (given inf-stfeed (lam g1 g2 g3 (inf-lelts lw 31 (inf-letrans lw lh 31 hww (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; d5-2
  (defvc inf-vc-stfeed-d5-2 (under inf-stfeed (pi g1 (inf-lt (add nin 8) (inf-pow w)) g2 (inf-le hlen0 (inf-pow lh)) g3 (inf-le (inf-pow lw) hlen0) (inf-lt (inf-pow lw) (inf-pow w))))
-   (given inf-stfeed (lam g1 g2 g3 (inf-lelt (inf-pow lw) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lw) hlen0 (inf-pow lim) g3 (inf-letrans hlen0 (inf-pow lh) (inf-pow lim) g2 (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim))))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed (lam g1 g2 g3 (inf-wpow w lw gw (inf-lelts lw 31 (inf-letrans lw lh 31 hww (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))))
 ; j1j-3
  (defvc inf-vc-stfeed-j1j-3 (under inf-stfeed (pi g1 (inf-lt (add nin 8) (inf-pow w)) g2 (inf-le hlen0 (inf-pow lh)) g3 (inf-le (inf-pow lw) hlen0) (inf-le (inf-pow lw) hlen0)))
    (given inf-stfeed (lam g1 g2 g3 g3)))
@@ -7432,7 +7432,7 @@
    (given inf-stfeed-c1 (inf-lelts lh 31 (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))
 ; j2-2
  (defvc inf-vc-stfeed-j2-2 (under inf-stfeed-c1 (inf-lt (inf-pow lh) (inf-pow w)))
-   (given inf-stfeed-c1 (inf-lelt (inf-pow lh) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))))
+   (given inf-stfeed-c1 (inf-wpow w lh gw (inf-lelts lh 31 (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; d8-1
  (defvc inf-vc-stfeed-d8-1 (under inf-stfeed-c1 (pi g4 (inf-le nin (inf-pow lh)) (inf-lt (add nin nin) (inf-pow w))))
    (given inf-stfeed-c1 (lam g4 (inf-fitlim w lim nin nin gw hm (inf-letrans nin (inf-pow lh) (inf-pow lim) g4 (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim)))) (inf-letrans nin (inf-pow lh) (inf-pow lim) g4 (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim))))))))
@@ -7459,7 +7459,7 @@
    (given inf-stfeed-c1 (lam g4 (inf-lelts lh 31 (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; d10-2
  (defvc inf-vc-stfeed-d10-2 (under inf-stfeed-c1 (pi g4 (inf-lt (inf-pow lh) nin) (inf-lt (inf-pow lh) (inf-pow w))))
-   (given inf-stfeed-c1 (lam g4 (inf-lelt (inf-pow lh) (inf-pow lim) (inf-pow w) (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim))) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed-c1 (lam g4 (inf-wpow w lh gw (inf-lelts lh 31 (inf-letrans lh lim 31 hll (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))))
 ; j2j-3
  (defvc inf-vc-stfeed-j2j-3 (under inf-stfeed-c1 (pi g4 (inf-lt (inf-pow lh) nin) (inf-le (inf-pow lh) (inf-pow lim))))
    (given inf-stfeed-c1 (lam g4 (inf-letrans (inf-pow lh) (inf-pow lim) (inf-pow lim) (inf-powle lh lim hll) (inf-refl (inf-pow lim))))))
@@ -7784,7 +7784,7 @@
    (given inf-stfeed-c3 (lam g9 (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))
 ; i6-2
  (defvc inf-vc-stfeed-i6-2 (under inf-stfeed-c3 (pi g9 unit (inf-lt (inf-pow lim) (inf-pow w))))
-   (given inf-stfeed-c3 (lam g9 (inf-lelt (inf-pow lim) (inf-pow lim) (inf-pow w) (inf-refl (inf-pow lim)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed-c3 (lam g9 (inf-wpow w lim gw (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; c2-7
  (defvc inf-vc-stfeed-c2-7 (under inf-stfeed-c3 (pi g9 unit g10 (inf-le (inf-pow lim) cap) (inf-le 32 w)))
    (given inf-stfeed-c3 (lam g9 g10 gw)))
@@ -7863,7 +7863,7 @@
    (given inf-stfeed-c3 (lam g9 g10 (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))
 ; j3-2
  (defvc inf-vc-stfeed-j3-2 (under inf-stfeed-c3 (pi g9 unit g10 (inf-lt cap (inf-pow lim)) (inf-lt (inf-pow lim) (inf-pow w))))
-   (given inf-stfeed-c3 (lam g9 g10 (inf-lelt (inf-pow lim) (inf-pow lim) (inf-pow w) (inf-refl (inf-pow lim)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed-c3 (lam g9 g10 (inf-wpow w lim gw (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; j3-3
  (defvc inf-vc-stfeed-j3-3 (under inf-stfeed-c3 (pi g9 unit g10 (inf-lt cap (inf-pow lim)) (inf-le cap (inf-pow lim))))
    (given inf-stfeed-c3 (lam g9 g10 k1)))
@@ -7881,7 +7881,7 @@
    (given inf-stfeed-c3 (lam g9 g10 g11 (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31))))))
 ; d12-2
  (defvc inf-vc-stfeed-d12-2 (under inf-stfeed-c3 (pi g9 unit g10 (inf-lt cap (inf-pow lim)) g11 (inf-le (natminus (inf-pow lim) cap) cap) (inf-lt (inf-pow lim) (inf-pow w))))
-   (given inf-stfeed-c3 (lam g9 g10 g11 (inf-lelt (inf-pow lim) (inf-pow lim) (inf-pow w) (inf-refl (inf-pow lim)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false)))))))
+   (given inf-stfeed-c3 (lam g9 g10 g11 (inf-wpow w lim gw (inf-lelts lim 31 (inf-letrans lim 31 31 (inf-ltle lim 31 hm) (inf-refl 31)))))))
 ; j3j-3
  (defvc inf-vc-stfeed-j3j-3 (under inf-stfeed-c3 (pi g9 unit g10 (inf-lt cap (inf-pow lim)) g11 (inf-le (natminus (inf-pow lim) cap) cap) (inf-lt cap (inf-pow lim))))
    (given inf-stfeed-c3 (lam g9 g10 g11 g10)))
