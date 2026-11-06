@@ -12,7 +12,7 @@
 #   skip    not held to anything here: assumes a 64-bit long, or no witness
 #   nogcc   held to x86-64 alone
 #   gnopie  an address as an "i" operand: gcc wants no pie
-# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 wasm arm i386 thumb1 thumb2)
+# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 wasm arm i386 i386m16 thumb1 thumb2)
 . test/gate/skip.sh
 . test/gate/a64run.sh
 . test/gate/cclib.sh
@@ -54,6 +54,10 @@ gstatic() {
 }
 a64_via=qemu
 int128s="111-int128 151-w128fuzz 314-u128union 352-u128abi 362-w128ops"
+# the bare boards': what wants a libc we do not link, and what assumes a 64-bit long; gcc's arm build
+# follows no frame chain past level 1, so no witness for 297
+boardnolibc="356-vafnval 72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope 147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 315-alloca-stack 298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign 111-int128 151-w128fuzz 314-u128union 352-u128abi 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 348-libcmore 353-intuint 355-cplxarg 362-w128ops"
+boardskip="354-idioms 81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct 297-frameaddr"
 narrow32="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 
 case $tgt in
@@ -101,6 +105,22 @@ case $tgt in
     narrow=$narrow32
     hosted="72-quals 125-widelit 150-alloc 160-rangeinit 297-frameaddr 298-malloc-wrap 300-aligned-alloc 301-free-checks 348-libcmore"
     gref() { arm-none-eabi-gcc -mcpu=cortex-a53 -mthumb -mfloat-abi=hard -mfpu=fp-armv8 --specs=rdimon.specs -O1 -w -o "$1" "$2" -lm; } ;;
+  i386m16)
+    . test/gate/m16rt.sh
+    m16_board "$d"
+    a64_qemu="sh $(cd "$d" && pwd)/m16run.sh"
+    pretty="qemu real mode"
+    GCC="gcc -m32"
+    grun=
+    exitonly=1
+    mflags="-Dmain=cc_main -c"
+    refuse="$int128s 364-w128float"
+    wide="68-static-assert 120-bfinit 161-enumwide"
+    narrow=$narrow32
+    # the boards' lists, a hosted reference building them all; past the 32K board; a libgcc complex
+    # divide (no 16-bit libgcc); sections the rom script lays nowhere
+    skip="$boardskip $boardnolibc 215-tablerows 216-namedvarargs 261-overflow-types 351-far-index 100-complex 280-cxf-fuzz 250-nullcmp-static 336-flexinit-section"
+    gref() { gcc -m32 -msse2 -mfpmath=sse -O0 -w -o "$1" "$2" -lm; } ;;
   i386)
     a64_qemu=
     GCC="gcc -m32"
@@ -120,9 +140,8 @@ case $tgt in
     GCC=arm-none-eabi-gcc
     exitonly=1
     mflags="-Dmain=cc_main -c"
-    nolibc="356-vafnval 72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope 147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 315-alloca-stack 298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign 111-int128 151-w128fuzz 314-u128union 352-u128abi 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 348-libcmore 353-intuint 355-cplxarg"
-    # assumes a 64-bit long; gcc's arm build follows no frame chain past level 1, so no witness for 297
-    skip="354-idioms 81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct 297-frameaddr"
+    nolibc=$boardnolibc
+    skip=$boardskip
     # main is renamed cc_main for `run`; mem* and strcmp are the floor a compiler may call
     { echo 'int cc_main(void);'
       echo 'int run(void){ return cc_main(); }'
@@ -145,7 +164,7 @@ case $tgt in
   *) echo "ccbat.sh: unknown target $tgt" >&2; exit 1 ;;
 esac
 [ "$(uname -m)" = x86_64 ] || [ -z "$x64ref" ] || gate_skip "$name: skipped (the reference build is native x86-64)"
-[ "$(uname -m)" = x86_64 ] || [ "$tgt" != i386 ] || gate_skip "$name: skipped (runs i386 binaries natively on x86-64)"
+[ "$(uname -m)" = x86_64 ] || { [ "$tgt" != i386 ] && [ "$tgt" != i386m16 ]; } || gate_skip "$name: skipped (runs i386 binaries natively on x86-64)"
 case $tgt in
   arm|i386)
     printf '#include <stdio.h>\nint main(void){puts("ok");return 0;}\n' > "$d/probe.c"
@@ -361,9 +380,9 @@ int cc_main(void) { dirty(); if (v(200)) return 1; dirty(); if (h(200)) return 2
 AVZ
   moonrun -t "$tgt" -ftrivial-auto-var-init=zero -c -o "$d/avz.o" "$d/avz.c" > "$d/avz.log" 2>&1 \
     || { cat "$d/avz.log" >&2; fail "-ftrivial-auto-var-init=zero: mooncc could not build a VLA and an alloca"; }
-  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/run.o" "$d/avz.o" "$lg" -o "$d/avz.elf" > "$d/avz.log" 2>&1 \
+  blink "$d/avz.o" "$d/avz.elf" > "$d/avz.log" 2>&1 \
     || { cat "$d/avz.log" >&2; fail "-ftrivial-auto-var-init=zero: ld could not bind our object"; }
-  timeout 60 qemu-system-arm -M $mach -semihosting -nographic -kernel "$d/avz.elf" < /dev/null > "$d/avz.out" 2>&1 \
+  timeout 60 $a64_qemu "$d/avz.elf" < /dev/null > "$d/avz.out" 2>&1 \
     || fail "-ftrivial-auto-var-init=zero left a block uncleared on $mach"
 fi
 

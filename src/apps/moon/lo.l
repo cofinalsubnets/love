@@ -1320,7 +1320,6 @@
        (lx u d fs) (fx u d (t32? g ? ('(li r4 0) . fs) fs))
        (? (bad? mo) 'bad
           (kind = 'generic) (nolane g "\(nm) is not carried out (its _n form is)")
-          (m16? g && elem kind '(rmw tas cas vcas bcas)) (nolane g "no lane for an atomic read-modify-write\(ontgt g)")
           (kind = 'fence) (lomk g @ d ['long d (<>mo + (<mo = 0 ? () [(fx () () (afence g))]) + [['li d 0]])])
           (kind = 'sfence) (lomk g @ d ['long d (<>mo + [(fx () () (abar g))] + [['li d 0]])])
           (kind = 'lockfree)

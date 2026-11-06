@@ -146,6 +146,8 @@
    (ilp32? g) (t32? g || ia32? g)                 ; the 32-bit word: a long and a pointer one register, a long long the r0:r1 pair
    (m16? g) (g 'tgt = 'i386m16)
    (m16b g) (m16? g ? [102] ())                    ; a raw 32-bit operation's operand-size prefix in a 16-bit segment
+   (m16a g) (m16? g ? [103] ())                    ; ..and a raw memory operand's address-size prefix
+   (acw g w) (m16? g ? (w @ 4 [102] ()) (w @ 2 [102] 8 [72] ()))   ; a cmpxchg's width prefix: a 16-bit segment reads 16 bits bare
    (wsize g) (ilp32? g ? 4 8)                       ; a pointer, a gp scalar, a stack cell
    (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 (ia32? g) (take (rpn g) '(r0 r2 r1)) argregs)   ; riscv a0..a7 map onto the same r0..r7; i386 -mregparm's eax edx ecx
    (ngp g) (? (a8? g) 8 (t32? g) 4 (ia32? g) (rpn g) 6)
@@ -702,13 +704,13 @@
                  + [240] + (w @ 2 [102] 8 [72] ()) + [15 (w = 1 ? 176 177) 25])   ; lock cmpxchg [rcx], rbx
            ; rbx is named once outside the raw, so the callee-saved save sees it written
            ['(li r3 0) ['raw (ld + body + [117 (256 - (#body + 2))])]])     ; jne back
-       (m16? g) (nolane g "no lane for an atomic read-modify-write\(ontgt g)")
        (ia32? g)                                                            ; x64's loop at 32 bits: no REX
-        (: ld (w @ 1 '(15 182 1) 2 '(15 183 1) '(139 1))
-           body ('(137 195)
-                 + (op @ 'add '(1 211) 'sub '(41 211) 'and '(33 211) 'or '(9 211)
-                         'xor '(49 211) 'nand '(33 211 247 211) 'set '(137 211))
-                 + [240] + (w @ 2 [102] ()) + [15 (w = 1 ? 176 177) 25])
+        (: o (m16b g) (r x) (o + x)
+           ld (m16a g + o + (w @ 1 '(15 182 1) 2 '(15 183 1) '(139 1)))
+           body (r '(137 195)
+                 + (op @ 'add (r '(1 211)) 'sub (r '(41 211)) 'and (r '(33 211)) 'or (r '(9 211))
+                         'xor (r '(49 211)) 'nand (r '(33 211) + r '(247 211)) 'set (r '(137 211)))
+                 + [240] + m16a g + acw g w + [15 (w = 1 ? 176 177) 25])
            ['(li r3 0) ['raw (ld + body + [117 (256 - (#body + 2))])]])
        (a64? g)
         (: lx ((w @ 1 0x085FFC00 2 0x485FFC00 4 0x885FFC00 0xC85FFC00) | 32)          ; ldaxr x0, [x1]
@@ -801,10 +803,9 @@
         (nlab g ".cas" @ f
            [[(uldop w) 'r3 'r1 0] '(cmp r3 r0) ['br 'ne f] [(stw w) 'r1 0 'r2] ['label f]
             '(cmp r3 r0) '(set eq r2) '(mov r0 r3)])
-       (m16? g) (nolane g "no lane for a compare-and-swap\(ontgt g)")
        (x86? g)                                         ; no REX below eight bytes: i386 lays the same
-        ['(li r3 0) ['raw ([240] + (w @ 2 [102] 8 [72] ()) + [15 (w = 1 ? 176 177) 17]   ; lock cmpxchg [rcx], rdx
-                           + '(15 148 195 15 182 219))]                                  ; sete bl; movzx ebx, bl
+        ['(li r3 0) ['raw ([240] + m16a g + acw g w + [15 (w = 1 ? 176 177) 17]          ; lock cmpxchg [rcx], rdx
+                           + '(15 148 195) + m16b g + '(15 182 219))]                    ; sete bl; movzx ebx, bl
          '(mov r2 r3)]
        (+ (? (a64? g)
               (: lx ((w @ 1 0x085FFC00 2 0x485FFC00 4 0x885FFC00 0xC85FFC00) | 32 | 3)          ; ldaxr x3, [x1]

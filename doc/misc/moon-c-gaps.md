@@ -1488,6 +1488,8 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   `__sigsetjmp` runs its dispatch loop in a `try_table`, landing a buffer of its own back at the
   site (wasmfn.l). Wants an engine with wasm exceptions (try_table). Law 345-jmpsave.c.
 - **an asm label on wasm** renames through the object. Law 294-asmlabel.c.
+- **`-m16` atomics**, and a lane that runs `-m16` in real mode: test_cci386m16, a 64K rom under
+  `qemu-system-i386 -bios` with no BIOS, held to `gcc -m32`. test/gate/m16rt.sh.
 - **a wide local's `x++`** answered the new value, in registers. Law 362-w128ops.c.
 - **packed bit-fields, on every target**: the bits run on from the last member, crossing what
   would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as
