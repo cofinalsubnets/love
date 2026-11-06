@@ -875,6 +875,7 @@ endif
 # love links its kernel's doors bare; doom's nifs want the kernel under them, so that lane links it
 love_door_o = $(if $(DOOM),$(kart_o),$(moon_d)/love/user/nokern.o)
 $(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(love_door_o)
+$(ho)/love-macos.raw: $(kart_o)
 $(k_elf): $(k_pie_o)
 
 $(k_odir)/love/love.o: out/lib/love_version.h
