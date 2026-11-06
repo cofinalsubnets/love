@@ -1625,7 +1625,7 @@
   (inf-le (inf-by16 (inf-pow 12)) (inf-pow 16)) inf-topq
   (inf-lt 320 (inf-pow 12)) (idpath true)
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk (inf-pow 12) k) (inf-pow w))) (inf-topk w gw)
-  (inf-le 12 15) (idpath false)
+  (inf-le 11 15) (idpath false)
   (inf-le 9 15) (idpath false)
   (inf-le 7 15) (idpath false)
   (inf-lt (add cap 266) (inf-pow w)) g2
@@ -3858,7 +3858,7 @@
   (inf-le (inf-by16 (inf-pow 12)) (inf-pow 16)) inf-topq
   (inf-lt 320 (inf-pow 12)) (idpath true)
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk (inf-pow 12) k) (inf-pow w))) (inf-topk w gw)
-  (inf-le 12 15) (idpath false)
+  (inf-le 11 15) (idpath false)
   (inf-le 9 15) (idpath false)
   (inf-le 7 15) (idpath false)
   (pi k nat g (inf-lt k 19) (inf-lt (inf-tob k) 19)) (lam k g (inf-lelts (inf-tob k) 18 (inf-anyno (lam j (natgtb (inf-tob j) 18)) 19 (idpath false) k g)))
