@@ -67,7 +67,7 @@
        ; only what can change a bound or a state is walked: each as (its index . the forms from it)
        (want? f) (f @ ['cmp t 0] (dem t != ())
                       ('cmp . _) 0
-                      _ (nmwctl <f || nmext <f || (raops g f @ [_ ds] (any (x \ dem x) ds) _ 0)))
+                      _ (nmwctl <f || nmext <f || (raops g f @ [_ ds] (any dem ds) _ 0)))
        ws (: (go l j) (l @ (f . u) (want? f ? ((j . l) . go u (j + 1)) (go u (j + 1))) _ ())
              (go fs 0))
        ; one walk under the heads' assumptions A -> [the forms that go, the states into each label, each head's]
