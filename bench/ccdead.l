@@ -139,7 +139,7 @@
 
    (reach elf ba)
     (: e (edges-of (shout ["objdump" "-d" elf]))
-       seed (filter (n \ e n) '("_start" "__love_start" "main"))
+       seed (filter e '("_start" "__love_start" "main"))
        roots (data-roots elf ba seed)
        seen {}
        (go q) (? !(two? q) seen

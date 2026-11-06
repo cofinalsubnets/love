@@ -6,7 +6,7 @@
 
 (: S "/tmp/designtest.l"
    d (design-new (level "a test" 1 1 ["###" "#.#" "###"] {} {}) S)
-   (keys! s) (each (map (i \ s i) ^#s) (c \ design-key d c))
+   (keys! s) (each (map s ^#s) (design-key d))
    lvl (d 'lvl)
    ; floor east past the map's edge grows the row
    _ (keys! "l.l.j#")

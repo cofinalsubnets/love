@@ -331,7 +331,7 @@
        ys1 (map (y \ (string? ps0 && 0 < <y && y 2 & 15 != 3 ? [<y (ps0 + y 1) (y 2) (y 3) (y 4)] y))
                 (filter (y \ !(sgone? y)) ys))
        ys2 ((filter (y \ y 2 >> 4 = 0) ys1) + filter (y \ !(y 2 >> 4 = 0)) ys1)
-       same (map (y \ <y) ys2 = ^#ys)
+       same (map cap ys2 = ^#ys)
        yx (: m {} _ (foldl (\ k y (pin m <y k, k + 1)) 0 ys2) m)
        nloc (foldl (\ a y (y 2 >> 4 = 0 ? (a + 1) a)) 0 ys2)
        ; the name tables built again: section names and, where it is linked, symbol names

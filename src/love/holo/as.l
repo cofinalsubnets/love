@@ -61,12 +61,13 @@
    (as-mem-rm md rf o n)
       (: b (o 1) ix (o 2) sc (o 3) d (o 4)
          sy (5 < #o ? (o 5) ())                            ; a symbol displacement: four bytes, sign-extended in 64
-         d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32) sy d)] (le32 d))
+         d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32d) sy d)] (le32 d))
          _ (md = 64 && (b >= 32 || ix >= 32) && scare 'as-mem16-mode o)
          (? (as-a16? o) (as-mem16 rf o)
             (md = 16 && b < 0 && ix < 0)                    ; an absolute address in a 16-bit segment: disp16
              ([(as-mrm 0 rf 6)] + (sy ? [(fix 2 'abs16 sy d)] (le16 d)))
-            (md = 32 && b < 0 && ix < 0) ([(as-mrm 0 rf 5)] + d4)   ; ..and in a 32-bit one, no SIB
+            (md = 32 && b < 0 && ix < 0)                    ; ..and in a 32-bit one, no SIB
+             ([(as-mrm 0 rf 5)] + (sy ? [(fix 4 'abs32 sy d)] (le32 d)))
             (as-mem32 rf o b ix sc d sy d4 n)))
    ; n scales a disp8: EVEX's disp8*N, 1 elsewhere
    (as-mem32 rf o b ix sc d sy d4 n)
@@ -113,10 +114,12 @@
    ;; the rel8-only branches -> their opcode
    as-loops {'loop 226 'loope 225 'loopz 225 'loopne 224 'loopnz 224 'jecxz 227 'jrcxz 227 'jcxz 227}
 
+   ;; an immediate spelled unsigned in w bytes, as the signed value those bytes hold
+   (as-sx w v) (v >= 1 << (8 * w - 1) && v < 1 << 8 * w ? (v - (1 << 8 * w)) v)
    ;; alu $imm,r/m: 80 /ext ib for a byte, else 83 /ext ib where the immediate fits, else 81 /ext iz
    (as-alu-i md ext w frc rm imm)
-      (? (w = 1)     (as-emit md 1 frc '(128) ext rm + [(byte imm)])
-         (fits8 imm) (as-emit md w frc '(131) ext rm + [(byte imm)])
+      (? (w = 1)              (as-emit md 1 frc '(128) ext rm + [(byte imm)])
+         (fits8 (as-sx w imm)) (as-emit md w frc '(131) ext rm + [(byte imm)])
          (as-emit md w frc '(129) ext rm + as-imw w imm))
 
    ;; mov $imm,%reg: b0/b8+r by width; at width 8, c7 /0 id where it fits signed-32, else movabs
@@ -125,7 +128,7 @@
          (? (w = 1) (catall [rx [(176 | as-lo d) (byte imm)]])
             (w = 2) (catall [(as-osz md 2) rx [(184 | as-lo d)] (le16 imm)])
             (w = 4) (catall [(as-osz md 4) rx [(184 | as-lo d)] (le32 imm)])
-            (fits32 imm) (catall [rx [199 (as-mrm 3 0 d)] (le32 imm)])
+            (fits32 (as-sx 8 imm)) (catall [rx [199 (as-mrm 3 0 d)] (le32 imm)])
             (catall [rx [(184 | as-lo d)] (le64 imm)])))
 
    ;; the per-instruction encoders, in AT&T operand order.
@@ -152,14 +155,14 @@
             (: im <>a
                ; into the accumulator, no Modrm: test's a8/a9, the ALU's 04+8*ext where its
                ; immediate is a byte's register or no 83 fits it
-               acc? (kb = 'rg && as-regn b = 0 && (mn = 'test || two? alu && (w = 1 || !(fits8 im))))
+               acc? (kb = 'rg && as-regn b = 0 && (mn = 'test || two? alu && (w = 1 || !(fits8 (as-sx w im)))))
                bs (? acc? (catall [(as-osz md w) (as-rexm md frc (as-rexw w) 0 0 0)
                                    [(mn = 'test ? (as-opw 169 w) (as-opw (<>alu * 8 + 5) w))] (as-imw w im)])
                      (mn = 'mov && kb = 'rg) (as-mov-ri md (as-regn b) w frc im)
                      (opi > 0) (as-emit md w frc [(as-opw opi w)] 0 b + as-imw w im)
                      (as-alu-i md <>alu w frc b im))
                ; the immediate's width as its encoder laid it: 80/83's byte, else the operand's
-               n (? (opi > 0) (w @ 1 1 2 2 4) (w = 1 || fits8 im) 1 (w @ 2 2 4))
+               n (? (opi > 0) (w @ 1 1 2 2 4) (w = 1 || fits8 (as-sx w im)) 1 (w @ 2 2 4))
                (<b = 'rip ? (as-riptail bs n) bs))
             (scare 'as-op2-form [a b])))
    (as-1 md mn w a)
@@ -168,7 +171,7 @@
          pw (? (md = 64) (w @ 2 2 0) (w > 0) w (k = 'rg) (as-regw a) 0)
          ; a near target: its field is the operand's width (callw in a 32-bit segment, calll in a 16-bit one)
          ow (? (elem mn '(callw jmpw)) 2 (elem mn '(calll jmpl)) 4 (md = 16) 2 4)
-         (rel sym) (ow = 2 ? (fix 2 'rel16 sym 0) (fix 4 'rel32 sym 0))
+         (rel sym) (ow = 2 ? (fix 2 'rel16 sym 0) (fix 4 (md = 64 ? 'rel32 'pc32) sym 0))
          (? (mn = 'push)                                     ; ff /6
             (k @ 'rg (as-regn a @ n
                         (as-osz md pw + (n >= 8 ? [65 (80 | as-lo n)] [(80 | n)])))
@@ -180,6 +183,9 @@
             (k @ 'rg (as-regn a @ n
                         (as-osz md pw + (n >= 8 ? [65 (88 | as-lo n)] [(88 | n)])))
                  (as-emit md pw 0 '(143) 0 a))
+            ; inc and dec of a whole register outside 64-bit: 40+r and 48+r
+            (elem mn '(inc dec) && md != 64 && k = 'rg && 1 < w)
+             (as-osz md w + [((mn = 'inc ? 64 72) + as-lo (as-regn a))])
             (elem mn '(neg not inc dec))
             (: opc (elem mn '(inc dec) ? 255 247)
                ext (mn @ 'neg 3 'not 2 'inc 0 1)
@@ -221,6 +227,28 @@
    as-strs {'movs 165 'stos 171 'lods 173 'cmps 167 'scas 175 'ins 109 'outs 111}
    as-nil32 {'rep '(243) 'repe '(243) 'repz '(243) 'repne '(242) 'repnz '(242) 'lock '(240)
              'wbinvd '(15 9) 'invd '(15 8) 'wrmsr '(15 48) 'rdmsr '(15 50) 'clts '(15 6)}
+   ;; a string op spelled with its operands: they say only the source's override and the
+   ;; address size. () when the line is not one
+   (as-stro md mn ops)
+    (? (#ops != 2) ()
+       (: t (show mn) n #t stem (name (snip t 0 (n - 1)))
+          sw (t (n - 1) @ 98 1 119 2 108 4 100 4 113 8 0)
+          op (peep as-strs stem ())
+          (bare o) (two? o && <o = 'seg ? <>>o o)
+          (lane o) (bare o 1 % 32)
+          (acc? o) (<o = 'rg && as-regn o = 0 && as-regw o = sw)
+          ms (filter (o \ <(bare o) = 'mem) ops)
+          (? (sw = 0 || !(charm? op)) ()
+             !(#ms = (elem stem '(stos lods scas) ? 1 2) && (#ms = 2 || any acc? ops)) ()
+             (: as (filter (o \ lane o != 2 || !(elem stem '(ins outs))) ms)
+                src (filter (o \ lane o = 6) as)
+                sg (two? src && two? <src && <<src = 'seg ? <><src 'ds)
+                (? !(all (o \ elem (lane o) '(6 7)) as) (scare 'as-strop ops)
+                   (sw = 8 && (md != 64 || elem stem '(ins outs))) (scare 'as-strop ops)
+                   (as-asz md (bare <as)
+                    + (sg = 'ds ? () [(sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 (scare 'as-strop ops))])
+                    + (sw = 8 ? [72] (as-osz md sw))
+                    + [(sw = 1 ? (op - 1) op)]))))))
    (as-0 md mn) (? (md = 64) (as-nils mn @ () (scare 'as-op0 mn) b b) (as-0n mn md))
    (as-0n mn md)
     (: t (show mn) n #t c (t (n - 1)) stem (name (snip t 0 (n - 1)))
@@ -550,7 +578,7 @@
            (: o (as-regn d = 0 ? s d) k (as-regn o)
               (catall [(as-osz md w) (as-rexm md 0 (as-rexw w) 0 0 (as-hi k)) [(144 + as-lo k)]]))
           (n = 2 && mn = 'xchg && (<d = 'rg || <s = 'rg))
-           (: r (<s = 'rg ? s d) o (<s = 'rg ? d s) (as-emit md w (as-frcs ops) [(as-opw 135 w)] (as-regn r) o))
+           (: r (<d = 'rg ? d s) o (<d = 'rg ? s d) (as-emit md w (as-frcs ops) [(as-opw 135 w)] (as-regn r) o))
           ()))
 
    ;; an instruction of the value: (op mn w ops), ops destination first; the encoders above
@@ -572,10 +600,12 @@
     (: mn (it 1 = 'movabs ? 'mov (it 1)) w (it 2) ops0 (it 3)
      ; a %fs:/%gs: operand: the override byte ahead of the same instruction over the bare operand
      sg (foldl (\ a o (? (two? a) a (two? o && <o = 'seg) o ())) () ops0)
-     ; outside 64 a bare symbol a non-branch reads is memory at that address (no %rip)
+     ; a bare symbol a non-branch reads is memory at that address (no %rip)
      br? (xa-branch? mn || xa-cc? mn || elem mn '(calll callw jmpl jmpw) || charm? (peep as-loops mn ()))
-     ops (md = 64 ? ops0 (map (o \ (<o = 'lbl && !br? ? (xa-symoff (show <>o) @ so ['mem -1 -1 1 >so <so]) o)) ops0))
-     (? (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
+     (nosp s) ((: (g i a) (i >= #s ? a (g (i + 1) (s i = 32 ? a (a + string (s i)))))) 0 "")
+     ops (map (o \ (<o = 'lbl && !br? ? (xa-symoff (nosp (show <>o)) @ so ['mem -1 -1 1 >so <so]) o)) ops0)
+     (? (two? (as-stro md mn ops0)) (as-stro md mn ops0)
+        (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
         ((md < 64 || as-sys64? mn) && two? (as-sys md mn w ops)) (as-sys md mn w ops)
         (as-vx md mn ops @ v
@@ -586,6 +616,10 @@
                          1 (as-1 md mn w <ops)
                          2 (as-2 md mn w <>ops <ops)
                          n (scare 'as-arity [mn n]))))))))
+   (as-moffs md op w o)
+    (: sy (5 < #o ? (o 5) ()) d (o 4)
+       (as-osz md w + [(as-opw (op + 1) w)]
+        + (md = 16 ? (sy ? [(fix 2 'abs16 sy d)] (le16 d)) (sy ? [(fix 4 'abs32 sy d)] (le32 d)))))
    ;; the system lane of a 16- or 32-bit segment: the segment and control registers, the far
    ;; transfers, the descriptor tables, the ports, int. ops destination first; () when not one
    (as-sys md mn w ops)
@@ -598,8 +632,11 @@
                     (<o = 'ims) (xa-symoff (show <>o) @ so [(fix k (k = 2 ? 'abs16 'abs32) <so >so)])
                     (scare 'as-sys-operand o))
        (? ; mov to/from a segment register: 8E /r and 8C /r (a register destination takes its width)
-          (mn = 'mov && n = 2 && <d = 'sr) (as-emit md 0 0 '(142) <>d s)
+          (mn = 'mov && n = 2 && <d = 'sr) (as-emit md (<s = 'rg && as-regw s = 8 ? 8 0) 0 '(142) <>d s)
           (mn = 'mov && n = 2 && <s = 'sr) (as-emit md (<d = 'rg ? (as-regw d) 0) 0 '(140) <>s d)
+          ; the accumulator and an absolute address outside 64: a0..a3, the address the segment's width
+          (mn = 'mov && n = 2 && md < 64 && <d = 'rg && as-regn d = 0 && as-abs? s) (as-moffs md 160 (as-regw d) s)
+          (mn = 'mov && n = 2 && md < 64 && <s = 'rg && as-regn s = 0 && as-abs? d) (as-moffs md 162 (as-regw s) d)
           ; ..and a control or debug register: 0F 22/20, 0F 23/21, always the full register
           ; (in a 64-bit segment REX reaches cr8 and r8..r15)
           (mn = 'mov && n = 2 && elem <d '(cr dr))

@@ -86,6 +86,6 @@
  ; full screen on cli's stage until a choice or esc: the item, or () for none
  (seek-run d)
   (pins d 'pick () 'over 0,
-   stage (w \ h \ seek-frame d w h) (k \ seek-key d k) (_ \ d 'over),
+   stage (w \ h \ seek-frame d w h) (seek-key d) (_ \ d 'over),
    d 'pick))
 ) ; module seek

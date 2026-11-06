@@ -16,7 +16,7 @@
        (go 0 0))
    (wg-lower s) (string (map (i \ (: c (s i) (? (64 < c && c < 91) (c + 32) c))) (jot #s)))
    ; what a peer said, fit for a terminal: the C0 controls but tab and newline, and DEL, out
-   (wg-plain s) (string (filter (c \ !((c < 32 && c != 9 && c != 10) || c = 127)) (map (i \ s i) ^#s)))
+   (wg-plain s) (string (filter (c \ !((c < 32 && c != 9 && c != 10) || c = 127)) (map s ^#s)))
    ; "https://host[:port]/path" -> (tls? host port path) | ()
    (wg-url u)
     (u @ ("https://" + r) (wg-url-at 1 r) ("http://" + r) (wg-url-at 0 r) ())

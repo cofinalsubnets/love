@@ -64,7 +64,7 @@
                         (ros n) "bake"
                         (any (= n) sp-seat) "seat"
                         (ends? n ".l") "lisp"
-                        (any (x \ ends? n x) [".c" ".h" ".S" ".s"]) "c"
+                        (any (ends? n) [".c" ".h" ".S" ".s"]) "c"
                         "rest"))
    ; -> each section's entries, leveled and re-homed; shared by both passes so digests compare
    (sp-lev es top stamp ros)

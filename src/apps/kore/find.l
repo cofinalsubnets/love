@@ -207,7 +207,7 @@
        ; a named path that is not there is find's one loud failure: it complains,
        ; the walk skips it, and the exit code remembers -- the rest still walk
        (there? p) (string? (readlink p) || two? (stat p))
-       (go m) (atom? m ? (each (fi-execs e) (x \ fi-flush st x), flush out, peep st 101 0 ? 1 0)
+       (go m) (atom? m ? (each (fi-execs e) (fi-flush st), flush out, peep st 101 0 ? 1 0)
                ((there? <m ? (fi-walk <m 0 e st maxd mind)
                      (say err ("find: '" + <m + "': No such file or directory"), put err 10, pin st 101 1)), go >m))
        (go (two? <sp ? <sp '(".")))))

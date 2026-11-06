@@ -493,7 +493,7 @@
                        (: _ (hstage o 'shut ? (hstage o 'shut ()) 0)
                           (pin (hb 'panes) id p, hrelay hb, hpty? p ? (hmoor hb id) 0, hsoil hb))))
  (hpicker hb title items)
-  (: own {-1} d (seek-new items (it \ <it) (it \ <it) title)
+  (: own {-1} d (seek-new items cap cap title)
      (go _) (hshut hb (peep own () -1))
      (pick it) ((it 1) () @ p (two? p ? (hswap hb (peep own () -1) p) (go 0)))
      (step k) (seek-key d k, d 'over ? (d 'pick @ it (two? it ? (pick it) (go 0))) 0)
@@ -715,7 +715,7 @@
          _ (setenv "COLORTERM" "truecolor")           ; the glass paints every pen as it is said
          hb (mitty-lush as r c 0)
          (? !(tablet? hb) (say err ("mitty: " + hb + "\n"), flush err, window-close win, 1)
-            (: _ (pins hb 'in kin 'out fout 'csize [r c] 'own (t \ window-own win 'clipboard t) 'bar 0)
+            (: _ (pins hb 'in kin 'out fout 'csize [r c] 'own (window-own win 'clipboard) 'bar 0)
                _ (hgreet hb)
                _ (window-typing win 1)                  ; a phone's keyboard up
                held {}

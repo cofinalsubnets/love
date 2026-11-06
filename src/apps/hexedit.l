@@ -43,7 +43,7 @@
  (elfed? d) (tablet? (d 'elf))
  (hexedit-byte d i) (peep (d 'edits) i -1 @ v (v < 0 ? (d 'bytes i) v))
  (range a b) (map (i \ a + i) (jot (b - a)))
- (slice d a b) (string (map (i \ hexedit-byte d i) (range a b)))
+ (slice d a b) (string (map (hexedit-byte d) (range a b)))
  (patched d) (slice d 0 (d 'n))
  ;; inside .text an offset and its address part company, elsewhere they agree
  (addr d off) (d 'elf @ e (elfed? d && e 'toff <= off < e 'toff + e 'tsize ? (off - e 'toff + e 'taddr) off))

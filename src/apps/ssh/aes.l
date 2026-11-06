@@ -21,7 +21,7 @@
     (: nk (#k // 4)
        nw (4 * (nk + 7))
        (rcon j) (j = 1 ? 1 (xt (rcon (j - 1))))
-       (sub w) (map (b \ aes-sbox b) w)
+       (sub w) (map aes-sbox w)
        (xw a b) (two? a ? ((<a ^ <b) . xw >a >b))
        ; ws is the words so far, newest first
        (go i ws)
@@ -46,7 +46,7 @@
        (go (ark s 0) 1))
 
    (aes-ctr ks iv s)
-    (: n0 (foldl (a \ b \ (a << 8) | b) 0 (map (j \ iv j) ^16))
+    (: n0 (foldl (a \ b \ (a << 8) | b) 0 (map iv ^16))
        (ctr i) (n0 + i & (1 << 128) - 1 @ v (bytes 16 (j \ (v >> 8 * (15 - j)) & 255)))
        ksm (foldl (+) "" (map (i \ aes-block ks (ctr i)) (jot ((#s + 15) // 16))))
        (bytes #s (j \ s j ^ ksm j)))

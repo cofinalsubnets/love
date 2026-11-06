@@ -7,7 +7,7 @@
                                      (? esc (g (i + 1) acc (? (c = 91) 1 (64 <= c <= 126) 0 1))
                                         (c = 27) (g (i + 1) acc 1)
                                         (g (i + 1) (acc + string c) 0))) acc)) 0 "" 0)
-   (keys! d s) (each (map (i \ s i) ^#s) (c \ hexedit-key d c))
+   (keys! d s) (each (map s ^#s) (hexedit-key d))
    (cmd! d s) (hexedit-key d 58, keys! d s, hexedit-key d 13)
    (frame d) (plain (hexedit-frame d 80 12))
    ; push rbp; mov rbp, rsp; mov eax, 42; pop rbp; ret; jmp back

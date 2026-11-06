@@ -27,7 +27,7 @@
 (test
  (lit? zstd-block)
  ; every level reads back, the empty input too, and one byte over and over
- (zst-all (l \ zst-back zst-mix l) [1 2 3 5 9 12 19])
+ (zst-all (zst-back zst-mix) [1 2 3 5 9 12 19])
  (zst-back "" 3)
  (zst-back "x" 3)
  (zst-back (cats (map (_ \ "z") (jot 70000))) 3)
@@ -49,5 +49,15 @@
  (zstd-unpack (snip zst-a 0 (#zst-a - 1)) = 'end)
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (snip zst-a 0 i) [7 4096]) 0 (go (i + 13))) (go 0))
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (zst-flip zst-a i) [7 4096]) 0 (go (i + 7))) (go 0)))
+
+; pour lands nothing in a state, and it reads on as it was
+(: st (zstd-new 4096)
+   ; a state is a port with no door: nothing lands, a read is the end, close leaves it whole
+   _ (say st "xyz", put st 65, flush st, close st)
+   _ (test (read st = ()) (slurp st = "")
+           (zstd-block (jug 0) "abc" = ()) (zstd-block (cask 4096) "abc" = ()))
+   _ (pour st 24 "\xff\xff\xff\xff\xff\x7f" 0 6)
+   _ (test (kind st = 'port) (zstd-block st "\x19\0\0abc" = "abc"))
+   0)
 
 (test_fin (), puts "zstd: ok -- every cut of a frame reads as the whole does, and our frames read back\n", 0)

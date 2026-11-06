@@ -28,7 +28,7 @@
                    (go 0))
                 ())
  (opl-bank b) (: g (string? b && #b > 12 ? (genmidi b) ())
-   (string? g && #g >= 8 + 68 * 175 ? (map (i \ ins g i) ^175) ()))
+   (string? g && #g >= 8 + 68 * 175 ? (map (ins g) ^175) ()))
  (opl-drum bank n) (35 <= n && n <= 81 ? (bank (128 + n - 35)) ())
 
  ; --- an operator's level: the envelope in dB of attenuation, 0 loud, 96 gone ---

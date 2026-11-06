@@ -16,6 +16,9 @@
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
    (nmxop g op) (nmxld op @ () () xo (? (x64? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo)))
    (nmxsop g op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo))
+   ; a64 lays these through x16, so their displacement has to encode in the one instruction
+   nmxw {'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
+   (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
@@ -241,10 +244,10 @@
                               _ ())
        (f @ ([op d b o] && elem op (ldops9 + fldops))
              (base b o @ [b2 o2] [op d b2 o2]
-                _ (nmxop g op @ () f xo (idx b o @ [b2 i s o2] [xo d b2 i s o2] _ f)))
+                _ (nmxop g op @ () f xo (idx b o @ [b2 i s o2] (nmxfar g xo o2 ? f [xo d b2 i s o2]) _ f)))
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
-                _ (nmxsop g op @ () f xo (idx b o @ [b2 i s o2] [xo b2 i s o2 v] _ f)))
+                _ (nmxsop g op @ () f xo (idx b o @ [b2 i s o2] (nmxfar g xo o2 ? f [xo b2 i s o2 v]) _ f)))
             ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ; an add of a literal onto a literal's sum is one add

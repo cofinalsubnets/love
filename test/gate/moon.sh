@@ -163,6 +163,49 @@ moonrun -c "$ho/.flg.S" -o "$ho/.flg.o" || fail "mooncc: an asm's section flags"
 printf '.text\n.type s, @function\ns: nop\nnop\n.size s, .-s\n.set al, s\n.set al2, s+1\n.data\n.type o, @object\no: .quad 0\n.size o, 8\n.set oa, o\n.set ob, o+2\n.type oc, @function\n.size oc, 3\n.set oc, o\n' > "$ho/.asz.S"
 moonrun -c "$ho/.asz.S" -o "$ho/.asz.o" || fail "mooncc: an asm's sized aliases"
 [ "$(readelf -sW "$ho/.asz.o" | awk '$8 ~ /^(al|al2|oa|ob|oc)$/ {print $8, $2 + 0, $3, $4}' | sort | tr '\n' ' ')" = "al 0 2 FUNC al2 1 2 FUNC oa 0 8 OBJECT ob 2 8 OBJECT oc 0 3 FUNC " ] || fail "an alias does not take its target's size and type"
+# holo's own layout against clang's: jumps relax in every mode, past a .fill chain that settles first; an
+# immediate over a label difference starts at its byte form; 66 before a lock; moffs outside 64
+printf '.text\n.code16\njne 1f\n1: jmp 2f\n2: inc %%cx\n.code32\njne 3f\n3: jmp 4f\n4: inc %%ecx\ndec %%ecx\nmov %%eax, 0x1234\nmov 0x1234, %%al\n.code64\na: nop\nb: addq $b-a, %%rbx\naddq $c-a, %%rbx\npushq $b-a\nlock btsw $1, (%%rax)\nxchgq %%r15, %%r14\nmovq $0xffffffff80000000, %%rax\naddq $0xffffffffffffffff, %%rax\nmovq %%rax, %%ds\nd: jmp e\n.fill d + 16 - ., 1, 0xcc\n.fill d + 32 - ., 1, 0xcc\n.fill d + 48 - ., 1, 0xcc\n.fill d + 64 - ., 1, 0xcc\n.fill d + 80 - ., 1, 0xcc\n.fill d + 96 - ., 1, 0xcc\n.fill d + 112 - ., 1, 0xcc\ne: nop\n.fill 300, 1, 0x90\nc:\n' > "$ho/.rlx.S"
+moonrun -c "$ho/.rlx.S" -o "$ho/.rlx.o" || fail "mooncc: an asm's relaxed forms"
+[ "$(readelf -x .text "$ho/.rlx.o" | awk '/^  0x/ {for(i=2;i<=5;i++) s=s $i} END{print substr(s,1,120)}')" = "7500eb00417500eb004149a334120000a034120000904883c3014881c3c20100006a0166f00fba28014d87f748c7c0000000804883c0ff488ed8eb6e" ] || fail "an asm's relaxed forms are not clang's bytes"
+# a field that is no 64-bit branch is pc32; an asm source has .text at 4 and only the sections it names;
+# an unreferenced .globl stays, visibility reaches an undefined name
+printf '.globl un\n.hidden hu1\n.protected hu2\n.text\ns: leaq 0(%%rip), %%rax\n1: subq $x-1b, %%rax\ncall g\n.code32\ncall g\njmp g\n.code64\ncall hu1\ncall hu2\n.data\nx: .long 0\n' > "$ho/.pcr.S"
+moonrun -c "$ho/.pcr.S" -o "$ho/.pcr.o" || fail "mooncc: an asm's pc32 fields"
+[ "$(readelf -rW "$ho/.pcr.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_X86_64_PC32 R_X86_64_PLT32 R_X86_64_PC32 R_X86_64_PC32 R_X86_64_PLT32 R_X86_64_PLT32 " ] || fail "pc32 and plt32 are not clang's"
+[ "$(readelf -SW "$ho/.pcr.o" | awk '{sub(/^ *\[ *[0-9]+\] */,"")} $1 == ".text" {print $1, $NF} $1 == ".rodata" || $1 == ".bss" {print $1}' | tr '\n' ' ')" = ".text 4 " ] || fail "an asm source's default sections are not clang's"
+[ "$(readelf -sW "$ho/.pcr.o" | awk '$8 ~ /^(un|hu1|hu2)$/ {print $8, $6, $7}' | sort | tr '\n' ' ')" = "hu1 HIDDEN UND hu2 PROTECTED UND un DEFAULT UND " ] || fail "an undefined name's visibility or .globl is lost"
+# a word over two labels on a64: relocs from clang
+printf '.text\nf: nop\n.long ext - f\n.long x - f\n1: .long ext - 1b\n2: .long ext + 4 - 2b\n.data\nx: .long 0\n' > "$ho/.a6p.S"
+moonrun -t a64 -c "$ho/.a6p.S" -o "$ho/.a6p.o" || fail "mooncc -t a64: a word over two labels"
+[ "$(readelf -rW "$ho/.a6p.o" | awk '$3 ~ /^R_/ {print $3, $5, $7}' | tr '\n' ' ')" = "R_AARCH64_PREL32 ext 4 R_AARCH64_PREL32 .data 8 R_AARCH64_PREL32 ext 0 R_AARCH64_PREL32 ext 4 " ] || fail "a word over two labels on a64 is no PREL32"
+# elf32: a pc-relative reach into data binds a symbol, never symbol 0
+printf '.text\n.code64\njmpq *x(%%rip)\n.code32\n.bss\nx: .long 0\n' > "$ho/.i3r.S"
+moonrun -t i386 -c "$ho/.i3r.S" -o "$ho/.i3r.o" || fail "mooncc: an i386 asm's reach into data"
+[ "$(readelf -rW "$ho/.i3r.o" | awk '$3 == "R_386_PC32" {print $5}')" = "x" ] || fail "an i386 pc-relative reach into data lost its symbol"
+# a string op spelled with operands, in each mode: bytes from clang; a sign-extend keeps its name
+printf '.text\n.code32\nrep movsl %%ds:(%%esi),%%es:(%%edi)\nmovsb %%ds:(%%esi),%%es:(%%edi)\nmovsw %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%edi)\nstosb %%al,%%es:(%%edi)\nlodsl %%ds:(%%esi),%%eax\nscasb %%es:(%%edi),%%al\ncmpsb %%es:(%%edi),%%ds:(%%esi)\nrep movsl (%%esi),(%%edi)\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsl %%fs:(%%si),%%es:(%%di)\nmovsl %%es:(%%esi),%%es:(%%edi)\ninsb (%%dx),%%es:(%%edi)\noutsl %%ds:(%%esi),(%%dx)\n.code16\nrep movsl %%ds:(%%si),%%es:(%%di)\nmovsb %%ds:(%%si),%%es:(%%di)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%di)\n.code64\nrep movsq %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosq %%rax,%%es:(%%rdi)\nlodsb %%ds:(%%rsi),%%al\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsq %%gs:(%%rsi),%%es:(%%rdi)\n' > "$ho/.str.S"
+moonrun -c "$ho/.str.S" -o "$ho/.str.o" || fail "mooncc: a string op's operands"
+[ "$(readelf -x .text "$ho/.str.o" | awk '/^  0x/ {for(i=2;i<=5;i++) s=s $i} END{print s}' | sed 's/[^0-9a-f].*//')" = "f3a5a466a5abaaadaea6f3a564a56764a526a56c6ff366a5a46766a566abf348a5a567a548abac6764a56548a5" ] || fail "a string op's operands are not clang's bytes"
+printf '.text\nmovsl (%%rax),(%%rbx)\n' > "$ho/.stb.S"
+! moonrun -c "$ho/.stb.S" -o "$ho/.stb.o" 2>/dev/null || fail "a string op off si and di was laid"
+printf '.text\nmovsbl (%%rax),%%ecx\nmovsb (%%rax),%%ecx\nmovsl (%%rax),%%rcx\n' > "$ho/.stx.S"
+moonrun -c "$ho/.stx.S" -o "$ho/.stx.o" || fail "mooncc: a sign-extend beside the string ops"
+# a based displacement outside 64 binds 32S in an x64 object, an absolute one 32; a real i386 keeps 386_32
+printf '.text\n.code32\nmovl x(%%ebx),%%eax\nmovl %%eax,x(%%ebx)\nleal x(%%ebx),%%eax\ncmpl $1,x(%%ebx)\nmovl x(,%%ebx,4),%%eax\nmovl x,%%ecx\nmovl %%ecx,x\nmovl $x,%%eax\n.code16\nmovl x(%%ebx),%%eax\n.code64\nmovl x(%%rbx),%%eax\n' > "$ho/.dsp.S"
+moonrun -c "$ho/.dsp.S" -o "$ho/.dsp.o" || fail "mooncc: a displacement's reloc"
+[ "$(readelf -rW "$ho/.dsp.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_X86_64_32S R_X86_64_32S R_X86_64_32S R_X86_64_32S R_X86_64_32S R_X86_64_32 R_X86_64_32 R_X86_64_32 R_X86_64_32S R_X86_64_32S " ] || fail "a displacement's reloc is not clang's"
+printf '.text\nmovl x(%%ebx),%%eax\nmovl x,%%ecx\n' > "$ho/.d32.S"
+moonrun -t i386 -c "$ho/.d32.S" -o "$ho/.d32.o" || fail "mooncc: an i386 displacement"
+[ "$(readelf -rW "$ho/.d32.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_386_32 R_386_32 " ] || fail "an i386 displacement is not 386_32"
+# a bare symbol stored to in 64-bit code is the absolute address: clang's SIB form and 32S
+printf '.text\nmovl %%eax, x\nmovl %%ecx, x\nmovq %%rax, x\nmovq %%rcx, x\nmovb %%al, x\nmovw %%ax, x\nmovl %%eax, x+4\nmovl $1, x\n' > "$ho/.mab.S"
+moonrun -c "$ho/.mab.S" -o "$ho/.mab.o" || fail "mooncc: a store to a bare symbol"
+[ "$(readelf -x .text "$ho/.mab.o" | awk '/^  0x/ {for(i=2;i<=5;i++) s=s $i} END{print s}' | sed 's/[^0-9a-f].*//')" = "89042500000000890c2500000000488904250000000048890c250000000088042500000000668904250000000089042500000000c704250000000001000000" ] || fail "a store to a bare symbol is not clang's bytes"
+# an inline the file-scope asm names is laid for no asm: the name stays undefined for the link, a used one stays laid
+printf 'static inline int si(void) { return 1; }\nextern inline __attribute__((gnu_inline)) int gi(void) { return 2; }\ninline int pi(void) { return 3; }\nstatic inline __attribute__((gnu_inline)) int sg(void) { return 4; }\nstatic inline __attribute__((used)) int su(void) { return 5; }\nextern inline int ei(void) { return 6; }\nasm(".pushsection .x,\\"a\\"\\n.long si\\n.long gi\\n.long pi\\n.long sg\\n.long su\\n.long ei\\n.popsection\\n");\n' > "$ho/.ain.c"
+moonrun -c "$ho/.ain.c" -o "$ho/.ain.o" || fail "mooncc: an inline an asm names"
+[ "$(readelf -sW "$ho/.ain.o" | awk '$8 ~ /^(si|gi|pi|sg|su|ei)$/ {print $8, $5, ($7 == "UND" ? "UND" : "laid")}' | sort | tr '\n' ' ')" = "ei GLOBAL laid gi GLOBAL UND pi GLOBAL UND sg GLOBAL UND si GLOBAL UND su LOCAL laid " ] || fail "an inline an asm names is not clang's binding"
 printf ' andl $0xffff0000, %%eax\n andl $4, %%eax\n andb $1, %%al\n testl $0x200, %%eax\n' > "$ho/.acc.S"
 moonrun -c "$ho/.acc.S" -o "$ho/.acc.o" || fail "mooncc: an asm's accumulator forms"
 readelf -x .text "$ho/.acc.o" | grep -q '250000ff ff83e004 2401a900 020000' || fail "an immediate into the accumulator does not take its short form"

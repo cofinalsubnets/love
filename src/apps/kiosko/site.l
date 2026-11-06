@@ -1,13 +1,13 @@
-; src/apps/kiosko/web.l -- `love web`: the tree, in a browser, painted on the way out.
+; src/apps/kiosko/site.l -- `love site`: the tree, in a browser, painted on the way out.
 ;
-;   love web [-p [ip:]port] [-n] [DIR]     DIR defaults to the working directory
+;   love site [-p [ip:]port] [-n] [DIR]     DIR defaults to the working directory
 ;
 ; kiosko's static serving plus one hook: *.l painted (hueweb.l) for a browser navigating
 ; here, the file itself for a fetch() (sv-doc?); *.l.md its header as a document;
 ; *.md rendered through lapiz; /hue.css. pages are boxed until the file's stamp moves.
 ; where DIR is the tree, the github page is laid through our own make first; a bare
 ; DIR gets the source aboard laid under it.
-(module (web web-main sv-make)
+(module (site site-main sv-make)
 (borrow '(libra hueweb lapiz path cli))
 
 (borrow 'posix)
@@ -77,13 +77,13 @@
                           md? (sv-doc p <>r ())
                           (sv-page p (hw-body p <>r) [(p + ".md") "the header, as a document"]))))]))))
 
-   sv-usage "usage: love web [-p [IP:]PORT] [-n] [DIR]
+   sv-usage "usage: love site [-p [IP:]PORT] [-n] [DIR]
 serve a source tree to a browser
   -p, --port PORT   listen on PORT (default 8080, on 127.0.0.1); IP:PORT picks the address
   -n, --no-build    serve DIR as it is
   DIR               the tree (default .); with no tree there, this binary's source is laid out first
 "
-   (sv-die c m) (udie c ("web: " + m))
+   (sv-die c m) (udie c ("site: " + m))
 
    ; the nest under DIR (source.l's src-nest), laid now where there is none
    (sv-root dir) (cite 'source 'src-root dir)
@@ -102,9 +102,11 @@ serve a source tree to a browser
       _ (say err ";; laying the page: make web site-wasm\n")
       p (spawn [exe "make" "-C" dir ("LOVE=" + exe) "web" "site-wasm"])
       st (charm? p && 0 <= p ? (wait p) 1)
-      (st @ 0 0 (sv-die 1 ("the page did not build (" + show st + ")"))))
+      (st @ 0 0 (sv-die 1 ("the page did not build (" + show st + ")")),
+       ; doom beside the page, unwaited: until it stands, the page's `love doom` builds its own
+       spawn [exe "make" "-C" dir ("LOVE=" + exe) "site-doom"]))
 
-   (web-main as)
+   (site-main as)
    (: box {}
       t {}
       o (uopt as t '(112) () {"port" 112 "no-build" 110})
@@ -131,16 +133,16 @@ serve a source tree to a browser
              dir0)
       _ (build? && sv-tree? dir ? (sv-build dir) 0)
       serve5 (cite 'kiosko 'serve5)
-      (nil? serve5 ? (udie 1 "web: no kiosko aboard"),
-       sv-tree? dir ? (say err ("web: " + dir + " -- the page is http://" + ip + ":" + show port
+      (nil? serve5 ? (udie 1 "site: no kiosko aboard"),
+       sv-tree? dir ? (say err ("site: " + dir + " -- the page is http://" + ip + ":" + show port
                                 + "/, the machine\n")) 0,
        serve5 dir [ip port] 0 () (sv-make dir box) @ r
-         (nom? r ? (udie 1 ("web: cannot listen on " + ip + ":" + show port + " -- " + show r))),
+         (nom? r ? (udie 1 ("site: cannot listen on " + ip + ":" + show port + " -- " + show r))),
        0))
 
-   ; the verb, and fired when `serve` or serve.l is named on a command line
-   door (udoor 'web (urun web-main) sv-usage 1 1)
-   _ (cite 'verbs 'enlist 'web door ())
-   s (cite 'verbs 'fire ["serve" "serve.l"])
+   ; the verb, and fired when `site` or site.l is named on a command line
+   door (udoor 'site (urun site-main) sv-usage 1 1)
+   _ (cite 'verbs 'enlist 'site door ())
+   s (cite 'verbs 'fire ["site" "site.l"])
    _ (two? s && quit (door >s)))
 ) ; module web

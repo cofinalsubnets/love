@@ -57,7 +57,7 @@
                                        ds (run-forms (src-last ds))))
                              () (\ a b ['scare a b]))
    (? (tablet? r) (r 'kind @ 'level (check r) "the file's last form should be (level NAME PART ..)")
-      (two? r && <r = 'scare) (r 1 @ 'level (r 2) ";; \(r 1) \(r 2)")
+      (two? r && <r = 'scare) (r 1 @ 'level (r 2) ";; \(r 1) \(string? (r 2) ? (r 2) (show (r 2)))")
       (two? r && <r = 'torn) "a form is not finished: a ( without its )"
       "the file's last form should be (level NAME PART ..)"))
  ; ..a file's forms run in turn, scenery's words first put back as scenery has them, so
@@ -110,7 +110,7 @@
                                  hd (#d > 5 ? (d 5) 0) gl (#d > 6 ? (d 6) ())
                                  (? (#zs = 2) {'ax 'z 'c x 'a (min (zs 0) (zs 1)) 'b (max (zs 0) (zs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl}
                                     (#xs = 2) {'ax 'x 'c z 'a (min (xs 0) (xs 1)) 'b (max (xs 0) (xs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl}
-                                    "a door must sit in the wall between two rooms: \('door . d)"))
+                                    "a door must sit in the wall between two rooms: \(show ('door . d))"))
    ps (map (q \ string? q ? q (pin q 'out (outward lv q))) (map place (lv 'doors)))
    (any string? ps ? <(filter string? ps) ps))
  ; ..the way a door swings open: away from a dark room behind it, -1.0 toward its a side and
@@ -892,7 +892,7 @@
    prev (fresh || memo 'ti != ti ? () (memo 'bstate))
    kp {'kept kept 'id idof 'reach (reach-of ap pks wi tft tfm) 'look (b \ [ti (vals (b 'skin)) (b 'lo 1)])
        'bkey (b \ idof [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0) (vals (b 'skin)) (peep b 'whole 0) (peep b 'sig 0)])
-       'prev prev 'hot hot 'stash (st \ pin memo 'bstate st) 'tick tk}
+       'prev prev 'hot hot 'stash (pin memo 'bstate) 'tick tk}
    (on m k) [(mid3 (m 0)) m k]
    ds (lv 'decals) dps (filter (d \ !(sheet? d)) (lv 'drapes))
    ; ..a land's sheet only where it is still the ground: none where a later air brush has
