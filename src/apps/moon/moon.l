@@ -1010,7 +1010,7 @@
        arm? (arm32? tgt && tgt != 'arm)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
-       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
+       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT

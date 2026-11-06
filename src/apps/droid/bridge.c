@@ -1,7 +1,7 @@
 /* src/apps/droid/bridge.c -- the native activity an apk's love runs behind. built with
    `mooncc -t a64 -shared` against the phone's own libraries, it owns what only the app
    process may: the window, the input queue, logcat. love is the static binary shipped as
-   lib/arm64-v8a/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
+   lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
    the wire, little-endian:
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
                      w by h frame, scaled to what the window shows
@@ -79,7 +79,17 @@ void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQ
 int AInputQueue_getEvent(void *, void **); int AInputQueue_preDispatchEvent(void *, void *);
 void AInputQueue_finishEvent(void *, void *, int);
 int AInputEvent_getType(void const *); int AInputEvent_getDeviceId(void const *); int AKeyEvent_getMetaState(void const *); int AKeyEvent_getAction(void const *); int AKeyEvent_getKeyCode(void const *);
-int AMotionEvent_getAction(void const *); float AMotionEvent_getX(void const *, size_t); float AMotionEvent_getY(void const *, size_t);
+/* armeabi-v7a is softfp: what android's side answers as a float comes back in core registers */
+#ifdef __arm__
+typedef unsigned fl32; typedef unsigned long long fl64;
+static float f32of(fl32 x) { union { fl32 i; float f; } u = {x}; return u.f; }
+static double f64of(fl64 x) { union { fl64 i; double d; } u = {x}; return u.d; }
+#else
+typedef float fl32; typedef double fl64;
+#define f32of(x) (x)
+#define f64of(x) (x)
+#endif
+int AMotionEvent_getAction(void const *); fl32 AMotionEvent_getX(void const *, size_t); fl32 AMotionEvent_getY(void const *, size_t);
 size_t AMotionEvent_getPointerCount(void const *); int AMotionEvent_getPointerId(void const *, size_t);
 void *AAssetManager_open(void *, char const *, int); void const *AAsset_getBuffer(void *);
 long AAsset_getLength(void *); void AAsset_close(void *);
@@ -100,11 +110,11 @@ int AAudio_createStreamBuilder(void **); int AAudioStreamBuilder_delete(void *);
 void AAudioStreamBuilder_setSampleRate(void *, int); void AAudioStreamBuilder_setChannelCount(void *, int);
 void AAudioStreamBuilder_setFormat(void *, int); void AAudioStreamBuilder_setPerformanceMode(void *, int);
 int AAudioStreamBuilder_openStream(void *, void **);
-int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const *, int, long); int AAudioStream_close(void *);
-void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *, void *, int, long);
+int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const *, int, long long); int AAudioStream_close(void *);
+void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *, void *, int, long long);
 void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void const *, size_t, int);
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
-struct dirent { unsigned long ino; long off; unsigned short reclen; unsigned char type; char name[256]; };
+struct dirent { unsigned long long ino; long long off; unsigned short reclen; unsigned char type; char name[256]; };
 void *opendir(char const *); struct dirent *readdir(void *); int closedir(void *);
 
 enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
@@ -255,13 +265,18 @@ static void insets(br *b) {
   void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
   void *(*callo)(void *, void *, void *, ...) = t[34]; void *(*fid)(void *, void *, char const *, char const *) = t[94];
   int (*geti)(void *, void *, void *) = t[100]; void (*clear)(void *) = t[17];
+  int (*calli)(void *, void *, void *, ...) = t[49];
   int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
   if (push(e, 16)) { clear(e); return; }
   void *ac = b->a->clazz, *w = callo(e, ac, mid(e, cls(e, ac), "getWindow", "()Landroid/view/Window;"));
   void *v = w ? callo(e, w, mid(e, cls(e, w), "getDecorView", "()Landroid/view/View;")) : 0;
   void *wi = v ? callo(e, v, mid(e, cls(e, v), "getRootWindowInsets", "()Landroid/view/WindowInsets;")) : 0;
-  void *in = wi ? callo(e, wi, mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;"), 8) : 0;
-  int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I")) : -1;
+  void *gi = wi ? mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;") : 0;
+  if (!gi) clear(e);                     /* before api 30: what's over the stable part */
+  void *in = gi ? callo(e, wi, gi, 8) : 0;
+  int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I"))
+          : wi && !gi ? calli(e, wi, mid(e, cls(e, wi), "getSystemWindowInsetBottom", "()I"))
+                      - calli(e, wi, mid(e, cls(e, wi), "getStableInsetBottom", "()I")) : -1;
   clear(e); pop(e, 0);
   if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
@@ -308,8 +323,8 @@ static void input(br *b) {
       if (t == 0 && b->d->typing && !b->shown) keyboard(b, b->env, 1);
       for (size_t i = 0; b->ww && vh && b->fw && i < AMotionEvent_getPointerCount(e); i++)
         if (!one || (int) i == ix)
-          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) (AMotionEvent_getX(e, i) * (float) b->fw / (float) b->ww),
-                                                                 (int) (AMotionEvent_getY(e, i) * (float) b->fh / (float) vh));
+          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) (f32of(AMotionEvent_getX(e, i)) * (float) b->fw / (float) b->ww),
+                                                                 (int) (f32of(AMotionEvent_getY(e, i)) * (float) b->fh / (float) vh));
     }
     AInputQueue_finishEvent(b->queue, e, handled);
   }
@@ -414,7 +429,7 @@ static void paste(br *b) {
 
 /* --- the framework's door: a session per connection on DATA/droid, ops run on the loop
    thread's env, each under a local frame, every call's exception answered and cleared */
-typedef union { unsigned char z; signed char b; unsigned short c; short s; int i; long j; float f; double d; void *l; } jvalue;
+typedef union { unsigned char z; signed char b; unsigned short c; short s; int i; long long j; float f; double d; void *l; } jvalue;
 enum { REFS = 256, ARGS = 16 };
 typedef struct { br *b; int fd; void *ref[REFS]; } sess;
 
@@ -494,13 +509,13 @@ static int caught(void *e, int fd) {
   return 1;
 }
 
-static long num(char const *w, int *ok) {
-  long v = 0; int neg = *w == '-'; char const *p = w + neg;
+static long long num(char const *w, int *ok) {
+  long long v = 0; int neg = *w == '-'; char const *p = w + neg;
   if (!*p) *ok = 0;
   for (; *p; p++) { if (*p < '0' || *p > '9') { *ok = 0; return 0; } v = v * 10 + (*p - '0'); }
   return neg ? -v : v;
 }
-double strtod(char const *, char **);
+fl64 strtod(char const *, char **);
 
 /* a handle's word -> its ref, "" -> null; -1 a word that names none */
 static int handle(sess *s, char const *w, void **r) {
@@ -531,10 +546,10 @@ static int params(sess *s, char const *sig, char **w, int nw, jvalue *v) {
     if (!*p) return 0;
     p++;
     if (c == 'L' || c == '[') { if (handle(s, w[k], &v[k].l)) return 0; }
-    else if (c == 'F') v[k].f = (float) strtod(w[k], 0);
-    else if (c == 'D') v[k].d = strtod(w[k], 0);
+    else if (c == 'F') v[k].f = (float) f64of(strtod(w[k], 0));
+    else if (c == 'D') v[k].d = f64of(strtod(w[k], 0));
     else {
-      long n = num(w[k], &ok);
+      long long n = num(w[k], &ok);
       if (c == 'Z') v[k].z = (unsigned char) (n != 0); else if (c == 'B') v[k].b = (signed char) n;
       else if (c == 'C') v[k].c = (unsigned short) n; else if (c == 'S') v[k].s = (short) n;
       else if (c == 'I') v[k].i = (int) n; else if (c == 'J') v[k].j = n; else return 0;
@@ -559,14 +574,14 @@ static void keep(sess *s, void *e, void *o) {
 static void call(sess *s, void *e, int ret, int stat, void *on, void *m, jvalue *v) {
   void *const *t = *(void *const **) e; int base = stat ? 116 : 36; char n[40]; size_t k = 0;
   if (ret == 'L' || ret == '[') { void *(*f)(void *, void *, void *, jvalue *) = t[base]; void *o = f(e, on, m, v); if (!caught(e, s->fd)) keep(s, e, o); return; }
-  if (ret == 'Z') { unsigned char (*f)(void *, void *, void *, jvalue *) = t[base + 3]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'B') { signed char (*f)(void *, void *, void *, jvalue *) = t[base + 6]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'C') { unsigned short (*f)(void *, void *, void *, jvalue *) = t[base + 9]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'S') { short (*f)(void *, void *, void *, jvalue *) = t[base + 12]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'I') { int (*f)(void *, void *, void *, jvalue *) = t[base + 15]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'J') { long (*f)(void *, void *, void *, jvalue *) = t[base + 18]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'F') { float (*f)(void *, void *, void *, jvalue *) = t[base + 21]; double r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%.9g", r); }
-  else if (ret == 'D') { double (*f)(void *, void *, void *, jvalue *) = t[base + 24]; double r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%.17g", r); }
+  if (ret == 'Z') { unsigned char (*f)(void *, void *, void *, jvalue *) = t[base + 3]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'B') { signed char (*f)(void *, void *, void *, jvalue *) = t[base + 6]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'C') { unsigned short (*f)(void *, void *, void *, jvalue *) = t[base + 9]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'S') { short (*f)(void *, void *, void *, jvalue *) = t[base + 12]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'I') { int (*f)(void *, void *, void *, jvalue *) = t[base + 15]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'J') { long long (*f)(void *, void *, void *, jvalue *) = t[base + 18]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'F') { fl32 (*f)(void *, void *, void *, jvalue *) = t[base + 21]; double r = f32of(f(e, on, m, v)); k = (size_t) snprintf(n, sizeof n, "%.9g", r); }
+  else if (ret == 'D') { fl64 (*f)(void *, void *, void *, jvalue *) = t[base + 24]; double r = f64of(f(e, on, m, v)); k = (size_t) snprintf(n, sizeof n, "%.17g", r); }
   else { void (*f)(void *, void *, void *, jvalue *) = t[base + 27]; f(e, on, m, v); }
   if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
 }
@@ -575,17 +590,17 @@ static void call(sess *s, void *e, int ret, int stat, void *on, void *m, jvalue 
 static void field(sess *s, void *e, int ty, int stat, void *on, void *f) {
   void *const *t = *(void *const **) e; int base = stat ? 145 : 95; char n[40]; size_t k;
   if (ty == 'L' || ty == '[') { void *(*g)(void *, void *, void *) = t[base]; void *o = g(e, on, f); if (!caught(e, s->fd)) keep(s, e, o); return; }
-  long r = 0; double d = 0; int fl = 0;
+  long long r = 0; double d = 0; int fl = 0;
   if (ty == 'Z') { unsigned char (*g)(void *, void *, void *) = t[base + 1]; r = g(e, on, f); }
   else if (ty == 'B') { signed char (*g)(void *, void *, void *) = t[base + 2]; r = g(e, on, f); }
   else if (ty == 'C') { unsigned short (*g)(void *, void *, void *) = t[base + 3]; r = g(e, on, f); }
   else if (ty == 'S') { short (*g)(void *, void *, void *) = t[base + 4]; r = g(e, on, f); }
   else if (ty == 'I') { int (*g)(void *, void *, void *) = t[base + 5]; r = g(e, on, f); }
-  else if (ty == 'J') { long (*g)(void *, void *, void *) = t[base + 6]; r = g(e, on, f); }
-  else if (ty == 'F') { float (*g)(void *, void *, void *) = t[base + 7]; d = g(e, on, f); fl = 1; }
-  else if (ty == 'D') { double (*g)(void *, void *, void *) = t[base + 8]; d = g(e, on, f); fl = 1; }
+  else if (ty == 'J') { long long (*g)(void *, void *, void *) = t[base + 6]; r = g(e, on, f); }
+  else if (ty == 'F') { fl32 (*g)(void *, void *, void *) = t[base + 7]; d = f32of(g(e, on, f)); fl = 1; }
+  else if (ty == 'D') { fl64 (*g)(void *, void *, void *) = t[base + 8]; d = f64of(g(e, on, f)); fl = 1; }
   else { answer(s->fd, 'e', "bad type", 8); return; }
-  k = (size_t) (fl ? snprintf(n, sizeof n, "%.17g", d) : snprintf(n, sizeof n, "%ld", r));
+  k = (size_t) (fl ? snprintf(n, sizeof n, "%.17g", d) : snprintf(n, sizeof n, "%lld", r));
   if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
 }
 
@@ -730,7 +745,7 @@ static void *hear(void *p) {
       AAudioStreamBuilder_delete(bd);
     }
     if (!st) { usleep(500000); continue; }
-    for (int n; __atomic_load_n(&b->up, 2) && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000L)) >= 0; )
+    for (int n; __atomic_load_n(&b->up, 2) && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000LL)) >= 0; )
       if (n ? send(fd, buf, (size_t) n * 2 * (size_t) ch, 0x4000) < 0 : hung(fd)) { rate = 0; break; }   /* MSG_NOSIGNAL */
     AAudioStream_close(st); st = 0;
   }
