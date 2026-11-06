@@ -95,17 +95,17 @@
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['cat_post_z ['post]]
-     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. scan lays a
-     ; native kernel through holo at load. every other module is post's.
+     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. every other
+     ; module is post's.
      "#if defined(__x86_64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'x64 'scan]]
+     ['cat_lib_h_z ['holo 'x64]]
      "#elif defined(__aarch64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'a64 'scan]]
+     ['cat_lib_h_z ['holo 'a64]]
      "#elif defined(__riscv)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64 'scan]]
+     ['cat_lib_h_z ['holo 'rv64]]
      ; wasm is gen's rv64 lane under another writer, so its holo machine is rv64's
      "#elif defined(__wasm__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64 'scan]]
+     ['cat_lib_h_z ['holo 'rv64]]
      "#endif"
      ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
      ; must not pay for it.
