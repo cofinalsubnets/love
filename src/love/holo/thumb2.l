@@ -241,6 +241,8 @@
          (t32 ((ubase | bn) << 16 | (dt << 12 | off)))
          (-255 <= off < 0)
          (t32 ((lbase | bn) << 16 | (dt << 12 | (0xC00 | -off))))   ; t4: P=1 U=0 W=0 = 0b1100, imm8=|off|
+         (dt = 12 && !(ubase & 16))                                 ; a store: r12 can't be value and address
+         (scare 'far-store-r12 off)
          (thumb-mem-far bn off + t32 ((ubase | 12) << 16 | dt << 12)))
    ;; the 16-bit forms: ldr/str [sp,#imm8*4], and [Rn,#imm5*size] for word, byte and half, low registers
    (thumb-narrow ubase dt bn off)
@@ -415,6 +417,10 @@
    (thumb-movqxr f glo)                                       ; vmov Df, Rlo, Rlo+1 (the pair in)
       (: fn (frn f) gn (rn glo)
          (t32 ((0xEC40 | gn + 1) << 16 | (gn << 12 | (0xB10 | fn)))))
+   (thumb-movqrr f lo hi)                                     ; vmov Df, Rlo, Rhi, any two
+      (t32 ((0xEC40 | rn hi) << 16 | (rn lo << 12 | (0xB10 | frn f)))) 
+   (thumb-movrrq lo hi f)                                     ; vmov Rlo, Rhi, Df, any two
+      (t32 ((0xEC50 | rn hi) << 16 | (rn lo << 12 | (0xB10 | frn f))))
    (thumb-movqrx glo f)                                       ; vmov Rlo, Rlo+1, Df (the pair out)
       (: gn (rn glo) fn (frn f)
          (t32 ((0xEC50 | gn + 1) << 16 | (gn << 12 | (0xB10 | fn)))))
@@ -539,7 +545,7 @@
           ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
-          ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx)
+          ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx) ('movqrr . thumb-movqrr) ('movrrq . thumb-movrrq)
           ('addss . thumb-addss) ('subss . thumb-subss) ('mulss . thumb-mulss) ('divss . thumb-divss)
           ('cvtsi2ss . thumb-cvtsi2ss) ('cvtui2ss . thumb-cvtui2ss)
           ('cvttss2si . thumb-cvttss2si) ('cvttss2ui . thumb-cvttss2ui)

@@ -16,7 +16,12 @@
    (cuuap x) >><x
    stdin in stdout out stderr err
    sine sin cosine cos tangent tan fabs abs
-   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors
+   ; a shape is a dimension list or a lone number; 0 and () are rank 0
+   (trayed w sh l) (tray w (sh = 0 || sh = () ? sh (a-shape sh)) l)
+   ; a star-tray's tier is the widest of its numbers; the others name theirs
+   star-tray (trayed 1)
+   galaxy star-tray
+   gem-tray (trayed 0.0) twin-tray (trayed (twin 0 0)) top-tray (trayed ())
    (tier v) (tray? v ? (atype v @ c (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's ctor; nil off a tray
    zero? nil?
    ; the roster's ear: while a cat is laid, verbs pins at 0 what hears each borrow and cite
@@ -268,7 +273,6 @@
 
 (:: 'suite (l \ (. 'do (. (. 'assert >l) [['puts <l] ['puts ": ok\n"]]))))
 
-(: (array s) (a-shape s @ sh (a-coll sh (foldl (*) 1 sh) 0)))
 
 ; --- coin: a user kind, a table of methods keyed by the noms the C side reads:
 ; name + * ap hot - net star /, net one of payload tally ratio. (coin 'nm spec) registers
@@ -828,7 +832,7 @@
          (<t @ m (px o <m sn, px o <>m sn))
        (plist o x sn)))
 
-  ; --- trays. rank 1 is @(…), past that (array '(shape) elem…). an object tray quotes
+  ; --- trays. rank 1 is @(…), past that (galaxy '(shape) [elem…]), or top-tray for object cells, which quote
   ; what would otherwise re-evaluate.
   ; a flat index to its row-major coordinate
   (coord sh i) (atom? >sh ? (i . ())
@@ -838,7 +842,8 @@
                (ty = 3 && (nom? e || two? e) ? (put o 39) 0, px o e sn))
     (gs l f) (two? l ? ((f ? 0 (put o 32)), pnum o <l, gs >l 0) 0)
     (rank v = 1 ? (say o "@(", each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), put o 41)
-       (say o "(array '(", gs sh 1, put o 41, each ^n (i \ (put o 32, pel i)), put o 41)))
+       (say o (ty = 3 ? "(top-tray '(" "(galaxy '("), gs sh 1, say o ") [",
+        each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), say o "])")))
 
   ; --- maps print {k v …}. a map can hold itself, so the path rides as [maps depth mark],
   ; matched by identity: the nearest 64 maps, and the mark, the map at the last power-of-two
@@ -2530,11 +2535,12 @@
    ; its [rows cols], 24 and 80 where it says no more than rmin and cmin (a fresh pty says 0)
    (ttysize rmin cmin) (tty 1 @ ws [(two? ws && rmin < <ws ? <ws 24) (two? ws && cmin < <>ws ? <>ws 80)])
    ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'tap (a press alone,
-   ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out).
+   ; sgr), 'paste (bracketed), 'hide (the cursor), 'nokeys (a phone's keyboard away), ('title t)
+   ; (pushed, popped on the way out).
    ; ttygive undoes what ttytake set, shows the cursor, and eats the keys still queued
-   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
+   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l" 'nokeys "\e[?7727h"
                   ('title t) ("\e[22;0t\e]2;\(t)\a") "")
-   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
+   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" 'nokeys "\e[?7727l" ('title _) "\e[23;0t" "")
    (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + catmap ttyon ms), flush out)
    (ttygive ms) (say out ("\e[0m" + catmap ttyoff (rev ms) + "\e[?25h\e[?1049l"), flush out, two? (tty 0) ? (unkey ()), raw 0)
 

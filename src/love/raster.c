@@ -271,7 +271,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
       if (glass) c[k] -= c[k] * f, tint[k] += (1 - tint[k]) * f;
       else c[k] += (fog[k] - c[k]) * f; }
     if (tone > 0) for (int k = 0; k < 3; k++) {
-     flo_t const x = tone * c[k] * (flo_t) (32.0 / 255);
+     flo_t const x = tone * c[k] * (flo_t) 0.12549019607843137;
      intptr_t const i = x <= 0 ? 0 : x >= rz_tn ? rz_tn : (intptr_t) x;
      flo_t const f = x <= 0 ? 0 : x - (flo_t) i;
      c[k] = tl[i] + (tl[i + 1] - tl[i]) * (f > 1 ? 1 : f); }
@@ -529,10 +529,10 @@ static void rz_bandrun(void *c, intptr_t i) {
 static void rz_share(struct g *g, struct rz *r) {
  rz_prep(r);
  intptr_t const nb = (r->H + rz_band - 1) / rz_band;
- if (r->W * r->H < rz_par || par_width(g, nb) < 2) { r->nth = 1, r->ylo = 0, r->yhi = r->H, r->bk = 0, rz_run(r); return; }
+ if (r->W * r->H < rz_par || par_width(nb) < 2) { r->nth = 1, r->ylo = 0, r->yhi = r->H, r->bk = 0, rz_run(r); return; }
  r->nth = nb;
  if (r->bk) rz_bins(r, nb);
- par_run(g, nb, rz_bandrun, r); }
+ par_run(nb, rz_bandrun, r); }
 
 love_noinline static struct g *host_raster(struct g *g) {
  word *a = g->sp;

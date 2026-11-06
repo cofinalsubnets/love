@@ -1,8 +1,8 @@
-; test/kernel/pane.l -- a mitty pane on the kernel, as the mitty opens one: hopen tethers a
+; test/kernel/pane.l -- a pier pane on the kernel, as the pier opens one: hopen tethers a
 ; child on a pty of its own at the pane's size, moor scribes what the master reads onto the
-; pane's grid until the child is gone, and hscreen-text reads the grid back. the crew's mitty,
+; pane's grid until the child is gone, and hscreen-text reads the grid back. the crew's pier,
 ; the one `inle` boots: on a woken image its doors were bound on the host. kernel corpus only.
-(borrow '(mooring mitty))
+(borrow '(mooring pier))
 
 ; a pane's rows once its child has ended; a watchdog stills the child's group should it hang,
 ; so a wedged pane fails its law and the corpus goes on
@@ -21,7 +21,7 @@
     rows (kp-run p)
   (test ("abc" = <rows) ("abc" = rows 1))))
 
-; lush in a pane, as the mitty's first pane: a command's answer reaches the grid. the lines
+; lush in a pane, as the pier's first pane: a command's answer reaches the grid. the lines
 ; are typed before lush takes the terminal, so the answer ends a row of its own or its prompt's
 (hopen ["lush"] 8 40 @ p
  (: m (hmas p)

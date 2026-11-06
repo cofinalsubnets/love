@@ -61,7 +61,7 @@ static bool pl_crosses(struct pv const *ps, uintptr_t n, flo_t const pl[4]) {
  bool hi = 0, lo = 0;
  for (uintptr_t i = 0; i < n; i++) {
   flo_t const s = pl_side(pl, ps[i].p);
-  hi |= s > (flo_t) 1e-5, lo |= s < (flo_t) -1e-5; }
+  hi |= s > (flo_t) 1e-5, lo |= s < -(flo_t) 1e-5; }
  return hi && lo; }
 // ps's part inside the plane onto in, and beyond it onto out, each one piece; either NULL
 static void pl_split(struct pv const *ps, uintptr_t n, flo_t const pl[4], struct bag *in, struct bag *out) {
@@ -169,7 +169,7 @@ love_noinline static struct g *host_poly_carve(struct g *g) {
 static flo_t pl_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
 // one piece in strips across axis k onto c, last first as brush.l's slab laid them; s u r scratch
 static void pl_slab(struct pv const *ps, uintptr_t n, int k, flo_t cell, struct bag *c, struct bag *s, struct bag *u, struct bag *r) {
- flo_t lo = (flo_t) 1e9, hi = (flo_t) -1e9;
+ flo_t lo = (flo_t) 1e9, hi = -(flo_t) 1e9;
  for (uintptr_t i = 0; i < n; i++) {
   flo_t const x = ps[i].p[k];
   lo = lo < x ? lo : x, hi = hi < x ? x : hi; }
@@ -209,7 +209,7 @@ love_noinline static struct g *host_poly_grid(struct g *g) {
 // empty slot
 #define pl_gone ((flo_t) 1e30)
 struct seen { uint8_t *s; uint64_t cap; };
-static int64_t pl_mm(flo_t x) { return (int64_t) pl_floor(x * (flo_t) 1000.0 + (flo_t) 0.5); }
+static int64_t pl_mm(flo_t x) { return flo_i64(pl_floor(x * (flo_t) 1000.0 + (flo_t) 0.5)); }
 static int64_t pl_bk(flo_t x) { int64_t const k = pl_mm(x); return k >= 0 ? k / 256 : -((255 - k) / 256); }
 static uint64_t pl_hash(int64_t const k[3]) {
  uint64_t h = (uint64_t) k[0] * 0x9e3779b97f4a7c15u;
@@ -226,7 +226,7 @@ static void pl_add(struct seen *t, flo_t const p[3]) {
   pl_get(t, i, e);
   if (e[0] == pl_gone) { memcpy(t->s + 8 + 3 * sizeof(flo_t) * i, p, 3 * sizeof(flo_t)); return; }
   if (pl_mm(e[0]) == pl_mm(p[0]) && pl_mm(e[1]) == pl_mm(p[1]) && pl_mm(e[2]) == pl_mm(p[2])) return; } }
-static bool pl_far(flo_t const p[3]) { for (int j = 0; j < 3; j++) if (!(p[j] > (flo_t) -1e9 && p[j] < (flo_t) 1e9)) return 1; return 0; }
+static bool pl_far(flo_t const p[3]) { for (int j = 0; j < 3; j++) if (!(p[j] > -(flo_t) 1e9 && p[j] < (flo_t) 1e9)) return 1; return 0; }
 
 // (poly-seen pss): every corner of every polygon in pss, for poly-fans
 love_noinline static struct g *host_poly_seen(struct g *g) {

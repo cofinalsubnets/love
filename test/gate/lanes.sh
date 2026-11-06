@@ -116,7 +116,7 @@ any() { for x in "$@"; do has "$x" "$run" && return 0; done; return 1; }
 builds=
 add() { builds="$builds
 $*"; }
-any test_vec test_links test_inle test_disk test_kverb test_kboot test_kmitty test_kernel_vmx test_kernel_uproc && add a=x64 kernel
+any test_vec test_links test_inle test_disk test_kverb test_kboot test_kpier test_kernel_vmx test_kernel_uproc && add a=x64 kernel
 any test_vec test_links test_inle test_kernel_a64 test_uefi_a64 && add a=a64 kernel
 any test_vec test_links test_inle test_kernel_rv64 test_rvboot && add a=rv64 kernel
 any test_rvboot && add a=rv64 out/rv64/rv64/boot.o out/rv64/inle/rv64/dtb.o

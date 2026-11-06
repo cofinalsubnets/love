@@ -17,6 +17,7 @@
 //                                cell's pixel w h, 8 the view's lookback, 9 history held,
 //                                10 11 the selection's first cell and one past its last,
 //                                12 the bytes osc 52 bodies hold from the heap, every screen's
+//                                13 the phone's keyboard asked away (?7727)
 //   (peer scr n)         -> n    view n lines back (0 live), clamped; answers the view
 //   (mouse scr b row col how) -> s  the report the program asked for (cb_mouse): how 0
 //                                press, 1 release, 2 move; "" when not asked
@@ -181,7 +182,7 @@ love_noinline static struct g *scr_pour(struct g *g) {
 static lvm(lvm_scribe) {
  Pack(g);
  g = scr_pour(g);
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
@@ -216,6 +217,7 @@ static lvm(lvm_gaze) {
   case 10: out = putcharm(c->sel0); break;
   case 11: out = putcharm(c->sel1); break;
   case 12: out = putcharm(c->clip ? cb_clipn : 0); break;
+  case 13: out = putcharm(c->nokeys); break;
   default: break; }
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
@@ -314,7 +316,7 @@ love_noinline static struct g *host_reply(struct g *g) {
 static lvm(lvm_reply) {
  Pack(g);
  g = host_reply(g);
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  Ip += 1; love_musttail return Continue(); }
 

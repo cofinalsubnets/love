@@ -19,7 +19,7 @@
        (has? f "38;5;") (has? deep "38;2;")))
 ; ..the keys named on the bottom row at the start, gone a while in; one synchronised update
 (: st (at 12.0 7) f (stones-frame st) g (stones-frame (pin (at 12.0 7) 'mt 30.0))
- (test (row-of f "h/j/k/l move" = 23) (has? f "space interacts") !(has? g "h/j/k/l")
+ (test (row-of f "h/j/k/l move" = 23) (has? f "space kneels") !(has? g "h/j/k/l")
        !(has? f "\e[24;1H") (snip f 0 8 = "\e[?2026h") (snip f (#f - 8) #f = "\e[?2026l")))
 ; ..the choices a third of the way up, the marked one first
 (: st (pin (at 12.0 7) 'dlg 0) f (stones-frame st) d (stones-frame (pin (at 12.0 7) 'deep 1 @ s (pin s 'dlg 1)))
@@ -181,5 +181,26 @@
  (test (z1 > z0) (mag (x1 - x0) < 1e-9) (x2 > x1) (mag (z2 - z1) < 1e-9)
        (mag (th - 0.1) < 1e-9) (mag (ph - 0.05) < 1e-9) (sw 'th = th) (sw 'ph = ph)))
 
+;; thumbs: a tap is the choice it lands on, a top corner leaves, the bottom or the altar kneels,
+;; elsewhere nothing, and a kneeler stands; a tall terminal's kitty picture fits 640 each way
+(: st (at 12.0 7) t (menu-top st)
+   _ (pin st 'dlg 0)
+   tap1 (stones-tap st 0 (16 * (t + 1) + 3)) tap5 (stones-tap st 0 (16 * (t + 5))) off (stones-tap st 0 (16 * t))
+   _ (pins st 'dlg () 'win {'w 640 'h 400} 'pic-w 320 'pic-h 200)
+   al <(st 'blocks) _ (pins st 'px (al 0) 'pz (al 2 - 5.0) 'th 0.0 'ph 0.0 'py (stones-ground (al 0) (al 2 - 5.0) + 1.6))
+   lq (stones-tap st 10 10) rq (stones-tap st 630 10) top (stones-tap st 320 10) foot (stones-tap st 320 395)
+   on (stones-tap st 320 280) air (stones-tap st 320 100) side (stones-tap st 20 280)
+   _ (pin st 'eye 'kneel) up (stones-tap st 320 100) _ (pins st 'eye 'walk 'win ())
+   tall ((stones-size (pins st 'kitty 1 'scale 2) 45 47) 'kp)
+   wide ((stones-size (pins st 'kitty 1 'scale 2) 80 24) 'kp)
+   (test (lq = [113]) (rq = [113]) (top = ()) (foot = [32]) (on = [32]) (air = ()) (side = ()) (up = [32]) (tap1 = [49]) (tap5 = [53]) (off = ())
+         (tall = 3) (wide = 4)))
+
 (test_fin ())
+;; a foot in the sand: a walk asks for it, and it joins the song at once, a voice that sounds and ends
+(: fs (stones-new 80 48 [(1.0 * 1790812800 + 12.0 * 3600.0) 3600] 1) fv {'fpos 1000 'vs []}
+   _ (pins fs 'sw 3.1 'sfx ()) _ (each ^30 (_ \ (stones-step fs (stones-kb 119), pin fs 'dt (1.0 / 30.0), stones-move fs)))
+   heard (map cap (peep fs 'sfx ())) _ (stones-steps fv fs) V (fv 'vs 0)
+ (test (two? heard) (all (s \ snip s 0 10 = "step sand ") heard) (peep fs 'sfx () = ()) (#(fv 'vs) = #heard)
+       (1000 < V 0) (0.0 < amax (abs ((V 1) (iota 2000 + 1000)))) (0.0 = amax (abs ((V 1) (iota 100 + V 0))))))
 (puts "stones: ok\n")

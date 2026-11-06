@@ -1,4 +1,4 @@
-; `love play src/apps/lore/levels/station.l`, and `love play edit` the same
+; `love play src/apps/lore/levels/earth.l`, and `love play edit` the same
 (borrow 'scenery)
 
 ; the textures, their layers listed at the top of src/apps/lore/swatch.l. (tiles n m a b
@@ -306,10 +306,11 @@
               '((fill hole)
                 (disc 32 18 8 (rgb 0.25 0.6 1)) (disc 20 39 8 (rgb 0.25 0.6 1)) (disc 44 39 8 (rgb 0.25 0.6 1))
                 (disc 32 18 4 (rgb 0.75 0.95 1)) (disc 20 39 4 (rgb 0.75 0.95 1)) (disc 44 39 4 (rgb 0.75 0.95 1)))))
-(: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -5 16.3] [(x + 1) 12 18.3]))
-              (decal [x -4.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -4.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
+(: (shaft-pane x y) (window [(x - 0.7) y 15.9] [(x + 0.7) (y + 1.3) 16.4] glass @ (a p) [(skin {'all concrete} a) p]))
+(: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -9 16.3] [(x + 1) 12 18.3]))
+              (decal [x -8.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -8.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
               (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
-              (window [(x - 0.8) -0.9 15.9] [(x + 0.8) 0.8 16.4] glass)])
+              (shaft-pane x -4.7) (shaft-pane x -0.7) (shaft-pane x 3.3)])
 ; ..the station's lamps: steel fittings, three-sided, on the walls
 (: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
 (: (lamp at n d) (sconce at n d 1.4 sconcemetal))
@@ -386,7 +387,7 @@
 ;; rises, its top floors drifting off into slabs and furniture hung in the air, a way up
 ;; across them to a pink orb over it all; the higher, the lighter the pull
 ; ..the roofs round it, seen from the climb: gravel
-(: gravel (texture 32 32 2 '((fill (grey 0.4)) (noise 1 0.35) (noise 6 0.1) (patches 4 0.2 (shade 0.85)))))
+(: gravel (feel 'gravel (texture 32 32 2 '((fill (grey 0.4)) (noise 1 0.35) (noise 6 0.1) (patches 4 0.2 (shade 0.85))))))
 ; ..the tower: pale panels outside, poured concrete where it is broken
 (: cladding (texture 64 64 4 '((fill (rgb 0.66 0.67 0.69)) (noise 6 0.06) (rows 0 2 (shade 0.8)) (cols 0 2 (shade 0.85)) (cols 32 33 (shade 0.9)))))
 (: cast (texture 128 128 6
@@ -518,14 +519,15 @@
 (: (aim a) (: dx (orb-at 0 - scope-at 0) dz (orb-at 2 - scope-at 2) dy (orb-at 1 - scope-at 1 - 1.3)
    (a @ 'deg (atan2 dx dz * 180 / 3.14159265) (atan2 dy (sqrt (2 dx + 2 dz)) * 180 / 3.14159265))))
 
-;; the city round about, for the eye alone: roofs at the street's walls' height out into
-;; the haze, and blocks standing up off them, taller further out; none over the streets or
-;; the climb. drapes, not brushes: nothing to walk on, nothing lit apart
-(: city-y 45.0 city-lot 20.0 city-n 8)
+;; the city round about, for the eye alone: roofs at the street's walls' height out to an
+;; avenue, and past it the ground far below, blocks standing up off it, taller further out,
+;; so none seems to stand on a roof. drapes, not brushes: nothing to walk on, nothing lit apart
+(: city-y 45.0 city-lot 20.0 city-n 8 city-low 27.0)
 (: city-at [32.5 43.0])                  ; the lots' middle, under the climb
-(: city-keep [[-48.0 11.0] [63.0 73.0]]) ; the streets and the climb, left open
+(: city-keep [[-45.0 14.0] [60.0 70.0]]) ; the streets and the climb, no roofs laid
+(: city-back [[-85.0 -26.0] [85.0 96.0]]) ; ..where the roofs end, no blocks in to here
 (: (city-u i j k) (sin (i * 12.9898 + j * 78.233 + k * 37.719) * 43758.5453 @ v (v - floor v)))
-; ..a lot's block, or () for bare roof: its plan inset off the lot's edges, a storey's four
+; ..a lot's block, or () for bare ground: its plan inset off the lot's edges, a storey's four
 ; metres a step up, more of them the further out
 (: (city-block i j) (: x (city-at 0 + city-lot * i) z (city-at 1 + city-lot * j) r (0.5 * city-lot)
    d (sqrt (1.0 * (i * i + j * j))) u (city-u i j 0)
@@ -533,73 +535,81 @@
       (: a (2.0 + 4.0 * city-u i j 1) b (2.0 + 4.0 * city-u i j 2) c (2.0 + 4.0 * city-u i j 3) e (2.0 + 4.0 * city-u i j 4)
          h (4.0 * (1 + int (u * u * u * (2.0 + 2.2 * d))))
          [(x - r + a) (z - r + b) (x + r - c) (z + r - e) (city-y + h)]))))
-(: (city-clear? q) (: k city-keep
+(: (city-clear? q) (: k city-back
    (q 2 < k 0 0 || k 1 0 < q 0 || q 3 < k 0 1 || k 1 1 < q 1)))
 (: city-blocks (filter (q \ two? q && city-clear? q)
                  (catmap (i \ map (j \ city-block (i - city-n) (j - city-n)) ^(2 * city-n + 1)) ^(2 * city-n + 1))))
-; ..each block four walls of storeys and a gravel roof, its foot a hair under the roofs
-(: (city-walls q) (: y0 (city-y - 0.1) y1 (q 4) (ring y) [[(q 0) y (q 1)] [(q 2) y (q 1)] [(q 2) y (q 3)] [(q 0) y (q 3)] [(q 0) y (q 1)]]
+; ..each block four walls of storeys and a gravel roof, its foot a hair under the ground
+(: (city-walls q) (: y0 (city-low - 0.1) y1 (q 4) (ring y) [[(q 0) y (q 1)] [(q 2) y (q 1)] [(q 2) y (q 3)] [(q 0) y (q 3)] [(q 0) y (q 1)]]
    [(drape facade [(ring y0) (ring y1)])
     (drape gravel [[[(q 0) y1 (q 1)] [(q 2) y1 (q 1)]] [[(q 0) y1 (q 3)] [(q 2) y1 (q 3)]]])]))
-; ..and the roofs between, four strips round what is left open, a point each lot's width
+; ..and what lies between, every tile on one set of lines, so no corner of one falls along
+; the edge of the next to open a crack: roofs round what is left open, its two corners the
+; streets and the climb leave, then the avenue's wall down to the ground beyond
 (: city-edge (city-lot * (city-n + 0.5)))
-(: (city-span a b) (: n (int ((b - a) / city-lot) + 1) (map (i \ a + (b - a) * i / n) ^(n + 1))))
-(: (city-roof x0 z0 x1 z1) (drape gravel (map (z \ map (x \ [x city-y z]) (city-span x0 x1)) (city-span z0 z1))))
-(: city-roofs (: X0 (city-at 0 - city-edge) X1 (city-at 0 + city-edge) Z0 (city-at 1 - city-edge) Z1 (city-at 1 + city-edge)
-                 k city-keep
-   [(city-roof X0 Z0 X1 (k 0 1)) (city-roof X0 (k 1 1) X1 Z1)
-    (city-roof X0 (k 0 1) (k 0 0) (k 1 1)) (city-roof (k 1 0) (k 0 1) X1 (k 1 1))]))
-(: city [city-roofs (map city-walls city-blocks)])
+(: (city-span a b) (: n (int ((b - a) / city-lot) + 1) (map (i \ a + (b - a) * i / n) ^n)))
+(: (city-lines l) (cat (catmap (i \ city-span (l i) (l (i + 1))) ^(#l - 1)) [(l (#l - 1))]))
+(: city-xs (city-lines [(city-at 0 - city-edge) (city-back 0 0) (city-keep 0 0) 5.0 45.0 (city-keep 1 0) (city-back 1 0) (city-at 0 + city-edge)]))
+(: city-zs (city-lines [(city-at 1 - city-edge) (city-back 0 1) (city-keep 0 1) 20.0 47.0 (city-keep 1 1) (city-back 1 1) (city-at 1 + city-edge)]))
+(: (city-in? x z lo hi) (lo 0 <= x && x < hi 0 && lo 1 <= z && z < hi 1))
+(: (city-open? x z) (city-in? x z (city-keep 0) (city-keep 1) && !(city-in? x z [(city-keep 0 0) 47.0] [5.0 (city-keep 1 1)]) && !(city-in? x z [45.0 (city-keep 0 1)] [(city-keep 1 0) 20.0])))
+(: (city-tile x0 z0 x1 z1) (: y (city-in? x0 z0 (city-back 0) (city-back 1) ? city-y city-low)
+   (drape gravel [[[x0 y z0] [x1 y z0]] [[x0 y z1] [x1 y z1]]])))
+(: (city-pairs l) (map (i \ [(l i) (l (i + 1))]) ^(#l - 1)))
+(: city-roofs (catmap (a \ catmap (b \ city-open? (a 0) (b 0) ? () [(city-tile (a 0) (b 0) (a 1) (b 1))]) (city-pairs city-zs)) (city-pairs city-xs)))
+(: city-avenue (: bx (filter (v \ city-back 0 0 <= v <= city-back 1 0) city-xs) bz (filter (v \ city-back 0 1 <= v <= city-back 1 1) city-zs)
+   x0 (city-back 0 0) x1 (city-back 1 0) z0 (city-back 0 1) z1 (city-back 1 1)
+   edge (cat (map (x \ [x z0]) bx) (cat (map (z \ [x1 z]) >bz) (cat (map (x \ [x z1]) >(rev bx)) (map (z \ [x0 z]) >(rev bz)))))
+   (drape facade [(map (p \ [(p 0) city-low (p 1)]) edge) (map (p \ [(p 0) city-y (p 1)]) edge)])))
+(: city [city-roofs city-avenue (map city-walls city-blocks)])
 
 
 
 (level "the station"
   (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
-  (start [0 -5 -5.9] 0 0)
+  (start [0 -9 -5.9] 0 0)
   ; first a second of a clear noon sky, broken cloud, looking up; then the car
   (shot 1 (sky 13 'partly) 30 55)
   ; a dim light everywhere, the lamps' thrown back off the concrete
   (ambient (rgb 0.15 0.15 0.16))
-  ; the hall, 38 metres across, ten high and 16 long
-  (room [-19 -5 0] [19 5 16])
+  ; the hall, 38 metres across, fourteen high and 16 long
+  (room [-19 -9 0] [19 5 16])
   ; the platform, its floor a grate, its ends in line with the hallways' outer walls, and
   ; the track a metre below it running on into the tunnels, under the car's floor, cabling
   ; on the walls up to the platform
-  (skin {'floor grate} (room [-11 -5 -4.52] [11 2 0]))
-  (skin {'walls cabling 'floor rails} (room [-70 -6 -7.6] [70 -5 -4.52]))
-  (room [-11 -5 -7.6] [11 2 -4.52])
-  (room [-70 -5 -7.6] [70 -2 -4.52])
+  (skin {'floor grate} (room [-11 -9 -4.52] [11 2 0]))
+  (skin {'walls cabling 'floor rails} (room [-70 -10 -7.6] [70 -9 -4.52]))
+  (room [-11 -9 -7.6] [11 2 -4.52])
+  (room [-70 -9 -7.6] [70 -6 -4.52])
   ; solid blocks standing in from the side walls, mirrored about x 0, their corners out in
   ; the air chamfered; the hallway between them and each wing's chamber south open onto
   ; the platform
   (mirror-x 0
-   [(block [-19 -5 0] [-11 5 4] [[-11 4]])
-    (block [-7 -5 0] [-3 5 4] [[-7 0] [-3 0] [-7 4] [-3 4]])
-    (block [-15 -5 8] [-11 5 10] [[-15 8] [-11 8]])
-    (block [-7 -5 8] [-3 5 10] [[-7 8] [-3 8]])
-    (solid (box [-19 -5 16] [-3 5 10]))
+   [(block [-19 -9 0] [-11 5 4] [[-11 4]])
+    (block [-7 -9 0] [-3 5 4] [[-7 0] [-3 0] [-7 4] [-3 4]])
+    (block [-15 -9 8] [-11 5 10] [[-15 8] [-11 8]])
+    (block [-7 -9 8] [-3 5 10] [[-7 8] [-3 8]])
+    (solid (box [-19 -9 16] [-3 5 10]))
     ; ..the lamps, each looking along its wall, some across, some up or down it
-    (lamp [-3 -2.2 2] [1 0 0] [0 0 1])
-    (lamp [-3 -2.2 9] [1 0 0] [0 0 -1])
-    (lamp [-11 -2.2 2] [1 0 0] [0 0 1])
-    (lamp [-19 0.5 7] [1 0 0] [0 1 0])
-    (lamp [-3 1.5 13] [1 0 0] [0 -1 0])
-    (lamp [-11 -2.5 -2.3] [1 0 0] [0 0 1])
-    (lamp [-5 -2.5 0] [0 0 -1] [-1 0 0])
+    (lamp [-3 -6.2 2] [1 0 0] [0 0 1])
+    (lamp [-3 -6.2 9] [1 0 0] [0 0 -1])
+    (lamp [-11 -6.2 2] [1 0 0] [0 0 1])
+    (lamp [-19 -3.5 7] [1 0 0] [0 1 0])
+    (lamp [-3 -2.5 13] [1 0 0] [0 -1 0])
+    (lamp [-11 -6.5 -2.3] [1 0 0] [0 0 1])
+    (lamp [-5 -6.5 0] [0 0 -1] [-1 0 0])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
-    (solid (box [-11 -5 -4.52] [-1 -4.6 -4.36]))
-    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -4.6 -4.47] [-1 -4.0 -4.41]))])
-    (solid (box [-11 -4.0 -4.48] [-1 -3.94 -4.4]))])
+    (solid (box [-11 -9 -4.52] [-1 -8.6 -4.36]))
+    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -8.6 -4.47] [-1 -8.0 -4.41]))])
+    (solid (box [-11 -8.0 -4.48] [-1 -7.94 -4.4]))])
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
-  (train [-9 -5 -7.24] [9 -2.7 -4.64] (door [0 -5 -4.64] 1.4 2.0) -55)
+  (train [-9 -9 -7.24] [9 -6.7 -4.64] (door [0 -9 -4.64] 1.4 2.0) -55)
   ; ..a bare mattress along the car's floor at its east end, gone with it
-  (mattress [5.4 -5 -5.94] 90)
-  ; ..and on the platform outside its door a red plush mouse, looking in
-  (plush [0.7 -5 -3.6] 200 "mouse.glb")
+  (mattress [5.4 -9 -5.94] 90)
   ; a telescope in the west wing's north corner, looking out across it
-  (telescope [-17.2 -5 8.9] 150 25 (rgb 0.9 0.9 0.87))
+  (telescope [-17.2 -9 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
   ; ends at a blank wall, painted a half court with its hoop on the wall
@@ -638,12 +648,12 @@
   (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
-  ; wing, a window a metre and a half over each doorway into its glow
-  (grav [0.7 -5 16.3] [2.7 9 18.3] 'up)
-  (grav [-2.7 -5 16.3] [-0.7 9 18.3] 'down)
+  ; wing, three windows up over each doorway into its glow
+  (grav [0.7 -9 16.3] [2.7 9 18.3] 'up)
+  (grav [-2.7 -9 16.3] [-0.7 9 18.3] 'down)
   (shaft 1.7) (shaft -1.7)
-  (air (box [0.9 -5 15.9] [2.5 -2.4 16.4]))
-  (air (box [-2.5 -5 15.9] [-0.9 -2.4 16.4]))
+  (air (box [0.9 -9 15.9] [2.5 -6.4 16.4]))
+  (air (box [-2.5 -9 15.9] [-0.9 -6.4 16.4]))
   (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
   (skin {'all concrete} (air (box [-2.5 9 18.2] [-0.9 11.6 19.1])))
   ; the natural food center at the street's west end, three storeys, its floor a step below
@@ -854,16 +864,16 @@
     (coarse 4 (glow (orb orb-at 6 pinkorb 0.06)))
     (coarse 4 (glow (inward (orb orb-at 5.95 pinkin 0.06))))
     (herald orb-at 1.6 5.9 smiley "ring.l" ())])
-  (poster [-4.7 -3.8 6.4] 0.7 1.0 ())
+  (poster [-4.7 -7.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
   ; chamber beside it, a lamp, and a door in its east wall
-  (room [11.3 -5 0.3] [18.7 -1.8 3.7])
-  (window [10.95 -4.1 0.6] [11.35 -2.4 3.4] glass)
-  (lamp [13 -3.4 0.3] [0 0 1] [1 0 0])
-  (door [18.7 -5 2] 1.2 2.2)
+  (room [11.3 -9 0.3] [18.7 -5.8 3.7])
+  (window [10.95 -8.1 0.6] [11.35 -6.4 3.4] glass)
+  (lamp [13 -7.4 0.3] [0 0 1] [1 0 0])
+  (door [18.7 -9 2] 1.2 2.2)
   ; the bins: on the platform against the blocks either side of the hallway and at its
   ; ends, and in each wing against the front block
   (mirror-x 0
-   [(bin [-5 -5 -0.4] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-10.5 -5 -1.0] 0.55 0.55 0.95 binmetal binsign)
-    (bin [-15 -5 4.4] 0.55 0.55 0.95 binmetal binsign)]))
+   [(bin [-5 -9 -0.4] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-10.5 -9 -1.0] 0.55 0.55 0.95 binmetal binsign)
+    (bin [-15 -9 4.4] 0.55 0.55 0.95 binmetal binsign)]))

@@ -232,6 +232,10 @@
     (i3-cell m (i3mem m 4 [137] r 'sp 0 + i3mem m 4 [137] (i3hi r) 'sp 4 + i3-xmem m 242 16 (i3x f) 'sp 0))
    (i3-movqrx m r f)
     (i3-cell m (i3-xmem m 242 17 (i3x f) 'sp 0 + i3mem m 4 [139] r 'sp 0 + i3mem m 4 [139] (i3hi r) 'sp 4))
+   (i3-movqrr m f a b)
+    (i3-cell m (i3mem m 4 [137] a 'sp 0 + i3mem m 4 [137] b 'sp 4 + i3-xmem m 242 16 (i3x f) 'sp 0))
+   (i3-movrrq m a b f)
+    (i3-cell m (i3-xmem m 242 17 (i3x f) 'sp 0 + i3mem m 4 [139] a 'sp 0 + i3mem m 4 [139] b 'sp 4))
    (i3-cvtui2sd m f r)
     (i3-cell m (i3mem m 4 [137] r 'sp 0 + i3-si m 4 'sp 4 0
                 + i3-x87 m 223 5 + i3-x87 m 221 3 + i3-xmem m 242 16 (i3x f) 'sp 0))   ; fild qword; fstp qword
@@ -295,7 +299,7 @@
            ('cvtui2ss . i3-cvtui2ss m) ('cvttss2ui . i3-cvttss2ui m)
            ('movdxr . (\ f r [102 15 110 (modrm 3 (i3x f) (i3rn r))]))
            ('movdrx . (\ r f [102 15 126 (modrm 3 (i3x f) (i3rn r))]))
-           ('movqxr . i3-movqxr m) ('movqrx . i3-movqrx m)
+           ('movqxr . i3-movqxr m) ('movqrx . i3-movqrx m) ('movqrr . i3-movqrr m) ('movrrq . i3-movrrq m)
            ('xaddm . (\ w b o s (i3-mw m w [15 192] [15 193] s b o)))
            ('cmpxchgm . (\ w b o s (i3-mw m w [15 176] [15 177] s b o)))
            ('xchgm . (\ w b o s (i3-mw m w [134] [135] s b o)))

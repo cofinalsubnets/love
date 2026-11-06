@@ -1,6 +1,6 @@
 ; src/apps/vi/vi.l -- the terminal face over core.l: keys off `in`, vframe's escapes onto
 ; `out`, and the write requests ex leaves on the state. kore is its door (`love vi FILE`).
-; a mitty where the seat has one, else cli's stage: raw tty, alternate screen, port EOF
+; a pier where the seat has one, else cli's stage: raw tty, alternate screen, port EOF
 ; leaves, so a piped script ending :wq never dangles
 (module 'vi
 (borrow 'kore) ; the text/u floors
@@ -51,8 +51,8 @@
              (vload s2 (two? r ? (lines <>r)) nm,
               two? >rq ? (vexgo s2 <>rq) 0,
               vmsg s2 (two? r ? "\(nm): \(#(s2 'lines)) lines\(note)" "\(nm): new file\(note)")))))
-   ; the ex split requests: (dir name), another buffer beside or under; split is the mitty's
-   ; door, or () with no mitty
+   ; the ex split requests: (dir name), another buffer beside or under; split is the pier's
+   ; door, or () with no pier
    (dos s2 split)
     (s2 'dos @ rq
        (atom? rq ? s2
@@ -121,7 +121,7 @@
        _ (pins st 'dirty dirty 'row (0 < row ? (row - 1) 0))
        fc (vi-face st {})
        (stage (fc 0) (fc 1) (fc 2)))
-   ; the visit: on a mitty every buffer a pane (:sp :vs, C-a s, C-a v), one register between
+   ; the visit: on a pier every buffer a pane (:sp :vs, the prefix and s, the prefix and v), one register between
    ; them; else cli's stage, one buffer full screen
    (vi-main as)
     (: f (two? as ? <as "")
@@ -129,11 +129,11 @@
        _ (each as (a \ 1 < #a && a 0 = 45 ? (udie 2 "vi: unknown option \(a)") 0))
        st (vi-open f)
        _ (two? >as ? (pin st 'args as, vmsg st "\(f) (1 of \(#as))") 0)
-       br (cite 'mitty)
+       br (cite 'pier)
        (tablet? br ?
-          (: sz (br 'hsize 0) hb (br 'mitty-up <sz <>sz)
+          (: sz (br 'hsize 0) hb (br 'pier-up <sz <>sz)
              (stage-of s) (: fc (vi-face s {'split split 'explore explore 'reg (hb 'clip)})
-                              sg (br 'mitty-stage (fc 0) (fc 1) (fc 2))
+                              sg (br 'pier-stage (fc 0) (fc 1) (fc 2))
                               (pin sg 'paste (fc 3), sg))
              ; a buffer's pane, kept on it so a door can show it again
              (berth-of s r c) (br 'hopen-stage (stage-of s) r c @ p (pin s 'vpane p, p))
@@ -145,7 +145,7 @@
                               _ (pin ms 'open (f \ (vpicked s f,
                                                       s 'vpane @ p (nil? p ? 0 (br 'hshow p)),
                                                       br 'hsoil hb)))
-                              sg (br 'mitty-stage (w \ h \ (mc 'mc-frame) ms w h) (c \ (mc 'mc-key) ms c) (_ \ ms 'over))
+                              sg (br 'pier-stage (w \ h \ (mc 'mc-frame) ms w h) (c \ (mc 'mc-key) ms c) (_ \ ms 'over))
                               (pin sg 'name "mc", br 'hberth hb 'beside 35 (br 'hopen-stage sg 1 1)))
              (pin hb 'more (_ \ (berth-of (vi-open "") 1 1)),
               br 'hberth hb 'stack 50 (berth-of st <sz <>sz),

@@ -87,19 +87,15 @@ hosted="72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-decls
         147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw
         159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 315-alloca-stack
         298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign
-        111-int128 151-w128fuzz 314-u128union 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 348-libcmore"
-narrow="81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct"
+        111-int128 151-w128fuzz 314-u128union 352-u128abi 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 348-libcmore 353-intuint"
+narrow="354-idioms 81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct"
 # gcc's arm build follows no frame chain past level 1, so it cannot witness 297
 nowit="297-frameaddr"
 
 case $tgt in
   thumb2) refuse="68-static-assert 161-enumwide" ;;
-  thumb1) refuse="67-varargs-double 88-varargs-overflow 97-muslrungs 68-static-assert 82-znvalue 85-aggval 100-complex 280-cxf-fuzz 101-vla 344-fixedregs 102-bigstruct 111-int128
-                  117-vastruct 129-sync 151-w128fuzz 314-u128union 161-enumwide 228-strictalign 266-vaarg-struct 338-farity" ;;
+  thumb1) refuse="68-static-assert 111-int128 129-sync 151-w128fuzz 314-u128union 352-u128abi 161-enumwide" ;;
 esac
-
-# v6-m's double varargs need rt.c's soft-float, which is not linked here
-[ $tgt = thumb1 ] && hosted="$hosted 71-varargs-sysv"
 
 inlist() { for w in $2; do [ "$w" = "$1" ] && return 0; done; return 1; }
 
@@ -165,6 +161,20 @@ for f in test/cc/*.c; do
         "$d/$b.tlog" "$d/$b.glog" "$d/$b.llog" "$d/$b.tout" "$d/$b.gout"
   nrun=$((nrun + 1))
 done
+
+# -ftrivial-auto-var-init=zero clears every word of a VLA and an alloca block
+cat > "$d/avz.c" <<'AVZ'
+static void __attribute__((noinline)) dirty(void) { volatile char b[1024]; for (int i = 0; i < 1024; i++) b[i] = 255; }
+static int __attribute__((noinline)) v(int n) { char a[n]; int s = 0; for (int i = 0; i < n; i++) s += a[i] != 0; return s; }
+static int __attribute__((noinline)) h(int n) { char *a = __builtin_alloca(n); int s = 0; for (int i = 0; i < n; i++) s += a[i] != 0; return s; }
+int cc_main(void) { dirty(); if (v(200)) return 1; dirty(); if (h(200)) return 2; return 0; }
+AVZ
+moonrun -t "$tgt" -ftrivial-auto-var-init=zero -c "$d/avz.c" "$d/avz.o" > "$d/avz.log" 2>&1 \
+  || { cat "$d/avz.log" >&2; fail "-ftrivial-auto-var-init=zero: mooncc could not build a VLA and an alloca"; }
+arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/run.o" "$d/avz.o" "$lg" -o "$d/avz.elf" > "$d/avz.log" 2>&1 \
+  || { cat "$d/avz.log" >&2; fail "-ftrivial-auto-var-init=zero: ld could not bind our object"; }
+timeout 60 qemu-system-arm -M $mach -semihosting -nographic -kernel "$d/avz.elf" < /dev/null > "$d/avz.out" 2>&1 \
+  || fail "-ftrivial-auto-var-init=zero left a block uncleared on $mach"
 
 [ $nrun -gt 0 ] || fail "no programs ran from test/cc/"
 echo "$name: $nrun programs answer on qemu $mach exactly as arm-none-eabi-gcc's build of the same source does; $nref refuse cleanly, $nhost want a libc we do not link, $nnar assume a 64-bit long, $nwit have no gcc witness here"

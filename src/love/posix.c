@@ -146,11 +146,12 @@ static struct g *argv_marshal(struct g *g, char ***cavp) {
 
 // SIG_IGN and the mask both survive exec: every exec-bound child leaves through here, or
 // ^C misses it and `yes | head` never stops. main.c's two exec sites reset by hand. what the
-// shell asked to stay ignored (trap '', g->child_ign) goes back on after, as POSIX has it
-static void sig_dfl_job(uint64_t ign) {
+// shell asked to stay ignored (trap '', childign) goes back on after, as POSIX has it
+static uint64_t child_ign;
+static void sig_dfl_job(void) {
  signal(SIGINT, SIG_DFL); signal(SIGQUIT, SIG_DFL); signal(SIGPIPE, SIG_DFL);
  signal(SIGTSTP, SIG_DFL); signal(SIGTTIN, SIG_DFL); signal(SIGTTOU, SIG_DFL);
- for (int s = 1; s < 64; s++) if (ign >> s & 1) signal(s, SIG_IGN);
+ for (int s = 1; s < 64; s++) if (child_ign >> s & 1) signal(s, SIG_IGN);
  sigset_t none; sigemptyset(&none); sigprocmask(SIG_SETMASK, &none, NULL); }
 
 // (sigign? sig): POSIX lets a non-interactive shell not trap a signal ignored on entry
@@ -172,7 +173,7 @@ static lvm(lvm_childign) {
  uint64_t m = 0;
  for (word l = Sp[0]; chainp(l); l = B(l))
   if (charmp(A(l)) && getcharm(A(l)) > 0 && getcharm(A(l)) < 64) m |= (uint64_t) 1 << getcharm(A(l));
- g->child_ign = m;
+ child_ign = m;
  Sp[0] = ZeroPoint;
  love_musttail return Next(1); }
 
@@ -198,8 +199,8 @@ void host_spawn_guard(struct g *g, int on) {
 // before a fork: a seekable stdin gives back what the reader holds ahead, so parent and
 // child both stand where the reader does (the offset is shared)
 static void stdin_exact(struct g *g) {
- if (!love_inport || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // a pipe or a tty
- struct io *i = (struct io*) love_inport;
+ if (!evenp(g->hook[hook_inport]) || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // a pipe or a tty
+ struct io *i = (struct io*) g->hook[hook_inport];
  int u = getcharm(love_stdin.io.ungetc_buf) != EOF;
  uintptr_t n = io_pending(g, i) + (u ? 1 : 0);
  if (!n || lseek(STDIN_FILENO, -(off_t) n, SEEK_CUR) < 0) return;
@@ -315,7 +316,7 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
   for (word p = closes; chainp(p); p = B(p)) {
    intptr_t fd = getcharm(A(p));
    if (fd > 2) close((int) fd); }
-  sig_dfl_job(g->child_ign);
+  sig_dfl_job();
   execvp(argv_file(cav), cav);
   _exit(127); }
  if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
@@ -1261,7 +1262,7 @@ love_noinline static struct g *host_tether(struct g *g, int envat) {
  if (pid < 0) { int e = errno; close(mfd); close(ep[0]); close(ep[1]); return push(g, 1, love_err(g, e)); }
  if (!pid) {
   close(mfd); close(ep[0]);
-  sig_dfl_job(g->child_ign);
+  sig_dfl_job();
   int e;
   if (setsid() < 0) { e = errno; goto childfail; }
   int sfd = open(sname, O_RDWR);                  // opening a tty in a fresh session claims it as ctty
@@ -1486,7 +1487,6 @@ static int call_open(struct str *pv, struct str *mv) {
 static int mk_open(struct g *g, void *env) { (void) env; return call_open(str(g->sp[0]), str(g->sp[1])); }
 
 // a nom is truthy: test with port? or nom?, never ?. LvmCallp's Pack writes back the registers
-// a seat's open may report (inle's /proc/gauge)
 love_noinline static struct g *host_open(struct g *g) {
   { char rel[256];
     uintptr_t rn;
@@ -1522,7 +1522,7 @@ static lvm(lvm_close) {
       g->io = io;
       Pack(g);
       g = io_wflush(g, io);
-      if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+      if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
       // a short write parks; nothing is mutated yet, so the re-run is this close whole
       if (io_wpending(g, (struct io*) g->sp[0])) {
         Unpack(g);

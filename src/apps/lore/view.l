@@ -118,6 +118,8 @@
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
+ ; ..a thumb's pixels before it counts as moved, and how much further its drag looks than a mouse
+ view-thumb-still 10 view-thumb-look 2 view-thumb-run 50
  view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
  ; the arrows; the rest come by what they type
@@ -164,7 +166,8 @@
  ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
  ; optional 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
-; and 'held (st) to stop a repeat.
+; and 'held (st) to stop a repeat; 'stick [ahead back left right], those keys for a phone's
+; thumbs, and 'tap (st x y) the keys a tap at pixel x y is.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
@@ -192,12 +195,33 @@
    held {}
    rep (peep lv 'repeat view-repeat)
    (hold? k) (elem (binds k) (peep lv 'walking view-walking) && (peep lv 'held (_ \ 1)) st)
+   ; ..thumbs: the left half a stick centred where it lands, its keys held like a keyboard's,
+   ; the right half looking, and a touch that stays put a tap
+   stick (lv 'stick) fg {}
+   _ (stick && win ? (window-thumbs win) 0)
+   (axis slot want) (: old (held slot @ h (h != () ? <h ()))
+     (? (want = old) ()
+        (want = ()) (pin held slot (), ())
+        (pin held slot [want (clock 0 + rep 0)], [want])))
+   (finger [_ id a x y]) (: f (fg id)
+     (? (a = 0) (pin fg id {'walk (x < <(window-size win) // 2) 'x0 x 'y0 y 'x x 'y y 'far 0}, ())
+        !(tablet? f) ()
+        (a = 2) (: dx (x - f 'x0) dy (y - f 'y0) d view-thumb-still
+                   ks (? (f 'walk) (axis 'stick-x (? (dx < -d) (stick 2) (d < dx) (stick 3) ())
+                                    + axis 'stick-y (? (#stick > 4 && dy < -view-thumb-run) (stick 4) (dy < -d) (stick 0) (d < dy) (stick 1) ()))
+                         (: _ (pins ms 'dx (ms 'dx + view-thumb-look * (x - f 'x)) 'dy (ms 'dy + view-thumb-look * (y - f 'y))) ()))
+                   (pins f 'x x 'y y 'far (f 'far || d < abs dx || d < abs dy ? 1 0), ks))
+        (: ks (f 'far ? () (lv 'tap st x y))
+           ((f 'walk ? (pins held 'stick-x () 'stick-y ())),
+            pin fg id (),
+            ks))))
    ; ..a window's keys: a key down is its code by what it typed, else by its place; the
    ; help's key let go puts the help away
    (wgo l) (? (atom? l) ()
               (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
                  k (? (0 < #t) (t 0) (view-set1 (e 1)))
                  (? (<e = 'close) ('quit . wgo >l)
+                    (<e = 'finger) (finger e + wgo >l)
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
                     (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
@@ -265,15 +289,16 @@
                   walk (),
                   ttygive rove-modes,
                   0)
- ; ..or the window its words asked for, or unasked where a window is the whole screen, 640
- ; by 400 and given back after; walk takes o with 'win the window, and done answers what to
- ; say to the terminal once it is down
+ ; ..or a window, unless its words asked for the terminal: 640 by 400 and given back after,
+ ; and one that can't be had is the terminal's unless it was asked for. walk takes o with
+ ; 'win the window, and done answers what to say to the terminal once it is down
  (view-stage o walk done)
-  (? (o 'md = () && window-whole? ()) (view-stage (pin o 'md 'window) walk done)
-     (o 'md != 'window) (view-run (_ \ walk o), done (), 0)
-     (window-open 640 400 "lore" @ win
-        (? !(tablet? win) (say err ("lore: no window (" + show win + ")\n"), flush err, 1)
-           (mind (_ \ walk (pin o 'win win)) () (_ \ window-close win), 0))))
+  (: asked (o 'md = 'window) (tty _) (view-run (_ \ walk o), done (), 0)
+     (? (!asked && (o 'md != () || !(window-here? ()))) (tty ())
+        (window-open 640 400 "lore" @ win
+           (? (tablet? win) (mind (_ \ walk (pins o 'md 'window 'win win)) () (_ \ window-close win), 0)
+              asked (say err ("lore: no window (" + show win + ")\n"), flush err, 1)
+              (tty ())))))
  ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
  ;     (tick what part), for the making to call as it goes, what it is at and () or how far
  ;     through, 0.0 to 1.0. once the making has taken view-load-wait ms, and no oftener than

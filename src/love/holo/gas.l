@@ -378,6 +378,7 @@
                    (<f = 'rdig) (f 4 = 8)
                    0)
        (catmap (f \ (? (<f = 'zx4) ()
+                       (<f = 'sys) [['raw '(15 5)]]         ; the template's syscall, not i386's int 0x80
                        (bad? f || any reg? >f) (scare 'gas-i386-form f)
                        (ghas? gx-ren <f) [((gx-ren <f) . >f)]
                        [f]))
@@ -2069,7 +2070,8 @@
               (elem mn '(".text" ".data" ".bss")) (goto mn (gf-dflt mn))
               (elem mn '(".globl" ".global")) (pin st 'globl (rev (map xa-unquote xs) + st 'globl))
               ; .size f, .-f: an end label here, f's st_size; L-f one at L, once the text is read;
-              ; a constant f's size outright. any other size goes unread
+              ; a constant f's size outright; E-S from another start, measured once laid. any
+              ; other size goes unread
               (mn = ".size")
                (two? >xs ?
                   (trap (\ _ (: f (xa-unquote <xs) ts (gtoks (xa-trim <>xs))
@@ -2078,7 +2080,12 @@
                         (gf-sum ts rl @ r
                            (gbad? r || two? >r || <<r != 0 ? 0
                               (gf-norm <><r @ ns
-                                 (? !(elem (f . -1) ns) 0
+                                 (? !(elem (f . -1) ns)
+                                     (: e (filter (p \ >p = 1) ns) s (filter (p \ >p = -1) ns)
+                                        (? (#ns != 2 || #e != 1 || #s != 1) 0
+                                           (: k (peep st 'szk 0) here (pfx + ".Lsz" + show k)
+                                              en (<<e = "." ? (pin st 'szk (k + 1), emit [['label (name here)]], here) <<e)
+                                              (pin st 'sizes ([f ['dif en <<s]] . peep st 'sizes ())))))
                                     (filter (p \ <p != f) ns @ ls
                                        (? (#ls != 1 || >(ls 0) != 1) 0
                                           (<(ls 0) = ".") (emit [['label (fn-end f)]])

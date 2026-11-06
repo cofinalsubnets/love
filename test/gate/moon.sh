@@ -182,7 +182,20 @@ moonrun -t a64 -c "$ho/.a6p.S" -o "$ho/.a6p.o" || fail "mooncc -t a64: a word ov
 # elf32: a pc-relative reach into data binds a symbol, never symbol 0
 printf '.text\n.code64\njmpq *x(%%rip)\n.code32\n.bss\nx: .long 0\n' > "$ho/.i3r.S"
 moonrun -t i386 -c "$ho/.i3r.S" -o "$ho/.i3r.o" || fail "mooncc: an i386 asm's reach into data"
-[ "$(readelf -rW "$ho/.i3r.o" | awk '$3 == "R_386_PC32" {print $5}')" = "x" ] || fail "an i386 pc-relative reach into data lost its symbol"
+[ "$(readelf -rW "$ho/.i3r.o" | awk '$3 == "R_386_PC32" {print $5}')" = ".bss" ] || fail "an i386 pc-relative reach into data lost its symbol"
+# i386, as clang: a local binds its section and the offset in the field, a global itself though laid here; an untyped label is notype, a named local and an absolute stay in the table; syscall is syscall
+printf '.globl g1, g2\n.type g2,@function\n.set ABSV, 7\n.text\nlo: nop\ng1: nop\ng2: call g1\njmp g1\nmovl $lo,%%eax\nmovl $.Lh,%%eax\nsyscall\n.size g2,.-g2\n.section .aa,"ax"\n.Lh: nop\ncall lo\n.data\nd1: .long lo\n.long .Lh\n.long 1f-.\n1: .long ABSV\n' > "$ho/.e32.S"
+moonrun -t i386 -c "$ho/.e32.S" -o "$ho/.e32.o" || fail "mooncc: an i386 asm's symbols"
+[ "$(readelf -x .text "$ho/.e32.o" | awk '/^  0x/ {for(i=2;i<=5;i++) s=s $i} END{print s}' | sed 's/[^0-9a-f].*//')" = "9090e8fcffffffe9fcffffffb800000000b8000000000f05" ] || fail "an i386 asm's text is not clang's bytes"
+[ "$(readelf -x .data "$ho/.e32.o" | awk '/^  0x/ {for(i=2;i<=5;i++) s=s $i} END{print s}' | sed 's/[^0-9a-f].*//')" = "00000000000000000400000007000000" ] || fail "an i386 asm's data is not clang's bytes"
+[ "$(readelf -rW "$ho/.e32.o" | awk '$3 ~ /^R_/ {print $1, $3, $5}' | tr '\n' ';')" = "00000003 R_386_PC32 g1;00000008 R_386_PC32 g1;0000000d R_386_32 .text;00000012 R_386_32 .aa;00000002 R_386_PC32 .text;00000000 R_386_32 .text;00000004 R_386_32 .aa;" ] || fail "an i386 asm's relocs are not clang's"
+[ "$(readelf -sW "$ho/.e32.o" | awk '$8 != "" && $4 != "SECTION" && NR > 3 {print $8, $4, $5, $3, $2}' | sort | tr '\n' ';')" = "ABSV NOTYPE LOCAL 0 00000007;d1 NOTYPE LOCAL 0 00000000;g1 NOTYPE GLOBAL 0 00000001;g2 FUNC GLOBAL 22 00000002;lo NOTYPE LOCAL 0 00000000;" ] || fail "an i386 asm's symbols are not clang's"
+# a .size measured from another start: the distance, in either writer
+printf '.text\n.globl s1, s2\n.type s1,@function\n.LS1:\ns1:\nnop\nnop\n.size s1,.-.LS1\n.LS2:\nnop\ns2:\nnop\n.LE2:\nnop\n.size s2,.LE2-.LS2\n' > "$ho/.szl.S"
+for t in x64 i386; do
+  moonrun -t $t -c "$ho/.szl.S" -o "$ho/.szl.o" || fail "mooncc: a .size from another start"
+  [ "$(readelf -sW "$ho/.szl.o" | awk '$8 ~ /^s[12]$/ {print $8, $3}' | sort | tr '\n' ' ')" = "s1 2 s2 2 " ] || fail "a .size from another start is not clang's ($t)"
+done
 # a string op spelled with operands, in each mode: bytes from clang; a sign-extend keeps its name
 printf '.text\n.code32\nrep movsl %%ds:(%%esi),%%es:(%%edi)\nmovsb %%ds:(%%esi),%%es:(%%edi)\nmovsw %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%edi)\nstosb %%al,%%es:(%%edi)\nlodsl %%ds:(%%esi),%%eax\nscasb %%es:(%%edi),%%al\ncmpsb %%es:(%%edi),%%ds:(%%esi)\nrep movsl (%%esi),(%%edi)\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsl %%fs:(%%si),%%es:(%%di)\nmovsl %%es:(%%esi),%%es:(%%edi)\ninsb (%%dx),%%es:(%%edi)\noutsl %%ds:(%%esi),(%%dx)\n.code16\nrep movsl %%ds:(%%si),%%es:(%%di)\nmovsb %%ds:(%%si),%%es:(%%di)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%di)\n.code64\nrep movsq %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosq %%rax,%%es:(%%rdi)\nlodsb %%ds:(%%rsi),%%al\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsq %%gs:(%%rsi),%%es:(%%rdi)\n' > "$ho/.str.S"
 moonrun -c "$ho/.str.S" -o "$ho/.str.o" || fail "mooncc: a string op's operands"
@@ -470,6 +483,26 @@ moonrun -t thumb2 -c -o "$ho/.osz2.o" "$ho/.osz.c" > /dev/null 2>&1 || fail "moo
 moonrun -t thumb2 -Os -c -o "$ho/.oszs.o" "$ho/.osz.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 -Os the size probe"
 a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
 [ "$a" -lt "$b" ] || fail "thumb2 -Os no smaller: $a bytes against $b"
+
+# a helper spliced at many sites costs its sites: four plain ones stay calls, four in a loop splice
+cat > "$ho/.isite.c" <<'EOF'
+int t[9];
+static int h(int a, int b) { int s = t[a] + b, r = t[b] * a; t[a] = s ^ r; t[b] = s + r; return s - r + t[(a + b) & 7]; }
+#ifdef L
+int f(int n) { int s = 0; for (int i = 0; i < n; i++) s += h(i, 1) + h(i, 2) + h(i, 3) + h(i, 4); return s; }
+#else
+int f(int n) { return h(n, 1) + h(n, 2) + h(n, 3) + h(n, 4); }
+#endif
+EOF
+for d in P L; do
+  moonrun -D $d -c -o "$ho/.isite.o" "$ho/.isite.c" > /dev/null 2>&1 || fail "mooncc the site probe $d"
+  moonrun -D $d -fno-inline -c -o "$ho/.isiten.o" "$ho/.isite.c" > /dev/null 2>&1 || fail "mooncc -fno-inline the site probe $d"
+  a=$(wc -c < "$ho/.isite.o"); b=$(wc -c < "$ho/.isiten.o")
+  case $d in
+    P) [ "$a" -eq "$b" ] || fail "four plain sites spliced: $a bytes against $b out of line" ;;
+    L) [ "$a" -gt "$b" ] || fail "four sites in a loop stayed calls: $a bytes against $b out of line" ;;
+  esac
+done
 
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
