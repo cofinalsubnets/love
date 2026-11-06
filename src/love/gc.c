@@ -127,8 +127,9 @@ static love_inline bool moved(struct gcx *X, word w) {
  return evenp(w) && ((X->fwd <= ptr(w) && ptr(w) < X->to_hi) || (X->s_lo && X->s_lo <= ptr(w) && ptr(w) < X->s_hi)); }
 
 // after the drain: an unforwarded young target is dead and finalizes while the from-space
-// still reads; a tenured one waits for a major
-static void minor_run_finalizers(struct g *g, struct gcx *X) {
+// still reads; a tenured one waits for a major. a young node leaves the nursery below ytop, and
+// no ytop leaves it there: its raw words may not lie where a second pass walks
+static void minor_run_finalizers(struct g *g, struct gcx *X, word *ytop) {
  struct fz **link = &g->fz;
  for (struct fz *fz = *link; fz; ) {
   struct fz *next = fz->next;
@@ -139,7 +140,7 @@ static void minor_run_finalizers(struct g *g, struct gcx *X) {
     fz->fn(g, fz->p), *link = fz = next;
     continue; }
    fz->p = cell(fwd); }
-  if ((word*) fz >= (word*) g->end && (word*) fz < g->hp) {   // the node itself was young
+  if ((word*) fz >= (word*) g->end && (word*) fz < ytop) {   // the node itself was young
    struct fz *nn = gbump(g, Width(struct fz));
    nn->p = fz->p, nn->fn = fz->fn, nn->next = next;
    *link = nn, link = &nn->next;
@@ -219,8 +220,9 @@ static void drain(struct g *g, struct gcx *X) {
 
 // the minor: [end, hp) into the survivors' block sto, slen long, and the survivors before into
 // the major block; X.fwd tells this pass's forwards from older major objects, and the tenured
-// from scan up are walked again. answers whether the block ran out
-static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan) {
+// from scan up are walked again. answers whether the block ran out; ytop is the nursery's
+// top, which a second pass's emptied range no longer says
+static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan, word *ytop) {
  struct gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
                   .f2lo = g->sv_base, .f2hi = g->sv_hp,      // the survivors before, tenuring
                   .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
@@ -247,11 +249,13 @@ static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan) {
   drain(g, &X);
   if (g->major_hp != hp1 || X.s_hp != sh1 || g->rem_n != rn) __builtin_trap(); }
 #endif
- if (g->fz) minor_run_finalizers(g, &X);
+ // a first pass that ran out goes again, over an emptied nursery
+ bool again = X.over && X.p0 < X.t0;
+ if (g->fz) minor_run_finalizers(g, &X, again ? NULL : ytop);
  g->hp = g->end;
 #ifdef LvGcStress
- // after the finalizers, the from-spaces' last reader
- for (word *p = (word*) X.p0; p < (word*) X.t0; p++) *p = gc_poison;
+ // after the finalizers, the from-spaces' last reader; a pass that ran out leaves the nursery its nodes
+ if (!again) for (word *p = (word*) g->end; p < ytop; p++) *p = gc_poison;
  for (word *p = (word*) X.f2lo; p < (word*) X.f2hi; p++) *p = gc_poison;
 #endif
  // the block copied into holds the survivors now; the one emptied is the spare
@@ -409,9 +413,10 @@ static struct g *please_(struct g *g, uintptr_t req0) {
    if (sto) alloc(sto, 0);
    sto = want ? alloc(NULL, want * sizeof(word)) : NULL, sl = sto ? want : 0;
    g->sv2_base = NULL, g->sv2_len = 0; }
-  bool over = gen_minor(g, sto, sl, before);
+  word *ytop = g->hp;
+  bool over = gen_minor(g, sto, sl, before, ytop);
   // a block that ran out tenures whole, its overflow rescanned for the edges back into it
-  if (over) gen_minor(g, NULL, 0, before), g->rem_miss = 0;
+  if (over) gen_minor(g, NULL, 0, before, ytop), g->rem_miss = 0;
   uintptr_t su = (uintptr_t)(g->sv_hp - g->sv_base);
   // grown when it ran out, halved after eight minors mostly empty, never under the floor
   if (over) g->sv_want = 2 * (sl ? sl : g->minor0), g->sv_idle = 0;
