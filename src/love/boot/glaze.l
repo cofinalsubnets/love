@@ -2256,6 +2256,7 @@
    ; srcreg: name -> (params . body) once lowered, or the form's shared cell {'form f} until a pull first asks for one of its
    ; names -- forms are recorded by the thousand and pulled by the handful, so the lowering waits for the first pull
    srcreg {}
+   (srcdrop _) (map (k \ pin srcreg k 0) (keys srcreg))                                ; the bake's last word: what it recorded stays out of the image
    (swfnpair? pr) (: nf <pr (two? nf && 1 < #nf < 6 && all nom? >nf && distinctp >nf))
    (srcrec form0)
     (two? form0 && <form0 = ': && !(atom? >form0) && 0 = #>form0 % 2 ?                                   ; body-less `:` only
