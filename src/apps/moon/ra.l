@@ -187,6 +187,41 @@
                spn (raspans fs) fqw (rafreq fs sc)
                wt (foldl (t \ i \ ((vwt spn i @ v (max (v / 16) (min v (fqw i)))) @ w (ud i @ [u d] (map (x \ pin t x (peep t x 0 + w)) (vun u d), t)))) {} ^n)
                (wt? x) (peep wt x 0)
+               ; coalescing: a copy's two sides take one interval where their ranges never meet, the
+               ; heaviest copies first; the scan places the one and the copy goes. org keeps a merged
+               ; interval's own ranges for the calls it outlives
+               rep {} org {} mem {}
+               (find x) (rep x @ () x r (find r))
+               (rmerge a b) (? (atom? a) b (atom? b) a (<<a < <<b) (<a . rmerge >a b) (<b . rmerge a >b))
+               (cls x) (lofr? (nms x))
+               ; a cmov's two sides never share a register
+               ap (foldl (t \ f \ (f @ (['cmov _ x y] && lovr? x && lovr? y) (: a (id x) b (id y) (pin t a (b . peep t a ()), pin t b (a . peep t b ()))) _ t)) {} fs)
+               (apart? a b) (any (x \ any (y \ elem y (peep ap x ())) (b . peep mem b ())) (a . peep mem a ()))
+               ; per file, the vregs live at each position; a merge keeps to where all fit
+               pz (foldl (t \ x \ (: c (cls x ? 'f 'g) d (peep t c {})
+                                     (map (r \ (pin d <r (peep d <r 0 + 1), pin d (r 1 + 1) (peep d (r 1 + 1) 0 - 1))) (rg x),
+                                      pin t c d))) {} (filter (x \ np <= x) (keys lo)))
+               pk (foldl (t \ c \ (: d (peep pz c {}) e {} (foldl (a \ p \ ((a + peep d p 0) @ v (pin e p v, v))) 0 ^(2 * n + 2), pin t c e))) {} '(g f))
+               rmc {}
+               (room1 x) (: e (pk (cls x ? 'f 'g)) k #(cls x ? (ragf g) (ragp g))
+                            (all (r \ all (p \ peep e p 0 < k) (map (+ <r) ^(r 1 - <r + 1))) (rg x)))
+               (room? x) (peep rmc x () @ () (room1 x @ v (pin rmc x v, v)) v v)
+               ; a side that outlives no call keeps a caller-saved register, and the copy stays
+               cq (catmap (i \ (ft i @ (('call || 'callr) . _) [[(2 * i + 1) (2 * i + 1)]] _ ())) ^n)
+               (xc? x) (raovl (rg x) cq)
+               (join x y)
+                (: a (find x) b (find y)
+                   (a != b && np <= a && np <= b && cls a = cls b && !(nosp (nms a)) && !(nosp (nms b)) &&
+                    !(raovl (rg a) (rg b)) && !(apart? a b) && xc? a = xc? b && room? a && room? b ?
+                    (org a = () ? (pin org a (rg a)), pin rg a (rmerge (rg a) (rg b)),
+                     pin lo a (min (lo a) (lo b)), pin hi a (max (hi a) (hi b)), pin wt a (wt? a + wt? b),
+                     pin forb a (peep forb a () + peep forb b ()), pin hint a (peep hint a () + peep hint b ()),
+                     pin mem a (b . (peep mem b () + peep mem a ())), pin rep b a, pin rmc a 1)))
+               cw (sortby (p \ q \ p 2 > q 2)
+                          (catmap (i \ (ft i @ ([('mov || 'movapd) a b] && lovr? a && lovr? b)
+                                                 [[(id a) (id b) (vwt spn i @ v (max (v / 16) (min v (fqw i))))]] _ ())) ^n))
+               _ (map (c \ (c @ [x y _] (join x y) _ 0)) cw)
+               vs2 (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ rep x = ()) vs))
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
                (victim x act)
@@ -207,16 +242,20 @@
                                w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp)))
                           r (pin loc x r, scan fl u (x . a2) sp))))
                (fv? x) (lofr? (nms x))
-               (scan (ragp g) (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
-                  sg (scan (ragf g) (filter fv? vs) () sg @ 'bad 'bad
-                        sp (: si (map id sp)
+               (scan (ragp g) (filter (x \ !(fv? x)) vs2) () () @ 'bad 'bad
+                  sg (scan (ragf g) (filter fv? vs2) () sg @ 'bad 'bad
+                        sp (: _ (map (x \ pin rg x (org x)) (keys org))
+                              ; a merged vreg goes where its interval went
+                              _ (map (x \ map (y \ pin loc y (loc x)) (mem x)) (filter (x \ rep x = ()) (keys mem)))
+                              sp2 (sp + catmap (v \ map (y \ nms y) (peep mem (id v) ())) sp)
+                              si (map id sp2)
                               ; per call, the spilled vregs it outlives
                               cr (foldl (t \ i \ (ft i @ (('call || 'callr) . _)
                                                       (filter (x \ raovl (rg x) [[(2 * i + 1) (2 * i + 1)]]) si @
                                                          () t
                                                          xs (pin t i (map nms xs)))
                                                       _ t)) {} ^n)
-                              [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp cr]))))))
+                              [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp2 cr]))))))
 
    ; the back edges' spans [label jump], for vwt's loop depth
    (raspans fs)
