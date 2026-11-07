@@ -8462,7 +8462,9 @@
    asmnames (foldl (t \ i \ "r\(i)" @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 (asmfile g) || a64? g && elem r9 '(r4 lr))   ; lr: the a64 frame saves it, and its epilogue restores
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
-   (asmpk g) (ia32? g ? '(r2 r1 r0 r6 r5) asmpick)   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1)
+   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1). v6-M's constants and most of its
+   ; forms reach only the low registers
+   (asmpk g) (ia32? g || v6m? g ? '(r2 r1 r0 r6 r5) asmpick)
    ; an x64 xmm0..15 or an a64 v0..31, by name
    (vclob? g c) (: (num k) (: d (chars (snip c k #c))
                               (? (two? d && foldl (\ a ch (a && 48 <= ch <= 57)) 1 d) (foldl (\ a ch (a * 10 + ch - 48)) 0 d) -1))
