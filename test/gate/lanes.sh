@@ -165,9 +165,8 @@ for l in $rlanes; do for p in $(deps "$l"); do has "$p" "$rpre" || rpre="$rpre $
 roflags=
 for p in $rpre; do roflags="$roflags -o $p"; done
 # a strict box's lanes are strict there too: its env does not cross
-. test/gate/skip.sh
 rst=
-gate_strict && rst=LOVE_GATE_STRICT=1
+[ -z "$rlanes" ] || { . test/gate/skip.sh; gate_strict && rst=LOVE_GATE_STRICT=1; }
 # a slot on host h: lanes of a KIND until the queue has none, each only on the gated commit,
 # an alone one holding the whole host. a host that cannot be reached (75, or ssh's 255) or has
 # moved off it (97) puts its lane back for this box and takes no more
