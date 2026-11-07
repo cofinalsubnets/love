@@ -1317,8 +1317,10 @@
           ; indirect calls and jumps go through __x86_indirect_thunk_REG, returns through
           ; __x86_return_thunk: the kernel lays both, mooncc only names them
           ((a . r) && elem a ["-mindirect-branch=thunk-extern" "-mretpoline-external-thunk"]) (flags r (fpush (xkon t 'thk) 'x6f a))
-          ((("-mindirect-branch=" + w) . r) && elem w ["thunk" "thunk-inline"])
-           (udie 2 "cc: -mindirect-branch=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
+          ; ..or by a retpoline laid at the site, gcc's thunk-inline and clang's -mretpoline: the vdso's ask
+          ((a . r) && elem a ["-mindirect-branch=thunk-inline" "-mretpoline"]) (flags r (xkon t 'thki))
+          ("-mindirect-branch=thunk" . r)
+           (udie 2 "cc: -mindirect-branch=thunk -- mooncc lays no shared thunk body: thunk-inline or thunk-extern")
           ("-mfunction-return=thunk-extern" . r) (flags r (fpush (xkon t 'rth) 'x6f "-mfunction-return=thunk-extern"))
           ((("-mfunction-return=" + w) . r) && elem w ["thunk" "thunk-inline"])
            (udie 2 "cc: -mfunction-return=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
@@ -1376,7 +1378,8 @@
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        _ (f 'ssp && pin f 'sspg (sspguard f))
        _ (two? (f 'x6f) && f 'tgt != 'x64 && udie 2 "cc: \(<(f 'x6f)) -- an x86-64 ask; no lane on \(f 'tgt)")
-       _ (elem 'thk (f 'xk) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
+       _ (elem 'thki (f 'xk) && !(elem (f 'tgt) '(x64 i386)) && udie 2 "cc: -mretpoline lays on x86 only")
+       _ ((elem 'thk (f 'xk) || elem 'thki (f 'xk)) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)

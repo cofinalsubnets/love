@@ -3684,7 +3684,7 @@
                                     spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['ld pk 'r4 pko] ['callr pk]]
                                     + fres + (sr6 ? (srback g sroff srg) ()) + clean + relods)))
                       ; i386: a pointer off a global is called where it lies
-                      (ia32? g && two? (gword (vfs hr)))
+                      (ia32? g && two? (gword (vfs hr)) && !(x86ki? g))
                        (mkv (fnret (vty hr)) 'r0 (pf + spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) +
                                  [['callm 'rip (gword (vfs hr))]] + fres +
                                  rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))
@@ -5388,7 +5388,7 @@
    ; x64: (ld X b o) .. (jmpr X) -> (jmpm b o), the load sinking past forms that leave X and b alone
    ; (b's own add folds into o). never off sp or fp, and X is no argument register
    (jmpm g fs)
-    (cz g 'jmpm fs (!(x64? g) || x86k? g 'thk || x86k? g 'ibr ? fs
+    (cz g 'jmpm fs (!(x64? g) || x86k? g 'thk || x86k? g 'thki || x86k? g 'ibr ? fs
        (: ar (argr g)
           (sink X b o l acc n)                        ; -> [forms-between o' rest] | ()
            (!(two? l) || 8 < n ? ()
@@ -5412,19 +5412,27 @@
                           (f . go >l))))
           (go fs))))
    ; -mindirect-branch=thunk-extern and -mfunction-return=thunk-extern, last over x64's code: an
-   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk
+   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk.
+   ; -mretpoline lays the thunk at the site instead, on i386 too: the target over the return
+   ; address, the speculated return caught in a pause loop
    x86rn {'r0 "rax" 'r1 "rcx" 'r2 "rdx" 'r3 "rbx" 'r4 "rbp" 'r5 "rsi" 'r6 "rdi" 'r7 "r8"
           'r8 "r9" 'r9 "r10" 'r10 "r11" 'r11 "r12" 'r12 "r13" 'r13 "r14" 'r14 "r15"}
    (thunks g fs)
-    (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs)
+    (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs) thki (x86ki? g)
        (via op r) (: s (intern "__x86_indirect_thunk_\(x86rn r)")
                      ((cs && elem r '(r7 r8 r9 r10 r11 r12 r13 r14) ? ['(raw (46))]) + [[op s]]))
+       (rjmp r) (nlab g ".rp" @ L0 (nlab g ".rp" @ L1
+                   [['call L1] ['label L0] '(raw (243 144)) '(raw (15 174 232)) ['jmp L0]
+                    ['label L1] ['st 'sp 0 r] '(ret)]))
+       (rcall r) (nlab g ".rp" @ L2 (nlab g ".rp" @ L3 ([['jmp L2] ['label L3]] + rjmp r + [['label L2] ['call L3]])))
        (one f) (? !(two? f) [f]
+                  (thki && <f = 'callr) (rcall <>f)
+                  (thki && elem <f '(jmpr jmpt)) (rjmp <>f)
                   (thk && <f = 'callr) (via 'call <>f)
                   (thk && elem <f '(jmpr jmpt)) (via 'jmp <>f)
                   (rth && f = '(ret)) [['jmp '__x86_return_thunk]]
                   [f])
-       (thk || rth ? (catmap one fs) fs)))
+       (thk || rth || thki ? (catmap one fs) fs)))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
    ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X
@@ -5595,7 +5603,8 @@
    (avz? g) (drop 11 (g 'mo) @ r (two? r && <r))   ; -ftrivial-auto-var-init=zero
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
-   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk rth ibr cs
+   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk thki rth ibr cs
+   (x86ki? g) (x64? g ? (x86k? g 'thki) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'thki <r)))   ; -mretpoline, either width
    (sa4? g) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'sa4 <r))   ; i386 -mstack-alignment=4
    (npic? g) (drop 17 (g 'mo) @ r (two? r && <r))   ; -fno-pie said: no load base moves the image
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)

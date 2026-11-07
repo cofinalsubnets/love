@@ -1128,7 +1128,8 @@ echo "mooncc: -fstack-protector guards the fns its level names, an overflow reac
 # the x86-64 kernel's -m set: -mcmodel=kernel and -mno-fp-ret-in-387 ask nothing of x64's code
 # (rip-relative, abs64 words, long double in xmm0); -mskip-rax-setup leaves al unset at a
 # varargs call; -mstack-alignment=8 realigns a 16-aligned local; the thunk asks send every
-# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk
+# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk;
+# -mretpoline lays the thunk at each site instead, i386 too
 cat > "$ho/.r3.c" <<'EOF'
 int pf(const char *, ...);
 int h(int);
@@ -1178,12 +1179,25 @@ $cc_g -O2 -o "$ho/.r3g" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 && "$ho/.r3g";
 moonrun $th -mstack-alignment=8 -mskip-rax-setup -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the thunked link"
 "$ho/.r3"; a=$?
 [ $a -eq $b ] || fail "r3: the thunked run answers $a, gcc $b"
+# -mretpoline (the vdso's ask) lays each thunk at its site, on x64 and i386: no plain indirect branch
+for t in x64 i386; do
+  for fl in -mretpoline -mindirect-branch=thunk-inline; do
+    moonrun -t $t $fl -c -o "$ho/.r3i.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: -t $t $fl compile"
+    objdump -d --no-show-raw-insn "$ho/.r3i.o" > "$ho/.r3i.d"
+    grep -Eq '(call|jmp) +\*' "$ho/.r3i.d" && fail "r3: -t $t $fl: a plain indirect branch: $(grep -E '(call|jmp) +\*' "$ho/.r3i.d" | head -1)"
+    grep -q 'lfence' "$ho/.r3i.d" || fail "r3: -t $t $fl: no retpoline laid"
+    objdump -r "$ho/.r3i.o" | grep -q '__x86_indirect_thunk_' && fail "r3: -t $t $fl names the kernel's thunk"
+  done
+done
+moonrun -mretpoline -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the retpoline link"
+"$ho/.r3"; a=$?
+[ $a -eq $b ] || fail "r3: the retpoline run answers $a, gcc $b"
 for fl in "-mcmodel=large" "-mcmodel=medium" "-mstack-alignment=4" "-mindirect-branch=thunk" "-mfunction-return=thunk-inline" \
-          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern"; do
+          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern" "-t a64 -mretpoline"; do
   moonrun $fl -c -o /dev/null "$ho/.r3.c" > /dev/null 2>&1; r=$?
   [ $r -eq 2 ] || fail "r3: $fl: exit $r, not refused"
 done
-echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks"
+echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks, the vdso's inline retpoline"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback
