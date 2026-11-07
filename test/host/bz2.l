@@ -37,6 +37,11 @@
  (bzt-same (bzt-a + bz2-pack "second" 3) bzt-ks)
  (bzt-same (bzt-a + "junk") bzt-ks)
  (bzt-same "hello, not bzip2" bzt-ks)
+ ; a block of zeros runs to megabytes: it reads out in pieces, a run of four past the mark at most
+ (: z (string (cask 8388608))
+    g (bz2-pull (bzt-rd [(bz2-pack z 1)]))
+    (go n k big) (bz2-next g @ p (#p = 0 ? [n k big (g 'ans)] (go (n + #p) (k + 1) (max big #p))))
+    ((go 0 0 0) @ [8388608 (k && 7 < k) (b && b <= 1048576 + 256) [1 8388608]] 1 _ 0))
  ; streamed: several blocks, any cut, runs across the cuts, nothing at all
  (bzt-all (k \ bzt-zips (snip bzt-noise 0 250000) k 1) [4096 100000 300000])
  (bzt-all (k \ bzt-zips bzt-runs k 1) [1 7 256 4096])

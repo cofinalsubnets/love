@@ -4,7 +4,7 @@
 //   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check,
 //                    5 past BZ_OUTMAX
 //   (bz2-new 0)      a state for reading a block at a time
-//   (bz2-step st b eof)  the next block (or a stream's head or end) off b at st's bit ->
+//   (bz2-step st b eof)  the next piece of a block (or a stream's head or end) off b at st's bit ->
 //                    (bytes . k), k whole bytes of b now behind it | -1 more of b wanted |
 //                    0 every stream read | bz2d's codes. eof: b is all there is
 #include "love.h"
@@ -312,7 +312,7 @@ static int bz_dec(const uint8_t *s, uintptr_t n, struct bz_w *w) {
    uint32_t m1 = br_get(&r, 24), m2 = br_get(&r, 24);
    if (br_past(&r)) { rc = 3; break; }
    if (m1 == 0x314159 && m2 == 0x265359) {
-    if ((rc = bz_dblock(d, &r, level, w))) break;
+    if ((rc = bz_dblock(d, &r, level)) || (rc = bz_dwalk(d, w, UINTPTR_MAX))) break;
     all = (all << 1 | all >> 31) ^ d->bc; }
    else if (m1 == 0x177245 && m2 == 0x385090) {
     uint32_t c = br_get(&r, 32);
@@ -326,11 +326,20 @@ static int bz_dec(const uint8_t *s, uintptr_t n, struct bz_w *w) {
  alloc(d, 0);
  return w->bad ? -1 : rc; }
 
-// bz_dec's walk cut at its blocks; one running past what the caller holds waits for a longer try
+// bz_dec's walk cut at its blocks, and a block's bytes at BZ_ROOM; a block running past what the
+// caller holds waits for a longer try. the state's bz_d follows it, a walk's place kept there
 #define BZ_MAGIC 0x627a3273u
+#define BZ_ROOM (1u << 20)
 struct bz_st { uint64_t magic, bit; uint32_t mode, level, all, nstream; };
 enum { BZ_MORE = 10, BZ_DONE = 11 };
+static int bz_walk(struct bz_st *S, struct bz_d *d, struct bz_w *w) {
+ int rc = bz_dwalk(d, w, BZ_ROOM);
+ if (rc == 1) return 0;
+ if (rc) return rc < 0 ? (w->big ? 5 : -1) : rc;
+ S->all = (S->all << 1 | S->all >> 31) ^ d->bc, S->mode = 1;
+ return 0; }
 static int bz_step(struct bz_st *S, struct bz_d *d, const uint8_t *s, uintptr_t n, int eof, struct bz_w *w) {
+ if (S->mode == 2) return bz_walk(S, d, w);
  uintptr_t at = S->bit / 8;
  if (at > n) return 2;
  if (!S->mode) {                                 // a stream's head, on a byte
@@ -345,11 +354,11 @@ static int bz_step(struct bz_st *S, struct bz_d *d, const uint8_t *s, uintptr_t 
  int rc;
  if (br_past(&r)) return eof ? 3 : BZ_MORE;
  if (m1 == 0x314159 && m2 == 0x265359) {
-  rc = bz_dblock(d, &r, S->level, w);
+  rc = bz_dblock(d, &r, S->level);
   if (rc && br_past(&r)) return eof ? 3 : BZ_MORE;
-  if (rc) return rc < 0 ? (w->big ? 5 : -1) : rc;
-  S->all = (S->all << 1 | S->all >> 31) ^ d->bc, S->bit = br_used(&r);
-  return 0; }
+  if (rc) return rc;
+  S->bit = br_used(&r), S->mode = 2;
+  return bz_walk(S, d, w); }
  if (m1 == 0x177245 && m2 == 0x385090) {
   uint32_t c = br_get(&r, 32);
   if (br_past(&r)) return eof ? 3 : BZ_MORE;
@@ -393,24 +402,24 @@ love_noinline static struct g *host_bz2d(struct g *g) {
  if (w.p) alloc(w.p, 0);
  return g; }
 
+#define BZ_STSIZE (sizeof(struct bz_st) + sizeof(struct bz_d))
 static struct str *bz_cask(word x) {
  struct str *s = state_str(x);
- return s && s->len == sizeof(struct bz_st) && ((struct bz_st*) s->bytes)->magic == BZ_MAGIC ? s : NULL; }
+ return s && s->len == BZ_STSIZE && ((struct bz_st*) s->bytes)->magic == BZ_MAGIC ? s : NULL; }
 love_noinline static struct g *host_bz2_new(struct g *g) {
- union u *k = new_state(&g, sizeof(struct bz_st), sizeof(struct bz_st));
+ union u *k = new_state(&g, BZ_STSIZE, BZ_STSIZE);
  if (!k) return g;
- ((struct bz_st*) ((struct state*) k)->str->bytes)->magic = BZ_MAGIC;
+ uint8_t *b = (uint8_t*) ((struct state*) k)->str->bytes;
+ ((struct bz_st*) b)->magic = BZ_MAGIC;
+ bz_crcs(((struct bz_d*) (b + sizeof(struct bz_st)))->crct);
  return g->sp[0] = word(k), g; }
 love_noinline static struct g *host_bz2_step(struct g *g) {
  struct str *cs = bz_cask(g->sp[0]);
  if (!cs || !strp(g->sp[1])) return g->sp[2] = ZeroPoint, g->sp += 2, g;
  struct bz_st *S = (struct bz_st*) cs->bytes;
- struct bz_d *d = S->mode ? alloc(NULL, sizeof *d) : NULL;
- if (S->mode && !d) return g->sp[2] = ZeroPoint, g->sp += 2, g;
- if (d) bz_crcs(d->crct);
+ struct bz_d *d = (struct bz_d*) (cs->bytes + sizeof *S);
  struct bz_w w = {0};
  int rc = bz_step(S, d, (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), oddp(g->sp[2]) && getcharm(g->sp[2]), &w);
- if (d) alloc(d, 0);
  if (rc) {
   if (w.p) alloc(w.p, 0);
   return g->sp[2] = rc == BZ_MORE ? putcharm(-1) : rc == BZ_DONE ? putcharm(0) : rc < 0 ? ZeroPoint : putcharm(rc),
