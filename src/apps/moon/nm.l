@@ -343,7 +343,37 @@
           (catmap (i \ map cup (rev (peep ins i ())) + (out i @ () [(ft i)] 1 () m [m])) ^n)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r)))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r))))
+   ; in a block, past (mov t v) a read of v reads t while neither is written, where that lets v die
+   ; at the copy: ra's copy hint then gives the two one register. a form that also writes v or t
+   ; (a cmov onto itself has no encoding), or an asm, ends it. a round leaves the names it moved to the next, over fresh liveness
+   (nmfwd g fs) (abl? g 'fwd ? fs (nmfwd1 g fs 4))
+   (nmfwd1 g fs k)
+    (k = 0 ? fs
+       (ralive g fs @ [ft ud _ lout]
+          (: n #fs
+             (out? x i) (elem x (lout i))
+             (end? f) (f @ (('label || 'jmp || 'br || 'jmpt || 'ret || 'fix || 'cdef || 'cuse) . _) 1 _ 0)
+             ; the reads past the copy to rewrite, the last one leaving v dead -> indices | ()
+             (scan v t i acc)
+              (n <= i ? ()
+                 (ft i @ ('label . _) ()
+                    f (ud i @ [u d]
+                         (: rd (elem v u) wv (elem v d) wt (elem t d)
+                            (? (rd && (wv || wt || end? f)) ()
+                               rd (: a2 (i . acc) (out? v i ? (scan v t (i + 1) a2) a2))
+                               wv acc
+                               (wt || end? f) (out? v i ? () acc)
+                               (scan v t (i + 1) acc))))))
+             (cp i) (ft i @ ([('mov || 'movapd) t v] && lovr? t && lovr? v && t != v && lofr? t = lofr? v) [t v] _ ())
+             dirty {} rw {}
+             _ (map (i \ (cp i @ [t v]
+                            (!(dirty t) && !(dirty v) && out? v i ?
+                               (scan v t (i + 1) () @ l
+                                  (two? l && all (j \ !(two? (rw j))) l ? (map (j \ pin rw j [v t]) l, pin dirty t 1, pin dirty v 1))))
+                            _ 0)) ^n)
+             (!(two? (keys rw)) ? fs
+                (nmfwd1 g (map (i \ (rw i @ [v t] (map (x \ x = v ? t x) (ft i)) _ (ft i))) ^n) (k - 1))))))
    ; a decided branch's dead arm may hold a value's other def: round again without it
    (nmfix g fs)
     (nmround g (nmround g fs) @ r
