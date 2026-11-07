@@ -2688,6 +2688,7 @@
           (atom? br ? ()
              (: base <br ts0 <>br
                 gbq (qspec ps ts base)  ; the run's mask, _Generic's
+                _ (pin ps 'curtdbase base)   ; note lays the typedef's ask on its own type alone
                 (peekp ts0 ";" ? ['(tdef) >ts0]     ; a bare struct/enum definition
                    (: _ (tyattr ts0 @ ta (pinat ps ta (hdhits ta)))   ; what a tag body hid from ptop
                       ; a tag body ahead of a declarator leaves the form no place to show it
@@ -2879,7 +2880,7 @@
                                      qtake ps nm <><prs,
                                      gogl >prs)))
                    (gogl <>f)))
-           st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign) va (max (an ? an 0) (peep ps 'curtdal 0))
+           st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign) an0 (an ? an 0) td (peep ps 'curtdal 0) va (max an0 td)
            fnp (elem <f '(fn proto))
            ; a `used` static is kept though nothing here calls it (gen's dead-static sweep); an
            ; 'inl one lays for no asm that names it
@@ -2894,7 +2895,7 @@
                               (<<prs @ nm
                                  (st ? (pin (ps 'svars) nm (ps 'curused ? 'used 1)),
                                   sc ? (pin (ps 'sects) nm sc),
-                                  0 < va ? (pin (ps 'aligns) nm va),
+                                  (max an0 (tdbase? <><prs (ps 'curtdbase) ? td 0)) @ a (0 < a ? (pin (ps 'aligns) nm a)),
                                   go2 >prs)))
                  (go2 <>f)),
            ; an alias names no storage: another name for a symbol in this TU; cgen lays the label
@@ -2936,6 +2937,7 @@
             pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'curtdal (),
+            pin ps 'curtdbase (),
             pin ps 'curpfe (),
             pin ps 'curssp (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
