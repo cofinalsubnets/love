@@ -61,7 +61,7 @@
  (charm? 5) !(charm? 3.5) !(charm? @(1 2 3)) !(charm? 'a) (charm? 5 ? (star? 5) 1)     ; a charm is the word-sized star
  (tray? @(1 2 3)) (tray? @("a" "b"))                      ; a tray holds any element kind
  (galaxy? @(1 2 3)) !(galaxy? @("a" "b"))                   ; a galaxy is a numeric tray
- (galaxy? (array '(2) (200 2) (200 2)))                    ; bignum cells are stars
+ (galaxy? (galaxy '(2) [(200 2) (200 2)]))                    ; bignum cells are stars
  !(galaxy? 5) !(galaxy? '(1 2))            ; disjoint; a scalar or list is neither
  (!"" = (0 = $"")) (!-5 = (0 = $-5)))            ; the parens matter: bare, = chains
 
@@ -287,12 +287,12 @@
  (2.0 = re (2 ~ 3)) (i < 1) !(1 < i) ("(0.0 ~ 1.0)" = show i)
  (0.0 = (peep (arg (1 ~ @(1 0))) 1 0)))          ; arg broadcasts
 (test
- (array 2 (1 ~ 2) (3 ~ 4) @ v (twin-tray = tier v && (1 ~ 2) = peep v 0 0 && (4 ~ 6) = net v
+ (galaxy 2 [(1 ~ 2) (3 ~ 4)] @ v (twin-tray = tier v && (1 ~ 2) = peep v 0 0 && (4 ~ 6) = net v
   && (2 ~ 4) = peep (v + v) 0 0 && (2 ~ 4) = peep ((2 ~ 0) * v) 0 0 && !(v < v)
   && $v = $(net v) && "@((1.0 ~ 2.0) (3.0 ~ 4.0))" = show v))
  ; phases sum as vectors; $ clamps re, never |z|
- (0 = $(array 2 (3 ~ 4) (-3 ~ 4)))
- (3 = $(array 2 (3 ~ 4) (0 ~ 0))) ((0.0 ~ 8.0) = (net (array 2 (3 ~ 4) (-3 ~ 4)))))
+ (0 = $(galaxy 2 [(3 ~ 4) (-3 ~ 4)]))
+ (3 = $(galaxy 2 [(3 ~ 4) (0 ~ 0)])) ((0.0 ~ 8.0) = (net (galaxy 2 [(3 ~ 4) (-3 ~ 4)]))))
 (test
  (twin (star-tray '(2 2) '(1 2 3 4)) (star-tray '(2 2) '(5 6 7 8)) @ m
   (aall (re m = star-tray '(2 2) '(1 2 3 4)) && aall (im m = star-tray '(2 2) '(5 6 7 8))
@@ -304,7 +304,7 @@
  !(re (top-tray '(2) 0)) !(im (top-tray '(2) 0)))                         ; an object tray is no number
 
 ; --- arrays --- (star-tray shape vals) typed ctor (vals 0 zero-fills; gem-/twin-/top-tray for r/c/o);
-; (array shape elem..) infers; @(..) rank-1 literal; (iota n) 0..n-1. an array is rank >= 1 at any
+; (galaxy shape [elem..]) infers; @(..) rank-1 literal; (iota n) 0..n-1. an array is rank >= 1 at any
 ; tally, so @(5) is an array; a rank-0 point is its scalar. empties stay arrays, carrying the units.
 ; + - * // < = and the bitwise five broadcast numpy-style (`/` goes r on one inexact cell); `=` and
 ; `<` answer 0/1 masks and aall/aany ask the whole question; a shape mismatch or a non-numeric
@@ -322,7 +322,7 @@
  (@(0 1 2) = (iota 3)) (star-tray = (tier (iota 3))) !(iota 0) !(iota -1) (4950 = (net (iota 100)))   ; iota: jot's range as a z-array
  (aall (@(2.0 3.0) = ((1 / 2) @(4.0 9.0)))) (@(3.5 5.5) = @(7 11) / 2) (@(3 5) = @(7 11) // 2)
  (@(4 6) = @(8 12) / 2) !(star-tray '(3) 0) ("@(10 20 30)" = show @(10 20 30))
- (aall (@(10 20 30) = (array 3 10 20 30))) !(@(1 2 3) + @(1 2))
+ (aall (@(10 20 30) = (galaxy 3 [10 20 30]))) !(@(1 2 3) + @(1 2))
  (0 = (@(1 2 3) = @(1 2))) (0 = ('sym = @(1 2 3))) (0 = ("ab" = @(1 2)))   ; a shape/kind mismatch is 0
  (aall (@(1 2 3) = @(1 2 3))) !(aall (@(1 2 3) = @(1 2 9)))                ; `=` is a mask; aall asks the whole question
  (tray? (@(1 2 3) = @(1 2 9))) (aany (@(1 2 3) = @(1 2 9)))
@@ -334,8 +334,8 @@
  (@(8 9) = (@(3 4) + ((200 2) + 5)))              ; a big truncates into the cell
  (star-tray = (tier (@(3 4) + (200 2))))          ; ..and never leaves the tray band
  (sun? (3 + (200 2)))                             ; the star lane grows exact instead
- (array '(2) (200 2) (200 2) @ o                  ; ..as does an object tray
-  (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))
+ (galaxy '(2) [(200 2) (200 2)] @ o                  ; ..as does an object tray
+  (aall (o = ((o + (galaxy '(2) [1 1])) - (galaxy '(2) [1 1])))))
  (word ? ("@(infinity infinity)" = show (@(1.0e308 1.0e308) * @(10.0 10.0))) 1)    ; a gem-tray saturates, never wraps
  (word ? (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
  (word ? (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
@@ -345,7 +345,7 @@
  (@(240 252) = (255 ^ @(15 3))) (@(2 16) = (@(1 1) << @(1 4)))   ; a star broadcasts; counts can be per-cell
  !(@(5 6) | ())                                                  ; ..and () is absent here too
  (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a gem tray is not the word lane
- (() = ((array '(2) (200 2) (200 2)) & @(255 255)))              ; ..nor an object tray
+ (() = ((galaxy '(2) [(200 2) (200 2)]) & @(255 255)))              ; ..nor an object tray
  (@(1 3 5 7 9) @ m (aall (@(0 1 1 1 0) = ((m > 2) & (m < 8)))))  ; masks combine
  (inner (star-tray '(2 3) '(1 2 3 4 5 6)) (star-tray '(3 2) '(7 8 9 10 11 12)) @ M    ; 2x2 matmul
   (('(2 2) = (shape M)) && 154 = (peep M '(1 1) 0))) !(inner @(1 2 3) @(1 2))

@@ -9,6 +9,13 @@
 ;                                         at each step and a sway from foot to foot
 ;   (gesture-breath t)                    under every move, the eye rising and nodding a
 ;                                         little, slowly: [dy dph]
+;   (gesture-gait st dt v run)            a walker's frame, v metres a second over the ground, run
+;                                         1 at a sprint: 'wa the stride's show, 'puff 0 to 1, up
+;                                         at a run and slowly down, 'bp the breath, quicker and
+;                                         harder for it; 'foot 1 as a foot lands
+;                                         as a breath turns in or out; with 'sway, 'lean a nod
+;                                         as the walk starts or stops, and nothing else moved
+;   (gesture-body st)                     what that does to the eye, [up right pitch roll]
 ;   (gesture-kneel st spot at ground kh)  a slow walk to spot [x z], turning to face at [x z],
 ;                                         one knee then the other, kh the eye kneeling over
 ;                                         (ground x z); then 'kneel
@@ -29,7 +36,7 @@
 ;   (gesture-play st dt fall)             a frame of the move, dt seconds after the last:
 ;                                         (fall st kind) for each event passed; 'eye is mv's
 ;                                         'then once it is over
-(module (gesture gesture-curve gesture-at gesture-breath gesture-kneel gesture-stand gesture-lie gesture-wake gesture-act gesture-acts
+(module (gesture gesture-curve gesture-at gesture-breath gesture-gait gesture-body gesture-kneel gesture-stand gesture-lie gesture-wake gesture-act gesture-acts
          gesture-begin gesture-play)
 (borrow 'view)                          ; wrap, clamp
 (borrow 'vec)
@@ -57,6 +64,20 @@
    q (sl > 1e-6 ? (pi * far x z / sl) 0.0)
    [x (ch 'y - 0.022 * sq (sin q)) z (ch 'th) (ch 'ph) (ch 'ro + 0.012 * sin q)])
  (gesture-breath t) [(0.005 * sin (t * 1.55)) (0.004 * sin (t * 1.55 - 0.8))]
+ gait-step 1.3 bob-walk 0.016 bob-run 0.032 puff-up 5.0 puff-down 18.0
+ ; ..a change of speed kicks the nod's rate, never its place: it swells and settles as a damped spring
+ lean-w 7.0 lean-kick 0.133
+ (gesture-gait st dt v run) (: sw0 (peep st 'sw 0.0) sw (sw0 + pi * v * dt / gait-step) goes (v > 0.2)
+   wa0 (peep st 'wa 0.0) wa (wa0 + min 1.0 (dt / 0.12) * ((goes ? (run ? bob-run bob-walk) 0.0) - wa0))
+   pf0 (peep st 'puff 0.0) pf (pf0 + (goes && run ? ((1.0 - pf0) * dt / puff-up) (0.0 - pf0 * dt / puff-down)))
+   bp0 (peep st 'bp 0.0) bp (bp0 + dt * (1.55 + 3.4 * pf))
+   _ (? (peep st 'sway 0) (: x (peep st 'lean 0.0) r (peep st 'leanv 0.0 + lean-kick * (v - peep st 'v0 0.0)) e (exp -(lean-w * dt)) q ((r + lean-w * x) * dt)
+                            (pins st 'v0 v 'lean ((x + q) * e) 'leanv ((r - lean-w * q) * e))))
+   (pins st 'sw sw 'wa wa 'puff pf 'bp bp 'foot (floor (sw / pi) > floor (sw0 / pi) ? 1 0)))
+ (gesture-body st) (: wa (peep st 'wa 0.0) sw (peep st 'sw 0.0) pf (peep st 'puff 0.0) bp (peep st 'bp 0.0)
+   c (cos (2.0 * sw)) s (sin sw)
+   [((0.005 + 0.03 * pf) * sin bp - wa * c) (0.6 * wa * s)
+    ((0.004 + 0.018 * pf) * sin (bp - 0.8) + 0.25 * wa * c + peep st 'lean 0.0) (0.25 * wa * s)])
  ; ..turn to it, the walk, the knees, the gaze settling below
  (gesture-kneel st spot at ground kh) (: x0 (st 'px) z0 (st 'pz) y0 (st 'py) th0 (st 'th) ph0 (st 'ph)
    kx (spot 0) kz (spot 1) ax (at 0) az (at 1) yk (ground kx kz + kh)

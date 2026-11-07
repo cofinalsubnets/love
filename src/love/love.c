@@ -138,7 +138,6 @@ static struct { short v; char n[16]; } const errnames[] = {
 static struct g *ini_0(struct g*g, uintptr_t len0) {
  memset(g, 0, sizeof(struct g));
  g->len = len0;
- g->scare_a = g->scare_b = g->scare_c = zero;   // v0..end is GC-walked: raw 0 is not a value
  for (int i = 0; i < hook_n; i++) g->hook[i] = zero;   // unsealed: hot_hook traps until (seal-hook) fills them
  g->hp = g->end, g->sp = (word*) g + len0, g->ip = (union u*) yield_c;
  g->major_len = love_major0;
@@ -226,14 +225,13 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
    if (ok(g)) g->errs = pop1(g); }
   // g->nom, in its enum's order; g->kreg: name -> (serial . table), pinned by post.l's `coin`
   { char const *p = kind_names " name + * ap - net star / payload < = int ceil lambda cask port coin"
-                               " \\ list hash tuple tablet iota mono torn @ , weave : ?";
-    for (int i = 0; ok(g) && i < NomOom; i++) {
+                               " \\ list hash tuple tablet iota mono torn @ , weave : ? oom deep deadlock code apply missing";
+    for (int i = 0; ok(g) && i < NomN; i++) {
      while (*p == ' ') p++;
      char nm[16], *q = nm;
      while (*p && *p != ' ') *q++ = *p++;
      *q = 0;
-     if (ok(g = intern(strof(g, nm)))) g->nom[i] = pop1(g); }
-    if (ok(g = gxr(push(intern(strof(g, "oom")), 1, putcharm(0))))) g->nom[NomOom] = pop1(g); }
+     if (ok(g = intern(strof(g, nm)))) g->nom[i] = pop1(g); } }
   if (ok(g = map_new(g))) g->kreg = pop1(g);
  }
  return g; }
@@ -242,10 +240,6 @@ word love_err(struct g *g, int e) {
  g = core_of(g);
  word v = mapget(g, 0, putcharm(e), g->errs);
  return v ? v : mapget(g, 0, zero, g->errs); }
-
-// the system process, a mutable global: inle's /proc reads it from under the syscall
-// boundary, where no g is in hand. moved only by gen_grow
-struct g *love_system;
 
 // the once-laid tables, filled by the first start (ini or love_image_load), read-only after.
 // arm32 has no exchange, and its boards start one core before any interrupt
@@ -277,7 +271,7 @@ struct g *ini(void) {
  struct g *g = alloc(NULL, len0 * sizeof(word));
  if (g == NULL) return encode(g, status_scare);
  g = ini_0(g, len0);
- return ok(g) ? (love_system = g) : g; }
+ return g; }
 
 // ===== stack =====
 static struct g *pushr(struct g *g, uintptr_t m, uintptr_t n, va_list xs) {
@@ -328,7 +322,7 @@ op11(lvm_nclock, putcharm(nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 static lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
- if (!ok(g = force(g, charmp(n) && getcharm(n) > 0))) love_musttail return Ap(_lvm_ghelp, g);
+ if (!ok(g = force(g, charmp(n) && getcharm(n) > 0))) love_musttail return Ap(_lvm_raise, g);
  Unpack(g);
  Sp[0] = putcharm((intptr_t) g->n_gc);
  Ip += 1; love_musttail return Continue(); }
@@ -435,7 +429,7 @@ lvm(lvm_arena) {
 // an arity-1 entry and three behind a curried one's
 lvm(lvm_lazy) {
  union u *h = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 3 : Ip - 1;
- if (code_seat(g, (char const*) h->ap)) { Pack(g); love_musttail return Ap(_lvm_ghelp, encode(g, status_scare)); }
+ if (code_seat(g, (char const*) h->ap)) { Pack(g), g->scare = ScareCode; love_musttail return Ap(_lvm_raise, encode(g, status_scare)); }
  Ip->ap = h->ap;
  love_musttail return Continue(); }
 
@@ -986,7 +980,7 @@ static lvm(lvm_link) {
    love_musttail return Push(_res); } } \
  if ((vop) == vop_mul) love_musttail return Ap(lvm_bmul_start, g); /* O(n^2): run yieldable */ \
  Pack(g); g = big_binop(g, vop); \
- if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g); \
+ if (!ok(g)) love_musttail return Ap(_lvm_raise, g); \
  Unpack(g); love_musttail return Continue(); }
 #define avm_slowdiv(op, vop, c_op, fexpr, zarm) lvm(lvm_##op##n) { \
  word a = Sp[0], b = Sp[1]; \
@@ -1180,3 +1174,8 @@ uintptr_t const def1_n = countof(def1);
 int nif_cell(union u const *k) {
  return (uintptr_t) ((char const*) k - (char const*) nifs) < sizeof nifs; }
 
+word kind_get(struct g *g, word kind, intptr_t i) {
+ return tabp(kind) ? mapget(g, ZeroPoint, core_of(g)->nom[i], kind) : ZeroPoint; }
+uint8_t *cask_bytes(word x, uintptr_t *n) {
+ struct str *s = cask_str(x);
+ return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }

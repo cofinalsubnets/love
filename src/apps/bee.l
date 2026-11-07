@@ -1511,7 +1511,7 @@
                      (sh-run (r 1))))
               (? !(two? ws) (: _ (map (n \ puts (n + "\n")) (resumable 0)) 0) (go-resume ())))
           2))
-     ; --- the core: the doors mitty's hud (src/apps/mitty/hud.l) reads the hive through ---
+     ; --- the core: the doors the hud (src/apps/mitty/hud.l) reads the hive through ---
      bee-core
       {'qwatch bee-qwatch 'utc-minute utc-minute
        'user-settle user-settle 'user-card! user-card! 'user-mail user-mail 'user-post user-post

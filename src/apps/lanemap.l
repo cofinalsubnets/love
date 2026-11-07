@@ -66,7 +66,7 @@
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
-     ["test_inle" "test_kernel_vmx" "test_disk" "test_uefi" "test_kboot" "test_kmitty" "test_kverb" "test_kernel_uproc"
+     ["test_inle" "test_kernel_vmx" "test_disk" "test_uefi" "test_kboot" "test_kpier" "test_kverb" "test_kernel_uproc"
       "test_kernel_a64" "test_uefi_a64" "test_kernel_rv64" "test_kernel_wasm" "test_seedwasm" "test_nestwasm"]
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]

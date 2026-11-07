@@ -30,12 +30,6 @@ roster_refuses='
 '
 # compiled clean and answered wrong: none on every target
 roster_wrong=''
-# a lane the new backend's targets have and the others lack
-if [ "$arch" != x64 ] && [ "$arch" != a64 ] && [ "$arch" != rv64 ]; then
-  roster_refuses="$roster_refuses
-00140 no lane for a by-value composite argument on $arch (x64 carries it, named and anonymous)
-"
-fi
 # the wasm machine's line, not the compiler's: the loader has no filesystem
 if [ "$arch" = wasm ]; then
   roster_wrong="$roster_wrong

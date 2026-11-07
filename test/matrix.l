@@ -8,8 +8,8 @@
    mx-big (100 2)                     ; ksun again, past the word
    mx-az  @(10 20)                       ; ktrayZ (int tray)
    mx-ar  @(1.5 2.5)                     ; ktrayR (float tray)
-   mx-ac  (array 2 (1 ~ 2) (3 ~ 4))    ; ktrayC (packed complex tray)
-   mx-ao  (array 2 (100 2) 5)         ; ktrayO (object tray)
+   mx-ac  (galaxy 2 [(1 ~ 2) (3 ~ 4)])    ; ktrayC (packed complex tray)
+   mx-ao  (galaxy 2 [(100 2) 5])         ; ktrayO (object tray)
    mx-str "ab"                           ; kstring
    mx-sym 'ef                            ; kmint (interned)
    mx-lst '(1 2)                         ; kchain (chain / list)
@@ -177,5 +177,5 @@
  (outer @(1 2 3) @(10 20) @ O
   ('(3 2) = shape O && 10 = peep O '(0 0) 0 && 60 = peep O '(2 1) 0))    ; outer
  (gem-tray = tier (outer @(1 2) @(3.0 4.0)))     ; outer widens on an inexact operand
- !(inner (array [4294967296 4294967296 0]) (array [0 1]))   ; a product no heap holds -> nil
+ !(inner (galaxy [4294967296 4294967296 0] []) (galaxy [0 1] []))   ; a product no heap holds -> nil
  !(inner @(1 2) 5) !(outer @(1 2) 5))              ; non-array operand -> nil

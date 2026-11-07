@@ -225,7 +225,7 @@
    ;; none takes the segment's own; the prefixes stand alone, as gas reads `rep; movsb`
    as-sized {'ret 195 'lret 203 'iret 207 'pushf 156 'popf 157 'pusha 96 'popa 97}
    as-strs {'movs 165 'stos 171 'lods 173 'cmps 167 'scas 175 'ins 109 'outs 111}
-   as-nil32 {'rep '(243) 'repe '(243) 'repz '(243) 'repne '(242) 'repnz '(242) 'lock '(240)
+   as-nil32 {'syscall '(15 5) 'rep '(243) 'repe '(243) 'repz '(243) 'repne '(242) 'repnz '(242) 'lock '(240)
              'wbinvd '(15 9) 'invd '(15 8) 'wrmsr '(15 48) 'rdmsr '(15 50) 'clts '(15 6)}
    ;; a string op spelled with its operands: they say only the source's override and the
    ;; address size. () when the line is not one
@@ -258,7 +258,7 @@
           (1 < sw && charm? (peep as-sized stem ())) (as-osz md sw + [(as-sized stem)])
           (0 < sw && charm? (peep as-strs stem ())) (sw = 1 ? [(as-strs stem - 1)] (as-osz md sw + [(as-strs stem)]))
           (elem mn '(cbw cwde cwd cdq)) (as-osz md (elem mn '(cbw cwd) ? 2 4) + [(elem mn '(cbw cwde) ? 152 153)])
-          (elem mn '(cdqe cqo syscall sysret sysretq pushfq popfq lretq)) (scare 'as-op0-mode [mn md])
+          (elem mn '(cdqe cqo sysret sysretq pushfq popfq lretq)) (scare 'as-op0-mode [mn md])
           (as-nils mn @ () (scare 'as-op0 mn) b b)))
 
    ;; past the GPR core, ops destination first. SSE by a table of (prefix opcode), register <-

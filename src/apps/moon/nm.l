@@ -9,13 +9,16 @@
    ; 32-bit indexed loads nor a store of an immediate, riscv only the word and byte twins
    nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
+   ; t32's word is ld4 and st4 too, and it has no float index
+   nmxl32 {'ld 'ldx 'ld4 'ldx 'ldu4 'ldx 'ldu1 'ldxb}
+   nmxs32 {'st 'stx 'st4 'stx 'st1 'stxb}
    nmsi {'st 'si 'st1 'si1 'st2 'si2 'st4 'si4}
    (nmu v) (v < 0 ? (v + 18446744073709551616) v)
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (nmxld op @ () () xo (? (x64? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo)))
-   (nmxsop g op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
    ; a64 lays these through x16, so their displacement has to encode in the one instruction
    nmxw {'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
    (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))
@@ -23,7 +26,7 @@
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
    (nmfuse g fs)
-    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu && (x64? g || a != 'sp))
+    (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu && (x86? g || a != 'sp))
            ([op d a b] . nmfuse g u)
           (f . u) (f . nmfuse g u)
           _ ())
@@ -133,7 +136,7 @@
    (nmwide h m) (foldl (t \ k \ (m k @ v (pin t k (h k @ () (nmstep v) x (v <= x ? v (nmstep v)))))) {} (keys m))
    (nmstep v) (v <= 4294967295 ? 4294967295)
    ; the next form reads the flags a compare left
-   (nmflg? u) (u @ ((('br || 'set) . _) . _) 1 _ 0)
+   (nmflg? u) (u @ ((('br || 'set || 'cmov) . _) . _) 1 _ 0)
    (nmcp w) (foldl (t \ k \ (w k @ () t v (pin t k v))) {} (keys w))
    ; two blocks' bounds where they join: the looser of each both know
    (nmmeet a b) (foldl (t \ k \ (a k @ () t x (b k @ () t y (pin t k (max x y))))) {} (keys a))
@@ -175,7 +178,7 @@
                            (cint? x && elem op racomm && imma g op x) [op d b x]
                            f))
                     ['cmp a b] (k b @ () f n (imma g 'cmp n ? ['cmp a n] f))
-                    ([op b o v] && x64? g && nmsi op) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
+                    ([op b o v] && x86? g && nmsi op) (k v @ () f n (k b @ () [(nmsi op) b o n] _ f))
                     ['mov d y] (k y @ () f n ['li d n])
                     f)
        ; an unsigned divide or remainder by a power of two: a shift or a mask
@@ -183,12 +186,14 @@
        (dv f) (f @ (('udiv . d . a . b . _) && pw (kv b)) [['mov d a] ['shr d (nmlog (kv b))]]
                    (('urem . d . a . b . _) && pw (kv b) && imma g 'and (kv b - 1)) [['and d a (kv b - 1)]]
                    _ ())
-       ; a compare of two known values decides its branch, lo.l laying a compare before each. in a
+       ; a compare of two known values decides its branch or select, lo.l laying a compare before each. in a
        ; block a value of more defs is known too, from its last literal
        (kb t x) (cint? x ? x (peep t x () @ () (k x) n n))
        (kbr l t)
         (l @ ((['cmp a b] . ['br cc L] . u) && cint? (kb t a) && cint? (kb t b) && peep nmcc cc ())
               (nmcc cc (kb t a) (kb t b) ? (['jmp L] . kbr u t) (kbr u t))
+             ((['cmp a b] . ['cmov cc d s] . u) && cint? (kb t a) && cint? (kb t b) && peep nmcc cc ())
+              (kbr (nmcc cc (kb t a) (kb t b) ? (['mov d s] . u) u) t)
              (f . u)
               (f . kbr u (f @ ('label . _) {}
                               ['li d n] (pin t d n)
@@ -247,12 +252,12 @@
                 _ (nmxop g op @ () f xo (idx b o @ [b2 i s o2] (nmxfar g xo o2 ? f [xo d b2 i s o2]) _ f)))
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
-                _ (nmxsop g op @ () f xo (idx b o @ [b2 i s o2] (nmxfar g xo o2 ? f [xo b2 i s o2 v]) _ f)))
+                _ (nmxsop g op @ () f xo (idx b o @ ([b2 i s o2] && (o2 = 0 || !(t32? g))) (nmxfar g xo o2 ? f [xo b2 i s o2 v]) _ f)))
             ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ; an add of a literal onto a literal's sum is one add
             (['add d a k] && cint? k && lovr? a) (base a k @ ([b2 o2] && lovr? b2) ['add d b2 o2] _ f)
-            ['cmp t 0] (nmav av t @ ['and _ a k] ['test a k] _ f)
+            ['cmp t 0] (nmav av t @ (['and _ a k] && (!(charm? k) || immok g 'log k)) ['test a k] _ f)
             f))
 
    ; (op t ..) (mov x t), t's one def and one read: the op writes x
@@ -279,7 +284,7 @@
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
        kv (foldl (t \ f \ (f @ (['li k n] && lovr? k && peep dn k 0 = 1) (pin t k n) _ t)) {} fs)
        (p2 n) (cint? n && 1 < n && n & (n - 1) = 0)
-       (x64? g ? fs
+       (x86? g ? fs
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)

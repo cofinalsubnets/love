@@ -111,9 +111,18 @@
  (aall (gem-tray '(2) '(2.0 3.0) = ((1 / 2) (gem-tray '(2) '(4.0 9.0)))))
  (gem-tray = tier ((1 / 2) (star-tray '(3) 0)))
 
- ; --- print: rank 1 as @(…), rank 2+ as (array '(shape) elem …) ---
+ ; --- print: rank 1 as @(…), rank 2+ as (galaxy '(shape) [elem …]) ---
  ("@(10 20 30)" = show (star-tray '(3) '(10 20 30)))
- ("(array '(2 2) 1 2 3 4)" = show (star-tray '(2 2) '(1 2 3 4)))
+ ("(galaxy '(2 2) [1 2 3 4])" = show (star-tray '(2 2) '(1 2 3 4)))
+ ("(top-tray '(2 1) ['a 'b])" = show (top-tray '(2 1) '(a b)))
+ (galaxy = star-tray)
+ (star-tray = tier (galaxy [2] [1 2])) (gem-tray = tier (galaxy [2] [1.5 2])) (twin-tray = tier (galaxy [2] [1 (1 ~ 1)]))
+ (twin-tray = tier (galaxy [3] [(1 ~ 1) 1.5 1])) (star-tray = tier (galaxy [0] []))
+ (star-tray = tier (galaxy [2] [(2 ** 62) (0 - 2 ** 62)])) (star-tray = tier (galaxy [2] [(2 ** 63 - 1) (0 - 2 ** 63)]))
+ (top-tray = tier (galaxy [1] [(2 ** 63)])) (top-tray = tier (galaxy [1] [(0 - 2 ** 63 - 1)])) (top-tray = tier (galaxy [1] [(2 ** 70)]))
+ (top-tray = tier (galaxy [1] [(1 /// 2)])) (gem-tray = tier (galaxy [2] ['a 1.5]))
+ (aall (@(0 2) = galaxy [2] ['a 2])) (aall (@(1.0 2.0) = gem-tray [2] [1 2]))
+ (aall (@(1 2) = galaxy 2 [1 2]))
  ("@(1.5 2.5)" = show (gem-tray '(2) '(1.5 2.5)))
  ("@(1 2 3)" = show (star-tray '(3) '(1 2 3)))   ; z aliases the word-int kind
  ; @(…) reads back to an equal array; the explicit form is a plain constructor call

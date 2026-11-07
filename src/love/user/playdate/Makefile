@@ -149,9 +149,10 @@ FORCE:
 
 # the stones: the host modules the lore libraries borrow stubbed, then the libraries in the
 # order they borrow each other, then the glue, as one text
-pds_l = stubs.l $(S)/apps/x11.l $(addprefix $(S)/apps/harp/,harp.l ops.l play.l) \
-  $(addprefix $(S)/apps/lore/,rove.l view.l vec.l flicker.l walk.l starmap.l sky.l mesh.l stones.l apartment.l) stones.l
-$(hd)/stones.h: $(pds_l) $(S)/tools/lcat.l | $(m)
+pds_l = stubs.l $(S)/apps/x11.l $(addprefix $(S)/apps/harp/,harp.l ops.l play.l) $(S)/apps/lore/rove.l $(S)/apps/harp/horn.l \
+  $(addprefix $(S)/apps/lore/,mixer.l view.l vec.l flicker.l walk.l starmap.l sky.l) $(S)/apps/json.l \
+  $(addprefix $(S)/apps/lore/,mesh.l gesture.l stones.l apartment.l) stones.l
+$(hd)/stones.h: Makefile $(pds_l) $(S)/tools/lcat.l | $(m)
 	@echo LOVE	$@
 	@mkdir -p $(hd)
 	@cat $(pds_l) > $@.l && $(m) $(S)/tools/lcat.l $@.l > $@.tmp && test -s $@.tmp && mv -f $@.tmp $@ \

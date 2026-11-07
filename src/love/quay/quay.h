@@ -72,6 +72,7 @@ enum { cb_clipn = 65536 };  // an osc 52 body's longest; one past it is refused 
 struct cb {
   uint32_t wpos, spos;        // the write cursor, and DECSC's saved one
   uint16_t rows, cols, flag, arg;  // arg: the CSI parameter being collected
+  uint8_t nokeys;                  // ?7727: the program asks a phone's keyboard away
   uint32_t cur_fg, cur_bg, def_fg, def_bg;  // the pen, and what a default colour means
   uint32_t sfg, sbg;  // the saved pen (DECSC), with sface
   uint8_t cur_face, sface, esc, gset;  // esc: escape-parser state; gset: the charsets (cb_g0 cb_g1 cb_so)

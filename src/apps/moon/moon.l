@@ -487,6 +487,10 @@
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                      + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                      + bpsecs bp + cfsecs cf tgt)
+                 locs (lnames + (foldl (\ t s (pin t s 1)) {} (fns + gns + lnames) @ have (filter (s \ !(peep have s 0)) (asmlocs <at))))
+                 ; the asm's data names typed as gas types them, its absolute symbols and its sizes
+                 asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
+                          (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
                  ; arm32 has no .image lane and no local func symbols (objsecs3 refuses the first)
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
@@ -494,13 +498,11 @@
                         (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
                        (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
                     (elf32? tgt)
-                    (objsecs32n tgt (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
-                                fns gns wks anames)
+                    (: s32 (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
+                       (i386? tgt ? (objsecs32x tgt s32 fns gns wks anames locs asmax)
+                          (objsecs32n tgt s32 fns gns wks anames)))
                     (objsecsn tgt (objsec-merge ((dotS? src || dots? src ? [[".text" 1 6 4 ()]] (objsecs4 tforms dforms nforms iforms bforms rforms)) + xs) <at)
-                              fns gns wks (lnames + (foldl (\ t s (pin t s 1)) {} (fns + gns + lnames) @ have (filter (s \ !(peep have s 0)) (asmlocs <at)))) anames
-                              ; the asm's data names typed as gas types them, its absolute symbols and its sizes
-                              [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
-                               (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
+                              fns gns wks locs anames asmax
                               ; the functions C laid, not the asm's, under unwind tables
                               (ua || us ? (fnames + lnames + map cap xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))

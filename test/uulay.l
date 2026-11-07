@@ -3,31 +3,31 @@
 
 ; --- take, drop, and placeat's zip (keeps the left list, truncates at the shorter) ---
 (test
- (defn ltake (pi k nat (pi l nlist nlist))
+ (defn ltake (pi k nat l nlist nlist)
    (lam k ((nat_rect (lam q (pi l nlist nlist))
               (lam l nnil)
-              (lam j (lam IH (lam l (bool_rect (lam x nlist)
+              (lam j IH l (bool_rect (lam x nlist)
                        nnil
                        (ncons (hd0 l) (IH (tl0 l)))
-                       (niszero (nlen l))))))
+                       (niszero (nlen l))))
               k))))
- (defn ldrop (pi k nat (pi l nlist nlist))
+ (defn ldrop (pi k nat l nlist nlist)
    (lam k ((nat_rect (lam q (pi l nlist nlist))
               (lam l l)
-              (lam j (lam IH (lam l (bool_rect (lam x nlist)
+              (lam j IH l (bool_rect (lam x nlist)
                        nnil
                        (IH (tl0 l))
-                       (niszero (nlen l))))))
+                       (niszero (nlen l))))
               k))))
- (defn lzipl (pi a nlist (pi b nlist nlist))
-   (lam a (lam b ((nat_rect (lam q (pi v (nvec q) (pi b2 nlist nlist)))
-                     (lam v (lam b2 nnil))
-                     (lam k (lam IH (lam v (lam b2 (bool_rect (lam x nlist)
+ (defn lzipl (pi a nlist b nlist nlist)
+   (lam a b ((nat_rect (lam q (pi v (nvec q) b2 nlist nlist))
+                     (lam v b2 nnil)
+                     (lam k IH v b2 (bool_rect (lam x nlist)
                               nnil
                               (ncons (pr1 v) (IH (pr2 v) (tl0 b2)))
-                              (niszero (nlen b2)))))))
+                              (niszero (nlen b2))))
                      (pr1 a))
-                   (pr2 a) b))))
+                   (pr2 a) b)))
  ((vof 0 '(ncons 7 (ncons 9 nnil))) = (vof 0 '(ltake 2 (ncons 7 (ncons 9 (ncons 4 nnil))))))
  ((vof 0 '(ncons 4 nnil)) = (vof 0 '(ldrop 2 (ncons 7 (ncons 9 (ncons 4 nnil))))))
  ((vof 0 '(ncons 7 nnil)) = (vof 0 '(lzipl (ncons 7 (ncons 9 nnil)) (ncons 1 nnil)))))
@@ -35,25 +35,25 @@
 ; --- the splits, counts only: splitv-eq one strip per master, splitv-w one per frac,
 ; --- padfr a length-ns frac list ---
 (test
- (defn msplitveq (pi n nat (pi r nat nlist))
-   (lam n (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) n))))
- (defn msplitvw (pi fr nlist (pi r nat nlist))
-   (lam fr (lam r (nat_rect (lam q nlist) nnil (lam j (lam IH (ncons r IH))) (pr1 fr)))))
- (defn mpadfr (pi fr nlist (pi ns nat nlist))
-   (lam fr (lam ns ((nat_rect (lam q (pi f nlist nlist))
+ (defn msplitveq (pi n nat r nat nlist)
+   (lam n r (nat_rect (lam q nlist) nnil (lam j IH (ncons r IH)) n)))
+ (defn msplitvw (pi fr nlist r nat nlist)
+   (lam fr r (nat_rect (lam q nlist) nnil (lam j IH (ncons r IH)) (pr1 fr))))
+ (defn mpadfr (pi fr nlist ns nat nlist)
+   (lam fr ns ((nat_rect (lam q (pi f nlist nlist))
                        (lam f nnil)
-                       (lam j (lam IH (lam f (ncons (bool_rect (lam x nat) 1 (hd0 f) (niszero (nlen f)))
-                                              (IH (tl0 f))))))
+                       (lam j IH f (ncons (bool_rect (lam x nat) 1 (hd0 f) (niszero (nlen f)))
+                                              (IH (tl0 f))))
                        ns)
-                     fr))))
+                     fr)))
  (2 = (vof 0 '(nlen (msplitveq 2 0))))
  (3 = (vof 0 '(nlen (mpadfr (ncons 5 nnil) 3)))))
 
 ; --- rt-tile's flow: a row fitting the masters zips into their column; otherwise
 ; --- masters (take nm) and slaves (drop nm) zip their own strips and append ---
 (test
- (defn rtwins (pi nm nat (pi fr nlist (pi r nat (pi row nlist nlist))))
-   (lam nm (lam fr (lam r (lam row
+ (defn rtwins (pi nm nat fr nlist r nat row nlist nlist)
+   (lam nm fr r row
       (let n (nlen row)
         (bool_rect (lam x nlist)
           nnil
@@ -62,7 +62,7 @@
                   (lzipl (ldrop nm row) (msplitvw (mpadfr fr (natminus n nm)) r)))
             (lzipl row (msplitveq n r))
             (natgtb n nm))
-          (niszero n))))))))
+          (niszero n)))))
  ; the ledger computes: split branch (nm 1, row (10 20 30)) and master branch
  ((vof 0 '(ncons 10 (ncons 20 (ncons 30 nnil))))
   = (vof 0 '(rtwins 1 nnil 0 (ncons 10 (ncons 20 (ncons 30 nnil))))))
@@ -76,24 +76,24 @@
  (defq lnil0 (pi v (nvec 0) (paths nlist (tpair 0 v) nnil))
    (lam v (maponpaths unit nlist (lam u (tpair 0 u)) v tt (uu-unitpath v))))
  (defq ldroplen
-   (pi k nat (pi l nlist (paths nat (nlen (ldrop k l)) (natminus (nlen l) k))))
+   (pi k nat l nlist (paths nat (nlen (ldrop k l)) (natminus (nlen l) k)))
    (lam k ((nat_rect
       (lam kq (pi l nlist (paths nat (nlen (ldrop kq l)) (natminus (nlen l) kq))))
       (lam l (pathsinv0 nat (natminus (nlen l) 0) (nlen l) (natminusn0 (nlen l))))
-      (lam j (lam IH (lam l
+      (lam j IH l
         ((nat_rect
            (lam q (pi v (nvec q) (paths nat (nlen (ldrop (succ j) (tpair q v))) (natminus (nlen (tpair q v)) (succ j)))))
            (lam v (idpath 0))
-           (lam m (lam u (lam v (IH (tpair m (pr2 v))))))
+           (lam m u v (IH (tpair m (pr2 v))))
            (pr1 l))
-         (pr2 l)))))
+         (pr2 l)))
       k))))
  (defq lzipltake
-   (pi k nat (pi l nlist (pi r nat (paths nlist (lzipl (ltake k l) (msplitveq k r)) (ltake k l)))))
+   (pi k nat l nlist r nat (paths nlist (lzipl (ltake k l) (msplitveq k r)) (ltake k l)))
    (lam k ((nat_rect
-      (lam kq (pi l nlist (pi r nat (paths nlist (lzipl (ltake kq l) (msplitveq kq r)) (ltake kq l)))))
-      (lam l (lam r (idpath nnil)))
-      (lam j (lam IH (lam l (lam r
+      (lam kq (pi l nlist r nat (paths nlist (lzipl (ltake kq l) (msplitveq kq r)) (ltake kq l))))
+      (lam l r (idpath nnil))
+      (lam j IH l r
         (bool_rect
           (lam b (paths nlist
              (lzipl (bool_rect (lam x nlist) nnil (ncons (hd0 l) (ltake j (tl0 l))) b) (msplitveq (succ j) r))
@@ -103,60 +103,60 @@
              (lzipl (ltake j (tl0 l)) (msplitveq j r))
              (ltake j (tl0 l))
              (IH (tl0 l) r))
-          (niszero (nlen l)))))))
+          (niszero (nlen l))))
       k))))
  (defq lziplveq
-   (pi a nlist (pi r nat (paths nlist (lzipl a (msplitveq (nlen a) r)) a)))
-   (lam a (lam r ((nat_rect
+   (pi a nlist r nat (paths nlist (lzipl a (msplitveq (nlen a) r)) a))
+   (lam a r ((nat_rect
       (lam q (pi v (nvec q) (paths nlist (lzipl (tpair q v) (msplitveq q r)) (tpair q v))))
       (lam v (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
-      (lam m (lam IH (lam v
+      (lam m IH v
         (maponpaths nlist nlist (lam t (ncons (pr1 v) t))
            (lzipl (tpair m (pr2 v)) (msplitveq m r))
            (tpair m (pr2 v))
-           (IH (pr2 v))))))
+           (IH (pr2 v))))
       (pr1 a))
-     (pr2 a)))))
+     (pr2 a))))
  (defq lziplpadvw
-   (pi a nlist (pi fr nlist (pi r nat (paths nlist (lzipl a (msplitvw (mpadfr fr (nlen a)) r)) a))))
-   (lam a (lam fr (lam r ((nat_rect
-      (lam q (pi v (nvec q) (pi f nlist (paths nlist (lzipl (tpair q v) (msplitvw (mpadfr f q) r)) (tpair q v)))))
-      (lam v (lam f (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v))))
-      (lam m (lam IH (lam v (lam f
+   (pi a nlist fr nlist r nat (paths nlist (lzipl a (msplitvw (mpadfr fr (nlen a)) r)) a))
+   (lam a fr r ((nat_rect
+      (lam q (pi v (nvec q) f nlist (paths nlist (lzipl (tpair q v) (msplitvw (mpadfr f q) r)) (tpair q v))))
+      (lam v f (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
+      (lam m IH v f
         (maponpaths nlist nlist (lam t (ncons (pr1 v) t))
            (lzipl (tpair m (pr2 v)) (msplitvw (mpadfr (tl0 f) m) r))
            (tpair m (pr2 v))
-           (IH (pr2 v) (tl0 f)))))))
+           (IH (pr2 v) (tl0 f))))
       (pr1 a))
-     (pr2 a) fr)))))
+     (pr2 a) fr)))
  (defq lapptakedrop
-   (pi k nat (pi l nlist (paths nlist (lapp (ltake k l) (ldrop k l)) l)))
+   (pi k nat l nlist (paths nlist (lapp (ltake k l) (ldrop k l)) l))
    (lam k ((nat_rect
       (lam kq (pi l nlist (paths nlist (lapp (ltake kq l) (ldrop kq l)) l)))
       (lam l (idpath l))
-      (lam j (lam IH (lam l
+      (lam j IH l
         ((nat_rect
            (lam q (pi v (nvec q) (paths nlist (lapp (ltake (succ j) (tpair q v)) (ldrop (succ j) (tpair q v))) (tpair q v))))
            (lam v (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
-           (lam m (lam u (lam v
+           (lam m u v
              (maponpaths nlist nlist (lam t (ncons (pr1 v) t))
                (lapp (ltake j (tpair m (pr2 v))) (ldrop j (tpair m (pr2 v))))
                (tpair m (pr2 v))
-               (IH (tpair m (pr2 v)))))))
+               (IH (tpair m (pr2 v)))))
            (pr1 l))
-         (pr2 l)))))
+         (pr2 l)))
       k)))))
 
 ; --- the tiling theorem: rtwins hands the row back, for every master count, frac
 ; --- list and rect; rtwinsane: a duplicate-free row tiles duplicate-free ---
 (test
  (defq rtwinsrow
-   (pi nm nat (pi fr nlist (pi r nat (pi row nlist (paths nlist (rtwins nm fr r row) row)))))
-   (lam nm (lam fr (lam r (lam row
+   (pi nm nat fr nlist r nat row nlist (paths nlist (rtwins nm fr r row) row))
+   (lam nm fr r row
       ((nat_rect
          (lam q (pi v (nvec q) (paths nlist (rtwins nm fr r (tpair q v)) (tpair q v))))
          (lam v (pathsinv0 nlist (tpair 0 v) nnil (lnil0 v)))
-         (lam m (lam u (lam v
+         (lam m u v
            (bool_rect
              (lam b (paths nlist
                 (bool_rect (lam x nlist)
@@ -194,13 +194,13 @@
                        (lzipltake nm (tpair (succ m) v) r))
                      (lapptakedrop nm (tpair (succ m) v)))))))
              (lziplveq (tpair (succ m) v) r)
-             (natgtb (succ m) nm)))))
+             (natgtb (succ m) nm)))
          (pr1 row))
-       (pr2 row)))))))
+       (pr2 row))))
  (defq rtwinsane
-   (pi nm nat (pi fr nlist (pi r nat (pi row nlist (pi hs (paths bool (nodupb row) true)
-      (paths bool (nodupb (rtwins nm fr r row)) true))))))
-   (lam nm (lam fr (lam r (lam row (lam hs
+   (pi nm nat fr nlist r nat row nlist hs (paths bool (nodupb row) true)
+      (paths bool (nodupb (rtwins nm fr r row)) true))
+   (lam nm fr r row hs
       (pathscomp0 bool (nodupb (rtwins nm fr r row)) (nodupb row) true
         (maponpaths nlist bool (lam t (nodupb t)) (rtwins nm fr r row) row (rtwinsrow nm fr r row))
-        hs))))))))
+        hs))))

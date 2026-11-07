@@ -81,9 +81,10 @@
        (go 0))
    (vfpm m i n) (m | (((1 << n) - 1) << i))
    vfpx 65535
-   ; an even slot is the single view of dK; an odd one has no f-register name, so its word rides r12
+   ; an even slot is the single view of dK; an odd one has no f-register name, so its word rides
+   ; r12 into the scratch s30, leaving r12 for a far home's address
    (vfpsv k base off) (0 = k & 1 ? [['stss base off (xmmreg (k // 2))]]   ; slot k -> a 4-byte home
-                         [['movsnrx 'r12 k] ['st base off 'r12]])
+                         [['movsnrx 'r12 k] ['movdxr 'f15 'r12] ['stss base off 'f15]])
    (bad? x) (x = 'bad)
    ; the value tuple (ty reg forms); the flo lane keeps the f0 protocol and dispatches on vty
    (vty v) <v
@@ -388,8 +389,8 @@
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    ; the targets the new backend lowers by default, and those it knows at all
-   lotgts '(x64 a64 rv64)
-   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || g 'tgt = 'rv64) _ (elem (peep g 'tgt 'x64) lotgts))
+   lotgts '(x64 a64 rv64 thumb2 thumb2sp arm i386 i386m16 thumb1 wasm)
+   (lo? g) (g 'lo @ () () 'all (x64? g || a64? g || elem (g 'tgt) '(rv64 thumb2 thumb2sp arm i386 i386m16 thumb1 wasm)) _ (elem (peep g 'tgt 'x64) lotgts))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (f32abi? g) (x64? g || a8? g)                      ; a prototyped float crosses a call as binary32 in its float register
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
@@ -477,7 +478,7 @@
           (? !(two? se) ()
              (16 < <>se) ()
              ; AAPCS64: an aggregate not of one float base rides gp registers alone
-             (a64? g && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
+             ((a64? g || t32? g) && !(flo? (hfab g ty))) (<>se <= 8 ? '(int) '(int int))
              (: cls {}
                 (mark o c) (: i (o >> 3) old (cls i)
                               (pin cls i (old = 'int || c = 'int ? 'int 'sse)))
@@ -1988,6 +1989,92 @@
    ; -- the gcc builtins --
    ; popcount of r0 by the swar fold (masks and adds only, so every target), clobbering r1 r2.
    ; the 32-bit form masks first: the word above bit 31 is not ours to count
+   ; clz over r0, or the pair r0:r1 at 32 bits when ll
+   (clzops g ll)
+    (: pre (ll ? () '((shl r0 32)))    ; clz32(x) = clz64(x << 32), clearing upper garbage
+       (? (ia32? g)                    ; bsr and xor 31 a word at a time
+           (: cz (m16b g + '(15 189 192) + m16b g + '(131 240 31))         ; bsr eax,eax; xor eax,31
+              lz (nlab g ".cz") ld (nlab g ".czd")
+              (!ll ? [['raw cz]]
+                 ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) ['raw cz] ['jmp ld]
+                  ['label lz] ['raw cz] '(add r0 r0 32) ['label ld]]))
+          (t32? g && !ll)              ; one word: clz or __clzsi2
+           (v6m? g ? '((call __clzsi2)) '((clz r0 r0)))
+          (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
+           (: lz (nlab g ".cz") ld (nlab g ".czd")
+              (v6m? g ?   ; no clz on v6-M
+                 ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
+                  ['label lz] '(call __clzsi2) '(add r0 r0 32) ['label ld]]
+                 ['(cmp r1 0) ['br 'eq lz] '(clz r0 r1) ['jmp ld]
+                  ['label lz] '(clz r0 r0) '(add r0 r0 32) ['label ld]]))
+          (rv64? g)                      ; no clz in rv64i: a binary search
+           (: ls (map (k \ (nlab g ".cz")) '(0 1 2 3 4 5))
+              step (kk \ lb2 \ ['(mov r2 r0) ['shr 'r2 (64 - kk)] '(cmp r2 0) ['br 'ne lb2]
+                                 ['add 'r1 'r1 kk] ['shl 'r0 kk] ['label lb2]])
+              (pre + '((li r1 0))
+               + step 32 (ls 0) + step 16 (ls 1) + step 8 (ls 2)
+               + step 4 (ls 3) + step 2 (ls 4) + step 1 (ls 5)
+               + '((mov r0 r1))))
+          (pre + (a64? g ? '((raw (0 16 192 218)))                    ; clz x0, x0
+                    '((raw (72 15 189 192 72 131 240 63)))))))   ; bsr rax,rax; xor rax,63
+   ; ctz over r0, or the pair r0:r1 on i386 when ll
+   (ctzops g ll)
+    (? (ia32? g)                     ; bsf: lo, or hi + 32 when lo is 0
+        (: tz (m16b g + '(15 188 192))
+           lz (nlab g ".tz") ld (nlab g ".tzd")
+           (!ll ? [['raw tz]]
+              ['(cmp r0 0) ['br 'eq lz] ['raw tz] ['jmp ld]
+               ['label lz] '(mov r0 r1) ['raw tz] '(add r0 r0 32) ['label ld]]))
+       (t32? g)
+        (v6m? g ? '((call __ctzsi2))
+           '((li r1 0) (sub r1 r1 r0) (and r0 r0 r1)     ; x & -x, then 31 - clz
+             (clz r0 r0) (li r1 31) (sub r0 r1 r0)))
+       (rv64? g)
+        (: ls (map (k \ (nlab g ".tz")) '(0 1 2 3 4 5))
+           step (kk \ mk \ lb2 \ [['li 'r3 mk] '(mov r2 r0) '(and r2 r2 r3) '(cmp r2 0)
+                                   ['br 'ne lb2] ['add 'r1 'r1 kk] ['shr 'r0 kk] ['label lb2]])
+           ('((li r1 0))
+            + step 32 4294967295 (ls 0) + step 16 65535 (ls 1)
+            + step 8 255 (ls 2) + step 4 15 (ls 3)
+            + step 2 3 (ls 4) + step 1 1 (ls 5)
+            + '((mov r0 r1))))
+       (a64? g && ll) '((raw (0 0 192 218 0 16 192 218)))   ; rbit x0,x0; clz x0,x0
+       (a64? g) '((raw (0 0 192 90 0 16 192 90)))           ; rbit w0,w0; clz w0,w0
+       '((raw (72 15 188 192))))                            ; bsf rax,rax: REX.W serves both widths
+   ; a pair's bytes reversed at 32 bits: the words trade places
+   (bs64ops g)
+    (ia32? g ? ('((mov r2 r0) (mov r0 r1) (mov r1 r2))
+                + [['raw (m16b g + [15 200] + m16b g + [15 201])]])   ; bswap eax; bswap ecx
+       ('((sub sp sp 16) (st sp 0 r0) (mov r0 r1)) + bsw32
+        + '((st sp 4 r0) (ld r0 sp 0)) + bsw32
+        + '((mov r1 r0) (ld r0 sp 4) (add sp sp 16))))
+   ; a pair's popcount at 32 bits: each word's, summed
+   (pc64ops g)
+    ('((sub sp sp 16) (st sp 0 r1)) + popops g 1
+     + '((st sp 4 r0) (ld r0 sp 0)) + popops g 1
+     + '((ld r1 sp 4) (add r0 r0 r1) (add sp sp 16)))
+   ; a checked add, sub or mul over r0 and r1: r0 the result, r1 the overflow bit
+   (ovfops g bi)
+    (: rx (x64? g ? [72] (m16b g))   ; x64 widens with REX.W; i386 is the word already
+       opb (rx + (? (bi = "__builtin_add_overflow") '(1 200)      ; add rax,rcx
+                    (bi = "__builtin_sub_overflow") '(41 200)     ; sub rax,rcx
+                    '(15 175 193)))                               ; imul rax,rcx
+       (? !(arm? g)
+           [['raw (opb + '(15 144 193) + rx + '(15 182 201))]]   ; op; seto cl; movzx rcx,cl
+          !(bi = "__builtin_mul_overflow")
+           [[(bi @ "__builtin_add_overflow" 'adds 'subs) 'r0 'r0 'r1] '(set vs r1)]
+          (v6m? g)                          ; no smull: __aeabi_lmul on the widened words,
+           (spush 'r3 +                     ; then hi vs lo>>31. r3 = &t, saved
+            '((mov r2 r1) (mov r1 r0) (sar r1 31)
+              (mov r3 r2) (sar r3 31) (call __aeabi_lmul)
+              (mov r2 r0) (sar r2 31) (subs r1 r1 r2) (set ne r1)) +
+            spop 'r3)
+          (t32? g)                          ; smull, then hi vs lo>>31
+           '((smull r0 r2 r0 r1) (mov r12 r0) (sar r12 31)
+             (subs r1 r2 r12) (set ne r1))
+          (: lo (nlab g ".vo") l2 (nlab g ".vd")
+             [['mulo 'r0 'r0 'r1 'r2 lo] '(li r1 0) ['jmp l2]
+              ['label lo] '(li r1 1) ['label l2]])))
    (popops g w32)
     (: fold (k \ ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
        (w32 ? ((ilp32? g ? () '((li r2 4294967295) (and r0 r0 r2)))
@@ -2085,6 +2172,65 @@
           body (catall (map tw ([lx] + ops + [sx])) + le2 0x2C00)      ; cmp r4, #0
           dmb (tw 0xF3BF8F5F)
           [['raw (dmb + body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + dmb)]]))   ; bne back
+   ; an exchange: value r0, pointer r1 -> the old value r0, r2 r3 spent
+   ; a64's flush of [r0, r1): dc cvau, ic ivau per line, strides off ctr_el0. it writes r2 r3 r9 r15
+   (a64flush g)
+    (: lb (nlab g ".ccd") db (nlab g ".ccdd")
+       li9 (nlab g ".cci") di (nlab g ".ccid")
+     ['(raw (34 0 59 213))          ; mrs x2, ctr_el0
+       '(li r9 15)
+       '(and r15 r2 r9)
+       '(li r3 4)
+       '(raw (111 32 207 154))      ; lsl x15, x3, x15 -- isize
+       '(shr r2 16)
+       '(and r2 r2 r9)
+       '(raw (98 32 194 154))       ; lsl x2, x3, x2 -- dsize
+       '(sub r3 r2 1)
+       '(not r3)
+       '(and r9 r0 r3)            ; begin & ~(dsize-1)
+       ['label lb]
+       '(cmp r9 r1)
+       ['br 'ae db]
+       '(raw (41 123 11 213))       ; dc cvau, x9
+       '(add r9 r9 r2)
+       ['jmp lb]
+       ['label db]
+       '(raw (159 59 3 213))        ; dsb ish
+       '(sub r3 r15 1)
+       '(not r3)
+       '(and r9 r0 r3)            ; begin & ~(isize-1)
+       ['label li9]
+       '(cmp r9 r1)
+       ['br 'ae di]
+       '(raw (41 117 11 213))         ; ic ivau, x9
+       '(add r9 r9 r15)
+       ['jmp li9]
+       ['label di]
+       '(raw (159 59 3 213))          ; dsb ish
+       '(raw (223 63 3 213))]) ; isb
+   (axchg g w)
+    (? (wasm? g) [[(w @ 4 'ldu4 'ld) 'r2 'r1 0] [(stw w) 'r1 0 'r0] '(mov r0 r2)]
+       (a64? g)
+        (nlab g ".ts" @ lb
+           [['label lb]
+            ['raw (w @ 4 '(34 252 95 136) '(34 252 95 200))]   ; ldaxr w2/x2, [x1]
+            ['raw (w @ 4 '(32 124 3 136) '(32 124 3 200))]     ; stxr w3, w0/x0, [x1]
+            '(cmp r3 0) ['br 'ne lb] '(mov r0 r2)])
+       (rv64? g)
+        [['raw (w @ 4 '(47 165 165 12) '(47 181 165 12))]]      ; amoswap.w/d.aq a0,a0,(a1)
+       (t32? g)                                                 ; ldrex r2 / strex r3, r0, [r1] until it holds, dmb
+        (: body (tw 0xE8512F00 + tw 0xE8410300 + le2 0x2B00)    ; cmp r3, #0
+           [['raw (body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + tw 0xF3BF8F5F)]
+            '(mov r0 r2)])
+       [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])   ; xchg eax/rax, (rcx)
+   ; a lock's release: zero in r0, pointer r1
+   (arel g w)
+    (? (a64? g) [['raw (w @ 4 '(32 252 159 136) '(32 252 159 200))]]   ; stlr w0/x0, [x1]
+       (t32? g) ([['raw (tw 0xF3BF8F5F)]] + [['st4 'r1 0 'r0]])                ; dmb sy, then the store
+       (wasm? g) [[(w @ 4 'st4 'st) 'r1 0 'r0]]
+       (rv64? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
+                  [[(w = 4 ? 'st4 'st) 'r1 0 'r0]])
+       [[(w @ 4 'st4 'st) 'r1 0 'r0]])
    ; a compare-and-swap: expected r0 (widened as the loop's load widens), pointer r1, desired r2 ->
    ; the old value r0, success (0/1) r2
    (acas g w)
@@ -2223,127 +2369,36 @@
        ; a hint: only the address evaluates, for its effects
        (bi = "__builtin_prefetch") (cgexpr g env <args ())
        (bi = "__builtin___clear_cache")
-        ; x86 keeps I-cache coherent. a64: dc cvau, ic ivau per line, strides off ctr_el0.
-        ; scratch r2/r3/r9/r15 only: r10-r14 are the homes
+        ; x86 keeps I-cache coherent; a64 walks the lines
         (!(a64? g) ? (mkv 'long 'r0 ())
            (: e1 (cgexpr g env <args ())
               e2 (cgexpr g env <>args ())
-              lb (nlab g ".ccd") db (nlab g ".ccdd")
-              li9 (nlab g ".cci") di (nlab g ".ccid")
               (bad? e1 || bad? e2 ? 'bad
                  (mkv 'long 'r0 $
-                   pk g (asint g e1) (asint g e2 + '((mov r1 r0))) 'r0 +
-                     ['(raw (34 0 59 213))          ; mrs x2, ctr_el0
-                       '(li r9 15)
-                       '(and r15 r2 r9)
-                       '(li r3 4)
-                       '(raw (111 32 207 154))      ; lsl x15, x3, x15 -- isize
-                       '(shr r2 16)
-                       '(and r2 r2 r9)
-                       '(raw (98 32 194 154))       ; lsl x2, x3, x2 -- dsize
-                       '(sub r3 r2 1)
-                       '(not r3)
-                       '(and r9 r0 r3)            ; begin & ~(dsize-1)
-                       ['label lb]
-                       '(cmp r9 r1)
-                       ['br 'ae db]
-                       '(raw (41 123 11 213))       ; dc cvau, x9
-                       '(add r9 r9 r2)
-                       ['jmp lb]
-                       ['label db]
-                       '(raw (159 59 3 213))        ; dsb ish
-                       '(sub r3 r15 1)
-                       '(not r3)
-                       '(and r9 r0 r3)            ; begin & ~(isize-1)
-                       ['label li9]
-                       '(cmp r9 r1)
-                       ['br 'ae di]
-                       '(raw (41 117 11 213))         ; ic ivau, x9
-                       '(add r9 r9 r15)
-                       ['jmp li9]
-                       ['label di]
-                       '(raw (159 59 3 213))          ; dsb ish
-                       '(raw (223 63 3 213))]))))     ; isb
+                   pk g (asint g e1) (asint g e2 + '((mov r1 r0))) 'r0 + a64flush g))))
        (elem bi '("__builtin_clzll" "__builtin_clzl" "__builtin_clz"))
         (: e1 (cgexpr g env <args ())
            ; the `l` spelling is the target's long
            ll (? (bi = "__builtin_clz") () (bi = "__builtin_clzll") 1 !(ilp32? g))
-           pre (ll ? () '((shl r0 32)))    ; clz32(x) = clz64(x << 32), clearing upper garbage
-           (? (bad? e1) 'bad
-              ; i386: bsr and xor 31 a word at a time
-              (ia32? g)
-               (: cz (m16b g + '(15 189 192) + m16b g + '(131 240 31))         ; bsr eax,eax; xor eax,31
-                  lz (nlab g ".cz") ld (nlab g ".czd")
-                  (mkv 'long 'r0 (!ll ? (asint g e1 + [['raw cz]])
-                                    (asll g e1 + ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) ['raw cz] ['jmp ld]
-                                                 ['label lz] ['raw cz] '(add r0 r0 32) ['label ld]]))))
-              (t32? g && !ll)              ; one word: clz or __clzsi2
-               (mkv 'long 'r0 (asint g e1 +
-                  (v6m? g ? '((call __clzsi2)) '((clz r0 r0)))))
-              (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
-               (: lz (nlab g ".cz") ld (nlab g ".czd")
-                  (mkv 'long 'r0 (asll g e1 +
-                    (v6m? g ?   ; no clz on v6-M
-                       ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
-                          ['label lz] '(call __clzsi2) '(add r0 r0 32) ['label ld]]
-                       ['(cmp r1 0) ['br 'eq lz] '(clz r0 r1) ['jmp ld]
-                          ['label lz] '(clz r0 r0) '(add r0 r0 32) ['label ld]]))))
-              (rv64? g)                      ; no clz in rv64i: a binary search
-               (: ls (map (k \ (nlab g ".cz")) '(0 1 2 3 4 5))
-                  step (kk \ lb2 \ ['(mov r2 r0) ['shr 'r2 (64 - kk)] '(cmp r2 0) ['br 'ne lb2]
-                                     ['add 'r1 'r1 kk] ['shl 'r0 kk] ['label lb2]])
-                  (mkv 'long 'r0 (asint g e1 + pre +
-                    ('((li r1 0))
-                     + step 32 (ls 0) + step 16 (ls 1) + step 8 (ls 2)
-                     + step 4 (ls 3) + step 2 (ls 4) + step 1 (ls 5)
-                     + '((mov r0 r1))))))
-              (mkv 'long 'r0 (asint g e1 + pre +
-                              (a64? g ? '((raw (0 16 192 218)))                    ; clz x0, x0
-                                 '((raw (72 15 189 192 72 131 240 63))))))))   ; bsr rax,rax; xor rax,63
+           (bad? e1 ? 'bad
+              (mkv 'long 'r0 ((ilp32? g && ll ? (asll g e1) (asint g e1)) + clzops g ll))))
        ; ctz(0) stays UB; the 32-bit spelling's upper garbage is harmless
        (elem bi '("__builtin_ctzll" "__builtin_ctzl" "__builtin_ctz"))
         (: e1 (cgexpr g env <args ())
            ll (? (bi = "__builtin_ctz") () (bi = "__builtin_ctzll") 1 !(ilp32? g))
            (? (bad? e1) 'bad
-              (ia32? g)                     ; bsf: lo, or hi + 32 when lo is 0
-               (: tz (m16b g + '(15 188 192))
-                  lz (nlab g ".tz") ld (nlab g ".tzd")
-                  (mkv 'long 'r0 (!ll ? (asint g e1 + [['raw tz]])
-                                    (asll g e1 + ['(cmp r0 0) ['br 'eq lz] ['raw tz] ['jmp ld]
-                                                 ['label lz] '(mov r0 r1) ['raw tz] '(add r0 r0 32) ['label ld]]))))
               (ll && t32? g) (nolane g "no lane for \(bi)\(ontgt g)")
-              (t32? g)
-               (mkv 'long 'r0 (asint g e1 +
-                  (v6m? g ? '((call __ctzsi2))
-                     '((li r1 0) (sub r1 r1 r0) (and r0 r0 r1)     ; x & -x, then 31 - clz
-                        (clz r0 r0) (li r1 31) (sub r0 r1 r0)))))
-              (rv64? g)
-               (: ls (map (k \ (nlab g ".tz")) '(0 1 2 3 4 5))
-                  step (kk \ mk \ lb2 \ [['li 'r3 mk] '(mov r2 r0) '(and r2 r2 r3) '(cmp r2 0)
-                                          ['br 'ne lb2] ['add 'r1 'r1 kk] ['shr 'r0 kk] ['label lb2]])
-                  (mkv 'long 'r0 (asint g e1 +
-                    ('((li r1 0))
-                     + step 32 4294967295 (ls 0) + step 16 65535 (ls 1)
-                     + step 8 255 (ls 2) + step 4 15 (ls 3)
-                     + step 2 3 (ls 4) + step 1 1 (ls 5)
-                     + '((mov r0 r1))))))
-              (mkv 'long 'r0 (asint g e1 +
-                              (? (a64? g && ll) '((raw (0 0 192 218 0 16 192 218)))   ; rbit x0,x0; clz x0,x0
-                                 (a64? g) '((raw (0 0 192 90 0 16 192 90)))   ; rbit w0,w0; clz w0,w0
-                                 '((raw (72 15 188 192))))))))                ; bsf rax,rax: REX.W serves both widths
+              (mkv 'long 'r0 ((ilp32? g && ll ? (asll g e1) (asint g e1)) + ctzops g ll))))
        ; bswap: masked shift/or expansions, no raw, so unframe stays alive
        (elem bi '("__builtin_bswap16" "__builtin_bswap32" "__builtin_bswap64"))
         (? (bi = "__builtin_bswap64" && ia32? g)   ; i386: the words trade places
             (cgexpr g env <args () @ e1
                (bad? e1 ? 'bad
-                  (mkv 'ullong 'r0 (asll g e1 + '((mov r2 r0) (mov r0 r1) (mov r1 r2))
-                                    + [['raw (m16b g + [15 200] + m16b g + [15 201])]]))))   ; bswap eax; bswap ecx
+                  (mkv 'ullong 'r0 (asll g e1 + bs64ops g))))
            (bi = "__builtin_bswap64" && ilp32? g)   ; the words trade places
             (cgexpr g env <args () @ e1
                (bad? e1 ? 'bad
-                  (mkv 'ullong 'r0 (asll g e1 + '((sub sp sp 16) (st sp 0 r0) (mov r0 r1)) + bsw32
-                                    + '((st sp 4 r0) (ld r0 sp 0)) + bsw32
-                                    + '((mov r1 r0) (ld r0 sp 4) (add sp sp 16))))))
+                  (mkv 'ullong 'r0 (asll g e1 + bs64ops g))))
            (cgexpr g env <args () @ e1
               (bad? e1 ? 'bad
                  (mkv 'long 'r0 (asint g e1 +
@@ -2363,9 +2418,7 @@
         (? (bi = "__builtin_popcountll" && ilp32? g)   ; each word's count, summed
             (cgexpr g env <args () @ e1
                (bad? e1 ? 'bad
-                  (mkv 'long 'r0 (asll g e1 + '((sub sp sp 16) (st sp 0 r1)) + popops g 1
-                                  + '((st sp 4 r0) (ld r0 sp 0)) + popops g 1
-                                  + '((ld r1 sp 4) (add r0 r0 r1) (add sp sp 16))))))
+                  (mkv 'long 'r0 (asll g e1 + pc64ops g))))
            (cgexpr g env <args () @ e1
               (bad? e1 ? 'bad
                  (mkv 'long 'r0 (asint g e1 + popops g (bi = "__builtin_popcount" || ilp32? g))))))
@@ -2393,29 +2446,12 @@
               !w (nolane g "\(bi) wants an int* or a long*/T** (the pointee sizes the exchange)")
               (bi = "__sync_lock_release")
                (mkv 'long 'r0 (tor0 g e1 +
-                 '((mov r1 r0) (li r0 0)) +
-                 (? (a64? g) [['raw (w @ 4 '(32 252 159 136) '(32 252 159 200))]]   ; stlr w0/x0, [x1]
-                    (t32? g) ([['raw (tw 0xF3BF8F5F)]] + [['st4 'r1 0 'r0]])                ; dmb sy, then the store
-                    (rv64? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
-                             [[(w = 4 ? 'st4 'st) 'r1 0 'r0]])
-                    [[(w @ 4 'st4 'st) 'r1 0 'r0]])))
+                 '((mov r1 r0) (li r0 0)) + arel g w))
               (cgexpr g env <>args () @ e2
                  (bad? e2 ? 'bad
                     (: q1 (tor0 g e1) q2 (asint g e2)
                        pre (pk g q1 q2 'r1)   ; val r0, ptr r1
-                       body (? (a64? g)
-                               (nlab g ".ts" @ lb
-                                  [['label lb]
-                                   ['raw (w @ 4 '(34 252 95 136) '(34 252 95 200))]   ; ldaxr w2/x2, [x1]
-                                   ['raw (w @ 4 '(32 124 3 136) '(32 124 3 200))]     ; stxr w3, w0/x0, [x1]
-                                   '(cmp r3 0) ['br 'ne lb] '(mov r0 r2)])
-                              (rv64? g)
-                               [['raw (w @ 4 '(47 165 165 12) '(47 181 165 12))]]      ; amoswap.w/d.aq a0,a0,(a1)
-                              (t32? g)                                                 ; ldrex r2 / strex r3, r0, [r1] until it holds, dmb
-                               (: body (tw 0xE8512F00 + tw 0xE8410300 + le2 0x2B00)    ; cmp r3, #0
-                                  [['raw (body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + tw 0xF3BF8F5F)]
-                                   '(mov r0 r2)])
-                              [['raw ((m16? g ? [103 102] ()) + (w @ 4 '(135 1) '(72 135 1)))]])   ; xchg eax/rax, (rcx)
+                       body (axchg g w)
                        (mkv pt 'r0 (pre + body + cvt pt 'r0)))))))
        (bi = "__builtin_isinf")
         (cgexpr g env <args () @ e1
@@ -2451,28 +2487,7 @@
            e3 (elem <<>>args '(addr var) ? (pin g 'argpos 1),
                cgexpr g env <>>args ())
            _ (pin g 'argpos ())
-           ; x64 widens with REX.W; i386 is the word already
-           rx (x64? g ? [72] (m16b g))
-           opb (rx + (? (bi = "__builtin_add_overflow") '(1 200)      ; add rax,rcx
-                        (bi = "__builtin_sub_overflow") '(41 200)     ; sub rax,rcx
-                        '(15 175 193)))                               ; imul rax,rcx
-           ; the op leaves r0 the result, r1 the overflow bit
-           ovf (? !(arm? g)
-                  [['raw (opb + '(15 144 193) + rx + '(15 182 201))]]   ; op; seto cl; movzx rcx,cl
-                  !(bi = "__builtin_mul_overflow")
-                   [[(bi @ "__builtin_add_overflow" 'adds 'subs) 'r0 'r0 'r1] '(set vs r1)]
-                  (v6m? g)                          ; no smull: __aeabi_lmul on the widened words,
-                   (spush 'r3 +                     ; then hi vs lo>>31. r3 = &t, saved
-                    '((mov r2 r1) (mov r1 r0) (sar r1 31)
-                      (mov r3 r2) (sar r3 31) (call __aeabi_lmul)
-                      (mov r2 r0) (sar r2 31) (subs r1 r1 r2) (set ne r1)) +
-                    spop 'r3)
-                  (t32? g)                          ; smull, then hi vs lo>>31
-                   '((smull r0 r2 r0 r1) (mov r12 r0) (sar r12 31)
-                      (subs r1 r2 r12) (set ne r1))
-                  (: lo (nlab g ".vo") l2 (nlab g ".vd")
-                     [['mulo 'r0 'r0 'r1 'r2 lo] '(li r1 0) ['jmp l2]
-                        ['label lo] '(li r1 1) ['label l2]]))
+           ovf (ovfops g bi)
            ; &t's lea must not open the sibs window: lean on arm; x64's raw splice resets it
            e3f (arm? g ? (relean (tor0 g e3)) (tor0 g e3))
            (bad? e1 || bad? e2 || bad? e3 ? 'bad
@@ -3831,7 +3846,7 @@
          ('un _ x) (rotp? x)
          ())
    (rotty g env e)                                  ; the operand's declared type, by static peek
-    (e @ ('var nm) (vent g env nm @ en (bad? en ? () <>>en))
+    (e @ ('var _) (peekty g env e @ t (bad? t ? () t))
          ('cast . ty . _) ty
          ('deref p) (rotty g env p @ t (? (ptr? t) <>t (arr? t) <>t ()))
          ('bin op x y && elem op '(+ -))         ; index arithmetic keeps the ptr/arr side's type
@@ -4454,6 +4469,8 @@
        ; live read and the forwarders keep a stale def
        _ (arm '(movqxr) (g \ f \ [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]))
        _ (arm '(movqrx) (g \ f \ [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]))
+       _ (arm '(movrrq) (_ \ f \ [[(f 3)] [(f 1) (f 2)] 1]))
+       _ (arm '(movqrr) (_ \ f \ [[(f 2) (f 3)] [(f 1)] 1]))
        ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
        _ (arm '(movsnxr) (g \ f \ [[<>>f] () ()]))
        _ (arm '(movsnrx) (g \ f \ [() [<>f] 1]))
@@ -7038,8 +7055,8 @@
    (csdrop g fs)
     (cz g 'csdrop fs (: (sv? f r) (two? f && <f = 'st && <>f = 'sp && f 3 == r)
        (rs? f r) (two? f && <f = 'ld && <>f = r && <>>f = 'sp)
-       (idle? r) (vany (f \ sv? f r) fs &&
-                  !(vany (f \ two? f && elem r >f && !(sv? f r || rs? f r)) fs))
+       ; a store that first names r saves its entry value; a later one passes something loaded
+       (idle? r) (filter (f \ two? f && elem r >f) fs @ (h . t) (sv? h r && !(any (f \ !(rs? f r)) t)) _ ())
        dr (x64t? g && !(g 'hasasm) && !(vany (f \ two? f && elem <f '(raw asm)) fs) ?
              (filter idle? (csx g)))
        (!(two? dr) ? fs
@@ -7069,7 +7086,7 @@
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
            fcs (a64? g ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
-           nm (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (csregs g) + fcs))
+           nm (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs))
            r3 (x86? g && elem 'r3 nm)
            cs (filter (r \ !(r3 && r = 'r3)) nm)
            n #cs
@@ -8445,7 +8462,9 @@
    asmnames (foldl (t \ i \ "r\(i)" @ s9 (pin t (name s9) s9)) {} ^11)
    (asmreg? g r9) (elem r9 (asmfile g) || a64? g && elem r9 '(r4 lr))   ; lr: the a64 frame saves it, and its epilogue restores
    (asmfile g) (ia32? g ? '(r0 r1 r2 r3 r5 r6) asmregs)      ; i386 has eight registers, esp and ebp aside
-   (asmpk g) (ia32? g ? '(r2 r1 r0 r6 r5) asmpick)   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1)
+   ; i386's esi edi are callee-saved: taken last, and saved (cgasm1). v6-M's constants and most of its
+   ; forms reach only the low registers
+   (asmpk g) (ia32? g || v6m? g ? '(r2 r1 r0 r6 r5) asmpick)
    ; an x64 xmm0..15 or an a64 v0..31, by name
    (vclob? g c) (: (num k) (: d (chars (snip c k #c))
                               (? (two? d && foldl (\ a ch (a && 48 <= ch <= 57)) 1 d) (foldl (\ a ch (a * 10 + ch - 48)) 0 d) -1))
@@ -9932,6 +9951,14 @@
              (a @ ('un 'not ('un 'not a2)) (aweigh a2) (aweigh a))
             ('var _) 1
             (foldl (n \ y \ n + aweigh y) 0 x)))
+   ; the size gate: 99 straight, 43 branchy, and what the sites cost together, more where one sits
+   ; in a loop; -Os, what a call costs
+   (inlgate g nm st w)
+    (: n (peep (g 'csites) nm 0)
+       (? (osz? g) (w <= (st ? 8 4))
+          ((st ? 99 43) < w) ()
+          (n < 2) 1
+          (w * n <= (? (peep (g 'cloop) nm ()) 800 100))))
    (inlok? g f sig aln)                             ; aln: always_inline waives the size gate
     (: rt (two? sig ? <sig 'long)
        items <><>>>f
@@ -9948,8 +9975,7 @@
           (flo? rt && !(dbl? rt) || stru? rt) ()
           (sig 2) ()                            ; variadic stays a real call
           !(pok <>>f 0) ()
-          ; the size gate on the body's weight: 99 straight, 43 branchy; -Os, what a call costs
-          (!aln && (osz? g ? (straight? items ? 8 4) (straight? items ? 99 43)) < aweigh <>>>f) ()
+          (!aln && !(inlgate g <>f (straight? items) (aweigh <>>>f))) ()
           (asmneed? g <>>f <>>>f) !(noinlj? <>>>f)
           !(noinl? <>>>f)))
    ; -- the AST inliner: a call to an inline candidate, evaluated by its statement before anything it
@@ -11959,7 +11985,7 @@
        ; i386: a build that seats esi and edi and leaves ebx alone (no park, no pair scratch) builds
        ; again with ebx a seat too
        (rhas? r x) (? (atom? x) (x = r) (any (rhas? r) x))
-       irf (? (ia32? g && uni9 && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(rhas? 'r3 irf0))
+       irf (? (ia32? g && uni9 && bad? irn && !(bad? irf0) && !(abl? g 'ebx) && rhas? 'r5 irf0 && rhas? 'r6 irf0 && !(rhas? 'r3 irf0))
               (: _ (pins (fnreset g) 'n n0 'strs strs0 'statics sts0 'fasecs fas0 'off off0 'slots sl0 'pool0 (tpl 0) 'pool (tpl 0)
                          'hasasm (pre0 1) 'twice (pre0 3) 'ltaken (pre0 5) 'ebx 1)
                  (ubuild (alive g f)))
@@ -12159,7 +12185,7 @@
           'census (cenv 0)
           'lo (getenv "MOON_BACKEND" @ "old" () "new" 'all _ 1)   ; lotgts lower by lo.l unless MOON_BACKEND=old; new takes every target lo.l knows
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'cgitems cgitems 'sxpre sxpre 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -12204,6 +12230,12 @@
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
                                     pin (g 'inl) <>f fi) 0)) 0),
                           recfns >fs)))
+       _ (: (go x lp) (? !(two? x) 0
+                         (x @ ('call . ('var nm) . r) (pin (g 'csites) nm (1 + peep (g 'csites) nm 0),
+                                                       (lp ? (pin (g 'cloop) nm 1) 0), go r lp)
+                              (('while || 'for || 'do) . r) (go r 1)
+                              (go <x lp, go >x lp)))
+            (go <>ast ()))
        _ (recfns <>ast)
        _ (: (go ns) (!(two? ns) ? 1 (pin (g 'fns) <ns 1, go >ns))
             (go (keys sigs)))

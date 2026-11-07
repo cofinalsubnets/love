@@ -19,5 +19,5 @@ int k_horn_open(int rate) { return -1; }
 intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
 uintptr_t k_horn_lag(void) { return 0; }
 void k_horn_close(void) { }
-lvm(k_lvm_quit) { love_musttail return Ap(_lvm_ghelp, g); }
-lvm(k_lvm_getpid) { love_musttail return Ap(_lvm_ghelp, g); }
+lvm(k_lvm_quit) { love_musttail return Ap(_lvm_raise, g); }
+lvm(k_lvm_getpid) { love_musttail return Ap(_lvm_raise, g); }
