@@ -106,7 +106,8 @@
        (go l) (l @ (s . u) ([s ((u @ (t . _) t _ n) - 1)] . go u) _ ())
        (rev (go (filter lead ^n))))
 
-   ; one round: ids, liveness, hulls, the scan -> [loc spills] | 'bad
+   ; one round: ids, liveness, hulls, the scan -> [loc spills calls] | 'bad, calls: per call the
+   ; spilled vregs it outlives
    (raround g fs nosp)
     (: n #fs
        ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
@@ -186,7 +187,6 @@
                spn (raspans fs)
                wt (foldl (t \ i \ (vwt spn i @ w (ud i @ [u d] (map (x \ pin t x (peep t x 0 + w)) (vun u d), t)))) {} ^n)
                (wt? x) (peep wt x 0)
-               rw (foldl (t \ i \ (vwt spn i @ w (ud i @ [u _] (map (x \ pin t x (peep t x 0 + w)) u, t)))) {} ^n)
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
                (victim x act)
@@ -210,16 +210,13 @@
                (scan (ragp g) (filter (x \ !(fv? x)) vs) () () @ 'bad 'bad
                   sg (scan (ragf g) (filter fv? vs) () sg @ 'bad 'bad
                         sp (: si (map id sp)
-                              ; per call, the spilled vregs it outlives; their reloads' weight there
-                              cw {}
+                              ; per call, the spilled vregs it outlives
                               cr (foldl (t \ i \ (ft i @ (('call || 'callr) . _)
                                                       (filter (x \ raovl (rg x) [[(2 * i + 1) (2 * i + 1)]]) si @
                                                          () t
-                                                         xs (vwt spn i @ w (map (x \ pin cw x (peep cw x 0 + w)) xs, pin t i (map nms xs))))
+                                                         xs (pin t i (map nms xs)))
                                                       _ t)) {} ^n)
-                              ; split where reloading after the calls weighs less than at the reads
-                              sv (map nms (filter (x \ cw x != () && cw x < peep rw x 0) si))
-                              [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp cr sv]))))))
+                              [(foldl (t \ k \ pin t (nms k) (loc k)) {} (keys loc)) sp cr]))))))
 
    ; the back edges' spans [label jump], for vwt's loop depth
    (raspans fs)
@@ -231,17 +228,20 @@
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
    ; until a label or a call ends the run (the last nk kept). x64's and a64's one-def wide literal or
-   ; address takes no slot and is made again at each read; a literal 0 might write the flags
-   (raspill g fs sp nosp nk)
+   ; address takes no slot and is made again at each read; a literal 0 might write the flags. one
+   ; split before keeps its split's slot, ssl, and its copies to and from it go
+   (raspill g fs sp nosp nk ssl)
     (: dn (x64? g || a64? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
        rem (foldl (t \ f \ (f @ ((('li || 'la) . v . k . _) && elem v sp && peep dn v 0 = 1 && k != 0) (pin t v f) _ t)) {} fs)
        (redo v r) (rem v @ [op _ k] [op r k])
        ss (filter (v \ !(two? (rem v))) sp)
-       sl (foldl (t \ v \ pin t v (nslot g 8)) {} ss)
+       sl (foldl (t \ v \ pin t v (ssl v @ () (nslot g 8) k k)) {} ss)
        _ (pin g 'rasls (map sl ss + g 'rasls))
        (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
        (go fs c)
         (fs @ ((f . u) && two? >f && rem (f 1) == f) (go u c)
+              (([('ld || 'ldsd) v 'r4 o] && sl v = o) . u) (go u c)
+              (([('st || 'stsd) 'r4 o v] && sl v = o) . u) (go u c)
               ((['mov p v] && !(lovr? p) && two? (rem v) && raget c v = ()) . u) ((redo v p) . go u c)
               ((['mov p v] && !(lovr? p) && elem v sp && raget c v = ()) . u)   ; a fixed register's reload needs no temp, which might take another's
                (['ld p 'r4 (sl v)] . go u c)
@@ -330,17 +330,18 @@
    ; a small file can run out under the temps a spill keeps: then again with none kept
    (raplan g fs) ((raplan1 g fs 4) @ 'bad (raplan1 g fs 0) r r)
    (raplan1 g fs nk)
-    (: nosp {} split {}
+    (: nosp {} split {} ssl {}
        _ (pin g 'rasls ())
        (go fs k)
         (k = 0 ? 'bad
            (raround g fs nosp @
               'bad 'bad
-              [loc () _ _] [(radse g fs (g 'rasls)) loc]
-              [_ sp cr sv] (: s1 (filter (v \ elem v sv && !(split v)) sp)
-                           s2 (filter (v \ nelem v s1) sp)
-                           (map (v \ pin split v 1) s1,
-                            go (raspill g (rasplit g fs s1) s2 nosp nk) (k - 1)))))
+              [loc () _] [(radse g fs (g 'rasls)) loc]
+              [_ sp cr] (: xs (foldl (t \ i \ (map (v \ pin t v 1) (cr i), t)) {} (keys cr))
+                           s1 (abl? g 'csplit ? () (filter (v \ xs v && !(split v)) sp))
+                           (rasplit g fs s1 cr @ [f2 ok s]
+                              (map (v \ pin split v 1) s1, map (v \ pin ssl v (s v)) ok,
+                               go (raspill g f2 (filter (v \ nelem v ok) sp) nosp nk ssl) (k - 1))))))
        (go fs 16))
    ; a spill slot's store goes when no path reads the slot back before writing it again or
    ; leaving: the slots are ra's own, so only its loads and stores name them
@@ -382,13 +383,40 @@
        (keep l i) (l @ (f . u) (dead i ? (keep u (i + 1)) (f . keep u (i + 1))) _ ())
        (keep fs 0))
 
-   ; a vreg split at its calls: stored after each def, reloaded before a read its register may not
-   ; hold, by a forward must-availability where a call holds none, so no call finds it live
-   (rasplit g fs vs)
+   ; each form's estimated frequency, its block's: one at entry; of a branch's two ways the one
+   ; inside more loops goes 7 in 8, else each half; solved by sweeps, so a loop weighs about 8
+   (rafreq fs sc)
+    (: n #fs
+       bs (rev (rablocks sc n))
+       sp (raspans fs)
+       (dep i) #(filter (s \ s 0 <= i && i <= s 1) sp)
+       bof {}
+       (fill i e s) (i <= e ? (pin bof i s, fill (i + 1) e s))
+       _ (map (b \ fill (b 0) (b 1) (b 0)) bs)
+       (ways ss) (ss @ [a] [[a 1]]
+                       [a b] (: da (dep a) db (dep b)
+                                (? (da = db) [[a 0.5] [b 0.5]] (db < da) [[a 0.875] [b 0.125]] [[a 0.125] [b 0.875]]))
+                       l (map (x \ [x (1 / #l)]) l))
+       inc {}
+       _ (map (b \ map (w \ (w @ [t p] (pin inc t ([(b 0) p] . peep inc t ())))) (ways (sc (b 1)))) bs)
+       fq {}
+       (sweep l d) (l @ ([s _] . u)
+                         (: v (foldl (a \ e \ a + peep fq (e 0) 0 * e 1) (s = 0 ? 1 0) (peep inc s ()))
+                            o (peep fq s 0)
+                            (pin fq s v, sweep u (max d (abs (v - o) / (v + 1)))))
+                        _ d)
+       (fix k) (sweep bs 0 < 0.001 || k = 0 ? 0 (fix (k - 1)))
+       _ (fix 400)
+       (i \ peep fq (bof i) 0))
+   ; a vreg split at the calls it outlives, cr: per call those of vs. its slot is written after each
+   ; def and read back before each read its register may not hold (a forward must-availability
+   ; where a call holds none), or read back after each such call instead, or also written only
+   ; before each such call; a read of the slot where no call ran first has no write before it, so
+   ; a slot written at the calls is read only after them. the lightest by rafreq, and only where it
+   ; weighs less than a full spill -> [forms split slots]
+   (rasplit g fs vs cr)
     (: n #fs
        ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
-       sl (foldl (t \ v \ pin t v (nslot g 8)) {} vs)
-       _ (pin g 'rasls (map sl vs + g 'rasls))
        (ld v) [(lofr? v ? 'ldsd 'ld) v 'r4 (sl v)]
        (st v) [(lofr? v ? 'stsd 'st) 'r4 (sl v) v]
        ud (foldl (t \ i \ pin t i (raops g (ft i) @ [u d] [(filter (x \ elem x vs) u) (filter (x \ elem x vs) d)] _ [() ()])) {} ^n)
@@ -405,11 +433,39 @@
               c2 (sz o != sz (peep aout i 'all) ? 1 chg)
               (pin aout i o, sw (i + 1) c2)))
        (fix _) (sw 0 0 @ 1 (fix 0) 0)
-       _ (fix 0)
-       (vs @ () fs
-          _ (catmap (i \ (ud i @ [u d] (: a (ain i @ 'all () a a)
-                                          (map ld (filter (x \ nelem x a) u) + [(ft i)] + map st d))))
-                    ^n)))
+       _ (two? vs ? (fix 0))
+       fq (two? vs ? (rafreq fs sc))
+       (has a) (ain a @ 'all () h h)
+       ; per vreg its weights: the calls it outlives, its defs, its reads, those reads unheld
+       wc {} wd {} wr {} wm {}
+       (bump t v w) (pin t v (peep t v 0 + w))
+       _ (two? vs ? (map (i \ (: w (fq i)
+                                  (map (v \ bump wc v w) (peep cr i ()),
+                                   ud i @ [u d] (map (v \ bump wd v w) d,
+                                                 map (v \ (bump wr v w, nelem v (has i) ? (bump wm v w))) u))))
+                         ^n))
+       ; [store-after-defs? reload-at-reads?] where the split pays
+       plan (foldl (t \ v \ (: c (peep wc v 0) d (peep wd v 0) m (peep wm v 0)
+                                a (d + m) b (d + c) e (c + c)
+                                (min a (min b e) < d + peep wr v 0 ?
+                                   (pin t v (? (a <= b && a <= e) [1 1] (b <= e) [1 0] [0 0])) t)))
+                   {} vs)
+       ok (filter (v \ two? (plan v)) vs)
+       sl (foldl (t \ v \ pin t v (nslot g 8)) {} ok)
+       (sd? v) (<(plan v)) (rr? v) (plan v 1)
+       (at i) (filter (v \ two? (plan v)) (peep cr i ()))
+       ; a call's stores go ahead of its cuse, where its argument registers are still live
+       (cu? i) (ft i @ ('cuse . _) (ft (i + 1) @ (('call || 'callr) . _) 1 _ 0) _ 0)
+       (pre i) (filter (v \ !(sd? v)) (cu? i ? (at (i + 1)) (cu? (i - 1) ? () (at i))))
+       (vs @ () [fs () {}]
+          _ [(catmap (i \ (ud i @ [u d]
+                              (: a (has i)
+                                 (map ld (filter (v \ two? (plan v) && rr? v && nelem v a) u)
+                                  + map st (pre i) + [(ft i)]
+                                  + map st (filter (v \ two? (plan v) && sd? v) d)
+                                  + map ld (filter (v \ !(rr? v)) (at i))))))
+                    ^n)
+             (pin g 'rasls (map sl ok + g 'rasls), ok) sl]))
    ; the forms over their registers: a copy onto itself and the use markers gone, a fix its body
    (rasub fs loc)
     (: (sub x) (lovr? x ? (loc x) x)
