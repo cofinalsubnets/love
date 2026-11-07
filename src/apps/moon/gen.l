@@ -910,6 +910,8 @@
        _ (arm '(cmpm) (g \ f \ [([<>f] + rg1 <>>>f) () ()]))
        _ (arm '(cmprm) (g \ f \ [[<>f <>>f] () ()]))
        _ (arm '(alurm) (g \ f \ [[(f 3) (f 4)] [(f 3)] 1]))
+       _ (arm '(alu4) (g \ f \ [(rg1 (f 3) + rg1 (f 4)) [(f 2)] 1]))
+       _ (arm '(shl4) (g \ f \ [[<>f] [<>f] 1]))
        _ (arm leaops (g \ f \ [[<>>f] [<>f] 1]))
        _ (arm xops (g \ f \ [[<>>f <>>>f] [<>f] 1]))
        _ (arm x4ops (g \ f \ [[<>f <>>f <>>>f] [<>f] 1]))

@@ -2237,7 +2237,7 @@
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (mprof 'rasub (_ \ rasub f2 loc @ b0 (? (x64? g) (lofuse g (cmpfuse g b0)) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
+         (mprof 'rasub (_ \ rasub f2 loc @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16 + (? (ia32? g) 8 (v6m? g) 4 0))
                 (rv64? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
@@ -2248,6 +2248,16 @@
     (csframe g fs @ f2
        (rvslots f2 (f2 3 3) @ f3
           (va ? (<f3 . (['(sub sp sp 64)] + map (i \ ['st 'sp (8 * i) (argr g i)]) ^8 + >f3)) f3)))
+   ; x64, after allocation: a 64-bit op and the zero-extend of its answer are its 32-bit op, where
+   ; that is one instruction
+   (lo32op fs)
+    (fs @ (([op d a b] . ['zx4 x] . u) && x = d && elem op '(add sub and or xor)
+           && (a = d || op = 'add || b = d && op != 'sub))
+           (['alu4 op d a b] . lo32op u)
+          ((['shl d k] . ['zx4 x] . u) && x = d && cint? k && 0 < k < 32)
+           (['shl4 d k] . lo32op u)
+          (f . u) (f . lo32op u)
+          _ ())
    ; after allocation, a full-word load one form alone reads, dying there, folds into it: a copy
    ; loads its copy, an alu op takes the word as its right side (a commuting one as its left)
    (lofuse g fs)
