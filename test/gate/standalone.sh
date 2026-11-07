@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
  uintptr_t n = fread(s, 1, sizeof s, stdin);
  struct bz_w o = {0};
  if (argv[1][0] == 'c' ? bz_enc(s, n, 1, &o) : bz_dec(s, n, &o)) return 2;
- fwrite(o.p, 1, o.n, stdout); return 0; }
+ fwrite(o.p, 1, o.on, stdout); return 0; }
 EOF
 # the coder's buffers as host_lzma2e lays them, a 1 MB dict
 cat > "$w/xz.c" <<'EOF'

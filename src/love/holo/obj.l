@@ -163,6 +163,7 @@
    r-thm-jump24 30                                  ; R_ARM_THM_JUMP24 same math      (a thumb2 B.W tail-jump)
    r-thm-jump19 51                                  ; R_ARM_THM_JUMP19 same math      (a thumb2 Bcc.W)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
+   r-arm-rel32 3                                     ; R_ARM_REL32      S + A - P       (a word over two labels)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
    r-thm-movwp 49                                   ; R_ARM_THM_MOVW_PREL_NC ((S+A)|T) - P, low 16   (thumb2 lap)
@@ -345,7 +346,7 @@
                       (peep extidx lbl 0))
        (o-rels32 rs)
         (catall (map (\ [off k lbl aux _]
-          (k @ ('rel32 || 'pc32) (o-rel32 off <(xsl k lbl aux) r-386-pc32)
+          (k @ ('rel32 || 'pc32) (o-rel32 off <(xsl k lbl aux) (x86 ? r-386-pc32 r-arm-rel32))
                'rel16 (o-rel32 off <(xsl k lbl aux) r-386-pc16)
                'pc8 (o-rel32 off <(xsl k lbl aux) r-386-pc8)
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
@@ -469,15 +470,15 @@
        sub ('(1) + le32 (5 + #pairs) + pairs)             ; Tag_File, over its own length
        ('(65) + le32 (10 + #sub) + o-strbytes "aeabi" + '(0) + sub))
 
-   ; the elf32 twin of objsecs4: no .love.image at 32 bits (no bake). arm code sits at grain 4,
-   ; flash being scarce; .bss rides as NOBITS since these ports zero it themselves.
+   ; the elf32 twin of objsecs4. arm code sits at grain 4, flash being scarce; .bss rides as
+   ; NOBITS since these ports zero it themselves.
    (objsecs3 target textforms dataforms nifforms imgforms bssforms rodataforms)
-    (two? imgforms ? (scare 'obj-image-arm32 target) 0,
-     [[".text"   1 6 (i386? target ? 16 4) textforms]
+    ([[".text"   1 6 (i386? target ? 16 4) textforms]
       [".rodata" 1 2 (o-dalign 4 rodataforms) rodataforms]
       [".data"   1 3 (o-dalign 4 dataforms) dataforms]
       [".bss"    8 3 (o-dalign 4 bssforms) bssforms]]
      + (two? nifforms ? [["love_nifs" 1 3 4 nifforms]] ())
+     + (two? imgforms ? [[".love.image" 1 3 16 imgforms]] ())
      + (i386? target ? () [[".ARM.attributes" 1879048195 0 1 [['raw (armattrs target 1)]]]]))   ; SHT_ARM_ATTRIBUTES
    ; the same under -mfloat-abi=soft
    (armsoft target secs) (map (s \ (<s = ".ARM.attributes" ? [<s (s 1) (s 2) (s 3) [['raw (armattrs target 0)]]] s)) secs)

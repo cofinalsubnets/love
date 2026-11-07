@@ -2226,7 +2226,7 @@
                              ['raw (gf-word tgt w (atom? >(f 1) && !(starts? <>k1 ".L") && string? (labs <<up) ? <>k1 (tspell (f 1))) rl)]
                             (!(#ns = 2 && #up = 1 && #dn = 1)) (scare a b)
                             (: s <<up l <<dn
-                               (? (!(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; l in the field's section
+                               (? (w > 4 || (w < 4 && gthumb? tgt) || !(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; a width its target can name, l in the field's section
                                   ['raw [(fix w (w @ 4 'pc32 2 'rel16 'pc8) (name s) (site + w - t l + <<r))]]))))))
        ; an .org may read back while the pads before it still grow: refused once they hold
        (settle n)

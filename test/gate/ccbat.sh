@@ -407,6 +407,34 @@ for b in $progs; do
   rm -f "${r:?}/${b:?}".* "${r:?}/res/${b:?}".* "${d:?}/${b:?}".*
 done
 
+if [ "$tgt" = arm ]; then
+  # a call an android filter traps answers ENOSYS; qemu has no filter, so the signal comes by hand
+  cat > "$d/.refused.c" <<'EOF'
+#include <errno.h>
+#include <signal.h>
+#include <unistd.h>
+int main(void) { return kill(getpid(), SIGSYS) == -1 && errno == ENOSYS ? 42 : 1; }
+EOF
+  moonrun -t arm -o "$d/refused" "$d/.refused.c" > "$d/refused.log" 2>&1 \
+    || { cat "$d/refused.log" >&2; fail "refused: mooncc could not build it"; }
+  qemu-arm "$d/refused"; a=$?
+  [ $a -eq 42 ] || fail "refused: a trapped call did not answer ENOSYS (got $a want 42)"
+  # -shared as bionic reads it; the phone is the oracle for the load
+  cat > "$d/.so.c" <<'EOF'
+int hook(int);
+int twice(int x) { return hook(x) * 2; }
+static int (*tab[2])(int) = {hook, twice};
+int via(int x) { return tab[1](tab[0](x)); }
+EOF
+  moonrun -t arm -fpic -shared -o "$d/libso.so" "$d/.so.c" > "$d/so.log" 2>&1 \
+    || { cat "$d/so.log" >&2; fail "shared: mooncc -t arm -shared"; }
+  so=$(arm-none-eabi-readelf -hdr "$d/libso.so")
+  for w in "ELF32" "DYN (" "(REL)" "R_ARM_GLOB_DAT" "R_ARM_RELATIVE"; do
+    case $so in *"$w"*) ;; *) fail "shared: no $w in the object" ;; esac
+  done
+  echo "arm: a trapped call answers ENOSYS, -shared lays a REL object"
+fi
+
 [ $n -gt 0 ] || fail "no programs ran from test/cc/"
 say="$name: $n programs answer $where, plain and -Os"
 [ -z "$x64ref" ] || say="$say, as on x86-64"
