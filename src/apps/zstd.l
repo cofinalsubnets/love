@@ -1,5 +1,6 @@
 ; src/apps/zstd.l -- the zstandard frame (rfc 8878) over src/love/compress/zstd.c's blocks.
 ;   (zstd-pack s level) -> one .zst frame of s, level 1..19, with size and checksum
+;   (zstd-zip rd level w) -> [in out] | (): rd's pieces as one frame, laid through w as coded
 ;   (zstd-unpack s)     -> (1 bytes) | 'format 'corrupt 'end 'check 'big 'dict; skippable frames passed
 ;   (zstd-pull rd)      -> g: (zstd-next g) the next block's bytes, "" once done, then g's 'ans
 ;   (zstd-unf rd mk)    -> (1 n) | the word | 'no, out through the writer mk answers (1 w)
@@ -7,6 +8,13 @@
 (borrow '(bytes tar))
 
 (: (zstd-pack s level) (zstde s level)
+   (zstd-zip rd level w)
+    (zstde-new level @ st
+       (st = () ? ()
+          (: (go i o) (rd 0 @ p
+                       (#p = 0 ? (zstde-end st @ z (string? z ? (w z, [i (o + #z)]) ()))
+                          (zstde-feed st p @ z (string? z ? (w z, go (i + #p) (o + #z)) ()))))
+             (go 0 0))))
    zstd-magic 4247762216               ; 28 b5 2f fd, little-endian
    zstd-wmax 134217728                 ; the largest window taken, zstd's own
    (zs-fin g a) (pins g 'mode 'end 'ans a, "")
@@ -142,26 +150,31 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (stat p @ st
        (? (two? st && st 2 & 61440 = 16384) (zsc-moan t (p + " is a directory -- ignored"), 1)
           (peep t 'd 0) (zsc-unone t p st)
-          (uread p @ r
-             (!r ? (zsc-say t ("can't stat " + p + " : No such file or directory -- ignored"), 1)
-                (: dst (zsc-dst t p)
-                   (? (zsc-suf p && !(peep t 'c 0) && !(peep t 'o ()))
-                       (zsc-moan t (p + " already has .zst suffix -- ignored"), 1)
-                      (zstd-pack <>r (peep t 'lvl 3) @ z
-                         (peep t 'v 0 && zsc-say t (p + " : " + show (#<>r = 0 ? 0 (100 * #z // #<>r)) + "%   ("
-                                                     + show #<>r + " B => " + show #z + " B, "
-                                                     + (peep t 'c 0 ? "/*stdout*\\" dst) + ")"),
-                          (? (peep t 'c 0) (say out z, 0)
-                             (two? (lstat dst) && !(peep t 'f 0))
-                              (zsc-say t (dst + " already exists; not overwritten"), 1)
-                             !(uwrite dst z) (zsc-say t ("can't open " + dst + " for writing"), 1)
-                             (zsc-done t p st dst))))))))))
+          (: c (peep t 'c 0)   dst (zsc-dst t p)
+             (? (zsc-suf p && !c && !(peep t 'o ())) (zsc-moan t (p + " already has .zst suffix -- ignored"), 1)
+                !(two? st) (zsc-say t ("can't stat " + p + " : No such file or directory -- ignored"), 1)
+                (!c && two? (lstat dst) && !(peep t 'f 0)) (zsc-say t (dst + " already exists; not overwritten"), 1)
+                (zsc-zip t p st c dst)))))
+   ; compress as read, a frame with no size in it; the output removed if the input fails
+   (zsc-zip t p st c dst)
+    (open p "r" @ q
+       (!(hot? q) ? (zsc-say t ("can't open " + p + " : Permission denied -- ignored"), 1)
+          (: o (c ? out (open dst "w"))
+             (? !(hot? o) (close q, zsc-say t ("can't open " + dst + " for writing"), 1)
+                (: z (zstd-zip (zsc-rd q) (peep t 'lvl 3) (say o))
+                   _ (close q)
+                   _ (c || close o)
+                   (? (atom? z) (c || unlink dst, zsc-say t (p + " : Read error"), 1)
+                      (peep t 'v 0 && zsc-say t (p + " : " + show (z 0 = 0 ? 0 (100 * z 1 // z 0)) + "%   ("
+                                                  + show (z 0) + " B => " + show (z 1) + " B, "
+                                                  + (c ? "/*stdout*\\" dst) + ")"),
+                       c ? 0 (zsc-done t p st dst))))))))
    (zsc-filter t)
     (? (peep t 'd 0)
        (zstd-unf (zsc-rd in) (_ \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
           (atom? u ? (zsc-say t ("/*stdin*\\ : " + zsc-why u), 1) 0))
        (two? (tty out) && !(peep t 'f 0)) (zsc-say t "stdout is a console, aborting", 1)
-       (say out (zstd-pack (slurp in + "") (peep t 'lvl 3)), 0))
+       (zstd-zip (zsc-rd in) (peep t 'lvl 3) (say out), 0))
 
    ; the cli walker in gnu order: the last of -d -z -t and the last level stand
    zsc-longs {"stdout" 99 "decompress" 100 "uncompress" 100 "compress" 122 "keep" 107 "force" 102
