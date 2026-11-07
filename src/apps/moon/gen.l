@@ -10382,6 +10382,11 @@
                 ('dot a fl) (hx a d @ r [<r ['dot <>r fl]])
                 ('addr a) (hx a d @ r [<r ['addr <>r]])
                 ('sexpr . _) [() (hsx e d)]
+                ; a brace's items hoist in order: C sequences them no tighter
+                ('init items) (: rs (map (it \ (it @ ('dfield fl v) (hx v d @ r [<r ['dfield fl <>r]])
+                                                     ('didx n v) (hx v d @ r [<r ['didx n <>r]])
+                                                     _ (hx it d))) items)
+                                 [(catmap (r \ <r) rs) ['init (map (r \ <>r) rs)]])
                 [() e]))
        ; a statement expression splices within itself: its items take calls like a block's, its value's
        ; hoist lands among them
@@ -10770,7 +10775,7 @@
        (peep m k 'none @ 'none (: r (lprop0 g f) _ (pin m k r) r) r9 r9))
    (lprop0 g f)
     (: w64 !(ilp32? g)
-       tak {} tys {}
+       tak {} tys {} sds {}                         ; sds: the block statics
        ; an asm's memory operand takes its name's address, as kprop reads it
        mc (a64? g ? '(81 109 111) '(109 111))       ; a64's Q is memory too
        (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) mc) 1 (go (i + 1)))) 0)
@@ -10778,6 +10783,7 @@
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
                        ; a register variable keeps its pin, as kprop keeps it
                        ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, (two? >>>p ? (pin tak <p 1) 0), cen >>p)) 0 ps)
+                       ('sdecl ps) (foldl (_ \ p \ (pin sds <p 1, cen >>p)) 0 ps)
                        ('asm . _) (: _ (foldl (_ \ o \ (mem? <o ? (<>o @ ('var v) (pin tak v 1) 0) 0)) 0 (x 2 + x 3)) (cen <x, cen >x))
                        (cen <x, cen >x)))
        _ (cen (f 3))
@@ -10856,7 +10862,19 @@
                            (nw t <x, nw t >x))))
        wtot {} wdone {} gs {'g 0}
        _ (nw wtot (f 3))
-       (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e ? <>e x)) (map (sub env) x)))
+       (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e && !(two? >>e) ? <>e x)) (map (sub env) x)))
+       ; a pointer declared at an address constant, &g or an array or a function, is that constant to
+       ; an asm's immediate input alone ("i"(p), rip_rel_ptr's), read before the asm's outputs are
+       (iok? nm) (!(tak nm) && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) && ptr? (peep tys nm ()))
+       (lcl? x) (? !(two? x) () (x @ ('var v) (two? (peep tys v ())) (lcl? <x || lcl? >x)))
+       ; a block static's address is one too: every name in it one of this fn's statics
+       (onlys x) (? !(two? x) 1 (<x = 'var) (sds <>x) (onlys <x && onlys >x))
+       (iaddr e) (!(lcl? e) && (onlys e || (: u0 (g 'undecl) a (imaddr g e) (pin g 'undecl u0, a != 'no))))
+       (imm? c) ((: (go i) (? (#c <= i) () (elem (c i) '(105 110)) 1 (go (i + 1)))) 0)
+       (iop env o) (imm? <o ? (<>o @ ('var v) (assoc v env @ e (two? e && two? >>e ? (<o . <>e . >>o) o)) o) o)
+       (ias env x) (x @ ('asm . _) (map (j \ (j = 3 ? (map (iop env) (x 3)) (x j))) ^#x)
+                        ('expr a) ['expr (ias env a)]
+                        x)
        (vsub nm k x) (? !(two? x) x (x = ['var nm]) ['num k] (map (vsub nm k) x))
        ; x's value past `x = rhs`: one constant whatever x held, in x's own type. an rhs that
        ; reads x is one only through a & or * with a zero
@@ -10894,11 +10912,15 @@
               ws (wrs it ())
               e1 (filter (e \ nelem <e ws) e0)
               n0 (lab2? it ? () ng)
-              it1 (sub e1 (it @ ('switch . _) (swp it (nkill (nws (it 1) ()) n0)) it))
-              ; a block in the run is entered from above, so it starts with the facts
-              it2 (it1 @ ('blk is) ['blk (blk is () n0 ())] (inner it1))
+              it1 (sub e1 (ias e0 (it @ ('switch . _) (swp it (nkill (nws (it 1) ()) n0)) it)))
+              ; a block in the run is entered from above, so it starts with the facts: the not-equal
+              ; ones and the immediates'
+              it2 (it1 @ ('blk is) ['blk (blk is (filter (e \ two? >>e) e0) n0 ())] (inner it1))
               e2 (it2 @ ('expr . ('asn . ('var v) . rhs . _) . _) (ok? v ? (val v rhs @ k (two? k ? ([v k] . e1) e1)) e1)
-                        ('decl ps) (foldl (a \ p \ (two? >>p && ok? <p ? (val <p <>>p @ k (two? k ? ([<p k] . a) a)) a)) e1 ps)
+                        ('decl ps) (foldl (a \ p \ (? !(two? >>p) a
+                                                        (ok? <p) (val <p <>>p @ k (two? k ? ([<p k] . a) a))
+                                                        (iok? <p && iaddr <>>p) ([<p ['cast (tys <p) <>>p] 'imm] . a)
+                                                        a)) e1 ps)
                         e1)
               (it2 . blk >items e2 (nkill (nws it ()) n0) top)))
        ; a nested block starts over: the entry it is reached by need not be the one above it.
