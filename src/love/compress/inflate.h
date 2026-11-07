@@ -36,7 +36,7 @@ static uint64_t ld64le(uint8_t const *p) {
 static int64_t inf_rundt(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,
                          const uint8_t *dic, uintptr_t nd, struct inf_tabs *t) {
  struct inf_rd r = { in, dic, out, t, n, 0, 0, cap, nd, 0, 0 };
- return inf_go(&r); }
+ return inf_start(&r); }
 // one block's tables: on the frame, or with inf_heap from alloc, for a stack too small for
 // them (a playdate's game task)
 static int64_t inf_rund(const uint8_t *in, uintptr_t n, uint8_t *out, uintptr_t cap,

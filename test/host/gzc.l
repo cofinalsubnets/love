@@ -103,6 +103,9 @@
          (gzc-all gzs-shape gzc-shapes)
          (gzc-all gzs-rest [gzc-empty gzc-one gzc-text gzc-noise gzc-long])
          (gzs-torn gzc-td 7)
+         ; past two windows of history, each match behind the feed; and far past a feed's first buffer
+         (: u (gzc-mk 20000 (j \ (j * 2654435761 >> 11 & 255))) (gzs-same (deflate (u + u + u + u))))
+         (gzs-same (deflate (gzc-mk 1000000 (0 7))))
          (gzc-all (s \ (gzs-fuzz s 1)) gzc-fz)
          (gzs-fuzz gzc-noise 29)
          ; a stream's end hands back what lay behind it, and every piece after is all behind
