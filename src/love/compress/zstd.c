@@ -434,14 +434,15 @@ static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, uintptr_t *on) {
 
 // ===== the coder: a hash-chain parse, an optimal one from level 16, huffman literals, fse sequences =====
 struct ze_bw { uint8_t *p, *e; uint64_t acc; unsigned nb; int bad; };   // bits out, low first
-static void ze_bits(struct ze_bw *w, uint64_t v, unsigned k) {          // k <= 32
- w->acc |= (v & (((uint64_t) 1 << k) - 1)) << w->nb, w->nb += k;
- if (w->nb < 32) return;
- if (w->e - w->p >= 8) {                         // a word down, the whole bytes of it kept
-  unsigned b = w->nb >> 3;
-  ZST(w->p, w->acc), w->p += b, w->acc >>= b * 8, w->nb -= b * 8; return; }
+static void ze_bspill(struct ze_bw *w) {         // the last 8 bytes of room, a byte at a time
  for (; w->nb >= 8; w->acc >>= 8, w->nb -= 8)
   if (w->p < w->e) *w->p++ = (uint8_t) w->acc; else w->bad = 1; }
+static love_inline void ze_bits(struct ze_bw *w, uint64_t v, unsigned k) {   // k <= 32
+ w->acc |= (v & (((uint64_t) 1 << k) - 1)) << w->nb, w->nb += k;
+ if (w->nb < 32) return;
+ if (w->e - w->p < 8) { ze_bspill(w); return; }
+ unsigned b = w->nb >> 3;                        // a word down, the whole bytes of it kept
+ ZST(w->p, w->acc), w->p += b, w->acc >>= b * 8, w->nb -= b * 8; }
 static void ze_flush(struct ze_bw *w) {
  for (; w->nb >= 8; w->acc >>= 8, w->nb -= 8)
   if (w->p < w->e) *w->p++ = (uint8_t) w->acc; else w->bad = 1;
@@ -475,7 +476,7 @@ static int ze_fsebuild(struct ze_fse *c, const int16_t *norm, unsigned ns, unsig
 static uint32_t ze_finit(const struct ze_fse *c, unsigned s) {
  uint32_t nbo = (c->dnb[s] + (1u << 15)) >> 16, v = (nbo << 16) - c->dnb[s];
  return c->st[(int32_t) (v >> nbo) + c->dfs[s]]; }
-static uint32_t ze_fenc(struct ze_bw *w, const struct ze_fse *c, uint32_t st, unsigned s) {
+static love_inline uint32_t ze_fenc(struct ze_bw *w, const struct ze_fse *c, uint32_t st, unsigned s) {
  uint32_t nbo = (st + c->dnb[s]) >> 16;
  ze_bits(w, st, nbo);
  return c->st[(int32_t) (st >> nbo) + c->dfs[s]]; }
@@ -673,12 +674,13 @@ static uintptr_t ze_seqs(const struct ze_seq *sq, uintptr_t ns, uint8_t *cd, uin
  return w.bad ? 0 : (uintptr_t) (w.p - o); }
 
 // --- the parse --------------------------------------------------------------------------------
-// a level: the window, the hash, how far down a chain, a length that ends the search, steps of lookahead
-struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt, fast; };
+// a level: the window, the hash, how far down a chain, a length that ends the search, steps of lookahead,
+// the fast parse's skip and whether it keeps one table
+struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt, fast, one; };
 static const uint8_t ze_depth[16] = { 0, 0, 0, 0, 4, 6, 8, 12, 16, 12, 16, 24, 32, 16, 32, 128 };
 static struct ze_cfg ze_cfg(int lv) {
- return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 1 ? 14 : lv <= 2 ? 16 : lv <= 3 ? 17 : lv <= 6 ? 19 : 20,
-                          lv < 16 ? ze_depth[lv] : 0, lv <= 9 ? 64 : lv <= 12 ? 128 : lv <= 14 ? 256 : 512, lv < 4 ? 0 : lv <= 8 ? 1 : 2, lv >= 16, lv <= 3 ? 6 : 0 }; }
+ return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 2 ? 15 : lv <= 3 ? 16 : lv <= 6 ? 19 : 20,
+                          lv < 16 ? ze_depth[lv] : 0, lv <= 9 ? 64 : lv <= 12 ? 128 : lv <= 14 ? 256 : 512, lv < 4 ? 0 : lv <= 8 ? 1 : 2, lv >= 16, lv <= 3 ? 6 : 0, lv <= 1 }; }
 #define ZO_MAXM 64u
 struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; struct lzf *f; };
 static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before p in its chain
@@ -756,6 +758,36 @@ static void ze_fast(struct ze_mf *m, unsigned step, uintptr_t a, uintptr_t e, ui
   if (p + 9 > e) break;
   ze_fins(m, q + 2), ze_fins(m, p - 2);           // two places inside it for those to come
   while (p + 9 <= e && rp[1] <= p && rp[1] <= w && !((ZLD(s + p - rp[1]) ^ ZLD(s + p)) << 32)) {   // the second distance, no literals between
+   uint64_t d = rp[1];
+   k = lzf_mlen(s + p - d, s + p, (unsigned) (e - p));
+   sq[ns].ll = 0, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, 0, d), ns++;
+   p += k, l0 = p; } }
+ *pnl = nl, *pns = ns; }
+// level 1's: one table of the last place of 6 bytes, and the repeat a byte on
+static void ze_fast1(struct ze_mf *m, unsigned step, uintptr_t a, uintptr_t e, uint64_t *rp, uint8_t *lit,
+                     uintptr_t *pnl, struct ze_seq *sq, uintptr_t *pns) {
+ const uint8_t *s = m->s;
+ uint32_t *t = m->head;
+ unsigned b = m->hlog;
+ uintptr_t p = a, l0 = a, nl = 0, ns = 0, w = m->wmask;
+ while (p + 9 <= e) {
+  uint64_t w8 = ZLD(s + p), off, r0 = rp[0];
+  uint32_t h = ze_hf(w8 << 16, b), c = t[h];
+  uintptr_t q = p, k;
+  t[h] = (uint32_t) p + 1;
+  if (r0 <= p + 1 && r0 <= w && !((ZLD(s + p + 1 - r0) ^ (w8 >> 8)) << 32))
+   q = p + 1, off = r0, k = lzf_mlen(s + q - r0, s + q, (unsigned) (e - q));
+  else if (c && p - (c - 1) <= w && !((ZLD(s + c - 1) ^ w8) << 16))
+   off = p - (c - 1), k = lzf_mlen(s + c - 1, s + p, (unsigned) (e - p));
+  else { p += 1 + ((p - l0) >> step); continue; }
+  while (q > l0 && q > off && s[q - 1] == s[q - 1 - off]) q--, k++;
+  uintptr_t ll = q - l0;
+  memcpy(lit + nl, s + l0, ll), nl += ll;
+  sq[ns].ll = (uint32_t) ll, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, ll, off), ns++;
+  p = q + k, l0 = p;
+  if (p + 9 > e) break;
+  t[ze_hf(ZLD(s + q + 2) << 16, b)] = (uint32_t) q + 3, t[ze_hf(ZLD(s + p - 2) << 16, b)] = (uint32_t) p - 1;
+  while (p + 9 <= e && rp[1] <= p && rp[1] <= w && !((ZLD(s + p - rp[1]) ^ ZLD(s + p)) << 32)) {
    uint64_t d = rp[1];
    k = lzf_mlen(s + p - d, s + p, (unsigned) (e - p));
    sq[ns].ll = 0, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, 0, d), ns++;
@@ -937,7 +969,7 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
   for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml;
   zo_halve(Z->lit, 256), zo_halve(Z->ll, 36), zo_halve(Z->ml, 53), zo_halve(Z->of, 32); }
  else if (cf->fast) {
-  ze_fast(m, cf->fast, a, e, rp, lit, &nl, sq, &ns);
+  (cf->one ? ze_fast1 : ze_fast)(m, cf->fast, a, e, rp, lit, &nl, sq, &ns);
   for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml; }
  else
  while (p + 8 <= e) {
@@ -1003,13 +1035,13 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  for (unsigned i = 0; i < fz; i++) o[at++] = (uint8_t) (fcs >> 8 * i);
  uintptr_t wsz = (uintptr_t) 1 << cf.wlog;
  int tree = lv >= 13;                            // levels with a tree want no chains
- uintptr_t hn = tree ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
+ uintptr_t hn = tree ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree || cf.one ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
  struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good, NULL };
  uint8_t *lit = alloc(NULL, ZS_BMAX), *cd = alloc(NULL, 3 * (ZS_BMAX / 3 + 1));
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;
  if (good && !tree) memset(m.head, 0, hn * 4);
- if (good && cf.fast) memset(m.chain, 0, cn * 4);
+ if (good && cf.fast && !cf.one) memset(m.chain, 0, cn * 4);
  struct zo *Z = NULL;
  uint32_t *bt = NULL;
  struct lzf F;
