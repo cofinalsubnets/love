@@ -130,9 +130,9 @@
 
    ; --- mixing and packing ---------------------------------------------------
    ; every live voice is evaluated over the whole chunk and summed; a hard-panned voice
-   ; skips its far side. mixin sums in C, left and right in one tray, a voice's raw answer
-   ; read in place; without it the trays sum in love, in the same order
-   mixin (cite 'dsp 'mixin)
+   ; skips its far side. mixall sums the chunk in C in one call, left and right in one tray,
+   ; a voice's raw answer read in place; without it the trays sum in love, in the same order
+   mixall (cite 'dsp 'mixall)
    (mixdown vs base n)
     (: ix (iota n + base)
        z  (ix * 0.0)
@@ -140,14 +140,14 @@
        (go l L R) (l @- (L . R)
                    ((_ . f . yl . yr . _) . u) (f ix @ y            ; the wave, once: it is a C pass
                                                   (go u (side L y yl) (side R y yr))))
-       (fast l a) (l @- (tray? a ? ((peep a (iota n) 0.0) . (peep a (iota n + n) 0.0)) (z . z))
-                   ([_ _ yl yr _ tp] . u) (fast u (foldl (a \ [y o g] \ (mixin a y (yl * g) (yr * g) n o)) a (tp ix)))
-                   ([_ _ yl yr r] . u) (fast u (mixin a (r ix) yl yr n 0))
-                   ((_ . f . yl . yr . _) . u) (fast u (mixin a (f ix @ y (tray? y ? y (z + y))) yl yr n 0)))
-       (mixin ? (fast vs ()) (go vs z z)))
+       (pieces l) (l @- ()
+                   ([_ _ yl yr _ tp] . u) (map ([y o g] \ [y (yl * g) (yr * g) o]) (tp ix) + pieces u)
+                   ([_ _ yl yr r] . u) ([(r ix) yl yr 0] . pieces u)
+                   ((_ . f . yl . yr . _) . u) ((f ix @ y [(tray? y ? y (z + y)) yl yr 0]) . pieces u))
+       (mixall ? (mixall (pieces vs) n @ m ((peep m (iota n) 0.0) . (peep m (iota n + n) 0.0))) (go vs z z)))
    ; an ops voice heard again at each tap [frames-behind gain], from the chunks it already
    ; laid rather than run again: [end fn gl gr () tp], tp the [tray offset gain] a chunk sums.
-   ; for a mixdown with mixin, whose chunks are all one length; fn is the voice unechoed
+   ; for a mixdown with mixall, whose chunks are all one length; fn is the voice unechoed
    (echoed [end fn gl gr raw] taps)
     (: mx (foldl max 0 (map cap taps)) box {'past ()}
        (tp ix) (: f0 (peep ix 0 0) n #ix

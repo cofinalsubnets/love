@@ -248,7 +248,7 @@
  ; down, swelling and wavering. sound effects go in at the write head, heard next chunk ---
  song-chunk (song-rate // 30)
  song-gain 5200.0
- song-mixin (cite 'dsp 'mixin)
+ song-mixall (cite 'dsp 'mixall)
  phrase [-5.5 -3.5 -12.5]
  phrase-gap 1.2                         ; seconds from one note of it to the next
  phrase-ring 3.0                        ; ..and how long a note takes to die away
@@ -279,9 +279,9 @@
  (apartment-song-new h st) {'h h 'fpos 0 'vs [[0 (drone-voice ())]] 'sb {st}
                             'next (phrase-first * song-rate) 'struck 0}
  (strike! s at v) (pin s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]))
- ; a note and its echoes: one voice heard again from what it laid, where mixin sums; else
+ ; a note and its echoes: one voice heard again from what it laid, where mixall sums; else
  ; each echo a voice of its own
- (note! s at v) (: vo (song-mixin && mkvoice at v song-rate)
+ (note! s at v) (: vo (song-mixall && mkvoice at v song-rate)
                    (? (#vo = 5) (pin s 'vs (s 'vs + [[at (echoed vo (map (e \ [(int (<e * song-rate)) (e 1)]) phrase-echoes))]]))
                       (strike! s at v,
                        each phrase-echoes (e \ strike! s (at + int (<e * song-rate)) (pin (pins {} 's (v 's) 'note (v 'note) 'legato (v 'legato)) 'gain (v 'gain * e 1))))))

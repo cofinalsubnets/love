@@ -166,31 +166,36 @@ love_noinline static struct g *host_tones(struct g *g) {
  return g; }
 static lvm(lvm_tones) { LvmCallp(g, 4, host_tones) }
 
-// (mixin acc y gl gr n o): acc's first 2n, left then right (any other acc is silence), with
-// y's first n laid in at gl and gr, y's frame o + i at i where it falls in them; a side whose
-// gain is 0 is copied as it was
-love_noinline static struct g *host_mixin(struct g *g) {
+// (mixall ps n): 2n frames, left then right, the sum of each piece [y gl gr o] of the list ps in
+// order: y's frame o + i at i where it falls in y's first n, at gl and gr. a side whose gain
+// is 0 is not touched; a piece that is not one is skipped
+love_noinline static struct g *host_mixall(struct g *g) {
  word *a = g->sp;
- if (!galaxyp(a[1]) || tray(a[1])->type != love_R || !isnum(a[2]) || !isnum(a[3]) || !(a[4] & 1) || !(a[5] & 1)) { a[0] = ZeroPoint; return g; }
- intptr_t const n = getcharm(a[4]), o = getcharm(a[5]);
- if (n < 0 || n > 1 << 22 || tray_nelem(tray(a[1])) < (uintptr_t) n) { a[0] = ZeroPoint; return g; }
+ if (!(a[1] & 1)) { a[0] = ZeroPoint; return g; }
+ intptr_t const n = getcharm(a[1]);
+ if (n < 0 || n > 1 << 22) { a[0] = ZeroPoint; return g; }
  uintptr_t const w = b2w(tray_bytes(love_R, 1, 2 * (uintptr_t) n));
  if (!ok(g = have(g, w))) return g;
  a = g->sp;
  struct tray *out = ini_tray(bump(g, w), love_R, 1);
  out->shape[0] = 2 * (uintptr_t) n;
- flo_t *d = tray_data(out);
- flo_t const *y = tray_data(tray(a[1])), gl = toflo(a[2]), gr = toflo(a[3]);
- flo_t const *s = galaxyp(a[0]) && tray(a[0])->type == love_R && tray_nelem(tray(a[0])) >= 2 * (uintptr_t) n
-                  ? tray_data(tray(a[0])) : 0;
- for (intptr_t i = 0; i < n; i++) {
-  flo_t const l = s ? s[i] : 0, r = s ? s[n + i] : 0;
-  int const in = o + i >= 0 && o + i < n;
-  d[i] = in && gl != 0 ? l + y[o + i] * gl : l;
-  d[n + i] = in && gr != 0 ? r + y[o + i] * gr : r; }
+ flo_t *L = tray_data(out), *R = L + n;
+ for (intptr_t i = 0; i < 2 * n; i++) L[i] = 0;
+ for (word p = a[0]; chainp(p); p = B(p)) {
+  word q = A(p), y, gl, gr, o;
+  if (!chainp(q) || !chainp(B(q)) || !chainp(BB(q)) || !chainp(B(BB(q)))) continue;
+  y = A(q), gl = AB(q), gr = A(BB(q)), o = A(B(BB(q)));
+  if (!galaxyp(y) || tray(y)->type != love_R || !isnum(gl) || !isnum(gr) || !(o & 1)) continue;
+  intptr_t const off = getcharm(o);
+  if (tray_nelem(tray(y)) < (uintptr_t) n || off <= -n || off >= n) continue;
+  // the frames i whose off + i falls in y's first n
+  intptr_t const i0 = off < 0 ? -off : 0, i1 = off > 0 ? n - off : n;
+  flo_t const *ys = (flo_t const *) tray_data(tray(y)) + off, fl = toflo(gl), fr = toflo(gr);
+  if (fl != 0) for (intptr_t i = i0; i < i1; i++) L[i] += ys[i] * fl;
+  if (fr != 0) for (intptr_t i = i0; i < i1; i++) R[i] += ys[i] * fr; }
  a[0] = word(out);
  return g; }
-static lvm(lvm_mixin) { LvmCallp(g, 5, host_mixin) }
+static lvm(lvm_mixall) { LvmCallp(g, 1, host_mixall) }
 
 LvDef("tones", tones, 5, "dsp");
-LvDef("mixin", mixin, 6, "dsp");
+LvDef("mixall", mixall, 2, "dsp");
