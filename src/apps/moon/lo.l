@@ -751,6 +751,12 @@
          ['un _ a] (lospec? g env a)
          ['cast ty a] (!(flo? ty || d128? ty) && lospec? g env a)
          ())
+   ; what an arm costs every time it speculates: its operators
+   (loops e)
+    (e @ ['bin _ a b] (1 + loops a + loops b)
+         ['un _ a] (1 + loops a)
+         ['cast _ a] (loops a)
+         0)
    (losel g env c a b)
     (? (relish? c && a = ['num 1] && b = ['num 0]) (lox g env c)
        (relish? c && a = ['num 0] && b = ['num 1]) (lox g env ['un 'not c])
@@ -770,6 +776,8 @@
          _ 'no)
    (losel1 g env c a b)
     (? !(lospec? g env a && lospec? g env b) 'no
+       ; past two operators the branch, which runs one arm, wins
+       (2 < loops a + loops b) 'no
        (lox g env a @ 'bad 'bad
           va (lox g env b @ 'bad 'bad
              vb (: xa (loui g env a va vb) xb (loui g env b vb va) ta (vty xa) tb (vty xb)
@@ -1082,7 +1090,8 @@
                 f ['int d (f + [['li d 1] ['jmp ld] ['label lf] ['li d 0] ['label ld]])]))))
          ['cond c a b]
           ((fsel? g ? (losel g env c a b) 'no) @ sel (sel != 'no ? sel
-          (nlab g ".lo" @ le (nlab g ".lo" @ ld
+          ; arms a select would run but for their cost: no guess which is colder, so tailarm leaves the else
+          (nlab g ".lo" @ le ((fsel? g && lospec? g env a && lospec? g env b ? (pin g 'hot (le . g 'hot))), nlab g ".lo" @ ld
              (lobr g env c 0 le @ 'bad 'bad
                 fc (lox g env a @ 'bad 'bad
                       va (lox g env b @ 'bad 'bad
