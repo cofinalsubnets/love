@@ -503,7 +503,7 @@
    o-st0 [31 0 0 () () 0 ()]
    (o-sx v n) (v >= 1 << (n - 1) ? (v - (1 << n)) v)
    (o-w32 s o) (s o | (s (o + 1) << 8) | (s (o + 2) << 16) | (s (o + 3) << 24))
-   (o-flat l) (catmap (x \ (string? x ? (map (i \ x i) ^#x) [x])) l)
+   (o-flat l) (catmap (x \ (string? x ? (map x ^#x) [x])) l)
    ; the registers a callee saves: x19-x30 and d8-d15 (dwarf 72-79)
    (o-cs? r) (19 <= r && r <= 30 || 72 <= r && r <= 79)
    ; a word's effect on the state; nm names the function a refusal blames
@@ -646,7 +646,7 @@
    ; the .eh_frame lane for the functions uw names, () where none is laid
    (o-eh lanes uw)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
-                  rl (map (r \ <r) (filter (r \ elem (r 1) '(b26 b19 b14)) (l 5)))
+                  rl (map cap (filter (r \ elem (r 1) '(b26 b19 b14)) (l 5)))
                   ; by address, one record where names alias
                   fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
                                                     (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
@@ -803,7 +803,7 @@
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
                  'secrel32 (o-where wx lbl @ w (o-rela off <w ra-prel32 <>w))
-                 'pc32 (o-rela off si (rv ? rr-pc32 r-pc32) ((sa + aux) - 4))
+                 'pc32 (o-rela off si (? a64 ra-prel32 rv rr-pc32 r-pc32) ((sa + aux) - 4))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
                  ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
                  ; anything else pc32 (data has no plt stub)

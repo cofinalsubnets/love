@@ -211,7 +211,7 @@
    (gz-head s)                                ; -> (1 stamp name body-seat) | ()
     (: n #s
        (skip i) (? (n <= i) () (s i = 0) (i + 1) (skip (i + 1)))       ; a NUL-ended field
-       (n < 18 || !(s 0 = 31 && s 1 = 139 && s 2 = 8) ? ()
+       (n < 18 || !(s 0 = 31 && s 1 = 139 && s 2 = 8) || s 3 & 224 ? ()
           (: flg (s 3)
              i1 (flg & 4 ? (12 + rdle s 10 2) 10)                                  ; fextra
              r2 (flg & 8 ? (skip i1 @ e (e && [1 (snip s i1 (e - 1)) e])) [1 "" i1])   ; fname
@@ -219,7 +219,9 @@
                 (: i3 (flg & 16 ? (skip <>>r2) <>>r2)                             ; fcomment
                    (!i3 ? ()
                       (: i4 (flg & 2 ? (i3 + 2) i3)                               ; fhcrc
-                         (n < i4 + 8 ? () [1 (rdle s 4 4) <>r2 i4]))))))))
+                         (n < i4 + 8 ? ()
+                            (flg & 2 && rdle s i3 2 != (gz-crc32 (snip s 0 i3) & 65535)) ()
+                            [1 (rdle s 4 4) <>r2 i4]))))))))
    (gz-unzip s)
     (: n #s h (gz-head s)
        (!h ? ()

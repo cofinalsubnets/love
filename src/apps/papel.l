@@ -112,12 +112,12 @@
                               x)) l)
    (rlb f b) (<b @ 'para    ['para (rli f <>b)]
                    'head    ['head <>b (rli f <>>b)]
-                   'bullets ['bullets (map (i \ rli f i) <>b)]
-                   'numbers ['numbers (map (i \ rli f i) <>b)]
+                   'bullets ['bullets (map (rli f) <>b)]
+                   'numbers ['numbers (map (rli f) <>b)]
                    'deflist ['deflist (map (it \ [(rli f <it) (rli f <>it)]) <>b)]
-                   'quote   ['quote (map (x \ rlb f x) <>b)]
+                   'quote   ['quote (map (rlb f) <>b)]
                    b)
-   (relink f d) (map (b \ rlb f b) d))
+   (relink f d) (map (rlb f) d))
 
 ; --- showing: lapiz shows every block but two ------------------------------------------
 ; papel emits the anchored head and deflist itself: lapiz has nowhere for an id or a class.
@@ -205,7 +205,7 @@ table{border-collapse:collapse}
 (: (outname s) (pbase s @ b (snip b 0 (#b - 3) + ".html"))
    (render conf known src dst)
    (: d0 (mdread (slurpf src))
-      d  (relink (u \ mdurl known u) d0)
+      d  (relink (mdurl known) d0)
       body (pbody d)
       hs (pheads body)
       ttl (ptitle body (pbase src))

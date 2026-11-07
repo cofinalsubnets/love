@@ -16,7 +16,12 @@
    (cuuap x) >><x
    stdin in stdout out stderr err
    sine sin cosine cos tangent tan fabs abs
-   star-tray (tray 0) gem-tray (tray 0.0) twin-tray (tray (twin 0 0)) top-tray (tray ())  ; the four typed-tray ctors
+   ; a shape is a dimension list or a lone number; 0 and () are rank 0
+   (trayed w sh l) (tray w (sh = 0 || sh = () ? sh (a-shape sh)) l)
+   ; a star-tray's tier is the widest of its numbers; the others name theirs
+   star-tray (trayed 1)
+   galaxy star-tray
+   gem-tray (trayed 0.0) twin-tray (trayed (twin 0 0)) top-tray (trayed ())
    (tier v) (tray? v ? (atype v @ c (? (c = 0) star-tray (c = 1) gem-tray (c = 2) twin-tray top-tray)))  ; a tray's ctor; nil off a tray
    zero? nil?
    ; the roster's ear: while a cat is laid, verbs pins at 0 what hears each borrow and cite
@@ -268,7 +273,6 @@
 
 (:: 'suite (l \ (. 'do (. (. 'assert >l) [['puts <l] ['puts ": ok\n"]]))))
 
-(: (array s) (a-shape s @ sh (a-coll sh (foldl (*) 1 sh) 0)))
 
 ; --- coin: a user kind, a table of methods keyed by the noms the C side reads:
 ; name + * ap hot - net star /, net one of payload tally ratio. (coin 'nm spec) registers
@@ -828,7 +832,7 @@
          (<t @ m (px o <m sn, px o <>m sn))
        (plist o x sn)))
 
-  ; --- trays. rank 1 is @(…), past that (array '(shape) elem…). an object tray quotes
+  ; --- trays. rank 1 is @(…), past that (galaxy '(shape) [elem…]), or top-tray for object cells, which quote
   ; what would otherwise re-evaluate.
   ; a flat index to its row-major coordinate
   (coord sh i) (atom? >sh ? (i . ())
@@ -838,7 +842,8 @@
                (ty = 3 && (nom? e || two? e) ? (put o 39) 0, px o e sn))
     (gs l f) (two? l ? ((f ? 0 (put o 32)), pnum o <l, gs >l 0) 0)
     (rank v = 1 ? (say o "@(", each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), put o 41)
-       (say o "(array '(", gs sh 1, put o 41, each ^n (i \ (put o 32, pel i)), put o 41)))
+       (say o (ty = 3 ? "(top-tray '(" "(galaxy '("), gs sh 1, say o ") [",
+        each ^n (i \ ((0 < i ? (put o 32) 0), pel i)), say o "])")))
 
   ; --- maps print {k v …}. a map can hold itself, so the path rides as [maps depth mark],
   ; matched by identity: the nearest 64 maps, and the mark, the map at the last power-of-two
@@ -902,8 +907,8 @@
 ; `dot` says a string or cask verbatim, anything else shown, and answers its operand
 (: (print o x) (px o x (), x)
    (show x) (jug 0 @ o (px o x (), slurp o))
-   ; a text with holes, "a \(x) b": its runs verbatim, a string verbatim, the rest shown
-   (weave l) (jug 0 @ o (each l (x \ string? x ? (say o x) (px o x ())), slurp o))
+   ; a text with holes, "a \(x) b": its runs verbatim, a string or a list as its text, the rest shown
+   (weave l) (jug 0 @ o (each l (x \ string? x || two? x || x = () ? (say o (string x)) (px o x ())), slurp o))
    (dot x) (string? x || hot? x && !(port? x) ? (say out x) (px out x ()), flush out, x)
    putx (print out))
 
@@ -1602,8 +1607,8 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defn defq GLOB HELPC lof rejects vof)
-(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {})
+(module '(uu axm bridge capp chk conv defcx defn defq defvc GLOB HELPC lof rejects sugar vof)
+(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
@@ -1616,6 +1621,12 @@
    (donr P z s m) (charm? m ?
     (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc))) (go 0 z))
     (m @ ['succ n] (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
+   ; a step that never reads its recursive result needs none computed, a case and no fold:
+   ; a double recursion, natgtb or natminus, costs a sum of its literals and not their binomial
+   (dosr P z s m) (charm? m ? (m = 0 ? z (vapp (vapp s (m - 1)) 0))
+    (m @ ['succ n] (vapp (vapp s n) 0) ['nnr P z s m]))
+   (reads? x t) (t == x || two? t && (reads? x <t || reads? x >t))
+   (stepless? s) (s @ ['lam _ ['lam u b]] !(reads? u b) 0)
    (dobr P x y v) (v @ 'true x  'false y  ['nbr P x y v])
    (dour P x v) (v @ 'tt x ['nur P x v])
    (docr P f g v) (v @ ['i1 a] (vapp f a) ['i2 b] (vapp g b) ['ncr P f g v])
@@ -1640,7 +1651,8 @@
          ['paths A a b]         (: cA (comp A) ca (comp a) cb (comp b)
                                  (en \ ['paths (cA en) (ca en) (cb en)]))
          ['nat_rect P z s n]    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
-                                 (en \ donr (cP en) (cz en) (cs en) (cn en)))
+                                   go (stepless? s ? dosr donr)
+                                 (en \ go (cP en) (cz en) (cs en) (cn en)))
          ['tpair a b]           (: ca (comp a) cb (comp b) (en \ ['chain (ca en) (cb en)]))
          ['idpath a]            (comp a @ ca (en \ ['refl (ca en)]))
          ['paths_rect P r e]    (: cP (comp P) cr (comp r) ce (comp e)
@@ -1790,25 +1802,53 @@
          (inf-spine cx en d (inf cx en d <t) >t))))
 
 ; --- drivers: defn checks then pins; an axiom's value is its own neutral name; rejects runs a
+; sugar, gone before the kernel sees a term: (pi x A y B C) and (lam x y b) nest, and a context
+; defcx names binds its telescope, (under cx C) as pis and (given cx b) as lams. the exporters read it too
+(: (cx-of c) (CX c @ b (two? b ? b (scare 'uu-no-context c)))
+   (pis r) (r @ [b] (sugar b) (x . A . u) ['pi x (sugar A) (pis u)])
+   (lams r) (r @ [b] (sugar b) (x . u) ['lam x (lams u)])
+   (cx-pis bs b) (bs @ ([x A] . u) ['pi x A (cx-pis u b)] (sugar b))
+   (cx-lams bs b) (bs @ ([x _] . u) ['lam x (cx-lams u b)] (sugar b))
+   (sugar t)
+    (atom? t ? t
+     (t @ ('pi . r) (pis r)
+          ('lam . r) (lams r)
+          ['under c b] (cx-pis (cx-of c) b)
+          ['given c b] (cx-lams (cx-of c) b)
+          (map sugar t)))
+   ; (defcx name [parent] (x A) ..): a parent's binders first
+   (defcx nm r)
+    (: own (x \ [<x (sugar (x 1))])
+     (pin CX nm (name? <r ? (cx-of <r + map own >r) (map own r)), nm)))
+
 ; thunk expecting the kernel to refuse
-(: (defn nm T t)
-   (: Tv (chk 0 0 0 T 'UU,
+(: (defn nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
      pin GLOB nm [Tv (vof 0 t)],
      pin SRC nm [t],
      nm))
-   (axm nm T)
-   (chk 0 0 0 T 'UU,
-    pin GLOB nm [(vof 0 T) ['nv nm]],
-    nm)
+   (axm nm T0)
+   (: T (sugar T0)
+    (chk 0 0 0 T 'UU,
+     pin GLOB nm [(vof 0 T) ['nv nm]],
+     nm))
    ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
    ; never builds its beta-normal form
-   (defq nm T t)
-   (: Tv (chk 0 0 0 T 'UU,
+   (defq nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
      pin GLOB nm [Tv ['nv nm]],
+     nm))
+   ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
+   ; ran, and a cite of it is unbound
+   (defvc nm T0 t0)
+   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
+          vof 0 T)
+    (chk 0 0 0 t Tv,
+     pin GLOB nm 1,
      nm))
    (rejects th)
    (: r (call-cc (k \ (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
@@ -1876,7 +1916,9 @@
 (: q (map qlit)
  (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
   :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
-  :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l))))
+  :: 'defvc (l \ l @ [_ _ _] (defvc . q l) (scare 'uu-defq-arity l)),
+  :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l)),
+  :: 'defcx (l \ [defcx (qlit <l) (qlit >l)])))
 
 ) ; module uu
 
@@ -2493,11 +2535,12 @@
    ; its [rows cols], 24 and 80 where it says no more than rmin and cmin (a fresh pty says 0)
    (ttysize rmin cmin) (tty 1 @ ws [(two? ws && rmin < <ws ? <ws 24) (two? ws && cmin < <>ws ? <>ws 80)])
    ; raw, on the alternate screen, with modes: 'mouse (sgr reports), 'tap (a press alone,
-   ; sgr), 'paste (bracketed), 'hide (the cursor), ('title t) (pushed, popped on the way out).
+   ; sgr), 'paste (bracketed), 'hide (the cursor), 'nokeys (a phone's keyboard away), ('title t)
+   ; (pushed, popped on the way out).
    ; ttygive undoes what ttytake set, shows the cursor, and eats the keys still queued
-   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l"
+   (ttyon m) (m @ 'mouse "\e[?1000h\e[?1006h" 'tap "\e[?9h\e[?1006h" 'paste "\e[?2004h" 'hide "\e[?25l" 'nokeys "\e[?7727h"
                   ('title t) ("\e[22;0t\e]2;\(t)\a") "")
-   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" ('title _) "\e[23;0t" "")
+   (ttyoff m) (m @ 'mouse "\e[?1003l\e[?1002l\e[?1000l\e[?1006l" 'tap "\e[?1006l\e[?9l" 'paste "\e[?2004l" 'nokeys "\e[?7727l" ('title _) "\e[23;0t" "")
    (ttytake ms) (raw 1, say out ("\e[?1049h\e[2J" + catmap ttyon ms), flush out)
    (ttygive ms) (say out ("\e[0m" + catmap ttyoff (rev ms) + "\e[?25h\e[?1049l"), flush out, two? (tty 0) ? (unkey ()), raw 0)
 

@@ -1,5 +1,5 @@
 ; uu2lean: love's uu proof corpus exported to lean 4, the twin of uu2coq.l. loads and
-; certifies the uu files, reads them as data, and translates every (defn/defq nm T t) in
+; certifies the uu files, reads them as data, and translates every (defn/defq/defvc nm T t) in
 ; the MLTT fragment; lean re-checks the same terms.
 ;
 ; a def exports iff in the fragment and every global it mentions exports -- a dependency
@@ -15,6 +15,8 @@
    _ (reads (open "test/uuhom.l" "r"))
    _ (reads (open "test/uuhomgen.l" "r"))
    _ (reads (open "test/uuhomlaw.l" "r"))
+   _ (reads (open "test/uuinf.l" "r"))
+   _ (reads (open "test/uuinfvc.l" "r"))
    _ (reads (open "test/uusplgen.l" "r"))
    _ (reads (open "test/uuspllaw.l" "r"))
    _ (reads (open "test/uulay.l" "r"))
@@ -31,6 +33,7 @@
    bs (intern "\\")
    nl "\n"
    b8 "⟨"  b9 "⟩"
+   sugar (cite 'uu 'sugar)
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
    (lines l) (foldl (a \ s \ a + s + nl) "" l)
 
@@ -39,10 +42,10 @@
    (leann nm) ("uu_" + sanit (string nm))
 
    ; --- collect (kind nm T t) entries (defns live inside the laws) ---
-   (deq? c) (two? c && (<c = 'defn || <c = 'defq))
+   (deq? c) (two? c && (<c = 'defn || <c = 'defq || <c = 'defvc))
    (axq? c) (two? c && <c = 'axm)
-   (entry c) (? (deq? c) ['def (unq (c 1)) (unq (c 2)) (unq (c 3))]
-                (axq? c) ['axm (unq (c 1)) (unq (c 2)) ()])
+   (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
+                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])
    (kids ks acc) (two? ks ? (kids >ks (deq? <ks || axq? <ks ? (entry <ks . acc) acc)) acc)
    (gather fs acc) (two? fs ?
                       (gather >fs (<fs @ F
@@ -50,7 +53,7 @@
                            (deq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (forms (open "test/uuinfvc.l" "r"))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r"))))))))))))))))))) ())
 
    ; a def must be whole (a paren slip reads () as its term) and pinned (a partial defn is a
    ; truthy closure that pins nothing). `= ()`, not `!`: a term of 0 is a legal def

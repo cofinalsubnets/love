@@ -102,10 +102,10 @@
    (penc s) (catmap (c \ (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122 || c = 45
                           || c = 46 || c = 95 || c = 126 || c = 47) ? (string c)
                          ("%" + string (hexd (c // 16)) + string (hexd (c % 16))))
-                    (map (i \ s i) ^#s))
+                    (map s ^#s))
    ; ..and text going into html
    (hesc s) (catmap (c \ c @ 38 "&amp;" 60 "&lt;" 62 "&gt;" 34 "&quot;" 39 "&#39;" (string c))
-                    (map (i \ s i) ^#s))
+                    (map s ^#s))
    ; a segment that starts with a dot: .git, .env, .ssh
    (dotted? p) (: n #p (g i) (? (n - 1 <= i) 0 (p i = 47 && p (i + 1) = 46) 1 (g (i + 1)))
                   (g 0))
@@ -142,18 +142,37 @@
 
 ; --- the response --------------------------------------------------------------------
 ; one shape for every answer. head sends a get's headers, Content-Length included, and no body
-(: (reply c code why ctype body head?)
+; no-cache asks again each time, and a file's tag lets the answer be 304; isolation, so a
+; page may use SharedArrayBuffer
+(: tail ("Cache-Control: no-cache\r\n"
+         + "Cross-Origin-Opener-Policy: same-origin\r\n"
+         + "Cross-Origin-Embedder-Policy: require-corp\r\n"
+         + "Connection: close\r\n\r\n")
+   (headed c code why ctype body head? more)
    (each ["HTTP/1.1 \(code) \(why)\r\n"
           "Content-Type: \(ctype)\r\n"
           "Content-Length: \(#body)\r\n"
-          "Cache-Control: no-cache\r\n"
-          ; isolation, so a page may use SharedArrayBuffer
-          "Cross-Origin-Opener-Policy: same-origin\r\n"
-          "Cross-Origin-Embedder-Policy: require-corp\r\n"
-          "Connection: close\r\n\r\n"] (say c),
+          more
+          tail] (say c),
     !head? ? (say c body),
     flush c,
     code)
+   (reply c code why ctype body head?) (headed c code why ctype body head? "")
+   ; a request header's line, lowercase, or "" with none
+   (hline blk name)
+   (: h (lower blk) i (fsub h ("\n" + name + ":") 0)
+      e (i < 0 ? -1 (fsub h "\n" (i + 1)))
+      (i < 0 ? "" (snip h i (e < 0 ? #h e))))
+   ; a file's tag: its size and modified time. a list of tags, or *, may come back
+   (etag full) (stat full @ (s . m . _) "\"\(s)-\(m)\"")
+   (seen? blk tag)
+   (: l (hline blk "if-none-match") (fsub l tag 0 >= 0 || fsub l "*" 0 >= 0))
+   ; ..and its gzipped copy, kept beside it: one no older than the file, for who takes gzip
+   (zipped blk full)
+   (: z (full + ".gz")
+      (? (fsub (hline blk "accept-encoding") "gzip" 0 < 0) ()
+         (stat z @ (_ . m . _) (stat full @ (_ . n . _) (n <= m ? z ()))
+                   _ ())))
    ; an error is a page too -- small, and readable when a browser shows it
    (oops c code why head?)
    (reply c code why "text/html; charset=utf-8"
@@ -178,6 +197,13 @@
 ; headers are read and dropped; consuming them lets the peer finish writing, so the close is
 ; clean, not a reset. `make`, asked before the disk, takes (path head) and answers
 ; [ctype body] or () for "not mine"; a () make is the plain static server.
+(: (file c full ctype blk head? meth raw)
+   (: z (zipped blk full) from (string? z ? z full) tag (etag from)
+      more "ETag: \(tag)\r\nVary: Accept-Encoding\r\n"
+      (? (seen? blk tag) (each ["HTTP/1.1 304 Not Modified\r\n" more tail] (say c), flush c, [304 meth raw])
+         (gulp from @ b
+            (got? b ? (headed c 200 "OK" ctype b head? (string? z ? (more + "Content-Encoding: gzip\r\n") more), [200 meth raw])
+               (oops c 403 "Forbidden" head?, [403 meth raw]))))))
 (: (serve1 root make c)
    (: blk (reqblk c)
       line (line1 blk)
@@ -202,13 +228,10 @@
                               (say c "HTTP/1.1 301 Moved Permanently\r\nLocation: \(penc p)/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                                flush c, [301 meth raw])
                               (fhere? "\(full)index.html")
-                              (gulp "\(full)index.html" @ b
-                                 (reply c 200 "OK" "text/html; charset=utf-8" b head?, [200 meth raw]))
+                              (file c "\(full)index.html" "text/html; charset=utf-8" blk head? meth raw)
                               (listing c root p head?, [200 meth raw]))
                            !(fhere? full) (oops c 404 "Not Found" head?, [404 meth raw])
-                           (gulp full @ b
-                              (got? b ? (reply c 200 "OK" (mime full) b head?, [200 meth raw])
-                                 (oops c 403 "Forbidden" head?, [403 meth raw]))))))))))))))
+                           (file c full (mime full) blk head? meth raw))))))))))))
 
 ; --- the loop ---------------------------------------------------------------------------
 (: (note quiet l) (!quiet ? (say err "kiosko: \(<l) \(<>l) \(<>>l)\n"))

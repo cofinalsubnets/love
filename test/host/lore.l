@@ -30,7 +30,7 @@
          (2 = <wh) (has? (wh 2) "usage: love play LEVEL.l")
          (2 = <eh) (has? (eh 2) "no game edit")
          (lore-kind "src/apps/lore/levels/lighthouse.l" = ['story 'design])
-         (lore-kind "src/apps/lore/levels/station.l" = ['world 'world-edit])
+         (lore-kind "src/apps/lore/levels/earth.l" = ['world 'world-edit])
          (lore-kind "test/lore/hall.l" = ['world 'world-edit])
          (lore-kind "src/apps/lore/levels" = ['story 'design]),
     puts "lore: ok\n"))

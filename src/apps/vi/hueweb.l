@@ -26,16 +26,16 @@
    ; unknown scheme is an empty block
    (hw-vars nm)
    (: s (hw-find hue-page nm)
-      (roles p) (":root{" + cats (map (r \ "--" + string <r + ":" + <>r + ";") p) + "}\n")
+      (roles p) (":root{" + cats (map (r \ "--\(<r):\(<>r);") p) + "}\n")
       (atom? s ? ""
-         (roles (s 1) + (two? >>s ? ("@media (prefers-color-scheme:dark){" + roles (s 2) + "}\n") ""))))
+         (roles (s 1) + (two? >>s ? "@media (prefers-color-scheme:dark){\(roles (s 2))}\n" ""))))
 
    ; --- the stylesheet -------------------------------------------------------
    ; a class whose group the theme does not carry gets no rule rather than a guess
    hw-faces (cats * map (f \ f @ 'bold ";font-weight:700" 'italic ";font-style:italic" ""))
    ; a row is (group cterm256 "#rrggbb" faces)
    (hw-rule r) (hw-find hue-theme (hue-grp r) @
-                (_ _ col fs) (".hue .l-" + string (hue-cls r) + "{color:" + col + hw-faces fs + "}\n")
+                (_ _ col fs) (".hue .l-\(hue-cls r){color:\(col)" + hw-faces fs + "}\n")
                 "")
    ; line numbers out of a css counter, so selecting the code copies the code alone
    hw-frame
@@ -68,7 +68,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
 
    ; --- one file, painted ----------------------------------------------------
    ; the unclaimed gaps between runs stay plain text; `in` carries an open string
-   (hw-span c a b s) ("<span class=\"l-" + string c + "\">" + hw-q (snip s a b) + "</span>")
+   (hw-span c a b s) "<span class=\"l-\(c)\">\(hw-q (snip s a b))</span>"
    (hw-paint bk s in)
    (:- (go <r 0 "")
     r (hue-lex bk s in 1)
@@ -76,22 +76,22 @@ hr{border:0;border-top:1px solid var(--rule);margin:2rem 0}
      (atom? rs ? [(acc + hw-q (snip s i #s)) <>r]
       (<rs @ [c a b] (go >rs b (acc + hw-q (snip s i a) + hw-span c a b s)))))
    (hw-body path src)
-   (:- ("<pre class=\"hue\">" + go (hw-lines src) 1 0 "" + "</pre>")
+   (:- "<pre class=\"hue\">\(go (hw-lines src) 1 0 "")</pre>"
     bk (hue-book 0)
     (go ls k in acc)
      (atom? ls ? acc
         (hw-paint bk <ls in @ (txt in2)
          (go >ls (k + 1) in2
-             (acc + "<span class=\"ln\" id=\"L" + show k + "\">" + txt + "\n</span>")))))
+             (acc + "<span class=\"ln\" id=\"L\(k)\">\(txt)\n</span>")))))
 
    ; --- the page -------------------------------------------------------------
    ; the site passes papel.css; `love serve` passes its own
    (hw-page ttl hrefs home body)
    ("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
     + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-    + "<title>" + hw-q ttl + "</title>\n"
-    + cats (map (h \ "<link rel=\"stylesheet\" href=\"" + hw-q h + "\">\n") hrefs)
+    + "<title>\(hw-q ttl)</title>\n"
+    + cats (map (h \ "<link rel=\"stylesheet\" href=\"\(hw-q h)\">\n") hrefs)
     + "</head>\n<body>\n"
-    + (#home ? ("<header><a href=\"" + hw-q home + "\">love</a></header>\n") "")
-    + "<main>\n<article>\n" + body + "\n</article>\n</main>\n</body>\n</html>\n"))
+    + (#home ? "<header><a href=\"\(hw-q home)\">love</a></header>\n" "")
+    + "<main>\n<article>\n\(body)\n</article>\n</main>\n</body>\n</html>\n"))
 ) ; module hueweb

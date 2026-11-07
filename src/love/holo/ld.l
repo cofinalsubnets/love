@@ -51,11 +51,33 @@
        _ (r 'class = (? i386 32 64) && r 'type = 1 ? 0 (scare 'link-not-rel64 id))
        _ (r 'nsym > 0 ? 0 (scare 'link-no-symtab id))
        _ (each ^(r 'shnum) (i \ (r 'sec i 1 = (? i386 4 9) ? (scare 'link-rel id))))
+       (any (i \ 0 < (r 'sec i 2 & 2048)) ^(r 'shnum) ? (ld-unz r) r))
+
+   ; compressed sections read as lld reads them: inflated, the size and alignment their header's.
+   ; the bytes land past the file's own, so every offset holds and nothing later need know
+   (ld-unz r)
+    (: s (r 'src) id (r 'id) hz (? (r 'class = 64) 24 12) w (? (r 'class = 64) 8 4)
+       (door m f) (: g (cite m f) (? (lit? g) g (scare 'link-compressed [id m])))
+       (out nm v) (? (two? v) <>v (scare 'link-compressed [id nm]))
+       st {'n #s 'ps ()}
+       (one e)
+        (? (0 = (e 2 & 2048)) e
+           (: o (e 3) ty (rle32 s o) n (rdle s (o + hz - 2 * w) w) al (rdle s (o + hz - w) w)
+              z (snip s (o + hz) (o + e 4))
+              b (? (ty = 1) (out <e (door 'gz 'gz-inflate (snip z 2 #z) n))
+                   (ty = 2) (out <e (door 'zstd 'zstd-unpack z))
+                   (scare 'link-compressed [id <e ty]))
+              _ (? (#b = n) 0 (scare 'link-compressed [id <e n #b]))
+              off (st 'n)
+              _ (pin st 'n (off + n), pin st 'ps (b . st 'ps))
+              [<e (e 1) (e 2 - 2048) off n (max al 1) (e 6) (e 7) (e 8)]))
+       sec (spread (map (i \ one (r 'sec i)) ^(r 'shnum)))
+       _ (pin r 'sec sec, pin r 'src (foldl (\ a p (a + p)) s (rev (st 'ps))))
        r)
 
    ; the linker's own .comment line, an object after every other, as ld.lld adds its banner
    (ld-banner id t)
-    (: s (string (map (i \ t i) ^#t + [0]))
+    (: s (string (map t ^#t + [0]))
        {'id id 'src s 'shnum 2 'sec {0 ["" 0 0 0 0 0 0 0 0] 1 [".comment" 1 48 0 #s 1 1 0 0]}
         'syms {0 ["" 0 0 0 0 0 0]} 'nsym 1 'rela {}})
 
@@ -198,7 +220,7 @@
        (one si) (: r (ob 'sec si)
                    (? (r 1 != 17 || (rle32 s (r 3) & 1) = 0) 0
                       (: sig <(ob 'syms (r 8))
-                         (? (peep grp sig 0) (each >^(r 4 // 4) (k \ pin dr (rle32 s (r 3 + 4 * k)) 1))
+                         (? (peep grp sig 0) (: _ (pin dr si 1) (each >^(r 4 // 4) (k \ pin dr (rle32 s (r 3 + 4 * k)) 1)))
                             (pin grp sig 1)))))
        _ (each >^(ob 'shnum) one)
        _ (pin ob 'drops dr)
@@ -469,7 +491,7 @@
                  (cats (map (b \ w4 (peep first b 0)) ^nb))
                  (cats (map (i \ w4 (hs i // 2 * 2 + (? (i + 1 = #hs || bk (i + 1) != bk i) 1 0))) ^#hs))])
        strs (sort (map (k \ [(st k) k]) (filter string? (keys st))))
-       dstr (cats ([0] . map (p \ map (i \ p 1 i) ^#(p 1) + [0]) strs))
+       dstr (cats ([0] . map (p \ map (p 1) ^#(p 1) + [0]) strs))
        vd (? (d 'flat) () (cats [(w2 1) (w2 1) (w2 1) (w2 1) (w4 (ld-ehash (d 'base))) (w4 20) (w4 28) (w4 (st (d 'base))) (w4 0)
                  (w2 1) (w2 0) (w2 2) (w2 1) (w4 (ld-ehash (d 'vn))) (w4 20) (w4 0) (w4 (st (d 'vn))) (w4 0)]))
        osv (env 'osv)
@@ -1104,18 +1126,23 @@
        oby {} rby {} orph {'l ()}
        (fresh m k nm) (: t {'name nm 'body () 'steps ()} _ (pin m k t, pin orph 'l (t . orph 'l)) t)
        (join t oi si r) (: _ (pin on (key oi si) (t 'name)) (pin t 'rs (['isec oi si (r 4) (r 5) <r] . peep t 'rs ())))
+       ; a group and a member of one stay apart, each an output of its own
+       (own oi si r) (: nm (<r + "\0g" + show (key oi si)) (fresh oby nm nm))
        ; lld's addOrphanSections: a .rela's target first, a name an output section already has joins it,
        ; a link-order section the one of its name whose members link to its link's output
        (add oi si)
-        (: r (ot oi 'sec si)
-           (? (peep on (key oi si) () != () || ld-rgone? r) 0
-              (r 1 = 17) (scare 'link-group (ot oi 'id))
+        (: r (ot oi 'sec si) mem (0 < (r 2 & 512))
+           (? (peep on (key oi si) () != () || ld-rgone? r || peep (ot oi 'drops) si 0) 0
+              (r 1 = 17) (join (own oi si r) oi si r)
               (<r = ".note.GNU-split-stack") (scare 'link-split-stack (ot oi 'id))
               (r 1 = 4)
                (: _ (add oi (r 8)) tn (peep on (key oi (r 8)) ())
                   (? (tn = ()) 0
-                     (join (: t (peep rby tn ()) (? (t = ()) (: n (fresh rby tn (".rela" + tn)) _ (pin n 'tgt tn) n) t))
+                     (join (: t (? mem () (peep rby tn ()))
+                              (? (t != ()) t
+                                 (: n (? mem (own oi si r) (fresh rby tn (".rela" + tn))) _ (pin n 'tgt tn) n)))
                            oi si r)))
+              mem (: u (own oi si r) _ (? (0 < (r 2 & 128) && r 7 > 0) (pin u 'ltk (key oi (r 7))) 0) (join u oi si r))
               (: s (peep sby <r ())
                  lo (? (s = () && 0 < (r 2 & 128) && r 7 > 0) (: _ (add oi (r 7)) (peep on (key oi (r 7)) ())) ())
                  nm (? (lo = ()) <r (<r + "\0" + lo))
@@ -1137,7 +1164,12 @@
        _ (foldl (\ oi ob (walk oi ob)) 0 objs)
        orphs (rev (orph 'l))
        outs (os + orphs)
-       _ (each outs (t \ pin t 'steps (peep t 'steps () + rev (peep t 'rs ()))))
+       ; a group's size is its members' outputs, known once every section has one
+       (gsz x) (: r (ot (x 1) 'sec (x 2))
+                  (? (r 1 = 17) ['isec (x 1) (x 2) (4 + 4 * #(ld-rgroup (ot (x 1)) (x 1) r on)) (x 4) (x 5)] x))
+       _ (each outs (t \ (: k (peep t 'ltk ())
+                            _ (? (k = ()) 0 (pin t 'lto (peep on k ())))
+                            (pin t 'steps (peep t 'steps () + rev (map gsz (peep t 'rs ())))))))
        cmds2 (cmds + map (t \ ['osec t]) orphs)
        mx (ld-merge ot outs)
        env (ld-lay cx cmds2 mx ())
@@ -1146,10 +1178,23 @@
        ; x86's code gaps are int3, as lld fills them; aarch64's stay zero
        _ (? (em = 62) (each live (t \ (? (0 < (t 'flags & 4) && peep t 'fill () = ()) (pin t 'fill 3435973836) 0))) 0)
        shx (: t {} _ (foldl (\ i x (pin t (x 'name) i, i + 1)) 1 live) t)
-       lk {'cx cx 'ot ot 'mx mx 'outs live 'cmds cmds2 'env env 'on on 'discard (o 'discard) 'patch ld-rpatch 'rsx {}}
+       lk {'cx cx 'ot ot 'mx mx 'outs live 'cmds cmds2 'env env 'on on 'shx shx 'discard (o 'discard) 'patch ld-rpatch 'rsx {}}
        st (ld-rsyms lk shx)
        _ (each ['lidx 'sidx 'gidx] (k \ pin lk k (st k)))
        (ld-relf lk st em out))
+
+   ; group section r's members' outputs in order, each once; one a member lost is gone
+   (ld-rgroup ob oi r on)
+    (: s (ob 'src)
+       (go k acc) (? (k >= r 4) (rev acc)
+                     (: n (peep on (oi * 65536 + rle32 s (r 3 + k)) ())
+                        (go (k + 4) (? (n = () || n = "/DISCARD/" || elem n acc) acc (n . acc)))))
+       (go 4 ()))
+
+   ; the index a group's output names its signature by
+   (ld-rgsig lk x)
+    (: oi (x 1) ob (lk 'ot oi) si (ob 'sec (x 2) 8) v (ld-rsymx lk oi si)
+       (? (v >= 0) v (lk 'sidx (lk 'on (oi * 65536 + ob 'syms si 3)))))
 
    ; -> {'nl 'rows 'strn 'strs 'lidx 'sidx 'gidx}: the locals by object, each object's then
    ; the section symbols of the outputs it opens, a merged section's after every object's;
@@ -1186,9 +1231,11 @@
                     (each >^(ld-nloc ob)
                        (si \ (: r (sy si) sh (r 3)
                                 (? (r 1 != 0 || r 2 = 3 || sh = 0) 0
-                                   (sh = 65521) (put oi si (ent <r (r 4) (r 5) (r 2) (r 6) 65521))
+                                   ; a dropped group's own signature stays, absolute
+                                   (sh = 65521 || (peep (ob 'drops) sh 0 && ob 'sec sh 1 = 17))
+                                    (put oi si (ent <r (r 4) (r 5) (r 2) (r 6) 65521))
                                    (: n (peep on (oi * 65536 + sh) ())
-                                      (? (n = ()) 0
+                                      (? (n = () || n = "/DISCARD/") 0
                                          (starts? <r ".L" && lk 'discard != 'none
                                           && (lk 'discard = 'locals || 0 < (ob 'sec sh 2 & 16)) && !(used? oi si)) 0
                                          (put oi si (ent <r (at oi sh (r 4) - va n) (r 5) (r 2) (r 6) (shx n))))))))))))
@@ -1226,6 +1273,7 @@
                        (? (sh = 65521) (gput nm (ent nm (r 4) (r 5) info (oth nm (r 6)) 65521))
                           (: n (peep on (oi * 65536 + sh) ())
                              (? (n = ()) (scare 'link-dropped [(ot oi 'id) nm])
+                                (n = "/DISCARD/") 0
                                 (gput nm (ent nm (at oi sh (r 4) - va n) (r 5) info (oth nm (r 6)) (shx n)))))))
                     (peep und nm 0 > 0) (gput nm (ent nm 0 0 (und nm * 16 + peep uty nm 0) (peep vis nm 0) 0))
                     0))))
@@ -1284,6 +1332,7 @@
               (go (o0 + <e + w) >es (string (ld-le (ld-tomb <r (e 3)) w) . snip s pos (o0 + <e) . acc))))
        (? (r 1 = 8) (ld-zp sz acc)
           (r 1 = 4) (ld-rrela lk oi r . acc)
+          (r 1 = 17) (string (ld-le (rle32 s o0) 4 + cats (map (n \ ld-le (lk 'shx n) 4) (ld-rgroup ob oi r on))) . acc)
           (0 = (r 2 & 2) && ld-debug? <r)
            (go o0 (sort (filter (e \ elem (e 1) '(257 258) && undef? e) (ld-relas ob si))) acc)
           (snip s o0 (o0 + sz) . acc)))
@@ -1347,6 +1396,7 @@
        eh (cats [[127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0] (w2 1) (w2 em) (w4 1) (w8 0) (w8 0) (w8 shoff)
                  (w4 0) (w2 64) (w2 0) (w2 0) (w2 64) (w2 shnum) (w2 (n0 + 2))])
        (lnk t) (? (t 'stype = 4) [(n0 + 1) (shx (t 'tgt))]
+                  (t 'stype = 17) [(n0 + 1) (ld-rgsig lk (t 'steps 0))]
                   [(: l (peep t 'lto ()) (? (l = ()) (peep t 'link 0) (shx l))) (peep t 'info 0)])
        ; SHF_INFO_LINK a .rela's alone, as lld resolves an input's
        (sh t) (: l (lnk t) f (t 'flags - (t 'flags & 64) + (? (t 'stype = 4) 64 0))

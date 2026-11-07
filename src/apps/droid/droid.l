@@ -1,8 +1,8 @@
 ; src/apps/droid/droid.l -- love apps on android: the face a program draws through, and the apk.
 ;
-;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-P PERM].. MAIN.l [FILE..]
+;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-s] [-P PERM].. MAIN.l [FILE..]
 ;
-; the app is a NativeActivity with no dex: bridge.c, built by our `mooncc -t a64 -shared`, owns
+; the app is a NativeActivity, no dex but `-s`'s one class: bridge.c, built by our `mooncc -t a64 -shared`, owns
 ; the window, input and logcat and starts LOVE (an a64 love, already baked: its library
 ; directory is read-only) from lib/arm64-v8a/liblove.so. MAIN.l and the FILEs ride as assets
 ; in the app's data directory, love's cwd and HOME. the apk is signed (scheme v2) by a p-256
@@ -58,6 +58,10 @@
    (jni-sget s c nm ty) (jni-op s ("f" + show c + string 0 + nm + string 0 + ty))
    (jni-text s h) (jni-op s ("t" + show h))
    (jni-drop s h) (charm? h ? (jni-op s ("d" + show h)) 0)
+   ; the app held sideways, or as the phone likes; nothing off a phone
+   (droid-side on)
+    (jni-open 0 @ s
+       (port? s ? (: a (jni-act s) (charm? a ? (jni-call s a "setRequestedOrientation" "(I)V" [(on ? 6 -1)])), close s)))
    ; a uri to what views it, an ACTION_VIEW intent the activity starts: 0, or the failed step's answer
    (droid-view s u)
     (: (on r k) (two? r ? r (k r))
@@ -71,17 +75,24 @@
 
    ; --- the binary manifest (android's axml) ---
    ; an element is [tag attrs kids], an attribute [android? name kind value], kind 'int 'hex
-   ; 'bool or 'str. attributes are known by resource id, which the map chunk gives the first
+   ; 'bool 'ref or 'str. attributes are known by resource id, which the map chunk gives the first
    ; strings of the pool, so those lead it, in id order.
    ax-uri "http://schemas.android.com/apk/res/android"
-   ax-rid {"label" 0x01010001 "name" 0x01010003 "hasCode" 0x0101000c "debuggable" 0x0101000f
-           "exported" 0x01010010 "configChanges" 0x0101001f "value" 0x01010024
+   ax-rid {"label" 0x01010001 "icon" 0x01010002 "name" 0x01010003 "drawable" 0x01010199 "hasCode" 0x0101000c "debuggable" 0x0101000f
+           "exported" 0x01010010 "launchMode" 0x0101001d "configChanges" 0x0101001f "value" 0x01010024
            "minSdkVersion" 0x0101020c "versionCode" 0x0101021b "versionName" 0x0101021c
            "windowSoftInputMode" 0x0101022b "targetSdkVersion" 0x01010270 "extractNativeLibs" 0x010104ea}
    (ap-cat f l) (cats (map f l))
    (ax-chunk ty hs body) (wrle ty 2 + wrle hs 2 + wrle (8 + #body) 4 + body)
    (ax-u16 s) (ap-cat (c \ wrle c 2) (chars s))
    (ax-uniq l) (foldl (\ a s (elem s a ? a (a + [s]))) () l)
+   ; a string pool, utf-16
+   (ax-pool strs)
+    (: (u32 v) (wrle v 4)
+       offs (foldl (\ a s (a + [(last a + 4 + 2 * #(chars s))])) [0] strs)
+       data (ap-cat (s \ wrle #(chars s) 2 + ax-u16 s + wrle 0 2) strs)
+       (ax-chunk 1 28 (u32 #strs + u32 0 + u32 0 + u32 (28 + 4 * #strs) + u32 0
+                       + ap-cat u32 (rev >(rev offs)) + data + zbytes (padk #data 4))))
    (ap-axml root)
     (: (walk e) (e @ [t at ks] (map (a \ [<a (a 1)]) at
                                     + map (a \ [0 (a 3)]) (filter (a \ a 2 = 'str) at)
@@ -91,15 +102,13 @@
        strs (ax-uniq (an + ["android" ax-uri] + map (p \ p 1) (filter (p \ <p = 0) all)))
        ix {} _ (each ^#strs (i \ pin ix (strs i) i))
        (u32 v) (wrle v 4)
-       offs (foldl (\ a s (a + [(last a + 4 + 2 * #(chars s))])) [0] strs)
-       data (ap-cat (s \ wrle #(chars s) 2 + ax-u16 s + wrle 0 2) strs)
-       pool (ax-chunk 1 28 (u32 #strs + u32 0 + u32 0 + u32 (28 + 4 * #strs) + u32 0
-                            + ap-cat u32 (rev >(rev offs)) + data + zbytes (padk #data 4)))
+       pool (ax-pool strs)
        rmap (ax-chunk 0x180 8 (ap-cat (n \ u32 (ax-rid n)) an))
        (nsc ty) (ax-chunk ty 16 (u32 1 + u32 -1 + u32 (ix "android") + u32 (ix ax-uri)))
        (attr [ns n k v])
         ((? ns (u32 (ix ax-uri)) (u32 -1)) + u32 (ix n) + u32 (? (k = 'str) (ix v) -1) + wrle 8 2 + string [0]
          + (k @ 'int (string [16] + u32 v) 'hex (string [17] + u32 v) 'bool (string [18] + u32 (? v -1 0))
+                'ref (string [1] + u32 v)
                 (string [3] + u32 (ix v))))
        (el [t at ks])
         (: so (sort (map (a \ [(? <a (ax-rid (a 1)) -1) a]) at))
@@ -108,29 +117,125 @@
             + ap-cat el ks
             + ax-chunk 0x103 16 (u32 1 + u32 -1 + u32 -1 + u32 (ix t))))
        (ax-chunk 3 8 (pool + rmap + nsc 0x100 + el root + nsc 0x101)))
+   dx-name "pics.salt.love.Service"                    ; bridge.c starts it by this name
+   ; the resource ids of the icon's table, ic-arsc
+   ic-bg 0x7f010000 ic-fg 0x7f010001 ic-icon 0x7f010002
    ; ps the permissions asked, each android's full name; the network is every app's
-   (ap-manifest pkg label ps)
+   (ap-manifest pkg label ps stay)
     ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
       ([["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]]
        + map (p \ ["uses-permission" [[1 "name" 'str p]] ()])
-             (elem ap-net ps ? ps ([ap-net] + ps)) +
-      [["application" [[1 "label" 'str label] [1 "hasCode" 'bool 0] [1 "debuggable" 'bool 1]
+             (elem ap-net ps ? ps ([ap-net] + ps))
+       + (stay ? [["uses-permission" [[1 "name" 'str "android.permission.FOREGROUND_SERVICE"]] ()]] ()) +
+      [["application" [[1 "label" 'str label] [1 "icon" 'ref ic-icon] [1 "hasCode" 'bool stay] [1 "debuggable" 'bool 1]
                       [1 "extractNativeLibs" 'bool 1]]
-         [["activity" [[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
+         ((stay ? [["service" [[1 "name" 'str dx-name] [1 "exported" 'bool 0]] ()]] ()) +
+         [["activity" ([[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
                       [1 "configChanges" 'hex 0x4a0]                   ; orientation keyboardHidden screenSize
                      [1 "windowSoftInputMode" 'hex 0x10]]             ; adjustResize: the keyboard never pans the window
+                     + (stay ? [[1 "launchMode" 'int 2]] ()))          ; singleTask: the notification finds the one task
             [["meta-data" [[1 "name" 'str "android.app.lib_name"] [1 "value" 'str "bridge"]] ()]
              ["intent-filter" ()
                [["action" [[1 "name" 'str "android.intent.action.MAIN"]] ()]
-                ["category" [[1 "name" 'str "android.intent.category.LAUNCHER"]] ()]]]]]]]])]
+                ["category" [[1 "name" 'str "android.intent.category.LAUNCHER"]] ()]]]]]])]])]
 
-   ; --- the zip: every entry deflated, dated 1980, so the same inputs lay the same bytes ---
+   ; --- the icon: cp437's heart, the favicon's, in the front page's red on its ground. adaptive,
+   ; so a launcher fills its own shape: 108dp at the top density, the heart in the middle 66 ---
+   ic-rows [0x6c 0xfe 0xfe 0xfe 0x7c 0x38 0x10]        ; cga_8x8.c's cell 3
+   (ic-rgb nm)                                         ; a role of hue-page's tokyo-night -> 0xrrggbb
+    (: (row k l) (? (atom? l) () (<<l = k) <l (row k >l))
+       hex <>(row nm ((row 'tokyo-night (cite 'vi 'hue-page)) 1))
+       (read ("0x" + snip hex 1 7)))
+   ; one bit a pixel, ink on clear: 54 bytes a row, 13 of them margin, a glyph pixel 4 bytes square
+   (ic-png _)
+    (: (chunk ty d) (wrbe #d 4 + ty + d + wrbe (gz-crc32 (ty + d)) 4)
+       blank (zbytes 55)
+       (row b) (string 0 + zbytes 13
+                + cats (map (x \ (b >> (7 - x)) & 1 = 1 ? (string [255 255 255 255]) (zbytes 4)) ^7)
+                + zbytes 13)
+       pix (cats (map (_ \ blank) ^104) + cats (map (b \ cats (map (_ \ row b) ^32)) ic-rows) + cats (map (_ \ blank) ^104))
+       (string [137 80 78 71 13 10 26 10]
+        + chunk "IHDR" (wrbe 432 4 + wrbe 432 4 + string [1 3 0 0 0])
+        + chunk "PLTE" (zbytes 3 + wrbe (ic-rgb 'red) 3)
+        + chunk "tRNS" (zbytes 1)
+        + chunk "IDAT" (string [120 156] + deflate pix + wrbe (dx-adler pix) 4)
+        + chunk "IEND" ""))
+   ic-xml ["adaptive-icon" () [["background" [[1 "drawable" 'ref ic-bg]] ()] ["foreground" [[1 "drawable" 'ref ic-fg]] ()]]]
+   ; the resource table: one package, one type, its entries in ic-bg's order
+   (ic-arsc _)
+    (: (u32 v) (wrle v 4) (u16 v) (wrle v 2)
+       tp (ax-pool ["drawable"]) kp (ax-pool ["bg" "fg" "icon"])
+       (ent k ty v) (u16 8 + u16 0 + u32 k + u16 8 + string [0 ty] + u32 v)
+       spec (ax-chunk 0x202 16 (string [1 0] + u16 0 + u32 3 + zbytes 12))
+       type (ax-chunk 0x201 84 (string [1 0] + u16 0 + u32 3 + u32 96 + u32 64 + zbytes 60
+                                + u32 0 + u32 16 + u32 32
+                                + ent 0 0x1d (0xff000000 | ic-rgb 'bg) + ent 1 3 0 + ent 2 3 1))
+       pkg (ax-chunk 0x200 288 (u32 0x7f + ax-u16 "love" + zbytes 248 + u32 288 + u32 1 + u32 (288 + #tp) + u32 3 + u32 0
+                                + tp + kp + spec + type))
+       (ax-chunk 2 12 (u32 1 + ax-pool ["res/f.png" "res/i.xml"] + pkg)))
+
+   ; --- the service's class, what `-s` adds: a Service with a constructor, a null onBind and a native
+   ; onStartCommand the bridge registers, so a notification keeps the process through a swipe.
+   ; dex 035's tables, each sorted as it requires ---
+   (dx-adler s) (foldl (\ st x ((<st + x) % 65521 @ a [a ((<>st + a) % 65521)])) [1 0] (map s ^#s) @ [a b] (b << 16 | a))
+   (dx-uleb n) (n < 128 ? (string [n]) (string [(n & 127 | 128)] + dx-uleb (n >> 7)))
+   (dx-service _)
+    (: (u16 v) (wrle v 2) (u32 v) (wrle v 4)
+       me "Lpics/salt/love/Service;" sup "Landroid/app/Service;" in "Landroid/content/Intent;" ib "Landroid/os/IBinder;"
+       strs (sort ["<init>" "I" "ILII" "LL" sup in ib me "V" "onBind" "onStartCommand"])
+       (at l s) (: (go i r) (<r = s ? i (go (i + 1) >r)) (go 0 l))
+       (sx s) (at strs s)
+       types (sort ["I" sup in ib me "V"])
+       (tx s) (at types s)
+       ids (112 + 4 * #strs + 4 * #types + 12 * 3 + 8 * 4 + 32)         ; the data begins here
+       (tlist l) (u32 #l + cats (map (s \ u16 (tx s)) l) + zbytes (padk (2 * #l) 4))
+       tl0 (tlist [in "I" "I"]) tl1 (tlist [in])
+       init (u16 1 + u16 1 + u16 1 + u16 0 + u32 0 + u32 4 + u16 0x1070 + u16 0 + u16 0 + u16 0x0e)   ; invoke-direct super, return-void
+       bind (u16 3 + u16 2 + u16 0 + u16 0 + u32 0 + u32 2 + u16 0x0012 + u16 0x0011)                 ; const/4 v0 0, return-object v0
+       init-off (ids + #tl0 + #tl1) bind-off (init-off + #init)
+       sd-off (bind-off + #bind)
+       (sdata s) (dx-uleb #s + s + string [0])
+       sds (map sdata strs)
+       sd (cats sds)
+       soffs (foldl (\ a s (a + [(last a + #s)])) [sd-off] sds)
+       cd-off (sd-off + #sd)
+       cd (dx-uleb 0 + dx-uleb 0 + dx-uleb 1 + dx-uleb 2
+           + dx-uleb 1 + dx-uleb 0x10001 + dx-uleb init-off
+           + dx-uleb 2 + dx-uleb 1 + dx-uleb bind-off
+           + dx-uleb 1 + dx-uleb 0x101 + dx-uleb 0)
+       map-off (cd-off + #cd + padk (cd-off + #cd) 4)
+       (item ty n off) (u16 ty + u16 0 + u32 n + u32 off)
+       s-off 112 t-off (s-off + 4 * #strs) p-off (t-off + 4 * #types) m-off (p-off + 12 * 3) c-off (m-off + 8 * 4)
+       mp (u32 11 + item 0 1 0 + item 1 #strs s-off + item 2 #types t-off + item 3 3 p-off
+           + item 5 4 m-off + item 6 1 c-off + item 0x1001 2 ids + item 0x2001 2 init-off
+           + item 0x2002 #strs sd-off + item 0x2000 1 cd-off + item 0x1000 1 map-off)
+       size (map-off + #mp)
+       body (u32 size + u32 112 + u32 0x12345678 + u32 0 + u32 0 + u32 map-off
+             + u32 #strs + u32 s-off + u32 #types + u32 t-off + u32 3 + u32 p-off
+             + u32 0 + u32 0 + u32 4 + u32 m-off + u32 1 + u32 c-off + u32 (size - ids) + u32 ids
+             + cats (map u32 (rev >(rev soffs)))
+             + cats (map (s \ u32 (sx s)) types)
+             ; the protos by return type, then the methods by class and name
+             + u32 (sx "ILII") + u32 (tx "I") + u32 ids
+             + u32 (sx "LL") + u32 (tx ib) + u32 (ids + #tl0)
+             + u32 (sx "V") + u32 (tx "V") + u32 0
+             + cats (map (m \ u16 (tx <m) + u16 (m 1) + u32 (sx (m 2)))
+                         [[sup 2 "<init>"] [me 2 "<init>"] [me 1 "onBind"] [me 0 "onStartCommand"]])
+             + u32 (tx me) + u32 1 + u32 (tx sup) + u32 0 + u32 -1 + u32 0 + u32 cd-off + u32 0
+             + tl0 + tl1 + init + bind + sd + cd + zbytes (map-off - cd-off - #cd) + mp)
+       sig (unhex (sha1 body))
+       tail (sig + body)
+       ("dex\n035" + string [0] + u32 (dx-adler tail) + tail))
+
+   ; --- the zip: every entry deflated but the resource table, which android 11 reads in place, so
+   ; stored and on a word: it goes first, and its 44 bytes of header leave it there. dated 1980, so
+   ; the same inputs lay the same bytes ---
    (ap-zip es)
     (: j (jug 0)
        (u16 v) (wrle v 2) (u32 v) (wrle v 4)
        (one [cd off] [nm d])
-        (: z (deflate d) c (gz-crc32 d)
-           h (u16 20 + u16 0 + u16 8 + u16 0 + u16 33 + u32 c + u32 #z + u32 #d + u16 #nm + u16 0)
+        (: raw (nm = "resources.arsc") z (raw ? d (deflate d)) c (gz-crc32 d)
+           h (u16 20 + u16 0 + u16 (raw ? 0 8) + u16 0 + u16 33 + u32 c + u32 #z + u32 #d + u16 #nm + u16 0)
            (say j ("PK" + string [3 4] + h + nm), say j z,
             [(cd + "PK" + string [1 2] + u16 20 + h + u16 0 + u16 0 + u16 0 + u32 0 + u32 off + nm)
              (off + 30 + #nm + #z)]))
@@ -183,12 +288,13 @@
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
    (apk-usage _) (puts """
-    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-P PERM].. MAIN.l [FILE..]
+    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-s] [-P PERM].. MAIN.l [FILE..]
       an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
       (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
       this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. the app has the
       network; each PERM is a permission it asks for at its start, RECORD_AUDIO for the mic
       (android.permission. unless named in full).
+      -s keeps the app's loves through a swipe or back: a foreground service and its notification.
       the key signing it lives in ~/.love/etc/apk.pem
     """)
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
@@ -198,6 +304,7 @@
     (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
           ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
           ("-b" . v . r) (apk-opts r (pin t 'b v))
+          ("-s" . r) (apk-opts r (pin t 's 1))
           ("-P" . v . r) (apk-opts r (pin t 'P (t 'P + [(has? v "." ? v ("android.permission." + v))])))
           (("-h" || "--help") . _) (apk-usage 0, quit 0)
           (("-" + _) . _) (apk-usage 0, quit 2)
@@ -219,11 +326,15 @@
        so (bridge-so tmp)
        ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
        ps (t 'P)
-       z (ap-zip ([["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm) ps))]
+       stay (t 's = 1)
+       z (ap-zip ([["resources.arsc" (ic-arsc 0)]
+                ["res/f.png" (ic-png 0)] ["res/i.xml" (ap-axml ic-xml)]
+                ["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm) ps stay))]
                 ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
                 ["assets/argv" (? (string? (t 'b)) (foldl (a \ w \ a + w + string [0]) "" (filter (w \ 0 < #w) (split " " (t 'b))))
                                   (ap-base <fs + string [0]))]]
-                + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ()) + ins))
+                + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ())
+                + (stay ? [["classes.dex" (dx-service 0)] ["assets/stay" (ap-or (t 'n) nm)]] ()) + ins))
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
           (udie 1 ("apk: cannot write " + out))))
 

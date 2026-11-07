@@ -4,7 +4,7 @@
 // (jpeg-pixels s o) -> the rgba of a baseline or progressive jpeg, grey, ycbcr (rgb by
 // adobe's word), or cmyk (ycck by adobe's), any sampling, laid upright by exif orientation o
 // (1..8) | why not: 1 not a jpeg, 2 cut short, 3 a kind it can't read (arithmetic,
-// lossless, 12-bit), 4 a bad table or scan, 5 past 2^24 pixels
+// lossless, 12-bit), 4 a bad table or scan, 5 past 2^28 pixels
 #include "love.h"
 #include "bytes.h"
 #include <stdint.h>
@@ -231,8 +231,8 @@ struct jd {
  uintptr_t mcux, mcuy;
  int ns, sc[4], ss, se, ah, al; };
 
-// scans past this many are ignored; a real progressive file has about ten
-#define JD_MAXSCANS 1000
+// scans past this many are ignored; a real progressive file has about ten, and each walks every block
+#define JD_MAXSCANS 100
 
 // entropy bytes, msb first into acc; a marker (or the end) feeds zeros
 static void jd_fill(struct jd *d) {
@@ -381,7 +381,7 @@ static int jd_sof(struct jd *d, const uint8_t *p, int n, int m) {
  d->h = (int) ld16be(p + 1), d->w = (int) ld16be(p + 3), d->nc = p[5], d->prog = m == 0xc2;
  if (!d->h || !d->w || (d->nc != 1 && d->nc != 3 && d->nc != 4)) return 3;
  if (n < 6 + 3 * d->nc) return 4;
- if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 24) return 5;
+ if ((uintptr_t) d->w * (uintptr_t) d->h > (uintptr_t) 1 << 28) return 5;
  d->hmax = d->vmax = 1;
  for (int i = 0; i < d->nc; i++) {
   struct jd_comp *c = &d->c[i];
@@ -442,7 +442,7 @@ static int jd_dht(struct jd *d, const uint8_t *p, int n) {
   p += 17 + total, n -= 17 + total; }
  return 0; }
 
-// the markers from the top: up to the frame header when head, else through every scan
+// the markers from the top: up to the first scan when head, else through every scan
 static int jd_walk(struct jd *d, int head) {
  d->frame = 0, d->scans = 0, d->ri = 0, d->adobe = 0, d->pos = 2;
  if (d->n < 4 || d->s[0] != 0xff || d->s[1] != 0xd8) return 1;
@@ -452,7 +452,7 @@ static int jd_walk(struct jd *d, int head) {
   if (d->pos >= d->n) return d->scans ? 0 : 2;
   int m = d->s[d->pos++];
   if (m == 0xd9) return d->scans ? 0 : 2;
-  if (m == 0x01 || (m >= 0xd0 && m <= 0xd7)) continue;
+  if (!m || m == 0x01 || (m >= 0xd0 && m <= 0xd8)) continue;
   if (d->pos + 2 > d->n) return d->scans ? 0 : 2;
   int len = (int) ld16be(d->s + d->pos);
   if (len < 2 || d->pos + (uintptr_t) len > d->n) return d->scans ? 0 : 2;
@@ -460,14 +460,14 @@ static int jd_walk(struct jd *d, int head) {
   d->pos += (uintptr_t) len;
   if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
    if (d->frame) return 4;
-   if ((why = jd_sof(d, p, n, m)) || head) return why; }
+   if ((why = jd_sof(d, p, n, m))) return why; }
   else if (m == 0xc4) why = jd_dht(d, p, n);
   else if (m == 0xdb) why = jd_dqt(d, p, n);
   else if (m == 0xdd) d->ri = n >= 2 ? (int) ld16be(p) : 0;
   else if (m == 0xee) { if (n >= 12 && !memcmp(p, "Adobe", 5)) d->adobe = 1, d->transform = p[11]; }
   else if (m == 0xdc) return 3;
   else if (m == 0xda) {
-   if (head) return 4;
+   if (head) return d->frame ? 0 : 4;
    if (d->scans >= JD_MAXSCANS) return 0;
    if ((why = jd_sos(d, p, n))) return why;
    jd_scan(d), d->scans++; }

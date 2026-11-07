@@ -42,7 +42,7 @@ static love_inline flo_t love_atan(flo_t x) { return love_atan2(x, (flo_t) 1); }
  word a = Sp[0], b = Sp[1], _res;                                     \
  if (!intp(a) || !intp(b)) love_musttail return Push(ZeroPoint);        \
  if (bigp(a) || bigp(b)) { Pack(g); g = big_bitop(g, vop);         \
-  if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);                \
+  if (!ok(g)) love_musttail return Ap(_lvm_raise, g);                \
   Unpack(g); love_musttail return Continue(); }                                      \
  Have(box_req);                                                       \
  emit_int(_res, toint(a) c_op toint(b));                                    \
@@ -643,7 +643,7 @@ lvm(lvm_eq) {
  word *top, *base = gap(g, &top);
  int r = eq_value(g, a, b, base, top);
  WalkAgain();
- if (r < 0) love_musttail return Ap(_lvm_ghelp, g);
+ if (r < 0) love_musttail return Ap(_lvm_raise, g);
  Sp[1] = r ? putcharm(1) : zero;
  love_musttail return Nextp(1, 1); }
 
@@ -672,7 +672,7 @@ lvm(lvm_elem) { word x = Sp[0], l = Sp[1];
  for (; chainp(l) && !nomp(l); l = B(l)) {
   int r = eq_value(g, x, A(l), base, top);
   WalkAgain();
-  if (r < 0) love_musttail return Ap(_lvm_ghelp, g);
+  if (r < 0) love_musttail return Ap(_lvm_raise, g);
   if (r) love_musttail return Push(putcharm(1)); }
  love_musttail return Push(zero); }
 
@@ -690,7 +690,7 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
  if (op == vop_eq) {
   word *top, *base = gap(*fp, &top);
   int r = eq_value(*fp, a, b, base, top);
-  if (r < 0 && !(*fp)->walk) return *fp = encode(*fp, status_scare), zero;
+  if (r < 0 && !(*fp)->walk) return (*fp)->scare = 0, *fp = encode(*fp, status_scare), zero;
   return r > 0 ? putcharm(1) : zero; }                         // spent: obin_run takes the room
  if (op >= vop_lt) {
   if (!isnum(a) || !isnum(b)) return zero;       // a twin is unordered
@@ -997,7 +997,7 @@ lvm(lvm_pow) {
   love_musttail return Push(word(v)); }
  if (isnum(a) && isnum(b)) {
   flo_t ad = toflo(a), bd = toflo(b);
-  if (ad < 0 && !__builtin_isinf(ad) && flo_fracp(bd)) {
+  if (ad < 0 && ad - ad == 0 && flo_fracp(bd)) {
    flo_t m = love_pow(-ad, bd), re = m * love_cospi(bd), im = m * love_sinpi(bd);
    Have(twin_req);
    *++Sp = mk_twin(&Hp, re, im); love_musttail return Next(1); } }
@@ -1228,3 +1228,13 @@ lvm(lvm_carg) {
   emit_gem(_res, r);
   love_musttail return Answer(_res); }
  love_musttail return Answer(ZeroPoint); }
+
+void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
+                              uintptr_t R, uintptr_t const *shape) {
+ w->R = R, w->shape = shape, w->oa = w->ob = 0;
+ for (uintptr_t j = 0; j < R; j++) w->idx[j] = 0;
+ bstride(va, R, w->ca), bstride(vb, R, w->cb); }
+void bc_step(struct bcast *w) {
+ for (intptr_t j = (intptr_t) w->R - 1; j >= 0; j--) {
+  if (++w->idx[j] < (intptr_t) w->shape[j]) { w->oa += w->ca[j], w->ob += w->cb[j]; return; }
+  w->idx[j] = 0, w->oa -= ((intptr_t) w->shape[j] - 1) * w->ca[j], w->ob -= ((intptr_t) w->shape[j] - 1) * w->cb[j]; } }

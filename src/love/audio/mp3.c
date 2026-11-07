@@ -1,5 +1,5 @@
 // src/love/audio/mp3.c -- mpeg audio layer iii (iso 11172-3, 13818-3, and mpeg 2.5), decoded.
-// (mp3-state 0)      -> the width of a decoder's state: (cask (mp3-state 0)) is a fresh one
+// (mp3-new 0)        -> a fresh decoder's state
 // (mp3-head s o)     -> the header at s[o]: bytes | ch << 12 | rate << 16, a charm, bytes 0 for
 //                       free format (the frame ends where the next begins); 0 for no frame
 //                       there, -1 for one this can't read (layers i and ii)
@@ -297,6 +297,7 @@ static uint8_t const mp3_parts[3][28] = {
 
 // the decoder's state, in the caller's cask: all zeros is a fresh stream. ov, v and res carry
 // between frames, the tables from its first; the rest is work room kept off the stack
+#define MP3_MAGIC 0x6d703363
 struct mst {
  double nik[64 * 32];       // the synthesis matrix, cos((16 + i)(2k + 1) pi / 64)
  double c36[36 * 18];       // the long imdct's cosines
@@ -309,6 +310,7 @@ struct mst {
  double v[2][1024];         // the synthesis fifo
  double xr[2][576];         // a granule's lines, then its subband samples
  double tb[2][576];         // the hybrid filter's output, subband-major
+ uint32_t magic;
  int32_t vo[2], reslen;
  uint8_t res[1024];         // the last main data bytes
  uint8_t buf[4096];         // the reservoir's reach and this frame's main data
@@ -658,10 +660,15 @@ refuse:
 
 static struct mst *mp3_st(word x) {
  uintptr_t n = 0;
- uint8_t *b = cask_bytes(x, &n);
- return b && n == sizeof(struct mst) ? (struct mst*) b : NULL; }
+ uint8_t *b = state_bytes(x, &n);
+ return b && n == sizeof(struct mst) && ((struct mst*) b)->magic == MP3_MAGIC ? (struct mst*) b : NULL; }
 
-static lvm(lvm_mp3_state) { Sp[0] = putcharm(sizeof(struct mst)); love_musttail return Next(1); }
+love_noinline static struct g *host_mp3_new(struct g *g) {
+ union u *k = new_state(&g, sizeof(struct mst), sizeof(struct mst));
+ if (!k) return g;
+ ((struct mst*) ((struct state*) k)->str->bytes)->magic = MP3_MAGIC;
+ return g->sp[0] = word(k), g; }
+static lvm(lvm_mp3_new) LvmCall(g, host_mp3_new)
 
 static love_inline struct g *host_mp3_head(struct g *g) {
  word r = putcharm(0);
@@ -696,6 +703,6 @@ love_noinline static struct g *host_mp3_frame(struct g *g) {
  return g->sp[3] = word(r), g->sp += 3, g; }
 static lvm(lvm_mp3_frame) LvmCall(g, host_mp3_frame)
 
-LvDef("mp3-state", mp3_state, 1, "mp3");
+LvDef("mp3-new", mp3_new, 1, "mp3");
 LvDef("mp3-head", mp3_head, 2, "mp3");
 LvDef("mp3-frame", mp3_frame, 4, "mp3");

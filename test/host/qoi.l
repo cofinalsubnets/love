@@ -70,4 +70,11 @@
     hark ["rm" "-rf" dir],
     0))
 
+; a width and height whose product wraps are refused; a header that cannot hold its pixels is cut short
+(: wrap (65535 * 4294967296 + 65536)
+   _ (test (qoi-encode wrap 65537 (string (cask 262144)) = ())
+           (qoi-encode 2305843009213693952 8 "" = ())
+           (qoi-pixels "qoif\0\0\x10\0\0\0\x10\0\x04\0" = 2))
+   0)
+
 (test_fin (), puts "qoi: ok", putc 10, 0)

@@ -140,10 +140,10 @@
                    (h = '+) ("(gadd " + tg <>x + " " + tg <>>x + ")")
                    (h = '-) ("(gsub " + tg <>x + " " + tg <>>x + ")")
                    ("(gmul " + tg <>x + " " + tg <>>x + ")"))))
-   ; a (list ..) / (array n ..) of gaussian elements: its net is the gadd fold
-   (gels x) (<x = 'array ? >>x >x)
+   ; a (list ..) / (galaxy n [..]) of gaussian elements: its net is the gadd fold
+   (gels x) (<x = 'galaxy ? ><>>x >x)
    (allg? l) (two? l ? (gz? <l && allg? >l) 1)
-   (glist? x) (two? x && (<x = 'list || <x = 'array && charm? <>x)
+   (glist? x) (two? x && (<x = 'list || <x = 'galaxy && charm? <>x)
                && two? (gels x) && allg? (gels x))
    (tgsum l) (two? >l ? ("(gadd " + tg <l + " " + tgsum >l + ")") (tg <l))
 

@@ -12,10 +12,10 @@
 ; --- and the collapse is sound: the home write lands the same r8, forall states ---
 (test
  (defq dl-mig-asn
-   (pi R hst (pi F hst (pi K hst
+   (pi R hst F hst K hst
       (paths nat (mrg (drun ds2ck (mmk R F K 0)) 8)
-                 (mrg (drun ds2cv (mmk R F K 0)) 8)))))
-   (lam R (lam F (lam K (idpath (mrg (drun ds2ck (mmk R F K 0)) 8)))))))
+                 (mrg (drun ds2cv (mmk R F K 0)) 8)))
+   (lam R F K (idpath (mrg (drun ds2ck (mmk R F K 0)) 8)))))
 
 ; --- control destinations: ck branches off the compares, cv reifies via set ---
 (test
@@ -36,15 +36,15 @@
 ; --- and the arg seats agree before either transfer, forall states ---
 (test
  (defq dl-seat6
-   (pi R hst (pi F hst (pi K hst
+   (pi R hst F hst K hst
       (paths nat (mrg (drun ds4ckargs (mmk R F K 0)) 6)
-                 (mrg (drun ds4cvargs (mmk R F K 0)) 6)))))
-   (lam R (lam F (lam K (idpath (mrg (drun ds4ckargs (mmk R F K 0)) 6))))))
+                 (mrg (drun ds4cvargs (mmk R F K 0)) 6)))
+   (lam R F K (idpath (mrg (drun ds4ckargs (mmk R F K 0)) 6))))
  (defq dl-seat5
-   (pi R hst (pi F hst (pi K hst
+   (pi R hst F hst K hst
       (paths nat (mrg (drun ds4ckargs (mmk R F K 0)) 5)
-                 (mrg (drun ds4cvargs (mmk R F K 0)) 5)))))
-   (lam R (lam F (lam K (idpath (mrg (drun ds4ckargs (mmk R F K 0)) 5)))))))
+                 (mrg (drun ds4cvargs (mmk R F K 0)) 5)))
+   (lam R F K (idpath (mrg (drun ds4ckargs (mmk R F K 0)) 5)))))
 
 ; --- the degenerate die: a leaf under () compiles byte-for-byte as cv does ---
 (test
@@ -54,9 +54,9 @@
 ; --- a compound under a die only improves: same r0 forall states, fewer forms ---
 (test
  (defq dl-mig-bin
-   (pi R hst (pi F hst (pi K hst
+   (pi R hst F hst K hst
       (paths nat (mrg (drun de5bck (mmk R F K 0)) 0)
-                 (mrg (drun de5bcv (mmk R F K 0)) 0)))))
-   (lam R (lam F (lam K (idpath (mrg (drun de5bck (mmk R F K 0)) 0))))))
+                 (mrg (drun de5bcv (mmk R F K 0)) 0)))
+   (lam R F K (idpath (mrg (drun de5bck (mmk R F K 0)) 0))))
  (defq dl-fewer (paths bool (natgtb (nlen de5bcv) (nlen de5bck)) true)
    (idpath true)))

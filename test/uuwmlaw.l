@@ -41,17 +41,17 @@
 (test
  (defn zrevrev (pi z stk (paths stk (zrev (zrev z)) z))
    (lam z (idpath z)))
- (defn zfocins (pi w nat (pi z stk (paths nat (zfoc (zins w z)) w)))
-   (lam w (lam z (idpath w))))
+ (defn zfocins (pi w nat z stk (paths nat (zfoc (zins w z)) w))
+   (lam w z (idpath w)))
  (defq zcountins
-   (pi w nat (pi z stk (paths nat (zcount (zins w z)) (succ (zcount z)))))
-   (lam w (lam z
+   (pi w nat z stk (paths nat (zcount (zins w z)) (succ (zcount z))))
+   (lam w z
       (maponpaths nat nat (lam q (succ q))
         (add (nlen (zup z)) (succ (nlen (zdn z))))
         (succ (add (nlen (zup z)) (nlen (zdn z))))
-        (natplusnsm (nlen (zup z)) (nlen (zdn z)))))))
+        (natplusnsm (nlen (zup z)) (nlen (zdn z))))))
  (defq zinsane
-   (pi w nat (pi z stk (pi hm (paths bool (memb w (zrow z)) false)
-      (pi hs (paths bool (zsane z) true)
-       (paths bool (zsane (zins w z)) true)))))
-   (lam w (lam z (nodupmid w (ncons (zfoc z) (zdn z)) (lrev (zup z)))))))
+   (pi w nat z stk hm (paths bool (memb w (zrow z)) false)
+      hs (paths bool (zsane z) true)
+       (paths bool (zsane (zins w z)) true))
+   (lam w z (nodupmid w (ncons (zfoc z) (zdn z)) (lrev (zup z))))))

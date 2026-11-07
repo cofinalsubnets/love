@@ -220,7 +220,7 @@ static lvm(lvm_shutdown) {
    g->io = io;
    Pack(g);
    g = io_wflush(g, io);
-   if (!ok(g)) love_musttail return Ap(_lvm_ghelp, g);
+   if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
    if (io_wpending(g, (struct io*) g->sp[0])) {   // park; nothing shut yet
     Unpack(g);
     g->next_wake_at = love_clock() + 1;

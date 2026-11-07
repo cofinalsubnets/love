@@ -194,8 +194,8 @@
          r (uread p)
          z (two? r ? (tzif <>r))
          ru (? (tablet? z) () (0 < #nm) (tzrule nm) ())
-         (? (tablet? z) (t \ tzif-at z t)
-            (tablet? ru) (t \ tzrule-at ru t)
+         (? (tablet? z) (tzif-at z)
+            (tablet? ru) (tzrule-at ru)
             tz-utc))))
 
    ; -- date: the wall clock, in the zone above; -u for utc. -d @seconds and -r file name
@@ -300,7 +300,7 @@
         (: ms3 [k (k + 1) (k + 2)]
            (col f) (map f ms3)
            ts (col (j \ (ucal-mid 20 (monl (j - 1)))))
-           ws (col (j \ (ucal-weeks y j)))
+           ws (col (ucal-weeks y))
            w1 <ws w2 <>ws w3 <>>ws
            _ (ucal-say (ucal-tri <ts <>ts <>>ts))
            _ (ucal-say (ucal-tri ucal-hdr ucal-hdr ucal-hdr))
@@ -447,7 +447,7 @@
    (groups-main _)
     (: nm (uidname "/etc/passwd" (getuid 0))
        gs (ugroups nm (getgid 0))
-       (say out (ujoin (map (g \ (uidname "/etc/group" g)) gs)),
+       (say out (ujoin (map (uidname "/etc/group") gs)),
         put out 10, flush out, 0))
 
    ; -- hostname: the name the kernel keeps. uname -n reads the same line, and this is
@@ -988,7 +988,7 @@
                 ((4 <= #w ? (say out (w 0 + " on " + w 1 + " type " + w 2
                                            + " (" + w 3 + ")"), put out 10)),
                  go >l)))
-       (go (filter (s \ #s) (lines <>r)),
+       (go (filter tally (lines <>r)),
         flush out, 0))
    (mount-main as)
     (atom? as ? (mount-list ())
@@ -1175,7 +1175,7 @@
                                        s (? (last && !R) c2 R (upad w c2) (urpad w c2))
                                        (s + (last ? "" " ") + go (k + 1) (max 0 (#s - w)))))
                        (go 0 0))
-       (any (c \ 0 < #<c) spec ? (say out (line (map (c \ <c) spec) + "\n")) 0,
+       (any (c \ 0 < #<c) spec ? (say out (line (map cap spec) + "\n")) 0,
         (each rows (r \ say out (line r + "\n"))),
         flush out,
         two? rows ? 0 1))

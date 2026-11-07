@@ -164,10 +164,10 @@ union u {
  word x;
  union u *m;
  union u const *k; };   // threaded code is const: .rodata, or flash
-// a C helper that may collect, ghelp on not-ok: LvmCall steps one, LvmCallp lifts the
+// a C helper that may collect, raises on not-ok: LvmCall steps one, LvmCallp lifts the
 // answer over k operands, LvmResume re-enters at g->ip
 #define LvmPack(g, f, ...) \
- Pack(g); if (!ok(g = f(g, ##__VA_ARGS__))) love_musttail return Ap(_lvm_ghelp, g)
+ Pack(g); if (!ok(g = f(g, ##__VA_ARGS__))) love_musttail return Ap(_lvm_raise, g)
 #define LvmCall(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); love_musttail return Next(1); }
 #define LvmCallp(g, k, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); Sp[k] = Sp[0]; love_musttail return Nextp(1, k); }
 #define LvmResume(g, f, ...) { LvmPack(g, f, ##__VA_ARGS__); Unpack(g); love_musttail return Continue(); }
@@ -189,7 +189,7 @@ union u {
 #define op1(nom, i, x) lvm(nom) { Sp[0] = (x); Ip += i; love_musttail return Continue(); }
 #define op11(nom, x) op1(nom, 1, x)
 // calls the installed help; the _lvm prefix makes vmret skip it, as it returns to C with none
-lvm_t _lvm_ghelp;
+lvm_t _lvm_raise;
 lvm(lvm_gc);                                    // takes its word count in g->b
 
 // --- heap objects ---
@@ -242,11 +242,13 @@ extern const struct mint mint_zero;
 struct port_vt;
 #include "kinds.h"
 // g->nom, interned at boot: enum q's rows, a kind table's keys and the built-in coins' names, the
-// reader's and compiler's names, and last the oom's reason, (oom . ask), its ask a charm written in place
+// reader's and compiler's names, and the scares' tags
 enum { KnName = KN, KnAdd, KnMul, KnApply, KnSub, KnNet, KnStar, KnDiv,
        KnPayload, KnLt, KnEq, KnInt, KnCeil, KnLambda, KnCask, KnPort, KnCoin,
        RnQuote, RnList, RnHash, RnTuple, RnTablet, RnIota, RnMono, RnTorn, RnAt, RnComma, RnWeave,
-       RnDef, RnCond, NomOom, NomN };
+       RnDef, RnCond, NomOom, NomDeep, NomDeadlock, NomCode, NomApply, NomMissing, NomN };
+// a scare past 0 and up is an oom, the ask its value; a runtime one's two words are on the stack
+enum { ScareRuntime = -1, ScareDeep = -2, ScareDeadlock = -3, ScareCode = -4, ScareApply = -5 };   // past runtime, in nom's order
 // lisp functions C calls, by (seal-hook n f)'s n; the task's own sit in its node: -1 help, -2 stdio
 enum hook {
  hook_numap,     // numeric application (church exponentiation)
@@ -259,6 +261,7 @@ enum hook {
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
  hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
+ hook_inport,    // not lisp: the buffered stdin port, once taken; rides no image
  hook_n };
 
 struct g {
@@ -296,8 +299,8 @@ struct g {
  // the rem set: old cells that took a young pointer; a rem_miss forces the next collection major
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // bounded by LvRemCap
- uint64_t child_ign;                      // bit n: signal n stays ignored in a spawned child
  int8_t lean;                             // grow streak; a grow needs lean >= 2
+ intptr_t scare;                          // why the last scare: an oom's ask, or a Scare case
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
 #endif
@@ -318,14 +321,11 @@ struct g {
    walk,                          // the most room a walk under one op wanted past the gap: the op takes it, runs again
    minor0, major0, ratio,         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
    push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
- struct pool *pool;               // the threads C kernels share out over (pool.c), made at the first ask
  union {
   intptr_t v0;
   struct {
    word
      stack,  // the books checked out, ours on top; the macro table is stack[zero]'s
-     scare_a, scare_b, // the last scare's condition data
-     scare_c,    // a C lane's reason, (tag . datum), for the re-raise
      hook[hook_n],
      lib,        // name -> book (borrow, cite, leave)
      errs,        // errno -> its nom
@@ -453,7 +453,7 @@ intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t);
 uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t);
 intptr_t port_fd(word);                         // the fd under a love port, or -1
 uintptr_t love_fd_write_all(int, unsigned char const*, uintptr_t);   // land every byte, waiting
-extern struct port_vt const to_vt, closed_vt, ci_vt;
+extern struct port_vt const to_vt, closed_vt, ci_vt, state_vt;
 // poll(2)'s struct pollfd, so the host polls the block directly (main.c static-asserts it)
 struct wait_fd { int fd; short events, revents; };
 
@@ -492,8 +492,9 @@ intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
 uint32_t crc32(unsigned char const*, uintptr_t);
 void sha256_of(unsigned char const*, uintptr_t, unsigned char*);
 // the thread pool (pool.c): fn(ctx, i) for chunks 0..n-1, C kernels only
-void par_run(struct g*, intptr_t, void (*)(void*, intptr_t), void*);
-intptr_t par_width(struct g*, intptr_t);
+void scare_args(struct g*, word*, word*);
+void par_run(intptr_t, void (*)(void*, intptr_t), void*);
+intptr_t par_width(intptr_t);
 // the carried source (archive/srctree.h); noblob.c's zero without one
 extern unsigned char const srctree[];
 extern uintptr_t const srctree_len;
@@ -555,15 +556,13 @@ void code_warm(struct g *g);
 void scare_face(struct g*);
 
 extern struct fio love_stdin, love_stdout, love_stderr;
-extern word love_inflag,  // fd 0's flags as found (a charm), 0 left alone
-            love_inport;  // the buffered stdin port, a root once taken, or 0
+extern word love_inflag;  // fd 0's flags as found (a charm), 0 left alone
 
 // --- allocation and roots ---
 #define avail(g) ((uintptr_t)(g->sp-g->hp))
 #define avec(g, y, ...) (mm(g,&(y)),(__VA_ARGS__),um(g))
 #define mm(g,r) ((core_of(g)->root=&((struct love_r){(word*)(r),core_of(g)->root})))
 #define um(g) (core_of(g)->root=core_of(g)->root->n)
-extern struct g *love_system;   // only gen_grow moves it
 struct g
  *please(struct g*, uintptr_t),
  *force(struct g*, bool),
@@ -589,15 +588,10 @@ static love_inline struct g *have(struct g *g, uintptr_t n) {
 }
 // a walk keeps its worklist in the gap it was lent: spent, it asks for twice the region and
 // gives up, and its op takes the room and runs again. walks nest, so the ask is the largest
-static love_inline void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want) {
- uintptr_t n = (uintptr_t) (hi - base), w = (n < 32 ? 64 : 2 * n) + want;
- if (w > g->walk) g->walk = w; }
+void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want);
 // the ask is on top of the room there is: an op's own scratch may sit ahead of the walk's.
 // a host lane's: the room taken (which may collect), the ask cleared; operands ride the stack
-static love_inline struct g *walk_room(struct g *g) {
- uintptr_t w = g->walk + (uintptr_t) (g->sp - g->hp);
- g->walk = 0;
- return have(g, w); }
+struct g *walk_room(struct g *g);
 // an op's: the room through lvm_gc, which runs the op again on its operands as they were
 #define WalkAgain() do { if (g->walk) { uintptr_t _w = g->walk + room(Hp, Sp); g->walk = 0; have_gc(_w) } } while (0)
 static love_inline void *bump(struct g *g, uintptr_t n) {   // the nursery's; gc.c bumps the major
@@ -784,8 +778,13 @@ static love_inline struct str *bytes_of(word x) { return caskp(x) ? cask(x)->str
 // a cask's str, or NULL for anything else
 static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str : NULL; }
 // a cask's bytes, 8-aligned to hold a C state, and their count; NULL for anything else
-static love_inline uint8_t *cask_bytes(word x, uintptr_t *n) {
- struct str *s = cask_str(x);
+uint8_t *cask_bytes(word x, uintptr_t *n);
+// a state: a port with no door, holding a nif's bytes. only the nifs that made it read or write them
+struct state { struct io io; struct str *str; };
+static love_inline struct str *state_str(word x) {
+ return evenp(x) && cell(x)->ap == lvm_port_io && ((struct io*) x)->vt == &state_vt ? ((struct state*) x)->str : NULL; }
+static love_inline uint8_t *state_bytes(word x, uintptr_t *n) {
+ struct str *s = state_str(x);
  return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
 
 // --- numbers ---
@@ -883,12 +882,19 @@ static love_inline flo_t love_trunc(flo_t x) {
  if (x != x) return x;
  flo_t m = x < 0 ? -x : x;
 #if Bits == 32
- if (m < (flo_t) 2147483648.0) return (flo_t) (int32_t) x;   // a word's: int64's may go through double
-#endif
+ return m < (flo_t) 8388608.0 ? (flo_t) (int32_t) x : x;     // from 2^23 a float is whole
+#else
  if (m > (flo_t) 9.22e18) return x;
- return (flo_t) (int64_t) x; }
-static love_inline flo_t love_fmod(flo_t a, flo_t b) {
- return a - love_trunc(a / b) * b; }
+ return (flo_t) (int64_t) x;
+#endif
+}
+// a float to int64: on a 32-bit word that goes through double, so a word's take the short way
+static love_noinline __attribute__((unused)) int64_t flo_i64(flo_t x) {
+#if Bits == 32
+ if (x >= -(flo_t) 2147483648.0 && x < (flo_t) 2147483648.0) return (int32_t) x;
+#endif
+ return (int64_t) x; }
+flo_t love_fmod(flo_t a, flo_t b);
 // the math lvms' function argument, in g->b
 typedef flo_t (*flo1)(flo_t);
 typedef flo_t (*flo2)(flo_t, flo_t);
@@ -957,15 +963,9 @@ flo_t vop_flo(int op, flo_t a, flo_t b);
 // the broadcast odometer, rightmost axis fastest, carrying each operand's offset by its stride
 // (0 on a size-1 axis); in the fill's frame, so an lvm wrapper stays a leaf
 struct bcast { uintptr_t R; uintptr_t const *shape; intptr_t oa, ob, ca[maxrank], cb[maxrank], idx[maxrank]; };
-static love_inline void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
-                              uintptr_t R, uintptr_t const *shape) {
- w->R = R, w->shape = shape, w->oa = w->ob = 0;
- for (uintptr_t j = 0; j < R; j++) w->idx[j] = 0;
- bstride(va, R, w->ca), bstride(vb, R, w->cb); }
-static love_inline void bc_step(struct bcast *w) {
- for (intptr_t j = (intptr_t) w->R - 1; j >= 0; j--) {
-  if (++w->idx[j] < (intptr_t) w->shape[j]) { w->oa += w->ca[j], w->ob += w->cb[j]; return; }
-  w->idx[j] = 0, w->oa -= ((intptr_t) w->shape[j] - 1) * w->ca[j], w->ob -= ((intptr_t) w->shape[j] - 1) * w->cb[j]; } }
+void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
+                              uintptr_t R, uintptr_t const *shape);
+void bc_step(struct bcast *w);
 
 // --- maps ---
 // a map: a fixed header [lvm_map_lookup, backing, serial, tag] and an open-addressed backing
@@ -1007,8 +1007,7 @@ static love_inline word coin_load(word x) { return ((struct coin*) x)->payload; 
 // coin band then the payload (a map key or sort reads the payload regardless), int and ceil
 // the measure's. star truthy: a numeral powers through its *. KnLambda on: `kind`'s answers
 // a kind table's slot, () if absent or not a tablet
-static love_inline word kind_get(struct g *g, word kind, intptr_t i) {
- return tabp(kind) ? mapget(g, ZeroPoint, core_of(g)->nom[i], kind) : ZeroPoint; }
+word kind_get(struct g *g, word kind, intptr_t i);
 
 // --- truth and equality ---
 // x is false iff its net's real part is not positive. the net is complex and additive, so a
@@ -1058,19 +1057,14 @@ static love_inline word ini_tablet(union u *h, word b, word serial) {
  t->ap = lvm_map_lookup, t->back = b, t->serial = serial;
  return word(tagthread(h, Width(struct tablet))); }
 #define topof(g) ((word*)g+g->len)
-static love_inline struct tag { union u *head; union u end[]; } *ttag(struct g*g, union u *k) {
- // k forward to its terminator, in whichever pool holds it
- word *lo, *hi;
- if (ptr(k) >= g->major_base && ptr(k) < g->major_hp) lo = g->major_base, hi = g->major_hp;
- else if (ptr(k) >= g->sv_base && ptr(k) < g->sv_hp) lo = g->sv_base, hi = g->sv_hp;
- else lo = ptr(g), hi = topof(g);
- while (!tagp(k->x, lo, hi)) k++;
- return (struct tag*) k; }
+struct tag { union u *head; union u end[]; };
+struct tag *ttag(struct g*, union u*);
 static love_inline union u *tag_head(struct tag *t) {
  return cell(word(t->head) & ~(word) 3); }
 // a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
 // state into; NULL when the room was refused (*gp is then not ok)
 union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
+union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
 static love_inline word *gap(struct g *g, word **top) {

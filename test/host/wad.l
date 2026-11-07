@@ -163,6 +163,15 @@
    (shoot s k) (k = 0 || zom s 'st = 'die ? s (shoot (wad-tics (wad-step s 'fire) 15) (k - 1)))
    d (shoot d 12)
    _ (test (zom d 'st = 'die) (d 'bul < 50) (d 'hp > 0))
+   ; ..the mouse looks, up to the limit, and the left button held goes on firing until let go
+   l (wad-look (pins d 'th 0.0 'ph 0.0) 400 -4000)
+   _ (test (abs (l 'th - 1.0) < 0.001) (l 'ph = 1.3))
+   _ (test (wad-mouse d 'press 3 'trig = ()))
+   b0 (d 'bul)
+   _ (wad-tics (wad-mouse d 'press 1) 40)
+   b1 (d 'bul)
+   _ (wad-tics (wad-mouse d 'release 1) 40)
+   _ (test (b1 < b0 - 1) (d 'bul = b1))
 
    ; a rocket instead, into the zombieman behind the door: a burst, a rocket the fewer
    r (wad-tics (wad-step (pins (wad-new 64 40 wd (wad-map wd "E1M2")) 'px 128.0 'pz 230.0) 'use) 70)

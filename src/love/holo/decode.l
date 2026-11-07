@@ -350,7 +350,7 @@
     (:- (go 0 ()) n #s (go off acc)
      (off >= n ? (rev acc)
       (: r (x64-decode s off) ln <r
-         its (map (it \ (<it = 'op ? ['op (it 1) (it 2) (map (o \ dc-abs base off ln o) (it 3))] it)) >r)
+         its (map (it \ (<it = 'op ? ['op (it 1) (it 2) (map (dc-abs base off ln) (it 3))] it)) >r)
        (go (off + ln) ([off ln its] . acc)))))
    ;; a target on an instruction boundary becomes the symbol L<addr>, with a label row laid
    ;; there; a rip form becomes (rip L<addr> 0). base is where x64-disasm read the rows, so a

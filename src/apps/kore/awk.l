@@ -54,6 +54,7 @@
 
    ; -- the decimal engine: C's %f, %e and %g by hand --------------------------
    (aw-trunc x) (-9.0e18 < x < 9.0e18 ? (int x) x)
+   (aw-inf? x) (abs x = 2.0 ** 2000)
    ; an integral double past a charm still owes its digits, and `int` overflows there: it is
    ; m*2^k for an exact m under 2^53, so take m as a charm and scale up through bigints, exact
    (aw-bigint x)
@@ -68,10 +69,11 @@
    (aw-lpad w s) (#s < w ? (aw-lpad w ("0" + s)) s)
    ; |x| > 0 -> the decimal exponent e with 1 <= |x|/10^e < 10
    (aw-exp10 a)
-    (: e0 (aw-trunc (log a / log 10))
-       (up e) (a / 10 ** e >= 10 ? (up (e + 1)) e)
-       (dn e) (a / 10 ** e < 1 ? (dn (e - 1)) e)
-       (dn (up e0)))
+    (: q (aw-exact a)
+       (ge e) (e < 0 ? (<>q <= <q * 10 ** (0 - e)) (<>q * 10 ** e <= <q)) ; a >= 10^e, exact
+       (up e) (ge (e + 1) ? (up (e + 1)) e)
+       (dn e) (ge e ? e (dn (e - 1)))
+       (dn (up (aw-trunc (log a / log 10)))))
    ; a double as the exact fraction it is (num den): halving a big one and doubling a
    ; small one are both exact, so the scaling never rounds
    (aw-exact a)
@@ -134,7 +136,7 @@
                 (aw-strip (aw-fixed x (np - 1 - e)))))))
    ; a number as awk writes it: an integral value is its digits, whatever convfmt
    (aw-numstr x fmt)
-    (x = aw-trunc x ? (aw-intstr x) (aw-sprintf fmt [x] "%.6g"))
+    (x = aw-trunc x && !(aw-inf? x) ? (aw-intstr x) (aw-sprintf fmt [x] "%.6g"))
    (aw-str v cf) (? (aw-nil? v) ""
                     (string? v) v
                     (aw-sn? v) <>>v
@@ -187,8 +189,9 @@
                (aw-zeros (w - t) + s))
           (aw-spaces (w - t) + s)))
    (aw-sgn p sp s) (? (0 < #s && s 0 = 45) s  p ("+" + s)  sp (" " + s)  s)
-   ; one conversion at f k (which is a %) -> (next-k args-left), the text said into o
-   (aw-conv o f n k l cf)
+   ; one conversion at f k (which is a %) -> (next-k args-left), the text said into o;
+   ; sg? writes inf's plus as gawk does
+   (aw-conv o f n k l cf sg?)
     (aw-spec f n (k + 1) @ [m z pl spc w pr j]
      (n <= j ? (put o 37, [(k + 1) l])
         (: d (f j)
@@ -196,6 +199,9 @@
            rest (two? l ? >l l)
            num (aw-numv v)
            done [(j + 1) rest]
+           (aw-inf? num && elem d [100 105 111 117 120 88 102 70 101 69 103 71] ?
+           (: s (num < 0 ? "-inf" (aw-sgn (pl || sg?) spc "inf"))
+              (say o (aw-pad m 0 w (elem d [88 70 69 71] ? (aw-up s) s)), done))
            (d @ 37 (put o 37, [(j + 1) l])
               99
                (: t (? (aw-nil? v) "" (string? v) v (aw-sn? v) <>>v ())
@@ -233,17 +239,20 @@
                (: s0 (aw-gen num (pr < 0 ? 6 pr))
                   s (aw-sgn pl spc (d = 71 ? (aw-up s0) s0))
                   (say o (aw-pad m z w s), done))
-              (put o 37, [(k + 1) l]))))
+              (put o 37, [(k + 1) l])))))
      [(k + 1) l])
-   (aw-sprintf f as cf)
+   (aw-lay f as cf sg?)
     (: n #f o (jug 0)
        (go k l)
         (n <= k ? (slurp o)
          (f k @ c
           (c = 37 && k + 1 < n ?
-             (aw-conv o f n k l cf @ [nk rest] (go nk rest) (slurp o))
+             (aw-conv o f n k l cf sg? @ [nk rest] (go nk rest) (slurp o))
              (put o c, go (k + 1) l))))
        (go 0 as))
+   (aw-sprintf f as cf) (aw-lay f as cf 1)
+   ; C's sprintf, pic's and grap's
+   (aw-csprintf f as cf) (aw-lay f as cf 0)
 
    ; -- printf, the shell's ----------------------------------------------------
    ; the format walked as C walks it; each argument read as C's strto* reads it, so a word not
@@ -1540,7 +1549,7 @@
         items <anp
         feed (<>anp ? aw-feedt aw-feed)
         _ (aw-nil? fs || pin (aw-g E) "FS" (aw-unesc fs))
-        _ (map (v \ aw-cmdas E v) vs)
+        _ (map (aw-cmdas E) vs)
         ; exit outside end still runs the end rules (POSIX); an exit inside them ends it
         (ending b)
          (peep E 'ph 'end == 'end
