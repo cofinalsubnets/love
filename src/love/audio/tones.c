@@ -3,7 +3,8 @@
 // voice's operators and decides their envelopes (src/apps/harp/ops.l); this runs the frames.
 // (tones ops st n f0 rate) -> a float tray: n frames of left, n of right, then each operator's
 //   last two outputs (for its feedback, handed back next time as st; any other st, () say, is
-//   all at rest), then scratch. ops is a float
+//   all at rest), then scratch; with ws a workspace of (tones-ws k), k >= the operators times n,
+//   the scratch is laid there and left out of the answer. ops is a float
 //   tray of rows of tn_row numbers, an operator a row, a modulator before what it moves:
 //    0 at     the frame its voice starts           1 f      its frequency, Hz
 //    2 slide  nepers a second it glides; phase f (e^kt - 1) / k
@@ -136,19 +137,45 @@ static void tn_op(flo_t const *o, flo_t const *mod, flo_t *y, flo_t *L, flo_t *R
    tn_step(&E), ek *= rk, ed *= rd; } }
  *y1 = a1, *y2 = a2; }
 
+// a workspace: a state holding its magic and k, then k floats a run lays its scratch in, kept
+// from one run to the next so the scratch is not made again. a str's bytes are word aligned,
+// all a flo_t needs, wherever the gc lays it
+#define TW_MAGIC ((uintptr_t) 0x746f6e65)
+struct tw_head { uintptr_t magic, k; };
+static uintptr_t tw_floats(word x) {
+ struct str const *s = state_str(x);
+ struct tw_head const *h = s ? (struct tw_head const *) s->bytes : 0;
+ return h && s->len >= sizeof *h && h->magic == TW_MAGIC && (s->len - sizeof *h) / sizeof(flo_t) >= h->k ? h->k : 0; }
+static flo_t *tw_data(word x) { return (flo_t *) (state_str(x)->bytes + sizeof(struct tw_head)); }
+
+// (tones-ws k): a workspace for k floats of scratch
+love_noinline static struct g *host_tones_ws(struct g *g) {
+ word *a = g->sp;
+ if (!(a[0] & 1) || getcharm(a[0]) < 0 || getcharm(a[0]) > 1 << 24) { a[0] = ZeroPoint; return g; }
+ uintptr_t const k = (uintptr_t) getcharm(a[0]), n = sizeof(struct tw_head) + k * sizeof(flo_t);
+ union u *s = new_state(&g, n, sizeof(struct tw_head));
+ if (!s) return g;
+ struct tw_head *h = (struct tw_head *) ((struct state *) s)->str->bytes;
+ h->magic = TW_MAGIC, h->k = k;
+ g->sp[0] = word(s);
+ return g; }
+static lvm(lvm_tones_ws) { LvmCallp(g, 0, host_tones_ws) }
+
 love_noinline static struct g *host_tones(struct g *g) {
  word *a = g->sp;
- // (tones ops st n f0 rate)
+ // (tones ops st n f0 rate ws)
  if (!galaxyp(a[0]) || tray(a[0])->type != love_R || !(a[2] & 1) || !isnum(a[3]) || !isnum(a[4])) { a[0] = ZeroPoint; return g; }
  intptr_t const n = getcharm(a[2]);
  uintptr_t const no = tray_nelem(tray(a[0])) / tn_row;
  if (n < 0 || n > 1 << 22 || no > 4096 || tray_nelem(tray(a[0])) % tn_row) { a[0] = ZeroPoint; return g; }
- uintptr_t const len = 2 * (uintptr_t) n + 2 * no + no * (uintptr_t) n, w = b2w(tray_bytes(love_R, 1, len));
+ int const inws = tw_floats(a[5]) >= no * (uintptr_t) n;
+ uintptr_t const len = 2 * (uintptr_t) n + 2 * no + (inws ? 0 : no * (uintptr_t) n), w = b2w(tray_bytes(love_R, 1, len));
  if (!ok(g = have(g, w))) return g;
  a = g->sp;
  struct tray *out = ini_tray(bump(g, w), love_R, 1);
  out->shape[0] = len;
- flo_t *d = tray_data(out), *L = d, *R = d + n, *st = d + 2 * n, *sc = st + 2 * no;
+ // the workspace read after the allocation, which may move it
+ flo_t *d = tray_data(out), *L = d, *R = d + n, *st = d + 2 * n, *sc = inws ? tw_data(a[5]) : st + 2 * no;
  for (uintptr_t i = 0; i < 2 * (uintptr_t) n; i++) d[i] = 0;
  flo_t const *ops = tray_data(tray(a[0])), rate = toflo(a[4]);
  int64_t const f0 = (int64_t) toflo(a[3]);
@@ -164,7 +191,7 @@ love_noinline static struct g *host_tones(struct g *g) {
         st + 2 * j, st + 2 * j + 1); }
  a[0] = word(out);
  return g; }
-static lvm(lvm_tones) { LvmCallp(g, 4, host_tones) }
+static lvm(lvm_tones) { LvmCallp(g, 5, host_tones) }
 
 // (mixall ps n): 2n frames, left then right, the sum of each piece [y gl gr o] of the list ps in
 // order: y's frame o + i at i where it falls in y's first n, at gl and gr. a side whose gain
@@ -197,5 +224,6 @@ love_noinline static struct g *host_mixall(struct g *g) {
  return g; }
 static lvm(lvm_mixall) { LvmCallp(g, 1, host_mixall) }
 
-LvDef("tones", tones, 5, "dsp");
+LvDef("tones", tones, 6, "dsp");
+LvDef("tones-ws", tones_ws, 1, "dsp");
 LvDef("mixall", mixall, 2, "dsp");
