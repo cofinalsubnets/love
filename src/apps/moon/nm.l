@@ -310,9 +310,36 @@
                      ())
        (x86? g ? (go fs)
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
+   ; a wide literal or an address a loop makes again each time round, one-def, is made once ahead of
+   ; the outermost loop entered only by its head or a jump to its test; the same one again is a
+   ; copy. a few to a loop, each a register held across it. -> fs itself when nothing moves
+   nmhmax 4
+   (nmhoist g fs)
+    (: dn (nmdn g fs)
+       lab {} ft {} n (foldl (i \ f \ (pin ft i f, (f @ ['label L] (pin lab L i) _ 0), i + 1)) 0 fs)
+       (dests f) (f @ ['jmp L] [L] ['br _ L] [L] ['jmpt _ _ ls] ls (('fix . _) && 4 < #f) (f 4) _ ())
+       refs (catmap (i \ map (L \ [i (peep lab L -1)]) (dests (ft i))) ^n)
+       far (foldl (t \ r \ (r @ ([i a] && 0 <= a <= i && peep t a -1 < i) (pin t a i) _ t)) {} refs)   ; head -> last jump back
+       spans (sort (keys far))
+       (pre a b)                                         ; the index the span's values go ahead of | ()
+        (: p (0 < a && (ft (a - 1) @ ['jmp E] (a < peep lab E -1 <= b) _ 0) ? (a - 1) a)
+           (any (r \ r @ [i t] (a <= t <= b && !(a <= i <= b) && i != p) _ 0) refs ? () p))
+       (hoist? f) (f @ (['li t k] && lovr? t && peep dn t 0 = 1 && cint? k && !(fits32 k)) 1
+                       (['la t _] && lovr? t && peep dn t 0 = 1) 1
+                       _ 0)
+       ins {} out {}                                     ; index -> what goes ahead of it, last first; a form's fate
+       (add p i f)
+        (: k (show (f 2)) seen (peep ins p ())
+           (assoc k seen @ () (#seen < nmhmax ? (pin ins p ((k . f) . seen), pin out i 1) 0)
+                            e (pin out i ['mov (f 1) (>e 1)])))
+       (seat l i f)
+        (l @ (a . u) (a <= i <= far a ? (pre a (far a) @ () (seat u i f) p (add p i f)) (seat u i f)) _ 0)
+       _ (map (i \ (hoist? (ft i) ? (seat spans i (ft i)) 0)) ^n)
+       (#(keys out) = 0 ? fs
+          (catmap (i \ map cup (rev (peep ins i ())) + (out i @ () [(ft i)] 1 () m [m])) ^n)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nminv g (nmfuse g fs)))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r)))
    ; a decided branch's dead arm may hold a value's other def: round again without it
    (nmfix g fs)
     (nmround g (nmround g fs) @ r

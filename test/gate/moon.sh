@@ -503,7 +503,7 @@ for d in P L; do
   a=$(wc -c < "$ho/.isite.o"); b=$(wc -c < "$ho/.isiten.o")
   case $d in
     P) [ "$a" -eq "$b" ] || fail "four plain sites spliced: $a bytes against $b out of line" ;;
-    L) [ "$a" -gt "$b" ] || fail "four sites in a loop stayed calls: $a bytes against $b out of line" ;;
+    L) [ "$(objdump -d "$ho/.isite.o" | grep -c call)" = 0 ] || fail "four sites in a loop stayed calls" ;;
   esac
 done
 
