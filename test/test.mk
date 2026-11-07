@@ -11,7 +11,7 @@
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
-  test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
+  test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
@@ -31,7 +31,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 
 # the core's gate: test_extra's local, unheavy lanes
 test_core: test_filemode test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
-	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_sat \
+	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_envimage test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
 	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
@@ -542,6 +542,9 @@ test_raw_rv64: host
 test_raw_a64: host
 	@$(raw_env) gate_sentinel='test/a64/callout:.* ok' \
 	  $(gsh) test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
+# test_envimage -- an unbaked love keeping its image at LOVE_IMAGE, as an android app does
+test_envimage: host
+	@sh test/gate/envimage.sh $(ho)/love.raw $(ho)/envimage
 # test_love_a64 -- the cross-built a64 artifact on a64 (else qemu-user): corpus, bake, corpus.
 # on an a64 box test_host is this lane
 ifeq ($(xa),a64)

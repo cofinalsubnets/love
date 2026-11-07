@@ -131,6 +131,7 @@ typedef struct {
   ANativeActivity *a; void *vm, *looper, *win, *queue;   /* a is 0 between activities, stay's only; the act lock guards it */
   int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, vh, shown;
   int bare;                               /* the client on top has not been told its pixels are gone */
+  int baking, tick;                       /* love's first run lays its image, no client yet */
   deck decks[NDECK], *d;                  /* d is on the screen */
   int up, ears, stay;                     /* in sight (onStart to onStop); hear threads alive; the service keeps us */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
@@ -178,10 +179,44 @@ static int vis(br *b) { return b->vh > 0 && b->vh < b->wh ? b->vh : b->wh; }
 /* how many of the window's pixels a frame's pixel is: whole, so none is filtered */
 static int zoom(br *b) { return b->fw && b->ww >= b->fw ? b->ww / b->fw : 1; }
 
+static void block(ANativeWindow_Buffer *o, int x, int y, int w, int h) {
+  for (int j = y; j < y + h && j < o->height; j++)
+    for (int i = x; i < x + w && i < o->width; i++) ((uint32_t *) o->bits)[(size_t) j * (size_t) o->stride + (size_t) i] = 0xffc0c0c0u;
+}
+/* a line in the columns of a 5x7 font, only the letters a first run says */
+static void say(ANativeWindow_Buffer *o, char const *s, int y, int k) {
+  static char const font[] =
+    "a\x20\x54\x54\x54\x78" "b\x7f\x48\x44\x44\x38" "e\x38\x54\x54\x54\x18" "f\x08\x7e\x09\x01\x02"
+    "g\x0c\x52\x52\x52\x3e" "i\x00\x44\x7d\x40\x00" "k\x7f\x10\x28\x44\x00" "m\x7c\x04\x18\x04\x78"
+    "n\x7c\x08\x04\x04\x78" "r\x7c\x08\x04\x04\x08" "s\x48\x54\x54\x54\x20" "t\x04\x3f\x44\x40\x20"
+    "u\x3c\x40\x40\x20\x7c" "w\x3c\x40\x30\x40\x3c" ":\x00\x36\x36\x00\x00";
+  int n = 0; while (s[n]) n++;
+  for (int i = 0; i < n; i++)
+    for (unsigned g = 0; g < sizeof font - 1; g += 6)
+      if (font[g] == s[i])
+        for (int c = 0; c < 5; c++)
+          for (int r = 0; r < 7; r++)
+            if (font[g + 1 + (unsigned) c] >> r & 1) block(o, (o->width - n * 6 * k) / 2 + (i * 6 + c) * k, y + r * k, k, k);
+}
+/* the window while a first run bakes, and a block that moves to show it lives. under the lock */
+static void notice(br *b) {
+  ANativeWindow_Buffer o;
+  if (ANativeWindow_lock(b->win, &o, 0)) return;
+  for (int y = 0; y < o.height; y++)
+    for (int x = 0; x < o.width; x++) ((uint32_t *) o.bits)[(size_t) y * (size_t) o.stride + (size_t) x] = 0xff000000u;
+  int k = (o.width < o.height ? o.width : o.height) / 120, y = o.height / 3;
+  if (k < 1) k = 1;
+  say(&o, "first run: baking", y, k);
+  say(&o, "a few minutes", y + 12 * k, k);
+  block(&o, b->tick * k * 2 % (o.width - 8 * k), y + 24 * k, 8 * k, 2 * k);
+  ANativeWindow_unlockAndPost(b->win);
+}
+
 /* the frame swizzled onto the window's visible part, each pixel k by k; the rest black.
    under the lock */
 static void paint(br *b) {
   int w = b->fw, ht = b->fh;
+  if (b->win && b->baking && !b->fb) notice(b);
   if (b->win && b->fb && w) {
     int k = zoom(b), vh = vis(b);
     ANativeWindow_Buffer o;
@@ -689,7 +724,9 @@ static void sessend(sess *s) {
   munmap(s, sizeof *s);
 }
 
-/* love's stdout and stderr, a line at a time, to logcat */
+static int prefix(char const *s, char const *p) { while (*p) if (*s++ != *p++) return 0; return 1; }
+
+/* love's stdout and stderr, a line at a time, to logcat; a first run's line starts its notice */
 static int logs(br *b) {
   ssize_t k = read(b->logfd, b->line + b->nline, sizeof b->line - 1 - (size_t) b->nline);
   if (k == 0) return -1;                       /* its end; a read that would wait is a stale wake */
@@ -697,7 +734,7 @@ static int logs(br *b) {
   b->nline += (int) k;
   int s = 0;
   for (int i = 0; i < b->nline; i++)
-    if (b->line[i] == '\n') { b->line[i] = 0; LOG(b->line + s); s = i + 1; }
+    if (b->line[i] == '\n') { b->line[i] = 0; LOG(b->line + s); b->baking |= prefix(b->line + s, "love: first run"); s = i + 1; }
   if (s == 0 && b->nline == (int) sizeof b->line - 1) b->line[b->nline] = 0, LOG(b->line), s = b->nline;
   for (int i = s; i < b->nline; i++) b->line[i - s] = b->line[i];
   b->nline -= s;
@@ -855,16 +892,17 @@ static void *loop(void *p) {
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
-    int id = ALooper_pollOnce(__atomic_load_n(&b->a, 2) && (b->d->typing || b->shown) ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
+    int id = ALooper_pollOnce(__atomic_load_n(&b->a, 2) && (b->baking || b->d->typing || b->shown) ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
     pthread_mutex_lock(b->act);                /* the activity stays through what this does */
     if (b->d->typing || b->shown) insets(b);
+    if (b->baking) { pthread_mutex_lock(b->mu); b->tick++; paint(b); pthread_mutex_unlock(b->mu); }
     if (id == LISTEN) {
       deck *l = d;
       int c = accept4(l->lsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && (l->csock < 0 || l->nunder < 3)) {
         pthread_mutex_lock(b->mu);
         if (l->csock >= 0) l->under[l->nunder] = l->csock, l->utyping[l->nunder++] = l->typing;
-        l->csock = c; if (l == b->d) blank(b);
+        l->csock = c; b->baking = 0; if (l == b->d) blank(b);
         pthread_mutex_unlock(b->mu);
         ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
         if (l == b->d && b->ww) sized(b);
@@ -924,7 +962,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b, deck *d) {
-  char *av[32], exe[600], *ev[64], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
+  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
   char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
@@ -933,6 +971,16 @@ static void spawn(br *b, deck *d) {
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
   face(b, d, sk, sizeof sk); snprintf(fc, sizeof fc, "LOVE_FACE=%s", sk); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
+  unsigned h = 2166136261u;                    /* one image per install: its name is the lib dir's, the others go */
+  for (char const *c = b->dir; *c; c++) h = (h ^ (unsigned char) *c) * 16777619u;
+  char me[32]; snprintf(me, sizeof me, "love-%08x.image", h);
+  snprintf(img, sizeof img, "LOVE_IMAGE=%s/%s", b->data, me);
+  void *dd = opendir(b->data);
+  for (struct dirent *de; dd && (de = readdir(dd)); ) {
+    int n = 0; while (de->name[n]) n++;
+    snprintf(path, sizeof path, "%s/%s", b->data, de->name);
+    if (n > 11 && prefix(de->name, "love-") && prefix(de->name + n - 6, ".image") && !prefix(de->name, me)) unlink(path); }
+  if (dd) closedir(dd);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
   void *bd = opendir(bin);                     /* DATA/bin is the bridge's: every link goes, then names[]'s */
   for (struct dirent *de; bd && (de = readdir(bd)); )
@@ -943,9 +991,9 @@ static void spawn(br *b, deck *d) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;
-  int e = 7;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=" };
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img;
+  int e = 8;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;

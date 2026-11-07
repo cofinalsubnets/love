@@ -374,6 +374,29 @@ static void self_bake(char const **argv) {
   execv(exe, (char *const *) argv);
   fprintf(stderr, "love: baked, but can't run again: running unbaked\n"); }
 
+// LOVE_IMAGE: an unbaked binary whose own file is read-only keeps its image there. missing or
+// refused, it is baked to a scratch name, moved in whole, and the line runs again
+static struct g *env_image(char const *path, char const **argv, char const **woke) {
+  int why = 0;
+  struct g *g = image_load(path, &why);
+  if (g) return *woke = path, g;
+  char exe[4096], tmp[4096];
+  if (getenv("LOVE_IMAGE_BAKED") || !host_selfpath(exe, sizeof exe)) return NULL;
+  snprintf(tmp, sizeof tmp, "%s.%ld", path, (long) getpid());
+  fprintf(stderr, "love: first run, baking %s\n", path);
+  pid_t pid = fork();
+  if (pid < 0) return NULL;
+  if (!pid) {
+    char const *bv[] = { exe, "bake", tmp, NULL };
+    execv(exe, (char *const *) bv);
+    _exit(127); }
+  int st; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
+  if (!WIFEXITED(st) || WEXITSTATUS(st) || rename(tmp, path))
+    return unlink(tmp), fprintf(stderr, "love: the bake did not go: running unbaked\n"), NULL;
+  setenv("LOVE_IMAGE_BAKED", "1", 1);
+  execv(exe, (char *const *) argv);
+  return NULL; }
+
 // bake --with/--without/--list/--pick: past the boot, to the bake verb (src/apps/roster.l)
 static bool bake_roster(int argc, char const **argv) {
   for (int i = 2; i < argc && argv[i][0] == '-'; i++)
@@ -392,6 +415,7 @@ static unsigned char const *bsrc_file(char const *p, uintptr_t *n) {
 #define bsrc_lay_cat(cat, n, at) 0
 #define bsrc_file(p, n) (*(n) = 0, (unsigned char const *) NULL)
 #define self_bake(argv) ((void) 0)
+#define env_image(path, argv, woke) ((struct g *) NULL)
 #define bake_roster(argc, argv) false
 #endif
 
@@ -520,7 +544,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   if (bake) {                                            // snapshot the post-warm heap, then exit
     // the crew is never aboard: -l names it, else the carried source's roster
     char cat[4096 + 40];                               // a path, and ".bakecat.<pid>.l"
-    if (!bake_load && bsrc_lay_cat(cat, sizeof cat, bake_out)) bake_load = cat;
+    if (!bake_load && bsrc_lay_cat(cat, sizeof cat, *bake ? bake : bake_out)) bake_load = cat;
     if (bake_load) {
       int ok = ok(g = bake_eval_file(g, bake_load));
       if (bake_load == cat) unlink(cat);
@@ -673,6 +697,8 @@ int main(int argc, char const **argv) {
     woke_ms = love_clock() - t0,
     image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
+  char const *envimg = getenv("LOVE_IMAGE");
+  if (!g && !bake && !(noimg && *noimg) && envimg && *envimg) g = env_image(envimg, argv, &image_load_path);
   if (!g && !bake && !(noimg && *noimg)) self_bake(argv);
 #endif
   bool woke = g != NULL;
