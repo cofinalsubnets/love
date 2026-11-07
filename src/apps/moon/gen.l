@@ -1420,6 +1420,38 @@
                   (rth && f = '(ret)) [['jmp '__x86_return_thunk]]
                   [f])
        (thk || rth ? (catmap one fs) fs)))
+   ; an else of one move lays before its test, and the then writes over it: (cmp ..) (br cc E) then
+   ; (jmp J) (label E) (li|mov r x) (label J) -> (li|mov r x) (cmp ..) (br cc J) then (label J). the
+   ; then must write r before any read of it or any exit, and E have no other reader
+   (kelse g fs)
+    (cz g 'kelse fs (t32? g ? fs
+       (: (cnt t x) (? (two? x) (foldl cnt t x) (atom? x) (pin t x (peep t x 0 + 1)) t)
+          refs (foldl (t \ f \ (two? f && <f = 'label ? t (cnt t f))) {} fs)
+          (mv? f) (f @ ('li r _) (nelem r '(sp fp)) ('mov r s) (nelem r '(sp fp)) _ ())
+          els (: (go l t) (l @ (('jmp J) . ('label E) . f . ('label J2) . _)
+                                (go >l (J = J2 && mv? f && refs E = 1 ? (pin t E [J f]) t))
+                               (_ . u) (go u t)
+                               _ t)
+                 (go fs {}))
+          dn {}
+          (dead? l r n) (l @ (f . u) (? (64 < n || !(two? f)) ()
+                                         (<f = 'label) (dead? u r (n + 1))
+                                         (rdsp g f @ 'bar ()
+                                            (rs . ds . _) (? (elem r rs) () (elem r ds) 1 (dead? u r (n + 1)))))
+                        _ ())
+          (ok? c f u) (elem <c '(cmp test) &&
+                       (rdsp g c @ 'bar ()
+                          (rs . ds . _) (: r <>f (nelem r rs && nelem r ds && (<f = 'li || nelem (f 2) ds) && dead? u r 0))))
+          (hoist l) (l @ (c . ('br cc E) . u)
+                          (els E @ (J f) (ok? c f u ? (pin dn E 1, [f c ['br cc J] u]))
+                                   _ ())
+                         _ ())
+          (go l acc)
+           (? !(two? l) (rev acc)
+              (hoist l @ (f c b u) (go u ([b c f] + acc))
+                         _ (l @ (('jmp _) . ('label E) . _ . u) (dn E ? (go u acc) (go >l (<l . acc)))
+                                (f . u) (go u (f . acc)))))
+          (go fs ()))))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
    ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X.
@@ -4211,8 +4243,9 @@
    (nmen nm x) (? (atom? x) 0 (x @ ['var n] (n = nm) (any (nmen nm) x)))
    ; -- a local struct of scalars, named only by member or by & to a call that keeps no pointer,
    ; becomes its members as scalars, which the allocator may seat; around such a call they copy to
-   ; the struct and back. one that starts as a copy from memory reads its members there, through
-   ; an address taken once. types carry no volatile, so a unit naming one is left alone --
+   ; the struct and back. one that starts as a copy from memory, or is assigned one as a statement,
+   ; reads its members there, through an address taken once. types carry no volatile, so a unit
+   ; naming one is left alone --
    (srs g f)
     (: w64 !(ilp32? g)
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
@@ -4236,8 +4269,14 @@
                               !(any (j \ !(j = i) && nmen nm (as j)) ^#as))
                               (pin site nm 1)
                               _ (scan a)))
+       ; a whole copy in, its value unread: a statement, or a comma's left
+       (eff x) (x @ (['asn ['var nm] m] && cand? nm && mem? m) (scan m)
+                    ['comma a b] (eff a, eff b)
+                    _ (scan x))
        (scan x) (? (atom? x) 0
-                   (x @ ['dot ['var nm] fl] (cand? nm ? (pin use nm (elem fl (peep use nm ()) ? (use nm) (fl . peep use nm ()))) 0)
+                   (x @ ['expr e] (eff e)
+                        ['comma a b] (eff a, scan b)
+                        ['dot ['var nm] fl] (cand? nm ? (pin use nm (elem fl (peep use nm ()) ? (use nm) (fl . peep use nm ()))) 0)
                         ['var nm] (pin bad nm 1)
                         ['addr ['var nm]] (pin bad nm 1)
                         ['addr ['dot ['var nm] _]] (pin bad nm 1)
@@ -4263,8 +4302,12 @@
                     (: k (tmps 'k) t "`s\(k)"
                        _ (pins tmps 'k (k + 1) 'l ([t rt ()] . tmps 'l))
                        (seq (in + [['asn ['var t] c]] + out + [['var t]])))))))
+       (asg nm m) (: k (tmps 'k) t "`s\(k)"
+                     _ (pins tmps 'k (k + 1) 'l ([t ['ptr (cand nm)] ()] . tmps 'l))
+                     (seq ([['asn ['var t] ['addr (rw m)]]] + map (fl \ ['asn ['var (sn nm fl)] ['dot ['deref ['var t]] fl]]) (use nm))))
        (rw x) (? (atom? x) x
                  (x @ (['dot ['var nm] fl] && elem nm ok) ['var (sn nm fl)]
+                      (['asn ['var nm] m] && elem nm ok) (asg nm m)
                       ['decl ps] ['decl (rd ps)]
                       ['call ['var fn] as] (rwcall fn as)
                       _ (map rw x)))

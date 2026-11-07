@@ -24,6 +24,7 @@
                 (cskeep (gst ir-final) ir-emitted)
                 (csdrop (gst ir-emitted) ir-emitted)
                 (jmpm (gst ir-emitted) ir-emitted)
+                (kelse (gst ir-emitted) ir-emitted)
                 (tailarm (gst ir-emitted) ir-emitted)
                 (swrap (gst ir-emitted) ir-emitted)
                 (frrec (gst ir-emitted) ir-emitted)

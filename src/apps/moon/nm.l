@@ -49,21 +49,60 @@
    (nmnext? fs L) (fs @ (['label x] . u) (x = L || nmnext? u L) _ ())
    (nmskip fs) (fs @ (('label . _) . _) fs (_ . u) (nmskip u) _ ())
 
-   ; a value's upper bound when it is known not negative, forward through a block: an extension
-   ; that cannot change its operand goes
-   nmext {'zx1 255 'zx2 65535 'zx4 4294967295 'sx1 127 'sx2 32767 'sx4 2147483647}
-   nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldxh 65535 'ldu4 4294967295 'ldxw 4294967295}
+   ; a value's bounds [lo hi], forward through a block: an extension that cannot change its
+   ; operand goes
+   nmext {'zx1 [0 255] 'zx2 [0 65535] 'zx4 [0 4294967295] 'sx1 [-128 127] 'sx2 [-32768 32767] 'sx4 [-2147483648 2147483647]}
+   nmldw {'ldu1 [0 255] 'ldxb [0 255] 'ldu2 [0 65535] 'ldxh [0 65535] 'ldu4 [0 4294967295] 'ldxw [0 4294967295]
+          'ld1 [-128 127] 'ld2 [-32768 32767] 'ld4 [-2147483648 2147483647] 'ldxsw [-2147483648 2147483647]}
+   nmneg {'lt 'ge 'ge 'lt 'le 'gt 'gt 'le 'eq 'ne 'ne 'eq 'below 'ae 'ae 'below 'be 'above 'above 'be}
    nmwctl {'label 1 'jmp 1 'br 1 'ret 1 'jmpt 1 'cmp 1}
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
+   (nmin? a b) (<b <= <a && a 1 <= b 1)
+   (nmor a b) [(min <a <b) (max (a 1) (b 1))]
+   (nmnn x) (two? x && 0 <= <x)
+   ; two values both in [-c-1 c] mix their bits there
+   (nmbits x y) (nmcov (max (max (x 1) (-1 - <x)) (max (y 1) (-1 - <y))) @ c [(-1 - c) c])
+   (nmand x y) (? (nmnn x && nmnn y) [0 (min (x 1) (y 1))] (nmnn x) [0 (x 1)] (nmnn y) [0 (y 1)]
+                  (two? x && two? y) (nmbits x y) ())
+   ; a word holds a bound as signed; one worked exactly that fits did not wrap
+   (nmlim g) (t32? g || ia32? g ? 2147483648 9223372036854775808)
+   (nmok g x) (two? x && -(nmlim g) <= <x && x 1 < nmlim g)
+   ; x's bounds where (x cc y) holds, an unknown x the whole word
+   (nmcut g x cc y)
+    ((two? x ? x [-(nmlim g) (nmlim g - 1)]) @ [lo hi]
+       (!(two? y) ? x
+          (cc @ 'lt [lo (min hi (y 1 - 1))] 'le [lo (min hi (y 1))]
+                'gt [(max lo (<y + 1)) hi] 'ge [(max lo <y) hi]
+                'eq [(max lo <y) (min hi (y 1))]
+                'below (0 <= <y ? [(max lo 0) (min hi (y 1 - 1))] x)
+                'be (0 <= <y ? [(max lo 0) (min hi (y 1))] x)
+                _ x) @ z (<z <= z 1 ? z x)))
+   ; a cmov just after (cmp a k), its target holding a's value: [a k] by the cmov's index
+   (nmcmv g fs)
+    (: at {}
+       (same cs gn d a) (d = a || (cs d @ [x n] (x = a && n = peep gn a 0) _ 0))
+       (go l j p cs gn)
+        (l @ (f . u)
+           (: _ (f @ (['cmov _ d _] && two? p && <p = 'cmp && same cs gn d (p 1)) (pin at j [(p 1) (p 2)]) _ 0)
+              (f @ ('label . _) (go u (j + 1) f {} gn)
+                   _ (raops g f @ [_ ds]
+                        (: g2 (foldl (t \ x \ pin t x (peep t x 0 + 1)) gn ds)
+                           c2 (foldl (t \ x \ pin t x ()) cs ds)
+                           (go u (j + 1) f (f @ (['mov t a] && lovr? t && lovr? a) (pin c2 t [a (peep g2 a 0)]) _ c2) g2))
+                        _ (go u (j + 1) f {} gn))))
+           _ at)
+       (go fs 0 () {} {}))
    ; the vregs a bound could matter for: an extension's operand, and what its bound is made of
    (nmdem fs)
     (: dep {} dem {}
        (edge t l) (pin dep t (l + dep t))
        _ (map (f \ (f @ ['mov t a] (edge t [a])
-                         [('and || 'or || 'xor || 'add || 'imul) t x y] (edge t [x y])
+                         [('and || 'or || 'xor || 'add || 'sub || 'imul) t x y] (edge t [x y])
+                         ['cmov _ t a] (edge t [a])
+                         ['cmp t k] (edge t [k])
                          _ 0)) fs)
        (want x) (dem x = () && lovr? x ? (pin dem x 1, map want (dep x)))
-       (map (f \ (f @ ([op t] && nmext op) (want t) ['cmp t 0] (want t) _ 0)) fs, dem))
+       (map (f \ (f @ ([op t] && two? (nmext op)) (want t) ['cmp t 0] (want t) _ 0)) fs, dem))
    (nmwid g fs)
     (: dem (nmdem fs)
        (#(keys dem) = 0 ? fs (nmwid1 g fs dem)))
@@ -78,9 +117,10 @@
                               _ 0,
                            i + 1)) 0 fs)
        ; only what can change a bound or a state is walked: each as (its index . the forms from it)
-       (want? f) (f @ ['cmp t 0] (dem t != ())
+       cv (nmcmv g fs)
+       (want? f) (f @ ['cmp t _] (dem t != ())
                       ('cmp . _) 0
-                      _ (nmwctl <f || nmext <f || (raops g f @ [_ ds] (any dem ds) _ 0)))
+                      _ (nmwctl <f || two? (nmext <f) || (raops g f @ [_ ds] (any dem ds) _ 0)))
        ws (: (go l j) (l @ (f . u) (want? f ? ((j . l) . go u (j + 1)) (go u (j + 1))) _ ())
              (go fs 0))
        ; one walk under the heads' assumptions A -> [the forms that go, the states into each label, each head's]
@@ -90,39 +130,47 @@
            (go ws w last fall)
             (ws @ ((j . l) . v)
                    (: f <l u >l
-                      (b x) (cint? x ? (x < 0 ? () x) (w x))
+                      (b x) (cint? x ? [x x] (w x))
                       ; any form with no bound to make or use, as itself
                       (rest _)
-                       (: t0 (<f = 'set ? (f 2) (f 1))
+                       (: t0 (elem <f '(set cmov) ? (f 2) (f 1))
+                          (bb x y) (b x @ () () n (b y @ () () m [n m]))
                           nb (dem t0 = () ? ()
                                 (f @ ['li t k] (b k)
                                      ['mov t a] (b a)
-                                     ([op t _ _] && nmldw op) (nmldw op)
-                                     ([op t _ _ _ _] && nmldw op) (nmldw op)
-                                     ([op t] && nmext op) (op @ ('zx1 || 'zx2 || 'zx4) (nmext op))
-                                     ['set _ t] 1
-                                     ['and t x y] (b x @ () (b y) n (b y @ () n m (min n m)))
-                                     [('or || 'xor) t x y] (b x @ () () n (b y @ () () m (nmcov (max n m))))
-                                     ['add t x y] (b x @ () () n (b y @ () () m (n + m)))
-                                     ['imul t x y] (b x @ () () n (b y @ () () m (n * m)))
-                                     [('shr || 'sar) t k] (b t @ () () n (cint? k ? (n // 2 ** k)))
-                                     ['shl t k] (b t @ () () n (cint? k && k < 32 ? (n * 2 ** k)))
+                                     ([op t _ _] && two? (nmldw op)) (nmldw op)
+                                     ([op t _ _ _ _] && two? (nmldw op)) (nmldw op)
+                                     ([op t] && two? (nmext op)) (nmext op @ e (b t @ () e x (nmin? x e ? x e)))
+                                     ['set _ t] [0 1]
+                                     ['cmov cc t a] (b a @ () () m (: n (cv j @ [_ k] (nmcut g (b t) (nmneg cc) (b k)) _ (b t)) (two? n ? (nmor n m))))
+                                     ['and t x y] (nmand (b x) (b y))
+                                     [('or || 'xor) t x y] (bb x y @ () () [n m] (nmnn n && nmnn m ? [0 (nmcov (max (n 1) (m 1)))] (nmbits n m)))
+                                     ['add t x y] (bb x y @ () () [n m] [(<n + <m) (n 1 + m 1)])
+                                     ['sub t x y] (bb x y @ () () [n m] [(<n - m 1) (n 1 - <m)])
+                                     ['imul t x y] (bb x y @ () () [n m] (: p [(<n * <m) (<n * m 1) (n 1 * <m) (n 1 * m 1)] [(foldl min <p >p) (foldl max <p >p)]))
+                                     ['shr t k] (b t @ () () n (cint? k && nmnn n ? [(<n >> k) (n 1 >> k)]))
+                                     ['sar t k] (b t @ () () n (cint? k ? [(<n >> k) (n 1 >> k)]))
+                                     ['shl t k] (b t @ () () n (cint? k && k < 32 ? [(<n * 2 ** k) (n 1 * 2 ** k)]))
                                      _ ()))
                           _ (raops g f @ [_ ds]
                              (map (x \ w x != () ? (pin w x ())) ds,
-                              lovr? t0 && elem t0 ds && nb != () && nb < 4611686018427387904 ? (pin w t0 nb))
+                              lovr? t0 && elem t0 ds && nmok g nb ? (pin w t0 nb))
                              _ 0)
                           (go v w j 1))
-                      (!(nmwctl <f || nmext <f) ? (rest 0)
+                      (!(nmwctl <f || two? (nmext <f)) ? (rest 0)
                       (f @ ['label L]
                             (: cs ((fall || j != last + 1 ? [w] ()) + pend L)
                                w0 (bad L || !(two? cs) ? {} (foldl nmmeet <cs >cs))
                                ; a head only jumped back to first guesses the state laid before it
                                w1 (back L ? (A L @ () (two? cs ? w0 (nmcp w)) a (two? cs ? (nmmeet w0 a) (nmcp a))) w0)
                                (back L ? (pin hs L (nmcp w1)), go v w1 j 1))
-                           ([op t] && nmext op && b t != () && b t <= nmext op) (pin gone j 1, go v w j 1)
+                           ([op t] && two? (nmext op) && two? (b t) && nmin? (b t) (nmext op)) (pin gone j 1, go v w j 1)
                            ; a value already 0 or 1 made boolean again
-                           ['cmp t 0] (u @ ((['set 'ne t2] . u2) && t = t2 && lovr? t && b t != () && b t <= 1 && !(nmflg? u2)) (pin gone j 1, pin gone (j + 1) 1, go >v w (j + 1) 1)
+                           ['cmp t k] (u @ ((['set 'ne t2] . u2) && k = 0 && t = t2 && lovr? t && two? (b t) && nmin? (b t) [0 1] && !(nmflg? u2)) (pin gone j 1, pin gone (j + 1) 1, go >v w (j + 1) 1)
+                                           ; a branch on it bounds it either way
+                                           ((['br cc L] . _) && lovr? t)
+                                            (: (cut c w2) (nmcut g (b t) c (b k) @ z (nmok g z ? (pin w2 t z) w2))
+                                               (keep L (cut cc (nmcp w)), cut (nmneg cc) w, go >v w (j + 1) 1))
                                            _ (rest 0))
                            ['jmp L] (keep L w, go v w j 0)
                            ['br _ L] (keep L w, go v w j 1)
@@ -132,24 +180,25 @@
            (go ws {} -1 1, [gone pend hs]))
        ; a head holds when every way in stays under it; one that does not widens, and after six
        ; rounds every head knows nothing
-       (held? pend hs L) (hs L @ () 1 h (all (c \ all (k \ (h k @ () 1 x (c k @ () 0 v (v <= x)))) (keys h)) (pend L)))
+       (held? pend hs L) (hs L @ () 1 h (all (c \ all (k \ (h k @ () 1 x (c k @ () 0 v (nmin? v x)))) (keys h)) (pend L)))
        (fix A k)
         (rnd A @ [out pend hs]
            (filter (L \ !(held? pend hs L)) (keys back) @
               () out
               ls (k < 1 ? (rnd (foldl (t \ L \ pin t L {}) {} (keys back)) @ [o2 _ _] o2)
-                    (fix (foldl (t \ L \ pin t L (hs L @ h (nmwide h (foldl nmmeet h (pend L))))) (nmcp A) ls) (k - 1)))))
+                    (fix (foldl (t \ L \ pin t L (hs L @ h (nmwide g h (foldl nmmeet h (pend L))))) (nmcp A) ls) (k - 1)))))
        (fix {} 6 @ gone
           (: (kept l j) (l @ (f . u) (gone j ? (kept u (j + 1)) (f . kept u (j + 1))) _ ())
              (kept fs 0))))
    ; a head's bounds after a round: each that grew, to 32 bits or none
-   (nmwide h m) (foldl (t \ k \ (m k @ v (pin t k (h k @ () (nmstep v) x (v <= x ? v (nmstep v)))))) {} (keys m))
-   (nmstep v) (v <= 4294967295 ? 4294967295)
+   (nmwide g h m) (foldl (t \ k \ (m k @ v (pin t k (h k @ () (nmstep g v) x (nmin? v x ? v (nmstep g v)))))) {} (keys m))
+   (nmstep g v) (? (nmin? v [0 4294967295] && nmok g [0 4294967295]) [0 4294967295]
+                   (nmin? v [-2147483648 2147483647]) [-2147483648 2147483647] ())
    ; the next form reads the flags a compare left
    (nmflg? u) (u @ ((('br || 'set || 'cmov) . _) . _) 1 _ 0)
    (nmcp w) (foldl (t \ k \ (w k @ () t v (pin t k v))) {} (keys w))
-   ; two blocks' bounds where they join: the looser of each both know
-   (nmmeet a b) (foldl (t \ k \ (a k @ () t x (b k @ () t y (pin t k (max x y))))) {} (keys a))
+   ; two blocks' bounds where they join: the span of each both know
+   (nmmeet a b) (foldl (t \ k \ (a k @ () t x (b k @ () t y (pin t k (nmor x y))))) {} (keys a))
 
    ; per vreg its defs and its reads -> [defs reads]
    (nmcnt g fs)
@@ -227,19 +276,22 @@
           (f . u) (f . nmlit u)
           _ ())
 
-   ; within a block, a one-def vreg's def while what it read still holds: copies read through, an
-   ; add or lea of a literal moves into the offset, an add of a scaled index into an indexed form
-   ; av: each def that holds, rv: per register the defs that read it, so a write drops them
-   (nmloc g fs dn)
-    (: (one? x) (lovr? x && peep dn x 0 = 1)
+   ; within a block, a vreg's one def but its declaration's while what it read still holds: copies
+   ; read through, an add or lea of a literal moves into the offset, an add of a scaled index into an
+   ; indexed form. av: each def that holds, rv: per register the defs that read it, so a write drops
+   ; them; a def that reads its own target is never held
+   (nmloc g fs)
+    (: dr (foldl (t \ f \ (f @ (('cdef . _) && !(abl? g 'nmdecl)) t
+                                _ (raops g f @ [_ d] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t d) _ t))) {} fs)
+       (one? x) (lovr? x && peep dr x 0 = 1)
        (go fs av rv)
         (fs @ (f . u)
                (f @ ('label . _) (f . go u {} {})
                     _ (nmfold g f av @ f2
                        (raops g f2 @ [rs ds]
                           (: _ (map (d \ (map (t \ pin av t ()) (rv d), pin av d (), pin rv d ())) ds)
-                             e (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t) rs
-                                     (['mov t y] && one? t && lovr? y) [y]
+                             e (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t && nelem t rs) rs
+                                     (['mov t y] && one? t && lovr? y && y != t) [y]
                                      (['li t k] && one? t) ()
                                      _ 'no)
                              _ (e = 'no ? 0 (pin av <>f2 f2, map (x \ pin rv x (<>f2 . rv x)) e))
@@ -296,7 +348,7 @@
        (nmdn g fs @ dn
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
-             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
+             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
    ; a multiply by a power of two the fold left is a shift, off x86 through a register;
    ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
@@ -340,7 +392,37 @@
           (catmap (i \ map cup (rev (peep ins i ())) + (out i @ () [(ft i)] 1 () m [m])) ^n)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r)))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r))))
+   ; in a block, past (mov t v) a read of v reads t while neither is written, where that lets v die
+   ; at the copy: ra's copy hint then gives the two one register. a form that also writes v or t
+   ; (a cmov onto itself has no encoding), or an asm, ends it. a round leaves the names it moved to the next, over fresh liveness
+   (nmfwd g fs) (abl? g 'fwd ? fs (nmfwd1 g fs 4))
+   (nmfwd1 g fs k)
+    (k = 0 ? fs
+       (ralive g fs @ [ft ud _ lout]
+          (: n #fs
+             (out? x i) (elem x (lout i))
+             (end? f) (f @ (('label || 'jmp || 'br || 'jmpt || 'ret || 'fix || 'cdef || 'cuse) . _) 1 _ 0)
+             ; the reads past the copy to rewrite, the last one leaving v dead -> indices | ()
+             (scan v t i acc)
+              (n <= i ? ()
+                 (ft i @ ('label . _) ()
+                    f (ud i @ [u d]
+                         (: rd (elem v u) wv (elem v d) wt (elem t d)
+                            (? (rd && (wv || wt || end? f)) ()
+                               rd (: a2 (i . acc) (out? v i ? (scan v t (i + 1) a2) a2))
+                               wv acc
+                               (wt || end? f) (out? v i ? () acc)
+                               (scan v t (i + 1) acc))))))
+             (cp i) (ft i @ ([('mov || 'movapd) t v] && lovr? t && lovr? v && t != v && lofr? t = lofr? v) [t v] _ ())
+             dirty {} rw {}
+             _ (map (i \ (cp i @ [t v]
+                            (!(dirty t) && !(dirty v) && out? v i ?
+                               (scan v t (i + 1) () @ l
+                                  (two? l && all (j \ !(two? (rw j))) l ? (map (j \ pin rw j [v t]) l, pin dirty t 1, pin dirty v 1))))
+                            _ 0)) ^n)
+             (!(two? (keys rw)) ? fs
+                (nmfwd1 g (map (i \ (rw i @ [v t] (map (x \ x = v ? t x) (ft i)) _ (ft i))) ^n) (k - 1))))))
    ; a decided branch's dead arm may hold a value's other def: round again without it
    (nmfix g fs)
     (nmround g (nmround g fs) @ r
