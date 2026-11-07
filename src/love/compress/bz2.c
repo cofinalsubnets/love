@@ -1,5 +1,6 @@
-// bz2.c -- bzip2, both directions, whole streams: blocks lie on bit boundaries, so bz2.l holds none
+// bz2.c -- bzip2, both directions: blocks lie on bit boundaries, so bz2.l holds none
 //   (bz2e s level)   bytes -> a .bz2 stream, level 1..9 the block in 100k | ()
+//   (bz2e-new level) a coder of one stream; (bz2e-feed st b) its bytes so far, (bz2e-end st) the rest
 //   (bz2d s)         every .bz2 stream in s -> their bytes | 1 format, 2 corrupt, 3 end, 4 check,
 //                    5 past BZ_OUTMAX
 //   (bz2-new 0)      a state for reading a block at a time
@@ -197,32 +198,50 @@ static void bz_efree(struct bz_e *e) {
  for (unsigned i = 0; i < sizeof p / sizeof *p; i++) if (p[i]) alloc(p[i], 0);
  alloc(e, 0); }
 
-// s[0..n) -> a whole .bz2 stream in *w; 0 ok, -1 out of memory
-static int bz_enc(const uint8_t *s, uintptr_t n, unsigned level, struct bz_w *w) {
- uintptr_t lim = level * 100000u - 19, bn = lim + 8;
+// the coder's scratch for a level, its block blk when given (the caller's, never freed) | NULL
+static struct bz_e *bz_eopen(unsigned level, uint8_t *blk) {
+ uintptr_t bn = level * 100000u - 19 + 8;
  struct bz_e *e = alloc(NULL, sizeof *e);
- if (!e) return -1;
+ if (!e) return NULL;
  memset(e, 0, sizeof *e);
- e->blk = alloc(NULL, bn);
+ e->blk = blk ? blk : alloc(NULL, bn);
  e->sa = alloc(NULL, bn * 4), e->rk = alloc(NULL, bn * 4);
  e->tmp = alloc(NULL, bn * 4), e->cnt = alloc(NULL, (bn > 256 ? bn : 256) * 4);
  e->mtf = alloc(NULL, (bn + 2) * 2);
- if (!e->blk || !e->sa || !e->rk || !e->tmp || !e->cnt || !e->mtf) return bz_efree(e), -1;
- bz_crcs(e->crct);
+ if (e->blk && e->sa && e->rk && e->tmp && e->cnt && e->mtf) return bz_crcs(e->crct), e;
+ if (blk) e->blk = NULL;
+ return bz_efree(e), NULL; }
+
+// runs of four and more from s[*pi] into blk[*pk..], four and a count, while the block has room and,
+// short of end, the longest run is all in s[0..n) -> 1 the block is full
+static int bz_runs(const uint32_t *crct, uint8_t *blk, uintptr_t lim, const uint8_t *s, uintptr_t n, int end,
+                   uintptr_t *pi, uintptr_t *pk, uint32_t *pcrc) {
+ uintptr_t i = *pi, k = *pk;
+ uint32_t crc = *pcrc;
+ int full = 0;
+ while (i < n && (end || n - i >= 255)) {
+  uintptr_t r = 1;
+  while (i + r < n && r < 255 && s[i + r] == s[i]) r++;
+  uintptr_t sz = r < 4 ? r : 5;
+  if (k + sz > lim) { full = 1; break; }
+  for (uintptr_t j = 0; j < r; j++) crc = crc << 8 ^ crct[(crc >> 24 ^ s[i]) & 255];
+  for (uintptr_t j = 0; j < (r < 4 ? r : 4); j++) blk[k++] = s[i];
+  if (r >= 4) blk[k++] = (uint8_t) (r - 4);
+  i += r; }
+ *pi = i, *pk = k, *pcrc = crc;
+ return full; }
+
+// s[0..n) -> a whole .bz2 stream in *w; 0 ok, -1 out of memory
+static int bz_enc(const uint8_t *s, uintptr_t n, unsigned level, struct bz_w *w) {
+ uintptr_t lim = level * 100000u - 19;
+ struct bz_e *e = bz_eopen(level, NULL);
+ if (!e) return -1;
  bw_put(w, 0x425a68, 24), bw_put(w, 48 + level, 8);
  uint32_t all = 0;
  for (uintptr_t i = 0; i < n; ) {
   uintptr_t k = 0;
   uint32_t crc = 0xffffffffu;
-  while (i < n) {                                // runs of four and more: four and a count
-   uintptr_t r = 1;
-   while (i + r < n && r < 255 && s[i + r] == s[i]) r++;
-   uintptr_t sz = r < 4 ? r : 5;
-   if (k + sz > lim) break;
-   for (uintptr_t j = 0; j < r; j++) crc = crc << 8 ^ e->crct[(crc >> 24 ^ s[i]) & 255];
-   for (uintptr_t j = 0; j < (r < 4 ? r : 4); j++) e->blk[k++] = s[i];
-   if (r >= 4) e->blk[k++] = (uint8_t) (r - 4);
-   i += r; }
+  bz_runs(e->crct, e->blk, lim, s, n, 1, &i, &k, &crc);
   crc = ~crc;
   all = (all << 1 | all >> 31) ^ crc;
   bz_block(e, w, k, crc); }
@@ -230,6 +249,47 @@ static int bz_enc(const uint8_t *s, uintptr_t n, unsigned level, struct bz_w *w)
  bw_flush(w);
  bz_efree(e);
  return w->bad ? -1 : 0; }
+
+// the coder as a stream: bz_enc's blocks, a run that might go on carried to the next feed. the
+// state holds the block and the bits not yet a byte; the sort's scratch lives for one block
+#define BZ_EMAGIC 0x627a3265u
+struct bz_es { uint32_t magic, level, said, crc, all, crct[256]; uintptr_t size, k, nc; uint64_t acc; unsigned bits;
+               uint8_t carry[256]; };
+#define BZ_EHEAD ((sizeof(struct bz_es) + 7) & ~(uintptr_t) 7)
+static uintptr_t bz_es_size(unsigned level) { return BZ_EHEAD + level * 100000u - 19 + 8; }
+static void bz_es_init(struct bz_es *S, unsigned level) {
+ memset(S, 0, sizeof *S);
+ S->magic = BZ_EMAGIC, S->level = level, S->crc = 0xffffffffu, S->size = bz_es_size(level);
+ bz_crcs(S->crct); }
+static int bz_es_close(struct bz_es *S, struct bz_w *w) {
+ struct bz_e *e = bz_eopen(S->level, (uint8_t*) S + BZ_EHEAD);
+ if (!e) return -1;
+ uint32_t crc = ~S->crc;
+ S->all = (S->all << 1 | S->all >> 31) ^ crc;
+ bz_block(e, w, S->k, crc);
+ e->blk = NULL, bz_efree(e);
+ S->k = 0, S->crc = 0xffffffffu;
+ return 0; }
+// n bytes of in, and with end the last block and the stream's crc -> 0, the bytes in *w | -1
+static int bz_es_feed(struct bz_es *S, const uint8_t *in, uintptr_t n, int end, struct bz_w *w) {
+ uintptr_t m = S->nc + n, i = 0, lim = S->level * 100000u - 19;
+ uint8_t *s = alloc(NULL, m ? m : 1), *blk = (uint8_t*) S + BZ_EHEAD;
+ if (!s) return -1;
+ memcpy(s, S->carry, S->nc), memcpy(s + S->nc, in, n);
+ w->acc = S->acc, w->k = S->bits;
+ if (!S->said) bw_put(w, 0x425a68, 24), bw_put(w, 48 + S->level, 8), S->said = 1;
+ int rc = 0;
+ while (!rc && bz_runs(S->crct, blk, lim, s, m, end, &i, &S->k, &S->crc)) rc = bz_es_close(S, w);
+ if (!rc && end) {
+  if (S->k) rc = bz_es_close(S, w);
+  bw_put(w, 0x177245, 24), bw_put(w, 0x385090, 24), bw_put(w, S->all, 32);
+  bw_flush(w), S->magic = 0; }
+ rc = rc || w->bad;
+ if (!rc) S->nc = m - i, memcpy(S->carry, s + i, S->nc);
+ S->acc = w->acc, S->bits = w->k;
+ alloc(s, 0);
+ if (rc) S->magic = 0;
+ return rc ? -1 : 0; }
 
 static uintptr_t br_used(struct bz_r *r) { return r->i * 8 - r->k; }  // bits consumed
 
@@ -364,12 +424,48 @@ love_noinline static struct g *host_bz2_step(struct g *g) {
  struct chain *c = ini_chain(bump(g, Width(struct chain)), (intptr_t) o, putcharm((intptr_t) k));
  return g->sp[2] = word(c), g->sp += 2, g; }
 
+// (bz2e-new level) -> a coder | (). (bz2e-feed st b) -> the stream's bytes b lets out, maybe ""
+// | () torn; (bz2e-end st) -> the rest, the state spent
+static struct str *bz_ecask(word x) {
+ struct str *s = state_str(x);
+ struct bz_es *S = s && s->len >= sizeof(struct bz_es) ? (struct bz_es*) s->bytes : NULL;
+ return S && S->magic == BZ_EMAGIC && S->size == s->len ? s : NULL; }
+love_noinline static struct g *host_bz2e_new(struct g *g) {
+ word lw = g->sp[0];
+ if (!oddp(lw) || getcharm(lw) < 1 || getcharm(lw) > 9) return g->sp[0] = ZeroPoint, g;
+ unsigned level = (unsigned) getcharm(lw);
+ union u *k = new_state(&g, bz_es_size(level), 0);
+ if (!k) return g;
+ bz_es_init((struct bz_es*) ((struct state*) k)->str->bytes, level);
+ return g->sp[0] = word(k), g; }
+static struct g *bz_lay(struct g *g, int end) {
+ uintptr_t ar = !end;                             // args past the state
+ struct str *cs = bz_ecask(g->sp[0]);
+ if (!cs || (!end && !strp(g->sp[1]))) return g->sp[ar] = ZeroPoint, g->sp += ar, g;
+ struct bz_w w = {0};
+ int rc = bz_es_feed((struct bz_es*) cs->bytes, end ? (const uint8_t*) "" : (const uint8_t*) txt(g->sp[1]),
+                     end ? 0 : len(g->sp[1]), end, &w);
+ if (!rc && ok(g = str0(g, w.on))) {             // pushes: out over the args
+  if (w.on) memcpy(txt(g->sp[0]), w.p, w.on);
+  g->sp[ar + 1] = g->sp[0], g->sp += ar + 1; }
+ else if (ok(g)) g->sp[ar] = ZeroPoint, g->sp += ar;
+ if (w.p) alloc(w.p, 0);
+ return g; }
+love_noinline static struct g *host_bz2e_feed(struct g *g) { return bz_lay(g, 0); }
+love_noinline static struct g *host_bz2e_end(struct g *g) { return bz_lay(g, 1); }
+
 static LvmWrap(lvm_bz2e, host_bz2e)
+static LvmWrap(lvm_bz2e_new, host_bz2e_new)
+static LvmWrap(lvm_bz2e_feed, host_bz2e_feed)
+static LvmWrap(lvm_bz2e_end, host_bz2e_end)
 static LvmWrap(lvm_bz2d, host_bz2d)
 static LvmWrap(lvm_bz2_new, host_bz2_new)
 static LvmWrap(lvm_bz2_step, host_bz2_step)
 
 LvDef("bz2e", bz2e, 2, "bz2");
+LvDef("bz2e-new", bz2e_new, 1, "bz2");
+LvDef("bz2e-feed", bz2e_feed, 2, "bz2");
+LvDef("bz2e-end", bz2e_end, 1, "bz2");
 LvDef("bz2d", bz2d, 1, "bz2");
 LvDef("bz2-new", bz2_new, 1, "bz2");
 LvDef("bz2-step", bz2_step, 3, "bz2");

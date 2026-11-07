@@ -1,6 +1,7 @@
 ; src/apps/bz2.l -- bzip2 over src/love/compress/bz2.c, which holds the whole stream (blocks
 ; lie on bit boundaries). `(borrow 'bz2)`, then:
 ;   (bz2-pack s level)  -> the .bz2 bytes of s, level 1..9 the block in 100k
+;   (bz2-zip rd level w) -> [in out] | (): rd's pieces as one stream, laid through w as coded
 ;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check 'big):
 ;                          every stream in s, each block's crc and each stream's held
 ;   (bz2-pull rd)       -> g, a reader over the streams as they come: (bz2-next g) the next
@@ -9,6 +10,13 @@
 ;                          (1 w), or () for 'no
 (module 'bz2
 (: (bz2-pack s level) (bz2e s level)
+   (bz2-zip rd level w)
+    (bz2e-new level @ st
+       (st = () ? ()
+          (: (go i o) (rd 0 @ p
+                       (#p = 0 ? (bz2e-end st @ z (string? z ? (w z, [i (o + #z)]) ()))
+                          (bz2e-feed st p @ z (string? z ? (w z, go (i + #p) (o + #z)) ()))))
+             (go 0 0))))
    (bz2-word c) (c @ 1 'format 3 'end 4 'check 5 'big 'corrupt)
    (bz2-unpack s) (bz2d s @ u (string? u ? [1 u] (bz2-word u)))
 
@@ -77,14 +85,25 @@ no file, or a bare -, is the filter: stdin -> stdout"
                         "\(p): data integrity (CRC) error in data")
    (bzc-tell t p m)                    ; -v's line: the name, padded as bzip2 pads it
     (say err ("  \(p): " + bzc-lpad (peep t 'w 7 - #p) " " "" + "\(m)\n"), flush err)
-   (bzc-ratio s z)
-    (#s = 0 ? "no data compressed."
-       (bzc-fix (#s / #z) 1000 6 + ":1, " + bzc-fix (8 * #z / #s) 1000 6 + " bits/byte, "
-        + bzc-fix (100 * (1 - #z / #s)) 100 5 + "% saved, \(#s) in, \(#z) out."))
-   (bzc-put t p dst bytes st)          ; the output laid, the input's mode and time carried
-    (? (two? (lstat dst) && !(peep t 'f 0)) (bzc-moan t "Output file \(dst) already exists.", 1)
-       !(uwrite dst bytes) (bzc-moan t "Can't create output file \(dst).", 1)
-       (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)), peep t 'k 0 ? 0 (unlink p), 0))
+   (bzc-ratio n z)                     ; n bytes in, z out
+    (n = 0 ? "no data compressed."
+       (bzc-fix (n / z) 1000 6 + ":1, " + bzc-fix (8 * z / n) 1000 6 + " bits/byte, "
+        + bzc-fix (100 * (1 - z / n)) 100 5 + "% saved, \(n) in, \(z) out."))
+   ; a file compressed as it is read: the input's mode and time carried, the output removed
+   ; if the input fails partway
+   (bzc-zip t p st)
+    (: c (peep t 'c 0)   dst "\(p).bz2"
+       (? (!c && two? (lstat dst) && !(peep t 'f 0)) (bzc-moan t "Output file \(dst) already exists.", 1)
+          (open p "r" @ q
+             (!(hot? q) ? (bzc-moan t "Can't open input file \(p): No such file or directory.", 1)
+                (: o (c ? out (open dst "w"))
+                   (? !(hot? o) (close q, bzc-moan t "Can't create output file \(dst).", 1)
+                      (: z (bz2-zip (bzc-rd q) (peep t 'lvl 9) (say o))
+                         _ (close q)
+                         _ (c || close o)
+                         (? (atom? z) (c || unlink dst, bzc-moan t "I/O or other error, bailing out.", 1)
+                            (peep t 'v 0 && bzc-tell t p (bzc-ratio (z 0) (z 1)),
+                             (c ? 0 (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)), peep t 'k 0 ? 0 (unlink p), 0)))))))))))
    (bzc-rd q) (_ \ (see q @ c (c < 0 ? "" (unsee q c, chug q))))
    ; a file decompressed as it comes off the disk: the output opened before the first byte,
    ; mode and time laid after the last, removed if the stream fails partway
@@ -118,21 +137,16 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (stat p @ st
        (? (two? st && st 2 & 61440 = 16384) (bzc-moan t "Input file \(p) is a directory.", 1)
           (peep t 'd 0) (bzc-unone t p st)
-          (uread p @ r
-             (!r ? (bzc-moan t "Can't open input file \(p): No such file or directory.", 1)
-                (bzc-suf p @ x
-                   (x && !(peep t 'c 0) ?
-                      (bzc-moan t "Input file \(p) already has \(<x) suffix.", 1)
-                      (bz2-pack <>r (peep t 'lvl 9) @ z
-                         (peep t 'v 0 && bzc-tell t p (bzc-ratio <>r z),
-                          (peep t 'c 0 ? (say out z, 0) (bzc-put t p "\(p).bz2" z st))))))))))
+          (bzc-suf p @ x
+             (x && !(peep t 'c 0) ? (bzc-moan t "Input file \(p) already has \(<x) suffix.", 1)
+                (bzc-zip t p st)))))
    (bzc-filter t)
     (? (peep t 'd 0)
        (bz2-unf (bzc-rd in) (_ \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
           (atom? u ? (bzc-say t (bzc-why t "(stdin)" u), 2) 0))
        (two? (tty out) && !(peep t 'f 0))
         (bzc-say t "I won't write compressed data to a terminal.", 1)
-       (say out (bz2-pack (slurp in + "") (peep t 'lvl 9)), 0))
+       (bz2-zip (bzc-rd in) (peep t 'lvl 9) (say out), 0))
 
    ; the cli walker in gnu order: the last of -d -z -t, and of the levels, wins
    bzc-longs {"stdout" 99 "decompress" 100 "compress" 122 "keep" 107 "force" 102 "test" 116
