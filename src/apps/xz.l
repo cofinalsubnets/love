@@ -1,6 +1,7 @@
 ; src/apps/xz.l -- the .xz container (and .lzma, read) over src/love/compress/xz.c's LZMA2;
 ; the spec is tukaani's .xz file format 1.2.
 ;   (xz-pack s dict check)  -> .xz bytes of s, one block; check 'none 'crc32 'crc64 'sha256
+;   (xz-zip rd dict check w) -> [in out] | (): rd's pieces as one stream, laid through w as coded
 ;   (xz-unpack s)           -> (1 bytes) | 'format 'corrupt 'end 'filter 'check 'big; every
 ;                              stream in s, padding skipped, checks and indexes held
 ;   (xz-pull rd)            -> g: (xz-next g) the next piece, "" once done, then g's 'ans
@@ -44,6 +45,34 @@
        ix (ix1 + wrle (crc32 ix1) 4)
        ft0 (wrle (#ix // 4 - 1) 4 + flags)
        (head + block + ix + wrle (crc32 ft0) 4 + ft0 + "YZ"))
+
+   ; rd's pieces as one stream, laid through w as coded: one block, no sizes in its header,
+   ; none at all for no bytes -> [in out] | ()
+   (xz-zip rd dict check w)
+    (: cid (peep xz-checks check 4)
+       flags (xz-bytes [0 cid])
+       head (xz-magic + flags + wrle (crc32 flags) 4)
+       p (xz-dprop dict)
+       bh0 (string 0 + xz-bytes [33 1 p])
+       bh1 (string ((#bh0 + 1 + padk (#bh0 + 1) 4 + 4) // 4 - 1) + bh0)
+       bh2 (bh1 + zbytes (padk #bh1 4))
+       bh (bh2 + wrle (crc32 bh2) 4)
+       (fin c i b z)                    ; the block's tail, the index and the footer
+        (: body (b + #z)   ck (xz-ckend cid c)
+           ix0 (string 0 + (i = 0 ? (xz-vli 0) (xz-vli 1 + xz-vli (#bh + body + #ck) + xz-vli i)))
+           ix1 (ix0 + zbytes (padk #ix0 4))
+           ix (ix1 + wrle (crc32 ix1) 4)
+           ft0 (wrle (#ix // 4 - 1) 4 + flags)
+           tl (i = 0 ? "" (z + zbytes (padk body 4) + ck))
+           (w (tl + ix + wrle (crc32 ft0) 4 + ft0 + "YZ"),
+            [i (#head + (i = 0 ? 0 (#bh + body + padk body 4 + #ck)) + #ix + 6 + #ft0)]))
+       (lzma2e-new (xz-dsize p) @ st
+          (st = () ? ()
+             (: (go c i b) (rd 0 @ u
+                            (#u = 0 ? (lzma2e-end st @ z (string? z ? (fin c i b z) ()))
+                               (lzma2e-feed st u @ z
+                                  (string? z ? (i = 0 && w bh, w z, go (xz-ckon cid c u) (i + #u) (b + #z)) ()))))
+                (w head, go (xz-ck0 cid) 0 0)))))
 
    ;; --- reading ---
    (xz-bhead hd)                       ; a block header, its crc held -> (csize usize props) | a word
@@ -282,10 +311,6 @@ no file, or a bare -, is the filter: stdin -> stdout"
             (s + ".lzma") [1 s]
             ((s + ".txz") || (s + ".tlz")) [1 (s + ".tar")]
             ()))
-   (xzc-put t p dst bytes st)           ; the output laid, the input's mode and time carried
-    (? (two? (lstat dst) && !(peep t 'f 0)) (xzc-moan t (dst + ": File exists"), 1)
-       !(uwrite dst bytes) (xzc-moan t (dst + ": Cannot write"), 1)
-       (xzc-done t p dst st))
    (xzc-done t p dst st)
     (two? st && (chmod dst (st 2 & 4095), utime dst (st 1)),
      (peep t 'k 0 ? 0 (unlink p)),
@@ -319,20 +344,31 @@ no file, or a bare -, is the filter: stdin -> stdout"
     (stat p @ st
        (? (two? st && st 2 & 61440 = 16384) (xzc-moan t (p + ": Is a directory, skipping"), 2)
           (peep t 'd 0) (xzc-unone t p st)
-          (uread p @ r
-             (!r ? (xzc-moan t (p + ": No such file or directory"), 1)
-                (: suf (peep t 'suf ".xz")
-                   (!(peep t 'c 0) && (ends? p suf || ends? p ".xz" || ends? p ".txz")
-                    ? (xzc-moan t (p + ": File already has '" + suf + "' suffix, skipping"), 2)
-                      (xz-pack <>r (xzc-dict t #<>r) (peep t 'ck 'crc64) @ z
-                         (peep t 'c 0 ? (say out z, 0) (xzc-put t p (p + suf) z st)))))))))
+          (: suf (peep t 'suf ".xz")
+             (!(peep t 'c 0) && (ends? p suf || ends? p ".xz" || ends? p ".txz")
+              ? (xzc-moan t (p + ": File already has '" + suf + "' suffix, skipping"), 2)
+                (xzc-zip t p (p + suf) st)))))
+   ; compress as read, the dictionary cut to the file's size; the output removed if the input fails
+   (xzc-zip t p dst st)
+    (: c (peep t 'c 0)
+       (? (!c && two? (lstat dst) && !(peep t 'f 0)) (xzc-moan t (dst + ": File exists"), 1)
+          (open p "r" @ q
+             (!(hot? q) ? (xzc-moan t (p + ": No such file or directory"), 1)
+                (: o (c ? out (open dst "w"))
+                   (? !(hot? o) (close q, xzc-moan t (dst + ": Cannot write"), 1)
+                      (: z (xz-zip (xzc-rd q) (xzc-dict t (two? st ? <st 0)) (peep t 'ck 'crc64) (say o))
+                         _ (close q)
+                         _ (c || close o)
+                         (? (atom? z) (c || unlink dst, xzc-moan t (p + ": Read error"), 1)
+                            c 0
+                            (xzc-done t p dst st)))))))))
    (xzc-filter t)
     (? (peep t 'd 0)
        (xz-unf (xzc-rd in) (_ \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
           (atom? u ? (xzc-moan t ("(stdin): " + xzc-why u), 1) 0))
        (two? (tty out) && !(peep t 'f 0))
         (say err "xz: Compressed data cannot be written to a terminal\n", 1)
-       (slurp in + "" @ s2 (say out (xz-pack s2 (xzc-dict t #s2) (peep t 'ck 'crc64)), 0)))
+       (xz-zip (xzc-rd in) (xzc-dict t 4294967296) (peep t 'ck 'crc64) (say out), 0))
 
    ; the cli walker in gnu order: the last of -d -z -t and the last level stand;
    ; -C -S -T -F take a word, glued or next
