@@ -263,7 +263,14 @@
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
                 _ (nmxsop g op @ () f xo (idx b o @ ([b2 i s o2] && (o2 = 0 || !(t32? g))) (nmxfar g xo o2 ? f [xo b2 i s o2 v]) _ f)))
-            ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
+            ([op d b o] && elem op leaops)
+             (base b o @ [b2 o2] [op d b2 o2]
+                _ (<f = 'lea && o = 0 && lovr? b ? ['mov d b] f))                 ; no offset is a copy
+            ; an indexed form's base and displacement fold the same way
+            ([op d b i s o] && elem op (xops + fxops))
+             (base b o @ ([b2 o2] && !(nmxfar g op o2)) [op d b2 i s o2] _ f)
+            ([op b i s o v] && elem op (stxops + fstxops))
+             (base b o @ ([b2 o2] && !(nmxfar g op o2) && (o2 = 0 || !(t32? g))) [op b2 i s o2 v] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ; an add of a literal onto a literal's sum is one add
             (['add d a k] && cint? k && lovr? a) (base a k @ ([b2 o2] && lovr? b2) ['add d b2 o2] _ f)
