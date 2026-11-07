@@ -1,4 +1,4 @@
-; src/tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one deflated
+; src/tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one zstd frame of
 ; archive per hosted ISA, so a bare `love cc` links without compiling its members first.
 ;
 ;   love wake out/mooncc0.image src/tools/mkrt.l -m GRP.a ISA SRC..   one group's members
@@ -7,14 +7,14 @@
 ; a group is a few members of one ISA (out/rt/<isa>/<grp>.a); the join reads every group,
 ; the ISA off its directory. per name in {id, x64, a64, rv64, i386}, 8-aligned:
 ;
-;   rtgz_<nm>_len   an 8-byte little-endian length
-;   rtgz_<nm>       the bytes behind it (a deflated .a; `id` is moon.l's rtcid, plain text)
+;   rtzst_<nm>_len   an 8-byte little-endian length
+;   rtzst_<nm>       the bytes behind it (a .a as one zstd frame; `id` is moon.l's rtcid, plain text)
 ;
 ; a link with no runtime names src/love/noblob.c instead. arbytes and rtcid are pure of
 ; the machine, so the seed's fixpoint carries this object unchanged. arch names the
 ; object format; a cross backend joins from its tree text.
 
-(borrow '(posix gz))
+(borrow '(posix zstd))
 (: (rt-die m) (say err ("mkrt: " + m + "\n"), quit 1)
    (rt-rdev cl)
     (sound cl @ 'torn (rt-die "torn backend text")
@@ -64,9 +64,9 @@
    (rt-forms nm s)
     (: n #s
        pad (8 - (n & 7) & 7)
-       [['label (name ("rtgz_" + nm + "_len"))]
+       [['label (name ("rtzst_" + nm + "_len"))]
         ['raw (rt-le8 n 0 ())]
-        ['label (name ("rtgz_" + nm))]
+        ['label (name ("rtzst_" + nm))]
         ['raw [s (rt-zerostr pad "")]]])
    (rt-zerostr k acc) (k < 1 ? acc (rt-zerostr (k - 1) (string 0 + acc)))
 
@@ -75,20 +75,20 @@
        objelf (cite 'holo 'objelf)
        cid ((cite 'moon 'rtcid) rt-home)
        _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
-       ; deflated: rtcarried pays one inflate for the ISA it wants
-       (one tgt) (: z (deflate (rt-isa tgt grps))
-                    _ (!(string? z) ? (rt-die (show tgt + ": deflate refused the archive")))
+       ; one frame each: rtcarried pays one decode for the ISA it wants
+       (one tgt) (: z (zstde (rt-isa tgt grps) 19)
+                    _ (!(string? z) ? (rt-die (show tgt + ": zstd refused the archive")))
                     z)
        forms (rt-forms "id" cid
               + rt-forms "x64" (one 'x64)
               + rt-forms "a64" (one 'a64)
               + rt-forms "rv64" (one 'rv64)
               + rt-forms "i386" (one 'i386))
-       xs '("rtgz_id" "rtgz_id_len"
-            "rtgz_x64" "rtgz_x64_len"
-            "rtgz_a64" "rtgz_a64_len"
-            "rtgz_rv64" "rtgz_rv64_len"
-            "rtgz_i386" "rtgz_i386_len")
+       xs '("rtzst_id" "rtzst_id_len"
+            "rtzst_x64" "rtzst_x64_len"
+            "rtzst_a64" "rtzst_a64_len"
+            "rtzst_rv64" "rtzst_rv64_len"
+            "rtzst_i386" "rtzst_i386_len")
        ob (objelf arch () () () xs () () () () () forms)
        (cite 'holo 'write-bytes dst ob))        ; a byte list, not a string
 

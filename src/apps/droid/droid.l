@@ -2,9 +2,9 @@
 ;
 ;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-s] [-P PERM].. MAIN.l [FILE..]
 ;
-; the app is a NativeActivity, no dex but `-s`'s one class: bridge.c, built by our `mooncc -t a64 -shared`, owns
+; the app is a NativeActivity, no dex but `-s`'s one class: bridge.c, built by our `mooncc -shared` per abi, owns
 ; the window, input and logcat and starts LOVE (an a64 love, already baked: its library
-; directory is read-only) from lib/arm64-v8a/liblove.so. MAIN.l and the FILEs ride as assets
+; directory is read-only) from lib/ABI/liblove.so. MAIN.l and the FILEs ride as assets
 ; in the app's data directory, love's cwd and HOME. the apk is signed (scheme v2) by a p-256
 ; key in ~/.love/etc/apk.pem, made on first use: android takes an update only under the same
 ; certificate, so keep that file.
@@ -81,7 +81,8 @@
    ax-rid {"label" 0x01010001 "icon" 0x01010002 "name" 0x01010003 "drawable" 0x01010199 "hasCode" 0x0101000c "debuggable" 0x0101000f
            "exported" 0x01010010 "launchMode" 0x0101001d "configChanges" 0x0101001f "value" 0x01010024
            "minSdkVersion" 0x0101020c "versionCode" 0x0101021b "versionName" 0x0101021c
-           "windowSoftInputMode" 0x0101022b "targetSdkVersion" 0x01010270 "extractNativeLibs" 0x010104ea}
+           "windowSoftInputMode" 0x0101022b "targetSdkVersion" 0x01010270 "extractNativeLibs" 0x010104ea
+           "foregroundServiceType" 0x01010599}
    (ap-cat f l) (cats (map f l))
    (ax-chunk ty hs body) (wrle ty 2 + wrle hs 2 + wrle (8 + #body) 4 + body)
    (ax-u16 s) (ap-cat (c \ wrle c 2) (chars s))
@@ -120,16 +121,22 @@
    dx-name "pics.salt.love.Service"                    ; bridge.c starts it by this name
    ; the resource ids of the icon's table, ic-arsc
    ic-bg 0x7f010000 ic-fg 0x7f010001 ic-icon 0x7f010002
-   ; ps the permissions asked, each android's full name; the network is every app's
-   (ap-manifest pkg label ps stay)
-    ["manifest" [[1 "versionCode" 'int 1] [1 "versionName" 'str "1"] [0 "package" 'str pkg]]
-      ([["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int 31]] ()]]
+   ; ps the permissions asked, each android's full name; the network is every app's.
+   ; o: 'code 'name the version, 'target the sdk, 'debug. target 34 wants a stay service's type named
+   (ap-manifest pkg label ps stay o)
+    ["manifest" [[1 "versionCode" 'int (o 'code)] [1 "versionName" 'str (o 'name)] [0 "package" 'str pkg]]
+      ([["uses-sdk" [[1 "minSdkVersion" 'int 26] [1 "targetSdkVersion" 'int (o 'target)]] ()]]
        + map (p \ ["uses-permission" [[1 "name" 'str p]] ()])
              (elem ap-net ps ? ps ([ap-net] + ps))
-       + (stay ? [["uses-permission" [[1 "name" 'str "android.permission.FOREGROUND_SERVICE"]] ()]] ()) +
-      [["application" [[1 "label" 'str label] [1 "icon" 'ref ic-icon] [1 "hasCode" 'bool stay] [1 "debuggable" 'bool 1]
+       + (stay ? [["uses-permission" [[1 "name" 'str "android.permission.FOREGROUND_SERVICE"]] ()]] ())
+       + (stay && o 'target >= 34 ? [["uses-permission" [[1 "name" 'str "android.permission.FOREGROUND_SERVICE_SPECIAL_USE"]] ()]] ()) +
+      [["application" [[1 "label" 'str label] [1 "icon" 'ref ic-icon] [1 "hasCode" 'bool stay] [1 "debuggable" 'bool (o 'debug)]
                       [1 "extractNativeLibs" 'bool 1]]
-         ((stay ? [["service" [[1 "name" 'str dx-name] [1 "exported" 'bool 0]] ()]] ()) +
+         ((stay ? [(o 'target >= 34
+                    ? ["service" [[1 "name" 'str dx-name] [1 "exported" 'bool 0] [1 "foregroundServiceType" 'hex 0x40000000]]
+                        [["property" [[1 "name" 'str "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"]
+                                      [1 "value" 'str "keeps the user's running programs alive"]] ()]]]
+                    ["service" [[1 "name" 'str dx-name] [1 "exported" 'bool 0]] ()])] ()) +
          [["activity" ([[1 "name" 'str "android.app.NativeActivity"] [1 "exported" 'bool 1]
                       [1 "configChanges" 'hex 0x4a0]                   ; orientation keyboardHidden screenSize
                      [1 "windowSoftInputMode" 'hex 0x10]]             ; adjustResize: the keyboard never pans the window
@@ -173,6 +180,33 @@
        pkg (ax-chunk 0x200 288 (u32 0x7f + ax-u16 "love" + zbytes 248 + u32 288 + u32 1 + u32 (288 + #tp) + u32 3 + u32 0
                                 + tp + kp + spec + type))
        (ax-chunk 2 12 (u32 1 + ax-pool ["res/f.png" "res/i.xml"] + pkg)))
+
+   ; --- a bundle's protobufs, by field number: aapt2's Resources.proto, bundletool's config.proto ---
+   (pb-int f n) (dx-uleb (f << 3) + dx-uleb n)
+   (pb-len f s) (dx-uleb (f << 3 | 2) + dx-uleb #s + s)
+   ; an XmlAttribute: a string's text is its value, any other holds a compiled item
+   (pb-attr [ns n k v])
+    (: item (k @ 'int (pb-len 7 (pb-int 6 v)) 'hex (pb-len 7 (pb-int 7 v))
+                 'bool (pb-len 7 (pb-int 8 (? v 1 0))) 'ref (pb-len 1 (pb-int 2 v)) "")
+       (? ns (pb-len 1 ax-uri + pb-int 5 (ax-rid n)) ""
+          + pb-len 2 n + (k = 'str ? (pb-len 3 v) "") + (0 < #item ? (pb-len 6 item) "")))
+   (pb-el [t at ks] ns)
+    (: so (sort (map (a \ [(? <a (ax-rid (a 1)) -1) a]) at))
+       (pb-len 1 (ns + pb-len 3 t + ap-cat (p \ pb-len 4 (pb-attr (p 1))) so
+                  + ap-cat (e \ pb-len 5 (pb-el e "")) ks)))
+   ; a proto xml file, android's namespace declared at its root
+   (pb-xml root) (pb-el root (pb-len 1 (pb-len 1 "android" + pb-len 2 ax-uri)))
+   ic-dir "res/drawable/"
+   ; ic-arsc's table: an entry is its id, its name and one value in the default config
+   (pb-table pkg)
+    (: (ent i nm item) (pb-len 3 (pb-len 1 (pb-int 1 i) + pb-len 2 nm + pb-len 6 (pb-len 1 "" + pb-len 2 (pb-len 4 item))))
+       (file nm ty) (pb-len 5 (pb-len 1 (ic-dir + nm) + pb-int 2 ty))         ; 1 png, 3 proto xml
+       (pb-len 2 (pb-len 1 (pb-int 1 0x7f) + pb-len 2 pkg
+                  + pb-len 3 (pb-len 1 (pb-int 1 1) + pb-len 2 "drawable"
+                              + ent 0 "bg" (pb-len 7 (pb-int 9 (0xff000000 | ic-rgb 'bg)))
+                              + ent 1 "fg" (file "f.png" 1) + ent 2 "icon" (file "i.xml" 3)))))
+   ; the bridge execs liblove.so, so an install must leave it unpacked: compression stays on
+   (aab-config _) (pb-len 1 (pb-len 2 "1.18.3") + pb-len 2 (pb-len 2 ""))
 
    ; --- the service's class, what `-s` adds: a Service with a constructor, a null onBind and a native
    ; onStartCommand the bridge registers, so a notification keeps the process through a swipe.
@@ -278,68 +312,99 @@
     (: a (tree-tar 0) t (? (string? a) (tar-unpack a))
        (? (two? t) (foldl (\ r e (? (string? r) r (ends? (tar-get e 'nom "") "src/apps/droid/bridge.c") (tar-get e 'body "") ()))
                           () <>t)))
-   (bridge-so tmp)
+   ; a love's abi off its elf header
+   (ap-abi lb lov) (lb 18 @ 183 "arm64-v8a" 40 "armeabi-v7a" _ (udie 1 ("apk: " + lov + " is no a64 or arm love")))
+   (bridge-so tmp abi)
     (: c (bridge-src 0)
        _ (string? c ? 0 (udie 1 "apk: this love carries no src/apps/droid/bridge.c"))
-       src (tmp + "/bridge.c") so (tmp + "/libbridge.so")
+       src (tmp + "/bridge.c") so (tmp + "/libbridge-" + abi + ".so")
        (uwrite src c,
-        (? ((cite 'moon 'moon-run) ["-t" "a64" "-shared" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src] != 0)
+        (? ((cite 'moon 'moon-run) ((abi = "arm64-v8a" ? ["-t" "a64"] ["-t" "arm" "-fpic"]) + ["-shared" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src]) != 0)
            (udie 1 "apk: the bridge does not compile")
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
    (apk-usage _) (puts """
-    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-s] [-P PERM].. MAIN.l [FILE..]
-      an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
-      (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. the app has the
+    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE].. [-b LINE] [-s] [-P PERM].. [-V CODE] [-v NAME] [-T SDK] [-R] MAIN.l [FILE..]
+      an android app that runs MAIN.l: a window, touch and keys through the face
+      (src/apps/droid/droid.l). LOVE is a baked love it ships, one per abi (arm64-v8a or
+      armeabi-v7a, read off the file); on an a64 machine this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. the app has the
       network; each PERM is a permission it asks for at its start, RECORD_AUDIO for the mic
       (android.permission. unless named in full).
       -s keeps the app's loves through a swipe or back: a foreground service and its notification.
+      -V the version code, -v its name, -T the sdk it targets, -R not debuggable.
       the key signing it lives in ~/.love/etc/apk.pem
+    """)
+   (aab-usage _) (puts """
+    usage: love aab [-o OUT.aab] [-p PACKAGE] [-n LABEL] [-L LOVE].. [-b LINE] [-s] [-P PERM].. [-V CODE] [-v NAME] [-T SDK] MAIN.l [FILE..]
+      the app `love apk` lays, as an android app bundle for a store: not debuggable, and
+      unsigned, since a store's upload key is its owner's. jarsigner signs it. a store refuses a version code it has seen.
     """)
    (ap-base p) (p @ (_ + "/" + s) (ap-base s) p)
    (ap-stem p) (ap-base p @ b (b @ (s + ".l") s b))
    (ap-or s d) (? (string? s) s d)
    (apk-opts as t)
     (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
-          ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
+          ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L (t 'L + [v])))
           ("-b" . v . r) (apk-opts r (pin t 'b v))
+          ("-V" . v . r) (apk-opts r (pin t 'code (read v))) ("-v" . v . r) (apk-opts r (pin t 'name v))
+          ("-T" . v . r) (apk-opts r (pin t 'target (read v)))
           ("-s" . r) (apk-opts r (pin t 's 1))
+          ("-R" . r) (apk-opts r (pin t 'R 1))
           ("-P" . v . r) (apk-opts r (pin t 'P (t 'P + [(has? v "." ? v ("android.permission." + v))])))
           (("-h" || "--help") . _) (apk-usage 0, quit 0)
           (("-" + _) . _) (apk-usage 0, quit 2)
           r (pin t 'files r))
-   (apk-main as)
+   (apk-main as) (ap-pack 'apk as)
+   (aab-main as) (ap-pack 'aab as)
+   (aab-path nm) (nm = "classes.dex" ? "base/dex/classes.dex" ("base/" + nm))
+   (ap-pack fmt as)
     (: t (apk-opts as {})
+       aab (fmt = 'aab)
+       ext (show fmt)
        fs (t 'files)
-       _ (two? fs || string? (t 'b) ? 0 (apk-usage 0, quit 2))
+       _ (two? fs || string? (t 'b) ? 0 (aab ? (aab-usage 0) (apk-usage 0), quit 2))
        nm (? (two? fs) (ap-stem <fs) (ap-or (t 'n) "love"))
-       out (ap-or (t 'o) (nm + ".apk"))
+       out (ap-or (t 'o) (nm + "." + ext))
        pkg (ap-or (t 'p) ("pics.salt." + nm))
-       lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
-              (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
-       lb (uread lov @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + lov))))
-       ks (apk-keys 0)
-       _ (two? ks ? 0 (udie 1 "apk: no key in ~/.love/etc/apk.pem, and none could be made"))
+       lovs (? (two? (t 'L)) (t 'L) (love-arch = 'a64) [(selfpath 0)]
+               (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
+       libs (map (lov \ uread lov @ r (? (two? r) (: lb <>r [(ap-abi lb lov) lb]) (udie 1 ("apk: cannot read " + lov)))) lovs)
+       ks (aab ? () (apk-keys 0))
+       _ (aab || two? ks ? 0 (udie 1 "apk: no key in ~/.love/etc/apk.pem, and none could be made"))
        tmp ((ap-or (getenv "TMPDIR") "/tmp") + "/love-apk-" + show (getpid 0))
        _ (mkdir tmp 448)
-       so (bridge-so tmp)
+       abis (map (l \ (: abi <l [[("lib/" + abi + "/libbridge.so") (bridge-so tmp abi)] [("lib/" + abi + "/liblove.so") <>l]])) libs)
        ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
-       ps (t 'P)
        stay (t 's = 1)
-       z (ap-zip ([["resources.arsc" (ic-arsc 0)]
-                ["res/f.png" (ic-png 0)] ["res/i.xml" (ap-axml ic-xml)]
-                ["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm) ps stay))]
-                ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
-                ["assets/argv" (? (string? (t 'b)) (foldl (a \ w \ a + w + string [0]) "" (filter (w \ 0 < #w) (split " " (t 'b))))
-                                  (ap-base <fs + string [0]))]]
-                + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ())
-                + (stay ? [["classes.dex" (dx-service 0)] ["assets/stay" (ap-or (t 'n) nm)]] ()) + ins))
-       (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
-          (udie 1 ("apk: cannot write " + out))))
+       target (? (charm? (t 'target)) (t 'target) aab 36 31)
+       ; a target past 33 asks for its notification
+       ps (t 'P + (stay && target >= 33 ? ["android.permission.POST_NOTIFICATIONS"] ()))
+       label (ap-or (t 'n) nm)
+       man (ap-manifest pkg label ps stay {'code (? (charm? (t 'code)) (t 'code) 1) 'name (ap-or (t 'name) "1")
+                                           'target target 'debug (aab || t 'R = 1 ? 0 1)})
+       rest ([["assets/argv" (? (string? (t 'b)) (foldl (a \ w \ a + w + string [0]) "" (filter (w \ 0 < #w) (split " " (t 'b))))
+                                (ap-base <fs + string [0]))]]
+             + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ())
+             + catmap id abis
+             + (stay ? [["classes.dex" (dx-service 0)] ["assets/stay" label]] ()) + ins)
+       z (aab ? (ap-zip ([["BundleConfig.pb" (aab-config 0)] ["base/manifest/AndroidManifest.xml" (pb-xml man)]
+                          ["base/resources.pb" (pb-table pkg)]
+                          [("base/" + ic-dir + "f.png") (ic-png 0)] [("base/" + ic-dir + "i.xml") (pb-xml ic-xml)]]
+                         + map (e \ [(aab-path <e) (e 1)]) rest))
+                (v2-sign (ap-zip ([["resources.arsc" (ic-arsc 0)]
+                                   ["res/f.png" (ic-png 0)] ["res/i.xml" (ap-axml ic-xml)]
+                                   ["AndroidManifest.xml" (ap-axml man)]] + rest)) <ks (ks 1)))
+       (? (uwrite out z)
+          (puts (aab ? ("aab: " + out + " (" + pkg + ") -- unsigned\n")
+                       ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n")), 0)
+          (udie 1 (ext + ": cannot write " + out))))
 
    door (udoor 'apk apk-main apk-usage 1 1)
    _ (pins (cite 'verbs 'tab) 'apk door)
    s (cite 'verbs 'fire ["apk" "droid.l"])
-   _ (two? s ? (quit (door >s)) 0))
+   _ (two? s ? (quit (door >s)) 0)
+   aab-door (udoor 'aab aab-main aab-usage 1 1)
+   _ (pins (cite 'verbs 'tab) 'aab aab-door)
+   s2 (cite 'verbs 'fire ["aab"])
+   _ (two? s2 ? (quit (aab-door >s2)) 0))
 ) ; module droid

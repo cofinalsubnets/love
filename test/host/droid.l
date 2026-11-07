@@ -23,9 +23,10 @@
               (go (i + 30 + nl + cs) ([(snip z (i + 30) (i + 30 + nl)) (? ok b 'badcrc)] . acc))))
        (go 0 ()))
    dr-eo (#dr-z - 22)
-   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" () 0))
-   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"] 0))
-   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"] 0))
+   dr-o {'code 1 'name "1" 'target 31 'debug 1}
+   dr-x (ap-axml (ap-manifest "pics.salt.t" "t" () 0 dr-o))
+   dr-xp (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.RECORD_AUDIO"] 0 dr-o))
+   dr-xn (ap-axml (ap-manifest "pics.salt.t" "t" ["android.permission.INTERNET"] 0 dr-o))
    (dr-walk x)
     (: (go i acc) (? (#x <= i) [i (rev acc)] (go (i + rdle x (i + 4) 4) (rdle x i 2 . acc))) (go 8 ()))
    (dr-pool x)
@@ -49,6 +50,11 @@
  (rdle dr-z (dr-eo + 10) 2 = 3)
  (rdle dr-z (rdle dr-z (dr-eo + 16) 4) 4 = 0x02014b50)
  (ap-zip dr-es = dr-z))
+
+(test
+ ; a love's lib/ABI, by its e_machine
+ (ap-abi (zbytes 18 + string [183]) "x" = "arm64-v8a")
+ (ap-abi (zbytes 18 + string [40]) "x" = "armeabi-v7a"))
 
 (test
  ; chunks: the pool, the resource map, then the tree
@@ -273,3 +279,17 @@
    (test (<do-r = 0) (do-g = [1 (do-d + "/" + (love-os = 'macos ? "open" "xdg-open") + " https://x\n")])))
 
 (puts "droid: ok") (putc 10)
+
+; the bundle's protobufs: protoc reads these against aapt2's schema, a phone or bundletool the rest
+(: dr-man (ap-manifest "pics.salt.t" "t" () 1 {'code 7 'name "v" 'target 36 'debug 0})
+   dr-pb (pb-xml dr-man)
+   _ (test (pb-int 1 300 = string [8 172 2])
+           (pb-len 2 "ab" = string [18 2 97 98])
+           (has? dr-pb "android.permission.FOREGROUND_SERVICE_SPECIAL_USE")
+           (has? dr-pb "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE")
+           (has? (pb-attr [1 "debuggable" 'bool 0]) (pb-len 6 (pb-len 7 (pb-int 8 0))))
+           (has? (pb-attr [1 "targetSdkVersion" 'int 36]) (pb-len 6 (pb-len 7 (pb-int 6 36))))
+           (has? (pb-table "p") "res/drawable/i.xml")
+           (aab-path "classes.dex" = "base/dex/classes.dex")
+           (aab-path "lib/a/b.so" = "base/lib/a/b.so")
+           (aab-config 0 = string [10 8 18 6 49 46 49 56 46 51 18 2 18 0])))

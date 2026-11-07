@@ -544,15 +544,16 @@ void love_horn_close(void) {
 static intptr_t horn_put(struct horn *h, int kind, int fd, unsigned char const *src, uintptr_t n) {
  return kind == horn_dev ? dev_land(fd, src, n) : kind == horn_sock ? sock_land(fd, src, n)
       : kind == horn_aq ? aq_land(getcharm(h->aq), src, n) : k_horn_write(src, n); }
-static intptr_t horn_land(struct horn *h, unsigned char const *src, uintptr_t n) {
- int kind = (int) getcharm(h->kind), fd = (int) getcharm(h->b.f.fd);
- if (getcharm(h->chans) == 2) return horn_put(h, kind, fd, src, n);
+love_noinline static intptr_t horn_mono(struct horn *h, int kind, int fd, unsigned char const *src, uintptr_t n) {
  unsigned char t[4096];
  if (n > sizeof t / 2) n = sizeof t / 2;
  for (uintptr_t i = 0; i < n; i += 2)
   t[2 * i] = t[2 * i + 2] = src[i], t[2 * i + 1] = t[2 * i + 3] = src[i + 1];
  intptr_t k = horn_put(h, kind, fd, t, 2 * n);
  return k > 0 ? k / 2 : k; }
+static intptr_t horn_land(struct horn *h, unsigned char const *src, uintptr_t n) {
+ int kind = (int) getcharm(h->kind), fd = (int) getcharm(h->b.f.fd);
+ return getcharm(h->chans) == 2 ? horn_put(h, kind, fd, src, n) : horn_mono(h, kind, fd, src, n); }
 
 struct g *love_horn_writen(struct g *g, unsigned char const *src, uintptr_t n) {
  struct horn *h = (struct horn*) g->io;

@@ -16,15 +16,15 @@ Instructions for any coding agent in this tree.
 ; it uses many fewer parens than traditional lisp and resembles a mix
 ; of scheme, haskell, and apl.
 ;
-; mooncc builds statically linked executables that currently run on
-; linux, freebsd and netbsd, using a built in custom libc, for x64,
-; a64, and thumb32, with rv64 currently in development.
+; mooncc builds statically linked executables that run on linux, freebsd,
+; netbsd and macos, using a built in custom libc, for x64, a64 and rv64,
+; with thumb1, thumb2, arm, i386 and wasm as further targets.
 ;
 ; kore includes sh, make, vi, as, nc, gzip/gunzip, and lots of other
 ; utilities.
 ;
-; inle currently runs on x64, a64 and rv64 and includes a virtual console,
-; filesystem, and doom port.
+; inle runs on x64, a64 and rv64, as wasm, and on several boards, and includes
+; a virtual console, filesystem, and doom port.
 ;
 ; the love artifact includes all these components in a single binary together
 ; with a compressed copy of its own source code, which it can use to identically
@@ -37,18 +37,20 @@ Instructions for any coding agent in this tree.
 ; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
 ; - makefiles must be compatible with our make (cook)
 ; - shell scripts must be compatible with our shell (lush)
-; - `make test` is the fast gate to check if something works (<1m)
-; - `make test_slow` is the slow gate, before committing (<10m)
+; - `make test` is the fast gate to check if something works
+; - `make test_slow` is the slow gate, before committing
 ; - `make test_extra` is the really slow gate, before merging (qemu boots, cross-arch, boards)
 ; - use libra `out/love src/apps/libra/libra.l <file>` to check paren balance
 ; - don't trust comments without reading the code they're talking about
 ; - just because something was done on purpose doesn't mean it was for a good reason
 
 ; love artifact and build information:
-; - love and inle are not separate builds. moon builds both with the same flags and
-;   links them together, and they share one copy of almost everything. a given instance
-;   of the love artifact is linked for hosted or freestanding use, but the translation
-;   is bidirectional and mechanical, and either image can generate the other.
+; - love and inle are not separate builds. moon builds both with the same flags, and a
+;   kernel is projected out of the love binary that makes it: that binary's own bytes, plus
+;   the kernel objects it compiles from the source it carries, so they share one copy of
+;   almost everything. a given instance of the love artifact is linked for hosted or
+;   freestanding use, but the translation is bidirectional and mechanical, and either
+;   image can generate the other.
 ; - mooncc compiles the artifact. the ambient cc is used to build love0, the bootstrap build of
 ;   love, which runs moon, which builds the finished product. 
 ; - moon's libc is moonlibc (src/apps/moon/lib/moonlibc), statically linked. not glibc, not musl.
@@ -96,6 +98,32 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
  [11 13 17] "this matches exactly"
  (l && two? l) 'this-guard-matches
  (11 . 13 . 17 . _) 'this-prefix-matches)
+
+; bindings. : is let and define; :- puts the body first
+3 = (: a 1 b 2 (a + b))
+6 = (: (f x) (x * 2) (f 3))
+3 = (:- (a + b) a 1 b 2)
+9 = (1 + 2 @ x (x * x))           ; a lone binding
+3 = (0, 1, 3)                     ; sequencing, the last answers
+
+; string patterns. a hole or a literal in a + chain cuts a string, each at its first match
+'("id" "7") = ("id:7" @ "\(t):\(n)" [t n] 'no)
+"7" = ("id:7" @ "id:\(n)" n 'no)
+'("a" "b-c") = ("a-b-c" @ (a + "-" + b) [a b] 'no)
+'no = ("v123" @ ("v" + (n && #n < 3)) n 'no)    ; a guard on a piece
+
+; glued prefixes
+[1 [2 3] 2 [3]] = [<[1 2 3] >[1 2 3] <>[1 2 3] >>[1 2 3]]
+[0 1 2] = [!1 ?5 $1.5]            ; not, truth, ceil of the real part of the net
+
+; trays and ratios
+6 = +@(1 2 3)
+"@(2 4 6)" = show (@(1 2 3) * 2)
+"@(7 5)" = show (@(5 6 7) @(2 0)) ; a tray of indices gathers
+"(1 /// 3)" = show (1 /// 3)
+
+; a scare caught: (trap f x n) answers (f x), or (n a b) on (scare a b)
+'(x 1) = (trap (_ \ scare 'x 1) 0 (a \ b \ [a b]))
 
 ; language advisories
 ; - (x) = x: singleton lists are no-ops
@@ -159,14 +187,14 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/kore/*` -> `test_kore` `test_hostnif`
 - `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l` -> `test_hostnif`
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)
-- `src/love/snap.c`, `src/love/image.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
+- `src/love/snap.c`, `src/love/image.c`, `src/love/elfbake.c`, `src/love/macho.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - `src/love/snap.c` -> `test_boards`, whose links bake their own images through it
 - `src/apps/caja/*`, `test/caja/*`, `test/gate/caja.sh` -> `test_caja`
 - `src/apps/tfm.l`, `test/gate/tfm.sh`, `test/gate/tfm.l` -> `test_tfm` `test_caja`, which caja borrows for its fonts
 - `src/apps/pic/*`, `test/gate/fzgen.l` -> `test_gpic` `test_grap` `test_chem`
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_core`
 - the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk` -> `test_gcstress`, in the queue's union; a `.l`, doc, app or test diff never owes it
-- what the bake runs, `src/love/{gc,snap,image,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
+- what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)
 - `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
