@@ -445,7 +445,7 @@
              (gcplx? ty && (ini @ ['init (_ . _ . _)] 1 _ ())) (lono g 'complex)
              (ntmp g ty @ off
                 (aggish? ty && !(gcplx? ty) ?
-                   (lofill g env off ty ini @ 'bad 'bad fs ['a ['long 'r4 (lozero g off (aup (tsz g ty) 8) + fs)] ty off])
+                   (lofill g env off ty ini @ 'bad 'bad fs ['a ['long 'r4 (lozfill g off (aup (tsz g ty) 8) fs)] ty off])
                    (lox g env (ini @ ['init (x . _)] x ['init ()] ['num 0] _ ini) @ 'bad 'bad
                       v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] ['a ['long 'r4 fs] ty off] 'bad)))))
          ; a struct rvalue (a call's, a cond's): its address
@@ -626,6 +626,15 @@
                         (0 < rem) (['st1 'r4 o z] . go (o + 1) (rem - 1))
                         ())
           (['li z 0] . go off span)))
+   ; the zeroing, less each store the fill lays over whole, when the fill reads nothing of the frame
+   ; and calls nothing that might
+   (lozfill g off span fs)
+    (: sw {'st 8 'stsd 8 'st4 4 'stss 4 'st2 2 'st1 1}
+       (st? f) (two? f && peep sw <f 0 > 0 && f 1 = 'r4 && cint? (f 2))
+       (rd? f) (two? f && (elem <f '(call callr asm fix) || !(st? f) && elem 'r4 >f))
+       cov (foldl (t \ f \ (st? f ? (foldl (t2 \ b \ pin t2 (f 2 + b) 1) t ^(sw <f)) t)) {} fs)
+       (over? f) (st? f && all (b \ cov (f 2 + b) != ()) ^(sw <f))
+       (any rd? fs ? (lozero g off span + fs) (filter (f \ !(over? f)) (lozero g off span) + fs)))
    (lostr g off text) (lomk g @ t (catmap (i \ [['li t (text i)] ['st1 'r4 (off + i) t]]) ^#text))
    (lofill g env off ty ini0)
     (unelide g env ty ini0 @ ini
@@ -2049,7 +2058,7 @@
                               (lox g env init @ 'bad 'bad
                                  v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] (go u e2 (acc + fs)) 'bad))
                              ((init @ ('init . _) 1 ()) || arr? ty && (init @ ('str . _) 1 ()) || clarr? ty init)
-                              (lofill g e2 off ty init @ 'bad 'bad fs (go u e2 (acc + lozero g off (aup (tsz g ty) 8) + fs)))
+                              (lofill g e2 off ty init @ 'bad 'bad fs (go u e2 (acc + lozfill g off (aup (tsz g ty) 8) fs)))
                              (stru? ty) (loelt g e2 off ty init @ 'bad 'bad fs (go u e2 (acc + fs)))
                              (lono g ['init ty]))))))
              [acc env])
