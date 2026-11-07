@@ -250,10 +250,30 @@
    (seed-os _) (elem 'love-os (names ()) && ev 'love-os @ n
                   (nom? n && !(elem n '(linux freebsd netbsd)) ? 'linux ()))
 
+   ; a format: android's one app for both abis, raw, so each phone bakes its image on first run
+   seed-formats '("apk" "aab")
+   (seed-app root fmt dst flags)
+    (: exe (src-me 0)
+       here (cwd 0)
+       _ (!(chdir root) ? 0 (src-die "can't enter \(root)"))
+       (lane x) (: s (src-run exe ["make" "-j" "xa=\(x)" "out/x-\(x)/love"]) st (two? s ? <s s)
+                   (0 != st ? (src-die "the \(x) build failed (exit \(st))")))
+       _ (lane "arm") _ (lane "a64")
+       made "out/love.\(fmt)"
+       s (src-run exe ([fmt "-n" "love" "-p" "pics.salt.love" "-s" "-P" "RECORD_AUDIO" "-o" made
+                        "-L" "out/x-arm/love" "-L" "out/x-a64/love"]
+                       + flags + ["src/apps/droid/lush.l"]))
+       st (two? s ? <s s)
+       _ (0 != st ? (src-die "the \(fmt) did not pack (exit \(st))"))
+       e (copyfile made dst)
+       (chdir here, (e < 0 ? (src-die "can't write \(dst)")), puts ";; laid \(dst)\n"))
+
    (seed-usage _) (puts """
     usage: love seed [-g] [ARCH] [DIR]
+           love seed [-g] FORMAT [DIR [FLAG..]]
     lay this binary's source under DIR (default .) and rebuild it, byte for byte
       ARCH   x64 | a64 | rv64: build for that machine instead, as DIR/love-ARCH
+      FORMAT apk | aab: android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
       -g     build with the system cc and tools, ours filling the gaps
 
     """)
@@ -266,15 +286,16 @@
        as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default, still eaten
        ; naming this machine's own arch is a native seed, fixpoint and all. the word is
        ; eaten either way, or it would be read as the directory
-       xa0 (two? as1 && seed-arch? <as1 ? (arch-nom <as1) ())
+       fmt (two? as1 && elem <as1 seed-formats ? <as1)
+       xa0 (two? as1 && !(string? fmt) && seed-arch? <as1 ? (arch-nom <as1) ())
        xa (nom? xa0 && xa0 = seed-native 0 ? () xa0)
-       as (nom? xa0 ? >as1 as1)
+       as (nom? xa0 || string? fmt ? >as1 as1)
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
        exe (src-me 0)
        ; with no path to itself there is no binary to hold a native seed to: cross only.
        ; said bare, it lists the machines it can lay for
-       _ (!(string? exe) && !(nom? xa) ?
+       _ (!(string? exe) && !(nom? xa) && !(string? fmt) ?
           (two? as ? (src-die "this seat has no path to itself -- name a machine: `love seed x64`")
              (puts "seed for a machine: \(src-words (map show seed-arches))\n", quit 0)))
        root (src-nest dir)
@@ -300,12 +321,14 @@
                (two? ours ? (puts ";; using own tools: \(src-words ours)\n") 0)))
        cc (? (string? env) env (two? amb) <>amb "this binary")
        ; the OS rides the word where we had to pick one, because nothing else here says it
-       tgt (nom? xa ? (seed-os 0 @ o " \(xa)\(nom? o ? "-\(o)" "")") "")
+       tgt (? (string? fmt) " \(fmt)" (nom? xa) (seed-os 0 @ o " \(xa)\(nom? o ? "-\(o)" "")") "")
        _ (puts ";; seeding\(tgt) -- the compiler is \(cc)\n")
-       dst (nom? xa ? "\(dir)/love-\(xa)" ())
-       _ (string? exe ? 0 (quit (seed-wait root (show xa) dst)))   ; nothing to exec: wait here
-       e (nom? xa ? (exec [exe "seed" "-wait" root (show xa) dst])
-                    (exec [exe "seed" "-wait" root]))
+       dst (? (string? fmt) "\(dir)/love.\(fmt)" (nom? xa) "\(dir)/love-\(xa)" ())
+       flags (two? as ? >as)
+       _ (string? exe ? 0 (quit (string? fmt ? (seed-app root fmt dst flags) (seed-wait root (show xa) dst))))   ; nothing to exec: wait here
+       e (? (string? fmt) (exec ([exe "seed" "-wait" root fmt dst] + flags))
+            (nom? xa) (exec [exe "seed" "-wait" root (show xa) dst])
+            (exec [exe "seed" "-wait" root]))
        (src-die "can't wait for the build (exec: \(show e))"))
 
    (seed-main as0)
@@ -316,7 +339,7 @@
           xa (two? a2 ? <a2)
           a3 (two? a2 ? >a2)
           dst (two? a3 ? <a3)
-          (seed-wait root xa dst)))
+          (elem xa seed-formats ? (seed-app root xa dst (two? a3 ? >a3)) (seed-wait root xa dst))))
 
    ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
    ; the boot stub is laid, not stored: the cat below evals off the carried tree in the

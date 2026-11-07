@@ -923,8 +923,9 @@ static void *loop(void *p) {
   return 0;
 }
 
+static int prefix(char const *s, char const *p) { while (*p) if (*s++ != *p++) return 0; return 1; }
 static void spawn(br *b, deck *d) {
-  char *av[32], exe[600], *ev[64], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
+  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
   char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
@@ -933,6 +934,16 @@ static void spawn(br *b, deck *d) {
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
   face(b, d, sk, sizeof sk); snprintf(fc, sizeof fc, "LOVE_FACE=%s", sk); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
+  unsigned h = 2166136261u;                    /* one image per install: its name is the lib dir's, the others go */
+  for (char const *c = b->dir; *c; c++) h = (h ^ (unsigned char) *c) * 16777619u;
+  char me[32]; snprintf(me, sizeof me, "love-%08x.image", h);
+  snprintf(img, sizeof img, "LOVE_IMAGE=%s/%s", b->data, me);
+  void *dd = opendir(b->data);
+  for (struct dirent *de; dd && (de = readdir(dd)); ) {
+    int n = 0; while (de->name[n]) n++;
+    snprintf(path, sizeof path, "%s/%s", b->data, de->name);
+    if (n > 11 && prefix(de->name, "love-") && prefix(de->name + n - 6, ".image") && !prefix(de->name, me)) unlink(path); }
+  if (dd) closedir(dd);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
   void *bd = opendir(bin);                     /* DATA/bin is the bridge's: every link goes, then names[]'s */
   for (struct dirent *de; bd && (de = readdir(bd)); )
@@ -943,9 +954,9 @@ static void spawn(br *b, deck *d) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;
-  int e = 7;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=" };
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img;
+  int e = 8;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;
