@@ -8662,6 +8662,7 @@
                       120 (x64? g ? 'fpick 'bad)               ; x64's x: an xmm register
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
+                      65 (ia32? g ? 'apair 'bad)               ; i386's A: edx:eax
                       (elem c0 asmimm ? 'imm 'bad))
           (c9 = "Nd" || c9 = "dN") (x86 ? 'r2 'bad)
           ; several register letters ("bdS"): whichever of them is free, ('one r..)
@@ -8928,6 +8929,8 @@
        (pinof k e) (k @ 'pick (asmvpin g env e @ p (nom? p ? p k)) k)
        ; a 64-bit register operand on thumb rides a pair, %Q its low register and %R its high
        (pr? e2) (t32? g && elem <e2 '(o x i) && e2 3 = 8)
+       ; i386's A: a 64-bit value rides edx:eax, a narrower one eax
+       (apw k e) (k = 'apair && asmw g env e < 8 ? 'r0 k)
        ; x64's memory operand at an address constant is `sym+k(%rip)`, as gcc spells it, and takes no
        ; register: paravirt's `call *%[op]` must stay the six-byte `ff 15` the kernel patches. a
        ; segment's operand keeps the register: holo lays no %gs: store at a rip address
@@ -8950,7 +8953,7 @@
                  (bad? k || elem k '(imm either) || two? k && <k != 'one) (asmno g "an asm output constrained \"\(c)\"")
                  ; a memory output is the asm's own store: its address rides a register, as "m" in
                  (k = 'mem) (oconv >l ((riptext <><l @ v (v ? ['g v 0 0] ['b 'pick ['addr <><l] 0])) . acc))
-                 (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
+                 (oconv >l ([(h @ 43 'x 'o) (pinof (apw k <><l) <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (!(two? l) ? (rev acc)
            (: k (asmc g <<l) e <><l
@@ -8959,7 +8962,7 @@
                    'imm (v != 'no ? (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
                    'either ((a64? g ? (cint? v && a64fit? <<l v) (charm? v)) ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
                    'mem (iconv >l ((riptext e @ v (v ? ['g v 0 0] ['b 'pick ['addr e] 0])) . acc))
-                   (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
+                   (iconv >l (['i (pinof (apw k e) e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
        ; an input pinned where an output is ("=a"(n) : "a"(0), cpuid's) is that output's tie
@@ -8973,8 +8976,10 @@
               (!(two? l) ? acc
                  (: e2 <l k <>e2
                     (? (elem <e2 '(m k g) || elem k '(pick fpick) || two? k) (pinset >l acc)
+                       (k = 'apair) (elem 'r0 acc || elem 'r2 acc ? 'bad (pinset >l ('apair . 'r0 . 'r2 . acc)))
                        !(asmreg? g k) 'bad
-                       (elem k acc) 'bad
+                       ; an input may take a half of the A pair it is read before
+                       (elem k acc) (<e2 = 'i && elem k '(r0 r2) && elem 'apair acc && !(elem ['i k] acc) ? (pinset >l (['i k] . acc)) 'bad)
                        (pinset >l (k . acc)))))
              pinned (pinset ops9 ())
              (bad? pinned ? (asmno g "an asm register pinned twice, or one no operand may take")
@@ -8987,6 +8992,7 @@
                               (filter (r9 \ elem r9 >k) fr @ c9
                                  (two? c9 ? (assign >l (filter (r9 \ r9 != <c9) fr) (<c9 . acc)) 'bad))
                              (two? k) (<>k < #acc ? (rev acc <>k @ r9 (assign >l fr (r9 . acc))) 'bad)
+                             (k = 'apair) (assign >l fr (['r0 'r2] . acc))
                              (k = 'pick && pr? e2)          ; a thumb pair: two registers, lo then hi
                               (two? >fr ? (assign >l >>fr ([<fr <>fr] . acc)) 'bad)
                              (k = 'pick)

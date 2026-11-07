@@ -445,7 +445,32 @@
        (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
    ; arm under -fpic: an address is pc-relative, movw/movt from the pc an add reads
-   (picla tgt pc fs) (tgt = 'arm && pc ? (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs) fs)
+   (picla tgt pc fs)
+    (? !pc fs
+       (tgt = 'arm) (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs)
+       (tgt = 'i386) (pic386 fs)
+       fs)
+   ; i386 under -fpic: an address is lar's, pc-relative; a symbol's word reads through a register,
+   ; the load's own or one pushed aside
+   (pic386 fs)
+    (: gp '(r0 r1 r2 r3 r5 r6)
+       (sw f r) (: (go l) (? !(two? l) l (<l = 'rip ? (r . (<>l 1) . go >>l) (<l . go >l))) (go f))
+       (sym f) (: (go l) (? !(two? l) () (<l = 'rip ? (<>l 0) (go >l))) (go f))
+       (aside f s mk)
+        (filter (r \ !(elem r f)) gp @ fr
+           (? (elem 'sp f || !(two? fr)) (udie 1 "cc: -fpic on i386 -- no register for \(show f)")
+              (: t <fr [['push t] ['lar t s] (mk t) ['pop t]])))
+       (one f)
+        (? !(two? f) [f]
+           (elem <f '(la lia)) [['lar (f 1) (f 2)]]
+           (<f = 'laa) [['lar (f 1) (f 2)] ['lea (f 1) (f 1) (f 3)]]
+           (<f = 'ldsdl) (aside f (f 2) (t \ ['ldsd (f 1) t 0]))
+           (<f = 'pushl) (udie 1 "cc: -fpic on i386 -- an address pushed whole")
+           !(elem 'rip f) [f]
+           (elem <f '(callm jmpm)) (udie 1 "cc: -fpic on i386 -- a call through a global's word")
+           (elem <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4) && elem (f 1) gp) [['lar (f 1) (sym f)] (sw f (f 1))]
+           (aside f (sym f) (t \ sw f t)))
+       (catmap one fs))
    ; thumb2 and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
    ; where it reaches, else lays movw/movt
@@ -1375,11 +1400,17 @@
        _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
        a32x (filter (a \ !(elem (f 'tgt) (a = "-mabi=aapcs-linux" ? '(arm) '(thumb1 thumb2 thumb2sp arm)))) (f 'a32))
        _ (two? a32x && udie 2 "cc: \(<a32x) -- an arm ask; no lane on \(f 'tgt)")
-       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
+       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm i386)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        _ (f 'ssp && pin f 'sspg (sspguard f))
-       _ (two? (f 'x6f) && f 'tgt != 'x64 && udie 2 "cc: \(<(f 'x6f)) -- an x86-64 ask; no lane on \(f 'tgt)")
+       ; i386 keeps three: no al to skip, an 8-aligned stack realigned as 4's, and floats in eax where
+       ; -msoft-float lets none be
+       x6 (f 'tgt != 'i386 ? (f 'x6f)
+             (filter (a \ !(elem a ["-mskip-rax-setup" "-mstack-alignment=8"] || (f 'nofp && a = "-mno-fp-ret-in-387"))) (f 'x6f)))
+       _ (f 'tgt = 'i386 && elem "-mstack-alignment=8" (f 'x6f) && !(elem 'sa4 (f 'xk)) && pin f 'xk ('sa4 . f 'xk))
+       _ (two? x6 && f 'tgt != 'x64 && udie 2 "cc: \(<x6) -- an x86-64 ask; no lane on \(f 'tgt)")
        _ (elem 'thki (f 'xk) && !(elem (f 'tgt) '(x64 i386)) && udie 2 "cc: -mretpoline lays on x86 only")
        _ ((elem 'thk (f 'xk) || elem 'thki (f 'xk)) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
+       _ (f 'pic && f 'tgt = 'i386 && pin f 'njt 1)                       ; ..and i386's table holds absolute words
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)
