@@ -16,6 +16,10 @@
    (fit t) ['inf-lt t '(inf-pow w)]
    (quit-on s) (puts "\(s)\n", quit 1)
 
+   ; a spec may hold a word as what each of its bits is, 'bitv naming it: a function, as an array is
+   (bitv? sp x) (elem x (peep sp 'bitv ()))
+   (ty sp n) (has? (sp 'arrays) n || bitv? sp n ? '(pi j nat nat) 'nat)
+
    ; --- a spec's expressions, as a term and as what they owe -----------------------------------
    (tm sp v e)
     (: (T x) (tm sp v x)
@@ -33,7 +37,12 @@
              ('cast x) (T x)
              ('u16 x) (T x)
              ('u8 x) (T x)
-             ('mask x k) ['inf-mod ['inf-pow (T k)] (T x)]
+             ('mask x k) (bitv? sp x ? ['inf-val (T x) (T k)] ['inf-mod ['inf-pow (T k)] (T x)])
+             ('bor64 a b) ['inf-bor (T a) (T b)]
+             ('shl64 a k) ['inf-bshl (T a) (T k)]
+             ('shr64 a k) ['inf-bshr (T a) (T k)]
+             ('ld64 A i) ['inf-bld (has? v A ? (lk v A) A) (T i)]
+             ('w64 x) ['inf-bbyte (T x)]
              ('low x m) ['inf-mod (m + 1) (T x)]
              ('div8 x) ['inf-div8 (T x)]
              ('or56 x) ['add 56 ['inf-mod 8 (T x)]])))
@@ -138,22 +147,30 @@
                         (_ 'tryr x f _ _ os _) (x . written (callee sp f) os)
                         (_ 'calx x f _ _ os) (x . written (callee sp f) os)
                         (_ 'new x o _ _) [x o]
+                        (_ 'poke A _ _) (tracked sp A)
+                        (_ 'pokew A _ _) (tracked sp A)
+                        (_ 'mcopy A _ _ _ _) (tracked sp A)
                         (_ 'for x _ _ _ b) (x . writes sp b)
                         (_ 'forby x _ _ _ _ b) (x . writes sp b)
                         ())
                ss))
    (written f os) (map (a \ <a) (f 'state) + map (a \ <>a) os)
+   ; a spec may track an array's bytes, 'model naming what it holds at entry; a write is then inf-blk
+   (tracked sp A) (has? (peep sp 'model ()) A ? [A] ())
+   (wrote sp v A i B j n)
+    (has? (peep sp 'model ()) A
+     ? ((A . ['inf-blk (lk v A) (tm sp v i) (has? v B ? (lk v B) B) (tm sp v j) n]) . v)
+     v)
    (mentions? x t) (t == x || two? t && (mentions? x <t || mentions? x >t))
    (loop sp L x from to by invs body rest v hy k)
     (: w (writes sp body)
-       (ty n) (has? (sp 'arrays) n ? '(pi j nat nat) 'nat)
        names (uniq (map (a \ <a) v))
        carried (x . filter (n \ n != x && elem n w) names)
        ; the loop's head: what it writes a fresh name, the rest as they stand
        kept (filter (a \ !(elem <a carried)) v)
        _ (map (a \ any (n \ mentions? n >a) carried ? (quit-on "inf: \(L) rebinds a name \(<a) holds") 0) kept)
        head (map (n \ (n . n)) carried + kept)
-       bind (map (n \ (n . ty n)) (rev carried))
+       bind (map (n \ (n . ty sp n)) (rev carried))
        hinv (rev (map (i \ (<i . sub head <>i)) invs))
        nm "\(cx-of hy)-\(L)"
        hy3 (('cx . nm) . (hinv + (bind + hy)))
@@ -175,13 +192,12 @@
    ; a break leaves with what stands there, no condition learned
    (wloop sp L c m invs body rest v hy k)
     (: w (writes sp body)
-       (ty n) (has? (sp 'arrays) n ? '(pi j nat nat) 'nat)
        names (uniq (map (a \ <a) v))
        carried (filter (n \ elem n w) names)
        kept (filter (a \ !(elem <a carried)) v)
        _ (map (a \ any (n \ mentions? n >a) carried ? (quit-on "inf: \(L) rebinds a name \(<a) holds") 0) kept)
        head (map (n \ (n . n)) carried + kept)
-       bind (map (n \ (n . ty n)) (rev carried))
+       bind (map (n \ (n . ty sp n)) (rev carried))
        hinv (rev (map (i \ (<i . sub head <>i)) invs))
        nm "\(cx-of hy)-\(L)"
        hy3 (('cx . nm) . (hinv + (bind + hy)))
@@ -221,7 +237,7 @@
        after (map (a \ (<a . fresh L <a)) st + map (a \ (<a . fresh L <>a)) os)
        post (after + (res = () ? () [('res . res)]) + pre)
        v2 (map (a \ (<a . fresh L <a)) st + map (a \ (<>a . fresh L <>a)) os + v)
-       bs ((res = () ? () [(res . 'nat)]) + rev (map (a \ (>a . (has? (f 'arrays) <a ? '(pi j nat nat) 'nat))) after))
+       bs ((res = () ? () [(res . 'nat)]) + rev (map (a \ (>a . ty f <a)) after))
        hs (rev (map (e \ (intern "\(L)\(<e)" . callsub post <>e)) (f 'ensures)))
        ; a negative answer goes straight up: the caller's stop stands on the callee's
        hn (rev (map (e \ (intern "\(L)\(<e)" . callsub post <>e)) (f 'stops)))
@@ -267,8 +283,7 @@
              (: w (uniq (filter (n \ has? v n || any (i \ mentions? n <>i) invs) (writes sp th + writes sp el)))
                 _ (map (a \ any (n \ mentions? n >a) w ? (quit-on "inf: \(L) rebinds a name \(<a) holds") 0) (filter (a \ !(elem <a w)) v))
                 v3 (map (n \ (n . fresh L n)) w + v)
-                (ty n) (has? (sp 'arrays) n ? '(pi j nat nat) 'nat)
-                bs (rev (map (n \ (fresh L n . ty n)) w))
+                         bs (rev (map (n \ (fresh L n . ty sp n)) w))
                 hs (rev (map (i \ (<i . sub v3 <>i)) invs))
                 (meet v2 h2) (vcs "\(L)j" (map (i \ sub v2 <>i) invs) h2)
               (vcs (show L) (cond-ob sp v c) hy
@@ -281,7 +296,9 @@
             (L 'brk) ((sp 'brk) v hy)
             (L 'havoc x e)
              (: y (fresh L x)
-              (vcs (show L) (ob sp v e) hy + run sp >ss ((x . y) . v) ((y . 'nat) . hy) k))
+              (vcs (show L) (ob sp v e) hy
+               + (bitv? sp x ? (run sp >ss ((x . tm sp v e) . v) hy k)
+                  (run sp >ss ((x . y) . v) ((y . 'nat) . hy) k))))
             ; a word holds what fits a word
             (L 'havw x e g)
              (: y (fresh L x)
@@ -289,18 +306,18 @@
                + run sp >ss ((x . y) . v) ((g . ['inf-lt y ['inf-pow (tm sp v 'w)]]) . ((y . 'nat) . hy)) k))
             (L 'ghost x e g) (run sp >ss ((x . x) . v) ((g . ['paths 'nat x (sub v e)]) . ((x . 'nat) . hy)) k)
             (L 'poke A i e) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]] + ob sp v e) hy
-                             + run sp >ss v hy k)
+                             + run sp >ss (poked sp v A i e 1) hy k)
             (L 'pokew A i e) (vcs (show L) (ob sp v i + [['inf-le ['add (tm sp v i) 8] (lk (sp 'arrays) A @ a (a 1))]] + ob sp v e) hy
-                              + run sp >ss v hy k)
-            (L 'mcopy A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss v hy k)
-            (L 'mmove A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss v hy k)
+                              + run sp >ss (poked sp v A i e 8) hy k)
+            (L 'mcopy A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss (wrote sp v A i B j (tm sp v n)) hy k)
+            (L 'mmove A i B j n) (vcs (show L) (mv-ob sp v A i B j n) hy + run sp >ss (untracked sp A v) hy k)
             (L 'dstore _ _) (run sp >ss v hy k)
             ; a pointer into an array: one element, inside
-            (L 'ptr _ A i) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]]) hy + run sp >ss v hy k)
+            (L 'ptr _ A i) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]]) hy + run sp >ss (untracked sp A v) hy k)
             ; a pointer into an array: its view stands inside
             (L 'view _ A i n)
              (vcs (show L) (ob sp v i + ob sp v n + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]]) hy
-              + run sp >ss v hy k)
+              + run sp >ss (untracked sp A v) hy k)
             ; alloc answers NULL or e bytes, and here the bytes are a fresh name's
             (L 'new x o e g)
              (: y (fresh L x) z (fresh L o)
@@ -328,6 +345,15 @@
             (quit-on "inf: \(sp 'short) has a statement the walk cannot read: \(show <ss)")))
    (callee sp f) (<(filter (c \ c 'name = f) (sp 'calls)))
    (bound sp v X) (sub v (lk (sp 'arrays) X @ a (a 1)))
+   ; what could write a tracked array the walk does not follow
+   (untracked sp A v) (has? (peep sp 'model ()) A ? (quit-on "inf: \(sp 'short) reaches tracked \(A) by a way the walk cannot follow") v)
+   ; a tracked poke's bytes come from an array, or the walk cannot say what they are
+   (poked sp v A i e n)
+    (has? (peep sp 'model ()) A
+     ? (e @ ('at B j) (wrote sp v A i B j n)
+            ('ld64 B j) (wrote sp v A i B j n)
+            (quit-on "inf: \(sp 'short) pokes a tracked \(A) with \(show e)"))
+     v)
    (mv-ob sp v A i B j n)
     (ob sp v i + ob sp v j + ob sp v n
      + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]
@@ -341,15 +367,16 @@
         (atom? l ? ()
          (<l @ ['cx _ _ _] (<l . go >l)
                [L g h] (: j (1 + peep t L 0) _ (pin t L j)
-                        (["\(L)-\(j)" g h] . go >l))))
+                        (["\(L)-\(j)" g h L j] . go >l))))
        (go l))
    ; a declaration with an initial value starts the walk holding it; an array or a parameter, itself
    (start sp)
     (foldl (v \ d \ foldl (v \ x \ two? >x && !(two? <>x && <<>x == 'raw) ? ((<x . <>x) . v) v) v >d)
-           (map (a \ (<a . <>a)) (sp 'state) + map (a \ (<a . <a)) (sp 'arrays + sp 'requires)) (sp 'decls))
+           (peep sp 'model () + map (a \ (<a . <>a)) (sp 'state) + map (a \ (<a . <a)) (sp 'arrays + sp 'requires)) (sp 'decls))
    (spec-all sp)
     (: top "inf-\(sp 'short)" rq (map (a \ (<a . <>a)) (sp 'requires))
        _ (pin sp 'cxn 0)
+       _ (peep sp 'model () && peep sp 'calls () ? (quit-on "inf: \(sp 'short) tracks an array across a call") 0)
      (['cx top () rq] . number (run sp (sp 'body) (start sp) [('cx . top)] (\ v hy (vcs "end" (ensured sp v) hy)))))
    (vc? c) (<c != 'cx)
    (spec-vcs sp) (filter vc? (spec-all sp))
@@ -358,8 +385,6 @@
    ; a vc stands under its loop's context, with pis and lams for what it adds
    (cx-of hy) (<<hy = 'cx ? >(<hy) (cx-of >hy))
    (added hy) (<<hy = 'cx ? () (<hy . added >hy))
-   (close-pi hy g) (added hy @ e (atom? e ? g ('pi . cats (map (b \ [<b >b]) (rev e)) + [g])))
-   (close-lam hy t) (added hy @ e (atom? e ? t ('lam . map (b \ <b) (rev e) + [t])))
    (cx-text c)
     (c @ ['cx nm up bs] " (defcx \(nm)\(up = () ? "" " \(up)") \(cats (map (b \ "(\(<b) \(show >b)) ") bs)))\n")
    ; what needs no author: a hypothesis as it stands, one a step weaker, x <= x, or a closed comparison.
@@ -454,13 +479,18 @@
    (proof-of sp c) (peep (sp 'proofs) <c () @ p (p ? p (auto sp (c 2) (c 1))))
    ; a proof may name a spec's macros, which may name each other
    (expand ms t) (sub ms t @ u (u = t ? t (expand ms u)))
-   (vc-text sp)
-    (map (c \ (vc? c ?
-                 (: lab <c goal (c 1) hy (c 2) cx (cx-of hy)
-                    pf (expand (sp 'macros) (proof-of sp c @ p (p ? p 'tt)))
-                    "; \(lab)\n (defvc inf-vc-\(sp 'short)-\(lab) (under \(cx) \(show (close-pi hy goal)))\n   (given \(cx) \(show (close-lam hy pf))))\n")
-                 (cx-text c)))
-         (spec-all sp))
+   ; one label's vcs in a row, under one context and binders, are one defvcs
+   (vc-run a b) (vc? b && a 3 = b 3 && b 4 = a 4 + 1 && cx-of (a 2) = cx-of (b 2) && added (a 2) = added (b 2))
+   (vc-goal sp c) "  \(show (c 1)) \(show (expand (sp 'macros) (proof-of sp c @ p (p ? p 'tt))))\n"
+   (vc-rest sp c l) (two? l && vc-run c <l ? (vc-goal sp <l . vc-rest sp <l >l) (" )\n" . vc-lay sp l))
+   (vc-lay sp l)
+    (atom? l ? ()
+     (: c <l
+      (vc? c
+       ? (" (defvcs inf-vc-\(sp 'short)-\(c 3) \(c 4) \(cx-of (c 2)) \(show (cats (map (b \ [<b >b]) (rev (added (c 2))))))\n"
+          . vc-goal sp c . vc-rest sp c >l)
+       (cx-text c . vc-lay sp >l))))
+   (vc-text sp) (vc-lay sp (spec-all sp))
    ; a vc the proofs do not answer, for the author; a proof no vc asks for
    (vc-open sp) (filter (c \ !(proof-of sp c)) (spec-vcs sp))
    (vc-stale sp) (: ls (map (c \ <c) (spec-vcs sp))

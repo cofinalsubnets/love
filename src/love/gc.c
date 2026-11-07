@@ -127,8 +127,9 @@ static love_inline bool moved(struct gcx *X, word w) {
  return evenp(w) && ((X->fwd <= ptr(w) && ptr(w) < X->to_hi) || (X->s_lo && X->s_lo <= ptr(w) && ptr(w) < X->s_hi)); }
 
 // after the drain: an unforwarded young target is dead and finalizes while the from-space
-// still reads; a tenured one waits for a major
-static void minor_run_finalizers(struct g *g, struct gcx *X) {
+// still reads; a tenured one waits for a major. a young node leaves the nursery below ytop, and
+// no ytop leaves it there: its raw words may not lie where a second pass walks
+static void minor_run_finalizers(struct g *g, struct gcx *X, word *ytop) {
  struct fz **link = &g->fz;
  for (struct fz *fz = *link; fz; ) {
   struct fz *next = fz->next;
@@ -139,7 +140,7 @@ static void minor_run_finalizers(struct g *g, struct gcx *X) {
     fz->fn(g, fz->p), *link = fz = next;
     continue; }
    fz->p = cell(fwd); }
-  if ((word*) fz >= (word*) g->end && (word*) fz < g->hp) {   // the node itself was young
+  if ((word*) fz >= (word*) g->end && (word*) fz < ytop) {   // the node itself was young
    struct fz *nn = gbump(g, Width(struct fz));
    nn->p = fz->p, nn->fn = fz->fn, nn->next = next;
    *link = nn, link = &nn->next;
@@ -219,8 +220,9 @@ static void drain(struct g *g, struct gcx *X) {
 
 // the minor: [end, hp) into the survivors' block sto, slen long, and the survivors before into
 // the major block; X.fwd tells this pass's forwards from older major objects, and the tenured
-// from scan up are walked again. answers whether the block ran out
-static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan) {
+// from scan up are walked again. answers whether the block ran out; ytop is the nursery's
+// top, which a second pass's emptied range no longer says
+static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan, word *ytop) {
  struct gcx X = { .p0 = (word const*) g->end, .t0 = g->hp,    // minor from-range
                   .f2lo = g->sv_base, .f2hi = g->sv_hp,      // the survivors before, tenuring
                   .to_lo = g->major_base, .to_hi = g->major_base + g->major_len,
@@ -247,11 +249,13 @@ static bool gen_minor(struct g *g, word *sto, uintptr_t slen, word *scan) {
   drain(g, &X);
   if (g->major_hp != hp1 || X.s_hp != sh1 || g->rem_n != rn) __builtin_trap(); }
 #endif
- if (g->fz) minor_run_finalizers(g, &X);
+ // a first pass that ran out goes again, over an emptied nursery
+ bool again = X.over && X.p0 < X.t0;
+ if (g->fz) minor_run_finalizers(g, &X, again ? NULL : ytop);
  g->hp = g->end;
 #ifdef LvGcStress
- // after the finalizers, the from-spaces' last reader
- for (word *p = (word*) X.p0; p < (word*) X.t0; p++) *p = gc_poison;
+ // after the finalizers, the from-spaces' last reader; a pass that ran out leaves the nursery its nodes
+ if (!again) for (word *p = (word*) g->end; p < ytop; p++) *p = gc_poison;
  for (word *p = (word*) X.f2lo; p < (word*) X.f2hi; p++) *p = gc_poison;
 #endif
  // the block copied into holds the survivors now; the one emptied is the spare
@@ -409,9 +413,10 @@ static struct g *please_(struct g *g, uintptr_t req0) {
    if (sto) alloc(sto, 0);
    sto = want ? alloc(NULL, want * sizeof(word)) : NULL, sl = sto ? want : 0;
    g->sv2_base = NULL, g->sv2_len = 0; }
-  bool over = gen_minor(g, sto, sl, before);
+  word *ytop = g->hp;
+  bool over = gen_minor(g, sto, sl, before, ytop);
   // a block that ran out tenures whole, its overflow rescanned for the edges back into it
-  if (over) gen_minor(g, NULL, 0, before), g->rem_miss = 0;
+  if (over) gen_minor(g, NULL, 0, before, ytop), g->rem_miss = 0;
   uintptr_t su = (uintptr_t)(g->sv_hp - g->sv_base);
   // grown when it ran out, halved after eight minors mostly empty, never under the floor
   if (over) g->sv_want = 2 * (sl ? sl : g->minor0), g->sv_idle = 0;
@@ -445,20 +450,20 @@ static struct g *please_(struct g *g, uintptr_t req0) {
 #endif
  // only a minor sizes the nursery: grown on a major it outgrows the room that major made
  uintptr_t used = g->len - avail(g), req = req0 + used + (used >> 2), len1 = g->len, arena = len1;
- // grow on two consecutive windows over the setpoint (lean counts them); never shrink for
- // low overhead, which oscillates on phased work
+ // grow on a window over the setpoint; never shrink for low overhead, which oscillates on phased work
  if (!major) {
   g->win_alloc += seen_young, g->win_copied += copied;
   if (g->win_copied * ratio > g->win_alloc) {                  // overhead over 1/ratio
-   if ((g->lean = g->lean > 0 ? g->lean + 1 : 1) >= 2) {
-    uintptr_t wa = g->win_alloc | 1;                           // | 1: progress
-    while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;
-    g->lean = 0, g->win_alloc = g->win_copied = 0; }
-  } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0, g->lean = 0; }
+   uintptr_t wa = g->win_alloc | 1;                            // | 1: progress
+   while (g->win_copied * ratio > wa) arena <<= 1, wa <<= 1;
+   g->win_alloc = g->win_copied = 0;
+  } else if (g->win_alloc > 8 * len1) g->win_alloc = g->win_copied = 0; }
+ uintptr_t room = words_max;
  if (g->budget) {
   // appel's cap, leaving the major room for a worst-case promotion: /8 at the budget,
   // where the room past live holds two nurseries
-  uintptr_t lv = 2 * g->major_live0, room = g->budget > lv ? (g->budget - lv) / (at_share(g) ? 8 : 4) : 0;
+  uintptr_t lv = 2 * g->major_live0;
+  room = g->budget > lv ? (g->budget - lv) / (at_share(g) ? 8 : 4) : 0;
   if (arena > room) arena = room; }
  // the pool was denied room for this nursery's promotion, so the nursery gives; the floors still win
  if (tight) {
@@ -469,7 +474,8 @@ static struct g *please_(struct g *g, uintptr_t req0) {
  if (arena > len1) {
   uintptr_t const c = gc_ncap(g), fr = (uintptr_t) ((g->major_base + g->major_len) - g->major_hp),
                   fit = fr > req0 + 16 ? fr - req0 - 16 : 0, top = c < fit ? c : fit;
-  arena = top > len1 ? top : len1; }
+  arena = top > len1 ? top : len1;
+  if (arena > room) arena = room > len1 ? room : len1; }
  if (arena < g->minor0) arena = g->minor0;
  if (arena < req) arena = req;                                 // the pending allocation fits
 #ifdef LvGcCheck
@@ -483,11 +489,10 @@ static struct g *please_(struct g *g, uintptr_t req0) {
 // a collection asked for, not needed: the resize window is set aside, so it never steers the nursery
 struct g *force(struct g *g, bool major) {
  uintptr_t wa = g->win_alloc, wc = g->win_copied;
- int8_t ln = g->lean;
- g->win_alloc = g->win_copied = 0, g->lean = 0;
+ g->win_alloc = g->win_copied = 0;
  if (major) g->rem_miss = 1;
  if (!ok(g = please(g, 0))) return g;
- g->win_alloc = wa, g->win_copied = wc, g->lean = ln;
+ g->win_alloc = wa, g->win_copied = wc;
  return g; }
 
 static love_inline word copy_data(struct g *g, struct gcx *X, union u *src, bool sv) {

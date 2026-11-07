@@ -106,9 +106,10 @@ void *malloc(size_t n) { return mallocw(b2w(n)); }
 void free(void *p) { ff_free(&freelist, p); }
 
 #ifdef BAKER_STONES
-// the device's horn.c rides the baker and the waker for its rows; qemu has no speaker, so it refuses
-int k_horn_open(int rate) { return -1; }
-intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return -1; }
+// the device's horn.c rides the baker and the waker for its rows; qemu has no speaker, so one that
+// swallows, and never lags: the wake's frames feed the song once each
+int k_horn_open(int rate) { return 0; }
+intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { return (intptr_t) n; }
 uintptr_t k_horn_lag(void) { return 0; }
 void k_horn_close(void) {}
 #endif
@@ -165,15 +166,24 @@ int main(void) {
   if (ok(g) && ok(g = gen_major(g, 0, NULL))) g->major_live0 = (uintptr_t) (g->major_hp - g->major_base);
   // the device's nifs, stood in for: up held, the crank turning, the picture only counted
   g = evals_(g, "(: (held _) 4 (pushed _) 0 (crank _) 10 (lcd f w h) (#f = w * h) (cur_set r c) 0)");
+  // the device's stack is far smaller than this board's: ten frames' depth, by a painted window
+  { enum { sk_window = 64u << 10, sk_limit = 10u << 10 };
+    uint8_t volatile here = 0;
+    uint8_t *top = (uint8_t *) &here, *lo = top - sk_window, *p = lo;
+    for (uint8_t volatile *q = lo; q < (uint8_t volatile *) top - 128; q++) *q = 0xa5;
+    g = evals_(g, "(each ^10 (_ \\ pd-frame ()))");
+    while (p < top - 128 && *p == 0xa5) p++;
+    sh_puts("; the frames' stack "); sh_hex((uintptr_t) (top - p)); sh_putc('\n');
+    if ((uintptr_t) (top - p) > sk_limit) { sh_puts("; past the device's reach\n"); m7_exit(7); } }
 #endif
   struct g *r = evals_(g,
     "(: ok (&& "
     SEAT_OK
 #if defined(BAKER_STONES)
-    "          (tablet? (pd-at 'st))"           // the land built and kept, and ten frames walked
+    "          (tablet? (pd-at 'st))"           // the land built and kept, ten frames walked, the song opened and fed
     "          (: t0 (clock 0) _ (each ^10 (_ \\ pd-frame ())) t1 (clock 0)"
     "             _ (puts (\"; ten frames, ms \" + show (t1 - t0) + \"\\n\"))"
-    "             (0 < (pd-at 'st) 'pz)))"
+    "             (0 < (pd-at 'st) 'pz && tablet? (pd-at 'song))))"
 #elif defined(BAKER_RUNE)
     "          (! ((cite ()) = ())))"           // rune registered
 #else

@@ -7,7 +7,7 @@
 (module 'moon
 (borrow '(kore cli))
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
-(borrow '(gz hashes))
+(borrow '(gz hashes zstd))
 
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard
@@ -491,7 +491,7 @@
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
-                 ; arm32 has no .image lane and no local func symbols (objsecs3 refuses the first)
+                 ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
                        (two? (filter (k \ anames k != k) (keys anames)))
@@ -833,7 +833,7 @@
    (rtcid home)
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
      (_ \ sha256 "moon-rtc 1\n\(mcsrctext home)"))
-   ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-gz), served
+   ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-zst), served
    ; only when the home hashes to the stamped id. cut under -os linux: impl.h parts the kernels
    ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error)
    (rtcarried home tgt os)
@@ -841,11 +841,10 @@
        (elem tgt '(i386 arm) && elem os '(freebsd netbsd)) ()
        (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
           (!(string? nm) ? ()
-             (runtime-gz nm @ z
+             (runtime-zst nm @ z
                 (!(string? z) ? ()
-                   (: ok (string? home ? (rtcid home = runtime-gz "id") 1)
-                      ; inflate does not validate, so the archive magic is the check
-                      a (ok && inflate z 0)
+                   (: ok (string? home ? (rtcid home = runtime-zst "id") 1)
+                      a (ok && zstd-d z)
                       (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))))
    ; the carried archive first; the cache key is cut only on the lane it refused
    (rtarch home tgt os vb)
@@ -1010,7 +1009,7 @@
        arm? (arm32? tgt && tgt != 'arm)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
-       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
+       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT

@@ -1243,17 +1243,18 @@
    ; ms an ms_abi callee: ints only, rcx rdx r8 r9 then the stack above a 32-byte shadow
    (locall1 g env rt ptys va ms as cl fv)
     (? !(rt = 'void || losv? rt || d128? rt || loagg? g rt) (lono g ['ret rt])
-       (ms && any (t \ d128? t) (rt . ptys)) (lono g 'msabi)
+       (ms && any d128? (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
        ; past SysV and AAPCS64 a pair takes the old path
-       (!(lo128? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
+       (!(lo128? g) && (ms || d128? rt || any d128? ptys)) (lono g 'abi)
        (ilp32? g && !(lot32sig g (rt . ptys))) (lono g 'abi)
        (: (arg e pt)
            (lox g env e @ ([vt r fs] && !(lo128? g) && d128? vt) (lono g ['abi vt])
                           ([vt r fs] && (losv? vt || d128? vt))
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
-                                 p9 (losv? p9 || d128? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                                 p9 (losv? p9 || d128? p9 || gcplx? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
+                          ([vt r fs] && gcplx? vt && gcplx? pt && !(locxsame? vt pt)) (lotr g [vt r fs] pt)
                           ([vt r fs] && loagg? g vt) [vt r fs]
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
@@ -1577,7 +1578,7 @@
             ['ret e _] (lost1 g env ['ret e] @ 'bad 'bad fs (lomust g fs))
             ['ret e]
              (: rt <(peep (g 'sigs) (g 'fn) ['long ()]) epj (peep g 'epi epi)
-                (lox g env (losv? rt && d128? (lopeek g env e) ? ['cast rt e] e) @ 'bad 'bad
+                (lox g env (losv? rt && d128? (lopeek g env e) || gcplx? rt ? ['cast rt e] e) @ 'bad 'bad
                    ([_ _ fs] && rt = 'void) (fs + epj)
                    ; an int's upper half is the caller's to extend
                    ([vt r fs] && pair? g rt && losv? vt)
@@ -1639,7 +1640,7 @@
             ['case lo hi] (assoc 'sw env @ [_ tab _] (tab "\(lo):\(hi)" @ () 'bad L [['label L]]) 'bad)
             ['case cv] (assoc 'sw env @ [_ tab ty] (tab (lokey g ty cv) @ () 'bad L [['label L]]) 'bad)
             ('dflt . _) (assoc 'sw env @ [_ tab _] (tab 'dflt @ () 'bad L [['label L]]) 'bad)
-            ('asm . _) (trap (s9 \ loasm g env s9) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
+            ('asm . _) (trap (loasm g env) s (a \ b \ (a = 'leave ? (scare a b) (lono g ['asm a]))))
             (lono g ['stmt <s])))
    ; an asm, its operands seated as asmplan seats them: the values moved to their registers, the body
    ; one fix form reading the inputs' and writing the outputs' and the clobbers', the outputs stored
@@ -1676,11 +1677,12 @@
            (lv 2 @ ty
               (? (stru? ty || arr? ty || lofl? ty && !(freg? a) || !(two? a) != !(pair? g ty)) (lono g 'asmout)
                  (two? a) (lomk g @ l (lomk g @ h
-                             [[['mov l <a] ['mov h <>a]] (lost g lv [ty [l h] ()] @ [fs _] fs 'bad)]))
+                             [[['mov l <a] ['mov h <>a]] (lost g lv [ty [l h] ()] @ [fs _] fs 'bad) (lolvfs lv)]))
                  ; an xmm output into an integer lvalue: its bits
                  ((freg? a && lofl? ty ? (lomkf g) (lomk g)) @ t
                     [[(freg? a && !(lofl? ty) ? [(o 3 <= 4 ? 'movdrx 'movqrx) t a] (lomv t a))]
-                     (lost g lv [ty t ()] @ [fs _] (freg? a ? fs (lonar g ty t + fs)) 'bad)])))
+                     (lost g lv [ty t ()] @ [fs _] (freg? a ? fs (lonar g ty t + fs)) 'bad)
+                     (lolvfs lv)])))
           ins (filter (i \ in? (ops i)) ^#ops)
           outs (filter (i \ out? (ops i)) ^#ops)
           lds (map (i \ ld (ops i) (asgn i)) ins)
@@ -1691,10 +1693,11 @@
                 + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
           (flat l) (catmap (a \ two? a ? a [a]) l)
           (any bad? lds || any bad? sts ? 'bad
-             (: post (catmap (x \ <x) sts + catmap (x \ x 1) sts)
+             (: post (catmap cap sts + catmap (x \ x 1) sts)
                 fx ['fix (flat (map asgn ins)) (flat (map asgn outs) + kills) body tls]
                 ; an asm goto with outputs jumps to a trampoline per label that stores them and goes on
-                (catmap (x \ <x) lds + catmap (x \ x 1) lds +
+                ; an output's address is worked out before the inputs take their registers
+                (catmap (x \ x 2) sts + catmap cap lds + catmap (x \ x 1) lds +
                  (tls = labs ? (fx . post)
                     (nlab g "\(g 'fn).ag" @ done
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +

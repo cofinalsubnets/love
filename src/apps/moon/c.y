@@ -29,9 +29,9 @@
           (cplxty? sty && !(stru? cty)) ['cast cty ['dot e "re"]]
           ['cast cty e]))
    (cx-szn ps n w) (charm? n ? ['cast (szty ps) ['num n]] (cx-no ps "\(w) an incomplete type" ()))
-   (cx-szty ps ty) (varr? ty ? ['bin '* <>>ty ['num (tsz ps <>ty)]] (cx-szn ps (tsz ps ty) "sizeof"))
+   (cx-szty ps [ty _]) (varr? ty ? ['bin '* <>>ty ['num (tsz ps <>ty)]] (cx-szn ps (tsz ps ty) "sizeof"))
    (cx-szof ps e) (ptype ps e @ ty (!ty || varr? ty ? ['szof e] (cx-szn ps (tsz ps ty) "sizeof")))
-   (cx-alty ps ty) (cx-szn ps (talign ps ty) "alignof")
+   (cx-alty ps [ty a]) (cx-szn ps (0 < a ? a (talign ps ty)) "alignof")
    (cx-alof ps e) (ptype ps e @ ty (ty ? (cx-szn ps (talign ps ty) "alignof") (cx-bad ps)))
    (cx-addr ps e) (nulloff ps e @ n (charm? n ? ['num n] ['addr e]))
    (cx-pos ps e) (ptype ps e @ ty (ty && pprom ty != ty ? ['cast (pprom ty) e] e))
@@ -376,7 +376,7 @@ prim : ID { (cx-id ps $1) }
        !(tyat? ps >ts) 'remap
        (thenw (pcty ps >ts) ")" @ tr
           (? (atom? tr) ()
-             (c = 23) [cx-kstyp <tr <>tr]
+             (c = 23) [cx-kstyp [<tr (tyask ps >ts <tr)] <>tr]
              (peekp <>tr "{") (pinit ps <>tr @ iv (two? iv ? [cx-kclit ['clit (fillarr ps <tr <iv) <iv] <>iv]))
              [cx-ktyp <tr <>tr])))
    ; kinds, last first -> their u16s in order
