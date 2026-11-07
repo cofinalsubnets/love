@@ -198,14 +198,25 @@
    (gz-zip9 s nom stamp) (gz-zipw s nom stamp gz-deflate-best)
    (gz-zipw s nom stamp def)
     (: txt "\(s)"
-       named (#nom ? 1 0)
+       (gz-hd nom stamp + def txt + wrle (gz-crc32 txt) 4 + wrle (#txt & 4294967295) 4))
+   (gz-hd nom stamp)
+    (: named (#nom ? 1 0)
        h (cask 10)
        (pins h 0 31 1 139 2 8 3 (named ? 8 0)
         4 (stamp & 255) 5 (stamp >> 8 & 255)
         6 (stamp >> 16 & 255) 7 (stamp >> 24 & 255)
         8 0 9 3,               ; xfl none, os 3 = unix
-        string h + (named ? (nom + string 0) "") + def txt
-        + wrle (gz-crc32 txt) 4 + wrle (#txt & 4294967295) 4))
+        string h + (named ? (nom + string 0) "")))
+   ; rd's pieces as one member, laid through w as they are coded -> [in out deflated] | ()
+   (gz-zipr rd nom stamp best w)
+    (deflate-new best @ st
+       (st = () ? ()
+          (: h (gz-hd nom stamp)
+             (go c i d) (rd 0 @ p
+                         (#p = 0 ? (deflate-end st @ z
+                                      (string? z ? (w (z + wrle c 4 + wrle (i & 4294967295) 4), [i (#h + d + #z + 8) (d + #z)]) ()))
+                            (deflate-feed st p @ z (string? z ? (w z, go (crc32-on c p) (i + #p) (d + #z)) ()))))
+             (w h, go 0 0 0))))
 
    ; every optional field is stepped over, though we write only fname. ftext carries no bytes
    (gz-head s)                                ; -> (1 stamp name body-seat) | ()
@@ -357,32 +368,34 @@ no file, or a bare -, is the filter: stdin -> stdout"
    (gzc-stem p suf)                    ; -> (1 stem) | ()
     (p @ (s + ^suf + "") [1 s] (s + ".tgz") [1 "\(s).tar"] ())
 
-   (gzc-zip t s nom stamp) (peep t 'lvl 6 @ 9 (gz-zip9 s nom stamp) (gz-zip s nom stamp))
+   (gzc-zip t rd nom stamp w) (gz-zipr rd nom stamp (peep t 'lvl 6 = 9 ? 1 0) w)
 
-   ; --- one file, compressed -------------------------------------------------
+   ; --- one file, compressed as it is read; a failure partway removes the output --
    (gzc-zip1 t p)
     (: suf (peep t 'suf ".gz")
-       r (uread p)
-       (? !r (gzc-moan t "\(p): No such file or directory", 1)
-          (ends? p suf && !(peep t 'c 0))
-           (gzc-moan t "\(p) already has \(suf) suffix -- unchanged", 0)
-          (: s <>r
-             st (stat p)
-             ms (two? st ? <>st 0)
-             n? (peep t 'n 0)
-             z (gzc-zip t s (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)))
-             (peep t 'c 0 ? (say out z, flush out, 0)
-                (p + suf @ dst
-                   (? (two? (lstat dst) && !(peep t 'f 0))
-                      (gzc-moan t "\(dst) already exists;\tnot overwritten", 2)
-                      !(uwrite dst z)
-                       (gzc-moan t "cannot write \(dst)", 1)
-                      (two? st && (chmod dst (<>>st & 4095), utime dst ms),
-                       peep t 'k 0 ? 0 (unlink p),
-                       gzc-tell t ("\(p):\t" + gzc-ratio (#s - gzc-pay z) #s
-                                     + (peep t 'k 0 ? " -- created " " -- replaced with ")
-                                     + dst),
-                       0)))))))
+       st (stat p)
+       c (peep t 'c 0)
+       dst (p + suf)
+       (? !(two? st) (gzc-moan t "\(p): No such file or directory", 1)
+          (ends? p suf && !c) (gzc-moan t "\(p) already has \(suf) suffix -- unchanged", 0)
+          (!c && two? (lstat dst) && !(peep t 'f 0)) (gzc-moan t "\(dst) already exists;\tnot overwritten", 2)
+          (open p "r" @ q
+             (!(hot? q) ? (gzc-moan t "\(p): No such file or directory", 1)
+                (: ms <>st
+                   n? (peep t 'n 0)
+                   o (c ? out (open dst "w"))
+                   (? !(hot? o) (close q, gzc-moan t "cannot write \(dst)", 1)
+                      (: z (gzc-zip t (gzc-rd q) (n? ? "" (pbase p)) (n? ? 0 (ms // 1000)) (say o))
+                         _ (close q)
+                         _ (c ? (flush out) (close o))
+                         (? (atom? z) (c || unlink dst, gzc-moan t "\(p): read error", 1)
+                            c 0
+                            (chmod dst (<>>st & 4095), utime dst ms,
+                             peep t 'k 0 ? 0 (unlink p),
+                             gzc-tell t ("\(p):\t" + gzc-ratio (z 0 - z 2) (z 0)
+                                           + (peep t 'k 0 ? " -- created " " -- replaced with ")
+                                           + dst),
+                             0)))))))))
 
    ; --- one file, decompressed (and -t, the same read with no write) --
    ; the output is opened once the header names it (-N); a failure partway removes it
@@ -451,7 +464,7 @@ no file, or a bare -, is the filter: stdin -> stdout"
        (gz-unzipf (gzc-rd in) (a \ b \ [1 (peep t 't 0 ? (s \ 0) (say out))]) @ u
           (flush out,
            gzc-dstat t "stdin" u))
-       (slurp in @ s (say out (gzc-zip t "\(s)" "" 0), flush out, 0)))
+       (gzc-zip t (gzc-rd in) "" 0 (say out), flush out, 0))
 
    ; --- the options ----------------------------------------------------------
    ; a digit is a level, the last one kept; only 9 (--best) changes the coder
