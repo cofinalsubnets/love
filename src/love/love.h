@@ -292,6 +292,7 @@ struct g {
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // bounded by LvRemCap
  intptr_t scare;                          // why the last scare: an oom's ask, or a Scare case
+ uintptr_t c0_floor;                      // the lowest C stack address a compile may reach, set by its first
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
 #endif

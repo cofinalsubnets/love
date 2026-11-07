@@ -803,7 +803,8 @@ lvm(lvm_trayctor) {
   rank++, nelem = mulsat(nelem, (uintptr_t) getcharm(d)); }   // saturated, for tray_bytes to refuse
  if (rank > maxrank) love_musttail return Answerp(2, zero);
  uintptr_t bytes = tray_bytes(ty, rank, nelem);
- Have(b2w(bytes));
+ // rank 0's scalar is reserved here too: no collection may follow the tray's store into Sp[2]
+ Have(b2w(bytes) + (rank ? 0 : ty == love_C ? twin_req : box_req));
  struct tray *v = (struct tray*) Hp;
  Hp += b2w(bytes);
  ini_tray(v, ty, rank);
@@ -813,13 +814,12 @@ lvm(lvm_trayctor) {
  else memset(tray_data(v), 0, nelem * love_T[ty]);
  i = 0;                                        // no alloc below
  for (word l = Sp[2]; chainp(l) && i < nelem; l = B(l), i++) tray_put(v, i, A(l));
- // only rank 0 demotes to its scalar: @(5) stays a one-cell array. rooted, as the box can GC
- Sp[2] = word(v);
+ // only rank 0 demotes to its scalar, in the room reserved above: @(5) stays a one-cell array
  if (rank == 0) {
   if (ty == love_O) love_musttail return Answerp(2, tray_get_obj(v, 0));
-  if (ty == love_C) { Have(twin_req); v = tray(Sp[2]); flo_t *fp = tray_data(v);
+  if (ty == love_C) { flo_t *fp = tray_data(v);
    Sp[2] = mk_twin(&Hp, fp[0], fp[1]); love_musttail return Nextp(1, 2); }
-  word _res; Have(box_req); v = tray(Sp[2]);
+  word _res;
   if (ty >= love_R) emit_gem(_res, tray_get_flo(v, 0));
   else emit_int(_res, tray_get_int(v, 0));
   love_musttail return Answerp(2, _res); }
@@ -1716,7 +1716,7 @@ static love_noinline bool vquot_needs_float(int op, word a, word b) {
  for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
   intptr_t oa = w.oa, ob = w.ob;
   intptr_t av = atray ? tray_get_int(va, oa) : ia, bv = btray ? tray_get_int(vb, ob) : ib;
-  if (bv == 0 || (op == vop_quot && av % bv != 0)) return true; }
+  if (bv == 0 || (op == vop_quot && (bv == -1 ? av == INTPTR_MIN : av % bv != 0))) return true; }
  return false; }
 
 lvm(lvm_vbin) {
