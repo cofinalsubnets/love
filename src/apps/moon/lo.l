@@ -1247,7 +1247,7 @@
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
        (0 < #ptys && !va && #as != #ptys) (lono g 'arity)
        ; past SysV and AAPCS64 a pair takes the old path
-       (!(lo128? g) && (ms || d128? rt || any (t \ d128? t) ptys)) (lono g 'abi)
+       (!(lo128? g) && (ms || d128? rt || any d128? ptys)) (lono g 'abi)
        (ilp32? g && !(lot32sig g (rt . ptys))) (lono g 'abi)
        (: (arg e pt)
            (lox g env e @ ([vt r fs] && !(lo128? g) && d128? vt) (lono g ['abi vt])
@@ -1693,11 +1693,11 @@
                 + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
           (flat l) (catmap (a \ two? a ? a [a]) l)
           (any bad? lds || any bad? sts ? 'bad
-             (: post (catmap (x \ <x) sts + catmap (x \ x 1) sts)
+             (: post (catmap cap sts + catmap (x \ x 1) sts)
                 fx ['fix (flat (map asgn ins)) (flat (map asgn outs) + kills) body tls]
                 ; an asm goto with outputs jumps to a trampoline per label that stores them and goes on
                 ; an output's address is worked out before the inputs take their registers
-                (catmap (x \ x 2) sts + catmap (x \ <x) lds + catmap (x \ x 1) lds +
+                (catmap (x \ x 2) sts + catmap cap lds + catmap (x \ x 1) lds +
                  (tls = labs ? (fx . post)
                     (nlab g "\(g 'fn).ag" @ done
                        ([fx ['jmp done]] + catmap (i \ [['label (tls i)]] + post + [['jmp (labs i)]]) ^#tls +
