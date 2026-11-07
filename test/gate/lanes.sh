@@ -13,9 +13,10 @@
 #      taking the lanes this run just passed as passed
 #
 # --remote: the lanes the lane map places off this box go to the lanes hosts (love bee --on
-# lanes): each host's kept tree is synced and its prerequisites made there once, then its slots
-# take those lanes longest first. this box takes them too once its own are done, and a host that
-# drops gives its lane back to run here, never skipped. a lane's .rc names where it ran
+# lanes): the gated commit is pushed to each host's kept tree and its prerequisites made there
+# once, then its slots take those lanes longest first. this box takes them too once its own are
+# done, and a host that drops gives its lane back to run here, never skipped. a lane's .rc
+# names where it ran
 #
 # heavy slots are the caller's: `love bee --lock --heavy --out out -- sh test/gate/lanes.sh ..`.
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary; the last run's in DIR.prev.
@@ -139,7 +140,12 @@ pop() {
   done
   return 1
 }
-rlanes=
+# a host runs the gated commit itself, so a tree that is not its commit runs every lane here
+rlanes= sha=
+if [ -n "$remote" ]; then
+  sha=$(git rev-parse HEAD 2>/dev/null) && git diff --quiet HEAD 2>/dev/null \
+    || { echo "lanes: the tree is not its commit; every lane runs here"; remote=; }
+fi
 if [ -n "$remote" ]; then
   for l in $run; do
     has "$l" "$alone" && continue
@@ -159,14 +165,15 @@ for p in $rpre; do roflags="$roflags -o $p"; done
 . test/gate/skip.sh
 rst=
 gate_strict && rst=LOVE_GATE_STRICT=1
-# a slot on host h: lanes until the queue is dry. a host that cannot be reached (75, or ssh's
-# 255) puts its lane back for this box and takes no more
+# a slot on host h: lanes until the queue is dry, each only on the gated commit. a host that
+# cannot be reached (75, or ssh's 255) or has moved off it (97) puts its lane back for this
+# box and takes no more
 worker() {
   while l=$(pop "$2" "$3"); do
     s=$(date +%s)
-    out/love bee --on lanes --where "name=$1" --in "$rd" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
+    out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
     r=$?
-    if [ $r -eq 75 ] || [ $r -eq 255 ]; then
+    if [ $r -eq 75 ] || [ $r -eq 97 ] || [ $r -eq 255 ]; then
       echo "lanes: $1 dropped $l ($r); it runs here" >> "$d/remote.log"
       echo "$l" >> "$d/back"
       return
@@ -174,19 +181,19 @@ worker() {
     echo "$r $(( $(date +%s) - s )) $1" > "$d/$l.rc"
   done
 }
-# a host: room enough (LANES_HOST_MEM_GB, 3, available there), its tree synced, its
+# a host: room enough (LANES_HOST_MEM_GB, 3, available there), the gated commit pushed, its
 # prerequisites made, then a worker a slot
 rhost() {
   k=$(out/love bee --on lanes --where "name=$1" -- awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)
   [ -n "$k" ] && [ "$k" -ge $(( ${LANES_HOST_MEM_GB:-3} * 1048576 )) ] \
     || { echo "lanes: $1 has ${k:-no} kB available, under ${LANES_HOST_MEM_GB:-3} GB; it takes no lanes" >> "$d/remote.log"; return; }
-  out/love bee --on lanes --where "name=$1" --in "$rd" --sync "$PWD" -- env $rst make -k -j4 $rpre > "$d/host-$1.log" 2>&1 \
+  out/love bee --on lanes --where "name=$1" --in "$rd" --push "$sha" -- env $rst make -k -j4 $rpre > "$d/host-$1.log" 2>&1 \
     || { echo "lanes: $1 could not make the prerequisites -- $d/host-$1.log" >> "$d/remote.log"; return; }
   # exact lanes read the binary: this host's build must be this box's, byte for byte
   x=0
   case $(uname -m) in aarch64|arm64) me=a64 ;; riscv64) me=rv64 ;; *) me=x64 ;; esac
   if [ "$3" = "$me" ]; then
-    [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw)" ] && x=1
+    [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw)" ] && x=1
     [ $x = 1 ] || echo "lanes: $1's love is not this box's; it takes no exact lanes" >> "$d/remote.log"
   fi
   i=0

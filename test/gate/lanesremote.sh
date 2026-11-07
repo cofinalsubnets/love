@@ -29,18 +29,20 @@ case "\$*" in
     exit 0 ;;
   "bee --on lanes --list") printf 'up 1 x64\ngone 1 x64\n'; exit 0 ;;
 esac
-h= src=
+h= src= at=
 while [ \$# -gt 0 ] && [ "\$1" != -- ]; do
   case \$1 in
     name=*) h=\${1#name=} ;;
-    --sync) src=\$2; shift ;;
+    --push) src=\$2; at=\$2; shift ;;
+    --at) at=\$2; shift ;;
   esac
   shift
 done
 [ \$# -gt 0 ] && shift
 d=$t/far/\$h
 mkdir -p "\$d"
-[ -n "\$src" ] && cp "\$src/Makefile" "\$d/"
+[ -z "\$at" ] || [ "\$at" = "\$(git -C $t rev-parse HEAD)" ] || exit 97
+[ -n "\$src" ] && cp "$t/Makefile" "\$d/"
 [ \$# -gt 0 ] || exit 0
 case "\$h \$*" in
   "gone "*--no-print-directory*) exit 255 ;;
@@ -48,6 +50,8 @@ esac
 cd "\$d" && exec "\$@"
 EOF
 chmod +x "$t/out/love"
+# a host runs the gated commit: the stand-in tree is one
+git -C "$t" init -q && git -C "$t" add Makefile test && git -C "$t" -c user.name=t -c user.email=t@t commit -qm t || exit 1
 
 ( cd "$t" && LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c ) > "$t/run.log" 2>&1 \
   || { cat "$t/run.log"; fail "the run was red"; }

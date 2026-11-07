@@ -10,7 +10,7 @@
    _ (mkdir ht-d 493)
    (ht-put nm s) (: p (open (ht-d + "/" + nm) "w") _ (say p s) (close p))
    (ht-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
-   ; past the options and the host: one word is a line, more an argv (rsync's far end)
+   ; past the options and the host: one word is a line, more an argv
    _ (ht-put "ssh" "while [ \"$1\" = -o ]; do shift 2; done; shift; [ $# -eq 1 ] && exec sh -c \"$1\"; exec \"$@\"\n")
    _ (ht-put "down" "exit 255\n")
    _ (ht-put "hosts" ("# a test registry\nname up\nreach sh " + ht-d + "/ssh up\nslots 2\ncaps a64-exec kvm-a64 lanes\nslots-lanes 1\napart-lanes bsd\npage 16384\n\n"
@@ -46,16 +46,30 @@
    held (map cap (ht-locks (ht-d + "/locks") "exclusive"))
    _ (hosts-free l1 (getpid 0))
    after (map cap (ht-locks (ht-d + "/locks") "exclusive"))
-   ; a kept directory: --sync fills it by content, out/ left behind, and it outlives the run;
-   ; a second sync leaves an unchanged file's time alone and carries the changed one
+   ; a kept directory: --push lays this repo's commit in it, untracked files but out/ cleaned,
+   ; and it outlives the run; a second push leaves a file the commit keeps at its time and
+   ; carries the changed one; --at runs only on that commit with its tracked files untouched
    kd (ht-d + "/kept")
-   _ (mkdir (ht-d + "/src") 493) _ (mkdir (ht-d + "/src/out") 493)
-   _ (ht-put "src/a.txt" "a\n") _ (ht-put "src/b.txt" "b\n") _ (ht-put "src/out/x" "x\n")
-   kin (hosts-on ["--on" "lanes" "--in" kd "--sync" (ht-d + "/src") "--" "sh" "-c" "cat a.txt b.txt > got; test ! -e out"])
-   k1 (ht-get (kd + "/got"))
+   _ (mkdir (ht-d + "/src") 493)
+   (ht-git as) (hark (["git" "-C" (ht-d + "/src") "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   (ht-sha _) <(lines <>(ht-git ["rev-parse" "HEAD"]))
+   _ (ht-git ["init" "-q"]) _ (ht-put "src/a.txt" "a\n") _ (ht-put "src/b.txt" "b\n")
+   _ (ht-git ["add" "a.txt" "b.txt"]) _ (ht-git ["commit" "-qm" "one"])
+   c1 (ht-sha 0)
+   here (cwd 0) _ (chdir (ht-d + "/src"))
+   kin (hosts-on ["--on" "lanes" "--in" kd "--push" c1 "--" "sh" "-c" "mkdir -p out && cat a.txt b.txt > out/got"])
+   _ (ht-put "kept/stray" "") _ (ht-put "kept/out/keep" "")
+   k1 (ht-get (kd + "/out/got"))
    _ (hark ["touch" "-d" "@1000" (kd + "/a.txt")])
-   _ (ht-put "src/b.txt" "c\n")
-   ks (hosts-on ["--on" "lanes" "--in" kd "--sync" (ht-d + "/src")])
+   _ (ht-put "src/b.txt" "c\n") _ (ht-git ["commit" "-qam" "two"])
+   c2 (ht-sha 0)
+   ks (hosts-on ["--on" "lanes" "--in" kd "--push" c2])
+   kb (ht-get (kd + "/b.txt"))
+   kat (hosts-on ["--on" "lanes" "--in" kd "--at" c2 "--" "true"])
+   kold (hosts-on ["--on" "lanes" "--in" kd "--at" c1 "--" "true"])
+   _ (ht-put "kept/b.txt" "edited\n")
+   kdirty (hosts-on ["--on" "lanes" "--in" kd "--at" c2 "--" "true"])
+   _ (chdir here)
    (ht-mt f) (hark ["stat" "-c" "%Y" f] @ r (<r = 0 ? (ht-num >r) ()))
    ; the env names hosts for a release, and takes the cap over the registry
    _ (setenv "KTEST_A64_HOSTS" "far.lan:3 near.lan")
@@ -73,7 +87,9 @@
            (1 = all 0 "slots-lanes") (ht-seq (all 0 "apart-lanes") ["bsd"])
            (ht-seq l1 [<l1 "host-up-lanes-1" "host-bsd-1"]) (ht-seq (sort held) ["host-bsd-1" "host-up-lanes-1"])
            !(two? after)
-           (0 = kin) (k1 = "a\nb\n") (0 = ks) (1000 = ht-mt (kd + "/a.txt")) (ht-get (kd + "/b.txt") = "c\n")
+           (0 = kin) (k1 = "a\nb\n") (0 = ks) (1000 = ht-mt (kd + "/a.txt")) (kb = "c\n")
+           !(two? (stat (kd + "/stray"))) (two? (stat (kd + "/out/keep")))
+           (0 = kat) (97 = kold) (97 = kdirty)
            (ht-seq (ht-names ev) ["far.lan" "near.lan"]) (ht-seq (map (h \ h "slots") ev) [3 1])
            (ht-seq (ev 0 "reach") ["ssh" "far.lan"]))
    _ (setenv "BEE_HOSTS" "") _ (setenv "BEE_LOCKS" "")

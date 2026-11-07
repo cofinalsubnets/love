@@ -109,20 +109,25 @@
         + foldl (\ s w (s + sh-quote w + " ")) "" (hs-ssh h) + sh-quote there))
 
    ; a kept directory on h, under its home unless absolute: argv runs there with the same
-   ; three words of env, and nothing is cleaned after
-   (hs-in-line h in argv)
+   ; three words of env, and nothing is cleaned after. with at, only while the directory's
+   ; checkout is that commit, its tracked files untouched; else 97
+   (hs-at at) (? !(string? at) ""
+                 (" && { test \"$(git rev-parse HEAD 2>/dev/null)\" = " + sh-quote at
+                  + " && git diff --quiet HEAD || { echo 'bee: not at " + at + "' >&2; exit 97; }; }"))
+   (hs-in-line h in at argv)
     (foldl (\ s w (s + sh-quote w + " ")) "" (hs-ssh h)
-     + sh-quote ("mkdir -p " + sh-quote in + " && cd " + sh-quote in
+     + sh-quote ("mkdir -p " + sh-quote in + " && cd " + sh-quote in + hs-at at
                  + " && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=\"$HOME\" LANG=C"
                  + foldl (\ s w (s + " " + sh-quote w)) "" argv))
-   ; src's files into h's kept directory by content: an unchanged file keeps its time there and
-   ; a changed one takes the copy's, so a make there rebuilds what moved and only that. out/
-   ; and .git stay behind
-   (hs-sync-line h src in)
-    (: r (hs-ssh h) n #r
-       (hs-in-line h in ["true"] + " && rsync -rlc --delete --exclude=/out/ --exclude=/.git -e "
-        + sh-quote (join " " (map sh-quote (take (n - 1) r))) + " "
-        + sh-quote (src + "/") + " " + sh-quote (r (n - 1) + ":" + in + "/")))
+   ; this repo's commit sha into h's kept directory: pushed, checked out over whatever was
+   ; there, untracked files but out/ cleaned. a file the commit keeps keeps its time, so a
+   ; make there rebuilds what moved and only that
+   (hs-push-line h sha in)
+    (: r (hs-ssh h) n #r q (sh-quote in)
+       (hs-in-line h in () ["sh" "-c" "{ [ -d .git ] || git init -q; } && git config receive.denyCurrentBranch ignore"]
+        + " && GIT_SSH_COMMAND=" + sh-quote (join " " (map sh-quote (take (n - 1) r)))
+        + " git push -q --force " + sh-quote (r (n - 1) + ":" + in) + " " + sh-quote (sha + ":refs/heads/gate")
+        + " && " + hs-in-line h in () ["sh" "-c" ("git update-index -q --refresh; git checkout -q --force " + sha + " && git clean -fdq -e /out/")]))
 
    ; --hosts: the registry, a line a host
    (hs-text _)
@@ -131,18 +136,19 @@
           (foldl (\ a h (a + h "name" + "  " + show (h "slots") + (h "slots" = 1 ? " slot  " " slots  ")
                          + join " " (h "caps") + "  " + join " " (h "reach") + "\n"))
                  "" hs)))
-   ; --on CAP [--where K=V] [--ship DIR | --in DIR [--sync SRC]] (--probe | --ssh | --list | -- CMD ..):
-   ; CMD's status, 75 when no host with CAP answers, 255 when ssh or the host fails, 2 for a
-   ; malformed line. --in keeps DIR on the host, which --sync fills first (alone, no slot taken);
-   ; --list is the live hosts, `name slots isa` a line
+   ; --on CAP [--where K=V] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..):
+   ; CMD's status, 75 when no host with CAP answers, 255 when ssh or the host fails, 97 when DIR
+   ; is not at SHA, 2 for a malformed line. --in keeps DIR on the host, which --push lays this
+   ; repo's SHA in first (alone, no slot taken); --list is the live hosts, `name slots isa` a line
    (hosts-on as)
     (: (opt k) (findsub as [k] @ i (0 <= i && i + 1 < #as ? (as (i + 1)) ()))
-       cap (opt "--on") where (opt "--where") ship (opt "--ship") in (opt "--in") src (opt "--sync")
+       cap (opt "--on") where (opt "--where") ship (opt "--ship") in (opt "--in")
+       src (opt "--push") at (opt "--at" @ a (string? a ? a src))
        cmd (findsub as ["--"] @ i (0 <= i ? (drop (i + 1) as) ()))
        (run line) (: p (spawn ["sh" "-c" line]) (charm? p && 0 <= p ? (wait p) 255))
        (? (elem "--hosts" as) (: _ (say out (hs-text 0)) 0)
-          !(string? cap) (: _ (say err "usage: love bee --on CAP [--where K=V] [--ship DIR | --in DIR [--sync SRC]] (--probe | --ssh | --list | -- CMD ..)\n") 2)
-          (string? src && !(string? in)) (: _ (say err "bee: --sync wants --in\n") 2)
+          !(string? cap) (: _ (say err "usage: love bee --on CAP [--where K=V] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..)\n") 2)
+          (string? at && !(string? in)) (: _ (say err "bee: --push and --at want --in\n") 2)
           (: live (hosts-live (hosts-with cap where))
              (? (elem "--probe" as) (two? live ? 0 75)
                 (elem "--ssh" as) (? (two? live) (: _ (say out (join " " (hs-ssh <live) + "\n")) 0) 75)
@@ -150,15 +156,16 @@
                  (: _ (map (h \ say out (h "name" + " " + show (hs-count h) + " " + peep h "isa" "?" + "\n")) live)
                     (two? live ? 0 75))
                 (string? src && !(two? cmd))
-                 (? (two? live) (run (hs-sync-line <live src in))
+                 (? (two? live) (: r (run (hs-push-line <live src in))
+                                   (r = 0 ? (run (hs-in-line <live in at ["true"])) r))
                     (: _ (say err ("bee: no host with " + cap + " answers\n")) 75))
                 !(two? cmd) (: _ (say err "bee: --on wants -- and a command\n") 2)
                 !(two? live) (: _ (say err ("bee: no host with " + cap + (string? where ? (" and " + where) "") + " answers\n")) 75)
                 (: me (getpid 0)
                    slot (hosts-take live me ("bee --on " + cap))
-                   s0 (string? src ? (run (hs-sync-line <slot src in)) 0)
+                   s0 (string? src ? (run (hs-push-line <slot src in)) 0)
                    r (? (s0 != 0) s0
-                        (run (string? in ? (hs-in-line <slot in cmd) (hosts-line <slot ship cmd))))
+                        (run (string? in ? (hs-in-line <slot in at cmd) (hosts-line <slot ship cmd))))
                    _ (hosts-free slot me)
                    r))))))
 ) ; module hosts

@@ -13,7 +13,7 @@
        love bee --mcp                                 the hive and the queue tools, as a claude code session's mcp server
        love bee --state busy|idle [--pid P]           a claude code session's hooks say its state
        love bee --lock [--heavy] [--out DIR] -- CMD ..   a command under its out/'s lock, and a heavy ticket
-       love bee --on CAP [--where K=V] [--ship DIR | --in DIR [--sync SRC]] (--probe | --ssh | --list | -- CMD ..)   a command on a host that can
+       love bee --on CAP [--where K=V] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..)   a command on a host that can
        love bee --hosts                               the hosts this box knows
        love bee --lanes-doc | --lanes-map             the lanes a change owes: AGENTS.md's table, lanes.sh's chains
        love bee --lanes [BASE [HEAD]]                 the lanes HEAD's change owes, in order, and why
