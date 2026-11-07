@@ -227,19 +227,22 @@
           (f . u) (f . nmlit u)
           _ ())
 
-   ; within a block, a one-def vreg's def while what it read still holds: copies read through, an
-   ; add or lea of a literal moves into the offset, an add of a scaled index into an indexed form
-   ; av: each def that holds, rv: per register the defs that read it, so a write drops them
-   (nmloc g fs dn)
-    (: (one? x) (lovr? x && peep dn x 0 = 1)
+   ; within a block, a vreg's one def but its declaration's while what it read still holds: copies
+   ; read through, an add or lea of a literal moves into the offset, an add of a scaled index into an
+   ; indexed form. av: each def that holds, rv: per register the defs that read it, so a write drops
+   ; them; a def that reads its own target is never held
+   (nmloc g fs)
+    (: dr (foldl (t \ f \ (f @ (('cdef . _) && !(abl? g 'nmdecl)) t
+                                _ (raops g f @ [_ d] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t d) _ t))) {} fs)
+       (one? x) (lovr? x && peep dr x 0 = 1)
        (go fs av rv)
         (fs @ (f . u)
                (f @ ('label . _) (f . go u {} {})
                     _ (nmfold g f av @ f2
                        (raops g f2 @ [rs ds]
                           (: _ (map (d \ (map (t \ pin av t ()) (rv d), pin av d (), pin rv d ())) ds)
-                             e (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t) rs
-                                     (['mov t y] && one? t && lovr? y) [y]
+                             e (f2 @ ([('add || 'lea || 'imul || 'and) t _ _] && one? t && nelem t rs) rs
+                                     (['mov t y] && one? t && lovr? y && y != t) [y]
                                      (['li t k] && one? t) ()
                                      _ 'no)
                              _ (e = 'no ? 0 (pin av <>f2 f2, map (x \ pin rv x (<>f2 . rv x)) e))
@@ -296,7 +299,7 @@
        (nmdn g fs @ dn
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
-             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
+             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
    ; a multiply by a power of two the fold left is a shift, off x86 through a register;
    ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
