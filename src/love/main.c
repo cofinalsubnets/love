@@ -544,7 +544,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   if (bake) {                                            // snapshot the post-warm heap, then exit
     // the crew is never aboard: -l names it, else the carried source's roster
     char cat[4096 + 40];                               // a path, and ".bakecat.<pid>.l"
-    if (!bake_load && bsrc_lay_cat(cat, sizeof cat, bake_out)) bake_load = cat;
+    if (!bake_load && bsrc_lay_cat(cat, sizeof cat, *bake ? bake : bake_out)) bake_load = cat;
     if (bake_load) {
       int ok = ok(g = bake_eval_file(g, bake_load));
       if (bake_load == cat) unlink(cat);
