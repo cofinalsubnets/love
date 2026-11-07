@@ -4243,8 +4243,9 @@
    (nmen nm x) (? (atom? x) 0 (x @ ['var n] (n = nm) (any (nmen nm) x)))
    ; -- a local struct of scalars, named only by member or by & to a call that keeps no pointer,
    ; becomes its members as scalars, which the allocator may seat; around such a call they copy to
-   ; the struct and back. one that starts as a copy from memory reads its members there, through
-   ; an address taken once. types carry no volatile, so a unit naming one is left alone --
+   ; the struct and back. one that starts as a copy from memory, or is assigned one as a statement,
+   ; reads its members there, through an address taken once. types carry no volatile, so a unit
+   ; naming one is left alone --
    (srs g f)
     (: w64 !(ilp32? g)
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
@@ -4268,8 +4269,14 @@
                               !(any (j \ !(j = i) && nmen nm (as j)) ^#as))
                               (pin site nm 1)
                               _ (scan a)))
+       ; a whole copy in, its value unread: a statement, or a comma's left
+       (eff x) (x @ (['asn ['var nm] m] && cand? nm && mem? m) (scan m)
+                    ['comma a b] (eff a, eff b)
+                    _ (scan x))
        (scan x) (? (atom? x) 0
-                   (x @ ['dot ['var nm] fl] (cand? nm ? (pin use nm (elem fl (peep use nm ()) ? (use nm) (fl . peep use nm ()))) 0)
+                   (x @ ['expr e] (eff e)
+                        ['comma a b] (eff a, scan b)
+                        ['dot ['var nm] fl] (cand? nm ? (pin use nm (elem fl (peep use nm ()) ? (use nm) (fl . peep use nm ()))) 0)
                         ['var nm] (pin bad nm 1)
                         ['addr ['var nm]] (pin bad nm 1)
                         ['addr ['dot ['var nm] _]] (pin bad nm 1)
@@ -4295,8 +4302,12 @@
                     (: k (tmps 'k) t "`s\(k)"
                        _ (pins tmps 'k (k + 1) 'l ([t rt ()] . tmps 'l))
                        (seq (in + [['asn ['var t] c]] + out + [['var t]])))))))
+       (asg nm m) (: k (tmps 'k) t "`s\(k)"
+                     _ (pins tmps 'k (k + 1) 'l ([t ['ptr (cand nm)] ()] . tmps 'l))
+                     (seq ([['asn ['var t] ['addr (rw m)]]] + map (fl \ ['asn ['var (sn nm fl)] ['dot ['deref ['var t]] fl]]) (use nm))))
        (rw x) (? (atom? x) x
                  (x @ (['dot ['var nm] fl] && elem nm ok) ['var (sn nm fl)]
+                      (['asn ['var nm] m] && elem nm ok) (asg nm m)
                       ['decl ps] ['decl (rd ps)]
                       ['call ['var fn] as] (rwcall fn as)
                       _ (map rw x)))
