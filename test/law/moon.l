@@ -881,9 +881,9 @@
          (cast "int main(void){ long long x = 5; return (int)x; }"))
       ((cast "int main(void){ __extension__ typedef int t; t y = __extension__ 3; return y; }") =
          (cast "int main(void){ typedef int t; t y = 3; return y; }"))
-      ; a typedef's declarator carries the trailing attribute run too
+      ; a typedef's declarator carries the trailing attribute run too, a bare aligned the widest
       ((cast "typedef struct TT { int a; } T __attribute__((__aligned__)); T t;") =
-         (cast "typedef struct TT { int a; } T; T t;"))))
+         (cast "typedef struct TT { int a; } T __attribute__((aligned(16))); T t;"))))
 
 ; -- a type-specifier run canonicalizes to one symbol; the unsigned scalars are 'uchar 'ushort 'uint 'ulong.
 (: (ty1 src)  <<><<><<>(cast (src + " int main(void){return 0;}"))

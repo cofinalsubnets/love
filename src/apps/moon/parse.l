@@ -580,7 +580,7 @@
              (k = 'cond)
               (: a (tdecay (ptype ps <>>e)) b (tdecay (ptype ps <>>>e))   ; an array arm decays
                  (? (parith? a && parith? b) (puac !(pst32? ps) a b)
-                    (two? a && a = b) a
+                    (two? a && alstrip a = alstrip b) a
                     ; 6.5.15p6: beside a null pointer constant, the other's type. a cast is
                     ; one only when its operand folds, which the kernel's __is_constexpr reads
                     (npc? <>>e && ptr? b) b
@@ -1178,11 +1178,18 @@
                    (two? more ? [(row . <more) <>more]))))))
    ; the selected expression, presence-wrapped. equality is structural over the marked type,
    ; so `const int *` and `int *` are two rows; a top-level-qualified row matches nothing.
+   ; a struct's ask is no part of its type, as gcc has it
    (gpick rows ty)
     (: (go l w) (atom? l ? w                       ; w: the default so far
                    (: r <l t <r q <>r e <>>r
-                      (!q && t = ty ? [1 e] (go >l (t = 'dflt ? [1 e] w)))))
+                      (!q && alstrip t = alstrip ty ? [1 e] (go >l (t = 'dflt ? [1 e] w)))))
        (go rows ()))
+   ; a type without the ask its structs carry
+   (alstrip ty) (? (stru? ty) [<ty <>ty]
+                   (ptr? ty) ['ptr (alstrip <>ty)]
+                   (arr? ty) ['arr (alstrip <>ty) <>>ty]
+                   (cq? ty) ['cq <>ty (alstrip <>>ty)]
+                   ty)
 
    ; complex usual arithmetic conversion (C99 6.3.1.8): a real side rises to {x, 0}, a
    ; single-eval clit, so gen's complex lane only meets complex operands
@@ -2258,13 +2265,13 @@
        (atom? dr ? ()
           (: nm <<dr
              old (peep (ps 'types) nm 'none)
-             _ (pin (ps 'types) nm <><dr)
-             _ (bq ? (pin (ps 'qtdef) nm bq) 0)
              ; n's alignment, its size unchanged: `typedef T n __aligned(N)` sets it, else the
              ; run's (ra) reaches a declarator of the run's own type. it may lower as well as raise
-             _ (pattpk ps <>dr 2 @ a
-                  (: v (? (0 < a) a (tdbase? <><dr base) ra 0)
-                     (0 < v || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm v) 0)))
+             v (pattpk ps <>dr 2 @ a (? (0 < a) a (tdbase? <><dr base) ra 0))
+             _ (0 < v || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm v) 0)
+             ; a struct carries it in its type's third slot, so a deref, index or member keeps it
+             _ (pin (ps 'types) nm (<><dr @ ty (0 < v && stru? ty ? [<ty <>ty v] ty)))
+             _ (bq ? (pin (ps 'qtdef) nm bq) 0)
              sh2 (['types nm old] . sh)
              af (patt <>dr)                ; glibc's trailing __attribute__
              (? (peekp af ",") (btdefs ps base >af sh2 bq ra)
