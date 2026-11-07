@@ -392,7 +392,25 @@
           (catmap (i \ map cup (rev (peep ins i ())) + (out i @ () [(ft i)] 1 () m [m])) ^n)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r)))))
+   ; a 32-bit extension of a vreg whose every reader takes only its low half goes. such a reader:
+   ; the extension, a store of 4 bytes or less, or an add, sub, imul, and, or, xor or copy whose
+   ; answer is such a vreg in turn or is extended by the next form
+   (nmlow g fs)
+    (: lv {}
+       _ (map (f \ (raops g f @ [u _] (map (x \ lovr? x ? (pin lv x 1)) u) _ 0)) fs)
+       ; a form's full reads, nx the form after it
+       (full f nx)
+        (: (low? t) (lv t = 1 || (nx @ [('zx4 || 'sx4) v] (v = t) _ 0))
+           (f @ [('zx4 || 'sx4) _] ()
+                [('st4 || 'st2 || 'st1) b o _] [b o]
+                [('add || 'sub || 'imul || 'and || 'or || 'xor) t x y] (low? t ? () [x y])
+                ['mov t a] (lovr? t && low? t ? () [a])
+                _ (raops g f @ [u _] u _ ())))
+       (sweep l c) (l @ (f . u) (sweep u (foldl (c2 \ x \ (lv x = 1 ? (pin lv x 0, 1) c2)) c (full f (u @ (n . _) n _ ())))) _ c)
+       (fix _) (sweep fs 0 @ 0 0 _ (fix 0))
+       _ (fix 0)
+       (filter (f \ !(f @ [('zx4 || 'sx4) v] (lv v = 1) _ 0)) fs))
    ; in a block, past (mov t v) a read of v reads t while neither is written, where that lets v die
    ; at the copy: ra's copy hint then gives the two one register. a form that also writes v or t
    ; (a cmov onto itself has no encoding), or an asm, ends it. a round leaves the names it moved to the next, over fresh liveness
