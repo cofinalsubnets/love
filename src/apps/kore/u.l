@@ -51,12 +51,12 @@
        [<r <>r <>>r (<>>>st + n)])
    ; lighter folds for a wc not asked for words, or asked for bytes alone
    (ucount-b st s) [<st <>st <>>st (<>>>st + #s)]
-   (ucount-l sc st s)
+   (ucount-l st s)
     (: n #s
-       (go k l) (sc s 10 k @ i (i < 0 ? l (go (i + 1) (l + 1))))
+       (go k l) (subidx s 10 k @ i (i < 0 ? l (go (i + 1) (l + 1))))
        [<st (go 0 <>st) <>>st (<>>>st + n)])
    (ucount-for l? w?)
-    (w? ? ucount-go (l? ? (ucount-l (cite 'scan 'scanner ())) ucount-b))
+    (w? ? ucount-go (l? ? ucount-l ucount-b))
    ucount0 [0 0 0 0]
    ; wc -m as a fold: st is [chars held], held the torn sequence a gulp ended in. a byte that
    ; begins no valid character counts nothing
@@ -262,18 +262,13 @@
      0 (0 < #p ? "/" ".")
      e0 (lastslash (snip p 0 e0) @ 0 "."
          b0 (uchop (snip p 0 b0) @ 0 "/" z (snip p 0 z))))
-   ; split at charm c, every piece kept: "a:" is ("a" ""), "" is (""). natively by the scan
-   ; floor, a charm walk where it is not aboard
+   ; split at charm c, every piece kept: "a:" is ("a" ""), "" is ("")
    (usplit c s)
     (: n #s
-       sc (cite 'scan 'scanner)
-       (go cite k acc) (? (n <= k) (rev (snip s cite k . acc))
-                          (s k = c) (go (k + 1) (k + 1) (snip s cite k . acc))
-                          (go cite (k + 1) acc))
-       (fast f cite acc) (f s c cite @ k
-                            (k < 0 ? (rev (snip s cite n . acc))
-                               (fast f (k + 1) (snip s cite k . acc))))
-       (lit? sc ? (fast (sc ()) 0 ()) (go 0 0 ())))
+       (go cite acc) (subidx s c cite @ k
+                        (k < 0 ? (rev (snip s cite n . acc))
+                           (go (k + 1) (snip s cite k . acc))))
+       (go 0 ()))
    ; join with charm c between
    (ujoinc c ls)
     (: o (jug 0)
@@ -326,7 +321,7 @@
    ; a gulp or a line at a time, never the whole input. see/unsee/chug, core's in every world.
    ; 'p is the unread cursor, 'm how far the newline scan has looked; the read-through prefix
    ; drops on a fill, not per line, so a line costs its own length, not the tail behind it
-   (urd q) {'q q 'h "" 'p 0 'm 0 'e 0 'sc (cite 'scan 'scanner ())}
+   (urd q) {'q q 'h "" 'p 0 'm 0 'e 0}
    (urd-drop t)                                  ; let the read-through bytes go
     (peep t 'p 0 @ 0 0 p 
      (peep t 'h "" @ h (pins t 'h (snip h p #h) 'm (peep t 'm 0 - p) 'p 0)))
@@ -341,7 +336,7 @@
    ; newline. the scan mark keeps a newline-less input from costing its length squared
    (urd-line t)
     (: h (peep t 'h "") n #h p (peep t 'p 0) m (peep t 'm 0)
-       i (t 'sc h 10 (m < p ? p m))          ; the newline, natively where it can be
+       i (subidx h 10 (m < p ? p m))          ; the newline
        (0 <= i ? (pins t 'p (i + 1) 'm (i + 1), [(snip h p i) 1])
           (peep t 'e 0)
            (p < n ? (pins t 'h "" 'p 0 'm 0, [(snip h p n) 0]))

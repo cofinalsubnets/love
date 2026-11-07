@@ -320,7 +320,7 @@
                          (idv? t "_Alignas" && peekp >s "(")
                           (two? >>s && tkk <>>s = 'num ? (tkv <>>s)
                              (pcty ps >>s @ tr
-                                (two? tr ? (talign ps <tr) (go >s d))))
+                                (two? tr ? (tyask ps >>s <tr @ a (0 < a ? a (talign ps <tr))) (go >s d))))
                          (go >s d))))
        (go ts 0))
    ; the words the scans above answer to, read in one walk by their bounds: a scan whose
@@ -1075,6 +1075,8 @@
    (tdrun ps ts) (specasks ps ts @ r (0 < <r ? <r <>r))
    ; a declarator's type is the run's own (or an array of it), not a pointer or function to it
    (tdbase? ty base) (? (ty = base) 1 (arr? ty) (tdbase? <>ty base) ())
+   ; what a type-name's run asks of its type ty, 0 for the type's own
+   (tyask ps ts ty) (tdrun ps ts @ a (a < 1 ? 0 (pbty ps ts @ br (tdbase? ty <br ? a 0))))
    ; a qualifier after the last star qualifies the pointer (`int * const`): a row no
    ; lvalue-converted expression matches
    (qtop? ts)

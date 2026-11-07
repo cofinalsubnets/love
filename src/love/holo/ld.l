@@ -342,7 +342,7 @@
                   (pin m 'size (foldl shard 0 ^32)))
        _ (each (keys ms) (id \ lay (ms id)))
        _ (each (keys im) (k \ (: v (im k) tab (ms <v 'tab)
-                                 (pin im k [<v (spread (map (q \ <q) (v 1))) (spread (map (q \ tab (q 1)) (v 1)))]))))
+                                 (pin im k [<v (spread (map cap (v 1))) (spread (map (q \ tab (q 1)) (v 1)))]))))
        {'ms ms 'im im})
 
    ;; --- relocation. a -shared -Bsymbolic image binds every definition home, so an ABS64 in

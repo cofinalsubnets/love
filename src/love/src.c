@@ -6,13 +6,13 @@
 // (tree-tar name) -> that section of the carried source as a tar; (tree-tar 0) -> the whole
 // tar. () where none is carried, no such section, or it won't decode
 // (tree-head 0) -> the sections, [name codec raw packed crc32 decoded?] each, the index first.
-// (runtime-gz "x64"|"a64"|"rv64"|"i386") -> that ISA's moonlibc archive, deflated;
-// (runtime-gz "id") -> the tree-slice hash they were cut from (moon.l's rtcid). () when none.
+// (runtime-zst "x64"|"a64"|"rv64"|"i386") -> that ISA's moonlibc archive, one zstd frame;
+// (runtime-zst "id") -> the tree-slice hash they were cut from (moon.l's rtcid). () when none.
 // mksrc.l and mkrt.l lay the blobs; a link without them takes noblob.c, so a length 0 is none
 extern const unsigned char
- rtgz_x64[], rtgz_a64[], rtgz_rv64[], rtgz_i386[], rtgz_id[];
+ rtzst_x64[], rtzst_a64[], rtzst_rv64[], rtzst_i386[], rtzst_id[];
 extern const uintptr_t
- rtgz_x64_len, rtgz_a64_len, rtgz_rv64_len, rtgz_i386_len, rtgz_id_len;
+ rtzst_x64_len, rtzst_a64_len, rtzst_rv64_len, rtzst_i386_len, rtzst_id_len;
 
 // the "c" section's crc32 and length, off the header undecoded: snap.c's header src. 0 = none
 uint64_t image_carried_c(void) {
@@ -68,7 +68,7 @@ static love_noinline struct g *host_tree_head(struct g *g) {
  return g->sp[0] = l, g; }
 
 // inlined into its wrapper: no buffer and nothing address-taken, so the tail still jumps
-static love_inline struct g *host_rtgz(struct g *g) {
+static love_inline struct g *host_rtzst(struct g *g) {
  const unsigned char *p = 0;
  uintptr_t n = 0;
  word a = g->sp[0];
@@ -76,20 +76,20 @@ static love_inline struct g *host_rtgz(struct g *g) {
   const char *s = (const char*) txt(a);
   uintptr_t sl = len(a);
   // prel.l's arch-canon words; the length test travels with each spelling
-  if      (sl == 3 && !memcmp(s, "x64",   3)) p = rtgz_x64,   n = rtgz_x64_len;
-  else if (sl == 3 && !memcmp(s, "a64",   3)) p = rtgz_a64,   n = rtgz_a64_len;
-  else if (sl == 4 && !memcmp(s, "rv64",  4)) p = rtgz_rv64,  n = rtgz_rv64_len;
-  else if (sl == 4 && !memcmp(s, "i386",  4)) p = rtgz_i386,  n = rtgz_i386_len;
-  else if (sl == 2 && !memcmp(s, "id",    2)) p = rtgz_id,    n = rtgz_id_len; }
+  if      (sl == 3 && !memcmp(s, "x64",   3)) p = rtzst_x64,   n = rtzst_x64_len;
+  else if (sl == 3 && !memcmp(s, "a64",   3)) p = rtzst_a64,   n = rtzst_a64_len;
+  else if (sl == 4 && !memcmp(s, "rv64",  4)) p = rtzst_rv64,  n = rtzst_rv64_len;
+  else if (sl == 4 && !memcmp(s, "i386",  4)) p = rtzst_i386,  n = rtzst_i386_len;
+  else if (sl == 2 && !memcmp(s, "id",    2)) p = rtzst_id,    n = rtzst_id_len; }
  if (!n) return g->sp[0] = ZeroPoint, g;
  if (!ok(g = str0(g, n))) return g;
  memcpy(txt(g->sp[0]), p, (size_t) n);          // .rodata: no re-read after the collect
  return g->sp[1] = g->sp[0], g->sp += 1, g; }
 
-static lvm(lvm_rtgz) LvmCall(g, host_rtgz)
+static lvm(lvm_rtzst) LvmCall(g, host_rtzst)
 static LvmWrap(lvm_tree_tar, host_tree_tar)
 static LvmWrap(lvm_tree_head, host_tree_head)
 
 LvDef("tree-tar", tree_tar, 1, NULL);
 LvDef("tree-head", tree_head, 1, NULL);
-LvDef("runtime-gz", rtgz, 1, NULL);
+LvDef("runtime-zst", rtzst, 1, NULL);

@@ -242,17 +242,17 @@ word love_err(struct g *g, int e) {
  return v ? v : mapget(g, 0, zero, g->errs); }
 
 // the once-laid tables, filled by the first start (ini or love_image_load), read-only after.
-// arm32 has no exchange, and its boards start one core before any interrupt
+// a board has no exchange, and starts one core before any interrupt
 static int once_lock, once_done;
 static love_inline void once_take(int *l) {
-#if !defined(__arm__)
+#if !defined(__arm__) || defined(__linux__)
  while (__sync_lock_test_and_set(l, 1)) continue;
 #else
  (void) l;
 #endif
  }
 static love_inline void once_give(int *l) {
-#if !defined(__arm__)
+#if !defined(__arm__) || defined(__linux__)
  __sync_lock_release(l);
 #else
  (void) l;
@@ -518,10 +518,16 @@ static lvm(lvm_sitsp) {
   if (!m || (0 <= i && i + m <= (intptr_t) len(s) && !memcmp(txt(s) + i, txt(t), (size_t) m))) v = putcharm(1); }
  love_musttail return Answerp(2, v); }
 
-// (subidx s t i): the first index >= i where t sits in s, or -1; an empty t is at i while i <= #s
+// (subidx s t i): the first index >= i where t, a text or one charm, sits in s, or -1; an empty t
+// is at i while i <= #s
 static lvm(lvm_subidx) {
  intptr_t r = -1;
- if (strp(Sp[0]) && strp(Sp[1])) {
+ if (strp(Sp[0]) && oddp(Sp[1])) {
+  struct str *s = str(Sp[0]);
+  intptr_t n = (intptr_t) len(s), c = getcharm(Sp[1]), i = oddp(Sp[2]) ? max(getcharm(Sp[2]), 0) : 0;
+  char const *p = 0 <= c && c < 256 && i < n ? memchr(txt(s) + i, (int) c, (size_t) (n - i)) : NULL;
+  if (p) r = p - txt(s); }
+ else if (strp(Sp[0]) && strp(Sp[1])) {
   struct str *s = str(Sp[0]), *t = str(Sp[1]);
   intptr_t n = (intptr_t) len(s), m = (intptr_t) len(t), i = oddp(Sp[2]) ? getcharm(Sp[2]) : 0;
   if (!m) r = i <= n ? i : -1;
