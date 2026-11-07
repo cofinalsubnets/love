@@ -39,7 +39,7 @@ test_core: test_filemode test_walkroom test_hashrun waits test_front test_proof 
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
 
-test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
+test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
 	test_uukind test_gc test_gcheck test_gcstress test_extract test_big test_mx \
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
