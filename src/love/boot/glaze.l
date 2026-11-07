@@ -1343,7 +1343,7 @@
             '* [['mulo A A T SC 'OVF]]
             ()))
    ; the reg/imm peephole: a param (already in an arg reg) or a small immediate combines with acc directly
-   (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= 4095)                      ; an immediate both arches add/sub/cmp directly
+   (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= 4095)                      ; an immediate every target adds, subs and compares directly
    (preg tgt ps x) (elem x ps && argregir tgt (argix x ps 0))
    (garith-r tgt op R) (: A (greg tgt 'acc) SC (greg tgt 'scratch)
       (? (op = '+) [['adds A A R] '(br vs OVF)]
