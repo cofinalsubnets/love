@@ -82,13 +82,15 @@
    (hs-apart h) (catmap (n \ (: o (filter (x \ x "name" = n) (hosts-all 0))
                              (? (two? o) (map (i \ "host-" + n + "-" + show (i + 1)) (jot (<o "slots"))) ())))
                         (peep h ("apart-" + peep h "want" "") ()))
+   ; a host pinned "whole" is taken with every slot its cap has, or not at all
    (hosts-take hs who note)
-    (: (both h nm) (: ap (hs-apart h)
-                      got (foldl (\ a l (? (hs-grab l who note) (l . a) a)) () ap)
-                      (? (#got = #ap) (h . nm . got)
-                         (: _ (map (l \ hs-drop l who) got) _ (hs-drop nm who) ())))
-       (one h) (foldl (\ a i (two? a ? a (: nm (hs-lock h i) (hs-grab nm who note ? (both h nm) ()))))
-                      () (map (+ 1) (jot (hs-count h))))
+    (: (all ls) (: got (foldl (\ a l (? (hs-grab l who note) (l . a) a)) () ls)
+                   (? (#got = #ls) (rev got) (: _ (map (l \ hs-drop l who) got) ())))
+       (both h nms) (: ap (all (hs-apart h)) (? (two? ap || !(two? (hs-apart h))) (h . (nms + ap))
+                                               (: _ (map (l \ hs-drop l who) nms) ())))
+       ns (h \ map (hs-lock h) (map (+ 1) (jot (hs-count h))))
+       (one h) (? (peep h "whole" ()) (: g (all (ns h)) (two? g ? (both h g) ()))
+                  (foldl (\ a nm (two? a ? a (hs-grab nm who note ? (both h [nm]) ()))) () (ns h)))
        (go n) (: s (foldl (\ a h (two? a ? a (one h))) () hs)
                  (? (two? s) s
                     (: _ (? (n = 0) (say err "bee: every slot on those hosts is taken; waiting\n") 0)
@@ -136,10 +138,11 @@
           (foldl (\ a h (a + h "name" + "  " + show (h "slots") + (h "slots" = 1 ? " slot  " " slots  ")
                          + join " " (h "caps") + "  " + join " " (h "reach") + "\n"))
                  "" hs)))
-   ; --on CAP [--where K=V] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..):
+   ; --on CAP [--where K=V] [--whole] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..):
    ; CMD's status, 75 when no host with CAP answers, 255 when ssh or the host fails, 97 when DIR
    ; is not at SHA, 2 for a malformed line. --in keeps DIR on the host, which --push lays this
-   ; repo's SHA in first (alone, no slot taken); --list is the live hosts, `name slots isa` a line
+   ; repo's SHA in first (alone, no slot taken); --whole holds every slot the cap has on the host
+   ; it runs on; --list is the live hosts, `name slots isa` a line
    (hosts-on as)
     (: (opt k) (findsub as [k] @ i (0 <= i && i + 1 < #as ? (as (i + 1)) ()))
        cap (opt "--on") where (opt "--where") ship (opt "--ship") in (opt "--in")
@@ -147,7 +150,7 @@
        cmd (findsub as ["--"] @ i (0 <= i ? (drop (i + 1) as) ()))
        (run line) (: p (spawn ["sh" "-c" line]) (charm? p && 0 <= p ? (wait p) 255))
        (? (elem "--hosts" as) (: _ (say out (hs-text 0)) 0)
-          !(string? cap) (: _ (say err "usage: love bee --on CAP [--where K=V] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..)\n") 2)
+          !(string? cap) (: _ (say err "usage: love bee --on CAP [--where K=V] [--whole] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..)\n") 2)
           (string? at && !(string? in)) (: _ (say err "bee: --push and --at want --in\n") 2)
           (: live (hosts-live (hosts-with cap where))
              (? (elem "--probe" as) (two? live ? 0 75)
@@ -162,7 +165,7 @@
                 !(two? cmd) (: _ (say err "bee: --on wants -- and a command\n") 2)
                 !(two? live) (: _ (say err ("bee: no host with " + cap + (string? where ? (" and " + where) "") + " answers\n")) 75)
                 (: me (getpid 0)
-                   slot (hosts-take live me ("bee --on " + cap))
+                   slot (hosts-take (elem "--whole" as ? (map (h \ pin h "whole" 1) live) live) me ("bee --on " + cap))
                    s0 (string? src ? (run (hs-push-line <slot src in)) 0)
                    r (? (s0 != 0) s0
                         (run (string? in ? (hs-in-line <slot in at cmd) (hosts-line <slot ship cmd))))

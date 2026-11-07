@@ -123,14 +123,18 @@ alone=$(echo "$map" | sed -n 's/^alone //p')
 places=$(echo "$map" | sed -n 's/^place //p')
 costs=$(echo "$map" | sed -n 's/^cost //p')
 mkdir -p "$d/q" "$d/qt"
-# a place may name isas after its class (`place test_libc source x64`): pop ISA EXACT takes
-# only a lane that isa may run, a bare pop any
-# lane, an exact one only where EXACT is 1: a host whose own build is this box's, byte for byte
+# a place may name isas after its class (`place test_libc source x64`): pop ISA EXACT KIND
+# takes only a lane that isa may run, an exact one only where EXACT is 1 (a host whose own
+# build is this box's, byte for byte); ISA empty is this box, which may run any. KIND alone
+# takes only the lane map's alone lanes, empty only the rest
 isas() { echo "$places" | awk -v l="$1" '$1 == l { for (i = 3; i <= NF; i++) print $i }'; }
 class() { echo "$places" | awk -v l="$1" '$1 == l { print $2 }'; }
 pop() {
   for f in $(ls "$d/q"); do
     l=${f#*-}
+    k=
+    has "$l" "$alone" && k=alone
+    [ "$k" = "${3:-}" ] || continue
     if [ -n "${1:-}" ]; then
       a=$(isas "$l")
       [ -z "$a" ] || echo "$a" | grep -qx "$1" || continue
@@ -148,7 +152,6 @@ if [ -n "$remote" ]; then
 fi
 if [ -n "$remote" ]; then
   for l in $run; do
-    has "$l" "$alone" && continue
     echo "$chains" | tr , '\n' | grep -qx "$l" && continue
     case $(class "$l") in source|exact) ;; *) continue ;; esac
     c=$(echo "$costs" | awk -v l="$l" '$1 == l { print $2 }')
@@ -165,24 +168,24 @@ for p in $rpre; do roflags="$roflags -o $p"; done
 . test/gate/skip.sh
 rst=
 gate_strict && rst=LOVE_GATE_STRICT=1
-# a slot on host h: lanes until the queue is dry, each only on the gated commit. a host that
-# cannot be reached (75, or ssh's 255) or has moved off it (97) puts its lane back for this
-# box and takes no more
+# a slot on host h: lanes of a KIND until the queue has none, each only on the gated commit,
+# an alone one holding the whole host. a host that cannot be reached (75, or ssh's 255) or has
+# moved off it (97) puts its lane back for this box and takes no more
 worker() {
-  while l=$(pop "$2" "$3"); do
+  while l=$(pop "$2" "$3" "${4:-}"); do
     s=$(date +%s)
-    out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
+    out/love bee --on lanes --where "name=$1" ${4:+--whole} --in "$rd" --at "$sha" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
     r=$?
     if [ $r -eq 75 ] || [ $r -eq 97 ] || [ $r -eq 255 ]; then
       echo "lanes: $1 dropped $l ($r); it runs here" >> "$d/remote.log"
       echo "$l" >> "$d/back"
-      return
+      return 1
     fi
     echo "$r $(( $(date +%s) - s )) $1" > "$d/$l.rc"
   done
 }
 # a host: room enough (LANES_HOST_MEM_GB, 3, available there), the gated commit pushed, its
-# prerequisites made, then a worker a slot
+# prerequisites made, then its alone lanes one at a time, then a worker a slot
 rhost() {
   k=$(out/love bee --on lanes --where "name=$1" -- awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)
   [ -n "$k" ] && [ "$k" -ge $(( ${LANES_HOST_MEM_GB:-3} * 1048576 )) ] \
@@ -196,6 +199,7 @@ rhost() {
     [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw)" ] && x=1
     [ $x = 1 ] || echo "lanes: $1's love is not this box's; it takes no exact lanes" >> "$d/remote.log"
   fi
+  worker "$1" "$3" "$x" alone || return
   i=0
   while [ $i -lt "$2" ]; do worker "$1" "$3" "$x" & i=$((i + 1)); done
   wait
@@ -269,26 +273,26 @@ newer
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
 
-# the placed lanes no host has taken yet, here, j at a time; then the hosts' last, and any
-# lane a host gave back
+# the placed lanes no host has taken yet, here, j at a time
 if [ -n "$rlanes" ]; then
-  steal() { while l=$(pop); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done; }
+  steal() { while l=$(pop "" "" ""); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done; }
   i=0
   while [ $i -lt "$j" ]; do steal & i=$((i + 1)); done
   wait
-  wait $rpid 2>/dev/null
-  [ -f "$d/back" ] && for l in $(cat "$d/back"); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done
-  while l=$(pop); do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" $oflags -- "$l"; done
-  [ -f "$d/remote.log" ] && cat "$d/remote.log"
 fi
 
 # step 4: alone, in turn, step 1's targets old as in step 3: a lane's own make of host packs the
-# tree again and moves out/love
-for l in $late; do
-  newer
-  MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" $oflags -- "$l"
-  moved "by $l"
-done
+# tree again and moves out/love. then the placed alone lanes no host has taken, the hosts'
+# last, and every lane a host gave back or left
+alone1() { newer; MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" $oflags -- "$1"; moved "by $1"; }
+for l in $late; do alone1 "$l"; done
+if [ -n "$rlanes" ]; then
+  while l=$(pop "" "" alone); do alone1 "$l"; done
+  wait $rpid 2>/dev/null
+  [ -f "$d/back" ] && for l in $(cat "$d/back"); do alone1 "$l"; done
+  while l=$(pop "" "" "") || l=$(pop "" "" alone); do alone1 "$l"; done
+  [ -f "$d/remote.log" ] && cat "$d/remote.log"
+fi
 
 # a group is green when every member is, else red naming the red ones; its secs its slowest
 for g in $groups; do

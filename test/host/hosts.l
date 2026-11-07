@@ -41,6 +41,10 @@
    s1 (hosts-take [<live] (getpid 0) "one")
    s2 (hosts-take [<live] 1 "two")
    _ (hosts-free s1 (getpid 0)) _ (hosts-free s2 1)
+   ; a whole host is every slot of it, given back as one
+   w1 (hosts-take (map (h \ pin h "whole" 1) [<live]) (getpid 0) "whole")
+   wheld (map cap (ht-locks (ht-d + "/locks") "exclusive"))
+   _ (hosts-free w1 (getpid 0))
    ; a cap with slots of its own takes host-NAME-CAP-N, and holds its apart host's slot beside it
    l1 (hosts-take (hosts-live (hosts-with "lanes" ())) (getpid 0) "lanes")
    held (map cap (ht-locks (ht-d + "/locks") "exclusive"))
@@ -84,6 +88,7 @@
            (3 = ran) (got = "carried\n") !gone
            (0 > fsub env "BEE_HOSTS" 0) (0 <= fsub env "LANG=C" 0)       ; only PATH HOME LANG=C cross
            ("host-up-1" = s1 1) ("host-up-2" = s2 1)
+           (ht-seq >w1 ["host-up-1" "host-up-2"]) (ht-seq (sort wheld) ["host-up-1" "host-up-2"])
            (1 = all 0 "slots-lanes") (ht-seq (all 0 "apart-lanes") ["bsd"])
            (ht-seq l1 [<l1 "host-up-lanes-1" "host-bsd-1"]) (ht-seq (sort held) ["host-bsd-1" "host-up-lanes-1"])
            !(two? after)
