@@ -462,7 +462,7 @@
              + (? fl () [[".gnu.version" (2 * n) 2 1879048191 2 2] [".gnu.version_d" (28 * (1 + #vns)) 4 1879048189 2 0]])
              + [[".gnu.hash" (16 + wd * mw + 4 * nb + 4 * #syms) wd 1879048182 2 0] [".hash" (4 * (2 + 2 * n)) 4 5 2 4]
                 [".dynamic" (2 * wd * #(ld-dtags d {})) wd 6 3 (2 * wd)] [".dynstr" (st 'n) 1 3 2 0]
-                [".got" 0 wd 1 3 0 1] (? gp [".got.plt" 12 4 1 3 0 0] [".got.plt" 0 8 1 3 0 1])
+                [".got" 0 wd 1 3 0 1] (? gp [".got.plt" 12 4 1 3 0 0] [".got.plt" 0 wd 1 3 0 1])
                 [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]])))
    ; a symbol's value, a script's first
    (ld-symv env n) (: v (peep (env 'sv) n ()) (? (whole? v) v ((env 'gv) n)))
