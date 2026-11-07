@@ -1,7 +1,8 @@
 ; src/apps/xz.l -- the .xz container (and .lzma, read) over src/love/compress/xz.c's LZMA2;
 ; the spec is tukaani's .xz file format 1.2.
 ;   (xz-pack s dict check)  -> .xz bytes of s, one block; check 'none 'crc32 'crc64 'sha256
-;   (xz-zip rd dict check w) -> [in out] | (): rd's pieces as one stream, laid through w as coded
+;   (xz-wr dict check w)    -> f | (): (f s) codes s, laid through w -> 1 | (); (f ()) ends -> [in out] | ()
+;   (xz-zip rd dict check w) -> [in out] | (): rd's pieces through xz-wr
 ;   (xz-unpack s)           -> (1 bytes) | 'format 'corrupt 'end 'filter 'check 'big; every
 ;                              stream in s, padding skipped, checks and indexes held
 ;   (xz-pull rd)            -> g: (xz-next g) the next piece, "" once done, then g's 'ans
@@ -46,9 +47,9 @@
        ft0 (wrle (#ix // 4 - 1) 4 + flags)
        (head + block + ix + wrle (crc32 ft0) 4 + ft0 + "YZ"))
 
-   ; rd's pieces as one stream, laid through w as coded: one block, no sizes in its header,
-   ; none at all for no bytes -> [in out] | ()
-   (xz-zip rd dict check w)
+   ; one stream laid through w as it is coded: one block, no sizes in its header, none at all
+   ; for no bytes. (f s) codes s -> 1 | (); (f ()) ends it -> [in out] | ()
+   (xz-wr dict check w)
     (: cid (peep xz-checks check 4)
        flags (xz-bytes [0 cid])
        head (xz-magic + flags + wrle (crc32 flags) 4)
@@ -68,11 +69,15 @@
             [i (#head + (i = 0 ? 0 (#bh + body + padk body 4 + #ck)) + #ix + 6 + #ft0)]))
        (lzma2e-new (xz-dsize p) @ st
           (st = () ? ()
-             (: (go c i b) (rd 0 @ u
-                            (#u = 0 ? (lzma2e-end st @ z (string? z ? (fin c i b z) ()))
-                               (lzma2e-feed st u @ z
-                                  (string? z ? (i = 0 && w bh, w z, go (xz-ckon cid c u) (i + #u) (b + #z)) ()))))
-                (w head, go (xz-ck0 cid) 0 0)))))
+             (: t {'c (xz-ck0 cid) 'i 0 'b 0}
+                (w head,
+                 (s \ (? !(string? s) (lzma2e-end st @ z (string? z ? (fin (t 'c) (t 'i) (t 'b) z) ()))
+                          (#s = 0) 1
+                          (lzma2e-feed st s @ z
+                             (string? z ? (t 'i = 0 && w bh, w z,
+                                           pins t 'c (xz-ckon cid (t 'c) s) 'i (t 'i + #s) 'b (t 'b + #z), 1) ())))))))))
+   ; rd's pieces as one stream through xz-wr
+   (xz-zip rd dict check w) (xz-wr dict check w @ f (f = () ? () (: (go _) (rd 0 @ p (#p = 0 ? (f ()) (f p ? (go 0) ()))) (go 0))))
 
    ;; --- reading ---
    (xz-bhead hd)                       ; a block header, its crc held -> (csize usize props) | a word

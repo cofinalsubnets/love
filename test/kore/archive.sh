@@ -216,6 +216,14 @@ if command -v tar >/dev/null 2>&1 && command -v xz >/dev/null 2>&1; then
   tar cJf "$T/g.txz" -C "$ho" .arcd && korerun tar tf "$T/g.txz" > "$o"
   grep -q '^\.arcd/one\.txt$' "$o" || fail "kore tar: GNU's xz tarball, sniffed"
 fi
+# tar's coders stream: past 4 MB each writes one stream, the filter's bytes over tar cf's
+mkdir -p "$T/big"; dd if="$K" of="$T/big/k" bs=1024 count=4200 2>/dev/null
+korerun tar cf "$T/b.tar" -C "$T" big || fail "kore tar cf of 4 MB"
+for c in "z gzip" "j bzip2" "J xz" "-zstd zstd"; do
+  set -- $c
+  korerun tar -$1 -cf "$T/b.c" -C "$T" big || fail "kore tar -$1 -cf"
+  korerun $2 -c < "$T/b.tar" | cmp -s - "$T/b.c" || fail "kore tar -$1: not the $2 filter's one stream"
+done
 # the coders read flags in gnu order: a flag after a file, the later of two wins, a bad one named
 F=$HO/.arcflag; rm -rf "$F"; mkdir -p "$F"; cp "$ho/.arc1" "$F/a"; cp "$ho/.arc1" "$F/b"
 korerun gzip "$F/a" -k || fail "kore gzip FILE -k"
@@ -305,15 +313,16 @@ if command -v gzip >/dev/null 2>&1; then
   [ $r -eq 0 ] && [ ! -s "$g" ] || { cat "$o"; fail "kore tar tzf of 1100 MiB of zeros did not stream (rc $r)"; }
   # a member bigger than the heap is poured to its file: 300 MiB under 64 MiB
   mkdir -p "$B/t" "$B/x"; dd if=/dev/zero bs=1048576 count=300 2>/dev/null > "$B/t/big"; printf 'tail\n' > "$B/t/small"
-  # ..and is packed a run at a time, as gzip members, bzip2 and xz streams read on in one
+  # ..and is packed as one stream, coded as it is laid; xz's 8 MiB dictionary wants its coder's
+  # room, the gc copying it, and every read holds to 64 MiB
   ( cd "$B" && LOVE_BUDGET_MB=72 LOVE_NO_IMAGE= "$K" tar czf big.tgz t ) 2> "$o" || { cat "$o"; fail "kore tar czf of a 300 MiB member did not stream"; }
   cbig() {
-    ( cd "$B" && LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$K" tar c$1f big.$2 t ) 2> "$o" \
+    ( cd "$B" && LOVE_BUDGET_MB=$3 LOVE_NO_IMAGE= "$K" tar c$1f big.$2 t ) 2> "$o" \
       || { cat "$o"; fail "kore tar c$1f of a 300 MiB member did not stream"; }
     LOVE_BUDGET_MB=64 LOVE_NO_IMAGE= "$m" tar tvf "$B/big.$2" > "$g" 2> "$o" || { cat "$o"; fail "kore tar tvf big.$2"; }
     grep -q ' 314572800 .* t/big$' "$g" && grep -q 't/small$' "$g" || fail "kore tar c$1f of a 300 MiB member: $(cat "$g")"
   }
-  cbig j tbz; cbig J txz
+  cbig j tbz 64; cbig J txz 256
   if command -v tar >/dev/null 2>&1; then
     tar tzf "$B/big.tgz" > "$g" 2>&1 && grep -q '^t/small$' "$g" || fail "the system tar of kore's czf: $(cat "$g")"
   fi

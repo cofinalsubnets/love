@@ -207,16 +207,21 @@
         6 (stamp >> 16 & 255) 7 (stamp >> 24 & 255)
         8 0 9 3,               ; xfl none, os 3 = unix
         string h + (named ? (nom + string 0) "")))
-   ; rd's pieces as one member, laid through w as they are coded -> [in out deflated] | ()
-   (gz-zipr rd nom stamp best w)
+   ; one member laid through w as it is coded, its header at once: (f s) codes s -> 1 | (),
+   ; (f ()) ends it -> [in out deflated] | ()
+   (gz-wr nom stamp best w)
     (deflate-new best @ st
        (st = () ? ()
           (: h (gz-hd nom stamp)
-             (go c i d) (rd 0 @ p
-                         (#p = 0 ? (deflate-end st @ z
-                                      (string? z ? (w (z + wrle c 4 + wrle (i & 4294967295) 4), [i (#h + d + #z + 8) (d + #z)]) ()))
-                            (deflate-feed st p @ z (string? z ? (w z, go (crc32-on c p) (i + #p) (d + #z)) ()))))
-             (w h, go 0 0 0))))
+             t {'c 0 'i 0 'd 0}
+             (w h,
+              (s \ (? (string? s)
+                       (deflate-feed st s @ z (string? z ? (w z, pins t 'c (crc32-on (t 'c) s) 'i (t 'i + #s) 'd (t 'd + #z), 1) ()))
+                       (deflate-end st @ z
+                          (: i (t 'i)   d (t 'd + #z)
+                             (string? z ? (w (z + wrle (t 'c) 4 + wrle (i & 4294967295) 4), [i (#h + d + 8) d]) ())))))))))
+   ; rd's pieces as one member through gz-wr
+   (gz-zipr rd nom stamp best w) (gz-wr nom stamp best w @ f (f = () ? () (: (go _) (rd 0 @ p (#p = 0 ? (f ()) (f p ? (go 0) ()))) (go 0))))
 
    ; every optional field is stepped over, though we write only fname. ftext carries no bytes
    (gz-head s)                                ; -> (1 stamp name body-seat) | ()

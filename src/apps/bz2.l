@@ -1,7 +1,8 @@
 ; src/apps/bz2.l -- bzip2 over src/love/compress/bz2.c, which holds the whole stream (blocks
 ; lie on bit boundaries). `(borrow 'bz2)`, then:
 ;   (bz2-pack s level)  -> the .bz2 bytes of s, level 1..9 the block in 100k
-;   (bz2-zip rd level w) -> [in out] | (): rd's pieces as one stream, laid through w as coded
+;   (bz2-wr level w)    -> f | (): (f s) codes s, laid through w -> 1 | (); (f ()) ends -> [in out] | ()
+;   (bz2-zip rd level w) -> [in out] | (): rd's pieces through bz2-wr
 ;   (bz2-unpack s)      -> (1 bytes) | a word saying why not ('format 'corrupt 'end 'check 'big):
 ;                          every stream in s, each block's crc and each stream's held
 ;   (bz2-pull rd)       -> g, a reader over the streams as they come: (bz2-next g) the next
@@ -10,13 +11,13 @@
 ;                          (1 w), or () for 'no
 (module 'bz2
 (: (bz2-pack s level) (bz2e s level)
-   (bz2-zip rd level w)
+   (bz2-wr level w)
     (bz2e-new level @ st
        (st = () ? ()
-          (: (go i o) (rd 0 @ p
-                       (#p = 0 ? (bz2e-end st @ z (string? z ? (w z, [i (o + #z)]) ()))
-                          (bz2e-feed st p @ z (string? z ? (w z, go (i + #p) (o + #z)) ()))))
-             (go 0 0))))
+          (: t {'i 0 'o 0}
+             (s \ (? (string? s) (bz2e-feed st s @ z (string? z ? (w z, pins t 'i (t 'i + #s) 'o (t 'o + #z), 1) ()))
+                      (bz2e-end st @ z (string? z ? (w z, [(t 'i) (t 'o + #z)]) ())))))))
+   (bz2-zip rd level w) (bz2-wr level w @ f (f = () ? () (: (go _) (rd 0 @ p (#p = 0 ? (f ()) (f p ? (go 0) ()))) (go 0))))
    (bz2-word c) (c @ 1 'format 3 'end 4 'check 5 'big 'corrupt)
    (bz2-unpack s) (bz2d s @ u (string? u ? [1 u] (bz2-word u)))
 

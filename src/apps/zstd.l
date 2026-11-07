@@ -1,6 +1,8 @@
 ; src/apps/zstd.l -- the zstandard frame (rfc 8878) over src/love/compress/zstd.c's blocks.
 ;   (zstd-pack s level) -> one .zst frame of s, level 1..19, with size and checksum
-;   (zstd-zip rd level w) -> [in out] | (): rd's pieces as one frame, laid through w as coded
+;   (zstd-wr level w)   -> f | (): (f s) codes s into the frame, laid through w -> 1 | (),
+;                          (f ()) ends it -> [in out] | ()
+;   (zstd-zip rd level w) -> [in out] | (): rd's pieces through zstd-wr
 ;   (zstd-unpack s)     -> (1 bytes) | 'format 'corrupt 'end 'check 'big 'dict; skippable frames passed
 ;   (zstd-pull rd)      -> g: (zstd-next g) the next block's bytes, "" once done, then g's 'ans
 ;   (zstd-unf rd mk)    -> (1 n) | the word | 'no, out through the writer mk answers (1 w)
@@ -8,13 +10,13 @@
 (borrow '(bytes tar))
 
 (: (zstd-pack s level) (zstde s level)
-   (zstd-zip rd level w)
+   (zstd-wr level w)
     (zstde-new level @ st
        (st = () ? ()
-          (: (go i o) (rd 0 @ p
-                       (#p = 0 ? (zstde-end st @ z (string? z ? (w z, [i (o + #z)]) ()))
-                          (zstde-feed st p @ z (string? z ? (w z, go (i + #p) (o + #z)) ()))))
-             (go 0 0))))
+          (: t {'i 0 'o 0}
+             (s \ (? (string? s) (zstde-feed st s @ z (string? z ? (w z, pins t 'i (t 'i + #s) 'o (t 'o + #z), 1) ()))
+                      (zstde-end st @ z (string? z ? (w z, [(t 'i) (t 'o + #z)]) ())))))))
+   (zstd-zip rd level w) (zstd-wr level w @ f (f = () ? () (: (go _) (rd 0 @ p (#p = 0 ? (f ()) (f p ? (go 0) ()))) (go 0))))
    zstd-magic 4247762216               ; 28 b5 2f fd, little-endian
    zstd-wmax 134217728                 ; the largest window taken, zstd's own
    (zs-fin g a) (pins g 'mode 'end 'ans a, "")
