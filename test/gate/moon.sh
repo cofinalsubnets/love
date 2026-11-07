@@ -196,6 +196,18 @@ for t in x64 i386; do
   moonrun -t $t -c "$ho/.szl.S" -o "$ho/.szl.o" || fail "mooncc: a .size from another start"
   [ "$(readelf -sW "$ho/.szl.o" | awk '$8 ~ /^s[12]$/ {print $8, $3}' | sort | tr '\n' ' ')" = "s1 2 s2 2 " ] || fail "a .size from another start is not clang's ($t)"
 done
+# a word over two labels on arm's two lanes is pc-relative, relocs from clang; other widths refuse, as clang
+printf '.text\nf: nop\n.long ext - f\n.long z - f\n.data\nx: .long 0\n.long 0\nz: .long 0\n' > "$ho/.a3p.S"
+for t in thumb2 arm; do
+  moonrun -t $t -c "$ho/.a3p.S" -o "$ho/.a3p.o" || fail "mooncc -t $t: a word over two labels"
+  [ "$(readelf -rW "$ho/.a3p.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_ARM_REL32 R_ARM_REL32 " ] || fail "a word over two labels on $t is no R_ARM_REL32"
+  for d in short byte quad; do
+    printf '.text\nf: nop\n.%s ext - f\n' $d > "$ho/.a3w.S"
+    ! moonrun -t $t -c "$ho/.a3w.S" -o "$ho/.a3w.o" 2>/dev/null || fail "$t: a .$d over two labels was laid"
+  done
+done
+printf '.text\nf: nop\n.quad ext - f\n' > "$ho/.q8.S"
+! moonrun -t i386 -c "$ho/.q8.S" -o "$ho/.q8.o" 2>/dev/null || fail "an i386 .quad over two labels was laid"
 # a string op spelled with operands, in each mode: bytes from clang; a sign-extend keeps its name
 printf '.text\n.code32\nrep movsl %%ds:(%%esi),%%es:(%%edi)\nmovsb %%ds:(%%esi),%%es:(%%edi)\nmovsw %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%edi)\nstosb %%al,%%es:(%%edi)\nlodsl %%ds:(%%esi),%%eax\nscasb %%es:(%%edi),%%al\ncmpsb %%es:(%%edi),%%ds:(%%esi)\nrep movsl (%%esi),(%%edi)\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsl %%fs:(%%si),%%es:(%%di)\nmovsl %%es:(%%esi),%%es:(%%edi)\ninsb (%%dx),%%es:(%%edi)\noutsl %%ds:(%%esi),(%%dx)\n.code16\nrep movsl %%ds:(%%si),%%es:(%%di)\nmovsb %%ds:(%%si),%%es:(%%di)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%di)\n.code64\nrep movsq %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosq %%rax,%%es:(%%rdi)\nlodsb %%ds:(%%rsi),%%al\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsq %%gs:(%%rsi),%%es:(%%rdi)\n' > "$ho/.str.S"
 moonrun -c "$ho/.str.S" -o "$ho/.str.o" || fail "mooncc: a string op's operands"
