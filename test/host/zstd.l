@@ -30,7 +30,7 @@
 (test
  (lit? zstd-block)
  ; every level reads back, the empty input too, and one byte over and over
- (zst-all (zst-back zst-mix) [1 2 3 5 9 12 16 17 18 19])
+ (zst-all (zst-back zst-mix) [1 2 3 5 9 12 13 14 15 16 17 18 19])
  (zst-back "" 3)
  (zst-back "x" 3)
  (zst-back "" 19)
@@ -40,9 +40,9 @@
  (uread "src/love/compress/zstd.c" @ [1 c] (: z (zstd-pack (c + "") 19) (#z * 100 < #(zstd-pack (c + "") 15) * 97 && zstd-d z = c + "")))
  (zst-back (cats (map (_ \ "z") (jot 70000))) 3)
  ; each step of the ladder pays on source, and the lookahead reads back to the last bytes
- (uread "src/love/compress/zstd.c" @ [1 c] (: (z l) #(zstd-pack (c + "") l) (z 15 < z 9 && z 9 < z 5 && z 5 < z 3)))
- (zst-all (zst-back "abcdefghabcdefgh") [4 9 15])
- (zst-all (zst-back zst-noise) [4 9 15])
+ (uread "src/love/compress/zstd.c" @ [1 c] (: (z l) #(zstd-pack (c + "") l) (z 15 < z 13 && z 13 < z 12 && z 12 < z 9 && z 9 < z 5 && z 5 < z 3)))
+ (zst-all (zst-back "abcdefghabcdefgh") [4 9 13 15])
+ (zst-all (zst-back zst-noise) [4 9 13 15])
  ; the fast parse reads past a run of nothing, up to the last byte, and its tables grow by level
  (zst-all (zst-back zst-noise) [1 2 3])
  (zst-all (zst-back "abcdefgh") [1 2 3])

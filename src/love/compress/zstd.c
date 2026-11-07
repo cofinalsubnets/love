@@ -675,11 +675,12 @@ static uintptr_t ze_seqs(const struct ze_seq *sq, uintptr_t ns, uint8_t *cd, uin
 // --- the parse --------------------------------------------------------------------------------
 // a level: the window, the hash, how far down a chain, a length that ends the search, steps of lookahead
 struct ze_cfg { unsigned wlog, hlog, depth, good, lazy, opt, fast; };
-static const uint8_t ze_depth[16] = { 0, 0, 0, 0, 4, 6, 8, 12, 16, 12, 16, 24, 32, 48, 64, 96 };
+static const uint8_t ze_depth[16] = { 0, 0, 0, 0, 4, 6, 8, 12, 16, 12, 16, 24, 32, 16, 32, 128 };
 static struct ze_cfg ze_cfg(int lv) {
  return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 1 ? 14 : lv <= 2 ? 16 : lv <= 3 ? 17 : lv <= 6 ? 19 : 20,
-                          lv < 16 ? ze_depth[lv] : 0, lv <= 9 ? 64 : lv <= 15 ? 128 : 256, lv < 4 ? 0 : lv <= 8 ? 1 : 2, lv >= 16, lv <= 3 ? 6 : 0 }; }
-struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; };
+                          lv < 16 ? ze_depth[lv] : 0, lv <= 9 ? 64 : lv <= 12 ? 128 : lv <= 14 ? 256 : 512, lv < 4 ? 0 : lv <= 8 ? 1 : 2, lv >= 16, lv <= 3 ? 6 : 0 }; }
+#define ZO_MAXM 64u
+struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; struct lzf *f; };
 static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before p in its chain
  for (; m->ins < p && m->ins + 4 <= m->n; m->ins++) {
   uint32_t h = lzf_h4(m->s + m->ins, m->hlog);
@@ -688,6 +689,13 @@ static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before
 static uintptr_t ze_find(struct ze_mf *m, uintptr_t p, uintptr_t e, uint64_t *off) {
  uintptr_t best = 0;
  if (p + 4 > m->n) return 0;
+ if (m->f) {                                     // the tree's: of every length it found, the best for its distance
+  uint32_t ls[ZO_MAXM], ds[ZO_MAXM];
+  int top = 0;
+  for (unsigned j = lzf_all(m->f, p, (unsigned) (e - p), ZS_BMAX, ls, ds); j--; )
+   if (ls[j] >= 4 && (!best || (int) ls[j] * 4 - (int) zs_hb(ds[j] + 2) > top))
+    best = ls[j], *off = (uint64_t) ds[j] + 1, top = (int) ls[j] * 4 - (int) zs_hb(ds[j] + 2);
+  return best; }
  ze_upto(m, p);
  uint32_t c = m->head[lzf_h4(m->s + p, m->hlog)];
  for (unsigned d = 0; c && d < m->depth; d++) {
@@ -759,7 +767,6 @@ static void ze_fast(struct ze_mf *m, unsigned step, uintptr_t a, uintptr_t e, ui
 // code of its open literal run, as though the run ended there
 #define ZO_OPTS 4096u
 #define ZO_NICEMAX 256u
-#define ZO_MAXM 64u
 #define ZO_INF 0x3fffffffu
 struct zo_nd { uint32_t price, ml, off, ll; uint64_t rep[3]; };
 struct zo_op { uint32_t at, ml, off; };
@@ -995,24 +1002,30 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  if (!ss) o[at++] = (uint8_t) ((cf.wlog - 10) << 3);
  for (unsigned i = 0; i < fz; i++) o[at++] = (uint8_t) (fcs >> 8 * i);
  uintptr_t wsz = (uintptr_t) 1 << cf.wlog;
- uintptr_t cn = cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;     // the fast parse's long table, in chain's room
- struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, ((uintptr_t) 1 << cf.hlog) * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good };
+ int tree = lv >= 13;                            // levels with a tree want no chains
+ uintptr_t hn = tree ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
+ struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good };
  uint8_t *lit = alloc(NULL, ZS_BMAX), *cd = alloc(NULL, 3 * (ZS_BMAX / 3 + 1));
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;
- if (good) memset(m.head, 0, ((uintptr_t) 1 << cf.hlog) * 4);
+ if (good && !tree) memset(m.head, 0, hn * 4);
  if (good && cf.fast) memset(m.chain, 0, cn * 4);
  struct zo *Z = NULL;
  uint32_t *bt = NULL;
- if (good && cf.opt) {
-  unsigned h4b = cf.wlog < 20 ? cf.wlog : 20, d = lv >= 19 ? 128 : lv >= 18 ? 64 : lv >= 17 ? 32 : 24, nc = lv >= 19 ? 256 : lv >= 18 ? 128 : lv >= 17 ? 64 : 48;
-  Z = alloc(NULL, sizeof *Z);
+ struct lzf F;
+ if (good && tree) {
+  unsigned h4b = cf.wlog < 20 ? cf.wlog : 20, d = lv >= 19 ? 128 : lv >= 18 ? 64 : lv >= 17 ? 32 : lv >= 16 ? 24 : cf.depth,
+           sk = lv == 13 ? 8 : lv == 14 ? 16 : lv == 15 ? 32 : 8,
+           nc = lv >= 19 ? 256 : lv >= 18 ? 128 : lv >= 17 ? 64 : lv >= 16 ? 48 : 128u << (lv - 13);
+  if (cf.opt) Z = alloc(NULL, sizeof *Z);
   bt = alloc(NULL, (((uintptr_t) 2 << 16) + ((uintptr_t) 1 << h4b) + 2 * wsz) * 4);
-  good = Z && bt;
+  good = (!cf.opt || Z) && bt;
   if (good) {
    memset(bt, 0, (((uintptr_t) 2 << 16) + ((uintptr_t) 1 << h4b)) * 4);
-   Z->f = (struct lzf) { s, n, bt, bt + (1u << 16), bt + (2u << 16), bt + (2u << 16) + ((uintptr_t) 1 << h4b),
-                         (uint32_t) wsz - 1, (uint32_t) wsz, 0, h4b, d, 8, nc, ZO_MAXM }; } }
+   F = (struct lzf) { s, n, bt, bt + (1u << 16), bt + (2u << 16), bt + (2u << 16) + ((uintptr_t) 1 << h4b),
+                      (uint32_t) wsz - 1, (uint32_t) wsz, 0, h4b, d, sk, nc, ZO_MAXM };
+   if (Z) Z->f = F;
+   else m.f = &F; } }
  uint64_t rep[3] = { 1, 4, 8 };
  for (uintptr_t a = 0; good; ) {
   uintptr_t e = n - a > ZS_BMAX ? a + ZS_BMAX : n,
