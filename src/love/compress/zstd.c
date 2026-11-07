@@ -1004,7 +1004,7 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  uintptr_t wsz = (uintptr_t) 1 << cf.wlog;
  int tree = lv >= 13;                            // levels with a tree want no chains
  uintptr_t hn = tree ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
- struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good };
+ struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good, NULL };
  uint8_t *lit = alloc(NULL, ZS_BMAX), *cd = alloc(NULL, 3 * (ZS_BMAX / 3 + 1));
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;

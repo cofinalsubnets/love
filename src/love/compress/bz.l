@@ -421,7 +421,7 @@
            ((h14 havoc y (bxor (shr64 crc 24) c))
             (h15 havoc crc (bxor (shl64 crc 8) (at Cr (low y 255))))
             (c1 call "bw_byte" ((raw (var "w")) (u8 c)) (w lim) ())
-            (e1 ife g5 (eq c last) ((h16 havoc same (wadd same 1))) ((h17 havoc same 1)))
+            (e1 ife g5 (eq c (u32 last)) ((h16 havoc same (wadd same 1))) ((h17 havoc same 1)))
             (h18 havoc last c)))))
         (i4 if g6 (ne (wg "bad") 0) ((r4 ret (raw (un neg (num 1))))))
         (i5 if g7 (ne (bnot crc) want) ((r5 ret 4)))

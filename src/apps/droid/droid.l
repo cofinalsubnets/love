@@ -206,7 +206,10 @@
                               + ent 0 "bg" (pb-len 7 (pb-int 9 (0xff000000 | ic-rgb 'bg)))
                               + ent 1 "fg" (file "f.png" 1) + ent 2 "icon" (file "i.xml" 3)))))
    ; the bridge execs liblove.so, so an install must leave it unpacked: compression stays on
-   (aab-config _) (pb-len 1 (pb-len 2 "1.18.3") + pb-len 2 (pb-len 2 ""))
+   ; and one split per abi, so a phone fetches only its own love
+   (aab-config _) (pb-len 1 (pb-len 2 "1.18.3") + pb-len 2 (pb-len 1 (pb-len 1 (pb-int 1 1)) + pb-len 2 ""))
+   ; each lib dir's abi, which that split is cut by: armeabi-v7a 2, arm64-v8a 3
+   (aab-native as) (cats (map (a \ pb-len 1 (pb-len 1 ("lib/" + a) + pb-len 2 (pb-len 1 (pb-int 1 (a = "arm64-v8a" ? 3 2))))) as))
 
    ; --- the service's class, what `-s` adds: a Service with a constructor, a null onBind and a native
    ; onStartCommand the bridge registers, so a notification keeps the process through a swipe.
@@ -387,7 +390,8 @@
              + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ())
              + catmap id abis
              + (stay ? [["classes.dex" (dx-service 0)] ["assets/stay" label]] ()) + ins)
-       z (aab ? (ap-zip ([["BundleConfig.pb" (aab-config 0)] ["base/manifest/AndroidManifest.xml" (pb-xml man)]
+       z (aab ? (ap-zip ([["BundleConfig.pb" (aab-config 0)] ["base/native.pb" (aab-native (map cap libs))]
+                          ["base/manifest/AndroidManifest.xml" (pb-xml man)]
                           ["base/resources.pb" (pb-table pkg)]
                           [("base/" + ic-dir + "f.png") (ic-png 0)] [("base/" + ic-dir + "i.xml") (pb-xml ic-xml)]]
                          + map (e \ [(aab-path <e) (e 1)]) rest))

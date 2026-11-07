@@ -343,7 +343,7 @@ static int bz_dout(struct bz_d *d, struct bz_w *w, unsigned int nb, unsigned int
    y = (crc >> 24) ^ c;
    crc = (crc << 8) ^ d->crct[y & 255];
    bw_byte(w, (uint8_t) c);
-   if (c == last) {
+   if (c == (uint32_t) last) {
     same = same + 1;
    } else {
     same = 1;
