@@ -11,6 +11,13 @@ struct g; union u;
 // --- the word and its tags ---
 #define love_inline inline __attribute__((always_inline))
 #define love_noinline __attribute__((noinline))
+// a hosted body inle's kernel defines too: a link with it takes the kernel's, a projection
+// patches this one with a jump there, in a section of its own so the jump spills into no body
+#if defined(__mooncc__)
+#define love_door __attribute__((weak, noinline, aligned(16), section(".text.door")))
+#else
+#define love_door __attribute__((weak, noinline))
+#endif
 // no identical-code folding: the data sentinels' bodies match, and their address is the type tag
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
 #define noicf __attribute__((noipa))

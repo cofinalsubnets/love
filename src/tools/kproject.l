@@ -76,9 +76,7 @@
       bias (xw + ld-align 4096 bootend)
       ; --- the kernel's objects, laid past the image's data copy and linked against its symbols
       (gapz a b) (a < b ? [(ld-zeros (b - a))] ())
-      ; a pie with a kernel inside (the doom lane) takes none
-      own? ((: (go e) (symo + symz <= e ? 0 (ld-cstr pie (stro + rle32 pie e)) = "kmain" ? 1 (go (e + 24)))) symo)
-      kobjs (own? ? () (map (kb \ ld-read <kb <>kb mach) kobs))
+      kobjs (map (kb \ ld-read <kb <>kb mach) kobs)
       kv (ld-align 4096 (dcopy 0 + dcopy 3))
       k0 (bias + kv)
       kt1 (ldlayn 'text (ldlay1 'text k0 kobjs) kobjs)
@@ -95,13 +93,15 @@
       glo (ldsyms (objs + kobjs))
       kglo (ldsyms kobjs)
       doors {}
-      ; the pie's globals join the book (boot's own stand), so a boot reloc can name a kernel symbol
+      ; the pie's globals join the book (boot's own stand), so a boot reloc can name a kernel symbol;
+      ; one the kernel defines too is a door, but a strong one stands over the kernel's weak
       _ ((: (go e)
              (? (symo + symz <= e) 0
                 (: sx (rle16 pie (e + 6)) bind (pie (e + 4) >> 4)
                    _ (? (0 < sx < 0xff00 && elem bind '(1 2))
                         (: nm (ld-cstr pie (stro + rle32 pie e))
-                           (? (two? (kglo nm)) (pin doors nm (rle64 pie (e + 8)))
+                           (? (two? (kglo nm) && (bind = 2 || !(kglo nm 1))) (pin doors nm (rle64 pie (e + 8)))
+                              (two? (kglo nm)) (pin glo nm [(bias + rle64 pie (e + 8)) 0])
                               (two? (glo nm)) 0
                               (pin glo nm [(bias + rle64 pie (e + 8)) 0])))
                         0)

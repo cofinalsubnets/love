@@ -44,7 +44,7 @@
     ["src/inle/teensy41/main.c" "main" "love_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]
     ["src/inle/doom.c" "DG_SleepMs" "love_sleep"
-     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
+     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, on inle as hosted"]]
 
    ; --- character classes ---
    (idc? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || c = 95)

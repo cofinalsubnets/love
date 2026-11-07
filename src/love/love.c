@@ -8,7 +8,7 @@ static love_inline uintptr_t nom_dig(uintptr_t name) {
  return h; }
 
 // the kernel we woke on (0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle): moonlibc's os.c
-// owns it where linked. weak unlike the doors, since its zero is already an honest answer
+// owns it where linked
 __attribute__((weak)) long __love_osv;
 #include <stddef.h>
 struct chain;
@@ -737,6 +737,7 @@ int code_in(struct g *g, uintptr_t v) {
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
+love_door char *code_window(char *p) { return p; }
 
 // the image's segment, a fixed chunk written through *w. inle's hhdm is NX and mprotect cannot
 // lift it off a shared 2 MiB entry, so there the block runs through code_window's low map

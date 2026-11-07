@@ -47,9 +47,6 @@ static struct g *stdin_take(struct g *g) {
  g->hook[hook_inport] = g->sp[0], g->sp++;
  return g; }
 
-_lvm(k_lvm_quit);
-_lvm(k_lvm_getpid);
-
 // a process on inle speaks linux's calls, and only its uname names the kernel under it
 static bool on_inle(void) {
 #if defined(__moonlibc__)
@@ -61,8 +58,7 @@ static bool on_inle(void) {
 }
 
 // on inle a twirled task is a process of the shell's
-static lvm(lvm_exit) {
- if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
+love_door lvm(lvm_exit) {
  union u *t = g->tasks;
  if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
  for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
@@ -258,8 +254,7 @@ static lvm(lvm_getenv) {
  if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
  LvmCallp(g, 1, strof, v) }
 
-static lvm(lvm_getpid) {
-  if (__love_osv < 0) love_musttail return Ap(k_lvm_getpid, g);
+love_door lvm(lvm_getpid) {
   love_musttail return Answer(putcharm(getpid())); }
 
 static union u const
