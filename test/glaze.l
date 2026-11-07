@@ -245,4 +245,9 @@
                  (grid px acc) (px < 2 ? (grid (px + 1) (acc + col px 0 0)) acc)
                  grid))
    _ (test (gzg-b 0 0 = 10000) (gzg-l 0 0 = 6))
+   ; the host row's word is the vm's: a charm holds 8w-1 bits, signed
+   _ (G 'targets love-arch @ row
+        (row == () ? 0
+           (: top (2 ** (8 * row 'word - 2))
+              (test (charm? (top - 1)) !(charm? top) (charm? -top) !(charm? (-top - 1))))))
    0)
