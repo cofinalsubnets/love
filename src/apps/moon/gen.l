@@ -4186,7 +4186,8 @@
    (nmen nm x) (? (atom? x) 0 (x @ ['var n] (n = nm) (any (nmen nm) x)))
    ; -- a local struct of scalars, named only by member or by & to a call that keeps no pointer,
    ; becomes its members as scalars, which the allocator may seat; around such a call they copy to
-   ; the struct and back. types carry no volatile, so a unit naming one is left alone --
+   ; the struct and back. one that starts as a copy from memory reads its members there, through
+   ; an address taken once. types carry no volatile, so a unit naming one is left alone --
    (srs g f)
     (: w64 !(ilp32? g)
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
@@ -4194,8 +4195,10 @@
        (over a b) (a 1 < b 1 + tsz g (b 2) && b 1 < a 1 + tsz g (a 2))
        (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ !(scal? (x 2))) m) &&
                                !(any (a \ any (b \ !(<a = <b) && over a b) m) m)))
-       cand {} dcl {} bad {} use {} site {} tmps {'k 0 'l ()}
-       (one x p) (pin dcl <p (1 + peep dcl <p 0), <x = 'decl && !(two? (p 2)) && clean? <>p ? (pin cand <p <>p) 0)
+       cand {} dcl {} bad {} use {} site {} inis {} tmps {'k 0 'l ()}
+       (mem? e) (e @ (('idx || 'deref || 'dot) . _) 1 0)
+       (one x p) (pin dcl <p (1 + peep dcl <p 0), (mem? (p 2) ? (pin inis <p 1) 0),
+                  <x = 'decl && (!(two? (p 2)) || mem? (p 2)) && clean? <>p ? (pin cand <p <>p) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
                   (map cen x))
@@ -4216,12 +4219,13 @@
                         ['call ['var fn] as] (g 'nocap fn @ c (map (arg [fn c] as) ^#as))
                         _ (map scan x)))
        _ (two? (keys cand) ? (scan f))
-       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
+       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) && !(peep site nm 0 && peep inis nm 0)) (sort (keys cand)))
        (sn nm fl) "\(nm)`m\(fl)"
        (fty nm fl) (assoc fl (mems (cand nm)) @ m (m 2))
        (rd ps) (? !(two? ps) ()
-                  (elem <<ps ok) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (use <<ps) + (peep site <<ps 0 ? [<ps]) + rd >ps)
+                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (use <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
                   (rw <ps . rd >ps))
+       (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (use <p)))
        (seq l) (two? >l ? ['comma <l (seq >l)] <l)
        (rwcall fn as)
         (: nms (filter (nm \ any (a \ a @ ['addr ['var n]] (n = nm) 0) as) ok)
