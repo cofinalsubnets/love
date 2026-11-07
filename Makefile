@@ -366,7 +366,7 @@ korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_ld) $(kore_arc)
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
 # `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
 kcrewfiles = $(holo_be) src/love/holo/as.l src/love/holo/gas.l $(moon_mid) $(crewfiles)
-moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l $(holo_be) src/love/holo/as.l src/love/holo/gas.l $(holo_obj) $(moon_mid)
+moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l $(holo_obj) $(moon_mid)
 # the plain tree's cat and image beside this tree's: out/rt and moonlibc.o are pinned to out/
 # as love0 is, and take its image whatever hsuf says
 mcc_trees = $(sort out $(ho))

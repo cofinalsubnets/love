@@ -4732,7 +4732,7 @@
           (!(two? sf && <sf = 'sub && sf 1 = 'sp && sf 2 = 'sp && charm? K) ? fs
              (strip (drop 5 fs) @ r (r = 'no ? fs (<fs . r)))))))
    (unframe g fs)
-    (cz g 'unframe fs (: a64 (a64? g)
+    (cz g 'unframe fs (kfp? g ? fs (: a64 (a64? g)
        fb (a64 ? 'fp 'r4)
        pro (a64 ? (epim? >fs pro-a64) (pro4? fs))
        sf (fs (a64 ? 4 3))
@@ -4841,7 +4841,7 @@
                                          f)
                                       (rw >l D))))))))
              body2 (r3f ? (sav3 . body) body)
-             (<fs . (vs ? (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0)))))))
+             (<fs . (vs ? (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0))))))))
 
    ; IR constant propagation: a straight-line pass tracking constants (the word's signed value) in
    ; registers, frame slots and stack cells, folding them to li's; an unknown op invalidates everything
@@ -5604,7 +5604,9 @@
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
    (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk thki rth ibr cs
-   (x86ki? g) (x64? g ? (x86k? g 'thki) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'thki <r)))   ; -mretpoline, either width
+   (xkask? g k) (drop 16 (g 'mo) @ r (two? r && elem k <r))           ; an ask by its word, any target
+   (x86ki? g) ((x64? g || ia32? g) && xkask? g 'thki)                   ; -mretpoline, either width
+   (kfp? g) (xkask? g 'kfp)                                              ; -fno-omit-frame-pointer: the link stays
    (sa4? g) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'sa4 <r))   ; i386 -mstack-alignment=4
    (npic? g) (drop 17 (g 'mo) @ r (two? r && <r))   ; -fno-pie said: no load base moves the image
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
@@ -5697,7 +5699,7 @@
    ; the edges leaving that region, one stub each, and its exits drop their restores. the frame is needed by
    ; an sp operand, a call, push/pop, or a write of a saved register; a label reached from outside is outside
    (swrap g fs)
-    (cz g 'swrap fs (: f1 (two? fs && two? >fs ? <>fs)
+    (cz g 'swrap fs (kfp? g ? fs (: f1 (two? fs && two? >fs ? <>fs)
        N (two? f1 && <f1 = 'sub && f1 1 = 'sp && f1 2 = 'sp && charm? (f1 3) ? (f1 3))
        (sv l acc) (two? l && two? <l && <<l = 'st && <l 1 = 'sp && charm? (<l 2) && nom? (<l 3) ?
                      (sv >l ([(<l 2) (<l 3)] . acc)) [(rev acc) l])
@@ -5764,7 +5766,7 @@
                              (: a1 (elem i js && !(two? f && <f = 'label) ? (['label (tl i)] . acc) acc)
                                 (emit (i + 1) (f . a1))))))
                    stubs (foldl (a \ j \ a + [['label (sl j)]] + pro + [['jmp (tl j)]]) () jb)
-                   ((<fs . emit 0 ()) + stubs)))))))
+                   ((<fs . emit 0 ()) + stubs))))))))
    ; the arrival rename: a call-free fn's param homes (mov H A) rename to A where A is never otherwise touched
    (unhome g fs)
     (cz g 'unhome fs (: ar (argr g) hr (hregs g)

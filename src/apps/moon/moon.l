@@ -1201,7 +1201,7 @@
           ; -fwrapv, -fno-strict-overflow: an int's arithmetic wraps at 32 bits where it is read
           ((a . r) && elem a '("-fwrapv" "-fno-strict-overflow")) (flags r (pin t 'wrapv 1))
           ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r (pin t 'wrapv ()))
-          ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))   ; a64's frame record (refused elsewhere)
+          ("-fno-omit-frame-pointer" . r) (flags r (xkon (pin t 'kfp 1) 'kfp))   ; a64's frame record, x86's rbp link
           ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pins t 'pic a 'npic ()))
           ; -fno-pie said outright (the kernel's): no load base moves the image, so a const the
           ; linker writes rides .rodata, as clang lays it
@@ -1300,7 +1300,7 @@
           ; a64's tiny model: its adrp+add pairs reach a superset of tiny's adr
           ("-mcmodel=tiny" . r) (flags r (pin t 'cmt 1))
           (("-mcmodel=" + w) . r) (udie 2 "cc: -mcmodel=\(w) -- x64's code is rip-relative within 2GB: small and kernel")
-          ; unwind tables, each of the pair on until its -fno-: an a64 .eh_frame, as clang lays it
+          ; unwind tables, each of the pair on until its -fno-: an a64 or x64 .eh_frame, as clang lays it
           ("-fasynchronous-unwind-tables" . r) (flags r (pin t 'uwa 1))
           ("-fno-asynchronous-unwind-tables" . r) (flags r (pin t 'uwa ()))
           ("-funwind-tables" . r) (flags r (pin t 'uws 1))
@@ -1359,7 +1359,7 @@
        _ (pin f 'is (map dirn (f 'is + f 'isy) + (two? (f 'ia) ? (oursinc () + map dirn (f 'ia)) ())))
        _ (f 'fx18 && f 'tgt != 'a64 && udie 2 "cc: -ffixed-x18 names an a64 register, and the target is \(f 'tgt)")
        _ (f 'cmt && f 'tgt != 'a64 && udie 2 "cc: -mcmodel=tiny -- an a64 model, and the target is \(f 'tgt)")
-       _ ((f 'uwa || f 'uws) && f 'tgt != 'a64 && udie 2 "cc: unwind tables lay on a64 only")
+       _ ((f 'uwa || f 'uws) && !(elem (f 'tgt) '(a64 x64)) && udie 2 "cc: unwind tables lay on a64 and x64 only")
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        ; on macos an x64 link is a mach-o unless -os names another kernel: it meets no ELF
@@ -1368,7 +1368,7 @@
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
        _ (elem 'sa4 (f 'xk) && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mstack-alignment=4 lays on i386 only")
-       _ (f 'kfp && f 'tgt != 'a64 && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
+       _ (f 'kfp && !(elem (f 'tgt) '(a64 x64 i386)) && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
        _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
