@@ -21,15 +21,12 @@
    ; highs is ones << 7, shifted rather than written: as a literal it is a bignum,
    ; which `li` does not take
    ;
-   ; lvm ops are C functions of (g, Ip, Hp, Sp), so the roles sit in each target's
-   ; argument registers and differ between x64 and a64: never spell them below
-   ;                            g   ip  sp  scratch
-   (abi tgt) (tgt @ 'a64 '(r0 r1 r3 r4) '(r6 r5 r1 r0))
+   ; the roles are the glaze's row for this target: never spell them below
    ; r7 = the charm, r8 = the cursor, r9 = the bytes, r10 = n, r11 = the charm in all
    ; eight lanes, r12 = ones, r13 = highs, r14 = ~w. r11..r14 are callee-saved on x64,
    ; so pushed; the guards deopt before any push, so sp balances on every way out
-   (scan-ir tgt)
-    (: rg (abi tgt) G <rg IP <>rg SP <>>rg SC <>>>rg
+   (scan-ir row)
+    (: G (row 'g) IP (row 'ip) SP (row 'sp) SC (row 'acc)
        ([['ld SC SP 0] ['test SC 1] '(br ne deopt)               ; Sp[0] a pointer ...
           ['ld 'r7 SC 0]
           ; the string kind off g's reach (slot 1), never an li of (apof "")
@@ -75,8 +72,8 @@
 
    ; build it, or answer the twin. `nif` hands the twin back when it declines (inle, wasm)
    (mk _) (: h (cite 'holo) g (cite 'glaze)
-             (!h || !g || !(elem love-arch '(x64 a64)) ? walk
-                (: bs (peep (h 'assemble love-arch (scan-ir love-arch)) 'bytes 0)
+             (!h || !g || !(g 'targets love-arch) ? walk
+                (: bs (peep (h 'assemble love-arch (scan-ir (g 'targets love-arch))) 'bytes 0)
                    (g 'nif (cask bs) walk 3))))
    box {}                                ; one install for the process
    ; (scanner ()) -> (f s c i), the index of charm c at-or-after i, or -1.

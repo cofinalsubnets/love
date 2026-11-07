@@ -205,7 +205,7 @@ test_doc: host
 ifeq ($a,x64)
 test_glaze: host $(love0)
 	@echo TEST test/glaze-x86.l "(emit + auto)"
-	@{ echo "(borrow 'holo)"; cat src/love/holo/x64.l src/love/holo/a64.l test/glaze-x86.l; } \
+	@{ echo "(borrow 'holo)"; cat src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l test/glaze-x86.l; } \
 	  | $(gsh) test/gate/run.sh glaze "env LOVE_NO_IMAGE=1 $m" "test/glaze-x86:"
 	@echo TEST test/gate/rebind.sh "(a rebinding, glazed, unglazed and in love0)"
 	@$(gsh) test/gate/rebind.sh "$m" $(love0)

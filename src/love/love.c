@@ -627,6 +627,9 @@ union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) {
 // tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__
 #define code_sync(a, b) ((void) (a), (void) (b))
+#elif defined(__riscv) && defined(__mooncc__)
+void __love_codesync(char *a, char *b);
+#define code_sync(a, b) __love_codesync(a, b)
 #else
 #define code_sync(a, b) __builtin___clear_cache(a, b)
 #endif

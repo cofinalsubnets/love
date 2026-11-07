@@ -1018,6 +1018,7 @@ extern void __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *
 /* the probe's leaves: netbsd/aarch64 reads the svc immediate and SIGSYSes the register
  * form, so these set x8 and the immediate (a7 and t6 on riscv). freebsd, which SIGILLs
  * any nonzero immediate, is parted out by crt0 first */
+extern void __love_fencei(void);
 extern long __love_nbp20(long);
 extern long __love_nbp202(long, long, long, long, long, long);
 #endif

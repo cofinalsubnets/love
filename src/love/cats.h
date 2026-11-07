@@ -5,7 +5,7 @@
 
 // the glaze exists here and this vm can call it: it emits the tail-threaded lvm ABI, which a
 // trampoline build lacks. spelled once, for the blob and its callers in separate TUs
-#if (defined(__x86_64__) || defined(__aarch64__)) && tco
+#if (defined(__x86_64__) || defined(__aarch64__) || defined(__riscv)) && tco
 #define LvGlazed 1
 #endif
 

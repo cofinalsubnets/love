@@ -30,6 +30,17 @@
 (: ; body-less, so it leaks into the module's book: the concat helper is `bcat`, never `holo`.
    ; glazeasm takes the hook's assembler pins at install; unpinned, the module's own serves
    glazeasm {}
+   ; a target, one row per isa. g/ip/hp/sp are the C args, and those and every other role are
+   ; caller-saved, since a blob enters and leaves by jmp. loop: a counted fold's N/counter/acc.
+   ; args/ovf: the group lane's callee-saved bank, each H saving its own. slot: the push/pop unit.
+   ; link: the return address is a register an H saves. kept: the first callee-saved grid counter,
+   ; by encoding. packed: 2-wide doubles with a lane mask
+   targets {'x64  {'g 'r6 'ip 'r5 'hp 'r2 'sp 'r1 'acc 'r0 'tmp 'r7 'anchor 'r8 'scratch 'r10
+                   'loop '(r8 r9 r10) 'args '(r3 r12 r13 r14) 'ovf 'r11 'slot 8 'link 0 'kept 12 'packed 1}
+            'a64  {'g 'r0 'ip 'r1 'hp 'r2 'sp 'r3 'acc 'r4 'tmp 'r5 'anchor 'r9 'scratch 'r10
+                   'loop '(r6 r7 r8) 'args '(r19 r20 r21 r22) 'ovf 'r23 'slot 16 'link 1 'kept 16 'packed 0}
+            'rv64 {'g 'r0 'ip 'r1 'hp 'r2 'sp 'r3 'acc 'r4 'tmp 'r5 'anchor 'r9 'scratch 'r10
+                   'loop '(r6 r7 r8) 'args '(r19 r20 r21 r22) 'ovf 'r23 'slot 16 'link 1 'kept 14 'packed 0}}
    letc (cite 'guts 'letc)                 ; (letc rows . binds): the hook's twin carries it where a surface is missing
    threadir (cite 'guts 'threadir)
    leafops '(+ - * // % & | ^ < <= > >= =)   ; the ops the integer lanes emit
@@ -108,7 +119,7 @@
                             (st \ map (f \ <f . fnkm use (f 1) (f 2) st) info) sm-size)
    ; the counted fold loop: acc = fold of body(cv) over cv while (cmp cv N), N the tagged Sp[0]
    (foldinit op)  (op = '* ? 1 0)
-   (loopregs tgt) (tgt = 'x64 ? '(r8 r9 r10) '(r6 r7 r8))   ; N / counter / acc: disjoint from acc/tmp/scratch/anchor on both targets
+   (loopregs tgt) (targets tgt 'loop)
    ; putfix acc, then Continue (Ip += 16 ; jmp [Ip])
    (loopepi tgt) (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp)
       ([['adds A A A]] + ldeopt tgt 0 + [['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]))
@@ -1008,11 +1019,8 @@
    ; --- heap result: (jitfr '(\ x <fexpr>)) returns a gem ---
    ; the lane cannot GC (raw regs are not roots), so a room guard deopts when the box will not fit;
    ; the box is [Hp]=lvm_gembox, [Hp+8]=the double, NaN -> 0 (mk_gem's law)
-   ; nanc: NaN -> 0.0 in f0. the x86 raw bytes: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd xmm0,xmm0.
-   ; a64: unordered sets V, so vc skips the zeroing
-   (nanc tgt) (tgt = 'x64 ? [['raw '(102 15 46 192  123 4  102 15 87 192)]]
-                 (: A (greg tgt 'acc) ok (mint 0)
-                    (['(ucomisd f0 f0) ['br 'vc ok]] + [['li A 0] ['movqxr 'f0 A]] + [['label ok]])))
+   ; nanc: NaN -> 0.0 in f0
+   (nanc tgt) (: ok (mint 0) ['(ucomisd f0 f0) ['br 'np ok] '(xorpd f0 f0) ['label ok]])
    (jitfr lam tgt) (jitfrx lam tgt (ev lam))
    ; the hook passes e, ala's twin: (ev lam) there would re-enter ala -> natjit -> ...
    (jitfrx lam tgt interp)
@@ -1075,10 +1083,10 @@
                           ()))
    (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt)
     ; k=r7, acc=r8, counters r9.. through gr; f2..=consts, f8..=invariants, fvars next, the rest the DAG
-    ; pool. x86 D>=3 spills the callee-saved counters (restored before the acc deopt); a64's are caller-saved
+    ; pool. a callee-saved counter spills, and is restored before the acc deopt
     (: D #dims  M #invs  N #fvars  SCR (greg tgt 'acc)
        cregs (rangeL 10 (10 + D))                                             ; outer->inner
-       saved (tgt = 'x64 ? (rangeL 12 (10 + D)) ())                       ; x86 r12.. are callee-saved
+       saved (filter (r \ r >= targets tgt 'kept) cregs)
        fenv (invs + fvars)
        cenv (map2 (\ nm r [nm [['cvtsi2sd 'f0 (gr r)]]]) cnames cregs)
        ht (htbl (fcc bound (fccl invd (fccl updates (fcc testexpr ())))) 2)
@@ -1168,7 +1176,7 @@
        (preload + '((li r8 0)) + loop-nest 0 cell + '((mov r0 r8))))
    ; jitfgridn: the packed kernel where the shape fits (x86 only: neon has no movmskpd), else scalar
    (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim tgt)
-    (: pk (tgt = 'x64 && grid2-ok? dims invs fvars updates testexpr cmpop bound
+    (: pk (targets tgt 'packed && grid2-ok? dims invs fvars updates testexpr cmpop bound
              ? (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim) ())
        prog (atom? pk ? (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt) pk)
        (nif (emit (asmt tgt (prog + loopepi tgt))) (ev lam) 1))
@@ -1196,14 +1204,8 @@
        (2 = #invs && 2 = #fvars
           ? (jitfgrid glam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim tgt) ()))
    ; --- the neutral-IR lanes ---
-   ; greg: a role -> its abstract holo register. g/Ip/Hp/Sp are the C args (SysV rdi/rsi/rdx/rcx, aapcs
-   ; x0..x3); every role must be caller-saved (a blob enters and leaves by jmp; x64 r3/r4 are rbx/rbp)
-   (greg tgt role)                                                     ; a role table: read it in columns
-    (: x (tgt = 'x64)
-       (? (role = 'g)       (x ? 'r6 'r0)   (role = 'ip)      (x ? 'r5 'r1)
-          (role = 'hp)      (x ? 'r2 'r2)   (role = 'sp)      (x ? 'r1 'r3)
-          (role = 'acc)     (x ? 'r0 'r4)   (role = 'tmp)     (x ? 'r7 'r5)
-          (role = 'anchor)  (x ? 'r8 'r9)   (role = 'scratch) (x ? 'r10 'r10) ()))
+   ; greg: a role -> its abstract holo register
+   (greg tgt role) (targets tgt role)
    (ccof op)  (op @ '< 'lt  '<= 'le  '> 'gt  '>= 'ge  '= 'eq  ())
    (bitop op) (op @ '& 'and  '| 'or  '^ 'xor  ())
 
@@ -1327,11 +1329,11 @@
    ; mutually recursive first-order integer fns, each H a (label <name>) called by (call <name>). args
    ; ride the callee-saved bank beside the OVF anchor, and each H saves, loads and restores its own
    ; (a64 also lr). mov to or from sp is `lea`: the ORR mov reads XZR for reg 31
-   (slotsz tgt) (tgt = 'x64 ? 8 16)                                          ; the push/pop unit
-   (govf tgt)   (tgt = 'x64 ? 'r11 'r23)                                     ; the OVF anchor: x86 r12 / a64 x23
-   (argregir tgt i) ((tgt = 'x64 ? '(r3 r12 r13 r14) '(r19 r20 r21 r22)) i)
-   (hsave tgt)  (tgt = 'x64 ? () ['(push lr)])                            ; x86 rides call/ret's stack
-   (hrest tgt)  (tgt = 'x64 ? () ['(pop lr)])
+   (slotsz tgt) (targets tgt 'slot)
+   (govf tgt)   (targets tgt 'ovf)                                           ; the OVF anchor
+   (argregir tgt i) (targets tgt 'args i)
+   (hsave tgt)  (targets tgt 'link ? ['(push lr)] ())
+   (hrest tgt)  (targets tgt 'link ? ['(pop lr)] ())
    (saveargsir tgt k) (foldl (\ a i (bcat [a [['push (argregir tgt i)]]])) () (rangeL 0 k))
    (restargsir tgt k) (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
    (loadargsir tgt k) (foldl (\ a i (bcat [a [['ld (argregir tgt i) 'sp (slotsz tgt * (2 * k - i))]]])) () (rangeL 0 k))   ; the passed arg at [sp + slotsz*(2k-i)]
@@ -1562,8 +1564,7 @@
    ; the registry, never `book`: a woken image has `book` sealed away
    base-ev (: G (cite 'glaze) (G ? (G 'base-ev) ev))   ; on a re-load ev is auto-ev already, so read it out of the module, else autospec's fold re-enters the glaze
    ev-lower (cite 'guts 'ev-lower)  ev-run (cite 'guts 'ev-run)   ; auto-ev lowers once, ahead of its source passes
-   arch love-arch                         ; 'x64 / 'a64; glaze loads only on these
-   x86? (arch = 'x64)                 ; gates the x86-only lanes (float result, counted loops, float grids)
+   arch love-arch                         ; a row of targets; glaze loads only on these
    ; the emitter's expression grammar over var v, exact arity: (+ x 1 2) is a tower, not x + 1
    (exprp e v) (? (e = v) 1  (charm? e) 1  (atom? e) 0
                   (e @ (op a b) (elem op '(+ - * // % & | ^ < <= > >= =) && exprp a v && exprp b v)
@@ -2422,8 +2423,7 @@
                             (!(two? outerp) ? form
                                (: chain (loopchain <<outerp pairs recnm)
                                   D #chain M #invs N #fvars
-                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7
-                                     && (x86? || all pimm? (lim . map caup chain))) ? form   ; a64 compares against an imm12
+                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7) ? form
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
@@ -2478,9 +2478,9 @@
    ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
    (auto-ev e) (? (atom? e) (ev-run e)                                                 ; an atom has nothing to lower
                   (qualfr e) (memo e (l \ jitfr l arch))
-                  ; cask-build a string loop (x86 only), lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
+                  ; cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
                   (: f (canon (ev-lower e))
-                     (ev-run (autogroup (autonat (twolow (x86? ? (castbuild f) f)))))))
+                     (ev-run (autogroup (autonat (twolow (castbuild f)))))))
    ; `ev` is orth, which a module layer cannot write, so the boot installs (: ev (cite 'glaze 'ev)). a re-load hands the baked
    ; auto-ev back; a trampoline build (love-tco 0) stays the interpreter, since glazed code Continues by tail-jump, which only the threaded vm honors
    ev (? glaze-loaded? ev
