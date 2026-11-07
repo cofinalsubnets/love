@@ -183,9 +183,9 @@
                (free? r x act) (!(any (w \ loc w = r && ovl? x w) act) && fits? r x)
                (pick l x act) (l @ (r . u) (free? r x act ? r (pick u x act)) _ ())
                (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (loc y)) (hint x)))
-               ; a spill's weight: its touches, each 8^loop depth
-               spn (raspans fs)
-               wt (foldl (t \ i \ (vwt spn i @ w (ud i @ [u d] (map (x \ pin t x (peep t x 0 + w)) (vun u d), t)))) {} ^n)
+               ; a spill's weight: its touches, each 8^loop depth, a branch's cold way down to a sixteenth
+               spn (raspans fs) fqw (rafreq fs sc)
+               wt (foldl (t \ i \ ((vwt spn i @ v (max (v / 16) (min v (fqw i)))) @ w (ud i @ [u d] (map (x \ pin t x (peep t x 0 + w)) (vun u d), t)))) {} ^n)
                (wt? x) (peep wt x 0)
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
