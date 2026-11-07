@@ -242,17 +242,17 @@ word love_err(struct g *g, int e) {
  return v ? v : mapget(g, 0, zero, g->errs); }
 
 // the once-laid tables, filled by the first start (ini or love_image_load), read-only after.
-// arm32 has no exchange, and its boards start one core before any interrupt
+// a board has no exchange, and starts one core before any interrupt
 static int once_lock, once_done;
 static love_inline void once_take(int *l) {
-#if !defined(__arm__)
+#if !defined(__arm__) || defined(__linux__)
  while (__sync_lock_test_and_set(l, 1)) continue;
 #else
  (void) l;
 #endif
  }
 static love_inline void once_give(int *l) {
-#if !defined(__arm__)
+#if !defined(__arm__) || defined(__linux__)
  __sync_lock_release(l);
 #else
  (void) l;

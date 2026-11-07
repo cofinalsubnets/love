@@ -2,9 +2,9 @@
 ;
 ;   love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-s] [-P PERM].. MAIN.l [FILE..]
 ;
-; the app is a NativeActivity, no dex but `-s`'s one class: bridge.c, built by our `mooncc -t a64 -shared`, owns
+; the app is a NativeActivity, no dex but `-s`'s one class: bridge.c, built by our `mooncc -shared` per abi, owns
 ; the window, input and logcat and starts LOVE (an a64 love, already baked: its library
-; directory is read-only) from lib/arm64-v8a/liblove.so. MAIN.l and the FILEs ride as assets
+; directory is read-only) from lib/ABI/liblove.so. MAIN.l and the FILEs ride as assets
 ; in the app's data directory, love's cwd and HOME. the apk is signed (scheme v2) by a p-256
 ; key in ~/.love/etc/apk.pem, made on first use: android takes an update only under the same
 ; certificate, so keep that file.
@@ -278,20 +278,22 @@
     (: a (tree-tar 0) t (? (string? a) (tar-unpack a))
        (? (two? t) (foldl (\ r e (? (string? r) r (ends? (tar-get e 'nom "") "src/apps/droid/bridge.c") (tar-get e 'body "") ()))
                           () <>t)))
-   (bridge-so tmp)
+   ; a love's abi off its elf header
+   (ap-abi lb lov) (lb 18 @ 183 "arm64-v8a" 40 "armeabi-v7a" _ (udie 1 ("apk: " + lov + " is no a64 or arm love")))
+   (bridge-so tmp abi)
     (: c (bridge-src 0)
        _ (string? c ? 0 (udie 1 "apk: this love carries no src/apps/droid/bridge.c"))
-       src (tmp + "/bridge.c") so (tmp + "/libbridge.so")
+       src (tmp + "/bridge.c") so (tmp + "/libbridge-" + abi + ".so")
        (uwrite src c,
-        (? ((cite 'moon 'moon-run) ["-t" "a64" "-shared" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src] != 0)
+        (? ((cite 'moon 'moon-run) ((abi = "arm64-v8a" ? ["-t" "a64"] ["-t" "arm" "-fpic"]) + ["-shared" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src]) != 0)
            (udie 1 "apk: the bridge does not compile")
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
 
    (apk-usage _) (puts """
-    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE] [-b LINE] [-s] [-P PERM].. MAIN.l [FILE..]
-      an android app (arm64) that runs MAIN.l: a window, touch and keys through the face
-      (src/apps/droid/droid.l). LOVE is the a64 love it ships, baked; on an a64 machine
-      this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. the app has the
+    usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE].. [-b LINE] [-s] [-P PERM].. MAIN.l [FILE..]
+      an android app that runs MAIN.l: a window, touch and keys through the face
+      (src/apps/droid/droid.l). LOVE is a baked love it ships, one per abi (arm64-v8a or
+      armeabi-v7a, read off the file); on an a64 machine this one. -b starts LOVE on LINE's words instead, MAIN.l then optional. the app has the
       network; each PERM is a permission it asks for at its start, RECORD_AUDIO for the mic
       (android.permission. unless named in full).
       -s keeps the app's loves through a swipe or back: a foreground service and its notification.
@@ -302,7 +304,7 @@
    (ap-or s d) (? (string? s) s d)
    (apk-opts as t)
     (as @ ("-o" . v . r) (apk-opts r (pin t 'o v)) ("-p" . v . r) (apk-opts r (pin t 'p v))
-          ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L v))
+          ("-n" . v . r) (apk-opts r (pin t 'n v)) ("-L" . v . r) (apk-opts r (pin t 'L (t 'L + [v])))
           ("-b" . v . r) (apk-opts r (pin t 'b v))
           ("-s" . r) (apk-opts r (pin t 's 1))
           ("-P" . v . r) (apk-opts r (pin t 'P (t 'P + [(has? v "." ? v ("android.permission." + v))])))
@@ -316,24 +318,24 @@
        nm (? (two? fs) (ap-stem <fs) (ap-or (t 'n) "love"))
        out (ap-or (t 'o) (nm + ".apk"))
        pkg (ap-or (t 'p) ("pics.salt." + nm))
-       lov (? (string? (t 'L)) (t 'L) (love-arch = 'a64) (selfpath 0)
-              (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
-       lb (uread lov @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + lov))))
+       lovs (? (two? (t 'L)) (t 'L) (love-arch = 'a64) [(selfpath 0)]
+               (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
+       libs (map (lov \ uread lov @ r (? (two? r) (: lb <>r [(ap-abi lb lov) lb]) (udie 1 ("apk: cannot read " + lov)))) lovs)
        ks (apk-keys 0)
        _ (two? ks ? 0 (udie 1 "apk: no key in ~/.love/etc/apk.pem, and none could be made"))
        tmp ((ap-or (getenv "TMPDIR") "/tmp") + "/love-apk-" + show (getpid 0))
        _ (mkdir tmp 448)
-       so (bridge-so tmp)
+       abis (map (l \ (: abi <l [[("lib/" + abi + "/libbridge.so") (bridge-so tmp abi)] [("lib/" + abi + "/liblove.so") <>l]])) libs)
        ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
        ps (t 'P)
        stay (t 's = 1)
        z (ap-zip ([["resources.arsc" (ic-arsc 0)]
                 ["res/f.png" (ic-png 0)] ["res/i.xml" (ap-axml ic-xml)]
                 ["AndroidManifest.xml" (ap-axml (ap-manifest pkg (ap-or (t 'n) nm) ps stay))]
-                ["lib/arm64-v8a/libbridge.so" so] ["lib/arm64-v8a/liblove.so" lb]
                 ["assets/argv" (? (string? (t 'b)) (foldl (a \ w \ a + w + string [0]) "" (filter (w \ 0 < #w) (split " " (t 'b))))
                                   (ap-base <fs + string [0]))]]
                 + (two? ps ? [["assets/perms" (cats (map (p \ p + string [0]) ps))]] ())
+                + catmap id abis
                 + (stay ? [["classes.dex" (dx-service 0)] ["assets/stay" (ap-or (t 'n) nm)]] ()) + ins))
        (? (uwrite out (v2-sign z <ks (ks 1))) (puts ("apk: " + out + " (" + pkg + ") -- adb install -r " + out + "\n"), 0)
           (udie 1 ("apk: cannot write " + out))))

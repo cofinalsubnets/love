@@ -491,7 +491,7 @@
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
-                 ; arm32 has no .image lane and no local func symbols (objsecs3 refuses the first)
+                 ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
                        (two? (filter (k \ anames k != k) (keys anames)))
@@ -1009,7 +1009,7 @@
        arm? (arm32? tgt && tgt != 'arm)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
-       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a 64-bit target")
+       _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
        _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT

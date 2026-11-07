@@ -25,16 +25,16 @@ int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win) {
   dl_iterate_phdr(bake_phdr, &bi);
   if (!(bl.found && bi.found)) return -5;
   uint64_t lenoff = bl.off, imgoff = bi.off;
-  Elf64_Ehdr eh;
-  Elf64_Shdr *sh = NULL;
-  Elf64_Phdr *ph = NULL;
+  ElfW(Ehdr) eh;
+  ElfW(Shdr) *sh = NULL;
+  ElfW(Phdr) *ph = NULL;
   char *str = NULL;
   size_t nsh, nph, si = 0, pi;
   uint64_t head, off, cur, al, pad;
   int rc = 1;
   if (pread(src, &eh, sizeof eh, 0) != (ssize_t) sizeof eh) return -6;
-  if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != ELFCLASS64
-      || eh.e_shentsize != sizeof(Elf64_Shdr) || eh.e_phentsize != sizeof(Elf64_Phdr)
+  if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != (sizeof(void *) == 8 ? ELFCLASS64 : ELFCLASS32)
+      || eh.e_shentsize != sizeof *sh || eh.e_phentsize != sizeof *ph
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
   nsh = eh.e_shnum, nph = eh.e_phnum;
   sh = alloc(NULL, nsh * sizeof *sh), ph = alloc(NULL, nph * sizeof *ph);

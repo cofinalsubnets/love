@@ -51,6 +51,7 @@ extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 extern long __love_sys8(long n, long a, long b, long c, long d, long e, long f, long g, long h);   /* a BSD's mmap: 8 words */
 extern long long __love_sysw(long n, long a, long b, long c, long d, long e, long f);   /* ..and its lseek, r0:r1 */
 #ifdef __ARM_EABI__
+extern void __love_refusals(void);        /* arm linux: a trapped call answers ENOSYS */
 extern long __love_fbfork(void);         /* freebsd's fork, made from arm state */
 # define LvFbPad 1                       /* freebsd pads a 64-bit arg to an even slot here; netbsd does everywhere */
 #else

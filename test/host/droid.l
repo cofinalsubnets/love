@@ -51,6 +51,11 @@
  (ap-zip dr-es = dr-z))
 
 (test
+ ; a love's lib/ABI, by its e_machine
+ (ap-abi (zbytes 18 + string [183]) "x" = "arm64-v8a")
+ (ap-abi (zbytes 18 + string [40]) "x" = "armeabi-v7a"))
+
+(test
  ; chunks: the pool, the resource map, then the tree
  (: w (dr-walk dr-x) (<w = #dr-x && rdle dr-x 4 4 = #dr-x && (w 1) 0 = 1 && (w 1) 1 = 0x180))
  ; the attribute names first, in resource-id order

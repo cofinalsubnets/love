@@ -57,6 +57,13 @@ long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
       d = (long) o; }
     return __love_sys(NR_futex_32, a, b, c, d, e, f); }
   return -38; }
+
+/* an android app's seccomp filter traps a call it does not list, new ones among them:
+ * as on a kernel without it, the caller reads ENOSYS. 8 is r0 in arm's ucontext */
+static void refused(int sig, void *si, long *uc) { uc[8] = -38; }
+void __love_refusals(void) {
+  struct __ksigaction ka = { (void *) refused, 4 };      /* SA_SIGINFO */
+  __love_sys(NR_rt_sigaction, 31, (long) &ka, 0, 8, 0, 0); }
 #endif
 
 #ifdef __i386__

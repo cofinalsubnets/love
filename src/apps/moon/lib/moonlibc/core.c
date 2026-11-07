@@ -121,6 +121,9 @@ void __love_start(long *sp, long osv) {
   while (*e) e++;
   __auxv = osv == 4 ? 0 : (long *) (e + 1);   /* macos lays its apple strings there */
   __love_reloc();   /* before any data pointer is read */
+#ifdef __ARM_EABI__
+  if (__love_osv == 1) __love_refusals();
+#endif
   __love_tlsinit();
   stdout->fd = 1;
   stdout->wr = 1;
