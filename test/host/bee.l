@@ -489,7 +489,7 @@
    lp-gl (map (r \ <r) ((cite 'lanemap 'lanes-plan) ["src/love/boot/glaze.l" "src/tools/hot.prof" "src/tools/hot.calls"]
                          ["src/love/boot/glaze.l"] lp-cov))
    ; what moon emits through owes moon's lanes: x64's encoder all of them, another's its own target
-   (lp-of p) (map (r \ <r) ((cite 'lanemap 'lanes-plan) [p] () lp-cov))
+   (lp-of p) (map cap ((cite 'lanemap 'lanes-plan) [p] () lp-cov))
    lp-x (lp-of "src/love/holo/x64.l")
    lp-t2 (lp-of "src/love/holo/thumb2.l")
    lp-dec (lp-of "src/love/holo/decode.l")

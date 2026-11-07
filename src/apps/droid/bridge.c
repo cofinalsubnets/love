@@ -1,10 +1,10 @@
 /* src/apps/droid/bridge.c -- the native activity an apk's love runs behind. built with
    `mooncc -t a64 -shared` against the phone's own libraries, it owns what only the app
    process may: the window, the input queue, logcat. love is the static binary shipped as
-   lib/arm64-v8a/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
+   lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
    the wire, little-endian:
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
-                     w by h frame, scaled to what the window shows
+                     w by h frame, each pixel the whole number of the window's that fit
                      'I' u8 on: the soft keyboard up, then toggled at each touch, or down
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
@@ -79,13 +79,23 @@ void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQ
 int AInputQueue_getEvent(void *, void **); int AInputQueue_preDispatchEvent(void *, void *);
 void AInputQueue_finishEvent(void *, void *, int);
 int AInputEvent_getType(void const *); int AInputEvent_getDeviceId(void const *); int AKeyEvent_getMetaState(void const *); int AKeyEvent_getAction(void const *); int AKeyEvent_getKeyCode(void const *);
-int AMotionEvent_getAction(void const *); float AMotionEvent_getX(void const *, size_t); float AMotionEvent_getY(void const *, size_t);
+/* armeabi-v7a is softfp: what android's side answers as a float comes back in core registers */
+#ifdef __arm__
+typedef unsigned fl32; typedef unsigned long long fl64;
+static float f32of(fl32 x) { union { fl32 i; float f; } u = {x}; return u.f; }
+static double f64of(fl64 x) { union { fl64 i; double d; } u = {x}; return u.d; }
+#else
+typedef float fl32; typedef double fl64;
+#define f32of(x) (x)
+#define f64of(x) (x)
+#endif
+int AMotionEvent_getAction(void const *); fl32 AMotionEvent_getX(void const *, size_t); fl32 AMotionEvent_getY(void const *, size_t);
 size_t AMotionEvent_getPointerCount(void const *); int AMotionEvent_getPointerId(void const *, size_t);
 void *AAssetManager_open(void *, char const *, int); void const *AAsset_getBuffer(void *);
 long AAsset_getLength(void *); void AAsset_close(void *);
 void *AAssetManager_openDir(void *, char const *); char const *AAssetDir_getNextFileName(void *); void AAssetDir_close(void *);
 int dladdr(void const *, Dl_info *);
-pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int); int fcntl(int, int, ...);
+void *memcpy(void *, void const *, size_t); pid_t fork(void); int execve(char const *, char *const[], char *const[]); int pipe2(int[2], int); int fcntl(int, int, ...);
 int dup2(int, int); int close(int); ssize_t read(int, void *, size_t); ssize_t write(int, void const *, size_t);
 void _exit(int); pid_t waitpid(pid_t, int *, int); int kill(pid_t, int); int chdir(char const *);
 int open(char const *, int, ...); int unlink(char const *);
@@ -100,11 +110,11 @@ int AAudio_createStreamBuilder(void **); int AAudioStreamBuilder_delete(void *);
 void AAudioStreamBuilder_setSampleRate(void *, int); void AAudioStreamBuilder_setChannelCount(void *, int);
 void AAudioStreamBuilder_setFormat(void *, int); void AAudioStreamBuilder_setPerformanceMode(void *, int);
 int AAudioStreamBuilder_openStream(void *, void **);
-int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const *, int, long); int AAudioStream_close(void *);
-void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *, void *, int, long);
+int AAudioStream_requestStart(void *); int AAudioStream_write(void *, void const *, int, long long); int AAudioStream_close(void *);
+void AAudioStreamBuilder_setDirection(void *, int); int AAudioStream_read(void *, void *, int, long long);
 void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void const *, size_t, int);
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
-struct dirent { unsigned long ino; long off; unsigned short reclen; unsigned char type; char name[256]; };
+struct dirent { unsigned long long ino; long long off; unsigned short reclen; unsigned char type; char name[256]; };
 void *opendir(char const *); struct dirent *readdir(void *); int closedir(void *);
 
 enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
@@ -121,12 +131,13 @@ typedef struct {
   ANativeActivity *a; void *vm, *looper, *win, *queue;   /* a is 0 between activities, stay's only; the act lock guards it */
   int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, vh, shown;
   int bare;                               /* the client on top has not been told its pixels are gone */
+  int baking, tick;                       /* love's first run lays its image, no client yet */
   deck decks[NDECK], *d;                  /* d is on the screen */
   int up, ears, stay;                     /* in sight (onStart to onStop); hear threads alive; the service keeps us */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
   long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
   char argv[2048], label[64]; long nargv;
-  uint32_t *fb; size_t fbsz; int gh;      /* a frame as love sent it, the window's buffer height */
+  uint32_t *fb; size_t fbsz;              /* a frame as love sent it */
   char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], line[2048]; int nline;
 } br;
 
@@ -165,19 +176,58 @@ static int writeall(int fd, void const *p, size_t n) {
 
 static int vis(br *b) { return b->vh > 0 && b->vh < b->wh ? b->vh : b->wh; }
 
-/* the frame swizzled onto the window's visible part (its top vh rows, the rest black),
-   which the window scales; under the lock */
+/* how many of the window's pixels a frame's pixel is: whole, so none is filtered */
+static int zoom(br *b) { return b->fw && b->ww >= b->fw ? b->ww / b->fw : 1; }
+
+static void block(ANativeWindow_Buffer *o, int x, int y, int w, int h) {
+  for (int j = y; j < y + h && j < o->height; j++)
+    for (int i = x; i < x + w && i < o->width; i++) ((uint32_t *) o->bits)[(size_t) j * (size_t) o->stride + (size_t) i] = 0xffc0c0c0u;
+}
+/* a line in the columns of a 5x7 font, only the letters a first run says */
+static void say(ANativeWindow_Buffer *o, char const *s, int y, int k) {
+  static char const font[] =
+    "a\x20\x54\x54\x54\x78" "b\x7f\x48\x44\x44\x38" "e\x38\x54\x54\x54\x18" "f\x08\x7e\x09\x01\x02"
+    "g\x0c\x52\x52\x52\x3e" "i\x00\x44\x7d\x40\x00" "k\x7f\x10\x28\x44\x00" "m\x7c\x04\x18\x04\x78"
+    "n\x7c\x08\x04\x04\x78" "r\x7c\x08\x04\x04\x08" "s\x48\x54\x54\x54\x20" "t\x04\x3f\x44\x40\x20"
+    "u\x3c\x40\x40\x20\x7c" "w\x3c\x40\x30\x40\x3c" ":\x00\x36\x36\x00\x00";
+  int n = 0; while (s[n]) n++;
+  for (int i = 0; i < n; i++)
+    for (unsigned g = 0; g < sizeof font - 1; g += 6)
+      if (font[g] == s[i])
+        for (int c = 0; c < 5; c++)
+          for (int r = 0; r < 7; r++)
+            if (font[g + 1 + (unsigned) c] >> r & 1) block(o, (o->width - n * 6 * k) / 2 + (i * 6 + c) * k, y + r * k, k, k);
+}
+/* the window while a first run bakes, and a block that moves to show it lives. under the lock */
+static void notice(br *b) {
+  ANativeWindow_Buffer o;
+  if (ANativeWindow_lock(b->win, &o, 0)) return;
+  for (int y = 0; y < o.height; y++)
+    for (int x = 0; x < o.width; x++) ((uint32_t *) o.bits)[(size_t) y * (size_t) o.stride + (size_t) x] = 0xff000000u;
+  int k = (o.width < o.height ? o.width : o.height) / 120, y = o.height / 3;
+  if (k < 1) k = 1;
+  say(&o, "first run: baking", y, k);
+  say(&o, "a few minutes", y + 12 * k, k);
+  block(&o, b->tick * k * 2 % (o.width - 8 * k), y + 24 * k, 8 * k, 2 * k);
+  ANativeWindow_unlockAndPost(b->win);
+}
+
+/* the frame swizzled onto the window's visible part, each pixel k by k; the rest black.
+   under the lock */
 static void paint(br *b) {
   int w = b->fw, ht = b->fh;
+  if (b->win && b->baking && !b->fb) notice(b);
   if (b->win && b->fb && w) {
-    int vh = vis(b), gh = vh ? (int) ((long) ht * b->wh / vh) : ht;
-    if (gh != b->gh) ANativeWindow_setBuffersGeometry(b->win, w, gh, 1), b->gh = gh;
+    int k = zoom(b), vh = vis(b);
     ANativeWindow_Buffer o;
     if (!ANativeWindow_lock(b->win, &o, 0)) {
       for (int y = 0; y < o.height; y++) {
-        uint32_t const *s = b->fb + (size_t) y * (size_t) w; uint32_t *d = (uint32_t *) o.bits + (size_t) y * (size_t) o.stride;
+        uint32_t *d = (uint32_t *) o.bits + (size_t) y * (size_t) o.stride;
+        int sy = y / k;
+        if (y % k && y < vh && sy < ht) { memcpy(d, d - o.stride, (size_t) o.width * 4); continue; }
+        uint32_t const *s = b->fb + (size_t) sy * (size_t) w;
         for (int x = 0; x < o.width; x++) {
-          uint32_t v = y < ht && x < w ? s[x] : 0;
+          uint32_t v = y < vh && sy < ht && x / k < w ? s[x / k] : 0;
           d[x] = 0xff000000u | (v & 0xff00) | (v >> 16 & 0xff) | (v & 0xff) << 16;
         }
       }
@@ -213,7 +263,7 @@ static int frame(br *b, int fd) {
       if (b->fb == (void *) -1) b->fb = 0, b->fbsz = 0;
     }
     if (b->fb) for (size_t i = 0; i < (size_t) w * (size_t) ht; i++) b->fb[i] = 0;
-    b->fw = b->fb ? w : 0; b->fh = ht; b->gh = 0;
+    b->fw = b->fb ? w : 0; b->fh = ht;
     pthread_mutex_unlock(b->mu);
     if (!b->fb) return -1;
   }
@@ -249,19 +299,25 @@ static void keyboard(br *b, void *e, int on) {
 
 /* the part the soft keyboard leaves, asked of the decor view's insets (ime, 8) while love
    types: a whole screen's window is not resized for it. a change goes to love as its size */
+static int imeover(int sys, int stable) { return sys > stable ? sys : 0; }
 static void insets(br *b) {
   void *e = b->env; if (!e || !b->ww || !b->a) return;
   void *const *t = *(void *const **) e;
   void *(*cls)(void *, void *) = t[31]; void *(*mid)(void *, void *, char const *, char const *) = t[33];
   void *(*callo)(void *, void *, void *, ...) = t[34]; void *(*fid)(void *, void *, char const *, char const *) = t[94];
   int (*geti)(void *, void *, void *) = t[100]; void (*clear)(void *) = t[17];
+  int (*calli)(void *, void *, void *, ...) = t[49];
   int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
   if (push(e, 16)) { clear(e); return; }
   void *ac = b->a->clazz, *w = callo(e, ac, mid(e, cls(e, ac), "getWindow", "()Landroid/view/Window;"));
   void *v = w ? callo(e, w, mid(e, cls(e, w), "getDecorView", "()Landroid/view/View;")) : 0;
   void *wi = v ? callo(e, v, mid(e, cls(e, v), "getRootWindowInsets", "()Landroid/view/WindowInsets;")) : 0;
-  void *in = wi ? callo(e, wi, mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;"), 8) : 0;
-  int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I")) : -1;
+  void *gi = wi ? mid(e, cls(e, wi), "getInsets", "(I)Landroid/graphics/Insets;") : 0;
+  if (!gi) clear(e);                     /* before api 30: all of it, past the stable bars alone */
+  void *in = gi ? callo(e, wi, gi, 8) : 0;
+  int bot = in ? geti(e, in, fid(e, cls(e, in), "bottom", "I"))
+          : wi && !gi ? imeover(calli(e, wi, mid(e, cls(e, wi), "getSystemWindowInsetBottom", "()I")),
+                                calli(e, wi, mid(e, cls(e, wi), "getStableInsetBottom", "()I"))) : -1;
   clear(e); pop(e, 0);
   if (bot >= 0) b->shown = bot > 0;
   if (bot < 0 || bot >= b->wh || b->wh - bot == vis(b)) return;
@@ -308,8 +364,8 @@ static void input(br *b) {
       if (t == 0 && b->d->typing && !b->shown) keyboard(b, b->env, 1);
       for (size_t i = 0; b->ww && vh && b->fw && i < AMotionEvent_getPointerCount(e); i++)
         if (!one || (int) i == ix)
-          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) (AMotionEvent_getX(e, i) * (float) b->fw / (float) b->ww),
-                                                                 (int) (AMotionEvent_getY(e, i) * (float) b->fh / (float) vh));
+          put(b, 'T', t | AMotionEvent_getPointerId(e, i) << 2, (int) f32of(AMotionEvent_getX(e, i)) / zoom(b),
+                                                                 (int) f32of(AMotionEvent_getY(e, i)) / zoom(b));
     }
     AInputQueue_finishEvent(b->queue, e, handled);
   }
@@ -414,7 +470,7 @@ static void paste(br *b) {
 
 /* --- the framework's door: a session per connection on DATA/droid, ops run on the loop
    thread's env, each under a local frame, every call's exception answered and cleared */
-typedef union { unsigned char z; signed char b; unsigned short c; short s; int i; long j; float f; double d; void *l; } jvalue;
+typedef union { unsigned char z; signed char b; unsigned short c; short s; int i; long long j; float f; double d; void *l; } jvalue;
 enum { REFS = 256, ARGS = 16 };
 typedef struct { br *b; int fd; void *ref[REFS]; } sess;
 
@@ -494,13 +550,13 @@ static int caught(void *e, int fd) {
   return 1;
 }
 
-static long num(char const *w, int *ok) {
-  long v = 0; int neg = *w == '-'; char const *p = w + neg;
+static long long num(char const *w, int *ok) {
+  long long v = 0; int neg = *w == '-'; char const *p = w + neg;
   if (!*p) *ok = 0;
   for (; *p; p++) { if (*p < '0' || *p > '9') { *ok = 0; return 0; } v = v * 10 + (*p - '0'); }
   return neg ? -v : v;
 }
-double strtod(char const *, char **);
+fl64 strtod(char const *, char **);
 
 /* a handle's word -> its ref, "" -> null; -1 a word that names none */
 static int handle(sess *s, char const *w, void **r) {
@@ -531,10 +587,10 @@ static int params(sess *s, char const *sig, char **w, int nw, jvalue *v) {
     if (!*p) return 0;
     p++;
     if (c == 'L' || c == '[') { if (handle(s, w[k], &v[k].l)) return 0; }
-    else if (c == 'F') v[k].f = (float) strtod(w[k], 0);
-    else if (c == 'D') v[k].d = strtod(w[k], 0);
+    else if (c == 'F') v[k].f = (float) f64of(strtod(w[k], 0));
+    else if (c == 'D') v[k].d = f64of(strtod(w[k], 0));
     else {
-      long n = num(w[k], &ok);
+      long long n = num(w[k], &ok);
       if (c == 'Z') v[k].z = (unsigned char) (n != 0); else if (c == 'B') v[k].b = (signed char) n;
       else if (c == 'C') v[k].c = (unsigned short) n; else if (c == 'S') v[k].s = (short) n;
       else if (c == 'I') v[k].i = (int) n; else if (c == 'J') v[k].j = n; else return 0;
@@ -559,14 +615,14 @@ static void keep(sess *s, void *e, void *o) {
 static void call(sess *s, void *e, int ret, int stat, void *on, void *m, jvalue *v) {
   void *const *t = *(void *const **) e; int base = stat ? 116 : 36; char n[40]; size_t k = 0;
   if (ret == 'L' || ret == '[') { void *(*f)(void *, void *, void *, jvalue *) = t[base]; void *o = f(e, on, m, v); if (!caught(e, s->fd)) keep(s, e, o); return; }
-  if (ret == 'Z') { unsigned char (*f)(void *, void *, void *, jvalue *) = t[base + 3]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'B') { signed char (*f)(void *, void *, void *, jvalue *) = t[base + 6]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'C') { unsigned short (*f)(void *, void *, void *, jvalue *) = t[base + 9]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'S') { short (*f)(void *, void *, void *, jvalue *) = t[base + 12]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'I') { int (*f)(void *, void *, void *, jvalue *) = t[base + 15]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'J') { long (*f)(void *, void *, void *, jvalue *) = t[base + 18]; long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%ld", r); }
-  else if (ret == 'F') { float (*f)(void *, void *, void *, jvalue *) = t[base + 21]; double r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%.9g", r); }
-  else if (ret == 'D') { double (*f)(void *, void *, void *, jvalue *) = t[base + 24]; double r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%.17g", r); }
+  if (ret == 'Z') { unsigned char (*f)(void *, void *, void *, jvalue *) = t[base + 3]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'B') { signed char (*f)(void *, void *, void *, jvalue *) = t[base + 6]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'C') { unsigned short (*f)(void *, void *, void *, jvalue *) = t[base + 9]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'S') { short (*f)(void *, void *, void *, jvalue *) = t[base + 12]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'I') { int (*f)(void *, void *, void *, jvalue *) = t[base + 15]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'J') { long long (*f)(void *, void *, void *, jvalue *) = t[base + 18]; long long r = f(e, on, m, v); k = (size_t) snprintf(n, sizeof n, "%lld", r); }
+  else if (ret == 'F') { fl32 (*f)(void *, void *, void *, jvalue *) = t[base + 21]; double r = f32of(f(e, on, m, v)); k = (size_t) snprintf(n, sizeof n, "%.9g", r); }
+  else if (ret == 'D') { fl64 (*f)(void *, void *, void *, jvalue *) = t[base + 24]; double r = f64of(f(e, on, m, v)); k = (size_t) snprintf(n, sizeof n, "%.17g", r); }
   else { void (*f)(void *, void *, void *, jvalue *) = t[base + 27]; f(e, on, m, v); }
   if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
 }
@@ -575,17 +631,17 @@ static void call(sess *s, void *e, int ret, int stat, void *on, void *m, jvalue 
 static void field(sess *s, void *e, int ty, int stat, void *on, void *f) {
   void *const *t = *(void *const **) e; int base = stat ? 145 : 95; char n[40]; size_t k;
   if (ty == 'L' || ty == '[') { void *(*g)(void *, void *, void *) = t[base]; void *o = g(e, on, f); if (!caught(e, s->fd)) keep(s, e, o); return; }
-  long r = 0; double d = 0; int fl = 0;
+  long long r = 0; double d = 0; int fl = 0;
   if (ty == 'Z') { unsigned char (*g)(void *, void *, void *) = t[base + 1]; r = g(e, on, f); }
   else if (ty == 'B') { signed char (*g)(void *, void *, void *) = t[base + 2]; r = g(e, on, f); }
   else if (ty == 'C') { unsigned short (*g)(void *, void *, void *) = t[base + 3]; r = g(e, on, f); }
   else if (ty == 'S') { short (*g)(void *, void *, void *) = t[base + 4]; r = g(e, on, f); }
   else if (ty == 'I') { int (*g)(void *, void *, void *) = t[base + 5]; r = g(e, on, f); }
-  else if (ty == 'J') { long (*g)(void *, void *, void *) = t[base + 6]; r = g(e, on, f); }
-  else if (ty == 'F') { float (*g)(void *, void *, void *) = t[base + 7]; d = g(e, on, f); fl = 1; }
-  else if (ty == 'D') { double (*g)(void *, void *, void *) = t[base + 8]; d = g(e, on, f); fl = 1; }
+  else if (ty == 'J') { long long (*g)(void *, void *, void *) = t[base + 6]; r = g(e, on, f); }
+  else if (ty == 'F') { fl32 (*g)(void *, void *, void *) = t[base + 7]; d = f32of(g(e, on, f)); fl = 1; }
+  else if (ty == 'D') { fl64 (*g)(void *, void *, void *) = t[base + 8]; d = f64of(g(e, on, f)); fl = 1; }
   else { answer(s->fd, 'e', "bad type", 8); return; }
-  k = (size_t) (fl ? snprintf(n, sizeof n, "%.17g", d) : snprintf(n, sizeof n, "%ld", r));
+  k = (size_t) (fl ? snprintf(n, sizeof n, "%.17g", d) : snprintf(n, sizeof n, "%lld", r));
   if (!caught(e, s->fd)) answer(s->fd, 'v', n, k);
 }
 
@@ -668,7 +724,9 @@ static void sessend(sess *s) {
   munmap(s, sizeof *s);
 }
 
-/* love's stdout and stderr, a line at a time, to logcat */
+static int prefix(char const *s, char const *p) { while (*p) if (*s++ != *p++) return 0; return 1; }
+
+/* love's stdout and stderr, a line at a time, to logcat; a first run's line starts its notice */
 static int logs(br *b) {
   ssize_t k = read(b->logfd, b->line + b->nline, sizeof b->line - 1 - (size_t) b->nline);
   if (k == 0) return -1;                       /* its end; a read that would wait is a stale wake */
@@ -676,7 +734,7 @@ static int logs(br *b) {
   b->nline += (int) k;
   int s = 0;
   for (int i = 0; i < b->nline; i++)
-    if (b->line[i] == '\n') { b->line[i] = 0; LOG(b->line + s); s = i + 1; }
+    if (b->line[i] == '\n') { b->line[i] = 0; LOG(b->line + s); b->baking |= prefix(b->line + s, "love: first run"); s = i + 1; }
   if (s == 0 && b->nline == (int) sizeof b->line - 1) b->line[b->nline] = 0, LOG(b->line), s = b->nline;
   for (int i = s; i < b->nline; i++) b->line[i - s] = b->line[i];
   b->nline -= s;
@@ -730,7 +788,7 @@ static void *hear(void *p) {
       AAudioStreamBuilder_delete(bd);
     }
     if (!st) { usleep(500000); continue; }
-    for (int n; __atomic_load_n(&b->up, 2) && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000L)) >= 0; )
+    for (int n; __atomic_load_n(&b->up, 2) && (n = AAudioStream_read(st, buf, (int) (sizeof buf / 2) / ch, 100000000LL)) >= 0; )
       if (n ? send(fd, buf, (size_t) n * 2 * (size_t) ch, 0x4000) < 0 : hung(fd)) { rate = 0; break; }   /* MSG_NOSIGNAL */
     AAudioStream_close(st); st = 0;
   }
@@ -834,16 +892,17 @@ static void *loop(void *p) {
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
-    int id = ALooper_pollOnce(__atomic_load_n(&b->a, 2) && (b->d->typing || b->shown) ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
+    int id = ALooper_pollOnce(__atomic_load_n(&b->a, 2) && (b->baking || b->d->typing || b->shown) ? 200 : -1, &fd, &ev, &d);   /* until a keyboard told to go has gone */
     pthread_mutex_lock(b->act);                /* the activity stays through what this does */
     if (b->d->typing || b->shown) insets(b);
+    if (b->baking) { pthread_mutex_lock(b->mu); b->tick++; paint(b); pthread_mutex_unlock(b->mu); }
     if (id == LISTEN) {
       deck *l = d;
       int c = accept4(l->lsock, 0, 0, O_CLOEXEC);
       if (c >= 0 && (l->csock < 0 || l->nunder < 3)) {
         pthread_mutex_lock(b->mu);
         if (l->csock >= 0) l->under[l->nunder] = l->csock, l->utyping[l->nunder++] = l->typing;
-        l->csock = c; if (l == b->d) blank(b);
+        l->csock = c; b->baking = 0; if (l == b->d) blank(b);
         pthread_mutex_unlock(b->mu);
         ALooper_addFd(b->looper, c, CONN, 1, 0, 0);
         if (l == b->d && b->ww) sized(b);
@@ -903,7 +962,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b, deck *d) {
-  char *av[32], exe[600], *ev[64], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
+  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
   char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
@@ -912,6 +971,16 @@ static void spawn(br *b, deck *d) {
   snprintf(home, sizeof home, "HOME=%s", b->data); snprintf(tmp, sizeof tmp, "TMPDIR=%s", b->data);
   face(b, d, sk, sizeof sk); snprintf(fc, sizeof fc, "LOVE_FACE=%s", sk); snprintf(horn, sizeof horn, "HORN=sock:%s", b->horn);
   snprintf(ear, sizeof ear, "HORN_IN=sock:%s", b->ear); snprintf(droid, sizeof droid, "LOVE_DROID=%s", b->droid);
+  unsigned h = 2166136261u;                    /* one image per install: its name is the lib dir's, the others go */
+  for (char const *c = b->dir; *c; c++) h = (h ^ (unsigned char) *c) * 16777619u;
+  char me[32]; snprintf(me, sizeof me, "love-%08x.image", h);
+  snprintf(img, sizeof img, "LOVE_IMAGE=%s/%s", b->data, me);
+  void *dd = opendir(b->data);
+  for (struct dirent *de; dd && (de = readdir(dd)); ) {
+    int n = 0; while (de->name[n]) n++;
+    snprintf(path, sizeof path, "%s/%s", b->data, de->name);
+    if (n > 11 && prefix(de->name, "love-") && prefix(de->name + n - 6, ".image") && !prefix(de->name, me)) unlink(path); }
+  if (dd) closedir(dd);
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
   void *bd = opendir(bin);                     /* DATA/bin is the bridge's: every link goes, then names[]'s */
   for (struct dirent *de; bd && (de = readdir(bd)); )
@@ -922,9 +991,9 @@ static void spawn(br *b, deck *d) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid;
-  int e = 7;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=" };
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img;
+  int e = 8;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;
@@ -1009,7 +1078,7 @@ static void created(void *a, void *w) {
   br *b = me(a);
   ANativeWindow_setBuffersGeometry(w, 0, 0, 1);
   pthread_mutex_lock(b->mu);
-  b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w); b->gh = 0;
+  b->win = w; b->ww = ANativeWindow_getWidth(w); b->wh = ANativeWindow_getHeight(w);
   paint(b);
   pthread_mutex_unlock(b->mu);
   sized(b);

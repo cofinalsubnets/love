@@ -10,7 +10,7 @@ endif
 # bootstrap interpreter
 love0 = $(if $(LOVE),out/drive0,out/love0)
 
-.PHONY: all install uninstall clean distclean host kernel wasm wasm_seat love0 lint ulp fonts web \
+.PHONY: all install uninstall clean distclean host kernel kart_objs wasm wasm_seat love0 lint ulp fonts web \
   site serve site-serve valg disasm flame cat cata catav perf repl gdb bench cloc
 
 # an unpacked release builds the product; a checkout keeps the fast gate
@@ -46,14 +46,14 @@ note = if cmp -s $$tf $@ 2>/dev/null; then rm -f $$tf; else mv $$tf $@; echo '$(
 # half-written one away when a generator dies, which is the whole of the guarantee.
 # the baked source: one header, one love0 run. src/tools/lcat.l carries the roster -- which
 # files, in which blobs, with what glue -- so a roster change edits a file this depends on.
-baked_l = $(wildcard src/love/boot/*.l) src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l
+baked_l = $(wildcard src/love/boot/*.l) src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l src/love/holo/thumb2.l
 out/lib/baked.h: $(baked_l) src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) src/tools/lcat.l > $@
 # one file as one literal: the ports and test/front paste these in expression position
 lib_h = $(patsubst src/love/boot/%.l,out/lib/%.h,$(wildcard src/love/boot/*.l))
-holo_h = out/lib/holo.h out/lib/x64.h out/lib/a64.h out/lib/rv64.h
+holo_h = out/lib/holo.h out/lib/x64.h out/lib/a64.h out/lib/rv64.h out/lib/thumb2.h
 $(lib_h): out/lib/%.h: src/love/boot/%.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
@@ -91,8 +91,10 @@ ho = out$(hsuf)
 # build (HCC) records no profile, and profiles its own link only to say so
 ifneq ($(HCC),)
 prof_raw = $(ho)/love.raw
+macho_o = $(ho)/o/love/macho.o
 else
 prof_raw = $(ho)/love.praw
+macho_o = $(ho)/moon/love/macho.o
 endif
 h_o = $(love_c:$(S)/%.c=$(ho)/o/%.o)
 host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
@@ -110,7 +112,8 @@ $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
 	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
 	 $(note)
-host: $(ho)/love $(ho)/love.1 $(ho)/cook.1
+# macho.o for its compile alone: no link here takes it
+host: $(macho_o) $(ho)/love $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
 
 # the two states of one binary, as two files: the link lays the raw one, and the bake
@@ -253,7 +256,7 @@ $$($(1)_love_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/love.o: out/lib/love_version.h   # only this TU carries the version id
-$$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
+$$($(1)_host_o) $$($(1)_seat_o) $$($(2))/love/macho.o $$($(2))/love/user/nokern.o: $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
@@ -275,7 +278,7 @@ endef
 moon_d = $(ho)/moon
 $(eval $(call moonlane,moon,moon_d,moon0,hosta))
 mksys_l = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
-          src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l \
+          src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l src/love/holo/thumb2.l \
           src/love/holo/elf.l src/love/holo/obj.l src/apps/moon/lib/mksys.l
 .PHONY: force_dist_list
 force_dist_list: ;
@@ -301,19 +304,20 @@ moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonl
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
-# love for macos: the same objects as dyld's mach-o (the horn reaches AudioToolbox through
+	@$(moon0) -pie $(moon_o) $(love_door_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# love for macos: the same objects but its bake's, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), unbaked -- the image is its own binary's, so the bake runs on the box
 # (test_macos_love)
-$(ho)/love-macos.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
+mac_o = $(filter-out %/love/elfbake.o,$(moon_o)) $(moon_d)/love/macho.o
+$(ho)/love-macos.raw: out/moonlibc.o $(mac_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos -pie $(moon_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -os macos -pie $(mac_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(love_door_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -426,6 +430,7 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@for f in $(distfiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
 	@for f in $(carryfiles); do printf '\n(cite (quote verbs) (quote carry) "%s")\n' $$f; done >> $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
+	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
 out/lib/distlist.h: Makefile
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles) + $(carryfiles)' > $$tf; \
@@ -525,8 +530,8 @@ xqemu_a64 = qemu-aarch64
 xqemu_rv64 = qemu-riscv64
 xa ?= $(if $(filter a64,$a),x64,a64)
 xqemu  = $(xqemu_$(xa))
-ifeq ($(filter $(xa),x64 a64 rv64),)
-$(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64)
+ifeq ($(filter $(xa),x64 a64 rv64 arm),)
+$(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64 arm)
 endif
 xd = out/x-$(xa)
 # the objects mirror the source tree, and this lane links its binary to $(xd)/love --
@@ -550,7 +555,7 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) -pie $(x_o) $(xkart_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xod)/love/user/nokern.o $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
 fat = out/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/love $(xd)/love src/tools/fatpack.l
@@ -752,21 +757,23 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	@{ echo "(borrow 'holo)"; cat $S/apps/kore/text.l $S/apps/kore/u.l; \
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(kproject_l)); } > $@
 
-# at the host's own arch there is no second kernel build: $(kart_o) is linked into the
-# shipped love already, so the elf is projected out of that binary, and it WAKES the
-# image the binary carries. $(k_pie) is the other lane -- a machine this one cannot
-# run, built from source, which carries no image and WARMS the egg instead. one gate
-# apiece: test_disk rides the projection, test_kernel_a64 the pie.
+# at the host's own arch the elf is projected out of the shipped love, with $(kart_o) laid
+# past its data and bound to its doors, and it WAKES the image the binary carries. $(k_pie)
+# is the other lane -- a machine this one cannot run, built from source, which carries no
+# image and WARMS the egg instead. one gate apiece: test_disk rides the projection,
+# test_kernel_a64 the pie.
 k_pie_in = $(k_pie)
 k_pie_dep =
+k_pie_o =
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
+k_pie_o = $(if $(DOOM),,$(kart_o))
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a && test -s $@
+	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a $(k_pie_o) && test -s $@
 
 out/lib/korelist.h: Makefile
 	@mkdir -p out/lib
@@ -801,8 +808,8 @@ $(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h 
 # `a=` says; the odir is spelled here so a caller never re-derives it.
 kmain_o: $(k_free_o)
 
-# THE CARRIED SEAT: the metal objects the one binary links, so `love kernel` projects a
-# bootable elf out of the running artifact instead of building a second one. one shape,
+# THE SEAT: the metal objects a projection lays beside the one binary; `love kernel` compiles
+# them from the source it carries and projects a bootable elf out of itself. one shape,
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
 # the first a variable NAME so the body stays deferred. an arch with no src/inle/<arch>/
 # carries no seat and its roster is empty.
@@ -839,6 +846,9 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 endef
 $(eval $(call kart,kart,moon_d,moon0,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
+# the objects alone, for the `love kernel` verb: it drives this from the carried tree
+kart_objs: $(kart_o)
+	@echo '$(kart_o)' > out/kart.list
 
 ifdef DOOM
 kcppflags += -I$(doom_d) -I$S/inle/doom -DFEATURE_SOUND
@@ -867,7 +877,11 @@ $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(kart_o)
+# love links its kernel's doors bare; doom's nifs want the kernel under them, so that lane links it
+love_door_o = $(if $(DOOM),$(kart_o),$(moon_d)/love/user/nokern.o)
+$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(love_door_o)
+$(ho)/love-macos.raw: $(kart_o)
+$(k_elf): $(k_pie_o)
 
 $(k_odir)/love/love.o: out/lib/love_version.h
 kcppflags += -DLvHaveVersionH      # only src/love/love.c reads it; cook has no target-specific variable
@@ -880,7 +894,7 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $S/inle/%.l $(klay_l)
 	@{ echo "(borrow 'holo)"; cat $S/apps/kore/text.l $S/apps/kore/u.l; \
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(klay_l)) $<; } > $@
 
-$(xd)/love: $(xkart_o)
+$(xd)/love: $(xod)/love/user/nokern.o
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
