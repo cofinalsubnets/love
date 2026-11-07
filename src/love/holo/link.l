@@ -609,10 +609,11 @@
                          . (snip s pos (off0 + ro) . acc))))
                  arm?
                  (ro + 4 <= sz ? 0 (scare 'link-oob (peep ob 'id 0)),
-                  ; a shared object: each abs32 site for the loader, (site import ()), the field
-                  ; holding the addend; a weak undefined stays zero
-                  relbox && kind = 2 && se 4 = 'rodata ? (scare 'link-rodata-pie <sy),
-                  relbox && kind = 2 && !(sy 1 = 2 && sy 3 = 0 && atom? (glo <sy)) ?
+                  ; a relocatable image: each abs32 site for the loader to slide. a shared object
+                  ; says (site import ()), the field holding the addend; a weak undefined stays zero
+                  relbox && dyn != 1 && kind = 2 ? (pin relbox 0 ((base + ro) . relbox 0)),
+                  dyn = 1 && kind = 2 && se 4 = 'rodata ? (scare 'link-rodata-pie <sy),
+                  dyn = 1 && kind = 2 && !(sy 1 = 2 && sy 3 = 0 && atom? (glo <sy)) ?
                      (pin relbox 0 ([(base + ro) ix ()] . relbox 0)),
                   ; ..a movw/movt pair's split immediates cannot be slid: `la` must use a
                   ; pooled abs32 word there
