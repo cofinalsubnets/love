@@ -33,7 +33,7 @@
    fldops '(ldsd ldss) fstops '(stsd stss)
    stops9 (gstops + fstops)                         ; gp head first
    leaops '(lea lean)                               ; lean: consumed by its own use
-   xops '(leax ldx ldxb ldxw ldxsw)                 ; base index scale disp; ldxw/ldxsw: the 32-bit loads, zero/sign-extending
+   xops '(leax ldx ldxb ldxh ldxw ldxsw)            ; base index scale disp; ldxh a zero-extending 16-bit load, ldxw/ldxsw the 32-bit ones, zero/sign-extending
    x4ops '(andx4 orx4 xorx4) m4ops '(andm4 orm4 xorm4)   ; and/or/xor r32 by a 32-bit load (base index scale disp | base off): the top zeroes
    stxops '(stx stxb)
    fxops '(ldsdx ldssx) fstxops '(stsdx stssx)      ; x64: no gp effect
@@ -1422,7 +1422,9 @@
        (thk || rth ? (catmap one fs) fs)))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
-   ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X
+   ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X.
+   ; an else behind its then's (jmp J) lays last too when it looks the colder: a call the then has none
+   ; of, or twice the then's length. the then then falls into J, the else jumps back
    (tailarm g fs)
     (cz g 'tailarm fs (t32? g ? fs                                            ; thumb's short branches stay put
        (: hot (g 'hot) cold (g 'cold)
@@ -1440,9 +1442,32 @@
                     (elem <f '(jmpt align)) ()
                     (elem <f '(br br8) && (!c || f 2 = L)) ()          ; a later test of L owns the region
                     (run >l L (f . acc) (n + 1) c))))
+          (ops l) (filter (f \ two? f && <f != 'label) l)
+          (call? l) (any (f \ elem <f '(call callr)) l)
+          ; acc's forms back to the test of E -> the then, only a guess's evidence
+          (thn l E t n) (l @ (f . u) (? (96 < n) ()
+                                        (two? f && <f = 'br && f 2 = E) t
+                                        (thn u E (f . t) (n + 1)))
+                               _ ())
+          (arm l J acc n) (l @ (f . u) (? (96 < n) ()
+                                          (!(two? f)) (arm u J (f . acc) (n + 1))
+                                          (<f = 'label && <>f = J) [(rev acc) l]
+                                          (elem <f '(jmpt align)) ()
+                                          (arm u J (f . acc) (n + 1)))
+                                 _ ())
+          (colder? a t) (: oa (ops a) ot (ops t)
+                           (two? ot && (call? oa && !(call? ot) || 2 * #ot <= #oa)))
+          (else f l acc)
+           (f @ ['jmp J] (l @ (['label E] . u)
+                            (: a (nelem E hot && arm u J () 0)
+                               (two? a && colder? <a (thn acc E () 0) ? [E J a])))
+                         _ ())
           (go l acc cs)
            (!(two? l) ? (rev acc + cs)
-              (: f <l
+              (else <l >l acc @
+               [E J a] (: b <a
+                          (go (a 1) acc (cs + (['label E] . b) + (term? (last b) ? () [['jmp J]]))))
+               _ (: f <l
                  k (two? f && <f = 'br && elem <>f '(eq ne lt le gt ge below be above ae s ns) &&
                     nelem <>>f hot ?
                       (run >l <>>f () 0 (elem <>>f cold)))
@@ -1452,7 +1477,7 @@
                     (two? k)
                      (nlab g ".k" @ K
                         (go (k 1) (['br (negcc <>f) K] . acc) (cs + (['label K] . <k))))
-                    (go >l (f . acc) cs))))
+                    (go >l (f . acc) cs)))))
           (go fs () ()))))
    ; a64's frame record: the fp and lr pushes fuse to one stp, the pops to one ldp; the area stays
    ; 32 bytes, so no fp-relative offset moves
