@@ -6,8 +6,8 @@
 (borrow 'holo)
 (:
    ; x64's indexed twin of a load or store, and a store's immediate twin; a64 has neither the
-   ; 32-bit indexed loads nor a store of an immediate, riscv only the word and byte twins
-   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
+   ; 32-bit indexed loads nor a store of an immediate, riscv only the word, halfword and byte twins
+   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu2 'ldxh 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
    ; t32's word is ld4 and st4 too, and it has no float index
    nmxl32 {'ld 'ldx 'ld4 'ldx 'ldu4 'ldx 'ldu1 'ldxb}
@@ -17,10 +17,10 @@
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb ldxh) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
    (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
    ; a64 lays these through x16, so their displacement has to encode in the one instruction
-   nmxw {'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
+   nmxw {'ldxh 2 'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
    (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
@@ -52,7 +52,7 @@
    ; a value's upper bound when it is known not negative, forward through a block: an extension
    ; that cannot change its operand goes
    nmext {'zx1 255 'zx2 65535 'zx4 4294967295 'sx1 127 'sx2 32767 'sx4 2147483647}
-   nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldu4 4294967295 'ldxw 4294967295}
+   nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldxh 65535 'ldu4 4294967295 'ldxw 4294967295}
    nmwctl {'label 1 'jmp 1 'br 1 'ret 1 'jmpt 1 'cmp 1}
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
    ; the vregs a bound could matter for: an extension's operand, and what its bound is made of

@@ -189,7 +189,7 @@
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
              'rem 4 'urem 4 'umull 4 'smull 4 'umlal 4 'mla 4
-             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
+             'ldx 5 'stx 5 'leax 5 'ldxb 5 'ldxh 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3 'decm 2
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2 'fopm 4 'fopl 3
              'minsd 2 'maxsd 2 'cmov 3}

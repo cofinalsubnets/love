@@ -285,6 +285,7 @@
                    (rv-ix-far disp dn (lo \ (rv-i lo 31 f3 dn 0x03)))]))
    (rv-ldx d base index scale disp)  (rv-ldx-f3 3 d base index scale disp)   ; ld
    (rv-ldxb d base index scale disp) (rv-ldx-f3 4 d base index scale disp)   ; lbu
+   (rv-ldxh d base index scale disp) (rv-ldx-f3 5 d base index scale disp)   ; lhu
    (rv-stx-f3 f3 base index scale disp s)
       (catall [(rv-ixaddr (rvn base) (rvn index) scale)
                 (rv-ix-far disp 30 (lo \ (rv-s lo 31 (rvn s) f3)))])
@@ -449,7 +450,7 @@
           ('adds . rv-addsub-s 'adds) ('subs . rv-addsub-s 'subs)
           ('div . rv-div) ('rem . rv-rem) ('udiv . rv-udiv) ('urem . rv-urem)
           ('ldx . rv-ldx) ('stx . rv-stx) ('leax . rv-leax)
-          ('ldxb . rv-ldxb) ('stxb . rv-stxb)
+          ('ldxb . rv-ldxb) ('ldxh . rv-ldxh) ('stxb . rv-stxb)
           ('call . rv-call) ('la . rv-la) ('lar . rv-la)
           ('tp . rv-tp)
           ('movsd . rv-fmov) ('movapd . rv-fmov) ('movss . rv-fmov)
