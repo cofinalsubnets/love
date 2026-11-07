@@ -604,9 +604,8 @@
                         atom? >line || dirk = 'num)
                      (cppgo rest macs cond nb out1 incf)
                     ; anything else is refused (#include_next, `#cmakedefine`); an assembler
-                    ; source keeps it as text (a device tree's #address-cells)
-                    (two? (mdef macs "__ASSEMBLER__")) (lnshift macs line @ sl
-                        (held ? (cppgo rest macs cond (revcat sl buf) out incf) (cppgo rest macs cond () (revcat sl out1) incf)))
+                    ; source keeps it as text, its macros expanded (a device tree's #address-cells)
+                    (two? (mdef macs "__ASSEMBLER__")) (cppgo rest macs cond (revcat sline nb) out1 incf)
                     (gripeat sline "invalid preprocessing directive #\(spellcat [<>line])")))
              !(condactive cond) (cppgo rest macs cond buf out incf)                    ; skipped code: drop
              (cppgo rest macs cond (revcat (lnshift macs line) buf) out incf))))         ; active code: accumulate (reversed)
@@ -708,10 +707,11 @@
        (go 0))
    ; -- the multiple-include rule: a header wholly inside `#ifndef G .. #endif` reads as nothing
    ; once G is defined (the marks still bracket it). an assembly source's headers lex as assembly --
+   ; under -E as its top file does, `#` kept as text (" -E", no name a source can spell, keys the memo too)
    (lexinc ip txt macs)
     (peep guards ip () @ e
        (? (two? e && <e = txt && two? (mdef macs <>e)) [1 ()]
-          ((two? (mdef macs "__ASSEMBLER__") ? (clexasm txt 1 (armgas? macs)) (clexw txt 1)) @ lr
+          ((? !(two? (mdef macs "__ASSEMBLER__")) (clexw txt 1) (peep macs " -E" 0 = 1) (clexm txt 1 2 1) (clexasm txt 1 (armgas? macs))) @ lr
              (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof <>lr)])
                 lr))))
    (armgas? macs) (two? (mdef macs "__aarch64__") || two? (mdef macs "__arm__"))  ; `#` past code marks an immediate
@@ -784,7 +784,7 @@
              (z = 47 && (c = 47 || c = 42)) 1
              (any (p \ n <= #p && snip p 0 n = xy) cpuncts))))
    (cpp-text toks incf fname)
-    (: r (cppgo toks (cppmacs fname) () () () incf)
+    (: r (cppgo toks (pin (cppmacs fname) " -E" 1) () () () incf)
        (qesc s) "\"\(string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
                                                    (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
                                         (chars s)))\""
