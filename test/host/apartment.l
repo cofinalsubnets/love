@@ -157,10 +157,10 @@
        (n0 = 1)
        (drone-voice () 1 (iota 4800) @ y (1.0 < amax y - amin y))     ; a wave, not a level
        (k1 = 1) (any (i \ 0 != heard (i * 89)) ^(#heard // 89))
-       ; a phrase is its notes and each note's echoes
+       ; a phrase is its notes, each heard again at its echoes from what it laid
        (: s3 (apartment-song-new (jug 0) (wheel 7)) _ (apartment-song-feed s3, pin s3 'next 0, apartment-song-feed s3)
           vs >(s3 'vs)
-          (#vs = #phrase * (1 + #phrase-echoes) && all (v \ v 1 0 < 1099511627776) vs))
+          (#vs = #phrase && all (v \ #(v 1) = 6 && v 1 0 < 1099511627776) vs))
        (2 <= k2 - k1 <= 4)
        (s2 'struck = k2) (s2 'next = s 'next)
        (0 < n1) !(g 'sfx)

@@ -13,7 +13,7 @@
 ; a voice maps a tray of frame numbers to a tray of amplitudes; a note starting mid-chunk
 ; is gated by `(t >= 0)`. a module, so harp's names do not shadow the prel at top level.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
-         harp-scale harp-chunk mkvoice cyc-voices mixdown pack song-out
+         harp-scale harp-chunk mkvoice cyc-voices mixdown echoed pack song-out
          twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice held-ops)
 (borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
 (borrow '(bytes cli))
@@ -141,9 +141,22 @@
                    ((_ . f . yl . yr . _) . u) (f ix @ y            ; the wave, once: it is a C pass
                                                   (go u (side L y yl) (side R y yr))))
        (fast l a) (l @- (tray? a ? ((peep a (iota n) 0.0) . (peep a (iota n + n) 0.0)) (z . z))
-                   ([_ _ yl yr r] . u) (fast u (mixin a (r ix) yl yr n))
-                   ((_ . f . yl . yr . _) . u) (fast u (mixin a (f ix @ y (tray? y ? y (z + y))) yl yr n)))
+                   ([_ _ yl yr _ tp] . u) (fast u (foldl (a \ [y o g] \ (mixin a y (yl * g) (yr * g) n o)) a (tp ix)))
+                   ([_ _ yl yr r] . u) (fast u (mixin a (r ix) yl yr n 0))
+                   ((_ . f . yl . yr . _) . u) (fast u (mixin a (f ix @ y (tray? y ? y (z + y))) yl yr n 0)))
        (mixin ? (fast vs ()) (go vs z z)))
+   ; an ops voice heard again at each tap [frames-behind gain], from the chunks it already
+   ; laid rather than run again: [end fn gl gr () tp], tp the [tray offset gain] a chunk sums.
+   ; for a mixdown with mixin, whose chunks are all one length; fn is the voice unechoed
+   (echoed [end fn gl gr raw] taps)
+    (: mx (foldl max 0 (map cap taps)) box {'past ()}
+       (tp ix) (: f0 (peep ix 0 0) n #ix
+                  r (f0 < end ? (raw ix))
+                  past (filter (p \ p 0 + n > f0 - mx) (tray? r ? ([f0 r] . box 'past) (box 'past)))
+                  _ (pin box 'past past)
+                  (from d g) (map (p \ [(p 1) (f0 - d - p 0) g]) (filter (p \ p 0 < f0 - d + n && p 0 + n > f0 - d) past))
+                  ((tray? r ? [[r 0 1.0]] ()) + catmap (t \ from (t 0) (t 1)) taps))
+       [(end + mx) fn gl gr () tp])
    ; one voice at full scale reaches 0.6 of the range; -g moves the mix under that ceiling
    harp-scale 20000.0
    (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
