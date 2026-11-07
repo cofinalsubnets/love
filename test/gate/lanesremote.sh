@@ -70,6 +70,9 @@ done
 grep -q 'on=up' "$t/out/lanes/summary" || fail "no lane went to the host that answered"
 grep -q '^test_a exit=0 secs=[0-9]*$' "$t/out/lanes/summary" || fail "the local lane names a host"
 grep -q "gone dropped" "$t/out/lanes/remote.log" || fail "the host that drops was never handed a lane"
+for l in $(sed -n 's/^lanes: gone dropped \([^ ]*\) .*/\1/p' "$t/out/lanes/remote.log"); do
+  grep -q "^$l exit=0 .* back=gone$" "$t/out/lanes/summary" || fail "$l, which gone gave back, is not marked back=gone"
+done
 grep -- '--whole' "$t/calls" | grep -q 'test_d$' || fail "the alone lane went to a host without --whole"
 grep -- '--whole' "$t/calls" | grep -qv 'test_d$' && fail "a lane beside others went to a host with --whole"
 echo "lanesremote: a placed lane runs on the host that answers (test_${on# }), the one a host dropped here, the local one here"

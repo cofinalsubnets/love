@@ -177,7 +177,7 @@ worker() {
     r=$?
     if [ $r -eq 75 ] || [ $r -eq 97 ] || [ $r -eq 255 ]; then
       echo "lanes: $1 dropped $l ($r); it runs here" >> "$d/remote.log"
-      echo "$l" >> "$d/back"
+      echo "$l $1" >> "$d/back"
       return 1
     fi
     echo "$r $(( $(date +%s) - s )) $1" > "$d/$l.rc"
@@ -288,7 +288,7 @@ for l in $late; do alone1 "$l"; done
 if [ -n "$rlanes" ]; then
   while l=$(pop "" "" alone); do alone1 "$l"; done
   wait $rpid 2>/dev/null
-  [ -f "$d/back" ] && for l in $(cat "$d/back"); do alone1 "$l"; done
+  [ -f "$d/back" ] && for l in $(awk '{ print $1 }' "$d/back"); do alone1 "$l"; done
   while l=$(pop "" "" "") || l=$(pop "" "" alone); do alone1 "$l"; done
   [ -f "$d/remote.log" ] && cat "$d/remote.log"
 fi
@@ -312,8 +312,9 @@ sum() {
   else
     r=missing s=0 w=
   fi
+  b=$([ -f "$d/back" ] && awk -v l="$1" '$1 == l { print $2; exit }' "$d/back")
   [ "$r" = 0 ] || red=1
-  echo "$1 exit=$r secs=$s${w:+ on=$w}"
+  echo "$1 exit=$r secs=$s${w:+ on=$w}${b:+ back=$b}"
 }
 { for l in $lanes $groups; do sum "$l"; done; [ -f "$d/love-moved.rc" ] && sum love-moved; } > "$d/summary"
 grep -v 'exit=0 ' "$d/summary" > /dev/null && red=1
