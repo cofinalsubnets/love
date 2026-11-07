@@ -430,6 +430,7 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@for f in $(distfiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
 	@for f in $(carryfiles); do printf '\n(cite (quote verbs) (quote carry) "%s")\n' $$f; done >> $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
+	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
 out/lib/distlist.h: Makefile
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles) + $(carryfiles)' > $$tf; \
