@@ -1,4 +1,4 @@
-; src/apps/moon/nm.l -- the new backend's normalise stage, lo.l's forms to lo.l's forms before ra.l:
+; src/apps/moon/nm.l -- the backend's normalise stage, lo.l's forms to lo.l's forms before ra.l:
 ; copy-then-op fused to three-address, copies and constants propagated, address arithmetic folded
 ; into loads and stores, extensions of values already in range dropped, unreachable forms dropped.
 ; each rule keeps the forms' meaning on its own
@@ -6,8 +6,8 @@
 (borrow 'holo)
 (:
    ; x64's indexed twin of a load or store, and a store's immediate twin; a64 has neither the
-   ; 32-bit indexed loads nor a store of an immediate, riscv only the word and byte twins
-   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
+   ; 32-bit indexed loads nor a store of an immediate, riscv only the word, halfword and byte twins
+   nmxld {'ld 'ldx 'ldu1 'ldxb 'ldu2 'ldxh 'ldu4 'ldxw 'ld4 'ldxsw 'ldsd 'ldsdx 'ldss 'ldssx}
    nmxst {'st 'stx 'st1 'stxb 'stsd 'stsdx 'stss 'stssx}
    ; t32's word is ld4 and st4 too, and it has no float index
    nmxl32 {'ld 'ldx 'ld4 'ldx 'ldu4 'ldx 'ldu1 'ldxb}
@@ -17,10 +17,10 @@
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb ldxh) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
    (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
    ; a64 lays these through x16, so their displacement has to encode in the one instruction
-   nmxw {'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
+   nmxw {'ldxh 2 'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
    (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))
 
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
@@ -30,6 +30,16 @@
            ([op d a b] . nmfuse g u)
           (f . u) (f . nmfuse g u)
           _ ())
+   ; a branch over a lone jump is the jump's branch; thumb's short branches stay put, and only
+   ; x64's reaches a symbol
+   (nminv g fs)
+    (t32? g ? fs
+       (: labs (map (f \ f 1) (filter (f \ two? f && <f = 'label) fs))
+          (go l) (l @ ((['br cc L] . ['jmp X] . u) && nmnext? u L && elem cc '(eq ne lt le gt ge below be above ae s ns) && (x64? g || elem X labs))
+                       (['br (negcc cc) X] . go u)
+                      (f . u) (f . go u)
+                      _ ())
+          (go fs)))
    ; nothing reaches past a jump or a return but through a label; a jump to a label just after
    ; it goes
    (nmreach fs)
@@ -42,7 +52,7 @@
    ; a value's upper bound when it is known not negative, forward through a block: an extension
    ; that cannot change its operand goes
    nmext {'zx1 255 'zx2 65535 'zx4 4294967295 'sx1 127 'sx2 32767 'sx4 2147483647}
-   nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldu4 4294967295 'ldxw 4294967295}
+   nmldw {'ldu1 255 'ldxb 255 'ldu2 65535 'ldxh 65535 'ldu4 4294967295 'ldxw 4294967295}
    nmwctl {'label 1 'jmp 1 'br 1 'ret 1 'jmpt 1 'cmp 1}
    (nmcov n) (n < 1 ? 0 (2 * nmcov (n // 2) + 1))
    ; the vregs a bound could matter for: an extension's operand, and what its bound is made of
@@ -253,7 +263,15 @@
             ([op b o v] && elem op (gstops + fstops))
              (base b o @ [b2 o2] [op b2 o2 v]
                 _ (nmxsop g op @ () f xo (idx b o @ ([b2 i s o2] && (o2 = 0 || !(t32? g))) (nmxfar g xo o2 ? f [xo b2 i s o2 v]) _ f)))
-            ([op d b o] && elem op leaops) (base b o @ [b2 o2] [op d b2 o2] _ f)
+            ([op d b o] && elem op leaops)
+             (base b o @ [b2 o2] [op d b2 o2]
+                _ (<f = 'lea && o = 0 && lovr? b ? ['mov d b] f))                 ; no offset is a copy
+            ; an indexed form's base and displacement fold the same way, not a64's frame base, which
+            ; may be sp, nor where v6-M's form has no displacement
+            ([op d b i s o] && elem op (xops + fxops))
+             (base b o @ ([b2 o2] && !(nmxfar g op o2) && !(a64? g && b2 = 'r4) && (o2 = 0 || !(v6m? g))) [op d b2 i s o2] _ f)
+            ([op b i s o v] && elem op (stxops + fstxops))
+             (base b o @ ([b2 o2] && !(nmxfar g op o2) && !(a64? g && b2 = 'r4) && (o2 = 0 || !(t32? g))) [op b2 i s o2 v] _ f)
             ([op b o v] && elem op siops) (base b o @ [b2 o2] [op b2 o2 v] _ f)
             ; an add of a literal onto a literal's sum is one add
             (['add d a k] && cint? k && lovr? a) (base a k @ ([b2 o2] && lovr? b2) ['add d b2 o2] _ f)
@@ -279,16 +297,50 @@
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again
              (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2 d2) d2))))))))
-   ; off x64, a multiply by a power of two the fold left a register for is a shift
+   ; a multiply by a power of two the fold left is a shift, off x86 through a register;
+   ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
        kv (foldl (t \ f \ (f @ (['li k n] && lovr? k && peep dn k 0 = 1) (pin t k n) _ t)) {} fs)
        (p2 n) (cint? n && 1 < n && n & (n - 1) = 0)
-       (x86? g ? fs
+       (odd n) (n & 1 = 1 ? n (odd (n >> 1)))
+       (x86k d a k) (odd k @ m ((m = 1 ? (a = d ? () [['mov d a]]) [['leax d a a (m - 1) 0]]) + (1 < k // m ? [['shl d (lg (k // m))]])))
+       (kx86? k) (cint? k && 1 < k && (k & (k - 1) = 0 || elem (odd k) '(3 5 9)))
+       (go fs) (fs @ ((['mov d a] . ['imul d2 x k] . u) && d = d2 && d = x && kx86? k) (x86k d a k + go u)
+                     (f . u) (((f @ (['imul d a k] && kx86? k) (x86k d a k) _ [f])) + go u)
+                     ())
+       (x86? g ? (go fs)
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
+   ; a wide literal or an address a loop makes again each time round, one-def, is made once ahead of
+   ; the outermost loop entered only by its head or a jump to its test; the same one again is a
+   ; copy. a few to a loop, each a register held across it. -> fs itself when nothing moves
+   nmhmax 4
+   (nmhoist g fs)
+    (: dn (nmdn g fs)
+       lab {} ft {} n (foldl (i \ f \ (pin ft i f, (f @ ['label L] (pin lab L i) _ 0), i + 1)) 0 fs)
+       (dests f) (f @ ['jmp L] [L] ['br _ L] [L] ['jmpt _ _ ls] ls (('fix . _) && 4 < #f) (f 4) _ ())
+       refs (catmap (i \ map (L \ [i (peep lab L -1)]) (dests (ft i))) ^n)
+       far (foldl (t \ r \ (r @ ([i a] && 0 <= a <= i && peep t a -1 < i) (pin t a i) _ t)) {} refs)   ; head -> last jump back
+       spans (sort (keys far))
+       (pre a b)                                         ; the index the span's values go ahead of | ()
+        (: p (0 < a && (ft (a - 1) @ ['jmp E] (a < peep lab E -1 <= b) _ 0) ? (a - 1) a)
+           (any (r \ r @ [i t] (a <= t <= b && !(a <= i <= b) && i != p) _ 0) refs ? () p))
+       (hoist? f) (f @ (['li t k] && lovr? t && peep dn t 0 = 1 && cint? k && !(fits32 k)) 1
+                       (['la t _] && lovr? t && peep dn t 0 = 1) 1
+                       _ 0)
+       ins {} out {}                                     ; index -> what goes ahead of it, last first; a form's fate
+       (add p i f)
+        (: k (show (f 2)) seen (peep ins p ())
+           (assoc k seen @ () (#seen < nmhmax ? (pin ins p ((k . f) . seen), pin out i 1) 0)
+                            e (pin out i ['mov (f 1) (>e 1)])))
+       (seat l i f)
+        (l @ (a . u) (a <= i <= far a ? (pre a (far a) @ () (seat u i f) p (add p i f)) (seat u i f)) _ 0)
+       _ (map (i \ (hoist? (ft i) ? (seat spans i (ft i)) 0)) ^n)
+       (#(keys out) = 0 ? fs
+          (catmap (i \ map cup (rev (peep ins i ())) + (out i @ () [(ft i)] 1 () m [m])) ^n)))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nmfuse g fs))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r)))
    ; a decided branch's dead arm may hold a value's other def: round again without it
    (nmfix g fs)
     (nmround g (nmround g fs) @ r

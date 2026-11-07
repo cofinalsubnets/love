@@ -44,10 +44,11 @@
 
    ;; op -> (code shape). code is a byte, or a byte list past the 0xfc prefix. shape: n none,
    ;; u one index, bt a blocktype, brt (labels) default, mem align offset, i32c/i64c a signed
-   ;; constant, f32c/f64c a bit pattern, ci type table, m0 the memory index byte
+   ;; constant, f32c/f64c a bit pattern, ci type table, m0 the memory index byte, tt a blocktype
+   ;; and its catches ((tag label) ..)
    wasm-rows
     '((unreachable 0 n) (nop 1 n) (block 2 bt) (loop 3 bt) (if 4 bt) (else 5 n) (end 11 n)
-     (br 12 u) (br_if 13 u) (br_table 14 brt) (return 15 n) (call 16 u) (call_indirect 17 ci)
+     (throw 8 u) (try_table 31 tt) (br 12 u) (br_if 13 u) (br_table 14 brt) (return 15 n) (call 16 u) (call_indirect 17 ci)
      (return_call 18 u) (return_call_indirect 19 ci)
      (drop 26 n) (select 27 n)
      (local.get 32 u) (local.set 33 u) (local.tee 34 u) (global.get 35 u) (global.set 36 u)
@@ -107,6 +108,7 @@
         'u    (code + uleb g)
         'bt   (code + blocktype (two? >f ? g 'void))
         'brt  (code + wvec (map uleb g) + uleb (f 2))
+        'tt   (code + blocktype g + wvec (map ([t l] \ (0 . uleb t + uleb l)) (f 2)))
         'mem  (code + uleb g + uleb <>>f)
         'i32c (code + sleb (wrap32 g))
         'i64c (code + sleb (s64 g))
@@ -146,6 +148,7 @@
          (wsection 3 (m 'funcs) (f . _ \ uleb f))
          (tab != () && wsect 4 (wvec [(112 . wlimits [tab tab] 0)]))
          (two? mem && wsect 5 (wvec [(wlimits mem is64)]))
+         (wsection 13 (peep m 'tags ()) (t \ (0 . uleb t)))
          (wsection 6 (m 'globals) wglobal)
          (wsection 7 (m 'exports) wexport)
          (start < 0 ? () (wsect 8 (uleb start)))

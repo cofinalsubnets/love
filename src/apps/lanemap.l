@@ -24,7 +24,7 @@
 (module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map
                  lanes-covers lanes-plan lanes-lines)
 
-(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccarm" "test_ccrv64" "test_ccwasm"
+(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccwasm"
                "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
@@ -53,7 +53,7 @@
        "src/love/holo/text.l" "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l"] moon-lanes ""]
      ["" ["src/love/holo/a64.l"] ["test_moon" "test_cca64"] ""]
      ["" ["src/love/holo/rv64.l"] ["test_moon" "test_ccrv64"] ""]
-     ["" ["src/love/holo/i386.l"] ["test_moon" "test_cci386"] ""]
+     ["" ["src/love/holo/i386.l"] ["test_moon" "test_cci386" "test_cci386m16"] ""]
      ["" ["src/love/holo/thumb1.l"] ["test_moon" "test_ccthumb1"] ""]
      ["" ["src/love/holo/thumb2.l"] ["test_moon" "test_ccthumb2" "test_ccarm"] ""]
      ["" ["src/love/holo/wasm.l" "src/love/holo/wasmfn.l"] ["test_moon" "test_ccwasm"] ""]

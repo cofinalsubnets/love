@@ -5,7 +5,7 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
@@ -36,7 +36,7 @@ test_core: test_filemode test_walkroom test_hashrun waits test_front test_proof 
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
 	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
-	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_ccarm test_ccthumb1 test_ccthumb2 \
+	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_cci386m16 test_ccarm test_ccthumb1 test_ccthumb2 \
 	test_cts_rv64 test_cts_wasm test_thumb1 test_thumb2 test_thumb2sp
 
 test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_uulean test_uuwm \
@@ -49,7 +49,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
-	test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
@@ -412,17 +412,9 @@ test_moonfuzz: host
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
 	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
-# every test/cc/*.c by `mooncc -t $*` under qemu-user, held to x64; unbuildable ones must refuse
-test_cca64 test_ccrv64: test_cc%: host
-	@$(gsh) test/gate/ccarch.sh $* $(ho) $m
-# the battery on 32-bit linux: gcc -m32, or arm-none-eabi-gcc's newlib under qemu-arm
-test_cci386 test_ccarm: test_cc%: host
-	@$(gsh) test/gate/cc32.sh $* $(ho) $m
-# test_ccwasm -- the battery on wasm, node as the machine
-gate_hm += test_ccwasm
-# the battery on M-profile: no qemu-user, ILP32, so arm-none-eabi-gcc's build is the oracle
-test_ccthumb1 test_ccthumb2: test_cc%: host
-	@$(gsh) test/gate/ccthumb.sh $* $(ho) $m
+# every test/cc/*.c by `mooncc -t $*`, plain and -Os, held to its references; the table is in ccbat.sh
+test_cca64 test_ccrv64 test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
+	@$(gsh) test/gate/ccbat.sh $* $(ho) $m
 # c-testsuite held to its shipped stdout, misses rostered in cts.sh
 test_cts: host
 	@DL=$(dl) $(gsh) test/gate/cts.sh x64 $(ho) $m
@@ -665,14 +657,10 @@ gate_love += test_cpio
 gate_love += test_tfm
 # test_caja -- caja against TeX: DVI byte for byte, -ini logs line for line; skips without TeX Live
 gate_love += test_caja
-# test_gpic -- classic pic (src/apps/pic/gpic.l) against groff's, byte for byte; test/gpic/open
-# counted, not gated. skips without groff
-gate_love += test_gpic
-# test_grap -- grap against plan9port's, both through our pic against groff's; test/grap/open
-# counted. skips without plan9port
-gate_love += test_grap
-# test_chem -- chem against groff's, likewise; test/chem/open counted. skips without groff's chem
-gate_love += test_chem
+# pic, grap and chem against their references, byte for byte; test/TOOL/open counted, skips without one
+test_gpic test_grap test_chem: test_%: host
+	@echo TEST test/gate/pictool.sh $*
+	@$(gsh) test/gate/pictool.sh $* $(ho)/love
 # holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
 test_holo: host
 	@echo TEST test/holo/golden.l

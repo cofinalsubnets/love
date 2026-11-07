@@ -1,4 +1,4 @@
-; src/apps/moon/ra.l -- the new backend's allocator over lo.l's forms: liveness per form, live
+; src/apps/moon/ra.l -- the backend's allocator over lo.l's forms: liveness per form, live
 ; ranges with holes per vreg, linear scan in start order, and a spilled vreg reloaded at every
 ; touch, the scan then run again. a physical register's live points bar every vreg live at one
 (module 'moon
@@ -230,14 +230,29 @@
        (go fs 0))
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
-   ; until a label or a call ends the run (the last nk kept)
+   ; until a label or a call ends the run (the last nk kept). x64's and a64's one-def wide literal or
+   ; address takes no slot and is made again at each read; a literal 0 might write the flags
    (raspill g fs sp nosp nk)
-    (: sl (foldl (t \ v \ pin t v (nslot g 8)) {} sp)
-       _ (pin g 'rasls (map sl sp + g 'rasls))
+    (: dn (x64? g || a64? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
+       rem (foldl (t \ f \ (f @ ((('li || 'la) . v . k . _) && elem v sp && peep dn v 0 = 1 && k != 0) (pin t v f) _ t)) {} fs)
+       (redo v r) (rem v @ [op _ k] [op r k])
+       ss (filter (v \ !(two? (rem v))) sp)
+       sl (foldl (t \ v \ pin t v (nslot g 8)) {} ss)
+       _ (pin g 'rasls (map sl ss + g 'rasls))
        (tmp v) ((lofr? v ? (lomkf g) (lomk g)) @ k (pin nosp k 1, k))
        (go fs c)
-        (fs @ ((['mov p v] && !(lovr? p) && elem v sp && raget c v = ()) . u)   ; a fixed register's reload needs no temp, which might take another's
+        (fs @ ((f . u) && two? >f && rem (f 1) == f) (go u c)
+              ((['mov p v] && !(lovr? p) && two? (rem v) && raget c v = ()) . u) ((redo v p) . go u c)
+              ((['mov p v] && !(lovr? p) && elem v sp && raget c v = ()) . u)   ; a fixed register's reload needs no temp, which might take another's
                (['ld p 'r4 (sl v)] . go u c)
+              ; t32's odd s-register goes by r12 with the float file full: to and from its slot straight,
+              ; a store through s30, as a far slot wants r12 for its address
+              ((['movdxr v 'r12] && t32? g && elem v sp) . u)
+               (['movdxr 'f15 'r12] . ['stss 'r4 (sl v) 'f15] . go u (filter (e \ <e != v) c))
+              ((['movdxr v r] && t32? g && elem v sp) . u)
+               (['st 'r4 (sl v) r] . go u (filter (e \ <e != v) c))
+              ((['movdrx r v] && t32? g && elem v sp && !(lovr? r) && raget c v = ()) . u)
+               (['ld r 'r4 (sl v)] . go u c)
               (f . u)
                (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
                   (raops g f @
@@ -245,7 +260,7 @@
                       (: us (filter (x \ elem x sp) u0) ds (filter (x \ elem x sp) d0)
                          vs (foldl (a \ x \ elem x a ? a (x . a)) () (us + ds))
                          m (foldl (t \ v \ pin t v (raget c0 v @ () (tmp v) k k)) {} vs)
-                         lds (map (v \ [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)]) (filter (v \ raget c0 v = ()) us))
+                         lds (map (v \ (two? (rem v) ? (redo v (m v)) [(lofr? v ? 'ldsd 'ld) (m v) 'r4 (sl v)])) (filter (v \ raget c0 v = ()) us))
                          sts (map (v \ [(lofr? v ? 'stsd 'st) 'r4 (sl v) (m v)]) ds)
                          c2 (take nk (map (v \ [v (m v)]) vs + filter (e \ nelem <e vs) c0))
                          ((vs @ () [f] _ (lds + [(map (x \ peep m x x) f)] + sts)) + go u c2))

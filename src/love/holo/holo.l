@@ -137,7 +137,7 @@
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'yield 0 'wfe 0 'eret 0
              'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0 'rdpkru 0 'wrpkru 0 'xgetbv 0 'xsetbv 0 'wbinvd 0 'invd 0 'monitor 0 'mwait 0 'monitorx 0 'mwaitx 0 'rdtscp 0
-             'carry 4 'alurm 5 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
+             'carry 4 'alurm 5 'alu4 4 'shl4 2 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lddr 2 'stdr 2 'lgdt 2 'lidt 2 'invlpg 2
              'mrs 2 'msr 2 'msri 2 'mrrc 5
@@ -189,7 +189,7 @@
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
              'rem 4 'urem 4 'umull 4 'smull 4 'umlal 4 'mla 4
-             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
+             'ldx 5 'stx 5 'leax 5 'ldxb 5 'ldxh 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3 'decm 2
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2 'fopm 4 'fopl 3
              'minsd 2 'maxsd 2 'cmov 3}

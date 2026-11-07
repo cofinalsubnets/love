@@ -43,8 +43,8 @@
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
       ; ('sexpr items value ty): gcc's ({ .. })
       (sexpr 3 3)
-      ; type forms. ('varr elt dim [idx]): idx is gen's VLA slot, unshown
-      (ptr 1 1) (arr 2 2) (varr 2 3) (struct 1 1) (named 1 1) (const 1 1) (restrict 1 1))
+      ; type forms. ('varr elt dim [idx]): idx is gen's VLA slot, unshown; ('struct tag [align])
+      (ptr 1 1) (arr 2 2) (varr 2 3) (struct 1 2) (named 1 1) (const 1 1) (restrict 1 1))
 
    ; --- clay-ok?: 1 or a gripe naming the first offender. a shape check, not a type check
    (clay-ok? c)
@@ -362,6 +362,8 @@
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
            (<x = 'struct && !(cident? <>x))
             (gripe "(struct \(show <>x)) -- an anonymous tag is not a C identifier")
+           (<x = 'struct && two? >>x)
+            (gripe "(struct \(show <>x) \(show <>>x)) -- a typedef's ask has no spelling on the type")
            (<x = 'flo && !(cfinite? <>x))
             (gripe "(flo \(<>x)) -- C has no literal for an infinity or a nan")
            (<x = 'edef && atom? <>>x)

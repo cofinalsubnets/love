@@ -41,7 +41,8 @@
    (tusg? ty) (elem ty '(cchar uchar ushort uint ulong ullong u128))
    (tusg ty) (ty @ 'int 'uint 'long 'ulong 'llong 'ullong 'i128 'u128 ty)
    (tw w64 ty) (trank ty @ 1 4 2 (w64 ? 8 4) 3 8 16)
-   (pprom ty) (? (bitf? ty) (pprom <>ty)              ; a bitfield promotes as its unit
+   ; a bit-field an int holds is an int, one of exactly unsigned int's width that, a wider one its type
+   (pprom ty) (? (bitf? ty) (: w (ty 3) (? (w < 32 || w = 32 && !(tusg? <>ty)) 'int (w = 32) 'uint (pprom <>ty)))
                  (elem ty '(bool char schar cchar uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
