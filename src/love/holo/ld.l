@@ -405,9 +405,9 @@
        (start l acc) (? (atom? l) (rev acc) (maps >l (<l + 8) (<l . acc)))
        (start as ()))
 
-   ;; --- a -shared image's dynamic tables, as lld lays them under a version script of one
-   ;     node exporting a list, the rest local. (ld-dso cx opts vtext) plans them before
-   ;     layout, opts {'soname 'symbolic 'bti}: 'exports, 'syms the exported names in
+   ;; --- a -shared image's dynamic tables, as lld lays them under a version script of named
+   ;     nodes exporting lists, the rest local. (ld-dso cx opts vtext) plans them before
+   ;     layout, opts {'soname 'symbolic 'bti 'w32 'gotplt}: 'exports, 'syms the exported names in
    ;     .gnu.hash's bucket order, 'synth their sections, 'slink their sh_link and sh_info.
    ;     (ld-dsdata lk) answers their bytes once laid, for lk 'sdata
    (ld-ehash s) (foldl (\ h i (: x ((h * 16 + s i) % 4294967296) ((x ^ ((x >> 28) << 4)) & 268435455))) 0 ^#s)
@@ -423,10 +423,18 @@
     (: ws (ld-words vt)
        pie (peep opts 'pie 0)
        fl (peep opts 'flat 0 || pie)
-       vn <ws
-       (gs l on acc) (? (atom? l) (rev acc) (<l = "global:") (gs >l 1 acc) (<l = "local:") (gs >l 0 acc)
-                        (on && <l != ";") (gs >l on (<l . acc)) (gs >l on acc))
-       ex (: t {} _ (each (gs >ws 0 ()) (n \ pin t n 1)) t)
+       ; i386's tables are ELF32's: 16-byte symbols, 8-byte tags, 32-bit bloom words
+       w32 (peep opts 'w32 0) wd (? w32 4 8)
+       ; the nodes, each `name { global: .. local: .. } ;`, in order; an export answers its
+       ; node's version index, from 2. on is () between nodes
+       ex {}
+       (vs l acc on)
+        (? (atom? l) (rev acc)
+           (on = ()) (? (two? >l && <(>l) = "{") (vs >(>l) (<l . acc) 0) (scare 'link-version vt))
+           (<l = "}") (? (two? >l && <(>l) = ";") (vs >(>l) acc ()) (scare 'link-version-dep vt))
+           (<l = "global:") (vs >l acc 1) (<l = "local:") (vs >l acc 0)
+           (: _ (? (on = 1 && <l != ";") (pin ex <l (1 + #acc)) 0) (vs >l acc on)))
+       vns (? fl () (vs ws () ()))
        (vis? n) (: g (peep (cx 'glob) n ())
                    (? (two? g) (: v ((cx 'objs) <g 'syms (g 1) 6 & 3) (v = 0 || v = 3)) 0))
        ds (? pie () (filter (n \ (? fl (vis? n) (peep ex n 0 && two? (peep (cx 'glob) n ())))) (cx 'order)))
@@ -436,22 +444,26 @@
        ; -soname no DT_SONAME; each name's offset is by when it was added, before the hash sort
        so (opts 'soname) base (? (string? so) so (opts 'out))
        st {'n 1}
-       _ (each (ds + (? fl () [base vn])) (s \ (? (whole? (peep st s ())) 0 (: _ (pin st s (st 'n)) (pin st 'n (st 'n + #s + 1))))))
-       mw ((: (go p) (? (p > #syms * 12 // 64) p (go (p * 2)))) 1)
+       _ (each (ds + (? fl () (base . vns))) (s \ (? (whole? (peep st s ())) 0 (: _ (pin st s (st 'n)) (pin st 'n (st 'n + #s + 1))))))
+       mw ((: (go p) (? (p > #syms * 12 // (8 * wd)) p (go (p * 2)))) 1)
        n (#syms + 1)
-       d {'exports ex 'syms syms 'vn vn 'soname so 'base base 'str st 'nb nb 'mw mw 'flat fl 'pie pie
+       ; .got.plt's header, i386's base for gotoff and gotpc: .dynamic's address, two words zero
+       gp (peep opts 'gotplt 0)
+       d {'exports ex 'syms syms 'vns vns 'soname so 'base base 'str st 'nb nb 'mw mw 'flat fl 'pie pie
+          'w32 w32 'gotplt gp
           'symbolic (peep opts 'symbolic 0) 'bti (peep opts 'bti 0) 'notext (peep opts 'notext 0)
           'slink {".hash" [".dynsym" 0] ".gnu.hash" [".dynsym" 0] ".dynsym" [".dynstr" 1] ".gnu.version" [".dynsym" 0]
-                  ".gnu.version_d" [".dynstr" 2] ".dynamic" [".dynstr" 0]}}
+                  ".gnu.version_d" [".dynstr" (1 + #vns)] ".dynamic" [".dynstr" 0]}}
        _ (? pie (pin (d 'slink) ".rela.dyn" [".dynsym" 0]) 0)
        ; in lld's order of creation, which orders the orphans of one rank; .dynamic's size is
        ; its tags', ld-dtags once laid
        (pin d 'synth
-            ([[".dynsym" (24 * n) 8 11 2 24]]
-             + (? fl () [[".gnu.version" (2 * n) 2 1879048191 2 2] [".gnu.version_d" 56 4 1879048189 2 0]])
-             + [[".gnu.hash" (16 + 8 * mw + 4 * nb + 4 * #syms) 8 1879048182 2 0] [".hash" (4 * (2 + 2 * n)) 4 5 2 4]
-                [".dynamic" (16 * #(ld-dtags d {})) 8 6 3 16] [".dynstr" (st 'n) 1 3 2 0]
-                [".got" 0 8 1 3 0 1] [".got.plt" 0 8 1 3 0 1] [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]])))
+            ([[".dynsym" ((? w32 16 24) * n) wd 11 2 (? w32 16 24)]]
+             + (? fl () [[".gnu.version" (2 * n) 2 1879048191 2 2] [".gnu.version_d" (28 * (1 + #vns)) 4 1879048189 2 0]])
+             + [[".gnu.hash" (16 + wd * mw + 4 * nb + 4 * #syms) wd 1879048182 2 0] [".hash" (4 * (2 + 2 * n)) 4 5 2 4]
+                [".dynamic" (2 * wd * #(ld-dtags d {})) wd 6 3 (2 * wd)] [".dynstr" (st 'n) 1 3 2 0]
+                [".got" 0 wd 1 3 0 1] (? gp [".got.plt" 12 4 1 3 0 0] [".got.plt" 0 8 1 3 0 1])
+                [".plt" 0 16 1 6 0 1] [".iplt" 0 16 1 6 0 1]])))
    ; a symbol's value, a script's first
    (ld-symv env n) (: v (peep (env 'sv) n ()) (? (whole? v) v ((env 'gv) n)))
    ; .dynamic's tags in lld's order. q: 'rela 'relc 'relr counts, 'arrs the array and init tags
@@ -472,38 +484,44 @@
    (ld-dsdata lk)
     (: d (lk 'dso) env (lk 'env) isa (env 'isa) glob (lk 'cx 'glob) ot (lk 'ot) shx (ld-shx (lk 'outs))
        syms (d 'syms) st (d 'str) n (#syms + 1) nb (d 'nb) mw (d 'mw)
-       (w2 v) (ld-le v 2) (w4 v) (ld-le v 4) (w8 v) (ld-le v 8)
+       w32 (d 'w32) bw (? w32 32 64)
+       (w2 v) (ld-le v 2) (w4 v) (ld-le v 4) (w8 v) (ld-le v 8) (wa v) (ld-le v (? w32 4 8))
        (dsym nm) (: g (glob nm) oi <g r (ot oi 'syms (g 1)) sh (r 3)
                     shn (? (sh = 65521) 65521 (shx (env 'osof (oi * 65536 + sh))))
-                    (cats [(w4 (st nm)) [(r 1 * 16 + r 2) 0] (w2 shn) (w8 ((env 'gv) nm)) (w8 (r 5))]))
+                    (? w32 (cats [(w4 (st nm)) (w4 ((env 'gv) nm)) (w4 (r 5)) [(r 1 * 16 + r 2) 0] (w2 shn)])
+                       (cats [(w4 (st nm)) [(r 1 * 16 + r 2) 0] (w2 shn) (w8 ((env 'gv) nm)) (w8 (r 5))])))
        ; .hash: a bucket per symbol, chained newest first
        hb {} hc {}
        _ (each (ld-zip syms) (p \ (: i (<p + 1) h (ld-ehash (p 1) % n)
                                     _ (pin hc i (peep hb h 0)) (pin hb h i))))
        sysv (cats [(w4 n) (w4 n) (cats (map (i \ w4 (peep hb i 0)) ^n)) (cats (map (i \ w4 (peep hc i 0)) ^n))])
-       ; .gnu.hash: one bloom word per 64 bits, two bits a name; the chain's low bit ends a bucket
+       ; .gnu.hash: one bloom word per 64 bits (32 on ELF32), two bits a name; the chain's low bit ends a bucket
        hs (map ld-ghash syms)
        bk (map (h \ h % nb) hs)
-       bloom (foldl (\ t h (: k (h // 64 % mw) (pin t k (ld-or (peep t k 0) (ld-or (2 ** (h % 64)) (2 ** ((h >> 26) % 64)))))))
+       bloom (foldl (\ t h (: k (h // bw % mw) (pin t k (ld-or (peep t k 0) (ld-or (2 ** (h % bw)) (2 ** ((h >> 26) % bw)))))))
                     {} hs)
        first (: t {} _ (each (rev (ld-zip bk)) (p \ pin t (p 1) (<p + 1))) t)
-       gh (cats [(w4 nb) (w4 1) (w4 mw) (w4 26) (cats (map (i \ w8 (peep bloom i 0)) ^mw))
+       gh (cats [(w4 nb) (w4 1) (w4 mw) (w4 26) (cats (map (i \ wa (peep bloom i 0)) ^mw))
                  (cats (map (b \ w4 (peep first b 0)) ^nb))
                  (cats (map (i \ w4 (hs i // 2 * 2 + (? (i + 1 = #hs || bk (i + 1) != bk i) 1 0))) ^#hs))])
        strs (sort (map (k \ [(st k) k]) (filter string? (keys st))))
        dstr (cats ([0] . map (p \ map (p 1) ^#(p 1) + [0]) strs))
-       vd (? (d 'flat) () (cats [(w2 1) (w2 1) (w2 1) (w2 1) (w4 (ld-ehash (d 'base))) (w4 20) (w4 28) (w4 (st (d 'base))) (w4 0)
-                 (w2 1) (w2 0) (w2 2) (w2 1) (w4 (ld-ehash (d 'vn))) (w4 20) (w4 0) (w4 (st (d 'vn))) (w4 0)]))
+       ; .gnu.version_d: the base, then a node each, 28 bytes with its one aux
+       vns (d 'vns)
+       (vdef ix nm last) (cats [(w2 1) (w2 (? (ix = 1) 1 0)) (w2 ix) (w2 1) (w4 (ld-ehash nm)) (w4 20) (w4 (? last 0 28))
+                                (w4 (st nm)) (w4 0)])
+       vd (? (d 'flat) () (cats (vdef 1 (d 'base) (atom? vns) . o-mapi (\ k nm (vdef (k + 2) nm (k + 1 = #vns))) vns)))
        osv (env 'osv)
        (dv k) (? (whole? k) k (string? k) (isa k) (two? k) (? (<k = 'osa) <(osv (k 1)) (<k = 'osz) (osv (k 1) 1) (ld-symv env (k 1)))
-                 (k = 'soname) (st (d 'soname)) (k = 'syment) 24
-                 (k = 'strsz) (st 'n) (k = 'nverdef) 2 (k = 'relrsz) (peep d 'relrsz 0) (k = 'relrent) 8
+                 (k = 'soname) (st (d 'soname)) (k = 'syment) (? w32 16 24)
+                 (k = 'strsz) (st 'n) (k = 'nverdef) (1 + #vns) (k = 'relrsz) (peep d 'relrsz 0) (k = 'relrent) 8
                  (k = 'relasz) (peep d 'relasz 0) (k = 'relacount) (peep d 'relacount 0) 0)
-       dyn (cats (map (e \ w8 <e + w8 (dv (e 1))) (d 'dt)))
+       dyn (cats (map (e \ wa <e + wa (dv (e 1))) (d 'dt)))
        one (\ b [#b [b]])
-       {".hash" (one sysv) ".gnu.hash" (one gh) ".dynsym" (one (cats ((ld-le 0 24) . map dsym syms)))
-        ".dynstr" (one dstr) ".gnu.version" (one (cats ((w2 0) . map (s \ w2 2) syms)))
-        ".gnu.version_d" (one vd) ".dynamic" (one dyn)})
+       out {".hash" (one sysv) ".gnu.hash" (one gh) ".dynsym" (one (cats ((ld-le 0 (? w32 16 24)) . map dsym syms)))
+            ".dynstr" (one dstr) ".gnu.version" (one (cats ((w2 0) . map (s \ w2 (peep (d 'exports) s 2)) syms)))
+            ".gnu.version_d" (one vd) ".dynamic" (one dyn)}
+       (? (d 'gotplt) (pin out ".got.plt" (one (w4 (isa ".dynamic") + ld-le 0 8))) out))
 
    ;; --- emission. pieces are texts and byte lists, laid in file order
    ld-z64 (cask (ld-zeros 65536))
@@ -535,6 +553,10 @@
    ; writes it: a debug section's tombstone, the addend elsewhere
    (ld-tomb nm a) (? (elem nm '(".debug_loc" ".debug_ranges")) 1 (nm = ".debug_names") (ld-m64 - 1)
                      (ld-debug? nm) 0 a)
+   ; an i386 REL entry of section si with its addend, the field's, sign-extended at its width
+   (ld-rel386 ob si e)
+    (: w <(ld-rk 3 (e 1)) v (rdle (ob 'src) (ob 'sec si 3 + <e) w) h (2 ** (8 * w - 1))
+       [<e (e 1) (e 2) (? (v >= h) (v - 2 * h) v)])
    ; one input section's bytes with its relocations applied -> pieces, reversed onto acc
    (ld-patch lk x acc)
     (: oi (x 1) si (x 2) r (lk 'ot oi 'sec si)
@@ -552,16 +574,23 @@
        ; both lifted a turn should it fall below 0, so pages divide as they would unsigned
        (near p0 s0) (: v (p0 + ld-s64 (ld-w (s0 - p0))) (? (v < 0) [(v + ld-m64) (p0 + ld-m64)] [v p0]))
        nal (0 = (r 2 & 2))
-       ; i386's REL: the addend is the field's, sign-extended at its width
        i386 (mach = 3)
-       (imp e) (: w <(ld-rk 3 (e 1)) v (rdle s (o0 + <e) w) h (2 ** (8 * w - 1))
-                  [<e (e 1) (e 2) (? (v >= h) (v - 2 * h) v)])
-       (field e0) (: e (? i386 (imp e0) e0) ro <e k (e 1) p0 (base + ro) s0 (ld-sad lk oi e nal)
+       (imp e) (ld-rel386 ob si e)
+       ; i386's got base, .got.plt; gotpc is GOT+A-P whatever its symbol, gotoff S+A-GOT
+       got (? i386 (peep (lk 'env 'isa) ".got.plt" ()) ())
+       (field e0) (: e (? i386 (imp e0) e0) ro <e k (e 1) p0 (base + ro)
+                    gpc (i386 && k = 10)
+                    s0 (? gpc 0 (ld-sad lk oi e nal))
                     q (? (whole? s0) (near p0 s0) [(weak k p0 (e 3)) p0])
                     sa <q p <>q
                     (? (s0 = 'dead) (? (elem k '(257 258)) (ld-le (ld-tomb <r (e 3)) (? (k = 257) 8 4))
                                        (i386 && k = 1) (ld-le (ld-tomb <r (e 3)) 4)
                                        (scare 'link-dropped [(ob 'id) ro k]))
+                       gpc (ld-le (got + e 3 - p0) 4)
+                       (i386 && k = 9) (? (whole? s0) (ld-le (sa - got) 4) (scare 'link-undef [(ob 'id) ro k]))
+                       ; an absolute in a loaded -shared image would want a dynamic relocation
+                       (i386 && k = 1 && !nal && peep lk 'etype 3 = 3 && whole? s0 && !(ld-absym? lk (lk 'env) oi e))
+                        (scare 'link-pic [(ob 'id) ro k])
                        (k = abs && nal) (ld-le sa 8)               ; not loaded: no slide
                        (k = abs)
                        (? (!(whole? s0)) (ld-le (? (peep lk 'shared 1) 0 sa) 8)         ; -shared binds it at load
@@ -656,7 +685,7 @@
           (: fst <ins
              _ (each kept (t \ pin t 'steps
                                  (foldr (\ x acc (? !(eh? x) (x . acc)
-                                                     (x = fst) (['synth ".eh_frame" 0 8 ".eh_frame"] . acc)
+                                                     (x = fst) (['synth ".eh_frame" 0 (? (peep cx 'w32 0) 4 8) ".eh_frame"] . acc)
                                                      acc))
                                         () (t 'steps))))
              {'recs recs 'size (size + 4) 'nf (nf 'n)})))
@@ -673,7 +702,8 @@
                                 _ (put oi si p (p + 4) (a + fo))
                                 _ (pin acc 'l (w4 (fo + 4 - co) . acc 'l))
                                 _ (put oi si (p + 8) q (a + fo + 8))
-                                _ (pin pcs 'l ([(ld-sa lk oi (f 4)) (a + fo)] . pcs 'l))
+                                e (? (peep lk 'mach 183 = 3) (ld-rel386 (lk 'ot oi) si (f 4)) (f 4))
+                                _ (pin pcs 'l ([(ld-sa lk oi e) (a + fo)] . pcs 'l))
                                 (pin pos 'o (fo + q - p))))))))
        body (rev (w4 0 . acc 'l))
        ; the header: version, its encodings, .eh_frame's place, then the FDEs by pc, one a pc
@@ -802,6 +832,10 @@
        (gl nm)
         (: v (peep sv nm ())
            (? (whole? v && starts? nm "__ld_") 0
+              ; i386's got base, hidden at .got.plt as lld defines it, in the linker's own
+              ; group (-2), apart from the script's (-1)
+              (nm = "_GLOBAL_OFFSET_TABLE_" && dso != 0 && dso 'gotplt)
+               (: a (env 'isa ".got.plt") (put -2 (ky nm (ent nm a 0 0 2 (shx (ld-holder lk a 'name))))))
               (whole? v) (: q (peep ssec nm ()) ty (peep (env 'stype) nm 0) vs (peep vtab nm 0)
                             shn (? (q = 'aether) 1 (string? q) (shx q) 65521)
                             (? (loc? nm || vs = 1 || vs = 2) (put -1 (ky nm (ent nm v 0 ty vs shn)))
@@ -818,7 +852,7 @@
        _ (each names gl)
        ; lld's _DYNAMIC, hidden at .dynamic, gone with it
        _ (? (dso = 0 || !(whole? (peep (env 'isa) ".dynamic" ()))) 0
-            (: a (env 'isa ".dynamic") (put -1 (ent "_DYNAMIC" a 0 0 2 (shx (ld-holder lk a 'name))))))
+            (: a (env 'isa ".dynamic") (put -2 (ent "_DYNAMIC" a 0 0 2 (shx (ld-holder lk a 'name))))))
        ; the erratum scan's section symbols, each at the end of its object's locals
        _ (each (peep lk 'a53 ()) (x \ (: oi <x si (x 1) (put oi (ent "" (at oi si 0) 0 3 0 (shx (oname oi si)))))))
        locs (cats (map (oi \ rev (groups oi)) (rev (gord 'l))))
@@ -1645,6 +1679,7 @@
        _ (? (elem [(o 'emu) em] '((() 183) (a64 183) (() 62) (x64 62) (() 3) (i386 3))) 0
             (no (show (? (o 'emu = ()) em (o 'emu)))))
        _ (pin cx 'objs (cx 'objs + [(ld-banner "<linker>" (peep o 'banner ("Linker: " + ld-lld)))]))
+       _ (pin cx 'w32 (em = 3))
        pg (peep o 'pg (? (elem em '(62 3)) 4096 65536))   ; lld's max-page-size
        body (? flat (ld-fresh ld-shtmpl) (lds-read <>(uread sc)))
        (words h) (? flat [['set "__ld_pg" '= pg] ['set "__ld_hdrs" '= h]] ())
@@ -1654,8 +1689,12 @@
        pie (o 'pie && !(o 'shared))
        _ (? (pie && em = 3) (no "-pie for i386") 0)
        dyn (o 'shared || pie)
+       ; i386's gotoff and gotpc read the got's base, .got.plt, which only a -shared link lays
+       gp (em = 3 && any (ob \ any (si \ any (e \ elem (e 1) '(9 10)) (ld-relas ob si)) (ld-reltgs ob)) (cx 'objs))
+       _ (? (gp && !(o 'shared && (flat || 0 < #vt))) (no "i386 gotoff or gotpc outside -shared with a version script") 0)
        d (? (o 'shared && (flat || 0 < #vt))
-            (ld-dso cx {'soname (peep o 'soname ()) 'out out 'symbolic 1 'bti (o 'bti) 'flat flat 'relr (o 'relr) 'notext (o 'notext)} vt)
+            (ld-dso cx {'soname (peep o 'soname ()) 'out out 'symbolic 1 'bti (o 'bti) 'flat flat 'relr (o 'relr) 'notext (o 'notext)
+                        'w32 (em = 3) 'gotplt gp} vt)
             pie (ld-dso cx {'pie 1 'out out 'bti (o 'bti) 'relr (o 'relr) 'notext (o 'notext)} vt) 0)
        dsyn (? (d = 0) () (d 'synth))
        bid (? (o 'bid) [[".note.gnu.build-id" 36 4 7 2]] ())
@@ -1718,7 +1757,7 @@
        body2 (body1 + map (u \ ['osec u]) nao)
        ; .eh_frame and, under --eh-frame-hdr, its header, synthetic as lld lays them
        eh (ld-eh cx os)
-       ehs ((? (eh = ()) () [[".eh_frame" (eh 'size) 8 1 2 0]])
+       ehs ((? (eh = ()) () [[".eh_frame" (eh 'size) (? (em = 3) 4 8) 1 2 0]])
             + (? (o 'ehh) [(? (eh = ()) [".eh_frame_hdr" 0 4 1 2 0 1] [".eh_frame_hdr" (12 + 8 * eh 'nf) 4 1 2 0])] ()))
        ot (: t {} _ (foldl (\ i ob (pin t i ob, i + 1)) 0 (cx 'objs)) t)
        mx (ld-merge ot os)
@@ -1737,13 +1776,14 @@
                           [[".preinit_array" 32 33] [".init_array" 25 27] [".fini_array" 26 28]])
                 + cats (map (p \ (? (whole? (peep (peep env 'sv {}) <p ()) || two? (peep (cx 'glob) <p ())) [[(p 1) ['sym <p]]] ()))
                             [["_init" 12] ["_fini" 13]]))}
-       (dz q) (? (d = 0) 0 (16 * #(ld-dtags d q)))
+       wd (? (em = 3) 4 8)
+       (dz q) (? (d = 0) 0 (2 * wd * #(ld-dtags d q)))
        ; an empty .rela.dyn or .relr.dyn lends its flags as lld's removed synthetic sections do;
        ; with no script lld keeps aarch64's empty .rela.dyn
        (dsec n z ty es l) [n z 8 ty 2 es (? (z = 0 && !(flat && ty = 4 && em = 183) && atom? l) 1 0)]
        _ (? (flat && two? (dy0 'rela)) (no "-shared with no script and a .rela.dyn") 0)
        (lay rz pz h dy z) (ld-lay cx (words h + body2) mx
-                            (map (s \ (? (<s = ".dynamic") [".dynamic" z 8 6 3 16] s)) dsyn + bid + ehs
+                            (map (s \ (? (<s = ".dynamic") [".dynamic" z wd 6 3 (2 * wd)] s)) dsyn + bid + ehs
                              + (? dyn [(dsec ".rela.dyn" (24 * #(dy 'rela)) 4 24 (dy 'rela))] ())
                              + (? (dyn && o 'relr) [(dsec ".relr.dyn" rz 19 8 (dy 'relr))] ())
                              + (? flat [[".relro_padding" pz 1 8 3 0 0]] ())))
