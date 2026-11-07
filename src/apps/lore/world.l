@@ -9,7 +9,7 @@
 ; met or a bed slept in, and world-run walks on there in the same window.
 (module (world world-run world-walk world-main world-new world-at world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
-         world-move world-mouse world-frame world-pens world-opts world-read world-load
+         world-move world-mouse world-frame world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove cli))
 (borrow 'horn)                          ; pad, for the bottom row
@@ -54,8 +54,10 @@
    (: sh (r 'shape) (sh 'box @ () (: p (sh 'prism) (p 1 - p 0 < 1e-6)) b (any (k \ b 1 k - b 0 k < 1e-6) ^3))))
  ; ..a scare raised by a word given what it does not take says what it takes; any other is
  ; love's own
- (world-read s) (: r (trap (_ \ (sounds s @ 'torn ['torn]
-                                       ds (run-forms (src-last ds))))
+ (world-read s) (world-reading s (_ \ _ \ ()))
+ ; ..told tick, as view-loading calls it, before each form
+ (world-reading s tk) (: r (trap (_ \ (sounds s @ 'torn ['torn]
+                                       ds (run-forms (src-last ds) tk)))
                              () (\ a b ['scare a b]))
    (? (tablet? r) (r 'kind @ 'level (check r) "the file's last form should be (level NAME PART ..)")
       (two? r && <r = 'scare) (r 1 @ 'level (r 2) ";; \(r 1) \(string? (r 2) ? (r 2) (show (r 2)))")
@@ -63,10 +65,10 @@
       "the file's last form should be (level NAME PART ..)"))
  ; ..a file's forms run in turn, scenery's words first put back as scenery has them, so
  ; none an earlier file named again stands in for them
- (run-forms ds) (: _ (ev 'ev '(borrow 'scenery)) m (cite 'scenery) colon <'(: _) q <''x
+ (run-forms ds tk) (: _ (ev 'ev '(borrow 'scenery)) m (cite 'scenery) colon <'(: _) q <''x
    ns (foldl (\ t k (pin t k 1)) {} (names ()))
    _ (each (keys m) (k \ peep ns k 0 && ev 'ev k != m k ? (ev 'ev [colon k ['cite [q 'scenery] [q k]]])))
-   (foldl (\ a d (ev 'ev d)) () ds))
+   (foldl (\ a d (tk "reading" (), ev 'ev d)) () ds))
  ; ..the level's last form, each of its parts told its path down the source: the part's
  ; place in (level ..), and in a repeat's or mirror's list of parts the place there too
  (src-form p f) (: n (#f - 1) l (two? f ? (f n) ())
@@ -147,6 +149,7 @@
  ; ..from a file: the level, or why not
  (slurp-file p) (: q (open p "r") (hot? q ? (slurp q @ s (close q, s)) ()))
  (world-load p) (slurp-file p @ () ("cannot read " + p) s (world-read s))
+ (world-loading p tk) (slurp-file p @ () ("cannot read " + p) s (world-reading s tk))
  ; --- places: in a door's frame, along its wall, up, and across it ---
  (P ax al y ac) (ax @ 'z [al y ac] [ac y al])
  (along ax) (ax @ 'z [1.0 0.0 0.0] [0.0 0.0 1.0])
@@ -2092,13 +2095,20 @@
  (dir-of p) (: (go i) (i < 0 ? "" (p i @ 47 (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---
+ (phone? st) (st 'win && string? (getenv "LOVE_FACE"))
+ thumb-text "left thumb walks  ·  right thumb looks  ·  tap to act, the bottom to jump  ·  a top corner leaves"
+ (world-tap st x y) (? (view-corner? st x y) [113]
+                       (0.88 * window-size (st 'win) 1 < y) [32]
+                       [101])
  (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
                                ld (_ \ view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin))
                                nm (o 'entry) came (peep o 'came 0)
                                st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
+                               _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
                                (world-watch (world-size st w (h // 2)))))
+               'stick [119 115 97 100 87] 'tap world-tap
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
                'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
                'walking (view-walking + ['sprint 'strafe-left 'strafe-right]) 'repeat [0 0] 'held (st \ peep st 'eye 'walk = 'walk)
@@ -2109,14 +2119,18 @@
                'song (hn \ (hn ? (mix-new hn world-sound (st \ [(st 'px) (st 'pz) (st 'th)]) {'near 2.0 'far 40.0 'fps fps 'gain 12000.0 'bus hum-bus}) ()))
                'win (o 'win)})
  ; ..the level named, else the tree's own on disk, else the one the binary carries
+ ; ..read on the stage, so the loading screen stands for it; why it would not read comes after
  (world-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
-                     lv (world-load p)
-   (? (string? lv) (say err ("world: " + p + ": " + lv + "\n"), flush err, 1)
-      (view-stage (pin o 'level p) (o2 \ world-go o2 lv) (_ \ (say out mesh-gone, flush out)))))
+                  bad {}
+                  r (view-stage (pin o 'level p)
+                       (o2 \ world-tick o2 p @ lv (string? lv ? (pin bad 'why lv) (world-go o2 lv)))
+                       (_ \ (say out mesh-gone, flush out)))
+   (bad 'why ? (say err ("world: " + p + ": " + bad 'why + "\n"), flush err, 1) r))
+ (world-tick o p) (world-loading p (view-tick (o 'win) (peep o 'loading view-spin)))
  ; ..and on to the level a walk left for, in the same window, as long as there is one
  (world-go o lv) (: st (world-walk o lv) g (st 'goto)
    (? (atom? g) st
-      (: p (g 0) l2 (world-load p)
+      (: p (g 0) l2 (world-tick o p)
          (string? l2 ? (say err ("world: " + p + ": " + l2 + "\n"), flush err, st) (world-go (pins o 'level p 'entry (g 1) 'came 1) l2)))))
  world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w s or k j step, W or K sprint, a d sidestep, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice

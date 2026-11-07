@@ -324,10 +324,9 @@
       (pt-seek (pt-pairs "") () -1 = '(1 0))                              ; a create's -0,0
       !(pt-seek (pt-pairs "q\n") '("a") 0)))
 
-; --- the scan floor (scan.l): the byte scan against its love walk, every length and start.
-; register roles differ per arch (r1 is Sp on x64, Ip on a64), so this is its a64 gate ---
-(: sc (cite 'scan 'scanner ())
-   tw (cite 'scan 'walk)
+; --- subidx for one charm against a love walk, every length and start ---
+(: sc subidx
+   (tw s c i) (: n #s (go k) (n <= k ? -1 (s k = c ? k (go (k + 1)))) (go (i < 0 ? 0 i)))
    (mk o n k) (n <= 0 ? (slurp o) (put o (97 + (k % 5)), mk o (n - 1) (k * 7 + 3)))
    (agree s c i) (sc s c i = (tw s c i))
    (sweep n)                                     ; every length past the word step ...

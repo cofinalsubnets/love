@@ -1,0 +1,32 @@
+; test/uuzb.l -- what bzip2's obligations (test/uuzbvc.l) lean on that inflate's lemmas do not say.
+(test
+ (defq bz-w1k (pi w nat gw (inf-le 32 w) (inf-lt 1024 (inf-pow w)))
+  (lam w gw (inf-lttrans 1024 (inf-pow 11) (inf-pow w) (idpath true) (inf-ltle (inf-pow 11) (inf-pow w) (inf-wpow w 11 gw (idpath true))))))
+ (defq bz-pos (pi a nat g (inf-le 1 a) (inf-lt 0 a))
+  (lam a g (inf-lttrans 0 1 a (idpath true) g)))
+ (defq bz-w4k (pi w nat gw (inf-le 32 w) (inf-lt 4096 (inf-pow w)))
+  (lam w gw (inf-lttrans 4096 (inf-pow 13) (inf-pow w) (idpath true) (inf-ltle (inf-pow 13) (inf-pow w) (inf-wpow w 13 gw (idpath true))))))
+ (defq bz-none (pi a nat b nat g (inf-le a b) e (paths nat b 0) (inf-lt a 4096))
+  (lam a b g e (inf-lelt a b 4096 g (inf-lttr 0 b 4096 (pathsinv0 nat b 0 e) (idpath true)))))
+ (defq bz-dbl (pi a nat b nat g (inf-le a b) p (inf-lt 0 b) (inf-lt a (add b b)))
+  (lam a b g p (inf-lelt a b (add b b) g (inf-lttr (add b 0) b (add b b) (natplusr0 b) (inf-ltaddl b 0 b p)))))
+ (defq bz-cle (pi a nat b nat c nat e (paths nat b c) g (inf-lt a c) (inf-le a b))
+  (lam a b c e g (inf-letl a c b (pathsinv0 nat b c e) (inf-ltle a c g))))
+ (defq bz-nbr (pi a nat r nat m nat g (inf-le r (natminus m a)) h (inf-le a m) (inf-le (add a r) m))
+  (lam a r m g h (inf-letl (add a r) (add a (natminus m a)) m (inf-addsub a m h) (inf-addl a r (natminus m a) g))))
+ (defq bz-nbq (pi a nat q nat r nat m nat f (inf-lt q r) g (inf-le r (natminus m a)) h (inf-le a m) (inf-lt (add a q) m))
+  (lam a q r m f g h (inf-lttrans (add a q) (add a r) m (inf-ltaddl a q r f) (bz-nbr a r m g h))))
+ ; a code in hand: at most u past 2^l, for any width past 20
+ (defq bz-cfit (pi w nat lim nat l nat c nat u nat gw (inf-le 32 w) h20 (inf-le 20 lim) hq (inf-lt lim 30)
+                   gl (inf-lt l 21) gu (inf-le u 258) g (inf-le c (add u (inf-pow l))) (inf-lt (add c 1) (inf-pow w)))
+  (lam w lim l c u gw h20 hq gl gu g
+   (inf-fitlim w (succ lim) c 1 gw (inf-lelts (succ lim) 30 (inf-ltsu lim 30 hq))
+    (inf-letrans c (add u (inf-pow l)) (inf-pow (succ lim)) g
+     (inf-powdbl lim u (inf-pow l)
+      (inf-letrans u 258 (inf-pow lim) gu (inf-letrans 258 (inf-pow 9) (inf-pow lim) (idpath false) (inf-powle 9 lim (inf-letrans 9 20 lim (idpath false) h20))))
+      (inf-powle l lim (inf-letrans l 20 lim (inf-ltsle l 20 gl) h20))))
+    (inf-powle 0 (succ lim) (idpath false)))))
+ (defq bz-sublt (pi a nat b nat c nat p (inf-lt 0 b) g (inf-le b a) h (inf-le a c) (inf-lt (natminus a b) c))
+  (lam a b c p g h (inf-lttrans (natminus a b) (natminus a 0) c (inf-subby 0 a b (inf-lttrans 0 b a p g) p)
+    (inf-letrans (natminus a 0) a c (inf-suble a 0) h))))
+)

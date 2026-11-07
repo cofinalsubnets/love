@@ -82,9 +82,6 @@ void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nifs (defs[] below), bracketed by the linker
 extern struct def const __start_knifs[], __stop_knifs[];
-// for the image codec's nif slice
-uintptr_t knifs_slice(struct def const **s) {
-  return *s = __start_knifs, (uintptr_t)(__stop_knifs - __start_knifs); }
 // the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for x64/proc.c; unpatched, none
