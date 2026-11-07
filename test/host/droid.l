@@ -292,4 +292,5 @@
            (has? (pb-table "p") "res/drawable/i.xml")
            (aab-path "classes.dex" = "base/dex/classes.dex")
            (aab-path "lib/a/b.so" = "base/lib/a/b.so")
-           (aab-config 0 = string [10 8 18 6 49 46 49 56 46 51 18 2 18 0])))
+           (aab-config 0 = string [10 8 18 6 49 46 49 56 46 51 18 8 10 4 10 2 8 1 18 0])
+           (aab-native ["arm64-v8a"] = string [10 21 10 13] + "lib/arm64-v8a" + string [18 4 10 2 8 3])))
