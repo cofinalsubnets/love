@@ -1420,6 +1420,38 @@
                   (rth && f = '(ret)) [['jmp '__x86_return_thunk]]
                   [f])
        (thk || rth ? (catmap one fs) fs)))
+   ; an else of one move lays before its test, and the then writes over it: (cmp ..) (br cc E) then
+   ; (jmp J) (label E) (li|mov r x) (label J) -> (li|mov r x) (cmp ..) (br cc J) then (label J). the
+   ; then must write r before any read of it or any exit, and E have no other reader
+   (kelse g fs)
+    (cz g 'kelse fs (t32? g ? fs
+       (: (cnt t x) (? (two? x) (foldl cnt t x) (atom? x) (pin t x (peep t x 0 + 1)) t)
+          refs (foldl (t \ f \ (two? f && <f = 'label ? t (cnt t f))) {} fs)
+          (mv? f) (f @ ('li r _) (nelem r '(sp fp)) ('mov r s) (nelem r '(sp fp)) _ ())
+          els (: (go l t) (l @ (('jmp J) . ('label E) . f . ('label J2) . _)
+                                (go >l (J = J2 && mv? f && refs E = 1 ? (pin t E [J f]) t))
+                               (_ . u) (go u t)
+                               _ t)
+                 (go fs {}))
+          dn {}
+          (dead? l r n) (l @ (f . u) (? (64 < n || !(two? f)) ()
+                                         (<f = 'label) (dead? u r (n + 1))
+                                         (rdsp g f @ 'bar ()
+                                            (rs . ds . _) (? (elem r rs) () (elem r ds) 1 (dead? u r (n + 1)))))
+                        _ ())
+          (ok? c f u) (elem <c '(cmp test) &&
+                       (rdsp g c @ 'bar ()
+                          (rs . ds . _) (: r <>f (nelem r rs && nelem r ds && (<f = 'li || nelem (f 2) ds) && dead? u r 0))))
+          (hoist l) (l @ (c . ('br cc E) . u)
+                          (els E @ (J f) (ok? c f u ? (pin dn E 1, [f c ['br cc J] u]))
+                                   _ ())
+                         _ ())
+          (go l acc)
+           (? !(two? l) (rev acc)
+              (hoist l @ (f c b u) (go u ([b c f] + acc))
+                         _ (l @ (('jmp _) . ('label E) . _ . u) (dn E ? (go u acc) (go >l (<l . acc)))
+                                (f . u) (go u (f . acc)))))
+          (go fs ()))))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
    ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X.
