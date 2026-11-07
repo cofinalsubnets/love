@@ -9021,7 +9021,11 @@
                          (rtext a9 w) (md \ (? (two? a9) (md @ (0 || 81) (gas-reg tgt <a9 4 0) 82 (gas-reg tgt <>a9 4 0) 'bad)
                                               (elem md '(81 82)) 'bad
                                               (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
-                         (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
+                         (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v))
+                                               ; x64's %a of an address constant is rip-relative, as gcc spells it, but under a
+                                               ; segment, which holo lays only absolute; %P and %c stay absolute
+                                               (md = 97 && tgt = 'x64 && !(cint? v) && findsub tmpl "s:" < 0) "\(v)(%rip)"
+                                               (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
                          ; a v register: plain is v, s h d b q its scalar views; x64's is xmm, x too
