@@ -9,7 +9,7 @@
 ;                      st their last two outputs each (() at rest): n of left then n of right,
 ;                      each operator's last two outputs, then scratch
 ;   (ops-ref os st n f0 rate)  the same answer worked out in love, no scratch
-;   (ops-voice os at end gl gr rate)  play's voice [end fn gl gr], fn the left the operators
+;   (ops-voice os at end gl gr rate)  play's voice [end fn gl gr raw], fn the left the operators
 ;                      sum to, their outputs fed back from one run to the next; worked out in
 ;                      love where the first operator has 'ref 1
 (module (ops ops-row ops-rows ops-run ops-ref ops-voice ops-db)
@@ -66,6 +66,8 @@
                  (: _ (pins box 'next at 'ys ())
                     (go p) (p >= f0 ? 0 (: _ (run p (min 4096 (f0 - p))) (go (box 'next))))
                     (go at)))
-   fn (ix \ (: n #ix f0 (peep ix 0 0) _ (reach f0) r (run f0 n) (peep r (iota n) 0.0)))
-   [end fn gl gr])
+   ; ..raw the kernel's whole answer, its first n the left, for a mixdown that reads it in place
+   (raw ix) (: n #ix f0 (peep ix 0 0) _ (reach f0) (run f0 n))
+   fn (ix \ peep (raw ix) (iota #ix) 0.0)
+   [end fn gl gr raw])
 )) ; module ops

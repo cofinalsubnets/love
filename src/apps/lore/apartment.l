@@ -273,7 +273,8 @@
                         'vib (drone-waver-depth * drone-waver / f) 'vrate drone-waver
                         'trem drone-swell-db 'trate drone-swell})
                     v (ops-voice (map op drone-notes) 0 1099511627776 1.0 1.0 song-rate)
-                    [(v 0) (ix \ v 1 (ix % (drone-loop * song-rate))) (drone-gain * 0.5) (drone-gain * 0.5)])
+                    (lp ix) (ix % (drone-loop * song-rate))
+                    [(v 0) (ix \ v 1 (lp ix)) (drone-gain * 0.5) (drone-gain * 0.5) (ix \ v 4 (lp ix))])
  (apartment-song-new h st) {'h h 'fpos 0 'vs [[0 (drone-voice ())]] 'sb {st}
                             'next (phrase-first * song-rate) 'struck 0}
  (strike! s at v) (pin s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]))

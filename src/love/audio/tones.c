@@ -166,4 +166,29 @@ love_noinline static struct g *host_tones(struct g *g) {
  return g; }
 static lvm(lvm_tones) { LvmCallp(g, 4, host_tones) }
 
+// (mixin acc y gl gr n): acc's first 2n, left then right (any other acc is silence), with y's
+// first n laid in at gl and gr; a side whose gain is 0 is copied as it was
+love_noinline static struct g *host_mixin(struct g *g) {
+ word *a = g->sp;
+ if (!galaxyp(a[1]) || tray(a[1])->type != love_R || !isnum(a[2]) || !isnum(a[3]) || !(a[4] & 1)) { a[0] = ZeroPoint; return g; }
+ intptr_t const n = getcharm(a[4]);
+ if (n < 0 || n > 1 << 22 || tray_nelem(tray(a[1])) < (uintptr_t) n) { a[0] = ZeroPoint; return g; }
+ uintptr_t const w = b2w(tray_bytes(love_R, 1, 2 * (uintptr_t) n));
+ if (!ok(g = have(g, w))) return g;
+ a = g->sp;
+ struct tray *out = ini_tray(bump(g, w), love_R, 1);
+ out->shape[0] = 2 * (uintptr_t) n;
+ flo_t *d = tray_data(out);
+ flo_t const *y = tray_data(tray(a[1])), gl = toflo(a[2]), gr = toflo(a[3]);
+ flo_t const *s = galaxyp(a[0]) && tray(a[0])->type == love_R && tray_nelem(tray(a[0])) >= 2 * (uintptr_t) n
+                  ? tray_data(tray(a[0])) : 0;
+ for (intptr_t i = 0; i < n; i++) {
+  flo_t const l = s ? s[i] : 0, r = s ? s[n + i] : 0;
+  d[i] = gl != 0 ? l + y[i] * gl : l;
+  d[n + i] = gr != 0 ? r + y[i] * gr : r; }
+ a[0] = word(out);
+ return g; }
+static lvm(lvm_mixin) { LvmCallp(g, 4, host_mixin) }
+
 LvDef("tones", tones, 5, "dsp");
+LvDef("mixin", mixin, 5, "dsp");

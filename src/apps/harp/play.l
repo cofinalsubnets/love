@@ -130,15 +130,20 @@
 
    ; --- mixing and packing ---------------------------------------------------
    ; every live voice is evaluated over the whole chunk and summed; a hard-panned voice
-   ; skips its far side.
+   ; skips its far side. mixin sums in C, left and right in one tray, a voice's raw answer
+   ; read in place; without it the trays sum in love, in the same order
+   mixin (cite 'dsp 'mixin)
    (mixdown vs base n)
     (: ix (iota n + base)
        z  (ix * 0.0)
        (side acc y g) (g = 0.0 ? acc (acc + y * g))
        (go l L R) (l @- (L . R)
-                   ([_ f yl yr] . u) (f ix @ y            ; the wave, once: it is a C pass
-                                        (go u (side L y yl) (side R y yr))))
-       (go vs z z))
+                   ((_ . f . yl . yr . _) . u) (f ix @ y            ; the wave, once: it is a C pass
+                                                  (go u (side L y yl) (side R y yr))))
+       (fast l a) (l @- (tray? a ? ((peep a (iota n) 0.0) . (peep a (iota n + n) 0.0)) (z . z))
+                   ([_ _ yl yr r] . u) (fast u (mixin a (r ix) yl yr n))
+                   ((_ . f . yl . yr . _) . u) (fast u (mixin a (f ix @ y (tray? y ? y (z + y))) yl yr n)))
+       (mixin ? (fast vs ()) (go vs z z)))
    ; one voice at full scale reaches 0.6 of the range; -g moves the mix under that ceiling
    harp-scale 20000.0
    (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
