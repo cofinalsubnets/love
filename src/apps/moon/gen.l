@@ -3499,7 +3499,7 @@
                          (!(two? ps) ? (go rest)
                             (: p <ps
                                r9 (['decl >ps] . rest)
-                               (? (!(two? >>p) || two? >>>p || !(pure? <>>p) || stru? <>p || arr? <>p) ()
+                               (? (!(two? >>p) || !(dbare? p) || !(pure? <>>p) || stru? <>p || arr? <>p) ()
                                   !(elem <<>>p '(num var) || rdw <p r9 1 <= 1) ()
                                   (go (sub r9 <p ['cast <>p <>>p])))))
                         ()))
@@ -3965,7 +3965,7 @@
        (cen x) (? !(two? x) 0
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
                        ; a register variable keeps its pin, as kprop keeps it
-                       ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, (two? >>>p ? (pin tak <p 1) 0), cen >>p)) 0 ps)
+                       ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, (dbare? p ? 0 (pin tak <p 1)), cen >>p)) 0 ps)
                        ('sdecl ps) (foldl (_ \ p \ (pin sds <p 1, cen >>p)) 0 ps)
                        ('asm . _) (: _ (foldl (_ \ o \ (mem? <o ? (<>o @ ('var v) (pin tak v 1) 0) 0)) 0 (x 2 + x 3)) (cen <x, cen >x))
                        (cen <x, cen >x)))
@@ -4121,6 +4121,9 @@
                         ('land . a . b . _) (zfold w64 a @ v (cint? v && v != 0 ? ['un 'not ['un 'not (simp b)]] (map simp x)))
                         (map simp x)))
        (tw? (f 3) ? f ([<f <>f <>>f (simp ((rd (f 3)) @ ('blk items) ['blk (blk items () () 1)] (inner (rd (f 3)))))] + >>>>f)))
+   ; a decl entry with nothing past its init but a mask, and that not volatile: no register,
+   ; ask or section, so a pass may read the object as a value
+   (dbare? p) (#p = 3 || #p = 7 && take 3 >>>p = [() 0 ()] && !(p 6 & 2))
    ; -- AST constant propagation: a scalar local declared once from a folding initializer, never
    ; written or &-taken, shadowing nothing, reads as its cast literal and its decl drops. runs to a fixpoint --
    ; it runs to its fixpoint, so a tree it answered once answers itself again
@@ -4176,7 +4179,7 @@
        sbs (: t {}
               (go l) (!(two? l) ? t
                         (: p <l
-                           kb (two? >>>p ? () (kok <p <>p <>>p))    ; a register variable keeps its pin
+                           kb (dbare? p ? (kok <p <>p <>>p))    ; a register variable keeps its pin
                            (two? kb ? (pin t <p kb),
                             go >l)))
               (go cds))
@@ -4269,9 +4272,7 @@
        cand {}                                      ; name -> (elty n)
        dcl {}
        (plain? p2 n) (p2 @ ('init is) (#is <= n && !(any (e \ two? e && elem <e '(dfield didx init)) is)) !(two? p2))
-       ; an entry with nothing past its init but a mask, and that not volatile
-       (bare? p) (#p = 3 || #p = 7 && take 3 >>>p = [() 0 ()] && !(p 6 & 2))
-       (fit? x p) (<x = 'decl && bare? p &&
+       (fit? x p) (<x = 'decl && dbare? p &&
                    (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16 && plain? (p 2) n) ()))
        (one x p) (pin dcl <p (1 + peep dcl <p 0), fit? x p ? (pin cand <p >(<>p)) 0)
        (cen x) (? (atom? x) 0

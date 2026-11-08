@@ -145,7 +145,7 @@
       ((cexp "*p++") = '(deref (post (var "p") 1)))
       ((cexp "sizeof(int*)") = '(cast ulong (num 8)))
       ((cexp "(char*)x") = '(cast (ptr char) (var "x")))
-      ((cexp "(const char*)x") = '(cast (ptr char) (var "x")))    ; a qualifier opens the cast type too -- quals drop, like the decl sites
+      ((cexp "(const char*)x") = '(cast (ptr char 0 1) (var "x")))    ; a qualifier opens the cast type too; the pointee's mask rides the ptr
       ((cexp "sizeof(const int)") = '(cast ulong (num 4)))
       ((cast "int main() { int *p; int a[4]; return 0; }") =
          '(prog ((fn "main" () (blk ((decl (("p" (ptr int) ())))
@@ -845,13 +845,14 @@
          (gripe? g && (gmsg g = "cannot lay the initializer of 'b' ((var \"nope\"))")))))
 
 ; -- freestanding headers: linkage/qualifier keywords and __attribute__((..)) skip wherever a
-; type may begin or a declarator carry them -- the AST equals the unqualified source.
+; type may begin or a declarator carry them -- attributes skip, qualifiers ride the type.
 (: (test
       ((cast "static const int x = 5;") = (cast "int x = 5;"))
+      ; a qualifier is the object's mask, slot 6 of its entry (1 const, 2 volatile, 4 restrict)
       ((cast "int f(int const a, volatile int b){return a;}") =
-         (cast "int f(int a, int b){return a;}"))
+         '(prog ((fn "f" (("a" int () () 0 () 1) ("b" int () () 0 () 2)) (blk ((ret (var "a"))))))))
       ((cast "int g(char * restrict p){return *p;}") =
-         (cast "int g(char *p){return *p;}"))
+         '(prog ((fn "g" (("p" (ptr char) () () 0 () 4)) (blk ((ret (deref (var "p")))))))))
       ((cast "__attribute__((unused)) static int h(void){return 1;}") =
          (cast "int h(void){return 1;}"))
       ; a trailing __attribute__((..)) / __asm__(..) on a declarator skips the same
@@ -867,9 +868,10 @@
       ((cast "int a __attribute__((unused)), b;") = (cast "int a, b;"))
       ((cast "extern int x __asm__(\"realx\");") = (cast "extern int x;"))
       ((cast "int main(void){register int a=3; const int b=4; return a+b;}") =
-         (cast "int main(void){int a=3; int b=4; return a+b;}"))
-      ((cast "int f(void const *p){return 0;}") =             ; a qual between type and star keeps the pointer
-         (cast "int f(void *p){return 0;}"))
+         '(prog ((fn "main" () (blk ((decl (("a" int (num 3)))) (decl (("b" int (num 4) () 0 () 1)))
+                                     (ret (bin + (var "a") (var "b")))))))))
+      ((cast "int f(void const *p){return 0;}") =             ; a qual between type and star: the pointee's
+         '(prog ((fn "f" (("p" (ptr void 0 1))) (blk ((ret (num 0))))))))
       ((cast "int f(int, long); int main(void){return 0;}") = ; unnamed proto params -> abstract declarators
          '(prog ((proto "f") (fn "main" () (blk ((ret (num 0))))))))
       ; __extension__ skips at a declaration's head (any scope, before typedef) and as a unary prefix
