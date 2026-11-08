@@ -51,6 +51,9 @@
                     (sh-size 20 4) (sh-link 24 4) (sh-info 28 4) (sh-align 32 4) (sh-esz 36 4)
                     (sy-name 0 4) (sy-info 12 1) (sy-shndx 14 2) (sy-val 4 4) (sy-size 8 4)
                     (rl-off 0 4) (rl-kind 4 1) (rl-sym 5 3)))
+   ; riscv's ELF32 is RELA: the REL entry and an addend word
+   elf32rf (foldl (t \ (a . u) \ pin t a u) (ld-cls '((rl-ent 12) (rl-ty 4) (rl-add 8 4)))
+                  (filter (p \ !(elem <p '(rl-ent rl-ty))) (map (k \ (k . elf32f k)) (keys elf32f))))
    (ld-cstr s i) (: j (subidx s "\0" i) (snip s i (? (j < 0) #s j)))
    (ld-zeros n) (n >= 1 ? (0 . ld-zeros (n - 1)))
    (ld-align a v) (a < 2 ? v (v % a @ r (r = 0 ? v (v + a - r))))
@@ -74,7 +77,7 @@
    ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
    (ld-obj id s rels?)
     (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
-       fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
+       fs (? (s 4 = 2) elf64f (s 4 = 1) (rle16 s 18 = 243 ? elf32rf elf32f) (scare 'link-elf-class id))
        (f b r) (: i (b + <r) w <>r (? (w = 4) (rle32 s i) (w = 8) (rle64 s i) (w = 2) (rle16 s i) (rdle s i w)))
        (fx nm) (ld-row fs nm)
        shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
@@ -110,12 +113,12 @@
                                    (? (two? m) m (: v (row i) _ (pin memo i v) v))))
                      (pin ob 'symr row, pin ob 'syms sym))
                   (pin ob 'syms (spread (map row ^n))))))
-       rty (? (s 4 = 2) 4 9) re (ld-n fs 'rl-ent)
+       rty (ld-n fs 'rl-ty) re (ld-n fs 'rl-ent)
        ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
        ; entries i to j of the section r holds
        (ents r i j) (: (go k acc) (? (k < i) acc
                                      (: e (r 3 + re * k)
-                                        (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
+                                        (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (f e ad @ v (<>ad = 4 && 2147483647 < v ? (v - 4294967296) (s64 v))))] . acc))))
                        (go (j - 1) ()))
        _ (? rels? (each ^shnum (i \ (: r (sec i)
                                        (? (r 1 != rty) 0
@@ -151,7 +154,7 @@
                           (549 4 tphi12) (550 4 tplo12) (551 4 tplo12nc) (553 4 tpst0) (555 4 tpst1)
                           (557 4 tpst2) (559 4 tpst3) (571 4 tpst4) (541 4 gottprel21) (542 4 gottprel12)))
             ; call_plt spans the auipc pair
-            243 (ld-cls '((2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
+            243 (ld-cls '((1 4 abs32) (2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
             40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc)))
@@ -270,7 +273,7 @@
    ;                       on a rel, where it rides in the field instead
    ; layout pins 'base later, section index -> load address
    (ld-read id s mach)
-    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64) 4 9)
+    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || r 'mach = 243) 4 9)
        _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
        secs {} lanes {} drops {}
        ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach}
@@ -1186,8 +1189,8 @@
        ; a thread template (x64 and a64): .tdata then .tbss as file zeros, past the nifs, a pt_tls
        tls? (ld-tls? objs)
        _ (tls? && !(elem mach '(62 183)) ? (scare 'link-tls target))
-       ; em_386 and em_arm: ELF32 headers, symbols and REL fields
-       w32 (elem mach '(3 40))
+       ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32 the headers and symbols
+       w32 (elem mach '(3 40) || target = 'rv32)
        _ (w32 && pie ? (scare 'link-i386-pie target))
        shf (w32 ? elf-shdr32 elf-shdr)
        phf (w32 ? elf32-phdr elf64-phdr)
@@ -1301,7 +1304,7 @@
             + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
             + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)])
             + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)]))
-       hdr (w32 ? (elf32-hdrn 2 ent mach (arm-eflags target) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
+       hdr (w32 ? (elf32-hdrn 2 ent mach (rv ? 1 (arm-eflags target)) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
        (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
