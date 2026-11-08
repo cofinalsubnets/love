@@ -29,8 +29,8 @@
    ra-lo12   277                                    ; R_AARCH64_ADD_ABS_LO12_NC   (S+A) & 0xfff into add
    ; ... rv64: the 8-byte 'pcrel fixup across an auipc pair maps onto call_plt, for call and
    ; la alike, as jalr/addi/ld share the I-form imm field.
+   rr-32    1                                       ; R_RISCV_32        S + A  in four bytes
    rr-64    2                                       ; r_rv64_64        S + A  (collides with R_X86_64_PC32: link.l dispatches by machine)
-   rr-32    1                                       ; R_RISCV_32       S + A in four bytes (rv32's data pointer)
    rr-pc32  57                                      ; R_RISCV_32_PCREL  S + A - P in four bytes (a jump table's entry)
    rr-jal   17                                      ; R_RISCV_JAL       S + A - P into jal's j-imm
    rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
@@ -757,6 +757,63 @@
              r (foldl one [(x ? x-cie o-cie) ()] fns)
              [".eh_frame" 1 2 8 <r (rev <>r) {}])))
 
+   ; -g's line tables, after the lay: each mark lo laid is a label .dl.K:LINE:FILE (.dlf.K: a
+   ; body's `{`), each code lane with one a sequence, and a bare compile unit (name, dir, the
+   ; lanes as its ranges) over them. dl: (unit dir)
+   (o-dwarf lanes dl fnl)
+    (: (row k o) (show k @ s (? (starts? s ".dlf.") (s @ ".dlf.\(_):\(n):\(f)" [o 0 (read n) f] ())
+                                (starts? s ".dl.") (s @ ".dl.\(_):\(n):\(f)" [o 1 (read n) f] ())
+                                ()))
+       ; per code lane: (index length label rows), rows (offset line file) by offset. at one
+       ; offset a statement's row wins over a body's, the latest line over the rest
+       (seq i l)
+        (: lb (l 6)
+           fo (sort (filter charm? (map (k \ peep lb (name k) ()) fnl)))
+           (snap o) (foldl (\ a f (f <= o ? f a)) o fo)
+           rs (sort (filter two? (map (k \ row k (lb k) @ r (two? r ? (r + [k]))) (keys lb))))
+           ; a body's row moves to its function's start when it is the function's first; an
+           ; inlined copy's stays where it is
+           (mv l p) (? (atom? l) ()
+                       (: r <l fs (snap <r)
+                          ([(r 1 = 0 && p < fs ? fs <r) (r 1) (r 2) (r 3) (r 4)] . mv >l <r)))
+           (dd l) (? (atom? l) () (atom? >l) l (<<l = <<>l) (dd >l) (<l . dd >l))
+           r2 (dd (sort (mv rs -1)))
+           (two? r2 ? [i (o-blen (l 4)) (<r2 4) () (map (r \ [<r (r 2) (r 3)]) r2)]))
+       sqs (filter two? (o-mapi (\ i l ((l 2 & 4) = 0 ? () (seq i l))) lanes))
+       files (uniq (catmap (q \ map (r \ r 2) (q 4)) sqs))
+       fix (foldl (\ t f (pin t f (1 + #(keys t)))) {} files)
+       (str x) (o-strbytes x + [0])
+       hdr ([1 1 1 251 14 13 0 1 1 1 1 0 0 0 1 0 0 1] + [0]
+            + catmap (f \ str (f = "" ? <dl f) + [0 0 0]) files + [0])
+       ; a sequence from its lane's start: set_address, then per row file, line, pc and copy
+       (prog acc q)
+        (@ acc [bs rels]
+           (@ q [i n k _ rows]
+              (: a0 (peep ((lanes i) 6) k 0)
+                 (step st r) (@ st [b f ln pc]
+                               (: f2 (fix (r 2))
+                                  [(b + (f2 = f ? () (4 . uleb f2)) + (r 1 = ln ? () (3 . sleb (r 1 - ln)))
+                                      + (<r = pc ? () (2 . uleb (<r - pc))) + [1])
+                                   f2 (r 1) <r]))
+                 st (foldl step [() 1 1 0] rows)
+                 [(bs + [0 9 2] + o-zeros 8 + <st + (n = st 3 ? () (2 . uleb (n - st 3))) + [0 1 1])
+                  ([(#bs + 3) 'abs64 k (0 - a0) 0] . rels)])))
+       pr (foldl prog [() ()] sqs)
+       body (le16 4 + le32 #hdr + hdr + <pr)
+       ln [".debug_line" 1 0 1 (le32 #body + body) (map (r \ (@ r [o k l a p] [(o + 10 + #hdr) k l a p])) (rev <>pr)) {(name ".dbg.line") 0}]
+       rg (foldl (\ a q (@ a [bs rels]
+                           (: k (q 2) a0 (peep ((lanes (q 0)) 6) k 0)
+                              [(bs + o-zeros 16) ([(#bs + 8) 'abs64 k (q 1 - a0) 0] . [#bs 'abs64 k (0 - a0) 0] . rels)])))
+                 [() ()] sqs)
+       rgl [".debug_ranges" 1 0 1 (<rg + o-zeros 16) (rev <>rg) {(name ".dbg.ranges") 0}]
+       ab [".debug_abbrev" 1 0 1 [1 17 0 37 8 19 11 3 8 27 8 16 23 17 1 85 23 0 0 0] () {(name ".dbg.abbrev") 0}]
+       pre (le16 4 + le32 0 + [8] + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
+       cu (pre + le32 0 + le64 0 + le32 0)
+       inf [".debug_info" 1 0 1 (le32 #cu + cu)
+              [[6 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
+               [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] {}]
+       (atom? sqs ? () [ab inf ln rgl]))
+
    ; -- the general object: a list of sections, each (name type flags align forms), each one
    ; lay: a branch inside resolves in place, a reference across becomes a relocation.
    ; shf_execinstr (flags & 4) picks the relaxer and rset (a64's branches resolve in any
@@ -803,7 +860,8 @@
                    w (o-walk be <p >p gbset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
-       lanes ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       lanes1 ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0)) lanes1)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
        (ln i) (peep lnt i ())

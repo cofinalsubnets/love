@@ -2272,6 +2272,13 @@
                    [(map (nm \ [nm (klook nm tmap)]) names) rest ()])))))
 
    (addweak ps nm) (pin ps 'weaks (nm . ps 'weaks))   ; the .o binds nm's symbol weak
+   ; -g: the file a body stands in, its stream index found by a cursor that walks forward, once
+   ; round from the start for a lazy body behind it
+   (dfileat ps ts)
+    (: (go l i w) (? (l == ts) (pin ps 'dcur [l i], filat (ps 'dspans) i)
+                     (atom? l) (w ? () (go (ps 'dtoks) 0 1))
+                     (go >l (i + 1) w))
+       (ps 'dcur @ [l i] (go l i ())))
    ; a 'sigs row off pparams' answer: (rettype (paramty..) variadic?)
    (mksig rty rp) [rty (map caup <rp) <>>rp]
    ; a function definition from its `{`: params, __func__ and the label table per function,
@@ -2280,7 +2287,9 @@
     (: psh (bindlocs ps prms (shadowdecl ps (filter string? (map cap prms)) ()))   ; a param hides a typedef of its name
        _ (pin ps 'fnname name)
        _ (pins ps 'labs {} 'clfn ())
-       b0 (pblock ps ts)
+       _ (ps 'dbg ? (pin ps 'dfile (dfileat ps ts)))
+       b0 (pblock ps ts @ r
+             (two? r && ps 'dbg ? (<r @ ('blk l) [['blk (['loc (ps 'dfile) <>><ts 1] . l)] <>r] r) r))
        b (two? b0 ? [(ahoist ps <b0) <>b0] b0)
        _ (pin ps 'fnname ())
        _ (unshadow ps psh)
@@ -2784,6 +2793,7 @@
    (cparse-h ts tgt dia opts eh lz)
     (: ps (pins (psnew-d tgt dia) 'swch (opts 'swch) 'uch (opts 'uch) 'ssp (opts 'ssp) 'ehint eh 'lazy lz)
        toks (fsbody ts) spans (fspans ts)
+       _ (? (opts 'dbg) (pins ps 'dbg 1 'dtoks toks 'dspans spans 'dcur [toks 0] 'cxls ()))
        ; a unit with no `mode(M)` or `__mode__(M)` has no mode attribute, so modeat's walk
        ; of every declaration is skipped; pfail's re-parse walks it again
        (mdw? l) (? (atom? l) ()

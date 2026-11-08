@@ -3134,13 +3134,14 @@
                   (noinlj? <x || noinlj? >x))
    ; decls and expression statements, then one trailing `return expr`: no arm to copy
    (straight? (i . u))
-    (i @ (('decl || 'expr) . _) (straight? u)
+    (i @ (('decl || 'expr || 'loc) . _) (straight? u)
          (('ret . rv . _) && two? rv) !(two? u))
    ; a body's weight by its structure: a name, a number or an operator one unit each, and a
-   ; __builtin_expect (with the !! it wraps) its operand -- a hint lays no code
+   ; __builtin_expect (with the !! it wraps) its operand -- a hint lays no code, nor -g's mark
    (aweigh x)
     (? !(two? x) 1
-       (x @ ('call ('var b9) [a _] && b9 = "__builtin_expect")
+       (x @ ('loc . _) 0
+            ('call ('var b9) [a _] && b9 = "__builtin_expect")
              (a @ ('un 'not ('un 'not a2)) (aweigh a2) (aweigh a))
             ('var _) 1
             (foldl (n \ y \ n + aweigh y) 0 x)))

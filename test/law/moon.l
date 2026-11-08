@@ -2033,6 +2033,17 @@
       (1 = calls (fnf 'nf <>irN) "trizz") (0 = calls (fnf 'nf <>irN) "fivezz")
       (0 = calls (fnf 'pf <>irN) "trizz") (0 = calls (fnf 'pf <>irN) "fivezz")))
 
+; -- -g's marks: each block item after its start's (loc file line), a body's `{` as (loc file
+; line 1) at its head, nested blocks too; without 'dbg the tree is the plain parse's
+(: src "int f(int x) {\n  int y = x + 1;\n  if (y) {\n    y++; y--;\n  }\n  return y;\n}\n"
+   (test
+      (<>(cparse-o <>(clex src) 'x64 'moon {'dbg 1}) =
+         '(prog ((fn "f" (("x" int)) (blk ((loc () 1 1) (loc () 2) (decl (("y" int (bin + (var "x") (num 1)))))
+                                            (loc () 3) (if (var "y") (blk ((loc () 4) (expr (post (var "y") 1))
+                                                                           (loc () 4) (expr (post (var "y") -1)))) ())
+                                            (loc () 6) (ret (var "y"))))))))
+      (<>(cparse-o <>(clex src) 'x64 'moon {}) = <>(cparse <>(clex src)))))
+
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: ok")
 (put err 10)

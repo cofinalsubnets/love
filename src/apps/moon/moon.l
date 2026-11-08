@@ -376,7 +376,7 @@
        (f ? ["__FILE__=\(q)" "__BASE_FILE__=\(q)"]))
    ; the shared front end: source -> (1 ast stag sigs ..) | a fatal exit. the -D lines prepend
    ; to the text before the one lex, stamped 1-k..0, so every source line keeps its number
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp 'fis fi}))
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp 'fis fi 'dbg dbg}))
     (: ds9 (cc-defs t + filedef src mp + fincs fi)
        ; `-` is stdin, for every door; cdir answers "" (the cwd). then disk, then vb by key
        r (src = "-" ? [1 (slurp in)]
@@ -390,7 +390,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (mprof 'cpp (_ \ cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src))
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1 'dbg dbg}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
         (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
@@ -499,7 +499,7 @@
                     (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
@@ -523,7 +523,8 @@
                  locs (lnames + (foldl (\ t s (pin t s 1)) {} (fns + gns + lnames) @ have (filter (s \ !(peep have s 0)) (asmlocs <at))))
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
-                          (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
+                          (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())
+                          (dbg ? [src (cwd 0)])]   ; -g: the unit and its dir, for obj.l's line tables
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
@@ -1125,6 +1126,7 @@
    (fpuse? l) (? (two? l) (any fpuse? l)
                  (name? l) (show l @ s (#s > 1 && s 0 = 102 && all (i \ 48 <= s i <= 57) >^#s))
                  0)
+   (dbgon? a) (elem a '("-g" "-g1" "-g2" "-g3" "-ggdb" "-ggdb1" "-ggdb2" "-ggdb3") || starts? a "-gdwarf")
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              glu? a 108 || glu? a 76 ||
@@ -1168,7 +1170,7 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia ()}
+                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1178,6 +1180,10 @@
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
           ("-c" . r) (flags r (pin t 'c 1))
+          ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
+          ; -g form rides through tol?
+          ("-g0" . r) (flags r (pin t 'dbg ()))
+          ((a . r) && dbgon? a) (flags r (pin t 'dbg 1))
           ("-E" . r) (flags r (pin t 'E 1))
           ; love's own version: mooncc is a verb on the love binary
           (("--version" || "-v") . _)
