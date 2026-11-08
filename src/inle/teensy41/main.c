@@ -88,8 +88,15 @@ static lvm(love_gpio_put) {
   Ip += 1;
   return Continue(); }
 
+// (tty fd) -- (): the console's size is unknown, so the line editor lays 80 columns
+static lvm(love_tty) {
+  Sp[0] = ZeroPoint;
+  Ip += 1;
+  return Continue(); }
+
 // a 2-arg nif leads with lvm_cur, as the host's nif_open does
 static union u const
+  nif_tty[]       = {{love_tty}, {lvm_ret0}},
   nif_gpio_init[] = {{love_gpio_init}, {lvm_ret0}},
   nif_gpio_get[]  = {{love_gpio_get}, {lvm_ret0}},
   nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_dir}, {lvm_ret0}},
@@ -103,7 +110,8 @@ static struct def defs[] = {
   {"gpio_init", {.k = nif_gpio_init}},
   {"gpio_dir",  {.k = nif_gpio_dir}},
   {"gpio_put",  {.k = nif_gpio_put}},
-  {"gpio_get",  {.k = nif_gpio_get}}, };
+  {"gpio_get",  {.k = nif_gpio_get}},
+  {"tty",       {.k = nif_tty}}, };
 
 // malloc/free for alloc's default: a first-fit free list (ffalloc.h) over the arena
 #include "../ffalloc.h"
