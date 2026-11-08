@@ -401,8 +401,11 @@
    ; the names whose address the body takes live in memory, and every name under a call that
    ; returns twice: its second return restores no register
    (lotk? g nm) (g 'twice || elem nm (g 'lotk))
+   ; ..and a volatile one, its entry's mask in the seventh slot: every access a load or a store
+   (lovq? e) (charm? (e 6) && e 6 & 2 > 0)
    (lotaken x acc)
     (x @ ['addr ['var n]] (elem n acc ? acc (n . acc))
+         ['decl es] (foldl (a \ e \ (lovq? e && nelem <e a ? (<e . a) a)) (foldl (a \ y \ lotaken y a) acc x) es)
          ; an asm's memory operand takes its name's address
          ('asm . _ . os . is . _)
           (foldl (a \ o \ (o @ (c . ['var n] . _) (any (k \ elem (c k) '(109 111 81)) ^#c && nelem n a ? (n . a) a) _ a))
@@ -425,8 +428,8 @@
                             ['g lbl ty] (lomk g @ t ['a ['long t [['la t lbl]]] ty 0])
                             (lono g ['var nm]))
          ['deref p]
-          (lox g env p @ [['ptr pt] r fs] ['a [['ptr pt] r fs] pt 0]
-                       [['ptr pt a] r fs] (loal g [['ptr pt] r fs] pt 0 a)
+          ; a pointer's third slot, where it is not 0, the alignment its pointee's address carries
+          (lox g env p @ [('ptr . pt . s) r fs] (two? s && 0 < <s ? (loal g [['ptr pt] r fs] pt 0 <s) ['a [['ptr pt] r fs] pt 0])
                        'bad 'bad (_ _ _) (lono g 'deref))
          ['dot base fld]
           (lolv g env base @ ['a av ty off]
@@ -688,7 +691,7 @@
 
    ; a pointer to a VLA steps by its row's bytes, the dim evaluated at the step: p +- i, i + p, p - q
    ; as the char arithmetic they are -> an expression | ()
-   (lovrow g ty) (ty @ ['ptr ('varr . el . n . _)] ['bin '* ['cast 'long n] ['num (tsz g el)]] _ ())
+   (lovrow g ty) (ty @ ('ptr . ('varr . el . n . _) . _) ['bin '* ['cast 'long n] ['num (tsz g el)]] _ ())
    (lovstep g op a b va vb)
     (: ra (lovrow g (vty va)) rb (lovrow g (vty vb)) (cp x) ['cast ['ptr 'char] x]
        (? !(elem op '(+ -)) ()
@@ -1058,7 +1061,7 @@
          ['cast 'void x] (lox g env x @ [_ _ fs] ['void () fs] 'bad)
          ; a function type's value is its address, a function's own type standing
          ['cast ('fn . ft) x]
-          (lox g env x @ ([vt r fs] && ptr? vt) [(vt @ ('ptr ('fn . _)) vt _ ['ptr ('fn . ft)]) r fs]
+          (lox g env x @ ([vt r fs] && ptr? vt) [(vt @ ('ptr . ('fn . _) . _) vt _ ['ptr ('fn . ft)]) r fs]
                          v v)
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
          ; a float of a wide value: a constant only, folded exactly
@@ -1225,9 +1228,9 @@
               (lono g ['call nm]))
           _ (lox g env fh @
                ; a variadic prototype parks () as an unprototyped one does: al only then
-               [['ptr ['fn rt ptys]] r fs] (locall1 g env rt ptys (two? ptys ? () 1) () as (locr g r) [r fs])
-               [['ptr ['fn rt ptys 'ms]] r fs] (locall1 g env rt ptys () 1 as (locr g r) [r fs])
-               [['ptr ['fn rt]] r fs] (locall1 g env rt () 1 () as (locr g r) [r fs])
+               [('ptr . ['fn rt ptys] . _) r fs] (locall1 g env rt ptys (two? ptys ? () 1) () as (locr g r) [r fs])
+               [('ptr . ['fn rt ptys 'ms] . _) r fs] (locall1 g env rt ptys () 1 as (locr g r) [r fs])
+               [('ptr . ['fn rt] . _) r fs] (locall1 g env rt () 1 () as (locr g r) [r fs])
                'bad 'bad
                (ty . _) (lono g ['callee ty])))
    ; a snippet over r0..r3 renamed onto fresh vregs, r0 the operand in and the answer out
@@ -1369,7 +1372,7 @@
               (charm? n ? (lomk g @ d ['int d [['li d (elem n (awidths g) ? 1 0)]]]) (lono g ['call nm])))
           (lobi1 g env <as @
              'bad 'bad
-             ([['ptr pt] p pf] && amw g pt)
+             ([('ptr . pt . _) p pf] && amw g pt)
               (: w (amw g pt) z (lomk g)
                  ; a fence ahead of a store or a load's read, and after one
                  fa (mo0 \ (mo0 = 0 || x86? g ? () [(fx () () (afence g))]))
@@ -2106,7 +2109,7 @@
           ; riscv's saves ride csframe here, so every exit restores at its marker
           _ (rv64? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
-          _ (pins g 'lotk (lotaken (f 3) ()) 'lowhy () 'losret sr
+          _ (pins g 'lotk (lotaken (f 3) (map cap (filter lovq? (f 2)))) 'lowhy () 'losret sr
                   'loret (? (rt = 'void) () (lofl? rt) (v6m? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) (lowabi g) (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           ; ..past the a0-a7 block a riscv variadic fn pushes
