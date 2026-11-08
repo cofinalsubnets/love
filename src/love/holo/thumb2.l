@@ -397,6 +397,9 @@
    (thumb-fimm d k)                                           ; VMOV.F32 S[2d], #imm8
       (: i ((k >> 31 & 1) << 7 | (k >> 29 & 1) << 6 | k >> 19 & 63)
          (t32 ((0xEEB0 | i >> 4) << 16 | (frn d << 12 | (0xA00 | i & 15)))))
+   ;; fli: any single's bits k by the scratch g; flal the same, its word pooled at p
+   (thumb-fli d g k) (thumb-li g k + thumb-movdxr d g)
+   (thumb-flal d g k p) (thumb-fli d g k)
    (thumb-cvtxsd base f g)                                    ; vmov S[2f], Rg ; vcvt.F64.{S,U}32 Df, S[2f]
       (: fn (frn f) gn (rn g)
          (t32 ((0xEE00 | fn) << 16 | (gn << 12 | 0xA10))
@@ -553,7 +556,7 @@
           ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
           ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
-          ('ucom0 . thumb-ucom0) ('fimm . thumb-fimm)
+          ('ucom0 . thumb-ucom0) ('fimm . thumb-fimm) ('fli . thumb-fli) ('flal . thumb-flal)
           ('ldsspi . thumb-ldsspi) ('stsspi . thumb-stsspi) ('ldpi4 . thumb-ldpi4) ('stpi4 . thumb-stpi4)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
@@ -632,6 +635,9 @@
                       (0 <= v <= 1020 && v % 4 = 0 ? (t16 (0x4800 | (aux << 8 | v >> 2))) (scare 'thumb-ldl16-reach v)))
             'ldlw (target - (site + 4 & -4) @ v
                      (-4095 <= v <= 4095 ? (t32 ((v < 0 ? 0xF85F 0xF8DF) << 16 | (aux << 12 | abs v))) (scare 'thumb-ldlw-reach v)))
+            ; flal's pooled load: vldr S[2aux], [pc, #imm] from the word-aligned pc
+            'vldl (target - (site + 4 & -4) @ v
+                     (0 <= v <= 1020 && v % 4 = 0 ? (t32 (0xED9F << 16 | (aux << 12 | 0xA00 | v >> 2))) (scare 'thumb-vldl-reach v)))
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
@@ -657,7 +663,8 @@
    ;; at least site + 2, reaches it
    (thumb-short ins c rel)
       (: x <c o (rel - 4)
-         (? (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
+         (? (<ins = 'flal) (rel < 0 || 1020 < rel ? () [(fix 4 'vldl (ins 4) (frn (ins 1)))])
+            (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
                                               (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
                                               ()))
             (#c != 1 || !(fix? x)) ()

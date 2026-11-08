@@ -2276,7 +2276,8 @@
     (: us {} ds {}
        (cnt t x) (pin t x (peep t x 0 + 1))
        _ (map (f \ (raops g f @ [u d] (map (cnt us) u, map (cnt ds) d) _ 0)) fs)
-       ; t read and written there alone; a zero's w is written there alone too
+       ; t read and written there alone; a zero's w is written there alone too. a single no imm8
+       ; reaches is fli, t its scratch, which lpool may load from a pool instead
        (lit? t) (peep us t 0 = 1 && peep ds t 0 = 1)
        zs {} zc {}
        _ (foldl (p \ f \ ((p @ ['li t 0] (f @ (['movdxr w t2] && t = t2 && lit? t && peep ds w 0 = 1) (pin zs w 1) _ 0) _ 0), f)) () fs)
@@ -2286,7 +2287,7 @@
               (: b (k & 4294967295)
                  (? (zs w && peep zc w 0 = peep us w 0) (go u)
                     (vfpimm? b) (['fimm w b] . go u)
-                    (<l . go >l)))
+                    (['fli w t b] . go u)))
              ((['ucomiss a z] . u) && a != z && zs z) (['ucom0 a] . go u)
              (f . u) (f . go u)
              _ ())

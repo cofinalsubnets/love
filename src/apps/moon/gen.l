@@ -893,6 +893,7 @@
        (arm ops a) (map (o \ (peep t o 'none = 'none ? (pin t o a) 0)) ops)
        _ (arm '(li fimm) (g \ f \ [() [<>f] 1]))
        _ (arm '(ucom0) (g \ f \ [[<>f] () ()]))
+       _ (arm '(fli) (g \ f \ [() [<>f <>>f] ()]))
        _ (arm '(ldsspi ldpi4) (g \ f \ [[<>>f] [<>f <>>f] ()]))
        _ (arm '(stsspi stpi4) (g \ f \ [[<>f <>>f] [<>f] ()]))
        _ (arm '(mov) (g \ f \ [[<>>f] [<>f] 1]))
@@ -1830,7 +1831,7 @@
    fmop9 '(addsd subsd mulsd divsd minsd maxsd ucomisd)     ; the scalar ops fldop gives a memory source
    fmops9 '(addss subss mulss divss minss maxss ucomiss)
    (fcvt9 op) (elem op '(cvtss2sd cvtsd2ss))
-   (fdef9 op) (elem op '(ldsd ldss ldsdl ldsdx ldssx cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movqxr movdxr fimm ldsspi))
+   (fdef9 op) (elem op '(ldsd ldss ldsdl ldsdx ldssx cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movqxr movdxr fimm fli ldsspi))
    (fuse9 op) (elem op '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui movqrx movdrx movmskpd))
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
    (fcalld g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
