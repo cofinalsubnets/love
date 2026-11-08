@@ -654,6 +654,7 @@
    (illty? t) (two? t && (? (<t = 'fn) (two? <>t && elem <<>t '(fn arr varr) || illty? <>t)
                             (elem <t '(arr varr)) (two? <>t && <<>t = 'fn || illty? <>t)
                             (<t = 'ptr) (illty? <>t)
+                            (qd? t) (illty? <>>t)
                             ()))
    (illblame _) (clblame "a function returning a function or an array, or an array of functions")
    ; ms_abi anywhere in a declarator marks the first function its type reaches: ('fn ret params 'ms).
@@ -662,7 +663,7 @@
    (pdtor ps ts base) (pdtor0 ps ts base @ dr (two? dr && pms? ps && msin? ts <>dr ? [(msent <dr) <>dr] dr))
    (msin? a b) (? (atom? a || a = b) () (tkk <a = 'id && elem (tkv <a) '("ms_abi" "__ms_abi__")) 1 (msin? >a b))
    (msty t) (? (fn? t) [<t <>t (2 < #t ? (t 2)) 'ms]
-               (two? t && elem <t '(ptr arr varr)) (<t . (msty <>t . >>t))
+               (two? t && elem <t '(ptr arr varr qual)) (qd? t ? ['qual <>t (msty <>>t)] (<t . (msty <>t . >>t)))
                t)
    (msent e) (<e . (msty <>e . >>e))
    (pdtor0 ps ts base)                              ; -> ((name ty) rest) | ()
