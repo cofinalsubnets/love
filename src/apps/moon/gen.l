@@ -1858,7 +1858,7 @@
            (stru? ty) (mkv (ua? r ? [<ty <>ty (vma r)] ty) 'r0 (fs + mata b o))    ; a struct value is its address (the pair reps read through it)
            (ua? r)                                    ; a misaligned member: by its chunks
             (? (flo? ty) (ntmp g 'double @ tm
-                            (mkv (fvt g ty) 'r0 (fs + ldal 'r0 b o (tsz g ty) (vma r) + [['st 'r4 tm 'r0]] + fldv g ty 'f0 'r4 tm)))
+                            (mkv (fvt g ty) 'r0 (fs + ldalw g b o (tsz g ty) (vma r) tm + fldv g ty 'f0 'r4 tm)))
                (pair? g ty)                           ; the high word gathers in r1 first, off a base that is not r1
                 (: b2 (b = 'r1 ? 'r0 b) a (vma r)
                    (mkv ty 'r0 (fs + (b = 'r1 ? ['(mov r0 r1)] ()) + ldal 'r1 b2 (o + 4) 4 a + ldal 'r0 b2 o 4 a)))
@@ -2696,7 +2696,7 @@
                            (flo? ty)
                             (ntmp g 'double @ tm
                                (mkv (fvt g ty) 'r0 (vfs lv + spush 'r0 + asfty g r ty + fstv g ty 'r4 tm 'f0
-                                                 + [[(uldop n) 'r0 'r4 tm]] + spop 'r1 + stal 'r1 0 n a 'r0)))
+                                                 + spop 'r1 + stalw g 'r1 0 n a tm)))
                            (mkv ty 'r0 (pk g (vfs lv) (asintt g r ty) 'r1 + cvt ty 'r0
                                         + stal 'r1 0 n a 'r0))))))
               (flo? (vty lv0))                     ; a float/double store (value in f0; narrow if float)
@@ -5629,6 +5629,9 @@
            () (alchunks n a))
    ; a bitfield's unit, n bytes at b+o: one word as its type says, or by chunks when packed (its
    ; own n bytes, every one exact) or misaligned (a, the alignment its face carries)
+   ; n bytes at b+o by chunks to the frame word(s) at tm, and back: a float wider than a register
+   (ldalw g b o n a tm) (catmap (p \ ldal 'r2 b (o + p) (min (wsize g) (n - p)) a + [['st 'r4 (tm + p) 'r2]]) (filter (p \ p % wsize g = 0) ^n))
+   (stalw g b o n a tm) (catmap (p \ (min (wsize g) (n - p) @ k ([(uldop k) 'r2 'r4 (tm + p)] . stal b (o + p) k a 'r2))) (filter (p \ p % wsize g = 0) ^n))
    (bfpk? bt) (two? (drop 4 bt))
    (bfld g bt d b o a) (? (bfpk? bt || a) (ldal d b o (tsz g bt) (a ? a 8)) [[(uldop (tsz g bt)) d b o]])
    (bfst g bt b o a v) (? (bfpk? bt || a) (stal b o (tsz g bt) (a ? a 8) v) [[(stop <>bt) b o v]])
@@ -8085,8 +8088,7 @@
            (? (d128? ty && !(w128? g)) (uanl g)
               (pair? g ty) (asll g r + stal 'r4 off 4 (lowb off) 'r0 + stal 'r4 (off + 4) 4 (lowb (off + 4)) 'r1)
               (d128? ty) (as128 g r + stal 'r4 off 8 (lowb off) 'r0 + stal 'r4 (off + 8) 8 (lowb (off + 8)) 'r2)
-              (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
-                                                + stal 'r4 off (tsz g ty) (lowb off) 'r0))
+              (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + stalw g 'r4 off (tsz g ty) (lowb off) tm))
               (asintt g r ty + cvt ty 'r0 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
           (d128? ty && w128? g) (as128 g r + wst g 'r4 off)   ; both halves: a union's .full = v
           (flo? ty) (asfty g r ty + fstv g ty 'r4 off 'f0)

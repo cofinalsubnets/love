@@ -1,10 +1,11 @@
 // packed members off their natural alignment, laid by an initializer, a store, a copy, a compound
-// literal and a step, wide ones too, read back whole: v6-M faults on any word not on its alignment
+// literal and a step, wide ones and floats too, read back whole: v6-M faults on any word not on its alignment
 #include <stdint.h>
 #include <string.h>
 
 struct dp { unsigned short size; unsigned long address; } __attribute__((packed));
 struct q { char c; uint32_t w; uint16_t h; uint64_t d; } __attribute__((packed));
+struct fl { char c; double d; float f; } __attribute__((packed));
 char text[16];
 __attribute__((noinline)) static unsigned long id(unsigned long x) { return x; }
 __attribute__((noinline)) static uint32_t sum(const struct q *p) { return p->w + p->h + (uint32_t) p->d + (uint32_t) (p->d >> 32) + (uint32_t) p->c; }
@@ -18,7 +19,9 @@ int main(void) {
  b.w += 1;
  uint32_t o = (uint32_t) a[0].d++ + (uint32_t) (a[2].d-- >> 32);
  a[1].d += 0xffffffffull; ++a[1].d;
- uint32_t s = (uint32_t) (d.address == (unsigned long) text) + d.size * 3u + o;
+ struct fl fv[2] = { { 1, 2.5, -1.25f }, { .d = (double) id(3) } };
+ fv[1].f = fv[0].f * 2; fv[0].d *= 3; fv[1].d += fv[0].d;
+ uint32_t s = (uint32_t) (fv[1].d * 4 + fv[1].f * 8) + (d.address == (unsigned long) text) + d.size * 3u + o;
  for (int i = 0; i < 3; i++) s = s * 31 + sum(&a[i]);
  s = s * 31 + sum(&b) + sum(&(struct q) { .c = 2, .h = 7, .w = id(40) });
  return (int) (s % 251);

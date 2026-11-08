@@ -441,8 +441,14 @@
    ; n bytes at b+off by the chunks a carries, and back
    (loga g b off n a) (loren2 g () 'r2 'long (ldal 'r2 b off n a))
    (lostu g b off n a v) (loren2 g () 'r3 'long (stal b off n a v) @ [_ _ fs] fs)
+   ; ..a float on v6-M, whose float file is soft: its bits by words through a frame temp
+   (lofws g ty) (filter (p \ p % 4 = 0) ^(tsz g ty))
    (loldu g [_ r fs] ty off a)
-    (? (d128? ty) (loga g r off 8 a @ [_ l fl] (loga g r (off + 8) 8 a @ [_ h fh] [ty [l h] (fs + fl + fh)]))
+    (? (lofl? ty && v6m? g)
+        (ntmp g ty @ tm
+           (foldl (acc \ p \ (loga g r (off + p) 4 a @ [_ t f2] (acc + f2 + [['st 'r4 (tm + p) t]]))) () (lofws g ty) @ f3
+              (lomkf g @ w [ty w (fs + f3 + [[(ty = 'float ? 'ldss 'ldsd) w 'r4 tm]])])))
+       (d128? ty) (loga g r off 8 a @ [_ l fl] (loga g r (off + 8) 8 a @ [_ h fh] [ty [l h] (fs + fl + fh)]))
        (lofl? ty) (loga g r off (tsz g ty) a @ [_ t f2] (lomkf g @ w [ty w (fs + f2 + [[(ty = 'float ? 'movdxr 'movqxr) w t]])]))
        (loga g r off (tsz g ty) a @ [_ t f2] [ty t (fs + f2 + cvt ty t)]))
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
@@ -454,6 +460,9 @@
           ['u [_ b _] ty off a]
            (lotr g v ty @
               [_ c fs] (? (d128? ty) [(fs + lostu g b off 8 a <c + lostu g b (off + 8) 8 a <>c) [ty c ()]]
+                          (lofl? ty && v6m? g)
+                           (ntmp g ty @ tm [(fs + [[(ty = 'float ? 'stss 'stsd) 'r4 tm c]]
+                                             + catmap (p \ (lomk g @ t ([['ld t 'r4 (tm + p)]] + lostu g b (off + p) 4 a t))) (lofws g ty)) [ty c ()]])
                           (lofl? ty) (lomk g @ t [(fs + [[(ty = 'float ? 'movdrx 'movqrx) t c]] + lostu g b off (tsz g ty) a t) [ty c ()]])
                           [(fs + lostu g b off (tsz g ty) a c) [ty c ()]])
               _ 'bad)
