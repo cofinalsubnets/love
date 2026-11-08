@@ -3695,7 +3695,7 @@
                                     spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['ld pk 'r4 pko] ['callr pk]]
                                     + fres + (sr6 ? (srback g sroff srg) ()) + clean + relods)))
                       ; i386: a pointer off a global is called where it lies
-                      (ia32? g && two? (gword (vfs hr)))
+                      (ia32? g && two? (gword (vfs hr)) && !(x86ki? g))
                        (mkv (fnret (vty hr)) 'r0 (pf + spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) +
                                  [['callm 'rip (gword (vfs hr))]] + fres +
                                  rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))
@@ -4743,7 +4743,7 @@
           (!(two? sf && <sf = 'sub && sf 1 = 'sp && sf 2 = 'sp && charm? K) ? fs
              (strip (drop 5 fs) @ r (r = 'no ? fs (<fs . r)))))))
    (unframe g fs)
-    (cz g 'unframe fs (: a64 (a64? g)
+    (cz g 'unframe fs (kfp? g ? fs (: a64 (a64? g)
        fb (a64 ? 'fp 'r4)
        pro (a64 ? (epim? >fs pro-a64) (pro4? fs))
        sf (fs (a64 ? 4 3))
@@ -4852,7 +4852,7 @@
                                          f)
                                       (rw >l D))))))))
              body2 (r3f ? (sav3 . body) body)
-             (<fs . (vs ? (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0)))))))
+             (<fs . (vs ? (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0))))))))
 
    ; IR constant propagation: a straight-line pass tracking constants (the word's signed value) in
    ; registers, frame slots and stack cells, folding them to li's; an unknown op invalidates everything
@@ -5399,7 +5399,7 @@
    ; x64: (ld X b o) .. (jmpr X) -> (jmpm b o), the load sinking past forms that leave X and b alone
    ; (b's own add folds into o). never off sp or fp, and X is no argument register
    (jmpm g fs)
-    (cz g 'jmpm fs (!(x64? g) || x86k? g 'thk || x86k? g 'ibr ? fs
+    (cz g 'jmpm fs (!(x64? g) || x86k? g 'thk || x86k? g 'thki || x86k? g 'ibr ? fs
        (: ar (argr g)
           (sink X b o l acc n)                        ; -> [forms-between o' rest] | ()
            (!(two? l) || 8 < n ? ()
@@ -5423,19 +5423,27 @@
                           (f . go >l))))
           (go fs))))
    ; -mindirect-branch=thunk-extern and -mfunction-return=thunk-extern, last over x64's code: an
-   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk
+   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk.
+   ; -mretpoline lays the thunk at the site instead, on i386 too: the target over the return
+   ; address, the speculated return caught in a pause loop
    x86rn {'r0 "rax" 'r1 "rcx" 'r2 "rdx" 'r3 "rbx" 'r4 "rbp" 'r5 "rsi" 'r6 "rdi" 'r7 "r8"
           'r8 "r9" 'r9 "r10" 'r10 "r11" 'r11 "r12" 'r12 "r13" 'r13 "r14" 'r14 "r15"}
    (thunks g fs)
-    (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs)
+    (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs) thki (x86ki? g)
        (via op r) (: s (intern "__x86_indirect_thunk_\(x86rn r)")
                      ((cs && elem r '(r7 r8 r9 r10 r11 r12 r13 r14) ? ['(raw (46))]) + [[op s]]))
+       (rjmp r) (nlab g ".rp" @ L0 (nlab g ".rp" @ L1
+                   [['call L1] ['label L0] '(raw (243 144)) '(raw (15 174 232)) ['jmp L0]
+                    ['label L1] ['st 'sp 0 r] '(ret)]))
+       (rcall r) (nlab g ".rp" @ L2 (nlab g ".rp" @ L3 ([['jmp L2] ['label L3]] + rjmp r + [['label L2] ['call L3]])))
        (one f) (? !(two? f) [f]
+                  (thki && <f = 'callr) (rcall <>f)
+                  (thki && elem <f '(jmpr jmpt)) (rjmp <>f)
                   (thk && <f = 'callr) (via 'call <>f)
                   (thk && elem <f '(jmpr jmpt)) (via 'jmp <>f)
                   (rth && f = '(ret)) [['jmp '__x86_return_thunk]]
                   [f])
-       (thk || rth ? (catmap one fs) fs)))
+       (thk || rth || thki ? (catmap one fs) fs)))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
    ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X
@@ -5608,7 +5616,10 @@
    (avz? g) (drop 11 (g 'mo) @ r (two? r && <r))   ; -ftrivial-auto-var-init=zero
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
-   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk rth ibr cs
+   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk thki rth ibr cs
+   (xkask? g k) (drop 16 (g 'mo) @ r (two? r && elem k <r))           ; an ask by its word, any target
+   (x86ki? g) ((x64? g || ia32? g) && xkask? g 'thki)                   ; -mretpoline, either width
+   (kfp? g) (xkask? g 'kfp)                                              ; -fno-omit-frame-pointer: the link stays
    (sa4? g) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'sa4 <r))   ; i386 -mstack-alignment=4
    (npic? g) (drop 17 (g 'mo) @ r (two? r && <r))   ; -fno-pie said: no load base moves the image
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
@@ -5704,7 +5715,7 @@
    ; the edges leaving that region, one stub each, and its exits drop their restores. the frame is needed by
    ; an sp operand, a call, push/pop, or a write of a saved register; a label reached from outside is outside
    (swrap g fs)
-    (cz g 'swrap fs (: f1 (two? fs && two? >fs ? <>fs)
+    (cz g 'swrap fs (kfp? g ? fs (: f1 (two? fs && two? >fs ? <>fs)
        N (two? f1 && <f1 = 'sub && f1 1 = 'sp && f1 2 = 'sp && charm? (f1 3) ? (f1 3))
        (sv l acc) (two? l && two? <l && <<l = 'st && <l 1 = 'sp && charm? (<l 2) && nom? (<l 3) ?
                      (sv >l ([(<l 2) (<l 3)] . acc)) [(rev acc) l])
@@ -5771,7 +5782,7 @@
                              (: a1 (elem i js && !(two? f && <f = 'label) ? (['label (tl i)] . acc) acc)
                                 (emit (i + 1) (f . a1))))))
                    stubs (foldl (a \ j \ a + [['label (sl j)]] + pro + [['jmp (tl j)]]) () jb)
-                   ((<fs . emit 0 ()) + stubs)))))))
+                   ((<fs . emit 0 ()) + stubs))))))))
    ; the arrival rename: a call-free fn's param homes (mov H A) rename to A where A is never otherwise touched
    (unhome g fs)
     (cz g 'unhome fs (: ar (argr g) hr (hregs g)

@@ -1128,7 +1128,8 @@ echo "mooncc: -fstack-protector guards the fns its level names, an overflow reac
 # the x86-64 kernel's -m set: -mcmodel=kernel and -mno-fp-ret-in-387 ask nothing of x64's code
 # (rip-relative, abs64 words, long double in xmm0); -mskip-rax-setup leaves al unset at a
 # varargs call; -mstack-alignment=8 realigns a 16-aligned local; the thunk asks send every
-# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk
+# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk;
+# -mretpoline lays the thunk at each site instead, i386 too
 cat > "$ho/.r3.c" <<'EOF'
 int pf(const char *, ...);
 int h(int);
@@ -1178,12 +1179,25 @@ $cc_g -O2 -o "$ho/.r3g" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 && "$ho/.r3g";
 moonrun $th -mstack-alignment=8 -mskip-rax-setup -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the thunked link"
 "$ho/.r3"; a=$?
 [ $a -eq $b ] || fail "r3: the thunked run answers $a, gcc $b"
+# -mretpoline (the vdso's ask) lays each thunk at its site, on x64 and i386: no plain indirect branch
+for t in x64 i386; do
+  for fl in -mretpoline -mindirect-branch=thunk-inline; do
+    moonrun -t $t $fl -c -o "$ho/.r3i.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: -t $t $fl compile"
+    objdump -d --no-show-raw-insn "$ho/.r3i.o" > "$ho/.r3i.d"
+    grep -Eq '(call|jmp) +\*' "$ho/.r3i.d" && fail "r3: -t $t $fl: a plain indirect branch: $(grep -E '(call|jmp) +\*' "$ho/.r3i.d" | head -1)"
+    grep -q 'lfence' "$ho/.r3i.d" || fail "r3: -t $t $fl: no retpoline laid"
+    objdump -r "$ho/.r3i.o" | grep -q '__x86_indirect_thunk_' && fail "r3: -t $t $fl names the kernel's thunk"
+  done
+done
+moonrun -mretpoline -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the retpoline link"
+"$ho/.r3"; a=$?
+[ $a -eq $b ] || fail "r3: the retpoline run answers $a, gcc $b"
 for fl in "-mcmodel=large" "-mcmodel=medium" "-mstack-alignment=4" "-mindirect-branch=thunk" "-mfunction-return=thunk-inline" \
-          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern"; do
+          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern" "-t a64 -mretpoline"; do
   moonrun $fl -c -o /dev/null "$ho/.r3.c" > /dev/null 2>&1; r=$?
   [ $r -eq 2 ] || fail "r3: $fl: exit $r, not refused"
 done
-echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks"
+echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks, the vdso's inline retpoline"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback
@@ -1857,7 +1871,41 @@ echo "$uw" | awk '/ FDE /{if (r != "" && r !~ /^sp\+0( +u)* *$/) bad = 1; r = ""
 moonrun -t a64 -O2 -c "$ho/.uwt.c" -o "$ho/.uwt.o" || fail "mooncc -t a64 on .uwt.c"
 readelf -SW "$ho/.uwt.o" | grep -q eh_frame && fail "an .eh_frame laid unasked"
 moonrun -t x64 -c -mcmodel=tiny "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "-mcmodel=tiny taken on x64"
-moonrun -t x64 -c -fasynchronous-unwind-tables "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "unwind tables taken on x64, where none is laid"
+# x64's: an FDE per C function; under -fno-omit-frame-pointer each keeps its rbp link
+moonrun -t x64 -O2 -fno-omit-frame-pointer -fasynchronous-unwind-tables -c "$ho/.uwt.c" -o "$ho/.uwt.o" || fail "mooncc -t x64: -fasynchronous-unwind-tables"
+[ "$(readelf -wf "$ho/.uwt.o" | grep -c ' FDE ')" = 3 ] || fail "x64 unwind tables: not one FDE per C function, the asm's left out"
+readelf -wF "$ho/.uwt.o" | grep -qE '^[0-9a-f]+ +rbp\+16 ' || fail "x64 unwind tables: no row rides rbp"
+for t in x64 i386; do
+  moonrun -t $t -O2 -fno-omit-frame-pointer -c "$ho/.uwt.c" -o "$ho/.fp.o" || fail "mooncc -t $t -fno-omit-frame-pointer"
+  [ "$(objdump -d --no-show-raw-insn "$ho/.fp.o" | grep -cE 'mov +%[er]sp,%[er]bp')" = 3 ] || fail "-t $t -fno-omit-frame-pointer: a C function lost its frame link"
+done
+# glibc's backtrace walks gcc's frames into mooncc's and back, a VLA's among them
+cat > "$ho/.uwx.c" <<'EOF'
+int probe(int);
+__attribute__((noinline)) int c3(int x) { volatile int t[30]; t[x % 30] = x; return probe(t[x % 30]) + 1; }
+__attribute__((noinline)) int c2(int x, int y) { volatile int v[x + y]; int s = 0; for (int i = 0; i < y; i++) { v[i] = c3(x + i); s += v[i]; } return s; }
+__attribute__((noinline)) int c1(int x) { double d = x * 1.5; if (x < 0) return -1; return c2(x, (int)d / 7) * 2; }
+EOF
+cat > "$ho/.uwm.c" <<'EOF'
+#include <execinfo.h>
+#include <stdio.h>
+#include <string.h>
+int c1(int);
+int probe(int x) {
+  void *b[32]; int n = backtrace(b, 32); char **s = backtrace_symbols(b, n);
+  const char *want[] = { "c3", "c2", "c1", "main" }; int k = 0;
+  for (int i = 0; i < n && k < 4; i++) { char w[16]; snprintf(w, sizeof w, "(%s+", want[k]); if (strstr(s[i], w)) k++; }
+  return k == 4 ? 0 : 100;
+}
+int main(void) { return c1(5) != 2; }
+EOF
+for o in 0 2; do
+  for fp in "" -fno-omit-frame-pointer; do
+    moonrun -t x64 -O$o $fp -fasynchronous-unwind-tables -c "$ho/.uwx.c" -o "$ho/.uwx.o" || fail "mooncc -O$o $fp: the backtrace corpus"
+    $cc_g -rdynamic -o "$ho/.uwx" "$ho/.uwm.c" "$ho/.uwx.o" || fail "gcc: the backtrace link"
+    "$ho/.uwx" || fail "x64 unwind tables -O$o $fp: a backtrace lost a mooncc frame"
+  done
+done
 # ..however deep the chain: ten calls down, seven of them always_inline
 for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/323-always-inline-deep.c -o "$ho/.awd.o" || fail "mooncc -t $t: 323-always-inline-deep"
