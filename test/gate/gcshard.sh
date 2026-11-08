@@ -28,7 +28,9 @@ el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
 if [ -z "${GCS_NOBUILD:-}" ]; then
   # only the stress builds: a make of host here relinks out/love under the other lanes
   ${MAKE:-make} --no-print-directory hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
-  ${MAKE:-make} --no-print-directory out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
+  # corpus.list is written on every make, and test_love0 reads it beside this lane: made once
+  [ -s out/lib/corpus.list ] || ${MAKE:-make} --no-print-directory out/lib/corpus.list || fail "the corpus list"
+  ${MAKE:-make} --no-print-directory out/gcs0/love0 || fail "the stress love0"
   el built
 fi
 for b in out/love out/love.raw out$gs/love.raw out/gcs0/love0; do [ -x $b ] || fail "no $b"; done

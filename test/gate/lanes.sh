@@ -8,7 +8,8 @@
 #   2. what lanes otherwise build from inside their recipes (kernels, the wasm seat) builds once
 #   3. one `make -k -jN` over the rest: a chain below runs its lanes in turn, every other lane
 #      on its own; each a sub-make on the shared jobserver, assuming step 1's targets old
-#   4. the lanes that rebuild love0 under another cc, alone
+#   4. the lanes that rebuild love0 under another cc, alone; the lane map's early lanes start
+#      with step 3 instead and run beside it and step 4, one at a time
 #   5. --slow: test_slow last and alone, on the same tree, only after every lane is green,
 #      taking the lanes this run just passed as passed
 #
@@ -116,6 +117,7 @@ for l in $dep; do echo "0 0" > "$d/$l.rc"; echo "(made as a prerequisite, $d/pre
 map=$(out/love bee --lanes-map) || { echo "FAIL out/love bee --lanes-map"; exit 1; }
 chains=$(echo "$map" | sed -n 's/^chain //p')
 alone=$(echo "$map" | sed -n 's/^alone //p')
+early=$(echo "$map" | sed -n 's/^early //p')
 [ -n "$chains" ] && [ -n "$alone" ] || { echo "FAIL the lane map has no chains or no alone set"; exit 1; }
 
 # the remote half: a queue of the placed lanes, dearest first, that the hosts' slots and then
@@ -230,13 +232,20 @@ echo "$builds" | while read -r b; do
   $MAKE -s -j"$j" $b >> "$d/pre.log" 2>&1 || { echo "FAIL build $b -- $d/pre.log"; exit 1; }
 done || exit 1
 
-# step 3: one make over the chains and the lone lanes
+# step 3: one make over the chains and the lone lanes, the early ones beside it from its start
 mk=$d/lanes.mk
-par= late=
+par= late= first=
 for l in $run; do
   has "$l" "$rlanes" && continue
-  has "$l" "$alone" && late="$late $l" || par="$par $l"
+  if has "$l" "$early"; then first="$first $l"
+  elif has "$l" "$alone"; then late="$late $l"
+  else par="$par $l"; fi
 done
+# the stress bake runs test_gcstress's shards in the same scratch: owing both runs it alone
+if has test_gcstress_bake "$first" && has test_gcstress "$late"; then
+  late=$(for l in $late; do [ "$l" = test_gcstress ] || printf ' %s' "$l"; done)
+  echo "0 0" > "$d/test_gcstress.rc"; echo "(covered by test_gcstress_bake, which runs its shards)" > "$d/test_gcstress.log"
+fi
 {
   echo "all:"
   n=0
@@ -269,6 +278,12 @@ moved() { [ "$(sums)" = "$before" ] || [ -f "$d/love-moved.rc" ] || {
   [ -s "$d/walk.moved" ] && { echo "what out/src.tree packs, moved since the lanes began:"; cat "$d/walk.moved"; } >> "$d/love-moved.log"
   [ -s "$d/newer" ] && { echo "love.raw's inputs newer than it before:"; cat "$d/newer"; } >> "$d/love-moved.log"; }; }
 newer
+epid=
+[ -z "$first" ] || { ( for l in $first; do MAKE=$MAKE sh test/gate/lanes.sh --chain "$d" -j"$j" $oflags -- "$l"; done ) & epid=$!; }
+# the box's least MemAvailable while they run, in kB, for the gate's log
+[ -z "$epid" ] || [ ! -r /proc/meminfo ] || ( lo=; while kill -0 $epid 2>/dev/null; do
+  k=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo); [ -n "$lo" ] && [ "$lo" -le "$k" ] || { lo=$k; echo "$lo" > "$d/early.mem"; }
+  sleep 10; done ) &
 $MAKE -k -j"$j" -f "$mk" all > "$d/make.log" 2>&1
 moved "during the parallel phase"
 
@@ -292,6 +307,9 @@ if [ -n "$rlanes" ]; then
   while l=$(pop "" "" "") || l=$(pop "" "" alone); do alone1 "$l"; done
   [ -f "$d/remote.log" ] && cat "$d/remote.log"
 fi
+
+[ -z "$epid" ] || { wait $epid; moved "beside the early lanes"
+  [ -s "$d/early.mem" ] && echo "early:$first, the box's least MemAvailable beside them $(cat "$d/early.mem") kB"; }
 
 # a group is green when every member is, else red naming the red ones; its secs its slowest
 for g in $groups; do
