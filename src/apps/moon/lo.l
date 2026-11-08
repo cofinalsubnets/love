@@ -766,6 +766,8 @@
              (sense ? (loseq [(br a 1 L) (br b 1 L)])
                 (nlab g ".lo" @ k (loseq [(br a 1 k) (br b 0 L) (lol [['label k]])])))
             ['un 'not x] (lobr g env x (sense ? 0 1) L)
+            ; a hint is its first argument's test
+            ('call ('var "__builtin_expect") (x . _)) (lobr g env x sense L)
             (['bin op a b] && locmp? op)
              (lox g env a @ 'bad 'bad
                 va0 (lox g env b @ 'bad 'bad
@@ -1689,9 +1691,11 @@
           sts (map (i \ st (ops i) (asgn i)) outs)
           ; a goto's edges are not unframe's to see
           ab (asmbody g tgt neutral? txt)
-          body (map (r \ ['push r]) saves + (two? labs ? ab (asmfsafe txt ab)) + map (r \ ['pop r]) (rev saves)
-                + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
           (flat l) (catmap (a \ two? a ? a [a]) l)
+          ; a callee-saved output whose value dies leaves no mov behind: named here, csframe still saves it
+          named (map (r \ ['li r 0]) (filter (r \ elem r (csregs g) && nelem r (flat (map asgn ins))) (flat (map asgn outs))))
+          body (named + map (r \ ['push r]) saves + (two? labs ? ab (asmfsafe txt ab)) + map (r \ ['pop r]) (rev saves)
+                + catmap (i \ (ops i @ ('f . _ . _ . _ . c . _) [['set c (asgn i)]] _ ())) outs)
           (any bad? lds || any bad? sts ? 'bad
              (: post (catmap cap sts + catmap (x \ x 1) sts)
                 fx ['fix (flat (map asgn ins)) (flat (map asgn outs) + kills) body tls]
