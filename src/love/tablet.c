@@ -455,8 +455,13 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
     *out = box_hash(x, obj ? (uintptr_t) ((uint8_t*) tray_data(tray(x)) - (uint8_t*) x) : love_tray_bytes(tray(x)));
     return obj ? (*src = x, 3) : 0; }
    case DBig: return *out = box_hash(x, big_bytes(big(x))), 0;
-   case DGem: return *out = box_hash(x, gem_req * sizeof(word)), 0;    // the lean box: ap is GC-stable
-   case DTwin: return *out = box_hash(x, twin_req * sizeof(word)), 0;
+   // a zero hashes as +0.0, since = holds -0.0 and 0.0 equal
+   case DGem: { struct gem c = *gem(x);
+    c.d = c.d == 0 ? 0 : c.d;
+    return *out = box_hash((word) &c, gem_req * sizeof(word)), 0; }
+   case DTwin: { struct twin c = *twin(x);
+    c.dre = c.dre == 0 ? 0 : c.dre, c.dim = c.dim == 0 ? 0 : c.dim;
+    return *out = box_hash((word) &c, twin_req * sizeof(word)), 0; }
    case DString: {
     uintptr_t n = len(x), h = mix;
     char const *bs = txt(x);

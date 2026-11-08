@@ -402,6 +402,19 @@ struct g *big_shift(struct g *g, int vop) {
  return *++g->sp = big_canon(&g->hp, r, rn, neg && rn > 0), ++g->ip, g; }
 
 
+// |a| / |b| as a float off each one's top four limbs, the rest kept as an exponent, so
+// operands past the float range answer their ratio, not inf / inf
+static flo_t mag_quot_flo(love_limb const *la, int nla, love_limb const *lb, int nlb, bool neg) {
+ int ta = nla < 4 ? nla : 4, tb = nlb < 4 ? nlb : 4;
+ double ma = 0, mb = 0, r, up = (double) ((uint64_t) 1 << 62);
+ for (int i = nla - 1; i >= nla - ta; i--) ma = ma * (double) limb_base + (double) la[i];
+ for (int i = nlb - 1; i >= nlb - tb; i--) mb = mb * (double) limb_base + (double) lb[i];
+ intptr_t e = ((intptr_t) (nla - ta) - (nlb - tb)) * limb_bits, k = e < 0 ? -e : e;
+ for (r = ma / mb; k && r != 0 && r - r == 0; k -= k < 62 ? k : 62) {
+  double s = k < 62 ? (double) ((uint64_t) 1 << k) : up;
+  r = e < 0 ? r / s : r * s; }
+ return (flo_t) (neg ? -r : r); }
+
 // `/` over bignums: exact when b divides a, else a float; a zero divisor screened by the caller
 struct g *big_quot_true(struct g *g) {
  word a = g->sp[0], b = g->sp[1];
@@ -432,7 +445,7 @@ struct g *big_quot_true(struct g *g) {
   while (qn > 0 && q[qn-1] == 0) qn--;
   rn = mag_copy(rmag, q, qn), rneg = nega != negb; }
  if (exact) g->sp[1] = big_canon(&g->hp, rmag, rn, rneg);
- else g->sp[1] = mk_gem(&g->hp, toflo(a) / toflo(b));  // no GC since the re-fetch
+ else g->sp[1] = mk_gem(&g->hp, mag_quot_flo(la, nla, lb, nlb, nega != negb));  // no GC since the re-fetch
  g->sp++;
  g->ip = (union u*) g->ip + 1;
  return g; }
