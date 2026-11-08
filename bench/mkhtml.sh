@@ -193,8 +193,8 @@ crc32 is losing to branches rather than to loads.</p>
 allocator is being worked on. <b>zstd</b> decodes a frame of the same source the inflate row
 reads (<code>src/love/compress/zstd.c</code>), its sequence loop carrying more live values
 than there are registers; <b>raster</b> draws a hundred frames of lore&rsquo;s triangles
-(<code>src/love/raster.c</code>, driven by <code>bench/raster.l</code>, the scene&rsquo;s
-build subtracted), and every lane must answer the host&rsquo;s checksum. Spills are most of
+(<code>src/love/raster.c</code>, driven by <code>bench/raster.l</code>, timed by its
+own clock past the scene&rsquo;s build), and every lane must answer the host&rsquo;s checksum. Spills are most of
 mooncc&rsquo;s gap on both, so these two rows move first when the allocator does.
 <b>net</b> sums every row, so it moves
 whenever a row is added &mdash; the per-row ratios are what compare across time.</p>

@@ -21,6 +21,8 @@
 
    ; (f) at zero operands is f itself, unrun. the unit is the operand, and it is ().
    (rep k f) (k < 1 ? 0 (f (), rep (k - 1) f))
+   ; the reps' ms by the process's own clock, so neither boot nor the setup is timed
+   (timed k f) (clock 0 @ t0 (rep k f, clock 0 - t0))
 
-   (cc-run _) (rep 2000 (_ \ chacha20 cckey non 1 msg), puts "ccrypto chacha: ok\n")
-   (po-run _) (rep 20000 (_ \ poly1305 cckey msg), puts "ccrypto poly1305: ok\n"))
+   (cc-run _) (puts "ccrypto chacha: ok ms \(timed 2000 (_ \ chacha20 cckey non 1 msg))\n")
+   (po-run _) (puts "ccrypto poly1305: ok ms \(timed 20000 (_ \ poly1305 cckey msg))\n"))

@@ -10,7 +10,7 @@
 #   sha256            and an array beside scalars. work the tree actually waits on.
 #   zstd raster       the two the register allocator is being worked on against: zstd's
 #                     sequence loop (cnifs.l) and lore's facets (bench/raster.l), its
-#                     scene build subtracted and its sum checked against the host love's
+#                     frames on its own clock and its sum checked against the host love's
 # the lanes, all three static, which is the point of the pairing:
 #   mooncc            love's own C compiler, run out of the shipped artifact's mooncc verb
 #   gcc-musl          the same units at the host's -O2 cflags through the musl wrappers,
@@ -32,6 +32,9 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 # a distro's ccache shim would clock a cache hit, and mooncc has no cache to hit
 export CCACHE_DISABLE=1
+# one thread in every lane: the pool widens by what each build detects of the box, so a
+# lane that fans out would be timed against one that does not -- this table times codegen
+export LOVE_THREADS=1
 
 # common.mk's `t`, byte for byte: the three front-loaded, then the rest in byte order
 # (glaze-x86 out -- it wants emit.l ahead of it and runs native under its own guard)
@@ -116,19 +119,23 @@ corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# a driver's run time, boot subtracted the same way; the reps are fixed in the .l.
+# a driver's own reading: the row's reps timed inside the process (its "ms N" after the
+# sentinel), median of SAMPLES runs. a whole-process wall less a boot run buried a second of
+# work under five of egg-boot, and a loaded box swung the difference past the row itself.
 # no sentinel is dnf: a lane that answered nothing must not be timed as if it were fast.
 CRYPTO=$R/bench/ccrypto.l
 NIFS=$R/bench/cnifs.l
+inmed() { # $1=command $2=sed pattern taking the ms ; the median of SAMPLES readings, or dnf
+  i=0; while [ "$i" -lt "$SAMPLES" ]; do
+    out=$(eval "$1" 2>&1) || { echo dnf; return; }
+    ! printf '%s' "$out" | grep -q '^;; missing' || { echo dnf; return; }   # a missing nif times nothing
+    v=$(printf '%s' "$out" | sed -nE "$2")
+    [ -n "$v" ] || { echo dnf; return; }
+    echo "$v"; i=$((i+1)); done | sort -n | awk '/dnf/{d=1} {v[NR]=$0} END{if (d) print "dnf"; else print v[int((NR+1)/2)]}'
+}
 drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
-  bin=$1; df=$2; drv=$3
-  { cat "$df"; echo "$drv"; } > "$WORK/drv.run.l"
-  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/drv.run.l" 2>&1) || { echo dnf; return; }
-  printf '%s' "$out" | grep -q "$4" || { echo dnf; return; }
-  ! printf '%s' "$out" | grep -q '^;; missing' || { echo dnf; return; }   # a missing nif times nothing
-  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/drv.run.l")
-  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
-  awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
+  { cat "$2"; echo "$3"; } > "$WORK/drv.run.l"
+  inmed "LOVE_NO_IMAGE=1 timeout $TIMEOUT $1 < $WORK/drv.run.l" "s/.*$4 ms ([0-9]+).*/\\1/p"
 }
 
 # the inflate row's input, laid by the host love: src/apps/gz.l is a module and the lane
@@ -138,21 +145,18 @@ ZST=$WORK/bench.zst
 INFN=$(cd "$R" && out/love bench/ccgen.l src/love/love.c "$INF" "$ZST" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
-# the raster row: FRAMES frames less a run of none, so the scene the love code builds is not
-# timed. the host love's sum is the answer a lane must give; a miscompile is dnf, not a row
+# the raster row: FRAMES frames by raster.l's own clock, so the scene the love code builds
+# is not timed. the host love's sum is the answer a lane must give; a miscompile is dnf
 RASTER=$R/bench/raster.l
 FRAMES=100
 RSUM=$(cd "$R" && RASTER_REPS=1 out/love "$RASTER" 2>/dev/null | sed -nE 's/.*sum ([0-9-]+) .*/\1/p')
 rast_ms() { # $1=binpath
-  bin=$1
-  out=$(RASTER_REPS=1 LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$RASTER" 2>&1) || { echo dnf; return; }
+  out=$(RASTER_REPS=1 LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" < "$RASTER" 2>&1) || { echo dnf; return; }
   [ -n "$RSUM" ] && printf '%s' "$out" | grep -q "sum $RSUM " || { echo dnf; return; }
-  full=$(med "RASTER_REPS=$FRAMES LOVE_NO_IMAGE=1 $bin < $RASTER")
-  none=$(med "RASTER_REPS=0 LOVE_NO_IMAGE=1 $bin < $RASTER")
-  awk -v f="$full" -v b="$none" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
+  inmed "RASTER_REPS=$FRAMES LOVE_NO_IMAGE=1 timeout $TIMEOUT $1 < $RASTER" 's/.*tot ([0-9]+).*/\1/p'
 }
 
-# one lane: build timed once, verified, then every row with boot subtracted
+# one lane: build timed once, verified, then every row by its own reading
 lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   lbl=$1; bld=$2; bin=$3
   bt=$(wall "$bld '$bin' '$4'")
@@ -163,7 +167,7 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   crow chacha   "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(cc-run ())' 'ccrypto chacha: ok')"
   crow poly1305 "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(po-run ())' 'ccrypto poly1305: ok')"
   if [ "$INFN" -gt 0 ]; then
-    crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 300)" 'cnifs inflate: ok')"
+    crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 900)" 'cnifs inflate: ok')"
   else echo "inflate $lbl dnf"; fi
   if [ "$INFN" -gt 0 ]; then
     crow zstd "$lbl" "$(drv_ms "$bin" "$NIFS" "(zst-run \"$ZST\" $INFN 1500)" 'cnifs zstd: ok')"
