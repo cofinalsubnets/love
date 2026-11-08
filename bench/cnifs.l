@@ -3,10 +3,12 @@
 ;   inflate   src/love/compress/gz.c: bit reader, table lookup per symbol, byte copy -- the branchiest
 ;   crc32     src/love/crypto/hash.c: eight independent table lookups per eight bytes, no branches
 ;   sha256    src/love/crypto/hash.c: a 64-word schedule array plus eight scalars, between the two
+;   zstd      src/love/compress/zstd.c: fse and huffman tables, a bit reader in a struct, the
+;             sequence loop the register allocator works hardest on
 ; these run the nifs, never src/apps/gz.l's love twins -- this table times C compilers. the binary
 ; under test lives in out/bench/cc where the module walk misses lib/, so everything is built from
-; the core, and the inflate stream is laid beside it by ccgen.l through the host love.
-(borrow '(posix hashes gz))
+; the core, and the inflate and zstd inputs are laid beside it by ccgen.l through the host love.
+(borrow '(posix hashes gz zstd))
 (:
    ; varied bytes: crc32 indexes its tables with the data, so an all-NUL message would read one
    ; entry of each. built small and doubled, since a love loop over the whole megabyte costs more
@@ -29,4 +31,10 @@
     (: q (open p "r")
        _ (q ? 0 (say err "cnifs: no stream\n", quit 1))
        d (slurp q + "")
-       (close q, rep k (_ \ inflate d n), puts "cnifs inflate: ok\n")))
+       (close q, rep k (_ \ inflate d n), puts "cnifs inflate: ok\n"))
+   ; a frame of the same source; a wrong decode is dnf, not a fast row
+   (zst-run p n k)
+    (: q (open p "r")
+       _ (q ? 0 (say err "cnifs: no frame\n", quit 1))
+       d (slurp q + "")
+       (close q, rep k (_ \ zstd-d d), #(zstd-d d) = n ? (puts "cnifs zstd: ok\n") 0)))

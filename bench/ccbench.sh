@@ -8,6 +8,9 @@
 #                     residency shows -- the pair is the reading, not either row
 #   inflate crc32     the heavy nifs (bench/cnifs.l), three shapes: branchy, branchless,
 #   sha256            and an array beside scalars. work the tree actually waits on.
+#   zstd raster       the two the register allocator is being worked on against: zstd's
+#                     sequence loop (cnifs.l) and lore's facets (bench/raster.l), its
+#                     scene build subtracted and its sum checked against the host love's
 # the lanes, all three static, which is the point of the pairing:
 #   mooncc            love's own C compiler, run out of the shipped artifact's mooncc verb
 #   gcc-musl          the same units at the host's -O2 cflags through the musl wrappers,
@@ -76,12 +79,14 @@ SEED=$R/out/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
+  # each unit by its path from the root, as the -I dirs are: mooncc's #pragma once keys on
+  # the spelling, so an absolute cb.c and a relative -Isrc/love read love.h twice
   ( cd "$R" || exit 1
     for f in $LOVE_C; do b=$(basename "$f" .c)
       case $f in */moonlibc/*) continue;; esac       # the link pulls moonlibc by need
-      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "${f#$R/}" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "${f#$R/}" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link pulls members by need, so ccsize and ccdead read
     # mooncc's libc off the binary's complement instead
     for f in src/apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
@@ -127,10 +132,25 @@ drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
 }
 
 # the inflate row's input, laid by the host love: src/apps/gz.l is a module and the lane
-# binaries have no module path. INFN is the inflated size; 0 leaves that one row dnf.
+# binaries have no module path. INFN is the inflated size; 0 leaves the inflate and zstd rows dnf.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && out/love bench/ccgen.l src/love/love.c "$INF" 2>/dev/null)
+ZST=$WORK/bench.zst
+INFN=$(cd "$R" && out/love bench/ccgen.l src/love/love.c "$INF" "$ZST" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
+
+# the raster row: FRAMES frames less a run of none, so the scene the love code builds is not
+# timed. the host love's sum is the answer a lane must give; a miscompile is dnf, not a row
+RASTER=$R/bench/raster.l
+FRAMES=100
+RSUM=$(cd "$R" && RASTER_REPS=1 out/love "$RASTER" 2>/dev/null | sed -nE 's/.*sum ([0-9-]+) .*/\1/p')
+rast_ms() { # $1=binpath
+  bin=$1
+  out=$(RASTER_REPS=1 LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$RASTER" 2>&1) || { echo dnf; return; }
+  [ -n "$RSUM" ] && printf '%s' "$out" | grep -q "sum $RSUM " || { echo dnf; return; }
+  full=$(med "RASTER_REPS=$FRAMES LOVE_NO_IMAGE=1 $bin < $RASTER")
+  none=$(med "RASTER_REPS=0 LOVE_NO_IMAGE=1 $bin < $RASTER")
+  awk -v f="$full" -v b="$none" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
+}
 
 # one lane: build timed once, verified, then every row with boot subtracted
 lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
@@ -145,11 +165,15 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   if [ "$INFN" -gt 0 ]; then
     crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 300)" 'cnifs inflate: ok')"
   else echo "inflate $lbl dnf"; fi
+  if [ "$INFN" -gt 0 ]; then
+    crow zstd "$lbl" "$(drv_ms "$bin" "$NIFS" "(zst-run \"$ZST\" $INFN 1500)" 'cnifs zstd: ok')"
+  else echo "zstd $lbl dnf"; fi
+  crow raster   "$lbl" "$(rast_ms "$bin")"
   crow crc32    "$lbl" "$(drv_ms "$bin" "$NIFS" '(crc-run ())' 'cnifs crc32: ok')"
   crow sha256   "$lbl" "$(drv_ms "$bin" "$NIFS" '(sha-run ())' 'cnifs sha256: ok')"
 }
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
-dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo "$ph $1 dnf"; done; }
+dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256 zstd raster; do echo "$ph $1 dnf"; done; }
 
 # a broken harness renders as a well-formed table of dnf. one missing compiler is a
 # skip; zero live lanes is this script's own fault, and it exits 1 at the foot.
