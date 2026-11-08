@@ -1426,15 +1426,15 @@
                      (acc + [['ld1 'r2 'r0 off] ['st1 'r1 off 'r2]]))
           acc))
    ; ..their -mstrict-align twins, by the chunks an a-aligned run carries
-   (bcopya off sz a) (foldl (acc \ [p k] \ acc + [[(uldop k) 'r2 'r0 (off + p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]])
-                            () (alchunks sz a))
-   (bseta off sz a) (foldl (acc \ [p k] \ acc + [[(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]]) () (alchunks sz a))
+   (bcopya g off sz a) (foldl (acc \ [p k] \ acc + [[(uldop k) 'r2 'r0 (off + p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]])
+                            () (alchunks sz (salk g a)))
+   (bseta g off sz a) (foldl (acc \ [p k] \ acc + [[(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]]) () (alchunks sz (salk g a)))
    ; the alignment a value's address carries: its face's mark, else its type's
    (val9 g v) (ua? v ? (vma v) (tal g (vty v)))
    ; a struct that rides registers by the word, which its alignment cannot carry
-   (salw? g ty) (sal? g && tal g ty < 8)
+   (salw? g ty) (a64? g && sal? g && tal g ty < 8)
    ; a pointer's mark from a misaligned array (sal only): the alignment its pointee is short of
-   (pal g ty) (sal? g && two? (drop 2 ty) && (ty 2) < tal g <>ty ? (ty 2) ())
+   (pal g ty) (sal? g && two? (drop 2 ty) && (ty 2) < salk g (tal g <>ty) ? (ty 2) ())
    ; a struct type as the value v's address aligns it: v's mark, when it carries one
    (amark ty v) (stru? ty && stru? (vty v) && two? (drop 2 (vty v)) ? [<ty <>ty ((vty v) 2)] ty)
    (w2 g ty)                                       ; a 9..16B aggregate at r0: its two words' loads into r1
@@ -1477,7 +1477,7 @@
                           ((c9 & 255) * (8 = wsize g ? 72340172838076673 16843009) @ v9
                              (mkv '(ptr void) 'r0 $
                               relean (tor0 g dv) + [['mov 'r1 'r0] ['li 'r2 v9]] +
-                              (sal? g ? (bseta 0 n9 (memal g env <args)) (bset g 0 n9 ()))))))))
+                              (sal? g ? (bseta g 0 n9 (memal g env <args)) (bset g 0 n9 ()))))))))
              (memnm? g bi "memcpy")
               ; the destination parks in a pool seat, never on the machine stack (sp motion costs
               ; a musttail fn its tail); a pool seat cannot survive a call, so a callish arg declines
@@ -1497,7 +1497,7 @@
                                    (mkv '(ptr void) 'r0 $
                                     relean fd + [['mov rd 'r0]] + relean (tor0 g sv) +
                                     [['mov 'r1 rd]]
-                                    + (sal? g ? (bcopya 0 n9 (min (memal g env <args) (memal g env <>args))) (bcopy g 0 n9 ()))
+                                    + (sal? g ? (bcopya g 0 n9 (min (memal g env <args) (memal g env <>args))) (bcopy g 0 n9 ()))
                                     + '((mov r0 r1))))))))))
              'no)))
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
@@ -1858,8 +1858,10 @@
            (stru? ty) (mkv (ua? r ? [<ty <>ty (vma r)] ty) 'r0 (fs + mata b o))    ; a struct value is its address (the pair reps read through it)
            (ua? r)                                    ; a misaligned member: by its chunks
             (? (flo? ty) (ntmp g 'double @ tm
-                            (mkv (fvt g ty) 'r0 (fs + ldal 'r0 b o (tsz g ty) (vma r) + [['st 'r4 tm 'r0]] + fldv g ty 'f0 'r4 tm)))
-               (pair? g ty) (uanl g)
+                            (mkv (fvt g ty) 'r0 (fs + ldalw g b o (tsz g ty) (vma r) tm + fldv g ty 'f0 'r4 tm)))
+               (pair? g ty)                           ; the high word gathers in r1 first, off a base that is not r1
+                (: b2 (b = 'r1 ? 'r0 b) a (vma r)
+                   (mkv ty 'r0 (fs + (b = 'r1 ? ['(mov r0 r1)] ()) + ldal 'r1 b2 (o + 4) 4 a + ldal 'r0 b2 o 4 a)))
                (d128? ty)                             ; the high half gathers in r1 first, off a base that is not r1
                 (: b2 (b = 'r1 ? 'r0 b) a (vma r)
                    (mkv ty 'r0 (fs + (b = 'r1 ? ['(mov r0 r1)] ()) + ldal 'r1 b2 (o + 8) 8 a + ldal 'r0 b2 o 8 a + ['(mov r2 r1)])))
@@ -2679,20 +2681,22 @@
                           (gcplx? (vty lv) && gcplx? (vty rv) &&
                            !(<>(vty lv) = <>(vty rv)) ?
                              (cxcopy g (vty rv))
-                             (sal? g ? (bcopya 0 (tsz g (vty lv)) al) (bcopy g 0 (tsz g (vty lv)) ()))))))
+                             (sal? g ? (bcopya g 0 (tsz g (vty lv)) al) (bcopy g 0 (tsz g (vty lv)) ()))))))
               ; a misaligned member (-mstrict-align): the value lands on the protocol, then by chunks
               (ua? lv0 && !(bitf? (vty lv0)))
                (: ty (vty lv0) n (tsz g ty) a (vma lv0)
-                  (? (pair? g ty || d128? ty && !(w128? g)) (uanl g)
+                  (? (d128? ty && !(w128? g)) (uanl g)
                      (: lv (matv g lv0)
                         r (cgexpr g env rhs ())
                         (? (bad? r) 'bad
+                           (pair? g ty)
+                            (mkv ty 'r0 (pk g (vfs lv) (asll g r) 'r2 + stal 'r2 0 4 a 'r0 + stal 'r2 4 4 a 'r1))
                            (d128? ty)
                             (mkv ty 'r0 (pk g (vfs lv) (as128 g r) 'r1 + stal 'r1 0 8 a 'r0 + stal 'r1 8 8 a 'r2))
                            (flo? ty)
                             (ntmp g 'double @ tm
                                (mkv (fvt g ty) 'r0 (vfs lv + spush 'r0 + asfty g r ty + fstv g ty 'r4 tm 'f0
-                                                 + [[(uldop n) 'r0 'r4 tm]] + spop 'r1 + stal 'r1 0 n a 'r0)))
+                                                 + spop 'r1 + stalw g 'r1 0 n a tm)))
                            (mkv ty 'r0 (pk g (vfs lv) (asintt g r ty) 'r1 + cvt ty 'r0
                                         + stal 'r1 0 n a 'r0))))))
               (flo? (vty lv0))                     ; a float/double store (value in f0; narrow if float)
@@ -2827,7 +2831,14 @@
                  stp (ptr? ty ? (tsz g <>ty) 1)
                  (? (arr? ty) 'bad
                     (ua? lv0 && !(bitf? ty))        ; a misaligned member: old by chunks, the step back by chunks
-                     (? (flo? ty || pair? g ty || d128? ty) (uanl g)
+                     (? (flo? ty || d128? ty) (uanl g)
+                        (pair? g ty)                 ; the address and the old pair ride the stack past the step
+                         (: a (vma lv0) sv (stp * step)
+                            (matv g lv0 @ lv
+                               (mkv ty 'r0 (vfs lv + spush 'r0 + ldal 'r1 'r0 4 4 a + ldal 'r0 'r0 0 4 a + spush 'r0 + spush 'r1
+                                            + [['li 'r2 (sv & 4294967295)] ['li 'r3 (sv < 0 ? 4294967295 0)] '(adds r0 r0 r2) '(adc r1 r1 r3)
+                                               '(ld r2 sp 32)]
+                                            + stal 'r2 0 4 a 'r0 + stal 'r2 4 4 a 'r1 + spop 'r1 + spop 'r0 + ['(add sp sp 16)]))))
                         (: n (tsz g ty) a (vma lv0)
                            (matv g lv0 @ lv
                               (mkv ty 'r0 (vfs lv + ['(mov r1 r0)] + ldal 'r0 'r1 0 n a + cvt ty 'r0
@@ -3407,7 +3418,7 @@
                        (refm? g aty)
                         (: off (ntmp g aty)
                            cp (tor0 g a + [['lea 'r1 'r4 off]]
-                               + (sal? g ? (bcopya 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
+                               + (sal? g ? (bcopya g 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
                                + [['lea 'r0 'r4 off]])
                            (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g 'g gpc cp . acc))
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] (cp + [['st 'sp (8 * ovc) 'r0]])] . acc))))
@@ -3684,7 +3695,7 @@
                                     spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) + [['ld pk 'r4 pko] ['callr pk]]
                                     + fres + (sr6 ? (srback g sroff srg) ()) + clean + relods)))
                       ; i386: a pointer off a global is called where it lies
-                      (ia32? g && two? (gword (vfs hr)))
+                      (ia32? g && two? (gword (vfs hr)) && !(x86ki? g))
                        (mkv (fnret (vty hr)) 'r0 (pf + spills + ezf + pops + setal + (sr6 ? (srpass g sroff srg) ()) +
                                  [['callm 'rip (gword (vfs hr))]] + fres +
                                  rext g (fnret (vty hr)) + pairin g (fnret (vty hr)) + (sr6 ? (srback g sroff srg) ()) + clean + relods))
@@ -4732,7 +4743,7 @@
           (!(two? sf && <sf = 'sub && sf 1 = 'sp && sf 2 = 'sp && charm? K) ? fs
              (strip (drop 5 fs) @ r (r = 'no ? fs (<fs . r)))))))
    (unframe g fs)
-    (cz g 'unframe fs (: a64 (a64? g)
+    (cz g 'unframe fs (kfp? g ? fs (: a64 (a64? g)
        fb (a64 ? 'fp 'r4)
        pro (a64 ? (epim? >fs pro-a64) (pro4? fs))
        sf (fs (a64 ? 4 3))
@@ -4841,7 +4852,7 @@
                                          f)
                                       (rw >l D))))))))
              body2 (r3f ? (sav3 . body) body)
-             (<fs . (vs ? (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0)))))))
+             (<fs . (vs ? (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0))))))))
 
    ; IR constant propagation: a straight-line pass tracking constants (the word's signed value) in
    ; registers, frame slots and stack cells, folding them to li's; an unknown op invalidates everything
@@ -5388,7 +5399,7 @@
    ; x64: (ld X b o) .. (jmpr X) -> (jmpm b o), the load sinking past forms that leave X and b alone
    ; (b's own add folds into o). never off sp or fp, and X is no argument register
    (jmpm g fs)
-    (cz g 'jmpm fs (!(x64? g) || x86k? g 'thk || x86k? g 'ibr ? fs
+    (cz g 'jmpm fs (!(x64? g) || x86k? g 'thk || x86k? g 'thki || x86k? g 'ibr ? fs
        (: ar (argr g)
           (sink X b o l acc n)                        ; -> [forms-between o' rest] | ()
            (!(two? l) || 8 < n ? ()
@@ -5412,19 +5423,27 @@
                           (f . go >l))))
           (go fs))))
    ; -mindirect-branch=thunk-extern and -mfunction-return=thunk-extern, last over x64's code: an
-   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk
+   ; indirect call or jump goes by the kernel's thunk for its register, a return by its return thunk.
+   ; -mretpoline lays the thunk at the site instead, on i386 too: the target over the return
+   ; address, the speculated return caught in a pause loop
    x86rn {'r0 "rax" 'r1 "rcx" 'r2 "rdx" 'r3 "rbx" 'r4 "rbp" 'r5 "rsi" 'r6 "rdi" 'r7 "r8"
           'r8 "r9" 'r9 "r10" 'r10 "r11" 'r11 "r12" 'r12 "r13" 'r13 "r14" 'r14 "r15"}
    (thunks g fs)
-    (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs)
+    (cz g 'thunks fs (: thk (x86k? g 'thk) rth (x86k? g 'rth) cs (x86k? g 'cs) thki (x86ki? g)
        (via op r) (: s (intern "__x86_indirect_thunk_\(x86rn r)")
                      ((cs && elem r '(r7 r8 r9 r10 r11 r12 r13 r14) ? ['(raw (46))]) + [[op s]]))
+       (rjmp r) (nlab g ".rp" @ L0 (nlab g ".rp" @ L1
+                   [['call L1] ['label L0] '(raw (243 144)) '(raw (15 174 232)) ['jmp L0]
+                    ['label L1] ['st 'sp 0 r] '(ret)]))
+       (rcall r) (nlab g ".rp" @ L2 (nlab g ".rp" @ L3 ([['jmp L2] ['label L3]] + rjmp r + [['label L2] ['call L3]])))
        (one f) (? !(two? f) [f]
+                  (thki && <f = 'callr) (rcall <>f)
+                  (thki && elem <f '(jmpr jmpt)) (rjmp <>f)
                   (thk && <f = 'callr) (via 'call <>f)
                   (thk && elem <f '(jmpr jmpt)) (via 'jmp <>f)
                   (rth && f = '(ret)) [['jmp '__x86_return_thunk]]
                   [f])
-       (thk || rth ? (catmap one fs) fs)))
+       (thk || rth || thki ? (catmap one fs) fs)))
    ; an early exit lays last: (br cc L) run (label L) -> (br !cc K) (label L) .., (label K) run after
    ; the fn. the run may hold labels, no branch; a cold L (__builtin_expect(c, 0)) lets the run past
    ; its last test of L branch, and one that falls into L jumps there. a lone (jmp X) run is the br, to X
@@ -5578,9 +5597,11 @@
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
    (bp? g k) (a64? g && elem k <>(g 'mo))
-   ; -mstrict-align (a64): no access wider than its known alignment; a packed member's face carries
-   ; its alignment and goes by chunks, r2 gathers and r3 shifts, neither ever a face's base
-   (sal? g) (a64? g && <(g 'mo))
+   ; -mstrict-align (a64), and always on v6-M, which faults on any unaligned word: no access wider
+   ; than its known alignment; a packed member's face carries its alignment and goes by chunks, r2
+   ; gathers and r3 shifts, neither ever a face's base
+   (sal? g) (a64? g && <(g 'mo) || v6m? g)
+   (salk g n) (v6m? g ? (min n 4) n)                ; the alignment an n-aligned access needs: v6-M's widest is a word
    ; -mregparm=n (i386): the first n argument words ride eax edx ecx
    (rpn g) (ia32? g ? (drop 2 (g 'mo) @ r (two? r && charm? <r ? <r 0)) 0)
    ; -march= a cpu before the 686: no cmov
@@ -5595,7 +5616,10 @@
    (avz? g) (drop 11 (g 'mo) @ r (two? r && <r))   ; -ftrivial-auto-var-init=zero
    (ibt? g) (x64t? g && drop 12 (g 'mo) @ r (two? r && <r))   ; -fcf-protection=branch: x86's endbr pads
    (sspg g) (drop 15 (g 'mo) @ r (two? r ? <r))   ; -fstack-protector's guard (mode reg symbol offset)
-   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk rth ibr cs
+   (x86k? g k) (x64? g && drop 16 (g 'mo) @ r (two? r && elem k <r))   ; the x86-64 kernel's asks: sa8 nal thk thki rth ibr cs
+   (xkask? g k) (drop 16 (g 'mo) @ r (two? r && elem k <r))           ; an ask by its word, any target
+   (x86ki? g) ((x64? g || ia32? g) && xkask? g 'thki)                   ; -mretpoline, either width
+   (kfp? g) (xkask? g 'kfp)                                              ; -fno-omit-frame-pointer: the link stays
    (sa4? g) (ia32? g && drop 16 (g 'mo) @ r (two? r && elem 'sa4 <r))   ; i386 -mstack-alignment=4
    (npic? g) (drop 17 (g 'mo) @ r (two? r && <r))   ; -fno-pie said: no load base moves the image
    (lowb x) (x & (0 - x))                            ; the alignment an offset keeps (0 for 0)
@@ -5616,6 +5640,9 @@
            () (alchunks n a))
    ; a bitfield's unit, n bytes at b+o: one word as its type says, or by chunks when packed (its
    ; own n bytes, every one exact) or misaligned (a, the alignment its face carries)
+   ; n bytes at b+o by chunks to the frame word(s) at tm, and back: a float wider than a register
+   (ldalw g b o n a tm) (catmap (p \ ldal 'r2 b (o + p) (min (wsize g) (n - p)) a + [['st 'r4 (tm + p) 'r2]]) (filter (p \ p % wsize g = 0) ^n))
+   (stalw g b o n a tm) (catmap (p \ (min (wsize g) (n - p) @ k ([(uldop k) 'r2 'r4 (tm + p)] . stal b (o + p) k a 'r2))) (filter (p \ p % wsize g = 0) ^n))
    (bfpk? bt) (two? (drop 4 bt))
    (bfld g bt d b o a) (? (bfpk? bt || a) (ldal d b o (tsz g bt) (a ? a 8)) [[(uldop (tsz g bt)) d b o]])
    (bfst g bt b o a v) (? (bfpk? bt || a) (stal b o (tsz g bt) (a ? a 8) v) [[(stop <>bt) b o v]])
@@ -5628,7 +5655,7 @@
           ba (ua? r ? (vma r) (tal g (vty r)))
           lb (lowb <fm) e (lb = 0 ? ba (min ba lb))
           nd (stru? ty || arr? ty ? (tal g ty) (tsz g ty))
-          (e < nd ? (mkma ty (vmb v) (vmo v) (vfs v) e) v)))
+          (e < salk g nd ? (mkma ty (vmb v) (vmo v) (vfs v) e) v)))
    (uanl g) (nolane g "under -mstrict-align, a misaligned member of this kind")
    bp-paci '(raw (63 35 3 213))                     ; paciasp
    bp-auti '(raw (191 35 3 213))                    ; autiasp
@@ -5688,7 +5715,7 @@
    ; the edges leaving that region, one stub each, and its exits drop their restores. the frame is needed by
    ; an sp operand, a call, push/pop, or a write of a saved register; a label reached from outside is outside
    (swrap g fs)
-    (cz g 'swrap fs (: f1 (two? fs && two? >fs ? <>fs)
+    (cz g 'swrap fs (kfp? g ? fs (: f1 (two? fs && two? >fs ? <>fs)
        N (two? f1 && <f1 = 'sub && f1 1 = 'sp && f1 2 = 'sp && charm? (f1 3) ? (f1 3))
        (sv l acc) (two? l && two? <l && <<l = 'st && <l 1 = 'sp && charm? (<l 2) && nom? (<l 3) ?
                      (sv >l ([(<l 2) (<l 3)] . acc)) [(rev acc) l])
@@ -5755,7 +5782,7 @@
                              (: a1 (elem i js && !(two? f && <f = 'label) ? (['label (tl i)] . acc) acc)
                                 (emit (i + 1) (f . a1))))))
                    stubs (foldl (a \ j \ a + [['label (sl j)]] + pro + [['jmp (tl j)]]) () jb)
-                   ((<fs . emit 0 ()) + stubs)))))))
+                   ((<fs . emit 0 ()) + stubs))))))))
    ; the arrival rename: a call-free fn's param homes (mov H A) rename to A where A is never otherwise touched
    (unhome g fs)
     (cz g 'unhome fs (: ar (argr g) hr (hregs g)
@@ -8068,11 +8095,11 @@
    (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
     (cgexpr g env val () @ r
        (? (bad? r) 'bad
-          (sal? g && (lowb off @ b (0 < b && b < tsz g ty)))   ; a packed member: by its chunks
-           (? (pair? g ty || d128? ty && !(w128? g)) (uanl g)
+          (sal? g && (lowb off @ b (0 < b && b < salk g (tsz g ty))))   ; a packed member: by its chunks
+           (? (d128? ty && !(w128? g)) (uanl g)
+              (pair? g ty) (asll g r + stal 'r4 off 4 (lowb off) 'r0 + stal 'r4 (off + 4) 4 (lowb (off + 4)) 'r1)
               (d128? ty) (as128 g r + stal 'r4 off 8 (lowb off) 'r0 + stal 'r4 (off + 8) 8 (lowb (off + 8)) 'r2)
-              (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
-                                                + stal 'r4 off (tsz g ty) (lowb off) 'r0))
+              (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + stalw g 'r4 off (tsz g ty) (lowb off) tm))
               (asintt g r ty + cvt ty 'r0 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
           (d128? ty && w128? g) (as128 g r + wst g 'r4 off)   ; both halves: a union's .full = v
           (flo? ty) (asfty g r ty + fstv g ty 'r4 off 'f0)
@@ -8116,7 +8143,7 @@
    (cgbffill g env off bt val)
     (cgexpr g env val () @ r
        (bad? r ? 'bad
-          (: uty <>bt bitoff <>>bt a (sal? g && lowb off < tsz g bt ? (lowb off) ())
+          (: uty <>bt bitoff <>>bt a (sal? g && lowb off < salk g (tsz g bt) ? (lowb off) ())
              mask ((1 << <>>>bt) - 1) cmask (0 - (mask << bitoff) - 1)
              (? (bfwide? g bt) (bfnl g)
              (asintt g r uty
@@ -8651,6 +8678,7 @@
                       120 (x64? g ? 'fpick 'bad)               ; x64's x: an xmm register
                       97 (x86 ? 'r0 'bad) 98 (x86 ? 'r3 'bad) 99 (x86 ? 'r1 'bad)
                       100 (x86 ? 'r2 'bad) 83 (x86 ? 'r5 'bad) 68 (x86 ? 'r6 'bad)
+                      65 (ia32? g ? 'apair 'bad)               ; i386's A: edx:eax
                       (elem c0 asmimm ? 'imm 'bad))
           (c9 = "Nd" || c9 = "dN") (x86 ? 'r2 'bad)
           ; several register letters ("bdS"): whichever of them is free, ('one r..)
@@ -8917,6 +8945,8 @@
        (pinof k e) (k @ 'pick (asmvpin g env e @ p (nom? p ? p k)) k)
        ; a 64-bit register operand on thumb rides a pair, %Q its low register and %R its high
        (pr? e2) (t32? g && elem <e2 '(o x i) && e2 3 = 8)
+       ; i386's A: a 64-bit value rides edx:eax, a narrower one eax
+       (apw k e) (k = 'apair && asmw g env e < 8 ? 'r0 k)
        ; x64's memory operand at an address constant is `sym+k(%rip)`, as gcc spells it, and takes no
        ; register: paravirt's `call *%[op]` must stay the six-byte `ff 15` the kernel patches. a
        ; segment's operand keeps the register: holo lays no %gs: store at a rip address
@@ -8939,7 +8969,7 @@
                  (bad? k || elem k '(imm either) || two? k && <k != 'one) (asmno g "an asm output constrained \"\(c)\"")
                  ; a memory output is the asm's own store: its address rides a register, as "m" in
                  (k = 'mem) (oconv >l ((riptext <><l @ v (v ? ['g v 0 0] ['b 'pick ['addr <><l] 0])) . acc))
-                 (oconv >l ([(h @ 43 'x 'o) (pinof k <><l) <><l (asmw g env <><l)] . acc)))))
+                 (oconv >l ([(h @ 43 'x 'o) (pinof (apw k <><l) <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (!(two? l) ? (rev acc)
            (: k (asmc g <<l) e <><l
@@ -8948,7 +8978,7 @@
                    'imm (v != 'no ? (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
                    'either ((a64? g ? (cint? v && a64fit? <<l v) (charm? v)) ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
                    'mem (iconv >l ((riptext e @ v (v ? ['g v 0 0] ['b 'pick ['addr e] 0])) . acc))
-                   (iconv >l (['i (pinof k e) e (asmw g env e)] . acc)))))
+                   (iconv >l (['i (pinof (apw k e) e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
        is9 (iconv <>>>s ())
        ; an input pinned where an output is ("=a"(n) : "a"(0), cpuid's) is that output's tie
@@ -8962,8 +8992,10 @@
               (!(two? l) ? acc
                  (: e2 <l k <>e2
                     (? (elem <e2 '(m k g) || elem k '(pick fpick) || two? k) (pinset >l acc)
+                       (k = 'apair) (elem 'r0 acc || elem 'r2 acc ? 'bad (pinset >l ('apair . 'r0 . 'r2 . acc)))
                        !(asmreg? g k) 'bad
-                       (elem k acc) 'bad
+                       ; an input may take a half of the A pair it is read before
+                       (elem k acc) (<e2 = 'i && elem k '(r0 r2) && elem 'apair acc && !(elem ['i k] acc) ? (pinset >l (['i k] . acc)) 'bad)
                        (pinset >l (k . acc)))))
              pinned (pinset ops9 ())
              (bad? pinned ? (asmno g "an asm register pinned twice, or one no operand may take")
@@ -8976,6 +9008,7 @@
                               (filter (r9 \ elem r9 >k) fr @ c9
                                  (two? c9 ? (assign >l (filter (r9 \ r9 != <c9) fr) (<c9 . acc)) 'bad))
                              (two? k) (<>k < #acc ? (rev acc <>k @ r9 (assign >l fr (r9 . acc))) 'bad)
+                             (k = 'apair) (assign >l fr (['r0 'r2] . acc))
                              (k = 'pick && pr? e2)          ; a thumb pair: two registers, lo then hi
                               (two? >fr ? (assign >l >>fr ([<fr <>fr] . acc)) 'bad)
                              (k = 'pick)
@@ -9021,7 +9054,11 @@
                          (rtext a9 w) (md \ (? (two? a9) (md @ (0 || 81) (gas-reg tgt <a9 4 0) 82 (gas-reg tgt <>a9 4 0) 'bad)
                                               (elem md '(81 82)) 'bad
                                               (md = 108 || elem md '(115 104 100)) 'bad (md = 97 && !neutral?) (gas-mem tgt a9) neutral? (md ? 'bad (peep asmnames a9 "r?")) (gas-reg tgt a9 w md)))
-                         (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v)) (gas-imm tgt v md)))
+                         (itext v) (md \ (? (md = 108 || elem md '(115 104 100)) 'bad neutral? (md || !(cint? v) ? 'bad (show v))
+                                               ; x64's %a of an address constant is rip-relative, as gcc spells it, but under a
+                                               ; segment, which holo lays only absolute; %P and %c stay absolute
+                                               (md = 97 && tgt = 'x64 && !(cint? v) && findsub tmpl "s:" < 0) "\(v)(%rip)"
+                                               (gas-imm tgt v md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
                          ; a v register: plain is v, s h d b q its scalar views; x64's is xmm, x too
@@ -9582,7 +9619,7 @@
                       (amem? g rt || refm? g rt)                         ; a memory return: fill the caller's temp through
                        (tor0 g r                                         ; the saved hidden pointer, and answer it in rax
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
-                        + (sal? g ? (bcopya 0 (tsz g rt) (tal g (amark rt r))) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
+                        + (sal? g ? (bcopya g 0 (tsz g rt) (tal g (amark rt r))) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
                       (stru? rt || stru? (vty r))                        ; any other composite: no lane
                        (nolane g "no lane for returning this \(tsz g (stru? rt ? rt (vty r)))-byte struct by value\(ontgt g)")
                       (flo? (vty r)) (asintt g r rt + (rt @ 'bool (cvt rt 'r0) ()) + epj)     ; a double value, an int return -> truncate to r0
@@ -10382,6 +10419,11 @@
                 ('dot a fl) (hx a d @ r [<r ['dot <>r fl]])
                 ('addr a) (hx a d @ r [<r ['addr <>r]])
                 ('sexpr . _) [() (hsx e d)]
+                ; a brace's items hoist in order: C sequences them no tighter
+                ('init items) (: rs (map (it \ (it @ ('dfield fl v) (hx v d @ r [<r ['dfield fl <>r]])
+                                                     ('didx n v) (hx v d @ r [<r ['didx n <>r]])
+                                                     _ (hx it d))) items)
+                                 [(catmap (r \ <r) rs) ['init (map (r \ <>r) rs)]])
                 [() e]))
        ; a statement expression splices within itself: its items take calls like a block's, its value's
        ; hoist lands among them
@@ -10770,7 +10812,7 @@
        (peep m k 'none @ 'none (: r (lprop0 g f) _ (pin m k r) r) r9 r9))
    (lprop0 g f)
     (: w64 !(ilp32? g)
-       tak {} tys {}
+       tak {} tys {} sds {}                         ; sds: the block statics
        ; an asm's memory operand takes its name's address, as kprop reads it
        mc (a64? g ? '(81 109 111) '(109 111))       ; a64's Q is memory too
        (mem? c) ((: (go i) (? (#c <= i) () (elem (c i) mc) 1 (go (i + 1)))) 0)
@@ -10778,6 +10820,7 @@
                   (x @ ('addr ('var nm)) (pin tak nm 1, 0)
                        ; a register variable keeps its pin, as kprop keeps it
                        ('decl ps) (foldl (_ \ p \ (pin tys <p <>p, (two? >>>p ? (pin tak <p 1) 0), cen >>p)) 0 ps)
+                       ('sdecl ps) (foldl (_ \ p \ (pin sds <p 1, cen >>p)) 0 ps)
                        ('asm . _) (: _ (foldl (_ \ o \ (mem? <o ? (<>o @ ('var v) (pin tak v 1) 0) 0)) 0 (x 2 + x 3)) (cen <x, cen >x))
                        (cen <x, cen >x)))
        _ (cen (f 3))
@@ -10856,7 +10899,19 @@
                            (nw t <x, nw t >x))))
        wtot {} wdone {} gs {'g 0}
        _ (nw wtot (f 3))
-       (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e ? <>e x)) (map (sub env) x)))
+       (sub env x) (? !(two? x) x (x @ ('var v) (assoc v env @ e (two? e && !(two? >>e) ? <>e x)) (map (sub env) x)))
+       ; a pointer declared at an address constant, &g or an array or a function, is that constant to
+       ; an asm's immediate input alone ("i"(p), rip_rel_ptr's), read before the asm's outputs are
+       (iok? nm) (!(tak nm) && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) && ptr? (peep tys nm ()))
+       (lcl? x) (? !(two? x) () (x @ ('var v) (two? (peep tys v ())) (lcl? <x || lcl? >x)))
+       ; a block static's address is one too: every name in it one of this fn's statics
+       (onlys x) (? !(two? x) 1 (<x = 'var) (sds <>x) (onlys <x && onlys >x))
+       (iaddr e) (!(lcl? e) && (onlys e || (: u0 (g 'undecl) a (imaddr g e) (pin g 'undecl u0, a != 'no))))
+       (imm? c) ((: (go i) (? (#c <= i) () (elem (c i) '(105 110)) 1 (go (i + 1)))) 0)
+       (iop env o) (imm? <o ? (<>o @ ('var v) (assoc v env @ e (two? e && two? >>e ? (<o . <>e . >>o) o)) o) o)
+       (ias env x) (x @ ('asm . _) (map (j \ (j = 3 ? (map (iop env) (x 3)) (x j))) ^#x)
+                        ('expr a) ['expr (ias env a)]
+                        x)
        (vsub nm k x) (? !(two? x) x (x = ['var nm]) ['num k] (map (vsub nm k) x))
        ; x's value past `x = rhs`: one constant whatever x held, in x's own type. an rhs that
        ; reads x is one only through a & or * with a zero
@@ -10894,11 +10949,15 @@
               ws (wrs it ())
               e1 (filter (e \ nelem <e ws) e0)
               n0 (lab2? it ? () ng)
-              it1 (sub e1 (it @ ('switch . _) (swp it (nkill (nws (it 1) ()) n0)) it))
-              ; a block in the run is entered from above, so it starts with the facts
-              it2 (it1 @ ('blk is) ['blk (blk is () n0 ())] (inner it1))
+              it1 (sub e1 (ias e0 (it @ ('switch . _) (swp it (nkill (nws (it 1) ()) n0)) it)))
+              ; a block in the run is entered from above, so it starts with the facts: the not-equal
+              ; ones and the immediates'
+              it2 (it1 @ ('blk is) ['blk (blk is (filter (e \ two? >>e) e0) n0 ())] (inner it1))
               e2 (it2 @ ('expr . ('asn . ('var v) . rhs . _) . _) (ok? v ? (val v rhs @ k (two? k ? ([v k] . e1) e1)) e1)
-                        ('decl ps) (foldl (a \ p \ (two? >>p && ok? <p ? (val <p <>>p @ k (two? k ? ([<p k] . a) a)) a)) e1 ps)
+                        ('decl ps) (foldl (a \ p \ (? !(two? >>p) a
+                                                        (ok? <p) (val <p <>>p @ k (two? k ? ([<p k] . a) a))
+                                                        (iok? <p && iaddr <>>p) ([<p ['cast (tys <p) <>>p] 'imm] . a)
+                                                        a)) e1 ps)
                         e1)
               (it2 . blk >items e2 (nkill (nws it ()) n0) top)))
        ; a nested block starts over: the entry it is reached by need not be the one above it.
