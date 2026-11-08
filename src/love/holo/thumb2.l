@@ -368,47 +368,54 @@
          (catall [(thumb-movw d 0) (t16 (0xBF08 | cc << 4)) (thumb-movw d 1)]))
 
    ;; vfp: f0..f15 -> d0..d15 (fpv5-d16). the IR's two-address d = op(d, s) repeats d as the
-   ;; first source. a single is S[2n], the low half of Dn, so the odd-register bits never arise.
+   ;; first source. a single in fN is S[2n], the low half of Dn; f16..f31 name the odd singles,
+   ;; f(16+n) S[2n+1], which only single ops take: a double op scares on one.
    ;; s30 is the converters' scratch: f15 is reserved. movqxr/movqrx move the gp pair r, r+1
    thumb-fregs (fregs 16)
    (frn r) (look thumb-fregs r 'badfreg)
+   thumb-sregs (foldl (t \ i \ pin t (intern ("f" + show i)) (i < 16 ? (2 * i) (2 * i - 31))) {} ^32)
+   (sx r) (look thumb-sregs r 'badfreg)
+   ; a single's fields: Vd:D, Vn:N, Vm:M, and D alone in the high halfword
+   (fD r) (sx r @ s ((s & 1) << 22 | (s >> 1) << 12))
+   (fN r) (sx r @ s ((s >> 1) << 16 | (s & 1) << 7))
+   (fM r) (sx r @ s (s >> 1 | (s & 1) << 5))
+   (dbit r) ((sx r & 1) << 6)
    (t2-fp3 hi lo d m) (: dn (frn d) mn (frn m) (t32 ((hi | dn) << 16 | (dn << 12 | (lo | mn)))))
+   (t2-fs3 hi lo d m) (t32 (hi << 16 | (lo | fD d | fN d | fM m)))
    (thumb-addsd d m) (t2-fp3 0xEE30 0xB00 d m)                ; vadd.F64 Dd, Dd, Dm
    (thumb-subsd d m) (t2-fp3 0xEE30 0xB40 d m)                ; vsub.F64
    (thumb-mulsd d m) (t2-fp3 0xEE20 0xB00 d m)                ; vmul.F64
    (thumb-divsd d m) (t2-fp3 0xEE80 0xB00 d m)                ; vdiv.F64
-   (thumb-addss d m) (t2-fp3 0xEE30 0xA00 d m)                ; vadd.F32 S[2d], S[2d], S[2m]
-   (thumb-subss d m) (t2-fp3 0xEE30 0xA40 d m)                ; vsub.F32
-   (thumb-mulss d m) (t2-fp3 0xEE20 0xA00 d m)                ; vmul.F32
-   (thumb-divss d m) (t2-fp3 0xEE80 0xA00 d m)                ; vdiv.F32
-   (t2-fp3n hi lo d n m) (: dn (frn d) nn (frn n) mn (frn m) (t32 ((hi | nn) << 16 | (dn << 12 | (lo | mn)))))
+   (thumb-addss d m) (t2-fs3 0xEE30 0xA00 d m)                ; vadd.F32 Sd, Sd, Sm
+   (thumb-subss d m) (t2-fs3 0xEE30 0xA40 d m)                ; vsub.F32
+   (thumb-mulss d m) (t2-fs3 0xEE20 0xA00 d m)                ; vmul.F32
+   (thumb-divss d m) (t2-fs3 0xEE80 0xA00 d m)                ; vdiv.F32
+   (t2-fp3n hi lo d n m) (t32 (hi << 16 | (lo | fD d | fN n | fM m)))
    (thumb-addss3 d n m) (t2-fp3n 0xEE30 0xA00 d n m)          ; vadd.F32 S[2d], S[2n], S[2m]
    (thumb-subss3 d n m) (t2-fp3n 0xEE30 0xA40 d n m)
    (thumb-mulss3 d n m) (t2-fp3n 0xEE20 0xA00 d n m)
    (thumb-divss3 d n m) (t2-fp3n 0xEE80 0xA00 d n m)
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xB40 | mn)))))
-   (thumb-movss d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn)))))   ; VMOV.F32 S[2d], S[2m]
+   (thumb-movss d m) (t32 (0xEEB0 << 16 | (0xA40 | fD d | fM m)))   ; VMOV.F32 Sd, Sm
    ; both halves: VMOV.F32 S[2d], S[2m] ; VMOV.F32 S[2d+1], S[2m+1] -- an sp-only fpu has no VMOV.F64
    (thumb-movpair d m) (: dn (frn d) mn (frn m)
                           (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn))) + t32 (0xEEF0 << 16 | (dn << 12 | (0xA60 | mn)))))
    (thumb-ucomisd a b)                                        ; VCMP.F64 Da, Db ; vmrs apsr_nzcv
       (: an (frn a) bn (frn b)                                ;   unordered sets V
          (t32 (0xEEB4 << 16 | (an << 12 | (0xB40 | bn))) + t32 0xEEF1FA10))
-   (thumb-ucomiss a b)                                        ; VCMP.F32 S[2a], S[2b] ; vmrs apsr_nzcv
-      (: an (frn a) bn (frn b)
-         (t32 (0xEEB4 << 16 | (an << 12 | (0xA40 | bn))) + t32 0xEEF1FA10))
-   (thumb-ucom0 a) (t32 (0xEEB5 << 16 | (frn a << 12 | 0xA40)) + t32 0xEEF1FA10)   ; VCMP.F32 S[2a], #0.0 ; vmrs
+   (thumb-ucomiss a b)                                        ; VCMP.F32 Sa, Sb ; vmrs apsr_nzcv
+      (t32 (0xEEB4 << 16 | (0xA40 | fD a | fM b)) + t32 0xEEF1FA10)
+   (thumb-ucom0 a) (t32 (0xEEB5 << 16 | (0xA40 | fD a)) + t32 0xEEF1FA10)   ; VCMP.F32 Sa, #0.0 ; vmrs
    ;; fimm: a single's bits k that VFPExpandImm reaches, as its imm8 sign:b:cdefgh
    (thumb-fimm d k)                                           ; VMOV.F32 S[2d], #imm8
       (: i ((k >> 31 & 1) << 7 | (k >> 29 & 1) << 6 | k >> 19 & 63)
-         (t32 ((0xEEB0 | i >> 4) << 16 | (frn d << 12 | (0xA00 | i & 15)))))
+         (t32 ((0xEEB0 | i >> 4) << 16 | (0xA00 | i & 15 | fD d))))
    ;; fli: any single's bits k by the scratch g; flal the same, its word pooled at p
    (thumb-fli d g k) (thumb-li g k + thumb-movdxr d g)
    (thumb-flal d g k p) (thumb-fli d g k)
-   (thumb-cvtxsd base f g)                                    ; vmov S[2f], Rg ; vcvt.F64.{S,U}32 Df, S[2f]
-      (: fn (frn f) gn (rn g)
-         (t32 ((0xEE00 | fn) << 16 | (gn << 12 | 0xA10))
-          + t32 (0xEEB8 << 16 | ((fn << 12) | (base | fn)))))
+   (thumb-cvtxsd base f g)                                    ; vmov Sf, Rg ; vcvt.F64.{S,U}32 Df, Sf
+      (t32 (0xEE00 << 16 | (rn g << 12 | 0xA10 | fN f))
+       + t32 (0xEEB8 << 16 | (base | fD f | fM f)))
    (thumb-cvtsi2sd f g) (thumb-cvtxsd 0xBC0 f g)              ; signed
    (thumb-cvtui2sd f g) (thumb-cvtxsd 0xB40 f g)              ; unsigned
    (thumb-cvtsdxi hi g f)                                     ; vcvt.{S,U}32.F64 s30, Df ; vmov Rg, s30
@@ -420,13 +427,12 @@
    (thumb-cvtsi2ss f g) (thumb-cvtxsd 0xAC0 f g)              ; vmov S[2f], Rg ; vcvt.F32.S32 S[2f], S[2f]
    (thumb-cvtui2ss f g) (thumb-cvtxsd 0xA40 f g)              ; ..F32.U32
    (thumb-cvtssxi hi g f)                                     ; vcvt.{S,U}32.F32 s30, S[2f] ; vmov Rg, s30
-      (: gn (rn g) fn (frn f)
-         (t32 (hi << 16 | (0xFAC0 | fn))
-          + t32 (0xEE1F << 16 | (gn << 12 | 0xA10))))
+      (t32 (hi << 16 | (0xFAC0 | fM f))
+       + t32 (0xEE1F << 16 | (rn g << 12 | 0xA10)))
    (thumb-cvttss2si g f) (thumb-cvtssxi 0xEEBD g f)
    (thumb-cvttss2ui g f) (thumb-cvtssxi 0xEEBC g f)
-   (thumb-movdxr f g) (: fn (frn f) gn (rn g) (t32 ((0xEE00 | fn) << 16 | (gn << 12 | 0xA10))))   ; vmov S[2f], Rg
-   (thumb-movdrx g f) (: fn (frn f) gn (rn g) (t32 ((0xEE10 | fn) << 16 | (gn << 12 | 0xA10))))   ; vmov Rg, S[2f]
+   (thumb-movdxr f g) (t32 (0xEE00 << 16 | (rn g << 12 | 0xA10 | fN f)))   ; vmov Sf, Rg
+   (thumb-movdrx g f) (t32 (0xEE10 << 16 | (rn g << 12 | 0xA10 | fN f)))   ; vmov Rg, Sf
    (thumb-movqxr f glo)                                       ; vmov Df, Rlo, Rlo+1 (the pair in)
       (: fn (frn f) gn (rn glo)
          (t32 ((0xEC40 | gn + 1) << 16 | (gn << 12 | (0xB10 | fn)))))
@@ -446,21 +452,21 @@
           (thumb-mem-far bn off + t32 ((pbase | 12) << 16 | (tn << 12 | lo)))))
    ;; unaligned: word by word through r12. a far store would want r12 twice, so it keeps near
    (thumb-fmemu ld? n f base off)
-      (catall (map (k \ (ld? ? (thumb-ld 'r12 base (off + 4 * k) + thumb-movsnxr (2 * frn f + k) 'r12)
+      (catall (map (k \ (ld? ? (thumb-ld 'r12 base (off + 4 * k) + thumb-movsnxr (sx f + k) 'r12)
                            (: _ (-255 <= off && off + 4 * k <= 4095 ? 0 (scare 'fmem-align off))
-                              (thumb-movsnrx 'r12 (2 * frn f + k) + thumb-st base (off + 4 * k) 'r12))))
+                              (thumb-movsnrx 'r12 (sx f + k) + thumb-st base (off + 4 * k) 'r12))))
                    ^n))
    (thumb-stsd base off s) (0 != off % 4 ? (thumb-fmemu () 2 s base off) (thumb-fmem 0xED80 0xED00 0xB00 (frn s) (rn base) off))   ; vstr Ds
    (thumb-ldsd d base off) (0 != off % 4 ? (thumb-fmemu 1 2 d base off) (thumb-fmem 0xED90 0xED10 0xB00 (frn d) (rn base) off))   ; vldr Dd
-   (thumb-stss base off s) (0 != off % 4 ? (thumb-fmemu () 1 s base off) (thumb-fmem 0xED80 0xED00 0xA00 (frn s) (rn base) off))   ; vstr S[2s]
-   (thumb-ldss d base off) (0 != off % 4 ? (thumb-fmemu 1 1 d base off) (thumb-fmem 0xED90 0xED10 0xA00 (frn d) (rn base) off))   ; vldr S[2d]
+   (thumb-stss base off s) (0 != off % 4 ? (thumb-fmemu () 1 s base off) (thumb-fmem (0xED80 | dbit s) (0xED00 | dbit s) 0xA00 (sx s >> 1) (rn base) off))   ; vstr Ss
+   (thumb-ldss d base off) (0 != off % 4 ? (thumb-fmemu 1 1 d base off) (thumb-fmem (0xED90 | dbit d) (0xED10 | dbit d) 0xA00 (sx d >> 1) (rn base) off))   ; vldr Sd
    ;; the post-increments a stepped pointer folds into: one single, or one word, then p += 4
-   (thumb-ldsspi d p) (t32 ((0xECB0 | rn p) << 16 | (frn d << 12 | 0xA01)))   ; VLDMIA Rp!, {S[2d]}
-   (thumb-stsspi p s) (t32 ((0xECA0 | rn p) << 16 | (frn s << 12 | 0xA01)))   ; VSTMIA Rp!, {S[2s]}
+   (thumb-ldsspi d p) (t32 ((0xECB0 | rn p) << 16 | (0xA01 | fD d)))   ; VLDMIA Rp!, {Sd}
+   (thumb-stsspi p s) (t32 ((0xECA0 | rn p) << 16 | (0xA01 | fD s)))   ; VSTMIA Rp!, {Ss}
    (thumb-ldpi4 d p) (t32 ((0xF850 | rn p) << 16 | (rn d << 12 | 0xB04)))     ; LDR Rd, [Rp], #4
    (thumb-stpi4 p s) (t32 ((0xF840 | rn p) << 16 | (rn s << 12 | 0xB04)))     ; STR Rs, [Rp], #4
-   (thumb-cvtss2sd d s) (: dn (frn d) sn (frn s) (t32 (0xEEB7 << 16 | (dn << 12 | (0xAC0 | sn)))))   ; vcvt.F64.F32 Dd, S[2s]
-   (thumb-cvtsd2ss d s) (: dn (frn d) sn (frn s) (t32 (0xEEB7 << 16 | (dn << 12 | (0xBC0 | sn)))))   ; vcvt.F32.F64 S[2d], Ds
+   (thumb-cvtss2sd d s) (: dn (frn d) (t32 (0xEEB7 << 16 | (dn << 12 | (0xAC0 | fM s)))))   ; vcvt.F64.F32 Dd, Ss
+   (thumb-cvtsd2ss d s) (: sn (frn s) (t32 (0xEEB7 << 16 | (0xBC0 | sn | fD d))))   ; vcvt.F32.F64 Sd, Ds
    ;; VMOV Sk,Rt / Rt,Sk by number: an AAPCS-VFP argument may be odd. Vn = k >> 1, the odd bit N
    (thumb-movsnxr k g) (rn g @ gn (t32 ((0xEE00 | k >> 1) << 16 | (gn << 12 | (0xA10 | (k & 1) << 7)))))
    (thumb-movsnrx g k) (rn g @ gn (t32 ((0xEE10 | k >> 1) << 16 | (gn << 12 | (0xA10 | (k & 1) << 7)))))
@@ -643,7 +649,7 @@
                      (-4095 <= v <= 4095 ? (t32 ((v < 0 ? 0xF85F 0xF8DF) << 16 | (aux << 12 | abs v))) (scare 'thumb-ldlw-reach v)))
             ; flal's pooled load: vldr S[2aux], [pc, #imm] from the word-aligned pc
             'vldl (target - (site + 4 & -4) @ v
-                     (0 <= v <= 1020 && v % 4 = 0 ? (t32 (0xED9F << 16 | (aux << 12 | 0xA00 | v >> 2))) (scare 'thumb-vldl-reach v)))
+                     (0 <= v <= 1020 && v % 4 = 0 ? (t32 ((0xED9F | (aux & 1) << 6) << 16 | ((aux >> 1) << 12 | 0xA00 | v >> 2))) (scare 'thumb-vldl-reach v)))
             ; la's absolute halves, aux = Rd
             'movw16 (thumb-mw16 0xF240 aux (target & 65535))
             'movt16 (thumb-mw16 0xF2C0 aux (target >> 16 & 65535))
@@ -669,7 +675,7 @@
    ;; at least site + 2, reaches it
    (thumb-short ins c rel)
       (: x <c o (rel - 4)
-         (? (<ins = 'flal) (rel < 0 || 1020 < rel ? () [(fix 4 'vldl (ins 4) (frn (ins 1)))])
+         (? (<ins = 'flal) (rel < 0 || 1020 < rel ? () [(fix 4 'vldl (ins 4) (sx (ins 1)))])
             (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
                                               (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
                                               ()))
