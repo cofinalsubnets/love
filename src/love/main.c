@@ -186,7 +186,8 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
  if (!w) { g->next_wake_at = love_clock() + 1; return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
- if (n) len(g->sp[0]) = n;
+ // the capture cut to what was read: a NUL and a zeroed pad, as ini_str lays them
+ if (n) memset(txt(g->sp[0]) + n, 0, b2w(n + 1) * sizeof(word) - n), len(g->sp[0]) = n;
  else g->sp[0] = EmptyString;
  int status = w < 0 ? -1
             : WIFEXITED(st) ? WEXITSTATUS(st)
