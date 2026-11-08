@@ -15,7 +15,7 @@
    (lobits g d bits)
     (ilp32? g ? (u64 bits @ u (lomk g @ l (lomk g @ h [['li l (u % 4294967296)] ['li h (u // 4294967296)] ['movqrr d l h]])))
        (lomk g @ t [['li t bits] ['movqxr d t]]))
-   (lomv d s) (lofr? d ? ['movapd d s] ['mov d s])
+   (lomv d s) (lofr? d ? (lofo? d || lofo? s ? ['movss d s] ['movapd d s]) ['mov d s])
    ; a pointer's step: the pointee's size, void and functions one byte
    (lostep g ty) (<>ty @ 'void 1 ('fn . _) 1 ('varr . _) 'bad t (tsz g t))
    (lok g e) (knum g e @ ((k . _) && fits32 k) [k] ())
@@ -1565,7 +1565,11 @@
        (go ts 0 0 0 ())))
    ; a slot's register, and a slot read into a float vreg: an odd one has no name and bounces off r12
    (lo32sn k) (xmmreg (k // 2))
-   (lo32rd k d) (0 = k & 1 ? [['movapd d (lo32sn k)]] [['movsnrx 'r12 k] ['cuse (lo32sn k)] ['movdxr d 'r12]])
+   ; ..on thumb2sp every slot is a register: an odd one f(16+k/2), a single read by its own copy
+   (lo32s1 k) (0 = k & 1 ? (lo32sn k) (name "f\(16 + k // 2)"))
+   (lo32rd g k d ty) (? (sp64? g && ty = 'float) [['movss d (lo32s1 k)]]
+                        (0 = k & 1) [['movapd d (lo32sn k)]]
+                        [['movsnrx 'r12 k] ['cuse (lo32sn k)] ['movdxr d 'r12]])
    ; a call's places -> loplace's [gi fi rg sk pre], an odd slot's rg entry ['s k vreg] last
    (lo32place g vs va)
     (: ps (lo32cl g (map vty vs) va)
@@ -1585,7 +1589,7 @@
                                     (: kk (k + (e = 8 ? (2 * i) i))
                                        [(rg2 + [[(0 = kk & 1 ? (lo32sn kk) ['s kk]) w]]) (p2 + f)]))))
                               [rg pre] ^n @ [rg2 p2] [rg2 sk p2]))
-                   ['f k _ _] [(rg + [[(0 = k & 1 ? (lo32sn k) ['s k]) x]]) sk pre]
+                   ['f k _ _] [(rg + [[(? (0 = k & 1) (lo32sn k) (sp64? g) (lo32s1 k) ['s k]) x]]) sk pre]
                    ['r i nw]
                     (? (stru? ty) (regs i x 0 nw (tsz g ty) rg pre @ [rg2 p2] [rg2 sk p2])
                        (pair? g ty) [(rg + [[(argr g i) <x] [(argr g (i + 1)) <>x]]) sk pre]
@@ -1635,8 +1639,8 @@
                              (0 = k & 1 ? [odd (acc + [[(ty = 'double || tsz g ty = 8 ? 'stsd 'stss) 'r4 off (lo32sn k)]]) post ([nm 'm off ty] . env)]
                                 [(odd + vfpsv k 'r4 off) acc post ([nm 'm off ty] . env)]))
                          (lomkf g @ r
-                            (0 = k & 1 ? [odd (acc + lo32rd k r) post ([nm 'v r ty] . env)]
-                               [(odd + lo32rd k r) acc post ([nm 'v r ty] . env)])))
+                            (0 = k & 1 ? [odd (acc + lo32rd g k r ty) post ([nm 'v r ty] . env)]
+                               [(odd + lo32rd g k r ty) acc post ([nm 'v r ty] . env)])))
                      ['f k n b]
                       (ntmp g ty @ off
                          (: e (tsz g b)

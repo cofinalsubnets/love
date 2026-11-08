@@ -19,12 +19,14 @@
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
                (v6m? g) ()
+               (sp64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f8 f9 f10 f11 f12 f13 f14 f24 f25 f26 f27 f28 f29 f30)
                (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14)
                (ia32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
    ; what a call clobbers: the caller-saved gp file and every float register the pool takes, but t32's d8 up
-   (racl g) (lvgp g + (t32? g ? (filter (r \ !(elem r '(f8 f9 f10 f11 f12 f13 f14))) (ragf g)) (ragf g)))
+   ; and their odd halves
+   (racl g) (lvgp g + (t32? g ? (filter (r \ !(elem r '(f8 f9 f10 f11 f12 f13 f14 f24 f25 f26 f27 f28 f29 f30))) (ragf g)) (ragf g)))
    ; the vregs lo.l mints: %nK on the gp file, %wK on the float file
    (lomk g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%n\(k)"))
    (lomkf g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%w\(k)"))
@@ -43,6 +45,9 @@
    ; the three-address ops, and those of them that commute
    raalu '(add sub and or xor imul)
    racomm '(add and or xor imul)
+   ; the ops a double rides: on thumb2sp their float vregs keep a whole d
+   rawide '(movapd movsd movupd ldsd stsd ldsdx stsdx ldsdl movqrr movrrq movqxr movqrx cvtss2sd cvtsd2ss cvtsi2sd
+            cvtui2sd cvttsd2si cvttsd2ui addsd subsd mulsd divsd minsd maxsd ucomisd sqrtsd xorpd andpd)
    rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
    ; each head's own shape, the rest rdsp's
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
@@ -179,8 +184,19 @@
                cu {}
                (past l p) (l @ ([_ e] . u) (e < p && two? u ? (past u p) l) _ l)
                (ovl? x y) (raovl (rg x) (past (cu y @ () (rg y) c c) (lo x) @ l (pin cu y l, l)))
-               (fits? r x) (nelem r (forb x) && !(ovl? x (id r)))
-               (free? r x act) (!(any (w \ loc w = r && ovl? x w) act) && fits? r x)
+               ; thumb2sp: a vreg a double op names is wide, takes an even single, and holds its odd
+               ; half too; any other single takes either. two singles at one d's halves clash only
+               ; when one of them is wide
+               wv {}
+               (wmark x) (lovr? x && lofr? x ? (pin wv (id x) 1) 0)
+               _ (sp64? g ? (map (f \ (two? f && elem <f rawide ? (map wmark >f)
+                                        (f @ ('fix . u . d . _) (map wmark (u + d)) _ 0))) fs))
+               (wid? x) (peep wv x 0 = 1)
+               (al r) (sp64? g ? (rafo g r))
+               (clash? x r y) (ovl? x y && (loc y = r || (al r @ () () a (loc y = a && (wid? x || wid? y)))))
+               (fits? r x) (nelem r (forb x) && !(ovl? x (id r)) && (al r @ () 1 a (wid? x || lofo? r ? !(ovl? x (id a)) 1)))
+               (free? r x act) (!(any (clash? x r) act) && fits? r x)
+               (flx x fl) (wid? x ? (filter (r \ !(lofo? r)) fl) fl)
                (pick l x act) (l @ (r . u) (free? r x act ? r (pick u x act)) _ ())
                (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (loc y)) (hint x)))
                ; a spill's weight: its touches, each 8^loop depth, a branch's cold way down to a sixteenth
@@ -216,7 +232,8 @@
                     (org a = () ? (pin org a (rg a)), pin rg a (rmerge (rg a) (rg b)),
                      pin lo a (min (lo a) (lo b)), pin hi a (max (hi a) (hi b)), pin wt a (wt? a + wt? b),
                      pin forb a (peep forb a () + peep forb b ()), pin hint a (peep hint a () + peep hint b ()),
-                     pin mem a (b . (peep mem b () + peep mem a ())), pin rep b a, pin rmc a 1)))
+                     pin mem a (b . (peep mem b () + peep mem a ())), pin rep b a, pin rmc a 1,
+                    wid? b ? (pin wv a 1))))
                cw (sortby (p \ q \ p 2 > q 2)
                           (catmap (i \ (ft i @ ([('mov || 'movapd || 'movss) a b] && lovr? a && lovr? b)
                                                  [[(id a) (id b) (vwt spn i @ v (max (v / 16) (min v (fqw i))))]] _ ())) ^n))
@@ -225,8 +242,8 @@
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
                (victim x act)
-                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) ||
-                                     any (y \ y != w && loc y = loc w && ovl? x y) act) b
+                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) || wid? x && lofo? (loc w) ||
+                                     any (y \ y != w && clash? x (loc w) y) act) b
                                    (b @ () w _ (wt? w < wt? b ? w b))))
                        () act @
                    () ()
@@ -236,7 +253,7 @@
                       sp
                      (x . u)
                       (: a2 (filter (w \ lo x <= hi w) act)
-                         ((pick (hreg x fl) x a2 @ () (pick fl x a2) r r) @
+                         ((pick (hreg x (flx x fl)) x a2 @ () (pick (flx x fl) x a2) r r) @
                           () (victim x a2 @
                                () (nosp (nms x) ? 'bad (scan fl u a2 (nms x . sp)))
                                w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp)))
