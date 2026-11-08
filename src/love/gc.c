@@ -416,7 +416,11 @@ static struct g *please_(struct g *g, uintptr_t req0) {
   word *ytop = g->hp;
   bool over = gen_minor(g, sto, sl, before, ytop);
   // a block that ran out tenures whole, its overflow rescanned for the edges back into it
-  if (over) gen_minor(g, NULL, 0, before, ytop), g->rem_miss = 0;
+  // the first pass emptied the old survivors' block into sto; the second leaves sto the spare
+  if (over) {
+   if (g->sv2_base) alloc(g->sv2_base, 0);
+   g->sv2_base = NULL, g->sv2_len = 0;
+   gen_minor(g, NULL, 0, before, ytop), g->rem_miss = 0; }
   uintptr_t su = (uintptr_t)(g->sv_hp - g->sv_base);
   // grown when it ran out, halved after eight minors mostly empty, never under the floor
   if (over) g->sv_want = 2 * (sl ? sl : g->minor0), g->sv_idle = 0;

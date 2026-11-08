@@ -180,6 +180,8 @@ hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzi
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
+hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
+hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
