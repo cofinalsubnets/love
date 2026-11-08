@@ -1,5 +1,5 @@
 // float literals that a vfp lays as an 8-bit immediate and ones it cannot, negated literals, and
-// compares against zero, -0.0 and a nan on either side
+// compares against zero, -0.0 and a nan on either side, and a float's truth as a value and a branch
 #include <stdint.h>
 #include <string.h>
 
@@ -19,6 +19,7 @@ int main(void) {
  for (unsigned i = 0; i < sizeof xs / sizeof xs[0]; i++) {
   float x = xs[i];
   s = s * 31 + (uint32_t) cmps(x);
+  if (x) s += 3;
   if (x == x) s = s * 31 + bits(lits(x)) + bits(negs(x)) * 3 + bits(relu(x)) * 5;
  }
  return (int) (s % 251);

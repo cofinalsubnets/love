@@ -15,6 +15,8 @@
    (lobits g d bits)
     (ilp32? g ? (u64 bits @ u (lomk g @ l (lomk g @ h [['li l (u % 4294967296)] ['li h (u // 4294967296)] ['movqrr d l h]])))
        (lomk g @ t [['li t bits] ['movqxr d t]]))
+   ; a zero of ty: riscv reads a single whose upper word is not all ones as a nan
+   (lofz g d ty) (rv64? g && ty = 'float ? (lomk g @ t [['li t 0] ['movdxr d t]]) (lobits g d 0))
    (lomv d s) (lofr? d ? (lofo? d || lofo? s ? ['movss d s] ['movapd d s]) ['mov d s])
    ; a pointer's step: the pointee's size, void and functions one byte
    (lostep g ty) (<>ty @ 'void 1 ('fn . _) 1 ('varr . _) 'bad t (tsz g t))
@@ -386,7 +388,7 @@
     (? (d128? vt || pair? g vt) (lomk g @ d ['int d (fs + [['mov d <r]] + map (x \ ['or d d x]) >r + [['cmp d 0] ['set 'ne d]])])
        (lofl? vt)
         (: t (lomk g) z (lomkf g) a (lomk g) b (lomk g) d (lomk g)
-           ['int d (fs + lobits g z 0 + [[(vt = 'float ? 'ucomiss 'ucomisd) r z]
+           ['int d (fs + lofz g z vt + [[(vt = 'float ? 'ucomiss 'ucomisd) r z]
                           ['set 'ne a] ['set 'p b] ['mov d a] ['or d d b]])])
        (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'ne d]])]))
    ; a copy, so the caller may write it in place
@@ -940,7 +942,7 @@
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]])))))))
             (lox g env e @ ([ty r fs] && pair? g ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
-                           ([ty r fs] && lofl? ty) (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z (lobits g z 0)] sense L))
+                           ([ty r fs] && lofl? ty) (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z (lofz g z ty)] sense L))
                            ([ty r fs] && d128? ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad))))
 
@@ -2052,7 +2054,7 @@
                            ; -ftrivial-auto-var-init=zero
                            (init @ () (go u e2 (acc + (? (two? r) (!(avz? g) ? [['cdef <r <>r]] [['li <r 0] ['li <>r 0]])
                                                            !(avz? g) [['cdef r]]
-                                                           (lofl? ty) (lobits g r 0)
+                                                           (lofl? ty) (lofz g r ty)
                                                            [['li r 0]])))
                                    _ (lox g env init @ 'bad 'bad
                                         v (lost g ['v r ty] v @ [fs _] (go u e2 (acc + fs)) 'bad)))))
