@@ -392,6 +392,11 @@
    (thumb-ucomiss a b)                                        ; VCMP.F32 S[2a], S[2b] ; vmrs apsr_nzcv
       (: an (frn a) bn (frn b)
          (t32 (0xEEB4 << 16 | (an << 12 | (0xA40 | bn))) + t32 0xEEF1FA10))
+   (thumb-ucom0 a) (t32 (0xEEB5 << 16 | (frn a << 12 | 0xA40)) + t32 0xEEF1FA10)   ; VCMP.F32 S[2a], #0.0 ; vmrs
+   ;; fimm: a single's bits k that VFPExpandImm reaches, as its imm8 sign:b:cdefgh
+   (thumb-fimm d k)                                           ; VMOV.F32 S[2d], #imm8
+      (: i ((k >> 31 & 1) << 7 | (k >> 29 & 1) << 6 | k >> 19 & 63)
+         (t32 ((0xEEB0 | i >> 4) << 16 | (frn d << 12 | (0xA00 | i & 15)))))
    (thumb-cvtxsd base f g)                                    ; vmov S[2f], Rg ; vcvt.F64.{S,U}32 Df, S[2f]
       (: fn (frn f) gn (rn g)
          (t32 ((0xEE00 | fn) << 16 | (gn << 12 | 0xA10))
@@ -441,6 +446,11 @@
    (thumb-ldsd d base off) (0 != off % 4 ? (thumb-fmemu 1 2 d base off) (thumb-fmem 0xED90 0xED10 0xB00 (frn d) (rn base) off))   ; vldr Dd
    (thumb-stss base off s) (0 != off % 4 ? (thumb-fmemu () 1 s base off) (thumb-fmem 0xED80 0xED00 0xA00 (frn s) (rn base) off))   ; vstr S[2s]
    (thumb-ldss d base off) (0 != off % 4 ? (thumb-fmemu 1 1 d base off) (thumb-fmem 0xED90 0xED10 0xA00 (frn d) (rn base) off))   ; vldr S[2d]
+   ;; the post-increments a stepped pointer folds into: one single, or one word, then p += 4
+   (thumb-ldsspi d p) (t32 ((0xECB0 | rn p) << 16 | (frn d << 12 | 0xA01)))   ; VLDMIA Rp!, {S[2d]}
+   (thumb-stsspi p s) (t32 ((0xECA0 | rn p) << 16 | (frn s << 12 | 0xA01)))   ; VSTMIA Rp!, {S[2s]}
+   (thumb-ldpi4 d p) (t32 ((0xF850 | rn p) << 16 | (rn d << 12 | 0xB04)))     ; LDR Rd, [Rp], #4
+   (thumb-stpi4 p s) (t32 ((0xF840 | rn p) << 16 | (rn s << 12 | 0xB04)))     ; STR Rs, [Rp], #4
    (thumb-cvtss2sd d s) (: dn (frn d) sn (frn s) (t32 (0xEEB7 << 16 | (dn << 12 | (0xAC0 | sn)))))   ; vcvt.F64.F32 Dd, S[2s]
    (thumb-cvtsd2ss d s) (: dn (frn d) sn (frn s) (t32 (0xEEB7 << 16 | (dn << 12 | (0xBC0 | sn)))))   ; vcvt.F32.F64 S[2d], Ds
    ;; VMOV Sk,Rt / Rt,Sk by number: an AAPCS-VFP argument may be odd. Vn = k >> 1, the odd bit N
@@ -543,6 +553,8 @@
           ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
           ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
+          ('ucom0 . thumb-ucom0) ('fimm . thumb-fimm)
+          ('ldsspi . thumb-ldsspi) ('stsspi . thumb-stsspi) ('ldpi4 . thumb-ldpi4) ('stpi4 . thumb-stpi4)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
           ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx) ('movqrr . thumb-movqrr) ('movrrq . thumb-movrrq)
@@ -670,7 +682,7 @@
            'lis 1
            'sform thumb-sform
            'flagr '(br set adc sbc adcs sbcs raw asis)
-           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss lis)
+           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss ucom0 lis)
            'patch thumb-patch
            'refix thumb-refix
            'lapa thumb-lapa

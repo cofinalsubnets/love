@@ -48,6 +48,9 @@
 ;   (minsd d s) (maxsd d s)                    ; d <- d < s ? d : s  /  d > s ? d : s (a NaN takes s)
 ;   (addss .. ucomiss minss maxss) (cvtsi2ss cvtui2ss f g) (cvttss2si cvttss2ui g f)   ; the single twins
 ;   (movdxr f g) (movdrx g f)                  ; gp<->f bit moves of a single's 32 bits
+;   (fimm f k) (ucom0 f)                       ; thumb2: f <- the single of bits k, an 8-bit vfp
+;                                              ;   immediate; compare a single against +0.0
+;   (ldsspi f p) (stsspi p f) (ldpi4 g p) (stpi4 p g)   ; thumb2: a single or a word at p, then p += 4
 ;   (cmov cond d s)                            ; d <- s when cond holds, off the last cmp (x86-64)
 ;
 ; a register operand is a symbol (r0..), an immediate a number, so the ALU ops take either in
@@ -162,7 +165,7 @@
              'movupd 2 'movsd 2 'movss 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
              'mulsd 2 'addsd 2 'subsd 2 'divsd 2
-             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2
+             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2 'ucom0 1 'fimm 2 'ldsspi 2 'stsspi 2 'ldpi4 2 'stpi4 2
              'cvtsi2ss 2 'cvtui2ss 2 'cvttss2si 2 'cvttss2ui 2 'movdxr 2 'movdrx 2
              'xorpd 2 'pcmpeqd 2 'andpd 2 'psubq 2
              'cvtss2sd 2 'cvtsd2ss 2 'ucomisd 2 'movmskpd 2

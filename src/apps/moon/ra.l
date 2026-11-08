@@ -168,7 +168,7 @@
                hint {} forb {}
                (link x y) (pin hint x (y . hint x))
                (link2 a b) (raok? g a && raok? g b ? (: x (id a) y (id b) (link x y, link y x)))
-               _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
+               _ (map (f \ (f @ [('mov || 'movapd || 'movss) a b] (link2 a b)
                                 ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
                                 ((op . d . _) && elem op divops && x86? g) (pin forb (id d) ['r2])
                                 0)) fs)
@@ -218,7 +218,7 @@
                      pin forb a (peep forb a () + peep forb b ()), pin hint a (peep hint a () + peep hint b ()),
                      pin mem a (b . (peep mem b () + peep mem a ())), pin rep b a, pin rmc a 1)))
                cw (sortby (p \ q \ p 2 > q 2)
-                          (catmap (i \ (ft i @ ([('mov || 'movapd) a b] && lovr? a && lovr? b)
+                          (catmap (i \ (ft i @ ([('mov || 'movapd || 'movss) a b] && lovr? a && lovr? b)
                                                  [[(id a) (id b) (vwt spn i @ v (max (v / 16) (min v (fqw i))))]] _ ())) ^n))
                _ (map (c \ (c @ [x y _] (join x y) _ 0)) cw)
                vs2 (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ rep x = ()) vs))
@@ -345,7 +345,7 @@
              stubs {}
              (stub L) (stubs L @ () (nlab g ".lo" @ T (pin stubs L T, T)) T T)
              ; a fall into a call copies ahead of its argument setup, whose registers the copies may take
-             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd li la lea)) (!(lovr? d)) _ 0)
+             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd movss li la lea)) (!(lovr? d)) _ 0)
              (back i) (0 < i && in? (i - 1) && setup? (i - 1) ? (back (i - 1)) i)
              pre {}
              _ (map (i \ (in? i && i + 1 < n && !(in? (i + 1)) && setup? i ? (pin pre (back i) 1))) ^n)
@@ -510,12 +510,12 @@
     (: (sub x) (lovr? x ? (loc x) x)
        (catmap (f \ (f @ (('cuse || 'cdef) . _) ()
                          ('fix . _ . _ . fs . _) fs
-                         ([('mov || 'movapd) a b] && sub a = sub b) ()
+                         ([('mov || 'movapd || 'movss) a b] && sub a = sub b) ()
                          (_ . _) [(map sub f)]
                          [f])) fs))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
-   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd add sub and or xor imul shl shr sar not neg
+   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss fimm add sub and or xor imul shl shr sar not neg
                                               sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx movqrr movrrq))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)
@@ -533,7 +533,7 @@
    ; a physical register but the frame and stack bases
    (raphys? g x) (elem x (rapool g) && nelem x '(r4 sp))
    ; the forms a physical register may stand in or live across: copies, crossings, control
-   raglue '(cdef mov movapd movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
+   raglue '(cdef mov movapd movss movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
    ; the forms with a fixed register operand: the count in rcx, a divide's rax
    rafixed '(fix call callr ret shlv shrv sarv div rem udiv urem)
    (raund a b) (foldl (s \ x \ elem x s ? s (x . s)) a b)
