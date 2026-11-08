@@ -54,3 +54,8 @@
 (test (1 = ((\ k (: (f n) k  (f n) (n < 1 ? 7 (f (n - 1)))  (f 2))) 1))
       (2 = ((\ k (: (g x) (f x)  (f x) k  (f x) 2  (g 0))) 1))
       (1 = ((\ k (: (f x) k  (g x) (f x)  (f x) 2  (g 0))) 1)))
+; an inner let's value reads the outer name its later sibling rebinds: the capture is the outer's
+(test (6 = (: x 5 (f a) (: z (a + x) x z) (f 1)))
+      (6 = (: x 5 f (a \ (: z (a + x) x z)) (f 1)))
+      (2 = (: x 5 (f a) (: y (a + x) x y q 2) (f 1)))
+      (10 = (: x 5 (f a) (: g (b \ b + x) x 9 (g a)) (f 1))))   ; a lambda def sees the later one
