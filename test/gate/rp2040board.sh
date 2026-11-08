@@ -19,7 +19,7 @@ rm -rf "$sd"; mkdir -p "$sd"; cp "$bin/love.bin" "$sd/"
 cat > "$sd/run.sh" <<'EOF'
 ocd() { openocd -f interface/cmsis-dap.cfg -c "adapter speed 1000" -f target/rp2040.cfg "$@"; }
 ocd -c "program love.bin 0x10000000 verify exit" > flash.log 2>&1 || { tail -5 flash.log; echo "the flash failed"; exit 1; }
-for p in /dev/ttyS* /dev/ttyAMA* /dev/ttyUSB*; do
+for p in /dev/serial/by-id/*Debug_Probe*-if01*; do                # the probe's uart is the board's
   [ -r "$p" ] || continue
   [ "$(cat /sys/class/tty/${p##*/}/type 2>/dev/null)" = 0 ] && continue
   stty -F "$p" 115200 cs8 -cstopb -parenb raw -echo -crtscts clocal 2>/dev/null || continue
