@@ -1859,7 +1859,9 @@
            (ua? r)                                    ; a misaligned member: by its chunks
             (? (flo? ty) (ntmp g 'double @ tm
                             (mkv (fvt g ty) 'r0 (fs + ldal 'r0 b o (tsz g ty) (vma r) + [['st 'r4 tm 'r0]] + fldv g ty 'f0 'r4 tm)))
-               (pair? g ty) (uanl g)
+               (pair? g ty)                           ; the high word gathers in r1 first, off a base that is not r1
+                (: b2 (b = 'r1 ? 'r0 b) a (vma r)
+                   (mkv ty 'r0 (fs + (b = 'r1 ? ['(mov r0 r1)] ()) + ldal 'r1 b2 (o + 4) 4 a + ldal 'r0 b2 o 4 a)))
                (d128? ty)                             ; the high half gathers in r1 first, off a base that is not r1
                 (: b2 (b = 'r1 ? 'r0 b) a (vma r)
                    (mkv ty 'r0 (fs + (b = 'r1 ? ['(mov r0 r1)] ()) + ldal 'r1 b2 (o + 8) 8 a + ldal 'r0 b2 o 8 a + ['(mov r2 r1)])))
@@ -2683,10 +2685,12 @@
               ; a misaligned member (-mstrict-align): the value lands on the protocol, then by chunks
               (ua? lv0 && !(bitf? (vty lv0)))
                (: ty (vty lv0) n (tsz g ty) a (vma lv0)
-                  (? (pair? g ty || d128? ty && !(w128? g)) (uanl g)
+                  (? (d128? ty && !(w128? g)) (uanl g)
                      (: lv (matv g lv0)
                         r (cgexpr g env rhs ())
                         (? (bad? r) 'bad
+                           (pair? g ty)
+                            (mkv ty 'r0 (pk g (vfs lv) (asll g r) 'r2 + stal 'r2 0 4 a 'r0 + stal 'r2 4 4 a 'r1))
                            (d128? ty)
                             (mkv ty 'r0 (pk g (vfs lv) (as128 g r) 'r1 + stal 'r1 0 8 a 'r0 + stal 'r1 8 8 a 'r2))
                            (flo? ty)
@@ -2827,7 +2831,14 @@
                  stp (ptr? ty ? (tsz g <>ty) 1)
                  (? (arr? ty) 'bad
                     (ua? lv0 && !(bitf? ty))        ; a misaligned member: old by chunks, the step back by chunks
-                     (? (flo? ty || pair? g ty || d128? ty) (uanl g)
+                     (? (flo? ty || d128? ty) (uanl g)
+                        (pair? g ty)                 ; the address and the old pair ride the stack past the step
+                         (: a (vma lv0) sv (stp * step)
+                            (matv g lv0 @ lv
+                               (mkv ty 'r0 (vfs lv + spush 'r0 + ldal 'r1 'r0 4 4 a + ldal 'r0 'r0 0 4 a + spush 'r0 + spush 'r1
+                                            + [['li 'r2 (sv & 4294967295)] ['li 'r3 (sv < 0 ? 4294967295 0)] '(adds r0 r0 r2) '(adc r1 r1 r3)
+                                               '(ld r2 sp 32)]
+                                            + stal 'r2 0 4 a 'r0 + stal 'r2 4 4 a 'r1 + spop 'r1 + spop 'r0 + ['(add sp sp 16)]))))
                         (: n (tsz g ty) a (vma lv0)
                            (matv g lv0 @ lv
                               (mkv ty 'r0 (vfs lv + ['(mov r1 r0)] + ldal 'r0 'r1 0 n a + cvt ty 'r0
@@ -5578,9 +5589,10 @@
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
    (bp? g k) (a64? g && elem k <>(g 'mo))
-   ; -mstrict-align (a64): no access wider than its known alignment; a packed member's face carries
-   ; its alignment and goes by chunks, r2 gathers and r3 shifts, neither ever a face's base
-   (sal? g) (a64? g && <(g 'mo))
+   ; -mstrict-align (a64), and always on v6-M, which faults on any unaligned word: no access wider
+   ; than its known alignment; a packed member's face carries its alignment and goes by chunks, r2
+   ; gathers and r3 shifts, neither ever a face's base
+   (sal? g) (a64? g && <(g 'mo) || v6m? g)
    ; -mregparm=n (i386): the first n argument words ride eax edx ecx
    (rpn g) (ia32? g ? (drop 2 (g 'mo) @ r (two? r && charm? <r ? <r 0)) 0)
    ; -march= a cpu before the 686: no cmov
@@ -8069,7 +8081,8 @@
     (cgexpr g env val () @ r
        (? (bad? r) 'bad
           (sal? g && (lowb off @ b (0 < b && b < tsz g ty)))   ; a packed member: by its chunks
-           (? (pair? g ty || d128? ty && !(w128? g)) (uanl g)
+           (? (d128? ty && !(w128? g)) (uanl g)
+              (pair? g ty) (asll g r + stal 'r4 off 4 (lowb off) 'r0 + stal 'r4 (off + 4) 4 (lowb (off + 4)) 'r1)
               (d128? ty) (as128 g r + stal 'r4 off 8 (lowb off) 'r0 + stal 'r4 (off + 8) 8 (lowb (off + 8)) 'r2)
               (flo? ty) (ntmp g 'double @ tm (asfty g r ty + fstv g ty 'r4 tm 'f0 + [[(uldop (tsz g ty)) 'r0 'r4 tm]]
                                                 + stal 'r4 off (tsz g ty) (lowb off) 'r0))
