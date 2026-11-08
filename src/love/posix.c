@@ -924,14 +924,24 @@ static love_inline struct g *host_regexec(struct g *g) {
  if (!strp(b) || !len(b) || !strp(s) || !charmp(i) || !charmp(e) || getcharm(i) < 0 || getcharm(i) > (intptr_t) len(s))
   return g->sp[0] = badarg(g), g;
  regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
- int ef = (int) getcharm(e) | REG_STARTEND, rc, k = 10;
+ int ef = (int) getcharm(e), rc, k = 10;
 #ifdef REG_UTF8
  regex_t re = {0, txt(b), len(b)};
- rc = regexec(&re, txt(s), 10, m, ef);
-#else
+ rc = regexec(&re, txt(s), 10, m, ef | REG_STARTEND);
+#elif defined REG_STARTEND
  regex_t re;
  rc = regcomp(&re, txt(b) + 1, (unsigned char) txt(b)[0]);
- if (!rc) rc = regexec(&re, txt(s), 10, m, ef), regfree(&re);
+ if (!rc) rc = regexec(&re, txt(s), 10, m, ef | REG_STARTEND), regfree(&re);
+#else
+ // no REG_STARTEND: match from txt(s) + i, a ^ there only after a newline under REG_NEWLINE
+ regex_t re;
+ intptr_t o = getcharm(i);
+ int cf = (unsigned char) txt(b)[0];
+ if (o && !(cf & REG_NEWLINE && txt(s)[o - 1] == '\n')) ef |= REG_NOTBOL;
+ rc = regcomp(&re, txt(b) + 1, cf);
+ if (!rc) rc = regexec(&re, txt(s) + o, 10, m, ef), regfree(&re);
+ for (int j = 0; !rc && j < 10; j++)
+  if (m[j].rm_so >= 0) m[j].rm_so += (regoff_t) o, m[j].rm_eo += (regoff_t) o;
 #endif
  if (rc) return g->sp[0] = rc == REG_NOMATCH ? ZeroPoint : putcharm(-rc), g;
  while (k > 1 && m[k - 1].rm_so < 0) k--;
