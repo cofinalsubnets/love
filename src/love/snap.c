@@ -1243,6 +1243,7 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_
   word *o = base + off;
   union u *p = (union u*) o;
   if (o[0] == ctok) {
+   if (hi - off < Width(struct chain)) return 0;                                  // a chain cut by the walk's end
    o[0] = chain_ap;
    o[1] = (word) img_decode((intptr_t) o[1], d);
    o[2] = (word) img_decode((intptr_t) o[2], d);
