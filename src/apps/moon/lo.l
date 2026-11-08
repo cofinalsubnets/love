@@ -43,6 +43,8 @@
        [ty r fs])
    ; -- the 32-bit pair: a value [ty [lo hi] fs], a local two registers, the carry in the flags --
    lokl '(r0 r1 r2 r3 r12 f0 f1)
+   ; ..what a helper's call clobbers there: riscv's caller-saved file
+   (lokc g) (rv32? g ? (racl g) lokl)
    ; a value as a pair -> [fs lo hi]: a word widens by its source's signedness
    (lop g v)
     (v @ ([vt [l h] fs] && pair? g vt) [fs l h]
@@ -57,7 +59,7 @@
        (pair? g ty && lofl? vt)
         (lotr g [vt r fs] 'double @ [_ x f2]
            (lomk g @ l (lomk g @ h
-              [ty [l h] (f2 + [['movapd 'f0 x] ['fix '(f0) lokl (cvtdll g (usg? ty))] ['mov l 'r0] ['mov h 'r1]])])))
+              [ty [l h] (f2 + [['movapd 'f0 x] ['fix '(f0) (lokc g) (cvtdll g (usg? ty))] ['mov l 'r0] ['mov h 'r1]])])))
        (pair? g ty) (lop g [vt r fs] @ [f2 l h] [ty [l h] f2])
        (lofl? ty && (sp64? g || soft? g))
         (lomkf g @ d
@@ -66,7 +68,7 @@
                         (ty = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])])])
        (lofl? ty)
         (lomkf g @ d
-           [ty d (fs + [['mov 'r0 <r] ['mov 'r1 <>r] ['fix '(r0 r1) lokl (cvtlld g (usg? vt) (ty = 'float))]
+           [ty d (fs + [['mov 'r0 <r] ['mov 'r1 <>r] ['fix '(r0 r1) (lokc g) (cvtlld g (usg? vt) (ty = 'float))]
                         [(ty = 'float ? 'cvtsd2ss 'movapd) d 'f0]])])
        (ty = 'bool) (lotest g [vt r fs] @ [_ d f2] ['bool d f2])
        (lotr g ['ulong <r fs] ty))
@@ -111,7 +113,7 @@
              (kb @ ([k] && 0 <= k) (lopshk g kd ta fa al ah k)
                    [_] 'bad
                    (lotr g b 'int @ [_ c fb] (lomk g @ l (lomk g @ h
-                      [ta [l h] (fa + fb + [['mov 'r0 al] ['mov 'r1 ah] ['mov 'r2 c] ['fix '(r0 r1 r2) lokl (pshiftv g kd)]
+                      [ta [l h] (fa + fb + [['mov 'r0 al] ['mov 'r1 ah] ['mov 'r2 c] ['fix '(r0 r1 r2) (lokc g) (pshiftv g kd)]
                                             ['mov l 'r0] ['mov h 'r1]])])))))))
    ; widened by its source's signedness: the high half's last form says
    (lozx? fs h) (rev fs @ (['li x 0] . _) (x = h) _ ())
@@ -152,7 +154,7 @@
                                                  ['add 'sp 'sp 16] ['mov l 'r0] ['mov h 'r2]])]
                               (rt = 'ullong && !(soft? g)
                               ? [rt [l h] (fs + [['mov 'r2 al] ['mov 'r3 ah] ['mov 'r0 bl] ['mov 'r1 bh]
-                                                 ['fix '(r0 r1 r2 r3) lokl [(op = '/ ? '(udivll) '(uremll))]]
+                                                 ['fix '(r0 r1 r2 r3) (lokc g) [(op = '/ ? '(udivll) '(uremll))]]
                                                  ['mov l 'r0] ['mov h 'r1]])]
                                 [rt [l h] (fs + [['mov 'r0 al] ['mov 'r1 ah] ['mov 'r2 bl] ['mov 'r3 bh] '(cuse r0 r1 r2 r3)
                                                  ['call (op = '/ ? (usg? rt ? '__udivdi3 '__divdi3) (usg? rt ? '__umoddi3 '__moddi3))] ['mov l 'r0] ['mov h 'r1]])]))
@@ -1260,7 +1262,7 @@
     (lotr g v 'llong @
      'bad 'bad
      [_ [l h] f0]
-      (: b [['mov 'r0 l] ['mov 'r1 h] ['fix '(r0 r1) lokl fs]]
+      (: b [['mov 'r0 l] ['mov 'r1 h] ['fix '(r0 r1) (lokc g) fs]]
          (lomk g @ d
             (pr ? (lomk g @ e ['ullong [d e] (f0 + b + [['mov d 'r0] ['mov e 'r1]])])
                ['long d (f0 + b + [['mov d 'r0]])]))))
@@ -1300,7 +1302,7 @@
                          b (lox g env (as 2) @ 'bad 'bad
                               [_ p pf] (lomk g @ t (lomk g @ d
                                  ['int d (vfs a + vfs b + pf + [['mov 'r0 (vreg a)] ['mov 'r1 (vreg b)]
-                                          ['fix '(r0 r1) (x64? g ? '(r0 r1) lokl) (ovfops g nm)]
+                                          ['fix '(r0 r1) (x64? g ? '(r0 r1) (lokc g)) (ovfops g nm)]
                                           ['mov t 'r0] ['mov d 'r1] ['st p 0 t]])])))))
               x (lox g env x)))
        ; |x| is infinite: the bits shifted past the sign are inf's
@@ -1336,12 +1338,12 @@
           (elem nm '("__builtin_clz" "__builtin_clzl" "__builtin_clzll"))
            (: w (nm = "__builtin_clzll" || !(nm = "__builtin_clz") && !(ilp32? g))
               (ilp32? g && w ? (lobp g env <as 0 (clzops g w))
-                 (one (v \ lofix g v (x64? g || a64? g ? () lokl) (clzops g w)))))
+                 (one (v \ lofix g v (x64? g || a64? g ? () (lokc g)) (clzops g w)))))
           (elem nm '("__builtin_ctz" "__builtin_ctzl" "__builtin_ctzll"))
            (: w (nm = "__builtin_ctzll" || !(nm = "__builtin_ctz") && !(ilp32? g))
               (? (ilp32? g && w)
                   (t32? g ? (lono g ['call nm]) (lobp g env <as 0 (ctzops g w)))
-                 (one (v \ lofix g v (x64? g || a64? g ? () lokl) (ctzops g w)))))
+                 (one (v \ lofix g v (x64? g || a64? g ? () (lokc g)) (ctzops g w)))))
           (nm = "__builtin_bswap16")
            (one (v \ loren g v '((li r2 255) (mov r1 r0) (shr r1 8) (and r1 r1 r2)
                                  (and r0 r0 r2) (shl r0 8) (or r0 r0 r1))))

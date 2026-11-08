@@ -451,9 +451,9 @@
    ; the pool or the immediate lanes: every pair op runs the shuttle, r2:r3 the popped left, r12 the scratch
    (pair? g ty) (ilp32? g && llt? ty)
    ; a pair shift by a variable count in r2 (0..63): count >= 32 moves one word across, else the
-   ; carry composes through r12 (count 0 skips: a 32-c shift at 0 is unpredictable). v6-M calls the helper
+   ; carry composes through r12 (count 0 skips: a 32-c shift at 0 is unpredictable). v6-M and rv32 call the helper
    (pshiftv g kind)
-    (? (v6m? g)
+    (? (v6m? g || rv32? g)
        [['call (kind @ 'shl '__aeabi_llsl 'shr '__aeabi_llsr '__aeabi_lasr)]]
        (ia32? g) (pshiftv-ia32 g kind)
     (: lb (nlab g ".pb") ld (nlab g ".pd")
