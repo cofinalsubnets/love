@@ -4922,17 +4922,25 @@
                (tgt = 'rv64)
                '((call main) (li r7 94) (sys))            ; a0 already the exit code; a7 = __nr_exit_group (94), ecall
                '((call main) (mov r6 r0) (li r0 60) (sys)))
-       r (cgen-core ast stbl sigs weaks xtra tgt)
+       r (xnar tgt (cgen-core ast stbl sigs weaks xtra tgt))
        (? (gripe? r) r                               ; a named cause rides out (a gripe is a chain: guard before two?)
           !(two? r) ()
           !(r 3) ()                               ; no main -> no program
           (two? (asecs-all <r)) (gripe () () () "an asm's sections ride only an object")
           (<>>r @ dat                           ; one flat image: nifs, rodata and bss (as real zeros) all ride the one lane
              [1 (crt0 + <>r + <>>>>>dat + <dat + <>dat + <>>>>dat)])))
+   ; x64, last: a test of a mask under 0x80 tests the low byte (the flags alike), and a byte or
+   ; word zero-extension, in place, from a register or a load, writes 32 bits, which clears the
+   ; top -- each shorter. moon's own forms alone are here: an asm's ride as raw bytes
+   (xnar tgt r) (? (gripe? r || tgt != 'x64 || !(two? r)) r ([<r (map xnar1 <>r)] + >>r))
+   (xnar1 f) (f @ (['test a k] && charm? k && 0 <= k < 128) ['testb a k] ['zx1 d] ['zxl1 d] ['zx2 d] ['zxl2 d]
+                  (['and d a k] && name? a && (k = 255 || k = 65535)) ['zxml (k = 255 ? 1 2) d a]
+                  ['ldu1 d b o] ['ldu1l d b o] ['ldu2 d b o] ['ldu2l d b o]
+                  ['ldxb d b i s o] ['ldxbl d b i s o] ['ldxh d b i s o] ['ldxhl d b i s o] _ f)
    ; the relocatable object view: the .o emitter turns the names into a symbol table + relocations;
    ; the static fns ride as lnames (local func symbols, so nm/gdb see real boundaries)
    (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs) | ()
-    (cgen-core ast stbl sigs weaks xtra tgt @ r
+    (xnar tgt (cgen-core ast stbl sigs weaks xtra tgt) @ r
        (? (gripe? r) r                               ; a named cause rides out
           !(two? r) ()
           (: sfns (two? xtra ? <xtra {})
