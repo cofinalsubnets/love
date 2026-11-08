@@ -129,8 +129,8 @@ case $tgt in
     narrow=$narrow32
     gref() { gcc -m32 -msse2 -mfpmath=sse -w -o "$1" "$2" -lm; } ;;
   rv32)
-    # the esp32-c6's isa under qemu-riscv32's user mode: no libc, run() exits by ecall. ours links
-    # rt.c by mooncc; clang's build is the witness, linked by ld.lld over rv32sf.c's libgcc names
+    # the esp32-c6's isa under qemu-riscv32's user mode: no libc, _start exits by ecall. ours is
+    # mooncc's bare link with rt.c; clang's build is the witness, by ld.lld over rv32sf.c's libgcc names
     for tool in clang ld.lld qemu-riscv32; do have $tool || gate_skip "$name: no $tool, skipped"; done
     a64_qemu=qemu-riscv32
     pretty=qemu-riscv32
@@ -168,15 +168,16 @@ case $tgt in
       echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
     } > "$d/run.c"
     { echo 'int main(void);'
-      echo 'void _start(void){ register int a0 __asm__("a0") = main(); register int a7 __asm__("a7") = 93;'
-      echo ' __asm__ volatile("ecall" :: "r"(a0), "r"(a7)); for (;;); }'
+      echo 'void _start(void){ int r = main();'
+      echo ' __asm__ volatile("mv a0, %0\n\tli a7, 93\n\tecall" :: "r"(r) : "a0", "a7"); for (;;); }'
     } > "$d/start.c"
     moonrun -t rv32 -os none -c -o "$d/run.o" "$d/run.c" || fail "mooncc run.c"
+    moonrun -t rv32 -os none -c -o "$d/start.o" "$d/start.c" || fail "mooncc start.c"
     moonrun -t rv32 -os none -c -o "$d/rt.o" src/apps/moon/lib/rt.c || fail "mooncc rt.c"
     clang $rvf -O1 -ffreestanding -fno-builtin -c "$d/run.c" -o "$d/run.cc.o" || fail "clang run.c"
     clang $rvf -O1 -ffreestanding -c "$d/start.c" -o "$d/start.cc.o" || fail "clang start.c"
     moonrun -t rv32 -os none -c -o "$d/sf.o" test/gate/rv32sf.c || fail "mooncc rv32sf.c"
-    blink() { moonrun -t rv32 -os none -nostdlib -o "$2" "$1" "$d/run.o" "$d/rt.o"; }
+    blink() { moonrun -t rv32 -os none -nostdlib -Ttext 0x10000 -o "$2" "$d/start.o" "$1" "$d/run.o" "$d/rt.o"; }
     gref() {
       clang $rvf -O0 -w -ffreestanding -Dmain=cc_main -c "$2" -o "$1.o" \
         && ld.lld -o "$1" "$d/start.cc.o" "$d/run.cc.o" "$1.o" "$d/sf.o" "$d/rt.o"
@@ -282,6 +283,22 @@ for f in test/cc/*.c; do
 done
 
 # what a target holds beside the battery
+if [ $tgt = rv32 ]; then
+  # a bare link answers __bss_start__/__bss_end__ with its .bss, which a board's startup clears
+  cat > "$d/bssb.c" <<'EOF'
+extern char __bss_start__[], __bss_end__[];
+static int zs[16];
+static char tail;
+int cc_main(void) {
+  if ((char *) zs < __bss_start__ || &tail >= __bss_end__) return 1;
+  if (__bss_end__ - __bss_start__ < (long) sizeof zs + 1) return 2;
+  return zs[3] + tail ? 3 : 42;
+}
+EOF
+  ours "$r/bssb.t" "$d/bssb.c" > "$d/bssb.log" 2>&1 \
+    || { cat "$d/bssb.log" >&2; fail "bss: mooncc's bare link could not answer the .bss brackets"; }
+  a64_job bssb.t "timeout 60 \$RUN ./bssb.t"
+fi
 if [ $tgt = a64 ]; then
   # the packed program again under -mstrict-align
   moonrun -t a64 -mstrict-align -o "$r/sa279.t" test/cc/279-packed-bitfield.c > "$d/sa279.log" 2>&1 \
@@ -381,6 +398,10 @@ fi
 
 a64_run "$r" || fail "the $pretty batch did not come back"
 
+if [ $tgt = rv32 ]; then
+  [ "$(cat "$r/res/bssb.t.rc")" -eq 42 ] || { cat "$r/res/bssb.t.out" >&2; fail "bss: a bare rv32 link answers $(cat "$r/res/bssb.t.rc") for its .bss brackets"; }
+  echo "bss: a bare rv32 link brackets its own .bss with __bss_start__/__bss_end__"
+fi
 if [ $tgt = a64 ]; then
   [ "$(cat "$r/res/sa279.t.rc")" -eq 0 ] || { cat "$r/res/sa279.t.out" >&2; fail "strict-align: 279-packed-bitfield.c answers wrong under -mstrict-align"; }
   [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }

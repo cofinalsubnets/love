@@ -1045,12 +1045,12 @@
                  (filter (f \ !(dota? f)) ins))
        ; a thumb link is a board's: the image lays at the address the core boots from, and
        ; no crt0 rides first: the first text byte is the vector table. -t arm is linux's,
-       ; hosted as i386 is
-       arm? (arm32? tgt && tgt != 'arm)
-       _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
+       ; hosted as i386 is. rv32 under -os none is a board's too, entered at _start
+       arm? (arm32? tgt && tgt != 'arm || tgt = 'rv32 && os = 'none)
+       _ (arm? && pie && udie 2 "cc: -pie needs an MMU; a bare link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
-       _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
+       _ (arm? && !(charm? org) && udie 2 "cc: a bare link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")

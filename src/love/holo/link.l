@@ -541,8 +541,9 @@
         xt))
 
    ; resolve a name: the symbol book, or a bracket: the nif region (n0..n1), the -pie
-   ; relative-reloc table (r0..r1, empty without -pie) moonlibc's startup walks, or ld's
-   ; generic __start_X/__stop_X over a section named X.
+   ; relative-reloc table (r0..r1, empty without -pie) moonlibc's startup walks, a bare
+   ; link's .bss (xt's "__bss", for a startup that clears it), or ld's generic
+   ; __start_X/__stop_X over a section named X.
    (ldres glo n0 n1 r0 r1 xt nm)
     (glo nm @ r
        (? (two? r) <r
@@ -550,6 +551,8 @@
           (nm = "__stop_love_nifs") n1
           (nm = "__start_love_rela") r0
           (nm = "__stop_love_rela") r1
+          (elem nm '("__bss_start__" "__bss_end__"))
+           (xt "__bss" @ v (two? v ? (nm = "__bss_start__" ? <v <>v) (scare 'link-undef nm)))
           (: x (nm @ ("__start_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<v]))
                      ("__stop_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<>v]))
                      ())
@@ -1617,7 +1620,7 @@
     (: mach (peep elf-machines target 0)
        _ (0 >= mach  ? (scare 'link-target target))
        _ (atom? runs ? (scare 'link-no-map target))
-       ; the re-encoder is the arm32 family's (see ldarm)
+       ; the re-encoder is the arm32 family's (see ldarm), else the target's own
        be (backends (arm32? target ? 'thumb2 target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
@@ -1694,7 +1697,9 @@
        nif (lpos 'nifs @ r (two? r ? r [org org 0]))
        n0 (ld-align (ld-lane0 objs 'nifs @ s (two? s ? (s 3) 1)) <nif)
        relbox (rel? ? {0 ()})    ; the emit-relocs sites
-       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be (ld-extents objs) ()]
+       ; .bss's bounds, where no copied region brackets them, answered to a name that asks
+       xt (ld-extents objs @ t (lpos 'bss @ q (two? q ? (pin t "__bss" [<q (<q + q 2)]) t)))
+       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be xt ()]
        body (: (go rs fp acc)
                 (atom? rs ? [fp acc]
                    (: r <rs
@@ -1755,7 +1760,7 @@
                                                 (reloffs i) #(relbs i)
                                                 (nl + 1) (peep lanesx l 0) 4 8))
                              rlanes))
-       hdr (elf32-hdrn 2 ent mach (arm-eflags target) [shto (nl + 4 + nr) (nl + 3)]
+       hdr (elf32-hdrn 2 ent mach (mach = 243 ? 1 (arm-eflags target)) [shto (nl + 4 + nr) (nl + 3)]
                        (map (g \ elf32-phdr 1 (g 5) (g 2) <g (g 1) (g 3) (g 4) 4096) segs))
        (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
                + [(ld-zeros (symo - fend)) <st <>st <shstr
