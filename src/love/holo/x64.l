@@ -177,6 +177,16 @@
          (rn a @ an (an = 0 ? ([(rex 1 0 0 0) 169] + le32 b)                              ; A9 id
                        ([(rex 1 0 0 (hi an)) 247 (modrm 3 0 an)] + le32 b))))            ; F7 /0 id
 
+   ;; the low byte against an imm8, F6 /0 ib (A8 ib on al); spl..dil and r8b..r15b want a REX
+   (emit-testb a k)
+      (rn a @ an (an = 0 ? [168 (byte k)] ((3 < an ? [(rex 0 0 0 (hi an))] ()) + [246 (modrm 3 0 (lo an)) (byte k)])))
+   ;; movzx r32 in place, which clears the top half: no REX.W
+   (emit-zxl w d)
+      (rn d @ dn ((w = 1 && 3 < dn || 7 < dn ? [(rex 0 (hi dn) 0 (hi dn))] ()) + [15 (w = 1 ? 182 183) (modrm 3 (lo dn) (lo dn))]))
+   ;; d = s's low byte or word into r32, which clears the top half
+   (emit-zxml w d s)
+      (: dn (rn d) sn (rn s)
+         ((w = 1 && 3 < sn || 7 < dn || 7 < sn ? [(rex 0 (hi dn) 0 (hi sn))] ()) + [15 (w = 1 ? 182 183) (modrm 3 (lo dn) (lo sn))]))
    ;; rsp cannot index (4 means none), and it is sp, never an r0..r14
    (memx regf base index scale disp) (x86-memx regf (rn base) (rn index) scale disp)
    (x64-memx w opc regf base index scale disp)
@@ -187,6 +197,8 @@
    (emit-leax d base index scale disp) (x64-memx 1 '(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
    (emit-ldxb d base index scale disp) (x64-memx 1 '(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE
    (emit-ldxh d base index scale disp) (x64-memx 1 '(15 183) d base index scale disp)  ; 0F B7 movzx r64, WORD
+   (emit-ldxbl d base index scale disp) (x64-memx 0 '(15 182) d base index scale disp) ; ..into r32, no REX.W
+   (emit-ldxhl d base index scale disp) (x64-memx 0 '(15 183) d base index scale disp)
    (emit-ldxw d base index scale disp) (x64-memx 0 '(139) d base index scale disp)     ; 8B    mov r32, DWORD
    (emit-ldxsw d base index scale disp) (x64-memx 1 '(99) d base index scale disp)     ; 63    movsxd r64, DWORD
    ;; and/or/xor r32 by a DWORD (23/0B/33 /r); the 32-bit write zeroes the top
@@ -211,6 +223,8 @@
    (emit-ld4 d base off)  (x64-mem () 1 '(99) d base off)       ; 63     movsxd r64, DWORD
    (emit-ldu1 d base off) (x64-mem () 1 '(15 182) d base off)   ; 0F B6  movzx r64, BYTE
    (emit-ldu2 d base off) (x64-mem () 1 '(15 183) d base off)   ; 0F B7  movzx r64, WORD
+   (emit-ldu1l d base off) (x64-mem () 0 '(15 182) d base off)  ; ..into r32, no REX.W
+   (emit-ldu2l d base off) (x64-mem () 0 '(15 183) d base off)
    (emit-ldu4 d base off) (x64-mem () 0 '(139) d base off)      ; 8B     mov r32, DWORD
    (emit-st1 base off s)  (x64-mem () 0 '(136) s base off)      ; 88     mov BYTE, s8
    (emit-st2 base off s)  (x64-mem '(102) 0 '(137) s base off)  ; 66 89  mov WORD, s16
@@ -598,7 +612,7 @@
          ('ld . emit-ld) ('st . emit-st)
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: the same bytes, unseen by the sibcall escape check
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
-         ('ldxb . emit-ldxb) ('ldxh . emit-ldxh) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
+         ('ldxb . emit-ldxb) ('ldxh . emit-ldxh) ('ldxbl . emit-ldxbl) ('ldxhl . emit-ldxhl) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
          ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4) ('decm . emit-decm)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
          ('ldsdl . emit-ldsdl) ('fopm . emit-fopm) ('fopl . emit-fopl)
@@ -625,7 +639,7 @@
          ('sar128v . '(128 249 64 114 12
                         72 137 208  72 211 248  72 193 250 63  235 7    ; mov rax,rdx; sar rax,cl; sar rdx,63
                         72 15 173 208  72 211 250))             ; small: shrd rax,rdx,cl; sar rdx,cl
-         ('ldu1 . emit-ldu1) ('ldu2 . emit-ldu2) ('ldu4 . emit-ldu4)
+         ('ldu1 . emit-ldu1) ('ldu2 . emit-ldu2) ('ldu1l . emit-ldu1l) ('ldu2l . emit-ldu2l) ('zxml . emit-zxml) ('ldu4 . emit-ldu4)
          ('cas . emit-cas 1) ('cas4 . emit-cas 0) ('tp . emit-tp)
          ('sx1 . emit-sx 1) ('sx2 . emit-sx 2) ('sx4 . emit-sx 4)
          ('zx1 . emit-zx 1) ('zx2 . emit-zx 2) ('zx4 . emit-zx 4)
@@ -633,7 +647,7 @@
          ('rorv . emit-shiftv 'rorv) ('rorv4 . emit-shiftv 'rorv4)
          ('shl . emit-shift 'shl) ('shr . emit-shift 'shr) ('sar . emit-shift 'sar)
          ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror) ('shl4 . emit-shift4 'shl)
-         ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
+         ('test . emit-test) ('testb . emit-testb) ('zxl1 . emit-zxl 1) ('zxl2 . emit-zxl 2) ('push . emit-push) ('pop . emit-pop)
          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
          ('jmpr . emit-jmpr) ('jmpm . emit-jmpm) ('jmpt . emit-jmpt) ('callr . emit-callr)
