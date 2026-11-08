@@ -2019,8 +2019,8 @@
 ; a plain static inline stays a call there and splices everywhere else
 (: (calls fs nm) #(filter (f \ two? f && elem <f '(call jmp) && 0 <= findsub (show f) nm) fs)
    (cgnx src) (cparse <>(clex src) @ r                    ; ..with the parser's tablets, as cc-objbytes hands them
-                (okv? r ? (cgen <>r (r 2) (r 3) (r 4) [(r 5) (r 6) (r 7) (r 8) (r 9) (r 10) (r 11) (r 12) (r 13) ()
-                                                      (r 14) (map (i \ ()) ^18) (r 16) (r 17)] 'x64)))
+                (okv? r ? (cgen <>r (r 2) (r 3) (r 4) [(r 5) (r 6) (r 7) (r 8) (r 9) (r 10) (r 11) (r 12) ()
+                                                      (r 13) (map (i \ ()) ^18) (r 15) (r 16)] 'x64)))
    srcN ("static inline int trizz(int x) { return x * 3 + 1; }\n"
          + "static inline __attribute__((__always_inline__)) int fivezz(int x) { return x * 5 + 1; }\n"
          + "__attribute__((__no_profile_instrument_function__)) int nf(int x) { return trizz(x) + fivezz(x); }\n"

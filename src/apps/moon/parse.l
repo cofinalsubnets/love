@@ -189,14 +189,6 @@
             plabs ps >ts (['lren nm old] . sh)))
        (plabs ps >ts sh))
    (lname ps nm) (peep (ps 'lren) nm nm)
-   ; does the run pquals drops carry `restrict`? the fact rides out of band (ps 'rstrs)
-   (rstrq? ts)
-    (atom? ts ? ()
-       (<ts @ t
-          (? (tkw? t 'restrict) 1
-             (tkk t = 'id && elem (tkv t) '("__restrict" "__restrict__")) 1
-             (qual? t) (rstrq? (qskip ts))
-             ())))
    (leadkw? ps ts k)
     (atom? ts ? ()
        (<ts @ t
@@ -377,10 +369,8 @@
                  pin t 'svars {},         ; top-level `static` globals
                  pin t 'sects {},         ; global name -> its section
                  pin t 'consts {},        ; global name -> 1: a const object with an initializer
-                 pin t 'rstrs {},         ; fn name -> its restrict param names
                  pin t 'gregs {},         ; a file-scope register variable: nm -> (R ty)
                  pin t 'anames {},        ; a file-scope asm label: nm -> its symbol
-                 pin t 'currstr (),               ; ..accumulating for the current declaration
                  pin t 'aligns {},        ; global name -> its aligned(N)
                  pin t 'fasks {},         ; tag -> ((member its alignment)..), where a member's is not its type's
                  pin t 'lasks {},         ; local name -> its aligned(N)
@@ -676,13 +666,10 @@
                t)
    (msent e) (<e . (msty <>e . >>e))
    (pdtor0 ps ts base)                              ; -> ((name ty) rest) | ()
-    ; k: the run follows a star, where alone restrict qualifies the pointer (pparams files it)
-    (: (stars ts2 ty k)
+    (: (stars ts2 ty)
         (pquals ts2 @ s
-           (qw (qrun ts2) ty @ t
-              (k && rstrq? ts2 ? (pin ps 'sawrstr 1) 0,
-               peekp s "*" ? (stars >s (pto t) 1) [t s])))
-       sr (stars ts base 0)
+           (qw (qrun ts2) ty @ t (peekp s "*" ? (stars >s (pto t)) [t s])))
+       sr (stars ts base)
        ty <sr ts2 (pquals <>sr)           ; attrs may sit before the name
        (? (peekp ts2 "(")                            ; a parenthesized declarator: pdirect recurses;
            ; dat (the name's own params) rides out third when it is a fn
@@ -2233,8 +2220,7 @@
        !(tyat? ps ts) ()
        (pbty ps ts @ br
           (atom? br ? ()
-             (: _ (pin ps 'sawrstr ())          ; cleared per param
-                dr (pdtor ps <>br <br)
+             (: dr (pdtor ps <>br <br)
                 (atom? dr ? ()
                    ; an array or function parameter decays to a pointer (a va_list is an array)
                    (: e0 <dr ty0 (qbare <>e0) oq (qof <>e0)
@@ -2242,8 +2228,6 @@
                       ; an array's elements' mask moves onto its pointer, the rest stays the param's
                       entry (? (arr? ty0) [<e0 (pmk <>ty0 0 oq)] (fn? ty0) [<e0 ['ptr (two? >>ty0 ? ty0 [<ty0 <>ty0 ()])]]
                                (qslot (<e0 . ty0 . >>e0) oq))
-                      _ (peep ps 'sawrstr () && <e0 ?   ; a named restrict param: file it for note
-                           (pin ps 'currstr (<e0 . peep ps 'currstr ())) 0)
                       ts3 (pattr <>dr)                     ; ..and on a parameter
                       (peekp ts3 "," ?
                           (peekp >ts3 "..." ?              ; ... after this param -> variadic
@@ -2306,7 +2290,7 @@
               b)
        b3 (two? b2 && sspfn? ps prms <b2 ? [(sspw ps <b2 (two? sig ? <sig 'int)) <>b2] b2)
        (two? b3 ? [['fn name prms <b3] <>b3]))
-   ; a static definition's body waits as ('lazy ts n rstr ssp), its n tokens from `{` and what
+   ; a static definition's body waits as ('lazy ts n ssp), its n tokens from `{` and what
    ; pfbody reads of the form, and is parsed at
    ; the unit's end only if the unit can reach it (lzres). a body that declares a tag or a
    ; typedef is parsed where it stands
@@ -2316,7 +2300,7 @@
        n (peep ps 'lazy () && (peep ps 'curstat () || sf) && sf != 'used && !(peep ps 'curused ())
           && !(3 < #sg && sg 3 = 'ms) && peekp ts "{" ? (lzlen ts))
        (charm? n ?
-          [['fn name prms ['lazy ts n (peep ps 'currstr ()) (peep ps 'curssp ())]] (drop n ts)]
+          [['fn name prms ['lazy ts n (peep ps 'curssp ())]] (drop n ts)]
           (pfbody ps name prms ts)))
    (lzlen ts)
     (: (tag? l) (two? >l && (patt >l @ r (idat? r ? (two? >r && tp? <>r "{") (two? r && tp? <r "{"))))
@@ -2356,10 +2340,9 @@
        roots (foldl (a \ f \ (lz? f ? a (refs f () a))) (refs (ps 'hoist) () ()) acc)
        _ (foldl (_ \ n \ visit n) 0 (roots + map (ps 'alias) (keys (ps 'alias))))
        (one f) (: lb <>>>f
-                  _ (pins ps 'currstr (lb 3) 'curssp (lb 4))
+                  _ (pin ps 'curssp (lb 3))
                   r (pfbody ps <>f <>>f <>lb)
-                  _ (ps 'currstr @ rs (two? rs ? (pin (ps 'rstrs) <>f (rev rs))))
-                  _ (pins ps 'currstr () 'curssp ())
+                  _ (pin ps 'curssp ())
                   (two? r ? <r 'lazyfail))
        (go l out) (? (atom? l) out
                      !(lz? <l) (go >l (<l . out))
@@ -2858,10 +2841,6 @@
             fnp ? (pin (ps 'c99inl) <>f (peep (ps 'c99inl) <>f 'inl = 'inl && ps 'curlink = 'inl ? 'inl 'ext)),
             pin ps 'curlink (),
             pin ps 'curkwi (),
-           ; restrict params, filed per function: `p` may be restrict in one and plain in the next
-            (ps 'currstr @ rs
-               (rs && fnp ? (pin (ps 'rstrs) <>f (rev rs)))),
-            pin ps 'currstr (),
             pin ps 'curstat (),
             pin ps 'curalias (),
             pin ps 'curweak (),
@@ -2885,7 +2864,7 @@
                       (acc2 = 'lazyfail ? acc2
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'rstrs) (ps 'gregs) (ps 'anames) (ps 'pfes) (ps 'nopro)]))
+                            (ps 'consts) (ps 'gregs) (ps 'anames) (ps 'pfes) (ps 'nopro)]))
            (pin ps 'tagmark (), ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why

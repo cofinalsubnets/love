@@ -4694,23 +4694,21 @@
           'alias (two? xtra && 3 < #xtra ? (xtra 3) {})
           'aligns (two? xtra && 4 < #xtra ? (xtra 4) {})
           'consts (two? xtra && 7 < #xtra ? (xtra 7) {})
-          ; the parser's restrict roster, fn -> its restrict param names; nothing reads it yet
-          'rstrs (two? xtra && 8 < #xtra ? (xtra 8) {})
           ; file-scope `register T nm asm("R")` names: vent answers the register, nothing is laid
-          'gregs (two? xtra && 10 < #xtra ? (xtra 10) {})
+          'gregs (two? xtra && 9 < #xtra ? (xtra 9) {})
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a global's image, laid once and read by every walk
-          'mo (two? xtra && 11 < #xtra ? (xtra 11) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
-          'pfes (two? xtra && 12 < #xtra ? (xtra 12) {})   ; fn name -> its own patchable_function_entry (N M)
-          'nopro (two? xtra && 13 < #xtra ? (xtra 13) ())  ; no_profile_instrument_function names
+          'mo (two? xtra && 10 < #xtra ? (xtra 10) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
+          'pfes (two? xtra && 11 < #xtra ? (xtra 11) {})   ; fn name -> its own patchable_function_entry (N M)
+          'nopro (two? xtra && 12 < #xtra ? (xtra 12) ())  ; no_profile_instrument_function names
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
        ainls (two? xtra && 5 < #xtra ? (xtra 5))
        noinls (two? xtra && 6 < #xtra ? (xtra 6))
        ; -fno-inline outranks always_inline: the flag is an instrument
-       nolin (two? xtra && 9 < #xtra ? (xtra 9))
+       nolin (two? xtra && 8 < #xtra ? (xtra 8))
        ; what glay may lay: an unreached fn is judged for no splice
        _ (pin g 'reach (cgreach <>ast (two? xtra ? <xtra {}) (g 'alias)))
        (recfns fs) (!(two? fs) ? 1
