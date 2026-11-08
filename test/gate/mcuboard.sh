@@ -12,7 +12,7 @@ ho=$1 t=$2 cap=$3 img=$4
 case $cap in
   rp2040-swd)
     ocd='-f interface/cmsis-dap.cfg -c "adapter speed 1000" -f target/rp2040.cfg'   # 1 MHz holds over jumper wires
-    at=0x10000000 con='/dev/ttyS* /dev/ttyAMA* /dev/ttyUSB*' ;;
+    at=0x10000000 con='/dev/serial/by-id/*Debug_Probe*-if01*' ;;   # the probe's own uart, on the pico's gp0/gp1
   nucleo446-swd)
     # its firmware may sleep or take the swd pins, so it is reached under reset
     ocd='-f interface/stlink.cfg -c "transport select hla_swd" -f target/stm32f4x.cfg -c "reset_config srst_only srst_nogate connect_assert_srst"'
