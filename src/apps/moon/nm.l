@@ -17,8 +17,8 @@
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv64? g) (elem xo '(ldx ldxb ldxh) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
-   (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv64? g && nelem xo '(stx stxb) ? () xo)))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv? g) (elem xo '(ldx ldxb ldxh) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv? g && nelem xo '(stx stxb) ? () xo)))
    ; a64 lays these through x16, so their displacement has to encode in the one instruction
    nmxw {'ldxh 2 'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
    (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))
@@ -65,7 +65,7 @@
    (nmand x y) (? (nmnn x && nmnn y) [0 (min (x 1) (y 1))] (nmnn x) [0 (x 1)] (nmnn y) [0 (y 1)]
                   (two? x && two? y) (nmbits x y) ())
    ; a word holds a bound as signed; one worked exactly that fits did not wrap
-   (nmlim g) (t32? g || ia32? g ? 2147483648 9223372036854775808)
+   (nmlim g) (ilp32? g ? 2147483648 9223372036854775808)
    (nmok g x) (two? x && -(nmlim g) <= <x && x 1 < nmlim g)
    ; x's bounds where (x cc y) holds, an unknown x the whole word
    (nmcut g x cc y)

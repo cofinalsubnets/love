@@ -333,6 +333,7 @@
 (: arch-canon {'x64 'x64  'amd64 'x64  'x86_64 'x64  'x86-64 'x64
                'a64 'a64  'arm64 'a64  'aarch64 'a64
                'rv64 'rv64  'riscv 'rv64  'riscv64 'rv64
+               'rv32 'rv32  'riscv32 'rv32
                'wasm 'wasm  'wasm64 'wasm
                'thumb1 'thumb1  'cortex-m0 'thumb1
                'thumb2 'thumb2  'cortex-m7 'thumb2
