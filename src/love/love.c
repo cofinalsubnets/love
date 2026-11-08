@@ -245,14 +245,14 @@ word love_err(struct g *g, int e) {
 // a board has no exchange, and starts one core before any interrupt
 static int once_lock, once_done;
 static love_inline void once_take(int *l) {
-#if !defined(__arm__) || defined(__linux__)
+#if !defined(__arm__) || (defined(__linux__) && __STDC_HOSTED__)
  while (__sync_lock_test_and_set(l, 1)) continue;
 #else
  (void) l;
 #endif
  }
 static love_inline void once_give(int *l) {
-#if !defined(__arm__) || defined(__linux__)
+#if !defined(__arm__) || (defined(__linux__) && __STDC_HOSTED__)
  __sync_lock_release(l);
 #else
  (void) l;

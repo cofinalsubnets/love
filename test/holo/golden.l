@@ -1846,7 +1846,7 @@
       ("i3.jmp" "e90000000090" ((jmp L) (label L) (nop)))      ; {disp32} jmp L
       ("i3.br" "0f840000000090" ((br eq L) (label L) (nop)))   ; {disp32} je L
       ("i3.mulo" "0fafc10f800000000090" ((mulo r0 r0 r1 r2 L) (label L) (nop))) ; imul %ecx,%eax ; {disp32} jo L
-      ("i3.lar" "e8000000005b81c30700000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
+      ("i3.lar" "e8000000005b8d9b0700000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; lea L-1b(%ebx),%ebx
       ("i3.addss" "f30f58c1" ((addss f0 f1)))                 ; addss %xmm1,%xmm0
       ("i3.ucomiss" "0f2ec8" ((ucomiss f1 f0)))                ; ucomiss %xmm0,%xmm1
       ("i3.cvtsi2ss" "f30f2ac0" ((cvtsi2ss f0 r0)))            ; cvtsi2ss %eax,%xmm0
@@ -1891,7 +1891,7 @@
       ("i3m16.call" "66e80000000090" ((call L) (label L) (nop))) ; call L
       ("i3m16.jmp" "e9000090" ((jmp L) (label L) (nop)))       ; {disp32} jmp L
       ("i3m16.br" "0f84000090" ((br eq L) (label L) (nop)))    ; {disp32} je L
-      ("i3m16.lar" "66e800000000665b6681c30900000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; add $(L-1b),%ebx
+      ("i3m16.lar" "66e800000000665b67668d9b0a00000090" ((lar r3 L) (label L) (nop))) ; call 1f ; 1: pop %ebx ; lea L-1b(%ebx),%ebx
       )
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'i386m16 (t 2)) 0 i3m16tests)
    ;; ..and what has no 32-bit face refuses: a register past r6

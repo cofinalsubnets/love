@@ -17,6 +17,7 @@
  ; (dig x) exposes the runtime hashing method: a fixnum, equal for eql keys
  (charm? (dig 'k))
  (dig '(1 2) = dig '(1 2))
+ (dig -0.0 = dig 0.0) (dig (-0.0 ~ 1.5) = dig (0.0 ~ 1.5))   ; = holds them equal
  ; a quote body inside a lambda leaf must not hide the elements beside it from the digest
  !(dig [1 (a \ (\ 5)) 2] = dig [3 (a \ (\ 5)) 2]))
 
@@ -38,3 +39,7 @@
  ("{() 5}" = show {5})                       ; a box prints as {() v}, reads back
  (7 = peep {1 2 7} () 0)                     ; an odd trailing operand lands in the box slot (the unit key)
  (2 = peep {1 2 7} 1 0))
+
+; a big tablet keeps one key for -0.0 and 0.0
+(: zt (pin (pin (foldl (t \ i \ pin t (i + 0.5) i) {} ^200) 0.0 'a) -0.0 'b))
+(test ('b = peep zt 0.0 0) (201 = #(keys zt)))
