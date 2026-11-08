@@ -569,6 +569,7 @@
            (foldl (acc \ p \ (loga g r (off + p) 4 a @ [_ t f2] (acc + f2 + [['st 'r4 (tm + p) t]]))) () (lofws g ty) @ f3
               (lomkf g @ w [ty w (fs + f3 + [[(ty = 'float ? 'ldss 'ldsd) w 'r4 tm]])])))
        (d128? ty) (loga g r off 8 a @ [_ l fl] (loga g r (off + 8) 8 a @ [_ h fh] [ty [l h] (fs + fl + fh)]))
+       (pair? g ty) (loga g r off 4 a @ [_ l fl] (loga g r (off + 4) 4 a @ [_ h fh] [ty [l h] (fs + fl + fh)]))
        (lofl? ty) (loga g r off (tsz g ty) a @ [_ t f2] (lomkf g @ w [ty w (fs + f2 + [[(ty = 'float ? 'movdxr 'movqxr) w t]])]))
        (loga g r off (tsz g ty) a @ [_ t f2] [ty t (fs + f2 + cvt ty t)]))
    ; a store of v (converted) to an lvalue -> [forms value] | 'bad
@@ -580,6 +581,7 @@
           ['u [_ b _] ty off a]
            (lotr g v ty @
               [_ c fs] (? (d128? ty) [(fs + lostu g b off 8 a <c + lostu g b (off + 8) 8 a <>c) [ty c ()]]
+                          (pair? g ty) [(fs + lostu g b off 4 a <c + lostu g b (off + 4) 4 a <>c) [ty c ()]]
                           (lofl? ty && v6m? g)
                            (ntmp g ty @ tm [(fs + [[(ty = 'float ? 'stss 'stsd) 'r4 tm c]]
                                              + catmap (p \ (lomk g @ t ([['ld t 'r4 (tm + p)]] + lostu g b (off + p) 4 a t))) (lofws g ty)) [ty c ()]])
