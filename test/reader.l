@@ -97,7 +97,9 @@
  (73786976294838206463 = rdr "007777777777777777777777")      ; 2^66-1, octal
  ; a prefix with no digits is a symbol; 08 is neither octal nor decimal, so it reads as a float
  ('0x = rdr "0x") ('0xg = rdr "0xg") ('0b101 = rdr "0b101")
- (8.0 = rdr "08"))
+ (8.0 = rdr "08")
+ ; a float is its whole token: a NUL inside one ends no float
+ (nom? (rdr "1\0xyz")) !(gem? (rdr "2.5\0x")) (2.5 = rdr "2.5"))
 
 ; --- quote and the constructor wraps: ' quotes and @ builds a tuple, glued to the datum ---
 (test
