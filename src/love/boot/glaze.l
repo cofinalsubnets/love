@@ -2529,7 +2529,7 @@
     (: arch love-arch
        G (cite 'glaze)                                                    ; not in the module: every name arrives by key
        defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop
-       firstcell (cite 'guts 'firstcell)  countcell (cite 'guts 'countcell)
+       hotcell (cite 'guts 'hotcell)  countcell (cite 'guts 'countcell)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
@@ -2557,12 +2557,19 @@
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = the uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
        ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never).
-       ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (firstcell), and the compile sees the siblings as they are then
+       ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (hotcell), and the compile sees the siblings as they are then;
+       ; outside a bake, a closure made at run time waits for its call past hot-calls (LOVE_GLAZE_HOT=N; any other word compiles at once)
+       hot-calls 1024
        (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (pin fires 'ix (1 + peep fires 'ix 0))                          ; this closure's place in the bake, the call profile's key
-        (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v))
+           hn (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v)) 0
+                 (gv 'cmdline 0 == 0) ()                                 ; a bake: main.c binds cmdline only past one
+                 (getenv "LOVE_GLAZE_HOT" @ v (string? v && 0 < #v))
+                  (: v (getenv "LOVE_GLAZE_HOT") (dg i n) (i < #v ? (48 <= v i <= 57 ? (dg (i + 1) (n * 10 + v i - 48)) ()) n) (dg 0 0))
+                 hot-calls)
+        (? (charm? hn)
            (: lz (freeze-self lams nm)
-              L (firstcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))))
+              L (hotcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))) hn)
               (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
            (: r (natnow e s a gv farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
               (r == e && peep fires 'cc 0 = ix ? (countcell e a ix) r))))

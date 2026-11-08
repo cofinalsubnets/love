@@ -1,5 +1,5 @@
 ; test/host/lazyglaze.l -- LOVE_LAZY_GLAZE: a closure's glaze waits for its first call (glaze.l's
-; natjit, tablet.c's firstcell). the answers are eager's, a function hashes the same before and
+; natjit, tablet.c's hotcell). the answers are eager's, a function hashes the same before and
 ; after its compile, and tasks calling one whose compile is still running take its twin
 ;   cat test/00-init.l test/host/lazyglaze.l | out/love
 (: lzg-q "(: (f x) (x * x + 1) (h n a) (n < 1 ? a (h (n - 1) (a + n))) d0 (dig f) v (f 3) d1 (dig f) ps (map (k \\ twirl (k \\ h 20000 k) k) [1 2 3 4]) rs (map catch ps) _ (putx [(d0 = d1) v rs (h 10 0)]) (quit 0))"
