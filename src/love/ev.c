@@ -140,8 +140,6 @@ static struct g *append(struct g *g) {
  return g; }
 
 // the C stack a compile may take below its outermost frame: 3/4 of the host's rlimit, else love_cstack
-// the C stack's floor, this process's: compiles nest through eval, and all run on the one stack
-static uintptr_t c0_floor;
 static uintptr_t c0_room(void) {
  uintptr_t room = love_cstack;
 #if __STDC_HOSTED__
@@ -167,8 +165,8 @@ static love_noinline struct g *c0(struct g *g, lvm_t *y) {
  word x = g->sp[0];
  g->sp[0] = (word) c1_yield;
  mm(g, &c); mm(g, &x);
- char here;                                      // the floor is measured from the first compile
- if (!c0_floor) c0_floor = (uintptr_t) &here > c0_room() ? (uintptr_t) &here - c0_room() : 1;
+ char here;                                      // g's stack floor, measured from its first compile
+ if (!g->c0_floor) g->c0_floor = (uintptr_t) &here > c0_room() ? (uintptr_t) &here - c0_room() : 1;
  if (ok(g = analyze(g, &c, x)))
    g = c1(c0_ix(g, &c, y, word(g->ip)), &c);
  um(g), um(g);
@@ -374,15 +372,15 @@ out:
         pull(g, c); }
 
 // a compile past its room of C stack scares before the stack runs out
-static love_noinline bool c0_deep(void) {
+static love_noinline bool c0_deep(struct g *g) {
  char here;
- return (uintptr_t) &here < c0_floor; }
+ return (uintptr_t) &here < g->c0_floor; }
 static love_noinline struct g *c0_scare(struct g *g) {
  return g->scare = ScareDeep, encode(g, status_scare); }
 
 static love_noinline Ana(analyze) {
  if (!ok(g)) return g;
- if (c0_deep()) return c0_scare(g);
+ if (c0_deep(g)) return c0_scare(g);
  if (nomp(x) && x != ZeroPoint) return ana_v(g, c, x);
  if (!chainp(x)) return ana_q(g, c, x); // non-chains are self quoting
  word a = A(x), b = B(x);
@@ -396,7 +394,7 @@ static love_noinline Ana(analyze) {
 // nom p -> m over x, quoted data kept -> the result on sp0
 static struct g *subst1(struct g *g, word x, word p, word m) {
  if (!ok(g)) return g;
- if (c0_deep()) return c0_scare(g);
+ if (c0_deep(g)) return c0_scare(g);
  if (x == p) return push(g, 1, m);
  if (!chainp(x)) return push(g, 1, x);
  if (A(x) == g->nom[RnQuote] && chainp(B(x)) && !chainp(BB(x))) return push(g, 1, x);   // (\ q): a quote is data
@@ -525,7 +523,7 @@ static struct g *ana_ap(struct g *g, struct env **c, intptr_t x) {
 
 
 static struct g *ana_ap_r2l(struct g *g, struct env **c, word x) {
- if (ok(g) && c0_deep()) return c0_scare(g);
+ if (ok(g) && c0_deep(g)) return c0_scare(g);
  if (chainp(x)) {
   word y = A(x);
   avec(g, y, g = ana_ap_r2l(g, c, B(x)));

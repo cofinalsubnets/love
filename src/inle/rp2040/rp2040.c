@@ -53,6 +53,7 @@ void clocks_init(void) {
   REG(CLK_REF_DIV) = CLK_DIV_1;
   REG(CLK_REF_CTRL) = CLK_REF_SRC_XOSC;
   while (REG(CLK_REF_SELECTED) != (1u << CLK_REF_SRC_XOSC)) {}
+  REG(WATCHDOG_TICK) = WATCHDOG_TICK_ENABLE | 12u;   // 12 MHz / 12: the timer's microsecond
   REG(CLK_SYS_CTRL) = CLK_SYS_SRC_REF;
   while (REG(CLK_SYS_SELECTED) != (1u << CLK_SYS_SRC_REF)) {}
 

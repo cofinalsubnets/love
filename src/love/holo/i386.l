@@ -155,12 +155,13 @@
    (i3-callm m base off) (base = 'rip ? (o32 m + [255] + i3abs m 2 off) (a32 m + o32 m + [255] + mem 2 base off))
    (i3-jmpm m base off) (i3memd m 4 [255] 4 base off)
    (i3-jmpt m d tl labs) (i3-jmpr m d)
-   ;; la is absolute (gcc -fno-pic); lar is position-independent: call next, pop, add the distance
+   ;; la is absolute (gcc -fno-pic); lar is position-independent: call next, pop, lea the distance
+   ;; (the flags kept)
    (i3-la m d label) (i3-laa m d label 0)
    (i3-laa m d label k) (o32 m + [(184 | i3rn d) (fix 4 'abs32 label k)])
    (i3-lar m d label)
     (i3rn d @ dn
-       (: tail (o32 m + [(88 | dn)] + o32 m + [129 (modrm 3 0 dn)])
+       (: tail (o32 m + [(88 | dn)] + a32 m + o32 m + [141 (modrm 2 dn dn)])
           (o32 m + [232 0 0 0 0] + tail + [(fix 4 'rel32 label (#tail + 4))])))
    (i3-pushl m label) (o32 m + [104 (fix 4 'abs32 label 0)])
 
@@ -334,7 +335,7 @@
    i386-ems16 (i386-ems 1)
    i386-wide '(r7 r8 r9 r10 r11 r12 r13 r14)
    (i386-lower ems ins)
-    (: _ (each (<ins @ 'call () 'jmp () 'la [ins 1] >ins)   ; those name a symbol
+    (: _ (each (<ins @ 'call () 'jmp () ('la || 'lar) [ins 1] >ins)   ; those name a symbol
               (o \ elem o i386-wide && scare 'i386-badreg [o ins]))
      (lower-via ems ins))
    (i386-be ems)

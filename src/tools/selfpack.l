@@ -66,13 +66,20 @@
                         (ends? n ".l") "lisp"
                         (any (ends? n) [".c" ".h" ".S" ".s"]) "c"
                         "rest"))
+   ; a directory rides only when a file or link under it does, so the tree's name hangs on
+   ; its files alone: a directory left empty by the ignore law is not packed
+   (sp-full es)
+    (: (ups n i t) (? (#n <= i) t (n i = 47) (ups n (i + 1) (pin t (snip n 0 i) 1)) (ups n (i + 1) t))
+       (dir? e) (tar-get e 'kind 'file = 'dir)
+       has (foldl (t \ e \ dir? e ? t (ups (tar-get e 'nom "") 0 t)) {} es)
+       (filter (e \ !(dir? e) || peep has (tar-get e 'nom "") 0) es))
    ; -> each section's entries, leveled and re-homed; shared by both passes so digests compare
    (sp-lev es top stamp ros)
     (: root <es
        te (tar-entry top 'dir "")
        _ (pin te 'mode (tar-get root 'mode 493))
        ; tagged before re-homing: sp-take pins the new nom into the entry itself
-       tag (map (e \ [(sp-sec ros e) e]) >es)
+       tag (map (e \ [(sp-sec ros e) e]) (sp-full >es))
        parts (map (nm \ sp-take (map (p \ p 1) (filter (p \ <p = nm) tag)) top ()) sp-secs)
        (map (l \ tar-level l stamp) (([root te] + <parts) . >parts)))
 
