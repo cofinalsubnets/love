@@ -26,7 +26,7 @@
    elf-machines {'x64 62 'a64 183                              ; canonical keys only (prel.l's arch-canon)
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
                  'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
-                 'rv64 243}                                  ; EM_RISCV
+                 'rv64 243 'rv32 243}                        ; EM_RISCV
 
    ;; one 56-byte program header. p_paddr differs from p_vaddr only for a kernel loaded low.
    (elf64-phdr ty fl off va pa fsz msz al)
