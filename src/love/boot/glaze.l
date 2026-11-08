@@ -1933,7 +1933,8 @@
     (atom? pairs ? result
        (: pr <pairs nm <pr val >pr rest >pairs
           uses (foldl (a \ e \ a + dcount nm e) 0 (map cup rest + [result]))
-          (!(dcheap? val) ? orig
+          ; a value naming a later binder reads past it: substituted there, the binder would capture it
+          (!(dcheap? val) || any (p \ occurs? <p val) rest ? orig
              (delet-go (map (p \ <p . subst-sym nm val >p) rest) (subst-sym nm val result) orig))))
    (delet-body e)                                                                             ; bottom-up, root or nested
     (? (atom? e) e

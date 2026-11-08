@@ -59,3 +59,7 @@
       (6 = (: x 5 f (a \ (: z (a + x) x z)) (f 1)))
       (2 = (: x 5 (f a) (: y (a + x) x y q 2) (f 1)))
       (10 = (: x 5 (f a) (: g (b \ b + x) x 9 (g a)) (f 1))))   ; a lambda def sees the later one
+; ..and stays unbound or the outer's when the let inlines: a later binder never captures it
+(test (6 = ev '(: x 5 (f a) (: z (a + x) x 9 z) (f 1)))
+      ('(missing y) = trap (_ \ ev '(: (f a) (: z (a + y) y 30 z) (f 1))) 0 (a \ b \ [a b]))
+      (4 = ev '(: (f a) (: z (a + 1) y (z * 2) y) (f 1))))
