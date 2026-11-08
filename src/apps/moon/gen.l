@@ -1426,15 +1426,15 @@
                      (acc + [['ld1 'r2 'r0 off] ['st1 'r1 off 'r2]]))
           acc))
    ; ..their -mstrict-align twins, by the chunks an a-aligned run carries
-   (bcopya off sz a) (foldl (acc \ [p k] \ acc + [[(uldop k) 'r2 'r0 (off + p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]])
-                            () (alchunks sz a))
-   (bseta off sz a) (foldl (acc \ [p k] \ acc + [[(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]]) () (alchunks sz a))
+   (bcopya g off sz a) (foldl (acc \ [p k] \ acc + [[(uldop k) 'r2 'r0 (off + p)] [(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]])
+                            () (alchunks sz (salk g a)))
+   (bseta g off sz a) (foldl (acc \ [p k] \ acc + [[(k @ 1 'st1 2 'st2 4 'st4 'st) 'r1 (off + p) 'r2]]) () (alchunks sz (salk g a)))
    ; the alignment a value's address carries: its face's mark, else its type's
    (val9 g v) (ua? v ? (vma v) (tal g (vty v)))
    ; a struct that rides registers by the word, which its alignment cannot carry
-   (salw? g ty) (sal? g && tal g ty < 8)
+   (salw? g ty) (a64? g && sal? g && tal g ty < 8)
    ; a pointer's mark from a misaligned array (sal only): the alignment its pointee is short of
-   (pal g ty) (sal? g && two? (drop 2 ty) && (ty 2) < tal g <>ty ? (ty 2) ())
+   (pal g ty) (sal? g && two? (drop 2 ty) && (ty 2) < salk g (tal g <>ty) ? (ty 2) ())
    ; a struct type as the value v's address aligns it: v's mark, when it carries one
    (amark ty v) (stru? ty && stru? (vty v) && two? (drop 2 (vty v)) ? [<ty <>ty ((vty v) 2)] ty)
    (w2 g ty)                                       ; a 9..16B aggregate at r0: its two words' loads into r1
@@ -1477,7 +1477,7 @@
                           ((c9 & 255) * (8 = wsize g ? 72340172838076673 16843009) @ v9
                              (mkv '(ptr void) 'r0 $
                               relean (tor0 g dv) + [['mov 'r1 'r0] ['li 'r2 v9]] +
-                              (sal? g ? (bseta 0 n9 (memal g env <args)) (bset g 0 n9 ()))))))))
+                              (sal? g ? (bseta g 0 n9 (memal g env <args)) (bset g 0 n9 ()))))))))
              (memnm? g bi "memcpy")
               ; the destination parks in a pool seat, never on the machine stack (sp motion costs
               ; a musttail fn its tail); a pool seat cannot survive a call, so a callish arg declines
@@ -1497,7 +1497,7 @@
                                    (mkv '(ptr void) 'r0 $
                                     relean fd + [['mov rd 'r0]] + relean (tor0 g sv) +
                                     [['mov 'r1 rd]]
-                                    + (sal? g ? (bcopya 0 n9 (min (memal g env <args) (memal g env <>args))) (bcopy g 0 n9 ()))
+                                    + (sal? g ? (bcopya g 0 n9 (min (memal g env <args) (memal g env <>args))) (bcopy g 0 n9 ()))
                                     + '((mov r0 r1))))))))))
              'no)))
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
@@ -2681,7 +2681,7 @@
                           (gcplx? (vty lv) && gcplx? (vty rv) &&
                            !(<>(vty lv) = <>(vty rv)) ?
                              (cxcopy g (vty rv))
-                             (sal? g ? (bcopya 0 (tsz g (vty lv)) al) (bcopy g 0 (tsz g (vty lv)) ()))))))
+                             (sal? g ? (bcopya g 0 (tsz g (vty lv)) al) (bcopy g 0 (tsz g (vty lv)) ()))))))
               ; a misaligned member (-mstrict-align): the value lands on the protocol, then by chunks
               (ua? lv0 && !(bitf? (vty lv0)))
                (: ty (vty lv0) n (tsz g ty) a (vma lv0)
@@ -3418,7 +3418,7 @@
                        (refm? g aty)
                         (: off (ntmp g aty)
                            cp (tor0 g a + [['lea 'r1 'r4 off]]
-                               + (sal? g ? (bcopya 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
+                               + (sal? g ? (bcopya g 0 (tsz g aty) (tal g aty)) (bcopy g 0 (tsz g aty) ()))
                                + [['lea 'r0 'r4 off]])
                            (gpc < ngp g ? (kls >as (i + 1) (gpc + 1) xmmc ovc (gent g 'g gpc cp . acc))
                               (kls >as (i + 1) gpc xmmc (ovc + 1) ([['ov ovc] (cp + [['st 'sp (8 * ovc) 'r0]])] . acc))))
@@ -5593,6 +5593,7 @@
    ; than its known alignment; a packed member's face carries its alignment and goes by chunks, r2
    ; gathers and r3 shifts, neither ever a face's base
    (sal? g) (a64? g && <(g 'mo) || v6m? g)
+   (salk g n) (v6m? g ? (min n 4) n)                ; the alignment an n-aligned access needs: v6-M's widest is a word
    ; -mregparm=n (i386): the first n argument words ride eax edx ecx
    (rpn g) (ia32? g ? (drop 2 (g 'mo) @ r (two? r && charm? <r ? <r 0)) 0)
    ; -march= a cpu before the 686: no cmov
@@ -5640,7 +5641,7 @@
           ba (ua? r ? (vma r) (tal g (vty r)))
           lb (lowb <fm) e (lb = 0 ? ba (min ba lb))
           nd (stru? ty || arr? ty ? (tal g ty) (tsz g ty))
-          (e < nd ? (mkma ty (vmb v) (vmo v) (vfs v) e) v)))
+          (e < salk g nd ? (mkma ty (vmb v) (vmo v) (vfs v) e) v)))
    (uanl g) (nolane g "under -mstrict-align, a misaligned member of this kind")
    bp-paci '(raw (63 35 3 213))                     ; paciasp
    bp-auti '(raw (191 35 3 213))                    ; autiasp
@@ -8080,7 +8081,7 @@
    (cgstore g env off ty val)                       ; store a scalar value expr into [r4+off]
     (cgexpr g env val () @ r
        (? (bad? r) 'bad
-          (sal? g && (lowb off @ b (0 < b && b < tsz g ty)))   ; a packed member: by its chunks
+          (sal? g && (lowb off @ b (0 < b && b < salk g (tsz g ty))))   ; a packed member: by its chunks
            (? (d128? ty && !(w128? g)) (uanl g)
               (pair? g ty) (asll g r + stal 'r4 off 4 (lowb off) 'r0 + stal 'r4 (off + 4) 4 (lowb (off + 4)) 'r1)
               (d128? ty) (as128 g r + stal 'r4 off 8 (lowb off) 'r0 + stal 'r4 (off + 8) 8 (lowb (off + 8)) 'r2)
@@ -8129,7 +8130,7 @@
    (cgbffill g env off bt val)
     (cgexpr g env val () @ r
        (bad? r ? 'bad
-          (: uty <>bt bitoff <>>bt a (sal? g && lowb off < tsz g bt ? (lowb off) ())
+          (: uty <>bt bitoff <>>bt a (sal? g && lowb off < salk g (tsz g bt) ? (lowb off) ())
              mask ((1 << <>>>bt) - 1) cmask (0 - (mask << bitoff) - 1)
              (? (bfwide? g bt) (bfnl g)
              (asintt g r uty
@@ -9599,7 +9600,7 @@
                       (amem? g rt || refm? g rt)                         ; a memory return: fill the caller's temp through
                        (tor0 g r                                         ; the saved hidden pointer, and answer it in rax
                         + [['ld 'r1 'r4 (peep g 'sret 0)]]
-                        + (sal? g ? (bcopya 0 (tsz g rt) (tal g (amark rt r))) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
+                        + (sal? g ? (bcopya g 0 (tsz g rt) (tal g (amark rt r))) (bcopy g 0 (tsz g rt) ())) + '((mov r0 r1)) + epj)
                       (stru? rt || stru? (vty r))                        ; any other composite: no lane
                        (nolane g "no lane for returning this \(tsz g (stru? rt ? rt (vty r)))-byte struct by value\(ontgt g)")
                       (flo? (vty r)) (asintt g r rt + (rt @ 'bool (cvt rt 'r0) ()) + epj)     ; a double value, an int return -> truncate to r0

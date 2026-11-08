@@ -431,11 +431,11 @@
    (loma g ty o) (lowb o @ 0 (tal g ty) lb (min (tal g ty) lb))
    ; an lvalue at an a-aligned address: a struct short of it keeps a on its type, the rest ride 'u
    (loal g av ty off a)
-    (? !(sal? g && a < (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
+    (? !(sal? g && a < salk g (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
        (stru? ty) ['a av [<ty <>ty a] off]
        ['u av ty off a])
    ; ..a bitfield's unit its alignment where that falls short, else ()
-   (lobfa g bt a) (sal? g && a < tsz g bt ? a)
+   (lobfa g bt a) (sal? g && a < salk g (tsz g bt) ? a)
    ; ..an initializer's slot in the frame, its offset all it knows
    (loelv g ty off) (loal g ['long 'r4 ()] ty off (lowb off @ 0 16 b b))
    ; n bytes at b+off by the chunks a carries, and back
@@ -479,7 +479,7 @@
    ; ..no wider than an alignment a, which -mstrict-align holds it to
    (locopya g s d doff sz a)
     (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
-   (loch g a) (sal? g ? a (wsize g))
+   (loch g a) (sal? g ? (salk g a) (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
    (lozero g off span)
     (lomk g @ z
@@ -1495,7 +1495,7 @@
                          _ (loren2 g () 'r2 'long (ldal 'r2 a off n 8) @ [_ y fs] (fs + [['mov t y]])))]))
    ; ..no wider than al where -mstrict-align holds it, a float's bits through a word
    (loeba g c a off n al)
-    (? !(sal? g && al < n) (loeb g c a off n)
+    (? !(sal? g && al < salk g n) (loeb g c a off n)
        (c = 'sse) (loga g a off n al @ [_ t fs] (lomkf g @ w [w (fs + [[(n <= 4 ? 'movdxr 'movqxr) w t]])]))
        (loga g a off n al @ [_ t fs] [t fs]))
    ; an aggregate's register pieces [class offset bytes].. : SysV's eightbytes; AAPCS64's HFA one
@@ -1750,7 +1750,7 @@
                            (lobase [ty d fd] @ [b o]
                               (lomk g @ v
                                  ['(ptr void) d (fd + [['li v ((c & 255) * (wsize g = 4 ? 16843009 72340172838076673))]] +
-                                                 map ([p k] \ [(stw k) b (o + p) v]) (alchunks n (lomemal g env <as)))]))
+                                                 map ([p k] \ [(stw k) b (o + p) v]) (alchunks n (salk g (lomemal g env <as))))]))
                            'bad)))
                  (memnm? g bi "memcpy")
                   (lox g env <as @ [ty d fd]
@@ -1758,7 +1758,7 @@
                         (vfs sv @ fs (lobase [ty d fd] @ [db do] (lobase sv @ [sb so]
                            (lomk g @ t
                               ['(ptr void) d (fd + fs + catmap ([p k] \ [[(uldop k) t sb (so + p)] [(stw k) db (do + p) t]])
-                                                       (alchunks n (min (lomemal g env <as) (lomemal g env <>as))))]))))
+                                                       (alchunks n (salk g (min (lomemal g env <as) (lomemal g env <>as)))))]))))
                         'bad)
                      'bad)
                  'no))
