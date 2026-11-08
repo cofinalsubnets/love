@@ -1292,16 +1292,18 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
  p += StreamSegHead, ns -= StreamSegHead;
  if (!nch || nch > ns / StreamRow || tn + ndz < tn || tn + ndz > ns - StreamRow * nch || nd > StreamDict || !nd != !ndz) return NULL;
  uintptr_t zn = ns - StreamRow * (uintptr_t) nch - (uintptr_t) tn - (uintptr_t) ndz, most = 0;
+ uintptr_t tb = 24 * ((uintptr_t) nch + 1);
+ uintptr_t ts = tn ? (inflate_tabs_size() + 7) & ~(uintptr_t) 7 : 0;
+ uintptr_t fix = sizeof(struct img_lazy) + ts + tb + 9 * (uintptr_t) nch + (uintptr_t) nd;
  for (uint64_t k = 0; k < nch; k++) {
   memcpy(t, p + StreamRow * k, StreamRow);
   if (k + 1 < nch) memcpy(t + 4, p + StreamRow * (k + 1), StreamRow);
   else t[4] = nw, t[5] = rn, t[6] = zn;
   if ((k == 0 && (t[0] || t[1] || t[2])) || t[0] >= t[4] || t[1] >= t[5] || t[2] >= t[6]
-      || t[4] > nw || t[5] > rn || t[6] > zn) return NULL;
+      || t[4] > nw || t[5] > rn || t[6] > zn
+      || t[5] - t[1] > (uint64_t) (UINTPTR_MAX - fix)) return NULL;                // a run the block's size would wrap on
   if (t[5] - t[1] > most) most = (uintptr_t) (t[5] - t[1]); }
- uintptr_t tb = 24 * ((uintptr_t) nch + 1);
- uintptr_t ts = tn ? (inflate_tabs_size() + 7) & ~(uintptr_t) 7 : 0;
- struct img_lazy *L = alloc(NULL, sizeof *L + ts + tb + 8 * (uintptr_t) nch + (uintptr_t) nch + most + (uintptr_t) nd);
+ struct img_lazy *L = alloc(NULL, fix + most);
  if (!L) return NULL;
  L->tabs = ts ? (void*) (L + 1) : NULL;
  if (ts && !inflate_tabs_load(p + StreamRow * nch, (uintptr_t) tn, L->tabs)) { alloc(L, 0); return NULL; }

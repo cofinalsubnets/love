@@ -63,6 +63,27 @@
    o (outcome (run ()))
    _ (test (o != 'fault) (o != 'woke))
 
+   ; a stream table whose first run wraps the lazy block's size, sealed again: it refuses.
+   ; the head digest is image_sum over the header (sum as 0), the dictionary and both tables
+   M (2 ** 64)
+   (at t o) (foldr (\ i a (a * 256 + t (o + i))) 0 ^8)
+   (le v) (foldl (\ a i (a + string ((v >> (8 * i)) % 256))) "" ^8)
+   (put8 t o v) (snip t 0 o + le v + snip t (o + 8) n)
+   (mix h w) (: x ((h ^ w) * 0xff51afd7ed558ccd % M) (x ^ (x >> 32)))
+   (isum t o m h) (: (go i h) (? (i + 8 <= m) (go (i + 8) (mix h (at t (o + i))))
+                                 (i < m) (go (i + 1) (mix h (t (o + i))))
+                                 h)
+                   (go 0 (h ^ (m * 0x9e3779b97f4a7c15 % M))))
+   (seal t) (: z (put8 t 80 0)
+               h (isum z co (32 + 24 * nch + ndz) (isum z so (sz - so) (isum z hsz (so - hsz) (isum z 0 hsz 0))))
+              (put8 z 80 h))
+   c (33 * sch)                       ; under the block's fixed words, so its size wraps small
+   (rows t k) (k < sch ? (rows (put8 t (srow + 32 * k + 8) (M - c + k - 1)) (k + 1)) t)
+   _ (: f (open bad "w") _ (say f (seal s)) (close f))
+   _ (test (outcome (run ()) = 'woke))
+   _ (: f (open bad "w") _ (say f (seal (put8 (rows s 1) so (M - c + sch)))) (close f))
+   _ (test (outcome (run ()) = 'refused))
+
    ; cut short at each edge: the header, the dictionary, the shared code, the stream's dictionary,
    ; a stream chunk, the code segment
    ((each [8 (hsz - 1) (so - 1) (stab + 1) (stab + stn + 1) (sz + 1) (szoff 1) (co - 1) (cz + 1) (n - 1)]
