@@ -2,7 +2,8 @@
  * (linux's call_single_data_t in struct rq), the struct grows, a global and a static sit on N.
  * before the name it may lower (linux's compat_u64), a typedef of it inherits, packed still
  * wins, a member's own ask still raises. the size stays the type's own. _Alignof and _Alignas read
- * it, through an array and not through a pointer. exit-code only (55) */
+ * it, through an array and not through a pointer, a global's too; a struct's rides its type, through
+ * an index, a deref and a member, _Generic matching it as the plain struct. exit-code only (55) */
 struct csd { void *a, *b, *c; int d; };
 typedef struct csd csd_t __attribute__((aligned(sizeof(struct csd))));
 typedef int i16 __attribute__((__aligned__(16)));
@@ -31,6 +32,14 @@ _Static_assert(_Alignof(int (*)(i16)) == _Alignof(void *), "not a function's");
 _Alignas(i16) char ga;
 char gb;
 _Alignas(s32) char gc;
+i16 gi, *gq, **gr;
+pi16 gs;
+csd_t gt[2], *gu;
+struct v { char c; csd_t b[2]; } *gw;
+
+_Static_assert(__alignof__(gt[1]) == sizeof(struct csd) && __alignof__(*gu) == sizeof(struct csd), "a struct's, indexed and through a pointer");
+_Static_assert(__alignof__(gw->b[1]) == sizeof(struct csd) && __alignof__(__typeof__(*gu)) == sizeof(struct csd), "a member's, a typeof's");
+_Static_assert(_Generic(gt[0], struct csd: 1, default: 0) && _Generic(gu, struct csd *: 1, default: 0), "the same type");
 
 csd_t gx;
 char gpad;
@@ -53,6 +62,7 @@ int main(void)
 	bad |= __builtin_offsetof(struct m2, x) != 4 || __builtin_offsetof(struct m2, y) != 16;
 	bad |= __builtin_offsetof(struct m4, x) != 4 || __builtin_offsetof(struct m4, y) % sizeof(void *);
 	bad |= addr(&ga) % 16 || addr(&gc) % 32 || gb;
+	bad |= __alignof__(gi) != 16 || __alignof__(gq) != sizeof(void *) || __alignof__(gr) != sizeof(void *) || __alignof__(gs) != sizeof(void *);
 	bad |= addr(&gx) % sizeof(struct csd) || addr(&gy) % sizeof(struct csd) || addr(&sx) % sizeof(struct csd);
 	return bad || !c || gpad ? 1 : 55;
 }

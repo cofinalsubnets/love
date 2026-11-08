@@ -364,7 +364,7 @@
                  + booldefs dia
                  + gnudefs
                  +
-                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc on both
+                 (elem tgt '(x64 a64 rv64 wasm) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc's
    ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
    ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
@@ -471,11 +471,12 @@
            (elem <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4) && elem (f 1) gp) [['lar (f 1) (sym f)] (sw f (f 1))]
            (aside f (sym f) (t \ sw f t)))
        (catmap one fs))
-   ; thumb2 and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
+   ; thumb2 (sp too) and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
-   ; where it reaches, else lays movw/movt
+   ; where it reaches, else lays movw/movt. thumb2's (fli f g k) becomes (flal f g k P) alike, and
+   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one
    (lpool tgt pc fs)
-    (? (pc || !(elem tgt '(thumb2 arm)) || elem 'lpool (ablenv 0)) fs
+    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) fs
        (: (onto a xs) (foldl (\ b x (x . b)) a xs)
           (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
           (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
@@ -483,12 +484,18 @@
           (go l ix ps n a)
            (? !(two? l) (rev (flush ps a))
               (<l @ f
-                 (? (two? f && (<f = 'la && #f = 3 || big? f))
+                 (? (two? f && <f = 'fli)
+                    (peep ix (f 3) 0 @ p
+                       (p != 0 ? (go >l ix ps n (['flal (f 1) (f 2) (f 3) p] . a))
+                          (name ".lp\(n)" @ q
+                             (go >l (pin ix (f 3) q) ((q . f 3) . ps) (n + 1) (['flal (f 1) (f 2) (f 3) q] . a)))))
+                    (two? f && (<f = 'la && #f = 3 || big? f))
                     (peep ix (f 2) 0 @ p
                        (p != 0 ? (go >l ix ps n (['lal (f 1) (f 2) p] . a))
                           (name ".lp\(n)" @ q
                              (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) (['lal (f 1) (f 2) q] . a)))))
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
+                    (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us}))
@@ -519,9 +526,7 @@
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
-                       (two? (filter (k \ anames k != k) (keys anames)))
-                        (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
-                       (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
+                       (show (wasm-labels anames [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks])))
                     (elf32? tgt)
                     (: s32 (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                        (i386? tgt ? (objsecs32x tgt s32 fns gns wks anames locs asmax)
@@ -549,6 +554,12 @@
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"), say q <>pp, close q))
               (puts <>pp, flush out)))
+   ; an asm label's name through a wasm object, which has no symbol table to rename in: code
+   ; names a symbol by nom, the object's name lists by string
+   (wasm-labels an ob)
+    (: t ({} @ t (map (k \ (pin t k (an k), pin t (nom k) (nom (an k)))) (keys an), t))
+       (sub x) (two? x ? (sub <x . sub >x) (peep t x x))
+       (two? (filter (k \ an k != k) (keys an)) ? (sub ob) ob))
    ; a wasm object is text: write-bytes walks a byte list, and a string lands as an empty file
    (cc-obj src dst (t @ {'tgt tgt}))
     (pin cppdeps 'l (),
@@ -993,7 +1004,7 @@
               (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
-       ; a name nothing answers (setjmp's, say) is the program's refusal, not an internal one
+       ; a name nothing answers is the program's refusal, not an internal one
        m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
                (a \ b \ a @ 'wasm-undefined
                           (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")

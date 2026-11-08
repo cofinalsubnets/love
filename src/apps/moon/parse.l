@@ -319,8 +319,8 @@
                          ; `_Alignas(T)` is `_Alignof(T)`
                          (idv? t "_Alignas" && peekp >s "(")
                           (two? >>s && tkk <>>s = 'num ? (tkv <>>s)
-                             (pcty ps >>s @ tr
-                                (two? tr ? (tyask ps >>s <tr @ a (0 < a ? a (talign ps <tr))) (go >s d))))
+                             (pctya ps >>s @ tr
+                                (two? tr ? (tyask ps <tr) (go >s d))))
                          (go >s d))))
        (go ts 0))
    ; the words the scans above answer to, read in one walk by their bounds: a scan whose
@@ -382,6 +382,8 @@
                  pin t 'anames {},        ; a file-scope asm label: nm -> its symbol
                  pin t 'currstr (),               ; ..accumulating for the current declaration
                  pin t 'aligns {},        ; global name -> its aligned(N)
+                 pin t 'fasks {},         ; tag -> ((member its alignment)..), where a member's is not its type's
+                 pin t 'lasks {},         ; local name -> its aligned(N)
                  pin t 'tdask {},         ; typedef name -> the aligned(N) its declarator asks
                  pin t 'pfes {},          ; fn name -> its patchable_function_entry (N M)
                  pin t 'locals {},        ; local/param name -> its declared type
@@ -578,7 +580,7 @@
              (k = 'cond)
               (: a (tdecay (ptype ps <>>e)) b (tdecay (ptype ps <>>>e))   ; an array arm decays
                  (? (parith? a && parith? b) (puac !(pst32? ps) a b)
-                    (two? a && a = b) a
+                    (two? a && alstrip a = alstrip b) a
                     ; 6.5.15p6: beside a null pointer constant, the other's type. a cast is
                     ; one only when its operand folds, which the kernel's __is_constexpr reads
                     (npc? <>>e && ptr? b) b
@@ -790,9 +792,20 @@
    (alask lay a) (a > lay 2 ? [<lay (a * ((lay 1 + a - 1) // a)) a] lay)
    ; a member type with no size yet (C11 6.7.2.1p3): a struct not laid out, or an array of one
    (incty? ps ty) (? (arr? ty) (incty? ps <>ty) (stru? ty) (atom? (peep (ps 'stag) <>ty 0)) ())
+   ; a member's alignment: an ask outranks packed, as gcc has it
+   (memal ps m pk)
+    (: own (two? (drop 4 m) ? (m 4) (talign ps <>m))
+       (max (pk ? 1 (packcap ps own)) (two? >>>m ? (m 3) 0)))
+   ; #pragma pack's cap on a member's alignment
+   (packcap ps x) (peep ps 'pack 0 @ cap (0 < cap && cap < x ? cap x))
+   ; the members whose alignment is not their type's, __alignof__'s; an anonymous one's come with it
+   (memasks ps ms pk)
+    (catmap (m \ (? (<>m = 'label || bfmem? m) ()
+                     !<m (stru? <>m ? (peep (ps 'fasks) <><>m ()))
+                     (: a (memal ps m pk) (a != talign ps <>m ? [[<m a]])))) ms)
    (playout ps ms uni pk)                           ; -> (fields size align); pk: packed, every member aligns 1
-    (: cap (peep ps 'pack 0)                         ; #pragma pack's cap on a member's alignment
-       (capa x) (0 < cap && cap < x ? cap x)
+    (: cap (peep ps 'pack 0)
+       (capa x) (packcap ps x)
        (go l bit mx acc)
         (atom? l ?
            (: a2 (mx < 1 ? 1 mx)
@@ -809,20 +822,20 @@
                  (bfmem? m)                          ; a bitfield member: (name ty width)
                  (: w <>>m
                     usz (tsz ps ty) ubits (usz * 8) a (talign ps ty)
-                    _ (0 < cap && cap < a && pin ps 'packbf 1)    ; gcc lets these straddle units; refused
                     _ (w > ubits && pin ps 'widebf 1)             ; wider than its type: C's constraint
-                    nmx (pk || a <= mx ? mx a)                    ; packed: the unit asks no alignment
-                    ; packed: the bits run on from the cursor; the unit is the n bytes they touch
+                    ; the struct's alignment: an unnamed field asks none but under AAPCS, and #pragma pack outranks packed
+                    nmx (max mx (? !(name || paapcs? ps) 1  (0 < cap) (capa a)  pk 1  a))
+                    ; packed or under any #pragma pack: the bits run on from the cursor; the unit is the n bytes they touch
+                    run (pk || 0 < cap)
                     pn (((& bit 7) + w + 7) >> 3)
-                    _ (pk && pn > 8 && pin ps 'pkwidebf 1)
                     ; `:0` aligns the cursor off a union; AAPCS also raises the struct's alignment
                     za (paapcs? ps && mx < a ? a mx)
                     (? (w = 0) (go >l (uni ? bit (aup bit (a * 8))) za acc)
-                       (uni && pk) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
+                       (uni && run) (: fld (name ? [name 0 ['bitfield ty 0 w ((w + 7) >> 3)]])
                                       (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
                        uni (: fld (name ? [name 0 ['bitfield ty 0 w]])
-                              (go >l (bit < ubits ? ubits bit) nmx (name ? (fld . acc) acc)))
-                       pk (: fld (name ? [name (bit >> 3) ['bitfield ty (& bit 7) w pn]])
+                              (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
+                       run (: fld (name ? [name (bit >> 3) ['bitfield ty (& bit 7) w pn]])
                              (go >l (bit + w) nmx (name ? (fld . acc) acc)))
                        (: bit2 ((& bit (ubits - 1)) + w > ubits ? (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (bit2 >> 3) (0 - usz))              ; the aligned unit holding the bits
@@ -843,8 +856,7 @@
                     (go >l nbit nmx (spl <inner acc)))
                  (incty? ps ty) (: _ (peep ps 'incmem () || pin ps 'incmem name)
                                    (go >l bit mx acc))
-                 (: own (two? (drop 4 m) ? (m 4) (talign ps ty))
-                    a (max (pk ? 1 (capa own)) (two? >>>m ? (m 3) 0))   ; an ask outranks packed, as gcc has it
+                 (: a (memal ps m pk)
                     sz (tsz ps ty)
                     abit (uni ? 0 (aup bit (a * 8)))
                     at (abit >> 3)
@@ -911,12 +923,11 @@
                           (: pa (pattpk ps <>mr)       ; a trailing packed lays align-1
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
-                             (? (peep ps 'packbf ()) (pin ps 'packbf (), clblame "a bit-field under #pragma pack is not carried out")
-                                (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
-                                (peep ps 'pkwidebf ()) (pin ps 'pkwidebf (), clblame "a packed bit-field spanning more than 8 bytes is not carried out")
+                             (? (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
                              (pin (ps 'stag) tag2 lay,
+                              pin (ps 'fasks) tag2 (memasks ps <mr (<pb | <pa)),
                               pin ps 'tagdef 1,
                               uni ? (pin (ps 'utag) tag2 1) 0,
                               tu ? (pin (ps 'tunion) tag2 1) 0,
@@ -1019,6 +1030,21 @@
        (atom? br ? ()
           (pdtor ps <>br <br @ dr
              (two? dr ? [<><dr <>dr]))))
+   ; a type name with the ask its run lays on it, on the run's own type or an array of it: ((ty ask) rest)
+   (pctya ps ts)
+    (pbty ps ts @ br
+       (atom? br ? ()
+          (pdtor ps <>br <br @ dr
+             (two? dr ? [[<><dr (tdbase? <><dr <br ? (tdrun ps ts) 0)] <>dr]))))
+   ; what such a type name aligns to: an ask may lower as well as raise
+   (tyask ps st) (0 < st 1 ? (st 1) (talign ps <st))
+   ; an expression's alignment: a named object's ask or a member's over its type's
+   (exal ps e ty)
+    (e @ ['var nm] (peep (ps 'locals) nm 'none = 'none ? (fn? ty ? (talign ps ty) (max (talign ps ty) (peep (ps 'aligns) nm 0)))
+                      (max (talign ps ty) (peep (ps 'lasks) nm 0)))
+         ['dot b m] (ptype ps b @ bt
+                       (assoc m (stru? bt ? (peep (ps 'fasks) <>bt ())) @ f (two? f ? <>f (talign ps ty))))
+         _ (talign ps ty))
 
    (pdecay ty) (? (arr? ty) ['ptr <>ty] (fn? ty) ['ptr ty] ty)   ; _Generic's lvalue conversion
    ; -- the qualifiers _Generic needs (6.5.1.1). types here carry no const/volatile, so its
@@ -1075,8 +1101,6 @@
    (tdrun ps ts) (specasks ps ts @ r (0 < <r ? <r <>r))
    ; a declarator's type is the run's own (or an array of it), not a pointer or function to it
    (tdbase? ty base) (? (ty = base) 1 (arr? ty) (tdbase? <>ty base) ())
-   ; what a type-name's run asks of its type ty, 0 for the type's own
-   (tyask ps ts ty) (tdrun ps ts @ a (a < 1 ? 0 (pbty ps ts @ br (tdbase? ty <br ? a 0))))
    ; a qualifier after the last star qualifies the pointer (`int * const`): a row no
    ; lvalue-converted expression matches
    (qtop? ts)
@@ -1154,11 +1178,18 @@
                    (two? more ? [(row . <more) <>more]))))))
    ; the selected expression, presence-wrapped. equality is structural over the marked type,
    ; so `const int *` and `int *` are two rows; a top-level-qualified row matches nothing.
+   ; a struct's ask is no part of its type, as gcc has it
    (gpick rows ty)
     (: (go l w) (atom? l ? w                       ; w: the default so far
                    (: r <l t <r q <>r e <>>r
-                      (!q && t = ty ? [1 e] (go >l (t = 'dflt ? [1 e] w)))))
+                      (!q && alstrip t = alstrip ty ? [1 e] (go >l (t = 'dflt ? [1 e] w)))))
        (go rows ()))
+   ; a type without the ask its structs carry
+   (alstrip ty) (? (stru? ty) [<ty <>ty]
+                   (ptr? ty) ['ptr (alstrip <>ty)]
+                   (arr? ty) ['arr (alstrip <>ty) <>>ty]
+                   (cq? ty) ['cq <>ty (alstrip <>>ty)]
+                   ty)
 
    ; complex usual arithmetic conversion (C99 6.3.1.8): a real side rises to {x, 0}, a
    ; single-eval clit, so gen's complex lane only meets complex operands
@@ -1860,7 +1891,7 @@
        (atom? br ? ()
           (: base <br ts0 <>br
              bq (qspec ps ts base)   ; _Generic's, staged below
-             lal (specask ps ts)   ; an ask among the specifiers, every declarator's
+             lal (specasks ps ts)   ; an ask among the specifiers, every declarator's, and its typedef's
              sct (stat ? (secat? ts @ sc (string? sc ? sc (secat? (tyattr ts0)))))   ; a block static's section, past a tag body too
              (peekp ts0 ";" ? [['decl ()] >ts0]   ; a bare definition (struct S {..};)
                 (: (one ts2)
@@ -1880,7 +1911,7 @@
                                    [(tkv <>>ts30) >>>>ts30])
                              pinl0 (two? ap ? [<ap])
                              ; the ask past the type's own rides a fifth slot, the fourth () unless pinned
-                             ask (max lal (pattpk ps <>dr 2))
+                             ask (max (max <lal (tdbase? ty base ? <>lal 0)) (pattpk ps <>dr 2))
                              pinl1 (talign ps ty < ask ? ((two? pinl0 ? pinl0 [()]) + [ask]) pinl0)
                              ; ..and a static's section a sixth, the slots before it padded
                              pinl (sct ? (take 2 (pinl1 + [() 0]) + [sct]) pinl1)
@@ -2218,9 +2249,13 @@
    (bindloc ps ent shadows) (: nm <ent
                                 old (peep (ps 'locals) nm 'none)
                                 oq (peep (ps 'qtys) nm 'none)
+                                oa (peep (ps 'lasks) nm 'none)
                                 (pin (ps 'locals) nm <>ent,
                                  qtake ps nm <>ent,
-                                 ['locals nm old] . ['qtys nm oq] . shadows))
+                                 ; the record's fifth slot, the ask past the type's own
+                                 (? (charm? (ent 4) && 0 < ent 4) (pin (ps 'lasks) nm (ent 4))
+                                    (oa != 'none) (pull (ps 'lasks) nm 0)),
+                                 ['locals nm old] . ['qtys nm oq] . ['lasks nm oa] . shadows))
    (bindlocs ps ents shadows) (atom? ents ? shadows (bindlocs ps >ents (bindloc ps <ents shadows)))
    (loctypes form) (two? form && elem <form '(decl sdecl) ? <>form)       ; a block decl's entries, () otherwise
    ; a block-scope typedef: each declarator into ps 'types, the old binding on the shadow
@@ -2230,13 +2265,13 @@
        (atom? dr ? ()
           (: nm <<dr
              old (peep (ps 'types) nm 'none)
-             _ (pin (ps 'types) nm <><dr)
-             _ (bq ? (pin (ps 'qtdef) nm bq) 0)
              ; n's alignment, its size unchanged: `typedef T n __aligned(N)` sets it, else the
              ; run's (ra) reaches a declarator of the run's own type. it may lower as well as raise
-             _ (pattpk ps <>dr 2 @ a
-                  (: v (? (0 < a) a (tdbase? <><dr base) ra 0)
-                     (0 < v || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm v) 0)))
+             v (pattpk ps <>dr 2 @ a (? (0 < a) a (tdbase? <><dr base) ra 0))
+             _ (0 < v || peep (ps 'tdask) nm 0 ? (pin (ps 'tdask) nm v) 0)
+             ; a struct carries it in its type's third slot, so a deref, index or member keeps it
+             _ (pin (ps 'types) nm (<><dr @ ty (0 < v && stru? ty ? [<ty <>ty v] ty)))
+             _ (bq ? (pin (ps 'qtdef) nm bq) 0)
              sh2 (['types nm old] . sh)
              af (patt <>dr)                ; glibc's trailing __attribute__
              (? (peekp af ",") (btdefs ps base >af sh2 bq ra)
@@ -2660,6 +2695,7 @@
           (atom? br ? ()
              (: base <br ts0 <>br
                 gbq (qspec ps ts base)  ; the run's mask, _Generic's
+                _ (pin ps 'curtdbase base)   ; note lays the typedef's ask on its own type alone
                 (peekp ts0 ";" ? ['(tdef) >ts0]     ; a bare struct/enum definition
                    (: _ (tyattr ts0 @ ta (pinat ps ta (hdhits ta)))   ; what a tag body hid from ptop
                       ; a tag body ahead of a declarator leaves the form no place to show it
@@ -2851,7 +2887,7 @@
                                      qtake ps nm <><prs,
                                      gogl >prs)))
                    (gogl <>f)))
-           st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign) va (max (an ? an 0) (peep ps 'curtdal 0))
+           st (ps 'curstat) sc (ps 'cursect) an (ps 'curalign) an0 (an ? an 0) td (peep ps 'curtdal 0) va (max an0 td)
            fnp (elem <f '(fn proto))
            ; a `used` static is kept though nothing here calls it (gen's dead-static sweep); an
            ; 'inl one lays for no asm that names it
@@ -2866,7 +2902,7 @@
                               (<<prs @ nm
                                  (st ? (pin (ps 'svars) nm (ps 'curused ? 'used 1)),
                                   sc ? (pin (ps 'sects) nm sc),
-                                  0 < va ? (pin (ps 'aligns) nm va),
+                                  (max an0 (tdbase? <><prs (ps 'curtdbase) ? td 0)) @ a (0 < a ? (pin (ps 'aligns) nm a)),
                                   go2 >prs)))
                  (go2 <>f)),
            ; an alias names no storage: another name for a symbol in this TU; cgen lays the label
@@ -2908,6 +2944,7 @@
             pin ps 'curused (),
             pin ps 'curalign (),
             pin ps 'curtdal (),
+            pin ps 'curtdbase (),
             pin ps 'curpfe (),
             pin ps 'curssp (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back

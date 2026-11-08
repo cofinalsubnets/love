@@ -144,6 +144,10 @@
              (emit-zxm (b @ 255 1 65535 2 4) d a)
             (emit-mov d a + alu-step rr ext d b)))
 
+   ;; the same op less REX.W: the 32-bit write zero-extends. one instruction, as its caller knows
+   (emit-alu4 op d a b)
+      (emit-alu op d a b @ (x . r) ((x & 248) = 72 ? ((x & 247) = 64 ? r ((x & 247) . r)) (x . r)))
+
    ;; 69 /r id (6B /r ib for a byte) is three-address; register-register folds onto two-address 0F AF /r
    (imul-rr d s) (: dn (rn d) sn (rn s) [(rex 1 (hi dn) 0 (hi sn)) 15 175 (modrm 3 dn sn)])
    (imul-ri d a imm) (: dn (rn d) an (rn a)
@@ -182,6 +186,7 @@
    (emit-stx base index scale disp s)  (x64-memx 1 '(137) s base index scale disp)     ; 89    mov [base+index*scale+disp], r64
    (emit-leax d base index scale disp) (x64-memx 1 '(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
    (emit-ldxb d base index scale disp) (x64-memx 1 '(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE
+   (emit-ldxh d base index scale disp) (x64-memx 1 '(15 183) d base index scale disp)  ; 0F B7 movzx r64, WORD
    (emit-ldxw d base index scale disp) (x64-memx 0 '(139) d base index scale disp)     ; 8B    mov r32, DWORD
    (emit-ldxsw d base index scale disp) (x64-memx 1 '(99) d base index scale disp)     ; 63    movsxd r64, DWORD
    ;; and/or/xor r32 by a DWORD (23/0B/33 /r); the 32-bit write zeroes the top
@@ -593,7 +598,7 @@
          ('ld . emit-ld) ('st . emit-st)
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: the same bytes, unseen by the sibcall escape check
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
-         ('ldxb . emit-ldxb) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
+         ('ldxb . emit-ldxb) ('ldxh . emit-ldxh) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
          ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4) ('decm . emit-decm)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
          ('ldsdl . emit-ldsdl) ('fopm . emit-fopm) ('fopl . emit-fopl)
@@ -627,7 +632,7 @@
          ('shlv . emit-shiftv 'shlv) ('shrv . emit-shiftv 'shrv) ('sarv . emit-shiftv 'sarv)
          ('rorv . emit-shiftv 'rorv) ('rorv4 . emit-shiftv 'rorv4)
          ('shl . emit-shift 'shl) ('shr . emit-shift 'shr) ('sar . emit-shift 'sar)
-         ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror)
+         ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror) ('shl4 . emit-shift4 'shl)
          ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
@@ -673,7 +678,7 @@
          ('monitor . '(15 1 200)) ('mwait . '(15 1 201))    ; rax the line, ecx/edx the hints
          ('monitorx . '(15 1 250)) ('mwaitx . '(15 1 251)) ('rdtscp . '(15 1 249))   ; rdtscp: aux in ecx
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
-         ('alum . emit-alum) ('carry . emit-carry) ('alurm . emit-alurm) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
+         ('alum . emit-alum) ('carry . emit-carry) ('alurm . emit-alurm) ('alu4 . emit-alu4) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr) ('lddr . emit-lddr) ('stdr . emit-stdr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
@@ -696,7 +701,7 @@
         ;; fresh set: inc/dec keep CF, a shift by 0 keeps all, imul/idiv leave some undefined
         'zeroxor 1
         'flagr '(br set cmov adc sbb)
-        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd ucomiss)
+        'flagw '(cmp cmpm cmprm test add sub and or xor alu4 shl4 andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd ucomiss)
         'short x86-short}
    (defbackend 'x64 x64))
 ) ; module 'holo
