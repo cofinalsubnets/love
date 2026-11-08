@@ -248,7 +248,10 @@
    ;; no rotate without Zbb: rol/ror go through x31
    (rv-shift op d c)
       (rvn d @ dn
-         (? (op = 'shl) (rv-i c dn 1 dn 0x13)                                ; slli
+         ; rv32 has no shamt past 31: a word shifted out is 0, or its sign, as thumb lays it
+         (? (rv32? 0 && 31 < c && elem op '(shl shr)) (rv-i 0 0 0 dn 0x13)    ; li d, 0
+            (rv32? 0 && 31 < c && op = 'sar) (rv-i 1055 dn 5 dn 0x13)         ; srai d, d, 31
+            (op = 'shl) (rv-i c dn 1 dn 0x13)                                ; slli
             (op = 'shr) (rv-i c dn 5 dn 0x13)                                ; srli
             (op = 'sar) (rv-i (1024 + c) dn 5 dn 0x13)                       ; srai
             (elem op '(rol ror))
