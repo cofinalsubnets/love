@@ -973,6 +973,49 @@ moonrun -t arm -mfloat-abi=soft -c -o "$ho/.asf.o" "$ho/.asf.c" > /dev/null 2>&1
 moonrun -mthumb -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mthumb laid on x64"
 moonrun -t thumb2 -mabi=aapcs-linux -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mabi=aapcs-linux laid on m-profile"
 echo "mooncc: -t arm -fpic lays pc-relative movw/movt, and the arm asks keep to arm ok"
+# i386 under -fpic: every address is call/pop/lea pc-relative, a word read through it, a switch
+# compares; the text holds no absolute word, and the program answers as without
+cat > "$ho/.ipic.c" <<'EOF'
+static int s = 5; int hd __attribute__((visibility("hidden"))) = 7; static double k = 2.5; static int a[4];
+static int f(int x) { return x + s; }
+int sw(int x) { switch (x) { case 0: return 3; case 1: return 9; case 2: return 4; case 3: return 1; case 4: return 8; case 5: return 6; } return 0; }
+int main(void) { int (*p)(int) = f; s += hd; a[hd & 3] = s; double d = k * 3.0 + 0.25; return p(1) + sw(4) + (int)d + (hd == 7) + a[3] - 12; }
+EOF
+for o in -O0 -O2; do
+  moonrun -t i386 $o -fpic -c -o "$ho/.ipic.o" "$ho/.ipic.c" || fail "-t i386 $o -fpic compile"
+  readelf -rW "$ho/.ipic.o" | sed -n "/'.rel.text'/,/^$/p" | grep -q 'R_386_32 ' && fail "-t i386 $o -fpic laid an absolute address in the text"
+  if [ "$(uname -m)" = x86_64 ]; then
+    moonrun -t i386 $o -fpic -o "$ho/.ipic" "$ho/.ipic.c" || fail "-t i386 $o -fpic link"
+    "$ho/.ipic"; r=$?
+    [ $r = 29 ] || fail "-t i386 $o -fpic: the program answers $r, not 29"
+  fi
+done
+moonrun -t i386 -fpic -c -o /dev/null test/cc/187-regnames.c || fail "-t i386 -fpic: a symbol named as a register"
+echo "mooncc: -t i386 -fpic lays every address pc-relative ok"
+# i386's "A": a 64-bit operand rides edx:eax, in and out
+cat > "$ho/.iA.c" <<'EOF'
+static unsigned long long rd(void) { unsigned long long r; asm volatile("rdtsc" : "=A"(r)); return r; }
+static unsigned long long two(void) { unsigned long long r; asm("movl $1, %%eax\n\tmovl $2, %%edx" : "=A"(r)); return r; }
+static unsigned long long swap(unsigned long long y) { unsigned long long r; asm("xchgl %%eax, %%edx" : "=A"(r) : "A"(y)); return r; }
+/* pvclock's scale: an input in a half of the pair */
+static unsigned long long sc(unsigned long long d, unsigned int m) {
+  unsigned long long p; unsigned int t1, t2;
+  asm("mul %5; mov %4,%%eax; mov %%edx,%4; mul %5; xor %5,%5; add %4,%%eax; adc %5,%%edx"
+      : "=A"(p), "=r"(t1), "=r"(t2) : "a"((unsigned int)d), "1"((unsigned int)(d >> 32)), "2"(m));
+  return p; }
+int main(void) { unsigned long long a = rd(), b = rd(), d = 0x123456789abcdef0ull; unsigned int m = 0x87654321u;
+  unsigned long long want = (((d & 0xffffffffull) * m) >> 32) + (d >> 32) * m;
+  return (b > a) + 2 * (two() == 0x200000001ull) + 4 * (swap(0x1122334455667788ull) == 0x5566778811223344ull)
+       + 16 * (sc(d, m) == want); }
+EOF
+for o in -O0 -O2; do
+  moonrun -t i386 $o -c -o /dev/null "$ho/.iA.c" || fail "-t i386 $o: an asm operand constrained A"
+  if [ "$(uname -m)" = x86_64 ]; then
+    moonrun -t i386 $o -o "$ho/.iA" "$ho/.iA.c" || fail "-t i386 $o: the A link"
+    "$ho/.iA"; r=$?
+    [ $r = 23 ] || fail "-t i386 $o: an A operand answers $r, not 23"
+  fi
+done
 [ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
 moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
 echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
