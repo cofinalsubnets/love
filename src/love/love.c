@@ -738,6 +738,7 @@ int code_in(struct g *g, uintptr_t v) {
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
 love_door char *code_window(char *p) { return p; }
+love_door_user(code_window)
 
 // the image's segment, a fixed chunk written through *w. inle's hhdm is NX and mprotect cannot
 // lift it off a shared 2 MiB entry, so there the block runs through code_window's low map

@@ -158,6 +158,29 @@ static love_inline uintptr_t mulsat(uintptr_t a, uintptr_t b) {
 #endif
 #define lvm(n) love_noinline noicf _lvm(n)
 typedef _lvm(lvm_t);
+// the kernel's body under a door's name. a wasm process is an instance of the kernel's own
+// module, so there the name calls through the table, whose slot proc.mjs aims at the hosted
+// body's __user alias
+#if defined(__wasm__)
+#define love_kdoor(T, n, ps, as) T n##__kern ps; \
+ static T (*const volatile n##__kp) ps = n##__kern; \
+ T n ps { return n##__kp as; } \
+ T n##__kern ps
+#define love_kdoorv(n, ps, as) void n##__kern ps; \
+ static void (*const volatile n##__kp) ps = n##__kern; \
+ void n ps { n##__kp as; } \
+ void n##__kern ps
+#define love_klvm(n) lvm(n##__kern); \
+ static lvm_t *const volatile n##__kp = n##__kern; \
+ lvm(n) { love_musttail return Ap(n##__kp, g); } \
+ lvm(n##__kern)
+#define love_door_user(n) extern __typeof__(n) n##__user __attribute__((alias(#n)));
+#else
+#define love_kdoor(T, n, ps, as) T n ps
+#define love_kdoorv(n, ps, as) void n ps
+#define love_klvm(n) lvm(n)
+#define love_door_user(n)
+#endif
 union u {
  lvm_t *ap;
  word x;

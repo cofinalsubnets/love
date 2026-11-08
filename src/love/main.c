@@ -756,3 +756,7 @@ int main(int argc, char const **argv) {
   stdin_give(g);
   enum status s = fin(g);
   return s ? (int) s : rc; }
+
+// the doors under a second name, for a wasm process's table (love.h)
+love_door_user(lvm_exit)
+love_door_user(lvm_getpid)

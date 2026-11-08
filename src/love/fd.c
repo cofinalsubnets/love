@@ -150,3 +150,15 @@ intptr_t port_fd(word x) {
  if (!charmp(x) && ((union u*) x)->ap == lvm_port_io)
   return io_fd((struct io*) x);
  return -1; }
+
+// the doors under a second name, for a wasm process's table (love.h)
+love_door_user(love_fd_flush)
+love_door_user(love_fd_readn)
+love_door_user(love_fd_writen)
+love_door_user(love_fd_port_writen)
+love_door_user(love_fd_port_readn)
+love_door_user(love_sleep)
+love_door_user(ready)
+love_door_user(wait_fds)
+love_door_user(ready_fds)
+love_door_user(love_fd_close)

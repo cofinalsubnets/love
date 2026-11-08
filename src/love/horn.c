@@ -723,3 +723,9 @@ static lvm(lvm_horn_lag) {
 LvDef("horn", horn, 2, NULL);
 LvDef("horn-in", horn_in, 2, NULL);
 LvDef("horn-lag", horn_lag, 1, NULL);
+
+// the doors under a second name, for a wasm process's table (love.h)
+love_door_user(k_horn_open)
+love_door_user(k_horn_write)
+love_door_user(k_horn_lag)
+love_door_user(k_horn_close)

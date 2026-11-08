@@ -18,7 +18,7 @@ static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tic
 uintptr_t khhdm;
 // the hhdm is NX throughout (mkboot.l), so code runs through the image window k_xw;
 // hosted, khhdm is 0
-char *code_window(char *p) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
+love_kdoor(char *, code_window, (char *p), (p)) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
 
 #include "ffalloc.h"
 static struct mem *kmem;
@@ -303,7 +303,7 @@ intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
  if (!s || !s->readn) return -1;
  return s->readn(fd, dst, n); }
 
-intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t n) {
+love_kdoor(intptr_t, love_fd_writen, (int fd, unsigned char const *src, uintptr_t n), (fd, src, n)) {
  struct k_source *s = k_source(fd);
  if (!s) return (intptr_t) n;
  if (s->writen) return s->writen(fd, src, n);
@@ -312,12 +312,12 @@ intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t n) {
  return (intptr_t) n; }
 
 // fd.c's lanes: busy and end are distinct, as read(2) cannot say
-intptr_t love_fd_readn(struct g *g, int fd, unsigned char *dst, uintptr_t n) { return (void) g, k_row_read(fd, dst, n); }
+love_kdoor(intptr_t, love_fd_readn, (struct g *g, int fd, unsigned char *dst, uintptr_t n), (g, fd, dst, n)) { return (void) g, k_row_read(fd, dst, n); }
 
-intptr_t love_fd_port_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+love_kdoor(intptr_t, love_fd_port_readn, (struct g *g, unsigned char *dst, uintptr_t n), (g, dst, n)) {
  return k_row_read((int) io_fd(g->io), dst, n); }
 
-struct g *love_fd_port_writen(struct g *g, unsigned char const *src, uintptr_t n) {
+love_kdoor(struct g *, love_fd_port_writen, (struct g *g, unsigned char const *src, uintptr_t n), (g, src, n)) {
  return g->b = love_fd_writen((int) io_fd(g->io), src, n), g; }
 
 // sys.c's posix door: read(2) says end with 0, the rows with -1
@@ -339,25 +339,25 @@ long k_fd_close(int fd) {
  love_fd_close(fd);
  return 0; }
 
-struct g *love_fd_flush(struct g *g) {
+love_kdoor(struct g *, love_fd_flush, (struct g *g), (g)) {
  int fd = (int) io_fd(g->io);
  struct k_source *s = k_source(fd);
  if (s && s->flush) s->flush(fd);
  return g; }
 
 // the boot rows have no close
-void love_fd_close(int fd) {
+love_kdoorv(love_fd_close, (int fd), (fd)) {
  struct k_source *s = k_source(fd);
  if (s && s->close) s->close(fd); }
 
 // a row that can take a byte always can: out is always ready
-bool ready(int fd, int events) {
+love_kdoor(bool, ready, (int fd, int events), (fd, events)) {
  if (fd < 0) return true;
  if (events != wait_in) return true;
  struct k_source *s = k_source(fd);
  return s && s->ready && s->ready(fd); }
 
-void ready_fds(struct wait_fd *fds, int n) {
+love_kdoorv(ready_fds, (struct wait_fd *fds, int n), (fds, n)) {
  for (int i = 0; i < n; i++) fds[i].revents = ready(fds[i].fd, fds[i].events) ? fds[i].events : 0; }
 
 // a file always reads
@@ -374,7 +374,7 @@ static void k_park(void) {
   k_horn_poll();
   k_wait(); }
 
-void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
+love_kdoorv(wait_fds, (struct wait_fd *fds, int n, uintptr_t ms), (fds, n, ms)) {
   if (n <= 0) { love_sleep(ms); return; }
   k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
@@ -394,7 +394,7 @@ uintptr_t k_clock_ms(void) {
 
 // ms 0 is forever. a seat that sleeps finer than the tick (wasm) answers true; metal rounds up
 __attribute__((weak)) bool k_nap(uintptr_t ms) { return (void) ms, false; }
-void love_sleep(uintptr_t ms) {
+love_kdoorv(love_sleep, (uintptr_t ms), (ms)) {
   if (ms && ms < k_tick_ms && k_nap(ms)) return;
   k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
@@ -1422,7 +1422,7 @@ long k_fd_stat(int fd, struct k_st *st) {
   return 0; }
 
 // (getpid _): the main task reads 0
-lvm(lvm_getpid) {
+love_klvm(lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   love_musttail return Next(1); }
 
@@ -2070,7 +2070,7 @@ static lvm(lvm_fault) {
 
 // (quit code): a task with a pid quits as _exit (task.c), the code what `wait` answers; else
 // the machine resets (test/kernel/kore0.l)
-lvm(lvm_exit) {
+love_klvm(lvm_exit) {
   if (k_cur_pid(g)) love_musttail return Ap(lvm_task_quit, g);
   k_reset();
   love_musttail return Next(1); }
