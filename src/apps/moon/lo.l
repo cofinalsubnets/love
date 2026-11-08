@@ -2328,10 +2328,18 @@
               m (two? >l ? (fold f <>l))
               (two? m && dieb? g <>f fs r ? (m . go r) (f . go >l))))
        (go fs))
+   ; sp-only vfp, after allocation: a single's copy into d and the op on d after it are one
+   ; three-operand op, d = a op b, where b is not d
+   (t2op3 g fs)
+    (: (go l) (l @ ((['movss d a] . [op d2 b] . u) && d = d2 && b != d && elem op '(addss subss mulss divss))
+                    ([(name "\(show op)3") d a b] . go u)
+                   (f . u) (f . go u)
+                   _ ())
+       (sp64? g ? (go fs) fs))
    ; v6-M: a frame slot off r4, the frame's bottom, its size known once csframe has laid the saves
    (lov6s g fs) (!(v6m? g) ? fs (filter (f \ f @ ('sub 'sp 'sp k) (charm? k) _ ()) fs @ ((_ _ _ k) . _) (t16slots fs k) _ fs))
    ; the frame and emit tail
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir))))))))))))))))))))))))
+     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (t2op3 g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir)))))))))))))))))))))))))
 )) ; module 'moon

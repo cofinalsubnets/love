@@ -50,6 +50,7 @@
 ;   (movdxr f g) (movdrx g f)                  ; gp<->f bit moves of a single's 32 bits
 ;   (fimm f k) (ucom0 f)                       ; thumb2: f <- the single of bits k, an 8-bit vfp
 ;                                              ;   immediate; compare a single against +0.0
+;   (addss3 d n m) .. (divss3 d n m)           ; thumb2: d <- n op m, a single's three-operand op
 ;   (fli f g k) (flal f g k p)                 ; thumb2: f <- the single of bits k, g a scratch; flal's
 ;                                              ;   word sits at p, a pool ahead, for the hook to load
 ;   (ldsspi f p) (stsspi p f) (ldpi4 g p) (stpi4 p g)   ; thumb2: a single or a word at p, then p += 4
@@ -167,7 +168,7 @@
              'movupd 2 'movsd 2 'movss 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
              'mulsd 2 'addsd 2 'subsd 2 'divsd 2
-             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2 'ucom0 1 'fimm 2 'fli 3 'flal 4 'ldsspi 2 'stsspi 2 'ldpi4 2 'stpi4 2
+             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2 'ucom0 1 'fimm 2 'fli 3 'flal 4 'addss3 3 'subss3 3 'mulss3 3 'divss3 3 'ldsspi 2 'stsspi 2 'ldpi4 2 'stpi4 2
              'cvtsi2ss 2 'cvtui2ss 2 'cvttss2si 2 'cvttss2ui 2 'movdxr 2 'movdrx 2
              'xorpd 2 'pcmpeqd 2 'andpd 2 'psubq 2
              'cvtss2sd 2 'cvtsd2ss 2 'ucomisd 2 'movmskpd 2

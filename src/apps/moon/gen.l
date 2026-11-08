@@ -894,6 +894,7 @@
        _ (arm '(li fimm) (g \ f \ [() [<>f] 1]))
        _ (arm '(ucom0) (g \ f \ [[<>f] () ()]))
        _ (arm '(fli) (g \ f \ [() [<>f <>>f] ()]))
+       _ (arm '(addss3 subss3 mulss3 divss3) (g \ f \ [[<>>f <>>>f] [<>f] ()]))
        _ (arm '(ldsspi ldpi4) (g \ f \ [[<>>f] [<>f <>>f] ()]))
        _ (arm '(stsspi stpi4) (g \ f \ [[<>f <>>f] [<>f] ()]))
        _ (arm '(mov) (g \ f \ [[<>>f] [<>f] 1]))
@@ -1834,7 +1835,8 @@
    (fdef9 op) (elem op '(ldsd ldss ldsdl ldsdx ldssx cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movqxr movdxr fimm fli ldsspi))
    (fuse9 op) (elem op '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui movqrx movdrx movmskpd))
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
-   (fcalld g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+   (fcalld g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+                 (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15)   ; d8-d14 callee-saved, d15 moon's own scratch
                  fregs16)
    (fnm? g x) (nom? x && elem x fall9)
    (frd g f)                                          ; -> [reads defs] of the float file | 'bar
@@ -1847,6 +1849,7 @@
              (op = 'jmpr) [fall9 ()]
              (elem op '(raw asm)) 'bar
              (elem op fbin9) [[<>f <>>f] [<>f]]
+             (elem op '(addss3 subss3 mulss3 divss3)) [[<>>f <>>>f] [<>f]]
              (elem op fcpy9 || fcvt9 op) [[<>>f] [<>f]]
              (fdef9 op) [() [<>f]]
              (elem op '(stsd stss)) [[(f 3)] ()]

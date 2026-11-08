@@ -381,6 +381,11 @@
    (thumb-subss d m) (t2-fp3 0xEE30 0xA40 d m)                ; vsub.F32
    (thumb-mulss d m) (t2-fp3 0xEE20 0xA00 d m)                ; vmul.F32
    (thumb-divss d m) (t2-fp3 0xEE80 0xA00 d m)                ; vdiv.F32
+   (t2-fp3n hi lo d n m) (: dn (frn d) nn (frn n) mn (frn m) (t32 ((hi | nn) << 16 | (dn << 12 | (lo | mn)))))
+   (thumb-addss3 d n m) (t2-fp3n 0xEE30 0xA00 d n m)          ; vadd.F32 S[2d], S[2n], S[2m]
+   (thumb-subss3 d n m) (t2-fp3n 0xEE30 0xA40 d n m)
+   (thumb-mulss3 d n m) (t2-fp3n 0xEE20 0xA00 d n m)
+   (thumb-divss3 d n m) (t2-fp3n 0xEE80 0xA00 d n m)
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xB40 | mn)))))
    (thumb-movss d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn)))))   ; VMOV.F32 S[2d], S[2m]
    ; both halves: VMOV.F32 S[2d], S[2m] ; VMOV.F32 S[2d+1], S[2m+1] -- an sp-only fpu has no VMOV.F64
@@ -562,6 +567,7 @@
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
           ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx) ('movqrr . thumb-movqrr) ('movrrq . thumb-movrrq)
           ('addss . thumb-addss) ('subss . thumb-subss) ('mulss . thumb-mulss) ('divss . thumb-divss)
+          ('addss3 . thumb-addss3) ('subss3 . thumb-subss3) ('mulss3 . thumb-mulss3) ('divss3 . thumb-divss3)
           ('cvtsi2ss . thumb-cvtsi2ss) ('cvtui2ss . thumb-cvtui2ss)
           ('cvttss2si . thumb-cvttss2si) ('cvttss2ui . thumb-cvttss2ui)
           ('movdxr . thumb-movdxr) ('movdrx . thumb-movdrx)
