@@ -1699,12 +1699,14 @@
    ; aux values close against each other left to right and every use is a copy, so only a dcheap? value goes: a call would recompute per use
    (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-free <q >q b)) >ap acc))])) () aps)
    (auxinl aps x) (foldl (\ b ap (subst-free <ap >ap b)) x (auxclose aps))
+   (auxfwd? aps) (two? aps && (any (p \ occurs? <p ><aps) >aps || auxfwd? >aps))   ; a value reading a later aux: inlined, that aux would capture it
    (norm-let body)
     (!(two? body && <body = ': && !(atom? >body)) ? body
        (: parsed (anat-defs >body) pairs <parsed result <>parsed
           fnps (filter (pr \ two? <pr) pairs) auxps (filter (pr \ !(two? <pr)) pairs)
           (? !(1 = #fnps && two? result) body                                         ; exactly one local fn + a call result
              !(all (dcheap? * cup) auxps) body
+             (auxfwd? auxps) body
              (: g <<<fnps q ><<fnps gbody ><fnps
                 (!(<result = g && #>result = #q) ? body            ; result must be (g inits..) matching arity
                    (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value,
@@ -1933,7 +1935,8 @@
     (atom? pairs ? result
        (: pr <pairs nm <pr val >pr rest >pairs
           uses (foldl (a \ e \ a + dcount nm e) 0 (map cup rest + [result]))
-          (!(dcheap? val) ? orig
+          ; a value naming a later binder reads past it: substituted there, the binder would capture it
+          (!(dcheap? val) || any (p \ occurs? <p val) rest ? orig
              (delet-go (map (p \ <p . subst-sym nm val >p) rest) (subst-sym nm val result) orig))))
    (delet-body e)                                                                             ; bottom-up, root or nested
     (? (atom? e) e

@@ -925,18 +925,22 @@ static love_inline struct tray *ini_tray(struct tray *v, enum tray_type t, uintp
 static love_inline uintptr_t tray_bytes(enum tray_type t, uintptr_t R, uintptr_t n) {
  if (n >= words_max) return (words_max + 1) * sizeof(word);
  return sizeof(struct tray) + R * sizeof(word) + n * love_T[t]; }
+// a float into an int tray's word, saturating, a NaN to 0, as floor and int's scalars leave the float kind
+static love_inline intptr_t flo_word(flo_t v) {
+ return v >= (flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (flo_t) INTPTR_MIN ? INTPTR_MIN
+      : v != v ? 0 : (intptr_t) v; }
 static love_inline flo_t tray_get_flo(struct tray *v, uintptr_t i) {
  void *p = tray_data(v);
  return v->type == love_R ? ((flo_t*) p)[i] : (flo_t) ((intptr_t*) p)[i]; }
 static love_inline intptr_t tray_get_int(struct tray *v, uintptr_t i) {
  void *p = tray_data(v);
- return v->type == love_R ? (intptr_t) ((flo_t*) p)[i] : ((intptr_t*) p)[i]; }
+ return v->type == love_R ? flo_word(((flo_t*) p)[i]) : ((intptr_t*) p)[i]; }
 static love_inline void tray_put_int(struct tray *v, uintptr_t i, intptr_t x) {
  void *p = tray_data(v);
  if (v->type == love_R) ((flo_t*) p)[i] = (flo_t) x; else ((intptr_t*) p)[i] = x; }
 static love_inline void tray_put_flo(struct tray *v, uintptr_t i, flo_t x) {
  void *p = tray_data(v);
- if (v->type == love_R) ((flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = (intptr_t) x; }
+ if (v->type == love_R) ((flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = flo_word(x); }
 static love_inline word tray_get_obj(struct tray *v, uintptr_t i) {
  return ((word*) tray_data(v))[i]; }
 static love_inline void tray_put_obj(struct tray *v, uintptr_t i, word x) {
@@ -952,7 +956,7 @@ static love_inline bool tray_put(struct tray *v, uintptr_t i, word x) {
   return true; }
  if (!isnum(x)) return false;
  if (v->type >= love_R) tray_put_flo(v, i, toflo(x));
- else tray_put_int(v, i, gemp(x) ? (intptr_t) gem_get(x) : toint(x));
+ else tray_put_int(v, i, gemp(x) ? flo_word(gem_get(x)) : toint(x));
  return true; }
 uintptr_t bshape(word a, word b, uintptr_t *R);
 void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),

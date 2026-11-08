@@ -225,11 +225,15 @@
      (nom? x) (x != () && 0 <= peep vt x -1 && !(elem x sh) ? ((x . u . sh) . acc) acc)
      (atom? x) acc
      (<x == '\) (atom? >>x ? acc (: r (lp x) (rd >r (<r + sh) 1 acc)))
-     (<x == ':) (rdl >x (ln >x + sh) u acc)
+     (<x == ':) (rdl >x (ln >x) (lnl >x) sh u acc)
      (foldl (a \ e \ rd e sh u a) acc x))
-    (rdl bs sh u acc) (? (atom? bs) acc
-     (atom? >bs) (rd <bs sh u acc)
-     (: nd (dsug <bs <>bs) (rdl >>bs sh u (rd >nd sh u acc))))
+    ; an inner let's names shadow as ana binds them: its body and lambda defs see them all, a
+    ; value def its lambda siblings and the names before it (vs)
+    (rdl bs ns vs sh u acc) (? (atom? bs) acc
+     (atom? >bs) (rd <bs (ns + sh) u acc)
+     (: nd (dsug <bs <>bs) (rdl >>bs ns (<nd . vs) sh u (rd >nd ((lambp >nd ? ns vs) + sh) u acc))))
+    (lnl bs) (? (atom? bs) () (atom? >bs) ()
+     (: nd (dsug <bs <>bs) (lambp >nd ? (<nd . lnl >>bs) (lnl >>bs))))
     (pairs bs) (atom? >bs ? () (dsug <bs <>bs . pairs >>bs))
     ds (pairs bs)
     rs (map (p \ <p . rd >p () 0 ()) ds)                                            ; per def, its reads
