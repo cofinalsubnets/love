@@ -63,3 +63,7 @@
 (test (6 = ev '(: x 5 (f a) (: z (a + x) x 9 z) (f 1)))
       ('(missing y) = trap (_ \ ev '(: (f a) (: z (a + y) y 30 z) (f 1))) 0 (a \ b \ [a b]))
       (4 = ev '(: (f a) (: z (a + 1) y (z * 2) y) (f 1))))
+; ..nor when a local loop's helper values inline into it
+(test ('(missing b) = trap (_ \ ev '(: (F a) (: k (b + 1) b 3 (g x) (x + k) (g a)) (F 0))) 0 (a \ b \ [a b]))
+      (101 = ev '(: b 100 (F a) (: k (b + 1) b 3 (g x) (x + k) (g a)) (F 0)))
+      (4 = ev '(: (F a) (: b 3 k (b + 1) (g x) (x + k) (g a)) (F 0))))
