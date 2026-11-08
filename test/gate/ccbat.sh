@@ -12,7 +12,7 @@
 #   skip    not held to anything here: assumes a 64-bit long, or no witness
 #   nogcc   held to x86-64 alone
 #   gnopie  an address as an "i" operand: gcc wants no pie
-# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 wasm arm i386 i386m16 thumb1 thumb2)
+# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 rv32 wasm arm i386 i386m16 thumb1 thumb2)
 . test/gate/skip.sh
 . test/gate/a64run.sh
 . test/gate/cclib.sh
@@ -128,6 +128,59 @@ case $tgt in
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow=$narrow32
     gref() { gcc -m32 -msse2 -mfpmath=sse -w -o "$1" "$2" -lm; } ;;
+  rv32)
+    # the esp32-c6's isa under qemu-riscv32's user mode: no libc, run() exits by ecall. ours links
+    # rt.c by mooncc; clang's build is the witness, linked by ld.lld over rv32sf.c's libgcc names
+    for tool in clang ld.lld qemu-riscv32; do have $tool || gate_skip "$name: no $tool, skipped"; done
+    a64_qemu=qemu-riscv32
+    pretty=qemu-riscv32
+    GCC=clang
+    exitonly=1
+    mflags="-os none -Dmain=cc_main -c"
+    refuse="$int128s 364-w128float 297-frameaddr"
+    wide="68-static-assert 120-bfinit 161-enumwide"
+    narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
+    # no libc on the board, and no libgcc: what a link of either side cannot close
+    nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+      148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
+      163-bitfields 164-switchtab 165-constcond 166-condconv 178-toplevelasm 228-strictalign 280-cxf-fuzz
+      283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
+      304-size-classes 315-alloca-stack 345-jmpsave 348-libcmore 353-intuint 354-idioms 355-cplxarg
+      356-vafnval 390-qualon"
+    # clang refuses these here; it folds a long shifted past 31 as gcc does not (152, 378), and a
+    # _Thread_local of its own wants a tp the board never sets (142)
+    nogcc="72-quals 95-libcfill 140-fsuffix 176-cleanup 268-overflow-p 269-builtin-alloca 308-negnan
+      311-coldsplit 315-rgnnest 375-splitcall 380-initcover 383-vfpimm 385-packedinit 142-syntax
+      152-rotate 378-extbounds"
+    rvf="--target=riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -mno-relax"
+    # main(argc, argv) gets a hosted run's 1 and its name, so an argc a program reads is no register's leftover
+    { echo 'int cc_main(int, char **);'
+      echo 'int main(void){ static char n[] = "t", *av[] = { n, 0 }; return cc_main(1, av); }'
+      echo 'void *memset(void *p, int c, unsigned long n){'
+      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
+      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
+      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
+      echo 'void *memmove(void *a, const void *b, unsigned long n){'
+      echo ' unsigned char *x = a; const unsigned char *y = b;'
+      echo ' if (x < y) { while (n--) *x++ = *y++; }'
+      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
+      echo 'int strcmp(const char *a, const char *b){'
+      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+    } > "$d/run.c"
+    { echo 'int main(void);'
+      echo 'void _start(void){ register int a0 __asm__("a0") = main(); register int a7 __asm__("a7") = 93;'
+      echo ' __asm__ volatile("ecall" :: "r"(a0), "r"(a7)); for (;;); }'
+    } > "$d/start.c"
+    moonrun -t rv32 -os none -c -o "$d/run.o" "$d/run.c" || fail "mooncc run.c"
+    moonrun -t rv32 -os none -c -o "$d/rt.o" src/apps/moon/lib/rt.c || fail "mooncc rt.c"
+    clang $rvf -O1 -ffreestanding -fno-builtin -c "$d/run.c" -o "$d/run.cc.o" || fail "clang run.c"
+    clang $rvf -O1 -ffreestanding -c "$d/start.c" -o "$d/start.cc.o" || fail "clang start.c"
+    moonrun -t rv32 -os none -c -o "$d/sf.o" test/gate/rv32sf.c || fail "mooncc rv32sf.c"
+    blink() { moonrun -t rv32 -os none -nostdlib -o "$2" "$1" "$d/run.o" "$d/rt.o"; }
+    gref() {
+      clang $rvf -O0 -w -ffreestanding -Dmain=cc_main -c "$2" -o "$1.o" \
+        && ld.lld -o "$1" "$d/start.cc.o" "$d/run.cc.o" "$1.o" "$d/sf.o" "$d/rt.o"
+    } ;;
   thumb1|thumb2)
     thumb_board $tgt "$d"
     if [ $tgt = thumb1 ]; then
