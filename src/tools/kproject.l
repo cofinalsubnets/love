@@ -39,10 +39,10 @@
       dl ((: (go l) (? (atom? l) (scare 'kproject-data) (0 < <l 4 & 2) <l (go >l))) pls)
       pend ((: (go l m) (? (atom? l) m (go >l (: e (<l 0 + <l 3) (m < e ? e m))))) pls 0)
       dcopy [(ld-align 4096 pend) (dl 1) (dl 2) (dl 2) 4]
-      loads (pls + [dcopy])
       (sho i) (shoff + i * 64)
       shstro (rle64 pie (sho shstrx + 24))
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
+      loads (pls + [dcopy])
       (shfind nm) ((: (go i) (? (shnum <= i) (scare 'kproject-section nm)
                                 (sname i = nm) i (go (i + 1)))) 1)
       relo (: x (shfind ".love.rela") (rle64 pie (sho x + 24)))
@@ -86,10 +86,6 @@
       kd1 (ldlayn 'data (ldlay1 'data kd0 kobjs) kobjs)
       kend (ldlayn 'bss (ldlay1 'bss kd1 kobjs) kobjs)
       kload [kv #pie (kd1 - k0) (kend - k0) 7]
-      loads2 (loads + [kload])
-      top ((: (go l m) (? (atom? l) m
-                          (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
-           loads2 0)
       glo (ldsyms (objs + kobjs))
       kglo (ldsyms kobjs)
       doors {}
@@ -106,6 +102,21 @@
                               (pin glo nm [(bias + rle64 pie (e + 8)) 0])))
                         0)
                    (go (e + 24))))) symo)
+      ; ..and each page holding a door, again and unpatched, past the kernel: a process's text
+      ; is the kernel's but for these
+      dpgs (foldl (\ a v (: p (v - v % 4096) (elem p a ? a (p . a)))) () (sort (map (k \ doors k) (keys doors))))
+      _ (? (16 < #dpgs) (scare 'kproject-doors #dpgs) 0)
+      tv (ld-align 4096 (kend - bias))
+      tcopy ((: (go l i acc)
+                 (? (atom? l) (rev acc)
+                    (: p <l g <(filter (g \ g 0 <= p && p < g 0 + g 2) pls)
+                       (go >l (i + 1) ([(tv + i * 4096) (p - g 0 + g 1) (min 4096 (g 0 + g 2 - p))
+                                        (min 4096 (g 0 + g 2 - p)) 4] . acc)))))
+             (rev dpgs) 0 ())
+      loads2 (loads + [kload] + tcopy)
+      top ((: (go l m) (? (atom? l) m
+                          (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
+           loads2 0)
       eaddr (: r (glo entnm) (two? r ? <r (scare 'kproject-entry entnm)))
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
       nifx (shfind ".love.nifs")
@@ -129,9 +140,9 @@
               (: lo ((rel + 0x800 & 0xfff) - 0x800)
                  (0x297 + (rel - lo & 0xfffff000) + (lo & 0xfff) * 1048576 * 4294967296 + 0x28067 * 4294967296)))])
 
-      ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base and k_pie_data
-      ; take the image's far edge (physical), the pie's base and the data copy. ascending, for
-      ; the one-pass splice below
+      ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base, k_pie_data and
+      ; k_pie_door take the image's far edge (physical), the pie's base, the data copy and the door
+      ; copy with its pages. ascending, for the one-pass splice below
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
@@ -139,11 +150,14 @@
             (ins [(ksym "k_image_top") (top - xw)]
             (ins [(ksym "k_pie_base") bias]
             (ins [(ksym "k_pie_data") (bias + dcopy 0)]
-                 (rev ((: (go k acc)
-                           (? (relz <= k) acc
-                              (: v (rle64 pie (relo + k))
-                                 (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
-                      0 ())))))
+            (foldl (\ a s (ins s a))
+                   (rev ((: (go k acc)
+                             (? (relz <= k) acc
+                                (: v (rle64 pie (relo + k))
+                                   (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
+                        0 ()))
+                   ((: (go l i acc) (? (atom? l) acc (go >l (i + 1) ([(ksym "k_pie_door" + 16 + 8 * i) <l] . acc))))
+                    (rev dpgs) 0 [[(ksym "k_pie_door") (bias + tv)] [(ksym "k_pie_door" + 8) #dpgs]])))))
             (sort (keys doors)))
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
