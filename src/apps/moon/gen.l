@@ -1940,7 +1940,7 @@
         (: (mark? f) (f = '(saves) || f = '(rests))
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
-           fcs (a64? g ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
+           fcs (? (a64? g) '(f8 f9 f10 f11 f12 f13 f14 f15) (t32? g) '(f8 f9 f10 f11 f12 f13 f14) ())
            ; wasm's registers are the function's own locals: a call leaves them, none is saved
            nm (wasm? g ? () (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs)))
            r3 (x86? g && elem 'r3 nm)

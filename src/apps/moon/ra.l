@@ -8,8 +8,8 @@
    ; each target's files, caller-saved first: a callee-saved one costs its save. every x64 xmm is
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
    ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
-   ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d8-d15
-   ; for their saves
+   ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d15
+   ; to holo's scratch, and takes d8-d14 last, callee-saved
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                (v6m? g) '(r0 r1 r2 r3 r5 r6)
@@ -19,12 +19,12 @@
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
                (v6m? g) ()
-               (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
+               (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14)
                (ia32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
-   ; what a call clobbers: the caller-saved gp file and every float register the pool takes
-   (racl g) (lvgp g + ragf g)
+   ; what a call clobbers: the caller-saved gp file and every float register the pool takes, but t32's d8 up
+   (racl g) (lvgp g + (t32? g ? (filter (r \ !(elem r '(f8 f9 f10 f11 f12 f13 f14))) (ragf g)) (ragf g)))
    ; the vregs lo.l mints: %nK on the gp file, %wK on the float file
    (lomk g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%n\(k)"))
    (lomkf g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%w\(k)"))
