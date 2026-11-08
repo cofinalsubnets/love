@@ -40,6 +40,10 @@
                       (lib () k @ M (M ? M (lib () 'verbs @ V (tablet? V ? (V 'lift k))))))
                  (keys (lib ()))))
 
+; a board that links no posix.c has no tty: () answers as one, (() 1) being (), so the
+; editor and the grid take their no-terminal widths
+(: tty (peep book 'tty ()))
+
 (: putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
