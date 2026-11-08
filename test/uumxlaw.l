@@ -105,6 +105,8 @@
    (idpath true)))
 
 ; --- the compose cell, the lane of test/uuhom.l's homcomp monoid; uuhom loads earlier ---
+; named through uu, so a run without uuhom misses them by uu-unbound, and a shard carries it
+(vof 0 'homcomp, vof 0 'hom-assoc)
 (test (two? (peep GLOB 'homcomp 0))
         (two? (peep GLOB 'hom-assoc 0))
         (two? (peep GLOB 'idfun 0)))
