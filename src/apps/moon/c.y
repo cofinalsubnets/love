@@ -89,6 +89,16 @@
         ['blk (rev acc)]))
    (cx-app l acc) (atom? l ? acc (cx-app >l (<l . acc)))
    (cx-it ps s) (clpop ps @ cm (cm ? [s cm] [s]))       ; a cleanup's marker rides after
+   ; -g: ps 'cxls holds each open block's next item start, innermost first, the lookahead
+   ; when the last item or the `{` reduced; an item, a marker's aside, lays ('loc file line)
+   ; before it
+   (cx-look ps vl) (ps 'dbg ? (pin ps 'cxlook (two? vl ? (cx-vtok <vl))))
+   (cx-dpush ps) (ps 'dbg ? (pin ps 'cxls (ps 'cxlook . ps 'cxls)))
+   (cx-dpop ps) (ps 'dbg ? (ps 'cxls @ l (pin ps 'cxls >l, two? l ? <l)))
+   (cx-dloc ps l lay)
+    (? !(ps 'dbg) l
+       (: t (cx-dpop ps) _ (cx-dpush ps)
+          (lay && two? t && two? <t ? (['loc (ps 'dfile) <>><t] . l) l)))
    (cx-ret ps e t) (intptr? ps e ? (cx-no ps "an integer where a pointer is owed" t) ['ret e])
    ; if (__builtin_expect(e, k)): the test is e, and a (nop cold|hot) heads the then-arm
    (cx-if ps rc th el)
@@ -136,10 +146,10 @@
 %left '*' '/' '%'
 %%
 top : XEXPR expr { $2 } | XASN asn { $2 } | XCOND cond { $2 } | XBLOCK block { $2 } ;
-block : lb items '}' { (cx-bend ps $2) } ;
-lb : '{' { (cx-benter ps) } ;
+block : lb items '}' { (cx-dpop ps, cx-bend ps $2) } ;
+lb : '{' { (cx-benter ps, cx-dpush ps, ()) } ;
 items : { () } | items item { (cx-app $2 $1) } ;
-item : DECL | stmt { (cx-it ps $1) } | mark { (cx-it ps $1) } ;
+item : DECL { (cx-dloc ps $1 1) } | stmt { (cx-dloc ps (cx-it ps $1) 1) } | mark { (cx-dloc ps (cx-it ps $1) ()) } ;
 stmt : block | sstmt ;
 sstmt : ';' { ['nop] }
       | expr ';' { ['expr $1] }
@@ -391,8 +401,9 @@ prim : ID { (cx-id ps $1) }
        (fr (peep ps 'cxfr ()), pin ps 'cxfr f0, lb (peep ps 'cxlab ()), pin ps 'cxlab l0))
    ; -> (value rest) | (): sel 'expr, 'asn, 'cond or 'blk
    (cx-parse ps ts sel)
-    (: f0 (peep ps 'cxfr ()) l0 (peep ps 'cxlab ())
+    (: f0 (peep ps 'cxfr ()) l0 (peep ps 'cxlab ()) d0 (ps 'cxls)
        r (cx-go ps ts sel)
+       _ (ps 'dbg ? (pin ps 'cxls d0))
        (two? r ? r (cx-undo ps f0 l0, ())))
    ; a val's first token: a said one carries the tail it was said from
    (cx-vtok e) (<e = 'cxv ? <>>>e e)
@@ -422,7 +433,7 @@ prim : ID { (cx-id ps $1) }
                  (cx-unit r = 1 ? (play c (o + 6) (k - 1) vl2 p st2)
                     (pop st2 (rlen r) () @ [st3 args]
                        ; an action answering a number refused: the lookahead rides out
-                       (: v (peep cx-tab-acts r () @ f (f ? (f ps args) <args))
+                       (: v (peep cx-tab-acts r () @ f (f ? (cx-look ps vl2, f ps args) <args))
                           (charm? v ? [vl2 -1 st3] (play c (o + 6) (k - 1) vl2 p (v . st3)))))))))
        ; sg: (kinds vals stop m start), kinds and vals in order; ks the kinds' string
        (go c look ks sg vl i st)

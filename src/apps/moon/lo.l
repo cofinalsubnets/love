@@ -1766,6 +1766,9 @@
        (s @ () ()
             ((_ . _) . _) (loitems g env s)
             ('nop . _) ()
+            ; -g's line mark: a label named for it, one per copy, read off the laid lanes (obj.l o-dwarf)
+            ['loc f l] [['label (name "\(nlab g ".dl"):\(l):\(f || "")")]]
+            ['loc f l _] [['label (name "\(nlab g ".dlf"):\(l):\(f || "")")]]   ; a body's `{`
             ('tdef . _) ()
             ; the canary at fp-16, the frame keeps its cell; the blob puts back what it borrows
             ('ssp k) [['fix () () (sspblob g k)]]
