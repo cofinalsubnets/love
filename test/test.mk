@@ -15,7 +15,7 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
-  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -52,7 +52,7 @@ test_extra: test_filemode waits test_front test_proof test_gen test_uugen test_u
 	test_cca64 test_cci386 test_ccarm test_ccrv64 test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp \
-	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_links \
+	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_nucleo446_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
 
@@ -582,11 +582,18 @@ test_nucleo446: host
 	   sh test/gate/skip.sh gate-skip "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
 	  $(MAKE) -C src/inle/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
-# test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs it
+# test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C src/inle/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
+# the boards' batteries on silicon, flashed over swd on a host with the board's cap
+test_rp2040_board: test_rp2040
+	@echo TEST out/rp2040/love.bin "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love.bin
+test_nucleo446_board: test_nucleo446
+	@echo TEST out/nucleo446/firm.bin "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
 test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
 	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
