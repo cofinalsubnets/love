@@ -320,41 +320,39 @@ qualifier, matched the first structurally equal row, and answered whichever one 
 first — c-testsuite 00219 (`const int * const` taking the `int *` row where C takes neither and
 falls to `default`) is off the roster with this.
 
-**the type language still carries no qualifier**, and that is the point: a node for one would
-reach all 56 of gen's ptr dispatch sites. The one consumer that must tell `const char *` from
-`char *` keeps its **own marked copy** — `('cq mask t)` over the leaf, mask 1=const 2=volatile —
-parked in `ps 'qtys` beside `'locals` and shadowed with it, staged by each declarator parse
-(`ps 'qstage`) and consumed by the bind that follows. Nothing outside `_Generic` reads a marked
-type, and a stage is taken only when it strips back to the type actually bound, so a mark cannot
-outlive the declaration that described it. The sources of a mark are the specifier run
-(`qrun`), a typedef's own (`ps 'qtdef`), a struct member's (`ps 'qmem`, which `playout` has no
-slot for), and — for a cast, whose `('cast ty ..)` node keeps the bare type gen reads — a
-re-read of the type-name off the tokens (`qctl`).
+**Qualifiers ride the type** (moon-uu's rung 1b): a mask, 1 const, 2 volatile, 4 restrict, sits on
+whatever holds a type rather than wrapping it, so no reader of a type's head sees a change:
 
-It costs **+0.09% of the instructions** compiling src/love/love.c (perf, 130.348G vs 130.231G,
-stable to five figures across runs), and the `.o` is byte-identical. Two things buy that back and both are load-bearing: nothing is staged for
-an unqualified declaration (the common path never touches a table), and `qrun` walks the
-specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),
-which would have been quadratic over a TU.
+- a pointer is `('ptr t a q)`: `a` the alignment its pointee's address carries (lo's slot), `q` the
+  pointee's mask, each laid only when it is not 0, so an unqualified pointer stays `('ptr t)`;
+- an object's own mask is its decl or param entry's seventh slot, and a member's the fourth
+  slot of its laid record; `ps 'lqs` and `ps 'gqs` hold the locals' and globals' for parse's `&`;
+- an array carries none: an element's mask is its access's, and decay lays it on the pointer.
 
-Held to gcc by test/cc/143-genericqual.c: 31 checks over locals, params, block scope, globals,
-typedefs, members, array decay, `&` and `*`, and const told apart from volatile.
+While a declarator is read, the specifier run's mask wraps its type as `('qual m t)`. Each star
+takes the wrapper into its pointee slot, an array hoists it to the object, and a function return
+sheds it. Only a typedef keeps a wrapped type, in `ps 'types`, so every use takes its mask
+(`typedef char *cp; const cp x` is a const pointer, `const cp *y` a pointer to one). `accq` answers
+an lvalue's mask: its object's, the pointer's it is reached through, or a member's over its base's.
 
-Two deliberate readings:
+`_Generic` reads the controlling expression's `ptype`, decayed with its access's mask. A pointee's
+mask is part of the type, so `const char *` and `char *` are two rows, while lvalue conversion
+needs nothing done: no `ptype` answers a top-level mask. A comparison of two types for
+compatibility goes through `tbare`, which drops every mask. `?:` meets two pointers with both
+pointees' masks.
 
-- a type-name with a **top-level** qualifier (`int * const:`) is parsed, kept, and matched
-  against nothing — no lvalue-converted controlling type can be compatible with it. gcc accepts
-  the row and never selects it; clang warns. We agree on the answer and say nothing.
-- only the **specifier run's** qualifier is seen. A mid-declarator one — `char * const *p`,
-  where the const sits on the inner pointer — reads unqualified, so it matches *more* than C
-  does, never less. `typedef char *cp; const cp x;` is read right (a const *pointer*, so the
-  mark does not reach the leaf); `typedef char *cp; const cp *y;` is the shape that would not be.
+Held to gcc by test/cc/143-genericqual.c (31 checks over locals, params, block scope, globals,
+typedefs, members, array decay, `&` and `*`, const told apart from volatile) and
+test/cc/390-qualon.c. The latter covers a qualifier past a star, typeof's mask, a const struct's
+members, a pointer to a const array, `?:`, and a volatile local's store before longjmp.
 
-one path binds a name without staging for it: a **K&R** parameter list, whose types arrive as
-separate declarations. A prototype's staged mark for the same name would still be sitting there,
-and it is taken if it strips back to the same type — so `int f(const char *buf);` followed by a
-K&R `f(buf) char *buf;` would read `buf` as qualified. The guard makes it need a shape match as
-well as a name match; nothing in the tree or the corpus reaches it.
+A type-name with a **top-level** qualifier (`int * const:`) is parsed, kept, and matched against
+nothing: no lvalue-converted controlling type can be compatible with it. gcc accepts the row and
+never selects it; clang warns. We agree on the answer and say nothing.
+
+What reads the mask past the parser: lo keeps a **volatile** local or param in its frame slot,
+so every access is a load or a store, and srs leaves a volatile struct, member or copy source
+whole. `_Atomic` is not parsed (above), so its bit is unused.
 
 ### the `_Static_assert` quirks
 

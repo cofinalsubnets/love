@@ -3304,7 +3304,7 @@
        gty (g 'ainlg @ t
               (t ? t (foldl (a \ k \ pin a k <>(g 'glob k)) {} (keys (g 'glob)) @ t2
                         (pin g 'ainlg t2, t2))))
-       ps9 {'locals tys 'globals gty 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
+       ps9 {'locals tys 'lqs {} 'globals gty 'gqs {} 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
        (ety e) (ptype ps9 e @ t (stru? t || arr? t ? () t))
        (tmp ty) (: k (n9 'k) _ (pin n9 'k (k + 1)) t "`c\(k)" (pin tys t ty, t))
        (cen x)                                     ; the caller's names: types, and which are &-taken
@@ -3381,10 +3381,10 @@
                                  (stru? <>p || arr? <>p) (bind >ps >as (pure? a ? pre (pre + [['expr a]])))
                                  ; ..and a scalar one the pruned body never names, when its arg loads nothing
                                  (rdw <p bd 1 = 0 && nold? a) (bind >ps >as pre)
-                                 (ty9 = <>p && !(tak <>a) && !(wrs? <p bd))
+                                 (tbare ty9 = tbare <>p && !(tak <>a) && !(wrs? <p bd))
                                   (pin m <p <>a, bind >ps >as pre)
                                  (tx != 'no)
-                                  (<>p = ['ptr tx] && !(wrs? <p bd) && aonly <p bd ?
+                                  (tbare <>p = ['ptr (tbare tx)] && !(wrs? <p bd) && aonly <p bd ?
                                      (pin m <p a, bind >ps >as pre)
                                      ; always_inline, or a body that compiles only spliced: the frame is the price
                                      (peep (g 'alw) nm () || jl ?
@@ -4269,7 +4269,9 @@
        cand {}                                      ; name -> (elty n)
        dcl {}
        (plain? p2 n) (p2 @ ('init is) (#is <= n && !(any (e \ two? e && elem <e '(dfield didx init)) is)) !(two? p2))
-       (fit? x p) (<x = 'decl && #p = 3 &&
+       ; an entry with nothing past its init but a mask, and that not volatile
+       (bare? p) (#p = 3 || #p = 7 && take 3 >>>p = [() 0 ()] && !(p 6 & 2))
+       (fit? x p) (<x = 'decl && bare? p &&
                    (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16 && plain? (p 2) n) ()))
        (one x p) (pin dcl <p (1 + peep dcl <p 0), fit? x p ? (pin cand <p >(<>p)) 0)
        (cen x) (? (atom? x) 0
@@ -4309,23 +4311,29 @@
    ; -- a local struct of scalars, named only by member or by & to a call that keeps no pointer,
    ; becomes its members as scalars, which the allocator may seat; around such a call they copy to
    ; the struct and back. one that starts as a copy from memory, or is assigned one as a statement,
-   ; reads its members there, through an address taken once. types carry no volatile, so a unit
-   ; naming one is left alone --
+   ; reads its members there, through an address taken once. a volatile struct, member or
+   ; source stays whole --
    (srs g f)
     (: w64 !(ilp32? g)
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
        (mems t) (t @ ('struct . _) (peep (g 'stag) <>t 0 @ e (two? e ? <e)) ())
        (over a b) (a 1 < b 1 + tsz g (b 2) && b 1 < a 1 + tsz g (a 2))
-       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ !(scal? (x 2))) m) &&
+       (vol? q) (charm? q && q & 2 > 0)
+       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ !(scal? (x 2)) || vol? (x 3)) m) &&
                                !(any (a \ any (b \ !(<a = <b) && over a b) m) m)))
        cand {} dcl {} bad {} use {} site {} inis {} tmps {'k 0 'l ()}
+       ; the parser's typer over this fn's names, for a source's mask
+       tys {} lqs {} ps9 {'locals tys 'lqs lqs 'globals {} 'gqs {} 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
+       (vsrc? e) (vol? (accq ps9 e))
        (mem? e) (e @ (('idx || 'deref || 'dot) . _) 1 0)
-       (one x p) (pin dcl <p (1 + peep dcl <p 0), (mem? (p 2) ? (pin inis <p 1) 0),
-                  <x = 'decl && (!(two? (p 2)) || mem? (p 2)) && clean? <>p ? (pin cand <p <>p) 0)
+       (bind p) (pin tys <p <>p, vol? (p 6) ? (pin lqs <p (p 6)) 0)
+       (one x p) (pin dcl <p (1 + peep dcl <p 0), bind p, (mem? (p 2) ? (pin inis <p 1) 0),
+                  <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2))) && !(vol? (p 6)) && clean? <>p ?
+                     (pin cand <p <>p) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
                   (map cen x))
-       _ (cen f)
+       _ (map bind <>>f, cen f)
        (cand? nm) (two? (peep cand nm ()))
        (fine? fn) (!(dcl fn) && !(two? (assoc fn <>>f)) && two? (g 'sigs fn) &&
                    (<(g 'sigs fn) @ t (t = 'void || scal? t)))
@@ -4335,7 +4343,7 @@
                               (pin site nm 1)
                               _ (scan a)))
        ; a whole copy in, its value unread: a statement, or a comma's left
-       (eff x) (x @ (['asn ['var nm] m] && cand? nm && mem? m) (scan m)
+       (eff x) (x @ (['asn ['var nm] m] && cand? nm && mem? m) (vsrc? m ? (pin bad nm 1) (scan m))
                     ['comma a b] (eff a, eff b)
                     _ (scan x))
        (scan x) (? (atom? x) 0
@@ -4376,7 +4384,7 @@
                       ['decl ps] ['decl (rd ps)]
                       ['call ['var fn] as] (rwcall fn as)
                       _ (map rw x)))
-       (? (abl? g 'srs || !(g 'novol) || !(two? ok)) f
+       (? (abl? g 'srs || !(two? ok)) f
           (rw f @ r (tmps 'l @ l (two? l ? [<r <>r <>>r (r 3 @ ['blk is] ['blk (['decl l] . is)])] r)))))
    ; an overflow builtin over two constant operands into a local only it &-takes and nothing else
    ; writes, answered here: the local's decl takes the exact value at its width, the call whether it
@@ -4690,14 +4698,12 @@
           'rstrs (two? xtra && 8 < #xtra ? (xtra 8) {})
           ; file-scope `register T nm asm("R")` names: vent answers the register, nothing is laid
           'gregs (two? xtra && 10 < #xtra ? (xtra 10) {})
-          ; the unit names no volatile (the parser's word; absent reads as named): memfw may run
-          'novol (two? xtra && 11 < #xtra && !(xtra 11))
           'xfns ()                                  ; (secname forms) per fn that named a section, newest first
           'fasecs ()                                ; a function's asm sections, one gas-top reading each
           'romemo {}                                ; a global's image, laid once and read by every walk
-          'mo (two? xtra && 12 < #xtra ? (xtra 12) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
-          'pfes (two? xtra && 13 < #xtra ? (xtra 13) {})   ; fn name -> its own patchable_function_entry (N M)
-          'nopro (two? xtra && 14 < #xtra ? (xtra 14) ())  ; no_profile_instrument_function names
+          'mo (two? xtra && 11 < #xtra ? (xtra 11) [() () () () () () () () () () () () () () () () () ()])   ; the asks: [strict-align branch-protection regparm pre-686 -Os no-float unsigned-char no-jump-tables no-builtin align-functions no-sibcalls auto-var-zero ibt wrapv patchable-entry stack-guard x86-kernel no-pie]
+          'pfes (two? xtra && 12 < #xtra ? (xtra 12) {})   ; fn name -> its own patchable_function_entry (N M)
+          'nopro (two? xtra && 13 < #xtra ? (xtra 13) ())  ; no_profile_instrument_function names
           'pfel ()}                                 ; the pads laid, newest first
        ; pass 0: every fn name (the sig table too: an mproto sibling has a sig but no proto form),
        ; and the inline table -- always_inline at any size, noinline never
