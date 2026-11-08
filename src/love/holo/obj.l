@@ -183,7 +183,7 @@
        be (peep backends target ())
        x86 (i386? target)
        tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
-       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8 cbz ldl16 ldlw))
+       rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8 cbz ldl16 ldlw vldl))
        wkset (o-names wknames)
        ; i386: a reach to any global stays a relocation, as gas leaves it
        gbset (x86 ? (o-names (wknames + funcnames + globnames)) wkset)

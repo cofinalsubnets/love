@@ -15,7 +15,9 @@
    (lobits g d bits)
     (ilp32? g ? (u64 bits @ u (lomk g @ l (lomk g @ h [['li l (u % 4294967296)] ['li h (u // 4294967296)] ['movqrr d l h]])))
        (lomk g @ t [['li t bits] ['movqxr d t]]))
-   (lomv d s) (lofr? d ? ['movapd d s] ['mov d s])
+   ; a zero of ty: riscv reads a single whose upper word is not all ones as a nan
+   (lofz g d ty) (rv64? g && ty = 'float ? (lomk g @ t [['li t 0] ['movdxr d t]]) (lobits g d 0))
+   (lomv d s) (lofr? d ? (lofo? d || lofo? s ? ['movss d s] ['movapd d s]) ['mov d s])
    ; a pointer's step: the pointee's size, void and functions one byte
    (lostep g ty) (<>ty @ 'void 1 ('fn . _) 1 ('varr . _) 'bad t (tsz g t))
    (lok g e) (knum g e @ ((k . _) && fits32 k) [k] ())
@@ -386,7 +388,7 @@
     (? (d128? vt || pair? g vt) (lomk g @ d ['int d (fs + [['mov d <r]] + map (x \ ['or d d x]) >r + [['cmp d 0] ['set 'ne d]])])
        (lofl? vt)
         (: t (lomk g) z (lomkf g) a (lomk g) b (lomk g) d (lomk g)
-           ['int d (fs + lobits g z 0 + [[(vt = 'float ? 'ucomiss 'ucomisd) r z]
+           ['int d (fs + lofz g z vt + [[(vt = 'float ? 'ucomiss 'ucomisd) r z]
                           ['set 'ne a] ['set 'p b] ['mov d a] ['or d d b]])])
        (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'ne d]])]))
    ; a copy, so the caller may write it in place
@@ -940,7 +942,7 @@
                                (fx + fy + [['cmp x y] ['br (scc (sense ? op (negrel op)) (cmpu g (vty va) (vty vb))) L]])))))))
             (lox g env e @ ([ty r fs] && pair? g ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            ([ty r fs] && losc? ty) (fs + [['cmp r 0] ['br (sense ? 'ne 'eq) L]])
-                           ([ty r fs] && lofl? ty) (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z (lobits g z 0)] sense L))
+                           ([ty r fs] && lofl? ty) (lomkf g @ z (lofbr g 'ne [ty r fs] [ty z (lofz g z ty)] sense L))
                            ([ty r fs] && d128? ty) (lotest g [ty r fs] @ [_ d f2] (f2 + [['cmp d 0] ['br (sense ? 'ne 'eq) L]]))
                            'bad))))
 
@@ -1067,6 +1069,8 @@
                          ([ty r fs] && losc? ty) (lomk g @ d ['int d (fs + [['cmp r 0] ['set 'eq d]])])
                          ([ty r fs] && (lofl? ty || d128? ty)) (lotest g [ty r fs] @ [_ t f2] (lomk g @ d ['int d (f2 + [['cmp t 0] ['set 'eq d]])]))
                          'bad)
+         ; a float literal's negation is its image with the sign flipped
+         ['un 'neg ['cast 'float ['flo v]]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v ^ 2147483648)] ['movdxr w t]]]))
          (['un op x] && elem op '(neg bnot))
           (lox g env x @ ([ty [l h] fs] && pair? g ty)
                           (lomk g @ l2 (lomk g @ h2
@@ -1563,7 +1567,11 @@
        (go ts 0 0 0 ())))
    ; a slot's register, and a slot read into a float vreg: an odd one has no name and bounces off r12
    (lo32sn k) (xmmreg (k // 2))
-   (lo32rd k d) (0 = k & 1 ? [['movapd d (lo32sn k)]] [['movsnrx 'r12 k] ['cuse (lo32sn k)] ['movdxr d 'r12]])
+   ; ..on thumb2sp every slot is a register: an odd one f(16+k/2), a single read by its own copy
+   (lo32s1 k) (0 = k & 1 ? (lo32sn k) (name "f\(16 + k // 2)"))
+   (lo32rd g k d ty) (? (sp64? g && ty = 'float) [['movss d (lo32s1 k)]]
+                        (0 = k & 1) [['movapd d (lo32sn k)]]
+                        [['movsnrx 'r12 k] ['cuse (lo32sn k)] ['movdxr d 'r12]])
    ; a call's places -> loplace's [gi fi rg sk pre], an odd slot's rg entry ['s k vreg] last
    (lo32place g vs va)
     (: ps (lo32cl g (map vty vs) va)
@@ -1583,7 +1591,7 @@
                                     (: kk (k + (e = 8 ? (2 * i) i))
                                        [(rg2 + [[(0 = kk & 1 ? (lo32sn kk) ['s kk]) w]]) (p2 + f)]))))
                               [rg pre] ^n @ [rg2 p2] [rg2 sk p2]))
-                   ['f k _ _] [(rg + [[(0 = k & 1 ? (lo32sn k) ['s k]) x]]) sk pre]
+                   ['f k _ _] [(rg + [[(? (0 = k & 1) (lo32sn k) (sp64? g) (lo32s1 k) ['s k]) x]]) sk pre]
                    ['r i nw]
                     (? (stru? ty) (regs i x 0 nw (tsz g ty) rg pre @ [rg2 p2] [rg2 sk p2])
                        (pair? g ty) [(rg + [[(argr g i) <x] [(argr g (i + 1)) <>x]]) sk pre]
@@ -1633,8 +1641,8 @@
                              (0 = k & 1 ? [odd (acc + [[(ty = 'double || tsz g ty = 8 ? 'stsd 'stss) 'r4 off (lo32sn k)]]) post ([nm 'm off ty] . env)]
                                 [(odd + vfpsv k 'r4 off) acc post ([nm 'm off ty] . env)]))
                          (lomkf g @ r
-                            (0 = k & 1 ? [odd (acc + lo32rd k r) post ([nm 'v r ty] . env)]
-                               [(odd + lo32rd k r) acc post ([nm 'v r ty] . env)])))
+                            (0 = k & 1 ? [odd (acc + lo32rd g k r ty) post ([nm 'v r ty] . env)]
+                               [(odd + lo32rd g k r ty) acc post ([nm 'v r ty] . env)])))
                      ['f k n b]
                       (ntmp g ty @ off
                          (: e (tsz g b)
@@ -2046,7 +2054,7 @@
                            ; -ftrivial-auto-var-init=zero
                            (init @ () (go u e2 (acc + (? (two? r) (!(avz? g) ? [['cdef <r <>r]] [['li <r 0] ['li <>r 0]])
                                                            !(avz? g) [['cdef r]]
-                                                           (lofl? ty) (lobits g r 0)
+                                                           (lofl? ty) (lofz g r ty)
                                                            [['li r 0]])))
                                    _ (lox g env init @ 'bad 'bad
                                         v (lost g ['v r ty] v @ [fs _] (go u e2 (acc + fs)) 'bad)))))
@@ -2246,7 +2254,7 @@
        fs0 (? (sp64? g) (losoft g fs9) (v6m? g) (map (f \ ret4? f ? '(ret) f) (lov6 g (losoft g fs9))) (ia32? g) (map (f \ ret4? f ? '(ret) f) fs9) fs9)
        (leak? f) (two? f && !(elem <f '(fix jmpt)) && any two? >f)
        (? (ilp32? g && (g 'lowhy || any leak? fs0)) (lono g ['pairleak (filter leak? fs0 @ (x . _) x _ ())])
-    (mprof 'ra0 (_ \ raentry g (t2nx g fs0 @ fs1 (li32 (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs1)) _ (radce g fs1))))) @ fs
+    (mprof 'ra0 (_ \ raentry g (t2nx g fs0 @ fs1 ((sp64? g ? (t2mov g) 1) ((t32f? g ? (t2fimm g) 1) (li32 (getenv "MOON_NONM" @ () (mprof 'nm (_ \ nmall g fs1)) _ (radce g fs1))))))) @ fs
      ((getenv "MOON_LOLOG" @ "2" (map (x \ (putx x, putc 10)) fs) 0),
      mprof 'raplan (_ \ raplan g fs) @ 'bad (lono g 'ra)
        [f2 loc]
@@ -2266,6 +2274,40 @@
     (csframe g fs @ f2
        (rvslots f2 (f2 3 3) @ f3
           (va ? (<f3 . (['(sub sp sp 64)] + map (i \ ['st 'sp (8 * i) (argr g i)]) ^8 + >f3)) f3)))
+   ; t32's vfp, before allocation: a float literal (li t k) (movdxr w t) lays w by vmov #imm where
+   ; k encodes in eight bits, and a compare against a +0.0 literal is vcmp #0, the literal going
+   ; when nothing else reads it
+   (vfpimm? k) (k & 524287 = 0 && ((k >> 25 & 31) @ e (e = 0 && k >> 30 & 1 = 1 || e = 31 && k >> 30 & 1 = 0)))
+   (t2fimm g fs)
+    (: us {} ds {}
+       (cnt t x) (pin t x (peep t x 0 + 1))
+       _ (map (f \ (raops g f @ [u d] (map (cnt us) u, map (cnt ds) d) _ 0)) fs)
+       ; t read and written there alone; a zero's w is written there alone too. a single no imm8
+       ; reaches is fli, t its scratch, which lpool may load from a pool instead
+       (lit? t) (peep us t 0 = 1 && peep ds t 0 = 1)
+       zs {} zc {}
+       _ (foldl (p \ f \ ((p @ ['li t 0] (f @ (['movdxr w t2] && t = t2 && lit? t && peep ds w 0 = 1) (pin zs w 1) _ 0) _ 0), f)) () fs)
+       _ (map (f \ (f @ (['ucomiss a z] && a != z && zs z) (cnt zc z) _ 0)) fs)
+       (go l)
+        (l @ ((['li t k] . ['movdxr w t2] . u) && t = t2 && cint? k && lit? t)
+              (: b (k & 4294967295)
+                 (? (zs w && peep zc w 0 = peep us w 0) (go u)
+                    (vfpimm? b) (['fimm w b] . go u)
+                    (['fli w t b] . go u)))
+             ((['ucomiss a z] . u) && a != z && zs z) (['ucom0 a] . go u)
+             (f . u) (f . go u)
+             _ ())
+       (go fs))
+   ; an sp-only vfp, before allocation: a copy of two vregs neither of which can hold a double's
+   ; high half is one vmov.f32. a high half rides in from a double load or a gp pair and on
+   ; through copies, as lov6 has it
+   (t2mov g fs)
+    (: hi {}
+       (dbl? f) (f @ ['ldsd d _ _] d ['movqrr d _ _] d ['stsd _ _ s] s ['movrrq _ _ s] s _ ())
+       _ (map (f \ (dbl? f @ () () d (pin hi d 1))) fs)
+       (prop _) (foldl (c \ f \ (f @ (['movapd d s] && hi s && !(hi d)) (pin hi d 1, c + 1) _ c)) 0 fs @ 0 0 _ (prop 0))
+       _ (prop 0)
+       (map (f \ (f @ (['movapd d s] && lovr? d && lovr? s && !(hi d) && !(hi s)) ['movss d s] _ f)) fs))
    ; x64, after allocation: a 64-bit op and the zero-extend of its answer are its 32-bit op, where
    ; that is one instruction
    (lo32op fs)
@@ -2292,10 +2334,18 @@
               m (two? >l ? (fold f <>l))
               (two? m && dieb? g <>f fs r ? (m . go r) (f . go >l))))
        (go fs))
+   ; sp-only vfp, after allocation: a single's copy into d and the op on d after it are one
+   ; three-operand op, d = a op b, where b is not d
+   (t2op3 g fs)
+    (: (go l) (l @ ((['movss d a] . [op d2 b] . u) && d = d2 && b != d && elem op '(addss subss mulss divss))
+                    ([(name "\(show op)3") d a b] . go u)
+                   (f . u) (f . go u)
+                   _ ())
+       (sp64? g ? (go fs) fs))
    ; v6-M: a frame slot off r4, the frame's bottom, its size known once csframe has laid the saves
    (lov6s g fs) (!(v6m? g) ? fs (filter (f \ f @ ('sub 'sp 'sp k) (charm? k) _ ()) fs @ ((_ _ _ k) . _) (t16slots fs k) _ fs))
    ; the frame and emit tail
    (lotail g ir)
     (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir))))))))))))))))))))))))
+     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (t2op3 g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir)))))))))))))))))))))))))
 )) ; module 'moon

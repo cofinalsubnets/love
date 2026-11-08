@@ -888,10 +888,20 @@
    ; replaces read them, so one lookup answers where up to forty tests ran. laid once a unit
    ; (g 'rdarms): the arms call fns the book lays later, which a bake-time value cannot
    (rg1 x) (charm? x ? () [x])
+   (snm k) (0 = k & 1 ? (xmmreg (k // 2)) (name "f\(16 + k // 2)"))   ; thumb2sp's single S[k] by name
+   ; thumb2sp's odd singles f16..f31, f(16+n) the high half of fN, and each one's other half
+   (rafo g r) (peep (g 'rafo @ () (foldl (t \ i \ (pin t (name "f\(16 + i)") (name "f\(i)"), pin t (name "f\(i)") (name "f\(16 + i)"))) {} ^16 @ t (pin g 'rafo t, t))
+                       t t) r ())
+   (lofo? x) (nom? x && elem x '(f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31))
    (rdmk _)
     (: t {}
        (arm ops a) (map (o \ (peep t o 'none = 'none ? (pin t o a) 0)) ops)
-       _ (arm '(li) (g \ f \ [() [<>f] 1]))
+       _ (arm '(li fimm) (g \ f \ [() [<>f] 1]))
+       _ (arm '(ucom0) (g \ f \ [[<>f] () ()]))
+       _ (arm '(fli) (g \ f \ [() [<>f <>>f] ()]))
+       _ (arm '(addss3 subss3 mulss3 divss3) (g \ f \ [[<>>f <>>>f] [<>f] ()]))
+       _ (arm '(ldsspi ldpi4) (g \ f \ [[<>>f] [<>f <>>f] ()]))
+       _ (arm '(stsspi stpi4) (g \ f \ [[<>f <>>f] [<>f] ()]))
        _ (arm '(mov) (g \ f \ [[<>>f] [<>f] 1]))
        _ (arm aluops (g \ f \ (<>f @ 'sp [() () ()]      ; sp motion touches no gp register
                                [(rg1 <>>f + rg1 <>>>f) [<>f] 1])))
@@ -928,8 +938,8 @@
        _ (arm '(movrrq) (_ \ f \ [[(f 3)] [(f 1) (f 2)] 1]))
        _ (arm '(movqrr) (_ \ f \ [[(f 2) (f 3)] [(f 1)] 1]))
        ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
-       _ (arm '(movsnxr) (g \ f \ [[<>>f] () ()]))
-       _ (arm '(movsnrx) (g \ f \ [() [<>f] 1]))
+       _ (arm '(movsnxr) (g \ f \ [[<>>f] (sp64? g ? [(snm <>f)] ()) ()]))
+       _ (arm '(movsnrx) (g \ f \ [(sp64? g ? [(snm <>>f)] ()) [<>f] 1]))
        _ (arm '(cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movdxr) (g \ f \ [[<>>f] () ()]))
        _ (arm '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui) (g \ f \ [() [<>f] ()]))
        _ (arm '(movdrx) (g \ f \ [() [<>f] 1]))
@@ -1827,10 +1837,12 @@
    fmop9 '(addsd subsd mulsd divsd minsd maxsd ucomisd)     ; the scalar ops fldop gives a memory source
    fmops9 '(addss subss mulss divss minss maxss ucomiss)
    (fcvt9 op) (elem op '(cvtss2sd cvtsd2ss))
-   (fdef9 op) (elem op '(ldsd ldss ldsdl ldsdx ldssx cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movqxr movdxr))
+   (fdef9 op) (elem op '(ldsd ldss ldsdl ldsdx ldssx cvtsi2sd cvtui2sd cvtsi2ss cvtui2ss movqxr movdxr fimm fli ldsspi))
    (fuse9 op) (elem op '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui movqrx movdrx movmskpd))
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
-   (fcalld g) (a64? g ? '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+   (fcalld g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
+                 (sp64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15 f16 f17 f18 f19 f20 f21 f22 f23 f31)
+                 (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15)   ; d8-d14 callee-saved, d15 moon's own scratch
                  fregs16)
    (fnm? g x) (nom? x && elem x fall9)
    (frd g f)                                          ; -> [reads defs] of the float file | 'bar
@@ -1843,11 +1855,14 @@
              (op = 'jmpr) [fall9 ()]
              (elem op '(raw asm)) 'bar
              (elem op fbin9) [[<>f <>>f] [<>f]]
+             (elem op '(addss3 subss3 mulss3 divss3)) [[<>>f <>>>f] [<>f]]
              (elem op fcpy9 || fcvt9 op) [[<>>f] [<>f]]
              (fdef9 op) [() [<>f]]
              (elem op '(stsd stss)) [[(f 3)] ()]
              (elem op '(stsdx stssx)) [[(f 5)] ()]
              (elem op '(ucomisd ucomiss)) [[<>f <>>f] ()]
+             (op = 'ucom0) [[<>f] ()]
+             (op = 'stsspi) [[<>>f] ()]
              (fuse9 op) [[<>>f] ()]
              (op = 'cmppd) [[<>f <>>f] [<>f]]
              (any (fnm? g) >f) 'bar
@@ -1934,9 +1949,11 @@
         (: (mark? f) (f = '(saves) || f = '(rests))
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
-           fcs (a64? g ? '(f8 f9 f10 f11 f12 f13 f14 f15) ())
+           fcs (? (a64? g) '(f8 f9 f10 f11 f12 f13 f14 f15) (t32? g && !(v6m? g)) '(f8 f9 f10 f11 f12 f13 f14) ())
            ; wasm's registers are the function's own locals: a call leaves them, none is saved
-           nm (wasm? g ? () (filter (r \ any (f \ !(mark? f) && names r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs)))
+           ; thumb2sp: an odd single's d is saved whole, by its even name
+           (named? r f) (names r f || sp64? g && elem r fcs && names (rafo g r) f)
+           nm (wasm? g ? () (filter (r \ any (f \ !(mark? f) && named? r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs)))
            r3 (x86? g && elem 'r3 nm)
            cs (filter (r \ !(r3 && r = 'r3)) nm)
            n #cs

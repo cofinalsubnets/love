@@ -8,8 +8,8 @@
    ; each target's files, caller-saved first: a callee-saved one costs its save. every x64 xmm is
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
    ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
-   ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d8-d15
-   ; for their saves
+   ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d15
+   ; to holo's scratch, and takes d8-d14 last, callee-saved
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                (v6m? g) '(r0 r1 r2 r3 r5 r6)
@@ -19,12 +19,14 @@
    (ragf g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                (rv64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19)
                (v6m? g) ()
-               (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
+               (sp64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f8 f9 f10 f11 f12 f13 f14 f24 f25 f26 f27 f28 f29 f30)
+               (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14)
                (ia32? g) '(f0 f1 f2 f3 f4 f5 f6 f7)
                '(f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15))
    (rapool g) (ragp g + ragf g)
-   ; what a call clobbers: the caller-saved gp file and every float register the pool takes
-   (racl g) (lvgp g + ragf g)
+   ; what a call clobbers: the caller-saved gp file and every float register the pool takes, but t32's d8 up
+   ; and their odd halves
+   (racl g) (lvgp g + (t32? g ? (filter (r \ !(elem r '(f8 f9 f10 f11 f12 f13 f14 f24 f25 f26 f27 f28 f29 f30))) (ragf g)) (ragf g)))
    ; the vregs lo.l mints: %nK on the gp file, %wK on the float file
    (lomk g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%n\(k)"))
    (lomkf g) (peep g 'lon 0 @ k (pin g 'lon (k + 1), name "%w\(k)"))
@@ -43,6 +45,9 @@
    ; the three-address ops, and those of them that commute
    raalu '(add sub and or xor imul)
    racomm '(add and or xor imul)
+   ; the ops a double rides: on thumb2sp their float vregs keep a whole d
+   rawide '(movapd movsd movupd ldsd stsd ldsdx stsdx ldsdl movqrr movrrq movqxr movqrx cvtss2sd cvtsd2ss cvtsi2sd
+            cvtui2sd cvttsd2si cvttsd2ui addsd subsd mulsd divsd minsd maxsd ucomisd sqrtsd xorpd andpd)
    rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
    ; each head's own shape, the rest rdsp's
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
@@ -168,7 +173,7 @@
                hint {} forb {}
                (link x y) (pin hint x (y . hint x))
                (link2 a b) (raok? g a && raok? g b ? (: x (id a) y (id b) (link x y, link y x)))
-               _ (map (f \ (f @ [('mov || 'movapd) a b] (link2 a b)
+               _ (map (f \ (f @ [('mov || 'movapd || 'movss) a b] (link2 a b)
                                 ([op d a b] && elem op raalu) (link2 d a, elem op racomm ? (link2 d b))
                                 ((op . d . _) && elem op divops && x86? g) (pin forb (id d) ['r2])
                                 0)) fs)
@@ -179,8 +184,19 @@
                cu {}
                (past l p) (l @ ([_ e] . u) (e < p && two? u ? (past u p) l) _ l)
                (ovl? x y) (raovl (rg x) (past (cu y @ () (rg y) c c) (lo x) @ l (pin cu y l, l)))
-               (fits? r x) (nelem r (forb x) && !(ovl? x (id r)))
-               (free? r x act) (!(any (w \ loc w = r && ovl? x w) act) && fits? r x)
+               ; thumb2sp: a vreg a double op names is wide, takes an even single, and holds its odd
+               ; half too; any other single takes either. two singles at one d's halves clash only
+               ; when one of them is wide
+               wv {}
+               (wmark x) (lovr? x && lofr? x ? (pin wv (id x) 1) 0)
+               _ (sp64? g ? (map (f \ (two? f && elem <f rawide ? (map wmark >f)
+                                        (f @ ('fix . u . d . _) (map wmark (u + d)) _ 0))) fs))
+               (wid? x) (peep wv x 0 = 1)
+               (al r) (sp64? g ? (rafo g r))
+               (clash? x r y) (ovl? x y && (loc y = r || (al r @ () () a (loc y = a && (wid? x || wid? y)))))
+               (fits? r x) (nelem r (forb x) && !(ovl? x (id r)) && (al r @ () 1 a (wid? x || lofo? r ? !(ovl? x (id a)) 1)))
+               (free? r x act) (!(any (clash? x r) act) && fits? r x)
+               (flx x fl) (wid? x ? (filter (r \ !(lofo? r)) fl) fl)
                (pick l x act) (l @ (r . u) (free? r x act ? r (pick u x act)) _ ())
                (hreg x fl) (filter (r \ elem r fl) (map (y \ y < np ? (nms y) (loc y)) (hint x)))
                ; a spill's weight: its touches, each 8^loop depth, a branch's cold way down to a sixteenth
@@ -216,17 +232,18 @@
                     (org a = () ? (pin org a (rg a)), pin rg a (rmerge (rg a) (rg b)),
                      pin lo a (min (lo a) (lo b)), pin hi a (max (hi a) (hi b)), pin wt a (wt? a + wt? b),
                      pin forb a (peep forb a () + peep forb b ()), pin hint a (peep hint a () + peep hint b ()),
-                     pin mem a (b . (peep mem b () + peep mem a ())), pin rep b a, pin rmc a 1)))
+                     pin mem a (b . (peep mem b () + peep mem a ())), pin rep b a, pin rmc a 1,
+                    wid? b ? (pin wv a 1))))
                cw (sortby (p \ q \ p 2 > q 2)
-                          (catmap (i \ (ft i @ ([('mov || 'movapd) a b] && lovr? a && lovr? b)
+                          (catmap (i \ (ft i @ ([('mov || 'movapd || 'movss) a b] && lovr? a && lovr? b)
                                                  [[(id a) (id b) (vwt spn i @ v (max (v / 16) (min v (fqw i))))]] _ ())) ^n))
                _ (map (c \ (c @ [x y _] (join x y) _ 0)) cw)
                vs2 (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ rep x = ()) vs))
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
                (victim x act)
-                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) ||
-                                     any (y \ y != w && loc y = loc w && ovl? x y) act) b
+                (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) || wid? x && lofo? (loc w) ||
+                                     any (y \ y != w && clash? x (loc w) y) act) b
                                    (b @ () w _ (wt? w < wt? b ? w b))))
                        () act @
                    () ()
@@ -236,7 +253,7 @@
                       sp
                      (x . u)
                       (: a2 (filter (w \ lo x <= hi w) act)
-                         ((pick (hreg x fl) x a2 @ () (pick fl x a2) r r) @
+                         ((pick (hreg x (flx x fl)) x a2 @ () (pick (flx x fl) x a2) r r) @
                           () (victim x a2 @
                                () (nosp (nms x) ? 'bad (scan fl u a2 (nms x . sp)))
                                w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp)))
@@ -345,7 +362,7 @@
              stubs {}
              (stub L) (stubs L @ () (nlab g ".lo" @ T (pin stubs L T, T)) T T)
              ; a fall into a call copies ahead of its argument setup, whose registers the copies may take
-             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd li la lea)) (!(lovr? d)) _ 0)
+             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd movss li la lea)) (!(lovr? d)) _ 0)
              (back i) (0 < i && in? (i - 1) && setup? (i - 1) ? (back (i - 1)) i)
              pre {}
              _ (map (i \ (in? i && i + 1 < n && !(in? (i + 1)) && setup? i ? (pin pre (back i) 1))) ^n)
@@ -510,12 +527,12 @@
     (: (sub x) (lovr? x ? (loc x) x)
        (catmap (f \ (f @ (('cuse || 'cdef) . _) ()
                          ('fix . _ . _ . fs . _) fs
-                         ([('mov || 'movapd) a b] && sub a = sub b) ()
+                         ([('mov || 'movapd || 'movss) a b] && sub a = sub b) ()
                          (_ . _) [(map sub f)]
                          [f])) fs))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
-   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd add sub and or xor imul shl shr sar not neg
+   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss fimm add sub and or xor imul shl shr sar not neg
                                               sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx movqrr movrrq))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)
@@ -533,7 +550,7 @@
    ; a physical register but the frame and stack bases
    (raphys? g x) (elem x (rapool g) && nelem x '(r4 sp))
    ; the forms a physical register may stand in or live across: copies, crossings, control
-   raglue '(cdef mov movapd movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
+   raglue '(cdef mov movapd movss movqrx movdrx movqxr movdxr li la st st1 st2 st4 stsd stss ld ldsd ldss cuse jmp label rests pop)
    ; the forms with a fixed register operand: the count in rcx, a divide's rax
    rafixed '(fix call callr ret shlv shrv sarv div rem udiv urem)
    (raund a b) (foldl (s \ x \ elem x s ? s (x . s)) a b)

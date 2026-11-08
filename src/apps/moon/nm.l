@@ -390,9 +390,100 @@
        _ (map (i \ (hoist? (ft i) ? (seat spans i (ft i)) 0)) ^n)
        (#(keys out) = 0 ? fs
           (catmap (i \ map cup (rev (peep ins i ())) + (out i @ () [(ft i)] 1 () m [m])) ^n)))
+   ; t32 has no scaled index. in an innermost rotated loop, (jmp E) (label L) .. (br cc L), entered
+   ; only by that jump: an address B + (v << k), v the loop's one-step counter and B the same all
+   ; through it, read only in its own straight run, becomes a pointer set ahead of the jump and
+   ; stepped beside v; a load or store at the pointer, then its step in the same straight run, is
+   ; one post-increment. -> fs itself when nothing moves
+   nmpi {'ldss 'ldsspi 'ld4 'ldpi4 'ldu4 'ldpi4 'ld 'ldpi4}
+   nmps {'stss 'stsspi 'st4 'stpi4 'st 'stpi4}
+   (nmrd g f) (raops g f @ [u d] [u d] _ [() ()])
+   (nmlsr g fs)
+    (: lab {} ft {} n (foldl (i \ f \ (pin ft i f, (f @ ['label L] (pin lab L i) _ 0), i + 1)) 0 fs)
+       (dests f) (f @ ['jmp L] [L] ['br _ L] [L] ['jmpt _ _ ls] ls (('fix . _) && 4 < #f) (f 4) _ ())
+       refs (catmap (i \ map (L \ [i (peep lab L -1)]) (dests (ft i))) ^n)
+       held {} _ (map (r \ (r @ [_ t] (pin held t 1) _ 0)) refs)
+       ; no form strictly between i and j a referenced label or a transfer
+       (run? i j) (all (x \ ft x @ ['label L] !(held (lab L)) (('jmp || 'br || 'jmpt || 'ret || 'jmpr) . _) 0 _ 1) (map (+ (i + 1)) ^(j - i - 1)))
+       (loop? a b) (0 < a && (ft (a - 1) @ ['jmp E] (a < peep lab E -1 <= b) _ 0) &&
+                    all (r \ r @ [i t] ((a <= t <= b ? (a <= i <= b || i = a - 1) 1) && (a <= i <= b && t <= i ? (i = b && t = a) 1)) _ 1) refs)
+       loops (catmap (r \ r @ ([b a] && 0 <= a < b && loop? a b) [[a b]] _ ()) refs)
+       us {} ds {}
+       (cnt t x) (pin t x (peep t x 0 + 1))
+       _ (map (f \ (nmrd g f @ [u d] (map (cnt us) u, map (cnt ds) d))) fs)
+       (uses x) (filter (i \ nmrd g (ft i) @ [u _] (elem x u) _ 0) ^n)
+       ; a loop's plan [drops renames pre steps]: forms gone, [vreg pointer] read through, forms ahead
+       ; of the jump, [i P d] a step after form i
+       (plan lp)
+        (lp @ [a b]
+           (: span (map (+ a) ^(b - a + 1))
+              dl {} _ (map (i \ (nmrd g (ft i) @ [_ d] (map (cnt dl) d))) span)
+              (ivat v) (filter (i \ ft i @ (['add x y c] && x = v && y = v && cint? c) 1 _ 0) span @ [i] i _ ())
+              (iv? v) (peep dl v 0 = 1 && ivat v != ())
+              (inv? x) (lovr? x && peep dl x 0 = 0)
+              (tri j)
+               (ft j @ (['mov t v] && lovr? t && lovr? v && iv? v)
+                        (ft (j + 1) @ (['shl t2 k] && t2 = t && cint? k && 0 <= k <= 3)
+                           (ft (j + 2) @ (['add x p q] && (p = t && inv? q || q = t && inv? p) && lovr? x &&
+                                           peep ds x 0 = 1 && peep us t 0 = 2 && peep ds t 0 = 2)
+                              (: e (uses x) s (ivat v)
+                                 (two? e && all (i \ j + 2 < i < s && run? (j + 2) (i + 1)) e ? [j v k (p = t ? q p) x]))
+                              _ ())
+                           _ ())
+                        _ ())
+              ts (filter two? (map tri span))
+              ps (foldl (t \ c \ (c @ [_ v k B _] (show [v k B] @ key (t key @ () (pin t key [(lomk g) v k B]) _ t)) _ t)) {} ts)
+              (ptr c) (c @ [_ v k B _] <(ps (show [v k B])) _ ())
+              ks (sort (keys ps))
+              ; the exit (cmp v m) (br below L), v read by nothing else but its step: a pointer's
+              ; test against B + (m << k), and v goes
+              (lftr P v k2 B)
+               (: s (ivat v) nv #(filter (c \ c 1 = v) ts)
+                  (ft (b - 1) @ (['cmp x m] && x = v && (cint? m || inv? m) && (ft b @ ['br 'below _] 1 _ 0) &&
+                                 0 < ft s 3 && peep us v 0 = nv + 2)
+                     (lomk g @ E [[s] ((cint? m ? [['li E (m << k2)]] [['mov E m] ['shl E k2]]) + [['add E E B]]) [(b - 1) ['cmp P E]]])
+                     _ ()))
+              lf (ks @ (k . _) (ps k @ [P v k2 B] (lftr P v k2 B) _ ()) _ ())
+              [(catmap (c \ c @ [j _ _ _ _] [j (j + 1) (j + 2)] _ ()) ts + (lf @ [d _ _] d _ ()))
+               (map (c \ c @ [_ _ _ _ x] [x (ptr c)] _ ()) ts)
+               (catmap (k \ ps k @ [P v k2 B] [['mov P v] ['shl P k2] ['add P P B]] _ ()) ks + (lf @ [_ p _] p _ ()))
+               (map (k \ ps k @ [P v k2 B] [(ivat v) P (ft (ivat v) 3 * (1 << k2))] _ ()) ks)
+               (lf @ [_ _ r] [r] _ ())])
+         _ [() () () () ()])
+       rs (map (lp \ [lp (plan lp)]) loops)
+       (any (r \ r @ [_ [(_ . _) _ _ _ _]] 1 _ 0) rs ? (nmpinc g (nmlsr2 fs ft n rs)) fs))
+   (nmlsr2 fs ft n rs)
+    (: drop {} ren {} pre {} stp {} rep {}
+       _ (map (r \ (r @ [[a _] [d e p s x]]
+                       (map (j \ pin drop j 1) d, map (y \ pin ren (y 0) (y 1)) e, pin pre (a - 1) p,
+                        map (y \ y @ [i P d2] (pin stp i (peep stp i () + [['add P P d2]])) _ 0) s,
+                        map (y \ pin rep (y 0) (y 1)) x)
+                       _ 0)) rs)
+       (sub f) (atom? f ? f (map (x \ peep ren x x) f))
+       (catmap (i \ peep pre i () + (drop i ? () [(sub (peep rep i (ft i)))]) + peep stp i ()) ^n))
+   ; a pointer's step folds into the load or store just behind it in its straight run
+   (nmpinc g fs)
+    (: held {} _ (map (f \ (f @ ['jmp L] (pin held L 1) ['br _ L] (pin held L 1) ['jmpt _ _ ls] (map (L \ pin held L 1) ls) _ 0)) fs)
+       (stop? f) (f @ ['label L] (held L) (('jmp || 'br || 'jmpt || 'ret || 'jmpr || 'fix || 'call || 'callr) . _) 1 _ 0)
+       ; back from the step over forms that leave P be, to the one that reads it
+       (fold acc P)
+        (acc @ (f . u)
+                (? (stop? f) ()
+                   (f @ (['ldss w b 0] || ['ld4 w b 0] || ['ldu4 w b 0] || ['ld w b 0]) (b = P && w != P) _ 0)
+                    (f @ [op w _ _] [([(nmpi op) w P] . u)] _ ())
+                   (f @ (['stss b 0 w] || ['st4 b 0 w] || ['st b 0 w]) (b = P && w != P) _ 0)
+                    (f @ [op _ _ w] [([(nmps op) P w] . u)] _ ())
+                   (nmrd g f @ [x y] (elem P x || elem P y) _ 1) ()
+                   (fold u P @ () () [l] [(f . l)]))
+               _ ())
+       (go acc l)
+        (l @ ((['add P P 4] && lovr? P) . u) (fold acc P @ () (go (<l . acc) u) [a2] (go a2 u))
+             (f . u) (go (f . acc) u)
+             _ (rev acc))
+       (go () fs))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (x64? g || a64? g ? (nmhoist g r @ h (h == r ? r (nmfix g h))) r)))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (? (x64? g || a64? g) (nmhoist g r @ h (h == r ? r (nmfix g h))) (t32? g && !(v6m? g)) (nmlsr g r @ h (h == r ? r (nmfix g h))) r)))))
    ; a 32-bit extension of a vreg whose every reader takes only its low half goes. such a reader:
    ; the extension, a store of 4 bytes or less, or an add, sub, imul, and, or, xor or copy whose
    ; answer is such a vreg in turn or is extended by the next form
