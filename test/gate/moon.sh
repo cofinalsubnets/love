@@ -783,6 +783,10 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 mkdir -p "$ho/.once/b"
 printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
 [ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
+# one header by an absolute source dir and a relative -I: the key is the file, from /
+oa=$(cd "$ho/.once" && pwd); orel=${oa#$PWD/}
+printf '#include "h.h"\n#include <h.h>\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m3.c"
+[ "$(moonrun -I "$orel" -E "$oa/m3.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice, absolute and relative"
 # -E on a .S defines __ASSEMBLER__, as -c on it does
 printf '#ifdef __ASSEMBLER__\nmovl $1, %%eax\n#endif\n' > "$ho/.asm.S"
 moonrun -E "$ho/.asm.S" | grep -q 'movl' || fail "-E on a .S left __ASSEMBLER__ undefined"
