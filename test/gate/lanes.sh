@@ -182,13 +182,16 @@ for v in TERM LANG LC_ALL; do eval "x=\${$v:-}"; [ -z "$x" ] || rst="$rst $v=$x"
 # a slot on host h: lanes of a KIND until the queue has none, each only on the gated commit,
 # an alone one holding the whole host. a host that cannot be reached (75, or ssh's 255) or has
 # moved off it (97) puts its lane back for this box and takes no more; so does one whose make
-# rebuilt love after all (a recipe's own $(MAKE) does not take -o), since its love is not ours
+# rebuilt love after all (a recipe's own $(MAKE) does not take -o), since its love is not ours.
+# a lane a strict host refused for want of a tool goes back too, and the host takes others
 worker() {
   while [ ! -f "$d/off-$1" ] && l=$(pop "$2" "$3" "${4:-}"); do
     s=$(date +%s)
     out/love bee --on lanes --where "name=$1" ${4:+--whole} --in "$rd" --at "$sha" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
     r=$?
     grep -qE '^(BAKE|LOVE|RAW)[[:space:]]+out/love(\.raw)?$' "$d/$l.log" && { touch "$d/off-$1"; r=love; }
+    [ $r = love ] || [ $r -eq 0 ] || ! grep -q 'REFUSED: a strict box' "$d/$l.log" || {
+      echo "lanes: $1 refused $l; it runs here" >> "$d/remote.log"; echo "$l $1" >> "$d/back"; continue; }
     if [ $r = love ] || [ $r -eq 75 ] || [ $r -eq 97 ] || [ $r -eq 255 ]; then
       echo "lanes: $1 dropped $l ($r); it runs here" >> "$d/remote.log"
       echo "$l $1" >> "$d/back"

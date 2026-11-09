@@ -5,7 +5,8 @@
 # answers its room and its prerequisites and then drops every lane the way a lost ssh does
 # (255). every lane must answer, none skipped: a placed lane on up or back here, the local one
 # here, each .rc and log agreeing on where, and only the alone lane holding a whole host. up
-# rebuilds love under test_b, which so runs here, and a lane there has this box's TERM.
+# rebuilds love under test_b, which so runs here, refuses test_a's twin test_e for want of a
+# tool, which runs here too, and a lane there has this box's TERM.
 #
 # usage: sh test/gate/lanesremote.sh
 set -u
@@ -21,13 +22,14 @@ test_a: host ; @sleep 4; echo "a ran in $$(basename $$(pwd))"
 test_b: host ; @[ $$(basename $$(pwd)) != up ] || printf 'BAKE\tout/love\n'; echo "b ran in $$(basename $$(pwd))"
 test_c: host ; @sleep 1; echo "c ran in $$(basename $$(pwd))"; echo "TERM=$$TERM"
 test_d: host ; @echo "d ran in $$(basename $$(pwd))"
+test_e: host ; @[ $$(basename $$(pwd)) != up ] || { echo 'e: REFUSED: a strict box runs every lane'; exit 1; }; echo "e ran in $$(basename $$(pwd))"
 EOF
 
 cat > "$t/out/love" <<EOF
 #!/bin/sh
 case "\$*" in
   "bee --lanes-map")
-    printf 'chain test_x,test_y\nalone test_z test_d\nplace test_b source\nplace test_c source\nplace test_d source\ncost test_b 50\ncost test_c 90\ncost test_d 99\n'
+    printf 'chain test_x,test_y\nalone test_z test_d\nplace test_b source\nplace test_c source\nplace test_d source\nplace test_e source\ncost test_b 50\ncost test_c 90\ncost test_d 99\ncost test_e 95\n'
     exit 0 ;;
   "bee --on lanes --list") printf 'up 1 x64\ngone 1 x64\n'; exit 0 ;;
 esac
@@ -56,10 +58,10 @@ chmod +x "$t/out/love"
 # a host runs the gated commit: the stand-in tree is one
 git -C "$t" init -q && git -C "$t" add Makefile test && git -C "$t" -c user.name=t -c user.email=t@t commit -qm t || exit 1
 
-( cd "$t" && TERM=lanes-term LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c test_d ) > "$t/run.log" 2>&1 \
+( cd "$t" && TERM=lanes-term LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c test_d test_e ) > "$t/run.log" 2>&1 \
   || { cat "$t/run.log"; fail "the run was red"; }
 on=
-for l in a b c d; do
+for l in a b c d e; do
   read -r r s w < "$t/out/lanes/test_$l.rc" || fail "test_$l left no rc"
   [ "$r" = 0 ] || fail "test_$l answered $r"
   want=.lanesremote
@@ -70,6 +72,7 @@ for l in a b c d; do
 done
 grep -q 'on=up' "$t/out/lanes/summary" || fail "no lane went to the host that answered"
 grep -q '^test_b .* on=up' "$t/out/lanes/summary" && fail "test_b rebuilt love on up and was kept"
+grep -q '^test_e .* on=up' "$t/out/lanes/summary" && fail "test_e was refused on up and kept"
 grep -qx 'TERM=lanes-term' "$t/out/lanes/test_c.log" || fail "test_c did not have this box's TERM"
 grep -q '^test_a exit=0 secs=[0-9]*$' "$t/out/lanes/summary" || fail "the local lane names a host"
 grep -q "gone dropped" "$t/out/lanes/remote.log" || fail "the host that drops was never handed a lane"
