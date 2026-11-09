@@ -73,7 +73,8 @@
         ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)]])]
         ["boot" (dir ())] ["data" (dir ())] ["dev" (dir ())]
         ["etc" (dir [["helm.l" (fil 420 helm-conf)] ["version" (fil 420 (ver + "\n"))]])]
-        ["proc" (dir ())] ["run" (dir ())] ["sys" (dir ())] ["tmp" (dir ())]])
+        ["proc" (dir ())] ["run" (dir ())] ["sys" (dir ())] ["tmp" (dir ())]
+        ["usr" (dir [["bin" (dir ())] ["src" (dir ())]])]])
    ; helm is four files catted into one script, run by love as the kernel's init
    helm ("#!/bin/love\n" + join "" (map rd ["src/apps/helm/unit.l" "src/apps/helm/sup.l"
                                             "src/apps/helm/moor.l" "src/apps/helm/helm.l"]))

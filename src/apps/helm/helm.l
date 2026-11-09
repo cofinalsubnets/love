@@ -93,8 +93,10 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
            hmount1 "sysfs"    "/sys"  "sysfs",
            hmount1 "devtmpfs" "/dev"  "devtmpfs",
            hmount1 "tmpfs"    "/tmp"  "tmpfs",
+           hmount1 "tmpfs"    "/run"  "tmpfs",
            hunderlay "/usr/bin",
-           hscatter "/",
+           ; a read-only root takes the tree in RAM beside it
+           (hscatter "/" || (hmount1 "tmpfs" "/usr/src" "tmpfs", hscatter "/usr/src")),
            1)))
 
    ; --- helm run --------------------------------------------------------------
