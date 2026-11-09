@@ -260,7 +260,7 @@
    (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
    ; the by-reference class: a composite past 16 bytes (AAPCS64: and no HFA; LP64 riscv and wasm: any) travels
    ; as the address of the caller's own copy, and returns through the buffer x8 (riscv: a0) points at
-   (refm? g ty) (stru? ty && (rv32? g ? 8 < tsz g ty (16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))))
+   (refm? g ty) (stru? ty && (rv32? g ? (8 < tsz g ty) (16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))))
    ; an AAPCS-VFP homogeneous aggregate: one float base, at most four of it
    (t32hfa? g ty) (hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b))
    (srreg g) (a64? g ? 'r8 (argr g 0))              ; where the hidden result pointer rides
