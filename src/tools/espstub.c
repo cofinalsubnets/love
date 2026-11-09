@@ -9,12 +9,12 @@ typedef unsigned u32;
 typedef unsigned char u8;
 #define R(a) (*(volatile u32 *)(a))
 #ifdef __riscv
-/* the c6: endpoint 1's byte, its conf's bits 0 send, 1 room, 2 a byte waiting; its flash words at +0x58 */
+/* the c6: endpoint 1's byte, its conf's bits 0 send, 1 room, 2 a byte waiting; flash words +0x58, status +0x2C */
 #define EP1 0x6000F000
 #define EPC 0x6000F004
 #define SPI1 0x60003000
 #define SPIW 0x58
-#define WRITES 0                                     /* until its status register is found */
+#define SPIST 0x2C
 static void tx(int c) { while (!(R(EPC) & 2)) ; R(EP1) = (u32)c; }
 /* a send asked while a full packet is still going out is lost: let it go first */
 static void sent(void) { for (u32 k = 0; k < 20000; k++) (void)R(EPC); R(EPC) = 1; }
@@ -25,7 +25,7 @@ static int rx(void) { while (!(R(EPC) & 4)) ; return (int)(R(EP1) & 0xff); }
 #define USTAT 0x3FF4001C
 #define SPI1 0x3FF42000
 #define SPIW 0x80
-#define WRITES 1
+#define SPIST 0x10
 static void tx(int c) { while ((R(USTAT) >> 16 & 0xff) >= 120) ; R(UFIFO) = (u32)c; }
 static void sent(void) {}
 static int rx(void) { while (!(R(USTAT) & 0xff)) ; return (int)(R(UFIFO) & 0xff); }
@@ -61,11 +61,11 @@ static void spiread(u32 a, u32 *w) {
 }
 /* the flash's status by RDSR until its busy bit clears */
 static void idle(void) {
-  do { R(SPI1 + 0x10) = 0, R(SPI1) = 1u << 27; while (R(SPI1)) ; } while (R(SPI1 + 0x10) & 1);
+  do { R(SPI1 + SPIST) = 0, R(SPI1) = 1u << 27; while (R(SPI1)) ; } while (R(SPI1 + SPIST) & 1);
 }
-/* a command bit after WREN, the address under a byte count, then the flash idle again */
+/* a command bit after WREN, the address under a byte count, then the flash idle again. the
+ * flash idle first: the c6's RDSR answers into W0 too, so no status read may follow the data */
 static void wcmd(u32 bit, u32 a) {
-  idle();
   R(SPI1) = 1u << 30;
   while (R(SPI1)) ;
   R(SPI1 + 0x04) = a;
@@ -83,6 +83,7 @@ static u32 crcb(const u8 *b, int n) {
 /* a sector erased (SE), then 32 bytes a page program (PP), as the rom writes */
 static int wsector(u32 a, const u8 *d) {
   if (a & 4095) return 1;
+  idle();
   wcmd(1u << 24, a & 0xffffff);
   for (u32 i = 0; i < 4096; i += 32) {
     idle();
@@ -107,7 +108,7 @@ void _start(void) {
         for (int j = 0; j < 16; j++) c = crc(c, w[j]), stx32(w[j]);
       }
       stx32(~c), stx(0), stx(0), end();
-    } else if (WRITES && op == 0xD4 && n == 8 + 4 + 4096)
+    } else if (op == 0xD4 && n == 8 + 4 + 4096)
       reply(op, crcb(b + 12, 4096) != rd32(b + 4) ? 3 : wsector(rd32(b + 8), b + 12));
     else reply(op, 2);
   }
