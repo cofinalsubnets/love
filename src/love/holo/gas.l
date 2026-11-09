@@ -3,7 +3,7 @@
 ; neutral IR holo.l assembles, so one template serves every compiler. a line lands on a backend
 ; row where one fits, else on as.l's bytes (x64) or its own word (a64).
 ;
-;   (gas-text tgt src)          ; text -> IR forms, tgt 'x64 'i386 'i386m16 'a64 'rv64 or a thumb
+;   (gas-text tgt src)          ; text -> IR forms, tgt 'x64 'i386 'i386m16 'a64 'rv64 'rv32 or a thumb
 ;   (gas-reg tgt r w mod)       ; the dialect's spelling of neutral register r at byte width w
 ;   (gas-imm tgt n mod)         ; .. of an immediate ("$3" / "3" / "#3")
 ;   (gas-mem tgt r)             ; .. of a memory operand at register r ("(%rax)" / "[x0]" / "0(a0)")
@@ -119,19 +119,19 @@
         (: k (r @ 'sp "sp" 'fp "29" 'lr "30" (snip (show r) 1 #(show r)))
            w9 (mod @ 119 4 120 8 w)
            (r = 'sp ? "sp" ((w9 <= 4 ? "w" "x") + k)))
-       (tgt = 'rv64) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
+       (grv? tgt) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
        (show r))
    (gas-imm tgt n mod) (: t (charm? n || sun? n ? (show n) n) ; n a number, or a "sym+k" text
                           (? (elem mod '(99 97 80)) t (gx86? tgt) ("$" + t) (gthumb? tgt) ("#" + t) t))
    (gas-mem tgt r) (? (gx86? tgt) ("(" + gas-reg tgt r (g32? tgt ? 4 8) 0 + ")")
-                      (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
+                      (grv? tgt) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
    (gas-regname tgt s)                              ; gas's own `%rdx` names the register too
     (name (s @ ("%" + r) r s) @ k
        (? (tgt = 'x64) (peep gx-regs k () @ e (two? e ? <e))
           (g32? tgt) (peep gx-regs k () @ e (two? e && <>e < 8 && elem <e '(r0 r1 r2 r3 sp r4 r5 r6) ? <e))
           (tgt = 'a64) (peep a64-names k (peep a64-ccnames k ()))
-          (tgt = 'rv64) (peep rv-names k ())
+          (grv? tgt) (peep rv-names k ())
           (peep t32-names k ())))
 
    ;; x64: att-read's (op mn w ops), destination first, physical registers, lowered here;
@@ -1292,7 +1292,9 @@
             ('ins m os) (ga-ins m (map (o \ ga-opnd (ga-glue o)) os))
             ()))
 
-   ;; rv64: dst first, the ABI register names, off(base) memory, the csr pseudos
+   ;; riscv: dst first, the ABI register names, off(base) memory, the csr pseudos; rv32 reads
+   ;; the same text, its backend laying ld and sd at the word
+   (grv? tgt) (elem tgt '(rv64 rv32))
    (gr-reg s) (peep rv-names (name s) ())
    (gr-opnd toks)
     (toks @ (('sym s)) (gr-reg s @ r (nom? r ? ['reg r 8] ['sym (name s)]))
@@ -1586,7 +1588,7 @@
                     [(snip s 0 j) (xa-trim (snip s j #s))])
    (gf-base nm) ((: (g j) (? (j >= #nm) nm (nm j = 1) (snip nm 0 j) (g (j + 1)))) 0)   ; a subsection's section
    (gf-lines tgt src)
-    (elem tgt '(x64 i386 i386m16 rv64) @ hash?
+    (elem tgt '(x64 i386 i386m16 rv64 rv32) @ hash?
        (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit (gdecom src) 10)))
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
@@ -2378,7 +2380,7 @@
     (? (tgt = 'x64) (gx-text src)
        (g32? tgt) (gx-text32 tgt src)
        (: lc {}
-          f (? (tgt = 'a64) ga-line (tgt = 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
-          fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64)))
+          f (? (tgt = 'a64) ga-line (grv? tgt) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
+          fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (grv? tgt)))
           (gthumb? tgt ? (gt-asis tgt fs) fs))))
 ) ; module 'holo

@@ -134,6 +134,9 @@
    ; a 24-byte RELA entry (the symbols are elf.l's elf-sym, st_size 0).
    (o-rela offset symidx typ addend)
     (catall [(le64 offset) (le64 (symidx * 4294967296 + typ)) (le64 addend)])
+   ; ..and the 12-byte ELF32 one, rv32's
+   (o-rela32 offset symidx typ addend)
+    (catall [(le32 offset) (le32 (symidx * 256 + typ)) (le32 addend)])
 
    ; a string table from a list of names -> (blob (offset..)), leading NUL
    (o-strtab names)
@@ -825,8 +828,12 @@
        adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
-       rv (target = 'rv64)
+       ; rv32 lays this same RELA shape in the ELF32 class
+       w32 (target = 'rv32)
+       rv (target = 'rv64 || w32)
        _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
+       esym (w32 ? elf-sym32 elf-sym)  eshdr (w32 ? elf-shdr32 elf-shdr)  erela (w32 ? o-rela32 o-rela)
+       symz (w32 ? 16 24)  rlz (w32 ? 12 24)  shz (w32 ? 40 64)  wa (w32 ? 4 8)
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
        rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 pc32 rel8 rel16 pc8))
        drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
@@ -864,7 +871,7 @@
        ext0 (o-exts wx allrel)
        exts (ext0 + filter (u \ !(elem u ext0)) (map name (3 < #ax ? (ax 3) ())))
        vist (foldl (\ t p (pin t (name <p) <>p)) {} (4 < #ax ? (ax 4) ()))
-       (o-vis nm b) (peep vist (name nm) 0 @ v (v = 0 ? b (o-putbs b 5 [v])))
+       (o-vis nm b) (peep vist (name nm) 0 @ v (v = 0 ? b (o-putbs b (w32 ? 13 5) [v])))
        ; x64: a reach with a constant into a merging section names its label; section + constant
        ; cannot say which piece it means. those no text named locally join the locals
        (rel-c k aux) (k @ ('rel32 || 'pc32) (aux - 4) 'rel64 (aux - 8) aux)
@@ -905,27 +912,27 @@
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data
                                             x (exec? (ln (<w - 1)))
-                                            (elf-sym (stroffs i) 0 (x ? (o-xtype ls) (o-dtype ls)) <w <>w (x ? (o-xsize w ls) (o-dsize w ls)))))
+                                            (esym (stroffs i) 0 (x ? (o-xtype ls) (o-dtype ls)) <w <>w (x ? (o-xsize w ls) (o-dsize w ls)))))
                                  locnames))
            fsyms (catall (o-mapi (\ i fs (o-place fs @ w
-                                            (o-vis fs (elf-sym (stroffs (nloc + i))
+                                            (o-vis fs (esym (stroffs (nloc + i))
                                              (elem fs wknames ? 2 1)   ; stb_weak | stb_global
                                              (o-xtype fs) <w <>w (o-xsize w fs)))))
                                  funcnames))
            gsyms (catall (o-mapi (\ i gs (o-place gs @ w
-                                            (o-vis gs (elf-sym (stroffs (nloc + nfun + i))
+                                            (o-vis gs (esym (stroffs (nloc + nfun + i))
                                                    (elem gs wknames ? 2 1) (o-dtype gs) <w <>w (o-dsize w gs)))))
                                  globnames))
            ; an absolute symbol: stt_notype, shn_abs
-           lasyms (catall (o-mapi (\ i p (elf-sym (stroffs (#locnames + i)) 0 0 65521 <>p 0)) labss))
-           asyms (catall (o-mapi (\ i p (elf-sym (stroffs (nloc + nfun + nglob + i)) 1 0 65521 <>p 0)) abss))
+           lasyms (catall (o-mapi (\ i p (esym (stroffs (#locnames + i)) 0 0 65521 <>p 0)) labss))
+           asyms (catall (o-mapi (\ i p (esym (stroffs (nloc + nfun + nglob + i)) 1 0 65521 <>p 0)) abss))
            ; a weak undef resolves to zero at static link
-           esyms (catall (o-mapi (\ i e (o-vis e (elf-sym (stroffs (nloc + nfun + nglob + nabs + i))
+           esyms (catall (o-mapi (\ i e (o-vis e (esym (stroffs (nloc + nfun + nglob + nabs + i))
                                                (o-has? wkset e ? 2 1) 0 0 0 0)))
                                  exts))
            ; one stt_section symbol per section, in section order
-           ssyms (catall (o-mapi (\ i l (elf-sym 0 0 3 (i + 1) 0 0)) lanes))
-           (catall [(elf-sym 0 0 0 0 0 0) ssyms lsyms lasyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
+           ssyms (catall (o-mapi (\ i l (esym 0 0 3 (i + 1) 0 0)) lanes))
+           (catall [(esym 0 0 0 0 0 0) ssyms lsyms lasyms fsyms gsyms asyms esyms]))    ; the NULL symbol leads
        nsym (1 + nsec + nloc + nfun + nglob + nabs + #exts)
 
        ; -- the relocations, by the fixup's kind, never the section. --
@@ -942,21 +949,21 @@
            (: sl (o-has? mset lbl && rel-c k aux != 0 ? [(peep locidx lbl 0) 0] (secsym lbl)) si <sl sa <>sl
               (k @
                  ; aux is the constant byte offset of a &arr[i] / &s.field
-                 'abs64 (o-rela off si rabs (sa + aux))
-                 'abs32 (o-rela off si (? a64 ra-abs32 rv rr-32 r-32) (sa + aux))
-                 ('abs32s || 'abs32d) (o-rela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
-                 'abs16 (o-rela off si r-16 (sa + aux))
-                 'abs8 (o-rela off si r-8 (sa + aux))
+                 'abs64 (erela off si rabs (sa + aux))
+                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 r-32) (sa + aux))
+                 ('abs32s || 'abs32d) (erela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
+                 'abs16 (erela off si r-16 (sa + aux))
+                 'abs8 (erela off si r-8 (sa + aux))
                  ; an 8-byte word measured from its own start
-                 'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
+                 'rel64 (erela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
-                 'secrel32 (o-where wx lbl @ w (o-rela off <w (a64 ? ra-prel32 r-pc32) <>w))
-                 'pc32 (o-rela off si (? a64 ra-prel32 rv rr-pc32 r-pc32) ((sa + aux) - 4))
+                 'secrel32 (o-where wx lbl @ w (erela off <w (a64 ? ra-prel32 r-pc32) <>w))
+                 'pc32 (erela off si (? a64 ra-prel32 rv rr-pc32 r-pc32) ((sa + aux) - 4))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
                  ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;
                  ; anything else pc32 (data has no plt stub)
                  'rel32
-                  (o-rela off si
+                  (erela off si
                           (? rv rr-pc32
                              a64 ra-prel32
                              (o-has? wkset lbl && o-has? fnidx lbl) r-plt32
@@ -964,16 +971,16 @@
                              r-pc32)
                           ((sa + aux) - 4))
                  ; a64: a page delta never resolves inside a .o
-                 'adrp21 (o-rela off si ra-pghi21 (sa + afix-ad aux))
-                 'addlo12 (o-rela off si ra-lo12 (sa + afix-ad aux))
-                 ('lo12s1 || 'lo12s2 || 'lo12s4 || 'lo12s8 || 'lo12s16) (o-rela off si (ra-ldst k) (sa + afix-ad aux))
-                 'b26 (o-rela off si (afix-w aux = 2483027968 ? ra-call26 ra-jump26) (sa + afix-ad aux))   ; 0x94000000 = bl
-                 'b19 (o-rela off si ra-condbr19 (sa + afix-ad aux))
-                 'b14 (o-rela off si ra-tstbr14 sa)
-                 'ld19 (o-rela off si ra-ldlo19 (sa + afix-ad aux))
-                 'adr21 (o-rela off si ra-adrlo21 (sa + afix-ad aux))
-                 'pcrel (o-rela off si rr-call sa)
-                 'j21 (o-rela off si rr-jal sa)
+                 'adrp21 (erela off si ra-pghi21 (sa + afix-ad aux))
+                 'addlo12 (erela off si ra-lo12 (sa + afix-ad aux))
+                 ('lo12s1 || 'lo12s2 || 'lo12s4 || 'lo12s8 || 'lo12s16) (erela off si (ra-ldst k) (sa + afix-ad aux))
+                 'b26 (erela off si (afix-w aux = 2483027968 ? ra-call26 ra-jump26) (sa + afix-ad aux))   ; 0x94000000 = bl
+                 'b19 (erela off si ra-condbr19 (sa + afix-ad aux))
+                 'b14 (erela off si ra-tstbr14 sa)
+                 'ld19 (erela off si ra-ldlo19 (sa + afix-ad aux))
+                 'adr21 (erela off si ra-adrlo21 (sa + afix-ad aux))
+                 'pcrel (erela off si rr-call sa)
+                 'j21 (erela off si rr-jal sa)
                  (scare 'obj-fix k))))
            rs))
        relas (map (o-rels * ln-rl) lanes)
@@ -994,38 +1001,39 @@
        ; per relocated section, .shstrtab last. --
        i-sym (1 + nsec) i-str (2 + nsec)
        i-shs (nsec + nrel + 3) nsh (nsec + nrel + 4)
-       h-sz 64
+       h-sz (w32 ? 52 64)
        ; the content offsets, in section order; a NOBITS sh_offset is a placeholder.
        (o-offs i off acc) (nsec <= i ? [(rev acc) off]
                              (o-offs (i + 1) (off + ln-fsz (ln i)) (off . acc)))
        co (o-offs 0 h-sz ())    coffs (o-rows <co)
-       sym-off <>co             sym-sz (nsym * 24)
+       sym-off <>co             sym-sz (nsym * symz)
        str-off (sym-off + sym-sz) str-sz #strblob
        (o-roffs i off acc) (nsec <= i ? [(rev acc) off]
-                              (o-roffs (i + 1) (off + rcnt i * 24) (off . acc)))
+                              (o-roffs (i + 1) (off + rcnt i * rlz) (off . acc)))
        ro (o-roffs 0 (str-off + str-sz) ())    roffs (o-rows <ro)
        shs-off <>ro             shs-sz #shstrblob
        sht-off (shs-off + shs-sz)
 
        ; a link-order section's sh_link: the section its first word reaches
        (o-link l) (0 < (l 2 & 128) && two? (l 5) ? (o-where wx (l 5 0 2) @ w (two? w ? <w 0)) 0)
-       sht (catall ([(o-zeros 64)]                                         ; 0 NULL
-              + o-mapi (\ i l (elf-shdr (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
+       sht (catall ([(o-zeros shz)]                                         ; 0 NULL
+              + o-mapi (\ i l (eshdr (shname i) (ln-ty l) (l 2 & 4294967295)   ; 1..nsec the content sections
                                   0 (coffs i) (o-blen (ln-bs l)) (o-link l) 0 (l 3) (l 2 >> 32)))
                        lanes
-              + [(elf-shdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) 8 24)    ; .symtab link=.strtab info=first-global
-                 (elf-shdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab
-              + o-mapi (\ j i (elf-shdr (shname (nsec + 2 + j)) 4 0                          ; a .rela per relocated section, link=.symtab
-                                  0 (roffs i) (rcnt i * 24) i-sym (i + 1) 8 24))
+              + [(eshdr (shname nsec) 2 0 0 sym-off sym-sz i-str ((1 + nsec) + nloc) wa symz)    ; .symtab link=.strtab info=first-global
+                 (eshdr (shname (nsec + 1)) 3 0 0 str-off str-sz 0 0 1 0)]                    ; .strtab
+              + o-mapi (\ j i (eshdr (shname (nsec + 2 + j)) 4 0                          ; a .rela per relocated section, link=.symtab
+                                  0 (roffs i) (rcnt i * rlz) i-sym (i + 1) wa rlz))
                        rl
-              + [(elf-shdr (shname (nsec + nrel + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
+              + [(eshdr (shname (nsec + nrel + 2)) 3 0 0 shs-off shs-sz 0 0 1 0)]))             ; .shstrtab
 
        hdr (catall [
-             '(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0)                      ; e_ident: \x7fELF 64-bit LSB
+             [127 69 76 70 (w32 ? 1 2) 1 1 0 0 0 0 0 0 0 0 0]              ; e_ident: \x7fELF 64-bit (rv32: 32-bit) LSB
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, e_machine, version
-             (le64 0) (le64 0) (le64 sht-off)                             ; e_entry=0, e_phoff=0, e_shoff
-             (le32 (machine = 243 ? 5 0)) (le16 64) (le16 0)            ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE), e_ehsize, e_phentsize=0
-             (le16 0) (le16 64) (le16 nsh)                                ; e_phnum=0, e_shentsize=64, e_shnum
+             (w32 ? (le32 0 + le32 0 + le32 sht-off)                      ; e_entry=0, e_phoff=0, e_shoff
+                 (le64 0 + le64 0 + le64 sht-off))
+             (le32 (? w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft), e_ehsize, e_phentsize=0
+             (le16 0) (le16 shz) (le16 nsh)                               ; e_phnum=0, e_shentsize, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
        (catall ([hdr]
                 + map (l \ (ln-ty l = 8 ? () (ln-bs l))) lanes           ; a NOBITS lane writes nothing

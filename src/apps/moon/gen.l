@@ -156,29 +156,32 @@
    (t32f? g) (t32? g && !(v6m? g))  ; with an fpu, hence AAPCS-VFP: floats ride s0..s15
    (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
+   (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
+   (rv? g) (rv64? g || rv32? g)      ; the riscv instruction family
    (wasm? {'tgt 'wasm}) 1          ; ..which wasm rides whole; it differs only where its machine lacks an op
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
-                (elem (peep g 'tgt 'x64) '(a64 rv64 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)))
-   (arm? g) (a64? g || t32? g || rv64? g)             ; the lr-push / fp-base frame family (riscv rides it whole)
+                (elem (peep g 'tgt 'x64) '(a64 rv64 rv32 thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)))
+   (arm? g) (a64? g || t32? g || rv? g)             ; the lr-push / fp-base frame family (riscv rides it whole)
    ; the 32-bit x86 seats (SysV i386, cdecl; i386m16 its 16-bit face): thumb's word and pair,
    ; x64's instructions, and every argument on the stack
    (ia32? g) (elem (g 'tgt) '(i386 i386m16))
    (x86? g) (x64? g || ia32? g)
-   (ilp32? g) (t32? g || ia32? g)                 ; the 32-bit word: a long and a pointer one register, a long long the r0:r1 pair
+   (ilp32? g) (t32? g || ia32? g || rv32? g)      ; the 32-bit word: a long and a pointer one register, a long long the r0:r1 pair
+   (soft? g) (v6m? g || rv32? g)                  ; no float file: every float op a helper call
    (m16? g) (g 'tgt = 'i386m16)
    (m16b g) (m16? g ? [102] ())                    ; a raw 32-bit operation's operand-size prefix in a 16-bit segment
    (m16a g) (m16? g ? [103] ())                    ; ..and a raw memory operand's address-size prefix
    (acw g w) (m16? g ? (w @ 4 [102] ()) (w @ 2 [102] 8 [72] ()))   ; a cmpxchg's width prefix: a 16-bit segment reads 16 bits bare
    (wsize g) (ilp32? g ? 4 8)                       ; a pointer, a gp scalar, a stack cell
-   (argr g) (? (a8? g) argregs-a64 (t32? g) argregs-t32 (ia32? g) (take (rpn g) '(r0 r2 r1)) argregs)   ; riscv a0..a7 map onto the same r0..r7; i386 -mregparm's eax edx ecx
-   (ngp g) (? (a8? g) 8 (t32? g) 4 (ia32? g) (rpn g) 6)
+   (argr g) (? (a8? g || rv32? g) argregs-a64 (t32? g) argregs-t32 (ia32? g) (take (rpn g) '(r0 r2 r1)) argregs)   ; riscv a0..a7 map onto the same r0..r7; i386 -mregparm's eax edx ecx
+   (ngp g) (? (a8? g || rv32? g) 8 (t32? g) 4 (ia32? g) (rpn g) 6)
    ; i386's hidden result pointer: eax under -mregparm (a variadic call keeps every word on the stack), else the first stack word
    (srreg? g va) (ia32? g && 0 < rpn g && !va)
-   (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv64? g) 'r12 'r3)   ; the callr park (rbx / x15 / IP / t4), clear of the arg registers
-   (ovb g) (? (a8? g) 32 (v6m? g) 12 (ilp32? g) 8 16)   ; overflow params above the push cells: x64 [ret+rbp]=16; a64/riscv 2x16; thumb2 lr+fp=8; v6m lr+fp+r4=12
+   (pkr g) (? (a64? g) 'r15 (t32? g) 'r12 (rv? g) 'r12 'r3)   ; the callr park (rbx / x15 / IP / t4), clear of the arg registers
+   (ovb g) (? (a8? g || rv32? g) 32 (v6m? g) 12 (ilp32? g) 8 16)   ; overflow params above the push cells: x64 [ret+rbp]=16; a64/riscv 2x16; thumb2 lr+fp=8; v6m lr+fp+r4=12
    ; the callee-saved pools residency may borrow: saved by the prologue (g 'cssv), reloaded on every
    ; exit. no r4 in an arm pool (a4ize renames a base-slot r4 to fp), no r7 in v6m's (fp there);
    ; riscv leads with s1 (r15), the rvc window's one callee-saved register
@@ -186,7 +189,7 @@
                  (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  ; wasm's r16..r18 are riscv's gp tp and flag scratch: plain locals there
                  (wasm? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r16 r17 r18)
-                 (rv64? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
+                 (rv? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
                  (v6m? g) '(r5 r6)                    ; the 16-bit str/ldr reach r0-r7 only, and r7 is fp
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
                  (ia32? g) '(r5 r6)   ; esi edi, and ebx where nothing parks there (cgfn); ebp the frame
@@ -195,7 +198,7 @@
    (deep? pl) (two? >>pl)                           ; a pool affords a priced seat: two remain after the take
    (fbase g) (arm? g ? 'fp 'r4)                   ; the frame base as post-build ir1 spells it (a4ize)
    ; the frame hangs off its top, so a save slot laid late moves no other (rv64, v6m address up)
-   (cstop? g) (!(rv64? g) && !(v6m? g))
+   (cstop? g) (!(rv? g) && !(v6m? g))
    ; 'bad is both a policy deopt ("take another lane") and "no lane anywhere"; only the second
    ; speaks, so nolane pins the phrase. last pin wins
    (nolane g txt) (pin g 'nolane txt, 'bad)
@@ -219,7 +222,7 @@
     (: u (n & 4294967295) b (u & 255) c (u >> 8 & 255)
        (u < 256 || u = b * 65537 || u = c * 16777472 || u = b * 16843009 || u // (u & (0 - u)) < 256))
    ; may this op take n as its immediate? (the sweeps ask before rewriting a reg-reg form)
-   (imma g op n) (op @ 'imul ((x64t? g || rv64? g) && fits32 n)   ; imul imm: x64's three-operand form, riscv materializes; a64/t32 have none
+   (imma g op n) (op @ 'imul ((x64t? g || rv? g) && fits32 n)   ; imul imm: x64's three-operand form, riscv materializes; a64/t32 have none
                        ('add || 'sub) (immok g 'addsub n)
                        'cmp (immok g 'cmp n)
                        (immok g 'log n || t32? g && !(v6m? g) && elem op '(and or) && -2147483648 <= n < 4294967296
@@ -281,7 +284,7 @@
    (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
    ; the by-reference class: a composite past 16 bytes (AAPCS64: and no HFA; LP64 riscv and wasm: any) travels
    ; as the address of the caller's own copy, and returns through the buffer x8 (riscv: a0) points at
-   (refm? g ty) (stru? ty && 16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))
+   (refm? g ty) (stru? ty && (rv32? g ? (8 < tsz g ty) (16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))))
    ; an AAPCS-VFP homogeneous aggregate: one float base, at most four of it
    (t32hfa? g ty) (hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b))
    (srreg g) (a64? g ? 'r8 (argr g 0))              ; where the hidden result pointer rides
@@ -388,7 +391,7 @@
                     'bool [['cmp r 0] ['set 'ne r]])
    ; a narrow integer answer from a call: SysV and AAPCS64 leave the bits above it to the caller,
    ; so it extends here; lp64's callee sign-extends even an unsigned, which ours reads zero-extended
-   (rext g ty) (? (!(x86? g || a64? g || rv64? g) || abl? g 'rext) ()
+   (rext g ty) (? (!(x86? g || a64? g || rv? g) || abl? g 'rext) ()
                   (ty = 'bool) [['zx1 'r0]]
                   (elem ty '(char schar cchar uchar short ushort int uint)) (cvt ty 'r0)
                   ())
@@ -429,7 +432,7 @@
           ((x < 0.0) * 2147483648 + m)))
    ; the native single lane: a 'float value rides its f-register as binary32 (C's FLT_EVAL_METHOD 0);
    ; elsewhere a float widens on load and every value is a double
-   (f32v? g) (x64? g || a8? g || t32? g || ia32? g)
+   (f32v? g) (x64? g || a8? g || t32? g || ia32? g || rv32? g)
    (n32? g ty) (ty = 'float && f32v? g)
    ; the double constant pool: one rodata block per distinct pattern, named by the pattern
    ; itself so a label is stable across the build's retries and shared across the unit
@@ -472,9 +475,9 @@
    ; the pool or the immediate lanes: every pair op runs the shuttle, r2:r3 the popped left, r12 the scratch
    (pair? g ty) (ilp32? g && llt? ty)
    ; a pair shift by a variable count in r2 (0..63): count >= 32 moves one word across, else the
-   ; carry composes through r12 (count 0 skips: a 32-c shift at 0 is unpredictable). v6-M calls the helper
+   ; carry composes through r12 (count 0 skips: a 32-c shift at 0 is unpredictable). v6-M and rv32 call the helper
    (pshiftv g kind)
-    (? (v6m? g)
+    (? (v6m? g || rv32? g)
        [['call (kind @ 'shl '__aeabi_llsl 'shr '__aeabi_llsr '__aeabi_lasr)]]
        (ia32? g) (pshiftv-ia32 g kind)
     (: lb (nlab g ".pb") ld (nlab g ".pd")
@@ -507,7 +510,7 @@
    ; lo adds exactly, one rounding; the signed face negates the pair in and the double out. v6-M: one call.
    ; sk: a magnitude at or past 2^53 first folds its low 11 bits into bit 11 (sticky), so it fits exactly
    (cvtlld g usg sk)
-    (v6m? g ?
+    (soft? g ?
        [['call (usg ? '__aeabi_ul2d '__aeabi_l2d)] '(movqxr f0 r0)]
     (: lu (nlab g ".lu") ld (nlab g ".ld")
        (fold lf lk) ['(li r2 2097152) '(cmp r1 r2) ['br 'ae lf] ['jmp lk] ['label lf]   ; hi >= 2^21
@@ -527,7 +530,7 @@
    ; double -> llong, toward zero: peel sign/exponent, rebuild the 53-bit mantissa as a pair, shift
    ; it into place, refix the sign. |d| < 1 answers 0; out of range is UB. v6-M: one runtime call
    (cvtdll g usg)
-    (v6m? g ?
+    (soft? g ?
        ['(movqrx r0 f0) ['call (usg ? '__aeabi_d2ulz '__aeabi_d2lz)]]
     (: l1 (nlab g ".d1") lr (nlab g ".dr") ls (nlab g ".ds") ld (nlab g ".dd")
        (['(movqrx r0 f0)
@@ -587,6 +590,11 @@
               (!ll ? [['raw cz]]
                  ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) ['raw cz] ['jmp ld]
                   ['label lz] ['raw cz] '(add r0 r0 32) ['label ld]]))
+          (rv32? g)                    ; no clz in rv32i: __clzsi2, the pair as v6-M's
+           (: lz (nlab g ".cz") ld (nlab g ".czd")
+              (!ll ? '((call __clzsi2))
+                 ['(cmp r1 0) ['br 'eq lz] '(mov r0 r1) '(call __clzsi2) ['jmp ld]
+                  ['label lz] '(call __clzsi2) '(add r0 r0 32) ['label ld]]))
           (t32? g && !ll)              ; one word: clz or __clzsi2
            (v6m? g ? '((call __clzsi2)) '((clz r0 r0)))
           (t32? g)                     ; the pair: clz(hi), or 32 + clz(lo) when hi is 0
@@ -614,6 +622,7 @@
            (!ll ? [['raw tz]]
               ['(cmp r0 0) ['br 'eq lz] ['raw tz] ['jmp ld]
                ['label lz] '(mov r0 r1) ['raw tz] '(add r0 r0 32) ['label ld]]))
+       (rv32? g) '((call __ctzsi2))
        (t32? g)
         (v6m? g ? '((call __ctzsi2))
            '((li r1 0) (sub r1 r1 r0) (and r0 r0 r1)     ; x & -x, then 31 - clz
@@ -699,14 +708,14 @@
    (tw x) (le2 (x >> 16) + le2 (x & 65535))
    ; the widths an exclusive loop lays: riscv's lr/sc are word and doubleword only, armv7-m has
    ; no doubleword exclusive, armv6-m none at all (gcc calls libatomic there); wasm is one thread
-   (awidths g) (? (wasm? g) '(1 2 4 8) (v6m? g) () (rv64? g) '(4 8) (ilp32? g) '(1 2 4) '(1 2 4 8))
+   (awidths g) (? (wasm? g) '(1 2 4 8) (v6m? g) () (rv32? g) '(4) (rv64? g) '(4 8) (ilp32? g) '(1 2 4) '(1 2 4 8))
    (amw g pt) (? (ptr? pt) (wsize g) (elem pt '(char schar cchar uchar bool)) 1 (elem pt '(short ushort)) 2
                  (elem pt '(int uint)) 4 (elem pt '(long ulong llong ullong)) (tsz g pt) ())
    ; a full fence, and a compiler-only one (a raw form nothing moves across)
    (afence g) (? (wasm? g) () (x86? g) [['raw '(15 174 240)]] (a64? g) [['raw (le4 0xD5033BBF)]]
-                 (rv64? g) [['raw (le4 0x0330000F)]] [['raw (tw 0xF3BF8F5F)]])
+                 (rv? g) [['raw (le4 0x0330000F)]] [['raw (tw 0xF3BF8F5F)]])
    (abar g) (? (wasm? g) () (x86? g) [['raw '(144)]] (a64? g) [['raw (le4 0xD503201F)]]
-               (rv64? g) [['raw (le4 19)]] [['raw (le2 0xBF00)]])
+               (rv? g) [['raw (le4 19)]] [['raw (le2 0xBF00)]])
    (stw w) (w @ 1 'st1 2 'st2 4 'st4 'st)
    ; riscv's R and B shapes
    (rvr f7 rs2 rs1 f3 rd) (f7 << 25 | rs2 << 20 | rs1 << 15 | f3 << 12 | rd << 7 | 0x33)
@@ -744,7 +753,7 @@
            body ([lx] + ops + [sx])
            [['raw (catall (map le4 (body + [(0x35000000 | ((0x80000 - #body) & 0x7FFFF) << 5 | 4)   ; cbnz w4, back
                                             0xD5033BBF])))]])
-       (rv64? g)
+       (rv? g)
         (: f3 (w = 4 ? 2 3)
            lr (2 << 27 | 3 << 25 | 11 << 15 | f3 << 12 | 10 << 7 | 0x2F)             ; lr.aqrl a0, (a1)
            sc (3 << 27 | 3 << 25 | 13 << 20 | 11 << 15 | f3 << 12 | 14 << 7 | 0x2F)   ; sc.aqrl a4, a3, (a1)
@@ -805,7 +814,7 @@
             ['raw (w @ 4 '(34 252 95 136) '(34 252 95 200))]   ; ldaxr w2/x2, [x1]
             ['raw (w @ 4 '(32 124 3 136) '(32 124 3 200))]     ; stxr w3, w0/x0, [x1]
             '(cmp r3 0) ['br 'ne lb] '(mov r0 r2)])
-       (rv64? g)
+       (rv? g)
         [['raw (w @ 4 '(47 165 165 12) '(47 181 165 12))]]      ; amoswap.w/d.aq a0,a0,(a1)
        (t32? g)                                                 ; ldrex r2 / strex r3, r0, [r1] until it holds, dmb
         (: body (tw 0xE8512F00 + tw 0xE8410300 + le2 0x2B00)    ; cmp r3, #0
@@ -817,7 +826,7 @@
     (? (a64? g) [['raw (w @ 4 '(32 252 159 136) '(32 252 159 200))]]   ; stlr w0/x0, [x1]
        (t32? g) ([['raw (tw 0xF3BF8F5F)]] + [['st4 'r1 0 'r0]])                ; dmb sy, then the store
        (wasm? g) [[(w @ 4 'st4 'st) 'r1 0 'r0]]
-       (rv64? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
+       (rv? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
                   [[(w = 4 ? 'st4 'st) 'r1 0 'r0]])
        [[(w @ 4 'st4 'st) 'r1 0 'r0]])
    ; a compare-and-swap: expected r0 (widened as the loop's load widens), pointer r1, desired r2 ->
@@ -836,7 +845,7 @@
                  sx ((w @ 1 0x0800FC00 2 0x4800FC00 4 0x8800FC00 0xC800FC00) | 4 << 16 | 32 | 2)   ; stlxr w4, x2, [x1]
                  [['raw (catall (map le4 [lx 0xEB00007F 0x54000061 sx                 ; cmp x3, x0; b.ne out
                                           (0x35000000 | (0x80000 - 4) << 5 | 4) 0xD5033BBF]))]])   ; cbnz w4, back
-             (rv64? g)
+             (rv? g)
               (: f3 (w = 4 ? 2 3)
                  lr (2 << 27 | 3 << 25 | 11 << 15 | f3 << 12 | 13 << 7 | 0x2F)             ; lr.aqrl a3, (a1)
                  sc (3 << 27 | 3 << 25 | 12 << 20 | 11 << 15 | f3 << 12 | 14 << 7 | 0x2F)   ; sc.aqrl a4, a2, (a1)
@@ -848,7 +857,7 @@
           '((cmp r3 r0) (set eq r2) (mov r0 r3))))
    ; the expected value as the loop's own load leaves it: riscv's lr.w sign-extends, the
    ; exclusive loads elsewhere zero-extend (x64's cmpxchg reads the low w bytes)
-   (aexp g w) (? (x86? g || w = 8) () (rv64? g && !(wasm? g)) (w = 4 ? '((sx4 r0))) [[(w @ 1 'zx1 2 'zx2 'zx4) 'r0]])
+   (aexp g w) (? (x86? g || w = 8) () (rv? g && !(wasm? g)) (w = 4 ? '((sx4 r0))) [[(w @ 1 'zx1 2 'zx2 'zx4) 'r0]])
    ; i386 answers a float on x87's st(0) and gen keeps it in f0 (xmm0): an 8-byte cell under esp
    ; carries it across, each way, raw so no pass reads the cell (16-bit: 67 on memory, 66 on lea)
    (x87raw g fl in?)
@@ -879,6 +888,7 @@
    ; thumb2 vararg: drops the r0-r3 block the prologue pushed
    epi-t32va '((lea sp fp 0) (pop fp) (pop lr) (add sp sp 16) (ret))
    epi-rv-va '((lea sp fp 0) (pop fp) (pop lr) (add sp sp 64) (ret))                   ; drop the a0-a7 block
+   epi-rv32va '((lea sp fp 0) (pop fp) (pop lr) (add sp sp 32) (ret))                  ; ..at four bytes a word
    ; soft-double (sp64, an SP-only FPU): f64 ops lower to __aeabi_* helpers through a 32-byte sp cell over
    ; r0-r3 (above sp: an irq frame owns below); moon stages doubles only in f0/f1/f15
    sf-bin {'addsd '__aeabi_dadd 'subsd '__aeabi_dsub
@@ -974,7 +984,7 @@
        ; arm and riscv pair the dest and a rem's temp, v6m's loop r0..r3
        _ (arm divops (g \ f \ [(rg1 <>>f + rg1 <>>>f)
                                (? (x86? g) [<>f 'r0]
-                                  (a64? g || rv64? g || t32? g && !(v6m? g)) (<>f . (#f = 5 ? [(f 4)] ()))
+                                  (a64? g || rv? g || t32? g && !(v6m? g)) (<>f . (#f = 5 ? [(f 4)] ()))
                                   '(r0 r1 r2 r3))
                                ()]))
        _ (arm llops (g \ f \ ['(r0 r1 r2 r3) '(r0 r1 r2 r3) ()]))
@@ -1052,12 +1062,12 @@
    (butret es) (two? >es ? (<es . butret >es))          ; the epilogue minus its ret
    (sibjmp g f ejx)                                 ; ejx: the epilogue this tail owes
     ; riscv's jal reaches only +-1MB: the tail call goes by la into the park, after the restores
-    (? (rv64? g && <f = 'call)
+    (? (rv? g && <f = 'call)
        (butret (peep g 'epi epi-a64) + [['la (pkr g) <>f] ['jmpr (pkr g)]])
        (<f = 'call) (butret ejx + [['jmp <>f]])
        ; ejx, not epi-a64: a cs-granted build pins its restores into g 'epi, and t32's vararg epilogue adds 16
        (a64? g) (butret ejx + '((jmpr r15)))                   ; the a64 epilogue never touches x15
-       (rv64? g) (butret (peep g 'epi epi-a64) + [['jmpr (pkr g)]])     ; riscv: the park (t4) survives the epilogue
+       (rv? g) (butret (peep g 'epi epi-a64) + [['jmpr (pkr g)]])     ; riscv: the park (t4) survives the epilogue
        (t32? g) (butret ejx + [['jmpr (pkr g)]])             ; thumb2: the park r12 survives the epilogue
        (ia32? g) ('((mov r1 r3)) + butret ejx + '((jmpr r1)))    ; i386: ecx, caller-saved and no result's
        (<>f = 'r10) (butret ejx + '((jmpr r10)))              ; lo.l's park, clear of the epilogue
@@ -1183,7 +1193,7 @@
    ; riscv: a body naming no sp, fp or lr and making no call (wasm: may call) drops its prologue
    ; and every exit's teardown
    (rvunframe g fs)
-    (cz g 'rvunframe fs (!(rv64? g && !(g 'fpin) && 5 < #fs && fs 1 = '(push lr) && fs 2 = '(push fp) && fs 4 = '(lea fp sp 0)) ? fs
+    (cz g 'rvunframe fs (!(rv? g && !(g 'fpin) && 5 < #fs && fs 1 = '(push lr) && fs 2 = '(push fp) && fs 4 = '(lea fp sp 0)) ? fs
        (: sf (fs 3) K (sf 3)
           tear [['lea 'sp 'fp K] '(pop fp) '(pop lr)]
           (deep? x) (two? x ? (vany deep? x) (elem x '(sp fp lr)))
@@ -1847,7 +1857,7 @@
    ; the callee-saved file per target, as holo's tables have it
    (csregs g) (? (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (wasm? g) '(r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26)
-                 (rv64? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
+                 (rv? g) '(r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                  (t32? g) '(r4 r5 r6 r7 r8 r9 r10)
                  (ia32? g) '(r3 r4 r5 r6)             ; ebx ebp esi edi
                  ('(r3 r4) + csx64))
@@ -1855,14 +1865,14 @@
    ; the liveness kit: a backward fixpoint over the per-form graph. the answer over-approximates
    ; live: a call reads+writes the caller-saved file, a sibcall reads everything, an unnamed op bars
    (lvgp g) (? (a64? g) '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15)
-               (rv64? g) '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)
+               (rv? g) '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)
                (t32? g) '(r0 r1 r2 r3 r12)
                (ia32? g) '(r0 r1 r2)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10))       ; caller-saved gp: no save owed, but none may span a call
    lvquiet '(label align ud2 br jmp)
    ; what an exit owes back beside the cs file; r2 only where a wide return rides it
    (lvret g) (? (t32w? g && d128? <(peep (g 'sigs) (g 'fn) ['long ()])) '(r0 r1 r2 r3)   ; a wide return's four words
-                (t32? g) '(r0 r1)
+                (t32? g || rv32? g) '(r0 r1)
                 (ia32? g) '(r0 r1 r2)                          ; a pair leaves as edx:eax, moved there at the exit
                 (<(peep (g 'sigs) (g 'fn) ['long ()]) @ rt       ; r2: a wide return's high half, x64's int pair's
                    (w128? g && (d128? rt || x64? g && ipair? g rt) ? '(r0 r1 r2 f0 f1) '(r0 r1 f0 f1))))
@@ -2125,7 +2135,7 @@
    ; x64's al is li'd by setal first); a wasm call writes only r0 r1, so its locals ride it. arm
    ; has none: r0-r3 carry arguments, r12 a call's target, and the rest are callee-saved
    (doors g tail) (? (a64? g) '(r9 r10 r11 r12 r13 r14 r15)
-                     (rv64? g) (wasm? g && !tail ? () '(r8 r9 r10 r11 r12))
+                     (rv? g) (wasm? g && !tail ? () '(r8 r9 r10 r11 r12))
                      (ia32? g) '(r0 r1 r2)
                      (t32? g) ()
                      '(r0 r9 r10))
@@ -2138,7 +2148,7 @@
     (two? f ?
        (rdsp g f @ rs
           (? (rs = 'bar)
-              (? (retx? f) (rd != 'r0 && !(t32? g && rd = 'r1))
+              (? (retx? f) (rd != 'r0 && !((t32? g || rv32? g) && rd = 'r1))
                  (elem <f '(call callr callm)) (elem rd (doors g 0))
                  (<f = 'jmp && fsym? <>f) (elem rd (doors g 1))
                  ())
@@ -2628,7 +2638,7 @@
    (asmsave? g r9) (? (ia32? g) (elem r9 '(r3 r5 r6))
                       (x64t? g) (r9 = 'r3 || elem r9 csx64)
                       (a64? g) (elem r9 '(r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28))
-                      (rv64? g) (elem r9 '(r11 r12 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26))
+                      (rv? g) (elem r9 '(r11 r12 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26))
                       (elem r9 '(r5 r6 r7 r8 r9 r10 r11 r12)))
    ; inline asm: the target's GNU dialect (gas.l; neutral text under __attribute__((holo))), spliced as one ('raw ..)
    ; a constraint's register part: r/q/g/rm 'pick, i/n 'imm, m 'mem, a digit ('tie n), rN the nom,
@@ -4534,7 +4544,7 @@
                         ; an i386 struct return pops its hidden pointer: ret $4 (66 ahead of it in a 16-bit segment)
                         (ia32? g && two? sig && sretm? g <sig && !(srreg? g vararg))
                          ('((mov sp r4) (pop r4)) + [['raw ((g 'tgt = 'i386m16 ? [102] ()) + [194 4 0])]])
-                        (vararg && rv64? g) epi-rv-va
+                        (vararg && rv32? g) epi-rv32va (vararg && rv64? g) epi-rv-va
                         (v6m? g) epi-t16 (arm? g) epi-a64 epi)
              @ e9 (cstop? g ? ('((rests)) + e9) e9)))
        ; lo.l lays after this file: its names resolve at the call

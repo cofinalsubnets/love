@@ -12,7 +12,7 @@
 #   skip    not held to anything here: assumes a 64-bit long, or no witness
 #   nogcc   held to x86-64 alone
 #   gnopie  an address as an "i" operand: gcc wants no pie
-# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 wasm arm i386 i386m16 thumb1 thumb2)
+# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 rv32 wasm arm i386 i386m16 thumb1 thumb2)
 . test/gate/skip.sh
 . test/gate/a64run.sh
 . test/gate/cclib.sh
@@ -128,6 +128,60 @@ case $tgt in
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow=$narrow32
     gref() { gcc -m32 -msse2 -mfpmath=sse -w -o "$1" "$2" -lm; } ;;
+  rv32)
+    # the esp32-c6's isa under qemu-riscv32's user mode: no libc, _start exits by ecall. ours is
+    # mooncc's bare link with rt.c; clang's build is the witness, by ld.lld over rv32sf.c's libgcc names
+    for tool in clang ld.lld qemu-riscv32; do have $tool || gate_skip "$name: no $tool, skipped"; done
+    a64_qemu=qemu-riscv32
+    pretty=qemu-riscv32
+    GCC=clang
+    exitonly=1
+    mflags="-os none -Dmain=cc_main -c"
+    refuse="$int128s 364-w128float 297-frameaddr"
+    wide="68-static-assert 120-bfinit 161-enumwide"
+    narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
+    # no libc on the board, and no libgcc: what a link of either side cannot close
+    nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+      148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
+      163-bitfields 164-switchtab 165-constcond 166-condconv 178-toplevelasm 228-strictalign 280-cxf-fuzz
+      283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
+      304-size-classes 315-alloca-stack 345-jmpsave 348-libcmore 353-intuint 354-idioms 355-cplxarg
+      356-vafnval 390-qualon"
+    # clang refuses these here; it folds a long shifted past 31 as gcc does not (152, 378), and a
+    # _Thread_local of its own wants a tp the board never sets (142)
+    nogcc="72-quals 95-libcfill 140-fsuffix 176-cleanup 268-overflow-p 269-builtin-alloca 308-negnan
+      311-coldsplit 315-rgnnest 375-splitcall 380-initcover 383-vfpimm 385-packedinit 142-syntax
+      152-rotate 378-extbounds"
+    rvf="--target=riscv32-unknown-elf -march=rv32imac -mabi=ilp32 -mno-relax"
+    # main(argc, argv) gets a hosted run's 1 and its name, so an argc a program reads is no register's leftover
+    { echo 'int cc_main(int, char **);'
+      echo 'int main(void){ static char n[] = "t", *av[] = { n, 0 }; return cc_main(1, av); }'
+      echo 'void *memset(void *p, int c, unsigned long n){'
+      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
+      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
+      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
+      echo 'void *memmove(void *a, const void *b, unsigned long n){'
+      echo ' unsigned char *x = a; const unsigned char *y = b;'
+      echo ' if (x < y) { while (n--) *x++ = *y++; }'
+      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
+      echo 'int strcmp(const char *a, const char *b){'
+      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+    } > "$d/run.c"
+    { echo 'int main(void);'
+      echo 'void _start(void){ int r = main();'
+      echo ' __asm__ volatile("mv a0, %0\n\tli a7, 93\n\tecall" :: "r"(r) : "a0", "a7"); for (;;); }'
+    } > "$d/start.c"
+    moonrun -t rv32 -os none -c -o "$d/run.o" "$d/run.c" || fail "mooncc run.c"
+    moonrun -t rv32 -os none -c -o "$d/start.o" "$d/start.c" || fail "mooncc start.c"
+    moonrun -t rv32 -os none -c -o "$d/rt.o" src/apps/moon/lib/rt.c || fail "mooncc rt.c"
+    clang $rvf -O1 -ffreestanding -fno-builtin -c "$d/run.c" -o "$d/run.cc.o" || fail "clang run.c"
+    clang $rvf -O1 -ffreestanding -c "$d/start.c" -o "$d/start.cc.o" || fail "clang start.c"
+    moonrun -t rv32 -os none -c -o "$d/sf.o" test/gate/rv32sf.c || fail "mooncc rv32sf.c"
+    blink() { moonrun -t rv32 -os none -nostdlib -Ttext 0x10000 -o "$2" "$d/start.o" "$1" "$d/run.o" "$d/rt.o"; }
+    gref() {
+      clang $rvf -O0 -w -ffreestanding -Dmain=cc_main -c "$2" -o "$1.o" \
+        && ld.lld -o "$1" "$d/start.cc.o" "$d/run.cc.o" "$1.o" "$d/sf.o" "$d/rt.o"
+    } ;;
   thumb1|thumb2)
     thumb_board $tgt "$d"
     if [ $tgt = thumb1 ]; then
@@ -229,6 +283,22 @@ for f in test/cc/*.c; do
 done
 
 # what a target holds beside the battery
+if [ $tgt = rv32 ]; then
+  # a bare link answers __bss_start__/__bss_end__ with its .bss, which a board's startup clears
+  cat > "$d/bssb.c" <<'EOF'
+extern char __bss_start__[], __bss_end__[];
+static int zs[16];
+static char tail;
+int cc_main(void) {
+  if ((char *) zs < __bss_start__ || &tail >= __bss_end__) return 1;
+  if (__bss_end__ - __bss_start__ < (long) sizeof zs + 1) return 2;
+  return zs[3] + tail ? 3 : 42;
+}
+EOF
+  ours "$r/bssb.t" "$d/bssb.c" > "$d/bssb.log" 2>&1 \
+    || { cat "$d/bssb.log" >&2; fail "bss: mooncc's bare link could not answer the .bss brackets"; }
+  a64_job bssb.t "timeout 60 \$RUN ./bssb.t"
+fi
 if [ $tgt = a64 ]; then
   # the packed program again under -mstrict-align
   moonrun -t a64 -mstrict-align -o "$r/sa279.t" test/cc/279-packed-bitfield.c > "$d/sa279.log" 2>&1 \
@@ -328,6 +398,10 @@ fi
 
 a64_run "$r" || fail "the $pretty batch did not come back"
 
+if [ $tgt = rv32 ]; then
+  [ "$(cat "$r/res/bssb.t.rc")" -eq 42 ] || { cat "$r/res/bssb.t.out" >&2; fail "bss: a bare rv32 link answers $(cat "$r/res/bssb.t.rc") for its .bss brackets"; }
+  echo "bss: a bare rv32 link brackets its own .bss with __bss_start__/__bss_end__"
+fi
 if [ $tgt = a64 ]; then
   [ "$(cat "$r/res/sa279.t.rc")" -eq 0 ] || { cat "$r/res/sa279.t.out" >&2; fail "strict-align: 279-packed-bitfield.c answers wrong under -mstrict-align"; }
   [ "$(cat "$r/res/abi64.t.rc")" -eq 0 ] || { cat "$r/res/abi64.t.out" >&2; fail "abi64: mooncc and clang disagree on AAPCS64"; }
