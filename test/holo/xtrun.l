@@ -1,6 +1,8 @@
 ; the xtensa backend run whole: n checks laid as one program, each answer held to love's own
 ; 32-bit arithmetic, a miss exiting 100 + its index; all held, exit 42. the sources are cat in
-; before it; XT_OUT names the linux ELF it writes, entered at 0x10060, for qemu-xtensa
+; before it; XT_OUT names the linux ELF it writes, entered at 0x10060, for qemu-xtensa. with
+; XT_BOARD=esp32 it writes raw bytes for the rom's ram download to 0x40080000 instead, entered
+; at its first byte, which say each line out of uart0 and spin
 (borrow 'posix)
 (borrow 'holo)
 (: seed {0 12345}
@@ -70,16 +72,24 @@
    cases (map gen ^n)
    ; check i: answer in r2 against the expected, a miss exits 100 + i % 100
    (chk i c) ((c 0) + [['li 'r3 (s (w (c 1)))] ['cmp 'r2 'r3] ['br 'ne (name "F\(i)")]])
-   (fails i) [['label (name "F\(i)")] ['li 'r4 (100 + i % 100)] ['jmp 'X]]
-   prog (catall (map (i \ chk i (cases i)) ^n)
-         + [['li 'r4 42] ['label 'X] ['li 'r0 119] ['sys]]
+   board (getenv "XT_BOARD" = "esp32")
+   ; uart0's fifo at 0x3FF40000, its fill in bits 16..23 of the status word at +28
+   (say t) (catall (map (c \ [['li 'r0 c] ['call 'PUTC]]) (chars t)))
+   putc [['align 4] ['label 'PUTC] ['li 'r6 0x3FF40000] ['label 'W] ['ld 'r7 'r6 28] ['shr 'r7 16]
+         ['and 'r7 'r7 255] ['cmp 'r7 120] ['br 'ge 'W] ['st 'r6 0 'r0] ['ret]]
+   (fails i) (board ? ([['label (name "F\(i)")]] + say "xtensa: check \(show i) missed\r\n" + [['jmp 'Z]])
+                      [['label (name "F\(i)")] ['li 'r4 (100 + i % 100)] ['jmp 'X]])
+   tail (board ? (say "xtensa: all \(show n) checks held\r\n" + [['label 'Z] ['jmp 'Z]])
+                 [['li 'r4 42] ['label 'X] ['li 'r0 119] ['sys]])
+   prog ((board ? (say "\r\nholo's xtensa, from ram\r\n") ()) + catall (map (i \ chk i (cases i)) ^n) + tail
          + catall (map fails ^n)
-         + [['align 4] ['label 'FN] ['mov 'r2 'r0] ['add 'r2 'r2 'r0] ['add 'r2 'r2 'r0] ['add 'r2 'r2 'r1] ['ret]])
+         + [['align 4] ['label 'FN] ['mov 'r2 'r0] ['add 'r2 'r2 'r0] ['add 'r2 'r2 'r0] ['add 'r2 'r2 'r1] ['ret]]
+         + (board ? putc ()))
    code (holo-bytes 'xtensa prog)
    (zs k) (map (i \ 0) ^k)
    ; one PT_LOAD over the file at 0x10000, the code at 0x60 so a call0's word grain holds
    hdr ([127 69 76 70 1 1 1 0] + zs 8 + le16 2 + le16 94 + le32 1 + le32 0x10060 + le32 52 + le32 0
         + le32 0x300 + le16 52 + le16 32 + le16 1 + le16 0 + le16 0 + le16 0)
    ph (le32 1 + le32 0 + le32 0x10000 + le32 0x10000 + le32 (0x60 + #code) + le32 (0x60 + #code) + le32 5 + le32 0x1000)
-   (write-bytes (getenv "XT_OUT") (hdr + ph + zs (0x60 - 84) + code),
+   (write-bytes (getenv "XT_OUT") (board ? code (hdr + ph + zs (0x60 - 84) + code)),
     puts "xtrun: \(show n) checks laid, \(show #code) bytes\n", 0))
