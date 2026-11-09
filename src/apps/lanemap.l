@@ -9,9 +9,10 @@
 ;   lanes-alone     the lanes that rebuild love0 under another cc or run their own fleet: alone
 ;   lanes-early     the lanes that start before the others and run beside them, one at a time:
 ;                   the long ones whose scratch is their own and which only read out/
-;   lanes-place     lane -> where it may run: "source" (a lanes host, built there) or "exact" (an
-;                   x64 one, on this box's pinned binary), then the isas it is held to, if any;
-;                   unnamed is local, here only. a lane is named once it has answered there as here
+;   lanes-place     lane -> where it may run: "source" or "exact" (one that reads love's own bytes),
+;                   either on a lanes host of this box's isa running this box's build, then the
+;                   isas it is held to, if any; unnamed is local, here only. a lane is named once
+;                   it has answered there as here
 ;   (lanes-doc _)   AGENTS.md's table, its lines (love bee --lanes-doc)
 ;   (lanes-map _)   lanes.sh's chains, alone and early sets, places and costs: `chain A,B,..`,
 ;                   `alone A B ..`, `early A ..`, `place LANE CLASS` and `cost LANE SECS` lines
@@ -85,7 +86,13 @@
    lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
    lanes-early ["test_gcstress_bake"]
 
-   lanes-place {"test" "source"}
+   lanes-place {"test" "source" "test_roster" "source" "test_holofuzz" "source" "test_moon" "source"
+                "test_ccarm" "source" "test_ccwasm" "source" "test_ccport" "source"
+                "test_cts_wasm" "source" "test_as" "source" "test_sb" "source"
+                "test_ccthumb1" "source" "test_ccthumb2" "source" "test_cca64" "source"
+                "test_ccrv64" "source" "test_tools" "source" "test_moonfuzz" "source"
+                "test_refuzz" "source" "test_clay" "source" "test_hostnif" "source"
+                "test_bakerep" "exact" "test_envimage" "exact" "test_wake" "exact"}
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)

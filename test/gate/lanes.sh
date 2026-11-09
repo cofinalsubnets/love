@@ -13,11 +13,11 @@
 #   5. --slow: test_slow last and alone, on the same tree, only after every lane is green,
 #      taking the lanes this run just passed as passed
 #
-# --remote: the lanes the lane map places off this box go to the lanes hosts (love bee --on
-# lanes): the gated commit is pushed to each host's kept tree and its prerequisites made there
-# once, then its slots take those lanes longest first. this box takes them too once its own are
-# done, and a host that drops gives its lane back to run here, never skipped. a lane's .rc
-# names where it ran
+# --remote: the lanes the lane map places off this box go to the lanes hosts of its isa (love
+# bee --on lanes): the gated commit is pushed to each host's kept tree and this box's build of
+# their prerequisites laid over it, then its slots take those lanes longest first. this box takes
+# them too once its own are done, and a host that drops gives its lane back to run here, never
+# skipped. a lane's .rc names where it ran
 #
 # heavy slots are the caller's: `love bee --lock --heavy --out out -- sh test/gate/lanes.sh ..`.
 # N defaults to 4. logs land in DIR (out/lanes): LANE.log, LANE.rc, summary; the last run's in DIR.prev.
@@ -164,45 +164,57 @@ fi
 rd=.love/run/lanes/$(basename "$PWD")
 rpre=
 for l in $rlanes; do for p in $(deps "$l"); do has "$p" "$rpre" || rpre="$rpre $p"; done; done
+# a host builds nothing: it takes this box's build of the prerequisites, a target under out/
+# or what a target outside it names there, with love, love.raw and out/lib, all newer than its
+# checkout, and make takes them as made
+ship=
+for p in $rpre; do
+  case $p in out/*) echo "$p" ;; *) for f in $(deps "$p"); do case $f in out/*) echo "$f" ;; esac; done ;; esac
+done > "$d/ship"
+for f in $(cat "$d/ship") out/love out/love.raw out/lib; do [ -e "$f" ] && ! has "$f" "$ship" && ship="$ship $f"; done
 roflags=
-for p in $rpre; do roflags="$roflags -o $p"; done
-# a strict box's lanes are strict there too: its env does not cross
+for p in $rpre $ship; do roflags="$roflags -o $p"; done
+# a strict box's lanes are strict there too, and its TERM and LANG: bee hands a host only
+# PATH, HOME and LANG=C
 rst=
 [ -z "$rlanes" ] || { . test/gate/skip.sh; gate_strict && rst=LOVE_GATE_STRICT=1; }
+for v in TERM LANG LC_ALL; do eval "x=\${$v:-}"; [ -z "$x" ] || rst="$rst $v=$x"; done
 # a slot on host h: lanes of a KIND until the queue has none, each only on the gated commit,
 # an alone one holding the whole host. a host that cannot be reached (75, or ssh's 255) or has
-# moved off it (97) puts its lane back for this box and takes no more
+# moved off it (97) puts its lane back for this box and takes no more; so does one whose make
+# rebuilt love after all (a recipe's own $(MAKE) does not take -o), since its love is not ours
 worker() {
-  while l=$(pop "$2" "$3" "${4:-}"); do
+  while [ ! -f "$d/off-$1" ] && l=$(pop "$2" "$3" "${4:-}"); do
     s=$(date +%s)
     out/love bee --on lanes --where "name=$1" ${4:+--whole} --in "$rd" --at "$sha" -- env $rst make --no-print-directory $roflags "$l" > "$d/$l.log" 2>&1
     r=$?
-    if [ $r -eq 75 ] || [ $r -eq 97 ] || [ $r -eq 255 ]; then
+    grep -qE '^(BAKE|LOVE|RAW)[[:space:]]+out/love(\.raw)?$' "$d/$l.log" && { touch "$d/off-$1"; r=love; }
+    if [ $r = love ] || [ $r -eq 75 ] || [ $r -eq 97 ] || [ $r -eq 255 ]; then
       echo "lanes: $1 dropped $l ($r); it runs here" >> "$d/remote.log"
       echo "$l $1" >> "$d/back"
       return 1
     fi
     echo "$r $(( $(date +%s) - s )) $1" > "$d/$l.rc"
   done
+  [ ! -f "$d/off-$1" ]
 }
-# a host: room enough (LANES_HOST_MEM_GB, 3, available there), the gated commit pushed, its
-# prerequisites made, then its alone lanes one at a time, then a worker a slot
+# a host: this box's isa, room enough (LANES_HOST_MEM_GB, 3, available there), the gated
+# commit pushed and this box's build laid over it, byte for byte, then its alone lanes one at
+# a time, then a worker a slot
 rhost() {
+  case $(uname -m) in aarch64|arm64) me=a64 ;; riscv64) me=rv64 ;; *) me=x64 ;; esac
+  [ "$3" = "$me" ] || { echo "lanes: $1 is $3, not $me; it takes no lanes" >> "$d/remote.log"; return; }
   k=$(out/love bee --on lanes --where "name=$1" -- awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null)
   [ -n "$k" ] && [ "$k" -ge $(( ${LANES_HOST_MEM_GB:-3} * 1048576 )) ] \
     || { echo "lanes: $1 has ${k:-no} kB available, under ${LANES_HOST_MEM_GB:-3} GB; it takes no lanes" >> "$d/remote.log"; return; }
-  out/love bee --on lanes --where "name=$1" --in "$rd" --push "$sha" -- env $rst make -k -j4 $rpre > "$d/host-$1.log" 2>&1 \
-    || { echo "lanes: $1 could not make the prerequisites -- $d/host-$1.log" >> "$d/remote.log"; return; }
-  # exact lanes read the binary: this host's build must be this box's, byte for byte
-  x=0
-  case $(uname -m) in aarch64|arm64) me=a64 ;; riscv64) me=rv64 ;; *) me=x64 ;; esac
-  if [ "$3" = "$me" ]; then
-    [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw)" ] && x=1
-    [ $x = 1 ] || echo "lanes: $1's love is not this box's; it takes no exact lanes" >> "$d/remote.log"
-  fi
-  worker "$1" "$3" "$x" alone || return
+  { out/love bee --on lanes --where "name=$1" --in "$rd" --push "$sha" < /dev/null \
+      && tar cf - $ship | out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- tar xmf -; } > "$d/host-$1.log" 2>&1 \
+    || { echo "lanes: $1 could not take the gated commit and this box's build -- $d/host-$1.log" >> "$d/remote.log"; return; }
+  [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw 2>/dev/null)" ] \
+    || { echo "lanes: $1's love is not this box's; it takes no lanes" >> "$d/remote.log"; return; }
+  worker "$1" "$3" 1 alone || return
   i=0
-  while [ $i -lt "$2" ]; do worker "$1" "$3" "$x" & i=$((i + 1)); done
+  while [ $i -lt "$2" ]; do worker "$1" "$3" 1 & i=$((i + 1)); done
   wait
 }
 if [ -n "$rlanes" ]; then

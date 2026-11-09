@@ -4,7 +4,8 @@
 # map and plays two hosts -- `up` runs what it is handed in a directory of its own, `gone`
 # answers its room and its prerequisites and then drops every lane the way a lost ssh does
 # (255). every lane must answer, none skipped: a placed lane on up or back here, the local one
-# here, each .rc and log agreeing on where, and only the alone lane holding a whole host.
+# here, each .rc and log agreeing on where, and only the alone lane holding a whole host. up
+# rebuilds love under test_b, which so runs here, and a lane there has this box's TERM.
 #
 # usage: sh test/gate/lanesremote.sh
 set -u
@@ -17,8 +18,8 @@ fail() { echo "FAIL lanesremote: $*"; exit 1; }
 cat > "$t/Makefile" <<'EOF'
 host: ; @true
 test_a: host ; @sleep 4; echo "a ran in $$(basename $$(pwd))"
-test_b: host ; @sleep 1; echo "b ran in $$(basename $$(pwd))"
-test_c: host ; @sleep 1; echo "c ran in $$(basename $$(pwd))"
+test_b: host ; @[ $$(basename $$(pwd)) != up ] || printf 'BAKE\tout/love\n'; echo "b ran in $$(basename $$(pwd))"
+test_c: host ; @sleep 1; echo "c ran in $$(basename $$(pwd))"; echo "TERM=$$TERM"
 test_d: host ; @echo "d ran in $$(basename $$(pwd))"
 EOF
 
@@ -55,7 +56,7 @@ chmod +x "$t/out/love"
 # a host runs the gated commit: the stand-in tree is one
 git -C "$t" init -q && git -C "$t" add Makefile test && git -C "$t" -c user.name=t -c user.email=t@t commit -qm t || exit 1
 
-( cd "$t" && LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c test_d ) > "$t/run.log" 2>&1 \
+( cd "$t" && TERM=lanes-term LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c test_d ) > "$t/run.log" 2>&1 \
   || { cat "$t/run.log"; fail "the run was red"; }
 on=
 for l in a b c d; do
@@ -68,6 +69,8 @@ for l in a b c d; do
   on="$on${w:+ $l}"
 done
 grep -q 'on=up' "$t/out/lanes/summary" || fail "no lane went to the host that answered"
+grep -q '^test_b .* on=up' "$t/out/lanes/summary" && fail "test_b rebuilt love on up and was kept"
+grep -qx 'TERM=lanes-term' "$t/out/lanes/test_c.log" || fail "test_c did not have this box's TERM"
 grep -q '^test_a exit=0 secs=[0-9]*$' "$t/out/lanes/summary" || fail "the local lane names a host"
 grep -q "gone dropped" "$t/out/lanes/remote.log" || fail "the host that drops was never handed a lane"
 for l in $(sed -n 's/^lanes: gone dropped \([^ ]*\) .*/\1/p' "$t/out/lanes/remote.log"); do
