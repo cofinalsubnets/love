@@ -8,6 +8,8 @@
 (borrow '(cli posix text re))
 
 (:
+   ; GNU's \a \f \n \r \t \v: the control character an escape letter c spells, or ()
+   (ctl c) (assoc c [[97 7] [102 12] [110 10] [114 13] [116 9] [118 11]] @ e (e ? <>e ()))
    ; -- the substitution: replace matches of nodes in ln by repl (g? = all) --
    (usub nodes repl ln g?) (usubn nodes repl ln g? 1)
    ; ..from the nth match on: the ones before it ride through as they were (ed's s///N)
@@ -32,7 +34,7 @@
                              (elem d [76 85]) (xgo (i + 2) acc d ())
                              (d = 69) (xgo (i + 2) acc () ())
                              (elem d [108 117]) (xgo (i + 2) acc m d)
-                             (on (string (? (d = 110) 10 (d = 116) 9 d)) (i + 2))))
+                             (on (string (ctl d @ x (x ? x d))) (i + 2))))
                       (on (string c) (i + 1))))))
            (xgo 0 "" () ()))
        ; ate marks "a match ended exactly here": an empty match at that point is
@@ -89,10 +91,16 @@
                      (sc j = 91 && j + 1 < n && elem (sc (j + 1)) '(58 46 61)) (go (cls (j + 2) (sc (j + 1))))
                      (go (j + 1)))
            (go j1))
+       ; a bracket's escapes, which GNU reads there too
+       (bkesc t) ((: (g i acc) (? (#t <= i) acc
+                                 (t i = 92 && i + 1 < #t)
+                                  (g (i + 2) (acc + (ctl (t (i + 1)) @ x (x ? (string x) (snip t i (i + 2))))))
+                                 (g (i + 1) (acc + string (t i))))) 0 "")
        (untilre i d acc)
         (n > i ?
-         (sc i = 91 && d != 91 ? (bkend (i + 1) @ e (untilre e d (acc + snip sc i e)))
-          (sc i = 92 && i + 1 < n && sc (i + 1) != d ? (untilre (i + 2) d (acc + snip sc i (i + 2)))
+         (sc i = 91 && d != 91 ? (bkend (i + 1) @ e (untilre e d (acc + bkesc (snip sc i e))))
+          (sc i = 92 && i + 1 < n && sc (i + 1) != d ?
+           (untilre (i + 2) d (acc + (ctl (sc (i + 1)) @ x (x ? (string x) (snip sc i (i + 2))))))
            (sc i = 92 && i + 1 < n ? (untilre (i + 2) d (acc + string d))
             (sc i = d ? [acc (i + 1)] (untilre (i + 1) d (acc + string (sc i))))))))
        ; one address or none: (addr j) | () malformed
