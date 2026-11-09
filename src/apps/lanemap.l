@@ -57,6 +57,7 @@
      ["" ["src/love/holo/thumb1.l"] ["test_moon" "test_ccthumb1"] ""]
      ["" ["src/love/holo/thumb2.l"] ["test_moon" "test_ccthumb2" "test_ccarm"] ""]
      ["" ["src/love/holo/wasm.l" "src/love/holo/wasmfn.l"] ["test_moon" "test_ccwasm"] ""]
+     ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l"] ["test_xtensa"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
      ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]]
