@@ -1,7 +1,7 @@
 ; src/apps/kore/sed.l -- sed-lite over the re.l engine, the stream editor's useful core;
 ; loads after re.l in the cat. verbs p d q s y and { }; -i makes each file its own stream
 ; (numbers restart, $ per file) by handing `srun` its output port. not here: empty-pattern
-; reuse, \n in a replacement, the hold space.
+; reuse, the hold space.
 ; the pure floor: (sparse sc ere?) -> (1 cmds) | (), and (usub nodes repl ln g?) ->
 ; (changed text), the one substitution walk.
 (module 'kore
@@ -14,7 +14,7 @@
    (usubn nodes repl ln g? nth)
     (: n #ln
        ; the replacement text for one match at (ms me) with group spans sp. GNU's case
-       ; escapes: \U \L case what follows to \E, \u \l the next character alone
+       ; escapes: \U \L case what follows to \E, \u \l the next character alone; \n \t its own
        (expand ms me sp)
         (: rn #repl
            (cased t m o) (: u (? (m = 85) (upper t) (m = 76) (lower t) t)
@@ -32,7 +32,7 @@
                              (elem d [76 85]) (xgo (i + 2) acc d ())
                              (d = 69) (xgo (i + 2) acc () ())
                              (elem d [108 117]) (xgo (i + 2) acc m d)
-                             (on (string d) (i + 2))))
+                             (on (string (? (d = 110) 10 (d = 116) 9 d)) (i + 2))))
                       (on (string c) (i + 1))))))
            (xgo 0 "" () ()))
        ; ate marks "a match ended exactly here": an empty match at that point is
