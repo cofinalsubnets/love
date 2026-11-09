@@ -47,7 +47,7 @@
           (f . u) (f . nmreach (f @ (('jmp || 'ret) . _) (nmskip u) _ u))
           _ ())
    (nmnext? fs L) (fs @ (['label x] . u) (x = L || nmnext? u L) _ ())
-   (nmskip fs) (fs @ (('label . _) . _) fs (_ . u) (nmskip u) _ ())
+   (nmskip fs) (fs @ ((('label . _) && !(dlab? <fs)) . _) fs (_ . u) (nmskip u) _ ())
 
    ; a value's bounds [lo hi], forward through a block: an extension that cannot change its
    ; operand goes
@@ -84,7 +84,8 @@
        (go l j p cs gn)
         (l @ (f . u)
            (: _ (f @ (['cmov _ d _] && two? p && <p = 'cmp && same cs gn d (p 1)) (pin at j [(p 1) (p 2)]) _ 0)
-              (f @ ('label . _) (go u (j + 1) f {} gn)
+              (f @ ((_ . _) && dlab? f) (go u (j + 1) p cs gn)
+                   ('label . _) (go u (j + 1) f {} gn)
                    _ (raops g f @ [_ ds]
                         (: g2 (foldl (t \ x \ pin t x (peep t x 0 + 1)) gn ds)
                            c2 (foldl (t \ x \ pin t x ()) cs ds)
@@ -254,7 +255,8 @@
              ((['cmp a b] . ['cmov cc d s] . u) && cint? (kb t a) && cint? (kb t b) && peep nmcc cc ())
               (kbr (nmcc cc (kb t a) (kb t b) ? (['mov d s] . u) u) t)
              (f . u)
-              (f . kbr u (f @ ('label . _) {}
+              (f . kbr u (f @ ((_ . _) && dlab? f) t
+                              ('label . _) {}
                               ['li d n] (pin t d n)
                               ['mov d y] (kb t y @ () (pin t d ()) n (pin t d n))
                               _ (raops g f @ [_ ds] (foldl (t2 \ d \ pin t2 d ()) t ds) _ t)))
@@ -286,7 +288,8 @@
        (one? x) (lovr? x && peep dr x 0 = 1)
        (go fs av rv)
         (fs @ (f . u)
-               (f @ ('label . _) (f . go u {} {})
+               (f @ ((_ . _) && dlab? f) (f . go u av rv)
+                    ('label . _) (f . go u {} {})
                     _ (nmfold g f av @ f2
                        (raops g f2 @ [rs ds]
                           (: _ (map (d \ (map (t \ pin av t ()) (rv d), pin av d (), pin rv d ())) ds)
@@ -511,11 +514,11 @@
        (ralive g fs @ [ft ud _ lout]
           (: n #fs
              (out? x i) (elem x (lout i))
-             (end? f) (f @ (('label || 'jmp || 'br || 'jmpt || 'ret || 'fix || 'cdef || 'cuse) . _) 1 _ 0)
+             (end? f) (f @ ((_ . _) && dlab? f) 0 (('label || 'jmp || 'br || 'jmpt || 'ret || 'fix || 'cdef || 'cuse) . _) 1 _ 0)
              ; the reads past the copy to rewrite, the last one leaving v dead -> indices | ()
              (scan v t i acc)
               (n <= i ? ()
-                 (ft i @ ('label . _) ()
+                 (ft i @ (('label . _) && !(dlab? (ft i))) ()
                     f (ud i @ [u d]
                          (: rd (elem v u) wv (elem v d) wt (elem t d)
                             (? (rd && (wv || wt || end? f)) ()

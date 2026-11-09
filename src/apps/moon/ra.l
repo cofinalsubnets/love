@@ -310,7 +310,7 @@
               ((['movdrx r v] && t32? g && elem v sp && !(lovr? r) && raget c v = ()) . u)
                (['ld r 'r4 (sl v)] . go u c)
               (f . u)
-               (: c0 (f @ (('label || 'call || 'callr) . _) () _ c)
+               (: c0 (f @ ((_ . _) && dlab? f) c (('label || 'call || 'callr) . _) () _ c)
                   (raops g f @
                      [u0 d0]
                       (: us (filter (x \ elem x sp) u0) ds (filter (x \ elem x sp) d0)
@@ -347,7 +347,7 @@
        (fix _) (sw 0 0 @ 1 (fix 0) 0)
        _ (fix 0)
        ; the entry run: up to the first label, jump, branch, call or return
-       k (: (go i) (i < n && nelem (hd i) '(label jmp br call callr ret jmpt fix) ? (go (i + 1)) i) (go 0))
+       k (: (go i) (i < n && (dlab? (ft i) || nelem (hd i) '(label jmp br call callr ret jmpt fix)) ? (go (i + 1)) i) (go 0))
        dfs (foldl (t \ i \ (raops g (ft i) @ [_ d] (map (x \ pin t x (i . t x)) (filter lovr? d), t) _ t)) {} ^n)
        outs (foldl (t \ i \ (in? i ? t (raops g (ft i) @ [u d] (map (x \ pin t x 1) (filter lovr? (u + d)), t) _ t))) {} ^n)
        vs (filter (v \ outs v && (dfs v @ [i] (i < k) _ ()))

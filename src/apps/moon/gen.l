@@ -54,6 +54,30 @@
    ; 'glob name -> (label ty init), 'globs the emission order, 'strs ((label . text)..);
    ; env ((name off ty)..) the frame locals
    (nlab g pfx) (peep g 'n 0 @ k (pin g 'n (k + 1), name "\(pfx).\(k)"))   ; one counter across prefixes
+   ; -g's line mark (lo.l lodl): a label no jump names, which a pass walks past as if it were not there
+   (dlab? f) (f @ ['label n] (starts? (show n) ".dl") _ 0)
+   ; a tree without its line marks: what a body is judged and spliced as
+   (dlsx x) (: (lc? y) (two? y && <y = 'loc)
+               (has? y) (? (atom? y) () (lc? y) 1 (any has? y))
+               (cut y) (? (atom? y) y (map cut (filter (z \ !(lc? z)) y)))
+               (has? x ? (cut x) x))
+   ; past allocation the marks leave the forms, each run held by the form after it, and come back
+   ; ahead of that very form once the tail is laid (dlin), so no pass from there on sees one. a
+   ; form a pass remade loses its marks, never its code
+   (dlout g fs)
+    (: (go l ms) (l @ (f . u) (? (dlab? f) (go u (f . ms))
+                                        (two? ms) (: _ (pin g 'dlp ([f (rev ms)] . g 'dlp)) (f . go u ()))
+                                        (f . go u ()))
+                            _ ())
+       _ (pin g 'dlp ())
+       (any dlab? fs ? (go fs ()) fs))
+   (dlin g fs)
+    (g 'dlp @ () fs
+       ps (: t (foldl (t \ p \ (show <p @ k (pin t k (p . peep t k ())))) {} ps)
+             (hit f) (filter (p \ <p == f) (peep t (show f) ()) @ (p . _) <>p _ ())
+             (go l) (l @ (f . u) (hit f + (f . go u)) _ ())
+             _ (pin g 'dlp ())
+             (go fs)))
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
@@ -4204,7 +4228,7 @@
    ; larger: its copies are what lets sra seat the array --
    (unrl g f)
     (: w64 !(ilp32? g)
-       (size x) (atom? x ? 1 (foldl (a \ y \ a + size y) 0 x))
+       (size x) (? (atom? x) 1 (<x = 'loc) 0 (foldl (a \ y \ a + size y) 0 x))   ; a line mark weighs nothing
        sm {}                                        ; the small local arrays sra may take
        (cen x) (? (atom? x) 0
                   (<x = 'decl) (map (p \ <>p @ ('arr _ n) (charm? n && n <= 16 ? (pin sm <p 1) 0) 0) <>x)
@@ -4516,7 +4540,7 @@
        ; lo.l lays after this file: its names resolve at the call
        (mprof 'lo (_ \ (cite 'moon 'lofn) g f params sig) @
          'bad ((cite 'moon 'lorefuse) g)
-         fs (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs))))
+         fs (dlin g (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs)))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -4714,7 +4738,7 @@
        ; what glay may lay: an unreached fn is judged for no splice
        _ (pin g 'reach (cgreach <>ast (two? xtra ? <xtra {}) (g 'alias)))
        (recfns fs) (!(two? fs) ? 1
-                      (<fs @ f
+                      (dlsx <fs @ f
                          (elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
                           ; a body that does nothing: a call to it here is its arguments' effects alone
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
@@ -4820,8 +4844,10 @@
                      _ (pin laid nm 1)          ; before the walk: a recursive fn names itself
                      ; the wide relation's order, narrowed: tablet keys run in no fixed order, so
                      ; walking the narrow tablet's own would re-deal the layout
-                     pr (cg-frefs fm {})
-                     (filter pr (keys (cg-refs fm {}))))))
+                     ; ..and over the body without its line marks, whose names would re-deal the keys
+                     fr (filter (f \ !(dlab? f)) fm)
+                     pr (cg-frefs fr {})
+                     (filter pr (keys (cg-refs fr {}))))))
            (drive q)
             (gripe? (g 'genfail) || !(two? q) ? 0
                (<q @ nm

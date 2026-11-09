@@ -78,14 +78,16 @@ for f in test/cc/*.c; do
   [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
 
-# -g lays line tables: each statement's line at its code, an inlined copy's at the copy, a
-# body with a prologue its `{` at the entry; -g0 lays none
+# -g lays line tables: each statement's line at its code, a body with a prologue its `{` at the
+# entry, an arm laid out of line its statement's (an inlined copy takes the caller's); -g0 lays
+# none, and the code is the same either way
 printf 'int sq(int x) {\n  int y = x * x;\n  return y + 1;\n}\nint q(int a) { if (a)\n    return sq(a);\n  return 7; }\n' > "$ho/.dwl.c"
 moonrun -g -c "$ho/.dwl.c" -o "$ho/.dwl.o" || fail "mooncc -g"
-[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 2 3 - " ] ||
+[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 5 - " ] ||
   fail "-g's line rows are not each statement's, at its code"
 moonrun -g0 -c "$ho/.dwl.c" -o "$ho/.dwl0.o" || fail "mooncc -g0"
 readelf -SW "$ho/.dwl0.o" | grep -q debug_ && fail "-g0 laid debug sections"
+[ "$(readelf -x .text "$ho/.dwl.o")" = "$(readelf -x .text "$ho/.dwl0.o")" ] || fail "-g changed the code"
 
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
 # carries its size, a file-scope static is a local one, a block static keeps its section

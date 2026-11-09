@@ -252,10 +252,13 @@
    ;; jump goes on at its label when that lies ahead, an unseen target answers no; a label is
    ;; transparent, as only the fall-through carries these flags. a backend's 'flagend names the
    ;; other forms that leave the flags to no one.
+   ; mooncc -g's line mark: a label that lays nothing, which no scan counts
+   (dlmark? ins) (<ins = 'label && starts? (show (ins 1)) ".dl")
    (flagfree be l k)
       (k < 1 || atom? l ? 0
          (<(<l) @ o
-            (? (elem o (be 'flagr)) 0
+            (? (dlmark? <l) (flagfree be >l k)
+               (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
                (lit? (peep be 'flagend 0) && (be 'flagend) <l) 1
@@ -264,7 +267,7 @@
                (flagfree be >l (k - 1)))))
    (flagjump be l nm k)
       (k < 1 || atom? l ? 0
-         (<l @ ins (<ins = 'label && ins 1 = nm ? (flagfree be >l (k - 1)) (flagjump be >l nm (k - 1)))))
+         (<l @ ins (? (<ins = 'label && ins 1 = nm) (flagfree be >l (k - 1)) (dlmark? ins) (flagjump be >l nm k) (flagjump be >l nm (k - 1)))))
    ; a label's address where it lays; ('label nm k) names k bytes on, inside what follows it
    (label-addr ins addr) (two? >>ins ? (addr + ins 2) addr)
    (lay prog be addr items labels)

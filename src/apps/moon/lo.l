@@ -1759,16 +1759,20 @@
           (ty = 'float || !(losv? ty)) (lono g ['vaarg ty])
           (at 8 @ [a f2] (lomkt g ty @ d [ty d (f2 + [(lofl? ty ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
+   (lodl g pfx l f) (peep g 'dln 0 @ k (pin g 'dln (k + 1), name "\(pfx).\(k):\(l):\(f || "")"))
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
-    (: (st x e2 _) (lost1 g e2 x)
+    (: ; an arm that lays code and opens with no mark takes one of the statement around it, so code moved out of line keeps a row
+       (st x e2 _) (lost1 g e2 x @ 'bad 'bad
+                      fs (g 'dlcur @ [f l] (two? x && !(x @ ('blk (('loc . _) . _)) 1 _ 0) && any (y \ <y != 'label) fs ? ([['label (lodl g ".dl" l f)]] + fs) fs) _ fs))
        (br x s L _) (lobr g env x s L)
        (s @ () ()
             ((_ . _) . _) (loitems g env s)
             ('nop . _) ()
-            ; -g's line mark: a label named for it, one per copy, read off the laid lanes (obj.l o-dwarf)
-            ['loc f l] [['label (name "\(nlab g ".dl"):\(l):\(f || "")")]]
-            ['loc f l _] [['label (name "\(nlab g ".dlf"):\(l):\(f || "")")]]   ; a body's `{`
+            ; -g's line mark: a label named for it, one per copy, read off the laid lanes (obj.l o-dwarf);
+            ; its own counter, so the other labels number as under -g0
+            ['loc f l] (pin g 'dlcur [f l], [['label (lodl g ".dl" l f)]])
+            ['loc f l _] (pin g 'dlcur [f l], [['label (lodl g ".dlf" l f)]])   ; a body's `{`
             ('tdef . _) ()
             ; the canary at fp-16, the frame keeps its cell; the blob puts back what it borrows
             ('ssp k) [['fix () () (sspblob g k)]]
@@ -2284,7 +2288,7 @@
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (mprof 'rasub (_ \ rasub f2 loc @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
+         (mprof 'rasub (_ \ dlout g (rasub f2 loc) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16 + (? (ia32? g) 8 (v6m? g) 4 0))
                 (rv64? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
