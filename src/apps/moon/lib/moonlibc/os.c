@@ -866,3 +866,10 @@ int __love_sofb(long *lv, long *op) {
     case 39: if (__love_osv != 2) return -1; *op = 0x1019; return 0; } /* SO_DOMAIN */
   return -1; }
 #endif
+
+#ifdef __riscv
+/* fence.i reaches this hart alone; linux's call reaches them all */
+void __love_codesync(char *a, char *b) {
+  __love_fencei();
+  if (__love_osv == 1) __love_sys(259, (long) a, (long) b, 0, 0, 0, 0); }
+#endif

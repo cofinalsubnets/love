@@ -302,6 +302,12 @@
    (rv-push s) (catall [(rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) 3)])         ; addi sp,sp,-16 ; sd s,0(sp)
    (rv-pop d)  (catall [(rv-i 0 2 3 (rvn d) 0x03) (rv-i 16 2 0 2 0x13)])     ; ld d,0(sp) ; addi sp,sp,16
 
+   (rv-decm base off)                                                        ; x30 = [base+off] - 1, stored, against x0
+      (: far !(rv-fits12 off)  bn (far ? 31 (rvn base))  o (far ? 0 off)
+         (rv-flag-set 0 30 0 -1,
+          catall [(far ? (rv-li-rec 31 off + rv-alu-rrr 0 0 31 31 (rvn base)) ())
+                  (rv-i o bn 3 30 0x03) (rv-i -1 30 0 30 0x13) (rv-s o bn 30 3)]))
+
    (rv-neg d) (rv-alu-rrr 0 32 (rvn d) 0 (rvn d))                            ; sub d, x0, d
    (rv-not d) (rv-i -1 (rvn d) 4 (rvn d) 0x13)                               ; xori d, d, -1
    (rv-inc d) (rv-i 1 (rvn d) 0 (rvn d) 0x13)
@@ -443,7 +449,7 @@
           ('rol . rv-shift 'rol) ('ror . rv-shift 'ror)
           ('lea . rv-lea) ('lean . rv-lea)
           ('push . rv-push) ('pop . rv-pop)
-          ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec)
+          ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec) ('decm . rv-decm)
           ('jmp . rv-jmp) ('br . rv-br) ('jmpr . rv-jmpr) ('jmpt . rv-jmpt) ('callr . rv-callr)
           ('mulo . rv-mulo) ('mulh . rv-mulh) ('umulh . rv-umulh) ('set . rv-set)
           ('adds . rv-addsub-s 'adds) ('subs . rv-addsub-s 'subs)

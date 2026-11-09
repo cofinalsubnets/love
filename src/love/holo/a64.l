@@ -102,7 +102,7 @@
             (: pos (b < 0 ? (0 - b) b) base (b < 0 ? 0xB100001F 0xF100001F)
                (? (pos <= 4095) (le32 (base | (pos << 10 | an << 5)))
                   (pos % 4096 = 0 && pos >> 12 <= 4095) (le32 (base | 0x400000 | (pos >> 12 << 10 | an << 5)))   ; imm12, lsl 12
-                  (scare 'imm12-range b)))))
+                  (a64-li 'r17 b + a64-cmp a 'r17)))))                      ; past imm12, through x17
 
    (a64-mulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9B407C00 | (bn << 16 | (an << 5 | dn)))))   ; smulh
    (a64-umulh d a b) (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9BC07C00 | (bn << 16 | (an << 5 | dn)))))  ; umulh
