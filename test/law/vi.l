@@ -759,11 +759,11 @@
 
    hh0 (getenv "HOME")
    hhd ((cwd 0) + "/out/.vihue-" + show (getpid 0))
-   _ (mkdir hhd 448) _ (mkdir (hhd + "/.love") 448)
+   _ (mkdir hhd 448) _ (mkdir (hhd + "/.love") 448) _ (mkdir (hhd + "/.love/etc") 448)
    hhn (getenv "LOVE_NEST")
    _ (setenv "HOME" hhd) _ (setenv "LOVE_NEST" (hhd + "/.love"))
    hn0 (hue-name ()) hr0 (hue-rows ())
-   _ (: q (open (hhd + "/.love/hue.l") "w")
+   _ (: q (open (hhd + "/.love/etc/hue.l") "w")
         _ (say q "nord\n(Comment 1 \"#000001\" (bold))\npaper\n") (close q))
    hn1 (hue-name ()) hr1 (hue-rows ()) hr2 (hue-rows "nord")
    _ (setenv "HOME" hh0) _ (setenv "LOVE_NEST" hhn) _ (hark ["rm" "-rf" hhd])
