@@ -33,6 +33,10 @@ for sc in 's/b.*/\U&/' 's/\(.\)\(.*\)/\u\1\U\2\E!/' 's/[a-z]*/\L\u&/' 's/z/\U\lZ
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
 bothrc "sed -E case" sed -E 's/^([a-z])([a-z]*)/\U\1\L\2/' "$ho/.sd1"
+# \n and \t in a replacement are a newline and a tab, as apparmor's caps mask ends
+for sc in 's/ *$/"\n/' 's/b/\t&\t/g'; do
+  bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
+done
 # options after an operand, in GNU order, as kbuild's apparmor recipe spells them
 sed "$ho/.sd1" -r -n -e '/x/d' -e 's/(b|q)/\U\1/p' > "$g"
 korerun sed "$ho/.sd1" -r -n -e '/x/d' -e 's/(b|q)/\U\1/p' > "$o"; same "sed FILE -r -n -e .."
