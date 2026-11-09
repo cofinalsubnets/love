@@ -410,10 +410,11 @@ test_clay: host
 	                       diff -u $$d $$o | head -20; exit 1; }; done
 	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h and uumagvc.l regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
-	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c and xz.c holds the clay vc.l laid)"
+	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c, xz.c and num.c holds the clay vc.l laid)"
 	@$m -l src/love/compress/inf.l -l test/gate/clayeq.l -e '(ceq-run "inf" "src/love/compress/gz.c" ["inf_gen.h" "inf_run_gen.h" "inf_st_gen.h"] inf-specs)' < /dev/null
 	@$m -l src/love/compress/bz.l -l test/gate/clayeq.l -e '(ceq-run "bz" "src/love/compress/bz2.c" ["bz_gen.h"] bz-specs)' < /dev/null
 	@$m -l src/love/compress/lz.l -l test/gate/clayeq.l -e '(ceq-run "lz" "src/love/compress/xz.c" ["lz_gen.h"] lz-specs)' < /dev/null
+	@$m -l src/love/mag.l -l test/gate/clayeq.l -e '(ceq-run "mag" "src/love/num.c" ["mag_gen.h"] mag-specs)' < /dev/null
 # test_moonfuzz -- each test/cc file mutated eight ways: no scare, no hang, G1 where it parses.
 # mooncc runs in this process, so the budget reaches it (peak ~215 MB, passes at 60; ~1 min)
 test_moonfuzz: host
