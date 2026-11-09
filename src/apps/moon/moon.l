@@ -1058,10 +1058,11 @@
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
        _ (relo && tgt = 'thumb2 && udie 2 "cc: --emit-relocs cannot answer -t thumb2: its `la` splits an address across MOVW/MOVT, which no loader can slide -- -t thumb2sp pools it")
        ; the board's map: -Ttext alone is one region (code and data share a memory); -Tdata
-       ; splits it as an xip mcu wants -- .data stored after the code, copied off __data_load__
-       runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
-                            ['copy dorg 'data 'bss]]
-                           [['at org 'text 'rodata 'data 'nifs 'bss]])
+       ; splits it as an xip mcu wants -- .data stored after the code, copied off __data_load__;
+       ; xtensa's instruction memory takes words alone, so its constants go with the data
+       runs (? !(charm? dorg) [['at org 'text 'rodata 'data 'nifs 'bss]]
+               (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
+               [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
        c9 (mac? ? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
