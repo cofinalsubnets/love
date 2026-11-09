@@ -81,8 +81,7 @@
 
    ; --- the boot files ---------------------------------------------------------
    ; the mini uart on gpio14/15 is serial1 in the mainline dtb; enable_uart pins the core
-   ; clock it counts its baud from. gpu_mem stays the firmware's: 16 asks for start_cd.elf.
-   ; uart_2ndstage and bootcode's BOOT_UART log each firmware stage on that uart
+   ; clock it counts its baud from. gpu_mem stays the firmware's: 16 asks for start_cd.elf
    config ("""
      arm_64bit=1
      kernel=Image
@@ -91,7 +90,6 @@
      fixup_file=fixup.dat
      enable_uart=1
      disable_splash=1
-     uart_2ndstage=1
      """ + "\n")
    (cmd root) ("console=ttyS1,115200 root=" + root + " rootfstype=squashfs ro rootwait panic=5 init=/bin/helm\n")
    autoboot ("""
@@ -114,8 +112,7 @@
    asz (64 * mib)  fsz (128 * mib)  dsz (64 * mib)
    ; the parts back to back from 1 MiB, each EBR a MiB ahead of its logical part
    pa mib  pb (pa + asz)  pc (pb + fsz)  x (pc + fsz)
-   bootcode (fw "bootcode.bin" @ b (b @ (h + "BOOT_UART=0" + t) (h + "BOOT_UART=1" + t) b))
-   auto (fatimg pa "AUTOBOOT" asz [["autoboot.txt" autoboot] ["bootcode.bin" bootcode] ["config.txt" ""]])
+   auto (fatimg pa "AUTOBOOT" asz [["autoboot.txt" autoboot] ["bootcode.bin" (fw "bootcode.bin")] ["config.txt" ""]])
    boota (fatimg pb "BOOT-A" fsz [["config.txt" config] ["cmdline.txt" (cmd (puuid 5))]
                       ["start.elf" (fw "start.elf")] ["fixup.dat" (fw "fixup.dat")]
                       ["LICENCE.broadcom" (fw "LICENCE.broadcom")]
