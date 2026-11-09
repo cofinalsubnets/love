@@ -75,7 +75,7 @@
 
    ; --- the boot files ---------------------------------------------------------
    ; the mini uart on gpio14/15 is serial1 in the mainline dtb; enable_uart pins the core
-   ; clock it counts its baud from
+   ; clock it counts its baud from. gpu_mem stays the firmware's: 16 asks for start_cd.elf
    config ("""
      arm_64bit=1
      kernel=Image
@@ -84,7 +84,6 @@
      fixup_file=fixup.dat
      enable_uart=1
      disable_splash=1
-     gpu_mem=16
      """ + "\n")
    (cmd root) ("console=ttyS1,115200 root=" + root + " rootfstype=squashfs ro rootwait panic=5 init=/bin/helm\n")
    autoboot ("""
