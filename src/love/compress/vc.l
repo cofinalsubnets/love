@@ -592,7 +592,13 @@
    (cl-for sp x from to step body)
     (: X ['var (string x)]
      ['for ['expr ['asn X (cl sp from)]] ['bin 'lt X (cl sp to)] step (cl-body sp body)])
-   (cl-decl sp ty ds) ['decl (map (x \ [(string <x) ty (two? >x ? (cl sp <>x) ())]) ds)]
+   ; a type as moon holds it: a pointee's qualifiers, 1 const 2 volatile, in the pointer's fourth slot
+   (cl-ty t)
+    (t @ ('ptr ('const x)) ['ptr (cl-ty x) 0 1]
+         ('ptr ('volatile x)) ['ptr (cl-ty x) 0 2]
+         ('ptr x) ['ptr (cl-ty x)]
+         _ t)
+   (cl-decl sp ty ds) ['decl (map (x \ [(string <x) (cl-ty ty) (two? >x ? (cl sp <>x) ())]) ds)]
    (cl-stmt sp s)
     (s @ (L 'set x e) (cl-set sp x e)
          (L 'let ty ds) (cl-decl sp ty ds)
@@ -629,6 +635,6 @@
          (L 'for x from to invs body) (cl-for sp x from to ['post ['var (string x)] 1] body)
          (L 'forby x from to by invs body) (cl-for sp x from to ['rmw '+ ['var (string x)] (cl sp by)] body))
    (cl-fn sp)
-    ['fn (sp 'name) (sp 'params)
+    ['fn (sp 'name) (map (p \ [<p (cl-ty (p 1))]) (sp 'params))
          ['blk (map (d \ cl-decl sp <d >d) (sp 'decls) + map (cl-stmt sp) (said (sp 'body)))]
          (sp 'ret) (sp 'attrs)])

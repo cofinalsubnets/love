@@ -1,6 +1,6 @@
 ; test/gate/clayeq.l -- moon-uu rung 1: mooncc's parse of the C file that includes vc.l's headers
 ; holds each spec's function equal, as data, to the clay vc.l laid, up to what cparse drops or
-; folds: a typedef's name, const, a definition's return type and attributes, x op= e as x = x op
+; folds: a typedef's name, a definition's return type and attributes, x op= e as x = x op
 ; e, a sizeof as some size, and a name a laid header defines to a number as that number. any
 ; other name the clay spells (LZ_LT, LD64, wideld) reaches the parse as spelled: around a laid
 ; header each is pushed and undefined, its macro the ledger's. loaded after a spec file:
@@ -40,7 +40,6 @@
     (? (atom? c || string? c) c
        (two? c && <c = 'named) (peep tt (c 1) c)
        (two? c && <c = 'var && charm? (peep tt ("#" + (c 1)) ())) ['num (tt ("#" + (c 1)))]
-       (two? c && <c = 'const) (ceq-drop tt (c 1))
        (two? c && <c = 'fn && #c = 6) (map (ceq-drop tt) (snip c 0 4))
        (two? c && <c = 'rmw && #c = 4) (ceq-drop tt ['asn (c 2) ['bin (c 1) (c 2) (c 3)]])
        (map (ceq-drop tt) c))
