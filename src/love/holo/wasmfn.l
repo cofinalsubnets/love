@@ -18,6 +18,10 @@
 ; that index (w-fnaddr), callr is call_indirect and a jmpr (gen.l's tail call)
 ; return_call_indirect. a call clobbers only the four answer registers.
 ; the hand lane (wasm-program) keeps a per-arity layout, mode n instead of 'uni.
+;
+; longjmp throws tag 0 with the buffer; a function that calls __sigsetjmp runs its dispatch
+; loop in a try_table, and the buffer it saved its activation in lands it back at the site.
+; the buffer: activation, sp, the site's segment, the value. longjmp.c holds the names.
 
 (module 'holo
 (: ;; register -> local. uni: r0..r7 0..7, f0..f7 8..15, then r8..r26 fp lr, lab (i32),
@@ -39,6 +43,7 @@
    (w-lab _) (w-uni? 0 ? 37 29)
    (w-A _) (w-uni? 0 ? 38 30)  (w-B _) (w-uni? 0 ? 39 31)  (w-V _) (w-uni? 0 ? 40 32)
    w-FA 53  w-FB 54
+   w-me 55  w-jb 56                          ; a __sigsetjmp caller's activation, and a caught buffer
    (w-locals n) (w-uni? 0 ? '((21 i64) (1 i32) (3 i64) (14 f64))
                    [[(29 - n) 'i64] '(1 i32) '(3 i64) '(22 f64)])
    (w-val x) (? (x = 'sp) '((global.get 0)) (reg? x) [['local.get (w-reg x)]] [['i64.const x]])
@@ -147,7 +152,8 @@
                            (two? e && <e = 'null) '((unreachable))
                            (scare 'wasm-nolabel l)))))
    (w-call x) (w-sym x @ e
-                 (? (two? e && <e = 'null) '((unreachable))         ; the C guards the call; reaching it is a trap
+                 (? (x = '__love_wthrow && peep w-st 'tag 0) '((local.get 0) (throw 0))
+                    (two? e && <e = 'null) '((unreachable))         ; the C guards the call; reaching it is a trap
                     !(two? e && <e = 'fn) (scare 'wasm-nocall x)
                     (w-args e + [['call (e 1)]] + w-rets 0)))
    (w-ret _) (w-uni? 0 ? '((local.get 0) (local.get 1) (local.get 8) (local.get 9) (return)) '((local.get 0) (return)))
@@ -187,6 +193,7 @@
      'ldx  (w-load 'ld (w-memx (f 2) (f 3) (f 4) (f 5)) (f 1))
      'stx  (w-store 'st (w-memx (f 1) (f 2) (f 3) (f 4)) (f 5))
      'ldxb (w-load 'ldu1 (w-memx (f 2) (f 3) (f 4) (f 5)) (f 1))
+     'ldxh (w-load 'ldu2 (w-memx (f 2) (f 3) (f 4) (f 5)) (f 1))
      'stxb (w-store 'st1 (w-memx (f 1) (f 2) (f 3) (f 4)) (f 5))
      ('lea || 'lean) (w-val (f 2) + [['i64.const (f 3)] '(i64.add)] + w-set (f 1))
      'leax (w-memx (f 2) (f 3) (f 4) (f 5) @ m (<m + [['i64.const >m] '(i64.add)] + w-set (f 1)))
@@ -194,6 +201,8 @@
      'push (w-push (f 1))
      'pop  (w-pop (f 1))
      'call (w-call (f 1))
+     'wsj [['local.get 0] ['local.get w-me] '(i64.store 3 0) '(local.get 0) '(global.get 0) '(i64.store 3 8)
+           '(local.get 0) ['i64.const (peep (peep w-st 'labs {}) (f 1) -1)] '(i64.store 3 16) '(i64.const 0) '(local.set 0)]
      'callr (w-indirect (f 1) 'call_indirect + w-rets 0)
      'jmpr  (w-indirect (f 1) 'return_call_indirect)
      'ret  (w-ret 0)
@@ -328,23 +337,41 @@
                                (needs-br? x nx) (cc + '((i32.eqz)) + [['br_if (depth (dom? nx x ? ('loop . nx) ('block . nx)) ctx 0)]] + tree t ctx)
                                (cc + '((if)) + tree t ('if . ctx) + '((else)) + branch x nx ('if . ctx) + '((end)))))))
        (reducible ? (tree 0 () + '((unreachable)))))
+   ;; each __sigsetjmp call becomes the save, and a label to land on
+   (w-sjsites l i)
+    (atom? l ? ()
+       (<l = '(call __sigsetjmp)
+        ? (nom ".sj\(i)" @ s (['wsj s] . (['label s] . w-sjsites >l (i + 1))))
+        (<l . w-sjsites >l i)))
+   ;; a __sigsetjmp caller around its dispatch loop: the next activation, and a catch that lands
+   ;; a buffer of its own or throws it on
+   (w-sjwrap body)
+    ('((global.get 1)) + [['local.tee w-me]] + '((i64.const 1) (i64.add) (global.set 1) (loop) (block i64) (try_table void ((0 0))))
+     + body
+     + '((end) (unreachable) (end)) + [['local.set w-jb] ['local.get w-jb] '(i64.load 3 0) ['local.get w-me] '(i64.eq) '(if void)
+        ['local.get w-jb] '(i64.load 3 24) '(local.set 0)
+        ['local.get w-jb] '(i64.load 3 8) '(global.set 0)
+        ['local.get w-jb] '(i64.load 3 16) '(i32.wrap_i64) ['local.set (w-lab 0)] '(br 1) '(end)
+        ['local.get w-jb] '(throw 0) '(end) '(unreachable)])
    ;; -> (locals . body). mode: 'uni, or the parameter count of the per-arity lane
-   (wasm-fn prog mode env)
+   (wasm-fn prog0 mode env)
     (: uni (mode = 'uni)
        _ (pin w-st 'uni (uni ? 1 0)) _ (pin w-st 'fl 0) _ (pin w-st 'env env)
        _ (pin w-st 'labs {})
-       r (w-abl? 'reloop ? () (w-reloop prog))
+       sj (uni && peep w-st 'tag 0 && elem '(call __sigsetjmp) prog0)
+       prog (sj ? (w-sjsites prog0 0) prog0)
+       r (sj || w-abl? 'reloop ? () (w-reloop prog))
        (two? r ? ((w-locals (uni ? 0 mode)) . r)
           (: _ (pin w-st 'fl 0)
              s (w-segs prog) segs <s k (#segs - 1)
              _ (pin w-st 'labs >s)
              (seg j) (catmap (f \ (w-ins f (k - j))) (segs j))
-             ((w-locals (uni ? 0 mode))
-              . [['i32.const 0] ['local.set (w-lab 0)] '(loop)]
-                + catmap (_ \ '((block))) ^(k + 1)
-                + [['local.get (w-lab 0)] ['br_table ^(k + 1) 0]]
-                + catall (map (j \ ('((end)) + seg j)) ^(k + 1))
-                + '((end) (unreachable))))))
+             loop ('((loop)) + catmap (_ \ '((block))) ^(k + 1)
+                   + [['local.get (w-lab 0)] ['br_table ^(k + 1) 0]]
+                   + catall (map (j \ ('((end)) + seg j)) ^(k + 1))
+                   + '((end) (unreachable)))
+             ((w-locals (uni ? 0 mode) + (sj ? '((2 i64))))
+              . [['i32.const 0] ['local.set (w-lab 0)]] + (sj ? (w-sjwrap loop) loop)))))
 
    ;; the hand lane's program: functions by name, one type per arity in use.
    ;; p: {'imports ((mod name n) ..) 'fns ((name n prog) ..) 'exports (name ..)
@@ -532,6 +559,7 @@
        ;;    defined: every function's name and its own labels, every data label
        dlanes (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7)
        defd ({} @ t (map (\ fn (pin t <fn 1, w-labels-into t <>fn)) fns,
+                     map (a \ pin t <a 1) als,
                      map (w-labels-into t) dlanes,
                      t))
        refs (keys ({} @ t (map (\ fn (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))
@@ -574,14 +602,16 @@
                   seen {}                                 ; a weak twin names the same export once
                   (ff s) (seen s @ () (pin seen s 1, two? (syms (nom s))))
                   (e = 'all ? (catmap (p \ filter ff (p 1)) parts) e))
+       _ (pin w-st 'tag (two? (syms '__love_wthrow)))
        ;; each function lowered and encoded as it comes, a body a string from here on
        funcs (map (f \ (wasm-fn (f 1) 'uni syms @ r [0 (wentry <r >r)])) fns)
-       {'types '(((i64 i64 i64 i64 i64 i64 i64 i64 f64 f64 f64 f64 f64 f64 f64 f64) (i64 i64 f64 f64)))
+       {'types '(((i64 i64 i64 i64 i64 i64 i64 i64 f64 f64 f64 f64 f64 f64 f64 f64) (i64 i64 f64 f64)) ((i64) ()))
+        'tags (peep w-st 'tag 0 ? '(1))
         'imports (map (x \ ["env" (show x) '(func 0)]) imps)
         'funcs funcs
         'table (ni + tally fns) 'elem ^(ni + tally fns)
         'memory [pages]
-        'globals [['i64 1 [['i64.const sp0]]]]
+        'globals [['i64 1 [['i64.const sp0]]] ['i64 1 [['i64.const 1]]]]
         'exports (map (s \ [s 'func (symidx (nom s))]) exports + '(("mem" memory 0)))
         'data [(base . string img)]
         'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show (fns i 0))]) (jot #fns))

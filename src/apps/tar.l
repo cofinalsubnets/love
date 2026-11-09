@@ -402,11 +402,14 @@
    (tarc-lazy m f what) (cite m f @ b (lit? b ? b (tarc-die "no \(what) aboard")))
 
    ; --- the codecs: 'z 'j 'J 'zst, and () for a bare tar ---
-   (tarc-zip z a) (z @ 'z (gz-zip a "" 0)
-                       'j (tarc-lazy 'bz2 'bz2-pack "bzip2" a 9)
-                       'J (tarc-lazy 'xz 'xz-pack "xz" a 8388608 'crc64)
-                       'zst (tarc-lazy 'zstd 'zstd-pack "zstd" a 3)
-                       a)
+   ; the archive coded as it is laid, one member, stream or frame: the codec's writer w,
+   ; (f s) a piece, (f ()) the end -> its answer | (). n bounds the archive, which xz's
+   ; dictionary need not pass
+   (tarc-wr z n w) (z @ 'z (gz-wr "" 0 0 w)
+                      'j (tarc-lazy 'bz2 'bz2-wr "bzip2" 9 w)
+                      'J (tarc-lazy 'xz 'xz-wr "xz" (: (go v) (8388608 <= v || n <= v ? v (go (v * 2))) (go 4096)) 'crc64 w)
+                      'zst (tarc-lazy 'zstd 'zstd-wr "zstd" 3 w)
+                      (s \ (string? s ? (w s, 1) 1)))
    (tarc-sniff b) (?
     (2 <= #b && b 0 = 31 && b 1 = 139) 'z
     (4 <= #b && snip b 0 3 = "BZh") 'j
@@ -418,9 +421,6 @@
     (ends? p ".xz" || ends? p ".txz") 'J
     (ends? p ".zst" || ends? p ".tzst") 'zst)
    (tarc-zname z) (z @ 'z "gzip" 'j "bzip2" 'zst "zstd" "xz")
-   ; the archive goes out coded in runs of tarc-run: gzip members, xz and bzip2 streams and
-   ; zstd frames each read on into the next, so no member is held
-   tarc-run 4194304
 
    ; --- the flags ---
    ; each letter's rows: what it pins, and 'arg for the two that take a word
@@ -546,14 +546,15 @@
        _ (any (e \ !(tar-head e)) es && tarc-die "cannot pack (a path too long for ustar?)")
        _ (peep t 'v 0 && each es (e \ tarc-tell t (tar-get e 'nom "")))
        z (? (peep t 'z ()) (peep t 'z ()) (peep t 'auto 0) (tarc-bysuf a) ())
-       run {'l () 'n 0}
-       (spill _) (: b (cats (rev (run 'l))) (pins run 'l () 'n 0, #b && say q (tarc-zip z b)))
-       (put x) (pins run 'l (x . run 'l) 'n (run 'n + #x), (tarc-run <= run 'n && spill 0))
-       ok (tar-emit es put)
-       (spill 0,
-        flush q,
+       ; a member's header and pad are a block each at most
+       f (tarc-wr z (1024 + net (map (e \ 1024 + tar-get e 'size #(tar-get e 'body "")) es)) (say q))
+       _ (f = () && tarc-die "cannot start \(tarc-zname z)")
+       ok (tar-emit es (x \ #x && f x))
+       zd (f ())
+       (flush q,
         (a = "-" || close q),
         !ok && tarc-die "a file changed as we read it",
+        !zd && tarc-die "\(tarc-zname z): the coder failed",
         (peep t 'bad 0 ? 2 0)))
 
    ; the archive as a source, its codec sniffed. -> (src fin z), fin _ reads what the walk
