@@ -1,16 +1,36 @@
-/* espstub -- an esp32 flash reader and writer run from RAM by esprom -x: the rom's slip frames,
- * its uart and SPI1 by register, as the rom left them after spi_attach. op 0xD2 [off len]
+/* espstub -- an esp32 or esp32-c6 flash reader and writer run from RAM by esprom -x: the rom's
+ * slip frames, its console (the esp32's uart0, the c6's USB-Serial-JTAG) and SPI1 by register,
+ * as the rom left them after spi_attach. op 0xD2 [off len]
  * answers len bytes and their crc32, off and len by 64, len at most 32K; op 0xD4 [off] + 4K,
  * the request's checksum their crc32, erases that sector and programs it.
- *   love mooncc -t xtensa -nostdlib -Ttext 0x40080000 -Tdata 0x3FFB0000 -o espstub.elf src/tools/espstub.c */
+ *   love mooncc -t xtensa -nostdlib -Ttext 0x40080000 -Tdata 0x3FFB0000 -o espstub.elf src/tools/espstub.c
+ *   love mooncc -t rv32 -os none -nostdlib -Ttext 0x40800000 -o espstub-c6.elf src/tools/espstub.c */
 typedef unsigned u32;
 typedef unsigned char u8;
 #define R(a) (*(volatile u32 *)(a))
+#ifdef __riscv
+/* the c6: endpoint 1's byte, its conf's bits 0 send, 1 room, 2 a byte waiting; its flash words at +0x58 */
+#define EP1 0x6000F000
+#define EPC 0x6000F004
+#define SPI1 0x60003000
+#define SPIW 0x58
+#define WRITES 0                                     /* until its status register is found */
+static void tx(int c) { while (!(R(EPC) & 2)) ; R(EP1) = (u32)c; }
+/* a send asked while a full packet is still going out is lost: let it go first */
+static void sent(void) { for (u32 k = 0; k < 20000; k++) (void)R(EPC); R(EPC) = 1; }
+static int rx(void) { while (!(R(EPC) & 4)) ; return (int)(R(EP1) & 0xff); }
+#else
+/* the esp32: uart0's fifo and its fill counts, rx in bits 0..7 and tx in 16..23 */
 #define UFIFO 0x3FF40000
 #define USTAT 0x3FF4001C
 #define SPI1 0x3FF42000
+#define SPIW 0x80
+#define WRITES 1
 static void tx(int c) { while ((R(USTAT) >> 16 & 0xff) >= 120) ; R(UFIFO) = (u32)c; }
+static void sent(void) {}
 static int rx(void) { while (!(R(USTAT) & 0xff)) ; return (int)(R(UFIFO) & 0xff); }
+#endif
+static void end(void) { tx(0xC0), sent(); }
 static void stx(int c) { if (c == 0xC0) tx(0xDB), tx(0xDC); else if (c == 0xDB) tx(0xDB), tx(0xDD); else tx(c); }
 static void stx32(u32 v) { for (int i = 0; i < 4; i++) stx((int)(v >> 8 * i & 0xff)); }
 static u32 crc(u32 c, u32 w) {
@@ -30,14 +50,14 @@ static int frame(u8 *b, int n) {
 }
 /* a reply: direction 1, the op, the size, a value; the data and two status bytes follow */
 static void head(int op, int n, u32 v) { tx(0xC0), stx(1), stx(op), stx(n & 0xff), stx(n >> 8), stx32(v); }
-static void reply(int op, int st) { head(op, 2, 0), stx(st), stx(0), tx(0xC0); }
+static void reply(int op, int st) { head(op, 2, 0), stx(st), stx(0), end(); }
 /* 64 bytes as the rom reads them: the byte count over the address, then go */
 static void spiread(u32 a, u32 *w) {
   while (R(SPI1)) ;
   R(SPI1 + 0x04) = a | 64u << 24;
   R(SPI1) = 1u << 31;
   while (R(SPI1)) ;
-  for (int i = 0; i < 16; i++) w[i] = R(SPI1 + 0x80 + 4 * i);
+  for (int i = 0; i < 16; i++) w[i] = R(SPI1 + SPIW + 4 * i);
 }
 /* the flash's status by RDSR until its busy bit clears */
 static void idle(void) {
@@ -66,7 +86,7 @@ static int wsector(u32 a, const u8 *d) {
   wcmd(1u << 24, a & 0xffffff);
   for (u32 i = 0; i < 4096; i += 32) {
     idle();
-    for (int j = 0; j < 8; j++) R(SPI1 + 0x80 + 4 * j) = rd32(d + i + 4 * j);
+    for (int j = 0; j < 8; j++) R(SPI1 + SPIW + 4 * j) = rd32(d + i + 4 * j);
     wcmd(1u << 25, (a + i & 0xffffff) | 32u << 24);
   }
   return 0;
@@ -74,7 +94,7 @@ static int wsector(u32 a, const u8 *d) {
 void _start(void) {
   static u8 b[4096 + 16];                             /* a write's frame: too big for the rom's stack */
   u32 w[16];
-  head(0xD0, 6, 0), stx('O'), stx('H'), stx('A'), stx('I'), stx(0), stx(0), tx(0xC0);
+  head(0xD0, 6, 0), stx('O'), stx('H'), stx('A'), stx('I'), stx(0), stx(0), end();
   for (;;) {
     int n = frame(b, sizeof b), op = b[1];
     if (n < 8 || b[0] != 0) continue;
@@ -86,8 +106,8 @@ void _start(void) {
         spiread(a + i, w);
         for (int j = 0; j < 16; j++) c = crc(c, w[j]), stx32(w[j]);
       }
-      stx32(~c), stx(0), stx(0), tx(0xC0);
-    } else if (op == 0xD4 && n == 8 + 4 + 4096)
+      stx32(~c), stx(0), stx(0), end();
+    } else if (WRITES && op == 0xD4 && n == 8 + 4 + 4096)
       reply(op, crcb(b + 12, 4096) != rd32(b + 4) ? 3 : wsector(rd32(b + 8), b + 12));
     else reply(op, 2);
   }

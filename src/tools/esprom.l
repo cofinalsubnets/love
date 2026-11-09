@@ -2,7 +2,8 @@
 ; its flash. the reset is the usual pair, RTS on EN and DTR on IO0 through two transistors,
 ; or on a chip's own USB-Serial-JTAG (a ttyACM) the lines its peripheral reads directly.
 ;   love src/tools/esprom.l [-p TTY] run ELF [SECONDS]  each PT_LOAD at its address (.bss as
-;                                                       zeros), e_entry, then the uart a while
+;                                                       zeros), e_entry, then the uart a while;
+;                                                       -s attaches the flash first
 ;   love src/tools/esprom.l [-p TTY] -s SIZE read OFF LEN FILE   (the esp32's rom alone)
 ;   love src/tools/esprom.l [-p TTY] -s SIZE md5 OFF LEN
 ;   love src/tools/esprom.l [-p TTY] -s SIZE write OFF FILE      erase, write, check, boot it
@@ -114,7 +115,7 @@
         (clock 0 < t ? (got 'b @ b (#b = 0 ? 0 (say out b, flush out, pin got 'b "")), rest 20, tail t))
        ; its answer, when it comes before the jump, kept out of the program's output
        (enter f) (: ld (loads f) ent <ld (each <>ld load, send (req 6 (w32 [(ent = 0 ? 1 0) ent]) 0), frame 6 (clock 0 + 200)))
-       (run f secs) (connect 0, enter f, tail (clock 0 + 1000 * secs))
+       (run f secs) (connect 0, charm? (o 'size) ? (attach 0), enter f, tail (clock 0 + 1000 * secs))
        ; the rom's md5 of the flash from off, n bytes, as hex
        (fmd5 off n) (call 19 (w32 [off n 0 0]) 0 "spi_flash_md5" 32 (3000 + 8 * n // 1000) @ [_ h] h)
        (stub _) (enter (o 'stub), frame 208 (clock 0 + 2000) @ r (string? r ? 0 (fail "the stub did not start")))
