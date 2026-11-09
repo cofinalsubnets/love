@@ -1094,12 +1094,15 @@
 ;   (segs p)      -> the '/'-separated components, empties dropped
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
-;   (nest _)      -> the nest: $LOVE_NEST, else $HOME/.love, /.love with no HOME
+;   (nest _)      -> the nest: $LOVE_NEST, else $XDG_DATA_HOME/love, else $HOME/.love,
+;                    /.love with no HOME. cli-line exports it, so a child reads LOVE_NEST alone
 
 (module '(path lastslash lastdot pbase phead segs pclean pprefixes nest)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
-   (nest _) (getenv "LOVE_NEST" @ e
-              (string? e && 0 < #e ? e (getenv "HOME" @ h ((string? h ? h "") + "/.love"))))
+   (nest _) (: (set? v) (string? v && 0 < #v)
+               (getenv "LOVE_NEST" @ e
+                (set? e ? e (getenv "XDG_DATA_HOME" @ x
+                             (set? x ? (x + "/love") (getenv "HOME" @ h ((string? h ? h "") + "/.love")))))))
    ; the leaf after the last '/', and the head before it with the slash kept ("" for none)
    (pbase p) (snip p (lastslash p) #p)
    (phead p) (snip p 0 (lastslash p))
@@ -2285,7 +2288,7 @@
    (load1 p) ((cite 'posix 'open) p "r" @ q
                (hot? q ? (reads q, cite 'posix 'close q) (scare 'no-source p)))
 
-   ; --- packs: apps and libraries outside the tree, a folder each under ~/.love/pack. the
+   ; --- packs: apps and libraries outside the tree, a folder each under the nest's pack/. the
    ; folder's name is the key: a miss on verb or module NAME reads pack NAME, its .l files in
    ; name order. a pack never pins over a verb already laid, and a bake reads none
    (pk-root _) (cite 'path 'nest 0 + "/pack")
@@ -3012,6 +3015,7 @@
    (: (charm0 x) (charm? x ? x 0)
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
+      _  (setenv "LOVE_NEST" (cite 'path 'nest 0))  ; resolved once; children and C read it
       f  (V 'seat <ln)
       (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a @ 'leave (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)

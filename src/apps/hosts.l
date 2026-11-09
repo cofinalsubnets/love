@@ -10,7 +10,7 @@
 ;   (hosts-line h dir argv)     the sh line that lays dir on h, runs argv there and cleans up
 ;   (hosts-on as)               love bee --on and --hosts, the door: its exit status
 ;
-; the registry is ~/.love/etc/bee/hosts (BEE_HOSTS), a paragraph a host of `key value`:
+; the registry is the nest's etc/bee/hosts (BEE_HOSTS), a paragraph a host of `key value`:
 ; name, reach (ssh words; ssh NAME by default), slots (1), caps, and any other line a fact
 ; for --where. a slot is an exclusive lock, host-NAME-N. an env cap list takes its hosts
 ; over the registry's: KTEST_A64_HOSTS (a64-exec, kvm-a64), KTEST_VMX_HOSTS (vt-x),

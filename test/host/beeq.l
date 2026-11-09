@@ -22,7 +22,7 @@
 
    bq-box {}
 
-   ; a way's world: HOME, a hive, locks and the repository
+   ; a way's world: HOME and the nest, a hive, locks and the repository
    (bq-git w as)
     (hark (["env" "GIT_AUTHOR_DATE=2026-01-01T00:00:00Z" "GIT_COMMITTER_DATE=2026-01-01T00:00:00Z"
             "git" "-C" (w 'repo) "-c" "user.name=t" "-c" "user.email=t@t"] + as))
@@ -31,7 +31,7 @@
     (: d (bq-root + "/" + nm) r (d + "/repo")
        _ (map (\ p (mkdir p 493)) [d (d + "/.love") (d + "/.love/etc")])
        _ (bq-put (d + "/.love/etc/bee.l") "(heavy-max 1)\n")
-       w {'dir d 'repo r 'locks (d + "/locks") 'env ("HOME=" + bq-sq d + " BEE_LOCKS=" + bq-sq (d + "/locks"))}
+       w {'dir d 'repo r 'locks (d + "/locks") 'env ("HOME=" + bq-sq d + " LOVE_NEST=" + bq-sq (d + "/.love") + " BEE_LOCKS=" + bq-sq (d + "/locks"))}
        _ (hark ["git" "init" "-q" "-b" "test" r])
        _ (bq-put (r + "/f") "one\n")
        _ (bq-git w ["add" "f"]) _ (bq-git w ["commit" "-q" "-m" "one"])

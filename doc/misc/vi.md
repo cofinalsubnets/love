@@ -40,7 +40,7 @@ regex door, post.l's re):
 * **test/law/vi.l** — the gate.
 
 The pens are the face's to hand over: they want `$COLORTERM` and the user's theme file, and the
-engine reads neither. `~/.love/hue.l` holds rows that override the theme's, and a bare theme
+engine reads neither. The nest's `hue.l` holds rows that override the theme's, and a bare theme
 name in it picks the theme they fold over (`paper`, say). `:colorscheme NAME` (`:colo`) switches
 while editing; bare, it names the theme in force.
 

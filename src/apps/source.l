@@ -400,12 +400,12 @@
         puts ";; wrote \(out) (\(arch))\n",
         0))
 
-   ; -- nest: this binary laid as the user's love under ~/.love/bin, lush linked to it --
+   ; -- nest: this binary laid as the user's love in the nest's bin/, lush linked to it --
    (nest-read p) (uread p @ [1 s] (s + "") ())
    ; the one tool linked to love by its own name, the argv[0] door: lush, autonomous by
    ; default, runs every other verb by name (`lush -c 'mooncc ..'`), PATH or no PATH
    nest-tools ["lush"]
-   ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
+   ; ~/.local/bin is already on PATH where the nest's bin/ is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
     (: d "\(home)/.local/bin" p "\(d)/\(nm)" to "\(bin)/\(nm)"
@@ -424,7 +424,8 @@
                (unlink tmp, src-die "nest: the copy does not run; nothing replaced"))
           (!(rename tmp dst) ? 'laid (unlink tmp, src-die "nest: cannot rename over \(dst)"))))
    nest-usage "usage: love nest
-install this binary as ~/.love/bin/love, with lush beside it
+install this binary as bin/love in the nest (LOVE_NEST, else XDG_DATA_HOME/love,
+else ~/.love), with lush beside it
 "
    (nest-main as)
     (: _ (two? as ?
@@ -440,7 +441,7 @@ install this binary as ~/.love/bin/love, with lush beside it
        _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
        bin (cite 'path 'nest 0 + "/bin")
        _ (mkdir (cite 'path 'nest 0) 493) _ (mkdir bin 493)
-       shown (bin = "\(home)/.love/bin" ? "~/.love/bin/love" "\(bin)/love")
+       shown ("\(bin)/love" @ p (starts? p "\(home)/" ? "~\(snip p #home #p)" p))
        r (nest-lay bin "\(bin)/love" new)
        _ (each nest-tools (nm \ "\(bin)/\(nm)" @ p (readlink p = "love" ? 0 (unlink p, symlink "love" p))))
        _ (each ("love" . nest-tools) (nest-compat home bin))

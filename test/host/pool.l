@@ -1,5 +1,5 @@
 ; test/host/pool.l -- the thread pool (src/love/pool.c): the width a call takes, LOVE_THREADS
-; read at each call, (threads N) in ~/.love/etc/love.l under it, and a fork's child drawing
+; read at each call, (threads N) in the nest's etc/love.l under it, and a fork's child drawing
 ; on a pool of its own
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
 (borrow '(posix pool))
@@ -17,17 +17,17 @@
    pl-out ("/tmp/love-pool-law-" + show (getpid 0))
    ; a home whose love.l says (threads ..): read on the load's 50 ms tick, so each change waits
    pl-home ("/tmp/love-pool-home-" + show (getpid 0))
-   pl-h0 (getenv "HOME")
+   pl-n0 (getenv "LOVE_NEST")
    (pl-salt k n) (: _ (uwrite (pl-home + "/.love/etc/love.l") ("; the runtime's own\n(threads " + k + ")\n"))
                     _ (rest 80) w (par-width n) w)
    _ (mkdir pl-home 448) _ (mkdir (pl-home + "/.love") 448) _ (mkdir (pl-home + "/.love/etc") 448)
-   _ (setenv "HOME" pl-home)
+   _ (setenv "LOVE_NEST" (pl-home + "/.love"))
    s1 (pl-salt "1" 64)
    s3 (pl-salt "3!" 64)
    s3e (: _ (setenv "LOVE_THREADS" "2!") w (par-width 64) _ (setenv "LOVE_THREADS" ()) w)
    _ (unlink (pl-home + "/.love/etc/love.l"))
    _ (rmdir (pl-home + "/.love/etc")) _ (rmdir (pl-home + "/.love")) _ (rmdir pl-home)
-   _ (setenv "HOME" pl-h0)
+   _ (setenv "LOVE_NEST" pl-n0)
    ; the parent draws on its pool first, so the child forks with one made and its workers left behind
    _ (pl-frame "4!")
    pid (fork 0)

@@ -598,7 +598,7 @@
 ; the seat, its own form so the binder above stays body-less: fire lux-main iff `lux` is
 ; the program word, as the shebang script's -l names it; a raise off /love runs it by name
 (: lux-usage "usage: love lux
-  the window manager, over the display DISPLAY names; settings ride ~/.love/etc/lux.l
+  the window manager, over the display DISPLAY names; settings ride the nest's etc/lux.l
 "
    door (udoor 'lux lux-main lux-usage 1 1)
    _ (cite 'verbs 'enlist 'lux door ())

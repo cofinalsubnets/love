@@ -45,11 +45,11 @@ While it is open, the hud holds the *user's card*, at the login's name (**USER**
 
 The hud is drawn by **src/apps/mitty/hud.l**. It reaches the hive through bee's *core*, a tablet of doors (**bee-core** in **src/apps/bee.l**): the user's card and its mail, the sessions, and the queues' lines.
 
-The settings are read from **~/.love/etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
+The settings are read from the nest's **etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
 
 # SESSIONS AND MESSAGES
 
-Every session has a name. It is **BEE_NAME** when that is set and free; otherwise it is the last part of the working directory followed by two hex digits. Sessions find each other, and write to each other, through plain files under the *hive*: **BEE_HIVE** when set, else **~/.love/run/hive**. Anything that can write a file can take part: a shell, a script, or another kind of agent.
+Every session has a name. It is **BEE_NAME** when that is set and free; otherwise it is the last part of the working directory followed by two hex digits. Sessions find each other, and write to each other, through plain files under the *hive*: **BEE_HIVE** when set, else the nest's **run/hive**. Anything that can write a file can take part: a shell, a script, or another kind of agent.
 
 A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 
@@ -121,7 +121,7 @@ Which lanes a change owes is data, **src/apps/lanemap.l**: path rules, each nami
 
 # HOSTS
 
-Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, **~/.love/etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
+Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, the nest's **etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
 
 **name**
 :   The host's name, which its locks carry.
@@ -280,7 +280,7 @@ See who is running, and send one of them a note:
 Send the same note with nothing but a shell:
 
 > ```
-> d=~/.love/run/hive/g-3f/inbox; id=$(date +%s)000-me
+> d=$(sh src/tools/nest.sh)/run/hive/g-3f/inbox; id=$(date +%s)000-me
 > printf 'from me\n\nrow 62 landed\n' > "$d/.$id" && mv "$d/.$id" "$d/$id"
 > ```
 
@@ -290,13 +290,13 @@ Send the same note with nothing but a shell:
 :   This session's name, and the sender that **--send** signs with.
 
 **BEE_HIVE**
-:   The hive's directory, **~/.love/run/hive** when unset.
+:   The hive's directory, the nest's **run/hive** when unset.
 
 **BEE_SELF_WATCH**
 :   Seconds between looks at the binary this session runs, 30 when unset.
 
 **BEE_HOSTS**
-:   The host registry, **~/.love/etc/bee/hosts** when unset.
+:   The host registry, the nest's **etc/bee/hosts** when unset.
 
 # EXIT STATUS
 

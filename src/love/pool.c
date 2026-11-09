@@ -15,7 +15,7 @@
 // cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
 // drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
 // load (the laws, and the measure's forced widths). where it is unset, the row (threads N)
-// in ~/.love/etc/love.l says the same, read on the load's tick: the salt pattern, data only.
+// in the nest's etc/love.l says the same, read on the load's tick: the salt pattern, data only.
 // serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD, a board), inside a
 // worker, and in a fork's child until the pool is made again there.
 #include "love.h"
@@ -47,7 +47,7 @@ struct pool {
  uint64_t idle0, tot0, psi0, self0;   // at the last read: idle and all jiffies, stall us, our cpu us
  int width, ask0, busy;          // the width the load allows, the last read's ask; a job is out
  uint64_t at;                    // when the load was last read, 0 never
- char salt[16];                  // (threads ..) from ~/.love/etc/love.l as last read, "" none
+ char salt[16];                  // (threads ..) from the nest's etc/love.l as last read, "" none
 #if PoolThreads
  int nw;                         // workers up
  pthread_mutex_t mu;
@@ -168,16 +168,14 @@ static int pool_cores(int ncpu) {
   s++; }
  return n > 0 && ncpu / n > 0 ? ncpu / n : ncpu; }
 
-// the operand of a (threads ..) row in ~/.love/etc/love.l into p->salt, or "": a form is
+// the operand of a (threads ..) row in the nest's etc/love.l into p->salt, or "": a form is
 // read only where it starts a line, past a comment's ;
 static void pool_salt(struct pool *p) {
- char const *n = getenv("LOVE_NEST"), *h = getenv("HOME");
+ char const *n = getenv("LOVE_NEST");  // post.l's cli-line exports the nest it resolved
  char path[256], b[4096];
  p->salt[0] = 0;
- int named = n && *n;                  // the nest: LOVE_NEST, else $HOME/.love, /.love with no HOME
- char const *r = named ? n : h ? h : "";
- if (strlen(r) > sizeof path - 20) return;
- strcpy(path, r), strcat(path, named ? "/etc/love.l" : "/.love/etc/love.l");
+ if (!n || !*n || strlen(n) > sizeof path - 20) return;
+ strcpy(path, n), strcat(path, "/etc/love.l");
  int fd = open(path, O_RDONLY | O_CLOEXEC);
  if (fd < 0) return;
  long k = read(fd, b, sizeof b - 1);

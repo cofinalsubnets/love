@@ -1,6 +1,6 @@
 ; src/apps/bee.l -- the hive of sessions on this machine, and the merge queue they land through.
 ; usage, settings and protocol: doc/bee.md and bee-usage below.
-; settings are ~/.love/etc/bee.l's, a form a line; a tree's ./.bee.l may set only bee-tree-keys.
+; settings are the nest's etc/bee.l's, a form a line; a tree's ./.bee.l may set only bee-tree-keys.
 (module (bee bee-main)
 (borrow '(posix json hashes cli))
 
@@ -23,7 +23,7 @@
      find fsub
      digits (cite 'kore 'wg-digits)
 
-     ; ~/.love/etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
+     ; the nest's etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
      ; what cannot move the machine's locks
      bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes]
      bee-salt (: sf (cite 'salt 'salt-file)
