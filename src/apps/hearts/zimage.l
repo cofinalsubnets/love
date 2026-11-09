@@ -85,7 +85,7 @@
      enable_uart=1
      disable_splash=1
      """ + "\n")
-   (cmd root) ("console=ttyS1,115200 root=" + root + " rootfstype=squashfs ro rootwait panic=5 init=/bin/helm\n")
+   (cmd root) ("earlycon console=ttyS1,115200 root=" + root + " rootfstype=squashfs ro rootwait panic=5 init=/bin/helm\n")
    autoboot ("""
      [all]
      tryboot_a_b=1
