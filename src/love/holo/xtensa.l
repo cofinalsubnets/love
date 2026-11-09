@@ -214,8 +214,10 @@
              x24 ((o >> 2 & 262143) << 6 | 5)))
          (kind = 'abs32) (le32 (target + aux))
          (scare 'badfix kind))
+   ; a link's slot0 field: the opcode it holds says j or call0
    (xt-refix kind bs target site width)
-      (? (kind = 'j18 && !(-131072 <= target - (site + 4) <= 131071)) ()
+      (? (kind = 'slot0) (xt-refix (bs 0 & 15 = 5 ? 'call0 'j18) bs target site width)
+         (kind = 'j18 && !(-131072 <= target - (site + 4) <= 131071)) ()
          (kind = 'call0 && !(-524288 <= target - ((site >> 2 << 2) + 4) <= 524287)) ()
          (xt-patch kind target site width 0))
 
