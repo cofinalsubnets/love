@@ -28,6 +28,14 @@ done
 for sc in 's/(a|x)b/@/' 's/a|z/Y/g' 's/[[:digit:]]+/#/' '/a|q/d' 's/b{1,2}/B/'; do
   bothrc "sed -E '$sc'" sed -E "$sc" "$ho/.sd1"
 done
+# GNU's case escapes in a replacement, plain and over -E groups
+for sc in 's/b.*/\U&/' 's/\(.\)\(.*\)/\u\1\U\2\E!/' 's/[a-z]*/\L\u&/' 's/z/\U\lZZ/g' 's/.*/x\Uy\Ez/'; do
+  bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
+done
+bothrc "sed -E case" sed -E 's/^([a-z])([a-z]*)/\U\1\L\2/' "$ho/.sd1"
+# options after an operand, in GNU order, as kbuild's apparmor recipe spells them
+sed "$ho/.sd1" -r -n -e '/x/d' -e 's/(b|q)/\U\1/p' > "$g"
+korerun sed "$ho/.sd1" -r -n -e '/x/d' -e 's/(b|q)/\U\1/p' > "$o"; same "sed FILE -r -n -e .."
 # -e stacks in order and clusters (-ne)
 sed -n -e 1p -e 3p "$ho/.sd1" > "$g"; korerun sed -n -e 1p -e 3p "$ho/.sd1" > "$o"
 same "sed -e stacking"
