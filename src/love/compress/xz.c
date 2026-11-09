@@ -57,152 +57,45 @@ static int lz_props(struct lz_model *m, unsigned b, unsigned maxlclp) {
 static unsigned lz_litst(unsigned s) { return s < 4 ? 0 : s < 10 ? s - 3 : s - 6; }
 
 // --- the range decoder: normalize before each bit --------------------------------------------
-struct lz_rd { const uint8_t *p, *e; uint32_t range, code; int bad; };
+// the input is p[0..n), i the next byte; past the end bad, and the coder reads zeros
+struct lz_rd { const uint8_t *p; uintptr_t i, n; uint32_t range, code; int bad; };
 
 static int rd_init(struct lz_rd *r, const uint8_t *p, const uint8_t *e) {
  if (e - p < 5 || p[0]) return 0;
- r->p = p + 5; r->e = e; r->range = 0xffffffffu; r->bad = 0;
+ r->p = p, r->i = 5, r->n = (uintptr_t) (e - p), r->range = 0xffffffffu, r->bad = 0;
  r->code = (uint32_t) p[1] << 24 | (uint32_t) p[2] << 16 | (uint32_t) p[3] << 8 | p[4];
  return 1; }
 
 static void rd_norm(struct lz_rd *r) {
  if (r->range < LZ_TOP) {
   r->range <<= 8;
-  if (r->p < r->e) r->code = r->code << 8 | *r->p++; else r->bad = 1, r->code <<= 8; } }
+  if (r->i < r->n) r->code = r->code << 8 | r->p[r->i++]; else r->bad = 1, r->code <<= 8; } }
 
-// the decoder on locals (rg range, cd code, ip input to ie), word-wide to stay in registers.
-// past the end ip counts on over zeros: a short stream is ip > ie, asked per symbol
-#define LZ_NORM() if (rg < LZ_TOP) { rg <<= 8, cd = cd << 8 | (ip < ie ? *ip : 0), ip++; }
-#define LZ_BIT(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
- if (cd < q_) rg = q_, *p_ = (lzp) (w_ + ((LZ_ONE - w_) >> LZ_MOVE)), b = 0; \
- else rg -= q_, cd -= q_, *p_ = (lzp) (w_ - (w_ >> LZ_MOVE)), b = 1; }
-// branchless, for a tree's unpredictable bits: k_ is all ones for a 0, the sign of cd - q where a word holds it
+// all ones where a < b, the sign of a - b where a word holds it
 #if UINTPTR_MAX > 0xffffffffu
 #define LZ_LT(a, b) ((uintptr_t) ((intptr_t) ((a) - (b)) >> 63))
 #else
 #define LZ_LT(a, b) (0 - (uintptr_t) ((a) < (b)))
 #endif
-#define LZ_BITF(pp, b) { lzp *p_ = (pp); uintptr_t w_ = *p_, q_, k_; LZ_NORM() q_ = (rg >> LZ_BITS) * w_; \
- k_ = LZ_LT(cd, q_), b = k_ + 1; \
- rg = q_ + ((rg - q_ - q_) & ~k_), cd -= q_ & ~k_; \
- *p_ = (lzp) (w_ + (((LZ_ONE - w_) >> LZ_MOVE) & k_) - ((w_ >> LZ_MOVE) & ~k_)); }
-#define LZ_TREE(pp, n, v) LZ_CALL(lz_ftree(&cs, (pp), (uintptr_t) 1 << (n)), v)
-#define LZ_RTREE(pp, n, v) { lzp *t_ = (pp); uintptr_t m_ = 1, b_, v_ = 0; \
- for (uintptr_t i_ = 0; i_ < (n); i_++) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_, v_ |= b_ << i_; } \
- v = v_; }
-#define LZ_LEN(l, ps, v) { uintptr_t c_; LZ_BIT(&(l)->choice, c_) \
- if (!c_) LZ_TREE((l)->low[ps], 3, v) \
- else { LZ_BIT(&(l)->choice2, c_) \
-        if (!c_) { LZ_TREE((l)->mid[ps], 3, v) v += 8; } \
-        else { LZ_TREE((l)->high, 8, v) v += 16; } } }
-
-// out of lz_run's loop so mooncc keeps a tree's temporaries in registers; the coder in and out at s
-struct lz_cs { uintptr_t rg, cd; const uint8_t *ip, *ie; };
-static love_noinline uintptr_t lz_ftree(struct lz_cs *s, lzp *t_, uintptr_t top) {
- uintptr_t rg = s->rg, cd = s->cd, m_ = 1, b_; const uint8_t *ip = s->ip, *ie = s->ie;
- while (m_ < top) { LZ_BITF(t_ + m_, b_) m_ = m_ << 1 | b_; }
- s->rg = rg, s->cd = cd, s->ip = ip;
- return m_ - top; }
-static love_noinline uintptr_t lz_fmlit(struct lz_cs *s, lzp *p, uintptr_t mb) {
- uintptr_t rg = s->rg, cd = s->cd, sy = 1, off = 0x100, mbit, b; const uint8_t *ip = s->ip, *ie = s->ie;
- while (sy < 0x100) {
-  mb <<= 1, mbit = mb & off;
-  LZ_BITF(p + off + mbit + sy, b)
-  sy = sy << 1 | b, off &= (0 - b) ^ ~mbit; }
- s->rg = rg, s->cd = cd, s->ip = ip;
- return sy; }
-#define LZ_CALL(call, v) { cs.rg = rg, cs.cd = cd, cs.ip = ip; v = call; rg = cs.rg, cd = cs.cd, ip = cs.ip; }
+#if wideld
+#define LD64(p) ld64(p)
+#define ST64(p, x) st64(p, x)
+#else
+#define LD64(p) 0
+#define ST64(p, x) ((void) (x))
+#endif
 // the output, which is the dictionary. `pause` stops at a symbol's start where cap may not
 // hold one more match (1, 2) or the input may not hold one more symbol (1): a stream fed in pieces
 struct lz_out { uint8_t *b; uintptr_t n, cap, base; int pause; };
 
+// lz.l reads the model as one table of probabilities at these offsets
+#define LZ_AT(f, k) _Static_assert(offsetof(struct lz_model, f) == (k) * sizeof(lzp), #f)
+LZ_AT(isrep, 192); LZ_AT(isg0, 204); LZ_AT(isg1, 216); LZ_AT(isg2, 228); LZ_AT(isrep0l, 240);
+LZ_AT(slot, 432); LZ_AT(spec, 688); LZ_AT(align, 802); LZ_AT(len, 818); LZ_AT(rep, 1332); LZ_AT(lc, 1846);
+
 // decode to lim bytes or, with eopm, the end marker: 1 done, 2 the marker, 3 paused for
-// input, 0 corrupt. coder, state and rep0 ride locals, back in r and m at the end; the other
-// reps stay in m
-static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
- uintptr_t rg = r->range, cd = r->code, st = m->state, r0 = m->reps[0], n = o->n, b, len, d;
- const uint8_t *ip = r->p, *ie = r->e;
- struct lz_cs cs = { 0, 0, 0, r->e };
- uint8_t *ob = o->b;
- int rc = 1;
- if (r->bad) ip = ie + 1;
- if (eopm) lim = ~(uintptr_t) 0;
- uintptr_t hlim = lim, istop = (uintptr_t) ie;
- if (o->pause) {
-  if (o->cap - LZ_MAXLEN < lim) lim = o->cap - LZ_MAXLEN;
-  if (o->cap < hlim) hlim = o->cap;
-  if (o->pause == 1) istop -= LZ_REQ; }
- while (n < lim) {
-  uintptr_t ps = n & (((uintptr_t) 1 << m->pb) - 1);
-  if ((uintptr_t) ip > istop) { rc = ip > ie ? 0 : 3; break; }
-  LZ_BIT(&m->ismatch[st][ps], b)
-  if (!b) {
-   if (n >= o->cap) { rc = 0; break; }
-   uintptr_t prev = n > o->base ? ob[n - 1] : 0, s = 1;
-   lzp *p = m->lit + 0x300 * (((n & (((uintptr_t) 1 << m->lp) - 1)) << m->lc) + (prev >> (8 - m->lc)));
-   if (st >= 7) {                                 // led by the byte at rep0 while the bits agree:
-    if (n - o->base <= r0) { rc = 0; break; }     // off stays 0x100 until one differs, then 0
-    LZ_CALL(lz_fmlit(&cs, p, ob[n - r0 - 1]), s) }
-   else LZ_CALL(lz_ftree(&cs, p, 0x100), s)
-   ob[n++] = (uint8_t) s;
-   st = st < 4 ? 0 : st < 10 ? st - 3 : st - 6;
-   continue; }
-  LZ_BIT(&m->isrep[st], b)
-  if (!b) {
-   LZ_LEN(&m->len, ps, len)
-   st = st < 7 ? 7 : 10;
-   uintptr_t slot, v;
-   LZ_TREE(m->slot[len < 3 ? len : 3], 6, slot)
-   d = slot;
-   if (slot >= 4) {
-    uintptr_t fb = (slot >> 1) - 1;
-    d = (2 | (slot & 1)) << fb;
-    if (slot < 14) { LZ_RTREE(m->spec + d - slot - 1, fb, v) d += v; }
-    else {
-     v = 0;
-     for (uintptr_t k = fb - 4; k; k--) {         // the direct bits, half the range each
-      LZ_NORM()
-      rg >>= 1, b = cd >= rg;
-      cd -= rg & (0 - b), v = v << 1 | b; }
-     d += v << 4;
-     LZ_RTREE(m->align, 4, v) d += v; } }
-   if (d == 0xffffffffu) { rc = eopm && ip <= r->e ? 2 : 0; break; }
-   m->reps[3] = m->reps[2], m->reps[2] = m->reps[1], m->reps[1] = (uint32_t) r0, r0 = d; }
-  else {
-   LZ_BIT(&m->isg0[st], b)
-   if (!b) {
-    LZ_BIT(&m->isrep0l[st][ps], b)
-    if (!b) {                                     // the short rep: one byte from rep0
-     if (n - o->base <= r0) { rc = 0; break; }
-     if (n >= o->cap) { rc = 0; break; }
-     ob[n] = ob[n - r0 - 1], n++;
-     st = st < 7 ? 9 : 11;
-     continue; } }
-   else {
-    LZ_BIT(&m->isg1[st], b)
-    if (!b) d = m->reps[1];
-    else {
-     LZ_BIT(&m->isg2[st], b)
-     if (!b) d = m->reps[2]; else d = m->reps[3], m->reps[3] = m->reps[2];
-     m->reps[2] = m->reps[1]; }
-    m->reps[1] = (uint32_t) r0, r0 = d; }
-   LZ_LEN(&m->rep, ps, len)
-   st = st < 7 ? 8 : 11; }
-  len += LZ_MINLEN;
-  if (n - o->base <= r0 || ip > ie || hlim - n < len) { rc = 0; break; }
-  if (o->cap - n < len) { rc = 0; break; }
-  uint8_t *dp = ob + n, *sp = dp - r0 - 1, *de = dp + len;
-#if wideld
-  if (r0 >= 7 && o->cap - n >= len + 8)              // whole words, the last running into room
-   for (; dp < de; dp += 8, sp += 8) st64(dp, ld64(sp));
-  else
-#endif
-  for (; dp < de; dp++, sp++) *dp = *sp;
-  n += len; }
- r->range = (uint32_t) rg, r->code = (uint32_t) cd, r->bad = ip > r->e, r->p = r->bad ? r->e : ip;
- m->state = (unsigned) st, m->reps[0] = (uint32_t) r0;
- o->n = n;
- return rc; }
+// input, 0 corrupt. laid and proved by lz.l
+#include "lz_gen.h"
 
 // --- LZMA2: the chunk walk ------------------------------------------------------------------
 // the header pass: total bytes, *end past the 0x00; -1 malformed
@@ -252,7 +145,7 @@ static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model
   if (cap - o.n < u || !rd_init(&r, s + i + h, s + i + h + k)) return -1;
   if (lz_run(m, &r, &o, o.n + u, 0) != 1) return -1;
   rd_norm(&r);                                   // the coder flushes a byte the last bit left
-  if (r.bad || r.p != r.e || r.code) return -1;
+  if (r.bad || r.i != r.n || r.code) return -1;
   i += h + k; } }
 
 // --- the range coder ------------------------------------------------------------------------
@@ -666,7 +559,7 @@ static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr
  struct lz_rd r;
  if (!rd_init(&r, s + h, s + h + k) || lz_run(&S->m, &r, &o, o.n + u, 0) != 1) return -1;
  rd_norm(&r);
- if (r.bad || r.p != r.e || r.code) return -1;
+ if (r.bad || r.i != r.n || r.code) return -1;
  *o0 = S->n, S->n = o.n;
  return (intptr_t) u; }
 
@@ -818,7 +711,7 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
   if (S->cap - S->n <= LZ_MAXLEN) {
    uintptr_t shift = (S->n - (S->n < S->dict ? S->n : S->dict)) & ~(uintptr_t) 15;
    memmove(win, win + shift, S->n - shift), S->n -= shift, o0 = S->n; }
-  struct lz_rd r = { buf, buf + in, S->range, S->code, 0 };
+  struct lz_rd r = { buf, 0, in, S->range, S->code, 0 };
   if (!S->started) {
    if (in < 5 && !last) rc = 3;
    else if (!rd_init(&r, buf, buf + in)) rc = 0;
@@ -831,7 +724,7 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
    S->tot += o.n - S->n, S->n = o.n, S->range = r.range, S->code = r.code;
    if (rc == 1 && known && S->tot == S->want) rc = 2;
    else if (rc == 1 && last && o.n < o.cap - LZ_MAXLEN) rc = 0;   // the input over, the stream not
-   used = (uintptr_t) (r.p - buf); }
+   used = r.i; }
   if (rc == 2) S->done = 1; }
  if (!rc) return S->magic = 0, alloc(buf, 0), g->sp[1] = ZeroPoint, g->sp += 1, g;
  uintptr_t on = S->n - o0, rest = in - used;

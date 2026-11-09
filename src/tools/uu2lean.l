@@ -19,6 +19,8 @@
    _ (reads (open "test/uuinfvc.l" "r"))
    _ (reads (open "test/uuzb.l" "r"))
    _ (reads (open "test/uuzbvc.l" "r"))
+   _ (reads (open "test/uuzx.l" "r"))
+   _ (reads (open "test/uuzxvc.l" "r"))
    _ (reads (open "test/uusplgen.l" "r"))
    _ (reads (open "test/uuspllaw.l" "r"))
    _ (reads (open "test/uulay.l" "r"))
@@ -62,7 +64,7 @@
                            (deq? F || elq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (forms (open "test/uuzbvc.l" "r"))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (app2 (forms (open "test/uuzbvc.l" "r")) (app2 (forms (open "test/uuzx.l" "r")) (forms (open "test/uuzxvc.l" "r"))))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))))) ())
 
    ; a def must be whole (a paren slip reads () as its term) and pinned (a partial defn is a
    ; truthy closure that pins nothing). `= ()`, not `!`: a term of 0 is a legal def
