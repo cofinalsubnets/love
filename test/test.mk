@@ -397,7 +397,8 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l: src/love/compress/vc.l
-# test_clay -- (cparse (clay-show ast)) == ast over test/cc, then the headers regenerate
+# test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
+# their includers to the clay vc.l laid (test/gate/clayeq.l)
 test_clay: host
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"
 	@$m -l test/gate/clay.l < /dev/null
@@ -406,6 +407,10 @@ test_clay: host
 	                       diff -u $$d $$o | head -20; exit 1; }; done
 	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h and uuzxvc.l regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
+	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c and xz.c holds the clay vc.l laid)"
+	@$m -l src/love/compress/inf.l -l test/gate/clayeq.l -e '(ceq-run "inf" "src/love/compress/gz.c" ["inf_gen.h" "inf_run_gen.h" "inf_st_gen.h"] inf-specs)' < /dev/null
+	@$m -l src/love/compress/bz.l -l test/gate/clayeq.l -e '(ceq-run "bz" "src/love/compress/bz2.c" ["bz_gen.h"] bz-specs)' < /dev/null
+	@$m -l src/love/compress/lz.l -l test/gate/clayeq.l -e '(ceq-run "lz" "src/love/compress/xz.c" ["lz_gen.h"] lz-specs)' < /dev/null
 # test_moonfuzz -- each test/cc file mutated eight ways: no scare, no hang, G1 where it parses.
 # mooncc runs in this process, so the budget reaches it (peak ~215 MB, passes at 60; ~1 min)
 test_moonfuzz: host
