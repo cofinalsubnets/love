@@ -223,3 +223,26 @@
            (nat? gzsl-b = nat? gzsl-q) (nat? gzsl-k = nat? gzsl-q)
            (gzsl-f "ab" = 1) (gzsl-f "b" = 0) !(nat? gzsl-f))
    0)
+
+; --- a map param's probe reads and writes the group's own registers ---
+(: gzmp-t (pins (tablet 8) 5 50 6 60 7 70)
+   gzmp-r (ev '(: (scan m i acc) (? (< i 8) (scan m (+ i 1) (+ acc (peep m i 0))) acc)
+                  (fill m i) (? (< i 3) (fill (pin m i (+ i 1)) (+ i 1)) m)
+                  (go m) (scan (fill m 0) 0 0)
+                  go))
+   _ (test (gzmp-r gzmp-t = 186) (gzmp-t 2 = 3))
+   0)
+
+; --- a grid past an imm12 still answers: a64 declines it, x64 compiles it ---
+(: gzg-b (ev '(: (mand c z it)
+                 (it < 3 && re z * re z + im z * im z <= 4.0 ? (mand c (z * z + c) (it + 1)) it)
+                 (col px py acc) (py < 5000 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                 (grid px acc) (px < 2 ? (grid (px + 1) (acc + col px 0 0)) acc)
+                 grid))
+   gzg-l (ev '(: (mand c z it)
+                 (it < 5000 && re z * re z + im z * im z <= 4.0 ? (mand c (z * z + c) (it + 1)) it)
+                 (col px py acc) (py < 3 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                 (grid px acc) (px < 2 ? (grid (px + 1) (acc + col px 0 0)) acc)
+                 grid))
+   _ (test (gzg-b 0 0 = 10000) (gzg-l 0 0 = 6))
+   0)

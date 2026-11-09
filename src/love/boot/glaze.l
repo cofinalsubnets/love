@@ -55,25 +55,26 @@
    (asmx ir) (hasm 'x64 ir 'bytes)
    (asmt tgt ir) (hasm tgt ir 'bytes)
    ; the map probe: map in r0, tagged key in r10, ends branched to hit (match) / miss (gap).
-   ; holo r7..r10 are x86 r8..r11
+   ; holo r7..r10 are x86 r8..r11. r0 stands for the lane's acc: mreg lays it
    mprobe-ir ['(ld r7 r0 8) '(ld r8 r7 16) '(shr r8 1) '(dec r8) '(add r7 r7 24)    ; r7=backing; r8=cap>>1-1 (mask); r7=&slots
       ['li 'r0 mapmix] '(imul r0 r0 r10) '(rol r0 32) '(and r0 r0 r8) '(mov r9 r0)    ; I = rot(mix*tagkey)&mask -> r9
       '(label loop) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 0) '(cmp r0 r10) '(br eq hit)
       '(test r0 1) '(br eq miss) '(inc r9) '(and r9 r9 r8) '(jmp loop)]                  ; gap (even) -> miss
-   (mpeep-ir d) (mprobe-ir                                                          ; miss -> d; hit -> slot[I].value, untagged
+   (mreg A ir) (map (f \ map (x \ (x = 'r0 ? A x)) f) ir)
+   (mpeep-ir A d) (mreg A (mprobe-ir                                                ; miss -> d; hit -> slot[I].value, untagged
       + [['label 'miss] ['li 'r0 d] '(jmp end)
-         '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)])
+         '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)]))
    (asmx-seed ir nm addr) (: t {nm addr} f (glazeasm 'at)
                              (((lit? f ? f (cite 'holo 'assemble-at)) 'x64 ir t) 'bytes))   ; one pre-bound external label nm->addr
    ; the write tails: insert-or-update. a near-full table wants a grow native cannot do, so it
    ; deopts through the caller-seeded label; fixnum keys and values, so no write barrier
-   mpin-ir (mprobe-ir + '((label miss)
+   (mpin-ir A) (mreg A (mprobe-ir + '((label miss)
       (ld r0 r7 -16) (sar r0 1) (cmp r0 r8) (br ge deopt)                           ; len >= mask -> near-full -> deopt
       (leax r0 r9 r9 1 0) (stx r7 r0 8 0 r10)
       (pop r8) (leax r8 r8 r8 1 1) (stx r7 r0 8 8 r8)
       (ld r0 r7 -16) (add r0 r0 2) (st r7 -16 r0) (jmp end)                         ; len++ (tagged: +2)
       (label hit) (leax r0 r9 r9 1 0) (pop r8) (leax r8 r8 r8 1 1) (stx r7 r0 8 8 r8)
-      (label end)))
+      (label end))))
    ; the param-kind probes: how the group body uses P picks the entry guard mkouterir lays for its slot
    (hasl e) (two? e ? (<e = '. || foldl (a \ x \ a || hasl x) 0 >e) 0)   ; a cons -> the group is value-typed
    (suse? e P) (? (atom? e) 0  (elem <e '(peep tally pin) && <>e = P) 1  (foldl (a \ x \ a || suse? x P) 0 >e))
@@ -1394,9 +1395,9 @@
                   (bcat [(go b) [['push A]] (go c)
                          [['pop T] ['ld 'r8 R 8] ['stxb 'r8 T 1 16 A] ['mov A R]]]))
                (op = 'mpeep) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)   ; (mpeep MAP k d): the raw value, a gap-miss -> d
-                  (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mpeep-ir (whole? c ? c 0)) lp ht ms en 'deopt)]))
+                  (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mpeep-ir A (whole? c ? c 0)) lp ht ms en 'deopt)]))
                (op = 'mpin) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)   ; (mpin MAP k v): a grow-due miss -> OVF; answers the map
-                  (bcat [(go c) [['push A]] (go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel mpin-ir lp ht ms en 'OVF) [['mov A R]]]))   ; v pushed as the spill mpin-ir's (pop r8) takes
+                  (bcat [(go c) [['push A]] (go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mpin-ir A) lp ht ms en 'OVF) [['mov A R]]]))   ; v pushed as the spill mpin-ir's (pop r8) takes
                ())
             (op a)
             (? (op = 'tally) (: R (argregir tgt (argix a ps 0)) [['ld A R 8]])              ; the raw len at [STR+8]
@@ -2422,7 +2423,8 @@
                             (!(two? outerp) ? form
                                (: chain (loopchain <<outerp pairs recnm)
                                   D #chain M #invs N #fvars
-                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7) ? form
+                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7
+                                     && (x86? || all pimm? (lim . map caup chain))) ? form   ; a64 compares against an imm12
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
