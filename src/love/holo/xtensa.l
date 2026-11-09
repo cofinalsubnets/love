@@ -180,6 +180,7 @@
    (xt-jmpr d) (x24 (0xA0 | xn d << 8))                     ; jx as
    (xt-jmpt d tl labs) (xt-jmpr d)
    (xt-lapool d) (x24 (0xFFFF << 8 | xn d << 4 | 1))        ; l32r at, the word just before
+   (xt-l32r d label) [(fix 3 'l32r label (xn d))]            ; l32r at, a pooled word behind it
 
    (xt-div d a b) (xt-rst2 13 d a b)
    (xt-udiv d a b) (xt-rst2 12 d a b)
@@ -207,7 +208,7 @@
           ('inc . (d \ xt-addk (xn d) (xn d) 1)) ('dec . (d \ xt-addk (xn d) (xn d) -1))
           ('set . xt-set) ('jmp . xt-jmp) ('br . xt-br) ('call . xt-call)
           ('jmpr . xt-jmpr) ('jmpt . xt-jmpt) ('callr . xt-callr)
-          ('lapool . xt-lapool)
+          ('lapool . xt-lapool) ('l32r . xt-l32r)
           ('raw . 1)
           ('ret . x24 0x80)                                 ; ret
           ('sys . x24 0x5000)                               ; syscall
@@ -226,13 +227,20 @@
              -524288 <= o <= 524287 ? 0 (scare 'xt-call0-range o),
              x24 ((o >> 2 & 262143) << 6 | 5)))
          (kind = 'abs32) (le32 (target + aux))
+         ; l32r counts words back from its own word, rounded up: aux is its register
+         (kind = 'l32r)
+         (target - ((site + 3) >> 2 << 2) @ o
+            (0 = target & 3 ? 0 (scare 'xt-l32r-align target),
+             -262144 <= o < 0 ? 0 (scare 'xt-l32r-range o),
+             x24 (((o >> 2) & 65535) << 8 | aux << 4 | 1)))
          (scare 'badfix kind))
    ; a link's slot0 field: the opcode it holds says j or call0
    (xt-refix kind bs target site width)
       (? (kind = 'slot0) (xt-refix (bs 0 & 15 = 5 ? 'call0 'j18) bs target site width)
          (kind = 'j18 && !(-131072 <= target - (site + 4) <= 131071)) ()
          (kind = 'call0 && !(-524288 <= target - ((site >> 2 << 2) + 4) <= 524287)) ()
-         (xt-patch kind target site width 0))
+         (kind = 'l32r && !(-262144 <= target - ((site + 3) >> 2 << 2) < 0)) ()
+         (xt-patch kind target site width (kind = 'l32r ? (bs 0 >> 4 & 15) 0)))
 
    xt {'lower xt-lower 'patch xt-patch 'refix xt-refix 'nop '(240 32 0)}
    (defbackend 'xtensa xt))

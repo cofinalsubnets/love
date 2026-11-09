@@ -663,6 +663,17 @@
                     '(15 175 193)))                               ; imul rax,rcx
        (? !(arm? g)
            [['raw (opb + '(15 144 193) + rx + '(15 182 201))]]   ; op; seto cl; movzx rcx,cl
+          ; xtensa has no flags: the overflow is the sign of (a^d)&(b^d), or (a^b)&(a^d) for a sub
+          (xt? g && bi = "__builtin_add_overflow")
+           '((add r2 r0 r1) (xor r1 r1 r2) (xor r0 r0 r2) (and r1 r1 r0) (shr r1 31) (mov r0 r2))
+          (xt? g && bi = "__builtin_sub_overflow")
+           '((sub r2 r0 r1) (xor r1 r1 r0) (xor r0 r0 r2) (and r1 r1 r0) (shr r1 31) (mov r0 r2))
+          (xt? g)                           ; as v6-M's, the high word compared without flags
+           (spush 'r3 +
+            '((mov r2 r1) (mov r1 r0) (sar r1 31)
+              (mov r3 r2) (sar r3 31) (call __aeabi_lmul)
+              (mov r2 r0) (sar r2 31) (cmp r1 r2) (set ne r1)) +
+            spop 'r3)
           !(bi = "__builtin_mul_overflow")
            [[(bi @ "__builtin_add_overflow" 'adds 'subs) 'r0 'r0 'r1] '(set vs r1)]
           (v6m? g)                          ; no smull: __aeabi_lmul on the widened words,
@@ -964,7 +975,7 @@
        _ (arm xops (g \ f \ [[<>>f <>>>f] [<>f] 1]))
        _ (arm x4ops (g \ f \ [[<>f <>>f <>>>f] [<>f] 1]))
        _ (arm m4ops (g \ f \ [[<>f <>>f] [<>f] 1]))
-       _ (arm '(la laa) (g \ f \ [() [<>f] 1]))
+       _ (arm '(la laa lapool) (g \ f \ [() [<>f] 1]))
        _ (arm '(set) (g \ f \ [() [<>>f] 1]))
        _ (arm '(cmov) (g \ f \ [[<>>f <>>>f] [<>>f] 1]))
        _ (arm '(cmp test) (g \ f \ [(rg1 <>f + rg1 <>>f) () ()]))
@@ -1040,10 +1051,14 @@
    (t16la (f . u)) ((atom? f || <f != 'la ?  [f]
                       ['(align 4) ['lapool <>f] ['raw [['fix 4 'abs32 <>>f 0]]]])
                      + t16la u)
-   ; xtensa has no pc-relative add: (la Rd lbl) jumps a pooled word that l32r reads back
-   (xtla g fs) (catall (map (f \ (atom? f || <f != 'la ? [f]
-                                   (nlab g ".la" @ k ['(align 4) ['jmp k] '(raw (0)) ['raw [['fix 4 'abs32 <>>f 0]]] ['label k] ['lapool <>f]])))
-                            fs))
+   ; xtensa has no pc-relative add: each address the fn takes is a word in a pool laid ahead of
+   ; its label, whole words so the label stays on its grain, and (la Rd lbl) an l32r back to it
+   (xtla g fs)
+    (: ls (uniq (catall (map (f \ (two? f && <f = 'la ? [<>>f]) ) fs)))
+       ps (foldl (t \ l \ pin t l (nlab g ".lp")) {} ls)
+       (atom? ls ? fs
+          (['(align 4)] + catall (map (l \ [['label (ps l)] ['raw [['fix 4 'abs32 l 0]]]]) ls)
+           + map (f \ (two? f && <f = 'la ? ['l32r <>f (ps <>>f)] f)) fs)))
    (epim? fs es) (? !(two? es) 1                  ; the next forms are exactly es
                     !(two? fs) ()
                     (<fs = <es && epim? >fs >es))
@@ -1688,11 +1703,11 @@
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
    (bp? g k) (a64? g && elem k <>(g 'mo))
-   ; -mstrict-align (a64), and always on v6-M, which faults on any unaligned word: no access wider
-   ; than its known alignment; a packed member's face carries its alignment and goes by chunks, r2
-   ; gathers and r3 shifts, neither ever a face's base
-   (sal? g) (a64? g && <(g 'mo) || v6m? g)
-   (salk g n) (v6m? g ? (min n 4) n)                ; the alignment an n-aligned access needs: v6-M's widest is a word
+   ; -mstrict-align (a64), and always on v6-M and xtensa, which fault on any unaligned word: no access
+   ; wider than its known alignment; a packed member's face carries its alignment and goes by chunks,
+   ; r2 gathers and r3 shifts, neither ever a face's base
+   (sal? g) (a64? g && <(g 'mo) || v6m? g || xt? g)
+   (salk g n) (v6m? g || xt? g ? (min n 4) n)        ; the alignment an n-aligned access needs: v6-M's and xtensa's widest is a word
    ; -mregparm=n (i386): the first n argument words ride eax edx ecx
    (rpn g) (ia32? g ? (drop 2 (g 'mo) @ r (two? r && charm? <r ? <r 0)) 0)
    (osz? g) (drop 4 (g 'mo) @ r (two? r && <r))   ; -Os: for size
@@ -4701,7 +4716,7 @@
    ; ..narrowed over a laid body's forms: an opcode is never a reference, and a register's spelling
    ; (r8, f0, sp) is one only at an op's label operand (cg-labpos) or in a form holo lays whole: a
    ; static named r8 dies unless a call, jmp or la names it. a label op missing here scares undef-label
-   cg-labpos {'call [1] 'jmp [1] 'jmp8 [1] 'br [2] 'br8 [2] 'la [2] 'lar [2] 'lia [2]
+   cg-labpos {'call [1] 'jmp [1] 'jmp8 [1] 'br [2] 'br8 [2] 'la [2] 'lar [2] 'lia [2] 'l32r [2]
               'ldsdl [2] 'mulo [5] 'jmpt [2 3]}
    cg-wholeops '(raw addr fix)
    (cg-regnom? x) (: s (show x) n #s
@@ -4854,8 +4869,9 @@
                                          (go >l (g 'alias <l = nm ?
                                                    (['label (name <l)] . a2) a2)))
                            (go (keys (g 'alias)) ()))
-                     ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law
-                     an (peep (g 'aligns) nm 2 @ a (max (max a 2) (falgn g)))
+                     ; an aligned(N) fn, or -falign-functions', floored at 2 by the parity law, at 4
+                     ; on xtensa, whose call0 reaches words alone
+                     an (peep (g 'aligns) nm 2 @ a (max (max a (xt? g ? 4 2)) (falgn g)))
                      pf (pfeof g nm)
                      fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r)
                           + (wasm? g ? () (catmap (a \ [['label (fn-end a)] ['label (fn-type a)]]) (nm . map (f \ <>f) al2))))   ; elf's size and type

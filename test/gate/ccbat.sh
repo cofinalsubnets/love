@@ -184,19 +184,25 @@ case $tgt in
     } ;;
   xtensa)
     # the esp32's lx6 under qemu-xtensa's user mode (dc233c: no mul32_high, which moon leaves be),
-    # bare as rv32's; no xtensa clang, so our x86-64 build is the reference
-    have qemu-xtensa || gate_skip "$name: no qemu-xtensa, skipped"
+    # bare as rv32's. no xtensa clang: the witness is our rv32 build, ILP32 with an unsigned char
+    # as xtensa is, on qemu-riscv32, itself held to clang by test_ccrv32
+    for tool in qemu-xtensa qemu-riscv32; do have $tool || gate_skip "$name: no $tool, skipped"; done
     a64_qemu="qemu-xtensa -cpu dc233c"
     pretty=qemu-xtensa
-    x64ref=1
+    GCC="mooncc -t rv32"
+    grun=qemu-riscv32
     exitonly=1
     mflags="-os none -Dmain=cc_main -c"
-    refuse="$int128s 364-w128float 297-frameaddr"
+    # no inline atomics yet (s32c1i): a __sync builtin refuses, as v6-M's; no gas dialect, so a
+    # target asm refuses
+    refuse="$int128s 364-w128float 297-frameaddr 129-sync 327-bcp-splice 357-asmoutaddr"
     wide="68-static-assert 120-bfinit 161-enumwide"
-    skip="105-fneg 144-gnubuiltins 266-vaarg-struct"
+    # a 64-bit long assumed, past an ILP32 word: a shift by 63 and the like, no answer to hold;
+    # 180 takes riscv's template on the reference and none here
+    skip="105-fneg 144-gnubuiltins 266-vaarg-struct 152-rotate 180-asmsections"
     nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
       148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
-      163-bitfields 164-switchtab 165-constcond 166-condconv 178-toplevelasm 228-strictalign 280-cxf-fuzz
+      163-bitfields 164-switchtab 165-constcond 166-condconv 228-strictalign 280-cxf-fuzz
       283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
       304-size-classes 315-alloca-stack 345-jmpsave 348-libcmore 353-intuint 354-idioms 355-cplxarg
       356-vafnval 390-qualon"
@@ -213,16 +219,26 @@ case $tgt in
       echo 'int strcmp(const char *a, const char *b){'
       echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
     } > "$d/run.c"
-    # exit_group is 119, its argument in a6 (holo's r4)
+    # exit_group is 119, its argument in a6 (holo's r4, the frame base: no clobber names it; the call never returns)
     { echo 'int main(void);'
       echo 'void _start(void){ int r = main();'
-      echo ' __attribute__((holo)) asm volatile("mov r4, %0\n\tli r0, 119\n\tsys" :: "r"(r) : "r0", "r4"); for (;;); }'
+      echo ' __attribute__((holo)) asm volatile("mov r4, %0\n\tli r0, 119\n\tsys" :: "r"(r) : "r0"); for (;;); }'
     } > "$d/start.c"
     moonrun -t xtensa -c -o "$d/run.o" "$d/run.c" || fail "mooncc run.c"
     moonrun -t xtensa -c -o "$d/start.o" "$d/start.c" || fail "mooncc start.c"
     moonrun -t xtensa -c -o "$d/rt.o" src/apps/moon/lib/rt.c || fail "mooncc rt.c"
     blink() { moonrun -t xtensa -nostdlib -Ttext 0x10000 -o "$2" "$d/start.o" "$1" "$d/run.o" "$d/rt.o"; }
-    gref() { return 1; } ;;
+    { echo 'int main(void);'
+      echo 'void _start(void){ int r = main();'
+      echo ' __asm__ volatile("mv a0, %0\n\tli a7, 93\n\tecall" :: "r"(r) : "a0", "a7"); for (;;); }'
+    } > "$d/rvstart.c"
+    moonrun -t rv32 -os none -c -o "$d/rvstart.o" "$d/rvstart.c" || fail "mooncc -t rv32 rvstart.c"
+    moonrun -t rv32 -os none -c -o "$d/rvrun.o" "$d/run.c" || fail "mooncc -t rv32 run.c"
+    moonrun -t rv32 -os none -c -o "$d/rvrt.o" src/apps/moon/lib/rt.c || fail "mooncc -t rv32 rt.c"
+    gref() {
+      moonrun -t rv32 -os none -Dmain=cc_main -c -o "$1.o" "$2" \
+        && moonrun -t rv32 -os none -nostdlib -Ttext 0x10000 -o "$1" "$d/rvstart.o" "$1.o" "$d/rvrun.o" "$d/rvrt.o"
+    } ;;
   thumb1|thumb2)
     thumb_board $tgt "$d"
     if [ $tgt = thumb1 ]; then

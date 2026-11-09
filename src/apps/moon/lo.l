@@ -546,8 +546,8 @@
    (lobfst g bt b off u a)
     (bfpk? bt || a ? (lostu g b off (tsz g bt) (lobfal g a) u)
        [[(stop <>bt) b off u]])
-   ; what a packed unit's chunks may assume: v6-M takes no word off its alignment
-   (lobfal g a) (a ? a (v6m? g ? 1 8))
+   ; what a packed unit's chunks may assume: v6-M and xtensa take no word off its alignment
+   (lobfal g a) (a ? a (v6m? g || xt? g ? 1 8))
    ; a unit past the word, as two: 8 bytes as its type says, or a packed one's chunks
    (lobfwld g bt b off)
     (bfpk? bt
@@ -1193,8 +1193,8 @@
                       [['lea t 'r4 (ovb g + 8 * nov)] ['st p 0 t] ['lea t 'r4 (rsa + 64)] ['st p 8 t]
                        ['lea t 'r4 (rsa + 192)] ['st p 16 t] ['li t (0 - 8 * (8 - ngp))] ['st4 p 24 t]
                        ['li t (nofp? g ? 0 (0 - 16 * (8 - nfp)))] ['st4 p 28 t]]
-                      ; the eight-word block holds the argument registers at its top
-                      (w32s? g) [['lea t 'r4 (ngp < ngp g ? (ovb g + 4 * (8 - ngp g) + 4 * ngp) (ovb g + 32 + nov))] ['st p 0 t]]
+                      ; the eight-word block holds the argument registers at its top (ngp is the named count here)
+                      (w32s? g) (#(argr g) @ k [['lea t 'r4 (ngp < k ? (ovb g + 4 * (8 - k) + 4 * ngp) (ovb g + 32 + nov))] ['st p 0 t]])
                       (rv64? g) [['lea t 'r4 (ovb g + 8 * ngp + 8 * nov)] ['st p 0 t]]   ; riscv: past the named words
                       [['li t (8 * ngp)] ['st4 p 0 t] ['li t (48 + 16 * nfp)] ['st4 p 4 t]
                        ['lea t 'r4 (16 + 8 * nov)] ['st p 8 t] ['lea t 'r4 rsa] ['st p 16 t]]))])))
@@ -1611,9 +1611,9 @@
    ; a call's places -> loplace's [gi fi rg sk pre], an odd slot's rg entry ['s k vreg] last
    (lo32place g vs va)
     (: ps (lo32cl g (map vty vs) va)
-       (word x i n) (loeb g 'int x (4 * i) (min 4 n))
-       (regs r x base nw sz rg pre)
-        (foldl (s \ i \ (s @ [rg2 p2] (word x i (sz - 4 * i) @ [w f] [(rg2 + [[(argr g (r + i - base)) w]]) (p2 + f)]))) [rg pre] (map (+ base) ^nw))
+       (word x i n a) (loeba g 'int x (4 * i) (min 4 n) a)
+       (regs r x base nw sz a rg pre)
+        (foldl (s \ i \ (s @ [rg2 p2] (word x i (sz - 4 * i) a @ [w f] [(rg2 + [[(argr g (r + i - base)) w]]) (p2 + f)]))) [rg pre] (map (+ base) ^nw))
        (one s v p)
         (s @ [rg sk pre]
            (: ty (vty v) x (vreg v)
@@ -1633,7 +1633,7 @@
                               [rg pre] ^n @ [rg2 p2] [rg2 sk p2]))
                    ['f k _ _] [(rg + [[(? (0 = k & 1) (lo32sn k) (sp64? g) (lo32s1 k) ['s k]) x]]) sk pre]
                    ['r i nw]
-                    (? (stru? ty) (regs i x 0 nw (tsz g ty) rg pre @ [rg2 p2] [rg2 sk p2])
+                    (? (stru? ty) (regs i x 0 nw (tsz g ty) (tal g ty) rg pre @ [rg2 p2] [rg2 sk p2])
                        (pair? g ty) [(rg + [[(argr g i) <x] [(argr g (i + 1)) <>x]]) sk pre]
                        (d128? ty) [(rg + map (j \ [(argr g (i + j)) (x j)]) ^4) sk pre]
                        (ty = 'double) (lomk g @ l (lomk g @ h [(rg + [[(argr g i) l] [(argr g (i + 1)) h]]) sk (pre + [['movrrq l h x]])]))
@@ -1644,7 +1644,7 @@
                        (lomk g @ l (lomk g @ h [(rg + [[(argr g i) l]]) (sk + [['at ['int h ()] 4 0]]) (pre + [['movrrq l h x]])])))
                    ['x i rn nw]
                     (lomk g @ t
-                       (regs i x 0 rn (tsz g ty) rg pre @ [rg2 p2]
+                       (regs i x 0 rn (tsz g ty) (tal g ty) rg pre @ [rg2 p2]
                           [rg2 (sk + [['at [ty t ()] (tsz g ty - 4 * rn) 0]]) (p2 + [['lea t x (4 * rn)]])]))
                    ['m o] [rg (sk + [['at v (stru? ty ? (tsz g ty) (4 * lo32words g ty)) o]]) pre]
                    _ [rg sk pre])))
@@ -2406,8 +2406,10 @@
        (sp64? g ? (go fs) fs))
    ; v6-M: a frame slot off r4, the frame's bottom, its size known once csframe has laid the saves
    (lov6s g fs) (!(v6m? g) ? fs (filter (f \ f @ ('sub 'sp 'sp k) (charm? k) _ ()) fs @ ((_ _ _ k) . _) (t16slots fs k) _ fs))
+   ; xtensa's literal pool goes last, ahead of the fn's label, where no pass reads the head
+   (xtpool g fs) (xt? g ? (xtla g fs) fs)
    ; the frame and emit tail
    (lotail g ir)
-    (dp 'final (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (t2op3 g (deadlabk (cg-refs (g 'fasecs) {}) (? (sp64? g || v6m? g) (t16la ir) (xt? g) (xtla g ir) ir)))))))))))))))))))))))))
+    (dp 'final (xtpool g (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
+     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (t2op3 g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir))))))))))))))))))))))))))
 )) ; module 'moon

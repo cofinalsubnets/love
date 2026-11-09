@@ -159,7 +159,7 @@
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
-             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'l32r 2
              'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'testb 2 'zxl1 1 'zxl2 1 'zxml 3 'ldu1l 3 'ldu2l 3 'ldxbl 5 'ldxhl 5 'set 2 'set1 2 'br 2 'br8 2
              'asis 1 'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
