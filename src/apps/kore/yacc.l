@@ -159,7 +159,8 @@
                         (j >= 0 ? (T + j)
                            (peep tn <>w -1 @ t
                               (t >= 0 ? t (yacc-die (<>w + " is neither a token nor a rule" + yacc-at ln)))))))
-       st (peep G 'start (nts 1))
+       ; the first rule written is the start, a lifted $@N laid ahead of it aside
+       st (peep G 'start (<(filter (x \ !(starts? x "$@")) >nts)))
        _ (peep nn st -1 > 0 ? () (yacc-die (st + " is no rule's name")))
        (rprec rhs pw ln)
         (? pw (peep pr (sym pw ln) () @ l (l ? l (yacc-die (yacc-wshow pw + " has no precedence" + yacc-at ln))))
