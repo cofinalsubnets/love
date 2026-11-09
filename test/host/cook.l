@@ -301,6 +301,19 @@
    _ (ok "a recipe's side-effect write invalidates the date cache" (has? side "NEW"))
 
 
+   ; .DELETE_ON_ERROR: a failed recipe's half-written file goes, as gnu make's; a .PRECIOUS one,
+   ; and one the recipe never touched, stay
+   (doe f) (dir + "/doe" + f + ".h")
+   doesrc (mk [".DELETE_ON_ERROR:" (".PRECIOUS: " + doe "k")
+               (doe "p" + ":") "\techo partial > $@; false"
+               (doe "k" + ":") "\techo partial > $@; false"
+               (doe "u" + ":") "\tfalse"])
+   _ (sh ("echo old > " + doe "u"))
+   _ (each ["p" "k" "u"] (f \ run-cook doesrc (doe f)))
+   _ (ok ".DELETE_ON_ERROR: a failed recipe's file goes" !(two? (stat (doe "p"))))
+   _ (ok ".DELETE_ON_ERROR: a .PRECIOUS file stays" (two? (stat (doe "k"))))
+   _ (ok ".DELETE_ON_ERROR: a file the recipe never touched stays" (two? (stat (doe "u"))))
+
    ; .ONESHELL: a variable set on one line is live on the next; differential against GNU make
    one (run-cook (mk '(".ONESHELL:"
                        ".SHELLFLAGS := -ec"
