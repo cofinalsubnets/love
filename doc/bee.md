@@ -178,6 +178,10 @@ Sessions working in parallel often share one branch, the *base*, and merge into 
 
 A queue is a text kept where it moves only by compare-and-swap: a git ref under **refs/queue/**. The queue **refs/queue/***name* merges into the branch *name*. Read it with **git cat-file -p refs/queue/***name*; a write is **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*.
 
+A tree whose queues are shared by several hosts names their *home*, a git remote every host reaches: **(queue-home "***remote***")** in its **.bee.l**, or **BEE_QUEUE_HOME**. Then the queue there is the queue. Every read first fetches **refs/queue/*** from the home, pruning, into the same refs here, which are only its mirror. Every write is one **git push --atomic** to the home, the queue's ref leased on the value it was read at (**--force-with-lease=refs/queue/***name***:***old*), so a host that read a stale queue is refused and reads again, as with **update-ref**. The same push lays each row's gated head as **refs/queue-heads/***name***/***position*, and drops the heads of rows gone, so a commit a row names is in every host's repository after its next read. The base branch is the home's too: **queue_land** checks the home's branch and says to fetch it before the merge and to push it to the home after the fast gate, and **queue_landed** finds the landing on the home's branch, so a landing counts once it is pushed. With the home on a host apart from the ones that gate, the queue keeps moving while any of those is down.
+
+A queue knows a session by its name alone, so once hives are joined (THE RELAY) a name must be one session's in all of them. A session whose name a live session on another host also holds is refused every queue tool until one of them takes another name (**set_name**). A remote session answers to its own name for the queue's watching, so the watchdog does not take a row written on its host for one whose owner is gone.
+
 ## The text
 
 A queue is lines:
@@ -317,6 +321,9 @@ Send the same note with nothing but a shell:
 
 **BEE_LEASE**
 :   How many seconds a remote card's beat keeps it live, 60 when unset.
+
+**BEE_QUEUE_HOME**
+:   The git remote that holds the queues, over the tree's **(queue-home** *remote***)**; the repository's own refs when neither names one.
 
 **BEE_HOSTS**
 :   The host registry, **~/.love/etc/bee/hosts** when unset.

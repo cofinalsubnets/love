@@ -26,7 +26,7 @@
 
      ; ~/.love/etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
      ; what cannot move the machine's locks
-     bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes]
+     bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes 'queue-home]
      bee-salt (: sf (cite 'salt 'salt-file)
                  u (sf (cite 'path 'nest 0 + "/etc/bee.l") {})
                  t (sf ".bee.l" {})
@@ -198,7 +198,8 @@
             !(uwrite "\(ib)/.\(id)" "from \(from)\nsent \(clock 0 // 1000)\n\n\(text)") "cannot write to \(to)"
             (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
-     (live-names _) (map cap (settled 0))
+     ; a remote cell answers to its name on its host too, which is what a row written there names
+     (live-names _) (: ps (settled 0) (q-uniq (map cap ps + filter (s \ 0 < #s) (map (p \ peep (p 1) "of" "") ps))))
      ; the hud's card, at the login's name: "here" while a hud holds it, "away" after, its
      ; inbox kept either way
      (user-card! st)
@@ -359,12 +360,25 @@
          t)
      bee-me (string? bee-self ? bee-self "love")
      ; every merge queue there is, as it stands at start: git's refs/queue/*
+     ; a tree's queues may live in a remote, (queue-home "REMOTE") or BEE_QUEUE_HOME: read after a fetch
+     ; from it, written by one atomic push with a lease, so every host sees one queue. the heads its rows
+     ; name ride along as refs/queue-heads/NAME/POS, so every host has every commit a row names
+     bee-qhome (: e (getenv "BEE_QUEUE_HOME") v (peep bee-salt 'queue-home ())
+                  (? (string? e && 0 < #e) e (two? v && string? <v) <v ""))
+     (q-home? _) (0 < #bee-qhome)
+     (q-fetch _) ("git fetch -q --prune " + sh-quote bee-qhome
+                  + " '+refs/queue/*:refs/queue/*' '+refs/queue-heads/*:refs/queue-heads/*' 2>/dev/null")
+     ; the base branch as the home has it, fetched; the branch itself without a home
+     (q-base-ref br) (? (q-home? 0) "refs/remotes/\(bee-qhome)/\(br)" br)
+     (q-fetch-base br)
+      (? (q-home? 0) (lush-out ("git fetch -q " + sh-quote bee-qhome + " " + sh-quote "+refs/heads/\(br):refs/remotes/\(bee-qhome)/\(br)" + " 2>/dev/null")) "")
      bee-qcmd
+      ((0 < #bee-qhome ? (q-fetch 0 + "\n") "") +
       """
       for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do
        echo "--- git $r ---"; git cat-file -p "$r"
       done
-      """
+      """)
      bee-queues (lush-out bee-qcmd)
 
      ; --- queue watching: every (queue-watch N) seconds the queues are read again, and a change to this
@@ -506,7 +520,8 @@
      (says? cmd tok) (0 <= find (lush-out (cmd + " && echo " + tok)) tok 0)
      ; [id text], id "none" for a queue not made yet
      (q-read q)
-      (: id (git1 ("rev-parse --verify -q " + sh-quote q))
+      (: _ (? (q-home? 0) (lush-out (q-fetch 0)) "")
+         id (git1 ("rev-parse --verify -q " + sh-quote q))
          (? (0 < #id) [id (lush-out ("git cat-file -p " + sh-quote q))] ["none" ""]))
      ; -> 1 when it landed on old, 0 when someone wrote first
      ; every write drops a gone row's number from the keep line
@@ -514,9 +529,24 @@
       (: text (? (two? (q-keeps text0)) (q-keep text0 "" 0) text0)
          tmp (bee-hive + "/.queue-" + (me 0)) _ (umkdirs bee-hive 448) _ (uwrite tmp text)
          nw (git1 ("hash-object -w " + sh-quote tmp))
-         r (says? ("git update-ref " + sh-quote q + " " + nw + (old = "none" ? " ''" (" " + old))) "landed")
+         r (? (q-home? 0) (q-push q old nw text)
+              (says? ("git update-ref " + sh-quote q + " " + nw + (old = "none" ? " ''" (" " + old))) "landed"))
          _ (unlink tmp)
          r)
+     ; the queue and its rows' heads in one atomic push, the queue's ref leased on old; the heads of
+     ; rows gone are dropped. the mirror here follows -> 1 when it landed
+     (q-push q old nw text)
+      (: nm (q-short q) rows (q-rows text)
+         hs (filter (p \ 0 < #(git-sha ((rows p) 4))) (keys rows))
+         had (filter (l \ 0 < #l) (lines (git1 ("for-each-ref --format='%(refname)' " + sh-quote "refs/queue-heads/\(nm)"))))
+         pre "refs/queue-heads/\(nm)/"
+         gone (filter (r \ !(elem (snip r #pre #r) (keys rows))) had)
+         specs (map (p \ "+\(git-sha ((rows p) 4))" + ":refs/queue-heads/\(nm)/\(p)") hs + map (r \ ":" + r) gone)
+         ok (says? ("git push -q --atomic " + sh-quote ("--force-with-lease=" + q + ":" + (old = "none" ? "" old))
+                    + " " + sh-quote bee-qhome + " " + sh-quote "\(nw):\(q)"
+                    + foldl (\ a x (a + " " + sh-quote x)) "" specs + " 2>/dev/null") "landed")
+         _ (? ok (lush-out (q-fetch 0)) "")
+         ok)
      (q-row? l) (: w (words l) (5 < #w && 0 < #<w && 48 <= <w 0 <= 57))
      (q-note l) (: k (find l "  # " 0) (? (k < 0) "" (snip l (k + 4) #l)))
      (q-leader text) (: w (words (q-line text "leader")) (? (1 < #w) (w 1) ""))
@@ -856,8 +886,16 @@
                                                                   (map v ^#v)))))
                         (keys in))
      (q-name? q) (: s (q-short q) (q-git? q && name-ok? s && s != "." && s != ".."))
+     ; a session whose name a live session on another host also holds: the queue knows a session by its
+     ; name alone, so neither may act on it until one renames
+     (name-clash _)
+      (: i (me 0) cs (filter (p \ remote? (p 1) && peep (p 1) "of" "" = i && live? (p 1)) (settled 0))
+         (? (two? cs) ("the name \(i) is also a live session on " + peep (<cs 1) "host" "?"
+                       + ": the queue knows a session by its name alone, so set_name to a name of your own before any queue tool")
+            ""))
      (q-check in go)
       (? !(q-name? (in "queue")) [0 "a queue is refs/queue/NAME"]
+         (0 < #(name-clash 0)) [0 (name-clash 0)]
          (two? (q-bad in)) [0 ("a field holds a control character, or a space outside a text: " + <(q-bad in))]
          (go in))
      (queue-read in) (q-check in (\ in (: rd (q-read (in "queue")) (? (<rd = "none") [0 ("no queue " + in "queue")] [1 (rd 1)]))))
@@ -1015,15 +1053,16 @@
             (two? (q-unresolved [(r 3) (r 4)])) ("row \(p): " + q-unres-why <(q-unresolved [(r 3) (r 4)]))
             [p r base]))
      ; a row merged onto the base branch whose queue_landed has not yet run
-     (q-merged? q base r) (two? base && 0 < #(git-sha (r 4)) && q-on? (r 4) <base)
+     (q-merged? q base r) (two? base && 0 < #(git-sha (r 4)) && q-on? (r 4) (q-base-ref <base))
      (queue-land in) (q-check in queue-land1)
      (queue-land1 in)
       (: q (in "queue") who (field in "session" (me 0))
          rd (q-read q) text (rd 1) rows (q-rows text)
+         _ (q-fetch-base (q-base-line text @ (b . _) b ""))
          l (? (<rd = "none") ("no queue " + q) (q-landing q who rows text))
          (? (string? l) [0 l]
-            (: p <l r (l 1) br <(l 2) was (l 2 1) fs (q-folds rows p)
-               (: cur (git-sha br) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree br g)
+            (: p <l r (l 1) br <(l 2) was (l 2 1) fs (q-folds rows p) bref (q-base-ref br)
+               (: cur (git-sha bref) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree bref g)
                wt (q-checkout br)
                (? (#cur = 0) [0 "no branch \(br) here"]
                   !(starts? cur was)
@@ -1034,15 +1073,17 @@
                   (mt != gt)
                    [0 "merging \(g) onto \(br) gives the tree \(mt), not the gated tree \(gt): re-merge onto \(br) at \(cur) and re-gate"]
                   [1 (unlines
-                      [("row \(p) (" + who + (two? fs ? (", with row" + (#fs @ 1 " " "s ") + q-joins fs + " folded in") "")
+                      ([("row \(p) (" + who + (two? fs ? (", with row" + (#fs @ 1 " " "s ") + q-joins fs + " folded in") "")
                         + ") lands: its gated head \(g) merges onto \(br) at \(cur) into the tree it gated, \(gt).")
-                       ("in the checkout of " + br + (0 < #wt ? (", " + wt) "") + ":")
-                       ("  git rev-parse \(br)   # must print " + cur)
+                       ("in the checkout of " + br + (0 < #wt ? (", " + wt) "") + ":")]
+                      + (q-home? 0 ? [("  git fetch " + sh-quote bee-qhome + " " + br + " && git merge --ff-only FETCH_HEAD   # the base as " + bee-qhome + " has it")] ())
+                      + [("  git rev-parse \(br)   # must print " + cur)
                        "  git status --short   # must print no one's uncommitted edits"
                        ("  git merge --no-ff \(g) -m " + sh-quote "Merge queue row \(p) (\(who))")
                        ("  git rev-parse 'HEAD^{tree}'   # must print " + gt)
-                       ("  love bee --lock --out " + sh-quote ((0 < #wt ? wt ".") + "/out") + " -- make test   # the fast gate, one make in its out/")
-                       "then queue_landed, which checks the landed tree and drops the row and the rows folded into it. the rows behind wait for it."])])))))
+                       ("  love bee --lock --out " + sh-quote ((0 < #wt ? wt ".") + "/out") + " -- make test   # the fast gate, one make in its out/")]
+                      + (q-home? 0 ? [("  git push " + sh-quote bee-qhome + " " + br + "   # refused when another landing came first: fetch, and land again")] ())
+                      + ["then queue_landed, which checks the landed tree and drops the row and the rows folded into it. the rows behind wait for it."]))])))))
      ; a landing checked: [the new base line's id, the bee files it changed] or why not
      (q-landed-git br was g0)
       (: from (git-sha was) g (git-sha g0) gt (git-tree g)
@@ -1065,7 +1106,8 @@
                   (q-landing q who rows text))
              (? (string? l) [0 l]
                 (: p <l r (l 1) br <(l 2)
-                   lk (q-landed-git br (l 2 1) (r 4))
+                   _ (q-fetch-base br)
+                   lk (q-landed-git (q-base-ref br) (l 2 1) (r 4))
                    (? (string? lk) [0 lk]
                       (: gone (p . q-folds rows p) short <lk
                          ; a landing that changes bee's served code ends the note with the restart line

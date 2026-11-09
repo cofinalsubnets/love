@@ -412,6 +412,47 @@
            (cr-in back "from bee-relay") (cr-in back "too late"))
    0)
 
+; a queue at home: two clones of one bare repo are two hosts. a row joined in one is read in the
+; other, its head fetched with it; a write on a stale read is refused by the lease; a session whose
+; name is live on another host is refused every queue tool
+(: hd (cr-dir "qhome" "")
+   (g d as) (hark (["git" "-C" d "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   (out r) (: s >r (snip s 0 (#s - 1)))
+   home (hd + "/home.git") ca (hd + "/ca") cb (hd + "/cb")
+   _ (hark ["git" "init" "-q" "--bare" "-b" "main" home])
+   _ (map (\ d (: _ (hark ["sh" "-c" ("git clone -q '" + home + "' '" + d + "' 2>/dev/null")]) _ (cr-put d "f" (d + "\n"))
+                  _ (g d ["checkout" "-q" "-b" "main"]) 0)) [ca cb])
+   _ (g ca ["add" "f"]) _ (g ca ["commit" "-q" "-m" "base"]) _ (g ca ["push" "-q" "origin" "main"])
+   _ (g cb ["fetch" "-q" "origin"]) _ (g cb ["reset" "-q" "--hard" "origin/main"])
+   base (out (g ca ["rev-parse" "HEAD"]))
+   _ (g ca ["checkout" "-q" "-b" "ant"]) _ (cr-put ca "f" "ant\n") _ (g ca ["commit" "-q" "-am" "ant"])
+   ah (out (g ca ["rev-parse" "HEAD"]))
+   (row id a) (cr-call id "queue_row" (pin a "queue" "refs/queue/main"))
+   env "BEE_QUEUE_HOME=origin BEE_HOST=hx"
+   _ (cr-put ca "in" (cr-msgs [(row 1 {"state" "waiting" "branch" "ant" "gated_on" base "gated_head" ah "leader" "ant"})]))
+   ra (cr-run ca ("BEE_NAME=ant " + env) ("--mcp < '" + ca + "/in'"))
+   onhome (hark ["git" "--git-dir" home "cat-file" "-p" "refs/queue/main"])
+   _ (cr-put cb "in" (cr-msgs [(cr-call 2 "queue_read" {"queue" "refs/queue/main"})]))
+   rb (cr-run cb ("BEE_NAME=bob " + env) ("--mcp < '" + cb + "/in'"))
+   hasah (hark ["git" "-C" cb "cat-file" "-t" ah])
+   ; a stale lease: cb's mirror is behind once ca writes again, and a push leased on it is refused
+   stale (out (g cb ["rev-parse" "refs/queue/main"]))
+   _ (cr-put ca "in" (cr-msgs [(row 3 {"state" "waiting" "note" "again"})]))
+   _ (cr-run ca ("BEE_NAME=ant " + env) ("--mcp < '" + ca + "/in'"))
+   lease (hark ["sh" "-c" ("git -C '" + cb + "' push -q --force-with-lease=refs/queue/main:" + stale + " origin " + stale + ":refs/queue/main 2>/dev/null")])
+   ; bob's name live on another host
+   hv (cb + "/.love/run/hive")                                  ; cr-run's HOME is the dir it runs in
+   _ (map (\ p (mkdir p 448)) [(cb + "/.love") (cb + "/.love/run") hv (hv + "/bob@hy") (hv + "/bob@hy/inbox")])
+   _ (cr-put (hv + "/bob@hy") "card" "pid 1\nhost hy\ncwd /x\nmodel claude-code\nstate idle\nsince 0\nof bob\nvia hy\n")
+   _ (cr-put (hv + "/bob@hy") "beat" (show (clock 0 // 1000) + "\n"))
+   _ (cr-put cb "in" (cr-msgs [(cr-call 4 "queue_read" {"queue" "refs/queue/main"})]))
+   rc (cr-run cb ("BEE_NAME=bob " + env) ("--mcp < '" + cb + "/in'"))
+   _ (test (0 = <ra) (0 = <onhome) (cr-in >onhome ("1 ant ant " + base + " " + ah + " waiting"))
+           (cr-in (cr-text (cr-byid (rb 1)) "2") ("1 ant ant " + base + " " + ah)) (cr-in >hasah "commit")
+           (0 != <lease)
+           (cr-in (cr-text (cr-byid (rc 1)) "4") "the name bob is also a live session on hy"))
+   0)
+
 ; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
 ; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")
