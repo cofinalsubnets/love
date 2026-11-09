@@ -1652,6 +1652,8 @@
    (anat-defs bs) (atom? >bs ? [() <bs]             ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
                      (: r (anat-defs >>bs)
                         [((<bs . <>bs) . <r) <>r]))
+   ; the float DAG reads every compound as (op a b): a recurrence still spelling re, im or a call is not one
+   (anat-fop? e) (atom? e ? 1 (e @ [op a b] (elem op '(+ - * /) && anat-fop? a && anat-fop? b) 0))
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))
    ; the recurrence pair: a (? (? A _ A) (SELF ..) ..), a lowered &&, whose then-branch self-calls (head = its own name)
    (anat-rec? p) (: nm <<p
@@ -2359,7 +2361,7 @@
                 (: fnames (map fnname pairs)
                    pt {} chg {}                                   ; [fn i] -> 1 if param i of fn is twin
                    ; twin-type inference under env (param-name -> twin bool)
-                   (tty e env) (atom? e ? (peep env e 0)
+                   (tty e env) (atom? e ? (twin? e || peep env e 0)                      ; a folded twin literal is a twin
                                   (e @ ('twin . _) 1
                                        (('re || 'im) . _) 0
                                        (('+ || '- || '*) a b) (tty a env || tty b env)
@@ -2392,7 +2394,7 @@
                                  (: op <e (memq op fnames ? (op . splitargs op >e 0 env nm)
                                                (op . map (a \ loR a env nm) >e)))))
                          (loT2 e env nm) (tty e env ? (loT e env nm) (loR e env nm . 0.0))
-                         (loT e env nm) (atom? e ? (peep nm e (e . e))
+                         (loT e env nm) (atom? e ? (twin? e ? (re e . im e) (peep nm e (e . e)))
                             (e @ ['twin u v] (loR u env nm . loR v env nm)
                                  ['twin u] (tty u env ? (: p (loT u env nm) (<p . negf >p)) (loR u env nm . 0.0))
                                  ['+ u v] (: a (loT2 u env nm) b (loT2 v env nm) (mkadd <a <b . mkadd >a >b))
@@ -2433,7 +2435,8 @@
                             (!(two? outerp) ? form
                                (: chain (loopchain <<outerp pairs recnm)
                                   D #chain M #invs N #fvars
-                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7) ? form
+                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7
+                                     && all anat-fop? (testexpr . updates)) ? form
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)

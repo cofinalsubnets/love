@@ -257,6 +257,17 @@
                  col))
    _ (test (show [(gzg-s 0 0) (gzg-s 1 0) (gzg-s 0 5) (gzg-s 0 1.5) (gzg-s 3 0) (gzg-s 0 0.0)] = "(6 3 11 7.5 0 6.0)")
            ([(gzg-c 0 0 0) (gzg-c 0 4990 0) (gzg-c 1 4999 7)] = [5000 10 8]))
+   ; a constant twin folds to a twin literal, which lowers as a twin; a recurrence left spelling re and im stays the twin's
+   gzg-t (ev '(: (mand c z it)
+                 (it < 3 && re z * re z + im z * im z <= 4.0 ? (mand c (z * z + c) (it + 1)) it)
+                 (col px py acc) (py < 5000 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                 [(mand (3.0 ~ 1247.5) (0.0 ~ 0.0) 0) (mand (3.0 ~ 1247.5) (0.0 ~ 0.0) 0) (col 0 4990 0)]))
+   ; the constants spelled in the source, (mand c z 0) at each cell of a 50-cell loop
+   (gzg-k cz) (ev (': . ['(mand c z it) '(it < 3 && re z * re z + im z * im z <= 4.0 ? (mand c (z * z + c) (it + 1)) it)
+                         '(col px py acc) ['? '(py < 50) ['col 'px '(py + 1) ['+ 'acc ['mand <cz <>cz 0]]] 'acc]
+                         '(col 0 0 0)]))
+   _ (test (gzg-t = [1 1 10])
+           (map gzg-k [[(5.0 ~ 1.0) (0.0 ~ 0.0)] [(0.1 ~ 0.2) (0.0 ~ 0.0)] [5 0] [5.0 0.0]] = [50 150 50 50]))
    ; the host row's word is the vm's: a charm holds 8w-1 bits, signed
    _ (G 'targets love-arch @ row
         (row == () ? 0
