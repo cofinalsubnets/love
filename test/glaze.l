@@ -268,6 +268,21 @@
                          '(col 0 0 0)]))
    _ (test (gzg-t = [1 1 10])
            (map gzg-k [[(5.0 ~ 1.0) (0.0 ~ 0.0)] [(0.1 ~ 0.2) (0.0 ~ 0.0)] [5 0] [5.0 0.0]] = [50 150 50 50]))
+   ; a nest off the native's shape is the interp's: an inner call's start and acc, the recurrence's starts, a step
+   gzg-m '(mand c z it)  gzg-mb '(it < 3 && re z * re z + im z * im z <= 4.0 ? (mand c (z * z + c) (it + 1)) it)
+   gzg-o '(grid px acc)  gzg-ob '(px < 4 ? (grid (px + 1) (acc + col px 0 0)) acc)
+   (gzg-i k a) (ev (': . [gzg-m gzg-mb '(col px py acc) '(py < 8 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                          gzg-o ['? '(px < 4) ['grid '(px + 1) ['+ 'acc ['col 'px k a]]] 'acc] '(grid 0 0)]))
+   (gzg-r z i) (ev (': . [gzg-m gzg-mb '(col px py acc) ['? '(py < 8) ['col 'px '(py + 1) ['+ 'acc ['mand '((3.0 + px * 0.25) ~ (py * 0.25)) z i]]] 'acc]
+                          gzg-o gzg-ob '(grid 0 0)]))
+   (gzg-p st) (ev (': . [gzg-m gzg-mb '(col px py acc) ['? '(py < 8) ['col 'px ['+ 'py st] '(acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)] 'acc]
+                         gzg-o gzg-ob '(grid 0 0)]))
+   _ (test (map (ka \ gzg-i <ka <>ka) [[0 0] [5 0] [0 100] [7 1]] = [32 12 432 8])
+           (map (zi \ gzg-r <zi <>zi) [[(0.0 ~ 0.0) 0] [(0.0 ~ 0.0) 2] [(1.5 ~ 1.5) 0] [(0.0 ~ 0.0) 5]] = [32 96 0 160])
+           (map gzg-p [1 2 3] = [32 16 12])
+           (ev (': . [gzg-m '(it < 3 && re z * re z + im z * im z <= 4.0 + 0 * it ? (mand c (z * z + c) (it + 1)) it)
+                      '(col px py acc) '(py < 8 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                      gzg-o gzg-ob '(grid 0 0)]) = 32))
    ; the host row's word is the vm's: a charm holds 8w-1 bits, signed
    _ (G 'targets love-arch @ row
         (row == () ? 0
