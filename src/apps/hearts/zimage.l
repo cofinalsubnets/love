@@ -6,7 +6,8 @@
 ; the parts lie on MiB bounds, each `at` where the one before it ends.
 ; usage: love -l src/apps/sqfs.l -l src/apps/ext4.l zimage.l OUT LOVE IMAGE DTB FW [STAMP]
 ;   writes OUT/disk.img; LOVE is a baked a64 love, IMAGE the kernel, DTB the board's, FW the
-;   firmware's directory (bootcode.bin start.elf fixup.dat LICENCE.broadcom), STAMP the one time
+;   firmware's directory (bootcode.bin start.elf fixup.dat LICENCE.broadcom, and wifi/, the root's
+;   /lib/firmware, where it has one), STAMP the one time
 ;   every file carries (seconds, default 0): the same inputs give the same bytes on any host.
 (borrow '(bytes posix fat sqfs ext4 hashes))
 (: ; its words are the ones after its own name, whatever loaded ahead of it
@@ -95,6 +96,7 @@
         ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)]])]
         ["boot" (dir ())] ["data" (dir ())] ["dev" (dir ())]
         ["etc" (dir [["helm.l" (fil 420 helm-conf)] ["version" (fil 420 (ver + "\n"))]])]
+        ["lib" (dir (two? (readdir wifi) ? [["firmware" (sqfs-tree wifi)]] ()))]
         ["proc" (dir ())] ["run" (dir ())] ["sys" (dir ())] ["tmp" (dir ())]
         ["usr" (dir [["bin" (dir ())] ["src" (dir ())]])]])
    ; helm is four files catted into one script, run by love as the kernel's init
@@ -127,6 +129,7 @@
    kernel (rd (as 2))
    dtb (rd (as 3))
    (fw f) (rd (as 4 + "/" + f))
+   wifi (as 4 + "/wifi")
    stamp (#as > 5 ? (read (as 5)) 0)
    r1 (sqfs-make (root love "v1") stamp 'zlib)
    rsz (32 * mib)
