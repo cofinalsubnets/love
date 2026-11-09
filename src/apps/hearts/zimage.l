@@ -24,6 +24,8 @@
                      + string 0xFE + string 0xFF + string 0xFF + le at 4 + le n 4))
    (sect lead es) (lead + join "" es + zbytes (64 - 16 * #es) + string 0x55 + string 0xAA)
    sig (snip (hex2b (sha256 "hearts rung 2 disk")) 0 4)   ; the same signature every build
+   ; a part by the signature, as the kernel names MBR parts: no mmcblk number to guess
+   (puuid n) ("PARTUUID=" + b2hex (string (rev (chars sig))) + "-" + zpad 2 (show n))
    (mbr ps) (sect (zbytes 440 + sig + zbytes 2) ps)
    ; an EBR at e: its part from e, and the next EBR from the extended part's start x
    (ebr e at n nx nn x) (sect (zbytes 446) [(ent 0x83 (at - e) n) (ent 0x05 (nx - x) nn)])
@@ -105,7 +107,7 @@
    _ (#r1 <= rsz * 512 || gone "a root outgrows its slot")
    asz (64 * mib)  fsz (128 * mib)  dsz (64 * mib)
    auto (fatimg asz [["autoboot.txt" autoboot] ["bootcode.bin" (fw "bootcode.bin")]])
-   boota (fatimg fsz [["config.txt" config] ["cmdline.txt" (cmd "/dev/mmcblk0p5")]
+   boota (fatimg fsz [["config.txt" config] ["cmdline.txt" (cmd (puuid 5))]
                       ["start.elf" (fw "start.elf")] ["fixup.dat" (fw "fixup.dat")]
                       ["LICENCE.broadcom" (fw "LICENCE.broadcom")]
                       ["Image" kernel] ["bcm2837-rpi-zero-2-w.dtb" dtb]])
