@@ -1652,6 +1652,8 @@
    (anat-defs bs) (atom? >bs ? [() <bs]             ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
                      (: r (anat-defs >>bs)
                         [((<bs . <>bs) . <r) <>r]))
+   ; the float DAG reads every compound as (op a b): a recurrence still spelling re, im or a call is not one
+   (anat-fop? e) (atom? e ? 1 (e @ [op a b] (elem op '(+ - * /) && anat-fop? a && anat-fop? b) 0))
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))
    ; the recurrence pair: a (? (? A _ A) (SELF ..) ..), a lowered &&, whose then-branch self-calls (head = its own name)
    (anat-rec? p) (: nm <<p
@@ -1669,11 +1671,16 @@
        (a @ ^recnm [[cnt bnd u]]                    ; innermost: the recurrence call's args
         (: rest (loopchain a pairs recnm)
          (two? rest ? ([cnt bnd ()] . rest))))))
-   ; rebuild a : binding list, replacing the outermost loop's body with (native 0)
+   ; rebuild a : binding list, the outermost loop's body (native 0) where every param is the fixnum 0, the nest's
+   ; own start, else its own body; == and the native ride as values, so no binding of the form can respell them
+   (anat-zero? ps) (atom? ps ? 1 ['? [(==) <ps 0] (anat-zero? >ps) 0])
    (anat-rebind bs outernm ng)
     (atom? >bs ? bs
      (: nm <bs bd <>bs
-      (nm . (two? nm && <nm = outernm ? [ng 0] bd) . anat-rebind >>bs outernm ng)))
+      (nm . (two? nm && <nm = outernm ? ['? (anat-zero? >nm) [ng 0] bd] bd) . anat-rebind >>bs outernm ng)))
+   ; the twin of (native 0): the binding list answering the outermost loop, called at its start
+   (anat-drive bs outer) (atom? >bs ? [<outer] (<bs . <>bs . anat-drive >>bs outer))
+   (anat-twin bs outer) ['\ '_ ((': . anat-drive bs outer) . map (p \ 0) >outer)]
    ; --- autogroup: the maximal closed subset of a `:`'s mutually-recursive arithmetic fns (groupok?'s fragment; a fn calling
    ;     out drops, with its callers), each binding rewritten to its own native while the calls among the group stay in the buffer
    ; --- lambda-lifting: a body ((: (g q..) GBODY) inits..) lifts g to a top-level (g' FV.. q..), FV the enclosing params free
@@ -2357,7 +2364,7 @@
                 (: fnames (map fnname pairs)
                    pt {} chg {}                                   ; [fn i] -> 1 if param i of fn is twin
                    ; twin-type inference under env (param-name -> twin bool)
-                   (tty e env) (atom? e ? (peep env e 0)
+                   (tty e env) (atom? e ? (twin? e || peep env e 0)                      ; a folded twin literal is a twin
                                   (e @ ('twin . _) 1
                                        (('re || 'im) . _) 0
                                        (('+ || '- || '*) a b) (tty a env || tty b env)
@@ -2390,7 +2397,7 @@
                                  (: op <e (memq op fnames ? (op . splitargs op >e 0 env nm)
                                                (op . map (a \ loR a env nm) >e)))))
                          (loT2 e env nm) (tty e env ? (loT e env nm) (loR e env nm . 0.0))
-                         (loT e env nm) (atom? e ? (peep nm e (e . e))
+                         (loT e env nm) (atom? e ? (twin? e ? (re e . im e) (peep nm e (e . e)))
                             (e @ ['twin u v] (loR u env nm . loR v env nm)
                                  ['twin u] (tty u env ? (: p (loT u env nm) (<p . negf >p)) (loR u env nm . 0.0))
                                  ['+ u v] (: a (loT2 u env nm) b (loT2 v env nm) (mkadd <a <b . mkadd >a >b))
@@ -2431,11 +2438,12 @@
                             (!(two? outerp) ? form
                                (: chain (loopchain <<outerp pairs recnm)
                                   D #chain M #invs N #fvars
-                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7) ? form
+                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7
+                                     && all anat-fop? (testexpr . updates)) ? form
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
-                                        glam ['\ '_ form]        ; the interp nest: deopt fallback and =/show
+                                        glam (anat-twin >form <outerp)        ; the interp nest at its start: deopt fallback and =/show
                                         ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)
                                         (lit? ng ? (': . anat-rebind >form <<outerp ng) form))))))
                          form)))))))
