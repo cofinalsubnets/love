@@ -34,6 +34,9 @@
    rr-pc32  57                                      ; R_RISCV_32_PCREL  S + A - P in four bytes (a jump table's entry)
    rr-jal   17                                      ; R_RISCV_JAL       S + A - P into jal's j-imm
    rr-call  19                                      ; R_RISCV_CALL_PLT  S + A - P across the auipc pair
+   ; ... xtensa: slot0 is a j's or call0's offset, whichever opcode holds the field
+   xr-32    1                                       ; R_XTENSA_32       S + A  in four bytes
+   xr-slot0 20                                      ; R_XTENSA_SLOT0_OP S + A into slot 0's pc-relative offset
 
    (o-has? tab k) (peep tab k 'no !== 'no)
    ; a lane's file size; an item may be a blob of many bytes
@@ -76,6 +79,8 @@
                                  (rev bs + bacc) racc))
                     (: fill (? (elem k a64-afixk) (le32 (afix-w (fix-a x)))
                                (elem k '(b14 j21)) (le32 (fix-a x))
+                               ; xtensa: a j or call0 with a zero offset, its opcode telling slot0 which
+                               (k == 'j18) [6 0 0]  (k == 'call0) [5 0 0]
                                ; riscv 'pcrel: aux packs both base words, auipc low, the I-insn high
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
                                ; arm is REL: a thumb branch holds its encoding with the -4 addend
@@ -828,14 +833,15 @@
        adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
-       ; rv32 lays this same RELA shape in the ELF32 class
-       w32 (target = 'rv32)
-       rv (target = 'rv64 || w32)
-       _ (target = 'x64 || a64 || rv ? 0 (scare 'obj-target target))
+       ; rv32 and xtensa lay this same RELA shape in the ELF32 class
+       xt (target = 'xtensa)
+       w32 (target = 'rv32 || xt)
+       rv (target = 'rv64 || target = 'rv32)
+       _ (target = 'x64 || a64 || rv || xt ? 0 (scare 'obj-target target))
        esym (w32 ? elf-sym32 elf-sym)  eshdr (w32 ? elf-shdr32 elf-shdr)  erela (w32 ? o-rela32 o-rela)
        symz (w32 ? 16 24)  rlz (w32 ? 12 24)  shz (w32 ? 40 64)  wa (w32 ? 4 8)
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
-       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) '(rel32 pc32 rel8 rel16 pc8))
+       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) xt '(j18 call0 l32r) '(rel32 pc32 rel8 rel16 pc8))
        drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
        machine (peep elf-machines target 0)
        ; a cross backend joins at runtime; unregistered, lay would lower nothing, silently
@@ -950,7 +956,7 @@
               (k @
                  ; aux is the constant byte offset of a &arr[i] / &s.field
                  'abs64 (erela off si rabs (sa + aux))
-                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 r-32) (sa + aux))
+                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 r-32) (sa + aux))
                  ('abs32s || 'abs32d) (erela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
                  'abs16 (erela off si r-16 (sa + aux))
                  'abs8 (erela off si r-8 (sa + aux))
@@ -981,6 +987,7 @@
                  'adr21 (erela off si ra-adrlo21 (sa + afix-ad aux))
                  'pcrel (erela off si rr-call sa)
                  'j21 (erela off si rr-jal sa)
+                 ('j18 || 'call0) (erela off si xr-slot0 sa)
                  (scare 'obj-fix k))))
            rs))
        relas (map (o-rels * ln-rl) lanes)
@@ -1032,7 +1039,7 @@
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, e_machine, version
              (w32 ? (le32 0 + le32 0 + le32 sht-off)                      ; e_entry=0, e_phoff=0, e_shoff
                  (le64 0 + le64 0 + le64 sht-off))
-             (le32 (? w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft), e_ehsize, e_phentsize=0
+             (le32 (? xt 768 w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit), e_ehsize, e_phentsize=0
              (le16 0) (le16 shz) (le16 nsh)                               ; e_phnum=0, e_shentsize, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
        (catall ([hdr]

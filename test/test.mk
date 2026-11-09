@@ -5,7 +5,7 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccwasm test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -49,9 +49,9 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
-	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 \
-	test_virt test_thumb1 test_thumb2 test_thumb2sp \
+	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_nucleo446_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
@@ -416,7 +416,7 @@ test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
 	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
 # every test/cc/*.c by `mooncc -t $*`, plain and -Os, held to its references; the table is in ccbat.sh
-test_cca64 test_ccrv64 test_ccrv32 test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
+test_cca64 test_ccrv64 test_ccrv32 test_ccxtensa test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
 	@$(gsh) test/gate/ccbat.sh $* $(ho) $m
 # c-testsuite held to its shipped stdout, misses rostered in cts.sh
 test_cts: host
@@ -556,6 +556,9 @@ endif
 # the ELF32/EM_ARM writer and 32-bit model: cross-object BL, soft divide, `la`, a gcc struct,
 # a pointer table in a named section; ld32.l reads it back.
 #   thumb2sp the SP-only FPU: f64 softens, qemu's mps2-an386 faults on any that slip
+# holo's xtensa backend, its law laid as one linux program on qemu-xtensa
+test_xtensa: host
+	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
 test_thumb1 test_thumb2 test_thumb2sp: test_%: host
 	@$(gsh) test/gate/thumb.sh $* $(ho)
 # love on the metal by mooncc and our linker; exit 42 = laws held, 98 = a trap.

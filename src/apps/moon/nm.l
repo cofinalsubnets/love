@@ -17,8 +17,8 @@
    nmcc {'eq (a \ b \ a = b) 'ne (a \ b \ a != b) 'lt (a \ b \ a < b) 'le (a \ b \ a <= b)
          'gt (a \ b \ b < a) 'ge (a \ b \ b <= a) 'below (a \ b \ nmu a < nmu b) 'be (a \ b \ nmu a <= nmu b)
          'above (a \ b \ nmu b < nmu a) 'ae (a \ b \ nmu b <= nmu a)}
-   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv? g) (elem xo '(ldx ldxb ldxh) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
-   (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo (rv? g && nelem xo '(stx stxb) ? () xo)))
+   (nmxop g op) (t32? g ? (nmxl32 op) (nmxld op @ () () xo (? (x86? g) xo (rv? g || xt? g) (elem xo '(ldx ldxb ldxh) ? xo) (nelem xo '(ldxw ldxsw) ? xo))))
+   (nmxsop g op) (? (v6m? g) () (t32? g) (nmxs32 op) (nmxst op @ () () xo ((rv? g || xt? g) && nelem xo '(stx stxb) ? () xo)))
    ; a64 lays these through x16, so their displacement has to encode in the one instruction
    nmxw {'ldxh 2 'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
    (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))

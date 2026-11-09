@@ -344,7 +344,8 @@
                'arm 'arm  'armv7l 'arm  'armv8l 'arm  'armhf 'arm
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp
                'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
-               'i386m16 'i386m16}
+               'i386m16 'i386m16
+               'xtensa 'xtensa  'esp32 'xtensa}
    ; uname's machine and a gnu triple's head; () for the embedded targets
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; main.c pins `love-os` per run off __love_osv: one binary meets four kernels
