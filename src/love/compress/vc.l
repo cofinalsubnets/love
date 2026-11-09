@@ -218,6 +218,9 @@
      ? ((A . ['inf-blk (lk v A) (tm sp v i) (has? v B ? (lk v B) B) (tm sp v j) n]) . v)
      v)
    (mentions? x t) (t == x || two? t && (mentions? x <t || mentions? x >t))
+   ; a term built at a loop's head names what stood there: nothing bound since may catch it
+   (since h top) (h == top || atom? h ? () (<<h . since >h top))
+   (caught L t h top) (any (n \ mentions? n t) (since h top) ? (quit-on "inf: a name bound inside \(L) catches its measure") 0)
    (loop sp L x from to by invs body rest v hy k)
     (: w (writes sp body)
        names (uniq (map (a \ <a) v))
@@ -233,7 +236,8 @@
        TO (tm sp head to)
        entry (map (i \ (sub ((x . tm sp v from) . v) <>i)) invs)
        (back v2 h2)
-        (: step (by = () ? ['succ x] ['add x (tm sp v2 by)])
+        (: _ (caught L TO h2 hy3)
+           step (by = () ? ['succ x] ['add x (tm sp v2 by)])
            stepped ((x . step) . v2)
            _ (tm sp stepped to = TO ? 0 (quit-on "inf: \(L)'s bound moves"))
            (vcs "\(L)b" ((by = () ? () (ob sp v2 by)) + [(fit step)]
@@ -259,7 +263,7 @@
        hy3 (('cx . nm) . (hinv + (bind + hy)))
        M (sub head m)
        entry (map (i \ (sub v <>i)) invs)
-       (back v2 h2) (vcs "\(L)b" (map (i \ (sub v2 <>i)) invs + [['inf-lt (sub v2 m) M]]) h2)
+       (back v2 h2) (caught L M h2 hy3, vcs "\(L)b" (map (i \ (sub v2 <>i)) invs + [['inf-lt (sub v2 m) M]]) h2)
        (after v2 h2) (run sp rest v2 h2 k)
        up (sp 'brk)
        _ (pin sp 'brk after)

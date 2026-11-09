@@ -398,6 +398,7 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
+src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, then the headers regenerate
 test_clay: host
 	@echo TEST test/gate/clay.l "(clay G1: (cparse (clay-show c)) == c over test/cc)"

@@ -559,7 +559,9 @@
     [["limbs" "every limb a magnitude holds is under B = 2^L" "love_limb is L bits: L = limb_bits"]
      ["dlimb" "a dlimb holds 2L bits" "love.h's dlimb"]
      ["sizes" "na and nb are counts, nb <= na, r holds na + 1 (na for sub), and na + 1 fits an int" "mag_add, which orders them, and the callers"]
-     ["order" "sub's b is at most its a" "big_addsub, by mag_cmp"]]
+     ["order" "sub's b is at most its a" "big_addsub, by mag_cmp"]
+     ["window" "divstep's w[0..n] is under B times v, and v is not zero" "mag_divmod and lvm_bdiv: dnorm's top limb, then each step's e3"]
+     ["qhat" "mag_qhat is the quotient limb or one over, knuth's theorem b (taocp 4.3.1), the one fact left unproved; divstep is right for any limb q, so it bounds only the fix-ups' cost" "mag_qhat in num.c"]]
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
    mag-vc (cats ["; test/uumagvc.l -- laid by src/love/mag.l, `make mx`. edit that file.\n"
                  "; the ledger: what the theorems leave open, each with who answers for it\n"
