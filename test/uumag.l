@@ -479,4 +479,50 @@
    (lam P g (fromempty P (nopathstruetofalse (maponpaths nat bool (lam z (natgtb z 0)) 1 0 g)))))
  (defq un-01 (pi P UU g (paths nat 0 1) P)
    (lam P g (fromempty P (nopathsfalsetotrue (maponpaths nat bool (lam z (natgtb z 0)) 0 1 g)))))
+ ; the normaliser's swaps: x + (y + r) = y + (x + r), and as products
+ (defq un-pswap (pi x nat y nat r nat (paths nat (add x (add y r)) (add y (add x r))))
+   (lam x y r (pathscomp0 nat (add x (add y r)) (add (add x y) r) (add y (add x r))
+     (pathsinv0 nat (add (add x y) r) (add x (add y r)) (natplusassoc x y r))
+     (pathscomp0 nat (add (add x y) r) (add (add y x) r) (add y (add x r))
+       (maponpaths nat nat (lam z (add z r)) (add x y) (add y x) (natpluscomm x y))
+       (natplusassoc y x r)))))
+ (defq un-mswap (pi x nat y nat r nat (paths nat (mul x (mul y r)) (mul y (mul x r))))
+   (lam x y r (pathscomp0 nat (mul x (mul y r)) (mul (mul x y) r) (mul y (mul x r))
+     (pathsinv0 nat (mul (mul x y) r) (mul x (mul y r)) (natmultassoc x y r))
+     (pathscomp0 nat (mul (mul x y) r) (mul (mul y x) r) (mul y (mul x r))
+       (maponpaths nat nat (lam z (mul z r)) (mul x y) (mul y x) (natmultcomm x y))
+       (natmultassoc y x r)))))
+ ; --- divstep's lemmas ---
+ ; a limb written under B keeps every limb under B
+ (defq un-updlt (pi B nat R (pi j nat nat) k nat x nat g (pi j nat (inf-lt (R j) B)) gx (inf-lt x B)
+     (pi j nat (inf-lt (inf-upd R k x j) B)))
+   (lam B R k x g gx (lam j (inf-case (inf-eqb k j) (lam y (inf-lt (bool_rect (lam b nat) x (R j) y) B))
+     (lam e gx)
+     (lam e (g j))))))
+ ; x + q v = a + b P with x < P and b > 0: q >= 1
+ (defq un-qpos (pi P nat X nat Q nat V nat A nat b nat e (paths nat (add X (mul Q V)) (add A (mul b P)))
+     gx (inf-lt X P) gb (inf-lt 0 b) (inf-le 1 Q))
+   (lam P X Q V A b e gx gb
+     ((nat_rect (lam q (pi e (paths nat (add X (mul q V)) (add A (mul b P))) (inf-le 1 q)))
+        (lam e (inf-ltnle (inf-le 1 0) X (add A (mul b P))
+          (inf-lttrans X P (add A (mul b P)) gx
+            (inf-letrans P (mul b P) (add A (mul b P)) (un-mulle2 1 b P (inf-ltsu 0 b gb)) (inf-leaddl (mul b P) A)))
+          (inf-eqle (add A (mul b P)) X
+            (pathscomp0 nat (add A (mul b P)) (add X 0) X (pathsinv0 nat (add X 0) (add A (mul b P)) e) (natplusr0 X)))))
+        (lam k IH e (idpath false))
+        Q) e)))
+ ; a v <= x < B v: a < B
+ (defq un-qlt (pi a nat V nat X nat B nat g (inf-le (mul a V) X) h (inf-lt X (mul B V)) (inf-lt a B))
+   (lam a V X B g h (inf-case (natgtb B a) (lam y (paths bool y true))
+     (lam e (idpath true))
+     (lam e (inf-ltnle (paths bool false true) X (mul B V) h
+       (inf-letrans (mul B V) (mul a V) X (un-mulle2 B a V e) g))))))
+ ; limbs equal below n: values equal
+ (defq un-valcong (pi B nat A (pi j nat nat) A2 (pi j nat nat) n nat e (pi j nat (paths nat (A j) (A2 j)))
+     (paths nat (un-val B A n) (un-val B A2 n)))
+   (lam B A A2 n e (nat_rect (lam q (paths nat (un-val B A q) (un-val B A2 q)))
+     (idpath 0)
+     (lam q IH (un-add2 (un-val B A q) (un-val B A2 q) (mul (A q) (uu-app q B)) (mul (A2 q) (uu-app q B)) IH
+       (maponpaths nat nat (lam z (mul z (uu-app q B))) (A q) (A2 q) (e q))))
+     n)))
 )

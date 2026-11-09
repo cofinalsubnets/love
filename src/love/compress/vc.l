@@ -194,6 +194,7 @@
                         (_ 'while _ _ _ b) (writes sp b)
                         (_ 'havoc x _) [x]
                         (_ 'havw x _ _) [x]
+                        (_ 'havl x _ _) [x]
                         (_ 'gset x _) [x]
                         (_ 'join _ _ th el _) (writes sp th + writes sp el)
                         (_ 'call f _ _ os) (written (callee sp f) os)
@@ -361,6 +362,11 @@
              (: y (fresh L x)
               (vcs (show L) (ob sp v e) hy
                + run sp >ss ((x . y) . v) ((g . ['inf-lt y ['inf-pow (tm sp v 'w)]]) . ((y . 'nat) . hy)) k))
+            ; and a limb what fits a limb
+            (L 'havl x e g)
+             (: y (fresh L x)
+              (vcs (show L) (ob sp v e) hy
+               + run sp >ss ((x . y) . v) ((g . ['inf-lt y (lbase sp)]) . ((y . 'nat) . hy)) k))
             (L 'ghost x e g) (run sp >ss ((x . x) . v) ((g . ['paths 'nat x (sub v e)]) . ((x . 'nat) . hy)) k)
             (L 'poke A i e) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]] + ob sp v e) hy
                              + run sp >ss (poked sp v A i e 1) hy k)
@@ -631,6 +637,7 @@
          (L 'raw c) c
          (L 'havoc x e) (cl-set sp x e)
          (L 'havw x e _) (cl-set sp x e)
+         (L 'havl x e _) (cl-set sp x e)
          (L 'dstore f e) ['expr ['asn ['dot ['deref ['var "d"]] f] (cl sp e)]]
          (L 'ptr x A i) ['expr ['asn ['var (string x)] ['bin '+ (base sp A) (cl sp i)]]]
          (L 'dec x e) (cl-set sp x e)
