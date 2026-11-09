@@ -30,62 +30,51 @@ and only to bake the heap image.
 
 ## Console
 
+Two at once, the same REPL on both. The Teensy's own USB is a CDC-ACM port (`usb.c`,
+USB1's ChipIdea controller held at full speed, under `../usbcdc.h`'s class half), seen
+as `usb-love_inle_teensy41_1-if00`; output goes only while a host holds DTR. And
 LPUART6 on **pin 0 (RX1) / pin 1 (TX1)** at 115200 8N1, over a 3.3 V USB-serial
-adapter -- the analogue of the rp2040 port's UART0 console. The REPL line editor
-in `src/love/boot/post.l` drives it exactly as it drives the kernel's. USB CDC (so the
-Teensy's own USB shows up as the console, no adapter) is the obvious next step
-and a **TODO** -- bare-metal device USB on the RT1062 is a substantial chunk.
+adapter, which also carries the boot banner and fault reports. The REPL line editor
+in `src/love/boot/post.l` drives both exactly as it drives the kernel's.
 
 ## Memory & boot
 
 The i.MX RT1062 boot ROM reads the **FlexSPI Configuration Block** at flash base
 (`0x60000000`), the **Image Vector Table** at `0x60001000`, and the **Boot
 Data** that follows, then jumps to our startup. `teensy41.c` supplies all three
-plus the crt0 (FPU enable, `.data`/`.bss`, VTOR, clocks, console). We run all
-RAM -- `.data`, `.bss`, the love heap pool, and the C stack -- out of the
-dedicated 512 KB **OCRAM2** at `0x20200000`, which is mapped at reset
-independent of the FlexRAM split, so the scaffold needs no FlexRAM
-reconfiguration to have working memory.
+plus the crt0 (FPU enable, `.data`/`.bss`, VTOR, clocks, console). `.data`, `.bss`
+and the C stack live in the 512 KB **OCRAM2** at `0x20200000`, mapped at reset
+whatever the FlexRAM split; the love heap is the 16 MB PSRAM on FlexSPI2
+(`psram.c`), with an OCRAM pool as the fallback when no PSRAM answers.
 
-## Status: boots + serial console verified on hardware (2026-07-12)
+## Status: a live shell on hardware (2026-11-07)
 
-First silicon ride: the board **boots XIP from flash and runs to `main`** (the
-FlexSPI config block / IVT / boot-data / crt0 / clocks path is proven), and the
-**LPUART6 console works both directions** at 115200 over an RPi Debug Probe UART
-bridge. Two register bugs surfaced and were fixed against PJRC's `cores/teensy4`
-as the authority (treat every offset here as verify-first -- these are lifted
-from the i.MX RT1060 RM):
+The board boots XIP from flash, brings the core to 600 MHz, finds the PSRAM, wakes the image
+baked under qemu (`src/inle/mps2`'s baker) and runs the REPL over LPUART6 at 115200:
 
-- **TX pad drive** -- `serial_init` set the pin *mux* but never the pad *control*
-  (drive strength). The mux routes the LPUART TX signal to the pad, but a pad at
-  its reset-default driver never drove the line: TDRE asserted and bytes clocked
-  out with the wire idle. Fixed by writing `SW_PAD_CTL` = `0x10B0` for both pads.
-- **RX daisy** -- `IOMUXC_LPUART6_RX_SELECT_INPUT` was at `+0x520`; the real
-  register is the SECOND IOMUXC block (`base+0x400`) offset `0x150`, i.e.
-  `+0x550`. With the wrong offset the receiver's pad-select stayed at reset
-  default, so RX heard nothing while TX (which drives its pad directly) worked.
+```
+; inle/teensy41
+; core 600 MHz
+; psram arena up
+; image awake
+; image hatched -- shell up
+> (+ 2 3)
+5
+```
 
-**Still open -- the egg double-bake does not complete on hardware.** The board
-boots and prints the `baking the egg` banner, but the self-hosting double-bake
-never reaches the new `; egg hatched -- shell up` marker (>14 min, solid LED, no
-scare face). Prime suspects, in order: the ROM-default core clock (see the clock
-TODO below), the tight GC budget (`main.c` sets `budget = pool/4` over the 384 KB
-OCRAM2 arena -- a live set past the pool likely faults inside the collector,
-matching the solid-LED silence), or egg size. Getting to a live REPL means
-attacking one of these next. Remaining verify-first surface + TODOs:
+The console's register traps, against PJRC's `cores/teensy4` as the authority:
 
-- **FlexSPI config block / read LUT** -- verify the exact bytes against the
-  on-board QSPI part (Teensy 4.1 ships a Winbond/ISSI 8 MB NOR) before trusting
-  a first flash.
-- **Clock tree** -- `clocks_init` only brings up the LPUART and GPT1 roots off
-  the 24 MHz crystal and leaves the M7 on the ROM's clock; raising the core to
-  600 MHz via ARM_PLL is a TODO (it changes neither the console nor the
-  GPT1-microsecond timebase math).
-- **ITCM/DTCM** -- left empty; moving hot code to ITCM and the stack to DTCM
-  (via the FlexRAM `GPR16/GPR17` bank split) is a performance optimisation, not
-  a correctness need.
+- **TX pad drive** -- the pin mux alone never drives the line; `SW_PAD_CTL` = `0x10B0` on
+  both pads does.
+- **RX daisy** -- `IOMUXC_LPUART6_RX_SELECT_INPUT` is the second IOMUXC block's `0x150`,
+  i.e. `+0x550`, not `+0x520`; with the wrong one RX hears nothing while TX works.
+
+The board has no `posix.c`, so `main.c` gives the line editor a `tty` answering `()`: an
+unknown size, laid at 80 columns. Open:
+
+- **ITCM/DTCM** -- left empty; hot code to ITCM and the stack to DTCM (the FlexRAM
+  `GPR16/GPR17` bank split) is performance, not correctness.
 - **GPIO** -- `gpio_*` covers the GPIO2 bank and muxes pin 13 (the LED). A full
   Teensy pin map (all 55 pads -> bank/bit -> ALT5 mux) is a TODO.
-- **USB CDC console** -- see above.
 
 See `tools/README.md` for the flashing path.

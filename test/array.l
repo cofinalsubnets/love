@@ -195,6 +195,8 @@
  (aall (@(0.0 2.5) = pin @(0.0 1.0) @(1) @(2.5))) (gem-tray = tier (pin @(0.0 1.0) @(1) 2))
  (aall (@(5 0) = pin @(0 0) @(0 0) @(4 5)))
  (aall (@(1 2) = pin @(1 2) @(-1 9) @(7 8)))
+ ; a float into an int tray saturates, as floor does, on every isa
+ (aall (@(9223372036854775807 -9223372036854775808 9223372036854775807 2) = pin (pin (pin (pin @(0 0 0 0) 0 1e30) 1 -1e30) 2 9223372036854775808.0) 3 2.7))
  (star-tray = tier (pin @(1 2) @(0) @(3.5))) (aall (@(3 2) = pin @(1 2) @(0) @(3.5)))
  (aall (@(1 2) = pin @(1 2) @(0 1) @(5)))                    ; values the wrong length: untouched
  (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2))))           ; the tray pinned is left as it was

@@ -112,6 +112,8 @@
    ; __CHAR_UNSIGNED__ where plain char is unsigned (parse.l's pchar), as gcc and clang predefine it
    (tgt @ 'a64                          '("__aarch64__" "__CHAR_UNSIGNED__")
           'rv64                        '("__riscv" "__CHAR_UNSIGNED__")
+          'rv32                        '("__riscv" "__riscv_xlen=32" "__riscv_float_abi_soft" "__CHAR_UNSIGNED__" "__ILP32__")
+          'xtensa                      '("__xtensa__" "__XTENSA__" "__XTENSA_EL__" "__XTENSA_CALL0_ABI__" "__XTENSA_SOFT_FLOAT__" "__CHAR_UNSIGNED__" "__ILP32__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
           ('thumb2 || 'thumb2sp)       '("__arm__" "__arm" "__CHAR_UNSIGNED__")
           'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__")
@@ -151,8 +153,8 @@
    ; gcc's atomic predefines: a width's lock-free answer as gen lays it, 2 or 0 (rv64 has no
    ; sub-word rmw, thumb2 no doubleword, thumb1 no exclusives)
    (atomdefs tgt sw)
-    (: ws (tgt @ 'thumb1 () 'rv64 '(4 8) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
-       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16) ? 4 8)
+    (: ws (tgt @ ('thumb1 || 'xtensa) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
+       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa) ? 4 8)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
           "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
@@ -293,7 +295,7 @@
                       '("__WCHAR_TYPE__=long int" "__WCHAR_MAX__=0x7fffffffL" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)"
                         "__WCHAR_WIDTH__=32" "__SIZEOF_WCHAR_T__=4"))
         + stdcommon)
-       ((arm32? tgt ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon))
+       ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon))
    ; a gripe prints "cc: <file>:<line>:<col>: msg" (no file: the source; no line/col: elided);
    ; anything else prints plain. both exit 1
    (ccdie val src plain)
@@ -364,7 +366,7 @@
                  + booldefs dia
                  + gnudefs
                  +
-                 (elem tgt '(x64 a64) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc on both
+                 (elem tgt '(x64 a64 rv64 wasm) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc's
    ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
    ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
@@ -375,7 +377,7 @@
        (f ? ["__FILE__=\(q)" "__BASE_FILE__=\(q)"]))
    ; the shared front end: source -> (1 ast stag sigs ..) | a fatal exit. the -D lines prepend
    ; to the text before the one lex, stamped 1-k..0, so every source line keeps its number
-   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp 'fis fi}))
+   (cc-parse src (t @ {'is is 'ds ds 'tgt tgt 'os os 'vb vb 'dia dia 'swch sw 'mpm mp 'uch uc 'ssp sp 'fis fi 'dbg dbg}))
     (: ds9 (cc-defs t + filedef src mp + fincs fi)
        ; `-` is stdin, for every door; cdir answers "" (the cwd). then disk, then vb by key
        r (src = "-" ? [1 (slurp in)]
@@ -389,7 +391,7 @@
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (mprof 'cpp (_ \ cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src))
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
-       ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
+       ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1 'dbg dbg}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
         (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
@@ -471,11 +473,12 @@
            (elem <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4) && elem (f 1) gp) [['lar (f 1) (sym f)] (sw f (f 1))]
            (aside f (sym f) (t \ sw f t)))
        (catmap one fs))
-   ; thumb2 and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
+   ; thumb2 (sp too) and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
-   ; where it reaches, else lays movw/movt
+   ; where it reaches, else lays movw/movt. thumb2's (fli f g k) becomes (flal f g k P) alike, and
+   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one
    (lpool tgt pc fs)
-    (? (pc || !(elem tgt '(thumb2 arm)) || elem 'lpool (ablenv 0)) fs
+    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) fs
        (: (onto a xs) (foldl (\ b x (x . b)) a xs)
           (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
           (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
@@ -483,20 +486,26 @@
           (go l ix ps n a)
            (? !(two? l) (rev (flush ps a))
               (<l @ f
-                 (? (two? f && (<f = 'la && #f = 3 || big? f))
+                 (? (two? f && <f = 'fli)
+                    (peep ix (f 3) 0 @ p
+                       (p != 0 ? (go >l ix ps n (['flal (f 1) (f 2) (f 3) p] . a))
+                          (name ".lp\(n)" @ q
+                             (go >l (pin ix (f 3) q) ((q . f 3) . ps) (n + 1) (['flal (f 1) (f 2) (f 3) q] . a)))))
+                    (two? f && (<f = 'la && #f = 3 || big? f))
                     (peep ix (f 2) 0 @ p
                        (p != 0 ? (go >l ix ps n (['lal (f 1) (f 2) p] . a))
                           (name ".lp\(n)" @ q
                              (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) (['lal (f 1) (f 2) q] . a)))))
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
+                    (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
-   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us}))
+   (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts rstrs gregs vol anames pfes nopro]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (mprof 'cgen (_ \ cgen-obj ast stag sigs weaks
-                       [sfns svars sects alias aligns ainl noinl consts rstrs ni gregs vol [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt))
+                       [sfns svars sects alias aligns ainl noinl consts ni gregs [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt))
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
@@ -515,13 +524,12 @@
                  locs (lnames + (foldl (\ t s (pin t s 1)) {} (fns + gns + lnames) @ have (filter (s \ !(peep have s 0)) (asmlocs <at))))
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
-                          (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())]
+                          (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())
+                          (dbg ? [src (cwd 0)])]   ; -g: the unit and its dir, for obj.l's line tables
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
-                       (two? (filter (k \ anames k != k) (keys anames)))
-                        (udie 1 "cc: an asm label that renames has no wasm lane, in \(src)")
-                       (show [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks]))
+                       (show (wasm-labels anames [tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns weaks])))
                     (elf32? tgt)
                     (: s32 (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                        (i386? tgt ? (objsecs32x tgt s32 fns gns wks anames locs asmax)
@@ -549,6 +557,12 @@
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"), say q <>pp, close q))
               (puts <>pp, flush out)))
+   ; an asm label's name through a wasm object, which has no symbol table to rename in: code
+   ; names a symbol by nom, the object's name lists by string
+   (wasm-labels an ob)
+    (: t ({} @ t (map (k \ (pin t k (an k), pin t (nom k) (nom (an k)))) (keys an), t))
+       (sub x) (two? x ? (sub <x . sub >x) (peep t x x))
+       (two? (filter (k \ an k != k) (keys an)) ? (sub ob) ob))
    ; a wasm object is text: write-bytes walks a byte list, and a string lands as an empty file
    (cc-obj src dst (t @ {'tgt tgt}))
     (pin cppdeps 'l (),
@@ -724,6 +738,8 @@
              (call main)
              (pop lr)
              (ret))
+   ; ..rv32's: argv a word past argc
+   crt0-rv32 (map (f \ f = '(lea r1 r0 8) ? '(lea r1 r0 4) f) crt0-rv)
    ; the driver's libc: a link still owing strong symbols pulls moonlibc + lm + sys, compiled
    ; from the sources beside us, member by need. -nostdlib leaves it off. noms still owed are
    ; said at once (a misspelling, an undefined function, a goto label gen spells main.<lbl>)
@@ -993,7 +1009,7 @@
               (set + new @ set2 (pull set2 (ledger (bsyms + map (m \ m 2) set2))))))
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
-       ; a name nothing answers (setjmp's, say) is the program's refusal, not an internal one
+       ; a name nothing answers is the program's refusal, not an internal one
        m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
                (a \ b \ a @ 'wasm-undefined
                           (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")
@@ -1030,22 +1046,24 @@
                  (filter (f \ !(dota? f)) ins))
        ; a thumb link is a board's: the image lays at the address the core boots from, and
        ; no crt0 rides first: the first text byte is the vector table. -t arm is linux's,
-       ; hosted as i386 is
-       arm? (arm32? tgt && tgt != 'arm)
-       _ (arm? && pie && udie 2 "cc: -pie needs an MMU; an arm32 link is bare metal")
+       ; hosted as i386 is. rv32 under -os none is a board's too, entered at _start; xtensa links
+       ; only so, moonlibc not yet speaking its syscalls
+       arm? (arm32? tgt && tgt != 'arm || tgt = 'rv32 && os = 'none || tgt = 'xtensa)
+       _ (arm? && pie && udie 2 "cc: -pie needs an MMU; a bare link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
-       _ (arm? && !(charm? org) && udie 2 "cc: an arm32 link needs -Ttext <addr>")
+       _ (arm? && !(charm? org) && udie 2 "cc: a bare link needs -Ttext <addr>")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
        _ (relo && tgt = 'thumb2 && udie 2 "cc: --emit-relocs cannot answer -t thumb2: its `la` splits an address across MOVW/MOVT, which no loader can slide -- -t thumb2sp pools it")
        ; the board's map: -Ttext alone is one region (code and data share a memory); -Tdata
-       ; splits it as an xip mcu wants -- .data stored after the code, copied off __data_load__
-       runs (charm? dorg ? [['at org 'text 'rodata 'nifs]
-                            ['copy dorg 'data 'bss]]
-                           [['at org 'text 'rodata 'data 'nifs 'bss]])
-       c9 (mac? ? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       ; splits it as an xip mcu wants -- .data stored after the code, copied off __data_load__;
+       ; xtensa's instruction memory takes words alone, so its constants go with the data
+       runs (? !(charm? dorg) [['at org 'text 'rodata 'data 'nifs 'bss]]
+               (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
+               [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
+       c9 (mac? ? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -1062,7 +1080,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1111,6 +1129,7 @@
    (fpuse? l) (? (two? l) (any fpuse? l)
                  (name? l) (show l @ s (#s > 1 && s 0 = 102 && all (i \ 48 <= s i <= 57) >^#s))
                  0)
+   (dbgon? a) (elem a '("-g" "-g1" "-g2" "-g3" "-ggdb" "-ggdb1" "-ggdb2" "-ggdb3") || starts? a "-gdwarf")
    (tol? a) (a = "-pipe" || a = "-static" ||
              starts? a "-g" || starts? a "-O" ||
              glu? a 108 || glu? a 76 ||
@@ -1154,7 +1173,7 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia ()}
+                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
@@ -1164,6 +1183,10 @@
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
           ("-c" . r) (flags r (pin t 'c 1))
+          ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
+          ; -g form rides through tol?
+          ("-g0" . r) (flags r (pin t 'dbg ()))
+          ((a . r) && dbgon? a) (flags r (pin t 'dbg 1))
           ("-E" . r) (flags r (pin t 'E 1))
           ; love's own version: mooncc is a verb on the love binary
           (("--version" || "-v") . _)
@@ -1396,7 +1419,7 @@
        _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
-       _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
+       _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64 rv32)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
        a32x (filter (a \ !(elem (f 'tgt) (a = "-mabi=aapcs-linux" ? '(arm) '(thumb1 thumb2 thumb2sp arm)))) (f 'a32))
        _ (two? a32x && udie 2 "cc: \(<a32x) -- an arm ask; no lane on \(f 'tgt)")
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm i386)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")

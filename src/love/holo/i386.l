@@ -259,7 +259,7 @@
            ('st1 . i3-st1 m) ('st2 . (\ b o s (i3mem m 2 [137] s b o))) ('st4 . (\ b o s (i3mem m 4 [137] s b o)))
            ('si . i3-si m 4) ('si1 . i3-si m 1) ('si2 . i3-si m 2) ('si4 . i3-si m 4)
            ('ldx . i3memx m 4 [139]) ('stx . (\ b i s d r (i3memx m 4 [137] r b i s d))) ('leax . i3-leax m)
-           ('ldxb . i3memx m 4 [15 182]) ('stxb . i3-stxb m) ('ldxw . i3memx m 4 [139]) ('ldxsw . i3memx m 4 [139])
+           ('ldxb . i3memx m 4 [15 182]) ('ldxh . i3memx m 4 [15 183]) ('stxb . i3-stxb m) ('ldxw . i3memx m 4 [139]) ('ldxsw . i3memx m 4 [139])
            ('andx4 . i3memx m 4 [35]) ('orx4 . i3memx m 4 [11]) ('xorx4 . i3memx m 4 [51])
            ('andm4 . i3mem m 4 [35]) ('orm4 . i3mem m 4 [11]) ('xorm4 . i3mem m 4 [51])
            ('cmpm . i3-cmpm m) ('cmprm . i3mem m 4 [59])
