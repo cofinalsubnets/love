@@ -20,70 +20,94 @@
    (bitv? sp x) (elem x (peep sp 'bitv ()))
    (ty sp n) (has? (sp 'arrays) n || bitv? sp n ? '(pi j nat nat) 'nat)
 
+   ; --- one row per operation: its term, what it owes, its C, and what grounds the term. the three
+   ;     readers take an operation from here alone, and an operation or shape with no row stops mx.
+   ;     'fit: the nat term is the C's value while what it owes holds; 'bitv: the word model's;
+   ;     'none: a word no law reads, whose term refuses. a row is [(sp v T args) (sp v T O e args)
+   ;     (sp C args) grounds]
+   (no-tm op) (\ sp v T xs (quit-on "vc: \(op)'s value has no term"))
+   owes-parts (\ sp v T O e xs (cats (map O xs)))
+   owes-none (\ sp v T O e xs ())
+   (len sp A) (lk (sp 'arrays) A @ a (a 1))
+   (arr v A) (has? v A ? (lk v A) A)
+   (u64 x) ['cast '(named "uint64_t") x]
+   vc-ops
+    {'+ [(\ sp v T [a b] ['add (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(fit (T e))]))
+         (\ sp C [a b] ['bin '+ (C a) (C b)]) 'fit]
+     '- [(\ sp v T [a b] ['natminus (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [['inf-le (T b) (T a)]]))
+         (\ sp C [a b] ['bin '- (C a) (C b)]) 'fit]
+     'at [(\ sp v T [A i] [(arr v A) (T i)]) (\ sp v T O e [A i] (O i + [['inf-lt (T i) (len sp A)]]))
+          (\ sp C [A i] ['deref ['bin '+ (base sp A) (C i)]]) 'fit]
+     'bit [(\ sp v T [i] ['bit (T i)]) (\ sp v T O e [i] (O i + [['inf-lt (T i) 64]]))
+           (\ sp C [i] ['cast 'int ['bin '& ['bin 'shr ['var "bb"] (C i)] ['num 1]]]) 'fit]
+     'sbit [(\ sp v T [x b] ['inf-sb (T x) (T b)]) (\ sp v T O e [x b] (O x + O b + [['inf-lt (T b) 32]]))
+            (\ sp C [x b] ['bin '& ['bin 'shr (C x) (C b)] ['num 1]]) 'fit]
+     'pow [(\ sp v T [k] ['inf-pow (T k)]) (\ sp v T O e [k] (O k + [['inf-lt (T k) 32] (fit (T e))]))
+           (\ sp C [k] ['bin 'shl ['cast 'uint ['num 1]] (C k)]) 'fit]
+     ; a shift's term is known at 1 and 4 alone
+     'shl [(\ sp v T [a k] (k @ 1 (T a @ t ['add t t]) 4 ['inf-by16 (T a)] _ (quit-on "vc: shl by \(k) has no term")))
+           (\ sp v T O e [a k] (O a + [(fit (T e))]))
+           (\ sp C [a k] ['bin 'shl (C a) ['num k]]) 'fit]
+     'or [(\ sp v T [a b k] ['add (T a) (T b)])
+          (\ sp v T O e [a b k] (O a + O b + [['paths 'nat ['inf-mod (k = 4 ? 16 2) (T a)] 0]
+                                              ['inf-lt (T b) (k = 4 ? 16 2)]
+                                              (fit (T e))]))
+          (\ sp C [a b k] ['bin '| (C a) (C b)]) 'fit]
+     'cast [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [(fit (T x))])) (\ sp C [x] ['cast 'int (C x)]) 'fit]
+     'u16 [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) (sp 'u16)]]))
+           (\ sp C [x] ['cast '(named "uint16_t") (C x)]) 'fit]
+     'u8 [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) 256]]))
+          (\ sp C [x] ['cast '(named "uint8_t") (C x)]) 'fit]
+     'mask [(\ sp v T [x k] (bitv? sp x ? ['inf-val (T x) (T k)] ['inf-mod ['inf-pow (T k)] (T x)]))
+            (\ sp v T O e [x k] (O x + O k + [['inf-lt (T k) 32]]))
+            (\ sp C [x k] ['bin '& (C x) ['bin '- ['bin 'shl ['cast 'uint ['num 1]] (C k)] ['num 1]]]) 'fit]
+     'low [(\ sp v T [x m] ['inf-mod (m + 1) (T x)]) (\ sp v T O e [x m] (O x)) (\ sp C [x m] ['bin '& (C x) ['num m]]) 'fit]
+     'div8 [(\ sp v T [x] ['inf-div8 (T x)]) (\ sp v T O e [x] (O x)) (\ sp C [x] ['bin 'shr (C x) ['num 3]]) 'fit]
+     'or56 [(\ sp v T [x] ['add 56 ['inf-mod 8 (T x)]]) (\ sp v T O e [x] (O x + [['inf-le (T x) 63]]))
+            (\ sp C [x] ['bin '| (C x) ['num 56]]) 'fit]
+     ; the bit buffer's, on the word model
+     'ld64 [(\ sp v T [A i] ['inf-bld (arr v A) (T i)]) (\ sp v T O e [A i] (O i + [['inf-le ['add (T i) 8] (len sp A)]]))
+            (\ sp C [A i] ['call ['var "LD64"] [['bin '+ (base sp A) (C i)]]]) 'bitv]
+     'w64 [(\ sp v T [x] ['inf-bbyte (T x)]) owes-parts (\ sp C [x] (u64 (C x))) 'bitv]
+     'shl64 [(\ sp v T [a k] ['inf-bshl (T a) (T k)]) (\ sp v T O e [a k] (O a + O k + [['inf-lt (T k) 64]]))
+             (\ sp C [a k] ['bin 'shl (C a) (C k)]) 'bitv]
+     'shr64 [(\ sp v T [a k] ['inf-bshr (T a) (T k)]) (\ sp v T O e [a k] (O a + O k + [['inf-lt (T k) 64]]))
+             (\ sp C [a k] ['bin 'shr (C a) (C k)]) 'bitv]
+     'bor64 [(\ sp v T [a b] ['inf-bor (T a) (T b)]) owes-parts (\ sp C [a b] ['bin '| (C a) (C b)]) 'bitv]
+     ; a word's, wrapping, whose values no law reads: only what they owe
+     'bxor [(no-tm 'bxor) owes-parts (\ sp C [a b] ['bin '^ (C a) (C b)]) 'none]
+     'rep8 [(no-tm 'rep8) owes-parts (\ sp C [x] ['bin '* (u64 ['num 72340172838076673]) (u64 (C x))]) 'none]
+     'le16 [(no-tm 'le16) (\ sp v T O e [A i] (O i + [['inf-le ['add (T i) 2] (len sp A)]]))
+            (\ sp C [A i] ['bin '| ['deref ['bin '+ (base sp A) (C i)]]
+                                 ['bin 'shl ['cast 'uint ['deref ['bin '+ (base sp A) ['bin '+ (C i) ['num 1]]]]] ['num 8]]]) 'none]
+     'u32 [(no-tm 'u32) owes-parts (\ sp C [x] ['cast '(named "uint32_t") (C x)]) 'none]
+     'and64 [(no-tm 'and64) owes-parts (\ sp C [a b] ['bin '& (C a) (C b)]) 'none]
+     'm64 [(no-tm 'm64) (\ sp v T O e [k] (O k + [['inf-lt (T k) 64]]))
+           (\ sp C [k] ['bin '- ['bin 'shl (u64 ['num 1]) (C k)] ['num 1]]) 'none]
+     'wadd [(no-tm 'wadd) owes-parts (\ sp C [a b] ['bin '+ (C a) (C b)]) 'none]
+     'wsub [(no-tm 'wsub) owes-parts (\ sp C [a b] ['bin '- (C a) (C b)]) 'none]
+     'wmul [(no-tm 'wmul) owes-parts (\ sp C [a b] ['bin '* (C a) (C b)]) 'none]
+     'bnot [(no-tm 'bnot) owes-parts (\ sp C [x] ['un 'bnot (C x)]) 'none]
+     ; the C's own places, read as they stand: no term, nothing owed
+     'dg [(no-tm 'dg) owes-none (\ sp C [f] ['dot ['deref ['var "d"]] f]) 'none]
+     'sg [(no-tm 'sg) owes-none (\ sp C [f] ['dot ['deref ['var "s"]] f]) 'none]
+     'wg [(no-tm 'wg) owes-none (\ sp C [f] ['dot ['deref ['var "w"]] f]) 'none]
+     'tf [(no-tm 'tf) owes-none (\ sp C [n] ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]) 'none]
+     'taddr [(no-tm 'taddr) owes-none (\ sp C [n] ['addr ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]]) 'none]
+     ; an opaque C value passed through, the context a call is handed: its term is ()
+     'raw [(\ sp v T xs ()) owes-none (\ sp C [x] x) 'none]}
+   (op-row e) (peep vc-ops <e () @ r (two? r ? r (quit-on "vc: \(show <e) is no operation")))
+
    ; --- a spec's expressions, as a term and as what they owe -----------------------------------
    (tm sp v e)
     (: (T x) (tm sp v x)
      (? (charm? e) e
         (name? e) (has? v e ? (lk v e) (quit-on "inf: \(e) read before it is set"))
-        (e @ ('+ a b) ['add (T a) (T b)]
-             ('- a b) ['natminus (T a) (T b)]
-             ('at A i) [(has? v A ? (lk v A) A) (T i)]
-             ('bit i) ['bit (T i)]
-             ('sbit x b) ['inf-sb (T x) (T b)]
-             ('pow k) ['inf-pow (T k)]
-             ('shl a 1) (T a @ t ['add t t])
-             ('shl a 4) ['inf-by16 (T a)]
-             ('or a b k) ['add (T a) (T b)]
-             ('cast x) (T x)
-             ('u16 x) (T x)
-             ('u8 x) (T x)
-             ('mask x k) (bitv? sp x ? ['inf-val (T x) (T k)] ['inf-mod ['inf-pow (T k)] (T x)])
-             ('bor64 a b) ['inf-bor (T a) (T b)]
-             ('shl64 a k) ['inf-bshl (T a) (T k)]
-             ('shr64 a k) ['inf-bshr (T a) (T k)]
-             ('ld64 A i) ['inf-bld (has? v A ? (lk v A) A) (T i)]
-             ('w64 x) ['inf-bbyte (T x)]
-             ('low x m) ['inf-mod (m + 1) (T x)]
-             ('div8 x) ['inf-div8 (T x)]
-             ('or56 x) ['add 56 ['inf-mod 8 (T x)]])))
+        ((op-row e) 0 sp v T >e)))
    (ob sp v e)
     (: (T x) (tm sp v x)
        (O x) (ob sp v x)
-     (? (atom? e) ()
-        (e @ ('+ a b) (O a + O b + [(fit (T e))])
-             ('- a b) (O a + O b + [['inf-le (T b) (T a)]])
-             ('at A i) (O i + [['inf-lt (T i) (lk (sp 'arrays) A @ a (a 1))]])
-             ('bit i) (O i + [['inf-lt (T i) 64]])
-             ('sbit x b) (O x + O b + [['inf-lt (T b) 32]])
-             ('pow k) (O k + [['inf-lt (T k) 32] (fit (T e))])
-             ('shl a k) (O a + [(fit (T e))])
-             ('or a b k) (O a + O b + [['paths 'nat ['inf-mod (k = 4 ? 16 2) (T a)] 0]
-                                       ['inf-lt (T b) (k = 4 ? 16 2)]
-                                       (fit (T e))])
-             ('cast x) (O x + [(fit (T x))])
-             ('u16 x) (O x + [['inf-lt (T x) (sp 'u16)]])
-             ('u8 x) (O x + [['inf-lt (T x) 256]])
-             ('mask x k) (O x + O k + [['inf-lt (T k) 32]])
-             ('low x _) (O x)
-             ('div8 x) (O x)
-             ('or56 x) (O x + [['inf-le (T x) 63]])
-             ; the bit buffer's, whose values no law reads: only what they owe
-             ('ld64 A i) (O i + [['inf-le ['add (T i) 8] (lk (sp 'arrays) A @ a (a 1))]])
-             ('w64 x) (O x)
-             ('shl64 a k) (O a + O k + [['inf-lt (T k) 64]])
-             ('shr64 a k) (O a + O k + [['inf-lt (T k) 64]])
-             ('bor64 a b) (O a + O b)
-             ('bxor a b) (O a + O b)
-             ('rep8 x) (O x)
-             ('le16 A i) (O i + [['inf-le ['add (T i) 2] (lk (sp 'arrays) A @ a (a 1))]])
-             ; a word's, wrapping, whose values no law reads
-             ('u32 x) (O x)
-             ('and64 a b) (O a + O b)
-             ('m64 k) (O k + [['inf-lt (T k) 64]])
-             ('wadd a b) (O a + O b)
-             ('wsub a b) (O a + O b)
-             ('wmul a b) (O a + O b)
-             ('bnot x) (O x))))
+     (? (atom? e) () ((op-row e) 1 sp v T O e >e)))
    ; a condition: what it owes, and what its arms may assume. a - b < c means a < c + b
    (cond-ob sp v c) (c @ ('ltsub a b d) (ob sp v a + ob sp v b + ob sp v d
                                          + [(fit (tm sp v a)) (fit (tm sp v b))])
@@ -513,43 +537,7 @@
     (: (C x) (cl sp x)
      (? (charm? e) ['num e]
         (name? e) (cv sp e)
-        (e @ ('+ a b) ['bin '+ (C a) (C b)]
-             ('- a b) ['bin '- (C a) (C b)]
-             ('at A i) ['deref ['bin '+ (base sp A) (C i)]]
-             ('bit i) ['cast 'int ['bin '& ['bin 'shr ['var "bb"] (C i)] ['num 1]]]
-             ('sbit x b) ['bin '& ['bin 'shr (C x) (C b)] ['num 1]]
-             ('pow k) ['bin 'shl ['cast 'uint ['num 1]] (C k)]
-             ('shl a k) ['bin 'shl (C a) ['num k]]
-             ('or a b k) ['bin '| (C a) (C b)]
-             ('cast x) ['cast 'int (C x)]
-             ('u16 x) ['cast '(named "uint16_t") (C x)]
-             ('u8 x) ['cast '(named "uint8_t") (C x)]
-             ('mask x k) ['bin '& (C x) ['bin '- ['bin 'shl ['cast 'uint ['num 1]] (C k)] ['num 1]]]
-             ('low x m) ['bin '& (C x) ['num m]]
-             ('div8 x) ['bin 'shr (C x) ['num 3]]
-             ('or56 x) ['bin '| (C x) ['num 56]]
-             ('ld64 A i) ['call ['var "LD64"] [['bin '+ (base sp A) (C i)]]]
-             ('w64 x) ['cast '(named "uint64_t") (C x)]
-             ('shl64 a k) ['bin 'shl (C a) (C k)]
-             ('shr64 a k) ['bin 'shr (C a) (C k)]
-             ('bor64 a b) ['bin '| (C a) (C b)]
-             ('bxor a b) ['bin '^ (C a) (C b)]
-             ('rep8 x) ['bin '* ['cast '(named "uint64_t") ['num 72340172838076673]] ['cast '(named "uint64_t") (C x)]]
-             ('le16 A i) ['bin '| ['deref ['bin '+ (base sp A) (C i)]]
-                               ['bin 'shl ['cast 'uint ['deref ['bin '+ (base sp A) ['bin '+ (C i) ['num 1]]]]] ['num 8]]]
-             ('u32 x) ['cast '(named "uint32_t") (C x)]
-             ('and64 a b) ['bin '& (C a) (C b)]
-             ('m64 k) ['bin '- ['bin 'shl ['cast '(named "uint64_t") ['num 1]] (C k)] ['num 1]]
-             ('wadd a b) ['bin '+ (C a) (C b)]
-             ('wsub a b) ['bin '- (C a) (C b)]
-             ('wmul a b) ['bin '* (C a) (C b)]
-             ('bnot x) ['un 'bnot (C x)]
-             ('dg f) ['dot ['deref ['var "d"]] f]
-             ('sg f) ['dot ['deref ['var "s"]] f]
-             ('wg f) ['dot ['deref ['var "w"]] f]
-             ('tf n) ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]
-             ('taddr n) ['addr ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]]
-             ('raw x) x)))
+        ((op-row e) 2 sp C >e)))
    (cl-cond sp c) (c @ ('ltsub a b d) ['bin 'lt ['bin '- (cl sp a) (cl sp b)] (cl sp d)]
                        ('lt a b) ['bin 'lt (cl sp a) (cl sp b)]
                        ('le a b) ['bin 'le (cl sp a) (cl sp b)]

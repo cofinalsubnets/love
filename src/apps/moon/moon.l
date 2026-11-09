@@ -445,7 +445,32 @@
        (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
    ; arm under -fpic: an address is pc-relative, movw/movt from the pc an add reads
-   (picla tgt pc fs) (tgt = 'arm && pc ? (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs) fs)
+   (picla tgt pc fs)
+    (? !pc fs
+       (tgt = 'arm) (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs)
+       (tgt = 'i386) (pic386 fs)
+       fs)
+   ; i386 under -fpic: an address is lar's, pc-relative; a symbol's word reads through a register,
+   ; the load's own or one pushed aside
+   (pic386 fs)
+    (: gp '(r0 r1 r2 r3 r5 r6)
+       (sw f r) (: (go l) (? !(two? l) l (<l = 'rip ? (r . (<>l 1) . go >>l) (<l . go >l))) (go f))
+       (sym f) (: (go l) (? !(two? l) () (<l = 'rip ? (<>l 0) (go >l))) (go f))
+       (aside f s mk)
+        (filter (r \ !(elem r f)) gp @ fr
+           (? (elem 'sp f || !(two? fr)) (udie 1 "cc: -fpic on i386 -- no register for \(show f)")
+              (: t <fr [['push t] ['lar t s] (mk t) ['pop t]])))
+       (one f)
+        (? !(two? f) [f]
+           (elem <f '(la lia)) [['lar (f 1) (f 2)]]
+           (<f = 'laa) [['lar (f 1) (f 2)] ['lea (f 1) (f 1) (f 3)]]
+           (<f = 'ldsdl) (aside f (f 2) (t \ ['ldsd (f 1) t 0]))
+           (<f = 'pushl) (udie 1 "cc: -fpic on i386 -- an address pushed whole")
+           !(elem 'rip f) [f]
+           (elem <f '(callm jmpm)) (udie 1 "cc: -fpic on i386 -- a call through a global's word")
+           (elem <f '(ld ld1 ld2 ld4 ldu1 ldu2 ldu4) && elem (f 1) gp) [['lar (f 1) (sym f)] (sw f (f 1))]
+           (aside f (sym f) (t \ sw f t)))
+       (catmap one fs))
    ; thumb2 and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
    ; where it reaches, else lays movw/movt
@@ -1200,7 +1225,7 @@
           ; -fwrapv, -fno-strict-overflow: an int's arithmetic wraps at 32 bits where it is read
           ((a . r) && elem a '("-fwrapv" "-fno-strict-overflow")) (flags r (pin t 'wrapv 1))
           ((a . r) && elem a '("-fno-wrapv" "-fstrict-overflow")) (flags r (pin t 'wrapv ()))
-          ("-fno-omit-frame-pointer" . r) (flags r (pin t 'kfp 1))   ; a64's frame record (refused elsewhere)
+          ("-fno-omit-frame-pointer" . r) (flags r (xkon (pin t 'kfp 1) 'kfp))   ; a64's frame record, x86's rbp link
           ((a . r) && elem a '("-fpic" "-fPIC" "-fpie" "-fPIE")) (flags r (pins t 'pic a 'npic ()))
           ; -fno-pie said outright (the kernel's): no load base moves the image, so a const the
           ; linker writes rides .rodata, as clang lays it
@@ -1299,7 +1324,7 @@
           ; a64's tiny model: its adrp+add pairs reach a superset of tiny's adr
           ("-mcmodel=tiny" . r) (flags r (pin t 'cmt 1))
           (("-mcmodel=" + w) . r) (udie 2 "cc: -mcmodel=\(w) -- x64's code is rip-relative within 2GB: small and kernel")
-          ; unwind tables, each of the pair on until its -fno-: an a64 .eh_frame, as clang lays it
+          ; unwind tables, each of the pair on until its -fno-: an a64 or x64 .eh_frame, as clang lays it
           ("-fasynchronous-unwind-tables" . r) (flags r (pin t 'uwa 1))
           ("-fno-asynchronous-unwind-tables" . r) (flags r (pin t 'uwa ()))
           ("-funwind-tables" . r) (flags r (pin t 'uws 1))
@@ -1316,8 +1341,10 @@
           ; indirect calls and jumps go through __x86_indirect_thunk_REG, returns through
           ; __x86_return_thunk: the kernel lays both, mooncc only names them
           ((a . r) && elem a ["-mindirect-branch=thunk-extern" "-mretpoline-external-thunk"]) (flags r (fpush (xkon t 'thk) 'x6f a))
-          ((("-mindirect-branch=" + w) . r) && elem w ["thunk" "thunk-inline"])
-           (udie 2 "cc: -mindirect-branch=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
+          ; ..or by a retpoline laid at the site, gcc's thunk-inline and clang's -mretpoline: the vdso's ask
+          ((a . r) && elem a ["-mindirect-branch=thunk-inline" "-mretpoline"]) (flags r (xkon t 'thki))
+          ("-mindirect-branch=thunk" . r)
+           (udie 2 "cc: -mindirect-branch=thunk -- mooncc lays no shared thunk body: thunk-inline or thunk-extern")
           ("-mfunction-return=thunk-extern" . r) (flags r (fpush (xkon t 'rth) 'x6f "-mfunction-return=thunk-extern"))
           ((("-mfunction-return=" + w) . r) && elem w ["thunk" "thunk-inline"])
            (udie 2 "cc: -mfunction-return=\(w) -- mooncc lays no thunk body: thunk-extern names the kernel's")
@@ -1356,7 +1383,7 @@
        _ (pin f 'is (map dirn (f 'is + f 'isy) + (two? (f 'ia) ? (oursinc () + map dirn (f 'ia)) ())))
        _ (f 'fx18 && f 'tgt != 'a64 && udie 2 "cc: -ffixed-x18 names an a64 register, and the target is \(f 'tgt)")
        _ (f 'cmt && f 'tgt != 'a64 && udie 2 "cc: -mcmodel=tiny -- an a64 model, and the target is \(f 'tgt)")
-       _ ((f 'uwa || f 'uws) && f 'tgt != 'a64 && udie 2 "cc: unwind tables lay on a64 only")
+       _ ((f 'uwa || f 'uws) && !(elem (f 'tgt) '(a64 x64)) && udie 2 "cc: unwind tables lay on a64 and x64 only")
        ; wasm's kernel is the page's loader, which speaks linux's numbers: the os unless named
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        ; on macos an x64 link is a mach-o unless -os names another kernel: it meets no ELF
@@ -1365,17 +1392,24 @@
           udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
        _ (elem 'sa4 (f 'xk) && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mstack-alignment=4 lays on i386 only")
-       _ (f 'kfp && f 'tgt != 'a64 && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
+       _ (f 'kfp && !(elem (f 'tgt) '(a64 x64 i386)) && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
        _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
        _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
        a32x (filter (a \ !(elem (f 'tgt) (a = "-mabi=aapcs-linux" ? '(arm) '(thumb1 thumb2 thumb2sp arm)))) (f 'a32))
        _ (two? a32x && udie 2 "cc: \(<a32x) -- an arm ask; no lane on \(f 'tgt)")
-       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
+       _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm i386)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        _ (f 'ssp && pin f 'sspg (sspguard f))
-       _ (two? (f 'x6f) && f 'tgt != 'x64 && udie 2 "cc: \(<(f 'x6f)) -- an x86-64 ask; no lane on \(f 'tgt)")
-       _ (elem 'thk (f 'xk) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
+       ; i386 keeps three: no al to skip, an 8-aligned stack realigned as 4's, and floats in eax where
+       ; -msoft-float lets none be
+       x6 (f 'tgt != 'i386 ? (f 'x6f)
+             (filter (a \ !(elem a ["-mskip-rax-setup" "-mstack-alignment=8"] || (f 'nofp && a = "-mno-fp-ret-in-387"))) (f 'x6f)))
+       _ (f 'tgt = 'i386 && elem "-mstack-alignment=8" (f 'x6f) && !(elem 'sa4 (f 'xk)) && pin f 'xk ('sa4 . f 'xk))
+       _ (two? x6 && f 'tgt != 'x64 && udie 2 "cc: \(<x6) -- an x86-64 ask; no lane on \(f 'tgt)")
+       _ (elem 'thki (f 'xk) && !(elem (f 'tgt) '(x64 i386)) && udie 2 "cc: -mretpoline lays on x86 only")
+       _ ((elem 'thk (f 'xk) || elem 'thki (f 'xk)) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
+       _ (f 'pic && f 'tgt = 'i386 && pin f 'njt 1)                       ; ..and i386's table holds absolute words
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)

@@ -3,8 +3,9 @@
 # between the harness and zz-fin. the cut is contiguous, balanced by one marked normal run.
 # each shard passes on the normal build first, carrying the file that binds a name it misses,
 # and the shards' counts sum to the full run's; then each stress shard answers its normal
-# count. the baked half wakes the normal bake's image, or with GCS_BAKE=1 a stress bake,
-# whose heap must be the normal one's. $w/cost holds each file's time under stress.
+# count. the baked half wakes the normal bake's image; GCS_BAKE=1 adds a stress bake beside
+# it, which must answer and whose heap must be the normal one's. $w/cost holds each file's
+# time under stress.
 # usage: gcshard.sh TREE [SHARDS]   SHARDS a half (GCS_SHARDS, default 4); GCS_NOBUILD=1 runs
 # the binaries TREE already has; GCS_HSUF the stress build's out suffix (default /gcs);
 # MAKE the tree's make; GCS_BAKE=1 the stress bake, this script's own. the normal build
@@ -17,8 +18,9 @@ gs=${GCS_HSUF-/gcs}
 sbake=${GCS_BAKE:-0}
 w=out/gcshard
 esc=$(printf '\033')
-# a failure stops the bakes still running (each keeps its love's pid)
-fail() { echo "FAIL gcshard: $*"; for b in bs bn; do [ -s $w/$b/pid ] && kill $(cat $w/$b/pid) 2>/dev/null; done; exit 1; }
+# a failure stops the bakes and runs still going (each keeps its love's pid)
+fail() { echo "FAIL gcshard: $*"; for b in bs bn; do [ -s $w/$b/pid ] && kill $(cat $w/$b/pid) 2>/dev/null; done
+         for p in $w/*.pid; do [ -s "$p" ] && kill $(cat "$p") 2>/dev/null; done; exit 1; }
 rm -rf $w
 t0=$(date +%s)
 el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
@@ -45,7 +47,7 @@ done
 
 # a background run: $w/TAG.out and $w/TAG.rc. wt waits for the runs, never the bakes
 ps=
-job() { tg=$1; shift; ( "$@" > $w/$tg.out 2>&1 < /dev/null; echo $? > $w/$tg.rc ) & ps="$ps $!"; }
+job() { tg=$1; shift; ( "$@" > $w/$tg.out 2>&1 < /dev/null & echo $! > $w/$tg.pid; wait $!; echo $? > $w/$tg.rc; rm -f $w/$tg.pid ) & ps="$ps $!"; }
 wt() { for p in $ps; do wait $p; done; ps=; }
 # a bake as the Makefile's, to love.img in its own dir: the bake keeps the path it writes
 bake() { ( cd $w/$1 && { env LOVE_NO_IMAGE=1 "$2" bake -l "$3" love.img > out 2>&1 < /dev/null &
@@ -162,29 +164,31 @@ for h in b e; do
 done
 el "the shards on the normal build"
 
-# the egg half runs while the bakes do; the baked half wakes its bake's image
+# an image answers on the stress runtime -- woken, not an egg boot
+sm=$w/sm
+smoke() { ( out$gs/love.raw wake $1 -e '(? (elem (quote love-image) (names ())) 42 0)' > $sm.out 2>&1 < /dev/null
+            echo $? > $sm.rc )
+          [ "$(cat $sm.rc)" = 0 ] && [ "$(cat $sm.out)" = 42 ] || { say sm; fail "the stress runtime's smoke run of $1"; }; }
+# the egg half runs while the bakes do; the baked half wakes the normal image, beside the stress bake
 i=0
 while [ $i -lt $n ]; do job se$i $egg out$gs/love.raw $w/m$i.l; i=$((i + 1)); done
+wait $bnp
+[ "$(cat $w/bn/rc)" = 0 ] && [ -s $w/bn/love.img ] || { tail -5 $w/bn/out; fail "the normal bake"; }
+el "the normal bake"
+smoke $w/bn/love.img
+i=0
+while [ $i -lt $n ]; do job sb$i out$gs/love.raw wake $w/bn/love.img $w/m$i.l; i=$((i + 1)); done
+# the stress image's heap is the normal one's: every global but cmdline, in name
+# order, each behind its own `@@ NAME` line
+canon='(map (n \ (, (puts "@@ ") (puts (show n)) (putc 10) (puts (show (ev n))) (putc 10))) (sort (filter (n \ n != (quote cmdline)) (names ()))))'
+digest() { ( cd $1 && "$2" wake love.img -e "$canon" ); }
 if [ "$sbake" = 1 ]; then
   wait $bsp
   [ "$(cat $w/bs/rc)" = 0 ] && [ -s $w/bs/love.img ] || { tail -5 $w/bs/out; fail "the stress bake"; }
   el "the stress bake"
-  im=$w/bs/love.img
+  smoke $w/bs/love.img
+  job dn digest $w/bn $PWD/out/love.raw; job ds digest $w/bs $PWD/out$gs/love.raw
 fi
-wait $bnp
-[ "$(cat $w/bn/rc)" = 0 ] && [ -s $w/bn/love.img ] || { tail -5 $w/bn/out; fail "the normal bake"; }
-[ "$sbake" = 1 ] || { im=$w/bn/love.img; el "the normal bake"; }
-# the image answers on the stress runtime -- woken, not an egg boot
-sm=$w/sm; ( out$gs/love.raw wake $im -e '(? (elem (quote love-image) (names ())) 42 0)' > $sm.out 2>&1 < /dev/null
-            echo $? > $sm.rc )
-[ "$(cat $sm.rc)" = 0 ] && [ "$(cat $sm.out)" = 42 ] || { say sm; fail "the stress runtime's smoke run of $im"; }
-i=0
-while [ $i -lt $n ]; do job sb$i out$gs/love.raw wake $im $w/m$i.l; i=$((i + 1)); done
-# ..and the stress image's heap is the normal one's: every global but cmdline, in name
-# order, each behind its own `@@ NAME` line
-canon='(map (n \ (, (puts "@@ ") (puts (show n)) (putc 10) (puts (show (ev n))) (putc 10))) (sort (filter (n \ n != (quote cmdline)) (names ()))))'
-digest() { ( cd $1 && "$2" wake love.img -e "$canon" ); }
-[ "$sbake" = 1 ] && { job dn digest $w/bn $PWD/out/love.raw; job ds digest $w/bs $PWD/out$gs/love.raw; }
 wt
 for h in b e; do
   i=0

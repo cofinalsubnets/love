@@ -604,49 +604,138 @@
           ((w & 0xFFFFFC1F) = 0xD65F0000 || w = 0xD65F0BFF || w = 0xD65F0FFF) ()            ; ret, retaa, retab
           ((w & 0xFFFFFC1F) = 0xD61F0000 || (w & 0xFFE0001F) = 0xD4200000 || w < 65536) ()  ; br, brk, udf
           nx))
+   ; -- x64's, the same walk over decode.l's reading of each instruction. "zR", code factor 1,
+   ; data -8, ra rip (16), pointers pcrel sdata4; the cfa rsp+8, rip at cfa-8. a state's
+   ; registers are dwarf's: rsp 7, rbp 6 --
+   x-cie [20 0 0 0 0 0 0 0 1 122 82 0 1 120 16 1 27 12 7 8 144 1 0 0]
+   x-st0 [7 8 8 () () 0 ()]
+   x-dw [0 2 1 3 7 6 4 5 8 9 10 11 12 13 14 15]          ; an encoding's dwarf number
+   (x-cs? r) (elem r '(3 6 12 13 14 15))                  ; rbx rbp r12-r15
+   x-jcc '(jo jno jb jae je jne jbe ja js jns jp jnp jl jge jle jg)   ; decode.l's sixteen
+   ; an instruction's effect on the state, it its decoded (op mn w operands)
+   (x-ehst st it nm)
+    (@ st [cb co sd fd sv ra pw]
+       (: mn (it 1) os (it 3)
+          pro (pw != 'body)
+          (mk cb co sd fd sv pw) [cb co sd fd sv ra pw]
+          (neg v) (v = () ? () (0 - v))
+          (at st r) (? (r = 7) (neg (st 2)) (r = 6) (neg (st 3)) ())
+          (wrote st r) (@ st [cb co sd fd sv _ pw] (mk cb co sd fd sv (pro ? (r . pw) pw)))
+          (fpw st f)
+           (@ st [cb co sd fd sv _ pw]
+              (? (cb != 6) (mk cb co sd f sv pw)
+                 (sd = ()) (scare 'obj-eh-fp nm)
+                 (mk 7 sd sd f sv pw)))
+          (spw st d)
+           (@ st [cb co sd fd sv _ pw]
+              (? (cb != 7) (mk cb co d fd sv pw)
+                 (d = ()) (scare 'obj-eh-sp nm)
+                 (mk 7 d d fd sv pw)))
+          (wr st r) (wrote (? (r = 6) (fpw st ()) (r = 7) (spw st ()) st) r)
+          (sav st r a)
+           (@ st [cb co sd fd sv _ pw]
+              (? (pro && a != () && x-cs? r && !(elem r pw) && !(any (p \ <p = r) sv))
+                 (mk cb co sd fd (sort ([r a] . sv)) pw)
+                 st))
+          (rst st r a) (@ st [cb co sd fd sv _ pw] (wr (mk cb co sd fd (filter (p \ p != [r a]) sv) pw) r))
+          (down st d) (spw st (st 2 = () ? () (st 2 + d)))                   ; rsp lowered by d
+          (from st r) (? (r = 7) (st 2) (r = 6) (st 3) ())                    ; how far the cfa sits above r
+          (body st) (@ st [cb co sd fd sv _ _] (mk cb co sd fd sv 'body))
+          (q o) (o @ ['rg k 8] (x-dw k) _ ())                                 ; a whole register's number
+          (anyr o) (o @ ['rg k w] (? (w = 16) () (k < 16) (x-dw k) (x-dw (k - 20))) _ ())   ; ..any width's, ah-bh too; no xmm
+          (mb o) (o @ ['mem mbr -1 _ mdk] (0 <= mbr < 16 ? [(x-dw mbr) mdk] ()) _ ())   ; a plain base and displacement
+          ; mov rbp, rsp over the pushed rbp: the cfa rides rbp
+          (link st) (@ st [cb co sd fd sv _ pw] (cb = 7 && fd != () && any (p \ <p = 6) sv ? (mk 6 fd sd fd sv pw) st))
+          d (two? os ? <os) s2 (two? os && two? >os ? <>os)
+          (? (elem mn '(call jmp ret)) (body st)
+             (elem mn x-jcc) (body st)
+             (mn = 'push) (: r (q d) a (at st 7) s1 (down st 8)
+                             (r != () ? (sav s1 r (a = () ? () (a - 8))) s1))
+             (mn = 'pop) (: r (q d) a (at st 7) s1 (down st -8)
+                            (r != () ? (rst s1 r a) (anyr d @ k (k != () ? (wr s1 k) s1))))
+             (mn = 'leave) (: s1 (spw st (st 3)) a (at s1 7) (rst (down s1 -8) 6 a))
+             (elem mn '(sub add) && q d = 7 && two? s2 && <s2 = 'im)
+              (down st (mn = 'sub ? <>s2 (0 - <>s2)))
+             (mn = 'mov && q d = 6 && q s2 = 7) (link (wrote (fpw st (st 2)) 6))
+             (mn = 'mov && q d = 7 && q s2 = 6) (spw st (st 3))
+             (mn = 'lea && q d = 7 && mb s2 != ()) (mb s2 @ [b k] (from st b @ f (spw st (f = () ? () (f - k)))))
+             (mn = 'lea && q d = 6 && mb s2 != ())
+              (mb s2 @ [b k] (from st b @ f (link (wrote (fpw st (f = () ? () (f - k))) 6))))
+             ; a whole register stored to a frame slot is its save, loaded back its restore
+             (mn = 'mov && mb d != () && q s2 != ()) (mb d @ [b k] (at st b @ a (sav st (q s2) (a = () ? () (a + k)))))
+             (mn = 'mov && q d != () && mb s2 != ()) (mb s2 @ [b k] (at st b @ a (rst st (q d) (a = () ? () (a + k)))))
+             (mn = 'xchg) (foldl (\ st o (anyr o @ k (k != () ? (wr st k) st))) st os)
+             (mn = 'cpuid) (foldl wr st '(0 1 2 3))
+             (elem mn '(cmp test bt nop)) st
+             (anyr d @ k (k != () ? (wr st k) st)))))
+   ; the instruction at pc: [state successors indirect?]; one decode.l cannot read refuses
+   (x-ehstep s pc st nm lo hi rl)
+    (: d (x64-decode s pc) n <d it (last >d)
+       (!(two? it) || <it != 'op ? (scare 'obj-eh-x64 [nm pc])
+          (: mn (it 1) os (it 3) nx (pc + n < hi ? [(pc + n)] ())
+             t (two? os ? (<os @ ['lbl t] t _ ()))
+             ; a branch the linker patches is to another function: a tail call, no successor here
+             to (? (t = () || elem (pc + n - 4) rl) () (lo <= t && t < hi) [t] ())
+             ind (mn = 'jmp && two? os && two? <os && <<os = 'ind)
+             [(x-ehst st it nm)
+              (? (elem mn '(ret ud2)) () (mn = 'jmp) to (elem mn x-jcc) (nx + to) nx)
+              ind])))
    ; what a row shows of a state: the cfa, the saves, ra
    (o-ehvis st) [(st 0) (st 1) (st 4) (st 5)]
-   ; a row's dwarf from the last one's
-   (o-ehops a b)
+   ; a row's dwarf from the last one's; df the CIE's data factor, as a slot's size
+   (o-ehops df a b)
     (@ a [cb co sv ra]
        (@ b [cb2 co2 sv2 ra2]
           (: cfa (? (cb != cb2) ([12 cb2] + uleb co2) (co != co2) (14 . uleb co2) ())
              rs (catmap ([r l] \ (elem [r l] sv2 ? () (r < 64 ? [(192 + r)] (6 . uleb r)))) sv)
              os (catmap ([r l] \ (elem [r l] sv ? ()
-                                    (l % 4 != 0) (scare 'obj-eh-slot l)
-                                    (r < 64 && l <= 0) ((128 + r) . uleb (l // -4))
-                                    ([17] + uleb r + sleb (l // -4))))
+                                    (l % df != 0) (scare 'obj-eh-slot l)
+                                    (r < 64 && l <= 0) ((128 + r) . uleb (l // (0 - df)))
+                                    ([17] + uleb r + sleb (l // (0 - df)))))
                         sv2)
              (cfa + os + rs + (ra != ra2 ? [45] ())))))
    (o-ehadv d) (? (d < 64) [(64 + d)] (d < 256) [2 d] (d < 65536) (3 . le16 d) (4 . le32 d))
+   ; one step of a walk: the state after the word or instruction at pc, its successors, and
+   ; whether it is an indirect jump. x: x64, else a64
+   (o-ehstep x s pc st nm lo hi rl)
+    (x ? (x-ehstep s pc st nm lo hi rl)
+       (: w (o-w32 s pc) [(o-ehst st w nm) (o-ehnx w pc lo hi rl) ((w & 0xFFFFFC1F) = 0xD61F0000)]))
+   ; paths that meet at sp heights apart while the cfa rides fp: sp's height is lost, else ()
+   (o-ehjoin a b sp)
+    (: (pk st) [(st 0) (st 1) (st 3) (st 4) (st 5)]
+       (a 0 != sp && pk a = pk b ? [(a 0) (a 1) () (a 3) (a 4) (a 5) (a 6)] ()))
    ; one function's rows: s its lane's bytes, lo..hi its code, labs the lane's labels
-   (o-ehrows s lo hi rl labs nm)
+   (o-ehrows x s lo hi rl labs nm)
     (: sts {}
+       st0 (x ? x-st0 o-st0)
        (s6 st) (take 6 st)
        ; jst: the state at a br that is no tail call, which a table's targets share
        (walk stk jst)
         (? (atom? stk) jst
-           (: pc <stk st (sts pc) w (o-w32 s pc) st2 (o-ehst st w nm)
-              j2 (? ((w & 0xFFFFFC1F) = 0xD61F0000 && s6 st != s6 o-st0) st2 jst)
-              (walk (foldl (\ k t (: o (peep sts t ())
-                                      (? (o = ()) (pin sts t st2, t . k)
-                                         (s6 o = s6 st2) k
-                                         (scare 'obj-eh-merge [nm t]))))
-                           >stk (o-ehnx w pc lo hi rl))
-                    j2)))
-       _ (pin sts lo o-st0)
+           (: pc <stk st (sts pc)
+              (o-ehstep x s pc st nm lo hi rl @ [st2 nxs ind]
+                 (walk (foldl (\ k t (: o (peep sts t ())
+                                         (? (o = ()) (pin sts t st2, t . k)
+                                            (s6 o = s6 st2) k
+                                            (o-ehjoin o st2 (st0 0) @ m
+                                               (? (m = ()) (scare 'obj-eh-merge [nm t])
+                                                  (s6 m = s6 o) k
+                                                  (pin sts t m, t . k))))))
+                              >stk nxs)
+                       (ind && s6 st != s6 st0 ? st2 jst)))))
+       _ (pin sts lo st0)
        jst (walk [lo] ())
        ; a label no branch reached: a jump table's case, in the state of its br
        _ (two? jst ? (filter (t \ lo < t && t < hi && sts t = ()) (map labs (keys labs)) @ left
                          (walk (map (t \ (pin sts t jst, t)) (uniq (sort left))) ())) 0)
        pcs (sort (keys sts))
        (foldl (\ acc pc (@ acc [cur at bs]
-                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops cur n)]))))
-              [(o-ehvis o-st0) lo ()] pcs @ r (r 2)))
-   ; the .eh_frame lane for the functions uw names, () where none is laid
-   (o-eh lanes uw)
+                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops (x ? 8 4) cur n)]))))
+              [(o-ehvis st0) lo ()] pcs @ r (r 2)))
+   ; the .eh_frame lane for the functions uw names, () where none is laid; x: x64's, else a64's
+   (o-eh lanes uw x)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
-                  rl (map cap (filter (r \ elem (r 1) '(b26 b19 b14)) (l 5)))
+                  rl (map cap (filter (r \ elem (r 1) (x ? '(rel32) '(b26 b19 b14))) (l 5)))
                   ; by address, one record where names alias
                   fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
                                                     (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
@@ -657,11 +746,11 @@
           (: (one acc f)
               (@ acc [bs rs]
                  (@ f [lo k hi s rl lb]
-                    (: ins (o-ehrows s lo hi rl lb k)
+                    (: ins (o-ehrows x s lo hi rl lb k)
                        fo #bs n (13 + #ins) pad ((4 - n % 4) % 4)
                        [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
                         ([(fo + 8) 'secrel32 k 0 0] . rs)])))
-             r (foldl one [o-cie ()] fns)
+             r (foldl one [(x ? x-cie o-cie) ()] fns)
              [".eh_frame" 1 2 8 <r (rev <>r) {}])))
 
    ; -- the general object: a list of sections, each (name type flags align forms), each one
@@ -706,7 +795,7 @@
                    w (o-walk be <p >p gbset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
-       lanes (a64 && two? uw ? (o-eh lanes0 uw @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       lanes ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
        (ln i) (peep lnt i ())
@@ -802,7 +891,7 @@
                  ; an 8-byte word measured from its own start
                  'rel64 (o-rela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
-                 'secrel32 (o-where wx lbl @ w (o-rela off <w ra-prel32 <>w))
+                 'secrel32 (o-where wx lbl @ w (o-rela off <w (a64 ? ra-prel32 r-pc32) <>w))
                  'pc32 (o-rela off si (? a64 ra-prel32 rv rr-pc32 r-pc32) ((sa + aux) - 4))
                  ; x64 counts from the field's end, so the -4. a weak fn binds plt32, as does a
                  ; branch (E8/E9 call/jmp, 0F 8x jcc) whatever it reaches, as llvm-mc lays it;

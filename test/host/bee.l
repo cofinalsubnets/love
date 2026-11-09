@@ -457,6 +457,17 @@
       (lg-pre = "x\n")
       (<lg-r = 1) (cr-in (lg-r 1) "test_core exit=1:test_b ") (cr-in (lg-r 1) "test_a exit=0 "))
    0)
+; test_slow takes the lanes its gate just passed as passed, and runs what it names beyond them
+(: ls-d (cr-root + "/lanes-slow")
+   _ (hark ["mkdir" "-p" (ls-d + "/test/gate") (ls-d + "/out")])
+   _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (ls-d + "/test/gate/")])
+   _ (hark ["ln" "-s" cr-love (ls-d + "/out/love")])
+   _ (cr-put ls-d "Makefile" "test_slow: test_a test_c\ntest_a:\n\t@echo a >> ran\ntest_c:\n\t@echo c >> ran\n")
+   ls-r (cr-sh ls-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l --slow test_a")
+   _ (test
+      (<ls-r = 0) (cr-get (ls-d + "/ran") = "a\nc\n")
+      (cr-in (cr-get (ls-d + "/out/l/summary")) "test_slow exit=0 "))
+   0)
 
 ; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
 ; the other lanes. its makes take only what cook takes too (no -o)
