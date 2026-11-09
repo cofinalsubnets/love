@@ -15,9 +15,11 @@ lays, so the flatten is the whole "packer".
 
 ## Flashing
 
-Tap the white button on the Teensy 4.1 to enter the bootloader, then:
+Tap the white button on the Teensy 4.1 to enter the bootloader, or, with this
+image running, set its USB port to 134 baud (the loaders' ask, as Teensyduino's), then:
 
 ```
+stty -F /dev/serial/by-id/usb-love_inle_teensy41_1-if00 134   # no button
 teensy_loader_cli --mcu=TEENSY41 -w -v out/teensy41/love.hex   # or: make flash
 ```
 
