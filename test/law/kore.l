@@ -1078,6 +1078,10 @@
    ; a type's name is TYPE where a type may stand, else the declarator's ID: lr.c's pair
    (yaccw-tdn ps i) (: ts (<>yaccw-td 'terms) (k nm) <(filter (j \ ts j = nm) (jot #ts))
                        (peep ps <>(yaccw-tdt i) () ? (k "TYPE" + 65536 * (k "ID" + 1)) (k "ID")))
+   ; three states by hand, A : x ; with A's lhs as given: T N S R AN GN, rlhs rlen, dflt abase,
+   ; gdef gbase, atab achk. an lhs of N would read gdef past its end, where gbase[0] says 2
+   (yaccw-lhs a) (: c (yaccw-lrun (yaccw-ks [2 1 3 1 2 0 a 1 0 1 0 0 65535 0 2 2 1 1 2 0]) (yaccw-ks [1]) yacc-c0 65535)
+                    (c (8 + 2 * yacc-u32 c 4)))
    (test
       (string? <yaccw-cr) (<>yaccw-cr 'sr = 0) (<>yaccw-cr 'rr = 0)
       (yaccw-fz 80 (wheel 11) = 'ok)
@@ -1105,6 +1109,8 @@
       ; lr.c answers () for anything it cannot walk
       (yaccw-lrun "x" "" yacc-c0 65535 = ()) (yaccw-lrun <yaccw-cr "\0" yacc-c0 65535 = ())
       (yaccw-lrun <yaccw-cr "" "\0\0\0\0\0\0\0\0\0\0" 65535 = ()) (yaccw-lrun (<yaccw-cr + "xx") "" yacc-c0 65535 = ())
+      ; ..and a rule whose lhs is past the tables is an error, not a read past them
+      (yaccw-lhs 0 = 1) (yaccw-lhs 1 = 2) (yaccw-lhs 65535 = 2)
       (yacc-scan "%token A\n" = "no %% before the rules")
       (yacc-scan "%%\n" = "no rules")
       (yacc-scan "%%\ns : t ;\n" = "t is neither a token nor a rule on line 2")

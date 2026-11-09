@@ -13,6 +13,8 @@
 //   (crc64-on c s)           the same carried on: c what crc64 said of the bytes before s
 //   (lzma2-new dict)         a state for LZMA2 a chunk at a time, a dict-sized window
 //   (lzma2-chunk st c)       one whole chunk (control byte, header, data) -> its bytes | ()
+//   (lzma2e-new dict)        lzma2e as a stream: (lzma2e-feed st b) the chunks b lets out,
+//                            (lzma2e-end st) the rest and the end byte
 // the decoders' dictionary is the output; the coder is an optimal parse over a binary-tree finder
 #include "love.h"
 #include "bytes.h"
@@ -535,8 +537,7 @@ static unsigned xe_plan(struct lz_model *m, struct lzf *f, struct xe_px *x, stru
   k--, ops[k].back = nd[i].back, ops[k].len = nd[i].len - (two ? e : e ? e + 1 : 0); }
  return n; }
 
-// the whole stream into out (cap the worst case) -> its length, or -1. a chunk that does not
-// shrink goes raw
+// a chunk takes XE_CU bytes at most and lays XE_CC; one that does not shrink goes raw
 #define XE_CU (2u << 20)
 #define XE_CC 65536u
 #define XE_CSLACK 256u
@@ -546,61 +547,138 @@ struct xe_arena { struct lz_model m; lzp lit[0x300 << XE_LC]; uint8_t cs[XE_CC +
                   struct xe_px px; struct xe_node nd[XE_OPTS + 2 * LZ_MAXLEN + 4]; struct xe_op ops[XE_OPTS + 2 * LZ_MAXLEN + 4];
                   uint32_t ls[XE_MAXM], ds[XE_MAXM]; };
 
-// the bytes below p0 are a base the decoder holds already: indexed, never coded
+// where the chunks stand: the next one's start, and what it must reset
+struct xe_ck { uintptr_t p; int first, needprops, needstate; };
+// one chunk from c->p over s[0..n), a's model carried -> its bytes in out | -1
+static int64_t xe_chunk(const uint8_t *s, uintptr_t n, struct xe_arena *a, struct lzf *f, struct xe_ck *c,
+                        uint8_t *out, uintptr_t cap) {
+ struct lz_model *m = &a->m;
+ uintptr_t p = c->p, o = 0, start = p, uend = n - p > XE_CU ? p + XE_CU : n;
+ unsigned rst = c->first ? 3 : c->needprops ? 2 : c->needstate ? 1 : 0;
+ struct lz_rc e;
+ if (rst) lz_reset(m), a->px.left = 0;
+ rc_init(&e, a->cs, sizeof a->cs);
+ unsigned pn = 0, pi = 0;                         // a plan holds within its chunk
+ while (p < uend && rc_size(&e) < XE_CC - XE_CSLACK) {
+  if (pi == pn) {
+   if (!a->px.left) xp_price(&a->px, m);
+   pn = xe_plan(m, f, &a->px, a->nd, a->ops, a->ls, a->ds, p, uend), pi = 0; }
+  struct xe_op *op = a->ops + pi++;
+  if (a->px.left) a->px.left--;
+  if (op->back == XB_LIT) xe_lit(m, &e, s, p);
+  else if (op->back == XB_SHORT) xe_rep(m, &e, p, 0, 1);
+  else if (op->back < 4) xe_rep(m, &e, p, op->back, op->len);
+  else xe_match(m, &e, p, op->back - 4, op->len);
+  p += op->len;
+  lzf_ins(f, p, LZ_MAXLEN); }
+ rc_flush(&e);
+ c->p = p;
+ uintptr_t u = p - start, k = e.n;
+ if (k > XE_CC) return -1;
+ if (k < u) {
+  if (cap - o < k + 6) return -1;
+  out[o++] = (uint8_t) (0x80 | rst << 5 | (u - 1) >> 16);
+  out[o++] = (uint8_t) ((u - 1) >> 8); out[o++] = (uint8_t) (u - 1);
+  out[o++] = (uint8_t) ((k - 1) >> 8); out[o++] = (uint8_t) (k - 1);
+  if (rst >= 2) out[o++] = (uint8_t) (XE_PB * 45 + XE_LC);
+  memcpy(out + o, a->cs, k); o += k;
+  c->first = c->needprops = c->needstate = 0; }
+ else {
+  for (uintptr_t q = start; q < p; ) {
+   uintptr_t r = p - q > 65536 ? 65536 : p - q;
+   if (cap - o < r + 3) return -1;
+   out[o++] = c->first ? 1 : 2; out[o++] = (uint8_t) ((r - 1) >> 8); out[o++] = (uint8_t) (r - 1);
+   memcpy(out + o, s + q, r); o += r; q += r;
+   if (c->first) c->needprops = 1;
+   c->first = 0; }
+  c->needstate = 1; }
+ return (int64_t) o; }
+
+static void xe_arena_init(struct xe_arena *a) {
+ memset(a->h2, 0, sizeof a->h2), memset(a->h3, 0, sizeof a->h3), memset(a->h4, 0, sizeof a->h4);
+ a->m.lit = a->lit; a->m.lc = XE_LC; a->m.lp = 0; a->m.pb = XE_PB;
+ xp_init(&a->px); }
+
+// the whole stream into out (cap the worst case) -> its length, or -1. the bytes below p0 are a
+// base the decoder holds already: indexed, never coded
 static int64_t xe_go(const uint8_t *s, uintptr_t n, uint32_t dict, uint8_t *out, uintptr_t cap,
                      struct xe_arena *a, uint32_t *son, uint32_t wmask, uintptr_t p0) {
- struct lz_model *m = &a->m;
  struct lzf f = { s, n, a->h2, a->h3, a->h4, son, wmask, dict, 0, XE_H4BITS, XE_DEPTH, XE_SKIPDEPTH, XE_NICE, XE_MAXM };
- uintptr_t p = p0, o = 0;
- int first = !p0, needprops = 1, needstate = 1;
- memset(a->h2, 0, sizeof a->h2), memset(a->h3, 0, sizeof a->h3), memset(a->h4, 0, sizeof a->h4);
+ struct xe_ck c = { p0, !p0, 1, 1 };
+ uintptr_t o = 0;
+ xe_arena_init(a);
  lzf_ins(&f, p0, LZ_MAXLEN);
- m->lit = a->lit; m->lc = XE_LC; m->lp = 0; m->pb = XE_PB;
- xp_init(&a->px);
- while (p < n) {
-  uintptr_t start = p, uend = n - p > XE_CU ? p + XE_CU : n;
-  unsigned rst = first ? 3 : needprops ? 2 : needstate ? 1 : 0;
-  struct lz_rc e;
-  if (rst) lz_reset(m), a->px.left = 0;
-  rc_init(&e, a->cs, sizeof a->cs);
-  unsigned pn = 0, pi = 0;                         // a plan holds within its chunk
-  while (p < uend && rc_size(&e) < XE_CC - XE_CSLACK) {
-   if (pi == pn) {
-    if (!a->px.left) xp_price(&a->px, m);
-    pn = xe_plan(m, &f, &a->px, a->nd, a->ops, a->ls, a->ds, p, uend), pi = 0; }
-   struct xe_op *op = a->ops + pi++;
-   if (a->px.left) a->px.left--;
-   if (op->back == XB_LIT) xe_lit(m, &e, s, p);
-   else if (op->back == XB_SHORT) xe_rep(m, &e, p, 0, 1);
-   else if (op->back < 4) xe_rep(m, &e, p, op->back, op->len);
-   else xe_match(m, &e, p, op->back - 4, op->len);
-   p += op->len;
-   lzf_ins(&f, p, LZ_MAXLEN); }
-  rc_flush(&e);
-  uintptr_t u = p - start, c = e.n;
-  if (c > XE_CC) return -1;
-  if (c < u) {
-   if (cap - o < c + 6) return -1;
-   out[o++] = (uint8_t) (0x80 | rst << 5 | (u - 1) >> 16);
-   out[o++] = (uint8_t) ((u - 1) >> 8); out[o++] = (uint8_t) (u - 1);
-   out[o++] = (uint8_t) ((c - 1) >> 8); out[o++] = (uint8_t) (c - 1);
-   if (rst >= 2) out[o++] = (uint8_t) (XE_PB * 45 + XE_LC);
-   memcpy(out + o, a->cs, c); o += c;
-   first = needprops = needstate = 0; }
-  else {
-   for (uintptr_t q = start; q < p; ) {
-    uintptr_t k = p - q > 65536 ? 65536 : p - q;
-    if (cap - o < k + 3) return -1;
-    out[o++] = first ? 1 : 2; out[o++] = (uint8_t) ((k - 1) >> 8); out[o++] = (uint8_t) (k - 1);
-    memcpy(out + o, s + q, k); o += k; q += k;
-    if (first) needprops = 1;
-    first = 0; }
-   needstate = 1; } }
+ while (c.p < n) {
+  int64_t k = xe_chunk(s, n, a, &f, &c, out + o, cap - o);
+  if (k < 0) return -1;
+  o += (uintptr_t) k; }
  if (cap - o < 1) return -1;
  out[o++] = 0;
  return (int64_t) o; }
 
 static uintptr_t xe_cap(uintptr_t n) { return n + 16 * (n / 65536 + 2); }
+
+// the coder as a stream: one state, fed in pieces, xe_go's chunks. it holds offsets, as its string
+// may move; its buffer keeps the dictionary behind the next chunk and the chunk with what its
+// last position indexes past it, and slides by whole son cycles, the tables with it
+#define XS_MAGIC 0x787a7365u
+struct xs_st { uint32_t magic, dict, wmask; uintptr_t w, size, cap, n, ins, oar, oson, obuf; struct xe_ck c; };
+#define XS_UP(x) (((x) + 63) & ~(uintptr_t) 63)
+static uintptr_t xs_lay(struct xs_st *S, uint32_t dict) {
+ uintptr_t w = 1, at = XS_UP(sizeof *S);
+ while (w < dict) w <<= 1;
+ memset(S, 0, sizeof *S);
+ S->dict = dict, S->w = w, S->wmask = (uint32_t) (w - 1), S->cap = dict + w + XE_CU + LZ_MAXLEN;
+ S->oar = at, at += XS_UP(sizeof(struct xe_arena));
+ S->oson = at, at += XS_UP(2 * w * sizeof(uint32_t));
+ S->obuf = at, at += S->cap + 16;
+ return S->size = at; }
+// the arena's model and the finder over the buffer as it stands
+static struct xe_arena *xs_view(struct xs_st *S, struct lzf *f) {
+ uint8_t *B = (uint8_t*) S;
+ struct xe_arena *a = (struct xe_arena*) (B + S->oar);
+ a->m.lit = a->lit;
+ *f = (struct lzf) { B + S->obuf, S->n, a->h2, a->h3, a->h4, (uint32_t*) (B + S->oson), S->wmask, S->dict, S->ins,
+                     XE_H4BITS, XE_DEPTH, XE_SKIPDEPTH, XE_NICE, XE_MAXM };
+ return a; }
+static void xs_rebase(uint32_t *t, uintptr_t n, uint32_t by) {
+ for (uintptr_t i = 0; i < n; i++) t[i] = t[i] > by ? t[i] - by : 0; }
+static void xs_slide(struct xs_st *S, struct xe_arena *a, struct lzf *f) {
+ uint8_t *B = (uint8_t*) S;
+ uintptr_t by = S->c.p > S->dict ? (S->c.p - S->dict) / S->w * S->w : 0;
+ memmove(B + S->obuf, B + S->obuf + by, S->n - by);
+ S->n -= by, S->c.p -= by, f->ins -= by, f->n = S->n;
+ xs_rebase(a->h2, 1u << 16, (uint32_t) by), xs_rebase(a->h3, 1u << 16, (uint32_t) by);
+ xs_rebase(a->h4, 1u << XE_H4BITS, (uint32_t) by), xs_rebase(f->son, 2 * S->w, (uint32_t) by); }
+// the most a feed of n bytes, or an end, may lay
+static uintptr_t xs_room(const struct xs_st *S, uintptr_t n, int end) {
+ uintptr_t open = S->n - S->c.p + n;
+ return !end && open < XE_CU + LZ_MAXLEN ? 16 : xe_cap(open) + 16; }
+// n bytes of in, and with end the last chunks and the end mark -> what is laid in o | -1 torn
+static intptr_t xs_feed(struct xs_st *S, const uint8_t *in, uintptr_t n, int end, uint8_t *o, uintptr_t cap) {
+ struct lzf f;
+ struct xe_arena *a = xs_view(S, &f);
+ uint8_t *buf = (uint8_t*) S + S->obuf;
+ uintptr_t at = 0;
+ int64_t k;
+ for (;;) {
+  while (S->n - S->c.p >= XE_CU + LZ_MAXLEN) {
+   f.n = S->n;
+   if ((k = xe_chunk(buf, S->n, a, &f, &S->c, o + at, cap - at)) < 0) return S->magic = 0, -1;
+   at += (uintptr_t) k; }
+  if (!n) break;
+  if (S->n == S->cap) xs_slide(S, a, &f);
+  uintptr_t t = S->cap - S->n < n ? S->cap - S->n : n;
+  memcpy(buf + S->n, in, t), S->n += t, in += t, n -= t; }
+ if (end) {
+  f.n = S->n;
+  while (S->c.p < S->n) {
+   if ((k = xe_chunk(buf, S->n, a, &f, &S->c, o + at, cap - at)) < 0) return S->magic = 0, -1;
+   at += (uintptr_t) k; }
+  if (cap - at < 1) return S->magic = 0, -1;
+  o[at++] = 0, S->magic = 0; }
+ S->ins = f.ins;
+ return (intptr_t) at; }
 
 // --- crc64 ----------------------------------------------------------------------------------
 // eight bytes a step, as hash.c's crc32; the tables are write-once and idempotent
@@ -895,7 +973,45 @@ love_noinline static struct g *host_lzma2_chunk(struct g *g) {
  memcpy(txt(g->sp[0]), l2_cask(g->sp[1])->bytes + L2_HEAD + o0, (uintptr_t) got);
  return g->sp[2] = g->sp[0], g->sp += 2, g; }
 
+// (lzma2e-new dict) -> a coder of one raw LZMA2 stream | (). (lzma2e-feed st b) -> the bytes b
+// lets out, maybe "" | () torn; (lzma2e-end st) -> the rest and the end mark, the state spent
+static struct str *xs_cask(word x) {
+ struct str *s = state_str(x);
+ struct xs_st *S = s && s->len >= sizeof(struct xs_st) ? (struct xs_st*) s->bytes : NULL;
+ return S && S->magic == XS_MAGIC && S->size == s->len ? s : NULL; }
+love_noinline static struct g *host_lzma2e_new(struct g *g) {
+ word dw = g->sp[0];
+ if (!oddp(dw) || getcharm(dw) < 4096 || getcharm(dw) > (1l << 30)) return g->sp[0] = ZeroPoint, g;
+ struct xs_st L;
+ uintptr_t n = xs_lay(&L, (uint32_t) getcharm(dw));
+ union u *k = new_state(&g, n, L.obuf);            // the tables zero, the buffer not
+ if (!k) return g;
+ struct xs_st *S = (struct xs_st*) ((struct state*) k)->str->bytes;
+ struct lzf f;
+ memcpy(S, &L, sizeof L), S->magic = XS_MAGIC, S->c = (struct xe_ck) { 0, 1, 1, 1 };
+ xe_arena_init(xs_view(S, &f));
+ return g->sp[0] = word(k), g; }
+static struct g *xs_lay1(struct g *g, int end) {
+ uintptr_t ar = !end;                              // args past the state
+ struct str *cs = xs_cask(g->sp[0]);
+ if (!cs || (!end && !strp(g->sp[1]))) return g->sp[ar] = ZeroPoint, g->sp += ar, g;
+ struct xs_st *S = (struct xs_st*) cs->bytes;
+ uintptr_t n = end ? 0 : len(g->sp[1]), cap = xs_room(S, n, end);
+ uint8_t *out = alloc(NULL, cap);
+ intptr_t got = out ? xs_feed(S, end ? (const uint8_t*) "" : (const uint8_t*) txt(g->sp[1]), n, end, out, cap) : -1;
+ if (got >= 0 && ok(g = str0(g, (uintptr_t) got))) {   // pushes: out over the args
+  memcpy(txt(g->sp[0]), out, (uintptr_t) got);
+  g->sp[ar + 1] = g->sp[0], g->sp += ar + 1; }
+ else if (ok(g)) g->sp[ar] = ZeroPoint, g->sp += ar;
+ if (out) alloc(out, 0);
+ return g; }
+love_noinline static struct g *host_lzma2e_feed(struct g *g) { return xs_lay1(g, 0); }
+love_noinline static struct g *host_lzma2e_end(struct g *g) { return xs_lay1(g, 1); }
+
 static LvmWrap(lvm_crc64_on, host_crc64_on)
+static LvmWrap(lvm_lzma2e_new, host_lzma2e_new)
+static LvmWrap(lvm_lzma2e_feed, host_lzma2e_feed)
+static LvmWrap(lvm_lzma2e_end, host_lzma2e_end)
 static LvmWrap(lvm_lzma2_new, host_lzma2_new)
 static LvmWrap(lvm_lzma2_chunk, host_lzma2_chunk)
 static LvmWrap(lvm_lzma2len, host_lzma2len)
@@ -918,4 +1034,7 @@ LvDef("lzma2-new", lzma2_new, 1, "xz");
 LvDef("lzma2-chunk", lzma2_chunk, 2, "xz");
 LvDef("lzma-new", lzma_new, 3, "xz");
 LvDef("lzma-feed", lzma_feed, 2, "xz");
+LvDef("lzma2e-new", lzma2e_new, 1, "xz");
+LvDef("lzma2e-feed", lzma2e_feed, 2, "xz");
+LvDef("lzma2e-end", lzma2e_end, 1, "xz");
 #endif

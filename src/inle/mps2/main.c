@@ -93,7 +93,8 @@ static struct def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 #include "../ffalloc.h"
 
 // the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
-#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4))"
+// the book here has no tty, so the editor's sizes are the no-terminal ones
+#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4) && (cite 'cli 'ttysize) 7 19 = [24 80])"
 static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x60000000u)

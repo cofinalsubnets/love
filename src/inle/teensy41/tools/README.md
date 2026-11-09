@@ -1,9 +1,7 @@
 # teensy41/tools
 
-Unlike `rp2040/tools` (which needs custom love programs -- `pad_checksum.l` to
-stamp the boot2 CRC and `elf2uf2.l` to pack the .uf2), the Teensy 4.1 flashing
-path needs no bespoke tooling: the i.MX RT1062 boots a plain Intel HEX, and the
-PJRC bootloader chip on the board accepts it directly.
+The Teensy 4.1 flashing path needs no bespoke tooling: the i.MX RT1062 boots a plain
+Intel HEX, and the PJRC bootloader chip on the board accepts it directly.
 
 ## Producing the image
 
@@ -15,9 +13,11 @@ lays, so the flatten is the whole "packer".
 
 ## Flashing
 
-Tap the white button on the Teensy 4.1 to enter the bootloader, then:
+Tap the white button on the Teensy 4.1 to enter the bootloader, or, with this
+image running, set its USB port to 134 baud (the loaders' ask, as Teensyduino's), then:
 
 ```
+stty -F /dev/serial/by-id/usb-love_inle_teensy41_1-if00 134   # no button
 teensy_loader_cli --mcu=TEENSY41 -w -v out/teensy41/love.hex   # or: make flash
 ```
 
