@@ -2324,11 +2324,12 @@
              _ ())
        (go fs))
    ; an sp-only vfp, before allocation: a copy of two vregs neither of which can hold a double's
-   ; high half is one vmov.f32. a high half rides in from a double load or a gp pair and on
-   ; through copies, as lov6 has it
+   ; high half is one vmov.f32. a high half rides in from a double load, a gp pair or a machine
+   ; register (a parameter, a call's answer) and on through copies, as lov6 has it
    (t2mov g fs)
     (: hi {}
-       (dbl? f) (f @ ['ldsd d _ _] d ['movqrr d _ _] d ['stsd _ _ s] s ['movrrq _ _ s] s _ ())
+       (dbl? f) (f @ ['ldsd d _ _] d ['movqrr d _ _] d ['stsd _ _ s] s ['movrrq _ _ s] s
+                     (['movapd d s] && !(lovr? s)) d _ ())
        _ (map (f \ (dbl? f @ () () d (pin hi d 1))) fs)
        (prop _) (foldl (c \ f \ (f @ (['movapd d s] && hi s && !(hi d)) (pin hi d 1, c + 1) _ c)) 0 fs @ 0 0 _ (prop 0))
        _ (prop 0)
