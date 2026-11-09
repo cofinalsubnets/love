@@ -293,6 +293,10 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
          closes = closeat >= 0 ? g->sp[closeat] : ZeroPoint;
  fflush(NULL);                                               // not twice in the child
  stdin_exact(g);
+ // a child on our stdin reads it blocking, as found: the bit is the shared description's,
+ // so held it would answer the child EAGAIN. our own reads then take it per read (fd.c)
+ if (love_inflag && (in < 0 || in == STDIN_FILENO))
+  fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(love_inflag)), love_inflag = 0;
  pid_t pid = fork();
  if (pid < 0 && errno == ENOSYS) return host_spawnk(g, cav, (int[3]) { in, out, err }, fdmap, closes, pg);
  if (pid < 0) return push(g, 1, love_err(g, errno));
