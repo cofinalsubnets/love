@@ -257,12 +257,18 @@
                       "prog: $(OBJ)"  "\t$(CC) -o $@ $(OBJ)"
                       "%.o: %.c"      "\t$(CC) -c -o $@ $<"
                       "clean:"        "\t-rm -f prog $(OBJ)"]))
-   _ (ok "emit: .PHONY target -> symbol"   (has? em "(recipe 'all "))
-   _ (ok "emit: file target -> string"     (has? em "(recipe '\"prog\" "))
-   _ (ok "emit: var-resolved step"         (has? em ("(\"sh\" \"-c\" \"cc -o prog " + (eo + "\")"))))
-   _ (ok "emit: pattern-resolved step"     (has? em ("(\"sh\" \"-c\" \"cc -c -o " + (dir + ("/e/a.o " + (dir + "/e/a.c\")"))))))
-   _ (ok "emit: default ticket emitted first" (has? em "(recipe 'all "))
-   _ (ok "emit: trailing cook call"        (has? em "(cook-all 0)"))
+   ; read back as forms: each (recipe 'TARGET 'PREREQS 'STEPS), a quote's datum its second
+   ef (sounds em)
+   rs (filter (f \ two? f && <f = 'recipe) ef)
+   (tgt r) (<>(<>r))
+   (steps r) (r 3 @ (q l) l _ ())
+   ss (catmap steps rs)
+   _ (ok "emit: .PHONY target -> symbol"   (elem 'all (map tgt rs)))
+   _ (ok "emit: file target -> string"     (elem "prog" (map tgt rs)))
+   _ (ok "emit: var-resolved step"         (elem ["sh" "-c" ("cc -o prog " + eo)] ss))
+   _ (ok "emit: pattern-resolved step"     (elem ["sh" "-c" ("cc -c -o " + dir + "/e/a.o " + dir + "/e/a.c")] ss))
+   _ (ok "emit: default ticket emitted first" (two? rs && tgt <rs = 'all))
+   _ (ok "emit: trailing cook call"        (<(rev ef) = '(cook-all 0)))
 
    ; round-trip: cook the emitted Cookfile; the rule only writes a file, so it is hermetic
    _ (sh ("mkdir -p " + (dir + "/e")))
