@@ -82,14 +82,12 @@ static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b,
  for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
  return 0; }
 
+// the loops laid and proved by mag.l
+#include "mag_gen.h"
+
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
 static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
- if (na < nb) { love_limb const *t = a; a = b; b = t; int u = na; na = nb; nb = u; }
- dlimb s, c = 0; int i = 0;
- for (; i < nb; i++) s = (dlimb) a[i] + b[i] + c, r[i] = (love_limb) s, c = s >> limb_bits;
- for (; i < na; i++) s = (dlimb) a[i] + c,        r[i] = (love_limb) s, c = s >> limb_bits;
- if (c) r[i++] = (love_limb) c;
- return i; }
+ return na < nb ? mag_add_ge(r, b, nb, a, na) : mag_add_ge(r, a, na, b, nb); }
 
 // r = a - b, a >= b, r distinct -> na, high zeros the caller's
 static love_noinline int mag_sub(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {

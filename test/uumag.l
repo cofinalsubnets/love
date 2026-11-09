@@ -1,5 +1,5 @@
-; test/uunat.l -- the arithmetic num.c's magnitudes read: division by a base that is named, never
-; written out, and a limb array's value as a sum. uu.l's mul and uuinf.l's order underneath
+; test/uumag.l -- the arithmetic under num.c's magnitudes (test/uumagvc.l): division by a named
+; base, never written out, and a limb array's value as a sum. uu.l's mul and uuinf.l's order beneath
 
 ; --- division by m: x div m counts the times x mod m wraps ---
 (test
@@ -206,3 +206,102 @@
        (pathscomp0 nat (add (add (un-val B R i) (mul (inf-mod B (add (add (A i) (V i)) c)) (uu-app i B))) (mul (un-div B (add (add (A i) (V i)) c)) (mul B (uu-app i B)))) (add (add (un-val B A i) (un-val B V i)) (mul (add (A i) (V i)) (uu-app i B))) (add (un-val B A (succ i)) (un-val B V (succ i)))
          (un-carry B h (un-val B R i) (add (un-val B A i) (un-val B V i)) c (add (A i) (V i)) (add (add (A i) (V i)) c) (uu-app i B) e (idpath (add (add (A i) (V i)) c)))
          (pathsinv0 nat (add (add (un-val B A i) (mul (A i) (uu-app i B))) (add (un-val B V i) (mul (V i) (uu-app i B)))) (add (add (un-val B A i) (un-val B V i)) (mul (add (A i) (V i)) (uu-app i B))) (un-gather (un-val B A i) (A i) (un-val B V i) (V i) (uu-app i B))))))))
+
+; --- the bounds: a carry stays at most 1, and a limb sum fits two limbs ---
+(test
+ (defq un-add1 (pi b nat (paths nat (add b 1) (succ b)))
+   (lam b (pathscomp0 nat (add b 1) (add (succ b) 0) (succ b) (natplusnsm b 0) (natplusr0 (succ b)))))
+ (defq un-B2 (pi B nat (paths nat (mul B 2) (add B B)))
+   (lam B (pathscomp0 nat (mul B 2) (add B (mul B 1)) (add B B) (multnsm B 1)
+     (maponpaths nat nat (lam z (add B z)) (mul B 1) B (natmultr1 B)))))
+ ; a + b + c below 2B, for limbs a, b and a carry c
+ (defq un-sum3lt (pi B nat a nat b nat c nat ga (inf-lt a B) gb (inf-lt b B) gc (inf-le c 1)
+     (inf-lt (add (add a b) c) (add B B)))
+   (lam B a b c ga gb gc
+     (inf-lttr (add a (add b c)) (add (add a b) c) (add B B)
+       (pathsinv0 nat (add (add a b) c) (add a (add b c)) (natplusassoc a b c))
+       (inf-lttrans (add a (add b c)) (add B (add b c)) (add B B)
+         (inf-ltaddr a B (add b c) ga)
+         (inf-addl B (add b c) B
+           (inf-letrans (add b c) (add b 1) B (inf-addl b c 1 gc)
+             (inf-letr (succ b) (add b 1) B (pathsinv0 nat (add b 1) (succ b) (un-add1 b)) (inf-ltsu b B gb))))))))
+ ; below 2B: its quotient by B at most 1
+ (defq un-carry1 (pi B nat h (inf-lt 0 B) s nat g (inf-lt s (add B B)) (inf-le (un-div B s) 1))
+   (lam B h s g (inf-ltsle (un-div B s) 1
+     (un-divlt B h s 2 (inf-lttrans s (add B B) (mul B 2) g
+       (inf-letl (add B B) (add B B) (mul B 2) (pathsinv0 nat (mul B 2) (add B B) (un-B2 B)) (isreflnatleh (add B B))))))))
+ ; two widths are their product
+ (defq un-powadd (pi a nat b nat (paths nat (inf-pow (add a b)) (mul (inf-pow a) (inf-pow b))))
+   (lam a b (nat_rect (lam q (paths nat (inf-pow (add q b)) (mul (inf-pow q) (inf-pow b))))
+     (pathsinv0 nat (mul 1 (inf-pow b)) (inf-pow b) (natmultl1 (inf-pow b)))
+     (lam k IH (pathscomp0 nat (inf-pow (succ (add k b))) (add (mul (inf-pow k) (inf-pow b)) (mul (inf-pow k) (inf-pow b)))
+                  (mul (inf-pow (succ k)) (inf-pow b))
+       (un-add2 (inf-pow (add k b)) (mul (inf-pow k) (inf-pow b)) (inf-pow (add k b)) (mul (inf-pow k) (inf-pow b)) IH IH)
+       (pathsinv0 nat (mul (add (inf-pow k) (inf-pow k)) (inf-pow b)) (add (mul (inf-pow k) (inf-pow b)) (mul (inf-pow k) (inf-pow b)))
+         (natrdistr (inf-pow k) (inf-pow k) (inf-pow b)))))
+     a)))
+ ; 2B fits two limbs, for a limb of a bit or more
+ (defq un-pow2 (pi L nat g (inf-le 1 L) (inf-le 2 (inf-pow L)))
+   (lam L (nat_rect (lam q (pi g (inf-le 1 q) (inf-le 2 (inf-pow q))))
+     (lam g (fromempty (inf-le 2 1) (nopathstruetofalse g)))
+     (lam k u g (inf-dbl 1 (inf-pow k) (inf-ltsu 0 (inf-pow k) (inf-powpos k))))
+     L)))
+ (defq un-2fit (pi L nat g (inf-le 1 L) (inf-le (add (inf-pow L) (inf-pow L)) (inf-pow (add L L))))
+   (lam L g (inf-letl (add (inf-pow L) (inf-pow L)) (mul (inf-pow L) (inf-pow L)) (inf-pow (add L L))
+     (pathsinv0 nat (inf-pow (add L L)) (mul (inf-pow L) (inf-pow L)) (un-powadd L L))
+     (inf-letr (mul (inf-pow L) 2) (add (inf-pow L) (inf-pow L)) (mul (inf-pow L) (inf-pow L)) (un-B2 (inf-pow L))
+       (un-mulle (inf-pow L) 2 (inf-pow L) (un-pow2 L g)))))))
+
+; --- the same with b spent: Vm what b held, whole ---
+(test
+ ; (a + v) + x = (a + x) + v
+ (defq un-swap3 (pi a nat v nat x nat (paths nat (add (add a v) x) (add (add a x) v)))
+   (lam a v x (pathscomp0 nat (add (add a v) x) (add a (add v x)) (add (add a x) v)
+     (natplusassoc a v x)
+     (pathscomp0 nat (add a (add v x)) (add a (add x v)) (add (add a x) v)
+       (maponpaths nat nat (lam z (add a z)) (add v x) (add x v) (natpluscomm v x))
+       (pathsinv0 nat (add (add a x) v) (add a (add x v)) (natplusassoc a x v))))))
+ (defq un-addstep1 (pi B nat h (inf-lt 0 B) R (pi j nat nat) A (pi j nat nat) Vm nat i nat c nat
+     e (paths nat (add (un-val B R i) (mul c (uu-app i B))) (add (un-val B A i) Vm))
+     (paths nat (add (un-val B (inf-upd R i (inf-mod B (add (A i) c))) (succ i)) (mul (un-div B (add (A i) c)) (uu-app (succ i) B))) (add (un-val B A (succ i)) Vm)))
+   (lam B h R A Vm i c e
+     (pathscomp0 nat (add (un-val B (inf-upd R i (inf-mod B (add (A i) c))) (succ i)) (mul (un-div B (add (A i) c)) (uu-app (succ i) B))) (add (add (un-val B R i) (mul (inf-mod B (add (A i) c)) (uu-app i B))) (mul (un-div B (add (A i) c)) (mul B (uu-app i B)))) (add (un-val B A (succ i)) Vm)
+       (un-add2 (un-val B (inf-upd R i (inf-mod B (add (A i) c))) (succ i)) (add (un-val B R i) (mul (inf-mod B (add (A i) c)) (uu-app i B)))
+         (mul (un-div B (add (A i) c)) (uu-app (succ i) B)) (mul (un-div B (add (A i) c)) (mul B (uu-app i B)))
+         (un-valst B R i (inf-mod B (add (A i) c))) (idpath (mul (un-div B (add (A i) c)) (mul B (uu-app i B)))))
+       (pathscomp0 nat (add (add (un-val B R i) (mul (inf-mod B (add (A i) c)) (uu-app i B))) (mul (un-div B (add (A i) c)) (mul B (uu-app i B)))) (add (add (un-val B A i) Vm) (mul (A i) (uu-app i B))) (add (un-val B A (succ i)) Vm)
+         (un-carry B h (un-val B R i) (add (un-val B A i) Vm) c (A i) (add (A i) c) (uu-app i B) e (idpath (add (A i) c)))
+         (un-swap3 (un-val B A i) Vm (mul (A i) (uu-app i B)))))))
+)
+
+; --- what the loops' obligations cite ---
+(test
+ (defq un-ltp1 (pi n nat (inf-lt n (add n 1)))
+   (lam n (inf-lttrans n (succ n) (add n 1) (inf-lelts n n (isreflnatleh n))
+     (inf-letl (succ n) (succ n) (add n 1) (pathsinv0 nat (add n 1) (succ n) (un-add1 n)) (isreflnatleh (succ n))))))
+ (defq un-1ltB (pi L nat g (inf-le 1 L) (inf-lt 1 (inf-pow L)))
+   (lam L g (inf-lttrans 1 2 (inf-pow L) (idpath true) (un-pow2 L g))))
+ ; under 2B: under a dlimb's width
+ (defq un-dfit (pi L nat g (inf-le 1 L) x nat h (inf-lt x (add (inf-pow L) (inf-pow L))) (inf-lt x (inf-pow (add L L))))
+   (lam L g x h (inf-lttrans x (add (inf-pow L) (inf-pow L)) (inf-pow (add L L)) h (un-2fit L g))))
+ ; a limb and a carry, under 2B
+ (defq un-sum2lt (pi B nat h (inf-lt 0 B) a nat c nat ga (inf-lt a B) gc (inf-le c 1) (inf-lt (add a c) (add B B)))
+   (lam B h a c ga gc (inf-lttrans (add a c) (add B c) (add B B) (inf-ltaddr a B c ga)
+     (inf-addl B c B (inf-letrans c 1 B gc (inf-ltsu 0 B h))))))
+ (defq un-sum2llt (pi B nat a nat b nat ga (inf-lt a B) gb (inf-lt b B) (inf-lt (add a b) (add B B)))
+   (lam B a b ga gb (inf-lttrans (add a b) (add B b) (add B B) (inf-ltaddr a B b ga) (inf-addl B b B (inf-ltle b B gb)))))
+ ; a carry under a dlimb's width
+ (defq un-cfit (pi L nat g (inf-le 1 L) q nat h (inf-le q 1) (inf-lt q (inf-pow (add L L))))
+   (lam L g q h (inf-lelt q 1 (inf-pow (add L L)) h (un-1ltB (add L L) (inf-letrans 1 L (add L L) g (inf-leaddr L L))))))
+)
+
+; --- cancelling a sum, for the borrow's step ---
+(test
+ (defq un-cancr (pi x nat y nat k nat e (paths nat (add x k) (add y k)) (paths nat x y))
+   (lam x y k e (inf-addcan k x y
+     (pathscomp0 nat (add k x) (add x k) (add k y) (natpluscomm k x)
+       (pathscomp0 nat (add x k) (add y k) (add k y) e (natpluscomm y k))))))
+ ; q at most 1: q + (1 - q) = 1
+ (defq un-one (pi q nat h (inf-le q 1) (paths nat (add q (natminus 1 q)) 1))
+   (lam q h (inf-addsub q 1 h)))
+)

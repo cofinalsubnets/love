@@ -14,6 +14,8 @@
                 (two? t) ((sub v <t) . (sub v >t))
                 t)
    (fit t) ['inf-lt t '(inf-pow w)]
+   (lbase sp) ['inf-pow (peep sp 'limb 'L)]
+   (dfit sp t) (peep sp 'limb 'L @ l ['inf-lt t ['inf-pow ['add l l]]])
    (quit-on s) (puts "\(s)\n", quit 1)
 
    ; a spec may hold a word as what each of its bits is, 'bitv naming it: a function, as an array is
@@ -102,6 +104,17 @@
      'wg [(no-tm 'wg) owes-none (\ sp C [f] ['dot ['deref ['var "w"]] f]) 'none]
      'tf [(no-tm 'tf) owes-none (\ sp C [n] ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]) 'none]
      'taddr [(no-tm 'taddr) owes-none (\ sp C [n] ['addr ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]]) 'none]
+     ; limbs, B = 2^L for the spec's 'limb width L: a dlimb sum or product fits two limbs, lo
+     ; and hi split one at B, and lc lays a value under B as a limb
+     'dl [(\ sp v T [x] (T x)) owes-parts (\ sp C [x] ['cast '(named "dlimb") (C x)]) 'fit]
+     'd+ [(\ sp v T [a b] ['add (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(dfit sp (T e))]))
+          (\ sp C [a b] ['bin '+ (C a) (C b)]) 'fit]
+     'd* [(\ sp v T [a b] ['mul (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(dfit sp (T e))]))
+          (\ sp C [a b] ['bin '* (C a) (C b)]) 'fit]
+     'lo [(\ sp v T [x] ['inf-mod (lbase sp) (T x)]) owes-parts (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
+     'hi [(\ sp v T [x] ['un-div (lbase sp) (T x)]) owes-parts (\ sp C [x] ['bin 'shr (C x) ['var "limb_bits"]]) 'fit]
+     'lc [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) (lbase sp)]]))
+          (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      ; an opaque C value passed through, the context a call is handed: its term is ()
      'raw [(\ sp v T xs ()) owes-none (\ sp C [x] x) 'none]}
    (op-row e) (peep vc-ops <e () @ r (two? r ? r (quit-on "vc: \(show <e) is no operation")))
@@ -192,7 +205,8 @@
                ss))
    (written f os) (map (a \ <a) (f 'state) + map (a \ <>a) os)
    ; a spec may track an array's bytes, 'model naming what it holds at entry; a write is then inf-blk
-   (tracked sp A) (has? (peep sp 'model ()) A ? [A] ())
+   ; or its values, 'vals naming it: a poke is then inf-upd. 'dvars are dlimbs, which fit two limbs
+   (tracked sp A) (has? (peep sp 'model ()) A || elem A (peep sp 'vals ()) ? [A] ())
    (wrote sp v A i B j n)
     (has? (peep sp 'model ()) A
      ? ((A . ['inf-blk (lk v A) (tm sp v i) (has? v B ? (lk v B) B) (tm sp v j) n]) . v)
@@ -285,7 +299,7 @@
    (run sp ss v hy k)
     (atom? ss ? (k v hy)
      (<ss @ (L 'set x e)
-             (vcs (show L) (ob sp v e + [(fit (tm sp v e))]) hy
+             (vcs (show L) (ob sp v e + [(elem x (peep sp 'dvars ()) ? (dfit sp (tm sp v e)) (fit (tm sp v e)))]) hy
               + run sp >ss ((x . tm sp v e) . v) hy k)
             ; x - y does not wrap, and fits where x did
             (L 'dec x e)
@@ -387,11 +401,12 @@
    (untracked sp A v) (has? (peep sp 'model ()) A ? (quit-on "inf: \(sp 'short) reaches tracked \(A) by a way the walk cannot follow") v)
    ; a tracked poke's bytes come from an array, or the walk cannot say what they are
    (poked sp v A i e n)
-    (has? (peep sp 'model ()) A
-     ? (e @ ('at B j) (wrote sp v A i B j n)
-            ('ld64 B j) (wrote sp v A i B j n)
-            (quit-on "inf: \(sp 'short) pokes a tracked \(A) with \(show e)"))
-     v)
+    (? (elem A (peep sp 'vals ())) ((A . ['inf-upd (arr v A) (tm sp v i) (tm sp v e)]) . v)
+       (has? (peep sp 'model ()) A)
+        (e @ ('at B j) (wrote sp v A i B j n)
+             ('ld64 B j) (wrote sp v A i B j n)
+             (quit-on "inf: \(sp 'short) pokes a tracked \(A) with \(show e)"))
+       v)
    (mv-ob sp v A i B j n)
     (ob sp v i + ob sp v j + ob sp v n
      + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]
