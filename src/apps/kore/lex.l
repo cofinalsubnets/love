@@ -398,6 +398,7 @@
       extern char *yytext;
       extern int yyleng;
       extern int yylineno;
+      extern int yy_flex_debug;
       int yylex(void);
       YY_BUFFER_STATE yy_create_buffer(FILE *f, int size);
       void yy_switch_to_buffer(YY_BUFFER_STATE b);
@@ -429,6 +430,7 @@
       char *yytext;
       int yyleng;
       int yylineno = 1;
+      int yy_flex_debug;   /* flex's trace switch: set by some callers, read by none here */
       static long yy_ncap;
       /* the byte held off behind yytext's nul, and whose */
       static YY_BUFFER_STATE yy_hbuf;

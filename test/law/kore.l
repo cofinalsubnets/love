@@ -1115,7 +1115,9 @@
       (yacc-scan "%%\n" = "no rules")
       (yacc-scan "%%\ns : t ;\n" = "t is neither a token nor a rule on line 2")
       (yacc-scan "%token s\n%%\ns : 'x' ;\n" = "s is a token and a rule on line 3")
-      (yacc-scan "%%\ns : {a} 'x' ;\n" = "not yet: an action mid-rule on line 2")
+      ; a mid-rule action is an empty rule's; love text still refuses one
+      (two? (yacc-scan "%%\ns : {a} 'x' ;\n"))
+      (trap (_ \ yacc-acts <>(yacc-scan "%%\ns : {a} 'x' ;\n")) 0 (a \ b \ b) = "not yet: an action mid-rule in love text on line 2")
       (yacc-scan "%define x\n%%\ns : 'x' ;\n" = "not yet: %define")
       (yacc-scan "%%\ns : 'x' %prec 'y' ;\n" = "'y' has no precedence on line 2")
       (yacc-scan "%%\ns : 'x' { [ ;\n" = "an open action on line 2")
