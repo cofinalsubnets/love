@@ -1,12 +1,13 @@
 /* moon -t xtensa under -Tdata: constants run with the data, since the esp32's instruction
  * memory takes words alone; strings, a const table, a pointer table and .bss read there.
- * exits 42 when all hold. */
+ * exits 42 when all hold. xtfar is built and never run: a far constant under an index. */
 static const char msg[] = "strings from data";
 static const short primes[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29 };
 static const char *const names[] = { "zero", "one", "two" };
 static char buf[8] = "dat";
 static int zero[4];
 extern char __data_start__[];
+void xtfar(int j, unsigned v) { *(volatile unsigned *)(0x3FF42080 + 4 * j) = v; }
 static int len(const char *s) { int n = 0; while (s[n]) n++; return n; }
 static int check(void) {
   int sum = 0;
