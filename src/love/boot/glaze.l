@@ -1669,11 +1669,16 @@
        (a @ ^recnm [[cnt bnd u]]                    ; innermost: the recurrence call's args
         (: rest (loopchain a pairs recnm)
          (two? rest ? ([cnt bnd ()] . rest))))))
-   ; rebuild a : binding list, replacing the outermost loop's body with (native 0)
+   ; rebuild a : binding list, the outermost loop's body (native 0) where every param is the fixnum 0, the nest's
+   ; own start, else its own body; == and the native ride as values, so no binding of the form can respell them
+   (anat-zero? ps) (atom? ps ? 1 ['? [(==) <ps 0] (anat-zero? >ps) 0])
    (anat-rebind bs outernm ng)
     (atom? >bs ? bs
      (: nm <bs bd <>bs
-      (nm . (two? nm && <nm = outernm ? [ng 0] bd) . anat-rebind >>bs outernm ng)))
+      (nm . (two? nm && <nm = outernm ? ['? (anat-zero? >nm) [ng 0] bd] bd) . anat-rebind >>bs outernm ng)))
+   ; the twin of (native 0): the binding list answering the outermost loop, called at its start
+   (anat-drive bs outer) (atom? >bs ? [<outer] (<bs . <>bs . anat-drive >>bs outer))
+   (anat-twin bs outer) ['\ '_ ((': . anat-drive bs outer) . map (p \ 0) >outer)]
    ; --- autogroup: the maximal closed subset of a `:`'s mutually-recursive arithmetic fns (groupok?'s fragment; a fn calling
    ;     out drops, with its callers), each binding rewritten to its own native while the calls among the group stay in the buffer
    ; --- lambda-lifting: a body ((: (g q..) GBODY) inits..) lifts g to a top-level (g' FV.. q..), FV the enclosing params free
@@ -2432,7 +2437,7 @@
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
-                                        glam ['\ '_ form]        ; the interp nest: deopt fallback and =/show
+                                        glam (anat-twin >form <outerp)        ; the interp nest at its start: deopt fallback and =/show
                                         ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)
                                         (lit? ng ? (': . anat-rebind >form <<outerp ng) form))))))
                          form)))))))
