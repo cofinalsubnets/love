@@ -356,6 +356,28 @@
            !(two? (readdir (d + "/.love/run/hive"))))
    0)
 
+; cards from another host: live by their beat within the lease, never by a pid here; a stale
+; one is hidden, swept only at ten leases. a local card with a dead pid goes at once
+(: d (cr-dir "hosts" "")
+   hv (d + "/.love/run/hive")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv])
+   now (clock 0 // 1000)
+   (cell nm card beat) (: c (hv + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")])
+                          _ (cr-put c "card" card) _ (? (charm? beat) (cr-put c "beat" (show beat + "\n")) 0) c)
+   (rc h) ("pid 1\nhost " + h + "\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n")
+   _ (cell "far" (rc "elsewhere") (now - 5))
+   _ (cell "late" (rc "elsewhere") (now - 120))
+   _ (cell "gone" (rc "elsewhere") (now - 3600))
+   _ (cell "dead" "pid 999999999\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n" ())
+   r (cr-run d "BEE_HOST=here BEE_LEASE=60" "--list")
+   s (cr-run d "BEE_HOST=here BEE_NAME=pal" "--send far 'over the wire'")
+   t (cr-run d "BEE_HOST=here BEE_NAME=pal" "--send late 'too late'")
+   ib (readdir (hv + "/far/inbox"))
+   _ (test (cr-in (r 1) "far  idle") !(cr-in (r 1) "late") !(cr-in (r 1) "gone") !(cr-in (r 1) "dead")
+           (two? (readdir (hv + "/late"))) !(two? (readdir (hv + "/gone"))) !(two? (readdir (hv + "/dead")))
+           (0 = <s) (1 = #ib) (0 != <t))
+   0)
+
 ; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
 ; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")

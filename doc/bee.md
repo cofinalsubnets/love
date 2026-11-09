@@ -54,7 +54,7 @@ Every session has a name. It is **BEE_NAME** when that is set and free; otherwis
 A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 
 **card**
-:   Who the session is, one *key value* pair a line: **pid**, **cwd**, **branch**, **model**, **state** (**idle** or **busy**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
+:   Who the session is, one *key value* pair a line: **pid**, **host** (the host it was written on), **cwd**, **branch**, **model**, **state** (**idle** or **busy**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
 
 **inbox/**
 :   The messages sent to the session, one file each.
@@ -62,11 +62,14 @@ A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 **read/**
 :   The messages the session has taken, moved there from **inbox/**.
 
+**beat**
+:   The time in seconds, rewritten through a rename every 10 seconds while a Claude Code session's server runs. It is a file of its own so that a beat never races a card's rewrite.
+
 The reading of cells and cards that every client shares (**pier**'s bar counts the live sessions with it) is the module **hive**, **src/apps/hive.l**.
 
 A *message* file is a header and a body. The header is *key value* lines, **from** *name* and **sent** *seconds* among them; a blank line ends it, and everything after the blank line is the text. To send, write the file as **inbox/.***id* and then rename it to **inbox/***id*. A reader ignores dot files, so it never sees a message half written. Messages are taken in the order their ids sort, so an id should begin with the time in milliseconds; bee's own are *ms***-***sender***-***hex*.
 
-A session is live while its card's **pid** is. Whoever lists the hive removes a cell whose card names a dead pid, along with its messages. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
+A session is live while its card's **pid** is. A card whose **host** is another host's (**BEE_HOST**, else the kernel's hostname, names this one) is live instead while its beat is younger than the lease, **BEE_LEASE** seconds (60): a pid means nothing off its own host. Whoever lists the hive removes a cell whose card names a dead pid here, along with its messages; a remote cell past its lease is hidden, and removed only once its beat is ten leases old, so a host away for maintenance comes back to its mail. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
 
 A *user's card* is the person at a login, in the hive through the hud. It says **kind user** and **model user**, its name is the login's, and its **state** is **here** while a hud holds it (its pid the hud's) and **away** after. It is never removed, so mail to the user waits in its inbox until a hud opens. One login has one, no agent may settle or be named as it, and **love bee --list** shows it as **user**. A message the hud sends says **kind user** in its header.
 
@@ -294,6 +297,12 @@ Send the same note with nothing but a shell:
 
 **BEE_SELF_WATCH**
 :   Seconds between looks at the binary this session runs, 30 when unset.
+
+**BEE_HOST**
+:   The host this session's card says it was written on, the kernel's hostname when unset.
+
+**BEE_LEASE**
+:   How many seconds a remote card's beat keeps it live, 60 when unset.
 
 **BEE_HOSTS**
 :   The host registry, **~/.love/etc/bee/hosts** when unset.

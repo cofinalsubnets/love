@@ -132,6 +132,9 @@
      card-of (cite 'hive 'hive-card)                        ; () when there is none
      card-pid (cite 'hive 'hive-pid)
      alive? (cite 'hive 'hive-alive?)
+     live? (cite 'hive 'hive-live?)
+     remote? (cite 'hive 'hive-remote?)                         ; a remote card by its beat, a local one by its pid
+     bee-host (cite 'hive 'hive-host 0)
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
      ; a user's card: the person at this login, in the hive through bee's hud, with no model
      ; behind it. it is never swept, so mail to it waits while no hud is open
@@ -166,19 +169,24 @@
          tn (? (tablet? k) (peep k "turn" ()) ())
          _ (pins bee-cell 'state state)
          _ (uwrite (d + "/.card")
-                   (unlines ([("pid " + show (getpid 0)) ("cwd " + bee-cwd) ("branch " + b)
+                   (unlines ([("pid " + show (getpid 0)) ("host " + bee-host) ("cwd " + bee-cwd) ("branch " + b)
                               ("model " + peep bee-cell 'model "claude-code")
                               "state \(state)"
                               "since \(bee-cell 'since)"]
                              + (string? tn ? [("turn " + tn)] ())
                              + (bee-mcp? ? ["parent \(ppid-of (getpid 0))"] ()))))
          (rename (d + "/.card") (d + "/card")))
+     ; the beat: the cell's beat file, the time in seconds, through a rename. it keeps a card live
+     ; on hosts that cannot ask its pid, and is its own file so a beat never races a card's rewrite
+     (beat! _) (: d (cell-of (me 0))
+                  (? (uwrite (d + "/.beat") (show (clock 0 // 1000) + "\n")) (rename (d + "/.beat") (d + "/beat")) 0))
      (settle branch)
       (: d (cell-of (me 0))
          _ (: c (card-of (me 0)) (tablet? c && !(user-card? c) ? (sweep (me 0)) 0))   ; a dead namesake's leavings
          _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
          _ (pins bee-cell 'since (clock 0 // 1000) 'branch branch)
-         (card! "idle"))
+         _ (card! "idle")
+         (beat! 0))
      (state! s) (? (bee-cell 'state && bee-cell 'state != s) (card! s) 0)
      (unsettle _) (? (bee-cell 'state) (sweep (me 0)) 0)
      ; a message into another's inbox -> "" when it is there, else why not
@@ -195,21 +203,21 @@
      (user-card! st)
       (: d (cell-of bee-login) t "\(d)/.card-\(getpid 0)"
          _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
-         _ (uwrite t (unlines ["pid \(st @ "here" (getpid 0) 0)" "cwd \(bee-cwd)" "kind user" "model user"
+         _ (uwrite t (unlines ["pid \(st @ "here" (getpid 0) 0)" "host \(bee-host)" "cwd \(bee-cwd)" "kind user" "model user"
                                "state \(st)" "since \(clock 0 // 1000)"]))
          (rename t "\(d)/card"))
      ; -> "" when this hud holds the user's card, else why not. one live user card a login
      (user-settle _)
       (: c (card-of bee-login)
-         (? (tablet? c && !(user-card? c) && alive? (card-pid c)) "the session \(bee-login) has the user's name"
-            (user-card? c && alive? (card-pid c) && card-pid c != getpid 0) "another hud has the user's card"
+         (? (tablet? c && !(user-card? c) && live? c) "the session \(bee-login) has the user's name"
+            (user-card? c && live? c && card-pid c != getpid 0) "another hud has the user's card"
             (: _ (user-card! "here") "")))
      ; mail from the user, marked kind user, to a live session here -> "" when it is there
      (user-post to text)
       (: c (card-of to) ib "\(cell-of to)/inbox"
          id "\(clock 0)-\(bee-login)-\(hex2 (clock 0 % 256))"
          m "from \(bee-login)\nsent \(clock 0 // 1000)\nkind user\n\n\(text)"
-         (? !(tablet? c && !(user-card? c) && alive? (card-pid c)) "no session named \(to)"
+         (? !(tablet? c && !(user-card? c) && live? c) "no session named \(to)"
             !(uwrite "\(ib)/.\(id)" m) "cannot write to \(to)"
             (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
@@ -315,7 +323,7 @@
          (? !(two? ps) "no sessions are running"
             (foldl (\ a p (: c (p 1)
                             (a + <p + (<p = (me 0) ? " (you)" "") + "  "
-                               + (user-card? c ? ("user " + (alive? (card-pid c) ? "here" "away")) (peep c "state" "?"))
+                               + (user-card? c ? ("user " + (live? c ? "here" "away")) (peep c "state" "?"))
                                + (backgrounded? c ? " background" "")
                                + "  " + (: b (peep c "branch" "") (0 < #b ? b "-"))
                                + "  " + peep c "cwd" "" + "\n")))
@@ -1308,7 +1316,7 @@
          (one p)
           (: c (p 1) st (peep c "state" "?") tn (peep c "turn" ()) sn (seen-at <p)
              (? (user-card? c)
-                ("  " + edfit <p 12 " " + sgr "36" "user" + " " + (alive? (card-pid c) ? "here" (sgr "2" "away"))
+                ("  " + edfit <p 12 " " + sgr "36" "user" + " " + (live? c ? "here" (sgr "2" "away"))
                  + (: n (waiting <p) (0 < n ? ("  " + show n + " waiting") "")))
                 ("  " + edfit <p 12 " " + (st = "busy" ? (sgr "33" st) st) + (string? tn ? (" " + ago (digits tn)) "")
                  + (backgrounded? c ? (" " + sgr "35" "background") "")
@@ -1357,7 +1365,7 @@
          (? !(string? nm && name-ok? nm) [0 "a name is letters, digits, - _ and ., at most 64"]
             (nm = was) [1 ("you are " + nm)]
             (user-card? c) [0 (nm + " is a user's name")]
-            (tablet? c && alive? (card-pid c)) [0 ("a live session is already named " + nm)]
+            (tablet? c && live? c) [0 ("a live session is already named " + nm)]
             (: ms (take-mail 0) _ (unsettle 0) _ (pin bee-who 'name nm) _ (settle bee-branch) _ (remember 0)
                [1 ("you are " + nm + " in the hive; a queue row under " + was + " keeps that name, so ask the leader to correct it"
                    + (two? ms ? ("\n\n" + mail-text ms) ""))])))
@@ -1381,11 +1389,11 @@
          mc (bee-resumes + "/mcp.json")
          (? !(tablet? r && string? (peep r "claude" ())) [0 ("no session to resume named " + nm)]
             ; a backgrounded claude keeps the card alive with no one at it: say how to reach it
-            (tablet? k && alive? (card-pid k) && backgrounded? k)
+            (tablet? k && live? k && !(remote? k) && backgrounded? k)
              (: id (: c (r "claude") (snip c 0 (min 8 #c)))
                 [0 ("\(nm) is a backgrounded claude session (\(id)): `claude attach \(id)` opens it here, "
                     + "or `claude stop \(id)` and then `love bee --resume \(nm)` (--attach, --stop do either)") id])
-            (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
+            (tablet? k && live? k) [0 (nm + " is live" + (remote? k ? (" on " + peep k "host" "?") ""))]
             (: _ (uwrite mc (json-show {"mcpServers" {"bee" {"command" "sh" "args" ["-c" bee-mcp-sh]}}}))
                [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=\(sh-quote nm) exec claude"
                    + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sh-quote mc
@@ -1435,9 +1443,10 @@
                          (go 0))))
          ; the bell: once a second, a channel notice naming who wrote whatever came in since. the
          ; mail stays for inbox, so a session without channels, which drops the notice, loses nothing
-         bell {'told ()}
+         bell {'told () 'n 1}
          (ring _)
           (: _ (rest 1000) _ (self-tell 0)
+             _ (? (bell 'n % 10 = 0) (beat! 0) 0) _ (pin bell 'n (bell 'n + 1))
              ib (cell-of (me 0) + "/inbox")
              fs (: d (readdir ib) (? (two? d) (filter (f \ f 0 != 46) (sort d)) ()))
              new (filter (f \ !(elem f (bell 'told))) fs)
@@ -1492,7 +1501,7 @@
               ; claude stop, then the card's pid gone (15 s at most) before the resume
               (stop-then nm id)
                (: _ (sh-run ("claude stop " + sh-quote id + " >/dev/null"))
-                  (gone n) (: k (card-of nm) (? !(tablet? k && alive? (card-pid k)) 1 (n <= 0) 0 (: _ (rest 500) (gone (n - 1)))))
+                  (gone n) (: k (card-of nm) (? !(tablet? k && live? k) 1 (n <= 0) 0 (: _ (rest 500) (gone (n - 1)))))
                   (? (gone 30) (go-resume ()) (say err ("bee: " + nm + " did not stop\n"), 1)))
               (go-resume _)
                (: r (resume-cmd <ws (join " " >ws))
