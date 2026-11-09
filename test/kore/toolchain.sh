@@ -176,7 +176,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   [ "$("$N/h")" = carried ] || fail "love cc off the carried source: the program"
 fi
 # lex's C back end, as kbuild asks for it: start conditions, ^, trailing context, <<EOF>>,
-# yyless and input(), compiled by mooncc and run; the same as flex's scanner when there is one
+# yyless and input(), flex's yy_flex_debug (genksyms sets it), compiled by mooncc and run; the same as flex's scanner when there is one
 L=$ho/.kore-lex; rm -rf "$L"; mkdir -p "$L"
 cat > "$L/t.l" <<'SPEC'
 %option noyywrap nounput yylineno
@@ -211,7 +211,7 @@ DIG	[0-9]
 .			printf("<%c>", yytext[0]);
 <<EOF>>			{ printf("<eof>"); return 0; }
 %%
-int main(void) { yylex(); printf("\n"); return 0; }
+int main(void) { extern int yy_flex_debug; yy_flex_debug = 0; yylex(); printf("\n"); return 0; }
 SPEC
 printf 'abc 12px 34 _a1 "q\\"x" ab cd ef xyz\n/* a\n*/ b #note\n%%v1 56 # c\n%%v1x 7\n  "open\nmore' > "$L/in"
 korerun lex -o "$L/l.c" "$L/t.l" || fail "kore lex -o"
