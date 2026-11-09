@@ -19,6 +19,8 @@ bee - the hive of sessions on this machine, and the merge queue they land throug
 
 **love bee --resume** \[*name* \[*prompt* ...\]\]
 
+**love bee --relay** \[**--once**\] \| **--cards** \| **--drop** *name* *host*
+
 **love bee --mcp**
 
 **love bee --state busy** \| **idle** \[**--pid** *pid*\]
@@ -109,6 +111,18 @@ and drops the notice in silence otherwise, which then costs nothing: that sessio
 The server also leaves its way back. It writes **.resume/***name* in the hive, holding Claude Code's session id (**CLAUDE_CODE_SESSION_ID**) and its directory; unlike the card, it outlives the session, and **set_name** moves it. **love bee --resume** lists the names it can bring back, and **love bee --resume** *name* [*prompt*] relaunches one: in its directory, as **BEE_NAME=***name*, with the channel flag, and with an MCP config that runs the **out/love** of the tree it starts in, as **.mcp.json** does, so a restart after a landing that changed bee takes the new bee; a tree with none runs the binary that ran **--resume**. A live name is refused, unless what keeps it live is a backgrounded Claude Code session (an **/exit** with work still running, or **claude --bg**: its claude runs under **claude --bg-pty-host**, with no terminal). Then **--resume** says so, with the session's short id: **--attach** runs **claude attach** *id* here, **--stop** runs **claude stop** *id* and resumes once the card is gone, and on a terminal it asks which. **--cmd** prints the line instead of running it, for a script or a terminal multiplexer to run.
 
 Asking stays with Claude Code: its permission prompt asks before a message or a queue write goes out, unless that session runs without asking.
+
+# THE RELAY
+
+Hives on several hosts join into one through a *relay*. Its peers are the hosts in the registry (HOSTS) with the cap **hive**; a host's fact **love** names the love binary there, **love** unless given. Every Claude Code session's server tries for the exclusive lock **bee-relay** every 5 seconds, and the one holding it relays; **love bee --relay** runs the same loop on a host with no session, and **--once** runs one round.
+
+A round asks each peer, over the registry's ssh, for **love bee --cards**: the cards of the sessions on that host, never the ones it relays itself. Each is laid here as a *remote cell*, under the session's own name unless a live card of another host holds that name here, and then as *name***@***host*. Its card is the peer's, with **of** (its name there) and **via** (the registry's name for the host) added, and its beat is written by this host's clock as the card arrives, so the hosts' clocks need not agree. A session the peer no longer lists is gone: the mail waiting in its cell goes back to each sender, from **bee-relay**, and the cell is removed. A peer that does not answer is left alone, and its cells lapse with their lease.
+
+Mail to a remote cell is written into its inbox like any other. Each round carries every message waiting there to its host, **love bee --drop** *name* *host* with the message on its standard input, and removes it once it is delivered. **--drop** writes it into *name*'s inbox there, its **from** spelled as that hive names the sender: the bare name when the card it holds under it is the sending host's, else *name***@***host*, so an answer finds its way back. It exits 3 when *name* has no live session on that host, and the relay then sends the message back to its sender. While a host is down, its mail waits in its cells here, which are not removed while mail waits in them.
+
+A **kind user** line rides with the message, so a user typing into a hud on one host reaches a session on another as the user. ssh is the boundary of trust here, as the login is within one host.
+
+**love bee --list** says **on** *host* after a remote session's state.
 
 # LOCKS
 

@@ -9,6 +9,7 @@
 (: bee-usage "usage: love bee                                   on a terminal, the hud: queues, locks, sessions; c talks to one
        love bee --hud                                 the hud once, as text
        love bee --list | --send NAME TEXT ..          the sessions, from a shell
+       love bee --relay [--once] | --cards | --drop NAME HOST   the relay between hosts' hives
        love bee --resume [NAME [PROMPT ..]]           the claude code sessions that can come back, or relaunch one
        love bee --mcp                                 the hive and the queue tools, as a claude code session's mcp server
        love bee --state busy|idle [--pid P]           a claude code session's hooks say its state
@@ -325,6 +326,7 @@
                             (a + <p + (<p = (me 0) ? " (you)" "") + "  "
                                + (user-card? c ? ("user " + (live? c ? "here" "away")) (peep c "state" "?"))
                                + (backgrounded? c ? " background" "")
+                               + (remote? c ? (" on " + peep c "host" "?") "")
                                + "  " + (: b (peep c "branch" "") (0 < #b ? b "-"))
                                + "  " + peep c "cwd" "" + "\n")))
                    "" ps)))
@@ -342,17 +344,19 @@
                                                 || c = 45 || c = 95 || c = 46)))
                          ^#nm)))
      ; a line of this binary's own lush -> its stdout, "" without a self
-     (lush-out cmd)
-      (? !(string? bee-self) ""
-         (: pp (pipe 0) nul (openfd "/dev/null" 0)
-            p (spawnio [bee-self "lush" "-a" "-c" cmd] nul >pp nul [<pp] -1 0)
-            _ (close >pp) _ (? (0 <= nul) (close nul) 0)
-            q (fdopen <pp)
-            (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
-            t (go "")
-            _ (close q)
-            _ (? (charm? p && 0 <= p) (wait p) 0)
-            t))
+     (lush-out cmd) (? !(string? bee-self) "" (argv-out [bee-self "lush" "-a" "-c" cmd]))
+     ; the system's sh, for a line whose words must be the system's: lush's ssh is kore's
+     (sh-out cmd) (argv-out ["sh" "-c" cmd])
+     (argv-out argv)
+      (: pp (pipe 0) nul (openfd "/dev/null" 0)
+         p (spawnio argv nul >pp nul [<pp] -1 0)
+         _ (close >pp) _ (? (0 <= nul) (close nul) 0)
+         q (fdopen <pp)
+         (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
+         t (go "")
+         _ (close q)
+         _ (? (charm? p && 0 <= p) (wait p) 0)
+         t)
      bee-me (string? bee-self ? bee-self "love")
      ; every merge queue there is, as it stands at start: git's refs/queue/*
      bee-qcmd
@@ -1465,15 +1469,94 @@
          _ (settle bee-branch) _ (remember 0)
          _ (twirl (_ \ watch 0) 0) _ (twirl (_ \ ring 0) 0)
          _ (twirl (_ \ lock-poll 0) 0)                   ; queued locks, mailed to the session
+         _ (twirl (_ \ relay 0) 0)                       ; the hive's relay, in whichever server holds it
          r (go 0)
          _ (unsettle 0)
          r)
 
+     ; --- the relay: the cards of every host with cap hive laid here as remote cells, beaten as they
+     ; arrive by this host's clock, and mail written into one carried to its host over ssh, where
+     ; --drop delivers it with its sender spelled as that host names this one's (doc/bee.md, THE RELAY) ---
+     (hs nm) (cite 'hosts nm)
+     cards (cite 'hive 'hive-cards)
+     (text-card s) (foldl (\ t l (l @ ((k && 0 < #k) + " \(v)") (pin t k v) t)) {} (lines s))
+     (relay-peers _) (filter (h \ h "name" != bee-host) ((hs 'hosts-with) "hive" ()))
+     (peer-love h) (peep h "love" "love")
+     (peer-sh h cmd) (foldl (\ s w (s + sh-quote w + " ")) "" ((hs 'hosts-ssh) h) + sh-quote cmd)
+     (sh-status c) (: p (spawn ["sh" "-c" c]) (charm? p && 0 <= p ? (wait p) 127))
+     (mirrors h) (filter (p \ peep (p 1) "via" "" = h "name") (cards 0))
+     ; --cards: this host's own cards, for a peer's relay; never one it relays itself
+     (cards-json _)
+      (json-show {"host" bee-host
+                  "cards" (map (p \ {"name" <p "card" (slurp-file (cell-of <p + "/card"))})
+                               (filter (p \ !(remote? (p 1)) && string? (slurp-file (cell-of <p + "/card"))) (settled 0)))})
+     ; where a peer's session is laid: its own name, unless a live card of another host holds it
+     (mirror-name nm host)
+      (: c (card-of nm)
+         (? (!(tablet? c) || peep c "host" "" = host || !(taken? c)) nm (nm + "@" + host)))
+     (lay-mirror h e now)
+      (: nm (e "name") s (e "card") host (peep (text-card s) "host" (h "name"))
+         ln (mirror-name nm host) d (cell-of ln)
+         _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
+         body (unlines (filter (l \ 0 < #l && !(starts? l "host ")) (lines s) + ["host \(host)" "of \(nm)" "via \(h "name")"]))
+         _ (? (uwrite "\(d)/.card" body) (rename "\(d)/.card" "\(d)/card") 0)
+         _ (? (uwrite "\(d)/.beat" (show now + "\n")) (rename "\(d)/.beat" "\(d)/beat") 0)
+         ln)
+     ; a message that cannot reach its session goes back to its sender, from bee-relay
+     (bounce-file nm f why)
+      (: p "\(cell-of nm)/inbox/\(f)" s (slurp-file p) m (string? s ? (mail-parse s) ())
+         _ (? (two? m && <m != "bee-relay") (post-as "bee-relay" <m "undelivered to \(nm): \(why)\n\n\(m 1)") "")
+         (unlink p))
+     (inbox-files nm) (: fs (readdir "\(cell-of nm)/inbox") (? (two? fs) (filter (f \ f 0 != 46) (sort fs)) ()))
+     (mirror-gone nm) (: _ (map (f \ bounce-file nm f "it has left its host") (inbox-files nm)) (sweep nm))
+     ; a peer's cards laid here, and the cells of its sessions that left it gone -> 1 when it answered
+     (relay-pull h now)
+      (: j (json-read (chomp (sh-out (peer-sh h (peer-love h + " bee --cards")))))
+         (? !(two? j && tablet? (j 1)) 0
+            (: es (filter (e \ tablet? e && string? (peep e "name" ()) && string? (peep e "card" ())
+                               && peep (text-card (e "card")) "host" "" != bee-host)
+                          (peep (j 1) "cards" ()))
+               ls (map (e \ lay-mirror h e now) es)
+               _ (map (p \ (? (elem <p ls) 0 (mirror-gone <p))) (mirrors h))
+               1)))
+     ; each waiting message carried to its host: 0 delivered, 3 no such session there, else kept
+     (relay-push h)
+      (map (p \ (: nm <p of (peep (p 1) "of" nm)
+                   (map (f \ (: q "\(cell-of nm)/inbox/\(f)"
+                                r (sh-status (peer-sh h (peer-love h + " bee --drop " + sh-quote of + " " + sh-quote bee-host)
+                                              + " < " + sh-quote q + " >/dev/null 2>&1"))
+                                (r @ 0 (unlink q) 3 (bounce-file nm f "no such session on its host") _ 0)))
+                        (inbox-files nm))))
+           (mirrors h))
+     (relay-round _) (: now (clock 0 // 1000) (map (h \ (? (relay-pull h now) (relay-push h) 0)) (relay-peers 0)))
+     ; a message from a peer's relay: its sender spelled as this hive names it -> 0, 3 no such session
+     (drop-in to src s)
+      (: c (card-of to)
+         k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) bd (? (k < 0) "" (snip s k #s))
+         (here nm) (: m (card-of nm) (? (tablet? m && peep m "host" "" = src) nm (nm + "@" + src)))
+         from (: fl (filter (l \ starts? l "from ") (lines hd)) (? (two? fl) (here (snip <fl 5 #<fl)) "?"))
+         hd2 (join "\n" (map (l \ (starts? l "from " ? ("from " + from) l)) (lines hd)))
+         ib "\(cell-of to)/inbox" id "\(clock 0)-\(from)-\(hex2 (clock 0 % 256))"
+         (? !(tablet? c && !(remote? c) && taken? c) 3
+            !(uwrite "\(ib)/.\(id)" (hd2 + bd)) 1
+            (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) 1
+            0))
+     ; the relay runs in the one server holding bee-relay, a lock its pid keeps
+     (relay _)
+      (: _ (rest 5000)
+         _ (? (two? (relay-peers 0) && locks? 0 && peep (lock-ask "bee-relay" "exclusive" "the hive's relay") "granted" 0)
+              (relay-round 0) 0)
+         (relay 0))
      ; --list, --send, --lock and --resume speak to the hive from a shell and settle nowhere; a
      ; sender there is BEE_NAME, else cli- and the user
      (bee-cli as)
       (: say1 (\ e ok (? (#e = 0) (puts (ok + "\n"), 0) (say err ("bee: " + e + "\n"), 1)))
          (<as @
+          ; --cards, --drop and --relay are the relay's: what a peer asks, what it hands over, the loop
+          "--cards" (: _ (puts (cards-json 0 + "\n")) 0)
+          "--drop" (? (#as < 3) (say err "usage: love bee --drop NAME HOST < MESSAGE\n", 2)
+                      (: s (slurp-file "/dev/stdin") (? (string? s) (drop-in <>as <>>as s) 1)))
+          "--relay" (? (elem "--once" as) (: _ (relay-round 0) 0) (relay 0))
           "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
                       (: e0 (getenv "BEE_NAME") u (getenv "USER")
@@ -1542,7 +1625,7 @@
          (two? as && <as = "--state") (: _ (state-cmd as) 0)
          (elem "--hud" as) (: _ (puts (unlines (hud-lines 0))) 0)   ; once, as text
          (!(two? as) && two? (tty 1)) ((cite 'hud 'hud-run) bee-core)
-         (two? as && elem <as ["--list" "--send" "--resume"]) (bee-cli as)
+         (two? as && elem <as ["--list" "--send" "--resume" "--cards" "--drop" "--relay"]) (bee-cli as)
          (: _ (say err (bee-usage + "\n")) 2))
       (bee-go as))
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))

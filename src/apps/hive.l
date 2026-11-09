@@ -17,7 +17,7 @@
 ;   (hive-sweep nm)    a gone session's cell removed, messages and all
 ;   (hive-cards _)     every cell with a card, [name card] each, by name
 ;   (hive-settled _)   the live ones and the users', the rest swept: a local one at once, a
-;                      remote one once its beat is ten leases old
+;                      remote one once its beat is ten leases old and no mail waits in it
 (module (hive hive-root hive-host hive-lease hive-cell hive-card hive-pid hive-alive? hive-remote?
          hive-live? hive-user? hive-taken? hive-sweep hive-cards hive-settled)
 (borrow 'posix)
@@ -64,8 +64,9 @@
  ; a remote card is its own host's to sweep; here it waits ten leases, which a host away for
  ; maintenance outlasts only when it is truly gone
  (stale? c) (beat-age c @ a (!(charm? a) || 10 * hive-lease 0 < a))
+ (mail? nm) (: fs (readdir "\(hive-cell nm)/inbox") (two? fs && two? (filter (f \ f 0 != 46) fs)))
  (hive-settled _)
   (filter (p \ hive-user? (p 1) || hive-live? (p 1)
-                || (? (hive-remote? (p 1)) (: _ (? (stale? (p 1)) (hive-sweep <p) 0) 0) (: _ (hive-sweep <p) 0)))
+                || (? (hive-remote? (p 1)) (: _ (? (stale? (p 1) && !(mail? <p)) (hive-sweep <p) 0) 0) (: _ (hive-sweep <p) 0)))
           (hive-cards 0)))
 ) ; module hive

@@ -378,6 +378,40 @@
            (0 = <s) (1 = #ib) (0 != <t))
    0)
 
+; the relay: a peer's cards laid here by a fake ssh that runs the peer's line under its HOME,
+; a name held here laid as NAME@HOST, mail carried there with its sender as that host names it,
+; and mail to a session that left bounced
+(: a (cr-dir "rla" "") b (cr-dir "rlb" "")
+   me (show (getpid 0))
+   (hv d) (d + "/.love/run/hive")
+   _ (map (\ d (map (\ p (mkdir p 448)) [(d + "/.love/run") (hv d)])) [a b])
+   (cell d nm card) (: c (hv d + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")])
+                       _ (cr-put c "card" card) c)
+   (lc h) ("pid " + me + "\nhost " + h + "\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n")
+   _ (cell b "ann" (lc "hb")) _ (cell b "g" (lc "hb"))
+   _ (cell a "g" (lc "ha")) _ (cell a "pal" (lc "ha"))
+   _ (cr-put a "fakessh" ("for x; do l=$x; done\nHOME='" + b + "' BEE_HOST=hb exec sh -c \"$l\"\n"))
+   _ (mkdir (a + "/.love/etc/bee") 448)
+   _ (cr-put (a + "/.love/etc/bee") "hosts" ("name hb\nreach sh " + a + "/fakessh hb\ncaps hive\nlove " + cr-love + "\n"))
+   env "BEE_HOST=ha"
+   r1 (cr-run a env "--relay --once")
+   l1 (cr-run a env "--list")
+   _ (cr-run a "BEE_HOST=ha BEE_NAME=pal" "--send ann 'across'")
+   _ (cr-run a "BEE_HOST=ha BEE_NAME=pal" "--send g@hb 'to their g'")
+   r2 (cr-run a env "--relay --once")
+   ib (\ d nm (: fs (readdir (hv d + "/" + nm + "/inbox")) (two? fs ? fs ())))
+   got (: fs (ib b "ann") (two? fs ? (cr-get (hv b + "/ann/inbox/" + <fs)) ""))
+   _ (hark ["rm" "-rf" (hv b + "/ann")])
+   _ (cr-run a "BEE_HOST=ha BEE_NAME=pal" "--send ann 'too late'")
+   r3 (cr-run a env "--relay --once")
+   back (: fs (ib a "pal") (two? fs ? (cr-get (hv a + "/pal/inbox/" + <fs)) ""))
+   _ (test (0 = <r1) (cr-in (l1 1) "ann  idle on hb") (cr-in (l1 1) "g@hb  idle on hb")
+           (cr-in (cr-get (hv a + "/g@hb/card")) "of g")
+           (0 = <r2) (cr-in got "from pal@ha") (cr-in got "across") (1 = #(ib b "g"))
+           (0 = #(ib a "ann")) !(two? (readdir (hv a + "/ann")))
+           (cr-in back "from bee-relay") (cr-in back "too late"))
+   0)
+
 ; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
 ; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")
