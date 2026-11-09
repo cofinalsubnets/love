@@ -50,7 +50,7 @@
        [[['li 'r0 a] ['lea 'r6 'sp -128] ['li 'r5 k] ['leax 'r7 'r6 'r5 sc o] ['st 'r7 0 'r0]
          ['li 'r0 0] ['ldx 'r2 'r6 'r5 sc o]] a])
    (gen k)
-    (k % 32 @
+    (k % 36 @
        0 (bin 'add (a \ b \ a + b)) 1 (bin 'sub (a \ b \ a - b)) 2 (bin 'and (a \ b \ w a & w b))
        3 (bin 'or (a \ b \ w a | w b)) 4 (bin 'xor (a \ b \ w a ^ w b)) 5 (bin 'imul (a \ b \ a * b))
        6 (dv 'div (a \ b \ a // b)) 7 (dv 'udiv (a \ b \ w a // w b)) 8 (dv 'rem (a \ b \ a % b)) 9 (dv 'urem (a \ b \ w a % w b))
@@ -67,12 +67,17 @@
        25 ([['eq (a \ w a = 0)] ['ne (a \ w a != 0)] ['lt (a \ s a < 0)] ['ge (a \ s a >= 0)] ['gt (a \ s a > 0)] ['le (a \ s a <= 0)]
             ['above (a \ w a != 0)] ['be (a \ w a = 0)]] (rnd 0 % 8) @ [c f] (cnz c f))
        26 (mem 0) 27 (memb 0) 28 (memh 0) 29 (callc 0) 30 (pushc 0) 31 (rnd 0 % 2 @ 0 (idx 0) _ (pushc 0))
+       ; muluh and mulsh are the esp32's mul32_high, which no qemu core carries
+       32 (board ? (bin 'umulh (a \ b \ w a * w b >> 32)) (bin 'add (a \ b \ a + b)))
+       33 (board ? (bin 'mulh (a \ b \ s a * s b >> 32)) (bin 'sub (a \ b \ a - b)))
+       34 (rnd 0 % 32 @ c (sh 'ror4 c (a \ c \ w (w a >> c | w a << (32 - c)))))
+       35 (shv 'rorv4 (a \ c \ w (w a >> c | w a << (32 - c))))
        _ (bin 'add (a \ b \ a + b)))
+   board (getenv "XT_BOARD" = "esp32")
    n 300
    cases (map gen ^n)
    ; check i: answer in r2 against the expected, a miss exits 100 + i % 100
    (chk i c) ((c 0) + [['li 'r3 (s (w (c 1)))] ['cmp 'r2 'r3] ['br 'ne (name "F\(i)")]])
-   board (getenv "XT_BOARD" = "esp32")
    ; uart0's fifo at 0x3FF40000, its fill in bits 16..23 of the status word at +28
    (say t) (catall (map (c \ [['li 'r0 c] ['call 'PUTC]]) (chars t)))
    putc [['align 4] ['label 'PUTC] ['li 'r6 0x3FF40000] ['label 'W] ['ld 'r7 'r6 28] ['shr 'r7 16]

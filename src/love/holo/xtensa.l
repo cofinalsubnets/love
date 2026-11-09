@@ -81,6 +81,11 @@
                'shrv (catall [(x-rrr 4 0 0 cn 0) (x-rrr 9 1 dn 0 dn)])
                (catall [(x-rrr 4 0 0 cn 0) (x-rrr 11 1 dn 0 dn)])))
 
+   ;; a rotate right is src over the register twice, by ssai's or ssr's SAR
+   (xt-ror4 d c) (: dn (xn d) k (c & 31)
+                    (k = 0 ? () (catall [(x-rrr 4 0 4 (k & 15) (k >> 4)) (x-rrr 8 1 dn dn dn)])))
+   (xt-rorv4 d c) (: dn (xn d) (catall [(x-rrr 4 0 0 (xn c) 0) (x-rrr 8 1 dn dn dn)]))
+
    (xt-sext dn sn bit) (x-rrr 2 3 dn sn (bit - 7))           ; sext ar, as, 7..22
    (xt-extui dn tn sh w) (x-rrr (w - 1) (4 + (sh >> 4)) dn (sh & 15) tn)
    (xt-sx w d) (xn d @ dn (w @ 1 (xt-sext dn dn 7) 2 (xt-sext dn dn 15) ()))
@@ -115,6 +120,12 @@
    (xt-stx base index scale disp s) (xt-memx 6 2 (xn s) base index scale disp)
    (xt-stxb base index scale disp s) (xt-memx 4 0 (xn s) base index scale disp)
 
+   ;; [base+off] less one, stored, its value against zero
+   (xt-decm base off)
+      (: bn (xn base)
+         (off >= 0 && 0 = off & 3 && off >> 2 <= 255 ? 0 (scare 'xt-decm-far off),
+          pin xt-flags 'a 8, pin xt-flags 'b -1,
+          catall [(x-rri8 2 bn 8 (off >> 2) 2) (x-addi 8 8 -1) (x-rri8 6 bn 8 (off >> 2) 2)]))
    (xt-push s) (catall [(x-addi 1 1 -16) (x-rri8 6 1 (xn s) 0 2)])
    (xt-pop d) (catall [(x-rri8 2 1 (xn d) 0 2) (x-addi 1 1 16)])
 
@@ -179,6 +190,8 @@
         [('li . xt-li) ('mov . xt-mov) ('cmp . xt-cmp) ('test . xt-test)
           ('add . xt-alu3 'add) ('sub . xt-alu3 'sub) ('and . xt-alu3 'and)
           ('or . xt-alu3 'or) ('xor . xt-alu3 'xor) ('imul . xt-rst2 8)
+          ('umulh . xt-rst2 10) ('mulh . xt-rst2 11)                     ; muluh, mulsh
+          ('ror4 . xt-ror4) ('rorv4 . xt-rorv4) ('decm . xt-decm)
           ('div . xt-div) ('rem . xt-rem) ('udiv . xt-udiv) ('urem . xt-urem)
           ('ld . xt-ld) ('ld4 . xt-ld) ('ldu4 . xt-ld) ('st . xt-st) ('st4 . xt-st)
           ('ldu1 . xt-ldu1) ('ldu2 . xt-ldu2) ('ld1 . xt-ld1) ('ld2 . xt-ld2)
