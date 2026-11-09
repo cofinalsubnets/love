@@ -19,7 +19,7 @@ include ../port.mk
 te_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
 objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) \
-  $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
+  $(R)/$(o)/teensy41.o $(R)/$(o)/usb.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 
 .PHONY: teensy41 flash psramtest flashpsram
@@ -32,6 +32,7 @@ $(eval $(call p_heap,$(te_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,src/apps/moon/lib/moonlibc/string/$m.c,\
   $(S)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Isrc/apps/moon/include)))
 $(eval $(call p_obj,teensy41,src/inle/teensy41/teensy41.c,teensy41.c teensy41.h $(S)/inle/bput.h $(S)/love/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,usb,src/inle/teensy41/usb.c,usb.c teensy41.h $(S)/inle/usbcdc.h $(mc),$(te_cc)))
 $(eval $(call p_obj,main,src/inle/teensy41/main.c,main.c teensy41.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(S)/love/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from

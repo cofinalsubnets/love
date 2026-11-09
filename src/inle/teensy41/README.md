@@ -30,11 +30,12 @@ and only to bake the heap image.
 
 ## Console
 
+Two at once, the same REPL on both. The Teensy's own USB is a CDC-ACM port (`usb.c`,
+USB1's ChipIdea controller held at full speed, under `../usbcdc.h`'s class half), seen
+as `usb-love_inle_teensy41_1-if00`; output goes only while a host holds DTR. And
 LPUART6 on **pin 0 (RX1) / pin 1 (TX1)** at 115200 8N1, over a 3.3 V USB-serial
-adapter -- the analogue of the rp2040 port's UART0 console. The REPL line editor
-in `src/love/boot/post.l` drives it exactly as it drives the kernel's. USB CDC (so the
-Teensy's own USB shows up as the console, no adapter) is the obvious next step
-and a **TODO** -- bare-metal device USB on the RT1062 is a substantial chunk.
+adapter, which also carries the boot banner and fault reports. The REPL line editor
+in `src/love/boot/post.l` drives both exactly as it drives the kernel's.
 
 ## Memory & boot
 
@@ -75,6 +76,5 @@ unknown size, laid at 80 columns. Open:
   `GPR16/GPR17` bank split) is performance, not correctness.
 - **GPIO** -- `gpio_*` covers the GPIO2 bank and muxes pin 13 (the LED). A full
   Teensy pin map (all 55 pads -> bank/bit -> ALT5 mux) is a TODO.
-- **USB CDC console** -- see above.
 
 See `tools/README.md` for the flashing path.

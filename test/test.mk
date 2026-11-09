@@ -13,7 +13,7 @@
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
-  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nucleo446 test_nucleo446_smoke \
+  test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
@@ -181,6 +181,8 @@ hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and 
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
 hostnif_tests += test/host/quit.l   # quit drains the ports; a scare gives a piped stdin back blocking
+hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
+hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -583,6 +585,13 @@ test_nucleo446: host
 	   sh test/gate/skip.sh gate-skip "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
 	  $(MAKE) -C src/inle/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
+# test_nrf52840 -- the xiao nrf52840: mooncc, xlink.l, ocopy.l, uf2.l; arm-none-eabi-gcc only for its libgcc.a
+test_nrf52840: host
+	@echo TEST out/nrf52840/firm.uf2
+	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
+	   sh test/gate/skip.sh gate-skip "test_nrf52840: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
+	  $(MAKE) -C src/inle/nrf52840 || { echo "FAIL nrf52840 build (the boot-image verify is inside)"; exit 1; }; \
+	  echo "test_nrf52840: firmware (all-mooncc thumb2sp), OUR linker, flatten and uf2, boot image verified"
 # test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
@@ -596,8 +605,8 @@ test_nucleo446_board: test_nucleo446
 	@echo TEST out/nucleo446/firm.bin "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
-test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_teensy41 test_playdate
-	@echo "test_boards: six ports build and link -- mooncc and our linker, no emulator"
+test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_nrf52840 test_teensy41 test_playdate
+	@echo "test_boards: seven ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build test_virt_build: test_%_build: host
 	@echo TEST out/$*/love.elf '(build)'
 	@$(MAKE) -C src/inle/$* || { echo "FAIL $* build"; exit 1; }

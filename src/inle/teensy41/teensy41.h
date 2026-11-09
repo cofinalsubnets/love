@@ -130,4 +130,11 @@ int  gpio_get(unsigned pin);
 void arm_dsb_isb(void);
 void arm_dsb(void);
 void arm_wfi(void);
+
+// usb.c: the board's own USB as a CDC-ACM console beside the UART
+void usb_init(void);
+void usb_putc(int c);
+void usb_flush(void);
+int usb_rx_ready(void);
+int usb_getc(void);
 void arm_bkpt(void);
