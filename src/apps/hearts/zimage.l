@@ -58,7 +58,7 @@
      (: (tell s) (say err ("hearts: " + s + "\n"))
         _ (mount "proc" "/proc" "proc", mount "sysfs" "/sys" "sysfs")
         model (uread "/sys/firmware/devicetree/base/model" @ r
-                 (two? r ? (<>r @ s (0 < #s && s (#s - 1) = 0 ? snip s 0 (#s - 1) s)) "?"))
+                 (two? r ? (<>r @ s (0 < #s && s (#s - 1) = 0 ? (snip s 0 (#s - 1)) s)) "?"))
         (tell ("zero 2 w, slot a: " + model)))
      """
    (dir kids) ['dir 493 kids]
