@@ -55,7 +55,29 @@
    ; --- a root ---------------------------------------------------------------
    helm-conf """
      (service app (exec "/bin/love" "/app/run.l") (restart no))
-     (target default (wants app))
+     (oneshot gadget (exec "/bin/love" "/app/gadget.l"))
+     (service console (after gadget)
+       (exec "/bin/love" "sh" "-c" "exec /bin/love sh < /dev/ttyGS0 > /dev/ttyGS0 2>&1")
+       (restart always))
+     (target default (wants app console))
+     """
+   ; the otg port as a usb serial port: an acm function through configfs, bound to the one udc
+   gadget-l """
+     (borrow 'posix)
+     (: g "/sys/kernel/config/usb_gadget/hearts"
+        (put p s) (uwrite (g + "/" + p) s || say err ("gadget: can't write " + p + "\n"))
+        udc (readdir "/sys/class/udc")
+        (? !(two? udc) (say err "gadget: no udc\n", 1)
+           (mount "configfs" "/sys/kernel/config" "configfs",
+            each ["" "/strings/0x409" "/configs/c.1" "/configs/c.1/strings/0x409" "/functions/acm.gs0"]
+                 (d \ umkdirs (g + d) 493),
+            put "idVendor" "0x1d6b", put "idProduct" "0x0104",
+            put "strings/0x409/manufacturer" "love", put "strings/0x409/product" "hearts",
+            put "strings/0x409/serialnumber" "hearts-z2w",
+            put "configs/c.1/strings/0x409/configuration" "acm",
+            symlink (g + "/functions/acm.gs0") (g + "/configs/c.1/acm.gs0"),
+            put "UDC" <udc,
+            say err ("gadget: acm on " + <udc + "\n"), 0)))
      """
    ; the app: /proc and /sys up, then the board by its device tree, on the console
    app-l """
@@ -69,7 +91,7 @@
    (dir kids) ['dir 493 kids]
    (fil mode b) ['file mode b]
    (root love ver)
-    (dir [["app" (dir [["run.l" (fil 420 app-l)]])]
+    (dir [["app" (dir [["gadget.l" (fil 420 gadget-l)] ["run.l" (fil 420 app-l)]])]
         ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)]])]
         ["boot" (dir ())] ["data" (dir ())] ["dev" (dir ())]
         ["etc" (dir [["helm.l" (fil 420 helm-conf)] ["version" (fil 420 (ver + "\n"))]])]
