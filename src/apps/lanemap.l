@@ -44,6 +44,7 @@
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
        "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
       ", which runs test_gcstress's shards as well: owing both runs it alone"]
+     ["" ["src/love/boot/glaze.l"] ["test_inle"] ", whose kernels run the glaze too"]
      ["a crewfiles member, or anything else baked" ["baked"] ["test_fixpoint" "test_bakerep"]
       ", and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
