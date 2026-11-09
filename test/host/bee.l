@@ -453,6 +453,34 @@
            (cr-in (cr-text (cr-byid (rc 1)) "4") "the name bob is also a live session on hy"))
    0)
 
+; draining: --drain marks this host, tells its sessions, and its cards say drain; a session on a
+; draining host still takes mail but the queue counts it gone, so the watchdog rings past it
+(: d (cr-repo (cr-dir "drain" ""))
+   hv (d + "/.love/run/hive")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv])
+   me (show (getpid 0))
+   (cell nm card) (: c (hv + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")]) _ (cr-put c "card" card) c)
+   _ (cell "cook" ("pid " + me + "\nhost hd\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n"))
+   r1 (cr-run d "BEE_HOST=hd" "--drain")
+   l1 (cr-run d "BEE_HOST=hd" "--list")
+   c1 (cr-run d "BEE_HOST=hd" "--cards")
+   told (readdir (hv + "/cook/inbox"))
+   r2 (cr-run d "BEE_HOST=hd" "--drain --off")
+   c2 (cr-run d "BEE_HOST=hd" "--cards")
+   _ (test (0 = <r1) (cr-in (r1 1) "hd is draining; told 1 session") (cr-in (l1 1) "cook  idle draining")
+           (cr-in (c1 1) "drain 1") (1 = #told) (0 = <r2) !(cr-in (c2 1) "drain 1"))
+   ; a row whose owner is live on a draining host: the watchdog rings its leader
+   _ (cr-put d ".bee.l" "(queue-watch 1)\n(gone-minutes 0)\n")
+   _ (cell "far" "pid 1\nhost hy\ncwd /x\nmodel claude-code\nstate idle\nsince 0\nof far\nvia hy\ndrain 1\n")
+   _ (cr-put (hv + "/far") "beat" (show (clock 0 // 1000 + 60) + "\n"))
+   _ (hark ["git" "-C" d "update-ref" "refs/queue/main"
+            (cr-blob d (cr-qtext ["leader alice" "1 far b1 aaa h1 gating" "2 alice b2 h1 h2 waiting"]))])
+   r (cr-feed d "BEE_NAME=alice BEE_HOST=hd" [["in" cr-init] ["in2" [(cr-call 1 "inbox" {})]]]
+              ["cat in" "sleep 5" "cat in2" "sleep 1"])
+   said (cr-text (cr-byid (r 1)) "1")
+   _ (test (0 = <r) (1 = cr-count said "from=\"watchdog\"") (cr-in said "row 1's owner far has no live session"))
+   0)
+
 ; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
 ; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")

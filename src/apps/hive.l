@@ -14,12 +14,14 @@
 ;   (hive-live? c)     a remote card beaten within the lease, else a local one whose pid answers
 ;   (hive-user? c)     a user's card, the hud's: never swept, its pid 0 while away
 ;   (hive-taken? c)    a name no one else may settle as: a user's, or a live session's
+;   (hive-draining? c) a session whose host is draining: a remote card saying drain, a local
+;                      one while HIVE/.drain is there. it takes mail but holds nothing in a queue
 ;   (hive-sweep nm)    a gone session's cell removed, messages and all
 ;   (hive-cards _)     every cell with a card, [name card] each, by name
 ;   (hive-settled _)   the live ones and the users', the rest swept: a local one at once, a
 ;                      remote one once its beat is ten leases old and no mail waits in it
 (module (hive hive-root hive-host hive-lease hive-cell hive-card hive-pid hive-alive? hive-remote?
-         hive-live? hive-user? hive-taken? hive-sweep hive-cards hive-settled)
+         hive-live? hive-user? hive-taken? hive-draining? hive-sweep hive-cards hive-settled)
 (borrow 'posix)
 (:
  (hive-root _) (getenv "BEE_HIVE" @ r (string? r && 0 < #r ? r (cite 'path 'nest 0 + "/run/hive")))
@@ -48,6 +50,8 @@
                    (hive-alive? (hive-pid c))))
  (hive-user? c) (tablet? c && peep c "kind" "" = "user")
  (hive-taken? c) (tablet? c && (hive-user? c || hive-live? c))
+ (hive-draining? c)
+  (tablet? c && (? (hive-remote? c) (peep c "drain" "" = "1") (string? (slurp-at "\(hive-root 0)/.drain"))))
  ; a cell with no card yet is being made, and stays
  (hive-sweep nm)
   (: d (hive-cell nm)

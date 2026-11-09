@@ -21,6 +21,8 @@ bee - the hive of sessions on this machine, and the merge queue they land throug
 
 **love bee --relay** \[**--once**\] \| **--cards** \| **--drop** *name* *host*
 
+**love bee --drain** \[**--off**\]
+
 **love bee --mcp**
 
 **love bee --state busy** \| **idle** \[**--pid** *pid*\]
@@ -123,6 +125,8 @@ Mail to a remote cell is written into its inbox like any other. Each round carri
 A **kind user** line rides with the message, so a user typing into a hud on one host reaches a session on another as the user. ssh is the boundary of trust here, as the login is within one host.
 
 **love bee --list** says **on** *host* after a remote session's state.
+
+**love bee --drain** takes this host down for maintenance. It lays **.drain** in the hive and tells each session here, from **bee**, to hand any queue it leads to a live session on another host (**queue_lead**), to start no gate, and to let a running one finish or write its row **waiting**. Its sessions go on taking mail, and the relay's **--cards** says **drain 1** on each of their cards, but every host's queue watching counts them gone: the watchdog rings past a row whose owner is draining, after **(gone-minutes** *n***)**, and the head row's session may take the lead, acting, from a draining leader. **--drain --off** ends it. **love bee --list** says **draining** after such a session's state.
 
 # LOCKS
 

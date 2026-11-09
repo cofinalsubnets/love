@@ -10,6 +10,7 @@
        love bee --hud                                 the hud once, as text
        love bee --list | --send NAME TEXT ..          the sessions, from a shell
        love bee --relay [--once] | --cards | --drop NAME HOST   the relay between hosts' hives
+       love bee --drain [--off]                       this host down for maintenance: the queue counts its sessions gone
        love bee --resume [NAME [PROMPT ..]]           the claude code sessions that can come back, or relaunch one
        love bee --mcp                                 the hive and the queue tools, as a claude code session's mcp server
        love bee --state busy|idle [--pid P]           a claude code session's hooks say its state
@@ -134,7 +135,8 @@
      card-pid (cite 'hive 'hive-pid)
      alive? (cite 'hive 'hive-alive?)
      live? (cite 'hive 'hive-live?)
-     remote? (cite 'hive 'hive-remote?)                         ; a remote card by its beat, a local one by its pid
+     remote? (cite 'hive 'hive-remote?)
+     draining? (cite 'hive 'hive-draining?)                         ; a remote card by its beat, a local one by its pid
      bee-host (cite 'hive 'hive-host 0)
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
      ; a user's card: the person at this login, in the hive through bee's hud, with no model
@@ -199,7 +201,9 @@
             (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
      ; a remote cell answers to its name on its host too, which is what a row written there names
-     (live-names _) (: ps (settled 0) (q-uniq (map cap ps + filter (s \ 0 < #s) (map (p \ peep (p 1) "of" "") ps))))
+     ; a session on a draining host is not, so the watchdog and the acting leader move the queue past it
+     (live-names _) (: ps (filter (p \ !(draining? (p 1))) (settled 0))
+                       (q-uniq (map cap ps + filter (s \ 0 < #s) (map (p \ peep (p 1) "of" "") ps))))
      ; the hud's card, at the login's name: "here" while a hud holds it, "away" after, its
      ; inbox kept either way
      (user-card! st)
@@ -328,6 +332,7 @@
                                + (user-card? c ? ("user " + (live? c ? "here" "away")) (peep c "state" "?"))
                                + (backgrounded? c ? " background" "")
                                + (remote? c ? (" on " + peep c "host" "?") "")
+                               + (draining? c && !(user-card? c) ? " draining" "")
                                + "  " + (: b (peep c "branch" "") (0 < #b ? b "-"))
                                + "  " + peep c "cwd" "" + "\n")))
                    "" ps)))
@@ -1530,8 +1535,22 @@
      ; --cards: this host's own cards, for a peer's relay; never one it relays itself
      (cards-json _)
       (json-show {"host" bee-host
-                  "cards" (map (p \ {"name" <p "card" (slurp-file (cell-of <p + "/card"))})
+                  "cards" (map (p \ {"name" <p "card" (slurp-file (cell-of <p + "/card") + (drained-here 0 ? "drain 1\n" ""))})
                                (filter (p \ !(remote? (p 1)) && string? (slurp-file (cell-of <p + "/card"))) (settled 0)))})
+     (drained-here _) (string? (slurp-file (bee-hive + "/.drain")))
+     ; --drain: this host goes down for maintenance. its sessions still take mail, but the queue counts
+     ; them gone; each is told to hand off the lead and start no gate. --drain --off ends it
+     (drain-cmd as)
+      (: f (bee-hive + "/.drain")
+         ps (filter (p \ !(remote? (p 1)) && !(user-card? (p 1))) (settled 0))
+         (? (elem "--off" as) (: _ (unlink f) _ (puts "\(bee-host) is no longer draining\n") 0)
+            (: _ (umkdirs bee-hive 448) _ (uwrite f (show (clock 0 // 1000) + "\n"))
+               _ (map (p \ post-as "bee" <p ("\(bee-host) is draining for maintenance: the queue now counts its sessions gone. "
+                                            + "if you lead a queue, hand it to a live session on another host (queue_lead); start no "
+                                            + "gate, and let a running one finish or write its row waiting. mail still reaches you."))
+                      ps)
+               _ (puts ("\(bee-host) is draining; told \(show #ps) session" + (#ps = 1 ? "" "s") + "\n"))
+               0)))
      ; where a peer's session is laid: its own name, unless a live card of another host holds it
      (mirror-name nm host)
       (: c (card-of nm)
@@ -1599,6 +1618,7 @@
           "--drop" (? (#as < 3) (say err "usage: love bee --drop NAME HOST < MESSAGE\n", 2)
                       (: s (slurp-file "/dev/stdin") (? (string? s) (drop-in <>as <>>as s) 1)))
           "--relay" (? (elem "--once" as) (: _ (relay-round 0) 0) (relay 0))
+          "--drain" (drain-cmd as)
           "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
                       (: e0 (getenv "BEE_NAME") u (getenv "USER")
@@ -1667,7 +1687,7 @@
          (two? as && <as = "--state") (: _ (state-cmd as) 0)
          (elem "--hud" as) (: _ (puts (unlines (hud-lines 0))) 0)   ; once, as text
          (!(two? as) && two? (tty 1)) ((cite 'hud 'hud-run) bee-core)
-         (two? as && elem <as ["--list" "--send" "--resume" "--cards" "--drop" "--relay"]) (bee-cli as)
+         (two? as && elem <as ["--list" "--send" "--resume" "--cards" "--drop" "--relay" "--drain"]) (bee-cli as)
          (: _ (say err (bee-usage + "\n")) 2))
       (bee-go as))
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))
