@@ -54,3 +54,16 @@
 (test (1 = ((\ k (: (f n) k  (f n) (n < 1 ? 7 (f (n - 1)))  (f 2))) 1))
       (2 = ((\ k (: (g x) (f x)  (f x) k  (f x) 2  (g 0))) 1))
       (1 = ((\ k (: (f x) k  (g x) (f x)  (f x) 2  (g 0))) 1)))
+; an inner let's value reads the outer name its later sibling rebinds: the capture is the outer's
+(test (6 = (: x 5 (f a) (: z (a + x) x z) (f 1)))
+      (6 = (: x 5 f (a \ (: z (a + x) x z)) (f 1)))
+      (2 = (: x 5 (f a) (: y (a + x) x y q 2) (f 1)))
+      (10 = (: x 5 (f a) (: g (b \ b + x) x 9 (g a)) (f 1))))   ; a lambda def sees the later one
+; ..and stays unbound or the outer's when the let inlines: a later binder never captures it
+(test (6 = ev '(: x 5 (f a) (: z (a + x) x 9 z) (f 1)))
+      ('(missing y) = trap (_ \ ev '(: (f a) (: z (a + y) y 30 z) (f 1))) 0 (a \ b \ [a b]))
+      (4 = ev '(: (f a) (: z (a + 1) y (z * 2) y) (f 1))))
+; ..nor when a local loop's helper values inline into it
+(test ('(missing b) = trap (_ \ ev '(: (F a) (: k (b + 1) b 3 (g x) (x + k) (g a)) (F 0))) 0 (a \ b \ [a b]))
+      (101 = ev '(: b 100 (F a) (: k (b + 1) b 3 (g x) (x + k) (g a)) (F 0)))
+      (4 = ev '(: (F a) (: b 3 k (b + 1) (g x) (x + k) (g a)) (F 0))))

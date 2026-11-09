@@ -17,7 +17,7 @@
 #include <sys/stat.h>   // mkdir, stat, chmod, umask, utimensat UTIME_NOW
 #include <sys/wait.h>   // waitpid, WIF* (proc_status)
 #include <spawn.h>      // posix_spawnp: a kernel with no fork
-#include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
+#include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ TIOCM* struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <fnmatch.h>    // fnmatch (glob's pattern law)
@@ -928,14 +928,24 @@ static love_inline struct g *host_regexec(struct g *g) {
  if (!strp(b) || !len(b) || !strp(s) || !charmp(i) || !charmp(e) || getcharm(i) < 0 || getcharm(i) > (intptr_t) len(s))
   return g->sp[0] = badarg(g), g;
  regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
- int ef = (int) getcharm(e) | REG_STARTEND, rc, k = 10;
+ int ef = (int) getcharm(e), rc, k = 10;
 #ifdef REG_UTF8
  regex_t re = {0, txt(b), len(b)};
- rc = regexec(&re, txt(s), 10, m, ef);
-#else
+ rc = regexec(&re, txt(s), 10, m, ef | REG_STARTEND);
+#elif defined REG_STARTEND
  regex_t re;
  rc = regcomp(&re, txt(b) + 1, (unsigned char) txt(b)[0]);
- if (!rc) rc = regexec(&re, txt(s), 10, m, ef), regfree(&re);
+ if (!rc) rc = regexec(&re, txt(s), 10, m, ef | REG_STARTEND), regfree(&re);
+#else
+ // no REG_STARTEND: match from txt(s) + i, a ^ there only after a newline under REG_NEWLINE
+ regex_t re;
+ intptr_t o = getcharm(i);
+ int cf = (unsigned char) txt(b)[0];
+ if (o && !(cf & REG_NEWLINE && txt(s)[o - 1] == '\n')) ef |= REG_NOTBOL;
+ rc = regcomp(&re, txt(b) + 1, cf);
+ if (!rc) rc = regexec(&re, txt(s) + o, 10, m, ef), regfree(&re);
+ for (int j = 0; !rc && j < 10; j++)
+  if (m[j].rm_so >= 0) m[j].rm_so += (regoff_t) o, m[j].rm_eo += (regoff_t) o;
 #endif
  if (rc) return g->sp[0] = rc == REG_NOMATCH ? ZeroPoint : putcharm(-rc), g;
  while (k > 1 && m[k - 1].rm_so < 0) k--;
@@ -1429,6 +1439,19 @@ love_noinline static word host_settermios(struct g *g, word x, word l) {
  return tcsetattr((int) fd, TCSADRAIN, &t) ? love_err(g, errno) : ZeroPoint; }
 LvmWord2(settermios)
 
+// (modem fd set clear): raise the modem lines in set and drop those in clear (TIOCM_DTR 2,
+// TIOCM_RTS 4 ..) in one write, so a board's reset and boot straps never pass through a
+// state between; answers the lines as they stand
+love_noinline static word host_modem(struct g *g, word x, word s, word c) {
+ intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);
+ int on = charmp(s) ? (int) getcharm(s) : 0, off = charmp(c) ? (int) getcharm(c) : 0, now = 0;
+ if (fd < 0) return badarg(g);
+ if (ioctl((int) fd, TIOCMGET, &now)) return love_err(g, errno);
+ now = (now | on) & ~off;
+ if (ioctl((int) fd, TIOCMSET, &now)) return love_err(g, errno);
+ return putcharm(now); }
+LvmWord3(modem)
+
 // (raw on): off restores the cooked termios from the first raw-on. one baseline and one
 // atexit, shared with main.c's repl, or two owners would ride atexit's LIFO
 static struct termios raw_cooked;
@@ -1547,6 +1570,7 @@ LvDef("settty", settty, 3, NULL);
 LvDef("ptyecho", ptyecho, 2, "posix");
 LvDef("termios", termios, 1, "posix");
 LvDef("settermios", settermios, 2, "posix");
+LvDef("modem", modem, 3, "posix");
 LvDef("raw", raw, 1, NULL);
 LvDef("swig", swig, 2, "posix");
 LvDef("open", open, 2, "posix");

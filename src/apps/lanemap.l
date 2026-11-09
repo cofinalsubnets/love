@@ -24,7 +24,7 @@
 (module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map
                  lanes-covers lanes-plan lanes-lines)
 
-(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_ccarm" "test_ccrv64" "test_ccwasm"
+(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccwasm"
                "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
@@ -44,6 +44,7 @@
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
        "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
       ", which runs test_gcstress's shards as well: owing both runs it alone"]
+     ["" ["src/love/boot/glaze.l"] ["test_inle"] ", whose kernels run the glaze too"]
      ["a crewfiles member, or anything else baked" ["baked"] ["test_fixpoint" "test_bakerep"]
       ", and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
@@ -52,11 +53,12 @@
       ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/as.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
        "src/love/holo/text.l" "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l"] moon-lanes ""]
      ["" ["src/love/holo/a64.l"] ["test_moon" "test_cca64"] ""]
-     ["" ["src/love/holo/rv64.l"] ["test_moon" "test_ccrv64"] ""]
-     ["" ["src/love/holo/i386.l"] ["test_moon" "test_cci386"] ""]
+     ["" ["src/love/holo/rv64.l"] ["test_moon" "test_ccrv64" "test_ccrv32"] ""]
+     ["" ["src/love/holo/i386.l"] ["test_moon" "test_cci386" "test_cci386m16"] ""]
      ["" ["src/love/holo/thumb1.l"] ["test_moon" "test_ccthumb1"] ""]
      ["" ["src/love/holo/thumb2.l"] ["test_moon" "test_ccthumb2" "test_ccarm"] ""]
      ["" ["src/love/holo/wasm.l" "src/love/holo/wasmfn.l"] ["test_moon" "test_ccwasm"] ""]
+     ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l" "test/holo/xtlink.l" "test/holo/xtdata.c"] ["test_xtensa" "test_ccxtensa"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
      ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]]
@@ -71,7 +73,7 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-      "test_nucleo446" "test_nucleo446_smoke" "test_teensy41" "test_playdate" "test_rp2040" "test_rp2040_board" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_teensy41" "test_playdate" "test_rp2040" "test_rp2040_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees

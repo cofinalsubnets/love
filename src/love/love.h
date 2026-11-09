@@ -481,7 +481,11 @@ extern uintptr_t baked_image_len;
 intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          inflate_dict(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, unsigned char const*, uintptr_t),
          deflate_raw(struct g*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
-         deflate_dict(struct g*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+         deflate_dict(struct g*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
+         deflate_hot(struct g*, unsigned char const*, uintptr_t const*, uintptr_t, unsigned char*, uintptr_t, uintptr_t*, unsigned char*, uintptr_t),
+         inflate_shared(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, void*);
+uintptr_t inflate_tabs_size(void);
+int inflate_tabs_load(unsigned char const*, uintptr_t, void*), inflate_shared_is(unsigned char const*, uintptr_t);
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
@@ -922,18 +926,22 @@ static love_inline struct tray *ini_tray(struct tray *v, enum tray_type t, uintp
 static love_inline uintptr_t tray_bytes(enum tray_type t, uintptr_t R, uintptr_t n) {
  if (n >= words_max) return (words_max + 1) * sizeof(word);
  return sizeof(struct tray) + R * sizeof(word) + n * love_T[t]; }
+// a float into an int tray's word, saturating, a NaN to 0, as floor and int's scalars leave the float kind
+static love_inline intptr_t flo_word(flo_t v) {
+ return v >= (flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (flo_t) INTPTR_MIN ? INTPTR_MIN
+      : v != v ? 0 : (intptr_t) v; }
 static love_inline flo_t tray_get_flo(struct tray *v, uintptr_t i) {
  void *p = tray_data(v);
  return v->type == love_R ? ((flo_t*) p)[i] : (flo_t) ((intptr_t*) p)[i]; }
 static love_inline intptr_t tray_get_int(struct tray *v, uintptr_t i) {
  void *p = tray_data(v);
- return v->type == love_R ? (intptr_t) ((flo_t*) p)[i] : ((intptr_t*) p)[i]; }
+ return v->type == love_R ? flo_word(((flo_t*) p)[i]) : ((intptr_t*) p)[i]; }
 static love_inline void tray_put_int(struct tray *v, uintptr_t i, intptr_t x) {
  void *p = tray_data(v);
  if (v->type == love_R) ((flo_t*) p)[i] = (flo_t) x; else ((intptr_t*) p)[i] = x; }
 static love_inline void tray_put_flo(struct tray *v, uintptr_t i, flo_t x) {
  void *p = tray_data(v);
- if (v->type == love_R) ((flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = (intptr_t) x; }
+ if (v->type == love_R) ((flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = flo_word(x); }
 static love_inline word tray_get_obj(struct tray *v, uintptr_t i) {
  return ((word*) tray_data(v))[i]; }
 static love_inline void tray_put_obj(struct tray *v, uintptr_t i, word x) {
@@ -949,7 +957,7 @@ static love_inline bool tray_put(struct tray *v, uintptr_t i, word x) {
   return true; }
  if (!isnum(x)) return false;
  if (v->type >= love_R) tray_put_flo(v, i, toflo(x));
- else tray_put_int(v, i, gemp(x) ? (intptr_t) gem_get(x) : toint(x));
+ else tray_put_int(v, i, gemp(x) ? flo_word(gem_get(x)) : toint(x));
  return true; }
 uintptr_t bshape(word a, word b, uintptr_t *R);
 void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),

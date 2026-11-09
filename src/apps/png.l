@@ -3,7 +3,7 @@
 ;
 ;   (png-decode s)              -> (w h rgba) | a string saying why not
 ;   (png-frames s most)         -> (w h ((rgba ms) ..)), up to most frames composed on the
-;                                  canvas; a still png one frame of 0 ms | why not
+;                                  canvas, 2^28 pixels in all; a still png one frame of 0 ms | why not
 ;   (png-encode w h rgba)       -> the png's bytes: a palette to 256 colours, else rgba
 ;   (png-walk c o rows n bpp)   -> the unfilter in love, in place in a cask, which the
 ;                                  nif (png-unfilter s o rows n bpp) answers to
@@ -227,12 +227,18 @@
    (png-head t ih)
     (png-header ih @ hd (string? hd ? hd (pin (pin hd 'trns (peep t 'trns "")) 'plte (peep t 'plte ""))))
 
+   ; deflate lays at most 1032 bytes per byte it reads (a 258-byte match in two bits): a stream
+   ; that cannot reach need is short, told before inflate or any canvas
+   (png-short? need z) (1032 * #z + 1024 < need)
    ; the zlib stream z of the image hd heads -> [w h rgba] | why not
    (png-pixels hd z)
     (? (#z < 2 || (z 0 * 256 + z 1) % 31 != 0 || z 0 & 15 != 8 || z 1 & 32) "bad zlib header"
        (: need (png-need hd)
-          r (1073741824 < need ? 'big (gz-inflate (snip z 2 #z) need))    ; inflate's own ceiling
+          r (? (1073741824 < need) 'big                                    ; inflate's own ceiling
+               (png-short? need z) 'short
+               (gz-inflate (snip z 2 #z) need))
           (? (r = 'big) "too big"
+             (r = 'short) "short image data"
              (atom? r) "bad deflate stream"
              (#<>r < need) "short image data"
              (: c <>r
@@ -257,7 +263,7 @@
              frs (rev (t 'fr))
              (fail why acc) (acc = () ? why [w h (rev acc)])
              (go fs c n acc)
-              (? (fs = () || most <= n) [w h (rev acc)]
+              (? (fs = () || most <= n || 268435456 < (n + 1) * w * h) [w h (rev acc)]   ; frames as many pixels as one picture
                  (: f <fs fc (f 0)
                     (? (#fc < 26 || 2 < fc 24 || 1 < fc 25) (fail "a bad fcTL" acc)
                        (: fw (rdbe fc 4 4) fh (rdbe fc 8 4) x (rdbe fc 12 4) y (rdbe fc 16 4)
@@ -273,5 +279,7 @@
                                  (n + 1) ([out ms] . acc)))))))
              (? (!(t 'actl) || frs = ())
                  (png-pixels hd (slurp (t 'idat)) @ r (string? r ? r [w h [[(r 2) 0]]]))
+                ; the default image heads the canvas, shown or not: data short of it is refused before the canvas is laid
+                (png-short? (png-need hd) (slurp (t 'idat))) "short image data"
                 (go frs (string (cask (4 * w * h))) 0 ()))))))
 ) ; module png

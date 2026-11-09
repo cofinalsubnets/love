@@ -40,6 +40,10 @@
                       (lib () k @ M (M ? M (lib () 'verbs @ V (tablet? V ? (V 'lift k))))))
                  (keys (lib ()))))
 
+; a board that links no posix.c has no tty: () answers as one, (() 1) being (), so the
+; editor and the grid take their no-terminal widths
+(: tty (peep book 'tty ()))
+
 (: putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
@@ -333,13 +337,15 @@
 (: arch-canon {'x64 'x64  'amd64 'x64  'x86_64 'x64  'x86-64 'x64
                'a64 'a64  'arm64 'a64  'aarch64 'a64
                'rv64 'rv64  'riscv 'rv64  'riscv64 'rv64
+               'rv32 'rv32  'riscv32 'rv32
                'wasm 'wasm  'wasm64 'wasm
                'thumb1 'thumb1  'cortex-m0 'thumb1
                'thumb2 'thumb2  'cortex-m7 'thumb2
                'arm 'arm  'armv7l 'arm  'armv8l 'arm  'armhf 'arm
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp
                'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
-               'i386m16 'i386m16}
+               'i386m16 'i386m16
+               'xtensa 'xtensa  'esp32 'xtensa}
    ; uname's machine and a gnu triple's head; () for the embedded targets
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; main.c pins `love-os` per run off __love_osv: one binary meets four kernels

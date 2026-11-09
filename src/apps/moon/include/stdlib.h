@@ -6,6 +6,7 @@
 #define EXIT_FAILURE 1
 typedef unsigned long size_t;
 typedef int wchar_t;
+#include <alloca.h>   /* as glibc's default features lay it */
 void *malloc(size_t);
 void *calloc(size_t, size_t);
 void *realloc(void*, size_t);

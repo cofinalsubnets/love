@@ -1,7 +1,7 @@
-; holo's encoder differential fuzz, x64 + a64 + rv64: each generated form's bytes go through a
+; holo's encoder differential fuzz, x64 + a64 + rv64 + rv32: each generated form's bytes go through a
 ; foreign decoder (objdump cross-read by llvm-mc; llvm-mc for a64/rv64), which must read back
 ; the mnemonic and operands; registers compare width-agnostic, immediates mod 2^64.
-; knobs: FUZZ_N (per class, 8), FUZZ_SEED, FUZZ_ARCH (x64|a64|rv64). out/love test/holo/fuzz/fuzz.l
+; knobs: FUZZ_N (per class, 8), FUZZ_SEED, FUZZ_ARCH (x64|a64|rv64|rv32). out/love test/holo/fuzz/fuzz.l
 
 (borrow 'posix)
 (reads (open "src/love/holo/holo.l" "r"))
@@ -622,11 +622,89 @@
                               ['("beq") [['r t] ['r 't6] ['i 8]]]
                               ['("j") [['i 4]]]])]))]]
 
+ ; ---- rv32 lane: rv64's width-free classes, the word ones at 4 bytes, no float file ----
+ rv32-ld '(("ld" "lw") ("ld1" "lb") ("ld2" "lh") ("ld4" "lw") ("ldu1" "lbu") ("ldu2" "lhu") ("ldu4" "lw"))
+ rv32-st '(("st" "sw") ("st1" "sb") ("st2" "sh") ("st4" "sw"))
+ (mask32 n) (n & 4294967295)
+ rv32-over
+  {"li" (_ \ (: d (rv-rand 0) k (rnd 3)
+                imm (? (k = 0) (rv-imm12 0) (k = 1) (imm-s32 0) (imm-u32 0))
+                [[['li d imm]]
+                 (ins \
+                        atom? ins || any i-bad ins ? "bad li decode"
+                          (: (go m val)
+                              (atom? m ? (mask32 val = mask32 imm ? ()
+                                            ("li value " + show0x (mask32 val) + " != " + show0x (mask32 imm)))
+                                 (: i <m o (ops-comma (i-ops i)) mn (i-mnem i)
+                                    (!(abs-rv <o = d) ? ("li dest " + <o + " != " + string d)
+                                       ((? (mn = "li") (imm-rv (o 1))
+                                           (mn = "lui") (imm-rv (o 1) * 4096)
+                                           (mn = "addi") (val + imm-rv (o 2))
+                                           'bad) @ v2
+                                        (v2 = 'bad ? ("li unexpected mnem " + mn)
+                                           (go >m v2))))))
+                             (go ins 0)))]))
+   "ld" (_ \ (: row (pick rv32-ld) d (rv-rand 0) b (rv-rand 0) o (rv-imm12 0)
+                [[[(intern <row) d b o]] (rv-spec [[[(row 1)] [['r d] ['m b o]]]])]))
+   "st" (_ \ (: row (pick rv32-st) b (rv-rand 0) o (rv-imm12 0) s (rv-rand 0)
+                [[[(intern <row) b o s]] (rv-spec [[[(row 1)] [['r s] ['m b o]]]])]))
+   "ld_far" (_ \ (: d (rv-rand 0) b (rv-rand 0)
+                    off ((coin 0 ? 1 -1) * rint 2048 2147479552)
+                    l0 ((mask64 off) % 4096)
+                    lo (2047 < l0 ? (l0 - 4096) l0)
+                    hi ((int ((mask64 (off - lo)) / 4096)) % 1048576)
+                    [[['ld d b off]]
+                     (rv-spec [['("lui") [['r 't6] ['i hi]]]
+                               ['("add") [['r 't6] ['r 't6] ['r b]]]
+                               ['("lw") [['r d] ['m 't6 lo]]]])]))
+   "ldx" (_ \ (: d (rv-rand 0) b (rv-rand 0) ix (rv-rand 0) sc (pick '(2 4 8)) dp (rv-imm12 0)
+                 amt (? (sc = 2) 1 (sc = 4) 2 3)
+                 [[['ldx d b ix sc dp]]
+                  (rv-spec [['("slli") [['r 't6] ['r ix] ['i amt]]]
+                            ['("add") [['r 't6] ['r 't6] ['r b]]]
+                            ['("lw") [['r d] ['m 't6 dp]]]])]))
+   "stx" (_ \ (: b (rv-rand 0) ix (rv-rand 0) s (rv-rand 0) sc (pick '(2 4 8)) dp (rv-imm12 0)
+                 amt (? (sc = 2) 1 (sc = 4) 2 3)
+                 [[['stx b ix sc dp s]]
+                  (rv-spec [['("slli") [['r 't6] ['r ix] ['i amt]]]
+                            ['("add") [['r 't6] ['r 't6] ['r b]]]
+                            ['("sw") [['r s] ['m 't6 dp]]]])]))
+   "shift" (_ \ (: row (pick '(("shl" "slli") ("shr" "srli") ("sar" "srai"))) d (rv-rand 0) c (rint 1 31)
+                   [[[(intern <row) d c]] (rv-spec [[[(row 1)] [['r d] ['r d] ['i c]]]])]))
+   "rot" (_ \ (: op (pick '("rol" "ror")) d (rv-rand 0) c (rint 1 31)
+                 k (op = "ror" ? c ((32 - c) % 32))
+                 [[[(intern op) d c]]
+                  (rv-spec [['("srli") [['r 't6] ['r d] ['i k]]]
+                            ['("slli") [['r d] ['r d] ['i ((32 - k) % 32)]]]
+                            ['("or") [['r d] ['r d] ['r 't6]]]])]))
+   "sxzx" (_ \ (: row (pick '(("sx1" 24 "srai") ("sx2" 16 "srai") ("zx2" 16 "srli")))
+                  d (rv-rand 0) c (row 1)
+                  [[[(intern <row) d]]
+                   (rv-spec [['("slli") [['r d] ['r d] ['i c]]]
+                             [[(row 2)] [['r d] ['r d] ['i c]]]])]))
+   "pushpop" (_ \ (? (coin 0)
+                     (rv-rand 0 @ s
+                      [[['push s]] (rv-spec [['("addi") [['r 'sp] ['r 'sp] ['i -16]]]
+                                             ['("sw") [['r s] ['m 'sp 0]]]])])
+                     (rv-rand 0 @ d
+                      [[['pop d]] (rv-spec [['("lw") [['r d] ['m 'sp 0]]]
+                                            ['("addi") [['r 'sp] ['r 'sp] ['i 16]]]])])))
+   "mulo" (_ \ (: rs (pick-n rv-gpregs 4) d <rs a (rs 1) b (rs 2) t (rs 3)
+                  [[['mulo d a b t 'l] ['label 'l]]
+                   (rv-spec [['("mulh") [['r t] ['r a] ['r b]]]
+                             ['("mul") [['r d] ['r a] ['r b]]]
+                             ['("srai") [['r 't6] ['r d] ['i 31]]]
+                             ['("beq") [['r t] ['r 't6] ['i 8]]]
+                             ['("j") [['i 4]]]])]))}
+ gens-rv32 (map (g \ (rv32-over <g @ f (f ? [<g f] g)))
+                (filter (g \ !(elem <g '("fp3" "fmov" "fcvt" "fldst" "fcmpbr"))) gens-rv))
+
  ; ---- the lanes; the 10th column names the disassembler a lane needs ----
  arches
   [["x64" 'x64 gens-x64 (hx \ disasm-x64 hx) ops-comma mem-x64 (s \ abs-x64 s) imm-x64 1 "objdump"]
    ["a64" 'a64 gens-arm (hx \ disasm-mc hx "aarch64" "" "//" 0) ops-arm mem-arm (s \ abs-arm s) imm-arm 0 "llvm-mc"]
-   ["rv64" 'rv64 gens-rv (hx \ disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1) ops-comma mem-rv (s \ abs-rv s) imm-rv 0 "llvm-mc"]]
+   ["rv64" 'rv64 gens-rv (hx \ disasm-mc hx "riscv64" " --mattr=+m,+f,+d,+c" "#" 1) ops-comma mem-rv (s \ abs-rv s) imm-rv 0 "llvm-mc"]
+   ["rv32" 'rv32 gens-rv32 (hx \ disasm-mc hx "riscv32" " --mattr=+m,+c" "#" 1) ops-comma mem-rv (s \ abs-rv s) imm-rv 0 "llvm-mc"]]
  (tool? t) ((sh ("command -v " + t + " >/dev/null 2>&1")) = 0)
 
  fz-n (("" + getenv "FUZZ_N") @ v (0 < #v ? (s2i v) 8))

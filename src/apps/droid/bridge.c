@@ -186,10 +186,9 @@ static void block(ANativeWindow_Buffer *o, int x, int y, int w, int h) {
 /* a line in the columns of a 5x7 font, only the letters a first run says */
 static void say(ANativeWindow_Buffer *o, char const *s, int y, int k) {
   static char const font[] =
-    "a\x20\x54\x54\x54\x78" "b\x7f\x48\x44\x44\x38" "e\x38\x54\x54\x54\x18" "f\x08\x7e\x09\x01\x02"
-    "g\x0c\x52\x52\x52\x3e" "i\x00\x44\x7d\x40\x00" "k\x7f\x10\x28\x44\x00" "m\x7c\x04\x18\x04\x78"
-    "n\x7c\x08\x04\x04\x78" "r\x7c\x08\x04\x04\x08" "s\x48\x54\x54\x54\x20" "t\x04\x3f\x44\x40\x20"
-    "u\x3c\x40\x40\x20\x7c" "w\x3c\x40\x30\x40\x3c" ":\x00\x36\x36\x00\x00";
+    "a\x20\x54\x54\x54\x78" "b\x7f\x48\x44\x44\x38" "f\x08\x7e\x09\x01\x02" "g\x0c\x52\x52\x52\x3e"
+    "i\x00\x44\x7d\x40\x00" "k\x7f\x10\x28\x44\x00" "n\x7c\x08\x04\x04\x78" "r\x7c\x08\x04\x04\x08"
+    "s\x48\x54\x54\x54\x20" "t\x04\x3f\x44\x40\x20" "u\x3c\x40\x40\x20\x7c" ":\x00\x36\x36\x00\x00";
   int n = 0; while (s[n]) n++;
   for (int i = 0; i < n; i++)
     for (unsigned g = 0; g < sizeof font - 1; g += 6)
@@ -207,8 +206,7 @@ static void notice(br *b) {
   int k = (o.width < o.height ? o.width : o.height) / 120, y = o.height / 3;
   if (k < 1) k = 1;
   say(&o, "first run: baking", y, k);
-  say(&o, "a few minutes", y + 12 * k, k);
-  block(&o, b->tick * k * 2 % (o.width - 8 * k), y + 24 * k, 8 * k, 2 * k);
+  block(&o, b->tick * k * 2 % (o.width - 8 * k), y + 12 * k, 8 * k, 2 * k);
   ANativeWindow_unlockAndPost(b->win);
 }
 

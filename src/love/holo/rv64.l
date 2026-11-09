@@ -1,5 +1,5 @@
 ; riscv -- the rv64 backend for holo (the ox64's c906, qemu -M virt). rv64imfd plus Zicsr/Zifencei
-; for kernels; no A (moon's __sync hands its atomic words in raw). words squeeze to C forms where
+; for kernels, and rv32 (the esp32-c6's rv32imac) through the same emitters at a 4-byte word; no A (moon's __sync hands its atomic words in raw). words squeeze to C forms where
 ; they fit (rvc-of), so an image asks for rv64gc.
 ;
 ; no flags register: cmp/test/ucomisd emit at most an immediate load and remember their operands in
@@ -49,6 +49,9 @@
    (rv-fits12 n) (n >= -2048 && n <= 2047)
    ;; the low 12 bits, signed, so n - lo is a multiple of 4096
    (rv-lo12 n) (n & 4095 @ low (low > 2047 ? (low - 4096) low))
+   ;; rv32 lowers through these same emitters with rv-flags 'x 32: a word is 4 bytes, no W ops
+   (rv32? _) (peep rv-flags 'x 64 = 32)
+   (rv-s32 n) (n & 4294967295 @ u (u > 2147483647 ? (u - 4294967296) u))
 
    ;; addi, lui+addiw, or the high chunks then slli 12 + addi. s64 folds an unsigned >= 2^63
    (rv-li-rec dn s)
@@ -57,13 +60,13 @@
          (: lo (rv-lo12 s) hi ((s - lo) // 4096)                            ; addiw wraps mod 2^32,
             (catall [                                                       ; so hi=2^19 is exact
 (rv-u hi dn 0x37)                                                           ; lui d, hi
-(lo = 0 ? () (rv-i lo dn 0 dn 0x1B))]))                                   ; addiw d, d, lo
+(lo = 0 ? () (rv-i lo dn 0 dn (rv32? 0 ? 0x13 0x1B)))]))                  ; addiw d, d, lo (rv32: addi)
          (rv-lo12 s @ lo
             (catall [
               (rv-li-rec dn ((s - lo) // 4096))
               (rv-i 12 dn 1 dn 0x13)                                      ; slli d, d, 12
               (lo = 0 ? () (rv-i lo dn 0 dn 0x13))])))                    ; addi d, d, lo
-   (rv-li d imm) (rv-li-rec (rvn d) (s64 imm))
+   (rv-li d imm) (rv-li-rec (rvn d) (rv32? 0 ? (rv-s32 imm) (s64 imm)))
 
    (rv-mov d s) (rv-i 0 (rvn s) 0 (rvn d) 0x13)                             ; addi d, s, 0
 
@@ -209,14 +212,15 @@
    (rv-st-f3 f3 bn off st)
       (rv-fits12 off ? (rv-s off bn st f3)
          (rv-mem-far bn off (\ b lo (rv-s lo b st f3))))
-   (rv-ld d base off)   (rv-ld-f3 3 0x03 (rvn d) (rvn base) off)             ; ld
-   (rv-st base off s)   (rv-st-f3 3 (rvn base) off (rvn s))                  ; sd
+   (rv-wf3 _) (rv32? 0 ? 2 3)                                                ; a word's funct3: lw/sw on rv32
+   (rv-ld d base off)   (rv-ld-f3 (rv-wf3 0) 0x03 (rvn d) (rvn base) off)    ; ld
+   (rv-st base off s)   (rv-st-f3 (rv-wf3 0) (rvn base) off (rvn s))         ; sd
    (rv-ld1 d base off)  (rv-ld-f3 0 0x03 (rvn d) (rvn base) off)             ; lb
    (rv-ld2 d base off)  (rv-ld-f3 1 0x03 (rvn d) (rvn base) off)             ; lh
    (rv-ld4 d base off)  (rv-ld-f3 2 0x03 (rvn d) (rvn base) off)             ; lw
    (rv-ldu1 d base off) (rv-ld-f3 4 0x03 (rvn d) (rvn base) off)             ; lbu
    (rv-ldu2 d base off) (rv-ld-f3 5 0x03 (rvn d) (rvn base) off)             ; lhu
-   (rv-ldu4 d base off) (rv-ld-f3 6 0x03 (rvn d) (rvn base) off)             ; lwu
+   (rv-ldu4 d base off) (rv-ld-f3 (rv32? 0 ? 2 6) 0x03 (rvn d) (rvn base) off)   ; lwu
    (rv-st1 base off s)  (rv-st-f3 0 (rvn base) off (rvn s))                  ; sb
    (rv-st2 base off s)  (rv-st-f3 1 (rvn base) off (rvn s))                  ; sh
    (rv-st4 base off s)  (rv-st-f3 2 (rvn base) off (rvn s))                  ; sw
@@ -230,26 +234,30 @@
                               (rv-mem-far bn off (\ b lo (lo & 4095 @ u (le32 ((u >> 5) << 25 | (sn << 20 | (b << 15 | (2 << 12 | ((u & 31) << 7 | 0x27)))))))))))
 
    (rv-sx w d) (rvn d @ dn
-                  (w = 4 ? (rv-i 0 dn 0 dn 0x1B)                           ; addiw d, d, 0 (sext.w)
-                     (: c (w = 1 ? 56 48)
+                  (w = 4 ? (rv32? 0 ? (rv-mov d d) (rv-i 0 dn 0 dn 0x1B))   ; addiw d, d, 0 (sext.w)
+                     (: c ((w = 1 ? 56 48) - (rv32? 0 ? 32 0))
                         (catall [(rv-i c dn 1 dn 0x13)                       ; slli d, d, c
                                   (rv-i (1024 + c) dn 5 dn 0x13)]))))        ; srai d, d, c
    (rv-zx w d) (rvn d @ dn
-                  (w = 1 ? (rv-i 255 dn 7 dn 0x13)                         ; andi d, d, 255
-                     (: c (w = 2 ? 48 32)
+                  (? (w = 1) (rv-i 255 dn 7 dn 0x13)                       ; andi d, d, 255
+                     (w = 4 && rv32? 0) (rv-mov d d)
+                     (: c ((w = 2 ? 48 32) - (rv32? 0 ? 32 0))
                         (catall [(rv-i c dn 1 dn 0x13)                       ; slli d, d, c
                                   (rv-i c dn 5 dn 0x13)]))))                 ; srli d, d, c
 
    ;; no rotate without Zbb: rol/ror go through x31
    (rv-shift op d c)
       (rvn d @ dn
-         (? (op = 'shl) (rv-i c dn 1 dn 0x13)                                ; slli
+         ; rv32 has no shamt past 31: a word shifted out is 0, or its sign, as thumb lays it
+         (? (rv32? 0 && 31 < c && elem op '(shl shr)) (rv-i 0 0 0 dn 0x13)    ; li d, 0
+            (rv32? 0 && 31 < c && op = 'sar) (rv-i 1055 dn 5 dn 0x13)         ; srai d, d, 31
+            (op = 'shl) (rv-i c dn 1 dn 0x13)                                ; slli
             (op = 'shr) (rv-i c dn 5 dn 0x13)                                ; srli
             (op = 'sar) (rv-i (1024 + c) dn 5 dn 0x13)                       ; srai
             (elem op '(rol ror))
-            (: k (op = 'ror ? c (64 - c & 63))                           ; rol c = ror 64-c
+            (: w (rv32? 0 ? 32 64) k (op = 'ror ? c (w - c & w - 1))       ; rol c = ror w-c
                (catall [(rv-i k dn 5 31 0x13)                                ; srli x31, d, k
-                         (rv-i (64 - k & 63) dn 1 dn 0x13)                 ; slli d, d, 64-k
+                         (rv-i (w - k & w - 1) dn 1 dn 0x13)               ; slli d, d, w-k
                          (rv-alu-rrr 6 0 dn dn 31)]))                        ; or d, d, x31
             (scare 'rv-badshift op)))
    (rv-shiftv op d c)                                                        ; the IR pins the count to r1
@@ -283,12 +291,13 @@
       (rvn d @ dn
          (catall [(rv-ixaddr (rvn base) (rvn index) scale)
                    (rv-ix-far disp dn (lo \ (rv-i lo 31 f3 dn 0x03)))]))
-   (rv-ldx d base index scale disp)  (rv-ldx-f3 3 d base index scale disp)   ; ld
+   (rv-ldx d base index scale disp)  (rv-ldx-f3 (rv-wf3 0) d base index scale disp)   ; ld
    (rv-ldxb d base index scale disp) (rv-ldx-f3 4 d base index scale disp)   ; lbu
+   (rv-ldxh d base index scale disp) (rv-ldx-f3 5 d base index scale disp)   ; lhu
    (rv-stx-f3 f3 base index scale disp s)
       (catall [(rv-ixaddr (rvn base) (rvn index) scale)
                 (rv-ix-far disp 30 (lo \ (rv-s lo 31 (rvn s) f3)))])
-   (rv-stx base index scale disp s)  (rv-stx-f3 3 base index scale disp s)   ; sd
+   (rv-stx base index scale disp s)  (rv-stx-f3 (rv-wf3 0) base index scale disp s)   ; sd
    (rv-stxb base index scale disp s) (rv-stx-f3 0 base index scale disp s)   ; sb
    (rv-leax d base index scale disp)
       (: dn (rvn d) amt (rv-shamt scale)
@@ -299,8 +308,14 @@
                       (rv-fits12 disp) (rv-i disp dn 0 dn 0x13)
                       (catall [(rv-li-rec 31 disp) (rv-alu-rrr 0 0 dn dn 31)]))]))
 
-   (rv-push s) (catall [(rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) 3)])         ; addi sp,sp,-16 ; sd s,0(sp)
-   (rv-pop d)  (catall [(rv-i 0 2 3 (rvn d) 0x03) (rv-i 16 2 0 2 0x13)])     ; ld d,0(sp) ; addi sp,sp,16
+   (rv-push s) (catall [(rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) (rv-wf3 0))])   ; addi sp,sp,-16 ; sd s,0(sp)
+   (rv-pop d)  (catall [(rv-i 0 2 (rv-wf3 0) (rvn d) 0x03) (rv-i 16 2 0 2 0x13)])   ; ld d,0(sp) ; addi sp,sp,16
+
+   (rv-decm base off)                                                        ; x30 = [base+off] - 1, stored, against x0
+      (: far !(rv-fits12 off)  bn (far ? 31 (rvn base))  o (far ? 0 off)
+         (rv-flag-set 0 30 0 -1,
+          catall [(far ? (rv-li-rec 31 off + rv-alu-rrr 0 0 31 31 (rvn base)) ())
+                  (rv-i o bn (rv-wf3 0) 30 0x03) (rv-i -1 30 0 30 0x13) (rv-s o bn 30 (rv-wf3 0))]))
 
    (rv-neg d) (rv-alu-rrr 0 32 (rvn d) 0 (rvn d))                            ; sub d, x0, d
    (rv-not d) (rv-i -1 (rvn d) 4 (rvn d) 0x13)                               ; xori d, d, -1
@@ -321,7 +336,7 @@
       (: dn (rvn d) an (rvn a) bn (rvn b) tn (rvn t)
          (catall [(rv-alu-rrr 1 1 tn an bn)                                  ; mulh t, a, b
                    (rv-alu-rrr 0 1 dn an bn)                                 ; mul  d, a, b
-                   (rv-i 1087 dn 5 31 0x13)                                  ; srai x31, d, 63
+                   (rv-i (rv32? 0 ? 1055 1087) dn 5 31 0x13)                 ; srai x31, d, 63 (rv32: 31)
                    (rv-b 0 tn 31 8)                                          ; beq t, x31, +8
                    [(fix 4 'j21 lbl 0x6F)]]))                                ; jal x0, lbl
 
@@ -443,13 +458,13 @@
           ('rol . rv-shift 'rol) ('ror . rv-shift 'ror)
           ('lea . rv-lea) ('lean . rv-lea)
           ('push . rv-push) ('pop . rv-pop)
-          ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec)
+          ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec) ('decm . rv-decm)
           ('jmp . rv-jmp) ('br . rv-br) ('jmpr . rv-jmpr) ('jmpt . rv-jmpt) ('callr . rv-callr)
           ('mulo . rv-mulo) ('mulh . rv-mulh) ('umulh . rv-umulh) ('set . rv-set)
           ('adds . rv-addsub-s 'adds) ('subs . rv-addsub-s 'subs)
           ('div . rv-div) ('rem . rv-rem) ('udiv . rv-udiv) ('urem . rv-urem)
           ('ldx . rv-ldx) ('stx . rv-stx) ('leax . rv-leax)
-          ('ldxb . rv-ldxb) ('stxb . rv-stxb)
+          ('ldxb . rv-ldxb) ('ldxh . rv-ldxh) ('stxb . rv-stxb)
           ('call . rv-call) ('la . rv-la) ('lar . rv-la)
           ('tp . rv-tp)
           ('movsd . rv-fmov) ('movapd . rv-fmov) ('movss . rv-fmov)
@@ -618,6 +633,7 @@
           (rv-patch kind target site width (kind = 'pcrel ? (w 0 + w 4 * 4294967296) (w 0)))))
 
    rv {}
+   rv32 {}
    (pin rv 'lower rv-lower,
     pin rv 'patch rv-patch,
     pin rv 'refix rv-refix,
@@ -637,5 +653,10 @@
     pin rv 'nop '(1 0),
    ;; for the rvc fuzz test only
     pin rv 'parts {'rvc-of rvc-of 'rv-patch rv-patch 'rv-cbase rv-cbase},
-    defbackend 'rv64 rv))
+    defbackend 'rv64 rv,
+   ;; rv32 (rv32imac, ILP32): the same lowering at a 4-byte word. no rv32 word is one of the
+   ;; W, ld/sd or OP-32 forms, so rvc-of squeezes none into an rv64-only C form
+    pins rv32 'lower (ins \ (pin rv-flags 'x 32, rv-lower ins @ b (pin rv-flags 'x 64, b)))
+              'patch rv-patch 'refix rv-refix 'short (rv 'short) 'nop '(1 0),
+    defbackend 'rv32 rv32))
 ) ; module 'holo

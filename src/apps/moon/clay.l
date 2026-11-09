@@ -6,7 +6,8 @@
 ;   (proto name PARAMS RET ATTRS)      the same on a forward declaration
 ;   (ret e PRE)                        a prefix spelling: `love_musttail return ..`
 ;   (gdecl decls STOR)                 (static) / (extern) / ()
-;   (restrict t) (named "lvm_t") (const t)   type forms
+;   (restrict t) (named "lvm_t") (const t) (volatile t)   type forms; cparse's pointer mask,
+;   (ptr t a q), shows as these over its pointee, and an entry's seventh slot over its type
 ;   (sassert e "msg") (tdef NAME TY) (sdef TAG FIELDS)   what cparse reduces to (tdef)
 ;   (arr t EXPR) (didx EXPR val)       symbolic bounds and indices
 ;   (chr 92) (note "text")             a char literal, a comment
@@ -43,8 +44,8 @@
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
       ; ('sexpr items value ty): gcc's ({ .. })
       (sexpr 3 3)
-      ; type forms. ('varr elt dim [idx]): idx is gen's VLA slot, unshown
-      (ptr 1 1) (arr 2 2) (varr 2 3) (struct 1 1) (named 1 1) (const 1 1) (restrict 1 1))
+      ; type forms. ('varr elt dim [idx]): idx is gen's VLA slot, unshown; ('struct tag [align])
+      (ptr 1 3) (arr 2 2) (varr 2 3) (struct 1 2) (named 1 1) (const 1 1) (volatile 1 1) (restrict 1 1))
 
    ; --- clay-ok?: 1 or a gripe naming the first offender. a shape check, not a type check
    (clay-ok? c)
@@ -75,27 +76,34 @@
               (ulong "unsigned long") (ullong "unsigned long long") (llong "long long")
               (i128 "__int128") (u128 "unsigned __int128") (bool "_Bool"))
    (cptr? ('ptr . _)) 1
+   ; a mask, 1 const 2 volatile 4 restrict, as wrappers: restrict next to the pointer it qualifies
+   (cqw q t) (: t1 (q & 4 ? ['restrict t] t) t2 (q & 2 ? ['volatile t1] t1) (q & 1 ? ['const t2] t2))
+   (cpq t) (3 < #t ? (t 3) 0)                       ; a pointer's pointee mask
+   ; an entry's type under its object's mask, which an array's elements wear
+   (cdty d) (cqe (6 < #d ? (d 6) 0) <>d)
+   (cqe q t) (t @ (('arr || 'varr) . e . u) (<t . cqe q e . u) _ (cqw q t))
+   ; a run of wrappers -> (words base)
+   (cqrun t) (t @ (('const || 'volatile || 'restrict) . a . _) (cqrun a @ [w b] [(show <t . w) b]) _ [() t])
    ; cident? checks the first char only: parse's synthetic tags all lead with a dot
    ctag string
    (cident? a) (: c (ctag a @ "" 0 s (s 0)) (96 < c < 123 || 64 < c < 91 || c = 95))
    (cty-base t)
     (name? t ? (look spelling t (string t))
      (t @ (h . a . _)
-      (h @ 'ptr (cty-base a)
+      (h @ 'ptr (cty-base (cqw (cpq t) a))
            'arr (cty-base a)
            'fn (cty-base a)
            'named a
            'struct "struct \(ctag a)"
-           ; const on a pointer goes in the declarator (`*const`), else on the base
-           'const (cptr? a ? (cty-base a) "\(cty-base a) const")
-           'restrict (cty-base a)
+           ; a qualifier on a pointer goes in the declarator (`*const`), else on the base
+           ('const || 'volatile || 'restrict) (cqrun t @ [w b] (cptr? b ? (cty-base b) "\(cty-base b) \(sepby " " w)"))
            "int")
       "int"))
    (cty-dtor t s p)
     (t @- s (h . a . u)
-     (h @- s 'ptr (cty-dtor a "*\(s)" 1)
-          'const (cptr? a ? (cty-dtor <>a "*const \(s)" 1) (cty-dtor a s p))
-          'restrict (cptr? a ? (cty-dtor <>a "*restrict \(s)" 1) (cty-dtor a s p))
+     (h @- s 'ptr (cty-dtor (cqw (cpq t) a) "*\(s)" 1)
+          ('const || 'volatile || 'restrict)
+           (cqrun t @ [w b] (cptr? b ? (cty-dtor (cqw (cpq b) <>b) "*\(sepby " " w) \(s)" 1) (cty-dtor b s p)))
           'arr (cty-dtor a "\(p ? "(\(s))" s)[\(cdim <u)]" 0)
           'varr (cty-dtor a "\(p ? "(\(s))" s)[\(ce <u 0)]" 0)
           'fn (cty-dtor a "\(p ? "(\(s))" s)\(cptys <u)" 0)))
@@ -196,7 +204,7 @@
         "/*?*/"))
    ; sizeof's operand: a type or an expression, by the head
    (ctype? t) (name? t ? (elem t '(char short int long uint void double float))
-                 (two? t && elem <t '(ptr arr struct named const restrict fn)))
+                 (two? t && elem <t '(ptr arr struct named const volatile restrict fn)))
    ; a nested initializer breaks the line, a flat one does not
    (cinitv x) (two? x && elem <x '(dfield didx) ? <>>x x)
    ; a function, not a point-free value: the recursive group compiles before a value
@@ -216,11 +224,11 @@
    (cstor st) (atom? st ? "" "\(sepby " " (map string st)) ")
    ; a 4th element is a register variable's asm("reg") pin; a 5th the alignment ask
    (pin? d) (two? >>>d && <>>>d)
-   (cdtor1 d) (: nm <d t <>d v <>>d
+   (cdtor1 d) (: nm <d t (cdty d) v <>>d
                  (cty-dtor t nm 0 + (pin? d ? " asm(\(cstrlit <>>>d))" "")
-                  + (4 < #d ? " __attribute__((aligned(\(d 4))))" "")
+                  + (4 < #d && 0 < d 4 ? " __attribute__((aligned(\(d 4))))" "")
                   + (atom? v ? "" " = \(cinit v 0)")))
-   (cdecls ds) (cty-base <><ds @ b
+   (cdecls ds) (cty-base (cdty <ds) @ b
                   "\(foldl (a \ d \ a || pin? d) () ds ? "register " "")\(b) \(sepby ", " (map cdtor1 ds))")
 
    ; --- statements: one space per level
@@ -295,8 +303,8 @@
                  " : \(sepby ", " (map (o \ "\(cstrlit <o)(\(ce <>o 0))") l))")
 
    ; --- top level ----------------------------------------------------------------
-   (cparam p) (cty-dtor <>p <p 0)
-   (cparams ps) (map (p \ "\(cty-base <>p) \(cparam p)") ps @ b
+   (cparam p) (cty-dtor (cdty p) <p 0)
+   (cparams ps) (map (p \ "\(cty-base (cdty p)) \(cparam p)") ps @ b
                    (two? ps ? (sepby ", " b) "void"))
    ; a signature, shared by cfn and proto so they cannot drift
    (csig nm at r ps)
@@ -362,6 +370,8 @@
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
            (<x = 'struct && !(cident? <>x))
             (gripe "(struct \(show <>x)) -- an anonymous tag is not a C identifier")
+           (<x = 'struct && two? >>x)
+            (gripe "(struct \(show <>x) \(show <>>x)) -- a typedef's ask has no spelling on the type")
            (<x = 'flo && !(cfinite? <>x))
             (gripe "(flo \(<>x)) -- C has no literal for an infinity or a nan")
            (<x = 'edef && atom? <>>x)

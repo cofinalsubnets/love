@@ -40,6 +40,7 @@
    pgen {}         ; a 1-cell box: a pattern-rule resolver (item -> a card | 0), from the importer
    cookbox {}      ; the in-image shell verdicts (inimg), one per SHELL and .SHELLFLAGS
    jobs {}         ; a 1-cell box: the -j width (1 = serial, nothing forks)
+   doebox {}       ; .DELETE_ON_ERROR: 'on, and each .PRECIOUS name it spares
    dryrun {}       ; ..and one for -n: every step is said and none is run
    running {}      ; pid -> the item whose recipe that job is running
    verdicts {}     ; pid -> the status a reaped job answered, until its land takes it
@@ -152,10 +153,17 @@
    (recur item steps)
    (: k (unseat item)
       nm (string? k ? k (show k))
+      t0 (date item)
       ((#(peep tvarbox k "") ?
           (say err "cook: target-specific variable (\(nm)) not implemented.\n",
            quit 2)),
-       each steps step1))
+       trap (_ \ each steps step1) () (a \ b \ (doe k t0, scare a b))))
+
+   ; under .DELETE_ON_ERROR a failed recipe's file goes, as gnu make's does, when the recipe
+   ; touched it: half written, it would read as up to date on the next run
+   (doe k t0)
+   (peep doebox 'on 0 && string? k && !(peep doebox k 0) ?
+      (date k @ t (t && t != t0 ? (say err "cook: deleting file '\(k)'\n", unlink k) 0)) 0)
 
    ; --- the job pool (-j N) --------------------------------------------------
    ; a stale recipe runs in a forked child (no exec): a job's outputs are the files it wrote
@@ -936,6 +944,10 @@
                (each rules (r \ expand-words [<r] as @ tg
                   (any (= ".PHONY") tg ?
                      (each (expand-words [<>r] as) (p \ pin ps p 1)) 0)), ps))
+      _ (each rules (r \ expand-words [<r] as @ tg
+           (? (any (= ".DELETE_ON_ERROR") tg) (pin doebox 'on 1)
+              (any (= ".PRECIOUS") tg) (each (expand-words [<>r] as) (p \ pin doebox p 1))
+              0)))
       ; .ONESHELL is a target, but expand-steps reads it from `as`
       _ (each rules (r \ (any (= ".ONESHELL") (expand-words [<r] as) ?
                             (pin as ".ONESHELL" "1") 0)))
