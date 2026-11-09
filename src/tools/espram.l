@@ -1,6 +1,7 @@
 ; espram -- an esp32's rom download over its uart, into RAM alone: each PT_LOAD of an ELF at
 ; its address (.bss as zeros), a jump to e_entry, then the uart's output for a while. no flash
-; is touched. the reset is the usual pair, RTS on EN and DTR on IO0 through two transistors.
+; is touched. the reset is the usual pair, RTS on EN and DTR on IO0 through two transistors,
+; or on a chip's own USB-Serial-JTAG (a ttyACM) the lines its peripheral reads directly.
 ; usage: love src/tools/espram.l ELF [TTY [SECONDS]], TTY /dev/ttyUSB0, SECONDS 5
 (borrow '(posix bytes))
 (: dtr 2 rts 4
@@ -49,13 +50,18 @@
               (: r (unslip (snip b (i + 1) j))
                  (8 <= #r && r 0 = 1 && r 1 = op ? (pin got 'b (snip b (j + 1) #b), r)
                   (pin got 'b (snip b j #b), frame op t)))))
-       (ok? r) (string? r && 12 <= #r && r (#r - 4) = 0)
+       ; the status leads the reply's data, whether two bytes or four follow
+       (ok? r) (string? r && 10 <= #r && r 8 = 0)
        (call op d ck what)
         (send (req op d ck), frame op (clock 0 + 3000) @ r (ok? r ? r (die (what + " refused"))))
        ; into the rom's download, each step one write: EN low with IO0 high, then EN up while
-       ; IO0 is held low, then IO0 let go
-       (reset _) (modem fd 0 (dtr | rts), modem fd (dtr | rts) 0, modem fd rts dtr, rest 100,
-                  modem fd dtr rts, rest 50, modem fd 0 (dtr | rts), rest 200, pin got 'b "")
+       ; IO0 is held low, then IO0 let go. a USB-Serial-JTAG takes DTR as the strap and RTS as
+       ; the reset, passing from strap to reset through both
+       jtag? (0 <= findsub dev "ttyACM" || 0 <= findsub dev "JTAG")
+       (lines on off ms) (modem fd on off, rest ms)
+       (reset _) (jtag? ? (lines 0 (dtr | rts) 100, lines dtr rts 100, lines (dtr | rts) 0 0, lines rts dtr 100, lines 0 (dtr | rts) 200)
+                    (lines 0 (dtr | rts) 0, lines (dtr | rts) 0 0, lines rts dtr 100, lines dtr rts 50, lines 0 (dtr | rts) 200),
+                  pin got 'b "")
        (sync k)
         (k = 0 ? (die (dev + ": no answer from the rom"))
            (send (req 8 (string [7 7 18 32] + string (map (_ \ 85) ^32)) 0),
