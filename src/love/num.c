@@ -82,25 +82,14 @@ static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b,
  for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
  return 0; }
 
-// the loops laid and proved by mag.l
+// the loops laid and proved by mag.l: mag_sub, r = a - b for a >= b, r distinct -> na, high
+// zeros the caller's; mag_mul_add_small, a = a*ml + ad in place, room for a carry at a[n] -> the
+// limb count
 #include "mag_gen.h"
 
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
 static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  return na < nb ? mag_add_ge(r, b, nb, a, na) : mag_add_ge(r, a, na, b, nb); }
-
-// r = a - b, a >= b, r distinct -> na, high zeros the caller's
-static love_noinline int mag_sub(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
- sdlimb borrow = 0; int i = 0;
- for (; i < nb; i++) {
-  sdlimb d = (sdlimb) a[i] - b[i] - borrow;
-  if (d < 0) d += (sdlimb) limb_base, borrow = 1; else borrow = 0;
-  r[i] = (love_limb) d; }
- for (; i < na; i++) {
-  sdlimb d = (sdlimb) a[i] - borrow;
-  if (d < 0) d += (sdlimb) limb_base, borrow = 1; else borrow = 0;
-  r[i] = (love_limb) d; }
- return na; }
 
 // rows [i0, end) of the schoolbook r = a * b; only row 0 reads limbs no row wrote, so lvm_bmul
 // can run a chunk per dispatch and yield
@@ -116,13 +105,6 @@ static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0,
 // r distinct, capacity na+nb
 static love_inline void mag_mul(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  mag_mul_rows(r, a, 0, na, b, nb); }
-
-// a = a*mul + add in place, room for a carry at a[n] -> the limb count
-static love_noinline int mag_mul_add_small(love_limb *a, int n, love_limb mul, love_limb add) {
- dlimb c = add;
- for (int i = 0; i < n; i++) { dlimb s = (dlimb) a[i] * mul + c; a[i] = (love_limb) s; c = s >> limb_bits; }
- if (c) a[n++] = (love_limb) c;
- return n; }
 
 // 128/64 with hi < d, so the quotient fits a limb
 static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {

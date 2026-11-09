@@ -295,7 +295,7 @@
    (lam L g q h (inf-lelt q 1 (inf-pow (add L L)) h (un-1ltB (add L L) (inf-letrans 1 L (add L L) g (inf-leaddr L L))))))
 )
 
-; --- cancelling a sum, for the borrow's step ---
+; --- the borrow's step, which mag_sub takes: d = (a' + B) - (v' + c) split at B ---
 (test
  (defq un-cancr (pi x nat y nat k nat e (paths nat (add x k) (add y k)) (paths nat x y))
    (lam x y k e (inf-addcan k x y
@@ -304,4 +304,122 @@
  ; q at most 1: q + (1 - q) = 1
  (defq un-one (pi q nat h (inf-le q 1) (paths nat (add q (natminus 1 q)) 1))
    (lam q h (inf-addsub q 1 h)))
+ ; u + s = a + B, its high part at most 1: u + (s mod B) = a + (1 - s div B) B
+ (defq un-bdig (pi B nat h (inf-lt 0 B) a nat u nat s nat e (paths nat (add u s) (add a B)) g (inf-le (un-div B s) 1)
+     (paths nat (add u (inf-mod B s)) (add a (mul (natminus 1 (un-div B s)) B))))
+   (lam B h a u s e g (un-cancr (add u (inf-mod B s)) (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)
+     (pathscomp0 nat (add (add u (inf-mod B s)) (mul (un-div B s) B)) (add u (add (inf-mod B s) (mul (un-div B s) B))) (add (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)) (natplusassoc u (inf-mod B s) (mul (un-div B s) B)) (pathscomp0 nat (add u (add (inf-mod B s) (mul (un-div B s) B))) (add u s) (add (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)) (maponpaths nat nat (lam z (add u z)) (add (inf-mod B s) (mul (un-div B s) B)) s (pathscomp0 nat (add (inf-mod B s) (mul (un-div B s) B)) (add (mul (un-div B s) B) (inf-mod B s)) s (natpluscomm (inf-mod B s) (mul (un-div B s) B)) (pathscomp0 nat (add (mul (un-div B s) B) (inf-mod B s)) (add (mul B (un-div B s)) (inf-mod B s)) s (maponpaths nat nat (lam z (add z (inf-mod B s))) (mul (un-div B s) B) (mul B (un-div B s)) (natmultcomm (un-div B s) B)) (un-dm0 B h s)))) (pathscomp0 nat (add u s) (add a B) (add (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)) e (pathscomp0 nat (add a B) (add a (mul (add (natminus 1 (un-div B s)) (un-div B s)) B)) (add (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)) (pathsinv0 nat (add a (mul (add (natminus 1 (un-div B s)) (un-div B s)) B)) (add a (mul 1 B)) (maponpaths nat nat (lam z (add a (mul z B))) (add (natminus 1 (un-div B s)) (un-div B s)) 1 (pathscomp0 nat (add (natminus 1 (un-div B s)) (un-div B s)) (add (un-div B s) (natminus 1 (un-div B s))) 1 (natpluscomm (natminus 1 (un-div B s)) (un-div B s)) (un-one (un-div B s) g)))) (pathscomp0 nat (add a (mul (add (natminus 1 (un-div B s)) (un-div B s)) B)) (add a (add (mul (natminus 1 (un-div B s)) B) (mul (un-div B s) B))) (add (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)) (pathsinv0 nat (add a (add (mul (natminus 1 (un-div B s)) B) (mul (un-div B s) B))) (add a (mul (add (natminus 1 (un-div B s)) (un-div B s)) B)) (maponpaths nat nat (lam z (add a z)) (add (mul (natminus 1 (un-div B s)) B) (mul (un-div B s) B)) (mul (add (natminus 1 (un-div B s)) (un-div B s)) B) (pathsinv0 nat (mul (add (natminus 1 (un-div B s)) (un-div B s)) B) (add (mul (natminus 1 (un-div B s)) B) (mul (un-div B s) B)) (natrdistr (natminus 1 (un-div B s)) (un-div B s) B)))) (pathsinv0 nat (add (add a (mul (natminus 1 (un-div B s)) B)) (mul (un-div B s) B)) (add a (add (mul (natminus 1 (un-div B s)) B) (mul (un-div B s) B))) (natplusassoc a (mul (natminus 1 (un-div B s)) B) (mul (un-div B s) B)))))))))))
+ ; the borrow's step: r + v = a + c P and (v' + c) + d = a' + c' B gather to the next terms
+ (defq un-bstep (pi P nat B nat Rv nat Vv nat Av nat c nat Vi nat d nat Ai nat c2 nat
+     e (paths nat (add Rv Vv) (add Av (mul c P))) f (paths nat (add (add Vi c) d) (add Ai (mul c2 B)))
+     (paths nat (add (add Rv (mul d P)) (add Vv (mul Vi P))) (add (add Av (mul Ai P)) (mul c2 (mul B P)))))
+   (lam P B Rv Vv Av c Vi d Ai c2 e f
+     (pathscomp0 nat (add (add Rv (mul d P)) (add Vv (mul Vi P))) (add (add Rv Vv) (mul (add d Vi) P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (un-gather Rv d Vv Vi P) (pathscomp0 nat (add (add Rv Vv) (mul (add d Vi) P)) (add (add Av (mul c P)) (mul (add d Vi) P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add z (mul (add d Vi) P))) (add Rv Vv) (add Av (mul c P)) e) (pathscomp0 nat (add (add Av (mul c P)) (mul (add d Vi) P)) (add Av (add (mul c P) (mul (add d Vi) P))) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (natplusassoc Av (mul c P) (mul (add d Vi) P)) (pathscomp0 nat (add Av (add (mul c P) (mul (add d Vi) P))) (add Av (mul (add c (add d Vi)) P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av z)) (add (mul c P) (mul (add d Vi) P)) (mul (add c (add d Vi)) P) (pathsinv0 nat (mul (add c (add d Vi)) P) (add (mul c P) (mul (add d Vi) P)) (natrdistr c (add d Vi) P))) (pathscomp0 nat (add Av (mul (add c (add d Vi)) P)) (add Av (mul (add Ai (mul c2 B)) P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av (mul z P))) (add c (add d Vi)) (add Ai (mul c2 B)) (pathscomp0 nat (add c (add d Vi)) (add (add c d) Vi) (add Ai (mul c2 B)) (pathsinv0 nat (add (add c d) Vi) (add c (add d Vi)) (natplusassoc c d Vi)) (pathscomp0 nat (add (add c d) Vi) (add Vi (add c d)) (add Ai (mul c2 B)) (natpluscomm (add c d) Vi) (pathscomp0 nat (add Vi (add c d)) (add (add Vi c) d) (add Ai (mul c2 B)) (pathsinv0 nat (add (add Vi c) d) (add Vi (add c d)) (natplusassoc Vi c d)) f)))) (pathscomp0 nat (add Av (mul (add Ai (mul c2 B)) P)) (add Av (add (mul Ai P) (mul (mul c2 B) P))) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av z)) (mul (add Ai (mul c2 B)) P) (add (mul Ai P) (mul (mul c2 B) P)) (natrdistr Ai (mul c2 B) P)) (pathscomp0 nat (add Av (add (mul Ai P) (mul (mul c2 B) P))) (add Av (add (mul Ai P) (mul c2 (mul B P)))) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av (add (mul Ai P) z))) (mul (mul c2 B) P) (mul c2 (mul B P)) (natmultassoc c2 B P)) (pathsinv0 nat (add (add Av (mul Ai P)) (mul c2 (mul B P))) (add Av (add (mul Ai P) (mul c2 (mul B P)))) (natplusassoc Av (mul Ai P) (mul c2 (mul B P)))))))))))))
+ ; and past v's end
+ (defq un-bstep1 (pi P nat B nat Rv nat Vv nat Av nat c nat d nat Ai nat c2 nat
+     e (paths nat (add Rv Vv) (add Av (mul c P))) f (paths nat (add c d) (add Ai (mul c2 B)))
+     (paths nat (add (add Rv (mul d P)) Vv) (add (add Av (mul Ai P)) (mul c2 (mul B P)))))
+   (lam P B Rv Vv Av c d Ai c2 e f
+     (pathscomp0 nat (add (add Rv (mul d P)) Vv) (add (add Rv Vv) (mul d P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (pathsinv0 nat (add (add Rv Vv) (mul d P)) (add (add Rv (mul d P)) Vv) (un-swap3 Rv Vv (mul d P))) (pathscomp0 nat (add (add Rv Vv) (mul d P)) (add (add Av (mul c P)) (mul d P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add z (mul d P))) (add Rv Vv) (add Av (mul c P)) e) (pathscomp0 nat (add (add Av (mul c P)) (mul d P)) (add Av (add (mul c P) (mul d P))) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (natplusassoc Av (mul c P) (mul d P)) (pathscomp0 nat (add Av (add (mul c P) (mul d P))) (add Av (mul (add c d) P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av z)) (add (mul c P) (mul d P)) (mul (add c d) P) (pathsinv0 nat (mul (add c d) P) (add (mul c P) (mul d P)) (natrdistr c d P))) (pathscomp0 nat (add Av (mul (add c d) P)) (add Av (mul (add Ai (mul c2 B)) P)) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av (mul z P))) (add c d) (add Ai (mul c2 B)) f) (pathscomp0 nat (add Av (mul (add Ai (mul c2 B)) P)) (add Av (add (mul Ai P) (mul (mul c2 B) P))) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av z)) (mul (add Ai (mul c2 B)) P) (add (mul Ai P) (mul (mul c2 B) P)) (natrdistr Ai (mul c2 B) P)) (pathscomp0 nat (add Av (add (mul Ai P) (mul (mul c2 B) P))) (add Av (add (mul Ai P) (mul c2 (mul B P)))) (add (add Av (mul Ai P)) (mul c2 (mul B P))) (maponpaths nat nat (lam z (add Av (add (mul Ai P) z))) (mul (mul c2 B) P) (mul c2 (mul B P)) (natmultassoc c2 B P)) (pathsinv0 nat (add (add Av (mul Ai P)) (mul c2 (mul B P))) (add Av (add (mul Ai P) (mul c2 (mul B P)))) (natplusassoc Av (mul Ai P) (mul c2 (mul B P)))))))))))))
+ ; mag_sub's step: what r holds and the borrow, against what a and b hold
+ (defq un-substep (pi B nat h (inf-lt 0 B) R (pi j nat nat) A (pi j nat nat) V (pi j nat nat) i nat c nat
+     k (inf-le (add (V i) c) (add (A i) B)) g (inf-le (un-div B (natminus (add (A i) B) (add (V i) c))) 1)
+     e (paths nat (add (un-val B R i) (un-val B V i)) (add (un-val B A i) (mul c (uu-app i B))))
+     (paths nat (add (un-val B (inf-upd R i (inf-mod B (natminus (add (A i) B) (add (V i) c)))) (succ i)) (un-val B V (succ i))) (add (un-val B A (succ i)) (mul (natminus 1 (un-div B (natminus (add (A i) B) (add (V i) c)))) (uu-app (succ i) B)))))
+   (lam B h R A V i c k g e
+     (pathscomp0 nat (add (un-val B (inf-upd R i (inf-mod B (natminus (add (A i) B) (add (V i) c)))) (succ i)) (un-val B V (succ i))) (add (add (un-val B R i) (mul (inf-mod B (natminus (add (A i) B) (add (V i) c))) (uu-app i B))) (un-val B V (succ i)))
+       (add (un-val B A (succ i)) (mul (natminus 1 (un-div B (natminus (add (A i) B) (add (V i) c)))) (uu-app (succ i) B)))
+       (un-add2 (un-val B (inf-upd R i (inf-mod B (natminus (add (A i) B) (add (V i) c)))) (succ i)) (add (un-val B R i) (mul (inf-mod B (natminus (add (A i) B) (add (V i) c))) (uu-app i B))) (un-val B V (succ i)) (un-val B V (succ i))
+         (un-valst B R i (inf-mod B (natminus (add (A i) B) (add (V i) c)))) (idpath (un-val B V (succ i))))
+       (un-bstep (uu-app i B) B (un-val B R i) (un-val B V i) (un-val B A i) c (V i) (inf-mod B (natminus (add (A i) B) (add (V i) c))) (A i) (natminus 1 (un-div B (natminus (add (A i) B) (add (V i) c)))) e
+         (un-bdig B h (A i) (add (V i) c) (natminus (add (A i) B) (add (V i) c)) (inf-addsub (add (V i) c) (add (A i) B) k) g)))))
+ ; and past b's end, its value Vm
+ (defq un-substep1 (pi B nat h (inf-lt 0 B) R (pi j nat nat) A (pi j nat nat) Vm nat i nat c nat
+     k (inf-le c (add (A i) B)) g (inf-le (un-div B (natminus (add (A i) B) c)) 1)
+     e (paths nat (add (un-val B R i) Vm) (add (un-val B A i) (mul c (uu-app i B))))
+     (paths nat (add (un-val B (inf-upd R i (inf-mod B (natminus (add (A i) B) c))) (succ i)) Vm) (add (un-val B A (succ i)) (mul (natminus 1 (un-div B (natminus (add (A i) B) c))) (uu-app (succ i) B)))))
+   (lam B h R A Vm i c k g e
+     (pathscomp0 nat (add (un-val B (inf-upd R i (inf-mod B (natminus (add (A i) B) c))) (succ i)) Vm) (add (add (un-val B R i) (mul (inf-mod B (natminus (add (A i) B) c)) (uu-app i B))) Vm)
+       (add (un-val B A (succ i)) (mul (natminus 1 (un-div B (natminus (add (A i) B) c))) (uu-app (succ i) B)))
+       (un-add2 (un-val B (inf-upd R i (inf-mod B (natminus (add (A i) B) c))) (succ i)) (add (un-val B R i) (mul (inf-mod B (natminus (add (A i) B) c)) (uu-app i B))) Vm Vm (un-valst B R i (inf-mod B (natminus (add (A i) B) c))) (idpath Vm))
+       (un-bstep1 (uu-app i B) B (un-val B R i) Vm (un-val B A i) c (inf-mod B (natminus (add (A i) B) c)) (A i) (natminus 1 (un-div B (natminus (add (A i) B) c))) e
+         (un-bdig B h (A i) c (natminus (add (A i) B) c) (inf-addsub c (add (A i) B) k) g)))))
+ ; a limb under B and a carry at most 1 sum to at most B
+ (defq un-vcle (pi B nat a nat c nat ga (inf-lt a B) gc (inf-le c 1) (inf-le (add a c) B))
+   (lam B a c ga gc (inf-letrans (add a c) (add a 1) B (inf-addl a c 1 gc) (inf-lt1 a B ga))))
+ ; x < P and d < B: x + d P < B P
+ (defq un-vbound (pi P nat x nat d nat B nat gx (inf-lt x P) gd (inf-lt d B) (inf-lt (add x (mul d P)) (mul B P)))
+   (lam P x d B gx gd (inf-lttrans (add x (mul d P)) (add P (mul d P)) (mul B P)
+     (inf-ltaddr x P (mul d P) gx)
+     (inf-letr (add (mul d P) P) (add P (mul d P)) (mul B P) (natpluscomm (mul d P) P)
+       (un-mulle2 (succ d) B P (inf-ltsu d B gd))))))
+ ; a value below B^i, a limb written at i: below B^(i+1)
+ (defq un-rbound (pi B nat R (pi j nat nat) i nat d nat g (inf-lt (un-val B R i) (uu-app i B)) gd (inf-lt d B)
+     (inf-lt (un-val B (inf-upd R i d) (succ i)) (uu-app (succ i) B)))
+   (lam B R i d g gd (inf-lttr (add (un-val B R i) (mul d (uu-app i B))) (un-val B (inf-upd R i d) (succ i)) (uu-app (succ i) B)
+     (pathsinv0 nat (un-val B (inf-upd R i d) (succ i)) (add (un-val B R i) (mul d (uu-app i B))) (un-valst B R i d))
+     (un-vbound (uu-app i B) (un-val B R i) d B g gd))))
+ ; x < P and v <= a: x + v < P + a
+ (defq un-ltadd2 (pi X nat P nat V nat A nat gx (inf-lt X P) gv (inf-le V A) (inf-lt (add X V) (add P A)))
+   (lam X P V A gx gv (inf-lttrans (add X V) (add P V) (add P A) (inf-ltaddr X P V gx) (inf-addl P V A gv))))
+ ; x + v = a + c P with x < P and v <= a: no borrow is left
+ (defq un-bzero (pi P nat X nat V nat A nat c nat e (paths nat (add X V) (add A (mul c P))) gx (inf-lt X P) gv (inf-le V A)
+     (paths nat c 0))
+   (lam P X V A c e gx gv
+     ((nat_rect (lam q (pi e (paths nat (add X V) (add A (mul q P))) (paths nat q 0)))
+        (lam e (idpath 0))
+        (lam k IH e (inf-ltnle (paths nat (succ k) 0) (add X V) (add A (mul (succ k) P))
+          (inf-lttrans (add X V) (add P A) (add A (mul (succ k) P))
+            (un-ltadd2 X P V A gx gv)
+            (inf-letr (add A P) (add P A) (add A (mul (succ k) P)) (natpluscomm A P)
+              (inf-addl A P (mul (succ k) P) (inf-leaddl P (mul k P)))))
+          (inf-eqle (add A (mul (succ k) P)) (add X V) (pathsinv0 nat (add X V) (add A (mul (succ k) P)) e))))
+        c) e)))
+ ; so r + v = a
+ (defq un-bdone (pi P nat X nat V nat A nat c nat e (paths nat (add X V) (add A (mul c P))) gx (inf-lt X P) gv (inf-le V A)
+     (paths nat (add X V) A))
+   (lam P X V A c e gx gv
+     (pathscomp0 nat (add X V) (add A (mul c P)) A e
+       (pathscomp0 nat (add A (mul c P)) (add A 0) A
+         (maponpaths nat nat (lam z (add A (mul z P))) c 0 (un-bzero P X V A c e gx gv))
+         (natplusr0 A)))))
+ (defq un-ltne2 (pi x nat l nat g (inf-lt x l) (paths bool (inf-eqb x l) false))
+   (lam x (nat_rect (lam q (pi l nat g (inf-lt q l) (paths bool (inf-eqb q l) false)))
+     (lam l (nat_rect (lam r (pi g (inf-lt 0 r) (paths bool (inf-eqb 0 r) false)))
+       (lam g (fromempty (paths bool (inf-eqb 0 0) false) (nopathsfalsetotrue g)))
+       (lam j u g (idpath false))
+       l))
+     (lam k IH l (nat_rect (lam r (pi g (inf-lt (succ k) r) (paths bool (inf-eqb (succ k) r) false)))
+       (lam g (idpath false))
+       (lam j u g (IH j g))
+       l))
+     x)))
+ ; a write at k below n: the value trades R k for x at B^k
+ (defq un-updgt (pi A (pi j nat nat) k nat v nat q nat g (inf-lt k q) (paths nat (inf-upd A k v q) (A q)))
+   (lam A k v q g (maponpaths bool nat (lam b (bool_rect (lam y nat) v (A q) b)) (inf-eqb k q) false (un-ltne2 k q g))))
+ (defq un-valup (pi B nat R (pi j nat nat) k nat x nat n nat g (inf-lt k n)
+     (paths nat (add (un-val B (inf-upd R k x) n) (mul (R k) (uu-app k B))) (add (un-val B R n) (mul x (uu-app k B)))))
+   (lam B R k x n (nat_rect (lam q (pi g (inf-lt k q) (paths nat (add (un-val B (inf-upd R k x) q) (mul (R k) (uu-app k B))) (add (un-val B R q) (mul x (uu-app k B))))))
+     (lam g (fromempty (paths nat (add (un-val B (inf-upd R k x) 0) (mul (R k) (uu-app k B))) (add (un-val B R 0) (mul x (uu-app k B)))) (nopathsfalsetotrue g)))
+     (lam q IH g (inf-case (natgtb q k) (lam y (paths nat (add (un-val B (inf-upd R k x) (succ q)) (mul (R k) (uu-app k B))) (add (un-val B R (succ q)) (mul x (uu-app k B)))))
+       (lam e (pathscomp0 nat (add (add (un-val B (inf-upd R k x) q) (mul ((inf-upd R k x) q) (uu-app q B))) (mul (R k) (uu-app k B))) (add (add (un-val B (inf-upd R k x) q) (mul (R k) (uu-app k B))) (mul ((inf-upd R k x) q) (uu-app q B))) (add (add (un-val B R q) (mul (R q) (uu-app q B))) (mul x (uu-app k B))) (pathsinv0 nat (add (add (un-val B (inf-upd R k x) q) (mul (R k) (uu-app k B))) (mul ((inf-upd R k x) q) (uu-app q B))) (add (add (un-val B (inf-upd R k x) q) (mul ((inf-upd R k x) q) (uu-app q B))) (mul (R k) (uu-app k B))) (un-swap3 (un-val B (inf-upd R k x) q) (mul (R k) (uu-app k B)) (mul ((inf-upd R k x) q) (uu-app q B)))) (pathscomp0 nat (add (add (un-val B (inf-upd R k x) q) (mul (R k) (uu-app k B))) (mul ((inf-upd R k x) q) (uu-app q B))) (add (add (un-val B R q) (mul x (uu-app k B))) (mul ((inf-upd R k x) q) (uu-app q B))) (add (add (un-val B R q) (mul (R q) (uu-app q B))) (mul x (uu-app k B))) (maponpaths nat nat (lam z (add z (mul ((inf-upd R k x) q) (uu-app q B)))) (add (un-val B (inf-upd R k x) q) (mul (R k) (uu-app k B))) (add (un-val B R q) (mul x (uu-app k B))) (IH e)) (pathscomp0 nat (add (add (un-val B R q) (mul x (uu-app k B))) (mul ((inf-upd R k x) q) (uu-app q B))) (add (add (un-val B R q) (mul x (uu-app k B))) (mul (R q) (uu-app q B))) (add (add (un-val B R q) (mul (R q) (uu-app q B))) (mul x (uu-app k B))) (maponpaths nat nat (lam z (add (add (un-val B R q) (mul x (uu-app k B))) (mul z (uu-app q B)))) ((inf-upd R k x) q) (R q) (un-updgt R k x q e)) (un-swap3 (un-val B R q) (mul x (uu-app k B)) (mul (R q) (uu-app q B)))))))
+       (lam f (transportf nat (lam z (paths nat (add (un-val B (inf-upd R z x) (succ q)) (mul (R z) (uu-app z B))) (add (un-val B R (succ q)) (mul x (uu-app z B))))) q k (pathsinv0 nat k q (isantisymmnatleh k q (inf-ltsle k q g) f)) (pathscomp0 nat (add (add (un-val B (inf-upd R q x) q) (mul ((inf-upd R q x) q) (uu-app q B))) (mul (R q) (uu-app q B))) (add (add (un-val B R q) (mul x (uu-app q B))) (mul (R q) (uu-app q B))) (add (add (un-val B R q) (mul (R q) (uu-app q B))) (mul x (uu-app q B))) (maponpaths nat nat (lam z (add z (mul (R q) (uu-app q B)))) (add (un-val B (inf-upd R q x) q) (mul ((inf-upd R q x) q) (uu-app q B))) (add (un-val B R q) (mul x (uu-app q B))) (un-valst B R q x)) (un-swap3 (un-val B R q) (mul x (uu-app q B)) (mul (R q) (uu-app q B))))))))
+     n)))
+ ; mag_mul_add_small's step: a's value scaled by ml, the carry beside it, a0 the limbs it began with
+ (defq un-mstep (pi B nat h (inf-lt 0 B) A (pi j nat nat) A0 (pi j nat nat) ml nat ad nat i nat c nat
+     e (paths nat (add (un-val B A i) (mul c (uu-app i B))) (add (mul ml (un-val B A0 i)) ad)) q (paths nat (A i) (A0 i))
+     (paths nat (add (un-val B (inf-upd A i (inf-mod B (add (mul (A i) ml) c))) (succ i)) (mul (un-div B (add (mul (A i) ml) c)) (uu-app (succ i) B))) (add (mul ml (un-val B A0 (succ i))) ad)))
+   (lam B h A A0 ml ad i c e q
+     (pathscomp0 nat (add (un-val B (inf-upd A i (inf-mod B (add (mul (A i) ml) c))) (succ i)) (mul (un-div B (add (mul (A i) ml) c)) (uu-app (succ i) B))) (add (add (un-val B A i) (mul (inf-mod B (add (mul (A i) ml) c)) (uu-app i B))) (mul (un-div B (add (mul (A i) ml) c)) (mul B (uu-app i B)))) (add (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) ad) (un-add2 (un-val B (inf-upd A i (inf-mod B (add (mul (A i) ml) c))) (succ i)) (add (un-val B A i) (mul (inf-mod B (add (mul (A i) ml) c)) (uu-app i B))) (mul (un-div B (add (mul (A i) ml) c)) (uu-app (succ i) B)) (mul (un-div B (add (mul (A i) ml) c)) (mul B (uu-app i B))) (un-valst B A i (inf-mod B (add (mul (A i) ml) c))) (idpath (mul (un-div B (add (mul (A i) ml) c)) (mul B (uu-app i B))))) (pathscomp0 nat (add (add (un-val B A i) (mul (inf-mod B (add (mul (A i) ml) c)) (uu-app i B))) (mul (un-div B (add (mul (A i) ml) c)) (mul B (uu-app i B)))) (add (add (mul ml (un-val B A0 i)) ad) (mul (mul (A i) ml) (uu-app i B))) (add (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) ad) (un-carry B h (un-val B A i) (add (mul ml (un-val B A0 i)) ad) c (mul (A i) ml) (add (mul (A i) ml) c) (uu-app i B) e (idpath (add (mul (A i) ml) c))) (pathscomp0 nat (add (add (mul ml (un-val B A0 i)) ad) (mul (mul (A i) ml) (uu-app i B))) (add (add (mul ml (un-val B A0 i)) ad) (mul (mul (A0 i) ml) (uu-app i B))) (add (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) ad) (maponpaths nat nat (lam z (add (add (mul ml (un-val B A0 i)) ad) (mul (mul z ml) (uu-app i B)))) (A i) (A0 i) q) (pathscomp0 nat (add (add (mul ml (un-val B A0 i)) ad) (mul (mul (A0 i) ml) (uu-app i B))) (add (add (mul ml (un-val B A0 i)) (mul (mul (A0 i) ml) (uu-app i B))) ad) (add (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) ad) (un-swap3 (mul ml (un-val B A0 i)) ad (mul (mul (A0 i) ml) (uu-app i B))) (pathscomp0 nat (add (add (mul ml (un-val B A0 i)) (mul (mul (A0 i) ml) (uu-app i B))) ad) (add (add (mul ml (un-val B A0 i)) (mul ml (mul (A0 i) (uu-app i B)))) ad) (add (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) ad) (maponpaths nat nat (lam z (add (add (mul ml (un-val B A0 i)) z) ad)) (mul (mul (A0 i) ml) (uu-app i B)) (mul ml (mul (A0 i) (uu-app i B))) (pathscomp0 nat (mul (mul (A0 i) ml) (uu-app i B)) (mul (mul ml (A0 i)) (uu-app i B)) (mul ml (mul (A0 i) (uu-app i B))) (maponpaths nat nat (lam z (mul z (uu-app i B))) (mul (A0 i) ml) (mul ml (A0 i)) (natmultcomm (A0 i) ml)) (natmultassoc ml (A0 i) (uu-app i B)))) (maponpaths nat nat (lam z (add z ad)) (add (mul ml (un-val B A0 i)) (mul ml (mul (A0 i) (uu-app i B)))) (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) (pathsinv0 nat (mul ml (add (un-val B A0 i) (mul (A0 i) (uu-app i B)))) (add (mul ml (un-val B A0 i)) (mul ml (mul (A0 i) (uu-app i B)))) (natldistr (un-val B A0 i) (mul (A0 i) (uu-app i B)) ml))))))))))
+ ; a limb times a limb plus a limb fits two
+ (defq un-mfit (pi B nat a nat x nat c nat ga (inf-lt a B) gx (inf-lt x B) gc (inf-lt c B) (inf-lt (add (mul a x) c) (mul B B)))
+   (lam B a x c ga gx gc (inf-lttrans (add (mul a x) c) (add (mul a x) B) (mul B B)
+     (inf-ltaddl (mul a x) c B gc)
+     (inf-letrans (add (mul a x) B) (add (mul a B) B) (mul B B)
+       (inf-addr (mul a x) (mul a B) B (un-mulle a x B (inf-ltle x B gx)))
+       (un-mulle2 (succ a) B B (inf-ltsu a B ga))))))
+ ; 2^(L+L) is B B
+ (defq un-bbfit (pi L nat x nat g (inf-lt x (mul (inf-pow L) (inf-pow L))) (inf-lt x (inf-pow (add L L))))
+   (lam L x g (transportf nat (lam z (inf-lt x z)) (mul (inf-pow L) (inf-pow L)) (inf-pow (add L L))
+     (pathsinv0 nat (inf-pow (add L L)) (mul (inf-pow L) (inf-pow L)) (un-powadd L L)) g)))
 )

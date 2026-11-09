@@ -105,7 +105,7 @@
      'tf [(no-tm 'tf) owes-none (\ sp C [n] ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]) 'none]
      'taddr [(no-tm 'taddr) owes-none (\ sp C [n] ['addr ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]]) 'none]
      ; limbs, B = 2^L for the spec's 'limb width L: a dlimb sum or product fits two limbs, lo
-     ; and hi split one at B, and lc lays a value under B as a limb
+     ; and hi split one at B, lc lays a value under B as a limb, and lB is B
      'dl [(\ sp v T [x] (T x)) owes-parts (\ sp C [x] ['cast '(named "dlimb") (C x)]) 'fit]
      'd+ [(\ sp v T [a b] ['add (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(dfit sp (T e))]))
           (\ sp C [a b] ['bin '+ (C a) (C b)]) 'fit]
@@ -113,6 +113,7 @@
           (\ sp C [a b] ['bin '* (C a) (C b)]) 'fit]
      'lo [(\ sp v T [x] ['inf-mod (lbase sp) (T x)]) owes-parts (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      'hi [(\ sp v T [x] ['un-div (lbase sp) (T x)]) owes-parts (\ sp C [x] ['bin 'shr (C x) ['var "limb_bits"]]) 'fit]
+     'lB [(\ sp v T _ (lbase sp)) owes-none (\ sp C _ ['var "limb_base"]) 'fit]
      'lc [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) (lbase sp)]]))
           (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      ; an opaque C value passed through, the context a call is handed: its term is ()
