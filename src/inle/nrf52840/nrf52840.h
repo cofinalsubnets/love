@@ -64,8 +64,13 @@
 #define TIMER_PRESCALER (TIMER0 + 0x510u)
 #define TIMER_CC0       (TIMER0 + 0x540u)
 
+// --- POWER: the retained register the bootloader reads after a reset ------
+#define POWER_GPREGRET 0x4000051Cu
+#define GPREGRET_UF2   0x57u     // come up as the uf2 drive
+
 // --- core ----------------------------------------------------------------
 #define SCB_VTOR   0xE000ED08u
+#define SCB_AIRCR  0xE000ED0Cu
 #define SCB_CPACR  0xE000ED88u
 #define NVIC_ICER0 0xE000E180u
 #define NVIC_ICPR0 0xE000E280u
@@ -86,3 +91,4 @@ int  serial_rx_ready(void);
 int  serial_getc(void);
 uint32_t clock_ms(void);
 void led_put(uint32_t pin, int on);
+void reboot_uf2(void);

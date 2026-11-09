@@ -51,7 +51,7 @@ int clock_xtal(void) {
 void serial_init(void) {
   REG(GPIO_OUTSET(P1)) = 1u << TX_PIN;              // idle high before the uart takes it
   REG(GPIO_DIRSET(P1)) = 1u << TX_PIN;
-  REG(GPIO_CNF(P1, RX_PIN)) = 0;                    // input, buffer connected
+  REG(GPIO_CNF(P1, RX_PIN)) = 3u << 2;              // input, pulled up: an open pin reads idle
   REG(UART_ENABLE) = 0;
   REG(UART_PSELTXD) = PSEL_P1(TX_PIN);
   REG(UART_PSELRXD) = PSEL_P1(RX_PIN);
@@ -98,3 +98,10 @@ void led_init(void) {
   REG(GPIO_DIRSET(P0)) = m; }
 
 void led_put(uint32_t pin, int on) { REG(on ? GPIO_OUTCLR(P0) : GPIO_OUTSET(P0)) = 1u << pin; }
+
+// the bootloader's drive without the reset button's double tap
+void reboot_uf2(void) {
+  REG(POWER_GPREGRET) = GPREGRET_UF2;
+  arm_dsb_isb();
+  REG(SCB_AIRCR) = 0x05FA0004u;                     // vectkey, sysresetreq
+  for (;;) {} }
