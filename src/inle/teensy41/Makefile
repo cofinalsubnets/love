@@ -18,7 +18,7 @@ include ../port.mk
 
 te_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
-objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) \
+objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(libc_o) \
   $(R)/$(o)/teensy41.o $(R)/$(o)/usb.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 
