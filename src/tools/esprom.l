@@ -117,10 +117,10 @@
        (run f secs) (connect 0, enter f, tail (clock 0 + 1000 * secs))
        ; the rom's md5 of the flash from off, n bytes, as hex
        (fmd5 off n) (call 19 (w32 [off n 0 0]) 0 "spi_flash_md5" 32 (3000 + 8 * n // 1000) @ [_ h] h)
+       (stub _) (enter (o 'stub), frame 208 (clock 0 + 2000) @ r (string? r ? 0 (fail "the stub did not start")))
        ; the stub's read: 4K a reply, its crc32 after it, kept short so the reader never stalls the line
        (sread off n)
-        (: _ (enter (o 'stub), frame 208 (clock 0 + 2000) @ r (string? r ? 0 (fail "the stub did not start")))
-           (go i acc) (n <= i ? (join "" (rev acc))
+        (: (go i acc) (n <= i ? (join "" (rev acc))
                         (: k (min 4096 (n - i))
                            (i % 65536 = 0 ? (say out "read \(radix (off + i) 16)\n", flush out),
                             call 210 (w32 [(off + i) k]) 0 "read" (k + 4) (3000 + k // 8) @ [_ b]
@@ -132,19 +132,27 @@
                            (: k (min 64 (n - i))
                               (i % 65536 = 0 ? (say out "read \(radix (off + i) 16)\n", flush out),
                                go (i + k) ((call 14 (w32 [(off + i) k]) 0 "read_flash_slow" 64 3000 @ [_ b] (snip b 0 k)) . acc))))
-              data (string? (o 'stub) ? (sread off n @ d (connect 0, attach 0, d)) (go 0 ()))
+              data (string? (o 'stub) ? (stub 0, sread off n @ d (connect 0, attach 0, d)) (go 0 ()))
               sum (fmd5 off n)
               (md5 data != sum ? (fail ("read back " + md5 data + ", the rom sums " + sum))
                (uwrite path data ? (say out "\(n) bytes from \(radix off 16) to \(path), md5 \(sum)\n", flush out)
                 (fail ("cannot write " + path))))))
+       ; the stub's write: a 4K sector a request, crc32 its checksum, then read back through it
+       (swrite off d)
+        (stub 0,
+         each ^(#d // 4096) (k \ snip d (k * 4096) (k * 4096 + 4096) @ s
+                                 (call 212 (w32 [(off + k * 4096)] + s) (crc32 s) "write" 0 5000,
+                                  k % 16 = 15 ? (say out "  \((k + 1) * 4096) bytes\n", flush out))),
+         sread off #d = d ? (say out "read back through the stub\n", flush out) (fail "the stub read back other bytes"),
+         connect 0, attach 0)
        (fwrite off data)
-        (: e (esp32? 0) n ((#data + fblk - 1) // fblk)
+        (: e (esp32? 0) n ((#data + 4095) // 4096 * 4096 // fblk)
            d (data + string (map (_ \ 255) ^(n * fblk - #data)))
            (off % 4096 = 0 ? 0 (fail "the offset is not on a 4K sector"),
             say out "erase and write \(#data) bytes at \(radix off 16)\n", flush out,
-            call 2 (w32 ([#d n fblk off] + (e ? [] [0]))) 0 "flash_begin" 0 (3000 + 40 * #d // 1000),
+            string? (o 'stub) ? (swrite off d) (call 2 (w32 ([#d n fblk off] + (e ? [] [0]))) 0 "flash_begin" 0 (3000 + 40 * #d // 1000),
             each ^n (k \ (call 3 (w32 [fblk k 0 0] + snip d (k * fblk) (k * fblk + fblk)) (xsum (snip d (k * fblk) (k * fblk + fblk))) "flash_data" 0 5000,
-                          k % 64 = 63 ? (say out "  \((k + 1) * fblk) bytes\n", flush out))),
+                          k % 64 = 63 ? (say out "  \((k + 1) * fblk) bytes\n", flush out)))),
             fmd5 off #d @ sum (sum = md5 d ? (say out "md5 \(sum) as written\n", flush out)
                                 (fail ("the flash sums " + sum + ", the image " + md5 d)))))
        (vs @ ("run" . f . r) (run (slurp f) (r @ (s . _) (num s) _ 5), leave 0)

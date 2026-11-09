@@ -44,13 +44,15 @@
    (xt-mov d s) (reg-eq d s ? () (x-or (xn d) (xn s) (xn s)))
    (reg-eq a b) (xn a = xn b)
 
-   ;; d = s + k in place of a register: addi, addmi, the pair, else k through a8
+   ;; d = s + k in place of a register: addi, addmi, the pair, else k through a8, or through
+   ;; d when a8 is s
    (xt-addk dn sn k)
       (: l (sx8 k) m ((k - l) >> 8)
          (? (k = 0) (dn = sn ? () (x-or dn sn sn))
             (s8? k) (x-addi dn sn k)
             (s8? m) (catall [(x-addmi dn sn m) (l = 0 ? () (x-addi dn dn l))])
-            (dn = 8 || sn = 8) (scare 'xt-far-off k)
+            (dn = 8 && sn = 8) (scare 'xt-far-off k)
+            (sn = 8) (catall [(xt-li-n dn (sx32 k)) (x-rrr 8 0 dn dn 8)])
             (catall [(xt-li-n 8 (sx32 k)) (x-rrr 8 0 dn sn 8)])))
 
    xt-alu {'add 8 'sub 12 'and 1 'or 2 'xor 3}
