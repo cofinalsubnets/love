@@ -14,8 +14,7 @@
 // we took ourselves, in whole cpus; and 1 whenever /proc/pressure/cpu says tasks waited for a
 // cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
 // drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
-// load (the laws, and the measure's forced widths). post.l's cli-line sets it from the nest's
-// etc/love.l row (threads N) when it is unset.
+// load (the laws, and the measure's forced widths).
 // serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD, a board), inside a
 // worker, and in a fork's child until the pool is made again there.
 #include "love.h"

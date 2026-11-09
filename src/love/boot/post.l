@@ -3011,20 +3011,11 @@
      trap (x \ <>cli2 ())
       () door)))
 
- ; the nest's etc/love.l row (threads N), read by salt, as LOVE_THREADS when that is unset:
- ; pool.c reads LOVE_THREADS each call, so an edit lands at the next start
- (cli-threads _)
-  (: t (getenv "LOVE_THREADS") f (cite 'salt 'salt-file)
-     (? (string? t && 0 < #t) 0
-        f (f (cite 'path 'nest 0 + "/etc/love.l") {} 'threads @ (n . _) (setenv "LOVE_THREADS" (string? n ? n (show n))) 0)
-        0))
-
  (cli-line ln tty)
    (: (charm0 x) (charm? x ? x 0)
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
       _  (setenv "LOVE_NEST" (cite 'path 'nest 0))  ; resolved once; children and C read it
-      _  (cli-threads 0)
       f  (V 'seat <ln)
       (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a @ 'leave (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)

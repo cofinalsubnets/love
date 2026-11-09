@@ -1,6 +1,5 @@
 ; test/host/pool.l -- the thread pool (src/love/pool.c): the width a call takes, LOVE_THREADS
-; read at each call, (threads N) in the nest's etc/love.l setting it at a start, and a fork's child drawing
-; on a pool of its own
+; read at each call, and a fork's child drawing on a pool of its own
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
 (borrow '(posix pool))
 (: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" ()) w)
@@ -15,23 +14,6 @@
                    _ (setenv "LOVE_THREADS" ()) f)
    pl-one (pl-frame "1")
    pl-out ("/tmp/love-pool-law-" + show (getpid 0))
-   ; a nest whose love.l says (threads ..): a love starting there reads it through salt as
-   ; LOVE_THREADS, unless that is set. the child answers [LOVE_THREADS (par-width 64)]
-   pl-home ("/tmp/love-pool-home-" + show (getpid 0))
-   (pl-child txt env)
-    (: _ (? (string? txt) (uwrite (pl-home + "/.love/etc/love.l") txt) (unlink (pl-home + "/.love/etc/love.l")))
-       r (hark (["env" "-u" "LOVE_THREADS" ("LOVE_NEST=" + pl-home + "/.love")] + env
-                + [(selfpath 0) "-e" "(borrow 'pool) (puts (show [(getenv \"LOVE_THREADS\") (par-width 64)]), quit 0)"]))
-       (<r = 0 ? >r ""))
-   _ (mkdir pl-home 448) _ (mkdir (pl-home + "/.love") 448) _ (mkdir (pl-home + "/.love/etc") 448)
-   s1 (pl-child "; the runtime's own\n(threads 1)\n" [])
-   s3 (pl-child "(threads 3!)\n" [])
-   ; a form read as a form: spaces inside, a newline in it, a comment after
-   sw (pl-child "( threads\n  3! ) ; three\n" [])
-   s3e (pl-child "(threads 3!)\n" ["LOVE_THREADS=2!"])
-   s0 (pl-child () [])
-   _ (unlink (pl-home + "/.love/etc/love.l"))
-   _ (rmdir (pl-home + "/.love/etc")) _ (rmdir (pl-home + "/.love")) _ (rmdir pl-home)
    ; the parent draws on its pool first, so the child forks with one made and its workers left behind
    _ (pl-frame "4!")
    pid (fork 0)
@@ -49,10 +31,8 @@
  (pl-w "3!" 64 = 3)
  (pl-w "3!" 2 = 2)
  (pl-w "2" 64 <= 2)
- ; the setting in love.l reaching LOVE_THREADS at a start, and the env over it
- (s1 = "(\"1\" 1)") (s3 = "(\"3!\" 3)") (sw = "(\"3!\" 3)") (s3e = "(\"2!\" 2)") (starts? s0 "(() ")
  ; the frame the same at any width, and in a fork's child
  (aall (pl-frame "3!" = pl-one))
  (said = "same"))
 
-(test_fin (), puts "pool: ok -- widths, the margin, love.l, the frame alike at any width and in a fork\n", 0)
+(test_fin (), puts "pool: ok -- widths, the margin, the frame alike at any width and in a fork\n", 0)
