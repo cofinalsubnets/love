@@ -104,25 +104,23 @@
    r1 (sqfs-make (root love "v1") stamp 'zlib)
    rsz (32 * mib)
    _ (#r1 <= rsz * 512 || gone "a root outgrows its slot")
-   fsz (64 * mib)
-   auto (fatimg fsz [["autoboot.txt" autoboot] ["bootcode.bin" (fw "bootcode.bin")]])
+   asz (64 * mib)  fsz (128 * mib)  dsz (64 * mib)
+   auto (fatimg asz [["autoboot.txt" autoboot] ["bootcode.bin" (fw "bootcode.bin")]])
    boota (fatimg fsz [["config.txt" config] ["cmdline.txt" (cmd "/dev/mmcblk0p5")]
                       ["start.elf" (fw "start.elf")] ["fixup.dat" (fw "fixup.dat")]
                       ["LICENCE.broadcom" (fw "LICENCE.broadcom")]
                       ["Image" kernel] ["bcm2837-rpi-zero-2-w.dtb" dtb]])
-   _ (#boota <= fsz * 512 || gone "boot a outgrows its part")
    bootb (fatimg fsz ())
-   data (ext4-image (ext4-make 16384 (snip (hex2b (sha256 "hearts rung 2 data")) 0 16)
-                               (snip (hex2b (sha256 "hearts rung 2 data hash")) 0 16) stamp) 16384)
-   ; the parts, in MiB: each EBR a MiB ahead of its part
-   x (193 * mib)
-   e1 x  ra (194 * mib)  e2 (226 * mib)  rb (227 * mib)  e3 (259 * mib)  da (260 * mib)
-   total (324 * mib)
-   bs [[0 (mbr [(ent 0x0C mib fsz) (ent 0x0C (65 * mib) fsz) (ent 0x0C (129 * mib) fsz)
-                (ent 0x0F x (total - x))])]
-       [mib auto] [(65 * mib) boota] [(129 * mib) bootb]
+   data (ext4-image (ext4-make (dsz // 8) (snip (hex2b (sha256 "hearts rung 2 data")) 0 16)
+                               (snip (hex2b (sha256 "hearts rung 2 data hash")) 0 16) stamp) (dsz // 8))
+   ; the parts back to back from 1 MiB, each EBR a MiB ahead of its logical part
+   pa mib  pb (pa + asz)  pc (pb + fsz)  x (pc + fsz)
+   e1 x  ra (e1 + mib)  e2 (ra + rsz)  rb (e2 + mib)  e3 (rb + rsz)  da (e3 + mib)
+   total (da + dsz)
+   bs [[0 (mbr [(ent 0x0C pa asz) (ent 0x0C pb fsz) (ent 0x0C pc fsz) (ent 0x0F x (total - x))])]
+       [pa auto] [pb boota] [pc bootb]
        [e1 (ebr e1 ra rsz e2 (rb + rsz - e2) x)] [ra r1]
-       [e2 (ebr e2 rb rsz e3 (da + 64 * mib - e3) x)]
-       [e3 (ebr e3 da (64 * mib) x 0 x)] [da data]]
+       [e2 (ebr e2 rb rsz e3 (total - e3) x)]
+       [e3 (ebr e3 da dsz x 0 x)] [da data]]
    (disk (odir + "/disk.img") bs total,
     say err "hearts-zimage: disk.img\n"))
