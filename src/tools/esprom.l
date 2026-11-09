@@ -7,12 +7,13 @@
 ;   love src/tools/esprom.l [-p TTY] -s SIZE md5 OFF LEN
 ;   love src/tools/esprom.l [-p TTY] -s SIZE write OFF FILE      erase, write, check, boot it
 ;   love src/tools/esprom.l [-p TTY] reset                       boot the flash
-; TTY /dev/ttyUSB0; SIZE the flash's bytes; a number takes 0x and K or M
+; TTY /dev/ttyUSB0; SIZE the flash's bytes; -b BAUD past the sync, as 921600; -x ELF reads through
+; a stub in RAM, as src/tools/espstub.c, and any rom; a number takes 0x and K or M
 (borrow '(posix bytes hashes))
 (: dtr 2 rts 4
    blk 6144                                           ; the rom's ram block
    fblk 1024                                          ; ..and its flash block
-   usage "usage: esprom [-p TTY] [-s SIZE] run ELF [SECONDS] | read OFF LEN FILE | md5 OFF LEN | write OFF FILE | reset"
+   usage "usage: esprom [-p TTY] [-s SIZE] [-b BAUD] [-x STUB] run ELF [SECONDS] | read OFF LEN FILE | md5 OFF LEN | write OFF FILE | reset"
    (die m) (say err ("esprom: " + m + "\n"), flush err, quit 1)
    (num w) (: (dig c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) 99)
               hex (2 < #w && w 0 = 48 && (w 1 = 120 || w 1 = 88))
@@ -43,7 +44,9 @@
           [(rdle f 24 4) (catmap seg ^(rdle f 44 2))]))
    (slurp p) (uread p @ [1 t] t _ (die ("cannot read " + p)))
    ; the flags, then the verb and its words
-   (opts as o) (as @ ("-p" . d . r) (opts r (pin o 'dev d)) ("-s" . n . r) (opts r (pin o 'size (num n))) _ [o as])
+   (opts as o) (as @ ("-p" . d . r) (opts r (pin o 'dev d)) ("-s" . n . r) (opts r (pin o 'size (num n)))
+                  ("-b" . n . r) (opts r (pin o 'baud (num n)))
+                  ("-x" . f . r) (opts r (pin o 'stub (slurp f))) _ [o as])
    (main as)
     (: oa (opts as {'dev "/dev/ttyUSB0"}) o <oa vs <>oa
        dev (o 'dev)
@@ -51,8 +54,9 @@
        _ (charm? fd ? 0 (die (dev + ": " + uerrno fd)))
        st0 (termios fd)
        _ (nom? st0 ? (die (dev + ": " + uerrno st0)))
-       ; raw 8N1 at 115200, CS8 CREAD CLOCAL, a byte at a time
-       _ (settermios fd ([0 0 2224 0 115200] + drop 5 st0 @ t (snip t 0 10 + [0 1] + drop 12 t)))
+       ; raw 8N1, CS8 CREAD CLOCAL, a byte at a time
+       (speed b) (settermios fd ([0 0 2224 0 b] + drop 5 st0 @ t (snip t 0 10 + [0 1] + drop 12 t)))
+       _ (speed 115200)
        p (fdopen fd)
        got {'b ""}
        (down _) (await p, see p @ c (c = -1 ? 0 (unsee p c, pin got 'b (got 'b + chug p), down 0)))
@@ -90,7 +94,8 @@
         (k = 0 ? (fail (dev + ": no answer from the rom"))
            (send (req 8 (string [7 7 18 32] + string (map (_ \ 85) ^32)) 0),
             frame 8 (clock 0 + 100) @ r (string? r ? (rest 100, pin got 'b "") (k % 10 = 0 ? (reset 0), sync (k - 1)))))
-       (connect _) (reset 0, sync 30)
+       ; the rom answers at the old rate, then listens at the new; a USB-Serial-JTAG has no rate
+       (connect _) (reset 0, speed 115200, sync 30, o 'baud @ b (charm? b && !jtag? ? (call0 15 (w32 [b 0]) "change_baudrate", speed b, rest 50, pin got 'b "")))
        ; the esp32 classic by the word at 0x40001000: its rom takes a shorter flash_begin
        (esp32? _) (<(call0 10 (w32 [1073745920]) "read_reg") = 15736195)
        ; the flash's pins and shape, as the rom wants them before it is read or written
@@ -107,21 +112,27 @@
                          (call 7 (w32 [#d k 0 0] + d) (xsum d) "mem_data" 0 3000))))
        (tail t)
         (clock 0 < t ? (got 'b @ b (#b = 0 ? 0 (say out b, flush out, pin got 'b "")), rest 20, tail t))
-       (run f secs)
-        (: ld (loads f) ent <ld
-           (connect 0, each <>ld load,
-            ; its answer, when it comes before the jump, kept out of the program's output
-            send (req 6 (w32 [(ent = 0 ? 1 0) ent]) 0), frame 6 (clock 0 + 200),
-            tail (clock 0 + 1000 * secs)))
+       ; its answer, when it comes before the jump, kept out of the program's output
+       (enter f) (: ld (loads f) ent <ld (each <>ld load, send (req 6 (w32 [(ent = 0 ? 1 0) ent]) 0), frame 6 (clock 0 + 200)))
+       (run f secs) (connect 0, enter f, tail (clock 0 + 1000 * secs))
        ; the rom's md5 of the flash from off, n bytes, as hex
        (fmd5 off n) (call 19 (w32 [off n 0 0]) 0 "spi_flash_md5" 32 (3000 + 8 * n // 1000) @ [_ h] h)
+       ; the stub's read: 4K a reply, its crc32 after it, kept short so the reader never stalls the line
+       (sread off n)
+        (: _ (enter (o 'stub), frame 208 (clock 0 + 2000) @ r (string? r ? 0 (fail "the stub did not start")))
+           (go i acc) (n <= i ? (join "" (rev acc))
+                        (: k (min 4096 (n - i))
+                           (i % 65536 = 0 ? (say out "read \(radix (off + i) 16)\n", flush out),
+                            call 210 (w32 [(off + i) k]) 0 "read" (k + 4) (3000 + k // 8) @ [_ b]
+                             (crc32 (snip b 0 k) = rdle b k 4 ? (go (i + k) (snip b 0 k . acc)) (fail "a block's crc")))))
+           (go 0 ()))
        (fread off n path)
-        (: _ (esp32? 0 ? 0 (fail "this rom cannot read its flash: only the esp32's can"))
+        (: _ (string? (o 'stub) || esp32? 0 ? 0 (fail "this rom cannot read its flash: only the esp32's can"))
            (: (go i acc) (n <= i ? (join "" (rev acc))
                            (: k (min 64 (n - i))
                               (i % 65536 = 0 ? (say out "read \(radix (off + i) 16)\n", flush out),
                                go (i + k) ((call 14 (w32 [(off + i) k]) 0 "read_flash_slow" 64 3000 @ [_ b] (snip b 0 k)) . acc))))
-              data (go 0 ())
+              data (string? (o 'stub) ? (sread off n @ d (connect 0, attach 0, d)) (go 0 ()))
               sum (fmd5 off n)
               (md5 data != sum ? (fail ("read back " + md5 data + ", the rom sums " + sum))
                (uwrite path data ? (say out "\(n) bytes from \(radix off 16) to \(path), md5 \(sum)\n", flush out)
