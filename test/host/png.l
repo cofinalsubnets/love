@@ -79,7 +79,8 @@ for n in (2, 4, 16, 256):
                           && got 2 = >want)
                          1 (puts ("png: " + n + " differs from magick\n"), 0)))
            (test (filter (n \ !(one n)) names = ())))
-        (gate-partly "png: no python3 PIL or magick, images skipped"))
+        (gate-partly ("png: no " + (pil? ? "magick" (has "/usr/bin/magick" ? "python3 PIL" "python3 PIL and no magick"))
+                      + ", images skipped")))
 
    ; apng
    ; muxed by hand, 24x16: five palette frames under one PLTE and tRNS, each composed frame by
