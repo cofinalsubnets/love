@@ -58,3 +58,24 @@ static love_noinline int mag_mul_add_small(love_limb *a, int na, love_limb ml, l
  }
  return (int) i;
 }
+static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
+ uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
+ i = n;
+ while (m < i) {
+  i = i - 1;
+  if (a[i]) {
+   return 1;
+  }
+ }
+ while (0 < i) {
+  i = i - 1;
+  if (a[i] != b[i]) {
+   if (b[i] < a[i]) {
+    return 1;
+   } else {
+    return 0;
+   }
+  }
+ }
+ return 1;
+}

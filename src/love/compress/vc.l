@@ -140,6 +140,7 @@
                          ('nz a) (ob sp v a)
                          ('z a) (ob sp v a)
                          ('ne a b) (ob sp v a + ob sp v b)
+                         ('dif a b) (ob sp v a + ob sp v b)
                          ('eq a b) (ob sp v a + ob sp v b)
                          ('wide d) (ob sp v d)
                          ('widec d) (ob sp v d)
@@ -154,6 +155,7 @@
                          ('nz a) ['inf-lt 0 (tm sp v a)]
                          ('z a) ['paths 'nat (tm sp v a) 0]
                          ('ne _ _) 'unit
+                         ('dif a b) ['pi 'e ['paths 'nat (tm sp v a) (tm sp v b)] 'empty]
                          ('eq _ _) 'unit
                          ('wide d) ['inf-le 8 (tm sp v d)]
                          ('widec _) 'unit
@@ -168,6 +170,8 @@
                          ('nz a) ['paths 'nat (tm sp v a) 0]
                          ('z a) ['inf-lt 0 (tm sp v a)]
                          ('ne _ _) 'unit
+                         ; ne whose false arm knows the two equal
+                         ('dif a b) ['paths 'nat (tm sp v a) (tm sp v b)]
                          ('eq _ _) 'unit
                          ('wide _) 'unit
                          ('widec _) 'unit
@@ -575,6 +579,7 @@
                        ('nz a) (cl sp a)
                        ('z a) ['un 'not (cl sp a)]
                        ('ne a b) ['bin 'ne (cl sp a) (cl sp b)]
+                       ('dif a b) ['bin 'ne (cl sp a) (cl sp b)]
                        ('eq a b) ['bin 'eq (cl sp a) (cl sp b)]
                        ('wide d) ['land ['var "wideld"] ['bin 'le ['num 8] (cl sp d)]]
                        ('widec d) ['land ['var "wideld"] ['bin 'eq (cl sp d) ['num 1]]]

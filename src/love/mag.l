@@ -201,7 +201,65 @@
        "j1j-4" '(pathscomp0 nat (un-val (inf-pow L) A i) (add (un-val (inf-pow L) A i) (mul c (uu-app i (inf-pow L)))) (add (mul ml (un-val (inf-pow L) A0 n)) ad) (pathscomp0 nat (un-val (inf-pow L) A i) (add (un-val (inf-pow L) A i) 0) (add (un-val (inf-pow L) A i) (mul c (uu-app i (inf-pow L)))) (pathsinv0 nat (add (un-val (inf-pow L) A i) 0) (un-val (inf-pow L) A i) (natplusr0 (un-val (inf-pow L) A i))) (maponpaths nat nat (lam z (add (un-val (inf-pow L) A i) (mul z (uu-app i (inf-pow L))))) 0 c (pathsinv0 nat c 0 g1))) (transportf nat (lam z (paths nat (add (un-val (inf-pow L) A i) (mul c (uu-app i (inf-pow L)))) (add (mul ml (un-val (inf-pow L) A0 z)) ad))) i n (isantisymmnatleh i n a1 w1) a3))
       }}
 
-   mag-specs [add sub mas]
+   ; --- a >= b as values, na >= nb: 1 or 0 -------------------------------------------------------
+   ge
+    {'name "mag_ge" 'short "mge"
+     'attrs '("static" "love_inline")
+     'ret 'int
+     'params '(("a" (ptr (const (named "love_limb")))) ("na" int) ("b" (ptr (const (named "love_limb")))) ("nb" int))
+     'fields ()
+     'limb 'L
+     'arrays '((A (v "a") n) (V (v "b") m))
+     'requires
+      (['(A (pi j nat nat)) '(V (pi j nat nat)) '(n nat) '(m nat)]
+       + limb-req
+       + ['(gm (inf-le m n)) '(gn (inf-lt n (inf-pow w))) (limbs 'A) (limbs 'V)])
+     'decls
+      [['(named "uintptr_t") ['n (int-n "na")] ['m (int-n "nb")] ['i]]]
+     'ensures
+      [['e1 '(inf-le res 1)]
+       ['e2 ['pi 'g '(paths nat res 1) ['inf-le (vl 'V 'm) (vl 'A 'n)]]]
+       ['e3 ['pi 'g '(paths nat res 0) ['inf-lt (vl 'A 'n) (vl 'V 'm)]]]]
+     'body
+      [['s0 'set 'i 'n]
+       ['w1 'while '(lt m i) 'i
+        [['a1 '(inf-le m i)] ['a2 '(inf-le i n)] ['a3 ['paths 'nat (vl 'A 'n) (vl 'A 'i)]]]
+        [['s1 'set 'i '(- i 1)]
+         ['j1 'join 'g1 '(nz (at A i)) '((r1 ret 1)) () [['t1 '(paths nat (A i) 0)]]]]]
+       ['w2 'while '(lt 0 i) 'i
+        [['b1 '(inf-le i m)] ['b2 ['paths 'nat ['add (vl 'A 'n) (vl 'V 'i)] ['add (vl 'V 'm) (vl 'A 'i)]]] ['b3 '(inf-le i n)]]
+        [['s2 'set 'i '(- i 1)]
+         ['j2 'join 'g2 '(dif (at A i) (at V i)) '((j3 ife g3 (lt (at V i) (at A i)) ((r2 ret 1)) ((r3 ret 0)))) ()
+          [['t2 '(paths nat (A i) (V i))]]]]]
+       '(r4 ret 1)]
+     'macros '()
+     'proofs
+      {
+       "w1e-3" '(idpath (un-val (inf-pow L) A n))
+       "s1-1" '(inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1))
+       "j1-1" '(inf-lttrans (natminus i 1) i n (un-predlt i (inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1))) a2)
+       "r1-2" '(lam g (inf-ltle (un-val (inf-pow L) V m) (un-val (inf-pow L) A n) (inf-lttrans (un-val (inf-pow L) V m) (uu-app m (inf-pow L)) (un-val (inf-pow L) A n) (un-vallt (inf-pow L) V m gV) (inf-letrans (uu-app m (inf-pow L)) (uu-app (natminus i 1) (inf-pow L)) (un-val (inf-pow L) A n) (un-appmono (inf-pow L) (inf-powpos L) m (natminus i 1) (inf-ltsle m (natminus i 1) (transportf nat (lam z (inf-lt m z)) i (succ (natminus i 1)) (pathsinv0 nat (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1)))) w1))) (inf-letl (uu-app (natminus i 1) (inf-pow L)) (un-val (inf-pow L) A i) (un-val (inf-pow L) A n) (pathsinv0 nat (un-val (inf-pow L) A n) (un-val (inf-pow L) A i) a3) (transportf nat (lam z (inf-le (uu-app (natminus i 1) (inf-pow L)) (un-val (inf-pow L) A z))) (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1))) (un-valge1 (inf-pow L) A (natminus i 1) g1)))))))
+       "r1-3" '(lam g (un-10 (inf-lt (un-val (inf-pow L) A n) (un-val (inf-pow L) V m)) g))
+       "w1b-1" '(inf-ltsle m (natminus i 1) (transportf nat (lam z (inf-lt m z)) i (succ (natminus i 1)) (pathsinv0 nat (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1)))) w1))
+       "w1b-3" '(pathscomp0 nat (un-val (inf-pow L) A n) (un-val (inf-pow L) A i) (un-val (inf-pow L) A (natminus i 1)) a3 (pathscomp0 nat (un-val (inf-pow L) A i) (add (un-val (inf-pow L) A (natminus i 1)) (mul (A (natminus i 1)) (uu-app (natminus i 1) (inf-pow L)))) (un-val (inf-pow L) A (natminus i 1)) (maponpaths nat nat (lam z (un-val (inf-pow L) A z)) i (succ (natminus i 1)) (pathsinv0 nat (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1))))) (pathscomp0 nat (add (un-val (inf-pow L) A (natminus i 1)) (mul (A (natminus i 1)) (uu-app (natminus i 1) (inf-pow L)))) (add (un-val (inf-pow L) A (natminus i 1)) 0) (un-val (inf-pow L) A (natminus i 1)) (maponpaths nat nat (lam z (add (un-val (inf-pow L) A (natminus i 1)) (mul z (uu-app (natminus i 1) (inf-pow L))))) (A (natminus i 1)) 0 t1) (natplusr0 (un-val (inf-pow L) A (natminus i 1))))))
+       "w1b-4" '(un-predlt i (inf-ltsu 0 i (inf-lelt 0 m i (idpath false) w1)))
+       "w2e-2" '(transportf nat (lam z (paths nat (add (un-val (inf-pow L) A n) (un-val (inf-pow L) V z)) (add (un-val (inf-pow L) V m) (un-val (inf-pow L) A i)))) m i (pathsinv0 nat i m (isantisymmnatleh i m w1 a1)) (pathscomp0 nat (add (un-val (inf-pow L) A n) (un-val (inf-pow L) V m)) (add (un-val (inf-pow L) V m) (un-val (inf-pow L) A n)) (add (un-val (inf-pow L) V m) (un-val (inf-pow L) A i)) (natpluscomm (un-val (inf-pow L) A n) (un-val (inf-pow L) V m)) (maponpaths nat nat (lam z (add (un-val (inf-pow L) V m) z)) (un-val (inf-pow L) A n) (un-val (inf-pow L) A i) a3)))
+       "s2-1" '(inf-ltsu 0 i w2)
+       "j2-1" '(inf-lttrans (natminus i 1) i n (un-predlt i (inf-ltsu 0 i w2)) (inf-letrans i m n b1 gm))
+       "j2-2" '(inf-lttrans (natminus i 1) i m (un-predlt i (inf-ltsu 0 i w2)) b1)
+       "j3-1" '(inf-lttrans (natminus i 1) i m (un-predlt i (inf-ltsu 0 i w2)) b1)
+       "j3-2" '(inf-lttrans (natminus i 1) i n (un-predlt i (inf-ltsu 0 i w2)) (inf-letrans i m n b1 gm))
+       "r2-2" '(lam g (inf-ltle (un-val (inf-pow L) V m) (un-val (inf-pow L) A n) (un-cancle (un-val (inf-pow L) A n) (un-val (inf-pow L) V m) (un-val (inf-pow L) V i) (un-val (inf-pow L) A i) b2 (transportf nat (lam z (inf-lt (un-val (inf-pow L) V z) (un-val (inf-pow L) A z))) (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i w2)) (un-lexlt (inf-pow L) A V (natminus i 1) gV g3)))))
+       "r2-3" '(lam g (un-10 (inf-lt (un-val (inf-pow L) A n) (un-val (inf-pow L) V m)) g))
+       "r3-2" '(lam g (un-01 (inf-le (un-val (inf-pow L) V m) (un-val (inf-pow L) A n)) g))
+       "r3-3" '(lam g (un-cancle (un-val (inf-pow L) V m) (un-val (inf-pow L) A n) (un-val (inf-pow L) A i) (un-val (inf-pow L) V i) (pathsinv0 nat (add (un-val (inf-pow L) A n) (un-val (inf-pow L) V i)) (add (un-val (inf-pow L) V m) (un-val (inf-pow L) A i)) b2) (transportf nat (lam z (inf-lt (un-val (inf-pow L) A z) (un-val (inf-pow L) V z))) (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i w2)) (un-lexlt (inf-pow L) V A (natminus i 1) gA (un-lene (A (natminus i 1)) (V (natminus i 1)) g3 g2)))))
+       "w2b-2" '(un-cancmid (un-val (inf-pow L) A n) (un-val (inf-pow L) V (natminus i 1)) (un-val (inf-pow L) V m) (un-val (inf-pow L) A (natminus i 1)) (mul (V (natminus i 1)) (uu-app (natminus i 1) (inf-pow L))) (pathscomp0 nat (add (un-val (inf-pow L) A n) (add (un-val (inf-pow L) V (natminus i 1)) (mul (V (natminus i 1)) (uu-app (natminus i 1) (inf-pow L))))) (add (un-val (inf-pow L) V m) (add (un-val (inf-pow L) A (natminus i 1)) (mul (A (natminus i 1)) (uu-app (natminus i 1) (inf-pow L))))) (add (un-val (inf-pow L) V m) (add (un-val (inf-pow L) A (natminus i 1)) (mul (V (natminus i 1)) (uu-app (natminus i 1) (inf-pow L))))) (transportf nat (lam z (paths nat (add (un-val (inf-pow L) A n) (un-val (inf-pow L) V z)) (add (un-val (inf-pow L) V m) (un-val (inf-pow L) A z)))) i (succ (natminus i 1)) (pathsinv0 nat (succ (natminus i 1)) i (inf-addsub 1 i (inf-ltsu 0 i w2))) b2) (maponpaths nat nat (lam z (add (un-val (inf-pow L) V m) (add (un-val (inf-pow L) A (natminus i 1)) (mul z (uu-app (natminus i 1) (inf-pow L)))))) (A (natminus i 1)) (V (natminus i 1)) t2)))
+       "w2b-4" '(un-predlt i (inf-ltsu 0 i w2))
+       "r4-2" '(lam g (inf-eqle (un-val (inf-pow L) V m) (un-val (inf-pow L) A n) (pathscomp0 nat (un-val (inf-pow L) V m) (add (un-val (inf-pow L) V m) 0) (un-val (inf-pow L) A n) (pathsinv0 nat (add (un-val (inf-pow L) V m) 0) (un-val (inf-pow L) V m) (natplusr0 (un-val (inf-pow L) V m))) (pathscomp0 nat (add (un-val (inf-pow L) V m) 0) (add (un-val (inf-pow L) A n) 0) (un-val (inf-pow L) A n) (pathsinv0 nat (add (un-val (inf-pow L) A n) 0) (add (un-val (inf-pow L) V m) 0) (transportf nat (lam z (paths nat (add (un-val (inf-pow L) A n) (un-val (inf-pow L) V z)) (add (un-val (inf-pow L) V m) (un-val (inf-pow L) A z)))) i 0 (isantisymmnatleh i 0 w2 (idpath false)) b2)) (natplusr0 (un-val (inf-pow L) A n))))))
+       "r4-3" '(lam g (un-10 (inf-lt (un-val (inf-pow L) A n) (un-val (inf-pow L) V m)) g))
+      }}
+
+   mag-specs [add sub mas ge]
    mag-h (cats ["// mag_gen.h -- laid by src/love/mag.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) mag-specs))])
    mag-ledger

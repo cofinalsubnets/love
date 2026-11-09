@@ -423,3 +423,60 @@
    (lam L x g (transportf nat (lam z (inf-lt x z)) (mul (inf-pow L) (inf-pow L)) (inf-pow (add L L))
      (pathsinv0 nat (inf-pow (add L L)) (mul (inf-pow L) (inf-pow L)) (un-powadd L L)) g)))
 )
+
+(test
+ ; --- comparing values from the top limb: mag_ge's lemmas ---
+ (defq un-predlt (pi i nat h (inf-le 1 i) (inf-lt (natminus i 1) i))
+   (lam i h (transportf nat (lam z (inf-lt (natminus i 1) z)) (succ (natminus i 1)) i (inf-addsub 1 i h)
+     (un-sult (natminus i 1) (succ (natminus i 1)) (isreflnatleh (succ (natminus i 1)))))))
+ ; limbs under B: the value is under B^n
+ (defq un-vallt (pi B nat A (pi j nat nat) n nat g (pi j nat (inf-lt (A j) B)) (inf-lt (un-val B A n) (uu-app n B)))
+   (lam B A n g (nat_rect (lam q (inf-lt (un-val B A q) (uu-app q B)))
+     (idpath true)
+     (lam q IH (un-vbound (uu-app q B) (un-val B A q) (A q) B IH (g q)))
+     n)))
+ ; a limb at least 1 at k: the value through k is at least B^k
+ (defq un-valge1 (pi B nat A (pi j nat nat) k nat g (inf-lt 0 (A k)) (inf-le (uu-app k B) (un-val B A (succ k))))
+   (lam B A k g (inf-letrans (uu-app k B) (mul (A k) (uu-app k B)) (un-val B A (succ k))
+     (un-mulle2 1 (A k) (uu-app k B) (inf-ltsu 0 (A k) g))
+     (inf-leaddl (mul (A k) (uu-app k B)) (un-val B A k)))))
+ ; B^m <= B^k for m <= k
+ (defq un-appmono (pi B nat h (inf-lt 0 B) m nat k nat g (inf-le m k) (inf-le (uu-app m B) (uu-app k B)))
+   (lam B h m k ((nat_rect (lam q (pi m nat g (inf-le m q) (inf-le (uu-app m B) (uu-app q B))))
+     (lam m g (transportf nat (lam z (inf-le (uu-app z B) 1)) 0 m (pathsinv0 nat m 0 (isantisymmnatleh m 0 g (idpath false))) (isreflnatleh 1)))
+     (lam q IH m g (inf-case (natgtb m q) (lam y (inf-le (uu-app m B) (uu-app (succ q) B)))
+       (lam e (transportf nat (lam z (inf-le (uu-app z B) (uu-app (succ q) B))) (succ q) m
+         (pathsinv0 nat m (succ q) (isantisymmnatleh m (succ q) g (inf-ltsu q m e))) (isreflnatleh (uu-app (succ q) B))))
+       (lam e (inf-letrans (uu-app m B) (uu-app q B) (uu-app (succ q) B) (IH m e)
+         (un-mulle2 1 B (uu-app q B) (inf-ltsu 0 B h))))))
+     k) m)))
+ ; v k < a k, limbs under B: the value through k is less
+ (defq un-lexlt (pi B nat A (pi j nat nat) V (pi j nat nat) k nat gV (pi j nat (inf-lt (V j) B)) g (inf-lt (V k) (A k))
+     (inf-lt (un-val B V (succ k)) (un-val B A (succ k))))
+   (lam B A V k gV g (inf-lttrans (un-val B V (succ k)) (add (uu-app k B) (mul (V k) (uu-app k B))) (un-val B A (succ k))
+     (inf-ltaddr (un-val B V k) (uu-app k B) (mul (V k) (uu-app k B)) (un-vallt B V k gV))
+     (inf-letr (add (mul (V k) (uu-app k B)) (uu-app k B)) (add (uu-app k B) (mul (V k) (uu-app k B))) (un-val B A (succ k)) (natpluscomm (mul (V k) (uu-app k B)) (uu-app k B))
+       (inf-letrans (mul (succ (V k)) (uu-app k B)) (mul (A k) (uu-app k B)) (un-val B A (succ k))
+         (un-mulle2 (succ (V k)) (A k) (uu-app k B) (inf-ltsu (V k) (A k) g))
+         (inf-leaddl (mul (A k) (uu-app k B)) (un-val B A k)))))))
+ ; x + a = y + b and a < b: y < x
+ (defq un-cancle (pi X nat Y nat a nat b nat e (paths nat (add X a) (add Y b)) h (inf-lt a b) (inf-lt Y X))
+   (lam X Y a b e h (inf-ltcan a Y X (inf-ltcong (add Y a) (add a Y) (add Y b) (add a X) (natpluscomm Y a)
+     (pathscomp0 nat (add Y b) (add X a) (add a X) (pathsinv0 nat (add X a) (add Y b) e) (natpluscomm X a))
+     (inf-ltaddl Y a b h)))))
+ ; x + (a + t) = y + (b + t): x + a = y + b
+ (defq un-cancmid (pi X nat a nat Y nat b nat t nat e (paths nat (add X (add a t)) (add Y (add b t))) (paths nat (add X a) (add Y b)))
+   (lam X a Y b t e (un-cancr (add X a) (add Y b) t
+     (pathscomp0 nat (add (add X a) t) (add X (add a t)) (add (add Y b) t) (natplusassoc X a t)
+       (pathscomp0 nat (add X (add a t)) (add Y (add b t)) (add (add Y b) t) e
+         (pathsinv0 nat (add (add Y b) t) (add Y (add b t)) (natplusassoc Y b t)))))))
+ ; a <= b, a != b: a < b
+ (defq un-lene (pi a nat b nat g (inf-le a b) n (pi e (paths nat a b) empty) (inf-lt a b))
+   (lam a b g n (inf-case (natgtb b a) (lam y (paths bool y true))
+     (lam e (idpath true))
+     (lam e (fromempty (paths bool false true) (n (isantisymmnatleh a b g e)))))))
+ (defq un-10 (pi P UU g (paths nat 1 0) P)
+   (lam P g (fromempty P (nopathstruetofalse (maponpaths nat bool (lam z (natgtb z 0)) 1 0 g)))))
+ (defq un-01 (pi P UU g (paths nat 0 1) P)
+   (lam P g (fromempty P (nopathsfalsetotrue (maponpaths nat bool (lam z (natgtb z 0)) 0 1 g)))))
+)
