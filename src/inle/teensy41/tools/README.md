@@ -1,9 +1,7 @@
 # teensy41/tools
 
-Unlike `rp2040/tools` (which needs custom love programs -- `pad_checksum.l` to
-stamp the boot2 CRC and `elf2uf2.l` to pack the .uf2), the Teensy 4.1 flashing
-path needs no bespoke tooling: the i.MX RT1062 boots a plain Intel HEX, and the
-PJRC bootloader chip on the board accepts it directly.
+The Teensy 4.1 flashing path needs no bespoke tooling: the i.MX RT1062 boots a plain
+Intel HEX, and the PJRC bootloader chip on the board accepts it directly.
 
 ## Producing the image
 
