@@ -314,6 +314,25 @@
    _ (ok ".DELETE_ON_ERROR: a .PRECIOUS file stays" (two? (stat (doe "k"))))
    _ (ok ".DELETE_ON_ERROR: a file the recipe never touched stays" (two? (stat (doe "u"))))
 
+   ; an included file is remade before it is read, as make restarts: a stale one by a two-target
+   ; pattern rule (kbuild's auto.conf), a missing one by its rule. -include of a file nothing
+   ; makes is quiet, include of it fatal
+   (inc f) (dir + "/inc" + f)
+   _ (sh ("mkdir -p " + inc "/config; echo V=stale > " + inc "/config/auto.mk; echo V=fresh > "
+          + inc ".cfg; touch -d '2000-01-01 00:00:00' " + inc "/config/auto.mk"))
+   incsrc (mk ["all:" "\t@echo \"V[$(V)] W[$(W)]\"" ("-include " + inc "/config/auto.mk")
+               ("include " + inc ".gen")
+               ("%/config/auto.mk %/config/auto.mk.cmd: " + inc ".cfg") ("\tcp " + inc ".cfg $@")
+               (inc ".gen" + ":") ("\techo W=made > $@")])
+   inc1 (run-cook incsrc "all")
+   _ (ok "include: a stale file is remade by its pattern rule" (has? inc1 "V[fresh]"))
+   _ (ok "include: a missing file is made by its rule" (has? inc1 "W[made]"))
+   _ (ok "include: a remade file is read again" (has? (run-cook incsrc "all") "V[fresh] W[made]"))
+   _ (ok "-include: a file nothing makes is quiet"
+         (has? (run-cook (mk ["all:" "\t@echo quiet" ("-include " + inc ".none")]) "all") "quiet"))
+   _ (ok "include: a file nothing makes is fatal, before any goal"
+         !(has? (run-cook (mk ["all:" "\t@echo loud" ("include " + inc ".none")]) "all") "loud"))
+
    ; .ONESHELL: a variable set on one line is live on the next; differential against GNU make
    one (run-cook (mk '(".ONESHELL:"
                        ".SHELLFLAGS := -ec"
