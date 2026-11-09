@@ -75,6 +75,10 @@ for f in test/cc/*.c; do
   [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
 
+# stdlib.h lays alloca, as glibc's default features do (kbuild's genksyms leans on it)
+printf '#include <stdlib.h>\n#include <string.h>\nint main(void){ char *p = alloca(64); memset(p, 5, 64); return p[63] - 5; }\n' > "$ho/.sal.c"
+moonrun "$ho/.sal.c" "$ho/.sal" && "$ho/.sal" || fail "mooncc: stdlib.h alone gives no alloca"
+
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
 # carries its size, a file-scope static is a local one, a block static keeps its section
 printf '#include <stdarg.h>\nint f(int n, ...){ va_list a; va_start(a, n); int r = va_arg(a, int); va_end(a); return r + n; }\n' > "$ho/.vns.c"
