@@ -50,6 +50,7 @@
            (0 = probe) (75 = none)
            (3 = ran) (got = "carried\n") !gone
            (0 > fsub env "BEE_HOSTS" 0) (0 <= fsub env "LANG=C" 0)       ; only PATH HOME LANG=C cross
+           (0 <= fsub env "BEE_PAGE=16384" 0) (0 > fsub env "BEE_NAME=" 0)  ; and the host's facts, not its name
            ("host-up-1" = s1 1) ("host-up-2" = s2 1)
            (ht-seq (ht-names ev) ["far.lan" "near.lan"]) (ht-seq (map (h \ h "slots") ev) [3 1])
            (ht-seq (ev 0 "reach") ["ssh" "far.lan"]))
