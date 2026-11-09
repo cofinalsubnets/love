@@ -2,7 +2,8 @@
 # test/gate/xtensa.sh -- holo's xtensa backend run whole on qemu-xtensa's dc233c, an LX core
 # with the esp32's mul32, div32 and sext: test/holo/xtrun.l lays its checks as one linux
 # program, which exits 42 when every answer held and 100+n at the first miss; test/holo/xtlink.l
-# links two of its objects, which exit 42 too.
+# links two of its objects, which exit 42 too; test/holo/xtdata.c, by mooncc under -Tdata, finds
+# its constants with the data.
 # usage: xtensa.sh LOVE OUTDIR
 . test/gate/skip.sh
 set -u
@@ -25,4 +26,14 @@ chmod +x "$d/link.elf"
 timeout 60 qemu-xtensa -cpu dc233c "$d/link.elf"
 a=$?
 [ "$a" -eq 42 ] || fail "the linked program answered $a, want 42"
-echo "$name: $(sed -n 's/^xtrun: //p' "$d/law.log"), every answer as love's own on qemu-xtensa; two objects linked and run"
+# qemu maps a segment only at an address congruent to its file offset, and a bare link lays the
+# data run straight after the code: link once for that offset (the second program header's)
+xtdata() { LOVE_NO_IMAGE= $love mooncc -t xtensa -nostdlib -Ttext 0x10000 -Tdata "$1" -o "$d/data.elf" test/holo/xtdata.c \
+  > "$d/data.log" 2>&1 || { cat "$d/data.log"; fail "mooncc could not build xtdata.c"; }; }
+xtdata 4194304
+off=$(od -An -tu4 -j 88 -N 4 "$d/data.elf" | tr -d ' ')
+xtdata $((4194304 + off % 4096))
+timeout 60 qemu-xtensa -cpu dc233c "$d/data.elf"
+a=$?
+[ "$a" -eq 42 ] || fail "xtdata.c answered $a, want 42 (100+n names the miss)"
+echo "$name: $(sed -n 's/^xtrun: //p' "$d/law.log"), every answer as love's own on qemu-xtensa; two objects linked and run; -Tdata's constants with the data"
