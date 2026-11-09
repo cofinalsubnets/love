@@ -439,8 +439,9 @@ else ~/.love), with lush beside it
        _ (string? me ? 0 (src-die "nest: cannot find this binary"))
        new (nest-read me)
        _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
-       bin (cite 'path 'nest 0 + "/bin")
-       _ (mkdir (cite 'path 'nest 0) 493) _ (mkdir bin 493)
+       nd (cite 'path 'nest 0) bin (nd + "/bin")
+       ; XDG_DATA_HOME may not be there yet: its parents first
+       _ (each (cite 'path 'pprefixes nd + [nd bin]) (d \ mkdir d 493))
        shown ("\(bin)/love" @ p (starts? p "\(home)/" ? "~\(snip p #home #p)" p))
        r (nest-lay bin "\(bin)/love" new)
        _ (each nest-tools (nm \ "\(bin)/\(nm)" @ p (readlink p = "love" ? 0 (unlink p, symlink "love" p))))

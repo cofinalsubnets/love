@@ -189,7 +189,7 @@
        (? (string? old) (? (old = fp || old = cfp) ()
                            ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
-          (: _ (mkdir (cite 'path 'nest 0) 448) _ (mkdir (cite 'path 'phead path) 448)
+          (: _ (each (cite 'path 'pprefixes path) (d \ mkdir d 448))
              a (open path "a")
              _ (? (hot? a) (say a (key + " " + fp + "\n"), close a) 0)
              ())))
