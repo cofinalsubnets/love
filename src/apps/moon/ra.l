@@ -239,11 +239,15 @@
                                                  [[(id a) (id b) (vwt spn i @ v (max (v / 16) (min v (fqw i))))]] _ ())) ^n))
                _ (map (c \ (c @ [x y _] (join x y) _ 0)) cw)
                vs2 (sortby (a \ b \ lo a < lo b || lo a = lo b && a < b) (filter (x \ rep x = ()) vs))
+               ; the others w's register would still clash with: on thumb2sp a wide one evicts the
+               ; singles at its odd half too, when each may spill
+               (mates x w act) (filter (y \ y != w && clash? x (loc w) y) act)
+               (held? x w act) (mates x w act @ () 0 ys (!(sp64? g && wid? x) || any (y \ nosp (nms y)) ys))
                ; the lightest active interval whose register serves this one alone, or none when
                ; this one weighs less and may spill itself
                (victim x act)
                 (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) || wid? x && lofo? (loc w) ||
-                                     any (y \ y != w && clash? x (loc w) y) act) b
+                                     held? x w act) b
                                    (b @ () w _ (wt? w < wt? b ? w b))))
                        () act @
                    () ()
@@ -256,7 +260,8 @@
                          ((pick (hreg x (flx x fl)) x a2 @ () (pick (flx x fl) x a2) r r) @
                           () (victim x a2 @
                                () (nosp (nms x) ? 'bad (scan fl u a2 (nms x . sp)))
-                               w (pin loc x (loc w), scan fl u (x . filter (y \ y != w) a2) (nms w . sp)))
+                               w (mates x w a2 @ ys
+                                  (pin loc x (loc w), scan fl u (x . filter (y \ y != w && nelem y ys) a2) (nms w . (map nms ys + sp)))))
                           r (pin loc x r, scan fl u (x . a2) sp))))
                (fv? x) (lofr? (nms x))
                (scan (ragp g) (filter (x \ !(fv? x)) vs2) () () @ 'bad 'bad
