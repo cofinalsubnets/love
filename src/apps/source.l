@@ -265,8 +265,10 @@
                        + flags + ["src/apps/droid/lush.l"]))
        st (two? s ? <s s)
        _ (0 != st ? (src-die "the \(fmt) did not pack (exit \(st))"))
-       e (copyfile made dst)
-       (chdir here, (e < 0 ? (src-die "can't write \(dst)")), puts ";; laid \(dst)\n"))
+       ; dst is the caller's path, so the copy runs back where it was named
+       _ (chdir here)
+       e (copyfile "\(root)/\(made)" dst)
+       (e < 0 ? (src-die "can't write \(dst)"), puts ";; laid \(dst)\n"))
 
    (seed-usage _) (puts """
     usage: love seed [-g] [ARCH] [DIR]

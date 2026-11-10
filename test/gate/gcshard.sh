@@ -112,13 +112,8 @@ el "the full corpus and the cut"
 lay() { cat $pre $(cat $w/c$1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l
         { cat $pre $(cat $w/c$1); for f in $(awk -v k=$1 '$1 == k { print $2 }' $w/cut); do cat $f; echo; echo "$mark"; done
           cat $fin; } > $w/m$1.l; }
-# the earliest corpus file that binds NAME at the head of a line: a letrec's, a define's, uu's (defn ..)
-binder() { for f in $(cat $w/rest); do
-             awk -v nm="$1" 'function at(s) { if (index(s, nm) != 1) return 0; c = substr(s, length(nm) + 1, 1); return c == " " || c == "\t" || c == ")" || c == "" }
-               { s = $0; sub(/^[ \t]*\(?/, "", s); d = s; sub(/^def[a-z]* +/, "", d)
-                 if (at(s) || d != s && at(d)) { x = 1; exit } }
-               END { exit !x }' $f && { echo $f; return; }
-           done; }
+# the earliest corpus file that binds NAME, as the reader reads it (test/gate/binder.l)
+binder() { out/love test/gate/binder.l "$1" $(cat $w/rest); }
 i=0
 while [ $i -lt $n ]; do : > $w/c$i; lay $i; i=$((i + 1)); done
 for h in b e; do

@@ -1185,10 +1185,6 @@ lvm(lvm_vmap1) {
  vmap1_fill(r, a, fn);
  love_musttail return Answer(word(r)); }
 
-// into an int tray, saturating, a NaN to 0, as floor and int's scalars leave the float kind
-static love_inline intptr_t flo_word(flo_t v) {
- return v >= (flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (flo_t) INTPTR_MIN ? INTPTR_MIN
-      : v != v ? 0 : (intptr_t) v; }
 static love_noinline void vmap1z_fill(struct tray *r, struct tray *a, flo_t (*fn)(flo_t)) {
  uintptr_t n = tray_nelem(r);
  intptr_t *p = tray_data(r);

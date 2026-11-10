@@ -43,7 +43,7 @@ every a64 instruction is exactly 4 bytes, the decoded-instruction count must equ
 ## Running
 
 The harness is love, and the knobs ride the environment: `FUZZ_N` (samples per class,
-default 8), `FUZZ_SEED`, `FUZZ_ARCH` (`x64`|`a64`|`rv64`, default all three).
+default 8), `FUZZ_SEED`, `FUZZ_ARCH` (`x64`|`a64`|`rv64`|`rv32`, default all four).
 
 ```
 out/love test/holo/fuzz/fuzz.l                              # all three lanes
@@ -85,6 +85,11 @@ index addressing (`ldx`, `stx`), shifts/rotates (`rot` checks the srli/slli/or t
 mulh-vs-sign-fill shape), and the D lane (`fp3`, `fmov`, `fcvt` incl. the `rtz` rounding mode,
 `fldst`). riscv's `sp` (x2) is a general register in every encoding, so it needs no
 out-of-contract barring at all.
+
+**rv32 — 22 classes**: rv64's, read by llvm-mc as riscv32 with `+m,+c`: the word classes at
+four bytes (`li` the lui/addi pair compared mod 2^32, `ld`/`st`/`ld_far`/`ldx`/`stx`/`pushpop`
+as lw/sw, `shift`/`rot` under 32, `sxzx` at 24/16, `mulo`'s sign fill `srai 31`), and no D
+lane: rv32imac has no float file.
 
 Status as of 2026-07-17: **x64 ~32,500 samples / 5 seeds and a64 ~27,000 / 5 seeds, zero
 encoder discrepancies on either backend.** 2026-07-27: **rv64 27,000 samples / 5 seeds,
