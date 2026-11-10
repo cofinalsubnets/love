@@ -165,15 +165,15 @@ setup: $(SETUP)
 
 # The compiler shootout (the page's FOURTH table): build the love host binary with
 # mooncc / gcc / clang, then run the full corpus ($t), the two cipher rows
-# (bench/ccrypto.l) and the three heavy-nif rows (bench/cnifs.l) through each.
-# Rows build+test+chacha+poly1305+inflate+crc32+sha256,
+# (bench/ccrypto.l), the heavy-nif rows (bench/cnifs.l) and raster (bench/raster.l) through each.
+# Rows build+test+chacha+poly1305+inflate+zstd+raster+crc32+sha256,
 # columns the compilers. cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane runs the artifact's own mooncc verb, so `dist-seed` stands
 # beside `host` -- an intermediate keys the cached moonlibc archive on its own stat and
 # the build row pays a libc build inside it. cached; `make ccbench` refreshes it on its
 # own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(love_c) $(host_c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l raster.l $(GL) $(love_c) $(host_c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(cflags)' CORPUS='$(t)' LOVE_C='$(abspath $(love_c))' HOST_C='$(abspath $(host_c))' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
