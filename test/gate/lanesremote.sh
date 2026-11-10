@@ -6,13 +6,15 @@
 # (255). every lane must answer, none skipped: a placed lane on up or back here, the local one
 # here, each .rc and log agreeing on where, and only the alone lane holding a whole host. up
 # rebuilds love under test_b, which so runs here, refuses test_a's twin test_e for want of a
-# tool, which runs here too, and a lane there has this box's TERM.
+# tool, which runs here too, and a lane there has this box's TERM. a pinned input this box's dl/
+# holds reaches a host's.
 #
 # usage: sh test/gate/lanesremote.sh
 set -u
 t=$(pwd)/out/.lanesremote
-rm -rf "$t" && mkdir -p "$t/out" "$t/test/gate" || exit 1
-cp test/gate/lanes.sh test/gate/skip.sh "$t/test/gate/" || exit 1
+rm -rf "$t" && mkdir -p "$t/out" "$t/test/gate" "$t/src/tools" "$t/dl/chibicc" || exit 1
+cp test/gate/lanes.sh test/gate/skip.sh test/gate/dl.sh "$t/test/gate/" && cp src/tools/dlfind.sh "$t/src/tools/" || exit 1
+echo cadb44e82354002000f6d2bbf41d3155f47a9b3e9abd50a309fdcd9b5ef791e0 > "$t/dl/chibicc/.pin"
 fail() { echo "FAIL lanesremote: $*"; exit 1; }
 
 # where a lane ran is the directory make ran it in: the tree's own, or far/up
@@ -58,7 +60,7 @@ chmod +x "$t/out/love"
 # a host runs the gated commit: the stand-in tree is one
 git -C "$t" init -q && git -C "$t" add Makefile test && git -C "$t" -c user.name=t -c user.email=t@t commit -qm t || exit 1
 
-( cd "$t" && TERM=lanes-term LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c test_d test_e ) > "$t/run.log" 2>&1 \
+( cd "$t" && DL=$t/dl TERM=lanes-term LANES_HOST_MEM_GB=0 sh test/gate/lanes.sh --remote -j 1 -d out/lanes test_a test_b test_c test_d test_e ) > "$t/run.log" 2>&1 \
   || { cat "$t/run.log"; fail "the run was red"; }
 on=
 for l in a b c d e; do
@@ -79,6 +81,7 @@ grep -q "gone dropped" "$t/out/lanes/remote.log" || fail "the host that drops wa
 for l in $(sed -n 's/^lanes: gone dropped \([^ ]*\) .*/\1/p' "$t/out/lanes/remote.log"); do
   grep -q "^$l exit=0 .* back=gone$" "$t/out/lanes/summary" || fail "$l, which gone gave back, is not marked back=gone"
 done
+cmp -s "$t/dl/chibicc/.pin" "$t/far/up/dl/chibicc/.pin" || fail "up's dl/ did not take this box's chibicc"
 grep -- '--whole' "$t/calls" | grep -q 'test_d$' || fail "the alone lane went to a host without --whole"
 grep -- '--whole' "$t/calls" | grep -qv 'test_d$' && fail "a lane beside others went to a host with --whole"
 echo "lanesremote: a placed lane runs on the host that answers (test_${on# }), the one a host dropped here, the local one here"
