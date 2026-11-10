@@ -114,6 +114,10 @@
      'lo [(\ sp v T [x] ['inf-mod (lbase sp) (T x)]) owes-parts (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      'hi [(\ sp v T [x] ['un-div (lbase sp) (T x)]) owes-parts (\ sp C [x] ['bin 'shr (C x) ['var "limb_bits"]]) 'fit]
      'lB [(\ sp v T _ (lbase sp)) owes-none (\ sp C _ ['var "limb_base"]) 'fit]
+     'lbits [(\ sp v T _ (peep sp 'limb 'L)) owes-none (\ sp C _ ['var "limb_bits"]) 'fit]
+     ; 2^k as a limb, k under the limb's width
+     'lpow [(\ sp v T [k] ['inf-pow (T k)]) (\ sp v T O e [k] (O k + [['inf-lt (T k) (peep sp 'limb 'L)]]))
+            (\ sp C [k] ['bin 'shl ['cast '(named "love_limb") ['num 1]] (C k)]) 'fit]
      'lc [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) (lbase sp)]]))
           (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      ; an opaque C value passed through, the context a call is handed: its term is ()
@@ -619,7 +623,9 @@
                         [s])
                ss))
    (cl-body sp ss) (said ss @ [s] (cl-stmt sp s) u ['blk (map (cl-stmt sp) u)])
-   (cl-blk sp ss) ['blk (map (cl-stmt sp) (said ss))]
+   ; a branch an else follows: an if left bare there would take the else, so it keeps its block
+   (cl-open? s) (s @ ('if _ _ e) (atom? e || cl-open? e) ('while _ b) (cl-open? b) ('for _ _ _ b) (cl-open? b) 0)
+   (cl-then sp ss) (cl-body sp ss @ b (cl-open? b ? ['blk [b]] b))
    (cl-for sp x from to step body)
     (: X ['var (string x)]
      ['for ['expr ['asn X (cl sp from)]] ['bin 'lt X (cl sp to)] step (cl-body sp body)])
@@ -639,9 +645,9 @@
          (L 'clear A sz) ['expr ['call ['var "memset"] [(base sp A) ['num 0] sz]]]
          (L 'field f e) ['expr ['asn ['dot ['deref ['var "c"]] f] (cl sp e)]]
          (L 'if g c th) ['if (cl-cond sp c) (cl-body sp th) ()]
-         (L 'join g c th el _) ['if (cl-cond sp c) (cl-blk sp th) (el == () ? () (cl-blk sp el))]
-         (L 'ife g c th el) ['if (cl-cond sp c) (cl-blk sp th) (cl-blk sp el)]
-         (L 'while c m invs b) ['while (cl-cond sp c) (cl-blk sp b)]
+         (L 'join g c th el _) ['if (cl-cond sp c) (el == () ? (cl-body sp th) (cl-then sp th)) (el == () ? () (cl-body sp el))]
+         (L 'ife g c th el) ['if (cl-cond sp c) (cl-then sp th) (cl-body sp el)]
+         (L 'while c m invs b) ['while (cl-cond sp c) (cl-body sp b)]
          (L 'brk) ['brk]
          (L 'store f e) ['expr ['asn ['dot ['deref ['var "r"]] f] (cl sp e)]]
          (L 'raw c) c
