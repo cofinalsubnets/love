@@ -19,7 +19,7 @@
          synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
          synth-vols synth-vol0
          synth-pads synth-pad
-         synth-prows synth-pwhite synth-pbtns synth-pat synth-finger synth-ppaint synth-wbuf?)
+         synth-prows synth-pwhite synth-pcols synth-pbtns synth-pat synth-finger synth-ppaint synth-wbuf?)
 (borrow '(horn harp play posix window opl ops cli))
 (:
  esc (string 27)
@@ -206,6 +206,7 @@
      (kn = 'slower) (synth-cps! st (st 'cps - synth-cps-step))
      (kn = 'quieter) (pins st 'vol (max 0 (st 'vol - 1)) 'dirty 1)
      (kn = 'louder) (pins st 'vol (min (#synth-vols - 1) (st 'vol + 1)) 'dirty 1)
+     (kn = 'quit) (pins st 'over 1)
      (fxkey st kn))
  ; a key down at k, the keys' own: a knob turned, else a note sounded by play
  (synth-down st k play) (peep synth-knobs k 0 @ kn
@@ -417,12 +418,14 @@
                  (pin st 'vd 0, st 'focus = 'vi ? (wrim p w 0 synth-top tw (16 * rows))))
               0))))
  ; --- a phone: held sideways, a row of status over two rows of buttons, the f keys' knobs,
- ; and under them a piano of two octaves, each finger its own note ---
+ ; and under them a piano of two octaves, each finger its own note. quit sits top right, where
+; grass and stones leave ---
  synth-prows 7                          ; the status row and the buttons' rows, in cells
  synth-pwhite 15                        ; c below middle c to the c two octaves up
  synth-pwpc [0 2 4 5 7 9 11]
- ; the buttons, a row of eight each: [label knob lit]. the loop's when there is a buffer,
- ; the instrument's when there is a bank
+ synth-pcols 9                          ; buttons a row
+ ; the buttons, a row each: [label knob lit], a gap's knob (). the loop's when there is a
+ ; buffer, the instrument's when there is a bank
  (synth-pbtns st)
   (: on (st 'latch = 1)
      tail (? (st 'fm) [["fm <" 'prev 0] ["fm >" 'next 0]]
@@ -430,13 +433,14 @@
              ())
      knobs [[(synth-tname st) 'tim 0] ["oct -" 'down 0] ["oct +" 'up 0] ["latch" 'latch on]
             ["vol -" 'quieter 0] ["vol +" 'louder 0]]
-     [(knobs + tail) (catmap (f \ [[(f 2) (f 0) (st (f 0))] [("wet " + show (synth-wets (st (f 1)))) (f 1) 0]]) synth-fx)])
+     gap (map (_ \ ["" () 0]) ^(synth-pcols - 1 - #knobs - #tail))
+     [(knobs + tail + gap + [["quit" 'quit 0]]) (catmap (f \ [[(f 2) (f 0) (st (f 0))] [("wet " + show (synth-wets (st (f 1)))) (f 1) 0]]) synth-fx)])
  ; what is at x y on a phone's window w by h: ['btn knob], ['key semis], or ()
  (synth-pat st w h x y)
-  (: bw (w // 8 // 8 * 8) top (synth-prows * 16) kh (h - top - 4) ww (w // synth-pwhite)
+  (: bw (w // 8 // synth-pcols * 8) top (synth-prows * 16) kh (h - top - 4) ww (w // synth-pwhite)
      (? (y < 16) ()
         (y < top) (: r ((y - 16) // 48) i (x // bw) row (synth-pbtns st r)
-                     (i < #row ? ['btn (row i 1)] ()))
+                     (i < #row && row i 1 != () ? ['btn (row i 1)] ()))
         (y < top + 4 || synth-pwhite * ww <= x) ()
         (: j (x // ww) s0 (12 * (j // 7) + synth-pwpc (j % 7) - 12 + 12 * st 'oct)
            bx (x - j * ww) bw2 (ww * 3 // 10)
@@ -456,7 +460,7 @@
  ; the status row and the buttons, cells scribed; the keys under them, a held one lit
  (synth-ppaint st win)
   (: wh (window-size win) w <wh h (wh 1) p (window-paper win)
-     c (w // 8) bc (c // 8) sc (screen (cask (screen () synth-prows c)) synth-prows c)
+     c (w // 8) bc (c // synth-pcols) sc (screen (cask (screen () synth-prows c)) synth-prows c)
      (at r x) (esc + "[" + show (r + 1) + ";" + show (x + 1) + "H")
      (sp n) (string (map (_ \ 32) ^n))
      (pad t n) (: t2 (#t > n ? (string (take n (chars t))) t) l ((n - #t2) // 2) (sp l + t2 + sp (n - l - #t2)))
@@ -467,7 +471,7 @@
      bs (synth-pbtns st)
      _ (scribe sc (esc + "[H" + esc + "[2J" + " " + synth-tname st + "   octave " + show (st 'oct)
                    + "   last " + (string? (st 'last) ? (st 'last) "-") + vline st + synth-lline st
-                   + catmap (r \ catmap (i \ btn r i (bs r i)) ^#(bs r)) ^2))
+                   + catmap (r \ catmap (i \ (bs r i 1 = () ? "" (btn r i (bs r i)))) ^#(bs r)) ^2))
      _ (each ^synth-prows (y \ dye sc p w y -1 0))
      top (synth-prows * 16) kh (h - top - 4) ww (w // synth-pwhite) y0 (top + 4) bw2 (ww * 3 // 10)
      lit (map (q \ int (q 1)) (st 'hv))
