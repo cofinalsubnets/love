@@ -26,6 +26,11 @@
   ; --- output larger than the initial buffer exercises the grow path ---
   (hark ["seq" "20000"] @ r ((0 = cap r) && (65536 < sat >r)))
 
+  ; --- the capture is a C string: its NUL follows what was read, over a reused heap ---
+  (: (junk n) (n ? (#(show n * 30) + junk (n - 1)) 0)
+     (cut k) (: _ (junk (k * 211)) (fnmatch "ab" >(hark ["printf" "ab"])))
+   (0 = #(filter (x \ x = 0) (map cut ^40))))
+
   ; --- getenv: PATH is set; an unset name answers () ---
   (string? (getenv "PATH"))
   !(getenv "GWEN_DEFINITELY_UNSET_12345")) 0)

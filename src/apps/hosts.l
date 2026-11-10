@@ -84,12 +84,18 @@
        (go 0))
    (hosts-free slot who) ((cite 'locks 'locks-release) (hs-root 0) (slot 1) 'exclusive who)
 
+   ; a host's own facts as BEE_KEY=value, so a board's tty reaches the command; sorted, as
+   ; keys answers in no order
+   (hs-word? k) (string? k && 0 < #k && !(elem 0 (map (c \ 97 <= c <= 122 || 48 <= c <= 57 || c = 95) (chars k))))
+   (hs-facts h)
+    (foldl (\ s k (s + " BEE_" + string (map (c \ 97 <= c <= 122 ? (c - 32) c) (chars k)) + "=" + sh-quote (h k)))
+           "" (filter (k \ hs-word? k && !(elem k ["name" "reach" "slots" "caps"]) && string? (h k)) (sort (keys h))))
    ; dir (or ()) goes as one tar on the one ssh; argv runs in a scratch dir with only PATH
-   ; HOME LANG=C, and the dir goes after, whatever argv answered
+   ; HOME LANG=C and the host's facts, and the dir goes after, whatever argv answered
    (hosts-line h dir argv)
     (: d ("/tmp/bee-on-" + show (getpid 0))
        there ("mkdir -p " + d + " && cd " + d + (string? dir ? " && tar xf -" "")
-              + " && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=\"$HOME\" LANG=C"
+              + " && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=\"$HOME\" LANG=C" + hs-facts h
               + foldl (\ s w (s + " " + sh-quote w)) "" argv
               + "; r=$?; cd /; rm -rf " + d + "; exit $r")
        ((string? dir ? ("tar cf - -C " + sh-quote dir + " . | ") "")

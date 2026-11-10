@@ -8,8 +8,8 @@
 ;
 ;   out/love src/tools/uuparity.l          (exit 1 on impostors)
 ;
-; skips with a note when UniMath is absent. the scan is textual on both sides
-; (a commented-out defn still counts), the shape of the python it replaced.
+; skips with a note when UniMath is absent. uu.l is read as forms, so a commented-out defn
+; does not count; the .v side is scanned as text.
 (borrow 'posix)
 (: unimath "/usr/lib/ocaml/coq/user-contrib/UniMath"
    uul "test/uu.l"
@@ -18,7 +18,6 @@
    (dir? p) (stat p @ st (atom? st ? 0 (61440 & <>>st = 16384)))
    (sfx-v? s) (#s @ n (2 < n && s (n - 2) = 46 && s (n - 1) = 118))
    (vnamec? c) (alnum? c || c = 95 || c = 39)            ; [a-za-z0-9_']
-   (unamec? c) (alnum? c || c = 95 || c = 45)            ; [a-za-z0-9_-]
    (blank? (32 || 9 || 13)) 1
 
    ; every *.v under p, then one flat sort so the visit order is the path order
@@ -57,26 +56,12 @@
                              (pin seen nm 1, line (eol j) (cnt + 1)))))))))
        (line 0 0))
 
-   ; test/uu.l: every (defn /(defq /(axm  occurrence, in order, dups kept
+   ; test/uu.l: every (defn ..), (defq ..) and (axm ..) as the reader reads it, in order, dups kept
    (uu-names s)
-    (: n #s
-       (lit? i t) (: k #t
-                     (go j) (? (k <= j) (i + k)
-                               (i + j < n) (s (i + j) = t j ? (go (j + 1)) ())
-                               ())
-                     (go 0))
-       (name-end i) (i < n && unamec? (s i) ? (name-end (i + 1)) i)
-       (go i acc)
-        (n <= i ? (rev acc)
-           (? !(s i = 40) (go (i + 1) acc)
-              (: e (lit? (i + 1) "defn " @ a (charm? a ? a
-                       (lit? (i + 1) "defq " @ b (charm? b ? b
-                          (lit? (i + 1) "axm ")))))
-                 (? !(charm? e) (go (i + 1) acc)
-                    (name-end e @ b
-                       (b = e ? (go (i + 1) acc)
-                          (go b (snip s e b . acc))))))))
-       (go 0 ()))
+    (: (walk f acc) (? !(two? f) acc
+                       (: acc2 ((elem <f '(defn defq axm) && two? >f && nom? <>f) ? (show <>f . acc) acc)
+                          (foldl (a \ g \ walk g a) acc2 f)))
+       (rev (foldl (a \ g \ walk g a) () (sounds s))))
 
    (pad3 v) (show v @ t (? (#t = 1) ("  " + t) (#t = 2) (" " + t) t))
 

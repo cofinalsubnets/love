@@ -44,8 +44,8 @@
             (\ sp C [x b] ['bin '& ['bin 'shr (C x) (C b)] ['num 1]]) 'fit]
      'pow [(\ sp v T [k] ['inf-pow (T k)]) (\ sp v T O e [k] (O k + [['inf-lt (T k) 32] (fit (T e))]))
            (\ sp C [k] ['bin 'shl ['cast 'uint ['num 1]] (C k)]) 'fit]
-     ; a shift's term is known at 1 and 4 alone
-     'shl [(\ sp v T [a k] (k @ 1 (T a @ t ['add t t]) 4 ['inf-by16 (T a)] _ (quit-on "vc: shl by \(k) has no term")))
+     ; a shift's term is known at 1, 3 and 4 alone
+     'shl [(\ sp v T [a k] (k @ 1 (T a @ t ['add t t]) 3 ['inf-by8 (T a)] 4 ['inf-by16 (T a)] _ (quit-on "vc: shl by \(k) has no term")))
            (\ sp v T O e [a k] (O a + [(fit (T e))]))
            (\ sp C [a k] ['bin 'shl (C a) ['num k]]) 'fit]
      'or [(\ sp v T [a b k] ['add (T a) (T b)])
@@ -88,6 +88,14 @@
      'wsub [(no-tm 'wsub) owes-parts (\ sp C [a b] ['bin '- (C a) (C b)]) 'none]
      'wmul [(no-tm 'wmul) owes-parts (\ sp C [a b] ['bin '* (C a) (C b)]) 'none]
      'bnot [(no-tm 'bnot) owes-parts (\ sp C [x] ['un 'bnot (C x)]) 'none]
+     'wshl [(no-tm 'wshl) owes-parts (\ sp C [a k] ['bin 'shl (C a) (C k)]) 'none]
+     'wshr [(no-tm 'wshr) owes-parts (\ sp C [a k] ['bin 'shr (C a) (C k)]) 'none]
+     'wor [(no-tm 'wor) owes-parts (\ sp C [a b] ['bin '| (C a) (C b)]) 'none]
+     'w16 [(no-tm 'w16) owes-parts (\ sp C [x] ['cast '(named "uint16_t") (C x)]) 'none]
+     'w8 [(no-tm 'w8) owes-parts (\ sp C [x] ['cast '(named "uint8_t") (C x)]) 'none]
+     'wge [(no-tm 'wge) owes-parts (\ sp C [a b] ['bin 'ge (C a) (C b)]) 'none]
+     ; all ones where a < b, else 0, with no branch: the spec's C names the macro
+     'wlt [(no-tm 'wlt) owes-parts (\ sp C [a b] ['call ['var "LZ_LT"] [(C a) (C b)]]) 'none]
      ; the C's own places, read as they stand: no term, nothing owed
      'dg [(no-tm 'dg) owes-none (\ sp C [f] ['dot ['deref ['var "d"]] f]) 'none]
      'sg [(no-tm 'sg) owes-none (\ sp C [f] ['dot ['deref ['var "s"]] f]) 'none]
@@ -108,10 +116,12 @@
     (: (T x) (tm sp v x)
        (O x) (ob sp v x)
      (? (atom? e) () ((op-row e) 1 sp v T O e >e)))
-   ; a condition: what it owes, and what its arms may assume. a - b < c means a < c + b
+   ; a condition: what it owes, and what its arms may assume. a - b < c means a < c + b; wlt
+   ; compares words no term reads, and its arms learn nothing
    (cond-ob sp v c) (c @ ('ltsub a b d) (ob sp v a + ob sp v b + ob sp v d
                                          + [(fit (tm sp v a)) (fit (tm sp v b))])
                          ('lt a b) (ob sp v a + ob sp v b)
+                         ('wlt a b) (ob sp v a + ob sp v b)
                          ('le a b) (ob sp v a + ob sp v b)
                          ('nz a) (ob sp v a)
                          ('z a) (ob sp v a)
@@ -125,6 +135,7 @@
                          ('tru) ())
    (cond-tt sp v c) (c @ ('ltsub a b d) ['inf-lt (tm sp v a) ['add (tm sp v d) (tm sp v b)]]
                          ('lt a b) ['inf-lt (tm sp v a) (tm sp v b)]
+                         ('wlt _ _) 'unit
                          ('le a b) ['inf-le (tm sp v a) (tm sp v b)]
                          ('nz a) ['inf-lt 0 (tm sp v a)]
                          ('z a) ['paths 'nat (tm sp v a) 0]
@@ -138,6 +149,7 @@
                          ('tru) 'unit)
    (cond-ff sp v c) (c @ ('ltsub a b d) ['inf-le ['add (tm sp v d) (tm sp v b)] (tm sp v a)]
                          ('lt a b) ['inf-le (tm sp v b) (tm sp v a)]
+                         ('wlt _ _) 'unit
                          ('le a b) ['inf-lt (tm sp v b) (tm sp v a)]
                          ('nz a) ['paths 'nat (tm sp v a) 0]
                          ('z a) ['inf-lt 0 (tm sp v a)]
@@ -315,6 +327,8 @@
                + run sp el v ((g . cond-ff sp v c) . hy) meet
                + cxed sp (hs + bs + hy) (\ h (run sp >ss v3 h k))))
             (L 'store _ _) (run sp >ss v hy k)
+            ; C the walk does not read: it writes only places no term names (the ledger says which)
+            (L 'raw _) (run sp >ss v hy k)
             (L 'gset x e) (run sp >ss ((x . sub v e) . v) hy k)
             (L 'while c m invs body) (wloop sp L c m invs body >ss v hy k)
             (L 'brk) ((sp 'brk) v hy)
@@ -540,6 +554,7 @@
         ((op-row e) 2 sp C >e)))
    (cl-cond sp c) (c @ ('ltsub a b d) ['bin 'lt ['bin '- (cl sp a) (cl sp b)] (cl sp d)]
                        ('lt a b) ['bin 'lt (cl sp a) (cl sp b)]
+                       ('wlt a b) ['bin 'lt (cl sp a) (cl sp b)]
                        ('le a b) ['bin 'le (cl sp a) (cl sp b)]
                        ('nz a) (cl sp a)
                        ('z a) ['un 'not (cl sp a)]
@@ -577,7 +592,13 @@
    (cl-for sp x from to step body)
     (: X ['var (string x)]
      ['for ['expr ['asn X (cl sp from)]] ['bin 'lt X (cl sp to)] step (cl-body sp body)])
-   (cl-decl sp ty ds) ['decl (map (x \ [(string <x) ty (two? >x ? (cl sp <>x) ())]) ds)]
+   ; a type as moon holds it: a pointee's qualifiers, 1 const 2 volatile, in the pointer's fourth slot
+   (cl-ty t)
+    (t @ ('ptr ('const x)) ['ptr (cl-ty x) 0 1]
+         ('ptr ('volatile x)) ['ptr (cl-ty x) 0 2]
+         ('ptr x) ['ptr (cl-ty x)]
+         _ t)
+   (cl-decl sp ty ds) ['decl (map (x \ [(string <x) (cl-ty ty) (two? >x ? (cl sp <>x) ())]) ds)]
    (cl-stmt sp s)
     (s @ (L 'set x e) (cl-set sp x e)
          (L 'let ty ds) (cl-decl sp ty ds)
@@ -592,6 +613,7 @@
          (L 'while c m invs b) ['while (cl-cond sp c) (cl-blk sp b)]
          (L 'brk) ['brk]
          (L 'store f e) ['expr ['asn ['dot ['deref ['var "r"]] f] (cl sp e)]]
+         (L 'raw c) c
          (L 'havoc x e) (cl-set sp x e)
          (L 'havw x e _) (cl-set sp x e)
          (L 'dstore f e) ['expr ['asn ['dot ['deref ['var "d"]] f] (cl sp e)]]
@@ -613,6 +635,6 @@
          (L 'for x from to invs body) (cl-for sp x from to ['post ['var (string x)] 1] body)
          (L 'forby x from to by invs body) (cl-for sp x from to ['rmw '+ ['var (string x)] (cl sp by)] body))
    (cl-fn sp)
-    ['fn (sp 'name) (sp 'params)
+    ['fn (sp 'name) (map (p \ [<p (cl-ty (p 1))]) (sp 'params))
          ['blk (map (d \ cl-decl sp <d >d) (sp 'decls) + map (cl-stmt sp) (said (sp 'body)))]
          (sp 'ret) (sp 'attrs)])

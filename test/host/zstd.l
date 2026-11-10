@@ -1,6 +1,7 @@
 ; test/host/zstd.l -- zstandard read a block at a time, held to the frames read whole
 ; zstd-pull steps a block at a time off a reader and zstd-unpack reads the whole string; every
-; cut of a stream answers the same bytes, or the same word. zstd-pack's frames read back.
+; cut of a stream answers the same bytes, or the same word. zstd-pack's frames read back, and
+; zstd-zip's, fed in any cut, are theirs but for the header.
 ;   run:  cat test/00-init.l test/host/zstd.l | out/love
 (borrow '(zstd bytes hashes))
 
@@ -26,7 +27,15 @@
    (zst-flip s k) (zst-xor s k 1)
    ; the same frame with its checksum and the flag that wants it taken off
    zst-nk (zst-xor (snip zst-a 0 (#zst-a - 4)) 4 4)
-   (zst-back s l) (zstd-unpack (zstd-pack s l) @ u (two? u && <>u = s)))
+   (zst-back s l) (zstd-unpack (zstd-pack s l) @ u (two? u && <>u = s))
+   (zst-zip s k l) (: o {0 ()}
+                      z (zstd-zip (zst-rd (zst-cut s k)) l (b \ pin o 0 (b . o 0)))
+                      (two? z ? (cats (rev (o 0))) ()))
+   ; the streamed frame reads back and ends as the whole one does, past its 6-byte header
+   (zst-zips s k l) (zst-zip s k l @ z
+                      (: w (zstd-pack s l)   n (#z - 6)
+                         (string? z && zstd-unpack z = [1 s] && snip w (#w - n) #w = snip z 6 #z)))
+   zst-big (cats (map (_ \ zst-mix) (jot 5))))
 (test
  (lit? zstd-block)
  ; every level reads back, the empty input too, and one byte over and over
@@ -66,6 +75,15 @@
  (zstd-unpack (zst-nk + zst-a) = [1 (zst-text + zst-text)])
  (zstd-unpack (zst-a + zst-nk) = [1 (zst-text + zst-text)])
  (zst-same zst-nk zst-ks)
+ ; streamed: any cut, every kind of parse, a window that slides, nothing at all
+ (zst-all (k \ zst-zips zst-mix k 3) [7 4096 100000 1000000])
+ (zst-zips (snip zst-mix 0 9000) 1 3)
+ (zst-all (zst-zips zst-mix 77777) [1 2 4 9 13 16 19])
+ (zst-zips zst-big 65536 1)
+ (zst-zips "" 7 3)
+ (#(zst-zip "" 7 3) = 13)
+ (zstde-new 20 = ())
+ (: st (zstde-new 3)   _ (zstde-end st) (zstde-feed st "x" = ()))
  ; torn at every length, and a flipped bit anywhere: the same answer whole or pulled
  (zstd-unpack (snip zst-a 0 (#zst-a - 1)) = 'end)
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (snip zst-a 0 i) [7 4096]) 0 (go (i + 13))) (go 0))

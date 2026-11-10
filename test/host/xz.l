@@ -48,4 +48,24 @@
    _ (test (go 0))
    0)
 
+; lzma2e fed in pieces is lzma2e whole, sliding past its window; xz-zip's streams read back
+(: (xzf-feed s k d) (: st (lzma2e-new d)
+                       (go ps acc) (? (atom? ps) (lzma2e-end st @ z (string? z ? (cats (rev (z . acc))) ()))
+                                      (lzma2e-feed st <ps @ z (string? z ? (go >ps (z . acc)) ())))
+                       (go (xzt-cut s k) ()))
+   (xzf-same s k d) (xzf-feed s k d @ z (string? z && z = lzma2e s d))
+   (xzf-zip s k ck) (: o {0 ()}
+                       z (xz-zip (xzt-rd (xzt-cut s k)) 65536 ck (x \ pin o 0 (x . o 0)))
+                       (two? z ? (cats (rev (o 0))) ()))
+   (xzf-back s k ck) (xzf-zip s k ck @ z (string? z && xz-unpack z = [1 s] && xzt-same z))
+   _ (test
+      (xzt-all (k \ xzf-same xzt-big k 65536) [100000 4000000])
+      (xzf-same (snip xzt-text 0 3000) 1 4096)
+      (xzf-same "" 7 4096)
+      (xzt-all (ck \ xzf-back xzt-text 999 ck) ['none 'crc32 'crc64 'sha256])
+      (xzf-back "" 7 'crc64)
+      (lzma2e-new 7 = ())
+      (: st (lzma2e-new 4096)   _ (lzma2e-end st) (lzma2e-feed st "x" = ())))
+   0)
+
 (test_fin (), puts "xz: ok -- every cut of a container reads as the whole does\n", 0)
