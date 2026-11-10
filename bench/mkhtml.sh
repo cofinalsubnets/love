@@ -188,7 +188,15 @@ They are three shapes as well &mdash; <b>inflate</b> is branchy (a bit reader an
 lookup per symbol), <b>crc32</b> has no branch in its loop at all, and <b>sha256</b>
 carries a sixty-four word array beside eight scalar working variables, which is the
 cipher pair&rsquo;s two shapes inside one function. A lane behind on inflate and level on
-crc32 is losing to branches rather than to loads. <b>net</b> sums every row, so it moves
+crc32 is losing to branches rather than to loads.</p>
+<p class="note">The <b>zstd</b> and <b>raster</b> rows are where mooncc&rsquo;s register
+allocator is being worked on. <b>zstd</b> decodes a frame of the same source the inflate row
+reads (<code>src/love/compress/zstd.c</code>), its sequence loop carrying more live values
+than there are registers; <b>raster</b> draws a hundred frames of lore&rsquo;s triangles
+(<code>src/love/raster.c</code>, driven by <code>bench/raster.l</code>, timed by its
+own clock past the scene&rsquo;s build), and every lane must answer the host&rsquo;s checksum. Spills are most of
+mooncc&rsquo;s gap on both, so these two rows move first when the allocator does.
+<b>net</b> sums every row, so it moves
 whenever a row is added &mdash; the per-row ratios are what compare across time.</p>
 <div class="wrap">
 CC

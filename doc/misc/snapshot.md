@@ -44,7 +44,10 @@ naming its own width. The heap is mostly a tree, and the major collection lays i
 first-reference order (the hot-first sort is stable), so the first word naming an object rides as
 its step from the last first reference: one chain on is a token of its own, two in three. A heap
 offset named again rides as its distance from its own word, in words. Each chunk lays its step
-base, its token bytes, one a word, then its literal bytes, so the two deflate apart. 3.8x off the file; the wake expands into the pool and then decodes there in
+base, its token bytes, one a word, then its literal bytes, so the two deflate apart. The first chunks,
+what every run wakes, share one deflate code laid once beside the table, so a wake builds its
+tables once; the rest but the last deflate against a 32 KB dictionary picked from them, which the
+first cold chunk touched inflates. 3.8x off the file; the wake expands into the pool and then decodes there in
 place. The dictionary is chosen by COUNT and not by lane: a fixed token budget per lane is the
 obvious thing and it is also worse (3.63x), because the split would be tuned to whichever image
 was measured, and the counts follow a kernel's image or an artifact's wherever those go.
@@ -69,7 +72,7 @@ rides it. `test_bakerep` holds that, and that each of two such builds wakes the 
 ## the digests
 
 The header's `sum` covers the head: the header with `sum` zeroed, the dictionary, each segment's
-head and chunk table, and a segment stored whole. Each deflated chunk, stream or code, carries
+head and chunk table, the stream's shared code and dictionary, and a segment stored whole. Each deflated chunk, stream or code, carries
 its own digest in its table row, checked before it inflates. A damaged head refuses the wake:
 `love wake FILE` exits 2 and says "damaged" (`image_why` 4), and a damaged `.image` section
 boots the egg. A damaged chunk refuses an eager wake. Under a lazy wake it ends the

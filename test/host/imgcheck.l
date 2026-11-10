@@ -14,15 +14,17 @@
    n #s
    (u64 o) (foldr (\ i a (a * 256 + s (o + i))) 0 ^8)
 
-   ; the wire: header (eleven words, then the root table), dictionary, stream, code
+   ; the wire: header (eleven words, then the root table), dictionary, stream, code. the stream:
+   ; five words, its rows, the hot chunks' shared code, its deflated dictionary, the chunks
    hsz (8 * (11 + 2 * u64 40))
    ns (u64 56)  nc (u64 72)
    so (n - nc - ns)  co (n - nc)
-   sch (u64 (so + 8))  srow (so + 16)  sz (srow + 32 * sch)
+   sch (u64 (so + 8))  stn (u64 (so + 16))  sdz (u64 (so + 32))  srow (so + 40)
+   stab (srow + 32 * sch)  sz (stab + stn + sdz)
    (szoff k) (sz + u64 (srow + 32 * k + 16))
    nch (u64 (co + 8))  ndz (u64 (co + 24))  crow (co + 32)  cz (crow + 24 * nch + ndz)
    (czoff k) (cz + u64 (crow + 24 * k + 8))
-   _ (test (1 < sch) (1 < nch) (hsz < so))
+   _ (test (1 < sch) (1 < nch) (hsz < so) (0 < stn) (0 < sdz))
 
    ; a copy with byte o flipped, or cut to its first m bytes
    (flip os) (: t (foldl (\ a o (snip a 0 o + string ((a o) ^ 90) + snip a (o + 1) n)) s os)
@@ -41,8 +43,10 @@
    _ (flip [])
    _ (test (outcome (run ()) = 'woke))
 
-   ; the head: any byte of the header, the dictionary, either table refuses at the wake
-   _ (each [0 80 (hsz - 8) (hsz + 100) (so - 1) (so + 4) (srow + 40) (co + 3) (crow + 30) (cz - 1)]
+   ; the head: any byte of the header, the dictionary, either table, the shared code or the
+   ; stream's dictionary refuses at the wake
+   _ (each [0 80 (hsz - 8) (hsz + 100) (so - 1) (so + 4) (so + 20) (so + 36) (srow + 40) (stab + 2)
+            (stab + stn + 5) (sz - 1) (co + 3) (crow + 30) (cz - 1)]
        (o \ (: _ (flip [o]) (test (outcome (run ()) = 'refused)))))
 
    ; a stream chunk: every chunk damaged refuses at the wake, which decodes the image's edges;
@@ -59,8 +63,30 @@
    o (outcome (run ()))
    _ (test (o != 'fault) (o != 'woke))
 
-   ; cut short at each edge: the header, the dictionary, a stream chunk, the code segment
-   ((each [8 (hsz - 1) (so - 1) (sz + 1) (szoff 1) (co - 1) (cz + 1) (n - 1)]
+   ; a stream table whose first run wraps the lazy block's size, sealed again: it refuses.
+   ; the head digest is image_sum over the header (sum as 0), the dictionary and both tables
+   M (2 ** 64)
+   (at t o) (foldr (\ i a (a * 256 + t (o + i))) 0 ^8)
+   (le v) (foldl (\ a i (a + string ((v >> (8 * i)) % 256))) "" ^8)
+   (put8 t o v) (snip t 0 o + le v + snip t (o + 8) n)
+   (mix h w) (: x ((h ^ w) * 0xff51afd7ed558ccd % M) (x ^ (x >> 32)))
+   (isum t o m h) (: (go i h) (? (i + 8 <= m) (go (i + 8) (mix h (at t (o + i))))
+                                 (i < m) (go (i + 1) (mix h (t (o + i))))
+                                 h)
+                   (go 0 (h ^ (m * 0x9e3779b97f4a7c15 % M))))
+   (seal t) (: z (put8 t 80 0)
+               h (isum z co (32 + 24 * nch + ndz) (isum z so (sz - so) (isum z hsz (so - hsz) (isum z 0 hsz 0))))
+              (put8 z 80 h))
+   c (33 * sch)                       ; under the block's fixed words, so its size wraps small
+   (rows t k) (k < sch ? (rows (put8 t (srow + 32 * k + 8) (M - c + k - 1)) (k + 1)) t)
+   _ (: f (open bad "w") _ (say f (seal s)) (close f))
+   _ (test (outcome (run ()) = 'woke))
+   _ (: f (open bad "w") _ (say f (seal (put8 (rows s 1) so (M - c + sch)))) (close f))
+   _ (test (outcome (run ()) = 'refused))
+
+   ; cut short at each edge: the header, the dictionary, the shared code, the stream's dictionary,
+   ; a stream chunk, the code segment
+   ((each [8 (hsz - 1) (so - 1) (stab + 1) (stab + stn + 1) (sz + 1) (szoff 1) (co - 1) (cz + 1) (n - 1)]
      (m \ (: _ (cut m) (test (outcome (run ()) = 'refused))))),
 
  unlink img, unlink bad, unlink drv,
