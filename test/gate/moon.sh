@@ -514,6 +514,12 @@ moonrun -t thumb2 -Os -c -o "$ho/.oszs.o" "$ho/.osz.c" > /dev/null 2>&1 || fail 
 a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
 [ "$a" -lt "$b" ] || fail "thumb2 -Os no smaller: $a bytes against $b"
 
+# a frame array read by index keeps thumb2's register-list frame, its slots off sp: no lone
+# str.w lr,[sp,#-4]! opens it
+printf 'int h(int *p, int n);\nint k(int *a, int n) { int t[100]; for (int i = 0; i < 100; i++) t[i] = a[i] + n; int s = 0; for (int i = 0; i < n; i++) s += h(t, i) * a[i]; return s + t[n %% 100]; }\n' > "$ho/.t2x.c"
+moonrun -t thumb2 -c -o "$ho/.t2x.o" "$ho/.t2x.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 a frame array by index"
+[ "$(readelf -x .text "$ho/.t2x.o" | awk '/^  0x/ {print $2; exit}')" != "4df804ed" ] || fail "thumb2: a frame array by index keeps the old frame"
+
 # a helper spliced at many sites costs its sites: four plain ones stay calls, four in a loop splice
 cat > "$ho/.isite.c" <<'EOF'
 int t[9];
