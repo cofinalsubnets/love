@@ -2,8 +2,8 @@
 ; loads uu's kernel (certifying every defn against its type), re-reads the files as data,
 ; and translates each (defn/defq/defvc nm T t) in the MLTT fragment to Gallina. coqc re-checks
 ; them, and supplies the universe check uu (type-in-type) lacks. skips are counted.
-; a def exports iff it is translatable and every global it mentions exports: the
-; univalence tower drops (it bottoms out at an `axm`).
+; a def exports iff it is translatable and every global it mentions exports. the one `axm`,
+; univalence, is postulated as a universe-polymorphic Axiom, so the tower above it exports too.
 ; Run: out/love src/tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
 (borrow 'posix)
@@ -137,8 +137,8 @@
                    (two? t) (ment-l t acc)  acc)
    (ment-l l acc) (two? l ? (ment-l >l (ment <l acc)) acc)
 
-   ; candidates: a def, translatable, not skipped, uu-certified
-   (cand? e) (<e = 'def && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
+   ; candidates: a def or an axm, translatable, not skipped, uu-certified
+   (cand? e) ((<e = 'def || <e = 'axm) && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
    cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
@@ -152,8 +152,9 @@
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit in source order: foldr keeps ents' order, definitions before uses ---
-   (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=\n"
-                  "  " (u2c (e 3)) ".\n"])
+   (emit e) (? (<e = 'axm) (cat ["Axiom " (rocqn (e 1)) " : " (u2c (e 2)) ".\n"])
+               (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=\n"
+                     "  " (u2c (e 3)) ".\n"]))
    exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
 
    _ (dot (cat [
@@ -163,15 +164,17 @@
       "   translated to Gallina, which coqc re-checks -- the independent second witness,\n"
       "   and the universe filter uu's type-in-type kernel lacks. Only the MLTT primitives\n"
       "   are mapped (nat/bool/unit/empty + recursors, paths<->a Type-valued Id type + J-match,\n"
-      "   Sigma<->a primitive-projection total2 record with eta, coprod<->sum); only the\n"
-      "   univalence tower (an axm) is skipped, on its own via the dependency closure\n"
-      "   (counted at the foot). *)\n"
+      "   Sigma<->a primitive-projection total2 record with eta, coprod<->sum). uu's one axm,\n"
+      "   univalence, is an Axiom here, universe polymorphic; Print Assumptions names it\n"
+      "   wherever it is used. *)\n"
       "From Stdlib Require Import PeanoNat.\n"
       "Set Warnings \"-notation-overridden,-abstract-large-number\".\n"
       "(* universe polymorphism -- the faithful encoding of uu's structures (large Sigmas like\n"
       "   wfs/hProp reuse total2 AT the universe of UU). It does NOT re-enable type-in-type:\n"
       "   Type@{i} : Type@{i+1} stays strict, so the cheats below are still rightly rejected. *)\n"
       "Set Universe Polymorphism.\n"
+      "(* a universe left free stays free, so a weq at bool can meet univalence's Type *)\n"
+      "Unset Universe Minimization ToSet.\n"
       "Set Polymorphic Inductive Cumulativity.  (* Prop-valued paths flow into Type carriers *)\n"
       "(* uu's Sigma has definitional eta; the faithful Coq target is a primitive-projection\n"
       "   record (eta in the kernel, axiom-free), NOT stdlib sigT (no eta). pr1/pr2/tpair\n"
@@ -207,6 +210,7 @@
      "Theorem mul_comm_std : forall n m, Nat.mul n m = Nat.mul m n.\n"
      "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply paths_to_eq, uu_natmultcomm. Qed.\n"]))
    _ (dot (cat ["\n" "Print Assumptions uu_natplusr0.\n"
+"Print Assumptions uu_uu_boolbool.\n"
 "Print Assumptions uu_zcountins.\n"
 "Print Assumptions uu_zinsane.\n"
 "Print Assumptions uu_rtwinsrow.\n"
