@@ -978,6 +978,8 @@
      ["dlimb" "a dlimb holds 2L bits" "love.h's dlimb"]
      ["sizes" "na and nb are counts, nb <= na, r holds na + 1 (na for sub), and na + 1 fits an int" "mag_add, which orders them, and the callers"]
      ["order" "sub's b is at most its a" "big_addsub, by mag_cmp"]
+     ["norm" "mag_dnorm's s is limb_clz of v's top limb: s < L, and v 2^s is under B^n" "mag_divmod and lvm_bdiv, limb_clz on v's nonzero top limb"]
+     ["denorm" "mag_ddenorm's un[0..n] holds r 2^s, r under B^n" "mag_divmod and lvm_bdiv: the divsteps' u = q v + r with r under v"]
      ["offs" "mag_add_off's r is apart from s, and the sum fits it: off + sn <= rn, and r + s B^off < B^rn" "mag_mul_kara, lvm_kmul and mag_join_dec, whose r holds the whole product"]
      ["rows" "mag_mul_rows' r is apart from a and b and holds end + nb; past row 0 it holds a[0..i0) b, as the chunk before left it" "mag_mul, and lvm_bmul, whose r is a fresh cask its chunks fill in order"]
      ["window" "divstep's w[0..n] is under B times v, and v is not zero" "mag_divmod and lvm_bdiv: dnorm's top limb, then each step's e3"]
