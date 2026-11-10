@@ -202,6 +202,126 @@
        "j1j-4" '(pathscomp0 nat (un-val (inf-pow L) A i) (add (un-val (inf-pow L) A i) (mul c (uu-app i (inf-pow L)))) (add (mul ml (un-val (inf-pow L) A0 n)) ad) (pathscomp0 nat (un-val (inf-pow L) A i) (add (un-val (inf-pow L) A i) 0) (add (un-val (inf-pow L) A i) (mul c (uu-app i (inf-pow L)))) (pathsinv0 nat (add (un-val (inf-pow L) A i) 0) (un-val (inf-pow L) A i) (natplusr0 (un-val (inf-pow L) A i))) (maponpaths nat nat (lam z (add (un-val (inf-pow L) A i) (mul z (uu-app i (inf-pow L))))) 0 c (pathsinv0 nat c 0 g1))) (transportf nat (lam z (paths nat (add (un-val (inf-pow L) A i) (mul c (uu-app i (inf-pow L)))) (add (mul ml (un-val (inf-pow L) A0 z)) ad))) i n (isantisymmnatleh i n a1 w1) a3))
       }}
 
+   ; --- rows [p, n) of the schoolbook r = a b, row i adding a[i] b at limb i. only row 0 reads
+   ;     limbs no row wrote, so lvm_bmul can run a chunk per dispatch and yield -----------------
+   (limbsR g) [g ['pi 'j 'nat ['inf-lt '(R j) Bt]]]
+   (rows-at i) ['paths 'nat (vl 'R ['add i 'm]) ['mul (vl 'A i) (vl 'V 'm)]]
+   rows0
+    {'name "mag_mul_rows" 'short "mrows"
+     'attrs '("static" "love_noinline")
+     'ret 'void
+     'params '(("r" (ptr (named "love_limb"))) ("a" (ptr (const (named "love_limb")))) ("i0" int) ("end" int)
+               ("b" (ptr (const (named "love_limb")))) ("nb" int))
+     'fields ()
+     'limb 'L
+     'vals '(R)
+     'dvars '(ai s c)
+     'arrays '((R (v "r") rc) (A (v "a") an) (V (v "b") m))
+     'requires
+      (['(R (pi j nat nat)) '(A (pi j nat nat)) '(V (pi j nat nat)) '(p nat) '(n nat) '(m nat) '(rc nat) '(an nat)]
+       + limb-req
+       + ['(gpn (inf-le p n)) '(gan (inf-le n an)) '(grc (inf-le (add n m) rc)) '(gnw (inf-lt (add n m) (inf-pow w)))
+          (limbs 'A) (limbs 'V) (limbs 'R) ['g0 ['pi 'h '(inf-lt 0 p) (rows-at 'p)]]])
+     'decls
+      [['(named "uintptr_t") ['p (int-n "i0")] ['n (int-n "end")] ['m (int-n "nb")] ['i] ['k]]
+       ['(named "love_limb") ['ai]]
+       ['(named "dlimb") ['s] ['c]]]
+     'ensures [['e1 (rows-at 'n)] (limbsR 'e2)]
+     'body
+      [['j0 'join 'g1 '(z p)
+        [['z1 'for 'k 0 'm
+          [['k1 '(inf-le k m)] ['k2 ['paths 'nat (vl 'R 'k) 0]] (limbsR 'gR1)]
+          '((p0 poke R k 0))]]
+        ()
+        [['t1 (rows-at 'p)] (limbsR 'gR2)]]
+       ['w1 'for 'i 'p 'n
+        [['o1 '(inf-le i n)] ['o2 (rows-at 'i)] (limbsR 'gR3)]
+        ['(s1 set ai (lc (at A i))) '(s2 set c 0)
+         ['w2 'for 'k 0 'm
+          [['b1 '(inf-le k m)] ['b2 ['inf-lt 'c Bt]]
+           ['b3 ['paths 'nat ['add (vl 'R '(add i m)) ['mul 'c (pw '(add i k))]]
+                 ['add ['mul (vl 'A 'i) (vl 'V 'm)] ['mul ['mul 'ai (vl 'V 'k)] (pw 'i)]]]]
+           (limbsR 'gR4)]
+          '((s3 set s (d+ (d+ (d* (dl ai) (dl (at V k))) (dl (at R (+ i k)))) c))
+            (p1 poke R (+ i k) (lo s))
+            (s4 set c (hi s)))]
+         '(p2 poke R (+ i m) (lc c))]]]
+     'macros '()
+     'proofs {}}
+   rows-goals (foldl (t \ c \ pin t (c 0) (c 1)) {} (spec-vcs rows0))
+   rows-out
+    (: (tm s) <(sound s)
+       (hy m t) [(m == () ? () (tm m)) (tm (t 0)) (tm (t 1)) (tm (t 2))]
+       (lid name k hs) [name (rows-goals k 2) (rows-goals k 3) hs]
+       (use id) (show (ring-use id))
+       B "(inf-pow L)" h "(inf-powpos L)"
+       (Vl A i) "(un-val \(B) \(A) \(i))"
+       (Pw i) "(uu-app \(i) \(B))"
+       Xm (Vl "R" "(add i m)") K "(mul \(Vl "A" "i") \(Vl "V" "m"))" Pi (Pw "i") P (Pw "(add i k)")
+       ; k < m, i < n: what an index owes
+       IK "(inf-lttrans (add i k) (add i m) (add n m) (inf-ltaddl i k m w2) (inf-addr i n m (inf-ltle i n w1)))"
+       nw "(inf-ltle (add n m) (inf-pow w) gnw)"
+       (sk g) "(inf-lelt (succ k) (add n m) (inf-pow w) (inf-letrans (succ k) m (add n m) (inf-ltsu k m \(g)) (inf-leaddl m n)) gnw)"
+       IM "(inf-ltaddr i n m w1)"
+       S "(add (add (mul (A i) (V k)) (R (add i k))) c)" lo "(inf-mod \(B) \(S))" hi "(un-div \(B) \(S))"
+       F3 "(un-mfit3 \(B) \(h) (A i) (V k) (R (add i k)) c (gA i) (gV k) (gR4 (add i k)) b2)"
+       DV "(un-divlt \(B) \(h) \(S) \(B) \(F3))"
+       (dfit x p) "(un-dfit L gL \(x) (inf-lttrans \(x) \(B) (add \(B) \(B)) \(p) (inf-leaddr \(B) \(B))))"
+       ; the inner step: the low limb at i + k, the high one carried a limb up
+       id1 (lid "un-rows-w2b-4" "w2b-4"
+            [(hy () ["(add \(Vl "(inf-upd R (add i k) \(lo))" "(add i m)") (mul (R (add i k)) \(P)))"
+                     "(add \(Xm) (mul \(lo) \(P)))"
+                     "(un-valup \(B) R (add i k) \(lo) (add i m) (inf-ltaddl i k m w2))"])
+             (hy P ["(add (mul \(B) \(hi)) \(lo))" S "(un-dm0 \(B) \(h) \(S))"])
+             (hy () ["(add \(Xm) (mul c \(P)))" "(add \(K) (mul (mul (A i) \(Vl "V" "k")) \(Pi)))" "b3"])
+             (hy hi [(Pw "(add i (succ k))") "(mul \(B) \(P))"
+                     "(maponpaths nat nat (lam z (uu-app z \(B))) (add i (succ k)) (succ (add i k)) (natplusnsm i k))"])
+             (hy "(mul (A i) \(Pi))" [(Vl "V" "(succ k)") "(add \(Vl "V" "k") (mul (V k) \(Pw "k")))" "(idpath \(Vl "V" "(succ k)"))"])
+             (hy "(mul (A i) (V k))" [P "(mul \(Pi) \(Pw "k"))" "(un-appadd \(B) i k)"])])
+       ; a row's end: its carry is the limb at i + m
+       Pm (Pw "(add i m)")
+       b3m "(transportf nat (lam z (paths nat (add \(Xm) (mul c (uu-app (add i z) \(B)))) (add \(K) (mul (mul (A i) \(Vl "V" "z")) \(Pi))))) k m (isantisymmnatleh k m b1 w2) b3)"
+       id2 (lid "un-rows-w1b-3" "w1b-3"
+            [(hy () [(Vl "(inf-upd R (add i m) c)" "(add (succ i) m)") "(add \(Xm) (mul c \(Pm)))" "(un-valst \(B) R (add i m) c)"])
+             (hy () ["(add \(Xm) (mul c \(Pm)))" "(add \(K) (mul (mul (A i) \(Vl "V" "m")) \(Pi)))" b3m])
+             (hy (Vl "V" "m") [(Vl "A" "(succ i)") "(add \(Vl "A" "i") (mul (A i) \(Pi)))" "(idpath \(Vl "A" "(succ i)"))"])])
+       (ra z) "(paths nat \(Vl "R" "(add \(z) m)") (mul \(Vl "A" z) \(Vl "V" "m")))"
+       Km (Vl "R" "k")
+       w2e3 (: X "(add \(Xm) (mul 0 \(Pw "(add i 0)")))" R0 "(add \(K) (mul (mul (A i) \(Vl "V" "0")) \(Pi)))"
+             "(pathscomp0 nat \(X) \(Xm) \(R0) (natplusr0 \(Xm)) (pathscomp0 nat \(Xm) \(K) \(R0) o2 (pathsinv0 nat \(R0) \(K) (pathscomp0 nat \(R0) (add \(K) 0) \(K) (maponpaths nat nat (lam z (add \(K) (mul z \(Pi)))) (mul (A i) 0) 0 (natmultn0 (A i))) (natplusr0 \(K))))))")
+       rs
+        [["z1e-2" "(idpath 0)"]
+         ["p0-1" "(inf-lttrans k m rc z1 (inf-letrans m (add n m) rc (inf-leaddl m n) grc))"]
+         ["z1b-1" (sk "z1")]
+         ["z1b-3" "(pathscomp0 nat \(Vl "(inf-upd R k 0)" "(succ k)") (add \(Km) (mul 0 \(Pw "k"))) 0 (un-valst \(B) R k 0) (maponpaths nat nat (lam z (add z 0)) \(Km) 0 k2))"]
+         ["z1b-4" "(un-updlt \(B) R k 0 gR1 \(h))"]
+         ["j0j-1" "(transportf nat (lam z \(ra "z")) 0 p (pathsinv0 nat p 0 g1) (transportf nat (lam z (paths nat \(Vl "R" "z") 0)) k m (isantisymmnatleh k m k1 z1) k2))"]
+         ["j0j-3" "(g0 g1)"]
+         ["s1-2" "(gA i)"]
+         ["s1-3" (dfit "(A i)" "(gA i)")]
+         ["s2-1" "(inf-powpos (add L L))"]
+         ["w2e-2" h]
+         ["w2e-3" w2e3]
+         ["s3-2" "(un-bbfit L (mul (A i) (V k)) (inf-lelt (mul (A i) (V k)) (add (mul (A i) (V k)) 0) (mul \(B) \(B)) (inf-leaddr (mul (A i) (V k)) 0) (un-mfit \(B) (A i) (V k) 0 (gA i) (gV k) \(h))))"]
+         ["s3-3" "(inf-lttrans (add i k) (add n m) (inf-pow w) \(IK) \(nw))"]
+         ["s3-4" "(inf-lttrans (add i k) (add n m) rc \(IK) grc)"]
+         ["s3-5" "(un-bbfit L (add (mul (A i) (V k)) (R (add i k))) (un-mfit \(B) (A i) (V k) (R (add i k)) (gA i) (gV k) (gR4 (add i k))))"]
+         ["s3-6" "(un-bbfit L \(S) \(F3))"]
+         ["p1-1" "(inf-lttrans (add i k) (add n m) (inf-pow w) \(IK) \(nw))"]
+         ["p1-2" "(inf-lttrans (add i k) (add n m) rc \(IK) grc)"]
+         ["s4-1" (dfit hi DV)]
+         ["w2b-1" (sk "w2")]
+         ["w2b-3" DV]
+         ["w2b-4" (use id1)]
+         ["w2b-5" "(un-updlt \(B) R (add i k) \(lo) gR4 (un-modlt0 \(B) \(h) \(S)))"]
+         ["p2-1" "(inf-lttrans (add i m) (add n m) (inf-pow w) \(IM) \(nw))"]
+         ["p2-2" "(inf-lttrans (add i m) (add n m) rc \(IM) grc)"]
+         ["w1b-3" (use id2)]
+         ["w1b-4" "(un-updlt \(B) R (add i m) c gR4 b2)"]
+         ["end-1" "(transportf nat (lam z \(ra "z")) i n (isantisymmnatleh i n o1 w1) o2)"]]
+     [(foldl (t \ r \ pin t (r 0) (tm (r 1))) {} rs) [id1 id2]])
+   rows (pin rows0 'proofs (rows-out 0))
+
    ; --- a >= b as values, na >= nb: 1 or 0 -------------------------------------------------------
    ge
     {'name "mag_ge" 'short "mge"
@@ -552,7 +672,7 @@
    divstep (pin divstep0 'proofs (ds-out 0))
    ds-ids (ds-out 1)
 
-   mag-specs [add sub mas ge divstep]
+   mag-specs [add sub mas rows ge divstep]
    mag-h (cats ["// mag_gen.h -- laid by src/love/mag.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) mag-specs))])
    mag-ledger
@@ -560,6 +680,7 @@
      ["dlimb" "a dlimb holds 2L bits" "love.h's dlimb"]
      ["sizes" "na and nb are counts, nb <= na, r holds na + 1 (na for sub), and na + 1 fits an int" "mag_add, which orders them, and the callers"]
      ["order" "sub's b is at most its a" "big_addsub, by mag_cmp"]
+     ["rows" "mag_mul_rows' r is apart from a and b and holds end + nb; past row 0 it holds a[0..i0) b, as the chunk before left it" "mag_mul, and lvm_bmul, whose r is a fresh cask its chunks fill in order"]
      ["window" "divstep's w[0..n] is under B times v, and v is not zero" "mag_divmod and lvm_bdiv: dnorm's top limb, then each step's e3"]
      ["qhat" "mag_qhat is the quotient limb or one over, knuth's theorem b (taocp 4.3.1), the one fact left unproved; divstep is right for any limb q, so it bounds only the fix-ups' cost" "mag_qhat in num.c"]]
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
@@ -567,6 +688,6 @@
                  "; the ledger: what the theorems leave open, each with who answers for it\n"
                  (ledger-text mag-ledger)
                  "(test\n"
-                 (cats (map ring-lemma ds-ids))
+                 (cats (map ring-lemma (rows-out 1 + ds-ids)))
                  (cats (map (s \ cats (vc-text s)) mag-specs)) " )\n"])
    mag-ok (0 < #mag-vc && all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) mag-specs))

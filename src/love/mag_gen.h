@@ -58,6 +58,25 @@ static love_noinline int mag_mul_add_small(love_limb *a, int na, love_limb ml, l
  }
  return (int) i;
 }
+static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0, int end, love_limb const *b, int nb) {
+ uintptr_t p = (uintptr_t) i0, n = (uintptr_t) end, m = (uintptr_t) nb, i, k;
+ love_limb ai;
+ dlimb s, c;
+ if (!p) {
+  for (k = 0; k < m; k++)
+   r[k] = 0;
+ }
+ for (i = p; i < n; i++) {
+  ai = (love_limb) a[i];
+  c = 0;
+  for (k = 0; k < m; k++) {
+   s = (dlimb) ai * (dlimb) b[k] + (dlimb) r[i + k] + c;
+   r[i + k] = (love_limb) s;
+   c = s >> limb_bits;
+  }
+  r[i + m] = (love_limb) c;
+ }
+}
 static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
  uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
  i = n;
