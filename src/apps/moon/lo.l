@@ -48,7 +48,11 @@
    ; a value as a pair -> [fs lo hi]: a word widens by its source's signedness
    (lop g v)
     (v @ ([vt [l h] fs] && pair? g vt) [fs l h]
-         [vt r fs] (lomk g @ l (lomk g @ h [(fs + [['mov l r]] + (usg? vt || ptr? vt ? [['li h 0]] [['mov h l] ['sar h 31]])) l h])))
+         ; ..a literal's high half a literal too
+         [vt r fs] (: n (rev fs @ (['li x k] . _) (x = r && cint? k ? k) _ ())
+                      (lomk g @ l (lomk g @ h [(fs + [['mov l r]] + (? (usg? vt || ptr? vt || charm? n && 0 <= n) [['li h 0]]
+                                                                        (charm? n) [['li h -1]]
+                                                                        [['mov h l] ['sar h 31]])) l h]))))
    ; to or from a pair: the float file through kits, a word its low half
    (lotrp g [vt r fs] ty)
     (? (pair? g ty && pair? g vt) [ty r fs]
