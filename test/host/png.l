@@ -79,7 +79,8 @@ for n in (2, 4, 16, 256):
                           && got 2 = >want)
                          1 (puts ("png: " + n + " differs from magick\n"), 0)))
            (test (filter (n \ !(one n)) names = ())))
-        (gate-partly "png: no python3 PIL or magick, images skipped"))
+        (gate-partly ("png: no " + (pil? ? "magick" (has "/usr/bin/magick" ? "python3 PIL" "python3 PIL and no magick"))
+                      + ", images skipped")))
 
    ; apng
    ; muxed by hand, 24x16: five palette frames under one PLTE and tRNS, each composed frame by
@@ -212,11 +213,12 @@ for n in (2, 4, 16, 256):
                   + chunk "IHDR" (wrbe w 4 + wrbe h 4 + bytes [8 6 0 0 0])
                   + chunk "IDAT" ("\x78\x01" + deflate z + zb 4) + chunk "IEND" "")
    rdbe (cite 'bytes 'rdbe)
-   ; an apng of one 2x2 frame at x, its data the default image's
-   (mkapng x) (: p (mkpng 2 2 (zb 18)) ih (8 + 8 + 13 + 4)
-                 (snip p 0 ih + chunk "acTL" (wrbe 1 4 + wrbe 0 4)
-                  + chunk "fcTL" (wrbe 0 4 + wrbe 2 4 + wrbe 2 4 + wrbe x 4 + wrbe 0 4 + wrbe 1 2 + wrbe 10 2 + bytes [0 0])
-                  + snip p ih #p))
+   ; an apng of one 2x2 frame at x, its data the default image's, on a w by h canvas
+   (mkapng x) (anim 2 2 (zb 18) x)
+   (anim w h z x) (: p (mkpng w h z) ih (8 + 8 + 13 + 4)
+                     (snip p 0 ih + chunk "acTL" (wrbe 1 4 + wrbe 0 4)
+                      + chunk "fcTL" (wrbe 0 4 + wrbe 2 4 + wrbe 2 4 + wrbe x 4 + wrbe 0 4 + wrbe 1 2 + wrbe 10 2 + bytes [0 0])
+                      + snip p ih #p))
    ; the chunks with each crc laid again, so a flipped byte reaches what reads it
    (recrc s) (: (go p acc) (? (#s < p + 12) (cats (rev (snip s p #s . acc)))
                               (: e (p + 12 + rdbe s p 4)
@@ -227,6 +229,7 @@ for n in (2, 4, 16, 256):
          (png-frames (mkapng 0) 10 = [2 2 [[(zb 16) 100]]])
          (png-frames (mkapng 1) 10 = "a frame past the canvas")
          (png-frames "GIF89a" 10 = "not a png")
+         (png-frames (anim 16383 16383 (zb 64) 0) 10 = "short image data")   ; before its 1 GiB canvas
          (atom? (filter (i \ !(png-frames (recrc (flip hand i)) 10 @ d (string? d || two? d))) (jot #hand)))
          (png-decode (mkpng 100000 100000 (zb 64)) = "too big")
          (png-decode (mkpng 16385 16384 (zb 64)) = "too big")

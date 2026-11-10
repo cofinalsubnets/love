@@ -67,6 +67,9 @@
             ['label 'arm_dsb_isb] ['dsb 'sy] ['isb] ['ret]
             ['label 'arm_dsb] ['dsb 'sy] ['ret]
             ['label 'arm_wfi] ['wfi] ['ret]
+            ['label 'arm_irq_on] ['raw [0x62 0xB6]] ['ret]                ; cpsie i
+            ['label 'arm_halt251] ['raw [0xFB 0xBE]] ['ret]               ; bkpt #251
+            ['label 'arm_ipsr] ['raw [0xEF 0xF3 0x05 0x80]] ['ret]     ; mrs r0, ipsr
             ['label 'arm_bkpt] ['brk 0] ['ret]]
 
       ;; ALLOC (2) for the data blocks, ALLOC|EXEC (6) for code; PROGBITS throughout
@@ -79,5 +82,5 @@
          [".startup"     1 6 4 startup]
          [".text"        1 6 4 text]]
         '("cstartup" "isr_hardfault" "default_handler"
-          "arm_dsb_isb" "arm_dsb" "arm_wfi" "arm_bkpt")
+          "arm_dsb_isb" "arm_dsb" "arm_wfi" "arm_irq_on" "arm_halt251" "arm_ipsr" "arm_bkpt")
         '("image_vector_table" "boot_data" "vectors") ()))))

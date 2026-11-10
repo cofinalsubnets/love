@@ -65,6 +65,15 @@ grep -qF 'int v = ((7)*2);' "$d/e.i" || fail "-E did not expand the macros: $(gr
 grep -q "^# 1 \"$d/inc/side.h\"" "$d/e.i" || fail "-E left no marker for the included header"
 printf '#include <no_such_header.h>\n' > "$d/e2.c"
 moonc -E "$d/e2.c" > /dev/null 2>&1 && fail "-E did not refuse a missing header"
+# -x assembler-with-cpp -E keeps a line's `#` that opens no directive, in a header as in the file (a dts's #address-cells)
+printf '\t#address-cells = <SIDE>;\n' > "$d/inc/cells.dtsi"
+printf '#include "side.h"\n/ {\n#include "cells.dtsi"\n\t#size-cells = <0>;\n};\n' > "$d/e.dts"
+moonc -E -undef -x assembler-with-cpp -I "$d/inc" "$d/e.dts" > "$d/e.pp" || fail "-x assembler-with-cpp -E did not preprocess"
+grep -q '#address-cells = <7>;' "$d/e.pp" || fail "-x assembler-with-cpp -E dropped a header's #address-cells: $(cat "$d/e.pp")"
+grep -q '#size-cells = <0>;' "$d/e.pp" || fail "-x assembler-with-cpp -E dropped the file's #size-cells"
+# a pp-number runs on past a float suffix: clock@7ef00000 stays one
+printf 'clock@7ef00000 { };\n' > "$d/n.dts"
+moonc -E -undef -x assembler-with-cpp "$d/n.dts" | grep -q 'clock@7ef00000 {' || fail "-E split the pp-number 7ef00000: $(moonc -E -undef -x assembler-with-cpp "$d/n.dts" | tail -1)"
 
 # 6: -MD, -MMD and -Wp,-MMD,FILE lay a dependency rule; -MMD leaves our headers out,
 # -MT names the target, -MP adds an empty rule per header

@@ -240,7 +240,7 @@ Four of them carry an edge worth knowing:
 C11 6.10.7) and gcc `-E`'s `# 42 "f.c"` line marker all pass and do nothing — except
 **`#pragma pack`** — `()`, `(N)`, `(push[, N])`, `(pop)`, N one of 1 2 4 8 16 — which caps each
 member's natural alignment at N for the structs laid while it stands (acpi's tables); another
-operand refuses, and so does a bit-field it would let straddle a unit, and `_Pragma("pack ..")`
+operand refuses, a bit-field's bits run on from the cursor at every N as a packed one's do, and `_Pragma("pack ..")`
 stays in the stream and refuses at parse — **`#pragma once`**, which reads a header once per
 TU by its resolved path, and **`#pragma push_macro("X")` / `pop_macro("X")`**, which save and restore the definition
 (gcc's semantics: a per-name stack, a saved-undefined pops back to undefined, a pop with
@@ -320,41 +320,39 @@ qualifier, matched the first structurally equal row, and answered whichever one 
 first — c-testsuite 00219 (`const int * const` taking the `int *` row where C takes neither and
 falls to `default`) is off the roster with this.
 
-**the type language still carries no qualifier**, and that is the point: a node for one would
-reach all 56 of gen's ptr dispatch sites. The one consumer that must tell `const char *` from
-`char *` keeps its **own marked copy** — `('cq mask t)` over the leaf, mask 1=const 2=volatile —
-parked in `ps 'qtys` beside `'locals` and shadowed with it, staged by each declarator parse
-(`ps 'qstage`) and consumed by the bind that follows. Nothing outside `_Generic` reads a marked
-type, and a stage is taken only when it strips back to the type actually bound, so a mark cannot
-outlive the declaration that described it. The sources of a mark are the specifier run
-(`qrun`), a typedef's own (`ps 'qtdef`), a struct member's (`ps 'qmem`, which `playout` has no
-slot for), and — for a cast, whose `('cast ty ..)` node keeps the bare type gen reads — a
-re-read of the type-name off the tokens (`qctl`).
+**Qualifiers ride the type** (moon-uu's rung 1b): a mask, 1 const, 2 volatile, 4 restrict, sits on
+whatever holds a type rather than wrapping it, so no reader of a type's head sees a change:
 
-It costs **+0.09% of the instructions** compiling src/love/love.c (perf, 130.348G vs 130.231G,
-stable to five figures across runs), and the `.o` is byte-identical. Two things buy that back and both are load-bearing: nothing is staged for
-an unqualified declaration (the common path never touches a table), and `qrun` walks the
-specifier run rather than taking a token span — a span by `tally` is O(the rest of the stream),
-which would have been quadratic over a TU.
+- a pointer is `('ptr t a q)`: `a` the alignment its pointee's address carries (lo's slot), `q` the
+  pointee's mask, each laid only when it is not 0, so an unqualified pointer stays `('ptr t)`;
+- an object's own mask is its decl or param entry's seventh slot, and a member's the fourth
+  slot of its laid record; `ps 'lqs` and `ps 'gqs` hold the locals' and globals' for parse's `&`;
+- an array carries none: an element's mask is its access's, and decay lays it on the pointer.
 
-Held to gcc by test/cc/143-genericqual.c: 31 checks over locals, params, block scope, globals,
-typedefs, members, array decay, `&` and `*`, and const told apart from volatile.
+While a declarator is read, the specifier run's mask wraps its type as `('qual m t)`. Each star
+takes the wrapper into its pointee slot, an array hoists it to the object, and a function return
+sheds it. Only a typedef keeps a wrapped type, in `ps 'types`, so every use takes its mask
+(`typedef char *cp; const cp x` is a const pointer, `const cp *y` a pointer to one). `accq` answers
+an lvalue's mask: its object's, the pointer's it is reached through, or a member's over its base's.
 
-Two deliberate readings:
+`_Generic` reads the controlling expression's `ptype`, decayed with its access's mask. A pointee's
+mask is part of the type, so `const char *` and `char *` are two rows, while lvalue conversion
+needs nothing done: no `ptype` answers a top-level mask. A comparison of two types for
+compatibility goes through `tbare`, which drops every mask. `?:` meets two pointers with both
+pointees' masks.
 
-- a type-name with a **top-level** qualifier (`int * const:`) is parsed, kept, and matched
-  against nothing — no lvalue-converted controlling type can be compatible with it. gcc accepts
-  the row and never selects it; clang warns. We agree on the answer and say nothing.
-- only the **specifier run's** qualifier is seen. A mid-declarator one — `char * const *p`,
-  where the const sits on the inner pointer — reads unqualified, so it matches *more* than C
-  does, never less. `typedef char *cp; const cp x;` is read right (a const *pointer*, so the
-  mark does not reach the leaf); `typedef char *cp; const cp *y;` is the shape that would not be.
+Held to gcc by test/cc/143-genericqual.c (31 checks over locals, params, block scope, globals,
+typedefs, members, array decay, `&` and `*`, const told apart from volatile) and
+test/cc/390-qualon.c. The latter covers a qualifier past a star, typeof's mask, a const struct's
+members, a pointer to a const array, `?:`, and a volatile local's store before longjmp.
 
-one path binds a name without staging for it: a **K&R** parameter list, whose types arrive as
-separate declarations. A prototype's staged mark for the same name would still be sitting there,
-and it is taken if it strips back to the same type — so `int f(const char *buf);` followed by a
-K&R `f(buf) char *buf;` would read `buf` as qualified. The guard makes it need a shape match as
-well as a name match; nothing in the tree or the corpus reaches it.
+A type-name with a **top-level** qualifier (`int * const:`) is parsed, kept, and matched against
+nothing: no lvalue-converted controlling type can be compatible with it. gcc accepts the row and
+never selects it; clang warns. We agree on the answer and say nothing.
+
+What reads the mask past the parser: lo keeps a **volatile** local or param in its frame slot,
+so every access is a load or a store, and srs leaves a volatile struct, member or copy source
+whole. `_Atomic` is not parsed (above), so its bit is unused.
 
 ### the `_Static_assert` quirks
 
@@ -526,6 +524,11 @@ global and dropped everywhere else — after a struct body too, so the kernel's 
   up into it, every later use `(*p)` until a declaration shadows the name, an initializer built
   as a compound literal and assigned in — an array's as a one-member struct of its bytes.
 - **a by-value struct aligned past 8** as an argument still refuses by name (`asalign`'s guard).
+- **`_Alignof` and `__alignof__`** answer a type name's ask, its typedef's or its run's, and a named
+  object's or a member's (test/cc/358-alignof.c, held to gcc). types carry no alignment, so an object
+  reached through a pointer or an index answers its type's: `__alignof__(*p)` for `ai *p` and
+  `__alignof__(a[0])` for an array of an aligned typedef are low, and a global `ai *gp` answers high.
+  layout is right in all of them.
 
 ### what the %f hunt actually found — and the trap in it
 
@@ -647,8 +650,8 @@ never silent**.
 
 | lane | x64 | a64 | rv64 | thumb2 | thumb2sp | thumb1 | arm |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `__int128` | ✓ | ✓ | — | rt.c | rt.c | — | rt.c |
-| `_Complex` arithmetic | ✓ | ✓ | ✓ | ✓ | — | — | ✓ |
+| `__int128` | ✓ | ✓ | ✓ | rt.c | rt.c | — | rt.c |
+| `_Complex` arithmetic | ✓ | ✓ | ✓ | ✓ | rt.c | rt.c | ✓ |
 | variable-length array | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | by-value composite arg, ≤16B, registers free | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | by-value composite arg, MEMORY class | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -715,7 +718,7 @@ caller and callee above). Three rules; do not fold them.
 
 **A by-value composite NAMED in a variadic parameter list rides x64, a64, rv64 and thumb2's family**
 (on t32 every named param is read in place off the pushed r0-r3 and the caller's block, the base
-pcs's rule); wasm and v6-M refuse it whole.
+pcs's rule), and wasm and v6-M too.
 that is a different shape from *passing* a composite at a variadic call site, which rv64
 also takes — probe the one you mean.
 
@@ -1471,6 +1474,21 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   refusal is llvm-mc's; golden gas.a64.mla, law test/cc/277-asm-mla.c. One departure, kept: a
   written-back `ldp` of one register twice (`ldp fp, fp, [sp], #16`) refuses: the Arm ARM calls it
   unpredictable, and llvm-mc, which lays it, refuses the offset form and `ldpsw`.
+- **`__int128` on rv64 and wasm**, in words and an unsigned compare's carry where x64 and a64 lay
+  the kit; riscv's pair splits over the last register, checked against gcc's objects. On every target
+  with the wide value a divide takes any divisor, signed too (`__udivti3` and kin, moonlibc's ti.c;
+  rt.c's `__moon_ud128` and kin on t32), and on 64-bit targets it converts to and from float and
+  double (`__floattidf`, `__fixdfti` and kin). t32 refuses those conversions by name, i386 and v6-M
+  the type, as gcc does. Laws 362-w128ops.c, 364-w128float.c.
+- **`(float)` of an unsigned 64-bit value with its top bit set** rounded twice, through double:
+  it halves with the lost bit stuck on instead. Law 363-u64float.c.
+- **setjmp and longjmp on wasm**: longjmp throws a tag with the buffer, and a function that calls
+  `__sigsetjmp` runs its dispatch loop in a `try_table`, landing a buffer of its own back at the
+  site (wasmfn.l). Wants an engine with wasm exceptions (try_table). Law 345-jmpsave.c.
+- **an asm label on wasm** renames through the object. Law 294-asmlabel.c.
+- **`-m16` atomics**, and a lane that runs `-m16` in real mode: test_cci386m16, a 64K rom under
+  `qemu-system-i386 -bios` with no BIOS, held to `gcc -m32`. test/gate/m16rt.sh.
+- **a wide local's `x++`** answered the new value, in registers. Law 362-w128ops.c.
 - **packed bit-fields, on every target**: the bits run on from the last member, crossing what
   would be a unit's edge, and the struct aligns 1, as gcc lays them; mooncc had laid them as
   unpacked (`struct { char c; unsigned x : 30; }` packed was 8 bytes aligned 4, gcc's 5 aligned
@@ -1523,7 +1541,7 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
   forms keep the C name. `asm`, `__asm__`, `__asm`, and adjacent strings. The plain `asm`
   spelling had refused (`parse error near asm`, which stopped process.c); the other two had
   dropped the label in silence, so the symbol kept its C name and a caller naming the label
-  missed it. A label that renames refuses on wasm, which lays no symbol table. Two C names on
+  missed it. Two C names on
   one label in one file lay the label defined and undefined, which ld and lld bind as one.
   Law 294-asmlabel.c.
 - **a test pushed down through a `!` keeps a missing else missing** (arm64 `do_page_fault`'s
@@ -1535,8 +1553,7 @@ below, 251 of those 332 re-run so far: **145 compile**, and the rest refuse by n
 
 Still open on this side (g-21's probes):
 
-- a packed bit-field whose bytes outrun a register (five on a 32-bit target, nine anywhere)
-  refuses by name; gcc carries both. On thumb, a struct member of a packed struct is not copied
+- on thumb, a struct member of a packed struct is not copied
   at all (`struct I v = p->in`, `f(p->in)`), refused with no cause named.
 - where the re-run stops now, on this side: the four units a register variable named `r0`
   stopped compile, and so do all 24 that stopped on the `.S` extable macro's `\insn`.
