@@ -35,9 +35,7 @@ static int
  big_nlimbs(word x),
  cmp_rank(struct g *g, word x),
  load_int_mag(word x, love_limb scratch[wlimbs], love_limb const **out, bool *neg),
- mag_copy(love_limb *dst, love_limb const *src, int n),
- mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int m, love_limb const *v, int n);
-static void mag_ddenorm(love_limb *r, love_limb const *un, int n, int s);
+ mag_copy(love_limb *dst, love_limb const *src, int n);
 static intptr_t
  bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb),
  galaxy_tie(struct tray *va, struct tray *vb),
@@ -111,8 +109,9 @@ static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, i
  return qhat >= B ? (love_limb) (B - 1) : (love_limb) qhat; }
 
 // the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_mul_rows
-// (rows [i0, end) of the schoolbook r = a b), mag_add_off (r += s B^off), mag_ge, and
-// mag_divstep, one quotient limb of knuth's D over un's window at j
+// (rows [i0, end) of the schoolbook r = a b), mag_add_off (r += s B^off), mag_dnorm and
+// mag_ddenorm (knuth D's shift by s, as products), mag_ge, and mag_divstep, one quotient limb
+// of knuth's D over un's window at j
 #include "mag_gen.h"
 
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
@@ -123,21 +122,8 @@ static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_
 static love_inline void mag_mul(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  mag_mul_rows(r, a, 0, na, b, nb); }
 
-// knuth's algorithm D (Hacker's Delight divmnu) in three pieces, shared with lvm_bdiv.
-// u (m limbs) and v (n >= 2) shifted so v's top bit is set, into un (m+1) and vn -> the shift
-static int mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int m, love_limb const *v, int n) {
- int s = limb_clz(v[n-1]);
- for (int i = n - 1; i > 0; i--) vn[i] = (v[i] << s) | (s ? (dlimb) v[i-1] >> (limb_bits - s) : 0);
- vn[0] = v[0] << s;
- un[m] = s ? (dlimb) u[m-1] >> (limb_bits - s) : 0;
- for (int i = m - 1; i > 0; i--) un[i] = (u[i] << s) | (s ? (dlimb) u[i-1] >> (limb_bits - s) : 0);
- un[0] = u[0] << s;
- return s; }
-
-// the remainder: un's low n limbs, shifted back
-static void mag_ddenorm(love_limb *r, love_limb const *un, int n, int s) {
- for (int i = 0; i < n; i++) r[i] = s ? (un[i] >> s) | ((dlimb) un[i+1] << (limb_bits - s)) : un[i]; }
-
+// knuth's algorithm D (Hacker's Delight divmnu): mag_dnorm, a mag_divstep per quotient limb,
+// then mag_ddenorm, shared with lvm_bdiv. s is limb_clz of v's top limb, so v's top bit is set
 // u (m limbs) / v (n limbs, m >= n) -> q (m-n+1 limbs), r (n limbs); un/vn are scratch
 static love_noinline void mag_divmod(love_limb *q, love_limb *r,
   love_limb const *u, int m, love_limb const *v, int n, love_limb *un, love_limb *vn) {
@@ -145,7 +131,8 @@ static love_noinline void mag_divmod(love_limb *q, love_limb *r,
   love_limb rem = 0;
   for (int j = m - 1; j >= 0; j--) { love_limb rr; q[j] = div2by1(rem, u[j], v[0], &rr); rem = rr; }
   r[0] = rem; return; }
- int s = mag_dnorm(un, vn, u, m, v, n);
+ int s = limb_clz(v[n-1]);
+ mag_dnorm(un, vn, u, m, v, n, s);
  for (int j = m - n; j >= 0; j--) q[j] = mag_divstep(un + j, vn, n);
  mag_ddenorm(r, un, n, s); }
 
@@ -621,7 +608,8 @@ static struct g *bdiv_setup(struct g *g, int which) {
  g->hp += sreq;
  love_limb *ws = (love_limb*) txt(ws_s),
          *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
- int s = mag_dnorm(un, vn, la, m, lb, n);
+ int s = limb_clz(lb[n-1]);
+ mag_dnorm(un, vn, la, m, lb, n, s);
  for (int i = 0; i < m - n + 1; i++) q[i] = 0;
  ws[0] = (love_limb) m, ws[1] = (love_limb) n, ws[2] = (love_limb) s, ws[3] = (love_limb) which;
  ws[4] = (love_limb) nega, ws[5] = (love_limb) negb;

@@ -114,6 +114,10 @@
      'lo [(\ sp v T [x] ['inf-mod (lbase sp) (T x)]) owes-parts (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      'hi [(\ sp v T [x] ['un-div (lbase sp) (T x)]) owes-parts (\ sp C [x] ['bin 'shr (C x) ['var "limb_bits"]]) 'fit]
      'lB [(\ sp v T _ (lbase sp)) owes-none (\ sp C _ ['var "limb_base"]) 'fit]
+     'lbits [(\ sp v T _ (peep sp 'limb 'L)) owes-none (\ sp C _ ['var "limb_bits"]) 'fit]
+     ; 2^k as a limb, k under the limb's width
+     'lpow [(\ sp v T [k] ['inf-pow (T k)]) (\ sp v T O e [k] (O k + [['inf-lt (T k) (peep sp 'limb 'L)]]))
+            (\ sp C [k] ['bin 'shl ['cast '(named "love_limb") ['num 1]] (C k)]) 'fit]
      'lc [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) (lbase sp)]]))
           (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      ; an opaque C value passed through, the context a call is handed: its term is ()

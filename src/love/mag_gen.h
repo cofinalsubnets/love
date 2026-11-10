@@ -96,6 +96,43 @@ static void mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int of
   i++;
  }
 }
+static void mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int nu, love_limb const *v, int nv, int sh) {
+ uintptr_t m = (uintptr_t) nu, n = (uintptr_t) nv, s = (uintptr_t) sh, i;
+ love_limb d;
+ dlimb t, c;
+ d = (love_limb) 1 << s;
+ c = 0;
+ for (i = 0; i < n; i++) {
+  t = (dlimb) v[i] * (dlimb) d + c;
+  vn[i] = (love_limb) t;
+  c = t >> limb_bits;
+ }
+ c = 0;
+ for (i = 0; i < m; i++) {
+  t = (dlimb) u[i] * (dlimb) d + c;
+  un[i] = (love_limb) t;
+  c = t >> limb_bits;
+ }
+ un[m] = (love_limb) c;
+}
+static void mag_ddenorm(love_limb *r, love_limb const *un, int nn, int sh) {
+ uintptr_t n = (uintptr_t) nn, s = (uintptr_t) sh, i;
+ love_limb d;
+ dlimb t, c;
+ if (!s) {
+  for (i = 0; i < n; i++)
+   r[i] = un[i];
+ } else {
+  d = (love_limb) 1 << (limb_bits - s);
+  t = (dlimb) un[0] * (dlimb) d;
+  c = t >> limb_bits;
+  for (i = 0; i < n; i++) {
+   t = (dlimb) un[i + 1] * (dlimb) d + c;
+   r[i] = (love_limb) t;
+   c = t >> limb_bits;
+  }
+ }
+}
 static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
  uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
  i = n;

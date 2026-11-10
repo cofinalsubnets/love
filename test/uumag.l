@@ -460,6 +460,22 @@
        (transportf nat (lam z (inf-le P z)) (add X (add (mul k P) P)) T e
          (inf-letrans P (add (mul k P) P) (add X (add (mul k P) P)) (inf-leaddl P (mul k P)) (inf-leaddl (add (mul k P) P) X)))))
      c) e)))
+ ; a + X B = Y B with a under B: X is Y, either way past it B too far
+ (defq un-bdivu (pi B nat a nat X nat Y nat e (paths nat (add a (mul X B)) (mul Y B)) g (inf-lt a B) (paths nat X Y))
+   (lam B a X Y e g (isantisymmnatleh X Y
+     (inf-case (natgtb X Y) (lam y (paths bool y false))
+       (lam f (inf-ltnle (paths bool true false) (mul Y B) (add (mul Y B) B)
+         (inf-ltaddpos (mul Y B) B (inf-lelt 0 a B (idpath false) g))
+         (inf-letrans (add (mul Y B) B) (mul X B) (mul Y B) (un-mulle2 (succ Y) X B (inf-ltsu Y X f))
+           (transportf nat (lam z (inf-le (mul X B) z)) (add a (mul X B)) (mul Y B) e (inf-leaddl (mul X B) a)))))
+       (lam f (idpath false)))
+     (inf-case (natgtb Y X) (lam y (paths bool y false))
+       (lam f (inf-ltnle (paths bool true false) (mul Y B) (add (mul X B) B)
+         (transportf nat (lam z (inf-lt z (add (mul X B) B))) (add a (mul X B)) (mul Y B) e
+           (transportf nat (lam z (inf-lt (add a (mul X B)) z)) (add B (mul X B)) (add (mul X B) B) (natpluscomm B (mul X B))
+             (inf-ltaddr a B (mul X B) g)))
+         (un-mulle2 (succ X) Y B (inf-ltsu X Y f))))
+       (lam f (idpath false))))))
 )
 
 (test
