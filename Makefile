@@ -66,6 +66,12 @@ out/lib/rune.h: src/apps/rune.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) src/tools/lcat.l $< > $@
+# the boards carry module 'fat alone: 'fatcmd borrows posix
+out/lib/fat.h: src/apps/fat.l src/tools/lcat.l $(love0)
+	@echo 'LOVE	'$@
+	@mkdir -p out/lib
+	@sed -n "1,/^) ; module 'fat/p" $< > out/lib/fatcore.l
+	@$(lcat_love) src/tools/lcat.l out/lib/fatcore.l > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
 # love0 reads this at runtime to find the corpus. $t is a glob, so it is written
