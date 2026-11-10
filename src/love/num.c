@@ -111,24 +111,14 @@ static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, i
   if (rhat >= B) break; }
  return qhat >= B ? (love_limb) (B - 1) : (love_limb) qhat; }
 
-// the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_ge, and
-// mag_divstep, one quotient limb of knuth's D over un's window at j
+// the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_mul_rows
+// (rows [i0, end) of the schoolbook r = a b), mag_ge, and mag_divstep, one quotient limb of
+// knuth's D over un's window at j
 #include "mag_gen.h"
 
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
 static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
  return na < nb ? mag_add_ge(r, b, nb, a, na) : mag_add_ge(r, a, na, b, nb); }
-
-// rows [i0, end) of the schoolbook r = a * b; only row 0 reads limbs no row wrote, so lvm_bmul
-// can run a chunk per dispatch and yield
-static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0, int end, love_limb const *b, int nb) {
- if (!i0) for (int j = 0; j < nb; j++) r[j] = 0;
- for (int i = i0; i < end; i++) {
-  dlimb carry = 0; love_limb ai = a[i];            // a limb, so ai*b[j] is 64x64->128, not __multi3
-  for (int j = 0; j < nb; j++) {
-   dlimb s = (dlimb) ai * b[j] + r[i+j] + carry;
-   r[i+j] = (love_limb) s; carry = s >> limb_bits; }
-  r[i+nb] = (love_limb) carry; } }
 
 // r distinct, capacity na+nb
 static love_inline void mag_mul(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
