@@ -2,19 +2,20 @@
 ; 4-way handshake itself (brcmfmac's idsup): the pmk from the passphrase, a scan for the ssid,
 ; a connect carrying the pmk, then dhcp's address and route. no eapol is read here.
 ;   love -l src/apps/wifi/netlink.l -l src/apps/wifi/dhcp.l src/apps/wifi/wifi.l IFACE SSID PASSPHRASE
-;   ..wifi.l IFACE CONF       the ssid and passphrase as CONF's first two lines
+;   ..wifi.l IFACE CONF       the ssid and passphrase as CONF's first two lines, a third the
+;                             country's two letters (US), whose rules the radio keeps
 ; run so it stays: the lease renewed at half its time, its dns in /run/resolv.conf, and a link
 ; gone or a renewal refused a failure, for helm to start it again
 ;   (wifi-pmk pass ssid)      -> the 32-byte pmk, pbkdf2-hmac-sha1 over 4096 rounds
-;   (wifi-up iface ssid pass) -> the lease as dhcp answers it, or a scare 'wifi why
+;   (wifi-up iface ssid pass cc) -> the lease as dhcp answers it, or a scare 'wifi why; cc "" for none
 ;   (wifi-hold iface lease)   -> never; a scare 'wifi why when the link or the lease goes
 (module (wifi wifi-pmk wifi-hmac1 wifi-ies wifi-rsn wifi-rsn-ie wifi-up wifi-hold wifi-conf)
 (borrow '(posix bytes hashes netlink dhcp))
 (:
    ; --- the numbers: nl80211's ---
-   CmdTriggerScan 33  CmdGetScan 32  CmdNewScan 34  CmdScanAborted 35  CmdConnect 46  CmdDisconnect 48
+   CmdTriggerScan 33  CmdGetScan 32  CmdNewScan 34  CmdScanAborted 35  CmdConnect 46  CmdDisconnect 48  CmdReqSetReg 27
    AIfindex 3  AMac 6  AIe 42  AScanSsids 45  ABss 47  AFreq 38  ASsid 52  AAuth 53  APrivacy 70
-   AStatus 72  APairwise 73  AGroup 74  AWpa 75  AAkm 76  APmk 254
+   AStatus 72  APairwise 73  AGroup 74  AWpa 75  AAkm 76  APmk 254  ARegAlpha2 33
    BBssid 1  BFreq 2  BIes 6  BSignal 7
    Ccmp 1027076  Tkip 1027074  Psk 1027074              ; 00-0f-ac:4, :2, and the akm's :2
 
@@ -69,7 +70,7 @@
    (fit? ssid x) (x 3 = ssid && x 4 != () && elem Psk (x 4 2) && (elem Ccmp (x 4 1) || elem Tkip (x 4 1)))
    (best l) (foldl (a \ x \ (a = () || a 2 < x 2 ? x a)) () l)
 
-   (wifi-up ifc ssid pass)
+   (wifi-up ifc ssid pass cc)
     (: ix (read (sysnet ifc "ifindex"))
        mac (hex2b (join "" (split ":" (sysnet ifc "address"))))
        pmk (wifi-pmk pass ssid)
@@ -83,6 +84,9 @@
        (grp n) (nl-get (f 1) n 0)
        ev (nl-open 16 [(grp "scan") (grp "mlme")])
        (ask cmd flags as) (nl-ask nl fam flags (genl-msg cmd as))
+       ; the country only advises: a refusal is said, and the join goes on under the world's rules
+       _ (cc != "" ? (trap (_ \ (ask CmdReqSetReg 0 [(nl-attr ARegAlpha2 (nl-str cc))], say1 ("country " + cc))) 0
+                           (a \ b \ say1 ("country " + cc + " refused: " + show b))) 0)
        _ (say1 ("scanning for " + ssid + " on " + ifc))
        _ (ask CmdTriggerScan 0 [(nl-attr AIfindex (nl-u32 ix)) (nl-nest AScanSsids [(nl-attr 1 ssid)])])
        done (ev-in 20000 ev fam (c \ as \ (for? ix as && (c = CmdNewScan || c = CmdScanAborted) ? [c] ())))
@@ -129,16 +133,17 @@
                       (dhcp ix mac 3000 @ n (? !(two? n) (gone "the lease was not renewed")
                                                (rt-addr rt ix <n (n 1), resolv n, go 0 n)))))
        (go 0 l))
-   ; a conf's first two lines: the ssid, the passphrase
-   (wifi-conf p) (uread p @ [1 s] (lines s @ ls (#ls < 2 ? (gone (p + ": wants an ssid line and a passphrase line")) [(trim <ls) (trim (ls 1))]))
+   ; a conf's lines: the ssid, the passphrase, the country if any
+   (wifi-conf p) (uread p @ [1 s] (lines s @ ls (#ls < 2 ? (gone (p + ": wants an ssid line and a passphrase line"))
+                                                [(trim <ls) (trim (ls 1)) (#ls > 2 ? (trim (ls 2)) "")]))
                    (gone ("cannot read " + p)))
 
    ; run as a script: the words after this file's name
    (after l) (atom? l ? () (<l @ (_ + "wifi.l") >l (after >l)))
    as (after cmdline)
-   (run ifc sp) (: l (wifi-up ifc <sp (sp 1)) (resolv l, wifi-hold ifc l))
+   (run ifc sp) (: l (wifi-up ifc <sp (sp 1) (sp 2)) (resolv l, wifi-hold ifc l))
    _ (#as = 3 || #as = 2
-      ? (trap (_ \ run (as 0) (#as = 3 ? [(as 1) (as 2)] (wifi-conf (as 1)))) 0
+      ? (trap (_ \ run (as 0) (#as = 3 ? [(as 1) (as 2) ""] (wifi-conf (as 1)))) 0
               (a \ b \ (say err ("wifi: " + show a + " " + show b + "\n"), quit 1)))
       0)
 )

@@ -35,10 +35,12 @@
            (b2hex (wifi-rsn-ie 1027074 1027076) = "30140100000fac020100000fac040100000fac020000")
            (wifi-ies (string [0 2 104 105 48 1 7 221]) = [[0 "hi"] [48 (string 7)]]))
 
-   ; a conf's two lines, a crlf's cr off
+   ; a conf's lines, a crlf's cr off; the country's is the third
    cf "out/hostnif/wifi.conf"
    _ (uwrite cf "my net\r\npass phrase \n")
-   _ (test (wifi-conf cf = ["my net" "pass phrase "]))
+   _ (test (wifi-conf cf = ["my net" "pass phrase " ""]))
+   _ (uwrite cf "my net\npass\nUS\n")
+   _ (test (wifi-conf cf = ["my net" "pass" "US"]))
    ; a discover: its ip header sums to 0, a reply to 68 with our xid reads back
    mac (hex2b "b827eb112233")
    d (dhcp-frame mac 305419896 [(string [53 1 1])])
