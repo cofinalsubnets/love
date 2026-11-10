@@ -15,6 +15,8 @@ int ioctl(int fd, unsigned long req, ...) {
       case 21519: fq = 0x40047477UL; break;   /* TIOCGPGRP: int */
       case 21520: fq = 0x80047476UL; break;   /* TIOCSPGRP: int */
       case 21531: fq = 0x4004667fUL; break;   /* FIONREAD: int */
+      case 21525: fq = 0x4004746aUL; break;   /* TIOCMGET: int, the line bits agree */
+      case 21528: fq = 0x8004746dUL; break;   /* TIOCMSET */
       /* sound: OSS on freebsd, where _IOR/_IOW swap direction bits; netbsd's audio(4),
        * spelled as linux's _IOC would */
       case 0xc0045002UL: case 0xc0045005UL: case 0xc0045006UL:   /* SNDCTL_DSP_SPEED, SETFMT, CHANNELS */

@@ -1,7 +1,7 @@
 ; src/apps/kore/sed.l -- sed-lite over the re.l engine, the stream editor's useful core;
 ; loads after re.l in the cat. verbs p d q s y and { }; -i makes each file its own stream
 ; (numbers restart, $ per file) by handing `srun` its output port. not here: empty-pattern
-; reuse, \n in a replacement, the hold space.
+; reuse, the hold space.
 ; the pure floor: (sparse sc ere?) -> (1 cmds) | (), and (usub nodes repl ln g?) ->
 ; (changed text), the one substitution walk.
 (module 'kore
@@ -13,22 +13,28 @@
    ; ..from the nth match on: the ones before it ride through as they were (ed's s///N)
    (usubn nodes repl ln g? nth)
     (: n #ln
-       ; the replacement text for one match at (ms me) with group spans sp
+       ; the replacement text for one match at (ms me) with group spans sp. GNU's case
+       ; escapes: \U \L case what follows to \E, \u \l the next character alone; \n \t its own
        (expand ms me sp)
         (: rn #repl
-           (xgo i acc)
-            (rn <= i ? acc
-             (repl i @ c
-                (? (c = 38) (xgo (i + 1) (acc + snip ln ms me))
-                   (c = 92 && i + 1 < rn)
-                    (repl (i + 1) @ d
-                       (49 <= d && d <= 57 ?
-                           (assoc (d - 48) sp @ e
-                              (xgo (i + 2)
-                                   (two? e ? (acc + snip ln <>e <>>e) acc)))
-                          (xgo (i + 2) (acc + string d))))
-                   (xgo (i + 1) (acc + string c)))))
-           (xgo 0 ""))
+           (cased t m o) (: u (? (m = 85) (upper t) (m = 76) (lower t) t)
+                            (o && 0 < #u ? ((o = 117 ? upper lower) (snip u 0 1) + snip u 1 #u) u))
+           ; t onto acc, then on from j: a one-shot case spends itself on the first character
+           (xgo i acc m o)
+            (: (on t j) (xgo j (acc + cased t m o) m (0 < #t ? () o))
+               (rn <= i ? acc
+                (repl i @ c
+                   (? (c = 38) (on (snip ln ms me) (i + 1))
+                      (c = 92 && i + 1 < rn)
+                       (repl (i + 1) @ d
+                          (? (49 <= d && d <= 57)
+                              (assoc (d - 48) sp @ e (on (two? e ? (snip ln <>e <>>e) "") (i + 2)))
+                             (elem d [76 85]) (xgo (i + 2) acc d ())
+                             (d = 69) (xgo (i + 2) acc () ())
+                             (elem d [108 117]) (xgo (i + 2) acc m d)
+                             (on (string (? (d = 110) 10 (d = 116) 9 d)) (i + 2))))
+                      (on (string c) (i + 1))))))
+           (xgo 0 "" () ()))
        ; ate marks "a match ended exactly here": an empty match at that point is
        ; discarded (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
        ; k counts the matches met, so the ones before nth keep their own text
@@ -237,10 +243,10 @@
    (sed-main as0)
     (: pre (sed-pre as0) as <pre sfx <>pre
        t {}
-       o (uopt as t '(101) '(101) ())                      ; -e script, stacking
+       o (uoptp as t '(101) '(101) ())                     ; -e script, stacking; GNU order
        _ (two? o ? () (udie 1 "sed: bad option"))
        _ (uoptbad as t "nEeirs" @ c (!c ? () (udie 1 "sed: unknown option -\(string c)")))
-       eps <>o rest <>>o
+       eps <>o rest (o 2)
        _ (two? eps || two? rest ? ()
           (udie 1 "usage: sed [-nErs] [-i[SUFFIX]] [-e SCRIPT].. [-f FILE].. SCRIPT [FILE..]"))
        n? (peep t 110 0) i? (peep t 105 0) s? (peep t 115 0)

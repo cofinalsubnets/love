@@ -1041,7 +1041,7 @@ static bool rd_float(char const *t, uintptr_t n, double *d) {
  if (!(c >= '0' && c <= '9') && c != '.') return false;
  char *e;
  *d = lm_strtod(t, &e);
- return e != t && *e == 0 && *d == *d; }
+ return e == t + n && *d == *d; }                       // the whole token: an inner NUL stops the parse short
 static bool rd_numeral(struct str *s) {
  double d;
  return is_dec_int(txt(s), len(s)) || is_hex_int(txt(s), len(s)) || is_oct_int(txt(s), len(s))
