@@ -4,7 +4,7 @@
 ; it runs as root. the password is never in argv, a log or the environment; an unknown name
 ; costs a hash as a known one does; each failure waits longer, and five end the session
 (module (login login-main login-usage login-who login-groups login-auth login-env login-utrec
-         login-utmp login-id)
+         login-utmp login-id login-start)
 (borrow '(posix cli crypt bytes))
 (:
  login-usage "usage: love login [-r ROOT] [TTY]"
@@ -69,8 +69,9 @@
      _ (echo ? 0 (ptyecho in 1, say out "\n", flush out))
      (? !(string? l) () (0 < #l && l (#l - 1) = 10) (snip l 0 (#l - 1)) l))
  (lg-host _) (uname 0 @ u (two? u && 1 < #u ? (u 1) "localhost"))
- ; the session: the terminal the user's, the ids dropped, the shell exec'd as a login shell
- (lg-start root w line)
+ ; the session: the terminal the user's, the ids dropped, then argv exec'd, or for () the
+ ; user's shell as a login shell
+ (login-start root w line argv)
   (: tty (line = "" ? "" ("/dev/" + line))
      _ (lg-record root line (w 0) (getpid 0))
      _ (tty = "" ? 0 (chown tty (w 1) (w 2), chmod tty 400))
@@ -79,14 +80,14 @@
      _ (nom? (chdir (w 4)) ? (chdir "/") 0)
      _ (each (login-env w (getenv "TERM" @ t (string? t ? t "linux"))) (kv \ setenv (kv 0) (kv 1)))
      base (rev (split "/" (w 5)) @ (b . _) b _ "sh")
-     (exec [((w 5) . ("-" + base))]))
+     (exec (two? argv ? argv [((w 5) . ("-" + base))])))
  (lg-tries root line n)
   (? (n = 5) (uleave 1)
      (: name (lg-ask (lg-host 0 + " login: ") 1)
         _ (string? name ? 0 (uleave 0))
         pw (lg-ask "Password: " 0)
         w (0 < #name && string? pw ? (login-auth root name pw) ())
-        (two? w ? (lg-start root w line)
+        (two? w ? (login-start root w line ())
            (: _ (rest (2000 << n)) _ (say out "Login incorrect\n\n", flush out) (lg-tries root line (n + 1))))))
  ; a tty argument becomes fds 0 1 2 and the controlling terminal
  (lg-take tty) (: fd (openfd tty 2)
