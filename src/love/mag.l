@@ -980,6 +980,190 @@
    (wv W) (vl W '(add n 1))
    limbsW '(gW (pi j nat (inf-lt (W j) (inf-pow L))))
    (limbs3 g) [g '(pi j nat (inf-lt (W j) (inf-pow L)))]
+
+   ; --- knuth's q-hat for the window w[0..n] over vn: w's top two limbs over vn's top, stepped down
+   ;     while vn's next limb shows it too big, clamped to a limb. theorem b: q or q + 1 ---------
+   qhat0
+    {'name "mag_qhat" 'short "mqh"
+     'attrs '("static" "love_inline")
+     'ret '(named "love_limb")
+     'params '(("w" (ptr (const (named "love_limb")))) ("vn" (ptr (const (named "love_limb")))) ("nn" int))
+     'fields ()
+     'limb 'L
+     'dvars '(t qh rh)
+     'arrays '((W (v "w") wc) (V (v "vn") n))
+     'requires
+      (['(W (pi j nat nat)) '(V (pi j nat nat)) '(n nat) '(wc nat)]
+       + limb-req
+       + ['(gwc (inf-le (add n 1) wc)) '(gn (inf-lt (add n 1) (inf-pow w))) '(gn2 (inf-le 2 n)) (limbs 'W) (limbs 'V)
+          '(gv1 (inf-lt 0 (V (natminus n 1)))) ['gu ['inf-lt (wv 'W) ['mul Bt (vl 'V 'n)]]]])
+     'decls
+      [['(named "uintptr_t") ['n (int-n "nn")]]
+       ['(named "dlimb") ['t] ['qh] ['rh]]]
+     'ensures
+      [['e1 ['inf-lt 'res Bt]]
+       ['e2 ['inf-lt (wv 'W) ['mul '(succ res) (vl 'V 'n)]]]
+       ['e3 ['inf-lt ['mul 'res (vl 'V 'n)] ['add (wv 'W) (vl 'V 'n)]]]]
+     'body
+      ['(s0 set t (d+ (d* (dl (at W n)) (lB)) (dl (at W (- n 1)))))
+       '(s1 set qh (d/ t (dl (at V (- n 1)))))
+       '(s2 set rh (d% t (dl (at V (- n 1)))))
+       ['w1 'while '(tru) 'qh
+        [['a1 ['paths 'nat ['add ['mul 'qh '(V (natminus n 1))] 'rh] ['add ['mul '(W n) Bt] '(W (natminus n 1))]]]
+         ['a2 ['inf-lt 'rh Bt]]
+         ['a3 ['inf-lt (wv 'W) ['mul '(succ qh) (vl 'V 'n)]]]]
+        [['j1 'join 'g1 '(lt qh (lB))
+          [['j2 'join 'g2 '(le (d* qh (dl (at V (- n 2)))) (d+ (d* rh (lB)) (dl (at W (- n 2))))) '((x1 brk)) ()
+            [['t2 ['inf-lt (wv 'W) ['mul 'qh (vl 'V 'n)]]]]]]
+          () [['t1 ['inf-lt (wv 'W) ['mul 'qh (vl 'V 'n)]]]]]
+         '(s3 set qh (- qh 1))
+         '(s4 set rh (d+ rh (dl (at V (- n 1)))))
+         ['j3 'join 'g3 '(le (lB) rh) '((x2 brk)) () [['t3 ['inf-lt 'rh Bt]]]]]]
+       '(j4 ife g4 (lt qh (lB)) ((r1 ret (lc qh))) ((r2 ret (lc (- (lB) 1)))))]
+     'macros '()
+     'proofs {}}
+   ; the regroupings theorem b's lemmas take, over their atoms
+   qh-ids
+    [["un-qrw" '(add (add (add (un-val B W y) (mul (W y) (uu-app y B))) (mul (W (succ y)) (mul B (uu-app y B))))
+                     (mul (W (succ (succ y))) (mul B (mul B (uu-app y B)))))
+               '(add (un-val B W y) (mul (add (mul (add (mul (W (succ (succ y))) B) (W (succ y))) B) (W y)) (uu-app y B))) ()]
+     ["un-qrv" '(add (add (un-val B V y) (mul (V y) (uu-app y B))) (mul (V (succ y)) (mul B (uu-app y B))))
+               '(add (mul (add (mul (V (succ y)) B) (V y)) (uu-app y B)) (un-val B V y)) ()]
+     ["un-qrc" '(mul c (add (mul D P) Lv)) '(add (mul (mul c D) P) (mul c Lv)) ()]
+     ["un-qre" '(add (mul (add (mul q v) r) B) w) '(add (mul (mul q v) B) (add (mul r B) w)) ()]
+     ["un-qrf" '(mul c (add (mul v B) u)) '(add (mul (mul c v) B) (mul c u)) ()]
+     ["un-qrg" '(add (mul (mul q v) B) (mul q u)) '(mul q (add (mul v B) u)) ()]
+     ["un-qrh" '(add (mul a v) (add r v)) '(add (add (mul a v) v) r) ()]]
+   (qh-use k) (show (ring-use (qh-ids k)))
+   ; a ring lemma's use with its atoms named as the context names them
+   (rsub t m) (? (name? t) (peep m t t) (two? t) (map (x \ rsub x m) t) t)
+   (qh-at k m) (show (rsub (ring-use (qh-ids k)) m))
+   ; theorem b over a window's top three limbs t3 and the divisor's top two d2, at y = n - 2: the
+   ;     value splits there (qdw, qdv), so t3 < k d2 puts w under k v (qlo), and c d2 <= t3 puts
+   ;     c v under w + v (qhi)
+   qh-lemmas
+    (: Y "(natminus n 2)" PY "(uu-app \(Y) B)" N1 "(natminus n 1)"
+       E1 "(inf-subsucc n 1 (inf-lesl 1 n g2))" G1 "(inf-ltle 1 n (inf-lesl 1 n g2))" E2 "(inf-addsub 1 n \(G1))"
+       (T3 c b) "(add (mul (add (mul (W \(c)) B) (W \(b))) B) (W \(Y)))"
+       (D2 b) "(add (mul (V \(b)) B) (V \(Y)))"
+       (qw b c) "(paths nat (un-val B W (succ \(c))) (add (un-val B W \(Y)) (mul \(T3 c b) \(PY))))"
+       (qv b c) "(paths nat (un-val B V \(c)) (add (mul \(D2 b) \(PY)) (un-val B V \(Y))))"
+       Tn (T3 "n" N1) Dn (D2 N1) Un "(un-val B W (add n 1))" Vn "(un-val B V n)"
+       ; from y, y + 1, y + 2 to y, n - 1, n
+       (lift q base) "(transportf nat (lam z \(q N1 "z")) (succ \(N1)) n \(E2) (transportf nat (lam z \(q "z" "(succ z)")) (succ \(Y)) \(N1) (pathsinv0 nat \(N1) (succ \(Y)) \(E1)) \(base)))"
+     (cats [
+      " (defq un-qdw (pi B nat W (pi j nat nat) n nat g2 (inf-le 2 n) (paths nat \(Un) (add (un-val B W \(Y)) (mul \(Tn) \(PY)))))\n"
+      "   (lam B W n g2 (transportf nat (lam z (paths nat (un-val B W z) (add (un-val B W \(Y)) (mul \(Tn) \(PY))))) (succ n) (add n 1) (pathsinv0 nat (add n 1) (succ n) (un-add1 n))\n"
+      "     \(lift qw (qh-at 0 {'y '(natminus n 2)})))))\n"
+      " (defq un-qdv (pi B nat V (pi j nat nat) n nat g2 (inf-le 2 n) (paths nat \(Vn) (add (mul \(Dn) \(PY)) (un-val B V \(Y)))))\n"
+      "   (lam B V n g2 \(lift qv (qh-at 1 {'y '(natminus n 2)}))))\n"
+      " (defq un-qdb (pi B nat V (pi j nat nat) n nat g2 (inf-le 2 n) gv1 (inf-lt 0 (V \(N1))) (inf-le (mul B \(PY)) \(Vn)))\n"
+      "   (lam B V n g2 gv1 (transportf nat (lam z (inf-le (mul B \(PY)) (un-val B V z))) (succ \(N1)) n \(E2)\n"
+      "     (transportf nat (lam z (inf-le (uu-app z B) (un-val B V (succ \(N1))))) \(N1) (succ \(Y)) \(E1) (un-valge1 B V \(N1) gv1)))))\n"
+      ; the algebra, its values named
+      " (defq un-qlo0 (pi P nat Lw nat Lv nat T nat D nat k nat VW nat VV nat ew (paths nat VW (add Lw (mul T P))) ev (paths nat VV (add (mul D P) Lv)) g (inf-lt Lw P) h (inf-lt T (mul k D)) (inf-lt VW (mul k VV)))\n"
+      "   (lam P Lw Lv T D k VW VV ew ev g h (inf-lttrans VW (add P (mul T P)) (mul k VV)\n"
+      "     (transportf nat (lam z (inf-lt z (add P (mul T P)))) (add Lw (mul T P)) VW (pathsinv0 nat VW (add Lw (mul T P)) ew) (inf-ltaddr Lw P (mul T P) g))\n"
+      "     (inf-letr (mul (succ T) P) (add P (mul T P)) (mul k VV) (natpluscomm (mul T P) P)\n"
+      "       (inf-letrans (mul (succ T) P) (mul (mul k D) P) (mul k VV) (un-mulle2 (succ T) (mul k D) P (inf-ltsu T (mul k D) h))\n"
+      "         (inf-letr (mul k (mul D P)) (mul (mul k D) P) (mul k VV) (pathsinv0 nat (mul (mul k D) P) (mul k (mul D P)) (natmultassoc k D P))\n"
+      "           (un-mulle k (mul D P) VV (inf-letl (mul D P) (add (mul D P) Lv) VV (pathsinv0 nat VV (add (mul D P) Lv) ev) (inf-leaddr (mul D P) Lv)))))))))\n"
+      " (defq un-mullt (pi c nat B nat P nat gc (inf-lt c B) gp (inf-lt 0 P) (inf-lt (mul c P) (mul B P)))\n"
+      "   (lam c B P gc gp (inf-lttrans (mul c P) (mul (succ c) P) (mul B P)\n"
+      "     (transportf nat (lam z (inf-lt z (add (mul c P) P))) (add (mul c P) 0) (mul c P) (natplusr0 (mul c P)) (inf-ltaddl (mul c P) 0 P gp))\n"
+      "     (un-mulle2 (succ c) B P (inf-ltsu c B gc)))))\n"
+      " (defq un-qhi0 (pi B nat P nat Lw nat Lv nat T nat D nat c nat VW nat VV nat ew (paths nat VW (add Lw (mul T P))) ev (paths nat VV (add (mul D P) Lv)) gv (inf-lt Lv P) gb (inf-le (mul B P) VV) gc (inf-lt c B) h (inf-le (mul c D) T) (inf-lt (mul c VV) (add VW VV)))\n"
+      "   (lam B P Lw Lv T D c VW VV ew ev gv gb gc h\n"
+      "     (transportf nat (lam z (inf-lt z (add VW VV))) (add (mul (mul c D) P) (mul c Lv)) (mul c VV)\n"
+      "       (pathsinv0 nat (mul c VV) (add (mul (mul c D) P) (mul c Lv)) (pathscomp0 nat (mul c VV) (mul c (add (mul D P) Lv)) (add (mul (mul c D) P) (mul c Lv)) (maponpaths nat nat (lam z (mul c z)) VV (add (mul D P) Lv) ev) \(qh-use 2)))\n"
+      "       (inf-lttrans (add (mul (mul c D) P) (mul c Lv)) (add (mul T P) VV) (add VW VV)\n"
+      "         (inf-lelt (add (mul (mul c D) P) (mul c Lv)) (add (mul T P) (mul c Lv)) (add (mul T P) VV)\n"
+      "           (inf-add2 (mul (mul c D) P) (mul T P) (mul c Lv) (mul c Lv) (un-mulle2 (mul c D) T P h) (isreflnatleh (mul c Lv)))\n"
+      "           (inf-ltaddl (mul T P) (mul c Lv) VV (inf-lelt (mul c Lv) (mul c P) VV (un-mulle c Lv P (inf-ltle Lv P gv))\n"
+      "             (inf-lttrans (mul c P) (mul B P) VV (un-mullt c B P gc (inf-lelt 0 Lv P (idpath false) gv)) gb))))\n"
+      "         (inf-add2 (mul T P) VW VV VV (inf-letl (mul T P) (add Lw (mul T P)) VW (pathsinv0 nat VW (add Lw (mul T P)) ew) (inf-leaddl (mul T P) Lw)) (isreflnatleh VV))))))\n"
+      " (defq un-qlo (pi B nat W (pi j nat nat) V (pi j nat nat) n nat k nat g2 (inf-le 2 n) gW (pi j nat (inf-lt (W j) B)) h (inf-lt \(Tn) (mul k \(Dn))) (inf-lt \(Un) (mul k \(Vn))))\n"
+      "   (lam B W V n k g2 gW h (un-qlo0 \(PY) (un-val B W \(Y)) (un-val B V \(Y)) \(Tn) \(Dn) k \(Un) \(Vn) (un-qdw B W n g2) (un-qdv B V n g2) (un-vallt B W \(Y) gW) h)))\n"
+      " (defq un-qhi (pi B nat W (pi j nat nat) V (pi j nat nat) n nat c nat g2 (inf-le 2 n) gV (pi j nat (inf-lt (V j) B)) gv1 (inf-lt 0 (V \(N1))) gc (inf-lt c B) h (inf-le (mul c \(Dn)) \(Tn)) (inf-lt (mul c \(Vn)) (add \(Un) \(Vn))))\n"
+      "   (lam B W V n c g2 gV gv1 gc h (un-qhi0 B \(PY) (un-val B W \(Y)) (un-val B V \(Y)) \(Tn) \(Dn) c \(Un) \(Vn) (un-qdw B W n g2) (un-qdv B V n g2) (un-vallt B V \(Y) gV) (un-qdb B V n g2 gv1) gc h)))\n"
+      ; the loop's arithmetic: theorem a's step, the test either way, and q-hat's bounds
+      " (defq un-qdivlt (pi v nat gv (inf-lt 0 v) t nat (inf-lt t (mul (succ (un-div v t)) v)))\n"
+      "   (lam v gv t (transportf nat (lam z (inf-lt z (mul (succ (un-div v t)) v))) (add (mul v (un-div v t)) (inf-mod v t)) t (un-dm0 v gv t)\n"
+      "     (transportf nat (lam z (inf-lt (add (mul v (un-div v t)) (inf-mod v t)) (add z v))) (mul v (un-div v t)) (mul (un-div v t) v) (natmultcomm v (un-div v t))\n"
+      "       (inf-ltaddl (mul v (un-div v t)) (inf-mod v t) v (un-modlt0 v gv t))))))\n"
+      " (defq un-divle (pi m nat h (inf-lt 0 m) x nat (inf-le (un-div m x) x))\n"
+      "   (lam m h x (inf-letr (mul (un-div m x) 1) (un-div m x) x (natmultr1 (un-div m x))\n"
+      "     (inf-letrans (mul (un-div m x) 1) (mul (un-div m x) m) x (un-mulle (un-div m x) 1 m (inf-ltsu 0 m h))\n"
+      "       (inf-letr (mul m (un-div m x)) (mul (un-div m x) m) x (natmultcomm m (un-div m x))\n"
+      "         (inf-letl (mul m (un-div m x)) (add (mul m (un-div m x)) (inf-mod m x)) x (un-dm0 m h x) (inf-leaddr (mul m (un-div m x)) (inf-mod m x))))))))\n"
+      " (defq un-qta (pi B nat t nat w nat v nat u nat k nat gw (inf-lt w B) h (inf-lt t (mul k v)) (inf-lt (add (mul t B) w) (mul k (add (mul v B) u))))\n"
+      "   (lam B t w v u k gw h (inf-lttrans (add (mul t B) w) (mul (succ t) B) (mul k (add (mul v B) u)) (inf-ltaddl (mul t B) w B gw)\n"
+      "     (inf-letrans (mul (succ t) B) (mul (mul k v) B) (mul k (add (mul v B) u)) (un-mulle2 (succ t) (mul k v) B (inf-ltsu t (mul k v) h))\n"
+      "       (inf-letr (mul k (mul v B)) (mul (mul k v) B) (mul k (add (mul v B) u)) (pathsinv0 nat (mul (mul k v) B) (mul k (mul v B)) (natmultassoc k v B))\n"
+      "         (un-mulle k (mul v B) (add (mul v B) u) (inf-leaddr (mul v B) u)))))))\n"
+      " (defq un-qtb (pi B nat q nat v nat r nat w nat u nat t nat e (paths nat (add (mul q v) r) t) h (inf-lt (add (mul r B) w) (mul q u)) (inf-lt (add (mul t B) w) (mul q (add (mul v B) u))))\n"
+      "   (lam B q v r w u t e h (transportf nat (lam z (inf-lt z (mul q (add (mul v B) u)))) (add (mul (mul q v) B) (add (mul r B) w)) (add (mul t B) w)\n"
+      "     (pathsinv0 nat (add (mul t B) w) (add (mul (mul q v) B) (add (mul r B) w)) (pathscomp0 nat (add (mul t B) w) (add (mul (add (mul q v) r) B) w) (add (mul (mul q v) B) (add (mul r B) w))\n"
+      "       (maponpaths nat nat (lam z (add (mul z B) w)) t (add (mul q v) r) (pathsinv0 nat (add (mul q v) r) t e)) \(qh-use 3)))\n"
+      "     (transportf nat (lam z (inf-lt (add (mul (mul q v) B) (add (mul r B) w)) z)) (add (mul (mul q v) B) (mul q u)) (mul q (add (mul v B) u)) \(qh-use 5)\n"
+      "       (inf-ltaddl (mul (mul q v) B) (add (mul r B) w) (mul q u) h)))))\n"
+      " (defq un-qtd (pi B nat q nat v nat r nat w nat u nat t nat c nat e (paths nat (add (mul q v) r) t) gc (inf-le c q) h (inf-le (mul c u) (add (mul r B) w)) (inf-le (mul c (add (mul v B) u)) (add (mul t B) w)))\n"
+      "   (lam B q v r w u t c e gc h (inf-letr (add (mul (mul c v) B) (mul c u)) (mul c (add (mul v B) u)) (add (mul t B) w)\n"
+      "     (pathsinv0 nat (mul c (add (mul v B) u)) (add (mul (mul c v) B) (mul c u)) \(qh-use 4))\n"
+      "     (inf-letl (add (mul (mul c v) B) (mul c u)) (add (mul (mul q v) B) (add (mul r B) w)) (add (mul t B) w)\n"
+      "       (pathsinv0 nat (add (mul t B) w) (add (mul (mul q v) B) (add (mul r B) w)) (pathscomp0 nat (add (mul t B) w) (add (mul (add (mul q v) r) B) w) (add (mul (mul q v) B) (add (mul r B) w))\n"
+      "         (maponpaths nat nat (lam z (add (mul z B) w)) t (add (mul q v) r) (pathsinv0 nat (add (mul q v) r) t e)) \(qh-use 3)))\n"
+      "       (inf-add2 (mul (mul c v) B) (mul (mul q v) B) (mul c u) (add (mul r B) w) (un-mulle2 (mul c v) (mul q v) B (un-mulle2 c q v gc)) h)))))\n"
+      " (defq un-mulpos (pi a nat b nat x nat g (inf-lt x (mul a b)) (inf-le 1 a))\n"
+      "   (lam a (nat_rect (lam y (pi b nat x nat g (inf-lt x (mul y b)) (inf-le 1 y)))\n"
+      "     (lam b x g (fromempty (inf-le 1 0) (nopathsfalsetotrue g))) (lam k IH b x g (idpath false)) a)))\n"]))
+   qh-out
+    (: (tm s) <(sound s)
+       B "(inf-pow L)" hB "(inf-powpos L)" N1 "(natminus n 1)" Y "(natminus n 2)"
+       v1 "(V \(N1))" vy "(V \(Y))" wy "(W \(Y))" t "(add (mul (W n) \(B)) (W \(N1)))"
+       U "(un-val \(B) W (add n 1))" Vn "(un-val \(B) V n)" q0 "(un-div \(v1) \(t))" r0 "(inf-mod \(v1) \(t))"
+       BB "(mul \(B) \(B))" a "(natminus qh 1)" R1 "(add rh \(v1))" Bm "(natminus \(B) 1)"
+       G1 "(inf-ltle 1 n (inf-lesl 1 n gn2))" P1 "(un-mulpos qh \(Vn) \(U) t1)" SB "(inf-addsub 1 \(B) (inf-ltsu 0 \(B) \(hB)))"
+       (fit2 x p) "(transportf nat (lam z (inf-lt \(x) z)) \(BB) (inf-pow (add L L)) (pathsinv0 nat (inf-pow (add L L)) \(BB) (un-powadd L L)) \(p))"
+       ; x B + y under B B, for limbs x and y
+       (top x y gx gy) "(inf-lttrans (add (mul \(x) \(B)) \(y)) (mul (succ \(x)) \(B)) \(BB) (inf-ltaddl (mul \(x) \(B)) \(y) \(B) \(gy)) (un-mulle2 (succ \(x)) \(B) \(B) (inf-ltsu \(x) \(B) \(gx))))"
+       TB (top "(W n)" "(W \(N1))" "(gW n)" "(gW \(N1))")
+       NW "(inf-lttrans n (add n 1) wc (un-ltp1 n) gwc)"
+       YN "(inf-subpos2 n 2 (inf-lelt 0 1 n (idpath false) (inf-lesl 1 n gn2)) (idpath true))"
+       QT "(inf-letrans qh (mul qh \(v1)) \(t) (inf-letr (mul qh 1) qh (mul qh \(v1)) (natmultr1 qh) (un-mulle qh 1 \(v1) (inf-ltsu 0 \(v1) gv1))) (inf-letl (mul qh \(v1)) (add (mul qh \(v1)) rh) \(t) a1 (inf-leaddr (mul qh \(v1)) rh)))"
+       ; a q-hat one down, with v's top added to its remainder: the same top two
+       E2 "(pathscomp0 nat (add (mul \(a) \(v1)) \(R1)) (add (add (mul \(a) \(v1)) \(v1)) rh) \(t) \(qh-at 6 {'a '(natminus qh 1) 'v '(V (natminus n 1)) 'r 'rh}) (pathscomp0 nat (add (mul (succ \(a)) \(v1)) rh) (add (mul qh \(v1)) rh) \(t) (maponpaths nat nat (lam z (add (mul z \(v1)) rh)) (succ \(a)) qh (inf-addsub 1 qh \(P1))) a1))"
+       ; past the break on rh: c's product with v's next limb is under B B, so under rh B
+       (HX c cb) "(inf-letrans (mul \(c) \(vy)) \(BB) (add (mul \(R1) \(B)) \(wy)) (inf-letrans (mul \(c) \(vy)) (mul \(B) \(vy)) \(BB) (un-mulle2 \(c) \(B) \(vy) \(cb)) (un-mulle \(B) \(vy) \(B) (inf-ltle \(vy) \(B) (gV \(Y))))) (inf-letrans \(BB) (mul \(R1) \(B)) (add (mul \(R1) \(B)) \(wy)) (un-mulle2 \(B) \(R1) \(B) g3) (inf-leaddr (mul \(R1) \(B)) \(wy))))"
+       DN "(transportf nat (lam z (inf-lt \(U) (mul z \(Vn)))) qh (succ \(a)) (pathsinv0 nat (succ \(a)) qh (inf-addsub 1 qh \(P1))) t1)"
+       BU "(transportf nat (lam z (inf-lt \(U) (mul z \(Vn)))) \(B) (succ \(Bm)) (pathsinv0 nat (succ \(Bm)) \(B) \(SB)) gu)"
+       rs [["s0-1" NW] ["s0-2" (fit2 "(mul (W n) \(B))" "(un-mullt (W n) \(B) \(B) (gW n) \(hB))")]
+           ["s0-4" "(inf-lttrans \(N1) n wc (un-predlt n \(G1)) (inf-ltle n wc \(NW)))"] ["s0-5" (fit2 t TB)]
+           ["s1-2" "(un-predlt n \(G1))"] ["s2-2" "(un-predlt n \(G1))"] ["s4-2" "(un-predlt n \(G1))"]
+           ["s1-4" (fit2 q0 "(inf-lelt \(q0) \(t) \(BB) (un-divle \(v1) gv1 \(t)) \(TB))")]
+           ["s2-4" (fit2 r0 "(inf-lelt \(r0) \(t) \(BB) (inf-letl \(r0) (add (mul \(v1) \(q0)) \(r0)) \(t) (un-dm0 \(v1) gv1 \(t)) (inf-leaddl \(r0) (mul \(v1) \(q0)))) \(TB))")]
+           ["w1e-1" "(transportf nat (lam z (paths nat (add z \(r0)) \(t))) (mul \(v1) \(q0)) (mul \(q0) \(v1)) (natmultcomm \(v1) \(q0)) (un-dm0 \(v1) gv1 \(t)))"]
+           ["w1e-2" "(inf-lttrans \(r0) \(v1) \(B) (un-modlt0 \(v1) gv1 \(t)) (inf-ltle \(v1) \(B) (gV \(N1))))"]
+           ["w1e-3" "(un-qlo \(B) W V n (succ \(q0)) gn2 gW (un-qta \(B) \(t) \(wy) \(v1) \(vy) (succ \(q0)) (gW \(Y)) (un-qdivlt \(v1) gv1 \(t))))"]
+           ["j2-2" YN] ["j2-5" "(inf-lttrans \(Y) n wc \(YN) (inf-ltle n wc \(NW)))"]
+           ["j2-3" (fit2 "(mul qh \(vy))" "(inf-lelt (mul qh \(vy)) (mul qh \(B)) \(BB) (un-mulle qh \(vy) \(B) (inf-ltle \(vy) \(B) (gV \(Y)))) (un-mullt qh \(B) \(B) g1 \(hB)))")]
+           ["j2-4" (fit2 "(mul rh \(B))" "(un-mullt rh \(B) \(B) a2 \(hB))")]
+           ["j2-6" (fit2 "(add (mul rh \(B)) \(wy))" (top "rh" wy "a2" "(gW \(Y))"))]
+           ["j2j-1" "(un-qlo \(B) W V n qh gn2 gW (un-qtb \(B) qh \(v1) rh \(wy) \(vy) \(t) a1 g2))"]
+           ["j1j-2" "(inf-lttrans \(U) (mul \(B) \(Vn)) (mul qh \(Vn)) gu (un-mulle2 \(B) qh \(Vn) g1))"]
+           ["s3-1" P1]
+           ["s3-2" (fit2 a "(inf-lelt \(a) \(t) \(BB) (inf-letrans \(a) qh \(t) (inf-suble qh 1) \(QT)) \(TB))")]
+           ["s4-3" "(un-dfit L gL \(R1) (inf-lttrans \(R1) (add \(B) \(v1)) (add \(B) \(B)) (inf-ltaddr rh \(B) \(v1) a2) (inf-ltle (add \(B) \(v1)) (add \(B) \(B)) (inf-ltaddl \(B) \(v1) \(B) (gV \(N1))))))"]
+           ["w1b-1" E2] ["w1b-3" DN] ["r1-5" DN] ["w1b-4" "(un-predlt qh \(P1))"]
+           ["r1-3" "(un-qhi \(B) W V n qh gn2 gV gv1 g1 (un-qtd \(B) qh \(v1) rh \(wy) \(vy) \(t) qh a1 (isreflnatleh qh) g2))"]
+           ["r1-6" "(un-qhi \(B) W V n \(a) gn2 gV gv1 g4 (un-qtd \(B) \(a) \(v1) \(R1) \(wy) \(vy) \(t) \(a) \(E2) (isreflnatleh \(a)) \(HX a "(inf-ltle \(a) \(B) g4)")))"]
+           ["r2-1" "(inf-ltsu 0 \(B) \(hB))"] ["r2-5" "(inf-ltsu 0 \(B) \(hB))"]
+           ["r2-2" "(un-predlt \(B) (inf-ltsu 0 \(B) \(hB)))"] ["r2-6" "(un-predlt \(B) (inf-ltsu 0 \(B) \(hB)))"]
+           ["r2-3" BU] ["r2-7" BU]
+           ["r2-4" "(inf-ltnle (inf-lt (mul \(Bm) \(Vn)) (add \(U) \(Vn))) qh \(B) g1 g4)"]
+           ["r2-8" "(un-qhi \(B) W V n \(Bm) gn2 gV gv1 (un-predlt \(B) (inf-ltsu 0 \(B) \(hB))) (un-qtd \(B) \(a) \(v1) \(R1) \(wy) \(vy) \(t) \(Bm) \(E2) (inf-letrans \(Bm) \(B) \(a) (inf-suble \(B) 1) g4) \(HX Bm "(inf-suble \(B) 1)")))"]]
+     (foldl (t \ r \ pin t (r 0) (tm (r 1))) {} rs))
+   qhat (pin qhat0 'proofs qh-out)
    divstep0
     {'name "mag_divstep" 'short "mdiv"
      'attrs '("static" "love_inline")
@@ -1267,7 +1451,7 @@
    divstep (pin divstep0 'proofs (ds-out 0))
    ds-ids (ds-out 1)
 
-   mag-specs [add sub mas rows offs dnorm ddn shl shr top ord ge divstep]
+   mag-specs [add sub mas rows offs dnorm ddn shl shr top ord qhat ge divstep]
    mag-h (cats ["// mag_gen.h -- laid by src/love/mag.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) mag-specs))])
    mag-ledger
@@ -1280,12 +1464,13 @@
      ["offs" "mag_add_off's r is apart from s, and the sum fits it: off + sn <= rn, and r + s B^off < B^rn" "mag_mul_kara, lvm_kmul and mag_join_dec, whose r holds the whole product"]
      ["rows" "mag_mul_rows' r is apart from a and b and holds end + nb; past row 0 it holds a[0..i0) b, as the chunk before left it" "mag_mul, and lvm_bmul, whose r is a fresh cask its chunks fill in order"]
      ["window" "divstep's w[0..n] is under B times v, and v is not zero" "mag_divmod and lvm_bdiv: dnorm's top limb, then each step's e3"]
-     ["qhat" "mag_qhat is the quotient limb or one over, knuth's theorem b (taocp 4.3.1), the one fact left unproved; divstep is right for any limb q, so it bounds only the fix-ups' cost" "mag_qhat in num.c"]]
+     ["qhat" "divstep's call to mag_qhat meets its requires: n >= 2 and vn's top limb not zero, over divstep's window; divstep is right for any limb q, so theorem b bounds only the fix-ups' cost" "mag_divmod (n == 1 apart) and lvm_bdiv (n < 2 one-shot), both over dnorm's vn"]]
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
    mag-vc (cats ["; test/uumagvc.l -- laid by src/love/mag.l, `make mx`. edit that file.\n"
                  "; the ledger: what the theorems leave open, each with who answers for it\n"
                  (ledger-text mag-ledger)
                  "(test\n"
-                 (cats (map ring-lemma (rows-out 1 + offs-out 1 + dn-out 1 + dd-out 1 + sl-out 1 + sr-out 1 + ds-ids)))
+                 (cats (map ring-lemma (rows-out 1 + offs-out 1 + dn-out 1 + dd-out 1 + sl-out 1 + sr-out 1 + ds-ids + qh-ids)))
+                 qh-lemmas
                  (cats (map (s \ cats (vc-text s)) mag-specs)) " )\n"])
    mag-ok (0 < #mag-vc && all (s \ clay-ok? (cl-fn s) = 1 && atom? (vc-open s) && atom? (vc-stale s)) mag-specs))
