@@ -93,7 +93,7 @@
                 "test_cts_wasm" "source" "test_as" "source" "test_sb" "source"
                 "test_ccthumb1" "source" "test_ccthumb2" "source" "test_cca64" "source"
                 "test_ccrv64" "source" "test_tools" "source" "test_moonfuzz" "source"
-                "test_refuzz" "source" "test_clay" "source"
+                "test_refuzz" "source" "test_clay" "source" "test_hostnif" "source"
                 "test_bakerep" "exact" "test_envimage" "exact" "test_wake" "exact"}
 
    (lm-tick s) ("`" + s + "`")
