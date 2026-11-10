@@ -307,6 +307,13 @@ static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
  d->f(h, tail);
  if (pad == 2 * bs) d->f(h, tail + bs); }
 
+void sha256s_init(struct sha256s *s) { dig_h0(s->h, &dig_sha), s->n = 0, s->r = 0; }
+void sha256s_feed(struct sha256s *s, void const *p, uintptr_t n) {
+ s->r = blk_feed(s->h, s->b, s->r, &dig_sha, (uint8_t const *) p, n), s->n += n; }
+void sha256s_done(struct sha256s *s, uint8_t out[32]) {
+ blk_done(s->h, s->b, s->r, s->n, &dig_sha);
+ for (int k = 0; k < 8; k++) st32be(out + 4 * k, s->h[k]); }
+
 static const char hexd[] = "0123456789abcdef";
 
 // n words of hex in the digest's own order
