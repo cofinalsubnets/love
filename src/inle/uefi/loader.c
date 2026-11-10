@@ -227,9 +227,15 @@ u64 efi_main(void *handle, void *st) {
   u64 pa = *(u64 *) (d + 8), np = *(u64 *) (d + 24);
   if (pa < 0x100000) continue;                         // low memory stays the firmware's
   if (pa >= 0x100000000ull) continue;                  // above the mapped 4G
+  u64 pe = pa + np * 4096, wb = (hi + 0x1fffff) & ~0x1fffffull;
+  // a bent window runs lo..wb at kbase, so a block there has no code alias: the heap keeps out
+  if (kbase != lo && pa < wb && lo < pe) {
+   if (pa < lo && kb->ram_n < ram_max) kb->ram[kb->ram_n].base = pa, kb->ram[kb->ram_n].len = lo - pa, kb->ram_n++;
+   if (pe <= wb) continue;
+   pa = wb; }
   if (kb->ram_n >= ram_max) break;
   kb->ram[kb->ram_n].base = pa;
-  kb->ram[kb->ram_n].len = np * 4096;
+  kb->ram[kb->ram_n].len = pe - pa;
   kb->ram_n++; }
 
  efi_go((u64) pt, entry);
