@@ -2,13 +2,16 @@
 ;   1 autoboot (FAT32): autoboot.txt (tryboot_a_b, boot a), bootcode.bin, an empty config.txt
 ;   2 boot a (FAT32): the firmware, config.txt, cmdline.txt, Image, the dtb; 3 boot b, empty
 ;   4 extended: 5 root a, 6 root b (squashfs; b empty), 7 data (ext4), each behind its EBR
-; a root: love as /bin/love, helm's script as init (/bin/helm), and an app that says the board.
+; a root: love as /bin/love and /bin/sh, helm's script as init (/bin/helm), an app that says the
+; board, the otg port's console, wifi's station (src/apps/wifi) and sshd, their state on data.
 ; the parts lie on MiB bounds, each `at` where the one before it ends.
-; usage: love -l src/apps/sqfs.l -l src/apps/ext4.l zimage.l OUT LOVE IMAGE DTB FW [STAMP]
+; usage: love -l src/apps/sqfs.l -l src/apps/ext4.l zimage.l OUT LOVE IMAGE DTB FW [STAMP [SITE]]
 ;   writes OUT/disk.img; LOVE is a baked a64 love, IMAGE the kernel, DTB the board's, FW the
 ;   firmware's directory (bootcode.bin start.elf fixup.dat LICENCE.broadcom, and wifi/, the root's
 ;   /lib/firmware, where it has one), STAMP the one time
 ;   every file carries (seconds, default 0): the same inputs give the same bytes on any host.
+;   SITE a directory laid into /etc, this card's own: wifi.conf (the ssid's line, then the
+;   passphrase's) and ssh/authorized_keys
 (borrow '(bytes posix fat sqfs ext4 hashes))
 (: ; its words are the ones after its own name, whatever loaded ahead of it
    (after l) (atom? l ? () (<l @ (_ + "zimage.l") >l (after >l)))
@@ -57,10 +60,18 @@
    helm-conf """
      (service app (exec "/bin/love" "/app/run.l") (restart no))
      (oneshot gadget (exec "/bin/love" "/app/gadget.l"))
+     (oneshot data (exec "/bin/love" "/app/data.l"))
+     ; the console's own session, so a ^C on the port reaches what runs there
      (service console (after gadget)
-       (exec "/bin/love" "sh" "-c" "exec /bin/love sh < /dev/ttyGS0 > /dev/ttyGS0 2>&1")
+       (exec "/bin/love" "sh" "-c" "exec /bin/love setsid -c /bin/love sh < /dev/ttyGS0 > /dev/ttyGS0 2>&1")
        (restart always))
-     (target default (wants app console))
+     (service wifi (after data)
+       (exec "/bin/love" "-l" "/app/wifi/netlink.l" "-l" "/app/wifi/dhcp.l" "/app/wifi/wifi.l" "wlan0" "/etc/wifi.conf")
+       (log "/data/wifi.log") (restart on-fail) (tries 5))
+     (service sshd (after data)
+       (exec "/bin/love" "sshd" "-o" "AuthorizedKeysFile=/etc/ssh/authorized_keys")
+       (env "HOME" "/data/root") (log "/data/sshd.log") (restart always))
+     (target default (wants app console wifi sshd))
      """
    ; the otg port as a usb serial port: an acm function through configfs, bound to the one udc
    gadget-l """
@@ -80,6 +91,13 @@
             put "UDC" <udc,
             say err ("gadget: acm on " + <udc + "\n"), 0)))
      """
+   ; data's ext4 on /data, read-write; on a refusal a tmpfs stands in, gone at each boot
+   data-l """
+     (borrow 'posix)
+     (: r (mount "/dev/mmcblk0p7" "/data" "ext4")
+        _ (r ? (say err ("data: ext4 refused (" + show r + "), a tmpfs instead\n"), mount "tmpfs" "/data" "tmpfs") 0)
+        (umkdirs "/data/root/.ssh" 448, 0))
+     """
    ; the app: /proc and /sys up, then the board by its device tree, on the console
    app-l """
      (borrow 'posix)
@@ -91,11 +109,17 @@
      """
    (dir kids) ['dir 493 kids]
    (fil mode b) ['file mode b]
-   (root love ver)
-    (dir [["app" (dir [["gadget.l" (fil 420 gadget-l)] ["run.l" (fil 420 app-l)]])]
-        ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)]])]
+   (link t) ['link t]
+   ; the station's three files, beside the tree's own
+   app-wifi (map (f \ [f (fil 420 (rd ("src/apps/wifi/" + f)))]) ["dhcp.l" "netlink.l" "wifi.l"])
+   (root love ver site)
+    (dir [["app" (dir [["data.l" (fil 420 data-l)] ["gadget.l" (fil 420 gadget-l)] ["run.l" (fil 420 app-l)]
+                       ["wifi" (dir app-wifi)]])]
+        ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)] ["sh" (link "love")]])]
         ["boot" (dir ())] ["data" (dir ())] ["dev" (dir ())]
-        ["etc" (dir [["helm.l" (fil 420 helm-conf)] ["version" (fil 420 (ver + "\n"))]])]
+        ["etc" (dir (sort (site + [["helm.l" (fil 420 helm-conf)] ["version" (fil 420 (ver + "\n"))]
+                                   ["passwd" (fil 420 "root:x:0:0:root:/data/root:/bin/sh\n")]
+                                   ["resolv.conf" (link "/run/resolv.conf")]])))]
         ["lib" (dir (two? (readdir wifi) ? [["firmware" (sqfs-tree wifi)]] ()))]
         ["proc" (dir ())] ["run" (dir ())] ["sys" (dir ())] ["tmp" (dir ())]
         ["usr" (dir [["bin" (dir ())] ["src" (dir ())]])]])
@@ -131,7 +155,8 @@
    (fw f) (rd (as 4 + "/" + f))
    wifi (as 4 + "/wifi")
    stamp (#as > 5 ? (read (as 5)) 0)
-   r1 (sqfs-make (root love "v1") stamp 'zlib)
+   site (#as > 6 ? (sqfs-tree (as 6) @ ['dir _ ks] ks ()) ())
+   r1 (sqfs-make (root love "v1" site) stamp 'zlib)
    rsz (32 * mib)
    _ (#r1 <= rsz * 512 || gone "a root outgrows its slot")
    asz (64 * mib)  fsz (128 * mib)  dsz (64 * mib)
