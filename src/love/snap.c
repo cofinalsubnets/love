@@ -178,7 +178,7 @@ static intptr_t image_imm_index(word v) {
 #define CodeDict ((uintptr_t) 32 << 10)
 #define CodeDictTabs ((uintptr_t) 1 << 10)                     // the tables' bound, past the content
 #ifndef CodeZLevel
-#define CodeZLevel 12
+#define CodeZLevel 15
 #endif
 // token stream: [raw length, chunks, shared code's length, dict length, its deflated length], per
 // chunk a StreamRow, the shared code, the dictionary, then the deflated bytes or the raw stream.
