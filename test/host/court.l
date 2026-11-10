@@ -251,4 +251,10 @@
        (oc 'sunk < 0.25 * clear 'sunk) (clear 'cover < oc 'cover)
        rises))
 (test_fin ())
+; a phone's thumbs: w s a d walk and sidestep at the frame's own pace
+(: st (at 12.0) x0 (st 'px) z0 (st 'pz) _ (keys! st [100]) x1 (st 'px) z1 (st 'pz)
+   _ (keys! st [97]) x2 (st 'px) z2 (st 'pz)
+   (test (x0 != x1 || z0 != z1)
+         (mag (x2 - x0) < 1e-9 && mag (z2 - z0) < 1e-9)))
+
 (puts "court: ok")

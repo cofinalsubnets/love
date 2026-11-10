@@ -6,7 +6,7 @@
                                             ; and the macro is what quotes their operands
    lof (uu 'lof) bridge (uu 'bridge))
 ; ..so hoist the three macros here, in a form of their own: c0 compiles a whole form at once
-(: _ (transcribe 'uu '(defn defq defvc axm defcx)))
+(: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx)))
 
 ; with `uu` missing every defn is a truthy no-op and the corpus paints fake green
 (test
@@ -2297,6 +2297,8 @@
  ; an obligation is checked and kept by no one: a false one refused, a cite of a true one unbound
  ('rejected = rejects (z \ defvc uu-vc-false (paths nat 1 2) (idpath 1)))
  (defvc uu-vc-true (paths nat 1 1) (idpath 1))
+ (defcx uu-cx-vcs (z nat))
+ ('rejected = rejects (z \ defvcs uu-vcs-bad 1 uu-cx-vcs (a nat) (paths nat a a) (idpath a) (paths nat a 0) (idpath a)))
  ('rejected = rejects (z \ defq uu-vc-cite (paths nat 1 1) uu-vc-true))
  ('rejected = rejects (z \ defn uu-bad2 (pi x nat nat) (lam x (succ y))))
  ('rejected = rejects (z \ defn uu-bad3 nat (lam x x)))
@@ -2324,3 +2326,5 @@
  ; a constant codomain still has to be compared
  ('rejected = rejects (z \ defn uu-cv7 (pi x nat bool) (the (pi x nat nat) (lam x x)))))
 (hear test-strict)
+; a run of obligations, each its own theorem, under the context and the binders
+(test (defvcs uu-vcs 1 uu-cx-vcs (a nat) (paths nat a a) (idpath a) (paths nat z z) (idpath z)))

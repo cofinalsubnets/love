@@ -5,10 +5,10 @@ static const uint16_t gz_dbase[30] = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 
 static const uint8_t gz_dext[30] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
 static const uint8_t gz_clord[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 // table roots: a longer code walks bits, so these trade 2^root fill writes against walks
-#define LROOT 12
+#define LROOT 11
 #define DROOT 9
 #define CROOT 7
-// one block's decode tables, 10 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
+// one block's decode tables, 7 KB on inf_run's frame (see inf_rund): the kernel's 64 KiB boot
 // stack inflates with it
 struct inf_tabs {
  uint16_t ltab[1 << LROOT], dtab[1 << DROOT], ctab[1 << CROOT], lsym[288], dsym[32], csym[19];
@@ -29,7 +29,7 @@ static inline void inf_fill(struct inf_rd *r) {
   r->bc |= 56;
  } else {
   while (r->ip < r->n) {
-   if (56 < r->bc)
+   if (55 < r->bc)
     break;
    r->bb |= (uint64_t) r->in[r->ip] << r->bc;
    r->ip++;
@@ -391,4 +391,21 @@ static int64_t inf_go(struct inf_rd *r) {
   }
  }
  return r->op;
+}
+static int64_t inf_start(struct inf_rd *r) {
+ int64_t x;
+ if ((uintptr_t) -1 - 8 < r->n)
+  return -1;
+ if ((uintptr_t) -1 - 266 < r->cap)
+  return -1;
+ if ((uintptr_t) -1 - r->nd < r->cap)
+  return -1;
+ r->ip = 0;
+ r->bc = 0;
+ r->bb = 0;
+ r->op = 0;
+ x = inf_go(r);
+ if (x < 0)
+  return x;
+ return x;
 }

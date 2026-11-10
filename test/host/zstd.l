@@ -1,6 +1,7 @@
 ; test/host/zstd.l -- zstandard read a block at a time, held to the frames read whole
 ; zstd-pull steps a block at a time off a reader and zstd-unpack reads the whole string; every
-; cut of a stream answers the same bytes, or the same word. zstd-pack's frames read back.
+; cut of a stream answers the same bytes, or the same word. zstd-pack's frames read back, and
+; zstd-zip's, fed in any cut, are theirs but for the header.
 ;   run:  cat test/00-init.l test/host/zstd.l | out/love
 (borrow '(zstd bytes hashes))
 
@@ -22,15 +23,40 @@
    zst-m (zstd-pack zst-mix 9)
    ; a skippable frame: magic 0x184d2a5?, a length, that many bytes
    zst-skip ("\x5a\x2a\x4d\x18" + wrle 5 4 + "hello")
-   (zst-flip s k) (cask #s @ c (pour c 0 s 0 #s, pin c k (s k ^ 1), string c))
-   (zst-back s l) (zstd-unpack (zstd-pack s l) @ u (two? u && <>u = s)))
+   (zst-xor s k b) (cask #s @ c (pour c 0 s 0 #s, pin c k (s k ^ b), string c))
+   (zst-flip s k) (zst-xor s k 1)
+   ; the same frame with its checksum and the flag that wants it taken off
+   zst-nk (zst-xor (snip zst-a 0 (#zst-a - 4)) 4 4)
+   (zst-back s l) (zstd-unpack (zstd-pack s l) @ u (two? u && <>u = s))
+   (zst-zip s k l) (: o {0 ()}
+                      z (zstd-zip (zst-rd (zst-cut s k)) l (b \ pin o 0 (b . o 0)))
+                      (two? z ? (cats (rev (o 0))) ()))
+   ; the streamed frame reads back and ends as the whole one does, past its 6-byte header
+   (zst-zips s k l) (zst-zip s k l @ z
+                      (: w (zstd-pack s l)   n (#z - 6)
+                         (string? z && zstd-unpack z = [1 s] && snip w (#w - n) #w = snip z 6 #z)))
+   zst-big (cats (map (_ \ zst-mix) (jot 5))))
 (test
  (lit? zstd-block)
  ; every level reads back, the empty input too, and one byte over and over
- (zst-all (zst-back zst-mix) [1 2 3 5 9 12 19])
+ (zst-all (zst-back zst-mix) [1 2 3 5 9 12 13 14 15 16 17 18 19])
  (zst-back "" 3)
  (zst-back "x" 3)
+ (zst-back "" 19)
+ (zst-back "x" 19)
+ (zst-back (cats (map (_ \ "z") (jot 70000))) 19)
+ ; the optimal parse beats the chain on source, and text beside noise splits its blocks
+ (uread "src/love/compress/zstd.c" @ [1 c] (: z (zstd-pack (c + "") 19) (#z * 100 < #(zstd-pack (c + "") 15) * 97 && zstd-d z = c + "")))
  (zst-back (cats (map (_ \ "z") (jot 70000))) 3)
+ ; each step of the ladder pays on source, and the lookahead reads back to the last bytes
+ (uread "src/love/compress/zstd.c" @ [1 c] (: (z l) #(zstd-pack (c + "") l) (z 15 < z 13 && z 13 < z 12 && z 12 < z 9 && z 9 < z 5 && z 5 < z 3)))
+ (zst-all (zst-back "abcdefghabcdefgh") [4 9 13 15])
+ (zst-all (zst-back zst-noise) [4 9 13 15])
+ ; the fast parse reads past a run of nothing, up to the last byte, and its tables grow by level
+ (zst-all (zst-back zst-noise) [1 2 3])
+ (zst-all (zst-back "abcdefgh") [1 2 3])
+ (zst-all (zst-back "abcdefghabcdefgh") [1 2 3])
+ (uread "src/love/compress/zstd.c" @ [1 c] (#(zstd-pack (c + "") 3) <= #(zstd-pack (c + "") 1)))
  (#zst-a < #zst-text // 20)
  (zst-same zst-a zst-ks)
  (zst-same zst-m [7 4096 100000])
@@ -45,6 +71,19 @@
  (zst-same "hello, not zstd" zst-ks)
  ; the checksum is held: a flipped bit in it is 'check
  (zstd-unpack (zst-flip zst-a (#zst-a - 2)) = 'check)
+ ; and a frame with none reads as well, before or after one with
+ (zstd-unpack (zst-nk + zst-a) = [1 (zst-text + zst-text)])
+ (zstd-unpack (zst-a + zst-nk) = [1 (zst-text + zst-text)])
+ (zst-same zst-nk zst-ks)
+ ; streamed: any cut, every kind of parse, a window that slides, nothing at all
+ (zst-all (k \ zst-zips zst-mix k 3) [7 4096 100000 1000000])
+ (zst-zips (snip zst-mix 0 9000) 1 3)
+ (zst-all (zst-zips zst-mix 77777) [1 2 4 9 13 16 19])
+ (zst-zips zst-big 65536 1)
+ (zst-zips "" 7 3)
+ (#(zst-zip "" 7 3) = 13)
+ (zstde-new 20 = ())
+ (: st (zstde-new 3)   _ (zstde-end st) (zstde-feed st "x" = ()))
  ; torn at every length, and a flipped bit anywhere: the same answer whole or pulled
  (zstd-unpack (snip zst-a 0 (#zst-a - 1)) = 'end)
  (: (go i) (? (#zst-a <= i) 1 !(zst-same (snip zst-a 0 i) [7 4096]) 0 (go (i + 13))) (go 0))

@@ -55,14 +55,14 @@ int lovefs_child(char const *c, uintptr_t cn, int *cur, char const **name, uintp
 
 // a read port over entry i's decoded bytes: they live as long as the process, so the cell
 // holds their address as a charm, nothing to trace
-struct lovefs_port { struct io io; word at, len, pos; };
+struct lovefs_port { struct io io; word ent, len, pos; };   // an entry, not an address: a charm is a bit short of one at 32 bits
 static struct g *lovefs_flush(struct g *g) { return g; }
 static intptr_t lovefs_readn(struct g *g, unsigned char *dst, uintptr_t n) {
  struct lovefs_port *q = (struct lovefs_port*) g->io;
  uintptr_t pos = (uintptr_t) getcharm(q->pos), len = (uintptr_t) getcharm(q->len);
  if (pos >= len) return -1;
  uintptr_t k = len - pos < n ? len - pos : n;
- memcpy(dst, (unsigned char const*) getcharm(q->at) + pos, k);
+ memcpy(dst, vfs_bake_bytes(&lovefs.v, lovefs.v.ents[getcharm(q->ent)].bake) + pos, k);
  q->pos = putcharm((intptr_t) (pos + k));
  return (intptr_t) k; }
 static uintptr_t lovefs_athand(struct g *g, uintptr_t n) {
@@ -83,7 +83,7 @@ struct g *lovefs_port(struct g *g, uintptr_t i) {
  q->io.ap = lvm_port_io;
  q->io.vt = &lovefs_vt;
  q->io.ungetc_buf = putcharm(EOF);
- q->at = putcharm((intptr_t) b);
+ q->ent = putcharm((intptr_t) i);
  q->len = putcharm((intptr_t) len);
  q->pos = putcharm(0);
  *--g->sp = (word) tagthread(k, n);

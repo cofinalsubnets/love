@@ -9,7 +9,7 @@
 ;   pom [[[[[cc]yy]mm]dd]HH]  another hour, date(1)'s order
 (module (pom pom-main pom-julian pom-phase pom-name pom-percent pom-art
              pom-pixels pom-now pom-cells pom-tint pom-tc pom-xterm pom-lit
-             pom-lit? pom-mare? pom-face pom-moon pom-glow pom-glow-at pom-natural)
+             pom-lit? pom-mare? pom-face pom-moon pom-glow pom-glow-at pom-orbit-at pom-natural)
 (borrow '(cal cli))
 (:
  epoch 2444238.5                       ; 1980 january 0.0
@@ -129,20 +129,26 @@
  (sat v) (min (max v 0.0) 1.0)
  (pom-glow p nx ny) (1.0 < 2 nx + 2 ny ? () (pom-glow-at p nx ny))
  ; ..the same at nx ny numbers or trays alike, off the disc as at its limb
- (pom-glow-at p nx ny)
-  (: nz (sqrt (max (1.0 - (2 nx + 2 ny)) 0.0)) a (tau * p) sx (sin a) sz (0.0 - cos a)
+ (limb nx ny) (sqrt (max (1.0 - (2 nx + 2 ny)) 0.0))
+ (pom-glow-at p nx ny) (: nz (limb nx ny) (glow-on (tau * p) nx nz nx ny nz))
+ ; ..the same light from a camera circling the moon: the sun stays over the near side, which turns
+ (pom-orbit-at p nx ny) (: nz (limb nx ny) a (tau * p)
+                           (glow-on a nx nz (0.0 - (nx * cos a + nz * sin a)) ny (nx * sin a - nz * cos a)))
+ ; ..lit by the view's (nx nz), its ground read on the sphere at (bx by bz), so a feature foreshortens at the limb
+ (glow-on a nx nz bx by bz)
+  (: sx (sin a) sz (0.0 - cos a)
      mu0 (max (nx * sx + nz * sz) 0.0) mu nz
      ls (mu0 / max (mu0 + mu) 1e-9)
      lit (1.65 * (0.85 * ls + 0.15 * mu0))
      ; ..a sea's shore wanders: its radius by the bearing from its middle
-     (soft m) (: dx (nx - m 0) dy (ny - m 1) an (atan2 dy dx) k (m 0 * 7.0 + m 1 * 11.0)
+     (soft m) (: dx (bx - m 0) dy (by - m 1) dz (bz - limb (m 0) (m 1)) an (atan2 dy dx) k (m 0 * 7.0 + m 1 * 11.0)
                  rr (m 2 * (1.0 + 0.13 * sin (2.0 * an + k) + 0.06 * sin (5.0 * an + 2.0 * k)))
-                 (sat ((rr - sqrt (2 dx + 2 dy)) / (0.5 * m 2))))
+                 (sat ((rr - sqrt (2 dx + 2 dy + 2 dz)) / (0.5 * m 2))))
      mare (foldl (\ b m (max b (soft m))) 0.0 seas)
      ; ..the highlands' mottle: waves at slants and lengths that never line up
-     mott (0.022 * sin (19.0 * nx + 11.0 * ny + 1.3) + 0.018 * sin (-23.0 * nx + 29.0 * ny + 0.4)
-           + 0.014 * sin (43.0 * nx - 31.0 * ny + 2.1) + 0.01 * sin (61.0 * nx + 67.0 * ny))
-     (bright c) (: dx (nx - c 0) dy (ny - c 1) r (sqrt (dx * dx + dy * dy))
+     mott (0.022 * sin (19.0 * bx + 11.0 * by + 13.0 * bz + 1.3) + 0.018 * sin (-23.0 * bx + 29.0 * by - 17.0 * bz + 0.4)
+           + 0.014 * sin (43.0 * bx - 31.0 * by + 23.0 * bz + 2.1) + 0.01 * sin (61.0 * bx + 67.0 * by - 37.0 * bz))
+     (bright c) (: dx (bx - c 0) dy (by - c 1) dz (bz - limb (c 0) (c 1)) r (sqrt (2 dx + 2 dy + 2 dz))
                    (c 3 * sat (1.0 - r / c 2) + (c 3 @ 0.5 (0.09 * sat (1.0 - r / 0.7) * (sin (9.0 * atan2 dy dx) @ v (4 v))) 0.0)))
      alb ((1.0 - 0.42 * mare + mott) * (1.0 + foldl (\ b c (b + bright c)) 0.0 craters))
      tint [(0.95 - 0.12 * mare) (0.93 - 0.1 * mare) (0.88 - 0.04 * mare)]

@@ -636,7 +636,7 @@
  ; the bottom of the screen, or the altar where it is seen, kneels
  (stones-tap st x y) (? (charm? (st 'dlg)) (y // 16 - menu-top st - 1 @ i (0 <= i < #acts ? [(49 + i)] ()))
                         (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1)
-                           (? (v < 0.15 && (u < 0.15 || 0.85 < u)) [113]
+                           (? (view-corner? st x y) [113]
                               (st 'eye != 'walk || 0.88 < v || altar-seen? st u v) [32]
                               ())))
  ; ..whether u v, fractions of the window, lie within the altar as the eye sees it
@@ -649,9 +649,8 @@
    qs (map at ps) m 0.02
    (all two? qs && foldl min 9.0 (map cap qs) - m <= u && u <= foldl max -9.0 (map cap qs) + m
     && foldl min 9.0 (map caup qs) - m <= v && v <= foldl max -9.0 (map caup qs) + m))
- ; ..and kitty's picture taken down after, where it was put up; held sideways on a phone
- (stones-run o) ((cite 'droid 'droid-side) 1,
-                 mind (_ \ view-stage o stones-walk (_ \ (say out mesh-gone, flush out))) () (_ \ (cite 'droid 'droid-side) 0))
+ ; ..and kitty's picture taken down after, where it was put up
+ (stones-run o) (view-stage o stones-walk (_ \ (say out mesh-gone, flush out)))
  stones-usage "usage: love play stones [--time HH:MM] [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w a s d or k j step and strafe, W or K sprint, h l turn, u n look, in a window a click holds the mouse to look and esc lets it go, space kneels, and at the altar 1 to 5 or k j and space choose; a walking key or space stands again; ? the keys; q or esc leaves, or walk back out of the canyon)"
  ; the words, as a tablet for stones-run, or () where one is wrong or said twice
  (stones-opts as)

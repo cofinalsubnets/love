@@ -1031,8 +1031,8 @@
    ; ---- the byte loops, natively -------------------------------------------------
    ; tr and base64 are nothing but a byte loop, too slow interpreted. tr's is the `xlat` nif,
    ; the love walk below its oracle. base64's group coder is a holo kernel for x64 and a64,
-   ; its twin the oracle and the engine wherever the install declines. the shape is scan.l's:
-   ; the kind guards read off g's reach, so the blob names no C address
+   ; its twin the oracle and the engine wherever the install declines. the kind guards
+   ; read off g's reach, so the blob names no C address
    ;                            g   ip  sp  scratch
    (kabi tgt) (tgt @ 'a64 '(r0 r1 r3 r4) '(r6 r5 r1 r0))
    ; Sp[k] is a heap object of reach kind `kind` (1 a string, 6 a cask), or the twin's;
@@ -1040,7 +1040,7 @@
    (kguard SP G SC k kind)
      [['ld SC SP (8 * k)] ['test SC 1] '(br ne deopt)
       ['ld 'r7 SC 0] ['ld 'r8 G (reach-offset 0 + 8 * kind)] '(cmp r7 r8) '(br ne deopt)]
-   ; the deopt: arity >= 2, so Ip <- the twin, as scan.l lands it
+   ; the deopt: arity >= 2, so Ip <- the twin, into its twin
    (kdeopt IP) ['(label deopt) ['ld 'r7 IP 8] ['lea IP 'r7 16] ['ld 'r7 IP 0] '(jmpr r7)]
    ; the answer: SC tagged as a charm onto Sp[0], then the cell's ret
    (kanswer SP IP SC) [['shl SC 1] ['or SC SC 1] ['st SP 0 SC] ['add IP IP 16] ['ld 'r7 IP 0] '(jmpr r7)]
@@ -1101,7 +1101,7 @@
         cnt))
    ; build a kernel, or answer its twin. `nif` hands the twin back itself where the
    ; install declines (inle's NX heap, wasm), so no fallback is arranged here; built
-   ; on first use and kept for the process, scan.l's shape and reason
+   ; on first use and kept for the process
    (kmake ir twin arity)
     (: h (cite 'holo) g (cite 'glaze)
        (!h || !g || nelem love-arch '(x64 a64) ? twin

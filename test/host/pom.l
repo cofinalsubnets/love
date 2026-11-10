@@ -46,5 +46,13 @@
               (g 0.5 0.0 0.0 < 1.35 * g 0.5 0.9 0.0)
               (0.0 < g 0.02 0.0 0.0) (g 0.02 0.0 0.0 < 40.0)
               (g 0.5 -0.35 -0.45 < g 0.5 -0.05 -0.82)
-              (12 = #(pom-cells (pom-natural 0.45 24) 0)))),
+              (12 = #(pom-cells (pom-natural 0.45 24) 0))
+              ; a sea at the limb narrows toward the rim and not along it
+              (g 0.5 0.7204 -0.2085 < g 0.5 0.7715 -0.3404)
+              ; circling the moon: the full moon is the same, and a quarter's light the same
+              ; while the ground under it turns
+              (: (o p x y) (lum (pom-orbit-at p x y))
+                 (&& (abs (o 0.5 0.3 0.2 - g 0.5 0.3 0.2) < 1.0)
+                     (4.0 * o 0.25 -0.6 0.0 < o 0.25 0.6 0.0) (4.0 * o 0.75 0.6 0.0 < o 0.75 -0.6 0.0)
+                     (o 0.25 0.65 0.0 != g 0.25 0.65 0.0))))),
     puts "pom: ok\n"))

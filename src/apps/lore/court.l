@@ -115,10 +115,14 @@
                   (d < m ? (pins st 'px (bs 0 + qx * m / max d 0.001) 'pz (bs 2 + qz * m / max d 0.001))
                      (pins st 'px x2 'pz z2)))
  ; ..the court's own keys, over view's
- court-binds {91 'hour-back 93 'hour-on 116 'pace 99 'clouds 112 'fall}
- (court-step st a) (: (tell st2) (pin st2 'shown (st 't + 2 * fps))
-   (walk-key st a {'turn turn-step 'walk (walk-v / fps) 'tilt tilt-step 'up 1.45 'down -1.2} put!
-    @ () (a @ 'hour-back (tell (pin st 'sim (st 'sim - 3600.0)))
+ court-binds {91 'hour-back 93 'hour-on 116 'pace 99 'clouds 112 'fall 119 'forward 115 'back 97 'strafe-left 100 'strafe-right}
+ (court-look st dx dy) (walk-look st dx dy {'mouse 0.0025 'up 1.45 'down -1.2})
+ ; ..as far as the time since the last frame carries it
+ (court-step st a) (: (tell st2) (pin st2 'shown (st 't + 2 * fps)) dt (peep st 'dt (1.0 / fps)) k (dt * fps)
+   (walk-key st a {'turn (turn-step * k) 'walk (walk-v * dt) 'tilt (tilt-step * k) 'up 1.45 'down -1.2} put!
+    @ () (a @ 'strafe-left (: d (-walk-v * dt) (put! st (st 'px + d * cos (st 'th)) (st 'pz - d * sin (st 'th))))
+              'strafe-right (: d (walk-v * dt) (put! st (st 'px + d * cos (st 'th)) (st 'pz - d * sin (st 'th))))
+              'hour-back (tell (pin st 'sim (st 'sim - 3600.0)))
               'hour-on (tell (pin st 'sim (st 'sim + 3600.0)))
               'pace (tell (pin st 'pace ((st 'pace + 1) % #(st 'paces))))
               'clouds (tell (pins st 'wx (wx-of ((st 'wx 'cover + 1) % 4) (sky-fall (st 'wx))) 'drift 0))
@@ -300,12 +304,14 @@
    {'r (alb 0) 'g (alb 1) 'b (alb 2)})
  ; ..laid a slice of k texels at a time, so the intermediates are held for a slice, not the map
  (lay-map n f) (: k 16384
-   (go lo out) (lo < n ? (: ix (lo + iota (min k (n - lo))) c (f ix)
+   (go lo out) (lo < n ? (: _ (making ()) ix (lo + iota (min k (n - lo))) c (f ix)
                             (go (lo + k) (foldl (o \ key \ pin o key (pin (peep o key (iota n * 0 + peep (c key) 0 0 * 0)) ix (c key)))
                                                 out (keys c))))
                          out)
    (go 0 {}))
- (court-maps _) (maps 'wall ? maps (: m (lay-map wall-n wall-at) _ (each runs (lay-run m))
+ ; ..and what is laid told to the loading screen, while a walk has one up
+ (making _) (maps 'tick @ () () t (t "laying" ()))
+ (court-maps _) (maps 'wall ? maps (: m (lay-map wall-n wall-at) _ (each runs (r \ (making (), lay-run m r)))
                                      (pins maps 'wall m 'floor (lay-map (fl-nx * fl-nz) floor-at))))
  ; --- the tree: below the wall tops a point is kept inside the walls, or not grown in one ---
  crown-y 5.5
@@ -703,16 +709,21 @@
  ; --- the walk, on view's loop; court-run raises the stage. o says how to start, or ():
  ; 'now [local-seconds dst], 'wx the weather, 'pace sky seconds a second ---
  (court-walk o) (: (opt k) (tablet? o ? (o k) ())
-   (view-walk {'new (w \ h \ (: st (court-size (pins (court-new w h (opt 'now @ n (n ? n (court-now ()))))
+   (view-walk {'new (w \ h \ (: _ (pin maps 'tick (view-tick (opt 'win) view-spin)) _ (court-maps ()) _ (making ())
+                                  st (court-size (pins (court-new w h (opt 'now @ n (n ? n (court-now ()))))
                                                     'deep (opt 'md = 'window || view-deep? ()) 'kitty (mesh-mode (opt 'md))
                                                     'win (opt 'win) 'scale (opt 'scale))
                                               w (h // 2))
                                   wx (opt 'wx) p (opt 'pace)
                                   _ (wx ? (pins st 'wx wx 'drift (opt 'fix ? 0 1)))
+                                  _ (making (), court-pens st, pin maps 'tick ())
                                   (charm? p ? (pins st 'paces (p . paces) 'pace 0) st)))
-               'size court-size 'frame court-frame 'key court-step 'tick court-move
+               'stick [119 115 97 100]
+               'walking (view-walking + ['strafe-left 'strafe-right]) 'repeat [0 0]
+               'size court-size 'frame court-frame 'key court-step 'look court-look
+               'tick (st \ (walk-dt st, court-move st))
                'binds (view-bind view-binds court-binds)
-               'listed (view-listed ['hour-back 'hour-on 'pace 'clouds 'fall 'finer 'coarser])
+               'listed (view-listed ['strafe-left 'strafe-right 'hour-back 'hour-on 'pace 'clouds 'fall 'finer 'coarser])
                'fps fps 'song (hn \ ()) 'linger 0 'next () 'win (opt 'win)}))
  ; ..and kitty's picture taken down after, where it was put up
  (court-run o) (view-stage o court-walk (_ \ (say out mesh-gone, flush out)))

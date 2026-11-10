@@ -18,6 +18,7 @@
 #define PLL_SYS_BASE    0x40028000u
 #define UART0_BASE      0x40034000u
 #define TIMER_BASE      0x40054000u
+#define WATCHDOG_BASE   0x40058000u
 #define SIO_BASE        0xd0000000u
 #define PPB_BASE        0xe0000000u
 #define VTOR_ADDR       (PPB_BASE + 0xed08u)   // M0PLUS_VTOR
@@ -101,6 +102,9 @@
 // TIMER (64-bit microsecond)
 #define TIMER_TIMEHR (TIMER_BASE + 0x08u)   // latched high (read TIMELR first)
 #define TIMER_TIMELR (TIMER_BASE + 0x0cu)   // latched low (latches high)
+// the timer counts watchdog ticks: CYCLES clk_ref cycles each, and a CYCLES of 0 counts as 512
+#define WATCHDOG_TICK        (WATCHDOG_BASE + 0x2cu)
+#define WATCHDOG_TICK_ENABLE (1u << 9)
 
 // the board's onboard LED, the one output every Pico has
 #define LED_PIN 25u

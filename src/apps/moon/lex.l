@@ -225,6 +225,11 @@
        (firstat i (a . u)) (at? i a ? a (firstat i u))
        (in1? c) (ctbl c & 128)
        (digend j) (j < n && dig? (src j) ? (digend (j + 1)) j)
+       ; does the last token, a number, end flush at i?
+       (numat? i acc) (0 < i && !(ws? (src (i - 1))) && two? acc &&
+                       elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo) &&
+                       4 < #(<acc) && string? ((<acc) 4) && 0 < #((<acc) 4) &&
+                       ((<acc) 4 @ sp (#sp <= i && snip src (i - #sp) i = sp)))
        ; is the line being lexed a directive (its first token `#`)? there a `#` is # or ##
        (dirline? acc ln) (: (go l f) (two? l && <>><l = ln ? (go >l <l) f)
                             f (go acc ())
@@ -375,6 +380,14 @@
                                          (0 < w & 2147483648 ? (w - 4294967296) w)))
                                  (go j line (['num v line () (snip src i j)] . acc)))
                               (go (i + 1) line (['p "'" line] . acc))))
+                 ; a pp-number runs on through identifier chars (C11 6.4.8): a number flush
+                 ; against an identifier run, or digits past its suffix (7ef00000), becomes
+                 ; ('ppnum spelling), no number to the parser
+                 ((idh? c || dig? c) && numat? i acc)
+                  (: (pr j) (? (j < n && (idc? (src j) || src j = 46)) (pr (j + 1)) j)
+                     j0 (pr i)
+                     sp ((<acc) 4 + snip src i j0)
+                     (go j0 line (['ppnum sp line () sp] . >acc)))
                  (c = 48 && i + 1 < n && (src (i + 1) = 120 || src (i + 1) = 88))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
                      k (<>r ? (<>>>r ? 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it unsigned (1U / 1ULL)
@@ -410,16 +423,6 @@
                            cps (two? r ? (utf8dec <r))
                            (lastc l) (two? >l ? (lastc >l) <l)
                            (two? cps ? (go <>r line (['num (lastc cps) line () (snip src i <>r)] . acc))))))
-                 ; a pp-number runs on through identifier chars (C11 6.4.8): a number flush
-                 ; against an identifier run becomes ('ppnum spelling), no number to the parser
-                 (idh? c && 0 < i && !(ws? (src (i - 1))) && two? acc &&
-                  elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo) &&
-                  4 < #(<acc) && string? ((<acc) 4) && 0 < #((<acc) 4) &&
-                  ((<acc) 4 @ sp (#sp <= i && snip src (i - #sp) i = sp)))
-                  (: (pr j) (? (j < n && (idc? (src j) || src j = 46)) (pr (j + 1)) j)
-                     j0 (pr i)
-                     sp ((<acc) 4 + snip src i j0)
-                     (go j0 line (['ppnum sp line () sp] . >acc)))
                  ; an identifier may hold ucns, interned as their utf-8; a malformed one lex-errors
                  (idh? c || ucn? i)
                   (: (idr j) (? (j < n && idc? (src j)) (idr (j + 1))

@@ -42,6 +42,10 @@
 
  (1.5 = peep (gem-tray '(2) '(1.5 2.5)) 0 -1)
  (gem? (peep (gem-tray '(2) '(1.5 2.5)) 0 -1))
+ ; rank 0 answers its scalar, whether or not a collection lands between the tray and its box
+ ('ok = (: (go i) (? (i < 300000) (? ((twin-tray () [(1 ~ 2)]) = (1 ~ 2)) (go (i + 1)) i) 'ok) (go 0)))
+ ('ok = (: (go i) (? (i < 300000) (? ((gem-tray () [5.5]) = 5.5) (go (i + 1)) i) 'ok) (go 0)))
+ ('ok = (: (go i) (? (i < 300000) (? ((star-tray () [(2 ** 70)]) = (2 ** 70)) (go (i + 1)) i) 'ok) (go 0)))
 
  ; --- scalar broadcast
  (aall (star-tray '(3) '(11 21 31) = (star-tray '(3) '(10 20 30) + 1)))
@@ -51,6 +55,7 @@
  (gem-tray = tier (star-tray '(2) '(7 11) / 2))                 ; `/` promotes (7/2 inexact) -> r
  (aall (gem-tray '(2) '(3.5 5.5) = (star-tray '(2) '(7 11) / 2)))
  (aall (star-tray '(2) '(4 6) = (star-tray '(2) '(8 12) / 2)))   ; `/` stays z when every element divides evenly
+ (aall (gem-tray '(2) [9223372036854775808.0 2.0] = (@(-9223372036854775808 4) / @(-1 2))))   ; -2^63 / -1 is past z
  (aall (star-tray '(2) '(1 1) = (star-tray '(2) '(7 11) % 2)))
  (aall (star-tray '(3) '(2 4 6) = (1 + star-tray '(3) '(1 3 5))))
 
@@ -190,6 +195,8 @@
  (aall (@(0.0 2.5) = pin @(0.0 1.0) @(1) @(2.5))) (gem-tray = tier (pin @(0.0 1.0) @(1) 2))
  (aall (@(5 0) = pin @(0 0) @(0 0) @(4 5)))
  (aall (@(1 2) = pin @(1 2) @(-1 9) @(7 8)))
+ ; a float into an int tray saturates, as floor does, on every isa
+ (aall (@(9223372036854775807 -9223372036854775808 9223372036854775807 2) = pin (pin (pin (pin @(0 0 0 0) 0 1e30) 1 -1e30) 2 9223372036854775808.0) 3 2.7))
  (star-tray = tier (pin @(1 2) @(0) @(3.5))) (aall (@(3 2) = pin @(1 2) @(0) @(3.5)))
  (aall (@(1 2) = pin @(1 2) @(0 1) @(5)))                    ; values the wrong length: untouched
  (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2))))           ; the tray pinned is left as it was

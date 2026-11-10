@@ -47,6 +47,7 @@ typedef struct {
 #define PT_TLS 7
 #define EI_NIDENT 16
 #define EI_CLASS 4
+#define ELFCLASS32 1
 #define ELFCLASS64 2
 #define ELFMAG "\177ELF"
 #define SELFMAG 4
@@ -70,6 +71,12 @@ typedef struct {
   Elf64_Word  sh_link, sh_info;
   Elf64_Xword sh_addralign, sh_entsize;
 } Elf64_Shdr;
+typedef struct {
+  Elf32_Word sh_name, sh_type, sh_flags;
+  Elf32_Addr sh_addr;
+  Elf32_Off  sh_offset;
+  Elf32_Word sh_size, sh_link, sh_info, sh_addralign, sh_entsize;
+} Elf32_Shdr;
 struct dl_phdr_info {
   ElfW(Addr)        dlpi_addr;
   char const       *dlpi_name;

@@ -11,14 +11,14 @@
 # make owns the dependency graph (the moon_o objects + mooncc0.image exist) AND the
 # source lanes; this owns the procedure. NOT set -e: the compile loop reports its own
 # file. the lanes arrive in the environment because the object list already has the
-# variadic tail -- gate_love_c / gate_host_c / gate_arch_c / gate_kern_c, the Makefile's own.
+# variadic tail -- gate_love_c / gate_host_c, the Makefile's own.
 #
-# gate_seat_c is src/love/noblob.c: this pair links the kernel but lays no out/src.o and no
+# gate_seat_c is src/love/noblob.c and nokern.c: this pair lays no out/src.o and no
 # out/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
 # the carried-archive symbols itself. it rides the OBJ list too, or love1 has a body
 # love2's link cannot find.
 #
-# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
+# usage: gate_love_c=.. gate_host_c=.. gate_seat_c=..
 #        fixpoint.sh OUTDIR LOVE0 HOSTA ODIR OBJ...
 . test/gate/skip.sh
 set -u
@@ -59,7 +59,7 @@ mkobj() {                    # $1 = source -> $o
 }
 
 # love1: relink the generation make already compiled (love0's lane, byte-cheap).
-# the list arrives FROM make ($(moon_o) $(kart_o), source-derived) and is never globbed out of
+# the list arrives FROM make ($(moon_o) and the doors, source-derived) and is never globbed out of
 # the odir: a deleted src/*.c leaves its .o sitting there, and a glob relinks the ghost --
 # love1 carrying a TU love2 never compiles, which reads as a broken fixpoint.
 moon0() { "$love0" wake "$ho/mooncc0.image" mooncc "$@"; }
@@ -93,21 +93,6 @@ for f in src/apps/moon/lib/moonlibc/math/*.c; do
 done
 LOVE_NO_IMAGE=1 "$d/love1" -l "$ho/.mksys-cat.l" -e "((cite 'moon '$mks) \"$d/sys.o\")" >/dev/null || fail "love1 mksys"
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
-
-# the kernel the artifact carries (the Makefile's $(kart_o)): the link takes it,
-# so the rebuild owes it. a gate that links what make links and compiles less
-# still answers love1 == love2 -- it just answers it about a shorter binary than
-# anyone ships. an arch with no seat carries none, and $gate_arch_c is empty there.
-if [ -n "$gate_arch_c" ]; then
-  kinc="-I$ho -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include"
-  for f in $gate_kern_c $gate_arch_c; do
-    mkobj "$f"
-    moon1 $kinc -c "$f" "$o" || fail "love1 mooncc -c $f"
-  done
-  LOVE_NO_IMAGE=1 "$d/love1" -l "out/$ha/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$ha\")" \
-    || fail "love1 lay-vec"
-  test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
-fi
 
 # love2 takes the SAME list in the SAME order, one directory over -- link order is layout,
 # so two globs agreeing by luck is not one list. A name love1 linked and the loops above

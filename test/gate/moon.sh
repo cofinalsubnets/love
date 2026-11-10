@@ -68,12 +68,30 @@ for f in test/cc/*.c; do
   "$ho/.ccb"; a=$?
   $cc_g -O0 -o "$ho/.ccbg" "$f" && "$ho/.ccbg"; b=$?
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
+  moonrun -Os -o "$ho/.ccb" "$f" > /dev/null 2>&1 || fail "mooncc -Os compile $f"
+  "$ho/.ccb"; c=$?
+  [ $a -eq $c ] || fail "mooncc battery $f -Os (ours $c, plain $a)"
   # ..and again with the hardening flags, which change no answer
   moonrun -fcf-protection=full -ftrivial-auto-var-init=zero -fstack-protector-all -o "$ho/.ccb" "$f" "$ho/.sspg.o" > /dev/null 2>&1 ||
     fail "mooncc -fcf-protection -ftrivial-auto-var-init -fstack-protector-all compile $f"
   "$ho/.ccb"; c=$?
   [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
+
+# -g lays line tables: each statement's line at its code, a body with a prologue its `{` at the
+# entry, an arm laid out of line its statement's (an inlined copy takes the caller's); -g0 lays
+# none, and the code is the same either way
+printf 'int sq(int x) {\n  int y = x * x;\n  return y + 1;\n}\nint q(int a) { if (a)\n    return sq(a);\n  return 7; }\n' > "$ho/.dwl.c"
+moonrun -g -c "$ho/.dwl.c" -o "$ho/.dwl.o" || fail "mooncc -g"
+[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 5 - " ] ||
+  fail "-g's line rows are not each statement's, at its code"
+moonrun -g0 -c "$ho/.dwl.c" -o "$ho/.dwl0.o" || fail "mooncc -g0"
+readelf -SW "$ho/.dwl0.o" | grep -q debug_ && fail "-g0 laid debug sections"
+[ "$(readelf -x .text "$ho/.dwl.o")" = "$(readelf -x .text "$ho/.dwl0.o")" ] || fail "-g changed the code"
+
+# stdlib.h lays alloca, as glibc's default features do (kbuild's genksyms leans on it)
+printf '#include <stdlib.h>\n#include <string.h>\nint main(void){ char *p = alloca(64); memset(p, 5, 64); return p[63] - 5; }\n' > "$ho/.sal.c"
+moonrun "$ho/.sal.c" "$ho/.sal" && "$ho/.sal" || fail "mooncc: stdlib.h alone gives no alloca"
 
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
 # carries its size, a file-scope static is a local one, a block static keeps its section
@@ -196,6 +214,18 @@ for t in x64 i386; do
   moonrun -t $t -c "$ho/.szl.S" -o "$ho/.szl.o" || fail "mooncc: a .size from another start"
   [ "$(readelf -sW "$ho/.szl.o" | awk '$8 ~ /^s[12]$/ {print $8, $3}' | sort | tr '\n' ' ')" = "s1 2 s2 2 " ] || fail "a .size from another start is not clang's ($t)"
 done
+# a word over two labels on arm's two lanes is pc-relative, relocs from clang; other widths refuse, as clang
+printf '.text\nf: nop\n.long ext - f\n.long z - f\n.data\nx: .long 0\n.long 0\nz: .long 0\n' > "$ho/.a3p.S"
+for t in thumb2 arm; do
+  moonrun -t $t -c "$ho/.a3p.S" -o "$ho/.a3p.o" || fail "mooncc -t $t: a word over two labels"
+  [ "$(readelf -rW "$ho/.a3p.o" | awk '$3 ~ /^R_/ {print $3}' | tr '\n' ' ')" = "R_ARM_REL32 R_ARM_REL32 " ] || fail "a word over two labels on $t is no R_ARM_REL32"
+  for d in short byte quad; do
+    printf '.text\nf: nop\n.%s ext - f\n' $d > "$ho/.a3w.S"
+    ! moonrun -t $t -c "$ho/.a3w.S" -o "$ho/.a3w.o" 2>/dev/null || fail "$t: a .$d over two labels was laid"
+  done
+done
+printf '.text\nf: nop\n.quad ext - f\n' > "$ho/.q8.S"
+! moonrun -t i386 -c "$ho/.q8.S" -o "$ho/.q8.o" 2>/dev/null || fail "an i386 .quad over two labels was laid"
 # a string op spelled with operands, in each mode: bytes from clang; a sign-extend keeps its name
 printf '.text\n.code32\nrep movsl %%ds:(%%esi),%%es:(%%edi)\nmovsb %%ds:(%%esi),%%es:(%%edi)\nmovsw %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%edi)\nstosb %%al,%%es:(%%edi)\nlodsl %%ds:(%%esi),%%eax\nscasb %%es:(%%edi),%%al\ncmpsb %%es:(%%edi),%%ds:(%%esi)\nrep movsl (%%esi),(%%edi)\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsl %%fs:(%%si),%%es:(%%di)\nmovsl %%es:(%%esi),%%es:(%%edi)\ninsb (%%dx),%%es:(%%edi)\noutsl %%ds:(%%esi),(%%dx)\n.code16\nrep movsl %%ds:(%%si),%%es:(%%di)\nmovsb %%ds:(%%si),%%es:(%%di)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosl %%eax,%%es:(%%di)\n.code64\nrep movsq %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%rsi),%%es:(%%rdi)\nmovsl %%ds:(%%esi),%%es:(%%edi)\nstosq %%rax,%%es:(%%rdi)\nlodsb %%ds:(%%rsi),%%al\nmovsl %%fs:(%%esi),%%es:(%%edi)\nmovsq %%gs:(%%rsi),%%es:(%%rdi)\n' > "$ho/.str.S"
 moonrun -c "$ho/.str.S" -o "$ho/.str.o" || fail "mooncc: a string op's operands"
@@ -500,7 +530,7 @@ for d in P L; do
   a=$(wc -c < "$ho/.isite.o"); b=$(wc -c < "$ho/.isiten.o")
   case $d in
     P) [ "$a" -eq "$b" ] || fail "four plain sites spliced: $a bytes against $b out of line" ;;
-    L) [ "$a" -gt "$b" ] || fail "four sites in a loop stayed calls: $a bytes against $b out of line" ;;
+    L) [ "$(objdump -d "$ho/.isite.o" | grep -c call)" = 0 ] || fail "four sites in a loop stayed calls" ;;
   esac
 done
 
@@ -720,11 +750,9 @@ for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
   printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
   moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
 done
-# #pragma pack refuses an operand it does not read and a bit-field it would let straddle
+# #pragma pack refuses an operand it does not read
 printf '#pragma pack(3)\nstruct s { char c; int i; };\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not one mooncc reads" || fail "#pragma pack(3) was taken"
-printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho/.attr.c"
-moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
 # atomics refuse by name: a generic form, a width past the exclusives, armv6-m's read-modify-write
@@ -770,6 +798,10 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 mkdir -p "$ho/.once/b"
 printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
 [ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
+# one header by an absolute source dir and a relative -I: the key is the file, from /
+oa=$(cd "$ho/.once" && pwd); orel=${oa#$PWD/}
+printf '#include "h.h"\n#include <h.h>\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m3.c"
+[ "$(moonrun -I "$orel" -E "$oa/m3.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice, absolute and relative"
 # -E on a .S defines __ASSEMBLER__, as -c on it does
 printf '#ifdef __ASSEMBLER__\nmovl $1, %%eax\n#endif\n' > "$ho/.asm.S"
 moonrun -E "$ho/.asm.S" | grep -q 'movl' || fail "-E on a .S left __ASSEMBLER__ undefined"
@@ -961,6 +993,49 @@ moonrun -t arm -mfloat-abi=soft -c -o "$ho/.asf.o" "$ho/.asf.c" > /dev/null 2>&1
 moonrun -mthumb -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mthumb laid on x64"
 moonrun -t thumb2 -mabi=aapcs-linux -c -o "$ho/.asf.o" "$ho/.apic.c" > /dev/null 2>&1 && fail "-mabi=aapcs-linux laid on m-profile"
 echo "mooncc: -t arm -fpic lays pc-relative movw/movt, and the arm asks keep to arm ok"
+# i386 under -fpic: every address is call/pop/lea pc-relative, a word read through it, a switch
+# compares; the text holds no absolute word, and the program answers as without
+cat > "$ho/.ipic.c" <<'EOF'
+static int s = 5; int hd __attribute__((visibility("hidden"))) = 7; static double k = 2.5; static int a[4];
+static int f(int x) { return x + s; }
+int sw(int x) { switch (x) { case 0: return 3; case 1: return 9; case 2: return 4; case 3: return 1; case 4: return 8; case 5: return 6; } return 0; }
+int main(void) { int (*p)(int) = f; s += hd; a[hd & 3] = s; double d = k * 3.0 + 0.25; return p(1) + sw(4) + (int)d + (hd == 7) + a[3] - 12; }
+EOF
+for o in -O0 -O2; do
+  moonrun -t i386 $o -fpic -c -o "$ho/.ipic.o" "$ho/.ipic.c" || fail "-t i386 $o -fpic compile"
+  readelf -rW "$ho/.ipic.o" | sed -n "/'.rel.text'/,/^$/p" | grep -q 'R_386_32 ' && fail "-t i386 $o -fpic laid an absolute address in the text"
+  if [ "$(uname -m)" = x86_64 ]; then
+    moonrun -t i386 $o -fpic -o "$ho/.ipic" "$ho/.ipic.c" || fail "-t i386 $o -fpic link"
+    "$ho/.ipic"; r=$?
+    [ $r = 29 ] || fail "-t i386 $o -fpic: the program answers $r, not 29"
+  fi
+done
+moonrun -t i386 -fpic -c -o /dev/null test/cc/187-regnames.c || fail "-t i386 -fpic: a symbol named as a register"
+echo "mooncc: -t i386 -fpic lays every address pc-relative ok"
+# i386's "A": a 64-bit operand rides edx:eax, in and out
+cat > "$ho/.iA.c" <<'EOF'
+static unsigned long long rd(void) { unsigned long long r; asm volatile("rdtsc" : "=A"(r)); return r; }
+static unsigned long long two(void) { unsigned long long r; asm("movl $1, %%eax\n\tmovl $2, %%edx" : "=A"(r)); return r; }
+static unsigned long long swap(unsigned long long y) { unsigned long long r; asm("xchgl %%eax, %%edx" : "=A"(r) : "A"(y)); return r; }
+/* pvclock's scale: an input in a half of the pair */
+static unsigned long long sc(unsigned long long d, unsigned int m) {
+  unsigned long long p; unsigned int t1, t2;
+  asm("mul %5; mov %4,%%eax; mov %%edx,%4; mul %5; xor %5,%5; add %4,%%eax; adc %5,%%edx"
+      : "=A"(p), "=r"(t1), "=r"(t2) : "a"((unsigned int)d), "1"((unsigned int)(d >> 32)), "2"(m));
+  return p; }
+int main(void) { unsigned long long a = rd(), b = rd(), d = 0x123456789abcdef0ull; unsigned int m = 0x87654321u;
+  unsigned long long want = (((d & 0xffffffffull) * m) >> 32) + (d >> 32) * m;
+  return (b > a) + 2 * (two() == 0x200000001ull) + 4 * (swap(0x1122334455667788ull) == 0x5566778811223344ull)
+       + 16 * (sc(d, m) == want); }
+EOF
+for o in -O0 -O2; do
+  moonrun -t i386 $o -c -o /dev/null "$ho/.iA.c" || fail "-t i386 $o: an asm operand constrained A"
+  if [ "$(uname -m)" = x86_64 ]; then
+    moonrun -t i386 $o -o "$ho/.iA" "$ho/.iA.c" || fail "-t i386 $o: the A link"
+    "$ho/.iA"; r=$?
+    [ $r = 23 ] || fail "-t i386 $o: an A operand answers $r, not 23"
+  fi
+done
 [ "$(printf '__CET__\n' | moonrun -fcf-protection -E - | tail -1 | tr -d ' ')" = 3 ] || fail "-fcf-protection: __CET__ is not 3"
 moonrun -t a64 -fcf-protection=branch -c -o /dev/null "$ho/.ibt.c" > /dev/null 2>&1 && fail "-fcf-protection taken on a64"
 echo "mooncc: -ftrivial-auto-var-init=zero zeroes every automatic, -fcf-protection lands every indirect branch on endbr"
@@ -1116,7 +1191,8 @@ echo "mooncc: -fstack-protector guards the fns its level names, an overflow reac
 # the x86-64 kernel's -m set: -mcmodel=kernel and -mno-fp-ret-in-387 ask nothing of x64's code
 # (rip-relative, abs64 words, long double in xmm0); -mskip-rax-setup leaves al unset at a
 # varargs call; -mstack-alignment=8 realigns a 16-aligned local; the thunk asks send every
-# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk
+# indirect branch through __x86_indirect_thunk_REG and every return through __x86_return_thunk;
+# -mretpoline lays the thunk at each site instead, i386 too
 cat > "$ho/.r3.c" <<'EOF'
 int pf(const char *, ...);
 int h(int);
@@ -1166,12 +1242,25 @@ $cc_g -O2 -o "$ho/.r3g" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 && "$ho/.r3g";
 moonrun $th -mstack-alignment=8 -mskip-rax-setup -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the thunked link"
 "$ho/.r3"; a=$?
 [ $a -eq $b ] || fail "r3: the thunked run answers $a, gcc $b"
+# -mretpoline (the vdso's ask) lays each thunk at its site, on x64 and i386: no plain indirect branch
+for t in x64 i386; do
+  for fl in -mretpoline -mindirect-branch=thunk-inline; do
+    moonrun -t $t $fl -c -o "$ho/.r3i.o" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: -t $t $fl compile"
+    objdump -d --no-show-raw-insn "$ho/.r3i.o" > "$ho/.r3i.d"
+    grep -Eq '(call|jmp) +\*' "$ho/.r3i.d" && fail "r3: -t $t $fl: a plain indirect branch: $(grep -E '(call|jmp) +\*' "$ho/.r3i.d" | head -1)"
+    grep -q 'lfence' "$ho/.r3i.d" || fail "r3: -t $t $fl: no retpoline laid"
+    objdump -r "$ho/.r3i.o" | grep -q '__x86_indirect_thunk_' && fail "r3: -t $t $fl names the kernel's thunk"
+  done
+done
+moonrun -mretpoline -o "$ho/.r3" "$ho/.r3m.c" "$ho/.r3.c" > /dev/null 2>&1 || fail "r3: the retpoline link"
+"$ho/.r3"; a=$?
+[ $a -eq $b ] || fail "r3: the retpoline run answers $a, gcc $b"
 for fl in "-mcmodel=large" "-mcmodel=medium" "-mstack-alignment=4" "-mindirect-branch=thunk" "-mfunction-return=thunk-inline" \
-          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern"; do
+          "-t a64 -mskip-rax-setup" "-t i386 -mno-fp-ret-in-387" "-t i386 -mindirect-branch=thunk-extern" "-t a64 -mretpoline"; do
   moonrun $fl -c -o /dev/null "$ho/.r3.c" > /dev/null 2>&1; r=$?
   [ $r -eq 2 ] || fail "r3: $fl: exit $r, not refused"
 done
-echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks"
+echo "mooncc: the x86-64 kernel's -m set: the code model, al, the 8-aligned stack, the retpoline and return thunks, the vdso's inline retpoline"
 
 # -- C11 conditional features (6.10.8.3), per target
 # ours alone (gcc has atomics): a claimed absence sends portable code down a fallback
@@ -1845,7 +1934,41 @@ echo "$uw" | awk '/ FDE /{if (r != "" && r !~ /^sp\+0( +u)* *$/) bad = 1; r = ""
 moonrun -t a64 -O2 -c "$ho/.uwt.c" -o "$ho/.uwt.o" || fail "mooncc -t a64 on .uwt.c"
 readelf -SW "$ho/.uwt.o" | grep -q eh_frame && fail "an .eh_frame laid unasked"
 moonrun -t x64 -c -mcmodel=tiny "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "-mcmodel=tiny taken on x64"
-moonrun -t x64 -c -fasynchronous-unwind-tables "$ho/.uwt.c" -o "$ho/.uwt.o" 2>/dev/null && fail "unwind tables taken on x64, where none is laid"
+# x64's: an FDE per C function; under -fno-omit-frame-pointer each keeps its rbp link
+moonrun -t x64 -O2 -fno-omit-frame-pointer -fasynchronous-unwind-tables -c "$ho/.uwt.c" -o "$ho/.uwt.o" || fail "mooncc -t x64: -fasynchronous-unwind-tables"
+[ "$(readelf -wf "$ho/.uwt.o" | grep -c ' FDE ')" = 3 ] || fail "x64 unwind tables: not one FDE per C function, the asm's left out"
+readelf -wF "$ho/.uwt.o" | grep -qE '^[0-9a-f]+ +rbp\+16 ' || fail "x64 unwind tables: no row rides rbp"
+for t in x64 i386; do
+  moonrun -t $t -O2 -fno-omit-frame-pointer -c "$ho/.uwt.c" -o "$ho/.fp.o" || fail "mooncc -t $t -fno-omit-frame-pointer"
+  [ "$(objdump -d --no-show-raw-insn "$ho/.fp.o" | grep -cE 'mov +%[er]sp,%[er]bp')" = 3 ] || fail "-t $t -fno-omit-frame-pointer: a C function lost its frame link"
+done
+# glibc's backtrace walks gcc's frames into mooncc's and back, a VLA's among them
+cat > "$ho/.uwx.c" <<'EOF'
+int probe(int);
+__attribute__((noinline)) int c3(int x) { volatile int t[30]; t[x % 30] = x; return probe(t[x % 30]) + 1; }
+__attribute__((noinline)) int c2(int x, int y) { volatile int v[x + y]; int s = 0; for (int i = 0; i < y; i++) { v[i] = c3(x + i); s += v[i]; } return s; }
+__attribute__((noinline)) int c1(int x) { double d = x * 1.5; if (x < 0) return -1; return c2(x, (int)d / 7) * 2; }
+EOF
+cat > "$ho/.uwm.c" <<'EOF'
+#include <execinfo.h>
+#include <stdio.h>
+#include <string.h>
+int c1(int);
+int probe(int x) {
+  void *b[32]; int n = backtrace(b, 32); char **s = backtrace_symbols(b, n);
+  const char *want[] = { "c3", "c2", "c1", "main" }; int k = 0;
+  for (int i = 0; i < n && k < 4; i++) { char w[16]; snprintf(w, sizeof w, "(%s+", want[k]); if (strstr(s[i], w)) k++; }
+  return k == 4 ? 0 : 100;
+}
+int main(void) { return c1(5) != 2; }
+EOF
+for o in 0 2; do
+  for fp in "" -fno-omit-frame-pointer; do
+    moonrun -t x64 -O$o $fp -fasynchronous-unwind-tables -c "$ho/.uwx.c" -o "$ho/.uwx.o" || fail "mooncc -O$o $fp: the backtrace corpus"
+    $cc_g -rdynamic -o "$ho/.uwx" "$ho/.uwm.c" "$ho/.uwx.o" || fail "gcc: the backtrace link"
+    "$ho/.uwx" || fail "x64 unwind tables -O$o $fp: a backtrace lost a mooncc frame"
+  done
+done
 # ..however deep the chain: ten calls down, seven of them always_inline
 for t in x64 a64 rv64; do
   moonrun -t $t -c test/cc/323-always-inline-deep.c -o "$ho/.awd.o" || fail "mooncc -t $t: 323-always-inline-deep"
@@ -2029,10 +2152,10 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # every hosted kernel takes the carried archive; a warm cache hides a refusal, so ask
 # the binary what it carries, then drop the cache so the clock means something
 for a in x64 a64 rv64; do
-  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-gz \"$a\")))) 0)" | head -1)
+  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-zst \"$a\")))) 0)" | head -1)
   case $n in ''|*[!0-9]*) n=0;; esac
   [ "$n" -gt 1000 ] \
-    || fail "carried runtime: this binary carries no $a archive (runtime-gz answered $n bytes)"
+    || fail "carried runtime: this binary carries no $a archive (runtime-zst answered $n bytes)"
 done
 rm -f out/cache/moon/*.a                      # the clock below must measure the carried read
 printf '#include <stdio.h>\nint main(void){ printf("os lane\\n"); return 0; }\n' > "$ho/.os.c"

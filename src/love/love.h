@@ -53,14 +53,6 @@ static love_inline size_t b2w(size_t b) {
 #ifndef iobuf
 #define iobuf 4096
 #endif
-// slack on every avail check against off-by-one overshoots; 0 under Love0, to keep it strict
-#ifndef avail_floor
-# ifdef Love0
-#  define avail_floor 0
-# else
-#  define avail_floor 8
-# endif
-#endif
 // this link bakes the crew from the source it carries; love0 lays that blob, wasm has no self on disk
 #if !defined(Love0) && !defined(__wasm__)
 # define LvBakeSrc 1
@@ -179,10 +171,10 @@ union u {
 // a variable ask is held to the room Sp - Hp, which no n can wrap; a small constant keeps
 // the one-instruction Hp + n, which wraps only within 32 KB of the address space's top
 #define room(Hp, Sp) (((uintptr_t) (Sp) - (uintptr_t) (Hp)) / sizeof(word))
-#define have_gc(n) { g->b = (n) + avail_floor; love_musttail return Ap(lvm_gc, g); }
+#define have_gc(n) { g->b = (n); love_musttail return Ap(lvm_gc, g); }
 #define Have(n) do { \
-  if (__builtin_constant_p(n) && (n) <= 4096) { if (Sp < Hp + (n) + avail_floor) have_gc(n) } \
-  else if (room(Hp, Sp) < (uintptr_t) (n) + avail_floor) have_gc(n) } while (0)
+  if (__builtin_constant_p(n) && (n) <= 4096) { if (Sp < Hp + (n)) have_gc(n) } \
+  else if (room(Hp, Sp) < (uintptr_t) (n)) have_gc(n) } while (0)
 #define Have1() Have(1)
 #define pop1(g) (*(g)->sp++)
 #define op(nom, n, x) lvm(nom) { intptr_t _ = (x); *(Sp += n-1) = _; Ip++; love_musttail return Continue(); }
@@ -299,8 +291,8 @@ struct g {
  // the rem set: old cells that took a young pointer; a rem_miss forces the next collection major
  word *rem;
  uint32_t rem_n, rem_hi, rem_miss;   // bounded by LvRemCap
- int8_t lean;                             // grow streak; a grow needs lean >= 2
  intptr_t scare;                          // why the last scare: an oom's ask, or a Scare case
+ uintptr_t c0_floor;                      // the lowest C stack address a compile may reach, set by its first
 #ifdef LvGcCheck
  bool unpacked;                           // the registers ahead of hp and sp (Pack, Unpack)
 #endif
@@ -478,6 +470,9 @@ int raw_mode(intptr_t on);                      // the (raw on) latch; main.c's 
 size_t host_selfpath(char*, size_t);
 // ..image.c..
 struct image_opt;
+int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win);
+// ..elfbake.c or macho.c, one per link: 0 laid, >0 not laid for growth, <0 failed
+int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win);
 int image_bake(struct g*, char const *out, int bare, struct image_opt const*), baked_pick(void const **blob, uintptr_t *blen);
 struct g *image_load(char const*, int*), *image_dump(struct g*, char const*, struct image_opt const*);
 extern uint64_t baked_image[];
@@ -486,7 +481,11 @@ extern uintptr_t baked_image_len;
 intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          inflate_dict(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, unsigned char const*, uintptr_t),
          deflate_raw(struct g*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
-         deflate_dict(struct g*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+         deflate_dict(struct g*, unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
+         deflate_hot(struct g*, unsigned char const*, uintptr_t const*, uintptr_t, unsigned char*, uintptr_t, uintptr_t*, unsigned char*, uintptr_t),
+         inflate_shared(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, void*);
+uintptr_t inflate_tabs_size(void);
+int inflate_tabs_load(unsigned char const*, uintptr_t, void*), inflate_shared_is(unsigned char const*, uintptr_t);
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
@@ -927,18 +926,22 @@ static love_inline struct tray *ini_tray(struct tray *v, enum tray_type t, uintp
 static love_inline uintptr_t tray_bytes(enum tray_type t, uintptr_t R, uintptr_t n) {
  if (n >= words_max) return (words_max + 1) * sizeof(word);
  return sizeof(struct tray) + R * sizeof(word) + n * love_T[t]; }
+// a float into an int tray's word, saturating, a NaN to 0, as floor and int's scalars leave the float kind
+static love_inline intptr_t flo_word(flo_t v) {
+ return v >= (flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (flo_t) INTPTR_MIN ? INTPTR_MIN
+      : v != v ? 0 : (intptr_t) v; }
 static love_inline flo_t tray_get_flo(struct tray *v, uintptr_t i) {
  void *p = tray_data(v);
  return v->type == love_R ? ((flo_t*) p)[i] : (flo_t) ((intptr_t*) p)[i]; }
 static love_inline intptr_t tray_get_int(struct tray *v, uintptr_t i) {
  void *p = tray_data(v);
- return v->type == love_R ? (intptr_t) ((flo_t*) p)[i] : ((intptr_t*) p)[i]; }
+ return v->type == love_R ? flo_word(((flo_t*) p)[i]) : ((intptr_t*) p)[i]; }
 static love_inline void tray_put_int(struct tray *v, uintptr_t i, intptr_t x) {
  void *p = tray_data(v);
  if (v->type == love_R) ((flo_t*) p)[i] = (flo_t) x; else ((intptr_t*) p)[i] = x; }
 static love_inline void tray_put_flo(struct tray *v, uintptr_t i, flo_t x) {
  void *p = tray_data(v);
- if (v->type == love_R) ((flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = (intptr_t) x; }
+ if (v->type == love_R) ((flo_t*) p)[i] = x; else ((intptr_t*) p)[i] = flo_word(x); }
 static love_inline word tray_get_obj(struct tray *v, uintptr_t i) {
  return ((word*) tray_data(v))[i]; }
 static love_inline void tray_put_obj(struct tray *v, uintptr_t i, word x) {
@@ -954,7 +957,7 @@ static love_inline bool tray_put(struct tray *v, uintptr_t i, word x) {
   return true; }
  if (!isnum(x)) return false;
  if (v->type >= love_R) tray_put_flo(v, i, toflo(x));
- else tray_put_int(v, i, gemp(x) ? (intptr_t) gem_get(x) : toint(x));
+ else tray_put_int(v, i, gemp(x) ? flo_word(gem_get(x)) : toint(x));
  return true; }
 uintptr_t bshape(word a, word b, uintptr_t *R);
 void bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),

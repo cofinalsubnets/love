@@ -7,7 +7,7 @@
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-cells view-pen view-band
-         view-rescale view-loading view-spin)
+         view-rescale view-loading view-spin view-tick view-corner? view-tap)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
@@ -167,7 +167,7 @@
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
  ; optional 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
 ; and 'held (st) to stop a repeat; 'stick [ahead back left right], those keys for a phone's
-; thumbs, and 'tap (st x y) the keys a tap at pixel x y is.
+; thumbs, and 'tap (st x y) the keys a tap at pixel x y is, view-tap unless said.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
@@ -211,7 +211,7 @@
                                     + axis 'stick-y (? (#stick > 4 && dy < -view-thumb-run) (stick 4) (dy < -d) (stick 0) (d < dy) (stick 1) ()))
                          (: _ (pins ms 'dx (ms 'dx + view-thumb-look * (x - f 'x)) 'dy (ms 'dy + view-thumb-look * (y - f 'y))) ()))
                    (pins f 'x x 'y y 'far (f 'far || d < abs dx || d < abs dy ? 1 0), ks))
-        (: ks (f 'far ? () (lv 'tap st x y))
+        (: ks (f 'far ? () (peep lv 'tap view-tap st x y))
            ((f 'walk ? (pins held 'stick-x () 'stick-y ())),
             pin fg id (),
             ks))))
@@ -221,7 +221,7 @@
               (: e <l nx (two? >l ? <>l ()) t (two? nx && <nx = 'text ? (nx 1) "")
                  k (? (0 < #t) (t 0) (view-set1 (e 1)))
                  (? (<e = 'close) ('quit . wgo >l)
-                    (<e = 'finger) (finger e + wgo >l)
+                    (<e = 'finger) (finger e @ ks (ks + wgo >l))     ; in turn: a quick tap's up may ride with its down
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
                     (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
@@ -291,14 +291,21 @@
                   0)
  ; ..or a window, unless its words asked for the terminal: 640 by 400 and given back after,
  ; and one that can't be had is the terminal's unless it was asked for. walk takes o with
- ; 'win the window, and done answers what to say to the terminal once it is down
+ ; 'win the window, and done answers what to say to the terminal once it is down. a phone
+ ; holds it sideways, its keyboard down, from before the level is made
  (view-stage o walk done)
   (: asked (o 'md = 'window) (tty _) (view-run (_ \ walk o), done (), 0)
+     (side on) ((cite 'droid 'droid-side) on)
      (? (!asked && (o 'md != () || !(window-here? ()))) (tty ())
-        (window-open 640 400 "lore" @ win
-           (? (tablet? win) (mind (_ \ walk (pins o 'md 'window 'win win)) () (_ \ window-close win), 0)
-              asked (say err ("lore: no window (" + show win + ")\n"), flush err, 1)
-              (tty ())))))
+        (side 1, window-open 640 400 "lore" @ win
+           (? (tablet? win) (window-thumbs win,
+                             mind (_ \ walk (pins o 'md 'window 'win win)) () (_ \ (window-close win, side 0)), 0)
+              asked (side 0, say err ("lore: no window (" + show win + ")\n"), flush err, 1)
+              (side 0, tty ())))))
+ ; ..whether pixel x y is a top corner of st's window, and the tap that leaves by one
+ (view-corner? st x y) (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1)
+                          (v < 0.15 && (u < 0.15 || 0.85 < u)))
+ (view-tap st x y) (view-corner? st x y ? [113] ())
  ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
  ;     (tick what part), for the making to call as it goes, what it is at and () or how far
  ;     through, 0.0 to 1.0. once the making has taken view-load-wait ms, and no oftener than
@@ -318,9 +325,13 @@
             (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (b 1) (b 3)))
                (string? s) (say out s, flush out)),
             ()))))))
+ ; ..a tick for win, or the terminal where it is (), its whole screen the box
+ (view-tick win draw) (view-loading win (tablet? win ? ()
+                         (tty 1 @ ws [0 0 (two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])) draw)
  ; ..the loading screen a level has unless it says another: the box black, and in its middle
  ; the moon going through its phases, a month in view-spin-n draws, new to full lit from the
- ; right, drawn as pom draws it naturally; in a terminal its eight faces, two cells wide
+ ; right, drawn as pom draws it naturally from a camera circling it; in a terminal its eight
+ ; faces, two cells wide
  view-spin-bg 0 view-spin-n 24
  view-spin-cells ["\u{1f311}" "\u{1f312}" "\u{1f313}" "\u{1f314}" "\u{1f315}" "\u{1f316}" "\u{1f317}" "\u{1f318}"]
  (view-spin ld) (: b (ld 'box) n (ld 'n) win (ld 'win) bw (b 2 - b 0) bh (b 3 - b 1)
@@ -330,7 +341,7 @@
       (: Q (min bw bh // 5) k (max 1 ((Q + 63) // 64)) S (Q // k) A (S * k) W (window-size win 0) P (window-paper win) bg view-spin-bg
          x0 (b 0 + (bw - A) // 2) y0 (b 1 + (bh - A) // 2)
          I (iota (2 S)) R (0.42 * S) x ((I % S - 0.5 * S + 0.5) / R) y ((I // S - 0.5 * S + 0.5) / R)
-         in (2 x + 2 y < 1.0) f (bg + in * ((cite 'pom 'pom-glow-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (2 A * 4))
+         in (2 x + 2 y < 1.0) f (bg + in * ((cite 'pom 'pom-orbit-at) ((n % view-spin-n) / (1.0 * view-spin-n)) x y - bg)) T (cask (2 A * 4))
          Z (cask (4 * bw))
          fr (peep ld 'fresh (n = 0)) _ (fr ? (each ^bh (j \ pour P (((b 1 + j) * W + b 0) * 4) Z 0 (4 * bw))))
          (S < 12 ? () (: _ (frame-paint f S k T A) _ (each ^A (j \ pour P (((y0 + j) * W + x0) * 4) T (j * A * 4) (A * 4)))

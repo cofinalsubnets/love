@@ -4,8 +4,8 @@ src/love/ is everything over one interface, moonlibc's `__love_sys`; a platform 
 it from one side. In user mode another kernel answers -- linux and the BSDs by trap,
 an SDK for the seats in src/love/user/. In kernel mode we answer: that is inle, the
 kernel (`kmain.c`, the syscall table `sys.c`, its drivers) and its machines. The
-bare boards below are reduced kernel seats; nucleo446 and rp2040 carry no love at
-all and are the toolchain on silicon. Every device target is self-contained (own
+bare boards below are reduced kernel seats; nucleo446, nrf52840 and rp2040 carry no
+love at all and are the toolchain on silicon. Every device target is self-contained (own
 Makefile, `R := ../..` back to the repo root); the qemu boot gates live in
 test/test.mk and ride `make test_slow`. A seat's own vocabulary comes in through
 `defn` -- a board's console -- so src/love/ never learns a device's name.
@@ -34,6 +34,15 @@ VCP, and a 28-check on-silicon battery (soft doubles, 64-bit, lm math,
 composites). `make flash` via st-flash; gate test_nucleo446 boots the
 semihosting face on qemu's netduinoplus2 (STM32F405 -- same UART/RCC map).
 
+## nrf52840/
+
+Seeed XIAO nRF52840 Sense (Cortex-M4F @ 64 MHz, 256 KB SRAM -- firmware only, no
+love). nucleo446's battery through `mooncc -t thumb2sp`, linked at 0x27000 above the
+UF2 bootloader's softdevice, flattened and packed by src/tools/uf2.l (family
+0xADA52840). UART0 console on D6/D7 at 115200, TIMER0 microseconds, the RGB LED.
+`make flash` copies firm.uf2 onto the bootloader's drive (double tap reset); gate
+test_nrf52840 builds it and verifies the boot surface. qemu has no nRF52 machine.
+
 ## the playdate
 
 A user-mode seat -- the SDK answers, not us -- so it lives at src/love/user/playdate/.
@@ -51,8 +60,8 @@ and main.c is a 32-check battery over exactly those. The one port with **no
 into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
 this ISA actually runs. arm-none-eabi-ld still binds it (thumb relocations
-are not in src/love/holo/link.l), and there is no .uf2 packer -- `make bin` writes
-the raw flash image, and a UF2 wants one written.
+are not in src/love/holo/link.l); `make bin` writes the raw flash image, which
+src/tools/uf2.l packs as a UF2 (family 0xE48BFF56).
 
 ## teensy41/
 

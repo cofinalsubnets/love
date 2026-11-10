@@ -736,10 +736,15 @@
  mouse-k 0.0025
  (wad-look st dx dy) (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2})
  (wad-mouse st ev bt) (bt = 1 ? (pin st 'trig (ev = 'press ? 1 0)) st)
+ ; ..a phone's tap fires, at the bottom uses, and a top corner leaves
+ (wad-tap st x y) (? (view-corner? st x y) [113]
+                     (0.88 * window-size (st 'win) 1 < y) [32]
+                     [102])
  (wad-walk o M)
    (view-walk {'new (w \ h \ (wad-size (pins (wad-new w h (o 'wad) M) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                              'win (o 'win) 'scale (peep o 'scale 2))
                                        w (h // 2)))
+               'stick [119 115 97 100] 'tap wad-tap
                'size wad-size 'frame wad-frame 'key wad-step 'look wad-look 'mouse wad-mouse
                'binds (view-bind view-binds wad-binds) 'listed (view-listed ['use 'fire 'strafe-left 'strafe-right 'run 'gun1 'gun2 'gun3 'gun4 'gun5 'gun6 'finer 'coarser])
                'tick wad-tick 'repeat [30 30] 'walking (view-walking + ['strafe-left 'strafe-right])

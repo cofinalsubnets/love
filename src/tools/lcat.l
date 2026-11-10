@@ -80,7 +80,7 @@
       (say out ("\"" + string (row s i (e - 1) ()) + "\"\n"), zrows s e n)))
 
    ; the boot files by name; holo's live beside src/love/boot
-   home {'holo "src/love/holo/" 'x64 "src/love/holo/" 'a64 "src/love/holo/" 'rv64 "src/love/holo/"}
+   home {'holo "src/love/holo/" 'x64 "src/love/holo/" 'a64 "src/love/holo/" 'rv64 "src/love/holo/" 'thumb2 "src/love/holo/"}
    (path n) (peep home n "src/love/boot/" + show n + ".l")
    (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) (close q, s))
    ; a file's minified text, once: holo rides four blobs
@@ -95,17 +95,19 @@
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['cat_post_z ['post]]
-     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. scan lays a
-     ; native kernel through holo at load. every other module is post's.
+     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. every other
+     ; module is post's.
      "#if defined(__x86_64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'x64 'scan]]
+     ['cat_lib_h_z ['holo 'x64]]
      "#elif defined(__aarch64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'a64 'scan]]
+     ['cat_lib_h_z ['holo 'a64]]
      "#elif defined(__riscv)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64 'scan]]
+     ['cat_lib_h_z ['holo 'rv64]]
      ; wasm is gen's rv64 lane under another writer, so its holo machine is rv64's
+     "#elif defined(__arm__) && defined(__linux__)" "#define LvCatModsH 1"
+     ['cat_lib_h_z ['holo 'thumb2 'scan]]
      "#elif defined(__wasm__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64 'scan]]
+     ['cat_lib_h_z ['holo 'rv64]]
      "#endif"
      ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
      ; must not pay for it.

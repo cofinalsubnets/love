@@ -2,8 +2,8 @@
 # test/gate/xfixpoint.sh -- the cross-machine fixpoint: this machine's mooncc -t XTGT links
 # love1; love1 under qemu-user bakes its own mooncc, rebuilds every TU natively (no -t) and
 # links love2, which must equal love1 to the byte. the TU flags mirror the Makefile's x-lane;
-# the rosters come in the environment, and the object list is the artifact's, kernel included.
-# usage: gate_love_c=.. gate_host_c=.. gate_arch_c=.. gate_kern_c=.. gate_seat_c=..
+# the rosters come in the environment, and the object list is the artifact's.
+# usage: gate_love_c=.. gate_host_c=.. gate_seat_c=..
 #        xfixpoint.sh OUTDIR LOVE0 QEMU XTGT MKSYS TCO XOD XA OBJ...
 # XOD is the x-lane's object root, where make lays mkvec.l and the objects it passes
 # the TUs compile XFIX_J at a time (default 4), each its own process under qemu with a log of
@@ -47,18 +47,10 @@ moon0 -t "$xtgt" -pie "$@" -o "$d/love1" || fail "love1 cross link"
 
 echo "XFIX $d/love1 rebuilds itself under $qemu"
 
-# sys.o and the kernel's vectors want no compiler image: they lay beside the bake. an arch
-# with no seat carries no kernel, and $gate_arch_c is empty there -- the makefile draws that
-# line with its own wildcard.
+# sys.o wants no compiler image: it lays beside the bake
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$mks) \"$d/sys.o\")" \
   > "$d/sys.log" 2>&1 &
 sysp=$!
-vecp=
-if [ -n "$gate_arch_c" ]; then
-  LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$xod/mkvec.l" -q -e "(lay-vec \"$d/kvec.o\" \"$xa\")" \
-    > "$d/kvec.log" 2>&1 &
-  vecp=$!
-fi
 
 # machine B: love1 bakes its own compiler image...
 LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
@@ -90,19 +82,9 @@ done
 for f in src/apps/moon/lib/moonlibc/math/*.c; do
   moon1 "$f" -Isrc/apps/moon/include
 done
-# the kernel the artifact carries (the Makefile's $(xkart_o)), rebuilt native and laid the same way
-if [ -n "$gate_arch_c" ]; then
-  for f in $gate_kern_c $gate_arch_c; do
-    moon1 "$f" -I"$ho" -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include
-  done
-fi
 while [ $n -gt 0 ]; do reap; done
 wait "$sysp" || { cat "$d/sys.log"; fail "love1 mksys"; }
 test -s "$d/sys.o" || fail "love1 mksys laid an empty sys.o"
-if [ -n "$vecp" ]; then
-  wait "$vecp" || { cat "$d/kvec.log"; fail "love1 lay-vec"; }
-  test -s "$d/kvec.o" || fail "love1 lay-vec laid an empty kvec.o"
-fi
 
 o2=; for o in "$@"; do o2="$o2 $d/${o#$xod/}"; done
 "$qemu" "$d/love1" wake "$d/mooncc1.image" mooncc -pie $o2 -o "$d/love2" || fail "love2 link"
