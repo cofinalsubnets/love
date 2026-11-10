@@ -61,9 +61,10 @@
      (service app (exec "/bin/love" "/app/run.l") (restart no))
      (oneshot gadget (exec "/bin/love" "/app/gadget.l"))
      (oneshot data (exec "/bin/love" "/app/data.l"))
-     ; the console's own session, so a ^C on the port reaches what runs there
+     ; the console's own session, so a ^C on the port reaches what runs there; -w keeps one
+     ; shell: helm starts a group leader, so setsid forks, and a parent gone is a restart
      (service console (after gadget)
-       (exec "/bin/love" "sh" "-c" "exec /bin/love setsid -c /bin/love sh < /dev/ttyGS0 > /dev/ttyGS0 2>&1")
+       (exec "/bin/love" "sh" "-c" "exec /bin/love setsid -cw /bin/love sh < /dev/ttyGS0 > /dev/ttyGS0 2>&1")
        (restart always))
      (service wifi (after data)
        (exec "/bin/love" "-l" "/app/wifi/netlink.l" "-l" "/app/wifi/dhcp.l" "/app/wifi/wifi.l" "wlan0" "/etc/wifi.conf")
