@@ -311,6 +311,21 @@
               (decal [x -8.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -8.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
               (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
               (shaft-pane x -4.7) (shaft-pane x -0.7) (shaft-pane x 3.3)])
+;; ..a window in a wall across x, its corners cut c off: the air carved to an octagon and
+; the pane set back into the wall, its own corners hidden there
+(: (octwin lo hi c t) (: x0 (lo 0) x1 (hi 0) y0 (lo 1) y1 (hi 1) z0 (lo 2) z1 (hi 2)
+   (cr y z dy dz) (cut [x0 (y + dy) z] [x0 y (z + dz)] [x1 (y + dy) z])
+   [(skin {'all concrete} (cr y0 z0 c c (cr y0 z1 c (0 - c) (cr y1 z0 (0 - c) c (cr y1 z1 (0 - c) (0 - c) (air (box lo hi)))))))
+    (window [(x0 + 0.2) y0 z0] [(x1 - 0.15) y1 z1] t @ (a p) p)]))
+;; ..a screen on a wall, 0.9 wide from 0.85 over the floor to 2.6, a window's head, in a
+; thin dark bezel 6 cm off the wall: the floor under its middle at x y z,
+; facing n along x or z; its face lit blank
+(: bezel (texture 16 16 1 '((fill (rgb 0.1 0.1 0.11)) (noise 4 0.2))))
+(: screenface (texture 8 8 1 '((fill (grey 0.97)))))
+(: (wallscreen at n) (: x (at 0) y (at 1) z (at 2) nx (n 0) nz (n 2)
+   a [(x + nz * 0.45) (y + 0.85) (z - nx * 0.45)] b [(x - nz * 0.45 + nx * 0.06) (y + 2.6) (z + nx * 0.45 + nz * 0.06)]
+   [(skin {'all bezel} (solid (box (map (i \ min (a i) (b i)) ^3) (map (i \ max (a i) (b i)) ^3))))
+    (ad [(x + nx * 0.065) (y + 1.725) (z + nz * 0.065)] n [0 1 0] 0.82 1.67 screenface)]))
 ; ..the station's lamps: steel fittings, three-sided, on the walls
 (: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
 (: (lamp at n d) (sconce at n d 1.4 sconcemetal))
@@ -594,10 +609,8 @@
     ; ..the lamps, each looking along its wall, some across, some up or down it
     (lamp [-3 -6.2 2] [1 0 0] [0 0 1])
     (lamp [-3 -6.2 9] [1 0 0] [0 0 -1])
-    (lamp [-11 -6.2 2] [1 0 0] [0 0 1])
     (lamp [-19 -3.5 7] [1 0 0] [0 1 0])
     (lamp [-3 -2.5 13] [1 0 0] [0 -1 0])
-    (lamp [-11 -6.5 -2.3] [1 0 0] [0 0 1])
     (lamp [-5 -6.5 0] [0 0 -1] [-1 0 0])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
@@ -664,6 +677,8 @@
   (across (strip-light [-39 12 17.2]))
   (across (strip-light [-39 12 13.8]))
   (window [-42 9.3 19.95] [-35.5 11.6 20.55] glass)
+  ; ..and west of the window a screen on its front
+  (wallscreen [-43.5 9 20.5] [0 0 1])
   (skin {'all concrete} (street [-33 8 15.8] [-28.4 9.2 17.6]))
   (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 15.8] [-28.4 8.833 17.6])))])
   (door [-33.25 8 16.6] 1.2 2.2)
@@ -867,9 +882,19 @@
   (poster [-4.7 -7.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
   ; chamber beside it, a lamp, and a door in its east wall
-  (room [11.3 -9 0.3] [18.7 -5.8 3.7])
-  (window [10.95 -8.1 0.6] [11.35 -6.4 3.4] glass)
-  (lamp [13 -7.4 0.3] [0 0 1] [1 0 0])
+  (room [11.3 -9 -4] [18.7 -5.8 3.7])
+  (octwin [10.9 -8.1 -3.7] [11.4 -6.4 1.23] 0.3 glass)
+  (lamp [13 -7.4 -4] [0 0 1] [1 0 0])
+  ; ..the lamps on the chambers' outer walls, the east ones over the window and the screen
+  (lamp [-11 -6.5 -2.3] [1 0 0] [0 0 1])
+  (lamp [11 -5.2 -2.3] [-1 0 0] [0 0 1])
+  (lamp [-11 -6.2 2] [1 0 0] [0 0 1])
+  (lamp [11 -4.6 2] [-1 0 0] [0 0 1])
+  ; ..and beside the window a screen, facing the platform's end
+  (wallscreen [11 -9 2.51] [-1 0 0])
+  ; ..two in the first alcove west of the shafts' way, on its back wall
+  (wallscreen [-9.82 -9 10] [0 0 -1])
+  (wallscreen [-8.18 -9 10] [0 0 -1])
   (door [18.7 -9 2] 1.2 2.2)
   ; the bins: on the platform against the blocks either side of the hallway and at its
   ; ends, and in each wing against the front block
