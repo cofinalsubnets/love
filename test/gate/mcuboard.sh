@@ -52,7 +52,7 @@ tr -d '\r' < got.1
 EOF
 else
 cp "$img" "$sd/firm.bin"
-green='*"; all "*" green"*'
+green='*; all * green*'
 echo "ocd() { openocd $ocd \"\$@\"; }" > "$sd/run.sh"
 echo "at=$at con='$con'" >> "$sd/run.sh"
 cat >> "$sd/run.sh" <<'EOF'
