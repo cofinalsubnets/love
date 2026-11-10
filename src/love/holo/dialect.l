@@ -419,8 +419,8 @@
              (xa-num? pre) (pin st 'd (xa-num pre))
              (xa-symoff pre @ so (pins st 'sym <so 'd >so))),
           foldl (\ _ p (take! <p >p)) 0 (in-terms inner),
-          (? (peep st 'rip 0) (wrap ['rip (peep st 'sym ()) (peep st 'd 0)])
-             (nom? (peep st 'sym ())) (scare 'as-symdisp u)
+          (? (peep st 'rip 0) (wrap ['rip (st 'sym) (peep st 'd 0)])
+             (nom? (st 'sym)) (scare 'as-symdisp u)
              (wrap ['mem (peep st 'b -1) (peep st 'ix -1) (peep st 'sc 1) (peep st 'd 0)]))))
    (in-operand mn0 t)                           ; -> (ptr-size . operand); mn0 settles a bare number
       (: l (lower t) p (in-ptr l) sz <p tail >p
