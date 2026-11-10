@@ -121,4 +121,19 @@
    (test (two? r1) (#<>r1 = 2 * cb)
          ('("loop.txt") = <>r2)))
 
+; an MBR card: the first FAT32 partition mounts, its lbas shifted; a FAT16 entry is passed over
+(: im (cask (72048 * 512))
+   wd (mkdev im)
+   pd [(lba \ n \ <wd (lba + 2048) n) (lba \ s \ <>wd (lba + 2048) s) 70000]
+   wrle (cite 'bytes 'wrle)
+   _ (fat-mkfs pd)
+   _ (fat-write (fat-mount pd) "card.txt" "on a partition")
+   mbr (cask 512)
+   _ (pin mbr 450 6, pin mbr 466 12)
+   _ (pour mbr 470 (wrle 2048 4) 0 4, pour mbr 474 (wrle 70000 4) 0 4)
+   _ (pin mbr 510 0x55, pin mbr 511 0xAA)
+   _ (<>wd 0 (string mbr))
+   (test ("on a partition" = <>(fat-read (fat-mount wd) "card.txt"))
+         !(fat-mount (mkdev (cask (4096 * 512))))))
+
 (test_fin ())
