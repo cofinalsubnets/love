@@ -1652,8 +1652,10 @@
    (anat-defs bs) (atom? >bs ? [() <bs]             ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
                      (: r (anat-defs >>bs)
                         [((<bs . <>bs) . <r) <>r]))
-   ; the float DAG reads every compound as (op a b): a recurrence still spelling re, im or a call is not one
-   (anat-fop? e) (atom? e ? 1 (e @ [op a b] (elem op '(+ - * /) && anat-fop? a && anat-fop? b) 0))
+   ; the float DAG reads every compound as (op a b) and every leaf as a float var or a number: a recurrence still
+   ; spelling re, im or a call, or reading its counter, is not one
+   (anat-fop? vs e) (atom? e ? (gem? e || whole? e || elem e vs)
+                       (e @ [op a b] (elem op '(+ - * /) && anat-fop? vs a && anat-fop? vs b) 0))
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))
    ; the recurrence pair: a (? (? A _ A) (SELF ..) ..), a lowered &&, whose then-branch self-calls (head = its own name)
    (anat-rec? p) (: nm <<p
@@ -1671,6 +1673,26 @@
        (a @ ^recnm [[cnt bnd u]]                    ; innermost: the recurrence call's args
         (: rest (loopchain a pairs recnm)
          (two? rest ? ([cnt bnd ()] . rest))))))
+   ; the shape the native assumes, else the nest declines: each loop steps its counter by 1, passes the rest through
+   ; and adds its inner call to its last param, the acc; an inner call passes the counters by name and starts its
+   ; callee's counter and acc at 0, and the recurrence's fvars and counter at 0, its own self-call stepping only that counter
+   (all2 f a b) (two? a ? (f <a <b && all2 f >a >b) 1)
+   (anat-rec-ok? recps sargs it) (#sargs = #recps
+      && all2 (r \ a \ r = it ? (a = ['+ it 1]) (a != ['+ r 1])) recps sargs)
+   (anat-call-ok? q args ps)
+    (>q @ ['? ['< cnt _] _ acc]
+     (#args = #><q && all2 (r \ x \ r = cnt || r = acc ? (x == 0) (x = r && elem r ps)) ><q args) 0)
+   (anat-shape? q pairs recp it fvars)
+    (: nm <<q ps ><q acc (last ps)
+     (>q @ ['? ['< cnt bnd] (^nm . sargs) ^acc]
+      (whole? bnd && #sargs = #ps
+       && all2 (p \ s \ p = cnt ? (s = ['+ cnt 1]) (p = acc || s = p)) ps sargs
+       && (last sargs @ ['+ ^acc (a . args)]
+           (a = <<recp ? (#args = #><recp && all2 (r \ x \ elem r fvars ? (x = 0) (r = it ? (x == 0) 1)) ><recp args)
+              (: q2 (afind (p \ <<p = a) pairs)
+                 (two? q2 && anat-call-ok? q2 args ps && anat-shape? q2 pairs recp it fvars)))
+           0))
+      0))
    ; rebuild a : binding list, the outermost loop's body (native 0) where every param is the fixnum 0, the nest's
    ; own start, else its own body; == and the native ride as values, so no binding of the form can respell them
    (anat-zero? ps) (atom? ps ? 1 ['? [(==) <ps 0] (anat-zero? >ps) 0])
@@ -2439,7 +2461,8 @@
                                (: chain (loopchain <<outerp pairs recnm)
                                   D #chain M #invs N #fvars
                                   (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7
-                                     && all anat-fop? (testexpr . updates)) ? form
+                                     && all (anat-fop? (invs + fvars)) (testexpr . bound . updates)
+                                     && anat-rec-ok? recps >then it && anat-shape? outerp pairs recp it fvars) ? form
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
