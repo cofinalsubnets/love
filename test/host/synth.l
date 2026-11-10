@@ -401,5 +401,10 @@
        (<hi < cv * cv)
        (one 1 < hi 1) (hi 1 < 32767)))
 
+; the window where asked for, and on a phone's face unless --tty asks the terminal's
+(test (synth-windowed? ["-w"] ()) (synth-windowed? ["loop" "--window"] ()) !(synth-windowed? ["loop"] ())
+      (synth-windowed? [] "/x/face") (synth-windowed? ["loop"] "/x/face")
+      !(synth-windowed? ["--tty"] "/x/face") !(synth-windowed? ["--tty" "loop"] "/x/face"))
+
 (test_fin (),
- puts "synth: ok -- the keys sit where they should, an f key reads whole, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, a finger plays the strip, the buffer sits under the window's keys, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there, and the volume turns\n")
+ puts "synth: ok -- the keys sit where they should, an f key reads whole, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, a finger plays the strip, the buffer sits under the window's keys, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there, and the volume turns, and a phone plays the window\n")

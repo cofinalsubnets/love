@@ -8,8 +8,8 @@
 ; of chorus, echo and reverb (space.c), each on its own f key. the pads (pad, glass, wash)
 ; swell in through a filter a slow lfo sweeps, and fade slowly once let go. f11 and f12 turn
 ; the volume, the horn's own, past any mixer.
-; run: love synth [--fm FILE] [-w|--window] [LOOP]   HORN=none plays silent on a box with no card
-(module (synth synth-run synth-main synth-new synth-step synth-name synth-key synth-tcode synth-tty
+; run: love synth [--fm FILE] [-w|--window|--tty] [LOOP]   HORN=none plays silent on a box with no card
+(module (synth synth-run synth-main synth-windowed? synth-new synth-step synth-name synth-key synth-tcode synth-tty
          synth-strike synth-feed synth-frame synth-wframe synth-timbres synth-knobs synth-knob
          synth-chunk synth-lead synth-octaves synth-send synth-play synth-stop synth-pull
          synth-cps! synth-cps synth-cps-step synth-cps-lo synth-cps-hi synth-text synth-ex
@@ -425,7 +425,7 @@
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
             0))))
- synth-usage "usage: love synth [--fm FILE] [-w|--window] [LOOP]   (z to / and q to ] play, the rows above them the sharps; tab the timbre, up and down the octave, f1 f2 f3 f8 reverb echo chorus shimmer and f5 f6 f7 f9 wetter, f4 the latch, f10 the loop, f11 f12 the volume, enter sends the buffer, pgup pgdn the cps, ctrl-w w the buffer and back, esc leaves)\n       in a window a note sounds while its key is held, or a finger on the strip of keys; on a tty a key is a strike\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
+ synth-usage "usage: love synth [--fm FILE] [-w|--window|--tty] [LOOP]   (z to / and q to ] play, the rows above them the sharps; tab the timbre, up and down the octave, f1 f2 f3 f8 reverb echo chorus shimmer and f5 f6 f7 f9 wetter, f4 the latch, f10 the loop, f11 f12 the volume, enter sends the buffer, pgup pgdn the cps, ctrl-w w the buffer and back, esc leaves)\n       in a window a note sounds while its key is held, or a finger on the strip of keys; on a tty a key is a strike\n       on a phone the window is the default, --tty the terminal's\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
  ; --- the pier: the keys a stage over a vi stage on the loop's text. ctrl-w then w, j or k
  ; goes between them as the prefix and j and k do ---
  (synth-pier br vi f o) (: _ (synth-warm ()) st (synth-new o)
@@ -452,13 +452,15 @@
     br 'hsail hb,
     hn ? (flush hn, close hn),
     0))
- ; --fm FILE first, its bank read whole or refused; -w or --window anywhere after
+ ; the window where it is asked for, or on a phone's face unless --tty asks the terminal's
+ (synth-windowed? as face) (any (a \ elem a ["-w" "--window"]) as || (string? face && !(elem "--tty" as)))
+ ; --fm FILE first, its bank read whole or refused; -w, --window or --tty anywhere after
  (synth-main as) (: br (cite 'pier) vi (cite 'vi)
    fw (two? as && <as = "--fm") f (fw && two? >as ? <>as "")
    fm (fw ? (uread f @ r (opl-bank (two? r ? (r 1) ""))) ())
    rs0 (fw ? (two? >as ? >>as ()) as) o {'fm fm}
-   wn (any (a \ elem a ["-w" "--window"]) rs0)
-   rs (filter (a \ !(elem a ["-w" "--window"])) rs0)
+   wn (synth-windowed? rs0 (getenv "LOVE_FACE"))
+   rs (filter (a \ !(elem a ["-w" "--window" "--tty"])) rs0)
    (? (fw && atom? fm) (say err ("synth: " + f + ": no FM bank (an op2 file, or a wad with GENMIDI)\n"), flush err, 1)
       (1 < #rs) (say err ("synth: " + synth-usage + "\n"), flush err, 2)
       wn (synth-window o (two? rs ? <rs ""))

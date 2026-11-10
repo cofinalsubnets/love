@@ -502,16 +502,18 @@
              r (ww-get <g 8)
              (? (<r = 0) (ww-show st r <>g (g 2)) (pgmsg st <>r)))))
    (ww-ride st kq)
-    (: (go pend)
+    (: (frame _) (ww-fit st, ww-pictures st, puts (pgframe st), flush out)
+       (go pend)
         (: _ (ww-do st)
            _ (pgresize st)
-           _ (ww-fit st)
-           _ (ww-pictures st)
-           _ (puts (pgframe st)) _ (flush out)
+           _ (frame 0)
            kr (pgkey kq pend)
            c <kr
            (c < 0 ? 0 (ww-step st c, st 'quit ? 0 (go <>kr))))
-       (ttytake (), mind go -1 (_ \ ttygive ()), 0))
+       (ttytake (),
+        pgwatch (_ \ (pgresize st ? (frame 0) 0)) @ stop
+          (mind go -1 (_ \ (stop 0, ttygive ()))),
+        0))
    (www-main as)
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value

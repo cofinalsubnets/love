@@ -218,6 +218,46 @@
  (dw-ev7 = [['size 540 304]]) (dw-rh7 = [70 28 2 144 1 48 1 96 0])
  (dw-i8 = [73 0]) (dw-ev8 = [['size 540 450]])
  (dw-ev9 = ()) (dw-ev10 = [['size 540 450]]) ([540 450] = window-size dw-w))
+;; an arrow on the row held: once at the touch, again after a pause, then at a pace, until let go;
+;; a key not an arrow types once however long it is held
+(: _ (window-typing dw-w 1)
+   _ (dw-take 2)
+   rd (dw-beside dw-row)
+   _ (window-events dw-w)
+   _ (catch rd)
+   up [['down 328] ['up 328]]
+   ; the events of n polls 10ms apart
+   (polls n) (n < 1 ? () (: e (window-events dw-w) (rest 10, e + polls (n - 1))))
+   (presses l k) #(filter (e \ e = ['down k]) l)
+   _ (say dc (dw-rec 84 0 270 380), flush dc)
+   _ (rest 30)
+   ev0 (window-events dw-w)
+   ev1 (polls 12)
+   ev2 (polls 60)
+   _ (say dc (dw-rec 84 1 270 380), flush dc)
+   _ (rest 30)
+   ev3 (polls 40)
+   ; held, then gone off the key: no more
+   _ (say dc (dw-rec 84 0 270 380), flush dc)
+   _ (rest 30)
+   _ (window-events dw-w)
+   _ (say dc (dw-rec 84 2 400 380), flush dc)
+   _ (rest 30)
+   ev4 (polls 40)
+   _ (say dc (dw-rec 84 1 400 380), flush dc)
+   ; esc held
+   _ (say dc (dw-rec 84 0 30 380), flush dc)
+   _ (rest 30)
+   ev5 (window-events dw-w + polls 40)
+   _ (say dc (dw-rec 84 1 30 380), flush dc)
+   _ (rest 30)
+   _ (window-events dw-w)
+   _ (window-typing dw-w 0)
+   _ (dw-take 2)
+   _ (window-events dw-w)
+   (test (ev0 = up) (ev1 = ())
+         (1 < presses ev2 328) (presses ev2 328 < 8) (ev2 = foldl (a \ _ \ a + up) () ^(presses ev2 328))
+         (ev3 = ()) (ev4 = ()) (ev5 = [['down 1] ['up 1]])))
 ;; thumbs: a second finger is nothing to a button's window, each its own record once asked for;
 ;; back is esc's place
 (: _ (say dc (dw-rec 84 4 30 40 + dw-rec 75 1 4 0), flush dc)

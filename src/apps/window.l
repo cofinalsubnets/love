@@ -79,6 +79,8 @@
    ; text]. ctrl and alt hold for the next key, and ≡ turns the row to the bridge's decks
    droid-row [["esc" 1 ""] ["|" 43 "|"] ["-" 12 "-"] ["home" 327 ""] ["↑" 328 ""] ["end" 335 ""] ["pgup" 329 ""] ["paste" 'paste ""] ["≡" 'decks ""]
               ["tab" 15 ""] ["ctrl" 29 ""] ["alt" 56 ""] ["←" 331 ""] ["↓" 336 ""] ["→" 333 ""] ["pgdn" 337 ""] ["/" 53 "/"] ["~" 41 "~"]]
+   droid-again [250 110]                               ; a row key held: its first again, then its pace, ms
+   droid-again-keys [328 336 331 333 329 337]          ; the arrows and the pages
    droid-per 9                                         ; keys a row
    droid-dper 4                                        ; decks a row, and the last place is a new one
    droid-rowh 96                                       ; two keys of three cells
@@ -142,17 +144,24 @@
           (n = #ds) (say s ("G" + string [255]), flush s)
           0,
         droid-row-show win, ()))
-   ; a touch on the row: a modifier held or let go, else its key
+   ; a touch on the row: a modifier held or let go, else its key, again while an arrow is held
    (droid-tap win x y)
     (peep win 'decks () @ ds
        (two? ds ? (droid-dtap win ds (droid-at win droid-dper x y))
-          (droid-row (droid-at win droid-per x y) @ [_ k t]
+          (: n (droid-at win droid-per x y)
+          (droid-row n @ [_ k t]
              (? (k = 'paste) (droid-paste win, ())
                 (k = 'decks) (: s (win 's) (say s "D", flush s, ()))
                 (k = 29 || k = 56) (: held (win 'held)
                                       (pin win 'held (elem k held ? (filter (m \ m != k) held) (k . held)),
                                        droid-row-show win, ()))
-                (droid-key win k t)))))
+                (elem k droid-again-keys) (pin win 'rep [k t n (clock 0 + <droid-again)], droid-key win k t)
+                (droid-key win k t))))))
+   ; the held key once more when its time is due; a finger let go, or gone off it, ends it
+   (droid-again-due win) (peep win 'rep () @ r
+                           (two? r && r 3 <= clock 0 ? (pin win 'rep [<r (r 1) (r 2) (clock 0 + droid-again 1)], droid-key win <r (r 1)) ()))
+   (droid-again-off win a x y)
+    (two? (peep win 'rep ()) && (a = 1 || y < win 'h || droid-at win droid-per x (y - win 'h) != win 'rep 2) ? (pin win 'rep ()) 0)
    ; a record -> the window's events. a key's text is android's map under meta state c; a
    ; touch is the left button, or a key of the row
    (droid-events win r)
@@ -171,9 +180,10 @@
                          ([[(a ? 'down 'up) p]] + (0 < #t ? [['text t]] ()))))
           (k = 84) (? (peep win 'thumbs 0) [['finger (a >> 2) (a & 3) b c]]
                       (3 < a) ()
-                      (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
-                      (a = 0) (droid-tap win b (c - win 'h))
-                      ())
+                      (: _ (a != 0 ? (droid-again-off win a b c) 0)
+                         (? (c < win 'h) [(? (a = 0) ['press 1 b c] (a = 1) ['release 1 b c] ['move b c])]
+                            (a = 0) (droid-tap win b (c - win 'h))
+                            ())))
           ()))
    (droid-open-win _)
     (getenv "LOVE_FACE" @ p
@@ -189,7 +199,7 @@
     (: s (win 's) more (peep win 'more ()) _ (pin win 'more ())
        (go acc) (? !(cue? s) acc
                    (droid-rec s @ r (? !r (acc + [['close]]) (go (acc + droid-events win r)))))
-       (go more))
+       (go more + droid-again-due win))
 
    (window-here? _) (inle? 0 || 0 < #(getenv "DISPLAY") || string? (getenv "LOVE_FACE"))
    (window-open w h title) (? (inle? 0) (inle-open-win ())
