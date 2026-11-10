@@ -165,13 +165,13 @@ rd=.love/run/lanes/$(basename "$PWD")
 rpre=
 for l in $rlanes; do for p in $(deps "$l"); do has "$p" "$rpre" || rpre="$rpre $p"; done; done
 # a host builds nothing: it takes this box's build of the prerequisites, a target under out/
-# or what a target outside it names there, with love, love.raw and out/lib, all newer than its
-# checkout, and make takes them as made
+# or what a target outside it names there, with love, love.raw, the cat it baked from and
+# out/lib, all newer than its checkout, and make takes them as made
 ship=
 for p in $rpre; do
   case $p in out/*) echo "$p" ;; *) for f in $(deps "$p"); do case $f in out/*) echo "$f" ;; esac; done ;; esac
 done > "$d/ship"
-for f in $(cat "$d/ship") out/love out/love.raw out/lib; do [ -e "$f" ] && ! has "$f" "$ship" && ship="$ship $f"; done
+for f in $(cat "$d/ship") out/love out/love.raw out/.dist-cat.l out/lib; do [ -e "$f" ] && ! has "$f" "$ship" && ship="$ship $f"; done
 roflags=
 for p in $rpre $ship; do roflags="$roflags -o $p"; done
 # a strict box's lanes are strict there too, and its TERM and LANG: bee hands a host only
@@ -213,7 +213,7 @@ rhost() {
   { out/love bee --on lanes --where "name=$1" --in "$rd" --push "$sha" < /dev/null \
       && tar cf - $ship | out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- tar xmf -; } > "$d/host-$1.log" 2>&1 \
     || { echo "lanes: $1 could not take the gated commit and this box's build -- $d/host-$1.log" >> "$d/remote.log"; return; }
-  [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw 2>/dev/null)" = "$(sha256sum out/love out/love.raw 2>/dev/null)" ] \
+  [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw out/.dist-cat.l 2>/dev/null)" = "$(sha256sum out/love out/love.raw out/.dist-cat.l 2>/dev/null)" ] \
     || { echo "lanes: $1's love is not this box's; it takes no lanes" >> "$d/remote.log"; return; }
   worker "$1" "$3" 1 alone || return
   i=0

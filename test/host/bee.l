@@ -436,7 +436,8 @@
       (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
       (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress test_gcstress_full")
       (cr-in >lm-map "\nearly test_gcstress_bake\n")
-      (cr-in >lm-map "\nplace test source\n"))
+      (cr-in >lm-map "\nplace test_roster source\n")
+      !(cr-in >lm-map "\nplace test source\n"))
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every

@@ -88,7 +88,7 @@
    lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
    lanes-early ["test_gcstress_bake"]
 
-   lanes-place {"test" "source" "test_roster" "source" "test_holofuzz" "source" "test_moon" "source"
+   lanes-place {"test_roster" "source" "test_holofuzz" "source" "test_moon" "source"
                 "test_ccarm" "source" "test_ccwasm" "source" "test_ccport" "source"
                 "test_cts_wasm" "source" "test_as" "source" "test_sb" "source"
                 "test_ccthumb1" "source" "test_ccthumb2" "source" "test_cca64" "source"
