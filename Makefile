@@ -438,6 +438,13 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@for f in $(carryfiles); do printf '\n(cite (quote verbs) (quote carry) "%s")\n' $$f; done >> $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
 	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
+# the kore set alone, the cat a small kernel bakes (src/inle/teensy41's): what kmain's own egg
+# lane loads, the crew left to /love
+out/.kore-cat.l: $(korefiles) out/lib/korelist.h
+	@echo '$(t_cat)	'$@
+	@for f in $(korefiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
+	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
+	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
 out/lib/distlist.h: Makefile
 	@mkdir -p out/lib
 	@tf=$@.$$$$.tmp; printf '"%s"\n' '$(distfiles) + $(carryfiles)' > $$tf; \
@@ -528,6 +535,12 @@ out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep
 	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
 endef
 $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
+# arm's, not carried: built only for a port whose own linker pulls members (teensy41's kernel)
+rt_arm_a = $(foreach g,$(rt_groups) rt,out/rt/arm/$g.a)
+$(foreach g,$(rt_groups) rt,$(eval $(call rtgroup,arm,$g)))
+out/rt/arm.list: force_dist_list $(rt_arm_a)
+	@mkdir -p out/rt; tf=$@.$$$$.tmp; echo '$(rt_arm_a)' > $$tf; \
+	 $(note)
 out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)
@@ -563,6 +576,10 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xod)/love/user/nokern.o $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# the lane's objects by name, for a port that links them (src/inle/teensy41's kernel face)
+$(xd)/o.list: force_dist_list $(x_o)
+	@tf=$@.$$$$.tmp; echo '$(x_o)' > $$tf; \
+	 $(note)
 fat = out/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/love $(xd)/love src/tools/fatpack.l

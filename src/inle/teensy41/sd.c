@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "teensy41.h"
 
-uintptr_t love_clock(void);
+uintptr_t te_ms(void);
 
 #define SD_BASE 0x402C0000u
 #define SD_BLK  (SD_BASE + 0x04u)   // BLKSIZE[12:0], BLKCNT[31:16]
@@ -35,8 +35,8 @@ enum { R0 = 0, R2 = 1u << 16 | 1u << 19, R3 = 2u << 16, R1 = 2u << 16 | 3u << 19
 static struct { uint32_t n, rca, hc; } sd;
 
 static int until(uint32_t a, uint32_t m, uint32_t want, uint32_t ms) {
-  uintptr_t t = love_clock();
-  while ((REG(a) & m) != want) if (love_clock() - t > ms) return 0;
+  uintptr_t t = te_ms();
+  while ((REG(a) & m) != want) if (te_ms() - t > ms) return 0;
   return 1; }
 
 // one command; 0 on a response, -1 on an error or a timeout
@@ -45,12 +45,12 @@ static int cmd(uint32_t i, uint32_t arg, uint32_t kind) {
   REG(SD_INT) = ~0u;
   REG(SD_ARG) = arg;
   REG(SD_XFR) = i << 24 | kind;
-  uintptr_t t = love_clock();
+  uintptr_t t = te_ms();
   for (;;) {
     uint32_t s = REG(SD_INT);
     if (s & INT_ERR) { REG(SD_SYS) |= 1u << 25; until(SD_SYS, 1u << 25, 0, 100); return -1; }   // RSTC
     if (s & 1u) { REG(SD_INT) = 1u; break; }
-    if (love_clock() - t > 500) return -1; }
+    if (te_ms() - t > 500) return -1; }
   return (kind & 3u << 16) == 3u << 16 && !until(SD_PRES, 1u << 24, 1u << 24, 500) ? -1 : 0; }
 
 static int acmd(uint32_t i, uint32_t arg, uint32_t kind) {
@@ -91,8 +91,8 @@ static uint32_t sd_up(void) {
   if (cmd(0, 0, R0) < 0) return 0;
   if (cmd(8, 0x1AAu, R1) < 0 || (REG(SD_RSP0) & 0xFFFu) != 0x1AAu) return 0;
   uint32_t ocr = 0;
-  for (uintptr_t t = love_clock(); !(ocr & 1u << 31); ) {
-    if (acmd(41, 0x40300000u, R3) < 0 || love_clock() - t > 1000) return 0;
+  for (uintptr_t t = te_ms(); !(ocr & 1u << 31); ) {
+    if (acmd(41, 0x40300000u, R3) < 0 || te_ms() - t > 1000) return 0;
     ocr = REG(SD_RSP0); }
   sd.hc = ocr >> 30 & 1;
   if (cmd(2, 0, R2) < 0 || cmd(3, 0, R1) < 0) return 0;
@@ -122,8 +122,8 @@ int sd_rw(uint32_t lba, uint32_t n, void *buf, int wr) {
     REG(SD_MIX) = (REG(SD_MIX) & ~0x3Fu) | (wr ? 0 : 1u << 4);
     if (cmd(wr ? 24 : 17, sd.hc ? lba + b : (lba + b) * 512, R1 | DATA) < 0) return -1;
     uint32_t want = wr ? 1u << 4 : 1u << 5;
-    uintptr_t t = love_clock();
-    while (!(REG(SD_INT) & (want | INT_ERR))) if (love_clock() - t > 500) return -1;
+    uintptr_t t = te_ms();
+    while (!(REG(SD_INT) & (want | INT_ERR))) if (te_ms() - t > 500) return -1;
     if (REG(SD_INT) & INT_ERR) return -1;
     REG(SD_INT) = want;
     for (uint32_t k = 0; k < 512; k += 4) {
