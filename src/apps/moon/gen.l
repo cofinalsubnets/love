@@ -1616,6 +1616,11 @@
                      (charm? (f 3) && f 3 < 0 ? [<f <>f 'fp (f 3 - P)] (charm? (f 3) && 0 < f 3 ? f 'bad))
                     (elem <f (gstops + fstops) && <>f = 'fp)
                      (charm? (f 2) && f 2 < 0 ? [<f 'fp (f 2 - P) (f 3)] (charm? (f 2) && 0 < f 2 ? f 'bad))
+                    ; ..and an indexed one by its displacement, the index never fp
+                    (elem <f (xops + fxops) && f 2 = 'fp && !(fp? (f 3)))
+                     (charm? (f 5) && f 5 < 0 ? (take 5 f + [(f 5 - P)] + drop 6 f) (charm? (f 5) && 0 < f 5 ? f 'bad))
+                    (elem <f (stxops + fstxops) && <>f = 'fp && !(fp? (drop 2 f)))
+                     (charm? (f 4) && f 4 < 0 ? (take 4 f + [(f 4 - P)] + drop 5 f) (charm? (f 4) && 0 < f 4 ? f 'bad))
                     (fp? f) 'bad
                     f)
           (fp? x) (? (atom? x) (x = 'fp) (any fp? x))
@@ -1623,7 +1628,9 @@
           ; the pop puts back the rest unchanged), then the frame back and the record (acc runs backwards,
           ; already shifted)
           (rst? f) (f @ ('ld r 'fp k) (any (x \ x = [r (k + P)]) sl) ())
-          (unrst l) (two? l && rst? <l ? (unrst >l) l)
+          ; ..a float register's restore among them stays
+          (frst? f) (elem <f fldops && f 2 = 'fp)
+          (unrst l) (? !(two? l) l (rst? <l) (unrst >l) (frst? <l) (<l . unrst >l) l)
           up [['spfp P]]                       ; sp back to fp - P, which t2sp lowers by the depth it knows
           (go l acc)
            (? !(two? l) (rev acc)
@@ -1688,6 +1695,9 @@
             (f 3 + d @ o [(fits? f o ? [<f <>f 'sp o] f)])
            (elem <f (gstops + fstops) && <>f = 'fp && charm? (f 2) && f 2 < 0)
             (f 2 + d @ o [(fits? f o ? [<f 'sp o (f 3)] f)])
+           ; an indexed load adds the index into its own destination, which sp may not be
+           (elem <f '(leax ldx ldxb) && <>f != 'sp && f 2 = 'fp && charm? (f 5) && f 5 < 0)
+            (f 5 + d @ o [(0 <= o && o <= 4095 ? (take 2 f + ['sp (f 3) (f 4) o] + drop 6 f) f)])
            [f])
        (low f d)
         (f @ ('spfp p) (? !(charm? d) ('((lea sp fp 0)) + (p = 0 ? () [['sub 'sp 'sp p]]))
