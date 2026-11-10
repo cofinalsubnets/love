@@ -26,7 +26,8 @@
    elf-machines {'x64 62 'a64 183                              ; canonical keys only (prel.l's arch-canon)
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
                  'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
-                 'rv64 243}                                  ; EM_RISCV
+                 'rv64 243 'rv32 243                         ; EM_RISCV
+                 'xtensa 94}                                   ; EM_XTENSA
 
    ;; one 56-byte program header. p_paddr differs from p_vaddr only for a kernel loaded low.
    (elf64-phdr ty fl off va pa fsz msz al)
@@ -87,7 +88,7 @@
         '(127 69 76 70 1 1 1 0 0 0 0 0 0 0 0 0)               ; e_ident: \x7fELF, 32-bit LSB SysV
         (le16 etype) (le16 machine) (le32 1)                   ; e_type (2 EXEC / 3 DYN), e_machine, version 1
         (le32 (arm? ? (entry | 1) entry)) (le32 52) (le32 shoff)    ; e_entry, e_phoff=52, e_shoff
-        (le32 (arm? ? eflags 0)) (le16 52) (le16 32)           ; e_flags (arm-eflags), e_ehsize=52, e_phentsize=32
+        (le32 (arm? || machine = 243 ? eflags 0)) (le16 52) (le16 32)   ; e_flags (arm-eflags; rv32 RVC), e_ehsize=52, e_phentsize=32
         (le16 #phs) (le16 (two? sh ? 40 0)) (le16 shnum) (le16 shstrx)
         (catall phs)]))
 
@@ -99,6 +100,8 @@
    ;; e_flags for an EM_ARM executable: eabi 5 (0x05000000), plus ABI_FLOAT_HARD (0x400) for
    ;; a target with an fpu, mooncc having no softfp lane. a .o carries plain 0x05000000.
    (arm-eflags target) (elem target '(thumb2 thumb2sp arm) ? 83887104 83886080)
+   ; an ELF32 link's e_flags: rv32's RVC, xtensa's xt_insn | xt_lit, else arm's
+   (elf32-eflags target) (target @ 'rv32 1 'xtensa 768 _ (arm-eflags target))
 
    ;; elf64-at's twin at 32 bits. 'entry is the even code address; the thumb bit is the header's.
    (elf32-at base target mkprog data)

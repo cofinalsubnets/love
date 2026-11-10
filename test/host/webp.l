@@ -208,7 +208,8 @@ open(d + '/anims', 'w').write(chr(10).join(man) + chr(10))
          ; a flipped byte answers why, or a picture, and never takes the process down
          (atom? (filter (i \ !(webp-decode (flip ll i) @ d (string? d || two? d))) (jot #ll)))
          (atom? (filter (i \ !(webp-frames (flip hand i) 10 @ d (string? d || two? d))) (jot #hand)))
-         (webp-frames "hello" 10 = "not a webp"),
+         (webp-frames "hello" 10 = "not a webp")
+         (#(webp-frames (flip hand 26) 10 2) = 1),            ; a 16711700x12 canvas: one frame's pixels, not six
     hark ["rm" "-rf" dir],
     0))
 

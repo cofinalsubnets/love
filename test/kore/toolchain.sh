@@ -176,7 +176,7 @@ if [ "$(uname -m)" = x86_64 ]; then
   [ "$("$N/h")" = carried ] || fail "love cc off the carried source: the program"
 fi
 # lex's C back end, as kbuild asks for it: start conditions, ^, trailing context, <<EOF>>,
-# yyless and input(), compiled by mooncc and run; the same as flex's scanner when there is one
+# yyless and input(), flex's yy_flex_debug (genksyms sets it), compiled by mooncc and run; the same as flex's scanner when there is one
 L=$ho/.kore-lex; rm -rf "$L"; mkdir -p "$L"
 cat > "$L/t.l" <<'SPEC'
 %option noyywrap nounput yylineno
@@ -211,7 +211,7 @@ DIG	[0-9]
 .			printf("<%c>", yytext[0]);
 <<EOF>>			{ printf("<eof>"); return 0; }
 %%
-int main(void) { yylex(); printf("\n"); return 0; }
+int main(void) { extern int yy_flex_debug; yy_flex_debug = 0; yylex(); printf("\n"); return 0; }
 SPEC
 printf 'abc 12px 34 _a1 "q\\"x" ab cd ef xyz\n/* a\n*/ b #note\n%%v1 56 # c\n%%v1x 7\n  "open\nmore' > "$L/in"
 korerun lex -o "$L/l.c" "$L/t.l" || fail "kore lex -o"
@@ -317,5 +317,51 @@ err syntax error at 1.4
 if command -v bison >/dev/null 2>&1; then
   bison -o "$Y/b.c" --defines="$Y/b.h" -t -l "$Y/t.y" 2>/dev/null && moonc "$Y/b.c" "$Y/b" > /dev/null 2>&1 || fail "bison's parser"
   { "$Y/b" < "$Y/in"; printf foo | "$Y/b"; } > "$g"; same "yacc C parser vs bison"
+fi
+# mid-rule actions, as genksyms' parse.y opens rules: one first in a rule, an empty {} still a
+# symbol, $<t>$ set mid-rule and read back as $<t>n, $k reaching back from inside one
+cat > "$Y/m.y" <<'SPEC'
+%{
+#include <stdio.h>
+int yylex(void);
+void yyerror(const char *s) { printf("err %s\n", s); }
+static int depth;
+%}
+%union { int n; }
+%token <n> NUM
+%type <n> list item
+%%
+top : { printf("start\n"); } list { printf("sum %d depth %d\n", $2, depth); }
+    ;
+list : item { $$ = $1; }
+     | list ',' { depth++; $<n>$ = $1 * 10; } item { printf("mid %d then %d\n", $<n>3, $4); $$ = $1 + $4; }
+     ;
+item : NUM {} NUM { $$ = $1 * 100 + $3; }
+     | '(' { printf("open at %d\n", depth); } list ')' { $$ = $3; }
+     ;
+%%
+static const char *p = "1 2,(3 4,5 6),7 8";
+int yylex(void)
+{
+  while (*p == ' ') p++;
+  if (!*p) return 0;
+  if (*p >= '0' && *p <= '9') { yylval.n = 0; while (*p >= '0' && *p <= '9') yylval.n = 10 * yylval.n + *p++ - '0'; return NUM; }
+  return *p++;
+}
+int main(void) { return yyparse(); }
+SPEC
+korerun yacc -o "$Y/m.c" --defines="$Y/m.h" -t -l "$Y/m.y" || fail "kore yacc -o, mid-rule actions"
+moonc "$Y/m.c" "$Y/m" > /dev/null 2>&1 || fail "kore yacc: mooncc the mid-rule parser"
+"$Y/m" > "$o"
+printf '%s' 'start
+open at 1
+mid 3040 then 506
+mid 1020 then 810
+mid 9120 then 708
+sum 1620 depth 3
+' > "$g"; same "yacc mid-rule actions (the answer)"
+if command -v bison >/dev/null 2>&1; then
+  bison -o "$Y/mb.c" --defines="$Y/mb.h" -t -l "$Y/m.y" 2>/dev/null && moonc "$Y/mb.c" "$Y/mb" > /dev/null 2>&1 || fail "bison's mid-rule parser"
+  "$Y/mb" > "$g"; same "yacc mid-rule actions vs bison"
 fi
 echo "kore: diff (GNU-identical) + argv0 symlink + as + ar + ld + objcopy + nm + size + strip + ranlib + readelf + objdump + lex + yacc ok"

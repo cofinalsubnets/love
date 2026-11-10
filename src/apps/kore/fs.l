@@ -706,8 +706,16 @@
    ; low 8 at 0, the rest at 12. %t/%T print the parts in hex
    (ust-major d) ((d >> 32) & 4294963200 | (d >> 8) & 4095)
    (ust-minor d) ((d >> 12) & 4294967040 | d & 255)
-   (ust-mount p)                       ; %m: the mount point the path sits on
-    (udf-holds (udf-mounts ()) p @ m (m ? <>m "/"))
+   ; %m as gnu finds it: a mount whose root the path is, else up from the path (its directory
+   ; when st is not one) while the parent keeps the device, so a btrfs subvolume's root stops it
+   (ust-mount p st)
+    (: (di q) (stat q @ s (two? s ? [(ust-at s 11) (ust-at s 8)] ()))
+       k (di p)
+       root (k ? (foldl (b \ m \ (b ? b (di <>m = k ? <>m ()))) () (udf-mounts ())) ())
+       (up c) (: d (di c) pa (udir c) dp (di pa)
+                 (c = "/" || !d || !dp || dp 0 != d 0 || dp = d ? c (up pa)))
+       from (16384 = 61440 & <>>st ? p (udir p))
+       (? root root (rp-canon from 40 @ r (two? r ? (up <>r) "/"))))
    (ust-kindc m) (m & 61440 @
     32768 "-" 16384 "d" 40960 "l" 8192 "c"
     24576 "b" 4096 "p" 49152 "s"
@@ -786,7 +794,7 @@
       116 (say o (hex (charm? rdev ? (ust-major rdev))))
       84 (say o (hex (charm? rdev ? (ust-minor rdev))))
       111 (say o (num iob))
-      109 (say o (ust-mount p))
+      109 (say o (ust-mount p st))
       67 (say o "?")                  ; the security context: no labels here
       (put o 63))))))                 ; an unknown directive is GNU's bare ?
    ; the default face: GNU's block line for line. a Links is padded only when a device

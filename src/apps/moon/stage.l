@@ -14,25 +14,17 @@
    stage-dom (hash 'dice stage-dies 'ctors () 'tr stage-tr 'join stage-join
                    'litdie stage-lit 'okr stage-okr)
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body is walked; a sig variable would ride rigid
-                ; vrfix advances: no vreg may reach sibcall/soften, which read the physical file
-                (vrfix (gst ir-vreg) ir-chosen)
-                (sibcall (gst a) a) (soften (gst a) a) (a4ize (a) a)
-                (cfoldir (gst a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
-                (stld (gst a) a) (copyprop (a) a) (rezx (a) a) (addrfold (gst a) a) (laacse (gst a) a) (hz4 (gst a) a) (addk (a) a) (memfw (a) a) (cmpfuse (a) a)
-                (deadst (gst a) a) (repack (gst a) a) (t2nx (gst a) a)
+                (sibcall (gst a) a) (a4ize (a) a)
+                (cmpfuse (a) a)
+                (t2nx (gst a) a)
                 ; the post-choice chain: one order types
-                (deadlab (ir-chosen) ir-nolab)
-                (wpair (gst ir-nolab) ir-nolab)
-                (recse (gst ir-nolab) ir-nolab)
-                (coal (gst ir-nolab) ir-nolab)       ; renames, never re-addresses
                 (csframe (gst ir-nolab) ir-nolab)     ; lays the saves out, before any reader of their shape
                 (unframe (gst ir-nolab) ir-noframe)
                 (rvunframe (gst ir-noframe) ir-noframe)
-                (jr0 (gst ir-noframe) ir-jmpfix)
-                (unhome (gst ir-jmpfix) ir-final)
                 (cskeep (gst ir-final) ir-emitted)
                 (csdrop (gst ir-emitted) ir-emitted)
                 (jmpm (gst ir-emitted) ir-emitted)
+                (kelse (gst ir-emitted) ir-emitted)
                 (tailarm (gst ir-emitted) ir-emitted)
                 (swrap (gst ir-emitted) ir-emitted)
                 (frrec (gst ir-emitted) ir-emitted)

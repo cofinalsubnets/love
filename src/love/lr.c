@@ -35,11 +35,13 @@ static bool lr_takes(unsigned char const *h, unsigned char const *st, uintptr_t 
   if (lr16(abase, s) != 0xffff && kind < T && i < AN && lr16(achk, i) == s) a = lr16(atab, i);
   if (!a) return false;
   if (a < 0x8000) return true;
-  uintptr_t r = a - 0x8000, L = r < R ? lr16(rlen, r) : 0, k = L < no ? L : no;
+  uintptr_t r = a - 0x8000;
+  if (r >= R || lr16(rlhs, r) >= N) return false;                // a rule or its lhs past the tables
+  uintptr_t L = lr16(rlen, r), k = L < no ? L : no;
   no -= k, L -= k;
   if (L >= d) return false;
   d -= L;
-  uintptr_t A = lr16(rlhs, r), q = no ? ov[no - 1] : lr16(st, d - 1), j = A < N ? lr16(gbase, A) + q : GN;
+  uintptr_t A = lr16(rlhs, r), q = no ? ov[no - 1] : lr16(st, d - 1), j = lr16(gbase, A) + q;
   if (no == 64) return true;
   ov[no++] = j < GN && lr16(gchk, j) == A ? lr16(gtab, j) : lr16(gdef, A); }
  return true; }
@@ -85,10 +87,10 @@ static love_inline struct g *host_lr_run(struct g *g) {
    if (!kind) { z = 1; break; }   // a shift of $end is the accept
    lrput16(st + 2 * d++, a), pos++, look = 0xffff;
    continue; }
-  uintptr_t r = a - 0x8000, L = r < R ? lr16(rlen, r) : d;
-  if (L >= d) { z = 2; break; }
+  uintptr_t r = a - 0x8000, L = r < R ? lr16(rlen, r) : d, A = r < R ? lr16(rlhs, r) : N;
+  if (L >= d || A >= N) { z = 2; break; }                       // a rule or its lhs past the tables
   d -= L;
-  uintptr_t A = lr16(rlhs, r), q = lr16(st, d - 1), i = A < N ? lr16(gbase, A) + q : GN;
+  uintptr_t q = lr16(st, d - 1), i = lr16(gbase, A) + q;
   lrput16(st + 2 * d++, i < GN && lr16(gchk, i) == A ? lr16(gtab, i) : lr16(gdef, A));
   lrput16(lg + 6 * n, r), lrput32(lg + 6 * n + 2, pos), n++; }
  uintptr_t at = 8 + 2 * d, m = at + 5 + 6 * n, w = str_width(m);

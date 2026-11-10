@@ -683,8 +683,18 @@
       (499999500000 = ((jitgroupir [(. '(sm i a) '(? (< i 1000000) (sm (+ i 1) (+ a i)) a))] 'sm 'x64) 0 0))      ; multi-arg tail accumulator (sum 0..1M-1)
       ; a64: the group assembles
       (< 0 (tally (peep (assemble 'a64 (bcat [(mkouterir 'a64 1 'fib 1 0 () () () () ())
-                (mkhir 'a64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))])) 'bytes 0))))
-   (say err "glaze emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; a64 assembles)\n")))
+                (mkhir 'a64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))])) 'bytes 0)))
+      ; rv64: every lane assembles
+      (< 0 (tally (peep (assemble 'rv64 (coreir 'rv64 '(x y) '(+ (* x x) y) (deoptir 'rv64 1))) 'bytes 0)))
+      (< 0 (tally (peep (assemble 'rv64 (calloutir 'rv64 '+ 'i)) 'bytes 0)))
+      (< 0 (tally (peep (assemble 'rv64 (bcat [(mkouterir 'rv64 1 'fib 1 0 () () () () ())
+                (mkhir 'rv64 '(fib) 'fib '(n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))])) 'bytes 0)))
+      (< 0 (tally (peep (assemble 'rv64 '((ucomisd f0 f0) (br np x) (xorpd f0 f0) (label x))) 'bytes 0)))
+      ; an operand past what the isa's immediate holds costs a word, never a scare
+      (< 0 (tally (peep (assemble 'a64 '((cmp r0 5000) (br lt x) (label x))) 'bytes 0)))
+      (< 0 (tally (peep (assemble 'rv64 '((decm r0 8) (br gt x) (label x))) 'bytes 0)))
+      (< 0 (tally (peep (assemble 'rv64 '((decm r0 5000) (br gt x) (label x))) 'bytes 0))))
+   (say err "glaze emit-ir: neutral-IR leaf + n-ary + group lanes ok (x86 == interp; a64 and rv64 assemble)\n")))
 
 ; --- delet soundness: only dup-cheap values inline; a user-fn call hides its effects, so it never inlines ---
 (: j (jug 0)
