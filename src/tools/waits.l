@@ -44,7 +44,7 @@
     ["src/inle/teensy41/main.c" "main" "love_sleep"
      "the panic blink after a fatal shell exit -- nothing runs after it"]
     ["src/inle/doom.c" "DG_SleepMs" "love_sleep"
-     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
+     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, on inle as hosted"]]
 
    ; --- character classes ---
    (idc? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || c = 95)
@@ -98,12 +98,18 @@
    (find s p) (: n #s
                  (go i) (? (n <= i) () (at? s i p) i (go (i + 1)))
                  (go 0))
-   ; the first call-shaped identifier not a qualifier -- except `lvm(name)`, love.h's
-   ; definition macro, where the name is inside the parens.
+   (past-blanks s i) (i < #s && blank? (s i) ? (past-blanks s (i + 1)) i)
+   ; the first call-shaped identifier not a qualifier -- except love.h's definition
+   ; macros, where the name is inside the parens: `lvm(name)`, `love_kdoorv(name, ..)`
+   ; and `love_kdoor(T, name, ..)`.
    (hdr-name s)
     (: j (find s "lvm(")
+       v (find s "love_kdoorv(")
+       d (find s "love_kdoor(")
        cs (filter (x \ !(any (= x) nonfn)) (calls s))
        (? (j != ()) (ident-from s (j + 4))
+          (v != ()) (ident-from s (past-blanks s (v + 12)))
+          (d != ()) (ident-from s (past-blanks s (find s "," + 1)))
           (two? cs) <cs
           (rtrim s)))
 
