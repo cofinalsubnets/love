@@ -3371,7 +3371,8 @@
             (aren <x m . aren >x m)))
    (ainl g f)
     (: rf (respell f)
-       tys {} dn {} tak {} sdn {} n9 {'k 0} st9 {'s ()}   ; st9: the statement being laid; sdn the block statics
+       ; n9 numbers the splices, one count per fn across both runs; st9: the statement being laid; sdn the block statics
+       tys {} dn {} tak {} sdn {} n9 (g 'ainln @ () {'k 0} t9 t9) st9 {'s ()}
        ; an expression's static type by the parser's typer over the caller's names: () where unknown
        gty (g 'ainlg @ t
               (t ? t (foldl (a \ k \ pin a k <>(g 'glob k)) {} (keys (g 'glob)) @ t2
@@ -3387,7 +3388,9 @@
        _ (map (p \ (pin tys <p <>p, pin dn <p 1)) <>>rf)
        _ (cen (rf 3))
        memo (g 'ainlc)
-       (cand nm) (peep memo nm 'no @ c
+       ; kinl's run splices its own copies alone
+       (cand nm) (g 'ainl2 @ () (cand0 nm) s9 (peep s9 nm 0 ? (cand0 nm) ()))
+       (cand0 nm) (peep memo nm 'no @ c
                     (c @ 'no (acand g nm @ c9 (pin memo nm c9, c9)) c))
        crt <(peep (g 'sigs) <>rf ['long ()])
        ; a call's value in its return type: a truth value needs no conversion to an integer type
@@ -3854,8 +3857,15 @@
                    ok (sm? v && all (it \ (it @ ('case . lo . r) (sm? lo && (!(two? r) || sm? <r)) 1)) items)
                    k (ok ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
                    (glb? l) (any glbl? l)
-                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
-                      ['switch c (map (dprunel w64 ty lk) (drop k items))])))
+                   ; ..and ends at its first way out, a later case reached by the dispatch alone -- when its
+                   ; labels are single and distinct, so a duplicate stays for the checker to name
+                   (out? it) (it = '(brk) || exits? it)
+                   ls (filter (it \ elem <it '(case dflt)) items)
+                   one (all (it \ (it @ ('case _) 1 ('dflt) 1 ())) ls && #(uniq (map show ls)) = #ls)
+                   (? (k < 0 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
+                      (: d (drop k items) j (one ? (at out? d 0) -1)
+                         d2 (j < 0 || glb? (drop (j + 1) d) ? d (take (j + 1) d))
+                         (k = 0 && #d2 = #d ? (map (dprunel w64 ty lk) x) ['switch c (map (dprunel w64 ty lk) d2)])))))
             (map (dprunel w64 ty lk) x)))
    (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
    (exits? x) (x @ ('ret . _) 1 ('goto . _) 1 ('blk items) (two? items && exits? (last items)) ())
@@ -4269,6 +4279,52 @@
        (atom? (keys sbs) ? f
         (kprop0 g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; -- a call the unroller left with constant args, to a body the size gate turned away: the body
+   ; with those params as their constants and pruned, judged again, and spliced by a second ainl
+   ; that takes these copies alone; a site it declines calls the callee as written
+   (kinl g f)
+    (: w64 !(ilp32? g) ks (g 'inlk) sp {} on {}
+       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+       ; a param the body writes, takes the address of or declares again keeps its arg
+       (fixed? p b) (: (go x) (? (atom? x) ()
+                                 (x @ (('asn || 'post) ('var ^p) . _) 1
+                                      ('rmw _ ('var ^p) _) 1
+                                      ('addr ('var ^p)) 1
+                                      ('decl ds) (any (d \ <d = p) ds || any go ds)
+                                      (any go x)))
+                       (go b))
+       (sub x p v) (? (atom? x) x (x = ['var p] ? v (map (y \ sub y p v) x)))
+       (spec x nm as)
+        (peep ks nm () @ () x
+           fi (: ps <>>fi sig (peep (g 'sigs) nm ())
+                 ; per param: its constant, cast to the param's type, or () where the arg stays
+                 cs (map (i \ (: p (ps i) k (kv (as i)) (charm? k && !(fixed? <p (fi 3)) ? ['cast <>p ['num k]]))) (jot #ps))
+                 (#ps != #as || !(two? sig) || !(any two? cs) ? x
+                    (: n9 (peep g 'kinln 0) _ (pin g 'kinln (n9 + 1))
+                       s "\(nm)`k\(n9)"
+                       kp (filter (i \ !(two? (cs i))) (jot #ps))
+                       b (foldl (b \ i \ (two? (cs i) ? (sub b <(ps i) (cs i)) b)) (fi 3) (jot #ps))
+                       f2 (nofx (do0 (ucut (dprune w64 (e \ ()) ([<fi s (map (i \ ps i) kp) b] + >>>>fi)))))
+                       sg [<sig (map (i \ (sig 1) i) kp) (sig 2)]
+                       (inlok? g f2 sg () ?
+                          (pin (g 'inl) s f2, pin (g 'sigs) s sg, pin on s 1, pin sp s [nm cs],
+                           ['call ['var s] (map (i \ as i) kp)])
+                          x)))))
+       (walk x) (? (atom? x) x
+                   (x @ ('call ('var nm) as) (map walk as @ a2 (spec ['call ['var nm] a2] nm a2))
+                        (map walk x)))
+       ; a copy ainl declined: the call as written, its constants back in place
+       (back x) (? (atom? x) x
+                   (x @ ('call ('var s) as && two? (peep sp s ()))
+                         (: e (sp s) nm <e cs <>e (go cs as) (? !(two? cs) () (two? <cs) (<cs . go >cs as) (<as . go >cs >as))
+                            ['call ['var nm] (go cs (map back as))])
+                        (map back x)))
+       f2 (walk f)
+       (!(two? (keys sp)) ? f
+          (: _ (pin g 'ainl2 on)
+             f3 (ainl g f2)
+             _ (pin g 'ainl2 ())
+             (back (respell (oalign g (nopcall g f3)))))))
    ; -- a small counted loop unrolled: for (T k = A; k < B; k++) of at most 16 trips, its copies small
    ; in all, a body that neither writes k, takes its address, nor leaves early. each copy reads k as
    ; its literal and spells its own locals apart. a body indexing a small local array by k may run
@@ -4518,8 +4574,9 @@
        (ucut (has? f ? (kprop g (dprunel w64 (e \ ()) lk (res f))) (dprune w64 (e \ ()) f))))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
-    (: f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
-                      u0 (unrl g k0)
+    (: _ (pin g 'ainln {'k 0})
+       f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
+                      u0 (unrl g k0 @ u9 (u9 = k0 ? u9 (kinl g u9)))
                       k1 (srs g (sra g (u0 = k0 ? k0 (kprop g u0))))
                       (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1)))
                 @ f1 (kprop g (ucut (dprune !(ilp32? g) (e \ ()) (lprop g f1)))))
@@ -4760,7 +4817,7 @@
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'csites {} 'cloop {} 'inl {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'inlk {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -4800,7 +4857,9 @@
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
-                                    pin (g 'inl) <>f fi) 0)) 0),
+                                    pin (g 'inl) <>f fi)
+                                   ; ..and one the size gate alone turns away, for kinl to weigh at each constant call
+                                   (inlok? g fi (sigs <>f) 1 && !(asmneed? g <>>f <>>>f) ? (pin (g 'inlk) <>f fi) 0))) 0),
                           recfns >fs)))
        _ (: (go x lp) (? !(two? x) 0
                          (x @ ('call . ('var nm) . r) (pin (g 'csites) nm (1 + peep (g 'csites) nm 0),

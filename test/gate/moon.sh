@@ -540,6 +540,28 @@ for d in P L; do
   esac
 done
 
+# a switch on a param too big to splice whole, called from an unrolled loop: each constant call
+# splices its own case, and none stays a call
+cat > "$ho/.kinl.c" <<'EOF'
+#include <stdio.h>
+static int side(int const *v, int k) {
+ switch (k) {
+  case 0: return v[2] + v[3];
+  case 1: return 64 * v[3] - v[0];
+  case 2: return 64 * v[3] + v[0];
+  case 3: return 64 * v[3] - v[1];
+  default: return 64 * v[3] + v[1]; } }
+int in(int const *v) { int a = 1; for (int k = 0; k < 5; k++) a &= side(v, k) >= 0; return a; }
+#ifndef ONLY
+int main(void) { int const v[4][4] = { { 1, 2, 3, 4 }, { -300, 0, 1, 4 }, { 0, 300, 1, 4 }, { 0, 0, -9, 4 } };
+ printf("%d %d %d %d\n", in(v[0]), in(v[1]), in(v[2]), in(v[3])); return 0; }
+#endif
+EOF
+moonrun -D ONLY -c -o "$ho/.kinl.o" "$ho/.kinl.c" > /dev/null 2>&1 || fail "mooncc the unrolled switch probe"
+[ "$(objdump -d "$ho/.kinl.o" | grep -c call)" = 0 ] || fail "an unrolled call on a constant stayed a call"
+moonrun -o "$ho/.kinl" "$ho/.kinl.c" || fail "mooncc: the unrolled switch probe linked"
+[ "$("$ho/.kinl")" = "1 0 0 0" ] || fail "an unrolled switch's constant splices answer wrong"
+
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
