@@ -111,9 +111,9 @@ love_h = $(wildcard $S/love/*.h)
 # not the whole build's critical path. a LINK ORDER, so it stays named where the other sets
 # glob -- $(wildcard) answers readdir order.
 love_tu = love.c gc.c ev.c task.c io.c tablet.c snap.c num.c arr.c thrun.c
-# ..and snap.c reaches the codec unconditionally to pack an image's code segment, so a seat
-# that links the runtime links it: the one library the core itself calls.
-love_codec = compress/gz.c
+# ..and snap.c reaches the codecs unconditionally to pack an image's segments, so a seat
+# that links the runtime links them: the libraries the core itself calls.
+love_codec = compress/gz.c compress/zstd.c
 # the nif libraries, a folder a kind
 love_libs = compress audio picture crypto archive
 core_tu = $(love_tu) $(love_codec)
@@ -127,7 +127,7 @@ hosta_c = $(wildcard $S/inle/$(hosta)/*.c)
 # mode both take it -- moonlibc's __love_sys is the one door under it, whoever answers. drop a
 # src/love/<app>.c in and its nifs register with no rule edit.
 host_c = $(filter-out $(addprefix $S/love/,$(love_tu) bare.c nohorn.c noblob.c macho.c),$(wildcard $S/love/*.c)) \
-         $(filter-out $S/love/$(love_codec),$(wildcard $(patsubst %,$S/love/%/*.c,$(love_libs))))
+         $(filter-out $(addprefix $S/love/,$(love_codec)),$(wildcard $(patsubst %,$S/love/%/*.c,$(love_libs))))
 # the tree cuts at moonlibc's interface: src/love/ is everything over it, src/love/user/ the seats
 # where another kernel answers, and src/inle/ kernel mode, where we do. quay draws into a buffer
 # and names no device, so it is over the door. paint.c (32bpp) and nif.c (the love door) are

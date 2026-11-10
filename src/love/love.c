@@ -793,19 +793,21 @@ char *code_adopt(struct g *g, char const *src, size_t n) {
  if (code_wopen(c, c->base, n, 1)) return NULL;
  code_sync(c->base, c->base + n);
  return c->base; }
-// a segment deflated a chunk at a time, each seated when a native in it first runs. the
-// image's table rows are (start, zstart, digest): tab keeps two, sum the third; dic is the preset dictionary
-struct lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic, *want; uint64_t *sum; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
+// a segment coded a chunk at a time, each seated when a native in it first runs. the image's
+// table rows are (start, zstart, digest): tab keeps two, sum the third; dic is the dictionary, zt its tables
+struct lazy { unsigned char const *z, *dz; char *w; unsigned char *seated, *dic, *want; void *zt; uint64_t *sum; uintptr_t n, nz, nch, nd, ndz; uint64_t tab[]; };
 static int code_seat1(struct code *c, uintptr_t k) {
  struct lazy *l = c->lz;
  if (l->seated[k]) return 0;
- if (l->dz && inflate_raw(l->dz, l->ndz, l->dic, l->nd) != (intptr_t) l->nd) return -1;   // the first seat inflates dic
- l->dz = NULL;
+ if (l->dz) {                                   // the first seat inflates dic and builds its tables
+  if (inflate_raw(l->dz, l->ndz, l->dic, l->nd) != (intptr_t) l->nd || !(l->zt = alloc(NULL, zstd_dict_size()))
+      || !zstd_dict_load(l->zt, l->dic, l->nd)) return -1;
+  l->dz = NULL; }
  uintptr_t a = (uintptr_t) l->tab[2 * k], b = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 2] : l->n,
            za = (uintptr_t) l->tab[2 * k + 1], zb = k + 1 < l->nch ? (uintptr_t) l->tab[2 * k + 3] : l->nz;
  if (image_sum(l->z + za, zb - za, 0) != l->sum[k]                   // a damaged chunk never runs
      || code_wopen(c, c->base + a, b - a, 0)
-     || inflate_dict(l->z + za, zb - za, (unsigned char*) l->w + a, b - a, l->dic, l->nd) != (intptr_t)(b - a)
+     || !l->zt || zstd_dict_into(l->zt, l->z + za, zb - za, (unsigned char*) l->w + a, b - a) != (intptr_t)(b - a)
      || code_wopen(c, c->base + a, b - a, 1)) return -1;
  code_sync(c->base + a, c->base + b);
  if (l->want) l->want[k] = 1;
@@ -822,7 +824,7 @@ char *code_lazy(struct g *g, size_t n, unsigned char const *z, size_t nz, unsign
  for (uintptr_t k = 0; k < nch; k++)
   memcpy(l->tab + 2 * k, tab + 24 * k, 16), memcpy(l->sum + k, tab + 24 * k + 16, 8);
  memset(l->seated, 0, nch);
- l->want = NULL;
+ l->want = NULL, l->zt = NULL;
  c->lz = l;
  for (uintptr_t k = 0; k < nch; k++) {
   uint64_t a = l->tab[2 * k], za = l->tab[2 * k + 1],
@@ -848,7 +850,7 @@ void code_warm(struct g *g) {
 void code_fin(struct g *g) {
  for (struct code *c = g->code, *n; c; c = n) {
   n = c->next, code_drop(g, c);
-  if (c->lz) code_unwant(c->lz->want, c->lz->nch), alloc(c->lz, 0);
+  if (c->lz) { code_unwant(c->lz->want, c->lz->nch); if (c->lz->zt) alloc(c->lz->zt, 0); alloc(c->lz, 0); }
   alloc(c, 0); }
  for (struct cfree *f = g->cfree, *n; f; f = n) n = f->next, alloc(f, 0);
  g->code = NULL, g->cfree = NULL; }
