@@ -29,6 +29,9 @@
 ;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
 ;                named in .hearts/kcc.log), love's ld (but the arm32 compat vdso's, lld's) and love's ar
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
+; $HEARTS_CONFIG a config fragment laid over defconfig as merge_config.sh lays one: appended to
+;                .config, then olddefconfig made (pi.config, the pi boards')
+; $HEARTS_FW     the fragment's CONFIG_EXTRA_FIRMWARE_DIR, appended after it: the firmware it builds in
 (: argv cmdline
    memo {}
    jobs {}
@@ -182,8 +185,14 @@
                     ["HEARTS_OBJCOPY" "OBJCOPY"] ["HEARTS_STRIP" "STRIP"] ["HEARTS_NM" "NM"]
                     ["HEARTS_OBJDUMP" "OBJDUMP"] ["HEARTS_READELF" "READELF"]])
          goals (words (getenv "HEARTS_GOALS" || (x86 ? "defconfig syncconfig headers bzImage" "defconfig syncconfig Image")))
+         frag (getenv "HEARTS_CONFIG")
+         fw (getenv "HEARTS_FW")
+         (lay 0) (uread frag @ [1 s]
+                   (appendf (here + "/.config") (s + (string? fw ? "CONFIG_EXTRA_FIRMWARE_DIR=\"\(fw)\"\n" "")))
+                   (puts "hearts: cannot read HEARTS_CONFIG \(frag)\n", quit 1))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
-                      (hk-make K top g made {} run, drain 0, puts ("made " + g + " in " + show (clock 0 - t0) + " ms\n"))))
+                      (hk-make K top g made {} run, drain 0, puts ("made " + g + " in " + show (clock 0 - t0) + " ms\n"),
+                       (g = "defconfig" && string? frag) ? (lay 0, one "olddefconfig") 0)))
          (each goals one,
           peep made " failed" 0 @ f (string? f ? (puts ("FAILED at " + f + "\n"), quit 1) 0)))))
