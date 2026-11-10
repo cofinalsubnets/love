@@ -21,7 +21,7 @@ mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 # the five faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER
 # that dumps a heap image through semihosting, the WAKER that boots one back, and the two
 # -pd twins carrying the rune+cas corpus.
-skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o)
+skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/rt.o
 objs        = $(skel) $(R)/$(o)/main.o
 baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o

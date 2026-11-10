@@ -1,6 +1,6 @@
 // teensy 4.1 (i.MX RT1062) frontend for love, bare metal: the love.h frontend contract and a
-// few GPIO nifs. the console is LPUART6 on pins 0/1 at 115200 8N1 (USB CDC is a TODO, see
-// README); teensy41.c owns boot image, startup, clocks, uart, timer and GPIO
+// few GPIO nifs. the console is LPUART6 on pins 0/1 at 115200 8N1 and the board's own USB as
+// CDC-ACM (usb.c), both at once; teensy41.c owns boot image, startup, clocks, uart, timer and GPIO
 #include "../../love/love.h"
 #include "teensy41.h"
 #include "../bput.h"
@@ -10,15 +10,20 @@
 #define EOF (-1)
 #endif
 
-// cooperative waits spin against love_clock (ms; 0 forever): no IRQs, so nothing to WFE on
+// input from either port, the UART's first
+static int con_ready(void) { return serial_rx_ready() || usb_rx_ready(); }
+static int con_getc(void) { return serial_rx_ready() ? serial_getc() : usb_getc(); }
+static void con_putc(int c) { serial_putc(c); usb_putc(c); }
+
+// cooperative waits spin against love_clock (ms; 0 forever)
 void love_sleep(uintptr_t ms) {
-  if (!ms) { for (;;) if (serial_rx_ready()) return; }   // forever, but wake on input
+  if (!ms) { for (;;) if (con_ready()) return; }   // forever, but wake on input
   uintptr_t start = love_clock();
   while (love_clock() - start < ms) ; }
 
 // the readiness law (main.c, kmain.c): a negative fd, a string port, is always ready, or its
 // task parks on a wait nothing satisfies. fd 0 is the honest poll; other fds are nominal
-bool ready(int fd, int events) { return fd || events != wait_in ? 1 : serial_rx_ready(); }
+bool ready(int fd, int events) { return fd || events != wait_in ? 1 : con_ready(); }
 
 void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
   if (n <= 0) { love_sleep(ms); return; }
@@ -27,17 +32,18 @@ void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
     for (int i = 0; i < n; i++) if (ready(fds[i].fd, fds[i].events)) return;
     if (ms && love_clock() - start >= ms) return; } }
 
-// both ports ride LPUART6, the fd nominal. serial never reaches EOF: a dry read is 0, and
-// serial_getc is called only behind serial_rx_ready, so an empty ring never spins the vm
+// both ports ride the console, the fd nominal. it never reaches EOF: a dry read is 0, and
+// con_getc is called only behind con_ready, so an empty ring never spins the vm
 static intptr_t fd_readn(struct g *g, unsigned char *dst, uintptr_t n) {
   uintptr_t k = 0;
-  while (k < n && serial_rx_ready()) dst[k++] = (unsigned char) serial_getc();
+  while (k < n && con_ready()) dst[k++] = (unsigned char) con_getc();
   return (intptr_t) k; }
 
 static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
   for (uintptr_t k = 0; k < n; k++) {
-    if (src[k] == '\n') serial_putc('\r');
-    serial_putc(src[k]); }
+    if (src[k] == '\n') con_putc('\r');
+    con_putc(src[k]); }
+  usb_flush();
   return g->b = (intptr_t) n, g; }
 
 // nothing to push: a flush is where to say what the inbound ring dropped (teensy41.c's rx_put)
@@ -140,6 +146,9 @@ int main(void) {
     if (mhz) { bput_n(serial_putc, mhz, 10);
       bput_s(serial_putc, " MHz\r\n"); }
     else bput_s(serial_putc, "on the ROM path\r\n"); }
+  // early, so the host enumerates the board while the image wakes
+  usb_init();
+  bput_s(serial_putc, "; usb up\r\n");
   uint32_t psram_mb = psram_init();
   { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
     for (; *s; s++) serial_putc(*s); }

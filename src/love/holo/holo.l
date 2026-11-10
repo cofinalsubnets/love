@@ -48,6 +48,12 @@
 ;   (minsd d s) (maxsd d s)                    ; d <- d < s ? d : s  /  d > s ? d : s (a NaN takes s)
 ;   (addss .. ucomiss minss maxss) (cvtsi2ss cvtui2ss f g) (cvttss2si cvttss2ui g f)   ; the single twins
 ;   (movdxr f g) (movdrx g f)                  ; gp<->f bit moves of a single's 32 bits
+;   (fimm f k) (ucom0 f)                       ; thumb2: f <- the single of bits k, an 8-bit vfp
+;                                              ;   immediate; compare a single against +0.0
+;   (addss3 d n m) .. (divss3 d n m)           ; thumb2: d <- n op m, a single's three-operand op
+;   (fli f g k) (flal f g k p)                 ; thumb2: f <- the single of bits k, g a scratch; flal's
+;                                              ;   word sits at p, a pool ahead, for the hook to load
+;   (ldsspi f p) (stsspi p f) (ldpi4 g p) (stpi4 p g)   ; thumb2: a single or a word at p, then p += 4
 ;   (cmov cond d s)                            ; d <- s when cond holds, off the last cmp (x86-64)
 ;
 ; a register operand is a symbol (r0..), an immediate a number, so the ALU ops take either in
@@ -137,7 +143,7 @@
              'vmread 2 'vmwrite 2
              'isb 0 'wfi 0 'yield 0 'wfe 0 'eret 0
              'int 1 'ltr 1 'dsb 1 'dmb 1 'seg 1 'bscan 4 'pause 0 'mfence 0 'lfence 0 'sfencex 0 'stc 0 'clc 0 'cmc 0 'stac 0 'clac 0 'rdpkru 0 'wrpkru 0 'xgetbv 0 'xsetbv 0 'wbinvd 0 'invd 0 'monitor 0 'mwait 0 'monitorx 0 'mwaitx 0 'rdtscp 0
-             'carry 4 'alurm 5 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
+             'carry 4 'alurm 5 'alu4 4 'shl4 2 'xaddm 4 'cmpxchgm 4 'xchgm 4 'alum 5 'unm 4 'btm 5 'testm 4
              'brk 1 'dbrk 1 'hvc 1 'smc 1 'udf 1 'svcn 1
              'ldcr 2 'stcr 2 'lddr 2 'stdr 2 'lgdt 2 'lidt 2 'invlpg 2
              'mrs 2 'msr 2 'msri 2 'mrrc 5
@@ -153,8 +159,8 @@
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
-             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1
-             'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'set 2 'set1 2 'br 2 'br8 2
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'l32r 2
+             'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'testb 2 'zxl1 1 'zxl2 1 'zxml 3 'ldu1l 3 'ldu2l 3 'ldxbl 5 'ldxhl 5 'set 2 'set1 2 'br 2 'br8 2
              'asis 1 'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2 'ubfx 4   ; the three-register twins, thumb2's ubfx
@@ -162,7 +168,7 @@
              'movupd 2 'movsd 2 'movss 2 'movapd 2 'movhlps 2 'unpcklpd 2
              'mulpd 2 'addpd 2 'subpd 2 'divpd 2
              'mulsd 2 'addsd 2 'subsd 2 'divsd 2
-             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2
+             'mulss 2 'addss 2 'subss 2 'divss 2 'minss 2 'maxss 2 'ucomiss 2 'ucom0 1 'fimm 2 'fli 3 'flal 4 'addss3 3 'subss3 3 'mulss3 3 'divss3 3 'ldsspi 2 'stsspi 2 'ldpi4 2 'stpi4 2
              'cvtsi2ss 2 'cvtui2ss 2 'cvttss2si 2 'cvttss2ui 2 'movdxr 2 'movdrx 2
              'xorpd 2 'pcmpeqd 2 'andpd 2 'psubq 2
              'cvtss2sd 2 'cvtsd2ss 2 'ucomisd 2 'movmskpd 2
@@ -189,7 +195,7 @@
              'ldu1 3 'ldu2 3 'ldu4 3
              'stsd 3 'ldsd 3 'stss 3 'ldss 3 'cmppd 3
              'rem 4 'urem 4 'umull 4 'smull 4 'umlal 4 'mla 4
-             'ldx 5 'stx 5 'leax 5 'ldxb 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
+             'ldx 5 'stx 5 'leax 5 'ldxb 5 'ldxh 5 'stxb 5 'ldxw 5 'ldxsw 5 'mulo 5
              'andx4 5 'orx4 5 'xorx4 5 'andm4 3 'orm4 3 'xorm4 3 'decm 2
              'ldsdx 5 'stsdx 5 'ldssx 5 'stssx 5 'ldsdl 2 'fopm 4 'fopl 3
              'minsd 2 'maxsd 2 'cmov 3}
@@ -246,10 +252,13 @@
    ;; jump goes on at its label when that lies ahead, an unseen target answers no; a label is
    ;; transparent, as only the fall-through carries these flags. a backend's 'flagend names the
    ;; other forms that leave the flags to no one.
+   ; mooncc -g's line mark: a label that lays nothing, which no scan counts
+   (dlmark? ins) (<ins = 'label && starts? (show (ins 1)) ".dl")
    (flagfree be l k)
       (k < 1 || atom? l ? 0
          (<(<l) @ o
-            (? (elem o (be 'flagr)) 0
+            (? (dlmark? <l) (flagfree be >l k)
+               (elem o (be 'flagr)) 0
                (elem o (be 'flagw)) 1
                (elem o '(call ret sys)) 1
                (lit? (peep be 'flagend 0) && (be 'flagend) <l) 1
@@ -258,7 +267,7 @@
                (flagfree be >l (k - 1)))))
    (flagjump be l nm k)
       (k < 1 || atom? l ? 0
-         (<l @ ins (<ins = 'label && ins 1 = nm ? (flagfree be >l (k - 1)) (flagjump be >l nm (k - 1)))))
+         (<l @ ins (? (<ins = 'label && ins 1 = nm) (flagfree be >l (k - 1)) (dlmark? ins) (flagjump be >l nm k) (flagjump be >l nm (k - 1)))))
    ; a label's address where it lays; ('label nm k) names k bytes on, inside what follows it
    (label-addr ins addr) (two? >>ins ? (addr + ins 2) addr)
    (lay prog be addr items labels)
@@ -298,7 +307,8 @@
    ;; 'short, (\ ins chunk rel -> bytes | ()): a shorter encoding of the jmp/br given its long
    ;; chunk and pessimistic distance, or () to keep it; any width (riscv drops a whole jal).
    ;; `longs` names labels that stay long (the object writer's weak set, kept as relocations).
-   ;; (lal d l p) is la of l whose word sits at p, a pool ahead: the hook may load it from there.
+   ;; (lal d l p) is la of l whose word sits at p, a pool ahead: the hook may load it from there,
+   ;; and (flal f g k p) a single's bits k.
    ;; its span may cross aligns, each counted at its widest pad on top of the distance.
    ;; 'fuse, (\ cmp br rel -> bytes | ()): one encoding of a cmp and the br right after it, asked
    ;; only where nothing on either path reads the flags the pair no longer sets.
@@ -356,8 +366,8 @@
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
-                        (elem <ins '(jmp br lal))
-                        (: t (<ins @ 'jmp (tgt-of (ins 1) era) 'br (tgt-of (ins 2) era) (pool-of (ins 3) era))
+                        (elem <ins '(jmp br lal flal))
+                        (: t (<ins @ 'jmp (tgt-of (ins 1) era) 'br (tgt-of (ins 2) era) 'lal (pool-of (ins 3) era) (pool-of (ins 4) era))
                            sc (imm? t ? (short-of ins (rev c) (t - pa)))
                            (two? sc ?
                               (: r (revonto sc items 0)          ; <r counts bytes, not items

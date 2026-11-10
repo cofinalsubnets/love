@@ -36,24 +36,23 @@
  (wrf p t) (open p "w" @ q (say q t, close q))
  tmpd "out"
 
- ; --- the 'key names of a `name {..}` tablet literal, source order ---
+ ; --- the 'key names of a `name {..}` tablet literal, source order, as the reader reads it ---
  a64src (rdf "src/love/holo/a64.l")
  rv64src (rdf "src/love/holo/rv64.l")
  (table-in src nm)
-  (: i (idx-of src ("\n   " + nm + " {"))
-     _ (charm? i ? 0 (puts ("sysdiff: no table " + nm + "\n"), quit 1))
-     (namec? c) (digit? c || (65 <= c && c <= 90) || (97 <= c && c <= 122) || c = 95)
-     ; a key is a 'name at the literal's own depth; a value such as '(0 5) is not
-     (harvest k d acc)
-      (src k @ c
-       (? (c = 40 || c = 123) (harvest (k + 1) (d + 1) acc)
-          (c = 41 || c = 125) (d = 1 ? (rev acc) (harvest (k + 1) (d - 1) acc))
-          (c = 39 && (d = 1 && namec? (src (k + 1))))
-           (: (e m) (namec? (src m) ? (e (m + 1)) m)
-              b (e (k + 1))
-              (harvest b d ((snip src (k + 1) b) . acc)))
-          (harvest (k + 1) d acc)))
-     (harvest (idx-from src "{" i) 0 ()))
+  (: k (nom nm)
+     (hash? v) (two? v && <v = 'hash)
+     ; the (hash ..) that follows nm in a binding list, anywhere in the file
+     (find f) (? !(two? f) ()
+                 (: (go l) (? !(two? l) ()
+                              (<l = k && two? >l && hash? <>l) >(<>l)
+                              (find <l @ () (go >l) r r))
+                    (go f)))
+     h (find (sounds src))
+     _ (two? h ? 0 (puts ("sysdiff: no table " + nm + "\n"), quit 1))
+     ; a key is a 'name, each before its value
+     (names l) (two? l ? (show (<>(<l)) . names >>l) ())
+     (names h))
  (table nm) (table-in a64src nm)
 
  ; --- the cases: [ir-form asm-text pair-key] (pair-key () when unpaired) ---

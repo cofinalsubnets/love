@@ -5,7 +5,7 @@
 ;   (webp-size s)    -> (w h) off the RIFF headers, an animation's canvas | why not
 ;   (webp-decode s)  -> (w h rgba) | a string saying why not
 ;   (webp-frames s most) -> (w h ((rgba ms) ..)), each frame as shown and how long, at most
-;                       most of them | why not; a still picture is one frame of no time
+;                       most of them, 2^28 pixels in all | why not; a still picture is one frame of no time
 ;
 ; lossy with or without its alpha plane, lossless, and an animation's first frame on its
 ; canvas, the pixels libwebp's own; its frames composed as libwebp's animation decoder does.
@@ -58,7 +58,7 @@
                              string o))
              ; p the next chunk, c the canvas, pv [anmf key at] of the frame before
              (go p c pv acc n)
-              (? (n = most || e < p + 8) acc
+              (? (n = most || e < p + 8 || 268435456 < (n + 1) * w * h) acc   ; frames as many pixels as one picture
                  (: sz (rdle s (p + 4) 4) nx (p + 8 + sz + (sz & 1))
                     (? (snip s p (p + 4) != "ANMF" || e < p + 24) (go nx c pv acc n)
                        (: a (anmf p)
