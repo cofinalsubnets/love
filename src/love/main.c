@@ -28,9 +28,9 @@ love_noinline intptr_t nclock(void) {
   : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
- if (!g || !ok(g)) return;
- if (love_inflag)                                        // the blocking bit was ours
+ if (love_inflag)                                        // the blocking bit was ours, a scare or not
   fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(love_inflag)), love_inflag = 0;
+ if (!g || !ok(g)) return;
  if (!evenp(g->hook[hook_inport]) || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
  uintptr_t n = io_pending(g, (struct io*) g->hook[hook_inport])
              + (getcharm(love_stdin.io.ungetc_buf) != EOF ? 1 : 0);
@@ -65,7 +65,9 @@ static lvm(lvm_exit) {
  if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
  union u *t = g->tasks;
  if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
- for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
+ int rc = (int) getcharm(Sp[0]);
+ stdin_give(g), fin(g);                          // as main's end: the finalizers drain each port's residue
+ for (;;) exit(rc); }
 
 
 static void stdin_hand(struct g *g) {
@@ -186,7 +188,8 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
  if (!w) { g->next_wake_at = love_clock() + 1; return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
- if (n) len(g->sp[0]) = n;
+ // the capture cut to what was read: a NUL and a zeroed pad, as ini_str lays them
+ if (n) memset(txt(g->sp[0]) + n, 0, b2w(n + 1) * sizeof(word) - n), len(g->sp[0]) = n;
  else g->sp[0] = EmptyString;
  int status = w < 0 ? -1
             : WIFEXITED(st) ? WEXITSTATUS(st)

@@ -13,7 +13,7 @@
 ; a spec: declarations (%token %left %right %nonassoc %start %expect %param %type %union %locations
 ; %destructor, %{ text %}), %%, rules (name : symbols {action} | .. ;), and an optional %% before
 ; text laid last, after the actions.
-; not yet: mid-rule actions, string-literal tokens; in love text, error, $$ and $<tag>.
+; not yet: string-literal tokens; in love text, mid-rule actions, error, $$ and $<tag>.
 (module 'kore
 (borrow '(cli posix))
 (:
@@ -115,17 +115,23 @@
                                (tgt >>ws () @ [w2 ts] (: _ (pin G 'dtors (peep G 'dtors () + [[<>(<>ws) ts]])) (decl w2 lv))))
                            (yacc-die ("%destructor wants an action" + yacc-at (w 2))))
                        (yacc-die ("not yet: %" + d)))))))
-       ; the rules as written: (name (word..) action precword line)
+       ; the rules as written: (name (word..) action precword line mid), mid ('mid . words)
+       ; on an action lifted from mid-rule: an empty rule $@N standing in its place, whose $k
+       ; reach back over the words before it
        (rule? ws) (two? ws && <<ws = 'id && two? >ws && <<>ws = 'colon)
-       (midact ln) (yacc-die ("not yet: an action mid-rule" + yacc-at ln))
+       (lift act sy ln acc)
+        (: k (peep G 'nmid 0) nm ("$@" + show (k + 1))
+           (pin G 'nmid (k + 1), [['id nm ln] ([nm () act () ln ('mid . rev sy)] . acc)]))
        (alt ws lhs sy act pw ln acc)
-        (: done ([lhs (rev sy) act pw ln] . acc)
+        (: done ([lhs (rev sy) act pw ln ()] . acc)
            (? (!(two? ws) || rule? ws || <<ws = 'mark) [ws done]
               (<ws @ w
                  (? (<w = 'bar) (alt >ws lhs () () () (w 2) done)
                     (<w = 'semi) (two? >ws && <<>ws = 'bar ? (alt >ws lhs sy act pw ln acc) [>ws done])
-                    (elem <w '(id ch)) (act ? (midact (w 2)) (alt >ws lhs (w . sy) act pw ln acc))
-                    (<w = 'act) (act ? (midact (w 2)) (alt >ws lhs sy <>w pw ln acc))
+                    (elem <w '(id ch)) (string? act ? (lift act sy (w 2) acc @ [m a2] (alt >ws lhs (w . m . sy) () pw ln a2))
+                                          (alt >ws lhs (w . sy) act pw ln acc))
+                    (<w = 'act) (string? act ? (lift act sy (w 2) acc @ [m a2] (alt >ws lhs (m . sy) <>w pw ln a2))
+                                   (alt >ws lhs sy <>w pw ln acc))
                     (<w = 'dir && <>w = "prec")
                      (two? >ws && elem <<>ws '(id ch) ? (alt >>ws lhs sy act <>ws ln acc)
                         (yacc-die ("%prec wants a token" + yacc-at (w 2))))
@@ -153,14 +159,16 @@
                         (j >= 0 ? (T + j)
                            (peep tn <>w -1 @ t
                               (t >= 0 ? t (yacc-die (<>w + " is neither a token nor a rule" + yacc-at ln)))))))
-       st (peep G 'start (nts 1))
+       ; the first rule written is the start, a lifted $@N laid ahead of it aside
+       st (peep G 'start (<(filter (x \ !(starts? x "$@")) >nts)))
        _ (peep nn st -1 > 0 ? () (yacc-die (st + " is no rule's name")))
        (rprec rhs pw ln)
         (? pw (peep pr (sym pw ln) () @ l (l ? l (yacc-die (yacc-wshow pw + " has no precedence" + yacc-at ln))))
            (foldl (a \ x \ (x < T && peep pr x () ? (pr x) a)) () rhs))
        rs ([T [(T + nn st) 0] () () 0] .
            map (r \ (: ln (r 4) rhs (map (w \ sym w ln) <>r)
-                      [(T + nn <r) rhs (r 2) (rprec rhs (r 3) ln) ln]))
+                      [(T + nn <r) rhs (r 2) (rprec rhs (r 3) ln) ln
+                       (two? (r 5) ? ('mid . map (w \ sym w ln) >(r 5)) ())]))
                rl)
        _ (pin G 'errtok (peep tn "error" -1))
        _ (pin G 'T T, pin G 'N #nts, pin G 'terms (G 'tl), pin G 'nts nts, pin G 'rules rs, pin G 'tail <tr)
@@ -362,7 +370,8 @@
            (go 0 ()))
        rs (G 'rules)
        (foldl (a \ k \ (rs k @ r
-                          (r 2 ? (a + [("      " + show k + " (\\ " + p + " [" + join " " (map (v \ "_" + show v) (map (+ 1) (jot #<>r))) +
+                          (? (two? (r 5)) (yacc-die ("not yet: an action mid-rule in love text" + yacc-at (r 4)))
+                             (r 2) (a + [("      " + show k + " (\\ " + p + " [" + join " " (map (v \ "_" + show v) (map (+ 1) (jot #<>r))) +
                                         "] (" + yacc-trim (dollars (r 2) #<>r) + "))")])
                              a)))
               () (jot #rs)))
@@ -598,7 +607,7 @@
        mx (foldl (a \ t \ max a (ext t)) 256 (drop 1 (jot T)))
        tr (map (c \ peep inv c T) (jot (mx + 1)))
        hd (yacc-chead G hf dbg)
-       (sub r a lt dd ll) (yacc-csub G a (r 1) lt dd ll)
+       (sub r a lt dd ll) (yacc-csub G a (two? (r 5) ? >(r 5) (r 1)) lt dd ll)
        acts (catmap (k \ (rs k @ r
                           (r 2 ? [("  case " + show k + ":\n    {" + sub r (r 2) (yacc-ctag G <r) "yyval" "yyloc" + "}\n    break;\n")] ())))
                     (drop 1 (jot #rs)))

@@ -245,14 +245,14 @@ word love_err(struct g *g, int e) {
 // a board has no exchange, and starts one core before any interrupt
 static int once_lock, once_done;
 static love_inline void once_take(int *l) {
-#if !defined(__arm__) || defined(__linux__)
+#if !defined(__arm__) || (defined(__linux__) && __STDC_HOSTED__)
  while (__sync_lock_test_and_set(l, 1)) continue;
 #else
  (void) l;
 #endif
  }
 static love_inline void once_give(int *l) {
-#if !defined(__arm__) || defined(__linux__)
+#if !defined(__arm__) || (defined(__linux__) && __STDC_HOSTED__)
  __sync_lock_release(l);
 #else
  (void) l;
@@ -633,6 +633,9 @@ union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) {
 // tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__
 #define code_sync(a, b) ((void) (a), (void) (b))
+#elif defined(__riscv) && defined(__mooncc__)
+void __love_codesync(char *a, char *b);
+#define code_sync(a, b) __love_codesync(a, b)
 #else
 #define code_sync(a, b) __builtin___clear_cache(a, b)
 #endif

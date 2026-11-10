@@ -14,7 +14,7 @@ typedef unsigned int       uint32_t;
 #define UINT8_MAX   255
 #define UINT16_MAX  65535
 #define UINT32_MAX  4294967295U
-#if defined(__arm__) || defined(__i386__)
+#if defined(__arm__) || defined(__ILP32__)
 /* the 32-bit targets: long is 4 bytes, long long the 8-byte pair */
 typedef long long          int64_t;
 typedef unsigned long long uint64_t;
@@ -51,7 +51,7 @@ typedef int16_t  int_least16_t;  typedef uint16_t  uint_least16_t;
 typedef int32_t  int_least32_t;  typedef uint32_t  uint_least32_t;
 typedef int64_t  int_least64_t;  typedef uint64_t  uint_least64_t;
 typedef signed char int_fast8_t; typedef unsigned char uint_fast8_t;
-#if defined(__arm__) || defined(__i386__)
+#if defined(__arm__) || defined(__ILP32__)
 typedef int      int_fast16_t;   typedef unsigned int  uint_fast16_t;
 typedef int      int_fast32_t;   typedef unsigned int  uint_fast32_t;
 #else
@@ -74,7 +74,7 @@ typedef int64_t  int_fast64_t;   typedef uint64_t  uint_fast64_t;
 #define INT_FAST8_MAX    INT8_MAX
 #define INT_FAST8_MIN    INT8_MIN
 #define UINT_FAST8_MAX   UINT8_MAX
-#if defined(__arm__) || defined(__i386__)
+#if defined(__arm__) || defined(__ILP32__)
 #define INT_FAST16_MAX   INT32_MAX
 #define INT_FAST16_MIN   INT32_MIN
 #define UINT_FAST16_MAX  UINT32_MAX
@@ -103,7 +103,7 @@ typedef int64_t  int_fast64_t;   typedef uint64_t  uint_fast64_t;
 #define UINT8_C(c)  c
 #define UINT16_C(c) c
 #define UINT32_C(c) c ## U
-#if defined(__arm__) || defined(__i386__)
+#if defined(__arm__) || defined(__ILP32__)
 #define INT64_C(c)  c ## LL
 #define UINT64_C(c) c ## ULL
 #else

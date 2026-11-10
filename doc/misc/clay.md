@@ -117,7 +117,7 @@ numbered as code comments cite them.
 - **G2 conversion equivalence** (`src/tools/clay-g2.l`): parse the old and new translation
   unit whole and compare named definitions as trees. run once, at a conversion.
 - **G3 differential**: the generated C built by the system cc and by mooncc, and across
-  a64/rv64, answering byte-identically (the `test/gate/ulp.sh` / `ccarch.sh` shape).
+  a64/rv64, answering byte-identically (the `test/gate/ulp.sh` / `ccbat.sh` shape).
 - **drift**: generated files are checked in; `test_clay` re-lays every `mx_gen` member and
   `cmp`s it. regeneration is a gate, not a build step, so a fresh tree builds from the
   committed files. `make mx` re-lays them.
