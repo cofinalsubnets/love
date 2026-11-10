@@ -612,7 +612,8 @@
         'table (ni + tally fns) 'elem ^(ni + tally fns)
         'memory [pages]
         'globals [['i64 1 [['i64.const sp0]]] ['i64 1 [['i64.const 1]]]]
-        'exports (map (s \ [s 'func (symidx (nom s))]) exports + '(("mem" memory 0)))
+        ; the table too, which a process re-aims at its own doors (proc.mjs)
+        'exports (map (s \ [s 'func (symidx (nom s))]) exports + '(("mem" memory 0) ("table" table 0)))
         'data [(base . string img)]
         'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show (fns i 0))]) (jot #fns))
         'start -1}))
