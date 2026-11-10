@@ -418,9 +418,9 @@
    _ (hark ["mkdir" "-p" (w 'repo + "/test/gate")])
    _ (bq-put (w 'repo + "/test/gate/lanes.sh")
              (unlines ["d=out/lanes-gate; mkdir -p $d; echo \"$@\" > out/args; : > $d/summary; rc=0"
-                       "for a in \"$@\"; do case $a in -*|out/*) ;; *)"
+                       "for a in \"$@\"; do on=$(cat on-$a 2>/dev/null); back=$(cat back-$a 2>/dev/null); case $a in -*|out/*) ;; *)"
                        "  if [ -f red-$a ]; then echo \"$a exit=1 secs=0\" >> $d/summary; rc=1"
-                       "  else echo \"$a exit=0 secs=0\" >> $d/summary; fi;; esac; done"
+                       "  else echo \"$a exit=0 secs=0${on:+ on=$on}${back:+ back=$back}\" >> $d/summary; fi;; esac; done"
                        "exit $rc"]))
    (calls nm cs) (calls-for nm cs "")
    ; ..and hold: the server's stdin stays open that much longer after the asks, the name its card's
@@ -464,8 +464,11 @@
    args3 (bq-get (w 'repo + "/out/args"))
    ; lanes of any name are read, and a rerun keeps every lane the last gate passed, owed or not
    (gated _) (bq-until (\ _ !(has? (row "2") " gating ")) 300)
+   ; a lane a host ran says which, and a lane one gave back says so; a rerun reads either as its rc
+   _ (bq-put (w 'repo + "/on-nettest") "tau.lan") _ (bq-put (w 'repo + "/back-waits") "tau.lan")
    g4 (calls "bob" [[12 "queue_gate" {"dir" (w 'repo) "lanes" "test nettest waits"}]])
    _ (gated 0) r4 (row "2")
+   _ (hark ["rm" (w 'repo + "/on-nettest") (w 'repo + "/back-waits")])
    ; a tree with its own out/love gates by it, its lanes its own lanemap's
    _ (bq-put (w 'repo + "/out/love") (unlines ["#!/bin/sh" "echo \"$@\" > \"$(dirname \"$0\")/gated-by\"" ("exec " + bq-sq bq-love + " \"$@\"")]))
    _ (hark ["chmod" "+x" (w 'repo + "/out/love")])
@@ -477,16 +480,17 @@
    _ (test
       (has? (g1 2) "row 1 is gating at ")
       ok1 (has? (row "1") "  # gate ") (has? (row "1") "test_slow=0")
-      (args = "-d out/lanes-gate --slow test test_slow\n")
+      (args = "-d out/lanes-gate --slow --remote test test_slow\n")
       (has? (c 4) "you hold no row")
       (has? (d 5) "has changes not committed")
       (has? (g2 6) "row 2 is gating at ")
       ok2 (has? red " waiting  #") (has? red "test_kore=1") (has? red "| red: test_kore owed by 2 bob")
       (has? (e 8) "row 2 ahead is waiting")
       (has? (g3 9) "runs test_kore again")
-      ok3 (args3 = "-d out/lanes-gate --slow test_kore test_slow\n")
+      ok3 (args3 = "-d out/lanes-gate --slow --remote test_kore test_slow\n")
       (has? (row "2") "test=0") (has? (row "2") "| stood: test") !(has? (row "2") "| red:")
-      (has? r4 " green  #") (has? r4 "nettest=0") (has? r4 "waits=0") !(has? r4 "unrun")
+      (has? r4 " green  #") (has? r4 "nettest=0@tau.lan") (has? r4 "waits=0") !(has? r4 "unrun")
+      (has? r4 "| back here: waits<tau.lan")
       (has? r5 " green  #") (has? r5 "nettest=0 waits=0") (string? by5) (has? by5 "bee --gate ")
       (: st (foldl (\ a x (? (x = "stood:") [] (a = 0 ? 0 (a + [x])))) 0 (words r5))
          (st != 0 && all (\ l (elem l st)) ["test" "nettest" "waits"]))
