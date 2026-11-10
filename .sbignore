@@ -45,6 +45,8 @@ test/proof/rocq/*.o
 web/favicon.png
 web/wasm/love.wasm
 web/wasm/love.image
+# and their gzipped copies, which the site serves to a browser that takes gzip
+web/wasm/*.gz
 
 # editor and debugger leavings, a core dump among them (qemu's are NAME.core)
 vgcore.*
