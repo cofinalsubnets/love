@@ -27,12 +27,12 @@ static inline void inf_fill(struct inf_rd *r) {
   r->bb |= LD64(r->in + r->ip) << r->bc;
   r->ip += 7 - (r->bc >> 3);
   r->bc |= 56; }
- else {
+ else
   while (r->ip < r->n) {
    if (55 < r->bc) break;
    r->bb |= (uint64_t) r->in[r->ip] << r->bc;
    r->ip++;
-   r->bc += 8; } } }
+   r->bc += 8; } }
 static inline int inf_take(struct inf_rd *r, unsigned int k) {
  int v;
  inf_fill(r);
@@ -149,10 +149,10 @@ static inline void inf_copy(struct inf_rd *r, uintptr_t l, uintptr_t d) {
   memcpy(r->out + r->op, r->dic + (r->nd - (d - r->op)), m);
   for (k = m; k < l; k++) r->out[r->op + k] = r->out[r->op + k - d]; }
  else {
-  if (wideld && 8 <= d) {
+  if (wideld && 8 <= d)
    while (k + 8 <= l) {
     ST64(r->out + (r->op + k), LD64(r->out + (r->op + k - d)));
-    k += 8; } }
+    k += 8; }
   while (k < l) {
    r->out[r->op + k] = r->out[r->op + k - d];
    k++; } } }
@@ -214,19 +214,18 @@ static int inf_fast_run(struct inf_rd *r) {
     for (k = dd; k < l; k++) out[op + k] = out[op + k - d]; }
    else {
     k = 0;
-    if (wideld && 8 <= d) {
+    if (wideld && 8 <= d)
      while (k < l) {
       ST64(out + (op + k), LD64(out + (op + k - d)));
-      k += 8; } }
-    else {
-     if (wideld && d == 1) {
-      while (k < l) {
-       ST64(out + (op + k), (uint64_t) 72340172838076673 * (uint64_t) out[op - d]);
-       k += 8; } }
-     else {
-      while (k < l) {
-       out[op + k] = out[op + k - d];
-       k++; } } } }
+      k += 8; }
+    else if (wideld && d == 1)
+     while (k < l) {
+      ST64(out + (op + k), (uint64_t) 72340172838076673 * (uint64_t) out[op - d]);
+      k += 8; }
+    else
+     while (k < l) {
+      out[op + k] = out[op + k - d];
+      k++; } }
    op += l; } }
  r->ip = ip;
  r->op = op;
@@ -237,12 +236,12 @@ static inline int inf_block(struct inf_rd *r) {
  int x, y, sy, sd;
  uintptr_t l, d;
  while (1) {
-  if (r->out) {
+  if (r->out)
    if (r->ip + 8 <= r->n)
     if (r->op + 266 <= r->cap) {
      x = inf_fast_run(r);
      if (x < 0) return x;
-     if (x) break; } }
+     if (x) break; }
   sy = inf_sym(r, &r->t->lit, r->t->ltab, LROOT);
   if (sy < 0) return sy;
   if (sy < 256) {

@@ -242,7 +242,7 @@
                       (go acc "\(cur)\(string c)" >l))))
        (go "" "" (map txt (jot #txt))))
    ; --- the tree's braces: the opener ends its header, the closer its block's last line, an else
-   ;     starts its own, and a body of one plain statement goes bare, on its header's line if it fits
+   ;     starts its own, and a bare body joins its header's line if it fits
    (blk? s) (two? s && <s = 'blk)
    (lastnl t k) (k < 0 || t k = 10 ? k (lastnl t (k - 1)))
    (lead t k) (sits? t k " " ? (lead t (k + 1)) k)
@@ -261,13 +261,10 @@
                     ['for _ _ _ b] (open-if? b)
                     ['blk [x]] (open-if? x)
                     0))
-   (plain? x) (two? x && !(elem <x '(decl sdecl note lbl case dflt blk)))
-   ; a header and its body; shut keeps an open if braced, for an else to come
+   ; a header and its body; shut braces an open if, for an else to come
    (cbody n hdr s shut)
     (: (joined t) (one-line? t && !(elem 123 t) ? (pad n + hdr + " " + snip t (n + 1) #t @ j (#j <= 111 ? j ())) ())
-       (? (blk? s && two? <>s && atom? >(<>s) && plain? <(<>s) && !(shut && open-if? s))
-           (cstmt <(<>s) (n + 1) @ t (joined t || cblk n hdr <>s ""))
-          (blk? s) (cblk n hdr <>s "")
+       (? (blk? s) (cblk n hdr <>s "")
           (shut && open-if? s) (cblk n hdr [s] "")
           (cstmt s (n + 1) @ t (joined t || line n hdr + t))))
 

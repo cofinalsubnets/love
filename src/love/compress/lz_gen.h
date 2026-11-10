@@ -20,10 +20,10 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
   if (nin < i) {
    rc = 0;
    break; }
-  if (pz == 1) {
+  if (pz == 1)
    if (nin - i < 20) {
     rc = 3;
-    break; } }
+    break; }
   sx = (st << 4) + ps;
   if (rg < 16777216) {
    rg = rg << 8;
@@ -110,9 +110,8 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
    ob[on] = (uint8_t) sy;
    on++;
    if (st < 4) st = 0;
-   else {
-    if (st < 10) st = st - 3;
-    else st = st - 6; } }
+   else if (st < 10) st = st - 3;
+   else st = st - 6; }
   else {
    if (rg < 16777216) {
     rg = rg << 8;
@@ -345,9 +344,9 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
        v = v | b << j; }
       d = d + v; } }
     if (d == 4294967295) {
-     if (em) {
+     if (em)
       if (i <= nin) rc = 2;
-      else rc = 0; }
+      else rc = 0;
      else rc = 0;
      break; }
     m->reps[3] = m->reps[2];
@@ -570,7 +569,7 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
    if (top - on < len) {
     rc = 0;
     break; }
-   if (wideld && 8 <= r0 + 1) {
+   if (wideld && 8 <= r0 + 1)
     if (len + 8 <= cap - on) {
      ck = 0;
      while (ck < len) {
@@ -580,7 +579,7 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
      ck = 0;
      while (ck < len) {
       ob[on + ck] = ob[on + ck - (r0 + 1)];
-      ck++; } } }
+      ck++; } }
    else {
     ck = 0;
     while (ck < len) {
@@ -588,9 +587,8 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
      ck++; } }
    on += len;
    if (st < 7) st = 7 + kind;
-   else {
-    if (!kind) st = 10;
-    else st = 11; } } }
+   else if (!kind) st = 10;
+   else st = 11; } }
  r->range = (uint32_t) rg;
  r->code = (uint32_t) cd;
  r->bad = nin < i;

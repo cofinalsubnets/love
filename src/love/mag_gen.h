@@ -112,9 +112,9 @@ static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, in
   if (a[i]) return 1; }
  while (0 < i) {
   i = i - 1;
-  if (a[i] != b[i]) {
+  if (a[i] != b[i])
    if (b[i] < a[i]) return 1;
-   else return 0; } }
+   else return 0; }
  return 1; }
 static love_inline love_limb mag_divstep(love_limb *w, love_limb const *vn, int nn) {
  uintptr_t n = (uintptr_t) nn, i;

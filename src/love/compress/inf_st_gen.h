@@ -54,7 +54,7 @@ static inline int inf_stlen(struct inf_rd *r, struct inf_ms *s) {
  return 0; }
 static inline int inf_ststo(struct inf_rd *r, struct inf_ms *s) {
  uintptr_t k;
- if (s->rem) {
+ if (s->rem)
   while (s->rem) {
    if (r->bc < 8) break;
    if (r->cap <= r->op) return -2;
@@ -62,7 +62,7 @@ static inline int inf_ststo(struct inf_rd *r, struct inf_ms *s) {
    r->op++;
    r->bb >>= 8;
    r->bc = r->bc - 8;
-   s->rem = s->rem - 1; } }
+   s->rem = s->rem - 1; }
  if (s->rem) {
   r->bb = 0;
   k = r->n - r->ip;
@@ -154,14 +154,14 @@ static inline int inf_stsy(struct inf_rd *r, struct inf_ms *s) {
  uintptr_t l, d;
  while (1) {
   if (!s->stage) {
-   if (r->ip + 8 <= r->n) {
+   if (r->ip + 8 <= r->n)
     if (r->op + 266 <= r->cap) {
      x = inf_fast_run(r);
      if (x < 0) return -3;
      if (x) {
       if (s->last) s->mode = 7;
       else s->mode = 0;
-      return 0; } } }
+      return 0; } }
    x = inf_sy1(r, &r->t->lit, r->t->ltab, LROOT);
    if (x < 0) return x;
    s->sy = x;

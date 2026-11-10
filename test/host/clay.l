@@ -182,18 +182,18 @@ here")) = "// two lines\n// here\n"))
 
 ; --- `for (;;)`, C's own spelling of forever
 (test
- (one '(fn "f" () (blk ((for () () () (blk ((brk)))))) void) = "void f(void) {\n for (;;) break; }\n")
- (one '(fn "g" () (blk ((for () (var "c") () (blk ((brk)))))) void) = "void g(void) {\n for (; c; ) break; }\n"))
+ (one '(fn "f" () (blk ((for () () () (blk ((brk)))))) void) = "void f(void) {\n for (;;) {\n  break; } }\n")
+ (one '(fn "g" () (blk ((for () (var "c") () (brk)))) void) = "void g(void) {\n for (; c; ) break; }\n"))
 
-; --- the tree's braces: a closer ends its block's last line, an else starts its own, a body of one
-;     plain statement goes bare
+; --- the tree's braces: a closer ends its block's last line, an else starts its own, and a bare body
+;     joins its header's line. a block keeps its braces, so the text parses back to the same tree
 (: (f b) (one ['fn "f" () ['blk b] 'void])
  (test
-  (f '((if (var "c") (blk ((expr (var "p")) (expr (var "q")))) (blk ((expr (var "r")))))))
+  (f '((if (var "c") (blk ((expr (var "p")) (expr (var "q")))) (expr (var "r")))))
    = "void f(void) {\n if (c) {\n  p;\n  q; }\n else r; }\n"
-  ; a bare body would hand the else to the inner if
-  (f '((if (var "a") (blk ((if (var "b") (expr (var "x"))))) (expr (var "y")))))
-   = "void f(void) {\n if (a) {\n  if (b) x; }\n else y; }\n"
+  (f '((if (var "c") (blk ((expr (var "p")))) (if (var "d") (expr (var "q")) (blk ())))))
+   = "void f(void) {\n if (c) {\n  p; }\n else if (d) q;\n else { } }\n"
+  ; a bare if before an else would take it, so it is braced
   (f '((if (var "a") (if (var "b") (expr (var "x"))) (expr (var "y")))))
    = "void f(void) {\n if (a) {\n  if (b) x; }\n else y; }\n"
   ; a closer never ends a note or a label
