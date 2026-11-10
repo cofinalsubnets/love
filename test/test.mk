@@ -954,11 +954,11 @@ test_doomx-run: $(R)/test/host/doomx.l
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
-	@echo TEST love kernel "(the projection verb; byte-identical to make's)"
-	@rm -f $(ko)/.kverb.elf
-	@cd $(ko) && $(abspath $m) kernel .kverb.elf > /dev/null
-	@cmp $(ko)/.kverb.elf $(k_elf)
-	@rm -f $(ko)/.kverb.elf
+	@echo TEST love seed kernel "(the projection; byte-identical to make's)"
+	@rm -rf $(ko)/.kverb
+	@cd $(ko) && $(abspath $m) seed kernel .kverb > /dev/null
+	@cmp $(ko)/.kverb/love-$a.elf $(k_elf)
+	@rm -rf $(ko)/.kverb
 
 test_kboot: host $(S)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)

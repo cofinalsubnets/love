@@ -807,7 +807,7 @@ $(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h 
 # `a=` says; the odir is spelled here so a caller never re-derives it.
 kmain_o: $(k_free_o)
 
-# THE SEAT: the metal objects a projection lays beside the one binary; `love kernel` compiles
+# THE SEAT: the metal objects a projection lays beside the one binary; `love seed kernel` compiles
 # them from the source it carries and projects a bootable elf out of itself. one shape,
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
 # the first a variable NAME so the body stays deferred. an arch with no src/inle/<arch>/
@@ -845,7 +845,7 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 endef
 $(eval $(call kart,kart,moon_d,moon0,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
-# the objects alone, for the `love kernel` verb: it drives this from the carried tree
+# the objects alone, for `love seed kernel`: it drives this from the carried tree
 kart_objs: $(kart_o)
 	@echo '$(kart_o)' > out/kart.list
 
