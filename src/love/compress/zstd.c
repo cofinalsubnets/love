@@ -51,7 +51,7 @@ struct zs_st {
  struct xx_st x;                                // xxh64 on the way
  uint8_t lit[ZS_BMAX + ZS_SLACK]; };
 
-static unsigned zs_hb(uint32_t x) { unsigned r = 0; while (x >>= 1) r++; return r; }
+static unsigned zs_hb(uint32_t x) { return x ? 31 - (unsigned) __builtin_clz(x) : 0; }
 
 // --- xxh64, seed 0 -------------------------------------------------------------------------
 #define XP1 0x9e3779b185ebca87ull
@@ -209,9 +209,11 @@ static intptr_t zs_tree(struct zs_st *S, const uint8_t *p, uintptr_t n) {
  for (unsigned i = 0; i < nw; i++) cnt[wt[i]]++;
  for (uint32_t w = 1, cur = 0; w <= mb; w++) at[w] = cur, cur += cnt[w] << (w - 1);
  for (unsigned s = 0; s < nw; s++)
-  if (wt[s])
-   for (uint32_t j = 0, w = wt[s]; j < 1u << (w - 1); j++)
-    S->huf[at[w]++] = (struct zs_huf) { (uint8_t) s, (uint8_t) (mb + 1 - w) };
+  if (wt[s]) {                                   // a run of cells, its end kept on a local
+   uint32_t w = wt[s], a = at[w], e = a + (1u << (w - 1));
+   struct zs_huf h = { (uint8_t) s, (uint8_t) (mb + 1 - w) };
+   at[w] = e;
+   for (struct zs_huf *q = S->huf + a, *qe = S->huf + e; q < qe; q++) *q = h; }
  S->hlog = mb;
  return (intptr_t) used; }
 
@@ -314,9 +316,10 @@ static int zs_table(struct zs_st *S, unsigned mode, const uint8_t *p, uintptr_t 
  S->have |= bit;
  return 1; }
 
-// n bytes from a to o eight at a time, running over by up to seven: the room is the caller's, and
-// a reads only behind what o writes when they are eight or more apart
-static love_inline void zs_wild(uint8_t *o, uint8_t const *a, uintptr_t n) { for (uintptr_t j = 0; j < n; j += 8) ZST(o + j, ZLD(a + j)); }
+// n bytes from a to o sixteen at a time, running over by up to fifteen: the room is the caller's,
+// and a reads only behind what o writes when they are eight or more apart
+static love_inline void zs_wild(uint8_t *o, uint8_t const *a, uintptr_t n) {
+ for (uintptr_t j = 0; j < n; j += 16) ZST(o + j, ZLD(a + j)), ZST(o + j + 8, ZLD(a + j + 8)); }
 // a match of ml at off behind o: under eight apart, the first sixteen a byte at a time, then wide
 // from a whole number of periods, eight or more, back
 static love_inline void zs_match(uint8_t *o, uintptr_t off, uintptr_t ml) {
@@ -368,7 +371,7 @@ static intptr_t zs_seqs(struct zs_st *S, uint8_t *w, const uint8_t *p, uintptr_t
    sm = S->ml[sm].base + (unsigned) zs_read(&r, S->ml[sm].nb);
    so = S->of[so].base + (unsigned) zs_read(&r, S->of[so].nb); }
   if (ll > (uintptr_t) (le - lit) || ll + ml > (uintptr_t) (oe - o)) return -1;
-  if (lit + ll + 8 <= ls) zs_wild(o, lit, ll); else memcpy(o, lit, ll);
+  if (lit + ll + 16 <= ls) zs_wild(o, lit, ll); else memcpy(o, lit, ll);
   o += ll, lit += ll;
   if (!off || off > (uint64_t) (o - w)) return -1;
   zs_match(o, (uintptr_t) off, ml), o += ml; }
