@@ -30,7 +30,7 @@ test:
 test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_roster test_moon test_as test_links test_kernel_wasm test_harp
 
 # the core's gate: test_extra's local, unheavy lanes
-test_core: test_filemode test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
+test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_envimage test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
@@ -289,6 +289,7 @@ gate_m += test_walkroom   # a walk past the gap, and past the budget
 gate_m += test_cli   # exit status: 0 working, 1 unopenable, 2 malformed, a verb's own charm
 gate_m += test_nest   # love nest, in a HOME of its own
 gate_m += test_spin   # a waiting machine spends nothing
+gate_m += test_lanesremote   # lanes.sh --remote over stand-in hosts, one dropping its lanes
 
 # the checked-in icon must be what src/tools/mkicon.l lays
 test_web: host
