@@ -48,6 +48,7 @@
    origins {}      ; $(origin): name -> "default" | "environment" | "file" | "command line" | "override"
    flavors {}      ; $(flavor): name -> "simple" | "recursive": the value cannot say which
    clivars {}      ; a 1-cell box: the command line's VAR=VAL words, ((name . val) ..)
+   incbox {}       ; a 1-cell box: the files a Makefile included, ([name strict] ..) in order
 
    ; one card per item, merging: prereqs accumulate deduped and a later non-empty recipe
    ; wins, as make does. card = (ingredients orderonly . steps); orderonly prereqs are
@@ -804,6 +805,7 @@
      peep as " exports" () @ xs (elem nm xs ? 0 (pin as " exports" (nm . xs))))
    ; an included file joins MAKEFILE_LIST before its lines are read
    (mklist as f) (peep as "MAKEFILE_LIST" "" @ l (pin as "MAKEFILE_LIST" (0 < #l ? (l + " " + f) f)))
+   (incnote as f strict) (pin as " incs" ([f strict] . peep as " incs" ()))
    (condon cond) (two? cond ? <>><cond 1)
    (push-cond cond pon active) ([pon active active] . cond)
    ; `else ifeq ..` chains: the tail's test runs only while no earlier arm was taken
@@ -842,10 +844,15 @@
                             loop rest (flushr cur rules) 0 cond)
                   'xname   ((on ? (each (split-ws (expand (r1 c) as 0)) (xport as)) 0),
                             loop rest (flushr cur rules) 0 cond)
-                  'inc    (on ? (catmap (f \ (mklist as f, file-lines f)) (split-ws (expand (r1 c) as 0)) @ more
+                  ; a missing `include` waits for the remake where one comes (" defer"), else dies
+                  'inc    (on ? (catmap (f \ (incnote as f 1,
+                                              exists? f ? (mklist as f, file-lines f)
+                                                 (peep as " defer" 0 ? () (file-lines f))))
+                                        (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
-                  'sinc   (on ? (catmap (f \ exists? f ? (mklist as f, file-lines f) ()) (split-ws (expand (r1 c) as 0)) @ more
+                  'sinc   (on ? (catmap (f \ (incnote as f 0, exists? f ? (mklist as f, file-lines f) ()))
+                                        (split-ws (expand (r1 c) as 0)) @ more
                                          (loop (more + rest) (flushr cur rules) 0 cond))
                                       (loop rest (flushr cur rules) 0 cond))
                   'defassign ((on ? (do-assign as (r1 c) "define" (r2 c)) 0),
@@ -938,7 +945,7 @@
    ; parse a Makefile and register its rules: .PHONY members become symbols, every other item
    ; a file string; static pattern, implicit pattern (resolved at prep), or normal rules.
    (register-makefile src)
-   (: as (seed-defaults {} (posixp src))
+   (: as (pin (seed-defaults {} (posixp src)) " defer" 1)
       rules (build (text-lines src) as)
       phony ({} @ ps
                (each rules (r \ expand-words [<r] as @ tg
@@ -1030,7 +1037,7 @@
                oo   (ex ? (map mk-item poo + <>ex) (map mk-item poo))
                (allp . (oo . expand-steps <>>>best item ping stem as)))
             0))
-      (pin pgen 0 resolve))
+      (pin incbox 0 (rev (peep as " incs" ())), pin pgen 0 resolve))
 
    ; -- emit: serialize the resolved cards back as a Cookfile ------------------
    ; with emitp set the cards hold fully expanded items and ("sh" "-c" cmd) steps. the default
@@ -1094,6 +1101,18 @@
 
    ; empty the import books so a fresh build starts clean
    (clear-cards _) (each (keys cards) (k \ pull cards k 0), pull check 0 0, pull pgen 0 0, 0)
+   ; make's remade makefiles: an included file a rule can make is brought up to date first; one
+   ; a recipe advanced sends the Makefile round again, read afresh as make restarts. then an
+   ; `include` still missing is fatal
+   (reread s) (clear-cards 0, each [doebox sufbox tvarbox] (b \ each (keys b) (k \ pull b k 0)),
+               register-makefile s)
+   (remake-incs s n)
+    (: fs (peep incbox 0 ())
+       (can f) (two? (cards f) || (peep pgen 0 0 @ g (g ? (two? (g f)) 0)))
+       moved (filter (f \ can f && peep (prepped f) f 0) (map cap fs))
+       (? (two? moved && n < 8) (reread s, remake-incs s (n + 1))
+          (each fs (e \ e @ [f strict]
+                      (strict && !(exists? f) ? (udie 1 "cook: \(f): no such file, and no rule to make it") 0)))))
    ; transpile Makefile `mk` into Cookfile `ck`, then wipe the books to read it back clean
    (regen-cookfile mk ck)
    (: _ (pin emitp 0 1)
@@ -1251,7 +1270,7 @@
           file
           (slurp-close file @ s
              ((asmake? file xf ?
-                 (register-makefile s, cook-all 0)
+                 (register-makefile s, remake-incs s 0, cook-all 0)
                  (sounds s @ 'torn (udie 1 "cook: unfinished form in \(file)")
                              fs (each fs (ev 'ev)))),
               0))

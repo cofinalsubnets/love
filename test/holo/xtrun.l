@@ -1,8 +1,8 @@
 ; the xtensa backend run whole: n checks laid as one program, each answer held to love's own
 ; 32-bit arithmetic, a miss exiting 100 + its index; all held, exit 42. the sources are cat in
 ; before it; XT_OUT names the linux ELF it writes, entered at 0x10060, for qemu-xtensa. with
-; XT_BOARD=esp32 it writes raw bytes for the rom's ram download to 0x40080000 instead, entered
-; at its first byte, which say each line out of uart0 and spin
+; XT_BOARD=esp32 it writes an ELF whose one segment loads at iram's 0x40080000 for esprom's
+; ram download, entered at its first byte, which says each line out of uart0 and spins
 (borrow 'posix)
 (borrow 'holo)
 (: seed {0 12345}
@@ -93,8 +93,10 @@
    code (holo-bytes 'xtensa prog)
    (zs k) (map (i \ 0) ^k)
    ; one PT_LOAD over the file at 0x10000, the code at 0x60 so a call0's word grain holds
-   hdr ([127 69 76 70 1 1 1 0] + zs 8 + le16 2 + le16 94 + le32 1 + le32 0x10060 + le32 52 + le32 0
+   hdr ([127 69 76 70 1 1 1 0] + zs 8 + le16 2 + le16 94 + le32 1 + le32 (board ? 0x40080000 0x10060) + le32 52 + le32 0
         + le32 0x300 + le16 52 + le16 32 + le16 1 + le16 0 + le16 0 + le16 0)
-   ph (le32 1 + le32 0 + le32 0x10000 + le32 0x10000 + le32 (0x60 + #code) + le32 (0x60 + #code) + le32 5 + le32 0x1000)
-   (write-bytes (getenv "XT_OUT") (board ? code (hdr + ph + zs (0x60 - 84) + code)),
+   ; on the board, the code alone at iram's 0x40080000, for esprom's ram download
+   ph (board ? (le32 1 + le32 0x60 + le32 0x40080000 + le32 0x40080000 + le32 #code + le32 #code + le32 5 + le32 4)
+         (le32 1 + le32 0 + le32 0x10000 + le32 0x10000 + le32 (0x60 + #code) + le32 (0x60 + #code) + le32 5 + le32 0x1000))
+   (write-bytes (getenv "XT_OUT") (hdr + ph + zs (0x60 - 84) + code),
     puts "xtrun: \(show n) checks laid, \(show #code) bytes\n", 0))

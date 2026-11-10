@@ -185,8 +185,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 <!-- lanes: laid by `love bee --lanes-doc` from src/apps/lanemap.l; edit there -->
 - `src/apps/kore/*` -> `test_kore` `test_hostnif`
-- `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l` -> `test_hostnif`
+- `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l`, `src/apps/hosts.l` -> `test_hostnif`
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)
+- `test/gate/lanes.sh` -> `test_lanesremote`
 - `src/love/snap.c`, `src/love/image.c`, `src/love/elfbake.c`, `src/love/macho.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - `src/love/snap.c` -> `test_boards`, whose links bake their own images through it
 - `src/apps/caja/*`, `test/caja/*`, `test/gate/caja.sh` -> `test_caja`

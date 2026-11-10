@@ -7,8 +7,15 @@
 ;   lanes-cost      lane -> its wall seconds on a shared box, measured; it only orders lanes
 ;   lanes-chains    the lanes that share scratch or sub-build one tree, each chain run in its order
 ;   lanes-alone     the lanes that rebuild love0 under another cc or run their own fleet: alone
+;   lanes-early     the lanes that start before the others and run beside them, one at a time:
+;                   the long ones whose scratch is their own and which only read out/
+;   lanes-place     lane -> where it may run: "source" or "exact" (one that reads love's own bytes),
+;                   either on a lanes host of this box's isa running this box's build, then the
+;                   isas it is held to, if any; unnamed is local, here only. a lane is named once
+;                   it has answered there as here
 ;   (lanes-doc _)   AGENTS.md's table, its lines (love bee --lanes-doc)
-;   (lanes-map _)   lanes.sh's chains and alone set, `chain A,B,..` and `alone A B ..` lines
+;   (lanes-map _)   lanes.sh's chains, alone and early sets, places and costs: `chain A,B,..`,
+;                   `alone A B ..`, `early A ..`, `place LANE CLASS` and `cost LANE SECS` lines
 ;                   (love bee --lanes-map)
 ;   (lanes-covers mk) test/test.mk's text -> lane -> the lanes it runs: its prerequisites and the
 ;                   targets of its recipe's $(MAKE) lines, read as written; and a path in the tree
@@ -21,16 +28,17 @@
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
 ; change owes `make test` besides, and test_slow runs last on the tree that lands
-(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-doc lanes-map
+(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-early lanes-place lanes-doc lanes-map
                  lanes-covers lanes-plan lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccwasm"
                "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
-     ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l"] ["test_hostnif"] ""]
+     ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l" "src/apps/hosts.l"] ["test_hostnif"] ""]
      ["" ["test/host/*" "test/gate/lanes.sh"] ["test_hostnif"]
       "; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)"]
+     ["" ["test/gate/lanes.sh"] ["test_lanesremote"] ""]
      ["" ["src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["" ["src/love/snap.c"] ["test_boards"] ", whose links bake their own images through it"]
      ["" ["src/apps/caja/*" "test/caja/*" "test/gate/caja.sh"] ["test_caja"] ""]
@@ -73,11 +81,20 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_teensy41" "test_playdate" "test_rp2040" "test_rp2040_board" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
-   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
+   lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
+   lanes-early ["test_gcstress_bake"]
+
+   lanes-place {"test_roster" "source" "test_holofuzz" "source" "test_moon" "source"
+                "test_ccarm" "source" "test_ccwasm" "source" "test_ccport" "source"
+                "test_cts_wasm" "source" "test_as" "source" "test_sb" "source"
+                "test_ccthumb1" "source" "test_ccthumb2" "source" "test_cca64" "source"
+                "test_ccrv64" "source" "test_tools" "source" "test_moonfuzz" "source"
+                "test_refuzz" "source" "test_clay" "source" "test_hostnif" "source"
+                "test_bakerep" "exact" "test_envimage" "exact" "test_wake" "exact"}
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)
@@ -85,7 +102,9 @@
                 ("- " + (#label > 0 ? label (join ", " (map lm-tick globs))) + " -> " + join " " (map lm-tick ls) + tail))
          lanes-rules)
    (lanes-map _)
-    (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone)])
+    (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone) ("early " + join " " lanes-early)]
+     + map (l \ "place " + l + " " + lanes-place l) (sort (keys lanes-place))
+     + map (l \ "cost " + l + " " + show (lanes-cost l)) (sort (keys lanes-cost)))
 
    ; a glob's stars cross `/`: the first piece a prefix, the last a suffix, the rest in order between
    (lm-from s p i) (? (#s < i + #p) -1 (snip s i (i + #p) = p) i (lm-from s p (i + 1)))
