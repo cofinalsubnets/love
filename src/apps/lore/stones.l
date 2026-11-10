@@ -486,7 +486,7 @@
  ; ..the feet asked for since the last frame, voices of the song from here on
  (stones-steps s st) (: fx (st 'sfx) at (s 'fpos)
    (foot f) (: q (step-sound "sand" (f 0 (#(f 0) - 1) - 48)) a (q 0) r (1.0 * q 1 / song-rate)
-     [(at + int (#a / r) + 2) (ix \ peep a (int ((ix - at) * r)) 0.0) 1.15 1.15])
+     [at [(at + int (#a / r) + 2) (ix \ peep a (int ((ix - at) * r)) 0.0) 1.15 1.15]])
    (two? fx ? (pin st 'sfx (), pin s 'vs (s 'vs + map foot fx)) s))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain

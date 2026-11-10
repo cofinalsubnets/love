@@ -66,7 +66,7 @@
              "wash"  {'wave 7 'n 1 'cents 0.0 'att 2.5 'rel 4.0 'lvl 4.0 'cut 261.6255653005986 'track 1.0 'depth 0.5 'lfo 0.05 'q 5.0 'band 1}}
  ksweep (cite 'dsp 'sweep)
  ; a voice's frames through the filter, its memory carried from one chunk to the next
- (swept [end fn gl gr] o s ph)
+ (swept (end . fn . gl . gr . _) o s ph)
   (: box {'next () 'st ()}
      (prm f0) (gem-tray [8] [(1.0 * song-rate) (1.0 * f0) (o 'cut * exp (o 'track * s * ln2-12)) (o 'depth) (o 'lfo) ph (o 'q) (1.0 * o 'band)])
      [end (ix \ (: f0 (peep ix 0 0)
@@ -306,7 +306,7 @@
            [[k s (ops-voice (held-ops (tm 0) f d) at (at + 3600 * song-rate) 0.4 0.4 song-rate)]])
      (pins st 'hv (hs + st 'hv) 'rls (pin (st 'rls) k (pad? st ? (synth-pads (tm 0) 'rel) (1.0 / 12)))
               'last (synth-name s) 'dirty 1))
- (fade [e f gl gr] at rl)
+ (fade (e . f . gl . gr . _) at rl)
   [(at + rl) (ix \ (: g ((at + rl - ix) * (1.0 / rl)) c (g * (g > 0.0))
                      (f ix * (c + (1.0 - c) * (c > 1.0))))) gl gr]
  (synth-free st k)
