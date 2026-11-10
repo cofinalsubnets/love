@@ -94,12 +94,50 @@ static lvm(love_gpio_put) {
   Ip += 1;
   return Continue(); }
 
+// the microSD slot as fat.l's block door, the kernel's spelling (kmain.c):
+// (disk _)         -> the sector count, 0 when no card (a card is looked for again each call)
+// (disk-read l n)  -> a string of n*512 bytes off sector l | ()
+// (disk-write l s) -> the sectors written | () (s must be whole sectors)
+uint32_t sd_sectors(void);
+int sd_rw(uint32_t lba, uint32_t n, void *buf, int wr);
+
+static lvm(love_disk) {
+  Sp[0] = putcharm((intptr_t) sd_sectors());
+  love_musttail return Next(1); }
+
+love_noinline static struct g *sd_disk_read(struct g *g) {
+  word lw = g->sp[0], nw = g->sp[1];
+  intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
+           n   = (nw & 1) ? getcharm(nw) : -1;
+  if (lba < 0 || n <= 0 || n > 1 << 16) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;
+  if (sd_rw((uint32_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0) g->sp[0] = ZeroPoint;
+  return g->sp[2] = g->sp[0], g->sp += 2, g; }
+
+static lvm(love_disk_read) {
+ LvmCall(g, sd_disk_read) }
+
+love_noinline static word sd_disk_write(word lw, word sw) {
+ intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
+ if (lba < 0 || !strp(sw)) return ZeroPoint;
+ struct str *s = (struct str*) sw;
+ if (!s->len || s->len % 512) return ZeroPoint;
+ if (sd_rw((uint32_t) lba, (uint32_t) (s->len / 512), s->bytes, 1) < 0) return ZeroPoint;
+ return putcharm((intptr_t) (s->len / 512)); }
+
+static lvm(love_disk_write) {
+  Sp[1] = sd_disk_write(Sp[0], Sp[1]);
+  love_musttail return Nextp(1, 1); }
+
 // a 2-arg nif leads with lvm_cur, as the host's nif_open does
 static union u const
   nif_gpio_init[] = {{love_gpio_init}, {lvm_ret0}},
   nif_gpio_get[]  = {{love_gpio_get}, {lvm_ret0}},
   nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_dir}, {lvm_ret0}},
-  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_put}, {lvm_ret0}};
+  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_put}, {lvm_ret0}},
+  nif_disk[]       = {{love_disk}, {lvm_ret0}},
+  nif_disk_read[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_disk_read}, {lvm_ret0}},
+  nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {love_disk_write}, {lvm_ret0}};
 
 // the baked image (ld -b binary, teensy41.lds's .image). file scope: mooncc emits no
 // relocation for a block-scope extern array
@@ -109,7 +147,10 @@ static struct def defs[] = {
   {"gpio_init", {.k = nif_gpio_init}},
   {"gpio_dir",  {.k = nif_gpio_dir}},
   {"gpio_put",  {.k = nif_gpio_put}},
-  {"gpio_get",  {.k = nif_gpio_get}}, };
+  {"gpio_get",  {.k = nif_gpio_get}},
+  {"disk",       {.k = nif_disk}},
+  {"disk-read",  {.k = nif_disk_read}},
+  {"disk-write", {.k = nif_disk_write}}, };
 
 // malloc/free for alloc's default: a first-fit free list (ffalloc.h) over the arena
 #include "../ffalloc.h"
@@ -210,6 +251,5 @@ int main(void) {
   // the shell returns only on a fatal error
   if (code_of(r) == status_scare) scare_face(r);
   fin(r);
-  for (;;) {
-    gpio_put(LED_BIT, 1); love_sleep(120);
-    gpio_put(LED_BIT, 0); love_sleep(120); } }
+  // the blink polls the console, so the loader's 134 baud still reboots it
+  for (;;) gpio_put(LED_BIT, love_clock() / 120 & 1), con_ready(); }

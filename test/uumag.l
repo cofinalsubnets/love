@@ -422,6 +422,36 @@
  (defq un-bbfit (pi L nat x nat g (inf-lt x (mul (inf-pow L) (inf-pow L))) (inf-lt x (inf-pow (add L L))))
    (lam L x g (transportf nat (lam z (inf-lt x z)) (mul (inf-pow L) (inf-pow L)) (inf-pow (add L L))
      (pathsinv0 nat (inf-pow (add L L)) (mul (inf-pow L) (inf-pow L)) (un-powadd L L)) g)))
+ ; sums keep order
+ (defq un-leadd2 (pi a nat b nat c nat d nat g (inf-le a b) h (inf-le c d) (inf-le (add a c) (add b d)))
+   (lam a b c d g h (inf-letrans (add a c) (add b c) (add b d) (inf-addr a b c g)
+     (transportf nat (lam z (inf-le (add b c) z)) (add d b) (add b d) (natpluscomm d b)
+       (transportf nat (lam z (inf-le z (add d b))) (add c b) (add b c) (natpluscomm c b) (inf-addr c d b h))))))
+ (defq un-leltadd (pi a nat b nat c nat d nat g (inf-le a b) h (inf-lt c d) (inf-lt (add a c) (add b d)))
+   (lam a b c d g h (inf-lelt (add a c) (add b c) (add b d) (inf-addr a b c g) (inf-ltaddl b c d h))))
+ ; a limb times a limb plus two limbs fits two: (B-1)^2 + 2(B-1) < B^2, said at B = P + 1
+ (defq un-mfit3p (pi P nat a nat x nat r nat c nat ga (inf-lt a (succ P)) gx (inf-lt x (succ P)) gr (inf-lt r (succ P))
+     gc (inf-lt c (succ P)) (inf-lt (add (add (mul a x) r) c) (mul (succ P) (succ P))))
+   (lam P a x r c ga gx gr gc (un-leltadd (add (mul a x) r) (mul P (succ P)) c (succ P)
+     (transportf nat (lam z (inf-le (add (mul a x) r) z)) (mul (succ P) P) (mul P (succ P)) (natmultcomm (succ P) P)
+       (un-leadd2 (mul a x) (mul P P) r P
+         (inf-letrans (mul a x) (mul P x) (mul P P) (un-mulle2 a P x (inf-ltsle a P ga)) (un-mulle P x P (inf-ltsle x P gx)))
+         (inf-ltsle r P gr)))
+     gc)))
+ (defq un-mfit3 (pi B nat h (inf-lt 0 B) a nat x nat r nat c nat ga (inf-lt a B) gx (inf-lt x B) gr (inf-lt r B) gc (inf-lt c B)
+     (inf-lt (add (add (mul a x) r) c) (mul B B)))
+   (lam B h a x r c ga gx gr gc
+     ((transportf nat (lam z (pi ga (inf-lt a z) gx (inf-lt x z) gr (inf-lt r z) gc (inf-lt c z) (inf-lt (add (add (mul a x) r) c) (mul z z))))
+        (succ (natminus B 1)) B (inf-addsub 1 B (inf-ltsu 0 B h)) (un-mfit3p (natminus B 1) a x r c))
+      ga gx gr gc)))
+ ; B^(i+j) is B^i B^j
+ (defq un-appadd (pi B nat i nat j nat (paths nat (uu-app (add i j) B) (mul (uu-app i B) (uu-app j B))))
+   (lam B i j (nat_rect (lam q (paths nat (uu-app (add q j) B) (mul (uu-app q B) (uu-app j B))))
+     (idpath (uu-app j B))
+     (lam q IH (pathscomp0 nat (mul B (uu-app (add q j) B)) (mul B (mul (uu-app q B) (uu-app j B))) (mul (mul B (uu-app q B)) (uu-app j B))
+       (maponpaths nat nat (lam z (mul B z)) (uu-app (add q j) B) (mul (uu-app q B) (uu-app j B)) IH)
+       (pathsinv0 nat (mul (mul B (uu-app q B)) (uu-app j B)) (mul B (mul (uu-app q B) (uu-app j B))) (natmultassoc B (uu-app q B) (uu-app j B)))))
+     i)))
 )
 
 (test
