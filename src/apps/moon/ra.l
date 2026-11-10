@@ -517,9 +517,12 @@
        sl (foldl (t \ v \ pin t v (nslot g 8)) {} ok)
        (sd? v) (<(plan v)) (rr? v) (plan v 1)
        (at i) (filter (v \ two? (plan v)) (peep cr i ()))
-       ; a call's stores go ahead of its cuse, where its argument registers are still live
-       (cu? i) (ft i @ ('cuse . _) (ft (i + 1) @ (('call || 'callr) . _) 1 _ 0) _ 0)
-       (pre i) (filter (v \ !(sd? v)) (cu? i ? (at (i + 1)) (cu? (i - 1) ? () (at i))))
+       ; a call's stores go ahead of its cuse, where its argument registers are still live, and
+       ; of the mov into a park the pool never holds: a far store takes t32's r12, the park itself
+       (lead? i) (ft i @ ('cuse . _) 1 ('mov . p . _) (p = pkr g && nelem p (ragp g)) _ 0)
+       (cj i) (lead? i ? (cj (i + 1)) (ft i @ (('call || 'callr) . _) i _ -1))
+       (cu? i) (lead? i && 0 <= cj i)
+       (pre i) (filter (v \ !(sd? v)) (cu? (i - 1) ? () (at (cu? i ? (cj i) i))))
        (vs @ () [fs () {}]
           _ [(catmap (i \ (ud i @ [u d]
                               (: a (has i)
