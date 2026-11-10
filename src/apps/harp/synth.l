@@ -7,7 +7,8 @@
 ; --fm FILE adds a last timbre from an op2 bank or a wad's GENMIDI. the mix goes through a bus
 ; of chorus, echo and reverb (space.c), each on its own f key. the pads (pad, glass, wash)
 ; swell in through a filter a slow lfo sweeps, and fade slowly once let go. f11 and f12 turn
-; the volume, the horn's own, past any mixer.
+; the volume, the horn's own, past any mixer. a phone holds it sideways: the f keys are buttons,
+; the keys a piano of two octaves a finger each, and no buffer but for a loop named.
 ; run: love synth [--fm FILE] [-w|--window|--tty] [LOOP]   HORN=none plays silent on a box with no card
 (module (synth synth-run synth-main synth-windowed? synth-new synth-step synth-name synth-key synth-tcode synth-tty
          synth-strike synth-feed synth-frame synth-wframe synth-timbres synth-knobs synth-knob
@@ -17,7 +18,8 @@
          synth-top synth-wlay synth-wedit synth-cell
          synth-tims synth-tname synth-space synth-wets synth-fx synth-mix synth-gain synth-ftail synth-stail synth-ceil synth-limit
          synth-vols synth-vol0
-         synth-pads synth-pad)
+         synth-pads synth-pad
+         synth-prows synth-pwhite synth-pbtns synth-pat synth-finger synth-ppaint synth-wbuf?)
 (borrow '(horn harp play posix window opl ops cli))
 (:
  esc (string 27)
@@ -357,6 +359,7 @@
      wh [(peep st 'ww 640) (peep st 'wh 400)]
      (? (e = 'close) (pins st 'over 1)
         (e = 'size) (synth-wlay st (r 1) (r 2))
+        (e = 'finger) (synth-finger st r)
         (e = 'up) (? (md != ()) (pin ms md ()) (st 'latch) st (synth-free st k))
         (e = 'press) (? (st 'fc && synth-top <= r 3) (wfocus st 'vi)
                         (: _ (wfocus st 'keys) i (synth-cell st <wh (wh 1) (r 2) (r 3))
@@ -413,17 +416,85 @@
                  _ (each ^(rows * 16) (y \ pour p (4 * ((synth-top + y) * w)) tb (4 * y * tw) (4 * tw)))
                  (pin st 'vd 0, st 'focus = 'vi ? (wrim p w 0 synth-top tw (16 * rows))))
               0))))
+ ; --- a phone: held sideways, a row of status over two rows of buttons, the f keys' knobs,
+ ; and under them a piano of two octaves, each finger its own note ---
+ synth-prows 7                          ; the status row and the buttons' rows, in cells
+ synth-pwhite 15                        ; c below middle c to the c two octaves up
+ synth-pwpc [0 2 4 5 7 9 11]
+ ; the buttons, a row of eight each: [label knob lit]. the loop's when there is a buffer,
+ ; the instrument's when there is a bank
+ (synth-pbtns st)
+  (: on (st 'latch = 1)
+     tail (? (st 'fm) [["fm <" 'prev 0] ["fm >" 'next 0]]
+             (tablet? (st 'buf)) [[(st 'on ? "stop" "loop") 'loop (st 'on)] ["send" 'send 0]]
+             ())
+     knobs [[(synth-tname st) 'tim 0] ["oct -" 'down 0] ["oct +" 'up 0] ["latch" 'latch on]
+            ["vol -" 'quieter 0] ["vol +" 'louder 0]]
+     [(knobs + tail) (catmap (f \ [[(f 2) (f 0) (st (f 0))] [("wet " + show (synth-wets (st (f 1)))) (f 1) 0]]) synth-fx)])
+ ; what is at x y on a phone's window w by h: ['btn knob], ['key semis], or ()
+ (synth-pat st w h x y)
+  (: bw (w // 8 // 8 * 8) top (synth-prows * 16) kh (h - top - 4) ww (w // synth-pwhite)
+     (? (y < 16) ()
+        (y < top) (: r ((y - 16) // 48) i (x // bw) row (synth-pbtns st r)
+                     (i < #row ? ['btn (row i 1)] ()))
+        (y < top + 4 || synth-pwhite * ww <= x) ()
+        (: j (x // ww) s0 (12 * (j // 7) + synth-pwpc (j % 7) - 12 + 12 * st 'oct)
+           bx (x - j * ww) bw2 (ww * 3 // 10)
+           (? (y - top - 4 < kh * 3 // 5 && bx < bw2 && 0 < j && elem (synth-pwpc ((j - 1) % 7)) [0 2 5 7 9]) ['key (s0 - 1)]
+              (y - top - 4 < kh * 3 // 5 && ww - bw2 <= bx && j < synth-pwhite - 1 && elem (synth-pwpc (j % 7)) [0 2 5 7 9]) ['key (s0 + 1)]
+              ['key s0]))))
+ ; a finger: down on a key holds its note, or on a button turns its knob; a slide takes the
+ ; next key; up lets it go. each finger's note held as 3000 past its id
+ (synth-finger st [_ id a x y])
+  (: k (3000 + id) fk (st 'fk) at (synth-pat st (peep st 'ww 640) (peep st 'wh 400) x y)
+     (lift _) (? (st 'latch) st (any (p \ <p = k) (st 'hv)) (synth-free st k) st)
+     (sound s) (pin fk id s, st 'latch ? (synth-drone st s) (synth-hold st k s))
+     (? (a = 0) (at @ ['btn kn] (synth-knob st kn) ['key s] (sound s) _ st)
+        (a = 1) (pin fk id (), lift ())
+        !(charm? (peep fk id ())) st
+        (at @ ['key s] (s != fk id && !(st 'latch) ? (lift (), sound s) st) _ st)))
+ ; the status row and the buttons, cells scribed; the keys under them, a held one lit
+ (synth-ppaint st win)
+  (: wh (window-size win) w <wh h (wh 1) p (window-paper win)
+     c (w // 8) bc (c // 8) sc (screen (cask (screen () synth-prows c)) synth-prows c)
+     (at r x) (esc + "[" + show (r + 1) + ";" + show (x + 1) + "H")
+     (sp n) (string (map (_ \ 32) ^n))
+     (pad t n) (: t2 (#t > n ? (string (take n (chars t))) t) l ((n - #t2) // 2) (sp l + t2 + sp (n - l - #t2)))
+     (btn r i b) (: x (i * bc) bg (b 2 = 1 ? "208" "238") fg (b 2 = 1 ? "16" "255")
+                    (esc + "[48;5;" + bg + ";38;5;" + fg + "m"
+                     + at (1 + 3 * r) x + sp (bc - 1) + at (2 + 3 * r) x + pad (b 0) (bc - 1)
+                     + at (3 + 3 * r) x + sp (bc - 1) + esc + "[0m"))
+     bs (synth-pbtns st)
+     _ (scribe sc (esc + "[H" + esc + "[2J" + " " + synth-tname st + "   octave " + show (st 'oct)
+                   + "   last " + (string? (st 'last) ? (st 'last) "-") + vline st + synth-lline st
+                   + catmap (r \ catmap (i \ btn r i (bs r i)) ^#(bs r)) ^2))
+     _ (each ^synth-prows (y \ dye sc p w y -1 0))
+     top (synth-prows * 16) kh (h - top - 4) ww (w // synth-pwhite) y0 (top + 4) bw2 (ww * 3 // 10)
+     lit (map (q \ int (q 1)) (st 'hv))
+     (on? s) (elem (s + 12 * st 'oct) lit)
+     (semis j) (12 * (j // 7) + synth-pwpc (j % 7) - 12)
+     _ (fill p w 0 top w (h - top) 0)
+     _ (each ^synth-pwhite (j \ fill p w (j * ww + 1) y0 (ww - 2) kh (on? (semis j) ? 16744448 13684944)))
+     (each ^(synth-pwhite - 1) (j \ (elem (synth-pwpc (j % 7)) [0 2 5 7 9] ?
+                                     (fill p w ((j + 1) * ww - bw2) y0 (2 * bw2) (kh * 3 // 5)
+                                           (on? (semis j + 1) ? 16744448 3684408))
+                                     0))))
+ ; a phone opens no buffer but for a loop named
+ (synth-wbuf? phone f) (!phone || 0 < #f)
  (synth-window o f)
   (: _ (synth-warm ()) st (synth-new o) vi (cite 'vi)
+     side (cite 'droid 'droid-side) _ (side ? (side 1))
      win (window-open 640 (synth-top + 320) "synth")
-     (? !(tablet? win) (say err ("synth: no window (" + show win + ")\n"), flush err, 1)
-        (: hf (synth-horn st) hn <hf feed <>hf wh (window-size win)
-           _ (tablet? vi ? (synth-wedit st vi (vi 'vi-open f) <wh (wh 1)) (synth-wlay st <wh (wh 1)))
+     (? !(tablet? win) (side ? (side 0), say err ("synth: no window (" + show win + ")\n"), flush err, 1)
+        (: hf (synth-horn st) hn <hf feed <>hf
+           ph (window-thumbs win) _ (pins st 'phone ph 'fk {})
+           wh (window-size win)
+           _ (tablet? vi && synth-wbuf? ph f ? (synth-wedit st vi (vi 'vi-open f) <wh (wh 1)) (synth-wlay st <wh (wh 1)))
            (go _) (feed (),
                    each (window-events win) (synth-wstep st),
-                   st 'dirty || st 'vd ? (synth-paint st win, window-show win 0 (window-size win 1), pins st 'dirty 0 'vd 0),
+                   st 'dirty || st 'vd ? ((ph ? synth-ppaint synth-paint) st win, window-show win 0 (window-size win 1), pins st 'dirty 0 'vd 0),
                    st 'over ? () (rest 4, go ()))
-           (mind go () (_ \ (hn ? (flush hn, close hn), window-close win)),
+           (mind go () (_ \ (hn ? (flush hn, close hn), window-close win, side ? (side 0))),
             0))))
  synth-usage "usage: love synth [--fm FILE] [-w|--window|--tty] [LOOP]   (z to / and q to ] play, the rows above them the sharps; tab the timbre, up and down the octave, f1 f2 f3 f8 reverb echo chorus shimmer and f5 f6 f7 f9 wetter, f4 the latch, f10 the loop, f11 f12 the volume, enter sends the buffer, pgup pgdn the cps, ctrl-w w the buffer and back, esc leaves)\n       in a window a note sounds while its key is held, or a finger on the strip of keys; on a tty a key is a strike\n       on a phone the window is the default, --tty the terminal's\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
  ; --- the pier: the keys a stage over a vi stage on the loop's text. ctrl-w then w, j or k
