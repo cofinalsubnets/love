@@ -112,6 +112,9 @@ void usb_putc(int c) {
   if (ucdc_txn == ucdc_tx) usb_flush();
   ucdc_txb[ucdc_txn++] = (uint8_t) c; }
 
+// a host has the port open: configured, DTR up
+int usb_up(void) { return ucdc_up(); }
+
 int usb_rx_ready(void) {
   if (ucdc_boot && usbhw_ms() - ucdc_boot > 50) usbhw_reboot();
   return ucdc_w != ucdc_r; }

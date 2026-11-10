@@ -3,7 +3,7 @@
 // and packets out; packets in are queued by the caller's flush
 #include <stdint.h>
 #include "teensy41.h"
-uintptr_t love_clock(void);
+uintptr_t te_ms(void);
 #define UCDC_VID 0x16C0
 #define UCDC_PID 0x0483
 #define UCDC_PRODUCT "inle teensy41"
@@ -133,7 +133,7 @@ static void usbhw_tx(void const *src, uint32_t n) {
   for (uint32_t i = 0; i < n; i++) TXBUF[i] = ((uint8_t const *) src)[i];
   queue(5, TD_TX, TXBUF, n, 0); }
 
-static uint32_t usbhw_ms(void) { return (uint32_t) love_clock(); }
+static uint32_t usbhw_ms(void) { return (uint32_t) te_ms(); }
 
 // the halt the bootloader chip watches for; the monitor off, so the bkpt is not ours
 void arm_halt251(void);

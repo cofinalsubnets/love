@@ -11,9 +11,12 @@
 #endif
 
 // input from either port, the UART's first
-static int con_ready(void) { return serial_rx_ready() || usb_rx_ready(); }
-static int con_getc(void) { return serial_rx_ready() ? serial_getc() : usb_getc(); }
-static void con_putc(int c) { serial_putc(c); usb_putc(c); }
+static int con_ready(void) { return uart_rx_ready() || usb_rx_ready(); }
+static int con_getc(void) { return uart_rx_ready() ? uart_getc() : usb_getc(); }
+static void con_putc(int c) { uart_putc(c); usb_putc(c); }
+
+uintptr_t te_ms(void);
+uintptr_t love_clock(void) { return te_ms(); }
 
 // cooperative waits spin against love_clock (ms; 0 forever)
 void love_sleep(uintptr_t ms) {
@@ -48,11 +51,11 @@ static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
 
 // nothing to push: a flush is where to say what the inbound ring dropped (teensy41.c's rx_put)
 static struct g *fd_flush(struct g *g) {
-  uint32_t lost = serial_rx_lost();
+  uint32_t lost = uart_rx_lost();
   if (lost) {
-    bput_s(serial_putc, "\r\n; input lost: ");
-    bput_n(serial_putc, lost, 10);
-    bput_s(serial_putc, " bytes\r\n"); }
+    bput_s(uart_putc, "\r\n; input lost: ");
+    bput_n(uart_putc, lost, 10);
+    bput_s(uart_putc, " bytes\r\n"); }
   return g; }
 
 struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
@@ -170,11 +173,11 @@ void free(void *p) { ff_free(&freelist, p); }
 static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed for alignment: mooncc parses no post-declarator attribute
 
 
-int main(void) {
+void te_main(void) {
   // first light before any love runs; gpio_* indexes GPIO2 bits (the pin-13 LED is GPIO2_IO03)
   gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
   for (char const *s = "\r\n; inle/teensy41\r\n"; *s; s++)
-    serial_putc(*s);
+    uart_putc(*s);
   // the core clock from the live mux state, so a failed retune shows on every boot
   { uint32_t mhz = 0;
     if (!(REG(CCM_CBCDR) & CBCDR_PERIPH_CLK_SEL)
@@ -183,16 +186,16 @@ int main(void) {
       mhz = 24u * (REG(CCM_ANALOG_PLL_ARM) & 0x7Fu) / 2u
           / ((REG(CCM_CACRR) & 7u) + 1u)
           / (((REG(CCM_CBCDR) >> 10) & 7u) + 1u);
-    bput_s(serial_putc, "; core ");
-    if (mhz) { bput_n(serial_putc, mhz, 10);
-      bput_s(serial_putc, " MHz\r\n"); }
-    else bput_s(serial_putc, "on the ROM path\r\n"); }
+    bput_s(uart_putc, "; core ");
+    if (mhz) { bput_n(uart_putc, mhz, 10);
+      bput_s(uart_putc, " MHz\r\n"); }
+    else bput_s(uart_putc, "on the ROM path\r\n"); }
   // early, so the host enumerates the board while the image wakes
   usb_init();
-  bput_s(serial_putc, "; usb up\r\n");
+  bput_s(uart_putc, "; usb up\r\n");
   uint32_t psram_mb = psram_init();
   { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
-    for (; *s; s++) serial_putc(*s); }
+    for (; *s; s++) uart_putc(*s); }
   uintptr_t arena_words;
   if (psram_mb) {
     // 64 B shy of the edge: a one-past read at a block boundary must stay inside
@@ -209,7 +212,7 @@ int main(void) {
                                (uintptr_t)(_binary_love_img_end - _binary_love_img_start), 0);
   int woke = g != NULL;
   { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
-    for (; *s; s++) serial_putc(*s); }
+    for (; *s; s++) uart_putc(*s); }
   if (!woke) g = ini();
   g = defn(g, defs, countof(defs));
   // born: this wake's cost, as main.c defines it; the egg lane's egg.l pins its own
