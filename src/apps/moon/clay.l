@@ -20,7 +20,6 @@
    ; --- the small vocabulary, here so clay loads without moon ---
    join (foldl (+) "")
    (sepby s l) (l @ (a . u) (foldl (a \ x \ a + s + x) a u) "")
-   nl (string 10)
    (gripe msg) ['gripe () () () msg]
    (gripe? ('gripe . _)) 1
    ; look answers a row's first value; lookr the whole tail, for an arity range
@@ -242,20 +241,41 @@
            (<l @ c (c = 10 ? (go "\(acc)\(line n (one1 cur))" "" >l)
                       (go acc "\(cur)\(string c)" >l))))
        (go "" "" (map txt (jot #txt))))
-   ; --- K&R braces: copen lays header and body; cclose the closer, with a tail
-   ; (` while (c);`) that falls to its own line under a non-block body
+   ; --- the tree's braces: the opener ends its header, the closer its block's last line, an else
+   ;     starts its own, and a body of one plain statement goes bare, on its header's line if it fits
    (blk? s) (two? s && <s = 'blk)
-   (copen n pre hdr s)
-    (blk? s ? (line n "\(pre)\(hdr) {" + join (map (x \ cstmt x (n + 1)) <>s))
-       (line n "\(pre)\(hdr)" + cstmt s (n + 1)))
-   (cclose n s tail)
-    (? (blk? s) (line n "}\(tail)") #tail (line n tail) "")
+   (lastnl t k) (k < 0 || t k = 10 ? k (lastnl t (k - 1)))
+   (lead t k) (sits? t k " " ? (lead t (k + 1)) k)
+   (one-line? t) (#t <= 120 && lastnl t (#t - 2) < 0)
+   ; t laid at n + 1 and a closer; it ends the last line unless that line is a note, label or directive
+   (cclose n t tail)
+    (: k (lastnl t (#t - 2) + 1) b (snip t (lead t k) (#t - 1))
+     (#b && !(starts? b "//") && !(starts? b "#") && !(sits? b (#b - 1) ":")
+      ? (snip t 0 (#t - 1) + " }\(tail)\n") (t + line n "}\(tail)")))
+   (cblk n hdr items tail) (cclose n (line n "\(hdr) {" + join (map (x \ cstmt x (n + 1)) items)) tail)
+   ; an if a bare body would leave open to a following else
+   (open-if? s)
+    (two? s && (s @ ('if _ _ e) (atom? e || open-if? e)
+                    ('if _ _) 1
+                    ['while _ b] (open-if? b)
+                    ['for _ _ _ b] (open-if? b)
+                    ['blk [x]] (open-if? x)
+                    0))
+   (plain? x) (two? x && !(elem <x '(decl sdecl note lbl case dflt blk)))
+   ; a header and its body; shut keeps an open if braced, for an else to come
+   (cbody n hdr s shut)
+    (: (joined t) (one-line? t && !(elem 123 t) ? (pad n + hdr + " " + snip t (n + 1) #t @ j (#j <= 111 ? j ())) ())
+       (? (blk? s && two? <>s && atom? >(<>s) && plain? <(<>s) && !(shut && open-if? s))
+           (cstmt <(<>s) (n + 1) @ t (joined t || cblk n hdr <>s ""))
+          (blk? s) (cblk n hdr <>s "")
+          (shut && open-if? s) (cblk n hdr [s] "")
+          (cstmt s (n + 1) @ t (joined t || line n hdr + t))))
 
    ; a label or case outdents by one against the statements it labels
    (cstmt s n)
     (atom? s ? ""
        (s @
-        ['blk items] (line n "{" + join (map (x \ cstmt x (n + 1)) items) + line n "}")
+        ['blk items] (cclose n (line n "{" + join (map (x \ cstmt x (n + 1)) items)) "")
         ['note x] (cnote n x)
         ['decl d] (line n "\(cdecls d);")
         ['sdecl d] (line n "static \(cdecls d);")
@@ -272,24 +292,23 @@
         ['case v w] (line (n < 1 ? 0 (n - 1)) "case \(v) ... \(w):")
         ['dflt] (line (n < 1 ? 0 (n - 1)) "default:")
         ('if . _ . _ . _) (cif s n "")     ; lax: `if 2 3`, and cif reads the else itself
-        ['while c b] (copen n "" "while (\(ce c 0))" b + cclose n b "")
-        ['do b c] (copen n "" "do" b + cclose n b " while (\(ce c 0));")
+        ['while c b] (cbody n "while (\(ce c 0))" b 0)
+        ['do b c] (blk? b ? (cblk n "do" <>b " while (\(ce c 0));") (line n "do" + cstmt b (n + 1) + line n "while (\(ce c 0));"))
         ['for i0 c0 p0 b]
          (: i (cfor i0) c (two? c0 ? (ce c0 0) "") p (two? p0 ? (ce p0 0) "")
             hdr (!#(i + c + p) ? "for (;;)"
                    "for (\(i); \(c); \(p))")
-            (copen n "" hdr b + cclose n b ""))
-        ['switch c items] (line n "switch (\(ce c 0)) {"
-                           + join (map (x \ cstmt x (n + 1)) items) + line n "}")
+            (cbody n hdr b 0))
+        ['switch c items] (cblk n "switch (\(ce c 0))" items "")
         ['asm t o1 o2 cl lb _] (casm n "__attribute__((holo)) " t o1 o2 cl lb)   ; the holo mark
         ['asm t o1 o2 cl lb] (casm n "" t o1 o2 cl lb)
         (line n "\(ce s 0);")))
-   ; the else-if chain kept flat
+   ; the else-if chain kept flat, each else on its own line
    (cif s n pre)
     (: c <>s th <>>s e <>>>s hdr "\(pre)if (\(ce c 0))"
-       (? (atom? e) (copen n "" hdr th + cclose n th "")
-          (<e == 'if) (copen n "" hdr th + cif e n (blk? th ? "} else " "else "))
-          (copen n "" hdr th + copen n (blk? th ? "} " "") "else" e + cclose n e "")))
+       (? (atom? e) (cbody n hdr th 0)
+          (<e == 'if) (cbody n hdr th 1 + cif e n "else ")
+          (cbody n hdr th 1 + cbody n "else" e 0)))
    ; a for's first clause, (decl ..) or (expr ..) unwrapped; () empty
    (cfor a) (? (atom? a) ""
                (<a = 'decl) (cdecls <>a)
@@ -397,7 +416,7 @@
           (<c = 'prog) (citems <>c)
           (ctop1 c)))
    ; (fn name params body [ret [attrs]]); an absent ret prints `int`
-   (cfnl nm ps b r at) (copen 0 "" (csig (ctag nm) at r ps) b + cclose 0 b "")
+   (cfnl nm ps b r at) (blk? b ? (cblk 0 (csig (ctag nm) at r ps) <>b "") (line 0 (csig (ctag nm) at r ps) + cstmt b 1))
    (cfn t)
     (t @ ['fn nm ps b r at] (cfnl nm ps b r at)
          ['fn nm ps b r] (cfnl nm ps b r ())
