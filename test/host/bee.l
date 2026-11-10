@@ -434,7 +434,10 @@
       (lm-agents = lm-doc)
       (<lm-map = 0)
       (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
-      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress"))
+      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress test_gcstress_full")
+      (cr-in >lm-map "\nearly test_gcstress_bake\n")
+      (cr-in >lm-map "\nplace test_roster source\n")
+      !(cr-in >lm-map "\nplace test source\n"))
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
@@ -469,16 +472,35 @@
       (cr-in (cr-get (ls-d + "/out/l/summary")) "test_slow exit=0 "))
    0)
 
+; an early lane starts beside the parallel phase, not after it: test_p waits for it to start. owing
+; the stress bake, test_gcstress is not run beside it, the bake running its shards
+(: le-d (cr-root + "/lanes-early")
+   _ (hark ["mkdir" "-p" (le-d + "/test/gate") (le-d + "/out")])
+   _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (le-d + "/test/gate/")])
+   _ (hark ["ln" "-s" cr-love (le-d + "/out/love")])
+   _ (cr-put le-d "Makefile" ("test_gcstress_bake:\n\t@touch started; sleep 1\ntest_gcstress:\n\t@false\n"
+                              + "test_p:\n\t@i=0; until [ -f started ]; do i=$$((i + 1)); [ $$i -lt 40 ] || exit 1; sleep 0.5; done\n"))
+   le-r (cr-sh le-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_p test_gcstress test_gcstress_bake")
+   le-s (cr-get (le-d + "/out/l/summary"))
+   _ (test
+      (<le-r = 0) (cr-in le-s "test_p exit=0 ") (cr-in le-s "test_gcstress_bake exit=0 ")
+      (cr-in le-s "test_gcstress exit=0 ") (cr-in (cr-get (le-d + "/out/l/test_gcstress.log")) "covered by test_gcstress_bake"))
+   0)
+
 ; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
-; the other lanes. its makes take only what cook takes too (no -o)
+; the other lanes. its makes take only what cook takes too (no -o), and it writes corpus.list,
+; which test_love0 reads beside it, only when there is none
 (: gb-d (cr-root + "/gcshard")
    _ (mkdir gb-d 493)
    _ (cr-put gb-d "mk" "echo \"$*\" >> made\n")
    gb-r (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
    gb-made (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
+   _ (hark ["mkdir" "-p" (gb-d + "/out/lib")]) _ (cr-put gb-d "out/lib/corpus.list" "x\n") _ (cr-put gb-d "made" "")
+   _ (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
+   gb-kept (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
    _ (test
       (<gb-r = 1) (cr-in (gb-r 1) "FAIL gcshard: no out/love")
-      (#gb-made = 2)
+      (#gb-made = 3) (#gb-kept = 2) !(two? (filter (\ l (cr-in l "corpus.list")) gb-kept))
       !(two? (filter (\ l (cr-in l " -o ")) gb-made))
       !(two? (filter (\ l (cr-in (l + " ") " host " || cr-in (l + " ") " out/love.raw ")) gb-made)))
    0)

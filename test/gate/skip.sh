@@ -14,4 +14,4 @@ gate_partly() {
   if gate_strict; then echo "$1 -- REFUSED: a strict box runs every leg"; exit 1; fi
   echo "$1"
 }
-if [ "$1" = gate-skip ]; then shift; gate_skip "$*"; fi
+if [ "${1:-}" = gate-skip ]; then shift; gate_skip "$*"; fi
