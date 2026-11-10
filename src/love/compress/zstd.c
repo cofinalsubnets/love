@@ -5,6 +5,8 @@
 //   (zstd-sum st)       the low 32 bits of xxh64 over every byte said, as 4 little-endian bytes
 //   (zstde s level)     bytes -> one whole frame, level 1..19, its size and checksum in it | ()
 //   (zstd-d s)          s one frame that says its size -> its bytes, at once | () for the walk
+//   (zstde-by s base level)  s coded against base, a dictionary the frame does not carry | ()
+//   (zstd-d-by z base)  such a frame with its base -> s | ()
 //   (zstde-new level)   a coder of one frame, no size in it | ()
 //   (zstde-feed st b)   b's bytes in -> the frame's bytes so far laid, maybe "" | () torn
 //   (zstde-end st)      the last blocks and the checksum; the state is spent after
@@ -405,34 +407,37 @@ static intptr_t zs_block(struct zs_st *S, uint8_t *w, const uint8_t *b, uintptr_
 
 // a frame whole, when s is one frame that says its size and nothing else, into one buffer: no
 // window slides and no block is copied out alone -> the bytes (n + ZS_SLACK from alloc, *on
-// set) | NULL for any other shape or a fault, which zstd.l's walk then reads and names
+// set) | NULL for any other shape or a fault, which zstd.l's walk then reads and names. base's
+// nb bytes are said already, before the frame's: its dictionary
 #define ZS_WHOLE ((uintptr_t) 1 << 30)
 static const uint8_t zs_dn[4] = { 0, 1, 2, 4 }, zs_fz[4] = { 0, 2, 4, 8 };
-static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, uintptr_t *on) {
+static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, const uint8_t *base, uintptr_t nb, uintptr_t *on) {
  if (n < 6 || xx_rd(s, 4) != 0xfd2fb528u) return NULL;
  unsigned d = s[4], ss = d >> 5 & 1, dn = zs_dn[d & 3], fz = d >> 6 ? zs_fz[d >> 6] : ss;
  uintptr_t i = 5 + !ss + dn + fz;
  if (!fz || d & 8 || n < i || (dn && xx_rd(s + 5 + !ss, dn))) return NULL;
  uint64_t fcs = xx_rd(s + 5 + !ss + dn, fz) + (fz == 2 ? 256 : 0);
- if (fcs > ZS_WHOLE) return NULL;
+ if (fcs > ZS_WHOLE || nb > ZS_WHOLE) return NULL;
  struct zs_st *S = alloc(NULL, sizeof *S);
- uint8_t *w = S ? alloc(NULL, (uintptr_t) fcs + ZS_BMAX + ZS_SLACK) : NULL;
+ uint8_t *w = S ? alloc(NULL, nb + (uintptr_t) fcs + ZS_BMAX + ZS_SLACK) : NULL;
  int good = w != NULL;
  if (good) {
   memset(S, 0, offsetof(struct zs_st, lit));
-  S->cap = (uintptr_t) fcs + ZS_BMAX, S->win = (uintptr_t) fcs, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
+  if (nb) memcpy(w, base, nb);
+  S->n = nb, S->cap = nb + (uintptr_t) fcs + ZS_BMAX, S->win = nb + (uintptr_t) fcs, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
   S->ck = d >> 2 & 1, xx_init(&S->x); }
  for (int last = 0; good && !last; ) {
   if (n - i < 3) { good = 0; break; }
   uintptr_t bh = (uintptr_t) xx_rd(s + i, 3), k = (bh >> 1 & 3) == 1 ? 1 : bh >> 3;
-  if (n - i - 3 < k || zs_block(S, w, s + i, 3 + k) < 0 || S->n > fcs) { good = 0; break; }
+  if (n - i - 3 < k || zs_block(S, w, s + i, 3 + k) < 0 || S->n - nb > fcs) { good = 0; break; }
   i += 3 + k, last = (int) (bh & 1); }
- if (good && S->n != fcs) good = 0;
+ if (good && S->n - nb != fcs) good = 0;
  if (good && d & 4) good = n - i >= 4 && xx_rd(s + i, 4) == (xx_done(&S->x) & 0xffffffffu), i += 4;
  if (good && i != n) good = 0;                   // frames after it: the walk's
  if (S) alloc(S, 0);
  if (!good) { if (w) alloc(w, 0); return NULL; }
  *on = (uintptr_t) fcs;
+ if (nb) memmove(w, w + nb, (uintptr_t) fcs);
  return w; }
 
 // ===== the coder: a hash-chain parse, an optimal one from level 16, huffman literals, fse sequences =====
@@ -685,7 +690,7 @@ static struct ze_cfg ze_cfg(int lv) {
  return (struct ze_cfg) { lv <= 2 ? 20 : lv <= 5 ? 21 : lv <= 12 ? 22 : 23, lv <= 2 ? 15 : lv <= 3 ? 16 : lv <= 6 ? 19 : 20,
                           lv < 16 ? ze_depth[lv] : 0, lv <= 9 ? 64 : lv <= 12 ? 128 : lv <= 14 ? 256 : 512, lv < 4 ? 0 : lv <= 8 ? 1 : 2, lv >= 16, lv <= 3 ? 6 : 0, lv <= 1 }; }
 #define ZO_MAXM 64u
-struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; struct lzf *f; };
+struct ze_mf { const uint8_t *s; uintptr_t n, wmask, ins; uint32_t *head, *chain; unsigned hlog, depth, good; struct lzf *f; uintptr_t p0; };
 static void ze_upto(struct ze_mf *m, uintptr_t p) {     // every position before p in its chain
  for (; m->ins < p && m->ins + 4 <= m->n; m->ins++) {
   uint32_t h = lzf_h4(m->s + m->ins, m->hlog);
@@ -962,7 +967,7 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
   o[0] = (uint8_t) (n << 3 | 2 | last), o[1] = (uint8_t) (n >> 5), o[2] = (uint8_t) (n >> 13), o[3] = s[a];
   return 4; }
  if (Z) {
-  if (!a) {                                      // the first block twice: its own counts, then a clean tree
+  if (a == m->p0) {                              // the first block twice: its own counts, then a clean tree
    zo_seed(Z, s + a, n);
    zo_parse(Z, s, a, e, rp, lit, &nl, sq, &ns);
    memset(Z->f.h2, 0, 4u << 16), memset(Z->f.h3, 0, 4u << 16), memset(Z->f.h4, 0, (uintptr_t) 4 << Z->f.h4bits);
@@ -1033,16 +1038,18 @@ static struct lzf ze_tree(int lv, const struct ze_cfg *cf, uint32_t *bt, const u
  return (struct lzf) { s, n, bt, bt + (1u << 16), bt + (2u << 16), bt + (2u << 16) + ((uintptr_t) 1 << h4b),
                        wsz - 1, wsz, 0, h4b, d, sk, nc, ZO_MAXM }; }
 static uintptr_t ze_cap(uintptr_t n) { return 2 * n + 3 * (n / ZS_BMAX + 1) + 64; }   // a split lays itself beside the whole
-// s whole -> the frame in o, cap ze_cap(n) | 0
-static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uintptr_t cap) {
+// s[p0, n) whole -> the frame in o, cap ze_cap(n - p0) | 0. the bytes below p0 are a base the
+// reader holds already, its dictionary: indexed, never coded, the window reaching over them
+static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, uintptr_t p0, int lv, uint8_t *o, uintptr_t cap) {
  struct ze_cfg cf = ze_cfg(lv);
  while (cf.wlog > 10 && (uintptr_t) 1 << (cf.wlog - 1) >= n) cf.wlog--;
  if (cf.hlog > cf.wlog) cf.hlog = cf.wlog;
- int ss = n <= (uintptr_t) 1 << cf.wlog;
- unsigned fz = ss && n < 256 ? 1 : n < 65536 + 256 && n >= 256 ? 2 : n < ((uint64_t) 1 << 32) ? 4 : 8,
+ uintptr_t c = n - p0;                           // what the frame says
+ int ss = !p0 && n <= (uintptr_t) 1 << cf.wlog;  // a base wants the window named, past the content
+ unsigned fz = ss && c < 256 ? 1 : c < 65536 + 256 && c >= 256 ? 2 : c < ((uint64_t) 1 << 32) ? 4 : 8,
           ff = fz == 1 ? 0 : fz == 2 ? 1 : fz == 4 ? 2 : 3;
  uintptr_t at = 0;
- uint64_t fcs = fz == 2 ? n - 256 : n;
+ uint64_t fcs = fz == 2 ? c - 256 : c;
  o[at++] = 0x28, o[at++] = 0xb5, o[at++] = 0x2f, o[at++] = 0xfd;
  o[at++] = (uint8_t) (ff << 6 | (unsigned) ss << 5 | 4);
  if (!ss) o[at++] = (uint8_t) ((cf.wlog - 10) << 3);
@@ -1050,7 +1057,7 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  uintptr_t wsz = (uintptr_t) 1 << cf.wlog;
  int tree = lv >= 13;                            // levels with a tree want no chains
  uintptr_t hn = tree ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree || cf.one ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
- struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good, NULL };
+ struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good, NULL, p0 };
  uint8_t *lit = alloc(NULL, ZS_BMAX), *cd = alloc(NULL, 3 * (ZS_BMAX / 3 + 1));
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;
@@ -1068,7 +1075,11 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
    if (Z) Z->f = F;
    else m.f = &F; } }
  uint64_t rep[3] = { 1, 4, 8 };
- for (uintptr_t a = 0; good; ) {
+ if (good && cf.fast)                            // the fast parse's tables take the base; the chains and the tree index it as they go
+  for (uintptr_t t = p0 > wsz ? p0 - wsz : 0; t < p0 && t + 8 <= n; t++) {
+   if (cf.one) m.head[ze_hf(ZLD(s + t) << 16, m.hlog)] = (uint32_t) t + 1;
+   else ze_fins(&m, t); }
+ for (uintptr_t a = p0; good; ) {
   uintptr_t e = n - a > ZS_BMAX ? a + ZS_BMAX : n,
             k = ze_block(&m, &cf, a, e, e == n, rep, lit, sq, cd, o + at, cap - at, Z);
   if (!k) good = 0;
@@ -1083,7 +1094,7 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uin
  if (sq) alloc(sq, 0);
  if (!good || at + 4 > cap) return 0;
  struct xx_st x;
- xx_init(&x), xx_feed(&x, s, n);
+ xx_init(&x), xx_feed(&x, s + p0, c);
  uint64_t h = xx_done(&x);
  for (int i = 0; i < 4; i++) o[at++] = (uint8_t) (h >> 8 * i);
  return at; }
@@ -1133,7 +1144,7 @@ static void ze_st_init(struct ze_st *S) {
 static void ze_st_view(struct ze_st *S, struct ze_mf *m, struct zo **pz) {
  uint8_t *B = (uint8_t*) S, *buf = B + S->obuf;
  *m = (struct ze_mf) { buf, S->n, S->wsz - 1, S->ins, (uint32_t*) (B + S->ohead), (uint32_t*) (B + S->ochain),
-                       S->cf.hlog, S->cf.depth, S->cf.good, NULL };
+                       S->cf.hlog, S->cf.depth, S->cf.good, NULL, 0 };
  *pz = NULL;
  if (!S->tree) return;
  uint32_t *bt = (uint32_t*) (B + S->obt);
@@ -1236,7 +1247,7 @@ love_noinline static struct g *host_zstd_sum(struct g *g) {
 
 love_noinline static struct g *host_zstd_d(struct g *g) {
  uintptr_t on = 0;
- uint8_t *w = strp(g->sp[0]) ? zs_whole((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), &on) : NULL;
+ uint8_t *w = strp(g->sp[0]) ? zs_whole((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), NULL, 0, &on) : NULL;
  if (!w) return g->sp[0] = ZeroPoint, g;
  if (ok(g = str0(g, on))) memcpy(txt(g->sp[0]), w, on), g->sp[1] = g->sp[0], g->sp++;   // pushes: out over s
  alloc(w, 0);
@@ -1247,12 +1258,39 @@ love_noinline static struct g *host_zstde(struct g *g) {
  if (!strp(sw) || !oddp(lw) || getcharm(lw) < 1 || getcharm(lw) > 19) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  uintptr_t n = len(sw), cap = ze_cap(n), got;
  uint8_t *out = alloc(NULL, cap);
- got = out ? ze_frame((const uint8_t*) txt(sw), n, (int) getcharm(lw), out, cap) : 0;
+ got = out ? ze_frame((const uint8_t*) txt(sw), n, 0, (int) getcharm(lw), out, cap) : 0;
  if (got && ok(g = str0(g, got))) {             // pushes: out over the two
   memcpy(txt(g->sp[0]), out, got);
   g->sp[2] = g->sp[0], g->sp += 2; }
  else if (ok(g)) g->sp[1] = ZeroPoint, g->sp += 1;
  if (out) alloc(out, 0);
+ return g; }
+
+// s against base: the two laid end to end, the frame saying only s
+love_noinline static struct g *host_zstde_by(struct g *g) {
+ word sw = g->sp[0], bw = g->sp[1], lw = g->sp[2];
+ if (!strp(sw) || !strp(bw) || !oddp(lw) || getcharm(lw) < 1 || getcharm(lw) > 19 || len(sw) + len(bw) > ZS_WHOLE)
+  return g->sp[2] = ZeroPoint, g->sp += 2, g;
+ uintptr_t nb = len(bw), n = nb + len(sw), cap = ze_cap(len(sw)), got = 0;
+ uint8_t *in = alloc(NULL, n ? n : 1), *out = alloc(NULL, cap);
+ if (in && out) {
+  memcpy(in, txt(bw), nb), memcpy(in + nb, txt(sw), len(sw));
+  got = ze_frame(in, n, nb, (int) getcharm(lw), out, cap); }
+ if (in) alloc(in, 0);
+ if (got && ok(g = str0(g, got))) {             // pushes: out over the three
+  memcpy(txt(g->sp[0]), out, got);
+  g->sp[3] = g->sp[0], g->sp += 3; }
+ else if (ok(g)) g->sp[2] = ZeroPoint, g->sp += 2;
+ if (out) alloc(out, 0);
+ return g; }
+
+love_noinline static struct g *host_zstd_d_by(struct g *g) {
+ uintptr_t on = 0;
+ uint8_t *w = strp(g->sp[0]) && strp(g->sp[1])
+              ? zs_whole((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), (const uint8_t*) txt(g->sp[1]), len(g->sp[1]), &on) : NULL;
+ if (!w) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+ if (ok(g = str0(g, on))) memcpy(txt(g->sp[0]), w, on), g->sp[2] = g->sp[0], g->sp += 2;   // pushes: out over z and base
+ alloc(w, 0);
  return g; }
 
 static struct str *ze_cask(word x) {
@@ -1293,6 +1331,8 @@ static LvmWrap(lvm_zstd_block, host_zstd_block)
 static LvmWrap(lvm_zstd_sum, host_zstd_sum)
 static LvmWrap(lvm_zstde, host_zstde)
 static LvmWrap(lvm_zstd_d, host_zstd_d)
+static LvmWrap(lvm_zstde_by, host_zstde_by)
+static LvmWrap(lvm_zstd_d_by, host_zstd_d_by)
 static LvmWrap(lvm_zstde_new, host_zstde_new)
 static LvmWrap(lvm_zstde_feed, host_zstde_feed)
 static LvmWrap(lvm_zstde_end, host_zstde_end)
@@ -1302,6 +1342,8 @@ LvDef("zstd-block", zstd_block, 2, "zstd");
 LvDef("zstd-sum", zstd_sum, 1, "zstd");
 LvDef("zstde", zstde, 2, "zstd");
 LvDef("zstd-d", zstd_d, 1, "zstd");
+LvDef("zstde-by", zstde_by, 3, "zstd");
+LvDef("zstd-d-by", zstd_d_by, 2, "zstd");
 LvDef("zstde-new", zstde_new, 1, "zstd");
 LvDef("zstde-feed", zstde_feed, 2, "zstd");
 LvDef("zstde-end", zstde_end, 1, "zstd");
