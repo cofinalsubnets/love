@@ -63,8 +63,8 @@
     (: defs {}
        (syms ob) (map (i \ peep (peep ob 'syms 0) i ()) ^(peep ob 'nsym 0))
        _ (map (ob \ map (sy \ two? sy && 0 < sy 3 && elem (sy 1) '(1 2) ? (pin defs <sy 1)) (syms ob)) objs)
-       (foldl (\ a ob (foldl (\ a2 sy (two? sy && sy 1 = 2 && sy 3 = 0 && !(defs <sy) && !(elem <sy a2)
-                                         && !(elem <sy ldsynth) && !(ld-bracket? <sy)
+       (foldl (\ a ob (foldl (\ a2 sy (two? sy && sy 1 = 2 && sy 3 = 0 && !(defs <sy) && (nelem <sy a2)
+                                         && (nelem <sy ldsynth) && !(ld-bracket? <sy)
                                          ? (a2 + [<sy]) a2))
                              a (syms ob)))
               () objs))
@@ -73,7 +73,7 @@
    ; libSystem and dylibs, signed ad hoc as ident; else static. pie (dyn? only): mh_pie, dyld
    ; slides every abs64 site
    (macholink target srcs dyn? dylibs pie ident)
-    (: cpu (peep macho-cpus target ())
+    (: cpu (macho-cpus target)
        _ (two? cpu || scare 'macho-target target)
        objs0 (map (p \ ld-read <p <>p (peep elf-machines target 0)) srcs)
        _ (ld-tls? objs0 ? (scare 'link-tls target))   ; a thread template is ldlink's alone

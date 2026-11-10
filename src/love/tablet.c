@@ -491,8 +491,6 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=a
 #endif
  char *code;
 #if __STDC_HOSTED__
- // inle declines: its heap rides the NX hhdm window
- if (__love_osv < 0) love_musttail return Answerp(nsp, Sp[1]);
  Have(10 + Width(struct fz));              // 10 covers every cell (5..8 words) + tag + fz
  code = code_install(g, txt(bytes_of(Sp[0])), n);   // reloaded: Have may move it
  if (!code) love_musttail return Answerp(nsp, Sp[1]);

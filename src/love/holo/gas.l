@@ -3,7 +3,7 @@
 ; neutral IR holo.l assembles, so one template serves every compiler. a line lands on a backend
 ; row where one fits, else on as.l's bytes (x64) or its own word (a64).
 ;
-;   (gas-text tgt src)          ; text -> IR forms, tgt 'x64 'i386 'i386m16 'a64 'rv64 or a thumb
+;   (gas-text tgt src)          ; text -> IR forms, tgt 'x64 'i386 'i386m16 'a64 'rv64 'rv32 or a thumb
 ;   (gas-reg tgt r w mod)       ; the dialect's spelling of neutral register r at byte width w
 ;   (gas-imm tgt n mod)         ; .. of an immediate ("$3" / "3" / "#3")
 ;   (gas-mem tgt r)             ; .. of a memory operand at register r ("(%rax)" / "[x0]" / "0(a0)")
@@ -64,7 +64,7 @@
 
    ;; the register files, dialect name -> neutral (and back)
    (gtab rows) (tablet 0 @ t (foldl (\ _ p (pin t <p <>p)) 0 rows, t))
-   (ghas? t k) (nom? (peep t k ()))                ; a symbol-valued row is there
+   (ghas? t k) (nom? (t k))                ; a symbol-valued row is there
    gx-rows '((r0 "rax" "eax" "ax" "al") (r1 "rcx" "ecx" "cx" "cl") (r2 "rdx" "edx" "dx" "dl")
               (r3 "rbx" "ebx" "bx" "bl") (sp "rsp" "esp" "sp" "spl") (r4 "rbp" "ebp" "bp" "bpl")
               (r5 "rsi" "esi" "si" "sil") (r6 "rdi" "edi" "di" "dil")
@@ -111,7 +111,7 @@
    ;; modifier letter (x64 b/w/k/q, a64 w/x) or 0.
    (gas-reg tgt r w mod)
     (? (gx86? tgt)
-        (: ns (peep gx-names r ())
+        (: ns (gx-names r)
            w9 (mod @ 98 1 119 2 107 4 113 8 w)
            (atom? ns || g32? tgt && (w9 = 8 || !(elem r '(r0 r1 r2 r3 sp r4 r5 r6))) ? (scare 'gas-reg r)
               ("%" + ns (w9 @ 1 3 2 2 4 1 0))))
@@ -119,20 +119,20 @@
         (: k (r @ 'sp "sp" 'fp "29" 'lr "30" (snip (show r) 1 #(show r)))
            w9 (mod @ 119 4 120 8 w)
            (r = 'sp ? "sp" ((w9 <= 4 ? "w" "x") + k)))
-       (tgt = 'rv64) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
+       (grv? tgt) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
        (show r))
    (gas-imm tgt n mod) (: t (charm? n || sun? n ? (show n) n) ; n a number, or a "sym+k" text
                           (? (elem mod '(99 97 80)) t (gx86? tgt) ("$" + t) (gthumb? tgt) ("#" + t) t))
    (gas-mem tgt r) (? (gx86? tgt) ("(" + gas-reg tgt r (g32? tgt ? 4 8) 0 + ")")
-                      (tgt = 'rv64) ("0(" + gas-reg tgt r 8 0 + ")")
+                      (grv? tgt) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
    (gas-regname tgt s)                              ; gas's own `%rdx` names the register too
     (name (s @ ("%" + r) r s) @ k
        (? (tgt = 'x64) (peep gx-regs k () @ e (two? e ? <e))
           (g32? tgt) (peep gx-regs k () @ e (two? e && <>e < 8 && elem <e '(r0 r1 r2 r3 sp r4 r5 r6) ? <e))
-          (tgt = 'a64) (peep a64-names k (peep a64-ccnames k ()))
-          (tgt = 'rv64) (peep rv-names k ())
-          (peep t32-names k ())))
+          (tgt = 'a64) (peep a64-names k (a64-ccnames k))
+          (grv? tgt) (rv-names k)
+          (t32-names k)))
 
    ;; x64: att-read's (op mn w ops), destination first, physical registers, lowered here;
    ;; GNU's numeric local labels resolve over the read items first (gx-locals)
@@ -222,15 +222,15 @@
        d (k > 0 ? (ops 0) ()) s (k > 1 ? (ops 1) ())
        (? (ghas? gx-nils m) [[(gx-nils m)]]
           (gx-narrow? m w0 d s ops) (scare 'gas-x64-op m)
-          (k = 0 && two? (peep gx-str m ())) (gx-str m @ e [['str <e <>e]])
+          (k = 0 && two? (gx-str m)) (gx-str m @ e [['str <e <>e]])
           (k = 0 && elem m '(cs ds es ss)) [['seg m]]                   ; a null override, the padding alternatives lay
-          (k = 1 && elem <d '(mem rip lbl) && two? (peep gx-mdig m ()))
+          (k = 1 && elem <d '(mem rip lbl) && two? (gx-mdig m))
            (: e (gx-mdig m) bm (gx-mref d) [['mdig <e <>e <>>e <bm <>bm]])
-          (k = 1 && <d = 'rg && two? (peep gx-rdig m ()))
+          (k = 1 && <d = 'rg && two? (gx-rdig m))
            (gx-rdig m @ e [['rdig (e 0) (e 1) (e 2) (e 3 = 0 ? (d 2) (e 3)) (gx-r d)]])
           (m = 'invpcid) (gx-mref s @ bm [['invpcid (gx-r d) <bm <>bm]])   ; the type register, the descriptor
           (m = 'movnti) (gx-mref d @ bm [['movntim (w0 > 0 ? w0 (s 2)) <bm <>bm (gx-r s)]])
-          (two? (peep gx-ext m ()))
+          (two? (gx-ext m))
            (: e (gx-ext m) x (gx-r d)
               (? (<s = 'rg) [['mov x (gx-r s)] [<e x]]
                  (<s = 'mem) (gx-mem s @ bm [[<>e x <bm <>bm]])
@@ -427,7 +427,7 @@
    ;; 64-bit rows cannot say -- a W-register op, a written-back or indexed address, `ret xN`, an
    ;; X op they would spell in two words -- lands as gas's own word; an unread operand scares.
    (ga-reg s) (name s @ k
-                 (? (nom? (peep a64-names k ())) ['reg (a64-names k) 8]
+                 (? (nom? (a64-names k)) ['reg (a64-names k) 8]
                     (elem k '(fp lr)) ['reg k 8]               ; llvm-mc's names for x29 and x30
                     (k = 'wzr || k = 'w31) ['reg 'zr 4]           ; llvm-mc reads x31 and w31 as zr
                     (k = 'x31) ['reg 'zr 8]
@@ -441,7 +441,7 @@
    (ga-index b ps toks)                             ; [b, rM{, lsl|uxtw|sxtw|sxtx {#s}}]
     (: i (<ps @ (('sym m)) (ga-reg m) ())
        ex (two? >ps ? <>ps ())
-       o (ex @ (('sym e) . _) (peep ga-exts (name e) ()) (atom? ex ? 3 ()))
+       o (ex @ (('sym e) . _) (ga-exts (name e)) (atom? ex ? 3 ()))
        s (ex @ (('sym _) . ('ch 35) . v) (gimm v) -1)
        (#ps > 2 || !(charm? o) || <>>i != (o & 1 ? 8 4) ? (scare 'gas-a64-operand toks)
           ['memx b <>i o s]))
@@ -519,7 +519,7 @@
        (x = 0 || x = m || atom? r ? ()
           ((e = 64 ? 1 0) << 22 | <r << 16 | (((63 ^ (2 * e - 1)) & 63) | (s - 1)) << 10)))
    (ga-wimm z m d n v)                              ; the immediate word at width z
-    (? (nom? (peep ga-flip m ()))
+    (? (nom? (ga-flip m))
         (: f (v < 0 ? (ga-flip m) m) u (v < 0 ? (0 - v) v) b ((z = 64 ? 0x80000000 0) | <>(ga-walu f))
            (? (n = 31 || d = 31 && elem m '(add sub)) (scare 'gas-a64-operand [m v])   ; 31 would be wsp
               (u <= 4095) (b | u << 10 | n << 5 | d)
@@ -536,7 +536,7 @@
           (#(lanes n) <= 1) (wide 0x12800000 n (lanes n))
           (ga-bm u z @ f (charm? f ? (sf | 0x320003E0 | f | d) ()))))
    (ga-sp? o) (o @ ('reg x _) (x = 'sp) 0)
-   (ga-irimm? m v) (nom? (peep ga-flip m ()) ? (-4095 <= v <= 4095) (charm? (ga-bm v 64)))   ; the IR lays it in one word
+   (ga-irimm? m v) (nom? (ga-flip m) ? (-4095 <= v <= 4095) (charm? (ga-bm v 64)))   ; the IR lays it in one word
    (ga-dp m os z)                                   ; a data op laid as its own word, z bits wide
     (: k #os (r i) (ga-hw (ga-r (os i))) sf (z = 64 ? 0x80000000 0) top (z - 1)
        (? (m = 'mov) ((os 1) @ ('imm v) (ga-movi z (r 0) v @ w (charm? w ? (ga-raw w) (scare 'gas-a64-mov-imm v)))
@@ -548,7 +548,7 @@
               ((os 1) @ ('imm v) (ga-raw (ga-wimm z op 31 (r 0) v))
                         (ga-raw (<(ga-walu op) | r 1 << 16 | r 0 << 5 | 31))))
           (k != 3) (scare 'gas-a64-operand os)
-          (two? (peep ga-walu m ()))
+          (two? (ga-walu m))
            ((os 2) @ ('imm v) (ga-raw (ga-wimm z m (r 0) (r 1) v))
                      (ga-raw (<(ga-walu m) | r 2 << 16 | r 1 << 5 | r 0)))
           ((os 2) @ ('imm s)                       ; the shifts: a bitfield move by an immediate
@@ -742,14 +742,14 @@
             'orn [1 0x2A200000] 'eor [1 0x4A000000] 'eon [1 0x4A200000] 'ands [1 0x6A000000] 'bics [1 0x6A200000]}
    ga-shal {'cmp ['subs 'd] 'cmn ['adds 'd] 'tst ['ands 'd] 'neg ['sub 'n] 'negs ['subs 'n] 'mvn ['orn 'n]}
    (ga-shifted m os)
-    (: k #os al (peep ga-shal m ()) sh (ga-shxof (os (k - 1)))
+    (: k #os al (ga-shal m) sh (ga-shxof (os (k - 1)))
        (bad _) (scare 'gas-a64-operand [m os])
        (zr o) (o @ ('reg _ w) ['reg 'zr w] _ ['reg 'zr 8])
        (? (two? al)
            (? (k != 3) (bad 0)
               (al 1 = 'd) (ga-sh3 m <al (zr (os 0)) (os 0) (os 1) sh)
               (os 1 @ ('reg _ _) (ga-sh3 m <al (os 0) (zr (os 0)) (os 1) sh) _ (bad 0)))
-          (two? (peep ga-shop m ())) (k = 4 ? (ga-sh3 m m (os 0) (os 1) (os 2) sh) (bad 0))
+          (two? (ga-shop m)) (k = 4 ? (ga-sh3 m m (os 0) (os 1) (os 2) sh) (bad 0))
           (bad 0)))
    (ga-sh3 m op d n r sh)
     (: row (ga-shop op) ar (<row = 0) s? (elem op '(adds subs ands bics))
@@ -778,7 +778,7 @@
    ga-grps {'abs_g0 [0 'u] 'abs_g1 [1 'u] 'abs_g2 [2 'u] 'abs_g3 [3 'u] 'abs_g0_nc [0 'nc] 'abs_g1_nc [1 'nc]
             'abs_g2_nc [2 'nc] 'abs_g0_s [0 's] 'abs_g1_s [1 's] 'abs_g2_s [2 's]}
    (ga-movg m rw g ts)
-    (: e (peep ga-grps g ()) z <>rw
+    (: e (ga-grps g) z <>rw
        (bad _) (scare 'gas-a64-operand [m g])
        (? (!(two? e) || <rw = 'sp || (z = 4 && <e > 1)) (bad 0)
           (gtoks? ts) (scare 'gas-a64-movw-symbol [m g])
@@ -797,12 +797,12 @@
                                  (scare 'gas-a64-operand [m os]))
                     _ (scare 'gas-a64-operand [m os]))))
    ;; the conditionals: a condition by name -> its 4-bit field, al and nv among them
-   (ga-cond o) (o @ ('sym c) (: n (name c) (? (n = 'al) 14 (n = 'nv) 15 (nom? (peep ga-cc n ())) (arm-cc (ga-cc n)) ())) _ ())
+   (ga-cond o) (o @ ('sym c) (: n (name c) (? (n = 'al) 14 (n = 'nv) 15 (nom? (ga-cc n)) (arm-cc (ga-cc n)) ())) _ ())
    ;; the conditional selects, and their aliases (register count, base) that invert the condition
    ga-csel {'csel 0x1A800000 'csinc 0x1A800400 'csinv 0x5A800000 'csneg 0x5A800400}
    ga-csal {'cset [0 'csinc] 'csetm [0 'csinv] 'cinc [1 'csinc] 'cinv [1 'csinv] 'cneg [1 'csneg]}
    (ga-cs-ins m os)
-    (: k #os al (peep ga-csal m ()) c (ga-cond (os (k - 1)))
+    (: k #os al (ga-csal m) c (ga-cond (os (k - 1)))
        rs (map ga-rw (take (k - 1) os))
        (bad _) (scare 'gas-a64-operand [m os])
        (? (!(charm? c) || any (r \ <r = 'sp || <>r != <>(rs 0)) rs) (bad 0)
@@ -893,7 +893,7 @@
            'plil1keep 8 'plil1strm 9 'plil2keep 10 'plil2strm 11 'plil3keep 12 'plil3strm 13
            'pstl1keep 16 'pstl1strm 17 'pstl2keep 18 'pstl2strm 19 'pstl3keep 20 'pstl3strm 21}
    (ga-prf-ins m os)
-    (: op ((os 0) @ ('sym t) (peep ga-prf t ()) ('imm n) (0 <= n <= 31 ? n ()) ())
+    (: op ((os 0) @ ('sym t) (ga-prf t) ('imm n) (0 <= n <= 31 ? n ()) ())
        ((os 1) @ ('mem x v)
           (? !(charm? op) (scare 'gas-a64-operand os)
              (m = 'prfm && v % 8 = 0 && 0 <= v <= 32760) (ga-raw (0xF9800000 | (v // 8) << 10 | ga-hw x << 5 | op))
@@ -996,8 +996,8 @@
    ga-f2 {'fadd 0x1E202800 'fsub 0x1E203800 'fmul 0x1E200800 'fdiv 0x1E201800 'fmax 0x1E204800 'fmin 0x1E205800}
    ; ..and the fused four, d n m a: the addend at bit 10
    ga-f3 {'fmadd 0x1F000000 'fmsub 0x1F008000 'fnmadd 0x1F200000 'fnmsub 0x1F208000}
-   (ga-fs o) (o @ ('sym s) (: t (show s) ty (peep ga-fty (t 0) ()) n (ga-fr o (t 0)) (charm? ty && charm? n ? [ty n] ())) _ ())
-   (ga-fp? m os) ((m = 'fcvt || charm? (peep ga-f1 m ()) || charm? (peep ga-f2 m ()) || charm? (peep ga-f3 m ())) && any (o \ two? (ga-fs o)) os)
+   (ga-fs o) (o @ ('sym s) (: t (show s) ty (ga-fty (t 0)) n (ga-fr o (t 0)) (charm? ty && charm? n ? [ty n] ())) _ ())
+   (ga-fp? m os) ((m = 'fcvt || charm? (ga-f1 m) || charm? (ga-f2 m) || charm? (ga-f3 m)) && any (o \ two? (ga-fs o)) os)
    (ga-fp m os)
     (: fs (map ga-fs os) k #os
        (gw o) (o @ ('reg r w) (r != 'sp ? [(ga-hw r) w]) _ ())
@@ -1008,14 +1008,14 @@
            (: g (gw (os 1)) (ga-raw (0x1E270000 | (<>g = 8 ? 0x80000000 0) | <<fs << 22 | <g << 5 | <>(fs 0))))
           (m = 'fmov && k = 2 && two? (fs 1) && two? (gw (os 0)))
            (: g (gw (os 0)) (ga-raw (0x1E260000 | (<>g = 8 ? 0x80000000 0) | <(fs 1) << 22 | <>(fs 1) << 5 | <g)))
-          (charm? (peep ga-f1 m ()) && k = 2 && same? fs)
+          (charm? (ga-f1 m) && k = 2 && same? fs)
            (ga-raw (ga-f1 m | <<fs << 22 | <>(fs 1) << 5 | <>(fs 0)))
-          (charm? (peep ga-f2 m ()) && k = 3 && same? fs)
+          (charm? (ga-f2 m) && k = 3 && same? fs)
            (ga-raw (ga-f2 m | <<fs << 22 | <>(fs 2) << 16 | <>(fs 1) << 5 | <>(fs 0)))
-          (charm? (peep ga-f3 m ()) && k = 4 && same? fs)
+          (charm? (ga-f3 m) && k = 4 && same? fs)
            (ga-raw (ga-f3 m | <<fs << 22 | <>(fs 2) << 16 | <>(fs 3) << 10 | <>(fs 1) << 5 | <>(fs 0)))
           (scare 'gas-a64-operand [m os])))
-   (ga-vec? m os) (!(two? (peep ga-simd m ())) &&
+   (ga-vec? m os) (!(two? (ga-simd m)) &&
                    (any (o \ two? (ga-vt o) || (o @ ('vel _ _) 1 ('vlist _) 1 _ 0)) os
                     || (elem m '(add sub) && #os = 3 && all (o \ charm? (ga-fr o 100)) os)
                     || (m = 'movi && #os = 2 && charm? (ga-fr (os 0) 100))))
@@ -1049,23 +1049,23 @@
           ; a scalar from a lane: dup's scalar form, mov its alias
           (elem m '(mov dup) && k = 2 && two? (e 1) && charm? (ga-fpz (os 0)) && ga-fpz (os 0) = e 1 1)
            (ga-raw (0x5E000400 | el5 (e 1) << 16 | e 1 0 << 5 | ga-vr (os 0) (ga-fpcs (e 1 1))))
-          (charm? (peep ga-vacr m ()) && k = 2 && two? (v 1) && ga-fpz (os 0) = v 1 2 && v 1 2 < 3 && v 1 3 != "2s")
+          (charm? (ga-vacr m) && k = 2 && two? (v 1) && ga-fpz (os 0) = v 1 2 && v 1 2 < 3 && v 1 3 != "2s")
            (ga-raw (ga-vacr m | v 1 1 << 30 | v 1 2 << 22 | v 1 0 << 5 | ga-vr (os 0) (ga-fpcs (v 1 2))))
           (elem m '(add sub) && k = 3 && all (o \ charm? (ga-fr o 100)) os)
            (ga-raw ((m = 'add ? 0x5EE08400 0x7EE08400) | ga-fr (os 2) 100 << 16 | ga-fr (os 1) 100 << 5 | ga-fr (os 0) 100))
-          (two? (peep ga-v3 m ()) && k = 3 && same)
+          (two? (ga-v3 m) && k = 3 && same)
            (: r (ga-v3 m) z (v 0 2)
               (? (v 0 3 = "1d" || (r 1 = 0 && z > 0)) (bad 0)
                  (ga-raw (r 0 | v 0 1 << 30 | (r 1 = 1 ? (z << 22) 0) | v 2 0 << 16 | v 1 0 << 5 | v 0 0))))
-          (two? (peep ga-vsh m ()) && k = 3 && two? (v 0) && two? (v 1) && v 1 3 = v 0 3)
+          (two? (ga-vsh m) && k = 3 && two? (v 0) && two? (v 1) && v 1 3 = v 0 3)
            (: r (ga-vsh m) es (8 << v 0 2) s ((os 2) @ ('imm x) x _ ())
               (? (v 0 3 = "1d" || !(charm? s) || (r 1 = 0 ? (s < 0 || s >= es) (s < 1 || s > es))) (bad 0)
                  (ga-raw (r 0 | v 0 1 << 30 | (r 1 = 0 ? (es + s) (2 * es - s)) << 16 | v 1 0 << 5 | v 0 0))))
-          (two? (peep ga-v2 m ()) && k = 2 && same)
+          (two? (ga-v2 m) && k = 2 && same)
            (: r (ga-v2 m) z (v 0 2)
               (? (v 0 3 = "1d" || z > r 1) (bad 0)
                  (ga-raw (r 0 | v 0 1 << 30 | (r 1 = 0 ? 0 (z << 22)) | v 1 0 << 5 | v 0 0))))
-          (charm? (peep ga-vperm m ()) && k = 3 && same)
+          (charm? (ga-vperm m) && k = 3 && same)
            (? (v 0 3 = "1d") (bad 0)
               (ga-raw (ga-vperm m | v 0 1 << 30 | v 0 2 << 22 | v 2 0 << 16 | v 1 0 << 5 | v 0 0)))
           (m = 'ext && k = 4)
@@ -1159,8 +1159,8 @@
           (charm? b && -256 <= v <= 255 ? (ga-raw (b | (v & 511) << 12 | ga-hw x << 5 | ga-hw <rw))
              (scare 'gas-a64-operand os))
           (scare 'gas-a64-operand os)))
-   (ga-bcond s) (show s @ t (? (#t > 2 && t 0 = 98 && t 1 = 46) (peep ga-cc (name (snip t 2 #t)) ())
-                                (#t = 3 && t 0 = 98) (peep ga-cc (name (snip t 1 3)) ())   ; gas's bne, as b.ne
+   (ga-bcond s) (show s @ t (? (#t > 2 && t 0 = 98 && t 1 = 46) (ga-cc (name (snip t 2 #t)))
+                                (#t = 3 && t 0 = 98) (ga-cc (name (snip t 1 3)))   ; gas's bne, as b.ne
                                 ()))
    (ga-inplace op d s) (d = s ? () [['mov d s]])       ; the IR's unary ops work in place
    ;; sys and sysl: op1, Cn, Cm, op2 and an X register, xzr when sys leaves it off; sysl reads it first
@@ -1175,7 +1175,7 @@
           _ (bad 0)))
    (ga-ins m os)
     (#os @ k
-       (? (charm? (peep ga-movw m ())) (ga-movw-ins m os)
+       (? (charm? (ga-movw m)) (ga-movw-ins m os)
           (ga-fp? m os) (ga-fp m os)
           (elem m '(tbl tbx)) (ga-tbl-ins m os)
           (ga-vec? m os) (ga-neon m os)
@@ -1185,17 +1185,17 @@
               (charm? b ? (ga-sym (os 1) @ (s a) [['afix 'ld19 (b | ga-hw ((os 0) 1)) s a]]) (scare 'gas-a64-operand [m os])))
           (elem m '(adrp adr)) (ga-adrp m os)
           (m = 'add && k = 3 && ((os 2) @ ('grp _ _) 1 _ 0)) (ga-addlo os)
-          (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (peep ga-shop m ()) || two? (peep ga-shal m ()))) (ga-shifted m os)
+          (k > 2 && two? (ga-shxof (os (k - 1))) && (two? (ga-shop m) || two? (ga-shal m))) (ga-shifted m os)
           ; a W mov beside wsp is add #0; zr has no place beside it
           (m = 'mov && k = 2 && any ga-sp? os && all (o \ o @ ('reg _ 4) 1 _ 0) os)
            (? (any (o \ o @ ('reg 'zr _) 1 _ 0) os) (scare 'gas-a64-operand [m os])
               (ga-raw (0x11000000 | ga-hw (ga-r (os 1)) << 5 | ga-hw (ga-r (os 0)))))
           ; a register form naming zr or sp, which the IR's rows cannot hold, or cmn and negs, which have none:
           ; the shifted word at lsl #0, the extended one beside sp
-          ((two? (peep ga-shop m ()) || two? (peep ga-shal m ())) && (elem m '(cmn negs) || any (o \ o @ ('reg 'zr _) 1 ('reg 'sp _) 1 _ 0) os)
+          ((two? (ga-shop m) || two? (ga-shal m)) && (elem m '(cmn negs) || any (o \ o @ ('reg 'zr _) 1 ('reg 'sp _) 1 _ 0) os)
            && ((os (k - 1)) @ ('reg _ _) 1 _ 0))
            (ga-shifted m (os + [['shx 0 0]]))
-          (charm? (peep ga-arity m ()) && k != ga-arity m) (scare 'gas-a64-operand [m os])
+          (charm? (ga-arity m) && k != ga-arity m) (scare 'gas-a64-operand [m os])
           (m = 'ret && k = 1) (ga-r (os 0) @ r (r = 'lr ? '((ret)) (ga-raw (0xD65F0000 | ga-hw r << 5))))
           (ghas? ga-nils m) (k = 0 ? [[(ga-nils m)]] (scare 'gas-a64-operand [m os]))
           (nom? (ga-bcond m)) (? (k != 1) (scare 'gas-a64-operand [m os])
@@ -1219,14 +1219,14 @@
           (ghas? ga-exc m) [[(ga-exc m) (k > 0 ? (<>(os 0)) 0)]]
           (m = 'svc) (: n (k > 0 ? (<>(os 0)) 0) (n = 0 ? '((sys)) [['svcn n]]))
           (k > 0 && elem m '(ldr str) && charm? (ga-fpz (os 0))) (ga-lsq m os)
-          (two? (peep ga-simd m ())) (ga-simd-ins m os)
-          (charm? (peep ga-crc m ())) (ga-crc-ins m os)
+          (two? (ga-simd m)) (ga-simd-ins m os)
+          (charm? (ga-crc m)) (ga-crc-ins m os)
           (elem m '(stg stzg st2g stz2g ldg stgm ldgm)) (ga-mte-ins m os)
-          (two? (peep ga-ldst m ())) (ga-ls m os)
-          (two? (peep ga-mla m ())) (ga-mul m os)
+          (two? (ga-ldst m)) (ga-ls m os)
+          (two? (ga-mla m)) (ga-mul m os)
           ; an immediate op beside no sp that the IR's rows cannot hold, zr or a word of its own: that
           ; word, or refused as llvm-mc does
-          (k = 3 && two? (peep ga-walu m ()) && !(any ga-sp? os)
+          (k = 3 && two? (ga-walu m) && !(any ga-sp? os)
            && ((os 2) @ ('imm v) (charm? v && (any (o \ o @ ('reg 'zr _) 1 _ 0) os || !(ga-irimm? m v))) _ 0))
            (ga-dp m os (ga-wide os = 4 ? 32 64))
           (elem m '(mov cmp tst neg mvn add sub and orr eor adds subs ands lsl lsr asr ror) && ga-wide os = 4)
@@ -1251,11 +1251,11 @@
               (k != 3 ? (scare 'gas-a64-operand os)
                  (c @ ('imm n) (ga-inplace m d s + [[(ga-sh m) d n]])
                       (d = s ? [[(name (show (ga-sh m) + "v")) d (ga-r c)]] (scare 'gas-a64-operand os)))))
-          (charm? (peep ga-hints m ())) (k = 0 ? (ga-raw (ga-hints m)) (scare 'gas-a64-operand [m os]))
+          (charm? (ga-hints m)) (k = 0 ? (ga-raw (ga-hints m)) (scare 'gas-a64-operand [m os]))
           (m = 'hint) ((os 0) @ ('imm n) (k = 1 && 0 <= n <= 127 ? (ga-raw (0xD503201F | n << 5)) (scare 'gas-a64-operand [m os]))
                          (scare 'gas-a64-operand [m os]))
           (m = 'bti) (? (k = 0) (ga-raw 0xD503241F)
-                        ((os 0) @ ('sym t) (charm? (peep ga-bti t ()) && k = 1) 0) (ga-raw (ga-bti <>(os 0)))
+                        ((os 0) @ ('sym t) (charm? (ga-bti t) && k = 1) 0) (ga-raw (ga-bti <>(os 0)))
                         (scare 'gas-a64-operand [m os]))
           (elem m '(cbz cbnz))                       ; compare and branch: the flags untouched
            (k = 2 ? (ga-rw (os 0) @ rw
@@ -1263,24 +1263,24 @@
                          (charm? (ga-dot (os 1)) ? (ga-raw (w | ga-off (ga-dot (os 1)) 19 << 5 | ga-hw <rw))
                             [['cbr w <rw (<>(os 1))]])))
               (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-lnot m ())) (k = 3 ? (ga-lnot-ins m os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-lnot m)) (k = 3 ? (ga-lnot-ins m os) (scare 'gas-a64-operand [m os]))
           (elem m '(tbz tbnz)) (k = 3 ? (ga-tb-ins m os) (scare 'gas-a64-operand [m os]))
           (m = 'ands) (k = 3 ? (ga-ands os) (scare 'gas-a64-operand [m os]))
           (elem m '(ccmp ccmn)) (k = 4 ? (ga-ccmp-ins m os) (scare 'gas-a64-operand [m os]))
-          (charm? (peep ga-csel m ()) || two? (peep ga-csal m ())) (ga-cs-ins m os)
-          (two? (peep ga-carry m ())) (k = 3 ? (ga-regw (ga-carry m) os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-un m ())) (k = 2 ? (ga-regw (ga-un m) os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-ut m ())) (k = 2 ? (ga-ut-ins m os) (scare 'gas-a64-operand [m os]))
+          (charm? (ga-csel m) || two? (ga-csal m)) (ga-cs-ins m os)
+          (two? (ga-carry m)) (k = 3 ? (ga-regw (ga-carry m) os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-un m)) (k = 2 ? (ga-regw (ga-un m) os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-ut m)) (k = 2 ? (ga-ut-ins m os) (scare 'gas-a64-operand [m os]))
           (elem m '(prfm prfum)) (k = 2 ? (ga-prf-ins m os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-ex m ())) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-sx m ())) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
-          (charm? (peep ga-bfm m ())) (k = 4 ? (ga-bfm-ins m os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-bfa m ())) (ga-bfa-ins m os)
+          (two? (ga-ex m)) (k = 2 ? (ga-ex-ins (ga-ex m) os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-sx m)) (k = 3 ? (ga-ex-ins (ga-sx m) os) (scare 'gas-a64-operand [m os]))
+          (charm? (ga-bfm m)) (k = 4 ? (ga-bfm-ins m os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-bfa m)) (ga-bfa-ins m os)
           (two? (ga-mops m)) (ga-mops-ins m (ga-mops m) os)
-          (two? (peep ga-pair m ())) (ga-pair-ins m os)
-          (two? (peep ga-xp m ())) (k = 3 ? (ga-xp-ins m (ga-xp m) os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-sxp m ())) (k = 4 ? (ga-xp-ins m (ga-sxp m) os) (scare 'gas-a64-operand [m os]))
-          (two? (peep ga-casp m ())) (k = 5 ? (ga-casp-ins m (ga-casp m) os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-pair m)) (ga-pair-ins m os)
+          (two? (ga-xp m)) (k = 3 ? (ga-xp-ins m (ga-xp m) os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-sxp m)) (k = 4 ? (ga-xp-ins m (ga-sxp m) os) (scare 'gas-a64-operand [m os]))
+          (two? (ga-casp m)) (k = 5 ? (ga-casp-ins m (ga-casp m) os) (scare 'gas-a64-operand [m os]))
           (ga-lse-ins m (ga-lse m) os)))
    ;; a register a #define named reaches here apart from its arrangement (`v5` `.4s`): one symbol again
    (ga-glue ts) (ts @ (('sym a) . ('sym b) . r) (b 0 = 46 ? (ga-glue (['sym (a + b)] . r)) (['sym a] . ga-glue (['sym b] . r)))
@@ -1292,8 +1292,10 @@
             ('ins m os) (ga-ins m (map (o \ ga-opnd (ga-glue o)) os))
             ()))
 
-   ;; rv64: dst first, the ABI register names, off(base) memory, the csr pseudos
-   (gr-reg s) (peep rv-names (name s) ())
+   ;; riscv: dst first, the ABI register names, off(base) memory, the csr pseudos; rv32 reads
+   ;; the same text, its backend laying ld and sd at the word
+   (grv? tgt) (elem tgt '(rv64 rv32))
+   (gr-reg s) (rv-names (name s))
    (gr-opnd toks)
     (toks @ (('sym s)) (gr-reg s @ r (nom? r ? ['reg r 8] ['sym (name s)]))
             (('ch 40) ('sym b) ('ch 41)) ['mem (gr-reg b) 0]
@@ -1347,7 +1349,7 @@
             ()))
 
    ;; thumb: the same operand grammar as a64 over r0..r12, a register list, a shifted operand
-   (gt-reg s) (peep t32-names (name s) ())
+   (gt-reg s) (t32-names (name s))
    gt-shs (gtab '((lsl shl) (lsr shr) (asr sar) (ror ror)))
    (gt-list toks)                                   ; {r4-r7, lr} -> (r4 r5 r6 r7 lr)
     (: (r t) (t @ ('sym s) (gt-reg s @ x (nom? x ? x (scare 'gas-thumb-register s))) (scare 'gas-thumb-operand toks))
@@ -1385,7 +1387,7 @@
                   (ands ands) (orrs ors) (eors eors) (bic bic) (bics bics) (orn orn) (addw add) (subw sub)))
    gt-sh3 (gtab '((lsl lsl) (lsr lsr) (asr asr)))
    ; bcc: b and a condition, as gas's bne
-   (gt-bcc m) (#(show m) = 3 && (show m) 0 = 98 ? (peep ga-cc (name (snip (show m) 1 3)) ()) ())
+   (gt-bcc m) (#(show m) = 3 && (show m) 0 = 98 ? (ga-cc (name (snip (show m) 1 3))) ())
    (gt-ins m os)
     (#os @ k
        (? (ghas? gt-nils m) [[(gt-nils m)]]
@@ -1586,7 +1588,7 @@
                     [(snip s 0 j) (xa-trim (snip s j #s))])
    (gf-base nm) ((: (g j) (? (j >= #nm) nm (nm j = 1) (snip nm 0 j) (g (j + 1)))) 0)   ; a subsection's section
    (gf-lines tgt src)
-    (elem tgt '(x64 i386 i386m16 rv64) @ hash?
+    (elem tgt '(x64 i386 i386m16 rv64 rv32) @ hash?
        (catmap (ln \ xa-lines (hash? ? (xa-decomment ln) (gcut2 ln 47))) (gsplit (gdecom src) 10)))
    ;; gas's macro language, over a text's lines before anything reads them: .macro/.endm and a
    ;; call (positional or name=value arguments), .irp and .rept, .if/.ifc/.ifnc/.ifeq/.ifne/.ifb/.ifnb with
@@ -1621,9 +1623,9 @@
        (rsub s vt rt) (: n #s                     ; the pieces laid once, a line being any length
                       (go i st acc) (? (i >= n) (cats (rev (snip s st n . acc)))
                                        (gidc? (s i) && (i = 0 || !(gidc? (s (i - 1)))))
-                                        (: j (word s i) k (snip s i j) v (peep vt k ()) q (peep rt k ())
+                                        (: j (word s i) k (snip s i j) v (vt k) q (rt k)
                                            ; an alias keeps the arrangement after it (t0.4s)
-                                           d (xa-idx k 46) q2 (0 < d ? (peep rt (snip k 0 d) ()) ())
+                                           d (xa-idx k 46) q2 (0 < d ? (rt (snip k 0 d)) ())
                                            (go j j ((? (charm? v) (show v) (string? q) q (string? q2) (q2 + snip k d #k) k)
                                                     . snip s st i . acc)))
                                        (go (i + 1) st acc))
@@ -1794,12 +1796,12 @@
                   (: xs (xa-oplist r) v (xa-trim (two? >xs ? <>xs "")) rv (ssub v)
                      ; a register's name (`digest = %rdi`, then `h = g` as the rounds rotate) stands for it after
                      (? (0 < #rv && rv 0 = 37) (pin rq <xs rv, pin sv <xs (), go >l acc)
-                        (gf-ident? v && !(charm? (peep sv v ())))
+                        (gf-ident? v && !(charm? (sv v)))
                          ((peep rq <xs () ? (pin rq <xs ())), go >l (s . acc))   ; an alias: gas-top lays it
                         ; a value over labels (`.set .L__sym_size_f, .-f`) is layout's, not a constant here
                         (trap val <>xs (\ _ _ 'label) @ k
                            (k = 'label ? (go >l (s . acc))
-                              (pin rq <xs (), pin sv <xs k, charm? (peep sv0 <xs ()) ? 0 (pin sv0 <xs k), go >l acc)))))
+                              (pin rq <xs (), pin sv <xs k, charm? (sv0 <xs) ? 0 (pin sv0 <xs k), go >l acc)))))
                  (w = ".irp")
                   (: b (grab >l gf-reps ".endr") xs (xa-oplist r)
                      (go <>b (foldl (\ a v (go (map (x \ psub x [[<xs v]]) <b) a)) acc >xs)))
@@ -1820,7 +1822,7 @@
                              (w = ".ifeq") (vat r acc = 0)
                              ; defined so far: a .set, or a label laid above
                              (elem w '(".ifdef" ".ifndef"))
-                              (: nm (xa-trim r) d (charm? (peep sv nm ()) || any (x \ starts? (xa-trim x) (nm + ":")) acc)
+                              (: nm (xa-trim r) d (charm? (sv nm) || any (x \ starts? (xa-trim x) (nm + ":")) acc)
                                  (w = ".ifdef" ? d !d))
                              (two? (rcmp r)) <(rcmp r)
                              (vat r acc != 0))
@@ -1923,12 +1925,12 @@
                  sh (c ? (filter (k \ u >> k << k = u && u >> k < 65536) (w = 8 ? [0 16 32 48] [0 16])) ())
                  (? (w = 0) s
                     (two? sh) ("movz " + rg + ", #" + show (u >> <sh) + ", lsl #" + show <sh)
-                    (: nm (st 'cur) l (peep lits nm ()) hit (filter (x \ x 1 = w && x 2 = e) l)
+                    (: nm (st 'cur) l (lits nm) hit (filter (x \ x 1 = w && x 2 = e) l)
                        lb (two? hit ? (hit 0 0) (pfx + ".Llit" + show (peep st 'nlit 0)))
                        (two? hit ? 0 (pin st 'nlit (peep st 'nlit 0 + 1), pin lits nm ([lb w e] . l)),
                         "ldr " + rg + ", " + lb))))))
        (pool nm)
-        (: es (rev (peep lits nm ())) c (st 'cur)
+        (: es (rev (lits nm)) c (st 'cur)
            (two? es ? (pin st 'cur nm,
                        emit (catmap (x \ [['dalign (x 1)] ['label (name (x 0))] ['raw (gf-word tgt (x 1) (x 2) rl)]]) es),
                        pin st 'cur c, pin lits nm ())
@@ -2050,7 +2052,7 @@
                    emit [['align al]], pin labs nm ".bss", emit [['label (name nm)]],
                    raw (map (i \ 0) ^sz),
                    pins st 'cur c 'prev pv,
-                   mn = ".comm" && !(elem nm (peep st 'local ())) ? (pin st 'globl (nm . st 'globl)) 0))
+                   mn = ".comm" && (nelem nm (st 'local)) ? (pin st 'globl (nm . st 'globl)) 0))
               ; a fill named (.balign 16, 0x90) is laid as asked, not as nops
               (mn = ".balign") (emit [(['align (num <xs)] + gf-fill xs)])
               (mn = ".p2align") (emit [(['align (1 << num <xs)] + gf-fill xs)])
@@ -2074,13 +2076,13 @@
               ; other size goes unread
               (mn = ".size")
                (two? >xs ?
-                  (trap (\ _ (: f (xa-unquote <xs) ts (gtoks (xa-trim <>xs))
+                  (trap (_ \ (: f (xa-unquote <xs) ts (gtoks (xa-trim <>xs))
                      (? !(any (t \ <t = 'sym || <t = 'lref) ts)
                          (pin st 'sizes ([f (gimm ts)] . peep st 'sizes ()))
                         (gf-sum ts rl @ r
                            (gbad? r || two? >r || <<r != 0 ? 0
                               (gf-norm <><r @ ns
-                                 (? !(elem (f . -1) ns)
+                                 (? (nelem (f . -1) ns)
                                      (: e (filter (p \ >p = 1) ns) s (filter (p \ >p = -1) ns)
                                         (? (#ns != 2 || #e != 1 || #s != 1) 0
                                            (: k (peep st 'szk 0) here (pfx + ".Lsz" + show k)
@@ -2140,7 +2142,7 @@
         (: os (xa-ops (xa-rest t)) c (foldl (\ a o (two? a ? a (dcut o @ d (two? d && diff? (d 1) ? d ())))) () os)
            (sent bs) ((: (g j) (? (j + 4 > #bs) () (snip bs j (j + 4) = [120 86 52 18]) j (g (j + 1)))) 0)
            (? (!(gx86? tgt) || atom? c) ()
-              (trap (\ _ (gx-exactm (st 'md) tgt t)) 0 (\ _ _ ()) @ ok
+              (trap (_ \ (gx-exactm (st 'md) tgt t)) 0 (\ _ _ ()) @ ok
                  ; an immediate read as one name is no constant: push takes `a-b` whole
                  (two? ok && !(c 0 = "$" && any (f \ <f != 'raw || !(all charm? <>f)) ok) ? ()
                     (: u (xa-mnem t + " " + xa-join ", " (map (o \ (dcut o = c ? (c 0 + "0x12345678" + c 2) o)) os))
@@ -2156,7 +2158,7 @@
        ; ..one with a sign-extended byte form starts there, as clang's, and grows to the word form:
        ; [bytes-before-the-byte opcode's-index long-opcode long-width]. () when it has none
        (dshort u)
-        (: md (st 'md) fs (trap (\ _ (gx-exactm md tgt u)) 0 (\ _ _ ()))
+        (: md (st 'md) fs (trap (_ \ (gx-exactm md tgt u)) 0 (\ _ _ ()))
            bs (two? fs && atom? >fs && <<fs = 'raw ? <>(fs 0) ())
            (pfx? b) (elem b '(102 103 38 46 54 62 100 101) || (md = 64 && 64 <= b < 80))
            (past i) (i < #bs && pfx? (bs i) ? (past (i + 1)) i)
@@ -2215,7 +2217,7 @@
        ; displacement, `(_bss - 8) - startup_32` -- a pc-relative fix: one name taken whole, one
        ; label in the field's section taken away, the constant and the field's distance from it the addend
        (wxlay f t)
-        (trap (\ _ ['raw (gf-le (skv f t) (f 2))]) 0
+        (trap (_ \ ['raw (gf-le (skv f t) (f 2))]) 0
               (\ a b (: w (f 2) site (t (f 3)) t1 (offs 1)
                          r (gf-sum (sxp (f 1) 0) (\ _ _ ()))
                          ns (gbad? r || two? >r ? () (gf-norm <><r))
@@ -2235,9 +2237,9 @@
            ; a short jump grows once its label leaves rel8's reach (another section lies a stride
            ; off), this text, or turns global; a short immediate once its value leaves imm8 or is
            ; no constant. neither shrinks, and neither is asked until the pads hold
-           (grow f) (t1 (show (f 2)) @ d (charm? d && !(elem (show (f 2)) (st 'globl)) && fits8 (d - (t1 (f 6) + 2)) ? [f]
+           (grow f) (t1 (show (f 2)) @ d (charm? d && (nelem (show (f 2)) (st 'globl)) && fits8 (d - (t1 (f 6) + 2)) ? [f]
                                            (pin ch 'g 1, [[(f 0) (f 1) (f 2) (f 3) (f 4) (f 4) (f 6) (f 7)]])))
-           (grim f) (trap (\ _ (fits8 (skv f t))) 0 (\ _ _ 0) @ ok
+           (grim f) (trap (_ \ (fits8 (skv f t))) 0 (\ _ _ 0) @ ok
                        (ok ? [f] (pin ch 'g 1, [['wordx (f 1) (f 5) (f 6)] ['raw (snip (f 2) 0 (f 3) + [(f 4)] + snip (f 2) (f 3 + 1) #(f 2))]])))
            (grows _) (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (f \ (? (two? f && <f = 'jx && f 5 = 2) (grow f)
                                                                                      (two? f && <f = 'imx) (grim f)
@@ -2257,7 +2259,7 @@
                   0 (st 'order),
             (? (ch 'c) (again 0)                       ; a chain of pads settles one a pass
                (grows 0, peep ch 'g 0) (again 0)
-               (two? (peep ch 'back ())) (scare 'gas-org-back (ch 'back))
+               (two? (ch 'back)) (scare 'gas-org-back (ch 'back))
                0)))
        ; an instruction over a label difference: the labels beside a `-` read as their offsets,
        ; and what it lays may not move with where its section lands
@@ -2293,7 +2295,7 @@
        ; an alias lays its label beside its target's, in the target's section; a target
        ; that is itself an alias is followed to the label at the end of the chain, and one
        ; this text never labels goes back to the caller
-       am (foldl (\ t al (pin t <al <>al)) {} (peep st 'alias ()))
+       am (foldl (\ t al (pin t <al <>al)) {} (st 'alias))
        (aroot s n) (string? (labs s) || n > 16 || !(am s) ? s (aroot (am s) (n + 1)))
        _ (foldl (\ _ al (: a <al s (aroot <>al 0) nm (labs s)
                           (? (!(string? nm) && am s) (scare 'gas-alias s)   ; a cycle labels nothing
@@ -2302,11 +2304,11 @@
                                 (pin labs a nm,
                                  pin st 'als ([a s 0] . peep st 'als ()),
                                  pin secs nm [<r <>r (catmap (f \ (f = ['label (name s)] ? [['label (name a)] f] [f])) <>>r)])))))
-                0 (peep st 'alias ()))
+                0 (st 'alias))
        ; .size f, L-f: f's end label beside L's
        _ (foldl (\ _ e (: l ['label (name (e 0))] en ['label (fn-end (e 1))]
                           (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (x \ (x = l ? [en x] [x])) <>>r)]))) 0 (st 'order))))
-                0 (peep st 'endat ()))
+                0 (st 'endat))
        ; .set a, s+k: a label of a's own k bytes on from s, in s's section, splitting a run of
        ; bytes there; inside a fix, or any other form, it lays before that with what is left
        (rsplit bs j) (? (atom? bs) [() () j]
@@ -2324,13 +2326,13 @@
                  (labk l (t - off) . fs))))
        (labpos fs off l) (? (atom? fs) () (<fs = l) off (labpos >fs (off + fsz <fs off) l))
        _ (foldl (\ _ a
-                   (: r (trap (\ _ (gf-sum (sxp (sx a) 0) rl)) 0 (\ _ _ 'bad))
+                   (: r (trap (_ \ (gf-sum (sxp (sx a) 0) rl)) 0 (\ _ _ 'bad))
                       (? (starts? a ".L" || string? (labs a) || gbad? r || two? >r) 0
                          (gf-norm <><r @ ns
                             (? (#ns != 1 || >(ns 0) != 1) 0
                                (: l ['label (name <(ns 0))]
                                   (foldl (\ _ nm (secs nm @ r9 (rev <>>r9) @ fs
-                                                    (? (string? (labs a) || !(elem l fs)) 0
+                                                    (? (string? (labs a) || nelem l fs) 0
                                                        (pin labs a nm,
                                                         pin st 'als ([a <(ns 0) <<r] . peep st 'als ()),
                                                         pin secs nm [<r9 <>r9 (rev (labin fs 0 (labpos fs 0 l + <<r) ['label (name a)]))]))))
@@ -2341,7 +2343,7 @@
        (laid? l) (any (nm \ elem l <>>(secs nm)) (st 'order))
        (beside l n) (foldl (\ _ nm (secs nm @ r (pin secs nm [<r <>r (catmap (f \ (f = l ? [n f] [f])) <>>r)]))) 0 (st 'order))
        _ (foldl (\ _ e (e @ [a s k]
-                          (: szs (peep st 'sizes ())
+                          (: szs (st 'sizes)
                              (szof n) (filter (p \ <p = n) szs)
                              (typed? n) (laid? ['label (fn-type n)] || laid? ['label (fn-obj n)])
                              (? (typed? a) 0
@@ -2350,24 +2352,24 @@
                               (? (laid? ['label (fn-end a)] || two? (szof a)) 0
                                  (two? (szof s)) (pin st 'sizes ([a <>(<(szof s))] . szs))
                                  (beside ['label (fn-end s)] (labk ['label (fn-end a)] k)))))))
-                0 (rev (peep st 'als ())))
+                0 (rev (st 'als)))
        (sec nm) (secs nm @ r [nm <r <>r (rev <>>r)])
        (exec? l) (0 < <>(secs (labs l)) & 4)
        def (filter (l \ string? (labs l)) (uniq (rev (st 'globl))))   ; .weak and .globl may both name one
        ; a .globl constant never labelled: an absolute symbol, (name value)
        ; ..and any other constant a local one, (name value 0)
-       habs (catmap (p \ (? (string? (labs <p)) () (elem <p (st 'globl)) [p] [[<p <>p 0]])) (rev (peep st 'abs ())))
+       habs (catmap (p \ (? (string? (labs <p)) () (elem <p (st 'globl)) [p] [[<p <>p 0]])) (rev (st 'abs)))
        ; a section the text named stays though empty: a linker script may lay it
        ; the aliases onto names this text never labels ride a fifth element, the absolute
        ; symbols a sixth, and the constant sizes a seventh, (name size), only when there are any
-       hsz (rev (peep st 'sizes ()))
+       hsz (rev (st 'sizes))
        ; ..and an eighth: the .globl names nothing here defines, and each name's visibility
-       habn (map cap (peep st 'abs ())) xaln (map cap (peep st 'xal ()))
-       hund (filter (l \ !(string? (labs l) || elem l habn || elem l xaln || elem l (peep st 'weak ()))) (uniq (rev (st 'globl))))
-       hvis (peep st 'vis ())
+       habn (map cap (st 'abs)) xaln (map cap (st 'xal))
+       hund (filter (l \ !(string? (labs l) || elem l habn || elem l xaln || elem l (st 'weak))) (uniq (rev (st 'globl))))
+       hvis (st 'vis)
        h8 (two? hund || two? hvis)
-       ([(filter (r \ two? (r 3) || elem <r (peep st 'named ())) (map sec (rev (st 'order))))
-         (filter exec? def) (filter (l \ !(exec? l)) def) (rev (peep st 'weak ()))]
+       ([(filter (r \ two? (r 3) || elem <r (st 'named)) (map sec (rev (st 'order))))
+         (filter exec? def) (filter (l \ !(exec? l)) def) (rev (st 'weak))]
         + (peep st 'xal () @ x (two? x || two? habs || two? hsz || h8 ? [(rev x)] ()))
         + (two? habs || two? hsz || h8 ? [habs] ())
         + (two? hsz || h8 ? [hsz] ())
@@ -2378,7 +2380,7 @@
     (? (tgt = 'x64) (gx-text src)
        (g32? tgt) (gx-text32 tgt src)
        (: lc {}
-          f (? (tgt = 'a64) ga-line (tgt = 'rv64) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
-          fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (tgt = 'rv64)))
+          f (? (tgt = 'a64) ga-line (grv? tgt) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
+          fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (grv? tgt)))
           (gthumb? tgt ? (gt-asis tgt fs) fs))))
 ) ; module 'holo

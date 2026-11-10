@@ -70,21 +70,16 @@ piece. ~14k lines of love (the laws in test/law/moon.l).
   **A read-modify-write may not duplicate its lvalue.** `x op= y` desugars to
   `(asn x (bin op x y))` and `++x` to the same — exact only when evaluating the lvalue leaves
   no trace, so `calm?` gates it and the other two doors take the address once: `++`/`--` ride
-  `('post lv step)`, `op=` stays whole as `('rmw op lv rhs)` for gen to moor.
-* **gen.l** — AST → holo IR (pure), **typed**: `cgexpr` answers
-  `(type forms)`, so pointer arithmetic scales by pointee size, a dereference loads by pointee
-  width, and an array decays to an address. Lvalues have one door (`clval`: the address in r0
-  plus the pointee type), through which `x`, `*p` and `a[i]` all assign — and through which
-  `('moor off ty)`, gen's own lvalue for an address already parked in a frame temp, lets an
-  `('rmw ...)` reuse every store lane there is without evaluating its target twice. The ALU
-  stays 64-bit —
-  sound because signed overflow is UB — and widths bite only at memory and casts. This is also
-  where the register story lives (its own section below).
-* **lo.l, nm.l, ra.l** — x64's backend: lo.l lowers a fn to three-address forms over vregs, nm.l
+  `('post lv step)`, `op=` stays whole as `('rmw op lv rhs)` for lo.l to take once.
+* **gen.l** — the kits, type and table helpers lo.l calls, the unit's driver (`cgen-core`,
+  `cgfn`), and the passes after allocation that lay the frame and tidy its code (`csframe`,
+  `unframe`, `csdrop`, `swrap` and so on).
+* **lo.l, nm.l, ra.l** — the backend: lo.l lowers a fn to three-address forms over vregs, **typed**:
+  a value is `(type vreg forms)`, so pointer arithmetic scales by pointee size, a dereference
+  loads by pointee width, and an array decays to an address. nm.l
   normalises them (copies, literals, widths, indexed loads), ra.l allocates over live ranges with
   holes (spill weights by loop depth, splits across calls, the entry's fast region in caller-saved
-  twins). A fn it refuses takes gen's own build; `MOON_BACKEND=old` takes it for every fn, and
-  test/law/moonlo.l holds its invariants.
+  twins). A fn with no lane is refused by name, and test/law/moonlo.l holds the invariants.
 * **clay.l** — C as love data (doc/misc/clay.md).
 * **stage.l** — the pipeline's stages, typed: each pass's signature (input stage → output
   stage). The moon gate checks gen.l *as data* against it, so a new pass declares its sig there
@@ -357,61 +352,35 @@ argv/envp/auxv before main — no link-time flag anywhere, the weak machinery IS
 * **rbx (holo r3) is callee-saved** and every function owns frame slot -8 for it; the gate
   links a mooncc callee against an `-O2` caller holding a loop bound live in ebx.
 
-## the register story (the one build)
+## the register story
 
-One world on every target since 2026-08-28 (the moon-ssa arc, closed): every seating
-decision is made ONCE, on the AST, before any machine form exists — then one build per
-function under those seats.
+Every function on every target takes one path, and a form it has no lane for is refused by name.
 
-* **alive** — the single analysis. Per-statement liveness (the wrapsets), call
-  crossings split hard/soft (a soft site costs its callee's TRANSITIVE hard count —
-  a spliced body brings its memcpys; a musttail never splices, the contract owes the
-  jump), the fn-level hard count as a PATH MAXIMUM (if takes its heavier arm, loops
-  weigh ×8), read/touch censuses for ranking, and the protocol-quiet and d128 flags.
-  One answer tuple feeds everything below.
-* **upar** — the param verdicts. A home-register identity rides free; an arrival
-  rides where staging can never clobber it (the arrival leaves the pool); a
-  protocol-quiet body lets a quad arrival (r0-r3) ride; an int/uint param rides its
-  arrival with one entry cvt while the file stays deep. d128 material refuses every
-  verdict on the ISA whose mul/div pin the rax:rdx pair — a 3-operand d128 ISA
-  keeps its verdicts.
-* **ulloc** — the locals allocator. Raw mention counts rank (the loop weight breaks
-  ties), disjoint spans share a seat, a name crossing a HARD call never takes a
-  caller-saved seat, and a pool floor keeps expressions from going dry.
-* **ubuild** — one build under the seats. The quad re-read (`qclob?`) verifies every
-  ridden r0-r3 arrival against the built forms — its only legitimate def is its own
-  entry cvt — and demotes ONCE on a surprise; the numbering guards (statement and
-  decl ticks against alive's totals) bare the whole build instead of guessing. A
-  memory sret and varargs take the bare spill build (one build there too, no seats).
-* **the armed shadow** — every home reserves a spill slot, but the wrap attaches at
-  call EMISSION, filtered by the statement's wrapset: a spliced call never wraps,
-  and a home dead across a call keeps its register.
-* **after the build** — sibcall (a musttail is owed its jump), the IR sweeps
-  (in-build on x64; a64 sweeps at the post-choice seam where the frame base is
-  settled fp, and `tailst` peels the dead straight-line stores a musttail leaves
-  behind), repack's per-def chains (x64: a store-to-loads chain promotes over its
-  OWN range, so one cell's call-free chain leaves the frame while its crossing
-  sibling keeps the cell), frame elision, and the cs upkeep.
+* **lo.l** lays forms over vregs. A physical register appears only in a copy beside the form that
+  demands it: arguments, results, returns, params on entry, a shift's count.
+* **nm.l** fuses copy-then-op to three addresses, propagates copies and constants, folds address
+  arithmetic into loads and stores, and drops extensions of values already in range.
+* **ra.l** works out liveness per form and live ranges with holes, then runs a linear scan in start
+  order. Each target's file lists caller-saved registers first, since a callee-saved one costs its
+  save. A physical register's live points bar every vreg live at one. A spilled vreg gets a slot,
+  stored after each write and reloaded before each read, and the scan runs again; one spilled
+  across calls splits there first when that weighs less. Spill weights follow loop depth.
+* **the entry's fast region**: the forms the entry reaches through no call. A vreg set there and
+  needed later lives in a caller-saved twin inside the region, copied back on each edge out, so
+  the region writes no callee-saved register and `swrap` can move the frame onto its exits.
+* **after the scan**: `sibcall` (a musttail is owed its jump), `csframe` lays the saves,
+  `unframe` drops the frame link where nothing needs it, `cskeep` checks every callee-saved
+  register comes back, and `csdrop` removes saves nothing wrote.
 
-The economics that shaped this: the two halves buy different things -- the pool
-half buys cycles with instructions, the cs half buys latency at flat count.
+**The float file.** A double stays in a float register, never a gp word. A constant is one load off
+the unit's rodata pool (`ldsdl`, labels `.D<pattern>`), through `la` + `ldsd` on a64. Every x64 xmm
+and riscv's whole float file are caller-saved; a64 and t32 keep d8-d15 for their saves. A select is
+a set, cmov or csel where its arms allow, and minsd/maxsd stay x64's, since fmin's NaN answers
+differ from C's ternary.
 
-* **the float file (x64 and a64)** — a double is a double in a register, never a gp word. The
-  protocol pair f0/f1 carries expression results; f2 is the narrow scratch; f3..f7 park
-  a binop's left operand across its right (`fshut`, the gp park only past a call);
-  f8..f15 home double locals and params (`fhomable?`, ulloc's `fok`: once-declared,
-  zero-crossing, two touches -- all xmm are caller-saved, so a home never crosses a call
-  and never joins g 'homes). A simple right operand (a home, a constant, one load) is
-  read direct (`fsimple`); a double constant is one load off the unit's rodata pool
-  (`ldsdl`, labels `.D<pattern>`). Loops are bottom-tested with a 64-byte-aligned head
-  under the entry jump, a select is a set/minsd/maxsd/cmov where its arms allow
-  (`csel`), and addrfold folds a lea into the load or store it feeds even at a distance.
-  a64 rides the same lanes on its d-file: parks in f17..f23, homes in f24..f31 (v8..v15 owe
-  a save and stay out), a constant through `la` + `ldsd`, the indexed float forms as
-  register-offset `ldr`/`str` (a scale of 1 or the element's size, no displacement -- the
-  gp `ldx`/`stx` take that word too now), `cmov` as `csel`; minsd/maxsd stay x64's (fmin's
-  NaN answers differ from C's ternary). `MOON_DUMP=<fn>` prints a function's forms at the
-  seams and ulloc's seating.
+`MOON_LOLOG=1` prints a line per function, its name and `ok` or why it was refused; `=2` prints its
+forms too. `MOON_DUMP=<fn>` prints a function's forms at the seams. test/law/moonlo.l holds the
+invariants: `MOON_LOLAW=1` pins what breaks on `g 'lolaw`.
 
 ## sibcalls, and the flat stack
 

@@ -4,7 +4,7 @@
 # syncconfig and Image in an empty output dir: every unit by mooncc (its asm by holo) through kcc.l,
 # the link by love's ld, objcopy, strip, nm, objdump and readelf by kore, the host programs by
 # mooncc, flex and bison as love's lex and yacc, perl's scripts ported, the commands through lush
-# with kore's verbs. clang keeps what mooncc refuses, one unit at a time, each named in
+# with kore's verbs. clang keeps what mooncc refuses or never takes (-E, -S), each file it lays named in
 # .hearts/kcc.log and listed here; lld links the arm32 compat vdso.
 # the Image then boots under qemu virt to an init of ours (mooncc, love's cpio), which says so and
 # powers off. a green run keeps the Image for test_hearts_boot, named in $C/Image-$V.green.
@@ -114,7 +114,7 @@ mkdir -p "$O"
 I=$O/arch/arm64/boot/Image
 [ -f "$I" ] || fail "hearts made no Image"
 n=0; [ -f "$O/.hearts/kcc.log" ] && n=$(wc -l < "$O/.hearts/kcc.log")
-[ "$n" -eq 0 ] || { echo "hearts: $n units are clang's:"; sed 's/^/  /' "$O/.hearts/kcc.log"; }
+[ "$n" -eq 0 ] || { echo "hearts: $n files are clang's:"; sed 's/^/  /' "$O/.hearts/kcc.log"; }
 
 # pid 1: say so, then power off
 d=$B/boot; mkdir -p "$d"

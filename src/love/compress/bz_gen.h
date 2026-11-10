@@ -9,7 +9,8 @@ struct bz_tab {
  uint32_t limit[22], base[22]; uint16_t perm[258]; unsigned maxl; };
 struct bz_d {
  uint32_t tt[BZ_TN]; struct bz_tab tab[6]; uint8_t sel[BZ_MAXSEL]; uint32_t crct[256];
- uint32_t cnt[256], cf[256], alpha, ns, nb, bc; uint8_t seq[256], yy[256], len[258], pos[6]; };static inline int bw_byte(struct bz_w *r, uint8_t b) {
+ uint32_t cnt[256], cf[256], alpha, ns, nb, bc, want, p, u, crc, same; int last;
+ uint8_t seq[256], yy[256], len[258], pos[6]; };static inline int bw_byte(struct bz_w *r, uint8_t b) {
  unsigned int lim = BZ_LIM;
  uintptr_t c;
  uint8_t *q;
@@ -301,9 +302,8 @@ static int bz_dsyms(struct bz_r *r, struct bz_d *d, unsigned int level) {
  }
  return 2;
 }
-static int bz_dout(struct bz_d *d, struct bz_w *w, unsigned int nb, unsigned int orig, unsigned int want) {
- unsigned int c, s, u, j, x, p, crc, y, same, tn = BZ_TN;
- int last;
+static int bz_dlink(struct bz_d *d, unsigned int nb, unsigned int orig) {
+ unsigned int c, s, u, j, x, tn = BZ_TN;
  if (tn < nb)
   return 2;
  if (nb <= orig)
@@ -321,11 +321,66 @@ static int bz_dout(struct bz_d *d, struct bz_w *w, unsigned int nb, unsigned int
   d->tt[j] = d->tt[j] | u << 8;
   d->cf[x & 255] = j + 1;
  }
- p = d->tt[orig] >> 8;
- crc = 4294967295;
- last = -1;
- same = 0;
- for (u = 0; u < nb; u++) {
+ d->p = d->tt[orig] >> 8;
+ d->crc = 4294967295;
+ d->last = -1;
+ d->same = 0;
+ d->u = 0;
+ return 0;
+}
+static int bz_dblock(struct bz_d *d, struct bz_r *r, unsigned int level) {
+ unsigned int want, orig, x, nb;
+ if ((uintptr_t) -1 - 9 < r->n)
+  return 2;
+ if ((uintptr_t) -1 >> 4 < r->n + 9)
+  return 2;
+ if (r->n + 9 < r->i)
+  return 2;
+ if (64 < r->k)
+  return 2;
+ want = br_get(r, 32);
+ x = br_get(r, 1);
+ if (x)
+  return 2;
+ orig = br_get(r, 24);
+ x = bz_dhead(r, d);
+ if (x)
+  return x;
+ x = bz_dsyms(r, d, level);
+ if (x)
+  return x;
+ x = br_past(r);
+ if (x)
+  return 3;
+ nb = d->nb;
+ x = bz_dlink(d, nb, orig);
+ if (x)
+  return x;
+ d->want = want;
+ return 0;
+}
+static int bz_dwalk(struct bz_d *d, struct bz_w *w, uintptr_t room) {
+ unsigned int c, u, u0, j, x, p, nb, crc, y, same, want, tn = BZ_TN;
+ int last;
+ if (w->oc < w->on)
+  return 2;
+ nb = d->nb;
+ if (tn < nb)
+  return 2;
+ p = d->p;
+ crc = d->crc;
+ last = d->last;
+ same = d->same;
+ u0 = d->u;
+ for (u = u0; u < nb; u++) {
+  if (room <= w->on) {
+   d->u = u;
+   d->p = p;
+   d->crc = crc;
+   d->last = last;
+   d->same = same;
+   return 1;
+  }
   if (nb <= p)
    return 2;
   x = d->tt[p];
@@ -351,42 +406,12 @@ static int bz_dout(struct bz_d *d, struct bz_w *w, unsigned int nb, unsigned int
    last = c;
   }
  }
+ d->u = nb;
  if (w->bad != 0)
   return -1;
+ want = d->want;
  if (~crc != want)
   return 4;
- return 0;
-}
-static int bz_dblock(struct bz_d *d, struct bz_r *r, unsigned int level, struct bz_w *w) {
- unsigned int want, orig, x, nb;
- if ((uintptr_t) -1 - 9 < r->n)
-  return 2;
- if ((uintptr_t) -1 >> 4 < r->n + 9)
-  return 2;
- if (r->n + 9 < r->i)
-  return 2;
- if (64 < r->k)
-  return 2;
- if (w->oc < w->on)
-  return 2;
- want = br_get(r, 32);
- x = br_get(r, 1);
- if (x)
-  return 2;
- orig = br_get(r, 24);
- x = bz_dhead(r, d);
- if (x)
-  return x;
- x = bz_dsyms(r, d, level);
- if (x)
-  return x;
- x = br_past(r);
- if (x)
-  return 3;
- nb = d->nb;
- x = bz_dout(d, w, nb, orig, want);
- if (x)
-  return x;
  d->bc = want;
  return 0;
 }

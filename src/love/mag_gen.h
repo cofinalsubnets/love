@@ -1,0 +1,134 @@
+// mag_gen.h -- laid by src/love/mag.l, `make mx`. edit that file.
+static love_inline int mag_add_ge(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
+ uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
+ dlimb s, c;
+ i = 0;
+ c = 0;
+ while (i < m) {
+  s = (dlimb) a[i] + (dlimb) b[i] + c;
+  r[i] = (love_limb) s;
+  c = s >> limb_bits;
+  i++;
+ }
+ while (i < n) {
+  s = (dlimb) a[i] + c;
+  r[i] = (love_limb) s;
+  c = s >> limb_bits;
+  i++;
+ }
+ if (c) {
+  r[i] = (love_limb) c;
+  i++;
+ }
+ return (int) i;
+}
+static love_noinline int mag_sub(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
+ uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
+ dlimb s, c;
+ i = 0;
+ c = 0;
+ while (i < m) {
+  s = (dlimb) a[i] + limb_base - ((dlimb) b[i] + c);
+  r[i] = (love_limb) s;
+  c = 1 - (s >> limb_bits);
+  i++;
+ }
+ while (i < n) {
+  s = (dlimb) a[i] + limb_base - c;
+  r[i] = (love_limb) s;
+  c = 1 - (s >> limb_bits);
+  i++;
+ }
+ return (int) n;
+}
+static love_noinline int mag_mul_add_small(love_limb *a, int na, love_limb ml, love_limb ad) {
+ uintptr_t n = (uintptr_t) na, i;
+ dlimb s, c;
+ i = 0;
+ c = (dlimb) ad;
+ while (i < n) {
+  s = (dlimb) a[i] * (dlimb) ml + c;
+  a[i] = (love_limb) s;
+  c = s >> limb_bits;
+  i++;
+ }
+ if (c) {
+  a[i] = (love_limb) c;
+  i++;
+ }
+ return (int) i;
+}
+static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
+ uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
+ i = n;
+ while (m < i) {
+  i = i - 1;
+  if (a[i]) {
+   return 1;
+  }
+ }
+ while (0 < i) {
+  i = i - 1;
+  if (a[i] != b[i]) {
+   if (b[i] < a[i]) {
+    return 1;
+   } else {
+    return 0;
+   }
+  }
+ }
+ return 1;
+}
+static love_inline love_limb mag_divstep(love_limb *w, love_limb const *vn, int nn) {
+ uintptr_t n = (uintptr_t) nn, i;
+ love_limb q;
+ dlimb s, t, c, b;
+ int x;
+ q = mag_qhat(w, vn, nn);
+ i = 0;
+ c = 0;
+ b = 0;
+ while (i < n) {
+  s = (dlimb) q * (dlimb) vn[i] + c;
+  t = (dlimb) w[i] + limb_base - ((dlimb) (love_limb) s + b);
+  w[i] = (love_limb) t;
+  b = 1 - (t >> limb_bits);
+  c = s >> limb_bits;
+  i++;
+ }
+ t = (dlimb) w[n] + limb_base - (c + b);
+ w[n] = (love_limb) t;
+ b = 1 - (t >> limb_bits);
+ while (b) {
+  i = 0;
+  c = 0;
+  while (i < n) {
+   s = (dlimb) w[i] + (dlimb) vn[i] + c;
+   w[i] = (love_limb) s;
+   c = s >> limb_bits;
+   i++;
+  }
+  t = (dlimb) w[n] + c;
+  w[n] = (love_limb) t;
+  b = b - (t >> limb_bits);
+  q = q - 1;
+ }
+ while (1) {
+  x = mag_ge(w, nn + 1, vn, nn);
+  if (!x) {
+   break;
+  }
+  i = 0;
+  b = 0;
+  while (i < n) {
+   t = (dlimb) w[i] + limb_base - ((dlimb) vn[i] + b);
+   w[i] = (love_limb) t;
+   b = 1 - (t >> limb_bits);
+   i++;
+  }
+  t = (dlimb) w[n] + limb_base - b;
+  w[n] = (love_limb) t;
+  q = (love_limb) (q + 1);
+ }
+ return q;
+}

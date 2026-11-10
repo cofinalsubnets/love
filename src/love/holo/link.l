@@ -26,7 +26,7 @@
    ; low) where RELA's splits at a word, and REL has no `rl-add`, its addend in the field.
    ; a row is (offset width), a lone scalar a one-element row; presence is `two?`.
    (ld-cls c) (foldl (t \ (a . u) \ pin t a u) {} c)
-   (ld-row fs nm) (peep fs nm ())
+   (ld-row fs nm) (fs nm)
    (ld-n fs nm) (ld-row fs nm @ r (two? r ? <r (scare 'link-field nm)))
    (ld-f fs s b nm)
     (ld-row fs nm @ r (two? r ? (rlew s (b + <r) <>r) (scare 'link-field nm)))
@@ -51,6 +51,9 @@
                     (sh-size 20 4) (sh-link 24 4) (sh-info 28 4) (sh-align 32 4) (sh-esz 36 4)
                     (sy-name 0 4) (sy-info 12 1) (sy-shndx 14 2) (sy-val 4 4) (sy-size 8 4)
                     (rl-off 0 4) (rl-kind 4 1) (rl-sym 5 3)))
+   ; riscv's ELF32 is RELA: the REL entry and an addend word
+   elf32rf (foldl (t \ (a . u) \ pin t a u) (ld-cls '((rl-ent 12) (rl-ty 4) (rl-add 8 4)))
+                  (filter (p \ !(elem <p '(rl-ent rl-ty))) (map (k \ (k . elf32f k)) (keys elf32f))))
    (ld-cstr s i) (: j (subidx s "\0" i) (snip s i (? (j < 0) #s j)))
    (ld-zeros n) (n >= 1 ? (0 . ld-zeros (n - 1)))
    (ld-align a v) (a < 2 ? v (v % a @ r (r = 0 ? v (v + a - r))))
@@ -74,7 +77,7 @@
    ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
    (ld-obj id s rels?)
     (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
-       fs (? (s 4 = 2) elf64f (s 4 = 1) elf32f (scare 'link-elf-class id))
+       fs (? (s 4 = 2) elf64f (s 4 = 1) (elem (rle16 s 18) '(243 94) ? elf32rf elf32f) (scare 'link-elf-class id))
        (f b r) (: i (b + <r) w <>r (? (w = 4) (rle32 s i) (w = 8) (rle64 s i) (w = 2) (rle16 s i) (rdle s i w)))
        (fx nm) (ld-row fs nm)
        shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
@@ -106,16 +109,16 @@
                   ; 'symr reads afresh, for a pass over them all
                   (: g (spread (map (i \ row (i + nl)) ^(n - nl))) memo {}
                      (sym i) (? (i >= nl) (g (i - nl))
-                                (: m (peep memo i ())
+                                (: m (memo i)
                                    (? (two? m) m (: v (row i) _ (pin memo i v) v))))
                      (pin ob 'symr row, pin ob 'syms sym))
                   (pin ob 'syms (spread (map row ^n))))))
-       rty (? (s 4 = 2) 4 9) re (ld-n fs 'rl-ent)
+       rty (ld-n fs 'rl-ty) re (ld-n fs 'rl-ent)
        ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
        ; entries i to j of the section r holds
        (ents r i j) (: (go k acc) (? (k < i) acc
                                      (: e (r 3 + re * k)
-                                        (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (s64 (f e ad)))] . acc))))
+                                        (go (k - 1) ([(f e ro) (f e rk) (f e rs) (? (two? ad) (f e ad @ v (<>ad = 4 && 2147483647 < v ? (v - 4294967296) (s64 v))))] . acc))))
                        (go (j - 1) ()))
        _ (? rels? (each ^shnum (i \ (: r (sec i)
                                        (? (r 1 != rty) 0
@@ -151,7 +154,9 @@
                           (549 4 tphi12) (550 4 tplo12) (551 4 tplo12nc) (553 4 tpst0) (555 4 tpst1)
                           (557 4 tpst2) (559 4 tpst3) (571 4 tpst4) (541 4 gottprel21) (542 4 gottprel12)))
             ; call_plt spans the auipc pair
-            243 (ld-cls '((2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
+            243 (ld-cls '((1 4 abs32) (2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
+            ; slot0 is a j's or a call0's offset, the opcode in the field says which
+            94 (ld-cls '((1 4 abs32) (20 3 slot0)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
             40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc)))
@@ -163,7 +168,7 @@
              'tpst2 '(nc 2) 'tpst3 '(nc 3) 'tpst4 '(nc 4) 'gottprel21 '(movz 16) 'gottprel12 '(movk 0)}
    ld-tpkinds ('(tpoff tpoff32 gottpoff) + keys ld-a64tp)
    ; machine, kind -> its row, or a scare
-   (ld-rk mach kind) (: t (peep ld-rtab mach ()) r (? (t = ()) () (peep t kind ()))
+   (ld-rk mach kind) (: t (ld-rtab mach) r (? (t = ()) () (t kind))
                         (two? r ? r (scare 'link-reloc kind)))
    ; a RELA field: row r, the field's old bytes bs, S+A, P -> its bytes, () out of reach
    (ld-fix be r bs sa p)
@@ -270,7 +275,7 @@
    ;                       on a rel, where it rides in the field instead
    ; layout pins 'base later, section index -> load address
    (ld-read id s mach)
-    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64) 4 9)
+    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94)) 4 9)
        _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
        secs {} lanes {} drops {}
        ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach}
@@ -515,7 +520,7 @@
                          (scare 'link-sym-section nm))
                     a (peep (peep ob 'base 0) shx 0 + sy 4)
                     w (bind = 2) e (sy 2 = 6 ? [a w 'tls] [a w])
-                    old (peep glo nm ())
+                    old (glo nm)
                     ((? (atom? old) (pin glo nm e)
                         w 0
                         (old 1) (pin glo nm e)
@@ -538,8 +543,9 @@
         xt))
 
    ; resolve a name: the symbol book, or a bracket: the nif region (n0..n1), the -pie
-   ; relative-reloc table (r0..r1, empty without -pie) moonlibc's startup walks, or ld's
-   ; generic __start_X/__stop_X over a section named X.
+   ; relative-reloc table (r0..r1, empty without -pie) moonlibc's startup walks, a bare
+   ; link's .bss (xt's "__bss", for a startup that clears it), or ld's generic
+   ; __start_X/__stop_X over a section named X.
    (ldres glo n0 n1 r0 r1 xt nm)
     (glo nm @ r
        (? (two? r) <r
@@ -547,6 +553,8 @@
           (nm = "__stop_love_nifs") n1
           (nm = "__start_love_rela") r0
           (nm = "__stop_love_rela") r1
+          (elem nm '("__bss_start__" "__bss_end__"))
+           (xt "__bss" @ v (two? v ? (nm = "__bss_start__" ? <v <>v) (scare 'link-undef nm)))
           (: x (nm @ ("__start_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<v]))
                      ("__stop_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<>v]))
                      ())
@@ -630,7 +638,7 @@
                     ; the thread-pointer kinds: S + A from tp
                     _ (elem k ld-tpkinds && !(charm? tp) ? (scare 'link-tls <sy))
                     ; ..and a thread-local takes no other: a plain read of one is its template's
-                    _ (!(elem k ld-tpkinds) && (sy 2 = 6 || sy 3 = 0 && elem 'tls (glo <sy)) ?
+                    _ ((nelem k ld-tpkinds) && (sy 2 = 6 || sy 3 = 0 && elem 'tls (glo <sy)) ?
                        (scare 'link-tls-plain <sy))
                     ; GOTTPOFF's mov or add from the got, relaxed as ld does to the same op on an
                     ; immediate: the three bytes ahead of the field rewritten
@@ -647,7 +655,7 @@
                     _ (? (relbox && abs64? && dyn = 1)
                           (wu ? 0 (pin relbox 0 ([(base + ro) ix (ix ? ad sa)] . relbox 0)))
                          (relbox && abs64?) (pin relbox 0 (base + ro . relbox 0))
-                         (charm? ix && !(elem kind (relbox 'br))) (scare 'link-import-addr <sy))
+                         (charm? ix && nelem kind (relbox 'br)) (scare 'link-import-addr <sy))
                     ; an abs32 site cannot be slid by a 64-bit base
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
                     ; ..nor a site in .rodata, which the startup cannot write: a -fno-pie object's
@@ -720,7 +728,7 @@
    (ld-nabs objs)
     (foldl (\ a ob (: t (peep ld-rtab (peep ob 'mach 0) {})
                       (foldl (\ a2 tr (foldl (\ a3 e (peep t (e 1) () @ r (two? r && (r 1 == 'abs || r 1 == 'w32) ? (a3 + 1) a3))) a2 >tr))
-                             a (peep ob 'relas ()))))
+                             a (ob 'relas))))
        0 objs)
 
    ; -- .comment, the producer record: NUL-separated strings, the inputs' deduped ahead of
@@ -834,11 +842,11 @@
                           (k + 1)))
                 4294967296 synth)
        dmap (: t {} _ (each descs (dd \ pin t (dd 2) dd)) t)
-       (expand b) (: dd (dmap b) (ld-order (rev (peep bk <dd ())) (b 3)))
+       (expand b) (: dd (dmap b) (ld-order (rev (bk <dd)) (b 3)))
        _ (each os
-            (t \ (: _ (pin t 'isds (map expand (filter (b \ <b = 'in) (t 'body))))
-                    (pin t 'steps
-                      (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body))))))
+            (t \ (pin t 'isds (map expand (filter (b \ <b = 'in) (t 'body))),
+                  pin t 'steps
+                   (foldr (\ b acc (? (<b = 'in) (expand b + acc) (b . acc))) () (t 'body)))))
        [os (rev (orph 'l))])
 
    ;; --- 64-bit words. & is wrong on a bignum >= 2^63, so the bit ops go by 32-bit halves
@@ -859,12 +867,12 @@
    (ld-sym env nom)
     (: v (peep (env 'sv) nom ())
        (? (whole? v) v
-          (: g ((env 'gv) nom) (? (whole? g) g (: _ (pin env 'undef 1) 0)))))
-   (ld-osv env nm k) (: r (peep (env 'osv) nm ()) (? (two? r) (r k) (: _ (pin env 'undef 1) 0)))
+          (: g ((env 'gv) nom) (? (whole? g) g (pin env 'undef 1, 0)))))
+   (ld-osv env nm k) (: r (peep (env 'osv) nm ()) (? (two? r) (r k) (pin env 'undef 1, 0)))
    (ld-ev env e)
     (? (whole? e) (ld-w e)
        (string? e) (? (e = ".") (env 'dot)
-                      (e = "SIZEOF_HEADERS") (: h (peep env 'hdrs ()) (? (whole? h) h (scare 'link-headers e)))
+                      (e = "SIZEOF_HEADERS") (: h (env 'hdrs) (? (whole? h) h (scare 'link-headers e)))
                       (ld-sym env e))
        (: o <e (a u) (ld-ev env (e 1)) (b u) (ld-ev env (e 2))
           (? (o = '+) (ld-w (a 0 + b 0)) (o = '-) (ld-w (a 0 - b 0)) (o = '*) (ld-w (a 0 * b 0))
@@ -920,7 +928,7 @@
        ref (: t {} _ (each (ld-walk ld-creads flat ()) (n \ pin t n 1)) t)
        ps (ld-walk (\ c a (? (<c = 'provide) (c . a) a)) flat ())
        tk {}
-       (want? nm) (!(peep tk nm 0) && !(two? (peep glob nm ())) && (peep und nm 0 > 0 || peep ref nm 0))
+       (want? nm) (!(peep tk nm 0) && !(two? (glob nm)) && (peep und nm 0 > 0 || peep ref nm 0))
        (go u)
         (: n (foldl (\ k c (? (want? (c 1))
                               (: _ (pin tk (c 1) 1) _ (each (ld-reads (c 2) ()) (x \ pin ref x 1)) (k + 1))
@@ -967,8 +975,8 @@
                   (? (<c != 'osec) pf
                      (: t <>c mem (filter (x \ mflags x >= 0) (t 'steps))
                         (? (t 'name = "/DISCARD/"
-                            || (all ghost? mem && !(elem (t 'name) named) && !(any held? (t 'body))))
-                           (: _ (pin t 'dead 1) pf)
+                            || (all ghost? mem && nelem (t 'name) named && !(any held? (t 'body))))
+                           (pin t 'dead 1, pf)
                            (: fl (? (atom? mem) (pf & 3) (foldl (\ a x (a | mflags x)) 0 mem))
                               ty (: ts (map mtype mem) nb (filter (y \ y != 8) ts)
                                     (? (atom? ts) 1 (atom? nb) 8 <nb))
@@ -985,9 +993,9 @@
        isa (env 'isa) msa (env 'msa) sv (env 'sv) ssec (env 'ssec) stype (env 'stype)
        ; the address of byte off of input section si of object oi, or () if not laid
        (at oi si off)
-        (: k (oi * 65536 + si) a (peep isa k ())
+        (: k (oi * 65536 + si) a (isa k)
            (? (whole? a) (a + off)
-              (: m (peep im k ())
+              (: m (im k)
                  (? (two? m)
                     (: st (m 1)
                        (go lo hi) (? (hi - lo < 2) lo (: c ((lo + hi) // 2) (? (st c > off) (go lo c) (go c hi))))
@@ -995,7 +1003,7 @@
                        (? (#st = 0) (msa <m + off) (msa <m + m 2 i + off - st i)))
                     ()))))
        (gv nom)
-        (: g (peep glob nom ())
+        (: g (glob nom)
            (? (atom? g) ()
               (: r (ot <g 'syms (g 1)) sh (r 3)
                  (? (sh = 65521) (r 4) (at <g sh (r 4))))))
@@ -1003,12 +1011,12 @@
        ; the output section a value is relative to, () when absolute, as lld carries it:
        ; + and & | keep the relative side, a difference of two relatives is absolute,
        ; ALIGN(x, a) keeps x's, ADDR names its section, and . is the last section's
-       (osec-of oi sh) (? (sh = 65521 || sh = 0) () (: k (oi * 65536 + sh) n (peep osof k ())
+       (osec-of oi sh) (? (sh = 65521 || sh = 0) () (: k (oi * 65536 + sh) n (osof k)
                                                      (? (string? n) n
-                                                        (: m (peep im k ()) (? (two? m) (peep mof <m ()) ())))))
+                                                        (: m (im k) (? (two? m) (mof <m) ())))))
        (symsec nom)
-        (? (whole? (peep sv nom ())) (: q (peep ssec nom ()) (? (rel? q) q ()))
-           (: g (peep glob nom ()) (? (two? g) (osec-of <g (ot <g 'syms (g 1) 3)) ())))
+        (? (whole? (sv nom)) (: q (ssec nom) (? (rel? q) q ()))
+           (: g (glob nom) (? (two? g) (osec-of <g (ot <g 'syms (g 1) 3)) ())))
        ; the aether: before any output section, where lld counts . relative to the first
        (rel? x) (string? x || x = 'aether)
        (secof e)
@@ -1024,8 +1032,8 @@
                  ())))
        ; a symbol assigned a symbol takes its type
        (typeof e) (? (!(string? e) || e = ".") 0
-                     (whole? (peep sv e ())) (peep stype e 0)
-                     (: g (peep glob e ()) (? (two? g) (ot <g 'syms (g 1) 2) 0)))
+                     (whole? (sv e)) (peep stype e 0)
+                     (: g (glob e) (? (two? g) (ot <g 'syms (g 1) 2) 0)))
        (setsym nm v e) (: _ (pin sv nm v, pin ssec nm (secof e)) (pin stype nm (typeof e)))
        (ev e) (ld-ev env e)
        (dot u) (env 'dot)
@@ -1067,7 +1075,7 @@
        (pass final) (: _ (setdot 0, pin env 'undef 0, pin env 'cur ()) _ (each flat (cmd final)) (snap 0))
        (go n prev)
         (: s (pass 0)
-           (? (s = prev) (: _ (pass 1) env)
+           (? (s = prev) (pass 1, env)
               (n > 12) (scare 'link-unsettled n)
               (go (n + 1) s)))
        ; a pass that read nothing before it was set is where the passes would settle
@@ -1130,7 +1138,7 @@
    ; each in the output section `want` names for it, or a scare -> the script's symbols
    ld-lanesec {'text ".text" 'rodata ".rodata" 'data ".data" 'nifs ".love.nifs" 'tdata ".tdata"
                'tbss ".tbss" 'bss ".bss" 'image ".love.image"}
-   (ld-homesec se) (peep ld-lanesec (se 4) ())
+   (ld-homesec se) (ld-lanesec (se 4))
    (ld-kernsec se) (peep ld-lanesec (se 4) () || peep {'note ".note.pvh" 'boot ".boot"} (se 4) ())
 
    ; the bare-metal kernel's default script: the PVH note in the header page, then boot, text,
@@ -1186,8 +1194,8 @@
        ; a thread template (x64 and a64): .tdata then .tbss as file zeros, past the nifs, a pt_tls
        tls? (ld-tls? objs)
        _ (tls? && !(elem mach '(62 183)) ? (scare 'link-tls target))
-       ; em_386 and em_arm: ELF32 headers, symbols and REL fields
-       w32 (elem mach '(3 40))
+       ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32 and xtensa the headers and symbols
+       w32 (elem mach '(3 40 94) || target = 'rv32)
        _ (w32 && pie ? (scare 'link-i386-pie target))
        shf (w32 ? elf-shdr32 elf-shdr)
        phf (w32 ? elf32-phdr elf64-phdr)
@@ -1253,7 +1261,7 @@
        etd (ldemit cx 'tdata <en objs >en)
        tbz (<etd < tl1 ? [(ld-zeros (tl1 - <etd))])
        tail (tl1 < r0 ? [(ld-zeros (r0 - tl1))])
-       rtab ((pie ? (catall (map le64 (rev (peep relbox 0 ()))))) + ld-zeros (dend - r1))
+       rtab ((pie ? (catall (map le64 (rev (relbox 0))))) + ld-zeros (dend - r1))
        ei (img? ? (ldemit cx 'image iaddr objs ()) [iaddr])
        ; -- the section headers and symbol table, past p_filesz. every loaded byte has a
        ; covering section, as strip rebuilds a file from its sections. --
@@ -1301,7 +1309,7 @@
             + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
             + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)])
             + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)]))
-       hdr (w32 ? (elf32-hdrn 2 ent mach (arm-eflags target) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
+       hdr (w32 ? (elf32-hdrn 2 ent mach (elf32-eflags target) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
        (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
@@ -1325,7 +1333,7 @@
                               (peep (peep ob 'syms 0) i () @ sy
                                  (one (i + 1)
                                       (sy 1 = 1 && sy 3 = 0 && !(defs <sy) && !(seen <sy)
-                                       && !(elem <sy ldsynth) && !(ld-bracket? <sy) ?
+                                       && (nelem <sy ldsynth) && !(ld-bracket? <sy) ?
                                           (pin seen <sy 1, <sy . a) a))))
                  (go >os (one 1 acc))))
           (go objs ())))
@@ -1376,7 +1384,7 @@
            40 ['(10 30) 23 2 21 ld-plt-thm 4096]}
    (ldshared target soname needed srcs prod)
     (: mach (peep elf-machines target 0)
-       dm (peep ld-dyn mach ())
+       dm (ld-dyn mach)
        w32 (mach = 40) wz (w32 ? 4 8) symz (w32 ? 16 24) relz (w32 ? 8 24) dynz (w32 ? 8 16)
        lew (w32 ? le32 le64) symf (w32 ? elf-sym32 elf-sym) shf (w32 ? elf-shdr32 elf-shdr)
        phf (w32 ? elf32-phdr elf64-phdr)
@@ -1614,7 +1622,7 @@
     (: mach (peep elf-machines target 0)
        _ (0 >= mach  ? (scare 'link-target target))
        _ (atom? runs ? (scare 'link-no-map target))
-       ; the re-encoder is the arm32 family's (see ldarm)
+       ; the re-encoder is the arm32 family's (see ldarm), else the target's own
        be (backends (arm32? target ? 'thumb2 target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
@@ -1622,7 +1630,7 @@
        ; it, unless the map names them itself (a table the silicon reads at a fixed address)
        (lrf a r) (a + ld-runlanes r)
        spoken (foldl lrf () runs)
-       (unspoken n) !(elem n spoken)
+       (unspoken n) (nelem n spoken)
        lruns (map (r \ <r . <>r . filter ld-fword? >>r
                                 + foldl (a \ l \ a + cons l (filter unspoken (ld-nlanes objs l)))
                                   () (ld-runlanes r))
@@ -1691,7 +1699,9 @@
        nif (lpos 'nifs @ r (two? r ? r [org org 0]))
        n0 (ld-align (ld-lane0 objs 'nifs @ s (two? s ? (s 3) 1)) <nif)
        relbox (rel? ? {0 ()})    ; the emit-relocs sites
-       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be (ld-extents objs) ()]
+       ; .bss's bounds, where no copied region brackets them, answered to a name that asks
+       xt (ld-extents objs @ t (lpos 'bss @ q (two? q ? (pin t "__bss" [<q (<q + q 2)]) t)))
+       cx [glo n0 (<nif + nif 2) org org relbox () (ld-rel32 mach) be xt ()]
        body (: (go rs fp acc)
                 (atom? rs ? [fp acc]
                    (: r <rs
@@ -1726,7 +1736,7 @@
                                   ((e 1) <= v < (e 1) + (e 4) ? <e (go >es))))
                     (go secs))
        rgrp (foldl (\ t v (rlane v @ l (l ? (pin t l (peep t l () + [v])) t))) {} rsites)
-       rlanes (filter (l \ two? (peep rgrp l ())) shl)
+       rlanes (filter (l \ two? (rgrp l)) shl)
        nr #rlanes
        shstr (o-strtab (map ld-lanenm shl + '(".symtab" ".strtab" ".shstrtab")
                         + map (l \ ".rel" + ld-lanenm l) rlanes))
@@ -1736,7 +1746,7 @@
        stro (symo + symz) strz #<>st
        ssto (stro + strz) sstz #<shstr
        relo (ld-align 4 (ssto + sstz))
-       relbs (map (l \ catall (map (v \ catall [(le32 v) (le32 2)]) (peep rgrp l ()))) rlanes)
+       relbs (map (l \ catall (map (v \ catall [(le32 v) (le32 2)]) (rgrp l))) rlanes)
        reloffs (: (go bs cur acc) (atom? bs ? acc (go >bs (cur + #<bs) (acc + [cur])))
                   (go relbs relo ()))
        relsz (foldl (\ a b (a + #b)) 0 relbs)
@@ -1752,7 +1762,7 @@
                                                 (reloffs i) #(relbs i)
                                                 (nl + 1) (peep lanesx l 0) 4 8))
                              rlanes))
-       hdr (elf32-hdrn 2 ent mach (arm-eflags target) [shto (nl + 4 + nr) (nl + 3)]
+       hdr (elf32-hdrn 2 ent mach (elf32-eflags target) [shto (nl + 4 + nr) (nl + 3)]
                        (map (g \ elf32-phdr 1 (g 5) (g 2) <g (g 1) (g 3) (g 4) 4096) segs))
        (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
                + [(ld-zeros (symo - fend)) <st <>st <shstr

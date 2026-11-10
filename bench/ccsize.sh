@@ -50,15 +50,14 @@ objsyms() { nm --defined-only "$@" 2>/dev/null | awk '
 
 for l in $LANES; do
   binsyms "$W/love-$l" > "$TD/bin.$l"
+  # every unit ccbench compiled is love's own, the lm math floor with them; the rest is
+  # libc/crt. ucd.c is a moonlibc member the natives compile and mooncc's link pulls, so it
+  # counts as libc on both sides
   if [ "$l" = mooncc ]; then
-    # mooncc's own lane: love.o + m_am.o + the host objects (flat). there is no
-    # moonlibc object to exclude -- the driver pulls those members itself, so they
-    # reach the binary and never the object dir. The complement IS the libc.
-    objsyms "$W/mooncc/love.o" "$W/mooncc/m_am.o" \
-            $(ls "$W"/mooncc/*.o | grep -vE '/(love|moonlibc|sys|m_[a-z0-9]+)\.o$') > "$TD/own.$l"
+    objsyms $(ls "$W"/mooncc/*.o | grep -vE '/(sys|m_[a-z0-9]+)\.o$') "$W/mooncc/m_lm.o" > "$TD/own.$l"
   else
     od=$W/o-love-$l
-    objsyms "$od/love.o" "$od/lm.o" "$od"/host/*.o > "$TD/own.$l"
+    objsyms $(ls "$od"/*.o | grep -v '/ucd\.o$') "$od"/host/*.o > "$TD/own.$l"
   fi
 done
 

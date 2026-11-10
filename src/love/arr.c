@@ -772,8 +772,8 @@ static struct g *obin_run(struct g *g, int op) {
  if (btray && tray(g->sp[1])->type != love_O) { if (!ok(g = tray_to_obj(g, 1))) return g; }   // b may have moved
  a = g->sp[0], b = g->sp[1], atray = trayp(a), btray = trayp(b);
  uintptr_t R, n = bshape(a, b, &R), shp[maxrank];
- if (n == (uintptr_t) -1) {                                    // non-conforming
-  g->sp[1] = zero, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
+ if (n == (uintptr_t) -1) {                                    // non-conforming: as the numeric trays
+  g->sp[1] = op == vop_eq ? zero : ZeroPoint, g->sp++, g->ip = (union u*) g->ip + 1; return g; }
  bshape_put(shp, R, a, b);
  uintptr_t bytes = tray_bytes(love_O, R, n);
  if (!ok(g = have(g, b2w(bytes)))) return g;
@@ -833,7 +833,7 @@ lvm(lvm_obin) {
  int op = (int) g->b;
  if (op == vop_eq || (op != vop_quot && obj_plain(Sp[0]) && obj_plain(Sp[1]))) LvmResume(g, obin_run, op)
  uintptr_t R;
- if (bshape(Sp[0], Sp[1], &R) == (uintptr_t) -1) { Sp[1] = zero; love_musttail return Nextp(1, 1); }   // as obin_run
+ if (bshape(Sp[0], Sp[1], &R) == (uintptr_t) -1) { Sp[1] = ZeroPoint; love_musttail return Nextp(1, 1); }   // as obin_run
  LvmPack(g, obin_frame, op);
  Unpack(g);
  Ip = (union u*) obin_drive;

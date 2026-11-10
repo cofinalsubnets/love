@@ -82,50 +82,6 @@ static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b,
  for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
  return 0; }
 
-// r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
-static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
- if (na < nb) { love_limb const *t = a; a = b; b = t; int u = na; na = nb; nb = u; }
- dlimb s, c = 0; int i = 0;
- for (; i < nb; i++) s = (dlimb) a[i] + b[i] + c, r[i] = (love_limb) s, c = s >> limb_bits;
- for (; i < na; i++) s = (dlimb) a[i] + c,        r[i] = (love_limb) s, c = s >> limb_bits;
- if (c) r[i++] = (love_limb) c;
- return i; }
-
-// r = a - b, a >= b, r distinct -> na, high zeros the caller's
-static love_noinline int mag_sub(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
- sdlimb borrow = 0; int i = 0;
- for (; i < nb; i++) {
-  sdlimb d = (sdlimb) a[i] - b[i] - borrow;
-  if (d < 0) d += (sdlimb) limb_base, borrow = 1; else borrow = 0;
-  r[i] = (love_limb) d; }
- for (; i < na; i++) {
-  sdlimb d = (sdlimb) a[i] - borrow;
-  if (d < 0) d += (sdlimb) limb_base, borrow = 1; else borrow = 0;
-  r[i] = (love_limb) d; }
- return na; }
-
-// rows [i0, end) of the schoolbook r = a * b; only row 0 reads limbs no row wrote, so lvm_bmul
-// can run a chunk per dispatch and yield
-static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0, int end, love_limb const *b, int nb) {
- if (!i0) for (int j = 0; j < nb; j++) r[j] = 0;
- for (int i = i0; i < end; i++) {
-  dlimb carry = 0; love_limb ai = a[i];            // a limb, so ai*b[j] is 64x64->128, not __multi3
-  for (int j = 0; j < nb; j++) {
-   dlimb s = (dlimb) ai * b[j] + r[i+j] + carry;
-   r[i+j] = (love_limb) s; carry = s >> limb_bits; }
-  r[i+nb] = (love_limb) carry; } }
-
-// r distinct, capacity na+nb
-static love_inline void mag_mul(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
- mag_mul_rows(r, a, 0, na, b, nb); }
-
-// a = a*mul + add in place, room for a carry at a[n] -> the limb count
-static love_noinline int mag_mul_add_small(love_limb *a, int n, love_limb mul, love_limb add) {
- dlimb c = add;
- for (int i = 0; i < n; i++) { dlimb s = (dlimb) a[i] * mul + c; a[i] = (love_limb) s; c = s >> limb_bits; }
- if (c) a[n++] = (love_limb) c;
- return n; }
-
 // 128/64 with hi < d, so the quotient fits a limb
 static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
 #if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__) && !defined(__mooncc__)
@@ -143,6 +99,41 @@ static love_inline dlimb div128by64(love_limb hi, love_limb lo, love_limb d, lov
  love_limb qlo = div2by1(r1, lo, d, rem);
  return ((dlimb) qhi << limb_bits) | qlo; }
 
+// knuth's q-hat for the window w[0..n] over vn, n >= 2 and vn's top bit set: the quotient limb
+// or one over (taocp 4.3.1, theorem b), clamped to a limb. mag_divstep's fix-ups make any answer
+// right, so this bounds their cost
+static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, int n) {
+ dlimb const B = limb_base;
+ love_limb rr;
+ dlimb qhat = div128by64(w[n], w[n-1], vn[n-1], &rr), rhat = rr;
+ while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | w[n-2])) {
+  qhat--; rhat += vn[n-1];
+  if (rhat >= B) break; }
+ return qhat >= B ? (love_limb) (B - 1) : (love_limb) qhat; }
+
+// the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_ge, and
+// mag_divstep, one quotient limb of knuth's D over un's window at j
+#include "mag_gen.h"
+
+// r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
+static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
+ return na < nb ? mag_add_ge(r, b, nb, a, na) : mag_add_ge(r, a, na, b, nb); }
+
+// rows [i0, end) of the schoolbook r = a * b; only row 0 reads limbs no row wrote, so lvm_bmul
+// can run a chunk per dispatch and yield
+static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0, int end, love_limb const *b, int nb) {
+ if (!i0) for (int j = 0; j < nb; j++) r[j] = 0;
+ for (int i = i0; i < end; i++) {
+  dlimb carry = 0; love_limb ai = a[i];            // a limb, so ai*b[j] is 64x64->128, not __multi3
+  for (int j = 0; j < nb; j++) {
+   dlimb s = (dlimb) ai * b[j] + r[i+j] + carry;
+   r[i+j] = (love_limb) s; carry = s >> limb_bits; }
+  r[i+nb] = (love_limb) carry; } }
+
+// r distinct, capacity na+nb
+static love_inline void mag_mul(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
+ mag_mul_rows(r, a, 0, na, b, nb); }
+
 // knuth's algorithm D (Hacker's Delight divmnu) in three pieces, shared with lvm_bdiv.
 // u (m limbs) and v (n >= 2) shifted so v's top bit is set, into un (m+1) and vn -> the shift
 static int mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int m, love_limb const *v, int n) {
@@ -153,31 +144,6 @@ static int mag_dnorm(love_limb *un, love_limb *vn, love_limb const *u, int m, lo
  for (int i = m - 1; i > 0; i--) un[i] = (u[i] << s) | (s ? (dlimb) u[i-1] >> (limb_bits - s) : 0);
  un[0] = u[0] << s;
  return s; }
-
-// one quotient limb: q-hat from un's top three at j, qhat*vn subtracted, added back if one high
-static love_inline love_limb mag_divstep(love_limb *un, love_limb const *vn, int n, int j) {
- dlimb const B = limb_base;
- love_limb rr;
- dlimb qhat = div128by64(un[j+n], un[j+n-1], vn[n-1], &rr), rhat = rr;
- while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | un[j+n-2])) {
-  qhat--; rhat += vn[n-1];
-  if (rhat >= B) break; }
- sdlimb borrow = 0;
- for (int i = 0; i < n; i++) {
-  dlimb p = (dlimb) (love_limb) qhat * vn[i];   // qhat < B: a limb, so 64x64->128
-  sdlimb sub = (sdlimb) un[i+j] - borrow - (sdlimb) (love_limb) p;
-  un[i+j] = (love_limb) sub;
-  borrow = (sdlimb) (p >> limb_bits) - (sub >> limb_bits); }
- sdlimb sub = (sdlimb) un[j+n] - borrow;
- un[j+n] = (love_limb) sub;
- if (sub >= 0) return (love_limb) qhat;
- dlimb carry = 0;                            // one too big: add back
- for (int i = 0; i < n; i++) {
-  dlimb t = (dlimb) un[i+j] + vn[i] + carry;
-  un[i+j] = (love_limb) t;
-  carry = t >> limb_bits; }
- un[j+n] = (love_limb) (un[j+n] + carry);
- return (love_limb) qhat - 1; }
 
 // the remainder: un's low n limbs, shifted back
 static void mag_ddenorm(love_limb *r, love_limb const *un, int n, int s) {
@@ -191,7 +157,7 @@ static love_noinline void mag_divmod(love_limb *q, love_limb *r,
   for (int j = m - 1; j >= 0; j--) { love_limb rr; q[j] = div2by1(rem, u[j], v[0], &rr); rem = rr; }
   r[0] = rem; return; }
  int s = mag_dnorm(un, vn, u, m, v, n);
- for (int j = m - n; j >= 0; j--) q[j] = mag_divstep(un, vn, n, j);
+ for (int j = m - n; j >= 0; j--) q[j] = mag_divstep(un + j, vn, n);
  mag_ddenorm(r, un, n, s); }
 
 // an integer x as a magnitude -> the limb count, 0 for zero. a fixnum or box fills scratch
@@ -701,7 +667,7 @@ static lvm(lvm_bdiv) {
  love_limb *vn = ws + BdivHdr, *un = vn + n, *q = un + (m + 1);
  int j = (int) getcharm(Sp[0]),
      steps = max(1, (int) (bdiv_chunk / (uintptr_t) n));
- for (int c = 0; c < steps && j >= 0; c++, j--) q[j] = mag_divstep(un, vn, n, j);
+ for (int c = 0; c < steps && j >= 0; c++, j--) q[j] = mag_divstep(un + j, vn, n);
  if (j >= 0) { Sp[0] = putcharm(j); YieldCheck(); love_musttail return Continue(); }
  // done. the remainder denormalizes into the dead vn, not in place, so a GC retry of this tail
  // is idempotent; j = -1 first, so the retry skips the loop
@@ -1185,10 +1151,6 @@ lvm(lvm_vmap1) {
  vmap1_fill(r, a, fn);
  love_musttail return Answer(word(r)); }
 
-// into an int tray, saturating, a NaN to 0, as floor and int's scalars leave the float kind
-static love_inline intptr_t flo_word(flo_t v) {
- return v >= (flo_t) INTPTR_MAX ? INTPTR_MAX : v <= (flo_t) INTPTR_MIN ? INTPTR_MIN
-      : v != v ? 0 : (intptr_t) v; }
 static love_noinline void vmap1z_fill(struct tray *r, struct tray *a, flo_t (*fn)(flo_t)) {
  uintptr_t n = tray_nelem(r);
  intptr_t *p = tray_data(r);

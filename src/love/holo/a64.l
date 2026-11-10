@@ -399,6 +399,9 @@
    (a64-ldxb d base index scale disp)
       (rn d @ dn (catall [(a64-addsh dn (rn base) (rn index) (a64-shiftamt scale))
                           (a64-mem-raw 0x38400000 0x39400000 1 dn dn disp)]))              ; ldrb/ldurb Wd, [Xd, #disp]
+   (a64-ldxh d base index scale disp)
+      (rn d @ dn (catall [(a64-addsh dn (rn base) (rn index) (a64-shiftamt scale))
+                          (a64-mem-raw 0x78400000 0x79400000 2 dn dn disp)]))              ; ldrh/ldurh Wd, [Xd, #disp]
    (a64-stxb base index scale disp s)
       (catall [(a64-addsh 16 (rn base) (rn index) (a64-shiftamt scale))
                 (a64-mem-raw 0x38000000 0x39000000 1 (rn s) 16 disp)])                    ; strb/sturb Ws, [x16, #disp]
@@ -520,7 +523,7 @@
           (charm? v ? v (a64-sgen s @ k (charm? k ? k (a64-sfam s @ f (charm? f ? f (scare 'badsysreg nm))))))))
    ;; mrs of a write-only register by name scares
    a64-wo {'oslar_el1 1 'icc_dir_el1 1 'icc_sgi1r_el1 1 'icc_eoir1_el1 1 'pmswinc_el0 1}
-   (a64-mrs d nm) (? (peep a64-wo (name (lower (show nm))) ()) (scare 'badsysreg-wo nm)
+   (a64-mrs d nm) (? (a64-wo (name (lower (show nm)))) (scare 'badsysreg-wo nm)
                      (le32 (0xD5200000 | (a64-sysreg nm | a64-sysrt d))))  ; MRS Xd, <reg>
    (a64-msr nm s) (le32 (0xD5000000 | (a64-sysreg nm | a64-sysrt s)))  ; MSR <reg>, Xs
 
@@ -613,7 +616,7 @@
           ('sx128 . a64-sx128) ('n128 . a64-n128)
           ('inc128 . a64-inc128) ('dec128 . a64-dec128)
           ('ldx . a64-ldx) ('stx . a64-stx) ('leax . a64-leax)
-          ('ldxb . a64-ldxb) ('stxb . a64-stxb)
+          ('ldxb . a64-ldxb) ('ldxh . a64-ldxh) ('stxb . a64-stxb)
           ('ldsdx . a64-fldx) ('stsdx . a64-fstx) ('ldssx . a64-fldsx) ('stssx . a64-fstsx)
           ('cmov . a64-cmov)
           ('call . a64-call) ('la . a64-la) ('lar . a64-lar) ('lia . a64-lia)

@@ -1098,7 +1098,9 @@
    (efold names i) (two? names ? ([<names i] . efold >names (i + 1)) ())   ; names -> (name reg) from reg i
    ; --- the nested grid owner, D-dimensional ---
    ; a whole counted-loop nest as one native kernel: D integer loops, M derived-float invariants per
-   ; cell, a float recurrence over N fvars counting into an integer checksum; arity 1, the arg ignored
+   ; cell, a float recurrence over N fvars counting into an integer checksum. starts: each loop's literal
+   ; start; at arity 2 the outermost starts at Sp[0] and the acc at Sp[1], both fixnum-guarded, else arity 1
+   ; and the arg ignored
    (rangeL a b) (a < b ? (a . rangeL (a + 1) b) ())
    (map2 f a b) (two? a ? (f <a <b . map2 f >a >b) ())
    ; cgFd: a derive expr over the counters and hoisted consts, spilling to [sp], never an f8.. local
@@ -1109,7 +1111,18 @@
                           (elem op '(+ - * /)
                            && cgFd tgt ht ce a + xpushir tgt + cgFd tgt ht ce b + xpop1ir tgt + fbinop op)
                           ()))
-   (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt)
+   ; a grid deopt: unwind d pushes, then arity 1 re-applies value[1] to Sp[0], arity 2 enters its body, value[2]
+   (gdeopt tgt d ar) (: A (greg tgt 'acc) IP (greg tgt 'ip) W (wd tgt)
+      ((d > 0 ? [['add 'sp 'sp (slotsz tgt * d)]] ()) + [['ld A IP W] (ar = 2 ? ['lea IP A (2 * W)] ['mov IP A]) ['ld A IP 0] ['jmpr A]]))
+   (gfx tgt i) (: A (greg tgt 'acc) ok (mint 0)
+      ([['ld A (greg tgt 'sp) (wd tgt * i)] ['test A 1] ['br 'ne ok]] + gdeopt tgt 0 2 + [['label ok]]))
+   (gridargs tgt ar) (ar = 2 ? (gfx tgt 0 + gfx tgt 1) ())                                 ; the guards, before any push
+   ; loopepi through gdeopt: putfix acc, then Continue
+   (gridepi tgt ar) (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) W (wd tgt) ok (mint 0)
+      ([['adds A A A] ['br 'vc ok]] + gdeopt tgt 0 ar + [['label ok] ['or A A 1] ['st S 0 A] ['add IP IP (2 * W)] ['ld T IP 0] ['jmpr T]]))
+   (gridacc tgt ar) (: S (greg tgt 'sp) (ar = 2 ? [['ld 'r8 S (wd tgt)] '(sar r8 1)] '((li r8 0))))
+   (gridstart tgt ar starts ci cr) (ci = 0 && ar = 2 ? [['ld cr (greg tgt 'sp) 0] ['sar cr 1]] [['li cr (starts ci)]])
+   (loopcode-gridn dims starts ar cnames invs invd fvars updates testexpr cmpop bound lim tgt)
     ; k=r7, acc=r8, counters r9.. through gr; f2..=consts, f8..=invariants, fvars next, the rest the DAG
     ; pool. a callee-saved counter spills, and is restored before the acc deopt
     (: D #dims  M #invs  N #fvars  SCR (greg tgt 'acc)
@@ -1130,16 +1143,16 @@
              + bodyc + [['ucomisd (fr magr) breg] ['br (ucmpx cmpop) 'iesc]]
              + wb + '((inc r7) (jmp itop) (label iesc)))
        popsv (foldl (\ a r (a + [['pop (gr r)]])) () (rev saved))
-       accb (['(adds r8 r8 r7) '(br vc cont)] + popsv + deoptbody tgt 0 + '((label cont)))
+       accb (['(adds r8 r8 r7) '(br vc cont)] + popsv + gdeopt tgt 0 ar + '((label cont)))
        cell (derives + zerof + '((li r7 0)) + iter + accb)
        (loop-nest ci body) (: cr (gr (cregs ci))  b (dims ci)                 ; outer->inner, single-step
           tp (intern ("lt" + show ci))  en (intern ("le" + show ci))
           inner (ci = (D - 1) ? body (loop-nest (ci + 1) body))
-          ([['li cr 0] ['label tp] ['cmp cr b] ['br 'ge en]] + inner + [['inc cr] ['jmp tp] ['label en]]))
+          (gridstart tgt ar starts ci cr + [['label tp] ['cmp cr b] ['br 'ge en]] + inner + [['inc cr] ['jmp tp] ['label en]]))
        pushsv (foldl (\ a r (a + [['push (gr r)]])) () saved)
        popsv2 (foldl (\ a r (a + [['pop (gr r)]])) () (rev saved))
        preload (foldl (\ a e (a + [['li SCR (fbits <e)] ['movqxr (fr <>e) SCR]])) () ht)
-       (pushsv + preload + '((li r8 0)) + loop-nest 0 cell + popsv2 + [['mov SCR 'r8]]))
+       (gridargs tgt ar + pushsv + preload + gridacc tgt ar + loop-nest 0 cell + popsv2 + [['mov SCR 'r8]]))
    ; --- the 2-wide packed grid kernel ---
    ; the innermost dim two cells at a time, lanes [c, c+1] packed per xmm; the escape test ands a
    ; per-lane mask into a sticky alive and `psubq count,alive` counts it (alive = -1). x86 only (sse2)
@@ -1164,13 +1177,14 @@
                    (go (i + 1) (acc + mvc + [[(opmap op) (fr dst) (fr rb)]]))))))) 0 ())
        [forms rg])
    (cmppd-imm op) (op @ '<= 2  '< 1  ())                                    ; the cmppd predicate: le / lt
-   (grid2-ok? dims invs fvars updates testexpr cmpop bound)                              ; D<=2, M+N<=4 (f8..f11), <=2 inner consts (f2,f3), an even innermost dim
-    (elem cmpop '(< <=) && #dims < 3 && 1 < last dims && 0 = last dims % 2
+   (grid2-ok? dims starts invs fvars updates testexpr cmpop bound)                       ; D<=2, M+N<=4 (f8..f11), <=2 inner consts (f2,f3), an even innermost trip
+    (elem cmpop '(< <=) && #dims < 3 && whole? (last starts)
+     && (last dims - last starts @ n (1 < n && 0 = n % 2))
      && #invs + #fvars < 5
      && #(htbl (fcc bound (fccl updates (fcc testexpr ()))) 2) < 3)
    ; gp: r0=scratch, r5=Ip (the deopt tail), r7=k, r8=acc, r9../r10..=the grid counters. xmm: f2,f3=consts,
    ; f4=count, f5=alive, f6=scratch, f8,f9=invariants, f10,f11=fvars, f0,f1,f12..f15 the DAG pool
-   (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim)
+   (loopcode-grid2 dims starts ar cnames invs invd fvars updates testexpr cmpop bound lim)
     (: D #dims  M #invs  N #fvars
        cregs (rangeL 10 (10 + D))  rinner (last cregs)  iir (gr rinner)                  ; bumped for lane1
        fenv (invs + fvars)
@@ -1191,7 +1205,7 @@
        maskc [['movupd 'f6 (fr magr)] ['cmppd 'f6 breg pred] '(andpd f5 f6) '(psubq f4 f5) '(movmskpd r0 f5)]
        iter (['(label itop) ['cmp 'r7 lim] '(br ge iesc)] + bodyc + maskc             ; while k<lim and any lane alive
              + '((test r0 r0) (br eq iesc)) + wb + '((inc r7) (jmp itop) (label iesc)))
-       deopt (deoptbody 'x64 0)
+       deopt (gdeopt 'x64 0 ar)
        accb ('((movqrx r0 f4) (adds r8 r8 r0) (br vc cont0)) + deopt                     ; acc += count.lane0
              + '((label cont0) (movhlps f6 f4) (movqrx r0 f6) (adds r8 r8 r0) (br vc cont1)) + deopt + '((label cont1)))   ; acc += count.lane1
        cell (derives + zerof + '((xorpd f4 f4) (pcmpeqd f5 f5) (li r7 0)) + iter + accb)   ; count=0; alive=ones; k=0
@@ -1199,18 +1213,20 @@
           tp (intern ("lt" + show ci)) en (intern ("le" + show ci))
           inner (ci = D - 1 ? body (loop-nest (ci + 1) body))
           step  (ci = D - 1 ? [['add cr cr 2]] [['inc cr]])
-          ([['li cr 0] ['label tp] ['cmp cr b] ['br 'ge en]] + inner + step + [['jmp tp] ['label en]]))
+          (gridstart 'x64 ar starts ci cr + [['label tp] ['cmp cr b] ['br 'ge en]] + inner + step + [['jmp tp] ['label en]]))
        preload (foldl (\ a e (a + [['li 'r0 (fbits <e)] ['movqxr (fr <>e) 'r0] ['unpcklpd (fr <>e) (fr <>e)]])) () ht)   ; broadcast each const [c,c]
-       (preload + '((li r8 0)) + loop-nest 0 cell + '((mov r0 r8))))
-   ; jitfgridn: the packed kernel where the shape fits (x86 only: neon has no movmskpd), else scalar
-   (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim tgt)
-    (: pk (targets tgt 'packed && grid2-ok? dims invs fvars updates testexpr cmpop bound
-             ? (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim) ())
-       prog (atom? pk ? (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt) pk)
-       (nif (emit (asmt tgt (prog + loopepi tgt))) (ev lam) 1))
+       (gridargs 'x64 ar + preload + gridacc 'x64 ar + loop-nest 0 cell + '((mov r0 r8))))
+   ; jitfgridn: the packed kernel where the shape fits (x86 only: neon has no movmskpd), else scalar; () where
+   ; nif declines, answering its twin
+   (jitfgridn lam cnames dims starts ar invs invd fvars updates testexpr cmpop bound lim tgt)
+    (: pk (targets tgt 'packed && grid2-ok? dims starts invs fvars updates testexpr cmpop bound
+             ? (loopcode-grid2 dims starts ar cnames invs invd fvars updates testexpr cmpop bound lim) ())
+       prog (atom? pk ? (loopcode-gridn dims starts ar cnames invs invd fvars updates testexpr cmpop bound lim tgt) pk)
+       tw (ev lam)  n (nif (emit (asmt tgt (prog + gridepi tgt ar))) tw ar)
+       (n == tw ? () n))
    ; jitfgrid: the 2D mandelbrot-class signature onto the general kernel, D=2 over (px py), M=2 (cx cy)
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim tgt)
-    (jitfgridn lam '(px py) [pxn pyn] '(cx cy) [cxd cyd] fvars updates testexpr cmpop bound lim tgt)
+    (jitfgridn lam '(px py) [pxn pyn] [0 0] 1 '(cx cy) [cxd cyd] fvars updates testexpr cmpop bound lim tgt)
    ; --- the auto-hook grid recognizer ---
    ; a float-recurrence grid nest read from source into jitfgrid's structure, else ():
    ;   (\ cx cy zx zy it (? (&& (it < LIM) (cmp TEST BOUND)) (mand ..updates.. (it + 1)) it)) under two counted loops
@@ -1677,6 +1693,10 @@
    (anat-defs bs) (atom? >bs ? [() <bs]             ; a : binding list -> (pairs body); pairs = ((nameform . body)..)
                      (: r (anat-defs >>bs)
                         [((<bs . <>bs) . <r) <>r]))
+   ; the float DAG reads every compound as (op a b) and every leaf as a float var or a number: a recurrence still
+   ; spelling re, im or a call, or reading its counter, is not one
+   (anat-fop? vs e) (atom? e ? (gem? e || whole? e || elem e vs)
+                       (e @ [op a b] (elem op '(+ - * /) && anat-fop? vs a && anat-fop? vs b) 0))
    (afind pred l) (? (atom? l) () (pred <l) <l (afind pred >l))
    ; the recurrence pair: a (? (? A _ A) (SELF ..) ..), a lowered &&, whose then-branch self-calls (head = its own name)
    (anat-rec? p) (: nm <<p
@@ -1694,11 +1714,42 @@
        (a @ ^recnm [[cnt bnd u]]                    ; innermost: the recurrence call's args
         (: rest (loopchain a pairs recnm)
          (two? rest ? ([cnt bnd ()] . rest))))))
-   ; rebuild a : binding list, replacing the outermost loop's body with (native 0)
+   ; the shape the native assumes, else the nest declines: each loop steps its counter by 1, passes the rest through
+   ; and adds its inner call to its last param, the acc; an inner call passes the counters by name, starts its
+   ; callee's counter at a literal and its acc at 0, and the recurrence's fvars and counter at 0, its own self-call
+   ; stepping only that counter
+   (all2 f a b) (two? a ? (f <a <b && all2 f >a >b) 1)
+   (anat-rec-ok? recps sargs it) (#sargs = #recps
+      && all2 (r \ a \ r = it ? (a = ['+ it 1]) (a != ['+ r 1])) recps sargs)
+   (anat-call-ok? q args ps pacc)
+    (>q @ ['? ['< cnt _] _ acc]
+     (#args = #><q && all2 (r \ x \ (? (r = cnt) (whole? x) (r = acc) (x == 0) (x = r && r != pacc && elem r ps))) ><q args) 0)
+   (anat-shape? q pairs recp it fvars)
+    (: nm <<q ps ><q acc (last ps)
+     (>q @ ['? ['< cnt bnd] (^nm . sargs) ^acc]
+      (whole? bnd && #sargs = #ps
+       && all2 (p \ s \ p = cnt ? (s = ['+ cnt 1]) (p = acc || s = p)) ps sargs
+       && (last sargs @ ['+ ^acc (a . args)]
+           (a = <<recp ? (#args = #><recp && all2 (r \ x \ elem r fvars ? (x = 0) (r = it ? (x == 0) 1)) ><recp args)
+              (: q2 (afind (p \ <<p = a) pairs)
+                 (two? q2 && anat-call-ok? q2 args ps acc && anat-shape? q2 pairs recp it fvars)))
+           0))
+      0))
+   ; each inner loop's start, read off the call that enters it, outer->inner
+   (anat-starts q pairs recnm)
+    (>q @ ['? _ (_ . sargs) _]
+     (last sargs @ ['+ _ (a . args)]
+      (a = recnm ? () (: q2 (afind (p \ <<p = a) pairs) (args (posof (>q2 1 1) ><q2 0) . anat-starts q2 pairs recnm)))
+      ())
+     ())
+   ; rebuild a : binding list, the outermost loop bound to the native, a value no binding of the form can respell
    (anat-rebind bs outernm ng)
     (atom? >bs ? bs
-     (: nm <bs bd <>bs
-      (nm . (two? nm && <nm = outernm ? [ng 0] bd) . anat-rebind >>bs outernm ng)))
+     (: nm <bs (two? nm && <nm = outernm ? (outernm . ng . >>bs) (nm . <>bs . anat-rebind >>bs outernm ng))))
+   ; the twin: the binding list answering the outermost loop, applied to that loop's own params
+   (anat-drive bs outer) (atom? >bs ? [<outer] (<bs . <>bs . anat-drive >>bs outer))
+   (anat-lam ps body) (atom? ps ? body ['\ <ps (anat-lam >ps body)])
+   (anat-twin bs outer) (anat-lam >outer ((': . anat-drive bs outer) . >outer))
    ; --- autogroup: the maximal closed subset of a `:`'s mutually-recursive arithmetic fns (groupok?'s fragment; a fn calling
    ;     out drops, with its callers), each binding rewritten to its own native while the calls among the group stay in the buffer
    ; --- lambda-lifting: a body ((: (g q..) GBODY) inits..) lifts g to a top-level (g' FV.. q..), FV the enclosing params free
@@ -1730,12 +1781,14 @@
    ; aux values close against each other left to right and every use is a copy, so only a dcheap? value goes: a call would recompute per use
    (auxclose aps) (foldl (\ acc ap (acc + [(<ap . (foldl (\ b q (subst-free <q >q b)) >ap acc))])) () aps)
    (auxinl aps x) (foldl (\ b ap (subst-free <ap >ap b)) x (auxclose aps))
+   (auxfwd? aps) (two? aps && (any (p \ occurs? <p ><aps) >aps || auxfwd? >aps))   ; a value reading a later aux: inlined, that aux would capture it
    (norm-let body)
     (!(two? body && <body = ': && !(atom? >body)) ? body
        (: parsed (anat-defs >body) pairs <parsed result <>parsed
           fnps (filter (pr \ two? <pr) pairs) auxps (filter (pr \ !(two? <pr)) pairs)
           (? !(1 = #fnps && two? result) body                                         ; exactly one local fn + a call result
              !(all (dcheap? * cup) auxps) body
+             (auxfwd? auxps) body
              (: g <<<fnps q ><<fnps gbody ><fnps
                 (!(<result = g && #>result = #q) ? body            ; result must be (g inits..) matching arity
                    (: inl (auxinl auxps)                                             ; inline every aux name -> its closed value,
@@ -1964,7 +2017,8 @@
     (atom? pairs ? result
        (: pr <pairs nm <pr val >pr rest >pairs
           uses (foldl (a \ e \ a + dcount nm e) 0 (map cup rest + [result]))
-          (!(dcheap? val) ? orig
+          ; a value naming a later binder reads past it: substituted there, the binder would capture it
+          (!(dcheap? val) || any (p \ occurs? <p val) rest ? orig
              (delet-go (map (p \ <p . subst-sym nm val >p) rest) (subst-sym nm val result) orig))))
    (delet-body e)                                                                             ; bottom-up, root or nested
     (? (atom? e) e
@@ -2379,7 +2433,7 @@
                 (: fnames (map fnname pairs)
                    pt {} chg {}                                   ; [fn i] -> 1 if param i of fn is twin
                    ; twin-type inference under env (param-name -> twin bool)
-                   (tty e env) (atom? e ? (peep env e 0)
+                   (tty e env) (atom? e ? (twin? e || peep env e 0)                      ; a folded twin literal is a twin
                                   (e @ ('twin . _) 1
                                        (('re || 'im) . _) 0
                                        (('+ || '- || '*) a b) (tty a env || tty b env)
@@ -2412,7 +2466,7 @@
                                  (: op <e (memq op fnames ? (op . splitargs op >e 0 env nm)
                                                (op . map (a \ loR a env nm) >e)))))
                          (loT2 e env nm) (tty e env ? (loT e env nm) (loR e env nm . 0.0))
-                         (loT e env nm) (atom? e ? (peep nm e (e . e))
+                         (loT e env nm) (atom? e ? (twin? e ? (re e . im e) (peep nm e (e . e)))
                             (e @ ['twin u v] (loR u env nm . loR v env nm)
                                  ['twin u] (tty u env ? (: p (loT u env nm) (<p . negf >p)) (loR u env nm . 0.0))
                                  ['+ u v] (: a (loT2 u env nm) b (loT2 v env nm) (mkadd <a <b . mkadd >a >b))
@@ -2453,12 +2507,16 @@
                             (!(two? outerp) ? form
                                (: chain (loopchain <<outerp pairs recnm)
                                   D #chain M #invs N #fvars
-                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7) ? form
+                                  (!(two? chain && elem cmpop '(< <= > >=) && 0 < N && M + N < 7 && D < 7
+                                     && all (anat-fop? (invs + fvars)) (testexpr . bound . updates)
+                                     && anat-rec-ok? recps >then it && anat-shape? outerp pairs recp it fvars
+                                     && #><outerp = 2) ? form
                                      (: cnames (map cap chain) dims (map caup chain)
                                         margs (last chain 2)
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
-                                        glam ['\ '_ form]        ; the interp nest: deopt fallback and =/show
-                                        ng (jitfgridn glam cnames dims invs invd fvars updates testexpr cmpop bound lim arch)
+                                        starts ('arg . anat-starts outerp pairs recnm)
+                                        glam (anat-twin >form <outerp)        ; the interp nest from its args: deopt fallback and =/show
+                                        ng (all (anat-fop? cnames) invd ? (jitfgridn glam cnames dims starts 2 invs invd fvars updates testexpr cmpop bound lim arch) ())
                                         (lit? ng ? (': . anat-rebind >form <<outerp ng) form))))))
                          form)))))))
    ; compile cache: each source \-expr compiles once, keyed by source, so structurally-equal closures share the native (they are =).

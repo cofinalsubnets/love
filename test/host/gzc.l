@@ -184,6 +184,32 @@
       !(string? (deflate-best 7))
       !(string? (deflate-best (cask 8)))))
 
+; deflate fed in pieces is deflate whole, either lane, any cut, and gzip's member as read is gz-zip's
+(: (gzf-cut s k) (: n #s (go i) (n <= i ? () ((snip s i (min n (i + k))) . go (i + k))) (go 0))
+   (gzf-rd ps) ({0 ps} @ t (_ \ (peep t 0 () @ l (two? l ? (pin t 0 >l, <l) ""))))
+   (gzf-feed s k b) (: st (deflate-new b)
+                       (go ps acc) (? (atom? ps) (deflate-end st @ z (string? z ? (cats (rev (z . acc))) ()))
+                                      (deflate-feed st <ps @ z (string? z ? (go >ps (z . acc)) ())))
+                       (go (gzf-cut s k) ()))
+   (gzf-same s k b) (gzf-feed s k b @ z (string? z && z = (b = 1 ? (deflate-best s) (deflate s))))
+   (gzf-zr s k b) (: o {0 ()}
+                     z (gz-zipr (gzf-rd (gzf-cut s k)) "f.txt" 1700000000 b (x \ pin o 0 (x . o 0)))
+                     (two? z ? (cats (rev (o 0))) ()))
+   gzf-text (cats (map (i \ "line \(i) of the quick brown fox; ") (jot 9000)))
+   gzf-big (gzf-text + gzc-long + gzf-text)
+   _ (test
+      (gzc-all (k \ gzf-same gzf-big k 0) [7 4096 100000 1000000])
+      (gzf-same (snip gzf-big 0 9000) 1 0)
+      (gzc-all (k \ gzf-same gzf-big k 1) [7 100000])
+      (gzf-same "" 7 0)
+      (gzf-same "" 7 1)
+      (gzf-same "x" 7 1)
+      (gzf-zr gzf-text 5000 0 = gz-zip gzf-text "f.txt" 1700000000)
+      (gzf-zr gzf-text 5000 1 = gz-zip9 gzf-text "f.txt" 1700000000)
+      (deflate-new 2 = ())
+      (: st (deflate-new 0)   _ (deflate-end st) (deflate-feed st "x" = ())))
+   0)
+
 (test_fin (),
  puts "gzc: ok -- the C twins agree with love (shapes, hints, torn, fuzz, crc, misuse)
 ",

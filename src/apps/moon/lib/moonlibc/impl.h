@@ -704,60 +704,12 @@ extern unsigned long __love_macslide(void);
 struct __mac_osigact;
 extern long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old);
 #endif
-static long __love_call(long n, long a, long b, long c, long d, long e, long f) {
-  long v = __love_osv;
-  if (!v) v = __love_osv = __love_osdetect();
-  if (v < 0) return __love_inle(n, a, b, c, d, e, f);   /* inle translates nothing, before the BSD read */
-#ifdef __i386__
-  if (v >= 2 && __love_tbsdn(n)) {
-    long r = __love_tbsd(n, a, b, c, d, e, f);
-    return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
-#endif
-  if (v >= 2) {
-#ifdef LvMac
-    if (v == 4) {                                     /* AT_FDCWD and the AT_ bits, in a copy: no arg's address is taken */
-      long w[5] = {a, b, c, d, e};
-      if (__love_macat(n, w)) a = w[0], b = w[1], c = w[2], d = w[3], e = w[4]; }
-#endif
-    n = __love_nrfb(n);
-    if (n < 0) return -38;                            /* ENOSYS, canonically */
-#ifdef LvMac
-    if (v == 4) {
-      long r = __love_door(n, a, b, c, d, e, f);
-      if (r != LvNoDoor) return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
-#endif
-  }
-#ifdef __ARM_EABI__
-  if (v == 1 && __love_t32k && __love_t64(n)) return __love_t32(n, a, b, c, d, e, f);
-#endif
-  long r = __love_sys(n, a, b, c, d, e, f);
-#ifdef __ARM_EABI__
-  if (r == -38 && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
-#endif
-#ifdef LvOsTranslate                                     /* a parked BSD answer */
-  if (__love_parked(r)) r = -__love_errfb(-r - 4096);
-#endif
-  if (r == -14 && __love_efault()) {                     /* EFAULT, and the address woke: again */
-    r = __love_sys(n, a, b, c, d, e, f);
-#ifdef LvOsTranslate
-    if (__love_parked(r)) r = -__love_errfb(-r - 4096);
-#endif
-  }
-  return r; }
+/* the syscall path, one copy in os.c: __love_call translates canonical numbers, __love_fb
+ * takes a kernel's own; both answer a parked BSD error as its canonical errno */
+long __love_call(long n, long a, long b, long c, long d, long e, long f);
+long __love_fb(long n, long a, long b, long c, long d, long e, long f);
 /* xnu's unix calls answer in their class: the BSD number with this bit */
 #define LvMacUnix 0x2000000L
-static long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
-#ifdef LvMac
-  long r = __love_osv == 4 ? __love_door(n, a, b, c, d, e, f) : LvNoDoor;
-  if (r == LvNoDoor) r = __love_sys(__love_osv == 4 ? n | LvMacUnix : n, a, b, c, d, e, f);
-#else
-  long r = __love_sys(n, a, b, c, d, e, f);
-#endif
-#ifdef LvOsTranslate
-  return __love_parked(r) ? -__love_errfb(-r - 4096) : r; }
-#else
-  return r; }
-#endif
 #if defined(__ARM_EABI__) || defined(__i386__)
 static long __love_fb8(long n, long a, long b, long c, long d, long e, long f, long g, long h) {
   long r = __love_sys8(n, a, b, c, d, e, f, g, h);

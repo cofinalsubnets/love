@@ -28,10 +28,10 @@
           (cplxty? sty && !(stru? cty)) ['cast cty ['dot e "re"]]
           ['cast cty e]))
    (cx-szn ps n w) (charm? n ? ['cast (szty ps) ['num n]] (cx-no ps "\(w) an incomplete type" ()))
-   (cx-szty ps [ty _]) (varr? ty ? ['bin '* <>>ty ['num (tsz ps <>ty)]] (cx-szn ps (tsz ps ty) "sizeof"))
+   (cx-szty ps st) (<st @ ty (varr? ty ? ['bin '* <>>ty ['num (tsz ps <>ty)]] (cx-szn ps (tsz ps ty) "sizeof")))
    (cx-szof ps e) (ptype ps e @ ty (!ty || varr? ty ? ['szof e] (cx-szn ps (tsz ps ty) "sizeof")))
-   (cx-alty ps [ty a]) (cx-szn ps (0 < a ? a (talign ps ty)) "alignof")
-   (cx-alof ps e) (ptype ps e @ ty (ty ? (cx-szn ps (talign ps ty) "alignof") (cx-bad ps)))
+   (cx-alty ps st) (cx-szn ps (tyask ps st) "alignof")
+   (cx-alof ps e) (ptype ps e @ ty (ty ? (cx-szn ps (exal ps e ty) "alignof") (cx-bad ps)))
    (cx-addr ps e) (nulloff ps e @ n (charm? n ? ['num n] ['addr e]))
    (cx-pos ps e) (ptype ps e @ ty (ty && pprom ty != ty ? ['cast (pprom ty) e] e))
    (cx-call ps e as) (bicall e (tuargs ps e as))
@@ -88,6 +88,16 @@
         ['blk (rev acc)]))
    (cx-app l acc) (atom? l ? acc (cx-app >l (<l . acc)))
    (cx-it ps s) (clpop ps @ cm (cm ? [s cm] [s]))       ; a cleanup's marker rides after
+   ; -g: ps 'cxls holds each open block's next item start, innermost first, the lookahead
+   ; when the last item or the `{` reduced; an item, a marker's aside, lays ('loc file line)
+   ; before it
+   (cx-look ps vl) (ps 'dbg ? (pin ps 'cxlook (two? vl ? (cx-vtok <vl))))
+   (cx-dpush ps) (ps 'dbg ? (pin ps 'cxls (ps 'cxlook . ps 'cxls)))
+   (cx-dpop ps) (ps 'dbg ? (ps 'cxls @ l (pin ps 'cxls >l, two? l ? <l)))
+   (cx-dloc ps l lay)
+    (? !(ps 'dbg) l
+       (: t (cx-dpop ps) _ (cx-dpush ps)
+          (lay && two? t && two? <t ? (['loc (ps 'dfile) <>><t] . l) l)))
    (cx-ret ps e t) (intptr? ps e ? (cx-no ps "an integer where a pointer is owed" t) ['ret e])
    ; if (__builtin_expect(e, k)): the test is e, and a (nop cold|hot) heads the then-arm
    (cx-if ps rc th el)
@@ -123,12 +133,13 @@
       2 (\ ps [_1 _2] (_2))
       3 (\ ps [_1 _2] (_2))
       4 (\ ps [_1 _2] (_2))
-      5 (\ ps [_1 _2 _3] ((cx-bend ps _2)))
-      6 (\ ps [_1] ((cx-benter ps)))
+      5 (\ ps [_1 _2 _3] ((cx-dpop ps, cx-bend ps _2)))
+      6 (\ ps [_1] ((cx-benter ps, cx-dpush ps, ())))
       7 (\ ps [] (()))
       8 (\ ps [_1 _2] ((cx-app _2 _1)))
-      10 (\ ps [_1] ((cx-it ps _1)))
-      11 (\ ps [_1] ((cx-it ps _1)))
+      9 (\ ps [_1] ((cx-dloc ps _1 1)))
+      10 (\ ps [_1] ((cx-dloc ps (cx-it ps _1) 1)))
+      11 (\ ps [_1] ((cx-dloc ps (cx-it ps _1) ())))
       14 (\ ps [_1] (['nop]))
       15 (\ ps [_1 _2] (['expr _1]))
       16 (\ ps [_1 _2] (['ret ()]))
@@ -340,7 +351,7 @@
              (? (idv? <ts "__label__") (plabs ps >ts sh @ r (pin fr 'sh <>r, [cx-kdecl () <r]))
                 (tkw? <ts 'typedef)
                  (: br (pbty ps >ts)
-                    r (two? br ? (btdefs ps <br <>br (sdrain ps epre sh) (qspec ps >ts <br) (tdrun ps >ts)))
+                    r (two? br ? (btdefs ps <br <>br (sdrain ps epre sh) (tdrun ps >ts)))
                     (atom? r ? () (pin fr 'sh <>r, [cx-kdecl () <r])))
                 !(tyat? ps ts) 'remap
                 (: r (pdecl ps ts)
@@ -356,9 +367,9 @@
        (c = 19) (? (tyat? ps ts) (cx-decl ps ts)
                    (pstmt ps ts @ r (two? r ? [(markerp <r ? cx-kmark cx-kstmt) <r <>r])))
        !(tyat? ps >ts) 'remap
-       (thenw (pcty ps >ts) ")" @ tr
+       (thenw ((c = 23 ? pctya pcty) ps >ts) ")" @ tr
           (? (atom? tr) ()
-             (c = 23) [cx-kstyp [<tr (tyask ps >ts <tr)] <>tr]
+             (c = 23) [cx-kstyp <tr <>tr]
              (peekp <>tr "{") (pinit ps <>tr @ iv (two? iv ? [cx-kclit ['clit (fillarr ps <tr <iv) <iv] <>iv]))
              [cx-ktyp <tr <>tr])))
    ; kinds, last first -> their u16s in order
@@ -373,8 +384,9 @@
        (fr (peep ps 'cxfr ()), pin ps 'cxfr f0, lb (peep ps 'cxlab ()), pin ps 'cxlab l0))
    ; -> (value rest) | (): sel 'expr, 'asn, 'cond or 'blk
    (cx-parse ps ts sel)
-    (: f0 (peep ps 'cxfr ()) l0 (peep ps 'cxlab ())
+    (: f0 (peep ps 'cxfr ()) l0 (peep ps 'cxlab ()) d0 (ps 'cxls)
        r (cx-go ps ts sel)
+       _ (ps 'dbg ? (pin ps 'cxls d0))
        (two? r ? r (cx-undo ps f0 l0, ())))
    ; a val's first token: a said one carries the tail it was said from
    (cx-vtok e) (<e = 'cxv ? <>>>e e)
@@ -404,7 +416,7 @@
                  (cx-unit r = 1 ? (play c (o + 6) (k - 1) vl2 p st2)
                     (pop st2 (rlen r) () @ [st3 args]
                        ; an action answering a number refused: the lookahead rides out
-                       (: v (peep cx-tab-acts r () @ f (f ? (f ps args) <args))
+                       (: v (peep cx-tab-acts r () @ f (f ? (cx-look ps vl2, f ps args) <args))
                           (charm? v ? [vl2 -1 st3] (play c (o + 6) (k - 1) vl2 p (v . st3)))))))))
        ; sg: (kinds vals stop m start), kinds and vals in order; ks the kinds' string
        (go c look ks sg vl i st)

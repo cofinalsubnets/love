@@ -1,13 +1,12 @@
-; test/law/moonlo.l -- the new backend's invariants (lo.l, ra.l): each check bites a planted break,
-; then holds over every fn a corpus lowers by the new path. run by test_moon, before moon.l's laws.
+; test/law/moonlo.l -- the backend's invariants (lo.l, ra.l): each check bites a planted break,
+; then holds over every fn a corpus lowers. run by test_moon, before moon.l's laws.
 
-; a source by the new path for tgt with the checks on -> [fns checked, what broke] | 'bad
+; a source for tgt with the checks on -> [fns checked, what broke] | 'bad
 (: (lolaw src tgt)
-    (getenv "MOON_BACKEND" @ b0
-     (setenv "MOON_BACKEND" "new", setenv "MOON_LOLAW" "1",
-      (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () tgt))) @ v
-        (setenv "MOON_BACKEND" b0, setenv "MOON_LOLAW" (),
-         v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad)))
+    (setenv "MOON_LOLAW" "1",
+     (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () tgt))) @ v
+       (setenv "MOON_LOLAW" (),
+        v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad))
    ; a source through the default backend refused, or griped at
    (lnay src) (cparse <>(clex src) @ r (okv? r ? (cgen <>r <>>r <>>>r <>>>>r () 'x64) @ () 1 x (gripe? x)))
    ; a planted fn's vregs spelt n0 n1 ..
@@ -76,7 +75,7 @@
       ; the entry's fast region falling into a call copies its twin back ahead of the argument setup
       (raentry g (lv [['mov 'n0 'r6] ['li 'n1 1] ['mov 'r6 'n1] ['cuse 'r6] ['call 'f] ['mov 'r0 'n0] ['ret]])
          @ [_ _ ['mov a _] ['mov 'r6 _] ['cuse 'r6] ['call 'f] _ _] (a = name "%n0") _ 0)
-      ; what the old path diagnoses, the new one hands it
+      ; what a diagnosis refuses
       (all lnay ["int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"
                  "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"
                  "int main() { switch (1) { default: return 2; default: return 3; } }"

@@ -12,6 +12,7 @@
          world-move world-mouse world-frame world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove cli))
+(borrow 'spans)                         ; the level's text read with where each form sits
 (borrow 'horn)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -78,24 +79,21 @@
       f))
  (src-last ds) (: r (rev ds) d (two? r ? <r ())
    (two? d && <d = 'level ? (rev ((take 2 d + map (k \ src-form [k] (d k)) (drop 2 ^#d)) . >r)) ds))
- ; ..a source path's text: [from to] in s, or () where s has no such form. the text read as
- ; the reader reads it, bracketed forms, strings and atoms, a [..]'s first part its second
- ; as (list ..)'s is
- (sx-skip s i) (? (i >= #s) i (elem (s i) [32 9 10 13]) (sx-skip s (i + 1))
-                  (s i = 59) (sx-skip s (sx-eol s i)) i)
- (sx-eol s i) (? (i >= #s || s i = 10) i (sx-eol s (i + 1)))
- (sx-end s i) (: c (s i)
-   (? (elem c [40 91 123]) (sx-close s (i + 1))
-      (c = 34) (sx-str s (i + 1))
-      (elem c [39 96 44]) (sx-end s (sx-skip s (i + 1)))
-      (sx-atom s i)))
- (sx-close s i) (: j (sx-skip s i) (? (j >= #s) j (elem (s j) [41 93 125]) (j + 1) (sx-close s (sx-end s j))))
- (sx-str s i) (? (i >= #s) i (s i = 92) (sx-str s (i + 2)) (s i = 34) (i + 1) (sx-str s (i + 1)))
- (sx-atom s i) (? (i >= #s || elem (s i) [32 9 10 13 40 41 91 93 123 125 34 59]) i (sx-atom s (i + 1)))
- (sx-kids s i) (: (go j acc) (: k (sx-skip s j)
-                                (? (k >= #s || elem (s k) [41 93 125]) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc))))
-   (go (i + 1) ()))
- (sx-tops s) (: (go j acc) (: k (sx-skip s j) (? (k >= #s) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc)))) (go 0 ()))
+ ; ..a source path's text: [from to] in s, or () where s has no such form, as spans reads
+ ; it; a [..]'s parts follow the head its bracket reads as. the last text's index is kept,
+ ; each node by where it starts, the outermost of those that start there
+ sx-memo {}
+ (sx-lay ix n) (: sp (n 1) o (peep ix (sp 0) ())
+   _ (? (atom? o || o 1 1 < sp 1) (pin ix (sp 0) n) 0)
+   (two? (n 0) ? (map (sx-lay ix) (n 0)) 0))
+ (sx-ix s) (? (peep sx-memo 't () = s) (sx-memo 'ix)
+   (: tops (trap spans s (a \ b \ ())) ix {} _ (map (sx-lay ix) tops)
+      _ (pin sx-memo 't s) _ (pin sx-memo 'tops tops) _ (pin sx-memo 'ix ix)
+      ix))
+ (sx-tops s) (: _ (sx-ix s) (map (n \ n 1) (sx-memo 'tops)))
+ (sx-kids s i) (: n (peep (sx-ix s) i ()) f (two? n ? (n 0) ())
+   ks (? !(two? f) () (elem (s i) [91 123]) (f 0 0 = 'tablet ? () >f) f)
+   (map (k \ k 1) ks))
  (world-span s p) (: tops (sx-tops s) lv (two? tops ? <(rev tops) ())
    (kid f k) (: ks (sx-kids s (f 0)) j (s (f 0) @ 91 (k - 1) k) (0 <= j && j < #ks ? (ks j) ()))
    (go f l) (? (atom? l) f (atom? f) () (go (kid f <l) >l))
