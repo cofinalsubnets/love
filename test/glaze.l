@@ -162,6 +162,23 @@
    _ (test (gzfm-s [1 2 3] 0 = 14) (gzfm-s [1.5] 0 = 2.25) ((gzfm-t gzfm-s) = 1)
            (gzfm-w ["ab" [1 2] "c"] 0 = 8))
    0)
+; a body spelling a float computes + - * and the orders on doubles in place, a fixnum either side
+; converted; = and any other kind take the twin's answer, and a long run boxes past the collector
+(: (gzf-a x) (x + 0.25)   (gzf-s x) (2.5 - x)   (gzf-m x) (x * -1.5)
+   (gzf-lt x) (x < 0.5)   (gzf-le x) (x <= 0.5)   (gzf-gt x) (-0.5 > x)   (gzf-ge x) (x >= -0.5)
+   (gzf-eq x) (x = 0.5)   (gzf-ob a b) (a + 0.0 < b)   (gzf-ab a b) (a * b - 0.0)
+   (gzf-run i acc) (i = 0 ? acc (gzf-run (i - 1) (acc + 0.5 * 3)))
+   ins [0 -3 0.5 1e308 4611686018427387903 -4611686018427387904 (1 /// 3) (0.5 ~ 1) "s" ()]
+   _ (test (show (map gzf-a ins) = "(0.25 -2.75 0.75 1e308 4.611686018427388e18 -4.611686018427388e18 0.5833333333333333 (0.75 ~ 1.0) \"s\" 0.25)")
+           (show (map gzf-s ins) = "(2.5 5.5 2.0 -1e308 -4.611686018427388e18 4.611686018427388e18 2.1666666666666665 (2.0 ~ -1.0) () ())")
+           (show (map gzf-m ins) = "(-0.0 4.5 -0.75 -1.5e308 -6.917529027641082e18 6.917529027641082e18 -0.5 (-0.75 ~ -1.5) () ())")
+           (map gzf-lt ins = [1 1 0 0 0 1 1 0 1 1]) (map gzf-le ins = [1 1 1 0 0 1 1 0 1 1])
+           (map gzf-gt ins = [0 1 0 0 0 1 0 0 1 1]) (map gzf-ge ins = [1 0 1 1 1 0 1 1 0 0])
+           (map gzf-eq ins = [0 0 1 0 0 0 0 0 0 0])
+           ([(gzf-ob 1 1.5) (gzf-ob 1.5 1) (gzf-ob -1 -1) (gzf-ob 2 2.0) (gzf-ob "a" 1)] = [1 0 0 0 1])
+           (show [(gzf-ab 3 0.5) (gzf-ab -2 -2) (gzf-ab 1e200 1e200) (gzf-ab -0.0 1)] = "(1.5 4.0 infinity -0.0)")
+           (show (gzf-run 300000 0) = "450000.0"))
+   0)
 ; a 3-arg peep predicate beside a pin on the same tablet answers the tablet, either order, in a loop
 (: (gzpp-put t k v) (? (peep t k 0) t (pin t k v))
    (gzpp-swap t k v) (? (peep t k 0) (pin t k v) t)

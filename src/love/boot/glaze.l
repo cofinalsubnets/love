@@ -279,6 +279,7 @@
    (aquote? e) (two? e && (<e = '\) && 2 = #e)            ; the reader's quote: (\ X) at exactly two
    (aqnom? e) (aquote? e && nom? <>e)                          ; a point, so (a = 'sym) is raw identity
    (astr? e) (? (aquote? e) 0  (string? e) 1  (two? e) (foldl (\ a x (a || astr? x)) 0 e)  0)   ; a bare text literal in e
+   (aflo? e) (? (aquote? e) (gem? <>e)  (two? e) (foldl (\ a x (a || aflo? x)) 0 e)  0)        ; a float literal in e, once desugared
    (amemq x l) (atom? l ? 0  (x = <l) 1  (amemq x >l))     ; interp's quote answers the source node, so two
    (aposq x l i) (x = <l ? i (aposq x >l (i + 1)))         ; =-equal quote nodes stay distinct slots
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; never walk into quoted data
@@ -408,6 +409,7 @@
    (adesug env ti ta e)
     (? (aquote? e) e
        (string? e) ['\ e]                       ; a text literal is the quote of its own node, so it rides qs
+       (gem? e) ['\ e]                          ; ..and a float literal
        (atom? e) e
        ; the analyzer's uninterned tags, handed down by ala: ta = (apx n head args..) the apply,
        ; ti = (iop value args..) the VM op as a value, named back through aopv
@@ -571,6 +573,9 @@
        ; fbk: a body with a call never restarts: its guards jump stubs that drive the op's own value
        ; (fb1/fb2/atruth), pulled off the extras chain past the inner entries into the one ovo slot
        fbk  (drok && (ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
+       ; the float lane on every arithmetic guard costs a run-time compile its size, so past the bake
+       ; it rides only a body that spells a float
+       flk  (gv 'bake-count 0 || string? (gv 'bake-calls 0) || aflo? body || any aflo? inits)
        ovs  (fbk ? '(bit + - < = cap cup . <= > >= * // % & | ^) ())   ; the most driven first: a stub walks to its own
        ovals (map (o \ o = 'bit ? bit (gv o 0)) ovs)   ; the truth stub's bit is the glaze's own: the book's may be a module's namesake
        nd0  (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
@@ -680,6 +685,24 @@
              (abin sa sb d fin) (acg sa d + [['st SP (spill d) A]] + acg sb (d + 1)
                                  + (fbk ? [['st SP (spill (d + 1)) A]] ()) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b (b spilled too for a stub)
              (refb seq fb) (map (i \ map (x \ x = 'deopt ? fb x) i) seq)
+             ; a float operand to + - * or an order: f1 = a, f0 = b, a fixnum converted, any other kind to gn
+             (afld r f gn) (: fx (mint 0) dn (mint 0)
+                             [['test r 1] ['br 'ne fx] ['ld X r 0] (reach tgt SC 5) ['cmp X SC] ['br 'ne gn]
+                              ['ldsd f r 8] ['jmp dn] ['label fx] ['sar r 1] ['cvtsi2sd f r] ['label dn]])
+             ; the float lane past fin's fixnum guard ('flt), T = a and A = b still: a NaN, which answers (),
+             ; a full heap, or any other kind takes the deopt (the twin, or fb2's stub)
+             (afl op fin) (: fl (mint 0) en (mint 0) gn (mint 0) ok (mint 0)
+                            (!flk ? (map (i \ map (x \ x = 'flt ? 'deopt x) i) fin)
+                             (map (i \ map (x \ x = 'flt ? fl x) i) fin + [['jmp en] ['label fl]]
+                             + afld T 'f1 gn + afld A 'f0 gn
+                             + (elem op '(+ - *)
+                                ? ([['lea X HP (16 + 8 * W)] ['cmp SP X] ['br 'below gn]]   ; a gem and an 8w margin
+                                   + fbinop op + [['ucomisd 'f0 'f0] ['br 'np ok] ['jmp gn] ['label ok]
+                                                  (reach tgt X 5) ['st HP 0 X] ['stsd HP 8 'f0]   ; struct gem: the double 8-aligned
+                                                  ['mov A HP] ['add HP HP 16] ['jmp en]])
+                                [['ucomisd 'f1 'f0] ['set (op @ '< 'below '<= 'be '> 'above 'ae) A]
+                                 ['leax A A A 1 1] ['jmp en]])
+                             + [['label gn] ['jmp 'deopt] ['label en]])))
              (fb2 op d fin) (!fbk ? fin                                                            ; the two-operand stub: drive op's value over a (spill d) then b
                               (: fb (mint 0) en (mint 0)                                          ; (spill d+1), the partial rolling through spill d, answer in A
                                  (refb fin fb + [['jmp en] ['label fb]] + ovload op + [['ld A SP (spill d)]] + adrive ovo
@@ -691,11 +714,13 @@
                          [[['test A 1] ['br 'eq fb] ['label tk]]
                           (fbk ? ([['label fb]] + ovload 'bit + adrive ovo + [['jmp tk]]) ())])   ; ovload spares A
              (aar op sa sb d)
-              (abin sa sb d (fb2 op d
-               (op @ '+ (fx2 'deopt + [['sub A A 1] ['adds A A T] ['br 'vs 'deopt]])         ; 2y + (2x+1) = tag(x+y)
-                    '- (fx2 'deopt + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])          ; 2(x-y) then tag
-                    (fx2 'deopt + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]]))))   ; y * 2x = 2xy, mulo the tag-range gate
-             (acmp2 op sa sb d) (abin sa sb d (fb2 op d (fx2 'deopt + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])))
+              (abin sa sb d (fb2 op d (afl op
+               (op @ '+ (fx2 'flt + [['sub A A 1] ['adds A A T] ['br 'vs 'deopt]])           ; 2y + (2x+1) = tag(x+y)
+                    '- (fx2 'flt + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])            ; 2(x-y) then tag
+                    (fx2 'flt + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]])))))   ; y * 2x = 2xy, mulo the tag-range gate
+             (acmp2 op sa sb d) (abin sa sb d (fb2 op d
+              (op = '= ? (fx2 'deopt + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])
+                 (afl op (fx2 'flt + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]])))))
              (adm op sa sb d) (abin sa sb d (fb2 op d                                             ; /-by-0 -> twin; truncates toward zero
               (fx2 'deopt + [['sar T 1] ['sar A 1]]                                              ; the adds gate catches most-negative // -1
                + (divc? sb ? (divk tgt op sb) ([['test A A] ['br 'eq 'deopt]] + divir tgt op))
@@ -2562,7 +2587,7 @@
     (: arch love-arch
        G (cite 'glaze)                                                    ; not in the module: every name arrives by key
        defercell (cite 'guts 'defercell)  deferpatch (cite 'guts 'deferpatch)    ; off the book, cited before the mop
-       firstcell (cite 'guts 'firstcell)  countcell (cite 'guts 'countcell)
+       hotcell (cite 'guts 'hotcell)  countcell (cite 'guts 'countcell)
        emit (G 'emit)  coreir (G 'coreir)  deoptir (G 'deoptir)
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
@@ -2590,12 +2615,19 @@
        ; farq = the letrec-local predicate (a farq name is wire-resolved: never gv it, the book namesake is stale), lams = the scope's
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = the uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
        ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never).
-       ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (firstcell), and the compile sees the siblings as they are then
+       ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (hotcell), and the compile sees the siblings as they are then;
+       ; outside a bake, a closure made at run time waits for its call past hot-calls (LOVE_GLAZE_HOT=N; any other word compiles at once)
+       hot-calls 1024
        (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (pin fires 'ix (1 + peep fires 'ix 0))                          ; this closure's place in the bake, the call profile's key
-        (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v))
+           hn (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v)) 0
+                 (gv 'cmdline 0 == 0) ()                                 ; a bake: main.c binds cmdline only past one
+                 (getenv "LOVE_GLAZE_HOT" @ v (string? v && 0 < #v))
+                  (: v (getenv "LOVE_GLAZE_HOT") (dg i n) (i < #v ? (48 <= v i <= 57 ? (dg (i + 1) (n * 10 + v i - 48)) ()) n) (dg 0 0))
+                 hot-calls)
+        (? (charm? hn)
            (: lz (freeze-self lams nm)
-              L (firstcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))))
+              L (hotcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))) hn)
               (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
            (: r (natnow e s a gv farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
               (r == e && peep fires 'cc 0 = ix ? (countcell e a ix) r))))
