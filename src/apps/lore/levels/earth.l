@@ -36,12 +36,12 @@
             (grid 16 16 4 (rgb 0.46 0.47 0.5))
             (grid 64 64 2 (rgb 0.3 0.31 0.33))
             (noise 6 0.2))))
-; ..the car: pale steel, a dark band of windows, a red line under them
+; ..the car: pale steel, a red line along it under its glass and a dark skirt
 (: carbody (texture 64 64 2.3
             '((fill (rgb 0.72 0.74 0.76))
               (noise 20 0.6 0.06)
-              (rows 14 30 (rgb 0.06 0.07 0.09))
-              (rows 33 36 (rgb 0.6 0.08 0.06))
+              (rows 46 49 (rgb 0.6 0.08 0.06))
+              (rows 60 64 (rgb 0.2 0.21 0.23))
               (cols 0 1 0.35))))
 ;; ..glass, faintly green, smeared
 (: glass (texture 64 64 2
@@ -310,7 +310,7 @@
 (: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -9 16.3] [(x + 1) 12 18.3]))
               (decal [x -8.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -8.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
               (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
-              (shaft-pane x -4.7) (shaft-pane x -0.7) (shaft-pane x 3.3)])
+              (shaft-pane x -3.9) (shaft-pane x -1.78) (shaft-pane x 0.34) (shaft-pane x 2.46)])
 ;; ..a window in a wall across x, its corners cut c off: the air carved to an octagon and
 ; the pane set back into the wall, its own corners hidden there
 (: (octwin lo hi c t) (: x0 (lo 0) x1 (hi 0) y0 (lo 1) y1 (hi 1) z0 (lo 2) z1 (hi 2)
@@ -326,6 +326,24 @@
    a [(x + nz * 0.45) (y + 0.85) (z - nx * 0.45)] b [(x - nz * 0.45 + nx * 0.06) (y + 2.6) (z + nx * 0.45 + nz * 0.06)]
    [(skin {'all bezel} (solid (box (map (i \ min (a i) (b i)) ^3) (map (i \ max (a i) (b i)) ^3))))
     (ad [(x + nx * 0.065) (y + 1.725) (z + nz * 0.065)] n [0 1 0] 0.82 1.67 screenface)]))
+;; ..a buttress the width of a back block's face about x: flying up from that face at z 8,
+; level with the head of the lowest shaft pane, south two thirds across, then 4 deep under
+; the ceiling to the front block's face at z 4
+(: (buttress x) (: a (x - 1.7) b (x + 1.7)
+   [(skin {'all concrete} (solid (box [a 1 4] [b 5 5.33])))
+    (skin {'all concrete} (cut [a -2.6 8] [a 1 5.33] [b -2.6 8] (cut [a 1.4 8] [a 5 5.33] [b 1.4 8] (solid (box [a -2.6 5.33] [b 5 8])))))]))
+;; ..a lintel x0 to x1 wide, z0 to z1 deep, its soffit at y and its top at the ceiling, its
+; edge at z1 rounded off r in n flats up into its face
+(: (lintel x0 x1 y z0 z1 top r n) (: cy (y + r) cz (z1 - r)
+   (foldl (\ b i (: t (3.14159265 * (i + 0.5) / (2 * n)) py (cy - r * cos t) pz (cz + r * sin t)
+              (cut [x0 py pz] [x0 (py + sin t) (pz + cos t)] [x1 py pz] b)))
+          (solid (box [x0 y z0] [x1 top z1])) ^n)))
+;; ..a vent's grille: a pale frame round dark slats; and a floor's strips, dark rubber
+; with the floor between
+(: vent (texture 16 16 0.6 '((fill (rgb 0.05 0.05 0.06)) (rows 3 5 (rgb 0.3 0.31 0.33)) (rows 7 9 (rgb 0.3 0.31 0.33))
+                             (rows 11 13 (rgb 0.3 0.31 0.33)) (rows 0 1 (rgb 0.42 0.43 0.45)) (rows 15 16 (rgb 0.42 0.43 0.45))
+                             (cols 0 1 (rgb 0.42 0.43 0.45)) (cols 15 16 (rgb 0.42 0.43 0.45)))))
+(: floorstrips (texture 54 8 5.4 '((fill hole) (stripes 3 2 0 (rgb 0.17 0.17 0.18)))))
 ; ..the station's lamps: steel fittings, three-sided, on the walls
 (: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
 (: (lamp at n d) (sconce at n d 1.4 sconcemetal))
@@ -594,9 +612,26 @@
   ; the track a metre below it running on into the tunnels, under the car's floor, cabling
   ; on the walls up to the platform
   (skin {'floor grate} (room [-11 -9 -4.52] [11 2 0]))
+  ; ..the tunnels either side a little wider than the track along the platform: a pair of
+  ; pilasters every car's length, their faces in line with the platform's walls; between
+  ; each pair a recess of cabling in the ceiling and a footlight low on the south wall, and
+  ; under every other recess a strip across
+  (mirror-x 0
+   [(skin {'all concrete} (room [-70 -10 -7.9] [-11 -4 -4.22]))
+    (map (j \ (: x (-20 - (9 * j))
+                [(skin {'all concrete} (solid (box [(x - 0.3) -10 -7.9] [(x + 0.3) -4 -7.6])))
+                 (skin {'all concrete} (solid (box [(x - 0.3) -10 -4.52] [(x + 0.3) -4 -4.22])))])) ^6)
+    (map (j \ (: a (-19.7 - (9 * j)) b (j = 0 ? -11 (-11.3 - (9 * j))) m (-15.5 - (9 * j))
+                [(skin {'all cabling} (air (box [a -4 -7.6] [b -3.6 -4.52])))
+                 (dim 0.35 (lamp [m -9.6 -7.9] [0 0 1] [0 -1 0]))
+                 (j % 2 = 0 ? [(dim 0.35 (strip-light [m -3.7 -6.06]))] ())])) ^6)])
+  ; ..and on the first stretch of each one's south wall a red beacon: the east's dark but for
+  ; a flash once a second, the west's lit but for a moment every four
+  (beacon 1.0 0.12 (bulb [15.5 -6.5 -7.8] (rgb 1 0.06 0.03)))
+  (beacon 4.0 3.7 (bulb [-15.5 -6.5 -7.8] (rgb 1 0.06 0.03)))
   (skin {'walls cabling 'floor rails} (room [-70 -10 -7.6] [70 -9 -4.52]))
   (room [-11 -9 -7.6] [11 2 -4.52])
-  (room [-70 -9 -7.6] [70 -6 -4.52])
+  (room [-70 -9 -7.6] [70 -4 -4.52])
   ; solid blocks standing in from the side walls, mirrored about x 0, their corners out in
   ; the air chamfered; the hallway between them and each wing's chamber south open onto
   ; the platform
@@ -606,21 +641,44 @@
     (block [-15 -9 8] [-11 5 10] [[-15 8] [-11 8]])
     (block [-7 -9 8] [-3 5 10] [[-7 8] [-3 8]])
     (solid (box [-19 -9 16] [-3 5 10]))
-    ; ..the lamps, each looking along its wall, some across, some up or down it
-    (lamp [-3 -6.2 2] [1 0 0] [0 0 1])
-    (lamp [-3 -6.2 9] [1 0 0] [0 0 -1])
-    (lamp [-19 -3.5 7] [1 0 0] [0 1 0])
-    (lamp [-3 -2.5 13] [1 0 0] [0 -1 0])
-    (lamp [-5 -6.5 0] [0 0 -1] [-1 0 0])
+    ; ..buttresses from the back blocks over to the front ones, a lamp under each foot
+    ; looking down the wall and one across from it on the front block
+    (buttress -13) (buttress -5)
+    (lamp [-13 -3.1 8] [0 0 -1] [0 -1 0]) (lamp [-5 -3.1 8] [0 0 -1] [0 -1 0])
+    (lamp [-13 -3.1 4] [0 0 1] [0 -1 0]) (lamp [-5 -3.1 4] [0 0 1] [0 -1 0])
+    ; ..and on the platform side of the middle pillar, two thirds as high
+    (lamp [-5 -5.07 0] [0 0 -1] [0 -1 0])
+    ; ..and either side of the shafts' alcove one looking at its north wall, midway up
+    ; between the doorways' heads and the lowest panes
+    (lamp [-3 -5.15 13] [1 0 0] [0 0 1])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
-    (solid (box [-11 -9 -4.52] [-1 -8.6 -4.36]))
-    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -8.6 -4.47] [-1 -8.0 -4.41]))])
-    (solid (box [-11 -8.0 -4.48] [-1 -7.94 -4.4]))])
+    (skin {'floor sconcemetal} (solid (box [-11 -9 -4.52] [-1 -8.6 -4.36])))
+    (repeat 8 [-1.41 0 0] [(skin {'all sconcemetal} (solid (box [-1.06 -8.6 -4.47] [-1 -8.0 -4.41])))])
+    (skin {'all sconcemetal} (solid (box [-11 -8.0 -4.48] [-1 -7.94 -4.4])))
+    ; ..vents low on the front blocks' north faces
+    (decal [-16.5 -8.5 4.005] [0 0 1] [0 1 0] 0.6 0.6 vent) (decal [-13.5 -8.5 4.005] [0 0 1] [0 1 0] 0.6 0.6 vent)
+    (decal [-5 -8.5 4.005] [0 0 1] [0 1 0] 0.6 0.6 vent)])
+  ; a band of dark strips along the floor from the platform's edge to the shafts' wall, a
+  ; foot of tile either side
+  (decal [0 -8.99 5.74] [0 1 0] [0 0 1] 5.4 20.52 floorstrips)
+  ; a low steel bench in the alcove east of the shafts, three seats on one beam, against its
+  ; north wall
+  (map (x \ skin {'all steelk} (solid (box [(x - 0.475) -8.6 9.5] [(x + 0.475) -8.55 9.95]))) [8 9 10])
+  (skin {'all steelk} (solid (box [7.6 -8.75 9.65] [10.4 -8.6 9.8])))
+  (map (x \ skin {'all steelk} (solid (box [(x - 0.04) -9 9.62] [(x + 0.04) -8.75 9.83]))) [7.6 9 10.4])
+  ; the platform's ceiling: over the track a tunnel's roof, from its edge sloping down to
+  ; the pillars, but for the way out from the car's door between the middle ones, whose
+  ; ceiling dips less, runs on level between them and rounds up into their north faces
+  (skin {'all concrete} (solid (box [-11 -4 -7.6] [11 2 -4.52])))
+  (skin {'all concrete} (cut [-11 -4.7 0] [-11 -4 -4.52] [-3 -4.7 0] (solid (box [-11 -4.7 -4.52] [-3 2 0]))))
+  (skin {'all concrete} (cut [3 -4.7 0] [3 -4 -4.52] [11 -4.7 0] (solid (box [3 -4.7 -4.52] [11 2 0]))))
+  (skin {'all concrete} (cut [-3 -4.6 0] [-3 -4 -4.52] [3 -4.6 0] (solid (box [-3 -4.6 -4.52] [3 2 0]))))
+  (skin {'all concrete} (lintel -3 3 -4.6 0 4 5 1.2 6))
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
-  (train [-9 -9 -7.24] [9 -6.7 -4.64] (door [0 -9 -4.64] 1.4 2.0) -55)
+  (glazed glass (train [-4.5 -9 -7.24] [4.5 -6.7 -4.64] (door [0 -9 -4.64] 1.4 2.0) -55))
   ; ..a bare mattress along the car's floor at its east end, gone with it
-  (mattress [5.4 -9 -5.94] 90)
+  (mattress [2.2 -9 -5.94] 90)
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -9 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
@@ -628,8 +686,8 @@
   ; ends at a blank wall, painted a half court with its hoop on the wall
   (sky 18.35 'mostly)
   (smog 0.9)
-  (skin {'floor roadmetal 'walls facade} (street [-45 8.85 14] [45 45 47]))
-  (skin {'all paving} (solid (box [-45 8.85 14] [45 9 22])))
+  (skin {'floor roadmetal 'walls facade} (street [-45 8.85 8.2] [45 45 47]))
+  (skin {'all paving} (solid (box [-45 8.85 8.2] [45 9 22])))
   (skin {'all paving} (solid (box [-45 8.85 28] [-31 9 33])))
   (skin {'all paving} (solid (box [-33 8.85 33] [-31 9 47])))
   (skin {'all paving} (solid (box [-20 8.85 28] [45 9 33])))
@@ -665,6 +723,8 @@
   (grav [0.7 -9 16.3] [2.7 9 18.3] 'up)
   (grav [-2.7 -9 16.3] [-0.7 9 18.3] 'down)
   (shaft 1.7) (shaft -1.7)
+  ; ..a lamp between the lowest panes, under them, looking down the wall
+  (lamp [0 -4.15 16] [0 0 -1] [0 -1 0])
   (air (box [0.9 -9 15.9] [2.5 -6.4 16.4]))
   (air (box [-2.5 -9 15.9] [-0.9 -6.4 16.4]))
   (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
@@ -672,7 +732,11 @@
   ; the natural food center at the street's west end, three storeys, its floor a step below
   ; the pavement: a window onto the street, steps down from the east to its door, a sign
   ; standing out from its front, and a spinner on its roof
-  (skin {'all grime} (solid (box [-45 8.85 14] [-33 22.5 20.5])))
+  (skin {'all grime} (solid (box [-45 8.85 8.2] [-33 22.5 20.5])))
+  ; ..east of it a block out from the south wall to the food center's height, before the
+  ; rooms behind them that carve it, and on its east face a screen
+  (skin {'all concrete} (solid (box [-33 8.85 8.2] [-20 22.5 11.8])))
+  (wallscreen [-20 9 10] [1 0 0])
   (skin {'floor woodfloor 'walls shopwall} (room [-44.5 8 12] [-33.5 12 20]))
   (across (strip-light [-39 12 17.2]))
   (across (strip-light [-39 12 13.8]))
@@ -747,12 +811,8 @@
   (shopsign -34.41 -1)
   (skin {'all darkmetal} (solid (box [-39.2 22.5 16.8] [-38.8 25 17.2])))
   (spinner [-39 25 17] 5 3.5 spin1 spin2)
-  ; ..east of it a block out from the south wall to the food center's height, its face along
-  ; the stairs down to the door, and on its east face a screen
-  (skin {'all concrete} (solid (box [-33 8.85 14] [-20 22.5 17.6])))
-  (wallscreen [-20 9 15.8] [1 0 0])
   ; ..the advertisements: red and blue across that block's face, green high on the east
-  (ad [-26.5 19 17.63] [0 0 1] [0 1 0] 13 7 adredblue)
+  (ad [-26.5 19 11.83] [0 0 1] [0 1 0] 13 7 adredblue)
   (ad [44.97 28 30] [-1 0 0] [0 1 0] 12 6 adgreen)
   ; ..a street sweeper out of the garage, in the middle of the road before it, nose east,
   ; headlights on: a big four-by-four's body, its hood sloping to the nose, a raked
@@ -886,15 +946,9 @@
     (herald orb-at 1.6 5.9 smiley "ring.l" ())])
   (poster [-4.7 -7.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
-  ; chamber beside it, a lamp, and a door in its east wall
+  ; chamber beside it, and a door in its east wall
   (room [11.3 -9 -4] [18.7 -5.8 3.7])
   (octwin [10.9 -8.1 -3.7] [11.4 -6.4 1.23] 0.3 glass)
-  (lamp [13 -7.4 -4] [0 0 1] [1 0 0])
-  ; ..the lamps on the chambers' outer walls, the east ones over the window and the screen
-  (lamp [-11 -6.5 -2.3] [1 0 0] [0 0 1])
-  (lamp [11 -5.2 -2.3] [-1 0 0] [0 0 1])
-  (lamp [-11 -6.2 2] [1 0 0] [0 0 1])
-  (lamp [11 -4.6 2] [-1 0 0] [0 0 1])
   ; ..and beside the window a screen, facing the platform's end
   (wallscreen [11 -9 2.51] [-1 0 0])
   ; ..two in the first alcove west of the shafts' way, on its back wall
