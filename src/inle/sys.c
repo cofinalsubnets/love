@@ -233,7 +233,7 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 extern void k_fs_cwd_swap(char *cwd, uintptr_t *n);
 extern bool k_fd_blocks(int fd);
 extern int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols);
-extern bool k_ready(int fd, int events);
+extern bool ready(int fd, int events);
 
 #define k_proc_fds 64
 struct k_proc { int pid, ppid, live, status, exitw; uint64_t cx, nb; uintptr_t cwd_n; char cwd[256];
@@ -541,7 +541,7 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
      if (q[i].fd < 0) { q[i].revents = 0; continue; }
      if (qf < 0) rv = POLLNVAL;
      else {
-      if ((ev & POLLIN) && k_ready((int) qf, POLLIN)) rv |= POLLIN;   // love's wait_in is poll's own 1
+      if ((ev & POLLIN) && ready((int) qf, POLLIN)) rv |= POLLIN;   // love's wait_in is poll's own 1
       if (ev & POLLOUT) rv |= POLLOUT; }
      q[i].revents = rv;
      k += !!rv; }

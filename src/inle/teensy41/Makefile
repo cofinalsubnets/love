@@ -81,7 +81,7 @@ k_brd = kern teensy41 usb sd psram
 k_objs = $(k_inle:%=$(R)/$(kd)/%.o) $(k_brd:%=$(R)/$(kd)/%.o) $(R)/$(o)/boot.o $(R)/$(kd)/love-img.o
 $(foreach u,$(k_inle),$(eval $(call p_obj,k/$u,src/inle/$u.c,$(S)/inle/$u.c $(S)/inle/k.h $(mc) $(k_hdr),$(k_cc))))
 $(foreach u,$(k_brd),$(eval $(call p_obj,k/$u,src/inle/teensy41/$u.c,$u.c teensy41.h psram.h $(S)/inle/k.h $(mc),$(k_cc))))
-$(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o $(R)/out/x-arm/o/love/user/nokern.o $(R)/out/.kore-cat.l: FORCE
+$(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o $(R)/out/.kore-cat.l: FORCE
 	@$(MAKE) --no-print-directory -C $(R) xa=arm $(patsubst $(R)/%,%,$@)
 # the image: the arm love relinked over noblob.o, as the kernel is, so the carried-c digests
 # agree; it bakes a cat under qemu-arm. the lib alone by default: kore's heap and a major's
@@ -91,10 +91,10 @@ $(R)/$(kd)/lib-cat.l:
 	@mkdir -p $(dir $@)
 	@printf '\n(cite (quote verbs) (quote mark) ())\n\n(cite (quote glaze) (quote srcdrop) ())\n' > $@
 k_xo = $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o
-$(R)/$(kd)/baker: $(k_xo) $(R)/out/x-arm/o/love/user/nokern.o $(lv)
+$(R)/$(kd)/baker: $(k_xo) $(lv)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@cd $(R) && $(MOONCC) -t arm $$(cat out/x-arm/o.list) out/x-arm/o/love/user/nokern.o out/x-arm/o/love/noblob.o -o $(kd)/baker
+	@cd $(R) && $(MOONCC) -t arm $$(cat out/x-arm/o.list) out/x-arm/o/love/noblob.o -o $(kd)/baker
 $(R)/$(kd)/love.img: $(R)/$(kd)/baker $(R)/$(k_cat)
 	@echo BAKE	$@ "(qemu-arm)"
 	@cd $(R) && LOVE_NO_IMAGE=1 qemu-arm $(kd)/baker bake -l $(k_cat) $(kd)/love.img > $(kd)/bake.log 2>&1 \

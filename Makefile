@@ -104,12 +104,10 @@ macho_o = $(ho)/moon/love/macho.o
 endif
 h_o = $(love_c:$(S)/%.c=$(ho)/o/%.o)
 host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
-# the three a LINK names rather than the directory, one per thing it does without:
-# src/love/user/nokern.c the kernel's doors where no kmain.c stands under them, src/love/noblob.c the
-# carried archives where no laid object brings them. the OS word is src/love/love.c's
-# weak one wherever moonlibc's os.c is not in the link.
-# wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
-seat_o = $(ho)/o/love/user/nokern.o $(ho)/o/love/noblob.o
+# what a LINK names rather than the directory: src/love/noblob.c the carried archives where no
+# laid object brings them. the OS word is src/love/love.c's weak one wherever moonlibc's os.c
+# is not in the link. the HCC flavour is gcc and glibc alone, so it takes both.
+seat_o = $(ho)/o/love/noblob.o
 hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dtco=$(htco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
@@ -148,7 +146,7 @@ $(ho)/liblove.a: $(h_o)
 # pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
+love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/noblob.c $(love_c))
 out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
 out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 # love0's cc: the plain build's. an HCC build is a differential over the hosted vm, and love0,
@@ -262,7 +260,7 @@ $$($(1)_love_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/love.o: out/lib/love_version.h   # only this TU carries the version id
-$$($(1)_host_o) $$($(1)_seat_o) $$($(2))/love/macho.o $$($(2))/love/user/nokern.o: $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
+$$($(1)_host_o) $$($(1)_seat_o) $$($(2))/love/macho.o: $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
@@ -310,7 +308,7 @@ moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonl
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(love_door_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 # love for macos: the same objects but its bake's, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), unbaked -- the image is its own binary's, so the bake runs on the box
 # (test_macos_love)
@@ -318,12 +316,12 @@ mac_o = $(filter-out %/love/elfbake.o,$(moon_o)) $(moon_d)/love/macho.o
 $(ho)/love-macos.raw: out/moonlibc.o $(mac_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos -pie $(mac_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -os macos -pie $(mac_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(love_door_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -575,7 +573,7 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xod)/love/user/nokern.o $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
 # the lane's objects by name, for a port that links them (src/inle/teensy41's kernel face)
 $(xd)/o.list: force_dist_list $(x_o)
 	@tf=$@.$$$$.tmp; echo '$(x_o)' > $$tf; \
@@ -792,7 +790,7 @@ k_pie_o =
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
-k_pie_o = $(if $(DOOM),,$(kart_o))
+k_pie_o = $(kart_ko)
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
@@ -888,9 +886,8 @@ $(k_odir)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(mdep)
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
 kart_inc += -I$(doom_d) -I$S/inle/doom -DFEATURE_SOUND
-kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/doom/%.o,$(doom_c)) \
-  $(moon_d)/doom/wad.o
-kart_o += $(kart_doom_o)
+kart_doom_o = $(moon_d)/inle/doom.o $(moon_d)/inle/doomsnd.o \
+  $(patsubst $(doom_d)/%.c,$(moon_d)/doom/%.o,$(doom_c)) $(moon_d)/doom/wad.o
 $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
@@ -901,10 +898,9 @@ $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-# love links its kernel's doors bare; doom's nifs want the kernel under them, so that lane links it
-love_door_o = $(if $(DOOM),$(kart_o),$(moon_d)/love/user/nokern.o)
-$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(love_door_o)
-$(ho)/love-macos.raw: $(kart_o)
+# doom's nifs ride the hosted link, their kernel names doors; the projection lays the rest
+kart_ko = $(filter-out $(kart_doom_o),$(kart_o))
+$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(kart_doom_o)
 $(k_elf): $(k_pie_o)
 
 $(k_odir)/love/love.o: out/lib/love_version.h
@@ -918,7 +914,6 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $S/inle/%.l $(klay_l)
 	@{ echo "(borrow 'holo)"; cat $S/apps/kore/text.l $S/apps/kore/u.l; \
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(klay_l)) $<; } > $@
 
-$(xd)/love: $(xod)/love/user/nokern.o
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
