@@ -218,9 +218,10 @@ korerun fsync -d "$ho/.kore-fsync" "$ho/.kore-nosuch" 2>/dev/null; r=$?; [ $r -e
 sleep 30 & kp=$!; korerun kill -s KILL $kp; wait $kp; r=$?; [ $r -eq 137 ] || fail "kore kill -s KILL ($r)"
 sleep 30 & kp=$!; korerun kill -SIGTERM $kp; wait $kp; r=$?; [ $r -eq 143 ] || fail "kore kill -SIGTERM ($r)"
 korerun kill -x 1 > /dev/null 2>&1; r=$?; [ $r -eq 1 ] || fail "kore kill -x ($r)"
-# env lists in the environment's order; -0, -C DIR, -S split, -C with no command refused; printenv's order too
+# env lists in the environment's order; -0, -C DIR, -S split, -C with no command refused; printenv's order too,
+# the nest named (love exports one it resolves)
 [ "$(env -i A=1 B=2 C=3)" = "$(korerun env -i A=1 B=2 C=3)" ] || fail "kore env's order"
-[ "$(env -i A=1 B=2 LOVE_NO_IMAGE= printenv)" = "$(env -i A=1 B=2 LOVE_NO_IMAGE= "$m" printenv)" ] || fail "kore printenv's order"
+[ "$(env -i A=1 LOVE_NEST=/nonexistent B=2 LOVE_NO_IMAGE= printenv)" = "$(env -i A=1 LOVE_NEST=/nonexistent B=2 LOVE_NO_IMAGE= "$m" printenv)" ] || fail "kore printenv's order"
 env -0 -i A=1 B=2 > "$g"; korerun env -0 -i A=1 B=2 > "$o"; same "env -0"
 [ "$(korerun env -C / pwd)" = / ] || fail "kore env -C"
 [ "$(korerun env -S 'echo a  b' c)" = "a b c" ] || fail "kore env -S"
