@@ -323,7 +323,7 @@
    rows (pin rows0 'proofs (rows-out 0))
 
    ; --- r += s at limb off, r sized for the whole sum, so the carry settles inside it ----------
-   offT ['add (vl 'R0 'n) ['mul (vl 'S 'm) (pw 'o)]]
+   offT ['add (vl 'R0 'n) ['mul (vl 'Y 'm) (pw 'o)]]
    offs0
     {'name "mag_add_off" 'short "maoff"
      'attrs '("static")
@@ -333,11 +333,11 @@
      'limb 'L
      'vals '(R)
      'dvars '(t c)
-     'arrays '((R (v "r") n) (S (v "s") m))
+     'arrays '((R (v "r") n) (Y (v "s") m))
      'requires
-      (['(R (pi j nat nat)) '(R0 (pi j nat nat)) '(S (pi j nat nat)) '(n nat) '(m nat) '(o nat)]
+      (['(R (pi j nat nat)) '(R0 (pi j nat nat)) '(Y (pi j nat nat)) '(n nat) '(m nat) '(o nat)]
        + limb-req
-       + ['(gom (inf-le (add o m) n)) '(gnw (inf-lt n (inf-pow w))) (limbs 'R) (limbs 'S)
+       + ['(gom (inf-le (add o m) n)) '(gnw (inf-lt n (inf-pow w))) (limbs 'R) (limbs 'Y)
           '(g0 (pi j nat (paths nat (R j) (R0 j)))) ['gf ['inf-lt offT (pw 'n)]]])
      'decls
       [['(named "uintptr_t") ['n (int-n "rn")] ['m (int-n "sn")] ['o (int-n "off")] ['i]]
@@ -347,9 +347,9 @@
       ['(s0 set c 0)
        ['w1 'for 'i 0 'm
         [['a1 '(inf-le i m)] ['a2 '(inf-le c 1)]
-         ['a3 ['paths 'nat ['add (vl 'R 'n) ['mul 'c (pw '(add o i))]] ['add (vl 'R0 'n) ['mul (vl 'S 'i) (pw 'o)]]]]
+         ['a3 ['paths 'nat ['add (vl 'R 'n) ['mul 'c (pw '(add o i))]] ['add (vl 'R0 'n) ['mul (vl 'Y 'i) (pw 'o)]]]]
          (limbsR 'gR1)]
-        '((s1 set t (d+ (d+ (dl (at R (+ o i))) (dl (at S i))) c))
+        '((s1 set t (d+ (d+ (dl (at R (+ o i))) (dl (at Y i))) c))
           (p1 poke R (+ o i) (lo t))
           (s2 set c (hi t)))]
        ; the carry runs up while it lasts; gf says it is gone by r's end
@@ -373,12 +373,12 @@
        (Vl A i) "(un-val \(B) \(A) \(i))"
        (Pw i) "(uu-app \(i) \(B))"
        Rn (Vl "R" "n") R0n (Vl "R0" "n") P (Pw "(add o i)") Po (Pw "o") Ro "(R (add o i))"
-       T "(add \(R0n) (mul \(Vl "S" "m") \(Po)))"
+       T "(add \(R0n) (mul \(Vl "Y" "m") \(Po)))"
        OI "(inf-lttrans (add o i) (add o m) n (inf-ltaddl o i m w1) gom)"
        IL "(inf-lelt i (add o i) n (inf-leaddl i o) w2)"
        E1 "(isantisymmnatleh i m a1 w1)"
-       T1 "(add (add \(Ro) (S i)) c)" lo1 "(inf-mod \(B) \(T1))" hi1 "(un-div \(B) \(T1))"
-       CY1 "(un-carry1 \(B) \(h) \(T1) (un-sum3lt \(B) \(Ro) (S i) c (gR1 (add o i)) (gS i) a2))"
+       T1 "(add (add \(Ro) (Y i)) c)" lo1 "(inf-mod \(B) \(T1))" hi1 "(un-div \(B) \(T1))"
+       CY1 "(un-carry1 \(B) \(h) \(T1) (un-sum3lt \(B) \(Ro) (Y i) c (gR1 (add o i)) (gY i) a2))"
        T2 "(add \(Ro) c)" lo2 "(inf-mod \(B) \(T2))" hi2 "(un-div \(B) \(T2))"
        CY2 "(un-carry1 \(B) \(h) \(T2) (un-sum2lt \(B) \(h) \(Ro) c (gR2 (add o i)) b2))"
        (valup lo lt) (hy () ["(add \(Vl "(inf-upd R (add o i) \(lo))" "n") (mul \(Ro) \(P)))" "(add \(Rn) (mul \(lo) \(P)))"
@@ -387,11 +387,11 @@
        ; the first loop: s's limb and the carry at o + i
        id1 (lid "un-offs-w1b-4" "w1b-4"
             [(valup lo1 OI) (dm hi1 lo1 T1)
-             (hy () ["(add \(Rn) (mul c \(P)))" "(add \(R0n) (mul \(Vl "S" "i") \(Po)))" "a3"])
+             (hy () ["(add \(Rn) (mul c \(P)))" "(add \(R0n) (mul \(Vl "Y" "i") \(Po)))" "a3"])
              (hy hi1 [(Pw "(add o (succ i))") "(mul \(B) \(P))"
                       "(maponpaths nat nat (lam z (uu-app z \(B))) (add o (succ i)) (succ (add o i)) (natplusnsm o i))"])
-             (hy Po [(Vl "S" "(succ i)") "(add \(Vl "S" "i") (mul (S i) \(Pw "i")))" "(idpath \(Vl "S" "(succ i)"))"])
-             (hy "(S i)" [P "(mul \(Po) \(Pw "i"))" "(un-appadd \(B) o i)"])])
+             (hy Po [(Vl "Y" "(succ i)") "(add \(Vl "Y" "i") (mul (Y i) \(Pw "i")))" "(idpath \(Vl "Y" "(succ i)"))"])
+             (hy "(Y i)" [P "(mul \(Po) \(Pw "i"))" "(un-appadd \(B) o i)"])])
        ; the second: the carry alone
        Ei "(pathscomp0 nat (add o (add i 1)) (add o (succ i)) (succ (add o i)) (maponpaths nat nat (lam z (add o z)) (add i 1) (succ i) (un-add1 i)) (natplusnsm o i))"
        id2 (lid "un-offs-w2b-3" "w2b-3"
@@ -403,8 +403,8 @@
          ["w1e-3" "(maponpaths nat nat (lam z (add z 0)) \(Rn) \(R0n) (un-valcong \(B) R R0 n g0))"]
          ["s1-1" "(inf-lttrans (add o i) n (inf-pow w) \(OI) (inf-ltle n (inf-pow w) gnw))"]
          ["s1-2" OI]
-         ["s1-4" "(un-dfit L gL (add \(Ro) (S i)) (un-sum2llt \(B) \(Ro) (S i) (gR1 (add o i)) (gS i)))"]
-         ["s1-5" "(un-dfit L gL \(T1) (un-sum3lt \(B) \(Ro) (S i) c (gR1 (add o i)) (gS i) a2))"]
+         ["s1-4" "(un-dfit L gL (add \(Ro) (Y i)) (un-sum2llt \(B) \(Ro) (Y i) (gR1 (add o i)) (gY i)))"]
+         ["s1-5" "(un-dfit L gL \(T1) (un-sum3lt \(B) \(Ro) (Y i) c (gR1 (add o i)) (gY i) a2))"]
          ["p1-1" "(inf-lttrans (add o i) n (inf-pow w) \(OI) (inf-ltle n (inf-pow w) gnw))"]
          ["p1-2" OI]
          ["s2-1" "(un-cfit L gL \(hi1) \(CY1))"]
@@ -413,7 +413,7 @@
          ["w1b-4" (use id1)]
          ["w1b-5" "(un-updlt \(B) R (add o i) \(lo1) gR1 (un-modlt0 \(B) \(h) \(T1)))"]
          ["w2e-1" "(transportf nat (lam z (inf-le (add o z) n)) m i (pathsinv0 nat i m \(E1)) gom)"]
-         ["w2e-3" "(transportf nat (lam z (paths nat (add \(Rn) (mul c \(P))) (add \(R0n) (mul \(Vl "S" "z") \(Po))))) i m \(E1) a3)"]
+         ["w2e-3" "(transportf nat (lam z (paths nat (add \(Rn) (mul c \(P))) (add \(R0n) (mul \(Vl "Y" "z") \(Po))))) i m \(E1) a3)"]
          ; a break: the carry is 0
          ["end-1" "(pathscomp0 nat \(Rn) (add \(Rn) (mul c \(P))) \(T) (pathsinv0 nat (add \(Rn) (mul c \(P))) \(Rn) (pathscomp0 nat (add \(Rn) (mul c \(P))) (add \(Rn) 0) \(Rn) (maponpaths nat nat (lam z (add \(Rn) (mul z \(P)))) c 0 g1) (natplusr0 \(Rn)))) b3)"]
          ["s3-3" "(un-dfit L gL \(T2) (un-sum2lt \(B) \(h) \(Ro) c (gR2 (add o i)) b2))"]
