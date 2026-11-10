@@ -452,6 +452,30 @@
        (maponpaths nat nat (lam z (mul B z)) (uu-app (add q j) B) (mul (uu-app q B) (uu-app j B)) IH)
        (pathsinv0 nat (mul (mul B (uu-app q B)) (uu-app j B)) (mul B (mul (uu-app q B) (uu-app j B))) (natmultassoc B (uu-app q B) (uu-app j B)))))
      i)))
+ ; x + c P = t under P: the carry was 0
+ (defq un-czero (pi X nat c nat P nat T nat e (paths nat (add X (mul c P)) T) g (inf-lt T P) (paths nat X T))
+   (lam X c P T e g ((nat_rect (lam q (pi e (paths nat (add X (mul q P)) T) (paths nat X T)))
+     (lam e (pathscomp0 nat X (add X 0) T (pathsinv0 nat (add X 0) X (natplusr0 X)) e))
+     (lam k IH e (inf-ltnle (paths nat X T) T P g
+       (transportf nat (lam z (inf-le P z)) (add X (add (mul k P) P)) T e
+         (inf-letrans P (add (mul k P) P) (add X (add (mul k P) P)) (inf-leaddl P (mul k P)) (inf-leaddl (add (mul k P) P) X)))))
+     c) e)))
+ ; a + X B = Y B with a under B: X is Y, either way past it B too far
+ (defq un-bdivu (pi B nat a nat X nat Y nat e (paths nat (add a (mul X B)) (mul Y B)) g (inf-lt a B) (paths nat X Y))
+   (lam B a X Y e g (isantisymmnatleh X Y
+     (inf-case (natgtb X Y) (lam y (paths bool y false))
+       (lam f (inf-ltnle (paths bool true false) (mul Y B) (add (mul Y B) B)
+         (inf-ltaddpos (mul Y B) B (inf-lelt 0 a B (idpath false) g))
+         (inf-letrans (add (mul Y B) B) (mul X B) (mul Y B) (un-mulle2 (succ Y) X B (inf-ltsu Y X f))
+           (transportf nat (lam z (inf-le (mul X B) z)) (add a (mul X B)) (mul Y B) e (inf-leaddl (mul X B) a)))))
+       (lam f (idpath false)))
+     (inf-case (natgtb Y X) (lam y (paths bool y false))
+       (lam f (inf-ltnle (paths bool true false) (mul Y B) (add (mul X B) B)
+         (transportf nat (lam z (inf-lt z (add (mul X B) B))) (add a (mul X B)) (mul Y B) e
+           (transportf nat (lam z (inf-lt (add a (mul X B)) z)) (add B (mul X B)) (add (mul X B) B) (natpluscomm B (mul X B))
+             (inf-ltaddr a B (mul X B) g)))
+         (un-mulle2 (succ X) Y B (inf-ltsu X Y f))))
+       (lam f (idpath false))))))
 )
 
 (test

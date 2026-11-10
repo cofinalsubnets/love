@@ -48,6 +48,18 @@
                   (rev (st 'log)))
  (test (lwrun 0 = [[1 'press 1] [2 'release 1] [3 'press 3]]) (lwrun 1 = ())))
 
+; the gauge: a frame resting a ms each 2560 pixels at its scale, 25 ms at 2 for a 20 ms goal,
+; steps once to 4 and holds there; a key by hand stops it, and 1 holds though it is over
+(: (lwg sc n) (: win {'w 640 'h 400 'paper (cask 4) 'evq ()}
+                 (sized st) (pins st 'pic-w (640 // st 'scale) 'pic-h (400 // st 'scale))
+                 lv {'new (w \ h \ sized {'w w 'h h 't 0 'scale 2 'seen ()})
+                     'size (st \ w \ r \ sized st) 'key (st \ a \ st)
+                     'frame (st \ (rest (st 'pic-w * st 'pic-h // 2560), pin st 'seen (st 'scale . st 'seen)))
+                     'tick (st \ pin win 'evq (peep sc (st 't + 1) (st 't + 1 < n ? () [['down 16]])))
+                     'fps 50 'linger 0 'next () 'song (_ \ ()) 'win win}
+                 (uniq (rev ((view-walk lv) 'seen))))
+ (test (lwg {} 60 = [2 4]) (lwg {1 [['down 13] ['text "+"]] 2 [['up 13]]} 14 = [2 1])))
+
 ; the world on a window's paper: the lit hall, and with p the bottom row's words
 (: hall (world-load "test/lore/hall.l")
    win {'w 640 'h 400 'paper (cask (640 * 400 * 4))}

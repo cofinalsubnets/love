@@ -39,12 +39,11 @@
    _ (reads (open "test/uuvallaw.l" "r"))
    _ (reads (open "test/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
    bs (intern "\\")
-   nl "\n"
    b8 "⟨"  b9 "⟩"
    sugar (cite 'uu 'sugar)
    vcs-of (cite 'uu 'vcs-of)
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
-   (lines l) (foldl (a \ s \ a + s + nl) "" l)
+   (lines l) (foldl (a \ s \ a + s + "\n") "" l)
 
    ; a uu name -> a Lean identifier: prefix uu_, kebab '-' -> '_'
    (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ 45 95 c c))), slurp j))
@@ -175,7 +174,7 @@
    (emit e) (: nm (e 1) mb (peep manual nm 0)
      _ (pin bases 'UU (peep mono nm 0 ? "Type" "(Type _)"))
      out ((peep red nm 0 ? "@[reducible] " "") + "def " + (leann nm) + " : " + (u2l (e 2)) + " :="
-      + nl + (mb ? mb ("  " + (u2l (e 3)))) + nl)
+      + "\n" + (mb ? mb ("  " + (u2l (e 3)))) + "\n")
      _ (pin bases 'UU "(Type _)")
      out)
    ; foldr keeps ents' order: lean wants every definition before its uses
@@ -244,6 +243,6 @@
       "#print axioms uu_idisweq"
       "#print axioms uu_iscontrcoconustot"
       ""]))
-   _ (dot ("/- " + (show #(keys keep)) + " exported / " + (show #ents) + " corpus entries swept;" + nl
-         + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/" + nl))
+   _ (dot ("/- " + (show #(keys keep)) + " exported / " + (show #ents) + " corpus entries swept;\n"
+         + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/\n"))
    (quit 0))
