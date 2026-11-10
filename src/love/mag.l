@@ -804,6 +804,119 @@
      [(foldl (t \ r \ pin t (r 0) (tm (r 1))) {} rs) [id1 id2]])
    shr (pin shr0 'proofs (sr-out 0))
 
+   ; --- a's length without its zero top limbs: the same value, and a top limb that is not 0 ----------
+   top0
+    {'name "mag_top" 'short "mtop"
+     'attrs '("static" "love_inline")
+     'ret 'int
+     'params '(("a" (ptr (const (named "love_limb")))) ("na" int))
+     'fields ()
+     'limb 'L
+     'arrays '((A (v "a") n0))
+     'requires
+      (['(A (pi j nat nat)) '(n0 nat)]
+       + limb-req
+       + ['(gnw (inf-lt n0 (inf-pow w))) (limbs 'A)])
+     'decls [['(named "uintptr_t") ['n0 (int-n "na")] ['n]]]
+     'ensures
+      [['e1 '(inf-le res n0)]
+       ['e2 ['paths 'nat (vl 'A 'res) (vl 'A 'n0)]]
+       ['e3 '(pi g (inf-lt 0 res) (inf-lt 0 (A (natminus res 1))))]]
+     'body
+      ['(s0 set n n0)
+       ['w1 'while '(lt 0 n) 'n
+        [['a1 '(inf-le n n0)] ['a2 ['paths 'nat (vl 'A 'n) (vl 'A 'n0)]]]
+        [['j1 'join 'g1 '(nz (at A (- n 1))) '((x1 brk)) () [['t1 '(paths nat (A (natminus n 1)) 0)]]]
+         '(s1 set n (- n 1))]]
+       '(r1 ret (cast n))]
+     'macros '()
+     'proofs {}}
+   tp-out
+    (: (tm s) <(sound s)
+       B "(inf-pow L)" (Vl i) "(un-val \(B) A \(i))" N "(natminus n 1)"
+       P1 "(inf-ltsu 0 n w1)" PL "(un-predlt n \(P1))"
+       ; a zero top limb leaves the value: A's value at n is at n - 1
+       Vn "(pathscomp0 nat \(Vl "n") (add \(Vl N) (mul (A \(N)) (uu-app \(N) \(B)))) \(Vl N) (maponpaths nat nat (lam z \(Vl "z")) n (succ \(N)) (pathsinv0 nat (succ \(N)) n (inf-addsub 1 n \(P1)))) (pathscomp0 nat (add \(Vl N) (mul (A \(N)) (uu-app \(N) \(B)))) (add \(Vl N) 0) \(Vl N) (maponpaths nat nat (lam z (add \(Vl N) (mul z (uu-app \(N) \(B))))) (A \(N)) 0 t1) (natplusr0 \(Vl N))))"
+       rs [["w1e-2" "(idpath \(Vl "n0"))"]
+           ["j1-1" P1] ["j1-2" "(inf-lttrans \(N) n n0 \(PL) a1)"]
+           ["r1-4" "(lam g g1)"]
+           ["s1-1" P1] ["w1b-3" PL]
+           ["w1b-2" "(pathscomp0 nat \(Vl N) \(Vl "n") \(Vl "n0") (pathsinv0 nat \(Vl "n") \(Vl N) \(Vn)) a2)"]
+           ["r1-8" "(lam g (inf-ltnle (inf-lt 0 (A \(N))) 0 n g w1))"]]
+     (foldl (t \ r \ pin t (r 0) (tm (r 1))) {} rs))
+   top (pin top0 'proofs tp-out)
+
+   ; --- a against b as values: 0 under, 1 equal, 2 over. lengths first, then limbs from the top ------
+   ord0
+    {'name "mag_ord" 'short "mord"
+     'attrs '("static" "love_inline")
+     'ret 'int
+     'params '(("a" (ptr (const (named "love_limb")))) ("na" int) ("b" (ptr (const (named "love_limb")))) ("nb" int))
+     'fields ()
+     'limb 'L
+     'arrays '((A (v "a") n0) (V (v "b") m0))
+     'requires
+      (['(A (pi j nat nat)) '(V (pi j nat nat)) '(n0 nat) '(m0 nat)]
+       + limb-req
+       + ['(gnw (inf-lt n0 (inf-pow w))) '(gmw (inf-lt m0 (inf-pow w))) (limbs 'A) (limbs 'V)])
+     'decls [['(named "uintptr_t") ['n0 (int-n "na")] ['m0 (int-n "nb")] ['n] ['m] ['i]]]
+     'calls [top]
+     'ensures
+      [['e1 '(inf-le res 2)]
+       ['e2 ['pi 'g '(paths nat res 0) ['inf-lt (vl 'A 'n0) (vl 'V 'm0)]]]
+       ['e3 ['pi 'g '(paths nat res 1) ['paths 'nat (vl 'A 'n0) (vl 'V 'm0)]]]
+       ['e4 ['pi 'g '(paths nat res 2) ['inf-lt (vl 'V 'm0) (vl 'A 'n0)]]]]
+     'body
+      [['c1 'calx 'n "mag_top" '((raw (var "a")) (raw (cast int (var "n0")))) '(A n0 L w) ()]
+       ['c2 'calx 'm "mag_top" '((raw (var "b")) (raw (cast int (var "m0")))) '((A V) (n0 m0) L w) ()]
+       ['j1 'join 'g1 '(dif n m) '((j2 ife g2 (lt n m) ((r1 ret 0)) ((r2 ret 2)))) () [['t1 '(paths nat n m)]]]
+       '(s1 set i n)
+       ['w1 'while '(lt 0 i) 'i
+        [['a1 '(inf-le i n)] ['a2 ['paths 'nat ['add (vl 'A 'n) (vl 'V 'i)] ['add (vl 'V 'm) (vl 'A 'i)]]]]
+        [['s2 'set 'i '(- i 1)]
+         ['j3 'join 'g3 '(dif (at A i) (at V i)) '((j4 ife g4 (lt (at A i) (at V i)) ((r3 ret 0)) ((r4 ret 2)))) ()
+          [['t2 '(paths nat (A i) (V i))]]]]]
+       '(r5 ret 1)]
+     'macros '()
+     'proofs {}}
+   od-out
+    (: (tm s) <(sound s)
+       B "(inf-pow L)" (Va i) "(un-val \(B) A \(i))" (Vv i) "(un-val \(B) V \(i))"
+       n "nc1" m "mc2" I1 "(natminus i 1)"
+       P1 "(inf-ltsu 0 i w1)" PL "(un-predlt i \(P1))" Si "(inf-addsub 1 i \(P1))"
+       ; a and b at their trimmed lengths, carried to na and nb
+       (lt p) "(transportf nat (lam z (inf-lt z \(Vv "m0"))) \(Va n) \(Va "n0") c1e2 (transportf nat (lam z (inf-lt \(Va n) z)) \(Vv m) \(Vv "m0") c2e2 \(p)))"
+       (gt p) "(transportf nat (lam z (inf-lt \(Vv "m0") z)) \(Va n) \(Va "n0") c1e2 (transportf nat (lam z (inf-lt z \(Va n))) \(Vv m) \(Vv "m0") c2e2 \(p)))"
+       (eq p) "(pathscomp0 nat \(Va "n0") \(Va n) \(Vv "m0") (pathsinv0 nat \(Va n) \(Va "n0") c1e2) (pathscomp0 nat \(Va n) \(Vv m) \(Vv "m0") \(p) c2e2))"
+       ; the shorter is under B^a, the longer's top limb at least B^(b-1)
+       (len X Y a b g eY gX)
+        (: bm "(natminus \(b) 1)" P0 "(inf-lelt 0 \(a) \(b) (idpath false) \(g))" Sb "(inf-addsub 1 \(b) (inf-ltsu 0 \(b) \(P0)))"
+           le1 "(inf-ltsle \(a) \(bm) (transportf nat (lam z (inf-lt \(a) z)) \(b) (succ \(bm)) (pathsinv0 nat (succ \(bm)) \(b) \(Sb)) \(g)))"
+           ge1 "(transportf nat (lam z (inf-le (uu-app \(bm) \(B)) (un-val \(B) \(Y) z))) (succ \(bm)) \(b) \(Sb) (un-valge1 \(B) \(Y) \(bm) (\(eY) \(P0))))"
+           "(inf-lttrans (un-val \(B) \(X) \(a)) (uu-app \(a) \(B)) (un-val \(B) \(Y) \(b)) (un-vallt \(B) \(X) \(a) \(gX)) (inf-letrans (uu-app \(a) \(B)) (uu-app \(bm) \(B)) (un-val \(B) \(Y) \(b)) (un-appmono \(B) (inf-powpos L) \(a) \(bm) \(le1)) \(ge1)))")
+       ; the top limbs that differ, lifted to the values through a2
+       (lex X Y gY g) "(transportf nat (lam z (inf-lt (un-val \(B) \(Y) z) (un-val \(B) \(X) z))) (succ \(I1)) i \(Si) (un-lexlt \(B) \(X) \(Y) \(I1) \(gY) \(g)))"
+       ; a return of k answers its own case, and the others are numerals apart
+       (no a b P) (: d (a > b ? "nopathstruetofalse" "nopathsfalsetotrue")
+        "(lam g (fromempty \(P) (\(d) (maponpaths nat bool (lam z (natgtb z \(min a b))) \(a) \(b) g))))")
+       cases ["(inf-lt \(Va "n0") \(Vv "m0"))" "(paths nat \(Va "n0") \(Vv "m0"))" "(inf-lt \(Vv "m0") \(Va "n0"))"]
+       (ret r k p) (map (j \ ["\(r)-\(j + 2)" (j = k ? "(lam g \(p))" (no k j (cases j)))]) ^3)
+       z0 "(transportf nat (lam z (paths nat (add \(Va n) (un-val \(B) V z)) (add \(Vv m) (un-val \(B) A z)))) i 0 (isantisymmnatleh i 0 w1 (idpath false)) a2)"
+       rs
+        (ret "r1" 0 (lt (len 'A 'V n m "g2" "c2e3" "gA"))
+         + ret "r2" 2 (gt (len 'V 'A m n "(un-lene \(m) \(n) g2 (lam e (g1 (pathsinv0 nat \(m) \(n) e))))" "c1e3" "gV"))
+         + ret "r3" 0 (lt "(un-cancle \(Vv m) \(Va n) \(Va "i") \(Vv "i") (pathsinv0 nat (add \(Va n) \(Vv "i")) (add \(Vv m) \(Va "i")) a2) \(lex 'V 'A "gA" "g4"))")
+         + ret "r4" 2 (gt "(un-cancle \(Va n) \(Vv m) \(Vv "i") \(Va "i") a2 \(lex 'A 'V "gV" "(un-lene (V \(I1)) (A \(I1)) g4 (lam e (g3 (pathsinv0 nat (V \(I1)) (A \(I1)) e))))"))")
+         + ret "r5" 1 (eq "(pathsinv0 nat \(Vv m) \(Va n) (pathscomp0 nat \(Vv m) (add \(Vv m) 0) \(Va n) (pathsinv0 nat (add \(Vv m) 0) \(Vv m) (natplusr0 \(Vv m))) (pathscomp0 nat (add \(Vv m) 0) (add \(Va n) 0) \(Va n) (pathsinv0 nat (add \(Va n) 0) (add \(Vv m) 0) \(z0)) (natplusr0 \(Va n)))))")
+         + [["w1e-2" "(transportf nat (lam z (paths nat (add \(Va n) (un-val \(B) V z)) (add \(Vv m) \(Va n)))) \(m) \(n) (pathsinv0 nat \(n) \(m) t1) (natpluscomm \(Va n) \(Vv m)))"]
+            ["s2-1" P1] ["w1b-3" PL]
+            ["j3-1" "(inf-lttrans \(I1) i n0 \(PL) (inf-letrans i \(n) n0 a1 c1e1))"]
+            ["j3-2" "(inf-lttrans \(I1) i m0 \(PL) (inf-letrans i \(m) m0 (transportf nat (lam z (inf-le i z)) \(n) \(m) t1 a1) c2e1))"]
+            ["w1b-2" "(un-cancmid \(Va n) \(Vv I1) \(Vv m) \(Va I1) (mul (V \(I1)) (uu-app \(I1) \(B))) (pathscomp0 nat (add \(Va n) (add \(Vv I1) (mul (V \(I1)) (uu-app \(I1) \(B))))) (add \(Vv m) (add \(Va I1) (mul (A \(I1)) (uu-app \(I1) \(B))))) (add \(Vv m) (add \(Va I1) (mul (V \(I1)) (uu-app \(I1) \(B))))) (transportf nat (lam z (paths nat (add \(Va n) (un-val \(B) V z)) (add \(Vv m) (un-val \(B) A z)))) i (succ \(I1)) (pathsinv0 nat (succ \(I1)) i \(Si)) a2) (maponpaths nat nat (lam z (add \(Vv m) (add \(Va I1) (mul z (uu-app \(I1) \(B)))))) (A \(I1)) (V \(I1)) t2)))"]])
+     (: t (foldl (t \ r \ pin t (r 0) (tm (r 1))) {} rs)
+      (pin (pin t "j4-1" (t "j3-1")) "j4-2" (t "j3-2"))))
+   ord (pin ord0 'proofs od-out)
+
    ; --- a >= b as values, na >= nb: 1 or 0 -------------------------------------------------------
    ge
     {'name "mag_ge" 'short "mge"
@@ -1154,7 +1267,7 @@
    divstep (pin divstep0 'proofs (ds-out 0))
    ds-ids (ds-out 1)
 
-   mag-specs [add sub mas rows offs dnorm ddn shl shr ge divstep]
+   mag-specs [add sub mas rows offs dnorm ddn shl shr top ord ge divstep]
    mag-h (cats ["// mag_gen.h -- laid by src/love/mag.l, `make mx`. edit that file.\n"
                 (cats (map (s \ clay-show (cl-fn s)) mag-specs))])
    mag-ledger

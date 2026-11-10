@@ -72,13 +72,6 @@ static int mag_copy(love_limb *dst, love_limb const *src, int n) {
  for (int i = 0; i < n; i++) dst[i] = src[i];
  return n; }
 
-static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b, int nb) {
- while (na > 0 && a[na-1] == 0) na--;
- while (nb > 0 && b[nb-1] == 0) nb--;
- if (na != nb) return na < nb ? -1 : 1;
- for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
- return 0; }
-
 // 128/64 with hi < d, so the quotient fits a limb
 static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
 #if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__) && !defined(__mooncc__)
@@ -111,8 +104,12 @@ static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, i
 // the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_mul_rows
 // (rows [i0, end) of the schoolbook r = a b), mag_add_off (r += s B^off), mag_dnorm and
 // mag_ddenorm (knuth D's shift by s, as products), mag_shl and mag_shr (big_shift's, the same
-// way), mag_ge, and mag_divstep, one quotient limb of knuth's D over un's window at j
+// way), mag_top and mag_ord (a against b: 0, 1, 2), mag_ge, and mag_divstep, one quotient limb
+// of knuth's D over un's window at j
 #include "mag_gen.h"
+
+static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b, int nb) {
+ return mag_ord(a, na, b, nb) - 1; }
 
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
 static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {

@@ -131,6 +131,27 @@ static void mag_shr(love_limb *r, love_limb const *a, int na, int sh) {
    r[i] = (love_limb) t;
    c = t >> limb_bits; }
   r[n] = (love_limb) c; } }
+static love_inline int mag_top(love_limb const *a, int na) {
+ uintptr_t n0 = (uintptr_t) na, n;
+ n = n0;
+ while (0 < n) {
+  if (a[n - 1]) break;
+  n = n - 1; }
+ return (int) n; }
+static love_inline int mag_ord(love_limb const *a, int na, love_limb const *b, int nb) {
+ uintptr_t n0 = (uintptr_t) na, m0 = (uintptr_t) nb, n, m, i;
+ n = mag_top(a, (int) n0);
+ m = mag_top(b, (int) m0);
+ if (n != m)
+  if (n < m) return 0;
+  else return 2;
+ i = n;
+ while (0 < i) {
+  i = i - 1;
+  if (a[i] != b[i])
+   if (a[i] < b[i]) return 0;
+   else return 2; }
+ return 1; }
 static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
  uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
  i = n;
