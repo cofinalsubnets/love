@@ -41,8 +41,6 @@
      "a raw fd carries no write run of love's to park behind, so the busy device is waited on -- bounded by its drain"]
     ["test/front/main.c" "love_fd_say" "love_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
-    ["src/inle/teensy41/main.c" "main" "love_sleep"
-     "the panic blink after a fatal shell exit -- nothing runs after it"]
     ["src/inle/doom.c" "DG_SleepMs" "love_sleep"
      "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
 
