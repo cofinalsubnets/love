@@ -679,9 +679,11 @@
   (window [-42 9.85 19.95] [-35.5 11.6 20.55] glass)
   ; ..and west of the window a screen on its front
   (wallscreen [-43.5 9 20.5] [0 0 1])
-  (skin {'all concrete} (street [-33 8 15.8] [-28.4 9.2 17.6]))
-  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 15.8] [-28.4 8.833 17.6])))])
-  (door [-33.25 8 16.6] 1.2 2.2)
+  (skin {'all concrete} (street [-33 8 17.6] [-28.4 9.2 20.3]))
+  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 17.6] [-28.4 8.833 20.3])))])
+  (door [-33.25 8 19.35] 1.2 2.2)
+  ; ..and left of the door, a window onto the steps
+  (window [-33.55 8.85 17.85] [-32.95 10.2 18.5] glass)
   ; ..in from the door, apples on the right and potatoes and onions on the left; along the
   ; west wall carrots, radishes and cabbages
   (stand -37 17.7 -34.6 18.6 's 'apple 1)
@@ -747,10 +749,10 @@
   (spinner [-39 25 17] 5 3.5 spin1 spin2)
   ; ..east of it a block out from the south wall to the food center's height, its face along
   ; the stairs down to the door, and on its east face a screen
-  (skin {'all concrete} (solid (box [-33 8.85 14] [-20 22.5 15.8])))
-  (wallscreen [-20 9 14.9] [1 0 0])
+  (skin {'all concrete} (solid (box [-33 8.85 14] [-20 22.5 17.6])))
+  (wallscreen [-20 9 15.8] [1 0 0])
   ; ..the advertisements: red and blue across that block's face, green high on the east
-  (ad [-26.5 19 15.83] [0 0 1] [0 1 0] 13 7 adredblue)
+  (ad [-26.5 19 17.63] [0 0 1] [0 1 0] 13 7 adredblue)
   (ad [44.97 28 30] [-1 0 0] [0 1 0] 12 6 adgreen)
   ; ..a street sweeper out of the garage, in the middle of the road before it, nose east,
   ; headlights on: a big four-by-four's body, its hood sloping to the nose, a raked
