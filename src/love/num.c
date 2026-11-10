@@ -72,13 +72,6 @@ static int mag_copy(love_limb *dst, love_limb const *src, int n) {
  for (int i = 0; i < n; i++) dst[i] = src[i];
  return n; }
 
-static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b, int nb) {
- while (na > 0 && a[na-1] == 0) na--;
- while (nb > 0 && b[nb-1] == 0) nb--;
- if (na != nb) return na < nb ? -1 : 1;
- for (int i = na - 1; i >= 0; i--) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
- return 0; }
-
 // 128/64 with hi < d, so the quotient fits a limb
 static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
 #if defined(__x86_64__) && limb_bits == 64 && defined(__GNUC__) && !defined(__mooncc__)
@@ -110,9 +103,13 @@ static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, i
 
 // the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_mul_rows
 // (rows [i0, end) of the schoolbook r = a b), mag_add_off (r += s B^off), mag_dnorm and
-// mag_ddenorm (knuth D's shift by s, as products), mag_ge, and mag_divstep, one quotient limb
+// mag_ddenorm (knuth D's shift by s, as products), mag_shl and mag_shr (big_shift's, the same
+// way), mag_top and mag_ord (a against b: 0, 1, 2), mag_ge, and mag_divstep, one quotient limb
 // of knuth's D over un's window at j
 #include "mag_gen.h"
+
+static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b, int nb) {
+ return mag_ord(a, na, b, nb) - 1; }
 
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
 static love_noinline int mag_add(love_limb *r, love_limb const *a, int na, love_limb const *b, int nb) {
@@ -313,27 +310,14 @@ struct g *big_shift(struct g *g, int vop) {
  int nla = load_int_mag(a, sa, &la, &neg);
  love_limb *r = (love_limb*) (g->hp + res_area);
  int rn = 0;
- if (left) {
-  for (int i = 0; i < ls; i++) r[i] = 0;
-  if (!bs) { for (int i = 0; i < nla; i++) r[ls + i] = la[i]; rn = ls + nla; }
-  else { love_limb carry = 0;
-   for (int i = 0; i < nla; i++) {
-    r[ls + i] = (love_limb) ((la[i] << bs) | carry);
-    carry = (love_limb) (la[i] >> (limb_bits - bs)); }
-   r[ls + nla] = carry, rn = ls + nla + 1; } }
+ if (left) mag_shl(r, la, nla, ls, bs), rn = ls + nla + 1;
  else if (khuge || ls >= nla) rn = 0, r[0] = 0;   // shifted past the top: 0, or -1 once floored
- else {
-  rn = nla - ls;
-  if (!bs) for (int i = 0; i < rn; i++) r[i] = la[ls + i];
-  else for (int i = 0; i < rn; i++)
-   r[i] = (love_limb) ((la[ls + i] >> bs) | (i + 1 < rn ? (la[ls + i + 1] << (limb_bits - bs)) : 0)); }
+ else rn = nla - ls, mag_shr(r, la + ls, rn, bs);
  if (!left && neg) {                              // floor: a lost bit rounds away from zero
   bool lost = khuge || ls >= nla;
   for (int i = 0; i < ls && !lost && i < nla; i++) lost = la[i] != 0;
   if (!lost && bs) lost = (la[ls] & (love_limb) ((((love_limb) 1) << bs) - 1)) != 0;
-  if (lost) { love_limb carry = 1;
-   for (int i = 0; i < rn && carry; i++) { r[i] = (love_limb) (r[i] + 1); carry = !r[i]; }
-   if (carry) r[rn++] = 1; } }
+  if (lost) rn = mag_mul_add_small(r, rn, 1, 1); }
  while (rn > 0 && r[rn-1] == 0) rn--;
  return *++g->sp = big_canon(&g->hp, r, rn, neg && rn > 0), ++g->ip, g; }
 

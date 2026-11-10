@@ -476,6 +476,23 @@
              (inf-ltaddr a B (mul X B) g)))
          (un-mulle2 (succ X) Y B (inf-ltsu X Y f))))
        (lam f (idpath false))))))
+ ; a multiple of B leaves nothing under it
+ (defq un-modmulB (pi B nat h (inf-lt 0 B) x nat (paths nat (inf-mod B (mul x B)) 0))
+   (lam B h x
+     (un-cancr (inf-mod B (mul x B)) 0 (mul x B)
+       (transportf nat (lam z (paths nat (add (inf-mod B (mul x B)) (mul z B)) (mul x B))) (un-div B (mul x B)) x
+         (un-bdivu B (inf-mod B (mul x B)) (un-div B (mul x B)) x
+           (pathscomp0 nat (add (inf-mod B (mul x B)) (mul (un-div B (mul x B)) B)) (add (mul B (un-div B (mul x B))) (inf-mod B (mul x B))) (mul x B)
+             (pathscomp0 nat (add (inf-mod B (mul x B)) (mul (un-div B (mul x B)) B)) (add (mul (un-div B (mul x B)) B) (inf-mod B (mul x B))) (add (mul B (un-div B (mul x B))) (inf-mod B (mul x B)))
+               (natpluscomm (inf-mod B (mul x B)) (mul (un-div B (mul x B)) B))
+               (maponpaths nat nat (lam z (add z (inf-mod B (mul x B)))) (mul (un-div B (mul x B)) B) (mul B (un-div B (mul x B))) (natmultcomm (un-div B (mul x B)) B)))
+             (un-dm0 B h (mul x B)))
+           (un-modlt0 B h (mul x B)))
+         (pathscomp0 nat (add (inf-mod B (mul x B)) (mul (un-div B (mul x B)) B)) (add (mul B (un-div B (mul x B))) (inf-mod B (mul x B))) (mul x B)
+           (pathscomp0 nat (add (inf-mod B (mul x B)) (mul (un-div B (mul x B)) B)) (add (mul (un-div B (mul x B)) B) (inf-mod B (mul x B))) (add (mul B (un-div B (mul x B))) (inf-mod B (mul x B)))
+             (natpluscomm (inf-mod B (mul x B)) (mul (un-div B (mul x B)) B))
+             (maponpaths nat nat (lam z (add z (inf-mod B (mul x B)))) (mul (un-div B (mul x B)) B) (mul B (un-div B (mul x B))) (natmultcomm (un-div B (mul x B)) B)))
+           (un-dm0 B h (mul x B)))))))
 )
 
 (test
