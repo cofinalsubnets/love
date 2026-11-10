@@ -56,7 +56,6 @@ static union u *as_big(word **hp, word x);
 static void
  big_addsub(love_limb *r, int *rn, bool *rneg, love_limb const *a, int na, bool nega,
             love_limb const *b, int nb, bool negb, bool subtract),
- mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int off),
  mag_mul_kara(love_limb *r, love_limb const *a, love_limb const *b, int n, love_limb *t);
 // big: fixnum -> sun box -> bignum. multi-limb work is noinline helpers over raw limbs that
 // never allocate, so the VM keeps its tail calls; never __multi3/__udivti3, which -nostdlib lacks
@@ -112,8 +111,8 @@ static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, i
  return qhat >= B ? (love_limb) (B - 1) : (love_limb) qhat; }
 
 // the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_mul_rows
-// (rows [i0, end) of the schoolbook r = a b), mag_ge, and mag_divstep, one quotient limb of
-// knuth's D over un's window at j
+// (rows [i0, end) of the schoolbook r = a b), mag_add_off (r += s B^off), mag_ge, and
+// mag_divstep, one quotient limb of knuth's D over un's window at j
 #include "mag_gen.h"
 
 // r = a + b, r distinct, capacity max(na,nb)+1 -> the limb count
@@ -204,12 +203,6 @@ static void big_addsub(love_limb *r, int *rn, bool *rneg,
   if (c == 0) { *rn = 0; *rneg = false; }
   else if (c > 0) { *rn = mag_sub(r, a, na, b, nb); *rneg = nega; }
   else { *rn = mag_sub(r, b, nb, a, na); *rneg = sb; } } }
-
-// s into r at limb off; r sized for the whole result, so the carry settles in it
-static void mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int off) {
- dlimb c = 0; int i = 0;
- for (; i < sn; i++)            { dlimb t = (dlimb) r[off+i] + s[i] + c; r[off+i] = (love_limb) t; c = t >> limb_bits; }
- for (; c && off + i < rn; i++) { dlimb t = (dlimb) r[off+i] + c;        r[off+i] = (love_limb) t; c = t >> limb_bits; } }
 
 // karatsuba for equal lengths; t is scratch, 4n + 8 log n limbs: each level's sums and
 // middle product, then the next level's

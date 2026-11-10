@@ -77,6 +77,25 @@ static love_noinline void mag_mul_rows(love_limb *r, love_limb const *a, int i0,
   r[i + m] = (love_limb) c;
  }
 }
+static void mag_add_off(love_limb *r, int rn, love_limb const *s, int sn, int off) {
+ uintptr_t n = (uintptr_t) rn, m = (uintptr_t) sn, o = (uintptr_t) off, i;
+ dlimb t, c;
+ c = 0;
+ for (i = 0; i < m; i++) {
+  t = (dlimb) r[o + i] + (dlimb) s[i] + c;
+  r[o + i] = (love_limb) t;
+  c = t >> limb_bits;
+ }
+ while (o + i < n) {
+  if (!c) {
+   break;
+  }
+  t = (dlimb) r[o + i] + c;
+  r[o + i] = (love_limb) t;
+  c = t >> limb_bits;
+  i++;
+ }
+}
 static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
  uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
  i = n;
