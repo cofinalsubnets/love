@@ -371,7 +371,7 @@ test_vi: host
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`
-test_moon: host $(love0)
+test_moon: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
