@@ -286,7 +286,7 @@
    ; the native takes the outer loop's own args, a literal inner start, and deopts on a non-fixnum or an acc past a fixnum;
    ; where it is native, half the nest runs at least 3x its declined twin (a test the native will not read), best of three
    (gzg-nest t k w) (ev (': . ['(mand c z it) ['? ['&& '(it < 40) t] '(mand c (z * z + c) (it + 1)) 'it]
-                              '(col px py acc) '(py < 20 ? (col px (py + 1) (acc + mand ((px * 0.075 - 2.0) ~ (py * 0.15 - 1.5)) (0.0 ~ 0.0) 0)) acc)
+                              ['col 'px 'py 'acc] ['? '(py < 20) ['col 'px '(py + 1) ['+ 'acc ['mand ['twin ['- ['* 'px (3.0 / w)] 2.0] '(py * 0.15 - 1.5)] '(0.0 ~ 0.0) 0]]] 'acc]
                               gzg-o ['? ['px '< w] ['grid '(px + 1) ['+ 'acc ['col 'px k 0]]] 'acc] 'grid]))
    gzg-q '(re z * re z + im z * im z <= 4.0)
    gzg-g (gzg-nest gzg-q 0 40)  gzg-h (gzg-nest gzg-q 7 40)
@@ -295,7 +295,7 @@
    _ (test (map (ab \ gzg-g <ab <>ab) [[0 0] [20 0] [20 7] [39 0] [40 5] [50 5] [-3 0] [0 1.5] [20.5 0] [0 4611686018427387900]]
             = [8574 5430 5437 45 5 5 8634 8575.5 5383 4611686018427396474])
            (map (ab \ gzg-h <ab <>ab) [[0 0] [20 0] [1 1]] = [7265 4475 7214])
-           (!(nat? gzg-g) || (: na (gzg-tm (gzg-nest gzg-q 0 200)) tw (gzg-tm (gzg-nest '(abs z <= 2.0) 0 200))
+           (!(nat? gzg-g) || (: na (gzg-tm (gzg-nest gzg-q 0 1000)) tw (gzg-tm (gzg-nest '(abs z <= 2.0) 0 1000))
                                 (<na = <tw && 3 * <>na < <>tw))))
    ; the host row's word is the vm's: a charm holds 8w-1 bits, signed
    _ (G 'targets love-arch @ row
