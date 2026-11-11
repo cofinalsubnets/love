@@ -52,6 +52,8 @@
    (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
             'gx gx 'gz gz 'G G 'S S 'stars-h -99.0 'alb (land (peep gx G 0.0) (peep gz G 0.0))
             'rays (sky-rays () (sr 'sdx) (sr 'sdy) (sr 'sdz) (eye 0) (eye 2) 0.0)
+            'quarters (: q (S % w % 2 + S // w % 2 * 2)
+                         (map (k \ iota (q = k) @ Q [Q (sky-rays () (peep (sr 'sdx) Q 0.0) (peep (sr 'sdy) Q 0.0) (peep (sr 'sdz) Q 0.0) (eye 0) (eye 2) 0.0)]) [0 3 1 2]))
             'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp -sp]))
  ; the stars: sky's ss, each a pixel where the lens shows it and the land does not; -1 unseen
  (lay-stars st ss) (: w (st 'w) h (st 'h) X (ss 'x) Y (ss 'y) Z (ss 'z)
@@ -170,6 +172,12 @@
    (cmix [0.07 0.24 0.03] [0.2 0.5 0.06] m))
  ; the ground's own colour: dirt about the row, turf from the meadow out
  (land gx gz) (cmix (dirt gx gz) (turf gx gz) (sat ((gz - 1.0) / 2.5)))
+ ; the sky's clouds, [th ts], a quarter of its pixels each frame and the rest as last laid:
+ ; they drift a pixel in seconds, and the light over them is the frame's own
+ (thick-kept st lt wx sim) (: T (st 'thick)
+   (? !(two? T) (sky-thick-rays lt wx (st 'rays) sim @ T (pin st 'thick T, T))
+      (: k (peep st 'quarter 0) Q (st 'quarters k) n (sky-thick-rays lt wx (Q 1) sim)
+         ([(pin (T 0) (Q 0) (n 0)) (pin (T 1) (Q 0) (n 1))] @ T2 (pins st 'thick T2 'quarter ((k + 1) % 4), T2)))))
  ; --- the frame's colours, three trays a picture wide ---
  (meadow-pens st g wx) (: lt (meadow-light g wx) s (lt 'sun) sim (cloud-sim g) t0 (g 'fr)
    ; the moon over the sun takes its light as it covers it, and the sky's with it
@@ -179,7 +187,7 @@
    w (st 'w) h (st 'h) G (st 'G) S (st 'S) (only ix v) (peep v ix 0.0)
    wxv (-(sin (g 'head * pi / 180.0) * g 'wind) * g 'gust)
    ; the sky behind, and the dirt under, each where it shows
-   hv (sky-colour-rays lt wx (st 'rays) sim)
+   hv (sky-colour-thick lt wx (st 'rays) sim (thick-kept st lt wx sim))
    alb (st 'alb)
    nx (only G (st 'nx)) ny (only G (st 'ny)) nz (only G (st 'nz))
    ; ..the shadows, the blades' points thrown down the sun onto the dirt
