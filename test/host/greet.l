@@ -7,11 +7,19 @@
    r1 (press [107 105 116])                                   ; "kit"
    r2 (press [13 115 101 99 120 127 127 99])                  ; enter, then "sec" x, two back, c
    r3 (press [9 -2 -2 -1 13])                                 ; to the session, turned, then enter
-   rows (: t {} _ (greet-box g "bee" ["shell" "lux"] 24 80 (\ y x s f b (pin t y s))) t)
+   rows (: t {} _ (greet-box g "bee" ["shell" "lux"] 24 80 (\ y x s f b (x = 18 ? (pin t y s) t))) t)
    text (map (y \ rows y) (sort (keys rows)))
    s (saver-make "life" 24 80 7 ())
    _ (saver-over s 0 (put \ greet-box g "bee" ["shell" "lux"] 24 80 put))
    cell (saver-cell (s 'cv) 10 18)                            ; the box's left edge, its login row
+   ; a message's row: its edges in the box's pen, the text in the warning's
+   w (greet-new 0)
+   _ (pin w 'msg "login incorrect")
+   ws (saver-make "life" 24 80 7 ())
+   _ (saver-over ws 0 (put \ greet-box w "bee" ["shell" "lux"] 24 80 put))
+   wl (saver-cell (ws 'cv) 14 18)
+   wm (saver-cell (ws 'cv) 14 20)
+   wr (saver-cell (ws 'cv) 14 61)
    h (greet-new 0)
    _ (pin h 'hold (clock 0 + 60000))
    _ (test (r1 = [() () ()]) (g 'user = "kit")
@@ -22,6 +30,7 @@
            ("| password  ***" = snip (text 4) 0 15)
            ("| session   < lux >" = snip (text 5) 0 19)
            (cell 0 = 124) (cell 2 = 236)                         ; "|" on the box's ground
+           (wl 0 = 124) (wl 1 = 252) (wm 0 = 108) (wm 1 = 210) (wr 0 = 124) (wr 1 = 252)
            (nil? (greet-key h 107 2)) (h 'user = "")
            ((greet-sessions "/bin/love" "tty8") 1 = ["lux" ["xinit" "/bin/love" "lux" "--" "vt8" "-keeptty"] ".xsession-errors"])
            ((greet-sessions "/bin/love" "") 1 1 = ["xinit" "/bin/love" "lux"]) ((greet-sessions "/bin/love" "") 0 = ["shell" () ()]))             ; a failure's wait takes no key

@@ -31,10 +31,12 @@
       [(row ("password  " + string (map (_ \ 42) ^#(g 'pass)) + cur 1)) (fg 1)]
       [(row ("session   < " + sn + " >")) (fg 2)]
       [(row "") box-fg] [(row (g 'msg)) warn] [edge box-fg]])
- ; the box centred in rows by cols, through put (y x text fg bg)
+ ; the box centred in rows by cols, through put (y x text fg bg): each row in the box's pen,
+ ; then a row of its own pen inside its edges
  (greet-box g host names rows cols put)
   (: rs (greet-rows g host names) y0 ((rows - #rs) // 2) x0 ((cols - gw) // 2)
-     (each ^#rs (i \ put (y0 + i) x0 (rs i 0) (rs i 1) box-bg)))
+     (each ^#rs (i \ rs i @ [t f] (put (y0 + i) x0 t box-fg box-bg,
+                                    f = box-fg ? 0 (put (y0 + i) (x0 + 2) (snip t 2 (#t - 2)) f box-bg)))))
  ; a key: the state moved, and 'try when enter asks for a login; none while a failure waits
  (greet-key g k n)
   (: f (g 'focus)
