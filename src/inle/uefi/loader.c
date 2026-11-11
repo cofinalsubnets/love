@@ -139,6 +139,17 @@ u64 efi_main(void *handle, void *st) {
   u8 *d = (u8*) (kbase + (pa - lo));
   for (u64 j = 0; j < flz; j++) d[j] = e[off + j];
   for (u64 j = flz; j < msz; j++) d[j] = 0; }
+#if defined(__aarch64__)
+ // the copy sits in the d-cache and a core fetches past it: clean to PoU, drop stale i-lines.
+ // tcg models no caches, so only kvm or metal fails without this
+ {
+  u64 ctr, step;
+  asm volatile ("mrs %0, ctr_el0" : "=r"(ctr));
+  step = 4ull << ((ctr >> 16) & 15);
+  for (u64 a = kbase & ~(step - 1); a < kbase + (hi - lo); a += step)
+   asm volatile ("dc cvau, %0" :: "r"(a) : "memory");
+  asm volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory"); }
+#endif
 
  // kboot's home: the kernel symtab (sh_type 2), symbol "kboot"
  u64 shoff = *(u64*) (e + 40);
