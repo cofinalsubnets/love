@@ -50,7 +50,7 @@
    ; the ops a double rides: on thumb2sp their float vregs keep a whole d
    rawide '(movapd movsd movupd ldsd stsd ldsdx stsdx ldsdl movqrr movrrq movqxr movqrx cvtss2sd cvtsd2ss cvtsi2sd
             cvtui2sd cvttsd2si cvttsd2ui addsd subsd mulsd divsd minsd maxsd ucomisd sqrtsd xorpd andpd)
-   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
+   rafmv '(movapd movsd movss negss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
    ; each head's own shape, the rest rdsp's
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
            t0 (cls (cls (cls (cls (cls (cls (cls (cls (cls {} 'fbin rafbin) 'fmv rafmv) 'div divops) 'ctl '(jmp br label))
@@ -246,14 +246,17 @@
                (mates x w act) (filter (y \ y != w && clash? x (loc w) y) act)
                (held? x w act) (mates x w act @ () 0 ys (!(sp64? g && wid? x) || any (y \ nosp (nms y)) ys))
                ; the lightest active interval whose register serves this one alone, or none when
-               ; this one weighs less and may spill itself
+               ; this one weighs less and may spill itself. light is touches per span: a short
+               ; interval spilled frees little, its reload's temp holding it as long
+               (span x) (hi x - lo x + 1)
+               (lt? a b) (wt? a * span b < wt? b * span a)
                (victim x act)
                 (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) || wid? x && lofo? (loc w) ||
                                      held? x w act) b
-                                   (b @ () w _ (wt? w < wt? b ? w b))))
+                                   (b @ () w _ (lt? w b ? w b))))
                        () act @
                    () ()
-                   w (!(nosp (nms x)) && wt? x <= wt? w ? () w))
+                   w (!(nosp (nms x)) && !(lt? w x) ? () w))
                (scan fl l act sp)
                 (l @ ()
                       sp
@@ -291,11 +294,15 @@
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
    ; until a label or a call ends the run (the last nk kept). x64's and a64's one-def wide literal or
-   ; address takes no slot and is made again at each read; a literal 0 might write the flags. one
-   ; split before keeps its split's slot, ssl, and its copies to and from it go
+   ; address takes no slot and is made again at each read; a literal 0 might write the flags.
+   ; thumb2's literal likewise, which keeps the flags. one split before keeps its split's slot, ssl,
+   ; and its copies to and from it go
    (raspill g fs sp nosp nk ssl)
-    (: dn (x64? g || a64? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
-       rem (foldl (t \ f \ (f @ ((('li || 'la) . v . k . _) && elem v sp && peep dn v 0 = 1 && k != 0) (pin t v f) _ t)) {} fs)
+    (: w (x64? g || a64? g)
+       dn (w || t2? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
+       rem (foldl (t \ f \ (f @ ((op . v . k . _) && elem v sp && peep dn v 0 = 1 &&
+                                  (w ? (elem op '(li la) && k != 0) (op = 'li && charm? k)))
+                                (pin t v f) _ t)) {} fs)
        (redo v r) (rem v @ [op _ k] [op r k])
        ss (filter (v \ !(two? (rem v))) sp)
        sl (foldl (t \ v \ pin t v (ssl v @ () (nslot g 8) k k)) {} ss)
@@ -542,7 +549,7 @@
                          [f])) fs))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
-   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss fimm add sub and or xor imul shl shr sar not neg
+   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss negss fimm add sub and or xor imul shl shr sar not neg
                                               sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx movqrr movrrq))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)

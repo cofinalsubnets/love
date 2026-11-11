@@ -49,7 +49,7 @@
    qfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)   ; the gp file a 32-bit pair move walks
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd minsd maxsd movsd movapd ucomisd cvtss2sd cvtsd2ss
-            addss subss mulss divss minss maxss ucomiss movss)   ; no gp effect
+            addss subss mulss divss minss maxss ucomiss movss negss)   ; no gp effect
    ; the gen state g: 'n the label counter, 'off the frame high-water, 'brk/'cnt loop label stacks,
    ; 'glob name -> (label ty init), 'globs the emission order, 'strs ((label . text)..);
    ; env ((name off ty)..) the frame locals
@@ -3371,7 +3371,8 @@
             (aren <x m . aren >x m)))
    (ainl g f)
     (: rf (respell f)
-       tys {} dn {} tak {} sdn {} n9 {'k 0} st9 {'s ()}   ; st9: the statement being laid; sdn the block statics
+       ; n9 numbers the splices, one count per fn across both runs; st9: the statement being laid; sdn the block statics
+       tys {} dn {} tak {} sdn {} n9 (g 'ainln @ () {'k 0} t9 t9) st9 {'s ()}
        ; an expression's static type by the parser's typer over the caller's names: () where unknown
        gty (g 'ainlg @ t
               (t ? t (foldl (a \ k \ pin a k <>(g 'glob k)) {} (keys (g 'glob)) @ t2
@@ -3387,7 +3388,9 @@
        _ (map (p \ (pin tys <p <>p, pin dn <p 1)) <>>rf)
        _ (cen (rf 3))
        memo (g 'ainlc)
-       (cand nm) (peep memo nm 'no @ c
+       ; kinl's run splices its own copies alone
+       (cand nm) (g 'ainl2 @ () (cand0 nm) s9 (peep s9 nm 0 ? (cand0 nm) ()))
+       (cand0 nm) (peep memo nm 'no @ c
                     (c @ 'no (acand g nm @ c9 (pin memo nm c9, c9)) c))
        crt <(peep (g 'sigs) <>rf ['long ()])
        ; a call's value in its return type: a truth value needs no conversion to an integer type
@@ -3854,8 +3857,15 @@
                    ok (sm? v && all (it \ (it @ ('case . lo . r) (sm? lo && (!(two? r) || sm? <r)) 1)) items)
                    k (ok ? (at hit? items 0 @ i (i < 0 ? (at (it \ it = '(dflt)) items 0) i)) -1)
                    (glb? l) (any glbl? l)
-                   (? (k < 1 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
-                      ['switch c (map (dprunel w64 ty lk) (drop k items))])))
+                   ; ..and ends at its first way out, a later case reached by the dispatch alone -- when its
+                   ; labels are single and distinct, so a duplicate stays for the checker to name
+                   (out? it) (it = '(brk) || exits? it)
+                   ls (filter (it \ elem <it '(case dflt)) items)
+                   one (all (it \ (it @ ('case _) 1 ('dflt) 1 ())) ls && #(uniq (map show ls)) = #ls)
+                   (? (k < 0 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
+                      (: d (drop k items) j (one ? (at out? d 0) -1)
+                         d2 (j < 0 || glb? (drop (j + 1) d) ? d (take (j + 1) d))
+                         (k = 0 && #d2 = #d ? (map (dprunel w64 ty lk) x) ['switch c (map (dprunel w64 ty lk) d2)])))))
             (map (dprunel w64 ty lk) x)))
    (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
    (exits? x) (x @ ('ret . _) 1 ('goto . _) 1 ('blk items) (two? items && exits? (last items)) ())
@@ -4269,6 +4279,52 @@
        (atom? (keys sbs) ? f
         (kprop0 g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
+   ; -- a call the unroller left with constant args, to a body the size gate turned away: the body
+   ; with those params as their constants and pruned, judged again, and spliced by a second ainl
+   ; that takes these copies alone; a site it declines calls the callee as written
+   (kinl g f)
+    (: w64 !(ilp32? g) ks (g 'inlk) sp {} on {}
+       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+       ; a param the body writes, takes the address of or declares again keeps its arg
+       (fixed? p b) (: (go x) (? (atom? x) ()
+                                 (x @ (('asn || 'post) ('var ^p) . _) 1
+                                      ('rmw _ ('var ^p) _) 1
+                                      ('addr ('var ^p)) 1
+                                      ('decl ds) (any (d \ <d = p) ds || any go ds)
+                                      (any go x)))
+                       (go b))
+       (sub x p v) (? (atom? x) x (x = ['var p] ? v (map (y \ sub y p v) x)))
+       (spec x nm as)
+        (peep ks nm () @ () x
+           fi (: ps <>>fi sig (peep (g 'sigs) nm ())
+                 ; per param: its constant, cast to the param's type, or () where the arg stays
+                 cs (map (i \ (: p (ps i) k (kv (as i)) (charm? k && !(fixed? <p (fi 3)) ? ['cast <>p ['num k]]))) (jot #ps))
+                 (#ps != #as || !(two? sig) || !(any two? cs) ? x
+                    (: n9 (peep g 'kinln 0) _ (pin g 'kinln (n9 + 1))
+                       s "\(nm)`k\(n9)"
+                       kp (filter (i \ !(two? (cs i))) (jot #ps))
+                       b (foldl (b \ i \ (two? (cs i) ? (sub b <(ps i) (cs i)) b)) (fi 3) (jot #ps))
+                       f2 (nofx (do0 (ucut (dprune w64 (e \ ()) ([<fi s (map (i \ ps i) kp) b] + >>>>fi)))))
+                       sg [<sig (map (i \ (sig 1) i) kp) (sig 2)]
+                       (inlok? g f2 sg () ?
+                          (pin (g 'inl) s f2, pin (g 'sigs) s sg, pin on s 1, pin sp s [nm cs],
+                           ['call ['var s] (map (i \ as i) kp)])
+                          x)))))
+       (walk x) (? (atom? x) x
+                   (x @ ('call ('var nm) as) (map walk as @ a2 (spec ['call ['var nm] a2] nm a2))
+                        (map walk x)))
+       ; a copy ainl declined: the call as written, its constants back in place
+       (back x) (? (atom? x) x
+                   (x @ ('call ('var s) as && two? (peep sp s ()))
+                         (: e (sp s) nm <e cs <>e (go cs as) (? !(two? cs) () (two? <cs) (<cs . go >cs as) (<as . go >cs >as))
+                            ['call ['var nm] (go cs (map back as))])
+                        (map back x)))
+       f2 (walk f)
+       (!(two? (keys sp)) ? f
+          (: _ (pin g 'ainl2 on)
+             f3 (ainl g f2)
+             _ (pin g 'ainl2 ())
+             (back (respell (oalign g (nopcall g f3)))))))
    ; -- a small counted loop unrolled: for (T k = A; k < B; k++) of at most 16 trips, its copies small
    ; in all, a body that neither writes k, takes its address, nor leaves early. each copy reads k as
    ; its literal and spells its own locals apart. a body indexing a small local array by k may run
@@ -4392,16 +4448,25 @@
        (mems t) (t @ ('struct . _) (peep (g 'stag) <>t 0 @ e (two? e ? <e)) ())
        (over a b) (a 1 < b 1 + tsz g (b 2) && b 1 < a 1 + tsz g (a 2))
        (vol? q) (charm? q && q & 2 > 0)
-       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ !(scal? (x 2)) || vol? (x 3)) m) &&
+       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ vol? (x 3)) m) &&
                                !(any (a \ any (b \ !(<a = <b) && over a b) m) m)))
-       cand {} dcl {} bad {} use {} site {} inis {} tmps {'k 0 'l ()}
+       (full? t) !(any (x \ !(scal? (x 2))) (mems t))
+       ; a brace of plain or member-named scalars -> [member -> value], the rest zero | ()
+       (brace t is) (: ms (mems t)
+                       (go is i acc) (? !(two? is) [acc]
+                                        (<is @ ('dfield fl v) (: j (fidx ms fl) (two? v && elem <v '(init didx dfield) || !(scal? (ms j 2)) ? () (go >is (j + 1) (pin acc fl v))))
+                                               (('init . _) || ('didx . _)) ()
+                                               v (i < #ms && scal? (ms i 2) ? (go >is (i + 1) (pin acc <(ms i) v)) ())))
+                       (go is 0 {}))
+       cand {} dcl {} bad {} use {} site {} inis {} brc {} tmps {'k 0 'l ()}
        ; the parser's typer over this fn's names, for a source's mask
        tys {} lqs {} ps9 {'locals tys 'lqs lqs 'globals {} 'gqs {} 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
        (vsrc? e) (vol? (accq ps9 e))
        (mem? e) (e @ (('idx || 'deref || 'dot) . _) 1 0)
        (bind p) (pin tys <p <>p, vol? (p 6) ? (pin lqs <p (p 6)) 0)
+       (bok? p) (p 2 @ ('init is) (brace <>p is @ [t] (pin brc <p [t], 1) _ 0) _ 0)
        (one x p) (pin dcl <p (1 + peep dcl <p 0), bind p, (mem? (p 2) ? (pin inis <p 1) 0),
-                  <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2))) && !(vol? (p 6)) && clean? <>p ?
+                  <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2)) || bok? p) && !(vol? (p 6)) && clean? <>p ?
                      (pin cand <p <>p) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
@@ -4429,11 +4494,17 @@
                         ['call ['var fn] as] (g 'nocap fn @ c (map (arg [fn c] as) ^#as))
                         _ (map scan x)))
        _ (two? (keys cand) ? (scan f))
-       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) && !(peep site nm 0 && peep inis nm 0)) (sort (keys cand)))
        (sn nm fl) "\(nm)`m\(fl)"
        (fty nm fl) (assoc fl (mems (cand nm)) @ m (m 2))
+       ; a member it names that is no scalar, or a call that sees the struct whole while its brace or
+       ; a member it never names is all that holds the rest, leaves it whole
+       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) &&
+                       !(peep site nm 0 && (peep inis nm 0 || two? (brc nm) || !(full? (cand nm)))) && all (fl \ scal? (fty nm fl)) (use nm))
+                  (sort (keys cand)))
+       (fls nm) (brc nm @ [t] (use nm + filter (fl \ nelem fl (use nm)) (sort (keys t))) _ (use nm))
+       (bv nm fl) (brc nm @ [t] (t fl @ () '(num 0) v (rw v)) _ ())
        (rd ps) (? !(two? ps) ()
-                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (use <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
+                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) (bv <<ps fl)]) (fls <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
                   (rw <ps . rd >ps))
        (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (use <p)))
        (seq l) (two? >l ? ['comma <l (seq >l)] <l)
@@ -4518,8 +4589,9 @@
        (ucut (has? f ? (kprop g (dprunel w64 (e \ ()) lk (res f))) (dprune w64 (e \ ()) f))))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
-    (: f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
-                      u0 (unrl g k0)
+    (: _ (pin g 'ainln {'k 0})
+       f (bcpfin g (: k0 (kprop g (lprop g (phome g (respell (oalign g (nopcall g (ainl g (nopcall g (lprop g (kcall g (respell f)))))))))))
+                      u0 (unrl g k0 @ u9 (u9 = k0 ? u9 (kinl g u9)))
                       k1 (srs g (sra g (u0 = k0 ? k0 (kprop g u0))))
                       (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1)))
                 @ f1 (kprop g (ucut (dprune !(ilp32? g) (e \ ()) (lprop g f1)))))
@@ -4760,7 +4832,7 @@
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'csites {} 'cloop {} 'inl {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'inlk {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -4800,7 +4872,9 @@
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
-                                    pin (g 'inl) <>f fi) 0)) 0),
+                                    pin (g 'inl) <>f fi)
+                                   ; ..and one the size gate alone turns away, for kinl to weigh at each constant call
+                                   (inlok? g fi (sigs <>f) 1 && !(asmneed? g <>>f <>>>f) ? (pin (g 'inlk) <>f fi) 0))) 0),
                           recfns >fs)))
        _ (: (go x lp) (? !(two? x) 0
                          (x @ ('call . ('var nm) . r) (pin (g 'csites) nm (1 + peep (g 'csites) nm 0),

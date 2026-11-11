@@ -540,6 +540,51 @@ for d in P L; do
   esac
 done
 
+# a switch on a param too big to splice whole, called from an unrolled loop: each constant call
+# splices its own case, and none stays a call
+cat > "$ho/.kinl.c" <<'EOF'
+#include <stdio.h>
+static int side(int const *v, int k) {
+ switch (k) {
+  case 0: return v[2] + v[3];
+  case 1: return 64 * v[3] - v[0];
+  case 2: return 64 * v[3] + v[0];
+  case 3: return 64 * v[3] - v[1];
+  default: return 64 * v[3] + v[1]; } }
+int in(int const *v) { int a = 1; for (int k = 0; k < 5; k++) a &= side(v, k) >= 0; return a; }
+#ifndef ONLY
+int main(void) { int const v[4][4] = { { 1, 2, 3, 4 }, { -300, 0, 1, 4 }, { 0, 300, 1, 4 }, { 0, 0, -9, 4 } };
+ printf("%d %d %d %d\n", in(v[0]), in(v[1]), in(v[2]), in(v[3])); return 0; }
+#endif
+EOF
+moonrun -D ONLY -c -o "$ho/.kinl.o" "$ho/.kinl.c" > /dev/null 2>&1 || fail "mooncc the unrolled switch probe"
+[ "$(objdump -d "$ho/.kinl.o" | grep -c call)" = 0 ] || fail "an unrolled call on a constant stayed a call"
+moonrun -o "$ho/.kinl" "$ho/.kinl.c" || fail "mooncc: the unrolled switch probe linked"
+[ "$("$ho/.kinl")" = "1 0 0 0" ] || fail "an unrolled switch's constant splices answer wrong"
+
+# a local struct braced or member-named, an array member unnamed, splits into its members:
+# the brace's values land, the rest read zero
+cat > "$ho/.srsb.c" <<'EOF'
+#include <stdio.h>
+struct va { float x, y, z, w, a[3]; };
+struct ip { int p, q, r; long s; };
+static int n;
+static int bump(int k) { return n += k; }
+static float sd(struct va const *v, int k) { switch (k) { case 0: return v->z + v->w; case 1: return v->w - v->x; default: return v->w + v->y; } }
+static int f1(float x, float w) { struct va const v = { .x = x, .w = w }; int in = 0; for (int k = 0; k < 3; k++) in = in * 2 + (sd(&v, k) >= 0); return in; }
+static long f2(int a) { struct ip u = { a, bump(3) }; u.r += 2; return u.p * 100 + u.q * 10 + u.r + u.s; }
+static long f3(int a) { struct ip u = { .q = a, 5, .p = bump(1) }; return u.p * 1000 + u.q * 100 + u.r * 10 + u.s; }
+static long f4(int a) { struct ip u = { .s = a }; for (int i = 0; i < 3; i++) u.s += u.p + i; return u.s; }
+static float f5(float x) { struct va v = { x, 2, 3, 4 }; v.a[1] = 9; return v.x + v.a[1] + v.a[0]; }
+int main(void) {
+ printf("%d %d %d\n", f1(1, 2), f1(-5, 2), f1(3, -1));
+ long a2 = f2(7); long a3 = f3(4); long a4 = f4(6); float a5 = f5(1.5f);
+ printf("%ld %ld %ld %g n=%d\n", a2, a3, a4, a5, n);
+ return 0; }
+EOF
+moonrun -o "$ho/.srsb" "$ho/.srsb.c" || fail "mooncc the braced struct probe"
+[ "$("$ho/.srsb" | tr '\n' '|')" = "7 7 0|732 4450 9 10.5 n=4|" ] || fail "a braced local struct split into members answers wrong"
+
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
 bug='asm volatile (".pushsection __bug_table,\"aw\"; .align 2; 14470: .long 14471f - .; .popsection; 14471: brk 0x800");'
