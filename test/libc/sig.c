@@ -28,6 +28,10 @@ int main(void)
 	sigaddset(&s, SIGCHLD);
 	sigaddset(&s, SIGSYS);
 	for (int i = 1; i <= 32; i++) say_n("added", sigismember(&s, i));
+	sigfillset(&s);
+	sigdelset(&s, SIGINT);
+	sigdelset(&s, SIGSYS);
+	for (int i = 1; i <= 64; i++) say_n("filled", sigismember(&s, i));
 
 	/* --- the numbers. several of these permute on the BSDs, so what the header
 	   names is the canonical value every translation table is cut against --- */
