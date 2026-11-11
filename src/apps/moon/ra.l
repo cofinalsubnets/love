@@ -9,11 +9,13 @@
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
    ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
    ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d15
-   ; to holo's scratch, and takes d8-d14 last, callee-saved
+   ; to holo's scratch, and takes d8-d14 last, callee-saved; thumb2 takes r4 last, by a name of
+   ; its own, q4, that a4ize spells r4 once the frame's r4 is fp
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                (xt? g) '(r0 r1 r2 r3 r5 r6 r7 r9 r10 r11)
                (v6m? g) '(r0 r1 r2 r3 r5 r6)
+               (t2? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 q4)
                (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
                (ia32? g) '(r0 r1 r2 r5 r6 r3)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
