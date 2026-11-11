@@ -46,8 +46,10 @@
    kx (max (peep kc x 0.0) 1.0) f ((kx - y - 0.5) / kx)
    el (sky-lo + f * (0.5 * pi - sky-lo) * 0.97) az (az-lift * atan U) cl (cos el)
    _ (pins st 'kc kc 'sdx (cl * sin az) 'sdy (sin el) 'sdz (cl * cos az))
+   ; the dirt's colour where each ray lands, which nothing after this moves
+   G (iota gnd)
    (pins st 'w w 'h h 'cy cy 'foc (w / 2.0) 'dx dx 'dy dy 'dz dz 'gnd gnd
-            'gx gx 'gz gz 'G (iota gnd) 'S (iota (1 - gnd)) 'stars-h -99.0
+            'gx gx 'gz gz 'G G 'S (iota (1 - gnd)) 'stars-h -99.0 'alb (land (peep gx G 0.0) (peep gz G 0.0))
             'bay (view-bayer w h) 'f [0.0 sp cp] 'u [0.0 cp -sp]))
  ; the stars: sky's ss, each a pixel where the lens shows it and the land does not; -1 unseen
  (lay-stars st ss) (: w (st 'w) h (st 'h) X (ss 'x) Y (ss 'y) Z (ss 'z)
@@ -176,8 +178,7 @@
    wxv (-(sin (g 'head * pi / 180.0) * g 'wind) * g 'gust)
    ; the sky behind, and the dirt under, each where it shows
    hv (sky-colour-of lt wx (only S (st 'sdx)) (only S (st 'sdy)) (only S (st 'sdz)) (eye 0) (eye 2) sim)
-   gx (only G (st 'gx)) gz (only G (st 'gz))
-   alb (land gx gz)
+   alb (st 'alb)
    nx (only G (st 'nx)) ny (only G (st 'ny)) nz (only G (st 'nz))
    ; ..the shadows, the blades' points thrown down the sun onto the dirt
    sunup (0.02 < s 1)
