@@ -52,6 +52,11 @@ static inline void k_sse_enable(void) {
     "mov %%rax, %%cr4"
     ::: "rax", "memory"); }
 
+static inline uint64_t k_rdtsc(void) {
+  uint32_t lo, hi;
+  asm volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+  return ((uint64_t) hi << 32) | lo; }
+
 // the MSR number rides ecx, the value edx:eax
 static inline uint64_t k_rdmsr(uint32_t msr) {
   uint32_t lo, hi;
