@@ -231,7 +231,7 @@
                  mn (m >> 6 = 3 ? () (r 3 @ 0 'prefetchnta 1 'prefetcht0 2 'prefetcht1 3 'prefetcht2 ()))
                  (nom? mn ? (fin (r 0) [(op1 mn 0 [(r 2)])]) (bad 0)))
           (c && c = 30 && px = 'f3 && (dc-at s k2 = 250 || dc-at s k2 = 251))
-           (finx (k2 + 1) [(op1 (dc-at s k2 = 250 ? 'endbr64 'endbr32) 0 ())])
+           (finx (k2 + 1) [(op1 (dc-at s k2 @ 250 'endbr64 'endbr32) 0 ())])
           1 (dc-at s k2 @
                   248 (fin (k2 + 1) [(op1 'swapgs 0 ())])
                   208 (fin (k2 + 1) [(op1 'xgetbv 0 ())])
@@ -255,7 +255,7 @@
           120 (eg 'vmread 8 8)  121 (ge 'vmwrite 8 8)
           199 (dc-modrm s k2 p 8 8 @ r
                  (r 3 @- (bad 0)
-                  1 (dc-at s k2 >> 6 = 3 ? (bad 0) (fin (r 0) [(op1 (w = 8 ? 'cmpxchg16b 'cmpxchg8b) 0 [(r 2)])]))
+                  1 (dc-at s k2 >> 6 @ 3 (bad 0) (fin (r 0) [(op1 (w = 8 ? 'cmpxchg16b 'cmpxchg8b) 0 [(r 2)])]))
                   (3 || 4 || 5) (dc-at s k2 >> 6 = 3 || px != 'none ? (bad 0)
                                    (fin (r 0) [(op1 (dc-x64 w 0 (r 3 @ 3 'xrstors 4 'xsavec 'xsaves)) 0 [(r 2)])]))
                   6 (finx (r 0) [(op1 (px @ 'none 'vmptrld '66 'vmclear 'f3 'vmxon 'vmptrld) 0 [(r 2)])])))

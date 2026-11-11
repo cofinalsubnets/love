@@ -26,7 +26,7 @@
             "test/kernel/sh0.l"
             "src/apps/lush.l"
             "test/kernel/sh.l"
-            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l"])
+            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l" "test/kernel/glaze.l"])
    ; the free list after the busiest run: ffalloc's walk is linear, so its length matters
    (frees p) (open p "r" @ q (port? q ? (slurp q @ s (close q,
      each (filter (l \ "free-" = snip l 0 5) (split "\n" s)) (l \ puts (l + "\n"))))))

@@ -2,7 +2,7 @@
 ; host-side: a crew module. run: cat test/00-init.l test/host/swatch.l | out/love
 (borrow 'swatch) (borrow 'mesh)
 
-(: (at l x y) (swatch-texel l x y)
+(: (at l x y) (swatch-texel 32 32 l x y)
    red [1.0 0.0 0.0] (g v) [v v v]
    (on? l x y) (at ('(fill 0.0) . l) x y = red)
    (paint1 s) (\ x y (on? [s] x y))
@@ -15,7 +15,7 @@
    tri (paint1 '(poly 0 0 8 0 0 8 (rgb 1 0 0))) ring (paint1 '(poly 0 0 8 0 8 8 0 8 0 0 2 2 2 6 6 6 6 2 2 2 (rgb 1 0 0)))
    pic (swatch 8 4 '((fill 0.25) (cols 6 8 hole))) t0 (pic 0)
    ; painted in C as the texels are in love: every shape, nested boxes, odd sides, holes in the levels
-   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel l)))
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel w h l)))
    sw-all '((fill (rgb 0.2 0.4 0.6)) (rows 1 5 (grey 0.9)) (cols 2 3 (tint (rgb 1 0.5 0.25)))
             (rect 4 1 9 6 (mix (rgb 0 1 0) 0.3)) (disc 6 5 3.5 (shade 0.7)) (grid 5 7 1 (rgb 0.1 0.1 0.1))
             (checker 3 2 (noise 2 3 0.4)) (stripes 6 2 1 (shade 1.2)) (dots 4 4 1.2 hole)
@@ -63,12 +63,12 @@
        (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())))
 ; an oval and a ball painted in C as in love: the oval its turned shape, the ball brighter toward
 ; its light, only inside itself and over no hole
-(: (at l x y) (swatch-texel l x y) red [1.0 0.0 0.0]
+(: (at l x y) (swatch-texel 32 32 l x y) red [1.0 0.0 0.0]
    rc '((fill 0.0) (oval 16 8 5 3 90 (rgb 1 0 0)))
    bl '((fill 0.6) (ball 16 16 10 10 0 -0.6 0 0.2))
    nt '((fill 0.5) (oval 12 10 8 5 33 (rgb 0.7 0.2 0.1)) (oval 20 8 6 2 -70 (shade 0.8)) (ball 14 10 9 6 33 0.3 -0.4 0.3)
         (within 2 2 28 8 (ball 8 4 5 5 0 0 0.5 0.1)) (rect 0 12 8 16 hole) (ball 4 13 4 4 0 0 0 0.5))
- (test (show (swatch 32 16 nt) = show (mesh-pic 32 16 (swatch-texel nt)))
+ (test (show (swatch 32 16 nt) = show (mesh-pic 32 16 (swatch-texel 32 16 nt)))
        (at rc 16 12 = red) (at rc 16 1 != red) (at rc 20 8 != red) (at rc 18 8 = red)
        (at bl 10 16 0 > at bl 22 16 0) (at bl 0 16 0 = 0.6) (at bl 10 16 1 = at bl 10 16 2)
        (at '((fill hole) (ball 4 4 4 4 0 0 0 0.5)) 4 4 = ())
@@ -78,8 +78,8 @@
        (swatch-fault '((ball 1 2 3 4 5 6 7 8)) = ())))
 ; grain, cells and seed: painted in C as in love; a (seed 0) changes nothing, another the
 ; noise after it alone; grain's rows wander, cells' borders part the texels
-(: (at l x y) (swatch-texel l x y) red [1.0 0.0 0.0]
-   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel l)))
+(: (at l x y) (swatch-texel 32 32 l x y) red [1.0 0.0 0.0]
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel w h l)))
    nat '((fill 0.4) (grain 6 2 2 9 (shade 0.7)) (patches 4 0.4 (rgb 0.8 0.6 0.3)) (cells 7 0.3 (grey 0.1))
          (noise 3 0.2) (within 2 2 20 14 (seed 4) (cells 5 0.2 hole) (noise 2 0.3)))
    pa '((fill 0.0) (patches 4 0.5 (rgb 1 0 0)))
@@ -98,5 +98,21 @@
        (swatch-fault '((grain 6 2 2 (shade 0.7))) 1 = "(grain every w warp size PAINT)")
        (swatch-fault '((cells 6 (shade 0.7))) 1 = "(cells size w PAINT)")
        (swatch-fault ['(fill 1) '(seed 2) '(cells 6 0.3 (shade 0.7))] = ())))
+; fbm, relief and stain: painted in C as in love; fbm darkens by up to its amount and wraps
+; at the picture's edges, so a texel past the right edge is the left edge's
+(: (at l x y) (swatch-texel 16 16 l x y) (g v) [v v v]
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel w h l)))
+   oct '((fill (rgb 0.5 0.45 0.4)) (fbm 4 3 0.3) (relief 6 4 0.8) (stain 5 3 0.4 0.2 (rgb 0.1 0.2 0.3))
+         (stain 3 2 0.2 0.1 hole) (rows 2 3 hole) (stain 4 2 0.5 0.3 (rgb 1 1 1)) (relief 2 1 0.5))
+   fb (map (i \ at '((fill 1.0) (fbm 4 3 0.4)) (i % 16) (i // 16) 0) ^256)
+   (wrapped l w h) (: t (swatch-texel w h l) (all (y \ (: a (t 0 y) b (t w y) (all (k \ abs (a k - b k) < 1e-9) ^3))) ^h))
+ (test (sw-same 16 16 oct) (sw-same 13 9 oct) (sw-same 1 5 oct)
+       (all (v \ 0.6 - 1e-9 <= v <= 1.0 + 1e-9) fb) (any (v \ v < 0.85) fb) (any (v \ v > 0.9) fb)
+       (wrapped '((fill 1.0) (fbm 5 3 0.5)) 16 12) (wrapped '((fill 0.6) (relief 4 3 1.0)) 16 16)
+       (at '((fill 0.5) (relief 4 2 0.0)) 3 3 = g 0.5) (at '((fill 0.5) (stain 4 2 0.0 0.1 0.0)) 3 3 = g 0.5)
+       (at '((fill 0.5) (stain 4 2 1.0 0.01 0.0)) 3 3 = g 0.0)
+       (swatch-fault '((relief 0 2 1)) 1 = "(relief size octaves depth)")
+       (swatch-fault '((stain 4 2 0.5 0 0.1)) 1 = "(stain size octaves cover soft PAINT)")
+       (swatch-fault '((fill 1) (fbm 4 13 0.2)) 0 = '(fbm 4 13 0.2))))
 (test_fin ())
 (puts "swatch: ok\n")

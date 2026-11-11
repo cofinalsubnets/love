@@ -69,8 +69,23 @@ void pdg_horn_close(void) { h_ring.rd = h_ring.wr = 0; }
 // device this file replaces setup.c (the entry and the malloc trio); the simulator keeps it,
 // and takes the host's heap: its realloc holds the device's 16 MB, which 64-bit words outgrow
 #if TARGET_PLAYDATE
+// one block taken at the first ask, less a margin the SDK keeps, laid out by ffalloc: the
+// pools off the top, small blocks off the bottom, so none lands in the hole a pool left
+#include "../../../inle/ffalloc.h"
+#define PDG_SDK_KEEP (512u << 10)
+static struct mem *pd_free;
+static int pd_heap(void) {
+  size_t lo = 0, hi = 16u << 20;
+  while (hi - lo > 4096) { size_t m = (lo + hi) / 2; void *t = pdg_realloc(NULL, m); if (t) pdg_realloc(t, 0), lo = m; else hi = m; }
+  if (lo <= PDG_SDK_KEEP + (1u << 20)) return 0;
+  size_t n = (lo - PDG_SDK_KEEP) & ~(size_t) 15;
+  void *b = pdg_realloc(NULL, n);
+  if (!b) return 0;
+  pd_free = (struct mem *) b, pd_free->next = NULL, pd_free->len = n / sizeof(uintptr_t);
+  return 1; }
 void *alloc(void *p, size_t n) {
-  return n ? pdg_realloc(NULL, n) : (pdg_realloc(p, 0), NULL); }
+  if (!n) return ff_free(&pd_free, p), NULL;
+  return pd_free || pd_heap() ? ff_alloc(&pd_free, b2w(n)) : NULL; }
 #else
 #include <stdlib.h>
 void *alloc(void *p, size_t n) { return n ? malloc(n) : (free(p), NULL); }

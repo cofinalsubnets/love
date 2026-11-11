@@ -401,5 +401,36 @@
        (<hi < cv * cv)
        (one 1 < hi 1) (hi 1 < 32767)))
 
+; a phone: two rows of buttons, the f keys' knobs, over a piano of two octaves from c below
+; middle c. a finger each: two hold a chord, a slide takes the next key, up lets go; a button
+; turns its knob, lit when on; no buffer but for a loop named
+(: w 800 h 360 win {'w w 'h h 'paper (cask (w * h * 4))} st (pins (synth-new ()) 'phone 1 'fk {})
+   (rgb x y) (4 * (y * w + x) @ i (string (win 'paper) @ p [(p (i + 2)) (p (i + 1)) (p i)]))
+   _ (synth-wlay st w h) bs (synth-pbtns st)
+   ww (w // synth-pwhite) ky (synth-prows * 16 + 40)
+   (at x y) (synth-pat st w h x y)
+   (ev id a x y) (synth-wstep st ['finger id a x y])
+   (notes _) (sort (map (p \ int (p 1)) (st 'hv)))
+   ats (map (xy \ at <xy (xy 1)) [[(7 * ww + 20) ky] [(8 * ww - 4) ky] [(9 * ww + ww - 2) ky] [(7 * ww + 20) 300] [(14 * ww + 20) 300]])
+   _ (ev 0 0 (7 * ww + 20) 300) _ (ev 1 0 (9 * ww + 20) 300) chord (notes ())
+   _ (synth-ppaint st win) lit (rgb (7 * ww + 20) 300) dark (rgb (8 * ww + 20) 300)
+   _ (ev 1 2 (10 * ww + 20) 300) slid (notes ())
+   _ (ev 0 1 (7 * ww + 20) 300) _ (ev 1 1 (10 * ww + 20) 300) gone (#(st 'hv))
+   rb0 (rgb 4 70) _ (ev 2 0 4 70) _ (ev 2 1 4 70) rev (st 'rev) _ (synth-ppaint st win) rb1 (rgb 4 70)
+   _ (ev 3 0 (2 * 96 + 4) 40) _ (ev 3 1 (2 * 96 + 4) 40) oct (st 'oct)
+   _ (ev 4 0 (7 * ww + 20) 300) up (notes ())
+   qb (bs 0 8) bw (w // 8 // synth-pcols * 8) gap (at (7 * bw + 4) 40) _ (ev 5 0 (8 * bw + 4) 40) quit (st 'over)
+ (test (#(bs 0) = 9) (#(bs 1) = 8) (qb 1 = 'quit) (gap = ()) (quit = 1) (bs 1 0 1 = 'rev) (bs 1 1 1 = 'rvw)
+       (at 10 5 = ()) (at (bw + 4) 40 = ['btn 'down]) (at 10 84 = ['btn 'rev])
+       (ats = [['key 0] ['key 1] ['key 4] ['key 0] ['key 12]])
+       (chord = [0 4]) (lit = [255 128 0]) (dark = [208 208 208]) (slid = [0 5]) (gone = 0)
+       (rev = 1) (rb0 != rb1) (oct = 1) (up = [12])
+       !(synth-wbuf? 1 "") (synth-wbuf? 1 "loop") (synth-wbuf? 0 "")))
+
+; the window where asked for, and on a phone's face unless --tty asks the terminal's
+(test (synth-windowed? ["-w"] ()) (synth-windowed? ["loop" "--window"] ()) !(synth-windowed? ["loop"] ())
+      (synth-windowed? [] "/x/face") (synth-windowed? ["loop"] "/x/face")
+      !(synth-windowed? ["--tty"] "/x/face") !(synth-windowed? ["--tty" "loop"] "/x/face"))
+
 (test_fin (),
- puts "synth: ok -- the keys sit where they should, an f key reads whole, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, a finger plays the strip, the buffer sits under the window's keys, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there, and the volume turns\n")
+ puts "synth: ok -- the keys sit where they should, an f key reads whole, the names are right, the turns stop, a strike rings, the loop plays what the buffer says, a held key holds, a finger plays the strip, the buffer sits under the window's keys, the FM timbre plays, the latch holds, and the bus rings and shimmers on under the clip, a limiter keeping it there, and the volume turns, and a phone plays the window\n")
