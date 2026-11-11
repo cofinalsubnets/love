@@ -14,7 +14,6 @@ static love_inline flo_t net_flo(flo_t v) { return v != v ? 0 : v; }
 struct love_zn { flo_t re, im; };                     // the net: a complex value
 static love_inline struct love_zn zn(flo_t re, flo_t im) {
   struct love_zn z = {re, im}; return z; }
-static dlimb div128by64(love_limb hi, love_limb lo, love_limb d, love_limb *rem);
 static love_limb
  div2by1(love_limb hi, love_limb lo, love_limb d, love_limb *rem),
  rdigit(char c);
@@ -83,29 +82,11 @@ static love_inline love_limb div2by1(love_limb hi, love_limb lo, love_limb d, lo
  return *rem = (love_limb) (num % d), (love_limb) (num / d);
 #endif
 }
-// the full 128/64 quotient for q-hat, as two divq-safe steps
-static love_inline dlimb div128by64(love_limb hi, love_limb lo, love_limb d, love_limb *rem) {
- love_limb qhi = hi / d, r1 = hi % d;
- love_limb qlo = div2by1(r1, lo, d, rem);
- return ((dlimb) qhi << limb_bits) | qlo; }
-
-// knuth's q-hat for the window w[0..n] over vn, n >= 2 and vn's top bit set: the quotient limb
-// or one over (taocp 4.3.1, theorem b), clamped to a limb. mag_divstep's fix-ups make any answer
-// right, so this bounds their cost
-static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, int n) {
- dlimb const B = limb_base;
- love_limb rr;
- dlimb qhat = div128by64(w[n], w[n-1], vn[n-1], &rr), rhat = rr;
- while (qhat >= B || qhat * vn[n-2] > ((rhat << limb_bits) | w[n-2])) {
-  qhat--; rhat += vn[n-1];
-  if (rhat >= B) break; }
- return qhat >= B ? (love_limb) (B - 1) : (love_limb) qhat; }
-
 // the loops laid and proved by mag.l: mag_add_ge, mag_sub, mag_mul_add_small, mag_mul_rows
 // (rows [i0, end) of the schoolbook r = a b), mag_add_off (r += s B^off), mag_dnorm and
 // mag_ddenorm (knuth D's shift by s, as products), mag_shl and mag_shr (big_shift's, the same
-// way), mag_top and mag_ord (a against b: 0, 1, 2), mag_ge, and mag_divstep, one quotient limb
-// of knuth's D over un's window at j
+// way), mag_top and mag_ord (a against b: 0, 1, 2), mag_qhat (the quotient limb or one over,
+// knuth's theorem b), mag_ge, and mag_divstep, one quotient limb of knuth's D over un's window at j
 #include "mag_gen.h"
 
 static love_noinline int mag_cmp(love_limb const *a, int na, love_limb const *b, int nb) {

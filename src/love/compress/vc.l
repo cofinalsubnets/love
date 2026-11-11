@@ -111,6 +111,11 @@
           (\ sp C [a b] ['bin '+ (C a) (C b)]) 'fit]
      'd* [(\ sp v T [a b] ['mul (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(dfit sp (T e))]))
           (\ sp C [a b] ['bin '* (C a) (C b)]) 'fit]
+     ; a dlimb over a divisor past 0: the quotient and the remainder
+     'd/ [(\ sp v T [a b] ['un-div (T b) (T a)]) (\ sp v T O e [a b] (O a + O b + [['inf-lt 0 (T b)]]))
+          (\ sp C [a b] ['bin '/ (C a) (C b)]) 'fit]
+     'd% [(\ sp v T [a b] ['inf-mod (T b) (T a)]) (\ sp v T O e [a b] (O a + O b + [['inf-lt 0 (T b)]]))
+          (\ sp C [a b] ['bin '% (C a) (C b)]) 'fit]
      'lo [(\ sp v T [x] ['inf-mod (lbase sp) (T x)]) owes-parts (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      'hi [(\ sp v T [x] ['un-div (lbase sp) (T x)]) owes-parts (\ sp C [x] ['bin 'shr (C x) ['var "limb_bits"]]) 'fit]
      'lB [(\ sp v T _ (lbase sp)) owes-none (\ sp C _ ['var "limb_base"]) 'fit]

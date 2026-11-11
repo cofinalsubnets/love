@@ -152,6 +152,19 @@ static love_inline int mag_ord(love_limb const *a, int na, love_limb const *b, i
    if (a[i] < b[i]) return 0;
    else return 2; }
  return 1; }
+static love_inline love_limb mag_qhat(love_limb const *w, love_limb const *vn, int nn) {
+ uintptr_t n = (uintptr_t) nn;
+ dlimb t, qh, rh;
+ t = (dlimb) w[n] * limb_base + (dlimb) w[n - 1];
+ qh = t / (dlimb) vn[n - 1];
+ rh = t % (dlimb) vn[n - 1];
+ while (1) {
+  if (qh < limb_base) if (qh * (dlimb) vn[n - 2] <= rh * limb_base + (dlimb) w[n - 2]) break;
+  qh = qh - 1;
+  rh = rh + (dlimb) vn[n - 1];
+  if (limb_base <= rh) break; }
+ if (qh < limb_base) return (love_limb) qh;
+ else return (love_limb) (limb_base - 1); }
 static love_inline int mag_ge(love_limb const *a, int na, love_limb const *b, int nb) {
  uintptr_t n = (uintptr_t) na, m = (uintptr_t) nb, i;
  i = n;
