@@ -104,6 +104,7 @@
       (msr ttbr0_el1 r0)
       (add r2 r0 4096)
       (msr ttbr1_el1 r2)
+      (isb)                       ; the new regime in force first, so no walk refills from the old
       (dsb ish)
       (tlbi vmalle1 zr)
       (dsb ish)
