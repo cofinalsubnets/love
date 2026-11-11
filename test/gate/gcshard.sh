@@ -107,10 +107,12 @@ paste -d ' ' $w/clock $w/rest | awk -v n=$n -v tab=test/gate/gcshard.cost '
     for (i = 1; i <= NR; i++) { if (a > 0 && a + w[i] > hi && k < n - 1) { k++; a = 0 } a += w[i]; print k, f[i] } }' > $w/cut
 el "the full corpus and the cut"
 
+# a shard's carried files in corpus order, so a carry reads what an earlier carry binds
+carried() { awk 'NR == FNR { c[$0] = 1; next } c[$0]' $w/c$1 $w/rest; }
 # a shard: the harness, its carried files, its slice, zz-fin
 # ..and its marked twin, a mark behind each slice file, which the stress runs take
-lay() { cat $pre $(cat $w/c$1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l
-        { cat $pre $(cat $w/c$1); for f in $(awk -v k=$1 '$1 == k { print $2 }' $w/cut); do cat $f; echo; echo "$mark"; done
+lay() { cat $pre $(carried $1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l
+        { cat $pre $(carried $1); for sf in $(awk -v k=$1 '$1 == k { print $2 }' $w/cut); do cat $sf; echo; echo "$mark"; done
           cat $fin; } > $w/m$1.l; }
 # the earliest corpus file that binds NAME, as the reader reads it (test/gate/binder.l)
 binder() { out/love test/gate/binder.l "$1" $(cat $w/rest); }
