@@ -1600,7 +1600,8 @@
 
 ; uu -- MLTT with the UniMath Preamble's seven inductives (empty unit bool coprod nat paths
 ; total2), bidirectional checking, NbE conversion (de bruijn levels as fresh vars, sigma- and
-; pi-eta), type-in-type as UniMath has it. an axiom is a book entry with a type and no value.
+; pi-eta), cumulative universes, each definition polymorphic in its own. an axiom is a book
+; entry with a type and no value.
 ; names follow UniMath.
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
@@ -1613,8 +1614,8 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig lof rejects sugar vcs-of vof)
-(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {} IND {})
+(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig lof rejects sugar univ vcs-of vof)
+(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {} IND {} UST {} UPOT {} UOUT {} UORG {} UPOLY {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
@@ -1671,6 +1672,7 @@
          ['empty_rect P e]      (: cP (comp P) ce (comp e) (en \ doer (cP en) (ce en)))
          ['unit_rect P u x]     (: cP (comp P) cu (comp u) cx (comp x)
                                  (en \ dour (cP en) (cu en) (cx en)))
+         ['UU ['lp i n]]        (en \ ['U (assq '%lv en @ (_ L) (L i @ ['lv k m] ['lv k (m + n)]) (scare 'uu-level-unbound i))])
          ['UU 0]                (en \ 'UU)
          ['UU l]                (en \ ['U l])
          ['the T u]             (comp u)                    ; the ascription is the term
@@ -1687,11 +1689,101 @@
 
    vof (flip comp)                               ; compile, then run
 
+   ; --- universes: on unless (univ 0), which gives UU : UU. each bare UU a level var, a level a fixnum or
+   ; ('lv k n), var k plus n. a constraint x+a <= y+b is an edge x -> y of weight a-b in one
+   ; graph, 'z the zero; a definition's edges wait in UST 'p until it commits
+   (univ on) (: was (peep UST 'on 1) (pin UST 'on on, was))
+   (uon? _) (peep UST 'on 1)
+   (univ? v) (v == 'UU || two? v && <v == 'U)
+   (ulvl v) (v == 'UU ? 0 <>v)
+   (umk l) (l == 0 ? 'UU ['U l])
+   (lsucc l) (charm? l ? (l + 1) ['lv <>l (<>>l + 1)])
+   (unode l) (charm? l ? ['z l] [<>l <>>l])
+   (ufresh _)
+    (: k (peep UST 'n 0)
+     (pin UST 'n (k + 1), pin UPOT k 0, pin UORG k (peep UST 'cur 0), pin UOUT 'z ([k 0] . peep UOUT 'z ()), ['lv k 0]))
+   (ule a b)
+    (? (charm? a && charm? b) (a <= b)
+       (a = b) 1
+       (: x (unode a) y (unode b)
+        (pin UST 'p ([<x <y (x 1 - y 1)] . peep UST 'p ()), 1)))
+   (ueq a b) (ule a b && ule b a)
+   (umax i j) (? (i = j || j == 0) i (i == 0) j (charm? i && charm? j) (i < j ? j i)
+                 (ufresh 0 @ k (ule i k, ule j k, k)))
+   ; an edge x -> y raises y's potential past x's by w, and on through y's edges; raising x
+   ; itself closes a positive cycle. log undoes a commit that does
+   (uedge x y w log)
+    (: (pot v) (peep UPOT v 0)
+       par (peep log 2 {})
+       (raise st) (st @ ([v p f] . u)
+                   (? (pot v >= p) (raise u)
+                      (v = x) (pin log 3 f, 0)
+                      (pin log 0 ([v (pot v)] . peep log 0 ()), pin UPOT v p, pin par v f,
+                       raise (foldl (\ a e ([<e (p + e 1) v] . a)) u (peep UOUT v ()))))
+                   1)
+     (pin log 2 par,
+      pin log 1 ([x (peep UOUT x ())] . peep log 1 ()),
+      pin UOUT x ([y w] . peep UOUT x ()),
+      raise [[y (pot x + w) x]]))
+   ; the cycle a refused commit closed, each var with the definition that made it
+   (ucycle log)
+    (: par (peep log 2 {}) (go v seen) (two? (memq v seen) || v == () ? seen (go (peep par v ()) (v . seen)))
+     (map (v \ [v (peep UORG v 'z)]) (go (peep log 3 ()) ())))
+   (ucommit nm)
+    (: es (peep UST 'p ()) log {}
+       ok (all (e \ uedge <e (e 1) (e 2) log) (rev es))
+     (pin UST 'p (),
+      ok ? es (: cy (ucycle log)
+              (each (peep log 0 ()) (e \ pin UPOT <e (e 1)),
+               each (peep log 1 ()) (e \ pin UOUT <e (e 1)),
+               scare 'uu-universe-inconsistency [nm cy]))))
+   (ureset nm) (pin UST 'p (), pin UST 'cur nm, pin UST 'n0 (peep UST 'n 0))
+   ; --- polymorphism: a definition's own levels in its type are made fresh at each cite, its
+   ; constraints carried as the longest paths its edges imply between them and the rest
+   (uvars t acc) (? (two? t) (t @ ['UU ['lv k _]] (two? (memq k acc) ? acc (k . acc)) (foldl (flip uvars) acc t)) acc)
+   (uidx k V) (: (go i u) (u @ (v . w) (v = k ? i (go (i + 1) w)) ()) (go 0 V))
+   (lvrepl t V) (? (two? t) (t @ ['UU ['lv k n]] (uidx k V @ i (i == () ? t ['UU ['lp i n]])) (map (x \ lvrepl x V) t)) t)
+   (ujot a b) (a < b ? (a . ujot (a + 1) b) ())
+   (upoly nm T es)
+    (: n0 (peep UST 'n0 0) (own? k) (charm? k && n0 <= k)
+       V (filter own? (uvars T ()))
+       E (es + map (k \ ['z k 0]) (ujot n0 (peep UST 'n 0)))
+       (bound? v) (!(own? v) || two? (memq v V))
+       S (foldl (\ a e (foldl (\ b v (bound? v && !(two? (memq v b)) ? (v . b) b)) a [<e (e 1)])) V E)
+       ; longest paths from u over the definition's edges; no positive cycle survived its commit
+       (from u) (: D {} _ (pin D u 0)
+                   (relax _) (foldl (\ ch e (: dx (peep D <e ()) dy (peep D (e 1) ())
+                                     (dx != () && (dy == () || dy < dx + e 2) ? (pin D (e 1) (dx + e 2), 1) ch))) 0 E)
+                   (loop _) (relax 0 ? (loop 0) 0)
+                 (loop 0, D))
+       cons (catmap (u \ (: D (from u)
+                          (catmap (v \ (v != u && (two? (memq u V) || two? (memq v V)) && peep D v () != () ? [[u v (D v)]] ())) S))) S)
+     (two? V ? (pin UPOLY nm [V (comp (lvrepl T V)) cons]) 0))
+   (uinst p)
+    (p @ [V cT cons]
+     (: F (map (_ \ <>(ufresh 0)) V)
+        (ren v) (uidx v V @ i (i == () ? v (F i)))
+      (pin UST 'p (foldl (\ a e ([(ren <e) (ren (e 1)) (e 2)] . a)) (peep UST 'p ()) cons),
+       cT [['%lv (map (f \ ['lv f 0]) F)]])))
+   (ulab t) (? (t == 'UU) ['UU (ufresh 0)] (two? t ? (<t == 'UU ? t (map ulab t)) t))
+   ; a motive's universe: any, a fresh var
+   (uany _) (uon? 0 ? ['U (ufresh 0)] 'UU)
+   ; a type: its level
+   (usort cx en d A) (inf cx en d A @ T (univ? T ? (ulvl T) (scare 'uu-not-a-type A)))
+   ; a <= b: universes climb, a pi's codomain with them
+   (cumul d a b)
+   (? (a == b) 1
+      (univ? a && univ? b) (ule (ulvl a) (ulvl b))
+      (two? a && two? b && <a == 'pi && <b == 'pi)
+       (conv d <>a <>b && (['nv d] @ fr (cumul (d + 1) (capp <>>a fr) (capp <>>b fr))))
+      (conv d a b))
+
    ; `==`, not `=`: `=` walks closures, exponential over shared environments. a `?`, not a
    ; pattern, which would build [a b] per call
    (conv d a b)
    (? (a == b) 1
-      (atom? a || atom? b) 0
+      (atom? a || atom? b) (univ? a && univ? b && ueq (ulvl a) (ulvl b))
+      (<a == 'U || <b == 'U) (univ? a && univ? b && ueq (ulvl a) (ulvl b))
       (<a = 'lam || <b = 'lam)
        (['nv d] @ fr (conv (d + 1) (vapp a fr) (vapp b fr)))
       (<a = 'chain && <b != 'chain)
@@ -1709,11 +1801,12 @@
    (atom? as && atom? bs || two? as && two? bs && conv d <as <bs && conv-args d >as >bs)
 
    (inf-sym cx x)
-   (x @ ('UU || 'nat || 'bool || 'unit || 'empty) 'UU
+   (x @ 'UU (uon? 0 ? ['U 1] 'UU)
+        ('nat || 'bool || 'unit || 'empty) 'UU
         'zero 'nat
         'tt 'unit
         ('true || 'false) 'bool
-        (assq x cx @ (_ T) T (GLOB x @ (g . _) g (scare 'uu-unbound x))))
+        (assq x cx @ (_ T) T (GLOB x @ (g . _) (UPOLY x @ p (two? p ? (uinst p) g)) (scare 'uu-unbound x))))
 
    (inf-spine cx en d f as)
    (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
@@ -1738,7 +1831,7 @@
                       va (vof en a)
                     (chk ([x Av] . cx) ([x va] . en) d b T))
       (inf cx en d t @ Ti
-         (conv d T Ti || scare 'uu-type-mismatch t)))
+         (cumul d Ti T || scare 'uu-type-mismatch t)))
 
    ; the else is the spine; a tag at the wrong length reaches it too and scares unbound
    (inf cx en d t)
@@ -1746,12 +1839,13 @@
       (nom? t) (inf-sym cx t)
       (t @
          [('pi || 'total2) x A B]
-          (: fr (chk cx en d A 'UU, ['nv d])
-           (chk ([x (vof en A)] . cx) ([x fr] . en) (d + 1) B 'UU, 'UU))
-         ['coprod A B] (chk cx en d A 'UU, chk cx en d B 'UU, 'UU)
+          (: i (usort cx en d A) fr ['nv d]
+           (umk (umax i (usort ([x (vof en A)] . cx) ([x fr] . en) (d + 1) B))))
+         ['coprod A B] (umk (umax (usort cx en d A) (usort cx en d B)))
          ['paths A a b]
-          (: Av (chk cx en d A 'UU, vof en A)
-           (chk cx en d a Av, chk cx en d b Av, 'UU))
+          (: l (usort cx en d A) Av (vof en A)
+           (chk cx en d a Av, chk cx en d b Av, umk l))
+         ['UU l] (umk (lsucc l))
          ['succ n] (chk cx en d n 'nat, 'nat)
          ['idpath a]
           (: Av (inf cx en d a) v (vof en a) ['paths Av v v])
@@ -1760,37 +1854,37 @@
          ['pr2 w]
           (inf cx en d w @ ['sig _ q] (capp q (dop1 (vof en w))) (scare 'uu-pr2-needs-total2 t))
          ['the T u]
-          (: Tv (chk cx en d T 'UU, vof en T) (chk cx en d u Tv, Tv))
+          (: Tv (usort cx en d T, vof en T) (chk cx en d u Tv, Tv))
          ['let x a b]
           (: Av (inf cx en d a) va (vof en a) (inf ([x Av] . cx) ([x va] . en) d b))
          ['nat_rect P z s n]
           (: Pv (chk cx en d n 'nat,
-                 chk cx en d P (vof 0 '(pi x nat UU)),
+                 chk cx en d P ['pi 'nat ['clo (uany 0 @ U (_ \ U))]],
                  vof en P)
            (chk cx en d z (vapp Pv 0),
             chk cx en d s (vof [['P Pv]] '(pi k nat (pi r (P k) (P (succ k))))),
             vapp Pv (vof en n)))
          ['bool_rect P x y w]
           (: Pv (chk cx en d w 'bool,
-                 chk cx en d P (vof 0 '(pi x bool UU)),
+                 chk cx en d P ['pi 'bool ['clo (uany 0 @ U (_ \ U))]],
                  vof en P)
            (chk cx en d x (vapp Pv 'true),
             chk cx en d y (vapp Pv 'false),
             vapp Pv (vof en w)))
          ['unit_rect P u w]
           (: Pv (chk cx en d w 'unit,
-                 chk cx en d P (vof 0 '(pi x unit UU)),
+                 chk cx en d P ['pi 'unit ['clo (uany 0 @ U (_ \ U))]],
                  vof en P)
            (chk cx en d u (vapp Pv 'tt),
             vapp Pv (vof en w)))
          ['empty_rect P e]
           (chk cx en d e 'empty,
-           chk cx en d P (vof 0 '(pi x empty UU)),
+           chk cx en d P ['pi 'empty ['clo (uany 0 @ U (_ \ U))]],
            vapp (vof en P) (vof en e))
          ['coprod_rect P f g w]
           (inf cx en d w @
            ['coprod A B]
-            (: Pv (chk cx en d P (vof [['A A] ['B B]] '(pi x (coprod A B) UU)),
+            (: Pv (chk cx en d P (vof [['A A] ['B B] ['K (uany 0)]] '(pi x (coprod A B) K)),
                    vof en P)
              (chk cx en d f (vof [['A A] ['P Pv]] '(pi a A (P (ii1 a)))),
               chk cx en d g (vof [['B B] ['P Pv]] '(pi b B (P (ii2 b)))),
@@ -1799,7 +1893,7 @@
          ['paths_rect P r e]
           (inf cx en d e @
            ['paths A av bv]
-            (: Pv (chk cx en d P (vof [['A A] ['a av]] '(pi b A (pi e (paths A a b) UU))),
+            (: Pv (chk cx en d P (vof [['A A] ['a av] ['K (uany 0)]] '(pi b A (pi e (paths A a b) K))),
                    vof en P)
              (chk cx en d r (vapp (vapp Pv av) ['refl av]),
               vapp (vapp Pv bv) (vof en e)))
@@ -1829,33 +1923,36 @@
 
 ; thunk expecting the kernel to refuse
 ; a family's names are its own: nothing pins over them
+; a statement and its term have their bare UUs made level vars; the source keeps them bare
 (: (gpin nm v) (IND nm == () ? (pin GLOB nm v) (scare 'uu-defind-owns nm))
+   (ulabs t) (uon? 0 ? (ulab t) t)
    (defn nm T0 t0)
-   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
-          vof 0 T)
-    (chk 0 0 0 t Tv,
-     gpin nm [Tv (vof 0 t)],
+   (: _ (ureset nm) t (sugar t0) T (ulabs (sugar T0)) u (ulabs t) Tv (usort 0 0 0 T, vof 0 T)
+    (chk 0 0 0 u Tv,
+     upoly nm T (ucommit nm),
+     gpin nm [Tv (vof 0 u)],
      pin SRC nm [t],
      nm))
    (axm nm T0)
-   (: T (sugar T0)
-    (chk 0 0 0 T 'UU,
+   (: _ (ureset nm) T (ulabs (sugar T0))
+    (usort 0 0 0 T,
+     upoly nm T (ucommit nm),
      gpin nm [(vof 0 T) ['nv nm]],
      nm))
    ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
    ; never builds its beta-normal form
    (defq nm T0 t0)
-   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
-          vof 0 T)
-    (chk 0 0 0 t Tv,
+   (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
+    (chk 0 0 0 u Tv,
+     upoly nm T (ucommit nm),
      gpin nm [Tv ['nv nm]],
      nm))
    ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
    ; ran, and a cite of it is unbound
    (defvc nm T0 t0)
-   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
-          vof 0 T)
-    (chk 0 0 0 t Tv,
+   (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
+    (chk 0 0 0 u Tv,
+     ucommit nm,
      gpin nm 1,
      nm))
    ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..
@@ -1937,20 +2034,32 @@
              ())
      {'ps ps 'is is 'cs cs 'xs xs 'iv iv 'rnm rnm 'Pn Pn 'tn tn 'ms ms 'famT famT 'rectT rectT 'bad bad
       'ct (map (k \ cs k @ [c fs _] [c k (map (f \ [<f (spec (f 1))]) fs)]) ^nc)})
+   ; a family's fields live no higher than it: each field's sort at most the family's level
+   (fields-le cx en d T k np f)
+    (T @ ['pi x A B] (: l (usort cx en d A) fr ['nv d]
+                      (k < np || ule l f, fields-le ([x (vof en A)] . cx) ([x fr] . en) (d + 1) B (k + 1) np f))
+         1)
+   (last-sort T) (T @ ['pi _ _ B] (last-sort B) ['UU l] l 0)
    (defind nm ps0 is0 cs0)
    (: g (indsig nm ps0 is0 cs0)
       xs (g 'xs) ps (g 'ps) cs (g 'cs) rnm (g 'rnm) ct (g 'ct)
       np #xs ni #(g 'is) nc #cs
       K (np + nc + ni + 2)
-      (pinax x T v) (chk 0 0 0 T 'UU, pin GLOB x [(vof 0 T) v])
+      _ (ureset nm)
+      fT (ulabs (g 'famT)) f (last-sort fT)
+      cTs (map (c \ c @ [c fs R] [c (ulabs (cx-pis ps (cx-pis fs R))) fs]) cs)
+      rT (ulabs (g 'rectT))
+      (pinax x T v) (pin GLOB x [(vof 0 T) v])
     (g 'bad != () ? (scare (g 'bad) nm)
      (each (nm . (rnm . map cap cs)) (x \ pin IND x 1),
-      pinax nm (g 'famT) ['nv nm],
+      usort 0 0 0 fT,
+      pinax nm fT ['nv nm],
+      each cTs (c \ (usort 0 0 0 (c 1), fields-le 0 0 0 (c 1) 0 np f, pinax <c (c 1) ['nv <c])),
+      usort 0 0 0 rT,
+      ucommit nm,
       pin BRIDGE nm ['hit (lcur (np + ni) () (_ \ ['ty nm]))],
-      each cs (c \ c @ [c fs R]
-               (pinax c (cx-pis ps (cx-pis fs R)) ['nv c],
-                pin BRIDGE c ['hit (lcur (np + #fs) () (as \ ('in . (c . as))))])),
-      pinax rnm (g 'rectT) (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof)),
+      each cTs (c \ c @ [c _ fs] (pin BRIDGE c ['hit (lcur (np + #fs) () (as \ ('in . (c . as))))])),
+      pinax rnm rT (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof)),
       pin BRIDGE rnm ['hit (lcur K () (rect-of xs nc ct (vs \ ['nrec rnm]) (\ f a (f a)) (f \ f) (v \ v @ ('in . r) r ()) (en \ j \ 0)))],
       nm))))
 

@@ -4,7 +4,7 @@
    capp (uu 'capp) conv (uu 'conv)
    rejects (uu 'rejects)                    ; not defn/defq/axm: a bound head hides its macro,
                                             ; and the macro is what quotes their operands
-   lof (uu 'lof) bridge (uu 'bridge))
+   lof (uu 'lof) bridge (uu 'bridge) univ (uu 'univ))
 ; ..so hoist the three macros here, in a form of their own: c0 compiles a whole form at once
 (: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx defind)))
 
@@ -855,6 +855,8 @@
    (funextsec nat (lam n nat) (lam n (add n 0)) (lam n n) natplusr0)))
 
 ; the girard canary: under type-in-type, but_seriously_the_world_explodes : empty checks.
+; it runs with universes off; with them on, wfs_wf_t is refused (the laws past hear)
+(: canary-univ (univ 0))
 ; formers and the nat_rect tower stay transparent (descent's type must compute); proofs Qed
 (test
  (defn wf (pi Flse UU T UU UU)
@@ -1029,6 +1031,7 @@
    (lam Flse (irref Flse (wfs_wf_t Flse) (wfs_wf_t Flse) (whoa Flse))))
  (defq but_seriously_the_world_explodes empty
    (the_world_explodes empty)))
+(univ canary-univ)
 
 ; the hprop logic layer (Propositions.v): impred_isaprop the engine, isapropiscontr the
 ; keystone. formers stay transparent (the demos project them with pr1); proofs Qed
@@ -2306,6 +2309,18 @@
  ('rejected = rejects (z \ defn uu-bad5 nat (let x (lam y y) x)))
  ('rejected = rejects (z \ defn uu-bad6 (pi x nat 5) (lam x x)))
  ('accepted = rejects (z \ defn uu-good (paths nat 2 2) (idpath 2))))
+
+; universes: a type holds only smaller ones, so the canary's wfs within itself is refused
+(: univ-was (univ 1))
+(test
+ (defn uwfs (pi Flse UU UU) (lam Flse (total2 T UU (wf Flse T))))
+ ('rejected = rejects (z \ defn uwfs_t (pi Flse UU (uwfs Flse)) (lam Flse (tpair (uwfs Flse) (wfs_wf Flse)))))
+ ('rejected = rejects (z \ defn uu-uu0 (UU 0) (UU 0)))
+ ('accepted = rejects (z \ defn uu-uu01 (UU 1) (UU 0)))
+ ; a cite takes fresh levels: uidf applies at its own type, a level up
+ (defn uidf (pi T UU x T T) (lam T x x))
+ ('accepted = rejects (z \ defn uidf-self (pi T UU x T T) (uidf (pi T UU x T T) uidf))))
+(univ univ-was)
 ; --- conv in pairs: a mixed-up env or de bruijn level would accept a bad proof
 ; --- silently. each negative needs its accepted twin ---
 (test
