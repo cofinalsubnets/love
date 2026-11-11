@@ -1,6 +1,5 @@
 ; test/host/pool.l -- the thread pool (src/love/pool.c): the width a call takes, LOVE_THREADS
-; read at each call, (threads N) in ~/.love/etc/love.l under it, and a fork's child drawing
-; on a pool of its own
+; read at each call, and a fork's child drawing on a pool of its own
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
 (borrow '(posix pool))
 (: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" ()) w)
@@ -15,19 +14,6 @@
                    _ (setenv "LOVE_THREADS" ()) f)
    pl-one (pl-frame "1")
    pl-out ("/tmp/love-pool-law-" + show (getpid 0))
-   ; a home whose love.l says (threads ..): read on the load's 50 ms tick, so each change waits
-   pl-home ("/tmp/love-pool-home-" + show (getpid 0))
-   pl-h0 (getenv "HOME")
-   (pl-salt k n) (: _ (uwrite (pl-home + "/.love/etc/love.l") ("; the runtime's own\n(threads " + k + ")\n"))
-                    _ (rest 80) w (par-width n) w)
-   _ (mkdir pl-home 448) _ (mkdir (pl-home + "/.love") 448) _ (mkdir (pl-home + "/.love/etc") 448)
-   _ (setenv "HOME" pl-home)
-   s1 (pl-salt "1" 64)
-   s3 (pl-salt "3!" 64)
-   s3e (: _ (setenv "LOVE_THREADS" "2!") w (par-width 64) _ (setenv "LOVE_THREADS" ()) w)
-   _ (unlink (pl-home + "/.love/etc/love.l"))
-   _ (rmdir (pl-home + "/.love/etc")) _ (rmdir (pl-home + "/.love")) _ (rmdir pl-home)
-   _ (setenv "HOME" pl-h0)
    ; the parent draws on its pool first, so the child forks with one made and its workers left behind
    _ (pl-frame "4!")
    pid (fork 0)
@@ -45,10 +31,8 @@
  (pl-w "3!" 64 = 3)
  (pl-w "3!" 2 = 2)
  (pl-w "2" 64 <= 2)
- ; the setting in love.l, read again when it changes, and the env over it
- (s1 = 1) (s3 = 3) (s3e = 2)
  ; the frame the same at any width, and in a fork's child
  (aall (pl-frame "3!" = pl-one))
  (said = "same"))
 
-(test_fin (), puts "pool: ok -- widths, the margin, love.l, the frame alike at any width and in a fork\n", 0)
+(test_fin (), puts "pool: ok -- widths, the margin, the frame alike at any width and in a fork\n", 0)

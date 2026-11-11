@@ -135,7 +135,7 @@ just as much as bare `foo` does, so it counts, reported at its quote.
 settings live in two files, read in this order, the second overlaying the first:
 
 ```
-~/.love/etc/libra.l     your taste, wherever the binary happens to live
+NEST/etc/libra.l        your taste, wherever the binary happens to live
 ./.libra.l              this tree's own -- and it travels in git
 ```
 
@@ -145,7 +145,7 @@ upward. a deprecated-name roster is a fact about a TREE rather than about a
 person, which is why the project file exists at all.
 
 ```love
-; ~/.love/etc/libra.l -- or ./.libra.l
+; the nest's etc/libra.l -- or ./.libra.l
 (singleton 0)                                    ; turn the rule OFF (on by default)
 (deprecated old-thing (worse-thing "use better-thing"))
 ```

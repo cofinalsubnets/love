@@ -625,7 +625,7 @@ keys over less's:
   other text shows as it is. A request for input (1x) is a field whose answer goes back as
   the query, a redirect (3x) is followed, and the rest of the statuses are said. The server's
   key is pinned the first time it is seen, host:port and the SHA-256 of its
-  SubjectPublicKeyInfo a line in `~/.love/gemini_hosts`, and held to after: gemini's own trust
+  SubjectPublicKeyInfo a line in the nest's `etc/gemini_hosts`, and held to after: gemini's own trust
   on first use. A changed one
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
@@ -633,7 +633,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, pictures other than PNG, JPEG and GIF, charsets other than
 utf-8, latin-1 and windows-1252, and gemini's client certificates. An https server is
 verified as wget's is: its certificate to a root in the host's bundle, or its key to a pin in
-`~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
+the nest's `etc/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
 ## im (src/apps/kore/im.l)

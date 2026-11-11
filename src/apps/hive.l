@@ -2,7 +2,7 @@
 ; claude code's, each settled in HIVE/NAME/ with a `card` of `key value` lines (doc/bee.md,
 ; THE HIVE). bee writes cards and mail; this is the reading every client shares.
 ;
-;   (hive-root _)      BEE_HIVE, else ~/.love/run/hive
+;   (hive-root _)      BEE_HIVE, else the nest's run/hive
 ;   (hive-cell nm)     a session's cell
 ;   (hive-card nm)     its card as a tablet, "name" included; () when there is none
 ;   (hive-pid c)       a card's pid, 0 for none

@@ -46,7 +46,7 @@ smoke)
   printf '#include <stdio.h>\nint main(void) { printf("bare door\\n"); return 0; }\n' > "$s/bare/hi.c"
   # timeout 15: the carried runtime makes this ~0.2 s; a fall back to
   # compiling 197 members (~28 s) is a regression this leg must SEE
-  ( cd "$s/bare" && HOME=$PWD/home timeout 15 env -u LOVE_NO_IMAGE "$dabs" cc hi.c && ./a.out ) > "$s/bare.log" 2>&1 \
+  ( cd "$s/bare" && HOME=$PWD/home timeout 15 env -u LOVE_NO_IMAGE -u LOVE_NEST -u XDG_DATA_HOME "$dabs" cc hi.c && ./a.out ) > "$s/bare.log" 2>&1 \
                                                    || { tail -3 "$s/bare.log"; fail "the bare cc door (or it took the 28 s compile lane)"; }
   grep -q "bare door" "$s/bare.log"                || fail "bare cc: the exe did not answer"
   [ -z "$(ls -A "$s/bare/home")" ]                 || fail "bare cc: wrote into HOME ($(ls -A "$s/bare/home"))"

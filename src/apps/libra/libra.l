@@ -7,7 +7,7 @@
 ;         libra doc file     its header as a document -- md, -ht html, -rf man
 ;     or: love -l src/apps/libra/libra.l ..
 ;
-; settings: salt.l -- ~/.love/etc/libra.l, then ./.libra.l over it.
+; settings: salt.l -- the nest's etc/libra.l, then ./.libra.l over it.
 
 ; the head names the exports, so the scanner's helpers stay off the tablet;
 ; `fatal?` is out because test/host/libra.l pins the gate rule against it.
@@ -229,7 +229,7 @@
                                    clean, exit 1. THE DEFAULT.
            libra doc FILE ..      the file's HEADER as a document, on stdout
                                   markdown by default; -ht for html, -rf for man
-      config: ~/.love/etc/libra.l, then ./.libra.l over it -- (singleton 0),
+      config: the nest's etc/libra.l, then ./.libra.l over it -- (singleton 0),
               (deprecated old (worse "use better")). doc/misc/libra.md
 
     """
