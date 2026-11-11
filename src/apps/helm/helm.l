@@ -85,9 +85,6 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
                    (atom? w ? (hnote ("extract: can't write " + root), 0)
                       (hnote ("extract " + show <>w + " files under " + root),
                        <>w)))))))
-   ; in a child: the unpack leaves a heap no collection gives back, and pid 1 lives on
-   (hextract1 root)
-    (flush err, fork 0 @ p (? (p = 0) (quit (hextract root, 0)) (0 < p) (wait p) (hextract root)))
    (helm-pid1 _)
     (getpid 0 @ me
        (me != 1 ? 0
@@ -98,7 +95,7 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
            hmount1 "tmpfs"    "/tmp"  "tmpfs",
            hmount1 "tmpfs"    "/run"  "tmpfs",
            hunderlay "/usr/bin",
-           hextract1 "/",
+           hextract "/",
            1)))
 
    ; --- helm run --------------------------------------------------------------
