@@ -1672,7 +1672,7 @@
          ['empty_rect P e]      (: cP (comp P) ce (comp e) (en \ doer (cP en) (ce en)))
          ['unit_rect P u x]     (: cP (comp P) cu (comp u) cx (comp x)
                                  (en \ dour (cP en) (cu en) (cx en)))
-         ['UU ['lp i n]]        (en \ ['U (assq '%lv en @ (_ L) (L i @ ['lv k m] ['lv k (m + n)]) (scare 'uu-level-unbound i))])
+         ['UU ['lp i n]]        (en \ ['U (assq 'uu-lvls en @ (_ L) (L i @ ['lv k m] ['lv k (m + n)]) (scare 'uu-level-unbound i))])
          ['UU 0]                (en \ 'UU)
          ['UU l]                (en \ ['U l])
          ['the T u]             (comp u)                    ; the ascription is the term
@@ -1764,7 +1764,7 @@
      (: F (map (_ \ <>(ufresh 0)) V)
         (ren v) (uidx v V @ i (i == () ? v (F i)))
       (pin UST 'p (foldl (\ a e ([(ren <e) (ren (e 1)) (e 2)] . a)) (peep UST 'p ()) cons),
-       cT [['%lv (map (f \ ['lv f 0]) F)]])))
+       cT [['uu-lvls (map (f \ ['lv f 0]) F)]])))
    (ulab t) (? (t == 'UU) ['UU (ufresh 0)] (two? t ? (<t == 'UU ? t (map ulab t)) t))
    ; a motive's universe: any, a fresh var
    (uany _) (uon? 0 ? ['U (ufresh 0)] 'UU)

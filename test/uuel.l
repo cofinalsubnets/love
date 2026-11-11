@@ -49,7 +49,7 @@
         ['ncr P f g w] ['coprod_rect (R P) (R f) (R g) (R w)]
         ['ner P w] ['empty_rect (R P) (R w)]
         ['njr P r e] ['paths_rect (R P) (R r) (R e)]
-        ['U l] (charm? l ? ['UU l] 'UU)
+        ['U l] ['UU l]
         (scare 'el-readback v))))))
 
    ; --- refolds: a value that is a head's unfolding, its arguments found by matching, reads as
@@ -274,4 +274,7 @@
                      (el 0 0 0 (el-sugar t0) G))) 0
                (a \ b \ (el-univ was, scare a b)))
       _ (el-univ was)
-    (pin ELT nm t, ev ['defq nm T t])))
+      ; a level var read back stays bare in the term made: defq gives it its own
+      (strip u) (? (two? u) (u @ ['UU l] (charm? l ? u 'UU) (map strip u)) u)
+      t1 (strip t)
+    (pin ELT nm t1, ev ['defq nm T t1])))
