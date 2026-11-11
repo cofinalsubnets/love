@@ -1,6 +1,5 @@
 ; test/uuind.l -- uu's declared inductives: a family's recursor computes on a constructor, is
 ; stuck on a neutral, and a declaration that is not strictly positive is refused
-(: _ (transcribe 'uu '(defind)))
 
 ; --- lists and trees: the recursor's hypothesis follows its field ---
 (test

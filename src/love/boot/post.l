@@ -1613,7 +1613,7 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC lof rejects sugar vcs-of vof)
+(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig lof rejects sugar vcs-of vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {} IND {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
@@ -1895,8 +1895,10 @@
    ; (defind nm (x A ..) (i I ..) (c (y B ..) (nm x .. j ..)) ..): a family over params x and
    ; indices i; constructor c takes fields y and lands at indices j. nm and each c are names
    ; with no value, and nm_rect computes on a c. a field names nm only strictly positively, as
-   ; (pi z C .. (nm x .. j ..)) with nm in no C or j, and no binder takes nm's or a param's name
-   (defind nm ps0 is0 cs0)
+   ; (pi z C .. (nm x .. j ..)) with nm in no C or j, and no binder takes nm's or a param's name.
+   ; indsig lays the declaration out for defind and the exporters: its telescopes, each
+   ; constructor's method [c m fields ihs tel], nm_rect's type, and what is wrong with it if any
+   (indsig nm ps0 is0 cs0)
    (: (pairs r) (r @ (x . A . u) ([x (sugar A)] . pairs u) ())
       ps (pairs ps0) is (pairs is0)
       cs (map (c \ [<c (pairs (c 1)) (sugar (c 2))]) cs0)
@@ -1918,30 +1920,39 @@
       Pn (fr "P") tn (fr "t")
       hd (sp nm xs) hi (sp hd iv)
       (ihT B y zs) (B @ ['pi z C D] ['pi z C (ihT D y (zs + [z]))] (sp Pn (drop np (tapp B) + [(sp y zs)])))
-      (methT c fs R)
-      (cx-pis (foldl (\ a f (a + [f] + (occ? (f 1) ? [[(fr "ih\(#a)") (ihT (f 1) <f ())]] ()))) () fs)
-              (sp Pn (drop np (tapp R) + [(sp (sp c xs) (map cap fs))])))
+      (tel fs) (foldl (\ a f (a + [f] + (occ? (f 1) ? [[(fr "ih\(#a)") (ihT (f 1) <f ())]] ()))) () fs)
+      ms (map (c \ c @ [c0 fs R]
+               (: t (tel fs)
+                [c0 (fr "m\(c0)") (map cap fs) (filter (b \ !(two? (memq b (map cap fs)))) (map cap t)) t
+                 (cx-pis t (sp Pn (drop np (tapp R) + [(sp (sp c0 xs) (map cap fs))])))])) cs)
       famT (cx-pis ps (cx-pis is 'UU))
       rectT (cx-pis ps ['pi Pn (cx-pis is ['pi tn hi 'UU])
-                        (cx-pis (map (c \ [(fr "m\(c 0)") (c @ [c0 fs R] (methT c0 fs R))]) cs)
+                        (cx-pis (map (m \ [(m 1) (m 5)]) ms)
                          (cx-pis is ['pi tn hi (sp Pn (iv + [tn]))]))])
       seen (iv + foldl (\ a c (a + map cap (c 1) + bndl (map (f \ f 1) (c 1)) + bnds (c 2))) (bndl (map (i \ i 1) is)) cs)
-      ct (map (k \ cs k @ [c fs _] [c k (map (f \ [<f (spec (f 1))]) fs)]) ^nc)
+      bad (? (any (x \ GLOB x !== ()) (nm . (rnm . cn))) 'uu-defind-taken
+             (dup? (nm . (rnm . cn)) || any (x \ two? (memq x (nm . (rnm . (xs + cn))))) seen) 'uu-defind-shadows
+             (occ? [ps is] || !(all (c \ fam? (c 2)) cs)) 'uu-defind-index
+             !(all (c \ all (f \ !(occ? (f 1)) || strict? (f 1)) (c 1)) cs) 'uu-defind-positivity
+             ())
+     {'ps ps 'is is 'cs cs 'xs xs 'iv iv 'rnm rnm 'Pn Pn 'tn tn 'ms ms 'famT famT 'rectT rectT 'bad bad
+      'ct (map (k \ cs k @ [c fs _] [c k (map (f \ [<f (spec (f 1))]) fs)]) ^nc)})
+   (defind nm ps0 is0 cs0)
+   (: g (indsig nm ps0 is0 cs0)
+      xs (g 'xs) ps (g 'ps) cs (g 'cs) rnm (g 'rnm) ct (g 'ct)
+      np #xs ni #(g 'is) nc #cs
       K (np + nc + ni + 2)
       (pinax x T v) (chk 0 0 0 T 'UU, pin GLOB x [(vof 0 T) v])
-    (? (any (x \ GLOB x !== ()) (nm . (rnm . cn))) (scare 'uu-defind-taken nm)
-       (dup? (nm . (rnm . cn)) || any (x \ two? (memq x (nm . (rnm . (xs + cn))))) seen) (scare 'uu-defind-shadows nm)
-       (occ? [ps is] || !(all (c \ fam? (c 2)) cs)) (scare 'uu-defind-index nm)
-       !(all (c \ all (f \ !(occ? (f 1)) || strict? (f 1)) (c 1)) cs) (scare 'uu-defind-positivity nm)
-       (each (nm . (rnm . cn)) (x \ pin IND x 1),
-        pinax nm famT ['nv nm],
-        pin BRIDGE nm ['hit (lcur (np + ni) () (_ \ ['ty nm]))],
-        each cs (c \ c @ [c fs R]
-                 (pinax c (cx-pis ps (cx-pis fs R)) ['nv c],
-                  pin BRIDGE c ['hit (lcur (np + #fs) () (as \ ('in . (c . as))))])),
-        pinax rnm rectT (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof)),
-        pin BRIDGE rnm ['hit (lcur K () (rect-of xs nc ct (vs \ ['nrec rnm]) (\ f a (f a)) (f \ f) (v \ v @ ('in . r) r ()) (en \ j \ 0)))],
-        nm))))
+    (g 'bad != () ? (scare (g 'bad) nm)
+     (each (nm . (rnm . map cap cs)) (x \ pin IND x 1),
+      pinax nm (g 'famT) ['nv nm],
+      pin BRIDGE nm ['hit (lcur (np + ni) () (_ \ ['ty nm]))],
+      each cs (c \ c @ [c fs R]
+               (pinax c (cx-pis ps (cx-pis fs R)) ['nv c],
+                pin BRIDGE c ['hit (lcur (np + #fs) () (as \ ('in . (c . as))))])),
+      pinax rnm (g 'rectT) (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof)),
+      pin BRIDGE rnm ['hit (lcur K () (rect-of xs nc ct (vs \ ['nrec rnm]) (\ f a (f a)) (f \ f) (v \ v @ ('in . r) r ()) (en \ j \ 0)))],
+      nm))))
 
 ; --- uu2l: a closed term to a love form whose value is vof's answer (charms for nats,
 ; ('chain a b) for pairs); lof evaluates one. untrusted: chk/conv never use it, so a bug
