@@ -66,16 +66,21 @@
  ; by bay. the upper step's share is the one that mixes to the part's light (its square,
  ; near enough to the eye's), not its code: the cube's first step is 0 to 95, and a code
  ; half way there dithered half and half reads far too bright
+ ; ..the steps' lights squared, gathered by step: the cube's by its code, the grey ramp's
+ ; lower and upper by its code + 1
  (cube-lvl k) (over (0.0 * k) (0 < k) ((55.0 + 40.0 * k) / 255.0))
- (dith a b v bay) (: a2 (2 a) (over 0 (bay < (2 v - a2) / (2 b - a2)) 1))
+ cube-sq (cube-lvl (iota 6) @ a (2 a))
+ grey-lo (iota 24 - 1 @ gl (over ((8.0 + 10.0 * gl) / 255.0) (gl < 0) 0.0) @ a (2 a))
+ grey-hi (iota 24 - 1 @ gl ((18.0 + 10.0 * gl) / 255.0) @ b (2 b))
+ (dith a2 b2 v bay) (over 0 (bay < (2 v - a2) / (b2 - a2)) 1)
  (view-cube-pens c bay) (: (ix v) (: u (sat1 v)
      lo (max 0 (min 4 (floor (over (u * 255.0 / 95.0) (95.0 / 255.0 <= u) (1.0 + (u * 255.0 - 95.0) / 40.0)))))
-     (lo + dith (cube-lvl lo) (cube-lvl (lo + 1)) u bay))
+     (lo + dith (peep cube-sq lo 0.0) (peep cube-sq (lo + 1) 0.0) u bay))
    r (c 0) g (c 1) bl (c 2)
    chroma (max r (max g bl) - min r (min g bl))
    y (sat1 (0.299 * r + 0.587 * g + 0.114 * bl))
    gl (max -1 (min 22 (floor ((y * 255.0 - 8.0) / 10.0))))          ; -1 the black below the ramp
-   d (dith (over ((8.0 + 10.0 * gl) / 255.0) (gl < 0) 0.0) ((18.0 + 10.0 * gl) / 255.0) y bay)
+   d (dith (peep grey-lo (gl + 1) 0.0) (peep grey-hi (gl + 1) 0.0) y bay)
    grey (over (232 + gl + d) ((gl + d) < 0) 16)
    cube (16 + 36 * ix r + 6 * ix g + ix bl)
    (over cube (chroma < 0.08) grey))
