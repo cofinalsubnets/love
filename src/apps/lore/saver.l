@@ -192,9 +192,15 @@
  ; pens are 24-bit where COLORTERM says so, else the palette's cube dithered by bay
  (scene-pens c bay) (? (elem (getenv "COLORTERM") ["truecolor" "24bit"]) ((cite 'view 'view-deep-pens) c + 256)
                        ((cite 'view 'view-cube-pens) c bay))
- (halves cv px) (: r (cv 'r) c (cv 'c) d (cv 'b)
-   (each ^r (y \ each ^c (x \ cv-set d (y * c + x) hb (int (peep px (2 * y * c + x) 16))
-                                      (int (peep px ((2 * y + 1) * c + x) 16))))))
+ ; ..the cells as last laid kept in cv's 'hk, only those whose pens moved set again
+ (halves cv px) (: c (cv 'c) n (cv 'r * c)
+   k (cv 'hk) hk (tablet? k ? k (: i (iota n) m (i * 0 - 1)
+                                   ({'sc (cask (cw * n)) 'ui (i + i // c * c) 'up m 'lo m} @ t (pin cv 'hk t, t))))
+   sc (hk 'sc) ui (hk 'ui)
+   up (int (peep px ui 16)) lo (int (peep px (ui + c) 16))
+   ch (iota (max (up != hk 'up) (lo != hk 'lo)))
+   _ (each ^#ch (j \ peep ch j 0 @ i (cv-set sc i hb (peep up i 0) (peep lo i 0))))
+   (pins hk 'up up 'lo lo, pour (cv 'b) 0 sc 0 (cw * n)))
  (owe s want tick) (: (go k) (? (k < 4 && s 'done < want) (: _ (tick 0) _ (pin s 'done (s 'done + 1)) (go (k + 1))) 0)
                       _ (go 0)
                       (pin s 'done (max (s 'done) (want - 4))))
