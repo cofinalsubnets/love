@@ -79,11 +79,14 @@ Start the interactive shell:
 # ENVIRONMENT
 
 **LOVE_NEST**
-:   The nest, where love keeps its settings (`etc/`), its install (`bin/`), its run state (`run/`) and its packs (`pack/`). `$HOME/.love` when unset or empty, and `/.love` with no `HOME`.
+:   The nest, where love keeps its settings (`etc/`), its install (`bin/`), its run state (`run/`) and its packs (`pack/`). When unset or empty, `$XDG_DATA_HOME/love`, else `$HOME/.love`, and `/.love` with no `HOME`. Each love sets it to the nest it resolved, for its children.
+
+**XDG_DATA_HOME**
+:   The nest's parent, as `$XDG_DATA_HOME/love`, when **LOVE_NEST** is unset.
 
 # FILES
 
-`~/.love/pack/NAME/`
+`pack/NAME/`, in the nest
 :   A pack: its `.l` files, read as one unit when it is first needed.
 
 # EXIT STATUS

@@ -9,7 +9,7 @@
 ; its Finished under the handshake secret -- and the certificate, before a byte goes out: a
 ; path from the leaf to a root in the host's bundle (verify.l's chain-ok?: every signature,
 ; every date, the issuers' roles, the host's name in subjectAltName). no revocation is
-; checked. a line in ~/.love/tls_pins, "host:port spki:<sha-256>", answers for that
+; checked. a line in the nest's etc/tls_pins, "host:port spki:<sha-256>", answers for that
 ; host:port instead of the roots -- a self-signed or private server -- and a key other than
 ; the pinned one is refused. a refusal says which check, and which certificate.
 ;
@@ -236,9 +236,14 @@
    (quit-why t d) (close (t 's), (? (string? (t 'why)) (t 'why) d))
 
    ; --- the pins: a line "host:port spki:<sha-256 of the key's SubjectPublicKeyInfo>" a key.
-   ; ~/.love/tls_pins is the override for a server no root vouches for; www's gemini trust on
-   ; first use writes the same lines to ~/.love/gemini_hosts ---
-   (pin-path nm) (cite 'path 'nest 0 + "/" + nm)
+   ; the nest's etc/tls_pins is the override for a server no root vouches for; www's gemini
+   ; trust on first use writes the same lines to etc/gemini_hosts. a file still at the nest's
+   ; top moves under etc/ when first asked for, or is read there if it cannot ---
+   (pin-path nm)
+    (: n (cite 'path 'nest 0) p (n + "/etc/" + nm) o (n + "/" + nm)
+       (? (two? (stat p)) p
+          (two? (stat o)) (: _ (mkdir (n + "/etc") 448) (rename o p = () ? p o))
+          p))
    (pin-of path key)
     (: txt (uread path @ [1 s] s "")
        (find l) (? (atom? l) () (: f (split " " <l) (? (1 < #f && <f = key) (f 1) (find >l))))

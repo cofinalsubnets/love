@@ -345,7 +345,8 @@ test_vi: host
 	    src/apps/tui.l test/law/tui.l \
 	    src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l test/law/vi.l \
 	  | $(gsh) test/gate/run.sh vi "$m" "test/law/vi:"
-	@rm -f $(ho)/.vi1; \
+	@export LOVE_NEST=$(abspath $(ho))/.vi-nest; rm -rf $$LOVE_NEST; mkdir -p $$LOVE_NEST/etc; \
+	  rm -f $(ho)/.vi1; \
 	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
 	    || { echo "FAIL kore vi create+write (exit $$r)"; exit 1; }; \
@@ -367,11 +368,16 @@ test_vi: host
 	    | $(korerun) vi $(ho)/.vi2 $(ho)/.vi3 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi2 $(ho)/.vi3 | tr '\n' ' ')" = "onex two " ]; } \
 	    || { echo "FAIL kore vi arglist (exit $$r)"; exit 1; }; \
-	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end) ok"
+	  rm -f $(ho)/.vi1; printf '(shiftwidth 4)\n(autoindent 0)\n' > $$LOVE_NEST/etc/vi.l; \
+	  printf 'ix\033>>o  y\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(tr '\n' '|' < $(ho)/.vi1)" = "    x|  y|" ]; } \
+	    || { echo "FAIL kore vi etc/vi.l: shiftwidth 4, autoindent off (exit $$r): $$(tr '\n' '|' < $(ho)/.vi1)"; exit 1; }; \
+	  rm -rf $$LOVE_NEST; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end + etc/vi.l) ok"
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`
-test_moon: host $(love0)
+test_moon: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
@@ -451,7 +457,7 @@ test_selfhost: host
 	@$(raw_env) $(gsh) test/gate/selfhost.sh $(ho) $m $t
 # the gcc-free fixpoint: test_selfhost plus our libc, lm.c, sys.o and linker. raw_env is shared
 # with the cross twins
-raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(S)/love/user/nokern.c $(S)/love/noblob.c'
+raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(S)/love/noblob.c'
 test_raw: host
 	@$(raw_env) $(gsh) test/gate/raw.sh x64 $(ho) $m $t
 # test_tco0 -- love at tco=0 (love0 never reaches the glaze's lvm shape): build, bake, corpus in
@@ -511,12 +517,12 @@ vec-%:
 # the fixpoint: love1 rebuilds every TU into love2, byte-identical; the link list is make's
 # objects, never a glob. test_extra only
 test_fixpoint: host $(moon_seat_o) $(love0) $(ho)/mooncc0.image
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c $(S)/love/user/nokern.c' \
-	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(moon_d)/love/user/nokern.o
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c' \
+	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o)
 # the cross fixpoint under qemu-user; opt-in (`make xa=rv64 test_xfixpoint`), skips without qemu
-test_xfixpoint: $(x_o) $(x_seat_o) $(xod)/love/user/nokern.o $(love0) $(ho)/mooncc0.image
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c $(S)/love/user/nokern.c' \
-	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xod)/love/user/nokern.o
+test_xfixpoint: $(x_o) $(x_seat_o) $(love0) $(ho)/mooncc0.image
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c' \
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o)
 # test_fat -- the fat container: native answer, deterministic pack, foreign member under qemu-user
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))

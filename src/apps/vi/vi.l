@@ -18,7 +18,14 @@
        st (vnew (two? r ? (lines <>r)) f)
        (pin st 'home (getenv "HOME"), pin st 'files vi-files,
         0 < #f && atom? r ? (vmsg st "\(f): new file"),
-        (vi-theme st ())))
+        (vi-theme (vi-salt st (: f (cite 'salt 'salt) (? f (f 'vi) {}))) ())))
+   ; the settings, salt's: the nest's etc/vi.l, then ./.vi.l over it, each a :set option by
+   ; its long name: (number 1) (autoindent 0) (shiftwidth 4)
+   (vi-salt st c)
+    (: _ (c 'number @ (v . _) (pin st 'nu (? v 1 ())) 0)
+       _ (c 'autoindent @ (v . _) (pin st 'ai (? v 1 ())) 0)
+       _ (c 'shiftwidth @ (v . _) (? (charm? v && 0 < v) (pin st 'sw v) 0) 0)
+       st)
    ; the pens, and the door :colorscheme rings to swap them: the face reads the env and the
    ; theme file, the engine neither
    (vi-theme st nm)

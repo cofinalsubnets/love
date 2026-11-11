@@ -50,7 +50,7 @@ CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dtco=1 -fpic -I$ho -
 [ -n "${LOVE_C:-}" ] && [ -n "${HOST_C:-}" ] || { echo "ccbench: no LOVE_C/HOST_C -- run \`make ccbench\`" >&2; exit 2; }
 host_cs=$HOST_C
 # ..and the hosted seat, the Makefile's seat_o: the kernel's doors stood in, no carried source
-host_cs="$host_cs $R/src/love/user/nokern.c $R/src/love/noblob.c"
+host_cs="$host_cs $R/src/love/noblob.c"
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's love_typ, and
 # ld left alone orders love.data.N as emitted -- lvm_str under lvm_sym, strings as closures
 LDFLAGS="-Wl,-T,$R/src/love/love_data.ld"
@@ -74,7 +74,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # mooncc: the whole toolchain in love, as `make test_raw` spells it -- a -c per unit,
 # mksys for the syscall leaf, our own linker. the compiler is the shipped artifact
-# because that is what a user runs, and its libc archive caches under ~/.love/cache/moon
+# because that is what a user runs, and its libc archive caches under out/cache/moon
 # keyed on a baked image, so intermediates rebuilding does not re-pay the build.
 # LOVE_NO_IMAGE= is empty, not unset: an egg-booted love has no verb table, so `mooncc`
 # would read as a filename.
