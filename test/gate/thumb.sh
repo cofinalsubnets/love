@@ -155,6 +155,10 @@ thumb2sp)
   LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/ng.c" -o "$d/ng.o" || fail "mooncc ng.c"
   arm-none-eabi-objdump -d "$d/ng.o" > "$d/ng.s"
   grep -q 'vneg.f32' "$d/ng.s" && ! grep -qE 'vmov[^.]*r[0-9]' "$d/ng.s" || fail "a float negate leaves the float file"
+  # a braced local struct read through an inlined pointer lives in registers, its unnamed array too
+  printf 'struct va { float x, y, z, w, a[11]; };\nstatic float sd(struct va const *v, int k) { return k ? v->w - v->x : v->z + v->w; }\nint in(float x, float y, float z, float w) { struct va const v = { .x = x, .y = y, .z = z, .w = w }; int a = 1; for (int k = 0; k < 2; k++) a &= sd(&v, k) >= 0; return a; }\n' > "$d/sv.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/sv.c" -o "$d/sv.o" || fail "mooncc sv.c"
+  [ "$(arm-none-eabi-objdump -d "$d/sv.o" | grep -c '\[sp')" = 0 ] || fail "a braced local struct stays in memory"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
   for f in raster lamp poly swatch; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"

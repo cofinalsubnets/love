@@ -4448,16 +4448,25 @@
        (mems t) (t @ ('struct . _) (peep (g 'stag) <>t 0 @ e (two? e ? <e)) ())
        (over a b) (a 1 < b 1 + tsz g (b 2) && b 1 < a 1 + tsz g (a 2))
        (vol? q) (charm? q && q & 2 > 0)
-       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ !(scal? (x 2)) || vol? (x 3)) m) &&
+       (clean? t) (mems t @ m (two? m && #m <= 16 && !(any (x \ vol? (x 3)) m) &&
                                !(any (a \ any (b \ !(<a = <b) && over a b) m) m)))
-       cand {} dcl {} bad {} use {} site {} inis {} tmps {'k 0 'l ()}
+       (full? t) !(any (x \ !(scal? (x 2))) (mems t))
+       ; a brace of plain or member-named scalars -> [member -> value], the rest zero | ()
+       (brace t is) (: ms (mems t)
+                       (go is i acc) (? !(two? is) [acc]
+                                        (<is @ ('dfield fl v) (: j (fidx ms fl) (two? v && elem <v '(init didx dfield) || !(scal? (ms j 2)) ? () (go >is (j + 1) (pin acc fl v))))
+                                               (('init . _) || ('didx . _)) ()
+                                               v (i < #ms && scal? (ms i 2) ? (go >is (i + 1) (pin acc <(ms i) v)) ())))
+                       (go is 0 {}))
+       cand {} dcl {} bad {} use {} site {} inis {} brc {} tmps {'k 0 'l ()}
        ; the parser's typer over this fn's names, for a source's mask
        tys {} lqs {} ps9 {'locals tys 'lqs lqs 'globals {} 'gqs {} 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
        (vsrc? e) (vol? (accq ps9 e))
        (mem? e) (e @ (('idx || 'deref || 'dot) . _) 1 0)
        (bind p) (pin tys <p <>p, vol? (p 6) ? (pin lqs <p (p 6)) 0)
+       (bok? p) (p 2 @ ('init is) (brace <>p is @ [t] (pin brc <p [t], 1) _ 0) _ 0)
        (one x p) (pin dcl <p (1 + peep dcl <p 0), bind p, (mem? (p 2) ? (pin inis <p 1) 0),
-                  <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2))) && !(vol? (p 6)) && clean? <>p ?
+                  <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2)) || bok? p) && !(vol? (p 6)) && clean? <>p ?
                      (pin cand <p <>p) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
@@ -4485,11 +4494,17 @@
                         ['call ['var fn] as] (g 'nocap fn @ c (map (arg [fn c] as) ^#as))
                         _ (map scan x)))
        _ (two? (keys cand) ? (scan f))
-       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) && !(peep site nm 0 && peep inis nm 0)) (sort (keys cand)))
        (sn nm fl) "\(nm)`m\(fl)"
        (fty nm fl) (assoc fl (mems (cand nm)) @ m (m 2))
+       ; a member it names that is no scalar, or a call that sees the struct whole while its brace or
+       ; a member it never names is all that holds the rest, leaves it whole
+       ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) &&
+                       !(peep site nm 0 && (peep inis nm 0 || two? (brc nm) || !(full? (cand nm)))) && all (fl \ scal? (fty nm fl)) (use nm))
+                  (sort (keys cand)))
+       (fls nm) (brc nm @ [t] (use nm + filter (fl \ nelem fl (use nm)) (sort (keys t))) _ (use nm))
+       (bv nm fl) (brc nm @ [t] (t fl @ () '(num 0) v (rw v)) _ ())
        (rd ps) (? !(two? ps) ()
-                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (use <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
+                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) (bv <<ps fl)]) (fls <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
                   (rw <ps . rd >ps))
        (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (use <p)))
        (seq l) (two? >l ? ['comma <l (seq >l)] <l)
