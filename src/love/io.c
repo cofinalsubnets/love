@@ -1222,9 +1222,10 @@ static lvm(lvm_rd_all) LvmResume(g, rd_all)
 static lvm(lvm_rd_weave) LvmResume(g, rd_weave)
 static lvm(lvm_rd_called) LvmResume(g, rd_called)
 
-// the boot stitch: the egg's corpus is read whole and handed to the egg expression
+// the boot stitch: a driver's text read whole; the texts it runs, form by form, each read
+// after the one before it has run
 
-// `torn` refused: the egg would fold it as an empty corpus and pin ev to 0
+// `torn` refused: a fold would take it as an empty text
 static struct g *readtext(struct g *g, char const *s) {
  g = gxr(push0(strof(g, s)));                     // ("<text>")
  if (!ok(g = push(g, 1, word(rd_reads_k)))) return g;
@@ -1246,25 +1247,26 @@ static struct g *readonto(struct g *g, char const *s) {
 static struct g *qtop(struct g *g) {                // x on top -> 'x
  return gxl(pushq(gxr(push0(g)))); }                 // (x), then (\ x)
 
-// (<driver> '(list)) of the list on top
+// (<driver> 'x) of the x on top
 static struct g *applyq(struct g *g, char const *driver) {
  g = readonto(gxr(push0(qtop(g))), driver);          // ('(list)), then (driver '(list))
  return eval(g); }
 
 // ev is read late so one text drives both of love0's passes; two?, never truth, or each
-// step nets the rest of the text
-static char const evfold[] = "((: (e a b) (? (two? b) (e (ev 'ev (cap b)) (cup b)) a) e) 0)";
+// step nets the rest of the text. the first sound lays the residue as a charlist
+static char const evfold[] =
+ "((: (e a t) (: r (sound t) (? (two? r) (e (ev 'ev (cap r)) (cup r)) (== r 'torn) (scare 'unfinished-form ()) a)) e) 0)";
 
 // every form of a text in order; evals keeps the last value at sp[0], evals_ drops it
 love_noinline struct g *evals(struct g *g, char const *s) {
- return applyq(readtext(g, s), evfold); }
+ return applyq(strof(g, s), evfold); }
 love_noinline struct g *evals_(struct g *g, char const *s) {
  return pop(evals(g, s), 1); }
 
 // corpus runs twice (ev compiles itself); post once, after the hatch and before the mop
-// takes the internal noms (peek/seek) off the book
+// takes the internal noms (peek/seek) off the book. the egg reads both texts itself
 love_noinline struct g *egg(struct g *g, char const *egg, char const *corpus, char const *post) {
- g = gxr(push0(qtop(readtext(g, post))));            // ('post), parked under the corpus
- g = readtext(g, corpus);                            // prel + ev
- g = readonto(gxl(qtop(g)), egg);                    // (egg 'corpus 'post)
+ g = gxr(push0(qtop(strof(g, post))));               // ('"post")
+ g = gxl(qtop(strof(g, corpus)));                    // ('"corpus" '"post"): prel + ev
+ g = readonto(g, egg);                               // (egg '"corpus" '"post")
  return pop(eval(g), 1); }
