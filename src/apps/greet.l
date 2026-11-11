@@ -70,12 +70,16 @@
          s2 (<z = s 'r && z 1 = s 'c ? s (fresh z now))
          ; the saver's own rate: a frame between its steps would hold one twice
          per (1000 // peep (s2 'd) 'fps 10)
-         _ (s2 'next <= now ? (pin s2 'next (s2 'next + per <= now ? (now + per) (s2 'next + per)), say out (saver-over s2 (now - s2 't0) (put \ greet-box g host names <z (z 1) put)), flush out) 0)
+         ; a step due, or keys since the last frame: those show at once, the step kept
+         due (s2 'next <= now)
+         _ (due || peep s2 'dirty 0 ? (due ? (pin s2 'next (s2 'next + per <= now ? (now + per) (s2 'next + per))) 0, pin s2 'dirty 0,
+                                       say out (saver-over s2 (now - s2 't0) (put \ greet-box g host names <z (z 1) put)), flush out) 0)
          ; the keys waiting, up to the end of input: a terminal gone stays readable
          keys (: (take acc) (cue? 0 ? (edkey in @ k (k = -7 ? (rev (k . acc)) (take (k . acc)))) (rev acc)) (take ()))
          ; a session ended takes the screen: the saver starts over
          back (foldl (a \ k \ (? (k = -7) (uleave 0) (greet-key g k #ss = 'try) (gr-try g root line ss) a)) () keys)
-         _ (two? keys ? 0 (rest (max 5 (s2 'next - clock 0))))
+         ; short rests, so a key waits a few ms and not a frame
+         _ (two? keys ? (pin s2 'dirty 1) (rest (max 1 (min 10 (s2 'next - clock 0)))))
          (go (back == 'back ? (fresh (ttysize 1 1) (clock 0)) s2)))
      (ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
  (greet-main as)
