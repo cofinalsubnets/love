@@ -6,7 +6,7 @@
 (borrow '(salt libra))
 (borrow 'lapiz)         ; the doc verb's surfaces, loaded on that verb alone
 
-; no config anywhere; never (salt 'libra) here, which reads the machine's own ~/.love/etc/libra.l
+; no config anywhere; never (salt 'libra) here, which reads the machine's own nest's etc/libra.l
 (: lt-none {}
    (lt-conf prs) (foldl (t \ p \ (pin t <p >p, t)) {} prs))
 

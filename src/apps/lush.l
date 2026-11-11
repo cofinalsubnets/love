@@ -2460,7 +2460,7 @@
 
 ; --- lush 🐚 the line -- prompt, history, completion, the repl loops ---
 ;
-; line editing is bao's edlnc. ~/.lush_history appends on Enter, so a crash loses nothing.
+; line editing is bao's edlnc. the nest's run/lush_history appends on Enter, so a crash loses nothing.
 
 (module 'lush
 (borrow 'cli)
@@ -2510,12 +2510,12 @@
         (pst + sh-pen-cwd + sh-vis (sh-homely ("" + sh-pwd S)) + sh-pen-off + pbr
              + (getuid 0 @ 0 " # " " $ ")))
 
-   ; --- history: ~/.lush_history, oldest first on disk, newest first in hand
+   ; --- history: the nest's run/lush_history, oldest first on disk, newest first in hand
    (sh-expl s)                                  ; string -> charlist
      (: n #s
         (go i) (i @ ^n () (s i . go (i + 1)))
         (go 0))
-   (sh-histpath _) (("" + (getenv "HOME")) + "/.lush_history")
+   (sh-histpath _) (cite 'path 'nest 0 + "/run/lush_history")
    (sh-histload S _)
      (: p (sh-histpath 0)
         (? (two? (stat p))
@@ -2531,7 +2531,10 @@
            ()))
    (sh-histput S ln)                              ; a new history is laid 0600: it holds secrets
      (: hp (sh-histpath 0)
-        _ (? (atom? (stat hp)) (: fd (openfd hp 3) (? (charm? fd) (close fd) 0)) 0)
+        _ (? (atom? (stat hp))
+             (: _ (each (cite 'path 'pprefixes hp) (d \ mkdir d 448))
+                fd (openfd hp 3) (? (charm? fd) (close fd) 0))
+             0)
         o (open hp "a")
         (? (hot? o) (say o (ln + "\n"), flush o, close o) 0))
 
@@ -2697,7 +2700,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
                 (: _ (heard () ? () (hear lush-help))
                    _ (pin S 'sh-tty 1)
                    erc ("" + getenv "ENV")
-                   rc (erc || "" + getenv "HOME" + "/.lushrc")
+                   rc (erc || cite 'path 'nest 0 + "/etc/lushrc")
                    _ (raw 0) _ (sh-profiles S 0) _ (sh-src S rc) _ (raw 1)
                    (sh-loop S "" (sh-histload S 0)))
                 (sh-profiles S 0, (sh-cooked S) ""))))

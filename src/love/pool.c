@@ -14,8 +14,7 @@
 // we took ourselves, in whole cpus; and 1 whenever /proc/pressure/cpu says tasks waited for a
 // cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
 // drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
-// load (the laws, and the measure's forced widths). where it is unset, the row (threads N)
-// in ~/.love/etc/love.l says the same, read on the load's tick: the salt pattern, data only.
+// load (the laws, and the measure's forced widths).
 // serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD, a board), inside a
 // worker, and in a fork's child until the pool is made again there.
 #include "love.h"
@@ -47,7 +46,6 @@ struct pool {
  uint64_t idle0, tot0, psi0, self0;   // at the last read: idle and all jiffies, stall us, our cpu us
  int width, ask0, busy;          // the width the load allows, the last read's ask; a job is out
  uint64_t at;                    // when the load was last read, 0 never
- char salt[16];                  // (threads ..) from ~/.love/etc/love.l as last read, "" none
 #if PoolThreads
  int nw;                         // workers up
  pthread_mutex_t mu;
@@ -168,33 +166,6 @@ static int pool_cores(int ncpu) {
   s++; }
  return n > 0 && ncpu / n > 0 ? ncpu / n : ncpu; }
 
-// the operand of a (threads ..) row in ~/.love/etc/love.l into p->salt, or "": a form is
-// read only where it starts a line, past a comment's ;
-static void pool_salt(struct pool *p) {
- char const *n = getenv("LOVE_NEST"), *h = getenv("HOME");
- char path[256], b[4096];
- p->salt[0] = 0;
- int named = n && *n;                  // the nest: LOVE_NEST, else $HOME/.love, /.love with no HOME
- char const *r = named ? n : h ? h : "";
- if (strlen(r) > sizeof path - 20) return;
- strcpy(path, r), strcat(path, named ? "/etc/love.l" : "/.love/etc/love.l");
- int fd = open(path, O_RDONLY | O_CLOEXEC);
- if (fd < 0) return;
- long k = read(fd, b, sizeof b - 1);
- close(fd);
- if (k <= 0) return;
- b[k] = 0;
- for (char *s = b; *s; ) {
-  while (*s == ' ' || *s == '\t') s++;
-  if (!strncmp(s, "(threads", 8) && (s[8] == ' ' || s[8] == '\t')) {
-   s += 8;
-   while (*s == ' ' || *s == '\t') s++;
-   unsigned i = 0;
-   while (*s && *s != ')' && *s != ' ' && *s != '\n' && i < sizeof p->salt - 1) p->salt[i++] = *s++;
-   p->salt[i] = 0; }
-  while (*s && *s != '\n') s++;
-  if (*s) s++; } }
-
 static void pool_chunks(struct pool *p) {
  for (intptr_t i; (i = __atomic_fetch_add(&p->next, 1, __ATOMIC_RELAXED)) < p->n; ) p->fn(p->ctx, i); }
 static void *pool_work(void *a) {
@@ -244,9 +215,8 @@ intptr_t par_width(intptr_t n) {
  if (!p || p->busy || p->ncpu < 2) return 1;
  uint64_t t = pool_ns();
  int tick = !p->at || t - p->at >= PoolTick;
- if (tick) pool_salt(p);
  char const *e = getenv("LOVE_THREADS");
- if (!e || !*e) e = p->salt;
+ if (!e) e = "";
  char *x = 0;
  long cap = *e ? strtol(e, &x, 10) : PoolMax;
  if (cap < 2) return 1;

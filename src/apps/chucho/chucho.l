@@ -1,6 +1,6 @@
 ; chucho -- a mail reader after mutt's manner: a mailbox as an index, threaded, a message in the
 ; pager, mail written in your editor and handed to sendmail or an SMTP server.
-; settings are salt's, ~/.love/etc/chucho.l: from spool folder record sendmail smtp smtp-user
+; settings are salt's, the nest's etc/chucho.l: from spool folder record sendmail smtp smtp-user
 ;   smtp-pass-cmd imap-user imap-pass-cmd editor signature alternates; spool may be imaps://
 ; every key is a pure step on the state and every frame a pure lay; what wants the tty leaves
 ; as 'act for the runner, so the tool gates headless

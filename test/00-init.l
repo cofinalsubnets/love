@@ -5,9 +5,10 @@
 (map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
 (elem 'open (names ()) ? () (ev '(: (open x y) ())))
 
-; a test that cannot run here says why; on a strict box (LOVE_GATE_STRICT) a skip is red
+; a test that cannot run here says why; on a strict box (LOVE_GATE_STRICT, or the nest's
+; etc/gate-strict) a skip is red
 (: (gate-strict? _) (? (getenv "LOVE_GATE_STRICT")
-                      1 (open ((getenv "HOME") + "/.love/etc/gate-strict") "r" @ q (hot? q ? (close q, 1) 0)))
+                      1 (open (cite 'path 'nest 0 + "/etc/gate-strict") "r" @ q (hot? q ? (close q, 1) 0)))
    (gate-skip m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every lane\n"), quit 1)
                   (puts (m + "\n"), quit 0))
    (gate-partly m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every leg\n"), quit 1)

@@ -230,7 +230,7 @@ nest, the hub, and reach it with `-C`.
 
 ## install is a composition, not a verb
 
-Install is `sync` + `cook install`: binaries go in the `~/.love` nest, `make install`'s layout
+Install is `sync` + `cook install`: binaries go in the nest, `make install`'s layout
 owns them, and the unit of distribution is a `.sb/` store any static host serves. The
 composition lives *outside* sb's verb set, and that is the point — sb records and syncs, and
 whoever wants an install runs `cook install` over what it synced.

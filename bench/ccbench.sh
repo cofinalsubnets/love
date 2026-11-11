@@ -74,7 +74,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # mooncc: the whole toolchain in love, as `make test_raw` spells it -- a -c per unit,
 # mksys for the syscall leaf, our own linker. the compiler is the shipped artifact
-# because that is what a user runs, and its libc archive caches under ~/.love/cache/moon
+# because that is what a user runs, and its libc archive caches under out/cache/moon
 # keyed on a baked image, so intermediates rebuilding does not re-pay the build.
 # LOVE_NO_IMAGE= is empty, not unset: an egg-booted love has no verb table, so `mooncc`
 # would read as a filename.
