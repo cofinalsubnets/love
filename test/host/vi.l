@@ -8,7 +8,7 @@
 
 (: (drink m) (:- (go "") (go acc) (? (cue? m) (: b (cask 4096) n (swig m b)
                                                   (charm? n && 0 < n ? (go (acc + snip b 0 n)) acc))
-                                    (rest 150, cue? m) (go acc)
+                                    (heed m 150) (go acc)
                                     acc))
    (say! m s) (say m s, flush m, drink m)
    ; n within a row of at: the row's cells follow its address
