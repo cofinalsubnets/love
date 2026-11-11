@@ -238,7 +238,8 @@
 (:: '?- (\ a (. '? (cat (cup a) (. (cap a) ())))))
 ; @ carries a subject the other two lack, so @- moves the second argument, not the
 ; first: (x @- dflt p v ..) is (x @ p v .. dflt), and the subject stays where it reads.
-(:: '@- (\ a (. '@ (. (cap a) (cat (cuup a) (. (caup a) ()))))))
+; named by nom: read before the operator bytes are sealed, '@- is @ around -
+(:: (nom "@-") (\ a (. '@ (. (cap a) (cat (cuup a) (. (caup a) ()))))))
 
 ; (pins t k v ..): pin each pair onto an existing tablet; an odd trailing operand is dropped
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
@@ -290,8 +291,7 @@
  0 (pins (tablet 0)                                 ; --- arity 0: glued. takes nothing from the form
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
  '% fraction '? bit '$ sat '! nil? '^ jot
- '# tally '~ conj
- '0? nil? '1? atom? '2? two?)                   ; a row may spell digits: 2?<>x is (two? (cap (cup x)))
+ '# tally '~ conj)
  1 (tablet 0)                                       ; --- arity 1: a right operand and no left. no walk yet
  2 (pins (tablet 0)                                 ; --- arity 2: spaced. a left operand and a right
  '~ '(twin 99)                                      ; tightest, so a complex literal binds before any operator
@@ -306,7 +306,8 @@
  '$ 5 '\ 5)                                         ; weak apply and the lambda, one band: at equal band the
                                                     ; right hand yields, (map $ a \ f a) is (map (\ a (f a)))
  -1 (pins (tablet 0)                                ; --- arity -1: spaced, no bound. a left, then all of them
- '? 10 '@ 10 '@- 10                                 ; every arm stays an operand; :- and ?- are prefix-only
+ '? 10 '@ 10 (nom "@-") 10                          ; every arm stays an operand; :- and ?- are prefix-only
+                                                    ; @- by nom, as at its macro: read before the seal
  ': 3 ':= ':)                                       ; := is a bare nom, an alias of `:` and its band
  -2 (pins (tablet 0)                                ; --- arity -2: spaced, and it chains. a left and a right, but
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40 '== 40 '!== 40)))          ; a same-band neighbour joins the run instead of nesting
@@ -350,6 +351,18 @@
                    0))
              0)) ;;; FIXME dangling 0 clauses like these are bad end-weight coding and
        0) ;;; they may not even be semantically needed since ? fall-through returns ()
+
+   ; the reader's operator bytes, as hook 10's 256-byte text: each byte of a name in any lane
+   ; that is punct whole. sealed below and again on every grip, so the reader is the table's
+   opb (tablet 0)
+   (op-bytes _) (: m (tablet 0)
+                   (row nm) (? (op-puncp nm)
+                               (: s (string nm) ((: (go i) (? (< i (tally s)) (: _ (pin m (s i) 1) (go (+ 1 i))) 0)) 0))
+                               0)
+                   _ (each (list 0 1 2 -1 -2) (\ ar (each (keys (operators ar)) row)))
+                   (string (map (\ c (peep m c 0)) (jot 256))))
+   (op-seal _) (: t (op-bytes ()) _ (pin opb 0 t) (seal-hook 10 t))
+   (op-byte? c) (? (charm? c) (? (< -1 c) (? (< c 256) ((opb 0) c) 0) 0) 0)
 
    ; a band is a signed charm: the magnitude is the level (higher binds tighter), the sign the
    ; hand, negative left. never 0: a tablet miss answers 0.
@@ -603,7 +616,8 @@
    ; restores; () clears a row. a shape the lane refuses rolls back and scares; a lane with no
    ; key is refused. the glued lane accepts anything: a value there is the emitted head.
    (op-lane-ok? t ar nm) (? (= ar 0) 1 (two? (op-lane nm t ar)))
-   (grip ar nm v)
+   (grip ar nm v) (: old (grip-row ar nm v) _ (op-seal ()) old)
+   (grip-row ar nm v)
     (: t (operators ar)
        (? (nil? (nom? nm)) (scare 'bad-grip nm)
           (nil? (tablet? t)) (scare 'bad-grip ar)
@@ -616,6 +630,8 @@
                          (scare 'bad-grip nm))))))))
 
    ; --- this `:` has a body, so the helpers above are local ------------------
+   _ (op-seal ())
+   _ (pin book 'op-byte? op-byte?)
    _ (pin book 'grip grip)
    _ (pin book 'opfix-past opfix-past)
    (pin book 'opfix opfix))

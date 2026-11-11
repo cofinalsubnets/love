@@ -709,19 +709,17 @@ enum { RsStart, RsRead, RsClose, RsDatum, RsAll, RsWeave };
 #define RdGo(s) (g->ip = (union u*) (rd_k + (s)), g)
 #define RdSlack 32   // every state's reserve: a frame, a call, a wrap's conses
 
-// RcEnd ends a name-led token, RcStop a glued run; 12 is form feed
+// RcEnd ends a name-led token, RcStop a glued run; 12 is form feed. RcOp is no byte's here:
+// the operator table's, through rd_opb
 enum { RcWs = 1, RcOp = 2, RcEnd = 4, RcOpen = 8, RcClose = 16, RcSign = 32, RcStop = 64, RcDig = 128 };
 #define RcW (RcWs | RcEnd | RcStop)
 #define RcO (RcEnd | RcOpen)
 #define RcC (RcEnd | RcClose | RcStop)
 static unsigned char const rd_cls[257] = {
  ['\t'] = RcW, ['\n'] = RcW, [12] = RcW, ['\r'] = RcW, [' '] = RcW,
- ['"'] = RcEnd, [','] = RcEnd, [';'] = RcEnd | RcStop, ['#'] = RcOp | RcEnd,
+ ['"'] = RcEnd, [','] = RcEnd, [';'] = RcEnd | RcStop, ['#'] = RcEnd,
  ['('] = RcO, ['['] = RcO, ['{'] = RcO, [')'] = RcC, [']'] = RcC, ['}'] = RcC,
- ['+'] = RcOp | RcSign, ['-'] = RcOp | RcSign,
- ['!'] = RcOp, ['$'] = RcOp, ['%'] = RcOp, ['&'] = RcOp, ['*'] = RcOp, ['.'] = RcOp,
- ['/'] = RcOp, [':'] = RcOp, ['<'] = RcOp, ['='] = RcOp, ['>'] = RcOp, ['?'] = RcOp,
- ['@'] = RcOp, ['\\'] = RcOp, ['^'] = RcOp, ['|'] = RcOp, ['~'] = RcOp,
+ ['+'] = RcSign, ['-'] = RcSign,
  ['0'] = RcDig, ['1'] = RcDig, ['2'] = RcDig, ['3'] = RcDig, ['4'] = RcDig,
  ['5'] = RcDig, ['6'] = RcDig, ['7'] = RcDig, ['8'] = RcDig, ['9'] = RcDig };
 
@@ -740,6 +738,12 @@ static love_inline intptr_t rd_at(word src, word p) {
  word c = A(p);
  return charmp(c) && (uintptr_t) getcharm(c) < 256 ? getcharm(c) : 256; }
 static love_inline unsigned rd_c(word src, word p) { intptr_t c = rd_at(src, p); return c < 0 ? 0 : rd_cls[c]; }
+// an operator byte: one the operator table's names spell, prel's seal of hook_opc, and never
+// one the grammar holds. unsealed, none is
+static love_inline bool rd_opb(struct g *g, intptr_t c) {
+ word const t = g->hook[hook_opc];
+ return c >= 0 && c < 256 && strp(t) && len(str(t)) == 256 && txt(str(t))[c]
+     && !(rd_cls[c] & (RcWs | RcOpen | RcClose | RcStop | RcDig)) && c != '"' && c != ',' && c != '\''; }
 // a cell's value keeps its low byte
 static love_inline intptr_t rd_raw(word src, word p) {
  return charmp(p) ? (unsigned char) txt(str(src))[getcharm(p)] : getcharm(A(p)); }
@@ -1042,10 +1046,6 @@ static bool rd_float(char const *t, uintptr_t n, double *d) {
  char *e;
  *d = lm_strtod(t, &e);
  return e == t + n && *d == *d; }                       // the whole token: an inner NUL stops the parse short
-static bool rd_numeral(struct str *s) {
- double d;
- return is_dec_int(txt(s), len(s)) || is_hex_int(txt(s), len(s)) || is_oct_int(txt(s), len(s))
-     || rd_float(txt(s), len(s), &d); }
 static struct g *rd_atom(struct g *g) {
  struct str *s = str(g->sp[0]);
  uintptr_t n = len(s);
@@ -1057,33 +1057,16 @@ static struct g *rd_atom(struct g *g) {
  if (!ok(g = have(g, gem_req))) return g;
  return g->sp[0] = mk_gem(&g->hp, (flo_t) d), g; }
 
-// a digit-led non-numeral with an operator run is cut past the run when a datum is glued
-// there (2?<>x is 2?<> around x); a trailing - before a digit is the next numeral's sign
-static struct g *rd_tok(struct g *g, bool split) {
+// a name or a numeral to its end; a # the table leaves out leads a name
+static struct g *rd_tok(struct g *g) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], n;
  uintptr_t len = 0;
- if (rd_in(src, p)) len = rd_send(str(src), getcharm(p)) - getcharm(p);
- else for (; rd_at(src, p) >= 0 && !(rd_c(src, p) & RcEnd); p = n, len++) RdStepW(n, p, RwTok);
- if (!ok(g = have(g, 2 * str_width(len) + RdSlack))) return g;
+ if (rd_in(src, p)) len = rd_send(str(src), getcharm(p) + 1) - getcharm(p);
+ else for (; rd_at(src, p) >= 0 && (!len || !(rd_c(src, p) & RcEnd)); p = n, len++) RdStepW(n, p, RwTok);
+ if (!ok(g = have(g, str_width(len) + RdSlack))) return g;
  src = g->sp[RdSrc], p = g->sp[RdCur];
  struct str *s = ini_str(bump(g, str_width(len)), len);
- word lop = ZeroPoint, aop = ZeroPoint;                 // the run's last char, and past it
- uintptr_t k = 0;
- for (uintptr_t i = 0; i < len; i++) {
-  txt(s)[i] = rd_byte(src, p), n = rd_next(p);
-  if (rd_c(src, p) & RcOp) k = i + 1, lop = p, aop = n;
-  p = n; }
- if (split && k && !rd_numeral(s)) {
-  bool shed = k > 1 && rd_at(src, lop) == '-' && (rd_c(src, aop) & RcDig);
-  word r = shed ? lop : aop;
-  if (rd_glued(src, r)) {
-   k -= shed;
-   struct str *o = ini_str(bump(g, str_width(k)), k);
-   memcpy(txt(o), txt(s), k);
-   g->sp[RdCur] = r, *--g->sp = word(o);
-   if (!ok(g = have(intern(g), 2))) return g;
-   rd_mono(g, *g->sp++);
-   return RdGo(RsRead); } }
+ for (uintptr_t i = 0; i < len; i++) txt(s)[i] = rd_byte(src, p), p = rd_next(p);
  g->sp[RdCur] = p, *--g->sp = word(s);
  if (!ok(g = rd_atom(g))) return g;
  g->sp[1 + RdVal] = g->sp[0], g->sp++;
@@ -1094,7 +1077,7 @@ static struct g *rd_tok(struct g *g, bool split) {
 static struct g *rd_op(struct g *g) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], last = p, n;
  uintptr_t len = 0;
- for (intptr_t c; (c = rd_at(src, p)) >= 0 && (c == '@' ? !len : rd_cls[c] & RcOp); last = p, p = n, len++)
+ for (intptr_t c; (c = rd_at(src, p)) >= 0 && (c == '@' ? !len : rd_opb(g, c)); last = p, p = n, len++)
   RdStep(n, p);
  len -= len > 1 && rd_at(src, last) == '-' && (rd_c(src, p) & RcDig);
  if (!ok(g = have(g, str_width(len) + RdSlack))) return g;
@@ -1132,7 +1115,7 @@ static struct g *rd_read(struct g *g) {
   g->sp[RdCur] = p;
   word const h = g->sp[RdRegs + getcharm(g->sp[RdCnt])];
   int const k = RdKind(h);
-  unsigned const m = c < 0 ? RcClose : rd_cls[c];
+  unsigned const m = c < 0 ? RcClose : rd_cls[c] | (rd_opb(g, c) ? RcOp : 0);
   if (m & RcClose)                                       // the end of the text or of a list
    return k >= RkParen && k <= RkHole ? (c < 0 ? rd_torn(g) : RdGo(RsClose))
         : k == RkOne ? rd_done(g, ZeroPoint)
@@ -1150,11 +1133,11 @@ static struct g *rd_read(struct g *g) {
    RdStep(n, p);
    if (c == ',') return g->sp[RdVal] = g->nom[RnComma], g->sp[RdCur] = n, RdGo(RsDatum);
    if (c == '@') {                                       // a run, the tuple wrap, or the plain @
-    if (rd_c(src, n) & RcOp) return rd_op(g);
+    if (rd_opb(g, rd_at(src, n))) return rd_op(g);
     if (rd_glued(src, n)) { rd_frame(g, RkLift), g->sp[RdCur] = n; continue; }
     return g->sp[RdVal] = g->nom[RnAt], g->sp[RdCur] = n, RdGo(RsDatum); }
-   return (rd_c(src, n) & RcDig) || rd_at(src, n) == '.' ? rd_tok(g, false) : rd_op(g); }   // a numeral's sign
-  return m & RcOp ? rd_op(g) : rd_tok(g, m & RcDig); } }
+   return (rd_c(src, n) & RcDig) || rd_at(src, n) == '.' || !(m & RcOp) ? rd_tok(g) : rd_op(g); }   // a numeral's sign
+  return m & RcOp ? rd_op(g) : rd_tok(g); } }
 
 // a closer ends the open list: its datums, under the wrap its opener named
 static struct g *rd_close(struct g *g) {
