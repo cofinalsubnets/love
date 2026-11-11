@@ -561,6 +561,17 @@ moonrun -D ONLY -c -o "$ho/.kinl.o" "$ho/.kinl.c" > /dev/null 2>&1 || fail "moon
 [ "$(objdump -d "$ho/.kinl.o" | grep -c call)" = 0 ] || fail "an unrolled call on a constant stayed a call"
 moonrun -o "$ho/.kinl" "$ho/.kinl.c" || fail "mooncc: the unrolled switch probe linked"
 [ "$("$ho/.kinl")" = "1 0 0 0" ] || fail "an unrolled switch's constant splices answer wrong"
+# ..and a param the body writes keeps its arg, never its constant
+cat > "$ho/.kinlw.c" <<'EOF'
+#include <stdio.h>
+struct u64u { unsigned long long v; } __attribute__((packed, may_alias));
+static unsigned long long rd(unsigned char const *p, unsigned k) { if (k == 8) return ((struct u64u const *)(p))->v;
+ unsigned long long w = 0; while (k--) w = w << 8 | p[k]; return w; }
+int main(void) { unsigned char d[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }; unsigned long long s = 0;
+ for (int j = 0; j < 3; j++) s += rd(d + 4 * j, 4); printf("%llx\n", s); return 0; }
+EOF
+moonrun -o "$ho/.kinlw" "$ho/.kinlw.c" || fail "mooncc: a written param under a constant call"
+[ "$("$ho/.kinlw")" = 1815120f ] || fail "a written param's constant splice answers wrong"
 
 # a local struct braced or member-named, an array member unnamed, splits into its members:
 # the brace's values land, the rest read zero

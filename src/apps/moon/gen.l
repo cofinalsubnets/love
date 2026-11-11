@@ -4287,7 +4287,7 @@
        (kv e) (cfold w64 e @ v (cint? v ? v ()))
        ; a param the body writes, takes the address of or declares again keeps its arg
        (fixed? p b) (: (go x) (? (atom? x) ()
-                                 (x @ (('asn || 'post) ('var ^p) . _) 1
+                                 (x @ (('asn || 'post) . ('var ^p) . _) 1
                                       ('rmw _ ('var ^p) _) 1
                                       ('addr ('var ^p)) 1
                                       ('decl ds) (any (d \ <d = p) ds || any go ds)
