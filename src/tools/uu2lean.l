@@ -188,11 +188,12 @@
       hd ("inductive " + T + cat (map (b \ " (" + string <b + " : " + u2l (b 1) + ")") (g 'ps)) + " : " + arrows (g 'is) + "Type where\n")
       cs (cat (map (c \ "  | " + leann <c + " : " + arrows (c 1) + u2l (c 2) + "\n") (g 'cs)))
       ab (cat (map (c \ "abbrev " + leann <c + " : " + arrows (g 'ps) + arrows (c 1) + u2l (c 2) + " := @" + T + "." + leann <c + "\n") (g 'cs)))
+      ; the recursor's motive lands in any universe, so a family can eliminate into UU
+      _ (pin bases 'UU "(Type _)")
       (minor m) (two? (m 2) || two? (m 3) ? ("(fun" + names (m 2 + m 3) + " => " + string (m 1) + names (map cap (m 4)) + ")") (string (m 1)))
       vs (g 'xs + [(g 'Pn)] + map (m \ m 1) (g 'ms) + g 'iv + [(g 'tn)])
       rc ("def " + leann (g 'rnm) + " : " + u2l (g 'rectT) + " :=\n  fun" + names vs + " => @" + T + ".rec"
           + names (g 'xs) + " " + string (g 'Pn) + cat (map (m \ " " + minor m) (g 'ms)) + names (g 'iv) + " " + string (g 'tn) + "\n")
-      _ (pin bases 'UU "(Type _)")
     (hd + cs + ab + rc))
    (emit e) (<e = 'ind ? (emit-ind e) (emit-def e))
    (emit-def e) (: nm (e 1) mb (peep manual nm 0)
