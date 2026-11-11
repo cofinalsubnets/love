@@ -2,8 +2,8 @@
 ;
 ;   (cpio-pack entries)      -> the archive bytes
 ;   (cpio-unpack s)          -> (1 entries) | ()
-;   (cpio-scatter root es u) -> (1 count) | ()   write entries back out under root
-;   (cpio-scatter? warn root es u) -> (1 count refused)   the same, a refused member warned
+;   (cpio-extract root es u) -> (1 count) | ()   write entries back out under root
+;   (cpio-extract? warn root es u) -> (1 count refused)   the same, a refused member warned
 ;   (cpio-walk s f)          -> (1 count) | () | 'stop   the members off a stream, (tar-src rd)
 ;   (cpio-put warn root e u fill) -> 'laid | 'skip | 'refused | 'fail   one member laid
 ;
@@ -170,15 +170,15 @@
                tar-at? p 32768 && chmod p (tar-perm (peep e 'mode 420)),
                cpio-there? p)))
        (? !ok 'fail !lp 'refused skip 'skip 'laid))
-   (cpio-scatter? warn root es u)           ; -> (1 count refused)
+   (cpio-extract? warn root es u)           ; -> (1 count refused)
     (: (go xs k r)
         (!(two? xs) ? [1 k r]
            (: e <xs   w (cpio-put warn root e u (q \ say q (peep e 'body "")))
               (w = 'fail ? ()
                  (go >xs (w = 'laid ? (k + 1) k) (w = 'refused ? (r + 1) r)))))
        (go es 0 0))
-   (cpio-scatter root es u)                 ; -> (1 count) | (), () on any refusal
-    (cpio-scatter? (m \ 0) root es u @ w (w && w 2 = 0 ? [1 (w 1)] ())))
+   (cpio-extract root es u)                 ; -> (1 count) | (), () on any refusal
+    (cpio-extract? (m \ 0) root es u @ w (w && w 2 = 0 ? [1 (w 1)] ())))
 
 ) ; module 'cpio
 
