@@ -4422,17 +4422,19 @@
        ok (filter (nm \ !(bad nm) && two? (peep use nm ()) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm) && !(peep site nm 0 && peep inis nm 0)) (sort (keys cand)))
        (sn nm fl) "\(nm)`m\(fl)"
        (fty nm fl) (assoc fl (mems (cand nm)) @ m (m 2))
+       ; the members it keeps: those named, or every one where a call reads the whole
+       (mset nm) (peep site nm 0 ? (map (m \ <m) (mems (cand nm))) (use nm))
        (rd ps) (? !(two? ps) ()
-                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (use <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
+                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) ()]) (mset <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
                   (rw <ps . rd >ps))
-       (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (use <p)))
+       (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (mset <p)))
        (seq l) (two? >l ? ['comma <l (seq >l)] <l)
        (rwcall fn as)
         (: nms (filter (nm \ any (a \ a @ ['addr ['var n]] (n = nm) 0) as) ok)
            c ['call ['var fn] (map rw as)]
            (? !(two? nms) c
-              (: in (catmap (nm \ map (fl \ ['asn ['dot ['var nm] fl] ['var (sn nm fl)]]) (use nm)) nms)
-                 out (catmap (nm \ map (fl \ ['asn ['var (sn nm fl)] ['dot ['var nm] fl]]) (use nm)) nms)
+              (: in (catmap (nm \ map (fl \ ['asn ['dot ['var nm] fl] ['var (sn nm fl)]]) (mset nm)) nms)
+                 out (catmap (nm \ map (fl \ ['asn ['var (sn nm fl)] ['dot ['var nm] fl]]) (mset nm)) nms)
                  rt <(g 'sigs fn)
                  (? (rt = 'void) (seq (in + [c] + out))
                     (: k (tmps 'k) t "`s\(k)"
@@ -4440,7 +4442,7 @@
                        (seq (in + [['asn ['var t] c]] + out + [['var t]])))))))
        (asg nm m) (: k (tmps 'k) t "`s\(k)"
                      _ (pins tmps 'k (k + 1) 'l ([t ['ptr (cand nm)] ()] . tmps 'l))
-                     (seq ([['asn ['var t] ['addr (rw m)]]] + map (fl \ ['asn ['var (sn nm fl)] ['dot ['deref ['var t]] fl]]) (use nm))))
+                     (seq ([['asn ['var t] ['addr (rw m)]]] + map (fl \ ['asn ['var (sn nm fl)] ['dot ['deref ['var t]] fl]]) (mset nm))))
        (rw x) (? (atom? x) x
                  (x @ (['dot ['var nm] fl] && elem nm ok) ['var (sn nm fl)]
                       (['asn ['var nm] m] && elem nm ok) (asg nm m)
