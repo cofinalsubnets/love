@@ -141,7 +141,7 @@ case $tgt in
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
     # no libc on the board, and no libgcc: what a link of either side cannot close
-    nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+    nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
       148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
       163-bitfields 164-switchtab 165-constcond 166-condconv 178-toplevelasm 228-strictalign 280-cxf-fuzz
       283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
@@ -200,7 +200,7 @@ case $tgt in
     # a 64-bit long assumed, past an ILP32 word: a shift by 63 and the like, no answer to hold;
     # 180 takes riscv's template on the reference and none here
     skip="105-fneg 144-gnubuiltins 266-vaarg-struct 152-rotate 180-asmsections"
-    nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+    nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
       148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
       163-bitfields 164-switchtab 165-constcond 166-condconv 228-strictalign 280-cxf-fuzz
       283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
