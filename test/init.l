@@ -64,6 +64,22 @@
       ('enoent = (unlink f))
       !(rmdir d)))
 
+  ; --- fdpush and fdpull: a cask's bytes to and from a raw fd at an offset, whole ---
+  (: f ("out/.fdmove-probe." + show (getpid 0))
+     _ (unlink f)
+     w (openfd f 1) r (openfd f 0)
+     c (cask 8) _ (pour c 0 "abcdefgh" 0 8)
+     d (cask 8)
+     (test
+      (5 = fdpush w c 2 10 5)                       ; "cdefg" at 10, a hole before it
+      ((stat f) @ s (15 = <s))
+      (3 = fdpull r d 1 11 3) ("\0def\0\0\0\0" = string d)
+      (3 = fdpull r d 4 12 4) ("\0defefg\0" = string d)     ; short at the end: 3 there
+      (0 = fdpull r d 0 15 2)
+      ('ebadf = fdpull -1 d 0 0 1)
+      (nom? (fdpull r d 6 0 4)) (nom? (fdpull r "text" 0 0 1)) (nom? (fdpull r d -1 0 1))
+      (: _ (close w) _ (close r) !(unlink f))))
+
   ; --- the raw-fd lane: the port ops on a charm, unbuffered, answering as the port arm does ---
   (: pp (pipe 0) rfd <pp wfd >pp
      _ (say wfd "through the door") _ (put wfd 33) _ (close wfd)

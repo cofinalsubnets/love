@@ -1021,6 +1021,31 @@ static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word 
 
 LvmWord3(posix_lseek)
 
+// (fdpull fd cask at off n): n bytes of the fd from off into the cask at at; (fdpush fd cask
+// at off n) the cask's into the fd. the count moved, short at the file's end. raw fds only:
+// a shared frame between love and a helper, a tmpfs file both hold, moved whole
+love_noinline static word host_fdmove(struct g *g, word *a, bool in) {
+ word c = a[1];
+ struct str *s = cask_str(c);
+ if (!s || !charmp(a[0]) || !charmp(a[2]) || !charmp(a[3]) || !charmp(a[4])) return badarg(g);
+ intptr_t at = getcharm(a[2]), off = getcharm(a[3]), n = getcharm(a[4]);
+ if (at < 0 || off < 0 || n < 0 || (uintptr_t) at > s->len || (uintptr_t) n > s->len - (uintptr_t) at)
+  return badarg(g);
+ int fd = (int) getcharm(a[0]);
+ if (lseek(fd, (off_t) off, SEEK_SET) < 0) return love_err(g, errno);
+ char *p = (char*) s->bytes + at;
+ intptr_t done = 0;
+ while (done < n) {
+  ssize_t r = in ? read(fd, p + done, (size_t) (n - done)) : write(fd, p + done, (size_t) (n - done));
+  if (r < 0 && errno == EINTR) continue;
+  if (r < 0) return love_err(g, errno);
+  if (r == 0) break;
+  done += r; }
+ return putcharm(done); }
+
+static lvm(lvm_fdpull) { Sp[4] = host_fdmove(g, Sp, true); love_musttail return Nextp(1, 4); }
+static lvm(lvm_fdpush) { Sp[4] = host_fdmove(g, Sp, false); love_musttail return Nextp(1, 4); }
+
 // a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
 // seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
@@ -1067,6 +1092,8 @@ LvDef("birth", posix_birth, 2, "posix");
 LvDef("readdir", posix_readdir, 1, "posix");
 LvDef("unlink", posix_unlink, 1, "posix");
 LvDef("lseek", posix_lseek, 3, "posix");
+LvDef("fdpull", fdpull, 5, "posix");
+LvDef("fdpush", fdpush, 5, "posix");
 LvDef("signal", posix_signal, 2, NULL);
 LvDef("ttyfg", posix_ttyfg, 1, NULL);
 LvDef("ttypg", posix_ttypg, 1, NULL);
