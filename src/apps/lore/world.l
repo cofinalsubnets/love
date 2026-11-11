@@ -19,6 +19,7 @@
 (borrow 'window)                        ; the editor's own window
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the triangles, the lamps, the frame
+(borrow 'gpu)                           ; the frame on the system's gpu, with LORE_GPU=1
 (borrow 'lore)                          ; lamp-open and its kin, in C
 (borrow 'neon)                          ; the signs, and the poster's letters
 (borrow 'brush)                         ; the world, carved and filled
@@ -1249,6 +1250,10 @@
    v (mesh-eye w h e (sh 'deg * pi / 180.0) (sh 'pitch * pi / 180.0) 0.0 fov 0.05 60.0)
    (mesh-frame v [[] []] (st 'sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)) ())))
+ ; ..the gpu that draws the level's frames, opened at the first: with LORE_GPU=1, else 'off
+ (world-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (gpu-state g) 'off)) 'off)
+                                 (pin st 'gpu s, s))
+                           s s)
  (level-pens st sh) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0))
    hb (tablet? sh ? [0.0 0.0 0.0 0.0] (mesh-sway st (gesture-body st) fov w))
@@ -1263,6 +1268,7 @@
    ; ..on a surface, the eye's view laid there, and the sky seen as from the level's own
    sf (sc 'surf) fr (tablet? sf ? 300.0 (out ? 150.0 60.0))
    vl (mesh-eye w h e th ph (tablet? sh ? 0.0 (peep st 'ro 0.0 + hb 3)) fov 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
+   _ (tablet? (world-gpu st) ? (pin v 'gpu (st 'gpu)))
    fog (out ? (: hz (mesh-haze vl (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) (tablet? sf ? 90.0 50.0) fr]) [0.0 0.0 0.0 30.0 60.0])
    ; ..the sky asked about every sky-k pixels a 160 across, or a kitty column, however shown
    sk0 (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (max k (w // 160) @ 1 1 q (sky-k * q)) (mesh-sky-memo st)) 0)

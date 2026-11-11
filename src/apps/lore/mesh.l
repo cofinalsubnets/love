@@ -7,7 +7,7 @@
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
-(borrow '(view window vec sky json))
+(borrow '(view window vec sky json gpu))
 (borrow 'lore)                          ; lamp-light, in C
 (:
  ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b], each triangle [a b c tex], tex -1 none
@@ -296,11 +296,13 @@
  ; bare pixel below -1 keeps a glow, -1 less its colour, put on what fills it, and one at or
  ; below -2^25 a glass's tint and sheen, -2^25 less tint + 2^24 sheen / 4, what fills it seen
  ; through them
- ; v 'under a coarser frame of mesh-coarse's, laid first where it drew
+ ; v 'under a coarser frame of mesh-coarse's, laid first where it drew; v 'gpu a gpu-state, which
+ ; draws it where it can
  (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (v 'under @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
-   f (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())]))
+   gp (peep v 'gpu ()) q (tablet? gp && #sc < 3 ? (gpu-facets gp (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs o) ())
+   f (tray? q ? q (facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())])))
    (? (two? bare) (<>bare v f B0)
       (: S (iota (f < 0)) (#S @ 0 f (pin f S (glowed (charm? bare ? (S * 0 + bare) (bare v S)) (-1 - f S)))))))
  ; ..colours s with the glows g kept on their bare pixels added, or through the tints kept

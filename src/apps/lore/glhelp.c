@@ -10,10 +10,15 @@
 //                     is) from OFF, then NT triangles of 4 ints (three vertices and a texture,
 //                     below 0 none)
 //   drop ID           a buf forgotten
-//   frame W H OFF CLEAR FR FG FB NEAR FAR TONE M0 .. M15 ID ..
+//   under CW CH OFF   for the next frame alone, a smaller frame laid first: CW x CH colours
+//                     (32-bit 0x00rrggbb) from OFF, then as many depths (floats, ndc z, 2 none),
+//                     rows top first, each pixel the one over it where it drew
+//   frame W H OFF CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..
 //                     the bufs drawn through clip = M * [x y z 1] (row-major), linear fog to
-//                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none); W x H
-//                     0x00rrggbb pixels to OFF, rows top first, CLEAR where nothing drew
+//                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none), FLAGS
+//                     facets's 8 alone (cull: anticlockwise in gl's y-up faces the eye); W x H
+//                     0x00rrggbb pixels to OFF, rows top first, CLEAR where nothing drew, or
+//                     with CLEAR below 0 0xff000000 there
 //   quit
 #include <dlfcn.h>
 #include <stdio.h>
@@ -46,6 +51,8 @@ enum {
  GL_TEXTURE_MIN_FILTER = 0x2801, GL_TEXTURE_MAG_FILTER = 0x2800, GL_TEXTURE_WRAP_S = 0x2802,
  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_MAX_LEVEL = 0x813D, GL_NEAREST = 0x2600,
  GL_NEAREST_MIPMAP_NEAREST = 0x2700, GL_REPEAT = 0x2901, GL_RENDERER = 0x1F01,
+ GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
+ GL_TEXTURE1 = 0x84C1,
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5 };
 
 #define EGLFNS(X) \
@@ -87,6 +94,8 @@ enum {
  X(void, glUniform2f, (GLint, GLfloat, GLfloat)) X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
  X(void, glUniformMatrix4fv, (GLint, GLsizei, unsigned char, const GLfloat *)) \
  X(void, glPixelStorei, (GLenum, GLint)) X(void, glEnable, (GLenum)) X(void, glDepthFunc, (GLenum)) \
+ X(void, glDisable, (GLenum)) X(void, glCullFace, (GLenum)) X(void, glFrontFace, (GLenum)) \
+ X(void, glDrawArrays, (GLenum, GLint, GLsizei)) X(void, glUniform2i, (GLint, GLint, GLint)) \
  X(void, glViewport, (GLint, GLint, GLsizei, GLsizei)) \
  X(void, glClearColor, (GLfloat, GLfloat, GLfloat, GLfloat)) X(void, glClear, (GLbitfield)) \
  X(void, glDrawElements, (GLenum, GLsizei, GLenum, const void *)) \
@@ -107,6 +116,8 @@ struct helper {
  struct buf *bufs; int nbuf, cbuf;
  GLuint prog, fb, rb, db; int fw, fh;
  GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone;
+ GLuint uprog, uc, ud; int uw, uh, upend;   // the smaller frame laid first
+ GLint uu_cs, uu_fs;
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -149,6 +160,24 @@ static char const fsrc[] =
  " if (tone > 0.0) c = 255.0 * (1.0 - exp(-tone * c / 255.0));\n"
  " c = clamp(c / 255.0, 0.0, 1.0); o = vec4(c.b, c.g, c.r, 0.0); }\n";
 
+// the smaller frame: one triangle over the whole frame, each pixel its own of the smaller's,
+// as facets picks it, its colour and its depth; where the smaller drew nothing, nothing
+static char const uvsrc[] =
+ "#version 300 es\n"
+ "void main(){ vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0); gl_Position = vec4(p, 0.0, 1.0); }\n";
+static char const ufsrc[] =
+ "#version 300 es\n"
+ "precision highp float; uniform highp sampler2D cc; uniform highp sampler2D cd; uniform ivec2 cs; uniform ivec2 fs;\n"
+ "out vec4 o;\n"
+ "void main(){ ivec2 p = ivec2(gl_FragCoord.xy), q = ivec2(p.x * cs.x / fs.x, p.y * cs.y / fs.y);\n"
+ " float d = texelFetch(cd, q, 0).r; if (d >= 2.0) discard;\n"
+ " vec4 k = texelFetch(cc, q, 0); o = vec4(k.b, k.g, k.r, 0.0); gl_FragDepth = clamp(d * 0.5 + 0.5, 0.0, 1.0); }\n";
+
+static GLuint program(GLuint vs, GLuint fs) {
+ GLuint p = glCreateProgram(); GLint ok = 0;
+ glAttachShader(p, vs); glAttachShader(p, fs); glLinkProgram(p); glGetProgramiv(p, GL_LINK_STATUS, &ok);
+ return ok ? p : 0; }
+
 static int setup(struct helper *H) {
  void *egl = dlopen("libEGL.so.1", RTLD_NOW), *gl = dlopen("libGLESv2.so.2", RTLD_NOW);
  if (!egl || !gl) { dprintf(1, "err no gles: %s\n", dlerror()); return 0; }
@@ -168,10 +197,12 @@ static int setup(struct helper *H) {
  if (!c || !eglMakeCurrent(d, NULL, NULL, c)) { dprintf(1, "err no gles 3 context\n"); return 0; }
  GLuint vs = shader(GL_VERTEX_SHADER, vsrc), fs = shader(GL_FRAGMENT_SHADER, fsrc);
  if (!vs || !fs) return 0;
- H->prog = glCreateProgram();
- glAttachShader(H->prog, vs); glAttachShader(H->prog, fs); glLinkProgram(H->prog);
- GLint ok = 0; glGetProgramiv(H->prog, GL_LINK_STATUS, &ok);
- if (!ok) { dprintf(1, "err link\n"); return 0; }
+ GLuint uvs = shader(GL_VERTEX_SHADER, uvsrc), ufs = shader(GL_FRAGMENT_SHADER, ufsrc);
+ if (!uvs || !ufs) return 0;
+ if (!(H->prog = program(vs, fs)) || !(H->uprog = program(uvs, ufs))) { dprintf(1, "err link\n"); return 0; }
+ glUseProgram(H->uprog);
+ glUniform1i(glGetUniformLocation(H->uprog, "cc"), 0); glUniform1i(glGetUniformLocation(H->uprog, "cd"), 1);
+ H->uu_cs = glGetUniformLocation(H->uprog, "cs"); H->uu_fs = glGetUniformLocation(H->uprog, "fs");
  glUseProgram(H->prog);
  H->u_m = glGetUniformLocation(H->prog, "m"); H->u_tx = glGetUniformLocation(H->prog, "tx");
  H->u_ts = glGetUniformLocation(H->prog, "ts"); H->u_has = glGetUniformLocation(H->prog, "has");
@@ -270,6 +301,24 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off) {
  b->runs = runs, b->nrun = nrun;
  dprintf(1, "ok\n"); }
 
+static void cmd_under(struct helper *H, int cw, int ch, size_t off) {
+ if (cw < 1 || ch < 1) { dprintf(1, "err under size\n"); return; }
+ size_t n = (size_t) cw * ch;
+ unsigned char const *p = bytes(H, off, 8 * n);
+ unsigned char *rgba = p ? malloc(4 * n) : NULL;
+ if (!rgba) { dprintf(1, "err under bytes\n"); return; }
+ if (!H->uc) {
+  GLuint t[2]; glGenTextures(2, t); H->uc = t[0], H->ud = t[1];
+  for (int i = 0; i < 2; i++) {
+   glBindTexture(GL_TEXTURE_2D, t[i]);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); } }
+ texels(rgba, p, n);
+ glBindTexture(GL_TEXTURE_2D, H->uc); glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, cw, ch, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+ glBindTexture(GL_TEXTURE_2D, H->ud); glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, cw, ch, 0, GL_RED, GL_FLOAT, p + 4 * n);
+ free(rgba);
+ H->uw = cw, H->uh = ch, H->upend = 1;
+ dprintf(1, "ok\n"); }
+
 static void cmd_drop(struct helper *H, int id) {
  struct buf *b = buf_of(H, id);
  if (b) buf_free(b), *b = H->bufs[--H->nbuf];
@@ -301,7 +350,7 @@ static int words(char *s, double *v, int max) {
  return n; }
 
 static void cmd_frame(struct helper *H, char *args) {
- enum { lead = 26 };   // w h off clear fr fg fb near far tone, then the 16 of m
+ enum { lead = 27 };   // w h off clear fr fg fb near far tone flags, then the 16 of m
  double v[lead + 4096];
  int n = words(args, v, lead + 4096);
  if (n < lead) { dprintf(1, "err frame args\n"); return; }
@@ -310,11 +359,22 @@ static void cmd_frame(struct helper *H, char *args) {
  if (!out || !target(H, w, h)) { dprintf(1, "err frame target\n"); return; }
  int32_t clear = (int32_t) v[3];
  glViewport(0, 0, w, h);
- glClearColor((float) (clear & 255) / 255, (float) (clear >> 8 & 255) / 255, (float) (clear >> 16 & 255) / 255, 0);
+ if (clear < 0) glClearColor(0, 0, 0, 1);
+ else glClearColor((float) (clear & 255) / 255, (float) (clear >> 8 & 255) / 255, (float) (clear >> 16 & 255) / 255, 0);
  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ glDisable(GL_CULL_FACE);
+ if (H->upend) {
+  glUseProgram(H->uprog);
+  glUniform2i(H->uu_cs, H->uw, H->uh); glUniform2i(H->uu_fs, w, h);
+  glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, H->ud);
+  glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->uc);
+  glDrawArrays(GL_TRIANGLES, 0, 3);
+  H->upend = 0; }
+ // y flips in clip, so what faces the eye winds clockwise here
+ if ((int) v[10] & 8) glEnable(GL_CULL_FACE), glCullFace(GL_BACK), glFrontFace(GL_CW);
  glUseProgram(H->prog);
  float m[16];
- for (int i = 0; i < 16; i++) m[i] = (float) v[10 + i];
+ for (int i = 0; i < 16; i++) m[i] = (float) v[11 + i];
  glUniformMatrix4fv(H->u_m, 1, 1, m);   // row-major, so transposed
  glUniform3f(H->u_fog, (float) v[4], (float) v[5], (float) v[6]);
  glUniform2f(H->u_fz, (float) v[7], v[8] > v[7] ? (float) (1 / (v[8] - v[7])) : 0);
@@ -360,6 +420,7 @@ int glhelp_main(int argc, char **argv) {
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
   else if (!strncmp(l, "buf ", 4) && sscanf(l + 4, "%d %d %d %ld", &id, &a, &b, &off) == 4) cmd_buf(H, id, a, b, (size_t) off);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
+  else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);
   else if (!strncmp(l, "frame ", 6)) cmd_frame(H, l + 6);
   else if (!strcmp(l, "quit")) break;
   else dprintf(1, "err what: %s\n", l); }
