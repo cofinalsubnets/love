@@ -1044,7 +1044,7 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-aarch64.fd; \
 	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
 	 $(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd \
-	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 900s)" \
+	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; kvm on a kvm-a64 host, else TCG, ceiling 900s)" \
 	 && $m $(S)/tools/ktest.l $(ko)/esp-a64 $$fw a64; fi
 endif
 
