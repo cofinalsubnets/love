@@ -233,7 +233,7 @@
  savers {"pom" {'fps 8 'new pom-new 'draw pom-draw}
          "court" {'fps 8 'new court-new 'draw court-draw}
          "grass99" {'fps 8 'new meadow-new 'draw meadow-draw}
-         "slop" {'fps 12 'new slop-new 'draw slop-draw}
+         "slop" {'fps 30 'new slop-new 'draw slop-draw}
          "life" {'fps 10 'new life-new 'draw life-draw}
          "matrix" {'fps 15 'new rain-new 'draw rain-draw}}
  saver-names (sort (keys savers))
