@@ -541,6 +541,24 @@
                                   + map ld (filter (v \ !(rr? v)) (at i))))))
                     ^n)
              (pin g 'rasls (map sl ok + g 'rasls), ok) sl]))
+   ; a spill slot a register still holds: its reload into that register, or its store back from it,
+   ; goes. a label forgets them all; a store near the slot, or into the frame by an index, the slot;
+   ; a write the register
+   (rakeep g fs)
+    (: sls (foldl (t \ o \ pin t o 1) {} (g 'rasls))
+       (has k o r) (any (e \ e = [o r]) k)
+       (fst? f) (peep a4base <f -1 = 1 && f 1 = 'r4)
+       (go fs k)
+        (fs @ (f . u)
+              (f @ (['ld r 'r4 o] && sls o && has k o r) (go u k)
+                   (['st 'r4 o r] && sls o && has k o r) (go u k)
+                   (['ld r 'r4 o] && sls o && raok? g r) (f . go u ([o r] . filter (e \ <e != o && <>e != r) k))
+                   (['st 'r4 o r] && sls o && raok? g r) (f . go u ([o r] . filter (e \ <e != o) k))
+                   ('label . _) (f . go u ())
+                   _ (fst? f ? (f . go u (charm? (f 2) && elem <f stops9 ? (filter (e \ abs (<e - f 2) >= 8) k) ()))
+                        (raops g f @ [_ d] (f . go u (filter (e \ nelem <>e d) k)) _ (f . go u ()))))
+              _ ())
+     (two? (g 'rasls) ? (go fs ()) fs))
    ; the forms over their registers: a copy onto itself and the use markers gone, a fix its body
    (rasub fs loc)
     (: (sub x) (lovr? x ? (loc x) x)

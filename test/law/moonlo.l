@@ -80,6 +80,11 @@
          tl ['(ld r3 r4 -8) '(mov sp r4) '(pop r4)]
          (elem '(mov r3 r0) (unframe g (hd + ['(mov r3 r0) '(mov r10 r3) '(cmp r3 0) '(br eq L) '(mov r0 r3) '(label L)] + tl + ['(ret)])) &&
           elem '(mov r10 r0) (unframe g (hd + ['(mov r3 r0) '(mov r10 r3)] + tl + ['(jmpr r10)]))))
+      ; a spill slot its register still holds: the reload past a call that keeps it goes, and the store back
+      ; of it, until a label
+      (rakeep (pin g 'rasls '(-16)) [['st 'r4 -16 'r3] ['call 'f] ['ld 'r3 'r4 -16] ['add 'r0 'r0 'r3] ['st 'r4 -16 'r3]
+                                     ['label 'L] ['st 'r4 -16 'r3]])
+         = [['st 'r4 -16 'r3] ['call 'f] ['add 'r0 'r0 'r3] ['label 'L] ['st 'r4 -16 'r3]]
       ; what a diagnosis refuses
       (all lnay ["int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"
                  "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"
