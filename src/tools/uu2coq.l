@@ -4,6 +4,7 @@
 ; them, and supplies the universe check uu (type-in-type) lacks. skips are counted.
 ; a def exports iff it is translatable and every global it mentions exports. the one `axm`,
 ; univalence, is postulated as a universe-polymorphic Axiom, so the tower above it exports too.
+; a defind is an Inductive, whose nm_rect rocq lays as uu does.
 ; Run: out/love src/tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
 (borrow 'posix)
@@ -27,6 +28,7 @@
    _ (reads (open "test/uulay.l" "r"))
    _ (reads (open "test/uuel.l" "r"))
    _ (reads (open "test/uugc.l" "r"))
+   _ (reads (open "test/uuind.l" "r"))
    _ (reads (open "test/uupatch.l" "r"))
    _ (reads (open "test/uuwm.l" "r"))
    _ (reads (open "test/uuwmlaw.l" "r"))
@@ -54,19 +56,24 @@
    (deq? c) (two? c && (<c = 'defn || <c = 'defq || <c = 'defvc))
    (elq? c) (two? c && <c = 'elq)
    (axq? c) (two? c && <c = 'axm)
+   (inq? c) (two? c && <c = 'defind)
+   ; an ind entry is [ind nm [ps is cs] () names], its telescopes as (x A) pairs
+   (tel r) (r @ (x . A . u) ([x (sugar A)] . tel u) ())
    (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
                 (elq? c) ['def (unq (c 1)) (sugar (unq (c 2))) ((ev 'ELT) (unq (c 1)))]
-                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])
+                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()]
+                (inq? c) (: nm (c 1) cs (map (k \ [<k (tel (k 1)) (sugar (k 2))]) (drop 4 c))
+                          ['ind nm [(tel (c 2)) (tel (c 3)) cs] () (nm . ((intern "\(nm)_rect") . (map cap cs)))]))
    (run-q? c) (two? c && <c = 'defvcs)
    (run-of c acc) (foldl (a \ e \ ['def <e (sugar (e 1)) (sugar (e 2))] . a) acc (vcs-of >c))
-   (kids ks acc) (two? ks ? (kids >ks (? (deq? <ks || elq? <ks || axq? <ks) (entry <ks . acc) (run-q? <ks) (run-of <ks acc) acc)) acc)
+   (kids ks acc) (two? ks ? (kids >ks (? (deq? <ks || elq? <ks || axq? <ks || inq? <ks) (entry <ks . acc) (run-q? <ks) (run-of <ks acc) acc)) acc)
    (gather fs acc) (two? fs ?
                       (gather >fs (<fs @ F
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || elq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat`: the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (app2 (forms (open "test/uuzbvc.l" "r")) (app2 (forms (open "test/uuzx.l" "r")) (app2 (forms (open "test/uuzxvc.l" "r")) (app2 (forms (open "test/uumag.l" "r")) (forms (open "test/uumagvc.l" "r"))))))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuind.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (app2 (forms (open "test/uuzbvc.l" "r")) (app2 (forms (open "test/uuzx.l" "r")) (app2 (forms (open "test/uuzxvc.l" "r")) (app2 (forms (open "test/uumag.l" "r")) (forms (open "test/uumagvc.l" "r"))))))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r"))))))))))))))))))))) ())
 
    ; a gathered def must be whole (a paren slip reads () as the term) and pinned (a partial
    ; defn is a truthy closure that pins nothing). `== ()`, not `!`: a term of 0 is legal.
@@ -76,7 +83,8 @@
         ents)
 
    ; corpus-wide names: a global reference vs a bound var
-   nt (tablet 0) _ (map (e \ (pin nt (e 1) 1)) ents)
+   (provs e) (<e = 'ind ? (e 4) [(e 1)])
+   nt (tablet 0) _ (map (e \ each (provs e) (x \ pin nt x 1)) ents)
    (corpus? x) (peep nt x 0)
 
    ; explicit skips: type-in-type detonations coqc's universe check rejects
@@ -138,21 +146,26 @@
    (ment-l l acc) (two? l ? (ment-l >l (ment <l acc)) acc)
 
    ; candidates: a def or an axm, translatable, not skipped, uu-certified
-   (cand? e) ((<e = 'def || <e = 'axm) && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
+   (cand? e) ((<e = 'def || <e = 'axm || <e = 'ind) && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
    cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep defs all of whose mentions survive ---
    (allin? l ex) (two? l ? (peep ex <l 0 && allin? >l ex) 1)
-   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (pin a (e 1) 1, a) a)) (tablet 0) cs)
+   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (each (provs e) (x \ pin a x 1), a) a)) (tablet 0) cs)
    ; settled when the key COUNT stops moving (pass only shrinks). not glued $: it nets any
    ; tablet to 1 and would stop after one pass.
    (fix ex) (pass cands ex @ ex2 (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
-   ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
+   ex0 (foldl (\ a e (each (provs e) (x \ pin a x 1), a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit in source order: foldr keeps ents' order, definitions before uses ---
+   (binds bs) (cat (map (b \ " (" + bvar <b + " : " + u2c (b 1) + ")") bs))
    (emit e) (? (<e = 'axm) (cat ["Axiom " (rocqn (e 1)) " : " (u2c (e 2)) ".\n"])
+               (<e = 'ind) (e 2 @ [ps is cs]
+                (cat ["Inductive " (rocqn (e 1)) (binds ps) " : " (two? is ? ("forall" + binds is + ", ") "") "Type :="
+                      (cat (map (c \ "\n  | " + rocqn <c + " : " + (two? (c 1) ? ("forall" + binds (c 1) + ", ") "") + u2c (c 2)) cs))
+                      ".\n"]))
                (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=\n"
                      "  " (u2c (e 3)) ".\n"]))
    exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
@@ -246,6 +259,6 @@
               "Print Assumptions add_comm_std.\n"
               "Print Assumptions add_assoc_std.\n"
               "Print Assumptions mul_comm_std.\n\n"
-              "(* " (show #(keys keep)) " exported / " (show #ents) " corpus entries swept;\n"
+              "(* " (show #exports) " exported / " (show #ents) " corpus entries swept;\n"
               "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)\n"]))
    (quit 0))
