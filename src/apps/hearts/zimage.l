@@ -2,7 +2,8 @@
 ; system one file. the root is a newc cpio built into the kernel (CONFIG_INITRAMFS_SOURCE), so
 ;   love .. zimage.l root OUT LOVE FW [STAMP [SITE]]   writes OUT/root.cpio, the kernel's input
 ;   love .. zimage.l disk OUT IMAGE DTB FW [STAMP]      writes OUT/disk.img from that kernel
-; the disk: 1 boot (FAT32): the firmware, config.txt, cmdline.txt, Image, the dtb; 2 data (ext4).
+; the disk: 1 boot (FAT32): the firmware, autoboot.txt, config.txt, cmdline.txt, Image, the dtb;
+; 2 data (ext4).
 ; an update is a second file beside the first: Image.new, run once by the firmware's tryboot,
 ; renamed over Image when the board comes up on it, else a plain reboot runs Image again.
 ; a root: love as /bin/love and /bin/sh, helm's script as init (/bin/helm), an app that says the
@@ -110,14 +111,23 @@
      (? !(two? (lstat "/boot/Image.new")) (say err "update: no /boot/Image.new\n", quit 1)
         (sync 0, say err "update: a trial of Image.new\n", reboot "0 tryboot"))
      """
-   ; a trial kept: on the firmware's tryboot, the link up within 2 minutes renames Image.new
-   ; over Image; down, a plain reboot runs Image again
+   ; a trial kept: on the firmware's tryboot, and the running kernel's banner inside Image.new,
+   ; the link up within 2 minutes renames Image.new over Image; down, a plain reboot runs Image
    commit-l """
      (borrow '(posix bytes))
      (: tb (uread "/sys/firmware/devicetree/base/chosen/bootloader/tryboot" @ [1 s] (rdbe s 0 4) 0)
+        v (uread "/proc/version" @ [1 s] (snip s 0 (#s - 1)) "?")
+        ; read a piece at a time: the board has no room for the whole Image beside helm
+        (ours? _) (open "/boot/Image.new" "r" @ q
+                    (hot? q ? (: (go t) (see q @ c (c < 0 ? 0 (unsee q c, t + chug q @ x
+                                         (has? x v ? 1 (go (snip x (max 0 (#x - #v)) #x))))))
+                                 r (go "")
+                                 (close q, r))
+                       0))
         (up? _) (uread "/sys/class/net/wlan0/operstate" @ [1 s] (snip s 0 2 = "up") 0)
         (wait k) (k = 0 ? 0 (up? 0 ? 1 (rest 1000, wait (k - 1))))
         (? !tb 0
+           !(ours? 0) (say err "commit: the trial is not Image.new's kernel, nothing kept\n", 1)
            (wait 120) (rename "/boot/Image.new" "/boot/Image" @ r
                         (nom? r ? (say err ("commit: rename refused (" + show r + ")\n"), 1)
                            (sync 0, say err "commit: Image.new is Image\n", 0)))
@@ -174,6 +184,15 @@
      kernel=Image.new
      """ + "\n")
    cmdline "console=ttyS1,115200 rdinit=/bin/helm panic=5\n"
+   ; the zero 2 w's bootcode hands start.elf the tryboot flag only under tryboot_a_b: both
+   ; modes name this one part, and config.txt's [tryboot] picks the file
+   autoboot ("""
+     [all]
+     tryboot_a_b=1
+     boot_partition=1
+     [tryboot]
+     boot_partition=1
+     """ + "\n\n")
 
    verb (as 0)
    odir (as 1)
@@ -195,7 +214,7 @@
        fsz (256 * mib)  dsz (64 * mib)
        _ (2 * #kernel + 16 * 1048576 < fsz * 512 || gone "the boot part holds no second Image")
        pa mib  pd (pa + fsz)
-       boot (fatimg pa "BOOT" fsz [["config.txt" config] ["cmdline.txt" cmdline]
+       boot (fatimg pa "BOOT" fsz [["autoboot.txt" autoboot] ["config.txt" config] ["cmdline.txt" cmdline]
                        ["bootcode.bin" (fw "bootcode.bin")] ["start.elf" (fw "start.elf")]
                        ["fixup.dat" (fw "fixup.dat")] ["LICENCE.broadcom" (fw "LICENCE.broadcom")]
                        ["Image" kernel] ["bcm2837-rpi-zero-2-w.dtb" dtb]])

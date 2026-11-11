@@ -31,6 +31,7 @@
            (has? (peep (at1 "bin/helm") 'body "") "#!/bin/love\n")
            ('chr = peep (at1 "dev/console") 'kind 0) ([5 1] = peep (at1 "dev/console") 'rdev ())
            (has? (peep (at1 "etc/helm.l") 'body "") "(oneshot commit (after boot wifi sshd)")
+           (has? (peep (at1 "app/commit.l") 'body "") "(has? x v ? 1")
            (has? (peep (at1 "app/data.l") 'body "") "/dev/mmcblk0p2")
            ; each directory ahead of what it holds
            (all (e \ (: n (peep e 'nom "") k (foldl (a \ i \ n i = 47 ? i a) -1 ^#n)
@@ -49,8 +50,9 @@
    b (fat-mount [(lba \ k \ snip im ((2048 + lba) * 512) ((2048 + lba + k) * 512)) (lba \ b \ ()) 524288])
    (rd p) <>(fat-read b p)
    cf (rd "config.txt")
-   _ (test (["Image" "LICENCE.broadcom" "bcm2837-rpi-zero-2-w.dtb" "bootcode.bin" "cmdline.txt" "config.txt"
-             "fixup.dat" "start.elf"] = sort <>(fat-ls b ""))
+   _ (test (["Image" "LICENCE.broadcom" "autoboot.txt" "bcm2837-rpi-zero-2-w.dtb" "bootcode.bin" "cmdline.txt"
+             "config.txt" "fixup.dat" "start.elf"] = sort <>(fat-ls b ""))
+           ("[all]\ntryboot_a_b=1\nboot_partition=1\n[tryboot]\nboot_partition=1\n\n" = rd "autoboot.txt")
            (all (f \ rd f = "the " + f) fws)
            ("a kernel" = rd "Image") ("a tree" = rd "bcm2837-rpi-zero-2-w.dtb")
            (2048 = at 2048 28 4) ("BOOT       " = snip im (2048 * 512 + 71) (2048 * 512 + 82))
