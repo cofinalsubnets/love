@@ -4,7 +4,7 @@
 ;   (lam x b)  (tpair a b) (ii1 a) (ii2 b)   checked against the goal, as the kernel does
 ;   (f a _ b)  a spine; _ is an argument found by unifying with the goal or a later argument
 ;   (rev (h ..) t)   t proves the goal with h back under it, h applied after
-;   (ind l n c)      induction on a list; c binds x, t, ih
+;   (ind l n c)      induction on a list, or a family like it; c binds x, t, ih
 ;   (nind k z c)     induction on a nat; c binds j, ih
 ;   (cases w f g)    a coprod; (ifb c f g) a bool, f and g binding c's value as a path
 ;   (rw e h)         h proves the goal with e's right end read as its left
@@ -204,6 +204,9 @@
       (terms _) (: (go i u) (u @ (a . w) ((arg i a) . go (i + 1) w) ()) (go 0 as))
      (G == 0 ? 0 (el-uni d (res 0) G), loop 0, h . terms 0))
 
+   ; a family's type, its name and params
+   (el-fam v u) (el-res v @ ['na f a] (el-fam f (a . u)) ['nv nm] (charm? nm ? () [nm u]) ())
+
    (el-inf cx en d t) (el-inq cx en d t 0)
    (el-inq cx en d t G) (two? t && !(memq <t '(pi total2 paths coprod succ idpath nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) ? (el cx en d t G) t)
 
@@ -237,10 +240,8 @@
        (: Gt (wrap ns) (. (el cx en d b (V Gt)) ns)))
      ['ind l n c]
       (: l2 (A l)
-       (Ty l2 @ ['sig _ q]
-        (capp q 1 @ ['sig A1 _]
-         (Sp ['grec (R A1) ['el-raw (el-motive en d G (V l2))] n c l2])
-         (scare 'el-ind t))
+       (el-fam (Ty l2) () @ [nm ps]
+        (Sp (el-cat ((intern "\(nm)_rect") . map R ps) [['el-raw (el-motive en d G (V l2))] n c l2]))
         (scare 'el-ind t)))
      ['cases w f g]
       (: w2 (A w)
