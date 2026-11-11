@@ -12,6 +12,7 @@ extern u64 efi_call(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e);
 extern u64 efi_call6(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
 extern void efi_go(u64 pml4, u64 entry);
 extern void efi_stay(u64 pml4, u64 entry);
+extern u8 efi_back[];
 
 #define HHDM 0xffff800000000000ull
 
@@ -46,6 +47,7 @@ struct k_boot {
  void *image; u64 image_len, initrd, initrd_len;
  void *efi_st, *efi_image;             // love.stay: boot services kept, and our handle
  u64 (*efi_call)(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
+ void *efi_back;
  u64 tsc0, tsc_khz; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
@@ -99,7 +101,7 @@ static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
  u64 n = bestn - 65536;                                // 256M stays the firmware's, for what it loads
  if (efi_call(bs[5], 2, 2, n, (u64) &best, 0)) return die("no pages for the heap");
  kb->ram_n = 1, kb->ram[0].base = best, kb->ram[0].len = n * 4096;
- kb->efi_st = sys, kb->efi_image = handle, kb->efi_call = efi_call6;
+ kb->efi_st = sys, kb->efi_image = handle, kb->efi_call = efi_call6, kb->efi_back = efi_back;
  kb->tsc0 = rdtsc();
  efi_stay((u64) pt, entry);
  return 1; }

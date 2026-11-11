@@ -3,7 +3,7 @@
 ; the thunks are laid first so the PE entry is the first text byte. x86-64 UEFI is ms_abi
 ; against sysv C, so both directions shuffle; a64 is AAPCS64, so only efi_go carries weight.
 ;   efiboot -- firmware enters here.
-;   efi_call -- every UEFI service goes back OUT through this.
+;   efi_call -- every UEFI service goes back OUT through this; efi_back, a protocol of ours IN.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
 ;     our tables in, jump to the kernel. never returns.
 
@@ -45,6 +45,23 @@
       (mov r1 r5)
       (callr r0)
       (add sp sp 56)
+      (ret)
+      ;; efi_back: a protocol we install, called by firmware or a child image. `this` (rcx)
+      ;; leads with the ms entry, then the sysv C it lands in: fn(this, rdx, r8, r9, arg5)
+      (label efi_back)
+      (push r5)
+      (push r6)
+      (sub sp sp 8)
+      (ld r0 r1 8)                ; this->fn
+      (mov r6 r1)                 ; rdi = this
+      (mov r5 r2)                 ; rsi = ms rdx
+      (mov r2 r7)                 ; rdx = ms r8
+      (mov r1 r8)                 ; rcx = ms r9
+      (ld r7 sp 64)               ; r8 = the ms stack arg, past the shadow, the two pushes and the pad
+      (callr r0)
+      (add sp sp 8)
+      (pop r6)
+      (pop r5)
       (ret)
       ;; efi_go(pml4, entry): the new tables identity-map the low 4G, so the loader and its
       ;; stack ride through. EFER.NXE first: the tables NX the hhdm, and bit 63 is reserved
@@ -93,7 +110,7 @@
       (isb)
       (jmpr r1))                  ; the kernel's entry, never back
 
-   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_call" "efi_call6" "efi_go" "efi_stay"))
+   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_back" "efi_call" "efi_call6" "efi_go" "efi_stay"))
    (efi-tgt arch) (arch @ "a64" 'a64 'x64)
    (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)

@@ -61,6 +61,7 @@ struct k_boot {                       // uefi/loader.c copies this layout by han
  void *efi_st;                       // the EFI system table
  void *efi_image;                    // our image handle, LoadImage's parent
  uintptr_t (*efi_call)(void *fn, uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f);
+ void *efi_back;                     // a protocol's ms entry: calls the sysv fn its second word holds
  uint64_t tsc0, tsc_khz; };          // the clock: the tsc at the hand-off, and its rate
 
 extern struct k_boot kboot;
