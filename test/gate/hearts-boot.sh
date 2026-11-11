@@ -1,20 +1,19 @@
 #!/bin/sh
-# test/gate/hearts-boot.sh -- hearts rung 0 under qemu virt (a64): the image boots our chooser
-# (src/inle/uefi/slot.c), which inflates and starts our kernel (the Image test_hearts certified,
-# gzipped), and helm as pid 1 off a squashfs root, then walks four updates in one run: one signed
-# by another key (refused), one whose root lost a byte under a good head (refused once it streams
-# past), v2 into slot b (tried, well, committed), and v3 into slot a, which never says it is well --
-# so the watch restarts it and it comes back on b. the serial log must say so, in order.
+# test/gate/hearts-boot.sh -- hearts rung 0 under qemu virt (a64): the image boots love's boot
+# menu (src/inle/uefi/loader.c, love.elf as the firmware's guest), which starts linux (the Image
+# test_hearts certified) and helm as pid 1 off a squashfs root; the app says its version and powers
+# off. the serial log must say so, in order.
 # and the image is reproducible: its a64 half (test/gate/hearts-run.sh) bakes, builds and boots on
-# an a64 host under kvm, and here the chooser and the image are built again -- twice, from that
+# an a64 host under kvm, and here the loader and the image are built again -- twice, from that
 # host's baked love -- and every byte must match. with no a64 host the half runs here (qemu-user,
 # tcg) and the cross-host check is a skip.
-# usage: hearts-boot.sh LOVE XLOVE CAT   (XLOVE the a64 love, CAT the carried tree it bakes from)
+# usage: hearts-boot.sh LOVE XLOVE CAT KELF   (XLOVE the a64 love, CAT the carried tree it bakes
+#        from, KELF the a64 love.elf)
 . test/gate/skip.sh
 . test/gate/dl.sh
 set -u
 
-love=$1 xlove=$2 cat=$3
+love=$1 xlove=$2 cat=$3 kelf=$4
 C=${HEARTS_CACHE:-$HOME/.cache/hearts}
 # the Image the last green test_hearts certified, by its hash
 KSHA=$(cat "$C/Image-6.19.14.green" 2>/dev/null)
@@ -32,11 +31,11 @@ trap 'rm -rf "$w"' EXIT
 # the a64 half's directory: the unbaked love, its tree, the kernel, the firmware, the sources
 s=$w/ship
 mkdir -p "$s/fw"
-cp "$xlove" "$s/love" && cp "$cat" "$s/cat.l" && cp "$K" "$s/Image" && cp test/gate/hearts-run.sh "$s/" \
+cp "$xlove" "$s/love" && cp "$cat" "$s/cat.l" && cp "$K" "$s/Image" && cp "$kelf" "$s/love.elf" && cp test/gate/hearts-run.sh "$s/" \
   && cp "$fw" "$s/fw/code.fd" && cp "$(dirname "$fw")/ovmf-vars-aarch64.fd" "$s/fw/vars.fd" || fail "cannot lay $s"
 for f in src/apps/sqfs.l src/apps/ext4.l src/apps/hearts/image.l src/apps/hearts/dev.l src/apps/hearts/app.l \
     src/apps/helm/unit.l src/apps/helm/sup.l src/apps/helm/moor.l src/apps/helm/helm.l \
-    src/inle/uefi/slot.c src/love/compress/inflate.h src/love/compress/prefix.h src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
+    src/inle/uefi/loader.c src/inle/uefi/mkefi.l src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
     src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/pe.l; do
   mkdir -p "$s/$(dirname $f)" && cp "$f" "$s/$f" || fail "cannot lay $f"
 done
@@ -61,30 +60,24 @@ cp "$r/serial.log" /var/tmp/hearts-boot.serial 2>/dev/null
 # the story, in order: each line must follow the one before it
 grep -a '^hearts: ' "$r/serial.log" | tr -d '\r' > "$w/story"
 pos=0
-for want in "hearts: slot a" "hearts: app v1" "hearts: well on slot a" "refused /dev/vdb: not signed" \
-    "refused /dev/vdc: a part is not what its head signed" \
-    "written to slot b" "hearts: slot b, a trial" "hearts: app v2" "well on slot b: committed" \
-    "written to slot a" "hearts: slot a, a trial" "hearts: app v3" "app sick" \
-    "slot a never said it was well: back to slot b" "hearts: slot b" "hearts: app v2" "hearts: done"; do
+for want in "hearts: up" "hearts: app v1" "hearts: done"; do
   n=$(tail -n +$((pos + 1)) "$w/story" | grep -n -F -m1 -- "$want" | cut -d: -f1)
   [ -n "$n" ] || { cat "$w/story"; fail "the log never says '$want' after line $pos"; }
   pos=$((pos + n))
 done
 
-# the same bytes here: the chooser by this host's mooncc, the image twice from the a64 half's love
-"$love" mooncc -t a64 -c src/inle/uefi/slot.c -o "$w/slot.o" || fail "mooncc on slot.c"
+# the same bytes here: the loader by this host's mooncc, the image twice from the a64 half's love
+"$love" mooncc -t a64 -c src/inle/uefi/loader.c -o "$w/loader.o" || fail "mooncc on loader.c"
 { echo "(borrow 'holo)"; cat src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
     src/love/holo/elf.l src/love/holo/obj.l src/love/holo/link.l src/love/holo/pe.l src/inle/uefi/mkefi.l
-  echo "(mkboot \"$w/BOOTAA64.EFI\" \"a64\" (list \"$w/slot.o\"))"; } | "$love" > "$w/efi.log" 2>&1 \
+  echo "(mkboot \"$w/BOOTAA64.EFI\" \"a64\" (list \"$w/loader.o\"))"; } | "$love" > "$w/efi.log" 2>&1 \
   || { tail -5 "$w/efi.log"; fail "mkefi"; }
-cmp -s "$w/BOOTAA64.EFI" "$r/BOOTAA64.EFI" || fail "the chooser built here differs from the a64 host's"
-seed=$(printf 'hearts rung 0 key' | sha256sum | cut -c1-64)
-bad=$(printf 'hearts rung 0 other key' | sha256sum | cut -c1-64)
+cmp -s "$w/BOOTAA64.EFI" "$r/BOOTAA64.EFI" || fail "the loader built here differs from the a64 host's"
 for i in 1 2; do
   mkdir -p "$w/i$i"
-  "$love" -l src/apps/sqfs.l -l src/apps/ext4.l src/apps/hearts/image.l "$w/i$i" "$r/love" "$K" "$r/BOOTAA64.EFI" "$seed" "$bad" "$stamp" \
+  "$love" -l src/apps/sqfs.l -l src/apps/ext4.l src/apps/hearts/image.l "$w/i$i" "$r/love" "$K" "$r/BOOTAA64.EFI" "$kelf" "$stamp" \
     || fail "the image here ($i)"
-  (cd "$w/i$i" && sha256sum disk.img u1.hup u2.hup u3.hup u4.hup) > "$w/i$i.shas"
+  (cd "$w/i$i" && sha256sum disk.img) > "$w/i$i.shas"
   grep -v ' BOOTAA64.EFI$\| love$' "$r/shas" | cmp -s - "$w/i$i.shas" \
     || { diff "$w/i$i.shas" "$r/shas" >&2; fail "the image built here ($i) differs from the a64 host's"; }
 done
@@ -92,4 +85,4 @@ img=$(grep ' disk.img$' "$r/shas" | cut -c1-16)
 case $where in
   here*) gate_skip "hearts-boot: story ok and the image ($img) the same twice here, but no a64 host to build it (bee's registry: kvm-a64), skipped" ;;
 esac
-echo "hearts-boot: ok ($where; v1 on a, two refused updates, v2 committed on b, v3 reverted to b; the image $img, the same bytes there and twice here)"
+echo "hearts-boot: ok ($where; love's menu started linux, helm ran the app; the image $img, the same bytes there and twice here)"
