@@ -48,20 +48,24 @@
  (bg-sgr b) (b < 256 ? (bgs b) (rgb-sgr "48" b))
  rights (: t {} _ (each ^256 (i \ pin t i ("\e[" + show i + "C"))) t)
 
- ; the first cell from i on where a and p differ, n for none: numbers only, a tight loop
- (cv-next a p i n)
-  (? (i < n && (: k (cw * i) (peep a k 0 = peep p k 0 && peep a (k + 1) 0 = peep p (k + 1) 0
-                                && peep a (k + 2) 0 = peep p (k + 2) 0 && peep a (k + 3) 0 = peep p (k + 3) 0
-                                && peep a (k + 4) 0 = peep p (k + 4) 0 && peep a (k + 5) 0 = peep p (k + 5) 0
-                                && peep a (k + 6) 0 = peep p (k + 6) 0)))
-     (cv-next a p (i + 1) n)
+ ; the first cell from i on where a and p differ, n for none: a row alike as a slice is
+ ; passed whole, the rest a cell at a time
+ (same a p i k) (: s (cw * i) e (cw * (i + k)) (snip a s e = snip p s e))
+ (cv-next a p i n c)
+  (? (n <= i) n
+     (i % c = 0 && same a p i c) (cv-next a p (i + c) n c)
+     (: k (cw * i) (peep a k 0 = peep p k 0 && peep a (k + 1) 0 = peep p (k + 1) 0
+                    && peep a (k + 2) 0 = peep p (k + 2) 0 && peep a (k + 3) 0 = peep p (k + 3) 0
+                    && peep a (k + 4) 0 = peep p (k + 4) 0 && peep a (k + 5) 0 = peep p (k + 5) 0
+                    && peep a (k + 6) 0 = peep p (k + 6) 0))
+     (cv-next a p (i + 1) n c)
      i)
  ; the cells of cv that differ from pv's (or all) as escapes; pv becomes cv's copy.
  ; cursor and pen are tracked, so a changed run costs a glyph each
  (cv-paint cv pv all)
   (: j (jug 0) c (cv 'c) n (cv 'r * c) a (cv 'b) p (pv 'b)
      (go i0 at f0 b0)
-      (: i (all ? i0 (cv-next a p i0 n))
+      (: i (all ? i0 (cv-next a p i0 n c))
          (? (i < n)
             (: k (cw * i) g (peep a k 0) f (pen-at a (k + 1)) b (pen-at a (k + 4))
                _ (? (at = i) 0
@@ -97,24 +101,26 @@
                    (? (u = () && l = ()) () [y x (u = () ? sky u) (l = () ? sky l)]))
      (? (rad <= 0) ()
         (filter two? (catmap (y \ map (cell y) (map (+ x0) ^(x1 - x0))) (map (+ y0) ^(y1 - y0))))))
- ; a few dozen stars, each [y x period phase], off the caption's row
+ ; a few dozen stars, each [y x period phase], off the caption's row and the moon. the moon
+ ; and the caption are laid once on 'base, poured in each frame under the stars
  (pom-new r c seed p0 sty)
   (: n (min 64 (max 16 (r * c // 50)))
      h (max 1 (r - 1))
      p (p0 = () ? (pom-now 0) p0)
-     {'p p 'moon (moon-cells p r c (sty = "natural" ? natural-pen moon-pen))
-      'stars (map (i \ [(dice i 0 seed h) (dice i 1 seed c) (1500 + dice i 2 seed 5000) (dice i 3 seed 628 / 100.0)]) ^n)})
+     moon (moon-cells p r c (sty = "natural" ? natural-pen moon-pen))
+     on (foldl (\ t m (pin t (<m * c + m 1) 1)) {} moon)
+     cap (pom-name p + ", " + show (pom-percent p) + "% of full")
+     cv (cv-new r c @ v (cv-wipe v, v))
+     _ (each moon (m \ cv-put cv <m (m 1) hb (m 2) (m 3)))
+     _ (cv-text cv (r - 1) (max 0 ((c - #cap) // 2)) (snip cap 0 c) 244 sky)
+     {'base (cv 'b)
+      'stars (filter (s \ !(on (<s * c + s 1))) (map (i \ [(dice i 0 seed h) (dice i 1 seed c) (1500 + dice i 2 seed 5000) (dice i 3 seed 628 / 100.0)]) ^n))})
  (star cv s t) (: b (sin (2 * pi * t / s 2 + s 3))
                   (? (b < -0.4) (cv-put cv <s (s 1) 46 238 sky)
                      (b < 0.3) (cv-put cv <s (s 1) twinkle 244 sky)
                      (b < 0.8) (cv-put cv <s (s 1) 43 250 sky)
                      (cv-put cv <s (s 1) 42 255 sky)))
- (pom-draw st cv t)
-  (: r (cv 'r) c (cv 'c) p (st 'p)
-     cap (pom-name p + ", " + show (pom-percent p) + "% of full")
-     (each (st 'stars) (s \ star cv s t),
-      each (st 'moon) (m \ cv-put cv <m (m 1) hb (m 2) (m 3)),
-      cv-text cv (r - 1) (max 0 ((c - #cap) // 2)) (snip cap 0 c) 244 sky))
+ (pom-draw st cv t) (pour (cv 'b) 0 (st 'base) 0 (cw * cv 'r * cv 'c), each (st 'stars) (s \ star cv s t))
 
  ; a cell's upper half on the grid of 2r by c, row major, and its lower c on: st's 'up and
  ; 'lo, and the cells drawn as pens's colours of v there
@@ -236,7 +242,7 @@
      (halves cv (scene-pens ((cite 'meadow 'meadow-pens) m g ((cite 'meadow 'meadow-sky) g)) (m 'bay * 0.5 + 0.25))))
 
  ; --- the savers, by name ---
- savers {"pom" {'fps 8 'new pom-new 'draw pom-draw}
+ savers {"pom" {'fps 4 'new pom-new 'draw pom-draw}
          "court" {'fps 8 'new court-new 'draw court-draw}
          "grass99" {'fps 20 'new meadow-new 'draw meadow-draw}
          "slop" {'fps 30 'new slop-new 'draw slop-draw}
