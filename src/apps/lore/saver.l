@@ -273,7 +273,7 @@
      (? (nm = ()) (puts names, 0)
         (2 < #as || !(known? nm)) (say err ("saver: no saver " + nm + "; there are\n" + names), flush err, 2)
         (saver-run nm)))
- ; until a key: a frame when one is due, a rest until the next
+ ; until a key: a frame when one is due, a heed until the next
  (saver-run nm)
   (: (go s k)
       (? (cue? 0) 0
@@ -283,7 +283,7 @@
                   (<z = s 'r && z 1 = s 'c) s
                   (: n (saver-make (s 'nm) <z (z 1) now ()) (pins n 't0 (s 't0) 'next now, n)))
             _ (? (s2 'next <= now) (: f (saver-step s2 now) (say out f, flush out)) 0)
-            _ (rest (max 5 (s2 'next - clock 0)))
+            _ (heed 0 (max 1 (s2 'next - clock 0)))
             (go s2 k2)))
      (run _) (: z (ttysize 1 1) k0 (clock 0 // 1000)
                 s0 (saver-make (pick nm k0) <z (z 1) (clock 0) ())
