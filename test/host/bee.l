@@ -390,7 +390,7 @@
    (lc h) ("pid " + me + "\nhost " + h + "\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n")
    _ (cell b "ann" (lc "hb")) _ (cell b "g" (lc "hb"))
    _ (cell a "g" (lc "ha")) _ (cell a "pal" (lc "ha"))
-   _ (cr-put a "fakessh" ("for x; do l=$x; done\nHOME='" + b + "' BEE_HOST=hb exec sh -c \"$l\"\n"))
+   _ (cr-put a "fakessh" ("for x; do l=$x; done\nHOME='" + b + "' LOVE_NEST='" + b + "/.love' BEE_HOST=hb exec sh -c \"$l\"\n"))
    _ (mkdir (a + "/.love/etc/bee") 448)
    _ (cr-put (a + "/.love/etc/bee") "hosts" ("name hb\nreach sh " + a + "/fakessh hb\ncaps hive\nlove " + cr-love + "\n"))
    env "BEE_HOST=ha"
