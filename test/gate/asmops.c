@@ -43,7 +43,7 @@ uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
   k_wr_cr3(k_rd_cr3());
   k_wr_cr4(k_rd_cr4());
   return k_rd_cr2() + k_inb(port) + k_inl(port) + k_rdmsr(0xc0000080u) + b + c + d
-       + k_rd_cr0() + k_rd_cr3() + k_vmread(0x4402) + (uint64_t) k_vmlaunch(&grax) + grax; }
+       + k_rd_cr0() + k_rd_cr3() + k_vmread(0x4402) + (uint64_t) k_vmlaunch(&grax) + grax + k_rdtsc(); }
 
 // AND EACH OP MUST EXIST AS ITS OWN FUNCTION for the differential to have
 // anything to compare. It is not enough to CALL them: a `static inline` whose
@@ -66,6 +66,7 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_cr0,
   (void const*) k_rd_cr3,
   (void const*) k_rd_cr4,
+  (void const*) k_rdtsc,
   (void const*) k_wr_cr0,
   (void const*) k_wr_cr3,
   (void const*) k_wr_cr4,

@@ -6,7 +6,7 @@
 // only while a host holds DTR, so a port nobody opened never stalls the console
 #include <stdint.h>
 
-enum { ucdc_pkt = 64, ucdc_tx = 1024 };
+enum { ucdc_pkt = 64, ucdc_tx = 1024, ucdc_rxn = 4096 };   // ucdc_rxn a power of two
 
 // the controller's: control transfers on endpoint 0, then the data endpoints
 static void usbhw_ep0_in(void const *src, uint32_t n);   // n bytes in (n may be 0), status out
@@ -42,7 +42,7 @@ static volatile uint32_t ucdc_cfgd, ucdc_dtr, ucdc_lc_wanted, ucdc_parked, ucdc_
 static uint8_t ucdc_lc[7] = { 0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08 };   // 115200 8N1
 static uint8_t ucdc_txb[ucdc_tx];
 static uint32_t ucdc_txn;
-static volatile uint8_t ucdc_ring[1024];
+static volatile uint8_t ucdc_ring[ucdc_rxn];
 static volatile uint32_t ucdc_w, ucdc_r;
 
 static void ucdc_send(void const *src, uint32_t n, uint32_t want) { usbhw_ep0_in(src, n < want ? n : want); }
@@ -92,7 +92,7 @@ static void ucdc_ep0_out(uint8_t const *src, uint32_t n) {
 // a packet in; the next is armed only while the ring holds a packet's room, else the host
 // waits on a NAK until the reader makes it
 static void ucdc_rx(uint8_t const *src, uint32_t n) {
-  for (uint32_t i = 0; i < n && ucdc_w - ucdc_r < sizeof ucdc_ring; i++) ucdc_ring[ucdc_w++ & 1023u] = src[i];
+  for (uint32_t i = 0; i < n && ucdc_w - ucdc_r < sizeof ucdc_ring; i++) ucdc_ring[ucdc_w++ & (ucdc_rxn - 1)] = src[i];
   if (sizeof ucdc_ring - (ucdc_w - ucdc_r) >= ucdc_pkt) usbhw_rx_arm();
   else ucdc_parked = 1; }
 
@@ -112,6 +112,9 @@ void usb_putc(int c) {
   if (ucdc_txn == ucdc_tx) usb_flush();
   ucdc_txb[ucdc_txn++] = (uint8_t) c; }
 
+// a host has the port open: configured, DTR up
+int usb_up(void) { return ucdc_up(); }
+
 int usb_rx_ready(void) {
   if (ucdc_boot && usbhw_ms() - ucdc_boot > 50) usbhw_reboot();
   return ucdc_w != ucdc_r; }
@@ -119,6 +122,6 @@ int usb_rx_ready(void) {
 // a parked endpoint is armed again here; the interrupt stands off it until then
 int usb_getc(void) {
   while (ucdc_w == ucdc_r) {}
-  int c = ucdc_ring[ucdc_r++ & 1023u];
+  int c = ucdc_ring[ucdc_r++ & (ucdc_rxn - 1)];
   if (ucdc_parked && sizeof ucdc_ring - (ucdc_w - ucdc_r) >= ucdc_pkt) ucdc_parked = 0, usbhw_rx_arm();
   return c; }

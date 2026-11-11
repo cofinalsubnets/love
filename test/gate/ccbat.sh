@@ -56,7 +56,7 @@ a64_via=qemu
 int128s="111-int128 151-w128fuzz 314-u128union 352-u128abi 362-w128ops"
 # the bare boards': what wants a libc we do not link, and what assumes a 64-bit long; gcc's arm build
 # follows no frame chain past level 1, so no witness for 297
-boardnolibc="356-vafnval 72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope 147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 315-alloca-stack 298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign 111-int128 151-w128fuzz 314-u128union 352-u128abi 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 390-qualon 348-libcmore 353-intuint 355-cplxarg 362-w128ops"
+boardnolibc="callpark 356-vafnval 72-quals 110-param5 114-rmwlv 134-tentative 135-uac 142-syntax 146-declscope 147-enumscope 148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr 163-bitfields 164-switchtab 315-alloca-stack 298-malloc-wrap 115-rmwop 165-constcond 166-condconv 283-splitsexpr 228-strictalign 111-int128 151-w128fuzz 314-u128union 352-u128abi 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn 304-size-classes 345-jmpsave 390-qualon 348-libcmore 353-intuint 355-cplxarg 362-w128ops"
 boardskip="354-idioms 81-builtins 99-muslimage 104-u32wrap 105-fneg 120-bfinit 125-widelit 144-gnubuiltins 266-vaarg-struct 297-frameaddr"
 narrow32="105-fneg 144-gnubuiltins 152-rotate 266-vaarg-struct"
 
@@ -141,7 +141,7 @@ case $tgt in
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
     # no libc on the board, and no libgcc: what a link of either side cannot close
-    nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+    nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
       148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
       163-bitfields 164-switchtab 165-constcond 166-condconv 178-toplevelasm 228-strictalign 280-cxf-fuzz
       283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
@@ -200,7 +200,7 @@ case $tgt in
     # a 64-bit long assumed, past an ILP32 word: a shift by 63 and the like, no answer to hold;
     # 180 takes riscv's template on the reference and none here
     skip="105-fneg 144-gnubuiltins 266-vaarg-struct 152-rotate 180-asmsections"
-    nolibc="100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+    nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
       148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
       163-bitfields 164-switchtab 165-constcond 166-condconv 228-strictalign 280-cxf-fuzz
       283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn

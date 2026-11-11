@@ -9,12 +9,17 @@ extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];
 extern void *const vectors[];
 
-int main(void);
+void te_main(void);   // the face: main.c the board shell, kern.c the kernel, psram-test.c
 
 // the stacked frame from mkboot.l's isr_hardfault (r0), kept where an SWD debugger finds it
 volatile struct fault {
   uint32_t r0, r1, r2, r3, r12, lr, pc, psr, sp, magic;
 } fault;
+
+// a face may say a fault on more wires, and end it its own way; by default the uart, then a spin
+__attribute__((weak)) void te_fault_putc(int c) { (void) c; }
+__attribute__((weak)) void te_fault_end(void) { for (;;) {} }   // a bkpt here would re-enter DebugMon
+static void fault_putc(int c) { uart_putc(c), te_fault_putc(c); }
 
 void hardfault_report(uint32_t *frame) {
   fault.r0  = frame[0]; fault.r1 = frame[1]; fault.r2 = frame[2];
@@ -27,10 +32,10 @@ void hardfault_report(uint32_t *frame) {
     uint32_t v[6] = { frame[6], frame[5], (uint32_t)(uintptr_t) frame,
                       REG(0xE000ED28u), REG(0xE000ED38u), REG(0xE000ED34u) };
     for (int k = 0; k < 6; k++) {
-      bput_s(serial_putc, tags[k]);
-      bput_x(serial_putc, v[k], 8); }
-    serial_putc('\r'); serial_putc('\n'); }
-  for (;;) {} }   // a bkpt here would re-enter DebugMon
+      bput_s(fault_putc, tags[k]);
+      bput_x(fault_putc, v[k], 8); }
+    fault_putc('\r'); fault_putc('\n'); }
+  te_fault_end(); }
 
 // XIP without caches fetches every instruction over QSPI, hours for a bake. the default map
 // already types flash and OCRAM cacheable, so no MPU regions; RT1062 L1D: way at bit 30, set at 5
@@ -71,8 +76,8 @@ void cmain(void) {
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
-  serial_init();
-  main();
+  uart_init();
+  te_main();
   for (;;) arm_wfi(); }
 
 // a cold boot can leave a handshake bit stuck: ~10 ms at any clock, 0 = gave up
@@ -122,7 +127,7 @@ void clocks_init(void) {
   REG(GPT1_CR) = GPT_CR_CLKSRC_24M | GPT_CR_EN_24M | GPT_CR_FRR | GPT_CR_ENMOD;
   REG(GPT1_CR) |= GPT_CR_EN; }
 
-void serial_init(void) {
+void uart_init(void) {
   REG(IOMUXC_SW_MUX_GPIO_AD_B0_02) = MUX_ALT(2);
   REG(IOMUXC_SW_MUX_GPIO_AD_B0_03) = MUX_ALT(2);
   REG(IOMUXC_LPUART6_RX_SELECT) = 1u;            // select GPIO_AD_B0_03
@@ -141,7 +146,7 @@ void serial_init(void) {
   while (REG(LPUART_STAT) & LPUART_STAT_RDRF) (void) REG(LPUART_DATA); }
 
 // the 4-deep RX FIFO loses a paste to the editor's redraws, so a soft ring is pumped from
-// serial_putc's TDRE stalls too. an overrun desyncs the FIFO: read what's there, flush, clear
+// uart_putc's TDRE stalls too. an overrun desyncs the FIFO: read what's there, flush, clear
 static uint8_t  rx_ring[1024];
 static uint32_t rx_w, rx_r, rx_lost;
 
@@ -163,23 +168,24 @@ static void rx_pump(void) {
 
 // the drops since the last ask, and clears; not reported from rx_pump, which a notice
 // on this same UART would re-enter
-uint32_t serial_rx_lost(void) {
+uint32_t uart_rx_lost(void) {
   uint32_t n = rx_lost;
   return rx_lost = 0, n; }
 
-void serial_putc(int c) {
+void uart_putc(int c) {
   while (!(REG(LPUART_STAT) & LPUART_STAT_TDRE)) rx_pump();
   REG(LPUART_DATA) = (uint32_t)(c & 0xff); }
 
-int serial_rx_ready(void) {
+int uart_rx_ready(void) {
   rx_pump();
   return rx_w != rx_r; }
 
-int serial_getc(void) {
+int uart_getc(void) {
   while (rx_w == rx_r) rx_pump();
   return rx_ring[rx_r++ & 1023u]; }
 
-uintptr_t love_clock(void) { return REG(GPT1_CNT) / 1000u; }
+// the board clock in ms, for the drivers; a love face answers love_clock from it
+uintptr_t te_ms(void) { return REG(GPT1_CNT) / 1000u; }
 
 // rp2040.c's gpio_* contract; pin is a GPIO2 bit, only the LED's pad muxed. TODO: the full pin map
 void gpio_init(unsigned pin) {

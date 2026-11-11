@@ -90,6 +90,7 @@ void *signal(int, void*);
 int raise(int);
 int sigaction(int, struct sigaction const*, struct sigaction*);
 int sigemptyset(sigset_t*);
+int sigfillset(sigset_t*);
 #define SIGHUP   1
 #define SIGQUIT  3
 #define SIGKILL  9
@@ -123,6 +124,7 @@ int sigemptyset(sigset_t*);
 #define _NSIG     NSIG
 int kill(pid_t, int);
 int sigaddset(sigset_t*, int);
+int sigdelset(sigset_t*, int);
 int sigismember(sigset_t const*, int);
 int sigprocmask(int, sigset_t const*, sigset_t*);
 /* linux's shape on every kernel; reordered for the bsds underneath */

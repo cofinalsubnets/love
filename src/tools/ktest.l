@@ -25,12 +25,12 @@
            m (two? st ? (st 2) 0)
            (16384 = m & 61440))
    ; x64 quits through isa-debug-exit; the virts reset through PSCI/SBI and -no-reboot
-   ; makes that the exit. an elf lane boots under kvm on a bee host with the lane's cap
+   ; makes that the exit. a lane boots under kvm on a bee host with the lane's cap
    ; (kvm-a64 for a64, or KTEST_CAP); a slot is the host's lock, so lanes never crowd a
    ; box past its memory. no host: it boots here
    (env-of k) (getenv k @ v (string? v && 0 < #v ? v ()))
    cap  (env-of "KTEST_CAP" @ c (string? c ? c (arch = "a64" ? "kvm-a64" ())))
-   hosts (? (elf? && string? cap) ((cite 'hosts 'hosts-live) ((cite 'hosts 'hosts-with) cap ())) ())
+   hosts (? (string? cap) ((cite 'hosts 'hosts-live) ((cite 'hosts 'hosts-with) cap ())) ())
    slot (two? hosts ? ((cite 'hosts 'hosts-take) hosts (getpid 0) ("ktest " + iso)) ())
    far  (two? slot)
    mach (arch @ "a64"
@@ -78,16 +78,15 @@
    qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern arch)) "-m" "1536M"]
          + mach + kvm + dargs
          + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media)
-   ; far: the elf goes over in a dir of its own, the disk made beside it, paths as
-   ; basenames, and the dir removed after
+   ; far: the elf or the esp and its firmware go over in a dir of their own, the disk
+   ; made beside them, paths as basenames, and the dir removed after
    r    (far ?
            (: d ("/tmp/ktest-" + show (getpid 0))
-              b (foldl (\ a i (iso i = 47 ? (i + 1) a)) 0 (jot #iso) @ k (snip iso k #iso))
-              rel (map (x \ (? (x = iso) b
-                                (sub-at x 0 "file=" 0) ("file=" + b + ".disk" + snip x (5 + #disk) #x)
-                                x))
-                       qemu)
-              _ (hark ["mkdir" "-p" d]) _ (hark ["cp" iso (d + "/" + b)])
+              (base p) (foldl (\ a i (p i = 47 ? (i + 1) a)) 0 (jot #p) @ k (snip p k #p))
+              b (base iso)
+              rel (map (x \ (: y (replace x iso b) (dir? ? (replace y ovmf (base ovmf)) y))) qemu)
+              _ (hark ["mkdir" "-p" d]) _ (hark ["cp" "-R" iso (d + "/" + b)])
+              _ (dir? ? (hark ["cp" ovmf (d + "/" + base ovmf)]) 0)
               x (hark ["sh" "-c" ((cite 'hosts 'hosts-line) <slot d
                                     ["sh" "-c" ("truncate -s 35840000 " + b + ".disk && exec"
                                                 + foldl (\ a w (a + " '" + w + "'")) "" rel)])])

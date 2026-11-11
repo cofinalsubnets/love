@@ -55,7 +55,14 @@ struct k_boot {                       // uefi/loader.c copies this layout by han
  uintptr_t image_len;
  // qemu's -initrd or PVH's first module, read-only at /proc/initrd; 0 = none
  void const *initrd;
- uintptr_t initrd_len; };
+ uintptr_t initrd_len;
+ // a guest of the firmware (uefi/loader.c with love.stay beside it): boot services live on,
+ // the devices stay theirs. 0 = we own the machine
+ void *efi_st;                       // the EFI system table
+ void *efi_image;                    // our image handle, LoadImage's parent
+ uintptr_t (*efi_call)(void *fn, uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f);
+ void *efi_back;                     // a protocol's ms entry: calls the sysv fn its second word holds
+ uint64_t tsc0, tsc_khz; };          // the clock: the tsc at the hand-off, and its rate
 
 extern struct k_boot kboot;
 

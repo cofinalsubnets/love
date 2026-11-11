@@ -215,6 +215,14 @@ rhost() {
     || { echo "lanes: $1 could not take the gated commit and this box's build -- $d/host-$1.log" >> "$d/remote.log"; return; }
   [ "$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sha256sum out/love out/love.raw out/.dist-cat.l 2>/dev/null)" = "$(sha256sum out/love out/love.raw out/.dist-cat.l 2>/dev/null)" ] \
     || { echo "lanes: $1's love is not this box's; it takes no lanes" >> "$d/remote.log"; return; }
+  # the pinned inputs this box holds and the host lacks go into its dl/, so it fetches none
+  ld=${DL:-$(sh src/tools/dlfind.sh . 2>/dev/null)}
+  out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- mkdir -p dl > /dev/null 2>&1
+  dt=$(out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- sh test/gate/dl.sh --have 2>/dev/null)
+  ds=
+  [ -z "$ld" ] || for n in $(DL=$ld sh test/gate/dl.sh --have); do has "$n" "$dt" || ds="$ds $n"; done
+  [ -z "$ds" ] || tar cf - -C "$ld" $ds | out/love bee --on lanes --where "name=$1" --in "$rd" --at "$sha" -- tar xf - -C dl > /dev/null 2>&1 \
+    || echo "lanes: $1 could not take dl/$ds; its lanes fetch them" >> "$d/remote.log"
   worker "$1" "$3" 1 alone || return
   i=0
   while [ $i -lt "$2" ]; do worker "$1" "$3" 1 & i=$((i + 1)); done
