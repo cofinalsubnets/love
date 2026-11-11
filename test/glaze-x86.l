@@ -328,7 +328,10 @@
               (col px py acc) (? (< py 64) (col px (+ py 1) (+ acc (mand (+ -2.0 (* px 0.046875)) (+ -1.5 (* py 0.046875)) 0.0 0.0 0))) acc)
               (grid px acc) (? (< px 64) (grid (+ px 1) (+ acc (col px 0 0))) acc)
             (grid 0 0))
-       (&& !(= (autonat (anlow g2)) (anlow g2)) (= 87130 (ev g2)) (tr g2)))      ; autonat rewrote it -> native == interp
+       (&& !(= (autonat (anlow g2)) (anlow g2)) (= 87130 (ev g2)) (tr g2)
+           (: (lastto l x) (two? >l ? (<l . lastto >l x) [x])                  ; the outer loop is the native, its args its own
+              g (ev (lastto g2 'grid))
+              (&& (nat? g) (= 87130 (g 0 0)) (= (base-ev (lastto g2 '(grid 32 5))) (g 32 5))))))
     ; D=1 -- a single row of escape counts (cy a constant 0.0) -> native == interp
     (: g1 '(: (mand cx cy zx zy it) (? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0)) (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
               (row px acc) (? (< px 64) (row (+ px 1) (+ acc (mand (- (* px 0.046875) 2.0) 0.0 0.0 0.0 0))) acc)

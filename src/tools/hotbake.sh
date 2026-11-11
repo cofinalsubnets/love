@@ -17,7 +17,7 @@
 # `bake --profile layout` bakes RAW with page-sized stream chunks, and -p runs the fixed workloads below on
 # that, each recording the chunks it woke (LOVE_TOUCH_OUT). both bakes are of the one crew,
 # so their heaps agree word for word. the workloads read only files made here and the tree's
-# own C, under an empty environment, and the binary runs as `love` off PATH: a verb is found by the name it
+# own sources, under an empty environment, and the binary runs as `love` off PATH: a verb is found by the name it
 # is run as, so any other name touches other slots.
 set -u
 here=$(cd "$(dirname "$0")" && pwd) || exit 1
@@ -49,6 +49,25 @@ if [ "${1:-}" = -c ]; then
   run sed -E '/left: abc[13]/{s/[0-9]+/N/g;y/abc/ABC/};3,9d' in
   run awk '{ n[$1] += $2; s += length($0) } END { for (k in n) t += n[k]; print t, s }' in
   run awk '$2 ~ /^[0-9]+7$/ { printf "%s %d\n", toupper($1), $2 * 2 }' in
+  # the apps and commands, each its own hot set: a build, the kore tools, vi, lore. no shell script:
+  # a leaf its forks run native wakes again in every child
+  i=0
+  { echo 'all: o/x0'; while [ $i -lt 200 ]; do
+      echo "o/x$i: o/x$((i + 1)) \$(wildcard t/src/love/*.h)"; printf '\t@echo $@ $(patsubst %%.h,%%.o,$(notdir $^))\n'
+      i=$((i + 1)); done; echo 'o/x200:'; } > "$d/w/Makefile"
+  run make -n
+  run sort -k2 -n in
+  run grep -rn 'lvm_' t/src/love/love.h
+  run diff t/src/love/love.c t/src/love/ev.c
+  run find t/src/apps -name '*.l'
+  run gzip -c in
+  for p in ps-args lf-lines r1-chain; do run pic "t/test/gpic/$p.pic"; done
+  run libra t/src/apps/kore/core.l
+  run -e "(borrow '(vi cli posix)) (: (bytes s) (: (go i acc) (i < 0 ? acc (go (i - 1) (s i . acc))) (go (#s - 1) ())) ls (split \"\\n\" (slurp (open \"t/src/apps/kore/text.l\" \"r\"))) ks \"/lines\\rnnnciwrows\\033jjddp10jyyP:s/acc/ac/g\\r:%s/n/N/g\\rGggdGu200jx.x.x.\\033:1,40>\\r\" (go k st) (k = 0 ? st (go (k - 1) (vfeed st (bytes ks)))) _ (go 20 (vnew ls \"t.l\")) 0)"
+  run -e "(borrow 'saver) (: (go nms) (two? nms ? ((: (f t) (t < 8 ? (saver-frame <nms 40 120 (t * 100) (), f (t + 1)) 0)) 0, go >nms) 0) _ (go saver-names) 0)"
+  for g in court stones; do
+    run -e "(borrow '($g view posix)) (: kb (view-bind view-binds $g-binds) st ($g-new 120 40 [(1.0 * 1790812800 + 15.0 * 3600.0) 3600]$([ $g = stones ] && echo ' 7')) keys [107 107 107 104 107 108 107 106 107 107] (go i) (i < 10 ? ($g-step st (kb (keys (i % 10))), $g-move st, $g-frame st, go (i + 1)) 0) _ (go 0) 0)"
+  done
   [ -s "$d/count" ] || { echo "hotbake: $raw counted no calls" >&2; exit 1; }
   (cd "$d" && env -i PATH="$d" love awk '$2 > m[$1] { m[$1] = $2 } END { for (i in m) if (m[i] >= 1024) print i, m[i] }' count \
      | env -i PATH="$d" love sort -n) > "$calls"

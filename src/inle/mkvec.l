@@ -178,7 +178,8 @@
      ;; then each (handler, type) pair into a 16-byte IDT descriptor, LIDT, the PIT and the PIC.
      ;; x87/SSE is on from kmain's top
      + [['align 8] ['label 'archinit]]
-     + '((la r0 k_tss)           ; the TSS descriptor's base, split as the CPU reads it
+     + '((push r3)               ; rbx is the caller's (sysv), and the IDT walk spends it
+         (la r0 k_tss)           ; the TSS descriptor's base, split as the CPU reads it
          (la r6 gdt64)
          (st2 r6 42 r0)
          (mov r3 r0) (shr r3 16) (st1 r6 44 r3)
@@ -233,6 +234,7 @@
          ;; ICW4 (8086 mode) on both, then an all-zero mask: everything unmasked
          (li r0 1) (li r2 0x21) (outb) (li r2 0xa1) (outb)
          (li r0 0) (li r2 0x21) (outb) (li r2 0xa1) (outb)
+         (pop r3)
          (sti)
          (ret))
      ;; reset by triple fault: LIDT a zero-size IDT, then int 0

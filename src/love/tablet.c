@@ -491,8 +491,6 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=a
 #endif
  char *code;
 #if __STDC_HOSTED__
- // inle declines: its heap rides the NX hhdm window
- if (__love_osv < 0) love_musttail return Answerp(nsp, Sp[1]);
  Have(10 + Width(struct fz));              // 10 covers every cell (5..8 words) + tag + fz
  code = code_install(g, txt(bytes_of(Sp[0])), n);   // reloaded: Have may move it
  if (!code) love_musttail return Answerp(nsp, Sp[1]);
@@ -580,30 +578,37 @@ static lvm(lvm_firstcall_land) {                    // [ans ip]
  Ip = cell(Sp[1]); Sp += 2; love_musttail return Continue(); }
 static union u const firstcall_land[] = {{.ap = lvm_firstcall_land}};
 lvm(lvm_firstcall) {
+ intptr_t n = getcharm(Ip[4].x);
+ if (n > 0) {                                       // calls left before the compile: the twin's
+  Ip[4].x = putcharm(n - 1);
+  union u *e = cell(Ip[1].x);
+  Ip = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? e + 2 : e;
+  love_musttail return Continue(); }
  Have(4);
  union u *v = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 2 : Ip;
  word t = Ip[5].x, *dst = Sp - 4;
  Ip->ap = v[-1].ap = lvm_deferfwd, Ip[5].x = putcharm(0);
  dst[0] = word(v), dst[1] = t, dst[2] = word(firstcall_land), dst[3] = word(Ip);
  Sp = dst; Ip = (union u*) callout_drive; love_musttail return Continue(); }
-// (firstcell interp arity thunk): defercell's cell, compiled by (thunk cell) at its first call
-static lvm(lvm_firstcell) {
+// (hotcell interp arity thunk n): defercell's cell, compiled by (thunk cell) at its call past n;
+// the calls before it are the twin's
+static lvm(lvm_hotcell) {
  word f = Sp[0];
- intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
- if (ar < 1 || oddp(f) || datp(f)
+ intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0, n = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;
+ if (ar < 1 || oddp(f) || datp(f) || n < 0
      || (ar > 1 && (cell(f)->ap != lvm_cur || cell(f)[1].x != putcharm(ar))))
-  love_musttail return Answerp(2, ZeroPoint);
+  love_musttail return Answerp(3, ZeroPoint);
  Have(10);
  union u *k = (union u*) Hp;
  uintptr_t w = 0;
  k[w++].ap = lvm_firstcall;
  if (ar > 1) k[w++].ap = lvm_cur, k[w++].x = putcharm(ar);
  k[w++].ap = lvm_firstcall, k[w++].x = Sp[0], k[w++].ap = lvm_ret, k[w++].x = putcharm(ar - 1);
- k[w++].x = putcharm(0), k[w++].x = Sp[2];
+ k[w++].x = putcharm(n), k[w++].x = Sp[2];
  Hp += w + 1;
  tagthread(k, w);
- love_musttail return Answerp(2, word(k + 1)); }
-LvDef("firstcell", firstcell, 3, "guts");
+ love_musttail return Answerp(3, word(k + 1)); }
+LvDef("hotcell", hotcell, 4, "guts");
 // a profiling bake's counting cell: deferfwd's, its E the call count; at each power of two N, the
 // closure's place in the bake, and the count append to LOVE_BAKE_COUNT (src/tools/hotbake.sh)
 lvm(lvm_countfwd) {

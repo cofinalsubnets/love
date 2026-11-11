@@ -84,16 +84,25 @@ static lvm(lcd) {
   intptr_t w = getcharm(Sp[1]), h = getcharm(Sp[2]);
   int okf = galaxyp(f) && tray(f)->type == love_Z && w > 0 && h > 0 && tray_nelem(tray(f)) >= (uintptr_t) (w * h);
   if (okf) {
-    uint8_t *fr = pdg_frame();
+    // a source row's luma once, and each screen column's source column once
+    uint8_t *fr = pdg_frame(), lr[400];
+    uint16_t sx[400];
+    intptr_t sw = w < 400 ? w : 400, last = -1;
+    for (intptr_t x = 0; x < 400; x++) sx[x] = (uint16_t) (x * sw / 400);
     for (intptr_t y = 0; y < PDG_ROWS; y++) {
       intptr_t sy = y * h / PDG_ROWS;
+      uint8_t const *d = bayer8 + (y & 7) * 8;
+      if (sy != last)
+        for (intptr_t i = 0; i < sw; i++) {
+          uint32_t c = (uint32_t) tray_get_int(tray(f), (uintptr_t) (sy * w + i * w / sw));
+          uint32_t l = (77 * (c >> 16 & 255) + 150 * (c >> 8 & 255) + 29 * (c & 255)) >> 8;
+          lr[i] = (uint8_t) l; }
+      last = sy;
       for (intptr_t xb = 0; xb < 400 / 8; xb++) {
         uint8_t byte = 0;
         for (intptr_t b = 0; b < 8; b++) {
           intptr_t x = 8 * xb + b;
-          uint32_t c = (uint32_t) tray_get_int(tray(f), (uintptr_t) (sy * w + x * w / 400));
-          uint32_t l = (77 * (c >> 16 & 255) + 150 * (c >> 8 & 255) + 29 * (c & 255)) >> 8;
-          byte |= (uint8_t) ((l > 4u * bayer8[(y & 7) * 8 + (x & 7)] + 2u) << (7 - b)); }
+          byte |= (uint8_t) ((lr[sx[x]] > 4u * d[b] + 2u) << (7 - b)); }
         fr[PDG_ROWSIZE * y + xb] = byte; } } }
   Sp += 2;
   Sp[0] = okf ? putcharm(1) : zero;
