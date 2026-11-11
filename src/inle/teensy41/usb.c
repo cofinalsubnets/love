@@ -3,7 +3,7 @@
 // and packets out; packets in are queued by the caller's flush
 #include <stdint.h>
 #include "teensy41.h"
-uintptr_t love_clock(void);
+uintptr_t te_ms(void);
 #define UCDC_VID 0x16C0
 #define UCDC_PID 0x0483
 #define UCDC_PRODUCT "inle teensy41"
@@ -106,7 +106,7 @@ static void usbhw_ep0_stall(void) { USB1(ENDPTCTRL(0)) = 1u << 16 | 1u; }
 static void usbhw_address(uint32_t a) { USB1(DEVICEADDR) = a << 25 | 1u << 24; }
 
 static void usbhw_open(void) {
-  QH(4)->config = ucdc_pkt << 16;                  // 2 out
+  QH(4)->config = ucdc_pkt << 16 | 1u << 29;       // 2 out; no zlt, or a full packet waits on a zero one
   QH(5)->config = ucdc_pkt << 16;                  // 2 in, a zero-length packet ending a full one
   QH(7)->config = 16u << 16;                       // 3 in
   // bulk = 2, interrupt = 3; an unused direction is typed bulk, never control
@@ -133,7 +133,7 @@ static void usbhw_tx(void const *src, uint32_t n) {
   for (uint32_t i = 0; i < n; i++) TXBUF[i] = ((uint8_t const *) src)[i];
   queue(5, TD_TX, TXBUF, n, 0); }
 
-static uint32_t usbhw_ms(void) { return (uint32_t) love_clock(); }
+static uint32_t usbhw_ms(void) { return (uint32_t) te_ms(); }
 
 // the halt the bootloader chip watches for; the monitor off, so the bkpt is not ours
 void arm_halt251(void);

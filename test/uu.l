@@ -6,7 +6,7 @@
                                             ; and the macro is what quotes their operands
    lof (uu 'lof) bridge (uu 'bridge))
 ; ..so hoist the three macros here, in a form of their own: c0 compiles a whole form at once
-(: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx)))
+(: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx defind)))
 
 ; with `uu` missing every defn is a truthy no-op and the corpus paints fake green
 (test

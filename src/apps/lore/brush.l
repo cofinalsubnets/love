@@ -140,9 +140,24 @@
    (near fb) (: lo (fb 'lo) hi (fb 'hi)
      (on k) ((H k >= lo k - 0.01) * (L k - 0.01 <= hi k)) I (iota (on 0 * on 1 * on 2))
      (map I ^#I))
-   ; ..and the medium there, of only those: a brush holding a place a hair off the face is
-   ; near it
-   (medium ks p) (: (go l) (? (atom? l) 0 (inside? (bt <l) p) (bt <l 'air) (go >l)) (go (rev ks)))
+   ; ..and the medium at points ps, a tray, of only those: a brush holding a place a hair off
+   ; the face is near it. the last brush holding a point says, each weighed over all at once
+   (xyz ps) (map (k \ gem-tray [#ps] (map (p \ 1.0 * p k) ps)) ^3)
+   (media ks ps) (: n #ps V (xyz ps) X (V 0) Y (V 1) Z (V 2)
+     (out pl) (pl @ [k 1 d] (V k <= d) [k -1 d] (V k >= 0.0 - d) [q d] (q 0 * X + q 1 * Y + q 2 * Z - d <= 0.0))
+     (in i) (: b (bt i) (b 'land @ () (PD i @ () (X * 0.0 + 1.0) l (foldl (\ m pl (m * out pl)) (out <l) >l))
+                                   L (gem-tray [n] (map (p \ 1.0 * inside? b p) ps))))
+     (n = 0 ? () (foldl (\ m k (m + in k * (1.0 * bt k 'air - m))) (X * 0.0) ks)))
+   ; ..and where a brush of ks has a face on points V facing n either way, a tray, as on-face?'s
+   (sides V pl) (: q (pl 0) (q 0 * V 0 + q 1 * V 1 + q 2 * V 2 - pl 1))
+   (flush ks V n) (foldl (\ m k (: pl (bt k 'planes) par (filter (p \ mag (mag (dot (p 0) n) - 1.0) < 1e-6) pl)
+                                   (? (atom? par) m
+                                      (: on (foldl (\ a p (: s (sides V p) (max a ((s < 1e-4) * (s > -1e-4))))) (V 0 * 0.0) par)
+                                         (max m (foldl (\ a p (a * (sides V p <= 1e-4))) on pl))))))
+                         (V 0 * 0.0) ks)
+   ; ..each brush's planes for media, one across an axis [k sign d], one compare with side's answer
+   (ax q k) (all (j \ j = k || q j = 0) ^3 && mag (q k) = 1)
+   PD (tab (map (b \ map (pl \ (: q (pl 0) k (filter (ax q) ^3) (two? k ? [<k (q <k > 0 ? 1 -1) (pl 1)] pl))) (b 'planes)) bs))
    ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
    ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0)]) bs)) ())
    ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it
@@ -157,10 +172,12 @@
                             others (filter (k \ k != i) ks)
                             pls (catmap (k \ meets (bt k) (b 'planes j)) others)
                             ps (poly-carve f pls)
-                            (catmap (p \ (: c (mid p) fr (medium ks (c+ c (c* 1e-3 n))) bk (medium ks (c+ c (c* -1e-3 n)))
-                                             (fr = bk || any (k \ on-face? (bt k) c n) later ? () [[p (fr @ 1 n (c* -1.0 n))]])))
-                                       ps))))
-     (map (m \ (: q (qs m) (tablet? kp ? [(q 0) (q 1) i [fi m] j] [(q 0) (q 1) i]))) ^#qs))
+                            pt (tab ps) cs (tab (map mid ps)) np #ps
+                            M (media ks (map (i \ c+ (cs i) (c* 1e-3 n)) ^np + map (i \ c+ (cs i) (c* -1e-3 n)) ^np))
+                            F (np = 0 || atom? later ? () (flush later (xyz (map cs ^np)) n))
+                            (catmap (i \ (: fr (M i) (fr = M (np + i) || (tray? F && F i > 0.5) ? () [[(pt i) (fr = 1 ? n (c* -1.0 n))]])))
+                                    ^np))))
+     qt (tab qs) (map (m \ (: q (qt m) (tablet? kp ? [(q 0) (q 1) i [fi m] j] [(q 0) (q 1) i]))) ^#qs))
    (ok? i j) (!(tablet? want) || peep want [i j] 0 > 0)
    (catmap (i \ (: b (bt i) _ (tick 'faces (i / nb)) (catmap (j \ (#(b 'faces j) >= 3 && shut? b j && ok? i j ? (piece i b j) ())) ^#(b 'planes)))) ^nb))
  ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,

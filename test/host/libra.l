@@ -1,12 +1,12 @@
-; test/host/libra.l -- libra, the .l balance tool (src/apps/libra/libra.l): the check and the
-; doc lifter both read src/apps/libra/lint.l, so they agree on what a paren or a comment is
+; test/host/libra.l -- libra, the .l balance tool (src/apps/libra/libra.l): balance is lint.l's
+; text scan, the rules and the doc lifter read spans.l's tree
 ;   cat test/00-init.l test/host/libra.l | out/love
 
 (borrow 'lint)          ; libra splices this, so the session asks too
 (borrow '(salt libra))
 (borrow 'lapiz)         ; the doc verb's surfaces, loaded on that verb alone
 
-; no config anywhere; never (salt 'libra) here, which reads the machine's own ~/.love/etc/libra.l
+; no config anywhere; never (salt 'libra) here, which reads the machine's own nest's etc/libra.l
 (: lt-none {}
    (lt-conf prs) (foldl (t \ p \ (pin t <p >p, t)) {} prs))
 
@@ -66,7 +66,19 @@
  !(lint-of "; old-thing" lt-dep)
  !(lint-of "(f \"old-thing\")" lt-dep)
  !(lint-of "(f old-thing-x)" lt-dep)
- (2 = #(lint-of "(old-thing worse-thing)" lt-dep)))
+ (2 = #(lint-of "(old-thing worse-thing)" lt-dep))
+ ; a quoted name warns at its quote
+ ('((1 4)) = map (w \ [<w <>w]) (lint-of "(f 'old-thing)" lt-dep)))
+
+; the rules read the tree: quoted data behind another prefix is data, a comma run is no
+; singleton, a match's arms and a binder's names stand down, and a torn file has balance alone
+(test
+ !(lint-of "!'(-5)" lt-sing) !(lint-of "$'(1)" lt-sing)
+ !(lint-of "(3 = (1,2,3))" lt-sing)
+ !(lint-of "(x @ (a) 1 _ 2)" lt-sing)
+ !(lint-of "(: (f) 1 (f 2))" lt-sing)
+ (1 = #(lint-of "(: a 1 (go))" lt-sing))
+ ('(balance) = lt-rule (lint-of "(go) (f old-thing" (lt-conf [['singleton 1] ['deprecated 'old-thing]]))))
 
 ; an imbalance is always fatal, an opinion never, whatever a config says
 (test
@@ -74,7 +86,7 @@
  !(fatal? <(lint-of "(go)" lt-sing))
  !(fatal? <(lint-of "(f old-thing)" lt-dep)))
 
-; doc: the header out of the file. lint-cmts reports every comment with its text, and a `;`
+; doc: the header out of the file. libra-cmts reports every comment with its text, and a `;`
 ; inside a string is none
 (: src "#!/usr/bin/env -S love -l
 ; two
@@ -85,7 +97,7 @@
    y 2)
 ; eight
 "
-   cs (lint-cmts src)
+   cs (libra-cmts src)
    (test (6 = tally cs)
          ('(1 1 "/usr/bin/env -S love -l" bang) = <cs)
          ('(2 1 " two" semi) = cs 1)

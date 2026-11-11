@@ -150,8 +150,17 @@ thumb2sp)
     ""
   lane r  test/thumb2/libr.c  test/thumb2/harnessr.c "" 13 30 "thumb2sp memory returns" \
     " = every composite past 4 bytes that is no HFA returns through the hidden pointer in r0; 100+n names the first miss -- see test/thumb2/harnessr.c"
+  # a single's negate stays in the float file
+  printf 'float ng(float x) { return -x; }\n' > "$d/ng.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/ng.c" -o "$d/ng.o" || fail "mooncc ng.c"
+  arm-none-eabi-objdump -d "$d/ng.o" > "$d/ng.s"
+  grep -q 'vneg.f32' "$d/ng.s" && ! grep -qE 'vmov[^.]*r[0-9]' "$d/ng.s" || fail "a float negate leaves the float file"
+  # a braced local struct read through an inlined pointer lives in registers, its unnamed array too
+  printf 'struct va { float x, y, z, w, a[11]; };\nstatic float sd(struct va const *v, int k) { return k ? v->w - v->x : v->z + v->w; }\nint in(float x, float y, float z, float w) { struct va const v = { .x = x, .y = y, .z = z, .w = w }; int a = 1; for (int k = 0; k < 2; k++) a &= sd(&v, k) >= 0; return a; }\n' > "$d/sv.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/sv.c" -o "$d/sv.o" || fail "mooncc sv.c"
+  [ "$(arm-none-eabi-objdump -d "$d/sv.o" | grep -c '\[sp')" = 0 ] || fail "a braced local struct stays in memory"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
-  for f in raster lamp poly swatch; do
+  for f in raster lamp poly swatch audio/tones; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"
     arm-none-eabi-nm -u "$d/nosoft.o" | grep -E '__aeabi_(dadd|dsub|dmul|ddiv|dcmp|i2d|ui2d|fadd|fsub|fmul|fdiv|fcmp|i2f|ui2f|f2iz|f2uiz)' && fail "$f.c calls a soft float or double"
   done

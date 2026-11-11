@@ -14,6 +14,8 @@
                 (two? t) ((sub v <t) . (sub v >t))
                 t)
    (fit t) ['inf-lt t '(inf-pow w)]
+   (lbase sp) ['inf-pow (peep sp 'limb 'L)]
+   (dfit sp t) (peep sp 'limb 'L @ l ['inf-lt t ['inf-pow ['add l l]]])
    (quit-on s) (puts "\(s)\n", quit 1)
 
    ; a spec may hold a word as what each of its bits is, 'bitv naming it: a function, as an array is
@@ -102,6 +104,27 @@
      'wg [(no-tm 'wg) owes-none (\ sp C [f] ['dot ['deref ['var "w"]] f]) 'none]
      'tf [(no-tm 'tf) owes-none (\ sp C [n] ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]) 'none]
      'taddr [(no-tm 'taddr) owes-none (\ sp C [n] ['addr ['dot ['deref ['dot ['deref ['var "r"]] "t"]] n]]) 'none]
+     ; limbs, B = 2^L for the spec's 'limb width L: a dlimb sum or product fits two limbs, lo
+     ; and hi split one at B, lc lays a value under B as a limb, and lB is B
+     'dl [(\ sp v T [x] (T x)) owes-parts (\ sp C [x] ['cast '(named "dlimb") (C x)]) 'fit]
+     'd+ [(\ sp v T [a b] ['add (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(dfit sp (T e))]))
+          (\ sp C [a b] ['bin '+ (C a) (C b)]) 'fit]
+     'd* [(\ sp v T [a b] ['mul (T a) (T b)]) (\ sp v T O e [a b] (O a + O b + [(dfit sp (T e))]))
+          (\ sp C [a b] ['bin '* (C a) (C b)]) 'fit]
+     ; a dlimb over a divisor past 0: the quotient and the remainder
+     'd/ [(\ sp v T [a b] ['un-div (T b) (T a)]) (\ sp v T O e [a b] (O a + O b + [['inf-lt 0 (T b)]]))
+          (\ sp C [a b] ['bin '/ (C a) (C b)]) 'fit]
+     'd% [(\ sp v T [a b] ['inf-mod (T b) (T a)]) (\ sp v T O e [a b] (O a + O b + [['inf-lt 0 (T b)]]))
+          (\ sp C [a b] ['bin '% (C a) (C b)]) 'fit]
+     'lo [(\ sp v T [x] ['inf-mod (lbase sp) (T x)]) owes-parts (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
+     'hi [(\ sp v T [x] ['un-div (lbase sp) (T x)]) owes-parts (\ sp C [x] ['bin 'shr (C x) ['var "limb_bits"]]) 'fit]
+     'lB [(\ sp v T _ (lbase sp)) owes-none (\ sp C _ ['var "limb_base"]) 'fit]
+     'lbits [(\ sp v T _ (peep sp 'limb 'L)) owes-none (\ sp C _ ['var "limb_bits"]) 'fit]
+     ; 2^k as a limb, k under the limb's width
+     'lpow [(\ sp v T [k] ['inf-pow (T k)]) (\ sp v T O e [k] (O k + [['inf-lt (T k) (peep sp 'limb 'L)]]))
+            (\ sp C [k] ['bin 'shl ['cast '(named "love_limb") ['num 1]] (C k)]) 'fit]
+     'lc [(\ sp v T [x] (T x)) (\ sp v T O e [x] (O x + [['inf-lt (T x) (lbase sp)]]))
+          (\ sp C [x] ['cast '(named "love_limb") (C x)]) 'fit]
      ; an opaque C value passed through, the context a call is handed: its term is ()
      'raw [(\ sp v T xs ()) owes-none (\ sp C [x] x) 'none]}
    (op-row e) (peep vc-ops <e () @ r (two? r ? r (quit-on "vc: \(show <e) is no operation")))
@@ -126,6 +149,7 @@
                          ('nz a) (ob sp v a)
                          ('z a) (ob sp v a)
                          ('ne a b) (ob sp v a + ob sp v b)
+                         ('dif a b) (ob sp v a + ob sp v b)
                          ('eq a b) (ob sp v a + ob sp v b)
                          ('wide d) (ob sp v d)
                          ('widec d) (ob sp v d)
@@ -140,6 +164,7 @@
                          ('nz a) ['inf-lt 0 (tm sp v a)]
                          ('z a) ['paths 'nat (tm sp v a) 0]
                          ('ne _ _) 'unit
+                         ('dif a b) ['pi 'e ['paths 'nat (tm sp v a) (tm sp v b)] 'empty]
                          ('eq _ _) 'unit
                          ('wide d) ['inf-le 8 (tm sp v d)]
                          ('widec _) 'unit
@@ -154,6 +179,8 @@
                          ('nz a) ['paths 'nat (tm sp v a) 0]
                          ('z a) ['inf-lt 0 (tm sp v a)]
                          ('ne _ _) 'unit
+                         ; ne whose false arm knows the two equal
+                         ('dif a b) ['paths 'nat (tm sp v a) (tm sp v b)]
                          ('eq _ _) 'unit
                          ('wide _) 'unit
                          ('widec _) 'unit
@@ -176,6 +203,7 @@
                         (_ 'while _ _ _ b) (writes sp b)
                         (_ 'havoc x _) [x]
                         (_ 'havw x _ _) [x]
+                        (_ 'havl x _ _) [x]
                         (_ 'gset x _) [x]
                         (_ 'join _ _ th el _) (writes sp th + writes sp el)
                         (_ 'call f _ _ os) (written (callee sp f) os)
@@ -192,12 +220,16 @@
                ss))
    (written f os) (map (a \ <a) (f 'state) + map (a \ <>a) os)
    ; a spec may track an array's bytes, 'model naming what it holds at entry; a write is then inf-blk
-   (tracked sp A) (has? (peep sp 'model ()) A ? [A] ())
+   ; or its values, 'vals naming it: a poke is then inf-upd. 'dvars are dlimbs, which fit two limbs
+   (tracked sp A) (has? (peep sp 'model ()) A || elem A (peep sp 'vals ()) ? [A] ())
    (wrote sp v A i B j n)
     (has? (peep sp 'model ()) A
      ? ((A . ['inf-blk (lk v A) (tm sp v i) (has? v B ? (lk v B) B) (tm sp v j) n]) . v)
      v)
    (mentions? x t) (t == x || two? t && (mentions? x <t || mentions? x >t))
+   ; a term built at a loop's head names what stood there: nothing bound since may catch it
+   (since h top) (h == top || atom? h ? () (<<h . since >h top))
+   (caught L t h top) (any (n \ mentions? n t) (since h top) ? (quit-on "inf: a name bound inside \(L) catches its measure") 0)
    (loop sp L x from to by invs body rest v hy k)
     (: w (writes sp body)
        names (uniq (map (a \ <a) v))
@@ -213,7 +245,8 @@
        TO (tm sp head to)
        entry (map (i \ (sub ((x . tm sp v from) . v) <>i)) invs)
        (back v2 h2)
-        (: step (by = () ? ['succ x] ['add x (tm sp v2 by)])
+        (: _ (caught L TO h2 hy3)
+           step (by = () ? ['succ x] ['add x (tm sp v2 by)])
            stepped ((x . step) . v2)
            _ (tm sp stepped to = TO ? 0 (quit-on "inf: \(L)'s bound moves"))
            (vcs "\(L)b" ((by = () ? () (ob sp v2 by)) + [(fit step)]
@@ -239,7 +272,7 @@
        hy3 (('cx . nm) . (hinv + (bind + hy)))
        M (sub head m)
        entry (map (i \ (sub v <>i)) invs)
-       (back v2 h2) (vcs "\(L)b" (map (i \ (sub v2 <>i)) invs + [['inf-lt (sub v2 m) M]]) h2)
+       (back v2 h2) (caught L M h2 hy3, vcs "\(L)b" (map (i \ (sub v2 <>i)) invs + [['inf-lt (sub v2 m) M]]) h2)
        (after v2 h2) (run sp rest v2 h2 k)
        up (sp 'brk)
        _ (pin sp 'brk after)
@@ -285,7 +318,7 @@
    (run sp ss v hy k)
     (atom? ss ? (k v hy)
      (<ss @ (L 'set x e)
-             (vcs (show L) (ob sp v e + [(fit (tm sp v e))]) hy
+             (vcs (show L) (ob sp v e + [(elem x (peep sp 'dvars ()) ? (dfit sp (tm sp v e)) (fit (tm sp v e)))]) hy
               + run sp >ss ((x . tm sp v e) . v) hy k)
             ; x - y does not wrap, and fits where x did
             (L 'dec x e)
@@ -342,6 +375,11 @@
              (: y (fresh L x)
               (vcs (show L) (ob sp v e) hy
                + run sp >ss ((x . y) . v) ((g . ['inf-lt y ['inf-pow (tm sp v 'w)]]) . ((y . 'nat) . hy)) k))
+            ; and a limb what fits a limb
+            (L 'havl x e g)
+             (: y (fresh L x)
+              (vcs (show L) (ob sp v e) hy
+               + run sp >ss ((x . y) . v) ((g . ['inf-lt y (lbase sp)]) . ((y . 'nat) . hy)) k))
             (L 'ghost x e g) (run sp >ss ((x . x) . v) ((g . ['paths 'nat x (sub v e)]) . ((x . 'nat) . hy)) k)
             (L 'poke A i e) (vcs (show L) (ob sp v i + [['inf-lt (tm sp v i) (bound sp v A)]] + ob sp v e) hy
                              + run sp >ss (poked sp v A i e 1) hy k)
@@ -387,11 +425,12 @@
    (untracked sp A v) (has? (peep sp 'model ()) A ? (quit-on "inf: \(sp 'short) reaches tracked \(A) by a way the walk cannot follow") v)
    ; a tracked poke's bytes come from an array, or the walk cannot say what they are
    (poked sp v A i e n)
-    (has? (peep sp 'model ()) A
-     ? (e @ ('at B j) (wrote sp v A i B j n)
-            ('ld64 B j) (wrote sp v A i B j n)
-            (quit-on "inf: \(sp 'short) pokes a tracked \(A) with \(show e)"))
-     v)
+    (? (elem A (peep sp 'vals ())) ((A . ['inf-upd (arr v A) (tm sp v i) (tm sp v e)]) . v)
+       (has? (peep sp 'model ()) A)
+        (e @ ('at B j) (wrote sp v A i B j n)
+             ('ld64 B j) (wrote sp v A i B j n)
+             (quit-on "inf: \(sp 'short) pokes a tracked \(A) with \(show e)"))
+       v)
    (mv-ob sp v A i B j n)
     (ob sp v i + ob sp v j + ob sp v n
      + [['inf-le ['add (tm sp v i) (tm sp v n)] (bound sp v A)]
@@ -559,6 +598,7 @@
                        ('nz a) (cl sp a)
                        ('z a) ['un 'not (cl sp a)]
                        ('ne a b) ['bin 'ne (cl sp a) (cl sp b)]
+                       ('dif a b) ['bin 'ne (cl sp a) (cl sp b)]
                        ('eq a b) ['bin 'eq (cl sp a) (cl sp b)]
                        ('wide d) ['land ['var "wideld"] ['bin 'le ['num 8] (cl sp d)]]
                        ('widec d) ['land ['var "wideld"] ['bin 'eq (cl sp d) ['num 1]]]
@@ -588,7 +628,11 @@
                         [s])
                ss))
    (cl-body sp ss) (said ss @ [s] (cl-stmt sp s) u ['blk (map (cl-stmt sp) u)])
-   (cl-blk sp ss) ['blk (map (cl-stmt sp) (said ss))]
+   ; a branch an else follows: an if left bare there would take the else, so it keeps its block
+   (cl-open? s) (s @ ('if _ _ e) (atom? e || cl-open? e) ('while _ b) (cl-open? b) ('for _ _ _ b) (cl-open? b) 0)
+   (cl-then sp ss) (cl-body sp ss @ b (cl-open? b ? ['blk [b]] b))
+   ; the body of an if with no else: an if-else there reads as a dangling else, so it keeps its block
+   (cl-sole sp ss) (cl-body sp ss @ b (b @ ('if _ _ e) (atom? e ? b ['blk [b]]) b))
    (cl-for sp x from to step body)
     (: X ['var (string x)]
      ['for ['expr ['asn X (cl sp from)]] ['bin 'lt X (cl sp to)] step (cl-body sp body)])
@@ -607,15 +651,16 @@
            (e = ['+ ['at A i] 1] ? ['expr ['post lhs 1]] ['expr ['asn lhs (cl sp e)]]))
          (L 'clear A sz) ['expr ['call ['var "memset"] [(base sp A) ['num 0] sz]]]
          (L 'field f e) ['expr ['asn ['dot ['deref ['var "c"]] f] (cl sp e)]]
-         (L 'if g c th) ['if (cl-cond sp c) (cl-body sp th) ()]
-         (L 'join g c th el _) ['if (cl-cond sp c) (cl-blk sp th) (el == () ? () (cl-blk sp el))]
-         (L 'ife g c th el) ['if (cl-cond sp c) (cl-blk sp th) (cl-blk sp el)]
-         (L 'while c m invs b) ['while (cl-cond sp c) (cl-blk sp b)]
+         (L 'if g c th) ['if (cl-cond sp c) (cl-sole sp th) ()]
+         (L 'join g c th el _) ['if (cl-cond sp c) (el == () ? (cl-sole sp th) (cl-then sp th)) (el == () ? () (cl-body sp el))]
+         (L 'ife g c th el) ['if (cl-cond sp c) (cl-then sp th) (cl-body sp el)]
+         (L 'while c m invs b) ['while (cl-cond sp c) (cl-body sp b)]
          (L 'brk) ['brk]
          (L 'store f e) ['expr ['asn ['dot ['deref ['var "r"]] f] (cl sp e)]]
          (L 'raw c) c
          (L 'havoc x e) (cl-set sp x e)
          (L 'havw x e _) (cl-set sp x e)
+         (L 'havl x e _) (cl-set sp x e)
          (L 'dstore f e) ['expr ['asn ['dot ['deref ['var "d"]] f] (cl sp e)]]
          (L 'ptr x A i) ['expr ['asn ['var (string x)] ['bin '+ (base sp A) (cl sp i)]]]
          (L 'dec x e) (cl-set sp x e)

@@ -1,5 +1,5 @@
 ; src/apps/lux/config.l -- the config, ~/.xmonad/xmonad.hs transliterated, as plain values.
-; read by salt: ~/.love/etc/lux.l, then ./.lux.l winning; each setting has a default.
+; read by salt: the nest's etc/lux.l, then ./.lux.l winning; each setting has a default.
 ; a repeated setting replaces, so a roster is one form; `()` alone is the empty roster.
 ;   (border 3)  (tags 9)  (mod sup)  (nudge 20)  (layout (rtall 1 0.02 0.5) (dwindle phi))
 ;   (layout-wrap minimize smart toggle-full mirror)  (float-class steam Gimp)

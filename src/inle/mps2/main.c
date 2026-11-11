@@ -248,7 +248,9 @@ int main(void) {
     " "
 #include "cas.h"
 #else
-    "(borrow 'cli)"
+    // the board cut: the cli, and fat.l over the board's disk nifs
+    "(borrow 'cli) "
+#include "fat.h"
 #endif
     "(: _ (pull book 'born 0)"            // this boot's cost, not the image's
     "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");

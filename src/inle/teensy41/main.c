@@ -11,9 +11,12 @@
 #endif
 
 // input from either port, the UART's first
-static int con_ready(void) { return serial_rx_ready() || usb_rx_ready(); }
-static int con_getc(void) { return serial_rx_ready() ? serial_getc() : usb_getc(); }
-static void con_putc(int c) { serial_putc(c); usb_putc(c); }
+static int con_ready(void) { return uart_rx_ready() || usb_rx_ready(); }
+static int con_getc(void) { return uart_rx_ready() ? uart_getc() : usb_getc(); }
+static void con_putc(int c) { uart_putc(c); usb_putc(c); }
+
+uintptr_t te_ms(void);
+uintptr_t love_clock(void) { return te_ms(); }
 
 // cooperative waits spin against love_clock (ms; 0 forever)
 void love_sleep(uintptr_t ms) {
@@ -48,11 +51,11 @@ static struct g *fd_writen(struct g *g, unsigned char const *src, uintptr_t n) {
 
 // nothing to push: a flush is where to say what the inbound ring dropped (teensy41.c's rx_put)
 static struct g *fd_flush(struct g *g) {
-  uint32_t lost = serial_rx_lost();
+  uint32_t lost = uart_rx_lost();
   if (lost) {
-    bput_s(serial_putc, "\r\n; input lost: ");
-    bput_n(serial_putc, lost, 10);
-    bput_s(serial_putc, " bytes\r\n"); }
+    bput_s(uart_putc, "\r\n; input lost: ");
+    bput_n(uart_putc, lost, 10);
+    bput_s(uart_putc, " bytes\r\n"); }
   return g; }
 
 struct fio love_stdin  = { { .ap = lvm_port_io, .vt = &love_fd_port_vt, .ungetc_buf = putcharm(EOF) }, .fd = putcharm(0) };
@@ -94,12 +97,50 @@ static lvm(love_gpio_put) {
   Ip += 1;
   return Continue(); }
 
+// the microSD slot as fat.l's block door, the kernel's spelling (kmain.c):
+// (disk _)         -> the sector count, 0 when no card (a card is looked for again each call)
+// (disk-read l n)  -> a string of n*512 bytes off sector l | ()
+// (disk-write l s) -> the sectors written | () (s must be whole sectors)
+uint32_t sd_sectors(void);
+int sd_rw(uint32_t lba, uint32_t n, void *buf, int wr);
+
+static lvm(love_disk) {
+  Sp[0] = putcharm((intptr_t) sd_sectors());
+  love_musttail return Next(1); }
+
+love_noinline static struct g *sd_disk_read(struct g *g) {
+  word lw = g->sp[0], nw = g->sp[1];
+  intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
+           n   = (nw & 1) ? getcharm(nw) : -1;
+  if (lba < 0 || n <= 0 || n > 1 << 16) return g->sp[1] = ZeroPoint, g->sp += 1, g;
+  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;
+  if (sd_rw((uint32_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0) g->sp[0] = ZeroPoint;
+  return g->sp[2] = g->sp[0], g->sp += 2, g; }
+
+static lvm(love_disk_read) {
+ LvmCall(g, sd_disk_read) }
+
+love_noinline static word sd_disk_write(word lw, word sw) {
+ intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
+ if (lba < 0 || !strp(sw)) return ZeroPoint;
+ struct str *s = (struct str*) sw;
+ if (!s->len || s->len % 512) return ZeroPoint;
+ if (sd_rw((uint32_t) lba, (uint32_t) (s->len / 512), s->bytes, 1) < 0) return ZeroPoint;
+ return putcharm((intptr_t) (s->len / 512)); }
+
+static lvm(love_disk_write) {
+  Sp[1] = sd_disk_write(Sp[0], Sp[1]);
+  love_musttail return Nextp(1, 1); }
+
 // a 2-arg nif leads with lvm_cur, as the host's nif_open does
 static union u const
   nif_gpio_init[] = {{love_gpio_init}, {lvm_ret0}},
   nif_gpio_get[]  = {{love_gpio_get}, {lvm_ret0}},
   nif_gpio_dir[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_dir}, {lvm_ret0}},
-  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_put}, {lvm_ret0}};
+  nif_gpio_put[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_gpio_put}, {lvm_ret0}},
+  nif_disk[]       = {{love_disk}, {lvm_ret0}},
+  nif_disk_read[]  = {{lvm_cur}, {.x = putcharm(2)}, {love_disk_read}, {lvm_ret0}},
+  nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {love_disk_write}, {lvm_ret0}};
 
 // the baked image (ld -b binary, teensy41.lds's .image). file scope: mooncc emits no
 // relocation for a block-scope extern array
@@ -109,7 +150,10 @@ static struct def defs[] = {
   {"gpio_init", {.k = nif_gpio_init}},
   {"gpio_dir",  {.k = nif_gpio_dir}},
   {"gpio_put",  {.k = nif_gpio_put}},
-  {"gpio_get",  {.k = nif_gpio_get}}, };
+  {"gpio_get",  {.k = nif_gpio_get}},
+  {"disk",       {.k = nif_disk}},
+  {"disk-read",  {.k = nif_disk_read}},
+  {"disk-write", {.k = nif_disk_write}}, };
 
 // malloc/free for alloc's default: a first-fit free list (ffalloc.h) over the arena
 #include "../ffalloc.h"
@@ -129,11 +173,11 @@ void free(void *p) { ff_free(&freelist, p); }
 static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed for alignment: mooncc parses no post-declarator attribute
 
 
-int main(void) {
+void te_main(void) {
   // first light before any love runs; gpio_* indexes GPIO2 bits (the pin-13 LED is GPIO2_IO03)
   gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
   for (char const *s = "\r\n; inle/teensy41\r\n"; *s; s++)
-    serial_putc(*s);
+    uart_putc(*s);
   // the core clock from the live mux state, so a failed retune shows on every boot
   { uint32_t mhz = 0;
     if (!(REG(CCM_CBCDR) & CBCDR_PERIPH_CLK_SEL)
@@ -142,16 +186,16 @@ int main(void) {
       mhz = 24u * (REG(CCM_ANALOG_PLL_ARM) & 0x7Fu) / 2u
           / ((REG(CCM_CACRR) & 7u) + 1u)
           / (((REG(CCM_CBCDR) >> 10) & 7u) + 1u);
-    bput_s(serial_putc, "; core ");
-    if (mhz) { bput_n(serial_putc, mhz, 10);
-      bput_s(serial_putc, " MHz\r\n"); }
-    else bput_s(serial_putc, "on the ROM path\r\n"); }
+    bput_s(uart_putc, "; core ");
+    if (mhz) { bput_n(uart_putc, mhz, 10);
+      bput_s(uart_putc, " MHz\r\n"); }
+    else bput_s(uart_putc, "on the ROM path\r\n"); }
   // early, so the host enumerates the board while the image wakes
   usb_init();
-  bput_s(serial_putc, "; usb up\r\n");
+  bput_s(uart_putc, "; usb up\r\n");
   uint32_t psram_mb = psram_init();
   { char const *s = psram_mb ? "; psram arena up\r\n" : "; NO psram -- ocram fallback\r\n";
-    for (; *s; s++) serial_putc(*s); }
+    for (; *s; s++) uart_putc(*s); }
   uintptr_t arena_words;
   if (psram_mb) {
     // 64 B shy of the edge: a one-past read at a block boundary must stay inside
@@ -168,7 +212,7 @@ int main(void) {
                                (uintptr_t)(_binary_love_img_end - _binary_love_img_start), 0);
   int woke = g != NULL;
   { char const *s = woke ? "; image awake\r\n" : "; no image -- baking the egg\r\n";
-    for (; *s; s++) serial_putc(*s); }
+    for (; *s; s++) uart_putc(*s); }
   if (!woke) g = ini();
   g = defn(g, defs, countof(defs));
   // born: this wake's cost, as main.c defines it; the egg lane's egg.l pins its own
@@ -210,6 +254,5 @@ int main(void) {
   // the shell returns only on a fatal error
   if (code_of(r) == status_scare) scare_face(r);
   fin(r);
-  for (;;) {
-    gpio_put(LED_BIT, 1); love_sleep(120);
-    gpio_put(LED_BIT, 0); love_sleep(120); } }
+  // the blink polls the console, so the loader's 134 baud still reboots it
+  for (;;) gpio_put(LED_BIT, love_clock() / 120 & 1), con_ready(); }

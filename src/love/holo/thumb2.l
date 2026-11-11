@@ -397,6 +397,7 @@
    (thumb-divss3 d n m) (t2-fp3n 0xEE80 0xA00 d n m)
    (thumb-movsd d m) (: dn (frn d) mn (frn m) (t32 (0xEEB0 << 16 | (dn << 12 | (0xB40 | mn)))))
    (thumb-movss d m) (t32 (0xEEB0 << 16 | (0xA40 | fD d | fM m)))   ; VMOV.F32 Sd, Sm
+   (thumb-negss d m) (t32 (0xEEB1 << 16 | (0xA40 | fD d | fM m)))   ; VNEG.F32 Sd, Sm
    ; both halves: VMOV.F32 S[2d], S[2m] ; VMOV.F32 S[2d+1], S[2m+1] -- an sp-only fpu has no VMOV.F64
    (thumb-movpair d m) (: dn (frn d) mn (frn m)
                           (t32 (0xEEB0 << 16 | (dn << 12 | (0xA40 | mn))) + t32 (0xEEF0 << 16 | (dn << 12 | (0xA60 | mn)))))
@@ -566,7 +567,7 @@
         [('li . thumb-li) ('lis . thumb-lis) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
           ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
-          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
+          ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('negss . thumb-negss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
           ('ucom0 . thumb-ucom0) ('fimm . thumb-fimm) ('fli . thumb-fli) ('flal . thumb-flal)
           ('ldsspi . thumb-ldsspi) ('stsspi . thumb-stsspi) ('ldpi4 . thumb-ldpi4) ('stpi4 . thumb-stpi4)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)

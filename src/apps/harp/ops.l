@@ -5,11 +5,12 @@
 ;                      'depth 'fb 'l 'r 'vib 'vrate 'trem 'trate 'lvl, 'segs [[t0 kind a b c] ..],
 ;                      'at the frame its voice starts; what is missing 0, 'mod -1, 'lvl 1
 ;   (ops-rows os)      the operators' rows, one float tray
-;   (ops-run R os st n f0 rate)  the kernel over rows R (of operators os) for n frames from f0,
+;   (ops-run R os st n f0 rate ws)  the kernel over rows R (of operators os) for n frames from f0,
 ;                      st their last two outputs each (() at rest): n of left then n of right,
-;                      each operator's last two outputs, then scratch
+;                      each operator's last two outputs, then scratch unless ws, a (tones-ws k)
+;                      big enough, holds it
 ;   (ops-ref os st n f0 rate)  the same answer worked out in love, no scratch
-;   (ops-voice os at end gl gr rate)  play's voice [end fn gl gr], fn the left the operators
+;   (ops-voice os at end gl gr rate)  play's voice [end fn gl gr raw], fn the left the operators
 ;                      sum to, their outputs fed back from one run to the next; worked out in
 ;                      love where the first operator has 'ref 1
 (module (ops ops-row ops-rows ops-run ops-ref ops-voice ops-db)
@@ -23,8 +24,9 @@
     (1.0 * #ss)] + catmap (map (* 1.0)) ss + map (_ \ 0.0) ^(5 * (6 - #ss))))
  (ops-rows os) (gem-tray [(width * #os)] (catmap ops-row os))
  kern (cite 'dsp 'tones)
+ kern-ws (cite 'dsp 'tones-ws)
  ; the reference where there is no kernel, or the first operator asks ('ref 1)
- (ops-run R os st n f0 rate) (kern && !(peep <os 'ref 0) ? (kern R st n f0 rate) (ops-ref os st n f0 rate))
+ (ops-run R os st n f0 rate ws) (kern && !(peep <os 'ref 0) ? (kern R st n f0 rate ws) (ops-ref os st n f0 rate))
 
  ; --- the reference: each frame by its closed form ---
  (seg-of ss t) (: (go l s) (? (atom? l) s (<l 0 <= t) (go >l <l) s) (go ss ()))
@@ -58,14 +60,18 @@
 
  ; --- a voice: the kernel run for the frames asked, outputs carried; frames asked out of
  ;     order rerun from the start ---
- (ops-voice os at end gl gr rate) (: k #os os0 (map (o \ pin o 'at at) os) R (ops-rows os0) box {'next at 'ys ()}
+ (ops-voice os at end gl gr rate) (: k #os os0 (map (o \ pin o 'at at) os) R (ops-rows os0) box {'next at 'ys () 'wk 0 'ws ()}
    S (iota (2 * k) + 0)
-   (run f0 n) (: r (ops-run R os0 (box 'ys) n f0 rate) (pins box 'next (f0 + n) 'ys (peep r (S + 2 * n) 0.0), r))
+   ; the kernel's scratch, kept from run to run and grown when a run is longer
+   (ws n) (: m (k * n) (box 'wk >= m ? (box 'ws) (pins box 'ws (kern-ws && kern-ws m) 'wk m @ b (b 'ws))))
+   (run f0 n) (: r (ops-run R os0 (box 'ys) n f0 rate (ws n)) (pins box 'next (f0 + n) 'ys (peep r (S + 2 * n) 0.0), r))
    (reach f0) (? (f0 = box 'next) 0
                  (f0 <= at) (pins box 'next f0 'ys ())
                  (: _ (pins box 'next at 'ys ())
                     (go p) (p >= f0 ? 0 (: _ (run p (min 4096 (f0 - p))) (go (box 'next))))
                     (go at)))
-   fn (ix \ (: n #ix f0 (peep ix 0 0) _ (reach f0) r (run f0 n) (peep r (iota n) 0.0)))
-   [end fn gl gr])
+   ; ..raw the kernel's whole answer, its first n the left, for a mixdown that reads it in place
+   (raw ix) (: n #ix f0 (peep ix 0 0) _ (reach f0) (run f0 n))
+   fn (ix \ peep (raw ix) (iota #ix) 0.0)
+   [end fn gl gr raw])
 )) ; module ops

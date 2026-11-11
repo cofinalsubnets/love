@@ -2,8 +2,10 @@
 
 the scales. libra weighs a `.l` file two ways and they are the same weighing:
 `libra` says what is wrong with it, and `libra doc` lifts its header out as a
-document. one scanner (`src/apps/libra/lint.l`) under both, so the gate and the doc lifter
-can never disagree about what a paren or a comment is. the tool is
+document. two readers under it: balance is `src/apps/libra/lint.l`'s text scan, which
+still reports a file that does not read, and the rules and the comments come off
+[spans](../../src/apps/libra/spans.l), the reader that keeps every node's place and every
+comment. the tool is
 `src/apps/libra/libra.l`, the gate `make test_hostnif` (test/host/libra.l), and
 `make lint` runs it over every tracked `.l`.
 
@@ -30,10 +32,9 @@ layout.
 code is not; `doc` prints the comments and nothing else -- the leading block, the
 header that twelve of the nineteen crew tools have instead of a `doc/*.md`.
 
-the lifting is a TEXT walk over the same `src/apps/libra/lint.l` scanner (`lint-cmts`, which
-reports every comment with its text): no reader in the tree keeps comments, so a
-datum walk would answer nothing. it lives in libra because reading `.l` is
-libra's beat and nothing else in the tree should have to learn what a comment is.
+the lifting reads the comments spans keeps (`libra-cmts`, every comment with its line,
+column and text). it lives in libra because reading `.l` is libra's beat and
+nothing else in the tree should have to learn what a comment is.
 what it hands out is MARKDOWN TEXT, and the showing is
 [lapiz](../../src/apps/lapiz.l)'s -- which is why one verb offers three surfaces
 and libra implements none of them.
@@ -101,11 +102,12 @@ in `.libra.l` -- the gate is no gripes, hand-fixed) -- a form of ONE element
 is that element, since
 `(f)` is `f` at zero operands. so the parens do nothing, and a nullary call
 never fires: `(go)` is `go` handed back unrun, silently, with the value you
-wanted one curry away. three things are exempt, and each for a reason:
+wanted one curry away. the rule reads spans' tree, so it runs only on a file that
+balances. three things are exempt, and each for a reason:
 
 - a CONSTRUCTOR is a datum, not a form -- `'(x)` and `@(x)`, and the bracket
   `[x]` and brace `{x}`. a `'` makes its contents data too, inherited all the
-  way down. (a bracket list EVALUATES its elements, so a form inside one is a
+  way down, glued behind another prefix as well (`!'(-5)`). (a bracket list EVALUATES its elements, so a form inside one is a
   real form and is flagged.)
 - a `(` GLUED to an operator run, where the parens may be holding two sigil runs
   apart. merged, two runs lex as ONE — and that is sometimes the same value and
@@ -118,18 +120,22 @@ wanted one curry away. three things are exempt, and each for a reason:
 
 that last exemption is narrower than "starts with punctuation" on purpose.
 `(<>b)` and `<>b` are one value, so those parens really are droppable, and
-flagging them is the point.
+flagging them is the point. `(1,2,3)` is three elements and two commas, never one.
+
+two places stand down too: the arms of a match, past a bare `@`, are list shapes; and
+in a binder slot -- a `:` name, an element past a `\` -- or one level in, only the
+body warns.
 
 **deprecated** (empty roster by default) -- names a project has finished with.
 comments and strings are not code and are skipped; a quoted `'foo` names `foo`
-just as much as bare `foo` does, so it counts.
+just as much as bare `foo` does, so it counts, reported at its quote.
 
 ## the config
 
 settings live in two files, read in this order, the second overlaying the first:
 
 ```
-~/.love/etc/libra.l     your taste, wherever the binary happens to live
+NEST/etc/libra.l        your taste, wherever the binary happens to live
 ./.libra.l              this tree's own -- and it travels in git
 ```
 
@@ -139,7 +145,7 @@ upward. a deprecated-name roster is a fact about a TREE rather than about a
 person, which is why the project file exists at all.
 
 ```love
-; ~/.love/etc/libra.l -- or ./.libra.l
+; the nest's etc/libra.l -- or ./.libra.l
 (singleton 0)                                    ; turn the rule OFF (on by default)
 (deprecated old-thing (worse-thing "use better-thing"))
 ```
@@ -199,6 +205,5 @@ in ONE form. lux's `(bind (spec action) (spec action) ..)` is the shape.
 settings live in `/usr/etc`, so config is the one thing a love program finds by
 the environment rather than by the seat walk. the module walk still reads none.
 
-`src/apps/libra/lint.l` takes a plain tablet and reads it with `peep`; it does NOT depend
-on salt, because vi cats that file directly and a module it had to carry along
-would break the cat. salt fills the tablet, lint only reads it.
+libra's rules take a plain tablet; salt fills it. `src/apps/libra/lint.l` reads no
+config at all: vi borrows its balance scan alone.

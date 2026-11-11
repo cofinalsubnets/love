@@ -5,7 +5,7 @@
 
 (borrow 'posix)
 (newns 0 @ e
-   (e ? (getenv "LOVE_GATE_STRICT" || (open ((getenv "HOME") + "/.love/etc/gate-strict") "r" @ q (hot? q ? (close q, 1) 0)) ?
+   (e ? (getenv "LOVE_GATE_STRICT" || (open (cite 'path 'nest 0 + "/etc/gate-strict") "r" @ q (hot? q ? (close q, 1) 0)) ?
          (puts "rootns: no unprivileged user namespace here, laws skipped -- REFUSED: a strict box runs every lane", putc 10, quit 1)
          (puts "rootns: no unprivileged user namespace here, laws skipped", putc 10, 0))
       (:

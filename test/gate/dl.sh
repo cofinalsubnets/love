@@ -3,9 +3,12 @@
 # a failed fetch skips loudly, naming what and from where; a hash that differs is a FAIL: the
 # pin or its source moved. dl/NAME/.pin holds the sha it was unpacked from.
 #   sh test/gate/dl.sh NAME..   fetch each missing one; exit 1 only on a mismatch
+#   sh test/gate/dl.sh --have   name each pinned one dl/ holds
 #   . test/gate/dl.sh           after skip.sh: dl_need NAME (the lane skips without it),
 #                               dl_want NAME (one leg skips: gate_partly, answers 1)
 # dl/ is $DL, else the nearest at or above the tree (dlfind.sh), else ./dl
+
+dl_all="c-testsuite mp3-vectors opus-vectors tinycc chibicc edk2-ovmf doomgeneric doom1.wad"
 
 # NAME: url sha256 member [tar patterns..]; member is the archive's path that becomes dl/NAME,
 # or `-` for a lone file
@@ -49,17 +52,22 @@ dl_dir() {
 
 dl_sum() { sha256sum < "$1" | cut -d' ' -f1; }
 
+# dl_ok NAME: 0 when dl/NAME is the pinned one, after dl_pin and dl_dir
+dl_ok() {
+  dl_d=$DL/$1
+  if [ "$dl_mem" = - ]; then
+    [ -f "$dl_d" ] && [ "$(dl_sum "$dl_d")" = "$dl_sha" ]
+  else
+    [ -f "$dl_d/.pin" ] && [ "$(cat "$dl_d/.pin")" = "$dl_sha" ]
+  fi
+}
+
 # dl_get NAME: 0 when dl/NAME is the pinned one, 2 when it cannot be fetched (said loudly),
 # 1 on a hash mismatch (said as a FAIL)
 dl_get() {
   dl_pin "$1" || { echo "FAIL dl: no pin for $1" >&2; return 1; }
   dl_dir
-  dl_d=$DL/$1
-  if [ "$dl_mem" = - ]; then
-    [ -f "$dl_d" ] && [ "$(dl_sum "$dl_d")" = "$dl_sha" ] && return 0
-  else
-    [ -f "$dl_d/.pin" ] && [ "$(cat "$dl_d/.pin")" = "$dl_sha" ] && return 0
-  fi
+  dl_ok "$1" && return 0
   mkdir -p "$DL" || { echo "SKIP dl: cannot make $DL for $1"; return 2; }
   dl_t=$DL/.$1.$$
   rm -rf "$dl_t" "$dl_t.x"
@@ -103,6 +111,7 @@ dl_want() {
 
 case $0 in
   *dl.sh)
+    [ "${1:-}" = --have ] && { dl_dir; for n in $dl_all; do dl_pin "$n" && dl_ok "$n" && echo "$n"; done; exit 0; }
     bad=0
     for n in "$@"; do dl_get "$n"; [ $? = 1 ] && bad=1; done
     exit $bad ;;
