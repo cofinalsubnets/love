@@ -246,14 +246,17 @@
                (mates x w act) (filter (y \ y != w && clash? x (loc w) y) act)
                (held? x w act) (mates x w act @ () 0 ys (!(sp64? g && wid? x) || any (y \ nosp (nms y)) ys))
                ; the lightest active interval whose register serves this one alone, or none when
-               ; this one weighs less and may spill itself
+               ; this one weighs less and may spill itself. light is touches per span: a short
+               ; interval spilled frees little, its reload's temp holding it as long
+               (span x) (hi x - lo x + 1)
+               (lt? a b) (wt? a * span b < wt? b * span a)
                (victim x act)
                 (foldl (b \ w \ (? (nosp (nms w) || !(ovl? x w) || !(fits? (loc w) x) || wid? x && lofo? (loc w) ||
                                      held? x w act) b
-                                   (b @ () w _ (wt? w < wt? b ? w b))))
+                                   (b @ () w _ (lt? w b ? w b))))
                        () act @
                    () ()
-                   w (!(nosp (nms x)) && wt? x <= wt? w ? () w))
+                   w (!(nosp (nms x)) && !(lt? w x) ? () w))
                (scan fl l act sp)
                 (l @ ()
                       sp
