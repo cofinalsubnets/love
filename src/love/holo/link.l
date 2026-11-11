@@ -1477,7 +1477,9 @@
             (phf 1 6 (fo d0) d0 d0 (dend - d0) (bend - d0) pg)
             (phf 2 6 (fo dy0) dy0 dy0 (dynz * ndy) (dynz * ndy) wz)
             (phf 0x6474e551 6 0 0 0 0 0 16)]
-       hdr (w32 ? (elf32-hdrn 3 0 mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 0 mach [shto 16 14] phs))
+       ; a `_start` makes the object runnable too, through the system loader: its entry
+       ent (glo "_start" @ e (two? e ? <e 0))
+       hdr (w32 ? (elf32-hdrn 3 ent mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 ent mach [shto 16 14] phs))
        (hdr . (>en + pad + [dbytes]
                + [(ld-zeros (symo - endf)) <st <>st <shstr cmt
                   (ld-zeros (shto - (cmto + cmtz))) sht])))

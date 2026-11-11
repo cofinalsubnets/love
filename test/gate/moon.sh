@@ -1796,6 +1796,19 @@ $cc_g -o "$ho/.soexe" "$ho/.somain.c" -L"$ho" -lmso -rdynamic -Wl,-rpath,"$PWD/$
   && "$ho/.soexe"; a=$?
 [ $a -eq 42 ] || fail "a -shared object under ld.so: plt import, abs64 import, relative (got $a want 42)"
 
+# -- -shared with a _start: run by the system loader itself, its libc named exactly
+cat > "$ho/.sorun.c" <<'EOF'
+#include <dlfcn.h>
+#include <stdlib.h>
+int rmain(int argc, char **argv) {
+  unsigned long (*len)(const char *) = (unsigned long (*)(const char *)) dlsym(RTLD_DEFAULT, "strlen");
+  return len ? argc * 20 + (int) len(argv[1]) : 1; }
+__asm__(".globl _start\n_start:\n xor %ebp,%ebp\n mov (%rsp),%rdi\n lea 8(%rsp),%rsi\n and $-16,%rsp\n call rmain\n mov %eax,%edi\n call exit\n hlt\n");
+EOF
+moonrun -shared -o "$ho/.sorun" "$ho/.sorun.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -shared -l:libc.so.6"
+/lib64/ld-linux-x86-64.so.2 "$ho/.sorun" ab; a=$?
+[ $a -eq 42 ] || fail "a -shared object with a _start, run by ld.so: entry, -l:FILE, dlsym (got $a want 42)"
+
 # -- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'
 __attribute__((weak)) int wpick(void){return 7;}

@@ -1074,7 +1074,7 @@
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
              mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
-             so (ldshared tgt (last (usplit 47 dst)) (map (l \ "lib\(l).so") libs) set prod)
+             so (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod)
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree
        nw (ld-write dst ps)
@@ -1200,7 +1200,8 @@
           ; the link warns of nothing, so there is no warning to make fatal (kbuild's host link)
           ("-Wl,--fatal-warnings" . r) (flags r t)
           ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
-          ; library each comes from (a DT_NEEDED libNAME.so). without -shared, -l rides through
+          ; library each comes from (a DT_NEEDED libNAME.so; -l:FILE names FILE as it is, libc.so.6).
+          ; without -shared, -l rides through
           ("-shared" . r) (flags r (pin t 'so 1))
           ((("-l" + w) . r) && #w) (flags r (fpush t 'libs w))
           ; -framework NAME: a macos framework, dyld's to load; what no object defines is
