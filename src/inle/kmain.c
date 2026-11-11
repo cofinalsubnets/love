@@ -372,7 +372,8 @@ __attribute__((weak)) void k_tick_sync(void) { }
 static void k_park(void) {
   if (!kkb.hold) fbdraw();
   k_horn_poll();
-  k_wait(); }
+  k_wait();
+  k_tick_sync(); }
 
 love_kdoorv(wait_fds, (struct wait_fd *fds, int n, uintptr_t ms), (fds, n, ms)) {
   if (n <= 0) { love_sleep(ms); return; }
@@ -2214,17 +2215,19 @@ void kmain(void) {
  __love_osv = -1;
  k_seat_init();
  khhdm = kboot.hhdm;
- archinit();
+ // a guest of the firmware keeps its interrupts, tables and devices: theirs, not ours
+ bool guest = kboot.efi_st != 0;
+ if (!guest) archinit();
  // the door's date, else the RTC, reachable once archinit has mapped it
  if (!kboot.date) kboot.date = k_rtc();
- serial_init();
+ if (!guest) serial_init();
  // only meminit is required: without fbinit or cbinit the kernel runs on serial alone
  if (meminit()) {
   if (fbinit()) cbinit();        // the framebuffer console
  // kmallocw memory, so pa = va - khhdm holds for everything the device reads
-  k_blk_init(kmallocwa(b2w(320), 16));
+  if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
-  k_hda_init(kmallocwa(b2w(3840), 128));
+  if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
  // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;

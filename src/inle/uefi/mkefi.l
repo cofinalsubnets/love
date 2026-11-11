@@ -33,11 +33,26 @@
       (callr r0)
       (add sp sp 56)
       (ret)
+      ;; efi_call6: a sixth (LoadImage's out handle) rides the sysv stack at entry+8
+      (label efi_call6)
+      (ld r0 sp 8)                ; f
+      (sub sp sp 56)
+      (st sp 40 r0)
+      (st sp 32 r8)               ; e
+      (mov r0 r6)                 ; fn
+      (mov r8 r7)
+      (mov r7 r1)
+      (mov r1 r5)
+      (callr r0)
+      (add sp sp 56)
+      (ret)
       ;; efi_go(pml4, entry): the new tables identity-map the low 4G, so the loader and its
       ;; stack ride through. EFER.NXE first: the tables NX the hhdm, and bit 63 is reserved
       ;; while NXE is clear. rdmsr/wrmsr spare rdi and rsi.
       (label efi_go)
       (raw (250))                 ; cli
+      ;; efi_stay(pml4, entry): the same with interrupts left on, the firmware's to field
+      (label efi_stay)
       (raw (185 128 0 0 192))     ; mov $0xC0000080, %ecx -- EFER
       (raw (15 50))               ; rdmsr
       (raw (13 0 8 0 0))          ; or $0x800, %eax -- NXE
@@ -78,7 +93,7 @@
       (isb)
       (jmpr r1))                  ; the kernel's entry, never back
 
-   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_call" "efi_go"))
+   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_call" "efi_call6" "efi_go" "efi_stay"))
    (efi-tgt arch) (arch @ "a64" 'a64 'x64)
    (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)
