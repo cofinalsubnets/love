@@ -7,8 +7,11 @@
 (borrow '(posix cli login saver))
 (:
  greet-usage "usage: love greet [-r ROOT] [-s SAVER] [TTY]"
- ; a session: a name, and () for the user's shell or an argv to exec
- (greet-sessions love) [["shell" ()] ["lux" ["xinit" love "lux"]]]
+ ; a session: a name, and () for the user's shell or an argv to exec. x opens the greeter's
+ ; own vt, as startx does without logind: tty0, where it would look for one, is root's
+ (greet-sessions love line)
+  (: vt (line @ ("tty" + (n && 0 < #n)) ["--" ("vt" + n) "-keeptty"] _ ())
+     [["shell" ()] ["lux" (["xinit" love "lux"] + vt)]])
  ; focus 0 the name, 1 the password, 2 the session
  (greet-new _) {'user "" 'pass "" 'focus 0 'sess 0 'msg "" 'fails 0 'hold 0}
  box-fg 252  box-bg 236  hi 230  warn 210
@@ -52,7 +55,7 @@
         (: n (g 'fails)
            (pins g 'pass "" 'focus 1 'fails (min 3 (n + 1)) 'msg "login incorrect" 'hold (clock 0 + (2000 << n))))))
  (gr-run root nm line)
-  (: ss (greet-sessions (selfpath 0)) names (map (s \ s 0) ss) host (gr-host 0) g (greet-new 0)
+  (: ss (greet-sessions (selfpath 0) line) names (map (s \ s 0) ss) host (gr-host 0) g (greet-new 0)
      (fresh z t) (: s (saver-make nm <z (z 1) t ()) (pins s 't0 t 'next t, s))
      (go s)
       (: now (clock 0) z (ttysize 1 1)
