@@ -18,7 +18,7 @@ static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tic
 uintptr_t khhdm;
 // the hhdm is NX throughout (mkboot.l), so code runs through the image window k_xw;
 // hosted, khhdm is 0
-char *code_window(char *p) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
+love_kdoor(char *, code_window, (char *p), (p)) { return khhdm ? (char*)((uintptr_t) p - khhdm + k_xw) : p; }
 
 #include "ffalloc.h"
 static struct mem *kmem;
@@ -71,10 +71,7 @@ static int kqpop(void) {                   // dequeue one byte, -1 if empty
 // kfb.scale says how large, paint.c the palette
 static struct font const kface = { (uint8_t const*) cleat_8x16, 8, 16 };
 
-// fd.c branches to these on a negative osv
-void k_row_close(int fd), k_sleep(uintptr_t ms), k_wait_fds(struct wait_fd*, int, uintptr_t),
-     k_seat_init(void);                // sys.c: environ and the std streams
-bool k_ready(int fd, int events);
+void k_seat_init(void);                // sys.c: environ and the std streams
 
 // the panic-time console: no l state, so it runs from a fault handler
 void kputc(int c) { if (kcb) cb_putc(kcb, (char) c); serial_putc(c); }
@@ -86,6 +83,8 @@ extern struct def const __start_knifs[], __stop_knifs[];
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for x64/proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
+// ..and the door pages' unpatched copy: where, how many, and each page's place in the pie
+uintptr_t const k_pie_door[18] = { 0 };
 
 #include "quay.h"
 #include <stdarg.h>
@@ -304,7 +303,7 @@ intptr_t k_row_read(int fd, unsigned char *dst, uintptr_t n) {
  if (!s || !s->readn) return -1;
  return s->readn(fd, dst, n); }
 
-intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
+love_kdoor(intptr_t, love_fd_writen, (int fd, unsigned char const *src, uintptr_t n), (fd, src, n)) {
  struct k_source *s = k_source(fd);
  if (!s) return (intptr_t) n;
  if (s->writen) return s->writen(fd, src, n);
@@ -312,16 +311,18 @@ intptr_t k_row_write(int fd, unsigned char const *src, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++) s->putc(fd, src[k]);
  return (intptr_t) n; }
 
-// fd.c's port lanes on a negative osv: busy and end are distinct, as read(2) cannot say
-intptr_t k_port_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+// fd.c's lanes: busy and end are distinct, as read(2) cannot say
+love_kdoor(intptr_t, love_fd_readn, (struct g *g, int fd, unsigned char *dst, uintptr_t n), (g, fd, dst, n)) { return (void) g, k_row_read(fd, dst, n); }
+
+love_kdoor(intptr_t, love_fd_port_readn, (struct g *g, unsigned char *dst, uintptr_t n), (g, dst, n)) {
  return k_row_read((int) io_fd(g->io), dst, n); }
 
-struct g *k_port_writen(struct g *g, unsigned char const *src, uintptr_t n) {
- return g->b = k_row_write((int) io_fd(g->io), src, n), g; }
+love_kdoor(struct g *, love_fd_port_writen, (struct g *g, unsigned char const *src, uintptr_t n), (g, src, n)) {
+ return g->b = love_fd_writen((int) io_fd(g->io), src, n), g; }
 
 // sys.c's posix door: read(2) says end with 0, the rows with -1
 long k_fd_write(int fd, void const *b, long n) { return
- n < 0 ? -22 : (long) k_row_write(fd, (unsigned char const *) b, (uintptr_t) n); }
+ n < 0 ? -22 : (long) love_fd_writen(fd, (unsigned char const *) b, (uintptr_t) n); }
 
 static void k_dir_close(int fd);       // the directory row's close, and its brand
 static void *k_dir_twin(struct k_source const *s);
@@ -335,26 +336,29 @@ long k_fd_read(int fd, void *b, long n) {
 
 long k_fd_close(int fd) {
  if (!k_row_live(fd)) return -9;                        // EBADF
- k_row_close(fd);
+ love_fd_close(fd);
  return 0; }
 
-struct g *k_port_flush(struct g *g) {
+love_kdoor(struct g *, love_fd_flush, (struct g *g), (g)) {
  int fd = (int) io_fd(g->io);
  struct k_source *s = k_source(fd);
  if (s && s->flush) s->flush(fd);
  return g; }
 
-// fd.c's love_fd_close on inle; the boot rows have no close
-void k_row_close(int fd) {
+// the boot rows have no close
+love_kdoorv(love_fd_close, (int fd), (fd)) {
  struct k_source *s = k_source(fd);
  if (s && s->close) s->close(fd); }
 
 // a row that can take a byte always can: out is always ready
-bool k_ready(int fd, int events) {
+love_kdoor(bool, ready, (int fd, int events), (fd, events)) {
  if (fd < 0) return true;
  if (events != wait_in) return true;
  struct k_source *s = k_source(fd);
  return s && s->ready && s->ready(fd); }
+
+love_kdoorv(ready_fds, (struct wait_fd *fds, int n), (fds, n)) {
+ for (int i = 0; i < n; i++) fds[i].revents = ready(fds[i].fd, fds[i].events) ? fds[i].events : 0; }
 
 // a file always reads
 bool k_fd_blocks(int fd) {
@@ -368,16 +372,17 @@ __attribute__((weak)) void k_tick_sync(void) { }
 static void k_park(void) {
   if (!kkb.hold) fbdraw();
   k_horn_poll();
-  k_wait(); }
+  k_wait();
+  k_tick_sync(); }
 
-void k_wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
-  if (n <= 0) { k_sleep(ms); return; }
+love_kdoorv(wait_fds, (struct wait_fd *fds, int n, uintptr_t ms), (fds, n, ms)) {
+  if (n <= 0) { love_sleep(ms); return; }
   k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
   for (;;) {
     int any = 0;
     for (int i = 0; i < n; i++) {
-      int r = k_ready(fds[i].fd, fds[i].events);
+      int r = ready(fds[i].fd, fds[i].events);
       fds[i].revents = r ? fds[i].events : 0;
       any |= r; }
     if (any || (ms && kticks >= deadline)) return;
@@ -390,7 +395,7 @@ uintptr_t k_clock_ms(void) {
 
 // ms 0 is forever. a seat that sleeps finer than the tick (wasm) answers true; metal rounds up
 __attribute__((weak)) bool k_nap(uintptr_t ms) { return (void) ms, false; }
-void k_sleep(uintptr_t ms) {
+love_kdoorv(love_sleep, (uintptr_t ms), (ms)) {
   if (ms && ms < k_tick_ms && k_nap(ms)) return;
   k_tick_sync();
   uintptr_t deadline = kticks + k_ticks_for(ms);
@@ -1239,7 +1244,7 @@ long k_fd_dup3(int src, int dst) {
   int nfd = k_dup_row(src, 0);
   if (nfd < 0) return -EBADF;
   struct k_source *d = k_source_open(dst);
-  if (!d) { k_row_close(nfd); k_row_zero(nfd); return -ENOMEM; }
+  if (!d) { love_fd_close(nfd); k_row_zero(nfd); return -ENOMEM; }
   if (d->close) d->close(dst);
   d = k_source(dst);                            // close zeroes through the live table
   struct k_source *n = k_source(nfd);
@@ -1417,8 +1422,8 @@ long k_fd_stat(int fd, struct k_st *st) {
   st->mode = 0020000 | 0620;                    // the console twins: a character device
   return 0; }
 
-// (getpid _): the main task reads 0; main.c's getpid branches here on a negative osv
-lvm(k_lvm_getpid) {
+// (getpid _): the main task reads 0
+love_klvm(lvm_getpid) {
   Sp[0] = putcharm(k_cur_pid(g));
   love_musttail return Next(1); }
 
@@ -1484,6 +1489,35 @@ love_noinline static word k_lvm_kexec(word pw, word cw) {
 static lvm(lvm_kexec) {
   Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
+// (kexec-initrd path cmd rd): the same, with the bytes rd as the kernel's initrd (a guest of
+// the firmware: linux's stub reads them off its initrd device path)
+__attribute__((weak)) long k_kexec_initrd(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn,
+                                          void const *rd, uintptr_t rn) {
+  return (void) p, (void) pn, (void) cmd, (void) cn, (void) rd, (void) rn, -ENOSYS; }
+love_noinline static word k_lvm_kexec_initrd(word pw, word cw, word rw) {
+  if (!strp(pw) || !strp(cw) || !strp(rw)) return ZeroPoint;
+  struct str *p = (struct str*) pw, *c = (struct str*) cw, *r = (struct str*) rw;
+  return putcharm((intptr_t) k_kexec_initrd(p->bytes, p->len, c->bytes, c->len, r->bytes, r->len)); }
+static lvm(lvm_kexec_initrd) {
+  Sp[2] = k_lvm_kexec_initrd(Sp[0], Sp[1], Sp[2]);
+  love_musttail return Nextp(1, 2); }
+
+// (efi-read path): a file off the volume the firmware booted us from, by its own reader (a
+// guest of the firmware) -> the bytes | ()
+__attribute__((weak)) long k_efi_open(char const *p, uintptr_t pn, void **fh) {
+  return (void) p, (void) pn, (void) fh, -ENOSYS; }
+__attribute__((weak)) long k_efi_read(void *fh, void *buf, uintptr_t n) {
+  return (void) fh, (void) buf, (void) n, -ENOSYS; }
+love_noinline static struct g *k_efi_readp(struct g *g) {
+  word pw = g->sp[0];
+  void *fh = 0;
+  long n = strp(pw) ? k_efi_open(((struct str*) pw)->bytes, ((struct str*) pw)->len, &fh) : -EINVAL;
+  if (n < 0) return g->sp[0] = ZeroPoint, g;
+  if (!ok(g = str0(g, (uintptr_t) n))) return k_efi_read(fh, 0, 0), g;   // OOM: closed, the wrapper raises
+  if (k_efi_read(fh, txt(g->sp[0]), (uintptr_t) n) < 0) g->sp[0] = ZeroPoint;
+  return g->sp[1] = g->sp[0], g->sp += 1, g; }
+static lvm(lvm_efi_read) {
+ LvmCall(g, k_efi_readp) }
 
 // the svm spike (x64/svm.c): (svm ()) the capability, (svm-run ()) one guest -> (exitcode rax rip) | ()
 #if defined(__x86_64__)
@@ -1956,7 +1990,7 @@ love_noinline static struct g *k_openpty(struct g *g) {
   int e = k_fd_pty(fds);
   if (e) return g->sp[0] = love_err(g, -e), g;
   if (!ok(g = have(g, 3 * Width(struct chain)))) {
-    for (int i = 0; i < 3; i++) k_row_close(fds[i]);
+    for (int i = 0; i < 3; i++) love_fd_close(fds[i]);
     return g; }
   word l = ZeroPoint;
   for (int i = 2; i >= 0; i--)
@@ -2065,8 +2099,8 @@ static lvm(lvm_fault) {
   love_musttail return Next(1); }
 
 // (quit code): a task with a pid quits as _exit (task.c), the code what `wait` answers; else
-// the machine resets (test/kernel/kore0.l). main.c's quit branches here on a negative osv
-lvm(k_lvm_quit) {
+// the machine resets (test/kernel/kore0.l)
+love_klvm(lvm_exit) {
   if (k_cur_pid(g)) love_musttail return Ap(lvm_task_quit, g);
   k_reset();
   love_musttail return Next(1); }
@@ -2081,6 +2115,8 @@ static union u
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
   nif_kexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kexec}, {lvm_ret0}},
+  nif_kexec_initrd[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kexec_initrd}, {lvm_ret0}},
+  nif_efi_read[] = {{lvm_efi_read}, {lvm_ret0}},
 #if defined(__x86_64__)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
@@ -2152,8 +2188,7 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"draw", {.k = nif_draw}},
   {"key", {.k = nif_key}},
   {"fault", {.k = nif_fault}},
-  // posix.c's and main.c's nifs land in love_nifs; quit and getpid branch here on a negative osv.
-  // the raw disk has no host twin: absence and refusal answer (), presence the sector count
+  // posix.c's and main.c's nifs land in love_nifs, quit and getpid this file's. the raw disk has no host twin: absence and refusal answer (), presence the sector count
   {"disk", {.k = nif_disk}},
   {"disk-read", {.k = nif_disk_read}},
   {"disk-write", {.k = nif_disk_write}},
@@ -2182,7 +2217,10 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},
   {"kscan", {.k = nif_kscan}},
-  {"kgrab", {.k = nif_kgrab}} };
+  {"kgrab", {.k = nif_kgrab}},
+  // a guest of the firmware's (x64/arch.c)
+  {"kexec-initrd", {.k = nif_kexec_initrd}},
+  {"efi-read", {.k = nif_efi_read}} };
 
 // the kore cat is read off the ramfs at boot: only the order is baked
 static char const src_korelist[] =
@@ -2211,17 +2249,19 @@ void kmain(void) {
  __love_osv = -1;
  k_seat_init();
  khhdm = kboot.hhdm;
- archinit();
+ // a guest of the firmware keeps its interrupts, tables and devices: theirs, not ours
+ bool guest = kboot.efi_st != 0;
+ if (!guest) archinit();
  // the door's date, else the RTC, reachable once archinit has mapped it
  if (!kboot.date) kboot.date = k_rtc();
- serial_init();
+ if (!guest) serial_init();
  // only meminit is required: without fbinit or cbinit the kernel runs on serial alone
  if (meminit()) {
   if (fbinit()) cbinit();        // the framebuffer console
  // kmallocw memory, so pa = va - khhdm holds for everything the device reads
-  k_blk_init(kmallocwa(b2w(320), 16));
+  if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
-  k_hda_init(kmallocwa(b2w(3840), 128));
+  if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
  // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;

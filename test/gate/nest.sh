@@ -1,7 +1,8 @@
 #!/bin/sh
 # test/gate/nest.sh -- `love nest`, the binary laying itself as the user's love, in a
-# HOME of its own: a fresh nest, the same build again, another love replaced, and the
-# build's name, a short hash of the source it carries, in --version and in nest's line.
+# HOME of its own, the nest unnamed: a fresh nest, the same build again, another love
+# replaced, XDG_DATA_HOME's nest, and the build's name, a short hash of the source it
+# carries, in --version and in nest's line.
 #
 # usage: sh test/gate/nest.sh LOVE
 set -u
@@ -11,7 +12,7 @@ H=$PWD/out/.nest
 fails=0
 fail() { echo "FAIL nest: $*"; fails=$((fails+1)); }
 fresh() { rm -rf "$H"; mkdir -p "$H/.local/bin"; }
-nest() { HOME=$H "$love" nest "$@" 2>&1; }
+nest() { LOVE_NEST= XDG_DATA_HOME= HOME=$H "$love" nest "$@" 2>&1; }
 
 # the name: love, the version, and 8 hex of the carried source; the same on every ask
 ver=$("$love" --version)
@@ -51,6 +52,12 @@ out=$(nest); st=$?
 [ "$out" = "love nest: installed ~/.love/bin/love ($ver)" ] || fail "over another love said: $out"
 cmp -s "$love" "$b/love" || fail "another love was not replaced"
 [ "$(readlink "$b/lush")" = love ] || fail "lush was not linked again"
+
+# XDG_DATA_HOME, with no LOVE_NEST, names the nest's parent
+out=$(LOVE_NEST= XDG_DATA_HOME=$H/xdg HOME=$H "$love" nest 2>&1); st=$?
+[ $st = 0 ] || fail "an xdg nest exits $st: $out"
+[ "$out" = "love nest: installed ~/xdg/love/bin/love ($ver)" ] || fail "an xdg nest said: $out"
+cmp -s "$love" "$H/xdg/love/bin/love" || fail "an xdg nest did not lay this binary"
 
 # no flags: a word is refused, and the old ones with it
 for o in -z -y -f -n --stamp; do

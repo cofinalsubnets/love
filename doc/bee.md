@@ -45,11 +45,11 @@ While it is open, the hud holds the *user's card*, at the login's name (**USER**
 
 The hud is drawn by **src/apps/mitty/hud.l**. It reaches the hive through bee's *core*, a tablet of doors (**bee-core** in **src/apps/bee.l**): the user's card and its mail, the sessions, and the queues' lines.
 
-The settings are read from **~/.love/etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
+The settings are read from the nest's **etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
 
 # SESSIONS AND MESSAGES
 
-Every session has a name. It is **BEE_NAME** when that is set and free; otherwise it is the last part of the working directory followed by two hex digits. Sessions find each other, and write to each other, through plain files under the *hive*: **BEE_HIVE** when set, else **~/.love/run/hive**. Anything that can write a file can take part: a shell, a script, or another kind of agent.
+Every session has a name. It is **BEE_NAME** when that is set and free; otherwise it is the last part of the working directory followed by two hex digits. Sessions find each other, and write to each other, through plain files under the *hive*: **BEE_HIVE** when set, else the nest's **run/hive**. Anything that can write a file can take part: a shell, a script, or another kind of agent.
 
 A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 
@@ -121,7 +121,7 @@ Which lanes a change owes is data, **src/apps/lanemap.l**: path rules, each nami
 
 # HOSTS
 
-Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, **~/.love/etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
+Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, the nest's **etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
 
 **name**
 :   The host's name, which its locks carry.
@@ -132,8 +132,14 @@ Work this box cannot do, or should not, runs on another: an a64 binary on an arm
 **slots**
 :   How many pieces of work it takes at once, 1 unless given. Each slot is an exclusive lock, **host-***name***-***n*, so two lanes never crowd one box.
 
+**slots-***cap*
+:   Slots of that cap's own, kept apart from **slots**: work asking for *cap* takes **host-***name***-***cap***-***n* instead, so it never waits on, or crowds out, the host's other caps.
+
+**apart-***cap*
+:   Hosts, by name, that work asking for *cap* never runs beside: every slot of each is held for as long as the work runs, so their lanes wait for it and it waits for them.
+
 **caps**
-:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against), **rp2040-swd** (an rp2040 on a raspberry pi debug probe: its swd on the probe's D port, its uart0 on the probe's U port), **nucleo446-swd** (a nucleo-f446re on its st-link, its console the st-link's serial port), **esp32-uart** (an esp32 on its usb uart, which test/gate/esp32board.sh runs from ram through src/tools/esprom.l; its facts **tty** and **love** name the port and the love that drives it), **teensy41-usb** (a teensy 4.1 on usb running our image, flashed through teensy_loader_cli, its console the usb tty its **tty** fact names). a board is one piece of work, so its paragraph names it apart from its host, with one slot; test/gate/mcuboard.sh knows each board's probe, flash and console.
+:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against), **rp2040-swd** (an rp2040 on a raspberry pi debug probe: its swd on the probe's D port, its uart0 on the probe's U port), **nucleo446-swd** (a nucleo-f446re on its st-link, its console the st-link's serial port), **esp32-uart** (an esp32 on its usb uart, which test/gate/esp32board.sh runs from ram through src/tools/esprom.l; its facts **tty** and **love** name the port and the love that drives it), **teensy41-usb** (a teensy 4.1 on usb running our image, flashed through teensy_loader_cli, its console the usb tty its **tty** fact names). a board is one piece of work, so its paragraph names it apart from its host, with one slot; test/gate/mcuboard.sh knows each board's probe, flash and console. **lanes** takes a gate's lanes, test/gate/lanes.sh.
 
 Any other line is a *fact*, such as **isa**, **os** or **page** (its page size in bytes). For example:
 
@@ -149,7 +155,7 @@ reach ssh -p 2222 root@127.0.0.1
 caps freebsd-x64
 ```
 
-**love bee --on** *cap* \[**--where** *key***=***value*\] \[**--ship** *dir*\] **--** *command* ... picks a host with *cap* that answers ssh, and whose fact *key* is *value* when **--where** asks; a **page** the registry does not give is asked of the host. It waits for a free slot on one, lays *dir*'s files in a scratch directory there in one tar over the one ssh, runs *command* in it with only **PATH**, **HOME**, **LANG=C** and the host's facts, each as **BEE_***KEY* (a **tty** fact is **BEE_TTY**), removes the directory, frees the slot, and exits with the command's status. Its output comes back on this side's. **--probe** in place of the command exits 0 when such a host answers and 75 when none does; **--ssh** prints the words that reach it. **love bee --hosts** lists the registry.
+**love bee --on** *cap* \[**--where** *key***=***value*\] \[**--whole**\] \[**--ship** *dir* | **--in** *dir* \[**--push** *sha* | **--at** *sha*\]\] **--** *command* ... picks a host with *cap* that answers ssh, and whose fact *key* is *value* when **--where** asks; a **page** the registry does not give is asked of the host. It waits for a free slot on one, lays *dir*'s files in a scratch directory there in one tar over the one ssh, runs *command* in it with only **PATH**, **HOME**, **LANG=C** and the host's facts, each as **BEE_***KEY* (a **tty** fact is **BEE_TTY**), removes the directory, frees the slot, and exits with the command's status. Its output comes back on this side's. **--in** *dir* in place of **--ship** keeps a directory there instead, under the host's home unless absolute: the command runs in it and nothing is removed after, so one build serves the runs that follow. **--push** *sha* lays this repository's commit *sha* in it first: pushed over the one ssh, checked out over whatever was there, and its untracked files cleaned but **out/**. A file the commit keeps keeps its time, so a make in it rebuilds what moved and only that. The command then runs only while the directory is at *sha*. **--push** with no command pushes and stops, taking no slot. **--whole** waits for every slot the cap has on one host, for work that runs with nothing beside it. **--at** *sha* runs the command only while the directory's checkout is *sha* and its tracked files are untouched, and exits 97 otherwise. **--probe** in place of the command exits 0 when such a host answers and 75 when none does; **--ssh** prints the words that reach it; **--list** prints the hosts that answer, *name slots isa* a line, their slots the cap's own. **love bee --hosts** lists the registry.
 
 The lanes ask for hosts this way: the a64 kernel lane boots on a **kvm-a64** host, the a64 lanes' binaries run on an **a64-exec** one, **test_kernel_vmx** boots on **vt-x**, and the BSD lanes find their boxes by their caps. A lane with a fallback takes 75 as its cue; one without skips loudly, which a strict box makes red. For one release the environment still names hosts, and a cap it names takes its hosts over the registry's: **KTEST_A64_HOSTS** (*host***:***slots* ...) for **a64-exec** and **kvm-a64**, **KTEST_VMX_HOSTS** for **vt-x**, and **FBSD_SSH**, **NBSD_SSH**, **FBSD_ARM64_SSH** and **NBSD_ARM64_SSH** (an ssh prefix each) for the four systems.
 
@@ -280,7 +286,7 @@ See who is running, and send one of them a note:
 Send the same note with nothing but a shell:
 
 > ```
-> d=~/.love/run/hive/g-3f/inbox; id=$(date +%s)000-me
+> d=$(sh src/tools/nest.sh)/run/hive/g-3f/inbox; id=$(date +%s)000-me
 > printf 'from me\n\nrow 62 landed\n' > "$d/.$id" && mv "$d/.$id" "$d/$id"
 > ```
 
@@ -290,17 +296,17 @@ Send the same note with nothing but a shell:
 :   This session's name, and the sender that **--send** signs with.
 
 **BEE_HIVE**
-:   The hive's directory, **~/.love/run/hive** when unset.
+:   The hive's directory, the nest's **run/hive** when unset.
 
 **BEE_SELF_WATCH**
 :   Seconds between looks at the binary this session runs, 30 when unset.
 
 **BEE_HOSTS**
-:   The host registry, **~/.love/etc/bee/hosts** when unset.
+:   The host registry, the nest's **etc/bee/hosts** when unset.
 
 # EXIT STATUS
 
-**0** when the run ends normally. **--on** exits with its command's status, **75** when no host with the cap answers and **255** when ssh or the host fails. **--lock** exits with its command's status. **1** when a message cannot be delivered. **2** for a malformed **--send**, or an unknown option.
+**0** when the run ends normally. **--on** exits with its command's status, **75** when no host with the cap answers, **97** when its kept directory is not at the commit **--push** or **--at** names, and **255** when ssh or the host fails. **--lock** exits with its command's status. **1** when a message cannot be delivered. **2** for a malformed **--send**, or an unknown option.
 
 # SEE ALSO
 

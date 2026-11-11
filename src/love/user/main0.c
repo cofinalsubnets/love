@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// nokern.c and noblob.c link beside this; no moonlibc, so __love_osv is love.c's weak 0
+// noblob.c links beside this; no moonlibc, so __love_osv is love.c's weak 0
 
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/love/boot/post.l) drinks the corpus

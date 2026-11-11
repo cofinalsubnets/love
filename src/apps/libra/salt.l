@@ -1,7 +1,7 @@
 ; src/apps/libra/salt.l -- salt, the config door every crew app can share. (salt 'libra)
 ; answers a tablet of that app's settings, the second file overlaying the first:
 ;
-;   ~/.love/etc/<app>.l    your taste, wherever the binary happens to live
+;   NEST/etc/<app>.l       your taste, wherever the binary happens to live
 ;   ./.<app>.l             this tree's own, and it travels in git
 ;
 ; the search is the cwd only, no walk upward; absent files are the same as empty ones.

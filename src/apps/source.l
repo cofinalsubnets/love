@@ -273,9 +273,12 @@
    (seed-usage _) (puts """
     usage: love seed [-g] [ARCH] [DIR]
            love seed [-g] FORMAT [DIR [FLAG..]]
+           love seed kernel [DIR]
     lay this binary's source under DIR (default .) and rebuild it, byte for byte
       ARCH   x64 | a64 | rv64: build for that machine instead, as DIR/love-ARCH
       FORMAT apk | aab: android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
+      kernel this binary projected onto the metal, as DIR/love-ARCH.elf: a reformat, its
+             code the running binary's, its own objects compiled from the carried tree
       -g     build with the system cc and tools, ours filling the gaps
 
     """)
@@ -283,6 +286,7 @@
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
        _ (two? as0 && src-vers? <as0 ? (src-vers "seed"))
+       _ (two? as0 && <as0 = "kernel" ? (quit (kern-seed >as0)))
        f0 (two? as0 ? <as0 "")
        greg? (f0 = "-g")
        as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default, still eaten
@@ -343,7 +347,7 @@
           dst (two? a3 ? <a3)
           (elem xa seed-formats ? (seed-app root xa dst (two? a3 ? >a3)) (seed-wait root xa dst))))
 
-   ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
+   ; --- `love seed kernel [DIR]` -- the metal projection of this binary --------
    ; the boot stub is laid, not stored: the cat below evals off the carried tree in the
    ; Makefile's order. the arch is this binary's own, read off e_machine
    ; the kernel's objects come from the carried source, by its own Makefile, in a tree
@@ -365,15 +369,11 @@
    (kern-pick nm)
     (uread "/love/\(nm)" @ [1 s] (s + "") (src-die "the carried tree has no \(nm)"))
    (kern-b16 s i) (s i + 256 * s (i + 1))
-   kern-box {}                  ; the verb's inputs, read back by the stream
-   (kernel-main as)
-    ; the operand is a path to WRITE, so the flags are asked before it: a `-h` taken
-    ; for one lays a kernel in a file called -h
-    (: usage "usage: love kernel OUT.elf"
-       _ (two? as && src-help? <as ? (puts "\(usage)\n", quit 0))
-       _ (two? as && src-vers? <as ? (src-vers "kernel"))
-       _ (two? as ? 0 (src-die usage))
-       out <as
+   (kern-seed as)
+    (: _ (two? as && src-help? <as ? (seed-usage 0, quit 0))
+       dir (two? as ? <as ".")
+       _ (src-dash? dir ? (src-not-dir "seed" dir))
+       _ (two? (stat dir) ? 0 (mkdir dir 493))
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read the seed path"))
        pie (open exe "r" @ h
@@ -382,11 +382,12 @@
        m (kern-b16 pie 18)
        arch (m @ 62 "x64" 183 "a64" 243 "rv64"
              (src-die "no boot door for this machine"))
+       out "\(dir)/love-\(arch).elf"
        ; the stream evals in its own layer, so the inputs cross on the verb table,
        ; the one tablet every layer reaches, under a key pulled back off after
-       _ (pins kern-box 'pie pie 'out out 'arch arch 'kobs (kern-objs out exe))
+       box (pins {} 'pie pie 'out out 'arch arch 'kobs (kern-objs out exe))
        vt (cite 'verbs 'tab)
-       _ (pin vt 'kern-in kern-box)
+       _ (pin vt 'kern-in box)
        cat ("(borrow 'holo)"
             + kern-pick "src/apps/kore/text.l"
             + kern-pick "src/apps/kore/u.l"
@@ -402,12 +403,12 @@
         puts ";; wrote \(out) (\(arch))\n",
         0))
 
-   ; -- nest: this binary laid as the user's love under ~/.love/bin, lush linked to it --
+   ; -- nest: this binary laid as the user's love in the nest's bin/, lush linked to it --
    (nest-read p) (uread p @ [1 s] (s + "") ())
    ; the one tool linked to love by its own name, the argv[0] door: lush, autonomous by
    ; default, runs every other verb by name (`lush -c 'mooncc ..'`), PATH or no PATH
    nest-tools ["lush"]
-   ; ~/.local/bin is already on PATH where ~/.love/bin is not; a name there that is not
+   ; ~/.local/bin is already on PATH where the nest's bin/ is not; a name there that is not
    ; ours already is left alone
    (nest-compat home bin nm)
     (: d "\(home)/.local/bin" p "\(d)/\(nm)" to "\(bin)/\(nm)"
@@ -426,7 +427,8 @@
                (unlink tmp, src-die "nest: the copy does not run; nothing replaced"))
           (!(rename tmp dst) ? 'laid (unlink tmp, src-die "nest: cannot rename over \(dst)"))))
    nest-usage "usage: love nest
-install this binary as ~/.love/bin/love, with lush beside it
+install this binary as bin/love in the nest (LOVE_NEST, else XDG_DATA_HOME/love,
+else ~/.love), with lush beside it
 "
    (nest-main as)
     (: _ (two? as ?
@@ -440,9 +442,10 @@ install this binary as ~/.love/bin/love, with lush beside it
        _ (string? me ? 0 (src-die "nest: cannot find this binary"))
        new (nest-read me)
        _ (string? new ? 0 (src-die "nest: cannot read \(me)"))
-       bin (cite 'path 'nest 0 + "/bin")
-       _ (mkdir (cite 'path 'nest 0) 493) _ (mkdir bin 493)
-       shown (bin = "\(home)/.love/bin" ? "~/.love/bin/love" "\(bin)/love")
+       nd (cite 'path 'nest 0) bin (nd + "/bin")
+       ; XDG_DATA_HOME may not be there yet: its parents first
+       _ (each (cite 'path 'pprefixes nd + [nd bin]) (d \ mkdir d 493))
+       shown ("\(bin)/love" @ p (starts? p "\(home)/" ? "~\(snip p #home #p)" p))
        r (nest-lay bin "\(bin)/love" new)
        _ (each nest-tools (nm \ "\(bin)/\(nm)" @ p (readlink p = "love" ? 0 (unlink p, symlink "love" p))))
        _ (each ("love" . nest-tools) (nest-compat home bin))
@@ -456,7 +459,6 @@ install this binary as ~/.love/bin/love, with lush beside it
       'source source-main
       'src    source-main
       'seed   seed-main
-      'kernel kernel-main
       'nest   nest-main))
 
 ) ; module 'source

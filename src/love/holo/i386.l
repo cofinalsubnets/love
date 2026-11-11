@@ -273,7 +273,7 @@
            ('push . i3-push m) ('pop . i3-pop m)
            ('neg . i3-un m 247 3) ('not . i3-un m 247 2) ('inc . i3-un m 255 0) ('dec . i3-un m 255 1)
            ('call . i3-call m) ('jmp . i3-jmp m) ('br . i3-br m)
-           ('jmp8 . (\ l [235 (fix 1 'rel8 l 0)])) ('br8 . (\ c l [(jcc-op c - 16) (fix 1 'rel8 l 0)]))
+           ('jmp8 . (l \ [235 (fix 1 'rel8 l 0)])) ('br8 . (\ c l [(jcc-op c - 16) (fix 1 'rel8 l 0)]))
            ('jmpr . i3-jmpr m) ('jmpm . i3-jmpm m) ('jmpt . i3-jmpt m) ('callr . i3-callr m) ('callm . i3-callm m)
            ('la . i3-la m) ('laa . i3-laa m) ('lia . i3-la m) ('lar . i3-lar m) ('pushl . i3-pushl m)
            ('set . i3-set m) ('set1 . i3-set1 m) ('cmov . i3-cmov m) ('mulo . i3-mulo m)
@@ -309,7 +309,7 @@
            ('ldseg . i3-ldseg m) ('stseg . i3-stseg m) ('segst . i3-segst m) ('segld . i3-segld m) ('pushseg . i3-pushseg m) ('popseg . i3-popseg m)
            ('ldcr . (\ d n (i3-cr m 32 n d))) ('stcr . (\ n s (i3-cr m 34 n s)))
            ('lddr . (\ d n (i3-cr m 33 n d))) ('stdr . (\ n s (i3-cr m 35 n s)))
-           ('ltr . (\ s [15 0 (modrm 3 3 (i3rn s))]))
+           ('ltr . (s \ [15 0 (modrm 3 3 (i3rn s))]))
            ('lgdt . i3-m0f m 2 [15 1]) ('lidt . i3-m0f m 3 [15 1])
            ('sgdt . i3-m0f m 0 [15 1]) ('sidt . i3-m0f m 1 [15 1]) ('invlpg . i3-m0f m 7 [15 1])
            ('mdig . i3-mdig m) ('rdig . i3-rdig m) ('rrop . i3-rrop m) ('str . i3-str m) ('bscan . i3-bscan m)
@@ -335,9 +335,9 @@
    i386-ems16 (i386-ems 1)
    i386-wide '(r7 r8 r9 r10 r11 r12 r13 r14)
    (i386-lower ems ins)
-    (: _ (each (<ins @ 'call () 'jmp () ('la || 'lar) [ins 1] >ins)   ; those name a symbol
-              (o \ elem o i386-wide && scare 'i386-badreg [o ins]))
-     (lower-via ems ins))
+    (each (<ins @ 'call () 'jmp () ('la || 'lar) [ins 1] >ins)   ; those name a symbol
+         (o \ elem o i386-wide && scare 'i386-badreg [o ins]),
+     lower-via ems ins)
    (i386-be ems)
     {'lower (i386-lower ems)
      'patch x86-patch

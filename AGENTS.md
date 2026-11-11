@@ -185,8 +185,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 <!-- lanes: laid by `love bee --lanes-doc` from src/apps/lanemap.l; edit there -->
 - `src/apps/kore/*` -> `test_kore` `test_hostnif`
-- `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l` -> `test_hostnif`
+- `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l`, `src/apps/hosts.l` -> `test_hostnif`
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)
+- `test/gate/lanes.sh` -> `test_lanesremote`
 - `src/love/snap.c`, `src/love/image.c`, `src/love/elfbake.c`, `src/love/macho.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - `src/love/snap.c` -> `test_boards`, whose links bake their own images through it
 - `src/apps/caja/*`, `test/caja/*`, `test/gate/caja.sh` -> `test_caja`
@@ -220,7 +221,7 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 
 - heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_gcstress_bake` `test_gcstress_full` `test_boards` `test_hearts` `test_hearts_boot` `moon-flex` `moon-bison`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
-- a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, `~/.love/etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
+- a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, the nest's `etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
 
 A worktree goes under `.claude/worktrees/NAME`, never beside the tree, and is removed (`git worktree remove`) once its row lands.
 

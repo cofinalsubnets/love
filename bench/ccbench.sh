@@ -8,6 +8,9 @@
 #                     residency shows -- the pair is the reading, not either row
 #   inflate crc32     the heavy nifs (bench/cnifs.l), three shapes: branchy, branchless,
 #   sha256            and an array beside scalars. work the tree actually waits on.
+#   zstd raster       the two the register allocator is being worked on against: zstd's
+#                     sequence loop (cnifs.l) and lore's facets (bench/raster.l), its
+#                     frames on its own clock and its sum checked against the host love's
 # the lanes, all three static, which is the point of the pairing:
 #   mooncc            love's own C compiler, run out of the shipped artifact's mooncc verb
 #   gcc-musl          the same units at the host's -O2 cflags through the musl wrappers,
@@ -29,6 +32,9 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 
 # a distro's ccache shim would clock a cache hit, and mooncc has no cache to hit
 export CCACHE_DISABLE=1
+# one thread in every lane: the pool widens by what each build detects of the box, so a
+# lane that fans out would be timed against one that does not -- this table times codegen
+export LOVE_THREADS=1
 
 # common.mk's `t`, byte for byte: the three front-loaded, then the rest in byte order
 # (glaze-x86 out -- it wants emit.l ahead of it and runs native under its own guard)
@@ -44,7 +50,7 @@ CFLAGS="$(printf '%s' "$LOVE_CFLAGS" | sed 's/-Werror//g') -Dtco=1 -fpic -I$ho -
 [ -n "${LOVE_C:-}" ] && [ -n "${HOST_C:-}" ] || { echo "ccbench: no LOVE_C/HOST_C -- run \`make ccbench\`" >&2; exit 2; }
 host_cs=$HOST_C
 # ..and the hosted seat, the Makefile's seat_o: the kernel's doors stood in, no carried source
-host_cs="$host_cs $R/src/love/user/nokern.c $R/src/love/noblob.c"
+host_cs="$host_cs $R/src/love/noblob.c"
 # common.mk's $(data_ld), owed by any link: the sentinels' tiling is love.h's love_typ, and
 # ld left alone orders love.data.N as emitted -- lvm_str under lvm_sym, strings as closures
 LDFLAGS="-Wl,-T,$R/src/love/love_data.ld"
@@ -68,7 +74,7 @@ build_cc() { # $1=compiler $2=binpath $3=extra flags ; objects under $WORK/o-<bi
 
 # mooncc: the whole toolchain in love, as `make test_raw` spells it -- a -c per unit,
 # mksys for the syscall leaf, our own linker. the compiler is the shipped artifact
-# because that is what a user runs, and its libc archive caches under ~/.love/cache/moon
+# because that is what a user runs, and its libc archive caches under out/cache/moon
 # keyed on a baked image, so intermediates rebuilding does not re-pay the build.
 # LOVE_NO_IMAGE= is empty, not unset: an egg-booted love has no verb table, so `mooncc`
 # would read as a filename.
@@ -76,12 +82,14 @@ SEED=$R/out/love
 mc() { env LOVE_NO_IMAGE= "$SEED" mooncc "$@"; }
 build_mooncc() { # $1=binpath
   bin=$1; od=$WORK/mooncc; rm -rf "$od"; mkdir -p "$od"
+  # each unit by its path from the root, as the -I dirs are: mooncc's #pragma once keys on
+  # the spelling, so an absolute cb.c and a relative -Isrc/love read love.h twice
   ( cd "$R" || exit 1
     for f in $LOVE_C; do b=$(basename "$f" .c)
       case $f in */moonlibc/*) continue;; esac       # the link pulls moonlibc by need
-      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/$b.o" || exit 1; done
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "${f#$R/}" "$od/$b.o" || exit 1; done
     for f in $host_cs; do b=$(basename "$f" .c)
-      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$f" "$od/host_$b.o" || exit 1; done
+      mc -D tco=1 -D LvHaveVersionH -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "${f#$R/}" "$od/host_$b.o" || exit 1; done
     # no moonlibc object: the link pulls members by need, so ccsize and ccdead read
     # mooncc's libc off the binary's complement instead
     for f in src/apps/moon/lib/moonlibc/math/*.c; do b=$(basename "$f" .c)
@@ -111,28 +119,44 @@ corpus_ms() { # $1=binpath ; median full, median boot, report max(0, full-boot)
   awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
 }
 
-# a driver's run time, boot subtracted the same way; the reps are fixed in the .l.
+# a driver's own reading: the row's reps timed inside the process (its "ms N" after the
+# sentinel), median of SAMPLES runs. a whole-process wall less a boot run buried a second of
+# work under five of egg-boot, and a loaded box swung the difference past the row itself.
 # no sentinel is dnf: a lane that answered nothing must not be timed as if it were fast.
 CRYPTO=$R/bench/ccrypto.l
 NIFS=$R/bench/cnifs.l
+inmed() { # $1=command $2=sed pattern taking the ms ; the median of SAMPLES readings, or dnf
+  i=0; while [ "$i" -lt "$SAMPLES" ]; do
+    out=$(eval "$1" 2>&1) || { echo dnf; return; }
+    ! printf '%s' "$out" | grep -q '^;; missing' || { echo dnf; return; }   # a missing nif times nothing
+    v=$(printf '%s' "$out" | sed -nE "$2")
+    [ -n "$v" ] || { echo dnf; return; }
+    echo "$v"; i=$((i+1)); done | sort -n | awk '/dnf/{d=1} {v[NR]=$0} END{if (d) print "dnf"; else print v[int((NR+1)/2)]}'
+}
 drv_ms() { # $1=binpath $2=driver-file $3=driver-call $4=sentinel
-  bin=$1; df=$2; drv=$3
-  { cat "$df"; echo "$drv"; } > "$WORK/drv.run.l"
-  out=$(LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$bin" < "$WORK/drv.run.l" 2>&1) || { echo dnf; return; }
-  printf '%s' "$out" | grep -q "$4" || { echo dnf; return; }
-  ! printf '%s' "$out" | grep -q '^;; missing' || { echo dnf; return; }   # a missing nif times nothing
-  full=$(med "LOVE_NO_IMAGE=1 $bin < $WORK/drv.run.l")
-  boot=$(med "LOVE_NO_IMAGE=1 $bin </dev/null")
-  awk -v f="$full" -v b="$boot" 'BEGIN{d=f-b; printf "%.1f", d<0?0:d}'
+  { cat "$2"; echo "$3"; } > "$WORK/drv.run.l"
+  inmed "LOVE_NO_IMAGE=1 timeout $TIMEOUT $1 < $WORK/drv.run.l" "s/.*$4 ms ([0-9]+).*/\\1/p"
 }
 
 # the inflate row's input, laid by the host love: src/apps/gz.l is a module and the lane
-# binaries have no module path. INFN is the inflated size; 0 leaves that one row dnf.
+# binaries have no module path. INFN is the inflated size; 0 leaves the inflate and zstd rows dnf.
 INF=$WORK/bench.deflate
-INFN=$(cd "$R" && out/love bench/ccgen.l src/love/love.c "$INF" 2>/dev/null)
+ZST=$WORK/bench.zst
+INFN=$(cd "$R" && out/love bench/ccgen.l src/love/love.c "$INF" "$ZST" 2>/dev/null)
 case $INFN in ''|*[!0-9]*) INFN=0;; esac
 
-# one lane: build timed once, verified, then every row with boot subtracted
+# the raster row: FRAMES frames by raster.l's own clock, so the scene the love code builds
+# is not timed. the host love's sum is the answer a lane must give; a miscompile is dnf
+RASTER=$R/bench/raster.l
+FRAMES=100
+RSUM=$(cd "$R" && RASTER_REPS=1 out/love "$RASTER" 2>/dev/null | sed -nE 's/.*sum ([0-9-]+) .*/\1/p')
+rast_ms() { # $1=binpath
+  out=$(RASTER_REPS=1 LOVE_NO_IMAGE=1 timeout "$TIMEOUT" "$1" < "$RASTER" 2>&1) || { echo dnf; return; }
+  [ -n "$RSUM" ] && printf '%s' "$out" | grep -q "sum $RSUM " || { echo dnf; return; }
+  inmed "RASTER_REPS=$FRAMES LOVE_NO_IMAGE=1 timeout $TIMEOUT $1 < $RASTER" 's/.*tot ([0-9]+).*/\1/p'
+}
+
+# one lane: build timed once, verified, then every row by its own reading
 lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   lbl=$1; bld=$2; bin=$3
   bt=$(wall "$bld '$bin' '$4'")
@@ -143,13 +167,17 @@ lane() { # $1=label $2=builder-cmd $3=binpath $4=extra cflags (build_cc only)
   crow chacha   "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(cc-run ())' 'ccrypto chacha: ok')"
   crow poly1305 "$lbl" "$(drv_ms "$bin" "$CRYPTO" '(po-run ())' 'ccrypto poly1305: ok')"
   if [ "$INFN" -gt 0 ]; then
-    crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 300)" 'cnifs inflate: ok')"
+    crow inflate "$lbl" "$(drv_ms "$bin" "$NIFS" "(inf-run \"$INF\" $INFN 900)" 'cnifs inflate: ok')"
   else echo "inflate $lbl dnf"; fi
+  if [ "$INFN" -gt 0 ]; then
+    crow zstd "$lbl" "$(drv_ms "$bin" "$NIFS" "(zst-run \"$ZST\" $INFN 1500)" 'cnifs zstd: ok')"
+  else echo "zstd $lbl dnf"; fi
+  crow raster   "$lbl" "$(rast_ms "$bin")"
   crow crc32    "$lbl" "$(drv_ms "$bin" "$NIFS" '(crc-run ())' 'cnifs crc32: ok')"
   crow sha256   "$lbl" "$(drv_ms "$bin" "$NIFS" '(sha-run ())' 'cnifs sha256: ok')"
 }
 crow() { case $3 in dnf) echo "$1 $2 dnf";; *) echo "$1 $2 $3 ok";; esac; }
-dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256; do echo "$ph $1 dnf"; done; }
+dnf_lane() { for ph in build test chacha poly1305 inflate crc32 sha256 zstd raster; do echo "$ph $1 dnf"; done; }
 
 # a broken harness renders as a well-formed table of dnf. one missing compiler is a
 # skip; zero live lanes is this script's own fault, and it exits 1 at the foot.

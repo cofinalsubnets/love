@@ -3,7 +3,7 @@
 # every gate is phony: one missing here stops running once a file of its name appears
 .PHONY: \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
-  moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
+  moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
@@ -17,10 +17,14 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_esp32_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
+
+# the gates' laws read a closure made at run time as compiled when made; test/host/glazehot.l
+# reads the default, a compile at its call past glaze.l's hot-calls
+export LOVE_GLAZE_HOT = eager
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
 test_phases = test_host test_love0
@@ -30,7 +34,7 @@ test:
 test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_roster test_moon test_as test_links test_kernel_wasm test_harp
 
 # the core's gate: test_extra's local, unheavy lanes
-test_core: test_filemode test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
+test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_envimage test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
 	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
@@ -180,6 +184,7 @@ hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzi
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
+hostnif_tests += test/host/glazehot.l    # a run-time closure compiles at its call past hot-calls
 hostnif_tests += test/host/quit.l   # quit drains the ports; a scare gives a piped stdin back blocking
 hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
@@ -289,6 +294,7 @@ gate_m += test_walkroom   # a walk past the gap, and past the budget
 gate_m += test_cli   # exit status: 0 working, 1 unopenable, 2 malformed, a verb's own charm
 gate_m += test_nest   # love nest, in a HOME of its own
 gate_m += test_spin   # a waiting machine spends nothing
+gate_m += test_lanesremote   # lanes.sh --remote over stand-in hosts, one dropping its lanes
 
 # the checked-in icon must be what src/tools/mkicon.l lays
 test_web: host
@@ -344,7 +350,8 @@ test_vi: host
 	    src/apps/tui.l test/law/tui.l \
 	    src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l test/law/vi.l \
 	  | $(gsh) test/gate/run.sh vi "$m" "test/law/vi:"
-	@rm -f $(ho)/.vi1; \
+	@export LOVE_NEST=$(abspath $(ho))/.vi-nest; rm -rf $$LOVE_NEST; mkdir -p $$LOVE_NEST/etc; \
+	  rm -f $(ho)/.vi1; \
 	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
 	    || { echo "FAIL kore vi create+write (exit $$r)"; exit 1; }; \
@@ -366,11 +373,16 @@ test_vi: host
 	    | $(korerun) vi $(ho)/.vi2 $(ho)/.vi3 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi2 $(ho)/.vi3 | tr '\n' ' ')" = "onex two " ]; } \
 	    || { echo "FAIL kore vi arglist (exit $$r)"; exit 1; }; \
-	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end) ok"
+	  rm -f $(ho)/.vi1; printf '(shiftwidth 4)\n(autoindent 0)\n' > $$LOVE_NEST/etc/vi.l; \
+	  printf 'ix\033>>o  y\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(tr '\n' '|' < $(ho)/.vi1)" = "    x|  y|" ]; } \
+	    || { echo "FAIL kore vi etc/vi.l: shiftwidth 4, autoindent off (exit $$r): $$(tr '\n' '|' < $(ho)/.vi1)"; exit 1; }; \
+	  rm -rf $$LOVE_NEST; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end + etc/vi.l) ok"
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`
-test_moon: host $(love0)
+test_moon: host $(love0) $(ho)/mooncc0.image
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
@@ -453,7 +465,7 @@ test_selfhost: host
 	@$(raw_env) $(gsh) test/gate/selfhost.sh $(ho) $m $t
 # the gcc-free fixpoint: test_selfhost plus our libc, lm.c, sys.o and linker. raw_env is shared
 # with the cross twins
-raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(S)/love/user/nokern.c $(S)/love/noblob.c'
+raw_env = gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' gate_hosta='$(hosta)' gate_seat_c='$(S)/love/noblob.c'
 test_raw: host
 	@$(raw_env) $(gsh) test/gate/raw.sh x64 $(ho) $m $t
 # test_tco0 -- love at tco=0 (love0 never reaches the glaze's lvm shape): build, bake, corpus in
@@ -513,12 +525,12 @@ vec-%:
 # the fixpoint: love1 rebuilds every TU into love2, byte-identical; the link list is make's
 # objects, never a glob. test_extra only
 test_fixpoint: host $(moon_seat_o) $(love0) $(ho)/mooncc0.image
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c $(S)/love/user/nokern.c' \
-	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o) $(moon_d)/love/user/nokern.o
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c' \
+	  $(gsh) test/gate/fixpoint.sh $(ho) $(love0) $(hosta) $(moon_d) $(moon_o) $(moon_seat_o)
 # the cross fixpoint under qemu-user; opt-in (`make xa=rv64 test_xfixpoint`), skips without qemu
-test_xfixpoint: $(x_o) $(x_seat_o) $(xod)/love/user/nokern.o $(love0) $(ho)/mooncc0.image
-	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c $(S)/love/user/nokern.c' \
-	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o) $(xod)/love/user/nokern.o
+test_xfixpoint: $(x_o) $(x_seat_o) $(love0) $(ho)/mooncc0.image
+	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_seat_c='$(S)/love/noblob.c' \
+	  sh test/gate/xfixpoint.sh $(ho) $(love0) $(xqemu) $(xa) mksys-$(xa) $(tco) $(xod) $(xa) $(x_o) $(x_seat_o)
 # test_fat -- the fat container: native answer, deterministic pack, foreign member under qemu-user
 test_fat: dist-fat
 	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd) $(uname_$(xa))
@@ -654,6 +666,9 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
+# perl's miniperl, held to its own minitest suite; x64 only
+moon-perl: host
+	@PERLSRC="$(PERLSRC)" ./src/tools/moon-perl.sh
 # flex and bison on m4, built with CC=mooncc, held byte-identical to the host's flex and bison
 moon-flex moon-bison: host
 	@./src/tools/$@.sh
@@ -956,11 +971,11 @@ test_doomx-run: $(R)/test/host/doomx.l
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
-	@echo TEST love kernel "(the projection verb; byte-identical to make's)"
-	@rm -f $(ko)/.kverb.elf
-	@cd $(ko) && $(abspath $m) kernel .kverb.elf > /dev/null
-	@cmp $(ko)/.kverb.elf $(k_elf)
-	@rm -f $(ko)/.kverb.elf
+	@echo TEST love seed kernel "(the projection; byte-identical to make's)"
+	@rm -rf $(ko)/.kverb
+	@cd $(ko) && $(abspath $m) seed kernel .kverb > /dev/null
+	@cmp $(ko)/.kverb/love-$a.elf $(k_elf)
+	@rm -rf $(ko)/.kverb
 
 test_kboot: host $(S)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
@@ -1010,6 +1025,19 @@ test_uefi: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(ko)/esp-x64 $$fw x64; fi
 endif
 
+# the kernel as the firmware's guest (love.stay), and the boot menu on it starting an image
+ifneq ($a,x64)
+test_uefi_stay:
+	@sh test/gate/skip.sh gate-skip "test_uefi_stay: skipped (host arch $a is not x64)"
+else
+test_uefi_stay: host $(S)/tools/ktest.l
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-x86_64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_stay: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s $(k_stay) \
+	 && echo TEST $(k_stayd) "(serial, headless, the firmware's guest and the boot menu)" \
+	 && $m $(S)/tools/ktest.l $(k_stayd) $$fw x64 "efihello: one two"; fi
+endif
+
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 ifeq ($(QEMU_A64),)
 test_uefi_a64:
@@ -1019,14 +1047,14 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-aarch64.fd; \
 	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
 	 $(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd \
-	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 900s)" \
+	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; kvm on a kvm-a64 host, else TCG, ceiling 900s)" \
 	 && $m $(S)/tools/ktest.l $(ko)/esp-a64 $$fw a64; fi
 endif
 
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
 inle_rv64 = test_kernel_rv64
-inle_x64 = test_disk test_uefi test_kboot test_kernel_uproc test_kpier test_kverb
+inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
 inle_a64 = test_kernel_a64 test_uefi_a64
 test_inle: host

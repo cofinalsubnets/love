@@ -8,7 +8,7 @@ static love_inline uintptr_t nom_dig(uintptr_t name) {
  return h; }
 
 // the kernel we woke on (0 unprobed, 1 linux, 2 freebsd, 3 netbsd, -1 inle): moonlibc's os.c
-// owns it where linked. weak unlike the doors, since its zero is already an honest answer
+// owns it where linked
 __attribute__((weak)) long __love_osv;
 #include <stddef.h>
 struct chain;
@@ -643,8 +643,9 @@ void __love_codesync(char *a, char *b);
 // the native code arena: hosted, RX page chunks outside the GC pool, opened W only while an
 // install writes (W^X). a blob is [len, span, code..], 16-aligned; span is what its install
 // took, which a free hands back: off the bump chunk's end it retracts, else it joins the free
-// list, by address, merged with its neighbours, lowest fit first. inle (asked at run time:
-// __love_osv < 0) and freestanding seats run heap copies, no finalizer owed.
+// list, by address, merged with its neighbours, lowest fit first. on inle (asked at run time:
+// __love_osv < 0) a chunk is a heap block, written at own and run through code_window, as the
+// image's segment is; freestanding seats run heap copies, no finalizer owed.
 // fixed = the image's own chunk, never freed blob by blob; own = what the allocator handed,
 // NULL off mmap, freed by that address and not the window it runs at
 struct code { char *base, *own; size_t len, used; int fixed; struct lazy *lz; struct code *next; };
@@ -691,15 +692,21 @@ static void code_release(struct g *g, char *p, size_t n) {
 static struct code *code_chunk(struct g *g, size_t need) {
  size_t ps = code_page(), len = (need > CodeChunk ? need : CodeChunk);
  len = (len + ps - 1) & ~(ps - 1);
- void *b = mmap(0, len, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ char *own = __love_osv < 0 ? alloc(NULL, len) : NULL;
+ void *b = own ? code_window(own) : __love_osv < 0 ? MAP_FAILED : mmap(0, len, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
  if (b == MAP_FAILED) return NULL;
  struct code *c = alloc(NULL, sizeof *c), *o = code_bump(g);
- if (!c) { munmap(b, len); return NULL; }
+ if (!c) { if (own) alloc(own, 0); else munmap(b, len); return NULL; }
  if (o && o->used < o->len) {                                     // the old bump's tail is free space now
   char *t = o->base + o->used;
   size_t tn = o->len - o->used;
   o->used = o->len, code_release(g, t, tn); }
- c->base = b, c->own = NULL, c->len = len, c->used = 0, c->fixed = 0, c->lz = NULL, c->next = g->code, g->code = c;
+ c->base = b, c->own = own, c->len = len, c->used = 0, c->fixed = 0, c->lz = NULL, c->next = g->code, g->code = c;
+ return c; }
+// the chunk holding p
+static struct code *code_at(struct g *g, char *p) {
+ struct code *c = g->code;
+ while (c && !(p >= c->base && p < c->base + c->len)) c = c->next;
  return c; }
 // (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
 char *code_install(struct g *g, char const *src, size_t n) {
@@ -716,18 +723,20 @@ char *code_install(struct g *g, char const *src, size_t n) {
   if (!c || c->len - c->used < need) c = code_chunk(g, need);
   if (!c) return NULL;
   p = c->base + c->used, c->used += need; }
- if (code_open(p, span, PROT_READ | PROT_WRITE)) return code_release(g, p, span), NULL;
- ((uintptr_t*) p)[0] = n, ((uintptr_t*) p)[1] = span;
- memcpy(p + CodeHead, src, n);
- p[CodeHead + n] = 0;
- if (code_open(p, span, PROT_READ | PROT_EXEC)) return code_release(g, p, span), NULL;
+ struct code *c = code_at(g, p);
+ char *w = c->own ? c->own + (p - c->base) : p;                   // a heap chunk is written at its own address
+ if (!c->own && code_open(p, span, PROT_READ | PROT_WRITE)) return code_release(g, p, span), NULL;
+ ((uintptr_t*) w)[0] = n, ((uintptr_t*) w)[1] = span;
+ memcpy(w + CodeHead, src, n);
+ w[CodeHead + n] = 0;
+ if (!c->own && code_open(p, span, PROT_READ | PROT_EXEC)) return code_release(g, p, span), NULL;
  code_sync(p + CodeHead, p + CodeHead + n);
  return p + CodeHead; }
 void code_free(struct g *g, char *code) {
  char *p = code - CodeHead;
- for (struct code *c = g->code; c; c = c->next)      // the image packs one blob per body, so its
-  if (c->fixed && p >= c->base && p < c->base + c->len) return;   // chunk frees nothing
- code_release(g, p, ((uintptr_t*) p)[1]); }
+ struct code *c = code_at(g, p);
+ if (!c || c->fixed) return;                         // the image packs one blob per body, so its chunk frees nothing
+ code_release(g, p, ((uintptr_t*) (c->own ? c->own + (p - c->base) : p))[1]); }
 // the arena, one figure at a time: 0 mapped, 1 bumped, 2 free, 3 free spans, over the chunks
 // installs own. a figure, not an array, so the nif keeps no local across its tail
 uintptr_t code_stat(struct g *g, int i) {
@@ -740,6 +749,8 @@ int code_in(struct g *g, uintptr_t v) {
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
+love_door char *code_window(char *p) { return p; }
+love_door_user(code_window)
 
 // the image's segment, a fixed chunk written through *w. inle's hhdm is NX and mprotect cannot
 // lift it off a shared 2 MiB entry, so there the block runs through code_window's low map

@@ -115,7 +115,7 @@
                        (foldl (\ _ k (o-has? t k ? 0 (pin t k [i (peep lb k 0)]))) 0 (keys lb),
                         go >ls (i + 1))))
        (go lanes 1))
-   (o-where wx lbl) (peep wx lbl ())
+   (o-where wx lbl) (wx lbl)
    ; lane index -> lane, so a walk by index is no walk of the list
    (o-rows ls) (: t {} (go es i) (atom? es ? t (pin t i <es, go >es (i + 1))) (go ls 0))
    ; a func symbol's size: its end label's offset less its own, in the same lane, else 0
@@ -189,7 +189,7 @@
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))
        machine (elf-machines target)
        _ (!machine ? (scare 'no-elf-machine target))
-       be (peep backends target ())
+       be (backends target)
        x86 (i386? target)
        tb (x86 ? 0 1)                                ; the thumb bit a func symbol's value carries
        rset (x86 ? '(rel32 rel8 rel16 pc8) '(b bcc bl b16 b8 cbz ldl16 ldlw vldl))
@@ -211,13 +211,13 @@
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
        wx (o-wix lanes) lnt (o-rows lanes)
-       (ln i) (peep lnt i ())
+       (ln i) (lnt i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
        (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
        (sec-exec? si) (exec? (ln (si - 1)))            ; by 1-based shndx
        allrel (catall (map ln-rl lanes))
        ext0 (o-exts wx allrel)
-       exts (ext0 + filter (u \ !(elem u ext0)) (map name (3 < #ax ? (ax 3) ())))
+       exts (ext0 + filter (u \ (nelem u ext0)) (map name (3 < #ax ? (ax 3) ())))
        vist (foldl (\ t p (pin t (name <p) <>p)) {} (4 < #ax ? (ax 4) ()))
        (o-vis nm b) (peep vist (name nm) 0 @ v (v = 0 ? b (o-putbs b 13 [v])))
        ; i386: a reach with a constant into a merging section names its label, as on x64
@@ -318,7 +318,7 @@
        (o-xtype nm) (two? (o-where wx (fn-obj nm)) ? 1 (o-ftype wx nm))
        (o-dtype nm) (x86 ? (o-asm? nm ? (o-xtype nm) 1) 1)
        (o-ftyp nm) (x86 ? (o-xtype nm) 2)
-       (o-xsize w nm) (o-gsize wx (peep szt (name nm) ()) @ z (charm? z ? z (o-fsize wx w nm)))
+       (o-xsize w nm) (o-gsize wx (szt (name nm)) @ z (charm? z ? z (o-fsize wx w nm)))
        (o-dsize w nm) (x86 && o-asm? nm ? (o-xsize w nm) (o-size nm))
        symbytes
         (: lsyms (catall (o-mapi (\ i e (: si <>e off <>>e
@@ -451,10 +451,10 @@
    ; forms at its tail and keeps its own flags, a new one rides after the rest
    (objsec-merge secs xs)
     (: more {} inn (foldl (\ t s (pin t <s 1)) {} secs)       ; a name's asm sections, latest first
-       news (foldl (\ a x (: l (peep more <x ())
+       news (foldl (\ a x (: l (more <x)
                              (pin more <x (x . l), (atom? l && !(inn <x) ? (x . a) a))))
                    () xs)
-       (grown nm al f) (rev (peep more nm ()) @ l
+       (grown nm al f) (rev (more nm) @ l
                           [(foldl (\ a x (o-dalign a (x 3))) al l) (catall (f . map (x \ x 3) l))])
        (map (s \ (grown <s (s 3) (s 4) @ g [<s (s 1) (s 2) <g <>g])) secs
         + map (x \ (grown <x 1 () @ g [<x (x 1) (x 2) <g <>g])) (rev news)))
@@ -539,7 +539,7 @@
           ; a store of a register the entry still holds is its save
           (sav st r a)
            (@ st [cb co sd fd sv ra pw]
-              (? (pro && a != () && o-cs? r && !(elem r pw) && !(any (p \ <p = r) sv))
+              (? (pro && a != () && o-cs? r && (nelem r pw) && !(any (p \ <p = r) sv))
                  (mk cb co sd fd (sort ([r a] . sv)) ra pw)
                  st))
           ; a load back from its slot restores it
@@ -643,7 +643,7 @@
           (wr st r) (wrote (? (r = 6) (fpw st ()) (r = 7) (spw st ()) st) r)
           (sav st r a)
            (@ st [cb co sd fd sv _ pw]
-              (? (pro && a != () && x-cs? r && !(elem r pw) && !(any (p \ <p = r) sv))
+              (? (pro && a != () && x-cs? r && (nelem r pw) && !(any (p \ <p = r) sv))
                  (mk cb co sd fd (sort ([r a] . sv)) pw)
                  st))
           (rst st r a) (@ st [cb co sd fd sv _ pw] (wr (mk cb co sd fd (filter (p \ p != [r a]) sv) pw) r))
@@ -723,7 +723,7 @@
         (? (atom? stk) jst
            (: pc <stk st (sts pc)
               (o-ehstep x s pc st nm lo hi rl @ [st2 nxs ind]
-                 (walk (foldl (\ k t (: o (peep sts t ())
+                 (walk (foldl (\ k t (: o (sts t)
                                          (? (o = ()) (pin sts t st2, t . k)
                                             (s6 o = s6 st2) k
                                             (o-ehjoin o st2 (st0 0) @ m
@@ -870,12 +870,12 @@
        lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0)) lanes1)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
-       (ln i) (peep lnt i ())
+       (ln i) (lnt i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
        (ln-fsz l) (ln-ty l = 8 ? 0 (o-blen (ln-bs l)))     ; a NOBITS lane owns no file bytes
        allrel (catall (map ln-rl lanes))
        ext0 (o-exts wx allrel)
-       exts (ext0 + filter (u \ !(elem u ext0)) (map name (3 < #ax ? (ax 3) ())))
+       exts (ext0 + filter (u \ (nelem u ext0)) (map name (3 < #ax ? (ax 3) ())))
        vist (foldl (\ t p (pin t (name <p) <>p)) {} (4 < #ax ? (ax 4) ()))
        (o-vis nm b) (peep vist (name nm) 0 @ v (v = 0 ? b (o-putbs b (w32 ? 13 5) [v])))
        ; x64: a reach with a constant into a merging section names its label; section + constant
@@ -913,7 +913,7 @@
        (o-asm? nm) (o-has? adata (name nm) || o-has? mnews (name nm))
        (o-xtype nm) (two? (o-where wx (fn-obj nm)) ? 1 (o-ftype wx nm))
        (o-dtype nm) (o-asm? nm ? (o-xtype nm) 1)
-       (o-xsize w nm) (o-gsize wx (peep szt (name nm) ()) @ z (charm? z ? z (o-fsize wx w nm)))
+       (o-xsize w nm) (o-gsize wx (szt (name nm)) @ z (charm? z ? z (o-fsize wx w nm)))
        (o-dsize w nm) (o-asm? nm ? (o-xsize w nm) (o-size nm))
        symbytes
         (: lsyms (catall (o-mapi (\ i ls (: w (o-place ls)                ; stb_local: a func, or an object in data

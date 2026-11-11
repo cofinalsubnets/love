@@ -631,6 +631,8 @@
    ; a branch an else follows: an if left bare there would take the else, so it keeps its block
    (cl-open? s) (s @ ('if _ _ e) (atom? e || cl-open? e) ('while _ b) (cl-open? b) ('for _ _ _ b) (cl-open? b) 0)
    (cl-then sp ss) (cl-body sp ss @ b (cl-open? b ? ['blk [b]] b))
+   ; the body of an if with no else: an if-else there reads as a dangling else, so it keeps its block
+   (cl-sole sp ss) (cl-body sp ss @ b (b @ ('if _ _ e) (atom? e ? b ['blk [b]]) b))
    (cl-for sp x from to step body)
     (: X ['var (string x)]
      ['for ['expr ['asn X (cl sp from)]] ['bin 'lt X (cl sp to)] step (cl-body sp body)])
@@ -649,8 +651,8 @@
            (e = ['+ ['at A i] 1] ? ['expr ['post lhs 1]] ['expr ['asn lhs (cl sp e)]]))
          (L 'clear A sz) ['expr ['call ['var "memset"] [(base sp A) ['num 0] sz]]]
          (L 'field f e) ['expr ['asn ['dot ['deref ['var "c"]] f] (cl sp e)]]
-         (L 'if g c th) ['if (cl-cond sp c) (cl-body sp th) ()]
-         (L 'join g c th el _) ['if (cl-cond sp c) (el == () ? (cl-body sp th) (cl-then sp th)) (el == () ? () (cl-body sp el))]
+         (L 'if g c th) ['if (cl-cond sp c) (cl-sole sp th) ()]
+         (L 'join g c th el _) ['if (cl-cond sp c) (el == () ? (cl-sole sp th) (cl-then sp th)) (el == () ? () (cl-body sp el))]
          (L 'ife g c th el) ['if (cl-cond sp c) (cl-then sp th) (cl-body sp el)]
          (L 'while c m invs b) ['while (cl-cond sp c) (cl-body sp b)]
          (L 'brk) ['brk]

@@ -377,24 +377,24 @@
    ;; p: {'imports ((mod name n) ..) 'fns ((name n prog) ..) 'exports (name ..)
    ;;     'memory (min [max]) 'data .. 'start name}
    (wasm-program p)
-    (: imps (peep p 'imports ())  fns (peep p 'fns ())
+    (: imps (p 'imports)  fns (p 'fns)
        ars ({} @ t (map (i \ (pin t (i 2) 1)) imps, map (f \ (pin t (f 1) 1)) fns, sort (keys t)))
        tyof ({} @ t (map (i \ pin t (ars i) i) (jot #ars), t))
-       (ty n) (peep tyof n ())
+       (ty n) (tyof n)
        env (: t {} ni #imps
               (map (i \ (pin t (nom (imps i 1)) ['fn i (imps i 2)])) ^ni,   ; a call names it by nom
                map (i \ pin t (fns i 0) ['fn (i + ni) (fns i 1)]) (jot #fns),
                t))
        (idx name) (peep env name () @ e (atom? e ? (scare 'wasm-noname name) (e 1)))
        n (#imps + #fns)
-       start (peep p 'start ())
+       start (p 'start)
        {'types (map (a \ [(map (_ \ 'i64) ^a) '(i64)]) ars)
         'imports (map (i \ [(i 0) (i 1) ['func (ty (i 2))]]) imps)
         'funcs (map (f \ (wasm-fn (f 2) (f 1) env @ r [(ty (f 1)) <r >r])) fns)
         'table n 'elem ^n
         'memory (peep p 'memory '(1))
-        'data (peep p 'data ())
-        'exports (map (e \ [(show e) 'func (idx e)]) (peep p 'exports ()) + '(("mem" memory 0)))
+        'data (p 'data)
+        'exports (map (e \ [(show e) 'func (idx e)]) (p 'exports) + '(("mem" memory 0)))
         'start (start = () ? -1 (idx start))})
 
    ;; the whole program, off gen.l's objects. a tu is cgen-obj's tuple with the weak names
@@ -499,7 +499,7 @@
                           [(catmap cap sp) (tu 2) (tu 3) (tu 11)
                            (rn (tu 1)) (rn (tu 4)) (rn (tu 5)) (map (x \ [(x 0) (rn (x 1)) (x 2)]) (tu 7))
                            (rn (tu 8)) (rn (tu 9))
-                           (catmap (s \ (map (k \ [k (peep >s k ())]) (keys >s))) sp)]))
+                           (catmap (s \ (map (k \ [k (>s k)]) (keys >s))) sp)]))
                    ^ntu)
        ;; 2. weak against strong: a weak definition with a strong twin elsewhere keeps its
        ;;    body under a private name; two weak ones, the first stands. a function is renamed
@@ -508,7 +508,7 @@
        wkseen {}
        ren2 (map (i \ (: p (parts i) r {}
                           (map (s \ (nom s @ l
-                                       (? !(elem s (p 3)) 0
+                                       (? (nelem s (p 3)) 0
                                           (peep strong l 0) (pin r l (nom (show l + ".wk." + show i)))
                                           (peep wkseen l 0) (pin r l (nom (show l + ".wk." + show i)))
                                           (pin wkseen l 1))))
@@ -518,7 +518,7 @@
        (rd i forms) (map (f \ (two? f && <f = 'label ? (w-symap f (ren2 i)) f)) forms)   ; the definition alone
        (r2 i x) (peep (ren2 i) x x)
        ;; 3. the functions, in tu order and stream order
-       fns (catmap (i \ (map (\ fn ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
+       fns (catmap (i \ (map (fn \ ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
        als (catmap (i \ (map (a \ [(r2 i (a 0)) (r2 i (a 1))]) (parts i 10))) ^ntu)   ; (alias . name) pairs
        (dl k) (map (i \ (rd i (parts i k))) ^ntu)                 ; one data lane across the tus
        d1 (dl 4)  d4 (dl 5)  d5 (dl 6)  d8 (dl 8)  d9 (dl 9)
@@ -558,25 +558,25 @@
        ;; 5. the index space: the imports the program names, then the functions. what is
        ;;    defined: every function's name and its own labels, every data label
        dlanes (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7)
-       defd ({} @ t (map (\ fn (pin t <fn 1, w-labels-into t <>fn)) fns,
+       defd ({} @ t (map (fn \ (pin t <fn 1, w-labels-into t <>fn)) fns,
                      map (a \ pin t <a 1) als,
                      map (w-labels-into t) dlanes,
                      t))
-       refs (keys ({} @ t (map (\ fn (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))
-       owed0 (filter (x \ !(peep defd x 0) && atom? (peep syms x ())) refs)   ; a bracket is the link's
+       refs (keys ({} @ t (map (fn \ (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))
+       owed0 (filter (x \ !(peep defd x 0) && atom? (syms x)) refs)   ; a bracket is the link's
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
        wkall (foldl (\ a p (map (s \ pin a (nom s) 1) (p 3), a)) {} parts)
        _ (pin wkall 'main 1)                            ; a module with its own exports has no main
        _ (map (x \ (peep wkall x 0 ? (pin syms x '(null)) 0)) owed0)
        owed (filter (x \ !(peep wkall x 0)) owed0)
-       allowed (map nom (peep opts 'imports ()))
-       bad (filter (x \ !(elem x allowed)) owed)
+       allowed (map nom (opts 'imports))
+       bad (filter (x \ (nelem x allowed)) owed)
        _ (two? bad ? (scare 'wasm-undefined bad) 0)
        imps (filter (x \ (elem x owed)) allowed)
        ni #imps
        _ (map (i \ pin syms (imps i) ['fn i]) ^ni)
        _ (map (i \ pin syms (fns i 0) ['fn (i + ni)]) (jot #fns))
-       _ (map (a \ (pin syms (a 0) (peep syms (a 1) ()))) (als + als))   ; twice: an alias of an alias
+       _ (map (a \ (pin syms (a 0) (syms (a 1)))) (als + als))   ; twice: an alias of an alias
        ;; 6. the data image, its pointers resolved. symidx is the module's own numbering (a
        ;; funcidx, what the export section wants); symval is the ADDRESS a data word holds,
        ;; which for a function is w-fnaddr's -- the same word w-la lays for it.
@@ -612,7 +612,8 @@
         'table (ni + tally fns) 'elem ^(ni + tally fns)
         'memory [pages]
         'globals [['i64 1 [['i64.const sp0]]] ['i64 1 [['i64.const 1]]]]
-        'exports (map (s \ [s 'func (symidx (nom s))]) exports + '(("mem" memory 0)))
+        ; the table too, which a process re-aims at its own doors (proc.mjs)
+        'exports (map (s \ [s 'func (symidx (nom s))]) exports + '(("mem" memory 0) ("table" table 0)))
         'data [(base . string img)]
         'names (map (i \ [i (show (imps i))]) ^ni + map (i \ [(i + ni) (show (fns i 0))]) (jot #fns))
         'start -1}))

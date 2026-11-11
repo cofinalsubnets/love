@@ -162,6 +162,23 @@
    _ (test (gzfm-s [1 2 3] 0 = 14) (gzfm-s [1.5] 0 = 2.25) ((gzfm-t gzfm-s) = 1)
            (gzfm-w ["ab" [1 2] "c"] 0 = 8))
    0)
+; a body spelling a float computes + - * and the orders on doubles in place, a fixnum either side
+; converted; = and any other kind take the twin's answer, and a long run boxes past the collector
+(: (gzf-a x) (x + 0.25)   (gzf-s x) (2.5 - x)   (gzf-m x) (x * -1.5)
+   (gzf-lt x) (x < 0.5)   (gzf-le x) (x <= 0.5)   (gzf-gt x) (-0.5 > x)   (gzf-ge x) (x >= -0.5)
+   (gzf-eq x) (x = 0.5)   (gzf-ob a b) (a + 0.0 < b)   (gzf-ab a b) (a * b - 0.0)
+   (gzf-run i acc) (i = 0 ? acc (gzf-run (i - 1) (acc + 0.5 * 3)))
+   ins [0 -3 0.5 1e308 4611686018427387903 -4611686018427387904 (1 /// 3) (0.5 ~ 1) "s" ()]
+   _ (test (show (map gzf-a ins) = "(0.25 -2.75 0.75 1e308 4.611686018427388e18 -4.611686018427388e18 0.5833333333333333 (0.75 ~ 1.0) \"s\" 0.25)")
+           (show (map gzf-s ins) = "(2.5 5.5 2.0 -1e308 -4.611686018427388e18 4.611686018427388e18 2.1666666666666665 (2.0 ~ -1.0) () ())")
+           (show (map gzf-m ins) = "(-0.0 4.5 -0.75 -1.5e308 -6.917529027641082e18 6.917529027641082e18 -0.5 (-0.75 ~ -1.5) () ())")
+           (map gzf-lt ins = [1 1 0 0 0 1 1 0 1 1]) (map gzf-le ins = [1 1 1 0 0 1 1 0 1 1])
+           (map gzf-gt ins = [0 1 0 0 0 1 0 0 1 1]) (map gzf-ge ins = [1 0 1 1 1 0 1 1 0 0])
+           (map gzf-eq ins = [0 0 1 0 0 0 0 0 0 0])
+           ([(gzf-ob 1 1.5) (gzf-ob 1.5 1) (gzf-ob -1 -1) (gzf-ob 2 2.0) (gzf-ob "a" 1)] = [1 0 0 0 1])
+           (show [(gzf-ab 3 0.5) (gzf-ab -2 -2) (gzf-ab 1e200 1e200) (gzf-ab -0.0 1)] = "(1.5 4.0 infinity -0.0)")
+           (show (gzf-run 300000 0) = "450000.0"))
+   0)
 ; a 3-arg peep predicate beside a pin on the same tablet answers the tablet, either order, in a loop
 (: (gzpp-put t k v) (? (peep t k 0) t (pin t k v))
    (gzpp-swap t k v) (? (peep t k 0) (pin t k v) t)
@@ -218,10 +235,11 @@
    (gzsl-q s i acc) (i < 1 ? acc (gzsl-q s (i - 1) (? (= s '"ab") (+ acc 1) acc)))
    (gzsl-k i acc) (i < 1 ? acc (gzsl-k (i - 1) "ab"))
    (gzsl-f s) (? (= s "ab") 1 0)
+   gzsl-now (: (live _) (arena 0 1 - arena 0 2) b (live 0) f (ev '(\ x (x * 3 + 1))) (b < live 0))   ; made is compiled: not a hot-calls count
    _ (test (gzsl-b "ab" 3 0 = 3) (gzsl-b "ac" 3 0 = 0) (gzsl-b "ab" 3 0 = gzsl-q "ab" 3 0)
            (gzsl-k 2 0 = "ab") (gzsl-k 2 0 == gzsl-k 3 0)
            (nat? gzsl-b = nat? gzsl-q) (nat? gzsl-k = nat? gzsl-q)
-           (gzsl-f "ab" = 1) (gzsl-f "b" = 0) !(nat? gzsl-f))
+           (gzsl-f "ab" = 1) (gzsl-f "b" = 0) (gzsl-now ? !(nat? gzsl-f) 1))
    0)
 
 ; --- a map param's probe reads and writes the group's own registers ---
@@ -268,6 +286,35 @@
                          '(col 0 0 0)]))
    _ (test (gzg-t = [1 1 10])
            (map gzg-k [[(5.0 ~ 1.0) (0.0 ~ 0.0)] [(0.1 ~ 0.2) (0.0 ~ 0.0)] [5 0] [5.0 0.0]] = [50 150 50 50]))
+   ; a nest answers the interp's, on the native's shape or off it: an inner call's start and acc, the recurrence's starts, a step
+   gzg-m '(mand c z it)  gzg-mb '(it < 3 && re z * re z + im z * im z <= 4.0 ? (mand c (z * z + c) (it + 1)) it)
+   gzg-o '(grid px acc)  gzg-ob '(px < 4 ? (grid (px + 1) (acc + col px 0 0)) acc)
+   (gzg-i k a) (ev (': . [gzg-m gzg-mb '(col px py acc) '(py < 8 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                          gzg-o ['? '(px < 4) ['grid '(px + 1) ['+ 'acc ['col 'px k a]]] 'acc] '(grid 0 0)]))
+   (gzg-r z i) (ev (': . [gzg-m gzg-mb '(col px py acc) ['? '(py < 8) ['col 'px '(py + 1) ['+ 'acc ['mand '((3.0 + px * 0.25) ~ (py * 0.25)) z i]]] 'acc]
+                          gzg-o gzg-ob '(grid 0 0)]))
+   (gzg-p st) (ev (': . [gzg-m gzg-mb '(col px py acc) ['? '(py < 8) ['col 'px ['+ 'py st] '(acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)] 'acc]
+                         gzg-o gzg-ob '(grid 0 0)]))
+   _ (test (map (ka \ gzg-i <ka <>ka) [[0 0] [5 0] [0 100] [7 1]] = [32 12 432 8])
+           (map (zi \ gzg-r <zi <>zi) [[(0.0 ~ 0.0) 0] [(0.0 ~ 0.0) 2] [(1.5 ~ 1.5) 0] [(0.0 ~ 0.0) 5]] = [32 96 0 160])
+           (map gzg-p [1 2 3] = [32 16 12])
+           (ev (': . [gzg-m '(it < 3 && re z * re z + im z * im z <= 4.0 + 0 * it ? (mand c (z * z + c) (it + 1)) it)
+                      '(col px py acc) '(py < 8 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
+                      gzg-o gzg-ob '(grid 0 0)]) = 32))
+   ; the native takes the outer loop's own args, a literal inner start, and deopts on a non-fixnum or an acc past a fixnum;
+   ; where it is native, half the nest runs at least 3x its declined twin (a test the native will not read), best of three
+   (gzg-nest t k w) (ev (': . ['(mand c z it) ['? ['&& '(it < 40) t] '(mand c (z * z + c) (it + 1)) 'it]
+                              ['col 'px 'py 'acc] ['? '(py < 20) ['col 'px '(py + 1) ['+ 'acc ['mand ['twin ['- ['* 'px (3.0 / w)] 2.0] '(py * 0.15 - 1.5)] '(0.0 ~ 0.0) 0]]] 'acc]
+                              gzg-o ['? ['px '< w] ['grid '(px + 1) ['+ 'acc ['col 'px k 0]]] 'acc] 'grid]))
+   gzg-q '(re z * re z + im z * im z <= 4.0)
+   gzg-g (gzg-nest gzg-q 0 40)  gzg-h (gzg-nest gzg-q 7 40)
+   (gzg-t1 f) (: t0 (clock 0) r (f 100 0) [r (clock t0)])
+   (gzg-tm f) (: w (gzg-t1 f) a (gzg-t1 f) b (gzg-t1 f) c (gzg-t1 f) [<w (min <>a (min <>b <>c))])
+   _ (test (map (ab \ gzg-g <ab <>ab) [[0 0] [20 0] [20 7] [39 0] [40 5] [50 5] [-3 0] [0 1.5] [20.5 0] [0 4611686018427387900]]
+            = [8574 5430 5437 45 5 5 8634 8575.5 5383 4611686018427396474])
+           (map (ab \ gzg-h <ab <>ab) [[0 0] [20 0] [1 1]] = [7265 4475 7214])
+           (!(nat? gzg-g) || (: na (gzg-tm (gzg-nest gzg-q 0 1000)) tw (gzg-tm (gzg-nest '(abs z <= 2.0) 0 1000))
+                                (<na = <tw && 3 * <>na < <>tw))))
    ; the host row's word is the vm's: a charm holds 8w-1 bits, signed
    _ (G 'targets love-arch @ row
         (row == () ? 0
