@@ -66,8 +66,9 @@
      (go s)
       (: now (clock 0) z (ttysize 1 1)
          s2 (<z = s 'r && z 1 = s 'c ? s (fresh z now))
-         per (1000 // 12)
-         _ (s2 'next <= now ? (pin s2 'next (now + per), say out (saver-over s2 (now - s2 't0) (put \ greet-box g host names <z (z 1) put)), flush out) 0)
+         ; the saver's own rate: a frame between its steps would hold one twice
+         per (1000 // peep (s2 'd) 'fps 10)
+         _ (s2 'next <= now ? (pin s2 'next (s2 'next + per <= now ? (now + per) (s2 'next + per)), say out (saver-over s2 (now - s2 't0) (put \ greet-box g host names <z (z 1) put)), flush out) 0)
          ; the keys waiting, up to the end of input: a terminal gone stays readable
          keys (: (take acc) (cue? 0 ? (edkey in @ k (k = -7 ? (rev (k . acc)) (take (k . acc)))) (rev acc)) (take ()))
          ; a session ended takes the screen: the saver starts over
