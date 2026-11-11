@@ -49,7 +49,7 @@
    qfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)   ; the gp file a 32-bit pair move walks
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
    xmmops '(addsd subsd mulsd divsd minsd maxsd movsd movapd ucomisd cvtss2sd cvtsd2ss
-            addss subss mulss divss minss maxss ucomiss movss)   ; no gp effect
+            addss subss mulss divss minss maxss ucomiss movss negss)   ; no gp effect
    ; the gen state g: 'n the label counter, 'off the frame high-water, 'brk/'cnt loop label stacks,
    ; 'glob name -> (label ty init), 'globs the emission order, 'strs ((label . text)..);
    ; env ((name off ty)..) the frame locals

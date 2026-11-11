@@ -50,7 +50,7 @@
    ; the ops a double rides: on thumb2sp their float vregs keep a whole d
    rawide '(movapd movsd movupd ldsd stsd ldsdx stsdx ldsdl movqrr movrrq movqxr movqrx cvtss2sd cvtsd2ss cvtsi2sd
             cvtui2sd cvttsd2si cvttsd2ui addsd subsd mulsd divsd minsd maxsd ucomisd sqrtsd xorpd andpd)
-   rafmv '(movapd movsd movss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
+   rafmv '(movapd movsd movss negss cvtss2sd cvtsd2ss cvtsi2sd cvtsi2ss cvtui2sd cvtui2ss movqxr movdxr cvttsd2si cvttss2si cvttsd2ui cvttss2ui movqrx movdrx)
    ; each head's own shape, the rest rdsp's
    raky (: (cls t k ops) (foldl (t \ op \ pin t op k) t ops)
            t0 (cls (cls (cls (cls (cls (cls (cls (cls (cls {} 'fbin rafbin) 'fmv rafmv) 'div divops) 'ctl '(jmp br label))
@@ -539,7 +539,7 @@
                          [f])) fs))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
-   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss fimm add sub and or xor imul shl shr sar not neg
+   rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss negss fimm add sub and or xor imul shl shr sar not neg
                                               sx1 sx2 sx4 zx1 zx2 zx4 set movqxr movdxr movqrx movdrx movqrr movrrq))
    (radce g fs)
     (: cnt (foldl (t \ f \ (raops g f @ [u _] (foldl (t2 \ x \ (lovr? x ? (pin t2 x (peep t2 x 0 + 1)) t2)) t u) _ t)) {} fs)

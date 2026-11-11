@@ -373,10 +373,12 @@
        (loparts g v p @ 'bad 'bad
           [fs x y] (lomkf g @ re (lomkf g @ im
                       (lopack g (vty v) p [(fs + lofneg g p re x + lofneg g p im y) re im])))))
-   ; a float's sign flipped through the general registers, a 32-bit double's in its high word
+   ; a float's sign flipped through the general registers, a 32-bit double's in its high word;
+   ; thumb2's float file flips a single's itself
    (lofneg g ty d r)
     (lomk g @ t (lomk g @ k
-       (? (ty = 'float || !(ilp32? g))
+       (? (ty = 'float && t32f? g) [['negss d r]]
+          (ty = 'float || !(ilp32? g))
           (: s (ty = 'float) [[(s ? 'movdrx 'movqrx) t r] ['li k (s ? 2147483648 -9223372036854775808)] ['xor t t k]
                               [(s ? 'movdxr 'movqxr) d t]])
           (lomk g @ h [['movrrq t h r] ['li k 2147483648] ['xor h h k] ['movqrr d t h]]))))
