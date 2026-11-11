@@ -32,6 +32,8 @@
 ; $HEARTS_CONFIG a config fragment laid over defconfig as merge_config.sh lays one: appended to
 ;                .config, then olddefconfig made (pi.config, the pi boards')
 ; $HEARTS_FW     the fragment's CONFIG_EXTRA_FIRMWARE_DIR, appended after it: the firmware it builds in
+; $HEARTS_ROOT   a .cpio the fragment's CONFIG_INITRAMFS_SOURCE names, appended after it: the root the
+;                Image carries and unpacks (zimage.l root lays the zero 2 w's)
 (: argv cmdline
    memo {}
    jobs {}
@@ -195,8 +197,10 @@
          goals (words (getenv "HEARTS_GOALS" || (x86 ? "defconfig syncconfig headers bzImage" "defconfig syncconfig Image")))
          frag (getenv "HEARTS_CONFIG")
          fw (getenv "HEARTS_FW")
+         rt (getenv "HEARTS_ROOT")
          (lay 0) (uread frag @ [1 s]
-                   (appendf (here + "/.config") (s + (string? fw ? "CONFIG_EXTRA_FIRMWARE_DIR=\"\(fw)\"\n" "")))
+                   (appendf (here + "/.config") (s + (string? fw ? "CONFIG_EXTRA_FIRMWARE_DIR=\"\(fw)\"\n" "")
+                                                  + (string? rt ? "CONFIG_INITRAMFS_SOURCE=\"\(rt)\"\n" "")))
                    (puts "hearts: cannot read HEARTS_CONFIG \(frag)\n", quit 1))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)

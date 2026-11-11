@@ -12,8 +12,9 @@
 ;
 ; newc: a 110-byte ascii header ("070701", thirteen 8-digit hex fields), the name (NUL
 ; counted in namesize), the body, each padded to 4; "TRAILER!!!" ends it, padded to 512.
-; mode is the whole st_mode, type bits included. a symlink's target is its body. hard
-; links are not encoded: every entry gets a fresh ino and nlink 1.
+; mode is the whole st_mode, type bits included. a symlink's target is its body. a char
+; device ('chr) carries 'rdev (major minor) and no body, and is never made on extraction.
+; hard links are not encoded: every entry gets a fresh ino and nlink 1.
 (module 'cpio
 (borrow 'tar)
 
@@ -41,13 +42,13 @@
        (go 0 0))
 
    ; --- the kind, which lives in the mode here --------------------------------
-   (cpio-kmode k) (k @ 'dir 16384 'link 40960 32768)
-   (cpio-kind m) (m & 61440 @ 16384 'dir 40960 'link 'file)
+   (cpio-kmode k) (k @ 'dir 16384 'link 40960 'chr 8192 32768)
+   (cpio-kind m) (m & 61440 @ 16384 'dir 40960 'link 8192 'chr 'file)
 
    ; --- writing ---------------------------------------------------------------
    (cpio-body e)                            ; what the member carries: a link says its target
-    (peep e 'kind 'file @ 'link (peep e 'to "") 'dir "" (peep e 'body ""))
-   (cpio-head ino nom mode mtime uid gid nb)
+    (peep e 'kind 'file @ 'link (peep e 'to "") 'dir "" 'chr "" (peep e 'body ""))
+   (cpio-head ino nom mode mtime uid gid nb rd)
     (: nz (#nom + 1)
        h (cask 110)
        (txt! o s) (each ^#s (i \ pin h (o + i) (s i)), 0)
@@ -57,7 +58,7 @@
         cpio-hex! h 38 1,                  ; nlink
         cpio-hex! h 46 mtime, cpio-hex! h 54 nb,
         cpio-hex! h 62 0, cpio-hex! h 70 0,     ; dev major/minor
-        cpio-hex! h 78 0, cpio-hex! h 86 0,     ; rdev major/minor
+        cpio-hex! h 78 <rd, cpio-hex! h 86 (rd 1),     ; rdev major/minor
         cpio-hex! h 94 nz, cpio-hex! h 102 0,    ; namesize, newc's dead check
         string h))
    (cpio-pack es)
@@ -69,7 +70,7 @@
            mode (cpio-kmode (peep e 'kind 'file)
                  | peep e 'mode (peep e 'kind 'file = 'dir ? 493 420))
            (say o (cpio-head i nom mode (peep e 'mtime 0)
-                             (peep e 'uid 0) (peep e 'gid 0) nb),
+                             (peep e 'uid 0) (peep e 'gid 0) nb (peep e 'rdev [0 0])),
             say o (nom + string 0),
             say o (zbytes (padk (110 + #nom + 1) 4)),
             say o b,
@@ -77,7 +78,7 @@
             i + 1))
        _ (foldl one 1 es)
        ; the trailer is a member whose name is the end mark
-       _ (say o (cpio-head 0 cpio-trail 0 0 0 0 0))
+       _ (say o (cpio-head 0 cpio-trail 0 0 0 0 0 [0 0]))
        _ (say o (cpio-trail + string 0))
        _ (say o (zbytes (padk (110 + #cpio-trail + 1) 4)))
        s (slurp o)
@@ -85,16 +86,16 @@
        (s + zbytes (padk #s 512)))
 
    ; --- reading ---------------------------------------------------------------
-   ; one header's fields off h, its 110 bytes -> (mode mtime nb uid gid nz) | ()
+   ; one header's fields off h, its 110 bytes -> (mode mtime nb uid gid nz rdev) | ()
    (cpio-fields h)
     (#h < 110 || !(snip h 0 6 = cpio-mag) ? ()
        (: mode (cpio-hex h 14)   nb (cpio-hex h 54)   nz (cpio-hex h 94)
           (mode = () || nb = () || nz = () ? ()
-             [mode (cpio-hex h 46) nb (cpio-hex h 22) (cpio-hex h 30) nz])))
+             [mode (cpio-hex h 46) nb (cpio-hex h 22) (cpio-hex h 30) nz [(cpio-hex h 78) (cpio-hex h 86)]])))
    (cpio-read1 s n o)                       ; -> (1 entry next) | 'end | ()
     (: f (n < o + 110 ? () (cpio-fields (snip s o (o + 110))))
        (!f ? ()
-          (: mode (f 0)   mtime (f 1)   nb (f 2)   uid (f 3)   gid (f 4)   nz (f 5)
+          (: mode (f 0)   mtime (f 1)   nb (f 2)   uid (f 3)   gid (f 4)   nz (f 5)   rd (f 6)
              (n < o + 110 + nz ? ()
                 (: nom (snip s (o + 110) (o + 110 + nz - 1))
                    b0 (o + 110 + nz + padk (110 + nz) 4)
@@ -105,6 +106,7 @@
                          e (tar-entry nom kind (kind = 'link ? "" body))
                          (pins e 'mode (mode & 4095) 'mtime mtime 'uid uid 'gid gid,
                           kind = 'link && pin e 'to body,
+                          kind = 'chr && pin e 'rdev rd,
                           [1 e (b0 + nb + padk nb 4)]))))))))
    (cpio-unpack s)
     (:- (go 0 ()) n #s
@@ -129,6 +131,7 @@
                     (: e (tar-entry nom kind "")
                        _ (pins e 'mode (mode & 4095) 'mtime (fs 1) 'uid (fs 3) 'gid (fs 4) 'size nb)
                        _ (kind = 'link && pin e 'to to)
+                       _ (kind = 'chr && pin e 'rdev (fs 6))
                        b {'left (kind = 'link ? 0 nb)}
                        (f e b != 1 ? 'stop
                           (peep b 'left 0 + padk nb 4 @ n
@@ -151,8 +154,9 @@
        p (lp && <>lp)
        kind (peep e 'kind 'file)
        _ (? !sg (warn (nom + ": member name contains '..'"))
-            !lp (warn (nom + ": will not extract through a symbolic link or a file")))
-       skip (!lp || atom? <>sg
+            !lp (warn (nom + ": will not extract through a symbolic link or a file"))
+            (kind = 'chr) (warn (nom + ": a device, not made")))
+       skip (!lp || atom? <>sg || kind = 'chr
              || !u && kind != 'dir && cpio-newer? p (peep e 'mtime 0))
        _ (skip || tar-link-at? p && unlink p)
        ok (? skip 1
