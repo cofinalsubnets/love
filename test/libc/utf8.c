@@ -2,6 +2,7 @@
  * (whole, torn across calls, every way a sequence can be wrong), wcrtomb at the edges, the
  * string forms, then every wctype class and case map over a stride of code points and the
  * cases that move. the C locale comes back at the end, and with it one byte a character. */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -62,4 +63,18 @@ int main(void) {
   for (unsigned i = 0; i < sizeof edge / sizeof *edge; i++) cls(edge[i]);
   say_s("back", setlocale(LC_ALL, "C"));
   say_n("MB_CUR_MAX.back", (long) MB_CUR_MAX); mb("back", "\xc3\xa9", 2); cls(0xe9);
+  /* categories apart: LC_ALL answers them all, and that answer restores them */
+  setlocale(LC_CTYPE, "C.UTF-8");
+  { char sv[512]; char const *a = setlocale(LC_ALL, 0);
+    say_n("mixed.pairs", strchr(a, ';') != 0 && strstr(a, "LC_CTYPE=C.UTF-8") != 0);
+    snprintf(sv, sizeof sv, "%s", a);
+    say_s("mixed.reset", setlocale(LC_ALL, "C"));
+    say_n("mixed.restored", setlocale(LC_ALL, sv) != 0);
+    say_s("  ctype", setlocale(LC_CTYPE, 0)); say_s("  numeric", setlocale(LC_NUMERIC, 0));
+    say_n("  MB_CUR_MAX", (long) MB_CUR_MAX);
+    say_n("mixed.self", setlocale(LC_ALL, setlocale(LC_ALL, 0)) != 0);
+    say_s("  ctype", setlocale(LC_CTYPE, 0));
+    say_n("mixed.badpair", setlocale(LC_ALL, "LC_CTYPE=no-such-locale;LC_NUMERIC=C") == 0);
+    say_s("  ctype", setlocale(LC_CTYPE, 0)); }
+  setlocale(LC_ALL, "C");
   return 0; }
