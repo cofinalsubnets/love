@@ -1,6 +1,6 @@
 #pragma once
-/* the names only: moonlibc loads nothing. a -shared object linked -l:libc.so.6 takes them
-   from the system's libc, which has carried them since glibc 2.34 */
+/* moonlibc's fail every ask and say why; a -shared object linked -l:libc.so.6 takes
+   these from the system's libc, which has carried them since glibc 2.34 */
 #define RTLD_LAZY   1
 #define RTLD_NOW    2
 #define RTLD_GLOBAL 0x100

@@ -349,17 +349,18 @@ static char *next_line(struct helper *H) {
   H->got += (size_t) r; } }
 
 int glhelp_main(int argc, char **argv) {
- struct helper H = { 0 };
+ struct helper *H = calloc(1, sizeof *H);
+ if (!H) { dprintf(1, "err no memory\n"); return 2; }
  if (argc < 2) { dprintf(1, "err usage: glhelp FILE\n"); return 2; }
- H.fd = open(argv[1], O_RDWR | O_CLOEXEC);
- if (H.fd < 0) { dprintf(1, "err cannot open %s\n", argv[1]); return 2; }
- if (!setup(&H)) return 3;
- for (char *l; (l = next_line(&H)); ) {
+ H->fd = open(argv[1], O_RDWR | O_CLOEXEC);
+ if (H->fd < 0) { dprintf(1, "err cannot open %s\n", argv[1]); return 2; }
+ if (!setup(H)) return 3;
+ for (char *l; (l = next_line(H)); ) {
   int id, a, b, c; long off;
-  if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(&H, id, a, b, c, (size_t) off);
-  else if (!strncmp(l, "buf ", 4) && sscanf(l + 4, "%d %d %d %ld", &id, &a, &b, &off) == 4) cmd_buf(&H, id, a, b, (size_t) off);
-  else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(&H, id);
-  else if (!strncmp(l, "frame ", 6)) cmd_frame(&H, l + 6);
+  if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
+  else if (!strncmp(l, "buf ", 4) && sscanf(l + 4, "%d %d %d %ld", &id, &a, &b, &off) == 4) cmd_buf(H, id, a, b, (size_t) off);
+  else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
+  else if (!strncmp(l, "frame ", 6)) cmd_frame(H, l + 6);
   else if (!strcmp(l, "quit")) break;
   else dprintf(1, "err what: %s\n", l); }
  return 0; }
