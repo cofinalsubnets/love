@@ -291,11 +291,15 @@
 
    ; a spilled vreg: a slot, stored after each write and reloaded before a read, a temp holding it
    ; until a label or a call ends the run (the last nk kept). x64's and a64's one-def wide literal or
-   ; address takes no slot and is made again at each read; a literal 0 might write the flags. one
-   ; split before keeps its split's slot, ssl, and its copies to and from it go
+   ; address takes no slot and is made again at each read; a literal 0 might write the flags.
+   ; thumb2's literal likewise, which keeps the flags. one split before keeps its split's slot, ssl,
+   ; and its copies to and from it go
    (raspill g fs sp nosp nk ssl)
-    (: dn (x64? g || a64? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
-       rem (foldl (t \ f \ (f @ ((('li || 'la) . v . k . _) && elem v sp && peep dn v 0 = 1 && k != 0) (pin t v f) _ t)) {} fs)
+    (: w (x64? g || a64? g)
+       dn (w || t2? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
+       rem (foldl (t \ f \ (f @ ((op . v . k . _) && elem v sp && peep dn v 0 = 1 &&
+                                  (w ? (elem op '(li la) && k != 0) (op = 'li && charm? k)))
+                                (pin t v f) _ t)) {} fs)
        (redo v r) (rem v @ [op _ k] [op r k])
        ss (filter (v \ !(two? (rem v))) sp)
        sl (foldl (t \ v \ pin t v (ssl v @ () (nslot g 8) k k)) {} ss)
