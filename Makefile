@@ -977,6 +977,34 @@ $(k_espd)/love.cmd:
 	@echo '$(t_sh)	'$@
 	@mkdir -p $(dir $@)
 	@echo 'test/kernel/all.l' > $@
+# test_uefi_stay's ESP: love.stay keeps the firmware, love.cmd runs test/kernel/stay.l, and
+# boot.l names efihello.efi for the menu to start
+k_stayd = $(ko)/esp-stay-$a
+k_stay = $(k_stayd)/EFI/BOOT/$(k_efiname) $(k_stayd)/love.elf $(k_stayd)/love.stay $(k_stayd)/love.cmd \
+  $(k_stayd)/boot.l $(k_stayd)/efihello.efi
+$(k_uefid)/efihello.o: test/kernel/c/efihello.c $(ho)/love
+	@echo 'MOON	'$@
+	@mkdir -p $(dir $@)
+	@$(mooncc) -t $a -c $< $@
+$(k_uefid)/efihello.efi: $(k_uefid)/efihello.o $(uefi_l) $(mdep)
+	@echo 'LOVE	'$@
+	@{ echo "(borrow 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m
+$(k_stayd)/EFI/BOOT/$(k_efiname): $(k_uefid)/$(k_efiname)
+$(k_stayd)/love.elf: $(ko)/love-$a.elf
+$(k_stayd)/boot.l: test/kernel/boot.l
+$(k_stayd)/efihello.efi: $(k_uefid)/efihello.efi
+$(k_stayd)/EFI/BOOT/$(k_efiname) $(k_stayd)/love.elf $(k_stayd)/boot.l $(k_stayd)/efihello.efi:
+	@echo '$(t_cp)	'$@
+	@mkdir -p $(dir $@)
+	@cp $< $@
+$(k_stayd)/love.stay:
+	@echo '$(t_sh)	'$@
+	@mkdir -p $(dir $@)
+	@echo stay > $@
+$(k_stayd)/love.cmd:
+	@echo '$(t_sh)	'$@
+	@mkdir -p $(dir $@)
+	@echo 'test/kernel/stay.l' > $@
 uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
 	@echo "      qemu-system-$(uname_$a) -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."

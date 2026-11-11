@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_esp32_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -1008,6 +1008,19 @@ test_uefi: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(ko)/esp-x64 $$fw x64; fi
 endif
 
+# the kernel as the firmware's guest (love.stay), and the boot menu on it starting an image
+ifneq ($a,x64)
+test_uefi_stay:
+	@sh test/gate/skip.sh gate-skip "test_uefi_stay: skipped (host arch $a is not x64)"
+else
+test_uefi_stay: host $(S)/tools/ktest.l
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-x86_64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_stay: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s $(k_stay) \
+	 && echo TEST $(k_stayd) "(serial, headless, the firmware's guest and the boot menu)" \
+	 && $m $(S)/tools/ktest.l $(k_stayd) $$fw x64 "efihello: one two"; fi
+endif
+
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 ifeq ($(QEMU_A64),)
 test_uefi_a64:
@@ -1024,7 +1037,7 @@ endif
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
 inle_rv64 = test_kernel_rv64
-inle_x64 = test_disk test_uefi test_kboot test_kernel_uproc test_kpier test_kverb
+inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
 inle_a64 = test_kernel_a64 test_uefi_a64
 test_inle: host
