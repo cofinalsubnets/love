@@ -90,7 +90,7 @@
         (two? w ? (login-start root w line ())
            (: _ (rest (2000 << n)) _ (say out "Login incorrect\n\n", flush out) (lg-tries root line (n + 1))))))
  ; a tty argument becomes fds 0 1 2 and the controlling terminal
- (lg-take tty) (: fd (openfd tty 2)
+ (lg-take tty) (: fd (openfd tty 6)
                   _ (charm? fd ? 0 (udie 1 ("login: " + tty + ": " + show fd)))
                   (dup2 fd 0, dup2 fd 1, dup2 fd 2, setsid 1))
  (login-main as)

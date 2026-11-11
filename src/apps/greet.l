@@ -59,7 +59,8 @@
          s2 (<z = s 'r && z 1 = s 'c ? s (fresh z now))
          per (1000 // 12)
          _ (s2 'next <= now ? (pin s2 'next (now + per), say out (saver-over s2 (now - s2 't0) (put \ greet-box g host names <z (z 1) put)), flush out) 0)
-         keys (: (take acc) (cue? 0 ? (take (edkey in . acc)) (rev acc)) (take ()))
+         ; the keys waiting, up to the end of input: a terminal gone stays readable
+         keys (: (take acc) (cue? 0 ? (edkey in @ k (k = -7 ? (rev (k . acc)) (take (k . acc)))) (rev acc)) (take ()))
          _ (each keys (k \ (? (k = -7) (uleave 0) (greet-key g k #ss = 'try) (gr-try g root line ss) 0)))
          _ (two? keys ? 0 (rest (max 5 (s2 'next - clock 0))))
          (go s2))
@@ -73,7 +74,7 @@
      o (opt as "" "life" "")
      _ (elem (o 1) saver-names ? 0 (udie 2 ("greet: no saver " + o 1)))
      tty (o 2 = "" || o 2 0 = 47 ? (o 2) ("/dev/" + o 2))
-     _ (tty = "" ? 0 (: fd (openfd tty 2) (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, setsid 1) (udie 1 ("greet: " + tty + ": " + show fd)))))
+     _ (tty = "" ? 0 (: fd (openfd tty 6) (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, setsid 1) (udie 1 ("greet: " + tty + ": " + show fd)))))
      (gr-run (o 0) (o 1) (tty = "" ? "" (snip tty 5 #tty))))
  _ (pins (cite 'verbs 'tab) 'greet (udoor 'greet greet-main greet-usage 1 1)))
 ) ; module greet

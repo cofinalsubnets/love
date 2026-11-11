@@ -219,13 +219,15 @@ static int fd_up(int fd) {
  int h = fcntl(fd, F_DUPFD_CLOEXEC, 10);
  return h < 0 ? fd : (close(fd), h); }
 
-// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe
+// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe,
+// 6 read and write (a login's terminal)
 static int openfd_mode(char const *path, intptr_t m) {
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : m == 4 ? O_WRONLY
            : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
+           : m == 6 ? O_RDWR
            : O_RDONLY;
  return fd_up(open(path, flags | O_CLOEXEC, m == 3 ? 0600 : 0644)); }
 
