@@ -1,5 +1,5 @@
-; test/host/bee.l -- bee as a child in a scratch dir with HOME there too, so no one's
-; ~/.love/etc/bee.l speaks; a session is driven as claude code drives it, through --mcp
+; test/host/bee.l -- bee as a child in a scratch dir with HOME and the nest there too, so no
+; one's own etc/bee.l speaks; a session is driven as claude code drives it, through --mcp
 ; run: cat test/00-init.l test/host/bee.l | out/love
 (borrow 'json)
 
@@ -12,7 +12,7 @@
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
    ; a session running these passes its hive down (BEE_HIVE, BEE_NAME, BEE_AS); a world would
-   ; write its cells among the live sessions: HOME alone says here
+   ; write its cells among the live sessions: HOME and LOVE_NEST say here
    _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
@@ -37,7 +37,7 @@
        o (go "")
        _ (close q)
        [(cr-reap p) o])
-   (cr-bee d env) ("env HOME='" + d + "' " + env + " '" + cr-love + "' '" + cr-app + "'")
+   (cr-bee d env) ("env HOME='" + d + "' LOVE_NEST='" + d + "/.love' " + env + " '" + cr-love + "' '" + cr-app + "'")
    (cr-run d env args) (cr-sh d ("exec " + cr-bee d env + " " + args))
 
    ; json-rpc for --mcp: a tools/call, messages a line each, the answers by id
@@ -241,7 +241,7 @@
    _ (cr-put cr-b2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}}
                                {"jsonrpc" "2.0" "method" "notifications/initialized"}]))
    _ (cr-put cr-b2 "in2" (msgs [{"jsonrpc" "2.0" "id" 1 "method" "tools/call" "params" {"name" "inbox" "arguments" {}}}]))
-   bee ("env HOME='" + cr-b2 + "' '" + cr-love + "' '" + cr-app + "'")
+   bee ("env HOME='" + cr-b2 + "' LOVE_NEST='" + cr-b2 + "/.love' '" + cr-love + "' '" + cr-app + "'")
    _ (cr-put cr-b2 "feed" ("cat in; sleep 2; BEE_NAME=pal " + bee + " --send ringer 'hello from pal' >/dev/null; "
                            + "sleep 4; cat in2; sleep 1\n"))
    r (: pp (pipe 0) nul (openfd "/dev/null" 0)
@@ -312,7 +312,7 @@
                                (call 5 "lock_release" {"name" "out-x"})]))
    (run-with args)
     (: pp (pipe 0) nul (openfd "/dev/null" 0)
-       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
+       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' LOVE_NEST='" + cr-l2 + "/.love' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
             + cr-love + "' '" + cr-app + "' " + args)
        p (spawnio ["sh" "-c" cmd] nul >pp >pp [<pp] -1 0)
        _ (close >pp) _ (close nul)
@@ -375,7 +375,7 @@
            (cr-in nap "state busy") (cr-in idle "state idle") !(cr-in idle "state busy"))
    ; the hud on a pty, as tess
    ; no git discovery above the scratch dir: the hud would show the tree's own queues
-   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
+   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' LOVE_NEST='" + d + "/.love' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
                          + "' exec '" + cr-love + "' '" + cr-app + "'")])
    m >md
    _ (settty m 24 100)

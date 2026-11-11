@@ -328,7 +328,7 @@
    (core-unwatch c id) (c 'remote ? (pin c 'fs (filter (!= id * cap) (c 'fs))) (lunwatch c id))
    (core-close c) (c 'remote ? (rclose c) (lclose c))
 
-   ; --- served: a core on PLAYER_RUN/main.sock (~/.love/run/player) ---
+   ; --- served: a core on PLAYER_RUN/main.sock (the nest's run/player) ---
    ; the first line is the attach's [snap]; then [ok] [err] [snap] answer commands in order
    ; and every other message is an event. a command led by a number gets its answer led by
    ; it. tasks switch at any call, so shared state is written by one task only

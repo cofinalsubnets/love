@@ -67,7 +67,7 @@
        (&& (two? ok) ("the plaintext" = <>ok) (atom? bad)))))
 
 ; https, given openssl: a leaf under a root laid here verifies by SSL_CERT_FILE, a bundle
-; without it refuses (exit 5), --no-check-certificate or a pin in ~/.love/tls_pins takes it
+; without it refuses (exit 5), --no-check-certificate or a pin in the nest's etc/tls_pins takes it
 (: W (cite 'kore 'wget-main)
    os? (two? (stat "/usr/bin/openssl"))
    odir ((cwd 0) + "/out/.wgett-" + show (getpid 0))
@@ -77,7 +77,7 @@
                  p)
    (reap p) (: _ (still <p 15) (: g (gather <p) (? (two? g || nom? g) g (rest 2, reap p))))
    cf0 (getenv "SSL_CERT_FILE") home0 (getenv "HOME")
-   _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love")])
+   _ (? os? (: _ (hark ["mkdir" "-p" (odir + "/.love/etc")])
                _ (osh ("openssl req -x509 -newkey rsa:2048 -nodes -keyout root.key -out root.pem -days 2 -subj /CN=t-root"
                        + " -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign"))
                (osh ("printf 'basicConstraints=critical,CA:FALSE\\nsubjectAltName=IP:127.0.0.1\\n' > l.cnf"
@@ -97,11 +97,12 @@
            c (fetch (test-free 0) ["--no-check-certificate"])
            spki (: r (hark ["sh" "-c" ("cd " + odir + " && openssl x509 -in leaf.pem -pubkey -noout | openssl pkey -pubin -outform DER | sha256sum")])
                    (snip >r 0 64))
-           _ (setenv "HOME" odir)
+           n0 (getenv "LOVE_NEST")
+           _ (setenv "HOME" odir) _ (setenv "LOVE_NEST" (odir + "/.love"))
            dp (test-free 0)
-           _ (: q (open (odir + "/.love/tls_pins") "w") _ (say q ("127.0.0.1:" + show dp + " spki:" + spki + "\n")) (close q))
+           _ (: q (open (odir + "/.love/etc/tls_pins") "w") _ (say q ("127.0.0.1:" + show dp + " spki:" + spki + "\n")) (close q))
            d (fetch dp [])
-           _ (setenv "HOME" (? (string? home0) home0 ""))
+           _ (setenv "HOME" (? (string? home0) home0 "")) _ (setenv "LOVE_NEST" n0)
            _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
            _ (hark ["rm" "-rf" odir])
            (test (<a = 0) (has? (a 1) "TLSv1.3") (<b = 5) (<c = 0) (has? (c 1) "TLSv1.3")

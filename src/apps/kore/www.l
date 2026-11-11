@@ -179,7 +179,7 @@
                 [1 ("www: " + url + " is a gopher " + ww-gkind t + " item, not a page")]))))
 
    ; gemini: the url on a line over tls on 1965; the answer a status line, then the body.
-   ; the server's key is pinned on first use in ~/.love/gemini_hosts as "spki:" + sha-256 of
+   ; the server's key is pinned on first use in the nest's etc/gemini_hosts as "spki:" + sha-256 of
    ; its SubjectPublicKeyInfo, so a renewed cert over it holds; a line without the prefix is a
    ; whole certificate's hash
    (ww-pinfile _) (cite 'tls 'pin-path "gemini_hosts")
@@ -189,7 +189,7 @@
        (? (string? old) (? (old = fp || old = cfp) ()
                            ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
-          (: _ (mkdir (snip path 0 (#path - 13)) 448)
+          (: _ (each (cite 'path 'pprefixes path) (d \ mkdir d 448))
              a (open path "a")
              _ (? (hot? a) (say a (key + " " + fp + "\n"), close a) 0)
              ())))

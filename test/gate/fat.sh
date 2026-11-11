@@ -22,12 +22,12 @@ fail() { echo "FAIL test_fat: $*" >&2; exit 1; }
 rm -rf "$d" && mkdir -p "$d" || fail "scratch"
 
 # the native lane, through the prefix and a fresh cache
-HOME=$d "$fat" -e '(quit 7)'
+LOVE_NEST=$d/nest "$fat" -e '(quit 7)'
 [ $? -eq 7 ] || fail "native member did not answer through the prefix"
-n1=$(ls "$d/.love/fat" | wc -l)
-HOME=$d "$fat" -e '(quit 7)'
+n1=$(ls "$d/nest/fat" | wc -l)
+LOVE_NEST=$d/nest "$fat" -e '(quit 7)'
 [ $? -eq 7 ] || fail "second run"
-n2=$(ls "$d/.love/fat" | wc -l)
+n2=$(ls "$d/nest/fat" | wc -l)
 [ "$n1" = "$n2" ] || fail "the cache did not hold ($n1 -> $n2 entries)"
 
 # determinism: the same members answer the same bytes
