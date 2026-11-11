@@ -7,11 +7,14 @@
 ; are the borders of cells size texels across, each round a point thrown in it, w how wide.
 ; oval is rx by ry round its middle, turned deg; ball takes no paint, it shades what is under
 ; such an oval as a globe lit from lx ly, up to shine bright where it faces the light.
+; fbm is octaves of noise, the first size texels a cell, each after twice as fine and half as
+; strong, wrapped at the picture's edges so it tiles; relief shades its slopes as lit from the
+; top left, depth deep; stain lays its paint where fbm passes 1 less cover, soft its edge.
 ; (seed n) throws the noise of the layers after it anew, n a whole number under a million.
 ; paints: (rgb r g b), (grey g) or a number, 0 to 1; (shade k) and (tint rgb) multiply what is
 ; there, (mix rgb t) goes t of the way to a colour, (noise size [sy] amount) multiplies by 1 less
-; up to amount, smooth over size texels. hole leaves the texel undrawn; a later colour fills it, shading keeps it a hole.
-; (swatch-fault l) is () or [Q USAGE]; (swatch-texel l) is (\ x y colour-or-()).
+; up to amount, smooth over size texels, (fbm size octaves amount) as much by fbm. hole leaves the texel undrawn; a later colour fills it, shading keeps it a hole.
+; (swatch-fault l) is () or [Q USAGE]; (swatch-texel w h l) is (\ x y colour-or-()).
 (module (swatch swatch swatch-fault swatch-texel swatch-plan)
 (borrow 'vec)                           ; vn, cmix, c*
 (borrow 'mesh)                          ; mesh-pic
@@ -20,12 +23,23 @@
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)
  (fmod a m) (a - m * floor (a / m))
+ ; ..value noise wrapped every pu by pv cells, as vec's vn; and its octaves over a picture z
+ (vnw x y pu pv s) (: ix (floor x) iy (floor y) ux (x - ix) uy (y - iy)
+   ex (2 ux * (3.0 - 2.0 * ux)) ey (2 uy * (3.0 - 2.0 * uy))
+   (h i k) (throw (((i % pu) + pu) % pu) (((k % pv) + pv) % pv) s 1024 / 1023.0)
+   p (h ix iy) q (h (ix + 1) iy) r (h ix (iy + 1)) t (h (ix + 1) (iy + 1))
+   lo (p + ex * (q - p)) hi (r + ex * (t - r)) (lo + ey * (hi - lo)))
+ (cells n size) (max 1 (int (n / size + 0.5)))
+ (fbm x y size n z s) (: (go k pu pv a sum wt) (? (k >= n) (sum / wt)
+                          (go (k + 1) (2 * pu) (2 * pv) (0.5 * a) (sum + a * vnw (x * pu / z 0) (y * pv / z 1) pu pv (s + k)) (wt + a)))
+   (go 0 (cells (z 0) size) (cells (z 1) size) 1.0 0.0 0.0))
+ (octs? a) (num? (a 0) && num? (a 1) && a 0 > 0 && 1 <= a 1 <= 12)
  (rgb? q) (two? q && <q = 'rgb && #q = 4 && all num? >q)
  (colour q) (? (num? q) [(f q) (f q) (f q)]
                (two? q && <q = 'grey && #q = 2 && num? (q 1)) (: g (f (q 1)) [g g g])
                (rgb? q) (map f >q))
  ; ..a paint: [(\ c x y c')], or () where it is not one; c () is a hole, left one
- (paint q s) (: (on g) [(\ c x y (two? c ? (g c x y) c))]
+ (paint q s z) (: (on g) [(\ c x y (two? c ? (g c x y) c))]
    (? (q = 'hole) [(\ c x y ())]
       (colour q != ()) (: k (colour q) [(\ c x y k)])
       (!(two? q)) ()
@@ -34,16 +48,19 @@
       (<q = 'mix && #q = 3 && colour (q 1) != () && num? (q 2)) (: k (colour (q 1)) t (f (q 2)) (on (\ c x y (cmix c k t))))
       (<q = 'noise && (#q = 3 || #q = 4) && all num? >q)
        (: sx (f (q 1)) sy (f (#q @ 4 (q 2) (q 1))) a (f (q (#q - 1)))
-          (on (\ c x y (c* (1.0 - a + a * vn (x / sx) (y / sy) s) c))))))
+          (on (\ c x y (c* (1.0 - a + a * vn (x / sx) (y / sy) s) c))))
+      (<q = 'fbm && #q = 4 && all num? >q && octs? >q)
+       (: sz (f (q 1)) n (int (q 2)) a (f (q 3)) (on (\ c x y (c* (1.0 - a + a * fbm x y sz n z s) c))))))
  ; ..what each layer takes, said back when one is not understood
  usage {'fill "(fill PAINT)" 'rows "(rows from to PAINT)" 'cols "(cols from to PAINT)"
         'rect "(rect x0 y0 x1 y1 PAINT)" 'disc "(disc x y r PAINT)" 'grid "(grid dx dy w PAINT)"
         'checker "(checker dx dy PAINT)" 'stripes "(stripes every w slant PAINT)" 'dots "(dots dx dy r PAINT)"
         'bevel "(bevel dx dy w LIGHT DARK)" 'patches "(patches size cover PAINT)" 'poly "(poly x y x y x y .. PAINT)"
         'cracks "(cracks dx dy w wander PAINT)" 'grain "(grain every w warp size PAINT)"
-        'cells "(cells size w PAINT)" 'oval "(oval x y rx ry deg PAINT)" 'ball "(ball x y rx ry deg lx ly shine)" 'within "(within x0 y0 x1 y1 LAYER ..)" 'seed "(seed n)"}
+        'cells "(cells size w PAINT)" 'oval "(oval x y rx ry deg PAINT)" 'ball "(ball x y rx ry deg lx ly shine)" 'within "(within x0 y0 x1 y1 LAYER ..)" 'seed "(seed n)"
+        'relief "(relief size octaves depth)" 'stain "(stain size octaves cover soft PAINT)"}
  (hint q) (two? q && usage <q != () ? (usage <q)
-           "a layer is one of fill rows cols rect disc grid checker stripes dots bevel patches cracks grain cells oval ball poly within seed")
+           "a layer is one of fill rows cols rect disc grid checker stripes dots bevel patches cracks grain cells oval ball relief stain poly within seed")
  ; ..the shapes: (in? x y), x y a texel's corner; s a seed
  ; ..a texel in an oval's own axes, a unit circle: nums x y rx ry cos sin
  (oval-uv m x y) (: dx (x + 0.5 - m 0) dy (y + 0.5 - m 1) [((dx * m 4 + dy * m 5) / m 2) ((dy * m 4 - dx * m 5) / m 3)])
@@ -89,19 +106,29 @@
  ; ..a within's inner layers, when its box is numbers
  (inner q) (two? q && <q = 'within && #q >= 6 && all num? (take 4 >q) ? (drop 5 q))
  ; ..a layer: [(\ c x y c')], or () where it is not one; s its noise's seed
- (layer q s) (? (two? (paint q s)) (paint q s)
+ (layer q s z) (? (two? (paint q s z)) (paint q s z)
    (!(two? q)) ()
-   (inner q != ()) (: ls (layers (inner q) s) r (shape 'rect (map f (take 4 >q)) s)
+   (inner q != ()) (: ls (layers (inner q) s z) r (shape 'rect (map f (take 4 >q)) s)
                      (two? ls ? [(\ c x y (r x y ? (run ls c x y) c))]))
-   (<q = 'poly) (: a >q n (#a - 1) p (n > 0 ? (paint (a n) s) ())
+   (<q = 'poly) (: a >q n (#a - 1) p (n > 0 ? (paint (a n) s z) ())
      (? (n < 6 || n % 2 = 1 || !(all num? (take n a)) || atom? p) ()
         (: in? (poly-in (map f (take n a))) [(\ c x y (in? x y ? (<p c x y) c))])))
    (<q = 'ball) (: a >q (#a = 8 && all num? a ? (: m (ball-nums a) [(\ c x y (ball-on m c x y))])))
+   ; ..a slope toward the top left lighter, away darker
+   (<q = 'relief) (: a >q (#a = 3 && octs? a && num? (a 2) ?
+     (: sz (f (a 0)) n (int (a 1)) d (f (a 2)) (e x y) (fbm x y sz n z s)
+        [(\ c x y (atom? c ? c (c* (1.0 + d * sz * 0.5 * ((e (x + 1.0) y - e (x - 1.0) y) + (e x (y + 1.0) - e x (y - 1.0)))) c)))])))
+   ; ..the paint mixed in by how far fbm is past its edge; a hole goes all or nothing
+   (<q = 'stain) (: a >q p (#a = 5 ? (paint (a 4) s z) ())
+     (? (atom? p || !(octs? a) || !(num? (a 2)) || !(num? (a 3)) || a 3 <= 0) ()
+        (: sz (f (a 0)) n (int (a 1)) cv (f (a 2)) sf (f (a 3))
+           [(\ c x y (: t (fbm x y sz n z s) w (min 1.0 (max 0.0 ((t - (1.0 - cv)) / sf))) d (<p c x y)
+                       (? (atom? c || atom? d) (w >= 0.5 ? d c) (cmix c d w))))])))
    (: k <q t (peep takes k -1) a >q
       (? (t < 0 || #a != t + (k @ 'bevel 2 1) || !(all num? (take t a))) ()
-         (: in? (shape k (take t a) s) p (paint (a t) s)
+         (: in? (shape k (take t a) s) p (paint (a t) s z)
             (? (atom? p) ()
-               (k = 'bevel) (: d (paint (a (t + 1)) (s + 1)) w (f (a 2)) dx (f (a 0)) dy (f (a 1))
+               (k = 'bevel) (: d (paint (a (t + 1)) (s + 1) z) w (f (a 2)) dx (f (a 0)) dy (f (a 1))
                               (two? d ? [(\ c x y (: u (fmod x dx) v (fmod y dy)
                                                      (? (u >= dx - w || v >= dy - w) (<d c x y)
                                                         (u < w || v < w) (<p c x y)
@@ -112,30 +139,34 @@
  (seeded l s) (: (go l i k acc) (? (atom? l) (rev acc) (seed? <l) (go >l i (k + 1009 * (<l 1)) acc)
                                    (go >l (i + 1) k ([<l (s + 7 * i + k)] . acc)))
                 (go l 0 0 ()))
- (layers l s) (: ls (map (p \ layer (p 0) (p 1)) (seeded l s)) (all two? ls ? (map cap ls)))
+ (layers l s z) (: ls (map (p \ layer (p 0) (p 1) z) (seeded l s)) (all two? ls ? (map cap ls)))
  (run ls c x y) (foldl (\ c g (g c x y)) c ls)
  ; ..the first layer not understood, a within's inner ones searched, and what it takes
  (swatch-fault l) (? (atom? l) ()
-   (seed? <l || two? (layer <l 0)) (swatch-fault >l)
+   (seed? <l || two? (layer <l 0 [1 1])) (swatch-fault >l)
    (: q <l (inner q @ () [q (hint q)] (swatch-fault (inner q) @ () [q (hint q)] e e))))
- (swatch-texel l) (: ls (layers l 211) g [0.5 0.5 0.5] (\ x y (run ls g (f x) (f y))))
+ (swatch-texel w h l) (: ls (layers l 211 [w h]) g [0.5 0.5 0.5] (\ x y (run ls g (f x) (f y))))
  ; ..the same recipe as data for swatch-pic (src/love/swatch.c): each layer [boxes kind nums
  ; seed paint paint], a within's box laid on each of its layers; a paint [tag a b c d]
- shapes {'fill 0 'rows 1 'cols 2 'rect 3 'disc 4 'grid 5 'checker 6 'stripes 7 'dots 8 'patches 9 'cracks 12 'grain 13 'cells 14 'oval 15}
+ shapes {'fill 0 'rows 1 'cols 2 'rect 3 'disc 4 'grid 5 'checker 6 'stripes 7 'dots 8 'patches 9 'cracks 12 'grain 13 'cells 14 'oval 15
+         'relief 17 'stain 18}
  (paint-plan q s) (: z 0.0
    (? (q = 'hole) [0 z z z z]
       (colour q != ()) (: k (colour q) [1 (k 0) (k 1) (k 2) z])
       (<q = 'shade) [2 (f (q 1)) z z z]
       (<q = 'tint) (: k (colour (q 1)) [3 (k 0) (k 1) (k 2) z])
       (<q = 'mix) (: k (colour (q 1)) [4 (k 0) (k 1) (k 2) (f (q 2))])
+      (<q = 'fbm) [6 (f (q 1)) (f (q 2)) (f (q 3)) (f s)]
       (: sx (f (q 1)) sy (f (#q @ 4 (q 2) (q 1))) [5 sx sy (f (q (#q - 1))) (f s)])))
- (plan q s bx) (? (two? (paint q s)) [[bx 0 [0.0 0.0 0.0 0.0] s (paint-plan q s) ()]]
+ (plan q s bx) (? (two? (paint q s [1 1])) [[bx 0 [0.0 0.0 0.0 0.0] s (paint-plan q s) ()]]
    (inner q != ()) (: b (bx + map f (take 4 >q)) (catmap (p \ plan (p 0) (p 1) b) (seeded (inner q) s)))
    (<q = 'poly) (: a >q n (#a - 1) [[bx 11 (map f (take n a)) s (paint-plan (a n) s) ()]])
    (<q = 'bevel) (: a >q [[bx 10 (map f (take 3 a)) s (paint-plan (a 3) s) (paint-plan (a 4) (s + 1))]])
    (<q = 'oval) (: a >q [[bx 15 (turned a) s (paint-plan (a 5) s) ()]])
    (<q = 'ball) [[bx 16 (ball-nums >q) s (paint-plan '(shade 1) s) ()]]
+   (<q = 'relief) (: a >q [[bx 17 (map f a + [0.0]) s (paint-plan '(shade 1) s) ()]])
+   (<q = 'stain) (: a >q [[bx 18 (map f (take 4 a)) s (paint-plan (a 4) s) ()]])
    (: k <q a >q t (takes k) [[bx (shapes k) (map f (take t a) + map (_ \ 0.0) ^(4 - t)) s (paint-plan (a t) s) ()]]))
- (swatch-plan l) (? (two? (layers l 211)) (catmap (p \ plan (p 0) (p 1) ()) (seeded l 211)))
+ (swatch-plan l) (? (two? (layers l 211 [1 1])) (catmap (p \ plan (p 0) (p 1) ()) (seeded l 211)))
  (swatch w h l) (swatch-pic w h (swatch-plan l)))
 ) ; module swatch

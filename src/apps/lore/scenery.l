@@ -248,6 +248,8 @@
 ;                                      breathing, or flashing as a mast's beacon does
 ;   (beacon period on LIGHT)           a light flashing on for on seconds of every period
 ;   (dim k LIGHT)                      a light burning steady at k of its strength
+;   (ripple period on delay LIGHT)     a beacon flashing delay seconds into its period, so a
+;                                      row of them runs outward
 ;   (texture width height metres LAYERS)  a texture, width by height texels and metres wide
 ;                                      on a surface, painted by its layers (swatch.l), quoted
 ;   (rock [x y z] seed SHAPE)          a rock standing at x y z: a box cut by planes thrown
@@ -299,7 +301,7 @@
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
-         across troffer unlit stammer buzz breathe blink beacon dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+         across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
  (num? v) (charm? v || gem? v)
@@ -688,6 +690,9 @@
  (breathe l) (how 'breathe l)
  (blink l) (how 'blink l)
  (dim k l) (: u "(dim k LIGHT)" (? (!(num? k) || k < 0) (no u k) (how-is ['dim (f k)] l)))
+ (ripple per on d l) (: u "(ripple period seconds-on delay LIGHT)"
+   (? (!(num? per) || per <= 0) (no u per) (!(num? on) || on <= 0 || per <= on) (no u on) (!(num? d)) (no u d)
+      (how-is ['beacon (f per) (f on) (f d)] l)))
  (beacon per on l) (: u "(beacon period seconds-on LIGHT)"
    (? (!(num? per) || per <= 0) (no u per) (!(num? on) || on <= 0 || per <= on) (no u on)
       (how-is ['beacon (f per) (f on)] l)))
