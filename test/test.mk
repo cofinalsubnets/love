@@ -348,7 +348,8 @@ test_vi: host
 	    src/apps/tui.l test/law/tui.l \
 	    src/apps/vi/config.l src/apps/vi/hue.l src/apps/vi/hues.l src/apps/vi/core.l test/law/vi.l \
 	  | $(gsh) test/gate/run.sh vi "$m" "test/law/vi:"
-	@rm -f $(ho)/.vi1; \
+	@export LOVE_NEST=$(abspath $(ho))/.vi-nest; rm -rf $$LOVE_NEST; mkdir -p $$LOVE_NEST/etc; \
+	  rm -f $(ho)/.vi1; \
 	  printf 'ihello world\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi1)" = "hello world" ]; } \
 	    || { echo "FAIL kore vi create+write (exit $$r)"; exit 1; }; \
@@ -370,7 +371,12 @@ test_vi: host
 	    | $(korerun) vi $(ho)/.vi2 $(ho)/.vi3 > /dev/null 2>&1; r=$$?; \
 	  { [ $$r -eq 0 ] && [ "$$(cat $(ho)/.vi2 $(ho)/.vi3 | tr '\n' ' ')" = "onex two " ]; } \
 	    || { echo "FAIL kore vi arglist (exit $$r)"; exit 1; }; \
-	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end) ok"
+	  rm -f $(ho)/.vi1; printf '(shiftwidth 4)\n(autoindent 0)\n' > $$LOVE_NEST/etc/vi.l; \
+	  printf 'ix\033>>o  y\033:wq\n' | $(korerun) vi $(ho)/.vi1 > /dev/null 2>&1; r=$$?; \
+	  { [ $$r -eq 0 ] && [ "$$(tr '\n' '|' < $(ho)/.vi1)" = "    x|  y|" ]; } \
+	    || { echo "FAIL kore vi etc/vi.l: shiftwidth 4, autoindent off (exit $$r): $$(tr '\n' '|' < $(ho)/.vi1)"; exit 1; }; \
+	  rm -rf $$LOVE_NEST; \
+	  echo "kore: vi (laws + piped create/dd/q!/undo/ex/arglist end-to-end + etc/vi.l) ok"
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`

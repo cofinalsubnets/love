@@ -113,12 +113,15 @@ test_xor: | $(m)
 	  [ $$r -eq 0 ] || { echo "FAIL test_xor (exit $$r)"; exit 1; }; \
 	  grep -q "tests pass" out/.test_xor.out || { echo "FAIL test_xor (exit 0, no summary)"; exit 1; }
 
-# dlfind: a tree's own dl/ or the one above it, else the nest's in ~/.love/etc/dl, else none.
+# nest.sh: LOVE_NEST, else XDG_DATA_HOME/love, else HOME/.love, an empty one as unset.
+# dlfind: a tree's own dl/ or the one above it, else the nest's in etc/dl, else none.
 # the trees are made under /tmp, so the walk up meets no checkout's dl/ on the way
 test_dlfind:
-	@echo TEST dlfind.sh
+	@echo TEST nest.sh dlfind.sh
+	@n() { [ "$$(LOVE_NEST=$$1 XDG_DATA_HOME=$$2 HOME=$$3 sh nest.sh)" = "$$4" ] || { echo "FAIL nest.sh '$$1' '$$2' '$$3': want '$$4'"; exit 1; }; } && \
+	 n /a /x /h /a && n "" /x /h /x/love && n "" "" /h /h/.love && n "" "" "" /.love
 	@t=$$(mktemp -d) && mkdir -p $$t/a/dl $$t/a/b $$t/c $$t/h/.love/etc $$t/n && \
-	 w() { [ "$$(HOME=$$t/h sh dlfind.sh $$1)" = "$$2" ] || { echo "FAIL dlfind $$1: want '$$2'"; rm -rf $$t; exit 1; }; } && \
+	 w() { [ "$$(LOVE_NEST= XDG_DATA_HOME= HOME=$$t/h sh dlfind.sh $$1)" = "$$2" ] || { echo "FAIL dlfind $$1: want '$$2'"; rm -rf $$t; exit 1; }; } && \
 	 w $$t/a/b $$t/a/dl && w $$t/c "" && \
 	 echo $$t/n > $$t/h/.love/etc/dl && w $$t/c $$t/n && w $$t/a/b $$t/a/dl && \
 	 echo $$t/gone > $$t/h/.love/etc/dl && w $$t/c "" && \

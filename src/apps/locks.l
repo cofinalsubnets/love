@@ -2,7 +2,7 @@
 ; resource, and a pool of heavy slots granted first come first served, at most `max` at once
 ; and only while memory is above a floor. state is files under one root, so any session can
 ; read it and a crash leaves evidence; nothing here kills anything.
-;   (locks-root 0)                              BEE_LOCKS, /run/user/UID/love-locks, ~/.love/run/locks
+;   (locks-root 0)                              BEE_LOCKS, /run/user/UID/love-locks, the nest's run/locks
 ;   (locks-acquire root nm kind who note floor max) {"granted" 1} | {"granted" 0 "position" ..}
 ;   (locks-release root nm kind who)            1 | ()
 ;   (locks-list root)                           {"exclusive" .. "heavy" .. "waiting" .. "mem_gb" ..}

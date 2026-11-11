@@ -989,7 +989,7 @@ $(dl)/doom1.wad:
 
 include $(R)/test/test.mk
 #
-# THE NEST: the default install is ~/.love, a self-implying home, and what lands in it
+# THE NEST: the default install is the nest (src/tools/nest.sh, post.l's rule), and what lands in it
 # is the BINARY and the things a person reads -- man pages and the vim files. nothing
 # else needs to: the loader resolves modules out of the baked image (the modules arc,
 # rung 3) and mooncc carries its own headers and runtime (the bare cc door), so a nest
@@ -997,7 +997,8 @@ include $(R)/test/test.mk
 # ~/.local/bin gets a compat SYMLINK per bin, since PATH already knows it.
 
 # --- install / uninstall --------------------------------------------
-PREFIX ?= .love/
+# PREFIX unset is the nest; a distro names one, under DESTDIR
+PREFIX ?=
 VIMPREFIX ?= .vim/
 DESTDIR ?= $(HOME)/
 # BIN -- the name the interpreter installs under, and the ONE knob for the LÖVE collision
@@ -1007,7 +1008,7 @@ DESTDIR ?= $(HOME)/
 # src/love/love.h and src/love/boot/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
 BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
-d = $(DESTDIR)/$(PREFIX)
+d = $(if $(PREFIX),$(DESTDIR)/$(PREFIX),$(shell sh $(S)/tools/nest.sh))
 v = $(DESTDIR)/$(VIMPREFIX)
 
 # A shebang-carrying source tool installs as a SYMLINK to the source under the default
@@ -1038,7 +1039,7 @@ mannames = $(BIN) cook lush
 # in and links lush, which runs every other verb by name. a real PREFIX,
 # DESTDIR or BIN keeps the whole roster as files
 nestnames = $(BIN) lush
-ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
+ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love||$(HOME)/)
 nested = 1
 endif
 rulenames = $(if $(nested),,$(binnames))
@@ -1051,7 +1052,7 @@ inst644 = @echo '$(t_cp)	'$(abspath $@); install -D -m 644 $< $@
 
 # the PATH door, nest-only: each bin and man page gets a ~/.local compat symlink, since
 # those are already on PATH and manpath. A real PREFIX (a distro) skips them.
-ifeq ($(PREFIX),.love/)
+ifeq ($(PREFIX),)
 compat = $(DESTDIR)/.local
 installs += $(patsubst %,$(compat)/bin/%,$(rulenames)) \
   $(patsubst %,$(compat)/share/man/man1/%.1,$(mannames))
@@ -1119,7 +1120,7 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 	@chmod 755 $@
 
 # lux, the window manager: its modules catted into one shebang script. Settings ride salt
-# (~/.love/etc/lux.l then ./.lux.l), which also names the display and the cookie when
+# (the nest's etc/lux.l then ./.lux.l), which also names the display and the cookie when
 # DISPLAY/XAUTHORITY will not do; mod+q restarts in place by exec'ing this script.
 luxfiles = src/apps/lux/core.l src/apps/lux/layout.l src/apps/lux/wire.l src/apps/lux/ewmh.l src/apps/lux/manage.l src/apps/lux/keys.l src/apps/lux/config.l src/apps/lux/lux.l
 $d/bin/lux: $(luxfiles)

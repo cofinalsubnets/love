@@ -3,6 +3,9 @@
 ; run: cat test/00-init.l test/host/sh.l | out/love
 (reads (open "src/apps/lush.l" "r"))
 (borrow 'lush)
+; a scratch nest for the whole file: no shell here reads or writes the user's rc or history
+(: sh-nest (cwd 0 + "/out/.lush-nest-" + show (getpid 0)))
+(setenv "LOVE_NEST" sh-nest)
 (: shS (sh-new 0))
 (pin shS 'sh-mflag 0) ; autonomous here
 
@@ -728,16 +731,17 @@
 
 ; an arrow in application cursor mode (ESC O A, as a remote shell leaves the terminal) walks
 ; the history as ESC [ A does, and a command that sets the mode finds it reset at the next
-; prompt; a scratch HOME keeps the history
+; prompt; a scratch nest keeps the history, laid 0600 in a run/ of 0700, and its etc/lushrc
+; is read at the start
 (: (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
    (type m s) (: (go i) (? (#s <= i) (flush m) (put m (s i), go (i + 1))) (go 0))
    e (string 27)
-   home0 ("" + getenv "HOME")
-   d "out/.lush-t13"
-   _ (hark ["out/love" "out/lush" "-c" ("mkdir -p " + d + "; rm -f " + d + "/.lush_history")])
-   _ (setenv "HOME" d)
-   r (tether ["out/love" "lush"])
-   _ (setenv "HOME" home0)
+   d (cwd 0 + "/out/.lush-t13")
+   _ (hark ["rm" "-rf" d]) _ (hark ["mkdir" "-p" (d + "/etc")])
+   _ (: q (open (d + "/etc/lushrc") "w") _ (say q "echo rc-''read\n") (close q))
+   _ (setenv "LOVE_NEST" d)
+   r (tether ["env" "-u" "ENV" "out/love" "lush"])
+   _ (setenv "LOVE_NEST" sh-nest)
    m >r
    _ (settty m 24 80)
    sink (jug 0)
@@ -754,8 +758,13 @@
    _ (landed? t ? (catch t) (freeze t))
    n (findsub s "ss3-up")
    k (findsub s (e + "[?1h" + e + "="))
+   hf (stat (d + "/run/lush_history")) hd (stat (d + "/run"))
+   hs (uread (d + "/run/lush_history") @ [1 t] t "")
+   _ (hark ["rm" "-rf" d])
    (test (0 <= n) (has? (snip s (n + 1) #s) "ss3-up") !(has? s "OA: not found")
-         (0 <= k) (has? (snip s k #s) (e + "[?1l" + e + ">"))))
+         (0 <= k) (has? (snip s k #s) (e + "[?1l" + e + ">"))
+         (has? s "rc-read") (has? hs "echo ss3''-up")
+         (two? hf) (384 = (511 & (hf 2))) (two? hd) (448 = (511 & (hd 2)))))
 
 ; PATH unset searches the default path, never the cwd
 (: r (hark ["out/love" "out/lush" "-c" "d=out/.lush-t9; mkdir -p $d; printf '#!/bin/sh\\necho planted\\n' > $d/zz-qq-plant; chmod 755 $d/zz-qq-plant; cd $d; unset PATH; zz-qq-plant; echo st=$?"])
@@ -763,16 +772,17 @@
 ; the prompt shows a control byte as ^X
 (test ("a^[^Gb^?" = sh-vis ("a" + string 27 + string 7 + "b" + string 127))
       ("~/x" = sh-vis "~/x"))
-; a fresh history is 0600
-(: home0 ("" + getenv "HOME")
-   d "out/.lush-t10"
-   _ (hark ["out/love" "out/lush" "-c" ("mkdir -p " + d + "; rm -f " + d + "/.lush_history")])
-   _ (setenv "HOME" d)
+; a fresh history is 0600, in a nest with no run/ yet
+(: d (cwd 0 + "/out/.lush-t10")
+   _ (hark ["rm" "-rf" d])
+   _ (setenv "LOVE_NEST" d)
    _ (sh-histput shS "echo zz")
    _ (sh-histput shS "echo yy")
-   st (stat (d + "/.lush_history"))
-   _ (setenv "HOME" home0)
-   (test (two? st) (384 = (511 & (st 2)))))
+   st (stat (d + "/run/lush_history"))
+   hs (uread (d + "/run/lush_history") @ [1 t] t "")
+   _ (setenv "LOVE_NEST" sh-nest)
+   _ (hark ["rm" "-rf" d])
+   (test (two? st) (384 = (511 & (st 2))) (hs = "echo zz\necho yy\n")))
 
 ; a bracketed paste runs nothing until an enter
 (: (pump src dst) (see src @ -1 0 ch (put dst ch, flush dst, pump src dst))
@@ -850,5 +860,6 @@
    sw-o (slurp sw-j)
    (test ("a\n" = sw-t) ("b\n" = sw-o)))
 
+(hark ["rm" "-rf" sh-nest])
 (test_fin ())
 (puts "sh: ok") (putc 10)
