@@ -37,7 +37,7 @@ if [ ! -f "$PERLSRC/config.h" ]; then
 fi
 [ -x "$love" ] || { echo "$name: missing $love -- run 'make host'"; exit 1; }
 
-d=$ho/moonperl
+d=$(pwd)/$ho/moonperl
 rm -rf "$d"; mkdir -p "$d"
 cp -a "$PERLSRC" "$d/src"
 P=$(cd "$d/src" && pwd)
