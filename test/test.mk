@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_esp32_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -686,11 +686,12 @@ test_distboot: dist
 	@sh test/gate/distboot.sh $(ho)/love
 # test_hearts -- the arm64 defconfig Image by mooncc, booted to init under qemu; heavy, opt-in
 gate_love += test_hearts
-# test_hearts_boot -- hearts under qemu virt: chooser, helm as pid 1, three updates. heavy
+# test_hearts_boot -- hearts under qemu virt: love's boot menu starts linux, helm as pid 1. heavy
 hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)
 test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
+	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST test/gate/hearts-boot.sh
-	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
+	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l $(ko)/love-a64.elf
 # test_hearts_objtool -- x86's objtool by mooncc on elfutils' libelf, its vmlinux.o pass the host's; opt-in
 test_hearts_objtool: host
 	@echo TEST test/gate/hearts-objtool.sh
@@ -1054,12 +1055,24 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(ko)/esp-a64 $$fw a64; fi
 endif
 
+ifeq ($(QEMU_A64),)
+test_uefi_stay_a64:
+	@sh test/gate/skip.sh gate-skip "test_uefi_stay_a64: skipped (qemu-system-aarch64 needed)"
+else
+test_uefi_stay_a64: host $(S)/tools/ktest.l
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-aarch64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_stay_a64: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s a=a64 $(addprefix $(ko)/esp-stay-a64/,EFI/BOOT/BOOTAA64.EFI love.elf love.stay love.cmd boot.l efihello.efi) \
+	 && echo TEST $(ko)/esp-stay-a64 "(serial, headless, the firmware's guest and the boot menu; TCG, ceiling 900s)" \
+	 && $m $(S)/tools/ktest.l $(ko)/esp-stay-a64 $$fw a64 "efihello: one two"; fi
+endif
+
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
 inle_rv64 = test_kernel_rv64
 inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
-inle_a64 = test_kernel_a64 test_uefi_a64
+inle_a64 = test_kernel_a64 test_uefi_a64 test_uefi_stay_a64
 test_inle: host
 	@$(MAKE) -s $(src_tree) out/rootfs.tar
 	@rm -rf out/inle && mkdir -p out/inle

@@ -4,7 +4,6 @@
 ; go: out nonzero holds cap bytes: it reaches inf_start as inf_rd's out -- every caller below
 ; caller: (inflate s n): out a str0 of cap, the hint or the counted length -- gz.c
 ; caller: inflate_raw: an idat, out at f0 in a region of cap, f0 + fsz <= cap checked there -- quay/png.c
-; caller: inflate_raw: a gzip member, out from AllocatePool of the size it states -- uefi/slot.c
 ; caller: inflate_raw: a carried tree entry -- archive/srctree.c
 ; caller: inflate_raw: a carried text -- cats.c
 ; caller: inflate_raw, inflate_dict: an image's dictionary and pages -- love.c

@@ -1,7 +1,8 @@
 ; src/inle/uefi/mkefi.l -- the firmware seam in holo IR, linked with mooncc's loader objects
 ; into the PE32+ for the ESP (BOOTX64.EFI / BOOTAA64.EFI). runs after holo/{elf,obj,link,pe}.l.
 ; the thunks are laid first so the PE entry is the first text byte. x86-64 UEFI is ms_abi
-; against sysv C, so both directions shuffle; a64 is AAPCS64, so only efi_go carries weight.
+; against sysv C, so both directions shuffle; a64 is AAPCS64, so only efi_go and efi_stay
+; carry weight.
 ;   efiboot -- firmware enters here.
 ;   efi_call -- every UEFI service goes back OUT through this; efi_back, a protocol of ours IN.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
@@ -92,6 +93,21 @@
       (mov r7 r0)
       (mov r0 r1) (mov r1 r2) (mov r2 r3) (mov r3 r4) (mov r4 r5) (mov r5 r6)
       (jmpr r7)
+      ;; efi_back: a protocol we install. `this` leads with this entry, then the C it lands in,
+      ;; which takes the arguments as they came
+      (label efi_back)
+      (ld r9 r0 8)
+      (jmpr r9)
+      ;; efi_stay(ttbr1, entry, tcr): love.stay's switch. TTBR0, MAIR and VBAR stay the
+      ;; firmware's, interrupts on; TTBR1 walked from here
+      (label efi_stay)
+      (msr ttbr1_el1 r0)
+      (msr tcr_el1 r2)
+      (dsb ish)
+      (tlbi vmalle1 zr)
+      (dsb ish)
+      (isb)
+      (jmpr r1)
       ;; efi_go(tables, entry): x0 is TTBR0's root, TTBR1's the page after (loader.c lays them
       ;; adjacent). the MMU is on and both maps identity this code: a switch, made by TLBI + ISB.
       (label efi_go)
@@ -111,7 +127,7 @@
       (isb)
       (jmpr r1))                  ; the kernel's entry, never back
 
-   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_back" "efi_call" "efi_call6" "efi_go" "efi_stay"))
+   efi-exports '("efi_back" "efi_call" "efi_call6" "efi_go" "efi_stay")
    (efi-tgt arch) (arch @ "a64" 'a64 'x64)
    (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)
@@ -119,5 +135,5 @@
                        (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1)))
                  objs)
        (pelink (efi-tgt arch)
-               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () (efi-exports arch) () () () () () () ()))] .  srcs)
+               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () efi-exports () () () () () () ()))] .  srcs)
                out)))
