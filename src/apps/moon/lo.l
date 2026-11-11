@@ -656,13 +656,19 @@
     (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
    (loch g a) (sal? g ? (salk g a) (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
+   ; a span of 16 words or more zeroes four words a turn of a loop, from the top down, the
+   ; words past the last four and the bytes past the last word straight after
    (lozero g off span)
     (lomk g @ z
-       (: w (wsize g)
+       (: w (wsize g) b (4 * w) n (span < 16 * w ? 0 (span - span % b))
           (go o rem) (? (w <= rem) (['st 'r4 o z] . go (o + w) (rem - w))
                         (0 < rem) (['st1 'r4 o z] . go (o + 1) (rem - 1))
                         ())
-          (['li z 0] . go off span)))
+          loop (n = 0 ? ()
+                  (lomk g @ q (lomk g @ c (lomk g @ a (nlab g ".z" @ l1 (nlab g ".z" @ l2
+                     [['lea q 'r4 off] ['li c n] ['label l1] ['cmp c 0] ['br 'eq l2] ['sub c c b] ['mov a q] ['add a a c]
+                      ['st a 0 z] ['st a w z] ['st a (2 * w) z] ['st a (3 * w) z] ['jmp l1] ['label l2]]))))))
+          (['li z 0] . loop + go (off + n) (span - n))))
    ; the zeroing, less each store the fill lays over whole, when the fill reads nothing of the frame
    ; and calls nothing that might
    (lozfill g off span fs)
