@@ -9,7 +9,7 @@
    (ops-t-diff a b m) (peep a (iota m) 0.0 - peep b (iota m) 0.0)
    (ops-t-worst a b m) (: d (ops-t-diff a b m) (sqrt (amax (d * d))))
    (ops-t-off a b m eps) (net (map (i \ (: d (peep a i 0.0 - peep b i 0.0) (d * d > eps * eps ? 1 0))) ^m))
-   (ops-t-pair os) [(ops-run (ops-rows os) os () n 0 rate) (ops-ref os () n 0 rate)]
+   (ops-t-pair os) [(ops-run (ops-rows os) os () n 0 rate ()) (ops-ref os () n 0 rate)]
    flat [[0.0 0 0.0 0.0 0.0]]
    ; every feature alone, and an FM pair: within 1e-6
    smooth [[{'f 220.0 'l 1.0 'segs flat}]
@@ -35,8 +35,11 @@
        {'at 300 'f 110.0 'slide 0.7 'wave 0 'l 0.2 'r 0.2 'segs [[0.0 3 420.0 9.0 0.5] [0.3 1 0.0 0.0 0.0]]}]
    R (ops-rows os) k #os
    (three f) (: (go j st acc) (j = 3 ? acc (: r (f st (j * n)) (go (j + 1) (peep r (iota (2 * k) + 2 * n) 0.0) (acc + [r])))) (go 0 () ()))
-   K (three (\ st f0 (ops-run R os st n f0 rate))) F (three (\ st f0 (ops-ref os st n f0 rate)))
+   K (three (\ st f0 (ops-run R os st n f0 rate ()))) F (three (\ st f0 (ops-ref os st n f0 rate)))
    _ (test (all (j \ ops-t-worst (K j) (F j) (2 * n + 2 * k) < 1e-3) ^3) (0.1 < sqrt (amax (K 2 * K 2))))
+   ; ..and with the scratch in a workspace kept across the runs, the same answer to the bit, less it
+   ws ((cite 'dsp 'tones-ws) (k * n)) W (three (\ st f0 (ops-run R os st n f0 rate ws)))
+   _ (test (all (j \ #(W j) = 2 * n + 2 * k && aall (W j = peep (K j) (iota (2 * n + 2 * k)) 0.0)) ^3))
    ; a GENMIDI voice fed back, its modulator into its carrier, held then let go, as play's voice
    ;   both ways: the kernel's and the love form's ('ref on its first operator)
    (ops-t-b l) (foldl (\ a c (a + string c)) "" l)

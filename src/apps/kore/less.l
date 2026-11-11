@@ -369,6 +369,14 @@
             pgwrapall st,
             pgline! st ln,
             1))))
+   ; SIGWINCH (28) wakes a task that runs f while a key is awaited, so a new size shows at
+   ; once; answers what stops it
+   (pgwatch f)
+    (sigfd [28] @ sig
+       (? !(hot? sig) (_ \ 0)
+          (: (go _) (await sig, sigtake sig, f 0, go 0)
+             t (twirl go 0)
+             (_ \ (freeze t, close sig)))))
    ; the loop. fs is the operand list (() when the text came off stdin), kq the
    ; keyboard port -- `in` when an operand is the text, /dev/tty when stdin was
    (pgride fs ls nm kq w h opt plus)
@@ -377,13 +385,17 @@
        _ (pgload st ls nm)
        _ (pgstart st plus)
        (doe _) (pgdoe st)
+       (frame _) (puts (pgframe st), flush out)
        (go pend)
         (: _ (pgresize st)
-           _ (puts (pgframe st)) _ (flush out)
+           _ (frame 0)
            kr (pgkey kq pend)
            c <kr
            (c < 0 ? 0 (pgstep st c, doe (), st 'quit ? 0 (go <>kr))))
-       (ttytake (), mind go -1 (_ \ ttygive ()), 0))
+       (ttytake (),
+        pgwatch (_ \ (pgresize st ? (frame 0) 0)) @ stop
+          (mind go -1 (_ \ (stop 0, ttygive ()))),
+        0))
    ; the flags kore's pager knows, and the complaint for anything else
    (pgopts as)
     (: t {}

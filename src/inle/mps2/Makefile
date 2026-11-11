@@ -10,7 +10,7 @@
 p_tgt  = thumb2
 p_be   = thumb2
 lib_h  = out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
-p_hdrs = out/lib/rune.h
+p_hdrs = out/lib/rune.h out/lib/fat.h
 include ../port.mk
 
 mps2_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
@@ -21,7 +21,7 @@ mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 # the five faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER
 # that dumps a heap image through semihosting, the WAKER that boots one back, and the two
 # -pd twins carrying the rune+cas corpus.
-skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o)
+skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/rt.o
 objs        = $(skel) $(R)/$(o)/main.o
 baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o
@@ -41,7 +41,7 @@ $(foreach m,$(libc_m),$(eval $(call p_obj,$m,src/apps/moon/lib/moonlibc/string/$
 # main.c, once per face -- the -D is the whole difference.
 mainc = main.c $(S)/love/love.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(lib_hR) $(mc)
 $(eval $(call p_obj,main,src/inle/mps2/main.c,$(mainc),$(mps2_cc)))
-$(eval $(call p_obj,main-baker,src/inle/mps2/main.c,$(mainc),$(mps2_cc) -D BAKER))
+$(eval $(call p_obj,main-baker,src/inle/mps2/main.c,$(mainc) $(R)/out/lib/fat.h,$(mps2_cc) -D BAKER))
 $(eval $(call p_obj,main-waker,src/inle/mps2/main.c,$(mainc),$(mps2_cc) -D WAKER))
 
 # start.o: the vector table, the FPU gate and the semihosting trampoline, laid from holo IR

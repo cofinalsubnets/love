@@ -26,6 +26,7 @@ a64_jobs() {
   rm -rf "$1"; mkdir -p "$1/res"
   a64_batch=$1/batch.sh
   : > "$a64_batch"
+  [ -z "${LOVE_GLAZE_HOT-}" ] || echo "export LOVE_GLAZE_HOT=$LOVE_GLAZE_HOT" >> "$a64_batch"   # the gates' glaze, as qemu inherits it
 }
 a64_tree() {
   LOVE_NO_IMAGE= "$a64_love" -e "(borrow 'posix) (: q (open \"$(dirname "$a64_batch")/tree.tar\" \"w\") (say q (tree-tar 0), close q, quit 0))" || return 1

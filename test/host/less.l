@@ -1,5 +1,5 @@
 ; test/host/less.l -- the pager on a pty (the engine is lawed in test/law/kore.l)
-; the pty is 0x0 until settty lands, so nothing here asks about geometry
+; the pty is 0x0 until settty lands, so only the resize law asks about geometry
 ; run: LOVEBIN=out/love LESSTESTDIR=out sh -c "cat test/00-init.l test/host/less.l | out/love"
 
 (: love (getenv "LOVEBIN")
@@ -87,10 +87,30 @@
          txt (slurp m)
          st (waitfor <r)
          [txt <st])
-   (test (<>ra = 0) (has? <ra "alpha") (has? <ra "\e[?1049h"),
+   _ (test (<>ra = 0) (has? <ra "alpha") (has? <ra "\e[?1049h"))
+
+   ; a new size is drawn at once, no key pressed: the status line moves to the new last row
+   (sized args)
+    (: r (tether (cat [love] args))
+       _ (test (two? r))
+       m >r
+       _ (settty m 10 40)
+       got {0 ""}
+       (pump _) (see m @ -1 0 c (pin got 0 (got 0 + string c), pump 0))
+       p (twirl pump 0)
+       (until s n) (has? (got 0) s || n < 1 ? (has? (got 0) s) (rest 20, until s (n - 1)))
+       a (until "\e[10;" 250)
+       _ (settty m 14 50)
+       b (until "\e[14;" 150)
+       _ (say m "q", flush m)
+       _ (catch p)
+       [a b <(waitfor <r)])
+   rz (sized ["less" f])
+   rw (sized ["www" f])
+   (test (rz = [1 1 0]) (rw = [1 1 0]),
 
     unlink f, unlink g,
     test_fin (),
-    say err "test/host/less: the pager face on a pty -- screenfuls, search, help, -N, +/PAT, the file walk and the pipe ok",
+    say err "test/host/less: the pager face on a pty -- screenfuls, search, help, -N, +/PAT, the file walk, the pipe and a resize ok",
     put err 10,
     0))

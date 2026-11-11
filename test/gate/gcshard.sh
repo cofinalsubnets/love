@@ -28,7 +28,9 @@ el() { echo "gcshard: $1 ($(( $(date +%s) - t0 )) s)"; }
 if [ -z "${GCS_NOBUILD:-}" ]; then
   # only the stress builds: a make of host here relinks out/love under the other lanes
   ${MAKE:-make} --no-print-directory hsuf=$gs GCDBG=-DLvGcStress out$gs/love.raw out$gs/.dist-cat.l || fail "the stress runtime"
-  ${MAKE:-make} --no-print-directory out/gcs0/love0 out/lib/corpus.list || fail "the stress love0"
+  # corpus.list is written on every make, and test_love0 reads it beside this lane: made once
+  [ -s out/lib/corpus.list ] || ${MAKE:-make} --no-print-directory out/lib/corpus.list || fail "the corpus list"
+  ${MAKE:-make} --no-print-directory out/gcs0/love0 || fail "the stress love0"
   el built
 fi
 for b in out/love out/love.raw out$gs/love.raw out/gcs0/love0; do [ -x $b ] || fail "no $b"; done
@@ -107,18 +109,15 @@ paste -d ' ' $w/clock $w/rest | awk -v n=$n -v tab=test/gate/gcshard.cost '
     for (i = 1; i <= NR; i++) { if (a > 0 && a + w[i] > hi && k < n - 1) { k++; a = 0 } a += w[i]; print k, f[i] } }' > $w/cut
 el "the full corpus and the cut"
 
+# a shard's carried files in corpus order, so a carry reads what an earlier carry binds
+carried() { awk 'NR == FNR { c[$0] = 1; next } c[$0]' $w/c$1 $w/rest; }
 # a shard: the harness, its carried files, its slice, zz-fin
 # ..and its marked twin, a mark behind each slice file, which the stress runs take
-lay() { cat $pre $(cat $w/c$1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l
-        { cat $pre $(cat $w/c$1); for f in $(awk -v k=$1 '$1 == k { print $2 }' $w/cut); do cat $f; echo; echo "$mark"; done
+lay() { cat $pre $(carried $1) $(awk -v k=$1 '$1 == k { print $2 }' $w/cut) $fin > $w/s$1.l
+        { cat $pre $(carried $1); for sf in $(awk -v k=$1 '$1 == k { print $2 }' $w/cut); do cat $sf; echo; echo "$mark"; done
           cat $fin; } > $w/m$1.l; }
-# the earliest corpus file that binds NAME at the head of a line: a letrec's, a define's, uu's (defn ..)
-binder() { for f in $(cat $w/rest); do
-             awk -v nm="$1" 'function at(s) { if (index(s, nm) != 1) return 0; c = substr(s, length(nm) + 1, 1); return c == " " || c == "\t" || c == ")" || c == "" }
-               { s = $0; sub(/^[ \t]*\(?/, "", s); d = s; sub(/^def[a-z]* +/, "", d)
-                 if (at(s) || d != s && at(d)) { x = 1; exit } }
-               END { exit !x }' $f && { echo $f; return; }
-           done; }
+# the earliest corpus file that binds NAME, as the reader reads it (test/gate/binder.l)
+binder() { out/love test/gate/binder.l "$1" $(cat $w/rest); }
 i=0
 while [ $i -lt $n ]; do : > $w/c$i; lay $i; i=$((i + 1)); done
 for h in b e; do

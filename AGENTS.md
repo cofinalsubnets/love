@@ -185,8 +185,9 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 <!-- lanes: laid by `love bee --lanes-doc` from src/apps/lanemap.l; edit there -->
 - `src/apps/kore/*` -> `test_kore` `test_hostnif`
-- `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l` -> `test_hostnif`
+- `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l`, `src/apps/hosts.l` -> `test_hostnif`
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)
+- `test/gate/lanes.sh` -> `test_lanesremote`
 - `src/love/snap.c`, `src/love/image.c`, `src/love/elfbake.c`, `src/love/macho.c`, `Makefile`, `common.mk`, `src/tools/hotbake.sh` -> `test_ccwarn` `test_hdiff` `test_inle`
 - `src/love/snap.c` -> `test_boards`, whose links bake their own images through it
 - `src/apps/caja/*`, `test/caja/*`, `test/gate/caja.sh` -> `test_caja`
@@ -195,16 +196,18 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_core`
 - the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk` -> `test_gcstress`, in the queue's union; a `.l`, doc, app or test diff never owes it
 - what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
+- `src/love/boot/glaze.l` -> `test_inle`, whose kernels run the glaze too
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)
-- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
-- what moon emits through, `src/love/holo/{x64,holo,as,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_ccarm` `test_ccrv64` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- what moon emits through, `src/love/holo/{x64,holo,as,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
 - `src/love/holo/a64.l` -> `test_moon` `test_cca64`
-- `src/love/holo/rv64.l` -> `test_moon` `test_ccrv64`
-- `src/love/holo/i386.l` -> `test_moon` `test_cci386`
+- `src/love/holo/rv64.l` -> `test_moon` `test_ccrv64` `test_ccrv32`
+- `src/love/holo/i386.l` -> `test_moon` `test_cci386` `test_cci386m16`
 - `src/love/holo/thumb1.l` -> `test_moon` `test_ccthumb1`
 - `src/love/holo/thumb2.l` -> `test_moon` `test_ccthumb2` `test_ccarm`
 - `src/love/holo/wasm.l`, `src/love/holo/wasmfn.l` -> `test_moon` `test_ccwasm`
+- `src/love/holo/xtensa.l`, `test/holo/xtrun.l`, `test/holo/xtlink.l`, `test/holo/xtdata.c` -> `test_xtensa` `test_ccxtensa`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`
@@ -218,7 +221,7 @@ Several sessions gate on one box. Two makes in one `out/` race, and a box short 
 
 - heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_gcstress_bake` `test_gcstress_full` `test_boards` `test_hearts` `test_hearts_boot` `moon-flex` `moon-bison`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
-- a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, `~/.love/etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
+- a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, the nest's `etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
 
 A worktree goes under `.claude/worktrees/NAME`, never beside the tree, and is removed (`git worktree remove`) once its row lands.
 

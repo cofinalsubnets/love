@@ -1,6 +1,7 @@
 // src/inle/uefi/loader.c -- BOOTX64.EFI / BOOTAA64.EFI: load love.elf off our volume, fill its
 // kboot, lay the page tables, ExitBootServices, jump. mkefi.l's thunks are efi_call and efi_go.
-// integer-only: the x86 entry thunk saves only rsi/rdi, so ms_abi's xmm6..15 must stay untouched
+// integer-only: the x86 entry thunk saves only rsi/rdi, so ms_abi's xmm6..15 must stay untouched.
+// love.stay beside it (x64) keeps boot services: the kernel never returns, so the rule holds
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
@@ -8,7 +9,10 @@ typedef unsigned short u16;
 typedef unsigned char u8;
 
 extern u64 efi_call(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e);
+extern u64 efi_call6(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
 extern void efi_go(u64 pml4, u64 entry);
+extern void efi_stay(u64 pml4, u64 entry);
+extern u8 efi_back[];
 
 #define HHDM 0xffff800000000000ull
 
@@ -36,10 +40,15 @@ struct k_boot {
  u32 ram_n;
  struct { u64 base, len; } ram[ram_max];
  u64 hhdm;
- struct { u64 base; u16 w, h; u32 pitch_px; u8 scale; } fb;
+ struct { u64 base; u16 w, h; u32 pitch_px; u8 scale; u32 cap_px; } fb;
  u8 has_fb;
  u64 date;                             // no door here answers it; kmain's rtc does
- char cmdline[256]; };
+ char cmdline[256];
+ void *image; u64 image_len, initrd, initrd_len;
+ void *efi_st, *efi_image;             // love.stay: boot services kept, and our handle
+ u64 (*efi_call)(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
+ void *efi_back;
+ u64 tsc0, tsc_khz; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
 // pml4, a pdpt per window, four pds, and a spare pd for a relocated kernel; a table's low
@@ -58,6 +67,45 @@ static void kcmdline(void *root, struct k_boot *kb) {
  for (; i < csz && i + 1 < sizeof kb->cmdline && cbuf[i] >= 32; i++)
   kb->cmdline[i] = (char) cbuf[i];                // stops at the trailing newline
  kb->cmdline[i] = 0; }
+
+#if !defined(__aarch64__)
+static u64 rdtsc(void) {
+ u32 lo, hi;
+ asm volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+ return (u64) hi << 32 | lo; }
+
+static u64 rdcr3(void) {
+ u64 v;
+ asm volatile ("mov %%cr3, %0" : "=r"(v));
+ return v; }
+
+// love.stay beside love.elf: the kernel runs as the firmware's guest, boot services alive.
+// the firmware keeps its interrupts, tables and devices, and the low half of the map is its
+// own; the heap is one allocation, most of the largest free run below 4G
+static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
+ efi_call(bs[32], 0, 0, 0, 0, 0);                      // the boot manager's watchdog off
+ u64 t = rdtsc();
+ efi_call(bs[31], 20000, 0, 0, 0, 0);                  // Stall 20 ms
+ kb->tsc_khz = (rdtsc() - t) / 20;
+ u64 *fw = (u64 *) (rdcr3() & ~0xfffull);
+ for (u64 i = 0; i < 256; i++) pt[i] = fw[i];
+ u64 msz = sizeof mmap, key = 0, dsz = 0, dvr = 0, best = 0, bestn = 0;
+ if (efi_call(bs[7], (u64) &msz, (u64) mmap, (u64) &key, (u64) &dsz, (u64) &dvr))
+  return die("GetMemoryMap failed");
+ for (u64 o = 0; o + dsz <= msz; o += dsz) {
+  u8 *d = mmap + o;
+  u64 pa = *(u64 *) (d + 8), np = *(u64 *) (d + 24);
+  if (*(u32 *) d == 7 && pa >= 0x100000 && pa + np * 4096 <= 0x100000000ull && np > bestn)
+   best = pa, bestn = np; }
+ if (bestn < 131072) return die("no free run of 512M below 4G");
+ u64 n = bestn - 65536;                                // 256M stays the firmware's, for what it loads
+ if (efi_call(bs[5], 2, 2, n, (u64) &best, 0)) return die("no pages for the heap");
+ kb->ram_n = 1, kb->ram[0].base = best, kb->ram[0].len = n * 4096;
+ kb->efi_st = sys, kb->efi_image = handle, kb->efi_call = efi_call6, kb->efi_back = efi_back;
+ kb->tsc0 = rdtsc();
+ efi_stay((u64) pt, entry);
+ return 1; }
+#endif
 
 // a link address's physical one: x64's image is linked high and loaded low (kproject.l)
 static u64 kpa(u8 *e, u64 va) {
@@ -139,6 +187,17 @@ u64 efi_main(void *handle, void *st) {
   u8 *d = (u8*) (kbase + (pa - lo));
   for (u64 j = 0; j < flz; j++) d[j] = e[off + j];
   for (u64 j = flz; j < msz; j++) d[j] = 0; }
+#if defined(__aarch64__)
+ // the copy sits in the d-cache and a core fetches past it: clean to PoU, drop stale i-lines.
+ // tcg models no caches, so only kvm or metal fails without this
+ {
+  u64 ctr, step;
+  asm volatile ("mrs %0, ctr_el0" : "=r"(ctr));
+  step = 4ull << ((ctr >> 16) & 15);
+  for (u64 a = kbase & ~(step - 1); a < kbase + (hi - lo); a += step)
+   asm volatile ("dc cvau, %0" :: "r"(a) : "memory");
+  asm volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory"); }
+#endif
 
  // kboot's home: the kernel symtab (sh_type 2), symbol "kboot"
  u64 shoff = *(u64*) (e + 40);
@@ -212,6 +271,13 @@ u64 efi_main(void *handle, void *st) {
  pt[511] = (u64) &pt[512] | 3;
 #endif
 
+#if !defined(__aarch64__)
+ void *sf = 0;
+ static u16 sname[10] = {'l','o','v','e','.','s','t','a','y',0};
+ if (!efi_call(((void**) root)[1], (u64) root, (u64) &sf, (u64) sname, 1, 0))
+  return stay(handle, kb, entry);
+#endif
+
  // kboot.ram: conventional (7) only, so the heap never eats this stack, the tables or the kernel
  u64 msz = sizeof mmap, key = 0, dsz = 0, dvr = 0;
  if (efi_call(bs[7], (u64) &msz, (u64) mmap, (u64) &key, (u64) &dsz, (u64) &dvr))
@@ -227,9 +293,15 @@ u64 efi_main(void *handle, void *st) {
   u64 pa = *(u64 *) (d + 8), np = *(u64 *) (d + 24);
   if (pa < 0x100000) continue;                         // low memory stays the firmware's
   if (pa >= 0x100000000ull) continue;                  // above the mapped 4G
+  u64 pe = pa + np * 4096, wb = (hi + 0x1fffff) & ~0x1fffffull;
+  // a bent window runs lo..wb at kbase, so a block there has no code alias: the heap keeps out
+  if (kbase != lo && pa < wb && lo < pe) {
+   if (pa < lo && kb->ram_n < ram_max) kb->ram[kb->ram_n].base = pa, kb->ram[kb->ram_n].len = lo - pa, kb->ram_n++;
+   if (pe <= wb) continue;
+   pa = wb; }
   if (kb->ram_n >= ram_max) break;
   kb->ram[kb->ram_n].base = pa;
-  kb->ram[kb->ram_n].len = np * 4096;
+  kb->ram[kb->ram_n].len = pe - pa;
   kb->ram_n++; }
 
  efi_go((u64) pt, entry);

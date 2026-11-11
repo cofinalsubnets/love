@@ -68,12 +68,30 @@ for f in test/cc/*.c; do
   "$ho/.ccb"; a=$?
   $cc_g -O0 -o "$ho/.ccbg" "$f" && "$ho/.ccbg"; b=$?
   [ $a -eq $b ] || fail "mooncc battery $f (ours $a gcc $b)"
+  moonrun -Os -o "$ho/.ccb" "$f" > /dev/null 2>&1 || fail "mooncc -Os compile $f"
+  "$ho/.ccb"; c=$?
+  [ $a -eq $c ] || fail "mooncc battery $f -Os (ours $c, plain $a)"
   # ..and again with the hardening flags, which change no answer
   moonrun -fcf-protection=full -ftrivial-auto-var-init=zero -fstack-protector-all -o "$ho/.ccb" "$f" "$ho/.sspg.o" > /dev/null 2>&1 ||
     fail "mooncc -fcf-protection -ftrivial-auto-var-init -fstack-protector-all compile $f"
   "$ho/.ccb"; c=$?
   [ $a -eq $c ] || fail "mooncc battery $f hardened (ours $c, unhardened $a)"
 done
+
+# -g lays line tables: each statement's line at its code, a body with a prologue its `{` at the
+# entry, an arm laid out of line its statement's (an inlined copy takes the caller's); -g0 lays
+# none, and the code is the same either way
+printf 'int sq(int x) {\n  int y = x * x;\n  return y + 1;\n}\nint q(int a) { if (a)\n    return sq(a);\n  return 7; }\n' > "$ho/.dwl.c"
+moonrun -g -c "$ho/.dwl.c" -o "$ho/.dwl.o" || fail "mooncc -g"
+[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 5 - " ] ||
+  fail "-g's line rows are not each statement's, at its code"
+moonrun -g0 -c "$ho/.dwl.c" -o "$ho/.dwl0.o" || fail "mooncc -g0"
+readelf -SW "$ho/.dwl0.o" | grep -q debug_ && fail "-g0 laid debug sections"
+[ "$(readelf -x .text "$ho/.dwl.o")" = "$(readelf -x .text "$ho/.dwl0.o")" ] || fail "-g changed the code"
+
+# stdlib.h lays alloca, as glibc's default features do (kbuild's genksyms leans on it)
+printf '#include <stdlib.h>\n#include <string.h>\nint main(void){ char *p = alloca(64); memset(p, 5, 64); return p[63] - 5; }\n' > "$ho/.sal.c"
+moonrun "$ho/.sal.c" "$ho/.sal" && "$ho/.sal" || fail "mooncc: stdlib.h alone gives no alloca"
 
 # kernel objects: -mno-sse keeps a variadic's prologue off the xmm file, a data symbol
 # carries its size, a file-scope static is a local one, a block static keeps its section
@@ -496,6 +514,12 @@ moonrun -t thumb2 -Os -c -o "$ho/.oszs.o" "$ho/.osz.c" > /dev/null 2>&1 || fail 
 a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
 [ "$a" -lt "$b" ] || fail "thumb2 -Os no smaller: $a bytes against $b"
 
+# a frame array read by index keeps thumb2's register-list frame, its slots off sp: no lone
+# str.w lr,[sp,#-4]! opens it
+printf 'int h(int *p, int n);\nint k(int *a, int n) { int t[100]; for (int i = 0; i < 100; i++) t[i] = a[i] + n; int s = 0; for (int i = 0; i < n; i++) s += h(t, i) * a[i]; return s + t[n %% 100]; }\n' > "$ho/.t2x.c"
+moonrun -t thumb2 -c -o "$ho/.t2x.o" "$ho/.t2x.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 a frame array by index"
+[ "$(readelf -x .text "$ho/.t2x.o" | awk '/^  0x/ {print $2; exit}')" != "4df804ed" ] || fail "thumb2: a frame array by index keeps the old frame"
+
 # a helper spliced at many sites costs its sites: four plain ones stay calls, four in a loop splice
 cat > "$ho/.isite.c" <<'EOF'
 int t[9];
@@ -512,9 +536,54 @@ for d in P L; do
   a=$(wc -c < "$ho/.isite.o"); b=$(wc -c < "$ho/.isiten.o")
   case $d in
     P) [ "$a" -eq "$b" ] || fail "four plain sites spliced: $a bytes against $b out of line" ;;
-    L) [ "$a" -gt "$b" ] || fail "four sites in a loop stayed calls: $a bytes against $b out of line" ;;
+    L) [ "$(objdump -d "$ho/.isite.o" | grep -c call)" = 0 ] || fail "four sites in a loop stayed calls" ;;
   esac
 done
+
+# a switch on a param too big to splice whole, called from an unrolled loop: each constant call
+# splices its own case, and none stays a call
+cat > "$ho/.kinl.c" <<'EOF'
+#include <stdio.h>
+static int side(int const *v, int k) {
+ switch (k) {
+  case 0: return v[2] + v[3];
+  case 1: return 64 * v[3] - v[0];
+  case 2: return 64 * v[3] + v[0];
+  case 3: return 64 * v[3] - v[1];
+  default: return 64 * v[3] + v[1]; } }
+int in(int const *v) { int a = 1; for (int k = 0; k < 5; k++) a &= side(v, k) >= 0; return a; }
+#ifndef ONLY
+int main(void) { int const v[4][4] = { { 1, 2, 3, 4 }, { -300, 0, 1, 4 }, { 0, 300, 1, 4 }, { 0, 0, -9, 4 } };
+ printf("%d %d %d %d\n", in(v[0]), in(v[1]), in(v[2]), in(v[3])); return 0; }
+#endif
+EOF
+moonrun -D ONLY -c -o "$ho/.kinl.o" "$ho/.kinl.c" > /dev/null 2>&1 || fail "mooncc the unrolled switch probe"
+[ "$(objdump -d "$ho/.kinl.o" | grep -c call)" = 0 ] || fail "an unrolled call on a constant stayed a call"
+moonrun -o "$ho/.kinl" "$ho/.kinl.c" || fail "mooncc: the unrolled switch probe linked"
+[ "$("$ho/.kinl")" = "1 0 0 0" ] || fail "an unrolled switch's constant splices answer wrong"
+
+# a local struct braced or member-named, an array member unnamed, splits into its members:
+# the brace's values land, the rest read zero
+cat > "$ho/.srsb.c" <<'EOF'
+#include <stdio.h>
+struct va { float x, y, z, w, a[3]; };
+struct ip { int p, q, r; long s; };
+static int n;
+static int bump(int k) { return n += k; }
+static float sd(struct va const *v, int k) { switch (k) { case 0: return v->z + v->w; case 1: return v->w - v->x; default: return v->w + v->y; } }
+static int f1(float x, float w) { struct va const v = { .x = x, .w = w }; int in = 0; for (int k = 0; k < 3; k++) in = in * 2 + (sd(&v, k) >= 0); return in; }
+static long f2(int a) { struct ip u = { a, bump(3) }; u.r += 2; return u.p * 100 + u.q * 10 + u.r + u.s; }
+static long f3(int a) { struct ip u = { .q = a, 5, .p = bump(1) }; return u.p * 1000 + u.q * 100 + u.r * 10 + u.s; }
+static long f4(int a) { struct ip u = { .s = a }; for (int i = 0; i < 3; i++) u.s += u.p + i; return u.s; }
+static float f5(float x) { struct va v = { x, 2, 3, 4 }; v.a[1] = 9; return v.x + v.a[1] + v.a[0]; }
+int main(void) {
+ printf("%d %d %d\n", f1(1, 2), f1(-5, 2), f1(3, -1));
+ long a2 = f2(7); long a3 = f3(4); long a4 = f4(6); float a5 = f5(1.5f);
+ printf("%ld %ld %ld %g n=%d\n", a2, a3, a4, a5, n);
+ return 0; }
+EOF
+moonrun -o "$ho/.srsb" "$ho/.srsb.c" || fail "mooncc the braced struct probe"
+[ "$("$ho/.srsb" | tr '\n' '|')" = "7 7 0|732 4450 9 10.5 n=4|" ] || fail "a braced local struct split into members answers wrong"
 
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays
@@ -732,11 +801,9 @@ for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
   printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
   moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
 done
-# #pragma pack refuses an operand it does not read and a bit-field it would let straddle
+# #pragma pack refuses an operand it does not read
 printf '#pragma pack(3)\nstruct s { char c; int i; };\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not one mooncc reads" || fail "#pragma pack(3) was taken"
-printf '#pragma pack(1)\nstruct s { char c; int i : 20; int j : 20; };\n' > "$ho/.attr.c"
-moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a bit-field under #pragma pack" || fail "a packed bit-field was laid"
 printf 'typedef union { char *p; short s; } u __attribute__((transparent_union));\n' > "$ho/.attr.c"
 moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "a transparent union wants" || fail "a mixed transparent union was taken"
 # atomics refuse by name: a generic form, a width past the exclusives, armv6-m's read-modify-write
@@ -782,6 +849,10 @@ printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct o
 mkdir -p "$ho/.once/b"
 printf '#include "h.h"\n#include "b/../h.h"\n#include "./h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m2.c"
 [ "$(moonrun -E "$ho/.once/m2.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice by two spellings"
+# one header by an absolute source dir and a relative -I: the key is the file, from /
+oa=$(cd "$ho/.once" && pwd); orel=${oa#$PWD/}
+printf '#include "h.h"\n#include <h.h>\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m3.c"
+[ "$(moonrun -I "$orel" -E "$oa/m3.c" | grep -c 'struct once {')" = 1 ] || fail "#pragma once read a header twice, absolute and relative"
 # -E on a .S defines __ASSEMBLER__, as -c on it does
 printf '#ifdef __ASSEMBLER__\nmovl $1, %%eax\n#endif\n' > "$ho/.asm.S"
 moonrun -E "$ho/.asm.S" | grep -q 'movl' || fail "-E on a .S left __ASSEMBLER__ undefined"

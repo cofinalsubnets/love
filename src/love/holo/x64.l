@@ -31,7 +31,7 @@
    ;; [base+disp] over register numbers: an esp/r12 base takes a SIB byte
    (x86-mem regf bn disp)
     (: md (x86-md bn disp)
-     ((bn & 7 = 4 ? [(x86-modrm md regf 4) (x86-sib 0 4 bn)] [(x86-modrm md regf bn)])
+     ((bn & 7 @ 4 [(x86-modrm md regf 4) (x86-sib 0 4 bn)] [(x86-modrm md regf bn)])
       + x86-dispb md disp))
    ;; [base + index*scale + disp]: always a SIB byte
    (x86-memx regf bn ixn sc disp)
@@ -121,12 +121,12 @@
       (: _ (constellation? imm ? 0 (scare 'badimm imm))
          dn (rn d)
          (? (0 <= imm <= 4294967295)
-            ((hi dn = 0 ? () [(rex 0 0 0 1)]) + ((184 | lo dn) . le32 imm))
+            ((hi dn @ 0 () [(rex 0 0 0 1)]) + ((184 | lo dn) . le32 imm))
             (fits32 imm)
             ([(rex 1 0 0 (hi dn)) 199 (modrm 3 0 dn)] + le32 imm)
             ([(rex 1 0 0 (hi dn)) (184 | lo dn)] + le64 imm)))
    ;; d's low word <- imm by 66 B8+r iw; the rest of d stays
-   (emit-li2 d imm) (rn d @ dn ([102] + (hi dn = 0 ? () [(rex 0 0 0 1)]) + ((184 | lo dn) . le16 imm)))
+   (emit-li2 d imm) (rn d @ dn ([102] + (hi dn @ 0 () [(rex 0 0 0 1)]) + ((184 | lo dn) . le16 imm)))
 
    ;; a fresh-dest add or sub is one lea, not mov + alu: lea sets no flags, and aluops feed none
    (emit-alu op d a b)
@@ -138,11 +138,15 @@
             (reg? b && reg-eq d b)    (comm ? (alu-step rr ext d a) (scare 'alias-dst [op d a b]))
             (op = 'add && reg? b)     (emit-leax d a b 1 0)
             (op = 'add && fits32 b)   (emit-lea d a b)
-            (op = 'sub && fits32 (0 - b)) (emit-lea d a (0 - b))
+            (op = 'sub && fits32 -b) (emit-lea d a -b)
             ;; a mask of the low 8/16/32 bits is one movzx or 32-bit mov
             (op = 'and && reg? a && elem b '(255 65535 4294967295))
              (emit-zxm (b @ 255 1 65535 2 4) d a)
             (emit-mov d a + alu-step rr ext d b)))
+
+   ;; the same op less REX.W: the 32-bit write zero-extends. one instruction, as its caller knows
+   (emit-alu4 op d a b)
+      (emit-alu op d a b @ (x . r) ((x & 248) @ 72 ((x & 247) @ 64 r ((x & 247) . r)) (x . r)))
 
    ;; 69 /r id (6B /r ib for a byte) is three-address; register-register folds onto two-address 0F AF /r
    (imul-rr d s) (: dn (rn d) sn (rn s) [(rex 1 (hi dn) 0 (hi sn)) 15 175 (modrm 3 dn sn)])
@@ -164,15 +168,25 @@
    ;; no REX.W: the 32-bit write zero-extends
    (emit-shift4 op d c)
       (: dn (rn d) ext (shift-ext op)
-       ((hi dn = 0 ? () [(rex 0 0 0 1)]) +
+       ((hi dn @ 0 () [(rex 0 0 0 1)]) +
         (c @ 1 [209 (modrm 3 ext dn)]
          ([193 (modrm 3 ext dn)] + [(byte c)]))))
 
    (emit-test a b)
       (reg? b ? (: an (rn a) bn (rn b) [(rex 1 (hi bn) 0 (hi an)) 133 (modrm 3 bn an)])    ; 85 /r
-         (rn a @ an (an = 0 ? ([(rex 1 0 0 0) 169] + le32 b)                              ; A9 id
+         (rn a @ an (an @ 0 ([(rex 1 0 0 0) 169] + le32 b)                              ; A9 id
                        ([(rex 1 0 0 (hi an)) 247 (modrm 3 0 an)] + le32 b))))            ; F7 /0 id
 
+   ;; the low byte against an imm8, F6 /0 ib (A8 ib on al); spl..dil and r8b..r15b want a REX
+   (emit-testb a k)
+      (rn a @ an (an @ 0 [168 (byte k)] ((3 < an ? [(rex 0 0 0 (hi an))] ()) + [246 (modrm 3 0 (lo an)) (byte k)])))
+   ;; movzx r32 in place, which clears the top half: no REX.W
+   (emit-zxl w d)
+      (rn d @ dn ((w = 1 && 3 < dn || 7 < dn ? [(rex 0 (hi dn) 0 (hi dn))] ()) + [15 (w @ 1 182 183) (modrm 3 (lo dn) (lo dn))]))
+   ;; d = s's low byte or word into r32, which clears the top half
+   (emit-zxml w d s)
+      (: dn (rn d) sn (rn s)
+         ((w = 1 && 3 < sn || 7 < dn || 7 < sn ? [(rex 0 (hi dn) 0 (hi sn))] ()) + [15 (w @ 1 182 183) (modrm 3 (lo dn) (lo sn))]))
    ;; rsp cannot index (4 means none), and it is sp, never an r0..r14
    (memx regf base index scale disp) (x86-memx regf (rn base) (rn index) scale disp)
    (x64-memx w opc regf base index scale disp)
@@ -182,6 +196,9 @@
    (emit-stx base index scale disp s)  (x64-memx 1 '(137) s base index scale disp)     ; 89    mov [base+index*scale+disp], r64
    (emit-leax d base index scale disp) (x64-memx 1 '(141) d base index scale disp)     ; 8D    lea r64, [base+index*scale+disp]
    (emit-ldxb d base index scale disp) (x64-memx 1 '(15 182) d base index scale disp)  ; 0F B6 movzx r64, BYTE
+   (emit-ldxh d base index scale disp) (x64-memx 1 '(15 183) d base index scale disp)  ; 0F B7 movzx r64, WORD
+   (emit-ldxbl d base index scale disp) (x64-memx 0 '(15 182) d base index scale disp) ; ..into r32, no REX.W
+   (emit-ldxhl d base index scale disp) (x64-memx 0 '(15 183) d base index scale disp)
    (emit-ldxw d base index scale disp) (x64-memx 0 '(139) d base index scale disp)     ; 8B    mov r32, DWORD
    (emit-ldxsw d base index scale disp) (x64-memx 1 '(99) d base index scale disp)     ; 63    movsxd r64, DWORD
    ;; and/or/xor r32 by a DWORD (23/0B/33 /r); the 32-bit write zeroes the top
@@ -206,6 +223,8 @@
    (emit-ld4 d base off)  (x64-mem () 1 '(99) d base off)       ; 63     movsxd r64, DWORD
    (emit-ldu1 d base off) (x64-mem () 1 '(15 182) d base off)   ; 0F B6  movzx r64, BYTE
    (emit-ldu2 d base off) (x64-mem () 1 '(15 183) d base off)   ; 0F B7  movzx r64, WORD
+   (emit-ldu1l d base off) (x64-mem () 0 '(15 182) d base off)  ; ..into r32, no REX.W
+   (emit-ldu2l d base off) (x64-mem () 0 '(15 183) d base off)
    (emit-ldu4 d base off) (x64-mem () 0 '(139) d base off)      ; 8B     mov r32, DWORD
    (emit-st1 base off s)  (x64-mem () 0 '(136) s base off)      ; 88     mov BYTE, s8
    (emit-st2 base off s)  (x64-mem '(102) 0 '(137) s base off)  ; 66 89  mov WORD, s16
@@ -225,8 +244,8 @@
    (x64-mw w op8 op regf base off tl)
     (: fn (rn regf) rip (base = 'rip) bn (rip ? 0 (rn base))
        rx (w = 8 || fn >= 8 || bn >= 8 || (w = 1 && 4 <= fn <= 7))
-       ((w = 2 ? [102] ()) + (rx ? [(rex (w = 8 ? 1 0) (hi fn) 0 (hi bn))])
-        + (w = 1 ? op8 op)
+       ((w @ 2 [102] ()) + (rx ? [(rex (w @ 8 1 0) (hi fn) 0 (hi bn))])
+        + (w @ 1 op8 op)
         + (rip ? [(modrm 0 (lo fn) 5) (fix 4 'rel32 <off (<>off - tl))] (mem fn base off))))
    (imw w y) (w @ 1 [(byte y)] 2 [(byte y) (byte (y >> 8))] (le32 y))   ; a quad's sign-extends its 32
    (emit-xaddm w base off s) (x64-mw w '(15 192) '(15 193) s base off 0)       ; 0F C0/C1 /r  xadd m, r
@@ -238,7 +257,7 @@
        (? (reg? y) (x64-mw w [(8 * k)] [(8 * k + 1)] y base off 0)
           (w = 1) (x64-mw 1 '(128) () (x64-digit k) base off 1 + [(byte y)])
           (fits8 y) (x64-mw w () '(131) (x64-digit k) base off 1 + [(byte y)])
-          (imw (w = 8 ? 4 w) y @ iy (x64-mw w () '(129) (x64-digit k) base off #iy + iy))))
+          (imw (w @ 8 4 w) y @ iy (x64-mw w () '(129) (x64-digit k) base off #iy + iy))))
    ;; op d, m: 02+8k/03+8k /r
    (emit-alurm op w d base off)
     (: k (op @ 'add 0 'or 1 'adc 2 'sbb 3 'and 4 'sub 5 'xor 6 'cmp 7 (scare 'x64-alurm op))
@@ -248,17 +267,17 @@
     (: k (op @ 'adc 2 'sbb 3 (scare 'x64-carry op)) dn (rn d)
        yn (reg? y ? (rn y) 0)
        rx (w = 8 || hi dn != 0 || hi yn != 0 || (w = 1 && (4 <= dn <= 7 || 4 <= yn <= 7)))
-       pre ((w = 2 ? [102] ()) + (rx ? [(rex (w = 8 ? 1 0) (hi yn) 0 (hi dn))]))
-       (? (reg? y) (pre + [(w = 1 ? (8 * k) (8 * k + 1)) (modrm 3 yn dn)])
+       pre ((w @ 2 [102] ()) + (rx ? [(rex (w @ 8 1 0) (hi yn) 0 (hi dn))]))
+       (? (reg? y) (pre + [(w @ 1 (8 * k) (8 * k + 1)) (modrm 3 yn dn)])
           (dn = 0 && w = 1) (pre + [(8 * k + 4) (byte y)])
           (w = 1) (pre + [128 (modrm 3 k dn) (byte y)])
           (fits8 y) (pre + [131 (modrm 3 k dn) (byte y)])
-          (dn = 0) (pre + [(8 * k + 5)] + imw (w = 8 ? 4 w) y)
-          (pre + [129 (modrm 3 k dn)] + imw (w = 8 ? 4 w) y)))
+          (dn = 0) (pre + [(8 * k + 5)] + imw (w @ 8 4 w) y)
+          (pre + [129 (modrm 3 k dn)] + imw (w @ 8 4 w) y)))
    ;; test m, y: 84/85 /r, or F6/F7 /0
    (emit-testm w base off y)
     (reg? y ? (x64-mw w '(132) '(133) y base off 0)
-       (imw (w = 8 ? 4 w) y @ iy (x64-mw w '(246) '(247) 'r0 base off #iy + iy)))
+       (imw (w @ 8 4 w) y @ iy (x64-mw w '(246) '(247) 'r0 base off #iy + iy)))
    ;; inc dec not neg m: FE/FF /0 /1, F6/F7 /2 /3
    (emit-unm op w base off)
     (: d (op @ 'inc 0 'dec 1 'not 2 'neg 3 (scare 'x64-unm op))
@@ -315,16 +334,16 @@
           (scare 'badcc128 cond)))
    (emit-shl128 c)
       (c < 64 ? [72 15 164 194 (byte c)  72 193 224 (byte c)]   ; shld rdx,rax,c; shl rax,c
-         (: s9 (c = 64 ? () [72 193 226 (byte (c - 64))])       ; shl rdx,c-64
-            ('(72 137 194) + s9 + '(49 192))))                  ; mov rdx,rax; ..; xor eax,eax
+         (: s9 (c @ 64 () [72 193 226 (byte (c - 64))])       ; shl rdx,c-64
+            ([72 137 194] + s9 + [49 192])))                  ; mov rdx,rax; ..; xor eax,eax
    (emit-shr128 c)
       (c < 64 ? [72 15 172 208 (byte c)  72 193 234 (byte c)]   ; shrd rax,rdx,c; shr rdx,c
        (: s9 (c @ 64 () [72 193 232 (byte (c - 64))])       ; shr rax,c-64
-        ('(72 137 208) + s9 + '(49 210))))                  ; mov rax,rdx; ..; xor edx,edx
+        ([72 137 208] + s9 + [49 210])))                  ; mov rax,rdx; ..; xor edx,edx
    (emit-sar128 c)
       (c < 64 ? [72 15 172 208 (byte c)  72 193 250 (byte c)]   ; shrd rax,rdx,c; sar rdx,c
        (: s9 (c @ 64 () [72 193 248 (byte (c - 64))])       ; sar rax,c-64
-        ('(72 137 208) + s9 + '(72 193 250 63))))           ; mov rax,rdx; ..; sar rdx,63
+        ([72 137 208] + s9 + [72 193 250 63])))           ; mov rax,rdx; ..; sar rdx,63
    ;; u128 in the cell / u64 in rax: qhi = hi/d leaves its remainder in rdx for the low div, so
    ;; neither faults (rdx < d). a zero divisor faults
    (d128-div-pre z9) '(72 137 193                                 ; mov rcx,rax        (d aside)
@@ -334,8 +353,8 @@
                   72 247 52 36                                    ; div QWORD [rsp]    (rax=qhi, rdx=r1)
                   72 145                                          ; xchg rax,rcx       (rax=lo, rcx=qhi)
                   72 247 52 36)                                   ; div QWORD [rsp]    (rax=qlo, rdx=rem)
-   (emit-dv128 sp9) (d128-div-pre 0 + '(72 137 202))              ; mov rdx,rcx: quotient qhi:qlo
-   (emit-rm128 sp9) (d128-div-pre 0 + '(72 137 208  49 210))      ; rax=rem; xor edx,edx
+   (emit-dv128 sp9) (d128-div-pre 0 + [72 137 202])              ; mov rdx,rcx: quotient qhi:qlo
+   (emit-rm128 sp9) (d128-div-pre 0 + [72 137 208  49 210])      ; rax=rem; xor edx,edx
    ;; 0/1 <- (LEFT cond RIGHT). eq/ne xor both words; lt/ge run L-R through rcx; gt/le/above/be
    ;; R-L in place, reading the flipped relation
    (emit-c128 cond sp9)
@@ -370,7 +389,7 @@
     (rn d @ dn
        (w @ 1 ([(rex 1 (hi dn) 0 (hi dn)) 15 182] + [(modrm 3 (lo dn) (lo dn))])
             2 ([(rex 1 (hi dn) 0 (hi dn)) 15 183] + [(modrm 3 (lo dn) (lo dn))])
-              ((hi dn = 0 ? () [(rex 0 1 0 1)]) + [139 (modrm 3 (lo dn) (lo dn))])))
+              ((hi dn @ 0 () [(rex 0 1 0 1)]) + [139 (modrm 3 (lo dn) (lo dn))])))
    ;; d = s's low w bytes, zero-extended
    (emit-zxm w d s)
     (: dn (rn d) sn (rn s)
@@ -425,17 +444,17 @@
    ;; the same over a register, a legacy prefix ahead of the REX
    (emit-rdig pfx opc dig w r)
     (rn r @ n
-       (pfx + (w = 2 ? [102] ()) + ((w = 8 || n >= 8) ? [(rex (w = 8 ? 1 0) 0 0 (hi n))]) + opc + [(modrm 3 dig (lo n))]))
+       (pfx + (w @ 2 [102] ()) + ((w = 8 || n >= 8) ? [(rex (w @ 8 1 0) 0 0 (hi n))]) + opc + [(modrm 3 dig (lo n))]))
    ;; opc d, s at width w: lar, lsl (0F 02, 0F 03 /r)
    (emit-rrop opc w d s)
     (: dn (rn d) sn (rn s)
-       ((w = 2 ? [102] ()) + ((w = 8 || dn >= 8 || sn >= 8) ? [(rex (w = 8 ? 1 0) (hi dn) 0 (hi sn))]) + opc + [(modrm 3 (lo dn) (lo sn))]))
+       ((w @ 2 [102] ()) + ((w = 8 || dn >= 8 || sn >= 8) ? [(rex (w @ 8 1 0) (hi dn) 0 (hi sn))]) + opc + [(modrm 3 (lo dn) (lo sn))]))
    (emit-invpcid r base off) (x64-mw 2 '(15 56 130) '(15 56 130) r base off 0)   ; 66 0F 38 82 /r  invpcid r, m128
    (emit-movntim w base off s) (x64-mw w '(15 195) '(15 195) s base off 0)   ; 0F C3 /r  movnti m, r
    ;; a string op by its stem (A4..AF, 6C..6F); 66 or REX.W widens the odd byte
    (emit-str op w)
     (: b (op @ 'movs 164 'cmps 166 'stos 170 'lods 172 'scas 174 'ins 108 'outs 110 (scare 'x64-str op))
-     ((w = 2 ? [102] ()) + (w = 8 ? [72] ()) + [(w = 1 ? b (b + 1))]))
+     ((w @ 2 [102] ()) + (w @ 8 [72] ()) + [(w @ 1 b (b + 1))]))
    (emit-jmp  label)     [233 (fix 4 'rel32 label 0)]
    ;; the table and its targets are for the analyses, not the machine
    (emit-jmpt d tl labs) (emit-jmpr d)
@@ -460,7 +479,7 @@
                      (emit-mov d 'r2) '(90)]))
          (catall ['(82) (emit-push b)
                   (reg-eq a 'r0 ? () (emit-mov 'r0 a))
-                  [72 247 (dig = 5 ? 44 36) 36]               ; imul | mul qword [rsp]
+                  [72 247 (dig @ 5 44 36) 36]               ; imul | mul qword [rsp]
                   '(72 137 208  72 131 196 8  90)             ; mov rax,rdx ; add rsp,8 ; pop rdx
                   (reg-eq d 'r0 ? () (emit-mov d 'r0))]))
    ;; REX.W 0F 4x /r, the jcc byte less 0x40; d = s scares
@@ -581,9 +600,9 @@
    ;; bsr bsf 0F BD/BC, lzcnt tzcnt popcnt F3 0F BD/BC/B8; a 32-bit scan reads the low half only
    (emit-bscan op w d s)
     (: dn (rn d) sn (rn s)
-       (w = 1 ? (scare 'x64-bscan-byte op)
-          ((w = 2 ? [102] ()) + (elem op '(lzcnt tzcnt popcnt) ? [243])
-           + (w = 8 || dn >= 8 || sn >= 8 ? [(rex (w = 8 ? 1 0) (hi dn) 0 (hi sn))] ())
+       (w @ 1 (scare 'x64-bscan-byte op)
+          ((w @ 2 [102] ()) + (elem op '(lzcnt tzcnt popcnt) ? [243])
+           + (w = 8 || dn >= 8 || sn >= 8 ? [(rex (w @ 8 1 0) (hi dn) 0 (hi sn))] ())
            + [15 (op @ 'bsr 189 'bsf 188 'lzcnt 189 'tzcnt 188 'popcnt 184 (scare 'x64-bscan op))
               (modrm 3 (lo dn) (lo sn))])))
 
@@ -593,7 +612,7 @@
          ('ld . emit-ld) ('st . emit-st)
          ('lea . emit-lea) ('lean . emit-lea)              ; lean: the same bytes, unseen by the sibcall escape check
          ('ldx . emit-ldx) ('stx . emit-stx) ('leax . emit-leax)
-         ('ldxb . emit-ldxb) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
+         ('ldxb . emit-ldxb) ('ldxh . emit-ldxh) ('ldxbl . emit-ldxbl) ('ldxhl . emit-ldxhl) ('stxb . emit-stxb) ('ldxw . emit-ldxw) ('ldxsw . emit-ldxsw)
          ('andx4 . emit-andx4) ('orx4 . emit-orx4) ('xorx4 . emit-xorx4) ('andm4 . emit-andm4) ('orm4 . emit-orm4) ('xorm4 . emit-xorm4) ('decm . emit-decm)
          ('ldsdx . emit-ldsdx) ('stsdx . emit-stsdx) ('ldssx . emit-ldssx) ('stssx . emit-stssx)
          ('ldsdl . emit-ldsdl) ('fopm . emit-fopm) ('fopl . emit-fopl)
@@ -620,15 +639,15 @@
          ('sar128v . '(128 249 64 114 12
                         72 137 208  72 211 248  72 193 250 63  235 7    ; mov rax,rdx; sar rax,cl; sar rdx,63
                         72 15 173 208  72 211 250))             ; small: shrd rax,rdx,cl; sar rdx,cl
-         ('ldu1 . emit-ldu1) ('ldu2 . emit-ldu2) ('ldu4 . emit-ldu4)
+         ('ldu1 . emit-ldu1) ('ldu2 . emit-ldu2) ('ldu1l . emit-ldu1l) ('ldu2l . emit-ldu2l) ('zxml . emit-zxml) ('ldu4 . emit-ldu4)
          ('cas . emit-cas 1) ('cas4 . emit-cas 0) ('tp . emit-tp)
          ('sx1 . emit-sx 1) ('sx2 . emit-sx 2) ('sx4 . emit-sx 4)
          ('zx1 . emit-zx 1) ('zx2 . emit-zx 2) ('zx4 . emit-zx 4)
          ('shlv . emit-shiftv 'shlv) ('shrv . emit-shiftv 'shrv) ('sarv . emit-shiftv 'sarv)
          ('rorv . emit-shiftv 'rorv) ('rorv4 . emit-shiftv 'rorv4)
          ('shl . emit-shift 'shl) ('shr . emit-shift 'shr) ('sar . emit-shift 'sar)
-         ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror)
-         ('test . emit-test) ('push . emit-push) ('pop . emit-pop)
+         ('rol . emit-shift 'rol) ('ror . emit-shift 'ror) ('ror4 . emit-shift4 'ror) ('shl4 . emit-shift4 'shl)
+         ('test . emit-test) ('testb . emit-testb) ('zxl1 . emit-zxl 1) ('zxl2 . emit-zxl 2) ('push . emit-push) ('pop . emit-pop)
          ('neg . emit-un 247 3) ('not . emit-un 247 2) ('inc . emit-un 255 0) ('dec . emit-un 255 1)
          ('jmp . emit-jmp) ('br . emit-br) ('jmp8 . emit-jmp8) ('br8 . emit-br8)
          ('jmpr . emit-jmpr) ('jmpm . emit-jmpm) ('jmpt . emit-jmpt) ('callr . emit-callr)
@@ -673,7 +692,7 @@
          ('monitor . '(15 1 200)) ('mwait . '(15 1 201))    ; rax the line, ecx/edx the hints
          ('monitorx . '(15 1 250)) ('mwaitx . '(15 1 251)) ('rdtscp . '(15 1 249))   ; rdtscp: aux in ecx
          ('xaddm . emit-xaddm) ('cmpxchgm . emit-cmpxchgm) ('xchgm . emit-xchgm)
-         ('alum . emit-alum) ('carry . emit-carry) ('alurm . emit-alurm) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
+         ('alum . emit-alum) ('carry . emit-carry) ('alurm . emit-alurm) ('alu4 . emit-alu4) ('unm . emit-unm) ('btm . emit-btm) ('testm . emit-testm)
          ('ldcr . emit-ldcr) ('stcr . emit-stcr) ('lddr . emit-lddr) ('stdr . emit-stdr)
          ('lgdt . emit-m0f 2 '(15 1)) ('lidt . emit-m0f 3 '(15 1))
          ('invlpg . emit-m0f 7 '(15 1))])
@@ -696,7 +715,7 @@
         ;; fresh set: inc/dec keep CF, a shift by 0 keeps all, imul/idiv leave some undefined
         'zeroxor 1
         'flagr '(br set cmov adc sbb)
-        'flagw '(cmp cmpm cmprm test add sub and or xor andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd ucomiss)
+        'flagw '(cmp cmpm cmprm test add sub and or xor alu4 shl4 andx4 orx4 xorx4 andm4 orm4 xorm4 adds subs neg mulo ucomisd ucomiss)
         'short x86-short}
    (defbackend 'x64 x64))
 ) ; module 'holo

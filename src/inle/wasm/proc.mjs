@@ -131,7 +131,13 @@ function run({ module, pid, argv, env, box: boxb, ring }) {
 
   const inst = new WebAssembly.Instance(module, { env: { __love_sys: sys } }), ex = inst.exports;
   memory = ex.mem ?? ex.memory;
-  uni = Object.values(ex).some((fn) => typeof fn === 'function' && fn.length === 16);
+  // love as a process is the kernel's module: each door's slot takes the hosted body (love.h)
+  if (ex.table) {
+    const slot = new Map();
+    for (let i = 0; i < ex.table.length; i++) slot.set(ex.table.get(i), i);
+    for (const k of Object.keys(ex))
+      if (k.endsWith('__user') && slot.has(ex[k.slice(0, -6) + '__kern'])) ex.table.set(slot.get(ex[k.slice(0, -6) + '__kern']), ex[k]); }
+  uni =Object.values(ex).some((fn) => typeof fn === 'function' && fn.length === 16);
   // the stack linux lays: argc, argv, a NULL, envp, a NULL, an empty auxv; the words above it
   const base = memory.buffer.byteLength, words = [BigInt(argv.length)];
   memory.grow(1n);

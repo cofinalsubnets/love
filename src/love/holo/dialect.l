@@ -219,6 +219,8 @@
          (? (sw = 0) rw
             (rw > 0 && rw != sw) (scare 'as-widthclash [sw rw])
             sw))
+   ;; a shift's count in cl says nothing of its width, which its destination does
+   (xa-wops st ops) (elem st '(sal shl shr sar rol ror) ? [<ops] ops)
    ;; the stems that take an AT&T size suffix
    xa-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea
                 imul mul div idiv adc sbb sal shl shr sar rol ror shld shrd xchg bswap bsr bsf
@@ -341,7 +343,7 @@
             (!(two? ops) && nom? (xa-strl st)) ['op (xa-strl st) 0 ()]
             (st = 'mov && xa-xmm? ops) ['op (mw 1 = 4 ? 'movd 'movq) (xa-gprw ops) ops]
             (xa-ext? st) ['op st (xa-width (mw 1) [<ops]) ops]
-            ['op st (xa-w64 st (xa-width (mw 1) ops)) ops]))
+            ['op st (xa-w64 st (xa-width (mw 1) (xa-wops st ops))) ops]))
    (att-read s) (xa-read s at-insn)
 
    (at-off n) (n = 0 ? "" ((n > 0 ? "+" "") + show n))
@@ -417,8 +419,8 @@
              (xa-num? pre) (pin st 'd (xa-num pre))
              (xa-symoff pre @ so (pins st 'sym <so 'd >so))),
           foldl (\ _ p (take! <p >p)) 0 (in-terms inner),
-          (? (peep st 'rip 0) (wrap ['rip (peep st 'sym ()) (peep st 'd 0)])
-             (nom? (peep st 'sym ())) (scare 'as-symdisp u)
+          (? (peep st 'rip 0) (wrap ['rip (st 'sym) (peep st 'd 0)])
+             (nom? (st 'sym)) (scare 'as-symdisp u)
              (wrap ['mem (peep st 'b -1) (peep st 'ix -1) (peep st 'sc 1) (peep st 'd 0)]))))
    (in-operand mn0 t)                           ; -> (ptr-size . operand); mn0 settles a bare number
       (: l (lower t) p (in-ptr l) sz <p tail >p
@@ -446,7 +448,7 @@
                st (name ((l = 'movzx ? "movz" "movs") + xa-wsfx sw))
                ['op st (xa-width 0 [<ops]) ops])
             (xa-ptrfix l) ['op l (xa-gprw ops) ops]
-            ['op l (xa-w64 l (xa-width (l = 'lea ? 0 psz) ops)) ops]))
+            ['op l (xa-w64 l (xa-width (l = 'lea ? 0 psz) (xa-wops l ops))) ops]))
    (intel-read s) (xa-read s in-insn)
 
    (in-mem-op o)

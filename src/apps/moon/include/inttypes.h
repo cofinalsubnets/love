@@ -44,7 +44,7 @@
 #define PRIuFAST8  "u"
 #define PRIxFAST8  "x"
 #define PRIXFAST8  "X"
-#if defined(__arm__) || defined(__i386__)
+#if defined(__arm__) || defined(__ILP32__)
 #define PRId64      "lld"
 #define PRIi64      "lli"
 #define PRIo64      "llo"

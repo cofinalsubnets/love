@@ -247,10 +247,10 @@
        (go l prev po n acc)
         (atom? l ? [(rev acc) m]
            (: nm <>(<l)
-              (? (whole? (peep m nm ())) (go >l prev po n acc)
+              (? (whole? (m nm)) (go >l prev po n acc)
                  (#nm <= #prev && snip prev (#prev - #nm) #prev = nm)
-                  (: _ (pin m nm (po + #prev - #nm)) (go >l prev po n acc))
-                 (: _ (pin m nm n) (go >l nm n (n + #nm + 1) ((nm + "\0") . acc))))))
+                  (pin m nm (po + #prev - #nm), go >l prev po n acc)
+                 (pin m nm n, go >l nm n (n + #nm + 1) ((nm + "\0") . acc)))))
        (go srt "" 0 1 ["\0"]))
    ; a relocation table's entries, each symbol renumbered
    (oe-rels t s sc yx)
@@ -341,7 +341,7 @@
        strs (foldl (\ m sc (sc 'i = shx || sc 'i = stx ? (pin m (sc 'i) (oe-strtab (names sc))) m)) {} ks)
        shso (<>(strs shx))
        _ (each ks (sc \ (: i (sc 'i)
-                           (? (two? (peep strs i ())) (: b <(strs i) (pin sc 'body b, pin sc 'nsize (oe-len b)))
+                           (? (two? (strs i)) (: b <(strs i) (pin sc 'body b, pin sc 'nsize (oe-len b)))
                               (sc 'type = 2) (: so <>(strs stx) b (cats (map (y \ oe-sym t y nx so) ys2))
                                                 (pin sc 'body b, pin sc 'nsize (oe-len b)))
                               (rel-of? sc && two? yt && sc 'link = <yt 'i && !same)
@@ -375,8 +375,8 @@
                  (filter (g \ 0 < g 'fsz && (oe-gparent g gs0) < 0) gs0))
        zs (map (sc \ (: g (gs (sc 'seg)) [(nw (sc 'seg) + sc 'off - g 'off) (sc 'size) [(ld-zeros (sc 'size))]]))
                (filter (sc \ gone (sc 'i) && 0 <= sc 'seg && !(sc 'type = 8)) secs))
-       bodies (map (sc \ (: b (peep sc 'body ()) [(sc 'noff) (sc 'nsize) (two? b ? b [(snip s (sc 'off) (sc 'off + sc 'size))])]))
-                   (filter (sc \ !(sc 'type = 8) && (sc 'seg < 0 || two? (peep sc 'body ()))) ks1))
+       bodies (map (sc \ (: b (sc 'body) [(sc 'noff) (sc 'nsize) (two? b ? b [(snip s (sc 'off) (sc 'off + sc 'size))])]))
+                   (filter (sc \ !(sc 'type = 8) && (sc 'seg < 0 || two? (sc 'body))) ks1))
        (oe-paint s runs (zs + [[0 ehs eh]] + (phnum ? [[nphoff (phnum * phe) phs]] ()) + bodies
                          + [[shoff (#ks * she) shdrs]])))
 

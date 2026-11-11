@@ -12,6 +12,7 @@
          world-move world-mouse world-frame world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove cli))
+(borrow 'spans)                         ; the level's text read with where each form sits
 (borrow 'horn)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
@@ -40,7 +41,7 @@
  door-v 1.4 door-near 2.4 door-t 0.03 swing-wide 1.75  ; the doors: their pace, how near opens one, half their thickness, how wide one by hand swings
  swing-v 0.6                              ; an iron gate's pace, the way open a second
  kneel-h 1.12 kneel-gap 0.85 dlg-pause 1.0  ; the eye kneeling at a grave, how far before it, the pause before its choices come back
- grav-v 1.4 grav-n 60                    ; a grav shaft: how fast it carries, its motes
+ grav-v 2.8 grav-n 60                    ; a grav shaft: how fast it carries, its motes
  car-t 0.08 car-wait 0.6 car-hold 1.5 car-acc 1.2  ; a car: its walls' thickness, the seconds before its door
                                                   ; opens and after it shuts, how fast it gathers speed
  chunk-m 8.0 cell 0.25 cell-top 2.0                   ; how fine the surfaces are cut near a lamp, for the
@@ -78,24 +79,21 @@
       f))
  (src-last ds) (: r (rev ds) d (two? r ? <r ())
    (two? d && <d = 'level ? (rev ((take 2 d + map (k \ src-form [k] (d k)) (drop 2 ^#d)) . >r)) ds))
- ; ..a source path's text: [from to] in s, or () where s has no such form. the text read as
- ; the reader reads it, bracketed forms, strings and atoms, a [..]'s first part its second
- ; as (list ..)'s is
- (sx-skip s i) (? (i >= #s) i (elem (s i) [32 9 10 13]) (sx-skip s (i + 1))
-                  (s i = 59) (sx-skip s (sx-eol s i)) i)
- (sx-eol s i) (? (i >= #s || s i = 10) i (sx-eol s (i + 1)))
- (sx-end s i) (: c (s i)
-   (? (elem c [40 91 123]) (sx-close s (i + 1))
-      (c = 34) (sx-str s (i + 1))
-      (elem c [39 96 44]) (sx-end s (sx-skip s (i + 1)))
-      (sx-atom s i)))
- (sx-close s i) (: j (sx-skip s i) (? (j >= #s) j (elem (s j) [41 93 125]) (j + 1) (sx-close s (sx-end s j))))
- (sx-str s i) (? (i >= #s) i (s i = 92) (sx-str s (i + 2)) (s i = 34) (i + 1) (sx-str s (i + 1)))
- (sx-atom s i) (? (i >= #s || elem (s i) [32 9 10 13 40 41 91 93 123 125 34 59]) i (sx-atom s (i + 1)))
- (sx-kids s i) (: (go j acc) (: k (sx-skip s j)
-                                (? (k >= #s || elem (s k) [41 93 125]) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc))))
-   (go (i + 1) ()))
- (sx-tops s) (: (go j acc) (: k (sx-skip s j) (? (k >= #s) (rev acc) (go (sx-end s k) ([k (sx-end s k)] . acc)))) (go 0 ()))
+ ; ..a source path's text: [from to] in s, or () where s has no such form, as spans reads
+ ; it; a [..]'s parts follow the head its bracket reads as. the last text's index is kept,
+ ; each node by where it starts, the outermost of those that start there
+ sx-memo {}
+ (sx-lay ix n) (: sp (n 1) o (peep ix (sp 0) ())
+   _ (? (atom? o || o 1 1 < sp 1) (pin ix (sp 0) n) 0)
+   (two? (n 0) ? (map (sx-lay ix) (n 0)) 0))
+ (sx-ix s) (? (peep sx-memo 't () = s) (sx-memo 'ix)
+   (: tops (trap spans s (a \ b \ ())) ix {} _ (map (sx-lay ix) tops)
+      _ (pin sx-memo 't s) _ (pin sx-memo 'tops tops) _ (pin sx-memo 'ix ix)
+      ix))
+ (sx-tops s) (: _ (sx-ix s) (map (n \ n 1) (sx-memo 'tops)))
+ (sx-kids s i) (: n (peep (sx-ix s) i ()) f (two? n ? (n 0) ())
+   ks (? !(two? f) () (elem (s i) [91 123]) (f 0 0 = 'tablet ? () >f) f)
+   (map (k \ k 1) ks))
  (world-span s p) (: tops (sx-tops s) lv (two? tops ? <(rev tops) ())
    (kid f k) (: ks (sx-kids s (f 0)) j (s (f 0) @ 91 (k - 1) k) (0 <= j && j < #ks ? (ks j) ()))
    (go f l) (? (atom? l) f (atom? f) () (go (kid f <l) >l))
@@ -122,16 +120,16 @@
    (dark? ac) (: p (P (q 'ax) (q 'c) (q 'y + 1.0) ac) (any (k \ all (j \ k 0 j - 0.01 <= p j && p j <= k 1 j + 0.01) ^3) ks))
    (dark? (q 'b + 0.15) ? -1.0 (dark? (q 'a - 0.15) ? 1.0 0.0)))
  ; ..a car's shape on axis ax, as a door's: its inside a0 to a1 along and c0 to c1 across, y0
- ; to y1 up; its door's wall at 'side, 'out away from the inside, the door 'dc along and
- ; sliding 'slide, toward the longer wall beside it
+ ; to y1 up; its door's wall at 'side, 'out away from the inside, the door 'dc along, its
+ ; leaves parting both ways
  (car-of c) (: lo (c 'lo) hi (c 'hi) ax ((hi 0 - lo 0) >= (hi 2 - lo 2) ? 'z 'x) d (c 'door)
    (al p) (ax @ 'z (p 0) (p 2)) (ac p) (ax @ 'z (p 2) (p 0))
    dal (ax @ 'z (d 0) (d 1)) dac (ax @ 'z (d 1) (d 0)) c0 (ac lo) c1 (ac hi) a0 (al lo) a1 (al hi)
    far1 (mag (dac - c1) < mag (dac - c0)) d0 (dal - 0.5 * d 2) d1 (dal + 0.5 * d 2)
    {'ax ax 'a0 a0 'a1 a1 'c0 c0 'c1 c1 'y0 (lo 1) 'y1 (hi 1) 'side (far1 ? c1 c0) 'out (far1 ? 1.0 -1.0)
-    'dc dal 'dw (d 2) 'dh (d 3) 'slide (a1 - d1 >= d0 - a0 ? 1.0 -1.0) 'leave (c 'leave)
-    'props (c 'props) 'pboxes (map span-of (c 'props))
-    'ok (mag (dac - (far1 ? c1 c0)) < 0.5 && a0 <= d0 && d1 <= a1 && max (a1 - d1) (d0 - a0) >= d 2 - 0.05
+    'dc dal 'dw (d 2) 'dh (d 3) 'leave (c 'leave)
+    'props (c 'props) 'pboxes (map span-of (c 'props)) 'glass (peep c 'glass ())
+    'ok (mag (dac - (far1 ? c1 c0)) < 0.5 && a0 <= d0 && d1 <= a1 && min (a1 - d1) (d0 - a0) >= 0.5 * d 2 - 0.05
          && d 3 <= hi 1 - lo 1)})
  ; ..a brush's box, by its shape before its cuts
  (span-of b) (: sh (b 'shape)
@@ -145,7 +143,7 @@
    ow (map (b \ foldl (\ a i (a = () && in? b (c0 i) ? i a)) () ^#c0) bs)
    _ (pin lv 'brushes (map bs (filter (j \ ow j = ()) ^#bs)))
    cs (map (i \ car-of (pin (c0 i) 'props (map bs (filter (j \ ow j = i) ^#bs)))) ^#c0) bad (filter (i \ !(cs i 'ok)) ^#cs)
-   (two? bad ? "a car's door must sit in one of its long walls, under its roof, with wall beside it to slide into" (pin lv 'cars cs)))
+   (two? bad ? "a car's door must sit in one of its long walls, under its roof, with wall either side for its leaves to slide into" (pin lv 'cars cs)))
  ; ..from a file: the level, or why not
  (slurp-file p) (: q (open p "r") (hot? q ? (slurp q @ s (close q, s)) ()))
  (world-load p) (slurp-file p @ () ("cannot read " + p) s (world-read s))
@@ -238,20 +236,65 @@
    (mesh-join [(bar l0 (l0 + w) y0 (y0 + e)) (bar l0 (l0 + w) (y0 + h - e) (y0 + h))
                (bar l0 (l0 + e) y0 (y0 + h)) (bar (l0 + w - e) (l0 + w) y0 (y0 + h))
                (sheets o V U n uv g0 g) (sheets o V U (c* -1.0 n) uv g0 g)]))
- ; ..a car: its floor, roof, ends and long walls, the door's wall in three round the doorway,
- ; car-t thick outside its inside; the texture along its walls and over its floor
+ ; ..a car: a floor, a waist a little wider and longer a hand over it, a roof smaller than
+ ; the floor, faces between them, so it is a hexagon along and across; glass above the
+ ; waist on every side, the door set back in its long side as deep as the glass at its head
  (car-box c al0 y0 ac0 al1 y1 ac1 uv i) (: p (P (c 'ax) al0 y0 ac0) q (P (c 'ax) al1 y1 ac1)
    (slab [(min (p 0) (q 0)) (min (p 1) (q 1)) (min (p 2) (q 2))] [(max (p 0) (q 0)) (max (p 1) (q 1)) (max (p 2) (q 2))] uv i white))
- (car-mesh c tt) (: T car-t a0 (c 'a0) a1 (c 'a1) c0 (c 'c0) c1 (c 'c1) y0 (c 'y0) y1 (c 'y1)
-   s (c 'side) w (s + c 'out * T) f (c 'out > 0.0 ? c0 c1) fw (f - c 'out * T)
-   d0 (c 'dc - 0.5 * c 'dw) d1 (c 'dc + 0.5 * c 'dw) dh (y0 + c 'dh)
-   i (tix tt 'train) t (tt i) k (t 1 / t 3)
-   (wl q) [(k * (q 0 + q 2)) (k * (y1 - q 1))] (fl q) [(k * q 0) (k * q 2)]
-   (mesh-join [(car-box c (a0 - T) (y0 - T) (c0 - T) (a1 + T) y0 (c1 + T) fl i)
-               (car-box c (a0 - T) y1 (c0 - T) (a1 + T) (y1 + T) (c1 + T) fl i)
-               (car-box c (a0 - T) y0 c0 a0 y1 c1 wl i) (car-box c a1 y0 c0 (a1 + T) y1 c1 wl i)
-               (car-box c a0 y0 f a1 y1 fw wl i)
-               (car-box c a0 y0 s d0 y1 w wl i) (car-box c d1 y0 s a1 y1 w wl i) (car-box c d0 dh s d1 y1 w wl i)]))
+ ; ..its faces, each four corners and the way out of it: 'solid below the waist, the ends'
+ ; and the roof, 'glass above it; and the door's plane across, 'cd
+ (car-hull c) (: A (c 'ax) a0 (c 'a0) a1 (c 'a1) c0 (c 'c0) c1 (c 'c1) y0 (c 'y0) H (c 'y1) o (c 'out)
+   ma (0.5 * (a0 + a1)) mc (0.5 * (c0 + c1)) fa (0.5 * (a1 - a0)) fc (0.5 * (c1 - c0)) yw (y0 + 0.6)
+   wa (fa + 0.3) wc (fc + 0.12) ra (fa - 0.6) rc (fc - 0.45)
+   (cs y) (wc - (y - yw) * (wc - rc) / (H - yw)) dh (y0 + c 'dh) cd (mc + o * cs dh)
+   d0 (c 'dc - 0.5 * c 'dw) d1 (c 'dc + 0.5 * c 'dw)
+   (pt a ac y) (P A a y ac)
+   ; ..a rect's corners round from low a low c, ha and hc its halves
+   (rect ha hc y) [(pt (ma - ha) (mc - hc) y) (pt (ma + ha) (mc - hc) y) (pt (ma + ha) (mc + hc) y) (pt (ma - ha) (mc + hc) y)]
+   F (rect fa fc y0) W (rect wa wc yw) R (rect ra rc H)
+   ns [(P A 0.0 0.0 -1.0) (P A 1.0 0.0 0.0) (P A 0.0 0.0 1.0) (P A -1.0 0.0 0.0)] ds (o > 0.0 ? 2 0)
+   (band L U j) [(L j) (L ((j + 1) % 4)) (U ((j + 1) % 4)) (U j) (ns j)]
+   ; ..the door's side: below the waist and above it either side of the doorway, over it
+   ; the glass from its head, and its jambs; either side the pocket its leaf slides into,
+   ; walled outside, and in a hand inside the leaf's plane
+   sd (o * fc) sw (o * wc) sr (o * rc) sh (o * cs dh) up (P A 0.0 1.0 0.0) N (ns ds)
+   (lo a ac) (pt a (mc + ac) y0) (hi a ac) (pt a (mc + ac) yw)
+   lows [[(lo (ma - fa) sd) (lo d0 sd) (hi d0 sw) (hi (ma - wa) sw) N] [(lo d1 sd) (lo (ma + fa) sd) (hi (ma + wa) sw) (hi d1 sw) N]]
+   (top a) (pt a (mc + sr) H) (sh2 a) (pt a (mc + sh) dh)
+   hw (0.5 * c 'dw) e0 (d0 - hw) e1 (d1 + hw)
+   highs [[(hi (ma - wa) sw) (hi e0 sw) (top e0) (top (ma - ra)) N] [(sh2 d0) (sh2 d1) (top d1) (top d0) N]
+          [(hi e1 sw) (hi (ma + wa) sw) (top (ma + ra)) (top e1) N]]
+   pockets [[(hi e0 sw) (hi d0 sw) (top d0) (top e0) N] [(hi d1 sw) (hi e1 sw) (top e1) (top d1) N]]
+   (jamb a n) [(pt a cd y0) (pt a (mc + sd) y0) (pt a (mc + sw) yw) (pt a cd dh) (P A n 0.0 0.0)]
+   ci (mc + o * (cs dh - 0.06)) I (ns ((ds + 2) % 4)) (inner a b) [(pt a ci y0) (pt b ci y0) (pt b ci dh) (pt a ci dh) I]
+   (reveal a) [(pt a ci y0) (pt a cd y0) (pt a cd dh) (pt a ci dh) (P A 1.0 0.0 0.0)]
+   (ledge a b) [(pt a ci dh) (pt b ci dh) (pt b cd dh) (pt a cd dh) up]
+   {'solid ((map (j \ band F W j) (filter (j \ j != ds) ^4)) + lows + [(jamb d0 1.0) (jamb d1 -1.0) (jamb e0 1.0) (jamb e1 -1.0)]
+                + pockets + [(inner e0 d0) (inner d1 e1) (ledge e0 d0) (ledge d1 e1)] + map reveal [e0 d0 d1 e1]
+                + [[(R 0) (R 1) (R 2) (R 3) up] [(F 0) (F 1) (F 2) (F 3) up]])
+    'glass ((map (j \ band W R j) (filter (j \ j != ds) ^4)) + highs)
+    'frame (catmap (j \ [[(W j) (W ((j + 1) % 4))] [(R j) (R ((j + 1) % 4))] [(W j) (R j)]]) ^4)
+    'cd cd 'ma ma 'mc mc 'ra ra 'fa fa 'fc fc})
+ ; ..a face of four corners f, front toward n, in cells; both ways when two
+ (car-face f n uv tex col two) (: p (f 0) q (f 1) r (f 2) s (f 3)
+   (lerp a b u) (c+ (c* (1.0 - u) a) (c* u b))
+   (grid a b d e) (: nu (max 1 (int (mag3 (c- b a) / cell + 0.5))) nv (max 1 (int (mag3 (c- d a) / cell + 0.5)))
+     (mesh-grid nu nv (\ i j (: w (lerp (lerp a b (1.0 * i / nu)) (lerp d e (1.0 * i / nu)) (1.0 * j / nv)) (w + uv w))) tex col))
+   m1 (grid p q s r) m2 (grid p s q r) v (m1 0 0) fr (v 5 * n 0 + v 6 * n 1 + v 7 * n 2 >= 0.0)
+   (two ? (mesh-join [m1 m2]) (fr ? m1 m2)))
+ (car-mesh c tt) (: h (car-hull c) i (tix tt 'train) t (tt i) k (t 1 / t 3)
+   (uv q) [(k * (q 0 + q 2)) (k * q 1)]
+   (face f) (car-face f (f 4) uv i white 1)
+   (rod e) (mesh-rod (e 0) (e 1) 0.035 white 6 i 1.0)
+   fa (h 'fa) fc (h 'fc) y0 (c 'y0)
+   (mesh-join (map face (h 'solid) + map rod (h 'frame)
+               + [(car-box c (h 'ma - fa + 0.6) (y0 - 0.5) (h 'mc - fc + 0.5) (h 'ma + fa - 0.6) y0 (h 'mc + fc - 0.5) uv i)])))
+ ; ..its glass, facing out only, so a look through the car meets one pane; drawn after what
+ ; is seen through it; the train's own texture, and solid, where the car has no glass
+ (car-glaze c tt fs) (: gl (c 'glass) gi (tix tt (gl = () ? 'train gl)) t (tt gi) k (t 1 / t 3)
+   tex (gl = () ? gi (-3 - gi)) col (gl = () ? white [0.14 0.15 0.15]) (uv q) [(k * (q 0 + q 2)) (k * q 1)]
+   (mesh-join (map (f \ car-face f (f 4) uv tex col 0) fs)))
+ (car-pane c tt) (car-glaze c tt (car-hull c 'glass))
  ; ..a lift: its platform under the middle of its top, a post at each corner, rails along
  ; its sides toward z, and up its middle the post the tether runs through, a switch on each
  ; face of it toward x
@@ -353,10 +396,18 @@
  (lift-tether c tt) (: p (c 'at) x (p 0) y (p 1) z (p 2) bot (y - 0.5) top (y + c 'rise + peep c 'tether 0.0)
    pad [(lift-bar c tt [0.5 0.5 0.5] [x (y - 0.29) z] [(0.5 * c 'w + 0.3) 0.21 (0.5 * c 'w + 0.3)])]
    (mesh-join (pad + (peep c 'tether 0.0 > 0.0 ? [(lift-bar c tt [0.55 0.55 0.6] [x (0.5 * (top + bot)) z] [0.03 (0.5 * (top - bot)) 0.03])] ()))))
- ; ..its door, in the middle of its wall's thickness
- (car-door c tt) (: m (c 'side + 0.5 * c 'out * car-t) d0 (c 'dc - 0.5 * c 'dw) y0 (c 'y0) h (c 'dh) w (c 'dw)
-   i (tix tt 'door) t (tt i)
-   (car-box c d0 y0 (m - door-t) (d0 + w) (y0 + h) (m + door-t) (q \ (: al ((c 'ax @ 'z (q 0) (q 2)) - d0) [(t 1 / w * al) (t 2 / h * (y0 + h - q 1))])) i))
+ ; ..its door, two leaves parting from the middle in its plane set back from the side, each a
+ ; window over a kick panel; e -1 the leaf toward a0, 1 the one toward a1
+ leaf-st 0.07 leaf-kick 0.9
+ (car-leaf c tt e) (: m (car-hull c 'cd) dc (c 'dc) w (c 'dw) d0 (dc - 0.5 * w) y0 (c 'y0) h (c 'dh)
+   l0 (e < 0.0 ? d0 dc) l1 (e < 0.0 ? dc (dc + 0.5 * w)) i (tix tt 'door) t (tt i) s leaf-st k (y0 + leaf-kick)
+   (uv q) (: al ((c 'ax @ 'z (q 0) (q 2)) - d0) [(t 1 / w * al) (t 2 / h * (y0 + h - q 1))])
+   (bx a0 b0 a1 b1) (car-box c a0 b0 (m - door-t) a1 b1 (m + door-t) uv i)
+   (mesh-join [(bx l0 y0 l1 k) (bx l0 (y0 + h - s) l1 (y0 + h)) (bx l0 k (l0 + s) (y0 + h - s)) (bx (l1 - s) k l1 (y0 + h - s))]))
+ ; ..and its window, facing out, drawn with the car's glass
+ (car-leaf-pane c tt e) (: A (c 'ax) m (car-hull c 'cd) dc (c 'dc) w (c 'dw) y0 (c 'y0) h (c 'dh) s leaf-st
+   l0 ((e < 0.0 ? (dc - 0.5 * w) dc) + s) l1 ((e < 0.0 ? dc (dc + 0.5 * w)) - s) k (y0 + leaf-kick) u (y0 + h - s)
+   (car-glaze c tt [[(P A l0 k m) (P A l1 k m) (P A l1 u m) (P A l0 u m) (P A 0.0 0.0 (c 'out))]]))
  ; ..what it carries, meshed in an air box just inside its walls, that box's own faces left out
  (props-mesh c tt) (: m 0.03 p (P (c 'ax) (c 'a0 - m) (c 'y0 - m) (c 'c0 - m)) q (P (c 'ax) (c 'a1 + m) (c 'y1 + m) (c 'c1 + m))
    lo (map (k \ min (p k) (q k)) ^3) hi (map (k \ max (p k) (q k)) ^3)
@@ -368,8 +419,8 @@
  ; ..its strip down the roof, and the lamp it is, lighting only the car
  (car-mask c) (: p (P (c 'ax) (c 'a0) 0.0 (c 'c0)) q (P (c 'ax) (c 'a1) 0.0 (c 'c1))
    (inside [(min (p 0) (q 0)) (min (p 2) (q 2)) (max (p 0) (q 0)) (max (p 2) (q 2))]))
- (car-bar c) (: m (0.5 * (c 'c0 + c 'c1)) y (c 'y1)
-   (car-box c (c 'a0 + 0.5) (y - 0.05) (m - 0.08) (c 'a1 - 0.5) y (m + 0.08) (_ \ [0.0 0.0]) -1))
+ (car-bar c) (: h (car-hull c) m (h 'mc) y (c 'y1)
+   (car-box c (h 'ma - h 'ra + 0.2) (y - 0.05) (m - 0.08) (h 'ma + h 'ra - 0.2) y (m + 0.08) (_ \ [0.0 0.0]) -1))
  (car-lamp c) (: m (0.5 * (c 'c0 + c 'c1)) y (c 'y1 - 0.06) n 6
    {'at (map (j \ P (c 'ax) (c 'a0 + (j + 0.5) / n * (c 'a1 - c 'a0)) y m) ^n) 'n [0.0 -1.0 0.0]
     'c [2.0 2.0 2.1] 'r 4.5 'soft 0.3 'keep (car-mask c)})
@@ -488,6 +539,8 @@
   'buzz (flicker-buzz mt)
   'breathe (flicker-pulse mt 0.7 0.3 1.7 sd)
   'blink (flicker-blink mt 1.5 0.5 0.06)
+  'beacon (flicker-blink (mt - (#how > 3 ? (how 3) 0.0)) (how 1) (how 2) 0.06)
+  'dim (how 1)
   'music mu
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
@@ -643,7 +696,7 @@
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
  ; --- the advertisements: each its own light, bright, and a lamp before it in the colour
  ;     its picture comes to on the whole; a spinner four of them round a square, turning ---
- (avg-col txs nm) (: t <(filter (t \ t 'name = nm) txs) f (swatch-texel (t 'layers))
+ (avg-col txs nm) (: t <(filter (t \ t 'name = nm) txs) f (swatch-texel (t 'w) (t 'h) (t 'layers))
    (c* (1.0 / 64.0) (foldl (\ a i (: c (f (t 'w * (i % 8) // 8) (t 'h * (i // 8) // 8)) (c @ () a (c+ a c)))) [0.0 0.0 0.0] ^64)))
  ad-shine 1.3
  (ad-light lv txs tt d) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) p (c+ a (c* 0.8 n))
@@ -960,13 +1013,16 @@
      ; setting the frame's gain
      q (tablet? sf ? (sun-here sf sk (c 0) (c 1) (c 2)) [s (lt 'amb) (lt 'sunc) (lt 'sunk) (sk 'k)]) sl (q 0)
      a (o * (0.5 + 0.5 * c 6) * q 4) d (o * max 0.0 (c 5 * sl 0 + c 6 * sl 1 + c 7 * sl 2) * (q 3 * q 4))
-     D (1.0 - dark pk) K (1.0 - inks pts pk) (map (j \ K * (a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * D * la j)) ^3))
+     D ((1.0 - dark pk) * facing pk) K (1.0 - inks pts pk) (map (j \ K * (a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * D * la j)) ^3))
    ; ..a dark room's faces and what faces into it, its doorways' sides too, none of the
    ; ambient: a corner a little way along its facing inside the room's box a wall's thickness over
    (inks ks pk) (? (atom? ks) 0.0 (: c (pk 'cols) X (c 0 + 0.1 * c 5) Y (c 1 + 0.1 * c 6) Z (c 2 + 0.1 * c 7) m 0.15
      (foldl (\ a b (max a ((b 0 0 - m < X) * (X < b 1 0 + m) * (b 0 1 - m < Y) * (Y < b 1 1 + m) * (b 0 2 - m < Z) * (Z < b 1 2 + m)))) (X * 0.0) ks)))
    (dark pk) (inks dks pk)
-   (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ (c* (1.0 - dark pk) la) (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
+   ; ..the ambient by a face's facing, so planes part: all of it on a floor, three quarters on
+   ; a wall across z, less across x, half on a ceiling
+   (facing pk) (: c (pk 'cols) (0.75 + 0.25 * c 6 - 0.1 * c 5 * c 5))
+   (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ (c* ((1.0 - dark pk) * facing pk) la) (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
              'chs (map (ch pk) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
    ; ..a chunk's light kept by what lights it: the lights that reach its box, in their places
@@ -987,9 +1043,11 @@
    (swung-lit i) (: d (lv 'doors i)
      (d 'hand @ 1 (map (w \ (: pk (swung-pk (drs i) d (w * swing-wide)) [pk (lit-of ['door-open (vals d) tt w] pk)])) [1.0 -1.0]) ()))
    (clit lp pk k) (: l (lit-of k pk) {'base (c+ (l 'base) (mesh-lamp pk lp)) 'chs (l 'chs)})
-   cars (map (c \ (: _ (tick 'cars ()) ck [(vals c) tt] b (kept ['car ck] (_ \ mesh-pack (car-mesh c tt))) d (kept ['car-door ck] (_ \ mesh-pack (car-door c tt))) lp (car-lamp c)
+   cars (map (c \ (: _ (tick 'cars ()) ck [(vals c) tt] b (kept ['car ck] (_ \ mesh-pack (car-mesh c tt))) d (kept ['car-door ck] (_ \ map (e \ mesh-pack (car-leaf c tt e)) [-1.0 1.0])) dp (kept ['car-dpane ck] (_ \ map (e \ mesh-pack (car-leaf-pane c tt e)) [-1.0 1.0])) pn (kept ['car-pane ck] (_ \ mesh-pack (car-pane c tt))) lp (car-lamp c)
                      {'body b 'body-lit (kept ['car-lit ck (litk-of b)] (_ \ clit lp b ['car ck]))
-                      'door d 'door-lit (kept ['car-door-lit ck (litk-of d)] (_ \ clit lp d ['car-door ck]))
+                      'door d 'door-lit (map (j \ kept ['car-door-lit ck j (litk-of (d j))] (_ \ clit lp (d j) ['car-door ck j])) ^2)
+                      'dpane dp 'dpane-lit (map (j \ kept ['car-dpane-lit ck j (litk-of (dp j))] (_ \ clit lp (dp j) ['car-dpane ck j])) ^2)
+                      'pane pn 'pane-lit (kept ['car-pane-lit ck (litk-of pn)] (_ \ clit lp pn ['car-pane ck]))
                       'props (two? (c 'props) ? (: q (kept ['car-props ck] (_ \ props-mesh c tt))
                                                     {'pk q 'lit (kept ['car-props-lit ck (litk-of q)] (_ \ clit lp q ['car-props ck]))}) ())
                       'bar (kept ['car-bar ck] (_ \ mesh-pack (car-bar c)))}))
@@ -1245,15 +1303,21 @@
    ; ..a glazed one with the glass, after what is seen through it
    (glazed? i) (lv 'doors i 'glass != ())
    doors (map door (filter (i \ !(glazed? i)) ^#(lv 'doors))) glazed (map door (filter glazed? ^#(lv 'doors)))
-   ; ..each car where it has got to along its track, its door slid along its wall; none once gone
+   ; ..each car where it has got to along its track, its door's leaves slid apart; none once gone
    (moved b pk k o) [(pin (b 0) (iota (pk 'n) * 8 + k) (pk 'cols k + o)) (b 1)]
+   (leaf c s j) (s 'o + (2 * j - 1) * s 'door * (0.5 * c 'dw - 0.05))
    cars (catmap (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i) k (c 'ax @ 'z 0 2) o (s 'o)
                          (s 'ph = 'gone ? ()
-                            [(moved (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)
-                             (moved (relit (cs 'door) (cs 'door-lit)) (cs 'door) k (o + c 'slide * s 'door * (c 'dw - 0.05)))
-                             (moved (mesh-shine (cs 'bar) 3.0) (cs 'bar) k o)]
+                            [(moved (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)]
+                            + map (j \ moved (relit (cs 'door j) (cs 'door-lit j)) (cs 'door j) k (leaf c s j)) ^2
+                            + [(moved (mesh-shine (cs 'bar) 3.0) (cs 'bar) k o)]
                             + (tablet? (cs 'props) ? [(moved (relit (cs 'props 'pk) (cs 'props 'lit)) (cs 'props 'pk) k o)] ()))))
                ^#(lv 'cars))
+   ; ..and its glass, drawn late
+   cpanes (catmap (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i)
+                         (s 'ph = 'gone ? () ([(moved (relit (cs 'pane) (cs 'pane-lit)) (cs 'pane) (c 'ax @ 'z 0 2) (s 'o))]
+                                              + map (j \ moved (relit (cs 'dpane j) (cs 'dpane-lit j)) (cs 'dpane j) (c 'ax @ 'z 0 2) (leaf c s j)) ^2))))
+                  ^#(lv 'cars))
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(shine-at (q 0) b key)])) (sc 'lights i key)) ^#ks)
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
@@ -1290,7 +1354,7 @@
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(lv 'gates))
    ; ..what moves laid on a surface frame by frame, what stands laid with the scene
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
-   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + by 'glow
+   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + bd cpanes + by 'glow
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)))
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few

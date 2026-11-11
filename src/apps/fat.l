@@ -290,8 +290,22 @@
              ft (string fb)
              (wr 32 ft, wr (32 + fatsz) ft, 1))))
 
-   ; --- mount: the bpb read back, refused unless it is the FAT32 this writes ---
+   ; --- mount: the bpb read back, refused unless it is the FAT32 this writes; else an
+   ;     MBR's first FAT32 partition (types 0x0B, 0x0C), the way a PC lays a card ---
    (fat-mount dev)
+    (fat-bpb dev @ f
+     (f ? f
+        (<dev 0 1 @ s
+         (string? s && rdle s 510 2 = 0xAA55 ?
+            (mbr-part s 0 @ p (p ? (fat-bpb (part-dev dev <p <>p))))))))
+   (mbr-part s i)
+    (i < 4 ? (s (450 + 16 * i) @ t
+              (t = 11 || t = 12 ? [(rdle s (454 + 16 * i) 4) (rdle s (458 + 16 * i) 4)]
+                 (mbr-part s (i + 1)))))
+   ; a device seen from lba o on, n sectors long
+   (part-dev dev o n)
+    ((l \ k \ <dev (l + o) k) . (l \ x \ <>dev (l + o) x) . n . >>>dev)
+   (fat-bpb dev)
     (: rd <dev s (rd 0 1)
        (? !(string? s) ()
           (rdle s 510 2 != 0xAA55 || rdle s 11 2 != 512 || rdle s 22 2 || !(rdle s 36 4)) ()

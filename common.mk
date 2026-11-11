@@ -3,7 +3,7 @@
 R ?= .
 S = $(R)/src
 # dl/ is untracked: LOVE_DL names it, else the nearest one at or above the tree, so a worktree
-# or a nest made inside a checkout reads the checkout's, and one outside any reads ~/.love/etc/dl
+# or a nest made inside a checkout reads the checkout's, and one outside any reads the nest's etc/dl
 dl := $(firstword $(LOVE_DL) $(shell sh $(S)/tools/dlfind.sh $(R)) $(R)/dl)
 
 # the recipe tag column is `@echo 'MOON<TAB>'$@`, and the quote is load-bearing: a bare tab
@@ -88,6 +88,10 @@ override HCC := $(filter-out 0,$(HCC))
 # (the deliberate trampoline-coverage lane) and the two seats with no sibcall, mps2's thumb1
 # face and the playdate simulator.
 tco ?= 1
+# ..but what $(CC) compiles of the vm (liblove.a: out/front, an HCC love) takes it only where
+# $(CC) has musttail (gcc 15+, clang): an older gcc gets the trampoline, love0's and mooncc's
+# builds untouched
+htco := $(if $(filter 0,$(tco)),0,$(shell printf 'int f(int);\nint g(int x) { __attribute__((musttail)) return f(x); }\n' | $(CC) -x c -c -o /dev/null - 2>/dev/null && echo 1 || echo 0))
 
 # tco earns a tree the way HCC does: a tco=0 love is a different binary at the same path, so
 # sharing out would rebuild the world each make and a test would run whichever flavour came

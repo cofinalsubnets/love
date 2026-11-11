@@ -6,13 +6,13 @@
 (: (tiles n m a b grout) (: h (n // 2) (texture n n m [['fill a] ['checker h h b] ['noise 5 0.1] ['grid h h 1 grout]])))
 ; ..(octagons n m a b grout): octagons of a, one in n texels m metres across, and between
 ; their corners small squares of b, in grout
-(: (octagons n m a b grout) (: N (1.0 * n) c (0.29 * N) g 1.0 d (c - 1.5)
+(: (octagons n m a b grout) (: N (1.0 * n) c (0.2 * N) g 1.0 d (c - 1.5)
      (texture n n m [['fill grout]
                      ['poly 0 0 d 0 0 d b] ['poly N 0 N d (N - d) 0 b] ['poly 0 N 0 (N - d) d N b] ['poly N N (N - d) N N (N - d) b]
                      ['poly c g (N - c) g (N - g) c (N - g) (N - c) (N - c) (N - g) c (N - g) g (N - c) g c a]
-                     ['noise 5 0.1]])))
+                     '(fbm 6 3 0.12) '(stain 16 3 0.3 0.4 (shade 0.9)) '(relief 1.5 2 0.1)])))
 ; ..the floor: light octagons half a metre across, dark squares between
-(: hallfloor (octagons 32 0.5 '(rgb 0.34 0.34 0.36) '(rgb 0.3 0.31 0.33) 0.12))
+(: hallfloor (octagons 32 0.5 '(rgb 0.34 0.34 0.36) '(rgb 0.22 0.23 0.25) 0.12))
 ; ..and the door: brushed steel in plates, a seam down the middle, a hazard band at its foot
 (: steel (texture 64 128 1
           '((fill (rgb 0.5 0.52 0.56))
@@ -36,12 +36,12 @@
             (grid 16 16 4 (rgb 0.46 0.47 0.5))
             (grid 64 64 2 (rgb 0.3 0.31 0.33))
             (noise 6 0.2))))
-; ..the car: pale steel, a dark band of windows, a red line under them
+; ..the car: pale steel, a red line along it under its glass and a dark skirt
 (: carbody (texture 64 64 2.3
             '((fill (rgb 0.72 0.74 0.76))
-              (noise 20 0.6 0.06)
-              (rows 14 30 (rgb 0.06 0.07 0.09))
-              (rows 33 36 (rgb 0.6 0.08 0.06))
+              (noise 20 0.6 0.04) (fbm 16 3 0.06)
+              (rows 46 49 (rgb 0.6 0.08 0.06))
+              (rows 60 64 (rgb 0.2 0.21 0.23))
               (cols 0 1 0.35))))
 ;; ..glass, faintly green, smeared
 (: glass (texture 64 64 2
@@ -62,29 +62,26 @@
               (disc 39 32 2 (grey 0.92)))))
 ; ..the street: paving slabs a metre square, worn, in pale joints
 (: paving (texture 64 64 2
-           '((fill (rgb 0.27 0.27 0.28))
-             (checker 32 32 (rgb 0.24 0.24 0.25))
-             (noise 7 0.08)
-             (patches 6 0.15 (shade 0.9))
+           '((fill (rgb 0.29 0.29 0.3))
+             (checker 32 32 (rgb 0.26 0.26 0.27))
+             (fbm 8 4 0.18) (stain 16 3 0.3 0.3 (shade 0.85)) (relief 1.5 2 0.12)
              (grid 32 32 1 (rgb 0.36 0.36 0.37)))))
 ; ..the buildings: concrete storeys four metres, a band of dark glass along each
 (: facade (texture 64 64 4
-           '((fill (rgb 0.27 0.27 0.29))
-             (noise 9 0.1)
-             (patches 6 0.3 (shade 0.7))
+           '((fill (rgb 0.31 0.31 0.32))
+             (fbm 16 4 0.2) (stain 16 3 0.35 0.3 (shade 0.8)) (relief 1.5 2 0.12)
              (within 0 18 64 44
-               (fill (rgb 0.05 0.07 0.1))
-               (noise 5 0.1)
-               (patches 8 0.22 (rgb 0.95 0.72 0.38))
-               (patches 5 0.08 (rgb 0.35 0.85 0.95))
-               (cols 0 4 (rgb 0.27 0.27 0.29)) (cols 30 34 (rgb 0.27 0.27 0.29)) (cols 62 64 (rgb 0.27 0.27 0.29)))
-             (rows 44 47 (rgb 0.17 0.17 0.18)))))
+               (fill (rgb 0.02 0.025 0.035)) (fbm 8 3 0.4)
+               (cols 0 4 (rgb 0.26 0.26 0.27)) (cols 30 34 (rgb 0.26 0.26 0.27)) (cols 62 64 (rgb 0.26 0.26 0.27))
+               (fbm 16 3 0.15))
+             (rows 18 19 (rgb 0.12 0.12 0.13))
+             (rows 44 46 (rgb 0.4 0.4 0.41)) (rows 46 47 (rgb 0.15 0.15 0.16)))))
 ;; the street and the recruitment office
 ; ..the road: steel plates, studded, in dark seams
 (: roadmetal (texture 64 64 2
-              '((fill (rgb 0.3 0.31 0.33)) (noise 20 0.6 0.08)
+              '((fill (rgb 0.32 0.33 0.35)) (noise 20 0.6 0.08) (fbm 8 4 0.15)
                 (dots 8 8 1.2 (shade 1.3))
-                (patches 9 0.25 (shade 0.82))
+                (stain 16 3 0.3 0.3 (shade 0.82)) (relief 1.5 2 0.1)
                 (grid 32 32 1 (rgb 0.1 0.1 0.11)))))
 (: kerb (texture 32 32 1 '((fill (rgb 0.36 0.36 0.36)) (noise 4 0.1) (grid 32 0 1 0.4))))
 ; ..the short street's half court, painted on the plates five centimetres a texel from its
@@ -121,19 +118,14 @@
       (drape netcord (map (j \ (: q (r - 0.07 * j / 3.0) h (ry - 0.42 * j / 3.0)
                                   (map (k \ [(x + q * sin (a k)) h (rz + q * cos (a k))]) ^17)))
                           ^4))]))
-; ..the office: poured concrete, its storeys four and a half metres with a band of
-; narrow windows, and the buttresses bare
+; ..the office: poured concrete, its storeys four and a half metres, a dark joint between
 (: unnwall (texture 64 64 4.5
-            '((fill (rgb 0.34 0.33 0.32)) (noise 3 0.05) (patches 3 0.18 (shade 0.88))
-              (rows 0 2 (rgb 0.2 0.2 0.21))
-              (within 0 22 64 46
-                (fill (rgb 0.04 0.06 0.09)) (noise 5 0.12) (patches 6 0.12 (rgb 0.4 0.75 1.0))
-                (cols 0 3 (rgb 0.27 0.27 0.28)) (cols 15 17 (rgb 0.27 0.27 0.28))
-                (cols 31 34 (rgb 0.27 0.27 0.28)) (cols 47 49 (rgb 0.27 0.27 0.28)) (cols 62 64 (rgb 0.27 0.27 0.28))))))
+            '((fill (rgb 0.37 0.36 0.35)) (fbm 16 4 0.2) (stain 16 3 0.35 0.3 (shade 0.85)) (fbm 2 2 0.06) (relief 1.5 2 0.12)
+              (rows 0 2 (rgb 0.2 0.2 0.21)))))
 ; ..poured concrete, smooth, stained broadly, a pour's line every three metres and the
 ; form ties' holes in rows between
 (: concrete (texture 128 128 6
-             '((fill (rgb 0.34 0.33 0.32)) (noise 6 0.05) (patches 6 0.18 (shade 0.88))
+             '((fill (rgb 0.37 0.36 0.35)) (fbm 32 4 0.2) (stain 32 4 0.35 0.3 (shade 0.84)) (fbm 2 2 0.06) (relief 1.5 2 0.12)
                (rows 0 1 (shade 0.88)) (rows 64 65 (shade 0.88)) (dots 42.667 16 0.8 (shade 0.6)))))
 ; ..its doors: two leaves of blued steel, each a raised plate with its corners cut, a dark
 ; seam between, blue lights in the frame, a hazard band at the foot
@@ -175,40 +167,46 @@
 
 ;; the corner shop and the advertisements
 ; ..the shop's grimed render, its sign's dark steel
-(: grime (texture 32 32 2 '((fill (rgb 0.26 0.24 0.23)) (noise 9 0.2) (patches 5 0.35 (shade 0.7)) (rows 0 1 0.12))))
+(: grime (texture 32 32 2 '((fill (rgb 0.3 0.28 0.27)) (fbm 8 4 0.2) (stain 8 3 0.35 0.35 (shade 0.8)) (fbm 2 2 0.06) (relief 1.5 2 0.12)
+                            (rows 0 1 0.12))))
 (: darkmetal (texture 16 16 1 '((fill (rgb 0.08 0.08 0.09)) (noise 4 0.3))))
 ; ..its sign: the shop's name, its first and last two small across over and under the four
-; between, down the middle; both faces the same
-(: (shopsign x s) [(neon [x 19.2 21.35] [s 0 0] 0.55 "戈文" (rgb 0.3 0.85 1))
-                   (neon [x 17.95 21.35] [s 0 0] 0.85 "天" (rgb 1 0.2 0.55))
+; between, down the middle; both faces the same but that f takes its 天
+(: (shopsign x s f) [(neon [x 19.2 21.35] [s 0 0] 0.55 "戈文" (rgb 0.3 0.85 1))
+                   (f (neon [x 17.95 21.35] [s 0 0] 0.85 "天" (rgb 1 0.2 0.55)))
                    (neon [x 16.85 21.35] [s 0 0] 0.85 "然" (rgb 1 0.2 0.55))
                    (neon [x 15.75 21.35] [s 0 0] 0.85 "食" (rgb 1 0.2 0.55))
                    (neon [x 14.65 21.35] [s 0 0] 0.85 "品" (rgb 1 0.2 0.55))
                    (neon [x 13.75 21.35] [s 0 0] 0.55 "中心" (rgb 0.3 0.85 1))])
 ; ..the boards, bright as their own light: red and blue, a disc and a pointer and lines of
-; type; green, a bubble and type; the spinner's magenta and its yellow
+; type; the spinner's magenta and its yellow
 (: adredblue (texture 128 64 13
               '((fill (rgb 0.95 0.08 0.12)) (poly 50 0 128 0 128 64 78 64 (rgb 0.08 0.22 1))
                 (disc 28 32 20 (grey 0.97)) (disc 28 32 14 (rgb 0.08 0.22 1)) (poly 23 23 38 32 23 41 (grey 0.97))
                 (rect 74 10 122 19 (grey 0.97)) (rect 80 25 118 30 (grey 0.97)) (rect 84 35 120 40 (grey 0.97))
                 (rect 88 47 122 56 (rgb 1 0.85 0.2)))))
-(: adgreen (texture 128 64 12
-            '((fill (rgb 0.04 0.78 0.3)) (rect 0 46 128 64 (rgb 0.01 0.25 0.08))
-              (disc 100 22 17 (rgb 0.75 1 0.35)) (disc 94 16 5 (grey 0.97))
-              (rect 10 9 66 18 (grey 0.97)) (rect 10 24 52 30 (grey 0.97)) (rect 10 34 60 39 (grey 0.97))
-              (rect 10 51 42 59 (rgb 1 1 0.5)) (rect 50 51 70 59 (rgb 1 1 0.5)))))
+; ..a black board, a radio mast on it in neon green: two legs braced across and crossed, a
+; mast and its tip
+(: admast (texture 128 128 9
+           '((fill (rgb 0.02 0.02 0.025))
+             (poly 44 88 50 88 63 40 60 40 (rgb 0.35 1 0.35)) (poly 78 88 84 88 68 40 65 40 (rgb 0.35 1 0.35))
+             (rect 52 76 76 79 (rgb 0.35 1 0.35)) (rect 56 64 72 67 (rgb 0.35 1 0.35)) (rect 59 52 69 55 (rgb 0.35 1 0.35))
+             (poly 56 67 59 67 74 76 71 76 (rgb 0.35 1 0.35)) (poly 70 67 73 67 57 76 54 76 (rgb 0.35 1 0.35))
+             (poly 60 55 62.4 55 70.4 64 68 64 (rgb 0.35 1 0.35)) (poly 67.6 55 70 55 60 64 57.6 64 (rgb 0.35 1 0.35))
+             (rect 62.6 24 65.4 40 (rgb 0.35 1 0.35)) (disc 64 24 3.2 (rgb 0.8 1 0.8)) (rect 36 88 92 91 (rgb 0.35 1 0.35)))))
 (: spin1 (texture 64 48 5 '((fill (rgb 0.95 0.08 0.6)) (disc 32 22 15 (rgb 0.2 0.9 1)) (disc 32 22 9 (rgb 0.95 0.08 0.6)) (rect 6 40 58 44 (grey 0.97)))))
 (: spin2 (texture 64 48 5 '((fill (rgb 1 0.85 0.08)) (rect 0 0 64 6 0.05) (rect 0 42 64 48 0.05) (poly 10 34 32 10 54 34 (rgb 0.9 0.08 0.08)))))
 ; ..the street sweeper: yellow paint scuffed, a dark cab, the drums' worn
 ; steel, and caution bars; the garage it came out of, ribbed, a bar of the same at its top
 ; and its foot
-(: sweepyellow (texture 32 32 1.5 '((fill (rgb 0.86 0.64 0.06)) (noise 6 0.18) (patches 4 0.2 (shade 0.6)) (grid 32 0 1 (shade 0.5)))))
+(: sweepyellow (texture 32 32 1.5 '((fill (rgb 0.86 0.64 0.06)) (fbm 8 3 0.12) (stain 8 3 0.25 0.3 (shade 0.75)) (grid 32 0 1 (shade 0.5)))))
 (: cabglass (texture 32 32 1 '((fill (rgb 0.04 0.07 0.1)) (noise 8 0.3) (rows 0 4 (rgb 0.36 0.37 0.39)))))
 (: drumsteel (texture 32 32 1 '((fill (rgb 0.22 0.22 0.23)) (noise 3 12 0.35) (cols 0 2 (shade 0.5)))))
 (: grille (texture 32 8 1 '((fill (grey 0.05)) (cols 0 2 (rgb 0.86 0.64 0.06)) (cols 30 32 (rgb 0.86 0.64 0.06)) (grid 3 0 1 (grey 0.2)))))
 (: hazard (texture 32 8 1 '((fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))))
 (: garage (texture 64 64 4.6
-           '((fill (rgb 0.3 0.31 0.32)) (noise 9 0.2) (grid 0 5 1 (shade 0.45)) (patches 6 0.3 (shade 0.75))
+           '((fill (rgb 0.32 0.33 0.34)) (fbm 16 4 0.18) (bevel 64 5 1 (shade 1.18) (shade 0.5))
+             (stain 16 3 0.3 0.3 (shade 0.8)) (relief 1.5 2 0.08)
              (within 0 0 64 6 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))
              (within 0 58 64 64 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04))))))
 ;; the memorial at the office's door
@@ -290,6 +288,32 @@
                                (decal [c (y + 1) 33.99] [0 0 -1] [0 1 0] 3.8 2 darkpane)]
                     [(skin {'all concrete} (air (box [-34 y (c - 1.9)] [-32.9 (y + 2) (c + 1.9)])))
                      (decal [-33.99 (y + 1) c] [1 0 0] [0 1 0] 3.8 2 darkpane)]))
+; ..a narrow window sunk half a metre into the office, a metre wide and two tall, its sill
+; at y: in its south face at z f, or in a side at x f looking along o
+(: (unnslot c y f o) (: i (o = 0 ? 1.0 (-1.0 * o)) e (f + 0.5 * i) d (f + 0.49 * i) a (f - 0.1 * i) n (o = 0 ? [0 0 -1] [o 0 0])
+     (? (o = 0) [(skin {'all concrete} (air (box [(c - 0.5) y a] [(c + 0.5) (y + 2) e])))
+                 (decal [c (y + 1) d] n [0 1 0] 1 2 darkpane)]
+        [(skin {'all concrete} (air (box [(min a e) y (c - 0.5)] [(max a e) (y + 2) (c + 0.5)])))
+         (decal [d (y + 1) c] n [0 1 0] 1 2 darkpane)])))
+;; the road: steel ribs across it down its middle, a dark gutter each side
+(: roadribs (texture 32 8 1.6 '((fill (rgb 0.15 0.15 0.16)) (stripes 4 2 0 (rgb 0.21 0.21 0.22)) (fbm 8 3 0.15) (relief 1.5 2 0.1))))
+(: gutter (texture 32 32 1.6 '((fill (rgb 0.11 0.11 0.12)) (fbm 8 3 0.2) (stain 8 3 0.3 0.3 (shade 0.8)) (relief 1.5 2 0.1))))
+;; the street's other buildings: grey precast panels, a tan render, corrugated steel, and
+; dark metal panels
+(: precast (texture 64 64 3 '((fill (rgb 0.31 0.32 0.31)) (fbm 16 4 0.18) (stain 16 3 0.35 0.3 (shade 0.82)) (fbm 2 2 0.06)
+                              (relief 1.5 2 0.1) (grid 64 32 1 (rgb 0.17 0.17 0.17)))))
+(: render (texture 64 64 3.8 '((fill (rgb 0.52 0.46 0.38)) (fbm 16 4 0.18) (stain 16 3 0.35 0.3 (shade 0.8)) (fbm 2 2 0.06)
+                               (relief 1.5 2 0.12) (rows 0 1 (shade 0.7)))))
+(: corrugated (texture 64 64 3 '((fill (rgb 0.38 0.39 0.38)) (fbm 16 4 0.15) (bevel 4 1000 1 (shade 1.2) (shade 0.6))
+                                 (stain 16 3 0.3 0.35 (mix (rgb 0.42 0.22 0.1) 0.6)) (relief 1.5 2 0.06))))
+(: panels (texture 64 64 3 '((fill (rgb 0.24 0.27 0.31)) (fbm 16 4 0.15) (stain 16 3 0.3 0.3 (shade 0.82)) (relief 1.5 2 0.08)
+                             (grid 32 64 1 (rgb 0.12 0.13 0.15)) (rows 0 1 (rgb 0.35 0.38 0.42)))))
+; ..a window of dark glass sunk d into a face of m: one looking north at z f, x0 to x1 across;
+; one looking west at x f, z0 to z1 across; y0 to y1 up
+(: (nwin x0 x1 y0 y1 f d m) [(skin {'all m} (air (box [x0 y0 (f - d)] [x1 y1 (f + 0.1)])))
+                             (decal [(0.5 * (x0 + x1)) (0.5 * (y0 + y1)) (f - d + 0.01)] [0 0 1] [0 1 0] (x1 - x0) (y1 - y0) darkpane)])
+(: (wwin z0 z1 y0 y1 f d m) [(skin {'all m} (air (box [(f - 0.1) y0 z0] [(f + d) y1 z1])))
+                             (decal [(f + d - 0.01) (0.5 * (y0 + y1)) (0.5 * (z0 + z1))] [-1 0 0] [0 1 0] (z1 - z0) (y1 - y0) darkpane)])
 ;; ..the grav shafts: walls of dark cabling bound in clamps, a plate floor and ceiling,
 ; and on each a steel ring round a triangle of three glowing blue lamps
 (: cabling (texture 64 64 1.2
@@ -310,7 +334,39 @@
 (: (shaft x) [(skin {'walls cabling 'floor shaftplate 'ceiling shaftplate} (room [(x - 1) -9 16.3] [(x + 1) 12 18.3]))
               (decal [x -8.99 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravring) (ad [x -8.98 17.3] [0 1 0] [0 0 1] 1.6 1.6 gravlamps)
               (decal [x 11.99 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravring) (ad [x 11.98 17.3] [0 -1 0] [0 0 1] 1.6 1.6 gravlamps)
-              (shaft-pane x -4.7) (shaft-pane x -0.7) (shaft-pane x 3.3)])
+              (shaft-pane x -3.9) (shaft-pane x -1.78) (shaft-pane x 0.34) (shaft-pane x 2.46)])
+;; ..a window in a wall across x, its corners cut c off: the air carved to an octagon and
+; the pane set back into the wall, its own corners hidden there
+(: (octwin lo hi c t) (: x0 (lo 0) x1 (hi 0) y0 (lo 1) y1 (hi 1) z0 (lo 2) z1 (hi 2)
+   (cr y z dy dz) (cut [x0 (y + dy) z] [x0 y (z + dz)] [x1 (y + dy) z])
+   [(skin {'all concrete} (cr y0 z0 c c (cr y0 z1 c (0 - c) (cr y1 z0 (0 - c) c (cr y1 z1 (0 - c) (0 - c) (air (box lo hi)))))))
+    (window [(x0 + 0.2) y0 z0] [(x1 - 0.15) y1 z1] t @ (a p) p)]))
+;; ..a screen on a wall, 0.9 wide from 0.85 over the floor to 2.6, a window's head, in a
+; thin dark bezel 6 cm off the wall: the floor under its middle at x y z,
+; facing n along x or z; its face lit blank
+(: bezel (texture 16 16 1 '((fill (rgb 0.1 0.1 0.11)) (noise 4 0.2))))
+(: screenface (texture 8 8 1 '((fill (grey 0.97)))))
+(: (wallscreen at n) (: x (at 0) y (at 1) z (at 2) nx (n 0) nz (n 2)
+   a [(x + nz * 0.45) (y + 0.85) (z - nx * 0.45)] b [(x - nz * 0.45 + nx * 0.06) (y + 2.6) (z + nx * 0.45 + nz * 0.06)]
+   [(skin {'all bezel} (solid (box (map (i \ min (a i) (b i)) ^3) (map (i \ max (a i) (b i)) ^3))))
+    (ad [(x + nx * 0.065) (y + 1.725) (z + nz * 0.065)] n [0 1 0] 0.82 1.67 screenface)]))
+;; ..a buttress the width of a back block's face about x: flying up from that face at z 8,
+; level with the head of the lowest shaft pane, south two thirds across, then 4 deep under
+; the ceiling to the front block's face at z 4
+(: (buttress x) (: a (x - 1.7) b (x + 1.7)
+   [(skin {'all concrete} (solid (box [a 1 4] [b 5 5.33])))
+    (skin {'all concrete} (cut [a -2.6 8] [a 1 5.33] [b -2.6 8] (cut [a 1.4 8] [a 5 5.33] [b 1.4 8] (solid (box [a -2.6 5.33] [b 5 8])))))]))
+;; ..a lintel x0 to x1 wide, z0 to z1 deep, its soffit at y and its top at the ceiling, its
+; edge at z1 rounded off r in n flats up into its face
+(: (lintel x0 x1 y z0 z1 top r n) (: cy (y + r) cz (z1 - r)
+   (foldl (\ b i (: t (3.14159265 * (i + 0.5) / (2 * n)) py (cy - r * cos t) pz (cz + r * sin t)
+              (cut [x0 py pz] [x0 (py + sin t) (pz + cos t)] [x1 py pz] b)))
+          (solid (box [x0 y z0] [x1 top z1])) ^n)))
+;; ..a vent's grille: a pale frame round dark slats; and a floor's band of ribbed rubber
+(: vent (texture 16 16 0.6 '((fill (rgb 0.05 0.05 0.06)) (rows 3 5 (rgb 0.3 0.31 0.33)) (rows 7 9 (rgb 0.3 0.31 0.33))
+                             (rows 11 13 (rgb 0.3 0.31 0.33)) (rows 0 1 (rgb 0.42 0.43 0.45)) (rows 15 16 (rgb 0.42 0.43 0.45))
+                             (cols 0 1 (rgb 0.42 0.43 0.45)) (cols 15 16 (rgb 0.42 0.43 0.45)))))
+(: floorstrips (texture 54 8 5.4 '((fill (rgb 0.13 0.13 0.14)) (stripes 3 2 0 (rgb 0.16 0.16 0.17)) (fbm 8 3 0.15) (relief 1.5 2 0.1))))
 ; ..the station's lamps: steel fittings, three-sided, on the walls
 (: sconcemetal (texture 16 16 0.5 '((fill (rgb 0.42 0.43 0.45)) (noise 4 0.15))))
 (: (lamp at n d) (sconce at n d 1.4 sconcemetal))
@@ -391,7 +447,7 @@
 ; ..the tower: pale panels outside, poured concrete where it is broken
 (: cladding (texture 64 64 4 '((fill (rgb 0.66 0.67 0.69)) (noise 6 0.06) (rows 0 2 (shade 0.8)) (cols 0 2 (shade 0.85)) (cols 32 33 (shade 0.9)))))
 (: cast (texture 128 128 6
-             '((fill (rgb 0.42 0.41 0.4)) (noise 6 0.05) (patches 6 0.18 (shade 0.88))
+             '((fill (rgb 0.45 0.44 0.43)) (fbm 32 4 0.2) (stain 32 4 0.35 0.3 (shade 0.84)) (fbm 2 2 0.06) (relief 1.5 2 0.12)
                (rows 0 1 (shade 0.88)) (rows 64 65 (shade 0.88)) (dots 42.667 16 0.8 (shade 0.6)))))
 ; ..the offices: blue-grey carpet, off-white walls, ceiling tiles in a grid
 (: carpet (feel 'soft (texture 64 64 2 '((fill (rgb 0.3 0.33 0.39)) (noise 1 0.25) (noise 8 0.1) (patches 5 0.2 (shade 0.9))))))
@@ -566,7 +622,7 @@
 
 
 (level "the station"
-  (textures {'wall concrete 'floor hallfloor 'ceiling concrete 'door steel 'train carbody})
+  (textures {'wall concrete 'floor concrete 'ceiling concrete 'door steel 'train carbody})
   ; the start inside the car, facing its door
   (start [0 -9 -5.9] 0 0)
   ; first a second of a clear noon sky, broken cloud, looking up; then the car
@@ -574,14 +630,31 @@
   ; a dim light everywhere, the lamps' thrown back off the concrete
   (ambient (rgb 0.15 0.15 0.16))
   ; the hall, 38 metres across, fourteen high and 16 long
-  (room [-19 -9 0] [19 5 16])
+  (skin {'floor hallfloor} (room [-19 -9 0] [19 5 16]))
   ; the platform, its floor a grate, its ends in line with the hallways' outer walls, and
   ; the track a metre below it running on into the tunnels, under the car's floor, cabling
   ; on the walls up to the platform
   (skin {'floor grate} (room [-11 -9 -4.52] [11 2 0]))
+  ; ..the tunnels either side a little wider than the track along the platform: a pair of
+  ; pilasters every car's length, their faces in line with the platform's walls; between
+  ; each pair a recess of cabling in the ceiling and a footlight low on the south wall, and
+  ; under every other recess a strip across
+  (mirror-x 0
+   [(skin {'all concrete} (room [-70 -10 -7.9] [-11 -4 -4.22]))
+    (map (j \ (: x (-20 - (9 * j))
+                [(skin {'all concrete} (solid (box [(x - 0.3) -10 -7.9] [(x + 0.3) -4 -7.6])))
+                 (skin {'all concrete} (solid (box [(x - 0.3) -10 -4.52] [(x + 0.3) -4 -4.22])))])) ^6)
+    (map (j \ (: a (-19.7 - (9 * j)) b (j = 0 ? -11 (-11.3 - (9 * j))) m (-15.5 - (9 * j))
+                [(skin {'all cabling} (air (box [a -4 -7.6] [b -3.6 -4.52])))
+                 (dim 0.35 (lamp [m -9.6 -7.9] [0 0 1] [0 -1 0]))
+                 (j % 2 = 0 ? [(dim 0.35 (strip-light [m -3.7 -6.06]))] ())])) ^6)])
+  ; ..and on the first stretch of each one's south wall a red beacon: the east's dark but for
+  ; a flash once a second, the west's lit but for a moment every four
+  (beacon 1.0 0.12 (bulb [15.5 -6.5 -7.8] (rgb 1 0.06 0.03)))
+  (beacon 4.0 3.7 (bulb [-15.5 -6.5 -7.8] (rgb 1 0.06 0.03)))
   (skin {'walls cabling 'floor rails} (room [-70 -10 -7.6] [70 -9 -4.52]))
   (room [-11 -9 -7.6] [11 2 -4.52])
-  (room [-70 -9 -7.6] [70 -6 -4.52])
+  (room [-70 -9 -7.6] [70 -4 -4.52])
   ; solid blocks standing in from the side walls, mirrored about x 0, their corners out in
   ; the air chamfered; the hallway between them and each wing's chamber south open onto
   ; the platform
@@ -591,23 +664,43 @@
     (block [-15 -9 8] [-11 5 10] [[-15 8] [-11 8]])
     (block [-7 -9 8] [-3 5 10] [[-7 8] [-3 8]])
     (solid (box [-19 -9 16] [-3 5 10]))
-    ; ..the lamps, each looking along its wall, some across, some up or down it
-    (lamp [-3 -6.2 2] [1 0 0] [0 0 1])
-    (lamp [-3 -6.2 9] [1 0 0] [0 0 -1])
-    (lamp [-11 -6.2 2] [1 0 0] [0 0 1])
-    (lamp [-19 -3.5 7] [1 0 0] [0 1 0])
-    (lamp [-3 -2.5 13] [1 0 0] [0 -1 0])
-    (lamp [-11 -6.5 -2.3] [1 0 0] [0 0 1])
-    (lamp [-5 -6.5 0] [0 0 -1] [-1 0 0])
+    ; ..buttresses from the back blocks over to the front ones, a lamp under each foot
+    ; looking down the wall and one across from it on the front block
+    (buttress -13) (buttress -5)
+    (lamp [-13 -3.1 8] [0 0 -1] [0 -1 0]) (lamp [-5 -3.1 8] [0 0 -1] [0 -1 0])
+    (lamp [-13 -3.1 4] [0 0 1] [0 -1 0]) (lamp [-5 -3.1 4] [0 0 1] [0 -1 0])
+    ; ..and on the platform side of the middle pillar, two thirds as high
+    (lamp [-5 -5.07 0] [0 0 -1] [0 -1 0])
+    ; ..and either side of the shafts' alcove one looking at its north wall, midway up
+    ; between the doorways' heads and the lowest panes
+    (lamp [-3 -5.15 13] [1 0 0] [0 0 1])
     ; ..the railing along the platform's edge, open across the car's door: a plinth, posts
     ; and a rail
-    (solid (box [-11 -9 -4.52] [-1 -8.6 -4.36]))
-    (repeat 8 [-1.41 0 0] [(solid (box [-1.06 -8.6 -4.47] [-1 -8.0 -4.41]))])
-    (solid (box [-11 -8.0 -4.48] [-1 -7.94 -4.4]))])
+    (skin {'floor sconcemetal} (solid (box [-11 -9 -4.52] [-1 -8.6 -4.36])))
+    (repeat 8 [-1.41 0 0] [(skin {'all sconcemetal} (solid (box [-1.06 -8.6 -4.47] [-1 -8.0 -4.41])))])
+    (skin {'all sconcemetal} (solid (box [-11 -8.0 -4.48] [-1 -7.94 -4.4])))
+    ; ..vents low on the front blocks' north faces
+    (decal [-16.5 -8.5 4.005] [0 0 1] [0 1 0] 0.6 0.6 vent) (decal [-13.5 -8.5 4.005] [0 0 1] [0 1 0] 0.6 0.6 vent)
+    (decal [-5 -8.5 4.005] [0 0 1] [0 1 0] 0.6 0.6 vent)])
+  ; a band of ribbed rubber along the floor from the platform's edge to the shafts' wall
+  (decal [0 -8.99 5.74] [0 1 0] [0 0 1] 5.4 20.52 floorstrips)
+  ; a low steel bench in the alcove east of the shafts, three seats on one beam, against its
+  ; north wall
+  (map (x \ skin {'all steelk} (solid (box [(x - 0.475) -8.6 9.5] [(x + 0.475) -8.55 9.95]))) [8 9 10])
+  (skin {'all steelk} (solid (box [7.6 -8.75 9.65] [10.4 -8.6 9.8])))
+  (map (x \ skin {'all steelk} (solid (box [(x - 0.04) -9 9.62] [(x + 0.04) -8.75 9.83]))) [7.6 9 10.4])
+  ; the platform's ceiling: over the track a tunnel's roof, from its edge sloping down to
+  ; the pillars, but for the way out from the car's door between the middle ones, whose
+  ; ceiling dips less, runs on level between them and rounds up into their north faces
+  (skin {'all concrete} (solid (box [-11 -4 -7.6] [11 2 -4.52])))
+  (skin {'all concrete} (cut [-11 -4.7 0] [-11 -4 -4.52] [-3 -4.7 0] (solid (box [-11 -4.7 -4.52] [-3 2 0]))))
+  (skin {'all concrete} (cut [3 -4.7 0] [3 -4 -4.52] [11 -4.7 0] (solid (box [3 -4.7 -4.52] [11 2 0]))))
+  (skin {'all concrete} (cut [-3 -4.6 0] [-3 -4 -4.52] [3 -4.6 0] (solid (box [-3 -4.6 -4.52] [3 2 0]))))
+  (skin {'all concrete} (lintel -3 3 -4.6 0 4 5 1.2 6))
   ; the car at the platform, its door on the hallway, a hand clear of the edge; it leaves west
-  (train [-9 -9 -7.24] [9 -6.7 -4.64] (door [0 -9 -4.64] 1.4 2.0) -55)
+  (glazed glass (train [-3 -9 -7.24] [3 -6.5 -4.64] (door [0 -9 -4.64] 1.4 2.0) -55))
   ; ..a bare mattress along the car's floor at its east end, gone with it
-  (mattress [5.4 -9 -5.94] 90)
+  (mattress [0.9 -9 -6.3] 90)
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -9 8.9] 150 25 (rgb 0.9 0.9 0.87))
   ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
@@ -615,22 +708,81 @@
   ; ends at a blank wall, painted a half court with its hoop on the wall
   (sky 18.35 'mostly)
   (smog 0.9)
-  (skin {'floor roadmetal 'walls facade} (street [-45 8.85 14] [45 45 47]))
-  (skin {'all paving} (solid (box [-45 8.85 14] [45 9 22])))
-  (skin {'all paving} (solid (box [-45 8.85 28] [-31 9 33])))
+  (skin {'floor roadmetal 'walls facade} (street [-45 8.85 8.2] [45 45 47]))
+  (skin {'all paving} (solid (box [-45 8.85 8.2] [45 9 22])))
+  (skin {'all paving} (solid (box [-45 8.85 32.2] [-31 9 33])))
   (skin {'all paving} (solid (box [-33 8.85 33] [-31 9 47])))
   (skin {'all paving} (solid (box [-20 8.85 28] [45 9 33])))
   (skin {'all paving} (solid (box [-20 8.85 33] [-18 9 47])))
   (skin {'all concrete} (solid (box [-33 8.85 46.6] [-18 33 47])))
   (skin {'all kerb} (solid (box [-45 8.85 21.8] [45 9 22])))
-  (skin {'all kerb} (solid (box [-45 8.85 28] [-31 9 28.2])))
+  ; ..the road: ribs down its middle half, a gutter each side, red lights low in the kerbs
+  (skin {'all gutter} (solid (box [-45 8.85 22] [45 8.86 23.5])))
+  (skin {'all gutter} (solid (box [-45 8.85 26.5] [45 8.86 28])))
+  (skin {'all roadribs} (solid (box [-45 8.85 23.5] [45 8.86 26.5])))
+  (map (k \ unlit (neon [(-43.5 + 3 * k) 8.88 22.01] [0 0 1] 0.11 "---" (rgb 1 0.05 0.03))) ^30)
+  (map (k \ unlit (neon [(-18.5 + 3 * k) 8.88 27.99] [0 0 -1] 0.11 "---" (rgb 1 0.05 0.03))) ^21)
+  (skin {'all kerb} (solid (box [-45 8.85 32.2] [-31 9 32.4])))
   (skin {'all kerb} (solid (box [-20 8.85 28] [45 9 28.2])))
-  (skin {'all kerb} (solid (box [-31.2 8.85 28.2] [-31 9 47])))
+  (skin {'all kerb} (solid (box [-31.2 8.85 32.4] [-31 9 47])))
   (skin {'all kerb} (solid (box [-20 8.85 28.2] [-19.8 9 47])))
   (decal [-25.5 8.86 38.2] [0 1 0] [0 0 1] 11 16 court)
   (hoop -25.5 8.85 46.6)
   (lamp [-25.5 14.6 46.6] [0 0 -1] [0 -1 0])
   (ball [-23.4 8.85 41.2])
+  ; the south side: east of the billboard's block a narrow alley, then five storeys
+  ; of precast panels, an arcade under them between three buttresses, two deep windows a bay a storey
+  (skin {'all precast} (solid (box [-18 8.85 8.2] [-5.5 28.6 12])))
+  (skin {'all concrete} (solid (box [-18.2 27.8 8.2] [-5.3 28.6 12.4])))
+  (skin {'all concrete} (solid (box [-18.1 12.6 8.2] [-5.4 13 12.25])))
+  (map (k \ (: a (-17.7 + 3.125 * k) b (-15.175 + 3.125 * k)
+              [(skin {'all precast} (air (box [a 8.85 10.4] [b 12.4 12.1])))
+               (decal [(0.5 * (a + b)) 10.4 10.41] [0 0 1] [0 1 0] (b - a - 0.6) 2.6 darkpane)])) ^4)
+  (map (x \ skin {'all concrete} (cut [(x + 0.3) 8.85 13.4] [(x - 0.3) 8.85 13.4] [x 16.4 12] (solid (box [(x - 0.3) 8.85 10] [(x + 0.3) 16.4 13.4]))))
+       [-14.875 -11.75 -8.625])
+  (map (q \ nwin (q 0 - 0.5) (q 0 + 0.5) (q 1) (q 1 + 2) 12 0.4 precast)
+       (catmap (y \ catmap (k \ (: c (-16.4375 + 3.125 * k) [[(c - 0.7) y] [(c + 0.7) y]])) ^4) [13.9 17.7 21.5 25.3]))
+  ; ..east of the station a tan office: concrete fins up its face between tall windows, its
+  ; top storey set back with a row of windows, its door sunk under a steel canopy
+  (skin {'all render} (solid (box [12 8.85 8.2] [27 26 12.5])))
+  (skin {'all render} (solid (box [12.5 26 8.2] [26.5 31 10.5])))
+  (skin {'all concrete} (solid (box [11.8 25.7 8.2] [27.2 26.2 12.8])))
+  (map (k \ skin {'all concrete} (solid (box [(13.13 + 2.5 * k) 12.6 12.5] [(13.37 + 2.5 * k) 25.7 13.2]))) ^6)
+  (map (q \ nwin (q 0 - 0.8) (q 0 + 0.8) (q 1) (q 1 + 3) 12.5 0.5 render) (catmap (y \ map (k \ [(14.5 + 2.5 * k) y]) ^5) [13.2 17.4 21.6]))
+  (map (k \ nwin (13.1 + 2.2 * k) (15.1 + 2.2 * k) 27.6 29.8 10.5 0.4 render) ^6)
+  (skin {'all render} (air (box [17.2 8.85 11] [21.3 12.2 12.6])))
+  (decal [19.25 10.35 11.01] [0 0 1] [0 1 0] 3.5 3 darkpane)
+  (skin {'all darkmetal} (solid (box [16.6 12.2 12.5] [21.9 12.4 14.6])))
+  (nwin 12.6 16.6 9.6 12 12.5 0.3 render) (nwin 21.9 26.4 9.6 12 12.5 0.3 render)
+  ; ..then a works in corrugated steel: a loading bay sunk in it, steel struts down to the
+  ; pavement, a row of high windows, a duct and a stack on its roof
+  (skin {'all corrugated} (solid (box [27 8.85 8.2] [42 21 11.2])))
+  (skin {'all darkmetal} (solid (box [26.9 20.8 8.2] [42 21.2 11.35])))
+  (skin {'all corrugated} (air (box [32 8.85 9.9] [35.6 12.7 11.3])))
+  (decal [33.8 10.775 9.91] [0 0 1] [0 1 0] 3.6 3.85 garage)
+  (bulb [33.8 13 11.5] (rgb 1 0.7 0.35))
+  (nwin 36.3 37.4 8.85 11.1 11.2 0.5 corrugated)
+  (map (x \ skin {'all darkmetal} (cut [(x + 0.15) 8.85 13.4] [(x - 0.15) 8.85 13.4] [x 15.5 11.2] (solid (box [(x - 0.15) 8.85 9.2] [(x + 0.15) 15.5 13.4]))))
+       [29.5 38.6 40.8])
+  (map (k \ nwin (28 + 1.75 * k) (29.5 + 1.75 * k) 17 18.8 11.2 0.35 corrugated) ^8)
+  (skin {'all darkmetal} (solid (box [29 21.2 8.6] [31.5 23 10.4])))
+  (skin {'all darkmetal} (solid (box [39 21.2 9] [39.6 26 9.6])))
+  ; ..and at the east end a block of dark panels, a loggia on columns at the pavement and
+  ; tall narrow windows over it
+  (skin {'all panels} (solid (box [42 8.85 8.2] [45 30.5 20.5])))
+  (skin {'all darkmetal} (solid (box [41.6 29.8 8.2] [45 30.5 20.8])))
+  (skin {'all panels} (air (box [41.9 8.85 11.8] [43.3 12.4 19.9])))
+  (map (z \ skin {'all darkmetal} (solid (box [41.95 8.85 (z - 0.2)] [42.35 12.4 (z + 0.2)]))) [14.5 17.2])
+  (map (z \ decal [43.29 10.6 z] [-1 0 0] [0 1 0] 2.3 2.8 darkpane) [13.15 15.85 18.55])
+  (map (q \ wwin (q 0 - 0.45) (q 0 + 0.45) (q 1) (q 1 + 5) 42 0.5 panels) (catmap (y \ map (z \ [z y]) [12.6 14.2 15.8 17.4 19]) [13.6 20.4]))
+  ; ..the garage at the west end in a wall of its own between the food center and the block
+  ; north of it, half again its gate's height, capped; a yard open behind it, a taller
+  ; building across the yard
+  (skin {'walls concrete 'floor concrete} (street [-55 14.9 20.5] [-45 45 33]))
+  (skin {'all facade} (solid (box [-55.1 14.9 20.5] [-54.9 45 33])))
+  (skin {'all grime} (solid (box [-55 14.9 20.4] [-45 22.5 20.5])))
+  (skin {'all concrete} (solid (box [-45 8.85 20.5] [-44.7 14.6 33])))
+  (skin {'all concrete} (solid (box [-45 14.6 20.5] [-44.55 14.9 33])))
   ; ..across it from the office a great column, the third of its beams reaching over to it,
   ; and either side of the column a wing, upright at the pavement, rising, then level to
   ; meet it, the pavement going on round behind them; the shafts come up in the west wing,
@@ -639,6 +791,9 @@
   (skin {'all concrete} (solid (box [3 9 15.8] [6 26 19.5])))
   (skin {'all concrete} (cut [-5.5 12.4 19] [-5.5 12.4 15.8] [-4.7 13.2 15.8] (solid (box [-5.5 9 15.8] [3 13.2 19]))))
   (skin {'all concrete} (cut [12 10.4 16] [12 10.4 19.3] [8 13.2 16] (cut [11 9 16] [11 9 19.3] [6 12.3 16] (solid (box [6 9 16] [12 13.2 19.3])))))
+  ; ..behind it, against the south wall, the station's vent house, louvres in its face
+  (skin {'all concrete} (solid (box [-5.5 8.85 8.2] [12 15.5 13])))
+  (map (x \ decal [x 11.2 13.01] [0 0 1] [0 1 0] 1.4 1.4 vent) [-3 0 9.5])
   ; ..the station's sign on the wing, a room of the street's air before it to hang it on
   (skin {'all concrete} (room [-5.5 9 19] [3 13 19.6]))
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
@@ -652,6 +807,8 @@
   (grav [0.7 -9 16.3] [2.7 9 18.3] 'up)
   (grav [-2.7 -9 16.3] [-0.7 9 18.3] 'down)
   (shaft 1.7) (shaft -1.7)
+  ; ..a lamp between the lowest panes, under them, looking down the wall
+  (lamp [0 -4.15 16] [0 0 -1] [0 -1 0])
   (air (box [0.9 -9 15.9] [2.5 -6.4 16.4]))
   (air (box [-2.5 -9 15.9] [-0.9 -6.4 16.4]))
   (skin {'all concrete} (air (box [0.9 9 18.2] [2.5 11.6 19.1])))
@@ -659,14 +816,22 @@
   ; the natural food center at the street's west end, three storeys, its floor a step below
   ; the pavement: a window onto the street, steps down from the east to its door, a sign
   ; standing out from its front, and a spinner on its roof
-  (skin {'all grime} (solid (box [-45 8.85 14] [-33 22.5 20.5])))
+  (skin {'all grime} (solid (box [-45 8.85 8.2] [-33 22.5 20.5])))
+  ; ..east of it a block out from the south wall to the food center's height, before the
+  ; rooms behind them that carve it, and on its front by its east corner a screen
+  (skin {'all concrete} (solid (box [-33 8.85 8.2] [-20 22.5 11.8])))
+  (wallscreen [-21.2 9 11.8] [0 0 1])
   (skin {'floor woodfloor 'walls shopwall} (room [-44.5 8 12] [-33.5 12 20]))
   (across (strip-light [-39 12 17.2]))
   (across (strip-light [-39 12 13.8]))
-  (window [-42 9.3 19.95] [-35.5 11.6 20.55] glass)
-  (skin {'all concrete} (street [-33 8 15.8] [-28.4 9.2 17.6]))
-  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 15.8] [-28.4 8.833 17.6])))])
-  (door [-33.25 8 16.6] 1.2 2.2)
+  (window [-42 9.85 19.95] [-35.5 11.6 20.55] glass)
+  ; ..and west of the window a screen on its front
+  (wallscreen [-43.5 9 20.5] [0 0 1])
+  (skin {'all concrete} (street [-33 8 17.6] [-28.4 9.2 20.3]))
+  (repeat 5 [-0.6 -0.1667 0] [(skin {'all concrete} (solid (box [-29 7 17.6] [-28.4 8.833 20.3])))])
+  (door [-33.25 8 19.35] 1.2 2.2)
+  ; ..and left of the door, a window onto the steps
+  (window [-33.55 8.85 17.85] [-32.95 10.2 18.5] glass)
   ; ..in from the door, apples on the right and potatoes and onions on the left; along the
   ; west wall carrots, radishes and cabbages
   (stand -37 17.7 -34.6 18.6 's 'apple 1)
@@ -726,14 +891,19 @@
   (pencil [-27.33 8 7.5] 82 (rgb 0.2 0.45 0.8))
   (coarse 8 (glow (orb [-29.8 10.63 8.05] 0.6 pinkorb 1.5)))
   (skin {'all darkmetal} (solid (box [-34.4 12 20.5] [-34.1 19.8 22.2])))
-  (shopsign -34.09 1)
-  (shopsign -34.41 -1)
+  (shopsign -34.09 1 stammer)
+  (shopsign -34.41 -1 1)
   (skin {'all darkmetal} (solid (box [-39.2 22.5 16.8] [-38.8 25 17.2])))
   (spinner [-39 25 17] 5 3.5 spin1 spin2)
-  ; ..the advertisements: red and blue at the west end of the south wall, green high on the
-  ; east
-  (ad [-24 19 14.03] [0 0 1] [0 1 0] 13 7 adredblue)
-  (ad [44.97 28 30] [-1 0 0] [0 1 0] 12 6 adgreen)
+  ; ..the advertisements: red and blue across that block's face
+  (ad [-26.5 19 11.83] [0 0 1] [0 1 0] 13 7 adredblue)
+  ; ..and high on the east wall over the road a square black board, a green radio mast on it sending three
+  ; rings of magenta waves out each side in turn, GTX in orange neon under it
+  (ad [44.97 28 25] [-1 0 0] [0 1 0] 9 9 admast)
+  (map (i \ (: r (0.7 + 0.55 * i) h (1.6 * r) e (r - h / 6.0) y (30.81 - 0.5 * h)
+              [(ripple 1.5 0.45 (0.25 * i) (neon [44.95 y (25 + e)] [-1 0 0] h "(" (rgb 1 0.15 0.85)))
+               (ripple 1.5 0.45 (0.25 * i) (neon [44.95 y (25 - e)] [-1 0 0] h ")" (rgb 1 0.15 0.85)))])) ^3)
+  (neon [44.95 24.5 25] [-1 0 0] 1.3 "GTX" (rgb 1 0.5 0.08))
   ; ..a street sweeper out of the garage, in the middle of the road before it, nose east,
   ; headlights on: a big four-by-four's body, its hood sloping to the nose, a raked
   ; windscreen and a cabin narrowing to its roof, all yellow, on a steel roller each end
@@ -765,8 +935,8 @@
   (bulb [-34.37 10.75 23.875] (rgb 1 0.95 0.82))
   (bulb [-34.37 10.75 26.125] (rgb 1 0.95 0.82))
   ; ..the garage it came out of, shut, a strip over it
-  (decal [-44.97 10.75 25] [1 0 0] [0 1 0] 4.6 3.8 garage)
-  (strip-light [-44.8 12.9 25])
+  (decal [-44.69 10.75 25] [1 0 0] [0 1 0] 4.6 3.8 garage)
+  (strip-light [-44.5 12.9 25])
   ; the UNN recruitment office across the road: five storeys of concrete, four broad
   ; buttresses sloping down from the top of the first to the pavement; from high on the
   ; second each reaches out a beam, braced steeply at its root, level over the street;
@@ -782,12 +952,30 @@
     (skin {'all concrete} (cut [-14.8 9 29] [-12.2 9 29] [-13.5 13.5 31.8] (solid (box [-14.8 9 29] [-12.2 13.5 33]))))
     (skin {'all concrete} (cut [-14.8 18.2 33] [-12.2 18.2 33] [-13.5 20.6 30.4] (solid (box [-14.8 18.2 30.4] [-12.2 22.6 33]))))])
   (beam -13.5) (beam -4.5) (beam 13.5)
-  (skin {'all concrete} (solid (box [3.2 20.6 19.4] [5.8 22.6 30.5])))
+  ; ..its windows: narrow and deep, three to a broad bay and one to an end, on each storey
+  ; over the doors' two; and down each side
+  (map (q \ unnslot (q 0) (q 1) 33 0) (catmap (y \ map (x \ [x y]) [-16.4 -11 -9 -7 -2 0 2 7 9 11 16.4]) [19.3 23.8 28.3]))
+  (map (x \ unnslot x 14.8 35 0) [-16.4 -11 -9 -7 7 9 11 16.4])
+  (map (q \ unnslot (q 0) (q 1) (q 2) (q 3)) (catmap (y \ catmap (z \ [[z y -18 -1.0] [z y 18 1.0]]) [37 41 45]) [14.8 19.3 23.8 28.3]))
+  ; ..the third beam deeper and the column's width, a walkway along its top railed both sides
+  ; from the column to the buttress, and either side of the column a red beacon, a little
+  ; quicker than the girder's
+  (skin {'all concrete} (solid (box [3 20 19.4] [6 22.6 31.8])))
+  (skin {'floor grate 'walls darkmetal} (solid (box [3 22.6 19.5] [6 22.68 31.8])))
+  (map (x \ [(map (j \ skin {'all sconcemetal} (solid (box [(x - 0.03) 22.68 (19.6 + 1.5 * j)] [(x + 0.03) 23.7 (19.66 + 1.5 * j)]))) ^9)
+             (skin {'all sconcemetal} (solid (box [(x - 0.04) 23.62 19.5] [(x + 0.04) 23.7 31.8])))
+             (skin {'all sconcemetal} (solid (box [(x - 0.02) 23.12 19.5] [(x + 0.02) 23.18 31.8])))]) [3.1 5.9])
+  (beacon 1.3 0.45 (bulb [2.9 21.2 17.65] (rgb 1 0.06 0.03)))
+  (beacon 1.3 0.45 (bulb [6.1 21.2 17.65] (rgb 1 0.06 0.03)))
   (repeat 4 [0 0.15 0.5] [(skin {'all concrete} (solid (box [-3.2 9 28.6] [3.2 9.15 37])))])
   (air (box [-1.7 9.6 36.8] [1.7 12.6 37.5]))
   (decal [0 11.1 37.49] [0 0 -1] [0 1 0] 3.4 3 unndoor)
   (decal [0 15.3 36.88] [0 0 -1] [0 1 0] 3.6 4.8 unnbanner)
   (bulb [0 12.9 36.4] (rgb 1 0.85 0.6))
+  ; ..a lamp looking up from each buttress beside the doors where its slope meets its upright,
+  ; and one looking down from each side of the doors' bay half a metre over them
+  (lamp [-4.5 13.8 31.8] [0 0 -1] [0 1 0]) (lamp [4.5 13.8 31.8] [0 0 -1] [0 1 0])
+  (lamp [-3.2 14.3 35.5] [1 0 0] [0 -1 0]) (lamp [3.2 14.3 35.5] [-1 0 0] [0 -1 0])
   ; ..and at its door a memorial: wreaths on easels either side and one on the doors,
   ; bouquets heaped along the wall and up the steps' ends, and on the landing eight candles
   ; round, seven brown and lit, the purple one far left unlit
@@ -866,10 +1054,14 @@
     (herald orb-at 1.6 5.9 smiley "ring.l" ())])
   (poster [-4.7 -7.8 6.4] 0.7 1.0 ())
   ; inside the easternmost block, a room no one can reach: a window in its west face onto the
-  ; chamber beside it, a lamp, and a door in its east wall
-  (room [11.3 -9 0.3] [18.7 -5.8 3.7])
-  (window [10.95 -8.1 0.6] [11.35 -6.4 3.4] glass)
-  (lamp [13 -7.4 0.3] [0 0 1] [1 0 0])
+  ; chamber beside it, and a door in its east wall
+  (room [11.3 -9 -4] [18.7 -5.8 3.7])
+  (octwin [10.9 -8.1 -3.7] [11.4 -6.4 1.23] 0.3 glass)
+  ; ..and beside the window a screen, facing the platform's end
+  (wallscreen [11 -9 2.51] [-1 0 0])
+  ; ..two in the first alcove west of the shafts' way, on its back wall
+  (wallscreen [-9.82 -9 10] [0 0 -1])
+  (wallscreen [-8.18 -9 10] [0 0 -1])
   (door [18.7 -9 2] 1.2 2.2)
   ; the bins: on the platform against the blocks either side of the hallway and at its
   ; ends, and in each wing against the front block

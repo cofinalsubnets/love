@@ -28,9 +28,9 @@ love_noinline intptr_t nclock(void) {
   : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
- if (!g || !ok(g)) return;
- if (love_inflag)                                        // the blocking bit was ours
+ if (love_inflag)                                        // the blocking bit was ours, a scare or not
   fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(love_inflag)), love_inflag = 0;
+ if (!g || !ok(g)) return;
  if (!evenp(g->hook[hook_inport]) || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
  uintptr_t n = io_pending(g, (struct io*) g->hook[hook_inport])
              + (getcharm(love_stdin.io.ungetc_buf) != EOF ? 1 : 0);
@@ -47,9 +47,6 @@ static struct g *stdin_take(struct g *g) {
  g->hook[hook_inport] = g->sp[0], g->sp++;
  return g; }
 
-_lvm(k_lvm_quit);
-_lvm(k_lvm_getpid);
-
 // a process on inle speaks linux's calls, and only its uname names the kernel under it
 static bool on_inle(void) {
 #if defined(__moonlibc__)
@@ -61,11 +58,12 @@ static bool on_inle(void) {
 }
 
 // on inle a twirled task is a process of the shell's
-static lvm(lvm_exit) {
- if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
+love_door lvm(lvm_exit) {
  union u *t = g->tasks;
  if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
- for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
+ int rc = (int) getcharm(Sp[0]);
+ stdin_give(g), fin(g);                          // as main's end: the finalizers drain each port's residue
+ for (;;) exit(rc); }
 
 
 static void stdin_hand(struct g *g) {
@@ -186,7 +184,8 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
  if (!w) { g->next_wake_at = love_clock() + 1; return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
- if (n) len(g->sp[0]) = n;
+ // the capture cut to what was read: a NUL and a zeroed pad, as ini_str lays them
+ if (n) memset(txt(g->sp[0]) + n, 0, b2w(n + 1) * sizeof(word) - n), len(g->sp[0]) = n;
  else g->sp[0] = EmptyString;
  int status = w < 0 ? -1
             : WIFEXITED(st) ? WEXITSTATUS(st)
@@ -258,8 +257,7 @@ static lvm(lvm_getenv) {
  if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
  LvmCallp(g, 1, strof, v) }
 
-static lvm(lvm_getpid) {
-  if (__love_osv < 0) love_musttail return Ap(k_lvm_getpid, g);
+love_door lvm(lvm_getpid) {
   love_musttail return Answer(putcharm(getpid())); }
 
 static union u const
@@ -761,3 +759,7 @@ int main(int argc, char const **argv) {
   stdin_give(g);
   enum status s = fin(g);
   return s ? (int) s : rc; }
+
+// the doors under a second name, for a wasm process's table (love.h)
+love_door_user(lvm_exit)
+love_door_user(lvm_getpid)

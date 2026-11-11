@@ -1110,6 +1110,10 @@
          (raw (147 15 16 0))         ; li t6, 1: exit, never reached
          (raw (115 0 0 0))           ; ecall
 
+         (label __love_fencei)
+         (fencei)
+         (ret)
+
          ; -- the OS probe, as a64's: a7 and t6 carry one number
          (label __love_nbp20)
          (li r7 20)
@@ -1140,6 +1144,6 @@
                   (arch = 'i386)
                   '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
-                    "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp"))
+                    "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp" "__love_fencei"))
                () () () () () () ())))
 ) ; module 'moon

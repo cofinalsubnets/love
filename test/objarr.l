@@ -157,7 +157,9 @@
  (2 = peep (@(1 (1 /// 3)) + 1) 0 0)                     ; a ratio cell takes its own +
  ((4 /// 3) = peep (@(1 (1 /// 3)) + 1) 1 0)
  ("ac" = peep (@("a" 'b) + @("c" "d")) 0 0)              ; ..and a text cell its own
- (0 = (oa-tt + @(1 2 3)))                                ; shapes apart: no answer, a 0
+ (() = (oa-tt + @(1 2 3)))                               ; shapes apart: no answer, as the numeric trays
+ (() = (@("a" "b") + @("c" "d" "e"))) (() = (@(1 2) + @(1 2 3)))
+ (0 = (oa-tt = @(1 2 3)))                                ; ..but = answers 0
  ; `/` answers per cell as the scalar does, whatever sits beside it: exact where it divides
  ((100 2) / 2 = peep (@((100 2) 3) / 2) 0 0)
  (1.5 = peep (@((100 2) 3) / 2) 1 0)

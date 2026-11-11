@@ -1,6 +1,6 @@
 ; src/apps/bee.l -- the hive of sessions on this machine, and the merge queue they land through.
 ; usage, settings and protocol: doc/bee.md and bee-usage below.
-; settings are ~/.love/etc/bee.l's, a form a line; a tree's ./.bee.l may set only bee-tree-keys.
+; settings are the nest's etc/bee.l's, a form a line; a tree's ./.bee.l may set only bee-tree-keys.
 (module (bee bee-main)
 (borrow '(posix json hashes cli))
 
@@ -15,7 +15,7 @@
        love bee --mcp                                 the hive and the queue tools, as a claude code session's mcp server
        love bee --state busy|idle [--pid P]           a claude code session's hooks say its state
        love bee --lock [--heavy] [--out DIR] -- CMD ..   a command under its out/'s lock, and a heavy ticket
-       love bee --on CAP [--where K=V] [--ship DIR] (--probe | --ssh | -- CMD ..)   a command on a host that can
+       love bee --on CAP [--where K=V] [--whole] [--ship DIR | --in DIR [--push SHA | --at SHA]] (--probe | --ssh | --list | -- CMD ..)   a command on a host that can
        love bee --hosts                               the hosts this box knows
        love bee --lanes-doc | --lanes-map             the lanes a change owes: AGENTS.md's table, lanes.sh's chains
        love bee --lanes [BASE [HEAD]]                 the lanes HEAD's change owes, in order, and why
@@ -25,7 +25,7 @@
      find fsub
      digits (cite 'kore 'wg-digits)
 
-     ; ~/.love/etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
+     ; the nest's etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
      ; what cannot move the machine's locks
      bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes 'queue-home]
      bee-salt (: sf (cite 'salt 'salt-file)
@@ -662,11 +662,14 @@
                             + (two? stood ? (", standing: " + join " " stood) "")))
                ; the lanes write to this log as they run
                p (spawnio ([bee-self "bee" "--lock" "--heavy" "--out" (dir + "/out") "--" "sh" "test/gate/lanes.sh"
-                            "-d" "out/lanes-gate" "--slow"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
+                            "-d" "out/lanes-gate" "--slow" "--remote"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
                rc (? (charm? p && 0 < p) (gate-wait p) -1)
                sm (slurp-file (dir + "/out/lanes-gate/summary"))
-               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1))])) (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ())))
-               (one l) (: g (filter (\ y (<y = l)) got) [l (? (two? g) (<g 1) (elem l stood) "0" "unrun")])
+               ; a summary line: LANE exit=RC secs=S, then on=HOST where a host ran it, back=HOST where one gave it back
+               (word w k) (: f (filter (\ x (starts? x k)) w) (two? f ? (snip <f #k #<f) ()))
+               got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1)) (word w "on=") (word w "back=")]))
+                        (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ())))
+               (one l) (: g (filter (\ y (<y = l)) got) (? (two? g) <g [l (elem l stood ? "0" "unrun") () ()]))
                res (map one (q-uniq (all + stood + ls + ["test_slow"])))
                reds (filter (\ y (y 1 != "0")) res)
                ok (rc = 0 && !(two? reds))
@@ -674,7 +677,10 @@
                ; a gate's result replaces the last one's
                n0 (: k (find n " | gate " 0) (? (starts? n "gate ") "" (k < 0) n (snip n 0 k)))
                said (join "; " (map gate-said owe))
-               note ((0 < #n0 ? (n0 + " | ") "") + "gate " + snip h 0 9 + ": " + join " " (map (\ y (<y + "=" + y 1)) res)
+               backs (filter (\ y (string? (y 3))) res)
+               (lr y) (<y + "=" + y 1 + (string? (y 2) ? ("@" + y 2) ""))
+               note ((0 < #n0 ? (n0 + " | ") "") + "gate " + snip h 0 9 + ": " + join " " (map lr res)
+                     + (two? backs ? (" | back here: " + join " " (map (\ y (<y + "<" + y 3)) backs)) "")
                      + ((ok || two? reds) ? "" (" lanes.sh=" + show rc))
                      + (two? stood ? (" | stood: " + join " " stood) "")
                      + (two? reds ? (" | red: " + said) ""))
@@ -682,7 +688,7 @@
                _ (gate-say (w 1))
                _ (? ok 0 (gate-tell q r owe dir))
                _ (post-as ("gate-" + r) who ("queue_gate: row \(r) at \(h)" + (ok ? " is green: " " is red: ")
-                                             + join " " (map (\ y (<y + "=" + y 1)) res)
+                                             + join " " (map lr res)
                                              + (two? reds ? ("; " + said + ". split those rows out of the union, then queue_gate "
                                                              + "lanes \"" + join " " (map (\ y <y) reds) + "\" runs only them again")
                                                   "")
@@ -717,12 +723,12 @@
                                    + "); the log is \(dir)/out/lanes-gate/\(<o).log")))
                      (q-uniq (map (\ m (m 1)) (o 1)))))
            owe)
-     ; [[lane rc] ..] a row's note says its last gate ran
+     ; [[lane rc] ..] a row's note says its last gate ran, a lane=rc@host's host dropped
      (gate-was n)
       (: k (find n " | gate " 0)
          s (? (0 <= k) (snip n (k + 8) #n) (starts? n "gate ") (snip n 5 #n) "")
          e (find s " | " 0)
-         (map (\ w (: i (find w "=" 0) [(snip w 0 i) (snip w (i + 1) #w)]))
+         (map (\ w (: i (find w "=" 0) j (find w "@" 0) [(snip w 0 i) (snip w (i + 1) (j < 0 ? #w j))]))
               (filter (\ w (0 < find w "=" 0)) (words (e < 0 ? s (snip s 0 e))))))
      (git-tree x) (git1 ("rev-parse --verify -q " + sh-quote "\(x)^{tree}"))
      ; the base line a new queue starts from: the branch it is named for, at its sha

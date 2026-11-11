@@ -1,5 +1,5 @@
-; test/host/bee.l -- bee as a child in a scratch dir with HOME there too, so no one's
-; ~/.love/etc/bee.l speaks; a session is driven as claude code drives it, through --mcp
+; test/host/bee.l -- bee as a child in a scratch dir with HOME and the nest there too, so no
+; one's own etc/bee.l speaks; a session is driven as claude code drives it, through --mcp
 ; run: cat test/00-init.l test/host/bee.l | out/love
 (borrow 'json)
 
@@ -12,7 +12,7 @@
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
    ; a session running these passes its hive down (BEE_HIVE, BEE_NAME, BEE_AS); a world would
-   ; write its cells among the live sessions: HOME alone says here
+   ; write its cells among the live sessions: HOME and LOVE_NEST say here
    _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
@@ -37,7 +37,7 @@
        o (go "")
        _ (close q)
        [(cr-reap p) o])
-   (cr-bee d env) ("env HOME='" + d + "' " + env + " '" + cr-love + "' '" + cr-app + "'")
+   (cr-bee d env) ("env HOME='" + d + "' LOVE_NEST='" + d + "/.love' " + env + " '" + cr-love + "' '" + cr-app + "'")
    (cr-run d env args) (cr-sh d ("exec " + cr-bee d env + " " + args))
 
    ; json-rpc for --mcp: a tools/call, messages a line each, the answers by id
@@ -241,7 +241,7 @@
    _ (cr-put cr-b2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}}
                                {"jsonrpc" "2.0" "method" "notifications/initialized"}]))
    _ (cr-put cr-b2 "in2" (msgs [{"jsonrpc" "2.0" "id" 1 "method" "tools/call" "params" {"name" "inbox" "arguments" {}}}]))
-   bee ("env HOME='" + cr-b2 + "' '" + cr-love + "' '" + cr-app + "'")
+   bee ("env HOME='" + cr-b2 + "' LOVE_NEST='" + cr-b2 + "/.love' '" + cr-love + "' '" + cr-app + "'")
    _ (cr-put cr-b2 "feed" ("cat in; sleep 2; BEE_NAME=pal " + bee + " --send ringer 'hello from pal' >/dev/null; "
                            + "sleep 4; cat in2; sleep 1\n"))
    r (: pp (pipe 0) nul (openfd "/dev/null" 0)
@@ -312,7 +312,7 @@
                                (call 5 "lock_release" {"name" "out-x"})]))
    (run-with args)
     (: pp (pipe 0) nul (openfd "/dev/null" 0)
-       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
+       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' LOVE_NEST='" + cr-l2 + "/.love' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
             + cr-love + "' '" + cr-app + "' " + args)
        p (spawnio ["sh" "-c" cmd] nul >pp >pp [<pp] -1 0)
        _ (close >pp) _ (close nul)
@@ -500,7 +500,7 @@
            (cr-in nap "state busy") (cr-in idle "state idle") !(cr-in idle "state busy"))
    ; the hud on a pty, as tess
    ; no git discovery above the scratch dir: the hud would show the tree's own queues
-   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
+   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' LOVE_NEST='" + d + "/.love' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
                          + "' exec '" + cr-love + "' '" + cr-app + "'")])
    m >md
    _ (settty m 24 100)
@@ -559,7 +559,10 @@
       (lm-agents = lm-doc)
       (<lm-map = 0)
       (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
-      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress"))
+      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress test_gcstress_full")
+      (cr-in >lm-map "\nearly test_gcstress_bake\n")
+      (cr-in >lm-map "\nplace test_roster source\n")
+      !(cr-in >lm-map "\nplace test source\n"))
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
@@ -594,16 +597,35 @@
       (cr-in (cr-get (ls-d + "/out/l/summary")) "test_slow exit=0 "))
    0)
 
+; an early lane starts beside the parallel phase, not after it: test_p waits for it to start. owing
+; the stress bake, test_gcstress is not run beside it, the bake running its shards
+(: le-d (cr-root + "/lanes-early")
+   _ (hark ["mkdir" "-p" (le-d + "/test/gate") (le-d + "/out")])
+   _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (le-d + "/test/gate/")])
+   _ (hark ["ln" "-s" cr-love (le-d + "/out/love")])
+   _ (cr-put le-d "Makefile" ("test_gcstress_bake:\n\t@touch started; sleep 1\ntest_gcstress:\n\t@false\n"
+                              + "test_p:\n\t@i=0; until [ -f started ]; do i=$$((i + 1)); [ $$i -lt 40 ] || exit 1; sleep 0.5; done\n"))
+   le-r (cr-sh le-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_p test_gcstress test_gcstress_bake")
+   le-s (cr-get (le-d + "/out/l/summary"))
+   _ (test
+      (<le-r = 0) (cr-in le-s "test_p exit=0 ") (cr-in le-s "test_gcstress_bake exit=0 ")
+      (cr-in le-s "test_gcstress exit=0 ") (cr-in (cr-get (le-d + "/out/l/test_gcstress.log")) "covered by test_gcstress_bake"))
+   0)
+
 ; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
-; the other lanes. its makes take only what cook takes too (no -o)
+; the other lanes. its makes take only what cook takes too (no -o), and it writes corpus.list,
+; which test_love0 reads beside it, only when there is none
 (: gb-d (cr-root + "/gcshard")
    _ (mkdir gb-d 493)
    _ (cr-put gb-d "mk" "echo \"$*\" >> made\n")
    gb-r (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
    gb-made (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
+   _ (hark ["mkdir" "-p" (gb-d + "/out/lib")]) _ (cr-put gb-d "out/lib/corpus.list" "x\n") _ (cr-put gb-d "made" "")
+   _ (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
+   gb-kept (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
    _ (test
       (<gb-r = 1) (cr-in (gb-r 1) "FAIL gcshard: no out/love")
-      (#gb-made = 2)
+      (#gb-made = 3) (#gb-kept = 2) !(two? (filter (\ l (cr-in l "corpus.list")) gb-kept))
       !(two? (filter (\ l (cr-in l " -o ")) gb-made))
       !(two? (filter (\ l (cr-in (l + " ") " host " || cr-in (l + " ") " out/love.raw ")) gb-made)))
    0)
