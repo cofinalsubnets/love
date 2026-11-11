@@ -1,4 +1,4 @@
-// inflate.h -- RFC 1951 DEFLATE decoded, for gz.c and for uefi/slot.c, which has no love.
+// inflate.h -- RFC 1951 DEFLATE decoded, for gz.c.
 // an includer with bytes.h gets its one-load ld64, else a byte gather
 #pragma once
 #include "prefix.h"

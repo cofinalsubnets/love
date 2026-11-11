@@ -666,11 +666,12 @@ test_distboot: dist
 	@sh test/gate/distboot.sh $(ho)/love
 # test_hearts -- the arm64 defconfig Image by mooncc, booted to init under qemu; heavy, opt-in
 gate_love += test_hearts
-# test_hearts_boot -- hearts under qemu virt: chooser, helm as pid 1, three updates. heavy
+# test_hearts_boot -- hearts under qemu virt: love's boot menu starts linux, helm as pid 1. heavy
 hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)
 test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
+	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST test/gate/hearts-boot.sh
-	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
+	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l $(ko)/love-a64.elf
 # test_hearts_objtool -- x86's objtool by mooncc on elfutils' libelf, its vmlinux.o pass the host's; opt-in
 test_hearts_objtool: host
 	@echo TEST test/gate/hearts-objtool.sh
