@@ -1,7 +1,7 @@
 // src/inle/uefi/loader.c -- BOOTX64.EFI / BOOTAA64.EFI: load love.elf off our volume, fill its
 // kboot, lay the page tables, ExitBootServices, jump. mkefi.l's thunks are efi_call and efi_go.
 // integer-only: the x86 entry thunk saves only rsi/rdi, so ms_abi's xmm6..15 must stay untouched.
-// love.stay beside it (x64) keeps boot services: the kernel never returns, so the rule holds
+// love.stay beside it keeps boot services: the kernel never returns, so the rule holds
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
@@ -11,7 +11,7 @@ typedef unsigned char u8;
 extern u64 efi_call(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e);
 extern u64 efi_call6(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
 extern void efi_go(u64 pml4, u64 entry);
-extern void efi_stay(u64 pml4, u64 entry);
+extern void efi_stay(u64 pml4, u64 entry, u64 tcr);
 extern u8 efi_back[];
 
 #define HHDM 0xffff800000000000ull
@@ -68,27 +68,9 @@ static void kcmdline(void *root, struct k_boot *kb) {
   kb->cmdline[i] = (char) cbuf[i];                // stops at the trailing newline
  kb->cmdline[i] = 0; }
 
-#if !defined(__aarch64__)
-static u64 rdtsc(void) {
- u32 lo, hi;
- asm volatile ("rdtsc" : "=a"(lo), "=d"(hi));
- return (u64) hi << 32 | lo; }
-
-static u64 rdcr3(void) {
- u64 v;
- asm volatile ("mov %%cr3, %0" : "=r"(v));
- return v; }
-
-// love.stay beside love.elf: the kernel runs as the firmware's guest, boot services alive.
-// the firmware keeps its interrupts, tables and devices, and the low half of the map is its
-// own; the heap is one allocation, most of the largest free run below 4G
-static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
+// love.stay's heap: one allocation, most of the largest free run below 4G (both hhdms end there)
+static u64 stayheap(void *handle, struct k_boot *kb) {
  efi_call(bs[32], 0, 0, 0, 0, 0);                      // the boot manager's watchdog off
- u64 t = rdtsc();
- efi_call(bs[31], 20000, 0, 0, 0, 0);                  // Stall 20 ms
- kb->tsc_khz = (rdtsc() - t) / 20;
- u64 *fw = (u64 *) (rdcr3() & ~0xfffull);
- for (u64 i = 0; i < 256; i++) pt[i] = fw[i];
  u64 msz = sizeof mmap, key = 0, dsz = 0, dvr = 0, best = 0, bestn = 0;
  if (efi_call(bs[7], (u64) &msz, (u64) mmap, (u64) &key, (u64) &dsz, (u64) &dvr))
   return die("GetMemoryMap failed");
@@ -102,8 +84,57 @@ static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
  if (efi_call(bs[5], 2, 2, n, (u64) &best, 0)) return die("no pages for the heap");
  kb->ram_n = 1, kb->ram[0].base = best, kb->ram[0].len = n * 4096;
  kb->efi_st = sys, kb->efi_image = handle, kb->efi_call = efi_call6, kb->efi_back = efi_back;
+ return 0; }
+
+#if !defined(__aarch64__)
+static u64 rdtsc(void) {
+ u32 lo, hi;
+ asm volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+ return (u64) hi << 32 | lo; }
+
+static u64 rdcr3(void) {
+ u64 v;
+ asm volatile ("mov %%cr3, %0" : "=r"(v));
+ return v; }
+
+// love.stay beside love.elf: the kernel runs as the firmware's guest, boot services alive.
+// the firmware keeps its interrupts, tables and devices, and the low half of the map is its own
+static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
+ u64 t = rdtsc();
+ efi_call(bs[31], 20000, 0, 0, 0, 0);                  // Stall 20 ms
+ kb->tsc_khz = (rdtsc() - t) / 20;
+ u64 *fw = (u64 *) (rdcr3() & ~0xfffull);
+ for (u64 i = 0; i < 256; i++) pt[i] = fw[i];
+ if (stayheap(handle, kb)) return 1;
  kb->tsc0 = rdtsc();
- efi_stay((u64) pt, entry);
+ efi_stay((u64) pt, entry, 0);
+ return 1; }
+#else
+static u64 rdel(void)   { u64 v; asm volatile ("mrs %0, currentel" : "=r"(v)); return v >> 2 & 3; }
+static u64 rdmair(void) { u64 v; asm volatile ("mrs %0, mair_el1" : "=r"(v)); return v; }
+static u64 rdtcr(void)  { u64 v; asm volatile ("mrs %0, tcr_el1" : "=r"(v)); return v; }
+static u64 rdfrq(void)  { u64 v; asm volatile ("mrs %0, cntfrq_el0" : "=r"(v)); return v; }
+static u64 rdpct(void)  { u64 v; asm volatile ("mrs %0, cntpct_el0" : "=r"(v)); return v; }
+
+// the firmware's MAIR slot holding attribute a, else 8
+static u64 mslot(u64 mair, u64 a) {
+ for (u64 i = 0; i < 8; i++) if ((mair >> 8 * i & 0xff) == a) return i;
+ return 8; }
+
+// love.stay on a64: TTBR0, VBAR and MAIR stay the firmware's, so its interrupts land in its
+// own vectors; only the hhdm is ours, under TTBR1, its blocks laid in the firmware's attributes
+static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
+ if (rdel() != 1) return die("love.stay wants the firmware at EL1");
+ u64 mair = rdmair(), wb = mslot(mair, 0xff), dev = mslot(mair, 0);
+ if (dev == 8) dev = mslot(mair, 4);
+ if (wb == 8 || dev == 8) return die("the firmware's MAIR has no write-back or device slot");
+ for (u64 i = 0; i < 512; i++) pt[4 * 512 + i] = (i << 21) | 0x401 | dev << 2;
+ for (u64 i = 1; i < 4; i++) pt[3 * 512 + i] = (i << 30) | 0x701 | wb << 2;
+ if (stayheap(handle, kb)) return 1;
+ kb->tsc_khz = rdfrq() / 1000;
+ kb->tsc0 = rdpct();
+ // TCR's TTBR1 half: T1SZ 16, walks on, WB inner-shareable, 4K granule; TTBR0's untouched
+ efi_stay((u64) &pt[512], entry, (rdtcr() & ~0xffff0000ull) | 0xb5100000ull);
  return 1; }
 #endif
 
@@ -161,10 +192,11 @@ u64 efi_main(void *handle, void *st) {
  // the window is laid in 2M pages
  lo &= ~0x1fffffull;
  u64 npg = (hi - lo + 4095) / 4096, span = lo, kbase = lo;
- // at the link address if firmware parts with it, else anywhere 2M-aligned
- if (efi_call(bs[5], 2, 2, npg, (u64) &span, 0)) {
+ // at the link address if firmware parts with it, else anywhere 2M-aligned. LoaderCode: a64's
+ // guest runs it through the firmware's map, which takes LoaderData no-execute
+ if (efi_call(bs[5], 2, 1, npg, (u64) &span, 0)) {
   span = 0;
-  if (efi_call(bs[5], 0, 2, npg + 512, (u64) &span, 0))   // + 2M of alignment slack
+  if (efi_call(bs[5], 0, 1, npg + 512, (u64) &span, 0))   // + 2M of alignment slack
    return die("no pages for the kernel");
   kbase = (span + 0x1fffff) & ~0x1fffffull;
   // relocating shadows virtual lo..hi, where efi_go still fetches code and uses the stack
@@ -260,12 +292,14 @@ u64 efi_main(void *handle, void *st) {
  pt[511] = (u64) &pt[512] | 3;
 #endif
 
-#if !defined(__aarch64__)
+ // a64's guest runs where it was linked, the firmware's identity under it
  void *sf = 0;
  static u16 sname[10] = {'l','o','v','e','.','s','t','a','y',0};
- if (!efi_call(((void**) root)[1], (u64) root, (u64) &sf, (u64) sname, 1, 0))
-  return stay(handle, kb, entry);
+ if (!efi_call(((void**) root)[1], (u64) root, (u64) &sf, (u64) sname, 1, 0)) {
+#if defined(__aarch64__)
+  if (kbase != lo) return die("love.stay wants the kernel at its link address");
 #endif
+  return stay(handle, kb, entry); }
 
  // kboot.ram: conventional (7) only, so the heap never eats this stack, the tables or the kernel
  u64 msz = sizeof mmap, key = 0, dsz = 0, dvr = 0;
