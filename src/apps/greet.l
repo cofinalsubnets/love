@@ -1,17 +1,19 @@
-; greet -- a terminal's greeter: a login box over a lore saver, then the session chosen,
-; started as login starts a shell (utmp, the tty, setids, the environment, exec).
+; greet -- a terminal's greeter: a login box over a lore saver, then the session chosen as a
+; child, started as login starts a shell (utmp, the tty, setids, the environment, exec); when
+; it ends, its logout recorded and the box again.
 ;   love greet [-r ROOT] [-s SAVER] [TTY]   ROOT for /etc and /var, SAVER the one behind (life)
 ; tab or up and down move between the fields, left and right turn the session, enter goes on
-; or tries. a failure waits as login's do; the greeter itself never ends but by its session
+; or tries. a failure waits as login's do; the greeter ends only at the end of its input
 (module (greet greet-main greet-usage greet-new greet-box greet-key greet-sessions)
 (borrow '(posix cli login saver))
 (:
  greet-usage "usage: love greet [-r ROOT] [-s SAVER] [TTY]"
- ; a session: a name, and () for the user's shell or an argv to exec. x opens the greeter's
- ; own vt, as startx does without logind: tty0, where it would look for one, is root's
+ ; a session: a name, () for the user's shell or an argv to exec, and where under home its
+ ; output goes, () the terminal. x opens the greeter's own vt, as startx does without
+ ; logind: tty0, where it would look for one, is root's
  (greet-sessions love line)
   (: vt (line @ ("tty" + (n && 0 < #n)) ["--" ("vt" + n) "-keeptty"] _ ())
-     [["shell" ()] ["lux" (["xinit" love "lux"] + vt)]])
+     [["shell" () ()] ["lux" (["xinit" love "lux"] + vt) ".xsession-errors"]])
  ; focus 0 the name, 1 the password, 2 the session
  (greet-new _) {'user "" 'pass "" 'focus 0 'sess 0 'msg "" 'fails 0 'hold 0}
  box-fg 252  box-bg 236  hi 230  warn 210
@@ -50,8 +52,12 @@
  (gr-host _) (uname 0 @ u (two? u && 1 < #u ? (u 1) "localhost"))
  (gr-try g root line ss)
   (: w (login-auth root (g 'user) (g 'pass))
-     (? (two? w) (: argv (ss (g 'sess % #ss) 1)
-                    (ttygive ['hide], login-start root w line argv, udie 1 "greet: the session would not start"))
+     (? (two? w) (: se (ss (g 'sess % #ss))
+                    (ttygive ['hide], say out "\e[2J\e[H", flush out,
+                     login-session root w line (se 1) (se 2),
+                     line = "" ? 0 (openfd ("/dev/" + line) 6 @ fd (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, close fd) 0)),
+                     pins g 'user "" 'pass "" 'focus 0 'msg "" 'fails 0 'hold 0,
+                     ttytake ['hide], 'back))
         (: n (g 'fails)
            (pins g 'pass "" 'focus 1 'fails (min 3 (n + 1)) 'msg "login incorrect" 'hold (clock 0 + (2000 << n))))))
  (gr-run root nm line)
@@ -64,9 +70,10 @@
          _ (s2 'next <= now ? (pin s2 'next (now + per), say out (saver-over s2 (now - s2 't0) (put \ greet-box g host names <z (z 1) put)), flush out) 0)
          ; the keys waiting, up to the end of input: a terminal gone stays readable
          keys (: (take acc) (cue? 0 ? (edkey in @ k (k = -7 ? (rev (k . acc)) (take (k . acc)))) (rev acc)) (take ()))
-         _ (each keys (k \ (? (k = -7) (uleave 0) (greet-key g k #ss = 'try) (gr-try g root line ss) 0)))
+         ; a session ended takes the screen: the saver starts over
+         back (foldl (a \ k \ (? (k = -7) (uleave 0) (greet-key g k #ss = 'try) (gr-try g root line ss) a)) () keys)
          _ (two? keys ? 0 (rest (max 5 (s2 'next - clock 0))))
-         (go s2))
+         (go (back == 'back ? (fresh (ttysize 1 1) (clock 0)) s2)))
      (ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
  (greet-main as)
   (: (opt as root nm tty) (? (atom? as) [root nm tty]

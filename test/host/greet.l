@@ -23,6 +23,6 @@
            ("| session   < lux >" = snip (text 5) 0 19)
            (cell 0 = 124) (cell 2 = 236)                         ; "|" on the box's ground
            (nil? (greet-key h 107 2)) (h 'user = "")
-           ((greet-sessions "/bin/love" "tty8") 1 1 = ["xinit" "/bin/love" "lux" "--" "vt8" "-keeptty"])
-           ((greet-sessions "/bin/love" "") 1 1 = ["xinit" "/bin/love" "lux"]))             ; a failure's wait takes no key
+           ((greet-sessions "/bin/love" "tty8") 1 = ["lux" ["xinit" "/bin/love" "lux" "--" "vt8" "-keeptty"] ".xsession-errors"])
+           ((greet-sessions "/bin/love" "") 1 1 = ["xinit" "/bin/love" "lux"]) ((greet-sessions "/bin/love" "") 0 = ["shell" () ()]))             ; a failure's wait takes no key
    (puts "greet: ok\n"))

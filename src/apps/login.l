@@ -4,7 +4,7 @@
 ; it runs as root. the password is never in argv, a log or the environment; an unknown name
 ; costs a hash as a known one does; each failure waits longer, and five end the session
 (module (login login-main login-usage login-who login-groups login-auth login-env login-utrec
-         login-utmp login-id login-start)
+         login-utmp login-id login-start login-session)
 (borrow '(posix cli crypt bytes))
 (:
  login-usage "usage: love login [-r ROOT] [TTY]"
@@ -54,9 +54,9 @@
      (go i) (? (#old < i + 384) (old + rec) (snip old (i + 40) (i + 44) = id) (snip old 0 i + rec + snip old (i + 384) #old)
                (go (i + 384)))
      (go 0))
- (lg-record root line user pid)
-  (: rec (login-utrec 7 pid line user "" (clock 0 // 1000))
-     ut (root + "/run/utmp")
+ (lg-record root line user pid) (lg-write root (login-utrec 7 pid line user "" (clock 0 // 1000)))
+ (lg-write root rec)
+  (: ut (root + "/run/utmp")
      old (uread ut @ r (two? r ? <>r ""))
      _ (uwrite ut (login-utmp old rec))
      q (open (root + "/var/log/wtmp") "a")
@@ -69,25 +69,38 @@
      _ (echo ? 0 (ptyecho in 1, say out "\n", flush out))
      (? !(string? l) () (0 < #l && l (#l - 1) = 10) (snip l 0 (#l - 1)) l))
  (lg-host _) (uname 0 @ u (two? u && 1 < #u ? (u 1) "localhost"))
- ; the session: the terminal the user's, the ids dropped, then argv exec'd, or for () the
- ; user's shell as a login shell
- (login-start root w line argv)
+ ; the session: the terminal the user's and its controlling one, the ids dropped, then argv
+ ; exec'd, or for () the user's shell as a login shell; log, a path under home or (), takes
+ ; its output
+ (login-start root w line argv log)
   (: tty (line = "" ? "" ("/dev/" + line))
      _ (lg-record root line (w 0) (getpid 0))
      _ (tty = "" ? 0 (chown tty (w 1) (w 2), chmod tty 400))
+     _ (setsid 1)
      e (setids (w 1) (w 2) (login-groups root (w 0) (w 2)))
      _ (nom? e ? (udie 1 ("login: cannot become " + w 0 + ": " + show e)) 0)
      _ (nom? (chdir (w 4)) ? (chdir "/") 0)
      _ (each (login-env w (getenv "TERM" @ t (string? t ? t "linux"))) (kv \ setenv (kv 0) (kv 1)))
+     _ (string? log ? (openfd (w 4 + "/" + log) 1 @ fd (charm? fd ? (dup2 fd 1, dup2 fd 2, close fd) 0)) 0)
      base (rev (split "/" (w 5)) @ (b . _) b _ "sh")
      (exec (two? argv ? argv [((w 5) . ("-" + base))])))
+ ; the session as a child, waited for: then its logout recorded and the terminal root's
+ ; again. its end hangs the terminal up, so the caller opens it anew. answers the exit code
+ (login-session root w line argv log)
+  (: p (fork 0)
+     (? (0 = p) (login-start root w line argv log)
+        !(0 < p) p
+        (: c (wait p)
+           _ (lg-write root (login-utrec 8 p line "" "" (clock 0 // 1000)))
+           _ (line = "" ? 0 (chown ("/dev/" + line) 0 0, chmod ("/dev/" + line) 384))
+           c)))
  (lg-tries root line n)
   (? (n = 5) (uleave 1)
      (: name (lg-ask (lg-host 0 + " login: ") 1)
         _ (string? name ? 0 (uleave 0))
         pw (lg-ask "Password: " 0)
         w (0 < #name && string? pw ? (login-auth root name pw) ())
-        (two? w ? (login-start root w line ())
+        (two? w ? (login-start root w line () ())
            (: _ (rest (2000 << n)) _ (say out "Login incorrect\n\n", flush out) (lg-tries root line (n + 1))))))
  ; a tty argument becomes fds 0 1 2 and the controlling terminal
  (lg-take tty) (: fd (openfd tty 6)
