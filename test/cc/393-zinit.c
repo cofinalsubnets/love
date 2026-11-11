@@ -1,6 +1,6 @@
 /* a large aggregate zeroed by its braces, over a stack dirtied first: the loop's turns, the
  * words past the last four and the bytes past the last word, under a fill that lands on
- * each. 0 is agreement */
+ * each, a zero it gives, and a zero laid over a value it gave. 0 is agreement */
 void *memset(void *, int, unsigned long);
 
 struct Big { char b[1001]; int x; short t[37]; };
@@ -31,8 +31,15 @@ __attribute__((noinline)) static int words(void) {
   for (int i = 0; i < 18; i++) bad |= w[i] != 0;
   return bad; }
 
+__attribute__((noinline)) static int zeros(void) {
+  int q[40] = { 0, 1, 0, 2, [7] = 9, [7] = 0, [9] = 0, [9] = 4 };
+  int bad = q[1] != 1 || q[3] != 2 || q[7] != 0 || q[9] != 4;
+  for (int i = 0; i < 40; i++) bad |= (i != 1 && i != 3 && i != 9) && q[i] != 0;
+  return bad; }
+
 int main(void) {
   dirty(); int r = big();
   dirty(); r |= arr() << 3;
   dirty(); r |= words() << 5;
+  dirty(); r |= zeros() << 6;
   return r; }
