@@ -1,7 +1,7 @@
 ; greet -- a terminal's greeter: a login box over a lore saver, then the session chosen as a
 ; child, started as login starts a shell (utmp, the tty, setids, the environment, exec); when
 ; it ends, its logout recorded and the box again.
-;   love greet [-r ROOT] [-s SAVER] [TTY]   ROOT for /etc and /var, SAVER the one behind (life)
+;   love greet [-r ROOT] [-s SAVER] [TTY]   ROOT for /etc and /var, SAVER the one behind (pom)
 ; tab or up and down move between the fields, left and right turn the session, enter goes on
 ; or tries. a failure waits as login's do; the greeter ends only at the end of its input
 (module (greet greet-main greet-usage greet-new greet-box greet-key greet-sessions)
@@ -88,7 +88,7 @@
                              (<as = "-s" && two? >as) (opt >>as root <>as tty)
                              (two? >as || (0 < #<as && <as 0 = 45)) (udie 2 greet-usage)
                              (opt >as root nm <as))
-     o (opt as "" "life" "")
+     o (opt as "" "pom" "")
      _ (elem (o 1) saver-names ? 0 (udie 2 ("greet: no saver " + o 1)))
      tty (o 2 = "" || o 2 0 = 47 ? (o 2) ("/dev/" + o 2))
      _ (tty = "" ? 0 (: fd (openfd tty 6) (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, setsid 1) (udie 1 ("greet: " + tty + ": " + show fd)))))
