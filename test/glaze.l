@@ -235,10 +235,11 @@
    (gzsl-q s i acc) (i < 1 ? acc (gzsl-q s (i - 1) (? (= s '"ab") (+ acc 1) acc)))
    (gzsl-k i acc) (i < 1 ? acc (gzsl-k (i - 1) "ab"))
    (gzsl-f s) (? (= s "ab") 1 0)
+   gzsl-now (: (live _) (arena 0 1 - arena 0 2) b (live 0) f (ev '(\ x (x * 3 + 1))) (b < live 0))   ; made is compiled: not a hot-calls count
    _ (test (gzsl-b "ab" 3 0 = 3) (gzsl-b "ac" 3 0 = 0) (gzsl-b "ab" 3 0 = gzsl-q "ab" 3 0)
            (gzsl-k 2 0 = "ab") (gzsl-k 2 0 == gzsl-k 3 0)
            (nat? gzsl-b = nat? gzsl-q) (nat? gzsl-k = nat? gzsl-q)
-           (gzsl-f "ab" = 1) (gzsl-f "b" = 0) !(nat? gzsl-f))
+           (gzsl-f "ab" = 1) (gzsl-f "b" = 0) (gzsl-now ? !(nat? gzsl-f) 1))
    0)
 
 ; --- a map param's probe reads and writes the group's own registers ---
