@@ -78,8 +78,8 @@
          keys (: (take acc) (cue? 0 ? (edkey in @ k (k = -7 ? (rev (k . acc)) (take (k . acc)))) (rev acc)) (take ()))
          ; a session ended takes the screen: the saver starts over
          back (foldl (a \ k \ (? (k = -7) (uleave 0) (greet-key g k #ss = 'try) (gr-try g root line ss) a)) () keys)
-         ; short rests, so a key waits a few ms and not a frame
-         _ (two? keys ? (pin s2 'dirty 1) (rest (max 1 (min 10 (s2 'next - clock 0)))))
+         ; until the next step, or a key
+         _ (two? keys ? (pin s2 'dirty 1) (heed 0 (max 1 (s2 'next - clock 0))))
          (go (back == 'back ? (fresh (ttysize 1 1) (clock 0)) s2)))
      (ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
  (greet-main as)
