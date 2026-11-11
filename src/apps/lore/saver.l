@@ -4,7 +4,7 @@
 ; frames are pure in (rows cols t phase); saver-frame and saver-canvas are gated by test/host/saver.l.
 ;   pom matrix life slop court grass99, and cycle: each in turn, every five minutes
 (module (saver saver-names saver-frame saver-canvas saver-cell saver-moon-lit?
-         saver-main saver-usage)
+         saver-main saver-usage saver-make saver-over)
 (borrow '(posix cal cli))
 (:
  drain-keys (cite 'rove 'drain-keys)
@@ -256,10 +256,13 @@
   (: d (savers (base nm)) nw (d 'new)
      {'nm nm 'd d 'r r 'c c 'st (nw r c (seed % 65536) p (style nm)) 'cv (cv-new r c) 'pv (cv-new r c) 'all 1 't0 0 'next 0})
  ; the frame at t ms into the saver
- (saver-show s t)
+ (saver-show s t) (saver-over s t (_ \ 0))
+ ; ..with over laid on it before it is painted: over takes cv-text's (y x text fg bg)
+ (saver-over s t over)
   (: cv (s 'cv) dr ((s 'd) 'draw) all (s 'all)
      _ (cv-wipe cv)
      _ (dr (s 'st) cv t)
+     _ (over (cv-text cv))
      _ (pin s 'all 0)
      (cv-paint cv (s 'pv) all))
  ; a frame now, the next one a period on; a frame late is skipped, not caught up
