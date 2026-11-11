@@ -76,4 +76,14 @@
              !(lay c 0 1 1 [1 2])                     ; not a tray
              !(see c 0 4 4 3)                         ; three words do not fit in eight bytes
              !(see c 0 4 4 neg))),                    ; nor a negative count
+
+    ; pinf lays 4-byte floats: 1.5 is 0x3fc00000, -2.25 0xc0100000, an int 2 as 2.0
+    (: layf (bufv 'pinf) c (cask 16)
+       _ (layf c 0 8 (iota 2 * -3.75 + 1.5))          ; 1.5 -2.25, a word apart
+       _ (layf c 4 8 (iota 2 + 2))                    ; 2 3, between them
+       g (see c 0 4 4 4)
+       (test (1069547520 = peep g 0 0) (1073741824 = peep g 1 0)
+             (3222274048 = peep g 2 0) (1077936128 = peep g 3 0)
+             (c = layf c 16 4 (iota 0))
+             !(layf c 12 4 (iota 2)) !(layf c 0 2 (iota 2)) !(layf c 0 4 [1 2]) !(layf "abcd" 0 4 (iota 1)))),
     ()))

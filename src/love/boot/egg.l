@@ -21,7 +21,7 @@
    _ (each n p)
    _ (pin M 'guts F)
    ; what a run may still cite: none reaches a word by address or writes a cell it did not lay
-   kept '(peepw pinw peepv pinv threadir)
+   kept '(peepw pinw peepv pinv pinf threadir)
    ; a book name goes only while it is still the one moved: a later file may bind its own
    (off k) (: v (peep F k miss) (? (== v miss) 0 (== v (peep book k miss)) (pull book k k) 0))
    (mop _) (: _ (pull book 'latemop 0)

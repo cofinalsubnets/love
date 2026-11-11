@@ -3,6 +3,7 @@
 //   (pinw c i v)       -> lay v zero-extended into 8-byte slot i -> c | () misuse
 //   (peepv c o w s n)  -> n elements of w bytes, stride s from byte o, as a Z tray
 //   (pinv c o w s v)   -> the elements of tray v laid that way -> c | () misuse
+//   (pinf c o s v)     -> the elements of tray v as 4-byte floats, stride s from byte o -> c | () misuse
 // a stride past the width interleaves (harp/play.l's channels). little-endian, unsigned; a
 // float element truncates toward zero, as `int` does. flat.l binds getw/putw to the word pair
 #include "love.h"
@@ -63,6 +64,22 @@ static lvm(lvm_pinv) {
  Sp[4] = out;
  love_musttail return Nextp(1, 4); }
 
+static lvm(lvm_pinf) {
+ word c = Sp[0], out = ZeroPoint;
+ if (caskp(c) && charmp(Sp[1]) && charmp(Sp[2]) && numtray(Sp[3])) {
+  intptr_t o = getcharm(Sp[1]), s = getcharm(Sp[2]);
+  struct tray *v = tray(Sp[3]);
+  uintptr_t n = tray_nelem(v);
+  struct str *st = cask(c)->str;
+  if (slot_fit(st->len, o, 4, s, n)) {
+   unsigned char *p = (unsigned char*) st->bytes + o;
+   for (uintptr_t i = 0; i < n; i++, p += s) {
+    float x = (float) tray_get_flo(v, i);
+    memcpy(p, &x, 4); }
+   out = c; } }
+ Sp[3] = out;
+ love_musttail return Nextp(1, 3); }
+
 static lvm(lvm_peepv) {
  word c = Sp[0];
  if (!caskp(c) || !charmp(Sp[1]) || !charmp(Sp[2])
@@ -99,3 +116,4 @@ LvDef("peepw", peepw, 2, "guts");
 LvDef("pinw", pinw, 3, "guts");
 LvDef("peepv", peepv, 5, "guts");
 LvDef("pinv", pinv, 5, "guts");
+LvDef("pinf", pinf, 4, "guts");
