@@ -260,7 +260,7 @@
                 (peep synth-ss3 c 0))
  (synth-key p) (see p @ c
    (? (c != 27) c
-      !(rest 1, cue? p) 27
+      !(heed p 1) 27
       (see p @ c2
          (? (c2 = 79) (see p @ f (peep synth-ss3 f 0))
             (c2 = 91) (see p @ c3 (c3 = 91 ? (see p @ f (peep synth-lnx f 0)) (tcsi p c3 "")))

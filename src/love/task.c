@@ -10,6 +10,9 @@ op11(lvm_worn, (intptr_t) *task_io(g))
 // checks it before it jumps: a child inherits its parent's help, continuation and all
 op11(lvm_myself, (intptr_t) g->tasks[2].x)
 
+// a park's poll bits: negated events mean the fd or the clock, whichever comes first, wakes it
+static love_inline int wev(int e) { return e < 0 ? -e : e; }
+
 // lvm_yield_sw_mono can't call wait_fds directly with a stack record
 static love_noinline void wait_one(int fd, int events, uintptr_t ms) {
   struct wait_fd w = { .fd = fd, .events = (short) events };
@@ -26,8 +29,10 @@ static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
  g->next_wait_fd = -1;
  g->next_wait_events = wait_in;
  g->yield_ctr = 0;
- if (my_wake) for (uintptr_t now; my_wake > (now = love_clock());)
-  my_wait_fd >= 0 ? wait_one(my_wait_fd, my_events, my_wake - now) : love_sleep(my_wake - now);
+ if (my_wake) for (uintptr_t now; my_wake > (now = love_clock());) {
+  if (my_wait_fd < 0) love_sleep(my_wake - now);
+  else if (my_events < 0 && ready(my_wait_fd, -my_events)) break;
+  else wait_one(my_wait_fd, wev(my_events), my_wake - now); }
  else if (my_wait_fd >= 0)
   while (!ready(my_wait_fd, my_events)) wait_one(my_wait_fd, my_events, 0);
  love_musttail return Continue(); }
@@ -88,14 +93,17 @@ static union u *find_runnable(struct g *g, union u *head, uintptr_t now, int me_
    if (n[1].m->ap == lvm_wait && task_live(g, head, getcharm(n[8].x), me_live)) continue;
    int wf = (int) getcharm(n[4].x);
    if (wf < 0 || wait_buffered(g, n[1].m->ap, n[8].x, wf)
-       || ready(wf, (int) getcharm(n[5].x))) return n; }
+       || ready(wf, wev((int) getcharm(n[5].x)))) return n; }
  return NULL; }
 
 // deadline come, port holding bytes, or fd ready; with ask clear, only syscall-free terms
 static love_inline int parked_ready(struct g *g, union u *n, uintptr_t now,
                                   struct wait_fd const *fds, int nfds, int *cur, int ask) {
- if (n[1].m->ap == lvm_task_exit || (uintptr_t) getcharm(n[3].x) > now) return 0;
  int wf = (int) getcharm(n[4].x), ev = (int) getcharm(n[5].x);
+ if (n[1].m->ap == lvm_task_exit || held(n)) return 0;
+ if ((uintptr_t) getcharm(n[3].x) > now) { if (ev >= 0) return 0; }
+ else if (ev < 0) return 1;                                    // the clock came first
+ ev = wev(ev);
  if (wf < 0 || wait_buffered(g, n[1].m->ap, n[8].x, wf)) return 1;
  int pr = polled_ready(fds, nfds, cur, wf, ev);
  return pr < 0 ? (ask && ready(wf, ev)) : pr; }
@@ -112,6 +120,7 @@ static love_noinline int wake_parked(struct g *g, uintptr_t now,
   union u *t = prev->m;
   if (!parked_ready(g, t, now, fds, nfds, &cur, ask)) { prev = t; continue; }
   if (!tail) for (tail = g->tasks; tail->m != g->tasks; tail = tail->m);   // once, on the first wake
+  if (getcharm(t[5].x) < 0) t[3].x = putcharm(0), t[5].x = putcharm(wait_in);   // either woke it: the run ring waits on neither
   parked_drop(g, prev, t);
   tail = run_splice_at(g, tail, t);
   woke++; }
@@ -128,7 +137,7 @@ static love_noinline int poll_parked(struct g *g, uintptr_t now) {
  int k = 0;
  union u *q = g->parked;
  do { int wf = (int) getcharm(q[4].x);
-      if (wf >= 0) fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
+      if (wf >= 0) fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) wev((int) getcharm(q[5].x));
       q = q->m; } while (q != g->parked);
  ready_fds(fds, k);
  return wake_parked(g, now, fds, k, 0); }
@@ -166,19 +175,20 @@ static love_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int 
    int k = 0;
    // revents zeroed here alone: the block is raw heap gap
    if (my_wait_fd >= 0)
-    fds[k].fd = my_wait_fd, fds[k].revents = 0, fds[k++].events = (short) my_events;
+    fds[k].fd = my_wait_fd, fds[k].revents = 0, fds[k++].events = (short) wev(my_events);
    if (g->parked) {
     union u *q = g->parked;
     do { int wf = (int) getcharm(q[4].x);
          if (wf >= 0 && !held(q))
-          fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
+          fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) wev((int) getcharm(q[5].x));
          q = q->m; } while (q != g->parked); }
    wait_fds(fds, k, ticks);
    for (int i = 0; i < k; i++) if (fds[i].revents) { pol = fds, npol = k; break; } }
   now = love_clock(); }
  if (my_wait_fd >= 0) {
-  int cur = 0, pr = polled_ready(pol, npol, &cur, my_wait_fd, my_events);
-  if (pr < 0 ? ready(my_wait_fd, my_events) : pr) return NULL; }
+  int cur = 0, pr = polled_ready(pol, npol, &cur, my_wait_fd, wev(my_events));
+  if (pr < 0 ? ready(my_wait_fd, wev(my_events)) : pr) return NULL;
+  if (my_events < 0 && my_wake <= now) return NULL; }
  wake_parked(g, now, pol, npol, 1);   // the wait answered the whole parked ring: collect it
  return find_runnable(g, g->tasks, now, me_live); }
 

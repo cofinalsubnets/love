@@ -1532,7 +1532,7 @@
              ; the lead paced by the frame gap: rove's pacer, asked each feed
              pace (pacer ())
              (feed! _) (horn-lag hn < song-lead-of (pace! pace) ? (song-feed sng (song-vol g)) (rest 5))
-             (idle _) (sng ? (feed! ()) (rest 30), flick! ())
+             (idle _) (sng ? (feed! ()) (heed 0 30), flick! ())
              (hold ms) (: t (clock 0) (go _) (clock 0 - t < ms ? (idle (), go ())) (go ()))
              ; ..but escape at a standing sign takes the sign down, and nothing else:
              ; a page of the book or her tree is left, not the tower
