@@ -63,6 +63,11 @@
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 2] ['li 'n2 4] ['imul 'n3 'n1 'n2] ['add 'n4 'n0 'n3] ['ld 'n5 'n4 0]
                     ['mov 'r0 'n5] ['ret]])
          = lv [['mov 'n0 'r6] ['ld 'n5 'n0 8] ['mov 'r0 'n5] ['ret]])
+      ; a frame slot read again is a copy of the vreg still holding it, when that vreg is read again
+      ; anyway; a dead holder or a label keeps the load, and forms past the slots stay as they are
+      (nmsf g (lv [['li 'n0 1] ['st 'r4 -8 'n0] ['ld 'n1 'r4 -8] ['add 'n2 'n1 'n0] ['ld 'n3 'r4 -8] ['label 'L] ['ld 'n4 'r4 -8] ['ret]])
+         = lv [['li 'n0 1] ['st 'r4 -8 'n0] ['mov 'n1 'n0] ['add 'n2 'n1 'n0] ['ld 'n3 'r4 -8] ['label 'L] ['ld 'n4 'r4 -8] ['ret]])
+      (nmsf g '((li n0 1) (mov r0 n0) (ret) (li r0 0) (ret)) = '((li n0 1) (mov r0 n0) (ret) (li r0 0) (ret)))
       ; a literal under not is one literal; an unsigned divide by 16 shifts its own copy, not its source
       (nmlit (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 16] ['udiv 'n2 'n0 'n1] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
