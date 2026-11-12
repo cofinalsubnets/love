@@ -60,6 +60,9 @@
 #if defined(LvHaveMount)
 #include <sys/mount.h>      // mount(2), in linux's argument shape
 #include <sys/reboot.h>     // reboot(2), linux's commands
+#if !defined(__moonlibc__)
+#include <sys/syscall.h>    // SYS_reboot, for restart2's argument
+#endif
 #endif
 #if defined(LvHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
@@ -669,11 +672,18 @@ static lvm(lvm_umount) {
   char const *t = str_c(Sp[0]);
   Sp[0] = !t ? badarg(g) : (umount(t) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
-// (reboot how): 0 restarts, 1 powers off, 2 halts; the caller syncs first
+#if defined(__moonlibc__)
+static int restart2(char const *a) { return reboot2(a); }
+#else
+static int restart2(char const *a) { return (int) syscall(SYS_reboot, 0xfee1dead, 672274793, 0xa1b2c3d4u, a); }
+#endif
+// (reboot how): 0 restarts, 1 powers off, 2 halts, a text restarts with it as linux's
+// argument (a pi's "0 tryboot" trial); the caller syncs first
 static lvm(lvm_reboot) {
+  char const *a = str_c(Sp[0]);
   intptr_t h = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
   int cmd = h == 0 ? (int) RB_AUTOBOOT : h == 1 ? (int) RB_POWER_OFF : h == 2 ? (int) RB_HALT_SYSTEM : 0;
-  Sp[0] = !cmd ? badarg(g) : (reboot(cmd), love_err(g, errno));
+  Sp[0] = a ? (restart2(a), love_err(g, errno)) : !cmd ? badarg(g) : (reboot(cmd), love_err(g, errno));
   love_musttail return Next(1); }
 #else
 static lvm(lvm_reboot) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }

@@ -29,6 +29,11 @@
 ;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
 ;                named in .hearts/kcc.log), love's ld (but the arm32 compat vdso's, lld's) and love's ar
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
+; $HEARTS_CONFIG a config fragment laid over defconfig as merge_config.sh lays one: appended to
+;                .config, then olddefconfig made (pi.config, the pi boards')
+; $HEARTS_FW     the fragment's CONFIG_EXTRA_FIRMWARE_DIR, appended after it: the firmware it builds in
+; $HEARTS_ROOT   a .cpio the fragment's CONFIG_INITRAMFS_SOURCE names, appended after it: the root the
+;                Image carries and unpacks (zimage.l root lays the zero 2 w's)
 (: argv cmdline
    memo {}
    jobs {}
@@ -135,14 +140,22 @@
         hark ["chmod" "+x" (hd + "/bin/hk-cc")],
         hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
-        ; perl: the scripts the build runs are ported (perlasm.l, oidreg.l, each pinned by hash); any
-        ; other refuses
+        ; perl: the one script the build runs is ported (oidreg.l, pinned by hash); any other refuses
         uwrite (hd + "/bin/perl")
-               (bang + "# the build's perl: the ported scripts, nothing else\ncase \"$1\" in\n"
-                + "  */sha2-armv8.pl) exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/perlasm.l") + " \"$@\";;\n"
+               (bang + "# the build's perl: the ported script, nothing else\ncase \"$1\" in\n"
                 + "  */build_OID_registry) exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/oidreg.l") + " \"$@\";;\n"
                 + "esac\necho \"hearts: no perl here for $1\" >&2\nexit 1\n"),
         hark ["chmod" "+x" (hd + "/bin/perl")]))
+   ; arm64's sha-256 and sha-512 are lib/crypto's generic c: their arch routines are perl
+   ; (sha2-armv8.pl), which nothing here runs. the source's two defaults go, before any config
+   (genericsha 0)
+    (: f (K + "/lib/crypto/Kconfig")
+       ls (uread f @ [1 s] (lines s) (puts ("hearts: cannot read " + f + "\n"), quit 1))
+       (arch? c) (c = "config CRYPTO_LIB_SHA256_ARCH" || c = "config CRYPTO_LIB_SHA512_ARCH")
+       (go l c) (atom? l ? () (<l @ x (: c2 (x @ ("config " + _) x c)
+                                         (arch? c2 && x = "\tdefault y if ARM64" ? (go >l c2) (x . go >l c2)))))
+       ks (go ls "")
+       (#ks = #ls ? 0 (uwrite f (join "\n" ks + "\n"))))
    (after l) (atom? l ? () (<l = "--sub" ? >l (after >l)))
    sub (after argv)
    _ (pins made " prior" (getenv "HEARTS_PRIOR" = "1" ? prior ()) " wait" waitfor)
@@ -155,7 +168,7 @@
          _ (seat 0)
          arch (getenv "HEARTS_ARCH" || "arm64")
          x86 (elem arch '("x86_64" "x86" "i386"))
-         _ (x86 ? (objlib 0) 0)
+         _ (x86 ? (objlib 0) (genericsha 0))
          id (filter (n \ string? (getenv n)) ["KBUILD_BUILD_USER" "KBUILD_BUILD_HOST" "KBUILD_BUILD_VERSION" "KBUILD_BUILD_TIMESTAMP"])
          ; no rust or pahole, and no libc to link a user program against, whatever the host has: their
          ; versions and CC_CAN_LINK land in .config, and so the image
@@ -182,8 +195,16 @@
                     ["HEARTS_OBJCOPY" "OBJCOPY"] ["HEARTS_STRIP" "STRIP"] ["HEARTS_NM" "NM"]
                     ["HEARTS_OBJDUMP" "OBJDUMP"] ["HEARTS_READELF" "READELF"]])
          goals (words (getenv "HEARTS_GOALS" || (x86 ? "defconfig syncconfig headers bzImage" "defconfig syncconfig Image")))
+         frag (getenv "HEARTS_CONFIG")
+         fw (getenv "HEARTS_FW")
+         rt (getenv "HEARTS_ROOT")
+         (lay 0) (uread frag @ [1 s]
+                   (appendf (here + "/.config") (s + (string? fw ? "CONFIG_EXTRA_FIRMWARE_DIR=\"\(fw)\"\n" "")
+                                                  + (string? rt ? "CONFIG_INITRAMFS_SOURCE=\"\(rt)\"\n" "")))
+                   (puts "hearts: cannot read HEARTS_CONFIG \(frag)\n", quit 1))
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
-                      (hk-make K top g made {} run, drain 0, puts ("made " + g + " in " + show (clock 0 - t0) + " ms\n"))))
+                      (hk-make K top g made {} run, drain 0, puts ("made " + g + " in " + show (clock 0 - t0) + " ms\n"),
+                       (g = "defconfig" && string? frag) ? (lay 0, one "olddefconfig") 0)))
          (each goals one,
           peep made " failed" 0 @ f (string? f ? (puts ("FAILED at " + f + "\n"), quit 1) 0)))))

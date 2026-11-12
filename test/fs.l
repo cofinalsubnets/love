@@ -90,6 +90,9 @@
     (mount "" "/" "no-such-fs" @ e
      (test (nom? e) !(e = 'enosys))),
 
+    ; reboot refuses what is neither a how nor a text, before any syscall; no law sends one
+    (test ((reboot 'x) = 'badarg) ((reboot 3) = 'badarg)),
+
     ; fchdir: back to a directory held open, even one removed meanwhile; a file is no directory
     (: here (cwd 0) e (here + "/" + d + "/e")       ; whole: the rmdir runs from /
        _ (mkdir e 493) _ (chdir e)

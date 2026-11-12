@@ -160,7 +160,7 @@ uniq, cut, sort, cmp, cat, gzip, cpio; `#!/bin/sh` scripts run as lush's sh.
 
 | tool | a64 | x64 | love |
 |---|---|---|---|
-| perl | 3: sha2-armv8.pl ×2, build_OID_registry | 1: build_OID_registry | perlasm.l, oidreg.l |
+| perl | 1: build_OID_registry (sha2-armv8.pl ×2 gone: build.l turns CRYPTO_LIB_SHA256/512_ARCH off, the generic C) | 1: build_OID_registry | oidreg.l |
 | flex / bison | 2 / 2 | 1 / 1 | love lex / love yacc, their C back ends (flex's `-o$@ -L`, bison's `-o -d -t -l`) |
 | awk | 2 (gen-cpucaps, gen-sysreg) | 3 (orc_hash, cpufeaturemasks.h, gen-insn-attr-x86.awk) | kore awk; x64 scripts untried |
 | bc | 1 (timeconst) | 1 | kore bc |

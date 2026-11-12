@@ -5,3 +5,4 @@
 #define RB_ENABLE_CAD  0x89abcdef
 #define RB_DISABLE_CAD 0
 int reboot(int);
+int reboot2(char const *);   // linux's restart2, not posix

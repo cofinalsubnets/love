@@ -139,4 +139,22 @@ diff -r "$t" "$w/x4" || fail "the image's tree differs"
 awk 'NR==1 && $0 != "." { exit 1 }' "$w/l1" || fail "the root entry is not first"
 echo "  OK the initramfs shape -- find's order kept, our cpio + our gzip, GNU unpacks it"
 
+# ---- 6. a device node ----------------------------------------------------------
+# the console an initramfs carries, since the kernel opens it before init: only root can
+# make one on disk, so the wire is laid by cpio-pack and listed by GNU, and ours reads it back
+cat > "$w/dev.l" <<'EOF'
+(borrow "src/apps/tar.l")
+(borrow "src/apps/cpio.l")
+(borrow '(tar cpio))
+(: c (pins (tar-entry "dev/console" 'chr "") 'mode 384 'rdev [5 1])
+   s (cpio-pack [(tar-entry "dev" 'dir "") c])
+   e (cpio-unpack s @ [1 es] (es 1) ())
+   (say out s, e && peep e 'kind 0 = 'chr && peep e 'rdev () = [5 1] ? 0 (quit 1)))
+EOF
+"$L" "$w/dev.l" > "$w/dev.cpio" || fail "cpio-pack's device did not read back"
+cpio -itv --quiet < "$w/dev.cpio" | grep -q '^crw------- .* 5, *1 .*dev/console$' || fail "GNU cpio does not list our device"
+mkdir -p "$w/x5" && ( cd "$w/x5" && "$L" cpio -id --quiet < "$w/dev.cpio" ) 2> /dev/null
+[ ! -e "$w/x5/dev/console" ] || fail "a device was made on extraction"
+echo "  OK a device node -- GNU lists it as c 5,1; ours reads it back and does not make it"
+
 echo "cpio: src/apps/cpio.l agrees with GNU cpio both ways over newc -- ok"

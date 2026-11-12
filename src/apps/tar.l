@@ -2,8 +2,8 @@
 ;   (tar-pack entries)     -> the archive bytes
 ;   (tar-unpack s)         -> (1 entries) | ()
 ;   (tar-gather root path) -> (1 entries) | ()
-;   (tar-scatter root es)  -> (1 count) | ()
-;   (tar-scatter? warn root es) -> (1 count refused)
+;   (tar-extract root es)  -> (1 count) | ()
+;   (tar-extract? warn root es) -> (1 count refused)
 ;   (tar-walk s f)         -> (1 count) | () | 'stop  members off a stream, (tar-src rd)
 ;   (tar-put warn root e fill) -> 1 | 0 | 'fail
 ; an entry is a tablet: 'nom (relative) 'kind 'file|'dir|'link 'body 'to 'mode 'mtime 'uid
@@ -379,13 +379,13 @@
                             tar-at? p 32768 && chmod p (tar-perm (tar-get e 'mode 420)),
                             tar-there? p))))
        (? no 0 ok 1 'fail))
-   (tar-scatter? warn root es)              ; -> (1 count refused)
+   (tar-extract? warn root es)              ; -> (1 count refused)
     (:- (go es 0 0) (go xs k r)
      (atom? xs ? [1 k r]
       (: e <xs   w (tar-put warn root e (q \ say q (tar-get e 'body "")))
          (w @ 'fail () (go >xs (k + w) (r + 1 - w))))))
-   (tar-scatter root es)                    ; -> (1 count) | (), () on any refusal
-    (tar-scatter? (m \ 0) root es @ w (w && w 2 = 0 ? [1 (w 1)] ())))) ; module 'tar
+   (tar-extract root es)                    ; -> (1 count) | (), () on any refusal
+    (tar-extract? (m \ 0) root es @ w (w && w 2 = 0 ? [1 (w 1)] ())))) ; module 'tar
 
 ; --- the face ---
 ; `love tar`, GNU tar's spelling: the bundled key (czf), dashed letters and long names.

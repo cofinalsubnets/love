@@ -190,8 +190,10 @@ hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles,
 hostnif_tests += test/host/glazehot.l    # a run-time closure compiles at its call past hot-calls
 hostnif_tests += test/host/quit.l   # quit drains the ports; a scare gives a piped stdin back blocking
 hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
+hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, read back by our fat and cpio
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
+hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
