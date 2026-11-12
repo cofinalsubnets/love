@@ -90,8 +90,9 @@
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['cat_post_z ['post]]
+     ['cat_uu_z ['uu]]                                 ; the proof kernel, every arch's
      ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. every other
-     ; module is post's.
+     ; module is post's or uu's.
      "#if defined(__x86_64__)" "#define LvCatModsH 1"
      ['cat_lib_h_z ['holo 'x64]]
      "#elif defined(__aarch64__)" "#define LvCatModsH 1"
