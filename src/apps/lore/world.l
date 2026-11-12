@@ -1251,6 +1251,8 @@
    (mesh-frame v [[] []] (st 'sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)) ())))
  ; ..the gpu that draws the level's frames, opened at the first: with LORE_GPU=1, else 'off
+ ; ..a packed mesh's name for the gpu, its own number in st
+ (gpu-name st pk) (pk 'gid @ () (: n (peep st 'gid 0 + 1) (pins st 'gid n, pin pk 'gid n, n)) g g)
  (world-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (gpu-state g) 'off)) 'off)
                                  (pin st 'gpu s, s))
                            s s)
@@ -1295,7 +1297,11 @@
    (far c) (net (map (k \ sq (c 'mid k - v 'e k)) ^3))
    cks (sc 'chunks) hid ((tablet? sf && e 1 < peep sf 'cut -1e9) || deep-hid? sc [(st 'px) (st 'py) (st 'pz)])
    cs (cells-seen sc v e) (cut? i) (tablet? cs && peep cs i 0 = 0)
-   hall (map (q \ (: c (cks (q 1)) (relit (c 'pk) (c 'lit)))) (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
+   ; ..what relit or shine-at keep on a mesh, named for the gpu by the mesh and what it was
+   ; made of: they write it again only as that changes
+   gk (tablet? (st 'gpu)) (named pk b x) (gk ? [(b 0) (b 1) [(gpu-name st pk) x]] b)
+   hall (map (q \ (: c (cks (q 1)) (named (c 'pk) (relit (c 'pk) (c 'lit)) dk)))
+             (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness, or one opened by hand
    ; swung on its hinge away from who opened it
    sw (peep st 'swing {})
@@ -1325,9 +1331,9 @@
                                               + map (j \ moved (relit (cs 'dpane j) (cs 'dpane-lit j)) (cs 'dpane j) (c 'ax @ 'z 0 2) (leaf c s j)) ^2))))
                   ^#(lv 'cars))
    ; ..what shines and glows, at each light's brightness; none where it is out
-   (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(shine-at (q 0) b key)])) (sc 'lights i key)) ^#ks)
+   (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(named (q 0) (shine-at (q 0) b key) [key b])])) (sc 'lights i key)) ^#ks)
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   glass (map (i \ relit (sc 'panes i 'pk) (sc 'panes i 'lit)) ^#(sc 'panes))
+   glass (map (i \ named (sc 'panes i 'pk) (relit (sc 'panes i 'pk) (sc 'panes i 'lit)) dk) ^#(sc 'panes))
    ; ..the sheets apart from the chunks, their texels drifting as they flow
    (drift x w) (x - w * floor (x / w))
    sheets (map (c \ (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
@@ -1351,10 +1357,10 @@
                                    ^#lift-leaves)))
                     ^#(lv 'lifts))
    ; ..an iron fence's runs in sight, laid with the scene; a gate's leaf swung as far as it is open
-   fences (map (c \ relit (c 'pk) (c 'lit)) (filter seen? (sc 'fences)))
+   fences (map (c \ named (c 'pk) (relit (c 'pk) (c 'lit)) dk) (filter seen? (sc 'fences)))
    ; ..a vined tree's vines grown as far as they have since the loop first played
    vines (catmap (q \ (: n (net (q 'ts <= st 'mt - peep st 'vined 1e9))
-                         (n @ 0 () (: b (relit (q 'pk) (q 'lit)) [(n = #(q 'ts) ? b [(b 0) (b 1 (iota (4 * n)))])]))))
+                         (n @ 0 () (: b (relit (q 'pk) (q 'lit)) [(named (q 'pk) (n = #(q 'ts) ? b [(b 0) (b 1 (iota (4 * n)))]) [dk n])]))))
                     (filter seen? (sc 'vines)))
    tears (tears-of st @ () () b [b]) hds (heralds-of st)
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(lv 'gates))
@@ -1362,6 +1368,7 @@
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
    all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + bd cpanes + by 'glow
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)))
+   _ (gk ? (pin v 'keys (map (b \ b 2) all)) 0)
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again

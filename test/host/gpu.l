@@ -50,8 +50,8 @@
            (apart c q) (: a (held c) b (held q)
                          (net ((kind c != kind q) + (off a b > 1) + (abs1 ((a >> 24 & 255) - (b >> 24 & 255)) > 1) > 0)))
            (both B fl) (: V [verts verts gv] T [ta tb tg] X [(int (gem-tray [8 8] ckl))]
-                          [(apart (facets W H B mat V T X (o fl)) (gpu-facets s W H B mat V T X (o fl)))
-                           (apart (facets W H B mat V [ta tb tr] X (o fl)) (gpu-facets s W H B mat V [ta tb tr] X (o fl)))])
+                          [(apart (facets W H B mat V T X (o fl)) (gpu-facets s W H B mat V T X (o fl) ()))
+                           (apart (facets W H B mat V [ta tb tr] X (o fl)) (gpu-facets s W H B mat V [ta tb tr] X (o fl) ()))])
            ; ..and over a frame half the size, laid first: the triangle alone, nearer, so it hides
            ; the square where they cross and the square shows past it elsewhere
            (half fl) (facets (W // 2) (H // 2) -1 mat [verts] [(iota 4 * 0 + gem-tray [4] [4 5 6 -1])] [] (o fl))
@@ -61,9 +61,10 @@
            ; lens over the square's corner, seen or not
            tc (iota 12 * 0 + gem-tray [12] [0 1 2 16777216  0 2 3 33554432  4 5 6 33554431])
            tl (iota 4 * 0 + gem-tray [4] [0 1 2 -16777219])
-           (lens fl) (: X [(int (gem-tray [8 8] ckl))]
-                       (apart (facets W H -1 mat [verts gv] [tc tl] X (o fl)) (gpu-facets s W H -1 mat [verts gv] [tc tl] X (o fl))))
-           gl [(lens 64) (lens 192) (lens 200)]
+           (lens fl ks) (: X [(int (gem-tray [8 8] ckl))]
+                          (apart (facets W H -1 mat [verts gv] [tc tl] X (o fl)) (gpu-facets s W H -1 mat [verts gv] [tc tl] X (o fl) ks)))
+           ; ..the last its batches named by their maker, twice: the second asks no sums
+           gl [(lens 64 ()) (lens 192 ()) (lens 200 ()) (lens 192 [['sq] ['ln]]) (lens 192 [['sq] ['ln]])]
            (gpu-close g, [up d dr e fs gl]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most

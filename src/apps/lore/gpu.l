@@ -19,11 +19,12 @@
 ;                                bare; flags facets's 8, cull
 ;   (gpu-close g)
 ; each answers () where it worked, else the helper's words, but gpu-frame
-;   (gpu-facets s w h base mat verts tris texs opts)  facets's answer with flags 64, from the
-;                                helper in s (gpu-state's), or () where facets must draw it:
+;   (gpu-facets s w h base mat verts tris texs opts ks)  facets's answer with flags 64, from
+;                                the helper in s (gpu-state's), or () where facets must draw it:
 ;                                a base not a colour, -1 or w*h colours, nor such a ground
 ;                                under a smaller frame, opts with a sun, flags
-;                                past 8 64 and 128, or a helper gone
+;                                past 8 64 and 128, or a helper gone. ks names each batch, or
+;                                (): one named alike holds alike, so is not summed again
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
 (module (gpu gpu-open gpu-tex gpu-buf gpu-drop gpu-under gpu-frame gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
@@ -107,10 +108,11 @@
      (? r r (: c (cask n) (fdpull (g 'r) c 0 0 n, c))))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {}}
- ; ..a batch's buf, by its sizes and its sums weighed by place, so an order counts: lore moves
- ; and relights a batch in place, so what it holds names it; [id]. one not drawn for a while
- ; is dropped
- (batch s v t) (: nt (#t // 4) key [#v nt (net (v * weights s #v)) (net (t * weights s #t))] b (s 'bufs) e (peep b key ())
+ ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
+ ; place, so an order counts: lore moves and relights a batch in place, so what it holds names
+ ; it; [id]. one not drawn for a while is dropped
+ (batch s v t k) (: nt (#t // 4) b (s 'bufs)
+   key (k = () ? [#v nt (net (v * weights s #v)) (net (t * weights s #t))] ['k k]) e (peep b key ())
    _ (pin (s 'used) key (s 'fr))
    (? (two? e) e
       (nt = 0) [-1]
@@ -126,14 +128,14 @@
  (texs! s texs) (? (s 'texs == texs) ()
    (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
       r (filter string? (map lay ^#texs)) (? (two? r) <r (pin s 'texs texs, ()))))
- (gpu-facets s w h B mat vs ts texs o)
+ (gpu-facets s w h B mat vs ts texs o ks)
   (: fl (tray? o ? (int (o 5)) -1)
      un (two? B && #B = 3 && tray? (B 1) && tray? (B 2) && #(B 1) = #(B 2) ? B ()) G (two? un ? <un B)
      bt (tray? G && #G = w * h)
      (? (!(tray? o) || (fl & 55) != 0 || !(bt || charm? G && -1 <= G) || bt && amin G < -1 || s 'g = ()) (no s 'gate)
         (: _ (pin s 'fr (s 'fr + 1)) V (tray? vs ? [vs] vs) T (tray? ts ? [ts] ts)
            tx (texs! s texs)
-           bs (string? tx ? () (map (i \ batch s (V i) (T i)) ^#V))
+           bs (string? tx ? () (map (i \ batch s (V i) (T i) (two? ks ? (ks i) ())) ^#V))
            (? (string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
