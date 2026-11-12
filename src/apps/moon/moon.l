@@ -718,7 +718,8 @@
               (pop lr)
               (ret))
    ; a dynamic exe's entry, its libc's. glibc's __libc_start_main takes main, argc, argv, no
-   ; init or fini of ours, the loader's fini (rdx, x0, a0) and the stack's end
+   ; init or fini of ours, the loader's fini (rdx, x0, a0) and the stack's end; musl's the same
+   ; leading six
    crt0-glibc-x64 '((li r4 0)
                     (mov r8 r2)
                     (ld r5 sp 0)

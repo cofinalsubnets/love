@@ -1830,6 +1830,14 @@ if command -v qemu-aarch64 > /dev/null && [ -e /usr/aarch64-linux-gnu/lib/ld-lin
 else
   gate_partly "  (-dynamic-linker on a64 skipped: no qemu-aarch64 or /usr/aarch64-linux-gnu)"
 fi
+# ..musl's loader is its libc, and its start takes glibc's leading arguments
+if [ -e /lib/ld-musl-x86_64.so.1 ]; then
+  moonrun -dynamic-linker /lib/ld-musl-x86_64.so.1 -o "$ho/.dynmu" "$ho/.dyn.c" -l:libc.so > /dev/null 2>&1 || fail "mooncc -dynamic-linker musl"
+  o=$(MOONDYN=env "$ho/.dynmu" ab cd); a=$?
+  [ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "a -dynamic-linker exe under musl (got $a '$o')"
+else
+  gate_partly "  (-dynamic-linker under musl skipped: no /lib/ld-musl-x86_64.so.1)"
+fi
 # ..rv64 likewise, and a -shared object it dlopens: an import called, a table slid, the exe's hook
 cat > "$ho/.dynso.c" <<'EOF'
 #include <string.h>
