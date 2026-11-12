@@ -2893,6 +2893,8 @@
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl && peep (ps 'sfns) nm () != 'used ? (pin (ps 'sfns) nm 'inl))) (keys (ps 'c99inl))),
                       (peep ps 'lazy () ? (lzres ps acc) acc) @ acc2
                       (acc2 = 'lazyfail ? acc2
+                         (ps 'tgt = 'wasm && two? (peep ps 'ctors ()))   ; wasm's start function has no array to walk
+                          (gripe () () () "__attribute__((constructor)) and destructor are not carried out on wasm")
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps + ctasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'gregs) (ps 'anames) (ps 'pfes) (ps 'nopro)]))
@@ -2920,9 +2922,8 @@
    (ctasm ps)
     (: w (pw64 ps)
        (sec k p) ((k = 'init ? ".init_array" ".fini_array") + (charm? p ? "." + snip (show (100000 + p)) 1 6 ""))
-       (map ((nm k p) \ (ps 'tgt = 'wasm ? (clblame "__attribute__((constructor)) on wasm")
-                            ['tasm (cats ["\t.pushsection \(sec k p),\"aw\"\n\t.p2align \(w ? 3 2)\n"
-                                          "\t\(w ? ".quad" ".long") \(nm)\n\t.popsection\n"])]))
+       (map ((nm k p) \ ['tasm (cats ["\t.pushsection \(sec k p),\"aw\"\n\t.p2align \(w ? 3 2)\n"
+                                       "\t\(w ? ".quad" ".long") \(nm)\n\t.popsection\n"])])
             (rev (peep ps 'ctors ()))))
    (msasm ps)
     (map (nm \ (: sg (ps 'sigs nm)

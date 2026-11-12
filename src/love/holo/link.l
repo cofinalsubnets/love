@@ -1529,8 +1529,8 @@
        ; a `_start` makes the object runnable too, through the system loader: its entry
        ent (glo "_start" @ e (two? e ? <e 0))
        hdr (w32 ? (elf32-hdrn 3 ent mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 ent mach [shto 16 14] phs))
-       ; ..the loader's path after the phdrs, out to the text
-       ipb (exe ? [(map (i \ ip i) ^#ip + ld-zeros (hdrsz - ipo - #ip))] ())
+       ; ..the loader's path after the phdrs, then zeros out to the text
+       ipb [((exe ? (chars ip) ()) + ld-zeros (hdrsz - ipo - (exe ? #ip 0)))]
        (hdr . (ipb + >en + pad + [dbytes]
                + [(ld-zeros (symo - endf)) <st <>st <shstr cmt
                   (ld-zeros (shto - (cmto + cmtz))) sht])))
