@@ -5,6 +5,7 @@
 ; every call is a step, so a socket door is a port over these
 ;   (tcp-on st)                    the stack takes protocol 6
 ;   (tcp-listen st port) (tcp-accept st port) -> a tcb now established, or ()
+;   (tcp-unlisten st port now)     the port shut, its connections not yet accepted reset
 ;   (tcp-connect st ip port now)   -> a tcb in syn-sent
 ;   (tcp-write st t b now)         -> the bytes taken, at most the send buffer's room
 ;   (tcp-read st t now)            -> what has arrived, "" for none yet, () once the peer's fin
@@ -12,8 +13,9 @@
 ;   (tcp-close st t now)           a fin once what was written is sent
 ;   (tcp-abort st t now)           a rst, and the tcb gone
 ;   (tcp-state t) (tcp-err t)      'established and kin; () or 'reset 'refused 'timeout
-(module (tcp tcp-on tcp-listen tcp-accept tcp-connect tcp-write tcp-read tcp-close tcp-abort
-         tcp-state tcp-err seq-d)
+;   (tcp-room t)                   what the send buffer would take now
+(module (tcp tcp-on tcp-listen tcp-unlisten tcp-listening? tcp-accept tcp-connect tcp-write
+         tcp-read tcp-close tcp-abort tcp-state tcp-err tcp-room seq-d)
 (borrow '(bytes net))
 (:
    fin 1  syn 2  rst 4  psh 8  ack 16
@@ -25,6 +27,7 @@
    (has f x) ((f & x) != 0)
    (tcp-state t) (t 'st)
    (tcp-err t) (t 'err)
+   (tcp-room t) (sbuf - #(t 'sb))
    (gone st t) (pull (st 'tcbs) (t 'key) 0, pin t 'st 'closed)
    (win t) (max 0 (rbuf - t 'rbn))
 
@@ -34,11 +37,11 @@
           + wrbe wn 2 + zbytes 4 + opts)
        s (h + b)
        c (ip-sum (ip-pseudo src dst 6 #s + s))
-       (ip-send st dst 6 (snip s 0 16 + wrbe c 2 + snip s 18 #s) now))
+       (ip-send-from st src dst 6 (snip s 0 16 + wrbe c 2 + snip s 18 #s) now))
    (out st t fl sq0 b now)
     (: w (win t)
        _ (pin t 'awin w)
-       (raw st (st 'ip) (t 'lp) (t 'rip) (t 'rp) fl sq0 (has fl ack ? (t 'rnxt) 0) w b
+       (raw st (t 'lip) (t 'lp) (t 'rip) (t 'rp) fl sq0 (has fl ack ? (t 'rnxt) 0) w b
             (has fl syn ? (string [2 4] + wrbe mss0 2) "") now))
    (ack-now st t now) (out st t ack (t 'nxt) "" now)
    ; max is the highest sent, which a go-back leaves where it was
@@ -68,9 +71,9 @@
                 0))))
 
    ; --- a tcb ---------------------------------------------------------------------------
-   (tcb st rip rp lp S iss)
+   (tcb st lip rip rp lp S iss)
     (: k (rip + wrbe rp 2 + wrbe lp 2)
-       t {'key k 'st S 'rip rip 'rp rp 'lp lp 'iss iss 'una iss 'nxt (sq (iss + 1)) 'max (sq (iss + 1)) 'wnd mss0 'sb ""
+       t {'key k 'st S 'lip lip 'rip rip 'rp rp 'lp lp 'iss iss 'una iss 'nxt (sq (iss + 1)) 'max (sq (iss + 1)) 'wnd mss0 'sb ""
           'fin 0 'fsent 0 'fq 0 'fseq 0 'irs 0 'rnxt 0 'rb () 'rbn 0 'ooo {} 'pfin 0 'pmoved 0 'mss mss0
           'srtt 0 'rttv 0 'rto rto0 'rtts -1 'rtt0 0 'tmr 0 'n 0 'cwnd (2 * mss0) 'ssth 65535
           'dup 0 'err () 'tw 0 'awin rbuf 'lst ()}
@@ -81,11 +84,18 @@
        _ (pin st 'iss (net-rand st)) _ (pin st 'msl 1000)
        (pin (st 'proto) 6 tcp-in, pin st 'ticks (tcp-tick . st 'ticks)))
    (tcp-listen st port) (pin (st 'lsn) port (peep (st 'lsn) port ()))
+   (tcp-listening? st port) (peep (st 'lsn) port 'none != 'none)
+   (tcp-unlisten st port now)
+    (: q (peep (st 'lsn) port ())
+       _ (pull (st 'lsn) port 0)
+       ; the handshakes still under way go too
+       h (filter (t \ t 'lst = port && t 'st = 'syn-rcvd) (map (k \ st 'tcbs k) (keys (st 'tcbs))))
+       (each (q + h) (t \ tcp-abort st t now)))
    (tcp-accept st port)
     (peep (st 'lsn) port () @ (t . r) (pin (st 'lsn) port r, t) _ ())
    (tcp-connect st ip port now)
     (: lp (st 'eph) _ (pin st 'eph (lp = 65535 ? 49152 (lp + 1)))
-       t (tcb st ip port lp 'syn-sent (next-iss st))
+       t (tcb st (ip-src st ip) ip port lp 'syn-sent (next-iss st))
        (out st t syn (t 'iss) "" now, pin t 'rtts (t 'iss), pin t 'rtt0 now, arm t now, t))
    (tcp-write st t b now)
     (? (!(elem (t 'st) '(established close-wait)) || t 'fin) 0
@@ -108,10 +118,10 @@
 
    ; --- in --------------------------------------------------------------------------------
    ; a reply to a segment no tcb takes
-   (rst-for st src sp dp sq0 ak fl n now)
+   (rst-for st me src sp dp sq0 ak fl n now)
     (has fl rst ? 0
-       (has fl ack ? (raw st (st 'ip) dp src sp rst ak 0 0 "" "" now)
-          (raw st (st 'ip) dp src sp (rst | ack) 0 (sq (sq0 + n + (has fl syn ? 1 0) + (has fl fin ? 1 0))) 0 "" "" now)))
+       (has fl ack ? (raw st me dp src sp rst ak 0 0 "" "" now)
+          (raw st me dp src sp (rst | ack) 0 (sq (sq0 + n + (has fl syn ? 1 0) + (has fl fin ? 1 0))) 0 "" "" now)))
    (opt-mss o)
     (: n #o
        (go i) (? (n <= i || o i = 0) mss0 (o i = 1) (go (i + 1)) (n < i + 2 || o (i + 1) < 2) mss0
@@ -125,12 +135,12 @@
           b (snip s off #s) o (snip s 20 off)
           t (peep (st 'tcbs) (src + wrbe sp 2 + wrbe dp 2) ())
           (? (t != ()) (seg st t fl sq0 ak wn b o now)
-             (has fl syn && !(has fl ack) && !(has fl rst) && peep (st 'lsn) dp 'none != 'none)
-               (: t (tcb st src sp dp 'syn-rcvd (next-iss st))
+             (has fl syn && !(has fl ack) && !(has fl rst) && tcp-listening? st dp)
+               (: t (tcb st dst src sp dp 'syn-rcvd (next-iss st))
                   (pin t 'irs sq0, pin t 'rnxt (sq (sq0 + 1)), pin t 'mss (opt-mss o), pin t 'wnd wn,
                    pin t 'lst dp, pin t 'rtt0 now,
                    out st t (syn | ack) (t 'iss) "" now, arm t now))
-             (rst-for st src sp dp sq0 ak fl #b now))))
+             (rst-for st dst src sp dp sq0 ak fl #b now))))
 
    ; an rtt sample (rfc 6298): srtt, its variance, rto clamped
    (rtt t r)
@@ -156,11 +166,15 @@
    (in-win? t s0 n)
     (: w (max 1 (win t)) d (seq-d s0 (t 'rnxt))
        (n = 0 ? (0 <= d && d < w) (d < w && 0 < d + n)))
-   (rst-in st t) (pin t 'err (t 'st = 'syn-rcvd ? 'refused 'reset), gone st t)
+   ; past our own fin's ack the user has nothing left to hear: a rst only ends it
+   (rst-in st t)
+    (t 'st @ 'syn-rcvd (pin t 'err 'refused, gone st t)
+             ('time-wait || 'closing || 'last-ack) (gone st t)
+             _ (pin t 'err 'reset, gone st t))
    (tw-again st t now) (ack-now st t now, pin t 'tw (now + 2 * st 'msl))
    (syn-sent st t fl sq0 ak wn o now)
     (: good (has fl ack && ak = t 'nxt)
-       (? (has fl ack && !good) (has fl rst ? 0 (raw st (st 'ip) (t 'lp) (t 'rip) (t 'rp) rst ak 0 0 "" "" now))
+       (? (has fl ack && !good) (has fl rst ? 0 (raw st (t 'lip) (t 'lp) (t 'rip) (t 'rp) rst ak 0 0 "" "" now))
           (has fl rst) (good ? (pin t 'err 'refused, gone st t) 0)
           (!(has fl syn)) 0
           (: _ (pin t 'irs sq0) _ (pin t 'rnxt (sq (sq0 + 1))) _ (pin t 'mss (opt-mss o)) _ (pin t 'wnd wn)
@@ -176,8 +190,8 @@
                  (: l (t 'lst)
                     (pin t 'una ak, pin t 'st 'established, pin t 'wnd wn, pin t 'tmr 0, pin t 'n 0,
                      rtt t (max 1 (now - t 'rtt0)),
-                     charm? l ? (pin (st 'lsn) l (peep (st 'lsn) l () + [t])) 0))
-               (raw st (st 'ip) (t 'lp) (t 'rip) (t 'rp) rst ak 0 0 "" "" now))
+                     tcp-listening? st l ? (pin (st 'lsn) l ((st 'lsn) l + [t])) 0))
+               (raw st (t 'lip) (t 'lp) (t 'rip) (t 'rp) rst ak 0 0 "" "" now))
           (0 < d && over <= 0)
             (: fa (t 'fq && ak = sq (t 'fseq + 1))
                k (d - (fa ? 1 0))
