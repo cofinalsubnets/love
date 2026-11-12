@@ -1809,6 +1809,29 @@ moonrun -shared -o "$ho/.sorun" "$ho/.sorun.c" -l:libc.so.6 > /dev/null 2>&1 || 
 /lib64/ld-linux-x86-64.so.2 "$ho/.sorun" ab; a=$?
 [ $a -eq 42 ] || fail "a -shared object with a _start, run by ld.so: entry, -l:FILE, dlsym (got $a want 42)"
 
+# -- -dynamic-linker: a pie the loader runs, libc's own entry: argv, environ, stdio flushed at exit
+cat > "$ho/.dyn.c" <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int main(int argc, char **argv) {
+  char const *e = getenv("MOONDYN");
+  printf("dyn %d %s %s", argc, argv[argc - 1], e ? e : "-");
+  return argc * 10 + (int) strlen(argv[1]); }
+EOF
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o "$ho/.dyn" "$ho/.dyn.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -dynamic-linker"
+o=$(MOONDYN=env "$ho/.dyn" ab cd); a=$?
+[ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "a -dynamic-linker exe under ld.so: __libc_start_main, argv, environ, exit's flush (got $a '$o')"
+# ..a64, under qemu-user over a cross glibc where the box has both
+if command -v qemu-aarch64 > /dev/null && [ -e /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 ]; then
+  moonrun -t a64 -dynamic-linker /lib/ld-linux-aarch64.so.1 -o "$ho/.dyn64" "$ho/.dyn.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t a64 -dynamic-linker"
+  o=$(MOONDYN=env qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.dyn64" ab cd); a=$?
+  [ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "an a64 -dynamic-linker exe (got $a '$o')"
+else
+  gate_partly "  (-dynamic-linker on a64 skipped: no qemu-aarch64 or /usr/aarch64-linux-gnu)"
+fi
+moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
+
 # -- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'
 __attribute__((weak)) int wpick(void){return 7;}

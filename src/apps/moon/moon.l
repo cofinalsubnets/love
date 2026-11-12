@@ -717,6 +717,33 @@
               (call main)
               (pop lr)
               (ret))
+   ; a dynamic exe's entry, its libc's. glibc's __libc_start_main takes main, argc, argv, no
+   ; init or fini of ours, the loader's fini (rdx, x0) and the stack's end
+   crt0-glibc-x64 '((li r4 0)
+                    (mov r8 r2)
+                    (ld r5 sp 0)
+                    (lea r2 sp 8)
+                    (and sp sp -16)
+                    (mov r0 sp) (push r0) (push r0)
+                    (li r1 0) (li r7 0)
+                    (la r6 main)
+                    (call __libc_start_main))
+   crt0-glibc-a64 '((mov r5 r0)
+                    (ld r1 sp 0)
+                    (lea r2 sp 8)
+                    (lea r6 sp 0)
+                    (li r3 0) (li r4 0)
+                    (la r0 main)
+                    (call __libc_start_main))
+   ; ..bionic's __libc_init takes the kernel's block, main, and the exe's structors, here three
+   ; empty slots on the stack (the loader runs the arrays; it never returns). a64 alone
+   crt0-bionic-a64 '((lea r0 sp 0)
+                     (sub sp sp 32)
+                     (li r9 0) (st sp 0 r9) (st sp 8 r9) (st sp 16 r9)
+                     (lea r3 sp 0)
+                     (li r1 0)
+                     (la r2 main)
+                     (call __libc_init))
    ; the riscv entry: a non-zero a0 is freebsd's vector, handed down as 2; linux and netbsd
    ; are asked. linux exits by 94 in a7, netbsd 1 in t6 (holo's scratch, set raw), freebsd 1 in t0
    crt0-rv '((cmp r0 0)
@@ -1021,7 +1048,7 @@
         0))
    (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static 'ip ip}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
     ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
@@ -1053,6 +1080,12 @@
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
        _ (arm? && !(charm? org) && udie 2 "cc: a bare link needs -Ttext <addr>")
+       ; -dynamic-linker: a pie the system's loader runs, its libc the one that loader keeps
+       ; (android's under /system), what it lacks imported from the -l libraries
+       dx (string? ip)
+       _ (dx && (so || static || mac? || arm?) && udie 2 "cc: -dynamic-linker lays a hosted executable: no -shared, -static or bare link")
+       _ (dx && !(elem tgt '(x64 a64)) && udie 1 "cc: -dynamic-linker links on x64 and a64")
+       bionic (dx && starts? ip "/system/")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
@@ -1063,24 +1096,27 @@
        runs (? !(charm? dorg) [['at org 'text 'rodata 'data 'nifs 'bss]]
                (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
                [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
-       c9 (mac? ? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       _ (bionic && tgt != 'a64 && udie 1 "cc: -dynamic-linker under /system links on a64")
+       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) crt0-glibc-x64)
+             mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       ent (dx ? ["_start"] '("__love_start"))
        all (arm? || so ? srcs
-                   (["crt0" (string (objelf tgt c9 () '("__love_start") () '("__love_start") () () () () ()))] . srcs))
+                   (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9) c9) () ent () (dx ? () ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so ? lib (lib + rtpull lib tgt os nostd vb dyld?))
+       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
              mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
-             so (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod)
+             (so || dx) (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod (dx ? ip ()))
              (ldlink tgt pie org set prod rdme))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1171,7 +1207,7 @@
    ; every key seeded: a map pattern matches on presence, so a key pinned only with its flag
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
                    'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
@@ -1203,6 +1239,9 @@
           ; library each comes from (a DT_NEEDED libNAME.so; -l:FILE names FILE as it is, libc.so.6).
           ; without -shared, -l rides through
           ("-shared" . r) (flags r (pin t 'so 1))
+          ; -dynamic-linker PATH (or -Wl,'s spellings): an executable that loader runs
+          (("-dynamic-linker" || "-Wl,-dynamic-linker" || "-Wl,--dynamic-linker") . p . r) (flags r (pin t 'ip p))
+          ((("-Wl,-dynamic-linker," + p) || ("-Wl,--dynamic-linker=" + p)) . r) (flags r (pin t 'ip p))
           ((("-l" + w) . r) && #w) (flags r (fpush t 'libs w))
           ; -framework NAME: a macos framework, dyld's to load; what no object defines is
           ; imported from it (or from libSystem, always loaded)

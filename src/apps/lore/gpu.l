@@ -1,6 +1,6 @@
 ; gpu -- frames on the system's gpu, drawn by glhelp (glhelp.c), a process of its own that
 ; loads the system's gles through dlopen. built once and kept in the nest's cache, keyed by its
-; source: by mooncc, a -shared object with a _start that the system's loader runs, else by the
+; source: by mooncc, an executable naming the system's loader, else by the
 ; system's cc. LOVE_GPU_CC picks one, moon or cc. the bulk rides a tmpfs file both hold, a
 ; line each way says what to do with it.
 ;   (gpu-open _)                 a helper, or a nom with why: 'no-helper 'no-gpu
@@ -51,7 +51,7 @@
               (hot? q ? (slurp q @ t (close q, t))
                  (open "src/apps/lore/glhelp.c" "r" @ q (hot? q ? (slurp q @ t (close q, t)) ()))))
  (here? p) (two? (stat p))
- ; ..the system loader a mooncc build runs under, by the machine, and the libraries it names:
+ ; ..the system loader a mooncc build names, by the machine, and the libraries it names:
  ; android's bionic, else glibc
  (droid? _) (here? "/system/bin/linker64")
  (loader m) (droid? () ? (m = "aarch64" ? "/system/bin/linker64" ())
@@ -70,9 +70,9 @@
            _ (here? cf ? 0 (open (cf + tmp) "w" @ q (say q src, close q, rename (cf + tmp) cf)))
            (made f argv) (here? f || (0 = run (argv (f + tmp)) && !(rename (f + tmp) f)))
            (moon? _) (how != 'cc && string? ld && here? ld
-                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-shared" "-o" o cf] + libs ())))
+                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-dynamic-linker" ld "-o" o cf] + libs ())))
            (cc? _) (how != 'moon && made cb (o \ ["cc" "-O2" "-o" o cf]))
-           (? (moon? ()) [ld mb] (cc? ()) [cb] 'no-compiler))))
+           (? (moon? ()) [mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
  (ask g s) (say (g 'to) (s + "\n"), (line (g 'from) @ () "the helper has gone" "ok" () r r))

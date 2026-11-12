@@ -1382,7 +1382,8 @@
    ld-dyn {183 ['(282 283) 1027 257 1025 ld-plt-a64 65536]
            62 ['(4) 8 1 6 ld-plt-x64 4096]
            40 ['(10 30) 23 2 21 ld-plt-thm 4096]}
-   (ldshared target soname needed srcs prod)
+   ; ip names an exe's loader: a pie that loads needed and runs, else ()
+   (ldshared target soname needed srcs prod ip)
     (: mach (peep elf-machines target 0)
        dm (ld-dyn mach)
        w32 (mach = 40) wz (w32 ? 4 8) symz (w32 ? 16 24) relz (w32 ? 8 24) dynz (w32 ? 8 16)
@@ -1397,8 +1398,11 @@
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
        objs (objs0 + [plt])
        pg (dm 5)
-       nph 6                                    ; phdr, three loads, dynamic, gnu_stack
-       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * nph)
+       exe (string? ip)
+       nph (exe ? 7 6)                          ; phdr, interp, three loads, dynamic, gnu_stack
+       phz ((w32 ? 32 56) * nph) eh (w32 ? 52 64)
+       ipo (eh + phz) ipz (exe ? (#ip + 1) 0)
+       hdrsz (ld-align 16 (ipo + ipz))
        lay (ldlay objs 0 hdrsz pg 1)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
        sk ((o0 - t1) + (d0 - o1))
@@ -1411,7 +1415,7 @@
        (soff k) (<>dstr k)
        nn #needed
        nrel (ld-nabs objs)
-       ndy (nn + 11)
+       ndy (nn + (exe ? 12 11))
        dy0 (ld-align 16 end)       got0 (dy0 + dynz * ndy)
        ra0 (got0 + wz * ni)        ds0 (ra0 + relz * (nrel + ni))
        nsym (1 + ni + ne)          hs0 (ds0 + symz * nsym)
@@ -1435,8 +1439,11 @@
        nr #rels
        dyn (catall (map (d \ catall [(lew <d) (lew <>d)])
                         (map (k \ [1 (soff (1 + k))]) ^nn
-                         + [[14 (soff 0)] [4 hs0] [5 st0] [6 ds0] [10 #<dstr] [11 symz]
-                            [(w32 ? 17 7) ra0] [(w32 ? 18 8) (relz * nr)] [(w32 ? 19 9) relz] [30 8] [0 0]])))
+                         ; ..an exe's debug slot and pie flag, else the soname
+                         + (exe ? [[21 0]] [[14 (soff 0)]])
+                         + [[4 hs0] [5 st0] [6 ds0] [10 #<dstr] [11 symz]
+                            [(w32 ? 17 7) ra0] [(w32 ? 18 8) (relz * nr)] [(w32 ? 19 9) relz] [30 8]]
+                         + (exe ? [[0x6ffffffb 0x8000000]] ()) + [[0 0]])))
        dsym (catall ([(ld-zeros symz)]
                      + map (k \ symf (soff (1 + nn + k)) 1 2 0 0 0) ^ni
                      + o-mapi (\ k e (symf (soff (1 + nn + ni + k)) (e 1) (e 2)
@@ -1473,17 +1480,18 @@
                     (shf (snm 13) 3 0 0 ssto sstz 0 0 1 0)
                     (shf (snm 14) 1 48 0 cmto cmtz 0 0 1 1)])
        ; ..pt_phdr first: bionic's linker will not run an object without one
-       phz ((w32 ? 32 56) * nph) eh (w32 ? 52 64)
-       phs [(phf 6 4 eh eh eh phz phz wz)
-            (phf 1 5 0 0 0 t1 t1 pg)
+       phs ([(phf 6 4 eh eh eh phz phz wz)] + (exe ? [(phf 3 4 ipo ipo ipo ipz ipz 1)] ())
+            + [(phf 1 5 0 0 0 t1 t1 pg)
             (phf 1 4 t1 o0 o0 (o1 - o0) (o1 - o0) pg)
             (phf 1 6 (fo d0) d0 d0 (dend - d0) (bend - d0) pg)
             (phf 2 6 (fo dy0) dy0 dy0 (dynz * ndy) (dynz * ndy) wz)
-            (phf 0x6474e551 6 0 0 0 0 0 16)]
+            (phf 0x6474e551 6 0 0 0 0 0 16)])
        ; a `_start` makes the object runnable too, through the system loader: its entry
        ent (glo "_start" @ e (two? e ? <e 0))
        hdr (w32 ? (elf32-hdrn 3 ent mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 ent mach [shto 16 14] phs))
-       (hdr . (>en + pad + [dbytes]
+       ; ..the loader's path after the phdrs, out to the text
+       ipb (exe ? [(map (i \ ip i) ^#ip + ld-zeros (hdrsz - ipo - #ip))] ())
+       (hdr . (ipb + >en + pad + [dbytes]
                + [(ld-zeros (symo - endf)) <st <>st <shstr cmt
                   (ld-zeros (shto - (cmto + cmtz))) sht])))
 

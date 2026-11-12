@@ -1,6 +1,6 @@
 // glhelp -- lore's frames on the system's gpu, a process apart: its gles 3 found through
 // dlopen (no gl headers, no -lEGL), so it builds with any cc and links the system's libc alone.
-// gpu.l builds it, by mooncc (-shared with a _start, -l:libc.so.6) or by the system's cc, and
+// gpu.l builds it, by mooncc (-dynamic-linker, the system's libc) or by the system's cc, and
 // speaks to it a line at a time, the bulk in a tmpfs file both hold.
 //   glhelp FILE       FILE the shared bytes; answers "ready RENDERER" or "err WHY"
 // then a line each, answered "ok" or "err WHY":
@@ -657,14 +657,12 @@ static char *next_line(struct helper *H) {
   if (r <= 0) return NULL;
   H->got += (size_t) r; } }
 
-int glhelp_main(int argc, char **argv) {
+int main(int argc, char **argv) {
  struct helper *H = calloc(1, sizeof *H);
  if (!H) { dprintf(1, "err no memory\n"); return 2; }
  if (argc < 2) { dprintf(1, "err usage: glhelp FILE\n"); return 2; }
- // ..the file last: bionic's linker, run as the program, leaves itself in argv
- char const *f = argv[argc - 1];
- H->fd = open(f, O_RDWR | O_CLOEXEC);
- if (H->fd < 0) { dprintf(1, "err cannot open %s\n", f); return 2; }
+ H->fd = open(argv[1], O_RDWR | O_CLOEXEC);
+ if (H->fd < 0) { dprintf(1, "err cannot open %s\n", argv[1]); return 2; }
  if (!setup(H)) return 3;
  for (char *l; (l = next_line(H)); ) {
   int id, a, b, c, k; long off; double tone;
@@ -679,15 +677,3 @@ int glhelp_main(int argc, char **argv) {
   else if (!strcmp(l, "quit")) break;
   else dprintf(1, "err what: %s\n", l); }
  return 0; }
-
-// built by mooncc, the loader runs the object itself: its entry hands argc and argv on
-#ifdef __mooncc__
-#if defined(__x86_64__)
-__asm__(".globl _start\n_start:\n xor %ebp,%ebp\n mov (%rsp),%rdi\n lea 8(%rsp),%rsi\n and $-16,%rsp\n"
-        " call glhelp_main\n mov %eax,%edi\n call exit\n hlt\n");
-#elif defined(__aarch64__)
-__asm__(".globl _start\n_start:\n mov x29, #0\n ldr x0, [sp]\n add x1, sp, #8\n bl glhelp_main\n bl exit\n");
-#endif
-#else
-int main(int argc, char **argv) { return glhelp_main(argc, argv); }
-#endif
