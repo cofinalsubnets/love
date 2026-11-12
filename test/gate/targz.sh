@@ -68,8 +68,8 @@ cat > "$w/unpack.l" <<EOF
    _ (? (! u) (: _ (say err "gunzip failed\n") (quit 1)) 0)
    r (tar-unpack (<(>u)))
    _ (? (! r) (: _ (say err "untar failed\n") (quit 1)) 0)
-   w (tar-scatter "$w/ours" (<(>r)))
-   _ (? (! w) (: _ (say err "scatter failed\n") (quit 1)) 0)
+   w (tar-extract "$w/ours" (<(>r)))
+   _ (? (! w) (: _ (say err "extract failed\n") (quit 1)) 0)
    0)
 EOF
 "$love" "$w/unpack.l" || fail "love could not read the system's .tar.gz"
@@ -213,8 +213,8 @@ cat > "$w/unpack6.l" <<EOF
    _ (? (! u) (: _ (say err "gunzip failed\n") (quit 1)) 0)
    r (tar-unpack (<(>u)))
    _ (? (! r) (: _ (say err "untar failed\n") (quit 1)) 0)
-   v (tar-scatter "$w/um" (<(>r)))
-   _ (? (! v) (: _ (say err "scatter failed\n") (quit 1)) 0)
+   v (tar-extract "$w/um" (<(>r)))
+   _ (? (! v) (: _ (say err "extract failed\n") (quit 1)) 0)
    0)
 EOF
 ( umask 077; "$love" "$w/unpack6.l" ) || fail "love could not lay the archive under umask 077"
