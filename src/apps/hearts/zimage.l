@@ -137,11 +137,9 @@
    ; and is laid again
    swap-l (on-disk """
      (: f "/data/swap"  n 1073741824
-        pg (sysconf () @ (p . _) (charm? p ? p 4096) 4096)
-        head (zbytes 1024 + wrle 1 4 + wrle (n // pg - 1) 4 + zbytes (pg - 1042) + "SWAPSPACE2")
         (lay _) (unlink f, openfd f 3 @ fd
                   (charm? fd ? (fdopen fd @ p (zbytes 1048576 @ z (each ^(n // 1048576) (_ \ say p z)), close p),
-                                openfd f 4 @ h (fdopen h @ p (say p head, close p)), sync 0) 0))
+                                hark ["/bin/love" "mkswap" f], sync 0) 0))
         (on _) (swapon f @ e (nom? e ? e (say err ("swap: " + f + " on\n"), 0)))
         (nom? (on 0) ? (lay 0, (on 0 @ e (nom? e ? (say err ("swap: refused (" + show e + ")\n"), 1) 0))) 0))
      """)
