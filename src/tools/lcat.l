@@ -23,14 +23,9 @@
                 (c = 40) 1 (c = 41) 1 (c = 91) 1 (c = 93) 1 (c = 123) 1 (c = 125) 1
                 (c = 34) 1 (c = 59) 1 (c = 39) 1 (c = 96) 1 (c = 44) 1
                 0)
-   ; an operator-run byte: punct neither hard nor a name char. a run glued to a datum is
-   ; monadic mid-list but the probe reads in head position, so that space is kept.
-   (opb? c) (? (hardb c) 0
-               (48 <= c <= 57) 0
-               (65 <= c <= 90) 0
-               (97 <= c <= 122) 0
-               (c = 95) 0
-               1)
+   ; an operator-run byte: the table's, or one past printable ascii, neither hard. a run glued
+   ; to a datum is monadic mid-list but the probe reads in head position, so that space is kept.
+   (opb? c) (? (hardb c) 0 (op-byte? c) 1 (c < 32 || 126 < c))
    (dstart? b) (? (b = 41) 0 (b = 93) 0 (b = 125) 0 (b = 59) 0
                   (b = 32) 0 (b = 10) 0 (b = 9) 0
                   1)

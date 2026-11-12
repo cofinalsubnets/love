@@ -11,15 +11,14 @@
 ; (spans-forms s) sound's forms of s, the law's other side
 ;
 (module (spans spans spans-strip spans-forms)
-(: ; char classes: 2 ws  4 opc  8 tend  16 open  32 close  64 sign  128 gstop
+(: ; char classes: 2 ws  8 tend  16 open  32 close  64 sign  128 gstop; an operator char is the table's
    (sp-in? s c) (: n #s (go k) (? (n <= k) () (s k = c) 1 (go (k + 1))) (go 0))
    (sp-bits c) (((c @ 12 1 (sp-in? " \t\n\r" c)) ? 2 0)
-                + ((sp-in? "!#$%&*+-./:<=>?@\\^|~" c ? 4 0)
                 + (((c @ 12 1 (sp-in? " \t\n\r;#()[]{}\"," c)) ? 8 0)
                 + ((sp-in? "([{" c ? 16 0)
                 + ((sp-in? ")]}" c ? 32 0)
                 + ((sp-in? "+-" c ? 64 0)
-                + ((c @ 12 1 (sp-in? " \t\n\r;)]}" c)) ? 128 0)))))))
+                + ((c @ 12 1 (sp-in? " \t\n\r;)]}" c)) ? 128 0))))))
    sp-cls (: (go k acc) (k < 0 ? (string acc) (go (k - 1) (sp-bits k . acc))) (go 255 ()))
    (sp-dig? c) (48 <= c && c <= 57)
    (sp-low c) (65 <= c && c <= 90 ? (c + 32) c)
@@ -67,7 +66,7 @@
        (ch i) (i < n ? (s i) -1)
        (cls i) (i < n ? (sp-cls (s i)) 0)
        (ws? i) ((cls i) & 2)
-       (opc? i) ((cls i) & 4)
+       (opc? i) (i < n && op-byte? (s i))
        (glued? i) (i < n && !((cls i) & 128))
        (eol i) (? (n <= i) i (ch i = 10 || ch i = 13) i (eol (i + 1)))
        (cut a b) (snip s a b)
@@ -117,8 +116,7 @@
                           [(nd (nom "@") i (i + 1) ()) (i + 1)])
               (c = 44) [(nd (nom ",") i (i + 1) ()) (i + 1)]
               ((opc? i) && !numlead) (op i)
-              (sp-dig? c) (nop i)
-              (tok i @ k [(nd (sp-atom (chars i k)) i k ()) k])))
+              (tok (i + 1) @ k [(nd (sp-atom (chars i k)) i k ()) k])))   ; the first char is the token's
        (chars a b) (: (go k acc) (k < a ? acc (go (k - 1) (s k . acc))) (go (b - 1) ()))
        (tok i) (? (n <= i) i ((cls i) & 8) i (tok (i + 1)))
 
@@ -153,15 +151,6 @@
        (fuse sym i r)
         (read1 r @ () 'torn 'torn 'torn
            [d k] [(nd [(nd 'mono i r ()) (nd [(nd sym i r ()) d] i k ())] i k ()) k])
-       ; a digit-led token is cut at its last sigil: 2?<>x is 2?<> around x; a numeral wins first
-       (nop i)
-        (: e (tok i) l (chars i e) a (sp-atom l)
-           (lst j best) (j < e ? (lst (j + 1) (opc? j ? (j + 1 - i) best)) best)
-           k0 (lst i 0)
-           shed (1 < k0 && ch (i + k0 - 1) = 45 && sp-dig? (ch (i + k0)))
-           r (i + (shed ? (k0 - 1) k0))
-           (? (!(nom? a) || r <= i || !(glued? r)) [(nd a i e ()) e]
-              (fuse (nom (cut i r)) i r)))
 
        ; a string's run up to its quote or a hole: [hole? text past] or torn
        (str i acc)
