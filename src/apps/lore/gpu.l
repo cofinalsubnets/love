@@ -6,9 +6,10 @@
 ;   (gpu-open _)                 a helper, or a nom with why: 'no-helper 'no-gpu
 ;   (gpu-tex g id w h t)         texture id, w by h: a tray of 0x00rrggbb (below 0 a hole), rows
 ;                                top first, or a list of them, each level half the last
-;   (gpu-buf g id verts tris)    buf id: facets's verts (8 numbers a vertex) and tris (4 a
-;                                triangle, a texture's id, -1 none, -2 a glow, -3 - t a glass
-;                                of t), flat trays
+;   (gpu-buf g id verts tris st) buf id: facets's verts (st numbers a vertex, 8, or 11 with the
+;                                sun's r g b) and tris (4 a triangle, a texture's id, -1 none,
+;                                -2 a glow, -3 - t a glass of t), flat trays
+;   (gpu-sun g sv sd bias)       the sun's view kept: its matrix sv and depths sd, facets's
 ;   (gpu-drop g id)
 ;   (gpu-base g w h t)           the next frame's ground, w*h colours, below 0 bare
 ;   (gpu-under g cs ds)          the next frame laid first with a smaller one's colours cs and
@@ -16,7 +17,7 @@
 ;   (gpu-frame g w h mat ids o)  the bufs ids through mat (16 numbers, row-major, gl's clip
 ;                                box), o [clear fr fg fb near far tone flags]: a cask of w*h
 ;                                of facets's words, 8 bytes each, rows top first; clear the ground, below 0
-;                                bare; flags facets's 8, cull
+;                                bare; flags facets's 8, cull, 128, seen, and 256, the sun's view
 ;   (gpu-send g w h mat ids o)   the same frame begun, the helper drawing it while the caller
 ;   (gpu-take g w h)             goes on, and then its cask
 ;   (gpu-close g)
@@ -25,14 +26,16 @@
 ;                                from the helper in s (gpu-state's), or () where facets must
 ;                                draw it:
 ;                                a base not a colour, -1 or w*h colours, nor such a ground
-;                                under a smaller frame, opts with a sun, flags
+;                                under a smaller frame, flags
 ;                                past 8 64 and 128, or a helper gone. ks names each batch, or
-;                                (): one named alike holds alike, so is not summed again.
+;                                (): one named alike holds alike, so is not summed again, and
+;                                one named 'once is laid anew each frame, unsummed, in a slot
+;                                of its own
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-tex gpu-buf gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-open gpu-tex gpu-buf gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -95,10 +98,12 @@
      c (cask (4 * +sz))
      _ (foldl (\ o k ((cite 'guts 'pinv) c o 4 4 (ls k), (o + 4 * sz k))) 0 ^#ls)
      (put! g c, ask g "tex \(show id) \(show w) \(show h) \(show #ls) 0"))
- (gpu-buf g id verts tris)
-  (: nv (#verts // 8) nt (#tris // 4) c (cask (32 * nv + 16 * nt))
-     _ ((cite 'guts 'pinf) c 0 4 verts) _ ((cite 'guts 'pinv) c (32 * nv) 4 4 tris)
-     (put! g c, ask g "buf \(show id) \(show nv) \(show nt) 0"))
+ (gpu-buf g id verts tris st)
+  (: nv (#verts // st) nt (#tris // 4) c (cask (4 * st * nv + 16 * nt))
+     _ ((cite 'guts 'pinf) c 0 4 verts) _ ((cite 'guts 'pinv) c (4 * st * nv) 4 4 tris)
+     (put! g c, ask g "buf \(show id) \(show nv) \(show nt) 0 \(show st)"))
+ (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
+    (put! g c, ask g ("sun \(show (shape sd 1)) \(show (shape sd 0)) 0 " + unwords (map num (bias . map (i \ sv i) ^16)))))
  (gpu-drop g id) (ask g "drop \(show id)")
  (gpu-base g w h t) (: c (cask (4 * w * h)) _ ((cite 'guts 'pinv) c 0 4 4 t)
    (put! g c, ask g "base \(show w) \(show h) 0"))
@@ -113,41 +118,50 @@
                                      + unwords (map show ids) + "\n"), ())
  (gpu-take g w h) (: n (8 * w * h) (line (g 'from) @ () "the helper has gone" "ok" (: c (cask n) (fdpull (g 'r) c 0 0 n, c)) r r))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
- (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {}}
+ (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
  ; place, so an order counts: lore moves and relights a batch in place, so what it holds names
  ; it; [id]. one not drawn for a while is dropped
- (batch s v t k) (: nt (#t // 4) b (s 'bufs)
-   key (k = () ? [#v nt (net (v * weights s #v)) (net (t * weights s #t))] ['k k]) e (peep b key ())
+ (batch s i v t k st) (? (k = 'once) (once s i v t st) (: nt (#t // 4) b (s 'bufs)
+   key (k = () ? [st #v nt (net (v * weights s #v)) (net (t * weights s #t))] ['k k st]) e (peep b key ())
    _ (pin (s 'used) key (s 'fr))
    (? (two? e) e
       (nt = 0) [-1]
-      (: id (s 'n) r (gpu-buf (s 'g) id v t)
-         (? (string? r) r (: e [id] (pins s 'n (id + 1), pin b key e, e))))))
+      (: id (s 'n) r (gpu-buf (s 'g) id v t st)
+         (? (string? r) r (: e [id] (pins s 'n (id + 1), pin b key e, e)))))))
+ ; ..a batch laid anew in the i-th slot
+ (once s i v t st) (: o (s 'once) id (peep o i () @ () (: n (s 'n) (pins s 'n (n + 1), pin o i n, n)) n n)
+   (#t < 4 ? [-1] (gpu-buf (s 'g) id v t st @ () [id] r r)))
  ; ..the weights for n words, kept until the sweep
  (weights s n) (: t (s 'wt) (peep t n () @ () (: w (iota n % 997 + 1) (pin t n w, w)) w w))
  (sweep s) (: b (s 'bufs) u (s 'used) fr (s 'fr) (old? k) (u k < fr - 120)
    _ (each (filter old? (keys u)) (k \ gpu-drop (s 'g) (b k 0)))
    ks (filter (k \ !(old? k)) (keys u))
    (pins s 'bufs (foldl (\ t k (pin t k (b k))) {} ks) 'used (foldl (\ t k (pin t k (u k))) {} ks) 'wt {}))
- ; ..the textures, laid once for each list of them
- (texs! s texs) (? (s 'texs == texs) ()
+ ; ..the sun's view, laid again only when it moves
+ (sun! s sv sd b) (? (s 'sv == sv && s 'sd == sd && s 'sb = b) ()
+   (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
+ ; ..the textures, laid again only when one of them is not the one laid
+ (texs! s texs) (? (alike (s 'texs) texs) ()
    (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
       r (filter string? (map lay ^#texs)) (? (two? r) <r (pin s 'texs texs, ()))))
- (gpu-facets s w h B mat vs ts texs o ks c)
-  (: fl (tray? o ? (int (o 5)) -1)
+ (alike a b) (a == b || two? a && two? b && #a = #b && all (i \ a i == b i) ^#a)
+ (gpu-facets s w h B mat vs ts texs ol ks c)
+  (: o (tray? ol ? ol (two? ol ? (ol 0) ())) st (tray? ol ? 8 11) sv (ol 1) sd (ol 2)
+     sun (st = 11 && tray? sv && 16 <= #sv && tray? sd && #(shape sd) = 2)
+     fl (tray? o ? (int (o 5)) -1)
      un (two? B && #B = 3 && tray? (B 1) && tray? (B 2) && #(B 1) = #(B 2) ? B ()) G (two? un ? <un B)
      bt (tray? G && #G = w * h)
      (? (!(tray? o) || (fl & 55) != 0 || !(bt || charm? G && -1 <= G) || bt && amin G < -1 || s 'g = ()) (drain s, no s 'gate)
         ; ..the frame sent before taken first, before anything is laid where it lies
         (: pr (s 'pend @ () () p (p 0 = w && p 1 = h ? (take s p) (drain s)))
            _ (pin s 'fr (s 'fr + 1)) V (tray? vs ? [vs] vs) T (tray? ts ? [ts] ts)
-           tx (texs! s texs)
-           bs (string? tx ? () (map (i \ batch s (V i) (T i) (two? ks ? (ks i) ())) ^#V))
+           tx (texs! s texs @ () (sun ? (sun! s sv sd (o 7)) ()) r r)
+           bs (string? tx ? () (map (i \ batch s i (V i) (T i) (two? ks ? (ks i) ()) st) ^#V))
            (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 e (string? u ? u (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) (fl & 136)]))
+                 e (string? u ? u (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0))]))
                  p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
                  (? (string? e) (pin s 'g (), ())
                     !(peep s 'pipe 0) (now () @ () () q (q 0))

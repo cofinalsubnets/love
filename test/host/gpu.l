@@ -27,7 +27,7 @@
    ; ..the frame through one build: () where it matched, its words where it did not, or the nom
    (drawn how) (: _ (setenv "LOVE_GPU_CC" how) g (gpu-open ())
      (? (two? g) g
-        (: up [(gpu-tex g 0 8 8 (gem-tray [64] ckl)) (gpu-buf g 1 verts tris)]
+        (: up [(gpu-tex g 0 8 8 (gem-tray [64] ckl)) (gpu-buf g 1 verts tris 8)]
            c (gpu-frame g W H mat [1] [bg 0.0 0.0 0.0 0.0 0.0 0.0 0])
            fr (string? c ? c ((cite 'guts 'peepv) c 0 8 8 (W * H)))
            d (string? fr ? fr (worst cpu fr))
@@ -73,13 +73,22 @@
                  n (gpu-facets s W H -1 mat [verts] [ta] [] (o 65) () 'n) z (pp 64 'z) _ (pin s 'pipe 0)
                  [[(a 1) (b 1) (d 1) (e 1) n (z 1)] (apart (a 0) (cf 64)) (apart (b 0) (cf 64)) (apart (d 0) (cf 192))
                   (apart (e 0) (cf 200)) (apart (z 0) (cf 64))])
-           (gpu-close g, [up d dr e fs gl pi]))))
+           ; ..the sun: half its view near enough to shade the square but not the triangle, the
+           ; view wider than the screen, so the square's edges fall past it, lit; and the sun down
+           sv (gem-tray [16] [1.5 0.0 0.0 0.0  0.0 1.5 0.0 0.0  0.0 0.0 1.0 0.0  0.0 0.0 0.0 1.0])
+           sd (gem-tray [8 8] (map (i \ i % 8 < 4 ? 2.0 (i // 8 < 5 ? 0.3 0.7)) ^64))
+           sv11 (gem-tray [77] (foldl cat [] (map (k \ (: q (map (j \ verts (8 * k + j)) ^8)
+                                                   (cat (map q ^5) (cat (map (j \ 0.3 * q (5 + j)) ^3) (map (j \ 0.7 * q (5 + j)) ^3))))) ^7)))
+           (so fl) (gem-tray [8] [40.0 60.0 80.0 10.0 20.0 (1.0 * fl) 1.5 0.01])
+           (lit fl sun) (apart (facets W H -1 mat [sv11] [tris] X [(so fl) (sun 0) (sun 1)]) (gpu-facets s W H -1 mat [sv11] [tris] X [(so fl) (sun 0) (sun 1)] () ()))
+           su [(lit 64 [sv sd]) (lit 192 [sv sd]) (lit 64 [() ()]) (lit 64 [sv sd])]
+           (gpu-close g, [up d dr e fs gl pi su]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
                  && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)
-                 && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6)))
+                 && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6) && all (f \ f <= 4) (r 7)))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())

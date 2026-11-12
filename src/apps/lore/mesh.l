@@ -4,7 +4,7 @@
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
-         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-coarse mesh-flat
+         mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
 (borrow '(view window vec sky json gpu))
@@ -302,9 +302,15 @@
  (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (v 'under @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
    o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
-   c [v B0 bare] gp (peep v 'gpu ()) q (tablet? gp && #sc < 3 ? (gpu-facets gp (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs o (peep v 'keys ()) c) ())
-   r (tray? q ? [q c] (two? q ? q [(facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())])) c]))
+   os (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())])
+   c [v B0 bare] gp (peep v 'gpu ()) q (tablet? gp ? (gpu-facets gp (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os (peep v 'keys ()) c) ())
+   r (tray? q ? [q c] (two? q ? q [(facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os) c]))
    (mesh-bare (r 0) (r 1 0) (r 1 1) (r 1 2)))
+ ; ..the gpu that draws st's frames, opened at the first: with LORE_GPU=1, else 'off. each is
+ ; shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0
+ (mesh-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0")) 'off)) 'off)
+                                (pin st 'gpu s, s))
+                          s s)
  ; ..f's bare pixels filled as bare asks, through v, B0 the ground: again, none is left to fill
  (mesh-bare f v B0 bare)
   (? (two? bare) (<>bare v f B0)

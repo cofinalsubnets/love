@@ -6,8 +6,9 @@
 // then a line each, answered "ok" or "err WHY":
 //   tex ID W H L OFF  L levels, each half the last, of 32-bit 0x00rrggbb texels from OFF, rows
 //                     top first; a texel below 0 is a hole
-//   buf ID NV NT OFF  NV vertices of 8 floats (x y z, u v in texels, r g b; 1.0 the texel as it
-//                     is) from OFF, then NT triangles of 4 ints (three vertices and facets's
+//   buf ID NV NT OFF [S]  NV vertices of S floats, 8 or 11 (x y z, u v in texels, r g b; 1.0 the
+//                     texel as it is; then the sun's r g b, as much as it reaches) from OFF,
+//                     then NT triangles of 4 ints (three vertices and facets's
 //                     texture: -1 none, -2 a glow, -3 - t a glass of t, a pane's class or a
 //                     lens as facets has them), drawn in their order
 //   drop ID           a buf forgotten
@@ -16,11 +17,15 @@
 //   under CW CH OFF   for the next frame alone, a smaller frame laid first: CW x CH colours
 //                     (32-bit 0x00rrggbb) from OFF, then as many depths (floats, ndc z, 2 none),
 //                     rows top first, each pixel the one over it where it drew
+//   sun SW SH OFF BIAS L0 .. L15
+//                     the sun's view, kept: its depths, SW x SH floats from OFF rows top first,
+//                     2 none, and its matrix, row-major, the depths asked less BIAS
 //   frame W H OFF CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..
 //                     the bufs drawn through clip = M * [x y z 1] (row-major), linear fog to
 //                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none), FLAGS
 //                     facets's 8 and 128 (cull: anticlockwise in gl's y-up faces the eye; seen,
-//                     the lenses' nearest depths asked first); W x H
+//                     the lenses' nearest depths asked first), and 256, the sun's view asked
+//                     as facets asks it; W x H
 //                     of facets's words to OFF, rows top first, each 8 bytes.
 //                     CLEAR is the ground, or with CLEAR below 0 bare
 //   quit
@@ -56,7 +61,7 @@ enum {
  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_MAX_LEVEL = 0x813D, GL_NEAREST = 0x2600,
  GL_NEAREST_MIPMAP_NEAREST = 0x2700, GL_REPEAT = 0x2901, GL_RENDERER = 0x1F01,
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
- GL_TEXTURE1 = 0x84C1, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
+ GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5 };
 
@@ -126,6 +131,7 @@ struct helper {
  GLuint prog, fb, rb, db, gb, gr; int fw, fh, dual, fglass;   // gb gr: glass's on what is bare, in floats where they blend
  unsigned char *gx;   // ..read back
  GLuint lf, lz; GLint u_cls;   // seen: the lenses' nearest depths
+ GLuint sm; GLint u_lm, u_sun, u_bias, u_ss; float lm[16], bias; int sw, sh;   // the sun's view
  GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp;
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
  GLint uu_cs, uu_fs, uu_base;
@@ -157,9 +163,9 @@ static GLuint shader(GLenum k, const char *src) {
 // fogged by view depth, then exposed; written b g r so the bytes read back are 0x00rrggbb
 static char const vsrc[] =
  "#version 300 es\n"
- "layout(location=0) in vec3 p; layout(location=1) in vec2 t; layout(location=2) in vec3 c;\n"
- "uniform mat4 m; uniform vec2 vp; out vec2 uv; out vec3 col; out float w;\n"
- "void main(){ vec4 q = m * vec4(p, 1.0); uv = t; col = c; w = q.w; q.y = -q.y;\n"
+ "layout(location=0) in vec3 p; layout(location=1) in vec2 t; layout(location=2) in vec3 c; layout(location=3) in vec3 sc;\n"
+ "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
+ "void main(){ vec4 q = m * vec4(p, 1.0); uv = t; col = c; scol = sc; lp = (lm * vec4(p, 1.0)).xyz; w = q.w; q.y = -q.y;\n"
  " if (q.w > 0.0) { vec2 s = floor((q.xy / q.w * 0.5 + 0.5) * vp * 16.0 + 0.5) / 16.0; q.xy = (s / vp * 2.0 - 1.0) * q.w; }\n"
  " gl_Position = q; }\n";
 // mode 0 opaque, 1 a glow (added), 2 a glass on what is there (times its tint, its colour
@@ -168,15 +174,20 @@ static char const vsrc[] =
 static char const fsrc[] =
  "#version 300 es\n"
  "#extension GL_EXT_blend_func_extended : enable\n"
- "precision highp float; in vec2 uv; in vec3 col; in float w;\n"
+ "precision highp float; in vec2 uv; in vec3 col; in vec3 scol; in vec3 lp; in float w;\n"
  "uniform sampler2D tx; uniform vec2 ts; uniform int has; uniform vec3 fog; uniform vec2 fz; uniform float tone; uniform int mode;\n"
- "uniform highp sampler2D lz; uniform int cls;\n"
+ "uniform highp sampler2D lz; uniform int cls; uniform highp sampler2D sm; uniform int sun; uniform float bias; uniform ivec2 ss;\n"
+ "float lit(int i, int j, float z) { return i < 0 || j < 0 || i >= ss.x || j >= ss.y || z <= texelFetch(sm, ivec2(i, j), 0).r ? 1.0 : 0.0; }\n"
+ "float vis() { float sx = (lp.x * 0.5 + 0.5) * float(ss.x) - 0.5, sy = (0.5 - lp.y * 0.5) * float(ss.y) - 0.5, fi = floor(sx), fj = floor(sy),\n"
+ "  fx = sx - fi, fy = sy - fj, z = lp.z - bias; int i = int(fi), j = int(fj);\n"
+ "  float t0 = lit(i, j, z) + (lit(i + 1, j, z) - lit(i, j, z)) * fx, t1 = lit(i, j + 1, z) + (lit(i + 1, j + 1, z) - lit(i, j + 1, z)) * fx;\n"
+ "  return t0 + (t1 - t0) * fy; }\n"
  "#ifdef GL_EXT_blend_func_extended\n"
  "layout(location = 0, index = 0) out vec4 o; layout(location = 0, index = 1) out vec4 o1;\n"
  "#else\n"
  "out vec4 o; vec4 o1;\n"
  "#endif\n"
- "void main(){ vec3 c = col * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
+ "void main(){ vec3 c = (col + scol * (sun != 0 ? vis() : 1.0)) * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
  " if (cls != 0) { float d = texelFetch(lz, ivec2(gl_FragCoord.xy), 0).r, z = gl_FragCoord.z;\n"
  "  if (cls == 1 ? !(d < 1.0 && z > d) : !(d >= 1.0 || z < d)) discard; }\n"
  " if (has != 0) { vec4 k = texture(tx, uv / ts); if (k.a < 0.5) discard; if (gl) t = k.rgb; else c *= k.rgb; }\n"
@@ -246,6 +257,9 @@ static int setup(struct helper *H) {
  H->fglass = ex && strstr(ex, "GL_EXT_color_buffer_float") && strstr(ex, "GL_EXT_float_blend");
  glUniform1i(H->u_tx, 0); glUniform1i(glGetUniformLocation(H->prog, "lz"), 2);
  H->u_cls = glGetUniformLocation(H->prog, "cls");
+ glUniform1i(glGetUniformLocation(H->prog, "sm"), 3);
+ H->u_lm = glGetUniformLocation(H->prog, "lm"); H->u_sun = glGetUniformLocation(H->prog, "sun");
+ H->u_bias = glGetUniformLocation(H->prog, "bias"); H->u_ss = glGetUniformLocation(H->prog, "ss");
  glPixelStorei(GL_PACK_ALIGNMENT, 4); glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
  glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
  dprintf(1, "ready %s\n", glGetString(GL_RENDERER));
@@ -306,14 +320,15 @@ static int bytex(void const *a, void const *b) {
 
 // the triangles in their order, as facets draws them, but for each stretch of opaque ones,
 // sorted by texture; each texture's a run of the index buffer
-static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off) {
- if (nv < 0 || nt < 0) { dprintf(1, "err buf size\n"); return; }
- unsigned char const *p = bytes(H, off, 32 * (size_t) nv + 16 * (size_t) nt);
+static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off, int S) {
+ if (nv < 0 || nt < 0 || (S != 8 && S != 11)) { dprintf(1, "err buf size\n"); return; }
+ size_t const vb = 4 * (size_t) S * nv;
+ unsigned char const *p = bytes(H, off, vb + 16 * (size_t) nt);
  int32_t *tr = p ? malloc(16 * (size_t) nt + 1) : NULL;
  uint32_t *ix = tr ? malloc(12 * (size_t) nt + 1) : NULL;
  struct run *runs = ix ? malloc(sizeof *runs * ((size_t) nt + 1)) : NULL;
  if (!runs) { free(tr); free(ix); dprintf(1, "err buf bytes\n"); return; }
- memcpy(tr, p + 32 * (size_t) nv, 16 * (size_t) nt);
+ memcpy(tr, p + vb, 16 * (size_t) nt);
  for (int i = 0, j; i < nt; i = j + (j == i)) {
   for (j = i; j < nt && tr[4 * j + 3] >= -1; j++) ;
   if (j > i + 1) qsort(tr + 4 * i, (size_t) (j - i), 16, bytex); }
@@ -330,10 +345,12 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off) {
  else { H->bufs = grow(H->bufs, &H->cbuf, H->nbuf, sizeof *H->bufs); b = H->bufs + H->nbuf++; b->id = id; }
  glGenVertexArrays(1, &b->vao); glBindVertexArray(b->vao);
  glGenBuffers(1, &b->vb); glBindBuffer(GL_ARRAY_BUFFER, b->vb);
- glBufferData(GL_ARRAY_BUFFER, 32 * (intptr_t) nv, p, GL_STATIC_DRAW);
- glVertexAttribPointer(0, 3, GL_FLOAT, 0, 32, (void*) 0); glEnableVertexAttribArray(0);
- glVertexAttribPointer(1, 2, GL_FLOAT, 0, 32, (void*) 12); glEnableVertexAttribArray(1);
- glVertexAttribPointer(2, 3, GL_FLOAT, 0, 32, (void*) 20); glEnableVertexAttribArray(2);
+ glBufferData(GL_ARRAY_BUFFER, (intptr_t) vb, p, GL_STATIC_DRAW);
+ GLsizei const sb = 4 * S;
+ glVertexAttribPointer(0, 3, GL_FLOAT, 0, sb, (void*) 0); glEnableVertexAttribArray(0);
+ glVertexAttribPointer(1, 2, GL_FLOAT, 0, sb, (void*) 12); glEnableVertexAttribArray(1);
+ glVertexAttribPointer(2, 3, GL_FLOAT, 0, sb, (void*) 20); glEnableVertexAttribArray(2);
+ if (S == 11) glVertexAttribPointer(3, 3, GL_FLOAT, 0, sb, (void*) 32), glEnableVertexAttribArray(3);   // ..else the sun reaches nothing
  glGenBuffers(1, &b->ib); glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, b->ib);
  glBufferData(GL_ELEMENT_ARRAY_BUFFER, 12 * (intptr_t) nt, ix, GL_STATIC_DRAW);
  glBindVertexArray(0);
@@ -371,6 +388,22 @@ static void cmd_base(struct helper *H, int w, int h, size_t off) {
  glBindTexture(GL_TEXTURE_2D, H->bc); glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
  free(rgba);
  H->bpend = 1;
+ dprintf(1, "ok\n"); }
+
+static int words(char *s, double *v, int max);
+
+static void cmd_sun(struct helper *H, char *args) {
+ double v[20];
+ if (words(args, v, 20) != 20 || v[0] < 1 || v[1] < 1) { dprintf(1, "err sun args\n"); return; }
+ int const w = (int) v[0], h = (int) v[1];
+ unsigned char const *p = bytes(H, (size_t) v[2], 4 * (size_t) w * h);
+ if (!p) { dprintf(1, "err sun bytes\n"); return; }
+ if (!H->sm) {
+  glGenTextures(1, &H->sm); glBindTexture(GL_TEXTURE_2D, H->sm);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); }
+ glBindTexture(GL_TEXTURE_2D, H->sm); glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, w, h, 0, GL_RED, GL_FLOAT, p);
+ H->sw = w, H->sh = h, H->bias = (float) v[3];
+ for (int i = 0; i < 16; i++) H->lm[i] = (float) v[4 + i];
  dprintf(1, "ok\n"); }
 
 static void cmd_drop(struct helper *H, int id) {
@@ -484,6 +517,11 @@ static void cmd_frame(struct helper *H, char *args) {
  glUniform3f(H->u_fog, (float) v[4], (float) v[5], (float) v[6]);
  glUniform2f(H->u_fz, (float) v[7], v[8] > v[7] ? (float) (1 / (v[8] - v[7])) : 0);
  glUniform1f(H->u_tone, (float) v[9]); glUniform2f(H->u_vp, (float) w, (float) h);
+ int const sun = ((int) v[10] & 256) && H->sm;
+ glUniform1i(H->u_sun, sun);
+ if (sun) {
+  glUniformMatrix4fv(H->u_lm, 1, 1, H->lm); glUniform1f(H->u_bias, H->bias); glUniform2i(H->u_ss, H->sw, H->sh);
+  glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, H->sm); glActiveTexture(GL_TEXTURE0); }
  // ..seen: the lenses' nearest depths, each alone, before all; else none, as far as can be
  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDepthMask(1); glClear(GL_DEPTH_BUFFER_BIT);
  if ((int) v[10] & 128) {
@@ -578,9 +616,10 @@ int glhelp_main(int argc, char **argv) {
  if (H->fd < 0) { dprintf(1, "err cannot open %s\n", argv[1]); return 2; }
  if (!setup(H)) return 3;
  for (char *l; (l = next_line(H)); ) {
-  int id, a, b, c; long off;
+  int id, a, b, c, k; long off;
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
-  else if (!strncmp(l, "buf ", 4) && sscanf(l + 4, "%d %d %d %ld", &id, &a, &b, &off) == 4) cmd_buf(H, id, a, b, (size_t) off);
+  else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
+  else if (!strncmp(l, "sun ", 4)) cmd_sun(H, l + 4);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
   else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);
   else if (!strncmp(l, "base ", 5) && sscanf(l + 5, "%d %d %ld", &a, &b, &off) == 3) cmd_base(H, a, b, (size_t) off);
