@@ -1462,15 +1462,20 @@
    (gtestir tgt syms ps q el)
     (q @ ((op a b) && elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['br (ccnot cc) el]]]))
          _ (bcat [(cggir tgt syms ps q) [['cmp (greg tgt 'acc) 0] ['br 'le el]]]))
-   ; tailir: a tail self-call's args into the arg regs. an arg that is its own param stays put; the rest
-   ; compute from the old regs, all but the last pushed, the last moved from acc
+   ; tailir: a tail self-call's args into the arg regs. an arg that is its own param stays put; one no
+   ; other changed arg reads computes straight into its reg, and when none is left so, the rest compute
+   ; from the old regs, all but the last pushed, the last moved from acc
    (tailir tgt syms ps as Lbody)
-    (: A (greg tgt 'acc) ch (filter (i \ !(as i = ps i)) (rangeL 0 #ps)) rv (rev ch)
-       (? !(two? ch) [['jmp Lbody]]
-          (bcat [(cats (map (i \ bcat [(cggir tgt syms ps (as i)) [['push A]]]) (rev >rv)))
-                 (cggir tgt syms ps (as <rv)) [['mov (argregir tgt <rv) A]]
-                 (cats (map (i \ [['pop (argregir tgt i)]]) >rv))
-                 [['jmp Lbody]]])))
+    (: A (greg tgt 'acc)
+       (rd? x nm) (x = nm || two? x && !(all (y \ !(rd? y nm)) x))
+       (put i) (bcat [(cggir tgt syms ps (as i)) [['mov (argregir tgt i) A]]])
+       (go ch) (: fr (filter (j \ all (i \ i = j || !(rd? (as i) (ps j))) ch) ch)
+                  (? !(two? ch) [['jmp Lbody]]
+                     (two? fr) (bcat [(put <fr) (go (filter (i \ !(i = <fr)) ch))])
+                     (: rv (rev ch)
+                        (bcat [(cats (map (i \ bcat [(cggir tgt syms ps (as i)) [['push A]]]) (rev >rv)))
+                               (put <rv) (cats (map (i \ [['pop (argregir tgt i)]]) >rv)) [['jmp Lbody]]]))))
+       (go (filter (i \ !(as i = ps i)) (rangeL 0 #ps))))
    (gargsir tgt syms ps as) (atom? as ? () (bcat [(cggir tgt syms ps <as) [['push (greg tgt 'acc)]] (gargsir tgt syms ps >as)]))
    ; per-site gensyms for the probe's fixed labels, so one probe IR splices N times into a group assemble
    (relabel ir lp ht ms en dp) (map (f \ map (x \ (x @ 'loop lp  'hit ht  'miss ms  'end en  'deopt dp  x)) f) ir)
