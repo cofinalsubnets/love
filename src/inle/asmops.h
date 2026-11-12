@@ -9,4 +9,6 @@
 #include "rv64/asmops.h"
 #elif defined(__wasm__)
 #include "wasm/asmops.h"
+#elif defined(__arm__)
+#include "arm/asmops.h"
 #endif

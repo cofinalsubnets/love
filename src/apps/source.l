@@ -273,9 +273,12 @@
    (seed-usage _) (puts """
     usage: love seed [-g] [ARCH] [DIR]
            love seed [-g] FORMAT [DIR [FLAG..]]
+           love seed kernel [DIR]
     lay this binary's source under DIR (default .) and rebuild it, byte for byte
       ARCH   x64 | a64 | rv64: build for that machine instead, as DIR/love-ARCH
       FORMAT apk | aab: android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
+      kernel this binary projected onto the metal, as DIR/love-ARCH.elf: a reformat, its
+             code the running binary's, its own objects compiled from the carried tree
       -g     build with the system cc and tools, ours filling the gaps
 
     """)
@@ -283,6 +286,7 @@
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
        _ (two? as0 && src-vers? <as0 ? (src-vers "seed"))
+       _ (two? as0 && <as0 = "kernel" ? (quit (kern-seed >as0)))
        f0 (two? as0 ? <as0 "")
        greg? (f0 = "-g")
        as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default, still eaten
@@ -343,7 +347,7 @@
           dst (two? a3 ? <a3)
           (elem xa seed-formats ? (seed-app root xa dst (two? a3 ? >a3)) (seed-wait root xa dst))))
 
-   ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
+   ; --- `love seed kernel [DIR]` -- the metal projection of this binary --------
    ; the boot stub is laid, not stored: the cat below evals off the carried tree in the
    ; Makefile's order. the arch is this binary's own, read off e_machine
    ; the kernel's objects come from the carried source, by its own Makefile, in a tree
@@ -365,15 +369,11 @@
    (kern-pick nm)
     (uread "/love/\(nm)" @ [1 s] (s + "") (src-die "the carried tree has no \(nm)"))
    (kern-b16 s i) (s i + 256 * s (i + 1))
-   kern-box {}                  ; the verb's inputs, read back by the stream
-   (kernel-main as)
-    ; the operand is a path to WRITE, so the flags are asked before it: a `-h` taken
-    ; for one lays a kernel in a file called -h
-    (: usage "usage: love kernel OUT.elf"
-       _ (two? as && src-help? <as ? (puts "\(usage)\n", quit 0))
-       _ (two? as && src-vers? <as ? (src-vers "kernel"))
-       _ (two? as ? 0 (src-die usage))
-       out <as
+   (kern-seed as)
+    (: _ (two? as && src-help? <as ? (seed-usage 0, quit 0))
+       dir (two? as ? <as ".")
+       _ (src-dash? dir ? (src-not-dir "seed" dir))
+       _ (two? (stat dir) ? 0 (mkdir dir 493))
        exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't read the seed path"))
        pie (open exe "r" @ h
@@ -382,11 +382,12 @@
        m (kern-b16 pie 18)
        arch (m @ 62 "x64" 183 "a64" 243 "rv64"
              (src-die "no boot door for this machine"))
+       out "\(dir)/love-\(arch).elf"
        ; the stream evals in its own layer, so the inputs cross on the verb table,
        ; the one tablet every layer reaches, under a key pulled back off after
-       _ (pins kern-box 'pie pie 'out out 'arch arch 'kobs (kern-objs out exe))
+       box (pins {} 'pie pie 'out out 'arch arch 'kobs (kern-objs out exe))
        vt (cite 'verbs 'tab)
-       _ (pin vt 'kern-in kern-box)
+       _ (pin vt 'kern-in box)
        cat ("(borrow 'holo)"
             + kern-pick "src/apps/kore/text.l"
             + kern-pick "src/apps/kore/u.l"
@@ -458,7 +459,6 @@ else ~/.love), with lush beside it
       'source source-main
       'src    source-main
       'seed   seed-main
-      'kernel kernel-main
       'nest   nest-main))
 
 ) ; module 'source

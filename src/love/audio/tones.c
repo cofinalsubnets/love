@@ -3,7 +3,8 @@
 // voice's operators and decides their envelopes (src/apps/harp/ops.l); this runs the frames.
 // (tones ops st n f0 rate) -> a float tray: n frames of left, n of right, then each operator's
 //   last two outputs (for its feedback, handed back next time as st; any other st, () say, is
-//   all at rest), then scratch. ops is a float
+//   all at rest), then scratch; with ws a workspace of (tones-ws k), k >= the operators times n,
+//   the scratch is laid there and left out of the answer. ops is a float
 //   tray of rows of tn_row numbers, an operator a row, a modulator before what it moves:
 //    0 at     the frame its voice starts           1 f      its frequency, Hz
 //    2 slide  nepers a second it glides; phase f (e^kt - 1) / k
@@ -32,26 +33,35 @@ float lm_expf(float);
 #endif
 
 enum { tn_row = 49, tn_segs = 6, tn_seg0 = 19 };
+#if Bits == 64
+enum { tn_lfo = 0 };
+#else
+enum { tn_lfo = 15 };   // vibrato and tremolo taken each 16 frames and held
+#endif
 #define tn_ln10_20 ((flo_t) 0.11512925464970229)   // ln 10 / 20
 #define tn_floor ((flo_t) 1.5848931924611134e-05)    // 96 dB down
 
-static love_inline flo_t tn_fl(flo_t x) { flo_t f = (flo_t) (int64_t) x; return f > x ? f - 1 : f; }
+static love_inline flo_t tn_fl(flo_t x) { flo_t f = (flo_t) (intptr_t) x; return f > x ? f - 1 : f; }
 // sine of x turns: folded to a quarter turn either side of 0, then its series to z^13
 static love_inline flo_t tn_sin(flo_t x) {
  flo_t u = x - tn_fl(x);
  if (u > (flo_t) 0.5) u -= 1;
  if (u > (flo_t) 0.25) u = (flo_t) 0.5 - u;
- else if (u < (flo_t) -0.25) u = (flo_t) -0.5 - u;
+ else if (u < -(flo_t) 0.25) u = -(flo_t) 0.5 - u;
  flo_t const z = u * (flo_t) 6.283185307179586, q = z * z;
- return z * (1 + q * ((flo_t) -1 / 6 + q * ((flo_t) 1 / 120 + q * ((flo_t) -1 / 5040 + q * ((flo_t) 1 / 362880
-          + q * ((flo_t) -1 / 39916800 + q * ((flo_t) 1 / 6227020800.0)))))));
+#if Bits == 64
+ return z * (1 + q * (-(flo_t) 0.16666666666666666 + q * ((flo_t) 0.008333333333333333 + q * (-(flo_t) 0.0001984126984126984
+          + q * ((flo_t) 2.7557319223985893e-06 + q * (-(flo_t) 2.505210838544172e-08 + q * (flo_t) 1.6059043836821613e-10))))));
+#else
+ return z * ((flo_t) 0.9999966158999021 + q * (-(flo_t) 0.166648283792627 + q * ((flo_t) 0.008306325205790568 + q * -(flo_t) 0.00018363653481551223)));
+#endif
 }
 // harp's noise: the frame's number hashed, so a frame always draws the same sample
 static flo_t tn_noise(int64_t ix) {
  uint64_t a = ((uint64_t) ix * 1103515245u + 12345u) & 0xffffffffu;
  uint64_t b = ((a ^ a >> 16) * 2246822507u) & 0xffffffffu;
  uint64_t c = ((b ^ b >> 13) * 3266489909u) & 0xffffffffu;
- return (flo_t) (c >> 16 & 65535) * (flo_t) 0.000030517578125 - 1; }
+ return (flo_t) (int) (c >> 16 & 65535) * (flo_t) 0.000030517578125 - 1; }
 static love_inline flo_t tn_wave(int w, flo_t x, int64_t ix) {
  flo_t u, s;
  switch (w) {
@@ -108,13 +118,16 @@ static void tn_op(flo_t const *o, flo_t const *mod, flo_t *y, flo_t *L, flo_t *R
   flo_t ek = k != 0 ? tn_exp(k * t) : 0, rk = k != 0 ? tn_exp(k * dt) : 1,
         ed = g != 0 ? tn_exp(-ka * t) : 0, rd = g != 0 ? tn_exp(-ka * dt) : 1;
   flo_t const vamp = vib != 0 && vr != 0 ? f * vib / (vr * (flo_t) 6.283185307179586) : 0;
+  flo_t tg = 1, vx = 0;
   for (; i < n; i++, t += dt) {
    if (t >= E.next) tn_enter(&E, t, dt);
-   flo_t a = tn_amp(&E) * lvl;
-   if (trem != 0) a *= tn_exp(-trem * ((flo_t) 0.5 - (flo_t) 0.5 * tn_sin(tr * t + (flo_t) 0.25)) * tn_ln10_20);
+   if (!(i & tn_lfo)) {
+    if (trem != 0) tg = tn_exp(-trem * ((flo_t) 0.5 - (flo_t) 0.5 * tn_sin(tr * t + (flo_t) 0.25)) * tn_ln10_20);
+    if (vamp != 0) vx = vamp * (1 - tn_sin(vr * t + (flo_t) 0.25)); }
+   flo_t a = tn_amp(&E) * lvl * tg;
    flo_t x = k != 0 ? f * (ek - 1) / k : f * t;
    if (g != 0) x += g * (1 - ed);
-   if (vamp != 0) x += vamp * (1 - tn_sin(vr * t + (flo_t) 0.25));
+   x += vx;
    if (mod) x += dep * mod[i];
    if (fb != 0) x += fb * (a1 + a2);
    flo_t const v = a == 0 ? 0 : a * tn_wave(w, x, f0 + i);
@@ -124,19 +137,45 @@ static void tn_op(flo_t const *o, flo_t const *mod, flo_t *y, flo_t *L, flo_t *R
    tn_step(&E), ek *= rk, ed *= rd; } }
  *y1 = a1, *y2 = a2; }
 
+// a workspace: a state holding its magic and k, then k floats a run lays its scratch in, kept
+// from one run to the next so the scratch is not made again. a str's bytes are word aligned,
+// all a flo_t needs, wherever the gc lays it
+#define TW_MAGIC ((uintptr_t) 0x746f6e65)
+struct tw_head { uintptr_t magic, k; };
+static uintptr_t tw_floats(word x) {
+ struct str const *s = state_str(x);
+ struct tw_head const *h = s ? (struct tw_head const *) s->bytes : 0;
+ return h && s->len >= sizeof *h && h->magic == TW_MAGIC && (s->len - sizeof *h) / sizeof(flo_t) >= h->k ? h->k : 0; }
+static flo_t *tw_data(word x) { return (flo_t *) (state_str(x)->bytes + sizeof(struct tw_head)); }
+
+// (tones-ws k): a workspace for k floats of scratch
+love_noinline static struct g *host_tones_ws(struct g *g) {
+ word *a = g->sp;
+ if (!(a[0] & 1) || getcharm(a[0]) < 0 || getcharm(a[0]) > 1 << 24) { a[0] = ZeroPoint; return g; }
+ uintptr_t const k = (uintptr_t) getcharm(a[0]), n = sizeof(struct tw_head) + k * sizeof(flo_t);
+ union u *s = new_state(&g, n, sizeof(struct tw_head));
+ if (!s) return g;
+ struct tw_head *h = (struct tw_head *) ((struct state *) s)->str->bytes;
+ h->magic = TW_MAGIC, h->k = k;
+ g->sp[0] = word(s);
+ return g; }
+static lvm(lvm_tones_ws) { LvmCallp(g, 0, host_tones_ws) }
+
 love_noinline static struct g *host_tones(struct g *g) {
  word *a = g->sp;
- // (tones ops st n f0 rate)
+ // (tones ops st n f0 rate ws)
  if (!galaxyp(a[0]) || tray(a[0])->type != love_R || !(a[2] & 1) || !isnum(a[3]) || !isnum(a[4])) { a[0] = ZeroPoint; return g; }
  intptr_t const n = getcharm(a[2]);
  uintptr_t const no = tray_nelem(tray(a[0])) / tn_row;
  if (n < 0 || n > 1 << 22 || no > 4096 || tray_nelem(tray(a[0])) % tn_row) { a[0] = ZeroPoint; return g; }
- uintptr_t const len = 2 * (uintptr_t) n + 2 * no + no * (uintptr_t) n, w = b2w(tray_bytes(love_R, 1, len));
+ int const inws = tw_floats(a[5]) >= no * (uintptr_t) n;
+ uintptr_t const len = 2 * (uintptr_t) n + 2 * no + (inws ? 0 : no * (uintptr_t) n), w = b2w(tray_bytes(love_R, 1, len));
  if (!ok(g = have(g, w))) return g;
  a = g->sp;
  struct tray *out = ini_tray(bump(g, w), love_R, 1);
  out->shape[0] = len;
- flo_t *d = tray_data(out), *L = d, *R = d + n, *st = d + 2 * n, *sc = st + 2 * no;
+ // the workspace read after the allocation, which may move it
+ flo_t *d = tray_data(out), *L = d, *R = d + n, *st = d + 2 * n, *sc = inws ? tw_data(a[5]) : st + 2 * no;
  for (uintptr_t i = 0; i < 2 * (uintptr_t) n; i++) d[i] = 0;
  flo_t const *ops = tray_data(tray(a[0])), rate = toflo(a[4]);
  int64_t const f0 = (int64_t) toflo(a[3]);
@@ -152,6 +191,39 @@ love_noinline static struct g *host_tones(struct g *g) {
         st + 2 * j, st + 2 * j + 1); }
  a[0] = word(out);
  return g; }
-static lvm(lvm_tones) { LvmCallp(g, 4, host_tones) }
+static lvm(lvm_tones) { LvmCallp(g, 5, host_tones) }
 
-LvDef("tones", tones, 5, "dsp");
+// (mixall ps n): 2n frames, left then right, the sum of each piece [y gl gr o] of the list ps in
+// order: y's frame o + i at i where it falls in y's first n, at gl and gr. a side whose gain
+// is 0 is not touched; a piece that is not one is skipped
+love_noinline static struct g *host_mixall(struct g *g) {
+ word *a = g->sp;
+ if (!(a[1] & 1)) { a[0] = ZeroPoint; return g; }
+ intptr_t const n = getcharm(a[1]);
+ if (n < 0 || n > 1 << 22) { a[0] = ZeroPoint; return g; }
+ uintptr_t const w = b2w(tray_bytes(love_R, 1, 2 * (uintptr_t) n));
+ if (!ok(g = have(g, w))) return g;
+ a = g->sp;
+ struct tray *out = ini_tray(bump(g, w), love_R, 1);
+ out->shape[0] = 2 * (uintptr_t) n;
+ flo_t *L = tray_data(out), *R = L + n;
+ for (intptr_t i = 0; i < 2 * n; i++) L[i] = 0;
+ for (word p = a[0]; chainp(p); p = B(p)) {
+  word q = A(p), y, gl, gr, o;
+  if (!chainp(q) || !chainp(B(q)) || !chainp(BB(q)) || !chainp(B(BB(q)))) continue;
+  y = A(q), gl = AB(q), gr = A(BB(q)), o = A(B(BB(q)));
+  if (!galaxyp(y) || tray(y)->type != love_R || !isnum(gl) || !isnum(gr) || !(o & 1)) continue;
+  intptr_t const off = getcharm(o);
+  if (tray_nelem(tray(y)) < (uintptr_t) n || off <= -n || off >= n) continue;
+  // the frames i whose off + i falls in y's first n
+  intptr_t const i0 = off < 0 ? -off : 0, i1 = off > 0 ? n - off : n;
+  flo_t const *ys = (flo_t const *) tray_data(tray(y)) + off, fl = toflo(gl), fr = toflo(gr);
+  if (fl != 0) for (intptr_t i = i0; i < i1; i++) L[i] += ys[i] * fl;
+  if (fr != 0) for (intptr_t i = i0; i < i1; i++) R[i] += ys[i] * fr; }
+ a[0] = word(out);
+ return g; }
+static lvm(lvm_mixall) { LvmCallp(g, 1, host_mixall) }
+
+LvDef("tones", tones, 6, "dsp");
+LvDef("tones-ws", tones_ws, 1, "dsp");
+LvDef("mixall", mixall, 2, "dsp");

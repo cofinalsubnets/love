@@ -179,7 +179,6 @@
    ; --- the C, through clay ------------------------------------------------------
    ; the roster laid once as X-rows for three consumers: nifs, def1, nif_lvm. P a plain run
    ; {impl, ret0}; C a curried one {cur, count, impl, ret0}. at: the run's offset in nifs
-   nl (string 10)
    (vr s) ['var s]
    (mac nm body) ['cpp-def nm body]
    (nif-wide? r) (1 < <>>r)
@@ -201,7 +200,7 @@
                        (two? cur ? [(rev cur)]))
      (go 0 () l))
    ; a macro body over several lines, each but the last ending in a continuation
-   (nif-lines l) (l @ (h . t) (foldl (a \ s \ "\(a) \\\(nl) \(s)") "\\\(nl) \(h)" t) "")
+   (nif-lines l) (l @ (h . t) (foldl (a \ s \ "\(a) \\\n \(s)") "\\\n \(h)" t) "")
    nif-rows-def
     (mac "nif_rows(P, C)" (nif-lines (map (p \ nif-row <>p <p) (zip nif-rows nif-ats))))
    nif-insts-def

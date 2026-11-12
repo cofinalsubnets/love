@@ -21,9 +21,8 @@
             wear (), ()))
 
 (:
-   nl (string 10)
    (join l) (foldl (+) "" l)
-   (pl s) (puts (s + nl))
+   (pl s) (puts (s + "\n"))
    (idxin x l k) (? !(two? l) -1 (<l = x) k (idxin x >l (k + 1)))
    (look k tbl) (? !(two? tbl) () (<<tbl = k) <tbl (look k >tbl))
    (zero? e) (charm? e && e = 0)
@@ -244,9 +243,9 @@
     (d 3 @ p
        (d 4 != 'cases ? ("   " + show p + ")")
           (p 2 @ nr
-             (join ["   (lam v (nat_rect " (show (nr 1)) nl
-                    "                     " (show (nr 2)) nl
-                    "                     " (show (nr 3)) nl
+             (join ["   (lam v (nat_rect " (show (nr 1)) "\n"
+                    "                     " (show (nr 2)) "\n"
+                    "                     " (show (nr 3)) "\n"
                     "                     " (show (nr 4)) ")))"]))))
    (howof d) (? (d 4 = 'conv)  "by conversion"
                 (d 4 = 'cases) "by cases on the saturated measure"

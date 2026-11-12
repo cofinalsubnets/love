@@ -372,7 +372,8 @@ __attribute__((weak)) void k_tick_sync(void) { }
 static void k_park(void) {
   if (!kkb.hold) fbdraw();
   k_horn_poll();
-  k_wait(); }
+  k_wait();
+  k_tick_sync(); }
 
 love_kdoorv(wait_fds, (struct wait_fd *fds, int n, uintptr_t ms), (fds, n, ms)) {
   if (n <= 0) { love_sleep(ms); return; }
@@ -1488,6 +1489,35 @@ love_noinline static word k_lvm_kexec(word pw, word cw) {
 static lvm(lvm_kexec) {
   Sp[1] = k_lvm_kexec(Sp[0], Sp[1]);
   love_musttail return Nextp(1, 1); }
+// (kexec-initrd path cmd rd): the same, with the bytes rd as the kernel's initrd (a guest of
+// the firmware: linux's stub reads them off its initrd device path)
+__attribute__((weak)) long k_kexec_initrd(char const *p, uintptr_t pn, char const *cmd, uintptr_t cn,
+                                          void const *rd, uintptr_t rn) {
+  return (void) p, (void) pn, (void) cmd, (void) cn, (void) rd, (void) rn, -ENOSYS; }
+love_noinline static word k_lvm_kexec_initrd(word pw, word cw, word rw) {
+  if (!strp(pw) || !strp(cw) || !strp(rw)) return ZeroPoint;
+  struct str *p = (struct str*) pw, *c = (struct str*) cw, *r = (struct str*) rw;
+  return putcharm((intptr_t) k_kexec_initrd(p->bytes, p->len, c->bytes, c->len, r->bytes, r->len)); }
+static lvm(lvm_kexec_initrd) {
+  Sp[2] = k_lvm_kexec_initrd(Sp[0], Sp[1], Sp[2]);
+  love_musttail return Nextp(1, 2); }
+
+// (efi-read path): a file off the volume the firmware booted us from, by its own reader (a
+// guest of the firmware) -> the bytes | ()
+__attribute__((weak)) long k_efi_open(char const *p, uintptr_t pn, void **fh) {
+  return (void) p, (void) pn, (void) fh, -ENOSYS; }
+__attribute__((weak)) long k_efi_read(void *fh, void *buf, uintptr_t n) {
+  return (void) fh, (void) buf, (void) n, -ENOSYS; }
+love_noinline static struct g *k_efi_readp(struct g *g) {
+  word pw = g->sp[0];
+  void *fh = 0;
+  long n = strp(pw) ? k_efi_open(((struct str*) pw)->bytes, ((struct str*) pw)->len, &fh) : -EINVAL;
+  if (n < 0) return g->sp[0] = ZeroPoint, g;
+  if (!ok(g = str0(g, (uintptr_t) n))) return k_efi_read(fh, 0, 0), g;   // OOM: closed, the wrapper raises
+  if (k_efi_read(fh, txt(g->sp[0]), (uintptr_t) n) < 0) g->sp[0] = ZeroPoint;
+  return g->sp[1] = g->sp[0], g->sp += 1, g; }
+static lvm(lvm_efi_read) {
+ LvmCall(g, k_efi_readp) }
 
 // the svm spike (x64/svm.c): (svm ()) the capability, (svm-run ()) one guest -> (exitcode rax rip) | ()
 #if defined(__x86_64__)
@@ -2085,6 +2115,8 @@ static union u
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
   nif_fetch[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_fetch}, {lvm_ret0}},
   nif_kexec[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_kexec}, {lvm_ret0}},
+  nif_kexec_initrd[] = {{lvm_cur}, {.x = putcharm(3)}, {lvm_kexec_initrd}, {lvm_ret0}},
+  nif_efi_read[] = {{lvm_efi_read}, {lvm_ret0}},
 #if defined(__x86_64__)
   nif_svm[] = {{lvm_svm}, {lvm_ret0}},
   nif_svm_run[] = {{lvm_svm_run}, {lvm_ret0}},
@@ -2185,7 +2217,10 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"kpaper", {.k = nif_kpaper}},
   {"kshow", {.k = nif_kshow}},
   {"kscan", {.k = nif_kscan}},
-  {"kgrab", {.k = nif_kgrab}} };
+  {"kgrab", {.k = nif_kgrab}},
+  // a guest of the firmware's (x64/arch.c)
+  {"kexec-initrd", {.k = nif_kexec_initrd}},
+  {"efi-read", {.k = nif_efi_read}} };
 
 // the kore cat is read off the ramfs at boot: only the order is baked
 static char const src_korelist[] =
@@ -2214,17 +2249,19 @@ void kmain(void) {
  __love_osv = -1;
  k_seat_init();
  khhdm = kboot.hhdm;
- archinit();
+ // a guest of the firmware keeps its interrupts, tables and devices: theirs, not ours
+ bool guest = kboot.efi_st != 0;
+ if (!guest) archinit();
  // the door's date, else the RTC, reachable once archinit has mapped it
  if (!kboot.date) kboot.date = k_rtc();
- serial_init();
+ if (!guest) serial_init();
  // only meminit is required: without fbinit or cbinit the kernel runs on serial alone
  if (meminit()) {
   if (fbinit()) cbinit();        // the framebuffer console
  // kmallocw memory, so pa = va - khhdm holds for everything the device reads
-  k_blk_init(kmallocwa(b2w(320), 16));
+  if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
-  k_hda_init(kmallocwa(b2w(3840), 128));
+  if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
  // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;

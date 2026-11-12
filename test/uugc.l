@@ -1,25 +1,16 @@
 ; test/uugc.l -- test/proof/rocq/gc.v as uu proof terms: the minor is sound under a complete
 ; write barrier, its work is bounded by the nursery, its cheney drain an exact fixpoint.
-; uu has no user inductives: a list is a length and nested pairs, Reach is step-indexed
+; a list and Reach are declared families, as gc.v's
 
-; --- lists over any type: grec computes on a cons by sigma eta ---
+; --- lists over any type ---
 (test
- (defn gvec (pi A UU n nat UU)
-   (lam A n (nat_rect (lam q UU) unit (lam j r (total2 x A r)) n)))
- (defn glist (pi A UU UU) (lam A (total2 n nat (gvec A n))))
- (defn gnil (pi A UU (glist A)) (lam A (tpair 0 tt)))
- (defn gcons (pi A UU x A l (glist A) (glist A))
-   (lam A x l (tpair (succ (pr1 l)) (tpair x (pr2 l)))))
+ (defind glist (A UU) () (gnil () (glist A)) (gcons (x A l (glist A)) (glist A)))
  (defn grec
    (pi A UU P (pi l (glist A) UU) pn (P (gnil A))
        pc (pi x A t (glist A) ih (P t) (P (gcons A x t)))
        l (glist A) (P l))
-   (lam A P pn pc l
-     ((nat_rect (lam q (pi v (gvec A q) (P (tpair q v))))
-        (lam v (unit_rect (lam u (P (tpair 0 u))) pn v))
-        (lam j ih v (pc (pr1 v) (tpair j (pr2 v)) (ih (pr2 v))))
-        (pr1 l))
-      (pr2 l))))
+   (lam A (glist_rect A)))
+ (defn glen (pi A UU l (glist A) nat) (lam A l (grec A (lam q nat) 0 (lam x t ih (succ ih)) l)))
  (defn gif (pi A UU c bool x A y A A) (lam A c x y (bool_rect (lam q A) x y c)))
  (defn gapp (pi A UU l (glist A) m (glist A) (glist A))
    (lam A l m (grec A (lam q (glist A)) m (lam x t ih (gcons A x ih)) l)))
@@ -54,13 +45,10 @@
      (lam x t ih (gif gnl (f x) (gcons nat x ih) ih)) l)))
  (defn gflat (pi f (pi x nat gnl) l gnl gnl)
    (lam f l (grec nat (lam q gnl) (gnil nat) (lam x t ih (gapp nat (f x) ih)) l)))
- ; reachability, an absent object a dead end: a seed at step 0, an edge from step n at step n+1
- (defn greachn (pi r greg s gnl n nat a nat UU)
-   (lam r s n (nat_rect (lam q (pi a nat UU))
-     (lam a (gin a s))
-     (lam j ih b (total2 a nat (total2 x (ih a) (gin b (gedges a r)))))
-     n)))
- (defn greach (pi r greg s gnl a nat UU) (lam r s a (total2 n nat (greachn r s n a))))
+ ; reachability, an absent object a dead end: a seed, or an edge from a reached object
+ (defind greach (r greg s gnl) (a nat)
+   (gseed (a nat h (gin a s)) (greach r s a))
+   (gstep (a nat b nat h (greach r s a) i (gin b (gedges a r))) (greach r s b)))
  (defn gyoung (pi nur greg roots gnl gnl) (lam nur roots (gfilter (lam a (gpresentb a nur)) roots)))
  (defn gremyoung (pi nur greg old greg rem gnl gnl)
    (lam nur old rem (gflat (lam oa (gfilter (lam y (gpresentb y nur)) (gedges oa old))) rem)))
@@ -84,26 +72,18 @@
  ((vof 0 '(gl2 1 3)) = (vof 0 '(gedges 2 gr3)))
  ((vof 0 '(gnil nat)) = (vof 0 '(gedges 7 gr3))))
 
-; --- reach's constructors and its induction ---
+; --- reach's induction: its recursor, the motive blind to the derivation ---
 (test
- (defn gseed (pi r greg s gnl a nat h (gin a s) (greach r s a)) (lam r s a h (tpair 0 h)))
- (defn gstep (pi r greg s gnl a nat b nat h (greach r s a) i (gin b (gedges a r)) (greach r s b))
-   (lam r s a b h i (tpair (succ (pr1 h)) (tpair a (tpair (pr2 h) i)))))
  (defq greachind
    (pi r greg s gnl P (pi a nat UU)
        hs (pi a nat h (gin a s) (P a))
        ht (pi a nat b nat h (greach r s a) p (P a) i (gin b (gedges a r)) (P b))
        a nat h (greach r s a) (P a))
-   (lam r s P hs ht a h
-     ((nat_rect (lam q (pi c nat v (greachn r s q c) (P c)))
-        (lam c v (hs c v))
-        (lam j ih c v (ht (pr1 v) c (tpair j (pr1 (pr2 v))) (ih (pr1 v) (pr1 (pr2 v))) (pr2 (pr2 v))))
-        (pr1 h))
-      a (pr2 h)))))
+   (lam r s P (greach_rect r s (lam a h (P a))))))
 
 ; --- gnatb reads as equality ---
 (test
- (elfold '(gnl greg gseeds gyoung gremyoung gif gapp gedges gfst gany gpresentb gpresent gin gfilter gflat gnodup ggray gcond gdel gcheney gnatb add (gnil nat) (gcons nat)))
+ (elfold '(gnl greg gseeds gyoung gremyoung gif gapp gedges gfst gany gpresentb gpresent gin gfilter gflat gnodup ggray gcond gdel gcheney gnatb add))
 
 (elq 'gnatbeq '(pi a nat b nat h (paths bool (gnatb a b) true) (paths nat a b))
    '(lam a b (cases (isdeceqnat a b) (lam e h e) (lam ne h (absurd (nopathsfalsetotrue h))))))
@@ -222,7 +202,7 @@
  (defn gdel (pi x nat m gnl gnl)
    (lam x m (grec nat (lam q gnl) (gnil nat)
      (lam z t ih (gif gnl (gnatb x z) t (gcons nat z ih))) m)))
- (elq 'gdellen '(pi x nat m gnl h (gin x m) (paths nat (pr1 m) (succ (pr1 (gdel x m)))))
+ (elq 'gdellen '(pi x nat m gnl h (gin x m) (paths nat (glen nat m) (succ (glen nat (gdel x m)))))
    '(lam x m (ind m
       (lam h (absurd h))
       (lam z t ih h (ifb (gnatb x z)
@@ -236,19 +216,19 @@
       (lam z t ih h (ifb (gnatb x z)
         (lam e (cases h (lam p (absurd (ne (sym (trans (gnatbeq _ _ e) p))))) (lam p p)))
         (lam e (cases h (lam p (ii1 p)) (lam p (ii2 (ih p))))))))))
- (elq 'gpigeon '(pi l gnl nd (gnodup l) m gnl inc (gincl l m) (paths bool (natgtb (pr1 l) (pr1 m)) false))
+ (elq 'gpigeon '(pi l gnl nd (gnodup l) m gnl inc (gincl l m) (paths bool (natgtb (glen nat l) (glen nat m)) false))
    '(lam l (ind l
       (lam nd m inc rfl)
       (lam x t ih nd m inc
         (rw (sym (gdellen x m (inc x (ii1 rfl))))
           (ih (pr2 nd) (gdel x m)
             (lam y hy (gdelin x y (lam p ((pr1 nd) (rw p hy))) m (inc y (ii2 hy))))))))))
- (elq 'gfstlen '(pi r greg (paths nat (pr1 (gfst r)) (pr1 r)))
+ (elq 'gfstlen '(pi r greg (paths nat (glen nat (gfst r)) (glen gobj r)))
    '(lam r (ind r rfl (lam o t ih (cong (lam n (succ n)) ih)))))
  (defn gpromoted (pi nur greg seeds gnl y nat UU)
    (lam nur seeds y (total2 u (gpresent y nur) (greach nur seeds y))))
  (elq 'gminorbounded '(pi nur greg seeds gnl l gnl nd (gnodup l) all (pi y nat h (gin y l) (gpromoted nur seeds y))
-       (paths bool (natgtb (pr1 l) (pr1 nur)) false))
+       (paths bool (natgtb (glen nat l) (glen gobj nur)) false))
    '(lam nur seeds l nd all (rw (gfstlen nur) (gpigeon l nd (gfst nur) (lam y h (pr1 (all y h))))))))
 
 ; --- tenured growth that keeps no pointer into the nursery leaves the survivors the same ---
@@ -392,7 +372,7 @@
      (lam a t ih hl hm hd (tpair
        (lam i (cases (ginappor a t m i) (lam p ((pr1 hl) p)) (lam p (hd a p (ii1 rfl)))))
        (ih (pr2 hl) hm (lam x i j (hd x i (ii2 j)))))))))
- (elq 'glenapp '(pi l gnl m gnl (paths nat (pr1 (gapp nat l m)) (add (pr1 l) (pr1 m))))
+ (elq 'glenapp '(pi l gnl m gnl (paths nat (glen nat (gapp nat l m)) (add (glen nat l) (glen nat m))))
    '(lam l m (ind l rfl (lam x t ih (cong (lam n (succ n)) ih))))))
 
 ; --- the copy loop: [] and gray matched first, so an empty answer only means an unfinished scan ---
@@ -408,7 +388,7 @@
          gray))
        fuel)))
  (defn gdrain (pi r greg roots gnl gopt)
-   (lam r roots (gcheney r (succ (pr1 r)) (gnil nat) (ggray r (gnil nat) roots))))
+   (lam r roots (gcheney r (succ (glen gobj r)) (gnil nat) (ggray r (gnil nat) roots))))
  (defn gclosed (pi r greg l gnl m gnl UU)
    (lam r l m (pi b nat h (gin b l) y nat i (gin y (gedges b r)) j (gpresent y r) (gin y m))))
  (defn gall (pi P (pi a nat UU) l gnl UU) (lam P l (pi b nat h (gin b l) (P b))))
@@ -486,7 +466,7 @@
      (lam r h (absurd (nopathsfalsetotrue h)))
      (lam j ih r (nind r (lam h rfl) (lam k u h (ih k h)))))))
  (defn gfueled (pi r greg fuel nat black gnl UU)
-   (lam r fuel black (paths bool (natgtb (add fuel (pr1 black)) (pr1 r)) true)))
+   (lam r fuel black (paths bool (natgtb (add fuel (glen nat black)) (glen gobj r)) true)))
  (defn genough (pi r greg fuel nat black gnl gray gnl UU)
    (lam r fuel black gray
      (pi nd (gnodup (gapp nat black gray))
@@ -498,7 +478,7 @@
      (lam black gray (grec nat (lam q (genough r 0 black q))
        (lam nd inc lt (tpair black rfl))
        (lam a gs ih nd inc lt (absurd (nopathstruetofalse (trans
-         (sym (ggtadd (pr1 black) (pr1 (gcons nat a gs)) (pr1 r) lt))
+         (sym (ggtadd (glen nat black) (glen nat (gcons nat a gs)) (glen gobj r) lt))
          (rw (glenapp black (gcons nat a gs))
            (rw (gfstlen r) (gpigeon (gapp nat black (gcons nat a gs)) nd (gfst r) inc)))))))
        gray))
@@ -517,24 +497,24 @@
                  (lam h (inc x h))
                  (lam h (ggraypresent r W (gedges a r) x h))))
                (rw (sym (glenapp black (gcons nat a (gnil nat))))
-                 (rw (sym (gaddstep f (pr1 black))) lt))))))))))
+                 (rw (sym (gaddstep f (glen nat black))) lt))))))))))
        gray)))))
  ; the scan pointer catches the allocation pointer
  (elq 'gdrainterminates '(pi r greg roots gnl (total2 res gnl (paths gopt (gdrain r roots) (ii1 res))))
    '(lam r roots
-     (gcheneyenough r (succ (pr1 r)) (gnil nat) (ggray r (gnil nat) roots)
+     (gcheneyenough r (succ (glen gobj r)) (gnil nat) (ggray r (gnil nat) roots)
        (ggraynodup r (gnil nat) roots)
        (lam x h (ggraypresent r (gnil nat) roots x h))
-       (transportf nat (lam w (paths bool (natgtb w (pr1 r)) true)) _ _
-         (sym (maponpaths nat nat (lam n (succ n)) _ _ (natplusr0 (pr1 r))))
-         (natgthsnn (pr1 r)))))))
+       (transportf nat (lam w (paths bool (natgtb w (glen gobj r)) true)) _ _
+         (sym (maponpaths nat nat (lam n (succ n)) _ _ (natplusr0 (glen gobj r))))
+         (natgthsnn (glen gobj r)))))))
 
 ; --- the drain copies each once, nothing dead, nothing live lost; a second pass copies nothing ---
 (test
  (elq 'gdrainsound '(pi r greg roots gnl res gnl y nat h (paths gopt (gdrain r roots) (ii1 res)) i (gin y res) (greach r roots y))
    '(lam r roots res y h i
      ((pr2 (pr2 (pr2 (gchinv r (lam a (greach r roots a)) (lam a b p j (gstep r roots a b p j))
-         (succ (pr1 r)) (gnil nat) (ggray r (gnil nat) roots) res h
+         (succ (glen gobj r)) (gnil nat) (ggray r (gnil nat) roots) res h
          (ggraynodup r (gnil nat) roots)
          (lam b j z k l (absurd j))
          (lam b j (gseed r roots b (ggraysub r (gnil nat) roots b j)))))))
@@ -542,7 +522,7 @@
  (elq 'gdrainunit '(pi r greg roots gnl res gnl h (paths gopt (gdrain r roots) (ii1 res))
        (gconcl r (lam a unit) (ggray r (gnil nat) roots) res))
    '(lam r roots res h
-     (gchinv r (lam a unit) (lam a y p i tt) (succ (pr1 r)) (gnil nat) (ggray r (gnil nat) roots) res h
+     (gchinv r (lam a unit) (lam a y p i tt) (succ (glen gobj r)) (gnil nat) (ggray r (gnil nat) roots) res h
        (ggraynodup r (gnil nat) roots)
        (lam b i y j k (absurd i))
        (lam b i tt))))
@@ -581,5 +561,5 @@
    (lam r roots res y hr (fromempty (gin y res) hr))))
  ; the elaborator proves nothing: what it makes the kernel still checks
  ('rejected = rejects (z \ elq 'gbadrfl '(paths nat 0 1) 'rfl))
- ('rejected = rejects (z \ elq 'gbadind '(pi l gnl (paths nat (pr1 l) 0)) '(lam l (ind l rfl (lam x t ih rfl))))))
+ ('rejected = rejects (z \ elq 'gbadind '(pi l gnl (paths nat (glen nat l) 0)) '(lam l (ind l rfl (lam x t ih rfl))))))
 (hear test-strict)

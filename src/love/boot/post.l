@@ -1616,8 +1616,8 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defn defq defvc defvcs GLOB HELPC lof rejects sugar vcs-of vof)
-(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {})
+(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig lof rejects sugar vcs-of vof)
+(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {} IND {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
@@ -1831,17 +1831,19 @@
      (pin CX nm (name? <r ? (cx-of <r + map own >r) (map own r)), nm)))
 
 ; thunk expecting the kernel to refuse
-(: (defn nm T0 t0)
+; a family's names are its own: nothing pins over them
+(: (gpin nm v) (IND nm == () ? (pin GLOB nm v) (scare 'uu-defind-owns nm))
+   (defn nm T0 t0)
    (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
-     pin GLOB nm [Tv (vof 0 t)],
+     gpin nm [Tv (vof 0 t)],
      pin SRC nm [t],
      nm))
    (axm nm T0)
    (: T (sugar T0)
     (chk 0 0 0 T 'UU,
-     pin GLOB nm [(vof 0 T) ['nv nm]],
+     gpin nm [(vof 0 T) ['nv nm]],
      nm))
    ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
    ; never builds its beta-normal form
@@ -1849,7 +1851,7 @@
    (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
-     pin GLOB nm [Tv ['nv nm]],
+     gpin nm [Tv ['nv nm]],
      nm))
    ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
    ; ran, and a cite of it is unbound
@@ -1857,7 +1859,7 @@
    (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
           vof 0 T)
     (chk 0 0 0 t Tv,
-     pin GLOB nm 1,
+     gpin nm 1,
      nm))
    ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..
    (vcs-of l)
@@ -1868,7 +1870,92 @@
    (defvcs l) (map (e \ defvc <e (e 1) (e 2)) (vcs-of l))
    (rejects th)
    (: r (call-cc (k \ (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
-    (pin HELPC () 0, r)))
+    (pin HELPC () 0, r))
+
+   ; k operands gathered, then g of them: as kernel lambdas, and as love ones for uu2l
+   (kcur k acc g) (k = 0 ? (g (rev acc)) ['lam ['clo (v \ kcur (k - 1) (v . acc) g)]])
+   (lcur k acc g) (k = 0 ? (g (rev acc)) (v \ lcur (k - 1) (v . acc) g))
+   (pairup a b) (two? a ? ([<a <b] . pairup >a >b) ())
+   ; a recursor's operands are params, motive, methods, indices, target. ct holds each
+   ; constructor's [c k fields], a field [y 0] or, when recursive, [y [zs js]]: its pis and
+   ; the indices it lands at. a hypothesis follows its field
+   (rect-of xs nc ct stuck ap lm dec ixv)
+   (: (full vs)
+      (: np #xs pv (take np vs) P (vs np) ms (take nc (drop (np + 1) vs))
+         (ihz zs js en a ys) (zs @ (z . u) (lm (v \ ihz u js ([z v] . en) a (ys + [v])))
+                              (full (pv + [P] + ms + map (ixv en) js + [(foldl ap a ys)])))
+         (go m en fs as) (fs @ ([y s] . fu)
+                          (: a <as m1 (ap m a)
+                           (go (s == 0 ? m1 (ap m1 (ihz <s (s 1) en a ()))) ([y a] . en) fu >as))
+                          m)
+       (dec (vs (#vs - 1)) @ (c . as)
+        (assq c ct @ [_ k fs] (#as = np + #fs ? (go (ms k) (pairup xs pv) fs (drop np as)) (stuck vs))
+         (stuck vs))
+        (stuck vs)))
+    full)
+   (kdec v) (: (u v acc) (v @ ['na f a] (u f (a . acc)) ['nv c] (c . acc) ()) (u v ()))
+
+   ; (defind nm (x A ..) (i I ..) (c (y B ..) (nm x .. j ..)) ..): a family over params x and
+   ; indices i; constructor c takes fields y and lands at indices j. nm and each c are names
+   ; with no value, and nm_rect computes on a c. a field names nm only strictly positively, as
+   ; (pi z C .. (nm x .. j ..)) with nm in no C or j, and no binder takes nm's or a param's name.
+   ; indsig lays the declaration out for defind and the exporters: its telescopes, each
+   ; constructor's method [c m fields ihs tel], nm_rect's type, and what is wrong with it if any
+   (indsig nm ps0 is0 cs0)
+   (: (pairs r) (r @ (x . A . u) ([x (sugar A)] . pairs u) ())
+      ps (pairs ps0) is (pairs is0)
+      cs (map (c \ [<c (pairs (c 1)) (sugar (c 2))]) cs0)
+      np #ps ni #is nc #cs
+      xs (map cap ps) iv (map cap is) cn (map cap cs)
+      rnm (intern "\(nm)_rect")
+      (sp h as) (two? as ? (two? h ? (h + as) (h . as)) h)
+      (occ? t) (reads? nm t)
+      (tapp t) (t == nm ? () (two? t && <t == nm ? >t 'no))
+      (fam? A) (tapp A @ as (as != 'no && #as = np + ni && take np as = xs && !(occ? (drop np as))))
+      (strict? A) (A @ ['pi _ C D] (!(occ? C) && strict? D) (fam? A))
+      (spec A) (occ? A ? (A @ ['pi z _ D] (spec D @ [zs js] [(z . zs) js]) [() (drop np (tapp A))]) 0)
+      (bnds t) (two? t ? ((two? (memq <t '(pi lam total2 let)) ? [(t 1)] ()) + bndl t) ())
+      (bndl l) (foldl (\ a u (a + bnds u)) () l)
+      (dup? l) (two? l && (two? (memq <l >l) || dup? >l))
+      (syms t) (two? t ? (syms <t + syms >t) (nom? t ? [t] ()))
+      used (syms [nm ps0 is0 cs0])
+      (fr b) (: s (intern b) (two? (memq s used) ? (fr (b + "'")) s))
+      Pn (fr "P") tn (fr "t")
+      hd (sp nm xs) hi (sp hd iv)
+      (ihT B y zs) (B @ ['pi z C D] ['pi z C (ihT D y (zs + [z]))] (sp Pn (drop np (tapp B) + [(sp y zs)])))
+      (tel fs) (foldl (\ a f (a + [f] + (occ? (f 1) ? [[(fr "ih\(#a)") (ihT (f 1) <f ())]] ()))) () fs)
+      ms (map (c \ c @ [c0 fs R]
+               (: t (tel fs)
+                [c0 (fr "m\(c0)") (map cap fs) (filter (b \ !(two? (memq b (map cap fs)))) (map cap t)) t
+                 (cx-pis t (sp Pn (drop np (tapp R) + [(sp (sp c0 xs) (map cap fs))])))])) cs)
+      famT (cx-pis ps (cx-pis is 'UU))
+      rectT (cx-pis ps ['pi Pn (cx-pis is ['pi tn hi 'UU])
+                        (cx-pis (map (m \ [(m 1) (m 5)]) ms)
+                         (cx-pis is ['pi tn hi (sp Pn (iv + [tn]))]))])
+      seen (iv + foldl (\ a c (a + map cap (c 1) + bndl (map (f \ f 1) (c 1)) + bnds (c 2))) (bndl (map (i \ i 1) is)) cs)
+      bad (? (any (x \ GLOB x !== ()) (nm . (rnm . cn))) 'uu-defind-taken
+             (dup? (nm . (rnm . cn)) || any (x \ two? (memq x (nm . (rnm . (xs + cn))))) seen) 'uu-defind-shadows
+             (occ? [ps is] || !(all (c \ fam? (c 2)) cs)) 'uu-defind-index
+             !(all (c \ all (f \ !(occ? (f 1)) || strict? (f 1)) (c 1)) cs) 'uu-defind-positivity
+             ())
+     {'ps ps 'is is 'cs cs 'xs xs 'iv iv 'rnm rnm 'Pn Pn 'tn tn 'ms ms 'famT famT 'rectT rectT 'bad bad
+      'ct (map (k \ cs k @ [c fs _] [c k (map (f \ [<f (spec (f 1))]) fs)]) ^nc)})
+   (defind nm ps0 is0 cs0)
+   (: g (indsig nm ps0 is0 cs0)
+      xs (g 'xs) ps (g 'ps) cs (g 'cs) rnm (g 'rnm) ct (g 'ct)
+      np #xs ni #(g 'is) nc #cs
+      K (np + nc + ni + 2)
+      (pinax x T v) (chk 0 0 0 T 'UU, pin GLOB x [(vof 0 T) v])
+    (g 'bad != () ? (scare (g 'bad) nm)
+     (each (nm . (rnm . map cap cs)) (x \ pin IND x 1),
+      pinax nm (g 'famT) ['nv nm],
+      pin BRIDGE nm ['hit (lcur (np + ni) () (_ \ ['ty nm]))],
+      each cs (c \ c @ [c fs R]
+               (pinax c (cx-pis ps (cx-pis fs R)) ['nv c],
+                pin BRIDGE c ['hit (lcur (np + #fs) () (as \ ('in . (c . as))))])),
+      pinax rnm (g 'rectT) (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof)),
+      pin BRIDGE rnm ['hit (lcur K () (rect-of xs nc ct (vs \ ['nrec rnm]) (\ f a (f a)) (f \ f) (v \ v @ ('in . r) r ()) (en \ j \ 0)))],
+      nm))))
 
 ; --- uu2l: a closed term to a love form whose value is vof's answer (charms for nats,
 ; ('chain a b) for pairs); lof evaluates one. untrusted: chk/conv never use it, so a bug
@@ -1935,6 +2022,7 @@
   :: 'defvc (l \ l @ [_ _ _] (defvc . q l) (scare 'uu-defq-arity l)),
   :: 'defvcs (l \ #l > 3 && #l % 2 = 0 ? [defvcs (qlit l)] (scare 'uu-defq-arity l)),
   :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l)),
+  :: 'defind (l \ #l > 2 ? [defind (qlit <l) (qlit (l 1)) (qlit (l 2)) (qlit (drop 3 l))] (scare 'uu-defind-arity l)),
   :: 'defcx (l \ [defcx (qlit <l) (qlit >l)])))
 
 ) ; module uu

@@ -22,6 +22,25 @@
        (walk-slide (at 0.8 0.0 0.0) 1.2 0.0 (\ st x z 0) @ s (near (s 'px) 0.8 && near (s 'pz) 0.0))
        (walk-dt {} @ s (0.02 <= s 'dt <= 0.25 && charm? (s 'wall)))))
 
+; the gauge: steps of 400 100 25 pixels from the middle, a 100 ms goal, a frame each 100 ms.
+; gr answers the steps taken over frames [paint feed low]; gc runs it closed, a frame's paint
+; k ms a pixel at the step it draws, and answers its steps
+(: (gr fs) (: g (view-gauge [400 100 25] 1 100.0)
+             (map (n \ fs n @ [ms fd lw] (view-gauged g ms fd lw (100 * n))) ^#fs))
+   (gc k n) (: g (view-gauge [400 100 25] 1 100.0)
+              (go t i) (t < n ? (: j (view-gauged g (k * (g 'pix) i) 10 0 (100 * t)) (j . go (t + 1) j)) ())
+              (go 0 1))
+   (ch l) (#(filter (x \ x) (map (i \ l i != l (i + 1)) ^(#l - 1))))
+   cheap (gr (map (_ \ [15 10 0]) ^40))
+   dear (gr (map (_ \ [150 10 0]) ^40))
+   low (gr (map (n \ [5 10 (n = 6)]) ^40))
+ (test (cheap 29 = 1) (cheap 30 = 0) (cheap 39 = 0)    ; finer at 3 s, its 60 ms under 0.8 of 90
+       (dear 9 = 1) (dear 10 = 2) (dear 39 = 2)        ; coarser after a second over
+       (low 5 = 1) (low 6 = 2) (low 35 = 2) (low 36 = 1) ; a low horn at once, finer 3 s on
+       (ch (gc 0.6 200) = 0)                           ; 60 ms fits, 240 never would
+       (gc 0.15 200 @ l (ch l = 1 && l 199 = 0))       ; 60 ms finer fits: one step, held
+       (gc 1.2 200 @ l (ch l = 1 && l 199 = 2))))      ; 120 ms over: one step coarser, held
+
 ; a level's bindings over view's: its own win, () unbinds, view's untouched; help in list order
 (: wb (view-bind view-binds {112 'where 104 () 108 'spin})
    hl (view-help wb (view-listed ['spin 'where 'nowhere]))

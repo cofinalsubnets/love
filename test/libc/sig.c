@@ -28,6 +28,10 @@ int main(void)
 	sigaddset(&s, SIGCHLD);
 	sigaddset(&s, SIGSYS);
 	for (int i = 1; i <= 32; i++) say_n("added", sigismember(&s, i));
+	sigfillset(&s);
+	sigdelset(&s, SIGINT);
+	sigdelset(&s, SIGSYS);
+	for (int i = 1; i <= 64; i++) if (i != 32 && i != 33) say_n("filled", sigismember(&s, i));   /* glibc keeps 32 and 33 for its threads */
 
 	/* --- the numbers. several of these permute on the BSDs, so what the header
 	   names is the canonical value every translation table is cut against --- */

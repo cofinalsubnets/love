@@ -148,7 +148,7 @@
          (wsection 3 (m 'funcs) (f . _ \ uleb f))
          (tab != () && wsect 4 (wvec [(112 . wlimits [tab tab] 0)]))
          (two? mem && wsect 5 (wvec [(wlimits mem is64)]))
-         (wsection 13 (peep m 'tags ()) (t \ (0 . uleb t)))
+         (wsection 13 (m 'tags) (t \ (0 . uleb t)))
          (wsection 6 (m 'globals) wglobal)
          (wsection 7 (m 'exports) wexport)
          (start < 0 ? () (wsect 8 (uleb start)))

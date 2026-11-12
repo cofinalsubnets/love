@@ -2,8 +2,9 @@
 ; loads uu's kernel (certifying every defn against its type), re-reads the files as data,
 ; and translates each (defn/defq/defvc nm T t) in the MLTT fragment to Gallina. coqc re-checks
 ; them, and supplies the universe check uu (type-in-type) lacks. skips are counted.
-; a def exports iff it is translatable and every global it mentions exports: the
-; univalence tower drops (it bottoms out at an `axm`).
+; a def exports iff it is translatable and every global it mentions exports. the one `axm`,
+; univalence, is postulated as a universe-polymorphic Axiom, so the tower above it exports too.
+; a defind is an Inductive, whose nm_rect rocq lays as uu does.
 ; Run: out/love src/tools/uu2coq.l > test/proof/rocq/uugen.v   then  coqc test/proof/rocq/uugen.v
 
 (borrow 'posix)
@@ -20,11 +21,14 @@
    _ (reads (open "test/uuzbvc.l" "r"))
    _ (reads (open "test/uuzx.l" "r"))
    _ (reads (open "test/uuzxvc.l" "r"))
+   _ (reads (open "test/uumag.l" "r"))
+   _ (reads (open "test/uumagvc.l" "r"))
    _ (reads (open "test/uusplgen.l" "r"))
    _ (reads (open "test/uuspllaw.l" "r"))
    _ (reads (open "test/uulay.l" "r"))
    _ (reads (open "test/uuel.l" "r"))
    _ (reads (open "test/uugc.l" "r"))
+   _ (reads (open "test/uuind.l" "r"))
    _ (reads (open "test/uupatch.l" "r"))
    _ (reads (open "test/uuwm.l" "r"))
    _ (reads (open "test/uuwmlaw.l" "r"))
@@ -52,19 +56,24 @@
    (deq? c) (two? c && (<c = 'defn || <c = 'defq || <c = 'defvc))
    (elq? c) (two? c && <c = 'elq)
    (axq? c) (two? c && <c = 'axm)
+   (inq? c) (two? c && <c = 'defind)
+   ; an ind entry is [ind nm [ps is cs] () names], its telescopes as (x A) pairs
+   (tel r) (r @ (x . A . u) ([x (sugar A)] . tel u) ())
    (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
                 (elq? c) ['def (unq (c 1)) (sugar (unq (c 2))) ((ev 'ELT) (unq (c 1)))]
-                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])
+                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()]
+                (inq? c) (: nm (c 1) cs (map (k \ [<k (tel (k 1)) (sugar (k 2))]) (drop 4 c))
+                          ['ind nm [(tel (c 2)) (tel (c 3)) cs] () (nm . ((intern "\(nm)_rect") . (map cap cs)))]))
    (run-q? c) (two? c && <c = 'defvcs)
    (run-of c acc) (foldl (a \ e \ ['def <e (sugar (e 1)) (sugar (e 2))] . a) acc (vcs-of >c))
-   (kids ks acc) (two? ks ? (kids >ks (? (deq? <ks || elq? <ks || axq? <ks) (entry <ks . acc) (run-q? <ks) (run-of <ks acc) acc)) acc)
+   (kids ks acc) (two? ks ? (kids >ks (? (deq? <ks || elq? <ks || axq? <ks || inq? <ks) (entry <ks . acc) (run-q? <ks) (run-of <ks acc) acc)) acc)
    (gather fs acc) (two? fs ?
                       (gather >fs (<fs @ F
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || elq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat`: the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (app2 (forms (open "test/uuzbvc.l" "r")) (app2 (forms (open "test/uuzx.l" "r")) (forms (open "test/uuzxvc.l" "r"))))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuind.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (app2 (forms (open "test/uuzbvc.l" "r")) (app2 (forms (open "test/uuzx.l" "r")) (app2 (forms (open "test/uuzxvc.l" "r")) (app2 (forms (open "test/uumag.l" "r")) (forms (open "test/uumagvc.l" "r"))))))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r"))))))))))))))))))))) ())
 
    ; a gathered def must be whole (a paren slip reads () as the term) and pinned (a partial
    ; defn is a truthy closure that pins nothing). `== ()`, not `!`: a term of 0 is legal.
@@ -74,7 +83,8 @@
         ents)
 
    ; corpus-wide names: a global reference vs a bound var
-   nt (tablet 0) _ (map (e \ (pin nt (e 1) 1)) ents)
+   (provs e) (<e = 'ind ? (e 4) [(e 1)])
+   nt (tablet 0) _ (map (e \ each (provs e) (x \ pin nt x 1)) ents)
    (corpus? x) (peep nt x 0)
 
    ; explicit skips: type-in-type detonations coqc's universe check rejects
@@ -135,111 +145,120 @@
                    (two? t) (ment-l t acc)  acc)
    (ment-l l acc) (two? l ? (ment-l >l (ment <l acc)) acc)
 
-   ; candidates: a def, translatable, not skipped, uu-certified
-   (cand? e) (<e = 'def && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
+   ; candidates: a def or an axm, translatable, not skipped, uu-certified
+   (cand? e) ((<e = 'def || <e = 'axm || <e = 'ind) && !(peep bl (e 1) 0) && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
    cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed
    (mlist e) (keys (ment-l (. (e 2) (. (e 3) ())) (tablet 0)))
 
    ; --- dependency closure: keep defs all of whose mentions survive ---
    (allin? l ex) (two? l ? (peep ex <l 0 && allin? >l ex) 1)
-   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (pin a (e 1) 1, a) a)) (tablet 0) cs)
+   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (each (provs e) (x \ pin a x 1), a) a)) (tablet 0) cs)
    ; settled when the key COUNT stops moving (pass only shrinks). not glued $: it nets any
    ; tablet to 1 and would stop after one pass.
    (fix ex) (pass cands ex @ ex2 (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
-   ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
+   ex0 (foldl (\ a e (each (provs e) (x \ pin a x 1), a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit in source order: foldr keeps ents' order, definitions before uses ---
-   (emit e) (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=" (string 10)
-                  "  " (u2c (e 3)) "." (string 10)])
+   (binds bs) (cat (map (b \ " (" + bvar <b + " : " + u2c (b 1) + ")") bs))
+   (emit e) (? (<e = 'axm) (cat ["Axiom " (rocqn (e 1)) " : " (u2c (e 2)) ".\n"])
+               (<e = 'ind) (e 2 @ [ps is cs]
+                (cat ["Inductive " (rocqn (e 1)) (binds ps) " : " (two? is ? ("forall" + binds is + ", ") "") "Type :="
+                      (cat (map (c \ "\n  | " + rocqn <c + " : " + (two? (c 1) ? ("forall" + binds (c 1) + ", ") "") + u2c (c 2)) cs))
+                      ".\n"]))
+               (cat ["Definition " (rocqn (e 1)) " : " (u2c (e 2)) " :=\n"
+                     "  " (u2c (e 3)) ".\n"]))
    exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
 
    _ (dot (cat [
-      "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by src/tools/uu2coq.l. Do not edit;" (string 10)
-      "   regenerate with `make test_uugen`. uu's kernel type-checked each term below" (string 10)
-      "   against its theorem (test/uu.l, green under `make test`); this is the SAME term" (string 10)
-      "   translated to Gallina, which coqc re-checks -- the independent second witness," (string 10)
-      "   and the universe filter uu's type-in-type kernel lacks. Only the MLTT primitives" (string 10)
-      "   are mapped (nat/bool/unit/empty + recursors, paths<->a Type-valued Id type + J-match," (string 10)
-      "   Sigma<->a primitive-projection total2 record with eta, coprod<->sum); only the" (string 10)
-      "   univalence tower (an axm) is skipped, on its own via the dependency closure" (string 10)
-      "   (counted at the foot). *)" (string 10)
-      "From Stdlib Require Import PeanoNat." (string 10)
-      "Set Warnings \"-notation-overridden,-abstract-large-number\"." (string 10)
-      "(* universe polymorphism -- the faithful encoding of uu's structures (large Sigmas like" (string 10)
-      "   wfs/hProp reuse total2 AT the universe of UU). It does NOT re-enable type-in-type:" (string 10)
-      "   Type@{i} : Type@{i+1} stays strict, so the cheats below are still rightly rejected. *)" (string 10)
-      "Set Universe Polymorphism." (string 10)
-      "Set Polymorphic Inductive Cumulativity.  (* Prop-valued paths flow into Type carriers *)" (string 10)
-      "(* uu's Sigma has definitional eta; the faithful Coq target is a primitive-projection" (string 10)
-      "   record (eta in the kernel, axiom-free), NOT stdlib sigT (no eta). pr1/pr2/tpair" (string 10)
-      "   mirror uu's own vocabulary; coprod stays stdlib sum (no eta needed). *)" (string 10)
-      "Set Primitive Projections." (string 10)
-      "Record total2 {A : Type} (B : A -> Type) : Type := tpair { pr1 : A ; pr2 : B pr1 }." (string 10)
-      "Unset Primitive Projections." (string 10)
-      "Arguments tpair {A B} _ _.  Arguments pr1 {A B} _.  Arguments pr2 {A B} _." (string 10)
-      "(* uu's paths is the Type-valued identity type (UniMath's `paths`), NOT Prop's eq:" (string 10)
-      "   a path can be a Sigma CARRIER (an element of UU), as in the hProp-valued nat order." (string 10)
-      "   paths_to_eq (below) bridges it back to Coq's = for the Nat.* headline laws. *)" (string 10)
-      "Inductive paths {A : Type} (a : A) : A -> Type := idpath : paths a a." (string 10) (string 10)]))
+      "(* test/proof/rocq/uugen.v -- GENERATED from test/uu.l by src/tools/uu2coq.l. Do not edit;\n"
+      "   regenerate with `make test_uugen`. uu's kernel type-checked each term below\n"
+      "   against its theorem (test/uu.l, green under `make test`); this is the SAME term\n"
+      "   translated to Gallina, which coqc re-checks -- the independent second witness,\n"
+      "   and the universe filter uu's type-in-type kernel lacks. Only the MLTT primitives\n"
+      "   are mapped (nat/bool/unit/empty + recursors, paths<->a Type-valued Id type + J-match,\n"
+      "   Sigma<->a primitive-projection total2 record with eta, coprod<->sum). uu's one axm,\n"
+      "   univalence, is an Axiom here, universe polymorphic; Print Assumptions names it\n"
+      "   wherever it is used. *)\n"
+      "From Stdlib Require Import PeanoNat.\n"
+      "Set Warnings \"-notation-overridden,-abstract-large-number\".\n"
+      "(* universe polymorphism -- the faithful encoding of uu's structures (large Sigmas like\n"
+      "   wfs/hProp reuse total2 AT the universe of UU). It does NOT re-enable type-in-type:\n"
+      "   Type@{i} : Type@{i+1} stays strict, so the cheats below are still rightly rejected. *)\n"
+      "Set Universe Polymorphism.\n"
+      "(* a universe left free stays free, so a weq at bool can meet univalence's Type *)\n"
+      "Unset Universe Minimization ToSet.\n"
+      "Set Polymorphic Inductive Cumulativity.  (* Prop-valued paths flow into Type carriers *)\n"
+      "(* uu's Sigma has definitional eta; the faithful Coq target is a primitive-projection\n"
+      "   record (eta in the kernel, axiom-free), NOT stdlib sigT (no eta). pr1/pr2/tpair\n"
+      "   mirror uu's own vocabulary; coprod stays stdlib sum (no eta needed). *)\n"
+      "Set Primitive Projections.\n"
+      "Record total2 {A : Type} (B : A -> Type) : Type := tpair { pr1 : A ; pr2 : B pr1 }.\n"
+      "Unset Primitive Projections.\n"
+      "Arguments tpair {A B} _ _.  Arguments pr1 {A B} _.  Arguments pr2 {A B} _.\n"
+      "(* uu's paths is the Type-valued identity type (UniMath's `paths`), NOT Prop's eq:\n"
+      "   a path can be a Sigma CARRIER (an element of UU), as in the hProp-valued nat order.\n"
+      "   paths_to_eq (below) bridges it back to Coq's = for the Nat.* headline laws. *)\n"
+      "Inductive paths {A : Type} (a : A) : A -> Type := idpath : paths a a.\n\n"]))
    _ (map (e \ (dot (emit e))) exports)
    ; --- the bridge: uu's nat ops restated on Nat.* (spec.v's vocabulary), tactic proofs ---
-   _ (dot (cat [(string 10)
-     "(* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on" (string 10)
-     "   Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std" (string 10)
-     "   (induction over the shared recursion) tie them to the standard vocabulary, by which" (string 10)
-     "   the headline arithmetic laws are RESTATED on Nat.* and discharged FROM love's exports. *)" (string 10)
-     "Lemma paths_to_eq : forall (A : Type) (a b : A), paths a b -> a = b." (string 10)
-     "Proof. intros A a b p; destruct p; reflexivity. Qed." (string 10)
-     "Lemma uu_add_std : forall n m, uu_add n m = Nat.add n m." (string 10)
-     "Proof. intros n m; induction n as [|n IHn]; [reflexivity|]." (string 10)
-     "  change (uu_add (S n) m) with (S (uu_add n m)); rewrite IHn; reflexivity. Qed." (string 10)
-     "Lemma uu_mul_std : forall n m, uu_mul n m = Nat.mul n m." (string 10)
-     "Proof. intros n m; induction n as [|n IHn]; [reflexivity|]." (string 10)
-     "  change (uu_mul (S n) m) with (uu_add (uu_mul n m) m);" (string 10)
-     "  rewrite uu_add_std, IHn, Nat.add_comm; reflexivity. Qed." (string 10)
-     "Theorem add_comm_std : forall n m, Nat.add n m = Nat.add m n." (string 10)
-     "Proof. intros n m; rewrite <- (uu_add_std n m), <- (uu_add_std m n); apply paths_to_eq, uu_natpluscomm. Qed." (string 10)
-     "Theorem add_assoc_std : forall n m k, Nat.add (Nat.add n m) k = Nat.add n (Nat.add m k)." (string 10)
-     "Proof. intros n m k; rewrite <- !uu_add_std; apply paths_to_eq, uu_natplusassoc. Qed." (string 10)
-     "Theorem mul_comm_std : forall n m, Nat.mul n m = Nat.mul m n." (string 10)
-     "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply paths_to_eq, uu_natmultcomm. Qed." (string 10)]))
-   _ (dot (cat [(string 10) "Print Assumptions uu_natplusr0." (string 10)
-"Print Assumptions uu_zcountins." (string 10)
-"Print Assumptions uu_zinsane." (string 10)
-"Print Assumptions uu_rtwinsrow." (string 10)
-"Print Assumptions uu_gbarriersound." (string 10)
-"Print Assumptions uu_gminorloses." (string 10)
-"Print Assumptions uu_gminorbounded." (string 10)
-"Print Assumptions uu_gminorflat." (string 10)
-"Print Assumptions uu_gdrainterminates." (string 10)
-"Print Assumptions uu_gdrainonce." (string 10)
-"Print Assumptions uu_gdrainsound." (string 10)
-"Print Assumptions uu_gdraincomplete." (string 10)
-"Print Assumptions uu_gdrainsecond." (string 10)
-"Print Assumptions uu_commute_involutive." (string 10)
-"Print Assumptions uu_invert_roundtrip." (string 10)
-"Print Assumptions uu_commute_sound." (string 10)
-"Print Assumptions uu_applall_swap." (string 10)
-"Print Assumptions uu_hcommute_involutive." (string 10)
-"Print Assumptions uu_hinv_roundtrip." (string 10)
-"Print Assumptions uu_hcommute_sound." (string 10)
-"Print Assumptions uu_hfold_swap." (string 10)
-"Print Assumptions uu_etreeeta." (string 10)
-"Print Assumptions uu_ekidsbeta." (string 10)
-"Print Assumptions uu_ffindlay." (string 10)
-"Print Assumptions uu_swal_involutive." (string 10)
-"Print Assumptions uu_scell_comm." (string 10)
-"Print Assumptions uu_splice_pad." (string 10)
-"Print Assumptions uu_bubble_len." (string 10)
-"Print Assumptions uu_mtch_sound." (string 10)
-"Print Assumptions uu_reaim_involutive." (string 10)
-"Print Assumptions uu_fid_swap." (string 10)
-"Print Assumptions uu_repo_found." (string 10)
-"Print Assumptions uu_repo_faithful." (string 10)
-              "Print Assumptions add_comm_std." (string 10)
-              "Print Assumptions add_assoc_std." (string 10)
-              "Print Assumptions mul_comm_std." (string 10) (string 10)
-              "(* " (show #(keys keep)) " exported / " (show #ents) " corpus entries swept;" (string 10)
-              "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)" (string 10)]))
+   _ (dot (cat ["\n"
+     "(* === bridge: uu's nat ops ARE Coq's standard ones, so the laws above land on\n"
+     "   Nat.add / Nat.mul -- the operations spec.v's own laws speak. uu_add_std/uu_mul_std\n"
+     "   (induction over the shared recursion) tie them to the standard vocabulary, by which\n"
+     "   the headline arithmetic laws are RESTATED on Nat.* and discharged FROM love's exports. *)\n"
+     "Lemma paths_to_eq : forall (A : Type) (a b : A), paths a b -> a = b.\n"
+     "Proof. intros A a b p; destruct p; reflexivity. Qed.\n"
+     "Lemma uu_add_std : forall n m, uu_add n m = Nat.add n m.\n"
+     "Proof. intros n m; induction n as [|n IHn]; [reflexivity|].\n"
+     "  change (uu_add (S n) m) with (S (uu_add n m)); rewrite IHn; reflexivity. Qed.\n"
+     "Lemma uu_mul_std : forall n m, uu_mul n m = Nat.mul n m.\n"
+     "Proof. intros n m; induction n as [|n IHn]; [reflexivity|].\n"
+     "  change (uu_mul (S n) m) with (uu_add (uu_mul n m) m);\n"
+     "  rewrite uu_add_std, IHn, Nat.add_comm; reflexivity. Qed.\n"
+     "Theorem add_comm_std : forall n m, Nat.add n m = Nat.add m n.\n"
+     "Proof. intros n m; rewrite <- (uu_add_std n m), <- (uu_add_std m n); apply paths_to_eq, uu_natpluscomm. Qed.\n"
+     "Theorem add_assoc_std : forall n m k, Nat.add (Nat.add n m) k = Nat.add n (Nat.add m k).\n"
+     "Proof. intros n m k; rewrite <- !uu_add_std; apply paths_to_eq, uu_natplusassoc. Qed.\n"
+     "Theorem mul_comm_std : forall n m, Nat.mul n m = Nat.mul m n.\n"
+     "Proof. intros n m; rewrite <- (uu_mul_std n m), <- (uu_mul_std m n); apply paths_to_eq, uu_natmultcomm. Qed.\n"]))
+   _ (dot (cat ["\n" "Print Assumptions uu_natplusr0.\n"
+"Print Assumptions uu_uu_boolbool.\n"
+"Print Assumptions uu_zcountins.\n"
+"Print Assumptions uu_zinsane.\n"
+"Print Assumptions uu_rtwinsrow.\n"
+"Print Assumptions uu_gbarriersound.\n"
+"Print Assumptions uu_gminorloses.\n"
+"Print Assumptions uu_gminorbounded.\n"
+"Print Assumptions uu_gminorflat.\n"
+"Print Assumptions uu_gdrainterminates.\n"
+"Print Assumptions uu_gdrainonce.\n"
+"Print Assumptions uu_gdrainsound.\n"
+"Print Assumptions uu_gdraincomplete.\n"
+"Print Assumptions uu_gdrainsecond.\n"
+"Print Assumptions uu_commute_involutive.\n"
+"Print Assumptions uu_invert_roundtrip.\n"
+"Print Assumptions uu_commute_sound.\n"
+"Print Assumptions uu_applall_swap.\n"
+"Print Assumptions uu_hcommute_involutive.\n"
+"Print Assumptions uu_hinv_roundtrip.\n"
+"Print Assumptions uu_hcommute_sound.\n"
+"Print Assumptions uu_hfold_swap.\n"
+"Print Assumptions uu_etreeeta.\n"
+"Print Assumptions uu_ekidsbeta.\n"
+"Print Assumptions uu_ffindlay.\n"
+"Print Assumptions uu_swal_involutive.\n"
+"Print Assumptions uu_scell_comm.\n"
+"Print Assumptions uu_splice_pad.\n"
+"Print Assumptions uu_bubble_len.\n"
+"Print Assumptions uu_mtch_sound.\n"
+"Print Assumptions uu_reaim_involutive.\n"
+"Print Assumptions uu_fid_swap.\n"
+"Print Assumptions uu_repo_found.\n"
+"Print Assumptions uu_repo_faithful.\n"
+              "Print Assumptions add_comm_std.\n"
+              "Print Assumptions add_assoc_std.\n"
+              "Print Assumptions mul_comm_std.\n\n"
+              "(* " (show #exports) " exported / " (show #ents) " corpus entries swept;\n"
+              "   3 headline laws (add_comm, add_assoc, mul_comm) landed on Coq's Nat.* via the bridge *)\n"]))
    (quit 0))

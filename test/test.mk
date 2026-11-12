@@ -3,7 +3,7 @@
 # every gate is phony: one missing here stops running once a file of its name appears
 .PHONY: \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
-  moon-bison moon-flex moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
+  moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
   test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
@@ -17,10 +17,14 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_esp32_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
+
+# the gates' laws read a closure made at run time as compiled when made; test/host/glazehot.l
+# reads the default, a compile at its call past glaze.l's hot-calls
+export LOVE_GLAZE_HOT = eager
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
 test_phases = test_host test_love0
@@ -183,6 +187,7 @@ hostnif_tests += test/host/greet.l   # love greet headless: its keys, its box, l
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
+hostnif_tests += test/host/glazehot.l    # a run-time closure compiles at its call past hot-calls
 hostnif_tests += test/host/quit.l   # quit drains the ports; a scare gives a piped stdin back blocking
 hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
@@ -389,13 +394,14 @@ mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:k
          src/love/compress/inf_gen.h:src/love/compress/inf.l:inf-h:inf-ok src/love/compress/inf_run_gen.h:src/love/compress/inf.l:inf-rh:inf-ok src/love/compress/inf_st_gen.h:src/love/compress/inf.l:inf-sh:inf-ok \
          test/uuinfvc.l:src/love/compress/inf.l:inf-vc:inf-ok \
          src/love/compress/bz_gen.h:src/love/compress/bz.l:bz-h:bz-ok test/uuzbvc.l:src/love/compress/bz.l:bz-vc:bz-ok \
-         src/love/compress/lz_gen.h:src/love/compress/lz.l:lz-h:lz-ok test/uuzxvc.l:src/love/compress/lz.l:lz-vc:lz-ok
+         src/love/compress/lz_gen.h:src/love/compress/lz.l:lz-h:lz-ok test/uuzxvc.l:src/love/compress/lz.l:lz-vc:lz-ok \
+         src/love/mag_gen.h:src/love/mag.l:mag-h:mag-ok test/uumagvc.l:src/love/mag.l:mag-vc:mag-ok
 # \# is load-bearing: a bare # in a make variable starts a comment
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
 # the egg lane: the crew in the warm book shadows names these generators use
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l on $m)"
+	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # each header depends on its table alone ($(m) would close a loop); with no love it stands
@@ -408,7 +414,8 @@ $(word 1,$(subst :, ,$(1))): $(word 2,$(subst :, ,$(1)))
 	 else touch $$@; fi
 endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
-src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l: src/love/compress/vc.l
+src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
+src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
 # their includers to the clay vc.l laid (test/gate/clayeq.l)
 test_clay: host
@@ -417,12 +424,13 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h and uuzxvc.l regenerate identically"
+	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h and uumagvc.l regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
-	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c and xz.c holds the clay vc.l laid)"
+	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c, xz.c and num.c holds the clay vc.l laid)"
 	@$m -l src/love/compress/inf.l -l test/gate/clayeq.l -e '(ceq-run "inf" "src/love/compress/gz.c" ["inf_gen.h" "inf_run_gen.h" "inf_st_gen.h"] inf-specs)' < /dev/null
 	@$m -l src/love/compress/bz.l -l test/gate/clayeq.l -e '(ceq-run "bz" "src/love/compress/bz2.c" ["bz_gen.h"] bz-specs)' < /dev/null
 	@$m -l src/love/compress/lz.l -l test/gate/clayeq.l -e '(ceq-run "lz" "src/love/compress/xz.c" ["lz_gen.h"] lz-specs)' < /dev/null
+	@$m -l src/love/mag.l -l test/gate/clayeq.l -e '(ceq-run "mag" "src/love/num.c" ["mag_gen.h"] mag-specs)' < /dev/null
 # test_moonfuzz -- each test/cc file mutated eight ways: no scare, no hang, G1 where it parses.
 # mooncc runs in this process, so the budget reaches it (peak ~215 MB, passes at 60; ~1 min)
 test_moonfuzz: host
@@ -661,6 +669,9 @@ $(eval $(call moon_pkg,lua,LUASRC,host))
 $(eval $(call moon_pkg,sqlite,SQLSRC,moon-sqlite))
 $(eval $(call moon_pkg,gzip,GZIPSRC,host))
 $(eval $(call moon_pkg,bzip2,BZIP2SRC,host))
+# perl's miniperl, held to its own minitest suite; x64 only
+moon-perl: host
+	@PERLSRC="$(PERLSRC)" ./src/tools/moon-perl.sh
 # flex and bison on m4, built with CC=mooncc, held byte-identical to the host's flex and bison
 moon-flex moon-bison: host
 	@./src/tools/$@.sh
@@ -963,11 +974,11 @@ test_doomx-run: $(R)/test/host/doomx.l
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
-	@echo TEST love kernel "(the projection verb; byte-identical to make's)"
-	@rm -f $(ko)/.kverb.elf
-	@cd $(ko) && $(abspath $m) kernel .kverb.elf > /dev/null
-	@cmp $(ko)/.kverb.elf $(k_elf)
-	@rm -f $(ko)/.kverb.elf
+	@echo TEST love seed kernel "(the projection; byte-identical to make's)"
+	@rm -rf $(ko)/.kverb
+	@cd $(ko) && $(abspath $m) seed kernel .kverb > /dev/null
+	@cmp $(ko)/.kverb/love-$a.elf $(k_elf)
+	@rm -rf $(ko)/.kverb
 
 test_kboot: host $(S)/tools/kboot.l
 	@$(MAKE) -s $(k_elf)
@@ -1017,6 +1028,19 @@ test_uefi: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(ko)/esp-x64 $$fw x64; fi
 endif
 
+# the kernel as the firmware's guest (love.stay), and the boot menu on it starting an image
+ifneq ($a,x64)
+test_uefi_stay:
+	@sh test/gate/skip.sh gate-skip "test_uefi_stay: skipped (host arch $a is not x64)"
+else
+test_uefi_stay: host $(S)/tools/ktest.l
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-x86_64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_stay: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s $(k_stay) \
+	 && echo TEST $(k_stayd) "(serial, headless, the firmware's guest and the boot menu)" \
+	 && $m $(S)/tools/ktest.l $(k_stayd) $$fw x64 "efihello: one two"; fi
+endif
+
 QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 ifeq ($(QEMU_A64),)
 test_uefi_a64:
@@ -1026,14 +1050,14 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-aarch64.fd; \
 	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
 	 $(MAKE) -s a=a64 $(ko)/esp-a64/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-a64/love.elf $(ko)/esp-a64/love.cmd \
-	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; TCG, ceiling 900s)" \
+	 && echo TEST $(ko)/esp-a64 "(serial, headless, our own BOOTAA64.EFI; kvm on a kvm-a64 host, else TCG, ceiling 900s)" \
 	 && $m $(S)/tools/ktest.l $(ko)/esp-a64 $$fw a64; fi
 endif
 
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
 inle_rv64 = test_kernel_rv64
-inle_x64 = test_disk test_uefi test_kboot test_kernel_uproc test_kpier test_kverb
+inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
 inle_a64 = test_kernel_a64 test_uefi_a64
 test_inle: host

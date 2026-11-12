@@ -14,11 +14,13 @@
     (n \ s \ (peep gs n () @ t
        (string? t ? [1 t (ceq-inc gs dir) n]
           (incload () ceq-is dir n s @ r (two? r ? [1 (r 1) (ceq-inc gs (cdir (r 3))) (r 3)] r)))))
+   ; the predefines as moon's x64 compile has them, the wide pair's among them
+   ceq-defs (deftext ("__SIZEOF_INT128__=16" . archdefs 'x64))
    ; the unit's top-level forms, a refusal as ()
    (ceq-unit path gs)
     (uread path @ r
        (atom? r ? ()
-        (clex (deftext (archdefs 'x64) + <>r) @ lx
+        (clex (ceq-defs + <>r) @ lx
            (!(okv? lx) ? ()
               (cpp <>lx (ceq-inc gs (cdir path)) path @ pp
                  (!(okv? pp) ? ()
@@ -29,10 +31,15 @@
    (ceq-wrap vs txt)
     (cats (map (v \ "#pragma push_macro(\"\(v)\")\n#undef \(v)\n") vs) + txt
      + cats (map (v \ "#pragma pop_macro(\"\(v)\")\n") vs))
-   ; the typedef names as the parser resolves them, through the same headers
-   (ceq-tdefs ns)
-    (: src (cats ["#include <stdint.h>\n#include <stddef.h>\ntypedef uint16_t lzp;\n" (cats (map (k \ "\(k) ceq_\(k);\n") ns))])
-       fs (clex src @ lx (cpp <>lx (ceq-inc {} ".") "<clayeq>" @ pp (? (okv? pp) (cparse-t <>pp 'x64 @ ps (? (okv? ps) (caup ps 1) ())) ())))
+   ; the includes the unit reads before its first laid header
+   (ceq-pre tu hs)
+    (: (laid? l) (any (h \ l = "#include \"\(h)\"") hs)
+       (go ls) (atom? ls || laid? <ls ? "" ((#<ls > 8 && snip <ls 0 8 = "#include" ? <ls + "\n" "") + go >ls))
+     (uread tu @ r (atom? r ? "" (go (lines <>r)))))
+   ; the typedef names as the parser resolves them, through the unit's own headers
+   (ceq-tdefs ns tu hs)
+    (: src (cats ["#include <stdint.h>\n#include <stddef.h>\n" (ceq-pre tu hs) "typedef uint16_t lzp;\n" (cats (map (k \ "\(k) ceq_\(k);\n") ns))])
+       fs (clex (ceq-defs + src) @ lx (cpp <>lx (ceq-inc {} (cdir tu)) "<clayeq>" @ pp (? (okv? pp) (cparse-t <>pp 'x64 @ ps (? (okv? ps) (caup ps 1) ())) ())))
      (atom? fs ? {}
       (foldl (t \ f \ (f @ ('gdecl ((v . ty . _) . _)) (? (#v > 4 && (snip v 0 4) = "ceq_") (pin t (snip v 4 #v) ty) t) _ t)) {} fs)))
    ; clay as cparse keeps it
@@ -56,7 +63,7 @@
 
    (ceq-run tag tu hs specs)
     (: cs (map cl-fn specs)
-       tt0 (ceq-tdefs (ceq-uniq (foldl (a \ c \ a + ceq-walk 'named c) () cs)))
+       tt0 (ceq-tdefs (ceq-uniq (foldl (a \ c \ a + ceq-walk 'named c) () cs)) tu hs)
        txts (foldl (a \ h \ uread (cdir tu + h) @ r (atom? r ? a (a + [<>r]))) () hs)
        defs (foldl (a \ t \ a + filter two? (map (l \ l @ "#define \(n) \(v)" [n (read v)] ()) (lines t))) () txts)
        tt (foldl (t \ d \ (? (charm? (d 1)) (pin t ("#" + <d) (d 1)) t)) tt0 defs)

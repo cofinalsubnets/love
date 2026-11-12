@@ -7,7 +7,7 @@
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-cells view-pen view-band
-         view-rescale view-loading view-spin view-tick view-corner? view-tap)
+         view-rescale view-scaled view-gauge view-gauged view-loading view-spin view-tick view-corner? view-tap)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
@@ -117,9 +117,23 @@
  (view-bind b o) (: t {} _ (each (keys b) (k \ pin t k (b k))) _ (each (keys o) (k \ pin t k (o k))) t)
  ; ..a picture's pixel scale halved or doubled, 1 to 8, and the screen sized again for it:
  ; fewer pixels drawn for more frames, or the other way
- (view-rescale lv st a) (: s (peep st 'scale 2)
-   _ (pin st 'scale (a @ 'finer (max 1 (s // 2)) (min 8 (s * 2))))
-   (lv 'size st (st 'w) (st 'h // 2)))
+ (view-rescale lv st a) (: s (peep st 'scale 2) (view-scaled lv st (a @ 'finer (max 1 (s // 2)) (min 8 (s * 2)))))
+ (view-scaled lv st s) (pin st 'scale s, lv 'size st (st 'w) (st 'h // 2))
+ ; ..or moved a step at a time by the frame's time: a gauge over steps whose pixels are pix,
+ ; finest first, at step i, a frame's goal in ms with the song's feed counted in it
+ (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low ()}
+ ; ..a frame's paint and feed ms, and whether the horn is running low, at clock t: the step
+ ; to draw at. coarser half a second after a step on a low horn, a second after it over the
+ ; goal; finer only three seconds from a step and from a low horn, where the finer step's
+ ; pixels fit under 0.8 of the goal. the feed's share is a slow mean, so a phrase's spike
+ ; leans on the horn's lead rather than the picture
+ (view-gauged g ms fd low t) (: (avg o x k) (o @ () (1.0 * x) (o + k * (x - o)))
+   p (avg (g 'p) ms 0.25) f (avg (g 'f) fd 0.0625) at (g 'at @ () t a a) i (g 'i) pix (g 'pix)
+   b (g 'goal - f) held (t - at) lw (low ? t (g 'low))
+   j (? (i + 1 < #pix && (low && 500 <= held || b < p && 1000 <= held)) (i + 1)
+        (0 < i && 3000 <= held && (lw = () || 3000 <= t - lw) && p * pix (i - 1) < 0.8 * b * pix i) (i - 1)
+        i)
+   (pins g 'p (p * pix j / pix i) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
@@ -261,8 +275,19 @@
    fd (lv 'song hn)
    pace (pacer ())
    (feed _) (? (hn && fd) (song-keep hn pace song-lead (_ \ (fd st))) fd (fd st) 0)
+   ; ..the pixel scale gauged where a picture's pixels are the scale's, a window's or kitty's,
+   ; until a key moves it by hand; the horn low once under half its lead and falling
+   scales [1 2 4 8] gz {'g () 'on 1 'l0 0}
+   (gauged? _) (gz 'on && (tablet? win || st 'kitty) && st 'pic-w != ())
+   (steer paint feed l0 t) (: g (gz 'g @ () (: g0 (view-gauge [64 16 4 1] (scale-step (peep st 'scale 2)) (1.0 * tick)) (pin gz 'g g0, g0)) g g)
+     lw (hn && l0 * 2 < song-lead-of (pace 'gap) && l0 < gz 'l0) i (g 'i)
+     j (view-gauged g paint feed lw t)
+     (pin gz 'l0 l0, j != i ? (view-scaled lv st (scales j))))
+   (scale-step s) (s @ 1 0 2 1 4 2 3)
    (go _) (: t0 (clock 0)
+             l0 (hn ? (horn-lag hn) 0)
              _ (feed ())
+             t1 (clock 0)
              ks (win ? (wkeys ()) (tget ()))
              acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
              _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
@@ -270,7 +295,8 @@
              _ (pin st 'over (win && hs 'on ? (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
                     (lv 'frame st @ f (say out (esc + "[H" + (hs 'on ? (view-synced f (view-help-say st hl)) f)), flush out)))
-             (each acts (a \ (? (elem a ['finer 'coarser]) (view-rescale lv st a)
+             _ (gauged? () ? (steer (clock 0 - t1) (t1 - t0) l0 (clock 0)))
+             (each acts (a \ (? (elem a ['finer 'coarser]) (pin gz 'on 0, view-rescale lv st a)
                                 (nom? a && !(elem a ['quit 'help])) (lv 'key st a))),
               lv 'tick st,
               pin st 't (st 't + 1),
