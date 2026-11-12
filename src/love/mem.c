@@ -80,6 +80,8 @@ static lvm(lvm_pinf) {
  Sp[3] = out;
  love_musttail return Nextp(1, 3); }
 
+_Static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "peepv loads an element as the cask lays it");
+
 static lvm(lvm_peepv) {
  word c = Sp[0];
  if (!caskp(c) || !charmp(Sp[1]) || !charmp(Sp[2])
@@ -98,11 +100,18 @@ static lvm(lvm_peepv) {
  Hp += b2w(bytes);
  v->shape[0] = (uintptr_t) n;
  unsigned char const *p = (unsigned char const*) cask(c)->str->bytes + o;
- if (w == 8 && s == 8 && love_T[love_Z] == 8) memcpy(tray_data(v), p, 8 * (size_t) n);   // ..whole words: one copy
+ intptr_t *d = (intptr_t*) tray_data(v);
+ // ..a width at a time, each element one load (memcpy: o and s leave it unaligned); a packed
+ // run already the tray's own intptr_t elements needs no widening, so one copy
+ if (w == (intptr_t) sizeof(intptr_t) && s == w) memcpy(d, p, sizeof(intptr_t) * (size_t) n);
+ else if (w == 1) for (intptr_t i = 0; i < n; i++, p += s) d[i] = *p;
+ else if (w == 2) for (intptr_t i = 0; i < n; i++, p += s) { uint16_t x; memcpy(&x, p, 2); d[i] = x; }
+ else if (w == 4) for (intptr_t i = 0; i < n; i++, p += s) { uint32_t x; memcpy(&x, p, 4); d[i] = (intptr_t) x; }
+ else if (w == 8) for (intptr_t i = 0; i < n; i++, p += s) { uint64_t x; memcpy(&x, p, 8); d[i] = (intptr_t) x; }
  else for (intptr_t i = 0; i < n; i++, p += s) {
   uint64_t x = 0;
   for (intptr_t b = 0; b < w; b++) x |= (uint64_t) p[b] << (8 * b);
-  tray_put_int(v, (uintptr_t) i, (intptr_t) x); }
+  d[i] = (intptr_t) x; }
  Sp[4] = word(v);
  love_musttail return Nextp(1, 4); }
 

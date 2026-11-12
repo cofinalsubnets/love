@@ -69,6 +69,11 @@
        (test (4 = #g) (aall (g = v)) (aall (g = (hi - 4294967296 * (hi >= 2147483648)) * 4294967296 + lo))
              (aall (see c 8 8 8 2 = @(-2 -33554437))))),
 
+    ; a byte and three bytes, each its own way, 5 apart
+    (: c (cask 20) v @(200 7 255 1) u @(16777215 65536 258 0)
+       _ (lay c 0 1 5 v) _ (lay c 1 3 5 u)
+       (test (aall (see c 0 1 5 4 = v)) (aall (see c 1 3 5 4 = u)) (aall (see c 1 2 5 4 = u & 65535)))),
+
     ; the empty run fits anywhere inside the cask, and lays nothing
     (cask 4 @ c (test (c = lay c 4 1 1 (iota 0)))),
 
