@@ -797,7 +797,7 @@ moonrun -std=c23 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "-std=c2
 printf '#include <stdbool.h>\nbool f(void) { return true; }\n' > "$ho/.bool.c"
 moonrun -std=c11 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "<stdbool.h> did not lay bool under -std=c11"
 # an attribute whose skip changes the code refuses by name
-for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
+for a in 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
   printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
   moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
 done
@@ -1869,6 +1869,79 @@ else
   gate_partly "  (-dynamic-linker and -shared on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
 fi
 moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
+
+# -- constructors and destructors: priorities first in order, the plain last; destructors
+# the other way about, after atexit's; static, -pie, a gcc object, every libc, a dlopened object
+cat > "$ho/.ctor.c" <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+static char seen[8];
+static int n;
+__attribute__((constructor(200))) static void c200(void) { seen[n++] = 'b'; }
+__attribute__((constructor)) static void cplain(void) { seen[n++] = 'c'; }
+__attribute__((constructor(101))) static void c101(void) { seen[n++] = 'a'; }
+__attribute__((destructor(101))) static void d101(void) { printf("z"); }
+__attribute__((destructor)) static void dplain(void) { printf("x"); }
+__attribute__((destructor(200))) static void d200(void) { printf("y"); }
+static void ae(void) { printf("w"); }
+int main(void) { atexit(ae); printf("%s ", seen); return 0; }
+EOF
+ctor() { o=$("$@"); [ "$o" = "abc wxyz" ] || fail "constructors and destructors, $ctw (got '$o')"; }
+moonrun -o "$ho/.ctor" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc constructor"
+ctw=static ctor "$ho/.ctor"
+moonrun -pie -o "$ho/.ctorp" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc -pie constructor"
+ctw=-pie ctor "$ho/.ctorp"
+$cc_g -O1 -c -o "$ho/.ctorg.o" "$ho/.ctor.c"
+moonrun -o "$ho/.ctorg" "$ho/.ctorg.o" > /dev/null 2>&1 || fail "mooncc linking gcc's init_array"
+ctw="gcc's object" ctor "$ho/.ctorg"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o "$ho/.ctord" "$ho/.ctor.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -dynamic-linker constructor"
+ctw=glibc ctor "$ho/.ctord"
+if [ -e /lib/ld-musl-x86_64.so.1 ]; then
+  moonrun -dynamic-linker /lib/ld-musl-x86_64.so.1 -o "$ho/.ctorm" "$ho/.ctor.c" -l:libc.so > /dev/null 2>&1 || fail "mooncc musl constructor"
+  ctw=musl ctor "$ho/.ctorm"
+else
+  gate_partly "  (constructors under musl skipped: no /lib/ld-musl-x86_64.so.1)"
+fi
+if command -v qemu-aarch64 > /dev/null && [ -e /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 ]; then
+  moonrun -t a64 -o "$ho/.ctora" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc -t a64 constructor"
+  ctw="a64 static" ctor qemu-aarch64 "$ho/.ctora"
+  moonrun -t a64 -dynamic-linker /lib/ld-linux-aarch64.so.1 -o "$ho/.ctorad" "$ho/.ctor.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t a64 -dynamic-linker constructor"
+  ctw="a64 glibc" ctor qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.ctorad"
+else
+  gate_partly "  (constructors on a64 skipped: no qemu-aarch64 or /usr/aarch64-linux-gnu)"
+fi
+if command -v qemu-riscv64 > /dev/null && [ -e /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 ]; then
+  moonrun -t rv64 -o "$ho/.ctorr" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc -t rv64 constructor"
+  ctw="rv64 static" ctor qemu-riscv64 "$ho/.ctorr"
+  moonrun -t rv64 -dynamic-linker /lib/ld-linux-riscv64-lp64d.so.1 -o "$ho/.ctorrd" "$ho/.ctor.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -dynamic-linker constructor"
+  ctw="rv64 glibc" ctor qemu-riscv64 -L /usr/riscv64-linux-gnu "$ho/.ctorrd"
+else
+  gate_partly "  (constructors on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
+fi
+# ..a -shared object's: at dlopen and at dlclose
+cat > "$ho/.ctorso.c" <<'EOF'
+#include <stdio.h>
+__attribute__((constructor)) static void up(void) { printf("up "); }
+__attribute__((destructor)) static void down(void) { printf("down "); }
+int val(void) { return 42; }
+EOF
+cat > "$ho/.ctorsom.c" <<'EOF'
+#include <dlfcn.h>
+#include <stdio.h>
+int main(int argc, char **argv) {
+  void *h = dlopen(argv[1], RTLD_NOW);
+  int (*v)(void) = h ? (int (*)(void)) dlsym(h, "val") : 0;
+  printf("%d ", v ? v() : -1);
+  if (h) dlclose(h);
+  printf("closed");
+  return 0; }
+EOF
+moonrun -shared -o "$ho/libctor.so" "$ho/.ctorso.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -shared constructor"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o "$ho/.ctorsom" "$ho/.ctorsom.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -dynamic-linker dlopen"
+o=$("$ho/.ctorsom" "$PWD/$ho/libctor.so")
+[ "$o" = "up 42 down closed" ] || fail "a -shared object's constructor at dlopen, destructor at dlclose (got '$o')"
+printf '__attribute__((constructor)) static void f(void) {}\nint main(void) { return 0; }\n' > "$ho/.ctorw.c"
+moonrun -t wasm -c -o /dev/null "$ho/.ctorw.c" 2>&1 | grep -q "constructor" || fail "a constructor on wasm was not refused"
 
 # -- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'

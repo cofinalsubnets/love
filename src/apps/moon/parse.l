@@ -283,6 +283,20 @@
                                 (go >s d)))
                          (go >s d))))
        (go ts 0))
+   ; `constructor` / `destructor`, each with its priority or (), to the first depth-0 `;` or
+   ; `{` -> (('init P) ('fini P) ..)
+   (ctorat? ts)
+    (: (go s d acc) (atom? s ? acc
+                       (<s @ t
+                          (? (d < 1 && (tp? t ";" || tp? t "{")) acc
+                             (tp? t "(") (go >s (d + 1) acc)
+                             (tp? t ")") (go >s (d - 1) acc)
+                             (0 < d && (idv? t "constructor" || idv? t "__constructor__" || idv? t "destructor" || idv? t "__destructor__"))
+                              (: k (idv? t "constructor" || idv? t "__constructor__" ? 'init 'fini)
+                                 p (peekp >s "(" && two? >>s && tkk <>>s = 'num ? (tkv <>>s))
+                                 (go >s d ([k p] . acc)))
+                             (go >s d acc))))
+       (go ts 0 ()))
    ; the attribute groups right after a struct/union/enum body are the type's (gcc): past them
    ; the declaration's own begin
    (tyattr s)
@@ -322,7 +336,8 @@
            "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
            "patchable_function_entry" 1 "__patchable_function_entry__" 1
            "no_stack_protector" 1 "__no_stack_protector__" 1 "stack_protect" 1 "__stack_protect__" 1
-           "no_profile_instrument_function" 1 "__no_profile_instrument_function__" 1}
+           "no_profile_instrument_function" 1 "__no_profile_instrument_function__" 1
+           "constructor" 1 "__constructor__" 1 "destructor" 1 "__destructor__" 1}
    ; a word counts inside an __attribute__((..)) group (a at the depth it opened, else -1), never
    ; as a parameter's name: `int used` is no attribute. _Alignas is a keyword, counted anywhere
    (hdhits ts)
@@ -2307,7 +2322,7 @@
    (pfdef ps name prms ts)
     (: sg (peep (ps 'sigs) name ())
        sf (peep (ps 'sfns) name ())
-       n (peep ps 'lazy () && (peep ps 'curstat () || sf) && sf != 'used && !(peep ps 'curused ())
+       n (peep ps 'lazy () && (peep ps 'curstat () || sf) && sf != 'used && !(peep ps 'curused ()) && !(peep ps 'curctor ())
           && !(3 < #sg && sg 3 = 'ms) && peekp ts "{" ? (lzlen ts))
        (charm? n ?
           [['fn name prms ['lazy ts n (peep ps 'curssp ())]] (drop n ts)]
@@ -2591,6 +2606,8 @@
      (peep ps 'curnopro () ? ()
         (hwin hw "no_profile_instrument_function" "__no_profile_instrument_function__" ? (pin ps 'curnopro 1))),
      (peep ps 'curused () ? () (hwin hw "used" "__used__" ? (pin ps 'curused 1))),
+     (peep ps 'curctor () ? ()
+        (hwin hw "constructor" "__constructor__" || hwin hw "destructor" "__destructor__" ? (pin ps 'curctor (ctorat? ts)))),
      (peep ps 'curalign () ? ()
         (hwin hw "aligned" "__aligned__" || elem "_Alignas" hw ? (alignat? ps ts @ an (an ? (pin ps 'curalign an))))),
      (peep ps 'curtdal () ? () (specask ps ts @ ta (0 < ta ? (pin ps 'curtdal ta)))),   ; a variable's typedef ask
@@ -2813,7 +2830,9 @@
            ; a `used` static is kept though nothing here calls it (gen's dead-static sweep); an
            ; 'inl one lays for no asm that names it
            (st && fnp ? (peep (ps 'sfns) <>f () @ was
-                           (pin (ps 'sfns) <>f (? (ps 'curused || was = 'used) 'used (ps 'curkwi || was = 'inl) 'inl 1))),
+                           (pin (ps 'sfns) <>f (? (ps 'curused || peep ps 'curctor () || was = 'used) 'used (ps 'curkwi || was = 'inl) 'inl 1))),
+           ; a constructor or destructor: its slot in the arrays, laid once at the unit's end
+            fnp ? (map (c \ pin ps 'ctors (elem (<>f . c) (peep ps 'ctors ()) ? (ps 'ctors) ((<>f . c) . peep ps 'ctors ()))) (peep ps 'curctor ())),
            ; a function may name its section and alignment too (where code lands, its spacing)
             sc && fnp ? (pin (ps 'sects) <>f sc),
             an && fnp ? (pin (ps 'aligns) <>f an),
@@ -2859,6 +2878,7 @@
             pin ps 'curnoinl (),
             pin ps 'curnopro (),
             pin ps 'curused (),
+            pin ps 'curctor (),
             pin ps 'curalign (),
             pin ps 'curtdal (),
             pin ps 'curtdbase (),
@@ -2873,7 +2893,7 @@
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl && peep (ps 'sfns) nm () != 'used ? (pin (ps 'sfns) nm 'inl))) (keys (ps 'c99inl))),
                       (peep ps 'lazy () ? (lzres ps acc) acc) @ acc2
                       (acc2 = 'lazyfail ? acc2
-                         [1 ['prog (ps 'hoist + rev acc2 + msasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
+                         [1 ['prog (ps 'hoist + rev acc2 + msasm ps + ctasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
                             (ps 'consts) (ps 'gregs) (ps 'anames) (ps 'pfes) (ps 'nopro)]))
            (pin ps 'tagmark (), ptop ps ts2 @ r
@@ -2895,6 +2915,15 @@
                    _ (peep (ps 'sects) nm () @ sc (sc ? (pin (ps 'sects) (msname nm) sc)))
                    ['fn (msname nm) prms body])))
         f)
+   ; each constructor's and destructor's word in .init_array / .fini_array, gcc's section
+   ; names: a priority's in .NNNNN, which the link lays first, in order
+   (ctasm ps)
+    (: w (pw64 ps)
+       (sec k p) ((k = 'init ? ".init_array" ".fini_array") + (charm? p ? "." + snip (show (100000 + p)) 1 6 ""))
+       (map ((nm k p) \ (ps 'tgt = 'wasm ? (clblame "__attribute__((constructor)) on wasm")
+                            ['tasm (cats ["\t.pushsection \(sec k p),\"aw\"\n\t.p2align \(w ? 3 2)\n"
+                                          "\t\(w ? ".quad" ".long") \(nm)\n\t.popsection\n"])]))
+            (rev (peep ps 'ctors ()))))
    (msasm ps)
     (map (nm \ (: sg (ps 'sigs nm)
                   sc (peep (ps 'sects) nm ".text")

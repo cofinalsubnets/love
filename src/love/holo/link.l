@@ -244,8 +244,9 @@
     (starts? nm ".eh_frame" || starts? nm ".ARM.exidx" || starts? nm ".ARM.extab")
    ; the lanes the linker knows by name; anything else allocated is a named lane
    ld-lanes '(text rodata data nifs bss image note boot tdata tbss)
-   ; an allocated progbits or nobits section of another name is its own lane, laid contiguous
-   (ld-any nm ty fl) (elem ty '(1 8) && 0 < fl & 2 ? (name nm))
+   ; an allocated progbits or nobits section of another name is its own lane, laid contiguous;
+   ; gcc's init_array, fini_array and preinit_array types are progbits here
+   (ld-any nm ty fl) (elem ty '(1 8 14 15 16) && 0 < fl & 2 ? (name nm))
    ; and travels with the known lane its flags name: exec text, write data, nobits bss,
    ; else rodata
    (ld-home lane fl ty)
@@ -290,7 +291,7 @@
         (shnum <= i ? ()
            (: h (sec i) nm <h ty (h 1) fl (h 2) off (h 3) sz (h 4)
               ; a note with a lane (.note.pvh) is placed like progbits
-              (? (elem ty '(1 8) || ty = 7 && ld-lane nm ty fl)
+              (? (elem ty '(1 8 14 15 16) || ty = 7 && ld-lane nm ty fl)
                    ; a nobits section's sh_offset is a placeholder
                    (ld-lane nm ty fl @ lane
                       (? lane (pin secs i [lane (ty = 8 ? 0 off) sz (h 5) (ld-home lane fl ty)],
@@ -341,7 +342,9 @@
    ; relocation that would read one refuses by its kind
    ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
              "__data_start__" "__data_end__" "__data_load__"
-             "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_")
+             "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
+             "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
+             "__preinit_array_start" "__preinit_array_end")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
@@ -463,7 +466,19 @@
           (ldlay1 lane (go cur (peep (peep ob 'lanes 0) lane ())) >os)))
 
    ; the named lanes of a set that travel with `home`, first-seen order: layout and emit both walk it
+   ; the constructor and destructor arrays each laid as one, a priority's .NNNNN first in
+   ; order, the plain one last; every other named lane as first seen
+   (ld-arr nm) (: s (show nm)
+                  (? (starts? s ".init_array") 1 (starts? s ".fini_array") 2 ()))
+   (ld-arrkey nm) (: s (show nm) (#s = 11 ? "~" (snip s 11 #s)))
    (ld-nlanes objs home)
+    (: ls (ld-nlanes0 objs home)
+       srt (sort (map (l \ [(ld-arr l) (ld-arrkey l) l]) (filter ld-arr ls)))
+       (filter (l \ !(ld-arr l)) ls + map (r \ r 2) srt))
+   ; the arrays' brackets, over every lane of the kind (k 1 or 2) -> (start end) | ()
+   (ld-arrx xt k)
+    (foldl (\ a l (ld-arr l = k ? (xt l @ v (atom? a ? v [(min <a <v) (max <>a <>v)])) a)) () (keys xt))
+   (ld-nlanes0 objs home)
     (: seen {}
        (nhome ob l) (peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) () 4)
        (go os acc)
@@ -555,6 +570,11 @@
           (nm = "__stop_love_rela") r1
           (elem nm '("__bss_start__" "__bss_end__"))
            (xt "__bss" @ v (two? v ? (nm = "__bss_start__" ? <v <>v) (scare 'link-undef nm)))
+          ; the constructor and destructor arrays, an absent one empty; preinit is always empty
+          (elem nm '("__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
+                     "__preinit_array_start" "__preinit_array_end"))
+           (ld-arrx xt (starts? nm "__init" ? 1 2) @ v
+              (two? v && !(starts? nm "__pre") ? (ends? nm "start" ? <v <>v) n0))
           (: x (nm @ ("__start_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<v]))
                      ("__stop_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<>v]))
                      ())
@@ -1432,7 +1452,10 @@
        (soff k) (<>dstr k)
        nn #needed
        nrel (ld-nabs objs)
-       ndy (nn + (exe ? 12 11))
+       ; ..the constructor and destructor arrays, for the loader to run
+       ia (ld-arrx (ld-extents objs) 1) fa (ld-arrx (ld-extents objs) 2)
+       arrs ((two? ia ? [[25 <ia] [27 (<>ia - <ia)]] ()) + (two? fa ? [[26 <fa] [28 (<>fa - <fa)]] ()))
+       ndy (nn + (exe ? 12 11) + #arrs)
        dy0 (ld-align 16 end)       got0 (dy0 + dynz * ndy)
        ra0 (got0 + wz * ni)        ds0 (ra0 + relz * (nrel + ni))
        nsym (1 + ni + ne)          hs0 (ds0 + symz * nsym)
@@ -1460,7 +1483,7 @@
                          + (exe ? [[21 0]] [[14 (soff 0)]])
                          + [[4 hs0] [5 st0] [6 ds0] [10 #<dstr] [11 symz]
                             [(w32 ? 17 7) ra0] [(w32 ? 18 8) (relz * nr)] [(w32 ? 19 9) relz] [30 8]]
-                         + (exe ? [[0x6ffffffb 0x8000000]] ()) + [[0 0]])))
+                         + arrs + (exe ? [[0x6ffffffb 0x8000000]] ()) + [[0 0]])))
        dsym (catall ([(ld-zeros symz)]
                      + map (k \ symf (soff (1 + nn + k)) 1 2 0 0 0) ^ni
                      + o-mapi (\ k e (symf (soff (1 + nn + ni + k)) (e 1) (e 2)

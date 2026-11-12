@@ -729,6 +729,10 @@
                     (li r1 0) (li r7 0)
                     (la r6 main)
                     (call __libc_start_main))
+   ; ..and atexit, weak: glibc keeps it out of libc.so (libc_nonshared's) and bionic in its crt,
+   ; both as __cxa_atexit(f, 0, the exe's handle 0); the push keeps x64's stack aligned
+   (crt-atexit tgt) (tgt = 'x64 ? '((label atexit) (push r3) (li r5 0) (li r2 0) (call __cxa_atexit) (pop r3) (ret))
+                       '((label atexit) (push lr) (li r1 0) (li r2 0) (call __cxa_atexit) (pop lr) (ret)))
    crt0-glibc-rv '((mov r5 r0)
                    (ld r1 sp 0)
                    (lea r2 sp 8)
@@ -745,14 +749,32 @@
                     (la r0 main)
                     (call __libc_start_main))
    ; ..bionic's __libc_init takes the kernel's block, main, and the exe's structors, here three
-   ; empty slots on the stack (the loader runs the arrays; it never returns). a64 alone
+   ; empty slots on the stack (it never returns). bionic's loader runs an exe's init array but
+   ; not its fini array, so a walker of it is registered first, to run after every atexit. a64 alone
    crt0-bionic-a64 '((lea r0 sp 0)
+                     (mov r19 r0)
+                     (la r0 c0b-fini) (li r1 0) (li r2 0)
+                     (call __cxa_atexit)
+                     (mov r0 r19)
                      (sub sp sp 32)
                      (li r9 0) (st sp 0 r9) (st sp 8 r9) (st sp 16 r9)
                      (lea r3 sp 0)
                      (li r1 0)
                      (la r2 main)
-                     (call __libc_init))
+                     (call __libc_init)
+                     (label c0b-fini)
+                     (push lr) (push r19) (push r20)
+                     (la r19 __fini_array_start) (la r20 __fini_array_end)
+                     (label c0b-next)
+                     (cmp r20 r19)
+                     (br eq c0b-done)
+                     (sub r20 r20 8)
+                     (ld r9 r20 0)
+                     (callr r9)
+                     (jmp c0b-next)
+                     (label c0b-done)
+                     (pop r20) (pop r19) (pop lr)
+                     (ret))
    ; the riscv entry: a non-zero a0 is freebsd's vector, handed down as 2; linux and netbsd
    ; are asked. linux exits by 94 in a7, netbsd 1 in t6 (holo's scratch, set raw), freebsd 1 in t0
    crt0-rv '((cmp r0 0)
@@ -1108,9 +1130,9 @@
        _ (bionic && tgt != 'a64 && udie 1 "cc: -dynamic-linker under /system links on a64")
        c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'rv64 crt0-glibc-rv crt0-glibc-x64)
              mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
-       ent (dx ? ["_start"] '("__love_start"))
+       ent (dx ? ["_start" "atexit"] '("__love_start"))
        all (arm? || so ? srcs
-                   (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9) c9) () ent () (dx ? () ent) () () () () ()))] . srcs))
+                   (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
