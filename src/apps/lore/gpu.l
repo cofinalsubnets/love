@@ -51,8 +51,12 @@
               (hot? q ? (slurp q @ t (close q, t))
                  (open "src/apps/lore/glhelp.c" "r" @ q (hot? q ? (slurp q @ t (close q, t)) ()))))
  (here? p) (two? (stat p))
- ; ..the system loader a mooncc build runs under, by the machine
- (loader m) (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1" ())
+ ; ..the system loader a mooncc build runs under, by the machine, and the libraries it names:
+ ; android's bionic, else glibc
+ (droid? _) (here? "/system/bin/linker64")
+ (loader m) (droid? () ? (m = "aarch64" ? "/system/bin/linker64" ())
+               (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1" ()))
+ (libs _) (droid? () ? ["-l:libc.so" "-l:libdl.so"] ["-l:libc.so.6"])
  (run argv) (: p (spawnio argv -1 -1 -1 () -1 0) (charm? p && 0 <= p ? (wait p) -1))
  ; ..argv to start the helper, built if the cache lacks it: mooncc first unless told
  (helper-argv _)
@@ -66,7 +70,7 @@
            _ (here? cf ? 0 (open (cf + tmp) "w" @ q (say q src, close q, rename (cf + tmp) cf)))
            (made f argv) (here? f || (0 = run (argv (f + tmp)) && !(rename (f + tmp) f)))
            (moon? _) (how != 'cc && string? ld && here? ld
-                      && made mb (o \ [(selfpath 0) "cc" "-O2" "-shared" "-o" o cf "-l:libc.so.6"]))
+                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-shared" "-o" o cf] + libs ())))
            (cc? _) (how != 'moon && made cb (o \ ["cc" "-O2" "-o" o cf]))
            (? (moon? ()) [ld mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone

@@ -39,7 +39,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 
 typedef void *EGLDisplay, *EGLConfig, *EGLContext, *EGLSurface;
 typedef int32_t EGLint;
@@ -51,13 +50,13 @@ typedef char GLchar;
 enum {
  EGL_PLATFORM_SURFACELESS_MESA = 0x31DD, EGL_SURFACE_TYPE = 0x3033, EGL_PBUFFER_BIT = 1,
  EGL_RENDERABLE_TYPE = 0x3040, EGL_OPENGL_ES3_BIT = 0x40, EGL_NONE = 0x3038,
- EGL_OPENGL_ES_API = 0x30A0, EGL_CONTEXT_MAJOR_VERSION = 0x3098,
+ EGL_OPENGL_ES_API = 0x30A0, EGL_WIDTH = 0x3057, EGL_HEIGHT = 0x3056, EGL_CONTEXT_MAJOR_VERSION = 0x3098,
  GL_FRAMEBUFFER = 0x8D40, GL_RENDERBUFFER = 0x8D41, GL_RGBA8 = 0x8058, GL_DEPTH_COMPONENT24 = 0x81A6,
  GL_COLOR_ATTACHMENT0 = 0x8CE0, GL_DEPTH_ATTACHMENT = 0x8D00, GL_FRAMEBUFFER_COMPLETE = 0x8CD5,
  GL_VERTEX_SHADER = 0x8B31, GL_FRAGMENT_SHADER = 0x8B30, GL_COMPILE_STATUS = 0x8B81,
  GL_LINK_STATUS = 0x8B82, GL_ARRAY_BUFFER = 0x8892, GL_ELEMENT_ARRAY_BUFFER = 0x8893,
  GL_STATIC_DRAW = 0x88E4, GL_FLOAT = 0x1406, GL_UNSIGNED_INT = 0x1405, GL_TRIANGLES = 4,
- GL_COLOR_BUFFER_BIT = 0x4000, GL_DEPTH_BUFFER_BIT = 0x100, GL_DEPTH_TEST = 0x0B71, GL_LESS = 0x201,
+ GL_COLOR_BUFFER_BIT = 0x4000, GL_DEPTH_BUFFER_BIT = 0x100, GL_DEPTH_TEST = 0x0B71, GL_LESS = 0x201, GL_ALWAYS = 0x207,
  GL_RGBA = 0x1908, GL_UNSIGNED_BYTE = 0x1401, GL_TEXTURE_2D = 0x0DE1, GL_TEXTURE0 = 0x84C0,
  GL_TEXTURE_MIN_FILTER = 0x2801, GL_TEXTURE_MAG_FILTER = 0x2800, GL_TEXTURE_WRAP_S = 0x2802,
  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_MAX_LEVEL = 0x813D, GL_NEAREST = 0x2600,
@@ -74,6 +73,8 @@ enum {
  X(unsigned, eglBindAPI, (GLenum)) \
  X(EGLContext, eglCreateContext, (EGLDisplay, EGLConfig, EGLContext, const EGLint *)) \
  X(unsigned, eglMakeCurrent, (EGLDisplay, EGLSurface, EGLSurface, EGLContext)) \
+ X(EGLDisplay, eglGetDisplay, (void *)) \
+ X(EGLSurface, eglCreatePbufferSurface, (EGLDisplay, EGLConfig, const EGLint *)) \
  X(void *, eglGetProcAddress, (const char *))
 #define GLFNS(X) \
  X(void, glGenFramebuffers, (GLsizei, GLuint *)) X(void, glBindFramebuffer, (GLenum, GLuint)) \
@@ -148,11 +149,12 @@ static void *need(void *h, const char *n) {
 
 // the shared file, mapped whole again once it has grown
 static unsigned char *bytes(struct helper *H, size_t off, size_t n) {
- struct stat st;
- if (fstat(H->fd, &st) < 0) return NULL;
- if ((size_t) st.st_size != H->sz) {
+ // ..its size by lseek: a struct stat laid by our headers is not the system libc's
+ off_t const e = lseek(H->fd, 0, SEEK_END);
+ if (e < 0) return NULL;
+ if ((size_t) e != H->sz) {
   if (H->map) munmap(H->map, H->sz);
-  H->sz = (size_t) st.st_size;
+  H->sz = (size_t) e;
   H->map = H->sz ? mmap(NULL, H->sz, PROT_READ | PROT_WRITE, MAP_SHARED, H->fd, 0) : NULL;
   if (H->map == MAP_FAILED) H->map = NULL, H->sz = 0; }
  return H->map && off <= H->sz && n <= H->sz - off ? H->map + off : NULL; }
@@ -237,7 +239,10 @@ static GLuint program(GLuint vs, GLuint fs) {
  return ok ? p : 0; }
 
 static int setup(struct helper *H) {
+ // ..mesa's names, else android's
  void *egl = dlopen("libEGL.so.1", RTLD_NOW), *gl = dlopen("libGLESv2.so.2", RTLD_NOW);
+ if (!egl) egl = dlopen("libEGL.so", RTLD_NOW);
+ if (!gl) gl = dlopen("libGLESv2.so", RTLD_NOW);
  if (!egl || !gl) { dprintf(1, "err no gles: %s\n", dlerror()); return 0; }
 #define LOADE(r, n, a) if (!(n = (r (*) a) need(egl, #n))) { dprintf(1, "err no %s\n", #n); return 0; }
 #define LOADG(r, n, a) if (!(n = (r (*) a) need(gl, #n))) { dprintf(1, "err no %s\n", #n); return 0; }
@@ -245,6 +250,7 @@ static int setup(struct helper *H) {
  GLFNS(LOADG)
  EGLDisplay d = eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL);
  EGLint ma, mi, n = 0;
+ if (!d || !eglInitialize(d, &ma, &mi)) d = eglGetDisplay(NULL);
  if (!d || !eglInitialize(d, &ma, &mi)) { dprintf(1, "err no egl display\n"); return 0; }
  EGLint ca[] = { EGL_SURFACE_TYPE, EGL_PBUFFER_BIT, EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_NONE };
  EGLConfig cf = NULL;
@@ -252,7 +258,10 @@ static int setup(struct helper *H) {
  eglBindAPI(EGL_OPENGL_ES_API);
  EGLint xa[] = { EGL_CONTEXT_MAJOR_VERSION, 3, EGL_NONE };
  EGLContext c = eglCreateContext(d, n ? cf : NULL, NULL, xa);
- if (!c || !eglMakeCurrent(d, NULL, NULL, c)) { dprintf(1, "err no gles 3 context\n"); return 0; }
+ // ..no surface where the driver allows it, else a pixel's pbuffer
+ EGLint pa[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
+ EGLSurface ps = c && !eglMakeCurrent(d, NULL, NULL, c) ? eglCreatePbufferSurface(d, cf, pa) : NULL;
+ if (!c || (ps && !eglMakeCurrent(d, ps, ps, c)) || (!ps && !eglMakeCurrent(d, NULL, NULL, c))) { dprintf(1, "err no gles 3 context\n"); return 0; }
  GLuint vs = shader(GL_VERTEX_SHADER, vsrc), fs = shader(GL_FRAGMENT_SHADER, fsrc);
  if (!vs || !fs) return 0;
  GLuint uvs = shader(GL_VERTEX_SHADER, uvsrc), ufs = shader(GL_FRAGMENT_SHADER, ufsrc);
@@ -525,10 +534,11 @@ static void cmd_frame(struct helper *H, char *args) {
  if (H->bpend || H->upend) {
   glUseProgram(H->uprog); glUniform2i(H->uu_fs, w, h);
   if (H->bpend) {
-   glUniform1i(H->uu_base, 1); glDepthMask(0); glDisable(GL_DEPTH_TEST);
+   // ..the test on but always passing: after a pass with it off, adreno misses glass over the smaller frame
+   glUniform1i(H->uu_base, 1); glDepthMask(0); glDepthFunc(GL_ALWAYS);
    glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->bc);
    glDrawArrays(GL_TRIANGLES, 0, 3);
-   glDepthMask(1); glEnable(GL_DEPTH_TEST); H->bpend = 0; }
+   glDepthMask(1); glDepthFunc(GL_LESS); H->bpend = 0; }
   if (H->upend) {
    glUniform1i(H->uu_base, 0); glUniform2i(H->uu_cs, H->uw, H->uh);
    glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, H->ud);
@@ -651,8 +661,10 @@ int glhelp_main(int argc, char **argv) {
  struct helper *H = calloc(1, sizeof *H);
  if (!H) { dprintf(1, "err no memory\n"); return 2; }
  if (argc < 2) { dprintf(1, "err usage: glhelp FILE\n"); return 2; }
- H->fd = open(argv[1], O_RDWR | O_CLOEXEC);
- if (H->fd < 0) { dprintf(1, "err cannot open %s\n", argv[1]); return 2; }
+ // ..the file last: bionic's linker, run as the program, leaves itself in argv
+ char const *f = argv[argc - 1];
+ H->fd = open(f, O_RDWR | O_CLOEXEC);
+ if (H->fd < 0) { dprintf(1, "err cannot open %s\n", f); return 2; }
  if (!setup(H)) return 3;
  for (char *l; (l = next_line(H)); ) {
   int id, a, b, c, k; long off; double tone;

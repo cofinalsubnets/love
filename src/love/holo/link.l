@@ -1397,7 +1397,7 @@
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
        objs (objs0 + [plt])
        pg (dm 5)
-       nph 5                                    ; three loads, dynamic, gnu_stack
+       nph 6                                    ; phdr, three loads, dynamic, gnu_stack
        hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * nph)
        lay (ldlay objs 0 hdrsz pg 1)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
@@ -1472,7 +1472,10 @@
                     (shf (snm 12) 3 0 0 stro strz 0 0 1 0)
                     (shf (snm 13) 3 0 0 ssto sstz 0 0 1 0)
                     (shf (snm 14) 1 48 0 cmto cmtz 0 0 1 1)])
-       phs [(phf 1 5 0 0 0 t1 t1 pg)
+       ; ..pt_phdr first: bionic's linker will not run an object without one
+       phz ((w32 ? 32 56) * nph) eh (w32 ? 52 64)
+       phs [(phf 6 4 eh eh eh phz phz wz)
+            (phf 1 5 0 0 0 t1 t1 pg)
             (phf 1 4 t1 o0 o0 (o1 - o0) (o1 - o0) pg)
             (phf 1 6 (fo d0) d0 d0 (dend - d0) (bend - d0) pg)
             (phf 2 6 (fo dy0) dy0 dy0 (dynz * ndy) (dynz * ndy) wz)
