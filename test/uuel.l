@@ -76,7 +76,7 @@
    ; a level the match went under may not leave it
    (el-esc d0 d e v)
    (v @ ['nv j] (charm? j && d0 <= j && j < d)
-        ['clo f] (el-esc d0 d (e + 1) (f ['nv e]))
+        ('clo . f . _) (el-esc d0 d (e + 1) (f ['nv e]))
         (two? v && (el-esc d0 d e <v || el-esc d0 d e >v)))
    (el-pat f T)
    (: (go f T i ms)

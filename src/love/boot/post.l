@@ -1623,7 +1623,8 @@
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
    ; a uu closure ('clo f) carries a love function, so applying one is an application, not a
-   ; re-walk of syntax. only capp opens one.
+   ; re-walk of syntax. only capp opens one. a pi's or sigma's carries a third, 1 when f never
+   ; reads its argument
    (capp cl v) (<>cl v)
    (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
    (dop1 v) (v @ ['chain a _] a ['np1 v])
@@ -1656,8 +1657,8 @@
       (t @
          ['lam x b]             (comp b @ cb (en \ ['lam ['clo (v \ cb ([x v] . en))]]))
          ['succ a]              (comp a @ ca (en \ vsucc (ca en)))
-         ['pi x A B]            (: cA (comp A) cB (comp B)
-                                 (en \ ['pi (cA en) ['clo (v \ cB ([x v] . en))]]))
+         ['pi x A B]            (: cA (comp A) cB (comp B) k (reads? x B ? 0 1)
+                                 (en \ ['pi (cA en) ['clo (v \ cB ([x v] . en)) k]]))
          ['paths A a b]         (: cA (comp A) ca (comp a) cb (comp b)
                                  (en \ ['paths (cA en) (ca en) (cb en)]))
          ['nat_rect P z s n]    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
@@ -1680,8 +1681,8 @@
          ['UU l]                (en \ ['U l])
          ['the T u]             (comp u)                    ; the ascription is the term
          ['let x a b]           (: ca (comp a) cb (comp b) (en \ cb ([x (ca en)] . en)))
-         ['total2 x A B]        (: cA (comp A) cB (comp B)
-                                 (en \ ['sig (cA en) ['clo (v \ cB ([x v] . en))]]))
+         ['total2 x A B]        (: cA (comp A) cB (comp B) k (reads? x B ? 0 1)
+                                 (en \ ['sig (cA en) ['clo (v \ cB ([x v] . en)) k]]))
          ['pr1 w]               (comp w @ ca (en \ dop1 (ca en)))
          ['pr2 w]               (comp w @ ca (en \ dop2 (ca en)))
          ['ii1 a]               (comp a @ ca (en \ ['i1 (ca en)]))
@@ -1811,8 +1812,10 @@
         ('true || 'false) 'bool
         (assq x cx @ (_ T) T (GLOB x @ (g . _) (UPOLY x @ p (two? p ? (uinst p) g)) (scare 'uu-unbound x))))
 
+   ; a codomain that never reads its binder (a closure's 1) is laid without the argument's value
+   (carg q en a) (q 2 == 1 ? 0 (vof en a))
    (inf-spine cx en d f as)
-   (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
+   (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (carg q en a)) u)
                    (scare 'uu-not-a-pi as)) f)
 
    ; each arm matches the term, then the type; the inner else is the mismatch
@@ -1822,7 +1825,7 @@
                                      (chk ([x A] . cx) ([x fr] . en) (d + 1) b (capp q fr)))
                         (scare 'uu-lam-needs-pi t))
       ['tpair a b] (T @ ['sig A q] (chk cx en d a A,
-                                    chk cx en d b (capp q (vof en a)))
+                                    chk cx en d b (capp q (carg q en a)))
                         (scare 'uu-tpair-needs-total2 t))
       ['ii1 a]     (T @ ['coprod A _] (chk cx en d a A) (scare 'uu-ii1-needs-coprod t))
       ['ii2 b]     (T @ ['coprod _ B] (chk cx en d b B) (scare 'uu-ii2-needs-coprod t))

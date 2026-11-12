@@ -14,6 +14,14 @@
   two? (peep GLOB 'uu-alive 0))
  (3 = vof 0 '(uu-alive 2)))
 
+; a codomain that never reads its binder is marked, and its argument, never evaluated, is still checked
+(test
+ (vof 0 '(pi x nat nat) @ ['pi _ q] (q 2 = 1) 0)
+ (vof 0 '(pi x nat (paths nat x x)) @ ['pi _ q] (q 2 = 0) 0)
+ (vof 0 '(total2 x nat bool) @ ['sig _ q] (q 2 = 1) 0)
+ (defn uu-skip (pi p (paths nat 0 0) nat) (lam p 3))
+ (3 = vof 0 '(uu-skip (idpath 0))))
+
 ; --- UniMath Foundations PartA. definitions and statements from here down are ported from
 ; --- UniMath (https://github.com/UniMath/UniMath, Foundations/PartA.v et al), mit license,
 ; --- copyright (c) 2015 the UniMath Development Team. the kernel is our own ---
@@ -2308,6 +2316,9 @@
  ('rejected = rejects (z \ defn uu-bad4 (coprod nat bool) (ii1 true)))
  ('rejected = rejects (z \ defn uu-bad5 nat (let x (lam y y) x)))
  ('rejected = rejects (z \ defn uu-bad6 (pi x nat 5) (lam x x)))
+ ; an argument whose value no codomain reads is still checked
+ ('rejected = rejects (z \ defn uu-skip-bad nat (uu-skip (idpath 1))))
+ ('rejected = rejects (z \ defn uu-skip-badp (total2 x nat bool) (tpair 0 7)))
  ('accepted = rejects (z \ defn uu-good (paths nat 2 2) (idpath 2))))
 
 ; universes: a type holds only smaller ones, so the canary's wfs within itself is refused
