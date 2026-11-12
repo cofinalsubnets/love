@@ -40,8 +40,6 @@ struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
     return evals(g, "((cite 'cli 'cli-line) cmdline 0)"); }
   g = evals0(g, prelpost0);
   g = evals0(g, mods0);
-  g = evals_(g, "(borrow 'holo)");
-  g = shelve(g);
   g = evals_(g,
     "(borrow '(uu kanren posix))"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (. (peep s i 0) (g (+ 1 i))))) 0)"

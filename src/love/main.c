@@ -472,19 +472,10 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
   g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
   g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
-  g = cats_lib(g);                                   // register every baked module
-  g = evals_(g,
-    "(borrow 'uu)"
-    "(borrow 'holo)"
-  );
-  g = shelve(g);
-  g = evals_(g, "(borrow 'cli)(borrow 'verbs)");
-  g = shelve(g);
-  // off again: no module stays ambient, a file borrows what it names
-  g = shelve(shelve(g));                            // cli, uu
+  g = cats_lib(g);                                   // register every baked module; none is ambient
   g = cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
-  g = shelve(g);                                    // holo back to non-ambient
+  g = shelve(g);                                    // glaze.l's own borrow of holo
 #endif
   g = evals_(g, "(latemop ())");                    // the egg's mop
 
