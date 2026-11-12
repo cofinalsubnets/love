@@ -62,10 +62,6 @@ $(holo_h): out/lib/%.h: src/love/holo/%.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) src/tools/lcat.l $< > $@
-out/lib/rune.h: src/apps/rune.l src/tools/lcat.l $(love0)
-	@echo 'LOVE	'$@
-	@mkdir -p out/lib
-	@$(lcat_love) src/tools/lcat.l $< > $@
 # the boards carry module 'fat alone: 'fatcmd borrows posix
 out/lib/fat.h: src/apps/fat.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@

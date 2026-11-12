@@ -1,10 +1,10 @@
-# love on the playdate: the rune workbench
+# love on the playdate: lore's stones
 
-the rune CAS (src/apps/rune.l) riding the crank. crank (or left/right) picks a
-card, up/down turns the dial n, A differentiates the view, B factors it --
-Zassenhaus under a button, every answer exact. cas.l is the whole demo;
-main.c is the love frontend glue (the console is a quay cb, 50x30 cells of
-the 8x8 CGA font, blitted to the 1-bit LCD each frame).
+lore's stones walked on the device: the d-pad walks and turns, the crank looks up
+and down, A or B kneels and chooses, and the song plays through horn.c. stones.l
+is the glue; main.c is the love frontend (the console is a quay cb, 50x30 cells
+of the 8x8 CGA font, laid over the dithered 1-bit frame). the image is baked on
+qemu's M7 by src/inle/mps2 (`imgpds`) and rides the pdx.
 
     make -C src/love/user/playdate        # out/playdate/love.pdx (device + simulator)
     make -C src/love/user/playdate sim    # run it in the Playdate Simulator

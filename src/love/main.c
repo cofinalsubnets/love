@@ -474,9 +474,6 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
   g = cats_lib(g);                                   // register every baked module
   g = evals_(g,
-    "(borrow 'kanren)"
-    "(borrow 'overlay)"
-    "(: ev ((cite 'overlay 'ov-hook) ev))"
     "(borrow 'uu)"
     "(borrow 'holo)"
   );
@@ -484,7 +481,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   g = evals_(g, "(borrow 'cli)(borrow 'verbs)");
   g = shelve(g);
   // off again: no module stays ambient, a file borrows what it names
-  for (int i = 0; i < 4; i++) g = shelve(g);        // cli, uu, overlay, kanren
+  g = shelve(shelve(g));                            // cli, uu
   g = cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
   g = shelve(g);                                    // holo back to non-ambient

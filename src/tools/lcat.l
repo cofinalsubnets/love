@@ -84,15 +84,14 @@
                (string? s ? s (minify (slurp-file (path n)) @ m (pin cache n m, m))))
 
    ; the baked source (cats.c): a string lays as is (arch guards); a list is [symbol items],
-   ; laid deflated with its _raw twin, items a boot file by name or glue text. a group is ONE
-   ; text: evals_ reads it whole before its first form runs, so grouping is meaning.
+   ; laid deflated with its _raw twin, items a boot file by name or glue text. a group is one
+   ; text, which evals_ reads and runs form by form.
    rows
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
      ['cat_post_z ['post]]
-     ['cat_uu_z ['uu]]                                 ; the proof kernel, every arch's
-     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. every other
-     ; module is post's or uu's.
+     ['cat_mods_z ['kanren " " 'uu]]                   ; every arch's modules past post's
+     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset
      "#if defined(__x86_64__)" "#define LvCatModsH 1"
      ['cat_lib_h_z ['holo 'x64]]
      "#elif defined(__aarch64__)" "#define LvCatModsH 1"

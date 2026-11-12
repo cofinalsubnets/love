@@ -8,8 +8,9 @@
 
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/love/boot/post.l) drinks the corpus
-// each group evaluates as one text: a text is read whole before its first form runs
-static char const *const mods0[] = { src0_uu, src0_holo, src0_x64, src0_a64, NULL };
+// each group joins into one text, read and run form by form
+static char const *const mods0[] = { src0_kanren, src0_uu, src0_holo, src0_x64, src0_a64, NULL };
+static char const *const fresh0[] = { src0_kanren, src0_uu, NULL };
 static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
 static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
 // one NUL-terminated buffer off the heap, so a collect mid-eval cannot move it; the caller frees
@@ -61,5 +62,5 @@ struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
   g = evals_(g, runner);          // pass 1: corpus via ev = the c0 nif
   char *corpus = join0(g, prelev0);                   // bootstrap: install the self-hosted ev
   if (corpus) g = egg(g, src0_egg, corpus, src0_post), alloc(corpus, 0);
-  g = evals_(g, src0_uu);                             // uu afresh, as the egg lays post: pass 2 checks from empty books
+  g = evals0(g, fresh0);                              // afresh, as the egg lays post: pass 2 starts from empty books
   return evals_(g, runner); }                      // pass 2: corpus via the self-hosted ev
