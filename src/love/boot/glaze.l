@@ -1424,17 +1424,11 @@
                  (bcat [(go a) [['push A]] (go b) [['test A A] '(br eq OVF) ['pop T]] (divir tgt op)])
                (elem op '(& | ^))
                  (bcat [(go a) [['push A]] (go b) [['pop T] [(bitop op) A A T]]])
-               (elem op '(< <= > >= =))
-                 (: pa (preg tgt ps a) pb (preg tgt ps b)
-                    (? pb         (bcat [(go a) [['cmp A pb] ['set (ccof op) A]]])
-                       (pimm? b)  (bcat [(go a) [['cmp A b]  ['set (ccof op) A]]])
-                       pa         (bcat [(go b) [['cmp pa A] ['set (ccof op) A]]])             ; (p op E): flags p-acc = a-b, cc kept
-                       (pimm? a)  (bcat [(go b) [['cmp A a]  ['set (ccof (flipc op)) A]]])     ; (C op E): b-a, flip cc
-                       (bcat [(go a) [['push A]] (go b) [['pop T] ['cmp T A] ['set (ccof op) A]]])))
+               (elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['set cc A]]]))
                ())
             (op a b c)
             (? (op = '?)
-                 (qrun e (q \ y \ el \ en \ [(go q) [['cmp A 0] ['br 'le el]] (go y) [['jmp en] ['label el]]]) go)
+                 (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (go y) [['jmp en] ['label el]]]) go)
                (op = 'peep) (: R (argregir tgt (argix a ps 0)) inl (mint 0) endl (mint 0)   ; i unsigned-vs-len: out of range -> d, else the byte at [STR+i+2w]
                   (bcat [(go b)
                          [['ld T R (wd tgt)] ['cmp A T] ['br 'below inl] ['li A (whole? c ? c 0)] ['jmp endl] ['label inl] ['ldxb A R A 1 (2 * wd tgt)] ['label endl]]]))
@@ -1455,6 +1449,28 @@
                (op = 'cup) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A (2 * wd tgt)]]])
                ())
             ())))
+   ; gcmpir: a comparison's operands to flags -> [code cc], cc the condition that holds when it does
+   (gcmpir tgt syms ps op a b)
+    (: A (greg tgt 'acc) T (greg tgt 'tmp) pa (preg tgt ps a) pb (preg tgt ps b) (go x) (cggir tgt syms ps x)
+       (? pb        [(bcat [(go a) [['cmp A pb]]]) (ccof op)]
+          (pimm? b) [(bcat [(go a) [['cmp A b]]]) (ccof op)]
+          pa        [(bcat [(go b) [['cmp pa A]]]) (ccof op)]                          ; (p op E): flags p-acc = a-b, cc kept
+          (pimm? a) [(bcat [(go b) [['cmp A a]]]) (ccof (flipc op))]                   ; (C op E): b-a, flip cc
+          [(bcat [(go a) [['push A]] (go b) [['pop T] ['cmp T A]]]) (ccof op)]))
+   (ccnot c) (c @ 'lt 'ge  'ge 'lt  'le 'gt  'gt 'le  'eq 'ne  'ne 'eq  c)
+   ; gtestir: q's code, branching to el when q fails; a comparison branches on its own flags
+   (gtestir tgt syms ps q el)
+    (q @ ((op a b) && elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['br (ccnot cc) el]]]))
+         _ (bcat [(cggir tgt syms ps q) [['cmp (greg tgt 'acc) 0] ['br 'le el]]]))
+   ; tailir: a tail self-call's args into the arg regs. an arg that is its own param stays put; the rest
+   ; compute from the old regs, all but the last pushed, the last moved from acc
+   (tailir tgt syms ps as Lbody)
+    (: A (greg tgt 'acc) ch (filter (i \ !(as i = ps i)) (rangeL 0 #ps)) rv (rev ch)
+       (? !(two? ch) [['jmp Lbody]]
+          (bcat [(cats (map (i \ bcat [(cggir tgt syms ps (as i)) [['push A]]]) (rev >rv)))
+                 (cggir tgt syms ps (as <rv)) [['mov (argregir tgt <rv) A]]
+                 (cats (map (i \ [['pop (argregir tgt i)]]) >rv))
+                 [['jmp Lbody]]])))
    (gargsir tgt syms ps as) (atom? as ? () (bcat [(cggir tgt syms ps <as) [['push (greg tgt 'acc)]] (gargsir tgt syms ps >as)]))
    ; per-site gensyms for the probe's fixed labels, so one probe IR splices N times into a group assemble
    (relabel ir lp ht ms en dp) (map (f \ map (x \ (x @ 'loop lp  'hit ht  'miss ms  'end en  'deopt dp  x)) f) ir)
@@ -1473,18 +1489,16 @@
          (atom? e) ()
          (elem <e syms) (cggir tgt syms ps e)                                   ; a value-group call already answers the value
          (e @ ('. a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])
-              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cggir tgt syms ps q) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps y) [['jmp en] ['label el]]])
+              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (cggvir tgt syms ps y) [['jmp en] ['label el]]])
                               (x \ cggvir tgt syms ps x))
               ())))
-   ; cggtir: e in tail position. a tail self-call of matching arity recomputes the args onto the stack, pops them into
-   ; the arg regs and jumps Lbody past save/load: the frame is reused. self only; a sibling tail-call stays a plain `call`
+   ; cggtir: e in tail position. a tail self-call of matching arity lays its args in the arg regs (tailir) and
+   ; jumps Lbody past save/load: the frame is reused. self only; a sibling tail-call stays a plain `call`
    (cggtir tgt syms ps e selfnm Lbody)
     (: A (greg tgt 'acc) k #ps
        (two? e && (<e = selfnm) && #>e = k ?
-            (bcat [(gargsir tgt syms ps >e)                                      ; all read from the old regs
-                   (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
-                   [['jmp Lbody]]])
-          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cggir tgt syms ps q) [['cmp A 0] ['br 'le el]] (cggtir tgt syms ps y selfnm Lbody) [['jmp en] ['label el]]])
+            (tailir tgt syms ps >e Lbody)
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (cggtir tgt syms ps y selfnm Lbody) [['jmp en] ['label el]]])
                                  (x \ cggtir tgt syms ps x selfnm Lbody))
                (cggir tgt syms ps e))))
    ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
