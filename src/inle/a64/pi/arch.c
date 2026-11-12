@@ -1,6 +1,7 @@
 // a64 on the raspberry pi zero 2 w (bcm2837, as the 3's): the mini uart console on gpio14/15,
-// the bcm2836 local intc and the bcm2835 armctrl, the pm watchdog's reset. stands in for
-// a64/arch.c; the stub maps the peripherals, so nothing is mapped here
+// the bcm2836 local intc and the bcm2835 armctrl, the pm watchdog's reset, the hardware rng
+// and the videocore's mailbox. stands in for a64/arch.c; the stub maps the peripherals, so
+// nothing is mapped here
 #include <stdint.h>
 #include "../asmops.h"                 // the privileged instructions, both spellings
 #include "k.h"                       // kticks, kq's queue
@@ -13,6 +14,8 @@ void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 #define AUX     (PERI + 0x215000)      // the mini uart's block
 #define ARMCTL  (PERI + 0x00b200)      // the gpu's interrupts, as the arm takes them
 #define PM      (PERI + 0x100000)      // power management: the watchdog
+#define RNG     (PERI + 0x104000)      // the hardware rng
+#define MBOX    (PERI + 0x00b880)      // the videocore's mailbox 0
 #define LOCAL   0x40000000             // the bcm2836 per-core block
 
 #define AUX_ENABLES 0x04               // bit 0: the mini uart
@@ -61,6 +64,83 @@ void k_irq(void) {
   if (src & SRC_CNTPNS) kticks++, k_timer_rearm();
   if ((src & SRC_GPU) && (mmio_rd(ARMCTL, IRQ_PEND1) & AUX_BIT)) k_uart(); }
 
+// the rng: a warm-up count first, then a word whenever the fifo holds one
+#define RNG_CTRL    0x00
+#define RNG_STATUS  0x04
+#define RNG_DATA    0x08
+#define RNG_MASK    0x10
+static void rng_init(void) {
+  mmio_wr(RNG, RNG_STATUS, 0x40000);
+  mmio_wr(RNG, RNG_MASK, mmio_rd(RNG, RNG_MASK) | 1);    // no interrupt: reads poll
+  mmio_wr(RNG, RNG_CTRL, mmio_rd(RNG, RNG_CTRL) | 1); }
+
+// /dev/urandom's bytes; a fifo that stays empty answers short
+uintptr_t k_entropy(unsigned char *p, uintptr_t n) {
+  uintptr_t k = 0;
+  while (k < n) {
+    for (int t = 0; !(mmio_rd(RNG, RNG_STATUS) >> 24); t++)
+      if (t > 1000000) return k;
+    uint32_t w = mmio_rd(RNG, RNG_DATA);
+    for (int b = 0; b < 4 && k < n; b++) p[k++] = (unsigned char) (w >> 8 * b); }
+  return k; }
+
+// the property channel: one tag a call, v its words in and its answer out. the buffer is the
+// caller's stack, cleaned to ram for the videocore and invalidated after; it reads ram
+// through the uncached 0xc0000000 alias. -1 on a refusal or a mailbox that never answers
+#define MB_READ   0x00
+#define MB_STATUS 0x18
+#define MB_WRITE  0x20
+#define MB_FULL   0x80000000u
+#define MB_EMPTY  0x40000000u
+#define MB_PROP   8
+static void mb_sync(uint32_t *b, uintptr_t n) {
+  for (uintptr_t a = (uintptr_t) b & ~63ull; a < (uintptr_t) (b + n); a += 64) k_dc_civac(a);
+  k_dsb_ish(); }
+int k_mbox(uint32_t tag, uint32_t *v, int nv) {
+  uint32_t b[32] __attribute__((aligned(64)));
+  if (nv < 1 || nv > 24) return -1;
+  b[0] = (uint32_t) (6 + nv) * 4, b[1] = 0, b[2] = tag, b[3] = (uint32_t) nv * 4, b[4] = 0;
+  for (int i = 0; i < nv; i++) b[5 + i] = v[i];
+  b[5 + nv] = 0;
+  mb_sync(b, 32);
+  uint64_t par = k_at_s1e1w_par(b);
+  if (par & 1) return -1;
+  uint32_t m = (uint32_t) (((par & 0xfffffffff000ull) | ((uintptr_t) b & 0xfff)) | 0xc0000000u) | MB_PROP;
+  for (int t = 0; mmio_rd(MBOX, MB_STATUS) & MB_FULL; t++) if (t > 10000000) return -1;
+  mmio_wr(MBOX, MB_WRITE, m);
+  for (int t = 0; ; t++) {
+    if (t > 10000000) return -1;
+    if (mmio_rd(MBOX, MB_STATUS) & MB_EMPTY) continue;
+    if (mmio_rd(MBOX, MB_READ) == m) break; }
+  mb_sync(b, 32);
+  if (b[1] != 0x80000000u || !(b[4] & 0x80000000u)) return -1;
+  for (int i = 0; i < nv; i++) v[i] = b[5 + i];
+  return 0; }
+
+// /proc/board: the firmware's answers, a row each; a refused tag is no row
+static int hexrow(char *b, int at, char const *k, uint64_t v, int digits) {
+  while (*k) b[at++] = *k++;
+  b[at++] = ' ', b[at++] = '0', b[at++] = 'x';
+  for (int i = digits - 1; i >= 0; i--) b[at++] = "0123456789abcdef"[v >> 4 * i & 15];
+  b[at++] = '\n';
+  return at; }
+int k_board(char *b) {
+  uint32_t v[2];
+  int at = 0;
+  if (!k_mbox(0x00010002, (v[0] = 0, v), 1)) at = hexrow(b, at, "revision", v[0], 8);
+  if (!k_mbox(0x00010004, (v[0] = v[1] = 0, v), 2)) at = hexrow(b, at, "serial", (uint64_t) v[1] << 32 | v[0], 16);
+  if (!k_mbox(0x00010003, (v[0] = v[1] = 0, v), 2)) {       // six bytes, in wire order
+    char const *k = "mac ";
+    while (*k) b[at++] = *k++;
+    for (int i = 0; i < 6; i++) {
+      unsigned c = (unsigned) ((uint8_t const *) v)[i];
+      b[at++] = "0123456789abcdef"[c >> 4], b[at++] = "0123456789abcdef"[c & 15];
+      b[at++] = i < 5 ? ':' : '\n'; } }
+  if (!k_mbox(0x00010005, (v[0] = v[1] = 0, v), 2))
+    at = hexrow(b, at, "arm-base", v[0], 8), at = hexrow(b, at, "arm-size", v[1], 8);
+  if (!k_mbox(0x00000001, (v[0] = 0, v), 1)) at = hexrow(b, at, "firmware", v[0], 8);
+  return at; }
+
 // archinit finds EL1 (the stub dropped from EL2), the MMU, a stack and the HHDM up
 void archinit(void) {
   k_sp_to_el1h();
@@ -68,7 +148,11 @@ void archinit(void) {
   k_wr_vbar_el1((uintptr_t) vectors);
   mmio_wr(LOCAL, CORE0_TIMER, SRC_CNTPNS);       // the physical timer's irq to core 0
   k_timer_init();
+  rng_init();
   k_daif_unmask_irq(); }
+
+// the firmware's one-shot flag: the next boot reads the [tryboot] section
+void k_tryboot(void) { uint32_t f = 1; k_mbox(0x00038064, &f, 1); }
 
 // the watchdog, a short count and a full reset; the firmware boots again
 #define PM_RSTC 0x1c

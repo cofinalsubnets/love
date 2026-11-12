@@ -45,6 +45,9 @@ static inline void k_dc_cvau(uintptr_t p) {         // clean D to unification
   asm volatile ("dc cvau, %0" :: "r"(p) : "memory"); }
 static inline void k_ic_ivau(uintptr_t p) {         // invalidate I
   asm volatile ("ic ivau, %0" :: "r"(p) : "memory"); }
+// a buffer another master reads and writes: clean and invalidate D to the point of coherency
+static inline void k_dc_civac(uintptr_t p) {
+  asm volatile ("dc civac, %0" :: "r"(p) : "memory"); }
 
 // EL1t -> EL1h: exception entry uses SP_EL1, which msr cannot write at EL1, so capture sp,
 // select SP_EL1, write sp -- in one asm block, so sp is never garbage across a memory access
