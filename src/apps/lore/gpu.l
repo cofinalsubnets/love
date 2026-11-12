@@ -23,7 +23,7 @@
 ;                                helper in s (gpu-state's), or () where facets must draw it:
 ;                                a base not a colour, -1 or w*h colours, nor such a ground
 ;                                under a smaller frame, opts with a sun, flags
-;                                past 8 64 and 128, a pane's class, or a helper gone
+;                                past 8 64 and 128, or a helper gone
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
 (module (gpu gpu-open gpu-tex gpu-buf gpu-drop gpu-under gpu-frame gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
@@ -108,14 +108,14 @@
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {}}
  ; ..a batch's buf, by its sizes and its sums weighed by place, so an order counts: lore moves
- ; and relights a batch in place, so what it holds names it; [id plain], plain where no
- ; triangle is a pane's class. one not drawn for a while is dropped
+ ; and relights a batch in place, so what it holds names it; [id]. one not drawn for a while
+ ; is dropped
  (batch s v t) (: nt (#t // 4) key [#v nt (net (v * weights s #v)) (net (t * weights s #t))] b (s 'bufs) e (peep b key ())
    _ (pin (s 'used) key (s 'fr))
    (? (two? e) e
-      (nt = 0) [-1 1]
-      (: id (s 'n) pl (nt = 0 || (t (iota nt * 4 + 3) @ k (amin k > -16777219 && amax k < 16777215))) r (gpu-buf (s 'g) id v t)
-         (? (string? r) r (: e [id pl] (pins s 'n (id + 1), pin b key e, e))))))
+      (nt = 0) [-1]
+      (: id (s 'n) r (gpu-buf (s 'g) id v t)
+         (? (string? r) r (: e [id] (pins s 'n (id + 1), pin b key e, e))))))
  ; ..the weights for n words, kept until the sweep
  (weights s n) (: t (s 'wt) (peep t n () @ () (: w (iota n % 997 + 1) (pin t n w, w)) w w))
  (sweep s) (: b (s 'bufs) u (s 'used) fr (s 'fr) (old? k) (u k < fr - 120)
@@ -135,10 +135,9 @@
            tx (texs! s texs)
            bs (string? tx ? () (map (i \ batch s (V i) (T i)) ^#V))
            (? (string? tx || any string? bs) (pin s 'g (), ())
-              !(all (b \ b 1) bs) (no s 'seen)
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 c (string? u ? u (gpu-frame (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) (fl & 8)]))
+                 c (string? u ? u (gpu-frame (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) (fl & 136)]))
                  (? (string? c) (pin s 'g (), ())
                     (no s 'drawn, (cite 'guts 'peepv) c 0 8 8 (w * h))))))))
  (no s k) (: t (peep s 'why {}) (pins s 'why (pin t k (peep t k 0 + 1)), ())))

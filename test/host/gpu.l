@@ -1,8 +1,8 @@
 ; test/host/gpu.l -- src/apps/lore/gpu.l: a frame drawn by glhelp on the system's gpu, as facets
 ; draws it on the cpu, each build of the helper in turn; and gpu-facets in facets's stead, culled,
 ; foggy, bare where nothing drew, over a ground or a smaller frame laid first, with glows and
-; glass on what drew and on what is bare, declining a pane's class. a box with no gpu or no
-; compiler answers a nom saying so, the frame left to facets
+; glass on what drew and on what is bare, and a pane's classes behind and before a lens. a box
+; with no gpu or no compiler answers a nom saying so, the frame left to facets
 ; host-side: a crew module. run: cat test/00-init.l test/host/gpu.l | out/love
 (borrow '(gpu posix))
 
@@ -57,13 +57,19 @@
            (half fl) (facets (W // 2) (H // 2) -1 mat [verts] [(iota 4 * 0 + gem-tray [4] [4 5 6 -1])] [] (o fl))
            un [-1 (half 64) (half 16)] sky (iota (W * H) % 7 * 1193046)
            fs [(both -1 64) (both -1 72) (both bg 72) (both un 72) (both sky 72) (both [sky (half 64) (half 16)] 72)]
-           gl (gpu-facets s W H -1 mat [verts] [(iota 4 * 0 + gem-tray [4] [0 1 2 16777216])] [(int (gem-tray [8 8] ckl))] (o 200))
+           ; ..the square's halves one behind a lens and one before it, the triangle before, and a
+           ; lens over the square's corner, seen or not
+           tc (iota 12 * 0 + gem-tray [12] [0 1 2 16777216  0 2 3 33554432  4 5 6 33554431])
+           tl (iota 4 * 0 + gem-tray [4] [0 1 2 -16777219])
+           (lens fl) (: X [(int (gem-tray [8 8] ckl))]
+                       (apart (facets W H -1 mat [verts gv] [tc tl] X (o fl)) (gpu-facets s W H -1 mat [verts gv] [tc tl] X (o fl))))
+           gl [(lens 64) (lens 192) (lens 200)]
            (gpu-close g, [up d dr e fs gl]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
-                 && all (f \ f 0 + f 1 <= 8) (r 4) && r 5 = ()))
+                 && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())
