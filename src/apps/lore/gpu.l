@@ -55,7 +55,8 @@
  ; android's bionic, else glibc
  (droid? _) (here? "/system/bin/linker64")
  (loader m) (droid? () ? (m = "aarch64" ? "/system/bin/linker64" ())
-               (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1" ()))
+               (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1"
+                    "riscv64" "/lib/ld-linux-riscv64-lp64d.so.1" ()))
  (libs _) (droid? () ? ["-l:libc.so" "-l:libdl.so"] ["-l:libc.so.6"])
  (run argv) (: p (spawnio argv -1 -1 -1 () -1 0) (charm? p && 0 <= p ? (wait p) -1))
  ; ..argv to start the helper, built if the cache lacks it: mooncc first unless told

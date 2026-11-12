@@ -655,7 +655,10 @@
                     _ (? (relbox && abs64? && dyn = 1)
                           (wu ? 0 (pin relbox 0 ([(base + ro) ix (ix ? ad sa)] . relbox 0)))
                          (relbox && abs64?) (pin relbox 0 (base + ro . relbox 0))
-                         (charm? ix && nelem kind (relbox 'br)) (scare 'link-import-addr <sy))
+                         (charm? ix && nelem kind (relbox 'br)) (scare 'link-import-addr <sy)
+                         ; ..riscv's pair kind is a call where a jalr ends it, or a tail's addi then a jump
+                         ; through it (jalr, c.jr, c.jalr); else an address
+                         (charm? ix && rv && kind = 19 && !(ld-rvjump? s (off0 + ro + 4))) (scare 'link-import-addr <sy))
                     ; an abs32 site cannot be slid by a 64-bit base
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
                     ; ..nor a site in .rodata, which the startup cannot write: a -fno-pie object's
@@ -1378,9 +1381,23 @@
                            (le16 (((x >> 8 & 7) << 12) | 3072 | (x & 255)))])
        (catall [(imm 0xf240 (v & 65535)) (imm 0xf2c0 (v >> 16 & 65535))
                 (le16 0x44fc) (le16 0xf8dc) (le16 0xf000) (le16 0xbf00)]))
-   ; a machine's row: the branch kinds that may reach an import, relative / abs64 / glob_dat, the stub, the page
+   ; a riscv pair's second word at o: a jalr, or an addi whose next jumps through it
+   (ld-rvjump? s o)
+    (: w ((s o) & 127) h ((s (o + 4)) | ((s (o + 5)) << 8))
+       rd ((((s o) >> 7) | ((s (o + 1)) << 1)) & 31)
+       jr (((s (o + 4)) & 127) = 103 && ((((s (o + 5)) >> 7) | ((s (o + 6)) << 1)) & 31) = rd)
+       cj ((h & 57471) = 32770 && ((h >> 7) & 31) = rd)
+       (w = 103 || w = 19 && (((s (o + 1)) >> 4) & 7) = 0 && (jr || cj)))
+   ; rv64: auipc t3, got; ld t3, lo(t3); jalr t1, t3; nop
+   (ld-plt-rv stub got)
+    (: d (got - stub) hi ((d + 2048) >> 12) lo (ld-u32 (d - (hi << 12)) & 4095)
+       (catall [(le32 (ld-u32 (hi << 12) | 3607)) (le32 ((lo << 20) | 933379))
+                (le32 918375) (le32 19)]))
+   ; a machine's row: the branch kinds that may reach an import, relative / abs64 / glob_dat, the stub, the page.
+   ; riscv has no glob_dat: its 64 fills the slot
    ld-dyn {183 ['(282 283) 1027 257 1025 ld-plt-a64 65536]
            62 ['(4) 8 1 6 ld-plt-x64 4096]
+           243 ['(19 17) 3 2 2 ld-plt-rv 4096]
            40 ['(10 30) 23 2 21 ld-plt-thm 4096]}
    ; ip names an exe's loader: a pie that loads needed and runs, else ()
    (ldshared target soname needed srcs prod ip)
@@ -1426,7 +1443,7 @@
        _ (pin plt 'src (string (catall (map (k \ (dm 4) (p0 + 16 * k) (got0 + wz * k)) ^ni))))
        imp ({} @ t (each ^ni (k \ pin t (imps k) (1 + k)), t))
        relbox {0 () 'dyn 1 'imp imp 'br <dm}
-       cx [glo n0 end dy0 dy0 relbox () (w32 ? (ld-rel32 mach)) (backends target) (ld-extents objs) ()]
+       cx [glo n0 end dy0 dy0 relbox (mach = 243) (w32 ? (ld-rel32 mach)) (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text hdrsz objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))

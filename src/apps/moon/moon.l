@@ -718,7 +718,7 @@
               (pop lr)
               (ret))
    ; a dynamic exe's entry, its libc's. glibc's __libc_start_main takes main, argc, argv, no
-   ; init or fini of ours, the loader's fini (rdx, x0) and the stack's end
+   ; init or fini of ours, the loader's fini (rdx, x0, a0) and the stack's end
    crt0-glibc-x64 '((li r4 0)
                     (mov r8 r2)
                     (ld r5 sp 0)
@@ -728,6 +728,14 @@
                     (li r1 0) (li r7 0)
                     (la r6 main)
                     (call __libc_start_main))
+   crt0-glibc-rv '((mov r5 r0)
+                   (ld r1 sp 0)
+                   (lea r2 sp 8)
+                   (and sp sp -16)
+                   (lea r6 sp 0)
+                   (li r3 0) (li r4 0)
+                   (la r0 main)
+                   (call __libc_start_main))
    crt0-glibc-a64 '((mov r5 r0)
                     (ld r1 sp 0)
                     (lea r2 sp 8)
@@ -1084,7 +1092,7 @@
        ; (android's under /system), what it lacks imported from the -l libraries
        dx (string? ip)
        _ (dx && (so || static || mac? || arm?) && udie 2 "cc: -dynamic-linker lays a hosted executable: no -shared, -static or bare link")
-       _ (dx && !(elem tgt '(x64 a64)) && udie 1 "cc: -dynamic-linker links on x64 and a64")
+       _ (dx && !(elem tgt '(x64 a64 rv64)) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64")
        bionic (dx && starts? ip "/system/")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
@@ -1097,7 +1105,7 @@
                (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
                [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
        _ (bionic && tgt != 'a64 && udie 1 "cc: -dynamic-linker under /system links on a64")
-       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) crt0-glibc-x64)
+       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'rv64 crt0-glibc-rv crt0-glibc-x64)
              mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        ent (dx ? ["_start"] '("__love_start"))
        all (arm? || so ? srcs

@@ -1830,6 +1830,36 @@ if command -v qemu-aarch64 > /dev/null && [ -e /usr/aarch64-linux-gnu/lib/ld-lin
 else
   gate_partly "  (-dynamic-linker on a64 skipped: no qemu-aarch64 or /usr/aarch64-linux-gnu)"
 fi
+# ..rv64 likewise, and a -shared object it dlopens: an import called, a table slid, the exe's hook
+cat > "$ho/.dynso.c" <<'EOF'
+#include <string.h>
+int hook(int);
+static int twice(int x) { return x * 2; }
+static int (*tab[2])(int) = {twice, hook};
+int via(char const *s) { return tab[0](tab[1]((int) strlen(s))); }
+EOF
+cat > "$ho/.dynmain.c" <<'EOF'
+#include <dlfcn.h>
+int hook(int x) { return x + 1; }
+int main(int argc, char **argv) {
+  void *h = dlopen(argv[1], RTLD_NOW);
+  int (*via)(char const *) = h ? (int (*)(char const *)) dlsym(h, "via") : 0;
+  return via ? via("abcdefghijklmnopqrst") : 1; }
+EOF
+if command -v qemu-riscv64 > /dev/null && [ -e /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 ]; then
+  rl=/lib/ld-linux-riscv64-lp64d.so.1
+  moonrun -t rv64 -dynamic-linker $rl -o "$ho/.dynrv" "$ho/.dyn.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -dynamic-linker"
+  o=$(MOONDYN=env qemu-riscv64 -L /usr/riscv64-linux-gnu "$ho/.dynrv" ab cd); a=$?
+  [ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "an rv64 -dynamic-linker exe (got $a '$o')"
+  moonrun -t rv64 -shared -o "$ho/libdynrv.so" "$ho/.dynso.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -shared"
+  moonrun -t rv64 -dynamic-linker $rl -o "$ho/.dynrvm" "$ho/.dynmain.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -dynamic-linker dlopen"
+  qemu-riscv64 -L /usr/riscv64-linux-gnu "$ho/.dynrvm" "$PWD/$ho/libdynrv.so"; a=$?
+  [ $a -eq 42 ] || fail "an rv64 -shared object dlopened: plt import, abs64 import, relative (got $a want 42)"
+  printf '#include <string.h>\nint main(void){unsigned long (*q)(char const *) = strlen; return (int) q("ab");}\n' > "$ho/.dynaddr.c"
+  moonrun -t rv64 -dynamic-linker $rl -o /dev/null "$ho/.dynaddr.c" -l:libc.so.6 2>&1 | grep -q "link-import-addr" || fail "an rv64 import's address was not refused"
+else
+  gate_partly "  (-dynamic-linker and -shared on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
+fi
 moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
 
 # -- weak overriding
