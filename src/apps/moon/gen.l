@@ -1253,7 +1253,16 @@
                         (nelem <g2 wina) 'no
                         (elem <g2 wind && <>g2 = X) 'no
                         (win >w (n + 1)))))
-              k (win r 0)
+              ; ..and r3 is dead past the unpark: written, restored or left before a read
+              (dead3? l) (? !(two? l) 1
+                            (<l @ f
+                               (? !(two? f) (dead3? >l)
+                                  (elem <f '(jmpr ret)) 1
+                                  (elem <f '(mov li ld lea pop) && <>f = 'r3) (nelem 'r3 >>f)
+                                  (elem <f '(label br jmp jmpm jmpt call callr callm raw)) ()
+                                  (elem 'r3 >f) ()
+                                  (dead3? >l))))
+              k (win r 0 @ k9 (k9 != 'no && !(dead3? (drop (k9 + 1) r)) ? 'no k9))
               (k @ 'no (f . squeeze r)
                  (: (take w n) (n < 1 ? (['mov 'r10 X] . squeeze (drop 1 w))
                                   (<w . take >w (n - 1)))
