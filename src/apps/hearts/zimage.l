@@ -62,7 +62,8 @@
      ; boot waits on data, so no part of the card is held while its table is read again
      (oneshot boot (after data) (exec "/bin/love" "/app/boot.l"))
      (oneshot swap (after data) (exec "/bin/love" "/app/swap.l"))
-     (oneshot source (after data) (exec "/bin/love" "/app/source.l"))
+     ; the unpack wants more than the board has free beside wifi and sshd: swap first
+     (oneshot source (after swap) (exec "/bin/love" "/app/source.l"))
      ; the console's own session, so a ^C on the port reaches what runs there; -w keeps one
      ; shell: helm starts a group leader, so setsid forks, and a parent gone is a restart
      (service console (after gadget)
