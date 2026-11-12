@@ -5,20 +5,19 @@
 ;   run FILE  checks a W.uu in a fresh heap, as rocqchk checks a .vo: no elaborator, no laws
 ; proofbench.sh drives both and times the checkers.
 (borrow 'posix)
+(: K {'defn (cite 'uu 'defn) 'defq (cite 'uu 'defq) 'defvc (cite 'uu 'defvc)
+      'axm (cite 'uu 'axm) 'defind (cite 'uu 'defind)}
+   (kcall e) (<e @ 'axm ((K 'axm) (e 1) (e 2))
+                    'defind ((K 'defind) (e 1) (e 2) (e 3) (drop 4 e))
+                    ((K <e) (e 1) (e 2) (e 3))))
+; run checks and quits before the dump's code is read: that code live in the heap doubled a run
+(argv 1 = "run" ? (: es (forms (open (argv 2) "r")) _ (each es kcall) (puts (show #es), putc 10, quit 0)) 0)
+
 (:: 'test (l \ (. 'assert l)))
 (: (pb-die s) (puts "proofbench: \(s)\n", quit 1)
    (pb-read p) (: q (open p "r") (!(hot? q) ? (pb-die "cannot read \(p)") (slurp q)))
    (pb-write p s) (: q (open p "w") (!(hot? q) ? (pb-die "cannot write \(p)") (say q s, close q)))
    (cat l) (foldl (+) "" l)
-   K {'defn (cite 'uu 'defn) 'defq (cite 'uu 'defq) 'defvc (cite 'uu 'defvc)
-      'axm (cite 'uu 'axm) 'defind (cite 'uu 'defind)}
-   (kcall e) (<e @ 'axm ((K 'axm) (e 1) (e 2))
-                    'defind ((K 'defind) (e 1) (e 2) (e 3) (drop 4 e))
-                    ((K <e) (e 1) (e 2) (e 3)))
-
-   (pb-run p)
-    (: es (forms (open p "r")) _ (each es kcall)
-     (puts (show #es), putc 10, quit 0))
 
    ; load order and gather order are uu2coq's: the exporters lay declarations in gather order
    loads ["test/uu.l" "test/uuhom.l" "test/uuhomgen.l" "test/uuhomlaw.l" "test/uuinf.l" "test/uuinfvc.l"
@@ -116,5 +115,4 @@
       each wls lay, quit 0))
 
  (argv 1 @ "dump" (pb-dump (argv 2))
-           "run" (pb-run (argv 2))
            (pb-die "usage: proofbench.l dump DIR | run FILE")))
