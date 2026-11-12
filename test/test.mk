@@ -11,7 +11,7 @@
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
-  test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
+  test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rpi3 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
@@ -1077,6 +1077,15 @@ test_kernel_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
+endif
+ifeq ($(QEMU_A64),)
+test_kernel_rpi3:
+	@sh test/gate/skip.sh gate-skip "test_kernel_rpi3: skipped (need qemu-system-aarch64)"
+else
+test_kernel_rpi3: host $(S)/tools/ktest.l
+	@$(MAKE) -s a=a64 kb=pi $(ko)/love-a64pi.img
+	@echo TEST $(ko)/love-a64pi.img "(the pi under qemu raspi3b: the mini uart, headless, TCG, ceiling 1800s)"
+	@$m $(S)/tools/ktest.l $(ko)/love-a64pi.img - a64pi
 endif
 
 QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)

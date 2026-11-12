@@ -683,8 +683,13 @@ ko = out$(hsuf)
 mooncc = LOVE_NO_IMAGE= $m mooncc
 mooncc_dep = $(mdep)
 
+# a board under the arch: kb=pi takes $a/pi/*.c over the same-named $a/*.c, defines k_pi,
+# and names the odir, the elf and the boot stub $a$(kb)
+ka = $a$(kb)
+kb_c = $(if $(kb),$(wildcard $(S)/inle/$a/$(kb)/*.c),)
+kcppflags += $(if $(kb),-Dk_$(kb),)
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-k_arch_c = $(wildcard $(S)/inle/$a/*.c)
+k_arch_c = $(filter-out $(addprefix $(S)/inle/$a/,$(notdir $(kb_c))),$(wildcard $(S)/inle/$a/*.c)) $(kb_c)
 k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
 # ..and doom, named here and not in its lane below: a rule's targets and prerequisites
 # are fixed where the rule is read, and every rule that links these is above that lane
@@ -706,8 +711,8 @@ k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
-k_odir = $(ko)/$a
-k_elf = $(ko)/love-$a.elf
+k_odir = $(ko)/$(ka)
+k_elf = $(ko)/love-$(ka).elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
 # and one name -- wasm is nobody's arch, so the seat's letter is not in it
@@ -795,7 +800,12 @@ endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a $(k_pie_o) && test -s $@
+	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $(ka) $(k_pie_o) && test -s $@
+
+# the pi's firmware and qemu's raspi load a flat image, not an elf
+$(ko)/love-$(ka).img: $(k_elf) $S/tools/kflat.l $(mdep)
+	@echo 'HOLO	'$@
+	@$m $S/tools/kflat.l $(k_elf) $@ && test -s $@
 
 out/lib/korelist.h: Makefile
 	@mkdir -p out/lib
@@ -917,10 +927,14 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $S/inle/%.l $(klay_l)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
-$(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
+$(k_lay_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -q -e '(lay-$* "$@" "$a")' && test -s $@
+$(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
+	@echo 'HOLO	'$@
+	@mkdir -p "$(dir $@)"
+	@$m -l $< -q -e '(lay-$* "$@" "$(ka)")' && test -s $@
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.

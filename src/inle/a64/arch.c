@@ -1,11 +1,12 @@
-// a64 arch C: the PL011 console, the GICv2, the generic timer, exception reporting. the
-// vectors are src/inle/mkvec.l's; the contract is x64/arch.c's (archinit, serial_*, k_reset)
+// a64 on qemu virt: the PL011 console, the GICv2, the PL031 clock, PSCI's reset. the timer and
+// the exception reports are cpu.c's; the contract is x64/arch.c's (archinit, serial_*, k_reset)
 #include <stdint.h>
 #include "asmops.h"                    // the privileged instructions, both spellings
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/inle/kmain.c)
 #include "../mmio.h"                  // mmio_rd/mmio_wr, device registers off the direct map
 
 void kq(uint8_t);                      // kmain's input queue, one byte
+void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 
 // qemu virt's fixed MMIO; another board would read the device tree
 #define UART_PHYS   0x09000000         // PL011 UART
@@ -123,48 +124,13 @@ static void gic_init(void) {
   mmio_wr(GICC_PHYS, GICC_PMR, 0xf0);        // unmask all interrupt priorities
   mmio_wr(GICC_PHYS, GICC_CTLR, 1); }        // enable CPU interface
 
-// the EL1 physical timer at ~100 Hz; the reload also deasserts the interrupt
-static uint64_t timer_interval;        // CNTFRQ_EL0 / 100
-
-static inline void rearm_timer(void) { k_wr_cntp_tval_el0(timer_interval); }
-
-static void timer_init(void) {
-  timer_interval = k_rd_cntfrq_el0() / 100;
-  rearm_timer();
-  k_wr_cntp_ctl_el0(1); }               // enable
-
 // from the IRQ vector; an INTID of 1020+ is spurious and must not be acknowledged
 void k_irq(void) {
   uint32_t iar = mmio_rd(GICC_PHYS, GICC_IAR), intid = iar & 0x3ff;
   if (intid >= 1020) return;
-  if (intid == TIMER_INTID) kticks++, rearm_timer();
+  if (intid == TIMER_INTID) kticks++, k_timer_rearm();
   else if (intid == UART_INTID) k_uart();
   mmio_wr(GICC_PHYS, GICC_EOIR, iar); }
-
-// CPU exception reporting
-static char const *fault_kind(uint64_t esr) {
-  switch (esr >> 26) {                 // ESR_EL1.EC -- exception class
-    case 0x15: return "SVC";
-    case 0x20: case 0x21: return "instruction abort";
-    case 0x22: return "PC alignment";
-    case 0x24: case 0x25: return "data abort";
-    case 0x26: return "SP alignment";
-    case 0x2c: return "FP";
-    default:   return "?"; } }
-
-// from the sync/FIQ/SError vectors: report and halt. kput* need no struct g
-void k_fault(uint64_t esr, uint64_t elr, uint64_t far) {
-  k_daif_mask_all();                   // all interrupts off while reporting
-  static int nested;
-  if (nested) for (;;) k_wait();
-  nested = 1;
-  kputs("\n*** CPU exception ("), kputs(fault_kind(esr));
-  kputs(") esr="), kputn(esr, 16);
-  kputs(" elr="),  kputn(elr, 16);
-  kputs(" far="),  kputn(far, 16);
-  kputc('\n');
-  fbdraw();
-  for (;;) k_wait(); }
 
 // archinit finds EL1, the MMU, a stack and the HHDM up: it adds vectors, GIC and timer
 void archinit(void) {
@@ -174,22 +140,8 @@ void archinit(void) {
   k_wr_vbar_el1((uintptr_t) vectors);
   if (khhdm) mmio_map();
   gic_init();
-  timer_init();
+  k_timer_init();
   k_daif_unmask_irq(); }               // unmask IRQ (DAIF.I = 0)
-
-// (fault n): n is an x86 vector number; 3 a breakpoint, 13/14 a data abort, else undefined.
-// k_fault halts
-void k_fault_trigger(intptr_t n) {
- switch (n) {
-  case 3:            // breakpoint
-   k_brk0();
-   break;
-  case 13: case 14:  // data abort: write to an unmapped address
-   *(volatile int*) 0x600000000000ULL = 0;
-   break;
-  default:           // undefined instruction
-   k_udf0();
-   break; } }
 
 // PSCI SYSTEM_RESET, over HVC on virt
 void k_reset(void) {
