@@ -29,13 +29,6 @@ test/uu.l, the ported section only (from "UniMath Foundations PartA")
   Definitions and theorem statements from Foundations/PartA.v et al, ported to
   uu's surface with the original names.
 
-src/apps/hearts/perlasm.l
-  A port of Linux's lib/crypto/arm64/sha2-armv8.pl, by Andy Polyakov for the OpenSSL
-  project (CRYPTOGAMS), which he relicensed under the GPLv2 for the kernel, as that
-  file's header states. GNU General Public License version 2
-  (SPDX-License-Identifier: GPL-2.0), not the tree's 0BSD. Its templates are read at
-  run time from the pinned upstream copy.
-
 src/apps/hearts/patches/0001-raspberrypi-tryboot.patch
   A patch to Linux's drivers/firmware/raspberrypi.c (Copyright © 2015 Broadcom).
   GNU General Public License version 2, as the kernel it patches
