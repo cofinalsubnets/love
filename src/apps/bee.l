@@ -9,6 +9,8 @@
 (: bee-usage "usage: love bee                                   on a terminal, the hud: queues, locks, sessions; c talks to one
        love bee --hud                                 the hud once, as text
        love bee --list | --send NAME TEXT ..          the sessions, from a shell
+       love bee --relay [--once] | --cards | --drop NAME HOST   the relay between hosts' hives
+       love bee --drain [--off]                       this host down for maintenance: the queue counts its sessions gone
        love bee --resume [NAME [PROMPT ..]]           the claude code sessions that can come back, or relaunch one
        love bee --mcp                                 the hive and the queue tools, as a claude code session's mcp server
        love bee --state busy|idle [--pid P]           a claude code session's hooks say its state
@@ -25,7 +27,7 @@
 
      ; the nest's etc/bee.l says everything. a tree's ./.bee.l comes with a clone, so it says only
      ; what cannot move the machine's locks
-     bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes]
+     bee-tree-keys ['queue-watch 'stall-minutes 'gone-minutes 'queue-home]
      bee-salt (: sf (cite 'salt 'salt-file)
                  u (sf (cite 'path 'nest 0 + "/etc/bee.l") {})
                  t (sf ".bee.l" {})
@@ -132,6 +134,10 @@
      card-of (cite 'hive 'hive-card)                        ; () when there is none
      card-pid (cite 'hive 'hive-pid)
      alive? (cite 'hive 'hive-alive?)
+     live? (cite 'hive 'hive-live?)
+     remote? (cite 'hive 'hive-remote?)
+     draining? (cite 'hive 'hive-draining?)                         ; a remote card by its beat, a local one by its pid
+     bee-host (cite 'hive 'hive-host 0)
      (hex2 n) (string [("0123456789abcdef" (n // 16)) ("0123456789abcdef" (n % 16))])
      ; a user's card: the person at this login, in the hive through bee's hud, with no model
      ; behind it. it is never swept, so mail to it waits while no hud is open
@@ -166,19 +172,24 @@
          tn (? (tablet? k) (peep k "turn" ()) ())
          _ (pins bee-cell 'state state)
          _ (uwrite (d + "/.card")
-                   (unlines ([("pid " + show (getpid 0)) ("cwd " + bee-cwd) ("branch " + b)
+                   (unlines ([("pid " + show (getpid 0)) ("host " + bee-host) ("cwd " + bee-cwd) ("branch " + b)
                               ("model " + peep bee-cell 'model "claude-code")
                               "state \(state)"
                               "since \(bee-cell 'since)"]
                              + (string? tn ? [("turn " + tn)] ())
                              + (bee-mcp? ? ["parent \(ppid-of (getpid 0))"] ()))))
          (rename (d + "/.card") (d + "/card")))
+     ; the beat: the cell's beat file, the time in seconds, through a rename. it keeps a card live
+     ; on hosts that cannot ask its pid, and is its own file so a beat never races a card's rewrite
+     (beat! _) (: d (cell-of (me 0))
+                  (? (uwrite (d + "/.beat") (show (clock 0 // 1000) + "\n")) (rename (d + "/.beat") (d + "/beat")) 0))
      (settle branch)
       (: d (cell-of (me 0))
          _ (: c (card-of (me 0)) (tablet? c && !(user-card? c) ? (sweep (me 0)) 0))   ; a dead namesake's leavings
          _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
          _ (pins bee-cell 'since (clock 0 // 1000) 'branch branch)
-         (card! "idle"))
+         _ (card! "idle")
+         (beat! 0))
      (state! s) (? (bee-cell 'state && bee-cell 'state != s) (card! s) 0)
      (unsettle _) (? (bee-cell 'state) (sweep (me 0)) 0)
      ; a message into another's inbox -> "" when it is there, else why not
@@ -189,27 +200,30 @@
             !(uwrite "\(ib)/.\(id)" "from \(from)\nsent \(clock 0 // 1000)\n\n\(text)") "cannot write to \(to)"
             (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
-     (live-names _) (map cap (settled 0))
+     ; a remote cell answers to its name on its host too, which is what a row written there names
+     ; a session on a draining host is not, so the watchdog and the acting leader move the queue past it
+     (live-names _) (: ps (filter (p \ !(draining? (p 1))) (settled 0))
+                       (q-uniq (map cap ps + filter (s \ 0 < #s) (map (p \ peep (p 1) "of" "") ps))))
      ; the hud's card, at the login's name: "here" while a hud holds it, "away" after, its
      ; inbox kept either way
      (user-card! st)
       (: d (cell-of bee-login) t "\(d)/.card-\(getpid 0)"
          _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
-         _ (uwrite t (unlines ["pid \(st @ "here" (getpid 0) 0)" "cwd \(bee-cwd)" "kind user" "model user"
+         _ (uwrite t (unlines ["pid \(st @ "here" (getpid 0) 0)" "host \(bee-host)" "cwd \(bee-cwd)" "kind user" "model user"
                                "state \(st)" "since \(clock 0 // 1000)"]))
          (rename t "\(d)/card"))
      ; -> "" when this hud holds the user's card, else why not. one live user card a login
      (user-settle _)
       (: c (card-of bee-login)
-         (? (tablet? c && !(user-card? c) && alive? (card-pid c)) "the session \(bee-login) has the user's name"
-            (user-card? c && alive? (card-pid c) && card-pid c != getpid 0) "another hud has the user's card"
+         (? (tablet? c && !(user-card? c) && live? c) "the session \(bee-login) has the user's name"
+            (user-card? c && live? c && card-pid c != getpid 0) "another hud has the user's card"
             (: _ (user-card! "here") "")))
      ; mail from the user, marked kind user, to a live session here -> "" when it is there
      (user-post to text)
       (: c (card-of to) ib "\(cell-of to)/inbox"
          id "\(clock 0)-\(bee-login)-\(hex2 (clock 0 % 256))"
          m "from \(bee-login)\nsent \(clock 0 // 1000)\nkind user\n\n\(text)"
-         (? !(tablet? c && !(user-card? c) && alive? (card-pid c)) "no session named \(to)"
+         (? !(tablet? c && !(user-card? c) && live? c) "no session named \(to)"
             !(uwrite "\(ib)/.\(id)" m) "cannot write to \(to)"
             (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) "cannot deliver to \(to)"
             ""))
@@ -315,8 +329,10 @@
          (? !(two? ps) "no sessions are running"
             (foldl (\ a p (: c (p 1)
                             (a + <p + (<p = (me 0) ? " (you)" "") + "  "
-                               + (user-card? c ? ("user " + (alive? (card-pid c) ? "here" "away")) (peep c "state" "?"))
+                               + (user-card? c ? ("user " + (live? c ? "here" "away")) (peep c "state" "?"))
                                + (backgrounded? c ? " background" "")
+                               + (remote? c ? (" on " + peep c "host" "?") "")
+                               + (draining? c && !(user-card? c) ? " draining" "")
                                + "  " + (: b (peep c "branch" "") (0 < #b ? b "-"))
                                + "  " + peep c "cwd" "" + "\n")))
                    "" ps)))
@@ -334,25 +350,40 @@
                                                 || c = 45 || c = 95 || c = 46)))
                          ^#nm)))
      ; a line of this binary's own lush -> its stdout, "" without a self
-     (lush-out cmd)
-      (? !(string? bee-self) ""
-         (: pp (pipe 0) nul (openfd "/dev/null" 0)
-            p (spawnio [bee-self "lush" "-a" "-c" cmd] nul >pp nul [<pp] -1 0)
-            _ (close >pp) _ (? (0 <= nul) (close nul) 0)
-            q (fdopen <pp)
-            (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
-            t (go "")
-            _ (close q)
-            _ (? (charm? p && 0 <= p) (wait p) 0)
-            t))
+     (lush-out cmd) (? !(string? bee-self) "" (argv-out [bee-self "lush" "-a" "-c" cmd]))
+     ; the system's sh, for a line whose words must be the system's: lush's ssh is kore's
+     (sh-out cmd) (argv-out ["sh" "-c" cmd])
+     (argv-out argv)
+      (: pp (pipe 0) nul (openfd "/dev/null" 0)
+         p (spawnio argv nul >pp nul [<pp] -1 0)
+         _ (close >pp) _ (? (0 <= nul) (close nul) 0)
+         q (fdopen <pp)
+         (go acc) (: c (see q) (? (c < 0) acc (: _ (unsee q c) (go (acc + chug q)))))
+         t (go "")
+         _ (close q)
+         _ (? (charm? p && 0 <= p) (wait p) 0)
+         t)
      bee-me (string? bee-self ? bee-self "love")
      ; every merge queue there is, as it stands at start: git's refs/queue/*
+     ; a tree's queues may live in a remote, (queue-home "REMOTE") or BEE_QUEUE_HOME: read after a fetch
+     ; from it, written by one atomic push with a lease, so every host sees one queue. the heads its rows
+     ; name ride along as refs/queue-heads/NAME/POS, so every host has every commit a row names
+     bee-qhome (: e (getenv "BEE_QUEUE_HOME") v (peep bee-salt 'queue-home ())
+                  (? (string? e && 0 < #e) e (two? v && string? <v) <v ""))
+     (q-home? _) (0 < #bee-qhome)
+     (q-fetch _) ("git fetch -q --prune " + sh-quote bee-qhome
+                  + " '+refs/queue/*:refs/queue/*' '+refs/queue-heads/*:refs/queue-heads/*' 2>/dev/null")
+     ; the base branch as the home has it, fetched; the branch itself without a home
+     (q-base-ref br) (? (q-home? 0) "refs/remotes/\(bee-qhome)/\(br)" br)
+     (q-fetch-base br)
+      (? (q-home? 0) (lush-out ("git fetch -q " + sh-quote bee-qhome + " " + sh-quote "+refs/heads/\(br):refs/remotes/\(bee-qhome)/\(br)" + " 2>/dev/null")) "")
      bee-qcmd
+      ((0 < #bee-qhome ? (q-fetch 0 + "\n") "") +
       """
       for r in $(git for-each-ref --format='%(refname)' refs/queue 2>/dev/null); do
        echo "--- git $r ---"; git cat-file -p "$r"
       done
-      """
+      """)
      bee-queues (lush-out bee-qcmd)
 
      ; --- queue watching: every (queue-watch N) seconds the queues are read again, and a change to this
@@ -494,7 +525,8 @@
      (says? cmd tok) (0 <= find (lush-out (cmd + " && echo " + tok)) tok 0)
      ; [id text], id "none" for a queue not made yet
      (q-read q)
-      (: id (git1 ("rev-parse --verify -q " + sh-quote q))
+      (: _ (? (q-home? 0) (lush-out (q-fetch 0)) "")
+         id (git1 ("rev-parse --verify -q " + sh-quote q))
          (? (0 < #id) [id (lush-out ("git cat-file -p " + sh-quote q))] ["none" ""]))
      ; -> 1 when it landed on old, 0 when someone wrote first
      ; every write drops a gone row's number from the keep line
@@ -502,9 +534,24 @@
       (: text (? (two? (q-keeps text0)) (q-keep text0 "" 0) text0)
          tmp (bee-hive + "/.queue-" + (me 0)) _ (umkdirs bee-hive 448) _ (uwrite tmp text)
          nw (git1 ("hash-object -w " + sh-quote tmp))
-         r (says? ("git update-ref " + sh-quote q + " " + nw + (old = "none" ? " ''" (" " + old))) "landed")
+         r (? (q-home? 0) (q-push q old nw text)
+              (says? ("git update-ref " + sh-quote q + " " + nw + (old = "none" ? " ''" (" " + old))) "landed"))
          _ (unlink tmp)
          r)
+     ; the queue and its rows' heads in one atomic push, the queue's ref leased on old; the heads of
+     ; rows gone are dropped. the mirror here follows -> 1 when it landed
+     (q-push q old nw text)
+      (: nm (q-short q) rows (q-rows text)
+         hs (filter (p \ 0 < #(git-sha ((rows p) 4))) (keys rows))
+         had (filter (l \ 0 < #l) (lines (git1 ("for-each-ref --format='%(refname)' " + sh-quote "refs/queue-heads/\(nm)"))))
+         pre "refs/queue-heads/\(nm)/"
+         gone (filter (r \ !(elem (snip r #pre #r) (keys rows))) had)
+         specs (map (p \ "+\(git-sha ((rows p) 4))" + ":refs/queue-heads/\(nm)/\(p)") hs + map (r \ ":" + r) gone)
+         ok (says? ("git push -q --atomic " + sh-quote ("--force-with-lease=" + q + ":" + (old = "none" ? "" old))
+                    + " " + sh-quote bee-qhome + " " + sh-quote "\(nw):\(q)"
+                    + foldl (\ a x (a + " " + sh-quote x)) "" specs + " 2>/dev/null") "landed")
+         _ (? ok (lush-out (q-fetch 0)) "")
+         ok)
      (q-row? l) (: w (words l) (5 < #w && 0 < #<w && 48 <= <w 0 <= 57))
      (q-note l) (: k (find l "  # " 0) (? (k < 0) "" (snip l (k + 4) #l)))
      (q-leader text) (: w (words (q-line text "leader")) (? (1 < #w) (w 1) ""))
@@ -850,8 +897,16 @@
                                                                   (map v ^#v)))))
                         (keys in))
      (q-name? q) (: s (q-short q) (q-git? q && name-ok? s && s != "." && s != ".."))
+     ; a session whose name a live session on another host also holds: the queue knows a session by its
+     ; name alone, so neither may act on it until one renames
+     (name-clash _)
+      (: i (me 0) cs (filter (p \ remote? (p 1) && peep (p 1) "of" "" = i && live? (p 1)) (settled 0))
+         (? (two? cs) ("the name \(i) is also a live session on " + peep (<cs 1) "host" "?"
+                       + ": the queue knows a session by its name alone, so set_name to a name of your own before any queue tool")
+            ""))
      (q-check in go)
       (? !(q-name? (in "queue")) [0 "a queue is refs/queue/NAME"]
+         (0 < #(name-clash 0)) [0 (name-clash 0)]
          (two? (q-bad in)) [0 ("a field holds a control character, or a space outside a text: " + <(q-bad in))]
          (go in))
      (queue-read in) (q-check in (\ in (: rd (q-read (in "queue")) (? (<rd = "none") [0 ("no queue " + in "queue")] [1 (rd 1)]))))
@@ -1009,15 +1064,16 @@
             (two? (q-unresolved [(r 3) (r 4)])) ("row \(p): " + q-unres-why <(q-unresolved [(r 3) (r 4)]))
             [p r base]))
      ; a row merged onto the base branch whose queue_landed has not yet run
-     (q-merged? q base r) (two? base && 0 < #(git-sha (r 4)) && q-on? (r 4) <base)
+     (q-merged? q base r) (two? base && 0 < #(git-sha (r 4)) && q-on? (r 4) (q-base-ref <base))
      (queue-land in) (q-check in queue-land1)
      (queue-land1 in)
       (: q (in "queue") who (field in "session" (me 0))
          rd (q-read q) text (rd 1) rows (q-rows text)
+         _ (q-fetch-base (q-base-line text @ (b . _) b ""))
          l (? (<rd = "none") ("no queue " + q) (q-landing q who rows text))
          (? (string? l) [0 l]
-            (: p <l r (l 1) br <(l 2) was (l 2 1) fs (q-folds rows p)
-               (: cur (git-sha br) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree br g)
+            (: p <l r (l 1) br <(l 2) was (l 2 1) fs (q-folds rows p) bref (q-base-ref br)
+               (: cur (git-sha bref) g (git-sha (r 4)) gt (git-tree g) mt (q-merge-tree bref g)
                wt (q-checkout br)
                (? (#cur = 0) [0 "no branch \(br) here"]
                   !(starts? cur was)
@@ -1028,15 +1084,17 @@
                   (mt != gt)
                    [0 "merging \(g) onto \(br) gives the tree \(mt), not the gated tree \(gt): re-merge onto \(br) at \(cur) and re-gate"]
                   [1 (unlines
-                      [("row \(p) (" + who + (two? fs ? (", with row" + (#fs @ 1 " " "s ") + q-joins fs + " folded in") "")
+                      ([("row \(p) (" + who + (two? fs ? (", with row" + (#fs @ 1 " " "s ") + q-joins fs + " folded in") "")
                         + ") lands: its gated head \(g) merges onto \(br) at \(cur) into the tree it gated, \(gt).")
-                       ("in the checkout of " + br + (0 < #wt ? (", " + wt) "") + ":")
-                       ("  git rev-parse \(br)   # must print " + cur)
+                       ("in the checkout of " + br + (0 < #wt ? (", " + wt) "") + ":")]
+                      + (q-home? 0 ? [("  git fetch " + sh-quote bee-qhome + " " + br + " && git merge --ff-only FETCH_HEAD   # the base as " + bee-qhome + " has it")] ())
+                      + [("  git rev-parse \(br)   # must print " + cur)
                        "  git status --short   # must print no one's uncommitted edits"
                        ("  git merge --no-ff \(g) -m " + sh-quote "Merge queue row \(p) (\(who))")
                        ("  git rev-parse 'HEAD^{tree}'   # must print " + gt)
-                       ("  love bee --lock --out " + sh-quote ((0 < #wt ? wt ".") + "/out") + " -- make test   # the fast gate, one make in its out/")
-                       "then queue_landed, which checks the landed tree and drops the row and the rows folded into it. the rows behind wait for it."])])))))
+                       ("  love bee --lock --out " + sh-quote ((0 < #wt ? wt ".") + "/out") + " -- make test   # the fast gate, one make in its out/")]
+                      + (q-home? 0 ? [("  git push " + sh-quote bee-qhome + " " + br + "   # refused when another landing came first: fetch, and land again")] ())
+                      + ["then queue_landed, which checks the landed tree and drops the row and the rows folded into it. the rows behind wait for it."]))])))))
      ; a landing checked: [the new base line's id, the bee files it changed] or why not
      (q-landed-git br was g0)
       (: from (git-sha was) g (git-sha g0) gt (git-tree g)
@@ -1059,7 +1117,8 @@
                   (q-landing q who rows text))
              (? (string? l) [0 l]
                 (: p <l r (l 1) br <(l 2)
-                   lk (q-landed-git br (l 2 1) (r 4))
+                   _ (q-fetch-base br)
+                   lk (q-landed-git (q-base-ref br) (l 2 1) (r 4))
                    (? (string? lk) [0 lk]
                       (: gone (p . q-folds rows p) short <lk
                          ; a landing that changes bee's served code ends the note with the restart line
@@ -1314,7 +1373,7 @@
          (one p)
           (: c (p 1) st (peep c "state" "?") tn (peep c "turn" ()) sn (seen-at <p)
              (? (user-card? c)
-                ("  " + edfit <p 12 " " + sgr "36" "user" + " " + (alive? (card-pid c) ? "here" (sgr "2" "away"))
+                ("  " + edfit <p 12 " " + sgr "36" "user" + " " + (live? c ? "here" (sgr "2" "away"))
                  + (: n (waiting <p) (0 < n ? ("  " + show n + " waiting") "")))
                 ("  " + edfit <p 12 " " + (st = "busy" ? (sgr "33" st) st) + (string? tn ? (" " + ago (digits tn)) "")
                  + (backgrounded? c ? (" " + sgr "35" "background") "")
@@ -1363,7 +1422,7 @@
          (? !(string? nm && name-ok? nm) [0 "a name is letters, digits, - _ and ., at most 64"]
             (nm = was) [1 ("you are " + nm)]
             (user-card? c) [0 (nm + " is a user's name")]
-            (tablet? c && alive? (card-pid c)) [0 ("a live session is already named " + nm)]
+            (tablet? c && live? c) [0 ("a live session is already named " + nm)]
             (: ms (take-mail 0) _ (unsettle 0) _ (pin bee-who 'name nm) _ (settle bee-branch) _ (remember 0)
                [1 ("you are " + nm + " in the hive; a queue row under " + was + " keeps that name, so ask the leader to correct it"
                    + (two? ms ? ("\n\n" + mail-text ms) ""))])))
@@ -1387,11 +1446,11 @@
          mc (bee-resumes + "/mcp.json")
          (? !(tablet? r && string? (peep r "claude" ())) [0 ("no session to resume named " + nm)]
             ; a backgrounded claude keeps the card alive with no one at it: say how to reach it
-            (tablet? k && alive? (card-pid k) && backgrounded? k)
+            (tablet? k && live? k && !(remote? k) && backgrounded? k)
              (: id (: c (r "claude") (snip c 0 (min 8 #c)))
                 [0 ("\(nm) is a backgrounded claude session (\(id)): `claude attach \(id)` opens it here, "
                     + "or `claude stop \(id)` and then `love bee --resume \(nm)` (--attach, --stop do either)") id])
-            (tablet? k && alive? (card-pid k)) [0 (nm + " is live")]
+            (tablet? k && live? k) [0 (nm + " is live" + (remote? k ? (" on " + peep k "host" "?") ""))]
             (: _ (uwrite mc (json-show {"mcpServers" {"bee" {"command" "sh" "args" ["-c" bee-mcp-sh]}}}))
                [1 ("cd " + sh-quote (r "cwd") + " && BEE_NAME=\(sh-quote nm) exec claude"
                    + " --dangerously-load-development-channels server:bee --strict-mcp-config --mcp-config " + sh-quote mc
@@ -1441,9 +1500,10 @@
                          (go 0))))
          ; the bell: once a second, a channel notice naming who wrote whatever came in since. the
          ; mail stays for inbox, so a session without channels, which drops the notice, loses nothing
-         bell {'told ()}
+         bell {'told () 'n 1}
          (ring _)
           (: _ (rest 1000) _ (self-tell 0)
+             _ (? (bell 'n % 10 = 0) (beat! 0) 0) _ (pin bell 'n (bell 'n + 1))
              ib (cell-of (me 0) + "/inbox")
              fs (: d (readdir ib) (? (two? d) (filter (f \ f 0 != 46) (sort d)) ()))
              new (filter (f \ !(elem f (bell 'told))) fs)
@@ -1462,15 +1522,109 @@
          _ (settle bee-branch) _ (remember 0)
          _ (twirl (_ \ watch 0) 0) _ (twirl (_ \ ring 0) 0)
          _ (twirl (_ \ lock-poll 0) 0)                   ; queued locks, mailed to the session
+         _ (twirl (_ \ relay 0) 0)                       ; the hive's relay, in whichever server holds it
          r (go 0)
          _ (unsettle 0)
          r)
 
+     ; --- the relay: the cards of every host with cap hive laid here as remote cells, beaten as they
+     ; arrive by this host's clock, and mail written into one carried to its host over ssh, where
+     ; --drop delivers it with its sender spelled as that host names this one's (doc/bee.md, THE RELAY) ---
+     (hs nm) (cite 'hosts nm)
+     cards (cite 'hive 'hive-cards)
+     (text-card s) (foldl (\ t l (l @ ((k && 0 < #k) + " \(v)") (pin t k v) t)) {} (lines s))
+     (relay-peers _) (filter (h \ h "name" != bee-host) ((hs 'hosts-with) "hive" ()))
+     (peer-love h) (peep h "love" "love")
+     (peer-sh h cmd) (foldl (\ s w (s + sh-quote w + " ")) "" ((hs 'hosts-ssh) h) + sh-quote cmd)
+     (sh-status c) (: p (spawn ["sh" "-c" c]) (charm? p && 0 <= p ? (wait p) 127))
+     (mirrors h) (filter (p \ peep (p 1) "via" "" = h "name") (cards 0))
+     ; --cards: this host's own cards, for a peer's relay; never one it relays itself
+     (cards-json _)
+      (json-show {"host" bee-host
+                  "cards" (map (p \ {"name" <p "card" (slurp-file (cell-of <p + "/card") + (drained-here 0 ? "drain 1\n" ""))})
+                               (filter (p \ !(remote? (p 1)) && string? (slurp-file (cell-of <p + "/card"))) (settled 0)))})
+     (drained-here _) (string? (slurp-file (bee-hive + "/.drain")))
+     ; --drain: this host goes down for maintenance. its sessions still take mail, but the queue counts
+     ; them gone; each is told to hand off the lead and start no gate. --drain --off ends it
+     (drain-cmd as)
+      (: f (bee-hive + "/.drain")
+         ps (filter (p \ !(remote? (p 1)) && !(user-card? (p 1))) (settled 0))
+         (? (elem "--off" as) (: _ (unlink f) _ (puts "\(bee-host) is no longer draining\n") 0)
+            (: _ (umkdirs bee-hive 448) _ (uwrite f (show (clock 0 // 1000) + "\n"))
+               _ (map (p \ post-as "bee" <p ("\(bee-host) is draining for maintenance: the queue now counts its sessions gone. "
+                                            + "if you lead a queue, hand it to a live session on another host (queue_lead); start no "
+                                            + "gate, and let a running one finish or write its row waiting. mail still reaches you."))
+                      ps)
+               _ (puts ("\(bee-host) is draining; told \(show #ps) session" + (#ps = 1 ? "" "s") + "\n"))
+               0)))
+     ; where a peer's session is laid: its own name, unless a live card of another host holds it
+     (mirror-name nm host)
+      (: c (card-of nm)
+         (? (!(tablet? c) || peep c "host" "" = host || !(taken? c)) nm (nm + "@" + host)))
+     (lay-mirror h e now)
+      (: nm (e "name") s (e "card") host (peep (text-card s) "host" (h "name"))
+         ln (mirror-name nm host) d (cell-of ln)
+         _ (umkdirs "\(d)/inbox" 448) _ (mkdir "\(d)/read" 448)
+         body (unlines (filter (l \ 0 < #l && !(starts? l "host ")) (lines s) + ["host \(host)" "of \(nm)" "via \(h "name")"]))
+         _ (? (uwrite "\(d)/.card" body) (rename "\(d)/.card" "\(d)/card") 0)
+         _ (? (uwrite "\(d)/.beat" (show now + "\n")) (rename "\(d)/.beat" "\(d)/beat") 0)
+         ln)
+     ; a message that cannot reach its session goes back to its sender, from bee-relay
+     (bounce-file nm f why)
+      (: p "\(cell-of nm)/inbox/\(f)" s (slurp-file p) m (string? s ? (mail-parse s) ())
+         _ (? (two? m && <m != "bee-relay") (post-as "bee-relay" <m "undelivered to \(nm): \(why)\n\n\(m 1)") "")
+         (unlink p))
+     (inbox-files nm) (: fs (readdir "\(cell-of nm)/inbox") (? (two? fs) (filter (f \ f 0 != 46) (sort fs)) ()))
+     (mirror-gone nm) (: _ (map (f \ bounce-file nm f "it has left its host") (inbox-files nm)) (sweep nm))
+     ; a peer's cards laid here, and the cells of its sessions that left it gone -> 1 when it answered
+     (relay-pull h now)
+      (: j (json-read (chomp (sh-out (peer-sh h (peer-love h + " bee --cards")))))
+         (? !(two? j && tablet? (j 1)) 0
+            (: es (filter (e \ tablet? e && string? (peep e "name" ()) && string? (peep e "card" ())
+                               && peep (text-card (e "card")) "host" "" != bee-host)
+                          (peep (j 1) "cards" ()))
+               ls (map (e \ lay-mirror h e now) es)
+               _ (map (p \ (? (elem <p ls) 0 (mirror-gone <p))) (mirrors h))
+               1)))
+     ; each waiting message carried to its host: 0 delivered, 3 no such session there, else kept
+     (relay-push h)
+      (map (p \ (: nm <p of (peep (p 1) "of" nm)
+                   (map (f \ (: q "\(cell-of nm)/inbox/\(f)"
+                                r (sh-status (peer-sh h (peer-love h + " bee --drop " + sh-quote of + " " + sh-quote bee-host)
+                                              + " < " + sh-quote q + " >/dev/null 2>&1"))
+                                (r @ 0 (unlink q) 3 (bounce-file nm f "no such session on its host") _ 0)))
+                        (inbox-files nm))))
+           (mirrors h))
+     (relay-round _) (: now (clock 0 // 1000) (map (h \ (? (relay-pull h now) (relay-push h) 0)) (relay-peers 0)))
+     ; a message from a peer's relay: its sender spelled as this hive names it -> 0, 3 no such session
+     (drop-in to src s)
+      (: c (card-of to)
+         k (find s "\n\n" 0) hd (? (k < 0) s (snip s 0 k)) bd (? (k < 0) "" (snip s k #s))
+         (here nm) (: m (card-of nm) (? (tablet? m && peep m "host" "" = src) nm (nm + "@" + src)))
+         from (: fl (filter (l \ starts? l "from ") (lines hd)) (? (two? fl) (here (snip <fl 5 #<fl)) "?"))
+         hd2 (join "\n" (map (l \ (starts? l "from " ? ("from " + from) l)) (lines hd)))
+         ib "\(cell-of to)/inbox" id "\(clock 0)-\(from)-\(hex2 (clock 0 % 256))"
+         (? !(tablet? c && !(remote? c) && taken? c) 3
+            !(uwrite "\(ib)/.\(id)" (hd2 + bd)) 1
+            (nom? (rename "\(ib)/.\(id)" "\(ib)/\(id)")) 1
+            0))
+     ; the relay runs in the one server holding bee-relay, a lock its pid keeps
+     (relay _)
+      (: _ (rest 5000)
+         _ (? (two? (relay-peers 0) && locks? 0 && peep (lock-ask "bee-relay" "exclusive" "the hive's relay") "granted" 0)
+              (relay-round 0) 0)
+         (relay 0))
      ; --list, --send, --lock and --resume speak to the hive from a shell and settle nowhere; a
      ; sender there is BEE_NAME, else cli- and the user
      (bee-cli as)
       (: say1 (\ e ok (? (#e = 0) (puts (ok + "\n"), 0) (say err ("bee: " + e + "\n"), 1)))
          (<as @
+          ; --cards, --drop and --relay are the relay's: what a peer asks, what it hands over, the loop
+          "--cards" (: _ (puts (cards-json 0 + "\n")) 0)
+          "--drop" (? (#as < 3) (say err "usage: love bee --drop NAME HOST < MESSAGE\n", 2)
+                      (: s (slurp-file "/dev/stdin") (? (string? s) (drop-in <>as <>>as s) 1)))
+          "--relay" (? (elem "--once" as) (: _ (relay-round 0) 0) (relay 0))
+          "--drain" (drain-cmd as)
           "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
                       (: e0 (getenv "BEE_NAME") u (getenv "USER")
@@ -1498,7 +1652,7 @@
               ; claude stop, then the card's pid gone (15 s at most) before the resume
               (stop-then nm id)
                (: _ (sh-run ("claude stop " + sh-quote id + " >/dev/null"))
-                  (gone n) (: k (card-of nm) (? !(tablet? k && alive? (card-pid k)) 1 (n <= 0) 0 (: _ (rest 500) (gone (n - 1)))))
+                  (gone n) (: k (card-of nm) (? !(tablet? k && live? k) 1 (n <= 0) 0 (: _ (rest 500) (gone (n - 1)))))
                   (? (gone 30) (go-resume ()) (say err ("bee: " + nm + " did not stop\n"), 1)))
               (go-resume _)
                (: r (resume-cmd <ws (join " " >ws))
@@ -1539,7 +1693,7 @@
          (two? as && <as = "--state") (: _ (state-cmd as) 0)
          (elem "--hud" as) (: _ (puts (unlines (hud-lines 0))) 0)   ; once, as text
          (!(two? as) && two? (tty 1)) ((cite 'hud 'hud-run) bee-core)
-         (two? as && elem <as ["--list" "--send" "--resume"]) (bee-cli as)
+         (two? as && elem <as ["--list" "--send" "--resume" "--cards" "--drop" "--relay" "--drain"]) (bee-cli as)
          (: _ (say err (bee-usage + "\n")) 2))
       (bee-go as))
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))

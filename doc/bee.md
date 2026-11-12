@@ -19,6 +19,10 @@ bee - the hive of sessions on this machine, and the merge queue they land throug
 
 **love bee --resume** \[*name* \[*prompt* ...\]\]
 
+**love bee --relay** \[**--once**\] \| **--cards** \| **--drop** *name* *host*
+
+**love bee --drain** \[**--off**\]
+
 **love bee --mcp**
 
 **love bee --state busy** \| **idle** \[**--pid** *pid*\]
@@ -54,7 +58,7 @@ Every session has a name. It is **BEE_NAME** when that is set and free; otherwis
 A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 
 **card**
-:   Who the session is, one *key value* pair a line: **pid**, **cwd**, **branch**, **model**, **state** (**idle** or **busy**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
+:   Who the session is, one *key value* pair a line: **pid**, **host** (the host it was written on), **cwd**, **branch**, **model**, **state** (**idle** or **busy**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
 
 **inbox/**
 :   The messages sent to the session, one file each.
@@ -62,11 +66,14 @@ A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 **read/**
 :   The messages the session has taken, moved there from **inbox/**.
 
+**beat**
+:   The time in seconds, rewritten through a rename every 10 seconds while a Claude Code session's server runs. It is a file of its own so that a beat never races a card's rewrite.
+
 The reading of cells and cards that every client shares (**pier**'s bar counts the live sessions with it) is the module **hive**, **src/apps/hive.l**.
 
 A *message* file is a header and a body. The header is *key value* lines, **from** *name* and **sent** *seconds* among them; a blank line ends it, and everything after the blank line is the text. To send, write the file as **inbox/.***id* and then rename it to **inbox/***id*. A reader ignores dot files, so it never sees a message half written. Messages are taken in the order their ids sort, so an id should begin with the time in milliseconds; bee's own are *ms***-***sender***-***hex*.
 
-A session is live while its card's **pid** is. Whoever lists the hive removes a cell whose card names a dead pid, along with its messages. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
+A session is live while its card's **pid** is. A card whose **host** is another host's (**BEE_HOST**, else the kernel's hostname, names this one) is live instead while its beat is younger than the lease, **BEE_LEASE** seconds (60): a pid means nothing off its own host. Whoever lists the hive removes a cell whose card names a dead pid here, along with its messages; a remote cell past its lease is hidden, and removed only once its beat is ten leases old, so a host away for maintenance comes back to its mail. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
 
 A *user's card* is the person at a login, in the hive through the hud. It says **kind user** and **model user**, its name is the login's, and its **state** is **here** while a hud holds it (its pid the hud's) and **away** after. It is never removed, so mail to the user waits in its inbox until a hud opens. One login has one, no agent may settle or be named as it, and **love bee --list** shows it as **user**. A message the hud sends says **kind user** in its header.
 
@@ -106,6 +113,20 @@ and drops the notice in silence otherwise, which then costs nothing: that sessio
 The server also leaves its way back. It writes **.resume/***name* in the hive, holding Claude Code's session id (**CLAUDE_CODE_SESSION_ID**) and its directory; unlike the card, it outlives the session, and **set_name** moves it. **love bee --resume** lists the names it can bring back, and **love bee --resume** *name* [*prompt*] relaunches one: in its directory, as **BEE_NAME=***name*, with the channel flag, and with an MCP config that runs the **out/love** of the tree it starts in, as **.mcp.json** does, so a restart after a landing that changed bee takes the new bee; a tree with none runs the binary that ran **--resume**. A live name is refused, unless what keeps it live is a backgrounded Claude Code session (an **/exit** with work still running, or **claude --bg**: its claude runs under **claude --bg-pty-host**, with no terminal). Then **--resume** says so, with the session's short id: **--attach** runs **claude attach** *id* here, **--stop** runs **claude stop** *id* and resumes once the card is gone, and on a terminal it asks which. **--cmd** prints the line instead of running it, for a script or a terminal multiplexer to run.
 
 Asking stays with Claude Code: its permission prompt asks before a message or a queue write goes out, unless that session runs without asking.
+
+# THE RELAY
+
+Hives on several hosts join into one through a *relay*. Its peers are the hosts in the registry (HOSTS) with the cap **hive**; a host's fact **love** names the love binary there, **love** unless given. Every Claude Code session's server tries for the exclusive lock **bee-relay** every 5 seconds, and the one holding it relays; **love bee --relay** runs the same loop on a host with no session, and **--once** runs one round.
+
+A round asks each peer, over the registry's ssh, for **love bee --cards**: the cards of the sessions on that host, never the ones it relays itself. Each is laid here as a *remote cell*, under the session's own name unless a live card of another host holds that name here, and then as *name***@***host*. Its card is the peer's, with **of** (its name there) and **via** (the registry's name for the host) added, and its beat is written by this host's clock as the card arrives, so the hosts' clocks need not agree. A session the peer no longer lists is gone: the mail waiting in its cell goes back to each sender, from **bee-relay**, and the cell is removed. A peer that does not answer is left alone, and its cells lapse with their lease.
+
+Mail to a remote cell is written into its inbox like any other. Each round carries every message waiting there to its host, **love bee --drop** *name* *host* with the message on its standard input, and removes it once it is delivered. **--drop** writes it into *name*'s inbox there, its **from** spelled as that hive names the sender: the bare name when the card it holds under it is the sending host's, else *name***@***host*, so an answer finds its way back. It exits 3 when *name* has no live session on that host, and the relay then sends the message back to its sender. While a host is down, its mail waits in its cells here, which are not removed while mail waits in them.
+
+A **kind user** line rides with the message, so a user typing into a hud on one host reaches a session on another as the user. ssh is the boundary of trust here, as the login is within one host.
+
+**love bee --list** says **on** *host* after a remote session's state.
+
+**love bee --drain** takes this host down for maintenance. It lays **.drain** in the hive and tells each session here, from **bee**, to hand any queue it leads to a live session on another host (**queue_lead**), to start no gate, and to let a running one finish or write its row **waiting**. Its sessions go on taking mail, and the relay's **--cards** says **drain 1** on each of their cards, but every host's queue watching counts them gone: the watchdog rings past a row whose owner is draining, after **(gone-minutes** *n***)**, and the head row's session may take the lead, acting, from a draining leader. **--drain --off** ends it. **love bee --list** says **draining** after such a session's state.
 
 # LOCKS
 
@@ -166,6 +187,10 @@ Sessions working in parallel often share one branch, the *base*, and merge into 
 ## The store
 
 A queue is a text kept where it moves only by compare-and-swap: a git ref under **refs/queue/**. The queue **refs/queue/***name* merges into the branch *name*. Read it with **git cat-file -p refs/queue/***name*; a write is **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*.
+
+A tree whose queues are shared by several hosts names their *home*, a git remote every host reaches: **(queue-home "***remote***")** in its **.bee.l**, or **BEE_QUEUE_HOME**. Then the queue there is the queue. Every read first fetches **refs/queue/*** from the home, pruning, into the same refs here, which are only its mirror. Every write is one **git push --atomic** to the home, the queue's ref leased on the value it was read at (**--force-with-lease=refs/queue/***name***:***old*), so a host that read a stale queue is refused and reads again, as with **update-ref**. The same push lays each row's gated head as **refs/queue-heads/***name***/***position*, and drops the heads of rows gone, so a commit a row names is in every host's repository after its next read. The base branch is the home's too: **queue_land** checks the home's branch and says to fetch it before the merge and to push it to the home after the fast gate, and **queue_landed** finds the landing on the home's branch, so a landing counts once it is pushed. With the home on a host apart from the ones that gate, the queue keeps moving while any of those is down.
+
+A queue knows a session by its name alone, so once hives are joined (THE RELAY) a name must be one session's in all of them. A session whose name a live session on another host also holds is refused every queue tool until one of them takes another name (**set_name**). A remote session answers to its own name for the queue's watching, so the watchdog does not take a row written on its host for one whose owner is gone.
 
 ## The text
 
@@ -300,6 +325,15 @@ Send the same note with nothing but a shell:
 
 **BEE_SELF_WATCH**
 :   Seconds between looks at the binary this session runs, 30 when unset.
+
+**BEE_HOST**
+:   The host this session's card says it was written on, the kernel's hostname when unset.
+
+**BEE_LEASE**
+:   How many seconds a remote card's beat keeps it live, 60 when unset.
+
+**BEE_QUEUE_HOME**
+:   The git remote that holds the queues, over the tree's **(queue-home** *remote***)**; the repository's own refs when neither names one.
 
 **BEE_HOSTS**
 :   The host registry, the nest's **etc/bee/hosts** when unset.
