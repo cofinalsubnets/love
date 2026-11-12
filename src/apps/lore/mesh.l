@@ -259,19 +259,27 @@
                      s (tan (qa / 2.0 * a)) t (tan (qa / 2.0 * b))
                      x (A0 * sg + (1 - A0) * s) y (A1 * sg + A0 * s + A2 * t) z (A2 * sg + (1 - A2) * t)
                      L (sqrt (2 x + 2 y + 2 z)) [(x / L) (y / L) (z / L)])
-     ; ..a block in view: inside each side of the view but for half a block's diagonal
-     tx (tan (v 'fov / 2.0)) ty (tx * h / w) r (v 'r) u (v 'u) fw (v 'f)
-     (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
-     sides [(side r tx) (side (map (j \ 0.0 - r j) ^3) tx) (side u ty) (side (map (j \ 0.0 - u j) ^3) ty)]
-     K (iota (6 * nb * nb)) bd (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
-     out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
-     vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
-     ; ..the blocks' corners, each asked once
-     (corner E c) (: bk (vb (E // (2 c))) o (E % (2 c))
-                    (bk // (2 nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
-     N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
      (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
-     d (dir N)
+     ; ..the corners in view, their directions and the triangles through them: kept in sm
+     ; until the view turns, the grid being the sky's and not the eye's
+     key [nb w h (v 'fov) (v 'f) (v 'r) (v 'u)]
+     gd (? (tablet? sm && peep sm 'gk () = key) (sm 'gd)
+           (: ; ..a block in view: inside each side of the view but for half a block's diagonal
+              tx (tan (v 'fov / 2.0)) ty (tx * h / w) r (v 'r) u (v 'u) fw (v 'f)
+              (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
+              sides [(side r tx) (side (map (j \ 0.0 - r j) ^3) tx) (side u ty) (side (map (j \ 0.0 - u j) ^3) ty)]
+              K (iota (6 * nb * nb)) bd (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
+              out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
+              vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
+              ; ..the blocks' corners, each asked once
+              (corner E c) (: bk (vb (E // (2 c))) o (E % (2 c))
+                             (bk // (2 nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
+              N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
+              ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
+              (q j) (ix (qs + j)) zq (qs * 0 - 1)
+              g [N (dir N) (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])]
+              (? (tablet? sm) (pins sm 'gk key 'gd g) 0, g)))
+     N (gd 0) d (gd 1)
      ; ..each ask's clouds no finer than the asks beside it; kept ones as they were
      (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
      c (? (!(tablet? sm)) (ask N d)
@@ -281,10 +289,7 @@
              _ (#A @ 0 () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
              [(sm 'r N) (sm 'g N) (sm 'b N)]))
      zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
-     ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
-     (q j) (ix (qs + j)) zq (qs * 0 - 1)
-     ts (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])
-     (#N @ 0 () [(lace cols) ts (1.5 * lt 'expo)]))
+     (#N @ 0 () [(lace cols) (gd 2) (1.5 * lt 'expo)]))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
  ; 60 degrees off th, so a turn carries no sample across a cloud's edge. the ring is the costly
