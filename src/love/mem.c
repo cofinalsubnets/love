@@ -98,7 +98,8 @@ static lvm(lvm_peepv) {
  Hp += b2w(bytes);
  v->shape[0] = (uintptr_t) n;
  unsigned char const *p = (unsigned char const*) cask(c)->str->bytes + o;
- for (intptr_t i = 0; i < n; i++, p += s) {
+ if (w == 8 && s == 8 && love_T[love_Z] == 8) memcpy(tray_data(v), p, 8 * (size_t) n);   // ..whole words: one copy
+ else for (intptr_t i = 0; i < n; i++, p += s) {
   uint64_t x = 0;
   for (intptr_t b = 0; b < w; b++) x |= (uint64_t) p[b] << (8 * b);
   tray_put_int(v, (uintptr_t) i, (intptr_t) x); }

@@ -62,6 +62,13 @@
        (test (65533 = peep g 0 0) (65535 = peep g 1 0)
              (0 = peep g 2 0) (1 = peep g 3 0))),
 
+    ; whole words, 8 wide and 8 apart, read in one copy: the same as their halves put together
+    (: c (cask 32) v @(5 -2 -33554437 4294967296)
+       _ (lay c 0 8 8 v)
+       g (see c 0 8 8 4) lo (see c 0 4 8 4) hi (see c 4 4 8 4)
+       (test (4 = #g) (aall (g = v)) (aall (g = (hi - 4294967296 * (hi >= 2147483648)) * 4294967296 + lo))
+             (aall (see c 8 8 8 2 = @(-2 -33554437))))),
+
     ; the empty run fits anywhere inside the cask, and lays nothing
     (cask 4 @ c (test (c = lay c 4 1 1 (iota 0)))),
 
