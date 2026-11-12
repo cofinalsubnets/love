@@ -7,22 +7,23 @@
 ;   (gpu-tex g id w h t)         texture id, w by h: a tray of 0x00rrggbb (below 0 a hole), rows
 ;                                top first, or a list of them, each level half the last
 ;   (gpu-buf g id verts tris)    buf id: facets's verts (8 numbers a vertex) and tris (4 a
-;                                triangle, a texture's id or below 0 none), flat trays
+;                                triangle, a texture's id, -1 none, -2 a glow, -3 - t a glass
+;                                of t), flat trays
 ;   (gpu-drop g id)
+;   (gpu-base g w h t)           the next frame's ground, w*h colours, below 0 bare
 ;   (gpu-under g cs ds)          the next frame laid first with a smaller one's colours cs and
 ;                                depths ds, facets's [ground cs ds]
 ;   (gpu-frame g w h mat ids o)  the bufs ids through mat (16 numbers, row-major, gl's clip
 ;                                box), o [clear fr fg fb near far tone flags]: a cask of w*h
-;                                0x00rrggbb, rows top first; clear below 0 leaves 0xff000000
-;                                where nothing drew; flags facets's 8, cull
+;                                of facets's words, 8 bytes each, rows top first; clear the ground, below 0
+;                                bare; flags facets's 8, cull
 ;   (gpu-close g)
 ; each answers () where it worked, else the helper's words, but gpu-frame
 ;   (gpu-facets s w h base mat verts tris texs opts)  facets's answer with flags 64, from the
 ;                                helper in s (gpu-state's), or () where facets must draw it:
 ;                                a base not a colour, -1 or w*h colours, nor such a ground
 ;                                under a smaller frame, opts with a sun, flags
-;                                past 8 64 and 128, a glow, a glass or a pane's class, or a
-;                                helper gone
+;                                past 8 64 and 128, a pane's class, or a helper gone
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
 (module (gpu gpu-open gpu-tex gpu-buf gpu-drop gpu-under gpu-frame gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
@@ -33,7 +34,7 @@
  ; ..the nest's cache: beside bin/ in a nest, else beside the binary (out/ in a checkout)
  (cache-dir _) (: s (selfpath 0) b (up s) r (base b = "bin" ? (up b) b)
                   d (r + "/cache/glhelp")
-                  (, (mkdir (r + "/cache") 493) (mkdir d 493) (dir? d ? d ())))
+                  (mkdir (r + "/cache") 493, mkdir d 493, (dir? d ? d ())))
  (source _) (open "/love/src/apps/lore/glhelp.c" "r" @ q
               (hot? q ? (slurp q @ t (close q, t))
                  (open "src/apps/lore/glhelp.c" "r" @ q (hot? q ? (slurp q @ t (close q, t)) ()))))
@@ -58,7 +59,7 @@
            (? (moon? ()) [ld mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
- (ask g s) (, (say (g 'to) (s + "\n")) (line (g 'from) @ () "the helper has gone" "ok" () r r))
+ (ask g s) (say (g 'to) (s + "\n"), (line (g 'from) @ () "the helper has gone" "ok" () r r))
  (gpu-how g) (g 'how)
  (gpu-open _)
   (: argv (helper-argv ())
@@ -74,69 +75,71 @@
            _ (unlink f)
            (? (string? hi && 6 < #hi && snip hi 0 6 = "ready ")
               {'to >a 'from q 'pid p 'w w 'r r 'room 0 'how (snip hi 6 #hi) 'argv argv}
-              (, (close >a) (close q) (close w) (close r) (charm? p ? (wait p) 0)
+              (close >a, close q, close w, close r, (charm? p ? (wait p) 0),
                  ['no-gpu (string? hi ? hi "the helper said nothing")])))))
- (gpu-close g) (, (say (g 'to) "quit\n") (close (g 'to)) (close (g 'from)) (close (g 'w)) (close (g 'r)) (wait (g 'pid)) ())
+ (gpu-close g) (say (g 'to) "quit\n", close (g 'to), close (g 'from), close (g 'w), close (g 'r), wait (g 'pid), ())
  ; ..the shared file at least n bytes
  (room! g n) (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g)
- (put! g c) (, (room! g #c) (fdpush (g 'w) c 0 0 #c))
+ (put! g c) (room! g #c, fdpush (g 'w) c 0 0 #c)
  (gpu-tex g id w h t)
   (: ls (two? t && !(tray? t) ? t [t])
      (side n k) (max 1 (n // (k 2)))
      sz (map (k \ side w k * side h k) ^#ls)
      c (cask (4 * +sz))
-     _ (foldl (\ o k (, ((cite 'guts 'pinv) c o 4 4 (ls k)) (o + 4 * sz k))) 0 ^#ls)
-     (, (put! g c) (ask g "tex \(show id) \(show w) \(show h) \(show #ls) 0")))
+     _ (foldl (\ o k ((cite 'guts 'pinv) c o 4 4 (ls k), (o + 4 * sz k))) 0 ^#ls)
+     (put! g c, ask g "tex \(show id) \(show w) \(show h) \(show #ls) 0"))
  (gpu-buf g id verts tris)
   (: nv (#verts // 8) nt (#tris // 4) c (cask (32 * nv + 16 * nt))
      _ ((cite 'guts 'pinf) c 0 4 verts) _ ((cite 'guts 'pinv) c (32 * nv) 4 4 tris)
-     (, (put! g c) (ask g "buf \(show id) \(show nv) \(show nt) 0")))
+     (put! g c, ask g "buf \(show id) \(show nv) \(show nt) 0"))
  (gpu-drop g id) (ask g "drop \(show id)")
+ (gpu-base g w h t) (: c (cask (4 * w * h)) _ ((cite 'guts 'pinv) c 0 4 4 t)
+   (put! g c, ask g "base \(show w) \(show h) 0"))
  (gpu-under g cs ds)
   (: ch (shape ds 0) cw (shape ds 1) n (cw * ch) c (cask (8 * n))
      _ ((cite 'guts 'pinv) c 0 4 4 cs) _ ((cite 'guts 'pinf) c (4 * n) 4 ds)
-     (, (put! g c) (ask g "under \(show cw) \(show ch) 0")))
+     (put! g c, ask g "under \(show cw) \(show ch) 0"))
  (num x) (show (1.0 * x))
  (gpu-frame g w h mat ids o)
-  (: n (4 * w * h) _ (room! g n)
+  (: n (8 * w * h) _ (room! g n)
      r (ask g ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
                + unwords (map show ids)))
      (? r r (: c (cask n) (fdpull (g 'r) c 0 0 n, c))))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
- (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs ()}
- ; ..a batch's buf, by its sizes and sums: lore moves and relights a batch in place, so what it
- ; holds names it; [id plain], plain where no triangle is a glow, a glass or a pane's class.
- ; one not drawn for a while is dropped
- (batch s v t) (: nt (#t // 4) key [#v nt (net v) (net t)] b (s 'bufs) e (peep b key ())
+ (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {}}
+ ; ..a batch's buf, by its sizes and its sums weighed by place, so an order counts: lore moves
+ ; and relights a batch in place, so what it holds names it; [id plain], plain where no
+ ; triangle is a pane's class. one not drawn for a while is dropped
+ (batch s v t) (: nt (#t // 4) key [#v nt (net (v * weights s #v)) (net (t * weights s #t))] b (s 'bufs) e (peep b key ())
    _ (pin (s 'used) key (s 'fr))
    (? (two? e) e
       (nt = 0) [-1 1]
-      (: id (s 'n) pl (nt = 0 || (t (iota nt * 4 + 3) @ k (amin k >= -1 && amax k < 16777216))) r (gpu-buf (s 'g) id v t)
-         (? (string? r) r (: e [id pl] (, (pins s 'n (id + 1)) (pin b key e) e))))))
+      (: id (s 'n) pl (nt = 0 || (t (iota nt * 4 + 3) @ k (amin k > -16777219 && amax k < 16777215))) r (gpu-buf (s 'g) id v t)
+         (? (string? r) r (: e [id pl] (pins s 'n (id + 1), pin b key e, e))))))
+ ; ..the weights for n words, kept until the sweep
+ (weights s n) (: t (s 'wt) (peep t n () @ () (: w (iota n % 997 + 1) (pin t n w, w)) w w))
  (sweep s) (: b (s 'bufs) u (s 'used) fr (s 'fr) (old? k) (u k < fr - 120)
    _ (each (filter old? (keys u)) (k \ gpu-drop (s 'g) (b k 0)))
    ks (filter (k \ !(old? k)) (keys u))
-   (pins s 'bufs (foldl (\ t k (pin t k (b k))) {} ks) 'used (foldl (\ t k (pin t k (u k))) {} ks)))
+   (pins s 'bufs (foldl (\ t k (pin t k (b k))) {} ks) 'used (foldl (\ t k (pin t k (u k))) {} ks) 'wt {}))
  ; ..the textures, laid once for each list of them
  (texs! s texs) (? (s 'texs == texs) ()
    (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
-      r (filter string? (map lay ^#texs)) (? (two? r) <r (, (pin s 'texs texs) ()))))
+      r (filter string? (map lay ^#texs)) (? (two? r) <r (pin s 'texs texs, ()))))
  (gpu-facets s w h B mat vs ts texs o)
   (: fl (tray? o ? (int (o 5)) -1)
      un (two? B && #B = 3 && tray? (B 1) && tray? (B 2) && #(B 1) = #(B 2) ? B ()) G (two? un ? <un B)
      bt (tray? G && #G = w * h)
-     (? (!(tray? o) || (fl & 55) != 0 || !(bt || charm? G && -1 <= G) || s 'g = ()) (no s 'gate)
+     (? (!(tray? o) || (fl & 55) != 0 || !(bt || charm? G && -1 <= G) || bt && amin G < -1 || s 'g = ()) (no s 'gate)
         (: _ (pin s 'fr (s 'fr + 1)) V (tray? vs ? [vs] vs) T (tray? ts ? [ts] ts)
            tx (texs! s texs)
            bs (string? tx ? () (map (i \ batch s (V i) (T i)) ^#V))
-           (? (string? tx || any string? bs) (, (pin s 'g ()) ())
-              !(all (b \ b 1) bs) (no s 'glow)
+           (? (string? tx || any string? bs) (pin s 'g (), ())
+              !(all (b \ b 1) bs) (no s 'seen)
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
-                 u (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ())
+                 u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
                  c (string? u ? u (gpu-frame (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) (fl & 8)]))
-                 (? (string? c) (, (pin s 'g ()) ())
-                    ; ..where nothing drew -1, or the base's own
-                    (: f ((cite 'guts 'peepv) c 0 4 4 (w * h)) g (f & 16777215) m (f >> 24 != 0)
-                       (, (no s 'drawn) (bt ? (g + m * (G - g)) (g - m * (g + 1)))))))))))
- (no s k) (: t (peep s 'why {}) (, (pins s 'why (pin t k (peep t k 0 + 1))) ())))
+                 (? (string? c) (pin s 'g (), ())
+                    (no s 'drawn, (cite 'guts 'peepv) c 0 8 8 (w * h))))))))
+ (no s k) (: t (peep s 'why {}) (pins s 'why (pin t k (peep t k 0 + 1)), ())))
 ) ; module gpu
