@@ -595,6 +595,17 @@ int main(void) {
 EOF
 moonrun -o "$ho/.srsb" "$ho/.srsb.c" || fail "mooncc the braced struct probe"
 [ "$("$ho/.srsb" | tr '\n' '|')" = "7 7 0|732 4450 9 10.5 n=4|" ] || fail "a braced local struct split into members answers wrong"
+# ..but a brace that reads its own struct, as of_property_for_each_u32's does, keeps it whole
+cat > "$ho/.srsi.c" <<'EOF'
+#include <stdio.h>
+static int const tb[4] = { 3, 5, 7, 0 };
+static int const *nx(int const *b, int const *at, int *k) { at = at ? at + 1 : b; if (!*at) return 0; *k = *at; return at; }
+int main(void) { int s = 0, key;
+ for (struct { int const *prop; int const *item; } _it = { tb, nx(_it.prop, 0, &key) }; _it.item; _it.item = nx(_it.prop, _it.item, &key)) s += key;
+ printf("%d\n", s); return 0; }
+EOF
+moonrun -o "$ho/.srsi" "$ho/.srsi.c" || fail "mooncc a brace that reads its own struct"
+[ "$("$ho/.srsi")" = 15 ] || fail "a brace that reads its own struct answers wrong"
 
 # a BUG_ON folded false loses its brk and label, so its __bug_table row must go too,
 # or the object names a label it never lays

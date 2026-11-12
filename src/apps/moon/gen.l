@@ -4464,7 +4464,9 @@
        (vsrc? e) (vol? (accq ps9 e))
        (mem? e) (e @ (('idx || 'deref || 'dot) . _) 1 0)
        (bind p) (pin tys <p <>p, vol? (p 6) ? (pin lqs <p (p 6)) 0)
-       (bok? p) (p 2 @ ('init is) (brace <>p is @ [t] (pin brc <p [t], 1) _ 0) _ 0)
+       ; ..and one that reads its own struct stays whole
+       (men nm x) (two? x ? (x @ ('var ^nm) 1 (men nm <x || men nm >x)))
+       (bok? p) (p 2 @ ('init is) (men <p is ? 0 (brace <>p is @ [t] (pin brc <p [t], 1) _ 0)) _ 0)
        (one x p) (pin dcl <p (1 + peep dcl <p 0), bind p, (mem? (p 2) ? (pin inis <p 1) 0),
                   <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2)) || bok? p) && !(vol? (p 6)) && clean? <>p ?
                      (pin cand <p <>p) 0)
