@@ -11,6 +11,7 @@
        love bee --list | --send NAME TEXT ..          the sessions, from a shell
        love bee --relay [--once] | --cards | --drop NAME HOST   the relay between hosts' hives
        love bee --drain [--off]                       this host down for maintenance: the queue counts its sessions gone
+       love bee --mirror [--stamp]                    pull the /srv/love save point from the freshest srv-mirror host
        love bee --resume [NAME [PROMPT ..]]           the claude code sessions that can come back, or relaunch one
        love bee --mcp                                 the hive and the queue tools, as a claude code session's mcp server
        love bee --state busy|idle [--pid P]           a claude code session's hooks say its state
@@ -1596,6 +1597,67 @@
                         (inbox-files nm))))
            (mirrors h))
      (relay-round _) (: now (clock 0 // 1000) (map (h \ (? (relay-pull h now) (relay-push h) 0)) (relay-peers 0)))
+     ; --- the mirror (doc/bee.md, THE MIRROR): the save point at /srv/love on every srv-mirror host. the box
+     ; holding the work cuts it and stamps it; every other node pulls git and files from the freshest source
+     ; whose stamp is not older than its own, never pruning, and sb from every source that answers ---
+     (srv-root _) (: e (getenv "BEE_SRV") (string? e && 0 < #e ? e "/srv/love"))
+     (srv-of h) (peep h "srv" "/srv/love")
+     (stamp-cut s) (? (string? s) (digits (peep (text-card s) "cut" "0")) 0)
+     (self-host? h) (: n (h "name") (n = bee-host || starts? n (bee-host + ".")))
+     (srv-peers _) (filter (h \ !(self-host? h)) ((hs 'hosts-with) "srv-mirror" ()))
+     ; a host's ssh words without its host, and the host word, for git's and sb's own ssh
+     (ssh-pre h) (: w ((hs 'hosts-ssh) h) (take (#w - 1) w))
+     (ssh-host h) (: w ((hs 'hosts-ssh) h) (w (#w - 1)))
+     (srv-stamp-of h) (: t (sh-out (peer-sh h ("cat " + srv-of h + "/stamp"))) (? (0 < stamp-cut t) t ()))
+     (srv-git h root)
+      (: d (root + "/g.git")
+         _ (? (two? (stat (d + "/HEAD"))) 0
+              (sh-status ("git init -q --bare " + sh-quote d + " && git -C " + sh-quote d + " config gc.auto 0 >/dev/null 2>&1")))
+         c ("GIT_SSH_COMMAND=" + sh-quote (join " " (ssh-pre h)) + " git -C " + sh-quote d + " fetch -q "
+            + sh-quote (ssh-host h + ":" + srv-of h + "/g.git") + " '+refs/*:refs/*' </dev/null >/dev/null 2>&1")
+         (? (0 = sh-status c) (: _ (sh-status ("git -C " + sh-quote d + " symbolic-ref HEAD refs/heads/gwen")) "")
+            "git fetch from \(h "name") failed"))
+     ; notes tools bin manifest, laid whole through a staging dir so a cut-off copy leaves the last one
+     (srv-files h root)
+      (: t (root + "/.pull") q sh-quote
+         c ("rm -rf " + q t + " && mkdir -p " + q t + " && " + peer-sh h ("cd " + srv-of h + " && tar cf - notes tools bin manifest")
+            + " </dev/null 2>/dev/null | tar xf - -C " + q t
+            + " && for n in notes tools bin manifest; do if [ -e " + q t + "/$n ]; then rm -rf " + q root + "/$n && mv " + q t + "/$n " + q root + "/$n || exit 1; fi; done"
+            + "; r=$?; rm -rf " + q t + "; exit $r")
+         (? (0 = sh-status c) "" "the files from \(h "name") failed"))
+     ; sb only grows: a pull of the far head, from every source that answers
+     (srv-sb h root)
+      (: n (root + "/g.sb") q sh-quote
+         _ (? (two? (stat (n + "/.sb"))) 0
+              (sh-status ("mkdir -p " + q n + " && cd " + q n + " && " + q bee-self + " sb record nest </dev/null >/dev/null 2>&1")))
+         (sh-status ("SB_SSH=" + q (join " " (ssh-pre h + ["-T"])) + " SB_LOVE=" + q (srv-of h + "/bin/love") + " " + q bee-self
+                     + " sb -C " + q n + " sync --take " + q ("ssh://" + ssh-host h + srv-of h + "/g.sb") + " </dev/null >/dev/null 2>&1")))
+     (srv-pull _)
+      (: root (srv-root 0) mine (slurp-file (root + "/stamp")) cm (stamp-cut mine)
+         _ (umkdirs root 493)
+         seen (filter (x \ string? (x 1)) (map (h \ [h (srv-stamp-of h)]) (srv-peers 0)))
+         ok (filter (x \ cm <= stamp-cut (x 1)) seen)
+         best (foldl (\ a x (? (!(two? a) || stamp-cut (a 1) < stamp-cut (x 1)) x a)) () ok)
+         why (? !(two? best) ""
+                (: g (srv-git <best root) (0 < #g ? g (srv-files <best root))))
+         _ (? (two? best && 0 = #why)
+              (? (uwrite (root + "/.stamp") (best 1)) (rename (root + "/.stamp") (root + "/stamp")) 0) 0)
+         sb (map (x \ [(<x "name") (srv-sb <x root)]) seen)
+         _ (puts (unlines
+                  (["stamp here: \(show cm)"]
+                   + map (x \ "\(<x "name"): stamp \(show (stamp-cut (x 1)))") seen
+                   + [(? !(two? seen) "no srv-mirror host answers with a stamp"
+                         !(two? best) "every source is older than this mirror: git and files left as they are"
+                         (0 < #why) why
+                         "git and files from \(<best "name") at \(show (stamp-cut (best 1)))")]
+                   + map (x \ "sb from \(<x): " + (x 1 = 0 ? "ok" "failed")) sb)))
+         (? !(two? seen) 75 (0 < #why || two? (filter (x \ x 1 != 0) sb)) 1 0))
+     ; --mirror --stamp: the cut's stamp, laid by the box that cut it once its save point is whole
+     (srv-stamp _)
+      (: root (srv-root 0)
+         g (chomp (sh-out ("git -C " + sh-quote (root + "/g.git") + " rev-parse --verify -q HEAD")))
+         t (unlines ["cut \(clock 0 // 1000)" "head \(g)" "from \(bee-host)"])
+         (? (uwrite (root + "/.stamp") t) (: _ (rename (root + "/.stamp") (root + "/stamp")) _ (puts t) 0) 1))
      ; a message from a peer's relay: its sender spelled as this hive names it -> 0, 3 no such session
      (drop-in to src s)
       (: c (card-of to)
@@ -1625,6 +1687,7 @@
                       (: s (slurp-file "/dev/stdin") (? (string? s) (drop-in <>as <>>as s) 1)))
           "--relay" (? (elem "--once" as) (: _ (relay-round 0) 0) (relay 0))
           "--drain" (drain-cmd as)
+          "--mirror" (? (elem "--stamp" as) (srv-stamp 0) (srv-pull 0))
           "--list" (: s (sessions-text 0) (puts (s + (#s && s (#s - 1) = 10 ? "" "\n")), 0))
           "--send" (? (#as < 3) (say err "usage: love bee --send NAME TEXT ..\n", 2)
                       (: e0 (getenv "BEE_NAME") u (getenv "USER")
@@ -1693,7 +1756,7 @@
          (two? as && <as = "--state") (: _ (state-cmd as) 0)
          (elem "--hud" as) (: _ (puts (unlines (hud-lines 0))) 0)   ; once, as text
          (!(two? as) && two? (tty 1)) ((cite 'hud 'hud-run) bee-core)
-         (two? as && elem <as ["--list" "--send" "--resume" "--cards" "--drop" "--relay" "--drain"]) (bee-cli as)
+         (two? as && elem <as ["--list" "--send" "--resume" "--cards" "--drop" "--relay" "--drain" "--mirror"]) (bee-cli as)
          (: _ (say err (bee-usage + "\n")) 2))
       (bee-go as))
    _ (pins (cite 'verbs 'tab) 'bee (udoor 'bee bee-main bee-usage 1 0)))

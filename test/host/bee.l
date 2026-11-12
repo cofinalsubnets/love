@@ -481,6 +481,46 @@
    _ (test (0 = <r) (1 = cr-count said "from=\"watchdog\"") (cr-in said "row 1's owner far has no live session"))
    0)
 
+; the mirror: srv-mirror hosts over a fake ssh, each its own root. git and files come from the freshest
+; stamp, never one older than this mirror's own; sb comes from every source; --stamp lays a cut's stamp
+(: d (cr-dir "mirror" "")
+   (g dir as) (hark (["git" "-C" dir "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   (out r) (: s >r (snip s 0 (#s - 1)))
+   (src nm txt)
+    (: r (d + "/" + nm) w (r + "/w")
+       _ (map (\ p (mkdir p 493)) [r w (r + "/notes") (r + "/tools") (r + "/bin")])
+       _ (cr-put (r + "/notes") "n" txt) _ (cr-put (r + "/tools") "t" txt) _ (cr-put r "manifest" txt)
+       _ (hark ["ln" "-s" cr-love (r + "/bin/love")])
+       _ (hark ["git" "init" "-q" "-b" "gwen" w]) _ (cr-put w "f" txt) _ (g w ["add" "f"]) _ (g w ["commit" "-q" "-m" txt])
+       _ (hark ["git" "clone" "-q" "--bare" w (r + "/g.git")])
+       _ (mkdir (r + "/g.sb") 493) _ (cr-put (r + "/g.sb") nm txt)
+       _ (cr-sh (r + "/g.sb") ("'" + cr-love + "' sb record " + nm + " >/dev/null 2>&1"))
+       [r (out (g w ["rev-parse" "HEAD"]))])
+   hb (src "hb" "from b\n") hc (src "hc" "from c\n")
+   _ (cr-sh <hb ("BEE_SRV='" + <hb + "' BEE_HOST=hb '" + cr-love + "' bee --mirror --stamp >/dev/null"))
+   _ (cr-put <hc "stamp" "cut 100\nhead x\nfrom hc\n")
+   _ (cr-put d "fakessh" ("while [ $# -gt 0 ]; do case $1 in -o) shift 2;; -T) shift;; *) break;; esac; done\n"
+                          + "h=$1; shift; [ -e '" + d + "'/down-$h ] && exit 255; exec sh -c \"$*\"\n"))
+   _ (mkdir (d + "/.love/etc/bee") 448)
+   _ (cr-put (d + "/.love/etc/bee") "hosts"
+             ("name hb\nreach sh " + d + "/fakessh hb\ncaps srv-mirror\nsrv " + <hb + "\n\n"
+              + "name hc\nreach sh " + d + "/fakessh hc\ncaps srv-mirror\nsrv " + <hc + "\n"))
+   dst (d + "/dst")
+   env ("BEE_SRV='" + dst + "' BEE_HOST=ha")
+   r1 (cr-run d env "--mirror")
+   g1 (out (hark ["git" "-C" (dst + "/g.git") "rev-parse" "gwen"]))
+   n1 (cr-get (dst + "/notes/n"))
+   sb1 [(cr-get (dst + "/g.sb/hb")) (cr-get (dst + "/g.sb/hc"))]
+   ; hb goes down: hc is older than this mirror now, so git and files stay
+   _ (cr-put d "down-hb" "")
+   r2 (cr-run d env "--mirror")
+   g2 (out (hark ["git" "-C" (dst + "/g.git") "rev-parse" "gwen"]))
+   n2 (cr-get (dst + "/notes/n"))
+   _ (test (0 = <r1) (cr-in (r1 1) "git and files from hb") (g1 = hb 1) (n1 = "from b\n")
+           (cr-in (cr-get (dst + "/stamp")) "from hb") (sb1 = ["from b\n" "from c\n"])
+           (0 = <r2) (cr-in (r2 1) "every source is older than this mirror") (g2 = hb 1) (n2 = "from b\n"))
+   0)
+
 ; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
 ; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")
