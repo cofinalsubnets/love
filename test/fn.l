@@ -21,7 +21,7 @@
   (has? (show (: t (foldl (t \ i \ pin t i i) {} (jot 40)) (x \ peep t (x + 1) 0))) "{..40}")
   (has? (show (: t {'s (foldl (t \ i \ pin t i i) {} (jot 40))} (x \ peep t x 0))) "{..1}")
   (has? (show (: t {'a 1} _ (pin t 'me t) (x \ peep t x 0))) "{..2}")
-  (#(show ev) < 200000)
+  (#(show ev) < 250000)
   !(has? (show ev) "((mint ")                        ; every name it calls is bound
   ; --- functions compare by their threads ---
   ((p \ q \ p + q) = (a \ b \ a + b))

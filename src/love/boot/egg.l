@@ -4,13 +4,14 @@
  ev (sit (sit ev () egg) () egg)
  _ (pin book 'ev ev)
  _ (sit ev () post)
+ _ (ev '(cpkindfill 0))          ; ev's kind table again, show bound now
  _ (pin book 'born (clock now))
  ; the internals move off the book into the guts module. compiled code holds its own
  ; references, so after the boot the module keeps only `kept`; the rest leave for good.
  ; nomop keeps them all. a start that loads more first finds `mop` under latemop
  (ev '(:
    m '(cellread seal-hook stack setstack lib enter leave gv trim peek poke pick place seek stem span
-       dis disp discell opname opnames nifop spin thrun lamthr lamform threadir nifnom yield ci-vt to-vt macros boxfix boxfix-es bodyless? bpr breads boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop letc ev-lower ev-run gone jotfuse numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset operators seqx lidx ldel ear _)
+       dis disp discell opname opnames nifop spin thrun lamthr lamform threadir nifnom yield ci-vt to-vt macros boxfix boxfix-es bodyless? bpr breads boxfix-core boxset cellbinds dsug lambp lp ln w wl mkcs hashtx feels apx iop letc ev-lower ev-run gone jotfuse numfn nfa nfq nfnest powg fpow ipow tray atype asum aprod alen a-coll a-dim a-emax a-rank a-shape a-type pureset cpkinds cpkindfill operators seqx lidx ldel ear _)
    n (filter (\ k (? (nom? k) (= "lvm_" (snip (string k) 0 4)))) (keys book))
    M (lib ())
    ; the module may already hold rows bound from C at boot: join them, don't replace

@@ -34,6 +34,14 @@
 ; and tally read mutable state and pin writes it; on text or a chain pin answers a fresh container
 (: readset (: names '(peep pin tally)
    (foldl (\ t s (: v (gv s ()) (v ? (pin t v 1) t))) {} names)))
+; what cprop knows of a value's kind, keyed by value as pureset is: a test's answers by kind (1 a
+; charm, 2 a string, 3 a pair), or ('head arity kind) for a head that answers one kind. cpkindfill
+; pins the ones bound so far; the egg calls it again past post, once show is
+(: cpkinds {}
+   (cpkindfill _) (each '((two? 0 0 1) (atom? 1 1 0) (charm? 1 0 0) (string? 0 1 0) (nom? 0 0 0) (tray? 0 0 0)
+                        (tally head 1 1) (show head 1 2) (. head 2 3))
+                      (r \ (: v (gv <r ()) (v ? (pin cpkinds v >r)))))
+   _ (cpkindfill 0))
 (: feels (:
    lvm_cur  (pick 0 (+))
    lvm_ret0 (pick 1 cap)
@@ -319,7 +327,7 @@
         (? (v == () && !(feels v)) (apx . 0 . x)    ; no global to shadow: the local lane either way
            (elem h bnd) (apx . 0 . x)                ; a shadowed name: local head
            (: hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
-            (? (two? n) (apx . napof v >x . ['\ (jf 2)] . jotsub >x <jf <n)   ; a walker over jot: its twin
+            (? (two? n) (apx . napof v >x . ['\ (jnum? <n bnd (jotfuse 'ops) ? (jf 3) (jf 2))] . jotsub >x <jf <n)   ; a walker over jot: its twin, a number's own
                hd (hd x)
                (apx . napof v >x . x)))))))
    ; the walked operand of a walker call is (jot N), as fold leaves it: (apx 0 jot N), the head
@@ -424,7 +432,11 @@
                                  (kind < 2 && !(jplain? <n || jplain? (as 1))) y
                                  (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops (jnum? <n bnd ops))))))
    ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
-   (jnum? N bnd ops) (charm? N || two? N && 2 = #N && (: T (ops 5) h <N (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)))
+   ; ..or, as wx has lowered it, an (iop OP x) of tally's own op
+   (jnum? N bnd ops) (charm? N || two? N && two? ops
+                      && (: T (ops 5) h <N
+                            (2 = #N && (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)
+                             || 3 = #N && h == iop && <>N == pick 0 T)))
    (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] l f]])))   ; a whole N loops, the rest is the twin's
    ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
    (jotloop1 kind F ps B N Z tw ops)
@@ -443,9 +455,21 @@
    ; non-constant rebind or a lambda param kills the name.
    (propk? v) <(kconst v)
    ; se, the static value env: a scope per binder, (tablet . parent). a name maps to its
-   ; (name value) entry, or to segone where the binder hides an outer one; a miss asks the parent
-   segone (mint 0)
-   (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) v (seget x >se))))
+   ; (name value) entry, or to segone where the binder hides an outer one; a miss asks the parent.
+   ; a (segk kind) entry hides as segone does, its value unknown but its kind certain
+   segone (mint 0) segk (mint 0)
+   (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? () v) (seget x >se))))
+   (sekind x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? <>v) (sekind x >se))))
+   ; cpkinds' row for a head by name or by value; a shadowed name is no book head, asked only on a hit
+   (khead h hr bnd) (: r (peep cpkinds (nom? h ? (gv h ()) hr) ()) (two? r && !(nom? h && elem h bnd) ? r))
+   ; a one-operand kind test whose operand's kind is certain -> (answer), else ()
+   (cpktest h hr as se bnd) (: t (two? as && atom? >as ? (khead h hr bnd)) k (two? t && <t != 'head ? (cpkind <as se bnd))
+                               (k ? [(t (k - 1))]))
+   ; the kind e answers for certain, else ()
+   (cpkind e se bnd) (? (charm? e) 1 (string? e) 2
+                        (nom? e) (sekind e se)
+                        (two? e) (: r (khead <e <e bnd) (two? r && <r == 'head && r 1 = #>e ? (r 2)))
+                        ())
    (sehide ns se) (foldl (\ t n (pin t n segone)) {} ns . se)   ; a binder's scope, its names hidden
    (cbake v) (v == () || !(nom? v || two? v) ? v ['\ v])                       ; folded value -> source
    (kval v) (atom? v ? v <>v)                                                  ; a const form -> its value
@@ -596,7 +620,7 @@
     (atom? bs) bs
     (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's body inherits the let's op
     (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
-       _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] segone))         ; a const or a known pure lambda enters se
+       _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] (cpkind v1 se bnd @ k (k ? [segk k] segone))))   ; a const or a known pure lambda enters se; else its kind
        b (two? <bs ? (usug <bs v1) segone)                                    ; a define keeps its sugar
        (b == segone ? (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb)) (keep3 bs <bs b (cpbinds >>bs se fl op bnd pb)))))
    ; usug: the body under a define's head (f a..), dsug undone, or segone where cprop changed its lambdas
@@ -618,7 +642,9 @@
              hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
              h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
              hk (kconst hr)
-             (? (dch? hr as bnd se fl) (cprop (dch-ap <as hr >as) se fl op bnd pb)                 ; (N f x ..)
+             kv (cpktest h hr as se bnd)
+             (? (two? kv) <kv                                                                                    ; (two? n): its kind answers
+                (dch? hr as bnd se fl) (cprop (dch-ap <as hr >as) se fl op bnd pb)                 ; (N f x ..)
                 (two? hr && 2 = #hr && dch? <hr (>hr + as) bnd se fl)
                   (cprop (dch-ap <>hr <hr as) se fl op bnd pb)                                     ; ((N f) x ..)
                 (lambp hr && two? as && fuel? fl hr)
