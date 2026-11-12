@@ -559,14 +559,29 @@
                         (raops g f @ [_ d] (f . go u (filter (e \ nelem <>e d) k)) _ (f . go u ()))))
               _ ())
      (two? (g 'rasls) ? (go fs ()) fs))
-   ; the forms over their registers: a copy onto itself and the use markers gone, a fix its body
-   (rasub fs loc)
+   ; a spill slot's gp reload whose register a call or a write takes before any read, on its run
+   ; to a label or a jump, goes. over registers, while a call's cuse still says its reads: a call
+   ; with none ahead of it (a runtime helper's) may read any
+   (radrl g fs)
+    (: sls (foldl (t \ o \ pin t o 1) {} (g 'rasls))
+       (dead? r u c)
+        (u @ (f . u2)
+             (f @ (('label || 'jmp || 'jmpr || 'jmpm || 'jmpt || 'br || 'ret || 'raw) . _) 0
+                  ((('call || 'callr) . _) && !c) 0
+                  _ (raops g f @ [a d] (? (elem r a) 0 (elem r d) 1 (dead? r u2 (<f = 'cuse))) _ 0))
+             _ 0)
+       (go fs) (fs @ (f . u) (f @ (['ld r 'r4 o] && sls o && dead? r u ()) (go u) _ (f . go u)) _ ())
+     (two? (g 'rasls) && !(abl? g 'drl) ? (go fs) fs))
+   ; the forms over their registers: a copy onto itself gone, a fix its body; rasubk keeps the use
+   ; markers for the passes over registers that read them
+   (rasubk fs loc)
     (: (sub x) (lovr? x ? (loc x) x)
-       (catmap (f \ (f @ (('cuse || 'cdef) . _) ()
-                         ('fix . _ . _ . fs . _) fs
+       (catmap (f \ (f @ ('fix . _ . _ . fs . _) fs
                          ([('mov || 'movapd || 'movss) a b] && sub a = sub b) ()
                          (_ . _) [(map sub f)]
                          [f])) fs))
+   (raunmark fs) (filter (f \ f @ (('cuse || 'cdef) . _) 0 _ 1) fs)
+   (rasub fs loc) (raunmark (rasubk fs loc))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
    rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss negss fimm add sub and or xor imul shl shr sar not neg

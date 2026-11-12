@@ -90,6 +90,14 @@
       (rakeep (pin g 'rasls '(-16)) [['st 'r4 -16 'r3] ['call 'f] ['ld 'r3 'r4 -16] ['add 'r0 'r0 'r3] ['st 'r4 -16 'r3]
                                      ['label 'L] ['st 'r4 -16 'r3]])
          = [['st 'r4 -16 'r3] ['call 'f] ['add 'r0 'r0 'r3] ['label 'L] ['st 'r4 -16 'r3]]
+      ; a spill slot's reload the next call takes unread goes; one the call reads, a runtime helper's
+      ; call with no cuse, or past a label, stays. a store back of what the slot holds goes first
+      (: g2 (pin g 'rasls '(-16)) tl [['li 'r0 1] ['cuse 'r0] ['call 'f] ['ret]]
+         (radrl g2 (['ld 'r1 'r4 -16] . tl) = tl &&
+          radrl g2 [['ld 'r1 'r4 -16] ['cuse 'r0 'r1] ['call 'f] ['ret]] = [['ld 'r1 'r4 -16] ['cuse 'r0 'r1] ['call 'f] ['ret]] &&
+          radrl g2 (['ld 'r1 'r4 -16] . ['label 'L] . tl) = (['ld 'r1 'r4 -16] . ['label 'L] . tl) &&
+          radrl g2 [['ld 'r1 'r4 -16] ['call 'f] ['ret]] = [['ld 'r1 'r4 -16] ['call 'f] ['ret]] &&
+          radrl g2 (rakeep g2 [['ld 'r1 'r4 -16] ['st 'r4 -16 'r1] ['cuse 'r0] ['call 'f] ['ret]]) = [['cuse 'r0] ['call 'f] ['ret]]))
       ; what a diagnosis refuses
       (all lnay ["int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"
                  "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"
