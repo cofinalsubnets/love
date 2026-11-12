@@ -29,10 +29,10 @@
      (? (two? g) g
         (: up [(gpu-tex g 0 8 8 (gem-tray [64] ckl)) (gpu-buf g 1 verts tris 8)]
            c (gpu-frame g W H mat [1] [bg 0.0 0.0 0.0 0.0 0.0 0.0 0])
-           fr (string? c ? c ((cite 'guts 'peepv) c 0 8 8 (W * H)))
+           fr c
            d (string? fr ? fr (worst cpu fr))
            dr (gpu-drop g 1)
-           e (gpu-frame g W H mat [1] [bg 0.0 0.0 0.0 0.0 0.0 0.0 0] @ c (string? c ? c (amax (((cite 'guts 'peepv) c 0 8 8 (W * H) & 16777215) != bg))))
+           e (gpu-frame g W H mat [1] [bg 0.0 0.0 0.0 0.0 0.0 0.0 0] @ c (string? c ? c (amax ((c & 16777215) != bg))))
            s (gpu-state g)
            ; ..the square's twin turned away, and the triangle wound the other way: culled
            ta (iota 8 * 0 + gem-tray [8] [0 1 2 0  0 2 3 0]) tb (iota 8 * 0 + gem-tray [8] [0 2 1 0  4 6 5 -1])

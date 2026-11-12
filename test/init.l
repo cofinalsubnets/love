@@ -80,6 +80,20 @@
       (nom? (fdpull r d 6 0 4)) (nom? (fdpull r "text" 0 0 1)) (nom? (fdpull r d -1 0 1))
       (: _ (close w) _ (close r) !(unlink f))))
 
+  ; --- fdtray: 8-byte words of a raw fd at an offset, signed, as a fresh int tray ---
+  (: f ("out/.fdtray-probe." + show (getpid 0))
+     _ (unlink f)
+     w (openfd f 1) r (openfd f 0)
+     c (cask 24) _ ((cite 'guts 'pinv) c 0 8 8 @(5 -2 -33554437))
+     (test
+      (24 = fdpush w c 0 0 24)
+      (fdtray r 0 3 @ t (tray? t && #t = 3 && aall (t = @(5 -2 -33554437))))
+      (fdtray r 8 5 @ t (#t = 2 && aall (t = @(-2 -33554437))))      ; short at the end: 2 there
+      (fdtray r 0 0 @ t (tray? t && #t = 0))
+      ('ebadf = fdtray -1 0 1)
+      (nom? (fdtray r -1 1)) (nom? (fdtray r 0 -1)) (nom? (fdtray r "0" 1))
+      (: _ (close w) _ (close r) !(unlink f))))
+
   ; --- the raw-fd lane: the port ops on a charm, unbuffered, answering as the port arm does ---
   (: pp (pipe 0) rfd <pp wfd >pp
      _ (say wfd "through the door") _ (put wfd 33) _ (close wfd)

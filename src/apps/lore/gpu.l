@@ -15,11 +15,11 @@
 ;   (gpu-under g cs ds)          the next frame laid first with a smaller one's colours cs and
 ;                                depths ds, facets's [ground cs ds]
 ;   (gpu-frame g w h mat ids o)  the bufs ids through mat (16 numbers, row-major, gl's clip
-;                                box), o [clear fr fg fb near far tone flags]: a cask of w*h
-;                                of facets's words, 8 bytes each, rows top first; clear the ground, below 0
+;                                box), o [clear fr fg fb near far tone flags]: a tray of w*h
+;                                of facets's words, rows top first; clear the ground, below 0
 ;                                bare; flags facets's 8, cull, 128, seen, and 256, the sun's view
 ;   (gpu-send g w h mat ids o)   the same frame begun, the helper drawing it while the caller
-;   (gpu-take g w h)             goes on, and then its cask
+;   (gpu-take g w h)             goes on, and then its tray
 ;   (gpu-close g)
 ; each answers () where it worked, else the helper's words, but gpu-frame and gpu-take
 ;   (gpu-facets s w h base mat verts tris texs opts ks c)  facets's answer with flags 64,
@@ -116,7 +116,7 @@
  (gpu-send g w h mat ids o)
   (room! g (8 * w * h), say (g 'to) ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
                                      + unwords (map show ids) + "\n"), ())
- (gpu-take g w h) (: n (8 * w * h) (line (g 'from) @ () "the helper has gone" "ok" (: c (cask n) (fdpull (g 'r) c 0 0 n, c)) r r))
+ (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
@@ -168,7 +168,7 @@
                     (two? pr) (pins s 'pend p 'last pr, pr)
                     (s 'last @ () (now () @ () () q (pin s 'last q, q)) l (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))
  ; ..a frame sent as [w h c], taken: [f c], or the helper's words
- (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [((cite 'guts 'peepv) f 0 8 8 (p 0 * p 1)) (p 2)])))
+ (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [f (p 2)])))
  ; ..and one sent and no longer wanted, the last shown forgotten with it
  (drain s) (s 'pend @ () () p (pins s 'pend () 'last (), take s p, ()))
  (no s k) (: t (peep s 'why {}) (pins s 'why (pin t k (peep t k 0 + 1)), ())))
