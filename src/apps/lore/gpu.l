@@ -22,7 +22,7 @@
 ;   (gpu-take g w h)             goes on, and then its tray
 ;   (gpu-close g)
 ; each answers () where it worked, else the helper's words, but gpu-frame and gpu-take
-;   (gpu-facets s w h base mat verts tris texs opts ks c)  facets's answer with flags 64,
+;   (gpu-facets s w h base mat verts tris texs opts ks sk c)  facets's answer with flags 64,
 ;                                from the helper in s (gpu-state's), or () where facets must
 ;                                draw it:
 ;                                a base not a colour, -1 or w*h colours, nor such a ground
@@ -30,7 +30,9 @@
 ;                                past 8 64 and 128, or a helper gone. ks names each batch, or
 ;                                (): one named alike holds alike, so is not summed again, and
 ;                                one named 'once is laid anew each frame, unsummed, in a slot
-;                                of its own
+;                                of its own. sk [verts tris tone] a sky drawn under what is bare
+;                                as facets draws it with flags 96, its pixels bare alone 2^32
+;                                more, or ()
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
@@ -141,12 +143,14 @@
  ; ..the sun's view, laid again only when it moves
  (sun! s sv sd b) (? (s 'sv == sv && s 'sd == sd && s 'sb = b) ()
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
+ ; ..the sky, laid each frame
+ (sky! s sk) (? !(two? sk) () (once s 'sky (sk 0) (sk 1) 8 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r))
  ; ..the textures, laid again only when one of them is not the one laid
  (texs! s texs) (? (alike (s 'texs) texs) ()
    (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
       r (filter string? (map lay ^#texs)) (? (two? r) <r (pin s 'texs texs, ()))))
  (alike a b) (a == b || two? a && two? b && #a = #b && all (i \ a i == b i) ^#a)
- (gpu-facets s w h B mat vs ts texs ol ks c)
+ (gpu-facets s w h B mat vs ts texs ol ks sk c)
   (: o (tray? ol ? ol (two? ol ? (ol 0) ())) st (tray? ol ? 8 11) sv (ol 1) sd (ol 2)
      sun (st = 11 && tray? sv && 16 <= #sv && tray? sd && #(shape sd) = 2)
      fl (tray? o ? (int (o 5)) -1)
@@ -161,7 +165,8 @@
            (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 e (string? u ? u (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0))]))
+                 y (string? u ? u (sky! s sk))
+                 e (string? y ? y (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0))]))
                  p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
                  (? (string? e) (pin s 'g (), ())
                     !(peep s 'pipe 0) (now () @ () () q (q 0))
