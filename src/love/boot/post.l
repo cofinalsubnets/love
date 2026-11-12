@@ -1617,14 +1617,14 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig lof rejects sugar univ vcs-of vof)
+(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig kof lof rejects sugar univ vcs-of vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {} IND {} UST {} UPOT {} UOUT {} UORG {} UPOLY {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
    ; a uu closure ('clo f) carries a love function, so applying one is an application, not a
-   ; re-walk of syntax. only capp opens one. a pi's or sigma's carries a third, 1 when f never
-   ; reads its argument
+   ; re-walk of syntax. only capp opens one. a lambda's, pi's or sigma's carries a third, a cell
+   ; saying how f reads its argument: 1 never, 2 only under a lambda or a branch, 0 at once
    (capp cl v) (<>cl v)
    (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
    (dop1 v) (v @ ['chain a _] a ['np1 v])
@@ -1643,7 +1643,22 @@
    (docr P f g v) (v @ ['i1 a] (vapp f a) ['i2 b] (vapp g b) ['ncr P f g v])
    (doer P v) ['ner P v]
    (dojr P r ev) (ev @ ['refl _] r ['njr P r ev])
-   (vof-sym en x) (assq x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x)))
+   ; a flag is worked out the first time it is asked for, once for every closure a compile makes
+   (kcell f) {1 f}
+   (kof q) (q 2 @ c (c == () ? 0 (peep c 0 () @ k (k != () ? k (: v ((c 1) 0) (pin c 0 v, v))))))
+   (strict? x t) (? (t == x) 1
+                    (two? t) (t @ ['lam _ _] 0
+                                 ['pi _ A _] (strict? x A)
+                                 ['total2 _ A _] (strict? x A)
+                                 ['bool_rect P _ _ w] (strict? x P || strict? x w)
+                                 (any (u \ strict? x u) t))
+                    0)
+   ; a recursor's hypothesis: skipped when the method never reads it, a memo cell when it reads it
+   ; only under a lambda or a branch, else computed. a lookup runs the cell
+   (lzy th) ['lz {0 th}]
+   (lzm m th) (m @ ['lam q] (kof q @ 1 0 2 (lzy th) (th 0)) (th 0))
+   (frc v) (two? v && <v == 'lz ? (v 1 @ c (peep c 1 0 ? (c 0) (: x ((c 0) 0) (pin c 0 x, pin c 1 1, x)))) v)
+   (vof-sym en x) (frc (assq x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x))))
 
    ; --- comp: a term walked once into a love function of the env. vof-sym stays inside the
    ; (\ en ..): a later defn must be visible to a term compiled earlier.
@@ -1655,9 +1670,10 @@
                   (en \ vof-sym en t))
       ; a spine's list head matches no tag, so it falls through to the else
       (t @
-         ['lam x b]             (comp b @ cb (en \ ['lam ['clo (v \ cb ([x v] . en))]]))
+         ['lam x b]             (: cb (comp b) k (kcell (_ \ reads? x b ? (strict? x b ? 0 2) 1))
+                                 (en \ ['lam ['clo (v \ cb ([x v] . en)) k]]))
          ['succ a]              (comp a @ ca (en \ vsucc (ca en)))
-         ['pi x A B]            (: cA (comp A) cB (comp B) k (reads? x B ? 0 1)
+         ['pi x A B]            (: cA (comp A) cB (comp B) k (kcell (_ \ reads? x B ? 0 1))
                                  (en \ ['pi (cA en) ['clo (v \ cB ([x v] . en)) k]]))
          ['paths A a b]         (: cA (comp A) ca (comp a) cb (comp b)
                                  (en \ ['paths (cA en) (ca en) (cb en)]))
@@ -1668,8 +1684,8 @@
          ['idpath a]            (comp a @ ca (en \ ['refl (ca en)]))
          ['paths_rect P r e]    (: cP (comp P) cr (comp r) ce (comp e)
                                  (en \ dojr (cP en) (cr en) (ce en)))
-         ['bool_rect P x y w]   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)
-                                 (en \ dobr (cP en) (cx en) (cy en) (cw en)))
+         ['bool_rect P x y w]   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)   ; only the branch taken
+                                 (en \ (cw en @ v (v @ 'true (cx en) 'false (cy en) ['nbr (cP en) (cx en) (cy en) v]))))
          ['coprod A B]          (: cA (comp A) cB (comp B) (en \ ['coprod (cA en) (cB en)]))
          ['coprod_rect P f g w] (: cP (comp P) cf (comp f) cg (comp g) cw (comp w)
                                  (en \ docr (cP en) (cf en) (cg en) (cw en)))
@@ -1681,7 +1697,7 @@
          ['UU l]                (en \ ['U l])
          ['the T u]             (comp u)                    ; the ascription is the term
          ['let x a b]           (: ca (comp a) cb (comp b) (en \ cb ([x (ca en)] . en)))
-         ['total2 x A B]        (: cA (comp A) cB (comp B) k (reads? x B ? 0 1)
+         ['total2 x A B]        (: cA (comp A) cB (comp B) k (kcell (_ \ reads? x B ? 0 1))
                                  (en \ ['sig (cA en) ['clo (v \ cB ([x v] . en)) k]]))
          ['pr1 w]               (comp w @ ca (en \ dop1 (ca en)))
          ['pr2 w]               (comp w @ ca (en \ dop2 (ca en)))
@@ -1812,8 +1828,8 @@
         ('true || 'false) 'bool
         (assq x cx @ (_ T) T (GLOB x @ (g . _) (UPOLY x @ p (two? p ? (uinst p) g)) (scare 'uu-unbound x))))
 
-   ; a codomain that never reads its binder (a closure's 1) is laid without the argument's value
-   (carg q en a) (q 2 == 1 ? 0 (vof en a))
+   ; a codomain that never reads its binder is laid without the argument's value
+   (carg q en a) (kof q == 1 ? 0 (vof en a))
    (inf-spine cx en d f as)
    (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (carg q en a)) u)
                    (scare 'uu-not-a-pi as)) f)
@@ -1979,14 +1995,14 @@
    ; a recursor's operands are params, motive, methods, indices, target. ct holds each
    ; constructor's [c k fields], a field [y 0] or, when recursive, [y [zs js]]: its pis and
    ; the indices it lands at. a hypothesis follows its field
-   (rect-of xs nc ct stuck ap lm dec ixv)
+   (rect-of xs nc ct stuck ap lm dec ixv lz)
    (: (full vs)
       (: np #xs pv (take np vs) P (vs np) ms (take nc (drop (np + 1) vs))
          (ihz zs js en a ys) (zs @ (z . u) (lm (v \ ihz u js ([z v] . en) a (ys + [v])))
                               (full (pv + [P] + ms + map (ixv en) js + [(foldl ap a ys)])))
          (go m en fs as) (fs @ ([y s] . fu)
                           (: a <as m1 (ap m a)
-                           (go (s == 0 ? m1 (ap m1 (ihz <s (s 1) en a ()))) ([y a] . en) fu >as))
+                           (go (s == 0 ? m1 (ap m1 (lz m1 (_ \ ihz <s (s 1) en a ())))) ([y a] . en) fu >as))
                           m)
        (dec (vs (#vs - 1)) @ (c . as)
         (assq c ct @ [_ k fs] (#as = np + #fs ? (go (ms k) (pairup xs pv) fs (drop np as)) (stuck vs))
@@ -2065,8 +2081,8 @@
       ucommit nm,
       pin BRIDGE nm ['hit (lcur (np + ni) () (_ \ ['ty nm]))],
       each cTs (c \ c @ [c _ fs] (pin BRIDGE c ['hit (lcur (np + #fs) () (as \ ('in . (c . as))))])),
-      pinax rnm rT (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof)),
-      pin BRIDGE rnm ['hit (lcur K () (rect-of xs nc ct (vs \ ['nrec rnm]) (\ f a (f a)) (f \ f) (v \ v @ ('in . r) r ()) (en \ j \ 0)))],
+      pinax rnm rT (kcur K () (rect-of xs nc ct (vs \ foldl (\ f a ['na f a]) ['nv rnm] vs) vapp (f \ ['lam ['clo f]]) kdec vof lzm)),
+      pin BRIDGE rnm ['hit (lcur K () (rect-of xs nc ct (vs \ ['nrec rnm]) (\ f a (f a)) (f \ f) (v \ v @ ('in . r) r ()) (en \ j \ 0) (m \ t \ t 0)))],
       nm))))
 
 ; --- uu2l: a closed term to a love form whose value is vof's answer (charms for nats,

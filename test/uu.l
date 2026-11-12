@@ -4,7 +4,7 @@
    capp (uu 'capp) conv (uu 'conv)
    rejects (uu 'rejects)                    ; not defn/defq/axm: a bound head hides its macro,
                                             ; and the macro is what quotes their operands
-   lof (uu 'lof) bridge (uu 'bridge) univ (uu 'univ))
+   lof (uu 'lof) bridge (uu 'bridge) univ (uu 'univ) kof (uu 'kof))
 ; ..so hoist the three macros here, in a form of their own: c0 compiles a whole form at once
 (: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx defind)))
 
@@ -14,11 +14,16 @@
   two? (peep GLOB 'uu-alive 0))
  (3 = vof 0 '(uu-alive 2)))
 
-; a codomain that never reads its binder is marked, and its argument, never evaluated, is still checked
+; a closure says how it reads its binder: 1 never, 2 only under a lambda or a branch, 0 at once.
+; a codomain that never reads it is laid without the argument's value, and the argument is still checked
 (test
- (vof 0 '(pi x nat nat) @ ['pi _ q] (q 2 = 1) 0)
- (vof 0 '(pi x nat (paths nat x x)) @ ['pi _ q] (q 2 = 0) 0)
- (vof 0 '(total2 x nat bool) @ ['sig _ q] (q 2 = 1) 0)
+ (vof 0 '(pi x nat nat) @ ['pi _ q] (kof q = 1) 0)
+ (vof 0 '(pi x nat (paths nat x x)) @ ['pi _ q] (kof q = 0) 0)
+ (vof 0 '(total2 x nat bool) @ ['sig _ q] (kof q = 1) 0)
+ (vof 0 '(lam x 3) @ ['lam q] (kof q = 1) 0)
+ (vof 0 '(lam x (bool_rect (lam b nat) x 0 true)) @ ['lam q] (kof q = 2) 0)
+ (vof 0 '(lam x (lam y x)) @ ['lam q] (kof q = 2) 0)
+ (vof 0 '(lam x (succ x)) @ ['lam q] (kof q = 0) 0)
  (defn uu-skip (pi p (paths nat 0 0) nat) (lam p 3))
  (3 = vof 0 '(uu-skip (idpath 0))))
 
