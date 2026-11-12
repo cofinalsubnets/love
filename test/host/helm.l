@@ -123,6 +123,8 @@
    (test (0 < k),
     test (two? (stat (scd + "/src/apps/helm/helm.l"))),
     test (atom? (stat (scd + "/love-0.1"))),
+    test (uread (scd + "/.love-build") = [1 (love-build 0 + "\n")]),
+    test (hextract scd = 'held),
     hark [(selfpath 0) "rm" "-rf" scd],
 
     unlink good, unlink bad, unlink stamp,
