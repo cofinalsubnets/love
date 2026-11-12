@@ -294,10 +294,12 @@
     (? (aquote? e) 0
        (two? e) (: op <e
           (nom? op && !(op = go) && !(elem op aopheads) && !(along? e)
+           || acomp? op
            || foldl (\ a x (a || ahascall? env go x)) 0 >e))
        0)
    ; aheads: the free call heads of e, the global-callee candidates. go is never one: a non-tail
    ; (go ..) must decline, not resolve a leaked namesake. over-approximate; amble-ok? is the gate
+   (acomp? h) (two? h && !(aquote? h))                              ; a computed head: its value is the callee
    (along? e) (<e = 'long? && 3 = #e && whole? <>e && 0 < <>e <= 8)   ; (long? k x), k small: inline, no call
    (aheads env go e acc)
     (? (aquote? e) acc
@@ -306,7 +308,7 @@
            a2 (nom? op && !(op = go) && !(elem op env) && !(elem op acc)
                && !(elem op aopheads) && !(along? e) ?
                  (op . acc) acc)                                      ; would read the unpinned local
-           (foldl (\ ac x (aheads env go x ac)) a2 >e))
+           (foldl (\ ac x (aheads env go x ac)) a2 (acomp? op ? e >e)))
        acc)
    ; amble-ok?: does e compile? env = visible names, shd = op names this frame may not claim, gn =
    ; resolvable global heads, go/k = the loop name and arity (0 outside), tl = tail position ((go ..) is a jump)
@@ -332,6 +334,7 @@
               (op = go) (tl && n = k && all (x \ amble-ok? env shd gn go k 0 x) as)
               (nom? op) (0 < n && (elem op env || elem op gn)
                           && all (x \ amble-ok? env shd gn go k 0 x) as)
+              (acomp? op) (0 < n && all (x \ amble-ok? env shd gn go k 0 x) e)
               0))
        0)
    ; amble-depth: an upper bound on the spill slots e needs; cx op = the extra curry steps a head
@@ -348,6 +351,7 @@
              (op = '=) (2 + amax (amble-depth go cx <as) (1 + amble-depth go cx <>as))   ; aeq2's slow lane spills the partial + the operand
              (aop2? op) (amax (amble-depth go cx <as) (1 + amble-depth go cx <>as))
              (op = go) (#as + admax go cx as)
+             (acomp? op) (amax (amble-depth go cx op) (1 + #as + admax go cx as))   ; the head's spill, then a call's
              (cx op + #as + admax go cx as))))                      ; a call spills a partial per curry step, so an n-arg call reserves n
    ; amble-loop: match the named-let body, both def sugars x both spellings -> (go vars GB inits) | 0
    ;   applied:  ((: (go v..) GB) i..)  |  ((: go (\ v.. GB)) i..)
@@ -609,6 +613,7 @@
                     (op = amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
                     (elem oop '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
+                    (acomp? op) (aseq cl ex @ 'bad 'bad 1)                  ; the head runs before the args
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
            && a = #ps && 0 < a && lpok && drok && dvok && lts != 'bad && two? body
@@ -885,7 +890,9 @@
                                      ()) (goj 0 cso)))))
              ; the string fast lane rides looping bodies and frame callees only: a gn or sibling callee is never a string
              (acall f as d t)
-              (? (f = self)                                                                               ; saturated -> the direct frame jump; partial or over-applied ->
+              (? (acomp? f) (acg f d + [['st SP (spill d) A]]                                        ; the head at spill d, then a frame callee's lanes
+                               + (two? >as ? ((t ? atsat asat) as (spill d) (d + 1)) (achain as (spill d) (d + 1))))
+                 (f = self)                                                                               ; saturated -> the direct frame jump; partial or over-applied ->
                  (#as = (a - ni) ?                                                                  ; curry the own cell through its imports, then the args (a saturated
                     (aselfcall as d)                                                                        ; tail self-call took sgo instead)
                     (achain (simp + as) soo d))
