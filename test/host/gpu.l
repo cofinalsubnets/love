@@ -50,8 +50,8 @@
            (apart c q) (: a (held c) b (held q)
                          (net ((kind c != kind q) + (off a b > 1) + (abs1 ((a >> 24 & 255) - (b >> 24 & 255)) > 1) > 0)))
            (both B fl) (: V [verts verts gv] T [ta tb tg] X [(int (gem-tray [8 8] ckl))]
-                          [(apart (facets W H B mat V T X (o fl)) (gpu-facets s W H B mat V T X (o fl) ()))
-                           (apart (facets W H B mat V [ta tb tr] X (o fl)) (gpu-facets s W H B mat V [ta tb tr] X (o fl) ()))])
+                          [(apart (facets W H B mat V T X (o fl)) (gpu-facets s W H B mat V T X (o fl) () ()))
+                           (apart (facets W H B mat V [ta tb tr] X (o fl)) (gpu-facets s W H B mat V [ta tb tr] X (o fl) () ()))])
            ; ..and over a frame half the size, laid first: the triangle alone, nearer, so it hides
            ; the square where they cross and the square shows past it elsewhere
            (half fl) (facets (W // 2) (H // 2) -1 mat [verts] [(iota 4 * 0 + gem-tray [4] [4 5 6 -1])] [] (o fl))
@@ -62,15 +62,24 @@
            tc (iota 12 * 0 + gem-tray [12] [0 1 2 16777216  0 2 3 33554432  4 5 6 33554431])
            tl (iota 4 * 0 + gem-tray [4] [0 1 2 -16777219])
            (lens fl ks) (: X [(int (gem-tray [8 8] ckl))]
-                          (apart (facets W H -1 mat [verts gv] [tc tl] X (o fl)) (gpu-facets s W H -1 mat [verts gv] [tc tl] X (o fl) ks)))
+                          (apart (facets W H -1 mat [verts gv] [tc tl] X (o fl)) (gpu-facets s W H -1 mat [verts gv] [tc tl] X (o fl) ks ())))
            ; ..the last its batches named by their maker, twice: the second asks no sums
            gl [(lens 64 ()) (lens 192 ()) (lens 200 ()) (lens 192 [['sq] ['ln]]) (lens 192 [['sq] ['ln]])]
-           (gpu-close g, [up d dr e fs gl]))))
+           ; ..piped: the first frame itself, then it again, then each the one before, its own c
+           ; with it; a frame declined stops it, and the next starts again
+           X [(int (gem-tray [8 8] ckl))] (cf fl) (facets W H -1 mat [verts gv] [tc tl] X (o fl))
+           (pp fl c) (gpu-facets s W H -1 mat [verts gv] [tc tl] X (o fl) () c)
+           pi (: _ (pin s 'pipe 1) a (pp 64 'a) b (pp 192 'b) d (pp 200 'c) e (pp 192 'd)
+                 n (gpu-facets s W H -1 mat [verts] [ta] [] (o 65) () 'n) z (pp 64 'z) _ (pin s 'pipe 0)
+                 [[(a 1) (b 1) (d 1) (e 1) n (z 1)] (apart (a 0) (cf 64)) (apart (b 0) (cf 64)) (apart (d 0) (cf 192))
+                  (apart (e 0) (cf 200)) (apart (z 0) (cf 64))])
+           (gpu-close g, [up d dr e fs gl pi]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
-                 && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)))
+                 && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)
+                 && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6)))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())

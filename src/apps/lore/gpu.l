@@ -17,16 +17,22 @@
 ;                                box), o [clear fr fg fb near far tone flags]: a cask of w*h
 ;                                of facets's words, 8 bytes each, rows top first; clear the ground, below 0
 ;                                bare; flags facets's 8, cull
+;   (gpu-send g w h mat ids o)   the same frame begun, the helper drawing it while the caller
+;   (gpu-take g w h)             goes on, and then its cask
 ;   (gpu-close g)
-; each answers () where it worked, else the helper's words, but gpu-frame
-;   (gpu-facets s w h base mat verts tris texs opts ks)  facets's answer with flags 64, from
-;                                the helper in s (gpu-state's), or () where facets must draw it:
+; each answers () where it worked, else the helper's words, but gpu-frame and gpu-take
+;   (gpu-facets s w h base mat verts tris texs opts ks c)  facets's answer with flags 64,
+;                                from the helper in s (gpu-state's), or () where facets must
+;                                draw it:
 ;                                a base not a colour, -1 or w*h colours, nor such a ground
 ;                                under a smaller frame, opts with a sun, flags
 ;                                past 8 64 and 128, or a helper gone. ks names each batch, or
-;                                (): one named alike holds alike, so is not summed again
+;                                (): one named alike holds alike, so is not summed again.
+;                                with s 'pipe, [f c'] instead: the frame before and its c, this
+;                                one drawn meanwhile; after a start or a stop the frame itself,
+;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-tex gpu-buf gpu-drop gpu-under gpu-frame gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-open gpu-tex gpu-buf gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -101,11 +107,11 @@
      _ ((cite 'guts 'pinv) c 0 4 4 cs) _ ((cite 'guts 'pinf) c (4 * n) 4 ds)
      (put! g c, ask g "under \(show cw) \(show ch) 0"))
  (num x) (show (1.0 * x))
- (gpu-frame g w h mat ids o)
-  (: n (8 * w * h) _ (room! g n)
-     r (ask g ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
-               + unwords (map show ids)))
-     (? r r (: c (cask n) (fdpull (g 'r) c 0 0 n, c))))
+ (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
+ (gpu-send g w h mat ids o)
+  (room! g (8 * w * h), say (g 'to) ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
+                                     + unwords (map show ids) + "\n"), ())
+ (gpu-take g w h) (: n (8 * w * h) (line (g 'from) @ () "the helper has gone" "ok" (: c (cask n) (fdpull (g 'r) c 0 0 n, c)) r r))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
@@ -128,19 +134,28 @@
  (texs! s texs) (? (s 'texs == texs) ()
    (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
       r (filter string? (map lay ^#texs)) (? (two? r) <r (pin s 'texs texs, ()))))
- (gpu-facets s w h B mat vs ts texs o ks)
+ (gpu-facets s w h B mat vs ts texs o ks c)
   (: fl (tray? o ? (int (o 5)) -1)
      un (two? B && #B = 3 && tray? (B 1) && tray? (B 2) && #(B 1) = #(B 2) ? B ()) G (two? un ? <un B)
      bt (tray? G && #G = w * h)
-     (? (!(tray? o) || (fl & 55) != 0 || !(bt || charm? G && -1 <= G) || bt && amin G < -1 || s 'g = ()) (no s 'gate)
-        (: _ (pin s 'fr (s 'fr + 1)) V (tray? vs ? [vs] vs) T (tray? ts ? [ts] ts)
+     (? (!(tray? o) || (fl & 55) != 0 || !(bt || charm? G && -1 <= G) || bt && amin G < -1 || s 'g = ()) (drain s, no s 'gate)
+        ; ..the frame sent before taken first, before anything is laid where it lies
+        (: pr (s 'pend @ () () p (p 0 = w && p 1 = h ? (take s p) (drain s)))
+           _ (pin s 'fr (s 'fr + 1)) V (tray? vs ? [vs] vs) T (tray? ts ? [ts] ts)
            tx (texs! s texs)
            bs (string? tx ? () (map (i \ batch s (V i) (T i) (two? ks ? (ks i) ())) ^#V))
-           (? (string? tx || any string? bs) (pin s 'g (), ())
+           (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 c (string? u ? u (gpu-frame (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) (fl & 136)]))
-                 (? (string? c) (pin s 'g (), ())
-                    (no s 'drawn, (cite 'guts 'peepv) c 0 8 8 (w * h))))))))
+                 e (string? u ? u (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) (fl & 136)]))
+                 p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
+                 (? (string? e) (pin s 'g (), ())
+                    !(peep s 'pipe 0) (now () @ () () q (q 0))
+                    (two? pr) (pins s 'pend p 'last pr, pr)
+                    (s 'last @ () (now () @ () () q (pin s 'last q, q)) l (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))
+ ; ..a frame sent as [w h c], taken: [f c], or the helper's words
+ (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [((cite 'guts 'peepv) f 0 8 8 (p 0 * p 1)) (p 2)])))
+ ; ..and one sent and no longer wanted, the last shown forgotten with it
+ (drain s) (s 'pend @ () () p (pins s 'pend () 'last (), take s p, ()))
  (no s k) (: t (peep s 'why {}) (pins s 'why (pin t k (peep t k 0 + 1)), ())))
 ) ; module gpu

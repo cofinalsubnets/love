@@ -1250,10 +1250,11 @@
    v (mesh-eye w h e (sh 'deg * pi / 180.0) (sh 'pitch * pi / 180.0) 0.0 fov 0.05 60.0)
    (mesh-frame v [[] []] (st 'sc 'texs) [0.0 0.0 0.0 30.0 60.0] 8 gain
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)) ())))
- ; ..the gpu that draws the level's frames, opened at the first: with LORE_GPU=1, else 'off
+ ; ..the gpu that draws the level's frames, opened at the first: with LORE_GPU=1, else 'off.
+ ; each is shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0
  ; ..a packed mesh's name for the gpu, its own number in st
  (gpu-name st pk) (pk 'gid @ () (: n (peep st 'gid 0 + 1) (pins st 'gid n, pin pk 'gid n, n)) g g)
- (world-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (gpu-state g) 'off)) 'off)
+ (world-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0")) 'off)) 'off)
                                  (pin st 'gpu s, s))
                            s s)
  (level-pens st sh) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
