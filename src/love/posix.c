@@ -7,6 +7,7 @@
 #include "love.h"
 #include "archive/srctree.h"   // the carried tree, under /love (lovefs.c)
 #include "vfs.h"
+#include "quay/quay.h"  // cleat and the cp437 map, for vtfont
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename
 #include <stdlib.h>     // setenv/unsetenv, posix_openpt grantpt unlockpt ptsname
@@ -1236,6 +1237,38 @@ static love_noinline word host_posix_setids(struct g *g, word uw, word gw, word 
  return ZeroPoint; }
 LvmWord3(posix_setids)
 
+// (vtfont fd): fd's linux console draws quay's cleat, its unicode map cp437's page and fold,
+// that console alone. the kernel's structs, as linux/kd.h lays them
+struct lv_fontop { unsigned op, flags, width, height, charcount; unsigned char *data; };
+struct lv_unipair { unsigned short unicode, fontpos; };
+struct lv_unimapdesc { unsigned short entry_ct; struct lv_unipair *entries; };
+struct lv_unimapinit { unsigned short size, step, level; };
+static love_noinline word host_posix_vtfont(struct g *g, word fw) {
+#if defined(LvHaveMount)
+ unsigned char rows[256 * 32] = {0};          // a glyph's rows at a stride of 32
+ struct lv_unipair map[640];
+ unsigned short n = 0;
+ if (!charmp(fw) || getcharm(fw) < 0) return badarg(g);
+ for (int c = 0; c < 256; c++) {
+  memcpy(rows + 32 * c, cleat_8x16[c], 16);
+  map[n++] = (struct lv_unipair) { (unsigned short) cb_unfold((uint8_t) c), (unsigned short) c }; }
+ for (uint32_t cp = 0x7f; cp < 0x10000 && n < 639; cp++) {
+  int k = cb_437x(cp);
+  if (k >= 0) map[n++] = (struct lv_unipair) { (unsigned short) cp, (unsigned short) k }; }
+ map[n++] = (struct lv_unipair) { 0xfffd, 0xfe };   // the rest wear the ■
+ struct lv_fontop op = { 0, 0, 8, 16, 256, rows };   // KD_FONT_OP_SET
+ struct lv_unimapinit ui = { 0, 0, 0 };
+ struct lv_unimapdesc ud = { n, map };
+ int fd = (int) getcharm(fw);
+ if (ioctl(fd, 0x4B72, &op) || ioctl(fd, 0x4B68, &ui) || ioctl(fd, 0x4B67, &ud)) return love_err(g, errno);
+ return ZeroPoint;
+#else
+ (void) fw;
+ return love_err(g, ENOSYS);
+#endif
+}
+LvmWord1(posix_vtfont)
+
 // (fsync path data): fdatasync when data is truthy
 love_noinline static word host_posix_fsync(struct g *g, word pw, word dw) {
  char const *p = str_c(pw);
@@ -1267,6 +1300,7 @@ LvDef("setprio", posix_setprio, 3, "posix");
 LvDef("truncate", posix_truncate, 3, "posix");
 LvDef("setsid", posix_setsid, 1, "posix");
 LvDef("setids", posix_setids, 3, "posix");
+LvDef("vtfont", posix_vtfont, 1, "posix");
 LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
 LvDef("hardlink", posix_hardlink, 2, NULL);

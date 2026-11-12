@@ -52,12 +52,16 @@
         ()))
  ; --- the terminal ---
  (gr-host _) (uname 0 @ u (two? u && 1 < #u ? (u 1) "localhost"))
+ ; a linux console's own font has no half blocks; ttyN takes quay's, which does
+ (digits? s) (: (go i) (i = #s || 48 <= s i <= 57 && go (i + 1)) (0 < #s && go 0))
+ (gr-font line) (line @ ("tty" + (n && digits? n)) (uname 0 @ u (two? u && u 0 = "Linux" ? (vtfont 0) 0)) _ 0)
  (gr-try g root line ss)
   (: w (login-auth root (g 'user) (g 'pass))
      (? (two? w) (: se (ss (g 'sess % #ss))
                     (ttygive ['hide], say out "\e[2J\e[H", flush out,
                      login-session root w line (se 1) (se 2),
                      line = "" ? 0 (openfd ("/dev/" + line) 6 @ fd (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, close fd) 0)),
+                     gr-font line,
                      pins g 'user "" 'pass "" 'focus 0 'msg "" 'fails 0 'hold 0,
                      ttytake ['hide], 'back))
         (: n (g 'fails)
@@ -81,7 +85,7 @@
          ; until the next step, or a key
          _ (two? keys ? (pin s2 'dirty 1) (heed 0 (max 1 (s2 'next - clock 0))))
          (go (back == 'back ? (fresh (ttysize 1 1) (clock 0)) s2)))
-     (ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
+     (gr-font line, ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
  (greet-main as)
   (: (opt as root nm tty) (? (atom? as) [root nm tty]
                              (<as = "-r" && two? >as) (opt >>as <>as nm tty)
