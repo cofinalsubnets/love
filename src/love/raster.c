@@ -333,7 +333,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  for (intptr_t y = rz_own(r, t.y0); y < t.y1; y = rz_own(r, y + 1)) rz_row(r, &t, lv, nlv, y); }
 
 // clip space to pixels; snapped to whole ones on request
-static void rz_project(struct rz const *r, struct rz_v *v) {
+static love_inline void rz_project(struct rz const *r, struct rz_v *v) {
  flo_t const q = 1 / v->w;
  v->x = (v->x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W;
  v->y = ((flo_t) 0.5 - v->y * q * (flo_t) 0.5) * (flo_t) r->H;
