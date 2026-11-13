@@ -172,9 +172,8 @@ uniq, cut, sort, cmp, cat, gzip, cpio; `#!/bin/sh` scripts run as lush's sh.
 ## 9. image steps
 
 - a64: Image = `llvm-objcopy -O binary -R .note -R .note.gnu.build-id -R .comment -S vmlinux`.
-  EFI_STUB=y makes it a PE; no zboot. hearts' image.l gzips it, lays GPT + FAT + squashfs + ext4,
-  and BOOTAA64.EFI (src/inle/uefi/slot.c by mooncc + holo) inflates and starts it. Only the objcopy
-  is outside
+  EFI_STUB=y makes it a PE; no zboot. hearts' image.l lays GPT + FAT + squashfs + ext4, and love's
+  boot menu (BOOTAA64.EFI, love.elf, love.stay) starts it off the ESP. Only the objcopy is outside
 - x64 (none of it in hearts yet; g-21, relocs/mkpiggy g-05-5f, links g-ae): setup.bin (37 `-m16` units, mkcpustr, nm|sed zoffset.h, ld.lld
   setup.elf, objcopy -O binary); realmode (relocs --realmode, objcopy); vmlinux.relocs (relocs);
   piggy (objcopy -R .comment -S, `cat vmlinux.bin vmlinux.relocs | gzip -n -9`, mkpiggy);

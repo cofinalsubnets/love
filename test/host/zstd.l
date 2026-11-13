@@ -1,7 +1,7 @@
 ; test/host/zstd.l -- zstandard read a block at a time, held to the frames read whole
 ; zstd-pull steps a block at a time off a reader and zstd-unpack reads the whole string; every
 ; cut of a stream answers the same bytes, or the same word. zstd-pack's frames read back, and
-; zstd-zip's, fed in any cut, are theirs but for the header.
+; zstd-zip's, fed in any cut, are theirs but for the header; a frame against a base reads back with it.
 ;   run:  cat test/00-init.l test/host/zstd.l | out/love
 (borrow '(zstd bytes hashes))
 
@@ -82,6 +82,16 @@
  (zst-zips zst-big 65536 1)
  (zst-zips "" 7 3)
  (#(zst-zip "" 7 3) = 13)
+ ; against a base: the frame says only s, its matches reach back into the base, and it reads
+ ; back with that base alone; an empty base is no base at all. level 1's one table keeps too
+ ; little of a long base to find it, but reads back
+ (: b (snip zst-noise 0 50000) s (snip zst-noise 10000 30000 + "tail")
+    (zst-all (l \ (zstde-by s b l @ z (string? z && zstd-d-by z b = s && (l = 1 || #z * 10 < #s && zstd-d-by z "" = ()))))
+             [1 2 3 5 9 13 16 19]))
+ (zstde-by zst-mix "" 9 = zstde zst-mix 9)
+ (zstd-d-by (zstde-by "abc" "xyz" 3) "xyz" = "abc")
+ (zstd-d-by (zstde-by "" "base" 19) "base" = "")
+ (zstde-by "abc" "xyz" 20 = ())
  (zstde-new 20 = ())
  (: st (zstde-new 3)   _ (zstde-end st) (zstde-feed st "x" = ()))
  ; torn at every length, and a flipped bit anywhere: the same answer whole or pulled

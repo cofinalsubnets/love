@@ -47,6 +47,14 @@
       ; an exec prints as a command line, sh's one word quoted
       (has? (hunit-line (hby us 'fails)) "exec /bin/sh -c 'exit 3'"))
 
+   ; a hearts seat's config reads clean, the greeter kept up on tty1
+   seat (hconf "src/apps/hearts/seat.l")
+   _ (test
+      (atom? <>seat)
+      (['mounts 'greet 'default] = hnames <seat)
+      (== 'always (peep (hby <seat 'greet) 'restart ()))
+      (["/bin/love" "greet" "tty1"] = peep (hby <seat 'greet) 'exec []))
+
    ; every complaint at once
    b  (hconf bad)
    gs <>b

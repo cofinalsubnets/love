@@ -133,6 +133,12 @@ static void timer_init(void) {
   rearm_timer();
   k_wr_cntp_ctl_el0(1); }               // enable
 
+// a guest of the firmware runs no timer of its own: the ticks follow the counter, whose
+// rate is the loader's tsc_khz
+void k_tick_sync(void) {
+  if (kboot.efi_st && kboot.tsc_khz)
+    kticks = (k_rd_cntpct_el0() - kboot.tsc0) / (kboot.tsc_khz * 10); }   // k_tick_ms
+
 // from the IRQ vector; an INTID of 1020+ is spurious and must not be acknowledged
 void k_irq(void) {
   uint32_t iar = mmio_rd(GICC_PHYS, GICC_IAR), intid = iar & 0x3ff;
