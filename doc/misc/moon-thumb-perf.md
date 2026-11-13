@@ -61,7 +61,7 @@ num.c and io.c.
 
 ## next, by payoff
 
-1. **the device**: `make -C src/love/user/playdate game=stones`, install, and listen: the song
+1. **the device**: `make -C src/love/user/playdate`, install, and listen: the song
    should keep up with the walk. to time the feed per frame, 815a2170c's `pdg_trail` and its
    `song ... ms` lines go back in for the run
 2. **gas: a numeric label never defined** (`b 7f`, no `7:`) assembles as an undefined `l7.1`

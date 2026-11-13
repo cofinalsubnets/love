@@ -293,6 +293,12 @@ moonrun -c "$ho/.sxw.c" -o "$ho/.sxw.o" || fail "mooncc: a narrow int's arithmet
 printf 'int g(long a){ return (int)a; }\n' > "$ho/.sxn.c"
 moonrun -c "$ho/.sxn.c" -o "$ho/.sxn.o" || fail "mooncc: a long narrowed to int"
 [ "$(objdump -d "$ho/.sxn.o" | grep -c movslq)" = 1 ] || fail "a long narrowed to int lost its sign extension"
+# a loop head is 16-aligned: every backward jump's target, here past a 3-byte fn and a loop's own prologue
+printf 'int z(void){ return 0; }\nlong f(long *p, long n){ long s = 0; for (long i = 0; i < n; i++) s += p[i]; return s; }\nvoid g(long *p, long n){ for (long i = 0; i < n; i++) for (long j = 0; j < i; j++) p[j] += i; }\n' > "$ho/.lal.c"
+moonrun -c "$ho/.lal.c" -o "$ho/.lal.o" || fail "mooncc: the loop-head law's loops"
+lal=$(objdump -d --no-show-raw-insn "$ho/.lal.o" | awk '$2 ~ /^j/ && $3 ~ /^[0-9a-f]+$/ { a = strtonum("0x" substr($1, 1, length($1) - 1)); t = strtonum("0x" $3)
+        if (t < a) { n++; if (t % 16) bad++ } } END { print n + 0, bad + 0 }')
+[ "$lal" = "3 0" ] || fail "a loop head is not 16-aligned (backward jumps, misaligned: $lal)"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"

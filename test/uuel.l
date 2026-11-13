@@ -12,7 +12,7 @@
 ; a motive abstracts a term from the goal's normal form, so one a head's computation hides needs
 ; writing out. (elfold '(h ..)) names the heads a normal form reads back through, with the statement's
 
-(: el-chk (uu 'chk) el-sugar (uu 'sugar) ELT {} ELM {} ELH {} el-count {}
+(: el-chk (uu 'chk) el-sugar (uu 'sugar) el-univ (uu 'univ) ELT {} ELM {} ELH {} el-count {}
    (el-tick _) (: n (peep el-count 0 0) (pin el-count 0 (n + 1), n))
    (el-cat a b) (a @ (x . u) (x . el-cat u b) b)
    (el-app f a) (vof [['f f] ['a a]] '(f a))
@@ -76,7 +76,7 @@
    ; a level the match went under may not leave it
    (el-esc d0 d e v)
    (v @ ['nv j] (charm? j && d0 <= j && j < d)
-        ['clo f] (el-esc d0 d (e + 1) (f ['nv e]))
+        ('clo . f . _) (el-esc d0 d (e + 1) (f ['nv e]))
         (two? v && (el-esc d0 d e <v || el-esc d0 d e >v)))
    (el-pat f T)
    (: (go f T i ms)
@@ -266,8 +266,15 @@
         (memq <t '(pi total2 paths coprod succ idpath nat_rect bool_rect unit_rect coprod_rect empty_rect paths_rect)) t
         (Sp t))))
 
+   ; it elaborates with UU : UU, as it is untrusted; defq checks its term with universes
    (elq nm T0 t0)
-   (: T (el-sugar T0)
-      G (el-chk 0 0 0 T 'UU, pin ELH 0 (foldl (l \ c \ el-ins c l) () (catmap el-cand (el-uniq (el-cat (el-heads T) (peep ELH 1 ()))))), vof 0 T)
-      t (el 0 0 0 (el-sugar t0) G)
-    (pin ELT nm t, ev ['defq nm T t])))
+   (: was (el-univ 0)
+      T (el-sugar T0)
+      t (trap (_ \ (: G (el-chk 0 0 0 T 'UU, pin ELH 0 (foldl (l \ c \ el-ins c l) () (catmap el-cand (el-uniq (el-cat (el-heads T) (peep ELH 1 ()))))), vof 0 T)
+                     (el 0 0 0 (el-sugar t0) G))) 0
+               (a \ b \ (el-univ was, scare a b)))
+      _ (el-univ was)
+      ; a level var read back stays bare in the term made: defq gives it its own
+      (strip u) (? (two? u) (u @ ['UU l] (charm? l ? u 'UU) (map strip u)) u)
+      t1 (strip t)
+    (pin ELT nm t1, ev ['defq nm T t1])))

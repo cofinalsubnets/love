@@ -147,7 +147,7 @@
   !(two? (parseall '(40 49)))
   (1.5 = <(parseall '(49 46 53)))
   (1000.0 = <(parseall '(49 101 51)))
-  (two? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led run factors
+  (nom? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led token is one name
    ; the more-sentinel: an unclosed shape is m (not two?)
   !(two? (parseall '(40 43 32 49)))                   ; "(+ 1" unclosed
   (two? (parseall '(49 32 43)))                       ; "1 +" complete (the curry partial)

@@ -46,7 +46,7 @@ test_nrf52840 builds it and verifies the boot surface. qemu has no nRF52 machine
 ## the playdate
 
 A user-mode seat -- the SDK answers, not us -- so it lives at src/love/user/playdate/.
-Its image still bakes here, on mps2's baker (`make -C src/inle/mps2 imgpd`).
+Its image still bakes here, on mps2's baker (`make -C src/inle/mps2 imgpds`).
 
 ## rp2040/
 

@@ -10,7 +10,7 @@
 p_tgt  = thumb2
 p_be   = thumb2
 lib_h  = out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
-p_hdrs = out/lib/rune.h out/lib/fat.h
+p_hdrs = out/lib/fat.h
 include ../port.mk
 
 mps2_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
@@ -18,16 +18,15 @@ mps2_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout
 # rather than a hunt for a runtime this board would not want.
 mps2_ld = $(MOONCC) -t thumb2 -Ttext 0 -Tdata 0x20000000 -nostdlib
 
-# the five faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER
-# that dumps a heap image through semihosting, the WAKER that boots one back, and the two
-# -pd twins carrying the rune+cas corpus.
+# the faces share a skeleton and differ in main.o alone: the plain kernel, the BAKER that
+# dumps a heap image through semihosting, the WAKER that boots one back, and the -pds twins
+# carrying the playdate's stones.
 skel = $(R)/$(o)/start.o $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/rt.o
 objs        = $(skel) $(R)/$(o)/main.o
 baker_objs  = $(skel) $(R)/$(o)/main-baker.o
 waker_objs  = $(skel) $(R)/$(o)/main-waker.o
-pd_lib_h    = $(lib_h) out/lib/rune.h
 
-.PHONY: mps2 mps2t1 img imgpd imgpds
+.PHONY: mps2 mps2t1 img imgpds
 default: mps2
 mps2: $(R)/$(o)/love.elf
 mps2t1: $(R)/$(o)/love-t1.elf
@@ -71,16 +70,6 @@ $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
 	     -kernel $(o)/baker.elf </dev/null && test -s $(o)/love.img; \
 	 else : > $@; echo "img: no qemu-system-arm -- empty image (device egg-boots)"; fi
 
-# the PLAYDATE image (love-pd.img): same baker skeleton, the rune+cas corpus
-# (-D BAKER_RUNE), and a qemu wake-check (waker-pd) BEFORE the pdx ships it.
-imgpd: $(R)/$(o)/love-pd.img
-$(R)/out/playdate/cas.h:
-	@$(MAKE) -C $(S)/love/user/playdate ../../../../out/playdate/cas.h
-
-pdmainc = main.c $(S)/love/love.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(addprefix $(R)/,$(pd_lib_h)) $(R)/out/playdate/cas.h $(mc)
-$(eval $(call p_obj,main-baker-pd,src/inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D BAKER -D BAKER_RUNE -Iout/playdate))
-$(eval $(call p_obj,main-waker-pd,src/inle/mps2/main.c,$(pdmainc),$(mps2_cc) -D WAKER -D BAKER_RUNE -Iout/playdate))
-
 # the playdate's STONES image (love-pds.img): the lore libraries and the glue as one text,
 # and horn.c + raster.c + lamp.c + pool.c + tones.c + mem.c beside the core, rt.c under them, as the device links
 # them, so the land is drawn and lit at bake and the image's nif rows line up with the device's
@@ -109,23 +98,6 @@ $(R)/$(o)/love-pds.img: $(R)/$(o)/baker-pds.elf $(R)/$(o)/waker-pds.elf
 	 && { timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
 	        -kernel $(o)/waker-pds.elf </dev/null; [ $$? -eq 42 ] \
 	      || { echo "FAIL pds image wake-check"; rm -f $(o)/love-pds.img; exit 1; }; }
-
-$(R)/$(o)/baker-pd.elf: $(skel) $(R)/$(o)/main-baker-pd.o
-	@echo MOON	$@
-	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/baker-pd.elf
-$(R)/$(o)/waker-pd.elf: $(skel) $(R)/$(o)/main-waker-pd.o
-	@echo MOON	$@
-	@cd $(R) && $(mps2_ld) $(^:$(R)/%=%) -o $(o)/waker-pd.elf
-
-$(R)/$(o)/love-pd.img: $(R)/$(o)/baker-pd.elf $(R)/$(o)/waker-pd.elf
-	@echo LOVE	$@ "(qemu M7 + wake-check)"
-	@if command -v qemu-system-arm >/dev/null 2>&1; then \
-	   cd $(R) && timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
-	     -kernel $(o)/baker-pd.elf </dev/null && test -s $(o)/love-pd.img \
-	   && { timeout 300 qemu-system-arm -M mps2-an500 -semihosting -nographic \
-	          -kernel $(o)/waker-pd.elf </dev/null; [ $$? -eq 42 ] \
-	        || { echo "FAIL pd image wake-check"; rm -f $(o)/love-pd.img; exit 1; }; }; \
-	 else : > $@; echo "imgpd: no qemu-system-arm -- empty image (device egg-boots)"; fi
 
 # --- the thumb1 face: the SAME port compiled `mooncc -t thumb1` (ARMv6-M, the RP2040's
 # ISA). v6-M code is a strict subset of ARMv7E-M, so qemu's M7 runs it natively -- no

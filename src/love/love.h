@@ -283,6 +283,7 @@ enum hook {
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
  hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
+ hook_opc,       // the reader's operator bytes: a 256-byte text, nonzero where the operator table's names spell
  hook_inport,    // not lisp: the buffered stdin port, once taken; rides no image
  hook_n };
 
