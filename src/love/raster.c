@@ -118,16 +118,16 @@ static love_inline intptr_t rz_own(struct rz const *r, intptr_t y) {
 // edge on, facing the eye when culling, some pixel centre of this worker's in its box, and
 // nearer than all drawn on some tile it covers
 static int rz_may(struct rz const *r, struct rz_v const *const P[3]) {
- int64_t X[3], Y[3];
+ intptr_t X[3], Y[3];   // sixteenths inside the guard band, under 2^30 apart: only the area wants 64 bits
  for (int i = 0; i < 3; i++)
   X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);
- int64_t const A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
+ int64_t const A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0 || (A > 0 && (r->flags & rz_cull))) return 0;
- int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
+ intptr_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
  for (int i = 1; i < 3; i++)
   xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
   ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
- int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
+ intptr_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
  if (bx0 >= bx1 || by0 >= by1 || rz_own(r, (intptr_t) by0) >= (intptr_t) by1) return 0;
