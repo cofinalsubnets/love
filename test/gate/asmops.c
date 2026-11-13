@@ -112,7 +112,7 @@ uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_semihost_exit(block);
   k_psci_system_reset();
   return k_rd_ctr_el0() + k_rd_mair_el1() + k_rd_ttbr1_el1()
-       + k_rd_cntfrq_el0() + k_at_s1e1w_par(va); }
+       + k_rd_cntfrq_el0() + k_rd_cntpct_el0() + k_at_s1e1w_par(va); }
 void const *const k_asmops_keep[] = {
   (void const*) k_isb,
   (void const*) k_dsb_ish,
@@ -135,6 +135,7 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_mair_el1,
   (void const*) k_rd_ttbr1_el1,
   (void const*) k_rd_cntfrq_el0,
+  (void const*) k_rd_cntpct_el0,
   (void const*) k_at_s1e1w_par
 };
 

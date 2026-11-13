@@ -27,10 +27,10 @@ int main(int argc, char **argv) {
  uintptr_t n = fread(s, 1, sizeof s, stdin), on;
  if (argv[1][0] == 'c') {
   uintptr_t cap = ze_cap(n); uint8_t *o = malloc(cap);
-  uintptr_t k = ze_frame(s, n, 19, o, cap);
+  uintptr_t k = ze_frame(s, n, 0, 19, o, cap, NULL);
   if (!k) return 2;
   fwrite(o, 1, k, stdout); return 0; }
- uint8_t *u = zs_whole(s, n, &on);
+ uint8_t *u = zs_whole(s, n, NULL, 0, NULL, &on);
  if (!u && n >= 6) {                             // no size said, as a stream writes it: walked into one window
   unsigned d = s[4], ss = d >> 5 & 1;
   uintptr_t i = 5 + !ss + zs_dn[d & 3] + (d >> 6 ? zs_fz[d >> 6] : ss);

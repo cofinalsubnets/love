@@ -142,6 +142,17 @@
        _ (ev '(module (gzh gzh-sum) (: (gzh-sum l acc) (? (two? l) (gzh-sum >l (acc + gzh-sq <l)) acc) (gzh-sq x) (x * x))))
        f (cite 'gzh 'gzh-sum)
        (fired? n && nat? f && 14 = (f [1 2 3] 0)))
+    ; --- a computed head: its value is the callee, a closure, a text or a tablet, applied as a param is
+    (: n (peep fires () 0)
+       f (ev '(: (ga fs x) (? (two? fs) (ga (cup fs) ((cap fs) x)) x) ga))
+       (fired? n && 6 = (f [(x \ x + 1) (x \ x * 2)] 2) && 98 = (f ["abc"] 1) && 5 = (f [{'a 5}] 'a)))
+    (: n (peep fires () 0)
+       f (ev '(: (gb fs a b) (? (two? fs) (gb (cup fs) ((cap fs) a b) b) a) gb))
+       (fired? n && 28 = (f [(+) (*)] 3 4) && -1 = (f [(a \ b \ a - b)] 3 4)
+        && 7 = (f [(a \ (b \ a + b))] 3 4)))                                      ; saturated, and a curried chain
+    (: n (peep fires () 0)
+       f (ev '(: (gc fs x) (? (two? (cup fs)) (gc (cup fs) ((cap fs) x)) ((cap fs) x 1)) gc))
+       (fired? n && 31 = (f [(x \ x + 1) (a \ b \ a * 10 + b)] 2)))             ; in tail position
     ; --- a saturated call's frame must not land on a tablet a call-out just made in the last free
     ; words: swept over m, the 15th argument stays a tablet
     (: n (peep fires () 0)
