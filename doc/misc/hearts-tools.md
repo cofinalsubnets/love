@@ -160,7 +160,7 @@ uniq, cut, sort, cmp, cat, gzip, cpio; `#!/bin/sh` scripts run as lush's sh.
 
 | tool | a64 | x64 | love |
 |---|---|---|---|
-| perl | 3: sha2-armv8.pl ×2, build_OID_registry | 1: build_OID_registry | perlasm.l, oidreg.l |
+| perl | 1: build_OID_registry (sha2-armv8.pl ×2 gone: build.l turns CRYPTO_LIB_SHA256/512_ARCH off, the generic C) | 1: build_OID_registry | oidreg.l |
 | flex / bison | 2 / 2 | 1 / 1 | love lex / love yacc, their C back ends (flex's `-o$@ -L`, bison's `-o -d -t -l`) |
 | awk | 2 (gen-cpucaps, gen-sysreg) | 3 (orc_hash, cpufeaturemasks.h, gen-insn-attr-x86.awk) | kore awk; x64 scripts untried |
 | bc | 1 (timeconst) | 1 | kore bc |
@@ -172,9 +172,8 @@ uniq, cut, sort, cmp, cat, gzip, cpio; `#!/bin/sh` scripts run as lush's sh.
 ## 9. image steps
 
 - a64: Image = `llvm-objcopy -O binary -R .note -R .note.gnu.build-id -R .comment -S vmlinux`.
-  EFI_STUB=y makes it a PE; no zboot. hearts' image.l gzips it, lays GPT + FAT + squashfs + ext4,
-  and BOOTAA64.EFI (src/inle/uefi/slot.c by mooncc + holo) inflates and starts it. Only the objcopy
-  is outside
+  EFI_STUB=y makes it a PE; no zboot. hearts' image.l lays GPT + FAT + squashfs + ext4, and love's
+  boot menu (BOOTAA64.EFI, love.elf, love.stay) starts it off the ESP. Only the objcopy is outside
 - x64 (none of it in hearts yet; g-21, relocs/mkpiggy g-05-5f, links g-ae): setup.bin (37 `-m16` units, mkcpustr, nm|sed zoffset.h, ld.lld
   setup.elf, objcopy -O binary); realmode (relocs --realmode, objcopy); vmlinux.relocs (relocs);
   piggy (objcopy -R .comment -S, `cat vmlinux.bin vmlinux.relocs | gzip -n -9`, mkpiggy);

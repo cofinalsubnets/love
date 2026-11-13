@@ -142,10 +142,10 @@ while [ $i -lt $n ]; do
   done
   i=$((i + 1))
 done
-# the carried files' own counts, a shard's harness and carries alone
+# the carried files' own counts, a shard's harness and carries alone, in corpus order as a shard lays them
 i=0
 while [ $i -lt $n ]; do
-  [ -s $w/c$i ] && { cat $pre $(cat $w/c$i) $fin > $w/k$i.l; job kb$i out/love $w/k$i.l; job ke$i $egg out/love.raw $w/k$i.l; }
+  [ -s $w/c$i ] && { cat $pre $(carried $i) $fin > $w/k$i.l; job kb$i out/love $w/k$i.l; job ke$i $egg out/love.raw $w/k$i.l; }
   i=$((i + 1))
 done
 wt

@@ -7,4 +7,9 @@
    glh-e (hark ["env" "LOVE_GLAZE_HOT=eager" "out/love" "-e" glh-q])
    _ (test (two? glh-d) (<glh-d = 0) (>glh-d = "(0 1 357390848 10)")
            (two? glh-e) (<glh-e = 0) (>glh-e = "(0 0 357390848 10)"))
+   ; canon reads the globals before anything compiles: an egg boot past every threshold still
+   ; spells a spliced op value as its word, or autogroup's lowering misses
+   glh-c (hark ["env" "LOVE_GLAZE_HOT=1000000000" "LOVE_NO_IMAGE=1" "out/love" "-e"
+                "((putx [(nom? <((cite 'glaze 'canon) [tally 's])) (peep fires () 0)]), (quit 0))"])
+   _ (test (two? glh-c) (<glh-c = 0) (>glh-c = "(1 0)"))
   (test_fin (), puts "glazehot: ok\n"))

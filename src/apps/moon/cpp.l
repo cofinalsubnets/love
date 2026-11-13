@@ -33,7 +33,7 @@
              "may_alias" 'hint "warn_if_not_aligned" 'hint "tls_model" 'hint "returns_twice" 'hint
              "noplt" 'hint "nocf_check" 'hint "indirect_branch" 'hint "function_return" 'hint
              "common" 'hint "nocommon" 'hint
-             "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
+             "constructor" 'do "destructor" 'do "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
              "no_profile_instrument_function" 'do
              ; i386's conventions: gcc ignores them on every target here

@@ -485,6 +485,10 @@
    (lovpin g env e) (e @ ['var nm] (lovar g env nm @ ['v r _] (g 'lopins r) _ ()) _ ())
    ; a refusal, its first cause kept for lorefuse
    (lono g why) (g 'lowhy @ () (pin g 'lowhy why, 'bad) _ 'bad)
+   ; the member at 0 of a scalar's type, else of its size -> its name | ()
+   (lounm g ty vt)
+    (: fs (filter (f \ f 1 = 0 && losv? (f 2)) <(peep (g 'stag) <>ty 0))
+       (? !(losv? vt) () (filter (f \ f 2 = vt) fs @ (f . _) <f _ (filter (f \ tsz g (f 2) = tsz g vt) fs @ (f . _) <f _ ()))))
    (lowno g nm w) (nolane g "no lane for \(nm) on a \(show w)-byte object\(ontgt g)")
    (loarity g who n va m)
     (pin g 'arity "\(who) wants \(show n)\(va ? " or more" "")\(n = 1 ? " argument" " arguments"), given \(show m)", lono g 'arity)
@@ -656,22 +660,37 @@
     (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
    (loch g a) (sal? g ? (salk g a) (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
+   ; a span of 16 words or more zeroes four words a turn of a loop, from the top down, the
+   ; words past the last four and the bytes past the last word straight after
    (lozero g off span)
     (lomk g @ z
-       (: w (wsize g)
+       (: w (wsize g) b (4 * w) n (span < 16 * w ? 0 (span - span % b))
           (go o rem) (? (w <= rem) (['st 'r4 o z] . go (o + w) (rem - w))
                         (0 < rem) (['st1 'r4 o z] . go (o + 1) (rem - 1))
                         ())
-          (['li z 0] . go off span)))
-   ; the zeroing, less each store the fill lays over whole, when the fill reads nothing of the frame
-   ; and calls nothing that might
+          loop (n = 0 ? ()
+                  (lomk g @ q (lomk g @ c (lomk g @ a (nlab g ".z" @ l1 (nlab g ".z" @ l2
+                     [['lea q 'r4 off] ['li c n] ['label l1] ['cmp c 0] ['br 'eq l2] ['sub c c b] ['mov a q] ['add a a c]
+                      ['st a 0 z] ['st a w z] ['st a (2 * w) z] ['st a (3 * w) z] ['jmp l1] ['label l2]]))))))
+          (['li z 0] . loop + go (off + n) (span - n))))
+   ; the zeroing, less each store the fill lays over whole, and the fill less each zero it stores
+   ; where no other of its stores lands, when the fill reads nothing of the frame and calls
+   ; nothing that might
    (lozfill g off span fs)
     (: sw {'st 8 'stsd 8 'st4 4 'stss 4 'st2 2 'st1 1}
        (st? f) (two? f && peep sw <f 0 > 0 && f 1 = 'r4 && cint? (f 2))
        (rd? f) (two? f && (elem <f '(call callr asm fix) || !(st? f) && elem 'r4 >f))
-       cov (foldl (t \ f \ (st? f ? (foldl (t2 \ b \ pin t2 (f 2 + b) 1) t ^(sw <f)) t)) {} fs)
+       ; a register holding 0: set once, by an li of 0
+       defs (foldl (t \ f \ (two? f && !(st? f) ? (pin t (f 1) (peep t (f 1) 0 + 1)) t)) {} fs)
+       (zero? r) (defs r = 1 && any (f \ f = ['li r 0]) fs)
+       (zst? f) (st? f && elem <f '(st st4 st2 st1) && zero? (f 3))
+       (cover l) (foldl (t \ f \ (foldl (t2 \ b \ pin t2 (f 2 + b) 1) t ^(sw <f))) {} (filter st? l))
+       nz (cover (filter (f \ !(zst? f)) fs))
+       (dead? f) (zst? f && all (b \ nz (f 2 + b) = ()) ^(sw <f))
+       fs2 (filter (f \ !(dead? f)) fs)
+       cov (cover fs2)
        (over? f) (st? f && all (b \ cov (f 2 + b) != ()) ^(sw <f))
-       (any rd? fs ? (lozero g off span + fs) (filter (f \ !(over? f)) (lozero g off span) + fs)))
+       (any rd? fs ? (lozero g off span + fs) (filter (f \ !(over? f)) (lozero g off span) + fs2)))
    (lostr g off text) (lomk g @ t (catmap (i \ [['li t (text i)] ['st1 'r4 (off + i) t]]) ^#text))
    (lofill g env off ty ini0)
     (unelide g env ty ini0 @ ini
@@ -925,8 +944,8 @@
        vop (op = 'shl ? 'shlv (uL ? 'shrv 'sarv))
        d (lomk g)
        nar (? u32 [['zx4 d]] (s32 && op = 'shl) [['sx4 d]] ())
-       (kb @ ([k] && 0 <= k && k < 64) [rt d (fa + [['mov d ra] [iop d k]] + nar)]
-             [_] 'bad
+       ; a literal count past the word (undefined, often in an arm never taken) as the machine's
+       (kb @ [k] [rt d (fa + [['mov d ra] [iop d (k & 63)]] + nar)]
              [rt d (fa + vfs b + [['mov d ra] ['mov 'r1 (vreg b)] [vop d 'r1]] + nar)]))
 
    ; forms laid by thunks run in list order (argument order is unspecified, and they mint), the
@@ -1008,7 +1027,7 @@
                     ((ty . r . _) && pair? g ty && !(two? r)) (lono g ['pairleak ty])
                     v v)
    ; a tree of double literals, which folds as the runtime would answer: a float inside rounds first
-   (lokd? e) (e @ ['flo _] 1 ['un 'neg x] (lokd? x) ['bin op a b] (elem op '(+ - * /) && (lokd? a && lokn? b || lokn? a && lokd? b)) ['cast 'double x] (lokn? x) 0)
+   (lokd? e) (e @ ['flo _] 1 ['un 'neg x] (lokd? x) ['bin op a b] (elem op '(+ - * /) && (lokd? a ? lokn? b (a @ ['num _] (lokd? b) _ 0))) ['cast 'double x] (lokn? x) 0)
    (lokn? e) (e @ ['num _] 1 (lokd? e))
    (lox0 g env e)
     (e @ () ['void () ()]
@@ -1088,6 +1107,9 @@
          ; a float of a wide value: a constant only, folded exactly
          (['cast ty x] && lofl? ty && d128? (lopeek g env x))
           (cfold 1 x @ (v && cint? v) (lox g env ['cast ty ['flo (0.0 + v)]]) _ (lox g env x @ 'bad 'bad v2 (lotr g v2 ty)))
+         ; gcc's cast to a union: the member of the operand's type takes it
+         (['cast ty x] && stru? ty && !(gcplx? ty) && lounm g ty (lopeek g env x) != ())
+          (lox g env ['clit ty ['init [['dfield (lounm g ty (lopeek g env x)) x]]]])
          ['cast ty x]
           (lox g env x @ ([vt r fs] && (pair? g ty || pair? g vt) && losv? ty && losv? vt) (lotr g [vt r fs] ty)
                          ([vt r fs] && (gcplx? ty || gcplx? vt) && (losv? ty || gcplx? ty)) (lotr g [vt r fs] ty)
@@ -1471,7 +1493,7 @@
                            (pt @ 'none (vt = 'float ? (lotr g [vt r fs] 'double) [vt r fs])
                                  p9 (losv? p9 || d128? p9 || gcplx? p9 ? (lotr g [vt r fs] p9) (lono g ['arg p9])))
                           ([vt r fs] && gcplx? vt && gcplx? pt && !(locxsame? vt pt)) (lotr g [vt r fs] pt)
-                          ([vt r fs] && loagg? g vt) [vt r fs]
+                          ([vt r fs] && loarg? g vt) [vt r fs]
                           'bad 'bad
                           (vt . _) (lono g ['arg vt]))
           ; a riscv variadic call: an unnamed double rides the gp file
@@ -1529,6 +1551,9 @@
    (locr g r) ((x64? g ? 'r10 (pkr g)) @ p [['mov p r] ['callr p]])
    ; an aggregate the SysV rules carry by value: classed in eightbytes, or the memory class
    (loagg? g ty) (stru? ty && 0 < tsz g ty && asalign g ty <= 8)
+   ; an argument: an aggregate, or an empty struct, which takes no register or slot (gcc's C)
+   (loarg? g ty) (loagg? g ty || lonil? g ty)
+   (lonil? g ty) (stru? ty && tsz g ty = 0)
    ; the args to their registers in order, each file its own count; an aggregate's eightbytes take
    ; registers only all together, else it goes whole to the block -> [nf rg sk pre]: rg [reg vreg]..,
    ; sk ['w v 8] | ['s v bytes].., pre the eightbyte loads
@@ -1545,6 +1570,7 @@
                         (? (j + 2 <= ngp g) [(j + 2) fi (rg + [[(argr g j) <x] [(argr g (j + 1)) <>x]]) sk pre]
                            (rv64? g && j + 1 = ngp g) [(ngp g) fi (rg + [[(argr g j) <x]]) (sk + [['w ['long <>x ()] 8]]) pre]
                            [(a64? g ? (ngp g) gi) fi rg (sk + [['w2 v 16]]) pre]))
+                    (lonil? g ty) s
                     (stru? ty)
                      (lopcs g ty @
                         ; AAPCS64 past 16 bytes: a copy of the caller's, its address the arg
@@ -1580,6 +1606,7 @@
    (lo386cl g ts va)
     (: (go l gi ov acc)
         (l @ () (rev acc)
+             ((ty . u) && lonil? g ty) (go u gi ov (['e] . acc))
              (ty . u)
               (: nw (lo32words g ty)
                  ; a float or a complex spends no register
@@ -1596,6 +1623,7 @@
               ((lo32al8 g ty ? (aup ov 8) ov) @ o (go u (ngp g) m (o + 4 * nw) (['m o] . acc)))))
        (go l gi m ov acc)
         (l @ () (rev acc)
+             ((ty . u) && lonil? g ty) (go u gi m ov (['e] . acc))
              (ty . u)
               (: hb (!va && t32f? g && stru? ty && t32hfa? g ty ? (hfab g ty))
                  (? (hb || !va && t32f? g && lofl? ty)
@@ -1666,7 +1694,8 @@
        (one s p loc)
         (s @ [odd acc post env]
            (: nm <p ty <>p
-              (loc @ ['ref ['r i _]]
+              (loc @ ['e] (ntmp g ty @ off [odd acc post ([nm 'm off ty] . env)])
+                     ['ref ['r i _]]
                       (va ? [odd acc post ([nm 'p (ovb g + 4 * i) ty] . env)]
                          (nslot g 4 @ po [odd (acc + [['st 'r4 po (argr g i)]]) post ([nm 'p po ty] . env)]))
                      ['ref ['m o]] [odd acc post ([nm 'p (ovb g + (va ? 32 0) + o) ty] . env)]
@@ -2121,14 +2150,15 @@
                                                            !(avz? g) [['cdef r]]
                                                            (lofl? ty) (lofz g r ty)
                                                            [['li r 0]])))
-                                   _ (lox g env init @ 'bad 'bad
+                                   ; a name is in scope in its own initializer
+                                   _ (lox g e2 init @ 'bad 'bad
                                         v (lost g ['v r ty] v @ [fs _] (go u e2 (acc + fs)) 'bad)))))
                     ; a slot aligned to the type's ask or the decl's own, the record's fifth
                     (naslot g (aup (tsz g ty) 8) (max (tal g ty) (rest @ (_ . _ . a . _) (charm? a ? a 0) _ 0)) @ off
                        (: e2 ([nm 'm off ty] . env)
                           (? (init = ()) (go u e2 (acc + (avz? g ? (lozero g off (aup (tsz g ty) 8)))))
                              (losv? ty || d128? ty)
-                              (lox g env init @ 'bad 'bad
+                              (lox g e2 init @ 'bad 'bad
                                  v (lost g ['a ['long 'r4 ()] ty off] v @ [fs _] (go u e2 (acc + fs)) 'bad))
                              ((init @ ('init . _) 1 ()) || arr? ty && (init @ ('str . _) 1 ()) || clarr? ty init)
                               (lofill g e2 off ty init @ 'bad 'bad fs (go u e2 (acc + lozfill g off (aup (tsz g ty) 8) fs)))
@@ -2140,12 +2170,12 @@
    ; -- the fn: params home off their registers, then the body -> forms over vregs | 'bad --
    ; MOON_LOLOG=1 names each fn, and why it refused
    ; the t32 signatures this path takes yet
-   (lot32sig g ts) (all (t \ t = 'void || losv? t || loagg? g t || d128? t && t32w? g) ts)
+   (lot32sig g ts) (all (t \ t = 'void || losv? t || loarg? g t || d128? t && t32w? g) ts)
    (lofn g f params sig)
     ((pins g 'lopeek lopeek 'lovpin lovpin 'lopins {}, lofn1 g f params sig) @ r
        (pins g 'lopeek () 'lovpin (), getenv "MOON_LOLOG" @ () r _ (puts ";; lo \(<>f) \(bad? r ? "refused \(show (g 'lowhy))" "ok")\n", r)))
    (lofn1 g f params sig)
-    (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loagg? g <>p) params &&
+    (sig @ ((rt . _ . va . _) && (rt = 'void || losv? rt || d128? rt || loagg? g rt) && all (p \ losv? <>p || d128? <>p || loarg? g <>p) params &&
             !(g 'abad) &&
             ; past SysV and AAPCS64 a pair has no lane
             (lo128? g || !(d128? rt || any (p \ d128? <>p) params)) &&
@@ -2184,6 +2214,7 @@
                            (ntmp g ty @ off (lomk g @ t (go u (ngp g) fi (ov + 1) ([nm 'm off ty] . env)
                                                 (acc + [['st 'r4 off (argr g j)] ['ld t 'r4 (ovo + 8 * ov)] ['st 'r4 (off + 8) t]]) post)))
                            ((ov + ov % 2) @ o (go u (a64? g ? (ngp g) gi) fi (o + 2) ((nm . ovm ty o) . env) acc post))))
+                    (lonil? g ty) (ntmp g ty @ off (go u gi fi ov ([nm 'm off ty] . env) acc post))
                     (stru? ty)
                      (lopcs g ty @
                         ; AAPCS64 past 16 bytes: the caller's copy, read through its address in a cell

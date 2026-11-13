@@ -19,6 +19,14 @@
       ((((0 . 1) . 1) . 1) = scar-link 3))
    0)
 
+; --- a tail self-call's args read the old regs, whatever order they land in ---
+(: (sw n)   (: (go k a b) (k < 1 ? (a * 10 + b) (go (k - 1) b a)) (go n 1 2))                  ; a swap
+   (fib n)  (: (go k a b) (k < 1 ? a (go (k - 1) b (a + b))) (go n 0 1))
+   (rot n)  (: (go k a b c) (k < 1 ? (a * 100 + b * 10 + c) (go (k - 1) b c a)) (go n 1 2 3))
+   (mix n)  (: (go k a b) (k < 1 ? (a + b) (go (k - 1) (a + k) b)) (go n 0 7))                ; b stays, a reads k
+   _ (test (21 = sw 5) (55 = fib 10) (231 = rot 4) (17 = mix 4))
+   0)
+
 ; --- the constant fold passes a pair whose own params spell the constant's name ---
 ; through `ev`, since only a bare top-level letrec meets the fold
 (test

@@ -183,7 +183,8 @@
 
  ; make a goal in tablet t as a serial make would: its prerequisites first, then its recipe line
  ; by line, each expanded as it runs -- a $(MAKE) line as the sub-make it starts. a file already
- ; there with nothing forcing it is up to date (conf's autoconf.h). run is handed (target kind
+ ; there with nothing forcing it and no prerequisite newer is up to date (conf's autoconf.h), make's
+ ; mtime law at its nanoseconds; order-only prerequisites are not compared. run is handed (target kind
  ; saved? text env) -- env this make's exported [name value]s -- and answers 0 when it went
  ; well; made spans the run -- a file made once is not
  ; remade by a later sub-make, a failure sits under " failed" -- and seen is this make's own
@@ -195,20 +196,28 @@
            x (hk-unit K t ["" g])
            ; made's " trace", when given, sees each goal with its tablet and unit
            _ (peep made " trace" 0 @ f (lit? f && f g t x))
+           ; each path stat'd once a run; a compiled object's headers are its .d's, as -MMD
+           ; laid them beside it (.NAME.d), since a hearts .cmd carries no fixdep deps. autoconf.h
+           ; is left out: syncconfig rewrites it each run, and a config's change is fixdep's
+           ms (peep made " mt" 0 @ 0 (: m {} (pin made " mt" m, m)) m m)
+           (mt p) (peep ms p () @ () (stat p @ s (two? s ? (s 3) -1) @ v (pin ms p v, v)) v v)
+           (deps _) (hk-lastsl g @ k (uread ((k < 0 ? "" (snip g 0 (k + 1))) + "." + snip g (k + 1) #g + ".d") @
+                       [1 s] (filter (w \ w != "\\" && !(ends? w ":") && !(ends? w "generated/autoconf.h")) (words s)) ()))
+           (older? _) (mt g @ m (any (p \ m < mt p) (x 1) || any (p \ m < mt p) (deps 0)))
            (? (atom? x) 0
-              (!(elem g ph) && two? (stat g) && !(any (p \ elem p ph) (x 2))) 0
+              (!(elem g ph) && two? (stat g) && !(any (p \ elem p ph) (x 2)) && !(older? 0)) 0
               (: _ (each (x 2) (p \ hk-make K (x 3) p made seen run))
                  ; a runner that makes in parallel answers made's " wait": the prerequisites'
                  ; jobs are done before this recipe starts
                  _ (peep made " wait" 0 @ w (lit? w ? (each (x 2) (w * hk-dot)) 0))
                  ; an earlier build's state, when made carries one under " prior" (target -> the
                  ; command its .cmd saved): a target there, its saved command the same, and no
-                 ; prerequisite remade this run is up to date -- if_changed's law, mtimes aside
+                 ; prerequisite remade this run or newer is up to date -- if_changed's law
                  pr (peep made " prior" 0)
                  sv (filter (c \ c 1) (x 0))
                  (new? p) (peep made (" new " + hk-dot p) 0)
                  ; compared as kbuild's cmd-check does, by words
-                 fresh (lit? pr && two? (stat g) && two? sv && !(any new? (x 2))
+                 fresh (lit? pr && two? (stat g) && two? sv && !(any new? (x 2)) && !(older? 0)
                         && (pr g @ p (string? p && words p = words (hk-text <sv))))
                  ; run answers 0 when it went well, 'same when a filechk left the file as it was
                  (one c) (peep made " failed" 0 ? 0

@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_esp32_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -174,7 +174,7 @@ test_front: $(ho)/front $(ho)/frontseat
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests kept out of the corpus: each wants a crew module, is not idempotent
 # (love0 evaluates twice), or can hang. gate = exit 0 and "<name>: ok"
-hostnif_tests = test/host/gcpause.l test/host/gcage.l test/host/gcroom.l test/host/gcbudget.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/pier.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/site.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/im.l test/host/font.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/saver.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/hexedit.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
+hostnif_tests = test/host/gcpause.l test/host/gcage.l test/host/gcroom.l test/host/gcbudget.l test/host/mop.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/pier.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/site.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/im.l test/host/font.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/saver.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/gpu.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/hexedit.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
 hostnif_tests += test/host/manifest.l   # the spreadsheet, raised off /love
 hostnif_tests += test/host/chucho.l   # the mail reader, headless, likewise
 hostnif_tests += test/host/pack.l   # directory packs: a verb runs, the table wins, a bad manifest refused
@@ -190,8 +190,10 @@ hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles,
 hostnif_tests += test/host/glazehot.l    # a run-time closure compiles at its call past hot-calls
 hostnif_tests += test/host/quit.l   # quit drains the ports; a scare gives a piped stdin back blocking
 hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
+hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, read back by our fat and cpio
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
+hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -686,11 +688,12 @@ test_distboot: dist
 	@sh test/gate/distboot.sh $(ho)/love
 # test_hearts -- the arm64 defconfig Image by mooncc, booted to init under qemu; heavy, opt-in
 gate_love += test_hearts
-# test_hearts_boot -- hearts under qemu virt: chooser, helm as pid 1, three updates. heavy
+# test_hearts_boot -- hearts under qemu virt: love's boot menu starts linux, helm as pid 1. heavy
 hb_love = $(if $(filter a64,$a),$(ho)/love,out/x-a64/love)
 test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
+	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST test/gate/hearts-boot.sh
-	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l
+	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l $(ko)/love-a64.elf
 # test_hearts_objtool -- x86's objtool by mooncc on elfutils' libelf, its vmlinux.o pass the host's; opt-in
 test_hearts_objtool: host
 	@echo TEST test/gate/hearts-objtool.sh
@@ -1054,12 +1057,24 @@ test_uefi_a64: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(ko)/esp-a64 $$fw a64; fi
 endif
 
+ifeq ($(QEMU_A64),)
+test_uefi_stay_a64:
+	@sh test/gate/skip.sh gate-skip "test_uefi_stay_a64: skipped (qemu-system-aarch64 needed)"
+else
+test_uefi_stay_a64: host $(S)/tools/ktest.l
+	@DL=$(dl) sh test/gate/dl.sh edk2-ovmf || exit 1; fw=$(dl)/edk2-ovmf/ovmf-code-aarch64.fd; \
+	 if [ ! -f $$fw ]; then sh test/gate/skip.sh gate-skip "test_uefi_stay_a64: skipped (no dl/edk2-ovmf: could not fetch it)"; else \
+	 $(MAKE) -s a=a64 $(addprefix $(ko)/esp-stay-a64/,EFI/BOOT/BOOTAA64.EFI love.elf love.stay love.cmd boot.l efihello.efi) \
+	 && echo TEST $(ko)/esp-stay-a64 "(serial, headless, the firmware's guest and the boot menu; TCG, ceiling 900s)" \
+	 && $m $(S)/tools/ktest.l $(ko)/esp-stay-a64 $$fw a64 "efihello: one two"; fi
+endif
+
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
 inle_rv64 = test_kernel_rv64
 inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
-inle_a64 = test_kernel_a64 test_uefi_a64
+inle_a64 = test_kernel_a64 test_uefi_a64 test_uefi_stay_a64
 test_inle: host
 	@$(MAKE) -s $(src_tree) out/rootfs.tar
 	@rm -rf out/inle && mkdir -p out/inle

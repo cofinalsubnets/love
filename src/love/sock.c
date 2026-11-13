@@ -43,11 +43,32 @@ static int quad(struct str *hv, uint32_t *out) {
 //   connect  (tcp "1.2.3.4" 80)   (unix "/tmp/.X11-unix/X0")
 //   listen   (tcp 80) or a bare port   (tcp "127.0.0.1" 80)   (unix "/run/x.sock")
 //   bind     (udp 53)   (udp "127.0.0.1" 53)   (icmp)   (icmp6)   options: ttl, errs
+//            (netlink proto group ..)   (packet ifindex ethertype)
 // icmp is linux's echo socket, or where refused a raw one dressed as it, same bytes either
-// way; icmp6 is the one ipv6 family
-enum { FamTcp = 1, FamUdp, FamIcmp, FamIcmp6, FamUnix };
+// way; icmp6 is the one ipv6 family. netlink joins each multicast group named; packet is
+// linux's cooked link layer, bound to one interface and one ethertype. both are linux's alone
+enum { FamTcp = 1, FamUdp, FamIcmp, FamIcmp6, FamUnix, FamNetlink, FamPacket };
 enum { HowConnect = 1, HowListen, HowBind };
-struct saddr { int fam, port, ttl, errs; uint32_t ip; struct str *path; };
+#define NlGroups 8
+struct saddr { int fam, port, ttl, errs, ngrp; uint32_t ip; struct str *path; uint32_t grp[NlGroups]; };
+
+// linux's numbers and its sockaddr_nl and sockaddr_ll, laid here: no libc need carry them.
+// moonlibc's one binary asks the kernel it runs on
+#if defined(__moonlibc__) || defined(__linux__)
+# define lsock_ok() (__love_osv < 2 && __love_osv >= 0)
+#else
+# define lsock_ok() 0
+#endif
+#ifndef AF_NETLINK
+#define AF_NETLINK 16
+#endif
+#ifndef AF_PACKET
+#define AF_PACKET 17
+#endif
+#define SolNetlink 270
+#define NlAddMembership 1
+struct nladdr { uint16_t family, pad; uint32_t pid, groups; };
+struct lladdr { uint16_t family, protocol; int32_t ifindex; uint16_t hatype; uint8_t pkttype, halen, addr[8]; };
 
 static int nom_is(word x, char const *s) {
  if (!x || !namep(x)) return 0;
@@ -85,6 +106,21 @@ static int parse_addr(word x, int how, struct saddr *a) {
  else if (nom_is(f, "icmp") || nom_is(f, "icmp6")) {
   if (how != HowBind) return -1;
   a->fam = nom_is(f, "icmp6") ? FamIcmp6 : FamIcmp; }
+ else if (nom_is(f, "netlink")) {
+  intptr_t p = (v = nth_take(&x)) && oddp(v) ? getcharm(v) : -1;
+  if (how != HowBind || p < 0 || p > 31) return -1;
+  a->fam = FamNetlink, a->port = (int) p;
+  while ((v = nth_take(&x))) {
+   intptr_t n = v && oddp(v) ? getcharm(v) : 0;
+   if (n < 1 || n > 0xffffffff || a->ngrp == NlGroups) return -1;
+   a->grp[a->ngrp++] = (uint32_t) n; }
+  return 0; }
+ else if (nom_is(f, "packet")) {
+  intptr_t i = (v = nth_take(&x)) && oddp(v) ? getcharm(v) : 0;
+  if (how != HowBind || i < 1 || i > 0x7fffffff || (a->port = port_of(nth_take(&x))) < 0 || nth_take(&x))
+   return -1;
+  a->fam = FamPacket, a->ip = (uint32_t) i;
+  return 0; }
  else return -1;
  while ((v = nth_take(&x)))                       // the options
   if (nom_is(v, "ttl") && (a->fam == FamIcmp || a->fam == FamIcmp6)) a->ttl = 1;
@@ -92,8 +128,30 @@ static int parse_addr(word x, int how, struct saddr *a) {
   else return -1;
  return 0; }
 
+// a netlink or packet socket, bound: the fd or a negated errno
+love_noinline static int call_lsock(struct saddr const *a) {
+ if (!lsock_ok()) return -EAFNOSUPPORT;
+ int nl = a->fam == FamNetlink, r;
+ int fd = nl ? socket(AF_NETLINK, SOCK_RAW, a->port) : socket(AF_PACKET, SOCK_DGRAM, htons((uint16_t) a->port));
+ if (fd < 0) return -errno;
+ cloexec(fd);
+ if (nl) {
+  struct nladdr s = { AF_NETLINK, 0, 0, 0 };
+  r = bind(fd, (struct sockaddr*) &s, sizeof s);
+  for (int i = 0; !r && i < a->ngrp; i++) r = setsockopt(fd, SolNetlink, NlAddMembership, &a->grp[i], sizeof a->grp[i]); }
+ else {
+  struct lladdr s;
+  memset(&s, 0, sizeof s);
+  s.family = AF_PACKET, s.protocol = htons((uint16_t) a->port), s.ifindex = (int32_t) a->ip;
+  r = bind(fd, (struct sockaddr*) &s, sizeof s); }
+ if (!r) return fd;
+ int e = errno;
+ close(fd);
+ return -e; }
+
 // the fd or a negated errno; a connect leaves it nonblocking, its handshake in flight
 love_noinline static int call_sock(struct saddr const *a, int how) {
+ if (a->fam == FamNetlink || a->fam == FamPacket) return call_lsock(a);
  int un = a->fam == FamUnix, v6 = a->fam == FamIcmp6, raw = 0;
  int type = a->fam == FamTcp || un ? SOCK_STREAM : SOCK_DGRAM;
  int dom = un ? AF_UNIX : v6 ? AF_INET6 : AF_INET;
@@ -399,9 +457,81 @@ love_noinline static struct g *host_dgram(struct g *g, char const *b, uintptr_t 
  g->sp[1] = word(c + 4), g->sp += 1;
  return g; }
 
+// a netlink or packet socket's datagrams
+//   (recv p)       -> ((pid) bytes) | ((mac ethertype) bytes), mac 6 bytes   [parks]
+//   (send p (pid) bytes)   (send p (mac ethertype) bytes)
+// a datagram comes whole at its own size, a netlink dump's many kilobytes too
+static int sock_fam(int fd) {
+ struct lladdr a;                                 // the larger of the two
+ socklen_t n = sizeof a;
+ memset(&a, 0, sizeof a);
+ return lsock_ok() && !getsockname(fd, (struct sockaddr*) &a, &n) ? a.family : -1; }
+static int lfam(int f) { return f == AF_NETLINK || f == AF_PACKET; }
+
+// the next datagram's size, read in place, or a negated errno
+love_noinline static ssize_t call_lpeek(int fd) {
+ char c;
+ ssize_t n;
+ do n = recv(fd, &c, 1, MSG_PEEK | MSG_TRUNC | MSG_DONTWAIT); while (n < 0 && errno == EINTR);
+ return n < 0 ? -(errno == EWOULDBLOCK ? EAGAIN : errno) : n; }
+
+love_noinline static struct g *host_lrecv(struct g *g, int fd, uintptr_t n) {
+ struct lladdr la;
+ struct nladdr *na = (struct nladdr*) &la;
+ socklen_t pl = sizeof la;
+ memset(&la, 0, sizeof la);
+ if (!ok(g = n ? str0(g, n) : push(g, 1, EmptyString))) return g;
+ ssize_t r;
+ do r = recvfrom(fd, n ? txt(g->sp[0]) : NULL, n, MSG_DONTWAIT, (struct sockaddr*) &la, &pl);
+ while (r < 0 && errno == EINTR);
+ if (r < 0) return g->sp[0] = love_err(g, errno), g;
+ if (n) len(g->sp[0]) = (uintptr_t) r;
+ int pk = la.family == AF_PACKET;
+ if (pk) {
+  uintptr_t h = la.halen > 8 ? 8 : la.halen;
+  if (!ok(g = h ? str0(g, h) : push(g, 1, EmptyString))) return g;
+  memcpy(txt(g->sp[0]), la.addr, h), len(g->sp[0]) = h; }
+ if (!ok(g = have(g, 4 * Width(struct chain)))) return g;
+ struct chain *c = bump(g, 4 * Width(struct chain));
+ word bytes = g->sp[pk];                          // after have, which may move it
+ ini_chain(c + 3, bytes, ZeroPoint);
+ if (pk) {
+  ini_chain(c + 2, putcharm(ntohs(la.protocol)), ZeroPoint);
+  ini_chain(c + 1, g->sp[0], word(c + 2)); }
+ else ini_chain(c + 1, putcharm(na->pid), ZeroPoint);
+ ini_chain(c + 0, word(c + 1), word(c + 3));
+ g->sp[pk] = word(c + 0), g->sp += pk;
+ return g; }
+
+// the peer's sockaddr from (pid) or (mac ethertype); the interface is the bound one's
+love_noinline static ssize_t call_lsend(int fd, int fam, word x, struct str const *s) {
+ struct lladdr la;
+ socklen_t n = sizeof la;
+ memset(&la, 0, sizeof la);
+ word h = nth_take(&x), e = nth_take(&x);
+ if (fam == AF_NETLINK) {
+  struct nladdr *na = (struct nladdr*) &la;
+  intptr_t pid = h && oddp(h) ? getcharm(h) : -1;
+  if (pid < 0 || pid > 0xffffffff || e) return -EINVAL;
+  na->family = AF_NETLINK, na->pid = (uint32_t) pid, n = sizeof *na; }
+ else {
+  int et = port_of(e);
+  struct str *m = h && strp(h) ? str(h) : NULL;
+  if (!m || m->len > 8 || et < 0 || nth_take(&x) || getsockname(fd, (struct sockaddr*) &la, &n)) return -EINVAL;
+  la.protocol = htons((uint16_t) et), la.halen = (uint8_t) m->len, n = sizeof la;   // the kernel takes no shorter
+  memcpy(la.addr, m->bytes, m->len); }
+ ssize_t w;
+ do w = sendto(fd, s->bytes, s->len, 0, (struct sockaddr const*) &la, n); while (w < 0 && errno == EINTR);
+ return w < 0 ? -errno : w; }
+
 static lvm(lvm_recv) {
  int fd = (int) port_fd(Sp[0]);
  if (fd < 0) love_musttail return Answer(badarg(g));
+ if (lfam(sock_fam(fd))) {
+  ssize_t n = call_lpeek(fd);
+  if (n == -EAGAIN) { g->next_wait_fd = fd; love_musttail return Ap(lvm_yield_sw, g); }
+  if (n < 0) love_musttail return Answer(love_err(g, (int) -n));
+  LvmCallp(g, 1, host_lrecv, fd, (uintptr_t) n) }   // [p] -> [(peer bytes)]
  struct rbuf r;                                // safe while its address never reaches a tail call
  ssize_t n = is_raw(fd) ? call_recv_raw(fd, &r) : call_recv_q(fd, &r);
  if (n == -EAGAIN) { g->next_wait_fd = fd; love_musttail return Ap(lvm_yield_sw, g); }
@@ -451,7 +581,10 @@ love_noinline static ssize_t call_send_raw(int fd, struct peer const *pe, void c
  return call_send(fd, pe, b, n); }
 
 static lvm(lvm_send) {
- int fd = (int) port_fd(Sp[0]);
+ int fd = (int) port_fd(Sp[0]), fam = fd >= 0 ? sock_fam(fd) : -1;
+ if (lfam(fam)) {
+  ssize_t w = strp(Sp[2]) ? call_lsend(fd, fam, Sp[1], str(Sp[2])) : -EINVAL;
+  love_musttail return Answerp(2, w == -EINVAL ? badarg(g) : w < 0 ? love_err(g, (int) -w) : Sp[0]); }
  word x = Sp[1], h = nth_take(&x);
  int port = port_of(nth_take(&x));
  struct peer pe;

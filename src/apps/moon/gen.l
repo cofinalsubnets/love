@@ -164,6 +164,12 @@
    (wasm? {'tgt 'wasm}) 1          ; ..which wasm rides whole; it differs only where its machine lacks an op
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
+   ; a loop head, a label a later jmp or br goes back to, at 16: a short loop then spans no 64-byte
+   ; line, which zen's op cache takes at half speed
+   (lheads r) (: seen {} hd {}
+                 _ (map (f \ (two? f ? (? (<f = 'label) (pin seen <>f 1)
+                                           (elem <f '(jmp br)) (f (#f - 1) @ l (seen l ? (pin hd l 1) 0))))) r)
+                 (catmap (f \ (two? f && <f = 'label && hd <>f ? [['align 16] f] [f])) r))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
                 (elem (peep g 'tgt 'x64) '(a64 rv64 rv32 xtensa thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)))
@@ -1253,7 +1259,16 @@
                         (nelem <g2 wina) 'no
                         (elem <g2 wind && <>g2 = X) 'no
                         (win >w (n + 1)))))
-              k (win r 0)
+              ; ..and r3 is dead past the unpark: written, restored or left before a read
+              (dead3? l) (? !(two? l) 1
+                            (<l @ f
+                               (? !(two? f) (dead3? >l)
+                                  (elem <f '(jmpr ret)) 1
+                                  (elem <f '(mov li ld lea pop) && <>f = 'r3) (nelem 'r3 >>f)
+                                  (elem <f '(label br jmp jmpm jmpt call callr callm raw)) ()
+                                  (elem 'r3 >f) ()
+                                  (dead3? >l))))
+              k (win r 0 @ k9 (k9 != 'no && !(dead3? (drop (k9 + 1) r)) ? 'no k9))
               (k @ 'no (f . squeeze r)
                  (: (take w n) (n < 1 ? (['mov 'r10 X] . squeeze (drop 1 w))
                                   (<w . take >w (n - 1)))
@@ -4287,7 +4302,7 @@
        (kv e) (cfold w64 e @ v (cint? v ? v ()))
        ; a param the body writes, takes the address of or declares again keeps its arg
        (fixed? p b) (: (go x) (? (atom? x) ()
-                                 (x @ (('asn || 'post) ('var ^p) . _) 1
+                                 (x @ (('asn || 'post) . ('var ^p) . _) 1
                                       ('rmw _ ('var ^p) _) 1
                                       ('addr ('var ^p)) 1
                                       ('decl ds) (any (d \ <d = p) ds || any go ds)
@@ -4464,7 +4479,9 @@
        (vsrc? e) (vol? (accq ps9 e))
        (mem? e) (e @ (('idx || 'deref || 'dot) . _) 1 0)
        (bind p) (pin tys <p <>p, vol? (p 6) ? (pin lqs <p (p 6)) 0)
-       (bok? p) (p 2 @ ('init is) (brace <>p is @ [t] (pin brc <p [t], 1) _ 0) _ 0)
+       ; ..and one that reads its own struct stays whole
+       (men nm x) (two? x ? (x @ ('var ^nm) 1 (men nm <x || men nm >x)))
+       (bok? p) (p 2 @ ('init is) (men <p is ? 0 (brace <>p is @ [t] (pin brc <p [t], 1) _ 0)) _ 0)
        (one x p) (pin dcl <p (1 + peep dcl <p 0), bind p, (mem? (p 2) ? (pin inis <p 1) 0),
                   <x = 'decl && (!(two? (p 2)) || mem? (p 2) && !(vsrc? (p 2)) || bok? p) && !(vol? (p 6)) && clean? <>p ?
                      (pin cand <p <>p) 0)
@@ -4503,17 +4520,19 @@
                   (sort (keys cand)))
        (fls nm) (brc nm @ [t] (use nm + filter (fl \ nelem fl (use nm)) (sort (keys t))) _ (use nm))
        (bv nm fl) (brc nm @ [t] (t fl @ () '(num 0) v (rw v)) _ ())
+       ; the members it keeps: those named and braced, or every one where a call reads the whole
+       (mset nm) (peep site nm 0 ? (map (m \ <m) (mems (cand nm))) (fls nm))
        (rd ps) (? !(two? ps) ()
-                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) (bv <<ps fl)]) (fls <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
+                  (elem <<ps ok) ((peep inis <<ps 0 ? (ini <ps) (map (fl \ [(sn <<ps fl) (fty <<ps fl) (bv <<ps fl)]) (mset <<ps) + (peep site <<ps 0 ? [<ps]))) + rd >ps)
                   (rw <ps . rd >ps))
-       (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (use <p)))
+       (ini p) ("`p\(<p)" @ t ([t ['ptr <>p] ['addr (rw (p 2))]] . map (fl \ [(sn <p fl) (fty <p fl) ['dot ['deref ['var t]] fl]]) (mset <p)))
        (seq l) (two? >l ? ['comma <l (seq >l)] <l)
        (rwcall fn as)
         (: nms (filter (nm \ any (a \ a @ ['addr ['var n]] (n = nm) 0) as) ok)
            c ['call ['var fn] (map rw as)]
            (? !(two? nms) c
-              (: in (catmap (nm \ map (fl \ ['asn ['dot ['var nm] fl] ['var (sn nm fl)]]) (use nm)) nms)
-                 out (catmap (nm \ map (fl \ ['asn ['var (sn nm fl)] ['dot ['var nm] fl]]) (use nm)) nms)
+              (: in (catmap (nm \ map (fl \ ['asn ['dot ['var nm] fl] ['var (sn nm fl)]]) (mset nm)) nms)
+                 out (catmap (nm \ map (fl \ ['asn ['var (sn nm fl)] ['dot ['var nm] fl]]) (mset nm)) nms)
                  rt <(g 'sigs fn)
                  (? (rt = 'void) (seq (in + [c] + out))
                     (: k (tmps 'k) t "`s\(k)"
@@ -4521,7 +4540,7 @@
                        (seq (in + [['asn ['var t] c]] + out + [['var t]])))))))
        (asg nm m) (: k (tmps 'k) t "`s\(k)"
                      _ (pins tmps 'k (k + 1) 'l ([t ['ptr (cand nm)] ()] . tmps 'l))
-                     (seq ([['asn ['var t] ['addr (rw m)]]] + map (fl \ ['asn ['var (sn nm fl)] ['dot ['deref ['var t]] fl]]) (use nm))))
+                     (seq ([['asn ['var t] ['addr (rw m)]]] + map (fl \ ['asn ['var (sn nm fl)] ['dot ['deref ['var t]] fl]]) (mset nm))))
        (rw x) (? (atom? x) x
                  (x @ (['dot ['var nm] fl] && elem nm ok) ['var (sn nm fl)]
                       (['asn ['var nm] m] && elem nm ok) (asg nm m)
@@ -4957,6 +4976,7 @@
                      ; on xtensa, whose call0 reaches words alone
                      an (peep (g 'aligns) nm 2 @ a (max (max a (xt? g ? 4 2)) (falgn g)))
                      pf (pfeof g nm)
+                     r (x64? g ? (lheads r) r)
                      fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r)
                           + (wasm? g ? () (catmap (a \ [['label (fn-end a)] ['label (fn-type a)]]) (nm . map (f \ <>f) al2))))   ; elf's size and type
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain

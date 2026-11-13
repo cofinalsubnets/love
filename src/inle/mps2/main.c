@@ -116,8 +116,6 @@ void k_horn_close(void) {}
 #endif
 #if defined(BAKER_STONES)
 #define IMPATH "out/mps2/love-pds.img"
-#elif defined(BAKER_RUNE)
-#define IMPATH "out/mps2/love-pd.img"
 #else
 #define IMPATH "out/mps2/love.img"
 #endif
@@ -185,8 +183,6 @@ int main(void) {
     "          (: t0 (clock 0) _ (each ^10 (_ \\ pd-frame ())) t1 (clock 0)"
     "             _ (puts (\"; ten frames, ms \" + show (t1 - t0) + \"\\n\"))"
     "             (0 < (pd-at 'st) 'pz && tablet? (pd-at 'song))))"
-#elif defined(BAKER_RUNE)
-    "          (! ((cite ()) = ())))"           // rune registered
 #else
     "          1)"
 #endif
@@ -204,16 +200,6 @@ int main(void) {
 #define SH_WRITE 0x05
 #define SH_CLOSE 0x02
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
-// rune is a plain text consumers borrow, so its module wrapper is here
-static char const src_mods[] =
-#ifdef BAKER_RUNE
-"(module 'rune "
-#include "rune.h"
-")"
-#else
-""
-#endif
-;
 int main(void) {
   sh_puts("\n; src/inle/mps2 baker -- baking the corpus\n");
   freelist = (struct mem*) POOL;
@@ -237,16 +223,10 @@ int main(void) {
     ,
 #include "post.h"
     );
-  r = evals_(r, src_mods);
   r = evals_(r,
 #if defined(BAKER_STONES)
     // the playdate's stones: the lore libraries and the glue, one text
 #include "stones.h"
-#elif defined(BAKER_RUNE)
-    // the playdate corpus: rune + cas; cas's crank/pushed/cur_set stay unbound until the device defn's them
-    "(borrow 'rune)"
-    " "
-#include "cas.h"
 #else
     // the board cut: the cli, and fat.l over the board's disk nifs
     "(borrow 'cli) "
