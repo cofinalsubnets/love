@@ -4,6 +4,8 @@
 (cite 'posix ? (borrow 'posix))
 (map (n \ elem n (names ()) ? () (ev [': [n 'x] ()])) '(quit close run getenv))
 (elem 'open (names ()) ? () (ev '(: (open x y) ())))
+; the provers are carried units: an image lifts them off /love, a bare egg reads the tree's
+(map (m \ cite m ? 0 (open ("src/apps/" + show m + ".l") "r" @ q (q ? (reads q) 0))) '(kanren uu))
 
 ; a test that cannot run here says why; on a strict box (LOVE_GATE_STRICT, or the nest's
 ; etc/gate-strict) a skip is red
