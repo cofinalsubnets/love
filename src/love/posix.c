@@ -19,6 +19,7 @@
 #include <spawn.h>      // posix_spawnp: a kernel with no fork
 #include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ TIOCM* struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
+#include <grp.h>        // setgroups (setids)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <fnmatch.h>    // fnmatch (glob's pattern law)
 #include <regex.h>      // regcomp regexec (re's engine)
@@ -222,13 +223,15 @@ static int fd_up(int fd) {
  int h = fcntl(fd, F_DUPFD_CLOEXEC, 10);
  return h < 0 ? fd : (close(fd), h); }
 
-// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe
+// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe,
+// 6 read and write (a login's terminal)
 static int openfd_mode(char const *path, intptr_t m) {
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : m == 4 ? O_WRONLY
            : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
+           : m == 6 ? O_RDWR
            : O_RDONLY;
  return fd_up(open(path, flags | O_CLOEXEC, m == 3 ? 0600 : 0644)); }
 
@@ -1251,6 +1254,23 @@ static love_noinline word host_posix_setsid(struct g *g, word cw) {
  return putcharm(s); }
 LvmWord1(posix_setsid)
 
+// (setids uid gid groups): a login's drop, groups then gid then uid, and the drop checked:
+// the ids read back, and a uid past 0 cannot take 0 again. groups a list of up to 256 gids
+static love_noinline word host_posix_setids(struct g *g, word uw, word gw, word lw) {
+ gid_t gs[256];
+ size_t n = 0;
+ if (!charmp(uw) || !charmp(gw) || getcharm(uw) < 0 || getcharm(gw) < 0) return badarg(g);
+ for (word p = lw; chainp(p); p = B(p)) {
+  if (n == 256 || !charmp(A(p)) || getcharm(A(p)) < 0) return badarg(g);
+  gs[n++] = (gid_t) getcharm(A(p)); }
+ uid_t u = (uid_t) getcharm(uw);
+ gid_t d = (gid_t) getcharm(gw);
+ if (setgroups(n, gs) || setgid(d) || setuid(u)) return love_err(g, errno);
+ if (getgid() != d || getegid() != d || getuid() != u || geteuid() != u) return love_err(g, EPERM);
+ if (u && !setuid(0)) return love_err(g, EPERM);
+ return ZeroPoint; }
+LvmWord3(posix_setids)
+
 // (fsync path data): fdatasync when data is truthy
 love_noinline static word host_posix_fsync(struct g *g, word pw, word dw) {
  char const *p = str_c(pw);
@@ -1281,6 +1301,7 @@ LvDef("prio", posix_prio, 2, "posix");
 LvDef("setprio", posix_setprio, 3, "posix");
 LvDef("truncate", posix_truncate, 3, "posix");
 LvDef("setsid", posix_setsid, 1, "posix");
+LvDef("setids", posix_setids, 3, "posix");
 LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
 LvDef("hardlink", posix_hardlink, 2, NULL);

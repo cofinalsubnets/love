@@ -16,6 +16,8 @@ static inline uint64_t k_rd_ttbr1_el1(void) {
   uint64_t v; asm volatile ("mrs %0, ttbr1_el1" : "=r"(v)); return v; }
 static inline uint64_t k_rd_cntfrq_el0(void) {
   uint64_t v; asm volatile ("mrs %0, cntfrq_el0" : "=r"(v)); return v; }
+static inline uint64_t k_rd_cntpct_el0(void) {
+  uint64_t v; asm volatile ("mrs %0, cntpct_el0" : "=r"(v)); return v; }
 
 static inline void k_wr_cntp_tval_el0(uint64_t v) {
   asm volatile ("msr cntp_tval_el0, %0" :: "r"(v)); }

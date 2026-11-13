@@ -40,7 +40,7 @@
    (lint-depmsg e)
     (: nm (two? e ? <e e) h (two? e && two? >e ? <>e ())
        ("deprecated \(nm)" + (string? h ? " -- \(h)" "")))
-   (lopc? c) (elem c "!#$%&*+-./:<=>?\\^|~")
+   (lopc? c) (c != 64 && op-byte? c)
    (ltkc? c) !(c < 33 || elem c '(34 59 40 41 91 93 123 125))
    (lall? p s) (:- (go 0) n #s (go k) (? (n <= k) (0 < n) (p (s k)) (go (k + 1)) ()))
    ; [line col] of each offset in ks, ascending, in one sweep

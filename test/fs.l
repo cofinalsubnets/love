@@ -41,6 +41,10 @@
     (umask 18 @ m0
      (test (charm? m0) (18 = umask m0) (m0 = umask m0))),
 
+    ; setids refuses a bad id before any call, and a user's own drop is refused at setgroups
+    (test ('badarg = (setids -1 0 ())) ('badarg = (setids 0 "x" ())) ('badarg = (setids 0 0 '(x)))
+          (getuid 0 = 0 || 'eperm = setids (getuid 0) (getgid 0) ())),
+
     ; rmdir: full is a live errno, empty goes
     ((d + "/sub") @ e
      (mkdir e 493,

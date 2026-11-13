@@ -24,17 +24,17 @@
    ; a library: no verb, one module
    _ (mkpack "words" [["words.l" "(module '(words hi)\n(: hi \"hi \")\n) ; module words\n"]])
    ; a verb of its own, and one the table already has: the table's stays
-   _ (mkpack "greet"
-       [["greet.l" "(cite 'verbs 'enlist 'greet (as \\ (puts \"greet\\n\", flush out, 0)) ())\n(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
+   _ (mkpack "wave"
+       [["wave.l" "(cite 'verbs 'enlist 'wave (as \\ (puts \"wave\\n\", flush out, 0)) ())\n(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
    ; a pack under a name the table answers is never read
    _ (mkpack "verbs" [["verbs.l" "(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
    _ (put (dir + "/stray.l") "a file is no pack\n")
 
    r1 (run "hello")
    r2 (run "hello you")
-   r3 (run "greet")
+   r3 (run "wave")
    r4 (run "verbs")
-   r5 (run "-e \"(: f (cite 'verbs 'get 'verbs) _ (cite 'verbs 'call 'greet ()) (putx (f == cite 'verbs 'get 'verbs)))\"")
+   r5 (run "-e \"(: f (cite 'verbs 'get 'verbs) _ (cite 'verbs 'call 'wave ()) (putx (f == cite 'verbs 'get 'verbs)))\"")
    r6 (run "-e \"(borrow 'words) (putx hi)\"")
    r7 (run "pack --list")
    ; HOME/.love with neither set; LOVE_NEST names the nest, HOME aside; XDG_DATA_HOME/love
@@ -47,12 +47,12 @@
    r12 (in-env ("LOVE_NEST= XDG_DATA_HOME=" + home + "/xdg") "-e \"(puts (getenv \\\"LOVE_NEST\\\"), quit 0)\"")
    _ (test (<r1 = 0) (>r1 = "hi there\n")
            (<r2 = 0) (>r2 = "hi you\n")
-           (<r3 = 0) (>r3 = "greet\n")
+           (<r3 = 0) (>r3 = "wave\n")
            (<r4 = 0) !(has? >r4 "pack's verbs") (has? >r4 "verbs")
            (has? >r5 "1")
            (<r6 = 0) (has? >r6 "\"hi \"")
            (<r7 = 0)
-           (>r7 = "greet\nhello\nverbs (the table wins)\nwords\n")
+           (>r7 = "hello\nverbs (the table wins)\nwave\nwords\n")
            (<r8 = 0) (>r8 = ("pack: none under " + home + "/none/.love/pack\n"))
            (<r9 = 0) (>r9 = "hi nest\n")
            (<r10 = 0) (>r10 = ("pack: none under " + home + "/xdg/love/pack\n"))

@@ -293,6 +293,12 @@ moonrun -c "$ho/.sxw.c" -o "$ho/.sxw.o" || fail "mooncc: a narrow int's arithmet
 printf 'int g(long a){ return (int)a; }\n' > "$ho/.sxn.c"
 moonrun -c "$ho/.sxn.c" -o "$ho/.sxn.o" || fail "mooncc: a long narrowed to int"
 [ "$(objdump -d "$ho/.sxn.o" | grep -c movslq)" = 1 ] || fail "a long narrowed to int lost its sign extension"
+# a loop head is 16-aligned: every backward jump's target, here past a 3-byte fn and a loop's own prologue
+printf 'int z(void){ return 0; }\nlong f(long *p, long n){ long s = 0; for (long i = 0; i < n; i++) s += p[i]; return s; }\nvoid g(long *p, long n){ for (long i = 0; i < n; i++) for (long j = 0; j < i; j++) p[j] += i; }\n' > "$ho/.lal.c"
+moonrun -c "$ho/.lal.c" -o "$ho/.lal.o" || fail "mooncc: the loop-head law's loops"
+lal=$(objdump -d --no-show-raw-insn "$ho/.lal.o" | awk '$2 ~ /^j/ && $3 ~ /^[0-9a-f]+$/ { a = strtonum("0x" substr($1, 1, length($1) - 1)); t = strtonum("0x" $3)
+        if (t < a) { n++; if (t % 16) bad++ } } END { print n + 0, bad + 0 }')
+[ "$lal" = "3 0" ] || fail "a loop head is not 16-aligned (backward jumps, misaligned: $lal)"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"
@@ -1817,6 +1823,40 @@ moonrun -shared -o "$ho/libmso.so" "$ho/.so.c" > /dev/null 2>&1 || fail "mooncc 
 $cc_g -o "$ho/.soexe" "$ho/.somain.c" -L"$ho" -lmso -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
   && "$ho/.soexe"; a=$?
 [ $a -eq 42 ] || fail "a -shared object under ld.so: plt import, abs64 import, relative (got $a want 42)"
+# data imports, libc's environ and the exe's knob, reached through their got slots: gcc's own
+# -shared build of the same file is the oracle
+cat > "$ho/.sod.c" <<'EOF'
+extern char **environ;
+extern int knob;
+static char ***pe = &environ;
+int nenv(void) { int n = 0; while (environ[n]) n++; return n; }
+int turn(void) { knob += 5; return knob; }
+int same(void) { return *pe == environ; }
+EOF
+cat > "$ho/.sodmain.c" <<'EOF'
+int knob = 24;
+int nenv(void), turn(void), same(void);
+int main() { return nenv() + turn() + 10 * same(); }
+EOF
+moonrun -shared -o "$ho/libmsod.so" "$ho/.sod.c" > /dev/null 2>&1 || fail "mooncc -shared: data imports"
+$cc_g -shared -fpic -o "$ho/libgsod.so" "$ho/.sod.c"
+for l in gsod msod; do
+  $cc_g -o "$ho/.sod$l" "$ho/.sodmain.c" -L"$ho" -l$l -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+    && env -i A=1 B=2 C=3 "$ho/.sod$l"; a=$?
+  [ $a -eq 42 ] || fail "lib$l.so's data imports under ld.so (got $a want 42)"
+done
+[ "$(readelf -rW "$ho/libmsod.so" | awk '$3 == "R_X86_64_GLOB_DAT" {print $5}' | sort | tr '\n' ' ')" = "environ knob " ] \
+  || fail "a -shared data import has no glob_dat slot"
+# ..a64's adrp and add of one: the add a load from the slot
+moonrun -t a64 -shared -o "$ho/libmsod64.so" "$ho/.sod.c" > /dev/null 2>&1 || fail "mooncc -t a64 -shared: data imports"
+[ "$(readelf -rW "$ho/libmsod64.so" | awk '$3 == "R_AARCH64_GLOB_DAT" {print $5}' | sort | tr '\n' ' ')" = "environ knob " ] \
+  || fail "an a64 -shared data import has no glob_dat slot"
+if command -v aarch64-linux-gnu-gcc > /dev/null && command -v qemu-aarch64 > /dev/null && [ -d /usr/aarch64-linux-gnu/lib ]; then
+  cp "$ho/libmsod64.so" "$ho/libmsoda.so"
+  aarch64-linux-gnu-gcc -o "$ho/.soda" "$ho/.sodmain.c" -L"$ho" -lmsoda -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+    && env -i A=1 B=2 C=3 qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.soda"; a=$?
+  [ $a -eq 42 ] || fail "an a64 -shared object's data imports under ld.so (got $a want 42)"
+fi
 
 # -- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'

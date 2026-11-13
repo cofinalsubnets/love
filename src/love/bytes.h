@@ -40,3 +40,9 @@ static love_inline uint32_t crc_msb(uint32_t c, uint8_t b) {
  c ^= (uint32_t) b << 24;
  for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
  return c; }
+
+// sha-256 over runs fed in turn, for C that needs the digest itself (hash.c keeps the rounds)
+struct sha256s { uint32_t h[8]; uint64_t n; unsigned r; uint8_t b[64]; };
+void sha256s_init(struct sha256s *s);
+void sha256s_feed(struct sha256s *s, void const *p, uintptr_t n);
+void sha256s_done(struct sha256s *s, uint8_t out[32]);

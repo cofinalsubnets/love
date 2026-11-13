@@ -158,7 +158,7 @@ static intptr_t image_imm_index(word v) {
 // the buffer codec: save compacts and serializes {header, dictionary, token stream}; load
 // validates, expands, decodes in place. a mismatched buffer -> NULL, a normal boot
 /* bump on any wire format change, renumbering image_immortals included */
-#define ImageMagic 0x30314f4e5349411aULL
+#define ImageMagic 0x31314f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -170,11 +170,16 @@ static intptr_t image_imm_index(word v) {
 #endif
 // three guards refuse a foreign image: arch, fp (what the indices mean) and src (the carried C).
 // code segment: [raw length, chunks, dict length, its deflated length], per chunk a CodeRow,
-// the dictionary, then the chunks deflated against it -- or with no chunks the raw blobs
+// the dictionary deflated, then the chunks as zstd frames against it -- or with no chunks the raw blobs.
+// the dictionary is zstd's with tables: the preset, and the tables its chunks want
 #define CodeSegHead (4 * sizeof(uint64_t))
-#define CodeRow (3 * sizeof(uint64_t))                         // raw offset, deflated offset, digest
+#define CodeRow (3 * sizeof(uint64_t))                         // raw offset, coded offset, digest
 #define CodeZChunk ((uintptr_t) 64 << 10)
 #define CodeDict ((uintptr_t) 32 << 10)
+#define CodeDictTabs ((uintptr_t) 1 << 10)                     // the tables' bound, past the content
+#ifndef CodeZLevel
+#define CodeZLevel 15
+#endif
 // token stream: [raw length, chunks, shared code's length, dict length, its deflated length], per
 // chunk a StreamRow, the shared code, the dictionary, then the deflated bytes or the raw stream.
 // a chunk starts at an object boundary, so each one inflates and walks on its own. the hot chunks,
@@ -1163,31 +1168,47 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
  alloc(d->first, 0), d->first = NULL;
  if (!sseg) { alloc(d, 0); return NULL; }
  H->nstream = ns;
- // code ships as whole-blob chunks of about CodeZChunk deflated apart against one preset
- // dictionary, so a wake inflates only what runs; one that would not shrink is raw, nch 0
+ // code ships as whole-blob chunks of about CodeZChunk coded apart against one dictionary, so
+ // a wake decodes only what runs; one that would not shrink is raw, nch 0
  uintptr_t craw = H->ncode, cstore = 0, nch = 0, dn = 0, dnz = 0;
- unsigned char *cz = NULL, *dic = craw ? alloc(NULL, 2 * CodeDict + 64) : NULL, *dz = NULL;
+ unsigned char *cz = NULL, *dic = craw ? alloc(NULL, CodeDict + 2 * (CodeDict + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
  if (craw) {
-  if (dic) dz = dic + CodeDict;
-  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2;
-  intptr_t dg = dz && (dn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk)) ? deflate_raw(g, dic, dn, dz, CodeDict + 64) : 0;
-  if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg;
-  uint64_t *tab = alloc(NULL, 3 * ncap * sizeof(uint64_t));
-  if (tab && (cz = alloc(NULL, craw)))
-   for (uintptr_t a = 0, b; a < craw; a = b) {
+  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, most = 0, pn = 0;
+  uintptr_t *cut = dic ? alloc(NULL, (ncap + 1) * sizeof *cut) : NULL;
+  if (cut) {
+   cut[0] = 0;
+   for (uintptr_t a = 0, b; a < craw && nch < ncap; a = b, nch++) {
     for (b = a; b < craw && b - a < CodeZChunk; )
      b += (hd + ((uintptr_t const*)(cseg + b))[0] + 1 + 15) & ~(uintptr_t) 15;
-    intptr_t got = nch < ncap && b <= craw
-                 ? deflate_dict(g, (unsigned char const*) cseg + a, b - a, dic, dn, cz + zn, craw - zn) : -1;
-    if (got <= 0) { nch = 0; break; }
-    tab[3 * nch] = a, tab[3 * nch + 1] = zn, tab[3 * nch + 2] = image_sum(cz + zn, (uintptr_t) got, 0);
-    nch++, zn += (uintptr_t) got; }
+    if (b > craw) { nch = 0; break; }
+    cut[nch + 1] = b, most = b - a > most ? b - a : most; }
+   if (cut[nch] != craw) nch = 0; }
+  if (nch && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk))) {
+   zd = dic + CodeDict, dz = zd + CodeDict + CodeDictTabs;
+   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs);
+   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, CodeDict + CodeDictTabs + 64) : 0;
+   if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg; }
+  if (!dn) nch = 0;
+  uint64_t *tab = nch ? alloc(NULL, 3 * nch * sizeof(uint64_t)) : NULL;
+  uintptr_t oc = zstde_cap(most);
+  unsigned char *one = tab ? alloc(NULL, oc) : NULL;
+  if (one && (cz = alloc(NULL, craw)))
+   for (uintptr_t k = 0; k < nch; k++) {
+    uintptr_t a = cut[k], b = cut[k + 1],
+              got = zstde_with(zd, dn, (unsigned char const*) cseg + a, b - a, CodeZLevel, one, oc);
+    if (!got || got > craw - zn) { nch = 0; break; }
+    memcpy(cz + zn, one, got);
+    tab[3 * k] = a, tab[3 * k + 1] = zn, tab[3 * k + 2] = image_sum(cz + zn, got, 0);
+    zn += got; }
+  else nch = 0;
   uintptr_t tn = CodeRow * nch;
   unsigned char *t = nch && tn + dnz + zn < craw ? alloc(NULL, tn + dnz + zn) : NULL;   // the table, the dictionary, the chunks
   if (t) memcpy(t, tab, tn), memcpy(t + tn, dz, dnz), memcpy(t + tn + dnz, cz, zn);
   else nch = 0, dn = dnz = 0;
+  if (one) alloc(one, 0);
   if (cz) alloc(cz, 0);
   if (tab) alloc(tab, 0);
+  if (cut) alloc(cut, 0);
   if (dic) alloc(dic, 0);
   cz = t;
   cstore = CodeSegHead + (nch ? CodeRow * nch + dnz + zn : craw);
@@ -1493,7 +1514,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   if (H.ncode < CodeSegHead) goto no;
   memcpy(&craw, p, 8), memcpy(&nch, p + 8, 8), memcpy(&nd, p + 16, 8), memcpy(&ndz, p + 24, 8);
   if (!nch) code = craw == H.ncode - CodeSegHead ? code_adopt(g, (char const*) p + CodeSegHead, craw) : NULL;
-  else if (nch <= (H.ncode - CodeSegHead) / CodeRow && ndz <= H.ncode - CodeSegHead - CodeRow * nch && nd <= CodeDict)
+  else if (nch <= (H.ncode - CodeSegHead) / CodeRow && ndz <= H.ncode - CodeSegHead - CodeRow * nch && nd <= CodeDict + CodeDictTabs)
    code = code_lazy(g, craw, p + CodeSegHead + CodeRow * nch + ndz, H.ncode - CodeSegHead - CodeRow * nch - ndz,
                     p + CodeSegHead, nch, p + CodeSegHead + CodeRow * nch, ndz, nd, kept), lazy = kept;
   if (!code) goto no;
