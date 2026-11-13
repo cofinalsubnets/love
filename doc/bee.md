@@ -23,6 +23,8 @@ bee - the hive of sessions on this machine, and the merge queue they land throug
 
 **love bee --drain** \[**--off**\]
 
+**love bee --mirror** \[**--stamp**\]
+
 **love bee --mcp**
 
 **love bee --state busy** \| **idle** \[**--pid** *pid*\]
@@ -127,6 +129,20 @@ A **kind user** line rides with the message, so a user typing into a hud on one 
 **love bee --list** says **on** *host* after a remote session's state.
 
 **love bee --drain** takes this host down for maintenance. It lays **.drain** in the hive and tells each session here, from **bee**, to hand any queue it leads to a live session on another host (**queue_lead**), to start no gate, and to let a running one finish or write its row **waiting**. Its sessions go on taking mail, and the relay's **--cards** says **drain 1** on each of their cards, but every host's queue watching counts them gone: the watchdog rings past a row whose owner is draining, after **(gone-minutes** *n***)**, and the head row's session may take the lead, acting, from a draining leader. **--drain --off** ends it. **love bee --list** says **draining** after such a session's state.
+
+# THE MIRROR
+
+The *save point* is a copy of the work kept at **/srv/love** (**BEE_SRV**) on each host the registry gives the cap **srv-mirror**, its fact **srv** naming another root there: **g.git**, a bare repository holding every ref; **g.sb**, an sb nest; **notes/**, **tools/**, **bin/** (the love that serves the nest, **bin/love**) and **manifest**. Its **stamp** is *key value* lines: **cut** (the seconds it was cut at), **head** (**g.git**'s HEAD then) and **from** (the host that cut it).
+
+The box holding the work cuts the save point into its own root, or pushes it to one host, and then lays the stamp with **love bee --mirror --stamp**, once the cut is whole. Every other node pulls with **love bee --mirror**, on a timer, so any node may go down and the rest go on from whichever answers:
+
+- It reads each srv-mirror host's stamp over the registry's ssh, and takes git and the files from the one with the newest cut, never from one older than its own stamp: a stale node never moves a ref back or lays older notes. A tie goes to the host the registry names first.
+- git is **git fetch '+refs/*:refs/*'**, never pruned: a branch gone from the work stays in the save point.
+- **notes/**, **tools/**, **bin/** and **manifest** are copied in one **tar** over the ssh into a staging directory, then laid whole, so a copy cut off leaves the last one.
+- Only then is the source's stamp laid as its own.
+- sb only grows, so it pulls from every host that answered, **sb sync --take** with the far **bin/love** serving.
+
+It prints the stamps it saw and what it took, and exits 0, 1 when a pull failed, and 75 when no srv-mirror host answers with a stamp.
 
 # LOCKS
 
@@ -334,6 +350,9 @@ Send the same note with nothing but a shell:
 
 **BEE_QUEUE_HOME**
 :   The git remote that holds the queues, over the tree's **(queue-home** *remote***)**; the repository's own refs when neither names one.
+
+**BEE_SRV**
+:   The save point's root on this host, **/srv/love** when unset.
 
 **BEE_HOSTS**
 :   The host registry, the nest's **etc/bee/hosts** when unset.
