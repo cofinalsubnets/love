@@ -2639,6 +2639,7 @@
        hot-calls 1024
        (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (pin fires 'ix (1 + peep fires 'ix 0))                          ; this closure's place in the bake, the call profile's key
+           _ (peep gvbox 'on 0 ? 0 (pin gvbox 0 gv, pin gvbox 'on 1))          ; canon's globals, from the first closure built, compiled or not. a flag: in an image, reading gv expands it
            hn (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v)) 0
                  (gv 'cmdline 0 == 0) ()                                 ; a bake: main.c binds cmdline only past one
                  (getenv "LOVE_GLAZE_HOT" @ v (string? v && 0 < #v))
@@ -2653,8 +2654,7 @@
        ; the self cell as it is now: a later compile reads its own import row as this one would
        (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
        (natnow e s a gv farq lams nm ti ta inl rt)
-        (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
-           _ (pin probebox 0 0)
+        (: _ (pin probebox 0 0)
            ps (init >s)  body (last >s)
            deep (nest? body gnest)
            t (deep ? 0 (threadir e leafops))                                                            ; read once for every thread lane
