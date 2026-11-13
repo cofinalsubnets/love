@@ -9,6 +9,8 @@
 
 void kq(uint8_t);                      // kmain's input queue, one byte
 void k_timer_init(void), k_timer_rearm(void);   // cpu.c
+int usb_init(void), usb_up(void), usb_rx_ready(void), usb_getc(void);   // usb.c
+void usb_irq(void), usb_tick(void), usb_putc(int);
 
 #define PERI    0x3f000000             // the peripherals, as the arm sees them
 #define AUX     (PERI + 0x215000)      // the mini uart's block
@@ -30,6 +32,7 @@ void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 #define IRQ_PEND1   0x04               // gpu interrupts 0-31, pending
 #define IRQ_EN1     0x10               // ..set-enable
 #define AUX_BIT     (1u << 29)         // aux is gpu interrupt 29
+#define USB_BIT     (1u << 9)          // the otg controller, gpu interrupt 9
 
 #define CORE0_TIMER 0x40               // core 0's timer interrupt control
 #define CORE0_SRC   0x60               // core 0's interrupt source
@@ -44,14 +47,24 @@ void serial_init(void) {
   mmio_wr(AUX, AUX_ENABLES, mmio_rd(AUX, AUX_ENABLES) | 1);
   mmio_wr(AUX, MU_LCR, 3);
   mmio_wr(AUX, MU_CNTL, 3);
+  // what the line caught before us (the firmware's hand-over glitches it) is no one's keys
+  for (int i = 0; i < 16 && (mmio_rd(AUX, MU_LSR) & LSR_RX); i++) (void) mmio_rd(AUX, MU_IO);
   mmio_wr(AUX, MU_IER, 1);
   mmio_wr(ARMCTL, IRQ_EN1, AUX_BIT); }
 
+// the uart and the otg port both; the usb bytes stage for the timer's flush
 void serial_putc(int c) {
   if (c == '\n') serial_putc('\r');
   // bounded, so an absent or wedged port can't hang output
   for (int i = 0; i < 100000 && !(mmio_rd(AUX, MU_LSR) & LSR_TXE); i++) {}
-  mmio_wr(AUX, MU_IO, (uint8_t) c); }
+  mmio_wr(AUX, MU_IO, (uint8_t) c);
+  uint64_t d = k_irq_save();
+  usb_putc(c);
+  k_irq_restore(d); }
+
+// the otg port's bytes in, as far as kq has room; the uart's come by interrupt
+void k_kb_sync(int room) {
+  for (; room > 0 && usb_rx_ready(); room--) kq((uint8_t) usb_getc()); }
 
 // reading the fifo dry clears the receive interrupt
 static void k_uart(void) {
@@ -61,8 +74,10 @@ static void k_uart(void) {
 // from the IRQ vector: the local block says which, the armctrl says which gpu interrupt
 void k_irq(void) {
   uint32_t src = mmio_rd(LOCAL, CORE0_SRC);
-  if (src & SRC_CNTPNS) kticks++, k_timer_rearm();
-  if ((src & SRC_GPU) && (mmio_rd(ARMCTL, IRQ_PEND1) & AUX_BIT)) k_uart(); }
+  if (src & SRC_CNTPNS) kticks++, k_timer_rearm(), usb_tick();
+  uint32_t p = src & SRC_GPU ? mmio_rd(ARMCTL, IRQ_PEND1) : 0;
+  if (p & AUX_BIT) k_uart();
+  if (p & USB_BIT) usb_irq(); }
 
 // the rng: a warm-up count first, then a word whenever the fifo holds one
 #define RNG_CTRL    0x00
@@ -149,7 +164,8 @@ void archinit(void) {
   mmio_wr(LOCAL, CORE0_TIMER, SRC_CNTPNS);       // the physical timer's irq to core 0
   k_timer_init();
   rng_init();
-  k_daif_unmask_irq(); }
+  k_daif_unmask_irq();
+  if (usb_init()) mmio_wr(ARMCTL, IRQ_EN1, USB_BIT); }
 
 // the firmware's one-shot flag: the next boot reads the [tryboot] section
 void k_tryboot(void) { uint32_t f = 1; k_mbox(0x00038064, &f, 1); }

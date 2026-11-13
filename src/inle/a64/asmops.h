@@ -29,6 +29,10 @@ static inline void k_daif_mask_all(void) {          // D, A, I, F all masked
 
 static inline void k_daif_unmask_irq(void) {        // DAIF.I = 0
   asm volatile ("msr daifclr, #2"); }
+// irqs off around a few stores an interrupt also makes, then as they were
+static inline uint64_t k_irq_save(void) {
+  uint64_t d; asm volatile ("mrs %0, daif\n msr daifset, #2" : "=r"(d) :: "memory"); return d; }
+static inline void k_irq_restore(uint64_t d) { asm volatile ("msr daif, %0" :: "r"(d) : "memory"); }
 
 // AT answers in PAR_EL1, readable after the isb
 static inline uint64_t k_at_s1e1w_par(void *va) {
