@@ -283,6 +283,8 @@ run.sh           per-language run/compile command + PATH check + per-bench timeo
 report.awk       formats the raw result lines into the terminal table
 mkhtml.sh        builds bench.html from the raw result lines (used by `make html`)
 Makefile         orchestration — per-language out/bench/<lang>.txt result files
+proofbench.sh    `make proofbench` — uu's kernel beside rocqchk and leanchecker,
+proofbench.l       on the same exported terms, a workload at a time
 ```
 
 ## Adding a benchmark

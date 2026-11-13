@@ -5,6 +5,7 @@
 ;   (hosts-all 0)               every host the registry names
 ;   (hosts-with cap where)      the hosts with cap whose facts hold where, "key=value" or ()
 ;   (hosts-live hs)             those of hs that answer ssh now
+;   (hosts-ssh h)               the ssh words that reach h, batch mode and a short connect
 ;   (hosts-take hs who note)    a free slot on one of hs, waited for -> [host lockname]
 ;   (hosts-free slot who)       the slot given back
 ;   (hosts-line h dir argv)     the sh line that lays dir on h, runs argv there and cleans up
@@ -16,7 +17,7 @@
 ; a slot is an exclusive lock, host-NAME-N or host-NAME-CAP-N. an env cap list takes its hosts
 ; over the registry's: KTEST_A64_HOSTS (a64-exec, kvm-a64), KTEST_VMX_HOSTS (vt-x),
 ; FBSD_SSH NBSD_SSH FBSD_ARM64_SSH NBSD_ARM64_SSH (freebsd-x64 netbsd-x64 freebsd-a64 netbsd-a64)
-(module (hosts hosts-all hosts-with hosts-live hosts-take hosts-free hosts-line hosts-on)
+(module (hosts hosts-all hosts-with hosts-live hosts-ssh hosts-take hosts-free hosts-line hosts-on)
 (borrow 'posix)
 
 (: sh-quote (cite 'lush 'sh-quote)
@@ -55,6 +56,7 @@
    ; ssh to a host: its own words first (ssh keeps the first it reads), then batch mode and
    ; a short connect
    (hs-ssh h) (: r (h "reach") n #r (take (n - 1) r + ["-o" "BatchMode=yes" "-o" "ConnectTimeout=10"] + [(r (n - 1))]))
+   hosts-ssh hs-ssh
    (hs-ask h line) (hark (hs-ssh h + [line]))
    (hosts-live hs) (filter (h \ <(hs-ask h "true") = 0) hs)
    ; where is "key=value": a fact the registry says, else the page size asked of the host

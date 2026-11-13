@@ -29,7 +29,7 @@
        es <>t
        top (src-top es)
        _ (0 >= #top ? (src-die "the carried source names no top directory"))
-       w (tar-scatter dir es)
+       w (tar-extract dir es)
        _ (atom? w ? (src-die "can't write \(dir)"))
        root (dir = "." ? top "\(dir)/\(top)")
        ; no love is laid beside the source: the driver names the compiler in CC

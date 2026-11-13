@@ -294,10 +294,12 @@
     (? (aquote? e) 0
        (two? e) (: op <e
           (nom? op && !(op = go) && !(elem op aopheads) && !(along? e)
+           || acomp? op
            || foldl (\ a x (a || ahascall? env go x)) 0 >e))
        0)
    ; aheads: the free call heads of e, the global-callee candidates. go is never one: a non-tail
    ; (go ..) must decline, not resolve a leaked namesake. over-approximate; amble-ok? is the gate
+   (acomp? h) (two? h && !(aquote? h))                              ; a computed head: its value is the callee
    (along? e) (<e = 'long? && 3 = #e && whole? <>e && 0 < <>e <= 8)   ; (long? k x), k small: inline, no call
    (aheads env go e acc)
     (? (aquote? e) acc
@@ -306,7 +308,7 @@
            a2 (nom? op && !(op = go) && !(elem op env) && !(elem op acc)
                && !(elem op aopheads) && !(along? e) ?
                  (op . acc) acc)                                      ; would read the unpinned local
-           (foldl (\ ac x (aheads env go x ac)) a2 >e))
+           (foldl (\ ac x (aheads env go x ac)) a2 (acomp? op ? e >e)))
        acc)
    ; amble-ok?: does e compile? env = visible names, shd = op names this frame may not claim, gn =
    ; resolvable global heads, go/k = the loop name and arity (0 outside), tl = tail position ((go ..) is a jump)
@@ -332,6 +334,7 @@
               (op = go) (tl && n = k && all (x \ amble-ok? env shd gn go k 0 x) as)
               (nom? op) (0 < n && (elem op env || elem op gn)
                           && all (x \ amble-ok? env shd gn go k 0 x) as)
+              (acomp? op) (0 < n && all (x \ amble-ok? env shd gn go k 0 x) e)
               0))
        0)
    ; amble-depth: an upper bound on the spill slots e needs; cx op = the extra curry steps a head
@@ -348,6 +351,7 @@
              (op = '=) (2 + amax (amble-depth go cx <as) (1 + amble-depth go cx <>as))   ; aeq2's slow lane spills the partial + the operand
              (aop2? op) (amax (amble-depth go cx <as) (1 + amble-depth go cx <>as))
              (op = go) (#as + admax go cx as)
+             (acomp? op) (amax (amble-depth go cx op) (1 + #as + admax go cx as))   ; the head's spill, then a call's
              (cx op + #as + admax go cx as))))                      ; a call spills a partial per curry step, so an n-arg call reserves n
    ; amble-loop: match the named-let body, both def sugars x both spellings -> (go vars GB inits) | 0
    ;   applied:  ((: (go v..) GB) i..)  |  ((: go (\ v.. GB)) i..)
@@ -609,6 +613,7 @@
                     (op = amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
                     (elem oop '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
                     (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
+                    (acomp? op) (aseq cl ex @ 'bad 'bad 1)                  ; the head runs before the args
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
            && a = #ps && 0 < a && lpok && drok && dvok && lts != 'bad && two? body
@@ -885,7 +890,9 @@
                                      ()) (goj 0 cso)))))
              ; the string fast lane rides looping bodies and frame callees only: a gn or sibling callee is never a string
              (acall f as d t)
-              (? (f = self)                                                                               ; saturated -> the direct frame jump; partial or over-applied ->
+              (? (acomp? f) (acg f d + [['st SP (spill d) A]]                                        ; the head at spill d, then a frame callee's lanes
+                               + (two? >as ? ((t ? atsat asat) as (spill d) (d + 1)) (achain as (spill d) (d + 1))))
+                 (f = self)                                                                               ; saturated -> the direct frame jump; partial or over-applied ->
                  (#as = (a - ni) ?                                                                  ; curry the own cell through its imports, then the args (a saturated
                     (aselfcall as d)                                                                        ; tail self-call took sgo instead)
                     (achain (simp + as) soo d))
@@ -1424,17 +1431,11 @@
                  (bcat [(go a) [['push A]] (go b) [['test A A] '(br eq OVF) ['pop T]] (divir tgt op)])
                (elem op '(& | ^))
                  (bcat [(go a) [['push A]] (go b) [['pop T] [(bitop op) A A T]]])
-               (elem op '(< <= > >= =))
-                 (: pa (preg tgt ps a) pb (preg tgt ps b)
-                    (? pb         (bcat [(go a) [['cmp A pb] ['set (ccof op) A]]])
-                       (pimm? b)  (bcat [(go a) [['cmp A b]  ['set (ccof op) A]]])
-                       pa         (bcat [(go b) [['cmp pa A] ['set (ccof op) A]]])             ; (p op E): flags p-acc = a-b, cc kept
-                       (pimm? a)  (bcat [(go b) [['cmp A a]  ['set (ccof (flipc op)) A]]])     ; (C op E): b-a, flip cc
-                       (bcat [(go a) [['push A]] (go b) [['pop T] ['cmp T A] ['set (ccof op) A]]])))
+               (elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['set cc A]]]))
                ())
             (op a b c)
             (? (op = '?)
-                 (qrun e (q \ y \ el \ en \ [(go q) [['cmp A 0] ['br 'le el]] (go y) [['jmp en] ['label el]]]) go)
+                 (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (go y) [['jmp en] ['label el]]]) go)
                (op = 'peep) (: R (argregir tgt (argix a ps 0)) inl (mint 0) endl (mint 0)   ; i unsigned-vs-len: out of range -> d, else the byte at [STR+i+2w]
                   (bcat [(go b)
                          [['ld T R (wd tgt)] ['cmp A T] ['br 'below inl] ['li A (whole? c ? c 0)] ['jmp endl] ['label inl] ['ldxb A R A 1 (2 * wd tgt)] ['label endl]]]))
@@ -1455,6 +1456,33 @@
                (op = 'cup) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A (2 * wd tgt)]]])
                ())
             ())))
+   ; gcmpir: a comparison's operands to flags -> [code cc], cc the condition that holds when it does
+   (gcmpir tgt syms ps op a b)
+    (: A (greg tgt 'acc) T (greg tgt 'tmp) pa (preg tgt ps a) pb (preg tgt ps b) (go x) (cggir tgt syms ps x)
+       (? pb        [(bcat [(go a) [['cmp A pb]]]) (ccof op)]
+          (pimm? b) [(bcat [(go a) [['cmp A b]]]) (ccof op)]
+          pa        [(bcat [(go b) [['cmp pa A]]]) (ccof op)]                          ; (p op E): flags p-acc = a-b, cc kept
+          (pimm? a) [(bcat [(go b) [['cmp A a]]]) (ccof (flipc op))]                   ; (C op E): b-a, flip cc
+          [(bcat [(go a) [['push A]] (go b) [['pop T] ['cmp T A]]]) (ccof op)]))
+   (ccnot c) (c @ 'lt 'ge  'ge 'lt  'le 'gt  'gt 'le  'eq 'ne  'ne 'eq  c)
+   ; gtestir: q's code, branching to el when q fails; a comparison branches on its own flags
+   (gtestir tgt syms ps q el)
+    (q @ ((op a b) && elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['br (ccnot cc) el]]]))
+         _ (bcat [(cggir tgt syms ps q) [['cmp (greg tgt 'acc) 0] ['br 'le el]]]))
+   ; tailir: a tail self-call's args into the arg regs. an arg that is its own param stays put; one no
+   ; other changed arg reads computes straight into its reg, and when none is left so, the rest compute
+   ; from the old regs, all but the last pushed, the last moved from acc
+   (tailir tgt syms ps as Lbody)
+    (: A (greg tgt 'acc)
+       (rd? x nm) (x = nm || two? x && !(all (y \ !(rd? y nm)) x))
+       (put i) (bcat [(cggir tgt syms ps (as i)) [['mov (argregir tgt i) A]]])
+       (go ch) (: fr (filter (j \ all (i \ i = j || !(rd? (as i) (ps j))) ch) ch)
+                  (? !(two? ch) [['jmp Lbody]]
+                     (two? fr) (bcat [(put <fr) (go (filter (i \ !(i = <fr)) ch))])
+                     (: rv (rev ch)
+                        (bcat [(cats (map (i \ bcat [(cggir tgt syms ps (as i)) [['push A]]]) (rev >rv)))
+                               (put <rv) (cats (map (i \ [['pop (argregir tgt i)]]) >rv)) [['jmp Lbody]]]))))
+       (go (filter (i \ !(as i = ps i)) (rangeL 0 #ps))))
    (gargsir tgt syms ps as) (atom? as ? () (bcat [(cggir tgt syms ps <as) [['push (greg tgt 'acc)]] (gargsir tgt syms ps >as)]))
    ; per-site gensyms for the probe's fixed labels, so one probe IR splices N times into a group assemble
    (relabel ir lp ht ms en dp) (map (f \ map (x \ (x @ 'loop lp  'hit ht  'miss ms  'end en  'deopt dp  x)) f) ir)
@@ -1473,18 +1501,16 @@
          (atom? e) ()
          (elem <e syms) (cggir tgt syms ps e)                                   ; a value-group call already answers the value
          (e @ ('. a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])
-              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cggir tgt syms ps q) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps y) [['jmp en] ['label el]]])
+              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (cggvir tgt syms ps y) [['jmp en] ['label el]]])
                               (x \ cggvir tgt syms ps x))
               ())))
-   ; cggtir: e in tail position. a tail self-call of matching arity recomputes the args onto the stack, pops them into
-   ; the arg regs and jumps Lbody past save/load: the frame is reused. self only; a sibling tail-call stays a plain `call`
+   ; cggtir: e in tail position. a tail self-call of matching arity lays its args in the arg regs (tailir) and
+   ; jumps Lbody past save/load: the frame is reused. self only; a sibling tail-call stays a plain `call`
    (cggtir tgt syms ps e selfnm Lbody)
     (: A (greg tgt 'acc) k #ps
        (two? e && (<e = selfnm) && #>e = k ?
-            (bcat [(gargsir tgt syms ps >e)                                      ; all read from the old regs
-                   (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
-                   [['jmp Lbody]]])
-          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(cggir tgt syms ps q) [['cmp A 0] ['br 'le el]] (cggtir tgt syms ps y selfnm Lbody) [['jmp en] ['label el]]])
+            (tailir tgt syms ps >e Lbody)
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (cggtir tgt syms ps y selfnm Lbody) [['jmp en] ['label el]]])
                                  (x \ cggtir tgt syms ps x selfnm Lbody))
                (cggir tgt syms ps e))))
    ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
@@ -2620,6 +2646,7 @@
        hot-calls 1024
        (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (pin fires 'ix (1 + peep fires 'ix 0))                          ; this closure's place in the bake, the call profile's key
+           _ (peep gvbox 'on 0 ? 0 (pin gvbox 0 gv, pin gvbox 'on 1))          ; canon's globals, from the first closure built, compiled or not. a flag: in an image, reading gv expands it
            hn (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v)) 0
                  (gv 'cmdline 0 == 0) ()                                 ; a bake: main.c binds cmdline only past one
                  (getenv "LOVE_GLAZE_HOT" @ v (string? v && 0 < #v))
@@ -2634,8 +2661,7 @@
        ; the self cell as it is now: a later compile reads its own import row as this one would
        (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
        (natnow e s a gv farq lams nm ti ta inl rt)
-        (: _ (peep gvbox 0 0 ? 0 (pin gvbox 0 gv))
-           _ (pin probebox 0 0)
+        (: _ (pin probebox 0 0)
            ps (init >s)  body (last >s)
            deep (nest? body gnest)
            t (deep ? 0 (threadir e leafops))                                                            ; read once for every thread lane

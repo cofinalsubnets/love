@@ -668,6 +668,19 @@
                               [(rx = 76 ? 73 72) (op = 139 ? 199 129) (192 | ((md >> 3) & 7))]
                               (scare 'link-tls-gottpoff <sy))))
                     ax (peep ld-a64tp k () @ f (two? f ? (ld-a64tls f s (off0 + ro) (s64 (ld-u64 (sa - tp))) <sy)))
+                    ; a -shared import's address is its got slot's word: x64's lea of it a mov from
+                    ; the slot (ld's relaxation run backward), a64's adrp the slot's page and the add
+                    ; after it a load from the slot. the symbol's own address only: no offset rides
+                    gs (charm? ix ? (peep relbox 'got 0 + 8 * (ix - 1)))
+                    dx (? (charm? gs && k == 'pc32 && ad = -4)
+                          (: o (off0 + ro) rx (s (o - 3)) op (s (o - 2)) md (s (o - 1))
+                             (pos <= o - 3 && elem rx '(72 76) && op = 141 && (md & 199) = 5 ? [rx 139 md])))
+                    da (? (charm? gs && k == 'addlo12 && ad = 0)
+                          (: wd (rle32 s (off0 + ro)) lo ((gs + ad) & 4095)
+                             ((wd & 4290772992) = 2432696320 && (lo & 7) = 0 ?
+                                (le32 (4181721088 | ((lo >> 3) << 10) | (wd & 1023))))))
+                    gk (two? dx || two? da || charm? gs && k == 'adrp21 && ad = 0)
+                    sg (gk ? (ld-u64 (gs + ad)) sa)
                     ; -pie: record each abs64 site for the startup relocator to add the base.
                     ; -shared: record (site import value) for the loader, an import's addend or
                     ; the link-time value; a weak undefined stays zero.
@@ -675,7 +688,7 @@
                     _ (? (relbox && abs64? && dyn = 1)
                           (wu ? 0 (pin relbox 0 ([(base + ro) ix (ix ? ad sa)] . relbox 0)))
                          (relbox && abs64?) (pin relbox 0 (base + ro . relbox 0))
-                         (charm? ix && nelem kind (relbox 'br)) (scare 'link-import-addr <sy)
+                         (charm? ix && !gk && nelem kind (relbox 'br)) (scare 'link-import-addr <sy)
                          ; ..riscv's pair kind is a call where a jalr ends it, or a tail's addi then a jump
                          ; through it (jalr, c.jr, c.jalr); else an address
                          (charm? ix && rv && kind = 19 && !(ld-rvjump? s (off0 + ro + 4))) (scare 'link-import-addr <sy))
@@ -686,16 +699,18 @@
                     _ (relbox && abs64? && se 4 = 'rodata ? (scare 'link-rodata-pie <sy))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
                     bs (? (two? ax) ax
+                          (two? da) da
                           (k == 'tpoff) (le64 (ld-u64 (sa - tp)))
                           ; GOTTPOFF's addend is the -4 of its rip-relative field, gone with the got
                           (elem k '(tpoff32 gottpoff))
                            (: v (s64 (ld-u64 ((k == 'gottpoff ? sv sa) - tp)))
                               (fits32 v ? 0 (scare 'link-range <sy),
                                le32 (ld-u32 v)))
-                          (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sa (base + ro))
+                          (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sg (base + ro))
                              (two? r ? r (scare 'link-range <sy))))
+                    g3 (two? gx ? gx dx)
                     (go (off0 + ro + w) >es
-                        (? (two? gx) (bs . gx . snip s pos (off0 + ro - 3) . acc)
+                        (? (two? g3) (bs . g3 . snip s pos (off0 + ro - 3) . acc)
                            (bs . snip s pos (off0 + ro) . acc)))))))
        (go off0 (ent (ob 'relas)) ()))
 
@@ -1465,7 +1480,7 @@
        (fo a) (a - sk)
        _ (pin plt 'src (string (catall (map (k \ (dm 4) (p0 + 16 * k) (got0 + wz * k)) ^ni))))
        imp ({} @ t (each ^ni (k \ pin t (imps k) (1 + k)), t))
-       relbox {0 () 'dyn 1 'imp imp 'br <dm}
+       relbox {0 () 'dyn 1 'imp imp 'br <dm 'got got0}
        cx [glo n0 end dy0 dy0 relbox (mach = 243) (w32 ? (ld-rel32 mach)) (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text hdrsz objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))

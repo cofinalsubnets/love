@@ -1,4 +1,4 @@
-; helm, the supervisor: units, checks, restarts, the control socket, underlay, scatter; not mounts
+; helm, the supervisor: units, checks, restarts, the control socket, underlay, extract; not mounts
 ; helm is not baked, so its crew files load by path
 ; run: cat test/00-init.l test/host/helm.l | out/love
 (borrow "src/apps/helm/unit.l")
@@ -46,6 +46,14 @@
       (["/bin/sh" "-c" "exit 3"] = peep (hby us 'fails) 'exec [])
       ; an exec prints as a command line, sh's one word quoted
       (has? (hunit-line (hby us 'fails)) "exec /bin/sh -c 'exit 3'"))
+
+   ; a hearts seat's config reads clean, the greeter kept up on tty1
+   seat (hconf "src/apps/hearts/seat.l")
+   _ (test
+      (atom? <>seat)
+      (['mounts 'greet 'default] = hnames <seat)
+      (== 'always (peep (hby <seat 'greet) 'restart ()))
+      (["/bin/love" "greet" "tty1"] = peep (hby <seat 'greet) 'exec []))
 
    ; every complaint at once
    b  (hconf bad)
@@ -117,9 +125,9 @@
    _   (unlink (ubd + "/love"))
    _   (rmdir ubd)
 
-   ; scatter: the blob inle boots on, laid as a checkout
-   scd ("out/.helm-scatter-" + me)
-   k   (hscatter scd)
+   ; extract: the blob inle boots on, laid as a checkout
+   scd ("out/.helm-extract-" + me)
+   k   (hextract scd)
    (test (0 < k),
     test (two? (stat (scd + "/src/apps/helm/helm.l"))),
     test (atom? (stat (scd + "/love-0.1"))),

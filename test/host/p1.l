@@ -7,18 +7,17 @@
    (cuap a) ><a (cuup a) >>a
    (p1-cup cl) (cup cl @ t (lit? t ? (t ()) t))
 
-   ; char classes: 2 ws  4 opc  8 tend  16 open  32 close  64 sign  128 gstop
+   ; char classes: 2 ws  8 tend  16 open  32 close  64 sign  128 gstop; an operator char is the table's
    ; bit 0 unused: a string indexed past its end answers 1
    (p1-cin? s c) (: n #s
                     (go k) (? (n <= k) () (s k = c) 1 (go (k + 1)))
                     (go 0))
    (p1-bits c) (((c @ 12 1 (p1-cin? " \t\n\r" c)) ? 2 0)
-                + ((p1-cin? "!#$%&*+-./:<=>?@\\^|~" c ? 4 0)
                 + (((c @ 12 1 (p1-cin? " \t\n\r;#()[]{}\"," c)) ? 8 0)
                 + ((p1-cin? "([{" c ? 16 0)
                 + ((p1-cin? ")]}" c ? 32 0)
                 + ((p1-cin? "+-" c ? 64 0)
-                + ((c @ 12 1 (p1-cin? " \t\n\r;)]}" c)) ? 128 0)))))))
+                + ((c @ 12 1 (p1-cin? " \t\n\r;)]}" c)) ? 128 0))))))
    p1-cls (: (go k acc) (k < 0 ? (string acc) (go (k - 1) (. (p1-bits k) acc)))
              (go 255 ()))
    ; 12 spelled out: love has no \f escape, "\f" is the letter f
@@ -26,7 +25,7 @@
    (p1-dig? c)  (48 <= c ? (c <= 57))
    (p1-hex? c)  (p1-dig? c ? 1 (97 <= p1-low c ? (p1-low c <= 102)))
    (p1-low c)   ((65 <= c ? (c <= 90)) ? (c + 32) c)
-   (p1-opc? c)  (p1-cls c & 4)
+   (p1-opc? c)  (op-byte? c)
    ; a name-led token ends here; ' is absent, so a name keeps a prime (x', n'')
    (p1-tend? c) (p1-cls c & 8)
 
@@ -86,11 +85,6 @@
         (p1-tok (p1-cup cl) (. <cl acc)))
    (p1-rev l acc) (two? l ? (p1-rev >l (. <l acc)) acc)
    (p1-drop cl k) (0 < k ? (p1-drop (p1-cup cl) (k - 1)) cl)
-   (p1-take l k acc) (0 < k ? (p1-take >l (k - 1) (. <l acc)) (p1-rev acc ()))
-   ; one past a token's last operator char, or 0
-   (p1-runend l i best)
-     (atom? l ? best
-      (p1-runend >l (i + 1) (p1-opc? <l ? (i + 1) best)))
    ; an operator run, factored later by opfix. a trailing '-' before a digit is shed as
    ; the number's sign: `!-5` is ! then -5. @ may start a run, never extend one
    (p1-run cl acc)
@@ -247,8 +241,7 @@
                            (. (nom "@") r))
                (c = 44) (. (nom ",") r)
                (p1-opc? c ? (! numlead)) (p1-op cl)
-               (p1-dig? c) (p1-nop cl)
-               (p1-tok cl () @ tr
+               (p1-tok (p1-cup cl) (. c ()) @ tr                ; the first char is the token's: a # the table leaves out
                   (. (p1-atom <tr) >tr))))))
 
    ; an unfinished datum is torn, never EOF. a splicing sigil over an open form renames
@@ -272,24 +265,6 @@
         (? (run = "\\") (. sym rest)
            (! (shed ? 1 (p1-glued? rest))) (. sym rest)
            (p1-read1 rest () @ d
-              (atom? d ? 'torn
-               (. (. 'mono (. (. sym (. <d ())) ())) >d)))))
-   ; a digit-led token is cut at its last sigil: 2?<>x is 2?<> around x; a numeral wins first
-   (p1-nop cl)
-     (: tr (p1-tok cl ())
-        tok <tr rest >tr a (p1-atom tok)
-        k0 (p1-runend tok 0 0)
-        lastc (cap (p1-drop cl (0 < k0 ? (k0 - 1) 0)))
-        shed (? (1 >= k0) ()
-                (!= lastc 45) ()
-                (p1-drop cl k0 @ r0 (two? r0 ? (p1-dig? <r0))))
-        k (shed ? (k0 - 1) k0)
-        r (p1-drop cl k)
-        (? (! (nom? a)) (. a rest)                  ; a numeral: untouched
-           (0 >= k) (. a rest)                   ; no sigil: a plain name-led token
-           (! (p1-glued? r)) (. a rest)             ; run ends the form: the plain symbol
-           (: sym (nom (string (p1-take tok k ())))
-              d (p1-read1 r ())
               (atom? d ? 'torn
                (. (. 'mono (. (. sym (. <d ())) ())) >d)))))
    ; the next char starts a datum rather than ending the form
