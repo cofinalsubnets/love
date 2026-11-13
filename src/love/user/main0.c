@@ -9,7 +9,8 @@
 #include "boot0.h"                                   // src0_<name>[]: one literal per boot file, laid by sed
 static char const runner[] = "(reads(tap(s2cl tests)))";   // the stream shell (src/love/boot/post.l) drinks the corpus
 // each group joins into one text, read and run form by form
-static char const *const mods0[] = { src0_kanren, src0_uu, src0_holo, src0_x64, src0_a64, NULL };
+static char const *const mods0[] = { src0_holo, src0_x64, src0_a64, NULL };
+// the corpus's carried units, which love0 has no tree to lift from
 static char const *const fresh0[] = { src0_kanren, src0_uu, NULL };
 static char const *const prelpost0[] = { src0_prel, src0_post, NULL };
 static char const *const prelev0[] = { src0_prel, src0_ev, NULL };
@@ -40,6 +41,7 @@ struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
     return evals(g, "((cite 'cli 'cli-line) cmdline 0)"); }
   g = evals0(g, prelpost0);
   g = evals0(g, mods0);
+  g = evals0(g, fresh0);
   g = evals_(g,
     "(borrow '(uu kanren posix))"
     "(: (s2cl s) ((: (g i) (? (< i (tally s)) (. (peep s i 0) (g (+ 1 i))))) 0)"

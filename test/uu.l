@@ -1,4 +1,4 @@
-; uu -- the UniMath corpus, checked by the uu kernel baked from src/love/boot/uu.l
+; uu -- the UniMath corpus, checked by the uu kernel, src/apps/uu.l
 ; the kernel surface the corpus reads bare re-leaks here, body-less, for later files
 (: uu (cite 'uu) GLOB (uu 'GLOB) HELPC (uu 'HELPC) vof (uu 'vof)
    capp (uu 'capp) conv (uu 'conv)

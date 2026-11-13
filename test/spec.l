@@ -604,14 +604,14 @@
 ; on a miss; a string is a path; 'x/y includes lib/x/y.l into the head. (cite 'name) is the
 ; module's tablet (a missing one answers (), so lit? is the presence test); (cite ()) lists names.
 (test
-  (lit? (cite 'uu)) (lit? (cite 'kanren))                      ; boot-loaded, registered
-  (elem 'kanren (cite ())) (elem 'uu (cite ()))          ; listed
+  (lit? (cite 'path)) (lit? (cite 'text))                      ; boot-loaded, registered
+  (elem 'path (cite ())) (elem 'text (cite ()))          ; listed
   !(cite 'spec-nope)                                            ; the presence guard
-  (tablet? (cite 'kanren))                                      ; a module is its tablet
-  (elem 'walk (keys (cite 'kanren)))                         ; so `keys` introspects it
-  (8 = (cite 'kanren 'subst '(()) 8))                           ; curried member reach
-  !(cite 'kanren 'spec-missing)                                 ; a member miss reads ()
-  (lit? (cite 'kanren 'unify)) (lit? rand) (lit? reads))        ; unify rides its module; rand and reads are base
+  (tablet? (cite 'path))                                        ; a module is its tablet
+  (elem 'pbase (keys (cite 'path)))                          ; so `keys` introspects it
+  ("b" = (cite 'path 'pbase "a/b"))                             ; curried member reach
+  !(cite 'path 'spec-missing)                                   ; a member miss reads ()
+  (lit? (cite 'path 'segs)) (lit? rand) (lit? reads))           ; segs rides its module; rand and reads are base
 
 ; (module 'nm form ..) defines without a file: it opens nm's layer (the registered tablet on a
 ; reopen), evals each form there, registers, and answers the tablet; (module () ..) registers nowhere.

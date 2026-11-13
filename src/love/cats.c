@@ -1,5 +1,5 @@
-// cats.c -- the baked source, deflated by src/tools/lcat.l into one header: the egg's texts,
-// the module registry, the glaze. only a love with no image to wake reads it
+// cats.c -- the baked source, deflated by src/tools/lcat.l into one header: the egg's texts
+// and the glaze. only a love with no image to wake reads it
 #include "love.h"
 #include "cats.h"
 // every build takes the whole registry: `cite` of an unregistered module answers (), silently
@@ -21,19 +21,11 @@ static struct g *cat_eval(struct g *g, unsigned char const *z, uintptr_t zn, uin
   return alloc(t, 0), g; }
 #define CatEval(g, nm) cat_eval((g), nm, sizeof nm - 1, nm##_raw)
 
-// the egg wants its three texts at once
+// the egg wants its three texts at once; post carries the arch's holo
 struct g *cats_egg(struct g *g) {
   char *e = CatOpen(g, cat_egg_z), *r = CatOpen(g, cat_prel_z), *o = CatOpen(g, cat_post_z);
   if (e && r && o) g = egg(g, e, r, o);             // prel carries ev's half spliced after its own
   alloc(e, 0), alloc(r, 0), alloc(o, 0);
-  return g; }
-
-// kanren and uu, then the arch's holo, scan riding it; post's modules registered with post
-struct g *cats_lib(struct g *g) {
-  g = CatEval(g, cat_mods_z);
-#ifdef LvCatModsH
-  g = CatEval(g, cat_lib_h_z);
-#endif
   return g; }
 
 #ifdef LvGlazed

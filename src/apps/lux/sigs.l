@@ -6,7 +6,7 @@
 ; and nothing changes at run time (the overlay law: erasable). Gradual:
 ; an unknown (a cap/cup harvest, a local) rides through; only a known kind in
 ; the wrong seat clashes. Check a form with ((cite 'overlay 'ov-check) lux-dom
-; lux-sigs form) -- src/love/boot/kanren.l; test/host/overlay.l gates core.l +
+; lux-sigs form) -- src/apps/kanren.l; test/host/overlay.l gates core.l +
 ; layout.l clean against this table, and the deliberate wound flagged. This is
 ; rung 1 of typing lux; the uu-proved StackSet laws ride on top of it.
 ;

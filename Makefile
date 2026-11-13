@@ -24,11 +24,11 @@ endif
 .DELETE_ON_ERROR:
 
 # love0's boot text: one header, one src0_<name>[] literal per file, laid by sed alone --
-# love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides;
-# src/love/main.c names the ones love0 evaluates.
+# love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides, and
+# the carried provers its corpus borrows; src/love/user/main0.c names the ones love0 evaluates.
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-boot0_l = $(wildcard src/love/boot/*.l) src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l
+boot0_l = $(wildcard src/love/boot/*.l) src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/apps/kanren.l src/apps/uu.l
 out/lib/boot0.h: $(boot0_l)
 	@echo '$(t_sed)	'$@
 	@mkdir -p out/lib
@@ -416,7 +416,8 @@ picfiles = src/apps/pic/grap.l src/apps/pic/gpic.l src/apps/pic/chem.l src/apps/
 # caja, TeX's engine, and the font metrics under it. the engine proper (mouth, build,
 # exec) is the -ini tests', borrowed by path, never carried as a unit
 cajafiles = src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l
-carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+# kanren and uu: the provers, which only tests, tools and the bench borrow
+carryfiles = src/apps/kanren.l src/apps/uu.l $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
