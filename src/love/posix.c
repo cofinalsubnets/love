@@ -1554,8 +1554,9 @@ static lvm(lvm_close) {
   if (cell(Sp[0])->ap == lvm_port_io) {
     struct io *io = (struct io*) Sp[0];
     intptr_t fd = io_fd(io);
-    bool horn = io->vt == &love_horn_vt;       // its device shuts its own way, after the run lands
-    if (fd >= 0 || horn) {
+    bool horn = io->vt == &love_horn_vt,       // its device shuts its own way, after the run lands
+         duct = io_duct(io);                   // a duct marks both halves shut, for its pump
+    if (fd >= 0 || horn || duct) {
       g->io = io;
       Pack(g);
       g = io_wflush(g, io);
@@ -1566,8 +1567,10 @@ static lvm(lvm_close) {
         g->next_wake_at = love_clock() + 1;
         love_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
-      if (horn) love_horn_shut((struct io*) Sp[0]); else close(fd);
-      ((struct io*) Sp[0])->vt = &closed_vt; } }   // re-read: wflush may collect
+      if (duct) duct_shut((struct io*) Sp[0], 2);   // its vt stays, for the pump's take
+      else {
+        if (horn) love_horn_shut((struct io*) Sp[0]); else close(fd);
+        ((struct io*) Sp[0])->vt = &closed_vt; } } }   // re-read: wflush may collect
   Sp[0] = ZeroPoint;
   love_musttail return Next(1); }
 

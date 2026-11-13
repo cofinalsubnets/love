@@ -13,10 +13,12 @@
 ;   (sock-close s now)         a connection's fin, or its rst when unread data is left
 ;   (sock-farend s) (sock-name s) -> ("quad" port) | 'enotconn
 ;   (sock-readable? s) (sock-writable? s) (sock-closed? s) (sock-err s) -> a nom or ()
+;   (sock-port s)              -> a duct (src/love/io.c) over a connection: say, see, chug,
+;                                 seal and close work it, each net-pump moving its bytes
 ; a malformed address or the wrong kind of socket answers 'badarg, as the hosted door does
 (module (sock sock-connect sock-listen sock-bind sock-accept sock-write sock-read sock-send
          sock-recv sock-seal sock-close sock-farend sock-name sock-readable? sock-writable?
-         sock-closed? sock-err)
+         sock-closed? sock-err sock-port)
 (borrow '(bytes net tcp))
 (:
    dg-max 1472
@@ -133,5 +135,42 @@
     (? (s 'shut) 1
        (tcp? s) ((s 't) 'st = 'closed)
        0)
+
+   ; --- a connection as a port --------------------------------------------------------------
+   ; each duct rides the stack's 'ducts by its connection's key, moved by a ticker. a pin or a
+   ; pull of one key is all either side does: a task preempted mid-turn loses nothing. po and pi
+   ; hold what one side took and the other could not yet, so a full side stalls the next take
+   (sock-port s)
+    (? (!(tcp? s)) 'badarg
+       (: st (s 'st)
+          d (duct 0)
+          _ (peep st 'ducts 'none = 'none ? (pin st 'ducts {}, pin st 'ticks (duct-tick . st 'ticks)) 0)
+          (pin (st 'ducts) ((s 't) 'key) {'d d 's s 'po "" 'pi "" 'wend 0 'wsent 0 'rend 0 'done 0}, d)))
+   (duct-tick st now)
+    (each (keys (st 'ducts))
+      (k \ peep (st 'ducts) k () @ e (e = () ? 0 (outward e now, inward e now, e 'done ? (pull (st 'ducts) k 0) 0))))
+   ; the far side failed: the program hears the nom as its end, and writes no more
+   (gone e n) (pin e 'po "", pin e 'wend 1, pin e 'wsent 1, pin e 'rend 1, duct-feed (e 'd) n)
+   ; the program's bytes to the socket, then its write half's end as a fin
+   (outward e now)
+    (: d (e 'd) s (e 's)
+       _ ((#(e 'po) = 0 && !(e 'wend)) ? (duct-take d @ b (b = () ? (pin e 'wend 1) (pin e 'po b))) 0)
+       (? (0 < #(e 'po))
+            (sock-write s (e 'po) now @ n (? (charm? n) (pin e 'po (snip (e 'po) n #(e 'po))) (n = 'eagain) 0 (gone e n)))
+          (e 'wend && !(e 'wsent)) (pin e 'wsent 1, sock-seal s 1 now)
+          0))
+   ; the socket's bytes to the program; once it reads no more they are drained, and when its
+   ; write half is done too the socket closes
+   (inward e now)
+    (: d (e 'd) s (e 's)
+       room (duct-room d)
+       (? (room < 0) (sock-read s now, e 'wsent ? (pin e 'done 1, sock-close s now) 0)
+          (0 < #(e 'pi)) (duct-feed d (e 'pi) @ n (pin e 'pi (snip (e 'pi) n #(e 'pi))))
+          (e 'rend) 0
+          (sock-read s now @ r
+             (? (r = 'eagain) 0
+                (r = "") (pin e 'rend 1, duct-feed d ())
+                (string? r) (duct-feed d r @ n (pin e 'pi (snip r n #r)))
+                (gone e r)))))
 )
 ) ; module sock
