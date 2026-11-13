@@ -1,22 +1,17 @@
-; src/apps/hearts/image.l -- rung 0's image: a GPT disk for qemu virt (a64), and the signed
-; updates that move it. the disk:
-;   1 ESP (FAT32): EFI/BOOT/BOOTAA64.EFI (src/inle/uefi/slot.c), a/Image.gz, a/cmd, hearts.st
-;   2 root a, 3 root b (squashfs, deflated; b empty until an update writes it), 4 data (ext4)
-; a root: love as /bin/love, helm's script as init (/bin/helm), src/apps/hearts/dev.l and app.l, the update key.
+; src/apps/hearts/image.l -- rung 0's image: a GPT disk for qemu virt (a64). the disk:
+;   1 ESP (FAT32): love's boot menu -- EFI/BOOT/BOOTAA64.EFI (src/inle/uefi/loader.c), love.elf,
+;     love.stay, love.cmd, boot.l -- and the Image it starts
+;   2 root (squashfs, deflated), 3 data (ext4)
+; a root: love as /bin/love, helm's script as init (/bin/helm), src/apps/hearts/dev.l and app.l.
 ; the parts lie back to back from 1 MiB, each `at` where the one before it ends.
-; usage: love -l src/apps/sqfs.l -l src/apps/ext4.l image.l OUT LOVE IMAGE EFI SEED BADSEED [STAMP]
-;   writes OUT/disk.img (v1 in slot a) and OUT/u1.hup (v2 signed by BADSEED, refused),
-;   OUT/u2.hup (v2 with a byte of its root changed under a good head, refused), OUT/u3.hup (v2)
-;   and OUT/u4.hup (v3, sick); LOVE is a baked a64 love, IMAGE the kernel,
-;   EFI the chooser, SEED and BADSEED 32-byte keys as hex, STAMP the one time every file
-;   carries (seconds, default 0): the same inputs give the same bytes on any host.
+; usage: love -l src/apps/sqfs.l -l src/apps/ext4.l image.l OUT LOVE IMAGE EFI KERNEL [STAMP]
+;   writes OUT/disk.img; LOVE is a baked a64 love, IMAGE linux, EFI love's loader, KERNEL the
+;   love.elf it starts, STAMP the one time every file carries (seconds, default 0): the same
+;   inputs give the same bytes on any host.
 (borrow '(bytes posix gz fat sqfs ext4 hashes))
 (: ; its words are the ones after its own name, whatever loaded ahead of it
    (after l) (atom? l ? () (<l @ (_ + "image.l") >l (after >l)))
    as (after cmdline)
-   ; by name: a borrow of 'ssh would bring its own split
-   ed-sign (cite 'ssh 'ed-sign)
-   ed-pub (cite 'ssh 'ed-pub)
    (gone s) (say err ("hearts-image: " + s + "\n"), quit 1)
    (rd f) (uread f @ r (two? r ? <>r (gone ("cannot read " + f))))
    (le v n) (wrle v n)
@@ -71,68 +66,41 @@
    ; --- a root ---------------------------------------------------------------
    helm-conf """
      (oneshot mounts (exec "/bin/love" "/lib/hearts/dev.l" "mount"))
-     (service watch (after mounts) (exec "/bin/love" "/lib/hearts/dev.l" "watch" "20") (restart no))
      (service app (after mounts) (exec "/bin/love" "/app/run.l") (restart no))
-     (target default (wants mounts watch app))
+     (target default (wants mounts app))
      """
    (dir kids) ['dir 493 kids]
    (fil mode b) ['file mode b]
-   (root love ver sick pub)
+   (root love ver)
     (dir [["app" (dir [["run.l" (fil 420 (rd "src/apps/hearts/app.l"))]])]
         ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)]])]
-        ["boot" (dir ())] ["data" (dir ())] ["dev" (dir ())] ["drop" (dir ())]
-        ["etc" (dir ((sick ? [["sick" (fil 420 "")]] ())
-                   + [["hearts.pub" (fil 420 pub)] ["helm.l" (fil 420 helm-conf)]
-                      ["version" (fil 420 (ver + "\n"))]]))]
+        ["boot" (dir ())] ["data" (dir ())] ["dev" (dir ())]
+        ["etc" (dir [["helm.l" (fil 420 helm-conf)] ["version" (fil 420 (ver + "\n"))]])]
         ["lib" (dir [["hearts" (dir [["dev.l" (fil 420 (rd "src/apps/hearts/dev.l"))]])]])]
         ["proc" (dir ())] ["run" (dir ())] ["sys" (dir ())] ["tmp" (dir ())]
         ["usr" (dir [["bin" (dir ())]])]])
    ; helm is four files catted into one script, run by love as the kernel's init
    helm ("#!/bin/love\n" + join "" (map rd ["src/apps/helm/unit.l" "src/apps/helm/sup.l"
                                             "src/apps/helm/moor.l" "src/apps/helm/helm.l"]))
-   cmd "console=ttyAMA0 rootfstype=squashfs ro rootwait panic=5 init=/bin/helm"
-
-   ; --- an update: a signed 4K head, then the parts, as dev.l streams them ---------
-   ; a part is [enc bytes raw]: enc 1 when bytes are raw deflated
-   (hup seed ps)
-    (: (ent p) (p @ [enc b raw] (le enc 8 + le #b 8 + le #raw 8 + hex2b (sha256 raw)))
-       hd ("hearts-update 2\n" + join "" (map ent ps))
-       head (hd + ed-sign seed (ed-pub seed) hd @ h (h + zbytes (4096 - #h)))
-       body (head + join "" (map (p \ p 1) ps))
-       (body + zbytes (padk #body 4096)))
+   cmd "console=ttyAMA0 rootfstype=squashfs ro rootwait panic=5 init=/bin/helm root=/dev/vda2"
+   ; the menu boots the one entry after a second; the kernel its guest runs the menu
+   bootl "(timeout 1)\n(default 0)\n(entry \"hearts\" \"/Image\" \"\(cmd)\")\n"
 
    odir (as 0)
    love (rd (as 1))
-   kernel (rd (as 2))
+   image (rd (as 2))
    efi (rd (as 3))
-   seed (hex2b (as 4))
-   bad (hex2b (as 5))
-   stamp (#as > 6 ? (read (as 6)) 0)
-   pub (ed-pub seed)
-   (rootimg ver sick) (sqfs-make (root love ver sick pub) stamp 'zlib)
-   r1 (rootimg "v1" 0)
-   r2 (rootimg "v2" 0)
-   r3 (rootimg "v3" 1)
+   kelf (rd (as 4))
+   stamp (#as > 5 ? (read (as 5)) 0)
+   r1 (sqfs-make (root love "v1") stamp 'zlib)
    rsz (32 * mib)
-   _ (#r1 <= rsz * 512 || gone "a root outgrows its slot")
-   ; the kernel lies and travels gzipped (an arm64 Image does not unpack itself: the chooser
-   ; inflates it), the root as it is (squashfs deflates its own blocks)
-   kz (deflate-best kernel @ z (string? z ? z (gone "cannot deflate the kernel")))
-   kgz (string 31 + string 139 + string 8 + string 0 + le stamp 4 + string 2 + string 3
-        + kz + le (crc32 kernel) 4 + le #kernel 4)
-   (upd r) [[0 kgz kgz] [0 r r] [0 cmd cmd]]
-   (flip s i) (snip s 0 i + string (255 - s i) + snip s (i + 1) #s)
-   esp (fatimg (128 * mib) [["EFI/BOOT/BOOTAA64.EFI" efi] ["a/Image.gz" kgz]
-                            ["a/cmd" (cmd + " root=/dev/vda2\n")] ["hearts.st" "a-\n"]])
+   _ (#r1 <= rsz * 512 || gone "the root outgrows its part")
+   esp (fatimg (128 * mib) [["EFI/BOOT/BOOTAA64.EFI" efi] ["love.elf" kelf] ["love.stay" "stay\n"]
+                            ["love.cmd" "src/inle/uefi/menu.l\n"] ["boot.l" bootl] ["Image" image]])
    data (ext4-image (ext4-make 16384 (made "data") (made "data hash") stamp) 16384)
    ps [["esp" esp-type mib (128 * mib) esp]
-       ["root-a" linux-type (129 * mib) rsz r1]
-       ["root-b" linux-type (161 * mib) rsz ""]
-       ["data" linux-type (193 * mib) (64 * mib) data]]
-   total (257 * mib + 34)
+       ["root" linux-type (129 * mib) rsz r1]
+       ["data" linux-type (161 * mib) (64 * mib) data]]
+   total (225 * mib + 34)
    (disk (odir + "/disk.img") ps total,
-    uwrite (odir + "/u1.hup") (hup bad (upd r2)),
-    uwrite (odir + "/u2.hup") (flip (hup seed (upd r2)) (4096 + #kgz + 4096)),
-    uwrite (odir + "/u3.hup") (hup seed (upd r2)),
-    uwrite (odir + "/u4.hup") (hup seed (upd r3)),
-    say err "hearts-image: disk.img and four updates\n"))
+    say err "hearts-image: disk.img\n"))

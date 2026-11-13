@@ -55,6 +55,9 @@
       ; the kind off the fd: a file, and a directory opened read-only
       (: fd (openfd f 0) s (stat fd) (close fd, 32768 = 61440 & <>>s))
       (: fd (openfd d 0) s (stat fd) (close fd, 16384 = 61440 & <>>s))
+      ; mode 6 reads and writes, and makes nothing
+      (: fd (openfd f 6) p (fdopen fd) c (see p) (close p, c = 104))
+      ('enoent = (openfd (f + "-absent") 6))
       ; close of a stranger, or a second close, is 'ebadf
       (: fd (openfd f 0) a (close fd) b (close fd) (!a && 'ebadf = b))
       ('ebadf = (close 4096))

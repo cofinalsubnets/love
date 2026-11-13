@@ -1823,6 +1823,40 @@ moonrun -shared -o "$ho/libmso.so" "$ho/.so.c" > /dev/null 2>&1 || fail "mooncc 
 $cc_g -o "$ho/.soexe" "$ho/.somain.c" -L"$ho" -lmso -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
   && "$ho/.soexe"; a=$?
 [ $a -eq 42 ] || fail "a -shared object under ld.so: plt import, abs64 import, relative (got $a want 42)"
+# data imports, libc's environ and the exe's knob, reached through their got slots: gcc's own
+# -shared build of the same file is the oracle
+cat > "$ho/.sod.c" <<'EOF'
+extern char **environ;
+extern int knob;
+static char ***pe = &environ;
+int nenv(void) { int n = 0; while (environ[n]) n++; return n; }
+int turn(void) { knob += 5; return knob; }
+int same(void) { return *pe == environ; }
+EOF
+cat > "$ho/.sodmain.c" <<'EOF'
+int knob = 24;
+int nenv(void), turn(void), same(void);
+int main() { return nenv() + turn() + 10 * same(); }
+EOF
+moonrun -shared -o "$ho/libmsod.so" "$ho/.sod.c" > /dev/null 2>&1 || fail "mooncc -shared: data imports"
+$cc_g -shared -fpic -o "$ho/libgsod.so" "$ho/.sod.c"
+for l in gsod msod; do
+  $cc_g -o "$ho/.sod$l" "$ho/.sodmain.c" -L"$ho" -l$l -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+    && env -i A=1 B=2 C=3 "$ho/.sod$l"; a=$?
+  [ $a -eq 42 ] || fail "lib$l.so's data imports under ld.so (got $a want 42)"
+done
+[ "$(readelf -rW "$ho/libmsod.so" | awk '$3 == "R_X86_64_GLOB_DAT" {print $5}' | sort | tr '\n' ' ')" = "environ knob " ] \
+  || fail "a -shared data import has no glob_dat slot"
+# ..a64's adrp and add of one: the add a load from the slot
+moonrun -t a64 -shared -o "$ho/libmsod64.so" "$ho/.sod.c" > /dev/null 2>&1 || fail "mooncc -t a64 -shared: data imports"
+[ "$(readelf -rW "$ho/libmsod64.so" | awk '$3 == "R_AARCH64_GLOB_DAT" {print $5}' | sort | tr '\n' ' ')" = "environ knob " ] \
+  || fail "an a64 -shared data import has no glob_dat slot"
+if command -v aarch64-linux-gnu-gcc > /dev/null && command -v qemu-aarch64 > /dev/null && [ -d /usr/aarch64-linux-gnu/lib ]; then
+  cp "$ho/libmsod64.so" "$ho/libmsoda.so"
+  aarch64-linux-gnu-gcc -o "$ho/.soda" "$ho/.sodmain.c" -L"$ho" -lmsoda -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+    && env -i A=1 B=2 C=3 qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.soda"; a=$?
+  [ $a -eq 42 ] || fail "an a64 -shared object's data imports under ld.so (got $a want 42)"
+fi
 
 # -- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'
