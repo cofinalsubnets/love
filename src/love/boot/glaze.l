@@ -75,14 +75,14 @@
        '(label loop) '(leax r0 r9 r9 1 0) ['ldx 'r0 'r7 'r0 W 0] '(cmp r0 r10) '(br eq hit)
        '(test r0 1) '(br eq miss) '(inc r9) '(and r9 r9 r8) '(jmp loop)])                 ; gap (even) -> miss
    (mreg A ir) (map (f \ map (x \ (x = 'r0 ? A x)) f) ir)
-   (mpeep-ir tgt A d) (: W (wd tgt) (mreg A (mprobe-ir tgt                           ; miss -> d; hit -> slot[I].value, untagged
-      + [['label 'miss] ['li 'r0 d] '(jmp end)
-         '(label hit) '(leax r0 r9 r9 1 0) ['ldx 'r0 'r7 'r0 W W] '(sar r0 1) '(label end)])))
+   (mget-ir tgt A d) (: W (wd tgt) (mreg A (mprobe-ir tgt                            ; miss -> d, or OVF with no d; hit -> slot[I].value, untagged
+      + [['label 'miss] (d = () ? '(jmp OVF) ['li 'r0 d]) '(jmp end)
+         '(label hit) '(leax r0 r9 r9 1 0) ['ldx 'r0 'r7 'r0 W W] '(test r0 1) '(br eq OVF) '(sar r0 1) '(label end)])))   ; a heap value OVFs
    (asmx-seed ir nm addr) (: t {nm addr} f (glazeasm 'at)
                              (((lit? f ? f (cite 'holo 'assemble-at)) 'x64 ir t) 'bytes))   ; one pre-bound external label nm->addr
    ; the write tails: insert-or-update. a near-full table wants a grow native cannot do, so it
    ; deopts through the caller-seeded label; fixnum keys and values, so no write barrier
-   (mpin-ir tgt A) (: W (wd tgt) (mreg A (mprobe-ir tgt + [['label 'miss]
+   (mput-ir tgt A) (: W (wd tgt) (mreg A (mprobe-ir tgt + [['label 'miss]
       ['ld 'r0 'r7 (-2 * W)] '(sar r0 1) '(cmp r0 r8) '(br ge deopt)                ; len >= mask -> near-full -> deopt
       '(leax r0 r9 r9 1 0) ['stx 'r7 'r0 W 0 'r10]
       '(pop r8) '(leax r8 r8 r8 1 1) ['stx 'r7 'r0 W W 'r8]
@@ -94,9 +94,9 @@
    (suse? e P) (? (atom? e) 0  (elem <e '(peep tally pin) && <>e = P) 1  (foldl (a \ x \ a || suse? x P) 0 >e))
    (buse? e P) (? (atom? e) 0  (<e = 'pin && <>e = P) 1  (foldl (a \ x \ a || buse? x P) 0 >e))   ; a cask: the guard wants the buf kind, not str
    (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup two?) && <>e = P) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: raw, no entry guard, since two? is total
-   (muse? e P) (? (atom? e) 0  ((<e = 'mpeep || <e = 'mpin) && <>e = P) 1  (foldl (a \ x \ a || muse? x P) 0 >e))   ; a map: raw, map-guarded
    (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)
    (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)
+   (ause? e P) (two? e ? (<e = P && 2 = #e ? 1 (foldl (a \ x \ a || ause? x P) 0 >e)) 0)   ; (P k): a map applied
    ; a point key, (P = <..) or (<.. = P): raw word identity guarded nom|mint, since a charm
    ; could bridge (2 = 2.0)
    (nuse? e P)
@@ -289,7 +289,7 @@
    ; every head the amble reads by name, masked out of all three recognizers when a frame takes it.
    ; list/&&/|| have no arm and ride for the mask alone; ? and : are reader syntax, never names
    aopnames '(two? cap cup + - * // % & | ^ < <= > >= = == . || && tally long? list
-              one? nil? atom? != !== peep mpeep)
+              one? nil? atom? != !== peep)
    (ahascall? env go e)                                                  ; any non-op head: the bisect knob's test
     (? (aquote? e) 0
        (two? e) (: op <e
@@ -612,7 +612,7 @@
                     (oop = 'tally && elem 'tally gn && atom? >as) (aseq cl as)
                     (op = amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
                     (elem oop '(cap cup . + - * // % & | ^ < <= > >= =)) (fbk ? (aseq cl as) (aguard (aseq cl as)))   ; stubs in fallback mode
-                    (elem oop '(mpeep peep)) (aguard (aseq cl as))         ; reads: a guard, never a call-out
+                    (oop = 'peep) (aguard (aseq cl as))         ; reads: a guard, never a call-out
                     (acomp? op) (aseq cl ex @ 'bad 'bad 1)                  ; the head runs before the args
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
@@ -1432,6 +1432,8 @@
                (elem op '(& | ^))
                  (bcat [(go a) [['push A]] (go b) [['pop T] [(bitop op) A A T]]])
                (elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['set cc A]]]))
+               (op = 'mget) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)    ; (mget MAP k): an applied map, a miss OVFs
+                  (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mget-ir tgt A ()) lp ht ms en 'deopt)]))
                ())
             (op a b c)
             (? (op = '?)
@@ -1442,10 +1444,10 @@
                (op = 'pin) (: R (argregir tgt (argix a ps 0))                              ; (pin C i V): V's low byte at C's backing[i], answers C
                   (bcat [(go b) [['push A]] (go c)
                          [['pop T] ['ld 'r8 R (wd tgt)] ['stxb 'r8 T 1 (2 * wd tgt) A] ['mov A R]]]))
-               (op = 'mpeep) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)   ; (mpeep MAP k d): the raw value, a gap-miss -> d
-                  (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mpeep-ir tgt A (whole? c ? c 0)) lp ht ms en 'deopt)]))
-               (op = 'mpin) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)   ; (mpin MAP k v): a grow-due miss -> OVF; answers the map
-                  (bcat [(go c) [['push A]] (go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mpin-ir tgt A) lp ht ms en 'OVF) [['mov A R]]]))   ; v pushed as the spill mpin-ir's (pop r8) takes
+               (op = 'mget) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)    ; (mget MAP k d): the raw value, a gap-miss -> d
+                  (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mget-ir tgt A (whole? c ? c 0)) lp ht ms en 'deopt)]))
+               (op = 'mput) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)    ; (mput MAP k v): a grow-due miss -> OVF; answers the map
+                  (bcat [(go c) [['push A]] (go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mput-ir tgt A) lp ht ms en 'OVF) [['mov A R]]]))   ; v pushed as the spill mput-ir's (pop r8) takes
                ())
             (op a)
             (? (op = 'tally) (: R (argregir tgt (argix a ps 0)) [['ld A R (wd tgt)]])       ; the raw len at [STR+w]
@@ -1549,46 +1551,49 @@
    ; jgir-ok?: does the group lane implement every op at the arity cggir lowers? the backstop for
    ; natjit, which has no recognizer. jgir-arity counts the head too; another arity would drop operands in silence
    jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 '. 3
-               '? 4 'peep 4 'pin 4 'mpeep 4 'mpin 4
+               '? 4 'peep 4 'pin 4
                'tally 2 'two? 2 'cap 2 'cup 2 'whole? 2}
-   (jgir-ops-ok? syms e)
+   (jgir-ops-ok? syms ps e)                                   ; ps: a param applied, (P k), is a map read
     (atom? e ? (gem? e || twin? e ? 0 1)                       ; a smooth-numeric leaf is out of the integer lane
        (: op <e
           n (jgir-arity op)
-          ((elem op syms || n && #e = n) && all (x \ jgir-ops-ok? syms x) >e)))
+          ((elem op syms || elem op ps && #e = 2 || n && #e = n) && all (x \ jgir-ops-ok? syms ps x) >e)))
    ; the lane's copy of a def: a whole? test answers 1 there or deopts, so its else arm is dead in the lane --
    ; it runs in the interpreter, where the deopt takes the def as written
    (jgir-lane e) (? (atom? e) e
                     (#e = 4 && <e = '? && two? (e 1) && <(e 1) = 'whole? && #(e 1) = 2) ['? (jgir-lane (e 1)) (jgir-lane (e 2)) 0]
                     (map jgir-lane e))
    (jgir-lane-def d) (<d . jgir-lane >d)
-   (jgir-ok? defs0) (: defs (map jgir-lane-def defs0) syms (map (d \ <<d) defs)
-      (all (d \ jgir-ops-ok? syms >d) defs && jgir-kinds-ok? defs
+   (jgir-ok? defs0 mp) (: defs (map jgir-lane-def defs0) syms (map (d \ <<d) defs)
+      (all (d \ jgir-ops-ok? syms ><d >d) defs && jgir-kinds-ok? defs mp
        && !(any (d \ any (p \ elem p syms) ><d) defs)))                              ; a param named like a group fn shadows it: cggir would call the fn
    ; a deopt reruns the whole call from the entry, so the group's writes must come out the same twice:
    ; a blind write does, a write after a read of that same kind need not. maps alias across params,
-   ; so mpin beside any mpeep declines; a cask is only read through its own peep'd param
+   ; so a map's pin beside any map's read declines; a cask is only read through its own peep'd param
    (jhas? op e) (? (atom? e) 0 (<e = op) 1 (any (jhas? op) >e))
    (jgir-reach n defs) (: syms (map (d \ <<d) defs)
       (go seen) (: nx (dedup (seen + filter (s \ any (d \ elem <<d seen && jhas? s >d) defs) syms))
                    (#nx = #seen ? seen (go nx)))
       (filter (d \ elem <<d (go [n])) defs))
-   (jgir-entry-ok? n defs) (jgir-rerun-ok? (jgir-reach n defs))      ; a deopt reruns only the call that entered
-   (jgir-rerun-ok? defs)
-    (: info (jgir-info defs) km (jgir-kmaps info)
-       (!(any (d \ jhas? 'mpin >d) defs && any (d \ jhas? 'mpeep >d) defs)
+   (jgir-entry-ok? n defs mp) (jgir-rerun-ok? (jgir-reach n defs) mp)      ; a deopt reruns only the call that entered
+   (jgir-rerun-ok? defs mp)
+    (: info (jgir-info defs) km (jgir-kmaps info mp)
+       (mapped? use) (any (i \ any (j \ elem 1 (jgir-kind km <i j) && use (i 2) (i 1 j)) (rangeL 0 (i 3))) info)
+       (!(mapped? buse? && (mapped? puse? || mapped? ause?))
         && all (i \ all (j \ !(elem 2 (jgir-kind km <i j)) || !(puse? (i 2) (i 1 j))) (rangeL 0 (i 3))) info))
    ; the param kinds at the fixpoint: only the entry's slots are guarded, so every group call must hand a
-   ; kinded slot a value of that same kind -- a param of the caller kinded alike (or a pin/mpin on one,
+   ; kinded slot a value of that same kind -- a param of the caller kinded alike (or a pin on one,
    ; which answers it), or a cell of a chain
    (jgir-info defs) (map (d \ (: nf <d [<nf >nf >d #>nf])) defs)          ; (name params body arity)
-   (jgir-kmaps info) (map (u \ kfix u info) [suse? muse? buse? cuse? nuse?])   ; kinds 0..4: string map cask chain point
-   (jgir-kind km nm j) (: ks (filter (k \ elem j (gsm nm (km k))) (rangeL 0 5))
+   ; kinds 0..4: string map cask chain point. a map is the tablet fact, mp, never a guess from use
+   (jgir-kmaps info mp) (: k (map (u \ kfix u info) [suse? buse? cuse? nuse?]) [(k 0) mp (k 1) (k 2) (k 3)])
+   (jgir-kind km nm j) (: ks0 (filter (k \ elem j (gsm nm (km k))) (rangeL 0 5))
+      ks (elem 1 ks0 ? (filter (k \ k != 0 && k != 2) ks0) ks0)                 ; a map's peep and pin are its own
       (elem 3 ks ? (filter (k \ k != 4) ks) ks))                            ; a chain-used param is never a point
-   (jgir-kinds-ok? defs)
-    (: info (jgir-info defs) km (jgir-kmaps info) syms (map cap info)
+   (jgir-kinds-ok? defs mp)
+    (: info (jgir-info defs) km (jgir-kmaps info mp) syms (map cap info)
        (cellv? a) (two? a && elem <a '(cap cup .))
-       (argp a) (? (two? a && elem <a '(pin mpin)) <>a a)          ; (pin P ..) and (mpin P ..) answer P
+       (argp a) (? (two? a && <a = 'pin) <>a a)          ; (pin P ..) answers P
        (argok? f fp g j a0) (: kg (jgir-kind km g j) a (argp a0)
           (? (elem a fp) (kg = jgir-kind km f (posof a fp 0))
              (atom? kg) 1
@@ -1597,25 +1602,32 @@
           (: g <e as >e
              ((!(elem g syms) || all (j \ argok? f fp g j (as j)) (rangeL 0 #as))
               && all (callok? f fp) as)))
+       (pok? f fp body j) (: ks (jgir-kind km f j) P (fp j)                    ; a map has no raw tally, and only a map applies
+          (elem ks ['() '(0) '(0 2) '(1) '(3) '(4)] && (ks = '(1) ? !(tuse? body P) !(ause? body P))))
        (all (i \ (: f <i fp (i 1)
-                     (all (j \ elem (jgir-kind km f j) ['() '(0) '(0 2) '(1) '(3) '(4)]) (rangeL 0 #fp)
-                      && callok? f fp (i 2)))) info))
-   ; the ((mpeep..) (peep..) (mpin..) (pin..) def..) tail the deopt fallback re-evaluates
+                     (all (j \ pok? f fp (i 2) j) (rangeL 0 #fp) && callok? f fp (i 2)))) info))
+   ; the (def.. entry) tail the deopt fallback re-evaluates
    (jgir-lrf entry ds) (atom? ds ? [entry] (: d <ds (<d . (>d . jgir-lrf entry >ds))))
-   ; jitgroupir: defs are ((nameform . body) ..), the entry is the group's value. the deopt fallback is (ev <group>), so the
-   ; mpeep/mpin -> peep/pin aliases must assemble on every target; by the sequence law they read the previous global binding, not themselves
-   (jitgroupir defs entry tgt)
-    (jitgroupirx defs entry tgt (ev-run (': . ('(mpeep mc mk md) . ('(peep mc mk md) . ('(mpin mc mk mv) . ('(pin mc mk mv) . jgir-lrf entry defs)))))))
+   ; jitgroupir: defs are ((nameform . body) ..), the entry is the group's value, the deopt fallback (ev <group>).
+   ; mp: the params the tablet fact makes maps, (name . indices) per fn
+   (jitgroupir defs entry tgt) (jitgroupirm defs entry tgt ())
+   (jitgroupirm defs entry tgt mp) (jitgroupirx defs entry tgt (ev-run (': . jgir-lrf entry defs)) mp)
+   ; the lane's map ops: a map param's peep, pin and application, in the lane's copy only
+   (mlane M e) (? (atom? e) e
+                  (4 = #e && elem <e '(peep pin) && elem (e 1) M) [(<e = 'peep ? 'mget 'mput) (e 1) (mlane M (e 2)) (mlane M (e 3))]
+                  (2 = #e && elem <e M) ['mget <e (mlane M (e 1))]
+                  (map (mlane M) e))
    ; jitgroupirx takes the deopt target directly: the natjit hook passes the bytecode twin `e`, so a group-bearing
    ; closure native-backs without re-entering the evaluator mid-ala
-   (jitgroupirx defs0 entry tgt deopt)
+   (jitgroupirx defs0 entry tgt deopt mp)
     (: defs (map jgir-lane-def defs0)
-       parse (map (d \ (: nf <d [<nf >nf >d])) defs)            ; (name params body) per fn
+       km (jgir-kmaps (jgir-info defs) mp)
+       parse (map (d \ (: nf <d M (filter (P \ elem 1 (jgir-kind km <nf (posof P >nf 0))) >nf)
+                         [<nf >nf (mlane M >d)])) defs)                             ; (name params body) per fn
        syms (map cap parse)
        efn (gfind (f \ (<f = entry)) parse)  eps (efn 1)  eb (efn 2)  k #eps
        ord (efn . filter (f \ !(<f = entry)) parse)                      ; the entry first, so H_entry sits right after the outer
        valt (hasl eb)
-       km (jgir-kmaps (jgir-info defs))
        (kmask i) (filter (j \ elem i (jgir-kind km entry j)) (rangeL 0 k))
        smask (kmask 0)
        mmask (kmask 1)
@@ -1849,7 +1861,7 @@
       (fnpair? pr && occurs? g body && !(uses-head? roalloc body)
        && !(any (s \ s != g && occurs? s body) sibs)))
    ; --- write-loop: a read-modify-write self-loop (g i) (? COND (: k.. _ (pin H k V) (g STEP)) H) over a captured map, hoisted
-   ;     with (mpin H k V) threaded into the call's H slot and base H -> 0 (native answers a fixnum): sound only where H's result is discarded, bumpok?'s job
+   ;     with (pin H k V) threaded into the call's H slot and base H -> 0 (native answers a fixnum): sound only where H's result is discarded, bumpok?'s job
    (wmaph pr sibs) (: g <<pr body >pr                                                   ; the captured map H, else ()
       (!(fnpair? pr && occurs? g body && !(any (s \ s != g && occurs? s body) sibs)
            && two? body && <body = '? && 4 = #body) ? ()
@@ -1860,7 +1872,7 @@
                   (two? pinpr
                    && all (b \ b = pinpr || !(uses-head? roalloc >b)) binds   ; the only effect is that one pin
                    && two? call && <call = g ? BASE ()))))))
-   (wthread g gn fv H pr) (: body >pr COND (opd body 0) THEN (opd body 1)                    ; still peep/pin: mapfix rewrites to mpeep/mpin later
+   (wthread g gn fv H pr) (: body >pr COND (opd body 0) THEN (opd body 1)                    ; the tablet fact makes H a map
       pp (anat-defs >THEN) binds <pp call <>pp
       pinpr (afind (b \ (: v >b (two? v && <v = 'pin && <>v = H))) binds)
       pv >pinpr K (opd pv 1) V (opd pv 2)
@@ -1924,13 +1936,42 @@
         (atom? extradefs ? form
          (: allp (foldl (a \ r \ a + (<r . <>r)) () results)                          ; each hoisted def right behind its fn: a later value binding may call it
           (': . (hasbody ? (unpair allp body) (cbflat allp)))))))
-   ; --- mapfix: a group fn's param peep'd but never tally'd is a map, so (peep h k d) -> (mpeep h k d), the open-addressed
-   ;     probe; the entry's mapkind guard backstops the guess -- a non-map arg deopts
-   (peep->mpeep P e) (two? e ? (<e = 'peep && <>e = P ? ('mpeep . map (peep->mpeep P) >e) (map (peep->mpeep P) e)) e)
-   (pin->mpin P e)   (two? e ? (<e = 'pin && <>e = P ? ('mpin . map (pin->mpin P) >e) (map (pin->mpin  P) e)) e)   ; a cask param is pin'd-not-peep'd so never in mps
-   (mapfix-def def) (: nf <def body >def
-      mps (filter (P \ puse? body P && !(tuse? body P)) >nf)
-      (nf . foldl (b \ P \ pin->mpin P (peep->mpeep P b)) body mps))
+   ; --- the tablet fact: a group fn's param every call hands a tablet -- (tablet n) or (hash ..), a name a `:` binds
+   ;     to one, or a param of the caller that is one, (pin P ..) answering P -- is a map. a greatest fixpoint, so a
+   ;     self-call keeps it; the entry's map guard backstops a `tablet` rebound
+   (tabval? v) (two? v && elem <v '(tablet hash))
+   (tnoms x) (? (nom? x) [x] (two? x) (tnoms <x + tnoms >x) ())
+   (tshad cf ps) (two? cf ? (<cf . map (p \ elem p ps ? () p) >cf) cf)
+   (tdrop ns l) (filter (n \ !(elem n ns)) l)
+   ; each call of a group fn in e as [g args tabs cf]: tabs the tablet names in scope, cf the calling fn's
+   ; (name . params); a group name off a call's head escapes, ['esc g]
+   (tsites gs e tb cf)
+    (? (atom? e) (elem e gs ? [['esc e]] ())
+       (aquote? e) ()
+       (<e = '\ ) (: ps (init >e) (tsites gs (last e) (tdrop ps tb) (tshad cf ps)))
+       (<e = ': && two? >e)
+        (: pd (anat-defs >e) prs <pd
+           ns (cats (map (pr \ fnpair? pr ? [<<pr] (tnoms <pr)) prs))
+           g2 (tdrop ns gs)
+           tb2 (tdrop ns tb + map cap (filter (pr \ nom? <pr && tabval? >pr) prs))
+           (cats (map (pr \ fnpair? pr ? (tsites g2 >pr (tdrop ><pr tb2) (tshad cf ><pr)) (tsites g2 >pr tb2 cf)) prs)
+            + tsites g2 <>pd tb2 cf))
+       (elem <e gs) ([<e >e tb cf] . cats (map (x \ tsites gs x tb cf) >e))
+       (cats (map (x \ tsites gs x tb cf) e)))
+   ; mp for jitgroupirm: per group fn, the params the fact holds for
+   (tabfact form gs)
+    (: pd (anat-defs >form) prs <pd
+       tb (map cap (filter (pr \ nom? <pr && tabval? >pr) prs))
+       sites (cats (map (pr \ fnpair? pr ? (tsites gs >pr (tdrop ><pr tb) (elem <<pr gs ? <pr ())) (tsites gs >pr tb ())) prs)
+              + tsites gs <>pd tb ())
+       (ar g) (: pr (afind (pr \ fnpair? pr && <<pr = g) prs) #><pr)
+       (tab? S a st) (: x (two? a && <a = 'pin ? <>a a) cf (st 3)                    ; st: the site [g args tabs cf]
+                        (tabval? x || nom? x && (elem x (st 2) || two? cf && elem x >cf && elem [<cf (posof x >cf 0)] S)))
+       (ok? S g j) (: ss (filter (s \ <s = g) sites)
+                      (!(elem ['esc g] sites) && two? ss && all (s \ j < #(s 1) && tab? S (s 1 j) s) ss))
+       (go S) (: S2 (filter (gj \ ok? S (gj 0) (gj 1)) S) (#S2 = #S ? S (go S2)))
+       S (go (cats (map (g \ map (j \ [g j]) (rangeL 0 (ar g))) gs)))
+       (map (g \ g . map (gj \ gj 1) (filter (gj \ gj 0 = g) S)) gs))
    ; --- castbuild: (: (g v.. s ..) (? COND (g u.. (s + X) ..) s) (g i.. "" ..)) appends O(n^2). the single-byte counted case lowers
    ;     to a cask-fill (cbcask); the rest threads a `jug` in the accumulator's own loop slot, since autogroup's inliners would copy an aux (jug 0) into both use sites
    (cbquote? x) (two? x && <x = '\ && 2 = #x)
@@ -2301,7 +2342,8 @@
        (elem e pps) 0                                                                       ; a point param only in the point-= and point slots
        (elem e ps) 1  (charm? e) 1
        (two? e) (: op <e ar (clook2 op cands)
-          (? (-1 < ar) (#>e = ar && gargok? cm pm cands cps pps ps >e 0 op)
+          (? (elem op ps && 2 = #e) (groupok? cm pm cands cps pps ps <>e)                  ; (P k): a map read, if the fact holds
+             (-1 < ar) (#>e = ar && gargok? cm pm cands cps pps ps >e 0 op)
              (op = '= && 3 = #e                                              ; point-=: word identity, total since P is entry-guarded nom|mint
               && (: x1 <>e y1 <>>e                                             ; and equals only itself whatever the car's kind
                   (elem x1 pps && pwcar? cm cands cps ps y1
@@ -2311,8 +2353,6 @@
              (op @ '? (4 = #e && groupok? cm pm cands cps pps ps <>e && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)
              'tally   (2 = #e && elem <>e ps)
              'peep    (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && charm? <>>>e)   ; d a const
-             'mpeep   (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && charm? <>>>e)
-             'mpin    (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)   ; answers the map: threaded into a call's map slot, or discarded
              'pin     (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)
              'two?    (2 = #e && cok? cm cands cps ps <>e)
              'whole?  (2 = #e && groupok? cm pm cands cps pps ps <>e)
@@ -2348,12 +2388,12 @@
                                          (<<f . filter (k \ nuse? >f (fps k) && !(elem k cix)) (rangeL 0 #fps)))) fns)
                          vnames (map (f \ <<f) (filter (f \ hasl >f) fns))    ; the value-typed candidates (body conses)
                          (gfix fns cm pm vnames cands))
-   (rewrite-bindings bl gnames gdefs) (atom? >bl ? bl
+   (rewrite-bindings bl gnames gdefs mp) (atom? >bl ? bl
       (: nf <bl val <>bl  hit (two? nf && elem <nf gnames)
-         ok (hit && jgir-ok? gdefs && jgir-entry-ok? <nf gdefs)                        ; a declined group keeps its define-sugar
+         ok (hit && jgir-ok? gdefs mp && jgir-entry-ok? <nf gdefs mp)                  ; a declined group keeps its define-sugar
          ((ok ? <nf nf)
-            . ((ok ? (jitgroupir gdefs <nf arch) val)
-                  . (rewrite-bindings >>bl gnames gdefs)))))
+            . ((ok ? (jitgroupirm gdefs <nf arch mp) val)
+                  . (rewrite-bindings >>bl gnames gdefs mp)))))
    ; memo-leak?: a candidate reading a `:`-sibling map free. the group lane touches only a fn's own params, so a free map is a silent miscompile: decline to interp
    (memo-leak? form)
     (: ps <(anat-defs >form)
@@ -2409,8 +2449,8 @@
    ;     charm or a param at a leaf and a head that is a grammar word, a candidate or a swallowed global, so a body that fails
    ;     here fails grpfix whatever the swallow lowers -- the check that spares lowering a whole module to learn it
    (swhope? names ps e) (? (charm? e) 1  (atom? e) (elem e ps)
-                           (: h <e (nom? h && (elem h '(+ - * // % & | ^ < <= > >= = ? . tally peep mpeep mpin pin two? cap cup whole?)
-                                               || elem h names || peep srcreg h 0 != 0)
+                           (: h <e (nom? h && (elem h '(+ - * // % & | ^ < <= > >= = ? . tally peep pin two? cap cup whole?)
+                                               || elem h ps || elem h names || peep srcreg h 0 != 0)
                                       && all (x \ swhope? names ps x) >e)))
    (autogroup form0)
     (srcrec form0, ; before any decline
@@ -2434,8 +2474,9 @@
                    ; a group of swallowed members only rewrites nothing here, so committing the lowered form stakes the file on it for nothing
                    !(ho-any (p \ elem (two? <p ? <<p <p) (map cap grp)) pairs) form0
                    (: gnames (map cap grp)
-                      gdefs (map mapfix-def (filter (p \ elem <<p gnames) fns))
-                      (jgir-ok? gdefs && any (n \ jgir-entry-ok? n gdefs) gnames ? (': . rewrite-bindings >form gnames gdefs) form0))))))))   ; a group the lane declines stakes nothing on the lowered form
+                      gdefs (filter (p \ elem <<p gnames) fns)
+                      mp (tabfact form gnames)
+                      (jgir-ok? gdefs mp && any (n \ jgir-entry-ok? n gdefs mp) gnames ? (': . rewrite-bindings >form gnames gdefs mp) form0))))))))   ; a group the lane declines stakes nothing on the lowered form
    ; --- twolow: a complex-recurrence grid becomes the real-pair float grid autonat glazes: each twin param p splits into (p_r p_i),
    ;     twin ops become real-pair arithmetic, call-site twin args split in two; a fixpoint picks the twin params. bit-exact: z*z's imag rides 2*re*im, and scaling by 2 is exact
    (twolow form)
@@ -2686,10 +2727,10 @@
                           gnames (map caap gdefs)
                           flat? (okshape && elem <tail gnames && >tail = ps)
                           osym '__outer  agdefs (okshape ? (gdefs + [((osym . ps) . tail)]) ())
-                          (? (flat? && grp-ok? gdefs && jgir-ok? gdefs && jgir-rerun-ok? gdefs && gdefs-ok? gdefs)
-                             (hit (jitgroupirx gdefs <tail arch e))
-                             (okshape && !(elem osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs && jgir-rerun-ok? agdefs && gdefs-ok? gdefs)
-                             (hit (jitgroupirx agdefs osym arch e))
+                          (? (flat? && grp-ok? gdefs && jgir-ok? gdefs () && jgir-rerun-ok? gdefs () && gdefs-ok? gdefs)
+                             (hit (jitgroupirx gdefs <tail arch e ()))
+                             (okshape && !(elem osym gnames) && opnd-ok? ps tail && grp-ok? agdefs && jgir-ok? agdefs () && jgir-rerun-ok? agdefs () && gdefs-ok? gdefs)
+                             (hit (jitgroupirx agdefs osym arch e ()))
                              (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)                 ; the last lane
                                 (aj ? (hit aj)
                                    (defer e s a gv farq lams nm ti ta inl rt))))))))))
