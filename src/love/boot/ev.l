@@ -34,6 +34,14 @@
 ; and tally read mutable state and pin writes it; on text or a chain pin answers a fresh container
 (: readset (: names '(peep pin tally)
    (foldl (\ t s (: v (gv s ()) (v ? (pin t v 1) t))) {} names)))
+; what cprop knows of a value's kind, keyed by value as pureset is: a test's answers by kind (1 a
+; charm, 2 a string, 3 a pair), or ('head arity kind) for a head that answers one kind. cpkindfill
+; pins the ones bound so far; the egg calls it again past post, once show is
+(: cpkinds {}
+   (cpkindfill _) (each '((two? 0 0 1) (atom? 1 1 0) (charm? 1 0 0) (string? 0 1 0) (nom? 0 0 0) (tray? 0 0 0)
+                        (tally head 1 1) (show head 1 2) (. head 2 3))
+                      (r \ (: v (gv <r ()) (v ? (pin cpkinds v >r)))))
+   _ (cpkindfill 0))
 (: feels (:
    lvm_cur  (pick 0 (+))
    lvm_ret0 (pick 1 cap)
@@ -182,30 +190,6 @@
               (letc . rows . wxb bs (ns + bnd) [rows #bnd #ns])))   ; a let's names all shadow throughout
      ; no macro lane: cprop's output is macro-free
      (fold (mapi (e \ wx e bnd) x) bnd)))
-   ; lflat: (: a b (: c d e)) -> (: a b c d e). three gates: both lets carry a body (a body-less
-   ; inner would hand the outer's names its defglob lane), the names are disjoint, and no inner
-   ; name is read by an outer def, since merging widens every outer def's scope.
-   (lend bs) (? (atom? bs) ()
-                (atom? >bs) bs
-                (lend >>bs))             ; the body's one-cell tail, 0 = body-less
-   (lsub? (': . u)) (two? (lend u))                 ; a spliceable inner let?
-   (lup bs) (atom? >bs ? ><bs (<bs . lup >bs))               ; the body's list, in its place
-   ; lrd/lrdl: does x read any name in ms?
-   (lrd ms x bnd) (?
-    (nom? x) (elem x ms && nil? (elem x bnd))
-    (atom? x) 0
-    (<x == '\) (atom? >>x ? 0 (: r (lp x) (lrd ms >r (<r + bnd))))
-    (<x == ':) (lrdl ms >x (ln >x + bnd))
-    (any (e \ lrd ms e bnd) x))
-   (lrdl ms bs bnd) (? (atom? bs) 0
-    (atom? >bs) 0                                                    ; the trailing body is not a def
-    (: nd (dsug <bs <>bs) (lrd ms >nd bnd || lrdl ms >>bs bnd)))
-   (lflat bs) (: t (lend bs)
-    (!(two? t && lsub? <t) ? bs
-     (: b <t ns (ln bs) ms (ln >b)
-      (? (any (m \ elem m ns) ms) bs                            ; a name collision
-         (lrdl ms bs ns) bs                                          ; an outer def reads an inner name
-         (lflat (lup bs))))))
    ; census: one walk of the defs answers boxfix's read graph and, per lambda sibling, the names
    ; it captures, resolved as ana will. an enclosing let's lambda sibling, seen from inside one of
    ; that let's lambda defs, is rebuilt at each reference from its imports, so its row reads there
@@ -258,16 +242,6 @@
     (grow s) (: s2 (foldl (a \ m \ (two? (wt m) ? (foldl (b \ v \ (elem v b ? b (v . b))) a >(wt m)) a)) s s)
                 (#s2 = #s ? s (grow s2)))
     (<bf . map (r \ <r . filter (v \ !(two? (wt v))) (grow >r)) rows))
-   ; --- the identity kit: unchanged -> the original, no copy --------------------------------
-   ; a `:`-bound non-tail call allocates where an arg/tail-position call is free, so a walk
-   ; result rides to its comparison as a sibling-call argument, never a fresh binding.
-   (keep x r h) (r == >x ? x (h . r))                        ; the walked tail vs the original
-   (keep2 x h r) (h == <x && r == >x ? x (h . r))           ; walked head and tail vs the original
-   (keep1 b e) (e == <b ? b [e])
-   (keep3 b p q r) (p == <b && q == <>b && r == >>b ? b (p . q . r))
-   (mapi f x) (atom? x ? x (mapi2 x (f <x) (mapi f >x)))
-   (mapi2 x e r) (e == <x && r == >x ? x (e . r))
-   (relam x r b) (b == >r ? x ('\ . <r + [b]))              ; r = (lp x), b the walked body
    (wxl1 c x r bnd) (wxl2 c x (relam x r (wx >r (<r + bnd))))
    (wxl2 c x lam) (push c 'src (>lam . x), lam)            ; surface src for ala, stashed even on identity to keep the assoc order
    (wxb bs bnd fr) (?
@@ -277,22 +251,6 @@
      (keep3 bs <nd (wxd >nd bnd fr) (wxb >>bs bnd fr))))
    (wxd d bnd fr) (!(lambp d) ? (wx d bnd)                        ; a lambda def walks under its let's frame
                      (push c 'fr fr, (: w (wx d bnd) (pop c 'fr, w))))
-   ; cflip: (? (nil? e) c [el]) is (? e [el] c), so drop the nil? wrapper of an exact (nil? e)
-   ; test in a 2- or 3-form clause. the head answers to the value as well as the name, and only
-   ; the name defers to sh, the shadow: a spliced value has no binder to hide it.
-   (cflip bs sh) (: r (cflip1 bs sh) (r == bs ? bs (cflip r sh)))
-   (cflip1 bs sh) (two? >bs && two? <bs && atom? >><bs
-                   && (<<bs == nilv || (!sh && <<bs == 'nil?)) ?
-    (: e <><bs c <>bs rest >>bs
-     (? (atom? rest)       [e () c]                ; (nil? e) c    -> (e () c)
-        (atom? >rest) [e <rest c]        ; (nil? e) c el -> (e el c)
-        bs))
-    bs)
-   ; cst: kconst re-read as (const? . falsy?), so a folded test prunes its dead branch
-   (cst t) (: c (kconst t)
-              (? <c (1 . !>c)
-                 (atom? >t && atom? <t && !(nom? <t)) (1 . !<t)  ; (c) == c: a folded test lands wrapped
-                 0))
    (wxc bs bnd) (: fb (cflip bs (elem 'nil? bnd))
     (? (atom? fb) [()]                           ; clauses ran out: implicit () else
        (atom? >fb) (keep1 fb (wx <fb bnd))      ; the lone else
@@ -300,383 +258,452 @@
         (? (atom? k) (keep3 fb t (wx <>fb bnd) (wxc >>fb bnd))   ; unknown -> keep the clause
            >k   (wxc >>fb bnd)               ; statically false -> drop this clause, try the rest
                      [(wx <>fb bnd)]))))     ; statically true  -> this result is the cond, drop rest
-   ; napof: v is a non-nif multi-arg fn the n>1 call args saturate -> its arity, the width of the
-   ; leading n-ary apply; a surplus arg curries onto that answer, not the head. 1 = a value that
-   ; is no cur, which takes its args one at a time; 0 = unknown (not yet bound, or a cur the args
-   ; leave short), the optimistic apply. the peeps are `==`-safe: a non-fn value never matches lvm_cur.
-   (napof v args) (? (charm? v) 1
-                     (lvm_cur !== pick 0 v) (v == () ? 0 1)
-                     (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
-   ; fold: un-shadowed global head -> ap (fold/iop/apx); else an apx node (apx n head . args)
-   ; carrying the strategy: n > 1 = the leading n-ary apply's width, 0 = the l2r chain.
-   (fold x bnd) (: h <x
-    (? (atom? >x) x                          ; (f): ana's (atom? b) handles it
-       ; a value head (opfix's glued lane, a macro splice): no binding reaches a value, so it
-       ; takes feels' lane
-       !(nom? h) (: hd (charm? h || two? h ? 0 (feels h))
-                          (hd ? (hd x) (apx . 0 . x)))
-       (: v (gv h ())
-        (? (v == () && !(feels v)) (apx . 0 . x)    ; no global to shadow: the local lane either way
-           (elem h bnd) (apx . 0 . x)                ; a shadowed name: local head
-           (: hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
-            (? (two? n) (apx . napof v >x . ['\ (jf 2)] . jotsub >x <jf <n)   ; a walker over jot: its twin
-               hd (hd x)
-               (apx . napof v >x . x)))))))
-   ; the walked operand of a walker call is (jot N), as fold leaves it: (apx 0 jot N), the head
-   ; book's jot by name or by value -> [N], else ()
-   (jotn x jf bnd) (: a (two? jf && jf 1 = #>x && >x <jf) j (jotfuse 'jot)
-    (two? a && <a == apx && 4 = #a && <>a == 0
-     && (: h <>>a (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>>>a] ()))
-   (jotsub as k n) (k = 0 ? (n . >as) (<as . jotsub >as (k - 1) n))
-   ; jotin: a walker over (jot N) whose step is a lambda literal -> a counted loop with the step's
-   ; body inline, the twin kept for a list N. the loop's own names are fresh and its ops spliced
-   ; as values, so the body captures nothing. a fold's Z and N trade places only when one of them
-   ; is plain
-   ; dv: the local names as fusion's oracle reads them, jdefs' rows, a param [n 0]
-   (jotin x bnd dv) (? (atom? x) x
-                    (<x == '\) (atom? >>x ? x (: r (lp x) ps (jsyms <r) (relam x r (jotin >r (ps + bnd) (jvars ps + dv)))))
-                    (<x == ':) (atom? >x ? x (: ns (ln >x) (keep x (jotinb >x (ns + bnd) (jdefs >x ns + dv)) ':)))
-                    (npow (jotx (mapi (e \ jotin e bnd dv) (jfuse x bnd dv)) bnd)))
-   ; (N x), N a literal 2..4: a number under apcap takes ipow's own products inline, the same tree
-   ; and so the same answer; the rest, a function's church power, data's, a scare, keeps num-ap's lane
-   (npow y) (two? y && charm? <y && 2 <= <y && <y <= 4 && 2 = #y ? (npow1 <y <>y) y)
-   (npow1 n a) (: t (nom 0) h (nom 0) q (nom 0)
-                  pw [': h [mulv 1 t] (n @ 2 [mulv h h]
-                                            3 [mulv [mulv h h] t]
-                                            [': q [mulv h h] [mulv q q]])]
-                  [': t a ['? [numv t] ['? [lev n [peepv apv 0 0]] pw [n t]] [n t]]])
-   (jotinb bs bnd dv) (? (atom? bs) bs
-                         (atom? >bs) (keep1 bs (jotin <bs bnd dv))
-                         (keep3 bs <bs (two? <bs ? (: ps (jsyms <bs) (jotin <>bs (ps + bnd) (jvars ps + dv))) (jotin <>bs bnd dv))
-                                (jotinb >>bs bnd dv)))
-   (jvars ps) (map (p \ [p 0]) ps)
-   ; a :'s rows: a helper bound once [n 'fn lambda], a constant [n 'lit], else [n 0]
-   (jdefs bs ns) (atom? bs || atom? >bs ? () (jdef <bs <>bs ns + jdefs >>bs ns))
-   (jdef k v ns) (? (two? k) (nom? <k && 1 = #(filter (== <k) ns) ? [[<k 'fn ('\ . >k + [v])]] (jvars (jsyms k)))
-                    (1 < #(filter (== k) ns)) [[k 0]]
-                    (string? v || charm? v || gem? v) [[k 'lit]]
-                    (two? v && <v == '\) [[k (atom? >>v ? 'lit 'fn) v]]
-                    [[k 0]])
-   (jdv h dv) (? (atom? dv) () (<<dv == h) <dv (jdv h >dv))
-   ; fusion interleaves a stage's calls with the consumer's, so a stage fuses only when pure: each
-   ; call a pure fn's, a pure local helper's (its own recursion taken as pure), a constant's, or a
-   ; read where rd licenses one, the consumer writing nothing. vs: the helpers being visited
-   jreads (map (n \ gv n ()) '(peep tally keys))
-   (jp? x dv rd vs) (? (atom? x) 1
-                       (<x == '\) (atom? >>x || (: r (lp x) (jp? >r (jvars (jsyms <r) + dv) rd vs)))
-                       (<x == '? || <x == ':) (all (e \ atom? e || jp? e dv rd vs) >x)
-                       (jph? <x >x dv rd vs && all (e \ jp? e dv rd vs) >x))
-   (jph? h as dv rd vs) (? (nom? h) (: e (jdv h dv)
-                                       (? (two? e) (e 1 @ 'fn (elem h vs || jp? (e 2) dv rd (h . vs)) 'lit 1 0)
-                                          (jpv? (gv h ()) as dv rd vs)))
-                           (two? h) 0
-                           (jpv? h as dv rd vs))
-   ; a walker is as pure as the fn it is handed
-   (jpv? v as dv rd vs) (string? v || constellation? v || pure-hv? v as || rd && elem v jreads
-                         || (jwalk? v && two? as && jpf? <as dv rd vs))
-   (jpf? f dv rd vs) (nom? f ? (jph? f () dv rd vs) (jp? f dv rd vs))
-   (jwalk? v) (v != () && (two? (jotfuse v) || v == jotfuse 'filter))
-   ; fusion: a walker over a map/filter chain takes the stages into its step, one pass and no list
-   ; between. a stage's fn and the consumer apply to fresh names, so nothing captures. [list step] places by kind
-   (jfuse x bnd dv) (: h <x jf (nom? h && !(elem h bnd) ? (jotfuse (gv h ())) ())
-      (? !(two? jf) x
-         (: kind (jkind jf) (? (kind = 3) x
-            ((? (kind < 2) [2 0] (kind = 2) [0 1] [1 0]) @ [li si]
-             (: as >x F (as si) pl (jpeel (as li) bnd ())
-               (? (atom? <pl || #as != jf 1 || !(atom? F || <F == '\ || jp? F dv 0 ())) x
-                  (: rd (jpf? F dv 1 ()) ss <pl
-                     (? !(all (s \ jpf? (s 1) dv rd ()) ss) x
-                        (: a (nom 0) i (nom 0)
-                           (step b) (? (kind = 0) ['\ a i b] (kind = 1) ['\ i a b] ['\ i b])
-                           sk (? (kind < 2) a (kind = 2) () (kind = 4) 1 0)
-                           (done v) (japp F (? (kind = 0) [a v] (kind = 1) [v a] [v]))
-                           (<x . jput as li <>pl si (step (jbody ss i sk done)))))))))))))
-   (jkind jf) (? (jf == jotfuse 'foldl) 0 (jf == jotfuse 'foldr) 1 (jf == jotfuse 'each) 2 (jf == jotfuse 'map) 3 (jf == jotfuse 'all) 4 5)
-   (jput as li l si f) (atom? as ? as ((? (li = 0) l (si = 0) f <as) . jput >as (li - 1) l (si - 1) f))
-   ; the stages, innermost first, and the list under them
-   (jstage L bnd) (two? L && 3 = #L && nom? <L && !(elem <L bnd) ? (: v (gv <L ()) (? (jotfuse v == jotfuse 'map) 1 (v == jotfuse 'filter) 2 0)) 0)
-   (jpeel L bnd ss) (: t (jstage L bnd) (t ? (jpeel <>>L bnd ([t <>L] . ss)) [ss L]))
-   ; the step's body: v the element, sk a filtered one's answer, done the consumer on the last
-   (jbody ss v sk done) (? (atom? ss) (done v)
-                           (<ss @ [t f] (t = 1 ? (: w (nom 0) [': w (japp f [v]) (jbody >ss w sk done)])
-                                                 ['? (japp f [v]) (jbody >ss v sk done) sk])))
-   ; f applied to fresh names: a plain lambda as a let, a partial flattened, else the call
-   (japp f as) (? (two? f && <f == '\ && two? (jstep f #as)) (': . (jrows (init >f) as + [(last f)]))
-                  (two? f && nom? <f && !(elem <f ['? '\ ':])) (f + as)
-                  (f . as))
-   (jrows ps as) (atom? ps ? () (<ps . <as . jrows >ps >as))
-   (jsyms p) (? (nom? p) [p] (atom? p) () (jsyms <p + jsyms >p))
-   (jplain? e) (atom? e || <e == '\ && atom? >>e)
-   ; the step's params when it is (\ p.. B) with np distinct plain names, else ()
-   (jstep s np) (two? s && <s == '\ && #s = np + 2 && (: ps (init >s)
-                  (all (p \ nom? p && p != ()) ps && #ps = #(foldl (a \ p \ (elem p a ? a (p . a))) () ps))) ? (init >s) ())
-   (jotx y bnd) (: h <y ops (jotfuse 'ops)
-                   jf (nom? h && two? ops ? (gv h () @ v (nom? v || elem h bnd ? () (jotfuse v))) ())   ; a shadowed head has none
-                   (? (two? jf && (jf 1) = #>y) (jotk y jf (jsrc (>y <jf) bnd) ops bnd) y))
-   ; the source operand (jot N), the book's jot by name or by value -> [N], else ()
-   (jsrc L bnd) (two? L && 2 = #L && (: j (jotfuse 'jot) h <L (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>L] ())
-   (jotk y jf n ops bnd) (: as >y k <jf
-                        (? !(two? n) y
-                           (: kind (jkind jf)
-                              F (as (k = 0 ? 1 0))
-                              ps (jstep F (kind < 2 ? 2 1))
-                              (? !(two? ps) y
-                                 (kind < 2 && !(jplain? <n || jplain? (as 1))) y
-                                 (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops (jnum? <n bnd ops))))))
-   ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
-   (jnum? N bnd ops) (charm? N || two? N && 2 = #N && (: T (ops 5) h <N (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)))
-   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] l f]])))   ; a whole N loops, the rest is the twin's
-   ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
-   (jotloop1 kind F ps B N Z tw ops)
-    (: lt <>ops pl <>>ops cons (ops 3) rv (ops 4)
-       n (nom 0) z (nom 0) go (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
-       (? (kind = 0) [[': n N z Z] n [tw F z n] [': [go I A] ['? [lt I n] [go [pl I 1] B] A] [go 0 z]]]
-          (kind = 1) [[': n N z Z] n [tw F z n] [': [go I] ['? [lt I n] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
-          (kind = 2) [[': n N] n [tw n F] [': [go I] ['? [lt I n] [': e B [go [pl I 1]]]] [go 0]]]
-          (kind > 3) (: t [go [pl I 1]] u (kind = 4)
-                        [[': n N] n [tw F n] [': [go I] ['? [lt I n] (u ? ['? B t 0] ['? B 1 t]) u] [go 0]]])
-          [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
-   ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
-   ; var and folds a pure-fn call on constant args; pureset is the fold license and a
-   ; bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc does) and unfolds no
-   ; recursion. only an already-constant RHS propagates, so it is letrec-safe, and a
-   ; non-constant rebind or a lambda param kills the name.
-   (propk? v) <(kconst v)
-   ; se, the static value env: a scope per binder, (tablet . parent). a name maps to its
-   ; (name value) entry, or to segone where the binder hides an outer one; a miss asks the parent
-   segone (mint 0)
-   (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) v (seget x >se))))
-   (sehide ns se) (foldl (\ t n (pin t n segone)) {} ns . se)   ; a binder's scope, its names hidden
-   (cbake v) (v == () || !(nom? v || two? v) ? v ['\ v])                       ; folded value -> source
-   (kval v) (atom? v ? v <>v)                                                  ; a const form -> its value
-   allk (all propk?)
-   ; apply the fn to the consts. a partial of a pure fn is pure at every arity, so this applies
-   ; without re-asking; but over-application can make a church numeral, so a step that grows
-   ; residualizes the rest, as cpap does.
-   (foldc o as) (atom? as ? (cbake o)
-                 (: r (o (kval <as))
-                  (cpgrew? o r ? (cbake o . as)
-                                 (foldc r >as))))
-   ; cpap: fold a head's known prefix, one operand at a time, while the value in hand still
-   ; applies purely: ("ab" "cd" x) leaves ("abcd" x), (3 2 x) leaves (8 x). a numeric head is
-   ; held to a charm-sized answer, since church application can answer an unboundedly large
-   ; value from a tiny form. `star?` drops the containers, whose magnitude says nothing of size.
-   (cpgrew? v r) (constellation? v && !(star? r && abs r <= max-charm))
-   ; a nif the args saturate inlines as an iop in feels' lane, so its prefix stays an operand
-   (nifsat? v as) (!(charm? v) && lvm_cur == pick 0 v && lvm_ret0 == pick 3 v && peek 1 v = #as)
-   (cpap v as) (: k (two? as ? (kconst <as))
-    (? (atom? as) (cbake v)                                              ; every operand consumed -> the value
-       !(<k && pure-ap? v >k) (cbake v . as)                      ; unknown operand or an impure apply -> stop
-       (: r (v >k) (cpgrew? v r ? (cbake v . as)                      ; ... or a numeral that left the charm band
-                       (cpap r >as)))))
-   ; --- the known-lambda inliner (cprop's beta-reduction lane) ----------------------------
-   ; beta-reduce an application whose resolved head is a statically-known lambda. three gates: the
-   ; lambda is inlinable (non-recursive, body bsub-safe, and closed, so it means the same at the
-   ; call site), the args are pure (allp), and a fuel bound caps the cascade. an under-saturated
-   ; call substitutes the given args and answers a \ of the rest.
-   ; `=` does not bridge beta, so a beta-produced closure must never escape where =/==/show could
-   ; observe it: one is committed only when consumed (op=1, an enclosing application's head), and
-   ; at a value position (op=0) the un-inlined source stays.
-   ; the purity oracle: applying v to this known first operand is effect-free. readset is pure
-   ; only on an immutable container, which is why k is a parameter.
-   (pure-fn? v k) (pureset v || readset v && (string? k || two? k))
-   ; two operands, always: under-applied this answers a closure, which is truthy, and every
-   ; purity gate below silently opens. `as` is the arg forms: a non-constant denies readset.
-   (pure-hv? v as) (pure-fn? v (: k (two? as ? (kconst <as)) (<k ? >k)))
-   (pure-head? h as) (pure-hv? (gv h ()) as)
-   ; pure-ap?: the same question for cpap's walk, widened by the data lanes, which never run what
-   ; they are handed. a partial of a pure fn is not itself in pureset, so the walk stops at one:
-   ; ((+) 1 2 x) folds ((+) 1) and no further. () is named apart: nom? declines it.
-   (pure-ap? v k) (string? v || two? v || nom? v || v == () || constellation? v || pure-fn? v k)
-   (allp as se) (all (a \ purep a se) as)
-   (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
-    (h = '\ || atom? a) 1
-    (h = '?) (allp >a se)
-    (nom? h) (: e (seget h se)                                              ; a known pure lambda or a pure fn, applied to pure args
-     (? (two? e && lambp <>e) (allp >a se) (pure-head? h >a) (allp >a se)))))
-   (smpl? x) (?                                                                        ; bsub-safe body: no : / macro head
-    (atom? x) 1
-    (<x == ':) 0
-    (<x == '\) (atom? >>x || smpl? <>x)
-    (nom? <x) (!(macros <x) && all smpl? x)
-    (all smpl? x))
-   (fvs x bs) (?                                                                       ; free vars of a simple term
-    (nom? x) (x == () || elem x bs ? () [x])
-    (atom? x) ()
-    (<x == '\) (two? >>x ? (: r (lp x) (fvs (last x) (<r + bs))))
-    (foldl (a \ e \ a + fvs e bs) () x))
-   (closedl? lam) (all (v \ gv v ()) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
-   (pbody? x bnd) (?                                                                   ; body is pure: every call head a pure fn or a param
-    (atom? x) 1
-    (<x == '?) (all (e \ pbody? e bnd) >x)
-    (<x == '\) (atom? >>x ? 1 (: r (lp x) (pbody? (last x) (<r + bnd))))
-    (nom? <x) ((pure-head? <x >x || elem <x bnd) && all (e \ pbody? e bnd) >x)
-    (all (e \ pbody? e bnd) x))
-   (inlinable? nm lam) (lambp lam && smpl? lam && closedl? lam && pbody? lam () && !(w nm lam 0 0 0))
-   (rmkeys ps env) (filter (p \ !(elem <p ps)) env)                         ; drop shadowed substitutions
-   (colnms bs) (atom? >bs ? ()                                                  ; a :'s binder noms, a define's head too
-                (: n <(dsug <bs 0) (nom? n ? (n . colnms >>bs) (colnms >>bs))))
-   (bsub env x) (?                                                                     ; capture-avoiding substitution
-    (nom? x) (assq x env @ (_ . x) x x)
-    (atom? x) x
-    (<x == '\) (atom? >>x ? x
-       (: r (lp x) ps <r ren (map (p \ p . nom 0) ps)                      ; rename binders fresh -> no capture
-          ('\ . (map cup ren + [(bsub (ren + rmkeys ps env) (last x))]))))
-    (<x == ':) (: y (': . dsrows >x) nms (colnms >y) ren (map (p \ p . nom 0) nms)   ; whole-form, so an entangled : never reaches here (entg?)
-       (map (e \ bsub (ren + rmkeys nms env) e) y))
-    (map (e \ bsub env e) x))
-   (dsrows bs) (atom? >bs ? bs (dsug <bs <>bs @ (n . d) (n . d . dsrows >>bs)))   ; (f a) B as f (\ a B), so the renaming sees f
-   (beta lam as) (: r (lp lam) ps <r np #ps                               ; apply a lambda to args (curried)
-    (#as < np ?                                                             ; under-saturated -> substitute the given,
-       (bsub (zip ps as) ('\ . drop #as ps + [(last lam)]))             ;   answer a \ of the rest
-       (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
-          (two? rest ? (bd2 . rest) bd2))))
-   ; --- the binding splice (laws: test/uuspllaw.l) --------------
-   ; a saturated known-lambda call with an impure arg. pure args substitute; the last effectful
-   ; arg substitutes too when its param is read exactly once, unconditionally, and the body is
-   ; otherwise pure. every other effectful arg binds once to a fresh nom, in call order, ahead
-   ; of the body. a read-many effectful form is never substituted.
-   ; rdn: reads of param v in x. an occurrence under \ or ? counts double (it can run zero or
-   ; many times), a shadowing binder zeroes its subtree, a quote is data.
-   (rdn v x) (?
-    (nom? x) (x == v)
-    (atom? x) 0
-    (<x == '\) (atom? >>x ? 0 (: r (lp x) (elem v <r ? 0 (2 * rdn v (last x)))))
-    (<x == '?) (2 * foldl (a \ e \ a + rdn v e) 0 >x)
-    (<x == ':) (elem v (colnms >x) ? 0 (foldl (a \ e \ a + rdn v e) 0 >x))
-    (foldl (a \ e \ a + rdn v e) 0 x))
-   (lasti ps as se) (atom? ps ? -1                                             ; index of the last effectful arg, -1 = none
-    (: k (lasti >ps >as se)
-     (0 <= k ? (1 + k) (purep <as se) -1 0)))
-   (spl ps as se i si bd) (atom? ps ? '(())                               ; (binds . env), call order; si = the substitutable index
-    (: r (spl >ps >as se (i + 1) si bd) p <ps a <as
-     (? (purep a se) (<r . ((p . a) . >r))
-        (i = si && 1 = rdn p bd) (<r . ((p . a) . >r))                  ; the licensed effectful substitution
-        (: n (nom 0) ((n . a . <r) . ((p . n) . >r))))))
-   (bspl x h h2 hr as se fl op bnd pb) (: r (lp hr) np #<r
-    (#as < np ? (keep2 x h2 as)                                           ; under-saturated -> decline: a partial's effects fire at build time
-     (: bd0 (last hr)
-        ; a nom head resolved through se already passed pbody? at admission
-        bok (nom? h || pbody? hr ())
-        sp (spl <r (take np as) se 0 (bok ? (lasti <r (take np as) se) -1) bd0)
-        bd (bsub >sp bd0)
-        rest (drop np as)
-      (op || two? rest || !(lambp bd) ?
-         (: f2 (atom? <sp ? bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
-            (cprop (two? rest ? (f2 . rest) f2) se (burn fl) op bnd pb))
-         (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
-   ; a param that shadows an enclosing lambda param or let name renames to a fresh mint (with its
-   ; like-named inners: one cluster, so a pre-pin read still sees the outer) -- ana's letrec loads
-   ; a sibling's captures by name at each reference site, and a shadow would hand it its own value.
-   (cplam x se fl op bnd pb) (atom? >>x ? x                                       ; (\ v) quote -> leave
-    (: r (lp x)
-     (any (p \ p != '_ && elem p pb) <r ?
-        (cplam (foldl (\ z p (p != '_ && elem p pb ? (sub1 z p (nom 0)) z)) x <r) se fl op bnd pb)
-        (relam x r (cprop >r (sehide <r se) fl 0 (<r + bnd) (<r + pb))))))          ; the body is a value -> op 0
-   ; eager reads see let*, closures letrec*: bsub renames a :'s binders over the whole form, but
-   ; a bare read before its name's pin reads the outer binding, and the rename would capture it.
-   ; so a body with such an entangled : declines beta and the splice. over-approximate: any
-   ; not-yet-pinned sibling name in a def flags.
-   (occn v e) (? (e == v) 1 (atom? e) 0 (occn v <e || occn v >e))
-   (entg? x) (?
-    (atom? x) 0
-    (<x == '\) (atom? >>x ? 0 (entg? (last x)))
-    (<x == ':) (: nms (colnms >x)
-       (walk bs pn) (?
-        (atom? bs) 0
-        (atom? >bs) (entg? <bs)
-        (? (any (v \ !(elem v pn) && occn v <>bs) nms) 1
-           (entg? <>bs) 1
-           (walk >>bs (<bs . pn))))
-       (walk >x ()))
-    (any entg? x))
-   ; se is the let's own scope, its names hidden on the way in: each binding pins its name as it
-   ; goes, so a value sees the bindings before it and the body sees them all
-   (cpbinds bs se fl op bnd pb) (?
-    (atom? bs) bs
-    (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's body inherits the let's op
-    (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
-       _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] segone))         ; a const or a known pure lambda enters se
-       b (two? <bs ? (usug <bs v1) segone)                                    ; a define keeps its sugar
-       (b == segone ? (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb)) (keep3 bs <bs b (cpbinds >>bs se fl op bnd pb)))))
-   ; usug: the body under a define's head (f a..), dsug undone, or segone where cprop changed its lambdas
-   (usug k v) (? (atom? k) v
-                 (: w (usug <k v) (w != segone && two? w && <w == '\ && init >w = >k ? (last w) segone)))
-   ; bnd: the lexical binder set (\ params + : names): a local is never a macro head, and se can't
-   ; stand in, since absence from se doesn't tell local from global.
-   ; the atom test stays out of the @ chain: as the pin ^x it would compile to a deep `=`
-   (cprop x se fl op bnd pb) (atom? x ?
-    (nom? x ? (seget x se @ (_ . e . _) e x) x)              ; const/known-lambda var -> value
-    (<x @
-    '\ (cplam x se fl op bnd pb)
-    ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
-    '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
-    h (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
-       (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (atom? >x ? () (map (e \ cprop e se fl 0 bnd pb) (init >x) + [(cprop (last >x) se fl op bnd pb)])) bnd)
-          (m && !(elem h bnd)) (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
-          (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
-             hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
-             h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
-             hk (kconst hr)
-             (? (dch? hr as bnd se fl) (cprop (dch-ap <as hr >as) se fl op bnd pb)                 ; (N f x ..)
-                (two? hr && 2 = #hr && dch? <hr (>hr + as) bnd se fl)
-                  (cprop (dch-ap <>hr <hr as) se fl op bnd pb)                                     ; ((N f) x ..)
-                (lambp hr && two? as && fuel? fl hr)
-                 (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound
-                     (keep2 x h2 as)
-                    (allp as se)
-                     (: red (cprop (beta hr as) se (burn fl) op bnd pb)                         ; known lambda -> beta, re-cprop (fuel-bounded)
-                      (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> keep the closure
-                    (bspl x h h2 hr as se fl op bnd pb))
-                (nom? h && allk as && pure-head? h as && !(elem h bnd))            ; pure-fn on consts -> fold; a binder
-                  (foldc (gv h ()) as)                                                ;   spelled like an op still shadows
-                ; the same fold for a value head, a macro splice: no name to shadow, so no bnd
-                ; guard. ahead of cpap: cpap's licence stops at the first partial, and its
-                ; residual reads as a two? head that feels' lane then declines.
-                (<hk && atom? >hk && allk as && pure-hv? >hk as)
-                  (foldc >hk as)
-                (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
-                  (cpap >hk as)                                                       ;   keeps the value as its head
-                (keep2 x h2 as)))))))
-   ; && and || keep the macro's answer without its let where the left operand may be read twice:
-   ; (? a b a) and (? a a b), the shape the glaze's recognizers read
-   ; its operands come propagated: a sibling cprop's show would carry twice
-   (cpand h as bnd) (? (atom? as) (h == '&& ? 1 0)
-      (atom? >as) <as
-      (: a <as r (cpand h >as bnd)
-         (? (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
-            (: y (nom 0) [': y a (h == '&& ? ['? y r y] ['? y y r])]))))
-   ; dupok?: a leaf, or a pure fn over dupok? operands in nine nodes or fewer: cheap to read twice, the same answer both times
-   (dupok? a bnd) (? (atom? a) 1
-                     (9 < nsz a) 0
-                     (: h <a ((? (nom? h) (!(elem h bnd) && pure-head? h >a)
-                                 (atom? h) (pure-hv? h >a)
-                                 0)
-                              && all (e \ dupok? e bnd) >a)))
-   ; dechurch: a numeral N under 64 applied to a literal function -- a lambda, or a dyadic op's
-   ; partial on pure operands, which a copy evaluates no more often -- and an operand is f nested
-   ; N deep, love's church power, written out so the beta lane above can take each f
-   dch-ops '(+ - * // % & | ^)
-   (dch-op? o bnd) (nom? o ? (elem o dch-ops && !(elem o bnd)) (any (s \ o == gv s ()) dch-ops))
-   (dch-fn? f bnd se) (lambp f || two? f && 2 = #f && dch-op? <f bnd && allp >f se)
-   (dch? n as bnd se fl) (charm? n && 0 <= n && n < 64 && two? as && two? >as && dch-fn? <as bnd se
-                          && n * nsz <as <= left fl)
-   (dch-nest f n x) (: y (n = 0 ? x (dch-nest f (n - 1) x)) (? (n = 0) x (lambp f) [f y] (f + [y])))   ; a partial takes its operand curried: (+ i y)
-   (dch-ap f n as) (: y (dch-nest f n <as) (atom? >as ? y (y . >as)))
-   (sub1 x p m) (? (x == p) m  (atom? x) x  (<x == '\ && atom? >>x) x
-                   (mapi2 x (sub1 <x p m) (sub1 >x p m)))
-   ; the fuel: (depth . box), the betas left on this path and the nodes the whole form may
-   ; still copy. depth alone bounds a chain, not a tree, where each level can double. a form
-   ; copies at most 256 plus 16 per node of its own. the box holds [form] until the first beta
-   ; asks, so a form that inlines nothing is never measured
-   (left fl) (: b >fl v (peep b 0 0) (? (two? v) (: n (256 + 16 * nsz <v) _ (pin b 0 n) n) v))
-   (fuel? fl lam) (: n (nsz (last lam)) _ (pin >fl 'z n) (0 < <fl && n <= left fl))   ; z: the size asked, for burn
-   (burn fl) (: b >fl _ (pin b 0 (left fl - peep b 'z 0)) ((<fl - 1) . b))
-   (nsz y) (? (two? y) (nsz <y + nsz >y) 1)
-   ; lower: cprop then jotin. bnd seeds (), not 0: `list + 0` would carry 0 into every binder set
-   (lower y) (jotin (cprop y () (64 . {0 [y]}) 0 () ()) () ())
    (mark y) (tablet? c ? (wx y ()) y)                   ; c 0 answers the lowering unmarked
    (mark (lo ? x (lower x))))
+  ; feel's helpers that read nothing of its frame: built once here, not at each compile
+  ; lflat: (: a b (: c d e)) -> (: a b c d e). three gates: both lets carry a body (a body-less
+  ; inner would hand the outer's names its defglob lane), the names are disjoint, and no inner
+  ; name is read by an outer def, since merging widens every outer def's scope.
+  (lend bs) (? (atom? bs) ()
+               (atom? >bs) bs
+               (lend >>bs))             ; the body's one-cell tail, 0 = body-less
+  (lsub? (': . u)) (two? (lend u))                 ; a spliceable inner let?
+  (lup bs) (atom? >bs ? ><bs (<bs . lup >bs))               ; the body's list, in its place
+  ; lrd/lrdl: does x read any name in ms?
+  (lrd ms x bnd) (?
+   (nom? x) (elem x ms && nil? (elem x bnd))
+   (atom? x) 0
+   (<x == '\) (atom? >>x ? 0 (: r (lp x) (lrd ms >r (<r + bnd))))
+   (<x == ':) (lrdl ms >x (ln >x + bnd))
+   (any (e \ lrd ms e bnd) x))
+  (lrdl ms bs bnd) (? (atom? bs) 0
+   (atom? >bs) 0                                                    ; the trailing body is not a def
+   (: nd (dsug <bs <>bs) (lrd ms >nd bnd || lrdl ms >>bs bnd)))
+  (lflat bs) (: t (lend bs)
+   (!(two? t && lsub? <t) ? bs
+    (: b <t ns (ln bs) ms (ln >b)
+     (? (any (m \ elem m ns) ms) bs                            ; a name collision
+        (lrdl ms bs ns) bs                                          ; an outer def reads an inner name
+        (lflat (lup bs))))))
+  ; --- the identity kit: unchanged -> the original, no copy --------------------------------
+  ; a `:`-bound non-tail call allocates where an arg/tail-position call is free, so a walk
+  ; result rides to its comparison as a sibling-call argument, never a fresh binding.
+  (keep x r h) (r == >x ? x (h . r))                        ; the walked tail vs the original
+  (keep2 x h r) (h == <x && r == >x ? x (h . r))           ; walked head and tail vs the original
+  (keep1 b e) (e == <b ? b [e])
+  (keep3 b p q r) (p == <b && q == <>b && r == >>b ? b (p . q . r))
+  (mapi f x) (atom? x ? x (mapi2 x (f <x) (mapi f >x)))
+  (mapi2 x e r) (e == <x && r == >x ? x (e . r))
+  (relam x r b) (b == >r ? x ('\ . <r + [b]))              ; r = (lp x), b the walked body
+  ; cflip: (? (nil? e) c [el]) is (? e [el] c), so drop the nil? wrapper of an exact (nil? e)
+  ; test in a 2- or 3-form clause. the head answers to the value as well as the name, and only
+  ; the name defers to sh, the shadow: a spliced value has no binder to hide it.
+  (cflip bs sh) (: r (cflip1 bs sh) (r == bs ? bs (cflip r sh)))
+  (cflip1 bs sh) (two? >bs && two? <bs && atom? >><bs
+                  && (<<bs == nilv || (!sh && <<bs == 'nil?)) ?
+   (: e <><bs c <>bs rest >>bs
+    (? (atom? rest)       [e () c]                ; (nil? e) c    -> (e () c)
+       (atom? >rest) [e <rest c]        ; (nil? e) c el -> (e el c)
+       bs))
+   bs)
+  ; cst: kconst re-read as (const? . falsy?), so a folded test prunes its dead branch
+  (cst t) (: c (kconst t)
+             (? <c (1 . !>c)
+                (atom? >t && atom? <t && !(nom? <t)) (1 . !<t)  ; (c) == c: a folded test lands wrapped
+                0))
+  ; napof: v is a non-nif multi-arg fn the n>1 call args saturate -> its arity, the width of the
+  ; leading n-ary apply; a surplus arg curries onto that answer, not the head. 1 = a value that
+  ; is no cur, which takes its args one at a time; 0 = unknown (not yet bound, or a cur the args
+  ; leave short), the optimistic apply. the peeps are `==`-safe: a non-fn value never matches lvm_cur.
+  (napof v args) (? (charm? v) 1
+                    (lvm_cur !== pick 0 v) (v == () ? 0 1)
+                    (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
+  ; fold: un-shadowed global head -> ap (fold/iop/apx); else an apx node (apx n head . args)
+  ; carrying the strategy: n > 1 = the leading n-ary apply's width, 0 = the l2r chain.
+  (fold x bnd) (: h <x
+   (? (atom? >x) x                          ; (f): ana's (atom? b) handles it
+      ; a value head (opfix's glued lane, a macro splice): no binding reaches a value, so it
+      ; takes feels' lane
+      !(nom? h) (: hd (charm? h || two? h ? 0 (feels h))
+                         (hd ? (hd x) (apx . 0 . x)))
+      (: v (gv h ())
+       (? (v == () && !(feels v)) (apx . 0 . x)    ; no global to shadow: the local lane either way
+          (elem h bnd) (apx . 0 . x)                ; a shadowed name: local head
+          (: hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
+           (? (two? n) (apx . napof v >x . ['\ (jnum? <n bnd (jotfuse 'ops) ? (jf 3) (jf 2))] . jotsub >x <jf <n)   ; a walker over jot: its twin, a number's own
+              hd (hd x)
+              (apx . napof v >x . x)))))))
+  ; the walked operand of a walker call is (jot N), as fold leaves it: (apx 0 jot N), the head
+  ; book's jot by name or by value -> [N], else ()
+  (jotn x jf bnd) (: a (two? jf && jf 1 = #>x && >x <jf) j (jotfuse 'jot)
+   (two? a && <a == apx && 4 = #a && <>a == 0
+    && (: h <>>a (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>>>a] ()))
+  (jotsub as k n) (k = 0 ? (n . >as) (<as . jotsub >as (k - 1) n))
+  ; jotin: a walker over (jot N) whose step is a lambda literal -> a counted loop with the step's
+  ; body inline, the twin kept for a list N. the loop's own names are fresh and its ops spliced
+  ; as values, so the body captures nothing. a fold's Z and N trade places only when one of them
+  ; is plain
+  ; dv: the local names as fusion's oracle reads them, jdefs' rows, a param [n 0]
+  (jotin x bnd dv) (? (atom? x) x
+                   (<x == '\) (atom? >>x ? x (: r (lp x) ps (jsyms <r) (relam x r (jotin >r (ps + bnd) (jvars ps + dv)))))
+                   (<x == ':) (atom? >x ? x (: ns (ln >x) (keep x (jotinb >x (ns + bnd) (jdefs >x ns + dv)) ':)))
+                   (npow (jotx (mapi (e \ jotin e bnd dv) (jfuse x bnd dv)) bnd)))
+  ; (N x), N a literal 2..4: a number under apcap takes ipow's own products inline, the same tree
+  ; and so the same answer; the rest, a function's church power, data's, a scare, keeps num-ap's lane
+  (npow y) (two? y && charm? <y && 2 <= <y && <y <= 4 && 2 = #y ? (npow1 <y <>y) y)
+  (npow1 n a) (: t (nom 0) h (nom 0) q (nom 0)
+                 pw [': h [mulv 1 t] (n @ 2 [mulv h h]
+                                           3 [mulv [mulv h h] t]
+                                           [': q [mulv h h] [mulv q q]])]
+                 [': t a ['? [numv t] ['? [lev n [peepv apv 0 0]] pw [n t]] [n t]]])
+  (jotinb bs bnd dv) (? (atom? bs) bs
+                        (atom? >bs) (keep1 bs (jotin <bs bnd dv))
+                        (keep3 bs <bs (two? <bs ? (: ps (jsyms <bs) (jotin <>bs (ps + bnd) (jvars ps + dv))) (jotin <>bs bnd dv))
+                               (jotinb >>bs bnd dv)))
+  (jvars ps) (map (p \ [p 0]) ps)
+  ; a :'s rows: a helper bound once [n 'fn lambda], a constant [n 'lit], else [n 0]
+  (jdefs bs ns) (atom? bs || atom? >bs ? () (jdef <bs <>bs ns + jdefs >>bs ns))
+  (jdef k v ns) (? (two? k) (nom? <k && 1 = #(filter (== <k) ns) ? [[<k 'fn ('\ . >k + [v])]] (jvars (jsyms k)))
+                   (1 < #(filter (== k) ns)) [[k 0]]
+                   (string? v || charm? v || gem? v) [[k 'lit]]
+                   (two? v && <v == '\) [[k (atom? >>v ? 'lit 'fn) v]]
+                   [[k 0]])
+  (jdv h dv) (? (atom? dv) () (<<dv == h) <dv (jdv h >dv))
+  ; fusion interleaves a stage's calls with the consumer's, so a stage fuses only when pure: each
+  ; call a pure fn's, a pure local helper's (its own recursion taken as pure), a constant's, or a
+  ; read where rd licenses one, the consumer writing nothing. vs: the helpers being visited
+  jreads (map (n \ gv n ()) '(peep tally keys))
+  (jp? x dv rd vs) (? (atom? x) 1
+                      (<x == '\) (atom? >>x || (: r (lp x) (jp? >r (jvars (jsyms <r) + dv) rd vs)))
+                      (<x == '? || <x == ':) (all (e \ atom? e || jp? e dv rd vs) >x)
+                      (jph? <x >x dv rd vs && all (e \ jp? e dv rd vs) >x))
+  (jph? h as dv rd vs) (? (nom? h) (: e (jdv h dv)
+                                      (? (two? e) (e 1 @ 'fn (elem h vs || jp? (e 2) dv rd (h . vs)) 'lit 1 0)
+                                         (jpv? (gv h ()) as dv rd vs)))
+                          (two? h) 0
+                          (jpv? h as dv rd vs))
+  ; a walker is as pure as the fn it is handed
+  (jpv? v as dv rd vs) (string? v || constellation? v || pure-hv? v as || rd && elem v jreads
+                        || (jwalk? v && two? as && jpf? <as dv rd vs))
+  (jpf? f dv rd vs) (nom? f ? (jph? f () dv rd vs) (jp? f dv rd vs))
+  (jwalk? v) (v != () && (two? (jotfuse v) || v == jotfuse 'filter))
+  ; fusion: a walker over a map/filter chain takes the stages into its step, one pass and no list
+  ; between. a stage's fn and the consumer apply to fresh names, so nothing captures. [list step] places by kind
+  (jfuse x bnd dv) (: h <x jf (nom? h && !(elem h bnd) ? (jotfuse (gv h ())) ())
+     (? !(two? jf) x
+        (: kind (jkind jf) (? (kind = 3) x
+           ((? (kind < 2) [2 0] (kind = 2) [0 1] [1 0]) @ [li si]
+            (: as >x F (as si) pl (jpeel (as li) bnd ())
+              (? (atom? <pl || #as != jf 1 || !(atom? F || <F == '\ || jp? F dv 0 ())) x
+                 (: rd (jpf? F dv 1 ()) ss <pl
+                    (? !(all (s \ jpf? (s 1) dv rd ()) ss) x
+                       (: a (nom 0) i (nom 0)
+                          (step b) (? (kind = 0) ['\ a i b] (kind = 1) ['\ i a b] ['\ i b])
+                          sk (? (kind < 2) a (kind = 2) () (kind = 4) 1 0)
+                          (done v) (japp F (? (kind = 0) [a v] (kind = 1) [v a] [v]))
+                          (<x . jput as li <>pl si (step (jbody ss i sk done)))))))))))))
+  (jkind jf) (? (jf == jotfuse 'foldl) 0 (jf == jotfuse 'foldr) 1 (jf == jotfuse 'each) 2 (jf == jotfuse 'map) 3 (jf == jotfuse 'all) 4 5)
+  (jput as li l si f) (atom? as ? as ((? (li = 0) l (si = 0) f <as) . jput >as (li - 1) l (si - 1) f))
+  ; the stages, innermost first, and the list under them
+  (jstage L bnd) (two? L && 3 = #L && nom? <L && !(elem <L bnd) ? (: v (gv <L ()) (? (jotfuse v == jotfuse 'map) 1 (v == jotfuse 'filter) 2 0)) 0)
+  (jpeel L bnd ss) (: t (jstage L bnd) (t ? (jpeel <>>L bnd ([t <>L] . ss)) [ss L]))
+  ; the step's body: v the element, sk a filtered one's answer, done the consumer on the last
+  (jbody ss v sk done) (? (atom? ss) (done v)
+                          (<ss @ [t f] (t = 1 ? (: w (nom 0) [': w (japp f [v]) (jbody >ss w sk done)])
+                                                ['? (japp f [v]) (jbody >ss v sk done) sk])))
+  ; f applied to fresh names: a plain lambda as a let, a partial flattened, else the call
+  (japp f as) (? (two? f && <f == '\ && two? (jstep f #as)) (': . (jrows (init >f) as + [(last f)]))
+                 (two? f && nom? <f && !(elem <f ['? '\ ':])) (f + as)
+                 (f . as))
+  (jrows ps as) (atom? ps ? () (<ps . <as . jrows >ps >as))
+  (jsyms p) (? (nom? p) [p] (atom? p) () (jsyms <p + jsyms >p))
+  (jplain? e) (atom? e || <e == '\ && atom? >>e)
+  ; the step's params when it is (\ p.. B) with np distinct plain names, else ()
+  (jstep s np) (two? s && <s == '\ && #s = np + 2 && (: ps (init >s)
+                 (all (p \ nom? p && p != ()) ps && #ps = #(foldl (a \ p \ (elem p a ? a (p . a))) () ps))) ? (init >s) ())
+  (jotx y bnd) (: h <y ops (jotfuse 'ops)
+                  jf (nom? h && two? ops ? (gv h () @ v (nom? v || elem h bnd ? () (jotfuse v))) ())   ; a shadowed head has none
+                  (? (two? jf && (jf 1) = #>y) (jotk y jf (jsrc (>y <jf) bnd) ops bnd) y))
+  ; the source operand (jot N), the book's jot by name or by value -> [N], else ()
+  (jsrc L bnd) (two? L && 2 = #L && (: j (jotfuse 'jot) h <L (h == j || h == 'jot && !(elem 'jot bnd) && gv 'jot () == j)) ? [<>L] ())
+  (jotk y jf n ops bnd) (: as >y k <jf
+                       (? !(two? n) y
+                          (: kind (jkind jf)
+                             F (as (k = 0 ? 1 0))
+                             ps (jstep F (kind < 2 ? 2 1))
+                             (? !(two? ps) y
+                                (kind < 2 && !(jplain? <n || jplain? (as 1))) y
+                                (jotloop kind F ps (last F) <n (as 1) ['\ (jf 2)] ops (jnum? <n bnd ops))))))
+  ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
+  ; ..or, as wx has lowered it, an (iop OP x) of tally's own op
+  (jnum? N bnd ops) (charm? N || two? N && two? ops
+                     && (: T (ops 5) h <N
+                           (2 = #N && (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)
+                            || 3 = #N && h == iop && <>N == pick 0 T)))
+  (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] l f]])))   ; a whole N loops, the rest is the twin's
+  ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
+  (jotloop1 kind F ps B N Z tw ops)
+   (: lt <>ops pl <>>ops cons (ops 3) rv (ops 4)
+      n (nom 0) z (nom 0) go (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
+      (? (kind = 0) [[': n N z Z] n [tw F z n] [': [go I A] ['? [lt I n] [go [pl I 1] B] A] [go 0 z]]]
+         (kind = 1) [[': n N z Z] n [tw F z n] [': [go I] ['? [lt I n] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
+         (kind = 2) [[': n N] n [tw n F] [': [go I] ['? [lt I n] [': e B [go [pl I 1]]]] [go 0]]]
+         (kind > 3) (: t [go [pl I 1]] u (kind = 4)
+                       [[': n N] n [tw F n] [': [go I] ['? [lt I n] (u ? ['? B t 0] ['? B 1 t]) u] [go 0]]])
+         [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
+  ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
+  ; var and folds a pure-fn call on constant args; pureset is the fold license and a
+  ; bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc does) and unfolds no
+  ; recursion. only an already-constant RHS propagates, so it is letrec-safe, and a
+  ; non-constant rebind or a lambda param kills the name.
+  (propk? v) <(kconst v)
+  ; se, the static value env: a scope per binder, (tablet . parent). a name maps to its
+  ; (name value) entry, or to segone where the binder hides an outer one; a miss asks the parent.
+  ; a (segk kind) entry hides as segone does, its value unknown but its kind certain
+  segone (mint 0) segk (mint 0)
+  (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? () v) (seget x >se))))
+  (sekind x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? <>v) (sekind x >se))))
+  ; cpkinds' row for a head by name or by value; a shadowed name is no book head, asked only on a hit
+  (khead h hr bnd) (: r (peep cpkinds (nom? h ? (gv h ()) hr) ()) (two? r && !(nom? h && elem h bnd) ? r))
+  ; a one-operand kind test whose operand's kind is certain -> (answer), else ()
+  (cpktest h hr as se bnd) (: t (two? as && atom? >as ? (khead h hr bnd)) k (two? t && <t != 'head ? (cpkind <as se bnd))
+                              (k ? [(t (k - 1))]))
+  ; the kind e answers for certain, else ()
+  (cpkind e se bnd) (? (charm? e) 1 (string? e) 2
+                       (nom? e) (sekind e se)
+                       (two? e) (: r (khead <e <e bnd) (two? r && <r == 'head && r 1 = #>e ? (r 2)))
+                       ())
+  (sehide ns se) (foldl (\ t n (pin t n segone)) {} ns . se)   ; a binder's scope, its names hidden
+  (cbake v) (v == () || !(nom? v || two? v) ? v ['\ v])                       ; folded value -> source
+  (kval v) (atom? v ? v <>v)                                                  ; a const form -> its value
+  allk (all propk?)
+  ; apply the fn to the consts. a partial of a pure fn is pure at every arity, so this applies
+  ; without re-asking; but over-application can make a church numeral, so a step that grows
+  ; residualizes the rest, as cpap does.
+  (foldc o as) (atom? as ? (cbake o)
+                (: r (o (kval <as))
+                 (cpgrew? o r ? (cbake o . as)
+                                (foldc r >as))))
+  ; cpap: fold a head's known prefix, one operand at a time, while the value in hand still
+  ; applies purely: ("ab" "cd" x) leaves ("abcd" x), (3 2 x) leaves (8 x). a numeric head is
+  ; held to a charm-sized answer, since church application can answer an unboundedly large
+  ; value from a tiny form. `star?` drops the containers, whose magnitude says nothing of size.
+  (cpgrew? v r) (constellation? v && !(star? r && abs r <= max-charm))
+  ; a nif the args saturate inlines as an iop in feels' lane, so its prefix stays an operand
+  (nifsat? v as) (!(charm? v) && lvm_cur == pick 0 v && lvm_ret0 == pick 3 v && peek 1 v = #as)
+  (cpap v as) (: k (two? as ? (kconst <as))
+   (? (atom? as) (cbake v)                                              ; every operand consumed -> the value
+      !(<k && pure-ap? v >k) (cbake v . as)                      ; unknown operand or an impure apply -> stop
+      (: r (v >k) (cpgrew? v r ? (cbake v . as)                      ; ... or a numeral that left the charm band
+                      (cpap r >as)))))
+  ; --- the known-lambda inliner (cprop's beta-reduction lane) ----------------------------
+  ; beta-reduce an application whose resolved head is a statically-known lambda. three gates: the
+  ; lambda is inlinable (non-recursive, body bsub-safe, and closed, so it means the same at the
+  ; call site), the args are pure (allp), and a fuel bound caps the cascade. an under-saturated
+  ; call substitutes the given args and answers a \ of the rest.
+  ; `=` does not bridge beta, so a beta-produced closure must never escape where =/==/show could
+  ; observe it: one is committed only when consumed (op=1, an enclosing application's head), and
+  ; at a value position (op=0) the un-inlined source stays.
+  ; the purity oracle: applying v to this known first operand is effect-free. readset is pure
+  ; only on an immutable container, which is why k is a parameter.
+  (pure-fn? v k) (pureset v || readset v && (string? k || two? k))
+  ; two operands, always: under-applied this answers a closure, which is truthy, and every
+  ; purity gate below silently opens. `as` is the arg forms: a non-constant denies readset.
+  (pure-hv? v as) (pure-fn? v (: k (two? as ? (kconst <as)) (<k ? >k)))
+  (pure-head? h as) (pure-hv? (gv h ()) as)
+  ; pure-ap?: the same question for cpap's walk, widened by the data lanes, which never run what
+  ; they are handed. a partial of a pure fn is not itself in pureset, so the walk stops at one:
+  ; ((+) 1 2 x) folds ((+) 1) and no further. () is named apart: nom? declines it.
+  (pure-ap? v k) (string? v || two? v || nom? v || v == () || constellation? v || pure-fn? v k)
+  (allp as se) (all (a \ purep a se) as)
+  (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
+   (h = '\ || atom? a) 1
+   (h = '?) (allp >a se)
+   (nom? h) (: e (seget h se)                                              ; a known pure lambda or a pure fn, applied to pure args
+    (? (two? e && lambp <>e) (allp >a se) (pure-head? h >a) (allp >a se)))))
+  (smpl? x) (?                                                                        ; bsub-safe body: no : / macro head
+   (atom? x) 1
+   (<x == ':) 0
+   (<x == '\) (atom? >>x || smpl? <>x)
+   (nom? <x) (!(macros <x) && all smpl? x)
+   (all smpl? x))
+  (fvs x bs) (?                                                                       ; free vars of a simple term
+   (nom? x) (x == () || elem x bs ? () [x])
+   (atom? x) ()
+   (<x == '\) (two? >>x ? (: r (lp x) (fvs (last x) (<r + bs))))
+   (foldl (a \ e \ a + fvs e bs) () x))
+  (closedl? lam) (all (v \ gv v ()) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
+  (pbody? x bnd) (?                                                                   ; body is pure: every call head a pure fn or a param
+   (atom? x) 1
+   (<x == '?) (all (e \ pbody? e bnd) >x)
+   (<x == '\) (atom? >>x ? 1 (: r (lp x) (pbody? (last x) (<r + bnd))))
+   (nom? <x) ((pure-head? <x >x || elem <x bnd) && all (e \ pbody? e bnd) >x)
+   (all (e \ pbody? e bnd) x))
+  (inlinable? nm lam) (lambp lam && smpl? lam && closedl? lam && pbody? lam () && !(w nm lam 0 0 0))
+  (rmkeys ps env) (filter (p \ !(elem <p ps)) env)                         ; drop shadowed substitutions
+  (colnms bs) (atom? >bs ? ()                                                  ; a :'s binder noms, a define's head too
+               (: n <(dsug <bs 0) (nom? n ? (n . colnms >>bs) (colnms >>bs))))
+  (bsub env x) (?                                                                     ; capture-avoiding substitution
+   (nom? x) (assq x env @ (_ . x) x x)
+   (atom? x) x
+   (<x == '\) (atom? >>x ? x
+      (: r (lp x) ps <r ren (map (p \ p . nom 0) ps)                      ; rename binders fresh -> no capture
+         ('\ . (map cup ren + [(bsub (ren + rmkeys ps env) (last x))]))))
+   (<x == ':) (: y (': . dsrows >x) nms (colnms >y) ren (map (p \ p . nom 0) nms)   ; whole-form, so an entangled : never reaches here (entg?)
+      (map (e \ bsub (ren + rmkeys nms env) e) y))
+   (map (e \ bsub env e) x))
+  (dsrows bs) (atom? >bs ? bs (dsug <bs <>bs @ (n . d) (n . d . dsrows >>bs)))   ; (f a) B as f (\ a B), so the renaming sees f
+  (beta lam as) (: r (lp lam) ps <r np #ps                               ; apply a lambda to args (curried)
+   (#as < np ?                                                             ; under-saturated -> substitute the given,
+      (bsub (zip ps as) ('\ . drop #as ps + [(last lam)]))             ;   answer a \ of the rest
+      (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
+         (two? rest ? (bd2 . rest) bd2))))
+  ; --- the binding splice (laws: test/uuspllaw.l) --------------
+  ; a saturated known-lambda call with an impure arg. pure args substitute; the last effectful
+  ; arg substitutes too when its param is read exactly once, unconditionally, and the body is
+  ; otherwise pure. every other effectful arg binds once to a fresh nom, in call order, ahead
+  ; of the body. a read-many effectful form is never substituted.
+  ; rdn: reads of param v in x. an occurrence under \ or ? counts double (it can run zero or
+  ; many times), a shadowing binder zeroes its subtree, a quote is data.
+  (rdn v x) (?
+   (nom? x) (x == v)
+   (atom? x) 0
+   (<x == '\) (atom? >>x ? 0 (: r (lp x) (elem v <r ? 0 (2 * rdn v (last x)))))
+   (<x == '?) (2 * foldl (a \ e \ a + rdn v e) 0 >x)
+   (<x == ':) (elem v (colnms >x) ? 0 (foldl (a \ e \ a + rdn v e) 0 >x))
+   (foldl (a \ e \ a + rdn v e) 0 x))
+  (lasti ps as se) (atom? ps ? -1                                             ; index of the last effectful arg, -1 = none
+   (: k (lasti >ps >as se)
+    (0 <= k ? (1 + k) (purep <as se) -1 0)))
+  (spl ps as se i si bd) (atom? ps ? '(())                               ; (binds . env), call order; si = the substitutable index
+   (: r (spl >ps >as se (i + 1) si bd) p <ps a <as
+    (? (purep a se) (<r . ((p . a) . >r))
+       (i = si && 1 = rdn p bd) (<r . ((p . a) . >r))                  ; the licensed effectful substitution
+       (: n (nom 0) ((n . a . <r) . ((p . n) . >r))))))
+  (bspl x h h2 hr as se fl op bnd pb) (: r (lp hr) np #<r
+   (#as < np ? (keep2 x h2 as)                                           ; under-saturated -> decline: a partial's effects fire at build time
+    (: bd0 (last hr)
+       ; a nom head resolved through se already passed pbody? at admission
+       bok (nom? h || pbody? hr ())
+       sp (spl <r (take np as) se 0 (bok ? (lasti <r (take np as) se) -1) bd0)
+       bd (bsub >sp bd0)
+       rest (drop np as)
+     (op || two? rest || !(lambp bd) ?
+        (: f2 (atom? <sp ? bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
+           (cprop (two? rest ? (f2 . rest) f2) se (burn fl) op bnd pb))
+        (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
+  ; a param that shadows an enclosing lambda param or let name renames to a fresh mint (with its
+  ; like-named inners: one cluster, so a pre-pin read still sees the outer) -- ana's letrec loads
+  ; a sibling's captures by name at each reference site, and a shadow would hand it its own value.
+  (cplam x se fl op bnd pb) (atom? >>x ? x                                       ; (\ v) quote -> leave
+   (: r (lp x)
+    (any (p \ p != '_ && elem p pb) <r ?
+       (cplam (foldl (\ z p (p != '_ && elem p pb ? (sub1 z p (nom 0)) z)) x <r) se fl op bnd pb)
+       (relam x r (cprop >r (sehide <r se) fl 0 (<r + bnd) (<r + pb))))))          ; the body is a value -> op 0
+  ; eager reads see let*, closures letrec*: bsub renames a :'s binders over the whole form, but
+  ; a bare read before its name's pin reads the outer binding, and the rename would capture it.
+  ; so a body with such an entangled : declines beta and the splice. over-approximate: any
+  ; not-yet-pinned sibling name in a def flags.
+  (occn v e) (? (e == v) 1 (atom? e) 0 (occn v <e || occn v >e))
+  (entg? x) (?
+   (atom? x) 0
+   (<x == '\) (atom? >>x ? 0 (entg? (last x)))
+   (<x == ':) (: nms (colnms >x)
+      (walk bs pn) (?
+       (atom? bs) 0
+       (atom? >bs) (entg? <bs)
+       (? (any (v \ !(elem v pn) && occn v <>bs) nms) 1
+          (entg? <>bs) 1
+          (walk >>bs (<bs . pn))))
+      (walk >x ()))
+   (any entg? x))
+  ; se is the let's own scope, its names hidden on the way in: each binding pins its name as it
+  ; goes, so a value sees the bindings before it and the body sees them all
+  (cpbinds bs se fl op bnd pb) (?
+   (atom? bs) bs
+   (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's body inherits the let's op
+   (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
+      _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] (cpkind v1 se bnd @ k (k ? [segk k] segone))))   ; a const or a known pure lambda enters se; else its kind
+      b (two? <bs ? (usug <bs v1) segone)                                    ; a define keeps its sugar
+      (b == segone ? (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb)) (keep3 bs <bs b (cpbinds >>bs se fl op bnd pb)))))
+  ; usug: the body under a define's head (f a..), dsug undone, or segone where cprop changed its lambdas
+  (usug k v) (? (atom? k) v
+                (: w (usug <k v) (w != segone && two? w && <w == '\ && init >w = >k ? (last w) segone)))
+  ; bnd: the lexical binder set (\ params + : names): a local is never a macro head, and se can't
+  ; stand in, since absence from se doesn't tell local from global.
+  ; the atom test stays out of the @ chain: as the pin ^x it would compile to a deep `=`
+  (cprop x se fl op bnd pb) (atom? x ?
+   (nom? x ? (seget x se @ (_ . e . _) e x) x)              ; const/known-lambda var -> value
+   (<x @
+   '\ (cplam x se fl op bnd pb)
+   ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
+   '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
+   h (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
+      (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (atom? >x ? () (map (e \ cprop e se fl 0 bnd pb) (init >x) + [(cprop (last >x) se fl op bnd pb)])) bnd)
+         (m && !(elem h bnd)) (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
+         (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
+            hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
+            h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
+            hk (kconst hr)
+            kv (cpktest h hr as se bnd)
+            (? (two? kv) <kv                                                                                    ; (two? n): its kind answers
+               (dch? hr as bnd se fl) (cprop (dch-ap <as hr >as) se fl op bnd pb)                 ; (N f x ..)
+               (two? hr && 2 = #hr && dch? <hr (>hr + as) bnd se fl)
+                 (cprop (dch-ap <>hr <hr as) se fl op bnd pb)                                     ; ((N f) x ..)
+               (lambp hr && two? as && fuel? fl hr)
+                (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound
+                    (keep2 x h2 as)
+                   (allp as se)
+                    (: red (cprop (beta hr as) se (burn fl) op bnd pb)                         ; known lambda -> beta, re-cprop (fuel-bounded)
+                     (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> keep the closure
+                   (bspl x h h2 hr as se fl op bnd pb))
+               (nom? h && allk as && pure-head? h as && !(elem h bnd))            ; pure-fn on consts -> fold; a binder
+                 (foldc (gv h ()) as)                                                ;   spelled like an op still shadows
+               ; the same fold for a value head, a macro splice: no name to shadow, so no bnd
+               ; guard. ahead of cpap: cpap's licence stops at the first partial, and its
+               ; residual reads as a two? head that feels' lane then declines.
+               (<hk && atom? >hk && allk as && pure-hv? >hk as)
+                 (foldc >hk as)
+               (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
+                 (cpap >hk as)                                                       ;   keeps the value as its head
+               (keep2 x h2 as)))))))
+  ; && and || keep the macro's answer without its let where the left operand may be read twice:
+  ; (? a b a) and (? a a b), the shape the glaze's recognizers read
+  ; its operands come propagated: a sibling cprop's show would carry twice
+  (cpand h as bnd) (? (atom? as) (h == '&& ? 1 0)
+     (atom? >as) <as
+     (: a <as r (cpand h >as bnd)
+        (? (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
+           (: y (nom 0) [': y a (h == '&& ? ['? y r y] ['? y y r])]))))
+  ; dupok?: a leaf, or a pure fn over dupok? operands in nine nodes or fewer: cheap to read twice, the same answer both times
+  (dupok? a bnd) (? (atom? a) 1
+                    (9 < nsz a) 0
+                    (: h <a ((? (nom? h) (!(elem h bnd) && pure-head? h >a)
+                                (atom? h) (pure-hv? h >a)
+                                0)
+                             && all (e \ dupok? e bnd) >a)))
+  ; dechurch: a numeral N under 64 applied to a literal function -- a lambda, or a dyadic op's
+  ; partial on pure operands, which a copy evaluates no more often -- and an operand is f nested
+  ; N deep, love's church power, written out so the beta lane above can take each f
+  dch-ops '(+ - * // % & | ^)
+  (dch-op? o bnd) (nom? o ? (elem o dch-ops && !(elem o bnd)) (any (s \ o == gv s ()) dch-ops))
+  (dch-fn? f bnd se) (lambp f || two? f && 2 = #f && dch-op? <f bnd && allp >f se)
+  (dch? n as bnd se fl) (charm? n && 0 <= n && n < 64 && two? as && two? >as && dch-fn? <as bnd se
+                         && n * nsz <as <= left fl)
+  (dch-nest f n x) (: y (n = 0 ? x (dch-nest f (n - 1) x)) (? (n = 0) x (lambp f) [f y] (f + [y])))   ; a partial takes its operand curried: (+ i y)
+  (dch-ap f n as) (: y (dch-nest f n <as) (atom? >as ? y (y . >as)))
+  (sub1 x p m) (? (x == p) m  (atom? x) x  (<x == '\ && atom? >>x) x
+                  (mapi2 x (sub1 <x p m) (sub1 >x p m)))
+  ; the fuel: (depth . box), the betas left on this path and the nodes the whole form may
+  ; still copy. depth alone bounds a chain, not a tree, where each level can double. a form
+  ; copies at most 256 plus 16 per node of its own. the box holds [form] until the first beta
+  ; asks, so a form that inlines nothing is never measured
+  (left fl) (: b >fl v (peep b 0 0) (? (two? v) (: n (256 + 16 * nsz <v) _ (pin b 0 n) n) v))
+  (fuel? fl lam) (: n (nsz (last lam)) _ (pin >fl 'z n) (0 < <fl && n <= left fl))   ; z: the size asked, for burn
+  (burn fl) (: b >fl _ (pin b 0 (left fl - peep b 'z 0)) ((<fl - 1) . b))
+  (nsz y) (? (two? y) (nsz <y + nsz >y) 1)
+  ; lower: cprop then jotin. bnd seeds (), not 0: `list + 0` would carry 0 into every binder set
+  (lower y) (jotin (cprop y () (64 . {0 [y]}) 0 () ()) () ())
   ; a bare symbol is a variable reference, except (), a literal: as a variable it would become a
   ; spurious import. the test is `!= ()`, not nil?: boxfix's cell names are nameless mints, also
   ; nil?, and must still reach ava.

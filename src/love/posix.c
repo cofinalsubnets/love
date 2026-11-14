@@ -1034,6 +1034,59 @@ static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word 
 
 LvmWord3(posix_lseek)
 
+// (fdpull fd cask at off n): n bytes of the fd from off into the cask at at; (fdpush fd cask
+// at off n) the cask's into the fd. the count moved, short at the file's end. raw fds only:
+// a shared frame between love and a helper, a tmpfs file both hold, moved whole
+love_noinline static word host_fdmove(struct g *g, word *a, bool in) {
+ word c = a[1];
+ struct str *s = cask_str(c);
+ if (!s || !charmp(a[0]) || !charmp(a[2]) || !charmp(a[3]) || !charmp(a[4])) return badarg(g);
+ intptr_t at = getcharm(a[2]), off = getcharm(a[3]), n = getcharm(a[4]);
+ if (at < 0 || off < 0 || n < 0 || (uintptr_t) at > s->len || (uintptr_t) n > s->len - (uintptr_t) at)
+  return badarg(g);
+ int fd = (int) getcharm(a[0]);
+ if (lseek(fd, (off_t) off, SEEK_SET) < 0) return love_err(g, errno);
+ char *p = (char*) s->bytes + at;
+ intptr_t done = 0;
+ while (done < n) {
+  ssize_t r = in ? read(fd, p + done, (size_t) (n - done)) : write(fd, p + done, (size_t) (n - done));
+  if (r < 0 && errno == EINTR) continue;
+  if (r < 0) return love_err(g, errno);
+  if (r == 0) break;
+  done += r; }
+ return putcharm(done); }
+
+static lvm(lvm_fdpull) { Sp[4] = host_fdmove(g, Sp, true); love_musttail return Nextp(1, 4); }
+static lvm(lvm_fdpush) { Sp[4] = host_fdmove(g, Sp, false); love_musttail return Nextp(1, 4); }
+
+// (fdtray fd off n): n 8-byte words of the fd from off, little-endian and signed, read straight
+// into a fresh int tray, short at the file's end: a helper's frame with no cask between
+static lvm(lvm_fdtray) {
+ if (!charmp(Sp[0]) || !charmp(Sp[1]) || !charmp(Sp[2]) || getcharm(Sp[1]) < 0 || getcharm(Sp[2]) < 0
+     || (uintptr_t) getcharm(Sp[2]) >= words_max / 8) {
+  Sp[2] = badarg(g); love_musttail return Nextp(1, 2); }
+ uintptr_t const n = (uintptr_t) getcharm(Sp[2]), tw = b2w(tray_bytes(love_Z, 1, n));
+ int const wide = love_T[love_Z] == 8;   // ..else a 4-byte word: read past the tray, then narrowed
+ Have(tw + (wide ? 0 : b2w(8 * n)));
+ int const fd = (int) getcharm(Sp[0]);
+ if (lseek(fd, (off_t) getcharm(Sp[1]), SEEK_SET) < 0) { Sp[2] = love_err(g, errno); love_musttail return Nextp(1, 2); }
+ struct tray *v = ini_tray((struct tray*) Hp, love_Z, 1);
+ char *p = wide ? (char*) tray_data(v) : (char*) (Hp + tw);
+ uintptr_t done = 0;
+ while (done < 8 * n) {
+  ssize_t k = read(fd, p + done, 8 * n - done);
+  if (k < 0 && errno == EINTR) continue;
+  if (k < 0) { Sp[2] = love_err(g, errno); love_musttail return Nextp(1, 2); }
+  if (k == 0) break;
+  done += (uintptr_t) k; }
+ uintptr_t const m = done / 8;
+ for (uintptr_t i = 0; !wide && i < m; i++) {
+  int64_t x; memcpy(&x, p + 8 * i, 8); ((intptr_t*) tray_data(v))[i] = (intptr_t) x; }
+ v->shape[0] = m;
+ Hp += b2w(tray_bytes(love_Z, 1, m));
+ Sp[2] = word(v);
+ love_musttail return Nextp(1, 2); }
+
 // a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
 // seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
@@ -1080,6 +1133,9 @@ LvDef("birth", posix_birth, 2, "posix");
 LvDef("readdir", posix_readdir, 1, "posix");
 LvDef("unlink", posix_unlink, 1, "posix");
 LvDef("lseek", posix_lseek, 3, "posix");
+LvDef("fdpull", fdpull, 5, "posix");
+LvDef("fdpush", fdpush, 5, "posix");
+LvDef("fdtray", fdtray, 3, "posix");
 LvDef("signal", posix_signal, 2, NULL);
 LvDef("ttyfg", posix_ttyfg, 1, NULL);
 LvDef("ttypg", posix_ttypg, 1, NULL);

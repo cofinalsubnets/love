@@ -2745,9 +2745,15 @@
                  (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
                  (alln f x) (? (two? x) (all f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0)))
                  (anyn f x) (? (two? x) (any f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0)))
-                 (list foldn foldrn eachn mapn alln anyn)))
+                 (foldnn f z n) (: (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z))
+                 (foldrnn f z n) (: (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0))
+                 (eachnn n f) (: (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0))
+                 (mapnn f n) (: (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ()))
+                 (allnn f n) (: (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0))
+                 (anynn f n) (: (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0))
+                 (list foldn foldrn eachn mapn alln anyn foldnn foldrnn eachnn mapnn allnn anynn)))
       (each [['foldl foldl 0] ['foldr foldr 1] ['each each 2] ['map map 3] ['all all 4] ['any any 5]]
-            ([nm w i] \ (jf nm @ e (pin jf nm [<e (e 1) (tw i)], pin jf w (jf nm)))),
+            ([nm w i] \ (jf nm @ e (pin jf nm [<e (e 1) (tw i) (tw (i + 6))], pin jf w (jf nm)))),
        pin jf 'filter filter,
        (jf 'ops @ o (pin jf 'ops (take 4 o + [rev] + drop 5 o)))))
    0)

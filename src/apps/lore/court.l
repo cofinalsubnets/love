@@ -687,13 +687,15 @@
  ; through the eye's gain: a flat tray of colours, 'kp pixels a column and twice that a row
  (court-pens st) (: lt (court-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) t0 (st 't)
    e [(st 'px) eye-h (st 'pz)] fv (peep st 'fov fov)
-   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fv 0.05 100.0)
+   v (mesh-eye w h e (st 'th) (st 'ph) 0.0 fv 0.05 100.0) _ (? (tablet? (mesh-gpu st)) (pin v 'gpu (st 'gpu)) 0)
    sc0 (scene st lt) sea (court-season st)
    tr (tree-of st sea) td (grove-dots tr lt e t0 (fv / w)) tw (grove-twigs tr lt e (fv / w))
    xs (filter two? [td tw (strand-batch t0 lt) (loose-batch st lt) (panes-batch st lt)])
    dr (drops-batch st lt e)
    bs (cat xs (two? dr ? [dr] ()))
    vs (cat (sc0 'sc 0) (map (b \ b 0) bs)) ts (cat (sc0 'sc 1) (map (b \ b 1) bs))
+   ; ..for the gpu, the scene by when it was made, what moves each frame laid anew
+   _ (pin v 'keys (cat (map (i \ [(sc0 'at) (sc0 'key) i]) ^#(sc0 'sc 0)) (map (b \ 'once) bs)))
    (mesh-frame v [vs ts (sc0 'sun)] (court-texs st) [0.0 0.0 0.0 0.0 0.0] 0 (1.5 * lt 'expo)
                (mesh-sky (stars st) lt (st 'wx) e (st 'sim) t0 (k @ 1 1 (sky-k * k)) (mesh-sky-memo st))))
  ; the frame: the clock in the corner for a while after the time is touched -- in the
