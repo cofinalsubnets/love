@@ -35,10 +35,11 @@
 (: readset (: names '(peep pin tally)
    (foldl (\ t s (: v (gv s ()) (v ? (pin t v 1) t))) {} names)))
 ; what cprop knows of a value's kind, keyed by value as pureset is: a test's answers by kind (1 a
-; charm, 2 a string, 3 a pair), or ('head arity kind) for a head that answers one kind. cpkindfill
+; charm, 2 a string, 3 a pair) then the kind its truth and its falsehood each make certain (0 none),
+; or ('head arity kind) for a head that answers one kind. cpkindfill
 ; pins the ones bound so far; the egg calls it again past post, once show is
 (: cpkinds {}
-   (cpkindfill _) (each '((two? 0 0 1) (atom? 1 1 0) (charm? 1 0 0) (string? 0 1 0) (nom? 0 0 0) (tray? 0 0 0)
+   (cpkindfill _) (each '((two? 0 0 1 3 0) (atom? 1 1 0 0 3) (charm? 1 0 0 1 0) (string? 0 1 0 2 0) (nom? 0 0 0 0 0) (tray? 0 0 0 0 0)
                         (tally head 1 1) (show head 1 2) (. head 2 3))
                       (r \ (: v (gv <r ()) (v ? (pin cpkinds v >r)))))
    _ (cpkindfill 0))
@@ -473,6 +474,22 @@
                        (nom? e) (sekind e se)
                        (two? e) (: r (khead <e <e bnd) (two? r && <r == 'head && r 1 = #>e ? (r 2)))
                        ())
+  ; a test (T x) of a local whose kind is not yet known -> [x then else], the kinds its holding
+  ; and its failing make certain, else ()
+  (cpnar c se bnd) (: x (two? c && two? >c && atom? >>c ? <>c)
+                      r (nom? x && elem x bnd && atom? (seget x se) && sekind x se == () ? (khead <c <c bnd))
+                      (two? r && <r != 'head ? [x (r 3) (r 4)]))
+  ; se past that test: i 1 where it held, 2 where it failed
+  (cpsek n i se) (: k (two? n ? (n i) 0) (k == 0 ? se (pin {} <n [segk k] . se)))
+  ; an arm of ? sees what its test made certain, the arms past a test what its failing did
+  (cpif as se fl op bnd pb) (? (atom? as) as
+     (atom? >as) (keep1 as (cprop <as se fl op bnd pb))
+     (: n (cpnar <as se bnd)
+        (keep3 as (cprop <as se fl op bnd pb) (cprop <>as (cpsek n 1 se) fl op bnd pb) (cpif >>as (cpsek n 2 se) fl op bnd pb))))
+  ; && and ||'s operands, each seeing what the ones before it made certain by reaching it
+  (cpops h as se fl op bnd pb) (? (atom? as) as
+     (atom? >as) [(cprop <as se fl op bnd pb)]
+     (cprop <as se fl 0 bnd pb . cpops h >as (cpsek (cpnar <as se bnd) (h == '&& ? 1 2) se) fl op bnd pb))
   (sehide ns se) (foldl (\ t n (pin t n segone)) {} ns . se)   ; a binder's scope, its names hidden
   (cbake v) (v == () || !(nom? v || two? v) ? v ['\ v])                       ; folded value -> source
   (kval v) (atom? v ? v <>v)                                                  ; a const form -> its value
@@ -637,9 +654,9 @@
    (<x @
    '\ (cplam x se fl op bnd pb)
    ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
-   '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
+   '? (keep x (cpif >x se fl op bnd pb) '?)              ; no prune here -- wxc does it
    h (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
-      (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (atom? >x ? () (map (e \ cprop e se fl 0 bnd pb) (init >x) + [(cprop (last >x) se fl op bnd pb)])) bnd)
+      (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (cpops h >x se fl op bnd pb) bnd)
          (m && !(elem h bnd)) (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
          (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
             hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
