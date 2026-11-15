@@ -687,8 +687,11 @@
                                  (oop = '=) (aqnom? <>q || aqnom? <>>q)
                                  0)))
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and A fixnums, else lbl
-             (abin sa sb d fin) (acg sa d + [['st SP (spill d) A]] + acg sb (d + 1)
-                                 + (fbk ? [['st SP (spill (d + 1)) A]] ()) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b (b spilled too for a stub)
+             (asimp? x) (nom? x || whole? x || x = amble-nil || aquote? x)           ; one load into A, nothing else touched
+             (abin sa sb d fin) (acg sa d + [['st SP (spill d) A]]
+                                 + (asimp? sb ? ([['mov T A]] + acg sb (d + 1)) (acg sb (d + 1)))
+                                 + (fbk ? [['st SP (spill (d + 1)) A]] ())
+                                 + (asimp? sb ? () [['ld T SP (spill d)]]) + fin)   ; T = a, A = b (both spilled for a stub)
              (refb seq fb) (map (i \ map (x \ x = 'deopt ? fb x) i) seq)
              ; a float operand to + - * or an order: f1 = a, f0 = b, a fixnum converted, any other kind to gn
              (afld r f gn) (: fx (mint 0) dn (mint 0)
@@ -773,10 +776,28 @@
                                              [['lea X HP (11 * W)] ['cmp SP X] ['br 'below 'deopt]         ; or the stub, whose cons collects
                                               (reach tgt X 0) ['st HP 0 X] ['st HP W T] ['st HP (2 * W) A]
                                               ['mov A HP] ['add HP HP (3 * W)]]))
-             (acq st sth sel d) (qrun ['? st sth sel]
-                                  (q \ y \ le \ ln \ (: tr (kbool? q ? [() ()] (atruth 0))
-                                     [(acg q d) <tr [['cmp A 1] ['br 'le le]]                 ; heap truth -> twin or the bit stub; tag(x)<=1 <=> x<=0
-                                      (kwith (kfacts q) (_ \ acg y d)) [['jmp ln]] <>tr [['label le]]]))
+             ; a negated test swaps its arms: (? (? Q 0 1) y n) is (? Q n y), so atom? branches on two?
+             ; and the chain facts reach the arm that holds them
+             (aneg e) (e @ ('? ('? q 0 1) y n) (aneg ['? q n y])
+                           ('? ('? q 1 0) y n) (aneg ['? q y n])
+                           ('? q y n) ['? q y (aneg n)]
+                           e)
+             ; atest: [falls through when q holds, else jumps le; its stubs]. two? and an order branch
+             ; on the flags; anything else answers a value its truth guard tests
+             (atest q d le) (: oop (two? q && !(elem <q shd) ? <q 0)
+              (? (oop = 'two? && 2 = #q && kn? <>q) [() ()]
+                 (oop = 'two? && 2 = #q)
+                  [(acg <>q d + [['test A 1] ['br 'ne le] ['ld X A 0] (reach tgt T 0) ['cmp X T] ['br 'ne le]]) ()]
+                 (elem oop '(< <= > >=) && 3 = #q)
+                  (: tk (mint 0) tr (atruth 0)
+                     [((abin <>q <>>q d (fb2 oop d (afl oop (fx2 'flt + [['cmp T A] ['br (ccnot (ccof oop)) le] ['jmp tk]]))))
+                       + <tr + [['cmp A 1] ['br 'le le] ['label tk]])
+                      <>tr])
+                 (: tr (kbool? q ? [() ()] (atruth 0))
+                    [(acg q d + <tr + [['cmp A 1] ['br 'le le]]) <>tr])))           ; heap truth -> twin or the bit stub; tag(x)<=1 <=> x<=0
+             (acq st sth sel d) (qrun (aneg ['? st sth sel])
+                                  (q \ y \ le \ ln \ (atest q d le @ [tc sc]
+                                     [tc (kwith (kfacts q) (_ \ acg y d)) [['jmp ln]] sc [['label le]]]))
                                   (x \ acg x d))
              (adrive cso) (: bb (mint 0)                                                                    ; apply the value at Sp[cso] to A, via the walkable resume:
               [['st SP (-4 * W) A] ['ld T SP cso] ['st SP (-3 * W) T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
@@ -907,7 +928,7 @@
                        (achain as cso d))))
              (agous us j d) (two? us ? (acg <us (d + j) + [['st SP (spill (d + j)) A]] + agous >us (j + 1) d))
              (agomv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (W * j) A]] + agomv (j - 1) d))
-             (ago as d) (agous as 0 d + agomv (k - 1) d + fairck tgt SC + [['jmp 'top]])                            ; updates read the old vars (spilled first)
+             (ago as d) (agous as 0 d + (k > 0 ? ([['st SP (W * (k - 1)) A]] + agomv (k - 2) d) ()) + fairck tgt SC + [['jmp 'top]])   ; updates read the old vars (spilled first); the last is still in A
              (asmv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (fro + W * (ni + j)) A]] + asmv (j - 1) d))
              ; aselfcall: a saturated non-tail self-call enters the own blob on the frame [imports.. args..
              ; resume tag(bb-entry0) entry0], Ip off So; its hand-rolled ret returns through lvm_resume to bb
@@ -926,10 +947,11 @@
                   ['label ch] ['ld A SP soo]]
                + catmap (i \ adrivep (voff i)) simp + catmap (j \ adrivep (spill (d + j))) ^(a - ni)
                + [['label dn]]))
-             (aselfgo as d) (agous as 0 d + asmv (a - ni - 1) d + fairck tgt SC + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
-             (acqt st sth sel d) (qrun ['? st sth sel]
-                                   (q \ y \ le \ ln \ (: tr (kbool? q ? [() ()] (atruth 0))
-                                      [(acg q d) <tr [['cmp A 1] ['br 'le le]] (kwith (kfacts q) (_ \ acgt y d)) [['jmp ln]] <>tr [['label le]]]))
+             (aselfgo as d) (: m (a - ni - 1)                                                                ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
+                             (agous as 0 d + (m >= 0 ? ([['st SP (fro + W * (ni + m)) A]] + asmv (m - 1) d) ()) + fairck tgt SC + [['jmp 'sgo]]))
+             (acqt st sth sel d) (qrun (aneg ['? st sth sel])
+                                   (q \ y \ le \ ln \ (atest q d le @ [tc sc]
+                                      [tc (kwith (kfacts q) (_ \ acgt y d)) [['jmp ln]] sc [['label le]]]))
                                    (x \ acgt x d))
              (acgt e d)                                                                             ; tail position, threaded through ? and lets so a saturated self-call jumps
               (? (aquote? e) (acg e d)
