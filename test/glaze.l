@@ -118,7 +118,7 @@
            named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally] [long? 'long?]
                   [(+) '+] [(-) '-] [(*) '*] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]
                   [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [atom? 'atom?] [nil? 'nil?]]
-           wordless '(list && || one? != !== mpeep)
+           wordless '(list && || one? != !==)
            _ (test
               (all (r \ (<>r = gw <r)) named)                                 ; a value answers its word
               ('zz = gw 'zz)                                                   ; a nom is its own word
@@ -224,7 +224,7 @@
 ; itself need not, so the group check takes the first and refuses the second -- answering, never a miss
 (: G (cite 'glaze)
    (? G (: R (G 'jgir-rerun-ok?)
-           (gzro d) (trap (_ \ R d) 0 (a \ _ \ 'scared))
+           (gzro d) (trap (_ \ R d ()) 0 (a \ _ \ 'scared))
            (test (1 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i 65) (+ i 1) n)))])
                  (0 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i (+ 1 (peep c i))) (+ i 1) n)))])))
       0))
