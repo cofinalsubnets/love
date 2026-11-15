@@ -20,7 +20,7 @@ default: nrf52840
 nrf52840: $(R)/$(o)/firm.uf2
 
 $(eval $(call p_obj,nrf52840,test/boards/nrf52840/nrf52840.c,nrf52840.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
-$(eval $(call p_obj,main,test/boards/nrf52840/main.c,main.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
+$(eval $(call p_obj,main,test/boards/nrf52840/main.c,main.c nrf52840.h ../battery.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 $(eval $(call p_link,xlink))
 $(eval $(p_ocopy))

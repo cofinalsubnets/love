@@ -25,10 +25,10 @@ nucleo446: $(R)/$(o)/firm.hex
 smoke: $(R)/$(o)/smoke.elf
 
 $(eval $(call p_obj,nucleo446,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
-$(eval $(call p_obj,main,test/boards/nucleo446/main.c,main.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
+$(eval $(call p_obj,main,test/boards/nucleo446/main.c,main.c nucleo446.h ../battery.h $(S)/inle/bput.h $(mc),$(nu_cc)))
 # the -D QSMOKE twin, the same two sources through the same cc
 $(eval $(call p_obj,nucleo446-q,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
-$(eval $(call p_obj,main-q,test/boards/nucleo446/main.c,main.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
+$(eval $(call p_obj,main-q,test/boards/nucleo446/main.c,main.c nucleo446.h ../battery.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
 
 # boot.o: the vector table, crt0, the fault shim and the asm helpers, laid from holo IR --
 # no gas. src/inle/teensy41/mkboot.l is the same shape with the i.MX ROM blocks on top.
