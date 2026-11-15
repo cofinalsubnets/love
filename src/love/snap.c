@@ -33,6 +33,7 @@ static intptr_t
  img_encode(struct img_ctx *x, intptr_t v);
 static struct g
  *img_canon_symbols(struct g *g),
+ *img_canon_serials(struct g *g),
  *img_wake(void const *buf, uintptr_t len, int kept);
 static uintptr_t
  hc_hchain(struct chain *c),
@@ -44,7 +45,6 @@ static uintptr_t
  image_objsize(struct g *g, union u *p),
  img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt),
  img_hash(word v),
- img_rank_assign(word *rank, uintptr_t nser),
  img_remap(struct img_ctx const *x, uintptr_t bo),
  img_stream(unsigned char *out, word const *blob, uintptr_t nw, uintptr_t i0, struct img_dic const *d,
             uintptr_t *last);
@@ -694,17 +694,64 @@ static struct g *img_canon_symbols(struct g *g) {
  alloc(pairs, 0);
  return g; }
 
-// live serials keep session order, packed 1..k; only the nameless (mints, tablets, pids) carry
-// one. a slot is a word offset; SlotCharm marks a serial held as a charm, where a mint's is raw
-#define SlotCharm ((uintptr_t) 1 << (8 * sizeof(uintptr_t) - 1))
-static love_inline uintptr_t slot_serial(word const *blob, uintptr_t s) {
- word v = blob[s & ~(uintptr_t) SlotCharm]; return s & SlotCharm ? (uintptr_t) getcharm(v) : (uintptr_t) v; }
-static love_inline void slot_put(word *blob, uintptr_t s, uintptr_t r) {
- blob[s & ~(uintptr_t) SlotCharm] = s & SlotCharm ? putcharm(r) : (word) r; }
-static uintptr_t img_rank_assign(word *rank, uintptr_t nser) {
+// live serials keep session order, packed 1..k, in the live heap; only the nameless (mints,
+// tablets, pids) carry one. 0 stays ()'s, and a pid charm copied into user data keeps its old number
+static love_inline bool img_serial_at(union u *p, uintptr_t *v) {
+ if (in_data(p->ap)) return love_typ(p) == DMint && (*v = sym(p)->serial, true);
+ return p->ap == lvm_map_lookup && (*v = map_serial((word) p), true); }
+// a serial's rank: its place among the sorted live ones, from 1
+static uintptr_t img_rank(word const *u, uintptr_t k, uintptr_t v) {
+ uintptr_t lo = 0, hi = k;
+ while (lo < hi) { uintptr_t m = (lo + hi) / 2; if ((uintptr_t) u[m] < v) lo = m + 1; else hi = m; }
+ return lo + 1; }
+// a tablet's pairs again, in their old slot order, under the hashes their keys have now
+static bool img_rehash(struct g *g, word m, word *pairs) {
+ uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
+ word *s = map_slots(m);
+ for (uintptr_t j = 0; j < cap; j++)
+  if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
+ for (uintptr_t j = 0; j < cap; j++) s[2 * j] = map_gap, s[2 * j + 1] = zero;
+ for (uintptr_t k = 0; k < n; k++) {
+  uintptr_t i = hash(g, pairs[2 * k]) & mask;
+  if (g->walk) return false;
+  while (s[2 * i] != map_gap) i = (i + 1) & mask;
+  s[2 * i] = pairs[2 * k], s[2 * i + 1] = pairs[2 * k + 1]; }
+ return true; }
+static struct g *img_canon_serials(struct g *g) {
+ word *base = g->major_base, *hp = g->major_hp;
+ unsigned char *fzm = hc_fzmap(g, base, hp);
+ uintptr_t n = 0, cap = 0, v;
+ int fz;
+ #define each_obj(p) for (union u *p = cell(base); ptr(p) < hp; p = cell(ptr(p) + hc_stride(g, fzm, base, p, &fz))) if (!fzm[ptr(p) - base])
+ if (!fzm) return g->scare = (uintptr_t) (hp - base), encode(g, status_scare);
+ each_obj(p) {
+  if (img_serial_at(p, &v) && v) n++;
+  if (p->ap == lvm_map_lookup && map_cap((word) p) > cap) cap = map_cap((word) p); }
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) n++;
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) n++;
+ word *u = alloc(NULL, (n + 1) * sizeof(word)), *pairs = alloc(NULL, (2 * cap + 1) * sizeof(word));
+ if (!u || !pairs) { alloc(u, 0), alloc(pairs, 0), alloc(fzm, 0); return g->scare = n + 2 * cap, encode(g, status_scare); }
  uintptr_t k = 0;
- for (uintptr_t i = 1; i < nser; i++) if (rank[i]) rank[i] = ++k;
- return k; }
+ each_obj(p) if (img_serial_at(p, &v) && v) u[k++] = (word) v;
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (word) getcharm(t[2].x);
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (word) getcharm(t[2].x);
+ { struct img_ord o = { img_lt_word, u, 1 };
+   img_sort(&o, k); }
+ uintptr_t nu = 0;
+ for (uintptr_t i = 0; i < k; i++) if (!nu || u[nu - 1] != u[i]) u[nu++] = u[i];
+ each_obj(p) if (img_serial_at(p, &v) && v) {
+  if (in_data(p->ap)) sym(p)->serial = img_rank(u, nu, v);
+  else tablet(p)->serial = putcharm(img_rank(u, nu, v)); }
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m)
+  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm(img_rank(u, nu, (uintptr_t) getcharm(t[2].x)));
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m)
+  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm(img_rank(u, nu, (uintptr_t) getcharm(t[2].x)));
+ g->next_serial = nu;
+ bool ok = true;
+ each_obj(p) if (ok && p->ap == lvm_map_lookup) ok = img_rehash(g, (word) p, pairs);
+ #undef each_obj
+ alloc(u, 0), alloc(pairs, 0), alloc(fzm, 0);
+ return ok ? g : (g->scare = 1, encode(g, status_scare)); }
 
 // the bake-time hash-cons: equal chains and strings merge. chains are immutable by convention
 // only (poke could write one); `==` is the one witness. bottom-up, so a candidate compares by
@@ -899,6 +946,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (!ok(gen_major(g, 0, NULL))) return NULL;
  img_hashcons(g);
  if (!ok(gen_major(g, 0, NULL))) return NULL;                  // ..and compact the duplicates away
+ if (!ok(g = img_canon_serials(g))) return NULL;
  if (!ok(g = img_canon_symbols(g))) return NULL;
  Why(8);
  word *base = g->major_base, *hp = g->major_hp;
@@ -909,16 +957,10 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  word *blob = alloc(NULL, bytes);
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
- // canonical serials, blob side only: live ones rename monotone to 1..k, preserving order,
- // 0 staying ()'s. a pid charm copied into user data keeps its old number. nw/2 + 1 bounds
- // the slots (a mint is two words at least); the cap is checked anyway
- uintptr_t nslot = 0, ncap = nw / 2 + 1, *slots = alloc(NULL, ncap * sizeof(uintptr_t));
- if (!slots) { alloc(blob, 0); return NULL; }
  // chunk starts: the first object on or past each multiple of kw words
  uintptr_t kw = opt && opt->chunk ? opt->chunk : StreamZWords,
            ncb = 0, nextk = 0, *cb = alloc(NULL, (nw / kw + 2) * sizeof(uintptr_t));
- if (!cb) { alloc(slots, 0); alloc(blob, 0); return NULL; }
- bool slotover = false;
+ if (!cb) { alloc(blob, 0); return NULL; }
  // every field spelled, not left to the compiler to zero
  uintptr_t const nlvm = image_nlvm(), nfn = image_nfn();
  struct img_ctx X = { g, base, hp, nlvm, image_code_base(nlvm, nfn), 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0,
@@ -946,8 +988,6 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
    case DChain: blob[off + 1] = img_encode(x, A(p));
                 blob[off + 2] = img_encode(x, B(p)); break;
    case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;   // dig rides raw
-   case DMint:  if (nslot < ncap) slots[nslot++] = off + 1; else slotover = true;
-                break;
    case DTray:   if (tray(p)->type == love_O) {
                  word *e = ptr(tray_data(tray(p)));
                  uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - ptr(p));
@@ -960,10 +1000,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
                    break; }
    default: break; }
   else { for (uintptr_t i = 1; i < sz; i++)
-          blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]);  // a woken entry is its header
-         if (p->ap == lvm_map_lookup) {
-          if (nslot < ncap) slots[nslot++] = (off + __builtin_offsetof(struct tablet, serial) / sizeof(word)) | SlotCharm;
-          else slotover = true; } }
+          blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]); }  // a woken entry is its header
   p = cell(ptr(p) + sz); }
  if (x->ob)                                        // chunk starts in the laid order
   for (uintptr_t q = 0; q < x->nobj; q++) { uintptr_t no = x->nob[x->ord[q]]; if (no >= nextk) cb[ncb++] = no, nextk = (no / kw + 1) * kw; }
@@ -971,40 +1008,10 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (x->ct) alloc(x->ct, 0);
  *cseg = x->cseg, *ncode = x->cn;
  Why(4);
- if (x->fail) { img_bad_out(x, bad); alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(slots, 0); alloc(blob, 0); return NULL; }
- if (slotover) { Why(12); alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(slots, 0); alloc(blob, 0); return NULL; }
- // the rename: mark the slots' serials and both task rings' pids ([2], a charm), rank, rewrite
- uintptr_t nser = g->next_serial + 1, kser = 0;
- Why(10);
- word *rank = alloc(NULL, nser * sizeof(word));
- if (!rank) { alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(slots, 0); alloc(blob, 0); return NULL; }
- Why(11);
- memset(rank, 0, nser * sizeof(word));
- for (uintptr_t i = 0; i < nslot; i++)
-  { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) rank[v] = 1; }
- for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
-  uintptr_t pid = getcharm(n[2].x);
-  if (pid < nser) rank[pid] = 1; }
- if (g->parked)
-  for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
-   uintptr_t pid = getcharm(n[2].x);
-   if (pid < nser) rank[pid] = 1; }
- rank[0] = 0;                                            // the immortal ()'s
- kser = img_rank_assign(rank, nser);
- for (uintptr_t i = 0; i < nslot; i++)
-  { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) slot_put(blob, slots[i], rank[v]); }
- for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
-  uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
-  if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
- if (g->parked)
-  for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
-   uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
-   if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
- alloc(slots, 0);
+ if (x->fail) { img_bad_out(x, bad); alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(blob, 0); return NULL; }
  // no address rides the header; `sum` is laid over the wire (img_wire). the counter drops
  // to the live count
- struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, kser, x->cn, 0, {0}, {0} };
- alloc(rank, 0);
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, g->next_serial, x->cn, 0, {0}, {0} };
  // roots: symbols, tasks, then all of v0..end, as the gc walks it
  uintptr_t nv = LvImgRoots - 2, nr = LvImgRoots;
  Why(5);
