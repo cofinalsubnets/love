@@ -1612,6 +1612,12 @@
    ; mp: the params the tablet fact makes maps, (name . indices) per fn
    (jitgroupir defs entry tgt) (jitgroupirm defs entry tgt ())
    (jitgroupirm defs entry tgt mp) (jitgroupirx defs entry tgt (ev-run (': . jgir-lrf entry defs)) mp)
+   ; the deopt copies, one compile for the group: name -> its interpreted fn
+   (jgir-copies ds) (: ns (map (d \ two? <d ? <<d <d) ds)
+                       fs (ev-run (': . jgir-lrf (jgir-all ns) ds))
+                       (jgir-cps ns fs {}))
+   (jgir-all ns) (two? ns ? ['. <ns (jgir-all >ns)] ())                ; the body: every fn, as a list
+   (jgir-cps ns fs t) (two? ns ? (jgir-cps >ns >fs (pin t <ns <fs)) t)
    ; the lane's map ops: a map param's peep, pin and application, in the lane's copy only
    (mlane M e) (? (atom? e) e
                   (4 = #e && elem <e '(peep pin) && elem (e 1) M) [(<e = 'peep ? 'mget 'mput) (e 1) (mlane M (e 2)) (mlane M (e 3))]
@@ -2388,12 +2394,12 @@
                                          (<<f . filter (k \ nuse? >f (fps k) && !(elem k cix)) (rangeL 0 #fps)))) fns)
                          vnames (map (f \ <<f) (filter (f \ hasl >f) fns))    ; the value-typed candidates (body conses)
                          (gfix fns cm pm vnames cands))
-   (rewrite-bindings bl gnames gdefs mp) (atom? >bl ? bl
+   (rewrite-bindings bl gnames gdefs mp cps) (atom? >bl ? bl
       (: nf <bl val <>bl  hit (two? nf && elem <nf gnames)
          ok (hit && jgir-ok? gdefs mp && jgir-entry-ok? <nf gdefs mp)                  ; a declined group keeps its define-sugar
          ((ok ? <nf nf)
-            . ((ok ? (jitgroupirm gdefs <nf arch mp) val)
-                  . (rewrite-bindings >>bl gnames gdefs mp)))))
+            . ((ok ? (jitgroupirx gdefs <nf arch (cps <nf) mp) val)
+                  . (rewrite-bindings >>bl gnames gdefs mp cps)))))
    ; memo-leak?: a candidate reading a `:`-sibling map free. the group lane touches only a fn's own params, so a free map is a silent miscompile: decline to interp
    (memo-leak? form)
     (: ps <(anat-defs >form)
@@ -2476,7 +2482,7 @@
                    (: gnames (map cap grp)
                       gdefs (filter (p \ elem <<p gnames) fns)
                       mp (tabfact form gnames)
-                      (jgir-ok? gdefs mp && any (n \ jgir-entry-ok? n gdefs mp) gnames ? (': . rewrite-bindings >form gnames gdefs mp) form0))))))))   ; a group the lane declines stakes nothing on the lowered form
+                      (jgir-ok? gdefs mp && any (n \ jgir-entry-ok? n gdefs mp) gnames ? (': . rewrite-bindings >form gnames gdefs mp (jgir-copies gdefs)) form0))))))))   ; a group the lane declines stakes nothing on the lowered form
    ; --- twolow: a complex-recurrence grid becomes the real-pair float grid autonat glazes: each twin param p splits into (p_r p_i),
    ;     twin ops become real-pair arithmetic, call-site twin args split in two; a fixpoint picks the twin params. bit-exact: z*z's imag rides 2*re*im, and scaling by 2 is exact
    (twolow form)
