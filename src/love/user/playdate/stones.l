@@ -16,9 +16,10 @@
    pd-pix (map (s \ pd-dims s @ [w h] (w * h)) pd-scales)
    pd-w (pd-dims (pd-scales pd-start) 0) pd-h (pd-dims (pd-scales pd-start) 1)
    crank-k (pi / 360.0)                 ; a degree of crank looks half a degree
-   ; the land built at the least detail and lit at bake, the sun held at noon so it stays built
+   ; the land built at the least detail and lit at bake, the sun held at noon so it stays built;
+   ; no gpu, and no getenv to ask for one
    pd-detail 0
-   pd-at (: st (pins (stones-detail (stones-new pd-w pd-h [(1.0 * 1790812800 + 12.0 * 3600.0) 3600] 7) pd-detail) 'keep-sky 1 'sky-k 3)
+   pd-at (: st (pins (stones-detail (stones-new pd-w pd-h [(1.0 * 1790812800 + 12.0 * 3600.0) 3600] 7) pd-detail) 'keep-sky 1 'sky-k 3 'gpu 'off)
             _ (stones-pens st)
             {'st st 'crank () 'song () 'pace () 'full 0 'l0 0
              'gauge (view-gauge pd-pix pd-start pd-goal) 'i pd-start})
