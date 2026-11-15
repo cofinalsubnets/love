@@ -461,9 +461,15 @@
   ; se, the static value env: a scope per binder, (tablet . parent). a name maps to its
   ; (name value) entry, or to segone where the binder hides an outer one; a miss asks the parent.
   ; a (segk kind) entry hides as segone does, its value unknown but its kind certain
-  segone (mint 0) segk (mint 0)
-  (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? () v) (seget x >se))))
-  (sekind x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? <>v) (sekind x >se))))
+  ; a (segal y kind) entry names another local, y, whose reads it stands for while no binder
+  ; between hides y; a narrowing's scope (segnar) binds nothing
+  segone (mint 0) segk (mint 0) segal (mint 0) segnar (mint 0)
+  (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk || <v == segal ? () v) (seget x >se))))
+  (sekind x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? <>v <v == segal ? (v 2)) (sekind x >se))))
+  ; the local x reads as, x itself unless an alias whose y is seen here as where it was bound
+  (cpal x se) (: v (cpent x se) (two? v && <v == segal && cpsee <>v x se ? <>v x))
+  (cpent x se) (? (atom? se) () (: v (peep <se x 0) (v == 0 ? (cpent x >se) v)))
+  (cpsee y x se) (: f <se (peep f x 0 !== 0 ? 1 (peep f y 0 !== 0 && peep f segnar 0 == 0) 0 (cpsee y x >se)))
   ; cpkinds' row for a head by name or by value; a shadowed name is no book head, asked only on a hit
   (khead h hr bnd) (: r (peep cpkinds (nom? h ? (gv h ()) hr) ()) (two? r && !(nom? h && elem h bnd) ? r))
   ; a one-operand kind test whose operand's kind is certain -> (answer), else ()
@@ -476,11 +482,11 @@
                        ())
   ; a test (T x) of a local whose kind is not yet known -> [x then else], the kinds its holding
   ; and its failing make certain, else ()
-  (cpnar c se bnd) (: x (two? c && two? >c && atom? >>c ? <>c)
+  (cpnar c se bnd) (: x (two? c && two? >c && atom? >>c && nom? <>c ? (cpal <>c se))
                       r (nom? x && elem x bnd && atom? (seget x se) && sekind x se == () ? (khead <c <c bnd))
                       (two? r && <r != 'head ? [x (r 3) (r 4)]))
   ; se past that test: i 1 where it held, 2 where it failed
-  (cpsek n i se) (: k (two? n ? (n i) 0) (k == 0 ? se (pin {} <n [segk k] . se)))
+  (cpsek n i se) (: k (two? n ? (n i) 0) (k == 0 ? se (pin (pin {} segnar 1) <n [segk k] . se)))
   ; an arm of ? sees what its test made certain, the arms past a test what its failing did
   (cpif as se fl op bnd pb) (? (atom? as) as
      (atom? >as) (keep1 as (cprop <as se fl op bnd pb))
@@ -640,9 +646,21 @@
    (atom? bs) bs
    (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's body inherits the let's op
    (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
-      _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] (cpkind v1 se bnd @ k (k ? [segk k] segone))))   ; a const or a known pure lambda enters se; else its kind
+      _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1]                  ; a const or a known pure lambda enters se,
+                      (nom? v1 && v1 != () && elem v1 bnd && peep <se v1 0 == 0) [segal v1 (cpkind v1 se bnd)]   ; a local of an outer scope its alias,
+                      (cpkind v1 se bnd @ k (k ? [segk k] segone))))                 ; else its kind
       b (two? <bs ? (usug <bs v1) segone)                                    ; a define keeps its sugar
       (b == segone ? (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb)) (keep3 bs <bs b (cpbinds >>bs se fl op bnd pb)))))
+  ; an alias row nothing else in the let reads goes; a bodyless let's rows bind, and a const's
+  ; row stays for the glaze's autospec, which reads it
+  (cpdead bs) (cpbless? bs || !(cpalr bs) ? bs (: t (ocnt bs {})
+                    (go r) (? (atom? r || atom? >r) r
+                              (nom? <r && <r != () && t <r == 1 && nom? <>r && <>r != ()) (go >>r)
+                              (<r . <>r . go >>r))
+                    (go bs)))
+  (cpbless? l) (? (atom? l) 1 (atom? >l) 0 (cpbless? >>l))
+  (cpalr l) (? (atom? l || atom? >l) 0 (nom? <>l && <>l != ()) 1 (cpalr >>l))
+  (ocnt e t) (? (nom? e) (pin t e (peep t e 0 + 1)) (atom? e) t (ocnt >e (ocnt <e t)))
   ; usug: the body under a define's head (f a..), dsug undone, or segone where cprop changed its lambdas
   (usug k v) (? (atom? k) v
                 (: w (usug <k v) (w != segone && two? w && <w == '\ && init >w = >k ? (last w) segone)))
@@ -650,16 +668,19 @@
   ; stand in, since absence from se doesn't tell local from global.
   ; the atom test stays out of the @ chain: as the pin ^x it would compile to a deep `=`
   (cprop x se fl op bnd pb) (atom? x ?
-   (nom? x ? (seget x se @ (_ . e . _) e x) x)              ; const/known-lambda var -> value
+   (nom? x ? (cpent x se @ (n . e . _) (n == segal ? (cpsee e x se ? e x) n == segk ? x e) x) x)   ; const/known-lambda var -> value, an alias its local
    (<x @
    '\ (cplam x se fl op bnd pb)
-   ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
+   ': (ln >x @ ns (: s (sehide ns se) d (cpdead (cpbinds >x s fl op (ns + bnd) (ns + pb)))
+                    (atom? >d ? <d (keep x d ':))))
    '? (keep x (cpif >x se fl op bnd pb) '?)              ; no prune here -- wxc does it
-   h (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
+   h (: e0 (nom? h ? (cpent h se) ())
+     (? (two? e0 && <e0 == segal && cpsee <>e0 h se) (cprop (<>e0 . >x) se fl op bnd pb)   ; an alias head reads as its local
+     (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
       (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (cpops h >x se fl op bnd pb) bnd)
          (m && !(elem h bnd)) (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
          (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
-            hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
+            hr (nom? h ? (two? e0 && <e0 != segk && <e0 != segal ? <>e0 h) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
             h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
             hk (kconst hr)
             kv (cpktest h hr as se bnd)
@@ -683,15 +704,18 @@
                  (foldc >hk as)
                (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
                  (cpap >hk as)                                                       ;   keeps the value as its head
-               (keep2 x h2 as)))))))
+               (keep2 x h2 as)))))))))
   ; && and || keep the macro's answer without its let where the left operand may be read twice:
   ; (? a b a) and (? a a b), the shape the glaze's recognizers read
   ; its operands come propagated: a sibling cprop's show would carry twice
   (cpand h as bnd) (? (atom? as) (h == '&& ? 1 0)
      (atom? >as) <as
      (: a <as r (cpand h >as bnd)
-        (? (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
+        (? (cp01? a bnd) (h == '&& ? ['? a r 0] ['? a 1 r])                  ; a kind test answers 0 or 1
+           (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
            (: y (nom 0) [': y a (h == '&& ? ['? y r y] ['? y y r])]))))
+  (cp01? a bnd) (two? a && nom? <a && !(elem <a bnd) && two? >a && atom? >>a
+                 && (: k (peep cpkinds (gv <a ()) ()) (two? k && <k != 'head)))
   ; dupok?: a leaf, or a pure fn over dupok? operands in nine nodes or fewer: cheap to read twice, the same answer both times
   (dupok? a bnd) (? (atom? a) 1
                     (9 < nsz a) 0

@@ -16,4 +16,10 @@
   (!cp || has? (show (x \ (? (two? x) 0 (atom? x)))) "atom?")       ; a failed two? says nothing
   ([0 1 2] = cnt 3) ('no = cnt 2.5) ('no = cnt (1 ~ 3)) (() = cnt -1)
   ([1 2 3] = (: (f l) (: n #l (map (i \ i + 1) ^n)) (f "abc")))
-  (['a 'c 'b] = map (x \ (two? x ? (atom? <x ? 'a 'b) 'c)) [[1] 2 [[3]]])))
+  (['a 'c 'b] = map (x \ (two? x ? (atom? <x ? 'a 'b) 'c)) [[1] 2 [[3]]])
+  (!cp || "(\\ a (? (charm? a) 3 0))" = show (x \ (charm? x && 3)))   ; && and || past their own test
+  (!cp || "(\\ a (? (two? a) 1 5))" = show (x \ (two? x || 5)))
+  ([3 0 1 5] = map (x \ (charm? x && 3)) [7 "s"] + map (x \ (two? x || 5)) [[1] 2])
+  (!cp || "(\\ a (+ a 1))" = show (s \ (: q s (q + 1))))          ; a local's alias reads as it
+  ([6 5] = [((s \ (: q s ((\ s (q + s)) 5))) 1) ((s \ (: q s (: s 4 (q + s + s - 4)))) 1)])  ; hidden, the alias stays
+  (7 = ((s \ (: q s f (\ _ q) s 9 ((f 0) + s - 3))) 1))))            ; a sibling's s is no alias
