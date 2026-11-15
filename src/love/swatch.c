@@ -250,4 +250,4 @@ love_noinline static struct g *host_swatch_pic(struct g *g) {
  if (hole) alloc(hole, 0);
  return g; }
 static lvm(lvm_swatch_pic) { LvmCallp(g, 2, host_swatch_pic) }
-LvDef("swatch-pic", swatch_pic, 3, NULL);
+LvDef("swatch-pic", swatch_pic, 3, "lore");

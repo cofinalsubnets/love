@@ -20,7 +20,7 @@
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the triangles, the lamps, the frame
 (borrow 'gpu)                           ; the frame on the system's gpu, with LORE_GPU=1
-(borrow 'lore)                          ; lamp-open and its kin, in C
+(borrow 'lore)                          ; lamp-open and its kin, lace and frame-paint, in C
 (borrow 'neon)                          ; the signs, and the poster's letters
 (borrow 'brush)                         ; the world, carved and filled
 (borrow 'swatch)                        ; the textures, from their recipes

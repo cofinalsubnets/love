@@ -1,6 +1,6 @@
 ; test/host/swatch.l -- src/apps/lore/swatch.l: textures painted from a recipe of layers
 ; host-side: a crew module. run: cat test/00-init.l test/host/swatch.l | out/love
-(borrow 'swatch) (borrow 'mesh)
+(borrow 'swatch) (borrow 'mesh) (borrow 'lore)
 
 (: (at l x y) (swatch-texel 32 32 l x y)
    red [1.0 0.0 0.0] (g v) [v v v]

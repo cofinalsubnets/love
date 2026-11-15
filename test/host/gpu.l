@@ -4,7 +4,7 @@
 ; glass on what drew and on what is bare, and a pane's classes behind and before a lens. a box
 ; with no gpu or no compiler answers a nom saying so, the frame left to facets
 ; host-side: a crew module. run: cat test/00-init.l test/host/gpu.l | out/love
-(borrow '(gpu posix))
+(borrow '(gpu posix lore))
 
 (: W 96 H 64
    ; a checker, one texel a hole, on a square leaning back; a vertex-coloured triangle before it
