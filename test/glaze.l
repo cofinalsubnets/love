@@ -27,6 +27,14 @@
    _ (test (21 = sw 5) (55 = fib 10) (231 = rot 4) (17 = mix 4))
    0)
 
+; --- a chain walk: atom? tests two?, a car read as an int deopts on any other car ---
+(: (hsh acc l)  (atom? l ? acc (hsh ((acc * 31 + <l) % 1000000007) >l))
+   (nlt k l)    (atom? l ? 0 (<l < k ? (1 + nlt k >l) (nlt k >l)))
+   _ (test (1026 = hsh 0 [1 2 3]) (33 = hsh 0 (1 . 2 . 3)) (5 = hsh 5 ())
+           (33.5 = hsh 0 [1 2.5]) ((hsh 0 [1 99999999999999999999]) = (31 + 99999999999999999999) % 1000000007)
+           (2 = nlt 3 [5 1 2 7]) (2 = nlt 3 [1 "a"]) (0 = nlt 3 ()))
+   0)
+
 ; --- the constant fold passes a pair whose own params spell the constant's name ---
 ; through `ev`, since only a bare top-level letrec meets the fold
 (test

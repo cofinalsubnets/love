@@ -26,6 +26,7 @@
 
 ; nif/nifx leave the book on boot; a body-less `:` rebinds the outer ones rather than letrec-ing
 (: nif nif  nifx nifx)
+(: gkn {})   ; the group lane's chain facts: a global, since a sibling-captured value-local misses in the hatched ev
 
 (: ; body-less, so it leaks into the module's book: the concat helper is `bcat`, never `holo`.
    ; glazeasm takes the hook's assembler pins at install; unpinned, the module's own serves
@@ -93,7 +94,7 @@
    (hasl e) (two? e ? (<e = '. || foldl (a \ x \ a || hasl x) 0 >e) 0)   ; a cons -> the group is value-typed
    (suse? e P) (? (atom? e) 0  (elem <e '(peep tally pin) && <>e = P) 1  (foldl (a \ x \ a || suse? x P) 0 >e))
    (buse? e P) (? (atom? e) 0  (<e = 'pin && <>e = P) 1  (foldl (a \ x \ a || buse? x P) 0 >e))   ; a cask: the guard wants the buf kind, not str
-   (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup two?) && <>e = P) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: raw, no entry guard, since two? is total
+   (cuse? e P) (? (atom? e) 0  (elem <e '(cap cup ucar two?) && <>e = P) 1  (foldl (a \ x \ a || cuse? x P) 0 >e))   ; a chain: raw, no entry guard, since two? is total
    (puse? e P) (two? e ? (<e = 'peep && <>e = P ? 1 (foldl (a \ x \ a || puse? x P) 0 >e)) 0)
    (tuse? e P) (two? e ? (<e = 'tally && <>e = P ? 1 (foldl (a \ x \ a || tuse? x P) 0 >e)) 0)
    (ause? e P) (two? e ? (<e = P && 2 = #e ? 1 (foldl (a \ x \ a || ause? x P) 0 >e)) 0)   ; (P k): a map applied
@@ -1459,7 +1460,7 @@
                ())
             (op a b c)
             (? (op = '?)
-                 (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (go y) [['jmp en] ['label el]]]) go)
+                 (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (gkwith q (_ \ go y)) [['jmp en] ['label el]]]) go)
                (op = 'peep) (: R (argregir tgt (argix a ps 0)) inl (mint 0) endl (mint 0)   ; i unsigned-vs-len: out of range -> d, else the byte at [STR+i+2w]
                   (bcat [(go b)
                          [['ld T R (wd tgt)] ['cmp A T] ['br 'below inl] ['li A (whole? c ? c 0)] ['jmp endl] ['label inl] ['ldxb A R A 1 (2 * wd tgt)] ['label endl]]]))
@@ -1476,10 +1477,18 @@
                (op = 'two?) (: z (mint 0) en (mint 0)                                       ; total, since a non-chain reads 0
                   (bcat [(go a) [['test A 1] ['br 'ne z] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne z] ['li A 1] ['jmp en] ['label z] ['li A 0] ['label en]]]))
                (op = 'whole?) (bcat [(go a) [['test A 1] ['br 'eq 'OVF] ['li A 1]]])         ; a heap value (a big, a float, ..) deopts
-               (op = 'cap) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A (wd tgt)]]])    ; a non-chain deopts
-               (op = 'cup) (bcat [(go a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A (2 * wd tgt)]]])
+               (op = 'cap) (bcat [(go a) (gkpair tgt a) [['ld A A (wd tgt)]]])                ; a non-chain deopts
+               (op = 'cup) (bcat [(go a) (gkpair tgt a) [['ld A A (2 * wd tgt)]]])
+               (op = 'ucar) (bcat [(go a) (gkpair tgt a) [['ld A A (wd tgt)] ['test A 1] ['br 'eq 'OVF] ['sar A 1]]])   ; ..and a non-fixnum car
                ())
             ())))
+   ; the chain facts: a param a two? test above has proven a chain is read bare. gkn 0 holds them
+   ; while the arm the test guards compiles; a group body binds no names, so none goes stale
+   (gkwith q f) (q @ ('two? x) (nom? x ? (: o (peep gkn 0 ()) _ (pin gkn 0 (x . o)) r (f 0) _ (pin gkn 0 o) r) (f 0))
+                     _ (f 0))
+   (gkpair tgt a) (nom? a && elem a (peep gkn 0 ()) ? ()
+                     [['test (greg tgt 'acc) 1] ['br 'ne 'OVF] ['ld (greg tgt 'tmp) (greg tgt 'acc) 0] (reach tgt 'r8 0)
+                      ['cmp (greg tgt 'tmp) 'r8] ['br 'ne 'OVF]])
    ; gcmpir: a comparison's operands to flags -> [code cc], cc the condition that holds when it does
    (gcmpir tgt syms ps op a b)
     (: A (greg tgt 'acc) T (greg tgt 'tmp) pa (preg tgt ps a) pb (preg tgt ps b) (go x) (cggir tgt syms ps x)
@@ -1492,6 +1501,8 @@
    ; gtestir: q's code, branching to el when q fails; a comparison branches on its own flags
    (gtestir tgt syms ps q el)
     (q @ ((op a b) && elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['br (ccnot cc) el]]]))
+         ('two? x) (bcat [(cggir tgt syms ps x) [['test (greg tgt 'acc) 1] ['br 'ne el] ['ld (greg tgt 'tmp) (greg tgt 'acc) 0]
+                                                 (reach tgt 'r8 0) ['cmp (greg tgt 'tmp) 'r8] ['br 'ne el]]])
          _ (bcat [(cggir tgt syms ps q) [['cmp (greg tgt 'acc) 0] ['br 'le el]]]))
    ; tailir: a tail self-call's args into the arg regs. an arg that is its own param stays put; one no
    ; other changed arg reads computes straight into its reg, and when none is left so, the rest compute
@@ -1525,7 +1536,7 @@
          (atom? e) ()
          (elem <e syms) (cggir tgt syms ps e)                                   ; a value-group call already answers the value
          (e @ ('. a b) (bcat [(cggvir tgt syms ps a) [['push A]] (cggvir tgt syms ps b) [['pop T]] (consir tgt)])
-              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (cggvir tgt syms ps y) [['jmp en] ['label el]]])
+              ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (gkwith q (_ \ cggvir tgt syms ps y)) [['jmp en] ['label el]]])
                               (x \ cggvir tgt syms ps x))
               ())))
    ; cggtir: e in tail position. a tail self-call of matching arity lays its args in the arg regs (tailir) and
@@ -1534,7 +1545,7 @@
     (: A (greg tgt 'acc) k #ps
        (two? e && (<e = selfnm) && #>e = k ?
             (tailir tgt syms ps >e Lbody)
-          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (cggtir tgt syms ps y selfnm Lbody) [['jmp en] ['label el]]])
+          (e @ ('? _ _ _) (qrun e (q \ y \ el \ en \ [(gtestir tgt syms ps q el) (gkwith q (_ \ cggtir tgt syms ps y selfnm Lbody)) [['jmp en] ['label el]]])
                                  (x \ cggtir tgt syms ps x selfnm Lbody))
                (cggir tgt syms ps e))))
    ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
@@ -1574,7 +1585,7 @@
    ; natjit, which has no recognizer. jgir-arity counts the head too; another arity would drop operands in silence
    jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 '. 3
                '? 4 'peep 4 'pin 4
-               'tally 2 'two? 2 'cap 2 'cup 2 'whole? 2}
+               'tally 2 'two? 2 'cap 2 'cup 2 'ucar 2 'whole? 2}
    (jgir-ops-ok? syms ps e)                                   ; ps: a param applied, (P k), is a map read
     (atom? e ? (gem? e || twin? e ? 0 1)                       ; a smooth-numeric leaf is out of the integer lane
        (: op <e
@@ -1582,9 +1593,16 @@
           ((elem op syms || elem op ps && #e = 2 || n && #e = n) && all (x \ jgir-ops-ok? syms ps x) >e)))
    ; the lane's copy of a def: a whole? test answers 1 there or deopts, so its else arm is dead in the lane --
    ; it runs in the interpreter, where the deopt takes the def as written
+   ; (atom? x) is (? (two? x) 0 1), and a negated test swaps its arms; a chain's car as an arith or
+   ; order operand is ucar, the fixnum it holds or a deopt
    (jgir-lane e) (? (atom? e) e
                     (#e = 4 && <e = '? && two? (e 1) && <(e 1) = 'whole? && #(e 1) = 2) ['? (jgir-lane (e 1)) (jgir-lane (e 2)) 0]
+                    (#e = 2 && <e = 'atom?) ['? ['two? (jgir-lane (e 1))] 0 1]
+                    (#e = 3 && elem <e '(+ - * // % & | ^ < <= > >=)) [<e (jucar (jgir-lane (e 1))) (jucar (jgir-lane (e 2)))]
+                    (#e = 4 && <e = '?) (jneg ['? (jgir-lane (e 1)) (jgir-lane (e 2)) (jgir-lane (e 3))])
                     (map jgir-lane e))
+   (jucar x) (two? x && 2 = #x && <x = 'cap ? ['ucar (x 1)] x)
+   (jneg e) (e @ ('? ('? q 0 1) y n) ['? q n y]  ('? ('? q 1 0) y n) ['? q y n]  e)
    (jgir-lane-def d) (<d . jgir-lane >d)
    (jgir-ok? defs0 mp) (: defs (map jgir-lane-def defs0) syms (map (d \ <<d) defs)
       (all (d \ jgir-ops-ok? syms ><d >d) defs && jgir-kinds-ok? defs mp
@@ -1648,7 +1666,8 @@
    ; jitgroupirx takes the deopt target directly: the natjit hook passes the bytecode twin `e`, so a group-bearing
    ; closure native-backs without re-entering the evaluator mid-ala
    (jitgroupirx defs0 entry tgt deopt mp)
-    (: defs (map jgir-lane-def defs0)
+    (: _ (pin gkn 0 ())                                                   ; no chain fact outlives its compile
+       defs (map jgir-lane-def defs0)
        km (jgir-kmaps (jgir-info defs) mp)
        parse (map (d \ (: nf <d M (filter (P \ elem 1 (jgir-kind km <nf (posof P >nf 0))) >nf)
                          [<nf >nf (mlane M >d)])) defs)                             ; (name params body) per fn
@@ -2383,6 +2402,7 @@
              'peep    (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && charm? <>>>e)   ; d a const
              'pin     (4 = #e && elem <>e ps && groupok? cm pm cands cps pps ps <>>e && groupok? cm pm cands cps pps ps <>>>e)
              'two?    (2 = #e && cok? cm cands cps ps <>e)
+             'ucar    (2 = #e && cok? cm cands cps ps <>e)                     ; a chain's car as an int: guarded at the load
              'whole?  (2 = #e && groupok? cm pm cands cps pps ps <>e)
              0)))                                                                               ; bare cap/cup are chain-valued, never in an int position
        0)
@@ -2477,7 +2497,7 @@
    ;     charm or a param at a leaf and a head that is a grammar word, a candidate or a swallowed global, so a body that fails
    ;     here fails grpfix whatever the swallow lowers -- the check that spares lowering a whole module to learn it
    (swhope? names ps e) (? (charm? e) 1  (atom? e) (elem e ps)
-                           (: h <e (nom? h && (elem h '(+ - * // % & | ^ < <= > >= = ? . tally peep pin two? cap cup whole?)
+                           (: h <e (nom? h && (elem h '(+ - * // % & | ^ < <= > >= = ? . tally peep pin two? cap cup ucar whole?)
                                                || elem h ps || elem h names || peep srcreg h 0 != 0)
                                       && all (x \ swhope? names ps x) >e)))
    (autogroup form0)
